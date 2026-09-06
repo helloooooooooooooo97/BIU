@@ -115,6 +115,10 @@ export function tagsFromRecord(row: Record<string, unknown>) {
   return [...new Set(tags)]
 }
 
+export function pluginRecordEnabled(row?: Record<string, unknown>) {
+  return row?.enabled === true || row?.enabled === 'true'
+}
+
 /** 与列表 RecordMark 相同：emoji 最多两枚。 */
 export function recordEmoji(row: Record<string, unknown>) {
   const text = String(row.emoji ?? '').trim()
@@ -631,7 +635,12 @@ export function ShellSearchPanel({
                     <span className="shell-search-hit-icon" aria-hidden>
                       <HitMark hit={item} />
                     </span>
-                    <span className="shell-search-hit-title">{item.title}</span>
+                    <span className="shell-search-hit-title">
+                      {item.kind === 'plugin' && pluginRecordEnabled(item.record) ? (
+                        <span className="shell-search-hit-enabled" data-testid="plugin-enabled-dot" aria-hidden />
+                      ) : null}
+                      <span className="shell-search-hit-title-text">{item.title}</span>
+                    </span>
                     {tags?.length || actions.length || hasGlyphActions ? (
                       <span className="shell-search-hit-aside">
                         {tags?.length ? (
