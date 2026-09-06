@@ -650,7 +650,13 @@ export function CollectionBrowser({
   }, [collectionPath, dataPath, nested, pullDetailBody])
 
   useEffect(() => {
-    void pullFacets()
+    let cancelled = false
+    void pullFacets().then((next) => {
+      if (!cancelled) setFacetCatalog(next)
+    })
+    return () => {
+      cancelled = true
+    }
   }, [collectionPath])
 
   useEffect(() => subscribeFacets(undefined, () => setFacetCatalog(loadFacets())), [])
@@ -1149,8 +1155,10 @@ export function CollectionBrowser({
 
   function toggleColumn(key: string) {
     if (key === schema?.labelField) return
-    const next = columnKeys.includes(key) ? columnKeys.filter((item) => item !== key) : [...columnKeys, key]
-    setVisibleColumns(next.length ? next : columnKeys)
+    const current = columnKeys.length ? columnKeys : schemaDefaultKeys
+    const next = current.includes(key) ? current.filter((item) => item !== key) : [...current, key]
+    if (!next.length) return
+    setVisibleColumns(next)
   }
 
   function setWrap(next: boolean) {
@@ -2399,9 +2407,12 @@ export function CollectionBrowser({
                     const on = columns.some((col) => col.key === item.key)
                     const flat = parseFacetFlatColumnKey(item.key)
                     const tone = flat ? schemaTagTone(flat.packId) : undefined
+                    const prev = allColumns[allColumns.indexOf(item) - 1]
+                    const showFacetHead = Boolean(flat && !parseFacetFlatColumnKey(prev?.key ?? ''))
                     return (
+                      <Fragment key={item.key}>
+                        {showFacetHead ? <div className="fsdb-col-menu-subhead">合集</div> : null}
                       <CheckRow
-                        key={item.key}
                         icon={<FieldGlyph kind={item.kind} />}
                         label={
                           flat ? (
@@ -2416,6 +2427,7 @@ export function CollectionBrowser({
                         locked={item.key === schema?.labelField}
                         onToggle={() => toggleColumn(item.key)}
                       />
+                      </Fragment>
                     )
                   })}
                   </div>

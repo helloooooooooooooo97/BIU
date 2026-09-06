@@ -362,6 +362,8 @@ test('create record sits at the right of the toolbar with a blue label', () => {
   assert.doesNotMatch(browser, /if \(current\?\.builtin\) return/)
   assert.doesNotMatch(browser, /setColumnKeys\(defaultColumnKeys\(listed\.schema/)
   assert.match(browser, /flattenFacetColumns\(facetCatalog\)/)
+  assert.match(browser, /className="fsdb-col-menu-subhead"/)
+  assert.match(browser, /setFacetCatalog\(next\)/)
   assert.match(browser, /facetColumnTitle\(col\)/)
   assert.match(browser, /<SchemaFieldEditor/)
   const schemaUi = readFileSync(resolve(import.meta.dirname, './schema-field.tsx'), 'utf8')

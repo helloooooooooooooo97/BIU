@@ -130,7 +130,8 @@ export function defaultColumnKeys(schema: CollectionSchema | undefined, allKeys:
     ? listed
     : allKeys.filter((key) => !(BUILTIN_FIELD_KEYS as readonly string[]).includes(key) && key !== parent)
   const keys = (raw.length ? raw : allKeys).filter((key) => !isFacetFlatColumnKey(key))
-  return pinLabelColumn(schema, keys)
+  const flats = allKeys.filter((key) => isFacetFlatColumnKey(key))
+  return pinLabelColumn(schema, [...keys, ...flats])
 }
 
 /** 列表投影：可见列 + 标题/图标/树/分组/合集源字段。不传则服务端仍返回除正文外全字段。 */
