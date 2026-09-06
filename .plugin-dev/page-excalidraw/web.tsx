@@ -12,11 +12,13 @@ type PageEditor = {
       kind: string
       plugin: string
       label: string
-    hint?: string
-    aliases?: string[]
-    defaults?: () => Record<string, unknown>
-    View: (props: { data: Record<string, unknown>; update: (p: Record<string, unknown>) => void; writable: boolean }) => unknown
-  }) => void
+      blockType?: string
+      blockTypeLabel?: string
+      hint?: string
+      aliases?: string[]
+      defaults?: () => Record<string, unknown>
+      View: (props: { data: Record<string, unknown>; update: (p: Record<string, unknown>) => void; writable: boolean }) => unknown
+    }) => void
 }
 
 type Scene = {
@@ -473,6 +475,8 @@ export function apply(ctx: { pageEditor: PageEditor }) {
     kind: 'excalidraw',
     plugin: name,
     label: '画板',
+    blockType: 'excalidraw',
+    blockTypeLabel: '画板',
     hint: '手绘白板，放大后编辑',
     aliases: ['excalidraw', 'draw', '白板', '画板', 'board'],
     defaults: () => ({ file: `assets/画板-${crypto.randomUUID().slice(0, 8)}.json` }),

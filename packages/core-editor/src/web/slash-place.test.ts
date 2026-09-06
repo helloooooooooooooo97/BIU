@@ -5,7 +5,7 @@ import { placeSlashInWindow } from './slash-place.ts'
 test('slash menu stays below when the window has room', () => {
   const placed = placeSlashInWindow({
     caret: { top: 80, bottom: 100, left: 40 },
-    menu: { width: 324, height: 280 },
+    menu: { width: 240, height: 280 },
     viewport: { width: 1200, height: 800 },
   })
   assert.equal(placed.placement, 'bottom-start')
@@ -13,10 +13,20 @@ test('slash menu stays below when the window has room', () => {
   assert.equal(placed.left, 40)
 })
 
+test('slash menu stays beside the caret at mid-window after compact height', () => {
+  const placed = placeSlashInWindow({
+    caret: { top: 480, bottom: 500, left: 24 },
+    menu: { width: 240, height: 1 },
+    viewport: { width: 1200, height: 900 },
+  })
+  assert.equal(placed.placement, 'bottom-start')
+  assert.equal(placed.top, 504)
+})
+
 test('slash menu flips above when the window would clip the bottom', () => {
   const placed = placeSlashInWindow({
     caret: { top: 620, bottom: 640, left: 40 },
-    menu: { width: 324, height: 280 },
+    menu: { width: 240, height: 280 },
     viewport: { width: 1200, height: 700 },
   })
   assert.equal(placed.placement, 'top-start')
@@ -27,7 +37,7 @@ test('slash menu flips above when the window would clip the bottom', () => {
 test('slash menu stays inside a short window', () => {
   const placed = placeSlashInWindow({
     caret: { top: 200, bottom: 220, left: 40 },
-    menu: { width: 324, height: 420 },
+    menu: { width: 240, height: 280 },
     viewport: { width: 1200, height: 400 },
   })
   assert.ok(placed.top >= 8)
@@ -37,7 +47,7 @@ test('slash menu stays inside a short window', () => {
 test('slash menu uses full height so a late layout still flips near the bottom', () => {
   const placed = placeSlashInWindow({
     caret: { top: 850, bottom: 868, left: 24 },
-    menu: { width: 324, height: 0 },
+    menu: { width: 240, height: 0 },
     viewport: { width: 1738, height: 900 },
   })
   assert.equal(placed.placement, 'top-start')

@@ -15,11 +15,21 @@ export type PageBlockViewProps = {
   writable: boolean
 }
 
+/** 斜杠菜单分类。'basic' 进「基础模块」；其它字符串各自成组。 */
+export const BASIC_BLOCK_TYPE = 'basic'
+
 export type PageBlockSpec = {
   kind: string
   /** 写入文档的插件 id（与 export const name / manifest.id 相同）。编辑器不推断。 */
   plugin: string
   label: string
+  /**
+   * 块类型：插件自己声明。'basic' 与标题/列表等基础块同组；
+   * 不写则用 kind（画板、算法题各自一类，不混进基础模块）。
+   */
+  blockType?: string
+  /** 斜杠分组标题。默认：basic →「基础模块」，否则用 label。 */
+  blockTypeLabel?: string
   hint?: string
   aliases?: string[]
   defaults?: Record<string, unknown> | (() => Record<string, unknown>)
@@ -93,7 +103,10 @@ export class PageEditorService extends Service {
   registerBlock(spec: PageBlockSpec) {
     const plugin = String(spec.plugin ?? '').trim()
     if (!plugin) throw new Error('page block needs plugin id')
-    const next = { ...spec, plugin }
+    const blockType = String(spec.blockType ?? spec.kind).trim() || spec.kind
+    const blockTypeLabel =
+      String(spec.blockTypeLabel ?? '').trim() || (blockType === BASIC_BLOCK_TYPE ? '基础模块' : spec.label)
+    const next = { ...spec, plugin, blockType, blockTypeLabel }
     return this.ctx.effect(() => {
       this.customBlocks.set(spec.kind, next)
       this.bump()

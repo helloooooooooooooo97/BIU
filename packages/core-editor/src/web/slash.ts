@@ -5,15 +5,19 @@ import Suggestion, { type SuggestionOptions } from '@tiptap/suggestion'
 import { SlashList } from './slash-list.tsx'
 import { placeSlashInWindow } from './slash-place.ts'
 import { slashMayOpen } from './editor-live.ts'
-import { getPageEditor, type SlashInsert } from './service.ts'
+import { BASIC_BLOCK_TYPE, getPageEditor, type SlashInsert } from './service.ts'
 
 export type SlashItem = {
   id: string
   label: string
   hint: string
   aliases: string[]
+  blockType: string
+  blockTypeLabel: string
   command: (props: { editor: Editor; range: Range }) => void
 }
+
+const BASIC_GROUP = { blockType: BASIC_BLOCK_TYPE, blockTypeLabel: '基础模块' } as const
 
 export const SLASH_ITEMS: SlashItem[] = [
   {
@@ -24,6 +28,7 @@ export const SLASH_ITEMS: SlashItem[] = [
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).toggleNode('paragraph', 'paragraph').run()
     },
+    ...BASIC_GROUP,
   },
   {
     id: 'h1',
@@ -33,6 +38,7 @@ export const SLASH_ITEMS: SlashItem[] = [
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).setNode('heading', { level: 1 }).run()
     },
+    ...BASIC_GROUP,
   },
   {
     id: 'h2',
@@ -42,6 +48,7 @@ export const SLASH_ITEMS: SlashItem[] = [
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).setNode('heading', { level: 2 }).run()
     },
+    ...BASIC_GROUP,
   },
   {
     id: 'h3',
@@ -51,6 +58,7 @@ export const SLASH_ITEMS: SlashItem[] = [
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).setNode('heading', { level: 3 }).run()
     },
+    ...BASIC_GROUP,
   },
   {
     id: 'bullet',
@@ -60,6 +68,7 @@ export const SLASH_ITEMS: SlashItem[] = [
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).toggleBulletList().run()
     },
+    ...BASIC_GROUP,
   },
   {
     id: 'ordered',
@@ -69,6 +78,7 @@ export const SLASH_ITEMS: SlashItem[] = [
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).toggleOrderedList().run()
     },
+    ...BASIC_GROUP,
   },
   {
     id: 'quote',
@@ -78,6 +88,7 @@ export const SLASH_ITEMS: SlashItem[] = [
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).toggleNode('paragraph', 'paragraph').toggleBlockquote().run()
     },
+    ...BASIC_GROUP,
   },
   {
     id: 'code',
@@ -87,6 +98,7 @@ export const SLASH_ITEMS: SlashItem[] = [
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).toggleCodeBlock().run()
     },
+    ...BASIC_GROUP,
   },
   {
     id: 'divider',
@@ -96,6 +108,7 @@ export const SLASH_ITEMS: SlashItem[] = [
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).setHorizontalRule().run()
     },
+    ...BASIC_GROUP,
   },
 ]
 
@@ -124,17 +137,22 @@ export function slashCatalog(): SlashItem[] {
       label: extra.label ?? prev?.label ?? extra.id,
       hint: extra.hint ?? prev?.hint ?? '',
       aliases: extra.aliases ?? prev?.aliases ?? [],
+      blockType: prev?.blockType ?? BASIC_GROUP.blockType,
+      blockTypeLabel: prev?.blockTypeLabel ?? BASIC_GROUP.blockTypeLabel,
       command: extra.insert
         ? ({ editor, range }) => runInsert(editor, range, extra.insert!)
         : (prev?.command ?? (({ editor, range }) => editor.chain().focus().deleteRange(range).run())),
     })
   }
   for (const block of blocks) {
+    const blockType = block.blockType ?? block.kind
     map.set(block.kind, {
       id: block.kind,
       label: block.label,
       hint: block.hint ?? '自定义块',
       aliases: block.aliases ?? [],
+      blockType,
+      blockTypeLabel: block.blockTypeLabel ?? (blockType === BASIC_BLOCK_TYPE ? '基础模块' : block.label),
       command: ({ editor, range }) => {
         editor
           .chain()
@@ -153,6 +171,26 @@ export function slashCatalog(): SlashItem[] {
     })
   }
   return [...map.values()]
+}
+
+export type SlashGroup = { id: string; label: string; items: SlashItem[] }
+
+export function slashGroups(items: SlashItem[]): SlashGroup[] {
+  const order: string[] = []
+  const map = new Map<string, SlashGroup>()
+  for (const item of items) {
+    const id = item.blockType || BASIC_BLOCK_TYPE
+    let group = map.get(id)
+    if (!group) {
+      group = { id, label: item.blockTypeLabel || (id === BASIC_BLOCK_TYPE ? '基础模块' : item.label), items: [] }
+      map.set(id, group)
+      order.push(id)
+    }
+    group.items.push(item)
+  }
+  const basic = order.filter((id) => id === BASIC_BLOCK_TYPE)
+  const rest = order.filter((id) => id !== BASIC_BLOCK_TYPE)
+  return [...basic, ...rest].map((id) => map.get(id)!).filter(Boolean)
 }
 
 export function filterSlashItems(query: string) {
@@ -185,7 +223,7 @@ function renderSlash() {
         })
         const el = component.element as HTMLElement
         el.style.zIndex = '10000'
-        el.style.maxHeight = `${Math.min(420, Math.max(120, window.innerHeight - 16))}px`
+        el.style.maxHeight = `${Math.min(280, Math.max(120, window.innerHeight - 16))}px`
         unmount = pending.mount(el)
       })
     },
@@ -239,8 +277,8 @@ export const slashCommand = Extension.create({
                     left: rects.reference.x,
                   },
                   menu: {
-                    width: Math.max(rects.floating.width, 324),
-                    height: Math.max(rects.floating.height, 420),
+                    width: Math.max(rects.floating.width, 240),
+                    height: Math.max(rects.floating.height, 1),
                   },
                   viewport: { width: window.innerWidth, height: window.innerHeight },
                 })

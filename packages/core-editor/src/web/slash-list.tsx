@@ -1,5 +1,6 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import type { SlashItem } from './slash.ts'
+import { slashGroups } from './slash.ts'
 
 function slashIcon(id: string) {
   if (id === 'text') return 'T'
@@ -87,28 +88,38 @@ export const SlashList = forwardRef(function SlashList(
     },
   }))
 
+  const groups = useMemo(() => slashGroups(items), [items])
+  const flat = useMemo(() => groups.flatMap((group) => group.items.map((item) => ({ group: group.id, item }))), [groups])
+
   return (
     <div className="page-slash" id="slash-command" role="listbox" aria-label="插入模块" data-testid="page-slash">
-      <div className="page-slash-head">基础模块</div>
       <div ref={listRef} className="page-slash-list" onWheel={(event) => event.stopPropagation()}>
         {items.length ? (
-          items.map((item, index) => (
-            <button
-              key={item.id}
-              type="button"
-              role="option"
-              aria-selected={index === active}
-              className={`page-slash-item${index === active ? ' is-active' : ''}`}
-              onMouseEnter={() => setActive(index)}
-              onMouseDown={(event) => {
-                event.preventDefault()
-                command(item)
-              }}
-            >
-              <span className="page-slash-icon">{slashIcon(item.id)}</span>
-              <span className="page-slash-label">{item.label}</span>
-              {slashKeys(item.id) ? <span className="page-slash-keys">{slashKeys(item.id)}</span> : null}
-            </button>
+          groups.map((group) => (
+            <div key={group.id} className="page-slash-group">
+              <div className="page-slash-head">{group.label}</div>
+              {group.items.map((item) => {
+                const index = flat.findIndex((entry) => entry.item.id === item.id)
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="option"
+                    aria-selected={index === active}
+                    className={`page-slash-item${index === active ? ' is-active' : ''}`}
+                    onMouseEnter={() => setActive(index)}
+                    onMouseDown={(event) => {
+                      event.preventDefault()
+                      command(item)
+                    }}
+                  >
+                    <span className="page-slash-icon">{slashIcon(item.id)}</span>
+                    <span className="page-slash-label">{item.label}</span>
+                    {slashKeys(item.id) ? <span className="page-slash-keys">{slashKeys(item.id)}</span> : null}
+                  </button>
+                )
+              })}
+            </div>
           ))
         ) : (
           <div className="page-slash-empty">没有匹配的模块</div>

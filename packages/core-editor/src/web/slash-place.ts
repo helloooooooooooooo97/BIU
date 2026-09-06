@@ -4,7 +4,7 @@ export type SlashViewport = { width: number; height: number }
 
 const GAP = 4
 const PAD = 8
-const MENU_HEIGHT = 420
+const MENU_HEIGHT = 280
 
 /** 按完整菜单高度判断。下方会被窗口裁切时放到光标右上。 */
 export function placeSlashInWindow(args: {

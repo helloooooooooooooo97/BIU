@@ -3,8 +3,8 @@ import assert from 'node:assert/strict'
 import { Editor } from '@tiptap/core'
 import { Context } from 'cordis'
 import { pageEditorExtensions } from './kit.ts'
-import { filterSlashItems } from './slash.ts'
-import { PageEditorService } from './service.ts'
+import { filterSlashItems, slashGroups } from './slash.ts'
+import { BASIC_BLOCK_TYPE, PageEditorService } from './service.ts'
 import { duplicateAssetPath } from './page-block.ts'
 
 test('registerBlock adds a slash item and inserts pageBlock', async () => {
@@ -205,6 +205,40 @@ test('saving an old fence backfills plugin from the running spec', async () => {
   })
   assert.match(editor.getMarkdown(), /plugin=page-excalidraw/)
   editor.destroy()
+  await fiber.dispose()
+})
+
+test('registerBlock puts custom kinds in their own slash group', async () => {
+  const ctx = new Context()
+  new PageEditorService(ctx)
+  const fiber = ctx.plugin({
+    name: 'draw',
+    inject: ['pageEditor'],
+    apply(inner) {
+      inner.pageEditor.registerBlock({
+        kind: 'excalidraw',
+        plugin: 'page-excalidraw',
+        label: '画板',
+        blockType: 'excalidraw',
+        blockTypeLabel: '画板',
+        View: () => null,
+      })
+      inner.pageEditor.registerBlock({
+        kind: 'algorithm',
+        plugin: 'page-algorithm',
+        label: '算法题',
+        blockType: 'algorithm',
+        View: () => null,
+      })
+    },
+  })
+  await fiber
+  const groups = slashGroups(filterSlashItems(''))
+  assert.equal(groups[0]?.id, BASIC_BLOCK_TYPE)
+  assert.equal(groups[0]?.label, '基础模块')
+  assert.equal(groups.find((group) => group.id === 'excalidraw')?.label, '画板')
+  assert.equal(groups.find((group) => group.id === 'algorithm')?.label, '算法题')
+  assert.equal(groups[0]?.items.some((item) => item.id === 'excalidraw' || item.id === 'algorithm'), false)
   await fiber.dispose()
 })
 

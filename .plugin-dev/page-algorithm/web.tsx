@@ -168,6 +168,8 @@ export function apply(ctx: {
       kind: string
       plugin: string
       label: string
+      blockType?: string
+      blockTypeLabel?: string
       hint?: string
       aliases?: string[]
       defaults?: Record<string, unknown>
@@ -179,6 +181,8 @@ export function apply(ctx: {
     kind: 'algorithm',
     plugin: name,
     label: '算法题',
+    blockType: 'algorithm',
+    blockTypeLabel: '算法题',
     hint: 'LeetCode 风：左题目右代码',
     aliases: ['leetcode', 'algo', '算法', 'lc'],
     defaults: DEFAULTS,

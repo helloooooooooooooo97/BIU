@@ -5,7 +5,7 @@ import { PageEditorService } from './service.ts'
 import { PAGE_EDITOR_STYLE } from './style.ts'
 
 export { PageEditor, PageEditor as RecordEditor } from './page-editor.tsx'
-export { PageEditorService, getPageEditor, usePageEditorVersion } from './service.ts'
+export { PageEditorService, BASIC_BLOCK_TYPE, getPageEditor, usePageEditorVersion } from './service.ts'
 export type { HeadingReplacement, PageBlockSpec, PageBlockViewProps, SlashCommandSpec, SlashInsert } from './service.ts'
 export { pageEditorExtensions } from './kit.ts'
 
