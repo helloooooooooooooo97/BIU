@@ -143,7 +143,7 @@ function isListColumn(key: string) {
   return key !== 'description' && key !== 'notes' && key !== 'content' && key !== 'emoji'
 }
 
-const QUERY_NEST_IGNORE = `${HEADLESS_DISMISS_IGNORE}, .db-search-menu, .fsdb-cellselect-menu`
+const QUERY_NEST_IGNORE = `${HEADLESS_DISMISS_IGNORE}, .db-search-menu, .fsdb-cellselect-menu, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]`
 
 function FacetColumnPackRow({
   pack,
@@ -2409,7 +2409,7 @@ export function CollectionBrowser({
                   onDismiss={() => setSortMenuOpen(false)}
                   insideRef={sortRef}
                   ignoreSelector={QUERY_NEST_IGNORE}
-                  inside={(node) => node instanceof Element && Boolean(node.closest('.db-search-menu, .fsdb-cellselect-menu'))}
+                  inside={(node) => node instanceof Element && Boolean(node.closest('.db-search-menu, .fsdb-cellselect-menu, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]'))}
                 >
                 <SortQueryMenu sorts={sorts} fields={sortFields} onChange={applySorts} />
                 </HeadlessDismiss>
@@ -2521,7 +2521,7 @@ export function CollectionBrowser({
                   onDismiss={() => setFilterOpen(false)}
                   insideRef={filterRef}
                   ignoreSelector={QUERY_NEST_IGNORE}
-                  inside={(node) => node instanceof Element && Boolean(node.closest('.db-search-menu, .fsdb-cellselect-menu'))}
+                  inside={(node) => node instanceof Element && Boolean(node.closest('.db-search-menu, .fsdb-cellselect-menu, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]'))}
                 >
                 <FilterQueryMenu
                   tree={filterTree}

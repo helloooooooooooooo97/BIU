@@ -1,4 +1,17 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core'
+import { restrictToVerticalAxis } from '@dnd-kit/modifiers'
+import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { PlusIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import type { FieldSpec, FieldType } from '@biu/type-file-system'
@@ -42,6 +55,80 @@ const WITHIN = [
   { value: '30d', label: '最近 30 天' },
 ]
 
+type SortFieldOption = { value: string; label: string; icon?: ReactNode }
+
+function SortRuleFields({
+  rule,
+  kind,
+  options,
+  sorts,
+  onChange,
+}: {
+  rule: SortRule
+  kind: FieldType
+  options: SortFieldOption[]
+  sorts: SortRule[]
+  onChange: (next: SortRule[]) => void
+}) {
+  return (
+    <>
+      <CellSelect
+        value={rule.field}
+        options={options}
+        variant="field"
+        onSelect={(next) => onChange(sorts.map((item) => (item.id === rule.id ? { ...item, field: next } : item)))}
+      />
+      <CellSelect
+        value={rule.dir}
+        options={[
+          { value: 'asc', label: sortDirLabel(kind, 'asc') },
+          { value: 'desc', label: sortDirLabel(kind, 'desc') },
+        ]}
+        variant="field"
+        onSelect={(next) =>
+          onChange(sorts.map((item) => (item.id === rule.id ? { ...item, dir: next === 'desc' ? 'desc' : 'asc' } : item)))
+        }
+      />
+      <button
+        type="button"
+        className="fsdb-query-x"
+        aria-label="删除这条排序"
+        onClick={() => onChange(sorts.filter((item) => item.id !== rule.id))}
+      >
+        <XMarkIcon aria-hidden className="size-[14px]" />
+      </button>
+    </>
+  )
+}
+
+function SortableSortRow({
+  rule,
+  kind,
+  options,
+  sorts,
+  onChange,
+}: {
+  rule: SortRule
+  kind: FieldType
+  options: SortFieldOption[]
+  sorts: SortRule[]
+  onChange: (next: SortRule[]) => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: rule.id })
+  return (
+    <div
+      ref={setNodeRef}
+      className={`fsdb-query-row${isDragging ? ' is-drag' : ''}`}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+    >
+      <button type="button" className="fsdb-query-grip" aria-label="拖动调整排序顺序" {...attributes} {...listeners}>
+        <SortGrip />
+      </button>
+      <SortRuleFields rule={rule} kind={kind} options={options} sorts={sorts} onChange={onChange} />
+    </div>
+  )
+}
+
 export function SortQueryMenu({
   sorts,
   fields,
@@ -58,81 +145,59 @@ export function SortQueryMenu({
   }))
   const used = new Set(sorts.map((item) => item.field))
   const leftover = fields.find((item) => !used.has(item.key))
-  const [dragId, setDragId] = useState<string | null>(null)
-
-  function reorder(fromId: string, toId: string) {
-    const from = sorts.findIndex((item) => item.id === fromId)
-    const to = sorts.findIndex((item) => item.id === toId)
-    if (from < 0 || to < 0 || from === to) return
-    onChange(moveList(sorts, from, to))
-  }
+  const [activeId, setActiveId] = useState<string | null>(null)
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
+  const active = sorts.find((item) => item.id === activeId)
+  const activeKind = fields.find((item) => item.key === active?.field)?.kind ?? 'string'
 
   return (
     <div className="fsdb-query-menu" role="menu">
       <div className="tasks-sort-head">排序</div>
       {sorts.length ? (
-        sorts.map((rule) => {
-          const field = fields.find((item) => item.key === rule.field)
-          const kind = field?.kind ?? 'string'
-          return (
-            <div
-              key={rule.id}
-              className={`fsdb-query-row${dragId === rule.id ? ' is-drag' : ''}`}
-              onDragOver={(event) => {
-                event.preventDefault()
-                event.dataTransfer.dropEffect = 'move'
-              }}
-              onDrop={(event) => {
-                event.preventDefault()
-                const fromId = event.dataTransfer.getData('text/plain')
-                if (fromId) reorder(fromId, rule.id)
-                setDragId(null)
-              }}
-            >
-              <button
-                type="button"
-                className="fsdb-query-grip"
-                aria-label="拖动调整排序顺序"
-                draggable
-                onDragStart={(event) => {
-                  event.dataTransfer.effectAllowed = 'move'
-                  event.dataTransfer.setData('text/plain', rule.id)
-                  setDragId(rule.id)
-                }}
-                onDragEnd={() => setDragId(null)}
-              >
-                <SortGrip />
-              </button>
-              <CellSelect
-                value={rule.field}
-                options={options}
-                variant="field"
-                onSelect={(next) =>
-                  onChange(sorts.map((item) => (item.id === rule.id ? { ...item, field: next } : item)))
-                }
-              />
-              <CellSelect
-                value={rule.dir}
-                options={[
-                  { value: 'asc', label: sortDirLabel(kind, 'asc') },
-                  { value: 'desc', label: sortDirLabel(kind, 'desc') },
-                ]}
-                variant="field"
-                onSelect={(next) =>
-                  onChange(sorts.map((item) => (item.id === rule.id ? { ...item, dir: next === 'desc' ? 'desc' : 'asc' } : item)))
-                }
-              />
-              <button
-                type="button"
-                className="fsdb-query-x"
-                aria-label="删除这条排序"
-                onClick={() => onChange(sorts.filter((item) => item.id !== rule.id))}
-              >
-                <XMarkIcon aria-hidden className="size-[14px]" />
-              </button>
-            </div>
-          )
-        })
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          modifiers={[restrictToVerticalAxis]}
+          onDragStart={(event: DragStartEvent) => setActiveId(String(event.active.id))}
+          onDragCancel={() => setActiveId(null)}
+          onDragEnd={(event: DragEndEvent) => {
+            const overId = event.over?.id
+            setActiveId(null)
+            if (overId == null || event.active.id === overId) return
+            const from = sorts.findIndex((item) => item.id === event.active.id)
+            const to = sorts.findIndex((item) => item.id === overId)
+            if (from < 0 || to < 0) return
+            onChange(moveList(sorts, from, to))
+          }}
+        >
+          <SortableContext items={sorts.map((item) => item.id)} strategy={verticalListSortingStrategy}>
+            {sorts.map((rule) => {
+              const kind = fields.find((item) => item.key === rule.field)?.kind ?? 'string'
+              return (
+                <SortableSortRow
+                  key={rule.id}
+                  rule={rule}
+                  kind={kind}
+                  options={options}
+                  sorts={sorts}
+                  onChange={onChange}
+                />
+              )
+            })}
+          </SortableContext>
+          <DragOverlay zIndex={280}>
+            {active ? (
+              <div className="fsdb-query-drag-overlay" data-fsdb-sort-overlay>
+                <div className="fsdb-query-row">
+                  <button type="button" className="fsdb-query-grip" tabIndex={-1}>
+                    <SortGrip />
+                  </button>
+                  <SortRuleFields rule={active} kind={activeKind} options={options} sorts={sorts} onChange={() => {}} />
+                </div>
+              </div>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
       ) : (
         <div className="tasks-viewdd-empty">还没有排序</div>
       )}

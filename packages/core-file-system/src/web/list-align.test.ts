@@ -70,6 +70,7 @@ test('list and detail share the chat column max width with side padding', () => 
   assert.match(css, /\.fsdb-page \.fsdb-query-menu\{/)
   assert.match(css, /\.fsdb-query-grip\{[^}]*color:#B6B5B2/)
   assert.match(css, /\.fsdb-query-grip\{[^}]*cursor:grab/)
+  assert.match(css, /\.fsdb-query-drag-overlay\{/)
   assert.match(css, /\.fsdb-page \.fsdb-query-join\.is-btn\{/)
   assert.match(css, /\.fsdb-right-body:has\(\.fsdb-detail-stage\) \.app-pane-in\{[^}]*overflow:visible/)
   assert.match(css, /\.fsdb-right-body:has\(\.fsdb-detail-stage\) \.app-pane-in\{[^}]*width:100%/)
