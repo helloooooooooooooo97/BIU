@@ -81,6 +81,7 @@ function DockSessionMascot({
       activeId={activeId}
       busy={busy}
       open={onChatPage ? false : overlayOpen}
+      tapToDance={onChatPage}
       onToggle={() => {
         if (getChatOverlay()) {
           closeChatOverlay()

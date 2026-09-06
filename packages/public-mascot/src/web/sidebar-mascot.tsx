@@ -21,6 +21,7 @@ export type SidebarMascotProps = {
   animate?: boolean
   /** 彩蛋：所有 mascot 一起跳舞。即使 animate=false 也强开完整动画并进入 celebrate 循环。 */
   dancing?: boolean
+  playNonce?: number
   /** 用于匹配 markSidebarMascotFresh；有剩余 intro 时才播放动画 */
   sessionId?: string
   className?: string
@@ -40,6 +41,7 @@ export const SidebarMascot = memo(function SidebarMascot({
   busy = false,
   animate,
   dancing = false,
+  playNonce = 0,
   sessionId,
   className,
   title = 'Biu',
@@ -83,6 +85,7 @@ export const SidebarMascot = memo(function SidebarMascot({
       busy={busy}
       introMs={introMs}
       dancing={dancing}
+      playNonce={playNonce}
       paused={paused}
       followPointer={followPointer}
       className={className}

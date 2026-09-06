@@ -18,6 +18,8 @@ export type GrokBotAvatarProps = {
   introMs?: number
   /** 彩蛋：进入持续庆祝/跳舞动画（spinWild 循环） */
   dancing?: boolean
+  /** 递增时补一跳/撒花，方便连点再起一段。 */
+  playNonce?: number
   /** Force-pause (e.g. offscreen). Visibility also auto-pauses. */
   paused?: boolean
   followPointer?: boolean
@@ -58,6 +60,7 @@ export const GrokBotAvatar = memo(function GrokBotAvatar({
   busy = false,
   introMs = 0,
   dancing = false,
+  playNonce = 0,
   paused = false,
   followPointer = false,
   className,
@@ -174,6 +177,15 @@ export const GrokBotAvatar = memo(function GrokBotAvatar({
   useEffect(() => {
     botRef.current?.setPaused(paused || !visible || !shouldAnimate)
   }, [paused, visible, ready, shouldAnimate])
+
+  useEffect(() => {
+    const bot = botRef.current
+    if (!bot || !ready || !dancing) return
+    const n = playNonce % 3
+    if (n === 1) bot.spinOnce?.(1)
+    else bot.bounceOnce?.()
+    bot.burstOnce?.()
+  }, [ready, dancing, playNonce])
 
   return (
     <span

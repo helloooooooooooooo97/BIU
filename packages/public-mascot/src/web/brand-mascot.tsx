@@ -1,4 +1,4 @@
-import { isValidElement, useCallback, useMemo, useState, type ReactElement, type ReactNode } from 'react'
+import { isValidElement, useCallback, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import { HeadlessDismiss } from '@biu/public-ui'
 import { SidebarMascot } from './sidebar-mascot.tsx'
 import { resolveSessionMascot } from './session-mascot.ts'
@@ -98,6 +98,8 @@ export function BrandAgentMenu({
   )
 }
 
+export const CORNER_TAP_DANCE_MS = 3200
+
 export function BrandCornerMascot({
   agents = [],
   activeId,
@@ -109,6 +111,7 @@ export function BrandCornerMascot({
   size = 36,
   busy = false,
   busyIds,
+  tapToDance = false,
 }: {
   agents?: CornerAgent[]
   activeId?: string | null
@@ -120,8 +123,13 @@ export function BrandCornerMascot({
   size?: number
   busy?: boolean
   busyIds?: Record<string, true>
+  /** 聊天页点不开悬浮窗时，点击改播一段 Grok 跳舞。 */
+  tapToDance?: boolean
 }) {
   const [agentsOpen, setAgentsOpen] = useState(false)
+  const [tapDance, setTapDance] = useState(false)
+  const [playNonce, setPlayNonce] = useState(0)
+  const danceTimer = useRef(0)
   const ranked = useMemo(() => rankCornerAgents(agents), [agents])
   const current = ranked.find((item) => item.id === activeId) ?? ranked[0]
   const identity = current ? resolveSessionMascot(current.id, current.mascot) : undefined
@@ -146,20 +154,43 @@ export function BrandCornerMascot({
         />
       )
 
+  useEffect(() => () => window.clearTimeout(danceTimer.current), [])
+
+  function playTapDance() {
+    setTapDance(true)
+    setPlayNonce((n) => n + 1)
+    window.clearTimeout(danceTimer.current)
+    danceTimer.current = window.setTimeout(() => setTapDance(false), CORNER_TAP_DANCE_MS)
+  }
+
+  const tip = tapToDance
+    ? tapDance
+      ? '跳舞中'
+      : '跳舞'
+    : onToggle
+      ? expanded
+        ? '关闭聊天窗'
+        : '打开聊天窗'
+      : name
+
   return (
     <div className="brand-corner-cluster" data-testid="brand-corner-mascot">
       {leading ? <div className="brand-corner-leading">{leading}</div> : null}
       <div className="brand-corner-mascot">
         <button
           type="button"
-          className={`brand-corner-mascot-btn${expanded ? ' is-active' : ''}`}
-          title={onToggle ? (expanded ? '关闭聊天窗' : '打开聊天窗') : name}
-          aria-label={onToggle ? (expanded ? '关闭聊天窗' : '打开聊天窗') : current ? `切换 Agent，当前：${name}` : '切换 Agent'}
-          aria-haspopup={onToggle ? 'dialog' : menu ? 'dialog' : 'menu'}
-          aria-expanded={expanded}
-          data-dock-tip={onToggle ? (expanded ? '关闭聊天窗' : '打开聊天窗') : name}
+          className={`brand-corner-mascot-btn${expanded ? ' is-active' : ''}${tapDance ? ' is-dancing' : ''}`}
+          title={tip}
+          aria-label={tip}
+          aria-haspopup={tapToDance ? undefined : onToggle ? 'dialog' : menu ? 'dialog' : 'menu'}
+          aria-expanded={tapToDance ? undefined : expanded}
+          data-dock-tip={tip}
           data-testid="brand-corner-mascot-toggle"
           onClick={() => {
+            if (tapToDance) {
+              playTapDance()
+              return
+            }
             if (onToggle) {
               onToggle()
               return
@@ -168,7 +199,16 @@ export function BrandCornerMascot({
           }}
         >
           {identity && current ? (
-            <SidebarMascot size={size} sessionId={current.id} identity={identity} busy={busy} animate={false} title="" />
+            <SidebarMascot
+              size={size}
+              sessionId={current.id}
+              identity={identity}
+              busy={busy}
+              animate={false}
+              dancing={tapDance}
+              playNonce={playNonce}
+              title=""
+            />
           ) : (
             <BrandMascot className="size-9" />
           )}

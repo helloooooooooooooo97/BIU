@@ -58,6 +58,9 @@ export type GrokCharacterLike = {
   setMode: (mode: string) => void
   setPaused: (v: boolean) => void
   destroy: () => void
+  bounceOnce?: () => void
+  spinOnce?: (turns?: number) => void
+  burstOnce?: () => void
 }
 
 export type GrokCharacterCtor = new (

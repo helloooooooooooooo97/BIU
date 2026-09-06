@@ -783,6 +783,10 @@ body {
   cursor: pointer;
 }
 
+.brand-corner-mascot-btn.is-dancing {
+  animation: brand-corner-tap-dance 0.7s ease-in-out 2;
+}
+
 .brand-corner-mascot-btn.is-active,
 .brand-corner-mascot-btn:hover,
 .brand-corner-mascot-btn:focus,
@@ -790,6 +794,22 @@ body {
   background: transparent;
   box-shadow: none;
   outline: none;
+}
+
+@keyframes brand-corner-tap-dance {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  25% {
+    transform: translateY(-4px) rotate(-8deg);
+  }
+  50% {
+    transform: translateY(-2px) rotate(8deg);
+  }
+  75% {
+    transform: translateY(-5px) rotate(-4deg);
+  }
 }
 
 .brand-corner-leading .project-chip,

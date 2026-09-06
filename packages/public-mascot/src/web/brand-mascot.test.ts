@@ -24,5 +24,8 @@ test('brand mascot is the grok blob on a white rounded square', () => {
   assert.match(favicon, new RegExp(blob.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
   assert.doesNotMatch(favicon, /M0.27 170.27/)
   assert.doesNotMatch(mascot, /#0066B0/)
+  assert.match(mascot, /tapToDance/)
+  assert.match(mascot, /dancing=\{tapDance\}/)
+  assert.match(mascot, /playNonce/)
   assert.doesNotMatch(lockup, /linearGradient/)
 })
