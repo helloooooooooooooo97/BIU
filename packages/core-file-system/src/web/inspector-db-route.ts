@@ -254,7 +254,7 @@ function savedViewFromPayload(raw: unknown, revealViewId: unknown): SavedView | 
     id,
     name: String(rec.name ?? rec.title ?? '新视图'),
     mode: rec.mode as SavedView['mode'],
-    sortField: String(rec.sortField ?? 'id'),
+    sortField: String(rec.sortField ?? 'title'),
     sortDir: rec.sortDir === 'desc' ? 'desc' : 'asc',
     filters,
     columns: Array.isArray(rec.columns) ? rec.columns.map((item) => String(item)) : [],

@@ -258,7 +258,7 @@ function asRecord(path: string, tableName: string, view: StoredView): DbRecord {
     tablePath: path,
     viewId: view.id,
     mode: view.mode ?? 'table',
-    sortField: view.sortField ?? 'id',
+    sortField: view.sortField ?? 'title',
     sortDir: view.sortDir === 'desc' ? 'desc' : 'asc',
     query: view.query ?? '',
     groupBy: view.groupBy ?? '',

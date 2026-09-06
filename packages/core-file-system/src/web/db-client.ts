@@ -30,7 +30,7 @@ export async function listCollection(opts: {
     limit: String(Math.max(1, opts.limit)),
     offset: String(Math.max(0, opts.offset ?? 0)),
     q: opts.query ?? '',
-    sort: opts.sortField || 'id',
+    sort: opts.sortField || 'title',
     dir: opts.sortDir === 'desc' ? 'desc' : 'asc',
     filter: JSON.stringify(opts.filters ?? {}),
   })

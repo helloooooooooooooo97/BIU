@@ -57,7 +57,7 @@ export function normalizeSavedView(view: SavedView): SavedView {
   return {
     ...view,
     mode: isViewModeId(view.mode) ? view.mode : 'table',
-    sortField: view.sortField || 'id',
+    sortField: view.sortField || 'title',
     sortDir: view.sortDir === 'desc' ? 'desc' : 'asc',
     filters: view.filters && typeof view.filters === 'object' ? view.filters : {},
     columns: Array.isArray(view.columns) ? view.columns : [],

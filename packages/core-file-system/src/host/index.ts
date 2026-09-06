@@ -99,15 +99,14 @@ function ensureColumn(columns: string[] | undefined, key: string) {
 
 function schemaFor(spec: CollectionSpec): CollectionSchema {
   const contentField = spec.schema.contentField ?? 'content'
-  const labelField = spec.schema.labelField ?? 'title'
-  const raw = withBuiltinFields(spec.schema.fields, contentField, labelField)
+  const raw = withBuiltinFields(spec.schema.fields, contentField, 'title')
   const fields: CollectionFields = { ...raw }
   for (const [key, field] of Object.entries(raw)) {
     fields[key] = field.computed ? { ...field, writable: false } : field
   }
   return {
     ...spec.schema,
-    labelField,
+    labelField: 'title',
     contentField,
     fields,
     columns:
@@ -592,7 +591,7 @@ export class DatabaseService extends Service implements Database {
     let schema = schemaFor(spec)
     const { limit, offset } = clampPage(page?.limit, page?.offset)
     const q = page?.q ?? ''
-    const sortField = page?.sortField ?? ''
+    const sortField = page?.sortField?.trim() || 'title'
     const sortDir = page?.sortDir === 'desc' ? 'desc' : 'asc'
     const schemaFilter = filter?.facet != null && filter.facet !== '' ? String(filter.facet) : ''
     const columnKeys = listedColumnKeys(page?.columns, schema.labelField ?? 'title')
@@ -1098,7 +1097,7 @@ function savedViewFromCreated(result: unknown) {
     id,
     name: String(row.title ?? '新视图'),
     mode: String(row.mode ?? 'table'),
-    sortField: String(row.sortField ?? 'id'),
+    sortField: String(row.sortField ?? 'title'),
     sortDir: row.sortDir === 'desc' ? 'desc' : 'asc',
     query: String(row.query ?? ''),
     groupBy: String(row.groupBy ?? ''),

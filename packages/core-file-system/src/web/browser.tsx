@@ -241,7 +241,7 @@ export function CollectionBrowser({
   const [fetchQuery, setFetchQuery] = useState(initialView?.query ?? '')
   const [mode, setMode] = useState<ViewMode>(initialView?.mode ?? 'table')
   const customView = extraViews.find((view) => view.id === mode)
-  const [sortField, setSortField] = useState(initialView?.sortField ?? 'id')
+  const [sortField, setSortField] = useState(initialView?.sortField ?? 'title')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>(initialView?.sortDir ?? 'asc')
   const [filters, setFilters] = useState<Record<string, string>>(initialView?.filters ?? {})
   const [columnKeys, setColumnKeys] = useState<string[]>(initialView?.columns ?? [])
@@ -775,10 +775,10 @@ export function CollectionBrowser({
 
   useEffect(() => {
     if (!schema || sortFields.some((item) => item.key === sortField)) return
-    const fallback = sortFields.find((item) => item.kind === 'datetime') ?? sortFields[0]
+    const fallback = sortFields.find((item) => item.key === 'title') ?? sortFields[0]
     if (fallback) {
       setSortField(fallback.key)
-      setSortDir(fallback.kind === 'datetime' ? 'desc' : 'asc')
+      setSortDir('asc')
     }
   }, [schema, sortField, sortFields])
 
@@ -1017,7 +1017,7 @@ export function CollectionBrowser({
       id: `${Date.now()}`,
       name: uniqueViewName('新视图', listed),
       mode: 'table',
-      sortField: target === collectionPath ? (allColumns[0]?.key ?? 'id') : 'id',
+      sortField: 'title',
       sortDir: 'asc',
       filters: { ...catalogLocks },
       columns: target === collectionPath ? [...schemaDefaultKeys] : [],
