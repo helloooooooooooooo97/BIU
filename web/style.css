@@ -332,8 +332,24 @@ body {
 }
 
 .shell-search-hit-title {
+  display: inline-flex;
   min-width: 0;
   flex: 1;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.shell-search-hit-enabled {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--dsw-ok, #22c55e);
+}
+
+.shell-search-hit-title-text {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

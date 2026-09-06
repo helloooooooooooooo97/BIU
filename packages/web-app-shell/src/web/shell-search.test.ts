@@ -10,6 +10,7 @@ import {
   searchCollection,
   searchHref,
   tagsFromRecord,
+  pluginRecordEnabled,
   visibleRowActions,
 } from './shell-search.tsx'
 
@@ -86,6 +87,17 @@ test('empty search lists every kind by updatedAt instead of skipping remotes', (
   assert.match(src, /sort: 'updatedAt'/)
   assert.match(src, /item.id === 'session' \? '\/sessions'/)
   assert.match(src, /空着时视图、会话、任务、页面、插件、合集各按更新时间列最近/)
+})
+
+test('plugin search hits show an enabled dot next to the title', () => {
+  assert.equal(pluginRecordEnabled({ enabled: true }), true)
+  assert.equal(pluginRecordEnabled({ enabled: 'true' }), true)
+  assert.equal(pluginRecordEnabled({}), false)
+  const src = readFileSync(resolve(import.meta.dirname, './shell-search.tsx'), 'utf8')
+  assert.match(src, /pluginRecordEnabled\(item\.record\)/)
+  assert.match(src, /shell-search-hit-enabled/)
+  const css = readFileSync(resolve(import.meta.dirname, '../../../../web/style.css'), 'utf8')
+  assert.match(css, /\.shell-search-hit-enabled\s*\{[^}]*background:\s*var\(--dsw-ok/)
 })
 
 test('session task page plugin hits render tags left of actions', () => {
