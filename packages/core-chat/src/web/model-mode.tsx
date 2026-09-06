@@ -1,4 +1,4 @@
-import type { ModelCapabilities, ReasoningEffort, ThinkingMode } from '../host/model-catalog.ts'
+import type { ContextWindow, ModelCapabilities, ReasoningEffort, ThinkingMode } from '../host/model-catalog.ts'
 
 const pillCls = (on: boolean) =>
   `rounded-md border px-2 py-[3px] text-[12px] leading-none transition-colors ${
@@ -11,38 +11,14 @@ export function ModelModeControls(props: {
   capabilities: ModelCapabilities
   thinking: ThinkingMode
   reasoningEffort: ReasoningEffort
+  contextWindow?: ContextWindow
   disabled?: boolean
-  onChange: (next: { thinking?: ThinkingMode; reasoningEffort?: ReasoningEffort }) => void
+  onChange: (next: { thinking?: ThinkingMode; reasoningEffort?: ReasoningEffort; contextWindow?: ContextWindow }) => void
 }) {
-  const { capabilities: caps, thinking, reasoningEffort, disabled, onChange } = props
-  if (!caps.thinking && !caps.speed && !caps.effort?.length) return null
+  const { capabilities: caps, thinking, reasoningEffort, contextWindow = '200k', disabled, onChange } = props
+  if (!caps.thinking && !caps.speed && !caps.effort?.length && !caps.context?.length) return null
   return (
     <div className="flex flex-col gap-2" data-testid="model-mode-controls">
-      {caps.speed ? (
-        <div className="flex items-center gap-2">
-          <span className="w-10 shrink-0 text-[11px] text-(--dsw-label-3)">快</span>
-          <div className="flex gap-1">
-            <button
-              type="button"
-              className={pillCls(thinking === 'disabled')}
-              disabled={disabled}
-              data-testid="speed-on"
-              onClick={() => onChange({ thinking: 'disabled' })}
-            >
-              开
-            </button>
-            <button
-              type="button"
-              className={pillCls(thinking !== 'disabled')}
-              disabled={disabled}
-              data-testid="speed-off"
-              onClick={() => onChange({ thinking: 'enabled' })}
-            >
-              关
-            </button>
-          </div>
-        </div>
-      ) : null}
       {caps.thinking ? (
         <div className="flex items-center gap-2">
           <span className="w-10 shrink-0 text-[11px] text-(--dsw-label-3)">思考</span>
@@ -68,7 +44,32 @@ export function ModelModeControls(props: {
           </div>
         </div>
       ) : null}
-      {caps.effort?.length && (caps.thinking ? thinking === 'enabled' : true) ? (
+      {caps.speed ? (
+        <div className="flex items-center gap-2">
+          <span className="w-10 shrink-0 text-[11px] text-(--dsw-label-3)">快</span>
+          <div className="flex gap-1">
+            <button
+              type="button"
+              className={pillCls(thinking === 'disabled')}
+              disabled={disabled}
+              data-testid="speed-on"
+              onClick={() => onChange({ thinking: 'disabled' })}
+            >
+              开
+            </button>
+            <button
+              type="button"
+              className={pillCls(thinking !== 'disabled')}
+              disabled={disabled}
+              data-testid="speed-off"
+              onClick={() => onChange({ thinking: 'enabled' })}
+            >
+              关
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {caps.effort?.length ? (
         <div className="flex items-center gap-2">
           <span className="w-10 shrink-0 text-[11px] text-(--dsw-label-3)">力度</span>
           <div className="flex gap-1">
@@ -79,9 +80,28 @@ export function ModelModeControls(props: {
                 className={pillCls(reasoningEffort === item)}
                 disabled={disabled}
                 data-testid={`effort-${item}`}
-                onClick={() => onChange({ thinking: 'enabled', reasoningEffort: item })}
+                onClick={() => onChange({ reasoningEffort: item })}
               >
                 {item === 'max' ? 'Max' : 'High'}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      {caps.context?.length ? (
+        <div className="flex items-center gap-2">
+          <span className="w-10 shrink-0 text-[11px] text-(--dsw-label-3)">上下文</span>
+          <div className="flex gap-1">
+            {caps.context.map((item) => (
+              <button
+                key={item}
+                type="button"
+                className={pillCls(contextWindow === item)}
+                disabled={disabled}
+                data-testid={`context-${item}`}
+                onClick={() => onChange({ contextWindow: item })}
+              >
+                {item === '1m' ? '1M' : '200k'}
               </button>
             ))}
           </div>
@@ -91,9 +111,15 @@ export function ModelModeControls(props: {
   )
 }
 
-export function modelModeSuffix(thinking: ThinkingMode, effort: ReasoningEffort, caps: ModelCapabilities) {
+export function modelModeSuffix(
+  thinking: ThinkingMode,
+  effort: ReasoningEffort,
+  caps: ModelCapabilities,
+  context: ContextWindow = '200k',
+) {
   if (caps.speed && thinking === 'disabled') return '快'
   if (caps.thinking && thinking === 'disabled') return ''
+  if (caps.context?.length && context === '1m') return '1M'
   if (!caps.thinking && !caps.effort?.length) return ''
   if (effort === 'max') return 'Max'
   return caps.effort?.length ? 'High' : ''

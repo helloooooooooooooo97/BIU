@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { CheckIcon, ChevronRightIcon, MagnifyingGlassIcon } from '@heroicons/react/16/solid'
 import {
   inferModelCapabilities,
+  type ContextWindow,
   type ModelCapabilities,
   type ReasoningEffort,
   type ThinkingMode,
@@ -17,7 +18,7 @@ export type ComposerModelOption = {
   note?: string
 }
 
-type Pane = 'root' | 'effort' | 'model'
+type Pane = 'root' | 'effort' | 'context' | 'model'
 
 function groupTitle(key: string, labels: Record<string, string>) {
   return (
@@ -31,11 +32,12 @@ function tagFor(
   current: ComposerModelOption,
   thinking: ThinkingMode,
   effort: ReasoningEffort,
+  context: ContextWindow,
   currentCaps: ModelCapabilities,
 ) {
-  if (option.id === current.id) return modelModeSuffix(thinking, effort, currentCaps)
+  if (option.id === current.id) return modelModeSuffix(thinking, effort, currentCaps, context)
   const caps = inferModelCapabilities(option.model, option.provider as 'deepseek' | 'openai' | 'anthropic')
-  return modelModeSuffix('enabled', 'high', caps)
+  return modelModeSuffix('enabled', 'high', caps, '200k')
 }
 
 export function ComposerModelMenu(props: {
@@ -44,10 +46,11 @@ export function ComposerModelMenu(props: {
   endpointLabels: Record<string, string>
   thinking: ThinkingMode
   reasoningEffort: ReasoningEffort
+  contextWindow: ContextWindow
   capabilities: ModelCapabilities
   disabled?: boolean
   onSelect: (option: ComposerModelOption) => void
-  onMode: (next: { thinking?: ThinkingMode; reasoningEffort?: ReasoningEffort }) => void
+  onMode: (next: { thinking?: ThinkingMode; reasoningEffort?: ReasoningEffort; contextWindow?: ContextWindow }) => void
   onAddModels: () => void
 }) {
   const {
@@ -56,6 +59,7 @@ export function ComposerModelMenu(props: {
     endpointLabels,
     thinking,
     reasoningEffort,
+    contextWindow,
     capabilities,
     disabled,
     onSelect,
@@ -68,8 +72,10 @@ export function ComposerModelMenu(props: {
   const fast = Boolean(capabilities.speed && thinking === 'disabled')
   const showThinking = Boolean(capabilities.thinking)
   const showFast = Boolean(capabilities.speed)
-  const showEffort = Boolean(capabilities.effort?.length && (!capabilities.thinking || thinking === 'enabled'))
+  const showEffort = Boolean(capabilities.effort?.length)
+  const showContext = Boolean(capabilities.context?.length)
   const effortLabel = reasoningEffort === 'max' ? 'Max' : 'High'
+  const contextLabel = contextWindow === '1m' ? '1M' : '200k'
 
   const grouped = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -113,7 +119,7 @@ export function ComposerModelMenu(props: {
                   <div className="composer-model-group-label">{group.title}</div>
                   {group.items.map((option) => {
                     const active = option.id === current.id
-                    const tag = tagFor(option, current, thinking, reasoningEffort, capabilities)
+                    const tag = tagFor(option, current, thinking, reasoningEffort, contextWindow, capabilities)
                     return (
                       <button
                         key={option.id}
@@ -155,7 +161,31 @@ export function ComposerModelMenu(props: {
                 className={`composer-model-item${active ? ' is-active' : ''}`}
                 data-testid={`effort-${item}`}
                 disabled={disabled}
-                onClick={() => onMode({ thinking: 'enabled', reasoningEffort: item })}
+                onClick={() => onMode({ reasoningEffort: item })}
+              >
+                <span className="composer-model-item-label">{label}</span>
+                {active ? <CheckIcon className="composer-model-check size-3.5" aria-hidden /> : null}
+              </button>
+            )
+          })}
+        </div>
+      ) : null}
+
+      {pane === 'context' ? (
+        <div className="composer-model-flyout is-compact" role="listbox" aria-label="上下文">
+          {(capabilities.context ?? []).map((item) => {
+            const active = contextWindow === item
+            const label = item === '1m' ? '1M' : '200k'
+            return (
+              <button
+                key={item}
+                type="button"
+                role="option"
+                aria-selected={active}
+                className={`composer-model-item${active ? ' is-active' : ''}`}
+                data-testid={`context-${item}`}
+                disabled={disabled}
+                onClick={() => onMode({ contextWindow: item })}
               >
                 <span className="composer-model-item-label">{label}</span>
                 {active ? <CheckIcon className="composer-model-check size-3.5" aria-hidden /> : null}
@@ -203,6 +233,18 @@ export function ComposerModelMenu(props: {
           >
             <span className="composer-model-row-label">力度</span>
             <span className="composer-model-row-val">{effortLabel}</span>
+            <ChevronRightIcon className="size-3.5 opacity-50" aria-hidden />
+          </button>
+        ) : null}
+        {showContext ? (
+          <button
+            type="button"
+            className={`composer-model-row${pane === 'context' ? ' is-open' : ''}`}
+            disabled={disabled}
+            onClick={() => setPane((p) => (p === 'context' ? 'root' : 'context'))}
+          >
+            <span className="composer-model-row-label">上下文</span>
+            <span className="composer-model-row-val">{contextLabel}</span>
             <ChevronRightIcon className="size-3.5 opacity-50" aria-hidden />
           </button>
         ) : null}

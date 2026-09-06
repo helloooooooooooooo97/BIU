@@ -5,9 +5,9 @@ import type { ChatMessage } from './chat-types.ts'
 import { isAgentToolMode, normalizeAgentMode, type AgentToolMode } from '@biu/host-tools'
 import type { LlmConfig } from '@biu/host-llm'
 import { probeLlmConnection } from '@biu/host-llm'
-import { LLM_MODEL_CATALOG, LLM_ENDPOINT_PRESETS, describeProvider, defaultModelFor, CHAT_PROVIDERS, findEndpointPreset, normalizeBaseUrl, inferModelCapabilities, defaultThinkingFor, defaultEffortFor } from './model-catalog.ts'
-import type { ChatProvider, LlmModelDef, LlmEndpointDef, ReasoningEffort, ThinkingMode, ModelCapabilities } from './model-catalog.ts'
-export type { ChatProvider, LlmModelDef, LlmEndpointDef, ReasoningEffort, ThinkingMode, ModelCapabilities } from './model-catalog.ts'
+import { LLM_MODEL_CATALOG, LLM_ENDPOINT_PRESETS, describeProvider, defaultModelFor, CHAT_PROVIDERS, findEndpointPreset, normalizeBaseUrl, inferModelCapabilities, defaultThinkingFor, defaultEffortFor, defaultContextFor } from './model-catalog.ts'
+import type { ChatProvider, LlmModelDef, LlmEndpointDef, ReasoningEffort, ThinkingMode, ContextWindow, ModelCapabilities } from './model-catalog.ts'
+export type { ChatProvider, LlmModelDef, LlmEndpointDef, ReasoningEffort, ThinkingMode, ContextWindow, ModelCapabilities } from './model-catalog.ts'
 export { LLM_ENDPOINT_PRESETS, LLM_MODEL_CATALOG } from './model-catalog.ts'
 import { currentSessionId } from '@biu/host-sessions/scope'
 import { isSessionCompactPoint, type SessionConfig, type SessionEvent } from '@biu/type-session'
@@ -61,8 +61,9 @@ interface ChatConfig {
   /** 当前模型的思考开关；能思考的模型默认 enabled（对齐上游）。 */
   thinking: ThinkingMode
   reasoningEffort: ReasoningEffort
+  contextWindow: ContextWindow
   /** 按「入口::模型」记住档位，切模型时带回。 */
-  modelPrefs: Record<string, { thinking?: ThinkingMode; reasoningEffort?: ReasoningEffort }>
+  modelPrefs: Record<string, { thinking?: ThinkingMode; reasoningEffort?: ReasoningEffort; contextWindow?: ContextWindow }>
 }
 
 function configPath() {
@@ -98,6 +99,7 @@ function defaults(): ChatConfig {
     extraTools: [],
     thinking: 'enabled',
     reasoningEffort: 'high',
+    contextWindow: '200k',
     modelPrefs: {},
   }
 }
@@ -131,6 +133,7 @@ function writePersisted(config: ChatConfig) {
         extraTools: config.extraTools,
         thinking: config.thinking,
         reasoningEffort: config.reasoningEffort,
+        contextWindow: config.contextWindow,
         modelPrefs: config.modelPrefs,
         apiKeys: config.apiKeys,
         baseUrls: config.baseUrls,
@@ -165,6 +168,14 @@ function parseEffort(value: unknown): ReasoningEffort | undefined {
   return value === 'high' || value === 'max' ? value : undefined
 }
 
+function parseContext(value: unknown): ContextWindow | undefined {
+  return value === '200k' || value === '1m' ? value : undefined
+}
+
+function hasModeCaps(caps: ModelCapabilities) {
+  return Boolean(caps.thinking || caps.speed || caps.effort?.length || caps.context?.length)
+}
+
 function mergeModelPrefs(saved: Partial<ChatConfig> | null): ChatConfig['modelPrefs'] {
   const out: ChatConfig['modelPrefs'] = {}
   if (!saved?.modelPrefs || typeof saved.modelPrefs !== 'object') return out
@@ -172,7 +183,14 @@ function mergeModelPrefs(saved: Partial<ChatConfig> | null): ChatConfig['modelPr
     if (!raw || typeof raw !== 'object') continue
     const thinking = parseThinking(raw.thinking)
     const reasoningEffort = parseEffort(raw.reasoningEffort)
-    if (thinking || reasoningEffort) out[key] = { ...(thinking ? { thinking } : {}), ...(reasoningEffort ? { reasoningEffort } : {}) }
+    const contextWindow = parseContext((raw as { contextWindow?: unknown }).contextWindow)
+    if (thinking || reasoningEffort || contextWindow) {
+      out[key] = {
+        ...(thinking ? { thinking } : {}),
+        ...(reasoningEffort ? { reasoningEffort } : {}),
+        ...(contextWindow ? { contextWindow } : {}),
+      }
+    }
   }
   return out
 }
@@ -182,12 +200,14 @@ function hydrateModelMode(config: ChatConfig) {
   const saved = config.modelPrefs[prefKey(config.endpointId, config.model)]
   config.thinking = saved?.thinking ?? defaultThinkingFor(caps)
   config.reasoningEffort = saved?.reasoningEffort ?? defaultEffortFor(caps)
+  config.contextWindow = saved?.contextWindow ?? defaultContextFor(caps)
 }
 
 function rememberModelPrefs(config: ChatConfig) {
   config.modelPrefs[prefKey(config.endpointId, config.model)] = {
     thinking: config.thinking,
     reasoningEffort: config.reasoningEffort,
+    contextWindow: config.contextWindow,
   }
 }
 
@@ -327,6 +347,7 @@ function mergePersisted(base: ChatConfig, saved: Partial<ChatConfig> | null): Ch
       : base.extraTools,
     thinking: parseThinking(saved.thinking) ?? base.thinking,
     reasoningEffort: parseEffort(saved.reasoningEffort) ?? base.reasoningEffort,
+    contextWindow: parseContext(saved.contextWindow) ?? base.contextWindow,
     modelPrefs: mergeModelPrefs(saved),
   }
   hydrateModelMode(next)
@@ -425,6 +446,7 @@ export class ChatService extends Service {
       agentMode: this.config.agentMode,
       thinking: this.config.thinking,
       reasoningEffort: this.config.reasoningEffort,
+      contextWindow: this.config.contextWindow,
       capabilities: inferModelCapabilities(this.config.model, this.config.provider),
       /** 当前默认入口是否已配置（兼容旧语义，供 banner 等使用）。 */
       configured: current ? endpointConfigured(this.config, current) : Boolean((this.config.apiKeys[this.config.provider] ?? '').trim()),
@@ -518,7 +540,7 @@ export class ChatService extends Service {
       apiKey: key,
       model: effective.model,
       ...(endpoint ? { baseUrl: effectiveBaseUrl(this.config, endpoint) } : {}),
-      ...(caps.thinking || caps.effort?.length
+      ...(hasModeCaps(caps)
         ? {
             thinking: prefs?.thinking ?? this.config.thinking,
             reasoningEffort: prefs?.reasoningEffort ?? this.config.reasoningEffort,
@@ -631,6 +653,7 @@ export class ChatService extends Service {
       extraTools: string[]
       thinking: ThinkingMode
       reasoningEffort: ReasoningEffort
+      contextWindow: ContextWindow
       /** 按入口更新 key；空串 / null 清除 */
       setApiKey: Partial<Record<string, string | null>>
       /** 按入口覆盖 baseUrl；空串清除覆盖、回到 preset 默认 */
@@ -805,11 +828,13 @@ export class ChatService extends Service {
     const afterKey = prefKey(this.config.endpointId, this.config.model)
     const thinkingPatch = parseThinking(next.thinking)
     const effortPatch = parseEffort(next.reasoningEffort)
-    if (afterKey !== beforeKey && thinkingPatch == null && effortPatch == null) {
+    const contextPatch = parseContext(next.contextWindow)
+    if (afterKey !== beforeKey && thinkingPatch == null && effortPatch == null && contextPatch == null) {
       hydrateModelMode(this.config)
     }
     if (thinkingPatch) this.config.thinking = thinkingPatch
     if (effortPatch) this.config.reasoningEffort = effortPatch
+    if (contextPatch) this.config.contextWindow = contextPatch
     rememberModelPrefs(this.config)
     this.syncLlm()
     this.syncToolsMode()

@@ -725,17 +725,24 @@ export function endpointProtocolProvider(endpoint: LlmEndpointDef): ChatProvider
 
 export type ReasoningEffort = 'high' | 'max'
 export type ThinkingMode = 'enabled' | 'disabled'
+export type ContextWindow = '200k' | '1m'
 
+/**
+ * 当前模型在一级菜单里能露出的配置。切模型后整排换掉，不是全局 Fast。
+ * DeepSeek：思考 + High/Max；GPT-5：快慢 + 力度 + 上下文；各家不同。
+ */
 export interface ModelCapabilities {
-  /** 可开关思考（DeepSeek V4 / Claude 扩展思考）。不是快/慢。 */
+  /** DeepSeek / Claude：是否思考。 */
   thinking?: boolean
-  /** 可调快/慢（Grok 等）。开 = 快，映射为 thinking disabled。 */
+  /** GPT-5 / o 系列 / Grok：快（少推理）或慢。开 = thinking disabled。 */
   speed?: boolean
-  /** 可调推理档位 High / Max */
+  /** High / Max 推理档。 */
   effort?: Array<ReasoningEffort>
+  /** 上下文窗口档，如 200k / 1M。 */
+  context?: Array<ContextWindow>
 }
 
-/** 按模型 id 推断：只露出该模型真正有的 1～2 项，避免一堆无效滑杆。 */
+/** 按模型 id 推断：只露出该模型真正有的项。 */
 export function inferModelCapabilities(model: string, provider: ChatProvider): ModelCapabilities {
   const id = model.toLowerCase()
   if (
@@ -749,8 +756,14 @@ export function inferModelCapabilities(model: string, provider: ChatProvider): M
   if (id.includes('grok')) {
     return { speed: true }
   }
-  if (/(^|[^a-z])o[1-4]([^a-z]|$)|gpt-5/.test(id)) {
-    return { effort: ['high', 'max'] }
+  if (/gpt-5/.test(id)) {
+    return { speed: true, effort: ['high', 'max'], context: ['200k', '1m'] }
+  }
+  if (/(^|[^a-z])o[1-4]([^a-z]|$)/.test(id)) {
+    return { speed: true, effort: ['high', 'max'] }
+  }
+  if (/gpt-4\.1/.test(id)) {
+    return { context: ['200k', '1m'] }
   }
   if (provider === 'anthropic' && /claude-(opus|sonnet)-4|claude-4|claude-3-7/.test(id)) {
     return { thinking: true }
@@ -759,12 +772,15 @@ export function inferModelCapabilities(model: string, provider: ChatProvider): M
 }
 
 export function defaultThinkingFor(caps: ModelCapabilities): ThinkingMode {
-  // 能思考就默认开。仅 speed 模型默认慢（思考开），用户可打成「快」。
   return caps.thinking || caps.speed || caps.effort?.length ? 'enabled' : 'disabled'
 }
 
 export function defaultEffortFor(caps: ModelCapabilities): ReasoningEffort {
   return caps.effort?.includes('high') ? 'high' : 'max'
+}
+
+export function defaultContextFor(caps: ModelCapabilities): ContextWindow {
+  return caps.context?.includes('200k') ? '200k' : caps.context?.[0] ?? '200k'
 }
 
 /** 规范化用户输入的 baseUrl（去尾斜杠）。 */

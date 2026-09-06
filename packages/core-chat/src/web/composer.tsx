@@ -19,7 +19,7 @@ import {
 import { ModelConfigDialog } from './model-config-dialog.tsx'
 import { modelModeSuffix } from './model-mode.tsx'
 import { ComposerModelMenu } from './composer-model-menu.tsx'
-import type { ModelCapabilities, ReasoningEffort, ThinkingMode } from '../host/model-catalog.ts'
+import type { ContextWindow, ModelCapabilities, ReasoningEffort, ThinkingMode } from '../host/model-catalog.ts'
 import { ImageThumbs } from './image-thumbs.tsx'
 import { collectClipboardImages, collectImageFiles } from './clipboard-images.ts'
 import { revealOverlayThread, isComposerFocusPending } from '@biu/web-app-shell/chat-overlay'
@@ -191,6 +191,7 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
   const [configOpen, setConfigOpen] = useState(false)
   const [thinking, setThinking] = useState<ThinkingMode>('enabled')
   const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>('high')
+  const [contextWindow, setContextWindow] = useState<ContextWindow>('200k')
   const [modelCaps, setModelCaps] = useState<ModelCapabilities>({ thinking: true, effort: ['high', 'max'] })
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([])
   /** 全部目录模型（含未配置的），用于下拉只展示已配置入口，但当前选中可能来自任一。 */
@@ -235,6 +236,7 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
       model?: string
       thinking?: ThinkingMode
       reasoningEffort?: ReasoningEffort
+      contextWindow?: ContextWindow
       capabilities?: ModelCapabilities
       providers?: Record<string, { configured?: boolean }>
       endpoints?: Array<{ id: string; label?: string; configured?: boolean }>
@@ -268,6 +270,7 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
       }
       if (data.thinking === 'enabled' || data.thinking === 'disabled') setThinking(data.thinking)
       if (data.reasoningEffort === 'high' || data.reasoningEffort === 'max') setReasoningEffort(data.reasoningEffort)
+      if (data.contextWindow === '200k' || data.contextWindow === '1m') setContextWindow(data.contextWindow)
       if (data.capabilities) setModelCaps(data.capabilities)
       const cfg: Record<string, boolean> = {}
       const labels: Record<string, string> = {
@@ -672,19 +675,25 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
         model?: string
         thinking?: ThinkingMode
         reasoningEffort?: ReasoningEffort
+        contextWindow?: ContextWindow
         capabilities?: ModelCapabilities
       }
       if (data.provider && data.model) setModelOption(matchModelOption(allModels, data.provider, data.model))
       else setModelOption(option)
       if (data.thinking === 'enabled' || data.thinking === 'disabled') setThinking(data.thinking)
       if (data.reasoningEffort === 'high' || data.reasoningEffort === 'max') setReasoningEffort(data.reasoningEffort)
+      if (data.contextWindow === '200k' || data.contextWindow === '1m') setContextWindow(data.contextWindow)
       if (data.capabilities) setModelCaps(data.capabilities)
     } finally {
       setModelBusy(false)
     }
   }
 
-  async function patchModelMode(next: { thinking?: ThinkingMode; reasoningEffort?: ReasoningEffort }) {
+  async function patchModelMode(next: {
+    thinking?: ThinkingMode
+    reasoningEffort?: ReasoningEffort
+    contextWindow?: ContextWindow
+  }) {
     setModelBusy(true)
     try {
       const res = await fetch('/api/chat/config', {
@@ -696,10 +705,12 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
       const data = (await res.json()) as {
         thinking?: ThinkingMode
         reasoningEffort?: ReasoningEffort
+        contextWindow?: ContextWindow
         capabilities?: ModelCapabilities
       }
       if (data.thinking === 'enabled' || data.thinking === 'disabled') setThinking(data.thinking)
       if (data.reasoningEffort === 'high' || data.reasoningEffort === 'max') setReasoningEffort(data.reasoningEffort)
+      if (data.contextWindow === '200k' || data.contextWindow === '1m') setContextWindow(data.contextWindow)
       if (data.capabilities) setModelCaps(data.capabilities)
     } finally {
       setModelBusy(false)
@@ -878,8 +889,8 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
             >
               <span className="composer-model-label">
                 {modelOption.label}
-                {modelModeSuffix(thinking, reasoningEffort, modelCaps)
-                  ? ` · ${modelModeSuffix(thinking, reasoningEffort, modelCaps)}`
+                {modelModeSuffix(thinking, reasoningEffort, modelCaps, contextWindow)
+                  ? ` · ${modelModeSuffix(thinking, reasoningEffort, modelCaps, contextWindow)}`
                   : ''}
               </span>
               <ChevronDownIcon className="size-3.5 opacity-70" />
@@ -892,6 +903,7 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
                   endpointLabels={endpointLabels}
                   thinking={thinking}
                   reasoningEffort={reasoningEffort}
+                  contextWindow={contextWindow}
                   capabilities={modelCaps}
                   disabled={modelBusy}
                   onSelect={(option) => void selectModel(option)}

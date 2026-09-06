@@ -11,7 +11,7 @@ import { CheckIcon, ChevronDownIcon, ArrowPathIcon, PlusIcon, MagnifyingGlassIco
 import { HeadlessDismiss } from '@biu/public-ui'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { ModelModeControls } from './model-mode.tsx'
-import type { ModelCapabilities, ReasoningEffort, ThinkingMode } from '../host/model-catalog.ts'
+import type { ContextWindow, ModelCapabilities, ReasoningEffort, ThinkingMode } from '../host/model-catalog.ts'
 
 type ChatProvider = 'deepseek' | 'openai' | 'anthropic'
 
@@ -52,6 +52,7 @@ interface ChatPublicConfig {
   model: string
   thinking?: ThinkingMode
   reasoningEffort?: ReasoningEffort
+  contextWindow?: ContextWindow
   capabilities?: ModelCapabilities
   configured: boolean
   hint: string
@@ -86,6 +87,7 @@ export function ChatConfig(props?: { onClose?: () => void }) {
   const [defaultModel, setDefaultModel] = useState('deepseek-v4-flash')
   const [thinking, setThinking] = useState<ThinkingMode>('enabled')
   const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>('high')
+  const [contextWindow, setContextWindow] = useState<ContextWindow>('200k')
   const [modelCaps, setModelCaps] = useState<ModelCapabilities>({})
   const [endpoints, setEndpoints] = useState<EndpointView[]>([])
   const [modelCatalog, setModelCatalog] = useState<ModelDef[]>([])
@@ -256,6 +258,7 @@ export function ChatConfig(props?: { onClose?: () => void }) {
     setDefaultModel(data.model)
     if (data.thinking === 'enabled' || data.thinking === 'disabled') setThinking(data.thinking)
     if (data.reasoningEffort === 'high' || data.reasoningEffort === 'max') setReasoningEffort(data.reasoningEffort)
+    if (data.contextWindow === '200k' || data.contextWindow === '1m') setContextWindow(data.contextWindow)
     if (data.capabilities) setModelCaps(data.capabilities)
     setActiveId(eid)
 
@@ -1086,6 +1089,7 @@ export function ChatConfig(props?: { onClose?: () => void }) {
                       capabilities={modelCaps}
                       thinking={thinking}
                       reasoningEffort={reasoningEffort}
+                      contextWindow={contextWindow}
                       disabled={saving}
                       onChange={(next) => {
                         void fetch('/api/chat/config', {

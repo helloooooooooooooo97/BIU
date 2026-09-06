@@ -97,6 +97,7 @@ test('DeepSeek V4 can toggle thinking and High/Max', () => {
   const caps = inferModelCapabilities('deepseek-v4-flash', 'deepseek')
   assert.equal(caps.thinking, true)
   assert.equal(caps.speed, undefined)
+  assert.equal(caps.context, undefined)
   assert.deepEqual(caps.effort, ['high', 'max'])
   assert.equal(defaultThinkingFor(caps), 'enabled')
 })
@@ -108,14 +109,33 @@ test('Grok exposes a speed switch, not thinking', () => {
   assert.equal(caps.effort, undefined)
 })
 
-test('GPT-4o has no thinking extras', () => {
+test('GPT-4o has no extra knobs', () => {
   const caps = inferModelCapabilities('gpt-4o', 'openai')
   assert.equal(caps.thinking, undefined)
+  assert.equal(caps.speed, undefined)
   assert.equal(caps.effort, undefined)
+  assert.equal(caps.context, undefined)
 })
 
-test('o3 exposes effort but not a thinking off switch', () => {
-  const caps = inferModelCapabilities('o3-mini', 'openai')
+test('GPT-4.1 exposes context size only', () => {
+  const caps = inferModelCapabilities('gpt-4.1', 'openai')
+  assert.deepEqual(caps.context, ['200k', '1m'])
+  assert.equal(caps.thinking, undefined)
+  assert.equal(caps.speed, undefined)
+})
+
+test('GPT-5 exposes speed, effort and context', () => {
+  const caps = inferModelCapabilities('gpt-5', 'openai')
+  assert.equal(caps.speed, true)
   assert.equal(caps.thinking, undefined)
   assert.deepEqual(caps.effort, ['high', 'max'])
+  assert.deepEqual(caps.context, ['200k', '1m'])
+})
+
+test('o3 exposes speed and effort, not a thinking switch', () => {
+  const caps = inferModelCapabilities('o3-mini', 'openai')
+  assert.equal(caps.thinking, undefined)
+  assert.equal(caps.speed, true)
+  assert.deepEqual(caps.effort, ['high', 'max'])
+  assert.equal(caps.context, undefined)
 })

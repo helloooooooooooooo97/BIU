@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 
 const root = resolve(import.meta.dirname, '../../../..')
 
-test('composer model menu is a nested thinking / speed / effort / model pop', () => {
+test('composer model menu shows per-model knobs plus nested model list', () => {
   const menu = readFileSync(resolve(import.meta.dirname, './composer-model-menu.tsx'), 'utf8')
   const composer = readFileSync(resolve(import.meta.dirname, './composer.tsx'), 'utf8')
   const css = readFileSync(resolve(root, 'web/style.css'), 'utf8')
@@ -16,6 +16,7 @@ test('composer model menu is a nested thinking / speed / effort / model pop', ()
   assert.match(menu, /composer-model-switch/)
   assert.match(menu, />思考</)
   assert.match(menu, />快</)
+  assert.match(menu, />上下文</)
   assert.doesNotMatch(menu, />Fast</)
   assert.match(menu, />力度</)
   assert.match(menu, />模型</)
