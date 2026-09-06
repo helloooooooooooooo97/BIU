@@ -1983,21 +1983,6 @@ export function CollectionBrowser({
     )
   }
 
-  function cycleSort(field: string) {
-    const current = sorts.find((item) => item.field === field)
-    if (!current) {
-      setSorts([...sorts, { id: `${Date.now()}`, field, dir: 'asc' }])
-      if (!sorts.length) {
-        setSortField(field)
-        setSortDir('asc')
-      }
-      return
-    }
-    const dir = current.dir === 'asc' ? 'desc' : 'asc'
-    setSorts(sorts.map((item) => (item.id === current.id ? { ...item, dir } : item)))
-    if (sorts[0]?.id === current.id) setSortDir(dir)
-  }
-
   function applySorts(next: SortRule[]) {
     setSorts(next)
     setSortField(next[0]?.field ?? 'title')
