@@ -30,16 +30,17 @@ import {
   TableCellsIcon,
   ViewColumnsIcon,
 } from '@heroicons/react/16/solid'
-import type { CollectionActionInfo, CollectionInfo, CollectionSchema, DbRecord, FieldSpec } from '@biu/type-file-system'
+import type { CollectionActionInfo, CollectionInfo, CollectionSchema, CollectionSchemaPack, DbRecord, FieldSpec } from '@biu/type-file-system'
 import type { CollectionChrome, CollectionViewType, DatabaseUi } from '@biu/type-file-system/ui'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
-import { BoolBox, ChatCount, RecordEmojiBoard, HeadlessDismiss } from '@biu/public-ui'
+import { BoolBox, ChatCount, RecordEmojiBoard, HeadlessDismiss, HeadlessPopover, HEADLESS_DISMISS_IGNORE } from '@biu/public-ui'
 import {
   contentFieldKey,
   defaultColumnKeys,
   facetSourceKey,
   flattenFacetColumns,
   facetColumnTitle,
+  facetFlatColumnKey,
   fieldEntries,
   flattenTree,
   formatField,
@@ -131,6 +132,69 @@ type StatResult = { schema?: CollectionSchema }
 
 function isListColumn(key: string) {
   return key !== 'description' && key !== 'notes' && key !== 'content' && key !== 'emoji'
+}
+
+function FacetColumnPackRow({
+  pack,
+  visibleKeys,
+  onToggle,
+}: {
+  pack: CollectionSchemaPack
+  visibleKeys: Set<string>
+  onToggle: (key: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const tone = schemaTagTone(pack.id)
+  const anyOn = pack.fields.some((field) => visibleKeys.has(facetFlatColumnKey(pack.id, field.key)))
+
+  return (
+    <HeadlessPopover
+      open={open}
+      onOpenChange={setOpen}
+      side="left"
+      align="start"
+      sideOffset={6}
+      trigger={
+        <button
+          type="button"
+          className={`fsdb-checkrow${anyOn || open ? ' is-on' : ''}`}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          aria-label={`${pack.label}属性`}
+        >
+          <span className="fsdb-checkrow-label">
+            <span className="fsdb-checkrow-icon">
+              <FieldGlyph kind="facet" />
+            </span>
+            <span className="fsdb-col-facet-name" style={tone ? { color: tone } : undefined}>
+              {pack.label}
+            </span>
+          </span>
+          <span className={`fsdb-col-facet-dot${anyOn ? ' is-on' : ''}`} aria-hidden />
+        </button>
+      }
+    >
+      <div className="fsdb-col-facet-flyout" data-fsdb-col-flyout role="menu">
+        <div className="tasks-sort-head">{pack.label}</div>
+        {pack.fields.length ? (
+          pack.fields.map((field) => {
+            const key = facetFlatColumnKey(pack.id, field.key)
+            return (
+              <CheckRow
+                key={field.key}
+                icon={<FieldGlyph kind={resolveFieldType(field)} />}
+                label={field.label ?? field.key}
+                on={visibleKeys.has(key)}
+                onToggle={() => onToggle(key)}
+              />
+            )
+          })
+        ) : (
+          <div className="tasks-viewdd-empty">还没有属性</div>
+        )}
+      </div>
+    </HeadlessPopover>
+  )
 }
 
 function recordsFingerprint(rows: Array<DbRecord & { path?: string }>) {
@@ -1149,8 +1213,10 @@ export function CollectionBrowser({
 
   function toggleColumn(key: string) {
     if (key === schema?.labelField) return
-    const next = columnKeys.includes(key) ? columnKeys.filter((item) => item !== key) : [...columnKeys, key]
-    setVisibleColumns(next.length ? next : columnKeys)
+    const current = columnKeys.length ? columnKeys : columns.map((col) => col.key)
+    const next = current.includes(key) ? current.filter((item) => item !== key) : [...current, key]
+    if (!next.length) return
+    setVisibleColumns(next)
   }
 
   function setWrap(next: boolean) {
@@ -2391,33 +2457,35 @@ export function CollectionBrowser({
                 {columnCustom ? <span className="tasks-sort-dot" aria-hidden /> : null}
               </button>
               {columnMenuOpen ? (
-                <HeadlessDismiss onDismiss={() => setColumnMenuOpen(false)} insideRef={columnRef}>
+                <HeadlessDismiss
+                  onDismiss={() => setColumnMenuOpen(false)}
+                  insideRef={columnRef}
+                  ignoreSelector={`${HEADLESS_DISMISS_IGNORE}, [data-fsdb-col-flyout]`}
+                  inside={(node) => node instanceof Element && Boolean(node.closest('[data-fsdb-col-flyout]'))}
+                >
                 <div className="tasks-sort-menu fsdb-col-menu" role="menu">
                   <div className="tasks-sort-head">可见列</div>
                   <div className="fsdb-col-menu-list">
-                  {allColumns.map((item) => {
-                    const on = columns.some((col) => col.key === item.key)
-                    const flat = parseFacetFlatColumnKey(item.key)
-                    const tone = flat ? schemaTagTone(flat.packId) : undefined
-                    return (
+                  {allColumns
+                    .filter((item) => !parseFacetFlatColumnKey(item.key))
+                    .map((item) => (
                       <CheckRow
                         key={item.key}
                         icon={<FieldGlyph kind={item.kind} />}
-                        label={
-                          flat ? (
-                            <span style={tone ? { color: tone } : undefined}>
-                              {facetColumnTitle(item)}
-                            </span>
-                          ) : (
-                            item.field.label ?? item.key
-                          )
-                        }
-                        on={on}
+                        label={item.field.label ?? item.key}
+                        on={columns.some((col) => col.key === item.key)}
                         locked={item.key === schema?.labelField}
                         onToggle={() => toggleColumn(item.key)}
                       />
-                    )
-                  })}
+                    ))}
+                  {facetCatalog.map((pack) => (
+                    <FacetColumnPackRow
+                      key={pack.id}
+                      pack={pack}
+                      visibleKeys={new Set(columns.map((col) => col.key))}
+                      onToggle={toggleColumn}
+                    />
+                  ))}
                   </div>
                 </div>
                 </HeadlessDismiss>
