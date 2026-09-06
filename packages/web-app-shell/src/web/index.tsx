@@ -70,10 +70,16 @@ function DockSessionMascot({
   const activeId = useSessionView((state) => state.sessionId)
   const overlayOpen = useSyncExternalStore(subscribeChatOverlay, getChatOverlay, () => false)
   const onChatPage = isChatPagePath(location.pathname)
+  const busy = useSessionView((state) => {
+    const id = state.sessionId
+    if (!id) return false
+    return Boolean(state.busySessions[id]) || state.agentStatus === 'running' || Boolean(state.pending)
+  })
   return (
     <BrandCornerMascot
       agents={agents}
       activeId={activeId}
+      busy={busy}
       open={onChatPage ? false : overlayOpen}
       onToggle={() => {
         if (getChatOverlay()) {
