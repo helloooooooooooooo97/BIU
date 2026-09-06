@@ -9,15 +9,17 @@ function mockFetch(handlers: Record<string, (init?: RequestInit) => unknown>) {
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
     calls.push({ url, init })
-    for (const [prefix, handler] of Object.entries(handlers)) {
-      if (url.includes(prefix)) {
-        const body = handler(init)
-        return {
-          ok: true,
-          status: 200,
-          json: async () => body,
-        } as Response
-      }
+    const matches = Object.entries(handlers)
+      .filter(([prefix]) => url.includes(prefix))
+      .sort((a, b) => b[0].length - a[0].length)
+    const hit = matches[0]
+    if (hit) {
+      const body = hit[1](init)
+      return {
+        ok: true,
+        status: 200,
+        json: async () => body,
+      } as Response
     }
     return { ok: false, status: 404, json: async () => ({}) } as Response
   }) as typeof fetch
@@ -753,6 +755,43 @@ test('home and module routes open the most recently updated chat', async () => {
   assert.equal(view.get().sessionId, 'new')
   await view.applyRoute({ kind: 'module', moduleId: 'database', path: '/database' })
   assert.equal(view.get().sessionId, 'new')
+})
+
+test('missing session route does not surface 404 and opens the latest chat', async () => {
+  const gone: string[] = []
+  const onMissing = (event: Event) => {
+    gone.push(String((event as CustomEvent<{ sessionId?: string }>).detail?.sessionId ?? ''))
+  }
+  window.addEventListener('biu:session-missing', onMissing)
+  mockFetch({
+    '/api/sessions': () => ({
+      sessions: [{ id: 'new', title: 'new', eventCount: 1, updatedAt: 9 }],
+    }),
+    '/api/sessions/new?turns=': () => ({
+      id: 'new',
+      events: [{ type: 'session/open', version: 1, seq: 0, ts: 1 }],
+      hasMore: false,
+      totalTurns: 0,
+    }),
+    '/api/approvals': () => ({ mode: 'auto', pending: [] }),
+  })
+  const innerFetch = globalThis.fetch
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input)
+    if (/\/api\/sessions\/gone(\?|$)/.test(url)) {
+      return { ok: false, status: 404, json: async () => ({}) } as Response
+    }
+    return innerFetch(input, init)
+  }) as typeof fetch
+  const ctx = new Context()
+  await ctx.plugin(sessionView)
+  const view = ctx.sessionView as SessionViewService
+  await view.refreshSessions()
+  await view.load('gone', { view: 'chat', wait: true })
+  window.removeEventListener('biu:session-missing', onMissing)
+  assert.equal(view.get().error, undefined)
+  assert.equal(view.get().sessionId, 'new')
+  assert.deepEqual(gone, ['gone'])
 })
 
 test('sessions record routes do not switch the live session', async () => {

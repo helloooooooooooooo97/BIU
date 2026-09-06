@@ -589,6 +589,18 @@ function Shell(props: SlotProps) {
   }, [location.pathname, navReady, sessionView, appModules.version()])
 
   useEffect(() => {
+    const onMissing = (event: Event) => {
+      const id = String((event as CustomEvent<{ sessionId?: string }>).detail?.sessionId ?? '')
+      if (!id) return
+      const prefix = `/s/${encodeURIComponent(id)}`
+      const path = location.pathname
+      if (path === prefix || path.startsWith(`${prefix}/`)) navigate('/', { replace: true })
+    }
+    window.addEventListener('biu:session-missing', onMissing)
+    return () => window.removeEventListener('biu:session-missing', onMissing)
+  }, [location.pathname, navigate])
+
+  useEffect(() => {
     if (activeModule === 'agent' && getChatOverlay()) closeChatOverlay()
   }, [activeModule])
 

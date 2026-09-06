@@ -400,12 +400,37 @@ export class SessionViewService extends Service {
     await this.loadMostRecentSession()
   }
 
-  private async loadMostRecentSession() {
+  private async loadMostRecentSession(skipId?: string) {
     if (!this.value.sessions.length) await this.refreshSessions()
-    const latest = mostRecentSessionId(this.value.sessions)
+    const latest = mostRecentSessionId(this.value.sessions.filter((item) => item.id !== skipId))
     if (!latest) return
     if (this.value.sessionId === latest) return
     await this.load(latest, { view: 'chat' })
+  }
+
+  /** 路由指向已删除/不存在的会话：不报 404，回首页并打开最近一条。 */
+  private async leaveMissingSession(sessionId: string) {
+    this.cache.delete(sessionId)
+    this.replace({
+      error: undefined,
+      sessionId: null,
+      events: [],
+      nodes: [],
+      trajectory: [],
+      view: 'chat',
+      focusCallId: undefined,
+      hasMoreOlder: false,
+      loadingOlder: false,
+      trajectoryHasMore: false,
+      trajectoryLoading: false,
+      totalTurns: 0,
+      switchingSession: false,
+    })
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('biu:session-missing', { detail: { sessionId } }))
+    }
+    await this.refreshSessions()
+    await this.loadMostRecentSession(sessionId)
   }
 
   ingest(sessionId: string, event: SessionEvent) {
@@ -792,20 +817,7 @@ export class SessionViewService extends Service {
       const res = await fetch(`/api/sessions/${sessionId}?turns=${SESSION_LOAD_TURNS}`)
       if (gen !== this.loadGen || this.value.sessionId !== sessionId) return
       if (!res.ok) {
-        if (res.status === 404) {
-          this.replace({
-            error: `加载 session 失败：${res.status}`,
-            sessionId: null,
-            events: [],
-            nodes: [],
-            trajectory: [],
-            view: 'chat',
-            focusCallId: undefined,
-            hasMoreOlder: false,
-            totalTurns: 0,
-            switchingSession: false,
-          })
-        }
+        if (res.status === 404) await this.leaveMissingSession(sessionId)
         return
       }
       const body = (await res.json()) as SessionPayload

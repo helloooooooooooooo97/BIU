@@ -47,8 +47,9 @@ test('update button does not download when already current', () => {
 
 test('refresh does not send unfinished plugin routes home', () => {
   const shell = readFileSync(resolve(import.meta.dirname, './index.tsx'), 'utf8')
-  assert.doesNotMatch(shell, /navigate\('\/', \{ replace: true \}\)/)
   assert.match(shell, /waitingOnNav/)
+  assert.match(shell, /biu:session-missing/)
+  assert.match(shell, /navigate\('\/', \{ replace: true \}\)/)
 })
 
 test('center stage keeps modules mounted without a page fade', () => {
@@ -84,6 +85,7 @@ test('left sidebar keeps chat and database lists mounted and folds smoothly', ()
   assert.match(shell, /id="shell-module-sidebar"/)
   assert.match(chat, /SidebarFold/)
   assert.match(chat, /embedded/)
+  assert.doesNotMatch(chat, /No chats yet/)
   assert.match(css, /\.chat-session-row::before[\s\S]*?transition:\s*background-color/)
 })
 
