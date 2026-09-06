@@ -79,7 +79,7 @@ test('plugin title is the name only; tags stay the file-system writable column',
   const chrome = readFileSync(resolve(import.meta.dirname, './chrome.tsx'), 'utf8')
   assert.doesNotMatch(chrome, /PluginTagsCell/)
   assert.doesNotMatch(chrome, /已装/)
-  assert.doesNotMatch(chrome, /rounded-full/)
+  assert.match(chrome, /data-testid="plugin-enabled-dot"/)
 })
 
 test('plugin window sizes from manifest.shell instead of measuring DOM', async () => {
