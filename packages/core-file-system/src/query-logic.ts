@@ -27,6 +27,15 @@ export function emptySortRule(field = 'title'): SortRule {
   return { id: queryNodeId('s'), field, dir: 'asc' }
 }
 
+export function moveList<T>(items: T[], from: number, to: number): T[] {
+  if (from === to || from < 0 || to < 0 || from >= items.length || to >= items.length) return items
+  const next = items.slice()
+  const [item] = next.splice(from, 1)
+  if (!item) return items
+  next.splice(to, 0, item)
+  return next
+}
+
 export function normalizeSorts(raw: unknown, sortField = 'title', sortDir: 'asc' | 'desc' = 'asc'): SortRule[] {
   if (Array.isArray(raw)) {
     const out: SortRule[] = []

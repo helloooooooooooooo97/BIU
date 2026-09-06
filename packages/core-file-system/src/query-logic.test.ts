@@ -9,6 +9,7 @@ import {
   matchFilterNode,
   matchListFilterRecord,
   normalizeSorts,
+  moveList,
   sortRecordsBy,
 } from './query-logic.ts'
 
@@ -70,6 +71,13 @@ test('multi-key sorts apply in order', () => {
     sorted.map((item) => item.id),
     ['3', '1', '2'],
   )
+})
+
+test('moveList reorders without mutating', () => {
+  const src = ['a', 'b', 'c']
+  assert.deepEqual(moveList(src, 0, 2), ['b', 'c', 'a'])
+  assert.deepEqual(src, ['a', 'b', 'c'])
+  assert.deepEqual(moveList(src, 2, 0), ['c', 'a', 'b'])
 })
 
 test('normalizeSorts falls back to a single field', () => {

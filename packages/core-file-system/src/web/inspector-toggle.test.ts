@@ -540,6 +540,14 @@ test('missing sort field falls back to title, not updatedAt', () => {
   assert.match(browser, /<FilterQueryMenu/)
   assert.match(browser, /QUERY_NEST_IGNORE/)
   assert.match(browser, /ignoreSelector=\{QUERY_NEST_IGNORE\}/)
+  const menus = readFileSync(resolve(import.meta.dirname, './query-menus.tsx'), 'utf8')
+  assert.match(menus, /fsdb-query-grip/)
+  assert.match(menus, /draggable/)
+  assert.match(menus, /moveList/)
+  const editor = menus.slice(menus.indexOf('function FilterGroupEditor'))
+  assert.match(editor, /添加筛选条件/)
+  assert.match(editor, /添加筛选分组/)
+  assert.match(editor, /emptyFilterGroup\(\)/)
 })
 
 test('page collection uses a document glyph, not the table/database icon', () => {

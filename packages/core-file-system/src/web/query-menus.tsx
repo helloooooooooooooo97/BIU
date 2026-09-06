@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { PlusIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import type { FieldSpec, FieldType } from '@biu/type-file-system'
@@ -9,6 +10,7 @@ import {
   emptyFilterGroup,
   emptyFilterRule,
   emptySortRule,
+  moveList,
   opsForKind,
   sortDirLabel,
   type FilterGroup,
@@ -17,6 +19,19 @@ import {
   type FilterRule,
   type SortRule,
 } from '../query-logic.ts'
+
+function SortGrip() {
+  return (
+    <svg aria-hidden viewBox="0 0 10 16" width="10" height="16" fill="currentColor">
+      <circle cx="3" cy="3.5" r="1.15" />
+      <circle cx="7" cy="3.5" r="1.15" />
+      <circle cx="3" cy="8" r="1.15" />
+      <circle cx="7" cy="8" r="1.15" />
+      <circle cx="3" cy="12.5" r="1.15" />
+      <circle cx="7" cy="12.5" r="1.15" />
+    </svg>
+  )
+}
 
 export type QueryField = { key: string; kind: FieldType; field: FieldSpec }
 
@@ -43,6 +58,14 @@ export function SortQueryMenu({
   }))
   const used = new Set(sorts.map((item) => item.field))
   const leftover = fields.find((item) => !used.has(item.key))
+  const [dragId, setDragId] = useState<string | null>(null)
+
+  function reorder(fromId: string, toId: string) {
+    const from = sorts.findIndex((item) => item.id === fromId)
+    const to = sorts.findIndex((item) => item.id === toId)
+    if (from < 0 || to < 0 || from === to) return
+    onChange(moveList(sorts, from, to))
+  }
 
   return (
     <div className="fsdb-query-menu" role="menu">
@@ -52,7 +75,34 @@ export function SortQueryMenu({
           const field = fields.find((item) => item.key === rule.field)
           const kind = field?.kind ?? 'string'
           return (
-            <div key={rule.id} className="fsdb-query-row">
+            <div
+              key={rule.id}
+              className={`fsdb-query-row${dragId === rule.id ? ' is-drag' : ''}`}
+              onDragOver={(event) => {
+                event.preventDefault()
+                event.dataTransfer.dropEffect = 'move'
+              }}
+              onDrop={(event) => {
+                event.preventDefault()
+                const fromId = event.dataTransfer.getData('text/plain')
+                if (fromId) reorder(fromId, rule.id)
+                setDragId(null)
+              }}
+            >
+              <button
+                type="button"
+                className="fsdb-query-grip"
+                aria-label="拖动调整排序顺序"
+                draggable
+                onDragStart={(event) => {
+                  event.dataTransfer.effectAllowed = 'move'
+                  event.dataTransfer.setData('text/plain', rule.id)
+                  setDragId(rule.id)
+                }}
+                onDragEnd={() => setDragId(null)}
+              >
+                <SortGrip />
+              </button>
               <CellSelect
                 value={rule.field}
                 options={options}
@@ -113,7 +163,6 @@ export function FilterQueryMenu({
   valueOptions: (field: QueryField) => Array<{ value: string; label: string }>
   onChange: (next: FilterGroup) => void
 }) {
-  const defaultField = fields[0]?.key ?? 'title'
   return (
     <div className="fsdb-query-menu is-filter" role="menu">
       <div className="tasks-sort-head">筛选</div>
@@ -124,22 +173,6 @@ export function FilterQueryMenu({
         root
         onChange={onChange}
       />
-      <button
-        type="button"
-        className="fsdb-query-add"
-        onClick={() => onChange({ ...tree, children: [...tree.children, emptyFilterRule(defaultField)] })}
-      >
-        <PlusIcon aria-hidden className="size-[14px]" />
-        添加筛选条件
-      </button>
-      <button
-        type="button"
-        className="fsdb-query-add"
-        onClick={() => onChange({ ...tree, children: [...tree.children, emptyFilterGroup()] })}
-      >
-        <PlusIcon aria-hidden className="size-[14px]" />
-        添加筛选分组
-      </button>
       {countFilterRules(tree) ? (
         <button type="button" className="fsdb-query-clear" onClick={() => onChange(emptyFilterGroup())}>
           <TrashGlyph aria-hidden className="size-[14px]" />
@@ -207,16 +240,22 @@ function FilterGroupEditor({
           )}
         </div>
       ))}
-      {!root && group.children.length ? (
-        <button
-          type="button"
-          className="fsdb-query-add"
-          onClick={() => onChange({ ...group, children: [...group.children, emptyFilterRule(fields[0]?.key ?? 'title')] })}
-        >
-          <PlusIcon aria-hidden className="size-[14px]" />
-          添加筛选条件
-        </button>
-      ) : null}
+      <button
+        type="button"
+        className="fsdb-query-add"
+        onClick={() => onChange({ ...group, children: [...group.children, emptyFilterRule(fields[0]?.key ?? 'title')] })}
+      >
+        <PlusIcon aria-hidden className="size-[14px]" />
+        添加筛选条件
+      </button>
+      <button
+        type="button"
+        className="fsdb-query-add"
+        onClick={() => onChange({ ...group, children: [...group.children, emptyFilterGroup()] })}
+      >
+        <PlusIcon aria-hidden className="size-[14px]" />
+        添加筛选分组
+      </button>
     </div>
   )
 }
