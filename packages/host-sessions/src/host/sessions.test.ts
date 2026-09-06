@@ -500,6 +500,30 @@ test('statInputComposition: idle with multiple turns -> latest turn is "this", e
   assert.ok(out.histPct < 0.5) // curPct=1-histPct > 0.5
 })
 
+test('append coalesces live tool/call arguments for the same id', async () => {
+  const ctx = new Context()
+  await ctx.plugin(sessionStore, { driver: 'memory' })
+  await ctx.plugin(sessions)
+  const record = await ctx.sessions.create()
+  const first = await ctx.sessions.append(record.id, {
+    type: 'tool/call',
+    id: 'c1',
+    name: 'db_update',
+    arguments: '{',
+  })
+  const second = await ctx.sessions.append(record.id, {
+    type: 'tool/call',
+    id: 'c1',
+    name: 'db_update',
+    arguments: '{"title":"hi"}',
+  })
+  const events = (await ctx.sessions.require(record.id)).events
+  const calls = events.filter((event) => event.type === 'tool/call')
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0]?.arguments, '{"title":"hi"}')
+  assert.equal(second.seq, first.seq)
+})
+
 test('statInputComposition: honors compact point (starts counting after it)', () => {
   const events = [
     ev({ type: 'turn/start', turn: 1, seq: 0 }),

@@ -416,8 +416,20 @@ export class SessionsService extends Service {
     const event: SessionEvent = { ...body, seq: record.events.length, ts: Date.now() }
     record.events.push(event)
     this.cache.set(id, record)
-    // chunk 极高频：先内存追加并广播，落盘合并到下一帧/定时器，避免每 token 全量 JSON 写盘
+    // chunk / 进行中的 tool/call：先内存追加并广播，落盘合并到下一帧，避免把事件循环卡死
     if (body.type === 'assistant/chunk') {
+      this.schedulePersist(id)
+    } else if (body.type === 'tool/call') {
+      const existing = record.events.slice(0, -1).findLast((item) => item.type === 'tool/call' && item.id === body.id)
+      if (existing && existing.type === 'tool/call') {
+        existing.name = body.name || existing.name
+        existing.arguments = body.arguments
+        existing.ts = event.ts
+        record.events.pop()
+        this.schedulePersist(id)
+        this.ctx.emit('session/event', { sessionId: id, event: existing })
+        return existing
+      }
       this.schedulePersist(id)
     } else {
       this.clearPersistTimer(id)

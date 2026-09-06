@@ -63,6 +63,12 @@ export function projectTrajectoryRows(events: SessionEvent[]): TrajectoryRow[] {
     } else if (event.type === 'tool/call') {
       callId = event.id
       summary = `${event.name}(${event.arguments.slice(0, 80)})`
+      const prev = rows.findLast((row) => row.type === 'tool/call' && row.callId === event.id)
+      if (prev) {
+        prev.summary = summary
+        prev.seq = event.seq
+        continue
+      }
     } else if (event.type === 'tool/result') {
       callId = event.id
       summary = `${event.name} → ${event.ok ? 'ok' : 'fail'}: ${event.detail.slice(0, 80)}`

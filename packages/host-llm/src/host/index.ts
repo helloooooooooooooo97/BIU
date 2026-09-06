@@ -210,6 +210,8 @@ export interface AssistantReply {
 export interface ChatOptions {
   /** 文本 delta；agent-loop 用来即时 append `assistant/chunk`。 */
   onDelta?: (text: string) => void | Promise<void>
+  /** 工具调用增量（name 出现后就开始推，长参数不必等整段生成完）。 */
+  onToolDelta?: (call: { id: string; name: string; arguments: string }) => void | Promise<void>
 }
 
 export interface LlmClient {
@@ -261,6 +263,7 @@ export async function consumeChatCompletionSse(
   stream: ReadableStream<Uint8Array>,
   options: {
     onDelta?: (text: string) => void | Promise<void>
+    onToolDelta?: (call: { id: string; name: string; arguments: string }) => void | Promise<void>
     signal?: AbortSignal
   } = {},
 ): Promise<AssistantReply> {
@@ -325,6 +328,7 @@ export async function consumeChatCompletionSse(
           if (call.function?.name) acc.name = call.function.name
           if (typeof call.function?.arguments === 'string') acc.arguments += call.function.arguments
           tools.set(index, acc)
+          if (acc.id && acc.name) await options.onToolDelta?.({ id: acc.id, name: acc.name, arguments: acc.arguments })
         }
         const nextUsage = parseProviderUsage(chunk.usage)
         if (nextUsage) usage = nextUsage
@@ -406,7 +410,7 @@ export class OpenAiCompatLlm implements LlmClient {
       throw new Error(detail)
     }
     if (!res.body) throw new Error('llm stream missing body')
-    return consumeChatCompletionSse(res.body, { onDelta: options?.onDelta, signal })
+    return consumeChatCompletionSse(res.body, { onDelta: options?.onDelta, onToolDelta: options?.onToolDelta, signal })
   }
 }
 
@@ -494,7 +498,7 @@ export class AnthropicLlm implements LlmClient {
       throw new Error(detail)
     }
     if (!res.body) throw new Error('llm stream missing body')
-    return consumeMessagesSse(res.body, { onDelta: options?.onDelta, signal })
+    return consumeMessagesSse(res.body, { onDelta: options?.onDelta, onToolDelta: options?.onToolDelta, signal })
   }
 }
 
@@ -510,7 +514,7 @@ function parseToolJson(text: string): unknown {
 /** 解析 Anthropic Messages SSE：text（text_delta）+ 工具参数（input_json_delta）累积。 */
 async function consumeMessagesSse(
   stream: ReadableStream<Uint8Array>,
-  options: { onDelta?: (text: string) => void | Promise<void>; signal?: AbortSignal } = {},
+  options: { onDelta?: (text: string) => void | Promise<void>; onToolDelta?: (call: { id: string; name: string; arguments: string }) => void | Promise<void>; signal?: AbortSignal } = {},
 ): Promise<AssistantReply> {
   const reader = stream.getReader()
   const decoder = new TextDecoder()
@@ -557,6 +561,9 @@ async function consumeMessagesSse(
             const block = evt.content_block as { type?: string; id?: string; name?: string } | undefined
             if (block?.type === 'tool_use') {
               toolBlocks.push({ id: block.id, name: block.name, input: '' })
+              if (block.id && block.name) {
+                await options.onToolDelta?.({ id: block.id, name: block.name, arguments: '' })
+              }
             }
             break
           }
@@ -567,7 +574,12 @@ async function consumeMessagesSse(
               await options.onDelta?.(delta.text)
             } else if (delta?.type === 'input_json_delta' && typeof delta.partial_json === 'string') {
               const last = toolBlocks[toolBlocks.length - 1]
-              if (last) last.input += delta.partial_json
+              if (last) {
+                last.input += delta.partial_json
+                if (last.id && last.name) {
+                  await options.onToolDelta?.({ id: last.id, name: last.name, arguments: last.input })
+                }
+              }
             }
             break
           }
@@ -619,6 +631,7 @@ export class LlmService extends Service {
             ctx.emit('llm/stream', { text })
             await options?.onDelta?.(text)
           },
+          onToolDelta: options?.onToolDelta,
         })
         return reply
       },

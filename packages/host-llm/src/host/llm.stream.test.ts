@@ -29,7 +29,8 @@ test('consumeChatCompletionSse yields text deltas and usage', async () => {
   assert.deepEqual(reply.usage, { inputTokens: 3, outputTokens: 2, totalTokens: 5 })
 })
 
-test('consumeChatCompletionSse accumulates tool_calls by index', async () => {
+test('consumeChatCompletionSse streams tool_calls before the stream ends', async () => {
+  const tools: Array<{ id: string; name: string; arguments: string }> = []
   const reply = await consumeChatCompletionSse(
     sseBody([
       'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c1","function":{"name":"clock_now","arguments":""}}]}}]}\n\n',
@@ -37,9 +38,12 @@ test('consumeChatCompletionSse accumulates tool_calls by index', async () => {
       'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"}"}}]}}]}\n\n',
       'data: [DONE]\n\n',
     ]),
+    { onToolDelta: (call) => { tools.push({ ...call }) } },
   )
-  assert.equal(reply.content, null)
-  assert.deepEqual(reply.toolCalls, [{ id: 'c1', name: 'clock_now', arguments: '{}' }])
+  assert.equal(reply.toolCalls[0]?.name, 'clock_now')
+  assert.ok(tools.length >= 2)
+  assert.equal(tools[0]?.name, 'clock_now')
+  assert.equal(tools.at(-1)?.arguments, '{}')
 })
 
 test('consumeChatCompletionSse aborts with signal', async () => {

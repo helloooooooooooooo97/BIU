@@ -1408,7 +1408,27 @@ export class SessionViewService extends Service {
 }
 
 function upsertEvent(events: SessionEvent[], event: SessionEvent) {
-  if (events.some((item) => item.seq === event.seq)) return events
+  if (event.type === 'tool/call') {
+    const idx = events.findLastIndex((item) => item.type === 'tool/call' && item.id === event.id)
+    if (idx >= 0) {
+      const prev = events[idx]
+      if (prev?.type === 'tool/call') {
+        const next = [...events]
+        next[idx] = { ...prev, name: event.name || prev.name, arguments: event.arguments, ts: event.ts, seq: prev.seq }
+        return next
+      }
+    }
+  }
+  if (events.some((item) => item.seq === event.seq)) {
+    if (event.type === 'tool/call') {
+      return events.map((item) =>
+        item.seq === event.seq && item.type === 'tool/call'
+          ? { ...item, name: event.name || item.name, arguments: event.arguments, ts: event.ts }
+          : item,
+      )
+    }
+    return events
+  }
   if (event.type === 'assistant/chunk') {
     const last = events.at(-1)
     if (last?.type === 'assistant/chunk') {
