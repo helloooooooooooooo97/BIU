@@ -115,7 +115,6 @@ test('normalizeSchemaPack drops fields that reuse file-system keys or labels', (
 
 test('withBuiltinFields always includes writable facet and tags', () => {
   const fields = withBuiltinFields({ title: { type: 'string', writable: true }, parentId: { type: 'string', label: '父级', writable: true } })
-  const fields = withBuiltinFields({ title: { type: 'string', writable: true } })
   assert.equal(fields.facet?.type, 'facet')
   assert.equal(fields.facet?.writable, true)
   assert.equal(fields.facet?.label, '合集')

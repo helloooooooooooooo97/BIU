@@ -116,10 +116,10 @@ export function pluginsCollection(store: PluginStoreService): CollectionSpec {
     },
     records: { update: false, create: false, delete: true },
     schema: {
-      labelField: 'name',
+      labelField: 'title',
       contentField: 'readme',
       columns: [
-        'name',
+        'title',
         'blurb',
         'installed',
         'sandbox',
@@ -136,7 +136,7 @@ export function pluginsCollection(store: PluginStoreService): CollectionSpec {
       ],
       fields: {
         ...REQUIRED_RECORD_FIELDS,
-        name: { type: 'string', label: '名称' },
+        title: { type: 'string', label: '标题' },
         blurb: { type: 'string', label: '简介' },
         installed: { type: 'boolean', label: '已安装' },
         sandbox: { type: 'boolean', label: '沙箱' },

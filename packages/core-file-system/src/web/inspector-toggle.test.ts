@@ -514,6 +514,12 @@ test('pager keeps the current page when filter objects are only recreated', () =
   assert.doesNotMatch(inspector, /lockedFiltersFromSearch\?\.\(search\) \?\? \{\}/)
 })
 
+test('missing sort field falls back to title, not updatedAt', () => {
+  assert.match(browser, /sortFields.find\(\(item\) => item.key === 'title'\)/)
+  assert.doesNotMatch(browser, /item.kind === 'datetime' \? 'desc'/)
+  assert.match(browser, /const \[sortField, setSortField\] = useState\(initialView\?\.sortField \?\? 'title'\)/)
+})
+
 test('page collection uses a document glyph, not the table/database icon', () => {
   const glyphs = readFileSync(resolve(import.meta.dirname, './table-glyph.tsx'), 'utf8')
   assert.match(glyphs, /name === 'document' \|\| name === 'document-text' \|\| name === 'page'/)

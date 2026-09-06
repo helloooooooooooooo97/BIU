@@ -168,7 +168,7 @@ export function savedViewFromRecord(row: { viewId?: unknown; title?: unknown; mo
     id,
     name: String(row.title ?? id),
     mode: String(row.mode ?? 'table') as SavedView['mode'],
-    sortField: String(row.sortField ?? 'id'),
+    sortField: String(row.sortField ?? 'title'),
     sortDir: row.sortDir === 'desc' ? 'desc' : 'asc',
     query: String(row.query ?? ''),
     groupBy: String(row.groupBy ?? ''),

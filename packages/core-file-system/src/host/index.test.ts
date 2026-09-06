@@ -463,6 +463,28 @@ test('list paginates collection records and reports total', async () => {
   assert.equal(found.items[0]?.id, 'n7')
 })
 
+test('list defaults to title so start/stop cannot reshuffle the table', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  db.register({
+    id: 'plug',
+    path: '/plug',
+    schema: { fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string' } } },
+    list: () => [
+      { id: 'b', title: 'Beta', updatedAt: 9 },
+      { id: 'a', title: 'Alpha', updatedAt: 1 },
+    ],
+    get: () => null,
+  })
+  const listed = await db.list('/plug')
+  assert.equal(listed.kind, 'collection')
+  if (listed.kind !== 'collection') return
+  assert.deepEqual(
+    listed.items.map((item) => item.id),
+    ['a', 'b'],
+  )
+})
+
 test('apply registers db_* tools', async () => {
   const ctx = new Context()
   await ctx.plugin(tools)
