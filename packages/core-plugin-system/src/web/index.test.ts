@@ -195,5 +195,6 @@ test('packed page-excalidraw plugin stores scenes as page assets', async () => {
   assert.match(packed, /ReactJSXRuntime/)
   assert.match(packed, /pageEditor/)
   assert.match(packed, /inject/)
+  assert.match(packed, /plugin:cci/)
   assert.match(src, /refresh/)
 })
