@@ -1272,7 +1272,9 @@ export class SessionViewService extends Service {
     const tools = [...new Set(extraTools.map((name) => name.trim()).filter(Boolean))]
     const busy = this.value.pending || this.value.agentStatus === 'running'
     const hasWake = this.value.inbox.some((item) => item.kind === 'wake')
-    // 忙碌且已有 wake：再发 → inject；否则 wake。忙碌时 wait:false 立刻返回。
+    // 忙碌且已有 wake：再发 → inject；否则 wake。
+    // 空闲 wake 也必须 wait:false：否则 POST 会卡到整段生成完（背长文会空等七八秒，
+    // 轨迹里也没有 assistant/chunk），HTTP/1 还可能堵住同域 WS。
     const effectiveKind: 'wake' | 'inject' =
       kind === 'inject' || (kind === 'wake' && busy && hasWake) ? 'inject' : 'wake'
     const imagePayload = pics.length ? { images: pics } : {}
@@ -1281,7 +1283,7 @@ export class SessionViewService extends Service {
         ? { text: content || '（图片）', kind: 'inject', ...(tools.length ? { extraTools: tools } : {}), ...imagePayload }
         : {
             text: content || '（图片）',
-            ...(busy ? { wait: false } : {}),
+            wait: false,
             ...(tools.length ? { extraTools: tools } : {}),
             ...imagePayload,
           }
@@ -1318,15 +1320,7 @@ export class SessionViewService extends Service {
       }
       if (!res.ok) throw new Error(data.error || `发送失败：${res.status}`)
       if (Array.isArray(data.inbox)) this.setInbox(data.inbox, data.sessionId ?? sessionId)
-      if (data.queued) {
-        // 已入队：不阻塞等回合结束，状态交给 WS
-        return
-      }
-      if (data.sessionId && data.sessionId !== sessionId) {
-        await this.load(data.sessionId, { view: 'chat', wait: true })
-      } else {
-        await this.load(sessionId, { view: this.value.view, wait: true })
-      }
+      // wait:false：HTTP 立刻返回，token / 状态走 WS。不要 GET 整页，会和首包 chunk 抢，看起来像先卡再整段弹出。
       if (typeof data.text === 'string' && data.text.startsWith('模型调用失败：')) {
         this.replace({ error: data.text })
       }

@@ -1239,7 +1239,8 @@ export function apply(ctx: Context) {
       : []
     const sendOpts = {
       ...(extraTools.length ? { extraTools } : {}),
-      ...(payload.wait === false ? { wait: false as const } : {}),
+      // 默认不等待整回合：聊天要靠 WS 推 chunk。显式 wait:true 才阻塞 HTTP。
+      wait: payload.wait === true,
       ...(images.length ? { images } : {}),
     }
     if (payload.kind === 'inject') {
