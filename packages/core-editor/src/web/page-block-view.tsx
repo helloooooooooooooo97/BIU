@@ -33,14 +33,9 @@ export function PageBlockMissing({ kind, plugin, data }: { kind: string; plugin:
     <div className="page-block-missing" data-testid="page-block-missing">
       <div className="page-block-missing-head">
         {plugin ? (
-          <div className="page-block-missing-lead">
-            <code className="page-block-missing-id">{plugin}</code>
-            <span className="page-block-missing-state">未运行</span>
-          </div>
+          <code className="page-block-missing-id">{plugin}</code>
         ) : (
-          <div className="page-block-missing-lead">
-            <span className="page-block-missing-state">没有插件 id</span>
-          </div>
+          <span className="page-block-missing-state">没有插件 id</span>
         )}
         {plugin ? (
           <button
@@ -57,10 +52,7 @@ export function PageBlockMissing({ kind, plugin, data }: { kind: string; plugin:
           </button>
         ) : null}
       </div>
-      <div className="page-block-missing-body">
-        <div className="page-block-missing-label">源码</div>
-        <pre className="page-block-missing-source">{source}</pre>
-      </div>
+      <pre className="page-block-missing-source">{source}</pre>
     </div>
   )
 }
