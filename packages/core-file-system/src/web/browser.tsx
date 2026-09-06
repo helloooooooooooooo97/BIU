@@ -267,9 +267,11 @@ function ColumnRowShell({
 
 function ColumnDragRow({
   col,
+  on,
   onToggle,
 }: {
   col: { key: string; kind: FieldType; field: FieldSpec }
+  on: boolean
   onToggle: () => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: col.key })
@@ -284,7 +286,7 @@ function ColumnDragRow({
         </button>
       }
     >
-      <ColumnMenuCheck col={col} on onToggle={onToggle} />
+      <ColumnMenuCheck col={col} on={on} onToggle={onToggle} />
     </ColumnRowShell>
   )
 }
@@ -307,9 +309,14 @@ function ColumnOrderMenu({
   const [activeId, setActiveId] = useState<string | null>(null)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
   const visibleKeys = new Set(columns.map((item) => item.key))
-  const sortableIds = columns.filter((item) => item.key !== labelField).map((item) => item.key)
   const hidden = allColumns.filter((item) => !parseFacetFlatColumnKey(item.key) && !visibleKeys.has(item.key))
-  const active = columns.find((item) => item.key === activeId)
+  const menuCols = [
+    ...columns.filter((item) => item.key === labelField),
+    ...columns.filter((item) => item.key !== labelField),
+    ...hidden,
+  ]
+  const sortableIds = menuCols.filter((item) => item.key !== labelField).map((item) => item.key)
+  const active = menuCols.find((item) => item.key === activeId)
 
   return (
     <>
@@ -323,26 +330,37 @@ function ColumnOrderMenu({
           const overId = event.over?.id
           setActiveId(null)
           if (overId == null || event.active.id === overId) return
-          const rest = columns.filter((item) => item.key !== labelField).map((item) => item.key)
-          const from = rest.indexOf(String(event.active.id))
-          const to = rest.indexOf(String(overId))
+          const from = sortableIds.indexOf(String(event.active.id))
+          const to = sortableIds.indexOf(String(overId))
           if (from < 0 || to < 0) return
-          const next = moveList(rest, from, to)
-          onReorder(labelField ? [labelField, ...next.filter((key) => key !== labelField)] : next)
+          const next = moveList(sortableIds, from, to)
+          onReorder(labelField ? [labelField, ...next.filter((key) => visibleKeys.has(key) && key !== labelField)] : next.filter((key) => visibleKeys.has(key)))
         }}
       >
-        {columns
+        {menuCols
           .filter((item) => item.key === labelField)
           .map((item) => (
-            <ColumnRowShell key={item.key} grip={<span className="fsdb-query-grip is-locked" aria-hidden />}>
+            <ColumnRowShell
+              key={item.key}
+              grip={
+                <span className="fsdb-query-grip is-locked" aria-hidden>
+                  <DndGrip />
+                </span>
+              }
+            >
               <ColumnMenuCheck col={item} on locked onToggle={() => onToggle(item.key)} />
             </ColumnRowShell>
           ))}
         <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
-          {columns
+          {menuCols
             .filter((item) => item.key !== labelField)
             .map((item) => (
-              <ColumnDragRow key={item.key} col={item} onToggle={() => onToggle(item.key)} />
+              <ColumnDragRow
+                key={item.key}
+                col={item}
+                on={visibleKeys.has(item.key)}
+                onToggle={() => onToggle(item.key)}
+              />
             ))}
         </SortableContext>
         <DragOverlay zIndex={280}>
@@ -352,19 +370,23 @@ function ColumnOrderMenu({
                 <button type="button" className="fsdb-query-grip" tabIndex={-1}>
                   <DndGrip />
                 </button>
-                <ColumnMenuCheck col={active} on onToggle={() => {}} />
+                <ColumnMenuCheck col={active} on={visibleKeys.has(active.key)} onToggle={() => {}} />
               </div>
             </div>
           ) : null}
         </DragOverlay>
       </DndContext>
-      {hidden.map((item) => (
-        <ColumnRowShell key={item.key} grip={<span className="fsdb-query-grip is-locked" aria-hidden />}>
-          <ColumnMenuCheck col={item} on={false} onToggle={() => onToggle(item.key)} />
-        </ColumnRowShell>
-      ))}
       {facetCatalog.map((pack) => (
-        <FacetColumnPackRow key={pack.id} pack={pack} visibleKeys={visibleKeys} onToggle={onToggle} />
+        <ColumnRowShell
+          key={pack.id}
+          grip={
+            <span className="fsdb-query-grip is-locked" aria-hidden>
+              <DndGrip />
+            </span>
+          }
+        >
+          <FacetColumnPackRow pack={pack} visibleKeys={visibleKeys} onToggle={onToggle} />
+        </ColumnRowShell>
       ))}
     </>
   )
