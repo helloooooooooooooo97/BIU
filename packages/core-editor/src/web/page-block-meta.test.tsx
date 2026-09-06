@@ -21,8 +21,11 @@ test('missing block shows stored source and asks to enable the stored plugin', (
   )
   const text = container.textContent ?? ''
   assert.match(text, /未启用「excalidraw」块/)
+  assert.match(text, /插件未启用/)
+  assert.match(text, /源码/)
   assert.match(text, /page-excalidraw/)
   assert.match(text, /assets\/a\.json/)
+  assert.ok(container.querySelector('.page-block-missing-head'))
   assert.ok(container.querySelector('[data-testid="page-block-enable"]'))
 })
 
