@@ -50,6 +50,7 @@ describe('composer dock stacking above sticky user', () => {
     expect(title).not.toContain('BrandCornerMascot')
     expect(title).toContain('chat-session-title-pop')
     expect(approvals).toContain('BrandCornerMascot')
+    expect(approvals).toContain('busy={sessionBusy}')
     expect(approvals).toMatch(/renderSlot\('header-tools'\)[\s\S]*BrandCornerMascot/)
     expect(approvals).toContain('variant="popover"')
     expect(composer).not.toContain('CaretMascot')

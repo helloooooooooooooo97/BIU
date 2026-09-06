@@ -62,10 +62,12 @@ export function BrandAgentMenu({
   agents,
   activeId,
   onSelect,
+  busyIds,
 }: {
   agents: CornerAgent[]
   activeId?: string | null
   onSelect: (id: string) => void
+  busyIds?: Record<string, true>
 }) {
   const ranked = useMemo(() => rankCornerAgents(agents), [agents])
   const currentId = activeId ?? ranked[0]?.id
@@ -84,7 +86,7 @@ export function BrandAgentMenu({
               data-testid={`brand-agent-${item.id}`}
               onClick={() => onSelect(item.id)}
             >
-              <SidebarMascot size={24} sessionId={item.id} identity={face} animate={false} title={item.title} />
+              <SidebarMascot size={24} sessionId={item.id} identity={face} busy={Boolean(busyIds?.[item.id])} animate={false} title={item.title} />
               <span className="min-w-0 flex-1 truncate">{item.title}</span>
             </button>
           )
@@ -105,6 +107,8 @@ export function BrandCornerMascot({
   leading,
   menu,
   size = 36,
+  busy = false,
+  busyIds,
 }: {
   agents?: CornerAgent[]
   activeId?: string | null
@@ -114,6 +118,8 @@ export function BrandCornerMascot({
   leading?: ReactNode
   menu?: ReactNode | ((close: () => void) => ReactNode)
   size?: number
+  busy?: boolean
+  busyIds?: Record<string, true>
 }) {
   const [agentsOpen, setAgentsOpen] = useState(false)
   const ranked = useMemo(() => rankCornerAgents(agents), [agents])
@@ -132,6 +138,7 @@ export function BrandCornerMascot({
         <BrandAgentMenu
           agents={ranked}
           activeId={activeId ?? current?.id}
+          busyIds={busyIds}
           onSelect={(id) => {
             onSelect?.(id)
             closeMenu()
@@ -161,7 +168,7 @@ export function BrandCornerMascot({
           }}
         >
           {identity && current ? (
-            <SidebarMascot size={size} sessionId={current.id} identity={identity} animate={false} title="" />
+            <SidebarMascot size={size} sessionId={current.id} identity={identity} busy={busy} animate={false} title="" />
           ) : (
             <BrandMascot className="size-9" />
           )}

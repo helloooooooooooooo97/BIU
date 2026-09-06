@@ -145,6 +145,11 @@ export function ApprovalsRail(props: SlotProps) {
   const sessionView = props.sessionView as SessionViewService
   const sessionId = useSessionView((state) => state.sessionId)
   const sessions = useSessionView((state) => state.sessions)
+  const sessionBusy = useSessionView((state) => {
+    const id = state.sessionId
+    if (!id) return false
+    return Boolean(state.busySessions[id]) || state.agentStatus === 'running' || Boolean(state.pending)
+  })
   const dispatchedTasksByTurn = useSessionView((state) => state.dispatchedTasksByTurn)
   const workerAgents = useMemo(
     () => activeWorkerAgents(dispatchedTasksByTurn, sessionId),
@@ -308,6 +313,7 @@ export function ApprovalsRail(props: SlotProps) {
               agents={sessions}
               activeId={sessionId}
               size={28}
+              busy={sessionBusy}
               menu={(close) => (
                 <ChatSidebar
                   variant="popover"
