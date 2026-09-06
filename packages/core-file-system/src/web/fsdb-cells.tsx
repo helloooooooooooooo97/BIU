@@ -489,10 +489,14 @@ export function FieldEditor({
   return <LocalText className="fsdb-plain-input" value={value} title={value} placeholder="" onCommit={onChange} />
 }
 
-export function visibleActions(schema: CollectionSchema | undefined, row: DbRecord, place: 'row' | 'detail') {
+export function placedActions(schema: CollectionSchema | undefined, place: 'row' | 'detail') {
   return (schema?.actions ?? []).filter((action) => {
     if (!actionVisibleToUser(action)) return false
     const places = action.placement ?? ['row', 'detail']
-    return places.includes(place) && matchActionWhen(row, action.when)
+    return places.includes(place)
   })
+}
+
+export function visibleActions(schema: CollectionSchema | undefined, row: DbRecord, place: 'row' | 'detail') {
+  return placedActions(schema, place).filter((action) => matchActionWhen(row, action.when))
 }

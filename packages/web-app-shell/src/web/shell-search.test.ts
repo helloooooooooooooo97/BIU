@@ -165,6 +165,14 @@ test('search hits never show report even if placement is row', () => {
   )
 })
 
+test('search hit actions use collection chrome.Actions when registered', () => {
+  const src = readFileSync(resolve(import.meta.dirname, './shell-search.tsx'), 'utf8')
+  assert.match(src, /getDatabaseUi\(\)\?\.chrome\(searchCollection\(hit\.kind\)\)\.Actions/)
+  assert.match(src, /placedRowActions\(hit\.actions\)/)
+  assert.match(src, /<Actions/)
+  assert.match(src, /previewRunningRecord\(record, action\.when\)/)
+})
+
 test('opening a session on the left closes search and focuses the composer', () => {
   const src = readFileSync(resolve(import.meta.dirname, './shell-search.tsx'), 'utf8')
   assert.match(src, /onClose\(\)\s*if \(side === 'left' && hit\.kind === 'session'\) requestComposerFocus\(\)/)

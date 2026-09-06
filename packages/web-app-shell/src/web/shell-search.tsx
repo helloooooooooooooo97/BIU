@@ -20,6 +20,8 @@ import { TagChip, TagChips } from '@biu/public-ui'
 import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { actionVisibleToUser } from '@biu/type-file-system'
+import type { CollectionActionInfo, DbRecord } from '@biu/type-file-system'
+import { getDatabaseUi } from '@biu/core-file-system/database-ui'
 import { setChatOverlay, requestComposerFocus } from './chat-overlay.ts'
 
 export type SearchKind = 'view' | 'session' | 'task' | 'page' | 'plugin' | 'facet'
@@ -159,14 +161,25 @@ export function matchActionWhen(record: Record<string, unknown>, when?: Record<s
   return true
 }
 
+export function previewRunningRecord(record: Record<string, unknown>, when?: Record<string, unknown>) {
+  if (!when || typeof when.running !== 'boolean') return record
+  const running = when.running === false
+  if (Object.is(record.running, running)) return record
+  return { ...record, running }
+}
+
 export function visibleRowActions(actions: SearchAction[] | undefined, record: Record<string, unknown> | undefined) {
   const row = record ?? {}
+  return placedRowActions(actions).filter((action) => matchActionWhen(row, action.when))
+}
+
+export function placedRowActions(actions: SearchAction[] | undefined) {
   return (actions ?? []).filter((action) => {
     if (!actionVisibleToUser(action)) return false
     if (NAV_ACTION_IDS.has(action.id)) return false
     if (SEARCH_SKIP_ACTION_IDS.has(action.id)) return false
     const places = action.placement ?? ['row', 'detail']
-    return places.includes('row') && matchActionWhen(row, action.when)
+    return places.includes('row')
   })
 }
 
@@ -278,19 +291,18 @@ function HitRecordTags({ tags }: { tags?: string[] }) {
   )
 }
 
-function HitActions({
-  hit,
-  onRan,
-}: {
-  hit: SearchHit
-  onRan: () => void
-}) {
-  const actions = visibleRowActions(hit.actions, hit.record ?? { id: hit.id }).filter((action) => actionGlyph(action.id))
-  const [busyId, setBusyId] = useState<string | null>(null)
-  if (!actions.length) return null
+function HitActions({ hit }: { hit: SearchHit }) {
+  const [record, setRecord] = useState(hit.record ?? { id: hit.id })
+  const acting = useRef(false)
+  const Actions = getDatabaseUi()?.chrome(searchCollection(hit.kind)).Actions
+  const placed = placedRowActions(hit.actions)
+  const actions = visibleRowActions(hit.actions, record).filter((action) => actionGlyph(action.id))
   const run = async (action: SearchAction) => {
+    if (acting.current) return
     if (action.confirm && !window.confirm(action.confirm)) return
-    setBusyId(action.id)
+    acting.current = true
+    const next = previewRunningRecord(record, action.when)
+    if (next !== record) setRecord(next)
     try {
       await fetch('/api/db/action', {
         method: 'POST',
@@ -300,11 +312,26 @@ function HitActions({
           action: action.id,
         }),
       })
-      onRan()
+      window.dispatchEvent(new Event('fsdb:change'))
     } finally {
-      setBusyId(null)
+      acting.current = false
     }
   }
+  if (Actions) {
+    if (!placed.length) return null
+    return (
+      <span className="shell-search-hit-actions" data-biu-ignore onClick={(event) => event.stopPropagation()}>
+        <Actions
+          actions={placed as CollectionActionInfo[]}
+          record={record as DbRecord}
+          busy={false}
+          place="row"
+          run={(action) => void run(action)}
+        />
+      </span>
+    )
+  }
+  if (!actions.length) return null
   return (
     <span className="shell-search-hit-actions" data-biu-ignore>
       {actions.map((action) => (
@@ -315,7 +342,6 @@ function HitActions({
           title={action.label}
           data-dock-tip={action.label}
           aria-label={action.label}
-          disabled={busyId != null}
           onClick={(event) => {
             event.preventDefault()
             event.stopPropagation()
@@ -591,6 +617,7 @@ export function ShellSearchPanel({
                   ? item.tags
                   : undefined
                 const actions = visibleRowActions(item.actions, item.record ?? { id: item.id })
+                const hasGlyphActions = (item.actions ?? []).some((action) => actionGlyph(action.id))
                 return (
                   <div
                     role="option"
@@ -605,16 +632,14 @@ export function ShellSearchPanel({
                       <HitMark hit={item} />
                     </span>
                     <span className="shell-search-hit-title">{item.title}</span>
-                    {tags?.length || actions.length ? (
+                    {tags?.length || actions.length || hasGlyphActions ? (
                       <span className="shell-search-hit-aside">
                         {tags?.length ? (
                           <span className="shell-search-hit-tags">
                             <HitRecordTags tags={tags} />
                           </span>
                         ) : null}
-                        {actions.length ? (
-                          <HitActions hit={item} onRan={() => setReloadSeq((n) => n + 1)} />
-                        ) : null}
+                        {hasGlyphActions ? <HitActions hit={item} /> : null}
                       </span>
                     ) : null}
                   </div>

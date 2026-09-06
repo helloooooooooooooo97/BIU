@@ -18,6 +18,15 @@ export type FsActionProps = {
   run: () => void
 }
 
+/** 整组动作。有则宿主只挂这一次，长什么样由登记方自己决定。 */
+export type FsActionsProps = {
+  actions: CollectionActionInfo[]
+  record: DbRecord
+  busy: boolean
+  place: 'row' | 'detail'
+  run: (action: CollectionActionInfo) => void
+}
+
 export type FsDetailPaneProps = {
   record: DbRecord
   openRecord?: (recordId: string, collection?: string) => void
@@ -33,6 +42,8 @@ export type FsDetailPane = {
 export type CollectionChrome = {
   cells?: Partial<Record<string, ComponentType<FsCellProps>>>
   Action?: ComponentType<FsActionProps>
+  /** 整组动作。有则宿主不再按条 map，前端完全由登记方 decorate。 */
+  Actions?: ComponentType<FsActionsProps>
   /** 记录独立图标属性。有 emoji 用 emoji；不传则详情/侧栏/面包屑用集合 glyph。 */
   Icon?: ComponentType<{ record: DbRecord }>
   Title?: ComponentType<{ record: DbRecord; label: string }>

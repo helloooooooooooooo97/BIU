@@ -6,7 +6,8 @@
   "description": "Core-File System：实现 @biu/type-file-system 契约",
   "exports": {
     "./host": "./src/host/index.ts",
-    "./web": "./src/web/index.tsx"
+    "./web": "./src/web/index.tsx",
+    "./database-ui": "./src/web/database-ui.ts"
   },
   "dependencies": {
     "@biu/type-file-system": "0.1.0",
