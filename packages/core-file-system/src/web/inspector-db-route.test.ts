@@ -13,6 +13,8 @@ import {
   applyDatabaseChannelPayload,
   isInspectorAgentWorking,
   setInspectorAgentWorking,
+  isInspectorAgentFollow,
+  setInspectorAgentFollow,
   clearInspectorDbPath,
   isInspectorPaneAbandoned,
 } from './inspector-db-route.ts'
@@ -29,6 +31,7 @@ function clearInspectorPanes() {
 
 beforeEach(() => {
   clearInspectorPanes()
+  setInspectorAgentFollow(false)
 })
 
 test('inspector database path is set explicitly', () => {
@@ -183,7 +186,25 @@ test('applyDatabaseChannelPayload marks the table as agent-working until done', 
     'main',
   )
   assert.equal(isInspectorAgentWorking('/tasks'), false)
+  assert.equal(getInspectorDbPath('database:/tasks'), '')
+})
+
+test('agent channel does not open inspector views unless follow is on', () => {
+  setInspectorDbPath('database:/pages', '/database/pages')
+  applyDatabaseChannelPayload(
+    { phase: 'working', sessionId: 'main', reveal: { collection: '/tasks', recordId: 't1' } },
+    'main',
+  )
+  assert.equal(getInspectorDbPath('database:/tasks'), '')
+  assert.equal(getInspectorDbPath('database:/pages'), '/database/pages')
+  setInspectorAgentFollow(true)
+  assert.equal(isInspectorAgentFollow(), true)
+  applyDatabaseChannelPayload(
+    { phase: 'done', sessionId: 'main', reveal: { collection: '/tasks', recordId: 't1' } },
+    'main',
+  )
   assert.equal(getInspectorDbPath('database:/tasks'), '/database/tasks/record/t1')
+  assert.equal(getInspectorDbPath('database:/pages'), '/database/pages')
 })
 
 test('applyDatabaseChannelPayload ignores other sessions and unsigned broadcasts', () => {
@@ -225,6 +246,17 @@ test('applyDatabaseChannelPayload upserts a created view then opens it', () => {
       },
     },
   })
+  applyDatabaseChannelPayload(
+    {
+      phase: 'done',
+      sessionId: 'main',
+      reveal: { collection: '/tasks', viewId: 'board-1' },
+      savedView: { id: 'board-1', name: '看板', mode: 'board', filters: { status: 'doing' } },
+    },
+    'main',
+  )
+  assert.equal(getInspectorDbPath('database:/tasks'), '')
+  setInspectorAgentFollow(true)
   applyDatabaseChannelPayload(
     {
       phase: 'done',

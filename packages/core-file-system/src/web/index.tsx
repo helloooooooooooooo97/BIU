@@ -10,6 +10,7 @@ import { pathForCenter, pathForCrumbTarget, type CrumbTarget } from './sidebar-n
 import { CollectionBrowser } from './browser.tsx'
 import { DatabaseInspectorBrowse, DatabaseInspectorTab, bindInspectorSnapshot, collectionTabIcon } from './inspector-database.tsx'
 import { applyDatabaseChannelPayload } from './inspector-db-route.ts'
+import { InspectorFollowToggle } from './inspector-follow.tsx'
 import { DatabaseUiService, getDatabaseUi } from './database-ui.ts'
 import {
   bootLoadCollections,
@@ -254,6 +255,10 @@ export function apply(ctx: Context) {
   }
 
   slots.place('root-overlays', RegisterErrorBanner, { key: 'fsdb-nav-errors', order: 80 })
+  slots.place('header-tools', InspectorFollowToggle, {
+    key: 'inspector-follow',
+    order: 11,
+  })
   let stopped = false
   let readyTimer = 0
   const runSync = async (rows: CollectionInfo[]) => {

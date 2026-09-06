@@ -12,6 +12,57 @@ const paths = new Map<string, string>()
 const abandonedPanes = new Set<string>()
 const working = new Set<string>()
 const workingListeners = new Set<() => void>()
+const FOLLOW_KEY = 'inspector.agentFollow'
+const followListeners = new Set<() => void>()
+let followLoaded = false
+let follow = false
+
+function bumpFollow() {
+  for (const fn of followListeners) fn()
+}
+
+function readFollow() {
+  if (followLoaded) return follow
+  followLoaded = true
+  try {
+    follow = localStorage.getItem(FOLLOW_KEY) === '1'
+  } catch {
+    follow = false
+  }
+  return follow
+}
+
+export function subscribeInspectorAgentFollow(fn: () => void) {
+  followListeners.add(fn)
+  return () => {
+    followListeners.delete(fn)
+  }
+}
+
+/** 开：Agent 改库时右侧检查器跟着打开/跳转。关：自己看，不被打断。默认关。 */
+export function isInspectorAgentFollow() {
+  return readFollow()
+}
+
+export function setInspectorAgentFollow(next: boolean) {
+  followLoaded = true
+  const value = Boolean(next)
+  if (follow === value) {
+    try {
+      localStorage.setItem(FOLLOW_KEY, follow ? '1' : '0')
+    } catch {
+      /* ignore */
+    }
+    return
+  }
+  follow = value
+  try {
+    localStorage.setItem(FOLLOW_KEY, follow ? '1' : '0')
+  } catch {
+    /* ignore */
+  }
+  bumpFollow()
+}
 
 function storageKey(paneId: string) {
   return `${STORAGE_PREFIX}${paneId}`
@@ -237,7 +288,7 @@ export function applyDatabaseChannelPayload(payload: unknown, currentSessionId?:
   const savedView = savedViewFromPayload((payload as { savedView?: unknown }).savedView, (reveal as { viewId?: unknown }).viewId)
   if (savedView) upsertSavedView(collection, savedView)
   const phase = String((payload as { phase?: unknown }).phase ?? '')
-  applyDatabaseReveal(reveal)
+  if (isInspectorAgentFollow()) applyDatabaseReveal(reveal)
   setInspectorAgentWorking(collection, phase !== 'done')
 }
 

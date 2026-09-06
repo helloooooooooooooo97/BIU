@@ -2684,7 +2684,10 @@ body {
 
 .project-chip.project-chip-pick-toggle:hover:not(:disabled),
 .project-chip.project-chip-pick-toggle.is-active,
-.project-chip.project-chip-pick-toggle.is-active:hover:not(:disabled) {
+.project-chip.project-chip-pick-toggle.is-active:hover:not(:disabled),
+.project-chip.project-chip-follow-toggle:hover:not(:disabled),
+.project-chip.project-chip-follow-toggle.is-active,
+.project-chip.project-chip-follow-toggle.is-active:hover:not(:disabled) {
   color: #5b9fd6;
 }
 
@@ -2718,7 +2721,9 @@ body {
 }
 
 .project-chip.project-chip-pick-toggle.is-active,
-.project-chip.project-chip-pick-toggle.is-active:hover:not(:disabled) {
+.project-chip.project-chip-pick-toggle.is-active:hover:not(:disabled),
+.project-chip.project-chip-follow-toggle.is-active,
+.project-chip.project-chip-follow-toggle.is-active:hover:not(:disabled) {
   border-color: var(--dsw-border);
   background: #262626;
   color: #5b9fd6;
