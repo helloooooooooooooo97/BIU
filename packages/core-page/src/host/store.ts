@@ -40,7 +40,6 @@ export type PageRow = DbRecord & {
   title: string
   tags: string[]
   notes: string
-  score: number
   parentId: string | null
   dependsOn: string[]
   facet: SchemaFieldValue
@@ -103,7 +102,6 @@ function rowFromFile(id: string, raw: string): PageRow {
     title: String(matter.title ?? id),
     tags: asStringList(matter.tags),
     notes: body,
-    score: Number(matter.score) || 0,
     parentId: matter.parentId == null || matter.parentId === '' ? null : String(matter.parentId),
     dependsOn: asStringList(matter.dependsOn),
     facet: normalizeSchemaValue(matter.facet),
@@ -119,7 +117,6 @@ function emptyRow(id: string, ts: number): PageRow {
     title: '未命名页面',
     tags: [],
     notes: '',
-    score: 0,
     parentId: null,
     dependsOn: [],
     facet: emptySchemaValue(),
@@ -146,7 +143,6 @@ function applyPatch(current: PageRow, patch: Record<string, unknown>): PageRow {
     dependsOn: 'dependsOn' in patch ? asStringList(patch.dependsOn) : current.dependsOn,
     facet: 'facet' in patch ? normalizeSchemaValue(patch.facet) : current.facet,
     emoji: 'emoji' in patch ? String(patch.emoji ?? '') : current.emoji,
-    score: current.score,
     createdAt: current.createdAt,
     updatedAt: Date.now(),
   }
@@ -179,7 +175,6 @@ export class PagesStore {
         title TEXT NOT NULL,
         tags_json TEXT NOT NULL DEFAULT '[]',
         notes TEXT NOT NULL DEFAULT '',
-        score REAL NOT NULL DEFAULT 0,
         parent_id TEXT,
         depends_on_json TEXT NOT NULL DEFAULT '[]',
         facet_json TEXT NOT NULL DEFAULT '{}',
@@ -225,12 +220,12 @@ export class PagesStore {
     if (!this.db) return
     this.db.prepare(`
       INSERT INTO pages (
-        id, title, tags_json, notes, score, parent_id,
+        id, title, tags_json, notes, parent_id,
         depends_on_json, facet_json, emoji, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         title=excluded.title, tags_json=excluded.tags_json,
-        notes=excluded.notes, score=excluded.score,
+        notes=excluded.notes,
         parent_id=excluded.parent_id, depends_on_json=excluded.depends_on_json, facet_json=excluded.facet_json, emoji=excluded.emoji,
         updated_at=excluded.updated_at
     `).run(...sqlValues(row))
@@ -249,7 +244,7 @@ export class PagesStore {
       return rows
     }
     const listed = db.prepare(`
-      SELECT id, title, tags_json, '' AS notes, score, parent_id,
+      SELECT id, title, tags_json, '' AS notes, parent_id,
         depends_on_json, facet_json, emoji, created_at, updated_at
       FROM pages ORDER BY id
     `).all() as SqlPage[]
@@ -284,7 +279,7 @@ export class PagesStore {
     }
     if (typeof fields.id === 'string' && ID_RE.test(fields.id) && !existing.has(fields.id)) id = fields.id
     const ts = Date.now()
-    const row = applyPatch(emptyRow(id, ts), { ...fields, score: 0 })
+    const row = applyPatch(emptyRow(id, ts), { ...fields })
     row.id = id
     row.createdAt = ts
     row.updatedAt = ts
@@ -367,7 +362,6 @@ type SqlPage = {
   title: string
   tags_json: string
   notes: string
-  score: number
   parent_id: string | null
   depends_on_json: string
   facet_json: string
@@ -390,7 +384,6 @@ function sqlValues(row: PageRow) {
     row.title,
     JSON.stringify(row.tags),
     row.notes ?? '',
-    row.score,
     row.parentId,
     JSON.stringify(row.dependsOn),
     JSON.stringify(row.facet),
@@ -406,7 +399,6 @@ function rowFromSql(row: SqlPage): PageRow {
     title: row.title,
     tags: asStringList(parseJson(row.tags_json, [])),
     notes: row.notes,
-    score: Number(row.score) || 0,
     parentId: row.parent_id == null || row.parent_id === '' ? null : String(row.parent_id),
     dependsOn: asStringList(parseJson(row.depends_on_json ?? '[]', [])),
     facet: normalizeSchemaValue(parseJson(row.facet_json, emptySchemaValue())),
