@@ -67,33 +67,43 @@ function normalizeStem(raw: string, fallback: string) {
   return stem
 }
 
-async function loadScene(file: string): Promise<Scene> {
+async function loadScene(file: string): Promise<{ scene: Scene; etag: string }> {
   const name = assetName(file)
   const res = await fetch(`/api/page/file/${encodeURIComponent(name)}`)
   if (res.status === 404) {
     const scene = emptyScene()
-    await fetch(`/api/page/file/${encodeURIComponent(name)}`, {
+    const created = await fetch(`/api/page/file/${encodeURIComponent(name)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(scene),
     })
-    return scene
+    const etag = etagFromResponse(created)
+    return { scene, etag }
   }
-  if (!res.ok) return emptyScene()
+  if (!res.ok) return { scene: emptyScene(), etag: '' }
   try {
-    return parseScene(JSON.parse(await res.text()))
+    return { scene: parseScene(JSON.parse(await res.text())), etag: etagFromResponse(res) }
   } catch {
-    return emptyScene()
+    return { scene: emptyScene(), etag: etagFromResponse(res) }
   }
 }
 
-function saveScene(file: string, scene: Scene) {
+function etagFromResponse(res: Response) {
+  return String(res.headers.get('etag') ?? '').replace(/^W\//, '').replaceAll('"', '')
+}
+
+async function saveScene(file: string, scene: Scene, etag: string) {
   const name = assetName(file)
-  void fetch(`/api/page/file/${encodeURIComponent(name)}`, {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (etag) headers['If-Match'] = `"${etag}"`
+  const res = await fetch(`/api/page/file/${encodeURIComponent(name)}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(scene),
   })
+  if (res.status === 409) return { ok: false as const, etag: etagFromResponse(res) }
+  if (!res.ok) return { ok: false as const, etag }
+  return { ok: true as const, etag: etagFromResponse(res) || etag }
 }
 
 function fitView(api: DrawApi | null) {
@@ -112,6 +122,8 @@ type Host = {
   ready: Promise<Host>
   initialData: { elements: never; appState: Record<string, unknown>; files: never } | null
   lastScene: Scene | null
+  etag: string
+  pending: ReturnType<typeof setTimeout> | null
   expanded: boolean
   sync?: () => void
   onCollapse?: () => void
@@ -119,6 +131,43 @@ type Host = {
 
 const hosts = new Map<string, Host>()
 let syncQueued = false
+
+function cancelPending(host: Host) {
+  if (!host.pending) return
+  clearTimeout(host.pending)
+  host.pending = null
+}
+
+async function reloadHost(file: string) {
+  const host = hosts.get(file)
+  if (!host) return
+  cancelPending(host)
+  const loaded = await loadScene(file)
+  if (hosts.get(file) !== host) return
+  const scene = loaded.scene
+  host.etag = loaded.etag
+  host.lastScene = scene
+  host.initialData = {
+    elements: (scene.elements ?? []) as never,
+    appState: { ...withoutCollab(scene.appState), collaborators: new Map() },
+    files: (scene.files ?? {}) as never,
+  }
+  paintHost(host)
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('biu:asset-changed', ((event: Event) => {
+    const detail = (event as CustomEvent<{ name?: string; etag?: string }>).detail
+    const name = String(detail?.name ?? '')
+    if (!name) return
+    for (const [file, host] of hosts) {
+      if (assetName(file) !== name && file !== name) continue
+      if (detail?.etag && host.etag === detail.etag) continue
+      cancelPending(host)
+      void reloadHost(file)
+    }
+  }) as EventListener)
+}
 
 function queueHostSync() {
   if (syncQueued) return
@@ -172,10 +221,14 @@ function retainHost(file: string) {
     ready: Promise.resolve(null as unknown as Host),
     initialData: null,
     lastScene: null,
+    etag: '',
+    pending: null,
     expanded: false,
   }
-  host.ready = loadScene(file).then((scene) => {
+  host.ready = loadScene(file).then((loaded) => {
     if (hosts.get(file) !== host) return host
+    const scene = loaded.scene
+    host.etag = loaded.etag
     host.initialData = {
       elements: (scene.elements ?? []) as never,
       appState: { ...withoutCollab(scene.appState), collaborators: new Map() },
@@ -219,6 +272,7 @@ function PersistentDraw(props: {
   const file = props.file
   const pending = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastSaved = useRef('')
+  const etagRef = useRef(hosts.get(file)?.etag ?? '')
   const apiRef = useRef<DrawApi | null>(null)
   const bindApi = useCallback((api: DrawApi | null) => {
     apiRef.current = api
@@ -236,7 +290,21 @@ function PersistentDraw(props: {
     const hosted = hosts.get(file)
     if (hosted) hosted.lastScene = next
     if (pending.current) clearTimeout(pending.current)
-    pending.current = setTimeout(() => saveScene(file, next), 400)
+    pending.current = setTimeout(() => {
+      const hostedNow = hosts.get(file)
+      if (hostedNow) hostedNow.pending = null
+      void saveScene(file, next, etagRef.current).then((result) => {
+        if (result.ok) {
+          etagRef.current = result.etag
+          const live = hosts.get(file)
+          if (live) live.etag = result.etag
+          return
+        }
+        void reloadHost(file)
+      })
+    }, 400)
+    const hostedPending = hosts.get(file)
+    if (hostedPending) hostedPending.pending = pending.current
   }, [file])
 
   useEffect(() => {
@@ -426,8 +494,9 @@ function Board(props: { data: Record<string, unknown>; update: (p: Record<string
 
   const onRename = (name: string) => {
     const nextFile = `assets/${name}`
-    const scene = hosts.get(file)?.lastScene
-    if (scene) saveScene(nextFile, scene)
+    const hosted = hosts.get(file)
+    const scene = hosted?.lastScene
+    if (scene) void saveScene(nextFile, scene, '')
     props.update({ file: nextFile })
   }
 

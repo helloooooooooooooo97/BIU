@@ -11,6 +11,7 @@ export const LIVE_TOOL_NAMES = [
   'db_stat',
   'db_action',
   'db_content',
+  'db_asset',
 ] as const
 
 export interface SessionProgressSnapshot {

@@ -50,6 +50,7 @@ export const FILE_TOOL_NAMES = [
   'db_stat',
   'db_action',
   'db_content',
+  'db_asset',
 ] as const
 
 /** 本回合 slash 选中的额外工具（极简模式下临时放开）。 */

@@ -43,6 +43,7 @@ export class AgentDbCompact {
       return next
     }
     if (kind === 'content') return this.content(rec)
+    if (kind === 'asset') return this.asset(rec)
     return result
   }
 
@@ -96,6 +97,17 @@ export class AgentDbCompact {
     if (typeof rec.end === 'number') next.end = rec.end
     if (typeof rec.total === 'number') next.total = rec.total
     if (rec.truncated) next.truncated = true
+    return next
+  }
+
+  private asset(rec: Record<string, unknown>) {
+    if (rec.ok === true || rec.command === 'write') {
+      return { ok: true, path: rec.path, name: rec.name, etag: rec.etag }
+    }
+    if (Array.isArray(rec.assets)) return { path: rec.path, assets: rec.assets }
+    const next: Record<string, unknown> = { path: rec.path, name: rec.name, etag: rec.etag }
+    if (typeof rec.text === 'string') next.text = rec.text
+    if (typeof rec.type === 'string') next.type = rec.type
     return next
   }
 

@@ -396,6 +396,10 @@ export function apply(ctx: Context) {
     let debounce = 0
     const off = snapshot.onMessage(DATABASE_CHANNEL, (payload) => {
       window.dispatchEvent(new Event('fsdb:change'))
+      const rec = payload && typeof payload === 'object' && !Array.isArray(payload) ? (payload as { asset?: { name?: string; etag?: string } }) : null
+      if (rec?.asset?.name) {
+        window.dispatchEvent(new CustomEvent('biu:asset-changed', { detail: rec.asset }))
+      }
       const sessionId = (
         ctx.get('sessionView') as { get?: () => { sessionId?: string | null } } | undefined
       )?.get?.()?.sessionId

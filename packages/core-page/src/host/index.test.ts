@@ -9,7 +9,7 @@ import * as tools from '@biu/host-tools'
 import * as fsPlugin from '@biu/host-fs'
 import * as page from './index.ts'
 import { dumpMarkdown, splitMarkdown } from './markdown.ts'
-import { ASSET_GC_GRACE_MS, PAGE_ASSETS, PAGE_ROOT, PagesStore, collectPageAssetNames } from './store.ts'
+import { ASSET_GC_GRACE_MS, PAGE_ASSETS, PAGE_ROOT, PageAssetConflictError, PagesStore, collectPageAssetNames } from './store.ts'
 
 test('markdown frontmatter roundtrips YAML properties and body', () => {
   const raw = dumpMarkdown({ title: '首页', tags: ['red', 'prod'] }, '正文第一段\n')
@@ -105,6 +105,9 @@ test('page plugin stores pages in SQLite under .page', async () => {
   assert.equal(shot.type, 'image/png')
   assert.deepEqual([...shot.bytes], [...png])
   await assert.rejects(() => store.writeAsset('../secret.json', '{}'), /invalid asset/)
+  await assert.rejects(() => store.writeAsset('board.json', '{}'), (error) => error instanceof PageAssetConflictError)
+  const overwritten = await store.writeAsset('board.json', '{}', { etag: asset.etag })
+  assert.equal(overwritten.etag.length, 16)
 })
 
 test('PagesStore reads existing markdown files from .page', async () => {

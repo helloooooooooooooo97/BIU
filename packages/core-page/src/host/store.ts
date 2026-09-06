@@ -1,4 +1,5 @@
 import { mkdir, readFile, stat, unlink, writeFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
 import { basename, dirname, join } from 'node:path'
 import { createRequire } from 'node:module'
 import type { DbRecord, SchemaFieldValue } from '@biu/type-file-system'
@@ -15,6 +16,24 @@ export const ASSET_GC_GRACE_MS = 24 * 60 * 60 * 1000
 const ID_RE = /^[A-Za-z0-9._-]+$/
 const ASSET_FILE_RE = /^[\p{L}\p{N}._-]+$/u
 const ASSET_REF_RE = /(?:(?:\.page\/)?assets\/|\/api\/(?:page|db)\/file\/)([\p{L}\p{N}._-]+)/gu
+
+function bytesEtag(bytes: Buffer) {
+  return createHash('sha1').update(bytes).digest('hex').slice(0, 16)
+}
+
+export class PageAssetConflictError extends Error {
+  readonly etag: string
+  constructor(etag: string) {
+    super('etag conflict')
+    this.name = 'PageAssetConflictError'
+    this.etag = etag
+  }
+}
+
+function parseIfMatch(raw: unknown) {
+  const text = String(raw ?? '').trim().replace(/^W\//, '').replaceAll('"', '')
+  return text && text !== '*' ? text : ''
+}
 
 export function isPageAssetFileName(name: string) {
   return Boolean(name) && name === basename(name) && name !== '.gitkeep' && ASSET_FILE_RE.test(name)
@@ -302,24 +321,37 @@ export class PagesStore {
     await this.gcAssets()
   }
 
-  async writeAsset(name: string, content: string | Buffer | Uint8Array) {
+  async writeAsset(name: string, content: string | Buffer | Uint8Array, opts?: { etag?: string }) {
     const file = basename(name)
     if (!file || file !== name.replace(/\\/g, '/') || !isPageAssetFileName(file)) throw new Error('invalid asset')
     await mkdir(this.assetsDir, { recursive: true })
     const bytes = typeof content === 'string' ? Buffer.from(content) : Buffer.from(content)
+    const expected = parseIfMatch(opts?.etag)
+    let current = ''
+    try {
+      current = bytesEtag(await readFile(join(this.assetsDir, file)))
+    } catch {
+      current = ''
+    }
+    if (current) {
+      if (!expected) throw new PageAssetConflictError(current)
+      if (expected !== current) throw new PageAssetConflictError(current)
+    } else if (expected) {
+      throw new PageAssetConflictError('')
+    }
     await writeFile(join(this.assetsDir, file), bytes)
-    return { name: file, href: fileUrl(file) }
+    return { name: file, href: fileUrl(file), etag: bytesEtag(bytes) }
   }
 
-  async readAsset(name: string): Promise<{ bytes: Buffer; type: string }> {
+  async readAsset(name: string): Promise<{ bytes: Buffer; type: string; etag: string }> {
     const file = basename(name)
     if (!file || file !== name.replace(/\\/g, '/')) throw new Error('invalid asset')
     try {
       const bytes = await readFile(join(this.assetsDir, file))
-      return { bytes, type: mimeOf(file) }
+      return { bytes, type: mimeOf(file), etag: bytesEtag(bytes) }
     } catch {
       const bytes = await readFile(this.fs.resolve(`${PAGE_ASSETS}/${file}`))
-      return { bytes, type: mimeOf(file) }
+      return { bytes, type: mimeOf(file), etag: bytesEtag(bytes) }
     }
   }
 

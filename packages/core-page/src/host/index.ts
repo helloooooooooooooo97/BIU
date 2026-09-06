@@ -1,8 +1,8 @@
 import { dataPath } from '@biu/host-plugin-loader/data-dir'
 import type { Context } from 'cordis'
 import type { CollectionSpec } from '@biu/type-file-system'
-import { REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
-import { PagesStore, type WorkspaceFs } from './store.ts'
+import { DATABASE_CHANNEL, REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
+import { PagesStore, PageAssetConflictError, type WorkspaceFs } from './store.ts'
 
 export { PAGE_ROOT, PAGE_ASSETS, ASSET_GC_GRACE_MS, collectPageAssetNames, PagesStore } from './store.ts'
 
@@ -55,8 +55,12 @@ function servePageFile(ctx: Context, store: PagesStore) {
   ctx.inject(['http'], (inner) => {
     inner.http.route('GET', '/api/page/file/:name', async (route) => {
       try {
-        const { bytes, type } = await store.readAsset(route.params.name ?? '')
-        route.res.writeHead(200, { 'content-type': type, 'cache-control': 'private, max-age=60' })
+        const { bytes, type, etag } = await store.readAsset(route.params.name ?? '')
+        route.res.writeHead(200, {
+          'content-type': type,
+          'cache-control': 'no-store',
+          etag: `"${etag}"`,
+        })
         route.res.end(bytes)
       } catch {
         route.send(404, { error: 'not found' })
@@ -64,9 +68,17 @@ function servePageFile(ctx: Context, store: PagesStore) {
     })
     inner.http.route('PUT', '/api/page/file/:name', async (route) => {
       try {
-        const written = await store.writeAsset(route.params.name ?? '', await route.bytes())
+        const ifMatch = String(route.req.headers['if-match'] ?? '').trim().replace(/^W\//, '').replaceAll('"', '')
+        const written = await store.writeAsset(route.params.name ?? '', await route.bytes(), {
+          etag: ifMatch && ifMatch !== '*' ? ifMatch : '',
+        })
+        inner.http.broadcast?.(DATABASE_CHANNEL, { ts: Date.now(), asset: { name: written.name, etag: written.etag } })
         route.send(200, { ok: true, ...written })
       } catch (error) {
+        if (error instanceof PageAssetConflictError) {
+          route.send(409, { error: 'etag conflict', etag: error.etag })
+          return
+        }
         route.send(400, { error: String(error) })
       }
     })

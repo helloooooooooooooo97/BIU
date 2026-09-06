@@ -1,11 +1,23 @@
+import { createHash } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { DATA_DIR_NAME, dataPath } from '@biu/host-plugin-loader/data-dir'
 
 export const FILE_SYSTEM_ASSETS = `${DATA_DIR_NAME}/assets`
 export const FILE_SYSTEM_ASSET_PREFIX = '/api/db/file/'
+export const ASSET_CHANGED_EVENT = 'biu:asset-changed'
 
 const ASSET_FILE_RE = /^[\p{L}\p{N}._-]+$/u
+const ASSET_REF_RE = /(?:(?:\.page\/)?assets\/|\/api\/(?:page|db)\/file\/)([\p{L}\p{N}._-]+)/gu
+
+export class AssetConflictError extends Error {
+  readonly etag: string
+  constructor(etag: string) {
+    super('etag conflict')
+    this.name = 'AssetConflictError'
+    this.etag = etag
+  }
+}
 
 export function isAssetFileName(name: string) {
   const file = basename(name)
@@ -29,6 +41,31 @@ export function mimeOfAsset(name: string) {
   return 'application/octet-stream'
 }
 
+export function bytesEtag(bytes: Buffer) {
+  return createHash('sha1').update(bytes).digest('hex').slice(0, 16)
+}
+
+export function parseIfMatch(raw: unknown) {
+  const text = String(raw ?? '').trim().replace(/^W\//, '').replaceAll('"', '')
+  return text && text !== '*' ? text : ''
+}
+
+export function collectAssetNames(...chunks: unknown[]): Set<string> {
+  const names = new Set<string>()
+  const eat = (text: string) => {
+    for (const match of text.matchAll(ASSET_REF_RE)) {
+      const name = basename(match[1] ?? '')
+      if (isAssetFileName(name)) names.add(name)
+    }
+  }
+  for (const chunk of chunks) {
+    if (chunk == null) continue
+    if (typeof chunk === 'string') eat(chunk)
+    else eat(JSON.stringify(chunk))
+  }
+  return names
+}
+
 export class FileSystemAssets {
   constructor(private dir = dataPath(process.cwd(), 'assets')) {}
 
@@ -36,13 +73,26 @@ export class FileSystemAssets {
     return this.dir
   }
 
-  async write(name: string, content: string | Buffer | Uint8Array) {
+  async write(name: string, content: string | Buffer | Uint8Array, opts?: { etag?: string }) {
     const file = basename(name)
     if (!file || file !== name.replace(/\\/g, '/') || !isAssetFileName(file)) throw new Error('invalid asset')
     await mkdir(this.dir, { recursive: true })
-    const bytes = typeof content === 'string' ? Buffer.from(content) : Buffer.from(content)
-    await writeFile(join(this.dir, file), bytes)
-    return { name: file, href: assetHref(file) }
+    const next = typeof content === 'string' ? Buffer.from(content) : Buffer.from(content)
+    const expected = parseIfMatch(opts?.etag)
+    let current = ''
+    try {
+      current = bytesEtag(await readFile(join(this.dir, file)))
+    } catch {
+      current = ''
+    }
+    if (current) {
+      if (!expected) throw new AssetConflictError(current)
+      if (expected !== current) throw new AssetConflictError(current)
+    } else if (expected) {
+      throw new AssetConflictError('')
+    }
+    await writeFile(join(this.dir, file), next)
+    return { name: file, href: assetHref(file), etag: bytesEtag(next) }
   }
 
   async read(name: string, fallbackDirs: string[] = []) {
@@ -53,7 +103,7 @@ export class FileSystemAssets {
     for (const dir of dirs) {
       try {
         const bytes = await readFile(join(dir, file))
-        return { bytes, type: mimeOfAsset(file) }
+        return { bytes, type: mimeOfAsset(file), etag: bytesEtag(bytes) }
       } catch (error) {
         last = error
       }

@@ -29,7 +29,7 @@ import {
 } from '@biu/type-file-system'
 import { SavedViewsStore, viewsCollection, type StoredView } from './saved-views.ts'
 import { FacetStore } from './facets-store.ts'
-import { FileSystemAssets } from './assets-store.ts'
+import { AssetConflictError, FileSystemAssets, collectAssetNames, isAssetFileName, parseIfMatch } from './assets-store.ts'
 import { facetsCollection } from './facets-collection.ts'
 import {
   asContentText,
@@ -406,6 +406,7 @@ export function clampPage(limit?: number, offset?: number) {
 export class DatabaseService extends Service implements Database {
   private collections = new Map<string, CollectionSpec>()
   facets = new FacetStore()
+  assets = new FileSystemAssets()
 
   private bumpQueued = false
 
@@ -945,6 +946,59 @@ export class DatabaseService extends Service implements Database {
       ok: true as const,
     }
   }
+
+  async editAsset(path: string, args: Record<string, unknown> = {}) {
+    const parts = splitPath(path)
+    if (parts.length !== 2) throw new Error(`cannot asset: ${normalizeCollectionPath(path)}`)
+    const spec = this.collection(`/${parts[0]}`)
+    if (!spec) throw new Error(`unknown collection: /${parts[0]}`)
+    const record = await spec.get(parts[1]!)
+    if (!record) throw new Error(`unknown record: ${spec.path}/${parts[1]}`)
+    const names = collectAssetNames(record)
+    const file = String(args.name ?? '')
+      .trim()
+      .replace(/^assets\//, '')
+      .replace(/^.*[/\\]/, '')
+    const command = String(args.command ?? (args.value != null ? 'write' : 'view'))
+    const recPath = `${spec.path}/${record.id}`
+    if (command === 'view' && !file) {
+      const assets = []
+      for (const name of [...names].sort()) {
+        try {
+          const read = await this.assets.read(name)
+          assets.push({ name, etag: read.etag, type: read.type })
+        } catch {
+          assets.push({ name, missing: true })
+        }
+      }
+      return { kind: 'asset' as const, path: recPath, command: 'view' as const, assets }
+    }
+    if (!isAssetFileName(file)) throw new Error('invalid asset')
+    if (!names.has(file)) throw new Error(`asset not referenced: ${file}`)
+    if (command === 'view') {
+      const read = await this.assets.read(file)
+      const text =
+        read.type.startsWith('text/') || read.type.includes('json') ? read.bytes.toString('utf8') : undefined
+      return {
+        kind: 'asset' as const,
+        path: recPath,
+        command: 'view' as const,
+        name: file,
+        etag: read.etag,
+        type: read.type,
+        ...(text != null ? { text } : {}),
+      }
+    }
+    if (command !== 'write') throw new Error(`unknown asset command: ${command}`)
+    const written = await this.assets.write(file, String(args.value ?? ''), { etag: String(args.etag ?? '') })
+    this.broadcastAsset(recPath, written.name, written.etag)
+    return { kind: 'asset' as const, ok: true as const, path: recPath, name: written.name, etag: written.etag }
+  }
+
+  private broadcastAsset(path: string, name: string, etag: string) {
+    const http = this.ctx.get('http') as { broadcast?: (type: string, payload: unknown) => void } | undefined
+    http?.broadcast?.(DATABASE_CHANNEL, { ts: Date.now(), asset: { name, etag, path } })
+  }
 }
 
 function parseContent(content: unknown): Record<string, unknown> {
@@ -1109,7 +1163,7 @@ export const inject = ['tools', 'http']
 export function apply(ctx: Context) {
   const db = new DatabaseService(ctx)
   db.facets.open(dataPath(process.cwd(), 'file-system.sqlite'))
-  const assets = new FileSystemAssets()
+  const assets = db.assets
   const savedViews = new SavedViewsStore()
   savedViews.open(process.env.VITEST ? ':memory:' : dataPath(process.cwd(), 'file-system.sqlite'))
   const facets = db.facets
@@ -1287,6 +1341,35 @@ export function apply(ctx: Context) {
         db.editContent(String(args.path), args).then((body) => agentDbCompact.query(body)),
       ),
   })
+  ctx.tools.register({
+    name: 'db_asset',
+    description: [
+      '读写一条记录引用的附件（画板 json、图片、文件），不是正文。正文仍用 db_content。',
+      'path 为 /<表>/<id>，name 为附件文件名（正文里的 assets/xxx 或 /api/page/file/xxx）。',
+      'command=view：不传 name 列出本条引用的附件及 etag；带 name 读该文件（文本/json 带 text）和 etag。',
+      'command=write：覆盖该文件，必须带 etag（等于上次 view 的 etag）。对不上返回 etag conflict，先 view 再写。',
+      '写成功只返回 {ok, path, name, etag}。前端开着的编辑器按 etag 重载，过期 PUT 会 409。',
+    ].join(' '),
+    parameters: {
+      type: 'object',
+      properties: {
+        path: { type: 'string' },
+        name: { type: 'string', description: '附件文件名，如 画板-ab12cd.json' },
+        command: {
+          type: 'string',
+          enum: ['view', 'write'],
+          description: 'view | write。省略时：有 value 则 write，否则 view。',
+        },
+        value: { type: 'string', description: 'write 的全文（json/文本）' },
+        etag: { type: 'string', description: 'write 必填，等于上次 view 的 etag' },
+      },
+      required: ['path'],
+    },
+    execute: (args) =>
+      withInspectorReveal(ctx, String(args.path), () =>
+        db.editAsset(String(args.path), args).then((body) => agentDbCompact.query(body)),
+      ),
+  })
 
   const send = async (route: { query: URLSearchParams; send: (status: number, body: unknown) => void }, op: () => unknown) => {
     try {
@@ -1388,8 +1471,12 @@ export function apply(ctx: Context) {
   })
   ctx.http.route('GET', '/api/db/file/:name', async (route) => {
     try {
-      const { bytes, type } = await assets.read(route.params.name ?? '')
-      route.res.writeHead(200, { 'content-type': type, 'cache-control': 'private, max-age=60' })
+      const { bytes, type, etag } = await assets.read(route.params.name ?? '')
+      route.res.writeHead(200, {
+        'content-type': type,
+        'cache-control': 'no-store',
+        etag: `"${etag}"`,
+      })
       route.res.end(bytes)
     } catch {
       route.send(404, { error: 'not found' })
@@ -1397,9 +1484,16 @@ export function apply(ctx: Context) {
   })
   ctx.http.route('PUT', '/api/db/file/:name', async (route) => {
     try {
-      const written = await assets.write(route.params.name ?? '', await route.bytes())
+      const written = await assets.write(route.params.name ?? '', await route.bytes(), {
+        etag: parseIfMatch(route.req.headers['if-match']),
+      })
+      ctx.http.broadcast?.(DATABASE_CHANNEL, { ts: Date.now(), asset: { name: written.name, etag: written.etag } })
       route.send(200, { ok: true, ...written })
     } catch (error) {
+      if (error instanceof AssetConflictError) {
+        route.send(409, { error: 'etag conflict', etag: error.etag })
+        return
+      }
       route.send(400, { error: String(error) })
     }
   })

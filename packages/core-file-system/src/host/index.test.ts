@@ -2,7 +2,11 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { Context, Service } from 'cordis'
 import * as tools from '@biu/host-tools'
+import { mkdtemp } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { DatabaseService, apply as applyFileSystem } from './index.ts'
+import { FileSystemAssets } from './assets-store.ts'
 import type { CollectionSpec } from '@biu/type-file-system'
 import { REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
 import { facetsCollection } from './facets-collection.ts'
@@ -432,6 +436,47 @@ test('editContent view/str_replace/replace_lines/insert/write', async () => {
   assert.equal((await db.content('/docs/n1')).value, 'done')
 })
 
+test('editAsset views and writes referenced attachments with etag', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  db.assets = new FileSystemAssets(await mkdtemp(join(tmpdir(), 'db-asset-')))
+  const rows = new Map<string, Record<string, unknown>>([
+    ['p1', { id: 'p1', title: '页', notes: '{"file":"assets/board.json"}' }],
+  ])
+  db.register({
+    id: 'pages',
+    path: '/pages',
+    schema: {
+      fields: {
+        ...REQUIRED_RECORD_FIELDS,
+        title: { type: 'string', writable: true },
+        notes: { type: 'file', writable: true },
+      },
+    },
+    list: () => [...rows.values()] as { id: string }[],
+    get: (id) => rows.get(id) as { id: string } | undefined,
+    records: { update: true },
+  })
+  const listed = await db.editAsset('/pages/p1', { command: 'view' })
+  assert.equal(listed.command, 'view')
+  const missing = (listed as { assets: Array<{ name: string; missing?: boolean }> }).assets
+  assert.equal(missing[0]?.name, 'board.json')
+  assert.equal(missing[0]?.missing, true)
+  await db.assets.write('board.json', '{"elements":[]}')
+  const viewed = await db.editAsset('/pages/p1', { command: 'view', name: 'board.json' })
+  assert.equal(typeof viewed.etag, 'string')
+  assert.equal(String(viewed.etag).length, 16)
+  await assert.rejects(() => db.editAsset('/pages/p1', { command: 'write', name: 'board.json', value: '{}' }))
+  const written = await db.editAsset('/pages/p1', {
+    command: 'write',
+    name: 'board.json',
+    value: '{}',
+    etag: viewed.etag,
+  })
+  assert.equal(written.ok, true)
+  await assert.rejects(() => db.editAsset('/pages/p1', { command: 'view', name: 'nope.json' }), /not referenced/)
+})
+
 test('list paginates collection records and reports total', async () => {
   const ctx = new Context()
   const db = new DatabaseService(ctx)
@@ -497,7 +542,7 @@ test('apply registers db_* tools', async () => {
   new HttpStub(ctx)
   await ctx.plugin({ inject: ['tools', 'http'], apply: applyFileSystem })
   const names = ctx.tools.names()
-  for (const name of ['db_list', 'db_read', 'db_update', 'db_create', 'db_delete', 'db_stat', 'db_action', 'db_content']) {
+  for (const name of ['db_list', 'db_read', 'db_update', 'db_create', 'db_delete', 'db_stat', 'db_action', 'db_content', 'db_asset']) {
     assert.equal(names.includes(name), true, name)
   }
   const listed = await ctx.tools.invoke('db_list', { path: '/' })

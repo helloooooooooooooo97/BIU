@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { FileSystemAssets, assetHref, isAssetFileName } from './assets-store.ts'
+import { FileSystemAssets, AssetConflictError, assetHref, collectAssetNames, isAssetFileName } from './assets-store.ts'
 
 test('shared assets live under a single directory and reject path escape', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'fs-assets-'))
@@ -17,6 +17,13 @@ test('shared assets live under a single directory and reject path escape', async
   await assert.rejects(() => store.write('../secret.png', 'nope'), /invalid asset/)
   assert.equal(isAssetFileName('ok-file_1.png'), true)
   assert.equal(isAssetFileName('../x'), false)
+  await assert.rejects(() => store.write('shot.png', 'next'), (error) => {
+    assert.equal(error instanceof AssetConflictError, true)
+    return true
+  })
+  const again = await store.write('shot.png', 'next', { etag: written.etag })
+  assert.equal(again.etag.length, 16)
+  assert.deepEqual([...collectAssetNames({ file: 'assets/画板-ab12.json' })], ['画板-ab12.json'])
 })
 
 test('asset reads fall back to a legacy folder', async () => {
