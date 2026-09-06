@@ -89,7 +89,6 @@ function ViewRecordPreview({
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({})
   const [pickerId, setPickerId] = useState<string | null>(null)
   const [pickerAnchor, setPickerAnchor] = useState<HTMLElement | null>(null)
-  const [emojiDraft, setEmojiDraft] = useState('')
   const chromeIcon = getDatabaseUi()?.chrome(path).Icon
 
   useEffect(() => {
@@ -185,7 +184,6 @@ function ViewRecordPreview({
                     setPickerAnchor(btn)
                     return row.id
                   })
-                  setEmojiDraft(emoji)
                 }}
               >
                 {emoji ? (
@@ -197,8 +195,6 @@ function ViewRecordPreview({
               {pickerId === row.id && pickerAnchor ? (
                 <RecordEmojiBoard
                   anchor={pickerAnchor}
-                  draft={emojiDraft}
-                  onDraft={setEmojiDraft}
                   onPick={(next) => void saveEmoji(row, next)}
                   onClear={() => void saveEmoji(row, '')}
                   onClose={() => {

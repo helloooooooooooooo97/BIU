@@ -28,7 +28,6 @@ function DetailTitleIcon({
   onChange: (next: string) => void
 }) {
   const [open, setOpen] = useState(false)
-  const [draft, setDraft] = useState(emoji)
   const [anchor, setAnchor] = useState<HTMLElement | null>(null)
   return (
     <span className="fsdb-detail-title-icon-wrap">
@@ -44,7 +43,6 @@ function DetailTitleIcon({
               setAnchor(null)
               return false
             }
-            setDraft(emoji)
             setAnchor(btn)
             return true
           })
@@ -63,8 +61,6 @@ function DetailTitleIcon({
       {open && anchor ? (
         <RecordEmojiBoard
           anchor={anchor}
-          draft={draft}
-          onDraft={setDraft}
           onPick={(next) => {
             onChange(normalizeRecordEmoji(next))
             setOpen(false)
@@ -143,7 +139,7 @@ export function RecordDetail({
 
   const propertyEntries = Object.entries(schema.fields)
     .filter(([key, field]) => {
-      if (key === 'id' || key === schema.labelField || key === contentFieldKey(schema)) return false
+      if (key === 'id' || key === 'emoji' || key === schema.labelField || key === contentFieldKey(schema)) return false
       if (chrome?.panes?.some((pane) => pane.id === key)) return false
       const kind = resolveFieldType(field)
       if (kind === 'facet' && !field.writable) return false

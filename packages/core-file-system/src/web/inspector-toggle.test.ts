@@ -97,9 +97,15 @@ test('sidebar records paint detail immediately without reloading the view', () =
   const emoji = readFileSync(resolve(import.meta.dirname, '../../../public-ui/src/emoji-board.tsx'), 'utf8')
   assert.match(emoji, /function RecordEmojiBoard/)
   assert.match(emoji, /className="fsdb-emoji-picker is-fixed"/)
+  assert.doesNotMatch(emoji, /fsdb-emoji-picker-input/)
+  assert.doesNotMatch(emoji, />恢复默认</)
+  assert.match(emoji, /aria-label="恢复默认"/)
   assert.match(sidebar, /fsdb-record-emoji/)
-  assert.match(css, /\.fsdb-emoji-picker \{[^}]*border:\s*0/s)
-  assert.match(css, /\.fsdb-emoji-picker \{[^}]*background:\s*#191919/s)
+  assert.match(css, /\.fsdb-emoji-picker \{[^}]*border-radius:\s*12px/s)
+  assert.match(css, /\.fsdb-emoji-picker \{[^}]*background:\s*#1c1c1c/s)
+  assert.match(css, /\.fsdb-emoji-picker-presets \{[^}]*grid-template-columns:\s*repeat\(8/)
+  assert.match(detail, /key === 'emoji'/)
+  assert.match(detail, /<RecordEmojiBoard/)
 })
 
 test('table title opens record from the title-side button', () => {

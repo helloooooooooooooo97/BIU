@@ -1602,7 +1602,6 @@ export function CollectionBrowser({
   function TableRecordIcon({ row }: { row: DbRecord }) {
     const emoji = recordPreviewEmoji(row)
     const [open, setOpen] = useState(false)
-    const [draft, setDraft] = useState(emoji)
     const [anchor, setAnchor] = useState<HTMLElement | null>(null)
     return (
       <span className="fsdb-table-record-icon">
@@ -1619,7 +1618,6 @@ export function CollectionBrowser({
                 setAnchor(null)
                 return false
               }
-              setDraft(emoji)
               setAnchor(btn)
               return true
             })
@@ -1635,8 +1633,6 @@ export function CollectionBrowser({
         {open && anchor ? (
           <RecordEmojiBoard
             anchor={anchor}
-            draft={draft}
-            onDraft={setDraft}
             onPick={(next) => {
               void writePatch(row, { emoji: normalizeRecordEmoji(next) })
               setOpen(false)

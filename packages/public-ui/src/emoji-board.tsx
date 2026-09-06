@@ -2,19 +2,32 @@ import { useLayoutEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { HeadlessDismiss } from './headless-dismiss.tsx'
 
-const RECORD_EMOJI_PRESETS = ['⭐', '🔥', '✅', '📌', '💡', '🎯', '📦', '🧩', '📄', '⚡']
+const RECORD_EMOJI_PRESETS = [
+  '📄', '📝', '📚', '🗂️', '📁', '📦', '🔖', '🧩',
+  '⭐', '🔥', '✅', '📌', '💡', '🎯', '⚡', '🚀',
+  '💻', '🛠️', '🧪', '📊', '📈', '🧠', '🔍', '💬',
+  '🏠', '🌍', '🎨', '🎵', '🎬', '📷', '🎮', '🧱',
+  '❤️', '😊', '🎉', '🌈', '☕', '🌙', '☀️', '🍀',
+  '🐛', '🔒', '⚠️', '✨', '🏆', '🧬', '🪄', '🌱',
+]
+
+const PICKER_WIDTH = 272
+
+function RestoreIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden fill="currentColor">
+      <path d="M8 1.5a6.5 6.5 0 1 0 6.32 8.12.75.75 0 0 0-1.46-.32A5 5 0 1 1 8 3a4.9 4.9 0 0 1 3.45 1.4H9.75a.75.75 0 0 0 0 1.5h3.5A.75.75 0 0 0 14 5.15V1.75a.75.75 0 0 0-1.5 0v1.36A6.47 6.47 0 0 0 8 1.5Z" />
+    </svg>
+  )
+}
 
 export function RecordEmojiBoard({
   anchor,
-  draft,
-  onDraft,
   onPick,
   onClear,
   onClose,
 }: {
   anchor: HTMLElement
-  draft: string
-  onDraft: (next: string) => void
   onPick: (emoji: string) => void
   onClear: () => void
   onClose: () => void
@@ -23,11 +36,11 @@ export function RecordEmojiBoard({
   useLayoutEffect(() => {
     const place = () => {
       const box = anchor.getBoundingClientRect()
-      const width = 168
-      setPos({
-        left: Math.min(box.left, Math.max(8, window.innerWidth - width - 8)),
-        top: box.bottom + 4,
-      })
+      const height = 268
+      const left = Math.min(box.left, Math.max(8, window.innerWidth - PICKER_WIDTH - 8))
+      const below = box.bottom + 6
+      const top = below + height > window.innerHeight - 8 ? Math.max(8, box.top - height - 6) : below
+      setPos({ left, top })
     }
     place()
     window.addEventListener('resize', place)
@@ -56,23 +69,11 @@ export function RecordEmojiBoard({
           </button>
         ))}
       </div>
-      <input
-        className="fsdb-emoji-picker-input"
-        value={draft}
-        placeholder="输入 emoji"
-        maxLength={8}
-        onChange={(event) => onDraft(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter') {
-            event.preventDefault()
-            onPick(draft)
-          }
-          if (event.key === 'Escape') onClose()
-        }}
-      />
-      <button type="button" className="fsdb-emoji-picker-clear" onClick={onClear}>
-        恢复默认
-      </button>
+      <div className="fsdb-emoji-picker-foot">
+        <button type="button" className="fsdb-emoji-picker-clear" title="恢复默认" aria-label="恢复默认" onClick={onClear}>
+          <RestoreIcon />
+        </button>
+      </div>
     </div>
     </HeadlessDismiss>,
     document.body,
