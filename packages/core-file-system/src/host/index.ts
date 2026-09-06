@@ -558,7 +558,7 @@ export class DatabaseService extends Service implements Database {
     if (!spec) throw new Error(`unknown collection: /${parts[0]}`)
     const caps = collectionCaps(spec)
     if (parts.length === 1) {
-      return { kind: 'collection' as const, path: spec.path, id: spec.id, label: spec.label ?? spec.id, schema: schemaFor(spec), caps }
+      return { kind: 'collection' as const, path: spec.path, id: spec.id, label: spec.label ?? spec.id, view: spec.view ?? null, schema: schemaFor(spec), caps }
     }
     if (parts.length === 2) {
       const record = await spec.get(parts[1]!)
@@ -604,6 +604,7 @@ export class DatabaseService extends Service implements Database {
           path: spec.path,
           id: spec.id,
           label: spec.label ?? spec.id,
+          view: spec.view ?? null,
           schema,
           total: 0,
           offset,
@@ -624,6 +625,7 @@ export class DatabaseService extends Service implements Database {
       path: spec.path,
       id: spec.id,
       label: spec.label ?? spec.id,
+      view: spec.view ?? null,
       schema,
       total,
       offset,
@@ -1150,7 +1152,7 @@ export function apply(ctx: Context) {
   }))))
   ctx.tools.register({
     name: 'db_list',
-    description: '列出 File System 路径：/ 为已登记表（path + 中文名），/<表> 为列式记录（不含 content、默认不含 createdAt/updatedAt/createdBy/updatedBy）。默认每页 50，最多 200。columns 参数只取需要的列。表结构用 db_stat。',
+    description: '列出 File System 路径：/ 为已登记表（path、中文名、view.blurb 说明书），/<表> 为列式记录（不含 content、默认不含 createdAt/updatedAt/createdBy/updatedBy）。默认每页 50，最多 200。columns 参数只取需要的列。表结构用 db_stat。',
     parameters: {
       type: 'object',
       properties: {

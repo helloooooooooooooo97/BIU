@@ -66,6 +66,8 @@ export class AgentDbCompact {
     const id = this.omitRedundantId(path, rec.id)
     if (id) next.id = id
     if (typeof rec.label === 'string' && rec.label && rec.label !== path.slice(1)) next.label = rec.label
+    const blurb = this.viewBlurb(rec)
+    if (blurb) next.blurb = blurb
     if (Array.isArray(rec.caps)) next.caps = rec.caps
     if (Array.isArray(rec.items)) {
       if (typeof rec.total === 'number') next.total = rec.total
@@ -118,14 +120,25 @@ export class AgentDbCompact {
     if (!Array.isArray(entries)) return []
     return entries.flatMap((item) => {
       if (!item || typeof item !== 'object' || Array.isArray(item)) return []
-      const rec = item as { path?: unknown; label?: unknown; id?: unknown }
+      const rec = item as { path?: unknown; label?: unknown; id?: unknown; view?: unknown }
       const path = typeof rec.path === 'string' ? rec.path : typeof rec.id === 'string' ? `/${rec.id}` : ''
       if (!path) return []
       const label = typeof rec.label === 'string' ? rec.label : ''
       const next: Record<string, unknown> = { path }
       if (label && label !== path.slice(1)) next.label = label
+      const blurb = this.viewBlurb(rec)
+      if (blurb) next.view = { blurb }
       return [next]
     })
+  }
+
+  /** 表说明书必须留给 Agent：这张表是什么、用哪条 db_*。UI chrome（route/icon）仍可丢掉。 */
+  private viewBlurb(rec: { view?: unknown; blurb?: unknown }) {
+    if (typeof rec.blurb === 'string' && rec.blurb.trim()) return rec.blurb.trim()
+    const view = rec.view
+    if (!view || typeof view !== 'object' || Array.isArray(view)) return ''
+    const blurb = String((view as { blurb?: unknown }).blurb ?? '').trim()
+    return blurb
   }
 
   private recordValue(value: unknown) {

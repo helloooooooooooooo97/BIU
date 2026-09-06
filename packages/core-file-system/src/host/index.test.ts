@@ -502,9 +502,14 @@ test('apply registers db_* tools', async () => {
   }
   const listed = await ctx.tools.invoke('db_list', { path: '/' })
   assert.equal((listed as { kind: string }).kind, 'root')
-  const paths = ((listed as { items: Array<{ path: string }> }).items ?? []).map((item) => item.path)
+  const items = ((listed as { items: Array<{ path: string; view?: { blurb?: string } }> }).items ?? [])
+  const paths = items.map((item) => item.path)
   assert.equal(paths.includes('/views'), true)
   assert.equal(paths.includes('/facets'), true)
+  const views = items.find((item) => item.path === '/views')
+  assert.match(String(views?.view?.blurb ?? ''), /db_list \/views/)
+  const facets = items.find((item) => item.path === '/facets')
+  assert.match(String(facets?.view?.blurb ?? ''), /db_list \/facets/)
 })
 
 test('db_list columns returns only those fields plus id', async () => {

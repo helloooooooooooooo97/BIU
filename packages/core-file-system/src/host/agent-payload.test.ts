@@ -150,19 +150,38 @@ test('compact list drops createdAt/people unless those are the projected columns
   assert.deepEqual(times.rows, [['n1', 1]])
 })
 
-test('compact root drops view chrome; content write is ok only', () => {
+test('compact root keeps view.blurb for the agent; drops route chrome', () => {
   const root = pack.query({
     kind: 'root',
     path: '/',
     items: [
-      { id: 'notes', path: '/notes', kind: 'collection', label: '笔记', view: { moduleId: 'notes', route: '/notes', title: '笔记' } },
+      {
+        id: 'notes',
+        path: '/notes',
+        kind: 'collection',
+        label: '笔记',
+        view: { moduleId: 'notes', route: '/notes', title: '笔记', blurb: '列表 db_list /notes。本表没有 db_action。' },
+      },
       { id: 'views', path: '/views', kind: 'collection', label: 'views', view: null },
     ],
   }) as Record<string, unknown>
   assert.deepEqual(root, {
     kind: 'root',
-    items: [{ path: '/notes', label: '笔记' }, { path: '/views' }],
+    items: [
+      { path: '/notes', label: '笔记', view: { blurb: '列表 db_list /notes。本表没有 db_action。' } },
+      { path: '/views' },
+    ],
   })
+
+  const listed = pack.query({
+    kind: 'collection',
+    path: '/notes',
+    label: '笔记',
+    view: { moduleId: 'notes', route: '/notes', blurb: '列表 db_list /notes。' },
+    items: [{ id: 'n1', title: '草稿' }],
+  }) as Record<string, unknown>
+  assert.equal(listed.blurb, '列表 db_list /notes。')
+  assert.equal('view' in listed, false)
 
   const written = pack.query({
     kind: 'content',
