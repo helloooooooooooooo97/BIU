@@ -89,6 +89,7 @@ export class AgentLoop implements AgentRunner {
     const steps: AgentTurn['steps'] = []
     let final = '（空回复）'
     let chunkBuf = ''
+    let chunkChannel: 'text' | 'reasoning' = 'text'
     let chunkFlush: Promise<void> = Promise.resolve()
     let chunkTimer: ReturnType<typeof setTimeout> | null = null
     let toolBuf = new Map<string, { id: string; name: string; arguments: string }>()
@@ -133,15 +134,22 @@ export class AgentLoop implements AgentRunner {
       }
       if (!chunkBuf) return chunkFlush
       const text = chunkBuf
+      const channel = chunkChannel
       chunkBuf = ''
       chunkFlush = chunkFlush.then(async () => {
-        await session.append(this.sessionId, { type: 'assistant/chunk', text })
+        await session.append(this.sessionId, {
+          type: 'assistant/chunk',
+          text,
+          ...(channel === 'reasoning' ? { channel: 'reasoning' as const } : {}),
+        })
       })
       return chunkFlush
     }
 
-    const queueChunk = (text: string) => {
+    const queueChunk = (text: string, channel: 'text' | 'reasoning' = 'text') => {
       if (!text) return
+      if (chunkBuf && chunkChannel !== channel) void flushChunks()
+      chunkChannel = channel
       chunkBuf += text
       if (chunkTimer != null) return
       chunkTimer = setTimeout(() => {
@@ -177,6 +185,9 @@ export class AgentLoop implements AgentRunner {
         reply = await this.llm.chat(messages, this.ctx.tools.schemas(), this.signal, {
           onDelta: async (text) => {
             queueChunk(text)
+          },
+          onReasoningDelta: (text) => {
+            queueChunk(text, 'reasoning')
           },
           onToolDelta: (call) => {
             queueTool(call)

@@ -210,6 +210,8 @@ export interface AssistantReply {
 export interface ChatOptions {
   /** 文本 delta；agent-loop 用来即时 append `assistant/chunk`。 */
   onDelta?: (text: string) => void | Promise<void>
+  /** 思考/reasoning delta（DeepSeek V4 `reasoning_content` 等）；不进最终 message。 */
+  onReasoningDelta?: (text: string) => void | Promise<void>
   /** 工具调用增量（name 出现后就开始推，长参数不必等整段生成完）。 */
   onToolDelta?: (call: { id: string; name: string; arguments: string }) => void | Promise<void>
 }
@@ -263,6 +265,7 @@ export async function consumeChatCompletionSse(
   stream: ReadableStream<Uint8Array>,
   options: {
     onDelta?: (text: string) => void | Promise<void>
+    onReasoningDelta?: (text: string) => void | Promise<void>
     onToolDelta?: (call: { id: string; name: string; arguments: string }) => void | Promise<void>
     signal?: AbortSignal
   } = {},
@@ -299,6 +302,8 @@ export async function consumeChatCompletionSse(
           choices?: Array<{
             delta?: {
               content?: string | null
+              reasoning_content?: string | null
+              reasoning?: string | null
               tool_calls?: Array<{
                 index?: number
                 id?: string
@@ -316,6 +321,10 @@ export async function consumeChatCompletionSse(
         }
         if (chunk.error?.message) throw new Error(chunk.error.message)
         const delta = chunk.choices?.[0]?.delta
+        const reasoning = delta?.reasoning_content ?? delta?.reasoning
+        if (typeof reasoning === 'string' && reasoning.length) {
+          await options.onReasoningDelta?.(reasoning)
+        }
         const text = delta?.content
         if (typeof text === 'string' && text.length) {
           content += text
@@ -410,7 +419,7 @@ export class OpenAiCompatLlm implements LlmClient {
       throw new Error(detail)
     }
     if (!res.body) throw new Error('llm stream missing body')
-    return consumeChatCompletionSse(res.body, { onDelta: options?.onDelta, onToolDelta: options?.onToolDelta, signal })
+    return consumeChatCompletionSse(res.body, { onDelta: options?.onDelta, onReasoningDelta: options?.onReasoningDelta, onToolDelta: options?.onToolDelta, signal })
   }
 }
 
@@ -498,7 +507,7 @@ export class AnthropicLlm implements LlmClient {
       throw new Error(detail)
     }
     if (!res.body) throw new Error('llm stream missing body')
-    return consumeMessagesSse(res.body, { onDelta: options?.onDelta, onToolDelta: options?.onToolDelta, signal })
+    return consumeMessagesSse(res.body, { onDelta: options?.onDelta, onReasoningDelta: options?.onReasoningDelta, onToolDelta: options?.onToolDelta, signal })
   }
 }
 
@@ -514,7 +523,7 @@ function parseToolJson(text: string): unknown {
 /** 解析 Anthropic Messages SSE：text（text_delta）+ 工具参数（input_json_delta）累积。 */
 async function consumeMessagesSse(
   stream: ReadableStream<Uint8Array>,
-  options: { onDelta?: (text: string) => void | Promise<void>; onToolDelta?: (call: { id: string; name: string; arguments: string }) => void | Promise<void>; signal?: AbortSignal } = {},
+  options: { onDelta?: (text: string) => void | Promise<void>; onReasoningDelta?: (text: string) => void | Promise<void>; onToolDelta?: (call: { id: string; name: string; arguments: string }) => void | Promise<void>; signal?: AbortSignal } = {},
 ): Promise<AssistantReply> {
   const reader = stream.getReader()
   const decoder = new TextDecoder()
@@ -568,10 +577,12 @@ async function consumeMessagesSse(
             break
           }
           case 'content_block_delta': {
-            const delta = evt.delta as { type?: string; text?: string; partial_json?: string } | undefined
+            const delta = evt.delta as { type?: string; text?: string; partial_json?: string; thinking?: string } | undefined
             if (delta?.type === 'text_delta' && typeof delta.text === 'string' && delta.text.length) {
               content += delta.text
               await options.onDelta?.(delta.text)
+            } else if (delta?.type === 'thinking_delta' && typeof delta.thinking === 'string' && delta.thinking.length) {
+              await options.onReasoningDelta?.(delta.thinking)
             } else if (delta?.type === 'input_json_delta' && typeof delta.partial_json === 'string') {
               const last = toolBlocks[toolBlocks.length - 1]
               if (last) {
@@ -631,6 +642,7 @@ export class LlmService extends Service {
             ctx.emit('llm/stream', { text })
             await options?.onDelta?.(text)
           },
+          onReasoningDelta: options?.onReasoningDelta,
           onToolDelta: options?.onToolDelta,
         })
         return reply

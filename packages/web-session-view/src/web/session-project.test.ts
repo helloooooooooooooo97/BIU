@@ -43,6 +43,27 @@ test('projects user, streaming assistant, tool call/result from session events',
   if (user?.kind === 'user') assert.equal(user.ts, 2)
 })
 
+test('projectNodes keeps streamed DeepSeek reasoning as a think part', () => {
+  const nodes = projectNodes([
+    { type: 'turn/start', turn: 1, seq: 1, ts: 1 },
+    { type: 'step/start', turn: 1, step: 0, seq: 2, ts: 2 },
+    { type: 'assistant/chunk', text: '先想', channel: 'reasoning', seq: 3, ts: 3 },
+    { type: 'assistant/chunk', text: '清楚', channel: 'reasoning', seq: 4, ts: 4 },
+    { type: 'assistant/chunk', text: '短答', seq: 5, ts: 5 },
+    { type: 'assistant/message', text: '短答', seq: 6, ts: 6 },
+  ])
+  const reply = nodes.find((node) => node.kind === 'reply')
+  assert.equal(reply?.kind, 'reply')
+  if (reply?.kind !== 'reply') return
+  assert.deepEqual(
+    reply.parts.map((part) => part.kind),
+    ['think', 'assistant'],
+  )
+  assert.equal(reply.parts[0]?.kind === 'think' && reply.parts[0].text, '先想清楚')
+  assert.equal(reply.parts[1]?.kind === 'assistant' && reply.parts[1].text, '短答')
+  assert.equal(reply.copyText, '短答')
+})
+
 test('projects live sender onto user nodes', () => {
   const nodes = projectNodes([
     { type: 'session/open', version: 1, seq: 0, ts: 1 },
@@ -275,6 +296,21 @@ test('compactSessionEvents coalesces chunks and drops ones superseded by message
     ['user/message', 'assistant/message', 'assistant/chunk'],
   )
   assert.equal(compacted[2]?.type === 'assistant/chunk' && compacted[2].text, 'partial')
+})
+
+test('compactSessionEvents keeps reasoning chunks when the answer message arrives', () => {
+  const compacted = compactSessionEvents([
+    { type: 'assistant/chunk', text: '想', channel: 'reasoning', seq: 1, ts: 1 },
+    { type: 'assistant/chunk', text: '一下', channel: 'reasoning', seq: 2, ts: 2 },
+    { type: 'assistant/chunk', text: '答', seq: 3, ts: 3 },
+    { type: 'assistant/message', text: '答', seq: 4, ts: 4 },
+  ])
+  assert.deepEqual(
+    compacted.map((event) => event.type),
+    ['assistant/chunk', 'assistant/message'],
+  )
+  assert.equal(compacted[0]?.type === 'assistant/chunk' && compacted[0].channel, 'reasoning')
+  assert.equal(compacted[0]?.type === 'assistant/chunk' && compacted[0].text, '想一下')
 })
 
 test('projectTrajectory keeps seq ledger and tool callIds for inspect', () => {

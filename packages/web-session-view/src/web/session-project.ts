@@ -29,7 +29,7 @@ export type SessionEvent = {
         histPct?: number
       }
     }
-  | { type: 'assistant/chunk'; text: string }
+  | { type: 'assistant/chunk'; text: string; channel?: 'reasoning' }
   | { type: 'tool/call'; id: string; name: string; arguments: string }
   | { type: 'tool/result'; id: string; name: string; ok: boolean; detail: string }
 )
@@ -62,7 +62,15 @@ export type ChatAssistantPart = {
   step?: number
 }
 
-export type ChatReplyPart = ChatAssistantPart | ChatToolPart
+export type ChatThinkPart = {
+  id: string
+  kind: 'think'
+  text: string
+  streaming?: boolean
+  step?: number
+}
+
+export type ChatReplyPart = ChatAssistantPart | ChatToolPart | ChatThinkPart
 
 /** 单步摘要：横条展示用。 */
 export type ChatStepStat = {
@@ -165,6 +173,7 @@ export function projectNodes(events: SessionEvent[]): ChatNode[] {
     id: string
     parts: ChatReplyPart[]
     streamingId: string | null
+    streamingThinkId: string | null
     tools: Map<string, ChatToolPart>
     usage: { input: number; output: number; total: number; cache: number; hit: boolean }
     /** 历史占比加权累加器：Σ(histPct × inputTokens) / Σ(inputTokens)。 */
@@ -183,6 +192,7 @@ export function projectNodes(events: SessionEvent[]): ChatNode[] {
         id: `r-${seq}`,
         parts: [],
         streamingId: null,
+        streamingThinkId: null,
         tools: new Map(),
         usage: { input: 0, output: 0, total: 0, cache: 0, hit: false },
         histSum: 0,
@@ -335,26 +345,56 @@ export function projectNodes(events: SessionEvent[]): ChatNode[] {
       })
     } else if (event.type === 'assistant/chunk') {
       const r = ensureReply(event.seq)
-      if (r.streamingId) {
-        const idx = r.parts.findIndex((part) => part.id === r.streamingId)
-        const current = idx >= 0 ? r.parts[idx] : undefined
-        if (current?.kind === 'assistant') {
-          r.parts[idx] = {
-            ...current,
-            text: current.text + event.text,
+      if (event.channel === 'reasoning') {
+        if (r.streamingThinkId) {
+          const idx = r.parts.findIndex((part) => part.id === r.streamingThinkId)
+          const current = idx >= 0 ? r.parts[idx] : undefined
+          if (current?.kind === 'think') {
+            r.parts[idx] = {
+              ...current,
+              text: current.text + event.text,
+              streaming: true,
+              ...(currentStep != null ? { step: currentStep } : {}),
+            }
+          }
+        } else {
+          r.streamingThinkId = `think-${event.seq}`
+          r.parts.push({
+            id: r.streamingThinkId,
+            kind: 'think',
+            text: event.text,
             streaming: true,
             ...(currentStep != null ? { step: currentStep } : {}),
-          }
+          })
         }
       } else {
-        r.streamingId = `a-${event.seq}`
-        r.parts.push({
-          id: r.streamingId,
-          kind: 'assistant',
-          text: event.text,
-          streaming: true,
-          ...(currentStep != null ? { step: currentStep } : {}),
-        })
+        if (r.streamingThinkId) {
+          const idx = r.parts.findIndex((part) => part.id === r.streamingThinkId)
+          const current = idx >= 0 ? r.parts[idx] : undefined
+          if (current?.kind === 'think') r.parts[idx] = { ...current, streaming: false }
+          r.streamingThinkId = null
+        }
+        if (r.streamingId) {
+          const idx = r.parts.findIndex((part) => part.id === r.streamingId)
+          const current = idx >= 0 ? r.parts[idx] : undefined
+          if (current?.kind === 'assistant') {
+            r.parts[idx] = {
+              ...current,
+              text: current.text + event.text,
+              streaming: true,
+              ...(currentStep != null ? { step: currentStep } : {}),
+            }
+          }
+        } else {
+          r.streamingId = `a-${event.seq}`
+          r.parts.push({
+            id: r.streamingId,
+            kind: 'assistant',
+            text: event.text,
+            streaming: true,
+            ...(currentStep != null ? { step: currentStep } : {}),
+          })
+        }
       }
       r.streaming = true
     } else if (event.type === 'assistant/message') {
@@ -384,10 +424,22 @@ export function projectNodes(events: SessionEvent[]): ChatNode[] {
           ...(currentStep != null ? { step: currentStep } : {}),
         })
       }
+      if (r.streamingThinkId) {
+        const idx = r.parts.findIndex((part) => part.id === r.streamingThinkId)
+        const current = idx >= 0 ? r.parts[idx] : undefined
+        if (current?.kind === 'think') r.parts[idx] = { ...current, streaming: false }
+        r.streamingThinkId = null
+      }
       if (currentTurn != null) r.streaming = true
     } else if (event.type === 'tool/call') {
       const r = ensureReply(event.seq)
       r.streamingId = null
+      if (r.streamingThinkId) {
+        const idx = r.parts.findIndex((part) => part.id === r.streamingThinkId)
+        const current = idx >= 0 ? r.parts[idx] : undefined
+        if (current?.kind === 'think') r.parts[idx] = { ...current, streaming: false }
+        r.streamingThinkId = null
+      }
       if (currentTurn != null) r.streaming = true
       const existing = r.tools.get(event.id)
       if (existing) {
@@ -614,7 +666,7 @@ export function compactSessionEvents(events: SessionEvent[]): SessionEvent[] {
   for (const event of events) {
     if (event.type === 'assistant/chunk') {
       const prev = coalesced.at(-1)
-      if (prev?.type === 'assistant/chunk') {
+      if (prev?.type === 'assistant/chunk' && (prev.channel === 'reasoning') === (event.channel === 'reasoning')) {
         coalesced[coalesced.length - 1] = {
           ...prev,
           text: prev.text + event.text,
@@ -629,7 +681,7 @@ export function compactSessionEvents(events: SessionEvent[]): SessionEvent[] {
   for (let i = 0; i < coalesced.length; i++) {
     const event = coalesced[i]!
     const next = coalesced[i + 1]
-    if (event.type === 'assistant/chunk' && next?.type === 'assistant/message') continue
+    if (event.type === 'assistant/chunk' && event.channel !== 'reasoning' && next?.type === 'assistant/message') continue
     out.push(event)
   }
   return out

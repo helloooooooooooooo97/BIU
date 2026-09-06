@@ -29,6 +29,26 @@ test('consumeChatCompletionSse yields text deltas and usage', async () => {
   assert.deepEqual(reply.usage, { inputTokens: 3, outputTokens: 2, totalTokens: 5 })
 })
 
+test('consumeChatCompletionSse streams DeepSeek reasoning_content separately from the answer', async () => {
+  const reasoning: string[] = []
+  const deltas: string[] = []
+  const reply = await consumeChatCompletionSse(
+    sseBody([
+      'data: {"choices":[{"delta":{"reasoning_content":"先"}}]}\n\n',
+      'data: {"choices":[{"delta":{"reasoning_content":"想"}}]}\n\n',
+      'data: {"choices":[{"delta":{"content":"短"}}]}\n\n',
+      'data: [DONE]\n\n',
+    ]),
+    {
+      onDelta: (text) => { deltas.push(text) },
+      onReasoningDelta: (text) => { reasoning.push(text) },
+    },
+  )
+  assert.deepEqual(reasoning, ['先', '想'])
+  assert.deepEqual(deltas, ['短'])
+  assert.equal(reply.content, '短')
+})
+
 test('consumeChatCompletionSse streams tool_calls before the stream ends', async () => {
   const tools: Array<{ id: string; name: string; arguments: string }> = []
   const reply = await consumeChatCompletionSse(

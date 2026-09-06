@@ -178,7 +178,27 @@ function renderReplyPartList({
       lastStep = step
     }
 
-    if (part.kind === 'assistant') {
+    if (part.kind === 'think') {
+      const partStreaming = Boolean(part.streaming)
+      elements.push(
+        <div
+          key={part.id}
+          className="chat-think-body text-[13px] leading-5 text-(--dsw-label-3)"
+          data-testid="chat-think"
+          {...pickDomAttrs('message', part.id, pickPreview(part.text) || 'think')}
+        >
+          <div className="mb-1 text-[12px] font-medium tracking-wide">思考</div>
+          {part.text ? (
+            <div className="whitespace-pre-wrap">{part.text}</div>
+          ) : partStreaming ? (
+            '…'
+          ) : null}
+          {partStreaming ? (
+            <span className="ml-1 inline-block animate-pulse">▍</span>
+          ) : null}
+        </div>,
+      )
+    } else if (part.kind === 'assistant') {
       const partStreaming = Boolean(part.streaming)
       elements.push(
         <div

@@ -35,6 +35,8 @@ export {
   sumTrajectoryRowUsage,
   sumUsageParts,
   type ChatNode,
+  type ChatAssistantPart,
+  type ChatThinkPart,
   type ChatReplyPart,
   type ChatStepStat,
   type ChatToolPart,
@@ -1431,7 +1433,7 @@ function upsertEvent(events: SessionEvent[], event: SessionEvent) {
   }
   if (event.type === 'assistant/chunk') {
     const last = events.at(-1)
-    if (last?.type === 'assistant/chunk') {
+    if (last?.type === 'assistant/chunk' && (last.channel === 'reasoning') === (event.channel === 'reasoning')) {
       return [
         ...events.slice(0, -1),
         { ...last, text: last.text + event.text, ts: event.ts },
@@ -1440,7 +1442,7 @@ function upsertEvent(events: SessionEvent[], event: SessionEvent) {
   }
   if (event.type === 'assistant/message') {
     const last = events.at(-1)
-    if (last?.type === 'assistant/chunk') {
+    if (last?.type === 'assistant/chunk' && last.channel !== 'reasoning') {
       return [...events.slice(0, -1), event]
     }
   }
@@ -1455,11 +1457,19 @@ function patchStreamingNodes(
   if (last?.kind === 'reply') {
     const parts = [...last.parts]
     const lastPart = parts.at(-1)
-    if (lastPart?.kind === 'assistant' && lastPart.streaming) {
+    const isThink = chunk.channel === 'reasoning'
+    if (lastPart?.kind === (isThink ? 'think' : 'assistant') && lastPart.streaming) {
       if (lastPart.text === chunk.text) return nodes
       parts[parts.length - 1] = { ...lastPart, text: chunk.text, streaming: true }
     } else {
-      parts.push({ id: `a-${chunk.seq}`, kind: 'assistant', text: chunk.text, streaming: true })
+      if (isThink) {
+        parts.push({ id: `think-${chunk.seq}`, kind: 'think', text: chunk.text, streaming: true })
+      } else {
+        if (lastPart?.kind === 'think' && lastPart.streaming) {
+          parts[parts.length - 1] = { ...lastPart, streaming: false }
+        }
+        parts.push({ id: `a-${chunk.seq}`, kind: 'assistant', text: chunk.text, streaming: true })
+      }
     }
     const copyText = parts
       .filter((part) => part.kind === 'assistant')
@@ -1473,8 +1483,8 @@ function patchStreamingNodes(
     {
       id: `r-${chunk.seq}`,
       kind: 'reply',
-      parts: [{ id: `a-${chunk.seq}`, kind: 'assistant', text: chunk.text, streaming: true }],
-      copyText: chunk.text,
+      parts: [{ id: `a-${chunk.seq}`, kind: chunk.channel === 'reasoning' ? 'think' : 'assistant', text: chunk.text, streaming: true }],
+      copyText: chunk.channel === 'reasoning' ? '' : chunk.text,
       streaming: true,
       finished: false,
     },

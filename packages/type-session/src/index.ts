@@ -39,7 +39,7 @@ export type SessionEventBody =
         histPct?: number
       }
     }
-  | { type: 'assistant/chunk'; text: string }
+  | { type: 'assistant/chunk'; text: string; channel?: 'reasoning' }
   | { type: 'tool/call'; id: string; name: string; arguments: string }
   | { type: 'tool/result'; id: string; name: string; ok: boolean; detail: string }
 

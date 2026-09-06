@@ -245,6 +245,24 @@ test('ingest coalesces consecutive chunks and skips trajectory on chat view', as
   assert.equal(view.get().trajectory.length, 0)
 })
 
+test('ingest keeps reasoning chunks separate from the answer', async () => {
+  mockFetch({
+    '/api/sessions': () => ({ sessions: [] }),
+    '/api/approvals': () => ({ mode: 'auto', pending: [] }),
+  })
+  const ctx = new Context()
+  await ctx.plugin(sessionView)
+  const view = ctx.sessionView as SessionViewService
+  view.ingest('s1', { type: 'session/open', version: 1, seq: 0, ts: 1 })
+  view.ingest('s1', { type: 'assistant/chunk', text: '想', channel: 'reasoning', seq: 1, ts: 2 })
+  view.ingest('s1', { type: 'assistant/chunk', text: '答', seq: 2, ts: 3 })
+  const chunks = view.get().events.filter((event) => event.type === 'assistant/chunk')
+  assert.equal(chunks.length, 2)
+  const reply = view.get().nodes.find((node) => node.kind === 'reply')
+  assert.equal(reply?.kind === 'reply' && reply.parts[0]?.kind, 'think')
+  assert.equal(reply?.kind === 'reply' && reply.parts[1]?.kind, 'assistant')
+})
+
 test('ingest updates live tool/call arguments without duplicating the card', async () => {
   mockFetch({
     '/api/sessions': () => ({ sessions: [] }),
