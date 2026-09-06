@@ -12,6 +12,7 @@ test('table list and previews pass view columns to /api/db/list', () => {
   const links = readFileSync(resolve(import.meta.dirname, './record-link-cell.tsx'), 'utf8')
   assert.match(browser, /listProjectionKeys/)
   assert.match(browser, /columns: listColumns/)
+  assert.match(browser, /columnKeys.length \? columnKeys : schemaDefaultKeys/)
   assert.match(browser, /\/api\/db\/read\?path=/)
   assert.match(client, /if \(opts\.columns\?\.length\) params\.set\('columns'/)
   assert.match(host, /columns: parseListColumnsParam\(route\.query\.get\('columns'\)\)/)

@@ -17,6 +17,7 @@ import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import type { FieldSpec, FieldType } from '@biu/type-file-system'
 import { CellSelect } from '@biu/database-ui'
 import { FieldGlyph } from './fsdb-cells.tsx'
+import { DndGrip } from './dnd-grip.tsx'
 import {
   countFilterRules,
   defaultOpForKind,
@@ -32,19 +33,6 @@ import {
   type FilterRule,
   type SortRule,
 } from '../query-logic.ts'
-
-function SortGrip() {
-  return (
-    <svg aria-hidden viewBox="0 0 10 16" width="10" height="16" fill="currentColor">
-      <circle cx="3" cy="3.5" r="1.15" />
-      <circle cx="7" cy="3.5" r="1.15" />
-      <circle cx="3" cy="8" r="1.15" />
-      <circle cx="7" cy="8" r="1.15" />
-      <circle cx="3" cy="12.5" r="1.15" />
-      <circle cx="7" cy="12.5" r="1.15" />
-    </svg>
-  )
-}
 
 export type QueryField = { key: string; kind: FieldType; field: FieldSpec }
 
@@ -122,7 +110,7 @@ function SortableSortRow({
       style={{ transform: CSS.Transform.toString(transform), transition }}
     >
       <button type="button" className="fsdb-query-grip" aria-label="拖动调整排序顺序" {...attributes} {...listeners}>
-        <SortGrip />
+        <DndGrip />
       </button>
       <SortRuleFields rule={rule} kind={kind} options={options} sorts={sorts} onChange={onChange} />
     </div>
@@ -190,7 +178,7 @@ export function SortQueryMenu({
               <div className="fsdb-query-drag-overlay" data-fsdb-sort-overlay>
                 <div className="fsdb-query-row">
                   <button type="button" className="fsdb-query-grip" tabIndex={-1}>
-                    <SortGrip />
+                    <DndGrip />
                   </button>
                   <SortRuleFields rule={active} kind={activeKind} options={options} sorts={sorts} onChange={() => {}} />
                 </div>

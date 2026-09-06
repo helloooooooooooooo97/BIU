@@ -107,6 +107,10 @@ const CSS = `
 .fsdb-page .fsdb-query-clear{color:var(--dsw-danger)}
 .fsdb-page .fsdb-query-input{flex:1;min-width:0;height:26px;border:0;border-radius:6px;padding:0 8px;background:var(--dsw-input);color:var(--dsw-label);font:inherit;font-size:14px;font-weight:600;outline:none}
 .fsdb-page .fsdb-query-spacer{flex:1;min-width:0}
+.fsdb-page .fsdb-col-drag-row{display:flex;align-items:center;gap:0;min-width:0}
+.fsdb-page .fsdb-col-drag-row .fsdb-checkrow{flex:1;min-width:0}
+.fsdb-page .fsdb-col-drag-row.is-drag{opacity:0}
+.fsdb-page .fsdb-query-grip.is-locked{visibility:hidden;pointer-events:none}
 .fsdb-page .fsdb-col-menu{max-height:min(60vh,360px);overflow:hidden}
 .fsdb-page .fsdb-col-menu-list{min-height:0;overflow:auto;display:flex;flex-direction:column;gap:4px}
 .fsdb-page .tasks-viewdd-head,.fsdb-page .tasks-sort-head{font-size:14px;font-weight:600;color:var(--dsw-label-3)}
