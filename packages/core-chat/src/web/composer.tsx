@@ -908,7 +908,7 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
               <ChevronDownIcon className="size-3.5 opacity-70" />
             </button>
             {modelOpen ? (
-              <HeadlessDismiss onDismiss={() => setModelOpen(false)} inside={(node) => Boolean((node instanceof Element ? node.closest('.composer-model') : null))}>
+              <HeadlessDismiss onDismiss={() => setModelOpen(false)} inside={(node) => Boolean((node instanceof Element ? node.closest('.composer-model, .composer-model-flyout') : null))}>
                 <ComposerModelMenu
                   models={allModels.filter((m) => modelProviders?.[m.endpointId])}
                   current={modelOption}

@@ -5241,18 +5241,17 @@ body {
 }
 
 .composer-model-flyout {
-  position: absolute;
-  left: calc(100% + 6px);
-  bottom: 0;
+  position: fixed;
+  z-index: 240;
   display: flex;
-  width: 260px;
+  width: 200px;
   max-height: min(380px, 56vh);
   flex-direction: column;
   overflow: hidden;
 }
 
 .composer-model-flyout.is-compact {
-  width: 160px;
+  width: 140px;
   padding: 4px;
 }
 
