@@ -6,6 +6,8 @@ import {
   LLM_MODEL_CATALOG,
   findEndpointPreset,
   normalizeBaseUrl,
+  inferModelCapabilities,
+  defaultThinkingFor,
 } from './model-catalog.ts'
 
 test('resolveChatCompletionsUrl uses defaults when baseUrl missing', () => {
@@ -75,4 +77,23 @@ test('relay endpoints share a multi-model pack', () => {
 
 test('normalizeBaseUrl strips trailing slash', () => {
   assert.equal(normalizeBaseUrl(' https://a.com/v1/ '), 'https://a.com/v1')
+})
+
+test('DeepSeek V4 can toggle thinking and High/Max', () => {
+  const caps = inferModelCapabilities('deepseek-v4-flash', 'deepseek')
+  assert.equal(caps.thinking, true)
+  assert.deepEqual(caps.effort, ['high', 'max'])
+  assert.equal(defaultThinkingFor(caps), 'enabled')
+})
+
+test('GPT-4o has no thinking extras', () => {
+  const caps = inferModelCapabilities('gpt-4o', 'openai')
+  assert.equal(caps.thinking, undefined)
+  assert.equal(caps.effort, undefined)
+})
+
+test('o3 exposes effort but not a thinking off switch', () => {
+  const caps = inferModelCapabilities('o3-mini', 'openai')
+  assert.equal(caps.thinking, undefined)
+  assert.deepEqual(caps.effort, ['high', 'max'])
 })

@@ -12,6 +12,34 @@ export interface LlmConfig {
    * 也可直接传入已含后缀的完整 URL。
    */
   baseUrl?: string
+  /** DeepSeek V4 / Claude 扩展思考：显式开关，避免上游默认开思考把页面卡死。 */
+  thinking?: 'enabled' | 'disabled'
+  reasoningEffort?: 'high' | 'max'
+}
+
+export function attachProviderOptions(
+  body: Record<string, unknown>,
+  config: LlmConfig,
+  protocol: 'openai-compat' | 'anthropic',
+) {
+  if (protocol === 'anthropic') {
+    if (config.thinking === 'enabled') {
+      body.thinking = { type: 'enabled', budget_tokens: 10_000 }
+    } else if (config.thinking === 'disabled') {
+      body.thinking = { type: 'disabled' }
+    }
+    return
+  }
+  if (config.thinking === 'disabled') {
+    body.thinking = { type: 'disabled' }
+    return
+  }
+  if (config.thinking === 'enabled') {
+    body.thinking = { type: 'enabled' }
+  }
+  if (config.reasoningEffort === 'high' || config.reasoningEffort === 'max') {
+    body.reasoning_effort = config.reasoningEffort
+  }
 }
 
 /** 把用户配置的 baseUrl 解析成 chat.completions 完整地址。 */
@@ -398,6 +426,7 @@ export class OpenAiCompatLlm implements LlmClient {
       body.tools = tools
       body.tool_choice = 'auto'
     }
+    attachProviderOptions(body, this.config, 'openai-compat')
     const res = await fetch(url, {
       method: 'POST',
       headers: {
@@ -485,6 +514,7 @@ export class AnthropicLlm implements LlmClient {
         }
       })
     }
+    attachProviderOptions(body, this.config, 'anthropic')
     const res = await fetch(endpoint, {
       method: 'POST',
       headers: {

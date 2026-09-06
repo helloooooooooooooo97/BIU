@@ -723,6 +723,45 @@ export function endpointProtocolProvider(endpoint: LlmEndpointDef): ChatProvider
   return endpoint.provider
 }
 
+export type ReasoningEffort = 'high' | 'max'
+export type ThinkingMode = 'enabled' | 'disabled'
+
+export interface ModelCapabilities {
+  /** 可开关思考（DeepSeek V4 / Claude 扩展思考） */
+  thinking?: boolean
+  /** 可调推理档位 High / Max */
+  effort?: Array<ReasoningEffort>
+}
+
+/** 按模型 id 推断：只露出该模型真正有的 1～2 项，避免一堆无效滑杆。 */
+export function inferModelCapabilities(model: string, provider: ChatProvider): ModelCapabilities {
+  const id = model.toLowerCase()
+  if (
+    provider === 'deepseek' ||
+    id.includes('deepseek-v4') ||
+    id.includes('deepseek-reasoner') ||
+    /deepseek-r1/.test(id)
+  ) {
+    return { thinking: true, effort: ['high', 'max'] }
+  }
+  if (/(^|[^a-z])o[1-4]([^a-z]|$)|gpt-5/.test(id)) {
+    return { effort: ['high', 'max'] }
+  }
+  if (provider === 'anthropic' && /claude-(opus|sonnet)-4|claude-4|claude-3-7/.test(id)) {
+    return { thinking: true }
+  }
+  return {}
+}
+
+export function defaultThinkingFor(caps: ModelCapabilities): ThinkingMode {
+  // 默认同 API：能思考就开。用户可在菜单里关成「快」。
+  return caps.thinking || caps.effort?.length ? 'enabled' : 'disabled'
+}
+
+export function defaultEffortFor(caps: ModelCapabilities): ReasoningEffort {
+  return caps.effort?.includes('high') ? 'high' : 'max'
+}
+
 /** 规范化用户输入的 baseUrl（去尾斜杠）。 */
 export function normalizeBaseUrl(url: string): string {
   return url.trim().replace(/\/+$/, '')

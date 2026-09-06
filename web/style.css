@@ -5199,6 +5199,11 @@ body {
   line-height: 1.5;
 }
 
+.composer-model-modes {
+  padding: 8px 12px 10px;
+  border-top: 1px solid var(--dsw-border);
+}
+
 .composer-model-config-head {
   position: sticky;
   top: 0;

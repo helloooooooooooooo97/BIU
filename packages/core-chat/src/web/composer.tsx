@@ -17,6 +17,8 @@ import {
   serializeComposer,
 } from './composer-tiptap.ts'
 import { ModelConfigDialog } from './model-config-dialog.tsx'
+import { ModelModeControls, modelModeSuffix } from './model-mode.tsx'
+import type { ModelCapabilities, ReasoningEffort, ThinkingMode } from '../host/model-catalog.ts'
 import { ImageThumbs } from './image-thumbs.tsx'
 import { collectClipboardImages, collectImageFiles } from './clipboard-images.ts'
 import { revealOverlayThread, isComposerFocusPending } from '@biu/web-app-shell/chat-overlay'
@@ -186,6 +188,9 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
   })
   const [modelBusy, setModelBusy] = useState(false)
   const [configOpen, setConfigOpen] = useState(false)
+  const [thinking, setThinking] = useState<ThinkingMode>('enabled')
+  const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>('high')
+  const [modelCaps, setModelCaps] = useState<ModelCapabilities>({ thinking: true, effort: ['high', 'max'] })
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([])
   /** 全部目录模型（含未配置的），用于下拉只展示已配置入口，但当前选中可能来自任一。 */
   const [allModels, setAllModels] = useState<ModelOption[]>([])
@@ -227,6 +232,9 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
       provider?: string
       endpointId?: string
       model?: string
+      thinking?: ThinkingMode
+      reasoningEffort?: ReasoningEffort
+      capabilities?: ModelCapabilities
       providers?: Record<string, { configured?: boolean }>
       endpoints?: Array<{ id: string; label?: string; configured?: boolean }>
       modelCatalog?: Array<{
@@ -257,6 +265,9 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
       } else if (data.provider && data.model) {
         setModelOption(matchModelOption([], data.provider, data.model))
       }
+      if (data.thinking === 'enabled' || data.thinking === 'disabled') setThinking(data.thinking)
+      if (data.reasoningEffort === 'high' || data.reasoningEffort === 'max') setReasoningEffort(data.reasoningEffort)
+      if (data.capabilities) setModelCaps(data.capabilities)
       const cfg: Record<string, boolean> = {}
       const labels: Record<string, string> = {
         deepseek: 'DeepSeek',
@@ -658,9 +669,18 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
         }),
       })
       if (!res.ok) return
-      const data = (await res.json()) as { provider?: string; model?: string }
+      const data = (await res.json()) as {
+        provider?: string
+        model?: string
+        thinking?: ThinkingMode
+        reasoningEffort?: ReasoningEffort
+        capabilities?: ModelCapabilities
+      }
       if (data.provider && data.model) setModelOption(matchModelOption(allModels, data.provider, data.model))
       else setModelOption(option)
+      if (data.thinking === 'enabled' || data.thinking === 'disabled') setThinking(data.thinking)
+      if (data.reasoningEffort === 'high' || data.reasoningEffort === 'max') setReasoningEffort(data.reasoningEffort)
+      if (data.capabilities) setModelCaps(data.capabilities)
       setModelOpen(false)
     } finally {
       setModelBusy(false)
@@ -837,7 +857,12 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
               title="选择模型"
               onClick={() => setModelOpen((open) => !open)}
             >
-              <span className="composer-model-label">{modelOption.label}</span>
+              <span className="composer-model-label">
+                {modelOption.label}
+                {modelModeSuffix(thinking, reasoningEffort, modelCaps)
+                  ? ` · ${modelModeSuffix(thinking, reasoningEffort, modelCaps)}`
+                  : ''}
+              </span>
               <ChevronDownIcon className="size-3.5 opacity-70" />
             </button>
             {modelOpen ? (
@@ -912,6 +937,39 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
                     )
                   })
                 })()}
+                <div className="composer-model-modes">
+                  <ModelModeControls
+                    capabilities={modelCaps}
+                    thinking={thinking}
+                    reasoningEffort={reasoningEffort}
+                    disabled={modelBusy}
+                    onChange={(next) => {
+                      void (async () => {
+                        setModelBusy(true)
+                        try {
+                          const res = await fetch('/api/chat/config', {
+                            method: 'POST',
+                            headers: { 'content-type': 'application/json' },
+                            body: JSON.stringify(next),
+                          })
+                          if (!res.ok) return
+                          const data = (await res.json()) as {
+                            thinking?: ThinkingMode
+                            reasoningEffort?: ReasoningEffort
+                            capabilities?: ModelCapabilities
+                          }
+                          if (data.thinking === 'enabled' || data.thinking === 'disabled') setThinking(data.thinking)
+                          if (data.reasoningEffort === 'high' || data.reasoningEffort === 'max') {
+                            setReasoningEffort(data.reasoningEffort)
+                          }
+                          if (data.capabilities) setModelCaps(data.capabilities)
+                        } finally {
+                          setModelBusy(false)
+                        }
+                      })()
+                    }}
+                  />
+                </div>
               </div>
               </HeadlessDismiss>
             ) : null}

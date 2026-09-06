@@ -5,9 +5,9 @@ import type { ChatMessage } from './chat-types.ts'
 import { isAgentToolMode, normalizeAgentMode, type AgentToolMode } from '@biu/host-tools'
 import type { LlmConfig } from '@biu/host-llm'
 import { probeLlmConnection } from '@biu/host-llm'
-import { LLM_MODEL_CATALOG, LLM_ENDPOINT_PRESETS, describeProvider, defaultModelFor, CHAT_PROVIDERS, findEndpointPreset, normalizeBaseUrl } from './model-catalog.ts'
-import type { ChatProvider, LlmModelDef, LlmEndpointDef } from './model-catalog.ts'
-export type { ChatProvider, LlmModelDef, LlmEndpointDef } from './model-catalog.ts'
+import { LLM_MODEL_CATALOG, LLM_ENDPOINT_PRESETS, describeProvider, defaultModelFor, CHAT_PROVIDERS, findEndpointPreset, normalizeBaseUrl, inferModelCapabilities, defaultThinkingFor, defaultEffortFor } from './model-catalog.ts'
+import type { ChatProvider, LlmModelDef, LlmEndpointDef, ReasoningEffort, ThinkingMode, ModelCapabilities } from './model-catalog.ts'
+export type { ChatProvider, LlmModelDef, LlmEndpointDef, ReasoningEffort, ThinkingMode, ModelCapabilities } from './model-catalog.ts'
 export { LLM_ENDPOINT_PRESETS, LLM_MODEL_CATALOG } from './model-catalog.ts'
 import { currentSessionId } from '@biu/host-sessions/scope'
 import { isSessionCompactPoint, type SessionConfig, type SessionEvent } from '@biu/type-session'
@@ -58,6 +58,11 @@ interface ChatConfig {
   agentMode: AgentToolMode
   /** 极简模式下常驻额外工具（不含 minimal 底座与 live 调度工具） */
   extraTools: string[]
+  /** 当前模型的思考开关；能思考的模型默认 enabled（对齐上游）。 */
+  thinking: ThinkingMode
+  reasoningEffort: ReasoningEffort
+  /** 按「入口::模型」记住档位，切模型时带回。 */
+  modelPrefs: Record<string, { thinking?: ThinkingMode; reasoningEffort?: ReasoningEffort }>
 }
 
 function configPath() {
@@ -91,6 +96,9 @@ function defaults(): ChatConfig {
     systemPrompt: '你是控制台里的助手。需要时调用当前已注册的 tools；插件卸载后对应 tool 会消失。回答简洁。',
     agentMode: 'standard',
     extraTools: [],
+    thinking: 'enabled',
+    reasoningEffort: 'high',
+    modelPrefs: {},
   }
 }
 
@@ -121,6 +129,9 @@ function writePersisted(config: ChatConfig) {
         systemPrompt: config.systemPrompt,
         agentMode: config.agentMode,
         extraTools: config.extraTools,
+        thinking: config.thinking,
+        reasoningEffort: config.reasoningEffort,
+        modelPrefs: config.modelPrefs,
         apiKeys: config.apiKeys,
         baseUrls: config.baseUrls,
         customEndpoints: config.customEndpoints,
@@ -140,6 +151,44 @@ function parseAgentMode(value: unknown, fallback: AgentToolMode): AgentToolMode 
 
 function parseProvider(value: unknown): ChatProvider | null {
   return CHAT_PROVIDERS.includes(value as ChatProvider) ? (value as ChatProvider) : null
+}
+
+function prefKey(endpointId: string, model: string) {
+  return `${endpointId}::${model}`
+}
+
+function parseThinking(value: unknown): ThinkingMode | undefined {
+  return value === 'enabled' || value === 'disabled' ? value : undefined
+}
+
+function parseEffort(value: unknown): ReasoningEffort | undefined {
+  return value === 'high' || value === 'max' ? value : undefined
+}
+
+function mergeModelPrefs(saved: Partial<ChatConfig> | null): ChatConfig['modelPrefs'] {
+  const out: ChatConfig['modelPrefs'] = {}
+  if (!saved?.modelPrefs || typeof saved.modelPrefs !== 'object') return out
+  for (const [key, raw] of Object.entries(saved.modelPrefs)) {
+    if (!raw || typeof raw !== 'object') continue
+    const thinking = parseThinking(raw.thinking)
+    const reasoningEffort = parseEffort(raw.reasoningEffort)
+    if (thinking || reasoningEffort) out[key] = { ...(thinking ? { thinking } : {}), ...(reasoningEffort ? { reasoningEffort } : {}) }
+  }
+  return out
+}
+
+function hydrateModelMode(config: ChatConfig) {
+  const caps = inferModelCapabilities(config.model, config.provider)
+  const saved = config.modelPrefs[prefKey(config.endpointId, config.model)]
+  config.thinking = saved?.thinking ?? defaultThinkingFor(caps)
+  config.reasoningEffort = saved?.reasoningEffort ?? defaultEffortFor(caps)
+}
+
+function rememberModelPrefs(config: ChatConfig) {
+  config.modelPrefs[prefKey(config.endpointId, config.model)] = {
+    thinking: config.thinking,
+    reasoningEffort: config.reasoningEffort,
+  }
 }
 
 function isLocalEndpoint(endpoint: LlmEndpointDef): boolean {
@@ -260,7 +309,7 @@ function mergePersisted(base: ChatConfig, saved: Partial<ChatConfig> | null): Ch
     customEndpoints.find((e) => e.id === endpointId) ??
     findEndpointPreset(base.endpointId)
 
-  return {
+  const next: ChatConfig = {
     endpointId,
     provider: endpoint?.provider ?? parseProvider(saved.provider) ?? base.provider,
     apiKeys,
@@ -276,7 +325,12 @@ function mergePersisted(base: ChatConfig, saved: Partial<ChatConfig> | null): Ch
     extraTools: Array.isArray(saved.extraTools)
       ? [...new Set(saved.extraTools.map((name) => String(name).trim()).filter(Boolean))]
       : base.extraTools,
+    thinking: parseThinking(saved.thinking) ?? base.thinking,
+    reasoningEffort: parseEffort(saved.reasoningEffort) ?? base.reasoningEffort,
+    modelPrefs: mergeModelPrefs(saved),
   }
+  hydrateModelMode(next)
+  return next
 }
 
 function allEndpoints(config: ChatConfig): LlmEndpointDef[] {
@@ -371,6 +425,9 @@ export class ChatService extends Service {
       model: this.config.model,
       systemPrompt: this.config.systemPrompt,
       agentMode: this.config.agentMode,
+      thinking: this.config.thinking,
+      reasoningEffort: this.config.reasoningEffort,
+      capabilities: inferModelCapabilities(this.config.model, this.config.provider),
       /** 当前默认入口是否已配置（兼容旧语义，供 banner 等使用）。 */
       configured: current ? endpointConfigured(this.config, current) : Boolean((this.config.apiKeys[this.config.provider] ?? '').trim()),
       hint: hint(this.config.apiKeys[this.config.endpointId] ?? this.config.apiKeys[this.config.provider] ?? ''),
@@ -393,6 +450,7 @@ export class ChatService extends Service {
       })),
       modelCatalog: models.map((m) => ({
         ...m,
+        capabilities: inferModelCapabilities(m.model, m.provider),
         // 方便前端按入口过滤
         endpointConfigured: (() => {
           const ep = resolveEndpoint(this.config, m.endpointId)
@@ -455,11 +513,19 @@ export class ChatService extends Service {
       ''
     // 本地入口允许空 Key：上游常不校验，填占位避免部分网关拒空 Authorization
     const key = apiKey.trim() || (endpoint && isLocalEndpoint(endpoint) ? 'local' : '')
+    const caps = inferModelCapabilities(effective.model, provider)
+    const prefs = this.config.modelPrefs[prefKey(endpointId, effective.model)]
     return {
       provider,
       apiKey: key,
       model: effective.model,
       ...(endpoint ? { baseUrl: effectiveBaseUrl(this.config, endpoint) } : {}),
+      ...(caps.thinking || caps.effort?.length
+        ? {
+            thinking: prefs?.thinking ?? this.config.thinking,
+            reasoningEffort: prefs?.reasoningEffort ?? this.config.reasoningEffort,
+          }
+        : {}),
     }
   }
 
@@ -565,6 +631,8 @@ export class ChatService extends Service {
       systemPrompt: string
       agentMode: AgentToolMode
       extraTools: string[]
+      thinking: ThinkingMode
+      reasoningEffort: ReasoningEffort
       /** 按入口更新 key；空串 / null 清除 */
       setApiKey: Partial<Record<string, string | null>>
       /** 按入口覆盖 baseUrl；空串清除覆盖、回到 preset 默认 */
@@ -578,6 +646,8 @@ export class ChatService extends Service {
     }>,
     opts?: { persist?: boolean },
   ) {
+    const beforeKey = prefKey(this.config.endpointId, this.config.model)
+    rememberModelPrefs(this.config)
     if (typeof next.endpointId === 'string' && next.endpointId.trim()) {
       const id = next.endpointId.trim()
       const ep = resolveEndpoint(this.config, id)
@@ -734,6 +804,15 @@ export class ChatService extends Service {
     if (Array.isArray(next.extraTools)) {
       this.config.extraTools = [...new Set(next.extraTools.map((name) => String(name).trim()).filter(Boolean))]
     }
+    const afterKey = prefKey(this.config.endpointId, this.config.model)
+    const thinkingPatch = parseThinking(next.thinking)
+    const effortPatch = parseEffort(next.reasoningEffort)
+    if (afterKey !== beforeKey && thinkingPatch == null && effortPatch == null) {
+      hydrateModelMode(this.config)
+    }
+    if (thinkingPatch) this.config.thinking = thinkingPatch
+    if (effortPatch) this.config.reasoningEffort = effortPatch
+    rememberModelPrefs(this.config)
     this.syncLlm()
     this.syncToolsMode()
     if (opts?.persist !== false) {

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'vitest'
-import { consumeChatCompletionSse } from '@biu/host-llm'
+import { consumeChatCompletionSse, attachProviderOptions } from '@biu/host-llm'
 
 function sseBody(chunks: string[]): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder()
@@ -75,4 +75,29 @@ test('consumeChatCompletionSse aborts with signal', async () => {
     },
   })
   await assert.rejects(() => consumeChatCompletionSse(stream, { signal: abort.signal }), /cancelled/)
+})
+
+test('attachProviderOptions disables DeepSeek thinking', () => {
+  const body: Record<string, unknown> = {}
+  attachProviderOptions(body, {
+    provider: 'deepseek',
+    apiKey: 'k',
+    model: 'deepseek-v4-flash',
+    thinking: 'disabled',
+  }, 'openai-compat')
+  assert.deepEqual(body.thinking, { type: 'disabled' })
+  assert.equal(body.reasoning_effort, undefined)
+})
+
+test('attachProviderOptions sends enabled thinking plus Max effort', () => {
+  const body: Record<string, unknown> = {}
+  attachProviderOptions(body, {
+    provider: 'deepseek',
+    apiKey: 'k',
+    model: 'deepseek-v4-flash',
+    thinking: 'enabled',
+    reasoningEffort: 'max',
+  }, 'openai-compat')
+  assert.deepEqual(body.thinking, { type: 'enabled' })
+  assert.equal(body.reasoning_effort, 'max')
 })

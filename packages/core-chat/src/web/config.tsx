@@ -10,6 +10,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { CheckIcon, ChevronDownIcon, ArrowPathIcon, PlusIcon, MagnifyingGlassIcon, SignalSlashIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import { HeadlessDismiss } from '@biu/public-ui'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
+import { ModelModeControls } from './model-mode.tsx'
+import type { ModelCapabilities, ReasoningEffort, ThinkingMode } from '../host/model-catalog.ts'
 
 type ChatProvider = 'deepseek' | 'openai' | 'anthropic'
 
@@ -48,6 +50,9 @@ interface ChatPublicConfig {
   endpointId?: string
   provider: ChatProvider
   model: string
+  thinking?: ThinkingMode
+  reasoningEffort?: ReasoningEffort
+  capabilities?: ModelCapabilities
   configured: boolean
   hint: string
   baseUrl?: string
@@ -79,6 +84,9 @@ export function ChatConfig(props?: { onClose?: () => void }) {
   const [activeId, setActiveId] = useState('deepseek')
   const [defaultEndpointId, setDefaultEndpointId] = useState('deepseek')
   const [defaultModel, setDefaultModel] = useState('deepseek-v4-flash')
+  const [thinking, setThinking] = useState<ThinkingMode>('enabled')
+  const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>('high')
+  const [modelCaps, setModelCaps] = useState<ModelCapabilities>({})
   const [endpoints, setEndpoints] = useState<EndpointView[]>([])
   const [modelCatalog, setModelCatalog] = useState<ModelDef[]>([])
   const [providers, setProviders] = useState<Record<string, ProviderView> | null>(null)
@@ -246,6 +254,9 @@ export function ChatConfig(props?: { onClose?: () => void }) {
     const eid = preferActive || data.endpointId || data.provider || 'deepseek'
     setDefaultEndpointId(data.endpointId || data.provider || eid)
     setDefaultModel(data.model)
+    if (data.thinking === 'enabled' || data.thinking === 'disabled') setThinking(data.thinking)
+    if (data.reasoningEffort === 'high' || data.reasoningEffort === 'max') setReasoningEffort(data.reasoningEffort)
+    if (data.capabilities) setModelCaps(data.capabilities)
     setActiveId(eid)
 
     const ep = eps.find((e) => e.id === eid)
@@ -1068,6 +1079,25 @@ export function ChatConfig(props?: { onClose?: () => void }) {
                   ) : (
                     <p className="text-[11px] text-(--dsw-label-3)">暂无模型，在下方添加 model id</p>
                   )}
+
+                  {isDefaultProvider ? (
+                    <ModelModeControls
+                      capabilities={modelCaps}
+                      thinking={thinking}
+                      reasoningEffort={reasoningEffort}
+                      disabled={saving}
+                      onChange={(next) => {
+                        void fetch('/api/chat/config', {
+                          method: 'POST',
+                          headers: { 'content-type': 'application/json' },
+                          body: JSON.stringify(next),
+                        })
+                          .then((res) => res.json())
+                          .then((data: ChatPublicConfig) => applyPublic(data, activeId))
+                          .catch(() => setError('保存失败'))
+                      }}
+                    />
+                  ) : null}
 
                   <div className="flex gap-2">
                     <input
