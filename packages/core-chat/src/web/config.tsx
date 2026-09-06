@@ -11,7 +11,7 @@ import { CheckIcon, ChevronDownIcon, ArrowPathIcon, PlusIcon, MagnifyingGlassIco
 import { HeadlessDismiss } from '@biu/public-ui'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { ModelModeControls } from './model-mode.tsx'
-import type { ContextWindow, ModelCapabilities, ReasoningEffort, ThinkingMode } from '../host/model-catalog.ts'
+import type { ContextWindow, ModelCapabilities, ReasoningEffort, SpeedMode, ThinkingMode } from '../host/model-catalog.ts'
 
 type ChatProvider = 'deepseek' | 'openai' | 'anthropic'
 
@@ -53,6 +53,7 @@ interface ChatPublicConfig {
   thinking?: ThinkingMode
   reasoningEffort?: ReasoningEffort
   contextWindow?: ContextWindow
+  speed?: SpeedMode
   capabilities?: ModelCapabilities
   configured: boolean
   hint: string
@@ -88,7 +89,8 @@ export function ChatConfig(props?: { onClose?: () => void }) {
   const [thinking, setThinking] = useState<ThinkingMode>('enabled')
   const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>('high')
   const [contextWindow, setContextWindow] = useState<ContextWindow>('200k')
-  const [modelCaps, setModelCaps] = useState<ModelCapabilities>({})
+  const [speed, setSpeed] = useState<SpeedMode>('slow')
+  const [modelCaps, setModelCaps] = useState<ModelCapabilities>({ knobs: [] })
   const [endpoints, setEndpoints] = useState<EndpointView[]>([])
   const [modelCatalog, setModelCatalog] = useState<ModelDef[]>([])
   const [providers, setProviders] = useState<Record<string, ProviderView> | null>(null)
@@ -259,6 +261,7 @@ export function ChatConfig(props?: { onClose?: () => void }) {
     if (data.thinking === 'enabled' || data.thinking === 'disabled') setThinking(data.thinking)
     if (data.reasoningEffort === 'high' || data.reasoningEffort === 'max') setReasoningEffort(data.reasoningEffort)
     if (data.contextWindow === '200k' || data.contextWindow === '1m') setContextWindow(data.contextWindow)
+    if (data.speed === 'fast' || data.speed === 'slow') setSpeed(data.speed)
     if (data.capabilities) setModelCaps(data.capabilities)
     setActiveId(eid)
 
@@ -1087,15 +1090,18 @@ export function ChatConfig(props?: { onClose?: () => void }) {
                   {isDefaultProvider ? (
                     <ModelModeControls
                       capabilities={modelCaps}
-                      thinking={thinking}
-                      reasoningEffort={reasoningEffort}
-                      contextWindow={contextWindow}
+                      mode={{ thinking, speed, effort: reasoningEffort, context: contextWindow }}
                       disabled={saving}
                       onChange={(next) => {
                         void fetch('/api/chat/config', {
                           method: 'POST',
                           headers: { 'content-type': 'application/json' },
-                          body: JSON.stringify(next),
+                          body: JSON.stringify({
+                            thinking: next.thinking,
+                            speed: next.speed,
+                            reasoningEffort: next.effort,
+                            contextWindow: next.context,
+                          }),
                         })
                           .then((res) => res.json())
                           .then((data: ChatPublicConfig) => applyPublic(data, activeId))

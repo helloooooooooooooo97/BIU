@@ -2,12 +2,11 @@ import { useMemo, useState } from 'react'
 import { CheckIcon, ChevronRightIcon, MagnifyingGlassIcon } from '@heroicons/react/16/solid'
 import {
   inferModelCapabilities,
-  type ContextWindow,
   type ModelCapabilities,
-  type ReasoningEffort,
-  type ThinkingMode,
+  type ModelKnob,
+  type ModelModeValues,
 } from '../host/model-catalog.ts'
-import { modelModeSuffix } from './model-mode.tsx'
+import { choiceKnob, knobValue, modelKnobs, modelModeSuffix, patchKnob } from './model-mode.tsx'
 
 export type ComposerModelOption = {
   id: string
@@ -18,7 +17,7 @@ export type ComposerModelOption = {
   note?: string
 }
 
-type Pane = 'root' | 'effort' | 'context' | 'model'
+type Pane = 'root' | 'model' | string
 
 function groupTitle(key: string, labels: Record<string, string>) {
   return (
@@ -30,52 +29,34 @@ function groupTitle(key: string, labels: Record<string, string>) {
 function tagFor(
   option: ComposerModelOption,
   current: ComposerModelOption,
-  thinking: ThinkingMode,
-  effort: ReasoningEffort,
-  context: ContextWindow,
+  mode: ModelModeValues,
   currentCaps: ModelCapabilities,
 ) {
-  if (option.id === current.id) return modelModeSuffix(thinking, effort, currentCaps, context)
+  if (option.id === current.id) return modelModeSuffix(mode, currentCaps)
   const caps = inferModelCapabilities(option.model, option.provider as 'deepseek' | 'openai' | 'anthropic')
-  return modelModeSuffix('enabled', 'high', caps, '200k')
+  return modelModeSuffix({ thinking: 'enabled', speed: 'slow', effort: 'high', context: '200k' }, caps)
+}
+
+function toggleOn(knob: Extract<ModelKnob, { kind: 'toggle' }>, mode: ModelModeValues) {
+  return knobValue(knob, mode) === knob.on
 }
 
 export function ComposerModelMenu(props: {
   models: ComposerModelOption[]
   current: ComposerModelOption
   endpointLabels: Record<string, string>
-  thinking: ThinkingMode
-  reasoningEffort: ReasoningEffort
-  contextWindow: ContextWindow
+  mode: ModelModeValues
   capabilities: ModelCapabilities
   disabled?: boolean
   onSelect: (option: ComposerModelOption) => void
-  onMode: (next: { thinking?: ThinkingMode; reasoningEffort?: ReasoningEffort; contextWindow?: ContextWindow }) => void
+  onMode: (next: Partial<ModelModeValues>) => void
   onAddModels: () => void
 }) {
-  const {
-    models,
-    current,
-    endpointLabels,
-    thinking,
-    reasoningEffort,
-    contextWindow,
-    capabilities,
-    disabled,
-    onSelect,
-    onMode,
-    onAddModels,
-  } = props
+  const { models, current, endpointLabels, mode, capabilities, disabled, onSelect, onMode, onAddModels } = props
   const [pane, setPane] = useState<Pane>('root')
   const [query, setQuery] = useState('')
-  const thinkingOn = thinking === 'enabled'
-  const fast = Boolean(capabilities.speed && thinking === 'disabled')
-  const showThinking = Boolean(capabilities.thinking)
-  const showFast = Boolean(capabilities.speed)
-  const showEffort = Boolean(capabilities.effort?.length)
-  const showContext = Boolean(capabilities.context?.length)
-  const effortLabel = reasoningEffort === 'max' ? 'Max' : 'High'
-  const contextLabel = contextWindow === '1m' ? '1M' : '200k'
+  const knobs = modelKnobs(capabilities)
+  const openChoice = choiceKnob(capabilities, pane)
 
   const grouped = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -119,7 +100,7 @@ export function ComposerModelMenu(props: {
                   <div className="composer-model-group-label">{group.title}</div>
                   {group.items.map((option) => {
                     const active = option.id === current.id
-                    const tag = tagFor(option, current, thinking, reasoningEffort, contextWindow, capabilities)
+                    const tag = tagFor(option, current, mode, capabilities)
                     return (
                       <button
                         key={option.id}
@@ -147,47 +128,22 @@ export function ComposerModelMenu(props: {
         </div>
       ) : null}
 
-      {pane === 'effort' ? (
-        <div className="composer-model-flyout is-compact" role="listbox" aria-label="推理力度">
-          {(capabilities.effort ?? []).map((item) => {
-            const active = reasoningEffort === item
-            const label = item === 'max' ? 'Max' : 'High'
+      {openChoice ? (
+        <div className="composer-model-flyout is-compact" role="listbox" aria-label={openChoice.label}>
+          {openChoice.options.map((item) => {
+            const active = knobValue(openChoice, mode) === item.value
             return (
               <button
-                key={item}
+                key={item.value}
                 type="button"
                 role="option"
                 aria-selected={active}
                 className={`composer-model-item${active ? ' is-active' : ''}`}
-                data-testid={`effort-${item}`}
+                data-testid={`${openChoice.id}-${item.value}`}
                 disabled={disabled}
-                onClick={() => onMode({ reasoningEffort: item })}
+                onClick={() => onMode(patchKnob(openChoice, item.value))}
               >
-                <span className="composer-model-item-label">{label}</span>
-                {active ? <CheckIcon className="composer-model-check size-3.5" aria-hidden /> : null}
-              </button>
-            )
-          })}
-        </div>
-      ) : null}
-
-      {pane === 'context' ? (
-        <div className="composer-model-flyout is-compact" role="listbox" aria-label="上下文">
-          {(capabilities.context ?? []).map((item) => {
-            const active = contextWindow === item
-            const label = item === '1m' ? '1M' : '200k'
-            return (
-              <button
-                key={item}
-                type="button"
-                role="option"
-                aria-selected={active}
-                className={`composer-model-item${active ? ' is-active' : ''}`}
-                data-testid={`context-${item}`}
-                disabled={disabled}
-                onClick={() => onMode({ contextWindow: item })}
-              >
-                <span className="composer-model-item-label">{label}</span>
+                <span className="composer-model-item-label">{item.label}</span>
                 {active ? <CheckIcon className="composer-model-check size-3.5" aria-hidden /> : null}
               </button>
             )
@@ -196,58 +152,40 @@ export function ComposerModelMenu(props: {
       ) : null}
 
       <div className="composer-model-panel" data-testid="composer-model-panel">
-        {showThinking ? (
-          <button
-            type="button"
-            role="switch"
-            aria-checked={thinkingOn}
-            className="composer-model-row"
-            data-testid="thinking-toggle"
-            disabled={disabled}
-            onClick={() => onMode({ thinking: thinkingOn ? 'disabled' : 'enabled' })}
-          >
-            <span className="composer-model-row-label">思考</span>
-            <span className={`composer-model-switch${thinkingOn ? ' is-on' : ''}`} aria-hidden />
-          </button>
-        ) : null}
-        {showFast ? (
-          <button
-            type="button"
-            role="switch"
-            aria-checked={fast}
-            className="composer-model-row"
-            data-testid="speed-toggle"
-            disabled={disabled}
-            onClick={() => onMode({ thinking: fast ? 'enabled' : 'disabled' })}
-          >
-            <span className="composer-model-row-label">快</span>
-            <span className={`composer-model-switch${fast ? ' is-on' : ''}`} aria-hidden />
-          </button>
-        ) : null}
-        {showEffort ? (
-          <button
-            type="button"
-            className={`composer-model-row${pane === 'effort' ? ' is-open' : ''}`}
-            disabled={disabled}
-            onClick={() => setPane((p) => (p === 'effort' ? 'root' : 'effort'))}
-          >
-            <span className="composer-model-row-label">力度</span>
-            <span className="composer-model-row-val">{effortLabel}</span>
-            <ChevronRightIcon className="size-3.5 opacity-50" aria-hidden />
-          </button>
-        ) : null}
-        {showContext ? (
-          <button
-            type="button"
-            className={`composer-model-row${pane === 'context' ? ' is-open' : ''}`}
-            disabled={disabled}
-            onClick={() => setPane((p) => (p === 'context' ? 'root' : 'context'))}
-          >
-            <span className="composer-model-row-label">上下文</span>
-            <span className="composer-model-row-val">{contextLabel}</span>
-            <ChevronRightIcon className="size-3.5 opacity-50" aria-hidden />
-          </button>
-        ) : null}
+        {knobs.map((knob) => {
+          if (knob.kind === 'toggle') {
+            const on = toggleOn(knob, mode)
+            return (
+              <button
+                key={knob.id}
+                type="button"
+                role="switch"
+                aria-checked={on}
+                className="composer-model-row"
+                data-testid={`${knob.id}-toggle`}
+                disabled={disabled}
+                onClick={() => onMode(patchKnob(knob, on ? knob.off : knob.on))}
+              >
+                <span className="composer-model-row-label">{knob.label}</span>
+                <span className={`composer-model-switch${on ? ' is-on' : ''}`} aria-hidden />
+              </button>
+            )
+          }
+          const current = knob.options.find((item) => item.value === knobValue(knob, mode))?.label ?? ''
+          return (
+            <button
+              key={knob.id}
+              type="button"
+              className={`composer-model-row${pane === knob.id ? ' is-open' : ''}`}
+              disabled={disabled}
+              onClick={() => setPane((p) => (p === knob.id ? 'root' : knob.id))}
+            >
+              <span className="composer-model-row-label">{knob.label}</span>
+              <span className="composer-model-row-val">{current}</span>
+              <ChevronRightIcon className="size-3.5 opacity-50" aria-hidden />
+            </button>
+          )
+        })}
         <button
           type="button"
           className={`composer-model-row${pane === 'model' ? ' is-open' : ''}`}

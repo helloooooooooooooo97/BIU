@@ -5,9 +5,9 @@ import type { ChatMessage } from './chat-types.ts'
 import { isAgentToolMode, normalizeAgentMode, type AgentToolMode } from '@biu/host-tools'
 import type { LlmConfig } from '@biu/host-llm'
 import { probeLlmConnection } from '@biu/host-llm'
-import { LLM_MODEL_CATALOG, LLM_ENDPOINT_PRESETS, describeProvider, defaultModelFor, CHAT_PROVIDERS, findEndpointPreset, normalizeBaseUrl, inferModelCapabilities, defaultThinkingFor, defaultEffortFor, defaultContextFor } from './model-catalog.ts'
-import type { ChatProvider, LlmModelDef, LlmEndpointDef, ReasoningEffort, ThinkingMode, ContextWindow, ModelCapabilities } from './model-catalog.ts'
-export type { ChatProvider, LlmModelDef, LlmEndpointDef, ReasoningEffort, ThinkingMode, ContextWindow, ModelCapabilities } from './model-catalog.ts'
+import { LLM_MODEL_CATALOG, LLM_ENDPOINT_PRESETS, describeProvider, defaultModelFor, CHAT_PROVIDERS, findEndpointPreset, normalizeBaseUrl, inferModelCapabilities, defaultModeValues, applyModeToLlm, hasKnob } from './model-catalog.ts'
+import type { ChatProvider, LlmModelDef, LlmEndpointDef, ReasoningEffort, ThinkingMode, ContextWindow, SpeedMode, ModelModeValues } from './model-catalog.ts'
+export type { ChatProvider, LlmModelDef, LlmEndpointDef, ReasoningEffort, ThinkingMode, ContextWindow, SpeedMode, ModelCapabilities } from './model-catalog.ts'
 export { LLM_ENDPOINT_PRESETS, LLM_MODEL_CATALOG } from './model-catalog.ts'
 import { currentSessionId } from '@biu/host-sessions/scope'
 import { isSessionCompactPoint, type SessionConfig, type SessionEvent } from '@biu/type-session'
@@ -62,8 +62,12 @@ interface ChatConfig {
   thinking: ThinkingMode
   reasoningEffort: ReasoningEffort
   contextWindow: ContextWindow
+  speed: SpeedMode
   /** 按「入口::模型」记住档位，切模型时带回。 */
-  modelPrefs: Record<string, { thinking?: ThinkingMode; reasoningEffort?: ReasoningEffort; contextWindow?: ContextWindow }>
+  modelPrefs: Record<
+    string,
+    { thinking?: ThinkingMode; reasoningEffort?: ReasoningEffort; contextWindow?: ContextWindow; speed?: SpeedMode }
+  >
 }
 
 function configPath() {
@@ -100,6 +104,7 @@ function defaults(): ChatConfig {
     thinking: 'enabled',
     reasoningEffort: 'high',
     contextWindow: '200k',
+    speed: 'slow',
     modelPrefs: {},
   }
 }
@@ -134,6 +139,7 @@ function writePersisted(config: ChatConfig) {
         thinking: config.thinking,
         reasoningEffort: config.reasoningEffort,
         contextWindow: config.contextWindow,
+        speed: config.speed,
         modelPrefs: config.modelPrefs,
         apiKeys: config.apiKeys,
         baseUrls: config.baseUrls,
@@ -172,8 +178,8 @@ function parseContext(value: unknown): ContextWindow | undefined {
   return value === '200k' || value === '1m' ? value : undefined
 }
 
-function hasModeCaps(caps: ModelCapabilities) {
-  return Boolean(caps.thinking || caps.speed || caps.effort?.length || caps.context?.length)
+function parseSpeed(value: unknown): SpeedMode | undefined {
+  return value === 'fast' || value === 'slow' ? value : undefined
 }
 
 function mergeModelPrefs(saved: Partial<ChatConfig> | null): ChatConfig['modelPrefs'] {
@@ -184,11 +190,13 @@ function mergeModelPrefs(saved: Partial<ChatConfig> | null): ChatConfig['modelPr
     const thinking = parseThinking(raw.thinking)
     const reasoningEffort = parseEffort(raw.reasoningEffort)
     const contextWindow = parseContext((raw as { contextWindow?: unknown }).contextWindow)
-    if (thinking || reasoningEffort || contextWindow) {
+    const speed = parseSpeed((raw as { speed?: unknown }).speed)
+    if (thinking || reasoningEffort || contextWindow || speed) {
       out[key] = {
         ...(thinking ? { thinking } : {}),
         ...(reasoningEffort ? { reasoningEffort } : {}),
         ...(contextWindow ? { contextWindow } : {}),
+        ...(speed ? { speed } : {}),
       }
     }
   }
@@ -198,9 +206,13 @@ function mergeModelPrefs(saved: Partial<ChatConfig> | null): ChatConfig['modelPr
 function hydrateModelMode(config: ChatConfig) {
   const caps = inferModelCapabilities(config.model, config.provider)
   const saved = config.modelPrefs[prefKey(config.endpointId, config.model)]
-  config.thinking = saved?.thinking ?? defaultThinkingFor(caps)
-  config.reasoningEffort = saved?.reasoningEffort ?? defaultEffortFor(caps)
-  config.contextWindow = saved?.contextWindow ?? defaultContextFor(caps)
+  const defaults = defaultModeValues(caps)
+  config.thinking = saved?.thinking ?? defaults.thinking
+  config.reasoningEffort = saved?.reasoningEffort ?? defaults.effort
+  config.contextWindow = saved?.contextWindow ?? defaults.context
+  config.speed =
+    saved?.speed ??
+    (hasKnob(caps, 'speed') && config.thinking === 'disabled' ? 'fast' : defaults.speed)
 }
 
 function rememberModelPrefs(config: ChatConfig) {
@@ -208,6 +220,7 @@ function rememberModelPrefs(config: ChatConfig) {
     thinking: config.thinking,
     reasoningEffort: config.reasoningEffort,
     contextWindow: config.contextWindow,
+    speed: config.speed,
   }
 }
 
@@ -348,6 +361,7 @@ function mergePersisted(base: ChatConfig, saved: Partial<ChatConfig> | null): Ch
     thinking: parseThinking(saved.thinking) ?? base.thinking,
     reasoningEffort: parseEffort(saved.reasoningEffort) ?? base.reasoningEffort,
     contextWindow: parseContext(saved.contextWindow) ?? base.contextWindow,
+    speed: parseSpeed(saved.speed) ?? base.speed,
     modelPrefs: mergeModelPrefs(saved),
   }
   hydrateModelMode(next)
@@ -447,6 +461,7 @@ export class ChatService extends Service {
       thinking: this.config.thinking,
       reasoningEffort: this.config.reasoningEffort,
       contextWindow: this.config.contextWindow,
+      speed: this.config.speed,
       capabilities: inferModelCapabilities(this.config.model, this.config.provider),
       /** 当前默认入口是否已配置（兼容旧语义，供 banner 等使用）。 */
       configured: current ? endpointConfigured(this.config, current) : Boolean((this.config.apiKeys[this.config.provider] ?? '').trim()),
@@ -535,17 +550,18 @@ export class ChatService extends Service {
     const key = apiKey.trim() || (endpoint && isLocalEndpoint(endpoint) ? 'local' : '')
     const caps = inferModelCapabilities(effective.model, provider)
     const prefs = this.config.modelPrefs[prefKey(endpointId, effective.model)]
+    const mode: ModelModeValues = {
+      thinking: prefs?.thinking ?? this.config.thinking,
+      speed: prefs?.speed ?? this.config.speed,
+      effort: prefs?.reasoningEffort ?? this.config.reasoningEffort,
+      context: prefs?.contextWindow ?? this.config.contextWindow,
+    }
     return {
       provider,
       apiKey: key,
       model: effective.model,
       ...(endpoint ? { baseUrl: effectiveBaseUrl(this.config, endpoint) } : {}),
-      ...(hasModeCaps(caps)
-        ? {
-            thinking: prefs?.thinking ?? this.config.thinking,
-            reasoningEffort: prefs?.reasoningEffort ?? this.config.reasoningEffort,
-          }
-        : {}),
+      ...applyModeToLlm(caps, mode),
     }
   }
 
@@ -654,6 +670,7 @@ export class ChatService extends Service {
       thinking: ThinkingMode
       reasoningEffort: ReasoningEffort
       contextWindow: ContextWindow
+      speed: SpeedMode
       /** 按入口更新 key；空串 / null 清除 */
       setApiKey: Partial<Record<string, string | null>>
       /** 按入口覆盖 baseUrl；空串清除覆盖、回到 preset 默认 */
@@ -829,12 +846,20 @@ export class ChatService extends Service {
     const thinkingPatch = parseThinking(next.thinking)
     const effortPatch = parseEffort(next.reasoningEffort)
     const contextPatch = parseContext(next.contextWindow)
-    if (afterKey !== beforeKey && thinkingPatch == null && effortPatch == null && contextPatch == null) {
+    const speedPatch = parseSpeed(next.speed)
+    if (
+      afterKey !== beforeKey &&
+      thinkingPatch == null &&
+      effortPatch == null &&
+      contextPatch == null &&
+      speedPatch == null
+    ) {
       hydrateModelMode(this.config)
     }
     if (thinkingPatch) this.config.thinking = thinkingPatch
     if (effortPatch) this.config.reasoningEffort = effortPatch
     if (contextPatch) this.config.contextWindow = contextPatch
+    if (speedPatch) this.config.speed = speedPatch
     rememberModelPrefs(this.config)
     this.syncLlm()
     this.syncToolsMode()

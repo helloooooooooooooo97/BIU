@@ -726,61 +726,131 @@ export function endpointProtocolProvider(endpoint: LlmEndpointDef): ChatProvider
 export type ReasoningEffort = 'high' | 'max'
 export type ThinkingMode = 'enabled' | 'disabled'
 export type ContextWindow = '200k' | '1m'
+export type SpeedMode = 'fast' | 'slow'
+export type ModelKnobId = 'thinking' | 'speed' | 'effort' | 'context'
 
-/**
- * 当前模型在一级菜单里能露出的配置。切模型后整排换掉，不是全局 Fast。
- * DeepSeek：思考 + High/Max；GPT-5：快慢 + 力度 + 上下文；各家不同。
- */
-export interface ModelCapabilities {
-  /** DeepSeek / Claude：是否思考。 */
-  thinking?: boolean
-  /** GPT-5 / o 系列 / Grok：快（少推理）或慢。开 = thinking disabled。 */
-  speed?: boolean
-  /** High / Max 推理档。 */
-  effort?: Array<ReasoningEffort>
-  /** 上下文窗口档，如 200k / 1M。 */
-  context?: Array<ContextWindow>
+export type ModelToggleKnob = {
+  id: 'thinking' | 'speed'
+  kind: 'toggle'
+  label: string
+  on: string
+  off: string
 }
 
-/** 按模型 id 推断：只露出该模型真正有的项。 */
+export type ModelChoiceKnob = {
+  id: 'effort' | 'context'
+  kind: 'choice'
+  label: string
+  options: Array<{ value: string; label: string }>
+}
+
+export type ModelKnob = ModelToggleKnob | ModelChoiceKnob
+
+/** 一级菜单只消费 knobs，不关心是哪家模型。 */
+export interface ModelCapabilities {
+  knobs: ModelKnob[]
+}
+
+export type ModelModeValues = {
+  thinking: ThinkingMode
+  speed: SpeedMode
+  effort: ReasoningEffort
+  context: ContextWindow
+}
+
+export const THINKING_KNOB: ModelToggleKnob = {
+  id: 'thinking',
+  kind: 'toggle',
+  label: '思考',
+  on: 'enabled',
+  off: 'disabled',
+}
+
+export const SPEED_KNOB: ModelToggleKnob = {
+  id: 'speed',
+  kind: 'toggle',
+  label: '快',
+  on: 'fast',
+  off: 'slow',
+}
+
+export const EFFORT_KNOB: ModelChoiceKnob = {
+  id: 'effort',
+  kind: 'choice',
+  label: '力度',
+  options: [
+    { value: 'high', label: 'High' },
+    { value: 'max', label: 'Max' },
+  ],
+}
+
+export const CONTEXT_KNOB: ModelChoiceKnob = {
+  id: 'context',
+  kind: 'choice',
+  label: '上下文',
+  options: [
+    { value: '200k', label: '200k' },
+    { value: '1m', label: '1M' },
+  ],
+}
+
+const FAMILIES: Array<{ match: (id: string, provider: ChatProvider) => boolean; knobs: ModelKnob[] }> = [
+  {
+    match: (id, provider) =>
+      provider === 'deepseek' ||
+      id.includes('deepseek-v4') ||
+      id.includes('deepseek-reasoner') ||
+      /deepseek-r1/.test(id),
+    knobs: [THINKING_KNOB, EFFORT_KNOB],
+  },
+  { match: (id) => id.includes('grok'), knobs: [SPEED_KNOB] },
+  { match: (id) => /gpt-5/.test(id), knobs: [SPEED_KNOB, EFFORT_KNOB, CONTEXT_KNOB] },
+  { match: (id) => /(^|[^a-z])o[1-4]([^a-z]|$)/.test(id), knobs: [SPEED_KNOB, EFFORT_KNOB] },
+  { match: (id) => /gpt-4\.1/.test(id), knobs: [CONTEXT_KNOB] },
+  {
+    match: (id, provider) =>
+      provider === 'anthropic' && /claude-(opus|sonnet)-4|claude-4|claude-3-7/.test(id),
+    knobs: [THINKING_KNOB],
+  },
+]
+
 export function inferModelCapabilities(model: string, provider: ChatProvider): ModelCapabilities {
   const id = model.toLowerCase()
-  if (
-    provider === 'deepseek' ||
-    id.includes('deepseek-v4') ||
-    id.includes('deepseek-reasoner') ||
-    /deepseek-r1/.test(id)
-  ) {
-    return { thinking: true, effort: ['high', 'max'] }
+  return { knobs: FAMILIES.find((family) => family.match(id, provider))?.knobs ?? [] }
+}
+
+export function hasKnob(caps: ModelCapabilities, id: ModelKnobId) {
+  return (caps.knobs ?? []).some((knob) => knob.id === id)
+}
+
+export function knobIds(caps: ModelCapabilities): ModelKnobId[] {
+  return (caps.knobs ?? []).map((knob) => knob.id)
+}
+
+export function defaultModeValues(caps: ModelCapabilities): ModelModeValues {
+  return {
+    thinking: hasKnob(caps, 'thinking') || hasKnob(caps, 'speed') || hasKnob(caps, 'effort') ? 'enabled' : 'disabled',
+    speed: 'slow',
+    effort: 'high',
+    context: '200k',
   }
-  if (id.includes('grok')) {
-    return { speed: true }
-  }
-  if (/gpt-5/.test(id)) {
-    return { speed: true, effort: ['high', 'max'], context: ['200k', '1m'] }
-  }
-  if (/(^|[^a-z])o[1-4]([^a-z]|$)/.test(id)) {
-    return { speed: true, effort: ['high', 'max'] }
-  }
-  if (/gpt-4\.1/.test(id)) {
-    return { context: ['200k', '1m'] }
-  }
-  if (provider === 'anthropic' && /claude-(opus|sonnet)-4|claude-4|claude-3-7/.test(id)) {
-    return { thinking: true }
-  }
-  return {}
 }
 
 export function defaultThinkingFor(caps: ModelCapabilities): ThinkingMode {
-  return caps.thinking || caps.speed || caps.effort?.length ? 'enabled' : 'disabled'
+  return defaultModeValues(caps).thinking
 }
 
-export function defaultEffortFor(caps: ModelCapabilities): ReasoningEffort {
-  return caps.effort?.includes('high') ? 'high' : 'max'
-}
-
-export function defaultContextFor(caps: ModelCapabilities): ContextWindow {
-  return caps.context?.includes('200k') ? '200k' : caps.context?.[0] ?? '200k'
+/** 只有发请求时才把 knobs 收成上游字段；快 ≠ 思考。 */
+export function applyModeToLlm(caps: ModelCapabilities, mode: ModelModeValues): {
+  thinking?: ThinkingMode
+  reasoningEffort?: ReasoningEffort
+} {
+  if (!(caps.knobs ?? []).length) return {}
+  if (hasKnob(caps, 'speed') && mode.speed === 'fast') return { thinking: 'disabled' }
+  return {
+    ...(hasKnob(caps, 'thinking') || hasKnob(caps, 'speed') ? { thinking: mode.thinking } : {}),
+    ...(hasKnob(caps, 'effort') ? { reasoningEffort: mode.effort } : {}),
+  }
 }
 
 /** 规范化用户输入的 baseUrl（去尾斜杠）。 */
