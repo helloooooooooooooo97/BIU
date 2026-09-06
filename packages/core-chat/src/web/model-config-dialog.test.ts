@@ -10,4 +10,11 @@ describe('model config dialog stacking', () => {
     expect(src).toMatch(/z-\[240\]/)
     expect(src).not.toMatch(/z-30/)
   })
+
+  it('does not repeat thinking or effort knobs already on the composer', () => {
+    const src = readFileSync(resolve(import.meta.dirname, './config.tsx'), 'utf8')
+    expect(src).not.toMatch(/ModelModeControls/)
+    expect(src).not.toMatch(/thinking:/)
+    expect(src).not.toMatch(/reasoningEffort/)
+  })
 })
