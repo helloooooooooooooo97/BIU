@@ -5,6 +5,8 @@ import {
   inspectorWidthForExpandedChat,
   allocateShellColumns,
   applyShellColumnCssVars,
+  publishShellLayout,
+  shellLayoutFromEvent,
   CHAT_OVERLAY_ENTER,
   CENTER_MIN,
   INSPECTOR_MIN,
@@ -82,6 +84,18 @@ test('applyShellColumnCssVars writes grid tracks without React state', () => {
   applyShellColumnCssVars(el, { left: 240, inspector: 320 })
   assert.equal(el.style.getPropertyValue('--sidebar-col'), '240px')
   assert.equal(el.style.getPropertyValue('--inspector-width'), '320px')
+})
+
+test('publishShellLayout reports painted column widths', () => {
+  const seen: Array<{ left: number; inspector: number }> = []
+  const onLayout = (event: Event) => {
+    const cols = shellLayoutFromEvent(event)
+    if (cols) seen.push(cols)
+  }
+  window.addEventListener('biu:shell-layout', onLayout)
+  publishShellLayout({ left: 0, inspector: 320 })
+  window.removeEventListener('biu:shell-layout', onLayout)
+  assert.deepEqual(seen, [{ left: 0, inspector: 320 }])
 })
 
 test('narrow viewport shrinks center and inspector first; left hides last', () => {

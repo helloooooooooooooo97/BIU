@@ -396,17 +396,45 @@ export function CollectionBrowser({
 
   useEffect(() => {
     if (nested) return
+    function applyLayout(left: number, inspector: number) {
+      setViewsOpen(left > 0)
+      setInspectorOpen(inspector > 0)
+    }
+    function onLayout(event: Event) {
+      const detail = (event as CustomEvent<{ left?: unknown; inspector?: unknown }>).detail
+      const left = Number(detail?.left)
+      const inspector = Number(detail?.inspector)
+      if (!Number.isFinite(left) || !Number.isFinite(inspector)) return
+      applyLayout(left, inspector)
+    }
     function onWidth(event: Event) {
       const n = (event as CustomEvent<number>).detail
       if (typeof n !== 'number' || !Number.isFinite(n)) return
       setViewsOpen(n > 0)
     }
-    window.addEventListener('biu:shell-sidebar-width', onWidth)
-    const aside = document.getElementById('shell-module-sidebar')?.closest('[data-testid="module-sidebar"]')
-    if (aside instanceof HTMLElement) {
-      setViewsOpen(!aside.classList.contains('hidden') && aside.getAttribute('aria-hidden') !== 'true')
+    function onOpen() {
+      setInspectorOpen(true)
     }
-    return () => window.removeEventListener('biu:shell-sidebar-width', onWidth)
+    function onClose() {
+      setInspectorOpen(false)
+    }
+    window.addEventListener('biu:shell-layout', onLayout)
+    window.addEventListener('biu:shell-sidebar-width', onWidth)
+    window.addEventListener('biu:inspector-open', onOpen)
+    window.addEventListener('biu:inspector-close', onClose)
+    const shell = document.querySelector('[data-testid="app-shell"]')
+    if (shell instanceof HTMLElement) {
+      const styles = getComputedStyle(shell)
+      const left = Number.parseFloat(styles.getPropertyValue('--sidebar-col'))
+      const inspector = Number.parseFloat(styles.getPropertyValue('--inspector-width'))
+      if (Number.isFinite(left) && Number.isFinite(inspector)) applyLayout(left, inspector)
+    }
+    return () => {
+      window.removeEventListener('biu:shell-layout', onLayout)
+      window.removeEventListener('biu:shell-sidebar-width', onWidth)
+      window.removeEventListener('biu:inspector-open', onOpen)
+      window.removeEventListener('biu:inspector-close', onClose)
+    }
   }, [nested])
 
   useEffect(() => {
@@ -419,22 +447,6 @@ export function CollectionBrowser({
     window.addEventListener('biu:toggle-module-sidebar', onToggle)
     return () => window.removeEventListener('biu:toggle-module-sidebar', onToggle)
   }, [collectionPath, nested, moduleId])
-
-  useEffect(() => {
-    if (nested) return
-    const sync = (open: boolean) => setInspectorOpen(open)
-    const onOpen = () => sync(true)
-    const onClose = () => sync(false)
-    const onToggle = () => setInspectorOpen((prev) => !prev)
-    window.addEventListener('biu:inspector-open', onOpen)
-    window.addEventListener('biu:inspector-close', onClose)
-    window.addEventListener('biu:inspector-toggle', onToggle)
-    return () => {
-      window.removeEventListener('biu:inspector-open', onOpen)
-      window.removeEventListener('biu:inspector-close', onClose)
-      window.removeEventListener('biu:inspector-toggle', onToggle)
-    }
-  }, [nested])
 
   useLayoutEffect(() => {
     if (sheet) return

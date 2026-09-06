@@ -385,6 +385,9 @@ test('filesystem header expands the shared left sidebar and toggles the right in
   assert.match(browser, /biu:expand-shell-sidebar/)
   assert.match(browser, /data-testid="fsdb-inspector-toggle"/)
   assert.match(browser, /biu:inspector-toggle/)
+  assert.match(browser, /biu:shell-layout/)
+  assert.doesNotMatch(browser, /setInspectorOpen\(\(prev\) => !prev\)/)
+  assert.doesNotMatch(browser, /aria-hidden'\) !== 'true'\)/)
   assert.match(
     browser,
     /inspectorOpen \?\s*\(\s*<ChevronDoubleRightIcon[\s\S]*:\s*\(\s*<ChevronDoubleLeftIcon/,
