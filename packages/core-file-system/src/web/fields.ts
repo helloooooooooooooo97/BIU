@@ -211,8 +211,9 @@ export function patchFacetFlatValue(row: DbRecord, columnKey: string, next: unkn
   const parsed = parseFacetFlatColumnKey(columnKey)
   const current = normalizeSchemaValue(row[sourceKey])
   if (!parsed) return current
+  const tags = current.tags.includes(parsed.packId) ? current.tags : [...current.tags, parsed.packId]
   return {
-    tags: current.tags,
+    tags,
     values: {
       ...current.values,
       [parsed.packId]: { ...(current.values[parsed.packId] ?? {}), [parsed.fieldKey]: next },
