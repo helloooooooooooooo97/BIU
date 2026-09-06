@@ -2251,18 +2251,22 @@ export function CollectionBrowser({
                     <div key={view.id} className={`tasks-viewdd-item${view.id === activeViewId ? ' is-active' : ''}`}>
                       <button type="button" className="tasks-viewdd-item-main" onClick={() => selectView(view)}>
                         <span className="tasks-viewdd-item-name">{view.name}</span>
-                        {view.id === activeViewId ? <CheckCircleIcon aria-hidden className="size-[14px] tasks-viewdd-check" /> : null}
                       </button>
-                      {view.builtin ? null : (
                       <span className="tasks-viewdd-item-actions">
-                        <button type="button" className="tasks-viewdd-act" title="重命名" onClick={() => renameView(view)}>
-                          <PencilSquareIcon aria-hidden className="size-[14px]" />
-                        </button>
-                        <button type="button" className="tasks-viewdd-act is-danger" title="删除" onClick={() => deleteView(view)}>
-                          <TrashGlyph aria-hidden className="size-[14px]" />
-                        </button>
+                        <span className="tasks-viewdd-check" aria-hidden>
+                          {view.id === activeViewId ? <CheckCircleIcon aria-hidden className="size-[14px]" /> : null}
+                        </span>
+                        {view.builtin ? null : (
+                          <>
+                            <button type="button" className="tasks-viewdd-act" title="重命名" onClick={() => renameView(view)}>
+                              <PencilSquareIcon aria-hidden className="size-[14px]" />
+                            </button>
+                            <button type="button" className="tasks-viewdd-act is-danger" title="删除" onClick={() => deleteView(view)}>
+                              <TrashGlyph aria-hidden className="size-[14px]" />
+                            </button>
+                          </>
+                        )}
                       </span>
-                      )}
                     </div>
                   ))}
                   <div className="tasks-viewdd-foot">
