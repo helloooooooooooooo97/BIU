@@ -2,16 +2,8 @@ node_modules/
 dist/
 .biu/
 .cordis/
-.plugin/store.json
-.plugin-dev/*
-!.plugin-dev/store-heavy-ping/
-!.plugin-dev/store-heavy-ping/**
-!.plugin-dev/page-heading-cards/
-!.plugin-dev/page-heading-cards/**
-!.plugin-dev/page-algorithm/
-!.plugin-dev/page-algorithm/**
-!.plugin-dev/page-excalidraw/
-!.plugin-dev/page-excalidraw/**
+# 已安装插件是本地产物，整目录不入库
+.plugin/
 .workspace/
 *.log
 .DS_Store

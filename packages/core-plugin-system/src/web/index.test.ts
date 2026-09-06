@@ -134,24 +134,12 @@ test('plugin window hover controls sit on the right without a title bar', async 
   assert.doesNotMatch(src, /ExtraIcon/)
 })
 
-test('bundled store plugins register their own dock icons', async () => {
-  const { readFile } = await import('node:fs/promises')
-  const { resolve } = await import('node:path')
-  const root = resolve(import.meta.dirname, '../../../../.plugin')
-  const hello = await readFile(resolve(root, 'store-hello/web.js'), 'utf8')
-  const gomoku = await readFile(resolve(root, 'store-gomoku/web.js'), 'utf8')
-  const ping = await readFile(resolve(root, 'store-heavy-ping/web.js'), 'utf8')
-  assert.match(hello, /Icon: HelloDockIcon/)
-  assert.match(gomoku, /Icon: GomokuDockIcon/)
-  assert.match(ping, /Icon: HeavyPingDockIcon/)
-})
-
-test('packed page-excalidraw plugin stores scenes as page assets', async () => {
+test('page-excalidraw sandbox stores scenes as page assets', async () => {
   const { readFile } = await import('node:fs/promises')
   const { resolve } = await import('node:path')
   const src = await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/page-excalidraw/web.tsx'), 'utf8')
   const manifest = JSON.parse(
-    await readFile(resolve(import.meta.dirname, '../../../../.plugin/page-excalidraw/manifest.json'), 'utf8'),
+    await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/page-excalidraw/manifest.json'), 'utf8'),
   ) as { headless?: boolean }
   assert.equal(manifest.headless, true)
   assert.match(src, /\/api\/page\/file\//)
@@ -191,10 +179,5 @@ test('packed page-excalidraw plugin stores scenes as page assets', async () => {
   assert.match(src, /assetStem/)
   assert.match(src, /normalizeStem/)
   assert.doesNotMatch(src, /border-\[var\(--border\)\]/)
-  const packed = await readFile(resolve(import.meta.dirname, '../../../../.plugin/page-excalidraw/web.js'), 'utf8')
-  assert.match(packed, /ReactJSXRuntime/)
-  assert.match(packed, /pageEditor/)
-  assert.match(packed, /inject/)
-  assert.match(packed, /plugin:cci/)
   assert.match(src, /refresh/)
 })
