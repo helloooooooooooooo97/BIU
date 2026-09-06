@@ -2,7 +2,7 @@ import { dataPath } from '@biu/host-plugin-loader/data-dir'
 import type { Context } from 'cordis'
 import type { CollectionSpec } from '@biu/type-file-system'
 import { REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
-import { PagesStore, STATUS, type WorkspaceFs } from './store.ts'
+import { PagesStore, type WorkspaceFs } from './store.ts'
 
 export { PAGE_ROOT, PAGE_ASSETS, ASSET_GC_GRACE_MS, collectPageAssetNames, PagesStore } from './store.ts'
 
@@ -24,34 +24,11 @@ export function pagesCollection(store: PagesStore): CollectionSpec {
       labelField: 'title',
       contentField: 'notes',
       parentField: 'parentId',
-      columns: [
-        'title',
-        'status',
-        'enabled',
-        'count',
-        'score',
-        'tags',
-        'aliases',
-        'homepage',
-        'cover',
-        'pack',
-        'size',
-        'publishedAt',
-      ],
+      columns: ['title', 'score', 'tags'],
       fields: {
         ...REQUIRED_RECORD_FIELDS,
         title: { type: 'string', label: '标题', writable: true },
-        blurb: { type: 'string', label: '摘要', writable: true },
-        count: { type: 'number', label: '计数', writable: true },
-        enabled: { type: 'boolean', label: '启用', writable: true },
-        status: { type: 'select', label: '状态', writable: true, enum: [...STATUS] },
         tags: { type: 'multi-select', label: '标签', writable: true },
-        aliases: { type: 'string[]', label: '别名', writable: true },
-        publishedAt: { type: 'datetime', label: '发布时间', writable: true },
-        size: { type: 'number', label: '体积', writable: true },
-        homepage: { type: 'url', label: '地址', writable: true },
-        cover: { type: 'image', label: '封面', writable: true },
-        pack: { type: 'attachment', label: '附件', writable: true },
         notes: { type: 'file', label: '正文', writable: true },
         score: { type: 'number', label: '得分', computed: true, sortable: true },
         parentId: { type: 'ref', label: '父级', writable: true },

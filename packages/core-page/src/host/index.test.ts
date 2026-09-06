@@ -4,34 +4,19 @@ import { mkdtemp, mkdir, readFile, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context, Service } from 'cordis'
-import { asAttachmentList, asImageSrc, type CollectionSpec, type FieldType } from '@biu/type-file-system'
+import type { CollectionSpec } from '@biu/type-file-system'
 import * as tools from '@biu/host-tools'
 import * as fsPlugin from '@biu/host-fs'
 import * as page from './index.ts'
 import { dumpMarkdown, splitMarkdown } from './markdown.ts'
 import { ASSET_GC_GRACE_MS, PAGE_ASSETS, PAGE_ROOT, PagesStore, collectPageAssetNames } from './store.ts'
 
-const FIELD_TYPES: FieldType[] = [
-  'string',
-  'number',
-  'boolean',
-  'select',
-  'multi-select',
-  'datetime',
-  'url',
-  'image',
-  'attachment',
-  'file',
-  'string[]',
-]
-
 test('markdown frontmatter roundtrips YAML properties and body', () => {
-  const raw = dumpMarkdown({ title: '首页', tags: ['red', 'prod'], enabled: true }, '正文第一段\n')
+  const raw = dumpMarkdown({ title: '首页', tags: ['red', 'prod'] }, '正文第一段\n')
   assert.match(raw, /^---\n/)
   const { matter, body } = splitMarkdown(raw)
   assert.equal(matter.title, '首页')
   assert.deepEqual(matter.tags, ['red', 'prod'])
-  assert.equal(matter.enabled, true)
   assert.equal(body, '正文第一段\n')
 })
 
@@ -57,51 +42,35 @@ test('page plugin stores pages in SQLite under .page', async () => {
   assert.equal(registered[0]?.view?.route, '/pages')
   assert.equal(registered[0]?.view?.moduleId, 'page')
   assert.equal(registered[0]?.view?.icon, 'document')
-  const types = new Set(Object.values(registered[0]!.schema.fields).map((field) => field.type))
-  for (const type of FIELD_TYPES) assert.equal(types.has(type), true, type)
+  const fields = registered[0]!.schema.fields
+  assert.equal(fields.blurb, undefined)
+  assert.equal(fields.count, undefined)
+  assert.equal(fields.enabled, undefined)
+  assert.equal(fields.status, undefined)
+  assert.equal(fields.aliases, undefined)
+  assert.equal(fields.size, undefined)
+  assert.equal(fields.publishedAt, undefined)
+  assert.equal(fields.homepage, undefined)
+  assert.equal(fields.cover, undefined)
+  assert.equal(fields.pack, undefined)
+  assert.equal(fields.tags?.type, 'multi-select')
+  assert.equal(fields.score?.type, 'number')
+  assert.equal(fields.notes?.type, 'file')
   assert.equal(registered[0]?.schema.fields.tags?.enum, undefined)
+  assert.deepEqual(registered[0]?.schema.columns, ['title', 'score', 'tags'])
   assert.deepEqual(registered[0]?.records, { update: true, create: true, delete: true })
 
   const spec = registered[0]!
   assert.equal((await spec.list()).length, 0)
 
-  await mkdir(join(root, PAGE_ASSETS), { recursive: true })
-  await writeFile(join(root, PAGE_ASSETS, 'hero.png'), 'fake-png', 'utf8')
-
   const created = await spec.create!([{
     title: '新页面',
     notes: '# 标题\n内容',
-    cover: 'assets/hero.png',
     tags: ['docs', 'wip'],
   }])
   assert.deepEqual(created[0]?.tags, ['docs', 'wip'])
   assert.equal(created[0]?.title, '新页面')
   assert.equal(created[0]?.notes, '# 标题\n内容')
-  assert.equal(created[0]?.cover, '/api/page/file/hero.png')
-  assert.equal(asImageSrc(created[0]?.cover), '/api/page/file/hero.png')
-  await writeFile(join(root, PAGE_ASSETS, 'hero-b.png'), 'fake-png-b', 'utf8')
-  const manyCovers = await spec.update!(created[0]!.id, {
-    cover: ['/api/page/file/hero.png', '/api/page/file/hero-b.png'],
-  })
-  assert.deepEqual(manyCovers.cover, ['/api/page/file/hero.png', '/api/page/file/hero-b.png'])
-  assert.deepEqual((await spec.get!(created[0]!.id))?.cover, ['/api/page/file/hero.png', '/api/page/file/hero-b.png'])
-  const manyPacks = await spec.update!(created[0]!.id, {
-    pack: [
-      { name: 'a.bin', href: '/api/page/file/hero.png' },
-      { name: 'b.bin', href: '/api/page/file/hero-b.png' },
-    ],
-  })
-  assert.deepEqual(
-    asAttachmentList(manyPacks.pack).map((file) => file.name),
-    ['a.bin', 'b.bin'],
-  )
-  assert.deepEqual(
-    asAttachmentList((await spec.get!(created[0]!.id))?.pack).map((file) => file.name),
-    ['a.bin', 'b.bin'],
-  )
-  const clearedPack = await spec.update!(created[0]!.id, { pack: '' })
-  assert.equal((clearedPack.pack as { href?: string }).href, '')
-  assert.deepEqual(asAttachmentList((await spec.get!(created[0]!.id))?.pack), [])
   const linked = await spec.update!(created[0]!.id, { parentId: 'p999', dependsOn: ['p001'] })
   assert.equal(linked.parentId, 'p999')
   assert.deepEqual(linked.dependsOn, ['p001'])
@@ -113,13 +82,10 @@ test('page plugin stores pages in SQLite under .page', async () => {
   assert.ok(sqlite.byteLength > 0)
 
   const written = await spec.update!(created[0]!.id, {
-    enabled: false,
     facet: { tags: ['dp'], values: { dp: { complexity: 'O(n)' } } },
   })
-  assert.equal(written.enabled, false)
   assert.deepEqual(written.facet, { tags: ['dp'], values: { dp: { complexity: 'O(n)' } } })
   const again = await spec.get!(created[0]!.id)
-  assert.equal(again?.enabled, false)
   assert.equal(JSON.stringify(again?.facet), JSON.stringify({ tags: ['dp'], values: { dp: { complexity: 'O(n)' } } }))
 
   await spec.remove!({ ids: [created[0]!.id] })
@@ -149,7 +115,7 @@ test('PagesStore reads existing markdown files from .page', async () => {
   await mkdir(join(root, PAGE_ROOT), { recursive: true })
   await writeFile(
     join(root, PAGE_ROOT, 'home.md'),
-    dumpMarkdown({ title: 'Home', status: 'live', parentId: null }, 'hello\n'),
+    dumpMarkdown({ title: 'Home', parentId: null }, 'hello\n'),
     'utf8',
   )
   let reads = 0

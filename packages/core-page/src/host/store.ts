@@ -1,8 +1,8 @@
 import { mkdir, readFile, stat, unlink, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { createRequire } from 'node:module'
-import type { AttachmentValue, DbRecord, SchemaFieldValue } from '@biu/type-file-system'
-import { asAttachmentList, emptySchemaValue, normalizeSchemaValue } from '@biu/type-file-system'
+import type { DbRecord, SchemaFieldValue } from '@biu/type-file-system'
+import { emptySchemaValue, normalizeSchemaValue } from '@biu/type-file-system'
 import { dataPath } from '@biu/host-plugin-loader/data-dir'
 import { splitMarkdown } from './markdown.ts'
 
@@ -36,21 +36,9 @@ export function collectPageAssetNames(...chunks: unknown[]): Set<string> {
   return names
 }
 
-const STATUS = ['draft', 'live', 'archived'] as const
-
 export type PageRow = DbRecord & {
   title: string
-  blurb: string
-  count: number
-  enabled: boolean
-  status: (typeof STATUS)[number]
   tags: string[]
-  aliases: string[]
-  publishedAt: number
-  size: number
-  homepage: string
-  cover: string | string[]
-  pack: AttachmentValue | AttachmentValue[]
   notes: string
   score: number
   parentId: string | null
@@ -96,118 +84,8 @@ function asNotes(value: unknown): string | undefined {
   return String(value)
 }
 
-function emptyPack(): AttachmentValue {
-  return { name: '', href: '', bytes: 0 }
-}
-
-function storedPack(file: AttachmentValue): AttachmentValue {
-  return { name: file.name, href: storedPackHref(file.href), bytes: file.bytes ?? 0 }
-}
-
-function publicPackValue(value: unknown): AttachmentValue | AttachmentValue[] {
-  const files = asAttachmentList(value).map((file) => publicPack(storedPack(file)))
-  if (!files.length) return emptyPack()
-  if (files.length === 1) return files[0]!
-  return files
-}
-
-function fromAssetApi(text: string) {
-  for (const prefix of ['/api/page/file/', '/api/db/file/'] as const) {
-    if (text.startsWith(prefix)) {
-      return decodeURIComponent(text.slice(prefix.length).split(/[?#]/)[0] ?? '')
-    }
-  }
-  return ''
-}
-
-function assetName(ref: string) {
-  const trimmed = ref.trim()
-  if (!trimmed) return ''
-  const fromApi = fromAssetApi(trimmed)
-  if (fromApi) return basename(fromApi)
-  const cleaned = trimmed.replace(/^\/+/, '')
-  if (cleaned.startsWith(`${PAGE_ASSETS}/`)) return basename(cleaned)
-  if (cleaned.startsWith('assets/')) return basename(cleaned)
-  if (!cleaned.includes('/') && !cleaned.includes('\\')) return cleaned
-  return ''
-}
-
 export function fileUrl(name: string) {
   return `/api/page/file/${encodeURIComponent(name)}`
-}
-
-function publicCover(stored: unknown): string | string[] {
-  const pubs = coverList(stored).map((item) => {
-    const name = assetName(item)
-    return name ? fileUrl(name) : item
-  })
-  if (!pubs.length) return ''
-  if (pubs.length === 1) return pubs[0]!
-  return pubs
-}
-
-function publicPack(pack: { name: string; href: string; bytes: number }) {
-  const name = assetName(pack.href) || (pack.name && assetName(pack.name) ? pack.name : '')
-  if (!name) return pack
-  return { ...pack, href: fileUrl(basename(name)) }
-}
-
-function storedCoverItem(value: unknown): string {
-  if (value == null) return ''
-  const text = String(value).trim()
-  if (!text) return ''
-  const name = assetName(text)
-  if (name) return `assets/${name}`
-  const file = fromAssetApi(text)
-  return file ? `assets/${basename(file)}` : text
-}
-
-function coverList(value: unknown): string[] {
-  if (value == null || value === '') return []
-  if (Array.isArray(value)) return value.flatMap(coverList).filter(Boolean)
-  if (typeof value === 'string') {
-    const trimmed = value.trim()
-    if (trimmed.startsWith('[')) {
-      try {
-        const parsed = JSON.parse(trimmed) as unknown
-        if (Array.isArray(parsed)) return coverList(parsed)
-      } catch {
-        /* one path */
-      }
-    }
-    const one = storedCoverItem(trimmed)
-    return one ? [one] : []
-  }
-  const one = storedCoverItem(value)
-  return one ? [one] : []
-}
-
-function storedCover(value: unknown, fallback: string) {
-  const list = coverList(value)
-  if (!list.length) return fallback
-  if (list.length === 1) return list[0]!
-  return JSON.stringify(list)
-}
-
-function storedCoverMatter(value: unknown, fallback: string) {
-  const list = coverList(value)
-  if (!list.length) return fallback
-  if (list.length === 1) return list[0]!
-  return list
-}
-
-function storedPackHref(href: string) {
-  const name = assetName(href)
-  if (name) return `assets/${name}`
-  const file = fromAssetApi(href)
-  return file ? `assets/${basename(file)}` : href
-}
-
-function storedPackJson(value: unknown) {
-  const files = asAttachmentList(value).map((file) => storedPack(file))
-  if (!files.length) return emptyPack()
-  if (files.length === 1) return files[0]!
-  return files
 }
 
 function pageRel(id: string) {
@@ -215,52 +93,15 @@ function pageRel(id: string) {
   return `${PAGE_ROOT}/${id}.md`
 }
 
-function matterOf(row: PageRow): Record<string, unknown> {
-  return {
-    title: row.title,
-    blurb: row.blurb,
-    count: row.count,
-    enabled: row.enabled,
-    status: row.status,
-    tags: row.tags,
-    aliases: row.aliases,
-    publishedAt: new Date(row.publishedAt).toISOString(),
-    size: row.size,
-    homepage: row.homepage,
-    cover: storedCoverMatter(row.cover, ''),
-    pack: storedPackJson(row.pack),
-    score: row.score,
-    parentId: row.parentId,
-    dependsOn: row.dependsOn,
-    facet: row.facet,
-    emoji: row.emoji,
-    createdAt: new Date(row.createdAt).toISOString(),
-    updatedAt: new Date(row.updatedAt).toISOString(),
-  }
-}
-
 function rowFromFile(id: string, raw: string): PageRow {
   const { matter, body } = splitMarkdown(raw)
   const now = Date.now()
-  const status = STATUS.includes(matter.status as (typeof STATUS)[number])
-    ? (matter.status as (typeof STATUS)[number])
-    : 'draft'
   const createdAt = asTime(matter.createdAt, now)
   const updatedAt = asTime(matter.updatedAt, createdAt)
   return {
     id,
     title: String(matter.title ?? id),
-    blurb: String(matter.blurb ?? ''),
-    count: Number(matter.count) || 0,
-    enabled: matter.enabled !== false,
-    status,
     tags: asStringList(matter.tags),
-    aliases: asStringList(matter.aliases),
-    publishedAt: asTime(matter.publishedAt, createdAt),
-    size: Number(matter.size) || 0,
-    homepage: String(matter.homepage ?? ''),
-    cover: publicCover(matter.cover),
-    pack: publicPackValue(matter.pack),
     notes: body,
     score: Number(matter.score) || 0,
     parentId: matter.parentId == null || matter.parentId === '' ? null : String(matter.parentId),
@@ -276,17 +117,7 @@ function emptyRow(id: string, ts: number): PageRow {
   return {
     id,
     title: '未命名页面',
-    blurb: '',
-    count: 0,
-    enabled: true,
-    status: 'draft',
     tags: [],
-    aliases: [],
-    publishedAt: ts,
-    size: 0,
-    homepage: '',
-    cover: '',
-    pack: { name: '', href: '', bytes: 0 },
     notes: '',
     score: 0,
     parentId: null,
@@ -300,17 +131,15 @@ function emptyRow(id: string, ts: number): PageRow {
 
 function applyPatch(current: PageRow, patch: Record<string, unknown>): PageRow {
   const notes = asNotes(patch.notes)
-  const next: PageRow = {
+  return {
     ...current,
-    ...patch,
     id: current.id,
     title:
       typeof patch.title === 'string' && patch.title.trim()
         ? patch.title.trim()
         : current.title,
     notes: notes ?? current.notes,
-    pack: patch.pack !== undefined ? publicPackValue(patch.pack) : current.pack,
-    cover: publicCover(patch.cover !== undefined ? patch.cover : current.cover),
+    tags: 'tags' in patch ? asStringList(patch.tags) : current.tags,
     parentId: 'parentId' in patch
       ? patch.parentId == null || patch.parentId === '' ? null : String(patch.parentId)
       : current.parentId,
@@ -321,7 +150,6 @@ function applyPatch(current: PageRow, patch: Record<string, unknown>): PageRow {
     createdAt: current.createdAt,
     updatedAt: Date.now(),
   }
-  return next
 }
 
 export class PagesStore {
@@ -349,17 +177,7 @@ export class PagesStore {
       CREATE TABLE IF NOT EXISTS pages (
         id TEXT PRIMARY KEY,
         title TEXT NOT NULL,
-        blurb TEXT NOT NULL DEFAULT '',
-        count REAL NOT NULL DEFAULT 0,
-        enabled INTEGER NOT NULL DEFAULT 1,
-        status TEXT NOT NULL DEFAULT 'draft',
         tags_json TEXT NOT NULL DEFAULT '[]',
-        aliases_json TEXT NOT NULL DEFAULT '[]',
-        published_at INTEGER NOT NULL,
-        size REAL NOT NULL DEFAULT 0,
-        homepage TEXT NOT NULL DEFAULT '',
-        cover TEXT NOT NULL DEFAULT '',
-        pack_json TEXT NOT NULL DEFAULT '{}',
         notes TEXT NOT NULL DEFAULT '',
         score REAL NOT NULL DEFAULT 0,
         parent_id TEXT,
@@ -407,15 +225,12 @@ export class PagesStore {
     if (!this.db) return
     this.db.prepare(`
       INSERT INTO pages (
-        id, title, blurb, count, enabled, status, tags_json, aliases_json,
-        published_at, size, homepage, cover, pack_json, notes, score, parent_id,
+        id, title, tags_json, notes, score, parent_id,
         depends_on_json, facet_json, emoji, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
-        title=excluded.title, blurb=excluded.blurb, count=excluded.count, enabled=excluded.enabled,
-        status=excluded.status, tags_json=excluded.tags_json, aliases_json=excluded.aliases_json,
-        published_at=excluded.published_at, size=excluded.size, homepage=excluded.homepage,
-        cover=excluded.cover, pack_json=excluded.pack_json, notes=excluded.notes, score=excluded.score,
+        title=excluded.title, tags_json=excluded.tags_json,
+        notes=excluded.notes, score=excluded.score,
         parent_id=excluded.parent_id, depends_on_json=excluded.depends_on_json, facet_json=excluded.facet_json, emoji=excluded.emoji,
         updated_at=excluded.updated_at
     `).run(...sqlValues(row))
@@ -434,8 +249,7 @@ export class PagesStore {
       return rows
     }
     const listed = db.prepare(`
-      SELECT id, title, blurb, count, enabled, status, tags_json, aliases_json,
-        published_at, size, homepage, cover, pack_json, '' AS notes, score, parent_id,
+      SELECT id, title, tags_json, '' AS notes, score, parent_id,
         depends_on_json, facet_json, emoji, created_at, updated_at
       FROM pages ORDER BY id
     `).all() as SqlPage[]
@@ -525,13 +339,9 @@ export class PagesStore {
     }
     const db = await this.openDb()
     const live = new Set<string>()
-    const bodies = db.prepare('SELECT cover, pack_json, notes FROM pages').all() as Array<{
-      cover: string
-      pack_json: string
-      notes: string
-    }>
+    const bodies = db.prepare('SELECT notes FROM pages').all() as Array<{ notes: string }>
     for (const body of bodies) {
-      for (const name of collectPageAssetNames(body.cover, body.pack_json, body.notes)) live.add(name)
+      for (const name of collectPageAssetNames(body.notes)) live.add(name)
     }
     for (const name of names) {
       if (name === '.gitkeep' || live.has(name) || !isPageAssetFileName(name)) continue
@@ -555,17 +365,7 @@ export class PagesStore {
 type SqlPage = {
   id: string
   title: string
-  blurb: string
-  count: number
-  enabled: number
-  status: string
   tags_json: string
-  aliases_json: string
-  published_at: number
-  size: number
-  homepage: string
-  cover: string
-  pack_json: string
   notes: string
   score: number
   parent_id: string | null
@@ -584,77 +384,27 @@ function parseJson<T>(raw: string, fallback: T): T {
   }
 }
 
-function sqlPayload(row: PageRow) {
-  return {
-    id: row.id,
-    title: row.title,
-    blurb: row.blurb,
-    count: row.count,
-    enabled: row.enabled ? 1 : 0,
-    status: row.status,
-    tags_json: JSON.stringify(row.tags),
-    aliases_json: JSON.stringify(row.aliases),
-    published_at: row.publishedAt,
-    size: row.size,
-    homepage: row.homepage,
-    cover: storedCover(row.cover, ''),
-    pack_json: JSON.stringify(storedPackJson(row.pack)),
-    notes: row.notes ?? '',
-    score: row.score,
-    parent_id: row.parentId,
-    depends_on_json: JSON.stringify(row.dependsOn),
-    facet_json: JSON.stringify(row.facet),
-    emoji: row.emoji,
-    created_at: row.createdAt,
-    updated_at: row.updatedAt,
-  }
-}
-
 function sqlValues(row: PageRow) {
-  const payload = sqlPayload(row)
   return [
-    payload.id,
-    payload.title,
-    payload.blurb,
-    payload.count,
-    payload.enabled,
-    payload.status,
-    payload.tags_json,
-    payload.aliases_json,
-    payload.published_at,
-    payload.size,
-    payload.homepage,
-    payload.cover,
-    payload.pack_json,
-    payload.notes,
-    payload.score,
-    payload.parent_id,
-    payload.depends_on_json,
-    payload.facet_json,
-    payload.emoji,
-    payload.created_at,
-    payload.updated_at,
+    row.id,
+    row.title,
+    JSON.stringify(row.tags),
+    row.notes ?? '',
+    row.score,
+    row.parentId,
+    JSON.stringify(row.dependsOn),
+    JSON.stringify(row.facet),
+    row.emoji,
+    row.createdAt,
+    row.updatedAt,
   ]
 }
 
 function rowFromSql(row: SqlPage): PageRow {
-  const status = STATUS.includes(row.status as (typeof STATUS)[number])
-    ? (row.status as (typeof STATUS)[number])
-    : 'draft'
   return {
     id: row.id,
     title: row.title,
-    blurb: row.blurb,
-    count: Number(row.count) || 0,
-    enabled: row.enabled !== 0,
-    status,
     tags: asStringList(parseJson(row.tags_json, [])),
-    aliases: asStringList(parseJson(row.aliases_json, [])),
-    publishedAt: Number(row.published_at) || 0,
-    size: Number(row.size) || 0,
-    homepage: row.homepage,
-    cover: publicCover(row.cover),
-    pack: publicPackValue(parseJson(row.pack_json, {})),
     notes: row.notes,
     score: Number(row.score) || 0,
     parentId: row.parent_id == null || row.parent_id === '' ? null : String(row.parent_id),
@@ -680,5 +430,3 @@ function mimeOf(name: string) {
   if (ext === '.pdf') return 'application/pdf'
   return 'application/octet-stream'
 }
-
-export { STATUS }
