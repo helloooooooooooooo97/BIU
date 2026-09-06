@@ -2,7 +2,7 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import type { CollectionSchema } from '@biu/type-file-system'
 import { REQUIRED_RECORD_FIELDS, normalizeSchemaValue } from '@biu/type-file-system'
-import { defaultColumnKeys, facetFlatColumnKey, flattenFacetColumns, inferPackFieldType, listProjectionKeys, parseFacetFlatColumnKey, patchFacetFlatValue, pinLabelColumn, contentFieldKey, flattenTree, formatField, fieldHasValue, groupField, groupRecords, hasTreeLinks, isViewModeId, matchActionWhen, overlayListed, previewActionRecord, parentFieldKey, readFacetFlatValue, recordLinkIds, resolveFieldType, uniqueValues } from './fields'
+import { defaultColumnKeys, facetFlatColumnKey, flattenFacetColumns, facetColumnTitle, inferPackFieldType, listProjectionKeys, parseFacetFlatColumnKey, patchFacetFlatValue, pinLabelColumn, contentFieldKey, flattenTree, formatField, fieldHasValue, groupField, groupRecords, hasTreeLinks, isViewModeId, matchActionWhen, overlayListed, previewActionRecord, parentFieldKey, readFacetFlatValue, recordLinkIds, resolveFieldType, uniqueValues } from './fields'
 import { placedActions, visibleActions } from './fsdb-cells.tsx'
 
 test('isViewModeId accepts builtin and custom slugs', () => {
@@ -141,6 +141,8 @@ test('default columns omit flattened type properties', () => {
   assert.equal(parseFacetFlatColumnKey(nested)?.fieldKey, 'dede')
   const cols = flattenFacetColumns([{ id: 'haohao', label: '好好哈', fields: [{ key: 'dede', type: 'string', label: '的的' }] }])
   assert.equal(cols[0]?.key, nested)
+  assert.equal(facetColumnTitle(cols[0]!), '好好哈.的的')
+  assert.equal(facetColumnTitle({ key: 'title', field: { label: '标题' } }), '标题')
   const row = { id: '1', facet: { tags: ['haohao'], values: { haohao: { dede: 'v' } } } }
   assert.equal(readFacetFlatValue(row, nested), 'v')
   assert.deepEqual(patchFacetFlatValue(row, nested, 'next').values.haohao?.dede, 'next')

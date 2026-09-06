@@ -39,6 +39,7 @@ import {
   defaultColumnKeys,
   facetSourceKey,
   flattenFacetColumns,
+  facetColumnTitle,
   fieldEntries,
   flattenTree,
   formatField,
@@ -2401,7 +2402,6 @@ export function CollectionBrowser({
                   {allColumns.map((item) => {
                     const on = columns.some((col) => col.key === item.key)
                     const flat = parseFacetFlatColumnKey(item.key)
-                    const packLabel = 'packLabel' in item ? String(item.packLabel ?? '') : ''
                     const tone = flat ? schemaTagTone(flat.packId) : undefined
                     return (
                       <CheckRow
@@ -2410,7 +2410,7 @@ export function CollectionBrowser({
                         label={
                           flat ? (
                             <span style={tone ? { color: tone } : undefined}>
-                              {packLabel ? `${packLabel} · ${item.field.label ?? item.key}` : (item.field.label ?? item.key)}
+                              {facetColumnTitle(item)}
                             </span>
                           ) : (
                             item.field.label ?? item.key
@@ -2613,7 +2613,7 @@ export function CollectionBrowser({
                     {index === 0 ? <RowCheck ids={pickableIds} /> : null}
                     <span className="tasks-th">
                       <FieldGlyph kind={col.kind} />
-                      {col.field.label ?? col.key}
+                      {facetColumnTitle(col)}
                     </span>
                     <span
                       className={`fsdb-col-resizer${resizingCol === col.key ? ' is-active' : ''}`}

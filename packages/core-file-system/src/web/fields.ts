@@ -201,6 +201,16 @@ export function flattenFacetColumns(catalog: CollectionSchemaPack[]) {
   )
 }
 
+export function facetColumnTitle(col: {
+  key: string
+  packLabel?: string
+  field?: { label?: string }
+}) {
+  const fieldLabel = String(col.field?.label ?? col.key).trim() || col.key
+  const pack = String(col.packLabel ?? '').trim()
+  return pack ? `${pack}.${fieldLabel}` : fieldLabel
+}
+
 export function readFacetFlatValue(row: DbRecord, columnKey: string, sourceKey = 'facet') {
   const parsed = parseFacetFlatColumnKey(columnKey)
   if (!parsed) return undefined
