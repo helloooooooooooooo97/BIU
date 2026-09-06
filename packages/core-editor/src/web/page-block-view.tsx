@@ -32,15 +32,16 @@ export function PageBlockMissing({ kind, plugin, data }: { kind: string; plugin:
   return (
     <div className="page-block-missing" data-testid="page-block-missing">
       <div className="page-block-missing-head">
-        <div className="page-block-missing-lead">
-          <span className="page-block-missing-kicker">插件未启用</span>
-          <div className="page-block-missing-title">未启用「{kind}」块</div>
-          {plugin ? (
-            <p className="page-block-missing-copy">文档里已经存了这块，开启 <code>{plugin}</code> 后会真正渲染。</p>
-          ) : (
-            <p className="page-block-missing-copy">文档里没有插件 id。启用对应插件后再保存，就会带上映射。</p>
-          )}
-        </div>
+        {plugin ? (
+          <div className="page-block-missing-lead">
+            <code className="page-block-missing-id">{plugin}</code>
+            <span className="page-block-missing-state">未运行</span>
+          </div>
+        ) : (
+          <div className="page-block-missing-lead">
+            <span className="page-block-missing-state">没有插件 id</span>
+          </div>
+        )}
         {plugin ? (
           <button
             type="button"
@@ -52,7 +53,7 @@ export function PageBlockMissing({ kind, plugin, data }: { kind: string; plugin:
               requestEnablePageBlockPlugin(plugin, kind)
             }}
           >
-            启用 {plugin}
+            启用
           </button>
         ) : null}
       </div>

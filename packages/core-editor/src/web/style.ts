@@ -12,13 +12,11 @@ export const PAGE_EDITOR_STYLE = `
 .page-editor .page-block.ProseMirror-selectednode{outline:none;box-shadow:none}
 .page-editor .page-block[data-page-block=excalidraw]{outline:none;box-shadow:none;border:0;border-radius:8px}
 .page-editor .page-block-missing{display:flex;flex-direction:column;gap:12px;padding:14px 16px;border:1px dashed var(--dsw-border);border-radius:8px;color:var(--dsw-label-3);font-size:13px}
-.page-editor .page-block-missing-head{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:12px}
-.page-editor .page-block-missing-lead{min-width:0;display:flex;flex-direction:column;gap:4px}
-.page-editor .page-block-missing-kicker{color:#7B7B79;font-size:11px;font-weight:650;letter-spacing:.08em}
-.page-editor .page-block-missing-title{color:#F0EFED;font-size:15px;font-weight:650;line-height:1.3}
-.page-editor .page-block-missing-copy{margin:0;max-width:42em;color:#ACA9A4;font-size:13px;line-height:1.45}
-.page-editor .page-block-missing-copy code{font-family:var(--font-mono);font-size:12px;color:#F0EFED}
-.page-editor .page-block-missing-enable{flex:none;margin:2px 0 0;border:1px solid var(--dsw-border);border-radius:6px;padding:6px 10px;background:transparent;color:#F0EFED;font:inherit;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
+.page-editor .page-block-missing-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.page-editor .page-block-missing-lead{min-width:0;display:flex;align-items:baseline;gap:8px}
+.page-editor .page-block-missing-id{font-family:var(--font-mono);font-size:13px;font-weight:600;color:#F0EFED}
+.page-editor .page-block-missing-state{color:#7B7B79;font-size:13px;font-weight:600}
+.page-editor .page-block-missing-enable{flex:none;margin:0;border:1px solid var(--dsw-border);border-radius:6px;padding:5px 10px;background:transparent;color:#F0EFED;font:inherit;font-size:13px;font-weight:600;cursor:pointer}
 .page-editor .page-block-missing-enable:hover{background:var(--dsw-hover)}
 .page-editor .page-block-missing-body{display:flex;flex-direction:column;gap:6px;min-width:0}
 .page-editor .page-block-missing-label{color:#7B7B79;font-size:11px;font-weight:650;letter-spacing:.08em}

@@ -20,13 +20,13 @@ test('missing block shows stored source and asks to enable the stored plugin', (
     <PageBlockMissing kind="excalidraw" plugin="page-excalidraw" data={{ file: 'assets/a.json' }} />,
   )
   const text = container.textContent ?? ''
-  assert.match(text, /未启用「excalidraw」块/)
-  assert.match(text, /插件未启用/)
-  assert.match(text, /源码/)
+  assert.doesNotMatch(text, /未启用「/)
+  assert.doesNotMatch(text, /文档里已经存/)
   assert.match(text, /page-excalidraw/)
+  assert.match(text, /未运行/)
+  assert.match(text, /源码/)
   assert.match(text, /assets\/a\.json/)
-  assert.ok(container.querySelector('.page-block-missing-head'))
-  assert.ok(container.querySelector('[data-testid="page-block-enable"]'))
+  assert.equal(container.querySelector('[data-testid="page-block-enable"]')?.textContent?.trim(), '启用')
 })
 
 test('enable button only dispatches the stored plugin id', () => {
