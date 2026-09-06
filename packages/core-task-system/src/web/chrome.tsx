@@ -2,39 +2,16 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 're
 import { createPortal } from 'react-dom'
 import {
   ArrowPathIcon,
-  ChartBarIcon,
-  CheckCircleIcon,
-  FlagIcon,
   LockClosedIcon,
-  MinusCircleIcon,
   UserIcon,
   XMarkIcon,
 } from '@heroicons/react/16/solid'
 import { HeadlessDismiss } from '@biu/public-ui'
-import { CellMulti, CellSelect, CellDateTime } from '@biu/database-ui'
+import { CellMulti, CellDateTime } from '@biu/database-ui'
 import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import type { DbRecord } from '@biu/type-file-system'
 import type { CollectionChrome, FsCellProps } from '@biu/type-file-system/ui'
 import { ReportsPane, ScriptPane } from './detail-panes.tsx'
-
-const STATUS_LABEL: Record<string, string> = {
-  todo: '待办',
-  doing: '进行中',
-  done: '已完成',
-  failed: '失败',
-}
-
-const PRIORITY_LABEL: Record<string, string> = {
-  low: '低',
-  med: '中',
-  high: '高',
-}
-
-const DIFFICULTY_LABEL: Record<string, string> = {
-  low: '低',
-  med: '中',
-  high: '高',
-}
 
 type ChatPerson = {
   id: string
@@ -48,8 +25,6 @@ type ActorBits = {
   sessionId?: string
   mascot?: { shape: string; color: string; eye?: number }
 }
-
-type ChipOption = { value: string; label: string; icon?: ReactNode }
 
 function asTags(value: unknown) {
   return Array.isArray(value) ? value.map(String) : []
@@ -136,28 +111,6 @@ function FloatMenu({
     </div>
     </HeadlessDismiss>,
     document.body,
-  )
-}
-
-function ChipSelect({
-  value,
-  options,
-  valueClass,
-  onSelect,
-}: {
-  value: string
-  options: ChipOption[]
-  valueClass?: string
-  onSelect: (value: string) => void
-}) {
-  return (
-    <CellSelect
-      className="tasks-cellselect"
-      value={value}
-      options={options}
-      onSelect={onSelect}
-      triggerClassName={`tasks-cellselect-trigger ${valueClass ?? ''}`}
-    />
   )
 }
 
@@ -321,61 +274,6 @@ function TaskTitle({ record, label }: { record: DbRecord; label: string }) {
   )
 }
 
-function StatusGlyph({ status }: { status: string }) {
-  if (status === 'doing') return <ArrowPathIcon aria-hidden className="size-[14px]" />
-  if (status === 'done') return <CheckCircleIcon aria-hidden className="size-[14px]" />
-  if (status === 'failed') return <XMarkIcon aria-hidden className="size-[14px]" />
-  return <MinusCircleIcon aria-hidden className="size-[14px]" />
-}
-
-function StatusCell({ record, value }: FsCellProps) {
-  const key = String(value ?? 'todo')
-  return (
-    <ChipSelect
-      value={key}
-      valueClass={`is-${key}`}
-      options={Object.entries(STATUS_LABEL).map(([item, label]) => ({
-        value: item,
-        label,
-        icon: <StatusGlyph status={item} />,
-      }))}
-      onSelect={(next) => void patchRecord(record.id, { status: next })}
-    />
-  )
-}
-
-function PriorityCell({ record, value }: FsCellProps) {
-  const key = String(value ?? 'med')
-  return (
-    <ChipSelect
-      value={key}
-      valueClass={`is-p-${key}`}
-      options={Object.entries(PRIORITY_LABEL).map(([item, label]) => ({
-        value: item,
-        label,
-        icon: <FlagIcon aria-hidden className="size-[14px]" />,
-      }))}
-      onSelect={(next) => void patchRecord(record.id, { priority: next })}
-    />
-  )
-}
-
-function DifficultyCell({ record, value }: FsCellProps) {
-  const key = String(value ?? 'med')
-  return (
-    <ChipSelect
-      value={key}
-      valueClass={`is-d-${key}`}
-      options={Object.entries(DIFFICULTY_LABEL).map(([item, label]) => ({
-        value: item,
-        label,
-        icon: <ChartBarIcon aria-hidden className="size-[14px]" />,
-      }))}
-      onSelect={(next) => void patchRecord(record.id, { difficulty: next })}
-    />
-  )
-}
-
 function TagsCell({ record, value }: FsCellProps) {
   const tags = asTags(value)
   return (
@@ -498,9 +396,6 @@ function AssigneeCell({ record }: FsCellProps) {
 export const tasksChrome: CollectionChrome = {
   Title: TaskTitle,
   cells: {
-    status: StatusCell,
-    priority: PriorityCell,
-    difficulty: DifficultyCell,
     tags: TagsCell,
     project: ProjectCell,
     dueAt: DueCell,

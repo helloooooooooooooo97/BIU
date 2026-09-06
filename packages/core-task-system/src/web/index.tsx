@@ -44,7 +44,6 @@ if (typeof document !== 'undefined') {
 .tasks-graph-status.is-failed{color:var(--dsw-danger)}
 .tasks-proj-tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:14px;font-weight:600;color:var(--dsw-label-2);background:color-mix(in srgb,var(--dsw-border) 55%,transparent);white-space:nowrap}
 .tasks-queue-assignee{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px;color:var(--dsw-label-2)}
-.tasks-status-cell{display:inline-flex;align-items:center;gap:5px;min-width:0}
 .tasks-actor{display:inline-flex;align-items:center;gap:6px;min-width:0;max-width:100%}
 .tasks-actor.is-empty{color:var(--dsw-label-3)}
 .tasks-actor-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
@@ -56,24 +55,10 @@ if (typeof document !== 'undefined') {
 .tasks-assignee-trigger{display:inline-flex;align-items:center;gap:4px;min-width:0;max-width:100%;border:0;background:transparent;padding:2px 4px;border-radius:5px;color:inherit;font:inherit;cursor:pointer;text-align:left}
 .tasks-assignee-trigger:hover,.tasks-assignee-trigger[data-open]{background:var(--dsw-hover)}
 .tasks-float-menu{max-width:280px;max-height:260px;overflow:auto;padding:4px;background:var(--dsw-sidebar);border:1px solid var(--dsw-border);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);display:flex;flex-direction:column;gap:1px}
-.tasks-assignee-option,.tasks-cellselect-option{display:flex;align-items:center;gap:6px;width:100%;border:0;background:transparent;padding:5px 6px;border-radius:5px;font:inherit;color:var(--dsw-label);cursor:pointer;text-align:left}
-.tasks-assignee-option:hover,.tasks-cellselect-option:hover{background:var(--dsw-hover)}
-.tasks-assignee-option.is-selected,.tasks-cellselect-option.is-selected{background:color-mix(in srgb,var(--dsw-business) 14%,transparent)}
+.tasks-assignee-option{display:flex;align-items:center;gap:6px;width:100%;border:0;background:transparent;padding:5px 6px;border-radius:5px;font:inherit;color:var(--dsw-label);cursor:pointer;text-align:left}
+.tasks-assignee-option:hover{background:var(--dsw-hover)}
+.tasks-assignee-option.is-selected{background:color-mix(in srgb,var(--dsw-business) 14%,transparent)}
 .tasks-assignee-loading{display:flex;align-items:center;gap:6px;padding:6px;color:var(--dsw-label-3);font-size:11px}
-.tasks-cellselect{position:relative;display:inline-flex;min-width:0;width:100%;max-width:none}
-.tasks-cellselect .db-cell-select-trigger,.tasks-cellselect.db-cell-select .db-cell-select-trigger{max-width:none;width:100%;height:auto;background:transparent}
-.tasks-cellselect-trigger{display:inline-flex;align-items:center;gap:5px;width:100%;min-width:0;border:0;border-radius:6px;padding:3px 7px;background:transparent;color:var(--dsw-label);font:inherit;font-size:14px;font-weight:600;cursor:pointer;text-align:left}
-.tasks-cellselect-trigger:hover,.tasks-cellselect-trigger[data-open]{background:var(--dsw-hover)}
-.tasks-cellselect-trigger.is-todo{color:var(--dsw-label-3)}
-.tasks-cellselect-trigger.is-doing{color:var(--dsw-business)}
-.tasks-cellselect-trigger.is-done{color:#2f7d4c}
-.tasks-cellselect-trigger.is-failed{color:var(--dsw-danger)}
-.tasks-cellselect-trigger.is-p-high{color:var(--dsw-danger)}
-.tasks-cellselect-trigger.is-p-med{color:var(--dsw-business)}
-.tasks-cellselect-trigger.is-p-low{color:var(--dsw-label-3)}
-.tasks-cellselect-trigger.is-d-high{color:#d64545}
-.tasks-cellselect-trigger.is-d-med{color:#e07a2f}
-.tasks-cellselect-trigger.is-d-low{color:#3d9a5f}
 .tasks-chip-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tasks-cell-input{min-width:0;width:100%;border:0;border-radius:6px;padding:3px 6px;background:transparent;color:var(--dsw-label);font:inherit;font-size:14px;font-weight:600}
 .tasks-cell-input:hover,.tasks-cell-input:focus{background:var(--dsw-hover);outline:none}
@@ -89,7 +74,6 @@ if (typeof document !== 'undefined') {
 .tasks-prop.is-stack { align-items:start; padding-top:8px; }
 .tasks-prop .tasks-field-input { padding:4px 0; font-size:14px; background:transparent; border:0; border-radius:0; box-shadow:none; }
 .tasks-prop .tasks-field-input:focus { border:0; box-shadow:none; }
-.tasks-prop .tasks-cellselect-trigger { padding:4px 0; font-size:14px; }
 .tasks-prop .tasks-actor-name { font-size:14px; }
 .tasks-detail-title-input { width:100%; border:0; background:transparent; color:var(--dsw-label); font:inherit; font-size:22px; font-weight:700; line-height:1.35; outline:none; padding:0; resize:none; }
 .tasks-detail-id { font-size:14px; font-weight:400; color:var(--dsw-label-2); font-family:var(--font-mono); letter-spacing:.01em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
