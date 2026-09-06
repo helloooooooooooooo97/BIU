@@ -4,8 +4,20 @@ import { asHttpHref } from '@biu/type-file-system'
 import type { CollectionActionInfo, DbRecord } from '@biu/type-file-system'
 import type { CollectionChrome, FsActionProps, FsActionsProps, FsCellProps } from '@biu/type-file-system/ui'
 
-function PluginTitle({ label }: { record: DbRecord; label: string }) {
-  return <span className="truncate font-medium">{label}</span>
+function PluginTitle({ record, label }: { record: DbRecord; label: string }) {
+  const enabled = record.enabled === true || record.enabled === 'true'
+  return (
+    <span className="inline-flex min-w-0 items-center gap-1.5">
+      {enabled ? (
+        <span
+          className="size-1.5 shrink-0 rounded-full bg-(--dsw-ok,#22c55e)"
+          data-testid="plugin-enabled-dot"
+          aria-hidden
+        />
+      ) : null}
+      <span className="truncate font-medium">{label}</span>
+    </span>
+  )
 }
 
 function PluginAuthorCell({ record, fallback }: FsCellProps) {
@@ -100,8 +112,8 @@ function PluginRunButton({
 
 function PluginActions({ actions, record, busy, place, run }: FsActionsProps) {
   const cls = btnClass(place)
-  const start = actions.find((action) => action.id === 'start')
-  const stop = actions.find((action) => action.id === 'stop')
+  const start = actions.find((action) => action.id === 'start' && matchWhen(record, action.when))
+  const stop = actions.find((action) => action.id === 'stop' && matchWhen(record, action.when))
   const running = runningOf(record)
   const current: CollectionActionInfo | undefined = running ? stop : start
   const rest = actions.filter(
