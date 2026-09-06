@@ -152,6 +152,8 @@ test('title cell row tools skip the overflow action menu', () => {
   assert.match(css, /\.fsdb-detail-actionbar\{/)
   assert.match(css, /top:calc\(100% - 35px\)/)
   assert.doesNotMatch(css, /top:calc\(100% - 60px\)/)
+  assert.match(css, /\.fsdb-page\.is-plugins \.fsdb-detail-actionbar\{[^}]*top:calc\(100% - 55px\)/)
+  assert.match(browser, /collectionPath === '\/plugins' \? ' is-plugins'/)
   assert.match(css, /\.fsdb-page \.fsdb-detail-actions \.dock-icon-btn,\.fsdb-page \.fsdb-detail-actions \.tasks-icon-btn\{[^}]*width:32px/)
   assert.match(css, /\.fsdb-page \.fsdb-detail-actions \.dock-icon-btn,\.fsdb-page \.fsdb-detail-actions \.tasks-icon-btn\{[^}]*height:32px/)
   assert.match(css, /\.fsdb-page \.fsdb-detail-actions \.dock-icon-btn,\.fsdb-page \.fsdb-detail-actions \.tasks-icon-btn\{[^}]*color:#F0EFED/)
