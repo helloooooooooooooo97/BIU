@@ -107,3 +107,13 @@ test('settings and session config floats match search chrome', () => {
   assert.match(dialog, /XMarkIcon/)
   assert.doesNotMatch(dialog, />\s*Close\s*</)
 })
+
+test('settings lists search and pick shortcuts', () => {
+  const shell = readFileSync(resolve(import.meta.dirname, './index.tsx'), 'utf8')
+  const chrome = readFileSync(resolve(import.meta.dirname, './shell-chrome.tsx'), 'utf8')
+  assert.match(shell, /key: 'shortcuts'/)
+  assert.match(shell, /ShellSettingsShortcuts/)
+  assert.match(chrome, /data-testid="settings-shortcuts"/)
+  assert.match(chrome, /⌘F/)
+  assert.match(chrome, /Ctrl\+Q/)
+})

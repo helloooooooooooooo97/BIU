@@ -11,6 +11,24 @@ import {
 import { setChatOverlay } from './chat-overlay.ts'
 import { chromeIcon } from './chrome-icon.ts'
 
+export function ShellSettingsShortcuts() {
+  return (
+    <section data-testid="settings-shortcuts">
+      <ul className="m-0 list-none p-0">
+        <li className="flex items-center justify-between gap-3 px-2 py-1.5">
+          <span>搜索</span>
+          <span className="settings-muted">⌘F</span>
+        </li>
+        <li className="flex items-center justify-between gap-3 px-2 py-1.5">
+          <span>快速选取</span>
+          <span className="settings-muted">Ctrl+Q</span>
+        </li>
+      </ul>
+      <p className="settings-muted m-0 px-2 pt-1">Windows 与 Linux 上 ⌘ 用 Ctrl。选取也可用 ⌘Q。</p>
+    </section>
+  )
+}
+
 export function ShellSettingsUpdate() {
   const [behind, setBehind] = useState(0)
   const [busy, setBusy] = useState(false)

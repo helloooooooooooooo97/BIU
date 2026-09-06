@@ -12,5 +12,8 @@ test('settings plugin tree keeps core out of capability and hides core toggles',
   assert.doesNotMatch(src, /disabled=\{!plugin\.togglable\}/)
   assert.doesNotMatch(src, /不可卸载/)
   assert.doesNotMatch(src, /plugin\.blurb/)
+  assert.doesNotMatch(src, /plugin\.id\} ·/)
+  assert.match(src, /data-testid="plugin-enabled-dot"/)
+  assert.match(src, /plugin\.state === 'active'/)
   assert.doesNotMatch(src, /text-\[1[12]px\]/)
 })

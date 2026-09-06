@@ -27,24 +27,29 @@ function PluginTree(props: SlotProps) {
             <ul className="m-0 list-none p-0">
               {rows.map((plugin) => (
                 <li
-                  className="flex items-start justify-between gap-3 rounded-md px-2 py-1.5"
+                  className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5"
                   key={`${plugin.layer}:${plugin.id}`}
                 >
-                  <div className="min-w-0">
-                    <h3 className="settings-name m-0">{plugin.name}</h3>
-                    <p className="settings-muted mt-0.5 mb-0 truncate">
-                      {plugin.id} · {plugin.state}
-                    </p>
-                  </div>
-                  {plugin.togglable ? (
-                    <button
-                      className="toggle"
-                      type="button"
-                      aria-label={plugin.enabled ? `关闭 ${plugin.name}` : `打开 ${plugin.name}`}
-                      aria-checked={plugin.enabled}
-                      onClick={() => void setEnabled(plugin.id, !plugin.enabled)}
-                    />
-                  ) : null}
+                  <h3 className="settings-name m-0 min-w-0 truncate">{plugin.name}</h3>
+                  <span className="flex shrink-0 items-center gap-2">
+                    {plugin.state === 'active' ? (
+                      <span
+                        className="size-1.5 shrink-0 rounded-full bg-(--dsw-ok,#22c55e)"
+                        data-testid="plugin-enabled-dot"
+                        title="Active"
+                        aria-label="已启用"
+                      />
+                    ) : null}
+                    {plugin.togglable ? (
+                      <button
+                        className="toggle"
+                        type="button"
+                        aria-label={plugin.enabled ? `关闭 ${plugin.name}` : `打开 ${plugin.name}`}
+                        aria-checked={plugin.enabled}
+                        onClick={() => void setEnabled(plugin.id, !plugin.enabled)}
+                      />
+                    ) : null}
+                  </span>
                 </li>
               ))}
             </ul>
