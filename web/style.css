@@ -5161,9 +5161,6 @@ body {
   right: 0;
   bottom: calc(100% + 8px);
   z-index: 9;
-  display: flex;
-  align-items: flex-end;
-  gap: 6px;
 }
 
 .composer-model-panel,
@@ -5244,6 +5241,9 @@ body {
 }
 
 .composer-model-flyout {
+  position: absolute;
+  left: calc(100% + 6px);
+  bottom: 0;
   display: flex;
   width: 260px;
   max-height: min(380px, 56vh);

@@ -22,7 +22,8 @@ test('composer model menu renders knobs from catalog, not hardcoded vendor rows'
   assert.match(catalog, /label: '快'/)
   assert.match(catalog, /label: '力度'/)
   assert.match(catalog, /label: '上下文'/)
-  assert.match(css, /\.composer-model-pop\s*\{[^}]*align-items:\s*flex-end/)
+  assert.match(css, /\.composer-model-pop\s*\{/)
+  assert.match(css, /\.composer-model-flyout\s*\{[^}]*left:\s*calc\(100% \+ 6px\)/)
   assert.match(css, /\.composer-model-panel,\s*\n\.composer-model-flyout\s*\{[^}]*border:\s*1px solid/)
   assert.doesNotMatch(
     css,
