@@ -456,6 +456,11 @@ test('editAsset views and writes referenced attachments with etag', async () => 
     list: () => [...rows.values()] as { id: string }[],
     get: (id) => rows.get(id) as { id: string } | undefined,
     records: { update: true },
+    update: (id, patch) => {
+      const next = { ...rows.get(id), ...patch, id }
+      rows.set(id, next)
+      return next as { id: string }
+    },
   })
   const listed = await db.editAsset('/pages/p1', { command: 'view' })
   assert.equal(listed.command, 'view')
