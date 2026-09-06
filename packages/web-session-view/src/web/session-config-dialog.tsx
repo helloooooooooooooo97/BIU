@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
-import { WrenchScrewdriverIcon } from '@heroicons/react/16/solid'
+import { WrenchScrewdriverIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import {
   bindSessionView,
   type SessionViewService,
@@ -141,27 +141,30 @@ export const SessionConfigDialog = memo(function SessionConfigDialog({
 
   return (
     <div
-      className="fixed inset-0 z-20 flex items-center justify-center bg-(--dsw-overlay)"
+      className="biu-float-overlay"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
       aria-label="会话配置"
+      data-testid="session-config-dialog"
     >
       <div
-        className="flex max-h-[min(720px,calc(100vh-48px))] w-[min(560px,calc(100vw-48px))] flex-col overflow-hidden rounded-3xl bg-(--dsw-surface) shadow-2xl"
+        className="biu-float max-h-[min(72vh,640px)] w-[min(560px,calc(100vw-32px))]"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-(--dsw-border) px-5 py-3">
-          <h2 className="text-sm font-medium text-(--dsw-label)">配置</h2>
+        <div className="biu-float-head">
+          <h2 className="biu-float-title">配置</h2>
           <button
             type="button"
-            className="rounded-full px-2 py-1 text-sm text-(--dsw-label-3) hover:bg-(--dsw-hover)"
+            className="biu-float-close"
+            title="关闭"
+            aria-label="关闭"
             onClick={onClose}
           >
-            Close
+            <XMarkIcon className="size-4 shrink-0" />
           </button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto p-5">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
           {error ? (
             <div className="mb-2 rounded-lg bg-(color-mix(in_srgb,#c44_16%,transparent)) p-2 text-[11px] text-[#f08888]">
               {error}

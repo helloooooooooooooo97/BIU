@@ -795,53 +795,54 @@ function Shell(props: SlotProps) {
       />
 
       <div
-        className={`fixed inset-0 z-20 flex items-center justify-center bg-(--dsw-overlay) ${settingsOpen ? '' : 'hidden'}`}
+        className={`biu-float-overlay${settingsOpen ? '' : ' hidden'}`}
+        data-testid="settings-dialog"
         onClick={() => setSettingsOpen(false)}
       >
         <div
-          className="flex h-[min(800px,calc(100vh-48px))] w-[min(800px,calc(100vw-48px))] overflow-hidden rounded-3xl bg-(--dsw-surface) shadow-2xl"
+          className="biu-float h-[min(72vh,640px)] w-[min(672px,calc(100vw-32px))]"
           role="dialog"
           aria-modal="true"
+          aria-label="设置"
           onClick={(event) => event.stopPropagation()}
         >
-          <nav className="w-48 shrink-0 border-r border-(--dsw-border) bg-(--dsw-sidebar) p-4">
-            <div className="mb-4 flex items-center gap-2 text-(--dsw-label)">
-              <span className="text-sm font-semibold">Settings</span>
-            </div>
-            <ul className="space-y-1 text-sm text-(--dsw-label-2)">
-              {[
-                { key: 'plugins', label: 'Plugins' },
-                { key: 'routes', label: 'Routes' },
-                { key: 'events', label: 'Events' },
-                { key: 'update', label: '更新' },
-              ].map((item) => (
-                <li key={item.key}>
-                  <button
-                    type="button"
-                    className={`w-full rounded-lg px-3 py-2 text-left transition-colors ${settingsTab === item.key
-                        ? 'bg-(--dsw-business-soft) text-(--dsw-business)'
-                        : 'hover:bg-(--dsw-hover)'
-                      }`}
-                    onClick={() => setSettingsTab(item.key)}
-                  >
-                    {item.label}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </nav>
-          <div className="flex min-w-0 flex-1 flex-col">
-            <div className="flex items-center justify-between border-b border-(--dsw-border) px-5 py-3">
-              <h2 className="text-sm font-medium">{settingsTab}</h2>
-              <button
-                type="button"
-                className="rounded-full px-2 py-1 text-sm text-(--dsw-label-3) hover:bg-(--dsw-hover)"
-                onClick={() => setSettingsOpen(false)}
-              >
-                Close
-              </button>
-            </div>
-            <div className="flex-1 space-y-6 overflow-y-auto px-5 py-4">
+          <div className="biu-float-head">
+            <h2 className="biu-float-title">设置</h2>
+            <button
+              type="button"
+              className="biu-float-close"
+              title="关闭"
+              aria-label="关闭"
+              onClick={() => setSettingsOpen(false)}
+            >
+              <XMarkIcon {...chromeIcon} />
+            </button>
+          </div>
+          <div className="flex min-h-0 flex-1 overflow-hidden">
+            <nav className="w-40 shrink-0 border-r border-(--dsw-float-border) p-2">
+              <ul className="m-0 flex list-none flex-col gap-0.5 p-0 text-[13px] text-(--dsw-label-2)">
+                {[
+                  { key: 'plugins', label: '插件' },
+                  { key: 'routes', label: '路由' },
+                  { key: 'events', label: '事件' },
+                  { key: 'update', label: '更新' },
+                ].map((item) => (
+                  <li key={item.key}>
+                    <button
+                      type="button"
+                      className={`w-full rounded-md px-2.5 py-1.5 text-left transition-colors ${settingsTab === item.key
+                          ? 'bg-(--dsw-business-soft) text-(--dsw-label)'
+                          : 'hover:bg-(--dsw-hover)'
+                        }`}
+                      onClick={() => setSettingsTab(item.key)}
+                    >
+                      {item.label}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+            <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-4 py-3">
               {settingsTab === 'plugins' ? (
                 <section>{props.renderSlot('sidebar')}</section>
               ) : null}

@@ -567,7 +567,7 @@ export function ChatConfig(props?: { onClose?: () => void }) {
     <div
       className={
         asDialog
-          ? 'flex h-[min(640px,calc(100vh-48px))] w-[min(720px,calc(100vw-32px))] flex-col overflow-hidden rounded-2xl border border-(--dsw-border) bg-(--dsw-surface) shadow-2xl'
+          ? 'biu-float h-[min(72vh,640px)] w-[min(720px,calc(100vw-32px))]'
           : 'flex h-full min-h-[460px] flex-col overflow-hidden rounded-xl border border-(--dsw-border)'
       }
       data-testid="assistant-config"
@@ -576,16 +576,17 @@ export function ChatConfig(props?: { onClose?: () => void }) {
       aria-label={asDialog ? '模型配置' : undefined}
       onClick={asDialog ? (e) => e.stopPropagation() : undefined}
     >
-      <div className="flex shrink-0 items-center justify-between border-b border-(--dsw-border) px-4 py-3">
-        <h2 className="text-[14px] font-semibold text-(--dsw-label)">模型配置</h2>
+      <div className="biu-float-head">
+        <h2 className="biu-float-title">模型配置</h2>
         {asDialog ? (
           <button
             type="button"
-            className="grid size-8 place-items-center rounded-lg text-(--dsw-label-3) hover:bg-(--dsw-hover) hover:text-(--dsw-label)"
+            className="biu-float-close"
+            title="关闭"
             aria-label="关闭"
             onClick={props?.onClose}
           >
-            <XMarkIcon className="size-4" />
+            <XMarkIcon className="size-4 shrink-0" />
           </button>
         ) : (
           <span className="text-[11px] text-(--dsw-label-3)">官方 Key / 第三方 URL</span>
@@ -594,7 +595,7 @@ export function ChatConfig(props?: { onClose?: () => void }) {
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         {/* 左：Provider 列表 */}
-        <aside className="flex w-[200px] shrink-0 flex-col border-r border-(--dsw-border) bg-(--dsw-sidebar)">
+        <aside className="flex w-[200px] shrink-0 flex-col border-r border-(--dsw-float-border)">
           <div className="min-h-0 flex-1 overflow-y-auto py-1">
             <div className="px-3 pt-2 pb-1 text-[10px] font-semibold tracking-wide text-(--dsw-label-3) uppercase">
               官方

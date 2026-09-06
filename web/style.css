@@ -28,6 +28,9 @@
   --dsw-sidebar-fg-active: #f0efed;
   --dsw-muted-fill: rgba(242, 241, 237, 0.04);
   --dsw-overlay: rgba(25, 25, 25, 0.72);
+  /* 居中浮层（搜索 / 设置 / 会话配置 / 模型配置）对齐侧栏菜单：#202020 + 8px */
+  --dsw-float: #202020;
+  --dsw-float-border: #383836;
   /* Cursor radii: 8px buttons/cards, softer bubble */
   --dsw-radius-bubble: 8px;
   --dsw-radius-card: 8px;
@@ -222,10 +225,70 @@ body {
   max-height: min(72vh, 640px);
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid #383836;
+  border: 1px solid var(--dsw-float-border);
   border-radius: 8px;
-  background: #202020;
+  background: var(--dsw-float);
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.32);
+}
+
+.biu-float-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--dsw-overlay);
+}
+
+.biu-float {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--dsw-float-border);
+  border-radius: 8px;
+  background: var(--dsw-float);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.32);
+  color: var(--dsw-label);
+}
+
+.biu-float-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 8px 8px 14px;
+  border-bottom: 1px solid var(--dsw-float-border);
+}
+
+.biu-float-title {
+  margin: 0;
+  color: var(--dsw-label);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.biu-float-close {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  place-items: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-label-3);
+  cursor: pointer;
+}
+
+.biu-float-close:hover {
+  background: var(--dsw-hover);
+  color: var(--dsw-label);
 }
 
 .shell-search-field {
@@ -233,7 +296,7 @@ body {
   flex: none;
   align-items: center;
   gap: 2px;
-  border-bottom: 1px solid #383836;
+  border-bottom: 1px solid var(--dsw-float-border);
   padding: 0 8px 0 4px;
 }
 
