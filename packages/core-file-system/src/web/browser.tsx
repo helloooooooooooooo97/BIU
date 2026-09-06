@@ -143,6 +143,8 @@ function isListColumn(key: string) {
   return key !== 'description' && key !== 'notes' && key !== 'content' && key !== 'emoji'
 }
 
+const QUERY_NEST_IGNORE = `${HEADLESS_DISMISS_IGNORE}, .db-search-menu, .fsdb-cellselect-menu`
+
 function FacetColumnPackRow({
   pack,
   visibleKeys,
@@ -184,7 +186,6 @@ function FacetColumnPackRow({
       }
     >
       <div className="fsdb-col-facet-flyout" data-fsdb-col-flyout role="menu">
-        <div className="tasks-sort-head">{pack.label}</div>
         {pack.fields.length ? (
           pack.fields.map((field) => {
             const key = facetFlatColumnKey(pack.id, field.key)
@@ -2404,7 +2405,12 @@ export function CollectionBrowser({
                 {sorts.length ? <span className="tasks-sort-dot" aria-hidden /> : null}
               </button>
               {sortMenuOpen ? (
-                <HeadlessDismiss onDismiss={() => setSortMenuOpen(false)} insideRef={sortRef}>
+                <HeadlessDismiss
+                  onDismiss={() => setSortMenuOpen(false)}
+                  insideRef={sortRef}
+                  ignoreSelector={QUERY_NEST_IGNORE}
+                  inside={(node) => node instanceof Element && Boolean(node.closest('.db-search-menu, .fsdb-cellselect-menu'))}
+                >
                 <SortQueryMenu sorts={sorts} fields={sortFields} onChange={applySorts} />
                 </HeadlessDismiss>
               ) : null}
@@ -2511,7 +2517,12 @@ export function CollectionBrowser({
                 {filterActive ? <span className="tasks-filter-dot" aria-hidden /> : null}
               </button>
               {filterOpen ? (
-                <HeadlessDismiss onDismiss={() => setFilterOpen(false)} insideRef={filterRef}>
+                <HeadlessDismiss
+                  onDismiss={() => setFilterOpen(false)}
+                  insideRef={filterRef}
+                  ignoreSelector={QUERY_NEST_IGNORE}
+                  inside={(node) => node instanceof Element && Boolean(node.closest('.db-search-menu, .fsdb-cellselect-menu'))}
+                >
                 <FilterQueryMenu
                   tree={filterTree}
                   fields={filterFields}

@@ -365,6 +365,7 @@ test('create record sits at the right of the toolbar with a blue label', () => {
   assert.match(browser, /facetColumnTitle\(col\)/)
   assert.match(browser, /function FacetColumnPackRow/)
   assert.match(browser, /data-fsdb-col-flyout/)
+  assert.doesNotMatch(browser, /data-fsdb-col-flyout[\s\S]{0,80}tasks-sort-head/)
   assert.match(browser, /className=\{`fsdb-col-facet-dot/)
   assert.match(browser, /<SchemaFieldEditor/)
   const schemaUi = readFileSync(resolve(import.meta.dirname, './schema-field.tsx'), 'utf8')
@@ -537,6 +538,8 @@ test('missing sort field falls back to title, not updatedAt', () => {
   assert.doesNotMatch(browser, /item.kind === 'datetime' \? 'desc'/)
   assert.match(browser, /<SortQueryMenu/)
   assert.match(browser, /<FilterQueryMenu/)
+  assert.match(browser, /QUERY_NEST_IGNORE/)
+  assert.match(browser, /ignoreSelector=\{QUERY_NEST_IGNORE\}/)
 })
 
 test('page collection uses a document glyph, not the table/database icon', () => {
