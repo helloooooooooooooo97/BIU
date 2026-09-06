@@ -17,5 +17,9 @@ test('resolveCatalog loads only packages declared in cordis.plugins.json', async
     assert.equal(entry?.packageName, item.package)
     assert.equal(entry?.web, pluginWebSpecifier(item))
     assert.equal(typeof entry?.plugin, 'object')
+    if (item.id.startsWith('core-')) {
+      assert.equal(entry?.layer, 'core')
+      assert.equal(entry?.togglable, false)
+    }
   }
 })

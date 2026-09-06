@@ -117,37 +117,39 @@ body {
 .toggle {
   position: relative;
   flex: 0 0 auto;
-  width: 2.2rem;
-  height: 1.2rem;
-  border: 0;
+  width: 28px;
+  height: 16px;
+  margin-top: 2px;
+  border: 1px solid var(--dsw-border);
   border-radius: 999px;
-  background: var(--dsw-hover-strong);
+  background: transparent;
   cursor: pointer;
 }
 
 .toggle::after {
   content: "";
   position: absolute;
-  top: 0.15rem;
-  left: 0.16rem;
-  width: 0.9rem;
-  height: 0.9rem;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
   border-radius: 999px;
-  background: var(--dsw-label);
+  background: var(--dsw-label-3);
   transition: transform 0.16s ease;
 }
 
 .toggle[aria-checked='true'] {
-  background: var(--dsw-business);
+  background: var(--dsw-hover);
+  border-color: transparent;
 }
 
 .toggle[aria-checked='true']::after {
-  transform: translateX(0.95rem);
+  background: var(--dsw-label);
+  transform: translateX(12px);
 }
 
 .toggle:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
+  display: none;
 }
 
 @keyframes dsw-swim {

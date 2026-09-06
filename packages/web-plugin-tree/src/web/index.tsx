@@ -8,6 +8,7 @@ export const inject = ['slots', 'snapshot']
 const SECTIONS = [
   { layer: 'host', title: '内核 · Host' },
   { layer: 'web', title: '内核 · Web' },
+  { layer: 'core', title: '内核 · Core' },
   { layer: 'capability', title: '能力插件' },
 ] as const
 
@@ -22,30 +23,29 @@ function PluginTree(props: SlotProps) {
         if (!rows.length) return null
         return (
           <section key={section.layer}>
-            <h2 className="m-0 mb-2 text-xs font-medium tracking-wide text-(--dsw-label-3)">{section.title}</h2>
-            <ul className="m-0 list-none space-y-2 p-0">
+            <h2 className="m-0 mb-1.5 text-[11px] font-semibold tracking-wide text-(--dsw-label-3)">{section.title}</h2>
+            <ul className="m-0 list-none p-0">
               {rows.map((plugin) => (
                 <li
-                  className="rounded-xl border border-(--dsw-border) bg-(--dsw-surface) px-3 py-3"
+                  className="flex items-start justify-between gap-3 rounded-md px-2 py-1.5"
                   key={`${plugin.layer}:${plugin.id}`}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h3 className="m-0 text-sm font-medium">{plugin.name}</h3>
-                      <div className="mt-0.5 text-xs text-(--dsw-label-3)">
-                        {plugin.id} · {plugin.state}
-                        {!plugin.togglable ? ' · 不可卸载' : ''}
-                      </div>
+                  <div className="min-w-0">
+                    <h3 className="m-0 text-[13px] font-medium text-(--dsw-label)">{plugin.name}</h3>
+                    <div className="mt-0.5 truncate text-[11px] text-(--dsw-label-3)">
+                      {plugin.id} · {plugin.state}
                     </div>
+                    <p className="mt-1 mb-0 text-[12px] leading-[1.45] text-(--dsw-label-3)">{plugin.blurb}</p>
+                  </div>
+                  {plugin.togglable ? (
                     <button
                       className="toggle"
                       type="button"
+                      aria-label={plugin.enabled ? `关闭 ${plugin.name}` : `打开 ${plugin.name}`}
                       aria-checked={plugin.enabled}
-                      disabled={!plugin.togglable}
                       onClick={() => void setEnabled(plugin.id, !plugin.enabled)}
                     />
-                  </div>
-                  <p className="mt-2 mb-0 text-sm leading-5 text-(--dsw-label-3)">{plugin.blurb}</p>
+                  ) : null}
                 </li>
               ))}
             </ul>

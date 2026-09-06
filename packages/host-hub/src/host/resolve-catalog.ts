@@ -10,6 +10,14 @@ import {
 
 const rootDir = findRepoRoot()
 
+export function pluginCatalogLayer(item: CordisPluginEntry): CatalogEntry['layer'] {
+  if (item.layer === 'web') return 'web'
+  if (item.layer === 'core') return 'core'
+  const pkg = item.package ?? ''
+  if (item.id.startsWith('core-') || /(^|\/)core-/.test(pkg)) return 'core'
+  return 'capability'
+}
+
 /** 只读 cordis.plugins.json 的 plugins 表。 */
 export async function resolveCatalog(): Promise<CatalogEntry[]> {
   const external = readCordisPlugins(rootDir)
@@ -32,14 +40,15 @@ export async function resolveCatalog(): Promise<CatalogEntry[]> {
 }
 
 function toCatalogEntry(item: CordisPluginEntry, mod: Plugin & { inject?: string[] }): CatalogEntry {
+  const layer = pluginCatalogLayer(item)
   return {
     id: item.id,
     name: item.name || item.id,
-    layer: item.layer === 'web' ? 'web' : 'capability',
+    layer,
     blurb: item.blurb || '',
     plugin: mod,
     inject: mod.inject,
-    togglable: item.togglable !== false,
+    togglable: layer === 'core' ? false : item.togglable !== false,
     enabled: item.enabled !== false,
     config: item.config,
     web: pluginWebSpecifier(item),

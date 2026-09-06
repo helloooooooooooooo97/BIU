@@ -40,21 +40,21 @@
     {
       "id": "core-pick",
       "name": "Core-Pick",
-      "layer": "capability",
+      "layer": "core",
       "blurb": "界面点选数据句柄（合集/记录）。给 Agent 的是选中结果，不是自己去点 DOM。",
       "package": "@biu/core-pick/host",
       "web": "@biu/core-pick/web",
-      "togglable": true,
+      "togglable": false,
       "enabled": true
     },
     {
       "id": "core-chat",
       "name": "Core-Chat",
-      "layer": "capability",
+      "layer": "core",
       "blurb": "会话表 /sessions：一行=一个代理（agent）。用户要「再开一个 agent」就是 db_create 一行会话。改元数据 db_update；动作 inspect/progress/status/compact/clear/retrieve 都是针对那一个代理。",
       "package": "@biu/core-chat/host",
       "web": "@biu/core-chat/web",
-      "togglable": true,
+      "togglable": false,
       "enabled": true
     },
     {
@@ -78,51 +78,51 @@
     {
       "id": "core-file-system",
       "name": "Core-File System",
-      "layer": "capability",
+      "layer": "core",
       "blurb": "登记各表并提供 db_list/read/update/create/delete/action/stat/content。先 db_list / 读每张表的 view.blurb（含该表全部动作），再对 /<表> 动手。",
       "package": "@biu/core-file-system/host",
       "web": "@biu/core-file-system/web",
-      "togglable": true,
+      "togglable": false,
       "enabled": true
     },
     {
       "id": "core-editor",
       "name": "Core-Editor",
-      "layer": "capability",
+      "layer": "core",
       "blurb": "记录正文 Markdown 编辑器，不自己落盘；各表经 File System 的 content 字段持久化。会话对话不用它。",
       "package": "@biu/core-editor/host",
       "web": "@biu/core-editor/web",
-      "togglable": true,
+      "togglable": false,
       "enabled": true
     },
     {
       "id": "core-plugin-system",
       "name": "Core-Plugin System",
-      "layer": "capability",
+      "layer": "core",
       "blurb": "插件表 /plugins，不是代理。代理在 /sessions。本表动作 create/sandbox/pack/start/stop/uninstall 只操作插件代码。",
       "package": "@biu/core-plugin-system/host",
       "web": "@biu/core-plugin-system/web",
-      "togglable": true,
+      "togglable": false,
       "enabled": true
     },
     {
       "id": "core-task-system",
       "name": "Core-Task System",
-      "layer": "capability",
+      "layer": "core",
       "blurb": "任务表 /tasks。让另一个代理做事：assignee 写成它的会话 id，再 db_action deliver。执行中的代理用 report 汇报。",
       "package": "@biu/core-task-system/host",
       "web": "@biu/core-task-system/web",
-      "togglable": true,
+      "togglable": false,
       "enabled": true
     },
     {
       "id": "core-page",
       "name": "Core-Page",
-      "layer": "capability",
+      "layer": "core",
       "blurb": "页面表 /pages。属性 db_update，正文 db_content（notes）。图和附件在仓库 .biu/assets。",
       "package": "@biu/core-page/host",
       "web": "@biu/core-page/web",
-      "togglable": true,
+      "togglable": false,
       "enabled": true
     }
   ]
