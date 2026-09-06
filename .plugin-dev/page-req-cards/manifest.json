@@ -1,0 +1,15 @@
+{
+  "id": "page-req-cards",
+  "name": "需求卡片",
+  "blurb": "把需求/待办做成页面里的结构化卡片块：/需求 插入，可标类型·状态·优先级，编辑或只读展示。与 page-doc-blocks 同机制（headless + pageEditor.registerBlock）。",
+  "tags": [
+    "page",
+    "editor",
+    "requirement",
+    "kanban"
+  ],
+  "author": "Biu",
+  "authorUrl": "https://github.com/helloooooooooooooo97/biu-harness",
+  "createdAt": 1788577242109,
+  "headless": true
+}
