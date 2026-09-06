@@ -18,6 +18,48 @@ function stubHub(ctx: Context) {
   }
 }
 
+test('list writes createdAt into old manifests and does not use directory ctime', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'plugin-created-at-'))
+  try {
+    const ctx = new Context()
+    stubHub(ctx)
+    const pluginDir = join(dir, '.plugin')
+    const idDir = join(pluginDir, 'store-old')
+    const { mkdir, utimes } = await import('node:fs/promises')
+    await mkdir(idDir, { recursive: true })
+    await writeFile(
+      join(idDir, 'manifest.json'),
+      `${JSON.stringify({ id: 'store-old', name: 'Old', blurb: 'x', tags: [], author: '', authorUrl: '' }, null, 2)}\n`,
+    )
+    const store = new PluginStoreService(ctx, pluginDir, join(dir, 'store.json'), join(dir, '.plugin-dev')).open()
+    const listed = await store.list()
+    const createdAt = listed[0]?.createdAt
+    assert.ok(typeof createdAt === 'number' && createdAt > 0)
+    const onDisk = JSON.parse(await readFile(join(idDir, 'manifest.json'), 'utf8')) as { createdAt: number }
+    assert.equal(onDisk.createdAt, createdAt)
+    await utimes(idDir, 1, 1)
+    await writeFile(join(idDir, 'host.js'), 'export const name = "store-old"\n')
+    const ctx2 = new Context()
+    stubHub(ctx2)
+    const store2 = new PluginStoreService(ctx2, pluginDir, join(dir, 'store.json'), join(dir, '.plugin-dev')).open()
+    const listed2 = await store2.list()
+    assert.equal(listed2[0]?.createdAt, createdAt)
+    await writeFile(
+      join(idDir, 'manifest.json'),
+      `${JSON.stringify({ id: 'store-old', name: 'Old', blurb: 'x', tags: [], author: '', authorUrl: '', createdAt: 0 }, null, 2)}\n`,
+    )
+    const ctx3 = new Context()
+    stubHub(ctx3)
+    const store3 = new PluginStoreService(ctx3, pluginDir, join(dir, 'store.json'), join(dir, '.plugin-dev')).open()
+    const listed3 = await store3.list()
+    assert.ok((listed3[0]?.createdAt ?? 0) > 0)
+    const fixed = JSON.parse(await readFile(join(idDir, 'manifest.json'), 'utf8')) as { createdAt: number }
+    assert.equal(fixed.createdAt, listed3[0]?.createdAt)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('create compiles host source straight into .plugin/<id>/', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'plugin-create-small-'))
   try {

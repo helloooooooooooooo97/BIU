@@ -10,7 +10,8 @@ import {
   compileStoreModule,
   findEntry,
   HOST_ENTRIES,
-  parseStoreManifest,
+  persistStoreManifestCreatedAt,
+  listingCreatedAt,
   WEB_ENTRIES,
   type PluginCreateInput,
   type StoreManifestFields,
@@ -79,24 +80,22 @@ async function importHostFile(hostFile: string) {
   }
 }
 
-async function pluginDirStats(dir: string): Promise<Pick<StoreListing, 'bytes' | 'createdAt' | 'updatedAt' | 'hasHost' | 'hasWeb'>> {
+export { listingCreatedAt } from './plugin-create.ts'
+
+async function pluginDirStats(dir: string): Promise<Pick<StoreListing, 'bytes' | 'updatedAt' | 'hasHost' | 'hasWeb'>> {
   const names = await readdir(dir)
   let bytes = 0
-  let createdAt = Number.MAX_SAFE_INTEGER
   let updatedAt = 0
   for (const name of names) {
     const file = join(dir, name)
     const st = await stat(file)
     if (!st.isFile()) continue
     bytes += st.size
-    const born = Math.floor(st.birthtimeMs || st.ctimeMs || st.mtimeMs)
     const modified = Math.floor(st.mtimeMs)
-    if (born < createdAt) createdAt = born
     if (modified > updatedAt) updatedAt = modified
   }
   return {
     bytes,
-    createdAt: createdAt === Number.MAX_SAFE_INTEGER ? updatedAt : createdAt,
     updatedAt,
     hasHost: existsSync(join(dir, 'host.js')),
     hasWeb: existsSync(join(dir, 'web.js')),
@@ -104,9 +103,8 @@ async function pluginDirStats(dir: string): Promise<Pick<StoreListing, 'bytes' |
 }
 
 async function readManifest(dir: string): Promise<StoreManifest> {
-  const raw = JSON.parse(await readFile(join(dir, 'manifest.json'), 'utf8')) as unknown
   try {
-    return parseStoreManifest(raw)
+    return await persistStoreManifestCreatedAt(dir)
   } catch {
     throw new Error(`invalid plugin manifest in ${dir}`)
   }
@@ -254,8 +252,8 @@ export class PluginStoreService extends Service {
     if (!isSafeId(id)) throw new Error(`invalid plugin id: ${id}`)
     const sandbox = this.sandboxPath(id)
     if (!existsSync(join(sandbox, 'manifest.json'))) throw new Error(`sandbox not found: ${sandbox}`)
+    const manifest = await persistStoreManifestCreatedAt(sandbox)
     const raw = JSON.parse(await readFile(join(sandbox, 'manifest.json'), 'utf8')) as unknown
-    const manifest = parseStoreManifest(raw)
     const hostEntry = findEntry(sandbox, HOST_ENTRIES)
     const webEntry = findEntry(sandbox, WEB_ENTRIES)
     if (!hostEntry && !webEntry) throw new Error('sandbox needs host.ts/js or web.tsx/ts/js')
@@ -311,7 +309,7 @@ export class PluginStoreService extends Service {
         hasHost: Boolean(findEntry(dir, HOST_ENTRIES)),
         hasWeb: Boolean(findEntry(dir, WEB_ENTRIES)),
         ...(manifest.headless ? { headless: true } : {}),
-        createdAt: manifest.createdAt || stats.createdAt,
+        createdAt: listingCreatedAt(manifest.createdAt),
         updatedAt: stats.updatedAt,
       })
     }
@@ -340,7 +338,7 @@ export class PluginStoreService extends Service {
         enabled,
         running: running.has(manifest.id),
         bytes: stats.bytes,
-        createdAt: manifest.createdAt || stats.createdAt,
+        createdAt: listingCreatedAt(manifest.createdAt),
         updatedAt: stats.updatedAt,
         lastRunAt: this.state.lastRunAt[manifest.id] ?? null,
         hasHost: stats.hasHost,
