@@ -155,11 +155,11 @@ const CSS = `
 .fsdb-page .fsdb-table-record-icon{position:relative;flex:none;display:inline-flex;align-items:center}
 .fsdb-page .fsdb-table-emoji-btn{display:inline-flex;align-items:center;justify-content:center;margin:0;border:0;padding:0;background:transparent;color:inherit;font:inherit;line-height:1;cursor:pointer}
 .fsdb-page .tasks-table.is-wrap .fsdb-title-text{white-space:normal}
-.fsdb-page .tasks-title-aside{position:relative;display:inline-flex;align-items:center;gap:0;pointer-events:none}
-.fsdb-page .tasks-title-zoom{position:relative;display:grid;place-items:center;width:24px;height:24px}
+.fsdb-page .tasks-title-aside{position:relative;display:inline-flex;align-items:center;gap:2px;pointer-events:none}
+.fsdb-page .tasks-title-zoom{position:relative;display:grid;place-items:center}
 .fsdb-page .tasks-title-zoom .tasks-tree-count,.fsdb-page .tasks-title-zoom .tasks-title-open{grid-area:1/1}
-.fsdb-page .tasks-title-open{flex:none;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;border:0;background:transparent;color:#F0EFED;border-radius:6px;cursor:pointer;padding:0;opacity:0;z-index:1;pointer-events:none}
-.fsdb-page .tasks-row-tools-slot{position:absolute;top:50%;right:8px;z-index:2;display:inline-flex;align-items:center;gap:0;width:auto;transform:translateY(-50%);overflow:visible;pointer-events:none}
+.fsdb-page .tasks-title-open{flex:none;color:#F0EFED;opacity:0;z-index:1;pointer-events:none}
+.fsdb-page .tasks-row-tools-slot{position:absolute;top:50%;right:8px;z-index:2;display:inline-flex;align-items:center;gap:2px;width:auto;transform:translateY(-50%);overflow:visible;pointer-events:none}
 .fsdb-page .tasks-table td:has(.fsdb-title-host) .tasks-row-tools,.fsdb-page .tasks-table td:has(.fsdb-title-host) .tasks-row-actions{opacity:0;pointer-events:none}
 .fsdb-page .tasks-table tr:hover td:has(.fsdb-title-host) .tasks-title-open,.fsdb-page .tasks-title-open:focus-visible,.fsdb-page .tasks-table tr:hover td:has(.fsdb-title-host) .tasks-row-actions,.fsdb-page .tasks-table tr:hover td:has(.fsdb-title-host) .tasks-row-tools{opacity:1;pointer-events:auto}
 .fsdb-page .tasks-table tr:hover td:has(.fsdb-title-host) .tasks-title-open,.fsdb-page .tasks-title-open:focus-visible,.fsdb-page .tasks-table tr:hover td:has(.fsdb-title-host) .tasks-row-tools .tasks-icon-btn,.fsdb-page .tasks-table tr:hover td:has(.fsdb-title-host) .tasks-row-actions .tasks-icon-btn{background:var(--dsw-hover)}
@@ -225,6 +225,7 @@ const CSS = `
 .fsdb-page .tasks-row-tools .tasks-icon-btn:hover,.fsdb-page .tasks-row-tools .tasks-icon-btn.is-active,.fsdb-page .tasks-row-actions .tasks-icon-btn:hover,.fsdb-page .tasks-row-actions .tasks-icon-btn.is-active{color:#F0EFED}
 .fsdb-page .tasks-icon-btn.is-danger:hover{background:var(--dsw-danger-soft);color:var(--dsw-danger)}
 .fsdb-page .tasks-icon-btn:disabled{opacity:.4;cursor:default}
+.fsdb-page .tasks-icon-btn.tasks-title-open,.fsdb-page .tasks-icon-btn.tasks-title-open:hover,.fsdb-page .tasks-icon-btn.tasks-title-open.is-active{color:#F0EFED}
 .fsdb-page .tasks-queue{display:flex;flex-direction:column;gap:18px;overflow:auto;box-sizing:border-box;width:calc(100% + var(--fsdb-check-gutter));margin-left:calc(var(--fsdb-check-gutter) * -1);padding:2px 0 12px var(--fsdb-check-gutter);flex:1;min-width:0;min-height:0}
 .fsdb-page .tasks-queue-group{display:flex;flex-direction:column;gap:2px}
 .fsdb-page .tasks-queue-ghead{display:flex;align-items:center;gap:6px;padding:4px 8px;color:var(--dsw-label-2);font-size:14px;font-weight:650;letter-spacing:.01em;cursor:default}

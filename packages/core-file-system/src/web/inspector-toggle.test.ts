@@ -106,7 +106,7 @@ test('table title opens record from the title-side button', () => {
   assert.match(browser, /data-testid="record-title-open"/)
   assert.match(browser, /data-testid="record-title-split"/)
   assert.match(browser, /showRecordInInspector\(collectionPath, row.id\)/)
-  assert.match(browser, /className="tasks-title-open"/)
+  assert.match(browser, /className="tasks-icon-btn tasks-title-open"/)
   assert.match(browser, /tasks-title-aside/)
   assert.match(browser, /tasks-tree-count/)
   assert.match(browser, /kidCount/)
