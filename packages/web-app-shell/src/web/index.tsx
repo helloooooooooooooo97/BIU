@@ -333,6 +333,16 @@ function Shell(props: SlotProps) {
     [persistSidebar, sidebarWidth],
   )
   const openSettings = useCallback(() => setSettingsOpen(true), [])
+  useEffect(() => {
+    if (!settingsOpen) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      setSettingsOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [settingsOpen])
   const [searchFocusSeq, setSearchFocusSeq] = useState(0)
   const openSearch = useCallback(() => {
     setSearchOpen(true)
@@ -794,11 +804,13 @@ function Shell(props: SlotProps) {
         sessionView={sessionView}
       />
 
-      <div
-        className={`biu-float-overlay${settingsOpen ? '' : ' hidden'}`}
-        data-testid="settings-dialog"
-        onClick={() => setSettingsOpen(false)}
-      >
+      {settingsOpen
+        ? createPortal(
+          <div
+            className="biu-float-overlay"
+            data-testid="settings-dialog"
+            onClick={() => setSettingsOpen(false)}
+          >
         <div
           className="biu-float h-[min(72vh,640px)] w-[min(672px,calc(100vw-32px))]"
           role="dialog"
@@ -856,7 +868,10 @@ function Shell(props: SlotProps) {
             </div>
           </div>
         </div>
-      </div>
+      </div>,
+          document.body,
+        )
+        : null}
       {searchOpen
         ? createPortal(
           <ShellSearchPanel

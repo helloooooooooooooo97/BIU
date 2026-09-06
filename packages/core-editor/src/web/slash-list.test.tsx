@@ -30,5 +30,13 @@ test('slash list keeps overflow-y auto', () => {
   assert.equal(getComputedStyle(list).overflowY, 'auto')
   assert.equal(getComputedStyle(list).position, 'fixed')
   assert.equal(getComputedStyle(list).zIndex, '10000')
+  assert.equal(container.querySelector('.page-slash-head'), null)
   style.remove()
+})
+
+test('page bubble uses 8px radius and a single hairline', () => {
+  assert.match(PAGE_EDITOR_STYLE, /\.page-bubble\{[^}]*border-radius:8px/)
+  assert.match(PAGE_EDITOR_STYLE, /\.page-bubble\{[^}]*border:1px solid var\(--dsw-border\)/)
+  assert.doesNotMatch(PAGE_EDITOR_STYLE, /\.page-bubble\{[^}]*0 0 0 1px/)
+  assert.doesNotMatch(PAGE_EDITOR_STYLE, /page-slash-head/)
 })

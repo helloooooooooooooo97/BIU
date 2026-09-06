@@ -84,7 +84,6 @@ export const SlashList = forwardRef(function SlashList(
       data-testid="page-slash"
       onWheel={(event) => event.stopPropagation()}
     >
-      <div className="page-slash-head">基础模块</div>
       {items.length ? (
         items.map((item, index) => (
           <button
