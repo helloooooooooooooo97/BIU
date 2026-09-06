@@ -882,9 +882,7 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
                   </button>
                 </div>
                 {(() => {
-                  const visible = allModels.filter(
-                    (m) => modelProviders?.[m.endpointId] || modelProviders?.[m.provider],
-                  )
+                  const visible = allModels.filter((m) => modelProviders?.[m.endpointId])
                   if (!visible.length) {
                     return (
                       <div className="composer-model-empty">

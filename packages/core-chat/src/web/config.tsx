@@ -455,6 +455,7 @@ export function ChatConfig(props?: { onClose?: () => void }) {
     if (fromPreset && !newLabel.trim()) {
       const body: Record<string, unknown> = { endpointId: fromPreset.id }
       if (newKey.trim()) body.setApiKey = { [fromPreset.id]: newKey.trim() }
+      else if (fromPreset.group === 'local') body.setApiKey = { [fromPreset.id]: 'local' }
       if (newUrl.trim() && newUrl.trim() !== fromPreset.defaultBaseUrl) {
         body.setBaseUrl = { [fromPreset.id]: newUrl.trim() }
       }

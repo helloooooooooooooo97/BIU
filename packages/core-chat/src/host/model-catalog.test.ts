@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { test } from 'vitest'
 import { resolveChatCompletionsUrl, resolveAnthropicMessagesUrl } from '@biu/host-llm'
 import {
@@ -44,6 +46,18 @@ test('endpoint presets cover official + relay + local groups', () => {
   assert.ok(findEndpointPreset('openrouter'))
   assert.ok(findEndpointPreset('closeai'))
   assert.ok(findEndpointPreset('ollama'))
+})
+
+test('local runtimes stay as addable presets, not default providers', () => {
+  assert.equal(findEndpointPreset('vllm')?.group, 'local')
+  assert.equal(findEndpointPreset('ollama')?.group, 'local')
+  assert.equal(findEndpointPreset('lmstudio')?.group, 'local')
+  const host = readFileSync(resolve(import.meta.dirname, './index.ts'), 'utf8')
+  assert.match(host, /return Boolean\(\(config\.apiKeys\[endpoint\.id\] \?\? ''\)\.trim\(\)\)/)
+  assert.doesNotMatch(host, /return isLocalEndpoint\(endpoint\)/)
+  const composer = readFileSync(resolve(import.meta.dirname, '../web/composer.tsx'), 'utf8')
+  assert.match(composer, /allModels\.filter\(\(m\) => modelProviders\?\.\[m\.endpointId\]\)/)
+  assert.doesNotMatch(composer, /modelProviders\?\.\[m\.provider\]/)
 })
 
 test('builtin models reference known endpoints', () => {

@@ -52,7 +52,7 @@ export interface LlmModelDef {
   builtin?: boolean
 }
 
-/** 内置入口：官方 + 常见中转站 / 聚合 + 本地。越全越好，URL 可按需在 UI 覆盖。 */
+/** 内置入口：默认侧栏只有 DeepSeek / Anthropic / OpenAI；其余进「添加」预设，不自动标已接入。 */
 export const LLM_ENDPOINT_PRESETS: LlmEndpointDef[] = [
   // ── 官方 ──
   {

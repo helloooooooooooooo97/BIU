@@ -358,12 +358,10 @@ function effectiveBaseUrl(config: ChatConfig, endpoint: LlmEndpointDef): string 
   return override?.trim() ? normalizeBaseUrl(override) : endpoint.baseUrl
 }
 
-/** 入口是否已配置：有 Key（或本地入口），且未被探测失败拉黑。 */
+/** 入口是否已配置：有 Key，且未被探测失败拉黑。本地入口不自动算已接入。 */
 function endpointConfigured(config: ChatConfig, endpoint: LlmEndpointDef): boolean {
   if (config.blockedEndpoints.includes(endpoint.id)) return false
-  const key = (config.apiKeys[endpoint.id] ?? '').trim()
-  if (key) return true
-  return isLocalEndpoint(endpoint)
+  return Boolean((config.apiKeys[endpoint.id] ?? '').trim())
 }
 
 function unblockEndpoint(config: ChatConfig, id: string) {
