@@ -535,7 +535,8 @@ test('pager keeps the current page when filter objects are only recreated', () =
 test('missing sort field falls back to title, not updatedAt', () => {
   assert.match(browser, /sortFields.find\(\(item\) => item.key === 'title'\)/)
   assert.doesNotMatch(browser, /item.kind === 'datetime' \? 'desc'/)
-  assert.match(browser, /const \[sortField, setSortField\] = useState\(initialView\?\.sortField \?\? 'title'\)/)
+  assert.match(browser, /<SortQueryMenu/)
+  assert.match(browser, /<FilterQueryMenu/)
 })
 
 test('page collection uses a document glyph, not the table/database icon', () => {

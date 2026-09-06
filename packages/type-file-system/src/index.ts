@@ -595,6 +595,8 @@ export type ListPage = {
   /** 缺省 50，最大 200；列表接口不会一次返回整表。 */
   limit?: number
   offset?: number
+  /** 多列排序；有值时优先于 sortField/sortDir。 */
+  sorts?: Array<{ field: string; dir: 'asc' | 'desc' }>
   /** 只返回这些列；空或不传则除 content 外全返回。id 始终带上。 */
   columns?: string[]
 }

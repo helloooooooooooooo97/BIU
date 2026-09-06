@@ -1,9 +1,7 @@
 import { Fragment, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { flushSync } from 'react-dom'
 import {
-  ArrowDownIcon,
   ArrowPathIcon,
-  ArrowUpIcon,
   ArrowsPointingOutIcon,
   ArrowsPointingInIcon,
   ArrowsUpDownIcon,
@@ -125,6 +123,17 @@ import { CellPop, cellUsesPop } from './cell-pop.tsx'
 import { CellPopDraft } from './cell-pop-draft.tsx'
 import { FieldValuePop } from './field-value-pop.tsx'
 import { loadFacets, pullFacets, subscribeFacets } from './facet-catalog.ts'
+import { FilterQueryMenu, SortQueryMenu } from './query-menus.tsx'
+import {
+  countFilterRules,
+  emptyFilterGroup,
+  encodeListFilter,
+  flatFiltersToTree,
+  normalizeFilterGroup,
+  normalizeSorts,
+  type FilterGroup,
+  type SortRule,
+} from '../query-logic.ts'
 
 const EMPTY_VIEWS: CollectionViewType[] = []
 
@@ -308,7 +317,13 @@ export function CollectionBrowser({
   const customView = extraViews.find((view) => view.id === mode)
   const [sortField, setSortField] = useState(initialView?.sortField ?? 'title')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>(initialView?.sortDir ?? 'asc')
+  const [sorts, setSorts] = useState<SortRule[]>(() =>
+    normalizeSorts(initialView?.sorts, initialView?.sortField ?? 'title', initialView?.sortDir ?? 'asc'),
+  )
   const [filters, setFilters] = useState<Record<string, string>>(initialView?.filters ?? {})
+  const [filterTree, setFilterTree] = useState<FilterGroup>(() =>
+    initialView?.filterTree ? normalizeFilterGroup(initialView.filterTree) : emptyFilterGroup(),
+  )
   const [columnKeys, setColumnKeys] = useState<string[]>(initialView?.columns ?? [])
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => normalizeColumnWidths(initialView?.columnWidths))
   const [resizingCol, setResizingCol] = useState<string | null>(null)
@@ -330,7 +345,10 @@ export function CollectionBrowser({
     if (!current?.builtin) return lockedFilters
     return { ...current.filters, ...lockedFilters }
   }, [activeViewId, lockedFilters, sheet, views])
-  const queryFilters = useMemo(() => ({ ...filters, ...catalogLocks }), [catalogLocks, filters])
+  const queryFilters = useMemo(
+    () => encodeListFilter(catalogLocks, filterTree),
+    [catalogLocks, filterTree],
+  )
   const queryFiltersKey = JSON.stringify(queryFilters)
   const lockedFilterKeys = Object.keys(catalogLocks)
   const lockedSource = catalogLocks.tablePath ?? ''
@@ -564,6 +582,7 @@ export function CollectionBrowser({
           query: fetchQuery,
           sortField,
           sortDir,
+          sorts,
           filters: queryFilters,
           columns: listColumns,
         }),
@@ -600,10 +619,10 @@ export function CollectionBrowser({
       setError(String(err))
       return false
     }
-  }, [activeViewId, collectionPath, dataPath, fetchQuery, listColumns, queryFilters, page, pageSize, sortDir, sortField])
+  }, [activeViewId, collectionPath, dataPath, fetchQuery, listColumns, queryFilters, page, pageSize, sortDir, sortField, sorts])
   const reloadRef = useRef(reload)
   reloadRef.current = reload
-  const reloadKey = `${dataPath}\0${page}\0${pageSize}\0${fetchQuery}\0${sortField}\0${sortDir}\0${JSON.stringify(queryFilters)}\0${activeViewId ?? ''}\0${listColumnsKey}`
+  const reloadKey = `${dataPath}\0${page}\0${pageSize}\0${fetchQuery}\0${sortField}\0${sortDir}\0${JSON.stringify(sorts)}\0${JSON.stringify(queryFilters)}\0${activeViewId ?? ''}\0${listColumnsKey}`
   const detailIdRef = useRef<string | null>(null)
   detailIdRef.current = detailId
   const contentGen = useRef(0)
@@ -674,7 +693,9 @@ export function CollectionBrowser({
         setMode(next.mode)
         setSortField(next.sortField)
         setSortDir(next.sortDir)
+        setSorts(normalizeSorts(next.sorts, next.sortField, next.sortDir))
         setFilters(next.filters)
+        setFilterTree(next.filterTree ? normalizeFilterGroup(next.filterTree) : next.builtin ? emptyFilterGroup() : flatFiltersToTree(next.filters))
         setColumnKeys(next.columns)
         setGroupBy(next.groupBy ?? '')
         setShowTree(next.tree !== false)
@@ -687,6 +708,8 @@ export function CollectionBrowser({
       setActiveViewId(null)
       setQuery('')
       setFilters({})
+      setFilterTree(emptyFilterGroup())
+      setSorts(normalizeSorts(undefined, 'title', 'asc'))
     }
   }, [collectionPath, dataPath, tablePathsKey])
 
@@ -905,6 +928,7 @@ export function CollectionBrowser({
           query: fetchQuery,
           sortField,
           sortDir,
+          sorts,
           filters: queryFilters,
           columns: listColumns,
         },
@@ -935,7 +959,7 @@ export function CollectionBrowser({
     rememberRecords(collectionPath, rows)
     window.dispatchEvent(new Event('fsdb:crumb-labels'))
   }, [collectionPath, items, schema?.labelField, selected])
-  const filterActive = Object.values(filters).some(Boolean)
+  const filterActive = countFilterRules(filterTree) > 0
   const activeView = views.find((view) => view.id === activeViewId)
   useSyncExternalStore(subscribeStarredViews, getStarredViewsVersion, () => 0)
   useSyncExternalStore(subscribePageWidth, getPageWidthVersion, () => 0)
@@ -1038,6 +1062,8 @@ export function CollectionBrowser({
       truncateCells === (next.truncate !== false) &&
       query === nextQuery &&
       pageSize === nextPageSize &&
+      JSON.stringify(sorts) === JSON.stringify(next.sorts ?? []) &&
+      JSON.stringify(filterTree) === JSON.stringify(next.filterTree ?? null) &&
       JSON.stringify(filters) === JSON.stringify(next.filters) &&
       JSON.stringify(columnKeys) === JSON.stringify(nextColumns) &&
       JSON.stringify(columnWidths) === JSON.stringify(normalizeColumnWidths(next.columnWidths))
@@ -1048,7 +1074,9 @@ export function CollectionBrowser({
     setMode(next.mode)
     setSortField(next.sortField)
     setSortDir(next.sortDir)
+    setSorts(normalizeSorts(next.sorts, next.sortField, next.sortDir))
     setFilters(next.filters)
+    setFilterTree(next.filterTree ? normalizeFilterGroup(next.filterTree) : next.builtin ? emptyFilterGroup() : flatFiltersToTree(next.filters))
     setColumnKeys(nextColumns)
     setColumnWidths(normalizeColumnWidths(next.columnWidths))
     setGroupBy(nextGroup)
@@ -1127,7 +1155,9 @@ export function CollectionBrowser({
             mode,
             sortField,
             sortDir,
-            filters: { ...queryFilters },
+            sorts,
+            filters: { ...catalogLocks },
+            filterTree,
             columns: columnKeys,
             groupBy,
             tree: showTree,
@@ -1954,12 +1984,24 @@ export function CollectionBrowser({
   }
 
   function cycleSort(field: string) {
-    if (sortField !== field) {
-      setSortField(field)
-      setSortDir('asc')
+    const current = sorts.find((item) => item.field === field)
+    if (!current) {
+      setSorts([...sorts, { id: `${Date.now()}`, field, dir: 'asc' }])
+      if (!sorts.length) {
+        setSortField(field)
+        setSortDir('asc')
+      }
       return
     }
-    setSortDir((dir) => (dir === 'asc' ? 'desc' : 'asc'))
+    const dir = current.dir === 'asc' ? 'desc' : 'asc'
+    setSorts(sorts.map((item) => (item.id === current.id ? { ...item, dir } : item)))
+    if (sorts[0]?.id === current.id) setSortDir(dir)
+  }
+
+  function applySorts(next: SortRule[]) {
+    setSorts(next)
+    setSortField(next[0]?.field ?? 'title')
+    setSortDir(next[0]?.dir ?? 'asc')
   }
 
   viewsRef.current = views
@@ -1998,7 +2040,9 @@ export function CollectionBrowser({
         mode,
         sortField,
         sortDir,
+        sorts,
         filters: current.builtin ? current.filters : filters,
+        filterTree: current.builtin ? undefined : filterTree,
         columns: pinLabelColumn(schema, columnKeys),
         groupBy,
         tree: showTree,
@@ -2023,6 +2067,7 @@ export function CollectionBrowser({
     columnKeys,
     columnWidths,
     filters,
+    filterTree,
     groupBy,
     hydrated,
     mode,
@@ -2032,6 +2077,7 @@ export function CollectionBrowser({
     showTree,
     sortDir,
     sortField,
+    sorts,
     truncateCells,
     wrapCells,
     sheet,
@@ -2364,45 +2410,17 @@ export function CollectionBrowser({
             <div className="tasks-sort-wrap" ref={sortRef}>
               <button
                 type="button"
-                className={`tasks-sort-btn${sortMenuOpen ? ' is-active' : ''}`}
+                className={`tasks-sort-btn${sortMenuOpen ? ' is-active' : ''}${sorts.length ? ' is-custom' : ''}`}
                 aria-label="排序"
-                title="排序"
+                title={sorts.length ? `${sorts.length} 个排序` : '排序'}
                 onClick={() => toggleMenu('sort')}
               >
                 <ArrowsUpDownIcon aria-hidden className="size-[14px]" />
+                {sorts.length ? <span className="tasks-sort-dot" aria-hidden /> : null}
               </button>
               {sortMenuOpen ? (
                 <HeadlessDismiss onDismiss={() => setSortMenuOpen(false)} insideRef={sortRef}>
-                <div className="tasks-sort-menu" role="menu">
-                  <div className="tasks-sort-head">排序依据</div>
-                  {sortFields.map((item) => {
-                    const current = sortField === item.key
-                    return (
-                      <button
-                        key={item.key}
-                        type="button"
-                        className={`fsdb-checkrow${current ? ' is-on' : ''}`}
-                        onClick={() => cycleSort(item.key)}
-                      >
-                        <span className="fsdb-checkrow-label">
-                          <span className="fsdb-checkrow-icon">
-                            <FieldGlyph kind={item.kind} />
-                          </span>
-                          {item.field.label ?? item.key}
-                        </span>
-                        {current ? (
-                          sortDir === 'asc' ? (
-                            <ArrowUpIcon aria-hidden className="size-[14px]" />
-                          ) : (
-                            <ArrowDownIcon aria-hidden className="size-[14px]" />
-                          )
-                        ) : (
-                          <span className="fsdb-checkrow-gap" aria-hidden />
-                        )}
-                      </button>
-                    )
-                  })}
-                </div>
+                <SortQueryMenu sorts={sorts} fields={sortFields} onChange={applySorts} />
                 </HeadlessDismiss>
               ) : null}
             </div>
@@ -2501,7 +2519,7 @@ export function CollectionBrowser({
                 type="button"
                 className={`tasks-refresh tasks-rbar-btn${filterOpen || filterActive ? ' is-active' : ''}`}
                 aria-label="筛选"
-                title="筛选"
+                title={filterActive ? `${countFilterRules(filterTree)} 条筛选` : '筛选'}
                 onClick={() => toggleMenu('filter')}
               >
                 <FunnelIcon aria-hidden className="size-[14px]" />
@@ -2509,50 +2527,24 @@ export function CollectionBrowser({
               </button>
               {filterOpen ? (
                 <HeadlessDismiss onDismiss={() => setFilterOpen(false)} insideRef={filterRef}>
-                <div className="tasks-filter-menu" role="menu">
-                  {filterFields.map((item) => {
-                    const options =
-                      item.kind === 'datetime'
-                        ? [
-                            { value: '1h', label: '最近 1 小时' },
-                            { value: '24h', label: '最近 1 天' },
-                            { value: '7d', label: '最近 7 天' },
-                            { value: '30d', label: '最近 30 天' },
-                          ]
-                        : item.kind === 'boolean'
-                          ? [
-                              { value: 'true', label: '是' },
-                              { value: 'false', label: '否' },
-                            ]
-                        : item.kind === 'facet'
-                          ? uniqueValues(items, item.key, item.field).map((option) => ({
-                              value: option,
-                              label: loadFacets().find((tag) => tag.id === option)?.label ?? option,
-                            }))
-                          : uniqueValues(items, item.key, item.field).map((option) => ({ value: option, label: option }))
-                    return (
-                      <div key={item.key} className="fsdb-filter-row">
-                        <span className="fsdb-filter-row-key">
-                          <FieldGlyph kind={item.kind} />
-                          {item.field.label ?? item.key}
-                        </span>
-                        <CellSelect
-                          value={filters[item.key] ?? ''}
-                          placeholder="全部"
-                          variant="cell"
-                          chips={item.kind === 'select' || item.kind === 'multi-select' || item.kind === 'facet'}
-                          options={options}
-                          onSelect={(next) => setFilters((prev) => ({ ...prev, [item.key]: next }))}
-                        />
-                      </div>
-                    )
-                  })}
-                  {filterActive ? (
-                    <button type="button" className="tasks-filter-clear" onClick={() => setFilters({})}>
-                      清除筛选
-                    </button>
-                  ) : null}
-                </div>
+                <FilterQueryMenu
+                  tree={filterTree}
+                  fields={filterFields}
+                  valueOptions={(item) =>
+                    item.kind === 'boolean'
+                      ? [
+                          { value: 'true', label: '是' },
+                          { value: 'false', label: '否' },
+                        ]
+                      : item.kind === 'facet'
+                        ? uniqueValues(items, item.key, item.field).map((option) => ({
+                            value: option,
+                            label: loadFacets().find((tag) => tag.id === option)?.label ?? option,
+                          }))
+                        : uniqueValues(items, item.key, item.field).map((option) => ({ value: option, label: option }))
+                  }
+                  onChange={setFilterTree}
+                />
                 </HeadlessDismiss>
               ) : null}
             </div>

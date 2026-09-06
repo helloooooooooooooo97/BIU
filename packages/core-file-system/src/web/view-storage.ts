@@ -269,6 +269,7 @@ const DISPLAY_KEYS = [
   'mode',
   'sortField',
   'sortDir',
+  'sorts',
   'columns',
   'groupBy',
   'tree',
@@ -277,6 +278,7 @@ const DISPLAY_KEYS = [
   'query',
   'pageSize',
   'columnWidths',
+  'filterTree',
 ] as const
 
 export type ViewDisplayPatch = Partial<Pick<SavedView, (typeof DISPLAY_KEYS)[number]>>

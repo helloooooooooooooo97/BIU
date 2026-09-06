@@ -1,4 +1,5 @@
 import { isViewModeId, type ViewMode } from './fields.ts'
+import { normalizeFilterGroup, normalizeSorts, type FilterGroup, type SortRule } from '../query-logic.ts'
 
 export type SavedView = {
   id: string
@@ -6,7 +7,9 @@ export type SavedView = {
   mode: ViewMode
   sortField: string
   sortDir: 'asc' | 'desc'
+  sorts?: SortRule[]
   filters: Record<string, string>
+  filterTree?: FilterGroup
   columns: string[]
   groupBy?: string
   tree?: boolean
@@ -54,12 +57,15 @@ export function tableWidthStyle(widths: Record<string, number>, keys: string[]):
 }
 
 export function normalizeSavedView(view: SavedView): SavedView {
+  const sorts = normalizeSorts(view.sorts, view.sortField || 'title', view.sortDir === 'desc' ? 'desc' : 'asc')
   return {
     ...view,
     mode: isViewModeId(view.mode) ? view.mode : 'table',
-    sortField: view.sortField || 'title',
-    sortDir: view.sortDir === 'desc' ? 'desc' : 'asc',
+    sortField: sorts[0]?.field || 'title',
+    sortDir: sorts[0]?.dir ?? 'asc',
+    sorts,
     filters: view.filters && typeof view.filters === 'object' ? view.filters : {},
+    filterTree: view.filterTree ? normalizeFilterGroup(view.filterTree) : undefined,
     columns: Array.isArray(view.columns) ? view.columns : [],
     groupBy: view.groupBy ?? '',
     tree: view.tree !== false,
@@ -81,13 +87,15 @@ export function normalizePageSize(value: unknown) {
 }
 
 export function viewStateKey(
-  view: Pick<SavedView, 'mode' | 'sortField' | 'sortDir' | 'filters' | 'columns' | 'groupBy' | 'tree' | 'wrap' | 'truncate' | 'query' | 'pageSize' | 'columnWidths'>,
+  view: Pick<SavedView, 'mode' | 'sortField' | 'sortDir' | 'sorts' | 'filters' | 'filterTree' | 'columns' | 'groupBy' | 'tree' | 'wrap' | 'truncate' | 'query' | 'pageSize' | 'columnWidths'>,
 ) {
   return JSON.stringify({
     mode: view.mode,
     sortField: view.sortField,
     sortDir: view.sortDir,
+    sorts: (view.sorts ?? []).map((item) => ({ field: item.field, dir: item.dir })),
     filters: view.filters,
+    filterTree: view.filterTree ?? null,
     columns: view.columns,
     groupBy: view.groupBy ?? '',
     tree: view.tree !== false,

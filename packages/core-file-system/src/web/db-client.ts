@@ -22,7 +22,8 @@ export async function listCollection(opts: {
   query?: string
   sortField?: string
   sortDir?: string
-  filters?: Record<string, string>
+  sorts?: Array<{ field: string; dir: 'asc' | 'desc' }>
+  filters?: Record<string, unknown>
   columns?: string[]
 }): Promise<ListPage> {
   const params = new URLSearchParams({
@@ -34,6 +35,7 @@ export async function listCollection(opts: {
     dir: opts.sortDir === 'desc' ? 'desc' : 'asc',
     filter: JSON.stringify(opts.filters ?? {}),
   })
+  if (opts.sorts?.length) params.set('sorts', JSON.stringify(opts.sorts))
   if (opts.columns?.length) params.set('columns', opts.columns.join(','))
   const key = params.toString()
   const pending = listInflight.get(key)

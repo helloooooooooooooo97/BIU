@@ -19,8 +19,9 @@ export type ViewNeighborQuery = {
   query?: string
   sortField?: string
   sortDir?: string
-  filters?: Record<string, string>
+  filters?: Record<string, unknown>
   columns?: string[]
+  sorts?: Array<{ field: string; dir: 'asc' | 'desc' }>
 }
 
 export type ViewNeighborHit = {
@@ -71,6 +72,7 @@ export async function findViewNeighbor(opts: {
     query: opts.query.query,
     sortField: opts.query.sortField,
     sortDir: opts.query.sortDir,
+    sorts: opts.query.sorts,
     filters: opts.query.filters,
     columns: opts.query.columns,
   })
@@ -95,6 +97,7 @@ async function locateInView(
       query: query.query,
       sortField: query.sortField,
       sortDir: query.sortDir,
+      sorts: query.sorts,
       filters: query.filters,
       columns: query.columns,
     })

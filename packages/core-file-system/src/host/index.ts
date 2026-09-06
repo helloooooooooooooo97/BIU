@@ -42,6 +42,7 @@ import {
 } from './content-edit.ts'
 import { currentSessionId } from '@biu/host-sessions/scope'
 import { databaseRevealForTool, normalizeCollectionPath } from '../paths.ts'
+import { matchListFilterRecord, normalizeSorts, sortRecordsBy } from '../query-logic.ts'
 import { AgentDbCompact } from './agent-payload.ts'
 
 const agentDbCompact = new AgentDbCompact()
@@ -385,56 +386,12 @@ function matchQuery(record: DbRecord, q: string, packs: CollectionSchemaPack[] =
 }
 
 function matchListFilter(record: DbRecord, filter: Record<string, unknown> | undefined, schema: CollectionSchema, packs: CollectionSchemaPack[] = []) {
-  if (!filter) return true
-  for (const [key, expected] of Object.entries(filter)) {
-    if (expected == null || expected === '') continue
-    const want = String(expected)
-    const actual = record[key]
-    const field = schema.fields[key]
-    if (isFacetFieldType(field?.type)) {
-      const parsed = normalizeSchemaValue(actual)
-      const hit = parsed.tags.some((id) => {
-        if (id === want) return true
-        const pack = packs.find((item) => item.id === id)
-        return pack?.label === want
-      })
-      if (!hit) return false
-      continue
-    }
-    if (field?.type === 'datetime' && ['1h', '24h', '7d', '30d'].includes(want)) {
-      const n = Number(actual)
-      if (!Number.isFinite(n) || n <= 0) return false
-      const span = want === '1h' ? 3600e3 : want === '24h' ? 86400e3 : want === '7d' ? 7 * 86400e3 : 30 * 86400e3
-      if (Date.now() - n > span) return false
-      continue
-    }
-    if (Array.isArray(actual)) {
-      if (!actual.map(String).includes(want)) return false
-      continue
-    }
-    if (field?.type === 'boolean') {
-      const on = actual === true || actual === 'true' ? 'true' : 'false'
-      if (on !== want) return false
-      continue
-    }
-    if (String(actual ?? '') !== want) return false
-  }
-  return true
+  return matchListFilterRecord(record, filter, schema, packs)
 }
 
-function sortRecords(rows: DbRecord[], field: string, dir: 'asc' | 'desc') {
-  if (!field) return rows
-  const sign = dir === 'desc' ? -1 : 1
-  return [...rows].sort((a, b) => {
-    const av = a[field]
-    const bv = b[field]
-    const an = Number(av)
-    const bn = Number(bv)
-    const numeric = Number.isFinite(an) && Number.isFinite(bn) && String(av).trim() !== '' && String(bv).trim() !== ''
-    const c = numeric ? an - bn : String(av ?? '').localeCompare(String(bv ?? ''), 'zh')
-    if (c !== 0) return c * sign
-    return String(a.id).localeCompare(String(b.id))
-  })
+function sortRecords(rows: DbRecord[], field: string, dir: 'asc' | 'desc', sorts?: Array<{ field: string; dir: 'asc' | 'desc' }>) {
+  const rules = normalizeSorts(sorts, field, dir)
+  return sortRecordsBy(rows, rules)
 }
 
 export const DEFAULT_PAGE_SIZE = 50
@@ -617,7 +574,7 @@ export class DatabaseService extends Service implements Database {
     const matched = await this.matchCollectionRows(spec, query, filter, q)
     const tagFilter = spec.path === '/facets' ? String(filter?.facetId ?? '').trim() : ''
     if (tagFilter) schema = schemaWithTagPack(schema, this.facets.get(tagFilter))
-    const sorted = sortRecords(matched, sortField, sortDir)
+    const sorted = sortRecords(matched, sortField, sortDir, page?.sorts)
     const total = sorted.length
     const slice = sorted.slice(offset, offset + limit)
     return {
@@ -1033,6 +990,24 @@ function parseListColumnsParam(raw: string | null): string[] | undefined {
   return asColumnKeys(text.split(','))
 }
 
+function parseSortsParam(raw: string | null): Array<{ field: string; dir: 'asc' | 'desc' }> | undefined {
+  if (!raw) return undefined
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return undefined
+    const out: Array<{ field: string; dir: 'asc' | 'desc' }> = []
+    for (const item of parsed) {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) continue
+      const field = String((item as { field?: unknown }).field ?? '').trim()
+      if (!field) continue
+      out.push({ field, dir: (item as { dir?: unknown }).dir === 'desc' ? 'desc' : 'asc' })
+    }
+    return out.length ? out : undefined
+  } catch {
+    return undefined
+  }
+}
+
 function asFilter(value: unknown): Record<string, unknown> | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
   return value as Record<string, unknown>
@@ -1336,6 +1311,7 @@ export function apply(ctx: Context) {
         q: route.query.get('q') || '',
         sortField: route.query.get('sort') || '',
         sortDir: route.query.get('dir') === 'desc' ? 'desc' : 'asc',
+        sorts: parseSortsParam(route.query.get('sorts')),
         limit: route.query.get('limit') ? Number(route.query.get('limit')) : undefined,
         offset: route.query.get('offset') ? Number(route.query.get('offset')) : undefined,
         columns: parseListColumnsParam(route.query.get('columns')),
