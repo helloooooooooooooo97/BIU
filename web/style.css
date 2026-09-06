@@ -1488,7 +1488,8 @@ body {
 }
 
 .chat-overlay-panel .chat-stage {
-  padding-block: 0;
+  padding-top: 0;
+  padding-bottom: 18rem;
 }
 
 .chat-overlay-panel .chat-stage .sticky,
