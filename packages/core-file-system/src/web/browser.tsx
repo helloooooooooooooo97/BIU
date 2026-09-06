@@ -2600,10 +2600,18 @@ export function CollectionBrowser({
                 {columns.map((col, index) => {
                   const flat = parseFacetFlatColumnKey(col.key)
                   const tone = flat ? schemaTagTone(flat.packId) : undefined
+                  const width = colWidthStyle(columnWidths[col.key])
                   return (
-                  <th key={col.key} style={colWidthStyle(columnWidths[col.key])}>
+                  <th
+                    key={col.key}
+                    className={tone ? 'is-facet-col' : undefined}
+                    style={{
+                      ...(width ?? {}),
+                      ...(tone ? { ['--biu-tag' as string]: tone } : {}),
+                    }}
+                  >
                     {index === 0 ? <RowCheck ids={pickableIds} /> : null}
-                    <span className="tasks-th" style={tone ? { color: tone } : undefined}>
+                    <span className="tasks-th">
                       <FieldGlyph kind={col.kind} />
                       {col.field.label ?? col.key}
                     </span>
