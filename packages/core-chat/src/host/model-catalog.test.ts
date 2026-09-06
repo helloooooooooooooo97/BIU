@@ -96,8 +96,16 @@ test('normalizeBaseUrl strips trailing slash', () => {
 test('DeepSeek V4 can toggle thinking and High/Max', () => {
   const caps = inferModelCapabilities('deepseek-v4-flash', 'deepseek')
   assert.equal(caps.thinking, true)
+  assert.equal(caps.speed, undefined)
   assert.deepEqual(caps.effort, ['high', 'max'])
   assert.equal(defaultThinkingFor(caps), 'enabled')
+})
+
+test('Grok exposes a speed switch, not thinking', () => {
+  const caps = inferModelCapabilities('grok-4', 'openai')
+  assert.equal(caps.speed, true)
+  assert.equal(caps.thinking, undefined)
+  assert.equal(caps.effort, undefined)
 })
 
 test('GPT-4o has no thinking extras', () => {

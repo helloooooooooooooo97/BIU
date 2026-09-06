@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 
 const root = resolve(import.meta.dirname, '../../../..')
 
-test('composer model menu is a nested Fast / effort / model pop', () => {
+test('composer model menu is a nested thinking / speed / effort / model pop', () => {
   const menu = readFileSync(resolve(import.meta.dirname, './composer-model-menu.tsx'), 'utf8')
   const composer = readFileSync(resolve(import.meta.dirname, './composer.tsx'), 'utf8')
   const css = readFileSync(resolve(root, 'web/style.css'), 'utf8')
@@ -14,12 +14,19 @@ test('composer model menu is a nested Fast / effort / model pop', () => {
   assert.match(menu, /composer-model-panel/)
   assert.match(menu, /composer-model-flyout/)
   assert.match(menu, /composer-model-switch/)
-  assert.match(menu, />Fast</)
+  assert.match(menu, />思考</)
+  assert.match(menu, />快</)
+  assert.doesNotMatch(menu, />Fast</)
   assert.match(menu, />力度</)
   assert.match(menu, />模型</)
   assert.match(menu, /添加模型/)
   assert.match(menu, /placeholder="搜索模型"/)
-  assert.match(css, /\.composer-model-pop\s*\{/)
+  assert.match(css, /\.composer-model-pop\s*\{[^}]*align-items:\s*flex-end/)
+  assert.match(css, /\.composer-model-panel,\s*\n\.composer-model-flyout\s*\{[^}]*border:\s*1px solid/)
+  assert.doesNotMatch(
+    css,
+    /\.composer-model-panel,\s*\n\.composer-model-flyout\s*\{[^}]*--dsw-shadow-lv2/,
+  )
   assert.match(css, /\.composer-model-switch\.is-on/)
   assert.match(css, /\.composer-model-add-models/)
 })

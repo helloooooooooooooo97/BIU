@@ -15,9 +15,34 @@ export function ModelModeControls(props: {
   onChange: (next: { thinking?: ThinkingMode; reasoningEffort?: ReasoningEffort }) => void
 }) {
   const { capabilities: caps, thinking, reasoningEffort, disabled, onChange } = props
-  if (!caps.thinking && !caps.effort?.length) return null
+  if (!caps.thinking && !caps.speed && !caps.effort?.length) return null
   return (
     <div className="flex flex-col gap-2" data-testid="model-mode-controls">
+      {caps.speed ? (
+        <div className="flex items-center gap-2">
+          <span className="w-10 shrink-0 text-[11px] text-(--dsw-label-3)">快</span>
+          <div className="flex gap-1">
+            <button
+              type="button"
+              className={pillCls(thinking === 'disabled')}
+              disabled={disabled}
+              data-testid="speed-on"
+              onClick={() => onChange({ thinking: 'disabled' })}
+            >
+              开
+            </button>
+            <button
+              type="button"
+              className={pillCls(thinking !== 'disabled')}
+              disabled={disabled}
+              data-testid="speed-off"
+              onClick={() => onChange({ thinking: 'enabled' })}
+            >
+              关
+            </button>
+          </div>
+        </div>
+      ) : null}
       {caps.thinking ? (
         <div className="flex items-center gap-2">
           <span className="w-10 shrink-0 text-[11px] text-(--dsw-label-3)">思考</span>
@@ -67,8 +92,9 @@ export function ModelModeControls(props: {
 }
 
 export function modelModeSuffix(thinking: ThinkingMode, effort: ReasoningEffort, caps: ModelCapabilities) {
+  if (caps.speed && thinking === 'disabled') return '快'
+  if (caps.thinking && thinking === 'disabled') return ''
   if (!caps.thinking && !caps.effort?.length) return ''
-  if (caps.thinking && thinking === 'disabled') return '快'
   if (effort === 'max') return 'Max'
-  return 'High'
+  return caps.effort?.length ? 'High' : ''
 }

@@ -64,8 +64,10 @@ export function ComposerModelMenu(props: {
   } = props
   const [pane, setPane] = useState<Pane>('root')
   const [query, setQuery] = useState('')
-  const fast = Boolean(capabilities.thinking && thinking === 'disabled')
-  const showFast = Boolean(capabilities.thinking)
+  const thinkingOn = thinking === 'enabled'
+  const fast = Boolean(capabilities.speed && thinking === 'disabled')
+  const showThinking = Boolean(capabilities.thinking)
+  const showFast = Boolean(capabilities.speed)
   const showEffort = Boolean(capabilities.effort?.length && (!capabilities.thinking || thinking === 'enabled'))
   const effortLabel = reasoningEffort === 'max' ? 'Max' : 'High'
 
@@ -164,17 +166,31 @@ export function ComposerModelMenu(props: {
       ) : null}
 
       <div className="composer-model-panel" data-testid="composer-model-panel">
+        {showThinking ? (
+          <button
+            type="button"
+            role="switch"
+            aria-checked={thinkingOn}
+            className="composer-model-row"
+            data-testid="thinking-toggle"
+            disabled={disabled}
+            onClick={() => onMode({ thinking: thinkingOn ? 'disabled' : 'enabled' })}
+          >
+            <span className="composer-model-row-label">思考</span>
+            <span className={`composer-model-switch${thinkingOn ? ' is-on' : ''}`} aria-hidden />
+          </button>
+        ) : null}
         {showFast ? (
           <button
             type="button"
             role="switch"
             aria-checked={fast}
             className="composer-model-row"
-            data-testid="thinking-off"
+            data-testid="speed-toggle"
             disabled={disabled}
             onClick={() => onMode({ thinking: fast ? 'enabled' : 'disabled' })}
           >
-            <span className="composer-model-row-label">Fast</span>
+            <span className="composer-model-row-label">快</span>
             <span className={`composer-model-switch${fast ? ' is-on' : ''}`} aria-hidden />
           </button>
         ) : null}

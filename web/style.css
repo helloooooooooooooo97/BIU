@@ -5162,7 +5162,7 @@ body {
   bottom: calc(100% + 8px);
   z-index: 9;
   display: flex;
-  align-items: stretch;
+  align-items: flex-end;
   gap: 6px;
 }
 
@@ -5171,7 +5171,7 @@ body {
   border: 1px solid var(--dsw-border);
   border-radius: 12px;
   background: #1c1c1c;
-  box-shadow: var(--dsw-shadow-lv2);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
 .composer-model-panel {

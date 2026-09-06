@@ -727,8 +727,10 @@ export type ReasoningEffort = 'high' | 'max'
 export type ThinkingMode = 'enabled' | 'disabled'
 
 export interface ModelCapabilities {
-  /** 可开关思考（DeepSeek V4 / Claude 扩展思考） */
+  /** 可开关思考（DeepSeek V4 / Claude 扩展思考）。不是快/慢。 */
   thinking?: boolean
+  /** 可调快/慢（Grok 等）。开 = 快，映射为 thinking disabled。 */
+  speed?: boolean
   /** 可调推理档位 High / Max */
   effort?: Array<ReasoningEffort>
 }
@@ -744,6 +746,9 @@ export function inferModelCapabilities(model: string, provider: ChatProvider): M
   ) {
     return { thinking: true, effort: ['high', 'max'] }
   }
+  if (id.includes('grok')) {
+    return { speed: true }
+  }
   if (/(^|[^a-z])o[1-4]([^a-z]|$)|gpt-5/.test(id)) {
     return { effort: ['high', 'max'] }
   }
@@ -754,8 +759,8 @@ export function inferModelCapabilities(model: string, provider: ChatProvider): M
 }
 
 export function defaultThinkingFor(caps: ModelCapabilities): ThinkingMode {
-  // 默认同 API：能思考就开。用户可在菜单里关成「快」。
-  return caps.thinking || caps.effort?.length ? 'enabled' : 'disabled'
+  // 能思考就默认开。仅 speed 模型默认慢（思考开），用户可打成「快」。
+  return caps.thinking || caps.speed || caps.effort?.length ? 'enabled' : 'disabled'
 }
 
 export function defaultEffortFor(caps: ModelCapabilities): ReasoningEffort {
