@@ -4,6 +4,7 @@ import { Plugin, PluginKey } from '@tiptap/pm/state'
 import type { Node as PmNode } from '@tiptap/pm/model'
 import { PageBlockView } from './page-block-view.tsx'
 import { getPageEditor } from './service.ts'
+import { formatPageBlockFence, parsePageBlockMeta } from './page-block-meta.ts'
 
 const metaKey = new PluginKey('page-block-meta')
 const uniqueFilesKey = new PluginKey('page-block-unique-files')
@@ -49,6 +50,7 @@ export const pageBlock = Node.create({
   addAttributes() {
     return {
       kind: { default: 'card' },
+      plugin: { default: '' },
       data: { default: {}, rendered: false },
     }
   },
@@ -61,6 +63,7 @@ export const pageBlock = Node.create({
           if (!(el instanceof HTMLElement)) return false
           return {
             kind: el.getAttribute('data-page-block') || 'card',
+            plugin: el.getAttribute('data-page-block-plugin') || '',
             data: parseData(el.getAttribute('data-page-block-data')),
           }
         },
@@ -73,6 +76,7 @@ export const pageBlock = Node.create({
       'div',
       mergeAttributes(HTMLAttributes, {
         'data-page-block': String(node.attrs.kind ?? 'card'),
+        'data-page-block-plugin': String(node.attrs.plugin ?? ''),
         'data-page-block-data': encodeURIComponent(JSON.stringify(node.attrs.data ?? {})),
       }),
     ]
@@ -80,6 +84,7 @@ export const pageBlock = Node.create({
 
   parseMarkdown: (token, helpers) => {
     const kind = String(token.attributes?.kind ?? 'card')
+    const plugin = String(token.attributes?.plugin ?? '')
     let data: Record<string, unknown> = {}
     const raw = String(token.content ?? '').trim()
     if (raw) {
@@ -89,15 +94,15 @@ export const pageBlock = Node.create({
         data = {}
       }
     }
-    return helpers.createNode('pageBlock', { kind, data })
+    return helpers.createNode('pageBlock', { kind, plugin, data })
   },
 
   renderMarkdown: (node) => {
     const kind = String(node.attrs?.kind ?? 'card')
+    const stored = String(node.attrs?.plugin ?? '').trim()
+    const plugin = stored || getPageEditor()?.block(kind)?.plugin || ''
     const data = { ...((node.attrs?.data && typeof node.attrs.data === 'object' ? node.attrs.data : {}) as Record<string, unknown>) }
-    delete data.cloneFrom
-    const body = JSON.stringify(data, null, 2)
-    return `:::pageBlock {kind=${kind}}\n${body}\n:::`
+    return formatPageBlockFence(kind, plugin, data)
   },
 
   markdownTokenizer: {
@@ -109,11 +114,11 @@ export const pageBlock = Node.create({
     tokenize(src) {
       const match = src.match(/^:::pageBlock(?:\s+\{([^}]*)\})?\s*\n([\s\S]*?)\n:::/)
       if (!match) return undefined
-      const kind = match[1]?.match(/kind=["']?([a-z0-9-]+)/i)?.[1] ?? 'card'
+      const { kind, plugin } = parsePageBlockMeta(match[1] ?? '')
       return {
         type: 'pageBlock',
         raw: match[0],
-        attributes: { kind },
+        attributes: { kind, plugin },
         content: match[2]?.trim() ?? '',
       }
     },
@@ -129,6 +134,7 @@ export const pageBlock = Node.create({
       update({ oldNode, newNode, updateProps }) {
         if (
           oldNode.attrs.kind === newNode.attrs.kind &&
+          oldNode.attrs.plugin === newNode.attrs.plugin &&
           JSON.stringify(oldNode.attrs.data) === JSON.stringify(newNode.attrs.data)
         ) {
           return true

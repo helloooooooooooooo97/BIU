@@ -40,6 +40,9 @@ test('plugin system web declares extras so store plugins can mount windows', asy
   await ctx.plugin(plugins2Ui)
   assert.equal(ctx.slots.list('root-overlays').some((item) => item.id === 'plugin-store-extras-layer'), true)
   assert.ok(ctx.slots.specOf('plugin-store-extras'))
+  const { readFileSync } = await import('node:fs')
+  const { resolve } = await import('node:path')
+  assert.match(readFileSync(resolve(import.meta.dirname, './index.tsx'), 'utf8'), /listenEnablePageBlockPlugin/)
 })
 
 test('plugin system web passes name/tags/action chrome into databaseUi', async () => {
@@ -165,6 +168,7 @@ test('packed page-excalidraw plugin stores scenes as page assets', async () => {
   assert.match(src, /queueMicrotask/)
   assert.doesNotMatch(src, /expanded \? null : canvas/)
   assert.match(src, /export const inject = \['pageEditor'\]/)
+  assert.match(src, /plugin: name/)
   assert.match(src, /View: Board/)
   assert.match(src, /defaults: \(\) => \(\{ file:/)
   assert.match(src, /res\.status === 404/)

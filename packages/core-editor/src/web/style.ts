@@ -11,7 +11,13 @@ export const PAGE_EDITOR_STYLE = `
 .page-editor .page-block{margin:12px 0;position:relative;z-index:0;isolation:isolate;overflow:hidden}
 .page-editor .page-block.ProseMirror-selectednode{outline:none;box-shadow:none}
 .page-editor .page-block[data-page-block=excalidraw]{outline:none;box-shadow:none;border:0;border-radius:8px}
-.page-editor .page-block-missing{padding:12px 14px;border:1px dashed var(--dsw-border);border-radius:8px;color:var(--dsw-label-3);font-size:13px}
+.page-editor .page-block-missing{display:flex;flex-direction:column;gap:8px;padding:12px 14px;border:1px dashed var(--dsw-border);border-radius:8px;color:var(--dsw-label-3);font-size:13px}
+.page-editor .page-block-missing-title{color:var(--dsw-label);font-size:14px;font-weight:650}
+.page-editor .page-block-missing-copy{margin:0;line-height:1.5}
+.page-editor .page-block-missing-copy code{font-family:var(--font-mono);font-size:12px;color:var(--dsw-label-2)}
+.page-editor .page-block-missing-enable{align-self:flex-start;margin:0;border:1px solid var(--dsw-border);border-radius:6px;padding:5px 10px;background:transparent;color:var(--dsw-label);font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.page-editor .page-block-missing-enable:hover{background:var(--dsw-hover)}
+.page-editor .page-block-missing-source{margin:0;max-height:220px;overflow:auto;padding:10px 12px;border-radius:8px;background:var(--dsw-chat-code-bg,var(--dsw-sidebar));color:var(--dsw-label-2);font-family:var(--font-mono);font-size:12px;line-height:1.55;white-space:pre-wrap;word-break:break-word}
 .page-editor .tiptap ul,.page-editor .tiptap ol{padding-left:1.6em;list-style-position:outside}
 .page-editor .tiptap ul{list-style-type:disc}
 .page-editor .tiptap ol{list-style-type:decimal}

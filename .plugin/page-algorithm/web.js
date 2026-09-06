@@ -167,6 +167,7 @@ function AlgorithmCard({
 function apply(ctx) {
   ctx.pageEditor.registerBlock({
     kind: "algorithm",
+    plugin: name,
     label: "\u7B97\u6CD5\u9898",
     hint: "LeetCode \u98CE\uFF1A\u5DE6\u9898\u76EE\u53F3\u4EE3\u7801",
     aliases: ["leetcode", "algo", "\u7B97\u6CD5", "lc"],

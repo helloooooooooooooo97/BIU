@@ -8,9 +8,10 @@ export const name = 'page-excalidraw'
 export const inject = ['pageEditor']
 
 type PageEditor = {
-  registerBlock: (spec: {
-    kind: string
-    label: string
+    registerBlock: (spec: {
+      kind: string
+      plugin: string
+      label: string
     hint?: string
     aliases?: string[]
     defaults?: () => Record<string, unknown>
@@ -470,6 +471,7 @@ function Board(props: { data: Record<string, unknown>; update: (p: Record<string
 export function apply(ctx: { pageEditor: PageEditor }) {
   ctx.pageEditor.registerBlock({
     kind: 'excalidraw',
+    plugin: name,
     label: '画板',
     hint: '手绘白板，放大后编辑',
     aliases: ['excalidraw', 'draw', '白板', '画板', 'board'],
