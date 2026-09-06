@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useSyncExternalStore, type ComponentType } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useState, useSyncExternalStore, type ComponentType } from 'react'
 import type { Context } from 'cordis'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { CircleStackIcon } from '@heroicons/react/16/solid'
@@ -18,6 +18,7 @@ import {
 } from './nav-boot.ts'
 import { defaultViewId, pullSavedViews, pushAllSavedViews } from './view-storage.ts'
 import { DATA_MODULE, DATA_MODULE_ID, DATA_MODULE_PATH, FACETS_COLLECTION_PATH, VIEWS_COLLECTION_PATH, sortDataCollections } from './database-path.ts'
+import { pickMainDataRoute, readMainDataRoute, writeMainDataRoute } from './main-data-route.ts'
 import { facetsChrome } from './facet-chrome.tsx'
 import { viewsChrome } from './views-chrome.ts'
 import { viewsForRegisteredCollection } from './collection-nav.ts'
@@ -67,11 +68,33 @@ function CollectionPage(props: SlotProps) {
   const navigate = useNavigate()
   const [expandedViewKey, setExpandedViewKey] = useState<string | null>(null)
   const parsed = useMemo(() => parseAppPath(location.pathname, [DATA_MODULE]), [location.pathname])
+  const dataHome = parsed.kind === 'module' && parsed.moduleId === DATA_MODULE_ID
+  const storedHome = useMemo(
+    () => (dataHome ? pickMainDataRoute(readMainDataRoute(), orderedTables) : ''),
+    [dataHome, orderedTables],
+  )
+  const storedParsed = useMemo(
+    () => (storedHome ? parseAppPath(storedHome, [DATA_MODULE]) : null),
+    [storedHome],
+  )
   const collectionFromRoute =
-    parsed.kind === 'collection-view' || parsed.kind === 'record' ? parsed.collection : ''
+    parsed.kind === 'collection-view' || parsed.kind === 'record'
+      ? parsed.collection
+      : storedParsed && (storedParsed.kind === 'collection-view' || storedParsed.kind === 'record')
+        ? storedParsed.collection
+        : ''
   const viewFromRoute =
-    parsed.kind === 'collection-view' || parsed.kind === 'record' ? parsed.viewId : undefined
-  const recordFromRoute = parsed.kind === 'record' ? parsed.recordId : null
+    parsed.kind === 'collection-view' || parsed.kind === 'record'
+      ? parsed.viewId
+      : storedParsed && (storedParsed.kind === 'collection-view' || storedParsed.kind === 'record')
+        ? storedParsed.viewId
+        : undefined
+  const recordFromRoute =
+    parsed.kind === 'record'
+      ? parsed.recordId
+      : dataHome && storedParsed?.kind === 'record'
+        ? storedParsed.recordId
+        : null
   const currentPath = collectionFromRoute || orderedTables[0]?.path || ''
   const row = orderedTables.find((item) => item.path === currentPath)
   const chrome = useSyncExternalStore(
@@ -111,10 +134,18 @@ function CollectionPage(props: SlotProps) {
     }
   }, [location.pathname, parsed])
 
-  const dataHome = parsed.kind === 'module' && parsed.moduleId === DATA_MODULE_ID
   useEffect(() => {
+    if (parsed.kind === 'collection-view' || parsed.kind === 'record') writeMainDataRoute(location.pathname)
+  }, [location.pathname, parsed])
+
+  useLayoutEffect(() => {
     if (!orderedTables.length) return
     if (!dataHome) return
+    const stored = pickMainDataRoute(readMainDataRoute(), orderedTables)
+    if (stored) {
+      navigate(stored, { replace: true })
+      return
+    }
     const first = orderedTables[0]!
     go({ collection: first.path, viewId: builtinAllViewId(first.path) }, { replace: true })
   }, [dataHome, orderedTables])

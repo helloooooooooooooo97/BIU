@@ -10,6 +10,7 @@ import {
 } from '@heroicons/react/16/solid'
 import { setChatOverlay } from './chat-overlay.ts'
 import { chromeIcon } from './chrome-icon.ts'
+import { readMainDataRoute } from '@biu/core-file-system/main-data-route'
 
 export function ShellSettingsShortcuts() {
   return (
@@ -187,7 +188,10 @@ export function ShellSidePlaces({
         active={activeId === 'database'}
         testId="chrome-data-panel"
         icon={<CircleStackIcon {...chromeIcon} />}
-        onClick={() => navigate('/database')}
+        onClick={() => {
+          setChatOverlay(false)
+          navigate(readMainDataRoute() || '/database')
+        }}
       />
     </div>
   )

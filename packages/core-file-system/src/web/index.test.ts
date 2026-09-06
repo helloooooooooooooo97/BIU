@@ -26,6 +26,9 @@ test('database page no longer registers collection shortcuts on the dock', () =>
   assert.match(page, /inspector-follow/)
   assert.match(page, /sessionView/)
   assert.match(page, /builtinAllViewId\(parsed.collection\)/)
+  assert.match(page, /writeMainDataRoute\(location.pathname\)/)
+  assert.match(page, /pickMainDataRoute\(readMainDataRoute\(\), orderedTables\)/)
+  assert.match(page, /useLayoutEffect/)
   assert.doesNotMatch(page, /isCollectionHub/)
 })
 
