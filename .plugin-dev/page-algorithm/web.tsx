@@ -166,6 +166,7 @@ export function apply(ctx: {
   pageEditor: {
     registerBlock: (spec: {
       kind: string
+      plugin: string
       label: string
       hint?: string
       aliases?: string[]
@@ -176,6 +177,7 @@ export function apply(ctx: {
 }) {
   ctx.pageEditor.registerBlock({
     kind: 'algorithm',
+    plugin: name,
     label: '算法题',
     hint: 'LeetCode 风：左题目右代码',
     aliases: ['leetcode', 'algo', '算法', 'lc'],

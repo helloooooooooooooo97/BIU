@@ -59,6 +59,7 @@ test('page editor paints a registered algorithm block', async () => {
   new PageEditorService(ctx)
   ctx.pageEditor.registerBlock({
     kind: 'algorithm',
+    plugin: 'page-algorithm',
     label: '算法题',
     defaults: { title: 'Two Sum' },
     View: ({ data }) => <div data-testid="algo-view">{String(data.title ?? '')}</div>,
@@ -98,6 +99,7 @@ test('page editor hydrates markdown after content fetch', async () => {
   new PageEditorService(ctx)
   ctx.pageEditor.registerBlock({
     kind: 'algorithm',
+    plugin: 'page-algorithm',
     label: '算法题',
     defaults: { title: 'Two Sum' },
     View: ({ data }) => <div data-testid="algo-view">{String(data.title ?? '')}</div>,

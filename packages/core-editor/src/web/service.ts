@@ -17,6 +17,8 @@ export type PageBlockViewProps = {
 
 export type PageBlockSpec = {
   kind: string
+  /** 写入文档的插件 id（与 export const name / manifest.id 相同）。编辑器不推断。 */
+  plugin: string
   label: string
   hint?: string
   aliases?: string[]
@@ -87,13 +89,16 @@ export class PageEditorService extends Service {
     return [...this.extras]
   }
 
-  /** 登记一种新块（atom）。斜杠菜单可插入；View 画卡片。 */
+  /** 登记一种新块（atom）。斜杠菜单可插入；View 画卡片。plugin 必须是插件自己的 id。 */
   registerBlock(spec: PageBlockSpec) {
+    const plugin = String(spec.plugin ?? '').trim()
+    if (!plugin) throw new Error('page block needs plugin id')
+    const next = { ...spec, plugin }
     return this.ctx.effect(() => {
-      this.customBlocks.set(spec.kind, spec)
+      this.customBlocks.set(spec.kind, next)
       this.bump()
       return () => {
-        if (this.customBlocks.get(spec.kind) === spec) this.customBlocks.delete(spec.kind)
+        if (this.customBlocks.get(spec.kind) === next) this.customBlocks.delete(spec.kind)
         this.bump()
       }
     })

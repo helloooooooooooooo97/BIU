@@ -16,6 +16,7 @@ test('registerBlock adds a slash item and inserts pageBlock', async () => {
     apply(inner) {
       inner.pageEditor.registerBlock({
         kind: 'algorithm',
+        plugin: 'page-algorithm',
         label: '算法题',
         aliases: ['leetcode'],
         defaults: { title: 'Two Sum' },
@@ -36,17 +37,18 @@ test('registerBlock adds a slash item and inserts pageBlock', async () => {
   const json = editor.getJSON()
   const block = json.content?.find((node) => node.type === 'pageBlock')
   assert.equal(block?.attrs?.kind, 'algorithm')
+  assert.equal(block?.attrs?.plugin, 'page-algorithm')
   assert.equal((block?.attrs?.data as { title?: string })?.title, 'Two Sum')
   const md = editor.getMarkdown()
-  assert.match(md, /:::pageBlock \{kind=algorithm\}/)
+  assert.match(md, /:::pageBlock \{kind=algorithm plugin=page-algorithm\}/)
   assert.match(md, /Two Sum/)
   editor.destroy()
   await fiber.dispose()
   assert.equal(filterSlashItems('leetcode').some((entry) => entry.id === 'algorithm'), false)
 })
 
-test('pageBlock markdown roundtrips kind and data', () => {
-  const src = `:::pageBlock {kind=algorithm}
+test('pageBlock markdown roundtrips kind, plugin and data', () => {
+  const src = `:::pageBlock {kind=algorithm plugin=page-algorithm}
 {"title":"Two Sum","lang":"python"}
 :::
 `
@@ -58,14 +60,15 @@ test('pageBlock markdown roundtrips kind and data', () => {
   const json = editor.getJSON()
   const block = json.content?.find((node) => node.type === 'pageBlock')
   assert.equal(block?.attrs?.kind, 'algorithm')
+  assert.equal(block?.attrs?.plugin, 'page-algorithm')
   assert.equal((block?.attrs?.data as { title?: string })?.title, 'Two Sum')
   const out = editor.getMarkdown()
-  assert.match(out, /:::pageBlock \{kind=algorithm\}/)
+  assert.match(out, /:::pageBlock \{kind=algorithm plugin=page-algorithm\}/)
   assert.match(out, /Two Sum/)
   editor.destroy()
 })
 
-test('pageBlock markdown roundtrips excalidraw as a file pointer only', () => {
+test('pageBlock markdown keeps old fences without plugin id', () => {
   const src = `:::pageBlock {kind=excalidraw}
 {"file":"assets/excalidraw-demo.json"}
 :::
@@ -78,8 +81,10 @@ test('pageBlock markdown roundtrips excalidraw as a file pointer only', () => {
   const json = editor.getJSON()
   const block = json.content?.find((node) => node.type === 'pageBlock')
   assert.equal(block?.attrs?.kind, 'excalidraw')
+  assert.equal(block?.attrs?.plugin, '')
   assert.deepEqual(block?.attrs?.data, { file: 'assets/excalidraw-demo.json' })
   const out = editor.getMarkdown()
+  assert.match(out, /:::pageBlock \{kind=excalidraw\}/)
   assert.match(out, /"file": "assets\/excalidraw-demo.json"/)
   assert.doesNotMatch(out, /"elements"/)
   assert.doesNotMatch(out, /"height"/)
@@ -95,6 +100,7 @@ test('slash insert for excalidraw only puts a file pointer in the node', async (
     apply(inner) {
       inner.pageEditor.registerBlock({
         kind: 'excalidraw',
+        plugin: 'page-excalidraw',
         label: '画板',
         defaults: () => ({ file: 'assets/excalidraw-new.json' }),
         View: () => null,
@@ -111,6 +117,7 @@ test('slash insert for excalidraw only puts a file pointer in the node', async (
   const from = editor.state.selection.from - 1
   item!.command({ editor, range: { from: Math.max(1, from), to: editor.state.selection.from } })
   const block = editor.getJSON().content?.find((node) => node.type === 'pageBlock')
+  assert.equal(block?.attrs?.plugin, 'page-excalidraw')
   assert.deepEqual(block?.attrs?.data, { file: 'assets/excalidraw-new.json' })
   assert.doesNotMatch(editor.getMarkdown(), /elements/)
   editor.destroy()
@@ -145,6 +152,7 @@ test('pageBlock node view skips react update when attrs are unchanged', async ()
   const { readFile } = await import('node:fs/promises')
   const { resolve } = await import('node:path')
   const src = await readFile(resolve(import.meta.dirname, './page-block.ts'), 'utf8')
+  assert.match(src, /oldNode\.attrs\.plugin === newNode\.attrs\.plugin/)
   assert.match(src, /oldNode\.attrs\.kind === newNode\.attrs\.kind/)
   assert.match(src, /JSON\.stringify\(oldNode\.attrs\.data\) === JSON\.stringify\(newNode\.attrs\.data\)/)
   assert.match(src, /return true/)
@@ -158,3 +166,45 @@ test('pageBlock capture includes drawing surfaces', async () => {
   assert.match(src, /\.excalidraw/)
   assert.match(src, /canvas/)
 })
+
+test('registerBlock requires plugin id', () => {
+  const ctx = new Context()
+  new PageEditorService(ctx)
+  assert.throws(
+    () =>
+      ctx.pageEditor.registerBlock({
+        kind: 'algorithm',
+        plugin: '',
+        label: '算法题',
+        View: () => null,
+      }),
+    /plugin id/,
+  )
+})
+
+test('saving an old fence backfills plugin from the running spec', async () => {
+  const ctx = new Context()
+  new PageEditorService(ctx)
+  const fiber = ctx.plugin({
+    name: 'draw',
+    inject: ['pageEditor'],
+    apply(inner) {
+      inner.pageEditor.registerBlock({
+        kind: 'excalidraw',
+        plugin: 'page-excalidraw',
+        label: '画板',
+        View: () => null,
+      })
+    },
+  })
+  await fiber
+  const editor = new Editor({
+    extensions: pageEditorExtensions(),
+    content: `:::pageBlock {kind=excalidraw}\n{"file":"assets/excalidraw-demo.json"}\n:::\n`,
+    contentType: 'markdown',
+  })
+  assert.match(editor.getMarkdown(), /plugin=page-excalidraw/)
+  editor.destroy()
+  await fiber.dispose()
+})
+

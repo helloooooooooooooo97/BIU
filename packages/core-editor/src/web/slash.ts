@@ -144,6 +144,7 @@ export function slashCatalog(): SlashItem[] {
             type: 'pageBlock',
             attrs: {
               kind: block.kind,
+              plugin: block.plugin,
               data: typeof block.defaults === 'function' ? block.defaults() : { ...(block.defaults ?? {}) },
             },
           })
