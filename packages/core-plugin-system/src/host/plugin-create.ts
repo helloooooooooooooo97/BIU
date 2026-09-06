@@ -29,6 +29,11 @@ export type StoreManifestFields = {
   shell?: StoreShell
 }
 
+export function listingCreatedAt(createdAt: unknown) {
+  const n = Number(createdAt)
+  return Number.isFinite(n) && n > 0 ? n : 0
+}
+
 export function parseTags(value: unknown): string[] {
   const list = Array.isArray(value)
     ? value
@@ -78,8 +83,22 @@ export function parseStoreManifest(raw: unknown): StoreManifestFields {
       shell: data.shell,
     },
     { createdAt },
-    Number.isFinite(createdAt) && createdAt > 0 ? createdAt : Date.now(),
+    listingCreatedAt(createdAt) || Date.now(),
   )
+}
+
+/** 缺 createdAt（含 0）时写入 manifest，之后不再用目录 ctime。 */
+export async function persistStoreManifestCreatedAt(dir: string, now = Date.now()): Promise<StoreManifestFields> {
+  const path = join(dir, 'manifest.json')
+  const raw = JSON.parse(await readFile(path, 'utf8')) as unknown
+  const data = raw && typeof raw === 'object' ? { ...(raw as Record<string, unknown>) } : {}
+  const stamped = listingCreatedAt(data.createdAt)
+  const manifest = parseStoreManifest({ ...data, createdAt: stamped || now })
+  if (!stamped) {
+    data.createdAt = manifest.createdAt
+    await writeFile(path, `${JSON.stringify(data, null, 2)}\n`)
+  }
+  return manifest
 }
 
 const HOST_ENTRIES = ['host.ts', 'host.tsx', 'host.js']
@@ -289,8 +308,7 @@ function finishBundle(code: string, kind: 'host' | 'web') {
 }
 
 export async function readSandboxManifest(dir: string) {
-  const raw = JSON.parse(await readFile(join(dir, 'manifest.json'), 'utf8')) as unknown
-  return parseStoreManifest(raw)
+  return persistStoreManifestCreatedAt(dir)
 }
 
 const CONTRACT = [
