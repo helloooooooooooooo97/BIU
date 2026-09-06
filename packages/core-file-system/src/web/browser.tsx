@@ -175,7 +175,6 @@ function FacetColumnPackRow({
       }
     >
       <div className="fsdb-col-facet-flyout" data-fsdb-col-flyout role="menu">
-        <div className="tasks-sort-head">{pack.label}</div>
         {pack.fields.length ? (
           pack.fields.map((field) => {
             const key = facetFlatColumnKey(pack.id, field.key)
