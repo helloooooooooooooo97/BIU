@@ -31,31 +31,36 @@ export function PageBlockMissing({ kind, plugin, data }: { kind: string; plugin:
   const source = formatPageBlockFence(kind, plugin, data)
   return (
     <div className="page-block-missing" data-testid="page-block-missing">
-      <div className="page-block-missing-title">未启用「{kind}」块</div>
-      {plugin ? (
-        <p className="page-block-missing-copy">
-          这块由插件 <code>{plugin}</code> 渲染。现在没在运行，下面是文档里存下的源码。
-        </p>
-      ) : (
-        <p className="page-block-missing-copy">
-          文档里没有记下插件 id。启用对应插件后重新保存，就会带上映射。
-        </p>
-      )}
-      {plugin ? (
-        <button
-          type="button"
-          className="page-block-missing-enable"
-          data-testid="page-block-enable"
-          onClick={(event) => {
-            event.preventDefault()
-            event.stopPropagation()
-            requestEnablePageBlockPlugin(plugin, kind)
-          }}
-        >
-          启用 {plugin}
-        </button>
-      ) : null}
-      <pre className="page-block-missing-source">{source}</pre>
+      <div className="page-block-missing-head">
+        {plugin ? (
+          <div className="page-block-missing-lead">
+            <code className="page-block-missing-id">{plugin}</code>
+            <span className="page-block-missing-state">未运行</span>
+          </div>
+        ) : (
+          <div className="page-block-missing-lead">
+            <span className="page-block-missing-state">没有插件 id</span>
+          </div>
+        )}
+        {plugin ? (
+          <button
+            type="button"
+            className="page-block-missing-enable"
+            data-testid="page-block-enable"
+            onClick={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              requestEnablePageBlockPlugin(plugin, kind)
+            }}
+          >
+            启用
+          </button>
+        ) : null}
+      </div>
+      <div className="page-block-missing-body">
+        <div className="page-block-missing-label">源码</div>
+        <pre className="page-block-missing-source">{source}</pre>
+      </div>
     </div>
   )
 }
