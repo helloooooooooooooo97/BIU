@@ -1,4 +1,4 @@
-import { Fragment, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { Fragment, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { flushSync } from 'react-dom'
 import {
   ArrowDownIcon,
@@ -82,6 +82,7 @@ import {
   parseFieldValue,
   VIEW_MODES,
   visibleActions,
+  placedActions,
 } from './fsdb-cells.tsx'
 import { ensureFsdbStyle } from './fsdb-style.ts'
 import { RecordDetail } from './record-detail.tsx'
@@ -875,7 +876,8 @@ export function CollectionBrowser({
   useEffect(() => {
     if (!detailId || !schema) return
     if (detailRow?.id !== detailId) return
-    setDraft(draftFromRecord(schema, detailRow, bodyKey, detailBody))
+    const next = draftFromRecord(schema, detailRow, bodyKey, detailBody)
+    setDraft((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next))
     hydratedDetail.current = detailId
   }, [bodyKey, detailBody, detailId, detailRow, schema])
 
@@ -1180,8 +1182,11 @@ export function CollectionBrowser({
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ path: `${dataPath}/${row.id}`, action: action.id }),
       })
-      quietUntil.current = 0
-      await reload()
+      quietUntil.current = Date.now() + 800
+      window.setTimeout(() => {
+        quietUntil.current = 0
+        void reloadRef.current()
+      }, 800)
     } catch (err) {
       setDlg({ kind: 'alert', title: `${action.label}失败`, body: String(err) })
       quietUntil.current = 0
@@ -1687,66 +1692,55 @@ export function CollectionBrowser({
   }
 
   function RecordActions({ row, place }: { row: DbRecord; place: 'row' | 'detail' }) {
+    const Actions = chrome?.Actions
+    const Action = chrome?.Action
+    const busy = actingRef.current
+    const placed = placedActions(schema, place).filter((action) => {
+      if (place !== 'detail' || !nested) return true
+      return action.id !== 'open-split' && action.id !== 'open-page'
+    })
+    const wrap = (body: ReactNode) =>
+      place === 'row' ? (
+        <div className="tasks-row-actions" data-biu-ignore onClick={(event) => event.stopPropagation()}>
+          {body}
+        </div>
+      ) : (
+        <div className="fsdb-detail-actionbar" data-testid="fsdb-detail-actions" data-biu-ignore aria-label="记录操作">
+          <div className="fsdb-detail-actions">{body}</div>
+        </div>
+      )
+    if (Actions) {
+      if (!placed.length) return null
+      return wrap(<Actions actions={placed} record={row} busy={busy} place={place} run={(action) => void runAction(row, action)} />)
+    }
     const actions = visibleActions(schema, row, place).filter((action) => {
       if (place !== 'detail' || !nested) return true
       return action.id !== 'open-split' && action.id !== 'open-page'
     })
-    if (!actions.length) return null
-    const Action = chrome?.Action
     const rowShown = actions.filter(
       (action) => Action || actionIcon(action.id) || action.id === 'open-split' || action.id === 'open-page',
     )
-    const busy = actingRef.current
-    const renderOne = (action: CollectionActionInfo) => {
-      const run = () => void runAction(row, action)
-      if (Action) return <Action key={action.id} action={action} record={row} busy={busy} run={run} />
-      const glyph = actionIcon(action.id)
-      return (
-        <button
-          key={action.id}
-          type="button"
-          className={`tasks-icon-btn${action.tone === 'danger' ? ' is-danger' : ''}`}
-          title={action.label}
-          data-dock-tip={action.label}
-          aria-label={`${action.label} ${labelOf(row)}`}
-          disabled={busy}
-          onClick={run}
-        >
-          {glyph ?? action.label}
-        </button>
-      )
-    }
-    if (place === 'row') {
-      if (!rowShown.length) return null
-      return (
-        <div className="tasks-row-actions" data-biu-ignore onClick={(event) => event.stopPropagation()}>
-          {rowShown.map(renderOne)}
-        </div>
-      )
-    }
     if (!rowShown.length) return null
-    return (
-      <div className="fsdb-detail-actionbar" data-testid="fsdb-detail-actions" data-biu-ignore aria-label="记录操作">
-        <div className="fsdb-detail-actions">
-        {rowShown.map((action) => {
-          const run = () => void runAction(row, action)
-          return (
-            <button
-              key={action.id === 'start' || action.id === 'stop' ? `${row.id}:run` : action.id}
-              type="button"
-              className="dock-icon-btn"
-              title={action.label}
-              data-dock-tip={action.label}
-              aria-label={`${action.label} ${labelOf(row)}`}
-              disabled={busy}
-              onClick={run}
-            >
-              {actionIcon(action.id, { className: 'size-4' })}
-            </button>
-          )
-        })}
-        </div>
-      </div>
+    return wrap(
+      rowShown.map((action) => {
+        const run = () => void runAction(row, action)
+        if (Action) return <Action key={action.id} action={action} record={row} busy={busy} run={run} />
+        const glyph = actionIcon(action.id)
+        return (
+          <button
+            key={action.id}
+            type="button"
+            className={`tasks-icon-btn${action.tone === 'danger' ? ' is-danger' : ''}`}
+            title={action.label}
+            data-dock-tip={action.label}
+            aria-label={`${action.label} ${labelOf(row)}`}
+            disabled={busy}
+            onClick={run}
+          >
+            {glyph ?? action.label}
+          </button>
+        )
+      }),
     )
   }
 

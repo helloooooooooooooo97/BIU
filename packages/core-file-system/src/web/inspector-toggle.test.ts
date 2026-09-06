@@ -137,8 +137,9 @@ test('table title opens record from the title-side button', () => {
 })
 
 test('title cell row tools skip the overflow action menu', () => {
-  assert.match(browser, /if \(place === 'row'\)/)
-  assert.match(browser, /rowShown\.map\(renderOne\)/)
+  assert.match(browser, /const Actions = chrome\?\.Actions/)
+  assert.match(browser, /placedActions\(schema, place\)/)
+  assert.match(browser, /<Actions actions=\{placed\} record=\{row\}/)
   assert.match(browser, /toolbar=\{<RecordActions row=\{selected\} place="detail" \/>\}/)
   assert.match(browser, /data-testid="fsdb-detail-actions"/)
   assert.doesNotMatch(browser, /selected \? <RecordActions row=\{selected\} place="detail" \/> : null/)
@@ -157,19 +158,12 @@ test('title cell row tools skip the overflow action menu', () => {
   assert.match(css, /\.fsdb-page \.fsdb-detail-actions \.dock-icon-btn,\.fsdb-page \.fsdb-detail-actions \.tasks-icon-btn\{[^}]*border-radius:50%/)
   assert.match(css, /\.fsdb-detail-actions\{[^}]*gap:4px/)
   assert.match(css, /\.fsdb-detail-actions\{[^}]*justify-content:center/)
-  assert.match(browser, /className="dock-icon-btn"/)
-  assert.match(browser, /data-dock-tip=\{action\.label\}/)
-  assert.match(browser, /className: 'size-4'/)
-  const detailBar = browser.slice(browser.indexOf('fsdb-detail-actionbar'), browser.indexOf('function GroupHead'))
-  assert.doesNotMatch(detailBar, /if \(Action\)/)
-  assert.match(detailBar, /rowShown\.map/)
   assert.match(browser, /listedSelected/)
   assert.match(browser, /overlayListed/)
   assert.match(browser, /overlayListed\(detailRow, listedSelected, listColumns\)/)
   assert.match(browser, /overlayListed\(prev, hit, listColumns\)/)
   assert.match(browser, /previewActionRecord/)
   assert.match(browser, /actingRef/)
-  assert.match(browser, /\$\{row\.id\}:run/)
 })
 
 test('deletable tables can pick rows and bulk-delete next to refresh', () => {

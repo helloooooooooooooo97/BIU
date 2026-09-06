@@ -393,9 +393,19 @@ body {
   color: var(--dsw-danger);
 }
 
-.shell-search-hit-action:disabled {
-  opacity: 0.4;
-  cursor: default;
+.shell-search-hit-actions .tasks-icon-btn {
+  border: 0;
+  border-radius: 5px;
+  padding: 3px;
+  background: transparent;
+  color: var(--dsw-label-2);
+  width: auto;
+  height: auto;
+  box-shadow: none;
+}
+
+.shell-search-hit-actions .tasks-icon-btn:hover:not(:disabled) {
+  background: var(--dsw-hover);
 }
 
 .shell-search-hit-action[data-dock-tip]::after {
@@ -2619,7 +2629,6 @@ body {
   opacity: 0;
   pointer-events: none;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
-  transition: opacity 0.12s ease;
 }
 
 [data-dock-tip]:hover::after,

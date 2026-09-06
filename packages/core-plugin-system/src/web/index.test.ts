@@ -56,7 +56,18 @@ test('plugin system web passes name/tags/action chrome into databaseUi', async (
   assert.equal(typeof ui.last?.chrome.Title, 'function')
   assert.equal(typeof ui.last?.chrome.cells?.author, 'function')
   assert.equal(ui.last?.chrome.cells?.tags, undefined)
-  assert.equal(typeof ui.last?.chrome.Action, 'function')
+  assert.equal(typeof ui.last?.chrome.Actions, 'function')
+  assert.equal(ui.last?.chrome.Action, undefined)
+})
+
+test('plugin chrome owns the whole action bar including the run toggle', async () => {
+  const { readFileSync } = await import('node:fs')
+  const { resolve } = await import('node:path')
+  const chrome = readFileSync(resolve(import.meta.dirname, './chrome.tsx'), 'utf8')
+  assert.match(chrome, /function PluginActions/)
+  assert.match(chrome, /Actions: PluginActions/)
+  assert.match(chrome, /function PluginRunButton/)
+  assert.doesNotMatch(chrome, /Action: PluginAction/)
 })
 
 test('plugin title is the name only; tags stay the file-system writable column', async () => {

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import type { CollectionSchema } from '@biu/type-file-system'
 import { REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
 import { defaultColumnKeys, facetFlatColumnKey, flattenFacetColumns, inferPackFieldType, listProjectionKeys, parseFacetFlatColumnKey, patchFacetFlatValue, pinLabelColumn, contentFieldKey, flattenTree, formatField, fieldHasValue, groupField, groupRecords, hasTreeLinks, isViewModeId, matchActionWhen, overlayListed, previewActionRecord, parentFieldKey, readFacetFlatValue, recordLinkIds, resolveFieldType, uniqueValues } from './fields'
-import { visibleActions } from './fsdb-cells.tsx'
+import { placedActions, visibleActions } from './fsdb-cells.tsx'
 
 test('isViewModeId accepts builtin and custom slugs', () => {
   assert.equal(isViewModeId('table'), true)
@@ -92,6 +92,24 @@ test('previewActionRecord flips running from action when', () => {
   assert.equal(previewActionRecord(row, { when: { installed: true, running: false } }).running, true)
   assert.equal(previewActionRecord({ ...row, running: true }, { when: { installed: true, running: true } }).running, false)
   assert.equal(previewActionRecord(row, { when: { installed: true } }), row)
+})
+
+test('placedActions keeps start and stop so chrome.Actions can own the pair', () => {
+  const schema: CollectionSchema = {
+    fields: { ...REQUIRED_RECORD_FIELDS },
+    actions: [
+      { id: 'start', label: '运行', when: { running: false } },
+      { id: 'stop', label: '停止', when: { running: true } },
+    ],
+  }
+  assert.deepEqual(
+    placedActions(schema, 'row').map((item) => item.id),
+    ['start', 'stop'],
+  )
+  assert.deepEqual(
+    visibleActions(schema, { id: '1', running: false }, 'row').map((item) => item.id),
+    ['start'],
+  )
 })
 
 test('visibleActions hides agent-only actions from the page', () => {
