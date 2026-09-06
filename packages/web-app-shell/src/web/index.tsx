@@ -9,6 +9,7 @@ import {
   requestInspectorClose,
   allocateShellColumns,
   applyShellColumnCssVars,
+  publishShellLayout,
   clampSidebarWidth,
   isChatPagePath,
   SIDEBAR_DEFAULT,
@@ -268,6 +269,10 @@ function Shell(props: SlotProps) {
     return SIDEBAR_DEFAULT
   })
   const lastWideSidebar = useRef(sidebarWidth >= SIDEBAR_LABEL_AT ? sidebarWidth : SIDEBAR_MAX)
+  const sidebarCollapsedRef = useRef(sidebarCollapsed)
+  const sidebarWidthRef = useRef(sidebarWidth)
+  sidebarCollapsedRef.current = sidebarCollapsed
+  sidebarWidthRef.current = sidebarWidth
   const persistSidebar = useCallback((width: number, collapsed: boolean) => {
     if (collapsed) {
       paintLiveLayoutRef.current({ sidebarCollapsed: true })
@@ -311,8 +316,8 @@ function Shell(props: SlotProps) {
     }
   }, [])
   const expandSidebar = useCallback(
-    () => persistSidebar(Math.max(SIDEBAR_LABEL_AT, lastWideSidebar.current, sidebarWidth), false),
-    [persistSidebar, sidebarWidth],
+    () => persistSidebar(Math.max(SIDEBAR_LABEL_AT, lastWideSidebar.current, sidebarWidthRef.current), false),
+    [persistSidebar],
   )
   const onSidebarWidthChange = useCallback(
     (width: number) => {
@@ -375,19 +380,23 @@ function Shell(props: SlotProps) {
       window.removeEventListener('pointercancel', onUp)
     }
   }, [])
-  const toggleInspector = useCallback(() => {
-    setInspectorOpen((prev) => {
-      const next = !prev
-      paintLiveLayoutRef.current({ inspectorOpen: next })
-      try {
-        localStorage.setItem('cordis.inspector.open', next ? '1' : '0')
-      } catch {
-        /* ignore */
-      }
-      if (!next) requestInspectorClose()
-      return next
-    })
+  const inspectorOpenRef = useRef(inspectorOpen)
+  inspectorOpenRef.current = inspectorOpen
+  const applyInspector = useCallback((next: boolean) => {
+    inspectorOpenRef.current = next
+    paintLiveLayoutRef.current({ inspectorOpen: next })
+    setInspectorOpen(next)
+    try {
+      localStorage.setItem('cordis.inspector.open', next ? '1' : '0')
+    } catch {
+      /* ignore */
+    }
   }, [])
+  const toggleInspector = useCallback(() => {
+    const next = !inspectorOpenRef.current
+    applyInspector(next)
+    if (!next) requestInspectorClose()
+  }, [applyInspector])
   const onInspectorWidthChange = useCallback((width: number) => {
     const next = Math.min(1000, Math.max(240, Math.round(width)))
     setInspectorWidth(next)
@@ -407,29 +416,13 @@ function Shell(props: SlotProps) {
     return () => window.removeEventListener('biu:inspector-width', onWidth)
   }, [onInspectorWidthChange])
   useEffect(() => {
-    const persist = (next: boolean) => {
-      paintLiveLayoutRef.current({ inspectorOpen: next })
-      setInspectorOpen(next)
-      try {
-        localStorage.setItem('cordis.inspector.open', next ? '1' : '0')
-      } catch {
-        /* ignore */
-      }
-    }
+    const persist = (next: boolean) => applyInspector(next)
     const onOpen = () => persist(true)
     const onClose = () => persist(false)
     const onToggle = () => {
-      setInspectorOpen((prev) => {
-        const next = !prev
-        paintLiveLayoutRef.current({ inspectorOpen: next })
-        try {
-          localStorage.setItem('cordis.inspector.open', next ? '1' : '0')
-        } catch {
-          /* ignore */
-        }
-        if (!next) queueMicrotask(() => requestInspectorClose())
-        return next
-      })
+      const next = !inspectorOpenRef.current
+      persist(next)
+      if (!next) queueMicrotask(() => requestInspectorClose())
     }
     window.addEventListener('biu:inspector-open', onOpen)
     window.addEventListener('biu:inspector-close', onClose)
@@ -439,7 +432,7 @@ function Shell(props: SlotProps) {
       window.removeEventListener('biu:inspector-close', onClose)
       window.removeEventListener('biu:inspector-toggle', onToggle)
     }
-  }, [])
+  }, [applyInspector])
   const appRoute = parseAppPath(location.pathname, pluginModules)
   const inspectorVisible = inspectorOpen
   // 侧栏高亮跟 URL，不跟 store：点一下立刻亮，不等 load 完成
@@ -516,6 +509,7 @@ function Shell(props: SlotProps) {
     })
     paintedCols.current = { left: cols.left, inspector: cols.inspector }
     applyShellColumnCssVars(shellRef.current, cols)
+    publishShellLayout(cols)
   }, [])
   const paintLiveLayoutRef = useRef(paintLiveLayout)
   paintLiveLayoutRef.current = paintLiveLayout
@@ -543,10 +537,11 @@ function Shell(props: SlotProps) {
   const leftHidden = shellColumns.left <= 0
   useEffect(() => {
     window.dispatchEvent(new CustomEvent('biu:shell-sidebar-width', { detail: sidebarCol }))
-  }, [sidebarCol])
+    publishShellLayout({ left: paintedCols.current.left, inspector: paintedCols.current.inspector })
+  }, [sidebarCol, inspectorVisible])
   useEffect(() => {
     const toggle = () => {
-      if (sidebarCollapsed || sidebarWidth < SIDEBAR_LABEL_AT) expandSidebar()
+      if (sidebarCollapsedRef.current || sidebarWidthRef.current < SIDEBAR_LABEL_AT) expandSidebar()
       else collapseSidebar()
     }
     const onCollapse = () => collapseSidebar()
@@ -559,18 +554,13 @@ function Shell(props: SlotProps) {
       window.removeEventListener('biu:collapse-shell-sidebar', onCollapse)
       window.removeEventListener('biu:expand-shell-sidebar', onExpand)
     }
-  }, [collapseSidebar, expandSidebar, sidebarCollapsed, sidebarWidth])
+  }, [collapseSidebar, expandSidebar])
 
   // 工具检查 /debuginspect：打开右侧轨迹 Tab（主区不再切 Debug 页）
   useEffect(() => {
     if (!focusCallId && routeView !== 'debug') return
-    setInspectorOpen(true)
-    try {
-      localStorage.setItem('cordis.inspector.open', '1')
-    } catch {
-      /* ignore */
-    }
-  }, [focusCallId, routeView])
+    applyInspector(true)
+  }, [applyInspector, focusCallId, routeView])
 
   // 单向：URL → sessionView。插件还没挂上时不要把 /database 当成首页。
   useEffect(() => {

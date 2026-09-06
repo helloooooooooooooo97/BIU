@@ -65,6 +65,29 @@ export function applyShellColumnCssVars(el: HTMLElement | null, cols: { left: nu
   el.style.setProperty('--inspector-width', `${cols.inspector}px`)
 }
 
+export function publishShellLayout(cols: { left: number; inspector: number }) {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent('biu:shell-layout', { detail: { left: cols.left, inspector: cols.inspector } }))
+}
+
+export function shellLayoutFromEvent(event: Event): { left: number; inspector: number } | null {
+  const detail = (event as CustomEvent<{ left?: unknown; inspector?: unknown }>).detail
+  if (!detail || typeof detail !== 'object') return null
+  const left = Number(detail.left)
+  const inspector = Number(detail.inspector)
+  if (!Number.isFinite(left) || !Number.isFinite(inspector)) return null
+  return { left, inspector }
+}
+
+export function shellLayoutFromElement(el: Element | null): { left: number; inspector: number } | null {
+  if (!(el instanceof HTMLElement)) return null
+  const styles = getComputedStyle(el)
+  const left = Number.parseFloat(styles.getPropertyValue('--sidebar-col'))
+  const inspector = Number.parseFloat(styles.getPropertyValue('--inspector-width'))
+  if (!Number.isFinite(left) || !Number.isFinite(inspector)) return null
+  return { left, inspector }
+}
+
 export function chatColumnWidth(opts: {
   viewportWidth: number
   inspectorOpen: boolean
