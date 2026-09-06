@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent } from 'react'
-import { ArrowUpIcon, ChevronDownIcon, PlusIcon, Cog6ToothIcon } from '@heroicons/react/16/solid'
+import { ArrowUpIcon, ChevronDownIcon, PlusIcon } from '@heroicons/react/16/solid'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { EditorContent, useEditor } from '@tiptap/react'
 import Placeholder from '@tiptap/extension-placeholder'
@@ -17,7 +17,8 @@ import {
   serializeComposer,
 } from './composer-tiptap.ts'
 import { ModelConfigDialog } from './model-config-dialog.tsx'
-import { ModelModeControls, modelModeSuffix } from './model-mode.tsx'
+import { modelModeSuffix } from './model-mode.tsx'
+import { ComposerModelMenu } from './composer-model-menu.tsx'
 import type { ModelCapabilities, ReasoningEffort, ThinkingMode } from '../host/model-catalog.ts'
 import { ImageThumbs } from './image-thumbs.tsx'
 import { collectClipboardImages, collectImageFiles } from './clipboard-images.ts'
@@ -653,10 +654,7 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
   pickToolRef.current = pickTool
 
   async function selectModel(option: ModelOption) {
-    if (modelBusy || option.id === modelOption.id) {
-      setModelOpen(false)
-      return
-    }
+    if (modelBusy || option.id === modelOption.id) return
     setModelBusy(true)
     try {
       const res = await fetch('/api/chat/config', {
@@ -681,7 +679,28 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
       if (data.thinking === 'enabled' || data.thinking === 'disabled') setThinking(data.thinking)
       if (data.reasoningEffort === 'high' || data.reasoningEffort === 'max') setReasoningEffort(data.reasoningEffort)
       if (data.capabilities) setModelCaps(data.capabilities)
-      setModelOpen(false)
+    } finally {
+      setModelBusy(false)
+    }
+  }
+
+  async function patchModelMode(next: { thinking?: ThinkingMode; reasoningEffort?: ReasoningEffort }) {
+    setModelBusy(true)
+    try {
+      const res = await fetch('/api/chat/config', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(next),
+      })
+      if (!res.ok) return
+      const data = (await res.json()) as {
+        thinking?: ThinkingMode
+        reasoningEffort?: ReasoningEffort
+        capabilities?: ModelCapabilities
+      }
+      if (data.thinking === 'enabled' || data.thinking === 'disabled') setThinking(data.thinking)
+      if (data.reasoningEffort === 'high' || data.reasoningEffort === 'max') setReasoningEffort(data.reasoningEffort)
+      if (data.capabilities) setModelCaps(data.capabilities)
     } finally {
       setModelBusy(false)
     }
@@ -867,108 +886,18 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
             </button>
             {modelOpen ? (
               <HeadlessDismiss onDismiss={() => setModelOpen(false)} inside={(node) => Boolean((node instanceof Element ? node.closest('.composer-model') : null))}>
-              <div className="composer-model-menu" role="listbox" aria-label="模型">
-                <div className="composer-model-config-head">
-                  <span className="composer-model-config-title">Models</span>
-                  <button
-                    type="button"
-                    className="composer-model-config-entry"
-                    data-testid="open-model-config"
-                    title="配置模型"
-                    aria-label="配置模型"
-                    onClick={openModelConfig}
-                  >
-                    <Cog6ToothIcon className="size-3.5" />
-                  </button>
-                </div>
-                {(() => {
-                  const visible = allModels.filter((m) => modelProviders?.[m.endpointId])
-                  if (!visible.length) {
-                    return (
-                      <div className="composer-model-empty">
-                        尚未配置可用模型。点击上方「配置模型」添加官方 Key 或第三方。
-                      </div>
-                    )
-                  }
-                  // 按入口分组，官方三家优先
-                  const order = ['deepseek', 'anthropic', 'openai']
-                  const groups = new Map<string, typeof visible>()
-                  for (const m of visible) {
-                    const key = m.endpointId || m.provider
-                    if (!groups.has(key)) groups.set(key, [])
-                    groups.get(key)!.push(m)
-                  }
-                  const keys = [
-                    ...order.filter((k) => groups.has(k)),
-                    ...[...groups.keys()].filter((k) => !order.includes(k)),
-                  ]
-                  return keys.map((key) => {
-                    const items = groups.get(key) ?? []
-                    const title =
-                      endpointLabels[key] ||
-                      (key === 'deepseek'
-                        ? 'DeepSeek'
-                        : key === 'anthropic'
-                          ? 'Claude'
-                          : key === 'openai'
-                            ? 'GPT'
-                            : key)
-                    return (
-                      <div key={key} className="composer-model-group">
-                        <div className="composer-model-group-label">{title}</div>
-                        {items.map((option) => (
-                          <button
-                            key={option.id}
-                            type="button"
-                            role="option"
-                            aria-selected={option.id === modelOption.id}
-                            className={`composer-model-item${option.id === modelOption.id ? ' is-active' : ''}`}
-                            onClick={() => void selectModel(option)}
-                          >
-                            <span className="composer-model-item-label">{option.label}</span>
-                            {option.note ? (
-                              <span className="composer-model-item-note">{option.note}</span>
-                            ) : null}
-                          </button>
-                        ))}
-                      </div>
-                    )
-                  })
-                })()}
-                <div className="composer-model-modes">
-                  <ModelModeControls
-                    capabilities={modelCaps}
-                    thinking={thinking}
-                    reasoningEffort={reasoningEffort}
-                    disabled={modelBusy}
-                    onChange={(next) => {
-                      void (async () => {
-                        setModelBusy(true)
-                        try {
-                          const res = await fetch('/api/chat/config', {
-                            method: 'POST',
-                            headers: { 'content-type': 'application/json' },
-                            body: JSON.stringify(next),
-                          })
-                          if (!res.ok) return
-                          const data = (await res.json()) as {
-                            thinking?: ThinkingMode
-                            reasoningEffort?: ReasoningEffort
-                            capabilities?: ModelCapabilities
-                          }
-                          if (data.thinking === 'enabled' || data.thinking === 'disabled') setThinking(data.thinking)
-                          if (data.reasoningEffort === 'high' || data.reasoningEffort === 'max') {
-                            setReasoningEffort(data.reasoningEffort)
-                          }
-                          if (data.capabilities) setModelCaps(data.capabilities)
-                        } finally {
-                          setModelBusy(false)
-                        }
-                      })()
-                    }}
-                  />
-                </div>
-              </div>
+                <ComposerModelMenu
+                  models={allModels.filter((m) => modelProviders?.[m.endpointId])}
+                  current={modelOption}
+                  endpointLabels={endpointLabels}
+                  thinking={thinking}
+                  reasoningEffort={reasoningEffort}
+                  capabilities={modelCaps}
+                  disabled={modelBusy}
+                  onSelect={(option) => void selectModel(option)}
+                  onMode={(next) => void patchModelMode(next)}
+                  onAddModels={openModelConfig}
+                />
               </HeadlessDismiss>
             ) : null}
           </div>
