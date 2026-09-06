@@ -23,12 +23,15 @@ test('slash list keeps overflow-y auto', () => {
   document.head.appendChild(style)
   const ref = createRef<{ onKeyDown: (props: { event: KeyboardEvent }) => boolean }>()
   const { container } = render(<SlashList ref={ref} items={SLASH_ITEMS} command={() => undefined} />)
-  const list = container.querySelector('.page-slash') as HTMLDivElement
+  const list = container.querySelector('.page-slash-list') as HTMLDivElement
   act(() => {
     ref.current?.onKeyDown({ event: new KeyboardEvent('keydown', { key: 'ArrowDown' }) })
   })
   assert.equal(getComputedStyle(list).overflowY, 'auto')
-  assert.equal(getComputedStyle(list).position, 'fixed')
-  assert.equal(getComputedStyle(list).zIndex, '10000')
+  assert.equal(getComputedStyle(container.querySelector('.page-slash') as HTMLDivElement).position, 'fixed')
+  assert.equal(getComputedStyle(container.querySelector('.page-slash') as HTMLDivElement).zIndex, '10000')
+  assert.equal(getComputedStyle(container.querySelector('.page-slash-icon') as HTMLElement).width, '18px')
+  assert.match(container.innerHTML, /关闭菜单/)
+  assert.doesNotMatch(PAGE_EDITOR_STYLE, /width:46px/)
   style.remove()
 })
