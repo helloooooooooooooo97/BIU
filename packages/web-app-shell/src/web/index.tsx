@@ -333,6 +333,16 @@ function Shell(props: SlotProps) {
     [persistSidebar, sidebarWidth],
   )
   const openSettings = useCallback(() => setSettingsOpen(true), [])
+  useEffect(() => {
+    if (!settingsOpen) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      setSettingsOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [settingsOpen])
   const [searchFocusSeq, setSearchFocusSeq] = useState(0)
   const openSearch = useCallback(() => {
     setSearchOpen(true)
@@ -794,69 +804,71 @@ function Shell(props: SlotProps) {
         sessionView={sessionView}
       />
 
-      <div
-        className={`biu-float-overlay${settingsOpen ? '' : ' hidden'}`}
-        data-testid="settings-dialog"
-        onClick={() => setSettingsOpen(false)}
-      >
-        <div
-          className="biu-float h-[min(72vh,640px)] w-[min(672px,calc(100vw-32px))]"
-          role="dialog"
-          aria-modal="true"
-          aria-label="设置"
-          onClick={(event) => event.stopPropagation()}
-        >
-          <div className="biu-float-head">
-            <h2 className="biu-float-title">设置</h2>
-            <button
-              type="button"
-              className="biu-float-close"
-              title="关闭"
-              aria-label="关闭"
-              onClick={() => setSettingsOpen(false)}
+      {settingsOpen
+        ? createPortal(
+          <div
+            className="biu-float-overlay"
+            data-testid="settings-dialog"
+            onClick={() => setSettingsOpen(false)}
+          >
+            <div
+              className="biu-float settings-float h-[min(72vh,640px)] w-[min(672px,calc(100vw-32px))]"
+              role="dialog"
+              aria-modal="true"
+              aria-label="设置"
+              onClick={(event) => event.stopPropagation()}
             >
-              <XMarkIcon {...chromeIcon} />
-            </button>
-          </div>
-          <div className="flex min-h-0 flex-1 overflow-hidden">
-            <nav className="w-40 shrink-0 border-r border-(--dsw-float-border) p-2">
-              <ul className="m-0 flex list-none flex-col gap-0.5 p-0 text-[13px] text-(--dsw-label-2)">
-                {[
-                  { key: 'plugins', label: '插件' },
-                  { key: 'routes', label: '路由' },
-                  { key: 'events', label: '事件' },
-                  { key: 'update', label: '更新' },
-                ].map((item) => (
-                  <li key={item.key}>
-                    <button
-                      type="button"
-                      className={`w-full rounded-md px-2.5 py-1.5 text-left transition-colors ${settingsTab === item.key
-                          ? 'bg-(--dsw-business-soft) text-(--dsw-label)'
-                          : 'hover:bg-(--dsw-hover)'
-                        }`}
-                      onClick={() => setSettingsTab(item.key)}
-                    >
-                      {item.label}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </nav>
-            <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-4 py-3">
-              {settingsTab === 'plugins' ? (
-                <section>{props.renderSlot('sidebar')}</section>
-              ) : null}
-              {settingsTab === 'routes' ? (
-                <section>{props.renderSlot('routes')}</section>
-              ) : null}
-              {settingsTab === 'events' ? (
-                <section>{props.renderSlot('log')}</section>
-              ) : null}
-              {settingsTab === 'update' ? <ShellSettingsUpdate /> : null}
+              <div className="biu-float-head">
+                <h2 className="biu-float-title">设置</h2>
+                <button
+                  type="button"
+                  className="biu-float-close"
+                  title="关闭"
+                  aria-label="关闭"
+                  onClick={() => setSettingsOpen(false)}
+                >
+                  <XMarkIcon {...chromeIcon} />
+                </button>
+              </div>
+              <div className="flex min-h-0 flex-1 overflow-hidden">
+                <nav className="w-40 shrink-0 border-r border-(--dsw-float-border) p-2">
+                  <ul className="m-0 flex list-none flex-col gap-0.5 p-0">
+                    {[
+                      { key: 'plugins', label: '插件' },
+                      { key: 'routes', label: '路由' },
+                      { key: 'events', label: '事件' },
+                      { key: 'update', label: '更新' },
+                    ].map((item) => (
+                      <li key={item.key}>
+                        <button
+                          type="button"
+                          className={`settings-nav-btn${settingsTab === item.key ? ' is-on' : ' settings-muted'}`}
+                          onClick={() => setSettingsTab(item.key)}
+                        >
+                          {item.label}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </nav>
+                <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
+                  {settingsTab === 'plugins' ? (
+                    <section>{props.renderSlot('sidebar')}</section>
+                  ) : null}
+                  {settingsTab === 'routes' ? (
+                    <section>{props.renderSlot('routes')}</section>
+                  ) : null}
+                  {settingsTab === 'events' ? (
+                    <section>{props.renderSlot('log')}</section>
+                  ) : null}
+                  {settingsTab === 'update' ? <ShellSettingsUpdate /> : null}
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-      </div>
+          </div>,
+          document.body,
+        )
+        : null}
       {searchOpen
         ? createPortal(
           <ShellSearchPanel

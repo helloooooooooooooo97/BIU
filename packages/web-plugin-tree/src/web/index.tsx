@@ -17,13 +17,13 @@ function PluginTree(props: SlotProps) {
   const setEnabled = props.setEnabled as (id: string, enabled: boolean) => Promise<void>
   const snap = useSnapshot((state: Snapshot) => state.plugins)
   return (
-    <div className="space-y-5">
+    <div className="flex flex-col gap-4">
       {SECTIONS.map((section) => {
         const rows = snap.filter((plugin) => plugin.layer === section.layer)
         if (!rows.length) return null
         return (
           <section key={section.layer}>
-            <h2 className="m-0 mb-1.5 text-[11px] font-semibold tracking-wide text-(--dsw-label-3)">{section.title}</h2>
+            <h2 className="settings-muted m-0 mb-1 px-2">{section.title}</h2>
             <ul className="m-0 list-none p-0">
               {rows.map((plugin) => (
                 <li
@@ -31,11 +31,10 @@ function PluginTree(props: SlotProps) {
                   key={`${plugin.layer}:${plugin.id}`}
                 >
                   <div className="min-w-0">
-                    <h3 className="m-0 text-[13px] font-medium text-(--dsw-label)">{plugin.name}</h3>
-                    <div className="mt-0.5 truncate text-[11px] text-(--dsw-label-3)">
+                    <h3 className="settings-name m-0">{plugin.name}</h3>
+                    <p className="settings-muted mt-0.5 mb-0 truncate">
                       {plugin.id} · {plugin.state}
-                    </div>
-                    <p className="mt-1 mb-0 text-[12px] leading-[1.45] text-(--dsw-label-3)">{plugin.blurb}</p>
+                    </p>
                   </div>
                   {plugin.togglable ? (
                     <button

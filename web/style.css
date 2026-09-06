@@ -236,7 +236,7 @@ body {
 .biu-float-overlay {
   position: fixed;
   inset: 0;
-  z-index: 40;
+  z-index: 240;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -290,6 +290,48 @@ body {
 
 .biu-float-close:hover {
   background: var(--dsw-hover);
+  color: var(--dsw-label);
+}
+
+/* 设置浮层：全文 13px / 600，颜色只留主字和次要灰 */
+.settings-float {
+  color: var(--dsw-label);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.settings-float .biu-float-title,
+.settings-float .settings-nav-btn,
+.settings-float .settings-name {
+  color: var(--dsw-label);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.settings-muted {
+  color: var(--dsw-label-3);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.settings-float .settings-nav-btn {
+  width: 100%;
+  margin: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  padding: 6px 10px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.settings-float .settings-nav-btn:hover {
+  background: var(--dsw-hover);
+}
+
+.settings-float .settings-nav-btn.is-on {
+  background: var(--dsw-business-soft);
   color: var(--dsw-label);
 }
 

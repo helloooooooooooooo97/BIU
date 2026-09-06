@@ -47,7 +47,7 @@ export function ShellSettingsUpdate() {
 
   return (
     <section className="shell-settings-update" data-testid="settings-update">
-      <p className="shell-settings-update-lead">
+      <p className="settings-muted mb-3">
         {behind > 0 ? `当前落后主分支 ${badge} 个提交。` : '已与主分支对齐。'}
       </p>
       <button
@@ -61,7 +61,7 @@ export function ShellSettingsUpdate() {
         {busy ? '更新中…' : '下载更新'}
       </button>
       {hint ? (
-        <p className="shell-settings-update-hint" role="status">
+        <p className="settings-muted mt-3 mb-0" role="status">
           {hint}
         </p>
       ) : null}
