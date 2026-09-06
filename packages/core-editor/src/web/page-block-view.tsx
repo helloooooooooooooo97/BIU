@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import type { NodeViewProps } from '@tiptap/react'
 import { NodeViewWrapper } from '@tiptap/react'
+import { PlayIcon } from '@heroicons/react/16/solid'
 import { getPageEditor, usePageEditorVersion } from './service.ts'
 import { formatPageBlockFence, requestEnablePageBlockPlugin } from './page-block-meta.ts'
 
@@ -42,13 +43,15 @@ export function PageBlockMissing({ kind, plugin, data }: { kind: string; plugin:
             type="button"
             className="page-block-missing-enable"
             data-testid="page-block-enable"
+            title="启用"
+            aria-label="启用"
             onClick={(event) => {
               event.preventDefault()
               event.stopPropagation()
               requestEnablePageBlockPlugin(plugin, kind)
             }}
           >
-            启用
+            <PlayIcon aria-hidden className="page-block-missing-enable-icon" />
           </button>
         ) : null}
       </div>

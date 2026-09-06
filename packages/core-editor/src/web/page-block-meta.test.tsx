@@ -26,7 +26,9 @@ test('missing block shows stored source and asks to enable the stored plugin', (
   assert.doesNotMatch(text, /未运行/)
   assert.doesNotMatch(text, /源码/)
   assert.match(text, /assets\/a\.json/)
-  assert.equal(container.querySelector('[data-testid="page-block-enable"]')?.textContent?.trim(), '启用')
+  const enable = container.querySelector('[data-testid="page-block-enable"]')
+  assert.equal(enable?.getAttribute('aria-label'), '启用')
+  assert.ok(enable?.querySelector('svg'))
 })
 
 test('enable button only dispatches the stored plugin id', () => {
