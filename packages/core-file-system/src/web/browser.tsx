@@ -1650,7 +1650,7 @@ export function CollectionBrowser({
         {!nested ? (
           <button
             type="button"
-            className="tasks-title-open"
+            className="tasks-icon-btn tasks-title-open"
             data-testid="record-title-split"
             aria-label="在右侧打开"
             title="在右侧打开"
@@ -1666,7 +1666,7 @@ export function CollectionBrowser({
           {kidCount > 0 ? <ChatCount count={kidCount} className="tasks-tree-count" title={`${kidCount} 项`} /> : null}
           <button
             type="button"
-            className="tasks-title-open"
+            className="tasks-icon-btn tasks-title-open"
             data-testid="record-title-open"
             data-biu-action="open"
             aria-label="查看详情"

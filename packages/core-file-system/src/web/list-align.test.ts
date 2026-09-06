@@ -74,6 +74,13 @@ test('list and detail share the chat column max width with side padding', () => 
 test('title cell hover icons use F0EFED', () => {
   assert.match(css, /\.fsdb-page \.tasks-title-open\{[^}]*color:#F0EFED/)
   assert.match(css, /\.fsdb-page \.tasks-title-open:hover\{[^}]*color:#F0EFED/)
+  assert.match(css, /\.fsdb-page \.tasks-title-aside\{[^}]*gap:2px/)
+  assert.match(css, /\.fsdb-page \.tasks-row-tools-slot\{[^}]*gap:2px/)
+  assert.match(css, /\.fsdb-page \.tasks-row-actions\{[^}]*gap:2px/)
+  assert.match(css, /\.fsdb-page \.tasks-icon-btn\{[^}]*padding:3px/)
+  assert.match(css, /\.fsdb-page \.tasks-icon-btn\{[^}]*border-radius:5px/)
+  assert.doesNotMatch(css, /\.fsdb-page \.tasks-title-open\{[^}]*width:24px/)
+  assert.doesNotMatch(css, /\.fsdb-page \.tasks-title-zoom\{[^}]*width:24px/)
   assert.match(css, /\.fsdb-page \.tasks-row-tools \.tasks-icon-btn,\.fsdb-page \.tasks-row-actions \.tasks-icon-btn\{[^}]*color:#F0EFED/)
   assert.match(
     css,
