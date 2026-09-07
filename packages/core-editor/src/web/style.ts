@@ -1,12 +1,12 @@
 export const PAGE_EDITOR_STYLE = `
 .page-editor{position:relative;overflow:visible;min-width:0;width:100%;padding:6px 0 48px;padding-left:0;color:var(--dsw-label);font-family:var(--font-sans);font-size:15px;line-height:1.7;letter-spacing:-.003em}
 .page-editor .tiptap{outline:none;min-height:240px}
-.page-block-handle{position:absolute;z-index:6;width:24px;display:flex;flex-direction:column;align-items:center;pointer-events:auto}
-.page-block-handle-grip{flex:none;display:flex;align-items:center;justify-content:center;width:18px;height:22px;margin:0;border:0;border-radius:5px;padding:0;background:transparent;color:var(--dsw-label-3);cursor:grab}
-.page-block-handle-grip:hover,.page-block-handle-grip:focus-visible{background:var(--dsw-hover);color:var(--dsw-label-2)}
+.page-block-handle{position:absolute;z-index:6;width:28px;display:flex;flex-direction:column;align-items:center;pointer-events:auto}
+.page-block-handle-grip{flex:none;display:flex;align-items:center;justify-content:center;width:22px;height:26px;margin:0;border:0;border-radius:6px;padding:0;background:transparent;color:#EFEEEC;cursor:grab}
+.page-block-handle-grip:hover,.page-block-handle-grip:focus-visible{background:var(--dsw-hover);color:#EFEEEC}
 .page-block-handle-grip:active{cursor:grabbing}
-.page-block-handle-dots{display:block;width:8px;height:14px;background-image:radial-gradient(circle,currentColor 1.05px,transparent 1.15px);background-size:4px 4.5px;background-position:0 0}
-.page-block-handle-menu{position:absolute;left:22px;top:0;z-index:40;min-width:132px;padding:4px;display:flex;flex-direction:column;gap:1px;background:var(--dsw-sidebar);border:1px solid var(--dsw-border);border-radius:8px;box-shadow:0 8px 28px rgba(15,15,15,.12)}
+.page-block-handle-dots{display:block;width:10px;height:16px;background-image:radial-gradient(circle,currentColor 1.35px,transparent 1.45px);background-size:5px 5.2px;background-position:0 0}
+.page-block-handle-menu{position:absolute;left:26px;top:0;z-index:40;min-width:132px;padding:4px;display:flex;flex-direction:column;gap:1px;background:var(--dsw-sidebar);border:1px solid var(--dsw-border);border-radius:8px;box-shadow:0 8px 28px rgba(15,15,15,.12)}
 .page-block-handle-menu button{display:block;width:100%;margin:0;border:0;border-radius:6px;padding:6px 8px;background:transparent;color:var(--dsw-label);font:inherit;font-size:13px;font-weight:600;text-align:left;cursor:pointer}
 .page-block-handle-menu button:hover{background:var(--dsw-hover)}
 .page-editor .tiptap>:first-child{margin-top:0}
