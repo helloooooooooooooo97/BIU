@@ -372,6 +372,8 @@ test('create record sits at the right of the toolbar with a blue label', () => {
   assert.match(browser, /data-fsdb-col-flyout/)
   assert.doesNotMatch(browser, /data-fsdb-col-flyout[\s\S]{0,80}tasks-sort-head/)
   assert.match(browser, /className=\{`fsdb-col-facet-dot/)
+  const facetFlyout = browser.slice(browser.indexOf('function FacetColumnPackRow'), browser.indexOf('function recordsFingerprint'))
+  assert.doesNotMatch(facetFlyout, /tasks-sort-head/)
   assert.match(browser, /<SchemaFieldEditor/)
   const schemaUi = readFileSync(resolve(import.meta.dirname, './schema-field.tsx'), 'utf8')
   assert.match(schemaUi, /retagSchemaValue\(liveRef.current, resolved\)/)
