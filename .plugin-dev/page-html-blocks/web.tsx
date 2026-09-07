@@ -226,7 +226,10 @@ export function apply(ctx: {
   pageEditor: {
     registerBlock: (spec: {
       kind: string
+      plugin: string
       label: string
+      blockType?: string
+      blockTypeLabel?: string
       hint?: string
       aliases?: string[]
       defaults?: Record<string, unknown> | (() => Record<string, unknown>)
@@ -236,7 +239,10 @@ export function apply(ctx: {
 }) {
   ctx.pageEditor.registerBlock({
     kind: 'html',
+    plugin: name,
     label: 'HTML 直接渲染',
+    blockType: 'html',
+    blockTypeLabel: 'HTML',
     hint: 'HTML 直接渲染进文档，无外框（悬停浮出编辑/预览）',
     aliases: ['html', 'html直', '静态html'],
     defaults: { html: HTML_DIRECT_SAMPLE },
@@ -244,7 +250,10 @@ export function apply(ctx: {
   })
   ctx.pageEditor.registerBlock({
     kind: 'htmlframe',
+    plugin: name,
     label: 'HTML iframe 沙箱',
+    blockType: 'html',
+    blockTypeLabel: 'HTML',
     hint: 'iframe 隔离小网页，无外框，可跑脚本/幻灯片',
     aliases: ['iframe', 'htmlf', 'frame', '幻灯片', 'slide'],
     defaults: { html: HTML_FRAME_SAMPLE, height: 300 },
