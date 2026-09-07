@@ -14,16 +14,29 @@ install:
 	npm install
 
 # 释放本项目常用端口（旧 make dev / vite / host 残留）
+# SIGTERM 经常不够：tsx/vite/concurrently 会忽略或晚退，端口仍被占着。
 stop:
 	@for p in 3141 5173; do \
-	  pids=$$(lsof -tiTCP:$$p -sTCP:LISTEN 2>/dev/null); \
-	  if [ -n "$$pids" ]; then echo "kill :$$p -> $$pids"; kill $$pids 2>/dev/null || true; \
+	  pids=$$(lsof -nP -tiTCP:$$p -sTCP:LISTEN 2>/dev/null); \
+	  if [ -n "$$pids" ]; then \
+	    echo "kill :$$p -> $$pids"; \
+	    kill $$pids 2>/dev/null || true; \
+	    sleep 0.2; \
+	    pids=$$(lsof -nP -tiTCP:$$p -sTCP:LISTEN 2>/dev/null); \
+	    if [ -n "$$pids" ]; then echo "kill -9 :$$p -> $$pids"; kill -9 $$pids 2>/dev/null || true; fi; \
 	  else echo ":$$p free"; fi; \
 	done
+	@for p in 3141 5173; do \
+	  i=0; \
+	  while lsof -nP -tiTCP:$$p -sTCP:LISTEN >/dev/null 2>&1; do \
+	    i=$$((i+1)); \
+	    if [ $$i -gt 20 ]; then echo "port :$$p still in use after stop" >&2; exit 1; fi; \
+	    sleep 0.1; \
+	  done; \
+	done
 
-# 先停再启（等端口释放后再 dev）
+# 先停再启（等端口真正释放后再 dev）
 restart: stop
-	@sleep 0.5
 	@$(MAKE) --no-print-directory dev
 
 test:
