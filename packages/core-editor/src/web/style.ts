@@ -1,7 +1,7 @@
 export const PAGE_EDITOR_STYLE = `
-.page-editor{position:relative;min-width:0;width:100%;padding:6px 0 48px;padding-left:0;color:var(--dsw-label);font-family:var(--font-sans);font-size:15px;line-height:1.7;letter-spacing:-.003em}
+.page-editor{position:relative;overflow:visible;min-width:0;width:100%;padding:6px 0 48px;padding-left:0;color:var(--dsw-label);font-family:var(--font-sans);font-size:15px;line-height:1.7;letter-spacing:-.003em}
 .page-editor .tiptap{outline:none;min-height:240px}
-.page-block-handle{position:absolute;left:0;z-index:6;width:28px;display:flex;flex-direction:column;align-items:center;pointer-events:auto}
+.page-block-handle{position:absolute;z-index:6;width:24px;display:flex;flex-direction:column;align-items:center;pointer-events:auto}
 .page-block-handle-grip{flex:none;display:flex;align-items:center;justify-content:center;width:18px;height:22px;margin:0;border:0;border-radius:5px;padding:0;background:transparent;color:var(--dsw-label-3);cursor:grab}
 .page-block-handle-grip:hover,.page-block-handle-grip:focus-visible{background:var(--dsw-hover);color:var(--dsw-label-2)}
 .page-block-handle-grip:active{cursor:grabbing}
