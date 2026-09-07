@@ -128,6 +128,33 @@ test('create writes .plugin/<id>/; close keeps code; uninstall deletes .plugin/<
   }
 })
 
+test('uninstall deletes .plugin/<id>/ and leaves .plugin-dev/<id>/', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'plugin-root-'))
+  const pluginDir = join(dir, '.plugin')
+  const sandboxDir = join(dir, '.plugin-dev')
+  try {
+    const ctx = new Context()
+    stubHub(ctx)
+    const store = new PluginStoreService(ctx, pluginDir, join(dir, 'store.json'), sandboxDir).open()
+    await store.initSandbox({
+      id: 'store-keep-src',
+      name: 'Keep src',
+      hostJs: `export const name = 'store-keep-src'\nexport function apply() {}\n`,
+    })
+    await store.pack('store-keep-src')
+    await access(join(pluginDir, 'store-keep-src', 'host.js'))
+    await access(join(sandboxDir, 'store-keep-src', 'host.ts'))
+    await store.uninstall('store-keep-src')
+    await assert.rejects(() => access(join(pluginDir, 'store-keep-src', 'host.js')))
+    await access(join(sandboxDir, 'store-keep-src', 'host.ts'))
+    await access(join(sandboxDir, 'store-keep-src', 'manifest.json'))
+    const row = (await store.listSandboxes()).find((item) => item.id === 'store-keep-src')
+    assert.ok(row)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('web-only plugin opens without host.js', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'plugin-root-'))
   try {

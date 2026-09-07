@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { Service, type Context, type Plugin } from 'cordis'
 import type { CatalogEntry } from '@biu/host-hub'
@@ -66,6 +66,13 @@ export function defaultStatePath() {
 
 function isSafeId(id: string) {
   return /^[a-z][a-z0-9-]{1,40}$/.test(id)
+}
+
+/** 用分隔符判断，避免 `.plugin` 误匹配 `.plugin-dev`。 */
+export function isPathInside(root: string, dir: string) {
+  const base = resolve(root)
+  const target = resolve(dir)
+  return target === base || target.startsWith(`${base}${sep}`)
 }
 
 function importHostModule(code: string) {
@@ -370,13 +377,15 @@ export class PluginStoreService extends Service {
     this.invalidateList()
   }
 
-  /** 卸载：停运行，并删掉 .plugin/<id>/ 代码。 */
+  /** 卸载：停运行，只删 .plugin/<id>/，不动 .plugin-dev。 */
   async uninstall(id: string) {
     if (!isSafeId(id)) throw new Error(`invalid plugin id: ${id}`)
     await this.hub().drop(id)
     this.setEnabled(id, false)
-    const hit = await this.findPluginDir(id)
-    if (hit) await rm(hit, { recursive: true, force: true })
+    const dest = this.pluginPath(id)
+    if (isPathInside(this.pluginDir, dest) && !isPathInside(this.sandboxDir, dest) && existsSync(dest)) {
+      await rm(dest, { recursive: true, force: true })
+    }
     this.invalidateList()
     const lastRunAt = { ...this.state.lastRunAt }
     delete lastRunAt[id]
