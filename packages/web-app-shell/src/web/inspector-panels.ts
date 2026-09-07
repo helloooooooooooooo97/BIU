@@ -73,10 +73,12 @@ export function nextRepeatableTabId(tabId: string) {
 }
 
 export function resolveInspectorTab(current: string, allowed: string[], opened: string[] = []) {
-  const hanging = opened.filter((id) => allowed.includes(id) || allowed.includes(slotTabId(id)))
-  if (current && hanging.includes(current)) return current
+  if (current && opened.includes(current)) return current
   const currentSlot = current ? slotTabId(current) : ''
-  const bySlot = currentSlot ? hanging.find((id) => slotTabId(id) === currentSlot) : undefined
+  const bySlot = currentSlot ? opened.find((id) => slotTabId(id) === currentSlot) : undefined
   if (bySlot) return bySlot
+  const hanging = allowed.length
+    ? opened.filter((id) => allowed.includes(id) || allowed.includes(slotTabId(id)))
+    : [...opened]
   return hanging[0] ?? ''
 }

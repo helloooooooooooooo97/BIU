@@ -39,6 +39,17 @@ test('inspector selects a hanging tab instead of showing an empty pane', () => {
   assert.equal(resolveInspectorTab('database::a1', ['database'], ['database::a1']), 'database::a1')
 })
 
+test('inspector keeps the restored tab even before its panel is listed', () => {
+  assert.equal(
+    resolveInspectorTab('database:/tasks', ['traj'], ['database:/pages', 'database:/tasks']),
+    'database:/tasks',
+  )
+  assert.equal(
+    resolveInspectorTab('database:/tasks', [], ['database:/pages', 'database:/tasks']),
+    'database:/tasks',
+  )
+})
+
 test('legacy untagged panels stay out of the inspector', () => {
   assert.equal(inspectorPanelMatches({}, 's1'), false)
   assert.equal(inspectorPanelMatches({ requiresSession: true }, null), false)

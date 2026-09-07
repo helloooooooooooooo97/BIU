@@ -219,6 +219,7 @@ export const SessionInspector = memo(function SessionInspector({
   )
   const setTab = useCallback(
     (next: string) => {
+      tabRef.current = next
       setTabState(next)
       writeTabCache(sessionId, next)
       queuePersist({ tab: next })
@@ -227,6 +228,7 @@ export const SessionInspector = memo(function SessionInspector({
   )
   const persistOpened = useCallback(
     (next: string[]) => {
+      openedRef.current = next
       setOpened(next)
       writeOpenedCache(sessionId, next)
       window.dispatchEvent(new CustomEvent('biu:inspector-opened', { detail: { sessionId, opened: next } }))
@@ -264,7 +266,12 @@ export const SessionInspector = memo(function SessionInspector({
     }
     const bind = currentSession?.inspector
     const openedNext = bind?.opened ?? readOpened(sessionId)
-    const tabNext = bind?.tab ?? readTab(sessionId)
+    const remembered = bind?.tab ?? readTab(sessionId)
+    const tabNext = openedNext.includes(remembered)
+      ? remembered
+      : openedNext.find((id) => slotTabId(id) === slotTabId(remembered)) ?? remembered
+    openedRef.current = openedNext
+    tabRef.current = tabNext
     setOpened(openedNext)
     setTabState(tabNext)
     writeOpenedCache(sessionId, openedNext)
@@ -304,6 +311,7 @@ export const SessionInspector = memo(function SessionInspector({
     setTabState((current) => {
       const next = resolveInspectorTab(current, allowedTabs, opened)
       if (next !== current) {
+        tabRef.current = next
         writeTabCache(sessionId, next)
         queuePersist({ tab: next })
       }
