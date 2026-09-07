@@ -1455,10 +1455,16 @@ body {
   opacity: 0;
   pointer-events: none;
   transition: none;
+  z-index: 81;
 }
 
 .sidebar-flyout-host.is-collapsed:hover {
   pointer-events: auto;
+}
+
+/* 唤醒后把热区铺满栏宽、垫在栏下面，避免指针刚离开 12px 条就丢 :hover */
+.sidebar-flyout-host.is-collapsed:hover .sidebar-edge-hot {
+  width: var(--sidebar-flyout-width, 240px);
 }
 
 .sidebar-flyout-host.is-collapsed:hover .app-side-bar.is-closed {
