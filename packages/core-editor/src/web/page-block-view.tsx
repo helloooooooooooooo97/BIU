@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, type MouseEvent } from 'react'
 import type { NodeViewProps } from '@tiptap/react'
 import { NodeViewWrapper } from '@tiptap/react'
 import { PlayIcon } from '@heroicons/react/16/solid'
@@ -60,7 +60,7 @@ export function PageBlockMissing({ kind, plugin, data }: { kind: string; plugin:
   )
 }
 
-export function PageBlockView({ node, updateAttributes, editor }: NodeViewProps) {
+export function PageBlockView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
   usePageEditorVersion()
   const kind = String(node.attrs.kind ?? 'card')
   const plugin = String(node.attrs.plugin ?? '').trim()
@@ -68,6 +68,8 @@ export function PageBlockView({ node, updateAttributes, editor }: NodeViewProps)
   const spec = getPageEditor()?.block(kind)
   const cloneFrom = typeof data.cloneFrom === 'string' ? data.cloneFrom : ''
   const file = typeof data.file === 'string' ? data.file : ''
+  const pickId = `${plugin || 'page-block'}:${kind}`
+  const pickLabel = spec?.label || kind
   const update = (patch: Record<string, unknown>, opts?: { replace?: boolean }) => {
     updateAttributes({ data: opts?.replace ? patch : { ...data, ...patch } })
   }
@@ -85,8 +87,26 @@ export function PageBlockView({ node, updateAttributes, editor }: NodeViewProps)
     }
   }, [cloneFrom, file])
 
+  const onMouseDown = (event: MouseEvent) => {
+    if (!editor.isEditable || editor.isDestroyed) return
+    if (event.target instanceof Element && event.target.closest('textarea, input, select, button, a')) return
+    const pos = getPos()
+    if (typeof pos !== 'number') return
+    editor.chain().setNodeSelection(pos).run()
+  }
+
   return (
-    <NodeViewWrapper className="page-block" data-page-block={kind} data-page-block-plugin={plugin} data-testid={`page-block-${kind}`}>
+    <NodeViewWrapper
+      className="page-block"
+      data-page-block={kind}
+      data-page-block-plugin={plugin}
+      data-page-block-capture=""
+      data-biu-kind="plugin"
+      data-biu-id={pickId}
+      data-biu-label={pickLabel}
+      data-testid={`page-block-${kind}`}
+      onMouseDown={onMouseDown}
+    >
       {cloneFrom ? (
         <div className="page-block-missing">正在复制附件…</div>
       ) : View ? (

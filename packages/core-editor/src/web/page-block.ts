@@ -144,9 +144,7 @@ export const pageBlock = Node.create({
       },
       stopEvent: ({ event }) => {
         const target = event.target as HTMLElement | null
-        return Boolean(
-          target?.closest('textarea, input, select, button, canvas, .excalidraw, [data-page-block-capture]'),
-        )
+        return Boolean(target?.closest('.page-block, [data-page-block-capture], textarea, input, select, button, canvas, .excalidraw'))
       },
     })
   },

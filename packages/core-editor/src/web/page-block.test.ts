@@ -158,13 +158,17 @@ test('pageBlock node view skips react update when attrs are unchanged', async ()
   assert.match(src, /return true/)
 })
 
-test('pageBlock capture includes drawing surfaces', async () => {
+test('pageBlock capture includes every registered block shell', async () => {
   const { readFile } = await import('node:fs/promises')
   const { resolve } = await import('node:path')
   const src = await readFile(resolve(import.meta.dirname, './page-block.ts'), 'utf8')
+  const view = await readFile(resolve(import.meta.dirname, './page-block-view.tsx'), 'utf8')
+  assert.match(src, /closest\('\.page-block/)
   assert.match(src, /data-page-block-capture/)
-  assert.match(src, /\.excalidraw/)
-  assert.match(src, /canvas/)
+  assert.match(view, /data-page-block-capture=""/)
+  assert.match(view, /data-biu-kind="plugin"/)
+  assert.match(view, /data-biu-id=\{pickId\}/)
+  assert.match(view, /setNodeSelection\(pos\)/)
 })
 
 test('registerBlock requires plugin id', () => {
