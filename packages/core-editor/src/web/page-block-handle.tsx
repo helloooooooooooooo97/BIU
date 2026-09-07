@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type DragEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import type { Editor } from '@tiptap/core'
-import { NodeSelection } from '@tiptap/pm/state'
 import { HeadlessDismiss } from '@biu/public-ui'
 import {
+  beginHandleDrag,
   deleteHandleBlock,
   duplicateHandleBlock,
   handleBlockAtPointer,
@@ -97,12 +97,7 @@ export function PageBlockHandle({ editor }: { editor: Editor }) {
   const onDragStart = (event: DragEvent) => {
     dragged.current = true
     setMenuOpen(false)
-    const { view } = editor
-    const selection = NodeSelection.create(view.state.doc, target.pos)
-    view.dispatch(view.state.tr.setSelection(selection))
-    view.dragging = { slice: selection.content(), move: true }
-    event.dataTransfer.effectAllowed = 'move'
-    event.dataTransfer.setData('text/plain', '')
+    beginHandleDrag(editor, target.pos, event.dataTransfer)
   }
 
   const onDragEnd = () => {

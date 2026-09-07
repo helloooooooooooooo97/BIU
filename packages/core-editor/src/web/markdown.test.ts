@@ -122,6 +122,16 @@ test('slash command inserts a table', () => {
   assert.ok(table)
   table!.command({ editor, range: { from: Math.max(1, from), to: editor.state.selection.from } })
   assert.equal(editor.isActive('table'), true)
+  editor.chain().focus().addRowAfter().run()
+  editor.chain().focus().addColumnAfter().run()
+  let rows = 0
+  let cells = 0
+  editor.state.doc.descendants((node) => {
+    if (node.type.name === 'tableRow') rows += 1
+    if (node.type.name === 'tableCell' || node.type.name === 'tableHeader') cells += 1
+  })
+  assert.equal(rows, 4)
+  assert.equal(cells, 16)
   editor.destroy()
 })
 

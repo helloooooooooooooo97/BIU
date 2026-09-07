@@ -42,13 +42,47 @@ function Bubble({ editor }: { editor: Editor }) {
   )
 
   return (
-    <BubbleMenu editor={editor} className="page-bubble" aria-label="文字样式">
+    <BubbleMenu
+      editor={editor}
+      className="page-bubble"
+      aria-label="文字样式"
+      shouldShow={({ editor: current, from, to }) => !current.isActive('table') && from !== to}
+    >
       {btn('B', editor.isActive('bold'), () => editor.chain().focus().toggleBold().run())}
       {btn('I', editor.isActive('italic'), () => editor.chain().focus().toggleItalic().run())}
       {btn('S', editor.isActive('strike'), () => editor.chain().focus().toggleStrike().run())}
       {btn('</>', editor.isActive('code'), () => editor.chain().focus().toggleCode().run())}
       {btn('H1', editor.isActive('heading', { level: 1 }), () => editor.chain().focus().toggleHeading({ level: 1 }).run())}
       {btn('H2', editor.isActive('heading', { level: 2 }), () => editor.chain().focus().toggleHeading({ level: 2 }).run())}
+    </BubbleMenu>
+  )
+}
+
+function TableBar({ editor }: { editor: Editor }) {
+  const btn = (label: string, run: () => void) => (
+    <button
+      type="button"
+      onMouseDown={(event: MouseEvent) => {
+        event.preventDefault()
+        run()
+      }}
+    >
+      {label}
+    </button>
+  )
+  return (
+    <BubbleMenu
+      editor={editor}
+      pluginKey="page-table-bar"
+      className="page-bubble"
+      aria-label="表格"
+      shouldShow={({ editor: current }) => current.isActive('table')}
+    >
+      {btn('+列', () => editor.chain().focus().addColumnAfter().run())}
+      {btn('+行', () => editor.chain().focus().addRowAfter().run())}
+      {btn('删列', () => editor.chain().focus().deleteColumn().run())}
+      {btn('删行', () => editor.chain().focus().deleteRow().run())}
+      {btn('删表', () => editor.chain().focus().deleteTable().run())}
     </BubbleMenu>
   )
 }
@@ -82,6 +116,13 @@ export function PageEditor({ record, value, writable, onChange }: FsContentProps
           event.preventDefault()
           window.dispatchEvent(new Event(FOCUS_RECORD_TITLE))
           return true
+        },
+        handleDOMEvents: {
+          dragover(view, event) {
+            if (!view.dragging?.move || !event.dataTransfer) return false
+            event.dataTransfer.dropEffect = 'move'
+            return false
+          },
         },
       },
       onUpdate: ({ editor: current }) => {
@@ -176,6 +217,7 @@ export function PageEditor({ record, value, writable, onChange }: FsContentProps
       <EditorContent editor={editor} />
       {writable !== false ? <PageBlockHandle editor={editor} /> : null}
       {writable !== false ? <Bubble editor={editor} /> : null}
+      {writable !== false ? <TableBar editor={editor} /> : null}
     </div>
   )
 }

@@ -297,7 +297,6 @@ function PluginExtrasLayer(props: SlotProps) {
   const [fullscreenId, setFullscreenId] = useState<string | null>(null)
 
   useEffect(() => {
-    if (extras.length === 0) return
     let cancelled = false
     const load = () => {
       void readJson<{ items: StoreListing[] }>('/api/db/list?path=/plugins')
@@ -314,7 +313,7 @@ function PluginExtrasLayer(props: SlotProps) {
       cancelled = true
       window.clearInterval(timer)
     }
-  }, [extras.map((item) => item.id).join('|')])
+  }, [])
 
   async function closePlugin(id: string) {
     try {
