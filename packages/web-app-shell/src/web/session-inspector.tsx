@@ -25,7 +25,7 @@ import { useSlotEntries } from '@biu/web-slots'
 import type { SlotsService } from '@biu/web-slots'
 import { inspectorTabFromEvent, requestInspectorAction } from './chat-overlay.ts'
 import { getInspectorCaption, getInspectorCaptionVersion, subscribeInspectorCaptions } from './inspector-captions.ts'
-import { inspectorPanelMatches, inspectorViewProps, nextRepeatableTabId, pruneOpenedForCollections, resolveInspectorTab, slotTabId } from './inspector-panels.ts'
+import { inspectorPanelMatches, inspectorViewProps, nextRepeatableTabId, pruneOpenedForCollections, resolveInspectorTab, slotTabId, rememberedInspectorTab } from './inspector-panels.ts'
 import { HeadlessDismiss } from '@biu/public-ui'
 import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import {
@@ -185,6 +185,7 @@ export const SessionInspector = memo(function SessionInspector({
   const tabsRef = useRef<HTMLDivElement>(null)
   const hydratingRef = useRef(false)
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const persistForRef = useRef<string | null>(sessionId)
   const lastSentRef = useRef('')
   const tabRef = useRef(tab)
   const openedRef = useRef(opened)
@@ -198,8 +199,16 @@ export const SessionInspector = memo(function SessionInspector({
       dbPaths: snapshotInspectorDbPaths(),
     }
   }, [])
+  const flushInspector = useCallback(
+    (id: string, bind: SessionInspectorBind) => {
+      const body = JSON.stringify(bind)
+      lastSentRef.current = body
+      void sessionView.patchInspector(id, bind)
+    },
+    [sessionView],
+  )
   const queuePersist = useCallback(
-    (partial?: SessionInspectorBind) => {
+    (partial?: SessionInspectorBind, delay = 280) => {
       if (!sessionId || hydratingRef.current) return
       const next = mergeInspectorBind(captureBind(), partial ?? {}) ?? captureBind()
       const packed = JSON.stringify(next)
@@ -211,18 +220,17 @@ export const SessionInspector = memo(function SessionInspector({
         const latest = mergeInspectorBind(captureBind(), partial ?? {}) ?? captureBind()
         const body = JSON.stringify(latest)
         if (body === lastSentRef.current) return
-        lastSentRef.current = body
-        void sessionView.patchInspector(sessionId, latest)
-      }, 280)
+        flushInspector(sessionId, latest)
+      }, delay)
     },
-    [captureBind, sessionId, sessionView],
+    [captureBind, flushInspector, sessionId],
   )
   const setTab = useCallback(
     (next: string) => {
       tabRef.current = next
       setTabState(next)
       writeTabCache(sessionId, next)
-      queuePersist({ tab: next })
+      queuePersist({ tab: next }, 0)
     },
     [queuePersist, sessionId],
   )
@@ -232,7 +240,7 @@ export const SessionInspector = memo(function SessionInspector({
       setOpened(next)
       writeOpenedCache(sessionId, next)
       window.dispatchEvent(new CustomEvent('biu:inspector-opened', { detail: { sessionId, opened: next } }))
-      queuePersist({ opened: next })
+      queuePersist({ opened: next }, 0)
     },
     [queuePersist, sessionId],
   )
@@ -245,6 +253,15 @@ export const SessionInspector = memo(function SessionInspector({
   const dragRef = useRef<{ startX: number; startWidth: number; last: number } | null>(null)
 
   useLayoutEffect(() => {
+    const prev = persistForRef.current
+    if (prev && prev !== sessionId) {
+      if (persistTimerRef.current) {
+        clearTimeout(persistTimerRef.current)
+        persistTimerRef.current = null
+      }
+      flushInspector(prev, captureBind())
+    }
+    persistForRef.current = sessionId
     hydratingRef.current = true
     if (persistTimerRef.current) {
       clearTimeout(persistTimerRef.current)
@@ -266,10 +283,7 @@ export const SessionInspector = memo(function SessionInspector({
     }
     const bind = currentSession?.inspector
     const openedNext = bind?.opened ?? readOpened(sessionId)
-    const remembered = bind?.tab ?? readTab(sessionId)
-    const tabNext = openedNext.includes(remembered)
-      ? remembered
-      : openedNext.find((id) => slotTabId(id) === slotTabId(remembered)) ?? remembered
+    const tabNext = rememberedInspectorTab(openedNext, readTab(sessionId), bind?.tab)
     openedRef.current = openedNext
     tabRef.current = tabNext
     setOpened(openedNext)
@@ -313,11 +327,10 @@ export const SessionInspector = memo(function SessionInspector({
       if (next !== current) {
         tabRef.current = next
         writeTabCache(sessionId, next)
-        queuePersist({ tab: next })
       }
       return next
     })
-  }, [sessionId, focusCallId, focusTabId, allowedTabs.join('|'), opened, queuePersist])
+  }, [sessionId, focusCallId, focusTabId, allowedTabs.join('|'), opened])
 
   useEffect(() => {
     const onTab = (event: Event) => {

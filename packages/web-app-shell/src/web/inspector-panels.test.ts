@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { inspectorPanelMatches, inspectorViewProps, inspectorTabCollectionPath, inspectorTabIsOpen, pruneOpenedForCollections, resolveInspectorTab } from './inspector-panels.ts'
+import { inspectorPanelMatches, inspectorViewProps, inspectorTabCollectionPath, inspectorTabIsOpen, pruneOpenedForCollections, resolveInspectorTab, rememberedInspectorTab } from './inspector-panels.ts'
 
 test('inspector only offers session panels when a session is selected', () => {
   const extra = { centerKinds: ['session'], requiresSession: true }
@@ -48,6 +48,13 @@ test('inspector keeps the restored tab even before its panel is listed', () => {
     resolveInspectorTab('database:/tasks', [], ['database:/pages', 'database:/tasks']),
     'database:/tasks',
   )
+})
+
+test('remembered inspector tab prefers the locally clicked pane', () => {
+  const opened = ['database:/pages', 'database:/tasks']
+  assert.equal(rememberedInspectorTab(opened, 'database:/tasks', 'database:/pages'), 'database:/tasks')
+  assert.equal(rememberedInspectorTab(opened, '', 'database:/tasks'), 'database:/tasks')
+  assert.equal(rememberedInspectorTab(opened, 'database:/tasks::x', 'database:/tasks::old'), 'database:/tasks')
 })
 
 test('legacy untagged panels stay out of the inspector', () => {

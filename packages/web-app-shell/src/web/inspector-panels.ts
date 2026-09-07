@@ -82,3 +82,15 @@ export function resolveInspectorTab(current: string, allowed: string[], opened: 
     : [...opened]
   return hanging[0] ?? ''
 }
+
+/** 切回 session：本机刚点过的栏优先，再才用后端记下的 tab。 */
+export function rememberedInspectorTab(opened: string[], cached?: string, stored?: string) {
+  if (cached && opened.includes(cached)) return cached
+  if (stored && opened.includes(stored)) return stored
+  const hint = cached || stored || ''
+  if (hint) {
+    const bySlot = opened.find((id) => slotTabId(id) === slotTabId(hint))
+    if (bySlot) return bySlot
+  }
+  return hint
+}
