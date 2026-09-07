@@ -9,6 +9,8 @@ import {
   matchFilterNode,
   matchListFilterRecord,
   normalizeSorts,
+  parseSortsInput,
+  resolveViewFilterTree,
   moveList,
   sortRecordsBy,
 } from './query-logic.ts'
@@ -86,3 +88,18 @@ test('normalizeSorts falls back to a single field', () => {
   assert.equal(sorts[0]?.field, 'dueAt')
   assert.equal(sorts[0]?.dir, 'desc')
 })
+
+test('empty filterTree falls back to flat filters from the agent', () => {
+  const empty = emptyFilterGroup()
+  const tree = resolveViewFilterTree({ filters: { project: 'biu' }, filterTree: empty })
+  assert.equal(countFilterRules(tree), 1)
+  assert.equal(tree.children[0] && tree.children[0].kind === 'rule' && tree.children[0].field, 'project')
+  assert.equal(tree.children[0] && tree.children[0].kind === 'rule' && tree.children[0].value, 'biu')
+})
+
+test('parseSortsInput accepts JSON strings', () => {
+  const sorts = parseSortsInput('[{"field":"project","dir":"desc"}]')
+  assert.equal(sorts[0]?.field, 'project')
+  assert.equal(sorts[0]?.dir, 'desc')
+})
+

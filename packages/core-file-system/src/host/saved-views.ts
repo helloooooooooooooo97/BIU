@@ -7,6 +7,14 @@ import { builtinAllView, isReadOnlyViewId } from '../catalog-views.ts'
 import { normalizeColumnWidths, type SavedView } from '../web/saved-view.ts'
 import { isViewModeId } from '../web/fields.ts'
 import { normalizeCollectionPath } from '../paths.ts'
+import {
+  flatFiltersToTree,
+  looksLikeFilterTree,
+  normalizeFilterGroup,
+  parseSortsInput,
+  type FilterGroup,
+  type SortRule,
+} from '../query-logic.ts'
 
 type DatabaseSync = import('node:sqlite').DatabaseSync
 
@@ -149,7 +157,8 @@ export class SavedViewsStore {
       query: typeof fields.query === 'string' ? fields.query : '',
       groupBy: typeof fields.groupBy === 'string' ? fields.groupBy : '',
       columns: Array.isArray(fields.columns) ? fields.columns.map((item) => String(item)) : [],
-      filters: asFilters(fields.filters),
+      ...filtersFromPatch(fields.filters),
+      ...sortsFromPatch(fields.sorts, fields.sortField, fields.sortDir),
       tree: fields.tree !== false,
       wrap: Boolean(fields.wrap),
       truncate: fields.truncate !== false,
@@ -191,7 +200,9 @@ export class SavedViewsStore {
         ...(patch.sortDir === 'asc' || patch.sortDir === 'desc' ? { sortDir: patch.sortDir } : {}),
         ...(typeof patch.query === 'string' ? { query: patch.query } : {}),
         ...(typeof patch.groupBy === 'string' ? { groupBy: patch.groupBy } : {}),
-        ...('filters' in patch ? { filters: asFilters(patch.filters) } : {}),
+        ...('filters' in patch ? filtersFromPatch(patch.filters) : {}),
+        ...('filterTree' in patch ? { filterTree: normalizeFilterGroup(parseJsonValue(patch.filterTree)) } : {}),
+        ...('sorts' in patch ? sortsFromPatch(patch.sorts, patch.sortField ?? cur.sortField, patch.sortDir ?? cur.sortDir) : {}),
         ...(Array.isArray(patch.columns) ? { columns: patch.columns.map((item) => String(item)) } : {}),
         ...(typeof patch.pageSize === 'number' ? { pageSize: patch.pageSize } : {}),
         ...(typeof patch.tree === 'boolean' ? { tree: patch.tree } : {}),
@@ -233,6 +244,36 @@ function uniqueViewName(base: string, views: StoredView[]) {
   return `${base} ${n}`
 }
 
+function parseJsonValue(value: unknown): unknown {
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      return JSON.parse(value)
+    } catch {
+      return value
+    }
+  }
+  return value
+}
+
+function filtersFromPatch(value: unknown): { filters: Record<string, string>; filterTree: FilterGroup } {
+  const raw = parseJsonValue(value)
+  if (looksLikeFilterTree(raw)) {
+    const filterTree = normalizeFilterGroup(raw)
+    return { filters: {}, filterTree }
+  }
+  const filters = asFilters(raw)
+  return { filters, filterTree: flatFiltersToTree(filters) }
+}
+
+function sortsFromPatch(value: unknown, sortField: unknown, sortDir: unknown): { sorts: SortRule[]; sortField: string; sortDir: 'asc' | 'desc' } {
+  const sorts = parseSortsInput(value, String(sortField || 'title'), sortDir === 'desc' ? 'desc' : 'asc')
+  return {
+    sorts,
+    sortField: sorts[0]?.field || 'title',
+    sortDir: sorts[0]?.dir ?? 'asc',
+  }
+}
+
 function asFilters(value: unknown): Record<string, string> {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     const out: Record<string, string> = {}
@@ -251,6 +292,8 @@ function asFilters(value: unknown): Record<string, string> {
 
 function asRecord(path: string, tableName: string, view: StoredView): DbRecord {
   const filters = view.filters && typeof view.filters === 'object' ? view.filters : {}
+  const sorts = parseSortsInput(view.sorts, view.sortField, view.sortDir === 'desc' ? 'desc' : 'asc')
+  const filterTree = view.filterTree
   return {
     id: rowId(path, view.id),
     title: view.name,
@@ -258,8 +301,8 @@ function asRecord(path: string, tableName: string, view: StoredView): DbRecord {
     tablePath: path,
     viewId: view.id,
     mode: view.mode ?? 'table',
-    sortField: view.sortField ?? 'title',
-    sortDir: view.sortDir === 'desc' ? 'desc' : 'asc',
+    sortField: sorts[0]?.field || view.sortField || 'title',
+    sortDir: sorts[0]?.dir ?? (view.sortDir === 'desc' ? 'desc' : 'asc'),
     query: view.query ?? '',
     groupBy: view.groupBy ?? '',
     tree: view.tree !== false,
@@ -269,6 +312,8 @@ function asRecord(path: string, tableName: string, view: StoredView): DbRecord {
     columns: Array.isArray(view.columns) ? view.columns.map(String) : [],
     columnWidths: view.columnWidths ?? {},
     filters: JSON.stringify(filters),
+    sorts: JSON.stringify(sorts.map((item) => ({ field: item.field, dir: item.dir }))),
+    filterTree: filterTree ? JSON.stringify(filterTree) : '',
     ...recordBuiltinValues(view as Record<string, unknown>),
   }
 }
@@ -284,7 +329,7 @@ export function viewsCollection(store: SavedViewsStore, tables: () => Collection
       route: '/db-views',
       title: '视图',
       inspector: false,
-      blurb: '各表已保存的视图（筛选/排序/呈现）。列表 db_list /views。新建 db_create /views records=[{title, tablePath, mode}]，tablePath 如 /tasks，mode 默认 table，其它呈现由集合 registerView。改筛选 filters（JSON 字符串）、列 columns、排序 sortField/sortDir、搜索 query、分组 groupBy、每页 pageSize 用 db_update。内置「全部 xx」只读。本表没有 db_action。',
+      blurb: '各表已保存的视图（筛选/排序/呈现）。列表 db_list /views。新建 db_create /views records=[{title, tablePath, mode}]，tablePath 如 /tasks，mode 默认 table。改筛选用 db_update 写 filters：扁平 JSON 如 {"project":"biu"}（等于），或 filterTree 树。排序用 sorts JSON [{"field":"title","dir":"asc"}]，或旧字段 sortField/sortDir。列 columns、搜索 query、分组 groupBy、每页 pageSize 同样 db_update。内置「全部 xx」只读。本表没有 db_action。',
       order: 17,
       icon: 'eye',
     },
@@ -301,6 +346,7 @@ export function viewsCollection(store: SavedViewsStore, tables: () => Collection
         mode: { type: 'string', label: '呈现', writable: true },
         sortField: { type: 'string', label: '排序字段', writable: true },
         sortDir: { type: 'select', label: '升降序', writable: true, enum: ['asc', 'desc'] },
+        sorts: { type: 'string', label: '排序', writable: true },
         query: { type: 'string', label: '搜索', writable: true },
         groupBy: { type: 'string', label: '分组', writable: true },
         tree: { type: 'boolean', label: '树形' },
@@ -309,6 +355,7 @@ export function viewsCollection(store: SavedViewsStore, tables: () => Collection
         pageSize: { type: 'number', label: '每页', writable: true },
         columns: { type: 'multi-select', label: '列', writable: true },
         filters: { type: 'string', label: '筛选', writable: true },
+        filterTree: { type: 'string', label: '筛选树', writable: true },
       },
     },
     list,

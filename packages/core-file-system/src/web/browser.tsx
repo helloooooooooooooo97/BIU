@@ -142,10 +142,9 @@ import {
   countFilterRules,
   emptyFilterGroup,
   encodeListFilter,
-  flatFiltersToTree,
   moveList,
-  normalizeFilterGroup,
   normalizeSorts,
+  resolveViewFilterTree,
   type FilterGroup,
   type SortRule,
 } from '../query-logic.ts'
@@ -507,9 +506,7 @@ export function CollectionBrowser({
     normalizeSorts(initialView?.sorts, initialView?.sortField ?? 'title', initialView?.sortDir ?? 'asc'),
   )
   const [filters, setFilters] = useState<Record<string, string>>(initialView?.filters ?? {})
-  const [filterTree, setFilterTree] = useState<FilterGroup>(() =>
-    initialView?.filterTree ? normalizeFilterGroup(initialView.filterTree) : emptyFilterGroup(),
-  )
+  const [filterTree, setFilterTree] = useState<FilterGroup>(() => resolveViewFilterTree(initialView ?? { filters: {} }))
   const [columnKeys, setColumnKeys] = useState<string[]>(initialView?.columns ?? [])
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => normalizeColumnWidths(initialView?.columnWidths))
   const [resizingCol, setResizingCol] = useState<string | null>(null)
@@ -881,7 +878,7 @@ export function CollectionBrowser({
         setSortDir(next.sortDir)
         setSorts(normalizeSorts(next.sorts, next.sortField, next.sortDir))
         setFilters(next.filters)
-        setFilterTree(next.filterTree ? normalizeFilterGroup(next.filterTree) : next.builtin ? emptyFilterGroup() : flatFiltersToTree(next.filters))
+        setFilterTree(resolveViewFilterTree(next))
         setColumnKeys(next.columns)
         setGroupBy(next.groupBy ?? '')
         setShowTree(next.tree !== false)
@@ -1263,7 +1260,7 @@ export function CollectionBrowser({
     setSortDir(next.sortDir)
     setSorts(normalizeSorts(next.sorts, next.sortField, next.sortDir))
     setFilters(next.filters)
-    setFilterTree(next.filterTree ? normalizeFilterGroup(next.filterTree) : next.builtin ? emptyFilterGroup() : flatFiltersToTree(next.filters))
+    setFilterTree(resolveViewFilterTree(next))
     setColumnKeys(nextColumns)
     setColumnWidths(normalizeColumnWidths(next.columnWidths))
     setGroupBy(nextGroup)

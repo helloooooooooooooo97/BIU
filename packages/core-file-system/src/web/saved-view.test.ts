@@ -26,6 +26,12 @@ test('normalizeSavedView keeps custom mode slugs and rejects junk', () => {
   assert.equal(junk.query, '')
   assert.equal(junk.pageSize, 50)
   assert.deepEqual(junk.columnWidths, {})
+  const fromFlat = normalizeSavedView({
+    ...base,
+    filters: { project: 'biu' },
+    filterTree: { kind: 'group', id: 'g', combinator: 'and', children: [] },
+  })
+  assert.equal(fromFlat.filterTree?.children[0] && fromFlat.filterTree.children[0].kind === 'rule' && fromFlat.filterTree.children[0].value, 'biu')
 })
 
 test('normalizeColumnWidths clamps and viewStateKey includes widths', () => {

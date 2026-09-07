@@ -197,7 +197,12 @@ function isEmptyValue(actual: unknown) {
 
 function asText(actual: unknown) {
   if (Array.isArray(actual)) return actual.map(String).join(' ')
-  if (actual && typeof actual === 'object') return ''
+  if (actual && typeof actual === 'object') {
+    const rec = actual as Record<string, unknown>
+    if (typeof rec.name === 'string' && rec.name.trim()) return rec.name
+    if (typeof rec.label === 'string' && rec.label.trim()) return rec.label
+    return ''
+  }
   return String(actual ?? '')
 }
 
@@ -310,6 +315,34 @@ export function sortRecordsBy(rows: DbRecord[], sorts: SortRule[]) {
     }
     return String(a.id).localeCompare(String(b.id))
   })
+}
+
+export function looksLikeFilterTree(raw: unknown): boolean {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false
+  const rec = raw as Record<string, unknown>
+  return rec.kind === 'group' || rec.kind === 'rule' || Array.isArray(rec.children)
+}
+
+/** 有规则的 filterTree 优先；空树则回退扁平 filters（agent db_update 仍写 {project:"biu"}）。 */
+export function resolveViewFilterTree(view: {
+  builtin?: boolean
+  filters?: Record<string, string>
+  filterTree?: FilterGroup | null
+}): FilterGroup {
+  if (view.filterTree && countFilterRules(view.filterTree) > 0) return normalizeFilterGroup(view.filterTree)
+  if (view.builtin) return emptyFilterGroup()
+  return flatFiltersToTree(view.filters)
+}
+
+export function parseSortsInput(raw: unknown, sortField = 'title', sortDir: 'asc' | 'desc' = 'asc'): SortRule[] {
+  if (typeof raw === 'string' && raw.trim()) {
+    try {
+      return normalizeSorts(JSON.parse(raw), sortField, sortDir)
+    } catch {
+      return normalizeSorts(undefined, sortField, sortDir)
+    }
+  }
+  return normalizeSorts(raw, sortField, sortDir)
 }
 
 export function encodeListFilter(locks: Record<string, string>, tree: FilterGroup | undefined) {

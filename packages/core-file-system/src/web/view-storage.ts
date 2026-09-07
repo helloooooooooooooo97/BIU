@@ -1,5 +1,6 @@
 import { builtinAllViewId, stubBuiltinAllView, stubBuiltinCatalogView, stubBuiltinTagView, isReadOnlyViewId } from '../catalog-views.ts'
 import { listCollection } from './db-client.ts'
+import { looksLikeFilterTree, normalizeFilterGroup, parseSortsInput } from '../query-logic.ts'
 import { normalizeSavedView, type SavedView } from './saved-view.ts'
 
 export function viewsKey(collectionPath: string) {
@@ -145,35 +146,56 @@ export function pushSavedViews(collectionPath: string, views: SavedView[]) {
   }).catch(() => undefined)
 }
 
-function parseViewFilters(value: unknown): Record<string, string> {
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
-    const out: Record<string, string> = {}
-    for (const [key, item] of Object.entries(value as Record<string, unknown>)) out[key] = String(item)
-    return out
-  }
+function parseMaybeJson(value: unknown): unknown {
   if (typeof value === 'string' && value.trim()) {
     try {
-      return parseViewFilters(JSON.parse(value))
+      return JSON.parse(value)
     } catch {
-      return {}
+      return value
     }
+  }
+  return value
+}
+
+function parseViewFilterTree(value: unknown) {
+  const raw = parseMaybeJson(value)
+  if (!looksLikeFilterTree(raw)) return undefined
+  return normalizeFilterGroup(raw)
+}
+
+function parseViewFilters(value: unknown): Record<string, string> {
+  const raw = parseMaybeJson(value)
+  if (looksLikeFilterTree(raw)) return {}
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    const out: Record<string, string> = {}
+    for (const [key, item] of Object.entries(raw as Record<string, unknown>)) {
+      if (key.startsWith('$')) continue
+      out[key] = String(item)
+    }
+    return out
   }
   return {}
 }
 
-export function savedViewFromRecord(row: { viewId?: unknown; title?: unknown; mode?: unknown; sortField?: unknown; sortDir?: unknown; query?: unknown; groupBy?: unknown; columns?: unknown; filters?: unknown; tree?: unknown; wrap?: unknown; truncate?: unknown; pageSize?: unknown; columnWidths?: unknown }): SavedView | null {
+export function savedViewFromRecord(row: { viewId?: unknown; title?: unknown; mode?: unknown; sortField?: unknown; sortDir?: unknown; sorts?: unknown; query?: unknown; groupBy?: unknown; columns?: unknown; filters?: unknown; filterTree?: unknown; tree?: unknown; wrap?: unknown; truncate?: unknown; pageSize?: unknown; columnWidths?: unknown }): SavedView | null {
   const id = String(row.viewId ?? '').trim()
   if (!id || isReadOnlyViewId(id)) return null
+  const sortDir = row.sortDir === 'desc' ? 'desc' : 'asc'
+  const sortField = String(row.sortField ?? 'title')
+  const filters = parseViewFilters(row.filters)
+  const filterTree = parseViewFilterTree(row.filterTree) ?? (looksLikeFilterTree(parseMaybeJson(row.filters)) ? normalizeFilterGroup(parseMaybeJson(row.filters)) : undefined)
   return normalizeSavedView({
     id,
     name: String(row.title ?? id),
     mode: String(row.mode ?? 'table') as SavedView['mode'],
-    sortField: String(row.sortField ?? 'title'),
-    sortDir: row.sortDir === 'desc' ? 'desc' : 'asc',
+    sortField,
+    sortDir,
+    sorts: parseSortsInput(row.sorts, sortField, sortDir),
     query: String(row.query ?? ''),
     groupBy: String(row.groupBy ?? ''),
     columns: Array.isArray(row.columns) ? row.columns.map((item) => String(item)) : [],
-    filters: parseViewFilters(row.filters),
+    filters,
+    filterTree,
     tree: row.tree !== false,
     wrap: Boolean(row.wrap),
     truncate: row.truncate !== false,
@@ -196,10 +218,12 @@ export async function pullSavedViews() {
         'mode',
         'sortField',
         'sortDir',
+        'sorts',
         'query',
         'groupBy',
         'columns',
         'filters',
+        'filterTree',
         'tree',
         'wrap',
         'truncate',

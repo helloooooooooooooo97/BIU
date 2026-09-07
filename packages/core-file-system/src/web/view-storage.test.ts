@@ -85,6 +85,15 @@ test('savedViewFromRecord skips builtin rows and keeps filters', () => {
   assert.equal(view?.id, 'v1')
   assert.equal(view?.mode, 'table')
   assert.equal(view?.filters.status, 'doing')
+  const withSorts = savedViewFromRecord({
+    viewId: 'v3',
+    title: '排序',
+    sorts: '[{"field":"project","dir":"desc"}]',
+    filters: '{"project":"biu"}',
+  })
+  assert.equal(withSorts?.sortField, 'project')
+  assert.equal(withSorts?.sortDir, 'desc')
+  assert.equal(withSorts?.filterTree?.children[0] && withSorts.filterTree.children[0].kind === 'rule' && withSorts.filterTree.children[0].value, 'biu')
   const withWidths = savedViewFromRecord({
     viewId: 'v2',
     title: '宽列',

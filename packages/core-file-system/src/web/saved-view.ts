@@ -1,5 +1,5 @@
 import { isViewModeId, type ViewMode } from './fields.ts'
-import { normalizeFilterGroup, normalizeSorts, type FilterGroup, type SortRule } from '../query-logic.ts'
+import { countFilterRules, normalizeSorts, resolveViewFilterTree, type FilterGroup, type SortRule } from '../query-logic.ts'
 
 export type SavedView = {
   id: string
@@ -65,7 +65,10 @@ export function normalizeSavedView(view: SavedView): SavedView {
     sortDir: sorts[0]?.dir ?? 'asc',
     sorts,
     filters: view.filters && typeof view.filters === 'object' ? view.filters : {},
-    filterTree: view.filterTree ? normalizeFilterGroup(view.filterTree) : undefined,
+    filterTree: (() => {
+      const tree = resolveViewFilterTree(view)
+      return countFilterRules(tree) ? tree : undefined
+    })(),
     columns: Array.isArray(view.columns) ? view.columns : [],
     groupBy: view.groupBy ?? '',
     tree: view.tree !== false,
