@@ -107,7 +107,7 @@ export const ShellSidebarFrame = memo(function ShellSidebarFrame({
       const width = Number.parseFloat(raw) || 240
       if (
         isSidebarFlyoutKeepTarget(event.target, host) ||
-        shouldKeepSidebarFlyout(event.clientX, peekRef.current, width, window.innerWidth)
+        shouldKeepSidebarFlyout(event.clientX, event.clientY, peekRef.current, width, window.innerWidth, window.innerHeight)
       ) {
         openPeek()
         return

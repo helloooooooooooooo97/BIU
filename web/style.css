@@ -1430,8 +1430,9 @@ body {
   pointer-events: auto;
   position: fixed;
   left: 0;
-  top: 0;
-  bottom: 0;
+  top: 22vh;
+  bottom: auto;
+  height: 20vh;
   width: 20px;
   z-index: 80;
 }

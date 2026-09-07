@@ -114,7 +114,8 @@ test('shell columns stay three tracks without animating on window resize', () =>
   assert.match(css, /\.app-shell-agent > main\s*\{[^}]*grid-column:\s*2/s)
   assert.match(css, /\.app-shell-agent > \.session-inspector\s*\{[^}]*grid-column:\s*3/s)
   assert.match(css, /\.sidebar-edge-hot\s*\{[^}]*width:\s*20px/s)
-  assert.match(css, /\.sidebar-edge-hot\s*\{[^}]*top:\s*0/s)
+  assert.match(css, /\.sidebar-edge-hot\s*\{[^}]*top:\s*22vh/s)
+  assert.match(css, /\.sidebar-edge-hot\s*\{[^}]*height:\s*20vh/s)
   assert.match(css, /\.sidebar-flyout-host\.is-collapsed\.is-flyout-open \.sidebar-edge-hot\s*\{[^}]*width:\s*var\(--sidebar-flyout-width/s)
   assert.match(css, /\.sidebar-flyout-host\.is-collapsed \.app-side-bar\.is-closed\s*\{[^}]*z-index:\s*81/s)
   assert.match(
