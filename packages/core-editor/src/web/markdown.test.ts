@@ -7,6 +7,8 @@ import { filterSlashItems, SLASH_ITEMS } from './slash.ts'
 test('slash filter matches chinese labels and aliases', () => {
   assert.ok(filterSlashItems('标题').some((item) => item.id === 'h1'))
   assert.ok(filterSlashItems('code').some((item) => item.id === 'code'))
+  assert.ok(filterSlashItems('图片').some((item) => item.id === 'image'))
+  assert.ok(filterSlashItems('表格').some((item) => item.id === 'table'))
   assert.equal(filterSlashItems('zzz').length, 0)
   assert.equal(filterSlashItems('').length, SLASH_ITEMS.length)
 })
@@ -84,6 +86,41 @@ test('slash suggestion uses a fixed high stacking context', async () => {
   assert.match(css, /\.page-editor \.page-block\{[^}]*isolation:isolate/)
   assert.match(css, /\.page-editor \.tiptap ul\{list-style-type:disc\}/)
   assert.match(css, /\.page-editor \.tiptap ol\{list-style-type:decimal\}/)
+})
+
+test('markdown roundtrips image and table', () => {
+  const src = `![封面](/api/db/file/cover.png)
+
+| 甲 | 乙 |
+| --- | --- |
+| 1 | 2 |
+`
+  const editor = new Editor({
+    extensions: pageEditorExtensions(),
+    content: src,
+    contentType: 'markdown',
+  })
+  const html = editor.getHTML()
+  const out = editor.getMarkdown()
+  assert.match(html, /<img[^>]+src="\/api\/db\/file\/cover.png"/)
+  assert.match(html, /<table/)
+  assert.match(out, /!\[封面\]\(\/api\/db\/file\/cover\.png\)/)
+  assert.match(out, /\|/)
+  editor.destroy()
+})
+
+test('slash command inserts a table', () => {
+  const editor = new Editor({
+    extensions: pageEditorExtensions(),
+    content: '/',
+    contentType: 'markdown',
+  })
+  const from = editor.state.selection.from - 1
+  const table = SLASH_ITEMS.find((item) => item.id === 'table')
+  assert.ok(table)
+  table!.command({ editor, range: { from: Math.max(1, from), to: editor.state.selection.from } })
+  assert.equal(editor.isActive('table'), true)
+  editor.destroy()
 })
 
 test('slash command turns the current block into a heading', () => {

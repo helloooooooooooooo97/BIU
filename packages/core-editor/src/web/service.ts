@@ -46,6 +46,8 @@ export type SlashInsert =
   | 'quote'
   | 'code'
   | 'divider'
+  | 'image'
+  | 'table'
 
 export type SlashCommandSpec = {
   id: string

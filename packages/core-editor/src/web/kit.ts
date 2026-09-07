@@ -1,5 +1,7 @@
 import { Markdown } from '@tiptap/markdown'
+import Image from '@tiptap/extension-image'
 import Placeholder from '@tiptap/extension-placeholder'
+import { TableKit } from '@tiptap/extension-table'
 import StarterKit from '@tiptap/starter-kit'
 import { headingSkin } from './heading-skin.ts'
 import { pageBlock } from './page-block.ts'
@@ -11,6 +13,10 @@ export function pageEditorExtensions() {
       heading: { levels: [1, 2, 3] },
     }),
     Markdown,
+    Image.configure({ inline: false, allowBase64: true }),
+    TableKit.configure({
+      table: { resizable: true },
+    }),
     Placeholder.configure({
       placeholder: ({ node }) => {
         if (node.type.name === 'heading') return `标题 ${node.attrs.level}`

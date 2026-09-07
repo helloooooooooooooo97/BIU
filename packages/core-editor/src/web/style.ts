@@ -37,6 +37,11 @@ export const PAGE_EDITOR_STYLE = `
 .page-editor .tiptap li p{min-height:0;margin:0}
 .page-editor .tiptap blockquote{margin-left:0;padding-left:14px;border-left:3px solid var(--dsw-border);color:var(--dsw-label-2)}
 .page-editor .tiptap hr{border:0;border-top:1px solid var(--dsw-border);margin:18px 0}
+.page-editor .tiptap img{display:block;max-width:100%;height:auto;margin:8px 0;border-radius:8px}
+.page-editor .tiptap table{width:100%;margin:8px 0;border-collapse:collapse;table-layout:fixed}
+.page-editor .tiptap th,.page-editor .tiptap td{border:1px solid var(--dsw-border);padding:6px 8px;vertical-align:top}
+.page-editor .tiptap th{background:var(--dsw-hover);font-weight:650;text-align:left}
+.page-editor .tiptap .selectedCell{background:color-mix(in srgb,var(--dsw-business) 14%,transparent)}
 .page-editor .tiptap code{display:inline;padding:.12em .35em;border-radius:4px;background:var(--dsw-hover);font-family:var(--font-mono);font-size:.9em}
 .page-editor .tiptap pre{display:block;margin:8px 0;padding:10px 12px;border:1px solid var(--dsw-border);border-radius:10px;background:var(--dsw-chat-code-bg,var(--dsw-sidebar));overflow-x:auto;white-space:pre;font-family:var(--font-mono)}
 .page-editor .tiptap pre code{display:block;padding:0;background:transparent;font-size:13px;line-height:1.6;white-space:inherit}

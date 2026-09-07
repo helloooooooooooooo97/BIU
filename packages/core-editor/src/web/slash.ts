@@ -110,7 +110,52 @@ export const SLASH_ITEMS: SlashItem[] = [
     },
     ...BASIC_GROUP,
   },
+  {
+    id: 'image',
+    label: '图片',
+    hint: '插入图片',
+    aliases: ['image', 'img', 'pic', '图片', 'photo'],
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).run()
+      pickLocalImageSrc().then((src) => {
+        if (!src || editor.isDestroyed) return
+        editor.chain().focus().setImage({ src }).run()
+      })
+    },
+    ...BASIC_GROUP,
+  },
+  {
+    id: 'table',
+    label: '表格',
+    hint: '插入表格',
+    aliases: ['table', 'grid', '表格'],
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
+    },
+    ...BASIC_GROUP,
+  },
 ]
+
+function pickLocalImageSrc() {
+  return new Promise<string>((resolve) => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'image/*'
+    input.addEventListener('change', () => {
+      const file = input.files?.[0]
+      if (!file) {
+        resolve('')
+        return
+      }
+      const reader = new FileReader()
+      reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '')
+      reader.onerror = () => resolve('')
+      reader.readAsDataURL(file)
+    })
+    input.addEventListener('cancel', () => resolve(''))
+    input.click()
+  })
+}
 
 function runInsert(editor: Editor, range: Range, insert: SlashInsert) {
   const chain = editor.chain().focus().deleteRange(range)
@@ -122,6 +167,8 @@ function runInsert(editor: Editor, range: Range, insert: SlashInsert) {
   if (insert === 'ordered') return chain.toggleOrderedList().run()
   if (insert === 'quote') return chain.toggleNode('paragraph', 'paragraph').toggleBlockquote().run()
   if (insert === 'code') return chain.toggleCodeBlock().run()
+  if (insert === 'image') return chain.setImage({ src: '', alt: '' }).run()
+  if (insert === 'table') return chain.insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
   return chain.setHorizontalRule().run()
 }
 
