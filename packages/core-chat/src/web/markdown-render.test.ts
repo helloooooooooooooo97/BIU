@@ -5,6 +5,7 @@ import {
   parseMarkdownSync,
   renderMarkdownHtml,
   resetMarkdownRenderForTests,
+  splitStreamingMarkdown,
   stabilizeStreamingMarkdown,
 } from './markdown-render.ts'
 
@@ -55,5 +56,29 @@ describe('markdown-render', () => {
     const html = parseMarkdownLive('```js\nconst x = 1')
     expect(html).toContain('<pre>')
     expect(html).toContain('const x = 1')
+    expect(html).not.toContain('hljs')
+  })
+
+  it('splits at the last open fence so closed blocks can freeze', () => {
+    const open = 'intro\n```js\nconst x = 1'
+    expect(splitStreamingMarkdown(open)).toEqual({
+      frozen: 'intro\n',
+      live: '```js\nconst x = 1',
+    })
+    const closed = 'intro\n```js\nconst x = 1\n```\nmore **text**'
+    expect(splitStreamingMarkdown(closed)).toEqual({
+      frozen: 'intro\n```js\nconst x = 1\n```\n',
+      live: 'more **text**',
+    })
+  })
+
+  it('highlights a code block as soon as its fence closes', () => {
+    const closed = '```js\nconst n = 1\n```\nstill **streaming**'
+    const html = parseMarkdownLive(closed)
+    expect(html).toContain('hljs')
+    expect(html).toContain('language-js')
+    expect(html).toContain('<strong>streaming</strong>')
+    expect(getCachedMarkdownHtml(closed)).toBeUndefined()
+    expect(getCachedMarkdownHtml('```js\nconst n = 1\n```\n')).toBeTruthy()
   })
 })

@@ -74,17 +74,58 @@ export function parseMarkdownSync(text: string): string {
   return html
 }
 
+const FENCE_RE = /^ {0,3}```/gm
+
+function fenceStarts(text: string): number[] {
+  const starts: number[] = []
+  const re = new RegExp(FENCE_RE.source, FENCE_RE.flags)
+  let m: RegExpExecArray | null
+  while ((m = re.exec(text)) !== null) starts.push(m.index)
+  return starts
+}
+
+function lineEndAfter(text: string, index: number): number {
+  const nl = text.indexOf('\n', index)
+  return nl === -1 ? text.length : nl + 1
+}
+
+/**
+ * 已闭合的围栏可以定稿（含 highlight.js）；
+ * 最后一个未闭合 ``` 及之后只做轻量 parse，避免每帧高亮正在增长的代码。
+ */
+export function splitStreamingMarkdown(text: string): { frozen: string; live: string } {
+  const starts = fenceStarts(text)
+  if (starts.length === 0) return { frozen: '', live: text }
+  if (starts.length % 2 === 1) {
+    const openAt = starts[starts.length - 1]!
+    return { frozen: text.slice(0, openAt), live: text.slice(openAt) }
+  }
+  const closeAt = starts[starts.length - 1]!
+  const end = lineEndAfter(text, closeAt)
+  return { frozen: text.slice(0, end), live: text.slice(end) }
+}
+
 /** 未闭合的 ``` 在流式里会把后面全吃进代码块，补一个结束围栏再 parse。 */
 export function stabilizeStreamingMarkdown(text: string): string {
-  const fences = text.match(/^ {0,3}```/gm)
-  if (fences && fences.length % 2 === 1) return `${text}\n\`\`\``
+  const starts = fenceStarts(text)
+  if (starts.length % 2 === 1) return `${text}\n\`\`\``
   return text
 }
 
-/** 流式预览：不写 LRU，不定稿高亮。chunk 已按帧合并，主线程每帧 parse 一次可接受。 */
-export function parseMarkdownLive(text: string): string {
+function parseLiveFragment(text: string): string {
+  if (!text) return ''
   const dirty = liveMarked.parse(stabilizeStreamingMarkdown(text), { async: false }) as string
   return sanitizeMarkdownHtml(dirty)
+}
+
+/**
+ * 流式预览：闭合代码块走定稿高亮（frozen 前缀可进 LRU）；
+ * 未闭合围栏与其后正文不高亮、不把整条 message 写入 LRU。
+ */
+export function parseMarkdownLive(text: string): string {
+  const { frozen, live } = splitStreamingMarkdown(text)
+  const frozenHtml = frozen ? (getCachedMarkdownHtml(frozen) ?? parseMarkdownSync(frozen)) : ''
+  return frozenHtml + parseLiveFragment(live)
 }
 
 function getWorker(): Worker | null {

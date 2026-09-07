@@ -7,7 +7,7 @@ import { getCachedMarkdownHtml, parseMarkdownLive, parseMarkdownSync } from './m
  *
  * 定稿后：渲染期同步取 LRU 缓存；未命中则同步 parse 一次并写入缓存。
  * 虚表滚走再滚回 = 同 text 必命中缓存 → 首帧就是 HTML，不再闪「加载一下」。
- * 流式：按当前全文做轻量 marked（不高亮、不进缓存），chunk 已按帧合并。
+ * 流式：已闭合的 ``` 代码块立刻定稿高亮；未闭合围栏仍轻量 parse。chunk 已按帧合并。
  */
 export const MarkdownBody = memo(function MarkdownBody({
   text,
@@ -16,7 +16,7 @@ export const MarkdownBody = memo(function MarkdownBody({
 }: {
   text: string
   className?: string
-  /** 流式中用轻量 parse，定稿后再高亮并写入缓存 */
+  /** 流式中：闭合代码块高亮，未闭合围栏轻量 parse */
   streaming?: boolean
 }) {
   if (!text) return null
