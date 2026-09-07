@@ -278,10 +278,8 @@ export const SessionInspector = memo(function SessionInspector({
       return () => window.clearTimeout(idle)
     }
     if (!rowPresent) {
-      const idle = window.setTimeout(() => {
-        hydratingRef.current = false
-      }, 80)
-      return () => window.clearTimeout(idle)
+      hydratingRef.current = true
+      return
     }
     const bind = currentSession?.inspector
     const openedNext = bind?.opened ?? readOpened(sessionId)
