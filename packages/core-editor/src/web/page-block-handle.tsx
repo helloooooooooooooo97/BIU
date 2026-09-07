@@ -5,9 +5,9 @@ import { HeadlessDismiss } from '@biu/public-ui'
 import {
   deleteHandleBlock,
   duplicateHandleBlock,
+  handleBlockAtPointer,
   insertParagraphAfter,
   insertParagraphBefore,
-  resolveHandleBlock,
   type HandleBlock,
 } from './page-block-handle.ts'
 
@@ -26,14 +26,11 @@ function lineCoords(editor: Editor, found: HandleBlock) {
 }
 
 function readTarget(editor: Editor, host: HTMLElement, clientX: number, clientY: number): HandleTarget | null {
-  const content = editor.view.dom.getBoundingClientRect()
-  const probeX = Math.min(Math.max(clientX, content.left + 8), content.right - 8)
-  const coords = editor.view.posAtCoords({ left: probeX, top: clientY })
-  if (!coords) return null
-  const found = resolveHandleBlock(editor.state.doc.resolve(coords.pos))
+  const found = handleBlockAtPointer(editor, clientX, clientY)
   if (!found) return null
-  const dom = editor.view.nodeDOM(found.pos)
-  const el = dom instanceof HTMLElement ? dom : dom?.parentElement
+  const content = editor.view.dom.getBoundingClientRect()
+  const raw = editor.view.nodeDOM(found.pos)
+  const el = raw instanceof HTMLElement ? raw : raw?.parentElement
   if (!(el instanceof HTMLElement)) return null
   const hostBox = host.getBoundingClientRect()
   const box = el.getBoundingClientRect()

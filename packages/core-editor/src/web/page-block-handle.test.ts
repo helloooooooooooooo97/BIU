@@ -4,6 +4,7 @@ import { Editor } from '@tiptap/core'
 import {
   deleteHandleBlock,
   duplicateHandleBlock,
+  handleBlockFromDom,
   insertParagraphAfter,
   insertParagraphBefore,
   resolveHandleBlock,
@@ -64,4 +65,51 @@ test('insert before / after / duplicate / delete a paragraph', () => {
   deleteHandleBlock(editor, 0, editor.state.doc.child(0))
   assert.notEqual(editor.state.doc.child(0).textContent, '')
   editor.destroy()
+})
+
+test('resolveHandleBlock picks pageBlock atom at the gap beside it', () => {
+  const editor = editorOf(`:::pageBlock {kind=html plugin=page-html-blocks}
+{"html":"<p>hi</p>"}
+:::
+`)
+  let blockPos = -1
+  let blockSize = 0
+  editor.state.doc.descendants((node, pos) => {
+    if (node.type.name === 'pageBlock') {
+      blockPos = pos
+      blockSize = node.nodeSize
+    }
+  })
+  assert.ok(blockPos >= 0)
+  const atStart = resolveHandleBlock(editor.state.doc.resolve(blockPos))
+  assert.equal(atStart?.node.type.name, 'pageBlock')
+  assert.equal(atStart?.pos, blockPos)
+  const after = resolveHandleBlock(editor.state.doc.resolve(blockPos + blockSize))
+  assert.equal(after?.node.type.name, 'pageBlock')
+  assert.equal(after?.pos, blockPos)
+  editor.destroy()
+})
+
+test('handleBlockFromDom maps a nested iframe back to the pageBlock atom', () => {
+  const host = document.createElement('div')
+  document.body.append(host)
+  const editor = new Editor({
+    element: host,
+    extensions: pageEditorExtensions(),
+    content: `:::pageBlock {kind=html plugin=page-html-blocks}
+{"html":"<p>hi</p>"}
+:::
+`,
+    contentType: 'markdown',
+  })
+  const hole = host.querySelector('[draggable="true"]')
+  assert.ok(hole instanceof HTMLElement)
+  hole.classList.add('page-block')
+  hole.setAttribute('data-page-block', 'html')
+  const iframe = document.createElement('iframe')
+  hole.append(iframe)
+  const found = handleBlockFromDom(editor, iframe)
+  assert.equal(found?.node.type.name, 'pageBlock')
+  editor.destroy()
+  host.remove()
 })
