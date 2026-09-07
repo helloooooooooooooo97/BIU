@@ -38,7 +38,6 @@ type Floater = { x: number; y: number; life: number; text: string; color: string
 type Mine = { x: number; y: number; life: number; r: number }
 
 const TAU = Math.PI * 2
-const ARENA = 920
 
 function rand(a: number, b: number) {
   return a + Math.random() * (b - a)
@@ -78,8 +77,17 @@ export class ArenaGame {
   stats = { rate: 1, dmg: 1, spread: 0, magnet: 80 }
   w = 1080
   h = 720
+  dpr = 1
   spawnT = 0
   left = 0
+
+  get fieldW() {
+    return Math.max(280, this.w)
+  }
+
+  get fieldH() {
+    return Math.max(280, this.h)
+  }
 
   get weaponId() {
     return WEAPONS[this.weapon]!.id
@@ -112,14 +120,15 @@ export class ArenaGame {
     if (this.left <= 0) return
     this.left -= 1
     const a = rand(0, TAU)
-    const d = ARENA * 0.42
+    const hw = this.fieldW * 0.46
+    const hh = this.fieldH * 0.46
     const roll = Math.random()
     const kind: Enemy['kind'] = this.wave > 4 && roll > 0.82 ? 'mage' : this.wave > 2 && roll > 0.62 ? 'tank' : roll > 0.45 ? 'runner' : 'grunt'
     const hp = kind === 'tank' ? 70 + this.wave * 12 : kind === 'mage' ? 28 + this.wave * 4 : kind === 'runner' ? 16 + this.wave * 3 : 22 + this.wave * 5
     const r = kind === 'tank' ? 18 : kind === 'runner' ? 10 : 13
     this.enemies.push({
-      x: Math.cos(a) * d,
-      y: Math.sin(a) * d,
+      x: Math.cos(a) * hw,
+      y: Math.sin(a) * hh,
       vx: 0,
       vy: 0,
       hp,
@@ -347,9 +356,8 @@ export class ArenaGame {
       p.x += d.x * speed * dt
       p.y += d.y * speed * dt
     }
-    const lim = ARENA / 2 - 24
-    p.x = clamp(p.x, -lim, lim)
-    p.y = clamp(p.y, -lim, lim)
+    p.x = clamp(p.x, -this.fieldW / 2 + 24, this.fieldW / 2 - 24)
+    p.y = clamp(p.y, -this.fieldH / 2 + 24, this.fieldH / 2 - 24)
 
     this.spawnT -= dt
     if (this.spawnT <= 0 && this.left > 0) {
@@ -481,9 +489,18 @@ export class ArenaGame {
     this.floats = this.floats.filter((f) => f.life > 0)
   }
 
+  space(ctx: CanvasRenderingContext2D) {
+    const canvas = ctx.canvas
+    const cssW = canvas?.clientWidth || this.w
+    const bitmapW = canvas?.width || 0
+    if (cssW > 0 && bitmapW > 0) this.dpr = bitmapW / cssW
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0)
+  }
+
   draw(ctx: CanvasRenderingContext2D) {
-    const { w, h } = this
-    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    const w = this.fieldW
+    const h = this.fieldH
+    this.space(ctx)
     ctx.clearRect(0, 0, w, h)
     ctx.fillStyle = '#07080c'
     ctx.fillRect(0, 0, w, h)
@@ -493,19 +510,23 @@ export class ArenaGame {
 
     ctx.strokeStyle = 'rgba(255,255,255,0.06)'
     ctx.lineWidth = 1
-    for (let i = -ARENA / 2; i <= ARENA / 2; i += 40) {
+    const left = -w / 2
+    const top = -h / 2
+    for (let x = left; x <= w / 2; x += 40) {
       ctx.beginPath()
-      ctx.moveTo(i, -ARENA / 2)
-      ctx.lineTo(i, ARENA / 2)
+      ctx.moveTo(x, top)
+      ctx.lineTo(x, h / 2)
       ctx.stroke()
+    }
+    for (let y = top; y <= h / 2; y += 40) {
       ctx.beginPath()
-      ctx.moveTo(-ARENA / 2, i)
-      ctx.lineTo(ARENA / 2, i)
+      ctx.moveTo(left, y)
+      ctx.lineTo(w / 2, y)
       ctx.stroke()
     }
     ctx.strokeStyle = 'rgba(239,238,236,0.18)'
     ctx.lineWidth = 3
-    ctx.strokeRect(-ARENA / 2, -ARENA / 2, ARENA, ARENA)
+    ctx.strokeRect(left, top, w, h)
 
     for (const m of this.mines) {
       ctx.fillStyle = 'rgba(249,115,22,0.25)'
@@ -581,7 +602,7 @@ export class ArenaGame {
       ctx.globalAlpha = 1
     }
 
-    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    this.space(ctx)
     this.hud(ctx)
   }
 

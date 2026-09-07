@@ -29,6 +29,7 @@ function ArenaApp() {
       canvas.style.height = `${h}px`
       g.w = w
       g.h = h
+      g.dpr = dpr
       const ctx = canvas.getContext('2d')
       if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     }
@@ -110,11 +111,12 @@ function ArenaApp() {
     <div
       data-testid="arena-rogue-root"
       style={{
+        position: 'absolute',
+        inset: 0,
         width: '100%',
         height: '100%',
         minHeight: 0,
         background: '#07080c',
-        position: 'relative',
         overflow: 'hidden',
       }}
     >
@@ -122,7 +124,15 @@ function ArenaApp() {
         ref={canvasRef}
         tabIndex={0}
         data-testid="arena-rogue-canvas"
-        style={{ display: 'block', width: '100%', height: '100%', outline: 'none', cursor: 'crosshair' }}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          display: 'block',
+          width: '100%',
+          height: '100%',
+          outline: 'none',
+          cursor: 'crosshair',
+        }}
       />
     </div>
   )
