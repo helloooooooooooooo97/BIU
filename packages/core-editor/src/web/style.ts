@@ -1,5 +1,5 @@
 export const PAGE_EDITOR_STYLE = `
-.page-editor{position:relative;min-width:0;width:100%;padding:6px 0 48px;color:var(--dsw-label);font-family:var(--font-sans);font-size:14px;line-height:1.7;letter-spacing:-.003em}
+.page-editor{position:relative;min-width:0;width:100%;padding:6px 0 48px;color:var(--dsw-label);font-family:var(--font-sans);font-size:15px;line-height:1.7;letter-spacing:-.003em}
 .page-editor .tiptap{outline:none;min-height:240px}
 .page-editor .tiptap>:first-child{margin-top:0}
 .page-editor .tiptap p,.page-editor .tiptap h1,.page-editor .tiptap h2,.page-editor .tiptap h3,.page-editor .tiptap ul,.page-editor .tiptap ol,.page-editor .tiptap blockquote,.page-editor .tiptap pre{margin:2px 0}
