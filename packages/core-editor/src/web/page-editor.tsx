@@ -5,6 +5,7 @@ import type { Editor } from '@tiptap/core'
 import { Selection } from '@tiptap/pm/state'
 import type { FsContentProps } from '@biu/type-file-system/ui'
 import { pageEditorExtensions } from './kit.ts'
+import { PageBlockHandle } from './page-block-handle.tsx'
 import { editorHostIsLive } from './editor-live.ts'
 import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, isDocStartSelection } from './title-content-nav.ts'
 
@@ -149,6 +150,7 @@ export function PageEditor({ record, value, writable, onChange }: FsContentProps
   return (
     <div className="page-editor">
       <EditorContent editor={editor} />
+      {writable !== false ? <PageBlockHandle editor={editor} /> : null}
       {writable !== false ? <Bubble editor={editor} /> : null}
     </div>
   )
