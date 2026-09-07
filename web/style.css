@@ -1454,7 +1454,8 @@ body {
   transform: translateX(calc(-100% - 8px));
   opacity: 0;
   pointer-events: none;
-  transition: none;
+  /* 贴窗口左缘时 :hover 会闪断；收起延迟一帧以上，避免消失又弹出 */
+  transition: transform 0s linear 180ms, opacity 0s linear 180ms;
   z-index: 81;
 }
 
@@ -1471,6 +1472,7 @@ body {
   transform: none;
   opacity: 1;
   pointer-events: auto;
+  transition: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
