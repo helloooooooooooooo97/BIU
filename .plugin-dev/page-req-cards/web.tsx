@@ -203,7 +203,10 @@ export function apply(ctx: {
   pageEditor: {
     registerBlock: (spec: {
       kind: string
+      plugin: string
       label: string
+      blockType?: string
+      blockTypeLabel?: string
       hint?: string
       aliases?: string[]
       defaults?: Record<string, unknown> | (() => Record<string, unknown>)
@@ -213,7 +216,10 @@ export function apply(ctx: {
 }) {
   ctx.pageEditor.registerBlock({
     kind: 'req',
+    plugin: name,
     label: '需求卡片',
+    blockType: 'req',
+    blockTypeLabel: '需求卡片',
     hint: '结构化记录一条需求/待办：类型·状态·优先级',
     aliases: ['需求', 'req', 'requirement', 'todo', '任务'],
     defaults: REQ_DEFAULTS,

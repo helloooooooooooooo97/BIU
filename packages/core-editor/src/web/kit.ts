@@ -44,7 +44,7 @@ export function pageEditorExtensions() {
     Markdown,
     Image.configure({ inline: false, allowBase64: true }),
     TableKit.configure({
-      table: { resizable: true },
+      table: { resizable: true, allowTableNodeSelection: true },
     }),
     pageMathematics,
     Placeholder.configure({

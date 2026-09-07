@@ -1,5 +1,6 @@
 import type { Editor } from '@tiptap/core'
 import type { Node, ResolvedPos } from '@tiptap/pm/model'
+import { NodeSelection } from '@tiptap/pm/state'
 
 export type HandleBlock = {
   pos: number
@@ -81,4 +82,23 @@ export function insertParagraphAfter(editor: Editor, pos: number, node: Node) {
 
 export function duplicateHandleBlock(editor: Editor, pos: number, node: Node) {
   editor.chain().focus().insertContentAt(pos + node.nodeSize, node.toJSON()).run()
+}
+
+/** 左侧把手拖块：整块 NodeSelection + move，避免 HTML5 默认复制。 */
+export function beginHandleDrag(
+  editor: Editor,
+  pos: number,
+  dataTransfer: { effectAllowed: string; setData: (type: string, data: string) => void } | null,
+) {
+  const { view } = editor
+  const node = view.state.doc.nodeAt(pos)
+  if (!node) return false
+  const selection = NodeSelection.create(view.state.doc, pos)
+  view.dispatch(view.state.tr.setSelection(selection))
+  view.dragging = { slice: selection.content(), move: true }
+  if (dataTransfer) {
+    dataTransfer.effectAllowed = 'move'
+    dataTransfer.setData('text/plain', '\u00a0')
+  }
+  return true
 }
