@@ -1,4 +1,4 @@
-import { Excalidraw } from '@excalidraw/excalidraw'
+import { CaptureUpdateAction, Excalidraw } from '@excalidraw/excalidraw'
 import '@excalidraw/excalidraw/index.css'
 import { createPortal } from 'react-dom'
 import { createRoot, type Root } from 'react-dom/client'
@@ -30,6 +30,12 @@ type Scene = {
 type DrawApi = {
   refresh: () => void
   scrollToContent?: (target?: unknown, opts?: { fitToContent?: boolean; animate?: boolean }) => void
+  updateScene?: (data: {
+    elements?: unknown
+    appState?: Record<string, unknown>
+    captureUpdate?: unknown
+  }) => void
+  addFiles?: (files: unknown[]) => void
 }
 
 function emptyScene(): Scene {
@@ -67,9 +73,9 @@ function normalizeStem(raw: string, fallback: string) {
   return stem
 }
 
-async function loadScene(file: string): Promise<{ scene: Scene; etag: string }> {
+async function loadScene(file: string, bust = false): Promise<{ scene: Scene; etag: string }> {
   const name = assetName(file)
-  const res = await fetch(`/api/page/file/${encodeURIComponent(name)}`)
+  const res = await fetch(`/api/page/file/${encodeURIComponent(name)}${bust ? `?t=${Date.now()}` : ''}`)
   if (res.status === 404) {
     const scene = emptyScene()
     const created = await fetch(`/api/page/file/${encodeURIComponent(name)}`, {
@@ -124,6 +130,8 @@ type Host = {
   lastScene: Scene | null
   etag: string
   pending: ReturnType<typeof setTimeout> | null
+  quietUntil: number
+  api: DrawApi | null
   expanded: boolean
   sync?: () => void
   onCollapse?: () => void
@@ -138,21 +146,41 @@ function cancelPending(host: Host) {
   host.pending = null
 }
 
+function sceneData(scene: Scene) {
+  return {
+    elements: (scene.elements ?? []) as never,
+    appState: { ...withoutCollab(scene.appState), isLoading: false, collaborators: new Map() },
+    files: (scene.files ?? {}) as never,
+  }
+}
+
+function applyScene(host: Host, scene: Scene, etag: string) {
+  host.etag = etag
+  host.lastScene = scene
+  host.initialData = sceneData(scene)
+  host.quietUntil = Date.now() + 1200
+  const api = host.api
+  if (api?.updateScene) {
+    api.updateScene({
+      elements: host.initialData.elements,
+      appState: host.initialData.appState,
+      captureUpdate: CaptureUpdateAction.NEVER,
+    })
+    const files = Object.values(host.initialData.files ?? {})
+    if (files.length) api.addFiles?.(files)
+    fitView(api)
+    return
+  }
+  paintHost(host)
+}
+
 async function reloadHost(file: string) {
   const host = hosts.get(file)
   if (!host) return
   cancelPending(host)
-  const loaded = await loadScene(file)
+  const loaded = await loadScene(file, true)
   if (hosts.get(file) !== host) return
-  const scene = loaded.scene
-  host.etag = loaded.etag
-  host.lastScene = scene
-  host.initialData = {
-    elements: (scene.elements ?? []) as never,
-    appState: { ...withoutCollab(scene.appState), collaborators: new Map() },
-    files: (scene.files ?? {}) as never,
-  }
-  paintHost(host)
+  applyScene(host, loaded.scene, loaded.etag)
 }
 
 if (typeof window !== 'undefined') {
@@ -200,7 +228,7 @@ function placeHost(host: Host, slot: HTMLElement | null) {
 function paintHost(host: Host) {
   if (!host.root || !host.initialData) return
   host.root.render(
-    <PersistentDraw file={host.file} initialData={host.initialData} expanded={host.expanded} />,
+    <PersistentDraw key={host.etag} file={host.file} initialData={host.initialData} expanded={host.expanded} />,
   )
 }
 
@@ -223,17 +251,16 @@ function retainHost(file: string) {
     lastScene: null,
     etag: '',
     pending: null,
+    quietUntil: 0,
+    api: null,
     expanded: false,
   }
   host.ready = loadScene(file).then((loaded) => {
     if (hosts.get(file) !== host) return host
     const scene = loaded.scene
     host.etag = loaded.etag
-    host.initialData = {
-      elements: (scene.elements ?? []) as never,
-      appState: { ...withoutCollab(scene.appState), collaborators: new Map() },
-      files: (scene.files ?? {}) as never,
-    }
+    host.quietUntil = Date.now() + 1200
+    host.initialData = sceneData(scene)
     host.lastScene = scene
     host.root = createRoot(el)
     paintHost(host)
@@ -276,7 +303,9 @@ function PersistentDraw(props: {
   const apiRef = useRef<DrawApi | null>(null)
   const bindApi = useCallback((api: DrawApi | null) => {
     apiRef.current = api
-  }, [])
+    const hosted = hosts.get(file)
+    if (hosted) hosted.api = api
+  }, [file])
   const onChange = useCallback((elements: unknown[], appState: Record<string, unknown>, files: Record<string, unknown>) => {
     if (!file) return
     const next: Scene = {
@@ -285,10 +314,17 @@ function PersistentDraw(props: {
       files,
     }
     const raw = JSON.stringify(next)
+    const hosted = hosts.get(file)
+    if (hosted) {
+      etagRef.current = hosted.etag
+      hosted.lastScene = next
+    }
+    if (hosted && Date.now() < hosted.quietUntil) {
+      lastSaved.current = raw
+      return
+    }
     if (raw === lastSaved.current) return
     lastSaved.current = raw
-    const hosted = hosts.get(file)
-    if (hosted) hosted.lastScene = next
     if (pending.current) clearTimeout(pending.current)
     pending.current = setTimeout(() => {
       const hostedNow = hosts.get(file)
