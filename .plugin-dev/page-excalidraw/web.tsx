@@ -1,4 +1,4 @@
-import { CaptureUpdateAction, Excalidraw } from '@excalidraw/excalidraw'
+import { Excalidraw } from '@excalidraw/excalidraw'
 import '@excalidraw/excalidraw/index.css'
 import { createPortal } from 'react-dom'
 import { createRoot, type Root } from 'react-dom/client'
@@ -131,6 +131,7 @@ type Host = {
   etag: string
   pending: ReturnType<typeof setTimeout> | null
   quietUntil: number
+  appliedEtag: string
   api: DrawApi | null
   expanded: boolean
   sync?: () => void
@@ -155,22 +156,15 @@ function sceneData(scene: Scene) {
 }
 
 function applyScene(host: Host, scene: Scene, etag: string) {
+  if (etag && host.appliedEtag === etag) return
   host.etag = etag
+  host.appliedEtag = etag
   host.lastScene = scene
   host.initialData = sceneData(scene)
   host.quietUntil = Date.now() + 1200
-  const api = host.api
-  if (api?.updateScene) {
-    api.updateScene({
-      elements: host.initialData.elements,
-      appState: host.initialData.appState,
-      captureUpdate: CaptureUpdateAction.NEVER,
-    })
-    const files = Object.values(host.initialData.files ?? {})
-    if (files.length) api.addFiles?.(files)
-    fitView(api)
-    return
-  }
+  host.api = null
+  host.root?.unmount()
+  host.root = createRoot(host.el)
   paintHost(host)
 }
 
@@ -190,7 +184,7 @@ if (typeof window !== 'undefined') {
     if (!name) return
     for (const [file, host] of hosts) {
       if (assetName(file) !== name && file !== name) continue
-      if (detail?.etag && host.etag === detail.etag) continue
+      if (detail?.etag && (host.appliedEtag === detail.etag || host.etag === detail.etag)) continue
       cancelPending(host)
       void reloadHost(file)
     }
@@ -252,6 +246,7 @@ function retainHost(file: string) {
     etag: '',
     pending: null,
     quietUntil: 0,
+    appliedEtag: '',
     api: null,
     expanded: false,
   }
@@ -259,6 +254,7 @@ function retainHost(file: string) {
     if (hosts.get(file) !== host) return host
     const scene = loaded.scene
     host.etag = loaded.etag
+    host.appliedEtag = loaded.etag
     host.quietUntil = Date.now() + 1200
     host.initialData = sceneData(scene)
     host.lastScene = scene

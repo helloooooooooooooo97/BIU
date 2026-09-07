@@ -160,7 +160,7 @@ test('page-excalidraw sandbox stores scenes as page assets', async () => {
   assert.match(src, /View: Board/)
   assert.match(src, /defaults: \(\) => \(\{ file:/)
   assert.match(src, /function reloadHost/)
-  assert.match(src, /updateScene/)
+  assert.match(src, /appliedEtag/)
   assert.match(src, /quietUntil/)
   assert.match(src, /biu:asset-changed/)
   const onChange = src.match(/const onChange = useCallback\([\s\S]*?\}, \[file\]\)/)?.[0]

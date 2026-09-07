@@ -447,7 +447,7 @@ test('excalidraw board onChange does not setState', async () => {
   assert.doesNotMatch(onChange, /setScene/)
   assert.match(onChange, /saveScene/)
   assert.match(src, /function reloadHost/)
-  assert.match(src, /updateScene/)
+  assert.match(src, /appliedEtag/)
   assert.match(src, /export const inject/)
   assert.match(src, /View: Board/)
 })
