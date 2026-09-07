@@ -2,7 +2,7 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { Context, Service } from 'cordis'
 import * as tools from '@biu/host-tools'
-import { mkdtemp } from 'node:fs/promises'
+import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DatabaseService, apply as applyFileSystem } from './index.ts'
@@ -479,6 +479,18 @@ test('editAsset views and writes referenced attachments with etag', async () => 
     etag: viewed.etag,
   })
   assert.equal(written.ok, true)
+  const dump = join(await mkdtemp(join(tmpdir(), 'db-asset-from-')), 'scene.json')
+  await writeFile(dump, '{"elements":[{"id":"a"}]}')
+  const fromFile = await db.editAsset('/pages/p1', {
+    command: 'write',
+    name: 'board.json',
+    from: dump,
+    etag: written.etag,
+  })
+  assert.equal(fromFile.ok, true)
+  const again = await db.editAsset('/pages/p1', { command: 'view', name: 'board.json' })
+  assert.match(String((again as { text?: string }).text), /"id":"a"/)
+  await assert.rejects(() => db.editAsset('/pages/p1', { command: 'write', name: 'board.json', etag: again.etag }), /value or from/)
   await assert.rejects(() => db.editAsset('/pages/p1', { command: 'view', name: 'nope.json' }), /not referenced/)
 })
 

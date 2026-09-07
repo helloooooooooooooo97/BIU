@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises'
+import { isAbsolute, resolve } from 'node:path'
 import { dataPath } from '@biu/host-plugin-loader/data-dir'
 import { Service, type Context } from 'cordis'
 import {
@@ -959,7 +961,8 @@ export class DatabaseService extends Service implements Database {
       .trim()
       .replace(/^assets\//, '')
       .replace(/^.*[/\\]/, '')
-    const command = String(args.command ?? (args.value != null ? 'write' : 'view'))
+    const from = String(args.from ?? '').trim()
+    const command = String(args.command ?? (args.value != null || from ? 'write' : 'view'))
     const recPath = `${spec.path}/${record.id}`
     if (command === 'view' && !file) {
       const assets = []
@@ -990,7 +993,9 @@ export class DatabaseService extends Service implements Database {
       }
     }
     if (command !== 'write') throw new Error(`unknown asset command: ${command}`)
-    const written = await this.assets.write(file, String(args.value ?? ''), { etag: String(args.etag ?? '') })
+    const body = from ? await readLocalWriteFile(from) : String(args.value ?? '')
+    if (!from && args.value == null) throw new Error('write needs value or from')
+    const written = await this.assets.write(file, body, { etag: String(args.etag ?? '') })
     this.broadcastAsset(recPath, written.name, written.etag)
     return { kind: 'asset' as const, ok: true as const, path: recPath, name: written.name, etag: written.etag }
   }
@@ -998,6 +1003,15 @@ export class DatabaseService extends Service implements Database {
   private broadcastAsset(path: string, name: string, etag: string) {
     const http = this.ctx.get('http') as { broadcast?: (type: string, payload: unknown) => void } | undefined
     http?.broadcast?.(DATABASE_CHANNEL, { ts: Date.now(), asset: { name, etag, path } })
+  }
+}
+
+async function readLocalWriteFile(raw: string) {
+  const file = isAbsolute(raw) ? raw : resolve(process.cwd(), raw)
+  try {
+    return await readFile(file)
+  } catch {
+    throw new Error(`cannot read from: ${raw}`)
   }
 }
 
@@ -1348,6 +1362,7 @@ export function apply(ctx: Context) {
       'path 为 /<表>/<id>，name 为附件文件名（正文里的 assets/xxx 或 /api/page/file/xxx）。',
       'command=view：不传 name 列出本条引用的附件及 etag；带 name 读该文件（文本/json 带 text）和 etag。',
       'command=write：覆盖该文件，必须带 etag（等于上次 view 的 etag）。对不上返回 etag conflict，先 view 再写。',
+      '大内容不要塞进 value：先用 bash/python 写到本地文件，再 from=该路径（工作区相对或绝对，如 /tmp/board.json）。value 只适合短文本。',
       '写成功只返回 {ok, path, name, etag}。前端开着的编辑器按 etag 重载，过期 PUT 会 409。',
     ].join(' '),
     parameters: {
@@ -1358,9 +1373,13 @@ export function apply(ctx: Context) {
         command: {
           type: 'string',
           enum: ['view', 'write'],
-          description: 'view | write。省略时：有 value 则 write，否则 view。',
+          description: 'view | write。省略时：有 value 或 from 则 write，否则 view。',
         },
-        value: { type: 'string', description: 'write 的全文（json/文本）' },
+        value: { type: 'string', description: 'write 的全文（json/文本）。大文件用 from，不要把整段 JSON 贴进来。' },
+        from: {
+          type: 'string',
+          description: 'write 时读这个本地文件作为内容，代替 value。相对工作区根，或绝对路径。',
+        },
         etag: { type: 'string', description: 'write 必填，等于上次 view 的 etag' },
       },
       required: ['path'],
