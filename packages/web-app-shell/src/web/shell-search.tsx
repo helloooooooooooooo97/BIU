@@ -209,7 +209,7 @@ export function openSearchHit(hit: { kind: SearchKind; id: string; record?: Reco
   )
 }
 
-/** Shift+Enter：左侧主区打开并改路由；会话会换成主 Session。 */
+/** Shift+Enter：左侧主区打开并改路由；只有会话会换成主 Session。 */
 export function searchHref(hit: { kind: SearchKind; id: string; record?: Record<string, unknown> }) {
   const view = viewOpenTarget(hit)
   if (view) return `/database${view.collection}/view/${encodeURIComponent(view.viewId)}`

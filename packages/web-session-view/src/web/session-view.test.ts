@@ -762,7 +762,7 @@ test('forkCurrent inserts the child into the sidebar list', async () => {
   assert.equal(view.get().sessions.some((item) => item.id === 's2'), true)
 })
 
-test('home and module routes open the most recently updated chat', async () => {
+test('home cold-start picks latest chat; opening pages or data does not switch session', async () => {
   mockFetch({
     '/api/sessions': () => ({
       sessions: [
@@ -776,6 +776,12 @@ test('home and module routes open the most recently updated chat', async () => {
       hasMore: false,
       totalTurns: 0,
     }),
+    '/api/sessions/old?turns=': () => ({
+      id: 'old',
+      events: [{ type: 'session/open', version: 1, seq: 0, ts: 1 }],
+      hasMore: false,
+      totalTurns: 0,
+    }),
     '/api/approvals': () => ({ mode: 'auto', pending: [] }),
   })
   const ctx = new Context()
@@ -784,8 +790,26 @@ test('home and module routes open the most recently updated chat', async () => {
   await view.refreshSessions()
   await view.applyRoute({ kind: 'home' })
   assert.equal(view.get().sessionId, 'new')
+  await view.load('old', { view: 'chat', wait: true })
+  assert.equal(view.get().sessionId, 'old')
   await view.applyRoute({ kind: 'module', moduleId: 'database', path: '/database' })
-  assert.equal(view.get().sessionId, 'new')
+  assert.equal(view.get().sessionId, 'old')
+  await view.applyRoute({
+    kind: 'record',
+    moduleId: 'database',
+    path: '/database',
+    collection: '/pages',
+    recordId: 'p1',
+  })
+  assert.equal(view.get().sessionId, 'old')
+  await view.applyRoute({
+    kind: 'collection-view',
+    moduleId: 'database',
+    path: '/database',
+    collection: '/pages',
+    viewId: 'mine',
+  })
+  assert.equal(view.get().sessionId, 'old')
 })
 
 test('missing session route does not surface 404 and opens the latest chat', async () => {

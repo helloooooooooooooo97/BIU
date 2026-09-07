@@ -369,8 +369,8 @@ export class SessionViewService extends Service {
   }
 
   /** URL → 状态：只由路由层调用，不回写 URL。
-   * `/s/:id` 打开该会话；其它页面打开最近一条对话，供全局悬浮窗使用。
-   * 会话表记录详情不切换主 session，详情自己 peek 该行日志。 */
+   * 只有 `/s/:id` 才换成主 Session。搜索把页面/其它记录开到左侧、进数据模块，都不改全局会话。
+   * 冷启动还没有会话时，给悬浮窗补最近一条。 */
   async applyRoute(route: AppRoute) {
     if (route.kind === 'session') {
       if (this.value.sessionId !== route.sessionId) {
@@ -403,10 +403,7 @@ export class SessionViewService extends Service {
       if (this.wantsTrajectory(route.view)) void this.ensureTrajectory()
       return
     }
-    if (route.kind === 'record' && route.collection === '/sessions') {
-      return
-    }
-    await this.loadMostRecentSession()
+    if (!this.value.sessionId) await this.loadMostRecentSession()
   }
 
   private async loadMostRecentSession(skipId?: string) {
