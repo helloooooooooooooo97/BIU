@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   asContentText,
   insertText,
+  mutationLocus,
   replaceLinesText,
   resolveContentCommand,
   strReplaceText,
@@ -42,4 +43,21 @@ test('command defaults to view, or write when value is passed', () => {
   assert.equal(resolveContentCommand({ value: 'x' }), 'write')
   assert.equal(resolveContentCommand({ command: 'str_replace' }), 'str_replace')
   assert.equal(asContentText({ a: 1 }), '{\n  "a": 1\n}')
+})
+
+test('mutationLocus reports 1-based lines in the new text', () => {
+  const before = 'one\ntwo\nthree\nfour'
+  assert.deepEqual(
+    mutationLocus('str_replace', before, 'one\nTWO\nthree\nfour', { old_str: 'two', new_str: 'TWO' }),
+    { start_line: 2, end_line: 2 },
+  )
+  assert.deepEqual(
+    mutationLocus('replace_lines', before, 'one\ntwo\nC\nD', { start_line: 3, end_line: 4, new_str: 'C\nD' }),
+    { start_line: 3, end_line: 4 },
+  )
+  assert.deepEqual(mutationLocus('insert', before, 'one\nmid\ntwo\nthree\nfour', { insert_line: 1, new_str: 'mid' }), {
+    start_line: 2,
+    end_line: 2,
+  })
+  assert.equal(mutationLocus('write', before, 'done', { value: 'done' }), null)
 })

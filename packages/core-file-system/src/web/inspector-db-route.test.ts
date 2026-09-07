@@ -188,6 +188,33 @@ test('applyDatabaseChannelPayload marks the table as agent-working until done', 
   assert.equal(getInspectorDbPath('database:/tasks'), '')
 })
 
+test('applyDatabaseChannelPayload emits content-jump on done', () => {
+  const seen: unknown[] = []
+  const onJump = (event: Event) => seen.push((event as CustomEvent).detail)
+  window.addEventListener('biu:content-jump', onJump)
+  applyDatabaseChannelPayload(
+    {
+      phase: 'working',
+      sessionId: 'main',
+      reveal: { collection: '/pages', recordId: 'home' },
+      contentJump: { path: '/pages/home', start_line: 8, end_line: 10 },
+    },
+    'main',
+  )
+  assert.equal(seen.length, 0)
+  applyDatabaseChannelPayload(
+    {
+      phase: 'done',
+      sessionId: 'main',
+      reveal: { collection: '/pages', recordId: 'home' },
+      contentJump: { path: '/pages/home', start_line: 8, end_line: 10 },
+    },
+    'main',
+  )
+  window.removeEventListener('biu:content-jump', onJump)
+  assert.deepEqual(seen, [{ path: '/pages/home', start_line: 8, end_line: 10 }])
+})
+
 test('agent channel does not open inspector views unless follow is on', () => {
   setInspectorDbPath('database:/pages', '/database/pages')
   applyDatabaseChannelPayload(

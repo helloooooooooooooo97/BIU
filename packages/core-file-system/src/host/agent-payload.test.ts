@@ -193,6 +193,17 @@ test('compact root keeps view.blurb for the agent; drops route chrome', () => {
   }) as Record<string, unknown>
   assert.deepEqual(written, { ok: true, path: '/notes/n1' })
 
+  const replaced = pack.query({
+    kind: 'content',
+    path: '/notes/n1',
+    field: 'content',
+    command: 'str_replace',
+    ok: true,
+    start_line: 4,
+    end_line: 5,
+  }) as Record<string, unknown>
+  assert.deepEqual(replaced, { ok: true, path: '/notes/n1', command: 'str_replace', start_line: 4, end_line: 5 })
+
   const assetWrite = pack.query({
     kind: 'asset',
     path: '/pages/p1',

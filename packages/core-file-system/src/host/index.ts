@@ -30,6 +30,7 @@ import {
   type FieldSpec,
   type ListPage,
   type PersonValue,
+  parseContentJump,
 } from '@biu/type-file-system'
 import { SavedViewsStore, clientViewFromDbRow, viewsCollection, type StoredView } from './saved-views.ts'
 import { FacetStore } from './facets-store.ts'
@@ -43,6 +44,7 @@ import {
   strReplaceText,
   viewContent,
   writeContentText,
+  mutationLocus,
 } from './content-edit.ts'
 import { currentSessionId } from '@biu/host-sessions/scope'
 import { databaseRevealForTool, normalizeCollectionPath } from '../paths.ts'
@@ -945,12 +947,14 @@ export class DatabaseService extends Service implements Database {
             ? insertText(text, args.insert_line, args.new_str)
             : replaceLinesText(text, args.start_line, args.end_line, args.new_str)
     await this.writeContent(path, next)
+    const locus = mutationLocus(command, text, next, args)
     return {
       kind: 'content' as const,
       path: current.path,
       field: current.field,
       command,
       ok: true as const,
+      ...(locus ? { start_line: locus.start_line, end_line: locus.end_line } : {}),
     }
   }
 
@@ -1113,12 +1117,14 @@ function broadcastInspectorReveal(
   const reveal = databaseRevealForTool({ path, result, dropRecord })
   if (!reveal) return
   const http = ctx.get('http') as { broadcast?: (type: string, payload: unknown) => void } | undefined
+  const contentJump = phase === 'done' ? parseContentJump(result) : null
   http?.broadcast?.(DATABASE_CHANNEL, {
     ts: Date.now(),
     reveal,
     phase,
     sessionId: currentSessionId(),
     ...(savedViewFromToolResult(result) ? { savedView: savedViewFromToolResult(result) } : {}),
+    ...(contentJump ? { contentJump } : {}),
   })
 }
 
@@ -1314,7 +1320,7 @@ export function apply(ctx: Context) {
       'command=str_replace：old_str 必须在正文里唯一，替换为 new_str。',
       'command=replace_lines：按 1-based 闭区间 start_line..end_line 换成 new_str。',
       'command=insert：在 insert_line 之后插入 new_str（0 插到第一行前）。',
-      'command=write：整篇覆盖，传 value。写成功只返回 {ok, path}，不含全文。',
+      'command=write：整篇覆盖，传 value。写成功只返回 {ok, path}，不含全文。str_replace / replace_lines / insert 成功额外返回 start_line、end_line（改后正文的 1-based 行），编辑器会跳到该处。',
     ].join(' '),
     parameters: {
       type: 'object',

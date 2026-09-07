@@ -1,5 +1,6 @@
 /** 检查器里每个数据库 Tab 有自己的路径，不改中间主界面。 */
 
+import { CONTENT_JUMP_EVENT, parseContentJump } from '@biu/type-file-system'
 import { normalizeCollectionPath } from '../paths.ts'
 import { DATA_MODULE_PATH, databaseAllViewPath, databaseRecordPath, databaseViewPath } from './database-path.ts'
 import { upsertSavedView, savedViewFromRecord } from './view-storage.ts'
@@ -286,6 +287,10 @@ export function applyDatabaseChannelPayload(payload: unknown, currentSessionId?:
   const phase = String((payload as { phase?: unknown }).phase ?? '')
   if (isInspectorAgentFollow()) applyDatabaseReveal(reveal)
   setInspectorAgentWorking(collection, phase !== 'done')
+  if (phase === 'done') {
+    const jump = parseContentJump((payload as { contentJump?: unknown }).contentJump)
+    if (jump) window.dispatchEvent(new CustomEvent(CONTENT_JUMP_EVENT, { detail: jump }))
+  }
 }
 
 function savedViewFromPayload(raw: unknown, revealViewId: unknown): SavedView | null {

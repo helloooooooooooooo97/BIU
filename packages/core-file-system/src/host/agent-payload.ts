@@ -90,6 +90,8 @@ export class AgentDbCompact {
     if (rec.ok === true || (typeof rec.command === 'string' && rec.command !== 'view')) {
       const next: Record<string, unknown> = { ok: true, path: rec.path }
       if (typeof rec.command === 'string' && rec.command !== 'write') next.command = rec.command
+      if (typeof rec.start_line === 'number') next.start_line = rec.start_line
+      if (typeof rec.end_line === 'number') next.end_line = rec.end_line
       return next
     }
     const next: Record<string, unknown> = { path: rec.path, text: rec.text }

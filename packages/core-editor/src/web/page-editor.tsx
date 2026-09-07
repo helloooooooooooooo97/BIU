@@ -8,6 +8,15 @@ import { pageEditorExtensions } from './kit.ts'
 import { PageBlockHandle } from './page-block-handle.tsx'
 import { editorHostIsLive } from './editor-live.ts'
 import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, isDocStartSelection } from './title-content-nav.ts'
+import { tryContentJump } from './content-jump.ts'
+import { CONTENT_JUMP_EVENT } from '@biu/type-file-system'
+
+function jumpToPending(editor: Editor, markdown: string, recordId: string, force = false) {
+  requestAnimationFrame(() => {
+    if (editor.isDestroyed) return
+    tryContentJump(editor, markdown, recordId, force)
+  })
+}
 
 function asMarkdown(value: unknown) {
   if (value == null) return ''
@@ -115,12 +124,17 @@ export function PageEditor({ record, value, writable, onChange }: FsContentProps
       saved.current = md
       hydratedId.current = record.id
       editor.commands.setContent(md, { contentType: 'markdown', emitUpdate: false })
+      jumpToPending(editor, md, record.id, true)
       return
     }
-    if (md === saved.current) return
+    if (md === saved.current) {
+      jumpToPending(editor, md, record.id)
+      return
+    }
     if (editor.isFocused) return
     saved.current = md
     editor.commands.setContent(md, { contentType: 'markdown', emitUpdate: false })
+    jumpToPending(editor, md, record.id, true)
   }, [editor, record.id, value])
 
   useEffect(() => {
@@ -144,6 +158,16 @@ export function PageEditor({ record, value, writable, onChange }: FsContentProps
     window.addEventListener(FOCUS_RECORD_CONTENT, onFocus)
     return () => window.removeEventListener(FOCUS_RECORD_CONTENT, onFocus)
   }, [editor])
+
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return
+    const onJump = () => {
+      if (editor.isDestroyed || editor.isFocused) return
+      jumpToPending(editor, asMarkdown(value), record.id)
+    }
+    window.addEventListener(CONTENT_JUMP_EVENT, onJump)
+    return () => window.removeEventListener(CONTENT_JUMP_EVENT, onJump)
+  }, [editor, record.id, value])
 
   if (!editor) return <div className="page-editor" data-testid="page-editor-pending" />
 

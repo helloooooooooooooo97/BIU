@@ -50,6 +50,51 @@ function parseViewRange(viewRange: unknown, lineCount: number) {
   return { start, end: Math.min(end, Math.max(lineCount, 1)) }
 }
 
+export type ContentLocus = { start_line: number; end_line: number }
+
+export function lineAtOffset(text: string, offset: number) {
+  if (offset <= 0) return 1
+  return text.slice(0, offset).split('\n').length
+}
+
+export function locusFromRange(text: string, start: number, end: number): ContentLocus {
+  const from = Math.max(0, start)
+  const to = Math.max(from, end)
+  return {
+    start_line: lineAtOffset(text, from),
+    end_line: lineAtOffset(text, to > from ? to - 1 : from),
+  }
+}
+
+export function mutationLocus(
+  command: ContentCommand,
+  before: string,
+  next: string,
+  args: Record<string, unknown>,
+): ContentLocus | null {
+  if (command === 'view') return null
+  if (command === 'str_replace') {
+    const oldStr = String(args.old_str ?? '')
+    const added = typeof args.new_str === 'string' ? args.new_str : ''
+    const at = before.indexOf(oldStr)
+    if (at < 0) return { start_line: 1, end_line: 1 }
+    return locusFromRange(next, at, at + added.length)
+  }
+  if (command === 'insert') {
+    const start_line = Number(args.insert_line) + 1
+    const added = String(args.new_str ?? '')
+    const span = Math.max(1, added.split('\n').length)
+    return { start_line, end_line: start_line + span - 1 }
+  }
+  if (command === 'replace_lines') {
+    const start_line = Number(args.start_line)
+    const added = String(args.new_str ?? '')
+    if (!added) return { start_line, end_line: start_line }
+    return { start_line, end_line: start_line + added.split('\n').length - 1 }
+  }
+  return null
+}
+
 export function strReplaceText(text: string, oldStr: unknown, newStr: unknown) {
   if (typeof oldStr !== 'string' || !oldStr) throw new Error('old_str is required for str_replace')
   const nextNew = typeof newStr === 'string' ? newStr : ''

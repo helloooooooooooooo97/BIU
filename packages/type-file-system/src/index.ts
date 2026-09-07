@@ -626,6 +626,23 @@ export type CollectionInfo = {
 }
 
 export const DATABASE_CHANNEL = 'database' as const
+export const CONTENT_JUMP_EVENT = 'biu:content-jump' as const
+
+export type ContentJump = {
+  path: string
+  start_line: number
+  end_line: number
+}
+
+export function parseContentJump(raw: unknown): ContentJump | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+  const rec = raw as { path?: unknown; start_line?: unknown; end_line?: unknown }
+  const start = Number(rec.start_line)
+  if (!Number.isInteger(start) || start < 1) return null
+  const endRaw = Number(rec.end_line)
+  const end = Number.isInteger(endRaw) && endRaw >= start ? endRaw : start
+  return { path: String(rec.path ?? ''), start_line: start, end_line: end }
+}
 
 export type ListPage = {
   q?: string
