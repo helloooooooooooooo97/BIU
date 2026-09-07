@@ -122,6 +122,13 @@ export function pickPreview(text: string, max = 48) {
   return value.length > max ? `${value.slice(0, max)}…` : value
 }
 
+export function pickIdFromText(raw: string) {
+  let hash = 0
+  const key = raw.replace(/\s+/g, ' ').trim()
+  for (let i = 0; i < key.length; i += 1) hash = (hash * 33 + key.charCodeAt(i)) >>> 0
+  return hash.toString(16)
+}
+
 /** 选取态下划到的一段正文；空选区返回 null。 */
 export function textPickFromSelection(
   route: string,
@@ -131,10 +138,7 @@ export function textPickFromSelection(
   const raw = selection.toString()
   const label = pickPreview(raw, 80)
   if (!label) return null
-  let hash = 0
-  const key = raw.replace(/\s+/g, ' ').trim()
-  for (let i = 0; i < key.length; i += 1) hash = (hash * 33 + key.charCodeAt(i)) >>> 0
-  return { kind: 'text', id: hash.toString(16), label, route }
+  return { kind: 'text', id: pickIdFromText(raw), label, route }
 }
 
 export function pickDomAttrs(kind: string, id: string, label?: string) {

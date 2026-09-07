@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { pickSurfaceAtPoint, resolvePickFromNode, resolvePickAtPoint, resolvePicksInRect, visiblePickBox } from './resolve.ts'
+import { pickSurfaceAtPoint, resolvePickFromNode, resolvePickAtPoint, resolvePicksInRect, visiblePickBox, editorBlockElFromNode } from './resolve.ts'
 import { formatPicks, parsePicks, splitPickStream, chipLabel, dedupePicks, textPickFromSelection } from './types.ts'
 
 test('splitPickStream keeps text and chips in order', () => {
@@ -289,4 +289,47 @@ test('dedupePicks keeps one chip per kind+id', () => {
   assert.equal(refs[0]?.id, 't1')
   assert.equal(refs[0]?.action, 'open')
   assert.equal(refs[1]?.id, 't2')
+})
+
+test('editor paragraphs headings lists and plugin shells are pickable', () => {
+  const root = document.createElement('div')
+  root.className = 'tiptap'
+  const p = document.createElement('p')
+  p.textContent = '一段正文'
+  const h2 = document.createElement('h2')
+  h2.textContent = '小标题'
+  const li = document.createElement('li')
+  const inner = document.createElement('p')
+  inner.textContent = '列表项'
+  li.append(inner)
+  const ul = document.createElement('ul')
+  ul.append(li)
+  const block = document.createElement('div')
+  block.className = 'page-block'
+  block.setAttribute('data-page-block', 'html')
+  block.setAttribute('data-biu-kind', 'plugin')
+  block.setAttribute('data-biu-id', 'page-html-blocks:html')
+  block.setAttribute('data-biu-label', 'HTML')
+  root.append(p, h2, ul, block)
+  document.body.append(root)
+  stubBox(p, 0, 0, 100, 20)
+  stubBox(h2, 0, 24, 100, 20)
+  stubBox(li, 0, 48, 100, 20)
+  stubBox(inner, 0, 48, 100, 20)
+  stubBox(block, 0, 72, 100, 40)
+  const fromP = resolvePickFromNode(p, '/pages/p1')
+  assert.equal(fromP?.ref.kind, 'block')
+  assert.equal(fromP?.ref.label, '一段正文')
+  assert.equal(editorBlockElFromNode(inner), li)
+  const fromLi = resolvePickFromNode(inner, '/pages/p1')
+  assert.equal(fromLi?.ref.kind, 'block')
+  assert.equal(fromLi?.ref.label, '列表项')
+  const fromPlugin = resolvePickFromNode(block, '/pages/p1')
+  assert.equal(fromPlugin?.ref.kind, 'plugin')
+  assert.equal(fromPlugin?.ref.id, 'page-html-blocks:html')
+  const hits = resolvePicksInRect({ left: 0, top: 0, width: 120, height: 120 }, '/pages/p1', root)
+  const kinds = hits.map((item) => item.ref.kind).sort()
+  assert.ok(kinds.includes('block'))
+  assert.ok(kinds.includes('plugin'))
+  root.remove()
 })

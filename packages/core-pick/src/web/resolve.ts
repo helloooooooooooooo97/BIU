@@ -1,4 +1,5 @@
 import type { PickRef } from './types.ts'
+import { pickIdFromText, pickPreview } from './types.ts'
 
 const KIND = 'data-biu-kind'
 const ID = 'data-biu-id'
@@ -68,7 +69,7 @@ export function resolvePickFromNode(
     if (kind && id && highlight) break
     node = node.parentElement
   }
-  if (!kind || !id || !highlight) return null
+  if (!kind || !id || !highlight) return editorBlockPick(start, route, surface)
   return {
     el: highlight,
     ref: {
@@ -76,6 +77,61 @@ export function resolvePickFromNode(
       id,
       ...(action ? { action } : {}),
       label: label || id,
+      route,
+    },
+  }
+}
+
+const EDITOR_ROOT = '.tiptap, [data-testid="page-editor"]'
+
+function isEditorBlockEl(el: HTMLElement) {
+  if (el.classList.contains('page-block') || el.hasAttribute('data-page-block')) return true
+  return /^(P|H1|H2|H3|LI|BLOCKQUOTE|PRE|HR)$/.test(el.tagName)
+}
+
+/** 编辑器顶层块：列表项、引用、插件块、段落/标题。 */
+export function editorBlockElFromNode(start: Element | null): HTMLElement | null {
+  const root = start?.closest(EDITOR_ROOT)
+  if (!root || !(start instanceof Element)) return null
+  let found: HTMLElement | null = null
+  let el: Element | null = start
+  while (el && el !== root) {
+    if (el instanceof HTMLElement && isEditorBlockEl(el)) found = el
+    el = el.parentElement
+  }
+  return found
+}
+
+function editorBlockPick(
+  start: Element | null,
+  route: string,
+  surface: Element | null,
+): { el: HTMLElement; ref: PickRef } | null {
+  const el = editorBlockElFromNode(start)
+  if (!el || isPickIgnored(el) || inHiddenPane(el)) return null
+  if (surface && !surface.contains(el)) return null
+  const taggedKind = read(el, KIND)
+  const taggedId = read(el, ID)
+  if (taggedKind && taggedId) {
+    return {
+      el,
+      ref: {
+        kind: taggedKind,
+        id: taggedId,
+        ...(read(el, ACTION) ? { action: read(el, ACTION) } : {}),
+        label: read(el, LABEL) || taggedId,
+        route,
+      },
+    }
+  }
+  const tag = (el.getAttribute('data-page-block') || el.tagName).toLowerCase()
+  const text = pickPreview(el.textContent ?? '', 80)
+  return {
+    el,
+    ref: {
+      kind: 'block',
+      id: `${tag}:${pickIdFromText(text || tag)}`,
+      label: text || tag,
       route,
     },
   }
@@ -173,12 +229,14 @@ export function visiblePickBox(el: Element): ClientBox | null {
   return box
 }
 
+export const EDITOR_BLOCK_SEL =
+  '.tiptap > p, .tiptap > h1, .tiptap > h2, .tiptap > h3, .tiptap > blockquote, .tiptap > pre, .tiptap > hr, .tiptap .page-block, .tiptap [data-page-block], .tiptap li'
+
 /**
- * 框选：命中所有带 kind+id 的对象节点（不采内部 action）。
- * 点选仍走 resolvePickFromNode，可以打到按钮上的 action。
+ * 框选：命中所有带 kind+id 的对象节点，以及编辑器里的段落/标题/列表/插件块。
  */
 export function resolvePicksInRect(box: ClientBox, route: string, root: ParentNode = document) {
-  const nodes = root.querySelectorAll('[data-biu-kind][data-biu-id]')
+  const nodes = root.querySelectorAll(`[data-biu-kind][data-biu-id], ${EDITOR_BLOCK_SEL}`)
   const seen = new Set<string>()
   const hits: { el: HTMLElement; ref: PickRef }[] = []
   for (const node of Array.from(nodes)) {

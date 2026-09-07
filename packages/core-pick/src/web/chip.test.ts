@@ -28,6 +28,7 @@ test('kind maps to distinct heroicons', () => {
   assert.equal(pickKindIcon('session'), lu.ChatBubbleLeftIcon)
   assert.equal(pickKindIcon('message'), lu.ChatBubbleLeftIcon)
   assert.equal(pickKindIcon('text'), lu.DocumentTextIcon)
+  assert.equal(pickKindIcon('block'), lu.DocumentTextIcon)
   assert.notEqual(pickKindIcon('text'), pickKindIcon('session'))
   assert.equal(pickKindIcon('task'), lu.CheckCircleIcon)
   assert.equal(pickKindIcon('tasks'), lu.CheckCircleIcon)
