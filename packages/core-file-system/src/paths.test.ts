@@ -46,3 +46,17 @@ test('databaseRevealForTool opens the source table view after creating a saved v
     { collection: '/views' },
   )
 })
+
+test('databaseRevealForTool maps view db_update onto the source table', () => {
+  assert.deepEqual(
+    databaseRevealForTool({
+      path: '/views/pages::mine',
+      result: {
+        kind: 'record',
+        path: '/views/pages::mine',
+        value: { tablePath: '/pages', viewId: 'mine', filters: '{"project":"biu"}' },
+      },
+    }),
+    { collection: '/pages', viewId: 'mine' },
+  )
+})

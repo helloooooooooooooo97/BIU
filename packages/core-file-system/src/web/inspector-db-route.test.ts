@@ -274,3 +274,45 @@ test('applyDatabaseChannelPayload upserts a created view then opens it', () => {
   assert.equal(stored[0]?.mode, 'table')
   assert.equal(stored[0]?.filters?.status, 'doing')
 })
+
+test('view db_update writes the source table view, not /views', () => {
+  const mem: Record<string, string> = {}
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => mem[key] ?? null,
+      setItem: (key: string, value: string) => {
+        mem[key] = value
+      },
+      removeItem: (key: string) => {
+        delete mem[key]
+      },
+      key: (index: number) => Object.keys(mem)[index] ?? null,
+      get length() {
+        return Object.keys(mem).length
+      },
+    },
+  })
+  const seen: Array<{ collection?: string; view?: { id?: string } }> = []
+  const onSaved = (event: Event) => {
+    seen.push((event as CustomEvent<{ collection?: string; view?: { id?: string } }>).detail)
+  }
+  window.addEventListener('fsdb:saved-view', onSaved)
+  applyDatabaseChannelPayload(
+    {
+      phase: 'done',
+      sessionId: 'other',
+      reveal: { collection: '/views', recordId: 'pages::mine' },
+      savedView: { id: 'mine', tablePath: '/pages', name: '我的', filters: { project: 'biu' } },
+    },
+    'main',
+  )
+  window.removeEventListener('fsdb:saved-view', onSaved)
+  assert.equal(mem['fsdb.views:/views'], undefined)
+  const stored = JSON.parse(mem['fsdb.views:/pages'] ?? '[]') as Array<{ id: string; filters?: Record<string, string> }>
+  assert.equal(stored[0]?.id, 'mine')
+  assert.equal(stored[0]?.filters?.project, 'biu')
+  assert.equal(seen[0]?.collection, '/pages')
+  assert.equal(seen[0]?.view?.id, 'mine')
+  assert.equal(getInspectorDbPath('database:/pages'), '')
+})

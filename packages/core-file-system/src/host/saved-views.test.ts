@@ -121,6 +121,7 @@ test('saved views persist created fields and updates across reopen', async () =>
 test('clientViewFromDbRow keeps flat filters and sorts for the live table', () => {
   const view = clientViewFromDbRow({
     viewId: 'mine',
+    tablePath: '/pages',
     title: '我的',
     filters: '{"project":"biu"}',
     sorts: '[{"field":"title","dir":"desc"}]',
@@ -128,6 +129,7 @@ test('clientViewFromDbRow keeps flat filters and sorts for the live table', () =
     sortDir: 'desc',
   })
   assert.equal(view?.id, 'mine')
+  assert.equal(view?.tablePath, '/pages')
   assert.equal(view?.filters.project, 'biu')
   assert.equal(view?.filterTree && view.filterTree.children[0] && view.filterTree.children[0].kind === 'rule' && view.filterTree.children[0].value, 'biu')
   assert.equal(view?.sorts[0]?.field, 'title')

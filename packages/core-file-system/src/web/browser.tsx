@@ -132,7 +132,7 @@ import { listCollection, readJson } from './db-client.ts'
 import { findViewNeighbor, indexOnPage } from './view-adjacent.ts'
 import { rememberPreviewTotal, viewTotalKey } from './sidebar-preview.ts'
 import { mergeTableViews } from '../catalog-views.ts'
-import { showRecordInInspector } from './inspector-db-route.ts'
+import { SAVED_VIEW_EVENT, showRecordInInspector } from './inspector-db-route.ts'
 import { SchemaChips, SchemaFieldEditor, schemaTagTone } from './schema-field.tsx'
 import { CellPop, cellUsesPop } from './cell-pop.tsx'
 import { CellPopDraft } from './cell-pop-draft.tsx'
@@ -622,6 +622,7 @@ export function CollectionBrowser({
   const skipPersistGen = useRef(0)
   const activeViewIdRef = useRef<string | null>(null)
   const syncViewsRef = useRef<() => Promise<void>>(async () => {})
+  const adoptViewRef = useRef<(view: SavedView) => void>(() => undefined)
   const hydratedDetail = useRef('')
   const [dlg, setDlg] = useState<
     | { kind: 'rename'; view: SavedView }
@@ -904,10 +905,13 @@ export function CollectionBrowser({
 
   useEffect(() => {
     let debounce = 0
+    let pendingViews = false
     const onChange = (event: Event) => {
+      if ((event as CustomEvent<{ views?: boolean }>).detail?.views) pendingViews = true
       window.clearTimeout(debounce)
-      const viewsTouched = Boolean((event as CustomEvent<{ views?: boolean }>).detail?.views)
       debounce = window.setTimeout(() => {
+        const viewsTouched = pendingViews
+        pendingViews = false
         void reloadRef.current()
         if (detailIdRef.current) pullDetailBody()
         if (viewsTouched) void syncViewsRef.current()
@@ -1284,8 +1288,21 @@ export function CollectionBrowser({
 
   viewsRef.current = views
   activeViewIdRef.current = activeViewId
+  adoptViewRef.current = (view: SavedView) => {
+    if (sheet) return
+    const listed = listedViews(collectionPath, loadViews(collectionPath)).map((item) =>
+      withViewDisplay(collectionPath, item),
+    )
+    rememberViews(collectionPath, listed)
+    viewsRef.current = listed
+    setViews(listed)
+    if (view.id === activeViewIdRef.current) {
+      skipPersistGen.current += 1
+      applyView(view)
+    }
+  }
   syncViewsRef.current = async () => {
-    if (nested || sheet) return
+    if (sheet) return
     await pullSavedViews()
     const listed = listedViews(collectionPath, loadViews(collectionPath)).map((view) =>
       withViewDisplay(collectionPath, view),
@@ -1307,6 +1324,16 @@ export function CollectionBrowser({
     applyView(view)
     onOpenView?.(view.id)
   }
+
+  useEffect(() => {
+    const onSaved = (event: Event) => {
+      const detail = (event as CustomEvent<{ collection?: string; view?: SavedView }>).detail
+      if (String(detail?.collection ?? '') !== collectionPath) return
+      if (detail?.view) adoptViewRef.current(detail.view)
+    }
+    window.addEventListener(SAVED_VIEW_EVENT, onSaved)
+    return () => window.removeEventListener(SAVED_VIEW_EVENT, onSaved)
+  }, [collectionPath])
 
   useEffect(() => {
     if (!routeViewId) return

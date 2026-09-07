@@ -395,8 +395,11 @@ export function apply(ctx: Context) {
     const offSnap = snapshot.subscribe?.(fromSnap)
     let debounce = 0
     const off = snapshot.onMessage(DATABASE_CHANNEL, (payload) => {
-      const rec = payload && typeof payload === 'object' && !Array.isArray(payload) ? (payload as { asset?: { name?: string; etag?: string }; savedView?: unknown; reveal?: { collection?: unknown } }) : null
-      const viewsTouched = Boolean(rec?.savedView) || String(rec?.reveal?.collection ?? '') === '/views'
+      const rec = payload && typeof payload === 'object' && !Array.isArray(payload) ? (payload as { asset?: { name?: string; etag?: string }; savedView?: unknown; reveal?: { collection?: unknown; viewId?: unknown } }) : null
+      const viewsTouched =
+        Boolean(rec?.savedView) ||
+        Boolean(rec?.reveal?.viewId) ||
+        String(rec?.reveal?.collection ?? '') === '/views'
       const sessionId = (
         ctx.get('sessionView') as { get?: () => { sessionId?: string | null } } | undefined
       )?.get?.()?.sessionId

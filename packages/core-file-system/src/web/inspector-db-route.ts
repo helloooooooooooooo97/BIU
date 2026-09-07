@@ -276,17 +276,22 @@ export function applyDatabaseReveal(reveal: unknown) {
   showInInspector(collection, databaseAllViewPath(collection), { unique })
 }
 
-/** Agent 工具推送：只跟当前主 Session。表格刷新仍走 fsdb:change。 */
+/** 视图表写入立刻套到来源表；检查器跟随仍只跟当前主 Session。 */
 export function applyDatabaseChannelPayload(payload: unknown, currentSessionId?: string | null) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return
+  const reveal = (payload as { reveal?: unknown }).reveal
+  const revealRec = reveal && typeof reveal === 'object' && !Array.isArray(reveal) ? (reveal as { collection?: unknown; viewId?: unknown }) : null
+  const collection = normalizeCollectionPath(String(revealRec?.collection ?? ''))
+  const savedRaw = (payload as { savedView?: unknown }).savedView
+  const savedView = savedViewFromPayload(savedRaw, revealRec?.viewId)
+  const tablePath = savedViewTablePath(savedRaw, collection)
+  if (savedView && tablePath) {
+    upsertSavedView(tablePath, savedView)
+    window.dispatchEvent(new CustomEvent(SAVED_VIEW_EVENT, { detail: { collection: tablePath, view: savedView } }))
+  }
   const sessionId = String((payload as { sessionId?: unknown }).sessionId ?? '').trim()
   if (!sessionId || !currentSessionId || sessionId !== String(currentSessionId)) return
-  const reveal = (payload as { reveal?: unknown }).reveal
-  if (!reveal || typeof reveal !== 'object' || Array.isArray(reveal)) return
-  const collection = normalizeCollectionPath(String((reveal as { collection?: unknown }).collection ?? ''))
   if (!collection || collection === '/') return
-  const savedView = savedViewFromPayload((payload as { savedView?: unknown }).savedView, (reveal as { viewId?: unknown }).viewId)
-  if (savedView) upsertSavedView(collection, savedView)
   const phase = String((payload as { phase?: unknown }).phase ?? '')
   if (isInspectorAgentFollow()) applyDatabaseReveal(reveal)
   setInspectorAgentWorking(collection, phase !== 'done')
@@ -316,6 +321,18 @@ function savedViewFromPayload(raw: unknown, revealViewId: unknown): SavedView | 
   return parsed
 }
 
+function savedViewTablePath(raw: unknown, revealCollection: string) {
+  const fromRow =
+    raw && typeof raw === 'object' && !Array.isArray(raw)
+      ? normalizeCollectionPath(String((raw as { tablePath?: unknown }).tablePath ?? ''))
+      : '/'
+  const fromReveal = revealCollection === '/views' ? '/' : revealCollection
+  const path = fromRow && fromRow !== '/' && fromRow !== '/views' ? fromRow : fromReveal
+  if (!path || path === '/' || path === '/views') return ''
+  return path
+}
+
+export const SAVED_VIEW_EVENT = 'fsdb:saved-view'
 export const INSPECTOR_REVEAL_EVENT = 'biu:inspector-reveal'
 export const INSPECTOR_PANE_CLOSED_EVENT = 'biu:inspector-pane-closed'
 

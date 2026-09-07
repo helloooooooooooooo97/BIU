@@ -39,23 +39,37 @@ export function databaseRevealForTool(opts: {
     const fromPath = databaseRevealFromPath(opts.path)
     return fromPath ? { collection: fromPath.collection } : null
   }
-  const created = revealFromCreatedView(opts.result)
-  if (created) return created
+  const fromView = revealFromSavedViewRow(opts.result)
+  if (fromView) return fromView
   return databaseRevealFromPath(resultPathOf(opts.result) || opts.path)
 }
 
-function revealFromCreatedView(result: unknown): DatabaseReveal | null {
+function viewRowFromResult(result: unknown): { tablePath?: unknown; viewId?: unknown } | null {
   if (!result || typeof result !== 'object' || Array.isArray(result)) return null
-  if ((result as { kind?: unknown }).kind !== 'created') return null
-  const items = (result as { items?: unknown }).items
-  if (!Array.isArray(items) || !items.length) return null
-  const first = items[0]
-  if (!first || typeof first !== 'object' || Array.isArray(first)) return null
-  const value = (first as { value?: unknown }).value
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
-  const row = value as { tablePath?: unknown; viewId?: unknown }
+  const rec = result as { kind?: unknown; items?: unknown; value?: unknown }
+  if (rec.kind === 'created') {
+    const items = rec.items
+    if (!Array.isArray(items) || !items.length) return null
+    const first = items[0]
+    if (!first || typeof first !== 'object' || Array.isArray(first)) return null
+    const value = (first as { value?: unknown }).value
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+    return value as { tablePath?: unknown; viewId?: unknown }
+  }
+  if (rec.kind === 'record') {
+    const value = rec.value
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+    return value as { tablePath?: unknown; viewId?: unknown }
+  }
+  return null
+}
+
+/** /views 行属于来源表；通知 tablePath 上的那条视图，而不是 /views 自己。 */
+function revealFromSavedViewRow(result: unknown): DatabaseReveal | null {
+  const row = viewRowFromResult(result)
+  if (!row) return null
   const collection = normalizeCollectionPath(String(row.tablePath ?? ''))
   const viewId = String(row.viewId ?? '').trim()
-  if (!collection || collection === '/' || !viewId) return null
+  if (!collection || collection === '/' || collection === '/views' || !viewId) return null
   return { collection, viewId }
 }

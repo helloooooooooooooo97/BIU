@@ -328,6 +328,7 @@ export function clientViewFromDbRow(row: Record<string, unknown> | undefined) {
   const sortsPatch = sortsFromPatch(row.sorts, row.sortField, row.sortDir)
   return {
     id,
+    tablePath: normalizeCollectionPath(String(row.tablePath ?? '')),
     name: String(row.title ?? row.name ?? id),
     mode: row.mode,
     sortField: sortsPatch.sortField,
