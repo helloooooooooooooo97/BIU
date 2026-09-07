@@ -40,7 +40,7 @@
   /* 右侧对话正文字号 */
   --dsw-chat-font-size: 14px;
   --dsw-chat-line-height: 1.6;
-  --dsw-chat-composer-font-size: 16px;
+  --dsw-chat-composer-font-size: 14px;
   /* 聊天窗内控件：工具条、回合栏、排队、slash、模型、工具卡 */
   --dsw-chat-ui-font-size: 12px;
   --dsw-chat-chip-font-size: 12px;
@@ -57,8 +57,8 @@
   --dsw-sidebar-max: 360px;
   --dsw-inspector-min: 240px;
   --dsw-chat-code-bg: var(--dsw-sidebar);
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB",
-    "Microsoft YaHei", system-ui, sans-serif;
+  --font-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
   --font-mono: "SF Mono", "JetBrains Mono", "Fira Code", ui-monospace, Consolas, monospace;
 }
 
@@ -4233,6 +4233,7 @@ body {
   /* 把 sticky 用户消息的 z-index 关在滚动层内，避免压过底部输入栏/悬浮按钮 */
   isolation: isolate;
   align-items: center;
+  font-family: var(--font-sans);
   font-size: var(--dsw-chat-font-size);
   line-height: var(--dsw-chat-line-height);
 }
@@ -5059,6 +5060,7 @@ body {
   min-height: 28px;
   outline: none;
   color: var(--dsw-label);
+  font-family: var(--font-sans);
   font-size: var(--dsw-chat-composer-font-size);
   line-height: 28px;
   word-break: break-word;

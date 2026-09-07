@@ -16,7 +16,9 @@ describe('composer dock stacking above sticky user', () => {
     const thread = readFileSync(resolve(root, 'packages/core-chat/src/web/thread.tsx'), 'utf8')
 
     expect(css).toMatch(/--dsw-chat-font-size:\s*14px/)
-    expect(css).toMatch(/--dsw-chat-composer-font-size:\s*16px/)
+    expect(css).toMatch(/--dsw-chat-composer-font-size:\s*14px/)
+    expect(css).toMatch(/--font-sans:\s*ui-sans-serif/)
+    expect(css).toMatch(/\.chat-stage\s*\{[^}]*font-family:\s*var\(--font-sans\)/s)
     expect(css).toMatch(/\.composer-tiptap\.is-readonly\s*\{[^}]*font-size:\s*var\(--dsw-chat-font-size\)/s)
     expect(css).toMatch(/\.chat-stage\s*\{[^}]*isolation:\s*isolate/s)
     expect(css).toMatch(/\.chat-composer-dock\s*\{[^}]*z-index:\s*20/s)
