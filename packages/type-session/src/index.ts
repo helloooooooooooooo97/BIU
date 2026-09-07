@@ -82,22 +82,17 @@ export interface SessionConfig {
   /** 分面 */
   facet?: { tags: string[]; values: Record<string, Record<string, unknown>> }
   createdAt?: number
-  /** 右侧检查器与当前 session 绑死；换环境/换机从这条记录恢复。 */
+  /** 右侧检查器页签与各栏库路径，跟这条 session 走。 */
   inspector?: SessionInspectorBind
 }
 
-/** 检查器开合、宽度、页签、库路径、跟随，均跟这条 session 走。 */
+/** 检查器打开的页签和各栏库路径，跟这条 session 走。开合/宽度/跟随只记本机。 */
 export type SessionInspectorBind = {
-  open?: boolean
-  width?: number
   tab?: string
   opened?: string[]
   dbPaths?: Record<string, string>
-  follow?: boolean
 }
 
-const INSPECTOR_WIDTH_MIN = 240
-const INSPECTOR_WIDTH_MAX = 1000
 const INSPECTOR_OPENED_MAX = 24
 const INSPECTOR_DB_PATHS_MAX = 32
 
@@ -109,10 +104,6 @@ export function normalizeInspectorBind(value: unknown): SessionInspectorBind | u
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
   const raw = value as Record<string, unknown>
   const next: SessionInspectorBind = {}
-  if (typeof raw.open === 'boolean') next.open = raw.open
-  if (typeof raw.width === 'number' && Number.isFinite(raw.width)) {
-    next.width = Math.min(INSPECTOR_WIDTH_MAX, Math.max(INSPECTOR_WIDTH_MIN, Math.round(raw.width)))
-  }
   if (typeof raw.tab === 'string') next.tab = raw.tab.trim().slice(0, 160)
   if (Array.isArray(raw.opened)) {
     next.opened = [...new Set(raw.opened.map((item) => String(item).trim()).filter(Boolean))].slice(0, INSPECTOR_OPENED_MAX)
@@ -128,7 +119,6 @@ export function normalizeInspectorBind(value: unknown): SessionInspectorBind | u
     }
     next.dbPaths = dbPaths
   }
-  if (typeof raw.follow === 'boolean') next.follow = raw.follow
   return Object.keys(next).length ? next : undefined
 }
 
@@ -136,11 +126,10 @@ export function mergeInspectorBind(
   base: SessionInspectorBind | undefined,
   patch: SessionInspectorBind,
 ): SessionInspectorBind | undefined {
-  const next: SessionInspectorBind = { ...(base ?? {}) }
-  if (typeof patch.open === 'boolean') next.open = patch.open
-  if (typeof patch.width === 'number' && Number.isFinite(patch.width)) {
-    next.width = Math.min(INSPECTOR_WIDTH_MAX, Math.max(INSPECTOR_WIDTH_MIN, Math.round(patch.width)))
-  }
+  const next: SessionInspectorBind = {}
+  if (typeof base?.tab === 'string') next.tab = base.tab
+  if (Array.isArray(base?.opened)) next.opened = [...base.opened]
+  if (base?.dbPaths) next.dbPaths = { ...base.dbPaths }
   if (typeof patch.tab === 'string') next.tab = patch.tab.trim().slice(0, 160)
   if (Array.isArray(patch.opened)) {
     next.opened = [...new Set(patch.opened.map((item) => String(item).trim()).filter(Boolean))].slice(0, INSPECTOR_OPENED_MAX)
@@ -150,7 +139,6 @@ export function mergeInspectorBind(
     if (dbPaths) next.dbPaths = dbPaths
     else delete next.dbPaths
   }
-  if (typeof patch.follow === 'boolean') next.follow = patch.follow
   return Object.keys(next).length ? next : undefined
 }
 

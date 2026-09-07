@@ -49,23 +49,18 @@ test('session config stores inspector bind', async () => {
   const record = await ctx.sessions.create()
   await ctx.sessions.patchConfig(record.id, {
     inspector: {
-      open: true,
-      width: 400,
       tab: 'database:/pages',
       opened: ['database:/pages'],
       dbPaths: { 'database:/pages': '/database/pages' },
-      follow: true,
     },
   })
   const again = await ctx.sessions.require(record.id)
-  assert.equal(again.config?.inspector?.open, true)
-  assert.equal(again.config?.inspector?.width, 400)
   assert.equal(again.config?.inspector?.tab, 'database:/pages')
   assert.deepEqual(again.config?.inspector?.opened, ['database:/pages'])
   assert.equal(again.config?.inspector?.dbPaths?.['database:/pages'], '/database/pages')
-  assert.equal(again.config?.inspector?.follow, true)
+  assert.deepEqual(Object.keys(again.config?.inspector ?? {}).sort(), ['dbPaths', 'opened', 'tab'])
   const listed = await ctx.sessions.listSummaries()
-  assert.equal(listed.find((item) => item.id === record.id)?.config?.inspector?.open, true)
+  assert.deepEqual(listed.find((item) => item.id === record.id)?.config?.inspector?.opened, ['database:/pages'])
   await ctx.sessions.patchConfig(record.id, { inspector: null })
   const cleared = await ctx.sessions.require(record.id)
   assert.equal(cleared.config?.inspector, undefined)

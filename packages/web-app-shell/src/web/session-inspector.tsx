@@ -29,11 +29,8 @@ import { inspectorPanelMatches, inspectorViewProps, nextRepeatableTabId, pruneOp
 import { HeadlessDismiss } from '@biu/public-ui'
 import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import {
-  isInspectorAgentFollow,
   restoreInspectorDbPaths,
-  setInspectorAgentFollow,
   snapshotInspectorDbPaths,
-  subscribeInspectorAgentFollow,
   subscribeInspectorDbPath,
 } from '@biu/core-file-system/inspector-db-route'
 import { mergeInspectorBind, type SessionInspectorBind } from '@biu/type-session'
@@ -91,7 +88,6 @@ export type SessionInspectorProps = {
   slots: SlotsService
   renderSlot: (name: string) => ReactNode
   collections?: Array<{ path: string }>
-  onLayoutHydrate?: (next: { open: boolean; width: number }) => void
 }
 
 function inspectorTabStorageKey(sid: string | null | undefined) {
@@ -137,15 +133,6 @@ function writeTabCache(sid: string | null | undefined, next: string) {
   }
 }
 
-const DEFAULT_INSPECTOR_WIDTH = 320
-
-function layoutFromBind(bind?: SessionInspectorBind) {
-  return {
-    open: bind?.open === true,
-    width: typeof bind?.width === 'number' && Number.isFinite(bind.width) ? bind.width : DEFAULT_INSPECTOR_WIDTH,
-  }
-}
-
 export const SessionInspector = memo(function SessionInspector({
   open,
   width,
@@ -156,7 +143,6 @@ export const SessionInspector = memo(function SessionInspector({
   slots,
   renderSlot,
   collections,
-  onLayoutHydrate,
 }: SessionInspectorProps) {
   const sessionId = useSessionView((state) => state.sessionId)
   const sessions = useSessionView((state) => state.sessions)
@@ -207,14 +193,11 @@ export const SessionInspector = memo(function SessionInspector({
   const rowPresent = Boolean(sessionId && sessions.some((item) => item.id === sessionId))
   const captureBind = useCallback((): SessionInspectorBind => {
     return {
-      open,
-      width,
       tab: tabRef.current,
       opened: openedRef.current,
       dbPaths: snapshotInspectorDbPaths(),
-      follow: isInspectorAgentFollow(),
     }
-  }, [open, width])
+  }, [])
   const queuePersist = useCallback(
     (partial?: SessionInspectorBind) => {
       if (!sessionId || hydratingRef.current) return
@@ -270,8 +253,6 @@ export const SessionInspector = memo(function SessionInspector({
       setOpened(readOpened(null))
       setTabState(readTab(null))
       restoreInspectorDbPaths({})
-      setInspectorAgentFollow(false)
-      onLayoutHydrate?.({ open: false, width: DEFAULT_INSPECTOR_WIDTH })
       const idle = window.setTimeout(() => {
         hydratingRef.current = false
       }, 80)
@@ -289,34 +270,19 @@ export const SessionInspector = memo(function SessionInspector({
     writeOpenedCache(sessionId, openedNext)
     writeTabCache(sessionId, tabNext)
     restoreInspectorDbPaths(bind?.dbPaths)
-    setInspectorAgentFollow(bind?.follow === true)
-    const layout = layoutFromBind(bind)
-    onLayoutHydrate?.(layout)
     lastSentRef.current = JSON.stringify({
-      open: layout.open,
-      width: layout.width,
       tab: tabNext,
       opened: openedNext,
       dbPaths: bind?.dbPaths ?? {},
-      follow: bind?.follow === true,
     })
     const idle = window.setTimeout(() => {
       hydratingRef.current = false
     }, 80)
     return () => window.clearTimeout(idle)
-  }, [onLayoutHydrate, rowPresent, sessionId])
+  }, [rowPresent, sessionId])
 
   useEffect(() => {
-    queuePersist({ open, width })
-  }, [open, queuePersist, width])
-
-  useEffect(() => {
-    const unsubPath = subscribeInspectorDbPath(() => queuePersist({ dbPaths: snapshotInspectorDbPaths() }))
-    const unsubFollow = subscribeInspectorAgentFollow(() => queuePersist({ follow: isInspectorAgentFollow() }))
-    return () => {
-      unsubPath()
-      unsubFollow()
-    }
+    return subscribeInspectorDbPath(() => queuePersist({ dbPaths: snapshotInspectorDbPaths() }))
   }, [queuePersist])
 
   const focusTabId = extraTabs.find((item) => item.focusOnCall)?.id
