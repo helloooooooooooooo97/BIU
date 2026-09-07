@@ -131,6 +131,14 @@ describe('scroll-back remount contract', () => {
     expect(second.container.querySelector('.chat-md-stream')).toBeNull()
     expect(second.container.querySelector('strong')?.textContent).toBe('world')
   })
+
+  it('MarkdownBody streams GFM html before the message is finished', () => {
+    const { container } = render(<MarkdownBody text={'hello **world**'} streaming />)
+    expect(container.querySelector('.chat-md-stream-pre')).toBeNull()
+    expect(container.querySelector('.chat-md-stream')).toBeTruthy()
+    expect(container.querySelector('strong')?.textContent).toBe('world')
+    expect(getCachedMarkdownHtml('hello **world**')).toBeUndefined()
+  })
 })
 
 describe('markdown cache helpers', () => {

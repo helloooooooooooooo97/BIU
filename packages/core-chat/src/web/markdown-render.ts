@@ -1,5 +1,5 @@
 import DOMPurify from 'dompurify'
-import { marked } from 'marked'
+import { Marked, marked } from 'marked'
 import type { MarkdownWorkerRequest, MarkdownWorkerResponse } from './markdown.worker.ts'
 import { markdownHighlight } from './markdown-highlight.ts'
 
@@ -9,6 +9,13 @@ marked.setOptions({
   async: false,
 })
 marked.use(markdownHighlight)
+
+/** 流式预览：不走 highlight.js，避免每帧高亮整段代码块。 */
+const liveMarked = new Marked({
+  gfm: true,
+  breaks: false,
+  async: false,
+})
 
 if (typeof window !== 'undefined') {
   DOMPurify.addHook('afterSanitizeAttributes', (node) => {
@@ -65,6 +72,19 @@ export function parseMarkdownSync(text: string): string {
   const html = sanitizeMarkdownHtml(dirty)
   touchCache(text, html)
   return html
+}
+
+/** 未闭合的 ``` 在流式里会把后面全吃进代码块，补一个结束围栏再 parse。 */
+export function stabilizeStreamingMarkdown(text: string): string {
+  const fences = text.match(/^ {0,3}```/gm)
+  if (fences && fences.length % 2 === 1) return `${text}\n\`\`\``
+  return text
+}
+
+/** 流式预览：不写 LRU，不定稿高亮。chunk 已按帧合并，主线程每帧 parse 一次可接受。 */
+export function parseMarkdownLive(text: string): string {
+  const dirty = liveMarked.parse(stabilizeStreamingMarkdown(text), { async: false }) as string
+  return sanitizeMarkdownHtml(dirty)
 }
 
 function getWorker(): Worker | null {
