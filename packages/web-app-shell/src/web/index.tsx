@@ -635,7 +635,7 @@ function Shell(props: SlotProps) {
   const chatHeader = (
     <header className="chat-view-header" data-biu-ignore>
       <div className="chat-view-header-left">
-        {sidebarNarrow ? (
+        {leftHidden || sidebarNarrow ? (
           <button
             type="button"
             className="chat-view-header-expand"

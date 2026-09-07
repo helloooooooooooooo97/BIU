@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { isSidebarFlyoutKeepTarget, shouldKeepSidebarFlyout } from './sidebar-flyout.ts'
+import { isSidebarFlyoutIgnoreTarget, isSidebarFlyoutKeepTarget, shouldKeepSidebarFlyout } from './sidebar-flyout.ts'
 
 test('only the upper-middle left edge wakes the flyout', () => {
   const vh = 1000
@@ -26,4 +26,18 @@ test('portaled sidebar menus still count as inside', () => {
   assert.equal(isSidebarFlyoutKeepTarget(document.body, host), false)
   host.remove()
   menu.remove()
+})
+
+test('composer mascot popover does not count as the sidebar flyout', () => {
+  const host = document.createElement('div')
+  const cluster = document.createElement('div')
+  cluster.className = 'brand-corner-cluster'
+  const menu = document.createElement('div')
+  menu.className = 'chat-sidebar-popover brand-agent-menu'
+  cluster.append(menu)
+  document.body.append(host, cluster)
+  assert.equal(isSidebarFlyoutIgnoreTarget(menu), true)
+  assert.equal(isSidebarFlyoutKeepTarget(menu, host), false)
+  host.remove()
+  cluster.remove()
 })

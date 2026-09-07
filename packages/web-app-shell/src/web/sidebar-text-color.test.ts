@@ -44,6 +44,7 @@ describe('sidebar text colors', () => {
     expect(shell).toMatch(/ShellSidebarFrame/)
     expect(shell).toMatch(/SIDEBAR_TAG_AT/)
     expect(shell).toMatch(/data-testid="header-sidebar-expand"/)
+    expect(shell).toMatch(/leftHidden \|\| sidebarNarrow/)
     const overlay = readFileSync(resolve(import.meta.dirname, './chat-overlay.ts'), 'utf8')
     expect(overlay).toMatch(/SIDEBAR_LABEL_AT = SIDEBAR_MIN/)
     expect(overlay).toMatch(/SIDEBAR_TAG_AT = SIDEBAR_MAX/)

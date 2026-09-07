@@ -5,6 +5,7 @@ import { chromeIcon } from './chrome-icon.ts'
 import { ShellSidePlaces } from './shell-chrome.tsx'
 import {
   isSidebarFlyoutKeepTarget,
+  isSidebarFlyoutIgnoreTarget,
   SIDEBAR_FLYOUT_HIDE_MS,
   shouldKeepSidebarFlyout,
 } from './sidebar-flyout.ts'
@@ -105,6 +106,10 @@ export const ShellSidebarFrame = memo(function ShellSidebarFrame({
       const shell = host?.parentElement
       const raw = shell ? getComputedStyle(shell).getPropertyValue('--sidebar-flyout-width') : ''
       const width = Number.parseFloat(raw) || 240
+      if (isSidebarFlyoutIgnoreTarget(event.target)) {
+        if (peekRef.current) scheduleHide()
+        return
+      }
       if (
         isSidebarFlyoutKeepTarget(event.target, host) ||
         shouldKeepSidebarFlyout(event.clientX, event.clientY, peekRef.current, width, window.innerWidth, window.innerHeight)

@@ -4,6 +4,8 @@ export const SIDEBAR_FLYOUT_HIDE_MS = 240
 export const SIDEBAR_FLYOUT_WAKE_TOP = 0.22
 export const SIDEBAR_FLYOUT_WAKE_BOTTOM = 0.42
 export const SIDEBAR_FLYOUT_KEEP = '.brand-agent-menu, .chat-sidebar-popover, [data-sidebar-flyout-keep]'
+/** 输入框上的小人及其悬浮窗不算侧栏热区。 */
+export const SIDEBAR_FLYOUT_IGNORE = '.brand-corner-cluster'
 
 export function isSidebarFlyoutWakeY(clientY: number, viewportHeight: number) {
   if (viewportHeight <= 0) return true
@@ -26,8 +28,13 @@ export function shouldKeepSidebarFlyout(
   return false
 }
 
+export function isSidebarFlyoutIgnoreTarget(node: EventTarget | null) {
+  return node instanceof Element && Boolean(node.closest(SIDEBAR_FLYOUT_IGNORE))
+}
+
 export function isSidebarFlyoutKeepTarget(node: EventTarget | null, host: Element | null) {
   if (!(node instanceof Element)) return false
+  if (isSidebarFlyoutIgnoreTarget(node)) return false
   if (host?.contains(node)) return true
   return Boolean(node.closest(SIDEBAR_FLYOUT_KEEP))
 }

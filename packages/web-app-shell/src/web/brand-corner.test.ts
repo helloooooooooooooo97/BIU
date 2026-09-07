@@ -105,6 +105,7 @@ test('shell columns stay three tracks without animating on window resize', () =>
   assert.match(frame, /is-closed flex/)
   assert.match(frame, /is-flyout-open/)
   assert.match(frame, /sidebar-flyout-host/)
+  assert.match(frame, /isSidebarFlyoutIgnoreTarget/)
   assert.match(frame, /sidebar-edge-hot/)
   assert.match(css, /\.sidebar-flyout-host\.is-collapsed \.app-side-bar\.is-closed\s*\{[^}]*top:\s*60px/s)
   assert.match(css, /\.sidebar-flyout-host\.is-collapsed \.app-side-bar\.is-closed\s*\{[^}]*bottom:\s*60px/s)
