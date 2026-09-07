@@ -25,7 +25,7 @@ import { useSlotEntries } from '@biu/web-slots'
 import type { SlotsService } from '@biu/web-slots'
 import { inspectorTabFromEvent, requestInspectorAction } from './chat-overlay.ts'
 import { getInspectorCaption, getInspectorCaptionVersion, subscribeInspectorCaptions } from './inspector-captions.ts'
-import { inspectorPanelMatches, inspectorViewProps, nextRepeatableTabId, pruneOpenedForCollections, resolveInspectorTab, slotTabId, rememberedInspectorTab } from './inspector-panels.ts'
+import { inspectorPanelMatches, inspectorViewProps, nextRepeatableTabId, pruneOpenedForCollections, resolveInspectorTab, slotTabId } from './inspector-panels.ts'
 import { HeadlessDismiss } from '@biu/public-ui'
 import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import {
@@ -90,49 +90,6 @@ export type SessionInspectorProps = {
   collections?: Array<{ path: string }>
 }
 
-function inspectorTabStorageKey(sid: string | null | undefined) {
-  return sid ? `inspector.tab:${sid}` : 'inspector.tab:home'
-}
-
-function inspectorOpenedKey(sid: string | null | undefined) {
-  return sid ? `inspector.opened:${sid}` : 'inspector.opened:home'
-}
-
-function readOpened(sid: string | null | undefined): string[] {
-  try {
-    const raw = localStorage.getItem(inspectorOpenedKey(sid))
-    if (!raw) return []
-    const parsed = JSON.parse(raw) as unknown
-    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : []
-  } catch {
-    return []
-  }
-}
-
-function readTab(sid: string | null | undefined): string {
-  try {
-    return localStorage.getItem(inspectorTabStorageKey(sid)) ?? ''
-  } catch {
-    return ''
-  }
-}
-
-function writeOpenedCache(sid: string | null | undefined, next: string[]) {
-  try {
-    localStorage.setItem(inspectorOpenedKey(sid), JSON.stringify(next))
-  } catch {
-    /* ignore */
-  }
-}
-
-function writeTabCache(sid: string | null | undefined, next: string) {
-  try {
-    localStorage.setItem(inspectorTabStorageKey(sid), next)
-  } catch {
-    /* ignore */
-  }
-}
-
 export const SessionInspector = memo(function SessionInspector({
   open,
   width,
@@ -177,21 +134,20 @@ export const SessionInspector = memo(function SessionInspector({
   const toolTabs = extraTabs.filter((item) => item.action)
 
   const [tab, setTabState] = useState('')
-  const [opened, setOpened] = useState(() => readOpened(sessionId))
+  const [opened, setOpened] = useState<string[]>([])
+  const inspectorReady = useSessionView((state) => state.inspectorReady)
+  const sessionInspector = useSessionView((state) => state.sessionInspector)
   const [plusOpen, setPlusOpen] = useState(false)
   const plusRef = useRef<HTMLDivElement>(null)
   const plusMenuRef = useRef<HTMLDivElement>(null)
   const [plusPos, setPlusPos] = useState<{ right: number; top: number } | null>(null)
   const tabsRef = useRef<HTMLDivElement>(null)
   const hydratingRef = useRef(false)
-  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const persistForRef = useRef<string | null>(sessionId)
-  const lastSentRef = useRef('')
   const tabRef = useRef(tab)
   const openedRef = useRef(opened)
   tabRef.current = tab
   openedRef.current = opened
-  const rowPresent = Boolean(sessionId && sessions.some((item) => item.id === sessionId))
   const captureBind = useCallback((): SessionInspectorBind => {
     return {
       tab: tabRef.current,
@@ -199,50 +155,30 @@ export const SessionInspector = memo(function SessionInspector({
       dbPaths: snapshotInspectorDbPaths(),
     }
   }, [])
-  const flushInspector = useCallback(
-    (id: string, bind: SessionInspectorBind) => {
-      const body = JSON.stringify(bind)
-      lastSentRef.current = body
-      void sessionView.patchInspector(id, bind)
-    },
-    [sessionView],
-  )
-  const queuePersist = useCallback(
-    (partial?: SessionInspectorBind, delay = 280) => {
+  const pushInspector = useCallback(
+    (partial?: SessionInspectorBind) => {
       if (!sessionId || hydratingRef.current) return
       const next = mergeInspectorBind(captureBind(), partial ?? {}) ?? captureBind()
-      const packed = JSON.stringify(next)
-      if (packed === lastSentRef.current) return
-      if (persistTimerRef.current) clearTimeout(persistTimerRef.current)
-      persistTimerRef.current = setTimeout(() => {
-        persistTimerRef.current = null
-        if (!sessionId || hydratingRef.current) return
-        const latest = mergeInspectorBind(captureBind(), partial ?? {}) ?? captureBind()
-        const body = JSON.stringify(latest)
-        if (body === lastSentRef.current) return
-        flushInspector(sessionId, latest)
-      }, delay)
+      void sessionView.patchInspector(sessionId, next)
     },
-    [captureBind, flushInspector, sessionId],
+    [captureBind, sessionId, sessionView],
   )
   const setTab = useCallback(
     (next: string) => {
       tabRef.current = next
       setTabState(next)
-      writeTabCache(sessionId, next)
-      queuePersist({ tab: next }, 0)
+      pushInspector({ tab: next })
     },
-    [queuePersist, sessionId],
+    [pushInspector],
   )
   const persistOpened = useCallback(
     (next: string[]) => {
       openedRef.current = next
       setOpened(next)
-      writeOpenedCache(sessionId, next)
       window.dispatchEvent(new CustomEvent('biu:inspector-opened', { detail: { sessionId, opened: next } }))
-      queuePersist({ opened: next }, 0)
+      pushInspector({ opened: next })
     },
-    [queuePersist, sessionId],
+    [pushInspector, sessionId],
   )
 
   useEffect(() => {
@@ -255,56 +191,45 @@ export const SessionInspector = memo(function SessionInspector({
   useLayoutEffect(() => {
     const prev = persistForRef.current
     if (prev && prev !== sessionId) {
-      if (persistTimerRef.current) {
-        clearTimeout(persistTimerRef.current)
-        persistTimerRef.current = null
-      }
-      flushInspector(prev, captureBind())
+      hydratingRef.current = false
+      void sessionView.patchInspector(prev, captureBind())
     }
     persistForRef.current = sessionId
     hydratingRef.current = true
-    if (persistTimerRef.current) {
-      clearTimeout(persistTimerRef.current)
-      persistTimerRef.current = null
-    }
     if (!sessionId) {
-      lastSentRef.current = ''
-      setOpened(readOpened(null))
-      setTabState(readTab(null))
+      setOpened([])
+      setTabState('')
       restoreInspectorDbPaths({})
-      const idle = window.setTimeout(() => {
-        hydratingRef.current = false
-      }, 80)
-      return () => window.clearTimeout(idle)
-    }
-    if (!rowPresent) {
-      hydratingRef.current = true
+      hydratingRef.current = false
       return
     }
-    const bind = currentSession?.inspector
-    const openedNext = bind?.opened ?? readOpened(sessionId)
-    const tabNext = rememberedInspectorTab(openedNext, readTab(sessionId), bind?.tab)
+    if (!inspectorReady) {
+      setOpened([])
+      setTabState('')
+      restoreInspectorDbPaths({})
+      return
+    }
+    const bind = sessionInspector
+    const openedNext = bind?.opened ?? []
+    const tabNext = bind?.tab && openedNext.includes(bind.tab) ? bind.tab : bind?.tab || openedNext[0] || ''
     openedRef.current = openedNext
     tabRef.current = tabNext
     setOpened(openedNext)
     setTabState(tabNext)
-    writeOpenedCache(sessionId, openedNext)
-    writeTabCache(sessionId, tabNext)
-    restoreInspectorDbPaths(bind?.dbPaths)
-    lastSentRef.current = JSON.stringify({
-      tab: tabNext,
-      opened: openedNext,
-      dbPaths: bind?.dbPaths ?? {},
-    })
-    const idle = window.setTimeout(() => {
+    restoreInspectorDbPaths(bind?.dbPaths ?? {})
+    if (tabNext) {
+      queueMicrotask(() => {
+        window.dispatchEvent(new CustomEvent('biu:inspector-tab', { detail: tabNext }))
+        hydratingRef.current = false
+      })
+    } else {
       hydratingRef.current = false
-    }, 80)
-    return () => window.clearTimeout(idle)
-  }, [rowPresent, sessionId])
+    }
+  }, [captureBind, inspectorReady, sessionId, sessionView])
 
   useEffect(() => {
-    return subscribeInspectorDbPath(() => queuePersist({ dbPaths: snapshotInspectorDbPaths() }))
-  }, [queuePersist])
+    return subscribeInspectorDbPath(() => pushInspector({ dbPaths: snapshotInspectorDbPaths() }))
+  }, [pushInspector])
 
   const focusTabId = extraTabs.find((item) => item.focusOnCall)?.id
   useEffect(() => {
@@ -312,22 +237,18 @@ export const SessionInspector = memo(function SessionInspector({
     setOpened((prev) => {
       if (prev.includes(focusTabId)) return prev
       const next = [...prev, focusTabId]
-      writeOpenedCache(sessionId, next)
       window.dispatchEvent(new CustomEvent('biu:inspector-opened', { detail: { sessionId, opened: next } }))
-      queuePersist({ opened: next })
+      pushInspector({ opened: next })
       return next
     })
     setTab(focusTabId)
-  }, [focusCallId, focusTabId, queuePersist, sessionId, setTab])
+  }, [focusCallId, focusTabId, pushInspector, sessionId, setTab])
 
   useEffect(() => {
     if (focusCallId && focusTabId) return
     setTabState((current) => {
       const next = resolveInspectorTab(current, allowedTabs, opened)
-      if (next !== current) {
-        tabRef.current = next
-        writeTabCache(sessionId, next)
-      }
+      if (next !== current) tabRef.current = next
       return next
     })
   }, [sessionId, focusCallId, focusTabId, allowedTabs.join('|'), opened])

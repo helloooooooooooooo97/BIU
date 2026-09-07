@@ -1132,6 +1132,7 @@ export function apply(ctx: Context) {
       newestSeq: window.newestSeq,
       ...(record.project ? { project: record.project } : {}),
       ...(record.mascot ? { mascot: record.mascot } : {}),
+      ...(record.config ? { config: record.config } : {}),
     }
     const summaries = await ctx.sessions.listSummaries()
     const workers = []

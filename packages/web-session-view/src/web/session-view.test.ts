@@ -350,6 +350,37 @@ test('load fetches full session turns and skips trajectory until ensureTrajector
   assert.equal(calls.some((url) => url.includes('turns=24')), false)
 })
 
+test('load applies inspector bind from GET session, not the list cache', async () => {
+  mockFetch({
+    '/api/sessions/s1': () => ({
+      id: 's1',
+      events: [{ type: 'session/open', version: 1, seq: 0, ts: 1 }],
+      hasMore: false,
+      totalTurns: 0,
+      config: {
+        inspector: {
+          tab: 'database:/tasks',
+          opened: ['database:/pages', 'database:/tasks'],
+          dbPaths: { 'database:/tasks': '/database/tasks' },
+        },
+      },
+    }),
+    '/api/sessions': () => ({
+      sessions: [{ id: 's1', title: 'A', eventCount: 1, updatedAt: 1 }],
+    }),
+    '/api/approvals': () => ({ mode: 'auto', pending: [] }),
+  })
+  const ctx = new Context()
+  await ctx.plugin(sessionView)
+  const view = ctx.sessionView as SessionViewService
+  await view.refreshSessions()
+  assert.equal(view.get().inspectorReady, false)
+  await view.load('s1', { view: 'chat', wait: true })
+  assert.equal(view.get().inspectorReady, true)
+  assert.equal(view.get().sessionInspector?.tab, 'database:/tasks')
+  assert.deepEqual(view.get().sessionInspector?.opened, ['database:/pages', 'database:/tasks'])
+})
+
 test('fetchEventDetail and fetchEventRequest hit fine-grained APIs', async () => {
   const calls: string[] = []
   globalThis.fetch = (async (input: RequestInfo | URL) => {

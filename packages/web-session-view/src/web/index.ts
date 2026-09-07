@@ -178,6 +178,9 @@ export interface SessionViewState {
   dispatchedUsage?: TrajectoryUsage
   /** 切会话且无缓存：保留上一段画面直到新数据到齐，避免先闪 EmptyHero */
   switchingSession: boolean
+  /** 当前 session 的检查器绑定，只来自 GET /api/sessions/:id */
+  sessionInspector?: SessionInspectorBind
+  inspectorReady: boolean
   error?: string
 }
 
@@ -202,6 +205,7 @@ const empty: SessionViewState = {
   dispatchedUsageByTurn: {},
   dispatchedTasksByTurn: {},
   switchingSession: false,
+  inspectorReady: false,
 }
 
 type SessionPayload = {
@@ -211,6 +215,8 @@ type SessionPayload = {
   totalTurns?: number
   totalEvents?: number
   project?: { name: string; path?: string; boundAt: number }
+  config?: { inspector?: SessionInspectorBind }
+  inspector?: SessionInspectorBind
   dispatchedUsage?: TrajectoryUsage
   dispatchedUsageByTurn?: Record<string, TrajectoryUsage>
   dispatchedTasksByTurn?: Record<string, DispatchedTaskRow[]>
@@ -428,6 +434,7 @@ export class SessionViewService extends Service {
       trajectoryLoading: false,
       totalTurns: 0,
       switchingSession: false,
+      ...this.pendingInspector(),
     })
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('biu:session-missing', { detail: { sessionId } }))
@@ -704,6 +711,19 @@ export class SessionViewService extends Service {
     return this.newSession()
   }
 
+  private pendingInspector(): Pick<SessionViewState, 'sessionInspector' | 'inspectorReady'> {
+    return { sessionInspector: undefined, inspectorReady: false }
+  }
+
+  private inspectorFromPayload(body: SessionPayload) {
+    return body.config?.inspector ?? body.inspector
+  }
+
+  private rememberSessionInspector(sessionId: string, inspector: SessionInspectorBind | undefined) {
+    const sessions = this.value.sessions.map((item) => (item.id === sessionId ? { ...item, inspector } : item))
+    return { sessionInspector: inspector, inspectorReady: true as const, sessions }
+  }
+
   async load(sessionId: string, options: { view?: ConversationView; wait?: boolean } = {}) {
     const view = options.view ?? this.value.view
     const wait = options.wait === true
@@ -742,6 +762,7 @@ export class SessionViewService extends Service {
             trajectoryHasMore: false,
             trajectoryLoading: false,
             switchingSession: true,
+            ...this.pendingInspector(),
           })
         } else {
           this.replace({
@@ -760,6 +781,7 @@ export class SessionViewService extends Service {
             trajectoryLoading: false,
             totalTurns: 0,
             switchingSession: true,
+            ...this.pendingInspector(),
           })
         }
         if (this.wantsTrajectory(view)) void this.ensureTrajectory()
@@ -788,6 +810,7 @@ export class SessionViewService extends Service {
           trajectoryHasMore: false,
           trajectoryLoading: false,
           switchingSession: true,
+          ...this.pendingInspector(),
         })
       } else {
         this.replace({
@@ -806,6 +829,7 @@ export class SessionViewService extends Service {
           trajectoryLoading: false,
           totalTurns: 0,
           switchingSession: true,
+          ...this.pendingInspector(),
         })
       }
     }
@@ -859,6 +883,7 @@ export class SessionViewService extends Service {
           dispatchedTasksByTurn: tasksByTurn,
           dispatchedUsage,
           nodes,
+          ...this.rememberSessionInspector(sessionId, this.inspectorFromPayload(body)),
         })
         this.syncDispatchedPoll()
         return
@@ -876,6 +901,7 @@ export class SessionViewService extends Service {
         trajectory: this.wantsTrajectory(view) ? this.value.trajectory : [],
         switchingSession: false,
         error: undefined,
+        ...this.rememberSessionInspector(sessionId, this.inspectorFromPayload(body)),
       })
       this.syncDispatchedPoll()
       if (this.wantsTrajectory(view)) void this.ensureTrajectory()
@@ -906,6 +932,7 @@ export class SessionViewService extends Service {
       dispatchedTasksByTurn: cached.dispatchedTasksByTurn,
       dispatchedUsage: cached.dispatchedUsage,
       switchingSession: false,
+      ...this.pendingInspector(),
     })
     this.syncDispatchedPoll()
     void this.refreshInbox(sessionId)

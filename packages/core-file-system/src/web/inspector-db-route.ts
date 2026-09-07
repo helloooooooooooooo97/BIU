@@ -6,7 +6,6 @@ import { upsertSavedView, savedViewFromRecord } from './view-storage.ts'
 import { type SavedView } from './saved-view.ts'
 
 const DEFAULT_PANE = 'database'
-const STORAGE_PREFIX = 'inspector.dbPath:'
 const listeners = new Set<() => void>()
 const paths = new Map<string, string>()
 const abandonedPanes = new Set<string>()
@@ -64,10 +63,6 @@ export function setInspectorAgentFollow(next: boolean) {
   bumpFollow()
 }
 
-function storageKey(paneId: string) {
-  return `${STORAGE_PREFIX}${paneId}`
-}
-
 function slotTabId(openedId: string) {
   const split = openedId.indexOf('::')
   return split === -1 ? openedId : openedId.slice(0, split)
@@ -78,35 +73,7 @@ function paneIdsForTab(tabId: string) {
   for (const id of paths.keys()) {
     if (id === tabId || slotTabId(id) === tabId) ids.add(id)
   }
-  try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i) ?? ''
-      if (!key.startsWith(STORAGE_PREFIX)) continue
-      const id = key.slice(STORAGE_PREFIX.length)
-      if (id === tabId || slotTabId(id) === tabId) ids.add(id)
-    }
-  } catch {
-    /* ignore */
-  }
   return [...ids]
-}
-
-function readStoredPath(paneId: string) {
-  try {
-    const raw = localStorage.getItem(storageKey(paneId)) ?? ''
-    return isInspectorDatabasePath(raw) ? raw : ''
-  } catch {
-    return ''
-  }
-}
-
-function writeStoredPath(paneId: string, path: string) {
-  try {
-    if (!path) localStorage.removeItem(storageKey(paneId))
-    else localStorage.setItem(storageKey(paneId), path)
-  } catch {
-    /* ignore */
-  }
 }
 
 export function subscribeInspectorAgentWorking(fn: () => void) {
@@ -157,17 +124,14 @@ export function isInspectorDatabasePath(pathname: string) {
 
 function panePath(paneId = DEFAULT_PANE) {
   const mem = paths.get(paneId)
-  if (mem !== undefined) return isInspectorDatabasePath(mem) ? mem : ''
-  const stored = readStoredPath(paneId)
-  if (stored) paths.set(paneId, stored)
-  return stored
+  return mem && isInspectorDatabasePath(mem) ? mem : ''
 }
 
 export function getInspectorDbPath(paneId = DEFAULT_PANE) {
   return panePath(paneId)
 }
 
-/** 测试用：清空内存路径，模拟整页刷新后只剩 localStorage。 */
+/** 测试用：清空内存路径。 */
 export function resetInspectorDbPathMemory() {
   paths.clear()
   abandonedPanes.clear()
@@ -178,27 +142,14 @@ export function setInspectorDbPath(paneId: string, next?: string) {
   const path = next === undefined ? paneId : next
   const stored = isInspectorDatabasePath(path) ? path : ''
   if (stored) abandonedPanes.delete(id)
-  if ((paths.get(id) ?? '') === stored) {
-    writeStoredPath(id, stored)
-    return
-  }
+  if ((paths.get(id) ?? '') === stored) return
   if (!stored) paths.delete(id)
   else paths.set(id, stored)
-  writeStoredPath(id, stored)
   bump()
 }
 
 function listStoredPaneIds() {
-  const ids = new Set<string>(paths.keys())
-  try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i) ?? ''
-      if (key.startsWith(STORAGE_PREFIX)) ids.add(key.slice(STORAGE_PREFIX.length))
-    }
-  } catch {
-    /* ignore */
-  }
-  return ids
+  return [...paths.keys()]
 }
 
 /** 当前检查器各栏路径，写入 session.config.inspector.dbPaths。 */
@@ -222,15 +173,9 @@ export function restoreInspectorDbPaths(next?: Record<string, string>) {
     }
   }
   const stale = [...listStoredPaneIds()].filter((id) => !(id in incoming))
-  for (const paneId of stale) {
-    paths.delete(paneId)
-    writeStoredPath(paneId, '')
-  }
+  for (const paneId of stale) paths.delete(paneId)
   abandonedPanes.clear()
-  for (const [paneId, path] of Object.entries(incoming)) {
-    paths.set(paneId, path)
-    writeStoredPath(paneId, path)
-  }
+  for (const [paneId, path] of Object.entries(incoming)) paths.set(paneId, path)
   bump()
 }
 

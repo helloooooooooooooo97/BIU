@@ -61,15 +61,14 @@ test('each inspector database pane keeps its own path', () => {
   assert.equal(getInspectorDbPath('database::b'), '/database/tasks')
 })
 
-test('inspector pane remembers view and record after a memory reset', () => {
+test('inspector pane path stays in memory until restored from session bind', () => {
   const pane = 'database:/sessions'
   setInspectorDbPath(pane, '/database/sessions/view/mine')
-  setInspectorDbPath(pane, '/database/sessions/record/s1?view=mine')
+  assert.equal(getInspectorDbPath(pane), '/database/sessions/view/mine')
   resetInspectorDbPathMemory()
+  assert.equal(getInspectorDbPath(pane), '')
+  restoreInspectorDbPaths({ [pane]: '/database/sessions/record/s1?view=mine' })
   assert.equal(getInspectorDbPath(pane), '/database/sessions/record/s1?view=mine')
-  setInspectorDbPath(pane, '/database/sessions/view/board-1')
-  resetInspectorDbPathMemory()
-  assert.equal(getInspectorDbPath(pane), '/database/sessions/view/board-1')
 })
 
 test('window reveal event opens the inspector record path', async () => {
@@ -122,9 +121,7 @@ test('unique inspector reveal focuses the same page and opens a new pane for a d
   assert.equal(getInspectorDbPath('database:/notes'), '/database/notes/record/n1?view=all')
   showInInspector('/notes', '/database/notes/record/n2', { unique: true })
   assert.equal(getInspectorDbPath('database:/notes'), '/database/notes/record/n1?view=all')
-  const extra = [...Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i) ?? '')]
-    .filter((key) => key.startsWith('inspector.dbPath:database:/notes::'))
-    .map((key) => key.slice('inspector.dbPath:'.length))
+  const extra = Object.keys(snapshotInspectorDbPaths()).filter((id) => id.startsWith('database:/notes::'))
   assert.equal(extra.length, 1)
   assert.equal(getInspectorDbPath(extra[0]!), '/database/notes/record/n2')
 })
