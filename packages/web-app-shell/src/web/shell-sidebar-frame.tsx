@@ -1,8 +1,13 @@
-import { memo, useEffect, useRef, type ReactNode } from 'react'
+import { memo, useEffect, useRef, useState, type ReactNode } from 'react'
 import { ChevronDoubleLeftIcon, ChevronDoubleRightIcon } from '@heroicons/react/16/solid'
 import { SidebarBrandLockup } from '@biu/public-mascot'
 import { chromeIcon } from './chrome-icon.ts'
 import { ShellSidePlaces } from './shell-chrome.tsx'
+import {
+  isSidebarFlyoutKeepTarget,
+  SIDEBAR_FLYOUT_HIDE_MS,
+  shouldKeepSidebarFlyout,
+} from './sidebar-flyout.ts'
 
 export type ShellSidebarFrameProps = {
   visible: boolean
@@ -39,6 +44,11 @@ export const ShellSidebarFrame = memo(function ShellSidebarFrame({
   children,
 }: ShellSidebarFrameProps) {
   const dragRef = useRef<{ startX: number; startWidth: number; last: number } | null>(null)
+  const hostRef = useRef<HTMLDivElement | null>(null)
+  const peekRef = useRef(false)
+  const hideRef = useRef<number | null>(null)
+  const [peek, setPeek] = useState(false)
+
   useEffect(() => {
     const onMove = (event: PointerEvent) => {
       const drag = dragRef.current
@@ -63,8 +73,65 @@ export const ShellSidebarFrame = memo(function ShellSidebarFrame({
     }
   }, [onWidthChange, onWidthLive])
 
+  useEffect(() => {
+    if (visible) {
+      peekRef.current = false
+      setPeek(false)
+      if (hideRef.current != null) {
+        clearTimeout(hideRef.current)
+        hideRef.current = null
+      }
+      return
+    }
+
+    const openPeek = () => {
+      if (hideRef.current != null) {
+        clearTimeout(hideRef.current)
+        hideRef.current = null
+      }
+      peekRef.current = true
+      setPeek(true)
+    }
+    const scheduleHide = () => {
+      if (hideRef.current != null) return
+      hideRef.current = window.setTimeout(() => {
+        hideRef.current = null
+        peekRef.current = false
+        setPeek(false)
+      }, SIDEBAR_FLYOUT_HIDE_MS)
+    }
+    const onPointer = (event: PointerEvent) => {
+      const host = hostRef.current
+      const shell = host?.parentElement
+      const raw = shell ? getComputedStyle(shell).getPropertyValue('--sidebar-flyout-width') : ''
+      const width = Number.parseFloat(raw) || 240
+      if (
+        isSidebarFlyoutKeepTarget(event.target, host) ||
+        shouldKeepSidebarFlyout(event.clientX, peekRef.current, width, window.innerWidth)
+      ) {
+        openPeek()
+        return
+      }
+      if (peekRef.current) scheduleHide()
+    }
+    window.addEventListener('pointermove', onPointer)
+    window.addEventListener('pointerdown', onPointer)
+    return () => {
+      window.removeEventListener('pointermove', onPointer)
+      window.removeEventListener('pointerdown', onPointer)
+      if (hideRef.current != null) {
+        clearTimeout(hideRef.current)
+        hideRef.current = null
+      }
+    }
+  }, [visible])
+
   return (
-    <div className={`sidebar-flyout-host${visible ? '' : ' is-collapsed'}`} data-testid="sidebar-flyout-host">
+    <div
+      ref={hostRef}
+      className={`sidebar-flyout-host${visible ? '' : ' is-collapsed'}${!visible && peek ? ' is-flyout-open' : ''}`}
+      data-testid="sidebar-flyout-host"
+    >
       {visible ? null : <div className="sidebar-edge-hot" data-testid="sidebar-edge-hot" aria-hidden />}
     <aside
       className={`app-side-bar min-h-0 flex-col overflow-hidden border-r border-(--dsw-border) bg-(--dsw-sidebar)${narrow ? ' is-narrow' : ''}${showTags ? ' is-wide' : ''}${visible ? ' flex' : ' is-closed flex'}`}

@@ -1430,9 +1430,9 @@ body {
   pointer-events: auto;
   position: fixed;
   left: 0;
-  top: 60px;
-  bottom: 60px;
-  width: 12px;
+  top: 0;
+  bottom: 0;
+  width: 20px;
   z-index: 80;
 }
 
@@ -1454,21 +1454,24 @@ body {
   transform: translateX(calc(-100% - 8px));
   opacity: 0;
   pointer-events: none;
-  /* 贴窗口左缘时 :hover 会闪断；收起延迟一帧以上，避免消失又弹出 */
-  transition: transform 0s linear 180ms, opacity 0s linear 180ms;
+  /* 贴窗口左缘时 :hover 会闪断；坐标锁定打开后，收起连 pointer-events 一起延迟 */
+  transition: transform 0s linear 240ms, opacity 0s linear 240ms, pointer-events 0s linear 240ms;
   z-index: 81;
 }
 
-.sidebar-flyout-host.is-collapsed:hover {
+.sidebar-flyout-host.is-collapsed:hover,
+.sidebar-flyout-host.is-collapsed.is-flyout-open {
   pointer-events: auto;
 }
 
 /* 唤醒后把热区铺满栏宽、垫在栏下面，避免指针刚离开 12px 条就丢 :hover */
-.sidebar-flyout-host.is-collapsed:hover .sidebar-edge-hot {
+.sidebar-flyout-host.is-collapsed:hover .sidebar-edge-hot,
+.sidebar-flyout-host.is-collapsed.is-flyout-open .sidebar-edge-hot {
   width: var(--sidebar-flyout-width, 240px);
 }
 
-.sidebar-flyout-host.is-collapsed:hover .app-side-bar.is-closed {
+.sidebar-flyout-host.is-collapsed:hover .app-side-bar.is-closed,
+.sidebar-flyout-host.is-collapsed.is-flyout-open .app-side-bar.is-closed {
   transform: none;
   opacity: 1;
   pointer-events: auto;
