@@ -11,18 +11,38 @@ import {
   type HandleBlock,
 } from './page-block-handle.ts'
 
-type HandleTarget = HandleBlock & { top: number }
+type HandleTarget = HandleBlock & { top: number; height: number; gripTop: number }
 
-function readTarget(editor: Editor, clientX: number, clientY: number): HandleTarget | null {
-  const coords = editor.view.posAtCoords({ left: clientX, top: clientY })
+function lineCoords(editor: Editor, found: HandleBlock) {
+  const inside = found.node.isAtom || found.node.isLeaf || found.node.nodeSize < 2 ? found.pos : found.pos + 1
+  try {
+    return editor.view.coordsAtPos(inside)
+  } catch {
+    return null
+  }
+}
+
+function readTarget(editor: Editor, host: HTMLElement, clientX: number, clientY: number): HandleTarget | null {
+  const content = editor.view.dom.getBoundingClientRect()
+  const probeX = Math.min(Math.max(clientX, content.left + 8), content.right - 8)
+  const coords = editor.view.posAtCoords({ left: probeX, top: clientY })
   if (!coords) return null
   const found = resolveHandleBlock(editor.state.doc.resolve(coords.pos))
   if (!found) return null
   const dom = editor.view.nodeDOM(found.pos)
   const el = dom instanceof HTMLElement ? dom : dom?.parentElement
   if (!(el instanceof HTMLElement)) return null
-  const wrap = editor.view.dom.getBoundingClientRect()
-  return { ...found, top: el.getBoundingClientRect().top - wrap.top }
+  const hostBox = host.getBoundingClientRect()
+  const box = el.getBoundingClientRect()
+  const line = lineCoords(editor, found) ?? { top: box.top, bottom: box.top + 22 }
+  const gripH = 22
+  const gripTop = (line.top + line.bottom) / 2 - box.top - gripH / 2
+  return {
+    ...found,
+    top: box.top - hostBox.top,
+    height: Math.max(box.height, gripH),
+    gripTop: Math.max(0, gripTop),
+  }
 }
 
 export function PageBlockHandle({ editor }: { editor: Editor }) {
@@ -47,8 +67,8 @@ export function PageBlockHandle({ editor }: { editor: Editor }) {
         setTarget(null)
         return
       }
-      if (event.target instanceof Element && event.target.closest('.page-block-handle')) return
-      const next = readTarget(editor, event.clientX, event.clientY)
+      if (event.target instanceof Element && event.target.closest('.page-block-handle-menu')) return
+      const next = readTarget(editor, wrap, event.clientX, event.clientY)
       setTarget(next)
     }
 
@@ -101,10 +121,15 @@ export function PageBlockHandle({ editor }: { editor: Editor }) {
   }
 
   return (
-    <div className="page-block-handle" style={{ top: target.top }} data-testid="page-block-handle">
+    <div
+      className="page-block-handle"
+      style={{ top: target.top, height: target.height }}
+      data-testid="page-block-handle"
+    >
       <button
         type="button"
         className="page-block-handle-grip"
+        style={{ marginTop: target.gripTop }}
         draggable
         aria-label="拖拽或打开块菜单"
         data-testid="page-block-handle-grip"
@@ -116,7 +141,13 @@ export function PageBlockHandle({ editor }: { editor: Editor }) {
       </button>
       {menuOpen ? (
         <HeadlessDismiss onDismiss={() => setMenuOpen(false)} insideRef={menuRef}>
-          <div ref={menuRef} className="page-block-handle-menu" role="menu" data-testid="page-block-handle-menu">
+          <div
+            ref={menuRef}
+            className="page-block-handle-menu"
+            style={{ top: target.gripTop }}
+            role="menu"
+            data-testid="page-block-handle-menu"
+          >
             <button type="button" role="menuitem" onMouseDown={run(() => insertParagraphBefore(editor, target.pos))}>
               向上插入
             </button>
