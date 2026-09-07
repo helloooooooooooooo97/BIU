@@ -14,6 +14,8 @@ function slashIcon(id: string) {
   if (id === 'divider') return '—'
   if (id === 'image') return '图'
   if (id === 'table') return '表'
+  if (id === 'math') return '∑'
+  if (id === 'math-inline') return '𝑥'
   if (id === 'algorithm') return 'LC'
   return '+'
 }
@@ -27,6 +29,8 @@ function slashKeys(id: string) {
   if (id === 'quote') return '>'
   if (id === 'code') return '```'
   if (id === 'divider') return '---'
+  if (id === 'math') return '$$'
+  if (id === 'math-inline') return '$'
   return ''
 }
 

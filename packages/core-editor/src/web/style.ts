@@ -42,6 +42,10 @@ export const PAGE_EDITOR_STYLE = `
 .page-editor .tiptap th,.page-editor .tiptap td{border:1px solid var(--dsw-border);padding:6px 8px;vertical-align:top}
 .page-editor .tiptap th{background:var(--dsw-hover);font-weight:650;text-align:left}
 .page-editor .tiptap .selectedCell{background:color-mix(in srgb,var(--dsw-business) 14%,transparent)}
+.page-editor .tiptap .tiptap-mathematics-render{margin:8px 0;overflow-x:auto}
+.page-editor .tiptap .tiptap-mathematics-render--editable{cursor:pointer}
+.page-editor .tiptap span[data-type=inline-math]{display:inline-block;padding:0 .15em;cursor:pointer}
+.page-editor .tiptap .block-math-error,.page-editor .tiptap .inline-math-error{color:var(--dsw-label-3);font-family:var(--font-mono);font-size:13px}
 .page-editor .tiptap code{display:inline;padding:.12em .35em;border-radius:4px;background:var(--dsw-hover);font-family:var(--font-mono);font-size:.9em}
 .page-editor .tiptap pre{display:block;margin:8px 0;padding:10px 12px;border:1px solid var(--dsw-border);border-radius:10px;background:var(--dsw-chat-code-bg,var(--dsw-sidebar));overflow-x:auto;white-space:pre;font-family:var(--font-mono)}
 .page-editor .tiptap pre code{display:block;padding:0;background:transparent;font-size:13px;line-height:1.6;white-space:inherit}

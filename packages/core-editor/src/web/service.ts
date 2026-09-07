@@ -48,6 +48,8 @@ export type SlashInsert =
   | 'divider'
   | 'image'
   | 'table'
+  | 'math'
+  | 'mathInline'
 
 export type SlashCommandSpec = {
   id: string

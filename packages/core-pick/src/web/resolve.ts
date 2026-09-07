@@ -86,6 +86,7 @@ const EDITOR_ROOT = '.tiptap, [data-testid="page-editor"]'
 
 function isEditorBlockEl(el: HTMLElement) {
   if (el.classList.contains('page-block') || el.hasAttribute('data-page-block')) return true
+  if (el.getAttribute('data-type') === 'block-math') return true
   return /^(P|H1|H2|H3|LI|BLOCKQUOTE|PRE|HR|IMG|TABLE)$/.test(el.tagName)
 }
 
@@ -230,7 +231,7 @@ export function visiblePickBox(el: Element): ClientBox | null {
 }
 
 export const EDITOR_BLOCK_SEL =
-  '.tiptap > p, .tiptap > h1, .tiptap > h2, .tiptap > h3, .tiptap > blockquote, .tiptap > pre, .tiptap > hr, .tiptap > img, .tiptap img, .tiptap table, .tiptap .page-block, .tiptap [data-page-block], .tiptap li'
+  '.tiptap > p, .tiptap > h1, .tiptap > h2, .tiptap > h3, .tiptap > blockquote, .tiptap > pre, .tiptap > hr, .tiptap > img, .tiptap img, .tiptap table, .tiptap [data-type="block-math"], .tiptap .page-block, .tiptap [data-page-block], .tiptap li'
 
 /**
  * 框选：命中所有带 kind+id 的对象节点，以及编辑器里的段落/标题/列表/插件块。

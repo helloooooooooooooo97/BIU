@@ -1,11 +1,40 @@
 import { Markdown } from '@tiptap/markdown'
 import Image from '@tiptap/extension-image'
+import { BlockMath, InlineMath, Mathematics } from '@tiptap/extension-mathematics'
 import Placeholder from '@tiptap/extension-placeholder'
 import { TableKit } from '@tiptap/extension-table'
 import StarterKit from '@tiptap/starter-kit'
 import { headingSkin } from './heading-skin.ts'
 import { pageBlock } from './page-block.ts'
 import { slashCommand } from './slash.ts'
+
+const pageMathematics = Mathematics.extend({
+  addExtensions() {
+    const editorOf = () => this.editor
+    const askLatex = (current: string) => {
+      if (typeof window === 'undefined' || typeof window.prompt !== 'function') return null
+      return window.prompt('LaTeX 公式', current)
+    }
+    return [
+      BlockMath.configure({
+        katexOptions: { throwOnError: false, displayMode: true },
+        onClick: (node, pos) => {
+          const next = askLatex(String(node.attrs.latex ?? ''))
+          if (next == null) return
+          editorOf().chain().setNodeSelection(pos).updateBlockMath({ latex: next }).focus().run()
+        },
+      }),
+      InlineMath.configure({
+        katexOptions: { throwOnError: false, displayMode: false },
+        onClick: (node, pos) => {
+          const next = askLatex(String(node.attrs.latex ?? ''))
+          if (next == null) return
+          editorOf().chain().setNodeSelection(pos).updateInlineMath({ latex: next }).focus().run()
+        },
+      }),
+    ]
+  },
+})
 
 export function pageEditorExtensions() {
   return [
@@ -17,6 +46,7 @@ export function pageEditorExtensions() {
     TableKit.configure({
       table: { resizable: true },
     }),
+    pageMathematics,
     Placeholder.configure({
       placeholder: ({ node }) => {
         if (node.type.name === 'heading') return `标题 ${node.attrs.level}`

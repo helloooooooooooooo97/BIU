@@ -9,6 +9,8 @@ test('slash filter matches chinese labels and aliases', () => {
   assert.ok(filterSlashItems('code').some((item) => item.id === 'code'))
   assert.ok(filterSlashItems('图片').some((item) => item.id === 'image'))
   assert.ok(filterSlashItems('表格').some((item) => item.id === 'table'))
+  assert.ok(filterSlashItems('公式').some((item) => item.id === 'math'))
+  assert.ok(filterSlashItems('latex').some((item) => item.id === 'math'))
   assert.equal(filterSlashItems('zzz').length, 0)
   assert.equal(filterSlashItems('').length, SLASH_ITEMS.length)
 })
@@ -120,6 +122,40 @@ test('slash command inserts a table', () => {
   assert.ok(table)
   table!.command({ editor, range: { from: Math.max(1, from), to: editor.state.selection.from } })
   assert.equal(editor.isActive('table'), true)
+  editor.destroy()
+})
+
+test('markdown roundtrips inline and block latex', () => {
+  const src = `行内 $E = mc^2$ 公式。
+
+$$\\sum_{i=1}^{n} x_i$$
+`
+  const editor = new Editor({
+    extensions: pageEditorExtensions(),
+    content: src,
+    contentType: 'markdown',
+  })
+  const html = editor.getHTML()
+  const out = editor.getMarkdown()
+  assert.match(html, /data-type="inline-math"/)
+  assert.match(html, /data-type="block-math"/)
+  assert.match(out, /\$E = mc\^2\$/)
+  assert.match(out, /\\sum_\{i=1\}\^\{n\} x_i/)
+  editor.destroy()
+})
+
+test('slash command inserts block math', () => {
+  const editor = new Editor({
+    extensions: pageEditorExtensions(),
+    content: '/',
+    contentType: 'markdown',
+  })
+  const from = editor.state.selection.from - 1
+  const math = SLASH_ITEMS.find((item) => item.id === 'math')
+  assert.ok(math)
+  math!.command({ editor, range: { from: Math.max(1, from), to: editor.state.selection.from } })
+  assert.match(editor.getHTML(), /data-type="block-math"/)
+  assert.match(editor.getHTML(), /E = mc\^2/)
   editor.destroy()
 })
 

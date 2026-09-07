@@ -134,6 +134,26 @@ export const SLASH_ITEMS: SlashItem[] = [
     },
     ...BASIC_GROUP,
   },
+  {
+    id: 'math',
+    label: '公式',
+    hint: '块级 LaTeX',
+    aliases: ['math', 'latex', 'katex', 'formula', '公式', '方程'],
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).insertBlockMath({ latex: 'E = mc^2' }).run()
+    },
+    ...BASIC_GROUP,
+  },
+  {
+    id: 'math-inline',
+    label: '行内公式',
+    hint: '行内 LaTeX',
+    aliases: ['inline math', 'inline latex', '行内公式', '行内'],
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).insertInlineMath({ latex: 'x^2' }).run()
+    },
+    ...BASIC_GROUP,
+  },
 ]
 
 function pickLocalImageSrc() {
@@ -169,6 +189,8 @@ function runInsert(editor: Editor, range: Range, insert: SlashInsert) {
   if (insert === 'code') return chain.toggleCodeBlock().run()
   if (insert === 'image') return chain.setImage({ src: '', alt: '' }).run()
   if (insert === 'table') return chain.insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
+  if (insert === 'math') return chain.insertBlockMath({ latex: 'E = mc^2' }).run()
+  if (insert === 'mathInline') return chain.insertInlineMath({ latex: 'x^2' }).run()
   return chain.setHorizontalRule().run()
 }
 

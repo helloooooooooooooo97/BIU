@@ -1,3 +1,4 @@
+import 'katex/dist/katex.min.css'
 import type { Context } from 'cordis'
 import type { DatabaseUi } from '@biu/type-file-system/ui'
 import { PageEditor } from './page-editor.tsx'
