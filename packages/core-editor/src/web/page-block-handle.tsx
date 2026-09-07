@@ -11,7 +11,9 @@ import {
   type HandleBlock,
 } from './page-block-handle.ts'
 
-type HandleTarget = HandleBlock & { top: number; height: number; gripTop: number }
+const HANDLE_RAIL = 24
+
+type HandleTarget = HandleBlock & { top: number; left: number; height: number; gripTop: number }
 
 function lineCoords(editor: Editor, found: HandleBlock) {
   const inside = found.node.isAtom || found.node.isLeaf || found.node.nodeSize < 2 ? found.pos : found.pos + 1
@@ -40,6 +42,7 @@ function readTarget(editor: Editor, host: HTMLElement, clientX: number, clientY:
   return {
     ...found,
     top: box.top - hostBox.top,
+    left: box.left - hostBox.left - HANDLE_RAIL,
     height: Math.max(box.height, gripH),
     gripTop: Math.max(0, gripTop),
   }
@@ -67,7 +70,7 @@ export function PageBlockHandle({ editor }: { editor: Editor }) {
         setTarget(null)
         return
       }
-      if (event.target instanceof Element && event.target.closest('.page-block-handle-menu')) return
+      if (event.target instanceof Element && event.target.closest('.page-block-handle')) return
       const next = readTarget(editor, wrap, event.clientX, event.clientY)
       setTarget(next)
     }
@@ -123,7 +126,7 @@ export function PageBlockHandle({ editor }: { editor: Editor }) {
   return (
     <div
       className="page-block-handle"
-      style={{ top: target.top, height: target.height }}
+      style={{ top: target.top, left: target.left, height: target.height }}
       data-testid="page-block-handle"
     >
       <button
