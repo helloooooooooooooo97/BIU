@@ -175,7 +175,9 @@ export function BrandCornerMascot({
 
   return (
     <div className="brand-corner-cluster" data-testid="brand-corner-mascot">
-      {leading ? <div className="brand-corner-leading">{leading}</div> : null}
+      <div className="brand-corner-leading" data-plugin-tray>
+        {leading}
+      </div>
       <div className="brand-corner-mascot">
         <button
           type="button"

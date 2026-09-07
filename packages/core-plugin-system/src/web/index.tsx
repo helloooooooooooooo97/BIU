@@ -7,6 +7,7 @@ import { XMarkIcon, MinusIcon, ArrowsPointingOutIcon, ArrowsPointingInIcon, Bars
 import type { DatabaseUi } from '@biu/type-file-system/ui'
 import { pluginsChrome } from './chrome.tsx'
 import { listenEnablePageBlockPlugin } from './page-block-plugin.ts'
+import { PluginTrayPortal, type PluginTrayItem } from './plugin-tray.tsx'
 import {
   WIN_CHROME_H,
   centeredGeom,
@@ -343,7 +344,7 @@ function PluginExtrasLayer(props: SlotProps) {
 
   useEffect(() => {
     const live = new Set(sorted.map((entry) => entry.id))
-    setDismissed((cur) => {
+    const prune = (cur: Record<string, boolean>) => {
       let changed = false
       const next = { ...cur }
       for (const id of Object.keys(next)) {
@@ -352,19 +353,32 @@ function PluginExtrasLayer(props: SlotProps) {
         changed = true
       }
       return changed ? next : cur
-    })
+    }
+    setDismissed(prune)
+    setMinimized(prune)
   }, [sorted.map((entry) => entry.id).join('|')])
+
+  const windows = sorted.flatMap((entry) => {
+    if (dismissed[entry.id]) return []
+    const listing = resolveListing(entry.id, listings)
+    const extraProps = entry.props?.() ?? {}
+    if (listingIsHeadless(listing) || extraProps.headless === true) return []
+    const pluginId = listing?.id ?? entry.id
+    const title = listing?.name ?? (typeof extraProps.title === 'string' ? extraProps.title : entry.id)
+    return [{ entry, listing, extraProps, pluginId, title }]
+  })
+
+  const trayItems: PluginTrayItem[] = windows.map(({ entry, extraProps, title }) => ({
+    id: entry.id,
+    title,
+    Icon: typeof extraProps.Icon === 'function' ? (extraProps.Icon as PluginTrayItem['Icon']) : undefined,
+  }))
 
   if (extras.length === 0) return null
   return (
     <div className="pointer-events-none fixed inset-0 z-20" data-testid="plugin-store-extras">
-      {sorted.map((entry) => {
-        if (minimized[entry.id] || dismissed[entry.id]) return null
-        const listing = resolveListing(entry.id, listings)
-        const extraProps = entry.props?.() ?? {}
-        if (listingIsHeadless(listing) || extraProps.headless === true) return null
-        const pluginId = listing?.id ?? entry.id
-        const title = listing?.name ?? entry.id
+      {windows.map(({ entry, pluginId, title, listing }) => {
+        if (minimized[entry.id]) return null
         const shell = storeShellFromRecord(listing)
         const Component = entry.Component
         return (
@@ -389,6 +403,21 @@ function PluginExtrasLayer(props: SlotProps) {
           </PluginAppWindow>
         )
       })}
+      <PluginTrayPortal
+        items={trayItems}
+        minimized={minimized}
+        onRestore={(id) => {
+          setMinimized((cur) => {
+            const next = { ...cur }
+            delete next[id]
+            return next
+          })
+        }}
+        onMinimize={(id) => {
+          if (fullscreenId === id) setFullscreenId(null)
+          setMinimized((cur) => ({ ...cur, [id]: true }))
+        }}
+      />
     </div>
   )
 }

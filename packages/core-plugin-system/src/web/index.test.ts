@@ -132,6 +132,8 @@ test('plugin window hover controls sit on the right without a title bar', async 
   assert.doesNotMatch(src, /dock\.register/)
   assert.doesNotMatch(src, /PuzzlePieceIcon/)
   assert.doesNotMatch(src, /ExtraIcon/)
+  assert.match(src, /PluginTrayPortal/)
+  assert.match(src, /setMinimized\(prune\)/)
 })
 
 test('page-excalidraw sandbox stores scenes as page assets', async () => {
@@ -182,5 +184,7 @@ test('page-excalidraw sandbox stores scenes as page assets', async () => {
   assert.match(src, /assetStem/)
   assert.match(src, /normalizeStem/)
   assert.doesNotMatch(src, /border-\[var\(--border\)\]/)
+  assert.match(src, /height: 280/)
+  assert.doesNotMatch(src, /h-\[280px\]/)
   assert.match(src, /refresh/)
 })

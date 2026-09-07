@@ -543,7 +543,7 @@ function Board(props: { data: Record<string, unknown>; update: (p: Record<string
         onToggle={() => setExpanded((v) => !v)}
         onRename={onRename}
       />
-      <div className="h-[280px]" ref={slotRef} style={{ position: 'relative' }} />
+      <div ref={slotRef} style={{ position: 'relative', height: 280 }} />
       {expanded
         ? createPortal(
             <div
