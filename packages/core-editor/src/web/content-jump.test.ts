@@ -1,13 +1,31 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
+import { Editor } from '@tiptap/core'
 import { CONTENT_JUMP_EVENT } from '@biu/type-file-system'
+import { pageEditorExtensions } from './kit.ts'
 import {
+  applyContentJump,
   clearContentJump,
   consumeContentJump,
   rememberContentJump,
   snippetAtLine,
   stripMarkdownLine,
+  tryContentJump,
 } from './content-jump.ts'
+
+function editorOf(markdown: string) {
+  return new Editor({
+    extensions: pageEditorExtensions(),
+    content: markdown,
+    contentType: 'markdown',
+  })
+}
+
+function textAtCaret(editor: Editor, span = 24) {
+  const from = editor.state.selection.from
+  const size = editor.state.doc.content.size
+  return editor.state.doc.textBetween(Math.max(0, from), Math.min(size, from + span), '\n')
+}
 
 test('content jump remembers then consumes for the matching record', () => {
   clearContentJump()
@@ -29,4 +47,25 @@ test('window content-jump event is remembered', () => {
 test('snippetAtLine strips markdown markers', () => {
   assert.equal(stripMarkdownLine('## Hello `x`'), 'Hello x')
   assert.equal(snippetAtLine('# Title\n\n- **item**\nmore', 3), 'item')
+})
+
+test('applyContentJump puts caret on the replaced markdown line', () => {
+  const md = '# 欢迎\n\n第一段\n\nUNIQUE_JUMP_ANCHOR 改到这\n\n末段'
+  const editor = editorOf(md)
+  applyContentJump(editor, md, { path: '/pages/home', start_line: 5, end_line: 5 })
+  assert.match(textAtCaret(editor), /UNIQUE_JUMP_ANCHOR/)
+  editor.destroy()
+})
+
+test('tryContentJump waits until new text is in the doc then jumps', () => {
+  clearContentJump()
+  const before = '# 欢迎\n\n旧段落'
+  const after = '# 欢迎\n\n改动段落 XYZ'
+  const editor = editorOf(before)
+  rememberContentJump({ path: '/pages/home', start_line: 3, end_line: 3 })
+  assert.equal(tryContentJump(editor, after, 'home', false), false)
+  editor.commands.setContent(after, { contentType: 'markdown', emitUpdate: false })
+  assert.equal(tryContentJump(editor, after, 'home', true), true)
+  assert.match(textAtCaret(editor), /改动段落 XYZ/)
+  editor.destroy()
 })
