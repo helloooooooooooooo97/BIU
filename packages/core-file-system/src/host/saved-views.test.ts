@@ -40,6 +40,14 @@ test('viewsCollection lists saved views with source table', async () => {
   const tree = JSON.parse(String(filtered.filterTree || '{}')) as { children?: Array<{ field?: string; value?: string }> }
   assert.equal(tree.children?.[0]?.field, 'project')
   assert.equal(tree.children?.[0]?.value, 'biu')
+  const tags = await spec.update!(String(user?.id), { filters: '{"tags":{"$in":["test","bug"]}}' })
+  const tagTree = JSON.parse(String(tags.filterTree || '{}')) as {
+    children?: Array<{ kind?: string; combinator?: string; children?: Array<{ field?: string; value?: string }> }>
+  }
+  assert.equal(tagTree.children?.[0]?.kind, 'group')
+  assert.equal(tagTree.children?.[0]?.combinator, 'or')
+  assert.equal(tagTree.children?.[0]?.children?.[0]?.field, 'tags')
+  assert.equal(tagTree.children?.[0]?.children?.[0]?.value, 'test')
   const sorted = await spec.update!(String(user?.id), { sorts: '[{"field":"title","dir":"desc"}]' })
   assert.equal(sorted.sortField, 'title')
   assert.equal(sorted.sortDir, 'desc')

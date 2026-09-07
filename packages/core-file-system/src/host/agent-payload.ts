@@ -186,6 +186,7 @@ export class AgentDbCompact {
     if (field.sortable) out.sortable = true
     if (field.format) out.format = field.format
     if (field.enum?.length) out.enum = field.enum
+    if (field.description) out.description = field.description
     if (field.action) out.action = field.action
     if (field.computed) out.computed = true
     return out

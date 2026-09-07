@@ -25,6 +25,8 @@ export type FieldSpec = {
   format?: 'datetime' | 'url' | 'image' | 'attachment' | 'file'
   /** select / multi-select 的选项 */
   enum?: string[]
+  /** 给 Agent / db_stat：这个字段怎么写。不进单元格 UI。 */
+  description?: string
   /** action 字段绑定的动作 id，缺省为字段 key */
   action?: string
   /** 由 list/get 计算写入记录，不能 PATCH。例如任务消耗。 */

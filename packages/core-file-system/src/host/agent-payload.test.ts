@@ -9,7 +9,7 @@ function notesSchema(): CollectionSchema {
   const fields = withBuiltinFields({
     ...REQUIRED_RECORD_FIELDS,
     title: { type: 'string', writable: true },
-    status: { type: 'string', writable: true, enum: ['open', 'done'] },
+    status: { type: 'string', writable: true, enum: ['open', 'done'], description: 'open 或 done' },
     pinned: { type: 'boolean' },
   })
   for (const [key, field] of Object.entries(fields)) {
@@ -36,6 +36,7 @@ test('compact schema drops identical builtins and user-only actions', () => {
   assert.deepEqual((compact.fields as Record<string, unknown>).status, {
     type: 'string',
     enum: ['open', 'done'],
+    description: 'open 或 done',
   })
   assert.deepEqual((compact.fields as Record<string, unknown>).pinned, { type: 'boolean' })
   assert.equal(compact.labelField, undefined)

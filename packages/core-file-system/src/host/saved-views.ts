@@ -8,10 +8,12 @@ import { normalizeColumnWidths, type SavedView } from '../web/saved-view.ts'
 import { isViewModeId } from '../web/fields.ts'
 import { normalizeCollectionPath } from '../paths.ts'
 import {
-  flatFiltersToTree,
-  looksLikeFilterTree,
   normalizeFilterGroup,
   parseSortsInput,
+  parseViewFilterInput,
+  VIEW_FILTERS_DESCRIPTION,
+  VIEW_FILTER_TREE_DESCRIPTION,
+  VIEW_SORTS_DESCRIPTION,
   type FilterGroup,
   type SortRule,
 } from '../query-logic.ts'
@@ -256,13 +258,7 @@ function parseJsonValue(value: unknown): unknown {
 }
 
 function filtersFromPatch(value: unknown): { filters: Record<string, string>; filterTree: FilterGroup } {
-  const raw = parseJsonValue(value)
-  if (looksLikeFilterTree(raw)) {
-    const filterTree = normalizeFilterGroup(raw)
-    return { filters: {}, filterTree }
-  }
-  const filters = asFilters(raw)
-  return { filters, filterTree: flatFiltersToTree(filters) }
+  return parseViewFilterInput(parseJsonValue(value))
 }
 
 function sortsFromPatch(value: unknown, sortField: unknown, sortDir: unknown): { sorts: SortRule[]; sortField: string; sortDir: 'asc' | 'desc' } {
@@ -272,22 +268,6 @@ function sortsFromPatch(value: unknown, sortField: unknown, sortDir: unknown): {
     sortField: sorts[0]?.field || 'title',
     sortDir: sorts[0]?.dir ?? 'asc',
   }
-}
-
-function asFilters(value: unknown): Record<string, string> {
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
-    const out: Record<string, string> = {}
-    for (const [key, item] of Object.entries(value as Record<string, unknown>)) out[key] = String(item)
-    return out
-  }
-  if (typeof value === 'string' && value.trim()) {
-    try {
-      return asFilters(JSON.parse(value))
-    } catch {
-      return {}
-    }
-  }
-  return {}
 }
 
 function asRecord(path: string, tableName: string, view: StoredView): DbRecord {
@@ -329,7 +309,7 @@ export function viewsCollection(store: SavedViewsStore, tables: () => Collection
       route: '/db-views',
       title: '视图',
       inspector: false,
-      blurb: '各表已保存的视图（筛选/排序/呈现）。列表 db_list /views。新建 db_create /views records=[{title, tablePath, mode}]，tablePath 如 /tasks，mode 默认 table。改筛选用 db_update 写 filters：扁平 JSON 如 {"project":"biu"}（等于），或 filterTree 树。排序用 sorts JSON [{"field":"title","dir":"asc"}]，或旧字段 sortField/sortDir。列 columns、搜索 query、分组 groupBy、每页 pageSize 同样 db_update。内置「全部 xx」只读。本表没有 db_action。',
+      blurb: '各表已保存的视图。列表 db_list /views。新建 db_create /views records=[{title, tablePath, mode}]，tablePath 如 /pages。改筛选 db_update 写 filters 或 filterTree（JSON 字符串）。filters 扁平等于：{"project":"biu","tags":"test"}（tags 含该标签）。不要写 Mongo $in。OR/复杂条件用 filterTree：{"kind":"group","combinator":"or","children":[{"kind":"rule","field":"tags","op":"eq","value":"test"},{"kind":"rule","field":"tags","op":"eq","value":"bug"}]}。rule.op=eq|neq|contains|not_contains|is_empty|not_empty|gt|lt|within，value 是字符串。排序 sorts：[{"field":"title","dir":"asc"}]。内置「全部 xx」只读。',
       order: 17,
       icon: 'eye',
     },
@@ -346,7 +326,7 @@ export function viewsCollection(store: SavedViewsStore, tables: () => Collection
         mode: { type: 'string', label: '呈现', writable: true },
         sortField: { type: 'string', label: '排序字段', writable: true },
         sortDir: { type: 'select', label: '升降序', writable: true, enum: ['asc', 'desc'] },
-        sorts: { type: 'string', label: '排序', writable: true },
+        sorts: { type: 'string', label: '排序', writable: true, description: VIEW_SORTS_DESCRIPTION },
         query: { type: 'string', label: '搜索', writable: true },
         groupBy: { type: 'string', label: '分组', writable: true },
         tree: { type: 'boolean', label: '树形' },
@@ -354,8 +334,8 @@ export function viewsCollection(store: SavedViewsStore, tables: () => Collection
         truncate: { type: 'boolean', label: '截断' },
         pageSize: { type: 'number', label: '每页', writable: true },
         columns: { type: 'multi-select', label: '列', writable: true },
-        filters: { type: 'string', label: '筛选', writable: true },
-        filterTree: { type: 'string', label: '筛选树', writable: true },
+        filters: { type: 'string', label: '筛选', writable: true, description: VIEW_FILTERS_DESCRIPTION },
+        filterTree: { type: 'string', label: '筛选树', writable: true, description: VIEW_FILTER_TREE_DESCRIPTION },
       },
     },
     list,
