@@ -28,7 +28,6 @@ function lineCoords(editor: Editor, found: HandleBlock) {
 function readTarget(editor: Editor, host: HTMLElement, clientX: number, clientY: number): HandleTarget | null {
   const found = handleBlockAtPointer(editor, clientX, clientY)
   if (!found) return null
-  const content = editor.view.dom.getBoundingClientRect()
   const raw = editor.view.nodeDOM(found.pos)
   const el = raw instanceof HTMLElement ? raw : raw?.parentElement
   if (!(el instanceof HTMLElement)) return null
@@ -39,7 +38,7 @@ function readTarget(editor: Editor, host: HTMLElement, clientX: number, clientY:
   return {
     ...found,
     top: box.top - hostBox.top,
-    left: content.left - hostBox.left - HANDLE_RAIL,
+    left: box.left - hostBox.left - HANDLE_RAIL,
     height: Math.max(box.height, GRIP_H),
     gripTop: Math.max(0, gripTop),
   }
