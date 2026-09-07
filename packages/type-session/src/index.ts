@@ -82,6 +82,76 @@ export interface SessionConfig {
   /** 分面 */
   facet?: { tags: string[]; values: Record<string, Record<string, unknown>> }
   createdAt?: number
+  /** 右侧检查器与当前 session 绑死；换环境/换机从这条记录恢复。 */
+  inspector?: SessionInspectorBind
+}
+
+/** 检查器开合、宽度、页签、库路径、跟随，均跟这条 session 走。 */
+export type SessionInspectorBind = {
+  open?: boolean
+  width?: number
+  tab?: string
+  opened?: string[]
+  dbPaths?: Record<string, string>
+  follow?: boolean
+}
+
+const INSPECTOR_WIDTH_MIN = 240
+const INSPECTOR_WIDTH_MAX = 1000
+const INSPECTOR_OPENED_MAX = 24
+const INSPECTOR_DB_PATHS_MAX = 32
+
+function isInspectorDbPath(value: string) {
+  return value === '/database' || value.startsWith('/database/')
+}
+
+export function normalizeInspectorBind(value: unknown): SessionInspectorBind | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const raw = value as Record<string, unknown>
+  const next: SessionInspectorBind = {}
+  if (typeof raw.open === 'boolean') next.open = raw.open
+  if (typeof raw.width === 'number' && Number.isFinite(raw.width)) {
+    next.width = Math.min(INSPECTOR_WIDTH_MAX, Math.max(INSPECTOR_WIDTH_MIN, Math.round(raw.width)))
+  }
+  if (typeof raw.tab === 'string') next.tab = raw.tab.trim().slice(0, 160)
+  if (Array.isArray(raw.opened)) {
+    next.opened = [...new Set(raw.opened.map((item) => String(item).trim()).filter(Boolean))].slice(0, INSPECTOR_OPENED_MAX)
+  }
+  if (raw.dbPaths && typeof raw.dbPaths === 'object' && !Array.isArray(raw.dbPaths)) {
+    const dbPaths: Record<string, string> = {}
+    for (const [paneId, path] of Object.entries(raw.dbPaths as Record<string, unknown>)) {
+      const id = String(paneId).trim()
+      const stored = String(path ?? '').trim()
+      if (!id || !isInspectorDbPath(stored)) continue
+      dbPaths[id] = stored
+      if (Object.keys(dbPaths).length >= INSPECTOR_DB_PATHS_MAX) break
+    }
+    next.dbPaths = dbPaths
+  }
+  if (typeof raw.follow === 'boolean') next.follow = raw.follow
+  return Object.keys(next).length ? next : undefined
+}
+
+export function mergeInspectorBind(
+  base: SessionInspectorBind | undefined,
+  patch: SessionInspectorBind,
+): SessionInspectorBind | undefined {
+  const next: SessionInspectorBind = { ...(base ?? {}) }
+  if (typeof patch.open === 'boolean') next.open = patch.open
+  if (typeof patch.width === 'number' && Number.isFinite(patch.width)) {
+    next.width = Math.min(INSPECTOR_WIDTH_MAX, Math.max(INSPECTOR_WIDTH_MIN, Math.round(patch.width)))
+  }
+  if (typeof patch.tab === 'string') next.tab = patch.tab.trim().slice(0, 160)
+  if (Array.isArray(patch.opened)) {
+    next.opened = [...new Set(patch.opened.map((item) => String(item).trim()).filter(Boolean))].slice(0, INSPECTOR_OPENED_MAX)
+  }
+  if (patch.dbPaths) {
+    const dbPaths = normalizeInspectorBind({ dbPaths: patch.dbPaths })?.dbPaths
+    if (dbPaths) next.dbPaths = dbPaths
+    else delete next.dbPaths
+  }
+  if (typeof patch.follow === 'boolean') next.follow = patch.follow
+  return Object.keys(next).length ? next : undefined
 }
 
 export function normalizeSessionConfig(value: unknown): SessionConfig | undefined {
@@ -114,12 +184,14 @@ export function normalizeSessionConfig(value: unknown): SessionConfig | undefine
     }
     next.facet = { tags, values }
   }
+  const inspector = normalizeInspectorBind(raw.inspector)
+  if (inspector) next.inspector = inspector
   return Object.keys(next).length ? next : undefined
 }
 
 export function mergeSessionConfig(
   base: SessionConfig | undefined,
-  patch: SessionConfig & { title?: string | null; systemPrompt?: string | null },
+  patch: SessionConfig & { title?: string | null; systemPrompt?: string | null; inspector?: SessionInspectorBind | null },
 ): SessionConfig | undefined {
   const next: SessionConfig = { ...(base ?? {}) }
   if ('title' in patch) {
@@ -159,6 +231,15 @@ export function mergeSessionConfig(
   }
   if (typeof patch.createdAt === 'number' && Number.isFinite(patch.createdAt) && patch.createdAt > 0) {
     next.createdAt = patch.createdAt
+  }
+  if ('inspector' in patch) {
+    if (patch.inspector == null) delete next.inspector
+    else {
+      const incoming = normalizeInspectorBind(patch.inspector) ?? patch.inspector
+      const inspector = mergeInspectorBind(next.inspector, incoming)
+      if (inspector) next.inspector = inspector
+      else delete next.inspector
+    }
   }
   return Object.keys(next).length ? next : undefined
 }

@@ -1059,6 +1059,7 @@ export function apply(ctx: Context) {
         extraTools?: string[]
         tags?: string[]
         pinned?: boolean
+        inspector?: SessionConfig['inspector'] | null
       } = {}
       if (typeof payload.title === 'string' || payload.title === null) patch.title = payload.title as string | null
       if (typeof payload.model === 'string') patch.model = payload.model
@@ -1072,9 +1073,13 @@ export function apply(ctx: Context) {
       if (Array.isArray(payload.extraTools)) patch.extraTools = payload.extraTools.map((name) => String(name))
       if (Array.isArray(payload.tags)) patch.tags = payload.tags.map((name) => String(name))
       if (typeof payload.pinned === 'boolean') patch.pinned = payload.pinned
+      if (payload.inspector === null) patch.inspector = null
+      else if (payload.inspector && typeof payload.inspector === 'object' && !Array.isArray(payload.inspector)) {
+        patch.inspector = payload.inspector as SessionConfig['inspector']
+      }
       const record = await ctx.sessions.patchConfig(
         route.params.id,
-        patch as SessionConfig & { title?: string | null; systemPrompt?: string | null },
+        patch as SessionConfig & { title?: string | null; systemPrompt?: string | null; inspector?: SessionConfig['inspector'] | null },
       )
       const resolved = chat.resolveEffective(record.id)
       route.send(200, {
@@ -1101,6 +1106,7 @@ export function apply(ctx: Context) {
         ...(item.mascot ? { mascot: item.mascot } : {}),
         tags: item.config?.tags ?? [],
         pinned: Boolean(item.config?.pinned),
+        ...(item.config?.inspector ? { inspector: item.config.inspector } : {}),
       })),
     })
   })

@@ -41,3 +41,32 @@ test('session config stores tags and pin', async () => {
   assert.equal(cleared.config?.pinned, undefined)
   assert.equal(cleared.config?.tags, undefined)
 })
+
+test('session config stores inspector bind', async () => {
+  const ctx = new Context()
+  await ctx.plugin(sessionStore, { driver: 'memory' })
+  await ctx.plugin(sessions)
+  const record = await ctx.sessions.create()
+  await ctx.sessions.patchConfig(record.id, {
+    inspector: {
+      open: true,
+      width: 400,
+      tab: 'database:/pages',
+      opened: ['database:/pages'],
+      dbPaths: { 'database:/pages': '/database/pages' },
+      follow: true,
+    },
+  })
+  const again = await ctx.sessions.require(record.id)
+  assert.equal(again.config?.inspector?.open, true)
+  assert.equal(again.config?.inspector?.width, 400)
+  assert.equal(again.config?.inspector?.tab, 'database:/pages')
+  assert.deepEqual(again.config?.inspector?.opened, ['database:/pages'])
+  assert.equal(again.config?.inspector?.dbPaths?.['database:/pages'], '/database/pages')
+  assert.equal(again.config?.inspector?.follow, true)
+  const listed = await ctx.sessions.listSummaries()
+  assert.equal(listed.find((item) => item.id === record.id)?.config?.inspector?.open, true)
+  await ctx.sessions.patchConfig(record.id, { inspector: null })
+  const cleared = await ctx.sessions.require(record.id)
+  assert.equal(cleared.config?.inspector, undefined)
+})

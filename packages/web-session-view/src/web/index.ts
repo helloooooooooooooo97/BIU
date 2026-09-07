@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { Service, type Context } from 'cordis'
+import { mergeInspectorBind, type SessionInspectorBind } from '@biu/type-session'
 import {
   compactSessionEvents,
   mergeDispatchedUsageIntoNodes,
@@ -95,6 +96,7 @@ export interface SessionListItem {
   mascot?: { shape: string; color: string; eye?: number }
   tags?: string[]
   pinned?: boolean
+  inspector?: SessionInspectorBind
 }
 
 export type ConversationView = 'chat' | 'debug'
@@ -252,7 +254,8 @@ function sessionsEqual(a: SessionListItem[], b: SessionListItem[]): boolean {
       left.mascot?.eye !== right.mascot?.eye ||
       Boolean(left.busy) !== Boolean(right.busy) ||
       Boolean(left.pinned) !== Boolean(right.pinned) ||
-      (left.tags ?? []).join('\0') !== (right.tags ?? []).join('\0')
+      (left.tags ?? []).join('\0') !== (right.tags ?? []).join('\0') ||
+      JSON.stringify(left.inspector ?? null) !== JSON.stringify(right.inspector ?? null)
     ) {
       return false
     }
@@ -1202,6 +1205,26 @@ export class SessionViewService extends Service {
       throw error
     }
     void this.refreshSessions()
+  }
+
+  async patchInspector(id: string, inspector: SessionInspectorBind) {
+    const prev = this.value.sessions
+    const current = prev.find((item) => item.id === id)?.inspector
+    const nextBind = mergeInspectorBind(current, inspector)
+    this.replace({
+      sessions: prev.map((item) => (item.id === id ? { ...item, inspector: nextBind } : item)),
+    })
+    try {
+      const res = await fetch(`/api/sessions/${id}/config`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ inspector: nextBind ?? null }),
+      })
+      if (!res.ok) throw new Error(`inspector bind failed HTTP ${res.status}`)
+    } catch (error) {
+      this.replace({ sessions: prev, error: String(error) })
+      throw error
+    }
   }
 
   async deleteSession(id: string) {

@@ -397,7 +397,7 @@ export class SessionsService extends Service {
   /** 合并写入会话配置；传 null/空字符串可清除 title / systemPrompt。 */
   async patchConfig(
     id: string,
-    patch: SessionConfig & { title?: string | null; systemPrompt?: string | null },
+    patch: SessionConfig & { title?: string | null; systemPrompt?: string | null; inspector?: SessionConfig['inspector'] | null },
   ) {
     const record = await this.require(id)
     const next = mergeSessionConfig(record.config, patch)
@@ -456,6 +456,8 @@ export class SessionsService extends Service {
     const source = await this.require(sourceId)
     const used = await this.collectUsedMascots()
     const mascot = pickSessionMascot(childId, used)
+    const sourceConfig = { ...(source.config ?? {}) }
+    delete sourceConfig.inspector
     const record: SessionRecord = {
       id: childId,
       version: source.version,
@@ -463,7 +465,7 @@ export class SessionsService extends Service {
       ...(source.project ? { project: { ...source.project } } : {}),
       mascot,
       config: normalizeSessionConfig({
-        ...(source.config ?? {}),
+        ...sourceConfig,
         title: nameFromSessionMascot(mascot),
       }),
     }

@@ -423,6 +423,18 @@ function Shell(props: SlotProps) {
       /* ignore */
     }
   }, [])
+  const onInspectorLayoutHydrate = useCallback((next: { open: boolean; width: number }) => {
+    const width = Math.min(1000, Math.max(240, Math.round(next.width)))
+    layoutSnap.current.inspectorWidth = width
+    layoutSnap.current.inspectorVisible = next.open
+    applyInspector(next.open)
+    setInspectorWidth(width)
+    try {
+      localStorage.setItem('cordis.inspector.width', String(width))
+    } catch {
+      /* ignore */
+    }
+  }, [applyInspector])
   const activeModule = moduleIdFromPath(location.pathname, pluginModules)
   useEffect(() => {
     const onWidth = (event: Event) => {
@@ -808,6 +820,7 @@ function Shell(props: SlotProps) {
         slots={slots}
         renderSlot={props.renderSlot}
         collections={collections}
+        onLayoutHydrate={onInspectorLayoutHydrate}
       />
 
       <SessionConfigDialog

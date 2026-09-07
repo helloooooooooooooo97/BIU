@@ -17,6 +17,8 @@ import {
   setInspectorAgentFollow,
   clearInspectorDbPath,
   isInspectorPaneAbandoned,
+  snapshotInspectorDbPaths,
+  restoreInspectorDbPaths,
 } from './inspector-db-route.ts'
 
 function clearInspectorPanes() {
@@ -315,4 +317,17 @@ test('view db_update writes the source table view, not /views', () => {
   assert.equal(seen[0]?.collection, '/pages')
   assert.equal(seen[0]?.view?.id, 'mine')
   assert.equal(getInspectorDbPath('database:/pages'), '')
+})
+
+test('inspector db paths restore replaces the global pane map', () => {
+  setInspectorDbPath('database:/pages', '/database/pages')
+  setInspectorDbPath('database:/tasks', '/database/tasks')
+  assert.equal(snapshotInspectorDbPaths()['database:/pages'], '/database/pages')
+  restoreInspectorDbPaths({ 'database:/sessions': '/database/sessions' })
+  assert.equal(getInspectorDbPath('database:/pages'), '')
+  assert.equal(getInspectorDbPath('database:/tasks'), '')
+  assert.equal(getInspectorDbPath('database:/sessions'), '/database/sessions')
+  restoreInspectorDbPaths({})
+  assert.equal(getInspectorDbPath('database:/sessions'), '')
+  assert.deepEqual(snapshotInspectorDbPaths(), {})
 })

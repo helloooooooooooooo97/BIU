@@ -188,6 +188,52 @@ export function setInspectorDbPath(paneId: string, next?: string) {
   bump()
 }
 
+function listStoredPaneIds() {
+  const ids = new Set<string>(paths.keys())
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i) ?? ''
+      if (key.startsWith(STORAGE_PREFIX)) ids.add(key.slice(STORAGE_PREFIX.length))
+    }
+  } catch {
+    /* ignore */
+  }
+  return ids
+}
+
+/** 当前检查器各栏路径，写入 session.config.inspector.dbPaths。 */
+export function snapshotInspectorDbPaths(): Record<string, string> {
+  const next: Record<string, string> = {}
+  for (const paneId of listStoredPaneIds()) {
+    const path = panePath(paneId)
+    if (path) next[paneId] = path
+  }
+  return next
+}
+
+/** 切 session 时用该条记录覆盖全局栏路径，避免多 session 抢一份。 */
+export function restoreInspectorDbPaths(next?: Record<string, string>) {
+  const incoming: Record<string, string> = {}
+  if (next) {
+    for (const [paneId, path] of Object.entries(next)) {
+      const id = String(paneId).trim()
+      const stored = isInspectorDatabasePath(path) ? path : ''
+      if (id && stored) incoming[id] = stored
+    }
+  }
+  const stale = [...listStoredPaneIds()].filter((id) => !(id in incoming))
+  for (const paneId of stale) {
+    paths.delete(paneId)
+    writeStoredPath(paneId, '')
+  }
+  abandonedPanes.clear()
+  for (const [paneId, path] of Object.entries(incoming)) {
+    paths.set(paneId, path)
+    writeStoredPath(paneId, path)
+  }
+  bump()
+}
+
 /** 关掉检查器里这一栏时清掉路径，避免左侧再点同一页又把右侧弹回来。 */
 export function clearInspectorDbPath(paneId: string) {
   if (!paneId) return

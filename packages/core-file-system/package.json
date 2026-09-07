@@ -8,7 +8,8 @@
     "./host": "./src/host/index.ts",
     "./web": "./src/web/index.tsx",
     "./database-ui": "./src/web/database-ui.ts",
-    "./main-data-route": "./src/web/main-data-route.ts"
+    "./main-data-route": "./src/web/main-data-route.ts",
+    "./inspector-db-route": "./src/web/inspector-db-route.ts"
   },
   "dependencies": {
     "@biu/database-ui": "0.1.0",

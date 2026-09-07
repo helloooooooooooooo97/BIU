@@ -13,5 +13,8 @@
   "peerDependencies": {
     "cordis": "4.0.0-rc.8",
     "react": "^19.1.1"
+  },
+  "dependencies": {
+    "@biu/type-session": "0.1.0"
   }
 }
