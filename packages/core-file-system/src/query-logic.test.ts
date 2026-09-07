@@ -10,7 +10,6 @@ import {
   matchListFilterRecord,
   normalizeSorts,
   parseSortsInput,
-  parseViewFilterInput,
   resolveViewFilterTree,
   moveList,
   sortRecordsBy,
@@ -102,23 +101,5 @@ test('parseSortsInput accepts JSON strings', () => {
   const sorts = parseSortsInput('[{"field":"project","dir":"desc"}]')
   assert.equal(sorts[0]?.field, 'project')
   assert.equal(sorts[0]?.dir, 'desc')
-})
-
-test('parseViewFilterInput accepts flat eq, $in, and group/rule trees', () => {
-  const flat = parseViewFilterInput({ project: 'biu', tags: 'test' })
-  assert.equal(flat.filters.project, 'biu')
-  assert.equal(flat.filterTree.children.length, 2)
-  const mongo = parseViewFilterInput({ tags: { $in: ['test', 'bug'] } })
-  assert.equal(mongo.filterTree.children[0]?.kind, 'group')
-  const or = mongo.filterTree.children[0]
-  assert.equal(or && or.kind === 'group' && or.combinator, 'or')
-  assert.equal(or && or.kind === 'group' && or.children.length, 2)
-  const tree = parseViewFilterInput({
-    kind: 'group',
-    combinator: 'and',
-    children: [{ field: 'tags', operator: 'eq', value: 'test' }],
-  })
-  assert.equal(tree.filterTree.children[0] && tree.filterTree.children[0].kind === 'rule' && tree.filterTree.children[0].op, 'eq')
-  assert.equal(tree.filterTree.children[0] && tree.filterTree.children[0].kind === 'rule' && tree.filterTree.children[0].value, 'test')
 })
 

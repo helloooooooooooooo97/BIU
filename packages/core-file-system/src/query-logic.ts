@@ -71,28 +71,13 @@ function normalizeFilterNode(raw: unknown): FilterNode | null {
   if (rec.kind === 'rule' || rec.field) {
     const field = String(rec.field ?? '').trim()
     if (!field) return null
-    const op = asFilterOp(rec.op) ?? asFilterOp(rec.operator) ?? 'eq'
-    if (Array.isArray(rec.value) && rec.value.length > 1) {
-      return {
-        kind: 'group',
-        id: String(rec.id ?? '').trim() || queryNodeId('g'),
-        combinator: 'or',
-        children: rec.value.map((item) => ({
-          kind: 'rule' as const,
-          id: queryNodeId('r'),
-          field,
-          op,
-          value: String(item),
-        })),
-      }
-    }
-    const value = Array.isArray(rec.value) ? String(rec.value[0] ?? '') : rec.value == null ? '' : String(rec.value)
+    const op = asFilterOp(rec.op) ?? 'eq'
     return {
       kind: 'rule',
       id: String(rec.id ?? '').trim() || queryNodeId('r'),
       field,
       op,
-      value,
+      value: rec.value == null ? '' : String(rec.value),
     }
   }
   const children = Array.isArray(rec.children)
@@ -338,54 +323,11 @@ export function looksLikeFilterTree(raw: unknown): boolean {
   return rec.kind === 'group' || rec.kind === 'rule' || Array.isArray(rec.children)
 }
 
-function ruleNode(field: string, op: FilterOp, value: string): FilterRule {
-  return { kind: 'rule', id: queryNodeId('r'), field, op, value }
-}
-
-/** Agent 写入的 filters / filterTree：扁平等于、Mongo $in、或 group/rule 树。 */
-export function parseViewFilterInput(raw: unknown): { filters: Record<string, string>; filterTree: FilterGroup } {
-  if (looksLikeFilterTree(raw)) {
-    return { filters: {}, filterTree: normalizeFilterGroup(raw) }
-  }
-  const filters: Record<string, string> = {}
-  const group = emptyFilterGroup()
-  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-    for (const [key, item] of Object.entries(raw as Record<string, unknown>)) {
-      if (!key || key.startsWith('$')) continue
-      if (item && typeof item === 'object' && !Array.isArray(item)) {
-        const rec = item as Record<string, unknown>
-        const listed = rec.$in ?? rec.$or
-        if (Array.isArray(listed) && listed.length) {
-          const kids = listed.map((value) => ruleNode(key, 'eq', String(value)))
-          if (kids.length === 1) group.children.push(kids[0]!)
-          else group.children.push({ kind: 'group', id: queryNodeId('g'), combinator: 'or', children: kids })
-          continue
-        }
-        if (rec.$eq != null && rec.$eq !== '') {
-          filters[key] = String(rec.$eq)
-          group.children.push(ruleNode(key, 'eq', String(rec.$eq)))
-          continue
-        }
-        if (rec.$contains != null && rec.$contains !== '') {
-          group.children.push(ruleNode(key, 'contains', String(rec.$contains)))
-          continue
-        }
-        continue
-      }
-      if (item == null || item === '') continue
-      filters[key] = String(item)
-      group.children.push(ruleNode(key, 'eq', String(item)))
-    }
-  }
-  if (group.children.length) return { filters, filterTree: group }
-  return { filters, filterTree: flatFiltersToTree(filters) }
-}
-
 export const VIEW_FILTERS_DESCRIPTION =
-  '扁平 JSON 字符串，各 key 等于该列。例 {"project":"biu","tags":"test"}。tags/多选是「包含该值」。不要写 $in。AND 多个 key；OR 或 contains/neq 用 filterTree。'
+  '扁平 JSON 字符串，各 key 等于该列。例 {"project":"biu","tags":"test"}。tags/多选是「包含该值」。AND 多个 key；OR 或 contains/neq 用 filterTree。'
 
 export const VIEW_FILTER_TREE_DESCRIPTION =
-  '筛选树 JSON，不是 Mongo。group: {kind:"group",combinator:"and"|"or",children}；rule: {kind:"rule",field,op,value}，value 为字符串，id 可省。op: eq|neq|contains|not_contains|is_empty|not_empty|gt|lt|within。标签含 test：{"kind":"group","combinator":"and","children":[{"kind":"rule","field":"tags","op":"eq","value":"test"}]}。两个标签任一：combinator or，两条 eq。'
+  '筛选树 JSON。group: {kind:"group",combinator:"and"|"or",children}；rule: {kind:"rule",field,op,value}，value 为字符串，id 可省。op: eq|neq|contains|not_contains|is_empty|not_empty|gt|lt|within。标签含 test：{"kind":"group","combinator":"and","children":[{"kind":"rule","field":"tags","op":"eq","value":"test"}]}。两个标签任一：combinator or，两条 eq。'
 
 export const VIEW_SORTS_DESCRIPTION =
   'JSON 数组，按顺序多 key 排序。例 [{"field":"project","dir":"asc"},{"field":"title","dir":"desc"}]。dir 仅 asc|desc。'
