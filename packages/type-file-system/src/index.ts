@@ -31,6 +31,8 @@ export type FieldSpec = {
   action?: string
   /** 由 list/get 计算写入记录，不能 PATCH。例如任务消耗。 */
   computed?: boolean
+  /** person：创建人一人；编辑人可多人。 */
+  multiple?: boolean
 }
 
 export type AttachmentValue = { name: string; href: string; bytes?: number }
@@ -69,6 +71,41 @@ export function personKey(person: PersonValue | null | undefined): string {
   if (person.kind === 'user') return 'user'
   if (person.kind === 'system') return 'system'
   return person.sessionId || person.name
+}
+
+export function asPersonList(value: unknown): PersonValue[] {
+  if (value == null || value === '') return []
+  if (Array.isArray(value)) {
+    const out: PersonValue[] = []
+    const seen = new Set<string>()
+    for (const item of value) {
+      const person = asPerson(item)
+      const key = personKey(person)
+      if (!person || !key || seen.has(key)) continue
+      seen.add(key)
+      out.push(person)
+    }
+    return out
+  }
+  const one = asPerson(value)
+  return one ? [one] : []
+}
+
+export function appendPerson(existing: unknown, actor: PersonValue | null | undefined): PersonValue[] {
+  const next = asPersonList(existing)
+  if (!actor) return next
+  const key = personKey(actor)
+  if (!key) return next
+  const idx = next.findIndex((item) => personKey(item) === key)
+  if (idx < 0) next.push(actor)
+  else next[idx] = actor
+  return next
+}
+
+export function commitPersons(list: PersonValue[]): unknown {
+  if (!list.length) return null
+  if (list.length === 1) return list[0]
+  return list
 }
 
 function hrefFromRecord(value: Record<string, unknown>) {
@@ -200,7 +237,7 @@ export const BUILTIN_FIELDS = {
   parentId: { type: 'ref', label: '父级', writable: true },
   dependsOn: { type: 'multi-ref', label: '依赖', writable: true },
   createdBy: { type: 'person', label: '创建人', writable: false },
-  updatedBy: { type: 'person', label: '编辑人', writable: false },
+  updatedBy: { type: 'person', label: '编辑人', writable: false, multiple: true },
 } as const satisfies Record<string, FieldSpec>
 
 /** 登记 CollectionSpec.schema.fields 必须声明的记录列。由登记方自己存；创建人/编辑人也可由 Core 叠一层。 */
@@ -412,7 +449,7 @@ export function recordBuiltinValues(row: Record<string, unknown> = {}) {
     parentId,
     dependsOn,
     createdBy: asPerson(row.createdBy),
-    updatedBy: asPerson(row.updatedBy),
+    updatedBy: commitPersons(asPersonList(row.updatedBy)),
   }
 }
 
@@ -459,7 +496,7 @@ export function withBuiltinFields(
   if (!next.createdBy) next.createdBy = BUILTIN_FIELDS.createdBy
   else next.createdBy = { ...BUILTIN_FIELDS.createdBy, ...next.createdBy, type: 'person', writable: false }
   if (!next.updatedBy) next.updatedBy = BUILTIN_FIELDS.updatedBy
-  else next.updatedBy = { ...BUILTIN_FIELDS.updatedBy, ...next.updatedBy, type: 'person', writable: false }
+  else next.updatedBy = { ...BUILTIN_FIELDS.updatedBy, ...next.updatedBy, type: 'person', writable: false, multiple: true }
   if (contentField === 'content' && !next.content) next.content = BUILTIN_FIELDS.content
   const ordered: Record<string, FieldSpec> = {
     id: next.id,

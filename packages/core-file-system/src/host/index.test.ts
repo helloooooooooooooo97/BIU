@@ -172,6 +172,7 @@ test('every collection schema includes id, title, createdAt and updatedAt', asyn
   assert.equal(stat.schema.fields.createdBy?.label, '创建人')
   assert.equal(stat.schema.fields.updatedBy?.type, 'person')
   assert.equal(stat.schema.fields.updatedBy?.writable, false)
+  assert.equal(stat.schema.fields.updatedBy?.multiple, true)
   assert.equal(stat.schema.fields.updatedBy?.label, '编辑人')
   assert.equal(stat.schema.contentField, 'content')
   const tagged = await db.update('/notes/n1', { facet: { tags: ['dp'], values: { dp: { complexity: 'O(n)' } } } })
@@ -256,7 +257,7 @@ test('stamps agent createdBy with the session title from /sessions', async () =>
   })
   const written = await runWithSession('sess-agent-1', () => db.update('/notes/n1', { status: 'done' }))
   assert.deepEqual(written.value.createdBy, { kind: 'agent', name: '蓝团爱', sessionId: 'sess-agent-1' })
-  assert.deepEqual(written.value.updatedBy, { kind: 'agent', name: '蓝团爱', sessionId: 'sess-agent-1' })
+  assert.deepEqual(written.value.updatedBy, [{ kind: 'agent', name: '蓝团爱', sessionId: 'sess-agent-1' }])
 })
 
 test('updates stamp createdBy and updatedBy from the current actor', async () => {
@@ -265,11 +266,37 @@ test('updates stamp createdBy and updatedBy from the current actor', async () =>
   db.register(notesCollection())
   const written = await db.update('/notes/n1', { status: 'done' })
   assert.deepEqual(written.value.createdBy, { kind: 'user', name: '用户' })
-  assert.deepEqual(written.value.updatedBy, { kind: 'user', name: '用户' })
+  assert.deepEqual(written.value.updatedBy, [{ kind: 'user', name: '用户' }])
   await assert.rejects(() => db.update('/notes/n1', { updatedBy: { kind: 'system', name: '系统' } }), /not writable/)
   const again = await db.update('/notes/n1', { status: 'open' })
   assert.deepEqual(again.value.createdBy, { kind: 'user', name: '用户' })
-  assert.deepEqual(again.value.updatedBy, { kind: 'user', name: '用户' })
+  assert.deepEqual(again.value.updatedBy, [{ kind: 'user', name: '用户' }])
+})
+
+test('later editors append to updatedBy and leave createdBy alone', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  db.register(notesCollection())
+  db.register({
+    id: 'sessions',
+    path: '/sessions',
+    schema: {
+      labelField: 'title',
+      fields: {
+        ...REQUIRED_RECORD_FIELDS,
+        title: { type: 'string', writable: true },
+      },
+    },
+    list: () => [{ id: 'sess-a', title: '甲' }],
+    get: (id) => (id === 'sess-a' ? { id: 'sess-a', title: '甲' } : null),
+  })
+  await db.update('/notes/n1', { status: 'done' })
+  const second = await runWithSession('sess-a', () => db.update('/notes/n1', { status: 'open' }))
+  assert.deepEqual(second.value.createdBy, { kind: 'user', name: '用户' })
+  assert.deepEqual(second.value.updatedBy, [
+    { kind: 'user', name: '用户' },
+    { kind: 'agent', name: '甲', sessionId: 'sess-a' },
+  ])
 })
 
 test('person fields accept user system and agent values', async () => {

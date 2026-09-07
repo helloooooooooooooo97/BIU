@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { asImageSrc, asImageSrcList, asAttachment, asAttachmentList, asPerson, personKey, actionVisibleToUser, emptySchemaValue, hasCollectionDeleteQuery, isReservedSchemaFieldKey, isReservedSchemaFieldLabel, normalizeSchemaPack, normalizeSchemaValue, recordBuiltinValues, REQUIRED_RECORD_FIELD_KEYS, REQUIRED_RECORD_FIELDS, retagSchemaValue, schemaSearchHaystack, withBuiltinFields } from './index.ts'
+import { asImageSrc, asImageSrcList, asAttachment, asAttachmentList, asPerson, asPersonList, appendPerson, personKey, actionVisibleToUser, emptySchemaValue, hasCollectionDeleteQuery, isReservedSchemaFieldKey, isReservedSchemaFieldLabel, normalizeSchemaPack, normalizeSchemaValue, recordBuiltinValues, REQUIRED_RECORD_FIELD_KEYS, REQUIRED_RECORD_FIELDS, retagSchemaValue, schemaSearchHaystack, withBuiltinFields } from './index.ts'
 
 test('asImageSrc keeps http, data:image, and same-origin image paths', () => {
   assert.equal(asImageSrc('https://example.com/a.png'), 'https://example.com/a.png')
@@ -131,6 +131,7 @@ test('withBuiltinFields always includes writable facet and tags', () => {
   assert.equal(fields.createdBy?.writable, false)
   assert.equal(fields.updatedBy?.type, 'person')
   assert.equal(fields.updatedBy?.writable, false)
+  assert.equal(fields.updatedBy?.multiple, true)
 })
 
 test('recordBuiltinValues fills required record columns', () => {
@@ -165,6 +166,7 @@ test('required record fields are icon, tags, timestamps, facet, parent, and depe
   ])
   assert.equal(REQUIRED_RECORD_FIELDS.createdBy.type, 'person')
   assert.equal(REQUIRED_RECORD_FIELDS.updatedBy.type, 'person')
+  assert.equal(REQUIRED_RECORD_FIELDS.updatedBy.multiple, true)
   assert.equal(REQUIRED_RECORD_FIELDS.emoji.type, 'string')
   assert.equal(REQUIRED_RECORD_FIELDS.tags.type, 'multi-select')
   assert.equal(REQUIRED_RECORD_FIELDS.facet.type, 'facet')
@@ -179,6 +181,14 @@ test('asPerson reads user, system, and agent session ids', () => {
   assert.deepEqual(asPerson('系统'), { kind: 'system', name: '系统' })
   assert.equal(personKey(asPerson({ kind: 'agent', name: '指挥', sessionId: 's1' })), 's1')
   assert.equal(asPerson(''), null)
+})
+
+test('updatedBy is a person list that appends unique editors', () => {
+  const user = { kind: 'user' as const, name: '用户' }
+  const agent = { kind: 'agent' as const, name: '蓝', sessionId: 's1' }
+  assert.deepEqual(asPersonList(user), [user])
+  assert.deepEqual(appendPerson(user, agent), [user, agent])
+  assert.equal(appendPerson([user, agent], agent).length, 2)
 })
 
 test('hasCollectionDeleteQuery requires ids, q, or a non-empty filter', () => {

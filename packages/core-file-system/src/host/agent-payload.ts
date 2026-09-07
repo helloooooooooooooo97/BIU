@@ -10,7 +10,7 @@ const LIST_META_KEYS = new Set(['createdAt', 'updatedAt', 'createdBy', 'updatedB
 /** 把 File System 工具回包压成 Agent 用的短 JSON；网页 API 不走这里。 */
 export class AgentDbCompact {
   readonly statBlurb =
-    '查看路径元数据。根目录列出表。表路径返回相对默认的 schema：每张表都有 id、title（标题）、createdAt、updatedAt、emoji、tags、facet、parentId（父级）、dependsOn、createdBy、updatedBy；正文默认字段 content（file，用 db_content）。fields 只含本表多出来的列，或覆盖了这些默认的列。caps 表示能否 list/read/update/create/delete/action/content。'
+    '查看路径元数据。根目录列出表。表路径返回相对默认的 schema：每张表都有 id、title（标题）、createdAt、updatedAt、emoji、tags、facet、parentId（父级）、dependsOn、createdBy（唯一创建人，系统自记不可写）、updatedBy（编辑人列表，系统自记不可写，多人先后编辑会追加）；正文默认字段 content（file，用 db_content）。fields 只含本表多出来的列，或覆盖了这些默认的列。caps 表示能否 list/read/update/create/delete/action/content。'
 
   schema(schema: CollectionSchema) {
     const defaults = this.defaultFields(schema)
@@ -224,6 +224,7 @@ export class AgentDbCompact {
     if (JSON.stringify(field.enum ?? null) !== JSON.stringify(builtin.enum ?? null)) return false
     if ((field.action ?? '') !== (builtin.action ?? '')) return false
     if (Boolean(field.computed) !== Boolean(builtin.computed)) return false
+    if (Boolean(field.multiple) !== Boolean(builtin.multiple)) return false
     return true
   }
 

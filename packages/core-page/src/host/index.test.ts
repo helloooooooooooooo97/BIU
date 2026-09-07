@@ -57,7 +57,7 @@ test('page plugin stores pages in SQLite under .page', async () => {
   assert.equal(fields.score, undefined)
   assert.equal(fields.notes?.type, 'file')
   assert.equal(registered[0]?.schema.fields.tags?.enum, undefined)
-  assert.deepEqual(registered[0]?.schema.columns, ['title', 'tags'])
+  assert.deepEqual(registered[0]?.schema.columns, ['title', 'tags', 'createdBy', 'updatedBy'])
   assert.deepEqual(registered[0]?.records, { update: true, create: true, delete: true })
 
   const spec = registered[0]!

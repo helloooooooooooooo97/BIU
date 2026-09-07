@@ -6,6 +6,8 @@ import {
   DATABASE_CHANNEL,
   asAttachmentList,
   asPerson,
+  asPersonList,
+  appendPerson,
   asHttpHref,
   asImageSrc,
   asImageSrcList,
@@ -624,11 +626,21 @@ export class DatabaseService extends Service implements Database {
   private applyPersonOverlay(spec: CollectionSpec, row: DbRecord): DbRecord {
     const meta = this.facets.recordMeta(spec.path, row.id)
     if (!meta) return row
+    const editors = asPersonList(meta.updatedBy).map((item) => this.namedPerson(item))
     return {
       ...row,
       ...(meta.createdBy ? { createdBy: this.namedPerson(meta.createdBy) } : {}),
-      ...(meta.updatedBy ? { updatedBy: this.namedPerson(meta.updatedBy) } : {}),
+      ...(editors.length ? { updatedBy: editors } : {}),
     }
+  }
+
+  private async stampActor(collection: string, recordId: string) {
+    const actor = await this.currentPerson()
+    const existing = this.facets.recordMeta(collection, recordId)
+    this.facets.writeRecordMeta(collection, recordId, {
+      ...(existing?.createdBy ? {} : { createdBy: actor }),
+      updatedBy: appendPerson(existing?.updatedBy, actor),
+    })
   }
 
   private async currentPerson(): Promise<PersonValue> {
@@ -758,6 +770,7 @@ export class DatabaseService extends Service implements Database {
           ...(meta.tags !== null ? { tags: meta.tags } : {}),
         }
       }
+      await this.stampActor(spec.path, current.id)
       this.bump()
       return {
         kind: 'record' as const,
@@ -767,13 +780,8 @@ export class DatabaseService extends Service implements Database {
     }
     const patch = pickWritablePatch(schema, raw)
     await assertSameTableLinks(spec, patch, parts[1])
-    const actor = await this.currentPerson()
     let record = await spec.update(parts[1]!, patch)
-    const existing = this.facets.recordMeta(spec.path, record.id)
-    this.facets.writeRecordMeta(spec.path, record.id, {
-      ...(existing?.createdBy ? {} : { createdBy: actor }),
-      updatedBy: actor,
-    })
+    await this.stampActor(spec.path, record.id)
     if (spec.path === '/facets' && schema.fields.facet && 'facet' in patch) {
       const nextFacet = coerce(schema.fields.facet, patch.facet)
       const labelKey = schema.labelField ?? 'title'
@@ -797,7 +805,6 @@ export class DatabaseService extends Service implements Database {
     if (!spec) throw new Error(`unknown collection: /${parts[0]}`)
     if (!spec.records?.create || !spec.create) throw new Error(`collection cannot create: ${spec.path}`)
     const schema = schemaFor(spec)
-    const actor = await this.currentPerson()
     const rows = parseRecords(content)
     const records: Record<string, unknown>[] = []
     for (const row of rows) {
@@ -807,10 +814,7 @@ export class DatabaseService extends Service implements Database {
     }
     const created = await spec.create(records)
     for (const record of created) {
-      this.facets.writeRecordMeta(spec.path, record.id, {
-        createdBy: actor,
-        updatedBy: actor,
-      })
+      await this.stampActor(spec.path, record.id)
       this.indexFacetRecord(spec, record)
     }
     this.bump()
@@ -904,6 +908,7 @@ export class DatabaseService extends Service implements Database {
       ? pickWritablePatch(schema, { [field]: value })
       : { [field]: value }
     const record = await spec.update(parts[1]!, patch)
+    await this.stampActor(spec.path, record.id)
     this.bump()
     return {
       kind: 'content' as const,

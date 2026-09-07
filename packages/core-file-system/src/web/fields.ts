@@ -1,5 +1,5 @@
 import type { AtomicFieldType, CollectionSchema, CollectionSchemaPack, DbRecord, FieldSpec, FieldType, SchemaFieldValue } from '@biu/type-file-system'
-import { asAttachment, asAttachmentList, asHttpHref, asImageSrc, asImageSrcList, asPerson, BUILTIN_FIELD_KEYS, isFacetFieldType, isRefFieldType, isReservedSchemaFieldKey, normalizeSchemaValue } from '@biu/type-file-system'
+import { asAttachment, asAttachmentList, asHttpHref, asImageSrc, asImageSrcList, asPerson, asPersonList, BUILTIN_FIELD_KEYS, isFacetFieldType, isRefFieldType, isReservedSchemaFieldKey, normalizeSchemaValue } from '@biu/type-file-system'
 
 export const BUILTIN_VIEW_MODES = ['table'] as const
 export type BuiltinViewMode = (typeof BUILTIN_VIEW_MODES)[number]
@@ -329,7 +329,12 @@ export function formatField(field: FieldSpec | undefined, value: unknown): strin
     const parsed = normalizeSchemaValue(value)
     return parsed.tags.length ? parsed.tags.join(', ') : ''
   }
-  if (kind === 'person') return asPerson(value)?.name ?? ''
+  if (kind === 'person') {
+    return asPersonList(value)
+      .map((item) => item.name)
+      .filter(Boolean)
+      .join(' ')
+  }
   if (kind === 'ref') {
     const id = String(value ?? '').trim()
     return id
@@ -346,6 +351,7 @@ export function fieldHasValue(field: FieldSpec | undefined, value: unknown): boo
   if (field && resolveFieldType(field) === 'action') return true
   if (value == null) return false
   if (typeof value === 'string' && !value.trim()) return false
+  if (field && resolveFieldType(field) === 'person') return asPersonList(value).length > 0
   if (Array.isArray(value) && asStringList(value).length === 0) return false
   if (!field) return true
   const kind = resolveFieldType(field)

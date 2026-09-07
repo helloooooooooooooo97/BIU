@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ArrowPathIcon, CpuChipIcon, UserIcon } from '@heroicons/react/16/solid'
 import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
-import { asPerson, personKey, type PersonValue } from '@biu/type-file-system'
+import { asPerson, asPersonList, personKey, type PersonValue } from '@biu/type-file-system'
 import { listCollection } from './db-client.ts'
 
 type ChatPerson = {
@@ -62,11 +62,12 @@ export async function loadAgents(): Promise<ChatPerson[]> {
 }
 
 export function PersonFace({ value, empty = '' }: { value: unknown; empty?: string }) {
-  const person = asPerson(value)
+  const people = asPersonList(value)
   const [sessionNames, setSessionNames] = useState<Map<string, string>>(() => new Map())
+  const needAgents = people.some((item) => item.kind === 'agent' && item.sessionId)
 
   useEffect(() => {
-    if (!person || person.kind !== 'agent' || !person.sessionId) return
+    if (!needAgents) return
     let cancelled = false
     void loadAgents()
       .then((rows) => {
@@ -79,9 +80,9 @@ export function PersonFace({ value, empty = '' }: { value: unknown; empty?: stri
     return () => {
       cancelled = true
     }
-  }, [person?.kind, person?.sessionId])
+  }, [needAgents])
 
-  if (!person) {
+  if (!people.length) {
     return empty ? (
       <span className="fsdb-person is-empty">
         <UserIcon aria-hidden className="size-[14px]" />
@@ -90,27 +91,32 @@ export function PersonFace({ value, empty = '' }: { value: unknown; empty?: stri
     ) : null
   }
 
-  const displayName = resolveAgentName(person, sessionNames) || (person.kind === 'agent' ? '' : person.name)
-  const label = displayName || empty
-
   return (
-    <span className="fsdb-person" title={label || undefined}>
-      {person.kind === 'agent' && person.sessionId ? (
-        <span className="fsdb-person-face" aria-hidden>
-          <SidebarMascot
-            size={18}
-            sessionId={person.sessionId}
-            identity={resolveSessionMascot(person.sessionId)}
-            animate={false}
-            title={label || person.sessionId}
-          />
-        </span>
-      ) : (
-        <span className="fsdb-person-avatar" aria-hidden>
-          {person.kind === 'system' ? <CpuChipIcon className="size-[14px]" /> : <UserIcon className="size-[14px]" />}
-        </span>
-      )}
-      {label ? <span className="fsdb-person-name">{label}</span> : null}
+    <span className="fsdb-person-list">
+      {people.map((person) => {
+        const displayName = resolveAgentName(person, sessionNames) || (person.kind === 'agent' ? '' : person.name)
+        const label = displayName || empty
+        return (
+          <span key={personKey(person) || person.name} className="fsdb-person" title={label || undefined}>
+            {person.kind === 'agent' && person.sessionId ? (
+              <span className="fsdb-person-face" aria-hidden>
+                <SidebarMascot
+                  size={18}
+                  sessionId={person.sessionId}
+                  identity={resolveSessionMascot(person.sessionId)}
+                  animate={false}
+                  title={label || person.sessionId}
+                />
+              </span>
+            ) : (
+              <span className="fsdb-person-avatar" aria-hidden>
+                {person.kind === 'system' ? <CpuChipIcon className="size-[14px]" /> : <UserIcon className="size-[14px]" />}
+              </span>
+            )}
+            {label ? <span className="fsdb-person-name">{label}</span> : null}
+          </span>
+        )
+      })}
     </span>
   )
 }

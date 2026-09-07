@@ -524,6 +524,7 @@ button.fsdb-detail-title-icon:hover{background:var(--dsw-hover);color:var(--dsw-
 .fsdb-media-pick-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fsdb-media-error{display:none}
 .fsdb-person{display:inline-flex;align-items:center;gap:6px;min-width:0;max-width:100%}
+.fsdb-person-list{display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0;max-width:100%}
 .fsdb-person.is-empty{color:var(--dsw-label-3)}
 .fsdb-person-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fsdb-person-face{display:inline-flex;flex:none;line-height:0}

@@ -211,6 +211,7 @@ test('deletable tables can pick rows and bulk-delete next to refresh', () => {
   assert.doesNotMatch(cells, /<RefFieldPop/)
   assert.doesNotMatch(cells, /<RecordPickPanel/)
   const people = readFileSync(resolve(import.meta.dirname, './person-cell.tsx'), 'utf8')
+  assert.match(people, /asPersonList/)
   assert.match(people, /kind: 'user', name: '用户'/)
   assert.match(people, /kind: 'system', name: '系统'/)
   assert.match(people, /listCollection/)

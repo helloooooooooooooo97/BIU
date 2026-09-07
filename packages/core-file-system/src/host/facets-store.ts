@@ -4,6 +4,7 @@ import { dirname } from 'node:path'
 import { createRequire } from 'node:module'
 import {
   asPerson,
+  asPersonList,
   normalizeSchemaPack,
   normalizeSchemaValue,
   type CollectionSchemaPack,
@@ -321,7 +322,7 @@ export class FacetStore {
     emoji: string | null
     tags: string[] | null
     createdBy: PersonValue | null
-    updatedBy: PersonValue | null
+    updatedBy: PersonValue[]
   } | null {
     const row = this.ensure()
       .prepare('SELECT emoji, tags_json, created_by_json, updated_by_json FROM record_meta WHERE collection = ? AND record_id = ?')
@@ -351,19 +352,27 @@ export class FacetStore {
         return asPerson(raw)
       }
     }
+    const parsePeople = (raw: string | null | undefined) => {
+      if (raw == null || raw === '') return []
+      try {
+        return asPersonList(JSON.parse(raw))
+      } catch {
+        return asPersonList(raw)
+      }
+    }
     return {
       emoji: row.emoji != null ? String(row.emoji) : null,
       tags,
       createdBy: parsePerson(row.created_by_json),
-      updatedBy: parsePerson(row.updated_by_json),
+      updatedBy: parsePeople(row.updated_by_json),
     }
   }
 
   writeRecordMeta(
     collection: string,
     recordId: string,
-    patch: { emoji?: string; tags?: string[]; createdBy?: PersonValue | null; updatedBy?: PersonValue | null },
-  ): { emoji: string | null; tags: string[] | null; createdBy: PersonValue | null; updatedBy: PersonValue | null } {
+    patch: { emoji?: string; tags?: string[]; createdBy?: PersonValue | null; updatedBy?: PersonValue[] | PersonValue | null },
+  ): { emoji: string | null; tags: string[] | null; createdBy: PersonValue | null; updatedBy: PersonValue[] } {
     this.ensure()
       .prepare(
         `INSERT INTO record_meta (collection, record_id, emoji, tags_json, created_by_json, updated_by_json)
@@ -382,9 +391,9 @@ export class FacetStore {
           ? JSON.stringify([...new Set(patch.tags.map((item) => String(item).trim()).filter(Boolean))])
           : null,
         patch.createdBy !== undefined ? JSON.stringify(patch.createdBy) : null,
-        patch.updatedBy !== undefined ? JSON.stringify(patch.updatedBy) : null,
+        patch.updatedBy !== undefined ? JSON.stringify(asPersonList(patch.updatedBy)) : null,
       )
-    return this.recordMeta(collection, recordId) ?? { emoji: null, tags: null, createdBy: null, updatedBy: null }
+    return this.recordMeta(collection, recordId) ?? { emoji: null, tags: null, createdBy: null, updatedBy: [] }
   }
 
   removeRecord(collection: string, recordId: string) {

@@ -24,7 +24,7 @@ export function pagesCollection(store: PagesStore): CollectionSpec {
       labelField: 'title',
       contentField: 'notes',
       parentField: 'parentId',
-      columns: ['title', 'tags'],
+        columns: ['title', 'tags', 'createdBy', 'updatedBy'],
       fields: {
         ...REQUIRED_RECORD_FIELDS,
         title: { type: 'string', label: '标题', writable: true },
