@@ -263,7 +263,6 @@ export function upsertSavedView(collectionPath: string, view: SavedView) {
   } catch {
     /* ignore */
   }
-  pushSavedViews(collectionPath, stored)
 }
 
 export function pushAllSavedViews() {
@@ -351,5 +350,6 @@ export function withViewDisplay(collectionPath: string, view: SavedView): SavedV
     name: view.name,
     builtin: view.builtin,
     filters: view.filters,
+    filterTree: view.builtin ? overlay.filterTree ?? view.filterTree : view.filterTree,
   })
 }

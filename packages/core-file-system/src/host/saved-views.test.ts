@@ -4,7 +4,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { builtinAllViewId } from '../catalog-views.ts'
-import { SavedViewsStore, viewsCollection } from './saved-views.ts'
+import { SavedViewsStore, clientViewFromDbRow, viewsCollection } from './saved-views.ts'
 
 test('viewsCollection lists saved views with source table', async () => {
   const store = new SavedViewsStore()
@@ -116,4 +116,20 @@ test('saved views persist created fields and updates across reopen', async () =>
   assert.equal(hit?.groupBy, 'status')
   assert.equal(hit?.sortField, 'dueAt')
   assert.equal(hit?.filters, '{"status":"doing"}')
+})
+
+test('clientViewFromDbRow keeps flat filters and sorts for the live table', () => {
+  const view = clientViewFromDbRow({
+    viewId: 'mine',
+    title: '我的',
+    filters: '{"project":"biu"}',
+    sorts: '[{"field":"title","dir":"desc"}]',
+    sortField: 'title',
+    sortDir: 'desc',
+  })
+  assert.equal(view?.id, 'mine')
+  assert.equal(view?.filters.project, 'biu')
+  assert.equal(view?.filterTree && view.filterTree.children[0] && view.filterTree.children[0].kind === 'rule' && view.filterTree.children[0].value, 'biu')
+  assert.equal(view?.sorts[0]?.field, 'title')
+  assert.equal(view?.sorts[0]?.dir, 'desc')
 })

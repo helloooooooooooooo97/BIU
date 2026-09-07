@@ -1,5 +1,5 @@
 import { isViewModeId, type ViewMode } from './fields.ts'
-import { countFilterRules, normalizeSorts, resolveViewFilterTree, type FilterGroup, type SortRule } from '../query-logic.ts'
+import { countFilterRules, filterTreeStateKey, normalizeSorts, resolveViewFilterTree, sortsStateKey, type FilterGroup, type SortRule } from '../query-logic.ts'
 
 export type SavedView = {
   id: string
@@ -96,9 +96,9 @@ export function viewStateKey(
     mode: view.mode,
     sortField: view.sortField,
     sortDir: view.sortDir,
-    sorts: (view.sorts ?? []).map((item) => ({ field: item.field, dir: item.dir })),
+    sorts: sortsStateKey(view.sorts),
     filters: view.filters,
-    filterTree: view.filterTree ?? null,
+    filterTree: filterTreeStateKey(view.filterTree),
     columns: view.columns,
     groupBy: view.groupBy ?? '',
     tree: view.tree !== false,

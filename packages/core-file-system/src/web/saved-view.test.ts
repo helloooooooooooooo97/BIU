@@ -59,3 +59,15 @@ test('viewStateKey ignores name and treats missing query as empty', () => {
   assert.equal(viewStateKey(a), viewStateKey(b))
   assert.notEqual(viewStateKey(a), viewStateKey({ ...a, sortDir: 'desc' }))
 })
+
+test('viewStateKey treats filter trees with different ids as the same', () => {
+  const a = normalizeSavedView({
+    ...base,
+    filterTree: { kind: 'group', id: 'g1', combinator: 'and', children: [{ kind: 'rule', id: 'r1', field: 'tags', op: 'eq', value: 'test' }] },
+  })
+  const b = normalizeSavedView({
+    ...base,
+    filterTree: { kind: 'group', id: 'g2', combinator: 'and', children: [{ kind: 'rule', id: 'r2', field: 'tags', op: 'eq', value: 'test' }] },
+  })
+  assert.equal(viewStateKey(a), viewStateKey(b))
+})

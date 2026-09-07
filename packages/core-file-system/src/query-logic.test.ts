@@ -5,6 +5,7 @@ import {
   emptyFilterGroup,
   emptyFilterRule,
   encodeListFilter,
+  filterTreeStateKey,
   flatFiltersToTree,
   matchFilterNode,
   matchListFilterRecord,
@@ -95,6 +96,16 @@ test('empty filterTree falls back to flat filters from the agent', () => {
   assert.equal(countFilterRules(tree), 1)
   assert.equal(tree.children[0] && tree.children[0].kind === 'rule' && tree.children[0].field, 'project')
   assert.equal(tree.children[0] && tree.children[0].kind === 'rule' && tree.children[0].value, 'biu')
+})
+
+test('filterTreeStateKey ignores node ids and treats empty as absent', () => {
+  const a = emptyFilterGroup()
+  const b = emptyFilterGroup()
+  assert.equal(filterTreeStateKey(a), filterTreeStateKey(b))
+  assert.equal(filterTreeStateKey(a), filterTreeStateKey(undefined))
+  a.children.push({ kind: 'rule', id: 'r1', field: 'tags', op: 'eq', value: 'test' })
+  b.children.push({ kind: 'rule', id: 'r2', field: 'tags', op: 'eq', value: 'test' })
+  assert.equal(filterTreeStateKey(a), filterTreeStateKey(b))
 })
 
 test('parseSortsInput accepts JSON strings', () => {

@@ -29,7 +29,7 @@ import {
   type ListPage,
   type PersonValue,
 } from '@biu/type-file-system'
-import { SavedViewsStore, viewsCollection, type StoredView } from './saved-views.ts'
+import { SavedViewsStore, clientViewFromDbRow, viewsCollection, type StoredView } from './saved-views.ts'
 import { FacetStore } from './facets-store.ts'
 import { AssetConflictError, FileSystemAssets, collectAssetNames, isAssetFileName, parseIfMatch } from './assets-store.ts'
 import { facetsCollection } from './facets-collection.ts'
@@ -1113,46 +1113,30 @@ function broadcastInspectorReveal(
     reveal,
     phase,
     sessionId: currentSessionId(),
-    ...(savedViewFromCreated(result) ? { savedView: savedViewFromCreated(result) } : {}),
+    ...(savedViewFromToolResult(result) ? { savedView: savedViewFromToolResult(result) } : {}),
   })
 }
 
-function savedViewFromCreated(result: unknown) {
+function rowFromToolResult(result: unknown): Record<string, unknown> | undefined {
   if (!result || typeof result !== 'object' || Array.isArray(result)) return undefined
-  if ((result as { kind?: unknown }).kind !== 'created') return undefined
-  const items = (result as { items?: unknown }).items
-  if (!Array.isArray(items) || !items[0] || typeof items[0] !== 'object') return undefined
-  const value = (items[0] as { value?: unknown }).value
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
-  const row = value as Record<string, unknown>
-  const id = String(row.viewId ?? '').trim()
-  if (!id) return undefined
-  let filters: Record<string, string> = {}
-  if (typeof row.filters === 'string' && row.filters.trim()) {
-    try {
-      const parsed = JSON.parse(row.filters)
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        filters = Object.fromEntries(Object.entries(parsed).map(([key, item]) => [key, String(item)]))
-      }
-    } catch {
-      filters = {}
-    }
+  const rec = result as { kind?: unknown; items?: unknown; value?: unknown }
+  if (rec.kind === 'created') {
+    const items = rec.items
+    if (!Array.isArray(items) || !items[0] || typeof items[0] !== 'object') return undefined
+    const value = (items[0] as { value?: unknown }).value
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+    return value as Record<string, unknown>
   }
-  return {
-    id,
-    name: String(row.title ?? '新视图'),
-    mode: String(row.mode ?? 'table'),
-    sortField: String(row.sortField ?? 'title'),
-    sortDir: row.sortDir === 'desc' ? 'desc' : 'asc',
-    query: String(row.query ?? ''),
-    groupBy: String(row.groupBy ?? ''),
-    columns: Array.isArray(row.columns) ? row.columns.map((item) => String(item)) : [],
-    filters,
-    tree: row.tree !== false,
-    wrap: Boolean(row.wrap),
-    truncate: row.truncate !== false,
-    pageSize: Number(row.pageSize) || 50,
+  if (rec.kind === 'record') {
+    const value = rec.value
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+    return value as Record<string, unknown>
   }
+  return undefined
+}
+
+function savedViewFromToolResult(result: unknown) {
+  return clientViewFromDbRow(rowFromToolResult(result))
 }
 
 async function withInspectorReveal<T>(

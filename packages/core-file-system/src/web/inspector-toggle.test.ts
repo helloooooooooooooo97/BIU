@@ -513,6 +513,16 @@ test('open detail still reloads body when the collection changes', () => {
   assert.match(browser, /window.dispatchEvent\(new Event\('fsdb:change'\)\)/)
 })
 
+test('agent view writes reload saved views without a full page refresh', () => {
+  assert.match(browser, /detail\?\.views/)
+  assert.match(browser, /void syncViewsRef\.current\(\)/)
+  assert.match(browser, /await pullSavedViews\(\)/)
+  const page = readFileSync(resolve(import.meta.dirname, './index.tsx'), 'utf8')
+  assert.match(page, /viewsTouched/)
+  assert.match(page, /applyDatabaseChannelPayload\(payload, sessionId\)/)
+  assert.match(page, /CustomEvent\('fsdb:change'/)
+})
+
 test('collection reload does not follow callback identity', () => {
   assert.match(browser, /const reloadKey = /)
   assert.match(browser, /void reloadRef\.current\(\)/)

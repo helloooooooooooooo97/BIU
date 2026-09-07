@@ -395,15 +395,16 @@ export function apply(ctx: Context) {
     const offSnap = snapshot.subscribe?.(fromSnap)
     let debounce = 0
     const off = snapshot.onMessage(DATABASE_CHANNEL, (payload) => {
-      window.dispatchEvent(new Event('fsdb:change'))
-      const rec = payload && typeof payload === 'object' && !Array.isArray(payload) ? (payload as { asset?: { name?: string; etag?: string } }) : null
-      if (rec?.asset?.name) {
-        window.dispatchEvent(new CustomEvent('biu:asset-changed', { detail: rec.asset }))
-      }
+      const rec = payload && typeof payload === 'object' && !Array.isArray(payload) ? (payload as { asset?: { name?: string; etag?: string }; savedView?: unknown; reveal?: { collection?: unknown } }) : null
+      const viewsTouched = Boolean(rec?.savedView) || String(rec?.reveal?.collection ?? '') === '/views'
       const sessionId = (
         ctx.get('sessionView') as { get?: () => { sessionId?: string | null } } | undefined
       )?.get?.()?.sessionId
       applyDatabaseChannelPayload(payload, sessionId)
+      window.dispatchEvent(new CustomEvent('fsdb:change', { detail: viewsTouched ? { views: true } : undefined }))
+      if (rec?.asset?.name) {
+        window.dispatchEvent(new CustomEvent('biu:asset-changed', { detail: rec.asset }))
+      }
       window.clearTimeout(debounce)
       debounce = window.setTimeout(() => void sync(), 40)
     })

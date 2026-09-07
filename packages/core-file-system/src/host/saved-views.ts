@@ -8,6 +8,7 @@ import { normalizeColumnWidths, type SavedView } from '../web/saved-view.ts'
 import { isViewModeId } from '../web/fields.ts'
 import { normalizeCollectionPath } from '../paths.ts'
 import {
+  countFilterRules,
   flatFiltersToTree,
   looksLikeFilterTree,
   normalizeFilterGroup,
@@ -313,6 +314,36 @@ function asRecord(path: string, tableName: string, view: StoredView): DbRecord {
     sorts: JSON.stringify(sorts.map((item) => ({ field: item.field, dir: item.dir }))),
     filterTree: filterTree ? JSON.stringify(filterTree) : '',
     ...recordBuiltinValues(view as Record<string, unknown>),
+  }
+}
+
+/** 工具广播给前端的视图快照（含扁平 filters / filterTree / sorts）。 */
+export function clientViewFromDbRow(row: Record<string, unknown> | undefined) {
+  if (!row) return undefined
+  const id = String(row.viewId ?? '').trim()
+  if (!id || isReadOnlyViewId(id)) return undefined
+  const parsedFilters = filtersFromPatch(row.filters)
+  const fromTree = parseJsonValue(row.filterTree)
+  const tree = looksLikeFilterTree(fromTree) ? normalizeFilterGroup(fromTree) : parsedFilters.filterTree
+  const sortsPatch = sortsFromPatch(row.sorts, row.sortField, row.sortDir)
+  return {
+    id,
+    name: String(row.title ?? row.name ?? id),
+    mode: row.mode,
+    sortField: sortsPatch.sortField,
+    sortDir: sortsPatch.sortDir,
+    sorts: sortsPatch.sorts,
+    query: String(row.query ?? ''),
+    groupBy: String(row.groupBy ?? ''),
+    columns: Array.isArray(row.columns) ? row.columns.map((item) => String(item)) : [],
+    filters: parsedFilters.filters,
+    filterTree: countFilterRules(tree) ? tree : undefined,
+    tree: row.tree !== false,
+    wrap: Boolean(row.wrap),
+    truncate: row.truncate !== false,
+    pageSize: Number(row.pageSize) || 50,
+    columnWidths: row.columnWidths,
+    builtin: false,
   }
 }
 

@@ -2,8 +2,8 @@
 
 import { normalizeCollectionPath } from '../paths.ts'
 import { DATA_MODULE_PATH, databaseAllViewPath, databaseRecordPath, databaseViewPath } from './database-path.ts'
-import { upsertSavedView } from './view-storage.ts'
-import { normalizeSavedView, type SavedView } from './saved-view.ts'
+import { upsertSavedView, savedViewFromRecord } from './view-storage.ts'
+import { type SavedView } from './saved-view.ts'
 
 const DEFAULT_PANE = 'database'
 const STORAGE_PREFIX = 'inspector.dbPath:'
@@ -295,28 +295,25 @@ export function applyDatabaseChannelPayload(payload: unknown, currentSessionId?:
 function savedViewFromPayload(raw: unknown, revealViewId: unknown): SavedView | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
   const rec = raw as Record<string, unknown>
-  const id = String(rec.id ?? revealViewId ?? '').trim()
-  if (!id) return null
-  let filters: Record<string, string> = {}
-  if (rec.filters && typeof rec.filters === 'object' && !Array.isArray(rec.filters)) {
-    filters = Object.fromEntries(Object.entries(rec.filters).map(([key, item]) => [key, String(item)]))
-  }
-  return normalizeSavedView({
-    id,
-    name: String(rec.name ?? rec.title ?? '新视图'),
-    mode: rec.mode as SavedView['mode'],
-    sortField: String(rec.sortField ?? 'title'),
-    sortDir: rec.sortDir === 'desc' ? 'desc' : 'asc',
-    filters,
-    columns: Array.isArray(rec.columns) ? rec.columns.map((item) => String(item)) : [],
-    groupBy: String(rec.groupBy ?? ''),
-    tree: rec.tree !== false,
-    wrap: Boolean(rec.wrap),
-    truncate: rec.truncate !== false,
-    query: String(rec.query ?? ''),
+  const parsed = savedViewFromRecord({
+    viewId: rec.id ?? rec.viewId ?? revealViewId,
+    title: rec.name ?? rec.title,
+    mode: rec.mode,
+    sortField: rec.sortField,
+    sortDir: rec.sortDir,
+    sorts: rec.sorts,
+    query: rec.query,
+    groupBy: rec.groupBy,
+    columns: rec.columns,
+    filters: rec.filters,
+    filterTree: rec.filterTree,
+    tree: rec.tree,
+    wrap: rec.wrap,
+    truncate: rec.truncate,
+    pageSize: rec.pageSize,
     columnWidths: rec.columnWidths,
-    builtin: false,
   })
+  return parsed
 }
 
 export const INSPECTOR_REVEAL_EVENT = 'biu:inspector-reveal'

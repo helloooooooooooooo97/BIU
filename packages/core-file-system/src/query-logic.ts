@@ -130,6 +130,21 @@ export function countFilterRules(node: FilterNode | undefined): number {
   return node.children.reduce((sum, child) => sum + countFilterRules(child), 0)
 }
 
+function filterNodeState(node: FilterNode): unknown {
+  if (node.kind === 'rule') return { kind: 'rule', field: node.field, op: node.op, value: node.value }
+  return { kind: 'group', combinator: node.combinator, children: node.children.map(filterNodeState) }
+}
+
+/** 比较筛选树时丢掉随机 id，空树与缺省等价。 */
+export function filterTreeStateKey(tree: FilterGroup | null | undefined): string {
+  if (!tree || countFilterRules(tree) === 0) return '[]'
+  return JSON.stringify(filterNodeState(normalizeFilterGroup(tree)))
+}
+
+export function sortsStateKey(sorts: Array<Pick<SortRule, 'field' | 'dir'>> | undefined): string {
+  return JSON.stringify((sorts ?? []).map((item) => ({ field: item.field, dir: item.dir })))
+}
+
 export function opsForKind(kind: FieldType | string): Array<{ value: FilterOp; label: string }> {
   if (kind === 'datetime') {
     return [

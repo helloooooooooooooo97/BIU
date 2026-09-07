@@ -268,8 +268,9 @@ test('applyDatabaseChannelPayload upserts a created view then opens it', () => {
   )
   assert.equal(getInspectorDbPath('database:/tasks'), '/database/tasks/view/board-1')
   assert.equal(isInspectorAgentWorking('/tasks'), false)
-  const stored = JSON.parse(mem['fsdb.views:/tasks'] ?? '[]') as Array<{ id: string; name: string; mode: string }>
+  const stored = JSON.parse(mem['fsdb.views:/tasks'] ?? '[]') as Array<{ id: string; name: string; mode: string; filters?: Record<string, string> }>
   assert.equal(stored[0]?.id, 'board-1')
   assert.equal(stored[0]?.name, '看板')
   assert.equal(stored[0]?.mode, 'table')
+  assert.equal(stored[0]?.filters?.status, 'doing')
 })

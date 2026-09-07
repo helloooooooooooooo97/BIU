@@ -110,6 +110,7 @@ import {
   isViewStarred,
   loadActiveViewId,
   loadViews,
+  pullSavedViews,
   rememberRecords,
   rememberViews,
   persistStarredViews,
@@ -142,9 +143,11 @@ import {
   countFilterRules,
   emptyFilterGroup,
   encodeListFilter,
+  filterTreeStateKey,
   moveList,
   normalizeSorts,
   resolveViewFilterTree,
+  sortsStateKey,
   type FilterGroup,
   type SortRule,
 } from '../query-logic.ts'
@@ -616,6 +619,9 @@ export function CollectionBrowser({
   const reloadGen = useRef(0)
   const hydratePath = useRef('')
   const viewsRef = useRef<SavedView[]>([])
+  const skipPersistGen = useRef(0)
+  const activeViewIdRef = useRef<string | null>(null)
+  const syncViewsRef = useRef<() => Promise<void>>(async () => {})
   const hydratedDetail = useRef('')
   const [dlg, setDlg] = useState<
     | { kind: 'rename'; view: SavedView }
@@ -898,11 +904,13 @@ export function CollectionBrowser({
 
   useEffect(() => {
     let debounce = 0
-    const onChange = () => {
+    const onChange = (event: Event) => {
       window.clearTimeout(debounce)
+      const viewsTouched = Boolean((event as CustomEvent<{ views?: boolean }>).detail?.views)
       debounce = window.setTimeout(() => {
         void reloadRef.current()
         if (detailIdRef.current) pullDetailBody()
+        if (viewsTouched) void syncViewsRef.current()
       }, 120)
     }
     window.addEventListener('fsdb:change', onChange)
@@ -1246,8 +1254,8 @@ export function CollectionBrowser({
       truncateCells === (next.truncate !== false) &&
       query === nextQuery &&
       pageSize === nextPageSize &&
-      JSON.stringify(sorts) === JSON.stringify(next.sorts ?? []) &&
-      JSON.stringify(filterTree) === JSON.stringify(next.filterTree ?? null) &&
+      sortsStateKey(sorts) === sortsStateKey(next.sorts) &&
+      filterTreeStateKey(filterTree) === filterTreeStateKey(resolveViewFilterTree(next)) &&
       JSON.stringify(filters) === JSON.stringify(next.filters) &&
       JSON.stringify(columnKeys) === JSON.stringify(nextColumns) &&
       JSON.stringify(columnWidths) === JSON.stringify(normalizeColumnWidths(next.columnWidths))
@@ -1272,6 +1280,27 @@ export function CollectionBrowser({
     setPageSize(nextPageSize)
     setPage(0)
     setViewMenuOpen(false)
+  }
+
+  viewsRef.current = views
+  activeViewIdRef.current = activeViewId
+  syncViewsRef.current = async () => {
+    if (nested || sheet) return
+    await pullSavedViews()
+    const listed = listedViews(collectionPath, loadViews(collectionPath)).map((view) =>
+      withViewDisplay(collectionPath, view),
+    )
+    const prev = viewsRef.current
+    const activeId = activeViewIdRef.current
+    rememberViews(collectionPath, listed)
+    viewsRef.current = listed
+    setViews(listed)
+    const nextView = (activeId ? listed.find((item) => item.id === activeId) : undefined) ?? listed[0]
+    const prevView = activeId ? prev.find((item) => item.id === activeId) : undefined
+    if (!nextView) return
+    if (prevView && viewStateKey(normalizeSavedView(prevView)) === viewStateKey(normalizeSavedView(nextView))) return
+    skipPersistGen.current += 1
+    applyView(nextView)
   }
 
   function selectView(view: SavedView) {
@@ -2200,7 +2229,9 @@ export function CollectionBrowser({
 
   useEffect(() => {
     if (sheet || !hydrated || !activeViewId) return
+    const persistGen = skipPersistGen.current
     const id = window.setTimeout(() => {
+      if (persistGen !== skipPersistGen.current) return
       if (hydratePath.current !== `${collectionPath}\0${dataPath}`) return
       const current = viewsRef.current.find((view) => view.id === activeViewId)
       if (!current) return
