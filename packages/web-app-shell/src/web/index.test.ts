@@ -118,4 +118,5 @@ test('settings lists search and pick shortcuts', () => {
   assert.match(chrome, /data-testid="settings-shortcuts"/)
   assert.match(chrome, /⌘F/)
   assert.match(chrome, /Ctrl\+Q/)
+  assert.match(chrome, /正文查找/)
 })

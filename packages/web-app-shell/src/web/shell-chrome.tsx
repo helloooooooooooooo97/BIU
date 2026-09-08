@@ -25,7 +25,7 @@ export function ShellSettingsShortcuts() {
           <span className="settings-muted">Ctrl+Q</span>
         </li>
       </ul>
-      <p className="settings-muted m-0 px-2 pt-1">Windows 与 Linux 上 ⌘ 用 Ctrl。选取也可用 ⌘Q。</p>
+      <p className="settings-muted m-0 px-2 pt-1">Windows 与 Linux 上 ⌘ 用 Ctrl。选取也可用 ⌘Q。编辑器内 ⌘F 为正文查找。</p>
     </section>
   )
 }

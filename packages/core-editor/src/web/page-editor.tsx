@@ -1,5 +1,5 @@
-import { useEffect, useRef, type MouseEvent } from 'react'
-import { SourceEditor } from './source-editor.tsx'
+import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
+import { SourceEditor, type SourceEditorHandle } from './source-editor.tsx'
 import { usePageSourceMode } from './source-mode.ts'
 import { EditorContent, useEditor } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
@@ -14,6 +14,8 @@ import { tryContentJump, contentJumpForRecord } from './content-jump.ts'
 import { CONTENT_JUMP_EVENT } from '@biu/type-file-system'
 import { bindEditorTextHost } from '@biu/core-pick/web'
 import { markdownLocusFromElement, markdownLocusFromSelection } from './markdown-locus.ts'
+import { FindBar, isFindHotkey } from './find-bar.tsx'
+import { applyEditorFind } from './find-plugin.ts'
 
 /** 本地正在打字时不要用远端正文盖掉；源码模式 / 未挂上的编辑器不算在打字。 */
 export function shouldApplyRemoteMarkdown(args: {
@@ -107,6 +109,11 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
   const saved = useRef(asMarkdown(value))
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const hydratedId = useRef<string | null>(null)
+  const sourceFind = useRef<SourceEditorHandle>(null)
+  const [findOpen, setFindOpen] = useState(false)
+  const [findQuery, setFindQuery] = useState('')
+  const [findIndex, setFindIndex] = useState(0)
+  const [findTotal, setFindTotal] = useState(0)
 
   const editor = useEditor(
     {
@@ -124,6 +131,13 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
           'data-testid': 'page-editor',
         },
         handleKeyDown: (view, event) => {
+          if (isFindHotkey(event)) {
+            event.preventDefault()
+            setFindOpen(true)
+            const { from, to } = view.state.selection
+            if (from !== to) setFindQuery(view.state.doc.textBetween(from, to))
+            return true
+          }
           if (event.key !== 'ArrowUp' || event.shiftKey || event.altKey || event.metaKey || event.ctrlKey) return false
           if (event.isComposing) return false
           const sel = view.state.selection
@@ -264,12 +278,68 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
     return () => window.removeEventListener(CONTENT_JUMP_EVENT, onJump)
   }, [editor, record.id, value])
 
+  const runFind = (query: string, index: number) => {
+    if (source) {
+      const next = sourceFind.current?.applyFind(query, index) ?? { total: 0, index: 0 }
+      setFindIndex(next.index)
+      setFindTotal(next.total)
+      return
+    }
+    if (!editor || editor.isDestroyed) return
+    const next = applyEditorFind(editor, query, index)
+    setFindIndex(next.index)
+    setFindTotal(next.total)
+  }
+
+  useEffect(() => {
+    if (!findOpen) {
+      if (source) sourceFind.current?.applyFind('', 0)
+      else if (editor && !editor.isDestroyed) applyEditorFind(editor, '', 0)
+      setFindTotal(0)
+      return
+    }
+    if (!source) {
+      runFind(findQuery, 0)
+      return
+    }
+    const id = requestAnimationFrame(() => runFind(findQuery, 0))
+    return () => cancelAnimationFrame(id)
+  }, [findOpen, findQuery, source, editor])
+
+  const onFindHotkey = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (!isFindHotkey(event)) return
+    event.preventDefault()
+    event.stopPropagation()
+    setFindOpen(true)
+    if (!source && editor && !editor.isDestroyed) {
+      const { from, to } = editor.state.selection
+      if (from !== to) setFindQuery(editor.state.doc.textBetween(from, to))
+    }
+  }
+
+  const findBar = findOpen ? (
+    <FindBar
+      query={findQuery}
+      index={findIndex}
+      total={findTotal}
+      onQuery={setFindQuery}
+      onNext={() => runFind(findQuery, findIndex + 1)}
+      onPrev={() => runFind(findQuery, findIndex - 1)}
+      onClose={() => {
+        setFindOpen(false)
+        if (!source && editor && !editor.isDestroyed) editor.commands.focus()
+      }}
+    />
+  ) : null
+
   if (!editor) return <div className="page-editor" data-testid="page-editor-pending" />
 
   if (source) {
     return (
-      <div className="page-editor is-source">
+      <div className="page-editor is-source" onKeyDownCapture={onFindHotkey}>
+        {findBar}
         <SourceEditor
+          ref={sourceFind}
           value={asMarkdown(value)}
           writable={writable !== false}
           onChange={(next) => {
@@ -283,7 +353,8 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
   }
 
   return (
-    <div className="page-editor">
+    <div className="page-editor" onKeyDownCapture={onFindHotkey}>
+      {findBar}
       <EditorContent editor={editor} />
       {writable !== false ? <PageBlockHandle editor={editor} /> : null}
       {writable !== false ? <Bubble editor={editor} /> : null}

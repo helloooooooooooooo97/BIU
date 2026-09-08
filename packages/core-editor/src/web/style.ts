@@ -69,6 +69,15 @@ export const PAGE_EDITOR_STYLE = `
 .page-slash-label{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:600;line-height:1.2}
 .page-slash-keys{flex:none;color:var(--dsw-label-3);font-size:12px;font-weight:500}
 .page-slash-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;flex:none;margin-top:2px;padding:6px 8px 4px;border-top:1px solid var(--dsw-border);color:var(--dsw-label-3);font-size:12px;font-weight:500}
+.page-find{position:sticky;top:8px;z-index:18;display:flex;justify-content:flex-end;margin:0 0 8px;pointer-events:none}
+.page-find-box{pointer-events:auto;display:flex;align-items:center;gap:4px;min-width:240px;max-width:min(360px,100%);padding:4px 6px;background:var(--dsw-sidebar);border:1px solid var(--dsw-border);border-radius:8px;box-shadow:0 8px 24px rgba(15,15,15,.16)}
+.page-find-icon{flex:none;width:14px;height:14px;color:#7B7B79}
+.page-find-input{flex:1 1 auto;min-width:0;margin:0;border:0;padding:4px 4px;background:transparent;color:var(--dsw-label);font:inherit;font-size:13px;outline:none}
+.page-find-count{flex:none;min-width:2.4em;color:#7B7B79;font-size:12px;font-weight:600;text-align:right}
+.page-find-btn{flex:none;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;margin:0;border:0;border-radius:5px;padding:0;background:transparent;color:#EFEEEC;cursor:pointer}
+.page-find-btn:hover{background:var(--dsw-hover)}
+.page-find-hit{background:color-mix(in srgb,var(--dsw-business) 22%,transparent);border-radius:2px}
+.page-find-hit.is-current{background:color-mix(in srgb,var(--dsw-business) 42%,transparent)}
 .page-bubble{display:flex;align-items:center;gap:2px;padding:4px}
 .page-bubble button{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:28px;margin:0;border:0;border-radius:6px;padding:0 7px;background:transparent;color:var(--dsw-label);font:inherit;font-size:13px;font-weight:700;cursor:pointer}
 .page-bubble button:hover,.page-bubble button.is-on{background:var(--dsw-hover)}

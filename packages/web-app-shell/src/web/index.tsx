@@ -354,6 +354,8 @@ function Shell(props: SlotProps) {
       if (event.isComposing) return
       if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return
       if (event.key !== 'f' && event.key !== 'F') return
+      const target = event.target
+      if (target instanceof Element && target.closest('.page-editor')) return
       event.preventDefault()
       event.stopPropagation()
       openSearch()

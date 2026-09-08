@@ -1,11 +1,39 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useImperativeHandle, useRef, forwardRef } from 'react'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { markdown } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
-import { EditorState } from '@codemirror/state'
-import { EditorView, drawSelection, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers } from '@codemirror/view'
+import { EditorSelection, EditorState, StateEffect, StateField } from '@codemirror/state'
+import { Decoration, EditorView, drawSelection, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers } from '@codemirror/view'
 import { tags } from '@lezer/highlight'
+import { findRanges, wrapFindIndex } from './find-ranges.ts'
+
+const findEffect = StateEffect.define<{ query: string; index: number }>()
+const findHit = Decoration.mark({ class: 'page-find-hit' })
+const findCurrent = Decoration.mark({ class: 'page-find-hit is-current' })
+
+const findField = StateField.define({
+  create: () => Decoration.none,
+  update(value, tr) {
+    for (const effect of tr.effects) {
+      if (effect.is(findEffect)) {
+        const hits = findRanges(tr.state.doc.toString(), effect.value.query)
+        if (!hits.length) return Decoration.none
+        const current = wrapFindIndex(effect.value.index, hits.length)
+        return Decoration.set(
+          hits.map((hit, i) => (i === current ? findCurrent : findHit).range(hit.from, hit.to)),
+        )
+      }
+    }
+    if (tr.docChanged) return value.map(tr.changes)
+    return value
+  },
+  provide: (field) => EditorView.decorations.from(field),
+})
+
+export type SourceEditorHandle = {
+  applyFind: (query: string, index: number) => { total: number; index: number }
+}
 
 const mdHighlight = HighlightStyle.define([
   { tag: tags.heading, color: '#F0EFED', fontWeight: '700' },
@@ -45,15 +73,11 @@ const theme = EditorView.theme({
   },
 })
 
-export function SourceEditor({
-  value,
-  writable,
-  onChange,
-}: {
+export const SourceEditor = forwardRef<SourceEditorHandle, {
   value: string
   writable: boolean
   onChange?: (next: string) => void
-}) {
+}>(function SourceEditor({ value, writable, onChange }, ref) {
   const host = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
   const onChangeRef = useRef(onChange)
@@ -70,6 +94,7 @@ export function SourceEditor({
         extensions: [
           history(),
           drawSelection(),
+          findField,
           lineNumbers(),
           highlightActiveLine(),
           highlightActiveLineGutter(),
@@ -98,6 +123,27 @@ export function SourceEditor({
     }
   }, [writable])
 
+  useImperativeHandle(ref, () => ({
+    applyFind(query, index) {
+      const view = viewRef.current
+      if (!view) return { total: 0, index: 0 }
+      const hits = findRanges(view.state.doc.toString(), query)
+      const total = hits.length
+      const i = wrapFindIndex(index, total)
+      const hit = total ? hits[i] : null
+      view.dispatch({
+        effects: findEffect.of({ query, index: i }),
+        ...(hit
+          ? {
+              selection: EditorSelection.range(hit.from, hit.to),
+              scrollIntoView: true,
+            }
+          : {}),
+      })
+      return { total, index: i }
+    },
+  }))
+
   useEffect(() => {
     const view = viewRef.current
     if (!view) return
@@ -117,4 +163,5 @@ export function SourceEditor({
   )
 
   return <div className="page-source" data-testid="page-source-editor" ref={host} />
-}
+})
+

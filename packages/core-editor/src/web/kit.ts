@@ -6,6 +6,7 @@ import { TableKit } from '@tiptap/extension-table'
 import StarterKit from '@tiptap/starter-kit'
 import { headingSkin } from './heading-skin.ts'
 import { pageBlock } from './page-block.ts'
+import { pageFind } from './find-plugin.ts'
 import { slashCommand } from './slash.ts'
 
 const pageMathematics = Mathematics.extend({
@@ -58,6 +59,7 @@ export function pageEditorExtensions() {
     }),
     headingSkin,
     pageBlock,
+    pageFind,
     slashCommand,
   ]
 }

@@ -98,6 +98,8 @@ test('page editor bridges cursor to the record title', async () => {
   assert.match(src, /markdownLocusFromSelection/)
   assert.match(src, /usePageSourceMode/)
   assert.match(src, /SourceEditor/)
+  assert.match(src, /FindBar/)
+  assert.match(src, /isFindHotkey/)
 })
 
 test('page editor hydrates markdown after content fetch', async () => {
