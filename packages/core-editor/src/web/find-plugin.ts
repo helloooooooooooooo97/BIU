@@ -1,7 +1,7 @@
 import { Extension } from '@tiptap/core'
 import type { Editor } from '@tiptap/core'
 import type { Node } from '@tiptap/pm/model'
-import { Plugin, PluginKey, TextSelection } from '@tiptap/pm/state'
+import { Plugin, PluginKey, NodeSelection, TextSelection } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { scrollOutlineTarget } from '@biu/public-ui'
 import { findInPmDoc, wrapFindIndex } from './find-ranges.ts'
@@ -16,11 +16,11 @@ function findDecorations(doc: Node, query: string, index: number) {
   const current = wrapFindIndex(index, hits.length)
   return DecorationSet.create(
     doc,
-    hits.map((hit, i) =>
-      Decoration.inline(hit.from, hit.to, {
-        class: i === current ? 'page-find-hit is-current' : 'page-find-hit',
-      }),
-    ),
+    hits.map((hit, i) => {
+      const cls = i === current ? 'page-find-hit is-current' : 'page-find-hit'
+      if (hit.node) return Decoration.node(hit.from, hit.to, { class: cls })
+      return Decoration.inline(hit.from, hit.to, { class: cls })
+    }),
   )
 }
 
@@ -62,7 +62,8 @@ export function applyEditorFind(editor: Editor, query: string, index: number) {
   const tr = editor.state.tr.setMeta(FIND_PLUGIN, { query, index: i })
   if (total) {
     const hit = hits[i]!
-    tr.setSelection(TextSelection.create(editor.state.doc, hit.from))
+    if (hit.node) tr.setSelection(NodeSelection.create(editor.state.doc, hit.from))
+    else tr.setSelection(TextSelection.create(editor.state.doc, hit.from))
   }
   editor.view.dispatch(tr)
   if (total) scrollFindLikeOutline(editor, hits[i]!.from)

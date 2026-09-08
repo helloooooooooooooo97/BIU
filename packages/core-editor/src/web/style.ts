@@ -86,6 +86,8 @@ export const PAGE_EDITOR_STYLE = `
 .page-find-hit{color:${TAG_TONE_ROSE};background:color-mix(in srgb,${TAG_TONE_ROSE} 22%,transparent);border-radius:2px}
 .page-find-hit.is-current{background:color-mix(in srgb,${TAG_TONE_ROSE} 34%,transparent)}
 .page-editor .page-find-hit,.page-editor .page-find-hit *{color:${TAG_TONE_ROSE}}
+.page-editor .page-block.page-find-hit{box-shadow:0 0 0 2px color-mix(in srgb,${TAG_TONE_ROSE} 55%,transparent)}
+.page-editor .page-block.page-find-hit.is-current{box-shadow:0 0 0 2px ${TAG_TONE_ROSE}}
 .page-bubble{display:flex;flex-wrap:wrap;align-items:center;gap:2px;padding:4px;max-width:min(420px,calc(100vw - 48px))}
 .page-bubble button{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:28px;margin:0;border:0;border-radius:6px;padding:0 7px;background:transparent;color:var(--dsw-label);font:inherit;font-size:13px;font-weight:700;cursor:pointer}
 .page-bubble button:hover,.page-bubble button.is-on{background:var(--dsw-hover)}
