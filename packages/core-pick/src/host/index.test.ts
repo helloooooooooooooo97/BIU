@@ -11,7 +11,7 @@ test('registers pick instructions on the system prompt', async () => {
   await ctx.plugin(systemPrompt)
   await ctx.plugin(pick)
   const text = ctx.systemPrompt.assemble()
-  assert.match(text, /<pick/)
+  assert.match(text, /<pick>/)
   assert.match(text, /kind\/id/)
   assert.match(text, /path/)
   assert.match(text, /db_content/)
