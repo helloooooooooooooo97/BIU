@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
+import { HeadlessPopover } from '@biu/public-ui'
 import { SourceEditor, type SourceEditorHandle } from './source-editor.tsx'
 import { usePageSourceMode } from './source-mode.ts'
 import { EditorContent, useEditor } from '@tiptap/react'
@@ -16,7 +17,7 @@ import { bindEditorTextHost } from '@biu/core-pick/web'
 import { markdownLocusFromElement, markdownLocusFromSelection } from './markdown-locus.ts'
 import { FindBar, isFindHotkey } from './find-bar.tsx'
 import { applyEditorFind } from './find-plugin.ts'
-import { TEXT_COLORS, HIGHLIGHT_COLORS } from './color-swatches.ts'
+import { EDITOR_TONES, tagTextColor, tagWashColor } from './color-swatches.ts'
 
 /** 本地正在打字时不要用远端正文盖掉；源码模式 / 未挂上的编辑器不算在打字。 */
 export function shouldApplyRemoteMarkdown(args: {
@@ -45,83 +46,134 @@ function asMarkdown(value: unknown) {
   return String(value)
 }
 
-function Swatch({
-  label,
-  value,
-  current,
-  kind,
-  onPick,
-}: {
-  label: string
-  value: string
-  current: string
-  kind: 'text' | 'mark'
-  onPick: () => void
-}) {
-  const on = Boolean(value) && current.toLowerCase() === value.toLowerCase()
-  return (
-    <button
-      type="button"
-      className={on ? 'is-on' : undefined}
-      title={label}
-      aria-label={label}
-      aria-pressed={on}
-      data-testid={kind === 'text' ? `page-color-${value || 'none'}` : `page-highlight-${value || 'none'}`}
-      onMouseDown={(event: MouseEvent) => {
-        event.preventDefault()
-        onPick()
-      }}
-    >
-      <span
-        className={kind === 'text' ? 'page-bubble-letter' : 'page-bubble-mark'}
-        style={kind === 'text' ? { color: value || '#F0EFED' } : { background: value || 'transparent' }}
-      >
-        {kind === 'text' ? 'A' : ''}
-      </span>
-    </button>
-  )
+function holdSelection(event: MouseEvent) {
+  event.preventDefault()
 }
 
-function ColorPicks({ editor }: { editor: Editor }) {
+function ColorMenus({
+  editor,
+  open,
+  onOpen,
+}: {
+  editor: Editor
+  open: 'text' | 'mark' | null
+  onOpen: (next: 'text' | 'mark' | null) => void
+}) {
   const color = String(editor.getAttributes('textStyle').color ?? '')
   const highlight = String(editor.getAttributes('highlight').color ?? '')
+
+  const flyout = (kind: 'text' | 'mark') => {
+    const current = kind === 'text' ? color : highlight
+    return (
+      <div
+        className="page-color-menu"
+        role="menu"
+        aria-label={kind === 'text' ? '文字颜色' : '背景色'}
+        onMouseDown={holdSelection}
+      >
+        <div className="page-color-menu-h">{kind === 'text' ? '文字颜色' : '背景色'}</div>
+        <div className="page-color-grid">
+          {EDITOR_TONES.map((tone) => {
+            const value = kind === 'text' ? tagTextColor(tone) : tagWashColor(tone)
+            const on = current.toLowerCase() === value.toLowerCase()
+            return (
+              <button
+                key={tone}
+                type="button"
+                role="menuitemradio"
+                className={on ? 'is-on' : undefined}
+                aria-checked={on}
+                aria-label={tone}
+                data-testid={kind === 'text' ? `page-color-${tone}` : `page-highlight-${tone}`}
+                style={
+                  kind === 'text'
+                    ? { color: tone, background: 'transparent' }
+                    : { background: tagWashColor(tone), color: tone }
+                }
+                onMouseDown={holdSelection}
+                onClick={() => {
+                  if (kind === 'text') editor.chain().focus().setColor(value).run()
+                  else editor.chain().focus().toggleHighlight({ color: value }).run()
+                  onOpen(null)
+                }}
+              >
+                {kind === 'text' ? 'A' : ''}
+              </button>
+            )
+          })}
+        </div>
+        <button
+          type="button"
+          className="page-color-clear"
+          data-testid={kind === 'text' ? 'page-color-none' : 'page-highlight-none'}
+          onMouseDown={holdSelection}
+          onClick={() => {
+            if (kind === 'text') editor.chain().focus().unsetColor().run()
+            else editor.chain().focus().unsetHighlight().run()
+            onOpen(null)
+          }}
+        >
+          清除
+        </button>
+      </div>
+    )
+  }
+
   return (
     <>
-      <span className="page-bubble-palette" role="group" aria-label="文字颜色">
-        {TEXT_COLORS.map((item) => (
-          <Swatch
-            key={`c-${item.value || 'none'}`}
-            label={item.label}
-            value={item.value}
-            current={color}
-            kind="text"
-            onPick={() => {
-              if (!item.value) editor.chain().focus().unsetColor().run()
-              else editor.chain().focus().setColor(item.value).run()
-            }}
-          />
-        ))}
-      </span>
-      <span className="page-bubble-palette" role="group" aria-label="背景色">
-        {HIGHLIGHT_COLORS.map((item) => (
-          <Swatch
-            key={`h-${item.value || 'none'}`}
-            label={item.label}
-            value={item.value}
-            current={highlight}
-            kind="mark"
-            onPick={() => {
-              if (!item.value) editor.chain().focus().unsetHighlight().run()
-              else editor.chain().focus().toggleHighlight({ color: item.value }).run()
-            }}
-          />
-        ))}
-      </span>
+      <HeadlessPopover
+        open={open === 'text'}
+        onOpenChange={(next) => onOpen(next ? 'text' : null)}
+        side="bottom"
+        align="start"
+        trigger={
+          <button
+            type="button"
+            className={color || open === 'text' ? 'is-on' : undefined}
+            title="文字颜色"
+            aria-label="文字颜色"
+            aria-haspopup="menu"
+            aria-expanded={open === 'text'}
+            onMouseDown={holdSelection}
+          >
+            <span className="page-bubble-letter" style={{ color: color || '#F0EFED' }}>
+              A
+            </span>
+          </button>
+        }
+      >
+        {flyout('text')}
+      </HeadlessPopover>
+      <HeadlessPopover
+        open={open === 'mark'}
+        onOpenChange={(next) => onOpen(next ? 'mark' : null)}
+        side="bottom"
+        align="start"
+        trigger={
+          <button
+            type="button"
+            className={highlight || open === 'mark' ? 'is-on' : undefined}
+            title="背景色"
+            aria-label="背景色"
+            aria-haspopup="menu"
+            aria-expanded={open === 'mark'}
+            onMouseDown={holdSelection}
+          >
+            <span
+              className="page-bubble-mark"
+              style={{ background: highlight || 'color-mix(in srgb, var(--dsw-label) 18%, transparent)' }}
+            />
+          </button>
+        }
+      >
+        {flyout('mark')}
+      </HeadlessPopover>
     </>
   )
 }
 
 function Bubble({ editor }: { editor: Editor }) {
+  const [colorOpen, setColorOpen] = useState<'text' | 'mark' | null>(null)
   const btn = (label: string, on: boolean, run: () => void) => (
     <button
       type="button"
@@ -140,7 +192,11 @@ function Bubble({ editor }: { editor: Editor }) {
       editor={editor}
       className="page-bubble"
       aria-label="文字样式"
-      shouldShow={({ editor: current, from, to }) => !current.isActive('table') && from !== to}
+      shouldShow={({ editor: current, from, to }) => {
+        if (current.isActive('table')) return false
+        if (colorOpen) return true
+        return from !== to
+      }}
     >
       {btn('B', editor.isActive('bold'), () => editor.chain().focus().toggleBold().run())}
       {btn('I', editor.isActive('italic'), () => editor.chain().focus().toggleItalic().run())}
@@ -148,7 +204,7 @@ function Bubble({ editor }: { editor: Editor }) {
       {btn('</>', editor.isActive('code'), () => editor.chain().focus().toggleCode().run())}
       {btn('H1', editor.isActive('heading', { level: 1 }), () => editor.chain().focus().toggleHeading({ level: 1 }).run())}
       {btn('H2', editor.isActive('heading', { level: 2 }), () => editor.chain().focus().toggleHeading({ level: 2 }).run())}
-      <ColorPicks editor={editor} />
+      <ColorMenus editor={editor} open={colorOpen} onOpen={setColorOpen} />
     </BubbleMenu>
   )
 }

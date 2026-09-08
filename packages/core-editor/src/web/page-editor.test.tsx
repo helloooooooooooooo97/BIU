@@ -100,9 +100,12 @@ test('page editor bridges cursor to the record title', async () => {
   assert.match(src, /SourceEditor/)
   assert.match(src, /FindBar/)
   assert.match(src, /isFindHotkey/)
-  assert.match(src, /ColorPicks/)
+  assert.match(src, /ColorMenus/)
+  assert.match(src, /HeadlessPopover/)
   assert.match(src, /setColor/)
   assert.match(src, /toggleHighlight/)
+  assert.doesNotMatch(src, /ColorPicks/)
+  assert.doesNotMatch(src, /page-bubble-palette/)
 })
 
 test('page editor hydrates markdown after content fetch', async () => {
