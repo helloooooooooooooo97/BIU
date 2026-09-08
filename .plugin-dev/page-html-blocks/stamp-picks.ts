@@ -43,12 +43,31 @@ function surfaceLabel(el: HTMLElement) {
   return (named || short || el.textContent || el.tagName.toLowerCase()).replace(/\s+/g, ' ').trim().slice(0, 80)
 }
 
+const PHRASE = new Set(['SPAN', 'STRONG', 'EM', 'B', 'I', 'SMALL', 'MARK', 'CODE', 'BR'])
+
+function ownText(el: HTMLElement) {
+  let out = ''
+  for (const node of el.childNodes) {
+    if (node.nodeType === Node.TEXT_NODE) out += node.textContent ?? ''
+  }
+  return out.replace(/\s+/g, ' ').trim()
+}
+
+function isTextRun(el: HTMLElement) {
+  if (SKIP.has(el.tagName)) return false
+  const text = (el.textContent ?? '').replace(/\s+/g, ' ').trim()
+  if (text.length < 2) return false
+  const kids = [...el.children]
+  if (kids.length === 0) return true
+  if (kids.every((node) => PHRASE.has(node.tagName))) return true
+  return ownText(el).length >= 2
+}
+
 function isPeerChunk(el: HTMLElement) {
   const parent = el.parentElement
   if (!parent) return false
   const peers = [...parent.children].filter(
-    (node): node is HTMLElement =>
-      node instanceof HTMLElement && node.tagName !== 'SPAN' && node.childElementCount >= 1,
+    (node): node is HTMLElement => node instanceof HTMLElement && node.childElementCount >= 1,
   )
   if (peers.length < 2 || !peers.includes(el)) return false
   const lengths = peers.map((node) => (node.textContent ?? '').replace(/\s+/g, ' ').trim().length)
@@ -58,16 +77,17 @@ function isPeerChunk(el: HTMLElement) {
   return (el.textContent ?? '').replace(/\s+/g, ' ').trim().length >= 12
 }
 
-/** 整块根、语义块、带 id、并列卡片。不给每个 span/内层排版 div 盖章。 */
+/** 卡片、语义块，以及每一段可见文字（一行/一枚标签），不拆到单字。 */
 export function isHtmlPickSurface(el: Element, root: Element) {
   if (!(el instanceof HTMLElement)) return false
   if (el === root) return true
-  if (SKIP.has(el.tagName) || el.tagName === 'SPAN') return false
+  if (SKIP.has(el.tagName)) return false
   if (SURFACE.has(el.tagName)) return true
   if (el.id.trim()) return true
   const role = el.getAttribute('role')
   if (role === 'button' || role === 'link' || role === 'img') return true
   if (el.parentElement === root) return true
+  if (isTextRun(el)) return true
   return isPeerChunk(el)
 }
 
