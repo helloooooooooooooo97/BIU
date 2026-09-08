@@ -10,6 +10,7 @@ import {
   parseToolCall,
   prettyJsonString,
   shouldAutoOpenTool,
+  toolOutputChars,
   toolSummary,
   toolTitle,
   type DiffLine,
@@ -244,6 +245,11 @@ export function ToolCard({
           <span className="tool-call-title">{title}</span>
           {open ? null : <span className="tool-call-summary">{summary}</span>}
         </button>
+        {parsed.kind === 'bash' ? (
+          <span className="tool-call-chars" title="输出字数" data-testid="tool-call-chars">
+            {toolOutputChars(node.result?.detail, parsed.kind)}
+          </span>
+        ) : null}
         <button
           type="button"
           className="tool-call-inspect"

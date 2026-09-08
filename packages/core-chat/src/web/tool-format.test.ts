@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { diffStats, formatToolDetail, lineDiff, parseToolCall, prettyJsonString, compactJsonSummary, toolSummary } from './tool-format.ts'
+import { diffStats, formatToolDetail, lineDiff, parseToolCall, prettyJsonString, compactJsonSummary, toolSummary, toolOutputChars } from './tool-format.ts'
 
 test('lineDiff marks removals and additions', () => {
   const lines = lineDiff('a\nb\nc', 'a\nx\nc')
@@ -64,6 +64,11 @@ test('formatToolDetail unwraps bash stdout/stderr json', () => {
   assert.equal(formatted.code, 0)
   assert.equal(formatted.stdout, 'hello\nworld\n')
   assert.equal(formatted.stderr, '')
+})
+
+test('toolOutputChars counts bash stdout and stderr', () => {
+  assert.equal(toolOutputChars(undefined, 'bash'), 0)
+  assert.equal(toolOutputChars(JSON.stringify({ code: 0, stdout: 'hello', stderr: 'err' }), 'bash'), 8)
 })
 
 test('formatToolDetail keeps bash artifacts for chat rendering', () => {
