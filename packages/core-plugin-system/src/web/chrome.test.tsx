@@ -35,6 +35,24 @@ test('plugin run toggle stays hidden until the plugin is installed', () => {
   assert.ok(container.querySelector('[aria-label="停止"]'))
 })
 
+test('plugin run toggle hides after uninstall', () => {
+  const Actions = pluginsChrome.Actions
+  assert.ok(Actions)
+  const { container } = render(
+    <Actions
+      actions={[...actions, { id: 'uninstall', label: '卸载', when: { installed: true } }]}
+      record={{ id: 'demo', sandbox: true }}
+      busy={false}
+      place="row"
+      run={() => {}}
+    />,
+  )
+  assert.equal(container.querySelector('[aria-label="运行"]'), null)
+  assert.equal(container.querySelector('[aria-label="停止"]'), null)
+  assert.equal(container.querySelector('[aria-label="卸载"]'), null)
+  assert.ok(container.querySelector('[aria-label="打包"]'))
+})
+
 test('plugin title puts a green dot left of the name when enabled', () => {
   const Title = pluginsChrome.Title
   assert.ok(Title)

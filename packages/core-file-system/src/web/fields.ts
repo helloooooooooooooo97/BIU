@@ -477,7 +477,15 @@ export function groupRecords(rows: DbRecord[], schema: CollectionSchema | undefi
   return listed
 }
 
-export function previewActionRecord(row: DbRecord, action: { when?: Record<string, unknown> }): DbRecord {
+export function previewActionRecord(row: DbRecord, action: { id?: string; when?: Record<string, unknown> }): DbRecord {
+  if (action.id === 'uninstall' || action.id === 'delete' || action.id === 'remove') {
+    if (row.installed === false && row.running !== true && row.enabled !== true) return row
+    return { ...row, installed: false, running: false, enabled: false }
+  }
+  if (action.id === 'pack' || action.id === 'create') {
+    if (row.installed === true) return row
+    return { ...row, installed: true }
+  }
   const when = action.when
   if (!when || !('running' in when) || typeof when.running !== 'boolean') return row
   const running = when.running === false

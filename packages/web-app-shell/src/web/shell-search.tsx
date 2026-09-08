@@ -172,6 +172,18 @@ export function previewRunningRecord(record: Record<string, unknown>, when?: Rec
   return { ...record, running }
 }
 
+export function previewHitRecord(record: Record<string, unknown>, action: SearchAction) {
+  if (action.id === 'uninstall' || action.id === 'delete' || action.id === 'remove') {
+    if (record.installed === false && record.running !== true && record.enabled !== true) return record
+    return { ...record, installed: false, running: false, enabled: false }
+  }
+  if (action.id === 'pack' || action.id === 'create') {
+    if (record.installed === true) return record
+    return { ...record, installed: true }
+  }
+  return previewRunningRecord(record, action.when)
+}
+
 export function visibleRowActions(actions: SearchAction[] | undefined, record: Record<string, unknown> | undefined) {
   const row = record ?? {}
   return placedRowActions(actions).filter((action) => matchActionWhen(row, action.when))
@@ -301,11 +313,14 @@ function HitActions({ hit }: { hit: SearchHit }) {
   const Actions = getDatabaseUi()?.chrome(searchCollection(hit.kind)).Actions
   const placed = placedRowActions(hit.actions)
   const actions = visibleRowActions(hit.actions, record).filter((action) => actionGlyph(action.id))
+  useEffect(() => {
+    setRecord(hit.record ?? { id: hit.id })
+  }, [hit.id, hit.record])
   const run = async (action: SearchAction) => {
     if (acting.current) return
     if (action.confirm && !window.confirm(action.confirm)) return
     acting.current = true
-    const next = previewRunningRecord(record, action.when)
+    const next = previewHitRecord(record, action)
     if (next !== record) setRecord(next)
     try {
       await fetch('/api/db/action', {
@@ -406,6 +421,12 @@ export function ShellSearchPanel({
     if (!node) return
     node.focus()
   }, [focusSeq])
+
+  useEffect(() => {
+    const onChange = () => setReloadSeq((seq) => seq + 1)
+    window.addEventListener('fsdb:change', onChange)
+    return () => window.removeEventListener('fsdb:change', onChange)
+  }, [])
 
   const needle = query.trim().toLowerCase()
 

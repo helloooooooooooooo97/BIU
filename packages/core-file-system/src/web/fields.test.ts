@@ -92,6 +92,11 @@ test('previewActionRecord flips running from action when', () => {
   assert.equal(previewActionRecord(row, { when: { installed: true, running: false } }).running, true)
   assert.equal(previewActionRecord({ ...row, running: true }, { when: { installed: true, running: true } }).running, false)
   assert.equal(previewActionRecord(row, { when: { installed: true } }), row)
+  const gone = previewActionRecord({ ...row, running: true, enabled: true }, { id: 'uninstall', when: { installed: true } })
+  assert.equal(gone.installed, false)
+  assert.equal(gone.running, false)
+  assert.equal(gone.enabled, false)
+  assert.equal(previewActionRecord({ id: 'draft', sandbox: true }, { id: 'pack', when: { sandbox: true } }).installed, true)
 })
 
 test('placedActions keeps start and stop so chrome.Actions can own the pair', () => {
