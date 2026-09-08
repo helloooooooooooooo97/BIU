@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   isHtmlPickSurface,
   stampHtmlPickSurfaces,
+  stampHtmlSource,
   htmlBlockKey,
 } from '../../../../.plugin-dev/page-html-blocks/stamp-picks.ts'
 
@@ -52,4 +53,22 @@ test('htmlBlockKey is stable for the same host and source', () => {
   assert.equal(htmlBlockKey(a, '<p>x</p>'), htmlBlockKey(a, '<p>x</p>'))
   assert.notEqual(htmlBlockKey(a, '<p>x</p>'), htmlBlockKey(b, '<p>x</p>'))
   assert.notEqual(htmlBlockKey(a, '<p>x</p>'), htmlBlockKey(a, '<p>y</p>'))
+})
+
+test('stampHtmlSource marks peer slide cards inside a flex wrap', () => {
+  const html = `<div style="display:flex;gap:12px">
+    <div style="flex:1"><span>SLIDE 01 · 视听</span><div>视听盛宴</div><div>从山顶的黄昏共舞到天文馆。</div></div>
+    <div style="flex:1"><span>SLIDE 02 · 弧光</span><div>梦想与现实</div><div>塞巴斯蒂安守着爵士乐。</div></div>
+    <div style="flex:1"><span>SLIDE 03 · 假如</span><div>结局的假如</div><div>结尾那段蒙太奇。</div></div>
+  </div>`
+  const stamped = stampHtmlSource(html, '1-slide')
+  const wrap = document.createElement('div')
+  wrap.innerHTML = stamped
+  const picks = [...wrap.querySelectorAll('[data-biu-id]')]
+  assert.ok(picks.length >= 3)
+  const ids = picks.map((el) => el.getAttribute('data-biu-id') ?? '')
+  assert.ok(ids.some((id) => id.includes('1-slide')))
+  const slides = picks.filter((el) => (el.textContent ?? '').includes('视听盛宴') || (el.textContent ?? '').includes('梦想与现实') || (el.textContent ?? '').includes('结局的假如'))
+  assert.equal(slides.length >= 3, true)
+  assert.equal(wrap.querySelector('span')?.hasAttribute('data-biu-kind'), false)
 })

@@ -36,22 +36,39 @@ function surfaceLabel(el: HTMLElement) {
     el.getAttribute('alt') ||
     el.getAttribute('title') ||
     el.getAttribute('aria-label') ||
-    (el instanceof HTMLAnchorElement ? el.textContent : '') ||
-    el.textContent ||
-    el.tagName.toLowerCase()
-  return named.replace(/\s+/g, ' ').trim().slice(0, 80)
+    (el instanceof HTMLAnchorElement ? el.textContent : '')
+  const short = [...el.querySelectorAll('div, span, h1, h2, h3, h4, p, button, a')]
+    .map((node) => (node.childElementCount === 0 ? (node.textContent ?? '').replace(/\s+/g, ' ').trim() : ''))
+    .find((text) => text.length >= 2 && text.length <= 40)
+  return (named || short || el.textContent || el.tagName.toLowerCase()).replace(/\s+/g, ' ').trim().slice(0, 80)
 }
 
-/** 整块根、语义块、带 id、以及预览根下的直接子节点。不给每个 span/div 盖章。 */
+function isPeerChunk(el: HTMLElement) {
+  const parent = el.parentElement
+  if (!parent) return false
+  const peers = [...parent.children].filter(
+    (node): node is HTMLElement =>
+      node instanceof HTMLElement && node.tagName !== 'SPAN' && node.childElementCount >= 1,
+  )
+  if (peers.length < 2 || !peers.includes(el)) return false
+  const lengths = peers.map((node) => (node.textContent ?? '').replace(/\s+/g, ' ').trim().length)
+  const max = Math.max(...lengths)
+  const min = Math.min(...lengths)
+  if (max > 0 && min < max * 0.25) return false
+  return (el.textContent ?? '').replace(/\s+/g, ' ').trim().length >= 12
+}
+
+/** 整块根、语义块、带 id、并列卡片。不给每个 span/内层排版 div 盖章。 */
 export function isHtmlPickSurface(el: Element, root: Element) {
   if (!(el instanceof HTMLElement)) return false
   if (el === root) return true
-  if (SKIP.has(el.tagName)) return false
+  if (SKIP.has(el.tagName) || el.tagName === 'SPAN') return false
   if (SURFACE.has(el.tagName)) return true
   if (el.id.trim()) return true
   const role = el.getAttribute('role')
   if (role === 'button' || role === 'link' || role === 'img') return true
-  return el.parentElement === root
+  if (el.parentElement === root) return true
+  return isPeerChunk(el)
 }
 
 export function htmlBlockKey(host: Element | null, html: string) {
@@ -72,7 +89,7 @@ export function clearHtmlPickSurfaces(root: ParentNode) {
   }
 }
 
-export function stampHtmlPickSurfaces(root: HTMLElement, blockKey: string) {
+export function stampHtmlPickSurfaces(root: HTMLElement, blockKey: string, opts?: { includeRoot?: boolean }) {
   clearHtmlPickSurfaces(root)
   const prefix = `${HTML_PICK_KIND}:${blockKey}`
   const stamp = (el: HTMLElement, path: string) => {
@@ -82,7 +99,7 @@ export function stampHtmlPickSurfaces(root: HTMLElement, blockKey: string) {
     el.setAttribute('data-biu-id', `${prefix}:${path}`)
     if (label) el.setAttribute('data-biu-label', label)
   }
-  stamp(root, 'root')
+  if (opts?.includeRoot !== false) stamp(root, 'root')
   const walk = (el: Element, path: string) => {
     let i = 0
     for (const child of el.children) {
@@ -93,4 +110,12 @@ export function stampHtmlPickSurfaces(root: HTMLElement, blockKey: string) {
     }
   }
   walk(root, '0')
+}
+
+/** 把 pick 写进 HTML 字符串，避免 React 重绘 innerHTML 时冲掉内部属性。 */
+export function stampHtmlSource(html: string, blockKey: string) {
+  const wrap = document.createElement('div')
+  wrap.innerHTML = html
+  stampHtmlPickSurfaces(wrap, blockKey, { includeRoot: false })
+  return wrap.innerHTML
 }

@@ -1,7 +1,7 @@
-import { htmlBlockKey, stampHtmlPickSurfaces } from './stamp-picks.ts'
+import { htmlBlockKey, stampHtmlPickSurfaces, stampHtmlSource } from './stamp-picks.ts'
 
 const React = globalThis.React
-const { useEffect, useRef, useState } = React
+const { useEffect, useMemo, useRef, useState } = React
 
 export const name = 'page-html-blocks'
 export const inject = ['pageEditor']
@@ -133,21 +133,11 @@ function HtmlDirectCard({ data, update, writable }: BlockProps) {
   const html = String(data.html ?? '')
   const [editing, setEditing] = useState(false)
   const [hover, setHover] = useState(false)
-  const previewRef = useRef<HTMLDivElement | null>(null)
   const hostRef = useRef<HTMLDivElement | null>(null)
-
-  useEffect(() => {
-    if (editing) return
-    const preview = previewRef.current
-    if (!preview) return
-    const host = hostRef.current?.closest('[data-page-block]') ?? null
-    const key = htmlBlockKey(host, html)
-    const stamp = () => stampHtmlPickSurfaces(preview, key)
-    queueMicrotask(stamp)
-    return () => {
-      /* next html replace clears nodes */
-    }
-  }, [editing, html])
+  const stamped = useMemo(
+    () => stampHtmlSource(html, htmlBlockKey(hostRef.current?.closest('[data-page-block]') ?? null, html)),
+    [html],
+  )
 
   return (
     <div
@@ -163,7 +153,7 @@ function HtmlDirectCard({ data, update, writable }: BlockProps) {
       {editing ? (
         <SourceEditor html={html} onChange={(v) => update({ html: v })} />
       ) : (
-        <div ref={previewRef} style={{ overflowX: 'auto' }} dangerouslySetInnerHTML={{ __html: html }} />
+        <div style={{ overflowX: 'auto' }} dangerouslySetInnerHTML={{ __html: stamped }} />
       )}
     </div>
   )
