@@ -1,6 +1,6 @@
 import { mergeAttributes, Node } from '@tiptap/core'
 import { ReactNodeViewRenderer } from '@tiptap/react'
-import { NodeSelection, Plugin, PluginKey } from '@tiptap/pm/state'
+import { Plugin, PluginKey } from '@tiptap/pm/state'
 import type { Node as PmNode } from '@tiptap/pm/model'
 import { PageBlockView } from './page-block-view.tsx'
 import { getPageEditor } from './service.ts'
@@ -122,16 +122,6 @@ export const pageBlock = Node.create({
         content: match[2]?.trim() ?? '',
       }
     },
-  },
-
-  addKeyboardShortcuts() {
-    return {
-      Enter: ({ editor }) => {
-        const { selection } = editor.state
-        if (!(selection instanceof NodeSelection) || selection.node.type.name !== 'pageBlock') return false
-        return editor.commands.deleteSelection()
-      },
-    }
   },
 
   addStorage() {

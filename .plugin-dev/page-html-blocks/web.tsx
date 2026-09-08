@@ -287,6 +287,8 @@ function FloatBar({
 }) {
   const seg = (active: boolean, onClick: () => void, label: string) => (
     <button
+      type="button"
+      tabIndex={-1}
       onClick={onClick}
       style={{
         ...barBtn,
@@ -325,6 +327,7 @@ function FloatBar({
           {seg(editing, () => setEditing(true), '编辑')}
           <button
             type="button"
+            tabIndex={-1}
             data-testid="html-deck-toggle"
             title={deck ? '已加入演示，点击移出' : '未加入演示，点击加入'}
             aria-label={deck ? '移出演示' : '加入演示'}

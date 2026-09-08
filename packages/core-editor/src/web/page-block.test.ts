@@ -169,12 +169,12 @@ test('pageBlock capture includes every registered block shell', async () => {
   assert.match(view, /data-biu-kind="plugin"/)
   assert.match(view, /data-biu-id=\{pickId\}/)
   assert.match(view, /setNodeSelection\(pos\)/)
-  assert.match(view, /data-page-block-expand/)
-  assert.match(src, /addKeyboardShortcuts/)
-  assert.match(src, /deleteSelection/)
+  assert.doesNotMatch(src, /addKeyboardShortcuts/)
+  assert.doesNotMatch(src, /deleteSelection/)
+  assert.doesNotMatch(view, /onKeyDownCapture/)
 })
 
-test('Enter on a selected pageBlock deletes it without leaving the node', () => {
+test('Enter on a selected pageBlock does not delete it', () => {
   const editor = new Editor({
     extensions: pageEditorExtensions(),
     content: `hello\n\n:::pageBlock {kind=excalidraw plugin=page-excalidraw}\n{"file":"assets/x.json"}\n:::\n`,
@@ -186,10 +186,11 @@ test('Enter on a selected pageBlock deletes it without leaving the node', () => 
   })
   assert.ok(pos >= 0)
   editor.chain().setNodeSelection(pos).run()
-  assert.equal(editor.commands.keyboardShortcut('Enter'), true)
+  editor.commands.keyboardShortcut('Enter')
   const types = editor.getJSON().content?.map((node) => node.type) ?? []
-  assert.equal(types.includes('pageBlock'), false)
+  assert.equal(types.includes('pageBlock'), true)
   assert.match(editor.getMarkdown(), /hello/)
+  assert.match(editor.getMarkdown(), /pageBlock/)
   editor.destroy()
 })
 

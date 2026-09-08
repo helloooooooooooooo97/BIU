@@ -104,18 +104,9 @@ export function PageBlockView({ node, updateAttributes, editor, getPos }: NodeVi
       data-biu-kind="plugin"
       data-biu-id={pickId}
       data-biu-label={pickLabel}
+      contentEditable="false"
       data-testid={`page-block-${kind}`}
       onMouseDown={onMouseDown}
-      onKeyDownCapture={(event) => {
-        if (event.key !== 'Enter' || event.nativeEvent.isComposing) return
-        const target = event.target as HTMLElement | null
-        if (!target?.closest('[data-page-block-expand]')) return
-        event.preventDefault()
-        event.stopPropagation()
-        const pos = getPos()
-        if (typeof pos !== 'number' || editor.isDestroyed) return
-        editor.chain().focus().setNodeSelection(pos).deleteSelection().run()
-      }}
     >
       {cloneFrom ? (
         <div className="page-block-missing">正在复制附件…</div>
