@@ -110,7 +110,7 @@ export function facetsCollection(
       route: '/db-facets',
       title: '合集',
       inspector: true,
-      blurb: '工作区全局合集定义，可贴到任意表的记录。列表 db_list /facets；某合集已贴过哪些记录用 filter.facetId。新建 db_create /facets records=[{title}]（id 由标题 slug）。改名或属性 db_update /facets/<id>，fields 为 JSON 数组 [{key,type,label}]。正文 notes 用 db_content（和页面、任务一样的编辑器）。把合集贴到某条记录：db_update 那条记录的 facet 字段。本表没有 db_action。',
+      blurb: '工作区全局合集定义，可贴到任意表的记录。列表 db_list /facets；某合集已贴过哪些记录用 filter.facetId。新建 db_create /facets records=[{title}]（id 由标题 slug）。改名或属性 db_update /facets/<id>，fields 为 JSON 数组 [{key,type,label}]。正文 notes 用 db_content。把合集贴到某条记录并填属性：db_update 那条记录，content.facet={tags:[合集id],values:{导演:"查泽雷"}}（扁平属性名即可）。本表没有 db_action。',
       order: 31,
       icon: 'rectangle-stack',
     },

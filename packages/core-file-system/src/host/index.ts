@@ -12,6 +12,8 @@ import {
   asImageSrc,
   asImageSrcList,
   isFacetFieldType,
+  bindSchemaValue,
+  emptySchemaValue,
   normalizeSchemaValue,
   schemaSearchHaystack,
   withBuiltinFields,
@@ -28,6 +30,7 @@ import {
   type Database,
   type DbRecord,
   type FieldSpec,
+  type SchemaFieldValue,
   type ListPage,
   type PersonValue,
   parseContentJump,
@@ -301,6 +304,99 @@ function coerce(field: FieldSpec, value: unknown) {
     if (typeof rec.sessionId === 'string' || rec.kind === 'agent' || rec.kind === 'user') return value
   }
   return String(value ?? '')
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function packFieldKey(pack: CollectionSchemaPack | null | undefined, name: string) {
+  const want = String(name ?? '').trim()
+  if (!pack || !want) return want
+  for (const field of pack.fields) {
+    if (field.key === want || field.label === want) return field.key
+  }
+  return want
+}
+
+function remapFacetBag(pack: CollectionSchemaPack | null | undefined, bag: Record<string, unknown>) {
+  const out: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(bag)) {
+    const field = packFieldKey(pack, key)
+    if (!field) continue
+    if (value == null || value === '') {
+      delete out[field]
+      continue
+    }
+    out[field] = value
+  }
+  return out
+}
+
+/** Agent 常写成扁平 values（中文属性名），权威形状是 values[合集id][字段key]。 */
+function coerceFacetPatch(
+  raw: unknown,
+  current: SchemaFieldValue,
+  resolvePack: (idOrLabel: string) => CollectionSchemaPack | null,
+): SchemaFieldValue {
+  let parsed: unknown = raw
+  if (typeof parsed === 'string' && parsed.trim()) {
+    try {
+      parsed = JSON.parse(parsed) as unknown
+    } catch {
+      parsed = raw
+    }
+  }
+  if (Array.isArray(parsed)) {
+    const tags = parsed.map((item) => resolvePack(String(item))?.id ?? String(item).trim()).filter(Boolean)
+    return bindSchemaValue(tags, current.values)
+  }
+  if (!isPlainObject(parsed)) return normalizeSchemaValue(parsed)
+  const rec = parsed
+  const rawTags = Array.isArray(rec.tags)
+    ? rec.tags.map((item) => String(item).trim()).filter(Boolean)
+    : rec.tags == null
+      ? current.tags
+      : []
+  const tags = [...new Set(rawTags.map((item) => resolvePack(item)?.id ?? item).filter(Boolean))]
+  const bags: SchemaFieldValue['values'] = {}
+  for (const id of tags) bags[id] = { ...(current.values[id] ?? {}) }
+  const applyBag = (packId: string, bag: Record<string, unknown>) => {
+    const id = resolvePack(packId)?.id ?? packId
+    if (!tags.includes(id)) return
+    bags[id] = { ...bags[id], ...remapFacetBag(resolvePack(id), bag) }
+  }
+  if (isPlainObject(rec.values)) {
+    const nested: Array<[string, Record<string, unknown>]> = []
+    const flat: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(rec.values)) {
+      const pack = resolvePack(key)
+      const packId = pack?.id ?? (tags.includes(key) ? key : '')
+      if (packId && isPlainObject(value)) nested.push([packId, value])
+      else flat[key] = value
+    }
+    for (const [id, bag] of nested) applyBag(id, bag)
+    if (Object.keys(flat).length) {
+      if (tags.length === 1) applyBag(tags[0]!, flat)
+      else {
+        for (const [key, value] of Object.entries(flat)) {
+          const hit = tags
+            .map((id) => resolvePack(id))
+            .find((pack) => pack?.fields.some((field) => field.key === key || field.label === key))
+          if (hit) applyBag(hit.id, { [key]: value })
+        }
+      }
+    }
+  }
+  for (const [key, value] of Object.entries(rec)) {
+    if (key === 'tags' || key === 'values') continue
+    if (tags.length === 1) applyBag(tags[0]!, { [key]: value })
+    else {
+      const hit = tags.map((id) => resolvePack(id)).find((pack) => pack?.fields.some((field) => field.key === key || field.label === key))
+      if (hit) applyBag(hit.id, { [key]: value })
+    }
+  }
+  return bindSchemaValue(tags, bags)
 }
 
 function pickWritablePatch(schema: CollectionSchema, patch: Record<string, unknown>) {
@@ -709,6 +805,13 @@ export class DatabaseService extends Service implements Database {
     return Boolean(spec.records?.update && spec.update)
   }
 
+  private persistRecordFacet(spec: CollectionSpec, recordId: string, facet: unknown, record: DbRecord) {
+    const next = normalizeSchemaValue(facet)
+    const labelKey = schemaFor(spec).labelField ?? 'title'
+    this.facets.writeRecordFacet(spec.path, recordId, next, String(record[labelKey] ?? record.id))
+    return next
+  }
+
   private indexFacetRecord(spec: CollectionSpec, record: DbRecord) {
     if (!schemaFor(spec).fields.facet) return
     const labelKey = schemaFor(spec).labelField ?? 'title'
@@ -739,21 +842,24 @@ export class DatabaseService extends Service implements Database {
     if (!spec) throw new Error(`unknown collection: /${parts[0]}`)
     const schema = schemaFor(spec)
     const raw = parseContent(content)
+    const current = await spec.get(parts[1]!)
+    if (!current) throw new Error(`unknown record: ${spec.path}/${parts[1]}`)
+    if ('facet' in raw && schema.fields.facet) {
+      if (!schema.fields.facet.writable || schema.fields.facet.computed) throw new Error(`field not writable: facet`)
+      raw.facet = coerceFacetPatch(raw.facet, normalizeSchemaValue(this.decorateRecord(spec, current).facet), (id) =>
+        this.facets.get(id),
+      )
+    }
     if (!this.collectionCanUpdate(spec)) {
       const keys = Object.keys(raw)
       const overlayKeys = new Set(['facet', 'emoji', 'tags'])
       if (!keys.length || keys.some((key) => !overlayKeys.has(key))) {
         throw new Error(`collection cannot update: ${spec.path}`)
       }
-      const current = await spec.get(parts[1]!)
-      if (!current) throw new Error(`unknown record: ${spec.path}/${parts[1]}`)
       let next: DbRecord = { ...this.decorateRecord(spec, current) }
       if ('facet' in raw) {
-        if (!schema.fields.facet?.writable || schema.fields.facet.computed) throw new Error(`field not writable: facet`)
         const nextSchema = coerce(schema.fields.facet, raw.facet)
-        const labelKey = schema.labelField ?? 'title'
-        this.facets.writeRecordFacet(spec.path, current.id, nextSchema, String(current[labelKey] ?? current.id))
-        next = { ...next, facet: nextSchema }
+        next = { ...next, facet: this.persistRecordFacet(spec, current.id, nextSchema, next) }
       }
       if ('emoji' in raw || 'tags' in raw) {
         if ('emoji' in raw && (!schema.fields.emoji?.writable || schema.fields.emoji.computed)) {
@@ -784,16 +890,8 @@ export class DatabaseService extends Service implements Database {
     await assertSameTableLinks(spec, patch, parts[1])
     let record = await spec.update(parts[1]!, patch)
     await this.stampActor(spec.path, record.id)
-    if (spec.path === '/facets' && schema.fields.facet && 'facet' in patch) {
-      const nextFacet = coerce(schema.fields.facet, patch.facet)
-      const labelKey = schema.labelField ?? 'title'
-      this.facets.writeRecordFacet(
-        spec.path,
-        record.id,
-        nextFacet as ReturnType<typeof normalizeSchemaValue>,
-        String(record[labelKey] ?? record.id),
-      )
-      record = { ...record, facet: nextFacet }
+    if (schema.fields.facet && 'facet' in patch) {
+      record = { ...record, facet: this.persistRecordFacet(spec, record.id, patch.facet, record) }
     }
     this.indexFacetRecord(spec, this.decorateRecord(spec, record))
     this.bump()
@@ -810,6 +908,9 @@ export class DatabaseService extends Service implements Database {
     const rows = parseRecords(content)
     const records: Record<string, unknown>[] = []
     for (const row of rows) {
+      if ('facet' in row && schema.fields.facet) {
+        row.facet = coerceFacetPatch(row.facet, emptySchemaValue(), (id) => this.facets.get(id))
+      }
       const patch = pickWritablePatch(schema, row)
       await assertSameTableLinks(spec, patch)
       records.push(patch)
@@ -817,6 +918,9 @@ export class DatabaseService extends Service implements Database {
     const created = await spec.create(records)
     for (const record of created) {
       await this.stampActor(spec.path, record.id)
+      if (schema.fields.facet) {
+        this.persistRecordFacet(spec, record.id, record.facet, record)
+      }
       this.indexFacetRecord(spec, record)
     }
     this.bump()
@@ -1234,7 +1338,7 @@ export function apply(ctx: Context) {
   })
   ctx.tools.register({
     name: 'db_update',
-    description: '按表结构 schema 的可写字段更新一条已有记录，路径为 /<表>/<id>。成功只返回 {ok, path}，不回整行。合集（facet 字段）在所有表都可写，包括 records.update 为 false 的表（如 /plugins）；其它字段仍看 caps。新建用 db_create，正文用 db_content。改合集属性用 db_update path=/facets/<id> content.fields。',
+    description: '按表结构 schema 的可写字段更新一条已有记录，路径为 /<表>/<id>。成功只返回 {ok, path}，不回整行。把合集贴到页面并填属性：content.facet={tags:["facet-2"],values:{导演:"查泽雷",年份:2016}}（values 用合集属性的中文名或 key 即可，不必再包一层合集 id）。改合集定义（名称、属性列表）用 db_update /facets/<id> content.fields。新建用 db_create，正文用 db_content。',
     parameters: {
       type: 'object',
       properties: {

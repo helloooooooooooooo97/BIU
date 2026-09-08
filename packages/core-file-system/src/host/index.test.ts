@@ -1060,6 +1060,46 @@ test('db_update /facets writes facet field packs', async () => {
   assert.equal(read.value, '# 合集说明')
 })
 
+test('db_update page facet stores flat property values on the stamp', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  const pages = new Map<string, Record<string, unknown>>([['p1', { id: 'p1', title: '爱乐之城' }]])
+  db.register({
+    id: 'pages',
+    path: '/pages',
+    schema: { fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string', writable: true } } },
+    records: { update: true },
+    list: () => [...pages.values()] as { id: string }[],
+    get: (id) => pages.get(id) as { id: string } | undefined,
+    update: (id, patch) => {
+      const next = { ...pages.get(id), ...patch, id }
+      pages.set(id, next)
+      return next as { id: string }
+    },
+  })
+  db.register(facetsCollection(db.facets))
+  const created = await db.create('/facets', [{ title: '电影' }])
+  const id = String(created.items[0]?.value.id)
+  await db.update(`/facets/${id}`, {
+    fields: JSON.stringify([
+      { key: 'director', type: 'string', label: '导演' },
+      { key: 'year', type: 'number', label: '年份' },
+      { key: 'score', type: 'number', label: '评分' },
+    ]),
+  })
+  const tagged = await db.update('/pages/p1', {
+    facet: { tags: [id], values: { 导演: '查泽雷', 年份: 2016, 评分: 8.6 } },
+  })
+  assert.deepEqual(tagged.value.facet, {
+    tags: [id],
+    values: { [id]: { director: '查泽雷', year: 2016, score: 8.6 } },
+  })
+  assert.equal(db.facets.recordFacet('/pages', 'p1')?.values[id]?.director, '查泽雷')
+  const merged = await db.update('/pages/p1', { facet: { values: { 导演: 'Damien Chazelle' } } })
+  assert.equal(merged.value.facet.values[id].director, 'Damien Chazelle')
+  assert.equal(merged.value.facet.values[id].year, 2016)
+})
+
 test('tables without records.create/delete reject create and delete', async () => {
   const ctx = new Context()
   const db = new DatabaseService(ctx)
