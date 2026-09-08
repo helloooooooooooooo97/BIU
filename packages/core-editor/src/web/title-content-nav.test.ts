@@ -12,11 +12,11 @@ import {
 
 const none = { shiftKey: false }
 
-test('empty caret at doc start leaves for title on Backspace/Delete and ArrowUp', () => {
+test('empty caret at doc start leaves for title on Backspace/Delete, ArrowUp and Enter', () => {
   assert.equal(shouldLeaveContentForTitle('Backspace', none, 1, true, 1), true)
   assert.equal(shouldLeaveContentForTitle('Delete', none, 1, true, 1), true)
   assert.equal(shouldLeaveContentForTitle('ArrowUp', none, 1, true, 1), true)
-  assert.equal(shouldLeaveContentForTitle('Enter', none, 1, true, 1), false)
+  assert.equal(shouldLeaveContentForTitle('Enter', none, 1, true, 1), true)
   assert.equal(shouldLeaveContentForTitle('Backspace', { shiftKey: true }, 1, true, 1), false)
   assert.equal(shouldLeaveContentForTitle('Backspace', none, 2, true, 1), false)
   assert.equal(shouldLeaveContentForTitle('Backspace', none, 1, false, 1), false)
@@ -96,13 +96,16 @@ test('Backspace in the middle of a paragraph does not jump to the title', () => 
   host.remove()
 })
 
-test('Enter at the start of TipTap stays in the document', () => {
+test('Enter at the start of TipTap focuses the title and does not insert a blank paragraph', () => {
   const { editor, host } = makeEditor('hello')
   editor.chain().focus().setTextSelection(Selection.atStart(editor.state.doc)).run()
   const title = listenTitle()
-  press(editor, 'Enter')
+  const before = editor.getMarkdown()
+  const event = press(editor, 'Enter')
   title.stop()
-  assert.equal(title.hits(), 0)
+  assert.equal(event.defaultPrevented, true)
+  assert.equal(title.hits(), 1)
+  assert.equal(editor.getMarkdown(), before)
   editor.destroy()
   host.remove()
 })

@@ -8,7 +8,7 @@ export function isDocStartSelection(from: number, empty: boolean, docStart: numb
   return empty && from === docStart
 }
 
-/** 正文最开头空选区：上方向键或退格（Mac 上的 Delete）回到标题末尾。 */
+/** 正文最开头空选区：上方向键、回车或退格（Mac 上的 Delete）回到标题末尾。 */
 export function shouldLeaveContentForTitle(
   key: string,
   flags: { shiftKey: boolean; altKey?: boolean; metaKey?: boolean; ctrlKey?: boolean; isComposing?: boolean },
@@ -18,7 +18,7 @@ export function shouldLeaveContentForTitle(
 ) {
   if (flags.isComposing) return false
   if (flags.shiftKey || flags.altKey || flags.metaKey || flags.ctrlKey) return false
-  if (key !== 'ArrowUp' && key !== 'Backspace' && key !== 'Delete') return false
+  if (key !== 'ArrowUp' && key !== 'Enter' && key !== 'Backspace' && key !== 'Delete') return false
   return isDocStartSelection(from, empty, docStart)
 }
 

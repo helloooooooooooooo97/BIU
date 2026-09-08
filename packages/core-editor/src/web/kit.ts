@@ -7,6 +7,7 @@ import { BlockMath, InlineMath, Mathematics } from '@tiptap/extension-mathematic
 import Placeholder from '@tiptap/extension-placeholder'
 import { TableKit } from '@tiptap/extension-table'
 import StarterKit from '@tiptap/starter-kit'
+import { Paragraph } from '@tiptap/extension-paragraph'
 import { common, createLowlight } from 'lowlight'
 import { pageTextStyle, pageHighlight, Color } from './color-marks.ts'
 import { headingSkin } from './heading-skin.ts'
@@ -18,6 +19,27 @@ import { openMathPop } from './math-pop.ts'
 function latexFromMarkdown(raw: unknown) {
   return String(raw ?? '').trim().replace(/\\([`*_[\]~])/g, '$1')
 }
+
+function isBlankParagraph(node: { content?: unknown } | null | undefined) {
+  const content = Array.isArray(node?.content) ? node.content : []
+  if (content.length === 0) return true
+  if (content.length !== 1) return false
+  const item = content[0] as { type?: string; text?: string }
+  if (item?.type !== 'text') return false
+  const text = String(item.text ?? '')
+    .replace(/\u00a0/g, '')
+    .replace(/&nbsp;/gi, '')
+    .trim()
+  return !text
+}
+
+/** 官方空段会写成 &nbsp;，源码/正文里会直接看见这串字符。空段改成真正的空行。 */
+const pageParagraph = Paragraph.extend({
+  renderMarkdown: (node, h) => {
+    if (!node || isBlankParagraph(node)) return ''
+    return h.renderChildren(Array.isArray(node.content) ? node.content : [])
+  },
+})
 
 function mathAnchor(editor: Editor, pos: number) {
   const dom = editor.view.nodeDOM(pos)
@@ -177,7 +199,9 @@ export function pageEditorExtensions() {
     StarterKit.configure({
       heading: { levels: [1, 2, 3] },
       codeBlock: false,
+      paragraph: false,
     }),
+    pageParagraph,
     pageCodeBlock,
     Markdown,
     pageTextStyle,
