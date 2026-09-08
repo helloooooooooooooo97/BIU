@@ -106,6 +106,50 @@ test('text pick round-trips markdown source line numbers', () => {
   }), '三尺微命')
 })
 
+test('text pick with > in source still round-trips as a chip handle', () => {
+  const text = formatPicks([
+    {
+      kind: 'text',
+      id: 'gt1',
+      label: 'x',
+      route: '/s/abc',
+      path: '/pages/p000',
+      start_line: 3,
+      end_line: 5,
+      text: '千里逢迎，高朋满座。>\n层峦耸翠',
+      selection: '高朋满座',
+    },
+  ])
+  assert.match(text, /&gt;/)
+  const parsed = parsePicks(text)
+  assert.equal(parsed.refs.length, 1)
+  assert.equal(parsed.refs[0]?.text, '千里逢迎，高朋满座。>\n层峦耸翠')
+  assert.equal(parsed.rest, '')
+  const parts = splitPickStream(text)
+  assert.equal(parts.length, 1)
+  assert.equal(parts[0]?.type, 'pick')
+})
+
+test('legacy unescaped > inside text attr still parses', () => {
+  const raw = '<pick kind="text" id="x" route="/s/a" path="/pages/p000" start_line="3" end_line="5" text="甲 > 乙" />'
+  const parsed = parsePicks(raw)
+  assert.equal(parsed.refs.length, 1)
+  assert.equal(parsed.refs[0]?.text, '甲 > 乙')
+})
+
+test('pick text with highlight HTML still becomes one chip', () => {
+  const raw =
+    '<pick kind="text" id="3c6fe4e9" route="/s/abc" path="/pages/p000" start_line="7" end_line="9" text="**<mark data-color=&quot;color-mix(in srgb, #c4554d 22%, transparent)&quot;>遥襟甫畅</mark>高而北辰远。**" selection="遥襟甫畅" />'
+  const parsed = parsePicks(raw)
+  assert.equal(parsed.refs.length, 1)
+  assert.equal(parsed.refs[0]?.id, '3c6fe4e9')
+  assert.match(parsed.refs[0]?.text ?? '', /遥襟甫畅/)
+  assert.equal(parsed.refs[0]?.selection, '遥襟甫畅')
+  assert.equal(parsed.rest, '')
+  const parts = splitPickStream(raw)
+  assert.equal(parts[0]?.type, 'pick')
+})
+
 test('selected body text becomes a text pick', () => {
   const fake = {
     isCollapsed: false,

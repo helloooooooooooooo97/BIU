@@ -65,11 +65,16 @@ export function formatPicks(refs: PickRef[]) {
     .join('\n')
 }
 
-const PICK_TAG = /<pick\b([^>]*)\/>/gi
+const PICK_TAG = /<pick\b((?:[^>"']|"[^"]*"|'[^']*')*)\s*\/?>/gi
 const ATTR = /(\w+)="([^"]*)"/g
 
 function unescapeAttr(value: string) {
-  return value.replace(/&#10;/g, '\n').replace(/&quot;/g, '"').replace(/&amp;/g, '&')
+  return value
+    .replace(/&#10;/g, '\n')
+    .replace(/&quot;/g, '"')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
 }
 
 function parsePickAttrs(raw: string): PickRef | null {
@@ -157,7 +162,12 @@ export function parsePicks(text: string): { refs: PickRef[]; rest: string } {
 }
 
 function escapeAttr(value: string) {
-  return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/\n/g, '&#10;')
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\n/g, '&#10;')
 }
 
 export function lineSpanLabel(ref: PickRef) {
