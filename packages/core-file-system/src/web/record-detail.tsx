@@ -138,6 +138,7 @@ export function RecordDetail({
   canNext,
   headingOutline = true,
   toolbar,
+  collectionPath,
 }: {
   selected: DbRecord
   schema: CollectionSchema
@@ -157,6 +158,7 @@ export function RecordDetail({
   canNext?: boolean
   headingOutline?: boolean
   toolbar?: ReactNode
+  collectionPath?: string
 }) {
   useEffect(() => {
     const onTitle = () => {
@@ -277,6 +279,7 @@ export function RecordDetail({
                           spec={spec}
                           value={detailBody}
                           writable={spec.writable}
+                          path={collectionPath ? `${collectionPath}/${selected.id}` : undefined}
                           onChange={(next) => void writePatch(selected, { [key]: next })}
                         />
                       </div>

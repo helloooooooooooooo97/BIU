@@ -74,6 +74,8 @@ export type FsContentProps = {
   value: unknown
   writable?: boolean
   onChange?: (next: unknown) => void
+  /** 记录路径，如 /pages/p002，给选区 pick 注入 db_content 句柄。 */
+  path?: string
 }
 
 /** 集合自定义呈现：谁 registerView(path)，谁才能在该 path 用这个 mode。 */

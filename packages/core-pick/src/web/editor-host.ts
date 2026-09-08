@@ -1,8 +1,17 @@
 export type EditorTextLocus = { start_line: number; end_line: number; text: string }
 
 export type EditorTextHost = {
+  /** db_content 路径，如 /pages/p002 */
+  path?: string
+  /** 工作区 Markdown，页面为 .page/<id>.md */
+  file?: string
   locusFromSelection: () => EditorTextLocus | null
   locusFromElement: (el: Element) => EditorTextLocus | null
+}
+
+export function pickContentFile(path: string) {
+  const id = path.match(/^\/pages\/([^/]+)$/)?.[1]
+  return id ? `.page/${id}.md` : undefined
 }
 
 const hosts = new WeakMap<Element, EditorTextHost>()

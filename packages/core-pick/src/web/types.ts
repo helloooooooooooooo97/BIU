@@ -6,6 +6,10 @@ export type PickRef = {
   action?: string
   label: string
   route: string
+  /** db_content 路径，如 /pages/p002。 */
+  path?: string
+  /** 工作区正文文件，页面为 .page/<id>.md。 */
+  file?: string
   /** Markdown 源码行号（1-based），不是可视编辑器行。 */
   start_line?: number
   end_line?: number
@@ -38,6 +42,7 @@ export function dedupePicks(refs: PickRef[]): PickRef[] {
       route: ref.route || prev.route,
       ...(ref.action || prev.action ? { action: ref.action || prev.action } : {}),
       ...locusFields(ref.start_line != null ? ref : prev),
+      ...sourceFields(ref.path || ref.file ? ref : prev),
     })
   }
   return [...map.values()]
@@ -50,6 +55,8 @@ export function formatPicks(refs: PickRef[]) {
       if (ref.action) attrs.push(`action="${escapeAttr(ref.action)}"`)
       if (ref.route) attrs.push(`route="${escapeAttr(ref.route)}"`)
       if (ref.label) attrs.push(`label="${escapeAttr(ref.label)}"`)
+      if (ref.path) attrs.push(`path="${escapeAttr(ref.path)}"`)
+      if (ref.file) attrs.push(`file="${escapeAttr(ref.file)}"`)
       if (ref.start_line != null) attrs.push(`start_line="${ref.start_line}"`)
       if (ref.end_line != null) attrs.push(`end_line="${ref.end_line}"`)
       if (ref.text) attrs.push(`text="${escapeAttr(ref.text)}"`)
@@ -84,11 +91,21 @@ function parsePickAttrs(raw: string): PickRef | null {
     ...(attrs.action?.trim() ? { action: attrs.action.trim() } : {}),
     label: attrs.label?.trim() || id,
     route: attrs.route?.trim() || '',
+    ...sourceFields({ path: attrs.path?.trim(), file: attrs.file?.trim() }),
     ...locusFields({
       start_line: Number.isInteger(start) && start >= 1 ? start : undefined,
       end_line: Number.isInteger(end) && end >= 1 ? end : undefined,
       text: text || undefined,
     }),
+  }
+}
+
+function sourceFields(ref: { path?: string; file?: string }) {
+  const path = ref.path?.trim()
+  const file = ref.file?.trim()
+  return {
+    ...(path ? { path } : {}),
+    ...(file ? { file } : {}),
   }
 }
 
@@ -149,7 +166,9 @@ export function lineSpanLabel(ref: PickRef) {
 
 export function chipLabel(ref: PickRef) {
   const lines = lineSpanLabel(ref)
+  const where = ref.file || ref.path
   if (ref.action) return `${ref.label} · ${ref.action}`
+  if (lines && where) return `${lines} ${where}`
   if (lines) return `${lines} ${ref.label}`
   return ref.label
 }
@@ -172,7 +191,16 @@ export function withPickLocus(ref: PickRef, locus: { start_line: number; end_lin
   return {
     ...ref,
     id: pickIdFromText(`${locus.start_line}:${locus.end_line}:${locus.text || ref.label}`),
+    ...sourceFields(ref),
     ...locusFields(locus),
+  }
+}
+
+export function withHostSource(ref: PickRef, node: Node | null): PickRef {
+  const host = editorHostFromNode(node)
+  return {
+    ...ref,
+    ...sourceFields({ path: host?.path || ref.path, file: host?.file || ref.file }),
   }
 }
 
@@ -188,7 +216,10 @@ export function textPickFromSelection(
   const anchor = 'anchorNode' in selection ? (selection as Selection).anchorNode : null
   const host = editorHostFromNode(anchor)
   const locus = host ? host.locusFromSelection() : null
-  return withPickLocus({ kind: 'text', id: pickIdFromText(raw), label, route }, locus)
+  return withPickLocus(
+    withHostSource({ kind: 'text', id: pickIdFromText(raw), label, route }, anchor),
+    locus,
+  )
 }
 
 export function pickChipAttrs(ref: PickRef) {
@@ -198,6 +229,8 @@ export function pickChipAttrs(ref: PickRef) {
     label: ref.label,
     route: ref.route,
     action: ref.action ?? null,
+    path: ref.path ?? null,
+    file: ref.file ?? null,
     start_line: ref.start_line ?? null,
     end_line: ref.end_line ?? null,
     text: ref.text ?? null,
@@ -209,6 +242,8 @@ export function pickRefFromAttrs(attrs: Record<string, unknown>): PickRef | null
   const id = String(attrs.id ?? '').trim()
   if (!kind || !id) return null
   const action = String(attrs.action ?? '').trim()
+  const path = String(attrs.path ?? '').trim()
+  const file = String(attrs.file ?? '').trim()
   const start = Number(attrs.start_line)
   const end = Number(attrs.end_line)
   const text = typeof attrs.text === 'string' ? attrs.text.trim() : ''
@@ -218,6 +253,7 @@ export function pickRefFromAttrs(attrs: Record<string, unknown>): PickRef | null
     label: String(attrs.label ?? '').trim() || id,
     route: String(attrs.route ?? ''),
     ...(action ? { action } : {}),
+    ...sourceFields({ path, file }),
     ...locusFields({
       start_line: Number.isInteger(start) && start >= 1 ? start : undefined,
       end_line: Number.isInteger(end) && end >= 1 ? end : undefined,

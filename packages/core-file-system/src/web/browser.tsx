@@ -2985,6 +2985,7 @@ export function CollectionBrowser({
           onNext={total > 1 ? () => void stepViewRecord(1) : undefined}
           canPrev={viewIndex == null ? total > 1 : viewIndex > 0}
           canNext={viewIndex == null ? total > 1 : viewIndex < total - 1}
+          collectionPath={collectionPath}
         />
       ) : null}
         </div>

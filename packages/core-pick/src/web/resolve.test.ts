@@ -75,11 +75,15 @@ test('text pick round-trips markdown source line numbers', () => {
       id: 'a1',
       label: '第一段',
       route: '/pages/home',
+      path: '/pages/home',
+      file: '.page/home.md',
       start_line: 5,
       end_line: 6,
       text: '第一段\n\nUNIQUESEL',
     },
   ])
+  assert.match(text, /path="\/pages\/home"/)
+  assert.match(text, /file="\.page\/home.md"/)
   assert.match(text, /start_line="5"/)
   assert.match(text, /end_line="6"/)
   assert.match(text, /text="第一段&#10;&#10;UNIQUESEL"/)
@@ -87,6 +91,8 @@ test('text pick round-trips markdown source line numbers', () => {
   assert.equal(parsed.refs[0]?.start_line, 5)
   assert.equal(parsed.refs[0]?.end_line, 6)
   assert.equal(parsed.refs[0]?.text, '第一段\n\nUNIQUESEL')
+  assert.equal(parsed.refs[0]?.path, '/pages/home')
+  assert.equal(parsed.refs[0]?.file, '.page/home.md')
 })
 
 test('selected body text becomes a text pick', () => {

@@ -12,7 +12,7 @@ import { editorHostIsLive } from './editor-live.ts'
 import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, isDocStartSelection } from './title-content-nav.ts'
 import { tryContentJump, contentJumpForRecord } from './content-jump.ts'
 import { CONTENT_JUMP_EVENT } from '@biu/type-file-system'
-import { bindEditorTextHost } from '@biu/core-pick/web'
+import { bindEditorTextHost, pickContentFile } from '@biu/core-pick/web'
 import { markdownLocusFromElement, markdownLocusFromSelection } from './markdown-locus.ts'
 
 /** 本地正在打字时不要用远端正文盖掉；源码模式 / 未挂上的编辑器不算在打字。 */
@@ -102,7 +102,7 @@ function TableBar({ editor }: { editor: Editor }) {
   )
 }
 
-export function PageEditor({ record, value, writable, onChange }: FsContentProps) {
+export function PageEditor({ record, value, writable, onChange, path }: FsContentProps) {
   const source = usePageSourceMode(record.id)
   const saved = useRef(asMarkdown(value))
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -206,11 +206,13 @@ export function PageEditor({ record, value, writable, onChange }: FsContentProps
     if (!editor || editor.isDestroyed || source) return
     const el = editor.view.dom
     bindEditorTextHost(el, {
+      path: path || undefined,
+      file: path ? pickContentFile(path) : undefined,
       locusFromSelection: () => markdownLocusFromSelection(editor),
       locusFromElement: (node) => markdownLocusFromElement(editor, node),
     })
     return () => bindEditorTextHost(el, null)
-  }, [editor, source])
+  }, [editor, source, path])
 
   useEffect(() => {
     if (!editor || editor.isDestroyed || !source) return
