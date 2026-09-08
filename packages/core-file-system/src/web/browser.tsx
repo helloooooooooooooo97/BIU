@@ -2039,8 +2039,6 @@ export function CollectionBrowser({
   function RecordActions({ row, place }: { row: DbRecord; place: 'row' | 'detail' }) {
     const Actions = chrome?.Actions
     const Action = chrome?.Action
-    const DetailTools = chrome?.DetailTools
-    const extras = place === 'detail' && DetailTools ? <DetailTools record={row} /> : null
     const busy = actingRef.current
     const placed = placedActions(schema, place).filter((action) => {
       if (place !== 'detail' || !nested) return true
@@ -2057,15 +2055,8 @@ export function CollectionBrowser({
         </div>
       )
     if (Actions) {
-      if (!placed.length && !extras) return null
-      return wrap(
-        <>
-          {placed.length ? (
-            <Actions actions={placed} record={row} busy={busy} place={place} run={(action) => void runAction(row, action)} />
-          ) : null}
-          {extras}
-        </>,
-      )
+      if (!placed.length) return null
+      return wrap(<Actions actions={placed} record={row} busy={busy} place={place} run={(action) => void runAction(row, action)} />)
     }
     const actions = visibleActions(schema, row, place).filter((action) => {
       if (place !== 'detail' || !nested) return true
@@ -2074,30 +2065,27 @@ export function CollectionBrowser({
     const rowShown = actions.filter(
       (action) => Action || actionIcon(action.id) || action.id === 'open-split' || action.id === 'open-page',
     )
-    if (!rowShown.length && !extras) return null
+    if (!rowShown.length) return null
     return wrap(
-      <>
-        {rowShown.map((action) => {
-          const run = () => void runAction(row, action)
-          if (Action) return <Action key={action.id} action={action} record={row} busy={busy} run={run} />
-          const glyph = actionIcon(action.id)
-          return (
-            <button
-              key={action.id}
-              type="button"
-              className={`tasks-icon-btn${action.tone === 'danger' ? ' is-danger' : ''}`}
-              title={action.label}
-              data-dock-tip={action.label}
-              aria-label={`${action.label} ${labelOf(row)}`}
-              disabled={busy}
-              onClick={run}
-            >
-              {glyph ?? action.label}
-            </button>
-          )
-        })}
-        {extras}
-      </>,
+      rowShown.map((action) => {
+        const run = () => void runAction(row, action)
+        if (Action) return <Action key={action.id} action={action} record={row} busy={busy} run={run} />
+        const glyph = actionIcon(action.id)
+        return (
+          <button
+            key={action.id}
+            type="button"
+            className={`tasks-icon-btn${action.tone === 'danger' ? ' is-danger' : ''}`}
+            title={action.label}
+            data-dock-tip={action.label}
+            aria-label={`${action.label} ${labelOf(row)}`}
+            disabled={busy}
+            onClick={run}
+          >
+            {glyph ?? action.label}
+          </button>
+        )
+      }),
     )
   }
 

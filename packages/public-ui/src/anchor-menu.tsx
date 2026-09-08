@@ -10,6 +10,7 @@ export function AnchorMenu({
   role = 'listbox',
   zIndex = 200,
   minWidth = 220,
+  placement = 'bottom',
   ...rest
 }: {
   anchor: HTMLElement | null
@@ -19,6 +20,7 @@ export function AnchorMenu({
   role?: string
   zIndex?: number
   minWidth?: number
+  placement?: 'bottom' | 'right'
 } & Omit<HTMLAttributes<HTMLDivElement>, 'role' | 'className' | 'children'>) {
   const menuRef = useRef<HTMLDivElement>(null)
   const [box, setBox] = useState({ top: 0, left: 0, width: 200 })
@@ -28,6 +30,12 @@ export function AnchorMenu({
     const place = () => {
       const rect = anchor.getBoundingClientRect()
       const width = Math.max(minWidth, rect.width)
+      if (placement === 'right') {
+        const left = Math.min(rect.right + 8, Math.max(8, window.innerWidth - width - 8))
+        const top = Math.min(rect.top, Math.max(8, window.innerHeight - 8 - 120))
+        setBox({ top, left, width })
+        return
+      }
       const left = Math.min(rect.left, Math.max(8, window.innerWidth - width - 8))
       const top = rect.bottom + 4
       setBox({ top, left, width })
@@ -39,7 +47,7 @@ export function AnchorMenu({
       window.removeEventListener('resize', place)
       window.removeEventListener('scroll', place, true)
     }
-  }, [anchor, minWidth])
+  }, [anchor, minWidth, placement])
 
   if (!anchor) return null
   return createPortal(

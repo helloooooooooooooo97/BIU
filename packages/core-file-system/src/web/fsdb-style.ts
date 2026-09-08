@@ -335,7 +335,10 @@ const CSS = `
 .fsdb-detail-float-btn{display:flex;width:24px;height:24px;align-items:center;justify-content:center;margin:0;border:0;border-radius:6px;padding:0;background:transparent;color:#F0EFED;cursor:pointer}
 .fsdb-detail-float-btn svg{width:16px;height:16px}
 .fsdb-detail-float-btn:hover:not(:disabled){background:rgba(255,255,255,.08);color:#F0EFED}
-.fsdb-detail-float-btn:disabled{opacity:.3;cursor:default}
+.fsdb-detail-more-menu{min-width:168px;padding:4px;display:flex;flex-direction:column;gap:1px;background:var(--dsw-sidebar);border:1px solid var(--dsw-border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.18)}
+.fsdb-detail-more-item{display:flex;align-items:center;gap:8px;width:100%;margin:0;border:0;border-radius:6px;padding:7px 8px;background:transparent;color:var(--dsw-label);font:inherit;font-size:13px;font-weight:600;text-align:left;cursor:pointer}
+.fsdb-detail-more-item:hover,.fsdb-detail-more-item[aria-pressed=true]{background:var(--dsw-hover)}
+.fsdb-detail-more-item svg{flex:none;width:16px;height:16px;color:#F0EFED}
 .fsdb-detail-split{display:flex;flex-direction:column;flex:none;width:100%;min-height:min-content;overflow:visible}
 .fsdb-detail-main{box-sizing:border-box;width:100%;max-width:var(--dsw-chat-max-width);margin-inline:auto;display:flex;flex-direction:column;gap:8px;padding:80px 80px 24px;min-width:0}
 .fsdb-tag-collect{display:flex;flex:none;min-width:0;width:100%;min-height:320px}

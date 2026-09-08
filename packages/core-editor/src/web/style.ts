@@ -4,7 +4,6 @@ export const PAGE_EDITOR_STYLE = `
 .page-source{min-width:0;width:100%}
 .page-source .cm-editor{background:transparent}
 .page-source .cm-focused{outline:none}
-.fsdb-page .fsdb-detail-actions .tasks-icon-btn.is-on{color:var(--dsw-business)}
 .page-editor .tiptap{outline:none;min-height:240px}
 .page-block-handle{position:absolute;z-index:6;width:28px;display:flex;flex-direction:column;align-items:center;pointer-events:auto}
 .page-block-handle-grip{flex:none;display:flex;align-items:center;justify-content:center;width:22px;height:26px;margin:0;border:0;border-radius:6px;padding:0;background:transparent;color:#EFEEEC;cursor:grab}

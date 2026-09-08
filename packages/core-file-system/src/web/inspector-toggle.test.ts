@@ -145,7 +145,6 @@ test('table title opens record from the title-side button', () => {
 test('title cell row tools skip the overflow action menu', () => {
   assert.match(browser, /const Actions = chrome\?\.Actions/)
   assert.match(browser, /placedActions\(schema, place\)/)
-  assert.match(browser, /chrome\?\.DetailTools/)
   assert.match(browser, /<Actions actions=\{placed\} record=\{row\}/)
   assert.match(browser, /toolbar=\{<RecordActions row=\{selected\} place="detail" \/>\}/)
   assert.match(browser, /data-testid="fsdb-detail-actions"/)
@@ -429,6 +428,8 @@ test('database extras sit after the record detail, not in the inspector', () => 
   assert.doesNotMatch(page, /tabLabel: '数据库'/)
   assert.doesNotMatch(page, /RecordPanePanel/)
   assert.match(detail, /fsdb-detail-float-nav/)
+  assert.match(detail, /fsdb-detail-more/)
+  assert.match(detail, /chrome\?\.DetailTools/)
   assert.match(detail, /按视图顺序切换记录/)
   assert.match(detail, /fsdb-detail-float-btn/)
   assert.match(browser, /findViewNeighbor/)

@@ -1,12 +1,12 @@
 import { useEffect, useState, type ReactNode, type Dispatch, type SetStateAction } from 'react'
 import type { CollectionChrome } from '@biu/type-file-system/ui'
 import type { CollectionSchema, DbRecord, FieldSpec } from '@biu/type-file-system'
-import { ChevronDownIcon, ChevronUpIcon, HashtagIcon } from '@heroicons/react/16/solid'
+import { ChevronDownIcon, ChevronUpIcon, EllipsisHorizontalIcon, HashtagIcon } from '@heroicons/react/16/solid'
+import { AnchorMenu, RecordEmojiBoard } from '@biu/public-ui'
 import { contentFieldKey, fieldHasValue, formatField, resolveFieldType } from './fields.ts'
 import { LocalText } from './controls.tsx'
 import { FilePreview } from './fsdb-cells.tsx'
 import { PropertyRow } from './property-row.tsx'
-import { RecordEmojiBoard } from '@biu/public-ui'
 import { TableGlyph } from './nav-glyphs.tsx'
 import { normalizeRecordEmoji, recordPreviewEmoji } from './sidebar-preview.ts'
 import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, shouldLeaveTitleForContent } from './title-content-nav.ts'
@@ -78,6 +78,44 @@ function DetailTitleIcon({
         />
       ) : null}
     </span>
+  )
+}
+
+function DetailMore({
+  record,
+  Tools,
+}: {
+  record: DbRecord
+  Tools: NonNullable<CollectionChrome['DetailTools']>
+}) {
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null)
+  return (
+    <>
+      <button
+        type="button"
+        className="fsdb-detail-float-btn"
+        title="操作"
+        aria-label="记录操作"
+        aria-haspopup="menu"
+        aria-expanded={Boolean(anchor)}
+        data-testid="fsdb-detail-more"
+        onClick={(event) => setAnchor((prev) => (prev ? null : event.currentTarget))}
+      >
+        <EllipsisHorizontalIcon aria-hidden />
+      </button>
+      {anchor ? (
+        <AnchorMenu
+          anchor={anchor}
+          onClose={() => setAnchor(null)}
+          className="fsdb-detail-more-menu"
+          role="menu"
+          minWidth={168}
+          placement="right"
+        >
+          <Tools record={record} onDone={() => setAnchor(null)} />
+        </AnchorMenu>
+      ) : null}
+    </>
   )
 }
 
@@ -299,28 +337,33 @@ export function RecordDetail({
             </div>
           </div>
           <HeadingOutline enabled={headingOutline} />
-          {onPrev || onNext ? (
+          {onPrev || onNext || chrome?.DetailTools ? (
             <nav className="fsdb-detail-float-nav" aria-label="按视图顺序切换记录">
-              <button
-                type="button"
-                className="fsdb-detail-float-btn"
-                title="上一条"
-                aria-label="上一条"
-                disabled={!canPrev}
-                onClick={onPrev}
-              >
-                <ChevronUpIcon aria-hidden />
-              </button>
-              <button
-                type="button"
-                className="fsdb-detail-float-btn"
-                title="下一条"
-                aria-label="下一条"
-                disabled={!canNext}
-                onClick={onNext}
-              >
-                <ChevronDownIcon aria-hidden />
-              </button>
+              {onPrev || onNext ? (
+                <button
+                  type="button"
+                  className="fsdb-detail-float-btn"
+                  title="上一条"
+                  aria-label="上一条"
+                  disabled={!canPrev}
+                  onClick={onPrev}
+                >
+                  <ChevronUpIcon aria-hidden />
+                </button>
+              ) : null}
+              {chrome?.DetailTools ? <DetailMore record={selected} Tools={chrome.DetailTools} /> : null}
+              {onPrev || onNext ? (
+                <button
+                  type="button"
+                  className="fsdb-detail-float-btn"
+                  title="下一条"
+                  aria-label="下一条"
+                  disabled={!canNext}
+                  onClick={onNext}
+                >
+                  <ChevronDownIcon aria-hidden />
+                </button>
+              ) : null}
             </nav>
           ) : null}
         </div>
