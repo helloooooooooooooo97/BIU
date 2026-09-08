@@ -169,6 +169,28 @@ test('pageBlock capture includes every registered block shell', async () => {
   assert.match(view, /data-biu-kind="plugin"/)
   assert.match(view, /data-biu-id=\{pickId\}/)
   assert.match(view, /setNodeSelection\(pos\)/)
+  assert.match(view, /data-page-block-expand/)
+  assert.match(src, /addKeyboardShortcuts/)
+  assert.match(src, /deleteSelection/)
+})
+
+test('Enter on a selected pageBlock deletes it without leaving the node', () => {
+  const editor = new Editor({
+    extensions: pageEditorExtensions(),
+    content: `hello\n\n:::pageBlock {kind=excalidraw plugin=page-excalidraw}\n{"file":"assets/x.json"}\n:::\n`,
+    contentType: 'markdown',
+  })
+  let pos = -1
+  editor.state.doc.descendants((node, p) => {
+    if (node.type.name === 'pageBlock') pos = p
+  })
+  assert.ok(pos >= 0)
+  editor.chain().setNodeSelection(pos).run()
+  assert.equal(editor.commands.keyboardShortcut('Enter'), true)
+  const types = editor.getJSON().content?.map((node) => node.type) ?? []
+  assert.equal(types.includes('pageBlock'), false)
+  assert.match(editor.getMarkdown(), /hello/)
+  editor.destroy()
 })
 
 test('registerBlock requires plugin id', () => {

@@ -450,6 +450,8 @@ test('excalidraw board onChange does not setState', async () => {
   assert.match(src, /appliedEtag/)
   assert.match(src, /function parkHost/)
   assert.match(src, /parkHost\(host\)/)
+  assert.match(src, /data-page-block-expand/)
+  assert.match(src, /host\.expanded = false/)
   assert.match(src, /export const inject/)
   assert.match(src, /View: Board/)
 })

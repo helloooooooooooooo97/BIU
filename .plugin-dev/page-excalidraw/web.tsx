@@ -202,6 +202,7 @@ function queueHostSync() {
 
 /** 卸下或卸载时先藏起来再挂到 body，避免 inset:0 铺满视口闪一下全屏。 */
 function parkHost(host: Host) {
+  host.expanded = false
   const el = host.el
   el.style.cssText =
     'position:fixed;width:0;height:0;overflow:hidden;visibility:hidden;pointer-events:none;inset:auto'
@@ -466,9 +467,12 @@ function BoardBar(props: {
       />
       <button
         type="button"
+        tabIndex={-1}
+        data-page-block-expand=""
         style={ICON_BTN}
         title={props.expanded ? '缩小' : '放大'}
         aria-label={props.expanded ? '缩小' : '放大'}
+        onMouseDown={(event) => event.preventDefault()}
         onClick={props.onToggle}
       >
         {props.expanded ? (
