@@ -8,7 +8,7 @@ import { pageEditorExtensions } from './kit.ts'
 import { PageBlockHandle } from './page-block-handle.tsx'
 import { editorHostIsLive } from './editor-live.ts'
 import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, isDocStartSelection } from './title-content-nav.ts'
-import { tryContentJump } from './content-jump.ts'
+import { tryContentJump, contentJumpForRecord } from './content-jump.ts'
 import { CONTENT_JUMP_EVENT } from '@biu/type-file-system'
 
 function jumpToPending(editor: Editor, markdown: string, recordId: string, force = false) {
@@ -172,7 +172,7 @@ export function PageEditor({ record, value, writable, onChange }: FsContentProps
       jumpToPending(editor, md, record.id)
       return
     }
-    if (editor.isFocused) return
+    if (editor.isFocused && !contentJumpForRecord(record.id)) return
     saved.current = md
     editor.commands.setContent(md, { contentType: 'markdown', emitUpdate: false })
     jumpToPending(editor, md, record.id, true)
@@ -203,7 +203,7 @@ export function PageEditor({ record, value, writable, onChange }: FsContentProps
   useEffect(() => {
     if (!editor || editor.isDestroyed) return
     const onJump = () => {
-      if (editor.isDestroyed || editor.isFocused) return
+      if (editor.isDestroyed) return
       jumpToPending(editor, asMarkdown(value), record.id)
     }
     window.addEventListener(CONTENT_JUMP_EVENT, onJump)

@@ -465,7 +465,7 @@ test('editContent view/str_replace/replace_lines/insert/write', async () => {
   assert.equal(inserted.start_line, 2)
   assert.equal((await db.content('/docs/n1')).value, 'one\nmid\nTWO\nC\nD')
   const written = await db.editContent('/docs/n1', { command: 'write', value: 'done' })
-  assert.equal('start_line' in written, false)
+  assert.equal(written.start_line, 1)
   assert.equal((await db.content('/docs/n1')).value, 'done')
 })
 

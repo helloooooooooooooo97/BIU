@@ -92,6 +92,15 @@ export function mutationLocus(
     if (!added) return { start_line, end_line: start_line }
     return { start_line, end_line: start_line + added.split('\n').length - 1 }
   }
+  if (command === 'write') {
+    const a = before.split('\n')
+    const b = next.split('\n')
+    const n = Math.max(a.length, b.length, 1)
+    for (let i = 0; i < n; i++) {
+      if ((a[i] ?? '') !== (b[i] ?? '')) return { start_line: i + 1, end_line: i + 1 }
+    }
+    return { start_line: 1, end_line: 1 }
+  }
   return null
 }
 

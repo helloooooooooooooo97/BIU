@@ -282,11 +282,12 @@ export function applyDatabaseChannelPayload(payload: unknown, currentSessionId?:
     window.dispatchEvent(new CustomEvent(SAVED_VIEW_EVENT, { detail: { collection: tablePath, view: savedView } }))
   }
   const sessionId = String((payload as { sessionId?: unknown }).sessionId ?? '').trim()
-  if (!sessionId || !currentSessionId || sessionId !== String(currentSessionId)) return
-  if (!collection || collection === '/') return
+  const sessionOk = Boolean(sessionId && currentSessionId && sessionId === String(currentSessionId))
   const phase = String((payload as { phase?: unknown }).phase ?? '')
-  if (isInspectorAgentFollow()) applyDatabaseReveal(reveal)
-  setInspectorAgentWorking(collection, phase !== 'done')
+  if (sessionOk && collection && collection !== '/') {
+    if (isInspectorAgentFollow()) applyDatabaseReveal(reveal)
+    setInspectorAgentWorking(collection, phase !== 'done')
+  }
   if (phase === 'done') {
     const jump = parseContentJump((payload as { contentJump?: unknown }).contentJump)
     if (jump) window.dispatchEvent(new CustomEvent(CONTENT_JUMP_EVENT, { detail: jump }))

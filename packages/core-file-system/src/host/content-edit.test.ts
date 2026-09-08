@@ -59,5 +59,9 @@ test('mutationLocus reports 1-based lines in the new text', () => {
     start_line: 2,
     end_line: 2,
   })
-  assert.equal(mutationLocus('write', before, 'done', { value: 'done' }), null)
+  assert.deepEqual(mutationLocus('write', before, 'done', { value: 'done' }), { start_line: 1, end_line: 1 })
+  assert.deepEqual(mutationLocus('write', before, 'one\ntwo\nTHREE\nfour', { value: 'one\ntwo\nTHREE\nfour' }), {
+    start_line: 3,
+    end_line: 3,
+  })
 })

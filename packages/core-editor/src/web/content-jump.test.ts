@@ -7,6 +7,7 @@ import {
   applyContentJump,
   clearContentJump,
   consumeContentJump,
+  peekContentJump,
   rememberContentJump,
   snippetAtLine,
   stripMarkdownLine,
@@ -68,4 +69,20 @@ test('tryContentJump waits until new text is in the doc then jumps', () => {
   assert.equal(tryContentJump(editor, after, 'home', true), true)
   assert.match(textAtCaret(editor), /改动段落 XYZ/)
   editor.destroy()
+})
+
+test('tryContentJump applies on every live editor before consuming', async () => {
+  clearContentJump()
+  const md = '# 欢迎\n\nUNIQUE_MULTI_JUMP'
+  const a = editorOf(md)
+  const b = editorOf(md)
+  rememberContentJump({ path: '/pages/home', start_line: 3, end_line: 3 })
+  assert.equal(tryContentJump(a, md, 'home', true), true)
+  assert.equal(tryContentJump(b, md, 'home', true), true)
+  assert.match(textAtCaret(a), /UNIQUE_MULTI_JUMP/)
+  assert.match(textAtCaret(b), /UNIQUE_MULTI_JUMP/)
+  await new Promise((resolve) => setTimeout(resolve, 10))
+  assert.equal(peekContentJump(), null)
+  a.destroy()
+  b.destroy()
 })

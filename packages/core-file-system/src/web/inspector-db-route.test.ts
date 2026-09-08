@@ -215,6 +215,23 @@ test('applyDatabaseChannelPayload emits content-jump on done', () => {
   assert.deepEqual(seen, [{ path: '/pages/home', start_line: 8, end_line: 10 }])
 })
 
+test('content-jump still fires when the live session does not match', () => {
+  const seen: unknown[] = []
+  const onJump = (event: Event) => seen.push((event as CustomEvent).detail)
+  window.addEventListener('biu:content-jump', onJump)
+  applyDatabaseChannelPayload(
+    {
+      phase: 'done',
+      sessionId: 'other',
+      reveal: { collection: '/pages', recordId: 'home' },
+      contentJump: { path: '/pages/home', start_line: 2, end_line: 2 },
+    },
+    'main',
+  )
+  window.removeEventListener('biu:content-jump', onJump)
+  assert.deepEqual(seen, [{ path: '/pages/home', start_line: 2, end_line: 2 }])
+})
+
 test('agent channel does not open inspector views unless follow is on', () => {
   setInspectorDbPath('database:/pages', '/database/pages')
   applyDatabaseChannelPayload(
