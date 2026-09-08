@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom'
 import { ChevronDownIcon, ChevronUpIcon, MagnifyingGlassIcon, XMarkIcon } from '@heroicons/react/16/solid'
 
 function pinHost(from: HTMLElement | null) {
+  const right = from?.closest('.fsdb-right')
+  if (right instanceof HTMLElement) return right
   const body = from?.closest('.fsdb-right-body')
   return body instanceof HTMLElement ? body : null
 }
@@ -34,9 +36,12 @@ export function FindBar({
       setHost(null)
       return
     }
+    const body = mark.current?.closest('.fsdb-right-body')
     const slot = document.createElement('div')
     slot.className = 'page-find-slot'
-    root.prepend(slot)
+    const top = body instanceof HTMLElement ? body.offsetTop + 8 : 8
+    slot.style.top = `${top}px`
+    root.appendChild(slot)
     setHost(slot)
     return () => {
       slot.remove()
