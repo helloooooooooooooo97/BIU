@@ -203,6 +203,8 @@ test('html and req page blocks register plugin id for slash', async () => {
   assert.match(html, /plugin: name/)
   assert.match(html, /kind: 'html'/)
   assert.match(html, /kind: 'htmlframe'/)
+  assert.match(html, /stampHtmlPickSurfaces/)
+  assert.match(html, /data-biu-ignore/)
   assert.match(req, /plugin: name/)
   assert.match(req, /kind: 'req'/)
 })

@@ -1,5 +1,7 @@
+import { htmlBlockKey, stampHtmlPickSurfaces } from './stamp-picks.ts'
+
 const React = globalThis.React
-const { useState } = React
+const { useLayoutEffect, useRef, useState } = React
 
 export const name = 'page-html-blocks'
 export const inject = ['pageEditor']
@@ -27,6 +29,7 @@ function SourceEditor({ html, onChange }: { html: string; onChange: (v: string) 
   return (
     <textarea
       data-testid="html-source"
+      data-biu-ignore
       spellCheck={false}
       value={html}
       onChange={(e) => onChange(e.target.value)}
@@ -85,6 +88,7 @@ function FloatBar({
   return (
     <div
       data-testid="html-floatbar"
+      data-biu-ignore
       style={{
         position: 'absolute',
         top: 6,
@@ -129,9 +133,20 @@ function HtmlDirectCard({ data, update, writable }: BlockProps) {
   const html = String(data.html ?? '')
   const [editing, setEditing] = useState(false)
   const [hover, setHover] = useState(false)
+  const previewRef = useRef<HTMLDivElement | null>(null)
+  const hostRef = useRef<HTMLDivElement | null>(null)
+
+  useLayoutEffect(() => {
+    if (editing) return
+    const preview = previewRef.current
+    if (!preview) return
+    const host = hostRef.current?.closest('[data-page-block]') ?? null
+    stampHtmlPickSurfaces(preview, htmlBlockKey(host, html))
+  }, [editing, html])
 
   return (
     <div
+      ref={hostRef}
       data-testid="page-html-direct"
       style={{ position: 'relative', width: '100%' }}
       onMouseEnter={() => setHover(true)}
@@ -143,7 +158,7 @@ function HtmlDirectCard({ data, update, writable }: BlockProps) {
       {editing ? (
         <SourceEditor html={html} onChange={(v) => update({ html: v })} />
       ) : (
-        <div style={{ overflowX: 'auto' }} dangerouslySetInnerHTML={{ __html: html }} />
+        <div ref={previewRef} style={{ overflowX: 'auto' }} dangerouslySetInnerHTML={{ __html: html }} />
       )}
     </div>
   )
@@ -183,9 +198,31 @@ function HtmlFrameCard({ data, update, writable }: BlockProps) {
   const height = Number(data.height) || 300
   const [editing, setEditing] = useState(false)
   const [hover, setHover] = useState(false)
+  const hostRef = useRef<HTMLDivElement | null>(null)
+  const frameRef = useRef<HTMLIFrameElement | null>(null)
+
+  const stampFrame = () => {
+    const frame = frameRef.current
+    if (!frame) return
+    const host = hostRef.current?.closest('[data-page-block]') ?? null
+    const key = htmlBlockKey(host, html)
+    stampHtmlPickSurfaces(frame, key)
+    try {
+      const body = frame.contentDocument?.body
+      if (body) stampHtmlPickSurfaces(body, `${key}-doc`)
+    } catch {
+      /* srcdoc + sandbox 可能读不到 contentDocument */
+    }
+  }
+
+  useLayoutEffect(() => {
+    if (editing) return
+    stampFrame()
+  }, [editing, html, height])
 
   return (
     <div
+      ref={hostRef}
       data-testid="page-html-frame"
       style={{ position: 'relative', width: '100%' }}
       onMouseEnter={() => setHover(true)}
@@ -209,10 +246,12 @@ function HtmlFrameCard({ data, update, writable }: BlockProps) {
         <SourceEditor html={html} onChange={(v) => update({ html: v })} />
       ) : (
         <iframe
+          ref={frameRef}
           data-testid="page-html-frame-preview"
           title="html-frame"
           srcDoc={html}
           sandbox="allow-scripts"
+          onLoad={stampFrame}
           style={{ display: 'block', width: '100%', height, border: 'none', background: '#15151f' }}
         />
       )}
