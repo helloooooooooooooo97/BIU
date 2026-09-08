@@ -1,4 +1,5 @@
-import { InputRule } from '@tiptap/core'
+import { InputRule, type Editor } from '@tiptap/core'
+import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Markdown } from '@tiptap/markdown'
 import Image from '@tiptap/extension-image'
 import { BlockMath, InlineMath, Mathematics } from '@tiptap/extension-mathematics'
@@ -16,8 +17,48 @@ function latexFromMarkdown(raw: unknown) {
   return String(raw ?? '').trim().replace(/\\([`*_[\]~])/g, '$1')
 }
 
+function mathAnchor(editor: Editor, pos: number) {
+  const dom = editor.view.nodeDOM(pos)
+  if (dom instanceof Element) return dom
+  try {
+    const mapped = editor.view.domAtPos(Math.max(0, pos))
+    const node = mapped.node
+    const el = node instanceof Element ? node : node.parentElement
+    return el?.closest('[data-type="inline-math"], [data-type="block-math"]') ?? el
+  } catch {
+    return null
+  }
+}
+
+function editLatex(editor: Editor | undefined, kind: 'block' | 'inline', node: { attrs: Record<string, unknown> }, pos: number) {
+  if (!editor || editor.isDestroyed) return
+  const anchor = mathAnchor(editor, pos)
+  if (!(anchor instanceof Element)) return
+  const name = kind === 'block' ? 'blockMath' : 'inlineMath'
+  openMathPop({
+    anchor,
+    latex: String(node.attrs.latex ?? ''),
+    onCommit: (next) => {
+      if (editor.isDestroyed) return
+      const current = editor.state.doc.nodeAt(pos)
+      if (!current || current.type.name !== name) return
+      if (next === String(current.attrs.latex ?? '')) return
+      const chain = editor.chain().setNodeSelection(pos)
+      if (kind === 'block') chain.updateBlockMath({ latex: next }).focus().run()
+      else chain.updateInlineMath({ latex: next }).focus().run()
+    },
+  })
+}
+
 /** 上游 insertInlineMath 读的是旧 selection，斜杠删掉 `/` 后会插到段落外，插不进去。 */
 const pageInlineMath = InlineMath.extend({
+  addOptions() {
+    const parent = this.parent?.() ?? {}
+    return {
+      ...parent,
+      katexOptions: { throwOnError: false, displayMode: false },
+    }
+  },
   addCommands() {
     const parent = this.parent?.() ?? {}
     return {
@@ -50,44 +91,58 @@ const pageInlineMath = InlineMath.extend({
   }),
 })
 
+const pageBlockMath = BlockMath.extend({
+  addOptions() {
+    const parent = this.parent?.() ?? {}
+    return {
+      ...parent,
+      katexOptions: { throwOnError: false, displayMode: true },
+    }
+  },
+  parseMarkdown: (token: { latex?: unknown }) => ({
+    type: 'blockMath',
+    attrs: { latex: latexFromMarkdown(token.latex) },
+  }),
+})
+
+const pageMathPopKey = new PluginKey('page-math-pop')
+
 const pageMathematics = Mathematics.extend({
   addExtensions() {
-    const editorOf = () => this.editor
-    const editLatex = (kind: 'block' | 'inline', node: { attrs: Record<string, unknown> }, pos: number) => {
-      const editor = editorOf()
-      if (editor.isDestroyed) return
-      const dom = editor.view.nodeDOM(pos)
-      const anchor = dom instanceof Element ? dom : null
-      if (!anchor) return
-      editor.chain().setNodeSelection(pos).focus().run()
-      const name = kind === 'block' ? 'blockMath' : 'inlineMath'
-      openMathPop({
-        anchor,
-        latex: String(node.attrs.latex ?? ''),
-        onCommit: (next) => {
-          if (editor.isDestroyed) return
-          const current = editor.state.doc.nodeAt(pos)
-          if (!current || current.type.name !== name) return
-          if (next === String(current.attrs.latex ?? '')) return
-          const chain = editor.chain().setNodeSelection(pos)
-          if (kind === 'block') chain.updateBlockMath({ latex: next }).focus().run()
-          else chain.updateInlineMath({ latex: next }).focus().run()
-        },
-      })
-    }
+    return [pageBlockMath, pageInlineMath]
+  },
+  addProseMirrorPlugins() {
+    const editor = this.editor
     return [
-      BlockMath.extend({
-        parseMarkdown: (token: { latex?: unknown }) => ({
-          type: 'blockMath',
-          attrs: { latex: latexFromMarkdown(token.latex) },
-        }),
-      }).configure({
-        katexOptions: { throwOnError: false, displayMode: true },
-        onClick: (node, pos) => editLatex('block', node, pos),
-      }),
-      pageInlineMath.configure({
-        katexOptions: { throwOnError: false, displayMode: false },
-        onClick: (node, pos) => editLatex('inline', node, pos),
+      new Plugin({
+        key: pageMathPopKey,
+        props: {
+          handleDOMEvents: {
+            click(view, event) {
+              const target = event.target
+              if (!(target instanceof Element)) return false
+              const wrap = target.closest('[data-type="inline-math"], [data-type="block-math"]')
+              if (!(wrap instanceof Element) || !view.dom.contains(wrap)) return false
+              let pos = -1
+              try {
+                pos = view.posAtDOM(wrap, 0)
+              } catch {
+                return false
+              }
+              let node = view.state.doc.nodeAt(pos)
+              if (!node || (node.type.name !== 'inlineMath' && node.type.name !== 'blockMath')) {
+                const $pos = view.state.doc.resolve(pos)
+                node = $pos.nodeAfter ?? $pos.nodeBefore ?? node
+                if ($pos.nodeAfter) pos = $pos.pos
+                else if ($pos.nodeBefore) pos = $pos.pos - $pos.nodeBefore.nodeSize
+              }
+              if (!node || (node.type.name !== 'inlineMath' && node.type.name !== 'blockMath')) return false
+              event.preventDefault()
+              editLatex(editor, node.type.name === 'blockMath' ? 'block' : 'inline', node, pos)
+              return true
+            },
+          },
+        },
       }),
     ]
   },
