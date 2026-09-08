@@ -16,6 +16,7 @@ import { bindEditorTextHost } from '@biu/core-pick/web'
 import { markdownLocusFromElement, markdownLocusFromSelection } from './markdown-locus.ts'
 import { FindBar, isFindHotkey } from './find-bar.tsx'
 import { applyEditorFind } from './find-plugin.ts'
+import { TEXT_COLORS, HIGHLIGHT_COLORS } from './color-swatches.ts'
 
 /** 本地正在打字时不要用远端正文盖掉；源码模式 / 未挂上的编辑器不算在打字。 */
 export function shouldApplyRemoteMarkdown(args: {
@@ -42,6 +43,82 @@ function asMarkdown(value: unknown) {
     return String((value as { body: string }).body)
   }
   return String(value)
+}
+
+function Swatch({
+  label,
+  value,
+  current,
+  kind,
+  onPick,
+}: {
+  label: string
+  value: string
+  current: string
+  kind: 'text' | 'mark'
+  onPick: () => void
+}) {
+  const on = Boolean(value) && current.toLowerCase() === value.toLowerCase()
+  return (
+    <button
+      type="button"
+      className={on ? 'is-on' : undefined}
+      title={label}
+      aria-label={label}
+      aria-pressed={on}
+      data-testid={kind === 'text' ? `page-color-${value || 'none'}` : `page-highlight-${value || 'none'}`}
+      onMouseDown={(event: MouseEvent) => {
+        event.preventDefault()
+        onPick()
+      }}
+    >
+      <span
+        className={kind === 'text' ? 'page-bubble-letter' : 'page-bubble-mark'}
+        style={kind === 'text' ? { color: value || '#F0EFED' } : { background: value || 'transparent' }}
+      >
+        {kind === 'text' ? 'A' : ''}
+      </span>
+    </button>
+  )
+}
+
+function ColorPicks({ editor }: { editor: Editor }) {
+  const color = String(editor.getAttributes('textStyle').color ?? '')
+  const highlight = String(editor.getAttributes('highlight').color ?? '')
+  return (
+    <>
+      <span className="page-bubble-palette" role="group" aria-label="文字颜色">
+        {TEXT_COLORS.map((item) => (
+          <Swatch
+            key={`c-${item.value || 'none'}`}
+            label={item.label}
+            value={item.value}
+            current={color}
+            kind="text"
+            onPick={() => {
+              if (!item.value) editor.chain().focus().unsetColor().run()
+              else editor.chain().focus().setColor(item.value).run()
+            }}
+          />
+        ))}
+      </span>
+      <span className="page-bubble-palette" role="group" aria-label="背景色">
+        {HIGHLIGHT_COLORS.map((item) => (
+          <Swatch
+            key={`h-${item.value || 'none'}`}
+            label={item.label}
+            value={item.value}
+            current={highlight}
+            kind="mark"
+            onPick={() => {
+              if (!item.value) editor.chain().focus().unsetHighlight().run()
+              else editor.chain().focus().toggleHighlight({ color: item.value }).run()
+            }}
+          />
+        ))}
+      </span>
+    </>
+  )
 }
 
 function Bubble({ editor }: { editor: Editor }) {
@@ -71,6 +148,7 @@ function Bubble({ editor }: { editor: Editor }) {
       {btn('</>', editor.isActive('code'), () => editor.chain().focus().toggleCode().run())}
       {btn('H1', editor.isActive('heading', { level: 1 }), () => editor.chain().focus().toggleHeading({ level: 1 }).run())}
       {btn('H2', editor.isActive('heading', { level: 2 }), () => editor.chain().focus().toggleHeading({ level: 2 }).run())}
+      <ColorPicks editor={editor} />
     </BubbleMenu>
   )
 }

@@ -4,6 +4,7 @@ import { BlockMath, InlineMath, Mathematics } from '@tiptap/extension-mathematic
 import Placeholder from '@tiptap/extension-placeholder'
 import { TableKit } from '@tiptap/extension-table'
 import StarterKit from '@tiptap/starter-kit'
+import { pageTextStyle, pageHighlight, Color } from './color-marks.ts'
 import { headingSkin } from './heading-skin.ts'
 import { pageBlock } from './page-block.ts'
 import { pageFind } from './find-plugin.ts'
@@ -43,6 +44,9 @@ export function pageEditorExtensions() {
       heading: { levels: [1, 2, 3] },
     }),
     Markdown,
+    pageTextStyle,
+    Color,
+    pageHighlight,
     Image.configure({ inline: false, allowBase64: true }),
     TableKit.configure({
       table: { resizable: true, allowTableNodeSelection: true },

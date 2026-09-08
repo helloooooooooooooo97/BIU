@@ -78,8 +78,13 @@ export const PAGE_EDITOR_STYLE = `
 .page-find-btn:hover{background:var(--dsw-hover)}
 .page-find-hit{background:color-mix(in srgb,var(--dsw-business) 22%,transparent);border-radius:2px}
 .page-find-hit.is-current{background:color-mix(in srgb,var(--dsw-business) 42%,transparent)}
-.page-bubble{display:flex;align-items:center;gap:2px;padding:4px}
+.page-bubble{display:flex;flex-wrap:wrap;align-items:center;gap:2px;padding:4px;max-width:min(360px,calc(100vw - 48px))}
 .page-bubble button{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:28px;margin:0;border:0;border-radius:6px;padding:0 7px;background:transparent;color:var(--dsw-label);font:inherit;font-size:13px;font-weight:700;cursor:pointer}
 .page-bubble button:hover,.page-bubble button.is-on{background:var(--dsw-hover)}
 .page-bubble button.is-on{color:var(--dsw-business)}
+.page-bubble-palette{display:flex;align-items:center;gap:2px;flex:1 1 100%;padding:2px 2px 0}
+.page-bubble-palette button{min-width:22px;width:22px;height:22px;padding:0}
+.page-bubble-letter{font-size:12px;font-weight:800;line-height:1;border-bottom:2px solid currentColor}
+.page-bubble-mark{display:block;width:12px;height:12px;border-radius:3px;border:1px solid var(--dsw-border);box-sizing:border-box}
+.page-editor .tiptap mark{border-radius:2px;padding:0 .08em}
 `
