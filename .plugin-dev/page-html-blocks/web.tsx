@@ -1,7 +1,9 @@
+import { createPortal } from 'react-dom'
+import { bindHtmlSlide, collectHtmlSlides, htmlDeckIndex, htmlDeckKeyAction, stepHtmlDeck } from './html-deck.ts'
 import { htmlBlockKey, stampHtmlPickSurfaces, stampHtmlSource } from './stamp-picks.ts'
 
 const React = globalThis.React
-const { useEffect, useMemo, useRef, useState } = React
+const { useEffect, useLayoutEffect, useMemo, useRef, useState } = React
 
 export const name = 'page-html-blocks'
 export const inject = ['pageEditor']
@@ -52,34 +54,203 @@ function SourceEditor({ html, onChange }: { html: string; onChange: (v: string) 
   )
 }
 
+function ExpandGlyph({ shrink }: { shrink?: boolean }) {
+  return (
+    <svg width={14} height={14} viewBox="0 0 16 16" fill="currentColor" aria-hidden>
+      {shrink ? (
+        <path
+          fillRule="evenodd"
+          d="M2.22 2.22a.75.75 0 0 1 1.06 0L5.5 4.44V2.75a.75.75 0 0 1 1.5 0v3.5a.75.75 0 0 1-.75.75h-3.5a.75.75 0 0 1 0-1.5h1.69L2.22 3.28a.75.75 0 0 1 0-1.06Zm10.5 0a.75.75 0 1 1 1.06 1.06L11.56 5.5h1.69a.75.75 0 0 1 0 1.5h-3.5A.75.75 0 0 1 9 6.25v-3.5a.75.75 0 0 1 1.5 0v1.69l2.22-2.22ZM2.75 9h3.5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-1.69l-2.22 2.22a.75.75 0 0 1-1.06-1.06l2.22-2.22H2.75a.75.75 0 0 1 0-1.5ZM9 9.75A.75.75 0 0 1 9.75 9h3.5a.75.75 0 0 1 0 1.5h-1.69l2.22 2.22a.75.75 0 1 1-1.06 1.06l-2.22-2.22v1.69a.75.75 0 0 1-1.5 0v-3.5Z"
+        />
+      ) : (
+        <path
+          fillRule="evenodd"
+          d="M2.75 9a.75.75 0 0 1 .75.75v1.69l2.22-2.22a.75.75 0 0 1 1.06 1.06L4.56 12.5h1.69a.75.75 0 0 1 0 1.5h-3.5a.75.75 0 0 1-.75-.75v-3.5A.75.75 0 0 1 2.75 9ZM2.75 7a.75.75 0 0 0 .75-.75V4.56l2.22 2.22a.75.75 0 0 0 1.06-1.06L4.56 3.5h1.69a.75.75 0 0 0 0-1.5h-3.5a.75.75 0 0 0-.75.75v3.5c0 .414.336.75.75.75ZM13.25 9a.75.75 0 0 0-.75.75v1.69l-2.22-2.22a.75.75 0 1 0-1.06 1.06l2.22 2.22H9.75a.75.75 0 0 0 0 1.5h3.5a.75.75 0 0 0 .75-.75v-3.5a.75.75 0 0 0-.75-.75ZM13.25 7a.75.75 0 0 1-.75-.75V4.56l-2.22 2.22a.75.75 0 1 1-1.06-1.06l2.22-2.22H9.75a.75.75 0 0 1 0-1.5h3.5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-.75.75Z"
+        />
+      )}
+    </svg>
+  )
+}
+
+const barBtn: Record<string, unknown> = {
+  cursor: 'pointer',
+  border: 'none',
+  borderRadius: 6,
+  padding: '4px 8px',
+  background: 'transparent',
+  color: '#c9cdd6',
+  fontWeight: 700,
+  fontSize: 11,
+  lineHeight: '16px',
+  display: 'inline-flex',
+  alignItems: 'center',
+}
+
+function HtmlDeckOverlay({
+  slides,
+  index,
+  onIndex,
+  onClose,
+}: {
+  slides: ReturnType<typeof collectHtmlSlides>
+  index: number
+  onIndex: (next: number) => void
+  onClose: () => void
+}) {
+  const slide = slides[index]
+  const total = slides.length
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const action = htmlDeckKeyAction(event.key)
+      if (action == null) return
+      event.preventDefault()
+      event.stopPropagation()
+      if (action === 'close') onClose()
+      else if (action === 'first') onIndex(0)
+      else if (action === 'last') onIndex(Math.max(0, total - 1))
+      else onIndex(stepHtmlDeck(index, action, total))
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [index, onClose, onIndex, total])
+
+  if (!slide) return null
+  const stamped = slide.kind === 'html' ? stampHtmlSource(slide.html, `deck-${index}`) : ''
+  return createPortal(
+    <div
+      data-testid="html-deck"
+      data-biu-ignore
+      tabIndex={0}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 9994,
+        display: 'flex',
+        flexDirection: 'column',
+        background: '#0b0b12',
+        color: '#e6edf3',
+        font: '13px/1.4 ui-sans-serif, system-ui, sans-serif',
+      }}
+    >
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 40,
+          overflow: 'auto',
+        }}
+      >
+        {slide.kind === 'htmlframe' ? (
+          <iframe
+            title={`html-deck-${index}`}
+            srcDoc={slide.html}
+            sandbox="allow-scripts"
+            style={{ width: '100%', height: '100%', border: 'none', background: '#15151f', borderRadius: 8 }}
+          />
+        ) : (
+          <div style={{ width: 'min(1100px, 100%)' }} dangerouslySetInnerHTML={{ __html: stamped }} />
+        )}
+      </div>
+      <div
+        data-testid="html-deck-nav"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 10,
+          padding: '10px 16px 16px',
+        }}
+      >
+        <button type="button" style={barBtn} disabled={index <= 0} onClick={() => onIndex(stepHtmlDeck(index, -1, total))} aria-label="上一张">
+          上一张
+        </button>
+        <span data-testid="html-deck-index" style={{ color: '#8b93a7', minWidth: 64, textAlign: 'center' }}>
+          {index + 1} / {total}
+        </span>
+        <button
+          type="button"
+          style={barBtn}
+          disabled={index >= total - 1}
+          onClick={() => onIndex(stepHtmlDeck(index, 1, total))}
+          aria-label="下一张"
+        >
+          下一张
+        </button>
+        <button type="button" data-page-block-expand="" style={{ ...barBtn, marginLeft: 12 }} onClick={onClose} title="退出放映" aria-label="退出放映">
+          <ExpandGlyph shrink />
+        </button>
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
+function useHtmlDeck(
+  hostRef: { current: HTMLElement | null },
+  kind: 'html' | 'htmlframe',
+  html: string,
+  height?: number,
+) {
+  const [open, setOpen] = useState(false)
+  const [index, setIndex] = useState(0)
+  const [slides, setSlides] = useState<ReturnType<typeof collectHtmlSlides>>([])
+
+  useLayoutEffect(() => {
+    const host = hostRef.current?.closest('[data-page-block]') ?? null
+    bindHtmlSlide(host, { kind, html, ...(height != null ? { height } : {}) })
+    return () => bindHtmlSlide(host, null)
+  }, [hostRef, html, kind, height])
+
+  const start = () => {
+    const host = hostRef.current?.closest('[data-page-block]') ?? null
+    const list = collectHtmlSlides(host)
+    setSlides(list)
+    setIndex(htmlDeckIndex(list, host))
+    setOpen(true)
+  }
+
+  const overlay = open ? (
+    <HtmlDeckOverlay
+      slides={slides.length ? slides : collectHtmlSlides(hostRef.current?.closest('[data-page-block]') ?? null)}
+      index={index}
+      onIndex={(next) => {
+        const host = hostRef.current?.closest('[data-page-block]') ?? null
+        setSlides(collectHtmlSlides(host))
+        setIndex(next)
+      }}
+      onClose={() => setOpen(false)}
+    />
+  ) : null
+
+  return { start, overlay }
+}
+
 /** 右上角悬浮工具条：只有 hover / 编辑时才浮出，不占内容、不包外框 */
 function FloatBar({
   editing,
   setEditing,
   ro,
   accent,
+  onExpand,
   children,
 }: {
   editing: boolean
   setEditing: (v: boolean) => void
   ro: boolean
   accent: string
+  onExpand: () => void
   children?: unknown
 }) {
-  if (ro) return null
   const seg = (active: boolean, onClick: () => void, label: string) => (
     <button
       onClick={onClick}
       style={{
-        cursor: 'pointer',
-        border: 'none',
-        borderRadius: 6,
-        padding: '3px 10px',
+        ...barBtn,
         background: active ? accent : 'transparent',
         color: active ? '#0d1117' : '#c9cdd6',
-        fontWeight: 700,
-        fontSize: 11,
-        lineHeight: '16px',
       }}
     >
       {label}
@@ -107,8 +278,25 @@ function FloatBar({
       }}
     >
       {children}
-      {seg(!editing, () => setEditing(false), '预览')}
-      {seg(editing, () => setEditing(true), '编辑')}
+      {ro ? null : (
+        <>
+          {seg(!editing, () => setEditing(false), '预览')}
+          {seg(editing, () => setEditing(true), '编辑')}
+        </>
+      )}
+      <button
+        type="button"
+        tabIndex={-1}
+        data-page-block-expand=""
+        data-testid="html-deck-expand"
+        title="放大放映"
+        aria-label="放大放映"
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={onExpand}
+        style={barBtn}
+      >
+        <ExpandGlyph />
+      </button>
     </div>
   )
 }
@@ -134,6 +322,7 @@ function HtmlDirectCard({ data, update, writable }: BlockProps) {
   const [editing, setEditing] = useState(false)
   const [hover, setHover] = useState(false)
   const hostRef = useRef<HTMLDivElement | null>(null)
+  const deck = useHtmlDeck(hostRef, 'html', html)
   const stamped = useMemo(
     () => stampHtmlSource(html, htmlBlockKey(hostRef.current?.closest('[data-page-block]') ?? null, html)),
     [html],
@@ -148,13 +337,14 @@ function HtmlDirectCard({ data, update, writable }: BlockProps) {
       onMouseLeave={() => setHover(false)}
     >
       {(hover || editing) && (
-        <FloatBar editing={editing} setEditing={setEditing} ro={ro} accent="#7c5cfc" />
+        <FloatBar editing={editing} setEditing={setEditing} ro={ro} accent="#7c5cfc" onExpand={deck.start} />
       )}
       {editing ? (
         <SourceEditor html={html} onChange={(v) => update({ html: v })} />
       ) : (
         <div style={{ overflowX: 'auto' }} dangerouslySetInnerHTML={{ __html: stamped }} />
       )}
+      {deck.overlay}
     </div>
   )
 }
@@ -195,6 +385,7 @@ function HtmlFrameCard({ data, update, writable }: BlockProps) {
   const [hover, setHover] = useState(false)
   const hostRef = useRef<HTMLDivElement | null>(null)
   const frameRef = useRef<HTMLIFrameElement | null>(null)
+  const deck = useHtmlDeck(hostRef, 'htmlframe', html, height)
 
   const stampFrame = () => {
     const frame = frameRef.current
@@ -224,17 +415,19 @@ function HtmlFrameCard({ data, update, writable }: BlockProps) {
       onMouseLeave={() => setHover(false)}
     >
       {(hover || editing) && (
-        <FloatBar editing={editing} setEditing={setEditing} ro={ro} accent="#38bdf8">
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, paddingLeft: 6, color: '#8b93a7', fontSize: 11 }}>
-            H
-            <input
-              type="number"
-              min={80}
-              value={height}
-              onChange={(e) => update({ height: Number(e.target.value) || 300 })}
-              style={{ width: 52, border: '1px solid #3b3b54', borderRadius: 6, background: 'rgba(255,255,255,.05)', color: '#e6e6f0', padding: '1px 6px', fontSize: 12 }}
-            />
-          </label>
+        <FloatBar editing={editing} setEditing={setEditing} ro={ro} accent="#38bdf8" onExpand={deck.start}>
+          {ro ? null : (
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, paddingLeft: 6, color: '#8b93a7', fontSize: 11 }}>
+              H
+              <input
+                type="number"
+                min={80}
+                value={height}
+                onChange={(e) => update({ height: Number(e.target.value) || 300 })}
+                style={{ width: 52, border: '1px solid #3b3b54', borderRadius: 6, background: 'rgba(255,255,255,.05)', color: '#e6e6f0', padding: '1px 6px', fontSize: 12 }}
+              />
+            </label>
+          )}
         </FloatBar>
       )}
       {editing ? (
@@ -250,6 +443,7 @@ function HtmlFrameCard({ data, update, writable }: BlockProps) {
           style={{ display: 'block', width: '100%', height, border: 'none', background: '#15151f' }}
         />
       )}
+      {deck.overlay}
     </div>
   )
 }
@@ -277,7 +471,7 @@ export function apply(ctx: {
     label: 'HTML 直接渲染',
     blockType: 'html',
     blockTypeLabel: 'HTML',
-    hint: 'HTML 直接渲染进文档，无外框（悬停浮出编辑/预览）',
+    hint: 'HTML 直接渲染进文档；悬停可编辑，放大后按页内 HTML 块翻页放映',
     aliases: ['html', 'html直', '静态html'],
     defaults: { html: HTML_DIRECT_SAMPLE },
     View: HtmlDirectCard,
@@ -288,7 +482,7 @@ export function apply(ctx: {
     label: 'HTML iframe 沙箱',
     blockType: 'html',
     blockTypeLabel: 'HTML',
-    hint: 'iframe 隔离小网页，无外框，可跑脚本/幻灯片',
+    hint: 'iframe 隔离小网页；放大后按页内 HTML 块翻页放映',
     aliases: ['iframe', 'htmlf', 'frame', '幻灯片', 'slide'],
     defaults: { html: HTML_FRAME_SAMPLE, height: 300 },
     View: HtmlFrameCard,
