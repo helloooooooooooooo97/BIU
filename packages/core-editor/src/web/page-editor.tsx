@@ -543,7 +543,6 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
     if (atDocStart && shouldLeaveContentForTitle(event.key, event, 0, true, 0)) {
       event.preventDefault()
       event.stopPropagation()
-      editor?.commands.blur()
       if (!focusRecordTitleNear(event.currentTarget)) {
         window.dispatchEvent(new Event(FOCUS_RECORD_TITLE))
       }

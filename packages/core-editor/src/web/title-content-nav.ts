@@ -28,20 +28,39 @@ export function handleContentTitleNav(view: EditorView, event: KeyboardEvent) {
   const start = Selection.atStart(view.state.doc).from
   if (!shouldLeaveContentForTitle(event.key, event, sel.from, sel.empty, start)) return false
   event.preventDefault()
-  view.dom.blur()
   if (!focusRecordTitleNear(view.dom)) {
     window.dispatchEvent(new Event(FOCUS_RECORD_TITLE))
   }
   return true
 }
 
-/** 标题在属性上方：同一个详情主栏里的 `.fsdb-detail-title-input`，光标放到末尾。 */
-export function focusRecordTitleNear(from: Element | null | undefined) {
-  const root = from?.closest('.fsdb-detail-main') ?? from?.closest('.fsdb-detail-stage')
-  const el = root?.querySelector<HTMLTextAreaElement | HTMLInputElement>('.fsdb-detail-title-input')
-  if (!el) return false
+function titleInputNear(from: Element | null | undefined) {
+  const root =
+    from?.closest('.fsdb-detail-main') ??
+    from?.closest('.fsdb-detail-stage') ??
+    from?.closest('.fsdb-page')
+  return root?.querySelector<HTMLTextAreaElement | HTMLInputElement>('.fsdb-detail-title-input')
+}
+
+function placeTitleCaret(el: HTMLTextAreaElement | HTMLInputElement) {
+  if (!el.isConnected) return
   el.focus()
   const n = el.value.length
-  el.setSelectionRange(n, n)
+  try {
+    el.setSelectionRange(n, n)
+  } catch {
+    /* ignore */
+  }
+}
+
+/** 标题在属性上方：同一个详情主栏里的 `.fsdb-detail-title-input`，光标放到末尾。 */
+export function focusRecordTitleNear(from: Element | null | undefined) {
+  const el = titleInputNear(from)
+  if (!el) return false
+  placeTitleCaret(el)
+  if (document.activeElement !== el) {
+    requestAnimationFrame(() => placeTitleCaret(el))
+    setTimeout(() => placeTitleCaret(el), 0)
+  }
   return true
 }

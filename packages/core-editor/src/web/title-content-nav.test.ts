@@ -129,6 +129,32 @@ test('focusRecordTitleNear targets the title above properties in the same detail
   main.remove()
 })
 
+test('Delete at doc start focuses the title above properties', () => {
+  const main = document.createElement('div')
+  main.className = 'fsdb-detail-main'
+  const title = document.createElement('textarea')
+  title.className = 'fsdb-detail-title-input'
+  title.value = '页面标题'
+  const host = document.createElement('div')
+  main.appendChild(title)
+  main.appendChild(host)
+  document.body.appendChild(main)
+  const editor = new Editor({
+    element: host,
+    extensions: pageEditorExtensions(),
+    content: 'hello',
+    contentType: 'markdown',
+    editorProps: { handleKeyDown: handleContentTitleNav },
+  })
+  editor.chain().focus().setTextSelection(Selection.atStart(editor.state.doc)).run()
+  press(editor, 'Delete')
+  assert.equal(document.activeElement, title)
+  assert.equal(title.selectionStart, '页面标题'.length)
+  assert.match(editor.getHTML(), /hello/)
+  editor.destroy()
+  main.remove()
+})
+
 test('Backspace at doc start focuses the title above properties', () => {
   const main = document.createElement('div')
   main.className = 'fsdb-detail-main'

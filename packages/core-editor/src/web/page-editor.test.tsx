@@ -90,6 +90,7 @@ test('page editor bridges cursor to the record title', async () => {
   assert.match(src, /handleKeyDown/)
   assert.match(src, /FOCUS_RECORD_TITLE/)
   assert.match(src, /focusRecordTitleNear/)
+  assert.doesNotMatch(src, /commands\.blur\(\)/)
   assert.match(src, /onKeyDownCapture/)
   assert.match(src, /FOCUS_RECORD_CONTENT/)
   assert.match(src, /jumpToPending/)

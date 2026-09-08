@@ -163,7 +163,9 @@ export function RecordDetail({
   const mainRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const onTitle = () => {
-      focusRecordTitleNear(mainRef.current)
+      const go = () => focusRecordTitleNear(mainRef.current)
+      go()
+      requestAnimationFrame(go)
     }
     window.addEventListener(FOCUS_RECORD_TITLE, onTitle)
     return () => window.removeEventListener(FOCUS_RECORD_TITLE, onTitle)
