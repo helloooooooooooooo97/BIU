@@ -15,18 +15,24 @@ export function closeMathPop() {
   open = null
 }
 
+function mathVisual(anchor: Element) {
+  return anchor.querySelector('.katex-display, .katex') ?? anchor
+}
+
 function placeBelow(panel: HTMLElement, anchor: Element) {
-  const r = anchor.getBoundingClientRect()
+  const r = mathVisual(anchor).getBoundingClientRect()
   const gap = 6
   const pad = 8
-  panel.style.left = `${Math.max(pad, r.left)}px`
   panel.style.top = `${r.bottom + gap}px`
   const box = panel.getBoundingClientRect()
-  if (box.right > window.innerWidth - pad) {
-    panel.style.left = `${Math.max(pad, window.innerWidth - pad - box.width)}px`
-  }
-  if (box.bottom > window.innerHeight - pad) {
-    panel.style.top = `${Math.max(pad, r.top - box.height - gap)}px`
+  const width = box.width || panel.offsetWidth
+  const mid = r.left + r.width / 2
+  const maxLeft = Math.max(pad, window.innerWidth - pad - width)
+  const left = Math.min(maxLeft, Math.max(pad, mid - width / 2))
+  panel.style.left = `${left}px`
+  const placed = panel.getBoundingClientRect()
+  if (placed.bottom > window.innerHeight - pad) {
+    panel.style.top = `${Math.max(pad, r.top - (placed.height || box.height) - gap)}px`
   }
 }
 
