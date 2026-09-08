@@ -88,6 +88,11 @@ test('slash suggestion uses a fixed high stacking context', async () => {
   assert.match(css, /\.page-editor \.page-block\{[^}]*isolation:isolate/)
   assert.match(css, /\.page-editor \.tiptap ul\{list-style-type:disc\}/)
   assert.match(css, /\.page-editor \.tiptap ol\{list-style-type:decimal\}/)
+  assert.match(css, /div\[data-type=block-math\]\.tiptap-mathematics-render\{[^}]*margin:8px 0/)
+  assert.match(css, /span\[data-type=inline-math\]\{[^}]*display:inline/)
+  assert.match(css, /span\[data-type=inline-math\]\{[^}]*vertical-align:baseline/)
+  assert.doesNotMatch(css, /\.tiptap \.tiptap-mathematics-render\{margin:8px 0/)
+  assert.doesNotMatch(css, /span\[data-type=inline-math\]\{[^}]*display:inline-block/)
 })
 
 test('markdown roundtrips image and table', () => {
