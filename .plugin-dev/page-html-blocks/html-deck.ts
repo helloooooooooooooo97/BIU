@@ -4,6 +4,12 @@ export type HtmlSlide = {
   kind: 'html' | 'htmlframe'
   html: string
   height?: number
+  /** 默认 true；false 时不进放映。 */
+  deck?: boolean
+}
+
+export function htmlDeckEnabled(deck: unknown) {
+  return deck !== false
 }
 
 const bound = new WeakMap<Element, HtmlSlide>()
@@ -23,7 +29,7 @@ export function collectHtmlSlides(from: Element | null): Array<HtmlSlide & { hos
   for (const el of root.querySelectorAll(HTML_DECK_SEL)) {
     if (!(el instanceof HTMLElement)) continue
     const slide = bound.get(el)
-    if (!slide) continue
+    if (!slide || !htmlDeckEnabled(slide.deck)) continue
     list.push({ ...slide, host: el })
   }
   return list

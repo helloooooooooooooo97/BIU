@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom'
-import { bindHtmlSlide, collectHtmlSlides, htmlDeckIndex, htmlDeckKeyAction, stepHtmlDeck } from './html-deck.ts'
+import { bindHtmlSlide, collectHtmlSlides, htmlDeckEnabled, htmlDeckIndex, htmlDeckKeyAction, stepHtmlDeck } from './html-deck.ts'
 import { htmlBlockKey, stampHtmlPickSurfaces, stampHtmlSource } from './stamp-picks.ts'
 
 const React = globalThis.React
@@ -97,34 +97,62 @@ function HtmlDeckOverlay({
   onIndex: (next: number) => void
   onClose: () => void
 }) {
+  const closeRef = useRef(onClose)
+  closeRef.current = onClose
+  const boxRef = useRef<HTMLDivElement | null>(null)
   const slide = slides[index]
   const total = slides.length
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const action = htmlDeckKeyAction(event.key)
       if (action == null) return
+      if (action === 'close') {
+        closeRef.current()
+        return
+      }
       event.preventDefault()
       event.stopPropagation()
-      if (action === 'close') onClose()
-      else if (action === 'first') onIndex(0)
+      if (action === 'first') onIndex(0)
       else if (action === 'last') onIndex(Math.max(0, total - 1))
       else onIndex(stepHtmlDeck(index, action, total))
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [index, onClose, onIndex, total])
+  }, [index, onIndex, total])
+
+  useEffect(() => {
+    const el = boxRef.current
+    if (!el) return
+    let gone = false
+    const enter = el.requestFullscreen?.bind(el)
+    void Promise.resolve(enter ? enter({ navigationUI: 'hide' }) : undefined).catch(() => {})
+    const onFs = () => {
+      if (gone) return
+      if (document.fullscreenElement) return
+      closeRef.current()
+    }
+    document.addEventListener('fullscreenchange', onFs)
+    return () => {
+      gone = true
+      document.removeEventListener('fullscreenchange', onFs)
+      if (document.fullscreenElement === el) void document.exitFullscreen?.()
+    }
+  }, [])
 
   if (!slide) return null
   const stamped = slide.kind === 'html' ? stampHtmlSource(slide.html, `deck-${index}`) : ''
   return createPortal(
     <div
+      ref={boxRef}
       data-testid="html-deck"
       data-biu-ignore
       tabIndex={0}
       style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 9994,
+        width: '100vw',
+        height: '100vh',
+        zIndex: 2147483646,
         display: 'flex',
         flexDirection: 'column',
         background: '#0b0b12',
@@ -136,11 +164,12 @@ function HtmlDeckOverlay({
         style={{
           flex: 1,
           minHeight: 0,
+          width: '100%',
+          height: '100%',
           display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: 40,
-          overflow: 'auto',
+          alignItems: 'stretch',
+          justifyContent: 'stretch',
+          overflow: 'hidden',
         }}
       >
         {slide.kind === 'htmlframe' ? (
@@ -148,20 +177,25 @@ function HtmlDeckOverlay({
             title={`html-deck-${index}`}
             srcDoc={slide.html}
             sandbox="allow-scripts"
-            style={{ width: '100%', height: '100%', border: 'none', background: '#15151f', borderRadius: 8 }}
+            style={{ width: '100%', height: '100%', border: 'none', background: '#0b0b12' }}
           />
         ) : (
-          <div style={{ width: 'min(1100px, 100%)' }} dangerouslySetInnerHTML={{ __html: stamped }} />
+          <div style={{ width: '100%', height: '100%', overflow: 'auto' }} dangerouslySetInnerHTML={{ __html: stamped }} />
         )}
       </div>
       <div
         data-testid="html-deck-nav"
         style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: 0,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           gap: 10,
-          padding: '10px 16px 16px',
+          padding: '12px 16px 18px',
+          background: 'linear-gradient(transparent, rgba(0,0,0,.55))',
         }}
       >
         <button type="button" style={barBtn} disabled={index <= 0} onClick={() => onIndex(stepHtmlDeck(index, -1, total))} aria-label="上一张">
@@ -192,21 +226,24 @@ function useHtmlDeck(
   hostRef: { current: HTMLElement | null },
   kind: 'html' | 'htmlframe',
   html: string,
-  height?: number,
+  opts?: { height?: number; deck?: boolean },
 ) {
   const [open, setOpen] = useState(false)
   const [index, setIndex] = useState(0)
   const [slides, setSlides] = useState<ReturnType<typeof collectHtmlSlides>>([])
+  const height = opts?.height
+  const deck = htmlDeckEnabled(opts?.deck)
 
   useLayoutEffect(() => {
     const host = hostRef.current?.closest('[data-page-block]') ?? null
-    bindHtmlSlide(host, { kind, html, ...(height != null ? { height } : {}) })
+    bindHtmlSlide(host, { kind, html, deck, ...(height != null ? { height } : {}) })
     return () => bindHtmlSlide(host, null)
-  }, [hostRef, html, kind, height])
+  }, [hostRef, html, kind, height, deck])
 
   const start = () => {
     const host = hostRef.current?.closest('[data-page-block]') ?? null
     const list = collectHtmlSlides(host)
+    if (!list.length) return
     setSlides(list)
     setIndex(htmlDeckIndex(list, host))
     setOpen(true)
@@ -235,6 +272,8 @@ function FloatBar({
   ro,
   accent,
   onExpand,
+  deck,
+  onDeck,
   children,
 }: {
   editing: boolean
@@ -242,6 +281,8 @@ function FloatBar({
   ro: boolean
   accent: string
   onExpand: () => void
+  deck: boolean
+  onDeck?: (next: boolean) => void
   children?: unknown
 }) {
   const seg = (active: boolean, onClick: () => void, label: string) => (
@@ -282,6 +323,21 @@ function FloatBar({
         <>
           {seg(!editing, () => setEditing(false), '预览')}
           {seg(editing, () => setEditing(true), '编辑')}
+          <button
+            type="button"
+            data-testid="html-deck-toggle"
+            title={deck ? '已加入演示，点击移出' : '未加入演示，点击加入'}
+            aria-label={deck ? '移出演示' : '加入演示'}
+            aria-pressed={deck}
+            onClick={() => onDeck?.(!deck)}
+            style={{
+              ...barBtn,
+              background: deck ? accent : 'transparent',
+              color: deck ? '#0d1117' : '#8b93a7',
+            }}
+          >
+            演示
+          </button>
         </>
       )}
       <button
@@ -319,10 +375,11 @@ const HTML_DIRECT_SAMPLE = `<div style="font-family:ui-sans-serif,system-ui;bord
 function HtmlDirectCard({ data, update, writable }: BlockProps) {
   const ro = !writable
   const html = String(data.html ?? '')
+  const deckOn = htmlDeckEnabled(data.deck)
   const [editing, setEditing] = useState(false)
   const [hover, setHover] = useState(false)
   const hostRef = useRef<HTMLDivElement | null>(null)
-  const deck = useHtmlDeck(hostRef, 'html', html)
+  const deck = useHtmlDeck(hostRef, 'html', html, { deck: deckOn })
   const stamped = useMemo(
     () => stampHtmlSource(html, htmlBlockKey(hostRef.current?.closest('[data-page-block]') ?? null, html)),
     [html],
@@ -337,7 +394,15 @@ function HtmlDirectCard({ data, update, writable }: BlockProps) {
       onMouseLeave={() => setHover(false)}
     >
       {(hover || editing) && (
-        <FloatBar editing={editing} setEditing={setEditing} ro={ro} accent="#7c5cfc" onExpand={deck.start} />
+        <FloatBar
+          editing={editing}
+          setEditing={setEditing}
+          ro={ro}
+          accent="#7c5cfc"
+          onExpand={deck.start}
+          deck={deckOn}
+          onDeck={(next) => update({ deck: next })}
+        />
       )}
       {editing ? (
         <SourceEditor html={html} onChange={(v) => update({ html: v })} />
@@ -381,11 +446,12 @@ function HtmlFrameCard({ data, update, writable }: BlockProps) {
   const ro = !writable
   const html = String(data.html ?? '')
   const height = Number(data.height) || 300
+  const deckOn = htmlDeckEnabled(data.deck)
   const [editing, setEditing] = useState(false)
   const [hover, setHover] = useState(false)
   const hostRef = useRef<HTMLDivElement | null>(null)
   const frameRef = useRef<HTMLIFrameElement | null>(null)
-  const deck = useHtmlDeck(hostRef, 'htmlframe', html, height)
+  const deck = useHtmlDeck(hostRef, 'htmlframe', html, { height, deck: deckOn })
 
   const stampFrame = () => {
     const frame = frameRef.current
@@ -415,7 +481,7 @@ function HtmlFrameCard({ data, update, writable }: BlockProps) {
       onMouseLeave={() => setHover(false)}
     >
       {(hover || editing) && (
-        <FloatBar editing={editing} setEditing={setEditing} ro={ro} accent="#38bdf8" onExpand={deck.start}>
+        <FloatBar editing={editing} setEditing={setEditing} ro={ro} accent="#38bdf8" onExpand={deck.start} deck={deckOn} onDeck={(next) => update({ deck: next })}>
           {ro ? null : (
             <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, paddingLeft: 6, color: '#8b93a7', fontSize: 11 }}>
               H
@@ -473,7 +539,7 @@ export function apply(ctx: {
     blockTypeLabel: 'HTML',
     hint: 'HTML 直接渲染进文档；悬停可编辑，放大后按页内 HTML 块翻页放映',
     aliases: ['html', 'html直', '静态html'],
-    defaults: { html: HTML_DIRECT_SAMPLE },
+    defaults: { html: HTML_DIRECT_SAMPLE, deck: true },
     View: HtmlDirectCard,
   })
   ctx.pageEditor.registerBlock({
@@ -484,7 +550,7 @@ export function apply(ctx: {
     blockTypeLabel: 'HTML',
     hint: 'iframe 隔离小网页；放大后按页内 HTML 块翻页放映',
     aliases: ['iframe', 'htmlf', 'frame', '幻灯片', 'slide'],
-    defaults: { html: HTML_FRAME_SAMPLE, height: 300 },
+    defaults: { html: HTML_FRAME_SAMPLE, height: 300, deck: true },
     View: HtmlFrameCard,
   })
 }

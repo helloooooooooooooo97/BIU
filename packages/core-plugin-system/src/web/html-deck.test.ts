@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   bindHtmlSlide,
   collectHtmlSlides,
+  htmlDeckEnabled,
   htmlDeckIndex,
   htmlDeckKeyAction,
   stepHtmlDeck,
@@ -30,6 +31,10 @@ test('collects html and htmlframe slides in document order', () => {
   assert.equal(slides[1]?.kind, 'htmlframe')
   assert.equal(slides[2]?.html.includes('三'), true)
   assert.equal(htmlDeckIndex(slides, b), 1)
+  bindHtmlSlide(c, { kind: 'html', html: '<div>三</div>', deck: false })
+  assert.equal(collectHtmlSlides(a).length, 2)
+  assert.equal(htmlDeckEnabled(undefined), true)
+  assert.equal(htmlDeckEnabled(false), false)
   bindHtmlSlide(a, null)
   bindHtmlSlide(b, null)
   bindHtmlSlide(c, null)
