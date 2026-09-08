@@ -9,7 +9,7 @@ import { FilePreview } from './fsdb-cells.tsx'
 import { PropertyRow } from './property-row.tsx'
 import { TableGlyph } from './nav-glyphs.tsx'
 import { normalizeRecordEmoji, recordPreviewEmoji } from './sidebar-preview.ts'
-import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, shouldLeaveTitleForContent } from './title-content-nav.ts'
+import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, shouldLeaveContentForTitle, shouldLeaveTitleForContent } from './title-content-nav.ts'
 import { HeadingOutline } from './heading-outline.tsx'
 
 function DetailTitleIcon({
@@ -300,8 +300,22 @@ export function RecordDetail({
                         onKeyDown={(event) => {
                           const el = event.currentTarget
                           if (!(el instanceof HTMLTextAreaElement)) return
-                          if (event.key !== 'ArrowUp' || event.shiftKey || event.nativeEvent.isComposing) return
-                          if (el.selectionStart !== 0 || el.selectionEnd !== 0) return
+                          if (
+                            !shouldLeaveContentForTitle(
+                              event.key,
+                              {
+                                shiftKey: event.shiftKey,
+                                altKey: event.altKey,
+                                metaKey: event.metaKey,
+                                ctrlKey: event.ctrlKey,
+                                isComposing: event.nativeEvent.isComposing,
+                              },
+                              el.selectionStart ?? 0,
+                              el.selectionStart === el.selectionEnd,
+                              0,
+                            )
+                          )
+                            return
                           event.preventDefault()
                           window.dispatchEvent(new Event(FOCUS_RECORD_TITLE))
                         }}

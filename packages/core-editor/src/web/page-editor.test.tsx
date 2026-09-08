@@ -89,6 +89,7 @@ test('page editor bridges cursor to the record title', async () => {
   const src = await readFile(resolve(import.meta.dirname, './page-editor.tsx'), 'utf8')
   assert.match(src, /handleKeyDown/)
   assert.match(src, /FOCUS_RECORD_TITLE/)
+  assert.match(src, /shouldLeaveContentForTitle/)
   assert.match(src, /FOCUS_RECORD_CONTENT/)
   assert.match(src, /jumpToPending/)
   assert.match(src, /CONTENT_JUMP_EVENT/)

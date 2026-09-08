@@ -34,6 +34,7 @@ const findField = StateField.define({
 export type SourceEditorHandle = {
   applyFind: (query: string, index: number) => { total: number; index: number }
   getLocus: () => { start_line: number; end_line: number; text: string; selection?: string; insert?: number } | null
+  isAtStart: () => boolean
 }
 
 const mdHighlight = HighlightStyle.define([
@@ -162,6 +163,12 @@ export const SourceEditor = forwardRef<SourceEditorHandle, {
       const start = view.state.doc.line(start_line)
       const end = view.state.doc.line(end_line)
       return { start_line, end_line, text: view.state.doc.sliceString(start.from, end.to), selection }
+    },
+    isAtStart() {
+      const view = viewRef.current
+      if (!view) return false
+      const sel = view.state.selection.main
+      return sel.empty && sel.from === 0
     },
   }))
 

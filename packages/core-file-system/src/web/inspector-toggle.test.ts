@@ -457,6 +457,7 @@ test('database extras sit after the record detail, not in the inspector', () => 
   assert.match(detail, /FOCUS_RECORD_CONTENT/)
   assert.match(detail, /FOCUS_RECORD_TITLE/)
   assert.match(detail, /shouldLeaveTitleForContent/)
+  assert.match(detail, /shouldLeaveContentForTitle/)
   assert.doesNotMatch(detail, /<h2 className="fsdb-detail-title-input">/)
   assert.match(style, /\.fsdb-detail-main\{[^}]*padding:80px 80px 24px/)
   assert.match(style, /\.fsdb-main > \.fsdb-detail-title-row\{[^}]*flex:none/)
