@@ -226,3 +226,35 @@ test('slash command turns the current block into a heading', () => {
   assert.equal(editor.isActive('heading', { level: 1 }), true)
   editor.destroy()
 })
+
+test('fenced code keeps language on the block and highlights tokens', () => {
+  const host = document.createElement('div')
+  document.body.appendChild(host)
+  const editor = new Editor({
+    element: host,
+    extensions: pageEditorExtensions(),
+    content: '```ts\nconst a = 1\n```\n',
+    contentType: 'markdown',
+  })
+  const pre = host.querySelector('pre')
+  assert.equal(pre?.getAttribute('data-language'), 'ts')
+  assert.ok(host.querySelector('.hljs-keyword, .hljs-attr, .hljs-number, [class^="hljs-"]'))
+  assert.match(editor.getMarkdown(), /```ts/)
+  editor.destroy()
+  host.remove()
+})
+
+test('code fence without language still auto-highlights', () => {
+  const host = document.createElement('div')
+  document.body.appendChild(host)
+  const editor = new Editor({
+    element: host,
+    extensions: pageEditorExtensions(),
+    content: '```\nfunction hello() { return 1 }\n```\n',
+    contentType: 'markdown',
+  })
+  assert.equal(host.querySelector('pre')?.hasAttribute('data-language'), false)
+  assert.ok(host.querySelector('[class^="hljs-"], [class*=" hljs-"]'))
+  editor.destroy()
+  host.remove()
+})

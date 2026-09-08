@@ -1,11 +1,13 @@
-import { InputRule, type Editor } from '@tiptap/core'
+import { InputRule, mergeAttributes, type Editor } from '@tiptap/core'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Markdown } from '@tiptap/markdown'
+import { CodeBlockLowlight } from '@tiptap/extension-code-block-lowlight'
 import Image from '@tiptap/extension-image'
 import { BlockMath, InlineMath, Mathematics } from '@tiptap/extension-mathematics'
 import Placeholder from '@tiptap/extension-placeholder'
 import { TableKit } from '@tiptap/extension-table'
 import StarterKit from '@tiptap/starter-kit'
+import { common, createLowlight } from 'lowlight'
 import { pageTextStyle, pageHighlight, Color } from './color-marks.ts'
 import { headingSkin } from './heading-skin.ts'
 import { pageBlock } from './page-block.ts'
@@ -105,6 +107,28 @@ const pageBlockMath = BlockMath.extend({
   }),
 })
 
+const pageLowlight = createLowlight(common)
+
+const pageCodeBlock = CodeBlockLowlight.extend({
+  renderHTML({ node, HTMLAttributes }) {
+    const language = String(node.attrs.language ?? '').trim()
+    return [
+      'pre',
+      mergeAttributes(this.options.HTMLAttributes, HTMLAttributes, language ? { 'data-language': language } : {}),
+      [
+        'code',
+        {
+          class: language ? `${this.options.languageClassPrefix}${language} hljs` : 'hljs',
+        },
+        0,
+      ],
+    ]
+  },
+}).configure({
+  lowlight: pageLowlight,
+  defaultLanguage: null,
+})
+
 const pageMathPopKey = new PluginKey('page-math-pop')
 
 const pageMathematics = Mathematics.extend({
@@ -152,7 +176,9 @@ export function pageEditorExtensions() {
   return [
     StarterKit.configure({
       heading: { levels: [1, 2, 3] },
+      codeBlock: false,
     }),
+    pageCodeBlock,
     Markdown,
     pageTextStyle,
     Color,
