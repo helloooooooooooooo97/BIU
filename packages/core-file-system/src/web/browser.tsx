@@ -12,7 +12,6 @@ import {
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { flushSync } from 'react-dom'
 import {
   ArrowPathIcon,
   ArrowsPointingOutIcon,
@@ -544,13 +543,13 @@ export function CollectionBrowser({
   }, [lockedSource])
   const detailId = openDetailId
   const setDetailId = (id: string | null, row?: DbRecord | null) => {
-    flushSync(() => {
-      setOpenDetailId(id)
-      if (id && row) setDetailRow(row)
-      if (!id) setDetailRow(null)
+    setOpenDetailId(id)
+    if (id && row) setDetailRow(row)
+    if (!id) setDetailRow(null)
+    queueMicrotask(() => {
+      if (id) onOpenRecord?.(id, activeViewId, dataPath)
+      else onCloseRecord?.()
     })
-    if (id) onOpenRecord?.(id, activeViewId, dataPath)
-    else onCloseRecord?.()
   }
   const openRow = (row: DbRecord) => {
     const jump = chrome?.openRow?.(row)
@@ -2324,12 +2323,10 @@ export function CollectionBrowser({
           onOpenRecord={(path, view, recordId, row) => {
             if (path === collectionPath) {
               applyView(view)
-              flushSync(() => {
-                setOpenDetailId(recordId)
-                if (row) setDetailRow(row)
-              })
+              setOpenDetailId(recordId)
+              if (row) setDetailRow(row)
             }
-            onOpenRecord?.(recordId, view.id, path)
+            queueMicrotask(() => onOpenRecord?.(recordId, view.id, path))
           }}
           expandedViewKey={expandedViewKey}
           onExpandedViewKeyChange={onExpandedViewKeyChange}

@@ -1,7 +1,7 @@
 import { htmlBlockKey, stampHtmlPickSurfaces } from './stamp-picks.ts'
 
 const React = globalThis.React
-const { useLayoutEffect, useRef, useState } = React
+const { useEffect, useRef, useState } = React
 
 export const name = 'page-html-blocks'
 export const inject = ['pageEditor']
@@ -136,12 +136,17 @@ function HtmlDirectCard({ data, update, writable }: BlockProps) {
   const previewRef = useRef<HTMLDivElement | null>(null)
   const hostRef = useRef<HTMLDivElement | null>(null)
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (editing) return
     const preview = previewRef.current
     if (!preview) return
     const host = hostRef.current?.closest('[data-page-block]') ?? null
-    stampHtmlPickSurfaces(preview, htmlBlockKey(host, html))
+    const key = htmlBlockKey(host, html)
+    const stamp = () => stampHtmlPickSurfaces(preview, key)
+    queueMicrotask(stamp)
+    return () => {
+      /* next html replace clears nodes */
+    }
   }, [editing, html])
 
   return (
@@ -215,9 +220,9 @@ function HtmlFrameCard({ data, update, writable }: BlockProps) {
     }
   }
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (editing) return
-    stampFrame()
+    queueMicrotask(stampFrame)
   }, [editing, html, height])
 
   return (
