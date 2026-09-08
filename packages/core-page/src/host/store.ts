@@ -5,7 +5,7 @@ import { createRequire } from 'node:module'
 import type { DbRecord, SchemaFieldValue } from '@biu/type-file-system'
 import { emptySchemaValue, normalizeSchemaValue } from '@biu/type-file-system'
 import { dataPath } from '@biu/host-plugin-loader/data-dir'
-import { splitMarkdown } from './markdown.ts'
+import { dumpMarkdown, splitMarkdown } from './markdown.ts'
 
 export const PAGE_ROOT = '.page'
 export const PAGE_DB = '.page/pages.sqlite'
@@ -109,6 +109,23 @@ export function fileUrl(name: string) {
 function pageRel(id: string) {
   if (!ID_RE.test(id)) throw new Error(`invalid page id: ${id}`)
   return `${PAGE_ROOT}/${id}.md`
+}
+
+function matterFrom(row: PageRow): Record<string, unknown> {
+  return {
+    title: row.title,
+    tags: row.tags,
+    parentId: row.parentId,
+    dependsOn: row.dependsOn,
+    facet: row.facet,
+    emoji: row.emoji,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  }
+}
+
+function toMarkdown(row: PageRow) {
+  return dumpMarkdown(matterFrom(row), row.notes ?? '')
 }
 
 function rowFromFile(id: string, raw: string): PageRow {
@@ -216,14 +233,16 @@ export class PagesStore {
     try {
       names = await this.fs.list(PAGE_ROOT)
     } catch {
-      return
+      names = []
     }
     const existing = new Set(
       (this.db.prepare('SELECT id FROM pages').all() as Array<{ id: string }>).map((row) => row.id),
     )
+    const mdIds = new Set<string>()
     for (const name of names) {
       if (!name.endsWith('.md')) continue
       const id = name.slice(0, -3)
+      mdIds.add(id)
       if (!ID_RE.test(id) || existing.has(id)) continue
       try {
         const row = rowFromFile(id, await this.fs.read(pageRel(id)))
@@ -233,6 +252,21 @@ export class PagesStore {
         /* skip unreadable */
       }
     }
+    await this.backfillMarkdown(mdIds)
+  }
+
+  /** sqlite 里已有、磁盘还没有 `.page/<id>.md` 的页，把 notes 写回 Markdown。 */
+  private async backfillMarkdown(mdIds: Set<string>) {
+    if (!this.db) return
+    const rows = this.db.prepare('SELECT * FROM pages').all() as SqlPage[]
+    for (const sql of rows) {
+      if (mdIds.has(sql.id)) continue
+      await this.persistMarkdown(rowFromSql(sql))
+    }
+  }
+
+  private async persistMarkdown(row: PageRow) {
+    await this.fs.write(pageRel(row.id), toMarkdown(row))
   }
 
   private upsert(row: PageRow) {
@@ -274,8 +308,17 @@ export class PagesStore {
     if (!ID_RE.test(id)) return null
     const db = await this.openDb()
     await this.migrateMarkdown()
-    const hit = db.prepare('SELECT * FROM pages WHERE id = ?').get(id) as SqlPage | undefined
-    return hit ? rowFromSql(hit) : null
+    try {
+      const row = rowFromFile(id, await this.fs.read(pageRel(id)))
+      this.upsert(row)
+      return row
+    } catch {
+      const hit = db.prepare('SELECT * FROM pages WHERE id = ?').get(id) as SqlPage | undefined
+      if (!hit) return null
+      const row = rowFromSql(hit)
+      await this.persistMarkdown(row)
+      return row
+    }
   }
 
   async update(id: string, patch: Record<string, unknown>): Promise<PageRow> {
@@ -316,7 +359,7 @@ export class PagesStore {
     try {
       await unlink(this.fs.resolve(pageRel(id)))
     } catch {
-      /* markdown sidecar optional */
+      /* markdown already gone */
     }
     await this.gcAssets()
   }
@@ -386,6 +429,7 @@ export class PagesStore {
   private async write(row: PageRow) {
     await this.openDb()
     this.upsert(row)
+    await this.persistMarkdown(row)
   }
 }
 
