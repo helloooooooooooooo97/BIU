@@ -70,6 +70,17 @@ test('isFindHotkey is command/ctrl f without shift', () => {
   assert.equal(isFindHotkey({ key: 'f', metaKey: true, ctrlKey: false, altKey: false, shiftKey: true }), false)
 })
 
+test('find bar pins to the inspector scrollport, not the editor flow', () => {
+  const src = readFileSync(resolve(import.meta.dirname, './find-bar.tsx'), 'utf8')
+  assert.match(src, /createPortal/)
+  assert.match(src, /fsdb-right-body/)
+  assert.match(src, /page-find-slot/)
+  assert.match(src, /root\.prepend/)
+  assert.match(PAGE_EDITOR_STYLE, /\.page-find-slot\{[^}]*position:sticky/)
+  assert.match(PAGE_EDITOR_STYLE, /\.page-find-slot\{[^}]*height:0/)
+  assert.doesNotMatch(PAGE_EDITOR_STYLE, /\.page-find\{[^}]*position:sticky/)
+})
+
 test('find hits use rose tag text and wash', () => {
   assert.match(PAGE_EDITOR_STYLE, new RegExp(`\\.page-find-hit\\{[^}]*color:${TAG_TONE_ROSE}`))
   assert.match(PAGE_EDITOR_STYLE, /color-mix\(in srgb,#e255a1 22%,transparent\)/)

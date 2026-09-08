@@ -1,5 +1,11 @@
-import { useEffect, useRef, type KeyboardEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { ChevronDownIcon, ChevronUpIcon, MagnifyingGlassIcon, XMarkIcon } from '@heroicons/react/16/solid'
+
+function pinHost(from: HTMLElement | null) {
+  const body = from?.closest('.fsdb-right-body')
+  return body instanceof HTMLElement ? body : null
+}
 
 export function FindBar({
   query,
@@ -19,10 +25,30 @@ export function FindBar({
   onClose: () => void
 }) {
   const input = useRef<HTMLInputElement>(null)
+  const mark = useRef<HTMLSpanElement>(null)
+  const [host, setHost] = useState<HTMLElement | null | undefined>(undefined)
+
+  useLayoutEffect(() => {
+    const root = pinHost(mark.current)
+    if (!root) {
+      setHost(null)
+      return
+    }
+    const slot = document.createElement('div')
+    slot.className = 'page-find-slot'
+    root.prepend(slot)
+    setHost(slot)
+    return () => {
+      slot.remove()
+      setHost(undefined)
+    }
+  }, [])
+
   useEffect(() => {
+    if (host === undefined) return
     input.current?.focus()
     input.current?.select()
-  }, [])
+  }, [host])
 
   const onKey = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Escape') {
@@ -39,7 +65,7 @@ export function FindBar({
 
   const label = query.trim() ? `${total ? index + 1 : 0}/${total}` : ''
 
-  return (
+  const bar = (
     <div className="page-find" data-testid="page-find" role="search">
       <div className="page-find-box">
         <MagnifyingGlassIcon aria-hidden className="page-find-icon" />
@@ -67,6 +93,13 @@ export function FindBar({
         </button>
       </div>
     </div>
+  )
+
+  return (
+    <>
+      <span ref={mark} hidden aria-hidden data-page-find-anchor="" />
+      {host === undefined ? null : host ? createPortal(bar, host) : bar}
+    </>
   )
 }
 
