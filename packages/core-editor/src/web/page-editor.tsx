@@ -19,7 +19,7 @@ import { markdownLocusFromElement, markdownLocusFromSelection } from './markdown
 import { FindBar, isFindHotkey } from './find-bar.tsx'
 import { applyEditorFind } from './find-plugin.ts'
 import { EDITOR_TONES, tagTextColor, tagWashColor } from './color-swatches.ts'
-import { isAskHotkey, isSendChatHotkey, pickFromEditor, pickFromLocus } from './editor-ask.ts'
+import { isSendChatHotkey, pickFromEditor, pickFromLocus } from './editor-ask.ts'
 
 /** 本地正在打字时不要用远端正文盖掉；源码模式 / 未挂上的编辑器不算在打字。 */
 export function shouldApplyRemoteMarkdown(args: {
@@ -174,39 +174,6 @@ function ColorMenus({
   )
 }
 
-function AskForm({
-  value,
-  onChange,
-  onSubmit,
-}: {
-  value: string
-  onChange: (next: string) => void
-  onSubmit: () => void
-}) {
-  return (
-    <form
-      className="page-ask"
-      onMouseDown={holdSelection}
-      onSubmit={(event) => {
-        event.preventDefault()
-        onSubmit()
-      }}
-    >
-      <input
-        className="page-ask-input"
-        value={value}
-        placeholder="描述如何改这段…"
-        aria-label="就地编辑"
-        data-testid="page-ask-input"
-        onChange={(event) => onChange(event.target.value)}
-      />
-      <button type="submit" className="page-ask-send">
-        发送
-      </button>
-    </form>
-  )
-}
-
 function Bubble({
   editor,
   onSendChat,
@@ -305,8 +272,6 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
   const [findQuery, setFindQuery] = useState('')
   const [findIndex, setFindIndex] = useState(0)
   const [findTotal, setFindTotal] = useState(0)
-  const [askOpen, setAskOpen] = useState(false)
-  const [askText, setAskText] = useState('')
 
   const editor = useEditor(
     {
@@ -329,11 +294,6 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
             setFindOpen(true)
             const { from, to } = view.state.selection
             if (from !== to) setFindQuery(view.state.doc.textBetween(from, to))
-            return true
-          }
-          if (isAskHotkey(event)) {
-            event.preventDefault()
-            setAskOpen(true)
             return true
           }
           if (isSendChatHotkey(event)) {
@@ -521,16 +481,6 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
   const sendToChat = () => {
     const ref = currentPick()
     if (ref) getPick()?.attach([ref])
-    setAskOpen(false)
-  }
-
-  const submitAsk = () => {
-    const ref = currentPick()
-    const text = askText.trim()
-    if (!ref || !text) return
-    getPick()?.attach([ref], { text, send: true })
-    setAskText('')
-    setAskOpen(false)
   }
 
   const onEditorHotkey = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -542,12 +492,6 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
         const { from, to } = editor.state.selection
         if (from !== to) setFindQuery(editor.state.doc.textBetween(from, to))
       }
-      return
-    }
-    if (isAskHotkey(event)) {
-      event.preventDefault()
-      event.stopPropagation()
-      if (currentPick()) setAskOpen(true)
       return
     }
     if (isSendChatHotkey(event)) {
@@ -578,7 +522,6 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
     return (
       <div className="page-editor is-source" onKeyDownCapture={onEditorHotkey}>
         {findBar}
-        {askOpen ? <AskForm value={askText} onChange={setAskText} onSubmit={submitAsk} /> : null}
         <SourceEditor
           ref={sourceFind}
           value={asMarkdown(value)}
@@ -596,7 +539,6 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
   return (
     <div className="page-editor" onKeyDownCapture={onEditorHotkey}>
       {findBar}
-      {askOpen ? <AskForm value={askText} onChange={setAskText} onSubmit={submitAsk} /> : null}
       <EditorContent editor={editor} />
       {writable !== false ? <PageBlockHandle editor={editor} /> : null}
       {writable !== false ? <Bubble editor={editor} onSendChat={sendToChat} /> : null}

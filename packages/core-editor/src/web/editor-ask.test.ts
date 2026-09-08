@@ -2,13 +2,12 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { Editor } from '@tiptap/core'
 import { pageEditorExtensions } from './kit.ts'
-import { isAskHotkey, isSendChatHotkey, pickFromEditor, pickFromLocus } from './editor-ask.ts'
+import { isSendChatHotkey, pickFromEditor, pickFromLocus } from './editor-ask.ts'
 
-test('ask and chat hotkeys are command/ctrl k and l', () => {
-  assert.equal(isAskHotkey({ key: 'k', metaKey: true, ctrlKey: false, altKey: false, shiftKey: false }), true)
+test('chat hotkey is command/ctrl l', () => {
   assert.equal(isSendChatHotkey({ key: 'l', metaKey: false, ctrlKey: true, altKey: false, shiftKey: false }), true)
-  assert.equal(isAskHotkey({ key: 'k', metaKey: true, ctrlKey: false, altKey: false, shiftKey: true }), false)
   assert.equal(isSendChatHotkey({ key: 'l', metaKey: true, ctrlKey: false, altKey: true, shiftKey: false }), false)
+  assert.equal(isSendChatHotkey({ key: 'k', metaKey: true, ctrlKey: false, altKey: false, shiftKey: false }), false)
 })
 
 test('pickFromLocus keeps path and markdown lines', () => {

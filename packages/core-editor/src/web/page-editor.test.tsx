@@ -109,10 +109,10 @@ test('page editor bridges cursor to the record title', async () => {
   assert.doesNotMatch(src, /⌘K/)
   assert.match(src, /⌘L/)
   assert.match(src, /ChatBubbleLeftRightIcon/)
-  assert.match(src, /isAskHotkey/)
   assert.match(src, /isSendChatHotkey/)
   assert.match(src, /getPick\(\)\?\.attach/)
-  assert.match(src, /page-ask/)
+  assert.doesNotMatch(src, /isAskHotkey/)
+  assert.doesNotMatch(src, /page-ask/)
 })
 
 test('page editor hydrates markdown after content fetch', async () => {

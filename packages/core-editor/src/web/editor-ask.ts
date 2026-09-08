@@ -16,17 +16,6 @@ function chord(
   return event.key === key || event.key === key.toUpperCase()
 }
 
-export function isAskHotkey(event: {
-  key: string
-  metaKey: boolean
-  ctrlKey: boolean
-  altKey: boolean
-  shiftKey: boolean
-  isComposing?: boolean
-}) {
-  return chord(event, 'k')
-}
-
 export function isSendChatHotkey(event: {
   key: string
   metaKey: boolean

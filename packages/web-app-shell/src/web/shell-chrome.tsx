@@ -25,10 +25,6 @@ export function ShellSettingsShortcuts() {
           <span className="settings-muted">Ctrl+Q</span>
         </li>
         <li className="flex items-center justify-between gap-3 px-2 py-1.5">
-          <span>就地编辑选区</span>
-          <span className="settings-muted">⌘K</span>
-        </li>
-        <li className="flex items-center justify-between gap-3 px-2 py-1.5">
           <span>选区送到对话</span>
           <span className="settings-muted">⌘L</span>
         </li>
