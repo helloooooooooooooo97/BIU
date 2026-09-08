@@ -33,7 +33,7 @@ const findField = StateField.define({
 
 export type SourceEditorHandle = {
   applyFind: (query: string, index: number) => { total: number; index: number }
-  getLocus: () => { start_line: number; end_line: number; text: string; selection: string } | null
+  getLocus: () => { start_line: number; end_line: number; text: string; selection?: string; insert?: number } | null
 }
 
 const mdHighlight = HighlightStyle.define([
@@ -147,9 +147,12 @@ export const SourceEditor = forwardRef<SourceEditorHandle, {
       const view = viewRef.current
       if (!view) return null
       const sel = view.state.selection.main
-      if (sel.empty) return null
       const from = Math.min(sel.from, sel.to)
       const to = Math.max(sel.from, sel.to)
+      if (sel.empty || from === to) {
+        const line = view.state.doc.lineAt(from)
+        return { start_line: line.number, end_line: line.number, text: line.text, insert: from - line.from }
+      }
       const selection = view.state.doc.sliceString(from, to).trim()
       if (!selection) return null
       const start_line = view.state.doc.lineAt(from).number

@@ -106,6 +106,29 @@ test('text pick round-trips markdown source line numbers', () => {
   }), '三尺微命')
 })
 
+test('caret pick round-trips insert offset in the markdown line', () => {
+  const insert = '前 **粗体**'.length
+  const text = formatPicks([
+    {
+      kind: 'text',
+      id: 'c1',
+      label: 'L1:4',
+      route: '/s/abc',
+      path: '/pages/p000',
+      start_line: 1,
+      end_line: 1,
+      text: '前 **粗体** 后',
+      insert,
+    },
+  ])
+  assert.match(text, new RegExp(`insert="${insert}"`))
+  assert.doesNotMatch(text, /selection=/)
+  const parsed = parsePicks(text)
+  assert.equal(parsed.refs[0]?.insert, insert)
+  assert.equal(parsed.refs[0]?.text, '前 **粗体** 后')
+  assert.equal(chipLabel(parsed.refs[0]!), `L1:${insert}`)
+})
+
 test('text pick with > in source still round-trips as a chip handle', () => {
   const text = formatPicks([
     {

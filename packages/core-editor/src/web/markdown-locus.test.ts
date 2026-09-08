@@ -81,3 +81,33 @@ test('locus keeps source lines in text and the highlight in selection', () => {
   assert.equal(locus.selection, '三尺微命')
   editor.destroy()
 })
+
+test('caret maps insert to markdown source offset, not visual marks', () => {
+  const md = '前 **粗体** 后'
+  const editor = editorOf(md)
+  const from = posOf(editor, '粗体')
+  assert.ok(from != null)
+  editor.commands.setTextSelection(from + '粗体'.length)
+  const locus = markdownLocusFromSelection(editor)
+  assert.ok(locus)
+  assert.equal(locus.start_line, 1)
+  assert.equal(locus.end_line, 1)
+  assert.equal(locus.text, '前 **粗体** 后')
+  assert.equal(locus.selection, undefined)
+  assert.equal(locus.insert, '前 **粗体**'.length)
+  editor.destroy()
+})
+
+test('caret in a heading uses the heading markdown line', () => {
+  const md = '# Hello title\n\nbody'
+  const editor = editorOf(md)
+  const from = posOf(editor, 'Hello title')
+  assert.ok(from != null)
+  editor.commands.setTextSelection(from + 'Hello'.length)
+  const locus = markdownLocusFromSelection(editor)
+  assert.ok(locus)
+  assert.equal(locus.start_line, 1)
+  assert.equal(locus.text, '# Hello title')
+  assert.equal(locus.insert, '# Hello'.length)
+  editor.destroy()
+})

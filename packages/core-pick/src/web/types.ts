@@ -15,6 +15,8 @@ export type PickRef = {
   text?: string
   /** 用户高亮的片段。 */
   selection?: string
+  /** 无选区时：当前 markdown 行里插入点（0-based，插在 text[insert] 之前）。 */
+  insert?: number
 }
 
 export function pickKey(ref: PickRef) {
@@ -60,6 +62,7 @@ export function formatPicks(refs: PickRef[]) {
       if (ref.end_line != null) attrs.push(`end_line="${ref.end_line}"`)
       if (ref.text) attrs.push(`text="${escapeAttr(ref.text)}"`)
       if (ref.selection) attrs.push(`selection="${escapeAttr(ref.selection)}"`)
+      else if (ref.insert != null) attrs.push(`insert="${ref.insert}"`)
       return `<pick ${attrs.join(' ')} />`
     })
     .join('\n')
@@ -91,11 +94,12 @@ function parsePickAttrs(raw: string): PickRef | null {
   const end = Number(attrs.end_line)
   const text = attrs.text?.trim() ?? ''
   const selection = attrs.selection?.trim() ?? ''
+  const insert = Number(attrs.insert)
   return {
     kind,
     id,
     ...(attrs.action?.trim() ? { action: attrs.action.trim() } : {}),
-    label: attrs.label?.trim() || (kind === 'text' ? selection || text : '') || id,
+    label: attrs.label?.trim() || (kind === 'text' ? selection || text : '') || (Number.isInteger(Number(attrs.start_line)) ? `L${attrs.start_line}` : '') || id,
     route: attrs.route?.trim() || '',
     ...sourceFields({ path: attrs.path?.trim() }),
     ...locusFields({
@@ -103,6 +107,7 @@ function parsePickAttrs(raw: string): PickRef | null {
       end_line: Number.isInteger(end) && end >= 1 ? end : undefined,
       text: text || undefined,
       selection: selection || undefined,
+      insert: !selection && Number.isInteger(insert) && insert >= 0 ? insert : undefined,
     }),
   }
 }
@@ -114,16 +119,18 @@ function sourceFields(ref: { path?: string }) {
   }
 }
 
-function locusFields(ref: { start_line?: number; end_line?: number; text?: string; selection?: string }) {
+function locusFields(ref: { start_line?: number; end_line?: number; text?: string; selection?: string; insert?: number }) {
   const start = ref.start_line
   const end = ref.end_line
   const text = ref.text?.trim()
   const selection = ref.selection?.trim()
+  const insert = ref.insert
   return {
     ...(start != null ? { start_line: start } : {}),
     ...(end != null ? { end_line: end } : {}),
     ...(text ? { text } : {}),
     ...(selection ? { selection } : {}),
+    ...(!selection && insert != null ? { insert } : {}),
   }
 }
 
@@ -178,6 +185,10 @@ export function lineSpanLabel(ref: PickRef) {
 
 export function chipLabel(ref: PickRef) {
   if (ref.kind === 'text') {
+    if (ref.insert != null && !ref.selection) {
+      const line = lineSpanLabel(ref) || 'L?'
+      return `${line}:${ref.insert}`
+    }
     const snippet = pickPreview(ref.selection || ref.text || ref.label, 24)
     return snippet || '选区'
   }
@@ -202,11 +213,11 @@ export function pickIdFromText(raw: string) {
   return hash.toString(16)
 }
 
-export function withPickLocus(ref: PickRef, locus: { start_line: number; end_line: number; text: string; selection?: string } | null | undefined): PickRef {
+export function withPickLocus(ref: PickRef, locus: { start_line: number; end_line: number; text: string; selection?: string; insert?: number } | null | undefined): PickRef {
   if (!locus) return ref
   return {
     ...ref,
-    id: pickIdFromText(`${locus.start_line}:${locus.end_line}:${locus.selection || locus.text || ref.label}`),
+    id: pickIdFromText(`${locus.start_line}:${locus.end_line}:${locus.selection || locus.text || ''}:${locus.insert ?? ''}`),
     ...sourceFields(ref),
     ...locusFields({
       ...locus,
@@ -253,6 +264,7 @@ export function pickChipAttrs(ref: PickRef) {
     end_line: ref.end_line ?? null,
     text: ref.text ?? null,
     selection: ref.selection ?? null,
+    insert: ref.insert ?? null,
   }
 }
 
@@ -266,6 +278,7 @@ export function pickRefFromAttrs(attrs: Record<string, unknown>): PickRef | null
   const end = Number(attrs.end_line)
   const text = typeof attrs.text === 'string' ? attrs.text.trim() : ''
   const selection = typeof attrs.selection === 'string' ? attrs.selection.trim() : ''
+  const insert = Number(attrs.insert)
   return {
     kind,
     id,
@@ -278,6 +291,7 @@ export function pickRefFromAttrs(attrs: Record<string, unknown>): PickRef | null
       end_line: Number.isInteger(end) && end >= 1 ? end : undefined,
       text: text || undefined,
       selection: selection || undefined,
+      insert: !selection && Number.isInteger(insert) && insert >= 0 ? insert : undefined,
     }),
   }
 }

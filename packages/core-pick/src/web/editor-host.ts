@@ -1,4 +1,4 @@
-export type EditorTextLocus = { start_line: number; end_line: number; text: string; selection?: string }
+export type EditorTextLocus = { start_line: number; end_line: number; text: string; selection?: string; insert?: number }
 
 export type EditorTextHost = {
   /** db_content 路径，如 /pages/p002 */

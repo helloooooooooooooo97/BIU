@@ -28,6 +28,7 @@ export const PickChipNode = Node.create({
       end_line: { default: null },
       text: { default: null },
       selection: { default: null },
+      insert: { default: null },
     }
   },
   parseHTML() {

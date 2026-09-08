@@ -1,7 +1,14 @@
 import type { Editor } from '@tiptap/core'
 import type { Node as PmNode } from '@tiptap/pm/model'
 
-export type MarkdownLocus = { start_line: number; end_line: number; text: string; selection?: string }
+export type MarkdownLocus = {
+  start_line: number
+  end_line: number
+  text: string
+  selection?: string
+  /** 0-based offset in this line's markdown source; caret sits between text[insert-1] and text[insert]. */
+  insert?: number
+}
 
 function serialize(editor: Editor, doc: PmNode) {
   const manager = editor.storage.markdown?.manager as { serialize?: (json: unknown) => string } | undefined
@@ -11,7 +18,7 @@ function serialize(editor: Editor, doc: PmNode) {
 
 function lineAtEnd(md: string) {
   if (!md) return 1
-  return md.slice(0, md.length).split('\n').length
+  return md.split('\n').length
 }
 
 function linesOf(md: string, start: number, end: number) {
@@ -21,26 +28,46 @@ function linesOf(md: string, start: number, end: number) {
   return lines.slice(from - 1, to).join('\n')
 }
 
-/** 选区对应 Markdown 源码行号（1-based）。text 是整行源码，selection 是高亮片段。 */
+function clampLine(line: number, full: string) {
+  const total = Math.max(full.split('\n').length, 1)
+  return Math.min(Math.max(1, line), total)
+}
+
+function lineFromPrefix(prefix: string, full: string) {
+  let start_line = lineAtEnd(prefix)
+  if (prefix.endsWith('\n')) start_line = Math.max(1, lineAtEnd(prefix.slice(0, -1)) + 1)
+  return clampLine(start_line, full)
+}
+
+function insertInLine(prefix: string, full: string, line: number) {
+  const text = linesOf(full, line, line)
+  const before = line <= 1 ? '' : `${linesOf(full, 1, line - 1)}\n`
+  return Math.min(Math.max(0, prefix.length - before.length), text.length)
+}
+
+/** 选区对应 Markdown 源码行号（1-based）。text 是整行源码，selection 是高亮；无选区时 insert 是该行源码插入点。 */
 export function markdownLocusFromRange(editor: Editor, from: number, to: number): MarkdownLocus | null {
   const doc = editor.state.doc
   const a = Math.max(0, Math.min(from, to))
   const b = Math.max(a, Math.max(from, to))
-  if (a === b) return null
+  const full = serialize(editor, doc)
+  if (a === b) {
+    const prefix = serialize(editor, doc.cut(0, a))
+    const start_line = lineFromPrefix(prefix, full)
+    const end_line = start_line
+    const text = linesOf(full, start_line, end_line)
+    const insert = insertInLine(prefix, full, start_line)
+    return { start_line, end_line, text, insert }
+  }
   const selection = doc.textBetween(a, b, '\n').trim()
   if (!selection) return null
-  const full = serialize(editor, doc)
   const prefix = serialize(editor, doc.cut(0, a))
   const through = serialize(editor, doc.cut(0, b))
-  let start_line = lineAtEnd(prefix)
-  if (prefix.endsWith('\n')) start_line = Math.max(1, lineAtEnd(prefix.slice(0, -1)) + 1)
-  let end_line = lineAtEnd(through.replace(/\n$/, ''))
-  const total = Math.max(full.split('\n').length, 1)
-  start_line = Math.min(Math.max(1, start_line), total)
-  end_line = Math.min(Math.max(start_line, end_line), total)
-  const text = linesOf(full, start_line, end_line)
+  const start_line = lineFromPrefix(prefix, full)
+  const end_line = clampLine(lineAtEnd(through.replace(/\n$/, '')), full)
+  const text = linesOf(full, start_line, Math.max(start_line, end_line))
   if (!text.trim()) return null
-  return { start_line, end_line, text, selection }
+  return { start_line, end_line: Math.max(start_line, end_line), text, selection }
 }
 
 export function markdownLocusFromSelection(editor: Editor): MarkdownLocus | null {
