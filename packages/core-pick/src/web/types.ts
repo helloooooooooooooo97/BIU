@@ -1,9 +1,16 @@
+import { editorHostFromNode } from './editor-host.ts'
+
 export type PickRef = {
   kind: string
   id: string
   action?: string
   label: string
   route: string
+  /** Markdown 源码行号（1-based），不是可视编辑器行。 */
+  start_line?: number
+  end_line?: number
+  /** 对应源码片段。 */
+  text?: string
 }
 
 export function pickKey(ref: PickRef) {
@@ -30,6 +37,7 @@ export function dedupePicks(refs: PickRef[]): PickRef[] {
       label: ref.label || prev.label,
       route: ref.route || prev.route,
       ...(ref.action || prev.action ? { action: ref.action || prev.action } : {}),
+      ...locusFields(ref.start_line != null ? ref : prev),
     })
   }
   return [...map.values()]
@@ -42,6 +50,9 @@ export function formatPicks(refs: PickRef[]) {
       if (ref.action) attrs.push(`action="${escapeAttr(ref.action)}"`)
       if (ref.route) attrs.push(`route="${escapeAttr(ref.route)}"`)
       if (ref.label) attrs.push(`label="${escapeAttr(ref.label)}"`)
+      if (ref.start_line != null) attrs.push(`start_line="${ref.start_line}"`)
+      if (ref.end_line != null) attrs.push(`end_line="${ref.end_line}"`)
+      if (ref.text) attrs.push(`text="${escapeAttr(ref.text)}"`)
       return `<pick ${attrs.join(' ')} />`
     })
     .join('\n')
@@ -51,7 +62,7 @@ const PICK_TAG = /<pick\b([^>]*)\/>/gi
 const ATTR = /(\w+)="([^"]*)"/g
 
 function unescapeAttr(value: string) {
-  return value.replace(/&quot;/g, '"').replace(/&amp;/g, '&')
+  return value.replace(/&#10;/g, '\n').replace(/&quot;/g, '"').replace(/&amp;/g, '&')
 }
 
 function parsePickAttrs(raw: string): PickRef | null {
@@ -64,12 +75,31 @@ function parsePickAttrs(raw: string): PickRef | null {
   const kind = attrs.kind?.trim()
   const id = attrs.id?.trim()
   if (!kind || !id) return null
+  const start = Number(attrs.start_line)
+  const end = Number(attrs.end_line)
+  const text = attrs.text?.trim() ?? ''
   return {
     kind,
     id,
     ...(attrs.action?.trim() ? { action: attrs.action.trim() } : {}),
     label: attrs.label?.trim() || id,
     route: attrs.route?.trim() || '',
+    ...locusFields({
+      start_line: Number.isInteger(start) && start >= 1 ? start : undefined,
+      end_line: Number.isInteger(end) && end >= 1 ? end : undefined,
+      text: text || undefined,
+    }),
+  }
+}
+
+function locusFields(ref: { start_line?: number; end_line?: number; text?: string }) {
+  const start = ref.start_line
+  const end = ref.end_line
+  const text = ref.text?.trim()
+  return {
+    ...(start != null ? { start_line: start } : {}),
+    ...(end != null ? { end_line: end } : {}),
+    ...(text ? { text } : {}),
   }
 }
 
@@ -108,11 +138,19 @@ export function parsePicks(text: string): { refs: PickRef[]; rest: string } {
 }
 
 function escapeAttr(value: string) {
-  return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+  return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/\n/g, '&#10;')
+}
+
+export function lineSpanLabel(ref: PickRef) {
+  if (ref.start_line == null) return ''
+  if (ref.end_line != null && ref.end_line !== ref.start_line) return `L${ref.start_line}–${ref.end_line}`
+  return `L${ref.start_line}`
 }
 
 export function chipLabel(ref: PickRef) {
+  const lines = lineSpanLabel(ref)
   if (ref.action) return `${ref.label} · ${ref.action}`
+  if (lines) return `${lines} ${ref.label}`
   return ref.label
 }
 
@@ -129,7 +167,16 @@ export function pickIdFromText(raw: string) {
   return hash.toString(16)
 }
 
-/** 选取态下划到的一段正文；空选区返回 null。 */
+export function withPickLocus(ref: PickRef, locus: { start_line: number; end_line: number; text: string } | null | undefined): PickRef {
+  if (!locus) return ref
+  return {
+    ...ref,
+    id: pickIdFromText(`${locus.start_line}:${locus.end_line}:${locus.text || ref.label}`),
+    ...locusFields(locus),
+  }
+}
+
+/** 选取态下划到的一段正文；空选区返回 null。编辑器选区附带 Markdown 源码行号。 */
 export function textPickFromSelection(
   route: string,
   selection: Pick<Selection, 'isCollapsed' | 'toString' | 'rangeCount'> | null = typeof window === 'undefined' ? null : window.getSelection(),
@@ -138,7 +185,45 @@ export function textPickFromSelection(
   const raw = selection.toString()
   const label = pickPreview(raw, 80)
   if (!label) return null
-  return { kind: 'text', id: pickIdFromText(raw), label, route }
+  const anchor = 'anchorNode' in selection ? (selection as Selection).anchorNode : null
+  const host = editorHostFromNode(anchor)
+  const locus = host ? host.locusFromSelection() : null
+  return withPickLocus({ kind: 'text', id: pickIdFromText(raw), label, route }, locus)
+}
+
+export function pickChipAttrs(ref: PickRef) {
+  return {
+    kind: ref.kind,
+    id: ref.id,
+    label: ref.label,
+    route: ref.route,
+    action: ref.action ?? null,
+    start_line: ref.start_line ?? null,
+    end_line: ref.end_line ?? null,
+    text: ref.text ?? null,
+  }
+}
+
+export function pickRefFromAttrs(attrs: Record<string, unknown>): PickRef | null {
+  const kind = String(attrs.kind ?? '').trim()
+  const id = String(attrs.id ?? '').trim()
+  if (!kind || !id) return null
+  const action = String(attrs.action ?? '').trim()
+  const start = Number(attrs.start_line)
+  const end = Number(attrs.end_line)
+  const text = typeof attrs.text === 'string' ? attrs.text.trim() : ''
+  return {
+    kind,
+    id,
+    label: String(attrs.label ?? '').trim() || id,
+    route: String(attrs.route ?? ''),
+    ...(action ? { action } : {}),
+    ...locusFields({
+      start_line: Number.isInteger(start) && start >= 1 ? start : undefined,
+      end_line: Number.isInteger(end) && end >= 1 ? end : undefined,
+      text: text || undefined,
+    }),
+  }
 }
 
 export function pickDomAttrs(kind: string, id: string, label?: string) {

@@ -1,5 +1,6 @@
 import type { PickRef } from './types.ts'
-import { pickIdFromText, pickPreview } from './types.ts'
+import { pickIdFromText, pickPreview, withPickLocus } from './types.ts'
+import { editorHostFromNode } from './editor-host.ts'
 
 const KIND = 'data-biu-kind'
 const ID = 'data-biu-id'
@@ -116,25 +117,31 @@ function editorBlockPick(
   if (taggedKind && taggedId) {
     return {
       el,
-      ref: {
-        kind: taggedKind,
-        id: taggedId,
-        ...(read(el, ACTION) ? { action: read(el, ACTION) } : {}),
-        label: read(el, LABEL) || taggedId,
-        route,
-      },
+      ref: withPickLocus(
+        {
+          kind: taggedKind,
+          id: taggedId,
+          ...(read(el, ACTION) ? { action: read(el, ACTION) } : {}),
+          label: read(el, LABEL) || taggedId,
+          route,
+        },
+        editorHostFromNode(el)?.locusFromElement(el) ?? null,
+      ),
     }
   }
   const tag = (el.getAttribute('data-page-block') || el.tagName).toLowerCase()
   const text = pickPreview(el.textContent ?? '', 80)
   return {
     el,
-    ref: {
-      kind: 'block',
-      id: `${tag}:${pickIdFromText(text || tag)}`,
-      label: text || tag,
-      route,
-    },
+    ref: withPickLocus(
+      {
+        kind: 'block',
+        id: `${tag}:${pickIdFromText(text || tag)}`,
+        label: text || tag,
+        route,
+      },
+      editorHostFromNode(el)?.locusFromElement(el) ?? null,
+    ),
   }
 }
 

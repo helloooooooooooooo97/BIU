@@ -1,18 +1,8 @@
 import type { Editor } from '@tiptap/react'
-import { formatPick, pickKey, splitPickStream, type PickRef } from '@biu/core-pick/web'
+import { formatPick, pickChipAttrs, pickKey, pickRefFromAttrs, splitPickStream, type PickRef } from '@biu/core-pick/web'
 
 function attrsToRef(attrs: Record<string, unknown>): PickRef | null {
-  const kind = String(attrs.kind ?? '').trim()
-  const id = String(attrs.id ?? '').trim()
-  if (!kind || !id) return null
-  const action = String(attrs.action ?? '').trim()
-  return {
-    kind,
-    id,
-    label: String(attrs.label ?? '').trim() || id,
-    route: String(attrs.route ?? ''),
-    ...(action ? { action } : {}),
-  }
+  return pickRefFromAttrs(attrs)
 }
 
 export function serializeComposer(editor: Editor | null): { text: string; refs: PickRef[]; plain: string } {
@@ -63,13 +53,7 @@ export function jsonFromDraft(raw: string) {
       const ref = part.ref
       content.push({
         type: 'pickChip',
-        attrs: {
-          kind: ref.kind,
-          id: ref.id,
-          label: ref.label,
-          route: ref.route,
-          action: ref.action ?? null,
-        },
+        attrs: pickChipAttrs(ref),
       })
     }
   }
@@ -98,13 +82,7 @@ export function collectPickKeys(editor: Editor | null) {
 function chipContent(ref: PickRef) {
   return {
     type: 'pickChip',
-    attrs: {
-      kind: ref.kind,
-      id: ref.id,
-      label: ref.label,
-      route: ref.route,
-      action: ref.action ?? null,
-    },
+    attrs: pickChipAttrs(ref),
   }
 }
 

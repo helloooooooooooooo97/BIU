@@ -68,6 +68,27 @@ test('formatPicks emits data handles only', () => {
   assert.doesNotMatch(text, /class=|svg|html/i)
 })
 
+test('text pick round-trips markdown source line numbers', () => {
+  const text = formatPicks([
+    {
+      kind: 'text',
+      id: 'a1',
+      label: '第一段',
+      route: '/pages/home',
+      start_line: 5,
+      end_line: 6,
+      text: '第一段\n\nUNIQUESEL',
+    },
+  ])
+  assert.match(text, /start_line="5"/)
+  assert.match(text, /end_line="6"/)
+  assert.match(text, /text="第一段&#10;&#10;UNIQUESEL"/)
+  const parsed = parsePicks(text)
+  assert.equal(parsed.refs[0]?.start_line, 5)
+  assert.equal(parsed.refs[0]?.end_line, 6)
+  assert.equal(parsed.refs[0]?.text, '第一段\n\nUNIQUESEL')
+})
+
 test('selected body text becomes a text pick', () => {
   const fake = {
     isCollapsed: false,

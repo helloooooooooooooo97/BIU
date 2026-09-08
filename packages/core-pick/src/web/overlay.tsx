@@ -60,7 +60,8 @@ export function PickOverlay(_props: SlotProps) {
       if (event.button !== 0) return
       if (ignorePickCapture(event.target, event)) return
       const inReadable =
-        event.target instanceof Element && Boolean(event.target.closest('.chat-stage'))
+        event.target instanceof Element &&
+        Boolean(event.target.closest('.chat-stage, .page-editor, .tiptap, [data-testid="page-editor"]'))
       if (!inReadable) event.preventDefault()
       drag = { x: event.clientX, y: event.clientY, boxed: false }
     }

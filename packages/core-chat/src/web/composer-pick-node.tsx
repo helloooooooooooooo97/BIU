@@ -1,14 +1,9 @@
 import { Node, mergeAttributes } from '@tiptap/core'
 import { createRoot, type Root } from 'react-dom/client'
-import { PickChip, type PickRef } from '@biu/core-pick/web'
+import { PickChip, pickRefFromAttrs, type PickRef } from '@biu/core-pick/web'
 
 function refFromAttrs(attrs: Record<string, unknown>): PickRef {
-  const kind = String(attrs.kind ?? '')
-  const id = String(attrs.id ?? '')
-  const label = String(attrs.label ?? id)
-  const route = String(attrs.route ?? '')
-  const action = attrs.action ? String(attrs.action) : undefined
-  return { kind, id, label, route, ...(action ? { action } : {}) }
+  return pickRefFromAttrs(attrs) ?? { kind: '', id: '', label: '', route: '' }
 }
 
 function PickChipView({ attrs, onRemove }: { attrs: Record<string, unknown>; onRemove?: () => void }) {
@@ -28,6 +23,9 @@ export const PickChipNode = Node.create({
       action: { default: null },
       label: { default: '' },
       route: { default: '' },
+      start_line: { default: null },
+      end_line: { default: null },
+      text: { default: null },
     }
   },
   parseHTML() {

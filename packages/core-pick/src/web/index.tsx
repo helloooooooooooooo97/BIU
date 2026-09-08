@@ -5,7 +5,8 @@ import { PickService, getPick, usePickState } from './service.ts'
 import { PickOverlay } from './overlay.tsx'
 
 export { PickService, usePickState } from './service.ts'
-export { formatPicks, formatPick, parsePicks, splitPickStream, dedupePicks, chipLabel, pickKey, pickPreview, textPickFromSelection, pickDomAttrs, type PickRef } from './types.ts'
+export { formatPicks, formatPick, parsePicks, splitPickStream, dedupePicks, chipLabel, pickKey, pickPreview, textPickFromSelection, pickDomAttrs, pickChipAttrs, pickRefFromAttrs, withPickLocus, lineSpanLabel, type PickRef } from './types.ts'
+export { bindEditorTextHost, editorHostFromNode } from './editor-host.ts'
 export { PickChip, PickChipLabel, PickKindGlyph, pickKindIcon, pickKindTone, canonicalPickKind } from './chip.tsx'
 export { resolvePickFromNode, resolvePickAtPoint, resolvePicksInRect, visiblePickBox, pickSurfaceFromNode, pickSurfaceAtPoint } from './resolve.ts'
 

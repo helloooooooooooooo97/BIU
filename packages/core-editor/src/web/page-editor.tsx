@@ -10,6 +10,8 @@ import { editorHostIsLive } from './editor-live.ts'
 import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, isDocStartSelection } from './title-content-nav.ts'
 import { tryContentJump, contentJumpForRecord } from './content-jump.ts'
 import { CONTENT_JUMP_EVENT } from '@biu/type-file-system'
+import { bindEditorTextHost } from '@biu/core-pick/web'
+import { markdownLocusFromElement, markdownLocusFromSelection } from './markdown-locus.ts'
 
 function jumpToPending(editor: Editor, markdown: string, recordId: string, force = false) {
   requestAnimationFrame(() => {
@@ -177,6 +179,16 @@ export function PageEditor({ record, value, writable, onChange }: FsContentProps
     editor.commands.setContent(md, { contentType: 'markdown', emitUpdate: false })
     jumpToPending(editor, md, record.id, true)
   }, [editor, record.id, value])
+
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return
+    const el = editor.view.dom
+    bindEditorTextHost(el, {
+      locusFromSelection: () => markdownLocusFromSelection(editor),
+      locusFromElement: (node) => markdownLocusFromElement(editor, node),
+    })
+    return () => bindEditorTextHost(el, null)
+  }, [editor])
 
   useEffect(() => {
     if (!editor || editor.isDestroyed) return

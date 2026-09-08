@@ -9,6 +9,7 @@ export { PageEditor, PageEditor as RecordEditor } from './page-editor.tsx'
 export { PageEditorService, BASIC_BLOCK_TYPE, getPageEditor, usePageEditorVersion } from './service.ts'
 export type { HeadingReplacement, PageBlockSpec, PageBlockViewProps, SlashCommandSpec, SlashInsert } from './service.ts'
 export { pageEditorExtensions } from './kit.ts'
+export { markdownLocusFromRange, markdownLocusFromSelection, markdownLocusFromElement } from './markdown-locus.ts'
 
 export const name = 'core-editor-ui'
 export const inject = ['databaseUi']
