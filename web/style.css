@@ -5641,12 +5641,23 @@ body {
   vertical-align: middle;
 }
 
-.composer-tool-chip.is-pick>span,
-.user-pick-chip>span {
+.composer-tool-chip.is-pick>span.pick-chip-name,
+.user-pick-chip>span.pick-chip-name {
   min-width: 0;
   padding-right: 2px;
   overflow: hidden;
   text-overflow: ellipsis;
+  line-height: 1;
+}
+
+.composer-tool-chip.is-pick>span.pick-chip-lines,
+.user-pick-chip>span.pick-chip-lines {
+  flex: none;
+  min-width: max-content;
+  overflow: visible;
+  text-overflow: unset;
+  padding-right: 0;
+  white-space: nowrap;
   line-height: 1;
 }
 

@@ -16,7 +16,7 @@ import {
 import type { ComponentType } from 'react'
 import { ensureTagChipStyle, TagChipCloseMark, tagTone } from '@biu/public-ui'
 import type { PickRef } from './types.ts'
-import { chipLabel } from './types.ts'
+import { chipCaption, chipLabel } from './types.ts'
 
 /** 注入侧可能写 tasks / sessions-db，芯片按规范 kind 取色和图标。 */
 const PICK_KIND_ALIAS: Record<string, string> = {
@@ -77,10 +77,12 @@ export function PickKindGlyph({ kind }: { kind: string }) {
 }
 
 export function PickChipLabel({ pick }: { pick: PickRef }) {
+  const { name, span } = chipCaption(pick)
   return (
     <>
       <PickKindGlyph kind={pick.kind} />
-      <span>{chipLabel(pick)}</span>
+      <span className="pick-chip-name">{name}</span>
+      {span ? <span className="pick-chip-lines">({span})</span> : null}
     </>
   )
 }
