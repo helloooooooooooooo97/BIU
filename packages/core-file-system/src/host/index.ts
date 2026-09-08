@@ -1338,7 +1338,7 @@ export function apply(ctx: Context) {
   })
   ctx.tools.register({
     name: 'db_update',
-    description: '按表结构 schema 的可写字段更新一条已有记录，路径为 /<表>/<id>。成功只返回 {ok, path}，不回整行。把合集贴到页面并填属性：content.facet={tags:["facet-2"],values:{导演:"查泽雷",年份:2016}}（values 用合集属性的中文名或 key 即可，不必再包一层合集 id）。改合集定义（名称、属性列表）用 db_update /facets/<id> content.fields。新建用 db_create，正文用 db_content。',
+    description: '按表结构 schema 的可写字段更新一条已有记录，路径为 /<表>/<id>。成功只返回 {ok, path}，不回整行。合集 facet：可同时贴多个。一个合集用扁平 values，如 {tags:["facet-2"],values:{导演:"查泽雷"}}；多个合集必须按合集分子对象，如 {tags:["facet-2","awards"],values:{"facet-2":{导演:"查泽雷"},awards:{oscar:true}}}。省略 tags 则改当前已贴合集的属性（合并，不撕掉别的合集）。改合集定义用 db_update /facets/<id> content.fields。新建用 db_create，正文用 db_content。',
     parameters: {
       type: 'object',
       properties: {

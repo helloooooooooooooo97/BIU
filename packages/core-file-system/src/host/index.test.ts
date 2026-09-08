@@ -1098,6 +1098,28 @@ test('db_update page facet stores flat property values on the stamp', async () =
   const merged = await db.update('/pages/p1', { facet: { values: { 导演: 'Damien Chazelle' } } })
   assert.equal(merged.value.facet.values[id].director, 'Damien Chazelle')
   assert.equal(merged.value.facet.values[id].year, 2016)
+
+  const awards = await db.create('/facets', [{ title: '奖项' }])
+  const awardId = String(awards.items[0]?.value.id)
+  await db.update(`/facets/${awardId}`, {
+    fields: JSON.stringify([{ key: 'oscar', type: 'boolean', label: '奥斯卡' }]),
+  })
+  const both = await db.update('/pages/p1', {
+    facet: {
+      tags: [id, awardId],
+      values: {
+        [id]: { 导演: '查泽雷' },
+        [awardId]: { 奥斯卡: true },
+      },
+    },
+  })
+  assert.deepEqual(both.value.facet.tags, [id, awardId])
+  assert.equal(both.value.facet.values[id].director, '查泽雷')
+  assert.equal(both.value.facet.values[id].year, 2016)
+  assert.equal(both.value.facet.values[awardId].oscar, true)
+  const onlyAward = await db.update('/pages/p1', { facet: { values: { [awardId]: { oscar: false } } } })
+  assert.equal(onlyAward.value.facet.values[awardId].oscar, false)
+  assert.equal(onlyAward.value.facet.values[id].director, '查泽雷')
 })
 
 test('tables without records.create/delete reject create and delete', async () => {
