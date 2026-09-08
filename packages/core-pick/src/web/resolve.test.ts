@@ -2,6 +2,7 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { pickSurfaceAtPoint, resolvePickFromNode, resolvePickAtPoint, resolvePicksInRect, visiblePickBox, editorBlockElFromNode } from './resolve.ts'
 import { formatPicks, parsePicks, splitPickStream, chipLabel, chipCaption, dedupePicks, textPickFromSelection } from './types.ts'
+import { bindEditorTextHost } from './editor-host.ts'
 
 test('splitPickStream keeps text and chips in order', () => {
   const parts = splitPickStream('看 <pick kind="task" id="t1" label="写需求" /> 和 <pick kind="plugin" id="p1" label="Hello" /> 吧')
@@ -514,5 +515,43 @@ test('editor paragraphs headings lists and plugin shells are pickable', () => {
   const kinds = hits.map((item) => item.ref.kind).sort()
   assert.ok(kinds.includes('block'))
   assert.ok(kinds.includes('plugin'))
+  root.remove()
+})
+
+test('html surface pick carries page path and markdown lines like a block', () => {
+  const root = document.createElement('div')
+  root.className = 'tiptap'
+  const block = document.createElement('div')
+  block.className = 'page-block'
+  block.setAttribute('data-page-block', 'html')
+  const card = document.createElement('div')
+  card.setAttribute('data-biu-kind', 'html')
+  card.setAttribute('data-biu-id', 'html:0-abcd:0/1')
+  card.setAttribute('data-biu-label', '静态富排版')
+  card.textContent = '静态富排版，不跑脚本'
+  block.append(card)
+  root.append(block)
+  document.body.append(root)
+  bindEditorTextHost(root, {
+    path: '/pages/p002',
+    locusFromSelection: () => null,
+    locusFromElement: (el) =>
+      el === block || block.contains(el)
+        ? { start_line: 14, end_line: 22, text: ':::html\n<div>静态富排版</div>\n:::' }
+        : null,
+  })
+  const hit = resolvePickFromNode(card, '/s/abc')
+  assert.ok(hit)
+  assert.equal(hit.ref.kind, 'html')
+  assert.equal(hit.ref.id, 'html:0-abcd:0/1')
+  assert.equal(hit.ref.path, '/pages/p002')
+  assert.equal(hit.ref.start_line, 14)
+  assert.equal(hit.ref.end_line, 22)
+  assert.equal(hit.ref.text, ':::html\n<div>静态富排版</div>\n:::')
+  assert.equal(hit.ref.selection, '静态富排版，不跑脚本')
+  const packed = formatPicks([hit.ref])
+  assert.match(packed, /"path":"\/pages\/p002"/)
+  assert.match(packed, /"start_line":14/)
+  bindEditorTextHost(root, null)
   root.remove()
 })

@@ -73,14 +73,37 @@ export function resolvePickFromNode(
   if (!kind || !id || !highlight) return editorBlockPick(start, route, surface)
   return {
     el: highlight,
-    ref: {
-      kind,
-      id,
-      ...(action ? { action } : {}),
-      label: label || id,
-      route,
-    },
+    ref: withEditorPickContext(
+      {
+        kind,
+        id,
+        ...(action ? { action } : {}),
+        label: label || id,
+        route,
+      },
+      highlight,
+    ),
   }
+}
+
+/** 带 data-biu 的命中也挂上页面 path / markdown 行，和点选 block 一样；id 仍用节点自己的。 */
+function withEditorPickContext(ref: PickRef, el: HTMLElement): PickRef {
+  const sourced = withHostSource(ref, el)
+  const locus = editorLocusFromNode(el)
+  const next = locus ? { ...withPickLocus(sourced, locus), id: ref.id } : sourced
+  if (ref.kind !== 'html' || next.selection) return next
+  const snippet = pickPreview(el.textContent ?? '', 120)
+  return snippet ? { ...next, selection: snippet } : next
+}
+
+function editorLocusFromNode(el: HTMLElement) {
+  const host = editorHostFromNode(el)
+  if (!host) return null
+  const direct = host.locusFromElement(el)
+  if (direct) return direct
+  const block = el.closest('[data-page-block], .page-block')
+  if (block instanceof Element && block !== el) return host.locusFromElement(block)
+  return null
 }
 
 const EDITOR_ROOT = '.tiptap, [data-testid="page-editor"]'
