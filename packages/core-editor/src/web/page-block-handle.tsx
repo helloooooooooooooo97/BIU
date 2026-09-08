@@ -6,12 +6,12 @@ import {
   deleteHandleBlock,
   duplicateHandleBlock,
   handleBlockAtPointer,
+  handleRailLeft,
   insertParagraphAfter,
   insertParagraphBefore,
   type HandleBlock,
 } from './page-block-handle.ts'
 
-const HANDLE_RAIL = 28
 const GRIP_H = 26
 
 type HandleTarget = HandleBlock & { top: number; left: number; height: number; gripTop: number }
@@ -33,12 +33,13 @@ function readTarget(editor: Editor, host: HTMLElement, clientX: number, clientY:
   if (!(el instanceof HTMLElement)) return null
   const hostBox = host.getBoundingClientRect()
   const box = el.getBoundingClientRect()
+  const contentBox = editor.view.dom.getBoundingClientRect()
   const line = lineCoords(editor, found) ?? { top: box.top, bottom: box.top + GRIP_H }
   const gripTop = (line.top + line.bottom) / 2 - box.top - GRIP_H / 2
   return {
     ...found,
     top: box.top - hostBox.top,
-    left: box.left - hostBox.left - HANDLE_RAIL,
+    left: handleRailLeft(hostBox.left, contentBox.left),
     height: Math.max(box.height, GRIP_H),
     gripTop: Math.max(0, gripTop),
   }

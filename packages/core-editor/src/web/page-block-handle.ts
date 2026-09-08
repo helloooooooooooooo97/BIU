@@ -7,6 +7,13 @@ export type HandleBlock = {
   node: Node
 }
 
+/** 所有块共用一条轨道，不跟列表缩进。 */
+export const HANDLE_RAIL = 28
+
+export function handleRailLeft(hostLeft: number, contentLeft: number, rail = HANDLE_RAIL) {
+  return contentLeft - hostLeft - rail
+}
+
 /** 列表项单独成块；其余取紧贴文档的顶层块（引用整段、段落、插件块等）。 */
 export function resolveHandleBlock($pos: ResolvedPos): HandleBlock | null {
   for (let depth = $pos.depth; depth >= 1; depth--) {

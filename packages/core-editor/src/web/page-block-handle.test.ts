@@ -2,10 +2,12 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { Editor } from '@tiptap/core'
 import {
+  HANDLE_RAIL,
   beginHandleDrag,
   deleteHandleBlock,
   duplicateHandleBlock,
   handleBlockFromDom,
+  handleRailLeft,
   insertParagraphAfter,
   insertParagraphBefore,
   resolveHandleBlock,
@@ -128,4 +130,24 @@ test('beginHandleDrag selects a table as a node and marks move', () => {
   assert.equal(editor.view.dragging?.move, true)
   assert.equal(transfer.effectAllowed, 'move')
   editor.destroy()
+})
+
+test('handleRailLeft is the same for indented list boxes and top-level paragraphs', () => {
+  const hostLeft = 40
+  const contentLeft = 40
+  const paragraphBoxLeft = 40
+  const listItemBoxLeft = 64
+  assert.equal(handleRailLeft(hostLeft, contentLeft), contentLeft - hostLeft - HANDLE_RAIL)
+  assert.equal(handleRailLeft(hostLeft, contentLeft), handleRailLeft(hostLeft, contentLeft))
+  assert.notEqual(paragraphBoxLeft - hostLeft - HANDLE_RAIL, listItemBoxLeft - hostLeft - HANDLE_RAIL)
+  assert.equal(handleRailLeft(hostLeft, contentLeft), paragraphBoxLeft - hostLeft - HANDLE_RAIL)
+  assert.notEqual(handleRailLeft(hostLeft, contentLeft), listItemBoxLeft - hostLeft - HANDLE_RAIL)
+})
+
+test('page block handle x uses the editor rail, not the node box', async () => {
+  const { readFile } = await import('node:fs/promises')
+  const { resolve } = await import('node:path')
+  const src = await readFile(resolve(import.meta.dirname, './page-block-handle.tsx'), 'utf8')
+  assert.match(src, /handleRailLeft\(hostBox\.left, contentBox\.left\)/)
+  assert.doesNotMatch(src, /left: box\.left - hostBox\.left - HANDLE_RAIL/)
 })
