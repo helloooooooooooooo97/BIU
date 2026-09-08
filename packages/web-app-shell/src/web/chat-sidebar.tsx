@@ -203,9 +203,6 @@ export const ChatSidebar = memo(function ChatSidebar({
   const navigate = useNavigate()
   const sessions = useSessionView((state) => state.sessions)
   const sessionId = useSessionView((state) => state.sessionId)
-  const agentBusy = useSessionView(
-    (state) => state.agentStatus === 'running' || state.pending,
-  )
   // 用签名订阅，避免 busySessions 对象引用抖动导致整栏重渲
   const busySignature = useSessionView((state) =>
     Object.keys(state.busySessions)
@@ -381,7 +378,7 @@ export const ChatSidebar = memo(function ChatSidebar({
                             key={`pinned:${item.id}`}
                             item={item}
                             active={item.id === highlightId}
-                            busy={Boolean(busySessions[item.id]) || (item.id === highlightId && agentBusy)}
+                            busy={Boolean(busySessions[item.id])}
                             dancing={dancing}
                             onDelete={requestDeleteChat}
                             onPin={pinChat}
@@ -457,7 +454,7 @@ export const ChatSidebar = memo(function ChatSidebar({
                                     key={`${group.key}:${item.id}`}
                                     item={item}
                                     active={item.id === highlightId}
-                                    busy={Boolean(busySessions[item.id]) || (item.id === highlightId && agentBusy)}
+                                    busy={Boolean(busySessions[item.id])}
                                     dancing={dancing}
                                     onDelete={requestDeleteChat}
                                     onPin={pinChat}

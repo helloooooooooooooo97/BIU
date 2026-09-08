@@ -148,7 +148,7 @@ export function ApprovalsRail(props: SlotProps) {
   const sessionBusy = useSessionView((state) => {
     const id = state.sessionId
     if (!id) return false
-    return Boolean(state.busySessions[id]) || state.agentStatus === 'running' || Boolean(state.pending)
+    return Boolean(state.busySessions[id])
   })
   const dispatchedTasksByTurn = useSessionView((state) => state.dispatchedTasksByTurn)
   const workerAgents = useMemo(

@@ -167,6 +167,72 @@ test('turn/end clears current busy promptly (no stale breathing state)', async (
   assert.equal(view.get().pending, false)
 })
 
+test('stale agent/status running after turn/end does not restart breathing', async () => {
+  mockFetch({
+    '/api/sessions': () => ({ sessions: [{ id: 's1', title: 'a', busy: false, eventCount: 2, updatedAt: 1 }] }),
+    '/api/approvals': () => ({ mode: 'auto', pending: [] }),
+  })
+  const ctx = new Context()
+  await ctx.plugin(sessionView)
+  const view = ctx.sessionView as SessionViewService
+  view.ingest('s1', { type: 'session/open', version: 1, seq: 0, ts: 1 })
+  view.setAgentStatus('running', 1)
+  view.ingest('s1', { type: 'turn/end', turn: 1, reason: 'complete', seq: 2, ts: 2 })
+  view.setAgentStatus('running', 2)
+  assert.equal(view.get().busySessions.s1, undefined)
+  assert.equal(view.get().pending, false)
+})
+
+test('list not-busy clears current breathing after the send hold expires', async () => {
+  mockFetch({
+    '/api/sessions': () => ({ sessions: [{ id: 's1', title: 'a', busy: false, eventCount: 1, updatedAt: 1 }] }),
+    '/api/approvals': () => ({ mode: 'auto', pending: [] }),
+  })
+  const ctx = new Context()
+  await ctx.plugin(sessionView)
+  const view = ctx.sessionView as SessionViewService
+  view.ingest('s1', { type: 'session/open', version: 1, seq: 0, ts: 1 })
+  view.setAgentStatus('running', 1)
+  assert.equal(view.get().busySessions.s1, true)
+  ;(view as unknown as { busyHoldUntil: number }).busyHoldUntil = 0
+  await view.refreshSessions()
+  assert.equal(view.get().busySessions.s1, undefined)
+  assert.equal(view.get().pending, false)
+})
+
+test('stale agent/status running after turn/end does not restart breathing', async () => {
+  mockFetch({
+    '/api/sessions': () => ({ sessions: [{ id: 's1', title: 'a', busy: false, eventCount: 2, updatedAt: 1 }] }),
+    '/api/approvals': () => ({ mode: 'auto', pending: [] }),
+  })
+  const ctx = new Context()
+  await ctx.plugin(sessionView)
+  const view = ctx.sessionView as SessionViewService
+  view.ingest('s1', { type: 'session/open', version: 1, seq: 0, ts: 1 })
+  view.setAgentStatus('running', 1)
+  view.ingest('s1', { type: 'turn/end', turn: 1, reason: 'complete', seq: 2, ts: 2 })
+  view.setAgentStatus('running', 2)
+  assert.equal(view.get().busySessions.s1, undefined)
+  assert.equal(view.get().pending, false)
+})
+
+test('list not-busy clears current breathing after the send hold expires', async () => {
+  mockFetch({
+    '/api/sessions': () => ({ sessions: [{ id: 's1', title: 'a', busy: false, eventCount: 1, updatedAt: 1 }] }),
+    '/api/approvals': () => ({ mode: 'auto', pending: [] }),
+  })
+  const ctx = new Context()
+  await ctx.plugin(sessionView)
+  const view = ctx.sessionView as SessionViewService
+  view.ingest('s1', { type: 'session/open', version: 1, seq: 0, ts: 1 })
+  view.setAgentStatus('running', 1)
+  assert.equal(view.get().busySessions.s1, true)
+  ;(view as unknown as { busyHoldUntil: number }).busyHoldUntil = 0
+  await view.refreshSessions()
+  assert.equal(view.get().busySessions.s1, undefined)
+  assert.equal(view.get().pending, false)
+})
+
 test('worker session busy cleared once list reports not busy', async () => {
   mockFetch({
     '/api/sessions': () => ({ sessions: [{ id: 'worker-9', title: 'w', busy: false, eventCount: 1, updatedAt: 1 }] }),

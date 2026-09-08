@@ -70,6 +70,7 @@ export class AgentLoop implements AgentRunner {
     }
     if (!req.messages.length) {
       await session.append(this.sessionId, { type: 'turn/end', turn, reason: 'empty' })
+      this.ctx.emit('agent/status', { sessionId: this.sessionId, status: 'idle' })
       return { text: '（空回合）', steps: [] }
     }
 

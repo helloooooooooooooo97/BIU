@@ -115,7 +115,10 @@ export class AgentsService extends Service {
           result = turn
         })
         .finally(() => {
-          if (live.running === running) live.running = undefined
+          if (live.running === running) {
+            live.running = undefined
+            this.ctx.emit('agent/status', { sessionId: id, status: 'idle' })
+          }
         })
       live.running = running
       this.ctx.emit('agent/status', { sessionId: id, status: 'running', step: 0 })

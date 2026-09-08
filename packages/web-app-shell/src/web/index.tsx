@@ -73,7 +73,7 @@ function DockSessionMascot({
   const busy = useSessionView((state) => {
     const id = state.sessionId
     if (!id) return false
-    return Boolean(state.busySessions[id]) || state.agentStatus === 'running' || Boolean(state.pending)
+    return Boolean(state.busySessions[id])
   })
   return (
     <BrandCornerMascot

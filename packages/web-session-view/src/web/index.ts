@@ -269,6 +269,18 @@ function sessionsEqual(a: SessionListItem[], b: SessionListItem[]): boolean {
   return true
 }
 
+/** send 乐观 busy 后，列表短暂仍可能 busy:false；超过此时长以列表为准。 */
+export const BUSY_HOLD_MS = 1500
+
+export function turnInProgress(events: { type: string }[]) {
+  for (let i = events.length - 1; i >= 0; i--) {
+    const type = events[i]?.type
+    if (type === 'turn/end') return false
+    if (type === 'turn/start') return true
+  }
+  return false
+}
+
 export class SessionViewService extends Service {
   private value: SessionViewState = empty
   private listeners = new Set<() => void>()
@@ -281,6 +293,7 @@ export class SessionViewService extends Service {
   private trajGen = 0
   private trajFetchSessionId: string | null = null
   private dispatchedPoll: ReturnType<typeof setInterval> | null = null
+  private busyHoldUntil = 0
 
   constructor(ctx: Context) {
     super(ctx, 'sessionView')
@@ -441,6 +454,9 @@ export class SessionViewService extends Service {
   }
 
   ingest(sessionId: string, event: SessionEvent) {
+    if (event.type === 'turn/end' || event.type === 'turn/start') {
+      this.applyTurnBusy(sessionId, event.type)
+    }
     if (this.value.sessionId && this.value.sessionId !== sessionId) {
       void this.refreshSessions()
       return
@@ -456,26 +472,12 @@ export class SessionViewService extends Service {
     }
     this.flushChunkFrame()
     const events = upsertEvent(this.value.sessionId === sessionId ? this.value.events : [], event)
-    const basePatch: Partial<SessionViewState> = {
+    this.replace({
       sessionId,
       events,
       nodes: this.buildNodes(events),
       error: undefined,
-    }
-    let patch: Partial<SessionViewState> = basePatch
-    // 回合真正结束(turn/end)：立即清掉该会话的 busy，并解除当前会话 pending/运行态，
-    // 让侧栏呼吸态及时转回；否则仅靠 refreshSessions 兜底会被 syncBusyFromSessions 的 pending 保护卡住。
-    if (event.type === 'turn/end') {
-      const busySessions = { ...this.value.busySessions }
-      if (busySessions[sessionId]) {
-        delete busySessions[sessionId]
-        patch = { ...patch, busySessions }
-      }
-      if (this.value.sessionId === sessionId) {
-        patch = { ...patch, pending: false, agentStatus: 'idle' }
-      }
-    }
-    this.replace(patch)
+    })
     this.stashCurrent()
     // 检查器打开后 trajectoryLive=true：即使 URL 仍是 chat 也要刷新右侧轨迹
     if (this.wantsTrajectory()) void this.refreshTrajectoryIndex()
@@ -526,6 +528,16 @@ export class SessionViewService extends Service {
     const isOther = Boolean(sessionId && this.value.sessionId && sessionId !== this.value.sessionId)
 
     if (status === 'running') {
+      const holdOpen = Date.now() < this.busyHoldUntil
+      if (
+        !isOther &&
+        !holdOpen &&
+        !turnInProgress(this.value.events) &&
+        this.value.events.some((item) => item.type === 'turn/end')
+      ) {
+        return
+      }
+      if (!holdOpen) this.markBusyHold()
       const alreadyBusy = Boolean(id && this.value.busySessions[id])
       if (isOther) {
         // worker 步进会连发 running：busy 集合没变就别 notify，避免侧栏跟着抖
@@ -588,10 +600,32 @@ export class SessionViewService extends Service {
     }
   }
 
+  private markBusyHold() {
+    this.busyHoldUntil = Date.now() + BUSY_HOLD_MS
+  }
+
+  private applyTurnBusy(sessionId: string, type: 'turn/start' | 'turn/end') {
+    const busySessions = { ...this.value.busySessions }
+    if (type === 'turn/start') {
+      busySessions[sessionId] = true
+      this.markBusyHold()
+    } else {
+      delete busySessions[sessionId]
+      if (sessionId === this.value.sessionId) this.busyHoldUntil = 0
+    }
+    const current = sessionId === this.value.sessionId
+    const running = Boolean(busySessions[sessionId])
+    this.replace({
+      busySessions,
+      ...(current ? { pending: running, agentStatus: running ? 'running' : 'idle' } : {}),
+    })
+  }
+
   private syncBusyFromSessions(sessions: SessionListItem[]) {
     const busySessions = { ...this.value.busySessions }
     let changed = false
     const currentId = this.value.sessionId
+    const holdOpen = Date.now() < this.busyHoldUntil
     for (const item of sessions) {
       if (item.busy) {
         if (!busySessions[item.id]) {
@@ -599,8 +633,7 @@ export class SessionViewService extends Service {
           changed = true
         }
       } else if (busySessions[item.id]) {
-        // 当前会话正在 pending 时别被列表抖动清掉（send 乐观更新早于 isBusy）
-        if (item.id === currentId && this.value.pending) continue
+        if (item.id === currentId && holdOpen) continue
         delete busySessions[item.id]
         changed = true
       }
@@ -1364,6 +1397,7 @@ export class SessionViewService extends Service {
       return
     }
 
+    this.markBusyHold()
     this.setAgentStatus('running', undefined, sessionId)
     this.replace({ error: undefined })
     try {
@@ -1433,6 +1467,7 @@ export class SessionViewService extends Service {
     const sessionId = this.value.sessionId
     if (!sessionId) return false
     if (!this.value.inbox.some((item) => item.kind === 'wake')) return false
+    this.markBusyHold()
     this.setAgentStatus('running', undefined, sessionId)
     try {
       const res = await fetch(`/api/sessions/${sessionId}/inbox/flush`, { method: 'POST' })
