@@ -202,9 +202,12 @@ function pickChipName(ref: PickRef) {
   return ref.label || file || ref.id
 }
 
+export function chipCaption(ref: PickRef) {
+  return { name: ref.action ? `${ref.label} · ${ref.action}` : pickChipName(ref), span: lineSpanLabel(ref) }
+}
+
 export function chipLabel(ref: PickRef) {
-  const name = ref.action ? `${ref.label} · ${ref.action}` : pickChipName(ref)
-  const span = lineSpanLabel(ref)
+  const { name, span } = chipCaption(ref)
   return span ? `${name} (${span})` : name
 }
 

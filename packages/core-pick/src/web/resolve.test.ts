@@ -1,7 +1,7 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { pickSurfaceAtPoint, resolvePickFromNode, resolvePickAtPoint, resolvePicksInRect, visiblePickBox, editorBlockElFromNode } from './resolve.ts'
-import { formatPicks, parsePicks, splitPickStream, chipLabel, dedupePicks, textPickFromSelection } from './types.ts'
+import { formatPicks, parsePicks, splitPickStream, chipLabel, chipCaption, dedupePicks, textPickFromSelection } from './types.ts'
 
 test('splitPickStream keeps text and chips in order', () => {
   const parts = splitPickStream('看 <pick kind="task" id="t1" label="写需求" /> 和 <pick kind="plugin" id="p1" label="Hello" /> 吧')
@@ -66,6 +66,20 @@ test('formatPicks emits JSON handles only', () => {
   ])
   assert.equal(text, '<pick>{"kind":"session","id":"abc","route":"/s/abc","label":"聊天"}</pick>')
   assert.doesNotMatch(text, /class=|svg|html/i)
+})
+
+test('chip caption keeps line span off the truncated preview', () => {
+  const raw =
+    '<pick>{"kind":"text","id":"4b33982e","route":"/s/b3b1d688-1e8b-45b1-ac56-b8747a14e842","path":"/pages/p004","start_line":1,"end_line":12,"text":"的的的\\n\\n我爱你\\n完成滕王阁序  \\n我爱你，谢谢  \\n我爱你  \\n我爱你 forever  \\n你好吗？？？  \\n我喜欢呢？？？  \\n非常好  \\n你好  \\n继续加","selection":"的的的\\n我爱你\\n完成滕王阁序我爱你，谢谢我爱你我爱你 forever你好吗？？？我喜欢呢？？？非常好你好继续加"}</pick>'
+  const parsed = parsePicks(raw)
+  const ref = parsed.refs[0]
+  assert.ok(ref)
+  assert.equal(ref.start_line, 1)
+  assert.equal(ref.end_line, 12)
+  const { name, span } = chipCaption(ref)
+  assert.equal(span, '1-12')
+  assert.ok(name.length <= 25)
+  assert.match(chipLabel(ref), /\(1-12\)$/)
 })
 
 test('chip label puts line span in parentheses after the name', () => {
