@@ -10,7 +10,7 @@ import type { FsContentProps } from '@biu/type-file-system/ui'
 import { pageEditorExtensions } from './kit.ts'
 import { PageBlockHandle } from './page-block-handle.tsx'
 import { editorHostIsLive } from './editor-live.ts'
-import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, isDocStartSelection } from './title-content-nav.ts'
+import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, shouldLeaveContentForTitle } from './title-content-nav.ts'
 import { tryContentJump, contentJumpForRecord } from './content-jump.ts'
 import { CONTENT_JUMP_EVENT } from '@biu/type-file-system'
 import { bindEditorTextHost, getPick } from '@biu/core-pick/web'
@@ -342,11 +342,10 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
             if (ref) getPick()?.attach([ref])
             return true
           }
-          if (event.key !== 'ArrowUp' || event.shiftKey || event.altKey || event.metaKey || event.ctrlKey) return false
           if (event.isComposing) return false
           const sel = view.state.selection
           const start = Selection.atStart(view.state.doc).from
-          if (!isDocStartSelection(sel.from, sel.empty, start)) return false
+          if (!shouldLeaveContentForTitle(event.key, event, sel.from, sel.empty, start)) return false
           event.preventDefault()
           window.dispatchEvent(new Event(FOCUS_RECORD_TITLE))
           return true
@@ -553,6 +552,16 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
       event.preventDefault()
       event.stopPropagation()
       sendToChat()
+      return
+    }
+    if (
+      source &&
+      sourceFind.current?.isAtStart() &&
+      shouldLeaveContentForTitle(event.key, event, 0, true, 0)
+    ) {
+      event.preventDefault()
+      event.stopPropagation()
+      window.dispatchEvent(new Event(FOCUS_RECORD_TITLE))
     }
   }
 
