@@ -17,7 +17,7 @@ export class AgentDbCompact {
     const fields: Record<string, unknown> = {}
     for (const [key, field] of Object.entries(schema.fields)) {
       const builtin = defaults[key]
-      if (builtin && this.specsMatch(field, builtin)) continue
+      if (key !== 'facet' && builtin && this.specsMatch(field, builtin)) continue
       fields[key] = this.field(key, field)
     }
     const actions = (schema.actions ?? []).map((item) => this.action(item)).filter(Boolean)

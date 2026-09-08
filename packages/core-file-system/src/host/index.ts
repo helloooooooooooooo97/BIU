@@ -1343,7 +1343,10 @@ export function apply(ctx: Context) {
       type: 'object',
       properties: {
         path: { type: 'string' },
-        content: { description: '要更新的字段（对象或 JSON 字符串）' },
+        content: {
+          description:
+            '要更新的字段（对象或 JSON 字符串）。合集写 facet：一个合集 values 扁平，如 {facet:{tags:["facet-2"],values:{导演:"查泽雷"}}}；多个合集 values 按合集 id 分子对象。省略 tags 只改属性，不撕掉其它合集。',
+        },
       },
       required: ['path', 'content'],
     },

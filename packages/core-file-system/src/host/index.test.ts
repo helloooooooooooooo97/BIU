@@ -654,7 +654,7 @@ test('agent db_stat omits builtin fields; service stat and list still include th
     caps?: string[]
   }
   assert.equal(agentStat.schema?.fields && 'id' in agentStat.schema.fields, false)
-  assert.equal(agentStat.schema?.fields && 'facet' in agentStat.schema.fields, false)
+  assert.equal((agentStat.schema?.fields as { facet?: { type?: string } } | undefined)?.facet?.type, 'facet')
   assert.ok(agentStat.schema?.fields && 'status' in agentStat.schema.fields)
   assert.equal(agentStat.schema?.records, undefined)
   assert.ok(agentStat.caps?.includes('list'))
