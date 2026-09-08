@@ -80,6 +80,10 @@ test('page plugin stores pages in SQLite under .page', async () => {
   assert.equal(loaded?.title, '新页面')
   const sqlite = await readFile(join(root, '.page/pages.sqlite'))
   assert.ok(sqlite.byteLength > 0)
+  const mdFile = await readFile(join(root, `.page/${created[0]!.id}.md`), 'utf8')
+  assert.match(mdFile, /^---\n/)
+  assert.match(mdFile, /title: 新页面/)
+  assert.match(mdFile, /# 标题\n内容/)
 
   const written = await spec.update!(created[0]!.id, {
     facet: { tags: ['dp'], values: { dp: { complexity: 'O(n)' } } },
@@ -143,14 +147,14 @@ test('PagesStore reads existing markdown files from .page', async () => {
   assert.equal(reads, afterListReads)
   const home = await store.get('home')
   assert.equal(home?.notes, 'hello\n')
-  assert.equal(reads, afterListReads)
+  assert.equal(reads, afterListReads + 1)
   await writeFile(join(root, PAGE_ROOT, 'other.md'), dumpMarkdown({ title: 'Other' }, ''), 'utf8')
   const onlyHome = await store.list(['home'])
   assert.equal(onlyHome.length, 1)
   assert.equal(onlyHome[0]?.id, 'home')
   const all = await store.list()
   assert.equal(all.map((row) => row.id).sort().join(','), 'home,other')
-  assert.equal(reads, afterListReads + 1)
+  assert.equal(reads, afterListReads + 3)
 })
 
 test('collectPageAssetNames picks page asset pointers', () => {

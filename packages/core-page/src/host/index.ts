@@ -16,7 +16,7 @@ export function pagesCollection(store: PagesStore): CollectionSpec {
       route: '/pages',
       title: '页面',
       inspector: true,
-      blurb: '页面存在工作区 .page/pages.sqlite。列表 db_list /pages 走 SQLite，不扫全部 Markdown；正文 notes 用 db_content / db_update。图片和附件与其它表一样在仓库 .biu/assets。树用 parentId。新建 db_create，删除 db_delete。本表没有 db_action。',
+      blurb: '每页正文在工作区 .page/<id>.md（YAML 头 + Markdown）。.page/pages.sqlite 只做列表索引，不扫全部文件。正文用 db_content；改标题/标签等用 db_update。图片和附件在仓库 .biu/assets。树用 parentId。新建 db_create，删除 db_delete。本表没有 db_action。',
       order: 25,
       icon: 'document',
     },
