@@ -11,13 +11,14 @@ import {
 
 const none = { shiftKey: false }
 
-test('empty caret at doc start leaves for title on Enter and ArrowUp', () => {
-  assert.equal(shouldLeaveContentForTitle('Enter', none, 1, true, 1), true)
+test('empty caret at doc start leaves for title on Backspace/Delete and ArrowUp', () => {
+  assert.equal(shouldLeaveContentForTitle('Backspace', none, 1, true, 1), true)
+  assert.equal(shouldLeaveContentForTitle('Delete', none, 1, true, 1), true)
   assert.equal(shouldLeaveContentForTitle('ArrowUp', none, 1, true, 1), true)
-  assert.equal(shouldLeaveContentForTitle('Enter', { shiftKey: true }, 1, true, 1), false)
-  assert.equal(shouldLeaveContentForTitle('Enter', none, 2, true, 1), false)
-  assert.equal(shouldLeaveContentForTitle('Enter', none, 1, false, 1), false)
-  assert.equal(shouldLeaveContentForTitle('ArrowDown', none, 1, true, 1), false)
+  assert.equal(shouldLeaveContentForTitle('Enter', none, 1, true, 1), false)
+  assert.equal(shouldLeaveContentForTitle('Backspace', { shiftKey: true }, 1, true, 1), false)
+  assert.equal(shouldLeaveContentForTitle('Backspace', none, 2, true, 1), false)
+  assert.equal(shouldLeaveContentForTitle('Backspace', none, 1, false, 1), false)
 })
 
 function makeEditor(md: string) {
@@ -41,53 +42,66 @@ function press(editor: Editor, key: string, extra: KeyboardEventInit = {}) {
   return event
 }
 
-test('Enter at the start of TipTap focuses the title and does not insert a paragraph', () => {
-  const { editor, host } = makeEditor('hello')
-  editor.chain().focus().setTextSelection(Selection.atStart(editor.state.doc)).run()
-  assert.equal(editor.state.selection.empty, true)
-  assert.equal(editor.state.selection.from, Selection.atStart(editor.state.doc).from)
-
+function listenTitle() {
   let hits = 0
   const onTitle = () => {
     hits += 1
   }
   window.addEventListener(FOCUS_RECORD_TITLE, onTitle)
-  const before = editor.getMarkdown()
-  const event = press(editor, 'Enter')
-  window.removeEventListener(FOCUS_RECORD_TITLE, onTitle)
+  return {
+    hits: () => hits,
+    stop() {
+      window.removeEventListener(FOCUS_RECORD_TITLE, onTitle)
+    },
+  }
+}
 
+test('Backspace at the start of TipTap focuses the title and does not delete the first character', () => {
+  const { editor, host } = makeEditor('hello')
+  editor.chain().focus().setTextSelection(Selection.atStart(editor.state.doc)).run()
+  const title = listenTitle()
+  const before = editor.getMarkdown()
+  const event = press(editor, 'Backspace')
+  title.stop()
   assert.equal(event.defaultPrevented, true)
-  assert.equal(hits, 1)
+  assert.equal(title.hits(), 1)
   assert.equal(editor.getMarkdown(), before)
-  assert.doesNotMatch(editor.getHTML(), /<p><\/p><p>hello/)
+  assert.match(editor.getHTML(), /hello/)
   editor.destroy()
   host.remove()
 })
 
-test('Enter in the middle of a paragraph does not jump to the title', () => {
+test('Delete at the start of TipTap also focuses the title', () => {
+  const { editor, host } = makeEditor('hello')
+  editor.chain().focus().setTextSelection(Selection.atStart(editor.state.doc)).run()
+  const title = listenTitle()
+  const before = editor.getMarkdown()
+  press(editor, 'Delete')
+  title.stop()
+  assert.equal(title.hits(), 1)
+  assert.equal(editor.getMarkdown(), before)
+  editor.destroy()
+  host.remove()
+})
+
+test('Backspace in the middle of a paragraph does not jump to the title', () => {
   const { editor, host } = makeEditor('hello')
   editor.commands.setTextSelection(3)
-  let hits = 0
-  const onTitle = () => {
-    hits += 1
-  }
-  window.addEventListener(FOCUS_RECORD_TITLE, onTitle)
-  press(editor, 'Enter')
-  window.removeEventListener(FOCUS_RECORD_TITLE, onTitle)
-  assert.equal(hits, 0)
+  const title = listenTitle()
+  press(editor, 'Backspace')
+  title.stop()
+  assert.equal(title.hits(), 0)
   editor.destroy()
   host.remove()
 })
 
-test('Shift+Enter at the start of TipTap stays in the document', () => {
+test('Enter at the start of TipTap stays in the document', () => {
   const { editor, host } = makeEditor('hello')
   editor.chain().focus().setTextSelection(Selection.atStart(editor.state.doc)).run()
-  let hits = 0
-  window.addEventListener(FOCUS_RECORD_TITLE, () => {
-    hits += 1
-  })
-  press(editor, 'Enter', { shiftKey: true })
-  assert.equal(hits, 0)
+  const title = listenTitle()
+  press(editor, 'Enter')
+  title.stop()
+  assert.equal(title.hits(), 0)
   editor.destroy()
   host.remove()
 })

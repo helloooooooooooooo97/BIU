@@ -21,6 +21,6 @@ export function shouldLeaveContentForTitle(
 ) {
   if (flags.isComposing) return false
   if (flags.shiftKey || flags.altKey || flags.metaKey || flags.ctrlKey) return false
-  if (key !== 'ArrowUp' && key !== 'Enter') return false
+  if (key !== 'ArrowUp' && key !== 'Backspace' && key !== 'Delete') return false
   return isDocStartSelection(from, empty, docStart)
 }
