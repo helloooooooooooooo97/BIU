@@ -21,15 +21,22 @@ import { applyEditorFind } from './find-plugin.ts'
 import { EDITOR_TONES, tagTextColor, tagWashColor } from './color-swatches.ts'
 import { isSendChatHotkey, pickFromEditor, pickFromLocus } from './editor-ask.ts'
 
-/** 本地正在打字时不要用远端正文盖掉；源码模式 / 未挂上的编辑器不算在打字。 */
+const LOCAL_EDIT_MS = 600
+
+/** 本地刚打过字时不要用远端正文盖掉光标；只看聚焦会挡住 db_content 的实时套入。 */
 export function shouldApplyRemoteMarkdown(args: {
   focused: boolean
   live: boolean
   hasJump: boolean
+  recentlyLocal: boolean
 }) {
   if (args.hasJump) return true
-  if (args.focused && args.live) return false
+  if (args.focused && args.live && args.recentlyLocal) return false
   return true
+}
+
+export function recentlyLocalEdit(typedAt: number, now = Date.now()) {
+  return now - typedAt < LOCAL_EDIT_MS
 }
 
 function jumpToPending(editor: Editor, markdown: string, recordId: string, force = false) {
@@ -264,6 +271,10 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
   const saved = useRef(asMarkdown(value))
   const sourceMode = useRef(source)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const remoteTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const typedAt = useRef(0)
+  const valueRef = useRef(value)
+  valueRef.current = value
   const hydratedId = useRef<string | null>(null)
   const sourceFind = useRef<SourceEditorHandle>(null)
   const editorRef = useRef<Editor | null>(null)
@@ -316,6 +327,7 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
       },
       onUpdate: ({ editor: current }) => {
         if (hydratedId.current !== record.id) return
+        typedAt.current = Date.now()
         if (timer.current) clearTimeout(timer.current)
         timer.current = setTimeout(() => {
           queueMicrotask(() => {
@@ -362,19 +374,39 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
       jumpToPending(editor, md, record.id)
       return
     }
-    if (
-      !shouldApplyRemoteMarkdown({
+    const paint = (next: string) => {
+      saved.current = next
+      editor.commands.setContent(next, { contentType: 'markdown', emitUpdate: false })
+      jumpToPending(editor, next, record.id, true)
+    }
+    const canPaint = () =>
+      shouldApplyRemoteMarkdown({
         focused: editor.isFocused,
         live: editorHostIsLive(editor),
         hasJump: Boolean(contentJumpForRecord(record.id)),
+        recentlyLocal: recentlyLocalEdit(typedAt.current),
       })
-    ) {
+    if (!canPaint()) {
+      if (remoteTimer.current) clearTimeout(remoteTimer.current)
+      const wait = () => {
+        if (editor.isDestroyed) return
+        const next = asMarkdown(valueRef.current)
+        if (next === saved.current) return
+        if (!canPaint()) {
+          remoteTimer.current = setTimeout(wait, LOCAL_EDIT_MS)
+          return
+        }
+        paint(next)
+      }
+      remoteTimer.current = setTimeout(wait, LOCAL_EDIT_MS)
       return
     }
-    saved.current = md
-    editor.commands.setContent(md, { contentType: 'markdown', emitUpdate: false })
-    jumpToPending(editor, md, record.id, true)
+    paint(md)
   }, [editor, record.id, value])
+
+  useEffect(() => () => {
+    if (remoteTimer.current) clearTimeout(remoteTimer.current)
+  }, [])
 
   useEffect(() => {
     if (!editor || editor.isDestroyed || source) return

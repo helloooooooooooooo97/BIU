@@ -2,7 +2,7 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { Editor } from '@tiptap/core'
 import { pageEditorExtensions } from './kit.ts'
-import { shouldApplyRemoteMarkdown } from './page-editor.tsx'
+import { recentlyLocalEdit, shouldApplyRemoteMarkdown } from './page-editor.tsx'
 
 function insertAfter(text: string, insertLine: number, newStr: string) {
   const lines = text.split('\n')
@@ -30,8 +30,26 @@ test('tiptap paints an inserted markdown line as a paragraph', () => {
 })
 
 test('remote insert applies when the wysiwyg editor is not live', () => {
-  assert.equal(shouldApplyRemoteMarkdown({ focused: true, live: false, hasJump: false }), true)
-  assert.equal(shouldApplyRemoteMarkdown({ focused: true, live: true, hasJump: false }), false)
-  assert.equal(shouldApplyRemoteMarkdown({ focused: true, live: true, hasJump: true }), true)
-  assert.equal(shouldApplyRemoteMarkdown({ focused: false, live: true, hasJump: false }), true)
+  assert.equal(
+    shouldApplyRemoteMarkdown({ focused: true, live: false, hasJump: false, recentlyLocal: false }),
+    true,
+  )
+  assert.equal(
+    shouldApplyRemoteMarkdown({ focused: true, live: true, hasJump: false, recentlyLocal: true }),
+    false,
+  )
+  assert.equal(
+    shouldApplyRemoteMarkdown({ focused: true, live: true, hasJump: false, recentlyLocal: false }),
+    true,
+  )
+  assert.equal(
+    shouldApplyRemoteMarkdown({ focused: true, live: true, hasJump: true, recentlyLocal: true }),
+    true,
+  )
+  assert.equal(
+    shouldApplyRemoteMarkdown({ focused: false, live: true, hasJump: false, recentlyLocal: true }),
+    true,
+  )
+  assert.equal(recentlyLocalEdit(Date.now()), true)
+  assert.equal(recentlyLocalEdit(Date.now() - 2000), false)
 })
