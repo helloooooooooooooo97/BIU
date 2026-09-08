@@ -33,7 +33,7 @@ export function ShellSettingsShortcuts() {
           <span className="settings-muted">⌘L</span>
         </li>
       </ul>
-      <p className="settings-muted m-0 px-2 pt-1">Windows 与 Linux 上 ⌘ 用 Ctrl。选取也可用 ⌘Q。编辑器内 ⌘F 为正文查找，⌘K / ⌘L 也可从选区气泡进入。</p>
+      <p className="settings-muted m-0 px-2 pt-1">Windows 与 Linux 上 ⌘ 用 Ctrl。选取也可用 ⌘Q。编辑器内 ⌘F 为正文查找，⌘L 也可从选区气泡进入。</p>
     </section>
   )
 }

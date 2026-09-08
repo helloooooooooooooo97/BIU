@@ -87,6 +87,8 @@ export const PAGE_EDITOR_STYLE = `
 .page-bubble button{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:28px;margin:0;border:0;border-radius:6px;padding:0 7px;background:transparent;color:var(--dsw-label);font:inherit;font-size:13px;font-weight:700;cursor:pointer}
 .page-bubble button:hover,.page-bubble button.is-on{background:var(--dsw-hover)}
 .page-bubble button.is-on{color:var(--dsw-business)}
+.page-bubble-chat{gap:4px;padding:0 8px}
+.page-bubble-chat-icon{display:block;width:14px;height:14px;flex:none}
 .page-bubble-letter{font-size:12px;font-weight:800;line-height:1;border-bottom:2px solid currentColor}
 .page-bubble-mark{display:block;width:12px;height:12px;border-radius:3px;border:1px solid var(--dsw-border);box-sizing:border-box}
 .page-ask{flex:1 1 100%;display:flex;align-items:center;gap:4px;padding:4px 2px 2px;min-width:200px}

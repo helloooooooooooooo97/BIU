@@ -120,6 +120,7 @@ test('settings lists search and pick shortcuts', () => {
   assert.match(chrome, /Ctrl\+Q/)
   assert.match(chrome, /正文查找/)
   assert.match(chrome, /⌘K/)
+  assert.match(chrome, /⌘L 也可从选区气泡进入/)
   assert.match(chrome, /⌘L/)
   assert.match(chrome, /就地编辑选区/)
   assert.match(chrome, /选区送到对话/)

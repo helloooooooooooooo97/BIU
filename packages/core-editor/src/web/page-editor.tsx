@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from
 import { HeadlessPopover } from '@biu/public-ui'
 import { SourceEditor, type SourceEditorHandle } from './source-editor.tsx'
 import { usePageSourceMode } from './source-mode.ts'
+import { ChatBubbleLeftRightIcon } from '@heroicons/react/16/solid'
 import { EditorContent, useEditor } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
 import type { Editor } from '@tiptap/core'
@@ -208,19 +209,9 @@ function AskForm({
 
 function Bubble({
   editor,
-  askOpen,
-  askText,
-  onAskOpen,
-  onAskText,
-  onSubmitAsk,
   onSendChat,
 }: {
   editor: Editor
-  askOpen: boolean
-  askText: string
-  onAskOpen: () => void
-  onAskText: (next: string) => void
-  onSubmitAsk: () => void
   onSendChat: () => void
 }) {
   const [colorOpen, setColorOpen] = useState<'text' | 'mark' | null>(null)
@@ -244,7 +235,7 @@ function Bubble({
       aria-label="文字样式"
       shouldShow={({ editor: current, from, to }) => {
         if (current.isActive('table')) return false
-        if (colorOpen || askOpen) return true
+        if (colorOpen) return true
         return from !== to
       }}
     >
@@ -255,9 +246,19 @@ function Bubble({
       {btn('H1', editor.isActive('heading', { level: 1 }), () => editor.chain().focus().toggleHeading({ level: 1 }).run())}
       {btn('H2', editor.isActive('heading', { level: 2 }), () => editor.chain().focus().toggleHeading({ level: 2 }).run())}
       <ColorMenus editor={editor} open={colorOpen} onOpen={setColorOpen} />
-      {btn('⌘K', askOpen, onAskOpen)}
-      {btn('⌘L', false, onSendChat)}
-      {askOpen ? <AskForm value={askText} onChange={onAskText} onSubmit={onSubmitAsk} /> : null}
+      <button
+        type="button"
+        className="page-bubble-chat"
+        title="送到对话"
+        aria-label="送到对话"
+        onMouseDown={(event: MouseEvent) => {
+          event.preventDefault()
+          onSendChat()
+        }}
+      >
+        <ChatBubbleLeftRightIcon className="page-bubble-chat-icon" aria-hidden />
+        ⌘L
+      </button>
     </BubbleMenu>
   )
 }
@@ -595,19 +596,10 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
   return (
     <div className="page-editor" onKeyDownCapture={onEditorHotkey}>
       {findBar}
+      {askOpen ? <AskForm value={askText} onChange={setAskText} onSubmit={submitAsk} /> : null}
       <EditorContent editor={editor} />
       {writable !== false ? <PageBlockHandle editor={editor} /> : null}
-      {writable !== false ? (
-        <Bubble
-          editor={editor}
-          askOpen={askOpen}
-          askText={askText}
-          onAskOpen={() => setAskOpen(true)}
-          onAskText={setAskText}
-          onSubmitAsk={submitAsk}
-          onSendChat={sendToChat}
-        />
-      ) : null}
+      {writable !== false ? <Bubble editor={editor} onSendChat={sendToChat} /> : null}
       {writable !== false ? <TableBar editor={editor} /> : null}
     </div>
   )
