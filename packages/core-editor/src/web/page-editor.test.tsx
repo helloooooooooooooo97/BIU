@@ -95,7 +95,6 @@ test('page editor bridges cursor to the record title', async () => {
   assert.match(src, /editorHostIsLive\(editor\)/)
   assert.match(src, /Selection\.atStart/)
   assert.match(src, /bindEditorTextHost/)
-  assert.match(src, /pickContentFile/)
   assert.match(src, /markdownLocusFromSelection/)
   assert.match(src, /usePageSourceMode/)
   assert.match(src, /SourceEditor/)

@@ -24,7 +24,6 @@ export const PickChipNode = Node.create({
       label: { default: '' },
       route: { default: '' },
       path: { default: null },
-      file: { default: null },
       start_line: { default: null },
       end_line: { default: null },
       text: { default: null },

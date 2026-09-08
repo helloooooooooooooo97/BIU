@@ -12,7 +12,7 @@ import { editorHostIsLive } from './editor-live.ts'
 import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, isDocStartSelection } from './title-content-nav.ts'
 import { tryContentJump, contentJumpForRecord } from './content-jump.ts'
 import { CONTENT_JUMP_EVENT } from '@biu/type-file-system'
-import { bindEditorTextHost, pickContentFile } from '@biu/core-pick/web'
+import { bindEditorTextHost } from '@biu/core-pick/web'
 import { markdownLocusFromElement, markdownLocusFromSelection } from './markdown-locus.ts'
 
 /** 本地正在打字时不要用远端正文盖掉；源码模式 / 未挂上的编辑器不算在打字。 */
@@ -207,7 +207,6 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
     const el = editor.view.dom
     bindEditorTextHost(el, {
       path: path || undefined,
-      file: path ? pickContentFile(path) : undefined,
       locusFromSelection: () => markdownLocusFromSelection(editor),
       locusFromElement: (node) => markdownLocusFromElement(editor, node),
     })

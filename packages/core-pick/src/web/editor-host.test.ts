@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { bindEditorTextHost, pickContentFile } from './editor-host.ts'
+import { bindEditorTextHost } from './editor-host.ts'
 import { textPickFromSelection } from './types.ts'
 
 test('text pick from a bound editor includes markdown source lines', () => {
@@ -10,7 +10,6 @@ test('text pick from a bound editor includes markdown source lines', () => {
   document.body.append(root)
   bindEditorTextHost(root, {
     path: '/pages/home',
-    file: '.page/home.md',
     locusFromSelection: () => ({ start_line: 5, end_line: 5, text: 'UNIQUESEL' }),
     locusFromElement: () => null,
   })
@@ -26,12 +25,6 @@ test('text pick from a bound editor includes markdown source lines', () => {
   assert.equal(ref.end_line, 5)
   assert.equal(ref.text, 'UNIQUESEL')
   assert.equal(ref.path, '/pages/home')
-  assert.equal(ref.file, '.page/home.md')
   bindEditorTextHost(root, null)
   root.remove()
-})
-
-test('page record path maps to the workspace markdown file', () => {
-  assert.equal(pickContentFile('/pages/p002'), '.page/p002.md')
-  assert.equal(pickContentFile('/tasks/t1'), undefined)
 })
