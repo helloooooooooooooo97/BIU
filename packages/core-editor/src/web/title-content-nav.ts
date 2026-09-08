@@ -1,3 +1,6 @@
+import { Selection } from '@tiptap/pm/state'
+import type { EditorView } from '@tiptap/pm/view'
+
 export const FOCUS_RECORD_TITLE = 'biu:focus-record-title'
 export const FOCUS_RECORD_CONTENT = 'biu:focus-record-content'
 
@@ -17,4 +20,14 @@ export function shouldLeaveContentForTitle(
   if (flags.shiftKey || flags.altKey || flags.metaKey || flags.ctrlKey) return false
   if (key !== 'ArrowUp' && key !== 'Enter') return false
   return isDocStartSelection(from, empty, docStart)
+}
+
+export function handleContentTitleNav(view: EditorView, event: KeyboardEvent) {
+  if (event.isComposing) return false
+  const sel = view.state.selection
+  const start = Selection.atStart(view.state.doc).from
+  if (!shouldLeaveContentForTitle(event.key, event, sel.from, sel.empty, start)) return false
+  event.preventDefault()
+  window.dispatchEvent(new Event(FOCUS_RECORD_TITLE))
+  return true
 }

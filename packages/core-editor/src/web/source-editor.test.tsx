@@ -1,9 +1,10 @@
+import { createRef } from 'react'
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { render, waitFor } from '@testing-library/react'
-import { SourceEditor } from './source-editor.tsx'
+import { SourceEditor, type SourceEditorHandle } from './source-editor.tsx'
 
 test('source editor uses CodeMirror markdown highlighting and line numbers', () => {
   const src = readFileSync(resolve(import.meta.dirname, './source-editor.tsx'), 'utf8')
@@ -25,4 +26,13 @@ test('source editor mounts a CodeMirror view for markdown', async () => {
   })
   assert.match(container.textContent ?? '', /Hello/)
   assert.ok(container.querySelector('.cm-lineNumbers'))
+})
+
+test('source editor reports an empty caret at the start of the document', async () => {
+  const ref = createRef<SourceEditorHandle>()
+  render(<SourceEditor ref={ref} value={'# Hello\n\nbody'} writable onChange={() => undefined} />)
+  await waitFor(() => {
+    assert.ok(ref.current)
+  })
+  assert.equal(ref.current?.isAtStart(), true)
 })

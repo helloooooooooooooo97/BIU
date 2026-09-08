@@ -6,12 +6,11 @@ import { ChatBubbleLeftRightIcon } from '@heroicons/react/16/solid'
 import { EditorContent, useEditor } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
 import type { Editor } from '@tiptap/core'
-import { Selection } from '@tiptap/pm/state'
 import type { FsContentProps } from '@biu/type-file-system/ui'
 import { pageEditorExtensions } from './kit.ts'
 import { PageBlockHandle } from './page-block-handle.tsx'
 import { editorHostIsLive } from './editor-live.ts'
-import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, shouldLeaveContentForTitle } from './title-content-nav.ts'
+import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, handleContentTitleNav, shouldLeaveContentForTitle } from './title-content-nav.ts'
 import { tryContentJump, contentJumpForRecord } from './content-jump.ts'
 import { CONTENT_JUMP_EVENT } from '@biu/type-file-system'
 import { bindEditorTextHost, getPick } from '@biu/core-pick/web'
@@ -304,13 +303,7 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
             if (ref) getPick()?.attach([ref])
             return true
           }
-          if (event.isComposing) return false
-          const sel = view.state.selection
-          const start = Selection.atStart(view.state.doc).from
-          if (!shouldLeaveContentForTitle(event.key, event, sel.from, sel.empty, start)) return false
-          event.preventDefault()
-          window.dispatchEvent(new Event(FOCUS_RECORD_TITLE))
-          return true
+          return handleContentTitleNav(view, event)
         },
         handleDOMEvents: {
           dragover(view, event) {
