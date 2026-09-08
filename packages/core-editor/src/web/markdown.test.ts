@@ -159,6 +159,29 @@ $$\\sum_{i=1}^{n} x_i$$
   editor.destroy()
 })
 
+test('latex markdown does not accumulate backslashes across reloads', () => {
+  let md = '的 $a_b$ 的\n\n$$\\sum_{i=1}^{n} x_i$$\n'
+  const counts: number[] = []
+  for (let i = 0; i < 4; i++) {
+    const editor = new Editor({
+      extensions: pageEditorExtensions(),
+      content: md,
+      contentType: 'markdown',
+    })
+    md = editor.getMarkdown()
+    counts.push((md.match(/\\/g) ?? []).length)
+    editor.destroy()
+  }
+  assert.equal(counts[0], counts[3])
+  const again = new Editor({
+    extensions: pageEditorExtensions(),
+    content: md,
+    contentType: 'markdown',
+  })
+  assert.equal(again.getMarkdown(), md)
+  again.destroy()
+})
+
 test('slash command inserts inline math into the current paragraph', () => {
   const editor = new Editor({
     extensions: pageEditorExtensions(),

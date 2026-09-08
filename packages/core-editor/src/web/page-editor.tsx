@@ -262,6 +262,7 @@ function TableBar({ editor }: { editor: Editor }) {
 export function PageEditor({ record, value, writable, onChange, path }: FsContentProps) {
   const source = usePageSourceMode(record.id)
   const saved = useRef(asMarkdown(value))
+  const sourceMode = useRef(source)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const hydratedId = useRef<string | null>(null)
   const sourceFind = useRef<SourceEditorHandle>(null)
@@ -405,7 +406,10 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
   }, [source, editor])
 
   useEffect(() => {
-    if (!editor || editor.isDestroyed || source) return
+    if (!editor || editor.isDestroyed) return
+    const leavingSource = sourceMode.current && !source
+    sourceMode.current = source
+    if (source || !leavingSource) return
     const md = asMarkdown(value)
     saved.current = md
     if (md === editor.getMarkdown()) return

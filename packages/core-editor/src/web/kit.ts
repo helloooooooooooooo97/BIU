@@ -12,6 +12,10 @@ import { pageFind } from './find-plugin.ts'
 import { slashCommand } from './slash.ts'
 import { openMathPop } from './math-pop.ts'
 
+function latexFromMarkdown(raw: unknown) {
+  return String(raw ?? '').trim().replace(/\\([`*_[\]~])/g, '$1')
+}
+
 /** 上游 insertInlineMath 读的是旧 selection，斜杠删掉 `/` 后会插到段落外，插不进去。 */
 const pageInlineMath = InlineMath.extend({
   addCommands() {
@@ -40,6 +44,10 @@ const pageInlineMath = InlineMath.extend({
       }),
     ]
   },
+  parseMarkdown: (token: { latex?: unknown }) => ({
+    type: 'inlineMath',
+    attrs: { latex: latexFromMarkdown(token.latex) },
+  }),
 })
 
 const pageMathematics = Mathematics.extend({
@@ -68,7 +76,12 @@ const pageMathematics = Mathematics.extend({
       })
     }
     return [
-      BlockMath.configure({
+      BlockMath.extend({
+        parseMarkdown: (token: { latex?: unknown }) => ({
+          type: 'blockMath',
+          attrs: { latex: latexFromMarkdown(token.latex) },
+        }),
+      }).configure({
         katexOptions: { throwOnError: false, displayMode: true },
         onClick: (node, pos) => editLatex('block', node, pos),
       }),

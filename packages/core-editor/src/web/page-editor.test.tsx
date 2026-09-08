@@ -169,5 +169,7 @@ test('page editor applies later value when it is not focused', async () => {
   assert.match(src, /editorHostIsLive\(editor\)/)
   assert.doesNotMatch(src, /if \(editor\.isFocused && !contentJumpForRecord\(record\.id\)\) return/)
   assert.match(src, /md === saved\.current/)
+  assert.match(src, /leavingSource/)
+  assert.match(src, /sourceMode\.current/)
 })
 
