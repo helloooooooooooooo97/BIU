@@ -99,5 +99,7 @@ export const PAGE_EDITOR_STYLE = `
 .page-color-grid button.is-on{box-shadow:0 0 0 2px var(--dsw-business)}
 .page-color-clear{width:100%;margin:8px 0 0;border:0;border-radius:6px;padding:6px 8px;background:transparent;color:var(--dsw-label-2);font:inherit;font-size:12px;font-weight:600;cursor:pointer;text-align:left}
 .page-color-clear:hover{background:var(--dsw-hover);color:var(--dsw-label)}
+.page-math-pop{position:fixed;z-index:10000;min-width:220px;max-width:min(360px,calc(100vw - 16px));padding:6px 8px;background:var(--dsw-sidebar);border:1px solid var(--dsw-border);border-radius:8px;box-shadow:0 8px 24px rgba(15,15,15,.16)}
+.page-math-pop-input{display:block;width:100%;margin:0;border:0;padding:2px 0;background:transparent;color:var(--dsw-label);font-family:var(--font-mono);font-size:13px;line-height:1.45;outline:none;resize:none}
 .page-editor .tiptap mark{border-radius:2px;padding:0 .08em}
 `

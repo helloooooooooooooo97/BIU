@@ -10,6 +10,7 @@ import { headingSkin } from './heading-skin.ts'
 import { pageBlock } from './page-block.ts'
 import { pageFind } from './find-plugin.ts'
 import { slashCommand } from './slash.ts'
+import { openMathPop } from './math-pop.ts'
 
 /** 上游 insertInlineMath 读的是旧 selection，斜杠删掉 `/` 后会插到段落外，插不进去。 */
 const pageInlineMath = InlineMath.extend({
@@ -44,26 +45,36 @@ const pageInlineMath = InlineMath.extend({
 const pageMathematics = Mathematics.extend({
   addExtensions() {
     const editorOf = () => this.editor
-    const askLatex = (current: string) => {
-      if (typeof window === 'undefined' || typeof window.prompt !== 'function') return null
-      return window.prompt('LaTeX 公式', current)
+    const editLatex = (kind: 'block' | 'inline', node: { attrs: Record<string, unknown> }, pos: number) => {
+      const editor = editorOf()
+      if (editor.isDestroyed) return
+      const dom = editor.view.nodeDOM(pos)
+      const anchor = dom instanceof Element ? dom : null
+      if (!anchor) return
+      editor.chain().setNodeSelection(pos).focus().run()
+      const name = kind === 'block' ? 'blockMath' : 'inlineMath'
+      openMathPop({
+        anchor,
+        latex: String(node.attrs.latex ?? ''),
+        onCommit: (next) => {
+          if (editor.isDestroyed) return
+          const current = editor.state.doc.nodeAt(pos)
+          if (!current || current.type.name !== name) return
+          if (next === String(current.attrs.latex ?? '')) return
+          const chain = editor.chain().setNodeSelection(pos)
+          if (kind === 'block') chain.updateBlockMath({ latex: next }).focus().run()
+          else chain.updateInlineMath({ latex: next }).focus().run()
+        },
+      })
     }
     return [
       BlockMath.configure({
         katexOptions: { throwOnError: false, displayMode: true },
-        onClick: (node, pos) => {
-          const next = askLatex(String(node.attrs.latex ?? ''))
-          if (next == null) return
-          editorOf().chain().setNodeSelection(pos).updateBlockMath({ latex: next }).focus().run()
-        },
+        onClick: (node, pos) => editLatex('block', node, pos),
       }),
       pageInlineMath.configure({
         katexOptions: { throwOnError: false, displayMode: false },
-        onClick: (node, pos) => {
-          const next = askLatex(String(node.attrs.latex ?? ''))
-          if (next == null) return
-          editorOf().chain().setNodeSelection(pos).updateInlineMath({ latex: next }).focus().run()
-        },
+        onClick: (node, pos) => editLatex('inline', node, pos),
       }),
     ]
   },
