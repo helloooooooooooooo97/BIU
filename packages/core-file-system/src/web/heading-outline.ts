@@ -36,6 +36,20 @@ function itemFromEl(el: HTMLElement, index: number): HeadingOutlineItem | null {
   return { id: `heading-${index}`, text, level: asLevel(Number(el.tagName.slice(1))) }
 }
 
+export function blockElBySnippet(root: ParentNode, snippet: string): HTMLElement | null {
+  const needle = snippet.replace(/\s+/g, ' ').trim().slice(0, 48)
+  if (!needle) return null
+  for (const el of headingElements(root)) {
+    if ((el.textContent ?? '').replace(/\s+/g, ' ').includes(needle)) return el
+  }
+  const scope = root.querySelector('.tiptap, .page-editor') ?? root
+  for (const el of scope.querySelectorAll('h1, h2, h3, p, li, blockquote, pre, th, td, .page-block')) {
+    if (!(el instanceof HTMLElement)) continue
+    if ((el.textContent ?? '').replace(/\s+/g, ' ').includes(needle)) return el
+  }
+  return null
+}
+
 function escapeId(id: string) {
   return typeof CSS !== 'undefined' && typeof CSS.escape === 'function' ? CSS.escape(id) : id
 }

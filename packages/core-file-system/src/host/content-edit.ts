@@ -50,20 +50,41 @@ function parseViewRange(viewRange: unknown, lineCount: number) {
   return { start, end: Math.min(end, Math.max(lineCount, 1)) }
 }
 
-export type ContentLocus = { start_line: number; end_line: number }
+export type ContentLocus = { start_line: number; end_line: number; text?: string }
 
 export function lineAtOffset(text: string, offset: number) {
   if (offset <= 0) return 1
   return text.slice(0, offset).split('\n').length
 }
 
+function stripJumpLine(line: string) {
+  return line
+    .replace(/^#{1,6}\s+/, '')
+    .replace(/^>\s+/, '')
+    .replace(/^[-*+]\s+/, '')
+    .replace(/^\d+\.\s+/, '')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .trim()
+}
+
+export function withJumpText(next: string, locus: ContentLocus): ContentLocus {
+  const lines = next.split('\n')
+  const i = Math.min(Math.max(1, locus.start_line), Math.max(lines.length, 1)) - 1
+  for (let k = i; k < lines.length; k++) {
+    const text = stripJumpLine(lines[k] ?? '')
+    if (text) return { ...locus, text }
+  }
+  return locus
+}
+
 export function locusFromRange(text: string, start: number, end: number): ContentLocus {
   const from = Math.max(0, start)
   const to = Math.max(from, end)
-  return {
+  return withJumpText(text, {
     start_line: lineAtOffset(text, from),
     end_line: lineAtOffset(text, to > from ? to - 1 : from),
-  }
+  })
 }
 
 export function mutationLocus(
@@ -77,29 +98,29 @@ export function mutationLocus(
     const oldStr = String(args.old_str ?? '')
     const added = typeof args.new_str === 'string' ? args.new_str : ''
     const at = before.indexOf(oldStr)
-    if (at < 0) return { start_line: 1, end_line: 1 }
+    if (at < 0) return withJumpText(next, { start_line: 1, end_line: 1 })
     return locusFromRange(next, at, at + added.length)
   }
   if (command === 'insert') {
     const start_line = Number(args.insert_line) + 1
     const added = String(args.new_str ?? '')
     const span = Math.max(1, added.split('\n').length)
-    return { start_line, end_line: start_line + span - 1 }
+    return withJumpText(next, { start_line, end_line: start_line + span - 1 })
   }
   if (command === 'replace_lines') {
     const start_line = Number(args.start_line)
     const added = String(args.new_str ?? '')
-    if (!added) return { start_line, end_line: start_line }
-    return { start_line, end_line: start_line + added.split('\n').length - 1 }
+    if (!added) return withJumpText(next, { start_line, end_line: start_line })
+    return withJumpText(next, { start_line, end_line: start_line + added.split('\n').length - 1 })
   }
   if (command === 'write') {
     const a = before.split('\n')
     const b = next.split('\n')
     const n = Math.max(a.length, b.length, 1)
     for (let i = 0; i < n; i++) {
-      if ((a[i] ?? '') !== (b[i] ?? '')) return { start_line: i + 1, end_line: i + 1 }
+      if ((a[i] ?? '') !== (b[i] ?? '')) return withJumpText(next, { start_line: i + 1, end_line: i + 1 })
     }
-    return { start_line: 1, end_line: 1 }
+    return withJumpText(next, { start_line: 1, end_line: 1 })
   }
   return null
 }

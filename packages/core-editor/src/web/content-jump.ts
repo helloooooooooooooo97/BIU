@@ -2,6 +2,7 @@ import type { Node as PmNode } from '@tiptap/pm/model'
 import type { Editor } from '@tiptap/core'
 import { CONTENT_JUMP_EVENT, parseContentJump, type ContentJump } from '@biu/type-file-system'
 import { editorHostIsLive } from './editor-live.ts'
+import { scrollOutlineTarget } from '@biu/public-ui'
 
 let pending: ContentJump | null = null
 let consumeTimer = 0
@@ -141,20 +142,9 @@ function scrollCaret(editor: Editor, pos: number) {
   const node = mapped.node
   const el = node instanceof Element ? node : node.parentElement
   if (!(el instanceof HTMLElement)) return
-  let host: HTMLElement | null = el
-  while (host && host !== document.body) {
-    const style = window.getComputedStyle(host)
-    const oy = style.overflowY
-    if ((oy === 'auto' || oy === 'scroll') && host.scrollHeight > host.clientHeight + 1) {
-      const box = el.getBoundingClientRect()
-      const frame = host.getBoundingClientRect()
-      const mid = box.top + box.height / 2
-      host.scrollTop += mid - (frame.top + frame.height / 2)
-      return
-    }
-    host = host.parentElement
-  }
-  el.scrollIntoView?.({ block: 'center', inline: 'nearest' })
+  const block =
+    el.closest('h1, h2, h3, p, li, blockquote, pre, table, .page-block') ?? el
+  scrollOutlineTarget(block)
 }
 
 function safeTextPos(doc: PmNode, pos: number) {

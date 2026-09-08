@@ -92,6 +92,7 @@ export class AgentDbCompact {
       if (typeof rec.command === 'string' && rec.command !== 'write') next.command = rec.command
       if (typeof rec.start_line === 'number') next.start_line = rec.start_line
       if (typeof rec.end_line === 'number') next.end_line = rec.end_line
+      if (typeof rec.text === 'string' && rec.text.trim()) next.text = rec.text.trim()
       return next
     }
     const next: Record<string, unknown> = { path: rec.path, text: rec.text }

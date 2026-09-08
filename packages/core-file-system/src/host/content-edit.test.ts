@@ -49,19 +49,21 @@ test('mutationLocus reports 1-based lines in the new text', () => {
   const before = 'one\ntwo\nthree\nfour'
   assert.deepEqual(
     mutationLocus('str_replace', before, 'one\nTWO\nthree\nfour', { old_str: 'two', new_str: 'TWO' }),
-    { start_line: 2, end_line: 2 },
+    { start_line: 2, end_line: 2, text: 'TWO' },
   )
   assert.deepEqual(
     mutationLocus('replace_lines', before, 'one\ntwo\nC\nD', { start_line: 3, end_line: 4, new_str: 'C\nD' }),
-    { start_line: 3, end_line: 4 },
+    { start_line: 3, end_line: 4, text: 'C' },
   )
   assert.deepEqual(mutationLocus('insert', before, 'one\nmid\ntwo\nthree\nfour', { insert_line: 1, new_str: 'mid' }), {
     start_line: 2,
     end_line: 2,
+    text: 'mid',
   })
-  assert.deepEqual(mutationLocus('write', before, 'done', { value: 'done' }), { start_line: 1, end_line: 1 })
+  assert.deepEqual(mutationLocus('write', before, 'done', { value: 'done' }), { start_line: 1, end_line: 1, text: 'done' })
   assert.deepEqual(mutationLocus('write', before, 'one\ntwo\nTHREE\nfour', { value: 'one\ntwo\nTHREE\nfour' }), {
     start_line: 3,
     end_line: 3,
+    text: 'THREE',
   })
 })

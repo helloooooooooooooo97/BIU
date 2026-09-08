@@ -632,16 +632,23 @@ export type ContentJump = {
   path: string
   start_line: number
   end_line: number
+  text?: string
 }
 
 export function parseContentJump(raw: unknown): ContentJump | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
-  const rec = raw as { path?: unknown; start_line?: unknown; end_line?: unknown }
+  const rec = raw as { path?: unknown; start_line?: unknown; end_line?: unknown; text?: unknown }
   const start = Number(rec.start_line)
   if (!Number.isInteger(start) || start < 1) return null
   const endRaw = Number(rec.end_line)
   const end = Number.isInteger(endRaw) && endRaw >= start ? endRaw : start
-  return { path: String(rec.path ?? ''), start_line: start, end_line: end }
+  const text = typeof rec.text === 'string' ? rec.text.trim() : ''
+  return {
+    path: String(rec.path ?? ''),
+    start_line: start,
+    end_line: end,
+    ...(text ? { text } : {}),
+  }
 }
 
 export type ListPage = {

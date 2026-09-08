@@ -1,7 +1,8 @@
-import { useCallback, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { OutlineNav } from '@biu/public-ui'
-import { headingElById, headingsFromRoot, sameOutlineItems } from './heading-outline.ts'
+import { OutlineNav, scrollOutlineTarget } from '@biu/public-ui'
+import { CONTENT_JUMP_EVENT, parseContentJump } from '@biu/type-file-system'
+import { blockElBySnippet, headingElById, headingsFromRoot, sameOutlineItems } from './heading-outline.ts'
 
 function detailMain(from: HTMLElement | null) {
   const stage = from?.closest('.fsdb-detail-stage')
@@ -45,8 +46,26 @@ export function HeadingOutline({ enabled }: { enabled: boolean }) {
   const go = useCallback((id: string) => {
     const main = detailMain(mark.current)
     if (!main) return
-    headingElById(main, id)?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    scrollOutlineTarget(headingElById(main, id))
   }, [])
+
+  useEffect(() => {
+    if (!enabled) return
+    const onJump = (event: Event) => {
+      const jump = parseContentJump((event as CustomEvent).detail)
+      const text = jump?.text?.trim() ?? ''
+      if (!text) return
+      const run = () => {
+        const main = detailMain(mark.current)
+        if (!main) return
+        scrollOutlineTarget(blockElBySnippet(main, text))
+      }
+      run()
+      requestAnimationFrame(() => requestAnimationFrame(run))
+    }
+    window.addEventListener(CONTENT_JUMP_EVENT, onJump)
+    return () => window.removeEventListener(CONTENT_JUMP_EVENT, onJump)
+  }, [enabled])
 
   if (!enabled) return null
   return (

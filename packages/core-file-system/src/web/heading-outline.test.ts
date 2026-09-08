@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { headingsFromRoot } from './heading-outline.ts'
+import { blockElBySnippet, headingsFromRoot } from './heading-outline.ts'
 
 test('headingsFromRoot extracts h1–h3 and skips chrome titles', () => {
   const root = document.createElement('div')
@@ -85,4 +85,17 @@ test('page and task outlines still use headings when no session chat', () => {
       ['heading-1', 'Step', 2],
     ],
   )
+})
+
+test('blockElBySnippet prefers the rendered heading like the outline', () => {
+  const root = document.createElement('div')
+  root.innerHTML = `
+    <div class="fsdb-detail-main">
+      <h1 class="fsdb-detail-title">Record</h1>
+      <div class="page-editor"><div class="tiptap"><h2>改动标题</h2><p>body</p></div></div>
+    </div>
+  `
+  const found = blockElBySnippet(root, '改动标题')
+  assert.equal(found?.tagName, 'H2')
+  assert.equal(found?.textContent, '改动标题')
 })

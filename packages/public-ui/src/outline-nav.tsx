@@ -12,6 +12,13 @@ function escapeId(id: string) {
   return typeof CSS !== 'undefined' && typeof CSS.escape === 'function' ? CSS.escape(id) : id
 }
 
+/** 详情正文滚动：和悬浮目录点 heading 一样。 */
+export function scrollOutlineTarget(el: HTMLElement | null) {
+  if (el && typeof el.scrollIntoView === 'function') {
+    el.scrollIntoView({ block: 'start', behavior: 'smooth' })
+  }
+}
+
 /** 左侧刻度条 + 悬停展开列表。聊天区和会话详情共用。 */
 export function OutlineNav({
   items,
