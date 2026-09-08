@@ -1,5 +1,7 @@
 const SKIP = new Set(['SCRIPT', 'STYLE', 'LINK', 'META', 'NOSCRIPT', 'BR', 'HR'])
-const SURFACE = new Set([
+const HIT = new Set([
+  'DIV',
+  'SPAN',
   'H1',
   'H2',
   'H3',
@@ -43,52 +45,11 @@ function surfaceLabel(el: HTMLElement) {
   return (named || short || el.textContent || el.tagName.toLowerCase()).replace(/\s+/g, ' ').trim().slice(0, 80)
 }
 
-const PHRASE = new Set(['SPAN', 'STRONG', 'EM', 'B', 'I', 'SMALL', 'MARK', 'CODE', 'BR'])
-
-function ownText(el: HTMLElement) {
-  let out = ''
-  for (const node of el.childNodes) {
-    if (node.nodeType === Node.TEXT_NODE) out += node.textContent ?? ''
-  }
-  return out.replace(/\s+/g, ' ').trim()
-}
-
-function isTextRun(el: HTMLElement) {
-  if (SKIP.has(el.tagName)) return false
-  const text = (el.textContent ?? '').replace(/\s+/g, ' ').trim()
-  if (text.length < 2) return false
-  const kids = [...el.children]
-  if (kids.length === 0) return true
-  if (kids.every((node) => PHRASE.has(node.tagName))) return true
-  return ownText(el).length >= 2
-}
-
-function isPeerChunk(el: HTMLElement) {
-  const parent = el.parentElement
-  if (!parent) return false
-  const peers = [...parent.children].filter(
-    (node): node is HTMLElement => node instanceof HTMLElement && node.childElementCount >= 1,
-  )
-  if (peers.length < 2 || !peers.includes(el)) return false
-  const lengths = peers.map((node) => (node.textContent ?? '').replace(/\s+/g, ' ').trim().length)
-  const max = Math.max(...lengths)
-  const min = Math.min(...lengths)
-  if (max > 0 && min < max * 0.25) return false
-  return (el.textContent ?? '').replace(/\s+/g, ' ').trim().length >= 12
-}
-
-/** 卡片、语义块，以及每一段可见文字（一行/一枚标签），不拆到单字。 */
-export function isHtmlPickSurface(el: Element, root: Element) {
+/** 所有 div/span 都打；标题、按钮、链接、图也打。 */
+export function isHtmlPickSurface(el: Element, _root?: Element) {
   if (!(el instanceof HTMLElement)) return false
-  if (el === root) return true
   if (SKIP.has(el.tagName)) return false
-  if (SURFACE.has(el.tagName)) return true
-  if (el.id.trim()) return true
-  const role = el.getAttribute('role')
-  if (role === 'button' || role === 'link' || role === 'img') return true
-  if (el.parentElement === root) return true
-  if (isTextRun(el)) return true
-  return isPeerChunk(el)
+  return HIT.has(el.tagName)
 }
 
 export function htmlBlockKey(host: Element | null, html: string) {
@@ -119,7 +80,7 @@ export function stampHtmlPickSurfaces(root: HTMLElement, blockKey: string, opts?
     el.setAttribute('data-biu-id', `${prefix}:${path}`)
     if (label) el.setAttribute('data-biu-label', label)
   }
-  if (opts?.includeRoot !== false) stamp(root, 'root')
+  if (opts?.includeRoot !== false && isHtmlPickSurface(root)) stamp(root, 'root')
   const walk = (el: Element, path: string) => {
     let i = 0
     for (const child of el.children) {
