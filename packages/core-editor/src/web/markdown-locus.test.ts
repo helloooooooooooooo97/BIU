@@ -32,7 +32,8 @@ test('selection maps to markdown source lines, not visual blocks', () => {
   assert.ok(locus)
   assert.equal(locus.start_line, 5)
   assert.equal(locus.end_line, 5)
-  assert.match(locus.text, /UNIQUESEL/)
+  assert.equal(locus.text, 'UNIQUESEL')
+  assert.equal(locus.selection, 'UNIQUESEL')
   editor.destroy()
 })
 
@@ -48,6 +49,8 @@ test('multi-line selection spans markdown source lines', () => {
   assert.equal(locus.end_line, 5)
   assert.match(locus.text, /bravo/)
   assert.match(locus.text, /charlie/)
+  assert.match(locus.selection ?? '', /bravo/)
+  assert.match(locus.selection ?? '', /charlie/)
   editor.destroy()
 })
 
@@ -60,5 +63,21 @@ test('heading selection uses the heading markdown line', () => {
   assert.ok(locus)
   assert.equal(locus.start_line, 1)
   assert.match(locus.text, /Hello title/)
+  assert.equal(locus.selection, 'Hello title')
+  editor.destroy()
+})
+
+test('locus keeps source lines in text and the highlight in selection', () => {
+  const md = '勃，三尺微命，一介书生。'
+  const editor = editorOf(md)
+  const from = posOf(editor, '三尺微命')
+  assert.ok(from != null)
+  editor.commands.setTextSelection({ from, to: from + '三尺微命'.length })
+  const locus = markdownLocusFromSelection(editor)
+  assert.ok(locus)
+  assert.equal(locus.start_line, 1)
+  assert.equal(locus.end_line, 1)
+  assert.equal(locus.text, '勃，三尺微命，一介书生。')
+  assert.equal(locus.selection, '三尺微命')
   editor.destroy()
 })

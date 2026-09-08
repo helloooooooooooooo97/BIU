@@ -40,7 +40,7 @@ export function isSendChatHotkey(event: {
 
 export function pickFromLocus(path: string | undefined, locus: MarkdownLocus | null, route = typeof window === 'undefined' ? '' : window.location.pathname): PickRef | null {
   if (!locus?.text.trim()) return null
-  const label = pickPreview(locus.text, 80)
+  const label = pickPreview(locus.selection || locus.text, 80)
   if (!label) return null
   return withPickLocus(
     {

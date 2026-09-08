@@ -79,17 +79,31 @@ test('text pick round-trips markdown source line numbers', () => {
       start_line: 5,
       end_line: 6,
       text: '第一段\n\nUNIQUESEL',
+      selection: 'UNIQUESEL',
     },
   ])
   assert.match(text, /path="\/pages\/home"/)
   assert.match(text, /start_line="5"/)
   assert.match(text, /end_line="6"/)
   assert.match(text, /text="第一段&#10;&#10;UNIQUESEL"/)
+  assert.match(text, /selection="UNIQUESEL"/)
+  assert.doesNotMatch(text, /label=/)
   const parsed = parsePicks(text)
   assert.equal(parsed.refs[0]?.start_line, 5)
   assert.equal(parsed.refs[0]?.end_line, 6)
   assert.equal(parsed.refs[0]?.text, '第一段\n\nUNIQUESEL')
+  assert.equal(parsed.refs[0]?.selection, 'UNIQUESEL')
   assert.equal(parsed.refs[0]?.path, '/pages/home')
+  assert.equal(chipLabel({
+    kind: 'text',
+    id: 'a1',
+    label: '整行',
+    route: '/',
+    text: '勃，三尺微命，一介书生。',
+    selection: '三尺微命',
+    start_line: 11,
+    path: '/pages/p000',
+  }), '三尺微命')
 })
 
 test('selected body text becomes a text pick', () => {

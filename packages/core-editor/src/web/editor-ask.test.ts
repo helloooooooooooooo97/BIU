@@ -33,6 +33,7 @@ test('pickFromEditor uses the current selection', () => {
   assert.ok(ref)
   assert.equal(ref?.path, '/pages/home')
   assert.match(ref?.text ?? '', /你好/)
+  assert.equal(ref?.selection, '你好')
   editor.commands.setTextSelection(1)
   assert.equal(pickFromEditor(editor, '/pages/home'), null)
   editor.destroy()

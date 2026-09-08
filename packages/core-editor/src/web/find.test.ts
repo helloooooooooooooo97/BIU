@@ -37,9 +37,11 @@ test('findInPmDoc matches visible text positions', () => {
   assert.equal(hits.length, 2)
   const first = applyEditorFind(editor, '你好', 0)
   assert.equal(first.total, 2)
-  assert.equal(editor.state.doc.textBetween(editor.state.selection.from, editor.state.selection.to), '你好')
+  assert.equal(editor.state.selection.empty, true)
+  assert.equal(editor.state.selection.from, hits[0]!.from)
   applyEditorFind(editor, '你好', 1)
-  assert.equal(editor.state.doc.textBetween(editor.state.selection.from, editor.state.selection.to), '你好')
+  assert.equal(editor.state.selection.empty, true)
+  assert.equal(editor.state.selection.from, hits[1]!.from)
   editor.destroy()
 })
 
@@ -52,8 +54,15 @@ test('findInPmDoc matches across marks in one paragraph', () => {
   const hits = findInPmDoc(editor.state.doc, '你好世界')
   assert.equal(hits.length, 1)
   applyEditorFind(editor, '你好世界', 0)
-  assert.equal(editor.state.doc.textBetween(editor.state.selection.from, editor.state.selection.to), '你好世界')
+  assert.equal(editor.state.selection.empty, true)
+  assert.equal(editor.state.selection.from, hits[0]!.from)
   editor.destroy()
+})
+
+test('find jump does not range-select, so the style bubble stays down', () => {
+  const plugin = readFileSync(resolve(import.meta.dirname, './find-plugin.ts'), 'utf8')
+  assert.match(plugin, /TextSelection\.create\(editor\.state\.doc, hit\.from\)/)
+  assert.doesNotMatch(plugin, /TextSelection\.create\(editor\.state\.doc, hit\.from, hit\.to\)/)
 })
 
 test('tiptap find jump uses outline scroll, not ProseMirror scrollIntoView', () => {

@@ -62,7 +62,7 @@ export function applyEditorFind(editor: Editor, query: string, index: number) {
   const tr = editor.state.tr.setMeta(FIND_PLUGIN, { query, index: i })
   if (total) {
     const hit = hits[i]!
-    tr.setSelection(TextSelection.create(editor.state.doc, hit.from, hit.to))
+    tr.setSelection(TextSelection.create(editor.state.doc, hit.from))
   }
   editor.view.dispatch(tr)
   if (total) scrollFindLikeOutline(editor, hits[i]!.from)

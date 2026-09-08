@@ -11,8 +11,10 @@ export type PickRef = {
   /** Markdown 源码行号（1-based），不是可视编辑器行。 */
   start_line?: number
   end_line?: number
-  /** 对应源码片段。 */
+  /** 对应源码整行。 */
   text?: string
+  /** 用户高亮的片段。 */
+  selection?: string
 }
 
 export function pickKey(ref: PickRef) {
@@ -52,11 +54,12 @@ export function formatPicks(refs: PickRef[]) {
       const attrs = [`kind="${escapeAttr(ref.kind)}"`, `id="${escapeAttr(ref.id)}"`]
       if (ref.action) attrs.push(`action="${escapeAttr(ref.action)}"`)
       if (ref.route) attrs.push(`route="${escapeAttr(ref.route)}"`)
-      if (ref.label) attrs.push(`label="${escapeAttr(ref.label)}"`)
+      if (ref.kind !== 'text' && ref.label) attrs.push(`label="${escapeAttr(ref.label)}"`)
       if (ref.path) attrs.push(`path="${escapeAttr(ref.path)}"`)
       if (ref.start_line != null) attrs.push(`start_line="${ref.start_line}"`)
       if (ref.end_line != null) attrs.push(`end_line="${ref.end_line}"`)
       if (ref.text) attrs.push(`text="${escapeAttr(ref.text)}"`)
+      if (ref.selection) attrs.push(`selection="${escapeAttr(ref.selection)}"`)
       return `<pick ${attrs.join(' ')} />`
     })
     .join('\n')
@@ -82,17 +85,19 @@ function parsePickAttrs(raw: string): PickRef | null {
   const start = Number(attrs.start_line)
   const end = Number(attrs.end_line)
   const text = attrs.text?.trim() ?? ''
+  const selection = attrs.selection?.trim() ?? ''
   return {
     kind,
     id,
     ...(attrs.action?.trim() ? { action: attrs.action.trim() } : {}),
-    label: attrs.label?.trim() || id,
+    label: attrs.label?.trim() || (kind === 'text' ? selection || text : '') || id,
     route: attrs.route?.trim() || '',
     ...sourceFields({ path: attrs.path?.trim() }),
     ...locusFields({
       start_line: Number.isInteger(start) && start >= 1 ? start : undefined,
       end_line: Number.isInteger(end) && end >= 1 ? end : undefined,
       text: text || undefined,
+      selection: selection || undefined,
     }),
   }
 }
@@ -104,14 +109,16 @@ function sourceFields(ref: { path?: string }) {
   }
 }
 
-function locusFields(ref: { start_line?: number; end_line?: number; text?: string }) {
+function locusFields(ref: { start_line?: number; end_line?: number; text?: string; selection?: string }) {
   const start = ref.start_line
   const end = ref.end_line
   const text = ref.text?.trim()
+  const selection = ref.selection?.trim()
   return {
     ...(start != null ? { start_line: start } : {}),
     ...(end != null ? { end_line: end } : {}),
     ...(text ? { text } : {}),
+    ...(selection ? { selection } : {}),
   }
 }
 
@@ -160,6 +167,10 @@ export function lineSpanLabel(ref: PickRef) {
 }
 
 export function chipLabel(ref: PickRef) {
+  if (ref.kind === 'text') {
+    const snippet = pickPreview(ref.selection || ref.text || ref.label, 24)
+    return snippet || '选区'
+  }
   const lines = lineSpanLabel(ref)
   const where = ref.path
   if (ref.action) return `${ref.label} · ${ref.action}`
@@ -181,13 +192,16 @@ export function pickIdFromText(raw: string) {
   return hash.toString(16)
 }
 
-export function withPickLocus(ref: PickRef, locus: { start_line: number; end_line: number; text: string } | null | undefined): PickRef {
+export function withPickLocus(ref: PickRef, locus: { start_line: number; end_line: number; text: string; selection?: string } | null | undefined): PickRef {
   if (!locus) return ref
   return {
     ...ref,
-    id: pickIdFromText(`${locus.start_line}:${locus.end_line}:${locus.text || ref.label}`),
+    id: pickIdFromText(`${locus.start_line}:${locus.end_line}:${locus.selection || locus.text || ref.label}`),
     ...sourceFields(ref),
-    ...locusFields(locus),
+    ...locusFields({
+      ...locus,
+      selection: locus.selection || ref.selection,
+    }),
   }
 }
 
@@ -212,7 +226,7 @@ export function textPickFromSelection(
   const host = editorHostFromNode(anchor)
   const locus = host ? host.locusFromSelection() : null
   return withPickLocus(
-    withHostSource({ kind: 'text', id: pickIdFromText(raw), label, route }, anchor),
+    withHostSource({ kind: 'text', id: pickIdFromText(raw), label, route, selection: raw.trim() }, anchor),
     locus,
   )
 }
@@ -228,6 +242,7 @@ export function pickChipAttrs(ref: PickRef) {
     start_line: ref.start_line ?? null,
     end_line: ref.end_line ?? null,
     text: ref.text ?? null,
+    selection: ref.selection ?? null,
   }
 }
 
@@ -240,10 +255,11 @@ export function pickRefFromAttrs(attrs: Record<string, unknown>): PickRef | null
   const start = Number(attrs.start_line)
   const end = Number(attrs.end_line)
   const text = typeof attrs.text === 'string' ? attrs.text.trim() : ''
+  const selection = typeof attrs.selection === 'string' ? attrs.selection.trim() : ''
   return {
     kind,
     id,
-    label: String(attrs.label ?? '').trim() || id,
+    label: String(attrs.label ?? '').trim() || (kind === 'text' ? selection || text : '') || id,
     route: String(attrs.route ?? ''),
     ...(action ? { action } : {}),
     ...sourceFields({ path }),
@@ -251,6 +267,7 @@ export function pickRefFromAttrs(attrs: Record<string, unknown>): PickRef | null
       start_line: Number.isInteger(start) && start >= 1 ? start : undefined,
       end_line: Number.isInteger(end) && end >= 1 ? end : undefined,
       text: text || undefined,
+      selection: selection || undefined,
     }),
   }
 }
