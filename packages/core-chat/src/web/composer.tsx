@@ -594,8 +594,14 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
       if (editor.isDestroyed) return
       insertPickChips(editor, missing)
       pickKeysRef.current = nextKeys
+      const draft = pick?.takeDraft()
+      if (draft?.text) {
+        const prefix = serializeComposer(editor).plain.trim() ? ' ' : ''
+        editor.chain().focus().insertContent(`${prefix}${draft.text}`).run()
+      }
       const packed = serializeComposer(editor)
       scheduleCanSubmit(packed.plain, picked, packed.refs.length, pendingImages.length)
+      if (draft?.send) queueMicrotask(() => formRef.current?.requestSubmit())
     })
   }, [pickRefs, editor, picked.length, pendingImages.length])
 

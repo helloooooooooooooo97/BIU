@@ -82,12 +82,16 @@ export const PAGE_EDITOR_STYLE = `
 .page-find-hit{color:${TAG_TONE_ROSE};background:color-mix(in srgb,${TAG_TONE_ROSE} 22%,transparent);border-radius:2px}
 .page-find-hit.is-current{background:color-mix(in srgb,${TAG_TONE_ROSE} 34%,transparent)}
 .page-editor .page-find-hit,.page-editor .page-find-hit *{color:${TAG_TONE_ROSE}}
-.page-bubble{display:flex;flex-wrap:nowrap;align-items:center;gap:2px;padding:4px}
+.page-bubble{display:flex;flex-wrap:wrap;align-items:center;gap:2px;padding:4px;max-width:min(420px,calc(100vw - 48px))}
 .page-bubble button{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:28px;margin:0;border:0;border-radius:6px;padding:0 7px;background:transparent;color:var(--dsw-label);font:inherit;font-size:13px;font-weight:700;cursor:pointer}
 .page-bubble button:hover,.page-bubble button.is-on{background:var(--dsw-hover)}
 .page-bubble button.is-on{color:var(--dsw-business)}
 .page-bubble-letter{font-size:12px;font-weight:800;line-height:1;border-bottom:2px solid currentColor}
 .page-bubble-mark{display:block;width:12px;height:12px;border-radius:3px;border:1px solid var(--dsw-border);box-sizing:border-box}
+.page-ask{flex:1 1 100%;display:flex;align-items:center;gap:4px;padding:4px 2px 2px;min-width:200px}
+.page-ask-input{flex:1;min-width:0;margin:0;border:1px solid var(--dsw-border);border-radius:6px;padding:5px 8px;background:var(--dsw-input,transparent);color:var(--dsw-label);font:inherit;font-size:13px;font-weight:500;outline:none}
+.page-ask-send{flex:none;min-width:44px;height:28px;margin:0;border:0;border-radius:6px;padding:0 8px;background:var(--dsw-hover);color:var(--dsw-label);font:inherit;font-size:12px;font-weight:700;cursor:pointer}
+.page-editor.is-source .page-ask{margin:0 0 8px;padding:0}
 .page-color-menu{z-index:90;width:168px;padding:8px;background:var(--dsw-sidebar);border:1px solid var(--dsw-border);border-radius:8px;box-shadow:0 8px 24px rgba(15,15,15,.16)}
 .page-color-menu-h{padding:0 2px 6px;color:var(--dsw-label-3);font-size:11px;font-weight:600}
 .page-color-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}

@@ -106,6 +106,12 @@ test('page editor bridges cursor to the record title', async () => {
   assert.match(src, /toggleHighlight/)
   assert.doesNotMatch(src, /ColorPicks/)
   assert.doesNotMatch(src, /page-bubble-palette/)
+  assert.match(src, /⌘K/)
+  assert.match(src, /⌘L/)
+  assert.match(src, /isAskHotkey/)
+  assert.match(src, /isSendChatHotkey/)
+  assert.match(src, /getPick\(\)\?\.attach/)
+  assert.match(src, /page-ask/)
 })
 
 test('page editor hydrates markdown after content fetch', async () => {

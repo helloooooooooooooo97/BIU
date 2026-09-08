@@ -12,6 +12,7 @@ test('source editor uses CodeMirror markdown highlighting and line numbers', () 
   assert.match(src, /lineNumbers/)
   assert.match(src, /syntaxHighlighting/)
   assert.match(src, /page-source-editor/)
+  assert.match(src, /getLocus/)
 })
 
 test('source editor mounts a CodeMirror view for markdown', async () => {

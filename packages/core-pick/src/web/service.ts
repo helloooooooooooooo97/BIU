@@ -3,6 +3,7 @@ import { Service, type Context } from 'cordis'
 import { pickKey, dedupePicks, type PickRef } from './types.ts'
 
 export type PickHover = { top: number; left: number; width: number; height: number }
+export type PickDraft = { text: string; send?: boolean }
 
 let boundPick: PickService | undefined
 
@@ -16,6 +17,7 @@ export class PickService extends Service {
   hover: PickHover | null = null
   marquee: PickHover | null = null
   marqueeHits: PickHover[] = []
+  draft: PickDraft | null = null
   private seq = 0
   private listeners = new Set<() => void>()
 
@@ -78,9 +80,26 @@ export class PickService extends Service {
     this.marqueeHits = []
     this.bump()
     // 选取模式下点一次对象就打开聊天窗；关窗后 picking=false，草稿同步不会再弹窗。
-    if (this.picking && typeof window !== 'undefined') {
-      window.dispatchEvent(new Event('biu:pick-attached'))
-    }
+    if (this.picking && typeof window !== 'undefined') this.emitAttached()
+  }
+
+  /** 把选区交给对话框；不依赖选取模式。可带一句指令，composer 灌进输入框并可直接发送。 */
+  attach(refs: PickRef[], draft?: PickDraft) {
+    if (draft?.text.trim()) this.draft = { text: draft.text.trim(), send: Boolean(draft.send) }
+    const picking = this.picking
+    this.addMany(refs)
+    if (!picking && typeof window !== 'undefined') this.emitAttached()
+  }
+
+  takeDraft() {
+    const next = this.draft
+    this.draft = null
+    return next
+  }
+
+  private emitAttached() {
+    if (typeof window === 'undefined') return
+    window.dispatchEvent(new Event('biu:pick-attached'))
   }
 
   removeLast() {

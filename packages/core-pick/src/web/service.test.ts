@@ -93,3 +93,21 @@ test('overlay-closed on window exits pick mode and keeps chips', () => {
   assert.equal(pick.picking, false)
   assert.equal(pick.refs.length, 1)
 })
+
+test('attach opens chat without pick mode and can stash a send draft', () => {
+  const ctx = new Context()
+  const pick = new PickService(ctx)
+  let attached = 0
+  const onAttached = () => {
+    attached += 1
+  }
+  window.addEventListener('biu:pick-attached', onAttached)
+  pick.attach([{ kind: 'text', id: 'a', label: '选区', route: '/pages' }], { text: '写短一点', send: true })
+  window.removeEventListener('biu:pick-attached', onAttached)
+  assert.equal(pick.picking, false)
+  assert.equal(attached, 1)
+  assert.equal(pick.refs[0]?.id, 'a')
+  const draft = pick.takeDraft()
+  assert.deepEqual(draft, { text: '写短一点', send: true })
+  assert.equal(pick.takeDraft(), null)
+})

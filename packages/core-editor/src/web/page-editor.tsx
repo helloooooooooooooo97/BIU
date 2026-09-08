@@ -13,11 +13,12 @@ import { editorHostIsLive } from './editor-live.ts'
 import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, isDocStartSelection } from './title-content-nav.ts'
 import { tryContentJump, contentJumpForRecord } from './content-jump.ts'
 import { CONTENT_JUMP_EVENT } from '@biu/type-file-system'
-import { bindEditorTextHost } from '@biu/core-pick/web'
+import { bindEditorTextHost, getPick } from '@biu/core-pick/web'
 import { markdownLocusFromElement, markdownLocusFromSelection } from './markdown-locus.ts'
 import { FindBar, isFindHotkey } from './find-bar.tsx'
 import { applyEditorFind } from './find-plugin.ts'
 import { EDITOR_TONES, tagTextColor, tagWashColor } from './color-swatches.ts'
+import { isAskHotkey, isSendChatHotkey, pickFromEditor, pickFromLocus } from './editor-ask.ts'
 
 /** 本地正在打字时不要用远端正文盖掉；源码模式 / 未挂上的编辑器不算在打字。 */
 export function shouldApplyRemoteMarkdown(args: {
@@ -172,7 +173,56 @@ function ColorMenus({
   )
 }
 
-function Bubble({ editor }: { editor: Editor }) {
+function AskForm({
+  value,
+  onChange,
+  onSubmit,
+}: {
+  value: string
+  onChange: (next: string) => void
+  onSubmit: () => void
+}) {
+  return (
+    <form
+      className="page-ask"
+      onMouseDown={holdSelection}
+      onSubmit={(event) => {
+        event.preventDefault()
+        onSubmit()
+      }}
+    >
+      <input
+        className="page-ask-input"
+        value={value}
+        placeholder="描述如何改这段…"
+        aria-label="就地编辑"
+        data-testid="page-ask-input"
+        onChange={(event) => onChange(event.target.value)}
+      />
+      <button type="submit" className="page-ask-send">
+        发送
+      </button>
+    </form>
+  )
+}
+
+function Bubble({
+  editor,
+  askOpen,
+  askText,
+  onAskOpen,
+  onAskText,
+  onSubmitAsk,
+  onSendChat,
+}: {
+  editor: Editor
+  askOpen: boolean
+  askText: string
+  onAskOpen: () => void
+  onAskText: (next: string) => void
+  onSubmitAsk: () => void
+  onSendChat: () => void
+}) {
   const [colorOpen, setColorOpen] = useState<'text' | 'mark' | null>(null)
   const btn = (label: string, on: boolean, run: () => void) => (
     <button
@@ -194,7 +244,7 @@ function Bubble({ editor }: { editor: Editor }) {
       aria-label="文字样式"
       shouldShow={({ editor: current, from, to }) => {
         if (current.isActive('table')) return false
-        if (colorOpen) return true
+        if (colorOpen || askOpen) return true
         return from !== to
       }}
     >
@@ -205,6 +255,9 @@ function Bubble({ editor }: { editor: Editor }) {
       {btn('H1', editor.isActive('heading', { level: 1 }), () => editor.chain().focus().toggleHeading({ level: 1 }).run())}
       {btn('H2', editor.isActive('heading', { level: 2 }), () => editor.chain().focus().toggleHeading({ level: 2 }).run())}
       <ColorMenus editor={editor} open={colorOpen} onOpen={setColorOpen} />
+      {btn('⌘K', askOpen, onAskOpen)}
+      {btn('⌘L', false, onSendChat)}
+      {askOpen ? <AskForm value={askText} onChange={onAskText} onSubmit={onSubmitAsk} /> : null}
     </BubbleMenu>
   )
 }
@@ -244,10 +297,15 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const hydratedId = useRef<string | null>(null)
   const sourceFind = useRef<SourceEditorHandle>(null)
+  const editorRef = useRef<Editor | null>(null)
+  const pathRef = useRef(path)
+  pathRef.current = path
   const [findOpen, setFindOpen] = useState(false)
   const [findQuery, setFindQuery] = useState('')
   const [findIndex, setFindIndex] = useState(0)
   const [findTotal, setFindTotal] = useState(0)
+  const [askOpen, setAskOpen] = useState(false)
+  const [askText, setAskText] = useState('')
 
   const editor = useEditor(
     {
@@ -270,6 +328,18 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
             setFindOpen(true)
             const { from, to } = view.state.selection
             if (from !== to) setFindQuery(view.state.doc.textBetween(from, to))
+            return true
+          }
+          if (isAskHotkey(event)) {
+            event.preventDefault()
+            setAskOpen(true)
+            return true
+          }
+          if (isSendChatHotkey(event)) {
+            event.preventDefault()
+            const current = editorRef.current
+            const ref = current ? pickFromEditor(current, pathRef.current) : null
+            if (ref) getPick()?.attach([ref])
             return true
           }
           if (event.key !== 'ArrowUp' || event.shiftKey || event.altKey || event.metaKey || event.ctrlKey) return false
@@ -316,6 +386,7 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
     },
     [record.id],
   )
+  editorRef.current = editor ?? null
 
   useEffect(() => {
     hydratedId.current = null
@@ -440,14 +511,48 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
     return () => cancelAnimationFrame(id)
   }, [findOpen, findQuery, source, editor])
 
-  const onFindHotkey = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (!isFindHotkey(event)) return
-    event.preventDefault()
-    event.stopPropagation()
-    setFindOpen(true)
-    if (!source && editor && !editor.isDestroyed) {
-      const { from, to } = editor.state.selection
-      if (from !== to) setFindQuery(editor.state.doc.textBetween(from, to))
+  const currentPick = () => {
+    if (source) return pickFromLocus(path, sourceFind.current?.getLocus() ?? null)
+    if (!editor || editor.isDestroyed) return null
+    return pickFromEditor(editor, path)
+  }
+
+  const sendToChat = () => {
+    const ref = currentPick()
+    if (ref) getPick()?.attach([ref])
+    setAskOpen(false)
+  }
+
+  const submitAsk = () => {
+    const ref = currentPick()
+    const text = askText.trim()
+    if (!ref || !text) return
+    getPick()?.attach([ref], { text, send: true })
+    setAskText('')
+    setAskOpen(false)
+  }
+
+  const onEditorHotkey = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (isFindHotkey(event)) {
+      event.preventDefault()
+      event.stopPropagation()
+      setFindOpen(true)
+      if (!source && editor && !editor.isDestroyed) {
+        const { from, to } = editor.state.selection
+        if (from !== to) setFindQuery(editor.state.doc.textBetween(from, to))
+      }
+      return
+    }
+    if (isAskHotkey(event)) {
+      event.preventDefault()
+      event.stopPropagation()
+      if (currentPick()) setAskOpen(true)
+      return
+    }
+    if (isSendChatHotkey(event)) {
+      event.preventDefault()
+      event.stopPropagation()
+      sendToChat()
     }
   }
 
@@ -470,8 +575,9 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
 
   if (source) {
     return (
-      <div className="page-editor is-source" onKeyDownCapture={onFindHotkey}>
+      <div className="page-editor is-source" onKeyDownCapture={onEditorHotkey}>
         {findBar}
+        {askOpen ? <AskForm value={askText} onChange={setAskText} onSubmit={submitAsk} /> : null}
         <SourceEditor
           ref={sourceFind}
           value={asMarkdown(value)}
@@ -487,11 +593,21 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
   }
 
   return (
-    <div className="page-editor" onKeyDownCapture={onFindHotkey}>
+    <div className="page-editor" onKeyDownCapture={onEditorHotkey}>
       {findBar}
       <EditorContent editor={editor} />
       {writable !== false ? <PageBlockHandle editor={editor} /> : null}
-      {writable !== false ? <Bubble editor={editor} /> : null}
+      {writable !== false ? (
+        <Bubble
+          editor={editor}
+          askOpen={askOpen}
+          askText={askText}
+          onAskOpen={() => setAskOpen(true)}
+          onAskText={setAskText}
+          onSubmitAsk={submitAsk}
+          onSendChat={sendToChat}
+        />
+      ) : null}
       {writable !== false ? <TableBar editor={editor} /> : null}
     </div>
   )

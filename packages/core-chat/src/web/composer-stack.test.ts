@@ -229,6 +229,7 @@ describe('composer dock stacking above sticky user', () => {
     expect(composer).toMatch(/composerDocExtensions/)
     expect(composer).toMatch(/EditorContent/)
     expect(composer).toMatch(/insertPickChips/)
+    expect(composer).toMatch(/takeDraft/)
     expect(node).not.toMatch(/ReactNodeViewRenderer/)
     expect(node).toMatch(/queueMicrotask/)
   })
