@@ -145,6 +145,7 @@ test('table title opens record from the title-side button', () => {
 test('title cell row tools skip the overflow action menu', () => {
   assert.match(browser, /const Actions = chrome\?\.Actions/)
   assert.match(browser, /placedActions\(schema, place\)/)
+  assert.match(browser, /chrome\?\.DetailTools/)
   assert.match(browser, /<Actions actions=\{placed\} record=\{row\}/)
   assert.match(browser, /toolbar=\{<RecordActions row=\{selected\} place="detail" \/>\}/)
   assert.match(browser, /data-testid="fsdb-detail-actions"/)

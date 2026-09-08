@@ -1,4 +1,6 @@
 import { useEffect, useRef, type MouseEvent } from 'react'
+import { SourceEditor } from './source-editor.tsx'
+import { usePageSourceMode } from './source-mode.ts'
 import { EditorContent, useEditor } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
 import type { Editor } from '@tiptap/core'
@@ -90,6 +92,7 @@ function TableBar({ editor }: { editor: Editor }) {
 }
 
 export function PageEditor({ record, value, writable, onChange }: FsContentProps) {
+  const source = usePageSourceMode(record.id)
   const saved = useRef(asMarkdown(value))
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const hydratedId = useRef<string | null>(null)
@@ -181,14 +184,31 @@ export function PageEditor({ record, value, writable, onChange }: FsContentProps
   }, [editor, record.id, value])
 
   useEffect(() => {
-    if (!editor || editor.isDestroyed) return
+    if (!editor || editor.isDestroyed || source) return
     const el = editor.view.dom
     bindEditorTextHost(el, {
       locusFromSelection: () => markdownLocusFromSelection(editor),
       locusFromElement: (node) => markdownLocusFromElement(editor, node),
     })
     return () => bindEditorTextHost(el, null)
-  }, [editor])
+  }, [editor, source])
+
+  useEffect(() => {
+    if (!editor || editor.isDestroyed || !source) return
+    if (timer.current) clearTimeout(timer.current)
+    const next = editor.getMarkdown()
+    if (next !== saved.current) {
+      saved.current = next
+      onChange?.(next)
+    }
+  }, [source, editor])
+
+  useEffect(() => {
+    if (!editor || editor.isDestroyed || source) return
+    const md = saved.current
+    if (md === editor.getMarkdown()) return
+    editor.commands.setContent(md, { contentType: 'markdown', emitUpdate: false })
+  }, [source, editor])
 
   useEffect(() => {
     if (!editor || editor.isDestroyed) return
@@ -223,6 +243,22 @@ export function PageEditor({ record, value, writable, onChange }: FsContentProps
   }, [editor, record.id, value])
 
   if (!editor) return <div className="page-editor" data-testid="page-editor-pending" />
+
+  if (source) {
+    return (
+      <div className="page-editor is-source">
+        <SourceEditor
+          value={asMarkdown(value)}
+          writable={writable !== false}
+          onChange={(next) => {
+            if (next === saved.current) return
+            saved.current = next
+            onChange?.(next)
+          }}
+        />
+      </div>
+    )
+  }
 
   return (
     <div className="page-editor">

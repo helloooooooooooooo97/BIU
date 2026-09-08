@@ -13,6 +13,7 @@ class FakeDatabaseUi extends Service implements DatabaseUi {
   decorate(path: string, chrome: CollectionChrome) {
     this.paths.push(path)
     assert.equal(chrome.Content, PageEditor)
+    assert.ok(chrome.DetailTools)
     return { dispose() {} }
   }
   registerView(_path: string, _view: CollectionViewType) {

@@ -4,8 +4,10 @@ import type { DatabaseUi } from '@biu/type-file-system/ui'
 import { PageEditor } from './page-editor.tsx'
 import { PageEditorService } from './service.ts'
 import { PAGE_EDITOR_STYLE } from './style.ts'
+import { SourceToggle } from './source-toggle.tsx'
 
 export { PageEditor, PageEditor as RecordEditor } from './page-editor.tsx'
+export { SourceToggle } from './source-toggle.tsx'
 export { PageEditorService, BASIC_BLOCK_TYPE, getPageEditor, usePageEditorVersion } from './service.ts'
 export type { HeadingReplacement, PageBlockSpec, PageBlockViewProps, SlashCommandSpec, SlashInsert } from './service.ts'
 export { pageEditorExtensions } from './kit.ts'
@@ -20,7 +22,7 @@ export function apply(ctx: Context) {
   new PageEditorService(ctx)
   const ui = ctx.get('databaseUi') as DatabaseUi
   for (const path of EDITOR_COLLECTIONS) {
-    ctx.effect(() => ui.decorate(path, { Content: PageEditor }).dispose)
+    ctx.effect(() => ui.decorate(path, { Content: PageEditor, DetailTools: SourceToggle }).dispose)
   }
 }
 

@@ -96,6 +96,8 @@ test('page editor bridges cursor to the record title', async () => {
   assert.match(src, /Selection\.atStart/)
   assert.match(src, /bindEditorTextHost/)
   assert.match(src, /markdownLocusFromSelection/)
+  assert.match(src, /usePageSourceMode/)
+  assert.match(src, /SourceEditor/)
 })
 
 test('page editor hydrates markdown after content fetch', async () => {
