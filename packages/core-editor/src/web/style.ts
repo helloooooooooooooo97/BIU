@@ -1,3 +1,5 @@
+import { TAG_TONE_ROSE } from '@biu/public-ui'
+
 export const PAGE_EDITOR_STYLE = `
 .page-editor{position:relative;overflow:visible;min-width:0;width:100%;padding:6px 0 48px;padding-left:0;color:var(--dsw-label);font-family:var(--font-sans);font-size:15px;line-height:1.7;letter-spacing:-.003em}
 .page-editor.is-source{font-family:var(--font-mono);font-size:14px;letter-spacing:0}
@@ -76,8 +78,9 @@ export const PAGE_EDITOR_STYLE = `
 .page-find-count{flex:none;min-width:2.4em;color:#7B7B79;font-size:12px;font-weight:600;text-align:right}
 .page-find-btn{flex:none;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;margin:0;border:0;border-radius:5px;padding:0;background:transparent;color:#EFEEEC;cursor:pointer}
 .page-find-btn:hover{background:var(--dsw-hover)}
-.page-find-hit{background:color-mix(in srgb,var(--dsw-business) 22%,transparent);border-radius:2px}
-.page-find-hit.is-current{background:color-mix(in srgb,var(--dsw-business) 42%,transparent)}
+.page-find-hit{color:${TAG_TONE_ROSE};background:color-mix(in srgb,${TAG_TONE_ROSE} 22%,transparent);border-radius:2px}
+.page-find-hit.is-current{background:color-mix(in srgb,${TAG_TONE_ROSE} 34%,transparent)}
+.page-editor .page-find-hit,.page-editor .page-find-hit *{color:${TAG_TONE_ROSE}}
 .page-bubble{display:flex;flex-wrap:nowrap;align-items:center;gap:2px;padding:4px}
 .page-bubble button{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:28px;margin:0;border:0;border-radius:6px;padding:0 7px;background:transparent;color:var(--dsw-label);font:inherit;font-size:13px;font-weight:700;cursor:pointer}
 .page-bubble button:hover,.page-bubble button.is-on{background:var(--dsw-hover)}

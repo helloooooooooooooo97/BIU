@@ -7,6 +7,8 @@ import { resolve } from 'node:path'
 import { applyEditorFind } from './find-plugin.ts'
 import { pageEditorExtensions } from './kit.ts'
 import { isFindHotkey } from './find-bar.tsx'
+import { PAGE_EDITOR_STYLE } from './style.ts'
+import { TAG_TONE_ROSE } from '@biu/public-ui'
 
 test('findRanges is case-insensitive and walks every hit', () => {
   assert.deepEqual(findRanges('Hello hello HELLO', 'hello'), [
@@ -66,4 +68,10 @@ test('isFindHotkey is command/ctrl f without shift', () => {
   assert.equal(isFindHotkey({ key: 'f', metaKey: true, ctrlKey: false, altKey: false, shiftKey: false }), true)
   assert.equal(isFindHotkey({ key: 'f', metaKey: false, ctrlKey: true, altKey: false, shiftKey: false }), true)
   assert.equal(isFindHotkey({ key: 'f', metaKey: true, ctrlKey: false, altKey: false, shiftKey: true }), false)
+})
+
+test('find hits use rose tag text and wash', () => {
+  assert.match(PAGE_EDITOR_STYLE, new RegExp(`\\.page-find-hit\\{[^}]*color:${TAG_TONE_ROSE}`))
+  assert.match(PAGE_EDITOR_STYLE, /color-mix\(in srgb,#e255a1 22%,transparent\)/)
+  assert.match(PAGE_EDITOR_STYLE, /color-mix\(in srgb,#e255a1 34%,transparent\)/)
 })
