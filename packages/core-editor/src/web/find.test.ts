@@ -2,6 +2,8 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { Editor } from '@tiptap/core'
 import { findInPmDoc, findRanges, wrapFindIndex } from './find-ranges.ts'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { applyEditorFind } from './find-plugin.ts'
 import { pageEditorExtensions } from './kit.ts'
 import { isFindHotkey } from './find-bar.tsx'
@@ -37,6 +39,27 @@ test('findInPmDoc matches visible text positions', () => {
   applyEditorFind(editor, '你好', 1)
   assert.equal(editor.state.doc.textBetween(editor.state.selection.from, editor.state.selection.to), '你好')
   editor.destroy()
+})
+
+test('findInPmDoc matches across marks in one paragraph', () => {
+  const editor = new Editor({
+    extensions: pageEditorExtensions(),
+    content: '前 **你好**世界 后',
+    contentType: 'markdown',
+  })
+  const hits = findInPmDoc(editor.state.doc, '你好世界')
+  assert.equal(hits.length, 1)
+  applyEditorFind(editor, '你好世界', 0)
+  assert.equal(editor.state.doc.textBetween(editor.state.selection.from, editor.state.selection.to), '你好世界')
+  editor.destroy()
+})
+
+test('tiptap find jump uses outline scroll, not ProseMirror scrollIntoView', () => {
+  const plugin = readFileSync(resolve(import.meta.dirname, './find-plugin.ts'), 'utf8')
+  assert.match(plugin, /scrollOutlineTarget/)
+  assert.match(plugin, /scrollFindLikeOutline/)
+  assert.match(plugin, /handleScrollToSelection/)
+  assert.doesNotMatch(plugin, /tr\.scrollIntoView/)
 })
 
 test('isFindHotkey is command/ctrl f without shift', () => {

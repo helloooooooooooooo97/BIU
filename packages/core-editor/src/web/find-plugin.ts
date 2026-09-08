@@ -3,6 +3,7 @@ import type { Editor } from '@tiptap/core'
 import type { Node } from '@tiptap/pm/model'
 import { Plugin, PluginKey, TextSelection } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
+import { scrollOutlineTarget } from '@biu/public-ui'
 import { findInPmDoc, wrapFindIndex } from './find-ranges.ts'
 
 export const FIND_PLUGIN = new PluginKey('page-find')
@@ -44,6 +45,10 @@ export const pageFind = Extension.create({
           decorations(state) {
             return FIND_PLUGIN.getState(state)?.set
           },
+          handleScrollToSelection(view) {
+            const query = FIND_PLUGIN.getState(view.state)?.query
+            return Boolean(String(query ?? '').trim())
+          },
         },
       }),
     ]
@@ -58,8 +63,27 @@ export function applyEditorFind(editor: Editor, query: string, index: number) {
   if (total) {
     const hit = hits[i]!
     tr.setSelection(TextSelection.create(editor.state.doc, hit.from, hit.to))
-    tr.scrollIntoView()
   }
   editor.view.dispatch(tr)
+  if (total) scrollFindLikeOutline(editor, hits[i]!.from)
   return { total, index: i }
+}
+
+/** 和悬浮目录 / content-jump 一样：滚详情里的块，而不是 PM 自带的 scrollIntoView。 */
+function scrollFindLikeOutline(editor: Editor, pos: number) {
+  try {
+    const mapped = editor.view.domAtPos(pos)
+    const node = mapped.node
+    const el = node instanceof Element ? node : node.parentElement
+    if (!(el instanceof HTMLElement)) return
+    const block =
+      el.closest('h1, h2, h3, p, li, blockquote, pre, table, .page-block') ?? el
+    const run = () => scrollOutlineTarget(block)
+    run()
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => requestAnimationFrame(run))
+    }
+  } catch {
+    /* jsdom 没有 layout */
+  }
 }
