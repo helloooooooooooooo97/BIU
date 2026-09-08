@@ -26,15 +26,46 @@ const field = {
   font: 'inherit',
 }
 
-/** 源码编辑区（仅编辑态出现，是编辑器本身，不算内容外框） */
+/** 源码编辑区。草稿在本地，避免每次回车写回 pageBlock 把光标甩到最后。 */
 function SourceEditor({ html, onChange }: { html: string; onChange: (v: string) => void }) {
+  const [draft, setDraft] = useState(html)
+  const focused = useRef(false)
+  const draftRef = useRef(draft)
+  const htmlRef = useRef(html)
+  const onChangeRef = useRef(onChange)
+  draftRef.current = draft
+  htmlRef.current = html
+  onChangeRef.current = onChange
+  useEffect(() => {
+    if (!focused.current) setDraft(html)
+  }, [html])
+  useEffect(
+    () => () => {
+      if (draftRef.current !== htmlRef.current) onChangeRef.current(draftRef.current)
+    },
+    [],
+  )
+  const flush = () => {
+    if (draftRef.current !== htmlRef.current) onChangeRef.current(draftRef.current)
+  }
   return (
     <textarea
       data-testid="html-source"
+      data-page-block-capture=""
       data-biu-ignore
       spellCheck={false}
-      value={html}
-      onChange={(e) => onChange(e.target.value)}
+      value={draft}
+      onFocus={() => {
+        focused.current = true
+      }}
+      onBlur={() => {
+        focused.current = false
+        flush()
+      }}
+      onKeyDown={(event) => {
+        event.stopPropagation()
+      }}
+      onChange={(e) => setDraft(e.target.value)}
       placeholder={'<div style="...">…</div>'}
       style={{
         ...field,
