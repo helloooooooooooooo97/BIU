@@ -1194,15 +1194,6 @@ export function CollectionBrowser({
   }, [collectionPath, dataPath, detailId, pullDetailBody])
 
   useEffect(() => {
-    if (nested || !detailId) return
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setDetailId(null)
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [detailId, nested])
-
-  useEffect(() => {
     if (dlg?.kind !== 'rename') return
     setDlgError('')
   }, [dlg])

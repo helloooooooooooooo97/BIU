@@ -649,6 +649,11 @@ test('inspector crumbs lock the first level to an icon', () => {
   assert.doesNotMatch(browser, /lockRootCrumb/)
 })
 
+test('Escape does not pop record detail back to the list crumb', () => {
+  assert.doesNotMatch(browser, /if \(event.key === 'Escape'\) setDetailId\(null\)/)
+  assert.doesNotMatch(browser, /window.addEventListener\('keydown', onKey\)/)
+})
+
 test('collection header has a layout config control next to the star', () => {
   assert.match(browser, /data-testid="fsdb-layout-toggle"/)
   assert.match(browser, /data-testid="fsdb-layout-menu"/)
