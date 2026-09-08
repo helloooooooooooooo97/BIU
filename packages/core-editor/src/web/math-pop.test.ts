@@ -33,6 +33,10 @@ test('math pop opens below the formula and commits on Enter, not via window.prom
   const pop = document.querySelector('[data-testid="page-math-pop"]')
   assert.ok(pop instanceof HTMLElement)
   assert.equal(pop.style.top, '66px')
+  const formulaMid = 24 + 56 / 2
+  const left = Number.parseFloat(pop.style.left)
+  const popMid = left + (pop.getBoundingClientRect().width || 0) / 2
+  assert.ok(Math.abs(popMid - formulaMid) < 1, `pop should sit under the formula, not left-aligned (left=${pop.style.left})`)
   const input = pop.querySelector('textarea')
   assert.ok(input)
   assert.equal(input.value, 'x^2')
@@ -81,4 +85,37 @@ test('clicking inline math opens the latex pop without crashing', () => {
   closeMathPop()
   editor.destroy()
   host.remove()
+})
+
+test('block math pop sits under the formula, not the left edge of the block', () => {
+  const anchor = document.createElement('div')
+  const katex = document.createElement('span')
+  katex.className = 'katex-display'
+  anchor.appendChild(katex)
+  document.body.appendChild(anchor)
+  Object.defineProperty(anchor, 'getBoundingClientRect', {
+    value: () => ({ top: 80, bottom: 120, left: 40, right: 700, width: 660, height: 40, x: 40, y: 80, toJSON() {} }),
+  })
+  Object.defineProperty(katex, 'getBoundingClientRect', {
+    value: () => ({ top: 80, bottom: 120, left: 200, right: 360, width: 160, height: 40, x: 200, y: 80, toJSON() {} }),
+  })
+  openMathPop({
+    anchor,
+    latex: '\\sum x',
+    onCommit: () => undefined,
+  })
+  const pop = document.querySelector('[data-testid="page-math-pop"]')
+  assert.ok(pop instanceof HTMLElement)
+  Object.defineProperty(pop, 'getBoundingClientRect', {
+    configurable: true,
+    value: () => {
+      const left = Number.parseFloat(pop.style.left) || 0
+      return { top: 126, bottom: 160, left, right: left + 220, width: 220, height: 34, x: left, y: 126, toJSON() {} }
+    },
+  })
+  window.dispatchEvent(new Event('resize'))
+  assert.equal(pop.style.top, '126px')
+  assert.equal(pop.style.left, '170px')
+  closeMathPop()
+  anchor.remove()
 })
