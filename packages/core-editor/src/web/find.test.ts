@@ -51,10 +51,10 @@ test('htmlVisibleText keeps inner copy', () => {
   assert.equal(htmlVisibleText('<script>x()</script><p>海报</p>'), '海报')
 })
 
-test('findInPmDoc matches text inside html pageBlocks', () => {
+test('findInPmDoc highlights an html pageBlock once, not each inner match', () => {
   const editor = new Editor({
     extensions: pageEditorExtensions(),
-    content: `正文\n\n:::pageBlock {kind=html plugin=page-html-blocks}\n{"html":"<div>爱乐之城海报</div>"}\n:::\n`,
+    content: `正文\n\n:::pageBlock {kind=html plugin=page-html-blocks}\n{"html":"<div>爱乐之城海报 爱乐之城</div>"}\n:::\n`,
     contentType: 'markdown',
   })
   const hits = findInPmDoc(editor.state.doc, '爱乐之城')
@@ -117,8 +117,10 @@ test('find bar pins to the inspector chrome, not the scrolling body', () => {
   assert.doesNotMatch(PAGE_EDITOR_STYLE, /\.page-find\{[^}]*position:sticky/)
 })
 
-test('find hits use rose tag text and wash', () => {
+test('find hits use rose tag text and wash; html blocks only get a pink frame', () => {
   assert.match(PAGE_EDITOR_STYLE, new RegExp(`\\.page-find-hit\\{[^}]*color:${TAG_TONE_ROSE}`))
   assert.match(PAGE_EDITOR_STYLE, /color-mix\(in srgb,#e255a1 22%,transparent\)/)
+  assert.match(PAGE_EDITOR_STYLE, /\.page-find-hit:not\(\.page-block\)/)
+  assert.match(PAGE_EDITOR_STYLE, /\.page-block\.page-find-hit\{[^}]*background:transparent/)
   assert.match(PAGE_EDITOR_STYLE, /\.page-block\.page-find-hit/)
 })

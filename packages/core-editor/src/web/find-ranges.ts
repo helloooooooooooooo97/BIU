@@ -61,7 +61,7 @@ function posFromFlat(pieces: TextPiece[], offset: number) {
   return last.pos + last.text.length
 }
 
-/** 在同一段落内跨 mark 搜可见文字；HTML / htmlframe 块搜去掉标签后的正文。 */
+/** 在同一段落内跨 mark 搜可见文字；HTML / htmlframe 块只看整块是否含关键字。 */
 export function findInPmDoc(
   doc: {
     descendants: (
@@ -86,14 +86,9 @@ export function findInPmDoc(
   doc.descendants((node, pos) => {
     const htmlText = pageBlockHtmlText(node)
     if (htmlText) {
-      const hay = htmlText.toLowerCase()
-      const size = node.nodeSize ?? 1
-      let from = 0
-      while (from <= hay.length - q.length) {
-        const at = hay.indexOf(q, from)
-        if (at < 0) break
+      if (htmlText.toLowerCase().includes(q)) {
+        const size = node.nodeSize ?? 1
         hits.push({ from: pos, to: pos + size, node: true })
-        from = at + Math.max(q.length, 1)
       }
       return false
     }
