@@ -60,12 +60,60 @@ test('picking does not look through the chat overlay', () => {
   panel.remove()
 })
 
-test('formatPicks emits data handles only', () => {
+test('formatPicks emits JSON handles only', () => {
   const text = formatPicks([
     { kind: 'session', id: 'abc', label: '聊天', route: '/s/abc' },
   ])
-  assert.equal(text, '<pick kind="session" id="abc" route="/s/abc" label="聊天" />')
+  assert.equal(text, '<pick>{"kind":"session","id":"abc","route":"/s/abc","label":"聊天"}</pick>')
   assert.doesNotMatch(text, /class=|svg|html/i)
+})
+
+test('chip label puts line span in parentheses after the name', () => {
+  assert.equal(
+    chipLabel({
+      kind: 'page',
+      id: 'p1',
+      label: '说明',
+      route: '/',
+      path: '/docs/README.md',
+      start_line: 9,
+      end_line: 10,
+    }),
+    'README.md (9-10)',
+  )
+  assert.equal(
+    chipLabel({
+      kind: 'page',
+      id: 'p1',
+      label: '说明',
+      route: '/',
+      path: '/docs/README.md',
+      start_line: 9,
+      end_line: 9,
+    }),
+    'README.md (9)',
+  )
+})
+
+test('JSON pick keeps line numbers when text contains quotes and >', () => {
+  const text = formatPicks([
+    {
+      kind: 'text',
+      id: 'q1',
+      label: 'x',
+      route: '/s/a',
+      path: '/pages/p000',
+      start_line: 4,
+      end_line: 6,
+      text: '甲 > 乙 "丙"',
+      selection: '乙 "丙"',
+    },
+  ])
+  const parsed = parsePicks(text)
+  assert.equal(parsed.refs[0]?.start_line, 4)
+  assert.equal(parsed.refs[0]?.end_line, 6)
+  assert.equal(parsed.refs[0]?.text, '甲 > 乙 "丙"')
+  assert.equal(parsed.refs[0]?.selection, '乙 "丙"')
 })
 
 test('text pick round-trips markdown source line numbers', () => {
@@ -82,12 +130,12 @@ test('text pick round-trips markdown source line numbers', () => {
       selection: 'UNIQUESEL',
     },
   ])
-  assert.match(text, /path="\/pages\/home"/)
-  assert.match(text, /start_line="5"/)
-  assert.match(text, /end_line="6"/)
-  assert.match(text, /text="第一段&#10;&#10;UNIQUESEL"/)
-  assert.match(text, /selection="UNIQUESEL"/)
-  assert.doesNotMatch(text, /label=/)
+  assert.match(text, /"path":"\/pages\/home"/)
+  assert.match(text, /"start_line":5/)
+  assert.match(text, /"end_line":6/)
+  assert.match(text, /"text":"第一段\\n\\nUNIQUESEL"/)
+  assert.match(text, /"selection":"UNIQUESEL"/)
+  assert.doesNotMatch(text, /"label"/)
   const parsed = parsePicks(text)
   assert.equal(parsed.refs[0]?.start_line, 5)
   assert.equal(parsed.refs[0]?.end_line, 6)
@@ -103,7 +151,7 @@ test('text pick round-trips markdown source line numbers', () => {
     selection: '三尺微命',
     start_line: 11,
     path: '/pages/p000',
-  }), '三尺微命')
+  }), '三尺微命 (11)')
 })
 
 test('caret pick round-trips insert offset in the markdown line', () => {
@@ -121,12 +169,12 @@ test('caret pick round-trips insert offset in the markdown line', () => {
       insert,
     },
   ])
-  assert.match(text, new RegExp(`insert="${insert}"`))
-  assert.doesNotMatch(text, /selection=/)
+  assert.match(text, new RegExp(`"insert":${insert}`))
+  assert.doesNotMatch(text, /"selection"/)
   const parsed = parsePicks(text)
   assert.equal(parsed.refs[0]?.insert, insert)
   assert.equal(parsed.refs[0]?.text, '前 **粗体** 后')
-  assert.equal(chipLabel(parsed.refs[0]!), `L1:${insert}`)
+  assert.equal(chipLabel(parsed.refs[0]!), '前 **粗体** 后 (1)')
 })
 
 test('text pick with > in source still round-trips as a chip handle', () => {
@@ -143,7 +191,7 @@ test('text pick with > in source still round-trips as a chip handle', () => {
       selection: '高朋满座',
     },
   ])
-  assert.match(text, /&gt;/)
+  assert.match(text, /"text":"千里逢迎，高朋满座。>\\n层峦耸翠"/)
   const parsed = parsePicks(text)
   assert.equal(parsed.refs.length, 1)
   assert.equal(parsed.refs[0]?.text, '千里逢迎，高朋满座。>\n层峦耸翠')

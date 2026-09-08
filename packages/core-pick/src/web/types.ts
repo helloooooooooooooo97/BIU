@@ -52,23 +52,29 @@ export function dedupePicks(refs: PickRef[]): PickRef[] {
 
 export function formatPicks(refs: PickRef[]) {
   return dedupePicks(refs)
-    .map((ref) => {
-      const attrs = [`kind="${escapeAttr(ref.kind)}"`, `id="${escapeAttr(ref.id)}"`]
-      if (ref.action) attrs.push(`action="${escapeAttr(ref.action)}"`)
-      if (ref.route) attrs.push(`route="${escapeAttr(ref.route)}"`)
-      if (ref.kind !== 'text' && ref.label) attrs.push(`label="${escapeAttr(ref.label)}"`)
-      if (ref.path) attrs.push(`path="${escapeAttr(ref.path)}"`)
-      if (ref.start_line != null) attrs.push(`start_line="${ref.start_line}"`)
-      if (ref.end_line != null) attrs.push(`end_line="${ref.end_line}"`)
-      if (ref.text) attrs.push(`text="${escapeAttr(ref.text)}"`)
-      if (ref.selection) attrs.push(`selection="${escapeAttr(ref.selection)}"`)
-      else if (ref.insert != null) attrs.push(`insert="${ref.insert}"`)
-      return `<pick ${attrs.join(' ')} />`
-    })
+    .map((ref) => `<pick>${encodePickJson(pickPayload(ref))}</pick>`)
     .join('\n')
 }
 
-const PICK_TAG = /<pick\b((?:[^>"']|"[^"]*"|'[^']*')*)\s*\/?>/gi
+function pickPayload(ref: PickRef) {
+  const data: Record<string, unknown> = { kind: ref.kind, id: ref.id }
+  if (ref.action) data.action = ref.action
+  if (ref.route) data.route = ref.route
+  if (ref.kind !== 'text' && ref.label) data.label = ref.label
+  if (ref.path) data.path = ref.path
+  if (ref.start_line != null) data.start_line = ref.start_line
+  if (ref.end_line != null) data.end_line = ref.end_line
+  if (ref.text) data.text = ref.text
+  if (ref.selection) data.selection = ref.selection
+  else if (ref.insert != null) data.insert = ref.insert
+  return data
+}
+
+function encodePickJson(data: unknown) {
+  return JSON.stringify(data).replace(/</g, '\\u003c')
+}
+
+const PICK_ANY = /<pick>([\s\S]*?)<\/pick>|<pick\b((?:[^>"']|"[^"]*"|'[^']*')*)\s*\/?>/gi
 const ATTR = /(\w+)="([^"]*)"/g
 
 function unescapeAttr(value: string) {
@@ -134,6 +140,19 @@ function locusFields(ref: { start_line?: number; end_line?: number; text?: strin
   }
 }
 
+function parsePickToken(jsonBody: string | undefined, attrBody: string | undefined): PickRef | null {
+  if (jsonBody != null && jsonBody !== '') {
+    try {
+      const data = JSON.parse(jsonBody) as Record<string, unknown>
+      return pickRefFromAttrs(data)
+    } catch {
+      return null
+    }
+  }
+  if (attrBody != null) return parsePickAttrs(attrBody)
+  return null
+}
+
 export function formatPick(ref: PickRef) {
   return formatPicks([ref])
 }
@@ -141,12 +160,12 @@ export function formatPick(ref: PickRef) {
 /** 按原文顺序拆成文字段和 pick 块，供输入框混排还原。 */
 export function splitPickStream(text: string): Array<{ type: 'text'; value: string } | { type: 'pick'; ref: PickRef }> {
   const parts: Array<{ type: 'text'; value: string } | { type: 'pick'; ref: PickRef }> = []
-  PICK_TAG.lastIndex = 0
+  PICK_ANY.lastIndex = 0
   let last = 0
   let match: RegExpExecArray | null
-  while ((match = PICK_TAG.exec(text))) {
+  while ((match = PICK_ANY.exec(text))) {
     if (match.index > last) parts.push({ type: 'text', value: text.slice(last, match.index) })
-    const ref = parsePickAttrs(match[1] ?? '')
+    const ref = parsePickToken(match[1], match[2])
     if (ref) parts.push({ type: 'pick', ref })
     else parts.push({ type: 'text', value: match[0] })
     last = match.index + match[0].length
@@ -156,10 +175,10 @@ export function splitPickStream(text: string): Array<{ type: 'text'; value: stri
 }
 export function parsePicks(text: string): { refs: PickRef[]; rest: string } {
   const refs: PickRef[] = []
-  PICK_TAG.lastIndex = 0
+  PICK_ANY.lastIndex = 0
   const rest = text
-    .replace(PICK_TAG, (_all, raw: string) => {
-      const ref = parsePickAttrs(raw)
+    .replace(PICK_ANY, (all, jsonBody: string | undefined, attrBody: string | undefined) => {
+      const ref = parsePickToken(jsonBody, attrBody)
       if (ref) refs.push(ref)
       return '\n'
     })
@@ -168,36 +187,25 @@ export function parsePicks(text: string): { refs: PickRef[]; rest: string } {
   return { refs: dedupePicks(refs), rest }
 }
 
-function escapeAttr(value: string) {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/\n/g, '&#10;')
-}
-
 export function lineSpanLabel(ref: PickRef) {
   if (ref.start_line == null) return ''
-  if (ref.end_line != null && ref.end_line !== ref.start_line) return `L${ref.start_line}–${ref.end_line}`
-  return `L${ref.start_line}`
+  if (ref.end_line != null && ref.end_line !== ref.start_line) return `${ref.start_line}-${ref.end_line}`
+  return String(ref.start_line)
+}
+
+function pickChipName(ref: PickRef) {
+  const file = ref.path?.split('/').filter(Boolean).pop() ?? ''
+  if (file.includes('.')) return file
+  if (ref.kind === 'text') {
+    return pickPreview(ref.selection || ref.text || ref.label, 24) || file || '选区'
+  }
+  return ref.label || file || ref.id
 }
 
 export function chipLabel(ref: PickRef) {
-  if (ref.kind === 'text') {
-    if (ref.insert != null && !ref.selection) {
-      const line = lineSpanLabel(ref) || 'L?'
-      return `${line}:${ref.insert}`
-    }
-    const snippet = pickPreview(ref.selection || ref.text || ref.label, 24)
-    return snippet || '选区'
-  }
-  const lines = lineSpanLabel(ref)
-  const where = ref.path
-  if (ref.action) return `${ref.label} · ${ref.action}`
-  if (lines && where) return `${lines} ${where}`
-  if (lines) return `${lines} ${ref.label}`
-  return ref.label
+  const name = ref.action ? `${ref.label} · ${ref.action}` : pickChipName(ref)
+  const span = lineSpanLabel(ref)
+  return span ? `${name} (${span})` : name
 }
 
 export function pickPreview(text: string, max = 48) {
