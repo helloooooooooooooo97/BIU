@@ -5,6 +5,7 @@ import { Selection } from '@tiptap/pm/state'
 import { pageEditorExtensions } from './kit.ts'
 import {
   FOCUS_RECORD_TITLE,
+  focusRecordTitleNear,
   handleContentTitleNav,
   shouldLeaveContentForTitle,
 } from './title-content-nav.ts'
@@ -104,4 +105,52 @@ test('Enter at the start of TipTap stays in the document', () => {
   assert.equal(title.hits(), 0)
   editor.destroy()
   host.remove()
+})
+
+test('focusRecordTitleNear targets the title above properties in the same detail', () => {
+  const decoy = document.createElement('textarea')
+  decoy.className = 'fsdb-detail-title-input'
+  decoy.value = 'wrong'
+  document.body.appendChild(decoy)
+  const main = document.createElement('div')
+  main.className = 'fsdb-detail-main'
+  const title = document.createElement('textarea')
+  title.className = 'fsdb-detail-title-input'
+  title.value = '页面标题'
+  const editorHost = document.createElement('div')
+  editorHost.className = 'page-editor'
+  main.appendChild(title)
+  main.appendChild(editorHost)
+  document.body.appendChild(main)
+  assert.equal(focusRecordTitleNear(editorHost), true)
+  assert.equal(document.activeElement, title)
+  assert.equal(title.selectionStart, '页面标题'.length)
+  decoy.remove()
+  main.remove()
+})
+
+test('Backspace at doc start focuses the title above properties', () => {
+  const main = document.createElement('div')
+  main.className = 'fsdb-detail-main'
+  const title = document.createElement('textarea')
+  title.className = 'fsdb-detail-title-input'
+  title.value = '页面标题'
+  const host = document.createElement('div')
+  main.appendChild(title)
+  main.appendChild(host)
+  document.body.appendChild(main)
+  const editor = new Editor({
+    element: host,
+    extensions: pageEditorExtensions(),
+    content: 'hello',
+    contentType: 'markdown',
+    editorProps: { handleKeyDown: handleContentTitleNav },
+  })
+  editor.chain().focus().setTextSelection(Selection.atStart(editor.state.doc)).run()
+  press(editor, 'Backspace')
+  assert.equal(document.activeElement, title)
+  assert.equal(title.selectionStart, '页面标题'.length)
+  assert.match(editor.getHTML(), /hello/)
+  editor.destroy()
+  main.remove()
 })

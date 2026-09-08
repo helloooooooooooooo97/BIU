@@ -6,11 +6,12 @@ import { ChatBubbleLeftRightIcon } from '@heroicons/react/16/solid'
 import { EditorContent, useEditor } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
 import type { Editor } from '@tiptap/core'
+import { Selection } from '@tiptap/pm/state'
 import type { FsContentProps } from '@biu/type-file-system/ui'
 import { pageEditorExtensions } from './kit.ts'
 import { PageBlockHandle } from './page-block-handle.tsx'
 import { editorHostIsLive } from './editor-live.ts'
-import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, handleContentTitleNav, shouldLeaveContentForTitle } from './title-content-nav.ts'
+import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, handleContentTitleNav, shouldLeaveContentForTitle, focusRecordTitleNear, isDocStartSelection } from './title-content-nav.ts'
 import { tryContentJump, contentJumpForRecord } from './content-jump.ts'
 import { CONTENT_JUMP_EVENT } from '@biu/type-file-system'
 import { bindEditorTextHost, getPick } from '@biu/core-pick/web'
@@ -496,14 +497,24 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
       sendToChat()
       return
     }
-    if (
-      source &&
-      sourceFind.current?.isAtStart() &&
-      shouldLeaveContentForTitle(event.key, event, 0, true, 0)
-    ) {
+    const atDocStart = source
+      ? Boolean(sourceFind.current?.isAtStart())
+      : Boolean(
+          editor &&
+            !editor.isDestroyed &&
+            isDocStartSelection(
+              editor.state.selection.from,
+              editor.state.selection.empty,
+              Selection.atStart(editor.state.doc).from,
+            ),
+        )
+    if (atDocStart && shouldLeaveContentForTitle(event.key, event, 0, true, 0)) {
       event.preventDefault()
       event.stopPropagation()
-      window.dispatchEvent(new Event(FOCUS_RECORD_TITLE))
+      editor?.commands.blur()
+      if (!focusRecordTitleNear(event.currentTarget)) {
+        window.dispatchEvent(new Event(FOCUS_RECORD_TITLE))
+      }
     }
   }
 

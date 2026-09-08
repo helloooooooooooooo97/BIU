@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode, type Dispatch, type SetStateAction } from 'react'
+import { useEffect, useRef, useState, type ReactNode, type Dispatch, type SetStateAction } from 'react'
 import type { CollectionChrome } from '@biu/type-file-system/ui'
 import type { CollectionSchema, DbRecord, FieldSpec } from '@biu/type-file-system'
 import { ChevronDownIcon, ChevronUpIcon, EllipsisHorizontalIcon, HashtagIcon } from '@heroicons/react/16/solid'
@@ -9,7 +9,7 @@ import { FilePreview } from './fsdb-cells.tsx'
 import { PropertyRow } from './property-row.tsx'
 import { TableGlyph } from './nav-glyphs.tsx'
 import { normalizeRecordEmoji, recordPreviewEmoji } from './sidebar-preview.ts'
-import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, shouldLeaveContentForTitle, shouldLeaveTitleForContent } from './title-content-nav.ts'
+import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, shouldLeaveContentForTitle, shouldLeaveTitleForContent, focusRecordTitleNear } from './title-content-nav.ts'
 import { HeadingOutline } from './heading-outline.tsx'
 
 function DetailTitleIcon({
@@ -160,13 +160,10 @@ export function RecordDetail({
   toolbar?: ReactNode
   collectionPath?: string
 }) {
+  const mainRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const onTitle = () => {
-      const el = document.querySelector<HTMLTextAreaElement>('.fsdb-detail-title-input')
-      if (!el) return
-      el.focus()
-      const n = el.value.length
-      el.setSelectionRange(n, n)
+      focusRecordTitleNear(mainRef.current)
     }
     window.addEventListener(FOCUS_RECORD_TITLE, onTitle)
     return () => window.removeEventListener(FOCUS_RECORD_TITLE, onTitle)
@@ -193,7 +190,7 @@ export function RecordDetail({
           <div className="fsdb-detail-screen" role="main" aria-label="记录详情">
             {toolbar}
             <div className="fsdb-detail-split">
-              <div className="fsdb-detail-main">
+              <div className="fsdb-detail-main" ref={mainRef}>
                 <div className="fsdb-detail-title-row">
                 <DetailTitleIcon
                   emoji={recordPreviewEmoji(selected)}
@@ -317,7 +314,9 @@ export function RecordDetail({
                           )
                             return
                           event.preventDefault()
-                          window.dispatchEvent(new Event(FOCUS_RECORD_TITLE))
+                          if (!focusRecordTitleNear(el)) {
+                            window.dispatchEvent(new Event(FOCUS_RECORD_TITLE))
+                          }
                         }}
                         onCommit={(next) => {
                           setDraft((prev) => ({ ...prev, [key]: next }))
