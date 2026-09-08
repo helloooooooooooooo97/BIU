@@ -200,6 +200,14 @@ function queueHostSync() {
   })
 }
 
+/** 卸下或卸载时先藏起来再挂到 body，避免 inset:0 铺满视口闪一下全屏。 */
+function parkHost(host: Host) {
+  const el = host.el
+  el.style.cssText =
+    'position:fixed;width:0;height:0;overflow:hidden;visibility:hidden;pointer-events:none;inset:auto'
+  if (el.parentElement !== document.body) document.body.appendChild(el)
+}
+
 function placeHost(host: Host, slot: HTMLElement | null) {
   const el = host.el
   if (host.expanded) {
@@ -209,9 +217,7 @@ function placeHost(host: Host, slot: HTMLElement | null) {
     return
   }
   if (!slot?.isConnected) {
-    if (el.parentElement !== document.body) document.body.appendChild(el)
-    el.style.visibility = 'hidden'
-    el.style.pointerEvents = 'none'
+    parkHost(host)
     return
   }
   if (el.parentElement !== slot) slot.appendChild(el)
@@ -497,7 +503,7 @@ function Board(props: { data: Record<string, unknown>; update: (p: Record<string
     retainHost(file)
     return () => {
       const host = hosts.get(file)
-      if (host && host.el.parentElement !== document.body) document.body.appendChild(host.el)
+      if (host) parkHost(host)
       releaseHost(file)
     }
   }, [file])
