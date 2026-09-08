@@ -131,6 +131,7 @@ function HtmlDeckOverlay({
   const closeRef = useRef(onClose)
   closeRef.current = onClose
   const boxRef = useRef<HTMLDivElement | null>(null)
+  const [navHot, setNavHot] = useState(false)
   const slide = slides[index]
   const total = slides.length
   useEffect(() => {
@@ -216,37 +217,52 @@ function HtmlDeckOverlay({
       </div>
       <div
         data-testid="html-deck-nav"
+        onMouseEnter={() => setNavHot(true)}
+        onMouseLeave={() => setNavHot(false)}
         style={{
           position: 'absolute',
           left: 0,
           right: 0,
           bottom: 0,
+          zIndex: 2,
           display: 'flex',
-          alignItems: 'center',
+          alignItems: 'flex-end',
           justifyContent: 'center',
-          gap: 10,
-          padding: '12px 16px 18px',
-          background: 'linear-gradient(transparent, rgba(0,0,0,.55))',
+          height: 96,
+          padding: '0 16px 18px',
+          background: navHot ? 'linear-gradient(transparent, rgba(0,0,0,.55))' : 'transparent',
         }}
       >
-        <button type="button" style={barBtn} disabled={index <= 0} onClick={() => onIndex(stepHtmlDeck(index, -1, total))} aria-label="上一张">
-          上一张
-        </button>
-        <span data-testid="html-deck-index" style={{ color: '#8b93a7', minWidth: 64, textAlign: 'center' }}>
-          {index + 1} / {total}
-        </span>
-        <button
-          type="button"
-          style={barBtn}
-          disabled={index >= total - 1}
-          onClick={() => onIndex(stepHtmlDeck(index, 1, total))}
-          aria-label="下一张"
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 10,
+            opacity: navHot ? 1 : 0,
+            transition: 'opacity 160ms ease',
+            pointerEvents: navHot ? 'auto' : 'none',
+          }}
         >
-          下一张
-        </button>
-        <button type="button" data-page-block-expand="" style={{ ...barBtn, marginLeft: 12 }} onClick={onClose} title="退出放映" aria-label="退出放映">
-          <ExpandGlyph shrink />
-        </button>
+          <button type="button" style={barBtn} disabled={index <= 0} onClick={() => onIndex(stepHtmlDeck(index, -1, total))} aria-label="上一张">
+            上一张
+          </button>
+          <span data-testid="html-deck-index" style={{ color: '#8b93a7', minWidth: 64, textAlign: 'center' }}>
+            {index + 1} / {total}
+          </span>
+          <button
+            type="button"
+            style={barBtn}
+            disabled={index >= total - 1}
+            onClick={() => onIndex(stepHtmlDeck(index, 1, total))}
+            aria-label="下一张"
+          >
+            下一张
+          </button>
+          <button type="button" data-page-block-expand="" style={{ ...barBtn, marginLeft: 12 }} onClick={onClose} title="退出放映" aria-label="退出放映">
+            <ExpandGlyph shrink />
+          </button>
+        </div>
       </div>
     </div>,
     document.body,
