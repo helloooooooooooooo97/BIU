@@ -149,9 +149,10 @@ test('page editor applies later value when it is not focused', async () => {
   const { readFile } = await import('node:fs/promises')
   const { resolve } = await import('node:path')
   const src = await readFile(resolve(import.meta.dirname, './page-editor.tsx'), 'utf8')
+  assert.match(src, /shouldApplyRemoteMarkdown/)
   assert.match(src, /contentJumpForRecord/)
-  assert.match(src, /if \(editor\.isFocused && !contentJumpForRecord\(record\.id\)\) return/)
-  assert.doesNotMatch(src, /editor\.isDestroyed \|\| editor\.isFocused/)
+  assert.match(src, /editorHostIsLive\(editor\)/)
+  assert.doesNotMatch(src, /if \(editor\.isFocused && !contentJumpForRecord\(record\.id\)\) return/)
   assert.match(src, /md === saved\.current/)
 })
 

@@ -15,6 +15,17 @@ import { CONTENT_JUMP_EVENT } from '@biu/type-file-system'
 import { bindEditorTextHost } from '@biu/core-pick/web'
 import { markdownLocusFromElement, markdownLocusFromSelection } from './markdown-locus.ts'
 
+/** 本地正在打字时不要用远端正文盖掉；源码模式 / 未挂上的编辑器不算在打字。 */
+export function shouldApplyRemoteMarkdown(args: {
+  focused: boolean
+  live: boolean
+  hasJump: boolean
+}) {
+  if (args.hasJump) return true
+  if (args.focused && args.live) return false
+  return true
+}
+
 function jumpToPending(editor: Editor, markdown: string, recordId: string, force = false) {
   requestAnimationFrame(() => {
     if (editor.isDestroyed) return
@@ -177,7 +188,15 @@ export function PageEditor({ record, value, writable, onChange }: FsContentProps
       jumpToPending(editor, md, record.id)
       return
     }
-    if (editor.isFocused && !contentJumpForRecord(record.id)) return
+    if (
+      !shouldApplyRemoteMarkdown({
+        focused: editor.isFocused,
+        live: editorHostIsLive(editor),
+        hasJump: Boolean(contentJumpForRecord(record.id)),
+      })
+    ) {
+      return
+    }
     saved.current = md
     editor.commands.setContent(md, { contentType: 'markdown', emitUpdate: false })
     jumpToPending(editor, md, record.id, true)
@@ -195,20 +214,22 @@ export function PageEditor({ record, value, writable, onChange }: FsContentProps
 
   useEffect(() => {
     if (!editor || editor.isDestroyed || !source) return
-    if (timer.current) clearTimeout(timer.current)
+    if (!timer.current) return
+    clearTimeout(timer.current)
+    timer.current = null
     const next = editor.getMarkdown()
-    if (next !== saved.current) {
-      saved.current = next
-      onChange?.(next)
-    }
+    if (next === saved.current) return
+    saved.current = next
+    onChange?.(next)
   }, [source, editor])
 
   useEffect(() => {
     if (!editor || editor.isDestroyed || source) return
-    const md = saved.current
+    const md = asMarkdown(value)
+    saved.current = md
     if (md === editor.getMarkdown()) return
     editor.commands.setContent(md, { contentType: 'markdown', emitUpdate: false })
-  }, [source, editor])
+  }, [source, editor, value])
 
   useEffect(() => {
     if (!editor || editor.isDestroyed) return
