@@ -111,3 +111,18 @@ test('caret in a heading uses the heading markdown line', () => {
   assert.equal(locus.insert, '# Hello'.length)
   editor.destroy()
 })
+
+test('block math node selection still has a markdown locus for ⌘L', () => {
+  const md = '前言\n\n$$\\sum x$$\n\n后记'
+  const editor = editorOf(md)
+  let pos = -1
+  editor.state.doc.descendants((node, p) => {
+    if (node.type.name === 'blockMath') pos = p
+  })
+  assert.ok(pos >= 0)
+  editor.chain().setNodeSelection(pos).run()
+  const locus = markdownLocusFromSelection(editor)
+  assert.ok(locus)
+  assert.match(locus.selection ?? locus.text, /\\sum x/)
+  editor.destroy()
+})

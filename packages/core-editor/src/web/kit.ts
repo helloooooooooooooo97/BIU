@@ -1,3 +1,4 @@
+import { InputRule } from '@tiptap/core'
 import { Markdown } from '@tiptap/markdown'
 import Image from '@tiptap/extension-image'
 import { BlockMath, InlineMath, Mathematics } from '@tiptap/extension-mathematics'
@@ -9,6 +10,36 @@ import { headingSkin } from './heading-skin.ts'
 import { pageBlock } from './page-block.ts'
 import { pageFind } from './find-plugin.ts'
 import { slashCommand } from './slash.ts'
+
+/** 上游 insertInlineMath 读的是旧 selection，斜杠删掉 `/` 后会插到段落外，插不进去。 */
+const pageInlineMath = InlineMath.extend({
+  addCommands() {
+    const parent = this.parent?.() ?? {}
+    return {
+      ...parent,
+      insertInlineMath:
+        (options) =>
+        ({ commands }) => {
+          const latex = options.latex
+          if (!latex) return false
+          const content = { type: this.name, attrs: { latex } }
+          return options.pos != null ? commands.insertContentAt(options.pos, content) : commands.insertContent(content)
+        },
+    }
+  },
+  addInputRules() {
+    return [
+      new InputRule({
+        find: /(?<!\$)\$([^$\n]+)\$(?!\$)$/,
+        handler: ({ state, range, match }) => {
+          const latex = match[1].trim()
+          if (!latex) return
+          state.tr.replaceWith(range.from, range.to, this.type.create({ latex }))
+        },
+      }),
+    ]
+  },
+})
 
 const pageMathematics = Mathematics.extend({
   addExtensions() {
@@ -26,7 +57,7 @@ const pageMathematics = Mathematics.extend({
           editorOf().chain().setNodeSelection(pos).updateBlockMath({ latex: next }).focus().run()
         },
       }),
-      InlineMath.configure({
+      pageInlineMath.configure({
         katexOptions: { throwOnError: false, displayMode: false },
         onClick: (node, pos) => {
           const next = askLatex(String(node.attrs.latex ?? ''))

@@ -59,7 +59,14 @@ export function markdownLocusFromRange(editor: Editor, from: number, to: number)
     const insert = insertInLine(prefix, full, start_line)
     return { start_line, end_line, text, insert }
   }
-  const selection = doc.textBetween(a, b, '\n').trim()
+  let selection = doc.textBetween(a, b, '\n').trim()
+  if (!selection) {
+    try {
+      selection = serialize(editor, doc.cut(a, b)).trim()
+    } catch {
+      selection = ''
+    }
+  }
   if (!selection) return null
   const prefix = serialize(editor, doc.cut(0, a))
   const through = serialize(editor, doc.cut(0, b))

@@ -41,3 +41,21 @@ test('pickFromEditor uses the current selection', () => {
   assert.match(caret?.text ?? '', /你好世界/)
   editor.destroy()
 })
+
+test('pickFromEditor on block math uses the latex markdown', () => {
+  const editor = new Editor({
+    extensions: pageEditorExtensions(),
+    content: '$$E = mc^2$$',
+    contentType: 'markdown',
+  })
+  let pos = -1
+  editor.state.doc.descendants((node, p) => {
+    if (node.type.name === 'blockMath') pos = p
+  })
+  assert.ok(pos >= 0)
+  editor.chain().setNodeSelection(pos).run()
+  const ref = pickFromEditor(editor, '/pages/math')
+  assert.ok(ref)
+  assert.match(ref?.text ?? '', /E = mc\^2/)
+  editor.destroy()
+})

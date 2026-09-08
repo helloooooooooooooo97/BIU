@@ -154,6 +154,22 @@ $$\\sum_{i=1}^{n} x_i$$
   editor.destroy()
 })
 
+test('slash command inserts inline math into the current paragraph', () => {
+  const editor = new Editor({
+    extensions: pageEditorExtensions(),
+    content: '/',
+    contentType: 'markdown',
+  })
+  const from = editor.state.selection.from - 1
+  const math = SLASH_ITEMS.find((item) => item.id === 'math-inline')
+  assert.ok(math)
+  math!.command({ editor, range: { from: Math.max(1, from), to: editor.state.selection.from } })
+  assert.match(editor.getHTML(), /data-type="inline-math"/)
+  assert.match(editor.getHTML(), /x\^2/)
+  assert.match(editor.getMarkdown(), /\$x\^2\$/)
+  editor.destroy()
+})
+
 test('slash command inserts block math', () => {
   const editor = new Editor({
     extensions: pageEditorExtensions(),
