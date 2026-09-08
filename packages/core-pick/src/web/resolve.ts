@@ -79,6 +79,7 @@ export function resolvePickFromNode(
         id,
         ...(action ? { action } : {}),
         label: label || id,
+        title: label || id,
         route,
       },
       highlight,

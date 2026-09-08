@@ -10,6 +10,7 @@ test('text pick from a bound editor includes markdown source lines', () => {
   document.body.append(root)
   bindEditorTextHost(root, {
     path: '/pages/home',
+    title: '主页',
     locusFromSelection: () => ({ start_line: 5, end_line: 5, text: 'UNIQUESEL', selection: '第一段' }),
     locusFromElement: () => null,
   })
@@ -26,6 +27,7 @@ test('text pick from a bound editor includes markdown source lines', () => {
   assert.equal(ref.text, 'UNIQUESEL')
   assert.equal(ref.selection, '第一段')
   assert.equal(ref.path, '/pages/home')
+  assert.equal(ref.title, '主页')
   bindEditorTextHost(root, null)
   root.remove()
 })

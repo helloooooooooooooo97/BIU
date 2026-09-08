@@ -69,6 +69,27 @@ test('formatPicks emits JSON handles only', () => {
   assert.doesNotMatch(text, /class=|svg|html/i)
 })
 
+test('formatPicks keeps page title for the agent', () => {
+  const text = formatPicks([
+    {
+      kind: 'text',
+      id: 't1',
+      label: '海报',
+      title: '爱乐之城',
+      route: '/database/pages/record/p002',
+      path: '/pages/p002',
+      start_line: 1,
+      end_line: 1,
+      text: '海报',
+      selection: '海报',
+    },
+  ])
+  const parsed = parsePicks(text)
+  assert.equal(parsed.refs[0]?.title, '爱乐之城')
+  assert.equal(parsed.refs[0]?.path, '/pages/p002')
+  assert.equal(chipLabel(parsed.refs[0]!), '爱乐之城 (1)')
+})
+
 test('chip caption keeps line span off the truncated preview', () => {
   const raw =
     '<pick>{"kind":"text","id":"4b33982e","route":"/s/b3b1d688-1e8b-45b1-ac56-b8747a14e842","path":"/pages/p004","start_line":1,"end_line":12,"text":"的的的\\n\\n我爱你\\n完成滕王阁序  \\n我爱你，谢谢  \\n我爱你  \\n我爱你 forever  \\n你好吗？？？  \\n我喜欢呢？？？  \\n非常好  \\n你好  \\n继续加","selection":"的的的\\n我爱你\\n完成滕王阁序我爱你，谢谢我爱你我爱你 forever你好吗？？？我喜欢呢？？？非常好你好继续加"}</pick>'

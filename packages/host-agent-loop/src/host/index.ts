@@ -85,7 +85,8 @@ export class AgentLoop implements AgentRunner {
     }
 
     // 分段 prompt 只在 turn 开头写入一次，避免每 step 污染权威日志；derive 取最后一条 system/prompt。
-    await session.append(this.sessionId, { type: 'system/prompt', text: this.ctx.systemPrompt.assemble() })
+    const live = [...claimed].reverse().find((item) => item.liveContext)?.liveContext
+    await session.append(this.sessionId, { type: 'system/prompt', text: this.ctx.systemPrompt.assemble(live) })
 
     const steps: AgentTurn['steps'] = []
     let final = '（空回复）'

@@ -1,4 +1,5 @@
 import { Service, type Context } from 'cordis'
+import { formatLiveUiContext, type LiveUiContext } from '@biu/type-session'
 
 export class SystemPromptService extends Service {
   private sections = new Map<string, () => string>()
@@ -14,13 +15,15 @@ export class SystemPromptService extends Service {
     }, `systemPrompt.register ${id}`)
   }
 
-  assemble() {
+  assemble(live?: LiveUiContext) {
     const parts = [...this.sections.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([, source]) => source().trim())
       .filter(Boolean)
     const tools = this.ctx.tools?.names() ?? []
     parts.push(`可用工具会随插件装卸变化：${tools.join(', ') || '（无）'}。没有的工具不要调用。`)
+    const ui = formatLiveUiContext(live)
+    if (ui) parts.push(ui)
     return parts.join('\n')
   }
 }

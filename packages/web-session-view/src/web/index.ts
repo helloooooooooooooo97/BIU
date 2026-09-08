@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import { Service, type Context } from 'cordis'
 import { mergeInspectorBind, type SessionInspectorBind } from '@biu/type-session'
+import { captureLiveUiContext } from './live-ui-context.ts'
 import {
   compactSessionEvents,
   mergeDispatchedUsageIntoNodes,
@@ -1364,6 +1365,7 @@ export class SessionViewService extends Service {
     if (!content && !pics.length) return
     const sessionId = await this.ensureSession()
     const tools = [...new Set(extraTools.map((name) => name.trim()).filter(Boolean))]
+    const liveContext = captureLiveUiContext(this)
     const busy = this.value.pending || this.value.agentStatus === 'running'
     const hasWake = this.value.inbox.some((item) => item.kind === 'wake')
     // 忙碌且已有 wake：再发 → inject；否则 wake。
@@ -1374,11 +1376,12 @@ export class SessionViewService extends Service {
     const imagePayload = pics.length ? { images: pics } : {}
     const body: Record<string, unknown> =
       effectiveKind === 'inject'
-        ? { text: content || '（图片）', kind: 'inject', ...(tools.length ? { extraTools: tools } : {}), ...imagePayload }
+        ? { text: content || '（图片）', kind: 'inject', ...(tools.length ? { extraTools: tools } : {}), ...(liveContext ? { liveContext } : {}), ...imagePayload }
         : {
             text: content || '（图片）',
             wait: false,
             ...(tools.length ? { extraTools: tools } : {}),
+            ...(liveContext ? { liveContext } : {}),
             ...imagePayload,
           }
 

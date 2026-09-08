@@ -6,6 +6,8 @@ export type PickRef = {
   action?: string
   label: string
   route: string
+  /** 页面 / 记录 / Tab 标题，给 agent 认对象。 */
+  title?: string
   /** db_content 路径，如 /pages/p002。 */
   path?: string
   /** Markdown 源码行号（1-based），不是可视编辑器行。 */
@@ -41,6 +43,7 @@ export function dedupePicks(refs: PickRef[]): PickRef[] {
       kind: ref.kind,
       id: ref.id,
       label: ref.label || prev.label,
+      title: ref.title || prev.title,
       route: ref.route || prev.route,
       ...(ref.action || prev.action ? { action: ref.action || prev.action } : {}),
       ...locusFields(ref.start_line != null ? ref : prev),
@@ -60,6 +63,7 @@ function pickPayload(ref: PickRef) {
   const data: Record<string, unknown> = { kind: ref.kind, id: ref.id }
   if (ref.action) data.action = ref.action
   if (ref.route) data.route = ref.route
+  if (ref.title) data.title = ref.title
   if (ref.kind !== 'text' && ref.label) data.label = ref.label
   if (ref.path) data.path = ref.path
   if (ref.start_line != null) data.start_line = ref.start_line
@@ -107,6 +111,7 @@ function parsePickAttrs(raw: string): PickRef | null {
     ...(attrs.action?.trim() ? { action: attrs.action.trim() } : {}),
     label: attrs.label?.trim() || (kind === 'text' ? selection || text : '') || (Number.isInteger(Number(attrs.start_line)) ? `L${attrs.start_line}` : '') || id,
     route: attrs.route?.trim() || '',
+    ...(attrs.title?.trim() ? { title: attrs.title.trim() } : {}),
     ...sourceFields({ path: attrs.path?.trim() }),
     ...locusFields({
       start_line: Number.isInteger(start) && start >= 1 ? start : undefined,
@@ -118,10 +123,12 @@ function parsePickAttrs(raw: string): PickRef | null {
   }
 }
 
-function sourceFields(ref: { path?: string }) {
+function sourceFields(ref: { path?: string; title?: string }) {
   const path = ref.path?.trim()
+  const title = ref.title?.trim()
   return {
     ...(path ? { path } : {}),
+    ...(title ? { title } : {}),
   }
 }
 
@@ -194,6 +201,7 @@ export function lineSpanLabel(ref: PickRef) {
 }
 
 function pickChipName(ref: PickRef) {
+  if (ref.title?.trim()) return ref.title.trim()
   const file = ref.path?.split('/').filter(Boolean).pop() ?? ''
   if (file.includes('.')) return file
   if (ref.kind === 'text') {
@@ -241,7 +249,7 @@ export function withHostSource(ref: PickRef, node: Node | null): PickRef {
   const host = editorHostFromNode(node)
   return {
     ...ref,
-    ...sourceFields({ path: host?.path || ref.path }),
+    ...sourceFields({ path: host?.path || ref.path, title: host?.title || ref.title }),
   }
 }
 
@@ -271,6 +279,7 @@ export function pickChipAttrs(ref: PickRef) {
     route: ref.route,
     action: ref.action ?? null,
     path: ref.path ?? null,
+    title: ref.title ?? null,
     start_line: ref.start_line ?? null,
     end_line: ref.end_line ?? null,
     text: ref.text ?? null,
@@ -296,7 +305,7 @@ export function pickRefFromAttrs(attrs: Record<string, unknown>): PickRef | null
     label: String(attrs.label ?? '').trim() || (kind === 'text' ? selection || text : '') || id,
     route: String(attrs.route ?? ''),
     ...(action ? { action } : {}),
-    ...sourceFields({ path }),
+    ...sourceFields({ path, title: String(attrs.title ?? '').trim() }),
     ...locusFields({
       start_line: Number.isInteger(start) && start >= 1 ? start : undefined,
       end_line: Number.isInteger(end) && end >= 1 ? end : undefined,

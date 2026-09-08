@@ -27,7 +27,12 @@ export function isSendChatHotkey(event: {
   return chord(event, 'l')
 }
 
-export function pickFromLocus(path: string | undefined, locus: MarkdownLocus | null, route = typeof window === 'undefined' ? '' : window.location.pathname): PickRef | null {
+export function pickFromLocus(
+  path: string | undefined,
+  locus: MarkdownLocus | null,
+  route = typeof window === 'undefined' ? '' : window.location.pathname,
+  title?: string,
+): PickRef | null {
   if (!locus) return null
   const hasSel = Boolean(locus.selection?.trim())
   const hasInsert = locus.insert != null
@@ -41,12 +46,13 @@ export function pickFromLocus(path: string | undefined, locus: MarkdownLocus | n
       label,
       route,
       ...(path ? { path } : {}),
+      ...(title?.trim() ? { title: title.trim() } : {}),
     },
     locus,
   )
 }
 
-export function pickFromEditor(editor: Editor, path: string | undefined): PickRef | null {
+export function pickFromEditor(editor: Editor, path: string | undefined, title?: string): PickRef | null {
   if (editor.isDestroyed) return null
-  return pickFromLocus(path, markdownLocusFromSelection(editor))
+  return pickFromLocus(path, markdownLocusFromSelection(editor), undefined, title)
 }
