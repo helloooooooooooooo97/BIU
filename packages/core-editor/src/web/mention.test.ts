@@ -4,6 +4,7 @@ import { createElement } from 'react'
 import { render } from '@testing-library/react'
 import { Editor } from '@tiptap/core'
 import { pageEditorExtensions } from './kit.ts'
+import { PAGE_EDITOR_STYLE } from './style.ts'
 import { MentionList } from './mention-list.tsx'
 import {
   decodeMentionId,
@@ -73,6 +74,9 @@ test('mention node roundtrips through markdown and opens inspector', () => {
   assert.doesNotMatch(html, /@首页/)
   assert.doesNotMatch(html, /<a[^>]*data-type="mention"/)
   assert.match(md, /page\/p1/)
+  assert.match(PAGE_EDITOR_STYLE, /span\[data-type=mention\]\.biu-tag\{[^}]*height:1\.7em/)
+  assert.match(PAGE_EDITOR_STYLE, /span\[data-type=mention\]\.biu-tag\{[^}]*line-height:1\.7em/)
+  assert.doesNotMatch(PAGE_EDITOR_STYLE, /vertical-align:text-top/)
   editor.destroy()
 
   const loaded = new Editor({
