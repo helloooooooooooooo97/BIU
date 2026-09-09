@@ -34,8 +34,8 @@ function askNewBanner(opts: {
   const kindName = opts.kind === 'htmlframe' ? '动态' : '静态'
   const path = opts.path?.trim()
   const draft = path
-    ? `请为「${opts.title || path}」创建一个新的${styleName}${kindName}顶部背景。用 db_update path=${path}，content 只含 banner:{kind:"${opts.kind}",html}。html 用纯 CSS${opts.kind === 'htmlframe' ? '和脚本' : ''}，不要图片，不要改 content 正文。背景用白色偏色的淡 tint（白色偏红、白色偏橙这类），不要饱和纯色色块。`
-    : `请创建一个新的${styleName}${kindName}顶部 HTML 背景，不要图片。背景用白色偏色的淡 tint，不要饱和纯色。`
+    ? `请为「${opts.title || path}」创建一个新的${styleName}${kindName}顶部背景。用 db_update path=${path}，content 只含 banner:{kind:"${opts.kind}",html}。html 用纯 CSS${opts.kind === 'htmlframe' ? '和脚本' : ''}，不要图片，不要改 content 正文。`
+    : `请创建一个新的${styleName}${kindName}顶部 HTML 背景，不要图片。`
   getPick()?.attach(
     path
       ? [

@@ -46,7 +46,7 @@ import { normalizeSchemaValue } from '@biu/type-file-system'
 import type { CollectionChrome, CollectionViewType, DatabaseUi } from '@biu/type-file-system/ui'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { DndGrip } from './dnd-grip.tsx'
-import { BoolBox, ChatCount, RecordEmojiBoard, HeadlessDismiss, HeadlessPopover, HEADLESS_DISMISS_IGNORE } from '@biu/public-ui'
+import { BoolBox, ChatCount, RecordEmojiBoard, HeadlessDismiss, HeadlessPopover, HEADLESS_DISMISS_IGNORE, tagTextColor } from '@biu/public-ui'
 import {
   contentFieldKey,
   defaultColumnKeys,
@@ -197,7 +197,7 @@ function FacetColumnPackRow({
             <span className="fsdb-checkrow-icon">
               <FieldGlyph kind="facet" />
             </span>
-            <span className="fsdb-col-facet-name" style={tone ? { color: tone } : undefined}>
+            <span className="fsdb-col-facet-name" style={tone ? { color: tagTextColor(tone) } : undefined}>
               {pack.label}
             </span>
           </span>

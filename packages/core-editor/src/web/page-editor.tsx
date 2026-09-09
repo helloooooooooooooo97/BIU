@@ -116,8 +116,8 @@ function ColorMenus({
                 data-testid={kind === 'text' ? `page-color-${tone}` : `page-highlight-${tone}`}
                 style={
                   kind === 'text'
-                    ? { color: tone, background: 'transparent' }
-                    : { background: tagWashColor(tone), color: tone }
+                    ? { color: tagTextColor(tone), background: 'transparent' }
+                    : { background: tagWashColor(tone), color: tagTextColor(tone) }
                 }
                 onMouseDown={holdSelection}
                 onClick={() => {
