@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom'
-import { bindHtmlSlide, collectHtmlSlides, htmlDeckEnabled, htmlDeckIndex, htmlDeckKeyAction, stepHtmlDeck } from './html-deck.ts'
+import { bindHtmlSlide, collectHtmlSlides, cssBoxSize, htmlDeckEnabled, htmlDeckIndex, htmlDeckKeyAction, stepHtmlDeck } from './html-deck.ts'
 import { htmlBlockKey, stampHtmlPickSurfaces, stampHtmlSource } from './stamp-picks.ts'
 
 const React = globalThis.React
@@ -213,9 +213,11 @@ function HtmlDeckOverlay({
             sandbox="allow-scripts"
             style={{
               flex: 'none',
-              width: 'min(100%, 960px)',
-              height: slide.height || 300,
+              width: cssBoxSize(slide.width) ?? 'min(100%, 960px)',
+              height: cssBoxSize(slide.height) ?? '300px',
+              maxWidth: '100%',
               maxHeight: '100%',
+              overflow: 'auto',
               border: 'none',
               background: '#0b0b12',
             }}
@@ -223,7 +225,14 @@ function HtmlDeckOverlay({
         ) : (
           <div
             data-testid="html-deck-slide"
-            style={{ flex: 'none', maxWidth: '100%', maxHeight: '100%' }}
+            style={{
+              flex: 'none',
+              width: cssBoxSize(slide.width),
+              height: cssBoxSize(slide.height),
+              maxWidth: '100%',
+              maxHeight: '100%',
+              overflow: slide.width != null || slide.height != null ? 'auto' : undefined,
+            }}
             dangerouslySetInnerHTML={{ __html: stamped }}
           />
         )}
@@ -286,19 +295,26 @@ function useHtmlDeck(
   hostRef: { current: HTMLElement | null },
   kind: 'html' | 'htmlframe',
   html: string,
-  opts?: { height?: number; deck?: boolean },
+  opts?: { width?: unknown; height?: unknown; deck?: boolean },
 ) {
   const [open, setOpen] = useState(false)
   const [index, setIndex] = useState(0)
   const [slides, setSlides] = useState<ReturnType<typeof collectHtmlSlides>>([])
+  const width = opts?.width
   const height = opts?.height
   const deck = htmlDeckEnabled(opts?.deck)
 
   useLayoutEffect(() => {
     const host = hostRef.current?.closest('[data-page-block]') ?? null
-    bindHtmlSlide(host, { kind, html, deck, ...(height != null ? { height } : {}) })
+    bindHtmlSlide(host, {
+      kind,
+      html,
+      deck,
+      ...(width != null && width !== '' ? { width: width as number | string } : {}),
+      ...(height != null && height !== '' ? { height: height as number | string } : {}),
+    })
     return () => bindHtmlSlide(host, null)
-  }, [hostRef, html, kind, height, deck])
+  }, [hostRef, html, kind, width, height, deck])
 
   const start = () => {
     const host = hostRef.current?.closest('[data-page-block]') ?? null
@@ -325,7 +341,68 @@ function useHtmlDeck(
   return { start, overlay }
 }
 
-/** 右上角悬浮工具条：只有 hover / 编辑时才浮出，不占内容、不包外框 */
+function SizeGrip({
+  boxRef,
+  onSize,
+}: {
+  boxRef: { current: HTMLElement | null }
+  onSize: (next: { width: number; height: number }) => void
+}) {
+  const drag = useRef<{ x: number; y: number; w: number; h: number } | null>(null)
+  const onSizeRef = useRef(onSize)
+  onSizeRef.current = onSize
+  useEffect(() => {
+    const move = (event: PointerEvent) => {
+      const start = drag.current
+      if (!start) return
+      event.preventDefault()
+      onSizeRef.current({
+        width: Math.max(80, Math.round(start.w + event.clientX - start.x)),
+        height: Math.max(48, Math.round(start.h + event.clientY - start.y)),
+      })
+    }
+    const up = () => {
+      drag.current = null
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+    return () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+    }
+  }, [])
+  return (
+    <button
+      type="button"
+      data-testid="html-size-grip"
+      data-biu-ignore
+      tabIndex={-1}
+      title="拖动调整宽高"
+      aria-label="拖动调整宽高"
+      onPointerDown={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        const box = boxRef.current
+        if (!box) return
+        drag.current = { x: event.clientX, y: event.clientY, w: box.offsetWidth, h: box.offsetHeight }
+      }}
+      style={{
+        position: 'absolute',
+        right: 3,
+        bottom: 3,
+        zIndex: 18,
+        width: 16,
+        height: 16,
+        margin: 0,
+        padding: 0,
+        cursor: 'nwse-resize',
+        border: 'none',
+        borderRadius: 2,
+        background: 'linear-gradient(135deg, transparent 50%, rgba(255,255,255,.55) 50%)',
+      }}
+    />
+  )
+}
 function FloatBar({
   editing,
   setEditing,
@@ -334,6 +411,8 @@ function FloatBar({
   onExpand,
   deck,
   onDeck,
+  sized,
+  onResetSize,
   children,
 }: {
   editing: boolean
@@ -343,6 +422,8 @@ function FloatBar({
   onExpand: () => void
   deck: boolean
   onDeck?: (next: boolean) => void
+  sized?: boolean
+  onResetSize?: () => void
   children?: unknown
 }) {
   const seg = (active: boolean, onClick: () => void, label: string) => (
@@ -385,6 +466,19 @@ function FloatBar({
         <>
           {seg(!editing, () => setEditing(false), '预览')}
           {seg(editing, () => setEditing(true), '编辑')}
+          {sized ? (
+            <button
+              type="button"
+              tabIndex={-1}
+              data-testid="html-size-auto"
+              title="恢复自适应宽高"
+              aria-label="恢复自适应宽高"
+              onClick={() => onResetSize?.()}
+              style={barBtn}
+            >
+              自适应
+            </button>
+          ) : null}
           <button
             type="button"
             tabIndex={-1}
@@ -438,11 +532,14 @@ const HTML_DIRECT_SAMPLE = `<div style="font-family:ui-sans-serif,system-ui;bord
 function HtmlDirectCard({ data, update, writable }: BlockProps) {
   const ro = !writable
   const html = String(data.html ?? '')
+  const width = data.width
+  const height = data.height
+  const sized = (width != null && width !== '') || (height != null && height !== '')
   const deckOn = htmlDeckEnabled(data.deck)
   const [editing, setEditing] = useState(false)
   const [hover, setHover] = useState(false)
   const hostRef = useRef<HTMLDivElement | null>(null)
-  const deck = useHtmlDeck(hostRef, 'html', html, { deck: deckOn })
+  const deck = useHtmlDeck(hostRef, 'html', html, { width, height, deck: deckOn })
   const stamped = useMemo(
     () => stampHtmlSource(html, htmlBlockKey(hostRef.current?.closest('[data-page-block]') ?? null, html)),
     [html],
@@ -452,7 +549,14 @@ function HtmlDirectCard({ data, update, writable }: BlockProps) {
     <div
       ref={hostRef}
       data-testid="page-html-direct"
-      style={{ position: 'relative', width: '100%' }}
+      style={{
+        position: 'relative',
+        width: cssBoxSize(width) ?? '100%',
+        height: cssBoxSize(height),
+        maxWidth: '100%',
+        overflow: sized ? 'auto' : undefined,
+        boxSizing: 'border-box',
+      }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
@@ -465,13 +569,16 @@ function HtmlDirectCard({ data, update, writable }: BlockProps) {
           onExpand={deck.start}
           deck={deckOn}
           onDeck={(next) => update({ deck: next })}
+          sized={sized}
+          onResetSize={() => update({ width: undefined, height: undefined })}
         />
       )}
       {editing ? (
         <SourceEditor html={html} onChange={(v) => update({ html: v })} />
       ) : (
-        <div style={{ overflowX: 'auto' }} dangerouslySetInnerHTML={{ __html: stamped }} />
+        <div style={{ overflowX: sized ? undefined : 'auto' }} dangerouslySetInnerHTML={{ __html: stamped }} />
       )}
+      {ro || editing ? null : <SizeGrip boxRef={hostRef} onSize={(next) => update(next)} />}
       {deck.overlay}
     </div>
   )

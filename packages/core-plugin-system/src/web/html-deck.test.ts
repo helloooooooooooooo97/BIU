@@ -3,11 +3,19 @@ import assert from 'node:assert/strict'
 import {
   bindHtmlSlide,
   collectHtmlSlides,
+  cssBoxSize,
   htmlDeckEnabled,
   htmlDeckIndex,
   htmlDeckKeyAction,
   stepHtmlDeck,
 } from '../../../../.plugin-dev/page-html-blocks/html-deck.ts'
+
+test('cssBoxSize turns numbers into px and keeps css units', () => {
+  assert.equal(cssBoxSize(320), '320px')
+  assert.equal(cssBoxSize('100%'), '100%')
+  assert.equal(cssBoxSize('100vh'), '100vh')
+  assert.equal(cssBoxSize(undefined), undefined)
+})
 
 test('collects html and htmlframe slides in document order', () => {
   const editor = document.createElement('div')

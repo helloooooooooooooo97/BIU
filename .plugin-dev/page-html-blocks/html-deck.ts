@@ -3,9 +3,17 @@ export const HTML_DECK_SEL = '[data-page-block="html"], [data-page-block="htmlfr
 export type HtmlSlide = {
   kind: 'html' | 'htmlframe'
   html: string
-  height?: number
+  width?: number | string
+  height?: number | string
   /** 默认 true；false 时不进放映。 */
   deck?: boolean
+}
+
+export function cssBoxSize(value: unknown): string | undefined {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) return `${Math.round(value)}px`
+  if (typeof value !== 'string') return undefined
+  const text = value.trim()
+  return text || undefined
 }
 
 export function htmlDeckEnabled(deck: unknown) {

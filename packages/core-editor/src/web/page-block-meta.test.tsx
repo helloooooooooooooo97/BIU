@@ -58,6 +58,19 @@ test('html pageBlock fence stores raw html and deck on the header', () => {
   })
   assert.match(frame, /kind=htmlframe plugin=page-html-blocks deck=false height=300/)
   assert.match(frame, /<html><\/html>/)
+  const sized = formatPageBlockFence('html', 'page-html-blocks', {
+    html: '<div>卡</div>',
+    deck: true,
+    width: '100%',
+    height: '100vh',
+  })
+  assert.match(sized, /width=100%/)
+  assert.match(sized, /height=100vh/)
+  assert.deepEqual(parsePageBlockMeta('kind=html plugin=page-html-blocks deck=true width=100% height=100vh').extras, {
+    deck: true,
+    width: '100%',
+    height: '100vh',
+  })
 })
 
 test('enable button only dispatches the stored plugin id', () => {

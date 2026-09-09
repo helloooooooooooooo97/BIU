@@ -9,9 +9,31 @@ export function parsePageBlockMeta(raw: string) {
   const extras: Record<string, unknown> = {}
   const deck = raw.match(/\bdeck=(true|false|1|0)\b/i)?.[1]
   if (deck) extras.deck = /^(true|1)$/i.test(deck)
-  const height = raw.match(/\bheight=(\d+)\b/i)?.[1]
-  if (height) extras.height = Number(height)
+  const width = raw.match(/\bwidth=([^\s}]+)/i)?.[1]
+  if (width) {
+    const parsed = parseFenceSize(width)
+    if (parsed != null) extras.width = parsed
+  }
+  const height = raw.match(/\bheight=([^\s}]+)/i)?.[1]
+  if (height) {
+    const parsed = parseFenceSize(height)
+    if (parsed != null) extras.height = parsed
+  }
   return { kind, plugin, extras }
+}
+
+function parseFenceSize(raw: string): string | number | undefined {
+  const value = raw.trim()
+  if (!value) return undefined
+  if (/^\d+(\.\d+)?$/.test(value)) return Math.round(Number(value))
+  if (/^\d+(\.\d+)?(px|%|vh|vw|em|rem)$/i.test(value)) return value
+  return undefined
+}
+
+function formatFenceSize(value: unknown): string | undefined {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) return String(Math.round(value))
+  if (typeof value === 'string') return parseFenceSize(value) == null ? undefined : String(parseFenceSize(value))
+  return undefined
 }
 
 function parseJsonObject(raw: string): Record<string, unknown> | null {
@@ -44,7 +66,10 @@ function formatMeta(kind: string, plugin: string, extras: string[]) {
 function htmlFenceExtras(data: Record<string, unknown>) {
   const extras: string[] = []
   if (typeof data.deck === 'boolean') extras.push(`deck=${data.deck}`)
-  if (typeof data.height === 'number' && Number.isFinite(data.height)) extras.push(`height=${Math.round(data.height)}`)
+  const width = formatFenceSize(data.width)
+  if (width) extras.push(`width=${width}`)
+  const height = formatFenceSize(data.height)
+  if (height) extras.push(`height=${height}`)
   return extras
 }
 

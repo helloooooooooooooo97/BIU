@@ -210,6 +210,8 @@ test('html and req page blocks register plugin id for slash', async () => {
   assert.match(html, /htmlDeckKeyAction/)
   assert.match(html, /requestFullscreen/)
   assert.match(html, /html-deck-toggle/)
+  assert.match(html, /html-size-grip/)
+  assert.match(html, /html-size-auto/)
   assert.match(html, /deck: true/)
   assert.match(html, /data-testid="html-source"/)
   assert.match(html, /event\.stopPropagation\(\)/)
