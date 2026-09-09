@@ -2202,22 +2202,25 @@ export function CollectionBrowser({
 
   function RowCheck({ id, ids }: { id?: string; ids?: string[] }) {
     const list = id ? [id] : (ids ?? [])
+    const some = list.some((item) => pickedIds.includes(item))
     const on = list.length > 0 && list.every((item) => pickedIds.includes(item))
+    const marked = id ? on : some
+    const header = !id
     return (
       <button
         type="button"
         data-testid="fsdb-row-check"
-        className={`fsdb-boolbtn fsdb-row-check${on ? ' is-on' : ''}`}
-        aria-pressed={on}
-        aria-label={id ? (on ? '取消选择记录' : '选择记录') : on ? '取消全选' : '全选'}
-        title={id ? (on ? '取消选择' : '选择') : on ? '取消全选' : '全选'}
+        className={`fsdb-boolbtn fsdb-row-check${marked ? ' is-on' : ''}`}
+        aria-pressed={marked}
+        aria-label={id ? (on ? '取消选择记录' : '选择记录') : some ? '取消选择' : '全选'}
+        title={id ? (on ? '取消选择' : '选择') : some ? '取消选择' : '全选'}
         onClick={(event) => {
           event.stopPropagation()
-          togglePicked(list, !on)
+          togglePicked(list, header ? !some : !on)
         }}
         onPointerDown={(event) => event.stopPropagation()}
       >
-        <BoolBox on={on}>{on ? <CheckIcon aria-hidden className="size-3" /> : null}</BoolBox>
+        <BoolBox on={marked}>{marked ? <CheckIcon aria-hidden className="size-3" /> : null}</BoolBox>
       </button>
     )
   }
@@ -2931,7 +2934,21 @@ export function CollectionBrowser({
               <div className="tasks-table-wrap">
                 {pickedIds.length ? (
                   <div className="fsdb-bulk" data-testid="fsdb-bulk-bar">
-                    <span className="fsdb-bulk-count">{pickedIds.length} 已选</span>
+                    <span
+                      className="fsdb-bulk-count"
+                      role="button"
+                      tabIndex={0}
+                      title="取消选择"
+                      onClick={() => setPickedIds([])}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault()
+                          setPickedIds([])
+                        }
+                      }}
+                    >
+                      {pickedIds.length} 已选
+                    </span>
                     {canDelete ? (
                       <button
                         type="button"
@@ -2959,24 +2976,6 @@ export function CollectionBrowser({
                       {bulkMenuOpen ? (
                         <HeadlessDismiss onDismiss={() => setBulkMenuOpen(false)} insideRef={bulkRef}>
                           <div className="fsdb-bulk-menu" role="menu">
-                            {bulkFields.length ? (
-                              <button
-                                type="button"
-                                className="tasks-sort-item"
-                                data-testid="fsdb-bulk-edit"
-                                onClick={() => {
-                                  setBulkEditKey(bulkFields[0]?.key ?? '')
-                                  setBulkEditRaw('')
-                                  setDlg({ kind: 'bulk-edit', ids: pickedIds })
-                                  setBulkMenuOpen(false)
-                                }}
-                              >
-                                <span className="tasks-sort-item-label">
-                                  <PencilSquareIcon aria-hidden className="size-[14px]" />
-                                  编辑属性
-                                </span>
-                              </button>
-                            ) : null}
                             {canFacet ? (
                               <button
                                 type="button"
@@ -2990,7 +2989,7 @@ export function CollectionBrowser({
                               >
                                 <span className="tasks-sort-item-label">
                                   <RectangleStackIcon aria-hidden className="size-[14px]" />
-                                  打合集
+                                  合集
                                 </span>
                               </button>
                             ) : null}
@@ -3223,7 +3222,7 @@ export function CollectionBrowser({
       ) : null}
       {dlg?.kind === 'bulk-facet' ? (
         <AppDialog
-          title={`打合集 · ${dlg.ids.length} 条`}
+          title={`合集 · ${dlg.ids.length} 条`}
           confirm="贴上"
           disabled={!bulkFacetIds.length}
           onCancel={() => setDlg(null)}
