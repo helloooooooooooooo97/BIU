@@ -161,13 +161,16 @@ export const pageMention = Mention.extend({
       new Plugin({
         key: new PluginKey('page-mention-open'),
         props: {
-          handleClick(view, _pos, event) {
-            const el = mentionAnchor(event.target, view.dom)
-            if (!el) return false
-            const id = el.getAttribute('data-id') || ''
-            if (!openMention(id)) return false
-            event.preventDefault()
-            return true
+          handleDOMEvents: {
+            click(view, event) {
+              const el = mentionAnchor(event.target, view.dom)
+              if (!el) return false
+              const id = el.getAttribute('data-id') || ''
+              if (!openMention(id)) return false
+              event.preventDefault()
+              event.stopPropagation()
+              return true
+            },
           },
         },
       }),
@@ -178,13 +181,9 @@ export const pageMention = Mention.extend({
     class: 'mention',
   },
   renderHTML({ options, node }) {
-    const href = mentionHref(String(node.attrs.id ?? ''))
     return [
-      'a',
-      mergeAttributes(
-        { 'data-type': 'mention', href },
-        options.HTMLAttributes,
-      ),
+      'span',
+      mergeAttributes({ 'data-type': 'mention' }, options.HTMLAttributes),
       `${options.suggestion.char}${node.attrs.label ?? node.attrs.id}`,
     ]
   },

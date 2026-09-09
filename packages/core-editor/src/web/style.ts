@@ -60,7 +60,7 @@ export const PAGE_EDITOR_STYLE = `
 .page-editor .tiptap pre code,.page-editor .tiptap pre code.hljs{display:block;padding:0;background:transparent;color:inherit;font-size:13px;line-height:1.6;white-space:inherit}
 .page-editor pre.page-block-missing-source{margin:0;max-height:220px;overflow:auto;padding:10px 12px;border:1px solid var(--dsw-border);border-radius:8px;background:var(--dsw-chat-code-bg,var(--dsw-sidebar));color:var(--dsw-label-2);font-size:12px;line-height:1.55;white-space:pre-wrap;word-break:break-word}
 .page-editor .tiptap a{color:var(--dsw-business);text-underline-offset:2px}
-.page-editor .tiptap .mention,.page-editor .tiptap a.mention{border-radius:4px;padding:0 .18em;background:color-mix(in srgb,var(--dsw-business) 14%,transparent);color:var(--dsw-business);text-decoration:none;cursor:pointer}
+.page-editor .tiptap span.mention,.page-editor .tiptap span[data-type=mention]{border-radius:4px;padding:0 .18em;background:color-mix(in srgb,var(--dsw-business) 14%,transparent);color:var(--dsw-business);text-decoration:none;cursor:pointer}
 .page-editor .tiptap p.is-editor-empty:first-child::before,
 .page-editor .tiptap .is-empty::before{content:attr(data-placeholder);float:left;height:0;pointer-events:none;color:var(--dsw-placeholder)}
 .page-bubble{z-index:80;background:var(--dsw-sidebar);border:1px solid var(--dsw-border);box-shadow:0 8px 28px rgba(15,15,15,.12),0 0 0 1px color-mix(in srgb,var(--dsw-border) 70%,transparent);border-radius:10px;overflow:hidden}
