@@ -47,7 +47,7 @@ import type { CollectionChrome, CollectionViewType, DatabaseUi } from '@biu/type
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { DndGrip } from './dnd-grip.tsx'
 import { BoolBox, ChatCount, RecordEmojiBoard, HeadlessDismiss, HeadlessPopover, HEADLESS_DISMISS_IGNORE, tagTextColor } from '@biu/public-ui'
-import { packMarkdownDocs, contentToMarkdown, recordToMarkdown } from './export-markdown.ts'
+import { zipMarkdownPack, contentToMarkdown, markdownFileName, recordToMarkdown } from './export-markdown.ts'
 import {
   contentFieldKey,
   defaultColumnKeys,
@@ -1725,21 +1725,28 @@ export function CollectionBrowser({
   }
 
   async function exportPicked() {
-    const rows = items.filter((row) => pickedIds.includes(row.id))
-    if (!rows.length) return
+    const ids = pickedIds.filter(Boolean)
+    if (!ids.length) return
     try {
-      const docs: string[] = []
-      for (const row of rows) {
-        const path = `${dataPath}/${row.id}`
-        const rec = await readJson<{ value?: Record<string, unknown> }>(`/api/db/read?path=${encodeURIComponent(path)}`).catch(() => ({ value: row }))
-        const content = await readJson<{ value?: unknown }>(`/api/db/content?path=${encodeURIComponent(path)}`).catch(() => ({ value: bodyKey ? row[bodyKey] : '' }))
-        docs.push(recordToMarkdown({ ...row, ...(rec.value ?? {}) }, contentToMarkdown(content.value)))
+      const files: Array<{ name: string; text: string }> = []
+      for (const id of ids) {
+        const listed = items.find((row) => row.id === id)
+        const path = `${dataPath}/${id}`
+        const rec = await readJson<{ value?: Record<string, unknown> }>(`/api/db/read?path=${encodeURIComponent(path)}`).catch(() => ({ value: listed }))
+        const content = await readJson<{ value?: unknown }>(`/api/db/content?path=${encodeURIComponent(path)}`).catch(() => ({
+          value: listed && bodyKey ? listed[bodyKey] : '',
+        }))
+        const row = { ...(listed ?? { id }), ...(rec.value ?? {}), id }
+        files.push({
+          name: markdownFileName(row),
+          text: recordToMarkdown(row, contentToMarkdown(content.value), bodyKey),
+        })
       }
-      const blob = new Blob([packMarkdownDocs(docs)], { type: 'text/markdown;charset=utf-8' })
+      const blob = zipMarkdownPack(files)
       const href = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = href
-      link.download = `${title || 'records'}.md`
+      link.download = `${title || 'records'}.zip`
       link.click()
       URL.revokeObjectURL(href)
     } catch (err) {
