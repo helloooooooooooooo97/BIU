@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { PhotoIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import { HeadlessPopover } from '@biu/public-ui'
 import { getPick } from '@biu/core-pick/web'
 import {
   BANNER_STYLE_IDS,
   BANNER_STYLE_LABEL,
+  findBannerPreset,
   presetsOf,
   type BannerStyleId,
 } from '../banner-presets.ts'
@@ -68,6 +70,7 @@ export function PageBanner({
   onChange?: (next: BannerValue | null) => void
 }) {
   const banner = parsePageBanner(value)
+  const story = banner ? findBannerPreset(banner) : null
   if (!banner && !writable) return null
   return (
     <div
@@ -82,6 +85,12 @@ export function PageBanner({
           sandbox={banner.kind === 'htmlframe' ? 'allow-scripts' : ''}
           tabIndex={-1}
         />
+      ) : null}
+      {story ? (
+        <div className="fsdb-banner-story" data-testid="fsdb-banner-story">
+          <div className="fsdb-banner-story-title">{story.title}</div>
+          <div className="fsdb-banner-story-note">{story.note}</div>
+        </div>
       ) : null}
       {writable && onChange ? (
         <BannerTitleActions
@@ -175,6 +184,7 @@ function BannerGallery({
 }) {
   const [mine, setMine] = useState<GalleryItem[]>([])
   const [mineTick, setMineTick] = useState(0)
+  const [tip, setTip] = useState<{ title: string; note: string; x: number; y: number } | null>(null)
   useEffect(() => {
     let cancelled = false
     void readJson<{ items?: GalleryItem[] }>('/api/db/banner-gallery')
@@ -220,6 +230,7 @@ function BannerGallery({
                     html={item.html}
                     label={item.title}
                     note={item.note}
+                    onHover={setTip}
                     onClick={() => onPick({ kind: item.kind, html: item.html })}
                   />
                 ))}
@@ -243,7 +254,7 @@ function BannerGallery({
                   kind={item.kind}
                   html={item.html}
                   label={item.title}
-                  note={item.title}
+                  onHover={setTip}
                   onClick={() => onPick({ kind: item.kind, html: item.html })}
                 />
                 <button
@@ -279,6 +290,15 @@ function BannerGallery({
           </div>
         </section>
       </div>
+        {tip
+          ? createPortal(
+              <div className="fsdb-banner-fly" style={{ left: tip.x, top: tip.y }} role="tooltip">
+                <div className="fsdb-banner-fly-title">{tip.title}</div>
+                {tip.note ? <div className="fsdb-banner-fly-note">{tip.note}</div> : null}
+              </div>,
+              document.body,
+            )
+          : null}
     </>
   )
 }
@@ -288,24 +308,33 @@ function BannerThumb({
   html,
   label,
   note,
+  onHover,
   onClick,
 }: {
   kind: PageBannerKind
   html: string
   label: string
   note?: string
+  onHover?: (next: { title: string; note: string; x: number; y: number } | null) => void
   onClick: () => void
 }) {
   const src = useMemo(() => bannerSrcDoc(html), [html])
+  const show = (el: HTMLElement) => {
+    const box = el.getBoundingClientRect()
+    onHover?.({ title: label, note: note ?? '', x: box.left + box.width / 2, y: box.top })
+  }
   return (
-    <button type="button" className="fsdb-banner-card" title={note || label} onClick={onClick}>
+    <button
+      type="button"
+      className="fsdb-banner-card"
+      onClick={onClick}
+      onMouseEnter={(event) => show(event.currentTarget)}
+      onMouseLeave={() => onHover?.(null)}
+    >
       <span className="fsdb-banner-thumb">
         <iframe title={label} srcDoc={src} sandbox={kind === 'htmlframe' ? 'allow-scripts' : ''} tabIndex={-1} />
       </span>
-      <span className="fsdb-banner-caption">
-        <span className="fsdb-banner-caption-title">{label}</span>
-        {note ? <span className="fsdb-banner-caption-note">{note}</span> : null}
-      </span>
+      <span className="fsdb-banner-caption">{label}</span>
     </button>
   )
 }

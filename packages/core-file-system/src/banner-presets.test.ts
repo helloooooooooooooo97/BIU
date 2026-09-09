@@ -24,4 +24,6 @@ test('banner presets cover four styles in static and live kinds', () => {
   const sample = BANNER_PRESETS[0]!
   assert.equal(isBannerPreset({ kind: sample.kind, html: sample.html }), true)
   assert.equal(isBannerPreset({ kind: 'html', html: '<div>custom</div>' }), false)
+  assert.match(sample.html, /max-height:100%/)
+  assert.match(sample.html, /-webkit-line-clamp:2/)
 })

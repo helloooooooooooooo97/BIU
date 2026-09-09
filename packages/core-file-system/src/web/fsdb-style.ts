@@ -360,6 +360,10 @@ const CSS = `
 .fsdb-detail-main .fsdb-page-banner{margin:-80px -80px 16px;width:calc(100% + 160px)}
 .fsdb-detail-main .fsdb-page-banner.is-empty{margin-bottom:0}
 .fsdb-page-banner iframe{display:block;width:100%;height:100%;border:0;pointer-events:none;background:transparent}
+.fsdb-banner-story{position:absolute;left:80px;bottom:44px;z-index:3;max-width:min(36rem,calc(100% - 160px));padding:10px 12px;border-radius:8px;background:rgba(12,12,12,.72);color:#F0EFED;opacity:0;transform:translateY(6px);pointer-events:none;transition:opacity .18s ease,transform .18s ease}
+.fsdb-page-banner:hover .fsdb-banner-story,.fsdb-page-banner:focus-within .fsdb-banner-story{opacity:1;transform:none}
+.fsdb-banner-story-title{font-size:12px;font-weight:700;letter-spacing:.04em}
+.fsdb-banner-story-note{margin-top:4px;font-size:12px;font-weight:500;line-height:1.5;color:#D8D5D0}
 .fsdb-banner-title-actions{position:absolute;left:80px;bottom:10px;z-index:3;display:flex;align-items:center;margin:0;min-height:0;opacity:0;pointer-events:none}
 .fsdb-page-banner:hover .fsdb-banner-title-actions,.fsdb-page-banner:focus-within .fsdb-banner-title-actions,.fsdb-banner-title-actions:has([data-state=open]){opacity:1;pointer-events:auto}
 .fsdb-banner-ico{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:28px;margin:0;border:0;border-radius:6px;padding:0 8px;background:transparent;color:#ACA9A4;font:inherit;font-size:12px;font-weight:600;cursor:pointer}
@@ -378,9 +382,10 @@ const CSS = `
 .fsdb-banner-card{display:flex;flex-direction:column;gap:5px;margin:0;border:0;padding:0;background:transparent;color:#F0EFED;text-align:left;cursor:pointer;width:100%;min-width:0}
 .fsdb-banner-thumb{position:relative;display:block;height:64px;margin:0;border:0;border-radius:6px;padding:0;overflow:hidden;background:#161616;width:100%}
 .fsdb-banner-thumb iframe{display:block;width:200%;height:200%;border:0;pointer-events:none;transform:scale(.5);transform-origin:top left}
-.fsdb-banner-caption{display:flex;flex-direction:column;gap:2px;min-width:0}
-.fsdb-banner-caption-title{font-size:11px;font-weight:700;line-height:1.25;color:#F0EFED}
-.fsdb-banner-caption-note{font-size:10px;font-weight:500;line-height:1.35;color:#ACA9A4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.fsdb-banner-caption{font-size:11px;font-weight:700;line-height:1.25;color:#F0EFED;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fsdb-banner-fly{position:fixed;z-index:120;width:min(280px,calc(100vw - 24px));transform:translate(-50%,calc(-100% - 10px));padding:10px 12px;border-radius:8px;background:#1c1c1c;border:1px solid var(--dsw-border);box-shadow:0 10px 28px rgba(0,0,0,.4);pointer-events:none;color:#F0EFED}
+.fsdb-banner-fly-title{font-size:12px;font-weight:700}
+.fsdb-banner-fly-note{margin-top:5px;font-size:12px;font-weight:500;line-height:1.5;color:#ACA9A4}
 .fsdb-banner-mine{position:relative;min-width:0}
 .fsdb-banner-mine-del{position:absolute;top:4px;right:4px;z-index:2;display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;margin:0;border:0;border-radius:6px;padding:0;background:rgba(0,0,0,.55);color:#F0EFED;opacity:0;cursor:pointer}
 .fsdb-banner-mine:hover .fsdb-banner-mine-del,.fsdb-banner-mine:focus-within .fsdb-banner-mine-del{opacity:1}

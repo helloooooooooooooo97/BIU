@@ -20,10 +20,10 @@ export type BannerPreset = {
 }
 
 const box = (css: string, inner: string) =>
-  `<div style="box-sizing:border-box;height:100%;width:100%;overflow:hidden;position:relative;${css}">${inner}</div>`
+  `<div style="box-sizing:border-box;height:100%;max-height:100%;width:100%;overflow:hidden;position:relative;${css}">${inner}</div>`
 
 const copy = (kicker: string, name: string, thought: string, extra = '') =>
-  `<div style="position:relative;z-index:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;padding:26px 34px 22px;${extra}"><div style="font-size:10px;font-weight:700;letter-spacing:.34em;opacity:.7">${kicker}</div><div style="margin-top:7px;font-size:28px;font-weight:800;letter-spacing:.04em;line-height:1.08">${name}</div><div style="max-width:36rem;margin-top:9px;font-size:13px;font-weight:500;line-height:1.55;opacity:.9">${thought}</div></div>`
+  `<div style="position:relative;z-index:1;box-sizing:border-box;display:flex;flex-direction:column;justify-content:flex-end;height:100%;max-height:100%;min-height:0;overflow:hidden;padding:18px 28px 16px;${extra}"><div style="flex:none;font-size:10px;font-weight:700;letter-spacing:.28em;opacity:.7">${kicker}</div><div style="flex:none;margin-top:6px;font-size:22px;font-weight:800;letter-spacing:.03em;line-height:1.15">${name}</div><div style="flex:none;max-width:34rem;margin-top:6px;font-size:12px;font-weight:500;line-height:1.4;opacity:.9;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${thought}</div></div>`
 
 function html(
   id: string,
@@ -86,8 +86,8 @@ export const BANNER_PRESETS: BannerPreset[] = [
     'jp',
     '田中一光',
     '能乐脸谱切成色块。传统不是临摹，是几何以后的再认。',
-    'background:#f3efe4;color:#171717;display:grid;grid-template-columns:1.6fr 1fr 1fr;grid-template-rows:1fr 1fr',
-    `<div style="background:#171717"></div><div style="background:#c43c1c"></div><div style="background:#e8c84a"></div><div style="grid-column:1;background:#f3efe4;padding:18px 22px;display:flex;flex-direction:column;justify-content:flex-end"><div style="font-size:10px;letter-spacing:.3em;font-weight:700">IKKO TANAKA</div><div style="margin-top:6px;font-size:26px;font-weight:800">色面能乐</div><div style="margin-top:8px;font-size:12px;line-height:1.5;max-width:22rem">能乐脸谱切成色块。传统不是临摹，是几何以后的再认。</div></div><div style="background:#2a5a9e"></div><div style="background:#171717"></div>`,
+    'background:#f3efe4;color:#171717',
+    `<div style="position:absolute;inset:0;display:grid;grid-template-columns:1.6fr 1fr 1fr;grid-template-rows:1fr 1fr"><div style="background:#171717"></div><div style="background:#c43c1c"></div><div style="background:#e8c84a"></div><div style="background:#f3efe4"></div><div style="background:#2a5a9e"></div><div style="background:#171717"></div></div>${copy('IKKO TANAKA', '色面能乐', '能乐脸谱切成色块。传统不是临摹，是几何以后的再认。')}`,
   ),
   html(
     'jp-sugiura',
@@ -118,8 +118,8 @@ export const BANNER_PRESETS: BannerPreset[] = [
     'jp',
     '和本',
     '纵组、界线、版心。书写方向本身就是世界观。',
-    'background:#efe6d4;color:#1c1610;writing-mode:vertical-rl',
-    `<div style="height:100%;padding:20px 28px;border-left:1px solid #c9b89a;letter-spacing:.18em;font:700 22px/1.7 'Songti SC',serif">和本<div style="margin-top:12px;font-size:12px;font-weight:500;letter-spacing:.12em">纵组、界线、版心。书写方向本身就是世界观。</div></div>`,
+    'background:#efe6d4;color:#1c1610',
+    `<div style="position:absolute;right:18px;top:16px;bottom:16px;writing-mode:vertical-rl;letter-spacing:.2em;font:700 22px/1.4 'Songti SC',serif">和本</div>${copy('和本', '纵组', '纵组、界线、版心。书写方向本身就是世界观。')}`,
   ),
 
   html(
@@ -144,7 +144,7 @@ export const BANNER_PRESETS: BannerPreset[] = [
     'Lubalin',
     '字母拥抱字母。Herb Lubalin 让刊头成为雕塑，亲密替代间距。',
     'background:#f3efe6;color:#111',
-    `<div style="position:absolute;right:6%;top:10%;font:900 120px/0.8 Helvetica,Arial,sans-serif;letter-spacing:-.12em;opacity:.12">AV</div>${copy('AVANT GARDE', 'Lubalin', '字母拥抱字母。刊头成为雕塑，亲密替代间距。')}`,
+    `<div style="position:absolute;right:6%;top:18%;font:900 72px/0.85 Helvetica,Arial,sans-serif;letter-spacing:-.12em;opacity:.12">AV</div>${copy('AVANT GARDE', 'Lubalin', '字母拥抱字母。刊头成为雕塑，亲密替代间距。')}`,
   ),
   html(
     'us-vignelli',
@@ -192,7 +192,7 @@ export const BANNER_PRESETS: BannerPreset[] = [
     'Ray Gun',
     'David Carson：可读性不是唯一伦理。感觉先到，字可以迟到。',
     'background:#151515;color:#f0efed',
-    `<div style="position:absolute;left:-2%;top:8%;font:900 96px/0.8 Helvetica,Arial,sans-serif;letter-spacing:-.08em;opacity:.14;transform:skewX(-18deg)">RAY</div>${copy('CARSON · RAY GUN', '直觉排版', '可读性不是唯一伦理。感觉先到，字可以迟到。')}`,
+    `<div style="position:absolute;left:2%;top:18%;font:900 72px/0.85 Helvetica,Arial,sans-serif;letter-spacing:-.08em;opacity:.14;transform:skewX(-18deg)">RAY</div>${copy('CARSON · RAY GUN', '直觉排版', '可读性不是唯一伦理。感觉先到，字可以迟到。')}`,
   ),
   html(
     'us-emigre',
@@ -405,7 +405,7 @@ export const BANNER_PRESETS: BannerPreset[] = [
     'us',
     '公共剧场',
     '字在街上走。',
-    `<div style="height:100%;overflow:hidden;background:#d21c12;color:#fff;font:800 22px/240px Helvetica,Arial,sans-serif;letter-spacing:.12em;white-space:nowrap"><div style="display:inline-block;animation:m 14s linear infinite">PAULA SCHER · PUBLIC THEATER · NEW YORK · </div></div><style>@keyframes m{from{transform:translateX(0)}to{transform:translateX(-50%)}}</style>`,
+    `<div style="height:100%;overflow:hidden;background:#d21c12;color:#fff;font:800 22px/240px Helvetica,Arial,sans-serif;letter-spacing:.12em;white-space:nowrap"><div style="display:inline-block;animation:m 14s linear infinite">PAULA SCHER · PUBLIC THEATER · NEW YORK · </div></div><style>html,body{margin:0;height:100%;overflow:hidden}@keyframes m{from{transform:translateX(0)}to{transform:translateX(-50%)}}</style>`,
   ),
   live(
     'us-live-decon',
@@ -489,8 +489,14 @@ export function bannerGalleryId(kind: string, html: string) {
   return `g-${(hash >>> 0).toString(16)}`
 }
 
+export function findBannerPreset(banner: Pick<PageBanner, 'kind' | 'html'> | null | undefined) {
+  if (!banner) return null
+  const html = banner.html.trim()
+  return BANNER_PRESETS.find((item) => item.kind === banner.kind && item.html.trim() === html) ?? null
+}
+
 export function isBannerPreset(banner: PageBanner) {
-  return BANNER_PRESETS.some((item) => item.kind === banner.kind && item.html === banner.html)
+  return Boolean(findBannerPreset(banner))
 }
 
 export function presetsOf(kind: PageBannerKind) {
