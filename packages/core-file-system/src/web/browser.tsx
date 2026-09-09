@@ -34,6 +34,7 @@ import {
   PencilSquareIcon,
   PlusIcon,
   RectangleStackIcon,
+  ArrowDownTrayIcon,
   Square2StackIcon,
   Squares2X2Icon,
   StarIcon,
@@ -41,6 +42,7 @@ import {
   ViewColumnsIcon,
 } from '@heroicons/react/16/solid'
 import type { CollectionActionInfo, CollectionInfo, CollectionSchema, CollectionSchemaPack, DbRecord, FieldSpec, FieldType } from '@biu/type-file-system'
+import { normalizeSchemaValue } from '@biu/type-file-system'
 import type { CollectionChrome, CollectionViewType, DatabaseUi } from '@biu/type-file-system/ui'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { DndGrip } from './dnd-grip.tsx'
@@ -630,8 +632,13 @@ export function CollectionBrowser({
     | { kind: 'alert'; title: string; body: string }
     | { kind: 'delete-record'; row: DbRecord }
     | { kind: 'delete-records'; ids: string[] }
+    | { kind: 'bulk-edit'; ids: string[] }
+    | { kind: 'bulk-facet'; ids: string[] }
     | null
   >(null)
+  const [bulkEditKey, setBulkEditKey] = useState('')
+  const [bulkEditRaw, setBulkEditRaw] = useState('')
+  const [bulkFacetIds, setBulkFacetIds] = useState<string[]>([])
   const [dlgError, setDlgError] = useState('')
   const crumbRef = useRef<HTMLElement>(null)
   const viewRef = useRef<HTMLDivElement>(null)
@@ -969,6 +976,17 @@ export function CollectionBrowser({
   const subsetLocked = lockedFilterKeys.length > 0
   const canCreate = Boolean(schema?.records?.create) && !subsetLocked
   const canDelete = Boolean(schema?.records?.delete) && !subsetLocked
+  const canFacet = Boolean(schema?.fields.facet?.writable) && !subsetLocked
+  const bulkFields = useMemo(
+    () =>
+      fieldEntries(schema).filter(({ key, field }) => {
+        if (!field.writable || field.computed) return false
+        if (key === 'id' || key === 'createdAt' || key === 'updatedAt' || key === 'createdBy' || key === 'updatedBy') return false
+        const kind = resolveFieldType(field)
+        return kind !== 'file' && kind !== 'action' && kind !== 'image' && kind !== 'attachment' && kind !== 'facet'
+      }),
+    [schema],
+  )
   useEffect(() => {
     setPickedIds([])
   }, [collectionPath])
@@ -1623,6 +1641,57 @@ export function CollectionBrowser({
       setError(String(err))
       quietUntil.current = 0
       await reload()
+    }
+  }
+
+  function csvCell(value: string) {
+    if (/[",\n\r]/.test(value)) return `"${value.replace(/"/g, '""')}"`
+    return value
+  }
+
+  function exportPicked() {
+    const rows = items.filter((row) => pickedIds.includes(row.id))
+    if (!rows.length) return
+    const header = columns.map((col) => csvCell(facetColumnTitle(col))).join(',')
+    const lines = rows.map((row) =>
+      columns
+        .map((col) => csvCell(formatField(row[col.key], col.field)))
+        .join(','),
+    )
+    const blob = new Blob([`\ufeff${[header, ...lines].join('\n')}`], { type: 'text/csv;charset=utf-8' })
+    const href = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = href
+    link.download = `${title || 'records'}.csv`
+    link.click()
+    URL.revokeObjectURL(href)
+  }
+
+  async function executeBulkEdit(ids: string[], key: string, raw: string) {
+    const field = schema?.fields[key]
+    if (!field) return
+    const rows = items.filter((row) => ids.includes(row.id))
+    try {
+      for (const row of rows) await writePatch(row, { [key]: parseFieldValue(field, raw) })
+      setPickedIds([])
+    } catch (err) {
+      setError(String(err))
+    }
+  }
+
+  async function executeBulkFacet(ids: string[], addTags: string[]) {
+    if (!addTags.length) return
+    const rows = items.filter((row) => ids.includes(row.id))
+    try {
+      for (const row of rows) {
+        const current = normalizeSchemaValue(row.facet)
+        const tags = [...current.tags]
+        for (const id of addTags) if (!tags.includes(id)) tags.push(id)
+        await writePatch(row, { facet: { tags, values: current.values } })
+      }
+      setPickedIds([])
+    } catch (err) {
+      setError(String(err))
     }
   }
 
@@ -2828,18 +2897,64 @@ export function CollectionBrowser({
                 </span>
               ) : null}
             </div>
-            {canDelete && pickedIds.length ? (
+            {pickedIds.length ? (
+              <div className="fsdb-bulk" data-testid="fsdb-bulk-bar">
+                <span className="fsdb-bulk-count">{pickedIds.length}</span>
+                {bulkFields.length ? (
+                  <button
+                    type="button"
+                    className="tasks-icon-btn"
+                    data-testid="fsdb-bulk-edit"
+                    aria-label="批量编辑"
+                    title={`编辑选中的 ${pickedIds.length} 条`}
+                    onClick={() => {
+                      setBulkEditKey(bulkFields[0]?.key ?? '')
+                      setBulkEditRaw('')
+                      setDlg({ kind: 'bulk-edit', ids: pickedIds })
+                    }}
+                  >
+                    <PencilSquareIcon aria-hidden className="size-[14px]" />
+                  </button>
+                ) : null}
+                {canFacet ? (
+                  <button
+                    type="button"
+                    className="tasks-icon-btn"
+                    data-testid="fsdb-bulk-facet"
+                    aria-label="打合集"
+                    title={`给选中的 ${pickedIds.length} 条打合集`}
+                    onClick={() => {
+                      setBulkFacetIds([])
+                      setDlg({ kind: 'bulk-facet', ids: pickedIds })
+                    }}
+                  >
+                    <RectangleStackIcon aria-hidden className="size-[14px]" />
+                  </button>
+                ) : null}
                 <button
                   type="button"
-                  className="tasks-icon-btn is-danger"
-                  data-testid="fsdb-bulk-delete"
-                  aria-label="删除选中"
-                  title={`删除选中的 ${pickedIds.length} 条`}
-                  onClick={() => setDlg({ kind: 'delete-records', ids: pickedIds })}
+                  className="tasks-icon-btn"
+                  data-testid="fsdb-bulk-export"
+                  aria-label="导出选中"
+                  title={`导出选中的 ${pickedIds.length} 条`}
+                  onClick={() => exportPicked()}
                 >
-                  <TrashGlyph aria-hidden className="size-[14px]" />
+                  <ArrowDownTrayIcon aria-hidden className="size-[14px]" />
                 </button>
-              ) : null}
+                {canDelete ? (
+                  <button
+                    type="button"
+                    className="tasks-icon-btn is-danger"
+                    data-testid="fsdb-bulk-delete"
+                    aria-label="删除选中"
+                    title={`删除选中的 ${pickedIds.length} 条`}
+                    onClick={() => setDlg({ kind: 'delete-records', ids: pickedIds })}
+                  >
+                    <TrashGlyph aria-hidden className="size-[14px]" />
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
             {canCreate ? (
               <button
                 type="button"
@@ -3029,6 +3144,80 @@ export function CollectionBrowser({
             void executeDeleteRecords(ids)
           }}
           body={<p>确定删除选中的 {dlg.ids.length} 条记录？删除后不可恢复。</p>}
+        />
+      ) : null}
+      {dlg?.kind === 'bulk-edit' ? (
+        <AppDialog
+          title={`编辑 ${dlg.ids.length} 条`}
+          confirm="写入"
+          disabled={!bulkEditKey}
+          onCancel={() => setDlg(null)}
+          onConfirm={() => {
+            const { ids } = dlg
+            const key = bulkEditKey
+            const raw = bulkEditRaw
+            setDlg(null)
+            void executeBulkEdit(ids, key, raw)
+          }}
+          body={
+            <div className="fsdb-bulk-form">
+              <label className="fsdb-bulk-label">
+                字段
+                <select className="fsdb-dlg-input" value={bulkEditKey} onChange={(event) => setBulkEditKey(event.target.value)}>
+                  {bulkFields.map((item) => (
+                    <option key={item.key} value={item.key}>
+                      {item.field.label || item.key}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="fsdb-bulk-label">
+                值
+                <input
+                  className="fsdb-dlg-input"
+                  value={bulkEditRaw}
+                  placeholder="写入到选中记录"
+                  onChange={(event) => setBulkEditRaw(event.target.value)}
+                />
+              </label>
+            </div>
+          }
+        />
+      ) : null}
+      {dlg?.kind === 'bulk-facet' ? (
+        <AppDialog
+          title={`打合集 · ${dlg.ids.length} 条`}
+          confirm="贴上"
+          disabled={!bulkFacetIds.length}
+          onCancel={() => setDlg(null)}
+          onConfirm={() => {
+            const { ids } = dlg
+            const tags = bulkFacetIds
+            setDlg(null)
+            void executeBulkFacet(ids, tags)
+          }}
+          body={
+            loadFacets().length ? (
+              <div className="fsdb-bulk-form">
+                {loadFacets().map((pack) => {
+                  const on = bulkFacetIds.includes(pack.id)
+                  return (
+                    <CheckRow
+                      key={pack.id}
+                      label={pack.label || pack.id}
+                      icon={<RectangleStackIcon aria-hidden className="size-[14px]" />}
+                      on={on}
+                      onToggle={() =>
+                        setBulkFacetIds((prev) => (on ? prev.filter((id) => id !== pack.id) : [...prev, pack.id]))
+                      }
+                    />
+                  )
+                })}
+              </div>
+            ) : (
+              <p>还没有合集。先到合集库里建一个，再回来贴。</p>
+            )
+          }
         />
       ) : null}
       {dlg?.kind === 'action' ? (

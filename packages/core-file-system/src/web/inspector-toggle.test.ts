@@ -177,7 +177,13 @@ test('title cell row tools skip the overflow action menu', () => {
 
 test('deletable tables can pick rows and bulk-delete next to refresh', () => {
   assert.match(browser, /data-testid="fsdb-bulk-delete"/)
+  assert.match(browser, /data-testid="fsdb-bulk-edit"/)
+  assert.match(browser, /data-testid="fsdb-bulk-export"/)
+  assert.match(browser, /data-testid="fsdb-bulk-facet"/)
   assert.match(browser, /kind: 'delete-records'/)
+  assert.match(browser, /kind: 'bulk-edit'/)
+  assert.match(browser, /kind: 'bulk-facet'/)
+  assert.match(browser, /exportPicked/)
   assert.match(browser, /className=\{\`fsdb-boolbtn fsdb-row-check\$\{on \? ' is-on' : ''\}\`\}/)
   assert.match(browser, /<BoolBox/)
   const boolBox = readFileSync(resolve(import.meta.dirname, '../../../public-ui/src/bool-box.tsx'), 'utf8')
