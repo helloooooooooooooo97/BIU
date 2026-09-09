@@ -344,13 +344,17 @@ function useHtmlDeck(
 function SizeGrip({
   boxRef,
   onSize,
+  reveal,
 }: {
   boxRef: { current: HTMLElement | null }
   onSize: (next: { width: number; height: number }) => void
+  reveal: boolean
 }) {
   const drag = useRef<{ x: number; y: number; w: number; h: number } | null>(null)
+  const [dragging, setDragging] = useState(false)
   const onSizeRef = useRef(onSize)
   onSizeRef.current = onSize
+  const show = reveal || dragging
   useEffect(() => {
     const move = (event: PointerEvent) => {
       const start = drag.current
@@ -363,6 +367,7 @@ function SizeGrip({
     }
     const up = () => {
       drag.current = null
+      setDragging(false)
     }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
@@ -384,6 +389,7 @@ function SizeGrip({
         event.stopPropagation()
         const box = boxRef.current
         if (!box) return
+        setDragging(true)
         drag.current = { x: event.clientX, y: event.clientY, w: box.offsetWidth, h: box.offsetHeight }
       }}
       style={{
@@ -399,6 +405,9 @@ function SizeGrip({
         border: 'none',
         borderRadius: 2,
         background: 'linear-gradient(135deg, transparent 50%, rgba(255,255,255,.55) 50%)',
+        opacity: show ? 1 : 0,
+        pointerEvents: show ? 'auto' : 'none',
+        transition: 'opacity .12s ease',
       }}
     />
   )
@@ -578,7 +587,7 @@ function HtmlDirectCard({ data, update, writable }: BlockProps) {
       ) : (
         <div style={{ overflowX: sized ? undefined : 'auto' }} dangerouslySetInnerHTML={{ __html: stamped }} />
       )}
-      {ro || editing ? null : <SizeGrip boxRef={hostRef} onSize={(next) => update(next)} />}
+      {ro || editing ? null : <SizeGrip reveal={hover} boxRef={hostRef} onSize={(next) => update(next)} />}
       {deck.overlay}
     </div>
   )
