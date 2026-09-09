@@ -1,10 +1,11 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { scrollMenuChild } from './slash-list.tsx'
+import { MentionKindGlyph, type MentionKind } from './mention-kind.tsx'
 
 export type MentionPick = {
   id: string
   label: string
-  kind: 'page' | 'task' | 'facet' | 'session'
+  kind: MentionKind
   kindLabel: string
 }
 
@@ -109,6 +110,7 @@ export const MentionList = forwardRef(function MentionList(
                       selectItem(index)
                     }}
                   >
+                    <MentionKindGlyph kind={item.kind} />
                     <span className="page-slash-label">{item.label}</span>
                   </button>
                 )

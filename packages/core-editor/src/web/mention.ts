@@ -4,10 +4,11 @@ import Mention from '@tiptap/extension-mention'
 import { ReactRenderer } from '@tiptap/react'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { MentionList, type MentionPick } from './mention-list.tsx'
+import { mentionIconSpec, type MentionKind } from './mention-kind.tsx'
 import { placeSlashInWindow } from './slash-place.ts'
 import { slashMayOpen } from './editor-live.ts'
 
-export type MentionKind = 'page' | 'task' | 'facet' | 'session'
+export type { MentionKind } from './mention-kind.tsx'
 
 export const MENTION_SCOPES: Array<{ kind: MentionKind; label: string; path: string }> = [
   { kind: 'page', label: '页面', path: '/pages' },
@@ -181,9 +182,11 @@ export const pageMention = Mention.extend({
     class: 'mention',
   },
   renderHTML({ options, node }) {
+    const kind = decodeMentionId(String(node.attrs.id ?? ''))?.kind ?? 'page'
     return [
       'span',
-      mergeAttributes({ 'data-type': 'mention' }, options.HTMLAttributes),
+      mergeAttributes({ 'data-type': 'mention', 'data-kind': kind }, options.HTMLAttributes),
+      mentionIconSpec(kind),
       `${options.suggestion.char}${node.attrs.label ?? node.attrs.id}`,
     ]
   },

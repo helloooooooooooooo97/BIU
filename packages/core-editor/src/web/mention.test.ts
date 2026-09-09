@@ -1,7 +1,10 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
+import { createElement } from 'react'
+import { render } from '@testing-library/react'
 import { Editor } from '@tiptap/core'
 import { pageEditorExtensions } from './kit.ts'
+import { MentionList } from './mention-list.tsx'
 import {
   decodeMentionId,
   encodeMentionId,
@@ -63,6 +66,8 @@ test('mention node roundtrips through markdown and opens inspector', () => {
   const md = editor.getMarkdown()
   assert.match(html, /<span[^>]*data-type="mention"/)
   assert.match(html, /data-id="page\/p1"/)
+  assert.match(html, /data-kind="page"/)
+  assert.match(html, /<svg[^>]*data-mention-kind="page"/)
   assert.doesNotMatch(html, /<a[^>]*data-type="mention"/)
   assert.match(md, /page\/p1/)
   editor.destroy()
@@ -81,4 +86,22 @@ test('mention node roundtrips through markdown and opens inspector', () => {
   assert.equal(openMention('task/t9'), true)
   window.removeEventListener('biu:inspector-reveal', onReveal)
   assert.deepEqual(seen, [{ collection: '/tasks', recordId: 't9', unique: true }])
+})
+
+test('mention list shows a kind icon on each hit', () => {
+  const { container } = render(
+    createElement(MentionList, {
+      items: [
+        { id: 'page/p1', label: '首页', kind: 'page', kindLabel: '页面' },
+        { id: 'task/t1', label: '任务甲', kind: 'task', kindLabel: '任务' },
+        { id: 'facet/f1', label: '合集', kind: 'facet', kindLabel: '合集' },
+        { id: 'session/s1', label: '会话', kind: 'session', kindLabel: '会话' },
+      ],
+      command: () => undefined,
+    }),
+  )
+  assert.equal(container.querySelectorAll('[data-mention-kind=page]').length, 1)
+  assert.equal(container.querySelectorAll('[data-mention-kind=task]').length, 1)
+  assert.equal(container.querySelectorAll('[data-mention-kind=facet]').length, 1)
+  assert.equal(container.querySelectorAll('[data-mention-kind=session]').length, 1)
 })
