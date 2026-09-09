@@ -61,9 +61,9 @@ test('mention node roundtrips through markdown and opens inspector', () => {
   ]).run()
   const html = editor.getHTML()
   const md = editor.getMarkdown()
-  assert.match(html, /data-type="mention"/)
+  assert.match(html, /<span[^>]*data-type="mention"/)
   assert.match(html, /data-id="page\/p1"/)
-  assert.match(html, /href="\/database\/pages\/record\/p1"/)
+  assert.doesNotMatch(html, /<a[^>]*data-type="mention"/)
   assert.match(md, /page\/p1/)
   editor.destroy()
 
