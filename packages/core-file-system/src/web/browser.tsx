@@ -1639,11 +1639,7 @@ export function CollectionBrowser({
       quietUntil.current = 0
       await reload()
       const id = data.items?.[0]?.value?.id
-      if (id) {
-        setOpenDetailId(id)
-        if (data.items?.[0]?.value) setDetailRow(data.items[0]!.value)
-        onOpenRecord?.(id, activeViewId, dataPath)
-      }
+      if (id) showRecordInInspector(collectionPath, id)
     } catch (err) {
       setError(String(err))
     }

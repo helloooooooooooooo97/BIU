@@ -98,6 +98,15 @@ test('showRecordInInspector focuses an already-open pane for the same page', () 
   assert.equal(getInspectorDbPath('database:/pages'), '')
 })
 
+test('showRecordInInspector opens a new pane when the collection view is already open', () => {
+  setInspectorDbPath('database:/pages', '/database/pages')
+  showRecordInInspector('/pages', 'p-new')
+  assert.equal(getInspectorDbPath('database:/pages'), '/database/pages')
+  const extra = Object.keys(snapshotInspectorDbPaths()).filter((id) => id.startsWith('database:/pages::'))
+  assert.equal(extra.length, 1)
+  assert.equal(getInspectorDbPath(extra[0]!), '/database/pages/record/p-new')
+})
+
 test('showRecordInInspector opens the inspector on this record', async () => {
   const tabs: string[] = []
   const onTab = (event: Event) => {
