@@ -19,6 +19,8 @@ import {
   isInspectorPaneAbandoned,
   snapshotInspectorDbPaths,
   restoreInspectorDbPaths,
+  inspectorPageKey,
+  reuseInspectorOfferPane,
 } from './inspector-db-route.ts'
 
 function clearInspectorPanes() {
@@ -122,6 +124,42 @@ test('showRecordInInspector opens the inspector on this record', async () => {
   assert.equal(getInspectorDbPath('database:/pages'), '/database/pages/record/p1')
   assert.deepEqual(tabs, ['database:/pages'])
   window.removeEventListener('biu:inspector-tab', onTab)
+})
+
+test('duplicate inspector panes for the same data page collapse to one', () => {
+  const closed: string[] = []
+  const onClosed = (event: Event) => {
+    const id = (event as CustomEvent).detail
+    if (typeof id === 'string') closed.push(id)
+  }
+  window.addEventListener('biu:inspector-pane-closed', onClosed)
+  setInspectorDbPath('database:/pages', '/database/pages/record/p1')
+  setInspectorDbPath('database:/pages::dup', '/database/pages/record/p1?view=all')
+  assert.equal(getInspectorDbPath('database:/pages'), '/database/pages/record/p1')
+  assert.equal(getInspectorDbPath('database:/pages::dup'), '')
+  assert.deepEqual(closed, ['database:/pages::dup'])
+  assert.equal(isInspectorPaneAbandoned('database:/pages::dup'), true)
+  window.removeEventListener('biu:inspector-pane-closed', onClosed)
+})
+
+test('plus offer reuses the default collection pane instead of opening another', () => {
+  setInspectorDbPath('database:/pages', databaseAllViewPath('/pages'))
+  assert.equal(reuseInspectorOfferPane('database:/pages', ['database:/pages', 'traj']), 'database:/pages')
+  assert.equal(reuseInspectorOfferPane('database:/pages', ['database:/pages::x']), 'database:/pages::x')
+  setInspectorDbPath('database:/pages', '/database/pages/record/p1')
+  assert.equal(reuseInspectorOfferPane('database:/pages', ['database:/pages']), undefined)
+})
+
+test('showInInspector does not copy the same href onto every collection pane', () => {
+  setInspectorDbPath('database:/notes', '/database/notes/record/n1')
+  setInspectorDbPath('database:/notes::b', '/database/notes/record/n2')
+  showInInspector('/notes', '/database/notes/record/n3')
+  assert.equal(getInspectorDbPath('database:/notes'), '/database/notes/record/n3')
+  assert.equal(getInspectorDbPath('database:/notes::b'), '/database/notes/record/n2')
+})
+
+test('inspectorPageKey ignores view query', () => {
+  assert.equal(inspectorPageKey('/database/pages/record/p1?view=all'), '/database/pages/record/p1')
 })
 
 test('unique inspector reveal focuses the same page and opens a new pane for a different page', () => {

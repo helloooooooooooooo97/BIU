@@ -30,6 +30,7 @@ import { HeadlessDismiss } from '@biu/public-ui'
 import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import {
   restoreInspectorDbPaths,
+  reuseInspectorOfferPane,
   snapshotInspectorDbPaths,
   subscribeInspectorDbPath,
 } from '@biu/core-file-system/inspector-db-route'
@@ -271,6 +272,18 @@ export const SessionInspector = memo(function SessionInspector({
   }, [allowedTabs.join('|'), opened, persistOpened, setTab])
 
   useEffect(() => {
+    const onClosed = (event: Event) => {
+      const id = (event as CustomEvent).detail
+      if (typeof id !== 'string' || !openedRef.current.includes(id)) return
+      const next = openedRef.current.filter((item) => item !== id)
+      persistOpened(next)
+      if (tabRef.current === id) setTab(next.at(-1) ?? '')
+    }
+    window.addEventListener('biu:inspector-pane-closed', onClosed)
+    return () => window.removeEventListener('biu:inspector-pane-closed', onClosed)
+  }, [persistOpened, setTab])
+
+  useEffect(() => {
     if (!open) return
     const current = extraTabs.find((item) => item.id === tab)
     if (current?.ensureTrajectory) void sessionView.ensureTrajectory()
@@ -331,6 +344,12 @@ export const SessionInspector = memo(function SessionInspector({
       return
     }
     if (item.repeatable) {
+      const existing = reuseInspectorOfferPane(item.id, opened)
+      if (existing) {
+        persistOpened(opened.includes(existing) ? opened : [...opened, existing])
+        setTab(existing)
+        return
+      }
       const instanceId = nextRepeatableTabId(item.id)
       persistOpened([...opened, instanceId])
       setTab(instanceId)
