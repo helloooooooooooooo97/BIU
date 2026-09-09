@@ -175,11 +175,19 @@ test('title cell row tools skip the overflow action menu', () => {
   assert.match(browser, /actingRef/)
 })
 
-test('deletable tables can pick rows and bulk-delete next to refresh', () => {
+test('deletable tables can pick rows and bulk-act over the table header', () => {
   assert.match(browser, /data-testid="fsdb-bulk-delete"/)
   assert.match(browser, /data-testid="fsdb-bulk-edit"/)
   assert.match(browser, /data-testid="fsdb-bulk-export"/)
   assert.match(browser, /data-testid="fsdb-bulk-facet"/)
+  assert.match(browser, /data-testid="fsdb-bulk-more"/)
+  assert.match(browser, /className="tasks-table-wrap"[\s\S]*data-testid="fsdb-bulk-bar"/)
+  const toolbarRight = browser.slice(browser.indexOf('tasks-toolbar-right'), browser.indexOf('className="tasks-table-wrap"'))
+  assert.doesNotMatch(toolbarRight, /fsdb-bulk-bar/)
+  assert.match(browser, /\{pickedIds\.length\} 已选/)
+  const bulkCss = readFileSync(resolve(import.meta.dirname, './fsdb-style.ts'), 'utf8')
+  assert.match(bulkCss, /\.fsdb-bulk\{[^}]*position:absolute/)
+  assert.match(bulkCss, /\.fsdb-bulk-count\{[^}]*color:var\(--dsw-pick/)
   assert.match(browser, /kind: 'delete-records'/)
   assert.match(browser, /kind: 'bulk-edit'/)
   assert.match(browser, /kind: 'bulk-facet'/)
