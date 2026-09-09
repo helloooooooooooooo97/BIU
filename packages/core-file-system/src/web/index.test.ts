@@ -67,7 +67,7 @@ test('tag collect table lives on the record board, not as sidebar views', () => 
   assert.match(collect, /<CollectionBrowser/)
   const css = readFileSync(resolve(import.meta.dirname, './fsdb-style.ts'), 'utf8')
   assert.match(css, /\.fsdb-page\.is-sheet \.tasks-main\{[^}]*padding:0;/)
-  assert.match(css, /\.fsdb-page\.is-sheet \.tasks-table-wrap\{[^}]*padding-left:var\(--fsdb-check-gutter\)/)
+  assert.match(css, /\.fsdb-page\.is-sheet \.tasks-table-wrap\{[^}]*padding-left:0/)
   assert.doesNotMatch(css, /\.fsdb-page\.is-sheet \.tasks-main\{[^}]*padding:0 0 0 var\(--fsdb-check-gutter\)/)
   assert.match(browser, /sheet\?: boolean/)
   assert.match(detail, /chrome\?\.Board/)
