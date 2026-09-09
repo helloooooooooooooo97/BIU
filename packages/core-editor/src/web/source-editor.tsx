@@ -70,10 +70,10 @@ const theme = EditorView.theme({
   '.cm-activeLine': { background: 'color-mix(in srgb, var(--dsw-hover) 70%, transparent)' },
   '.cm-activeLineGutter': { background: 'transparent', color: '#F0EFED' },
   '.cm-cursor': { borderLeftColor: 'var(--dsw-label)' },
-  /* TipTap 用浏览器原生 ::selection（深色下是蓝）。不要用 --dsw-business，那是浅字色，混出来会过亮。 */
-  '.cm-content ::selection': { background: 'Highlight' },
+  /* 与正文 TipTap / --dsw-pick 同一蓝。系统 Highlight 在深色页会发白。 */
+  '.cm-content ::selection': { background: 'color-mix(in srgb, var(--dsw-pick) 40%, transparent)', color: 'inherit' },
   '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionLayer .cm-selectionBackground': {
-    background: 'Highlight',
+    background: 'color-mix(in srgb, var(--dsw-pick) 40%, transparent)',
   },
 })
 
