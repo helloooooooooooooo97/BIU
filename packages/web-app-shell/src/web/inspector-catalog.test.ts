@@ -34,6 +34,7 @@ test('plus menu can add another database tab', () => {
   assert.match(inspector, /nextRepeatableTabId/)
   assert.match(inspector, /reuseInspectorOfferPane/)
   assert.match(inspector, /slotTabId/)
+  assert.match(inspector, /paneId=\{item.id\}/)
   assert.match(inspector, /inspector-stage-pane/)
   assert.match(inspector, /headerTabs.map\(\(item\) => \{/)
   assert.doesNotMatch(inspector, /displayTabs.find\(\(item\) => item.id === tab\)/)
