@@ -1020,9 +1020,6 @@ export function CollectionBrowser({
       .map((key) => allColumns.find((item) => item.key === key))
       .filter(Boolean) as typeof allColumns
   }, [allColumns, columnKeys, schema, schemaDefaultKeys])
-  const titleColKey = schema?.labelField && columns.some((col) => col.key === schema.labelField)
-    ? schema.labelField
-    : columns[0]?.key
   const hasColWidths = Object.keys(columnWidths).length > 0
 
   function startColResize(event: ReactPointerEvent<HTMLSpanElement>, colKey: string) {
@@ -1127,6 +1124,40 @@ export function CollectionBrowser({
     return flattenRows(rows).map((item) => item.row.id)
   }, [flattenRows, grouped, grouping, visible])
   const tableColSpan = Math.max(columns.length, 1)
+  const tableRef = useRef<HTMLTableElement>(null)
+  const [checkSlots, setCheckSlots] = useState<{ kind: 'head' | 'gap' | 'row'; id?: string; h: number }[]>([])
+  const [checkHover, setCheckHover] = useState<string | 'head' | null>(null)
+
+  useLayoutEffect(() => {
+    const table = tableRef.current
+    if (!table) {
+      setCheckSlots([])
+      return
+    }
+    const measure = () => {
+      const next: { kind: 'head' | 'gap' | 'row'; id?: string; h: number }[] = []
+      const head = table.tHead?.rows[0]
+      if (head) next.push({ kind: 'head', h: head.getBoundingClientRect().height })
+      for (const tr of table.tBodies[0]?.rows ?? []) {
+        const h = tr.getBoundingClientRect().height
+        if (tr.classList.contains('fsdb-group-row') || !tr.dataset.recordId) next.push({ kind: 'gap', h })
+        else next.push({ kind: 'row', id: tr.dataset.recordId, h })
+      }
+      setCheckSlots((prev) => {
+        if (
+          prev.length === next.length &&
+          prev.every((slot, i) => slot.kind === next[i]!.kind && slot.id === next[i]!.id && slot.h === next[i]!.h)
+        ) {
+          return prev
+        }
+        return next
+      })
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(table)
+    return () => ro.disconnect()
+  }, [collapsed, collapsedGroups, columns, grouping, grouped, items, page, pageSize, wrapCells, truncateCells, columnWidths])
 
   const listedSelected = detailId ? items.find((item) => item.id === detailId) : undefined
   const selected = useMemo(() => {
@@ -2241,7 +2272,12 @@ export function CollectionBrowser({
     return (
       <>
         {listed.map(({ row, depth, hasKids, kidCount }) => (
-          <tr key={`${keyPrefix}${row.id}`} className={row.id === detailId ? 'is-active' : undefined} {...recordPick(row)}>
+          <tr
+            key={`${keyPrefix}${row.id}`}
+            data-record-id={row.id}
+            className={row.id === detailId ? 'is-active' : undefined}
+            {...recordPick(row)}
+          >
             {columns.map((col) => (
               <td
                 key={col.key}
@@ -2281,7 +2317,6 @@ export function CollectionBrowser({
                   setCellPop(cellUsesPop(kind, col.field.writable) ? { id: row.id, key: col.key } : null)
                 }}
               >
-                {col.key === titleColKey ? <RowCheck id={row.id} /> : null}
                 {col.key === schema?.labelField ? (
                   <RecordTitle row={row} depth={depth} hasKids={hasKids} kidCount={kidCount} />
                 ) : (
@@ -3013,9 +3048,42 @@ export function CollectionBrowser({
                     </div>
                   </div>
                 ) : null}
+                <div className="tasks-table-stage" onMouseLeave={() => setCheckHover(null)}>
+                  <div className="fsdb-check-rail" data-testid="fsdb-check-rail">
+                    <div className="fsdb-check-stack">
+                      {checkSlots.map((slot, index) => (
+                        <div
+                          key={slot.kind === 'row' ? `${slot.id}-${index}` : `${slot.kind}-${index}`}
+                          className={`fsdb-check-slot${
+                            slot.kind === 'head' && checkHover === 'head'
+                              ? ' is-hover'
+                              : slot.kind === 'row' && slot.id === checkHover
+                                ? ' is-hover'
+                                : ''
+                          }`}
+                          style={{ height: slot.h }}
+                          onMouseEnter={() => {
+                            if (slot.kind === 'head') setCheckHover('head')
+                            else if (slot.id) setCheckHover(slot.id)
+                          }}
+                        >
+                          {slot.kind === 'head' ? <RowCheck ids={pickableIds} /> : null}
+                          {slot.kind === 'row' && slot.id ? <RowCheck id={slot.id} /> : null}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 <table
+                  ref={tableRef}
                   className={`tasks-table${wrapCells ? ' is-wrap' : ''}${truncateCells ? ' is-truncate' : ''}${hasColWidths ? ' is-cols-fixed' : ''}${resizingCol ? ' is-col-resize' : ''}`}
                   style={tableWidthStyle(columnWidths, columns.map((col) => col.key))}
+                  onMouseOver={(event) => {
+                    const hit = event.target as HTMLElement | null
+                    const tr = hit?.closest('tr')
+                    if (!tr || !event.currentTarget.contains(tr)) return
+                    if (tr.closest('thead')) setCheckHover('head')
+                    else setCheckHover(tr.dataset.recordId ?? null)
+                  }}
                 >
             <colgroup>
               {columns.map((col) => (
@@ -3037,7 +3105,6 @@ export function CollectionBrowser({
                       ...(tone ? { ['--biu-tag' as string]: tone } : {}),
                     }}
                   >
-                    {col.key === titleColKey ? <RowCheck ids={pickableIds} /> : null}
                     <span className="tasks-th">
                       <FieldGlyph kind={col.kind} />
                       {facetColumnTitle(col)}
@@ -3073,6 +3140,7 @@ export function CollectionBrowser({
                     )}
             </tbody>
           </table>
+                </div>
         </div>
             ) : null}
           </div>
