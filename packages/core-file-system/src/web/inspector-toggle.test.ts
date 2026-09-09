@@ -416,7 +416,7 @@ test('create record sits at the right of the toolbar with a blue label', () => {
   assert.match(browser, /schemaTagTone\(flat\.packId\)/)
   assert.match(browser, /className=\{tone \? 'is-facet-col' : undefined\}/)
   assert.match(css, /\.tasks-table th\.is-facet-col\{[^}]*color:var\(--biu-tag\)/)
-  assert.match(css, /\.tasks-table th\.is-facet-col\{[^}]*background:color-mix\(in srgb,var\(--biu-tag\) 22%,var\(--dsw-surface\)\)/)
+  assert.match(css, /\.tasks-table th\.is-facet-col\{[^}]*background:color-mix\(in srgb,var\(--biu-tag\) 22%,#fff\)/)
   assert.match(css, /\.tasks-table\.is-wrap\{[^}]*white-space:normal/)
   assert.match(css, /\.tasks-table th,\.fsdb-page \.tasks-table\.is-wrap th\{[^}]*white-space:nowrap/)
   assert.match(css, /\.tasks-th\{[^}]*white-space:nowrap/)
