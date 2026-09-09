@@ -14,6 +14,8 @@ test('color palettes follow supertag tones', () => {
     assert.ok(HIGHLIGHT_COLORS.some((item) => item.value === tagWashColor(tone)))
   }
   assert.ok(tagWashColor('#5b9fd6').includes('22%'))
+  assert.ok(tagWashColor('#5b9fd6').includes('#ffffff'))
+  assert.doesNotMatch(tagWashColor('#5b9fd6'), /transparent/)
 })
 
 test('tiptap Color and Highlight apply tag tones', () => {

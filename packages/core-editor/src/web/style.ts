@@ -83,8 +83,8 @@ export const PAGE_EDITOR_STYLE = `
 .page-find-count{flex:none;min-width:2.4em;color:#7B7B79;font-size:12px;font-weight:600;text-align:right}
 .page-find-btn{flex:none;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;margin:0;border:0;border-radius:5px;padding:0;background:transparent;color:#EFEEEC;cursor:pointer}
 .page-find-btn:hover{background:var(--dsw-hover)}
-.page-find-hit{color:${TAG_TONE_ROSE};background:color-mix(in srgb,${TAG_TONE_ROSE} 22%,transparent);border-radius:2px}
-.page-find-hit.is-current{background:color-mix(in srgb,${TAG_TONE_ROSE} 34%,transparent)}
+.page-find-hit{color:${TAG_TONE_ROSE};background:color-mix(in srgb,${TAG_TONE_ROSE} 22%,#fff);border-radius:2px}
+.page-find-hit.is-current{background:color-mix(in srgb,${TAG_TONE_ROSE} 34%,#fff)}
 .page-editor .page-find-hit:not(.page-block),.page-editor .page-find-hit:not(.page-block) *{color:${TAG_TONE_ROSE}}
 .page-editor .page-block.page-find-hit{color:inherit;background:transparent;box-shadow:0 0 0 2px color-mix(in srgb,${TAG_TONE_ROSE} 55%,transparent)}
 .page-editor .page-block.page-find-hit.is-current{box-shadow:0 0 0 2px ${TAG_TONE_ROSE}}
