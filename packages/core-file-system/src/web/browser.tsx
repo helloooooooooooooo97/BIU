@@ -2199,6 +2199,7 @@ export function CollectionBrowser({
     return (
       <button
         type="button"
+        data-testid="fsdb-row-check"
         className={`fsdb-boolbtn fsdb-row-check${on ? ' is-on' : ''}`}
         aria-pressed={on}
         aria-label={id ? (on ? '取消选择记录' : '选择记录') : on ? '取消全选' : '全选'}
@@ -2979,6 +2980,9 @@ export function CollectionBrowser({
             ) : null}
             {!customView ? (
               <div className="tasks-table-wrap">
+                <div className="fsdb-check-rail">
+                  <RowCheck ids={pickableIds} />
+                </div>
                 <table
                   className={`tasks-table${wrapCells ? ' is-wrap' : ''}${truncateCells ? ' is-truncate' : ''}${hasColWidths ? ' is-cols-fixed' : ''}${resizingCol ? ' is-col-resize' : ''}`}
                   style={tableWidthStyle(columnWidths, columns.map((col) => col.key))}
@@ -3003,7 +3007,6 @@ export function CollectionBrowser({
                       ...(tone ? { ['--biu-tag' as string]: tone } : {}),
                     }}
                   >
-                    {col.key === titleColKey ? <RowCheck ids={pickableIds} /> : null}
                     <span className="tasks-th">
                       <FieldGlyph kind={col.kind} />
                       {facetColumnTitle(col)}
