@@ -2726,6 +2726,47 @@ export function CollectionBrowser({
                 </HeadlessDismiss>
               ) : null}
             </div>
+            {activeView?.builtin ? null : (
+            <div className="tasks-filter-btn-wrap" ref={filterRef}>
+              <button
+                type="button"
+                className={`tasks-refresh tasks-rbar-btn${filterOpen || filterActive ? ' is-active' : ''}`}
+                aria-label="筛选"
+                title={filterActive ? `${countFilterRules(filterTree)} 条筛选` : '筛选'}
+                onClick={() => toggleMenu('filter')}
+              >
+                <FunnelIcon aria-hidden className="size-[14px]" />
+                {filterActive ? <span className="tasks-filter-dot" aria-hidden /> : null}
+              </button>
+              {filterOpen ? (
+                <HeadlessDismiss
+                  onDismiss={() => setFilterOpen(false)}
+                  insideRef={filterRef}
+                  ignoreSelector={QUERY_NEST_IGNORE}
+                  inside={(node) => node instanceof Element && Boolean(node.closest('.db-search-menu, .fsdb-cellselect-menu, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]'))}
+                >
+                <FilterQueryMenu
+                  tree={filterTree}
+                  fields={filterFields}
+                  valueOptions={(item) =>
+                    item.kind === 'boolean'
+                      ? [
+                          { value: 'true', label: '是' },
+                          { value: 'false', label: '否' },
+                        ]
+                      : item.kind === 'facet'
+                        ? uniqueValues(items, item.key, item.field).map((option) => ({
+                            value: option,
+                            label: loadFacets().find((tag) => tag.id === option)?.label ?? option,
+                          }))
+                        : uniqueValues(items, item.key, item.field).map((option) => ({ value: option, label: option }))
+                  }
+                  onChange={setFilterTree}
+                />
+                </HeadlessDismiss>
+              ) : null}
+            </div>
+            )}
             <div className="tasks-sort-wrap" ref={groupRef}>
               <button
                 type="button"
@@ -2806,47 +2847,6 @@ export function CollectionBrowser({
                 </HeadlessDismiss>
               ) : null}
             </div>
-            {activeView?.builtin ? null : (
-            <div className="tasks-filter-btn-wrap" ref={filterRef}>
-              <button
-                type="button"
-                className={`tasks-refresh tasks-rbar-btn${filterOpen || filterActive ? ' is-active' : ''}`}
-                aria-label="筛选"
-                title={filterActive ? `${countFilterRules(filterTree)} 条筛选` : '筛选'}
-                onClick={() => toggleMenu('filter')}
-              >
-                <FunnelIcon aria-hidden className="size-[14px]" />
-                {filterActive ? <span className="tasks-filter-dot" aria-hidden /> : null}
-              </button>
-              {filterOpen ? (
-                <HeadlessDismiss
-                  onDismiss={() => setFilterOpen(false)}
-                  insideRef={filterRef}
-                  ignoreSelector={QUERY_NEST_IGNORE}
-                  inside={(node) => node instanceof Element && Boolean(node.closest('.db-search-menu, .fsdb-cellselect-menu, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]'))}
-                >
-                <FilterQueryMenu
-                  tree={filterTree}
-                  fields={filterFields}
-                  valueOptions={(item) =>
-                    item.kind === 'boolean'
-                      ? [
-                          { value: 'true', label: '是' },
-                          { value: 'false', label: '否' },
-                        ]
-                      : item.kind === 'facet'
-                        ? uniqueValues(items, item.key, item.field).map((option) => ({
-                            value: option,
-                            label: loadFacets().find((tag) => tag.id === option)?.label ?? option,
-                          }))
-                        : uniqueValues(items, item.key, item.field).map((option) => ({ value: option, label: option }))
-                  }
-                  onChange={setFilterTree}
-                />
-                </HeadlessDismiss>
-              ) : null}
-            </div>
-            )}
             {mode === 'table' ? (
             <div className="tasks-filter-btn-wrap" ref={configRef}>
               <button
