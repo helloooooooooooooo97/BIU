@@ -1,7 +1,7 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { Context, Service } from 'cordis'
-import type { CollectionChrome, CollectionViewType, DatabaseUi } from '@biu/type-file-system/ui'
+import { DEFAULT_CHROME_PATH, type CollectionChrome, type CollectionViewType, type DatabaseUi } from '@biu/type-file-system/ui'
 import * as editorUi from './index.ts'
 import { PageEditor } from './page-editor.tsx'
 
@@ -30,10 +30,10 @@ class FakeDatabaseUi extends Service implements DatabaseUi {
   }
 }
 
-test('core-editor paints Content on pages, tasks, plugins and facets, not sessions', async () => {
+test('core-editor paints Content as the default for every file body, not a path allowlist', async () => {
   const ctx = new Context()
   const ui = new FakeDatabaseUi(ctx)
   await ctx.plugin(editorUi)
-  assert.deepEqual(ui.paths, ['/pages', '/tasks', '/plugins', '/facets'])
+  assert.deepEqual(ui.paths, [DEFAULT_CHROME_PATH])
   assert.ok(ctx.pageEditor)
 })

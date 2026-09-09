@@ -1,7 +1,7 @@
 import 'katex/dist/katex.min.css'
 import 'highlight.js/styles/github-dark.css'
 import type { Context } from 'cordis'
-import type { DatabaseUi } from '@biu/type-file-system/ui'
+import { DEFAULT_CHROME_PATH, type DatabaseUi } from '@biu/type-file-system/ui'
 import { PageEditor } from './page-editor.tsx'
 import { PageEditorService } from './service.ts'
 import { PAGE_EDITOR_STYLE } from './style.ts'
@@ -17,14 +17,11 @@ export { markdownLocusFromRange, markdownLocusFromSelection, markdownLocusFromEl
 export const name = 'core-editor-ui'
 export const inject = ['databaseUi']
 
-const EDITOR_COLLECTIONS = ['/pages', '/tasks', '/plugins', '/facets'] as const
-
 export function apply(ctx: Context) {
   new PageEditorService(ctx)
   const ui = ctx.get('databaseUi') as DatabaseUi
-  for (const path of EDITOR_COLLECTIONS) {
-    ctx.effect(() => ui.decorate(path, { Content: PageEditor, DetailTools: SourceToggle }).dispose)
-  }
+  // 凡是有 file 正文的表都走 Markdown；没有 contentField 的表不会用到这份 chrome。
+  ctx.effect(() => ui.decorate(DEFAULT_CHROME_PATH, { Content: PageEditor, DetailTools: SourceToggle }).dispose)
 }
 
 if (typeof document !== 'undefined') {

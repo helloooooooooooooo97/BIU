@@ -93,6 +93,9 @@ export type CollectionViewType = {
   View: ComponentType<FsViewProps>
 }
 
+/** 所有表共用的默认 chrome。具体表再 decorate 时后写覆盖。 */
+export const DEFAULT_CHROME_PATH = '/*'
+
 export interface DatabaseUi {
   decorate(path: string, chrome: CollectionChrome): { dispose: () => void }
   /** 给指定集合登记一种查看模式。其它集合看不到、也不能选。 */
