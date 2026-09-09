@@ -4,9 +4,9 @@ const STYLE_ID = 'biu-public-ui-tag-chip'
 const CSS = `
 .biu-tag-wrap{border:0;background:transparent;padding:0;cursor:pointer;font:inherit}
 .biu-tags{display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center;min-width:0;max-width:100%}
-.biu-tag{display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 6px;border-radius:4px;font-size:13px;font-weight:400;line-height:20px;background:color-mix(in srgb,var(--biu-tag,#5b9fd6) 22%,#fff);color:var(--biu-tag,#5b9fd6);max-width:160px}
+.biu-tag{display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 6px;border-radius:4px;font-size:13px;font-weight:400;line-height:20px;background:color-mix(in srgb,var(--biu-tag,#5b9fd6) 22%,transparent);color:color-mix(in srgb,var(--biu-tag,#5b9fd6) 28%,#F0EFED);max-width:160px}
 .biu-tag.is-btn{cursor:pointer}
-.biu-tag.is-on{background:color-mix(in srgb,var(--biu-tag,#5b9fd6) 34%,#fff)}
+.biu-tag.is-on{background:color-mix(in srgb,var(--biu-tag,#5b9fd6) 34%,transparent)}
 .biu-tag-icon{display:inline-flex;width:12px;height:12px;flex:none;align-items:center;justify-content:center}
 .biu-tag-icon svg{width:12px;height:12px;display:block}
 .biu-tag-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -15,11 +15,16 @@ const CSS = `
 `
 
 export const TAG_TONES = ['#5b9fd6', '#9a6dd7', '#d9730d', '#448361', '#c4554d', '#e255a1', '#c2920a', '#787774'] as const
-/** 背景叠在纯白上，得到「白色偏蓝 / 白色偏橙」这类淡 tint。 */
-export const TAG_WASH_BASE = '#ffffff'
+/** 字色叠在界面白字 #F0EFED 上，得到「白色偏红 / 白色偏橙」。 */
+export const TAG_INK_BASE = '#F0EFED'
 
+export function tagTextColor(tone: string, strength = 28) {
+  return `color-mix(in srgb, ${tone} ${strength}%, ${TAG_INK_BASE})`
+}
+
+/** 浅底仍叠在透明上，不改成白色色块。 */
 export function tagWashColor(tone: string, strength = 22) {
-  return `color-mix(in srgb, ${tone} ${strength}%, ${TAG_WASH_BASE})`
+  return `color-mix(in srgb, ${tone} ${strength}%, transparent)`
 }
 
 /** 分面色板里的玫红。 */

@@ -119,7 +119,7 @@ test('find bar pins to the inspector chrome, not the scrolling body', () => {
 
 test('find hits use rose tag text and wash; html blocks only get a pink frame', () => {
   assert.match(PAGE_EDITOR_STYLE, new RegExp(`\\.page-find-hit\\{[^}]*color:${TAG_TONE_ROSE}`))
-  assert.match(PAGE_EDITOR_STYLE, /color-mix\(in srgb,#e255a1 22%,#fff\)/)
+  assert.match(PAGE_EDITOR_STYLE, /color-mix\(in srgb,#e255a1 22%,transparent\)/)
   assert.match(PAGE_EDITOR_STYLE, /\.page-find-hit:not\(\.page-block\)/)
   assert.match(PAGE_EDITOR_STYLE, /\.page-block\.page-find-hit\{[^}]*background:transparent/)
   assert.match(PAGE_EDITOR_STYLE, /\.page-block\.page-find-hit/)

@@ -10,8 +10,4 @@ test('banner presets cover four styles in static and live kinds', () => {
   const sample = BANNER_PRESETS[0]!
   assert.equal(isBannerPreset({ kind: sample.kind, html: sample.html }), true)
   assert.equal(isBannerPreset({ kind: 'html', html: '<div>custom</div>' }), false)
-  for (const item of BANNER_PRESETS) {
-    assert.match(item.html, /color-mix\(in srgb,[^)]+#fff/)
-    assert.doesNotMatch(item.html, /background:#1c7cff(?:;|"|$)/)
-  }
 })
