@@ -56,6 +56,10 @@ function askNewBanner(opts: {
 
 export function PageBanner({
   value,
+  writable,
+  path,
+  title,
+  onChange,
 }: {
   value: unknown
   writable?: boolean
@@ -64,15 +68,30 @@ export function PageBanner({
   onChange?: (next: BannerValue | null) => void
 }) {
   const banner = parsePageBanner(value)
-  if (!banner) return null
+  if (!banner && !writable) return null
   return (
-    <div className="fsdb-page-banner" data-testid="fsdb-page-banner" data-kind={banner.kind}>
-      <iframe
-        title="页面背景"
-        srcDoc={bannerSrcDoc(banner.html)}
-        sandbox={banner.kind === 'htmlframe' ? 'allow-scripts' : ''}
-        tabIndex={-1}
-      />
+    <div
+      className={`fsdb-page-banner${banner ? '' : ' is-empty'}`}
+      data-testid="fsdb-page-banner"
+      data-kind={banner?.kind ?? 'empty'}
+    >
+      {banner ? (
+        <iframe
+          title="页面背景"
+          srcDoc={bannerSrcDoc(banner.html)}
+          sandbox={banner.kind === 'htmlframe' ? 'allow-scripts' : ''}
+          tabIndex={-1}
+        />
+      ) : null}
+      {writable && onChange ? (
+        <BannerTitleActions
+          value={value}
+          writable
+          path={path}
+          title={title}
+          onChange={onChange}
+        />
+      ) : null}
     </div>
   )
 }
@@ -107,10 +126,11 @@ export function BannerTitleActions({
             type="button"
             className="fsdb-banner-ico"
             data-testid="fsdb-banner-open"
-            aria-label="背景"
-            title="背景"
+            aria-label="添加背景"
+            title="添加背景"
           >
             <PhotoIcon aria-hidden className="size-[14px]" />
+            添加背景
           </button>
         }
       >

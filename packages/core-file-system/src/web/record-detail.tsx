@@ -12,7 +12,7 @@ import { TableGlyph } from './nav-glyphs.tsx'
 import { normalizeRecordEmoji, recordPreviewEmoji } from './sidebar-preview.ts'
 import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, shouldLeaveContentForTitle, shouldLeaveTitleForContent, focusRecordTitleNear } from './title-content-nav.ts'
 import { HeadingOutline } from './heading-outline.tsx'
-import { PageBanner, BannerTitleActions } from './page-banner.tsx'
+import { PageBanner } from './page-banner.tsx'
 
 function DetailTitleIcon({
   emoji,
@@ -223,7 +223,17 @@ export function RecordDetail({
           <div className="fsdb-detail-screen" role="main" aria-label="记录详情">
             <div className="fsdb-detail-split">
               <div className="fsdb-detail-main" ref={mainRef}>
-                <PageBanner value={selected.banner} />
+                <PageBanner
+                  value={selected.banner}
+                  writable
+                  path={collectionPath ? `${collectionPath}/${selected.id}` : undefined}
+                  title={labelOf(selected)}
+                  onChange={(next) => {
+                    void Promise.resolve(writePatch(selected, { banner: next })).then(() => {
+                      window.dispatchEvent(new Event('fsdb:change'))
+                    })
+                  }}
+                />
                 <div className="fsdb-detail-title-row">
                 <DetailTitleIcon
                   emoji={recordPreviewEmoji(selected)}
@@ -238,17 +248,6 @@ export function RecordDetail({
                   }}
                 />
                 <div className="fsdb-detail-title-block">
-                <BannerTitleActions
-                  value={selected.banner}
-                  writable
-                  path={collectionPath ? `${collectionPath}/${selected.id}` : undefined}
-                  title={labelOf(selected)}
-                  onChange={(next) => {
-                    void Promise.resolve(writePatch(selected, { banner: next })).then(() => {
-                      window.dispatchEvent(new Event('fsdb:change'))
-                    })
-                  }}
-                />
                 {schema.labelField && schema.fields[schema.labelField]?.writable ? (
                   <h1 className="fsdb-detail-title">
                     <LocalText

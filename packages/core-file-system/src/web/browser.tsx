@@ -101,7 +101,7 @@ import {
 } from './fsdb-cells.tsx'
 import { ensureFsdbStyle } from './fsdb-style.ts'
 import { RecordDetail } from './record-detail.tsx'
-import { PageBanner, BannerTitleActions } from './page-banner.tsx'
+import { PageBanner } from './page-banner.tsx'
 import { TableGlyph, ViewModeGlyph } from './nav-glyphs.tsx'
 import { countFittingViewTabs, splitVisibleViews } from './view-tabs.ts'
 import { getDatabaseUi } from './database-ui.ts'
@@ -2613,30 +2613,29 @@ export function CollectionBrowser({
         <div className="tasks-main fsdb-main">
         {sheet ? null : (
         <>
-        <PageBanner value={viewBanner} />
+        <PageBanner
+          value={viewBanner}
+          writable={Boolean(activeViewId)}
+          path={activeViewId ? savedViewRecordPath(collectionPath, activeViewId) : undefined}
+          title={activeView?.name ?? title}
+          onChange={(next) => {
+            if (!activeViewId) return
+            const path = savedViewRecordPath(collectionPath, activeViewId)
+            if (!path) return
+            void readJson<{ value?: { banner?: unknown } }>('/api/db/update', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ path, content: { banner: next } }),
+            }).then((data) => {
+              setViewBanner(data.value?.banner ?? next)
+            })
+          }}
+        />
         <div className="fsdb-detail-title-row">
           <span className="fsdb-detail-title-icon" aria-hidden>
             <TableGlyph icon={currentTable?.view?.icon} className="size-8" />
           </span>
           <div className="fsdb-detail-title-block">
-          <BannerTitleActions
-            value={viewBanner}
-            writable={Boolean(activeViewId)}
-            path={activeViewId ? savedViewRecordPath(collectionPath, activeViewId) : undefined}
-            title={activeView?.name ?? title}
-            onChange={(next) => {
-              if (!activeViewId) return
-              const path = savedViewRecordPath(collectionPath, activeViewId)
-              if (!path) return
-              void readJson<{ value?: { banner?: unknown } }>('/api/db/update', {
-                method: 'POST',
-                headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({ path, content: { banner: next } }),
-              }).then((data) => {
-                setViewBanner(data.value?.banner ?? next)
-              })
-            }}
-          />
           <h1 className="fsdb-detail-title">{activeView?.name ?? title}</h1>
           </div>
         </div>
