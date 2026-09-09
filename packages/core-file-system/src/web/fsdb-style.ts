@@ -365,7 +365,7 @@ const CSS = `
 .fsdb-banner-ico{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:28px;margin:0;border:0;border-radius:6px;padding:0 8px;background:transparent;color:#ACA9A4;font:inherit;font-size:12px;font-weight:600;cursor:pointer}
 .fsdb-banner-ico:hover,.fsdb-banner-ico[data-state=open]{background:rgba(255,255,255,.08);color:#F0EFED}
 .fsdb-page-banner:not(.is-empty) .fsdb-banner-ico{background:rgba(0,0,0,.45);color:#F0EFED}
-.fsdb-banner-pop{width:min(420px,calc(100vw - 32px));max-height:min(460px,70vh);display:flex;flex-direction:column;background:#252525;border:1px solid var(--dsw-border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.28);overflow:hidden;z-index:80}
+.fsdb-banner-pop{width:min(520px,calc(100vw - 32px));max-height:min(560px,76vh);display:flex;flex-direction:column;background:#252525;border:1px solid var(--dsw-border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.28);overflow:hidden;z-index:80}
 .fsdb-banner-pop-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border-bottom:1px solid var(--dsw-border)}
 .fsdb-banner-pop-tabs{display:flex;gap:2px}
 .fsdb-banner-pop-tabs button,.fsdb-banner-pop-remove,.fsdb-banner-create{margin:0;border:0;border-radius:6px;padding:4px 8px;background:transparent;color:#F0EFED;font:inherit;font-size:12px;font-weight:600;cursor:pointer}
@@ -375,8 +375,12 @@ const CSS = `
 .fsdb-banner-pop-body{flex:1;min-height:0;overflow:auto;padding:10px 12px 14px;display:flex;flex-direction:column;gap:14px}
 .fsdb-banner-pop-sec h3{margin:0 0 8px;color:#ACA9A4;font-size:11px;font-weight:650;letter-spacing:.04em}
 .fsdb-banner-pop-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
-.fsdb-banner-thumb{position:relative;display:block;height:56px;margin:0;border:0;border-radius:6px;padding:0;overflow:hidden;background:#161616;cursor:pointer;width:100%}
+.fsdb-banner-card{display:flex;flex-direction:column;gap:5px;margin:0;border:0;padding:0;background:transparent;color:#F0EFED;text-align:left;cursor:pointer;width:100%;min-width:0}
+.fsdb-banner-thumb{position:relative;display:block;height:64px;margin:0;border:0;border-radius:6px;padding:0;overflow:hidden;background:#161616;width:100%}
 .fsdb-banner-thumb iframe{display:block;width:200%;height:200%;border:0;pointer-events:none;transform:scale(.5);transform-origin:top left}
+.fsdb-banner-caption{display:flex;flex-direction:column;gap:2px;min-width:0}
+.fsdb-banner-caption-title{font-size:11px;font-weight:700;line-height:1.25;color:#F0EFED}
+.fsdb-banner-caption-note{font-size:10px;font-weight:500;line-height:1.35;color:#ACA9A4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .fsdb-banner-mine{position:relative;min-width:0}
 .fsdb-banner-mine-del{position:absolute;top:4px;right:4px;z-index:2;display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;margin:0;border:0;border-radius:6px;padding:0;background:rgba(0,0,0,.55);color:#F0EFED;opacity:0;cursor:pointer}
 .fsdb-banner-mine:hover .fsdb-banner-mine-del,.fsdb-banner-mine:focus-within .fsdb-banner-mine-del{opacity:1}

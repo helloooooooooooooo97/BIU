@@ -219,6 +219,7 @@ function BannerGallery({
                     kind={item.kind}
                     html={item.html}
                     label={item.title}
+                    note={item.note}
                     onClick={() => onPick({ kind: item.kind, html: item.html })}
                   />
                 ))}
@@ -242,6 +243,7 @@ function BannerGallery({
                   kind={item.kind}
                   html={item.html}
                   label={item.title}
+                  note={item.title}
                   onClick={() => onPick({ kind: item.kind, html: item.html })}
                 />
                 <button
@@ -285,17 +287,25 @@ function BannerThumb({
   kind,
   html,
   label,
+  note,
   onClick,
 }: {
   kind: PageBannerKind
   html: string
   label: string
+  note?: string
   onClick: () => void
 }) {
   const src = useMemo(() => bannerSrcDoc(html), [html])
   return (
-    <button type="button" className="fsdb-banner-thumb" title={label} onClick={onClick}>
-      <iframe title={label} srcDoc={src} sandbox={kind === 'htmlframe' ? 'allow-scripts' : ''} tabIndex={-1} />
+    <button type="button" className="fsdb-banner-card" title={note || label} onClick={onClick}>
+      <span className="fsdb-banner-thumb">
+        <iframe title={label} srcDoc={src} sandbox={kind === 'htmlframe' ? 'allow-scripts' : ''} tabIndex={-1} />
+      </span>
+      <span className="fsdb-banner-caption">
+        <span className="fsdb-banner-caption-title">{label}</span>
+        {note ? <span className="fsdb-banner-caption-note">{note}</span> : null}
+      </span>
     </button>
   )
 }
