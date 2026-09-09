@@ -2619,7 +2619,6 @@ export function CollectionBrowser({
             <TableGlyph icon={currentTable?.view?.icon} className="size-8" />
           </span>
           <div className="fsdb-detail-title-block">
-          <h1 className="fsdb-detail-title">{activeView?.name ?? title}</h1>
           <BannerTitleActions
             value={viewBanner}
             writable={Boolean(activeViewId)}
@@ -2638,6 +2637,7 @@ export function CollectionBrowser({
               })
             }}
           />
+          <h1 className="fsdb-detail-title">{activeView?.name ?? title}</h1>
           </div>
         </div>
         </>

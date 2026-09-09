@@ -8,7 +8,8 @@ const css = readFileSync(resolve(import.meta.dirname, './fsdb-style.ts'), 'utf8'
 test('list and detail share the chat column max width with side padding', () => {
   assert.match(css, /\.fsdb-main\{[^}]*max-width:var\(--dsw-chat-max-width\)/)
   assert.match(css, /\.fsdb-main\{[^}]*margin-inline:auto/)
-  assert.match(css, /\.fsdb-main\{[^}]*padding:80px 80px 16px/)
+  assert.match(css, /\.fsdb-main\{[^}]*padding:80px 80px 16px calc\(80px - var\(--fsdb-check-gutter\)\)/)
+  assert.match(css, /\.fsdb-page:not\(\.is-sheet\) \.fsdb-main > \.fsdb-detail-title-row,\.fsdb-page:not\(\.is-sheet\) \.fsdb-main > \.tasks-toolbar\{[^}]*padding-left:var\(--fsdb-check-gutter\)/)
   assert.match(css, /\.fsdb-main > \.fsdb-detail-title-row\{[^}]*flex:none/)
   assert.match(css, /\.fsdb-detail-title-row\{[^}]*padding-bottom:16px/)
   assert.match(css, /\.fsdb-detail-main\{[^}]*max-width:var\(--dsw-chat-max-width\)/)

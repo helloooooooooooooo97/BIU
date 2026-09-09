@@ -238,6 +238,17 @@ export function RecordDetail({
                   }}
                 />
                 <div className="fsdb-detail-title-block">
+                <BannerTitleActions
+                  value={selected.banner}
+                  writable
+                  path={collectionPath ? `${collectionPath}/${selected.id}` : undefined}
+                  title={labelOf(selected)}
+                  onChange={(next) => {
+                    void Promise.resolve(writePatch(selected, { banner: next })).then(() => {
+                      window.dispatchEvent(new Event('fsdb:change'))
+                    })
+                  }}
+                />
                 {schema.labelField && schema.fields[schema.labelField]?.writable ? (
                   <h1 className="fsdb-detail-title">
                     <LocalText
@@ -265,17 +276,6 @@ export function RecordDetail({
                 ) : (
                   <h1 className="fsdb-detail-title">{labelOf(selected)}</h1>
                 )}
-                <BannerTitleActions
-                  value={selected.banner}
-                  writable
-                  path={collectionPath ? `${collectionPath}/${selected.id}` : undefined}
-                  title={labelOf(selected)}
-                  onChange={(next) => {
-                    void Promise.resolve(writePatch(selected, { banner: next })).then(() => {
-                      window.dispatchEvent(new Event('fsdb:change'))
-                    })
-                  }}
-                />
                 </div>
                 </div>
                 <div className="fsdb-detail-aside">

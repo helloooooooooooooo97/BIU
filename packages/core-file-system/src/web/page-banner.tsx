@@ -92,6 +92,10 @@ export function BannerTitleActions({
   const banner = parsePageBanner(value)
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<PageBannerKind>(banner?.kind ?? 'html')
+  const openTab = (next: PageBannerKind) => {
+    setTab(next)
+    setOpen(true)
+  }
   if (!writable) return null
   return (
     <div className="fsdb-banner-title-actions" data-testid="fsdb-banner-title-actions">
@@ -106,14 +110,24 @@ export function BannerTitleActions({
             <button
               type="button"
               data-testid="fsdb-banner-static"
-              onMouseDown={() => setTab('html')}
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+                openTab('html')
+              }}
             >
               静态背景
             </button>
             <button
               type="button"
               data-testid="fsdb-banner-live"
-              onMouseDown={() => setTab('htmlframe')}
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+                openTab('htmlframe')
+              }}
             >
               动态背景
             </button>
