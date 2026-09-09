@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { PhotoIcon } from '@heroicons/react/16/solid'
+import { PhotoIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import { HeadlessPopover } from '@biu/public-ui'
 import { getPick } from '@biu/core-pick/web'
 import {
@@ -174,6 +174,7 @@ function BannerGallery({
   onRemove: () => void
 }) {
   const [mine, setMine] = useState<GalleryItem[]>([])
+  const [mineTick, setMineTick] = useState(0)
   useEffect(() => {
     let cancelled = false
     void readJson<{ items?: GalleryItem[] }>('/api/db/banner-gallery')
@@ -186,7 +187,7 @@ function BannerGallery({
     return () => {
       cancelled = true
     }
-  }, [tab])
+  }, [tab, mineTick])
   const mineOfTab = mine.filter((item) => item.kind === tab)
   return (
     <>
@@ -236,13 +237,35 @@ function BannerGallery({
           <h3>我的</h3>
           <div className="fsdb-banner-pop-grid">
             {mineOfTab.map((item) => (
-              <BannerThumb
-                key={item.id}
-                kind={item.kind}
-                html={item.html}
-                label={item.title}
-                onClick={() => onPick({ kind: item.kind, html: item.html })}
-              />
+              <div key={item.id} className="fsdb-banner-mine">
+                <BannerThumb
+                  kind={item.kind}
+                  html={item.html}
+                  label={item.title}
+                  onClick={() => onPick({ kind: item.kind, html: item.html })}
+                />
+                <button
+                  type="button"
+                  className="fsdb-banner-mine-del"
+                  data-testid="fsdb-banner-mine-del"
+                  aria-label="删除背景"
+                  title="删除"
+                  onClick={(event) => {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    void readJson<{ ok?: boolean }>('/api/db/banner-gallery', {
+                      method: 'POST',
+                      headers: { 'content-type': 'application/json' },
+                      body: JSON.stringify({ id: item.id }),
+                    }).then(() => {
+                      setMine((prev) => prev.filter((entry) => entry.id !== item.id))
+                      setMineTick((n) => n + 1)
+                    })
+                  }}
+                >
+                  <XMarkIcon aria-hidden className="size-[12px]" />
+                </button>
+              </div>
             ))}
             <button
               type="button"

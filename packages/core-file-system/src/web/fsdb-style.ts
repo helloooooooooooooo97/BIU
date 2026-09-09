@@ -375,8 +375,12 @@ const CSS = `
 .fsdb-banner-pop-body{flex:1;min-height:0;overflow:auto;padding:10px 12px 14px;display:flex;flex-direction:column;gap:14px}
 .fsdb-banner-pop-sec h3{margin:0 0 8px;color:#ACA9A4;font-size:11px;font-weight:650;letter-spacing:.04em}
 .fsdb-banner-pop-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
-.fsdb-banner-thumb{position:relative;display:block;height:56px;margin:0;border:0;border-radius:6px;padding:0;overflow:hidden;background:#161616;cursor:pointer}
+.fsdb-banner-thumb{position:relative;display:block;height:56px;margin:0;border:0;border-radius:6px;padding:0;overflow:hidden;background:#161616;cursor:pointer;width:100%}
 .fsdb-banner-thumb iframe{display:block;width:200%;height:200%;border:0;pointer-events:none;transform:scale(.5);transform-origin:top left}
+.fsdb-banner-mine{position:relative;min-width:0}
+.fsdb-banner-mine-del{position:absolute;top:4px;right:4px;z-index:2;display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;margin:0;border:0;border-radius:6px;padding:0;background:rgba(0,0,0,.55);color:#F0EFED;opacity:0;cursor:pointer}
+.fsdb-banner-mine:hover .fsdb-banner-mine-del,.fsdb-banner-mine:focus-within .fsdb-banner-mine-del{opacity:1}
+.fsdb-banner-mine-del:hover{background:rgba(0,0,0,.78)}
 .fsdb-banner-create{display:flex;align-items:center;justify-content:center;height:56px;border:1px dashed rgba(255,255,255,.18)!important;color:#ACA9A4!important;text-align:center;line-height:1.3}
 .fsdb-tag-collect{display:flex;flex:none;min-width:0;width:100%;min-height:320px}
 .fsdb-tag-collect>.fsdb-page{flex:1;min-width:0;min-height:320px;background:transparent}
