@@ -14,6 +14,7 @@ import { headingSkin } from './heading-skin.ts'
 import { pageBlock } from './page-block.ts'
 import { pageFind } from './find-plugin.ts'
 import { slashCommand } from './slash.ts'
+import { pageMention } from './mention.ts'
 import { openMathPop } from './math-pop.ts'
 
 function latexFromMarkdown(raw: unknown) {
@@ -215,7 +216,7 @@ export function pageEditorExtensions() {
     Placeholder.configure({
       placeholder: ({ node }) => {
         if (node.type.name === 'heading') return `标题 ${node.attrs.level}`
-        return '输入 / 插入模块'
+        return '输入 / 插入模块，@ 引用'
       },
       showOnlyWhenEditable: true,
       showOnlyCurrent: true,
@@ -225,5 +226,6 @@ export function pageEditorExtensions() {
     pageBlock,
     pageFind,
     slashCommand,
+    pageMention,
   ]
 }
