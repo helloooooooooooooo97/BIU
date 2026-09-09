@@ -47,6 +47,7 @@ import type { CollectionChrome, CollectionViewType, DatabaseUi } from '@biu/type
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { DndGrip } from './dnd-grip.tsx'
 import { BoolBox, ChatCount, RecordEmojiBoard, HeadlessDismiss, HeadlessPopover, HEADLESS_DISMISS_IGNORE, tagTextColor } from '@biu/public-ui'
+import { packMarkdownDocs, contentToMarkdown, recordToMarkdown } from './export-markdown.ts'
 import {
   contentFieldKey,
   defaultColumnKeys,
@@ -1723,27 +1724,27 @@ export function CollectionBrowser({
     }
   }
 
-  function csvCell(value: string) {
-    if (/[",\n\r]/.test(value)) return `"${value.replace(/"/g, '""')}"`
-    return value
-  }
-
-  function exportPicked() {
+  async function exportPicked() {
     const rows = items.filter((row) => pickedIds.includes(row.id))
     if (!rows.length) return
-    const header = columns.map((col) => csvCell(facetColumnTitle(col))).join(',')
-    const lines = rows.map((row) =>
-      columns
-        .map((col) => csvCell(formatField(row[col.key], col.field)))
-        .join(','),
-    )
-    const blob = new Blob([`\ufeff${[header, ...lines].join('\n')}`], { type: 'text/csv;charset=utf-8' })
-    const href = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = href
-    link.download = `${title || 'records'}.csv`
-    link.click()
-    URL.revokeObjectURL(href)
+    try {
+      const docs: string[] = []
+      for (const row of rows) {
+        const path = `${dataPath}/${row.id}`
+        const rec = await readJson<{ value?: Record<string, unknown> }>(`/api/db/read?path=${encodeURIComponent(path)}`).catch(() => ({ value: row }))
+        const content = await readJson<{ value?: unknown }>(`/api/db/content?path=${encodeURIComponent(path)}`).catch(() => ({ value: bodyKey ? row[bodyKey] : '' }))
+        docs.push(recordToMarkdown({ ...row, ...(rec.value ?? {}) }, contentToMarkdown(content.value)))
+      }
+      const blob = new Blob([packMarkdownDocs(docs)], { type: 'text/markdown;charset=utf-8' })
+      const href = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = href
+      link.download = `${title || 'records'}.md`
+      link.click()
+      URL.revokeObjectURL(href)
+    } catch (err) {
+      setError(String(err))
+    }
   }
 
   async function executeBulkEdit(ids: string[], key: string, raw: string) {
@@ -3121,7 +3122,7 @@ export function CollectionBrowser({
                               className="tasks-sort-item"
                               data-testid="fsdb-bulk-export"
                               onClick={() => {
-                                exportPicked()
+                                void exportPicked()
                                 setBulkMenuOpen(false)
                               }}
                             >
