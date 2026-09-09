@@ -6,7 +6,7 @@ export const PAGE_EDITOR_STYLE = `
 .page-source{min-width:0;width:100%}
 .page-source .cm-editor{background:transparent}
 .page-source .cm-focused{outline:none}
-.page-source .cm-editor.cm-focused>.cm-scroller>.cm-selectionLayer .cm-selectionBackground,.page-source .cm-selectionLayer .cm-selectionBackground{background:Highlight}
+.page-source .cm-editor.cm-focused>.cm-scroller>.cm-selectionLayer .cm-selectionBackground,.page-source .cm-selectionLayer .cm-selectionBackground{background:color-mix(in srgb,var(--dsw-pick) 40%,transparent)}
 .page-editor .tiptap{outline:none;min-height:240px}
 .page-block-handle{position:absolute;z-index:6;width:28px;display:flex;flex-direction:column;align-items:center;pointer-events:auto}
 .page-block-handle-grip{flex:none;display:flex;align-items:center;justify-content:center;width:22px;height:26px;margin:0;border:0;border-radius:6px;padding:0;background:transparent;color:#EFEEEC;cursor:grab}
