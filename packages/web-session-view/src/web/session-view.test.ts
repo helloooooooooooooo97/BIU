@@ -399,7 +399,8 @@ test('load fetches full session turns and skips trajectory until ensureTrajector
   await ctx.plugin(sessionView)
   const view = ctx.sessionView as SessionViewService
   await view.load('s1', { view: 'chat', wait: true })
-  assert.equal(calls.some((url) => url.includes('turns=all')), true)
+  assert.equal(calls.some((url) => url.includes('turns=100')), true)
+  assert.equal(calls.some((url) => url.includes('turns=all')), false)
   assert.equal(view.get().events.some((event) => event.type === 'assistant/chunk'), false)
   assert.equal(view.get().trajectory.length, 0)
   assert.equal(

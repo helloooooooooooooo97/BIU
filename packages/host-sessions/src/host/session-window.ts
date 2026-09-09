@@ -1,6 +1,6 @@
 import type { SessionEvent } from '@biu/type-session'
 
-export const DEFAULT_TAIL_TURNS = 24
+export const DEFAULT_TAIL_TURNS = 100
 
 export interface SessionWindow {
   events: SessionEvent[]
