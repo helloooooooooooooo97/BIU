@@ -11,6 +11,8 @@ import type { CollectionSpec } from '@biu/type-file-system'
 import { REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
 import { facetsCollection } from './facets-collection.ts'
 import { runWithSession } from '@biu/host-sessions/scope'
+import { builtinAllViewId } from '../catalog-views.ts'
+import { savedViewRecordPath } from '../paths.ts'
 
 function notesCollection(): CollectionSpec {
   const rows = new Map<string, { id: string; title: string; status: string; pinned: boolean }>()
@@ -126,6 +128,40 @@ test('html banner is stored by file system and never written as a table field', 
   const cleared = await db.read('/notes/n1')
   if (cleared.kind !== 'record') return
   assert.equal('banner' in cleared.value, false)
+})
+
+test('each view keeps its own html banner outside list rows', async () => {
+  const ctx = new Context()
+  await ctx.plugin(tools)
+  class HttpStub extends Service {
+    constructor(c: Context) {
+      super(c, 'http')
+    }
+    route() {}
+    broadcast() {}
+  }
+  new HttpStub(ctx)
+  await ctx.plugin({ inject: ['tools', 'http'], apply: applyFileSystem })
+  const db = ctx.get('database') as DatabaseService
+  db.register(notesCollection())
+  const allPath = savedViewRecordPath('/notes', builtinAllViewId('/notes'))
+  await db.update(allPath, { banner: { kind: 'html', html: '<div>all</div>' } })
+  const all = await db.read(allPath)
+  if (all.kind !== 'record') return
+  assert.deepEqual(all.value.banner, { kind: 'html', html: '<div>all</div>' })
+  const created = await db.create('/views', [{ title: '看板', tablePath: '/notes', mode: 'graph' }])
+  const boardPath = created.items[0]?.path
+  assert.equal(typeof boardPath, 'string')
+  await db.update(boardPath!, { banner: { kind: 'htmlframe', html: '<div>board</div>' } })
+  const board = await db.read(boardPath!)
+  if (board.kind !== 'record') return
+  assert.deepEqual(board.value.banner, { kind: 'htmlframe', html: '<div>board</div>' })
+  const again = await db.read(allPath)
+  if (again.kind !== 'record') return
+  assert.deepEqual(again.value.banner, { kind: 'html', html: '<div>all</div>' })
+  const listed = await db.list('/views')
+  if (listed.kind !== 'collection') return
+  assert.ok(listed.items.every((row) => !('banner' in row)))
 })
 
 test('computed fields come from list and cannot be written', async () => {

@@ -218,7 +218,11 @@ function publicCollection(item: CollectionSpec): CollectionInfo {
 function splitPath(path: string): string[] {
   const normalized = normalizeCollectionPath(path)
   if (normalized === '/') return []
-  return normalized.slice(1).split('/').filter(Boolean)
+  const parts = normalized.slice(1).split('/').filter(Boolean)
+  if (parts[0] === 'views' && parts.length > 2) {
+    return ['views', parts.slice(1).join('/')]
+  }
+  return parts
 }
 
 function coerceList(value: unknown) {
@@ -1552,6 +1556,9 @@ export function apply(ctx: Context) {
     }),
   )
   ctx.http.route('GET', '/api/db/read', (route) => send(route, () => db.read(route.query.get('path') || '/')))
+  ctx.http.route('GET', '/api/db/banner-gallery', (route) =>
+    send(route, () => ({ items: db.facets.listBannerGallery() })),
+  )
   ctx.http.route('GET', '/api/db/stat', (route) => send(route, () => db.stat(route.query.get('path') || '/')))
   ctx.http.route('GET', '/api/db/content', (route) => send(route, () => db.content(route.query.get('path') || '/')))
   ctx.http.route('POST', '/api/db/content', async (route) => {

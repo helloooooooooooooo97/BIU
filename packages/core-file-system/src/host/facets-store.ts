@@ -11,7 +11,8 @@ import {
   type PersonValue,
   type SchemaFieldValue,
 } from '@biu/type-file-system'
-import { parsePageBanner, type PageBanner } from '../page-banner.ts'
+import { parsePageBanner, type PageBanner, type PageBannerKind } from '../page-banner.ts'
+import { bannerGalleryId, isBannerPreset } from '../banner-presets.ts'
 
 type DatabaseSync = import('node:sqlite').DatabaseSync
 
@@ -140,11 +141,20 @@ export class FacetStore {
         html TEXT NOT NULL,
         PRIMARY KEY (collection, record_id)
       );
+      CREATE TABLE IF NOT EXISTS banner_gallery (
+        id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL,
+        style TEXT NOT NULL DEFAULT 'mine',
+        title TEXT NOT NULL DEFAULT '',
+        html TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      );
     `)
     this.ensureNotesColumn()
     this.ensureCreatedAtColumn()
     this.ensurePersonMetaColumns()
     this.ensureBannerTable()
+    this.ensureBannerGallery()
     return this
   }
 
@@ -203,6 +213,19 @@ export class FacetStore {
       if (!parsed) continue
       put.run(row.collection, row.record_id, parsed.kind, parsed.html)
     }
+  }
+
+  private ensureBannerGallery() {
+    this.db!.exec(`
+      CREATE TABLE IF NOT EXISTS banner_gallery (
+        id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL,
+        style TEXT NOT NULL DEFAULT 'mine',
+        title TEXT NOT NULL DEFAULT '',
+        html TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      )
+    `)
   }
 
   notes(id: string) {
@@ -429,7 +452,32 @@ export class FacetStore {
        VALUES (?, ?, ?, ?)
        ON CONFLICT(collection, record_id) DO UPDATE SET kind = excluded.kind, html = excluded.html`,
     ).run(collection, recordId, banner.kind, banner.html)
+    if (!isBannerPreset(banner)) this.rememberBannerGallery(banner)
     return this.recordBanner(collection, recordId)
+  }
+
+  rememberBannerGallery(banner: PageBanner, title = '自定义') {
+    const html = banner.html.trim()
+    if (!html) return
+    const id = bannerGalleryId(banner.kind, html)
+    this.ensure()
+      .prepare(
+        `INSERT INTO banner_gallery (id, kind, style, title, html, created_at)
+         VALUES (?, ?, 'mine', ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET kind = excluded.kind, html = excluded.html`,
+      )
+      .run(id, banner.kind, title, html, Date.now())
+  }
+
+  listBannerGallery(): Array<{ id: string; kind: PageBannerKind; style: string; title: string; html: string }> {
+    const rows = this.ensure()
+      .prepare('SELECT id, kind, style, title, html FROM banner_gallery ORDER BY created_at DESC')
+      .all() as Array<{ id: string; kind: string; style: string; title: string; html: string }>
+    return rows.flatMap((row) => {
+      const parsed = parsePageBanner({ kind: row.kind, html: row.html })
+      if (!parsed) return []
+      return [{ id: row.id, kind: parsed.kind, style: row.style || 'mine', title: row.title || '自定义', html: parsed.html }]
+    })
   }
 
   writeRecordMeta(

@@ -64,6 +64,7 @@ const KIND_ICONS: Record<string, Glyph> = {
   tag: TagIcon,
   facet: RectangleStackIcon,
   record: ClipboardDocumentCheckIcon,
+  html: DocumentIcon,
   block: DocumentTextIcon,
 }
 
