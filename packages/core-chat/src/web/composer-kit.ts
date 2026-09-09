@@ -1,7 +1,8 @@
 import StarterKit from '@tiptap/starter-kit'
+import { pageMention } from '@biu/core-editor/mention'
 import { PickChipNode } from './composer-pick-node.tsx'
 
-/** 输入栏与已发送气泡共用：纯段落 + 行内 pick 芯片。 */
+/** 输入栏：纯段落 + pick 芯片 + 与正文同一套 @mention。 */
 export function composerDocExtensions() {
   return [
     StarterKit.configure({
@@ -21,5 +22,6 @@ export function composerDocExtensions() {
       underline: false,
     }),
     PickChipNode,
+    pageMention,
   ]
 }
