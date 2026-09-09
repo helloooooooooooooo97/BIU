@@ -68,6 +68,50 @@ test('pageBlock markdown roundtrips kind, plugin and data', () => {
   editor.destroy()
 })
 
+test('html pageBlock markdown keeps raw html and deck on the fence', () => {
+  const src = `:::pageBlock {kind=html plugin=page-html-blocks deck=true}
+<div style="color:#fff">爱乐之城</div>
+:::
+`
+  const editor = new Editor({
+    extensions: pageEditorExtensions(),
+    content: src,
+    contentType: 'markdown',
+  })
+  const block = editor.getJSON().content?.find((node) => node.type === 'pageBlock')
+  assert.equal(block?.attrs?.kind, 'html')
+  assert.equal((block?.attrs?.data as { html?: string; deck?: boolean })?.html, '<div style="color:#fff">爱乐之城</div>')
+  assert.equal((block?.attrs?.data as { deck?: boolean })?.deck, true)
+  const out = editor.getMarkdown()
+  assert.match(out, /:::pageBlock \{kind=html plugin=page-html-blocks deck=true\}/)
+  assert.match(out, /<div style="color:#fff">爱乐之城<\/div>/)
+  assert.doesNotMatch(out, /"html":/)
+  editor.destroy()
+})
+
+test('html pageBlock still reads the old JSON body', () => {
+  const src = `:::pageBlock {kind=html plugin=page-html-blocks}
+{"html":"<div>旧写法</div>","deck":true}
+:::
+`
+  const editor = new Editor({
+    extensions: pageEditorExtensions(),
+    content: src,
+    contentType: 'markdown',
+  })
+  const data = editor.getJSON().content?.find((node) => node.type === 'pageBlock')?.attrs?.data as {
+    html?: string
+    deck?: boolean
+  }
+  assert.equal(data?.html, '<div>旧写法</div>')
+  assert.equal(data?.deck, true)
+  const out = editor.getMarkdown()
+  assert.match(out, /deck=true/)
+  assert.match(out, /<div>旧写法<\/div>/)
+  assert.doesNotMatch(out, /\\"/)
+  editor.destroy()
+})
+
 test('pageBlock markdown keeps old fences without plugin id', () => {
   const src = `:::pageBlock {kind=excalidraw}
 {"file":"assets/excalidraw-demo.json"}

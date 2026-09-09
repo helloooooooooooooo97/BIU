@@ -4,7 +4,7 @@ import { Plugin, PluginKey } from '@tiptap/pm/state'
 import type { Node as PmNode } from '@tiptap/pm/model'
 import { PageBlockView } from './page-block-view.tsx'
 import { getPageEditor } from './service.ts'
-import { formatPageBlockFence, parsePageBlockMeta } from './page-block-meta.ts'
+import { formatPageBlockFence, parsePageBlockData, parsePageBlockMeta } from './page-block-meta.ts'
 
 const metaKey = new PluginKey('page-block-meta')
 const uniqueFilesKey = new PluginKey('page-block-unique-files')
@@ -85,15 +85,10 @@ export const pageBlock = Node.create({
   parseMarkdown: (token, helpers) => {
     const kind = String(token.attributes?.kind ?? 'card')
     const plugin = String(token.attributes?.plugin ?? '')
-    let data: Record<string, unknown> = {}
-    const raw = String(token.content ?? '').trim()
-    if (raw) {
-      try {
-        data = JSON.parse(raw) as Record<string, unknown>
-      } catch {
-        data = {}
-      }
-    }
+    const extras: Record<string, unknown> = {}
+    if (typeof token.attributes?.deck === 'boolean') extras.deck = token.attributes.deck
+    if (typeof token.attributes?.height === 'number') extras.height = token.attributes.height
+    const data = parsePageBlockData(kind, String(token.content ?? ''), extras)
     return helpers.createNode('pageBlock', { kind, plugin, data })
   },
 
@@ -114,12 +109,12 @@ export const pageBlock = Node.create({
     tokenize(src) {
       const match = src.match(/^:::pageBlock(?:\s+\{([^}]*)\})?\s*\n([\s\S]*?)\n:::/)
       if (!match) return undefined
-      const { kind, plugin } = parsePageBlockMeta(match[1] ?? '')
+      const { kind, plugin, extras } = parsePageBlockMeta(match[1] ?? '')
       return {
         type: 'pageBlock',
         raw: match[0],
-        attributes: { kind, plugin },
-        content: match[2]?.trim() ?? '',
+        attributes: { kind, plugin, ...extras },
+        content: match[2] ?? '',
       }
     },
   },
