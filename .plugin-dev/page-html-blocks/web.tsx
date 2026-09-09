@@ -104,6 +104,9 @@ function ExpandGlyph({ shrink }: { shrink?: boolean }) {
 }
 
 const inkFace = "'Helvetica Neue', Arial, sans-serif"
+const MAG_INK = '#0a0a0a'
+const MAG_PAPER = '#ece7dc'
+const MAG_BLUE = '#1c7cff'
 
 const barBtn: Record<string, unknown> = {
   cursor: 'pointer',
@@ -238,7 +241,7 @@ function HtmlDeckOverlay({
               maxHeight: '100%',
               overflow: 'auto',
               border: 'none',
-              background: '#fff',
+              background: MAG_INK,
             }}
           />
         ) : (
@@ -545,17 +548,17 @@ function FloatBar({
    1) kind=html：直接渲染（无 iframe，无脚本）——内容裸渲染，无外框
    ============================================================ */
 
-const HTML_EDITORIAL_SAMPLE = `<div style="font-family:'Helvetica Neue','Arial',sans-serif;background:#ffffff;border:2px solid #111;color:#111;margin:0;display:flex;flex-direction:column">
-  <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #111;padding:8px 12px;padding-right:220px;font-size:11px;letter-spacing:.15em">
+const HTML_EDITORIAL_SAMPLE = `<div style="font-family:'Helvetica Neue','Arial',sans-serif;background:${MAG_INK};border:2px solid ${MAG_PAPER};color:${MAG_PAPER};margin:0;display:flex;flex-direction:column">
+  <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid ${MAG_PAPER};padding:8px 12px;padding-right:220px;font-size:11px;letter-spacing:.15em">
     <span style="font-weight:700">现代 ・ 美式</span><span style="font-weight:800">创立 2024</span>
   </div>
-  <div style="background:#1c7cff;color:#fff;font-size:34px;font-weight:900;line-height:1.05;padding:16px;letter-spacing:-.02em">丰富<br>排版，<br>不跑脚本。</div>
+  <div style="background:${MAG_BLUE};color:#fff;font-size:34px;font-weight:900;line-height:1.05;padding:16px;letter-spacing:-.02em">丰富<br>排版，<br>不跑脚本。</div>
   <div style="display:flex;gap:0;flex:1">
-    <div style="flex:1.4;padding:12px;font-size:13px;line-height:1.7;font-weight:500">静态富排版，不执行脚本。纯 HTML / CSS，用来做卡片、表格、配色和干净的杂志网格。</div>
-    <div style="flex:1;border-left:2px solid #111;display:flex;flex-direction:column;gap:6px;padding:12px;font-size:10px;font-weight:800">
-      <span style="background:#ffd400;padding:2px 6px">静态</span>
+    <div style="flex:1.4;padding:12px;font-size:13px;line-height:1.7;font-weight:500">夜间美式杂志网格。静态富排版，不执行脚本。纯 HTML / CSS，用来做卡片、表格、配色和干净的刊头。</div>
+    <div style="flex:1;border-left:2px solid ${MAG_PAPER};display:flex;flex-direction:column;gap:6px;padding:12px;font-size:10px;font-weight:800">
+      <span style="background:#ffd400;color:#0a0a0a;padding:2px 6px">静态</span>
       <span style="background:#ff2a6d;color:#fff;padding:2px 6px">无脚本</span>
-      <span style="border:1.5px solid #111;padding:2px 6px">直出</span>
+      <span style="border:1.5px solid ${MAG_PAPER};padding:2px 6px">直出</span>
     </div>
   </div>
 </div>`
@@ -621,7 +624,64 @@ function HtmlDirectCard({ data, update, writable }: BlockProps) {
    同样无外框，iframe 本身不再描边
    ============================================================ */
 
-const HTML_FRAME_SAMPLE = HTML_EDITORIAL_SAMPLE
+const HTML_FRAME_SAMPLE = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+html,body{margin:0;height:100%;background:${MAG_INK};color:${MAG_PAPER}}
+@keyframes mag-pulse{50%{opacity:.35}}
+@keyframes mag-rail{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+.mag{font-family:'Helvetica Neue',Arial,sans-serif;background:${MAG_INK};border:2px solid ${MAG_PAPER};color:${MAG_PAPER};margin:0;min-height:100%;box-sizing:border-box;display:flex;flex-direction:column}
+.mag-head{display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid ${MAG_PAPER};padding:8px 12px;padding-right:220px;font-size:11px;letter-spacing:.15em}
+.mag-hero{background:${MAG_BLUE};color:#fff;font-size:34px;font-weight:900;line-height:1.05;padding:16px;letter-spacing:-.02em}
+.mag-body{display:flex;gap:0;flex:1}
+.mag-copy{flex:1.4;padding:12px;font-size:13px;line-height:1.7;font-weight:500}
+.mag-side{flex:1;border-left:2px solid ${MAG_PAPER};display:flex;flex-direction:column;gap:6px;padding:12px;font-size:10px;font-weight:800}
+.mag-live{display:inline-flex;align-items:center;gap:6px}
+.mag-dot{width:7px;height:7px;border-radius:50%;background:#ff2a6d;animation:mag-pulse 1.1s ease-in-out infinite}
+.mag-rail-wrap{overflow:hidden;border-top:2px solid ${MAG_PAPER}}
+.mag-rail{display:flex;width:max-content;animation:mag-rail 12s linear infinite;font-size:10px;font-weight:800;letter-spacing:.18em;padding:6px 0}
+.mag-rail span{padding:0 18px;white-space:nowrap}
+.mag-hit{cursor:pointer;background:#ffd400;color:#0a0a0a;padding:2px 6px;border:0;font:inherit;font-weight:800}
+</style></head><body>
+<div class="mag">
+  <div class="mag-head"><span style="font-weight:700">现代 ・ 美式</span><span class="mag-live"><span class="mag-dot"></span><span id="mag-clock" style="font-weight:800">创立 2024</span></span></div>
+  <div class="mag-hero">丰富<br>排版，<br><span id="mag-line">会跑脚本。</span></div>
+  <div class="mag-body">
+    <div class="mag-copy">同一夜间刊头，沙箱里跑脚本：时钟、词条轮播、点击计数。版式与静态块一致，只是内容会动。</div>
+    <div class="mag-side">
+      <button type="button" class="mag-hit" id="mag-hit">动态 · 点我 <span id="mag-n">0</span></button>
+      <span style="background:#ff2a6d;color:#fff;padding:2px 6px">有脚本</span>
+      <span style="border:1.5px solid ${MAG_PAPER};padding:2px 6px">iframe</span>
+    </div>
+  </div>
+  <div class="mag-rail-wrap"><div class="mag-rail" id="mag-rail"><span>NIGHT ISSUE</span><span>LIVE TYPE</span><span>NEW YORK GRID</span><span>NIGHT ISSUE</span><span>LIVE TYPE</span><span>NEW YORK GRID</span></div></div>
+</div>
+<script>
+(function(){
+  var lines=['会跑脚本。','会动。','夜间刊。'];
+  var i=0,n=0;
+  var clock=document.getElementById('mag-clock');
+  var line=document.getElementById('mag-line');
+  var hit=document.getElementById('mag-hit');
+  var count=document.getElementById('mag-n');
+  function tick(){
+    var d=new Date();
+    var hh=String(d.getHours()).padStart(2,'0');
+    var mm=String(d.getMinutes()).padStart(2,'0');
+    var ss=String(d.getSeconds()).padStart(2,'0');
+    if(clock) clock.textContent=hh+':'+mm+':'+ss;
+  }
+  tick();
+  setInterval(tick,1000);
+  setInterval(function(){
+    i=(i+1)%lines.length;
+    if(line) line.textContent=lines[i];
+  },1800);
+  if(hit) hit.addEventListener('click',function(){
+    n+=1;
+    if(count) count.textContent=String(n);
+  });
+})();
+</script>
+</body></html>`
 
 function HtmlFrameCard({ data, update, writable }: BlockProps) {
   const ro = !writable
@@ -687,7 +747,7 @@ function HtmlFrameCard({ data, update, writable }: BlockProps) {
           srcDoc={html}
           sandbox="allow-scripts"
           onLoad={stampFrame}
-          style={{ display: 'block', width: '100%', height, border: 'none', background: '#fff' }}
+          style={{ display: 'block', width: '100%', height, border: 'none', background: MAG_INK }}
         />
       )}
       {deck.overlay}
