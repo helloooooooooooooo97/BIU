@@ -3013,9 +3013,6 @@ export function CollectionBrowser({
                     </div>
                   </div>
                 ) : null}
-                <div className="fsdb-check-rail">
-                  <RowCheck ids={pickableIds} />
-                </div>
                 <table
                   className={`tasks-table${wrapCells ? ' is-wrap' : ''}${truncateCells ? ' is-truncate' : ''}${hasColWidths ? ' is-cols-fixed' : ''}${resizingCol ? ' is-col-resize' : ''}`}
                   style={tableWidthStyle(columnWidths, columns.map((col) => col.key))}
@@ -3040,6 +3037,7 @@ export function CollectionBrowser({
                       ...(tone ? { ['--biu-tag' as string]: tone } : {}),
                     }}
                   >
+                    {col.key === titleColKey ? <RowCheck ids={pickableIds} /> : null}
                     <span className="tasks-th">
                       <FieldGlyph kind={col.kind} />
                       {facetColumnTitle(col)}

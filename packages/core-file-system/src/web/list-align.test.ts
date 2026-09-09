@@ -29,7 +29,7 @@ test('list and detail share the chat column max width with side padding', () => 
   assert.match(css, /\.fsdb-page \.tasks-table \[data-dock-tip\]::after\{[^}]*z-index:80/)
   assert.match(css, /\.fsdb-page \.tasks-table\{[^}]*font-weight:600/)
   assert.match(css, /\.fsdb-cell\{[^}]*overflow:hidden/)
-  assert.match(css, /\.fsdb-page \.tasks-table td\{[^}]*overflow:hidden/)
+  assert.match(css, /\.fsdb-page \.tasks-table td\{[^}]*overflow:visible/)
   assert.match(css, /\.fsdb-page \.tasks-table:not\(\.is-wrap\) \.fsdb-cell > span:not\(\.fsdb-ref-chips\):not\(\.biu-tags\):not\(\.fsdb-person-list\)\{[^}]*text-overflow:ellipsis/)
   assert.doesNotMatch(css, /\.fsdb-page \.tasks-table th,\.fsdb-page \.tasks-table td\{[^}]*overflow:visible/)
   assert.match(css, /\.fsdb-page \.tasks-table \.biu-tag,\.fsdb-page \.fsdb-cell \.biu-tag,\.fsdb-page \.fsdb-proprow-v \.biu-tag,\.fsdb-page \.fsdb-proprow-v \.fsdb-token,\.fsdb-page \.tasks-table \.fsdb-token\{[^}]*font-weight:400/)
