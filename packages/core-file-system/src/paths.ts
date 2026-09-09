@@ -73,3 +73,11 @@ function revealFromSavedViewRow(result: unknown): DatabaseReveal | null {
   if (!collection || collection === '/' || collection === '/views' || !viewId) return null
   return { collection, viewId }
 }
+
+/** /views 行 id：`<表>::<viewId>`，和 SavedViewsStore 一致。 */
+export function savedViewRecordPath(tablePath: string, viewId: string) {
+  const path = normalizeCollectionPath(tablePath)
+  const id = String(viewId ?? '').trim()
+  if (!path || path === '/' || !id) return ''
+  return `/views/${path.slice(1)}::${id}`
+}

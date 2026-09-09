@@ -101,6 +101,7 @@ import {
 } from './fsdb-cells.tsx'
 import { ensureFsdbStyle } from './fsdb-style.ts'
 import { RecordDetail } from './record-detail.tsx'
+import { PageBanner } from './page-banner.tsx'
 import { TableGlyph, ViewModeGlyph } from './nav-glyphs.tsx'
 import { countFittingViewTabs, splitVisibleViews } from './view-tabs.ts'
 import { getDatabaseUi } from './database-ui.ts'
@@ -130,6 +131,7 @@ import {
   subscribePageWidth,
 } from './page-width.ts'
 import { listCollection, readJson } from './db-client.ts'
+import { savedViewRecordPath } from '../paths.ts'
 import { findViewNeighbor, indexOnPage } from './view-adjacent.ts'
 import { rememberPreviewTotal, viewTotalKey } from './sidebar-preview.ts'
 import { mergeTableViews } from '../catalog-views.ts'
@@ -1215,6 +1217,29 @@ export function CollectionBrowser({
   }, [collectionPath, items, schema?.labelField, selected])
   const filterActive = countFilterRules(filterTree) > 0
   const activeView = views.find((view) => view.id === activeViewId)
+  const [viewBanner, setViewBanner] = useState<unknown>(null)
+  useEffect(() => {
+    if (sheet || !activeViewId) {
+      setViewBanner(null)
+      return
+    }
+    const path = savedViewRecordPath(collectionPath, activeViewId)
+    if (!path) {
+      setViewBanner(null)
+      return
+    }
+    let cancelled = false
+    void readJson<{ value?: { banner?: unknown } }>(`/api/db/read?path=${encodeURIComponent(path)}`)
+      .then((data) => {
+        if (!cancelled) setViewBanner(data.value?.banner ?? null)
+      })
+      .catch(() => {
+        if (!cancelled) setViewBanner(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [sheet, collectionPath, activeViewId])
   useSyncExternalStore(subscribeStarredViews, getStarredViewsVersion, () => 0)
   useSyncExternalStore(subscribePageWidth, getPageWidthVersion, () => 0)
   const viewStarred = Boolean(activeViewId && isViewStarred(getStarredViews(), collectionPath, activeViewId))
@@ -2587,12 +2612,30 @@ export function CollectionBrowser({
         {!detailId ? (
         <div className="tasks-main fsdb-main">
         {sheet ? null : (
+        <>
+        <PageBanner
+          value={viewBanner}
+          writable={Boolean(activeViewId)}
+          onChange={(next) => {
+            if (!activeViewId) return
+            const path = savedViewRecordPath(collectionPath, activeViewId)
+            if (!path) return
+            void readJson<{ value?: { banner?: unknown } }>('/api/db/update', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ path, content: { banner: next } }),
+            }).then((data) => {
+              setViewBanner(data.value?.banner ?? next)
+            })
+          }}
+        />
         <div className="fsdb-detail-title-row">
           <span className="fsdb-detail-title-icon" aria-hidden>
             <TableGlyph icon={currentTable?.view?.icon} className="size-8" />
           </span>
           <h1 className="fsdb-detail-title">{activeView?.name ?? title}</h1>
         </div>
+        </>
         )}
         <div className="tasks-toolbar" ref={toolbarRef} data-biu-ignore>
           <div className="tasks-toolbar-left">

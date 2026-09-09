@@ -218,7 +218,11 @@ function publicCollection(item: CollectionSpec): CollectionInfo {
 function splitPath(path: string): string[] {
   const normalized = normalizeCollectionPath(path)
   if (normalized === '/') return []
-  return normalized.slice(1).split('/').filter(Boolean)
+  const parts = normalized.slice(1).split('/').filter(Boolean)
+  if (parts[0] === 'views' && parts.length > 2) {
+    return ['views', parts.slice(1).join('/')]
+  }
+  return parts
 }
 
 function coerceList(value: unknown) {

@@ -498,6 +498,8 @@ test('database extras sit after the record detail, not in the inspector', () => 
   assert.match(style, /\.fsdb-detail-main\{[^}]*max-width:var\(--dsw-chat-max-width\)/)
   assert.match(style, /\.fsdb-detail-title\{[^}]*font-size:32px/)
   assert.match(browser, /<h1 className="fsdb-detail-title">\{activeView\?\.name \?\? title\}<\/h1>/)
+  assert.match(browser, /savedViewRecordPath\(collectionPath, activeViewId\)/)
+  assert.match(browser, /<PageBanner/)
   assert.match(style, /\.fsdb-detail-title-row\{[^}]*padding-bottom:16px/)
   assert.match(browser, /<TableGlyph icon=\{currentTable\?\.view\?\.icon\}/)
   assert.match(style, /\.fsdb-detail-title-icon\{[^}]*display:inline-flex/)
