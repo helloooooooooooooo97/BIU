@@ -244,7 +244,7 @@ export class AgentDbCompact {
   }
 
   private skipListKey(key: string, keepMeta: boolean) {
-    if (key === 'path' || key === 'kind') return true
+    if (key === 'path' || key === 'kind' || key === 'banner') return true
     if (!keepMeta && LIST_META_KEYS.has(key)) return true
     return false
   }

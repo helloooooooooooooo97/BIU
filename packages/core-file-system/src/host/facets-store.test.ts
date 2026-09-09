@@ -89,3 +89,14 @@ test('sqlite stores emoji and tags overlay without wiping the other', () => {
   store.removeRecord('/plugins', 'demo')
   assert.equal(store.recordMeta('/plugins', 'demo'), null)
 })
+
+test('sqlite stores html banner overlay without wiping emoji', () => {
+  const store = new FacetStore()
+  store.writeRecordMeta('/pages', 'home', { emoji: '🏠' })
+  store.writeRecordMeta('/pages', 'home', { banner: { kind: 'htmlframe', html: '<div>live</div>' } })
+  assert.equal(store.recordMeta('/pages', 'home')?.emoji, '🏠')
+  assert.deepEqual(store.recordMeta('/pages', 'home')?.banner, { kind: 'htmlframe', html: '<div>live</div>' })
+  store.writeRecordMeta('/pages', 'home', { banner: null })
+  assert.equal(store.recordMeta('/pages', 'home')?.banner, null)
+  assert.equal(store.recordMeta('/pages', 'home')?.emoji, '🏠')
+})

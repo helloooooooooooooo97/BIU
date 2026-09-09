@@ -158,7 +158,7 @@ const EMPTY_VIEWS: CollectionViewType[] = []
 type StatResult = { schema?: CollectionSchema }
 
 function isListColumn(key: string) {
-  return key !== 'description' && key !== 'notes' && key !== 'content' && key !== 'emoji'
+  return key !== 'description' && key !== 'notes' && key !== 'content' && key !== 'emoji' && key !== 'banner'
 }
 
 const QUERY_NEST_IGNORE = `${HEADLESS_DISMISS_IGNORE}, .db-search-menu, .fsdb-cellselect-menu, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]`
@@ -1615,8 +1615,9 @@ export function CollectionBrowser({
       })
       const next = data.value
       if (next) {
-        setItems((prev) => prev.map((item) => (item.id === next.id ? { ...item, ...next } : item)))
-        setDetailRow((prev) => (prev?.id === next.id ? { ...prev, ...next } : prev))
+        const merge = (item: DbRecord) => (item.id === next.id ? { ...item, ...next, banner: next.banner ?? null } : item)
+        setItems((prev) => prev.map(merge))
+        setDetailRow((prev) => (prev?.id === next.id ? { ...prev, ...next, banner: next.banner ?? null } : prev))
         window.dispatchEvent(new Event('fsdb:change'))
         return
       }

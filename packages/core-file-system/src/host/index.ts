@@ -35,6 +35,7 @@ import {
   type PersonValue,
   parseContentJump,
 } from '@biu/type-file-system'
+import { parsePageBanner, type PageBanner } from '../page-banner.ts'
 import { SavedViewsStore, clientViewFromDbRow, viewsCollection, type StoredView } from './saved-views.ts'
 import { FacetStore } from './facets-store.ts'
 import { AssetConflictError, FileSystemAssets, collectAssetNames, isAssetFileName, parseIfMatch } from './assets-store.ts'
@@ -411,6 +412,13 @@ function pickWritablePatch(schema: CollectionSchema, patch: Record<string, unkno
   return next
 }
 
+function takeBannerPatch(raw: Record<string, unknown>): { present: boolean; value: PageBanner | null } {
+  if (!('banner' in raw)) return { present: false, value: null }
+  const value = parsePageBanner(raw.banner)
+  delete raw.banner
+  return { present: true, value }
+}
+
 async function assertSameTableLinks(spec: CollectionSpec, patch: Record<string, unknown>, selfId?: string) {
   const ids: string[] = []
   for (const [key, value] of Object.entries(patch)) {
@@ -717,8 +725,8 @@ export class DatabaseService extends Service implements Database {
   private decorateRecord(spec: CollectionSpec, row: DbRecord): DbRecord {
     const withFacet = this.applyFacetOverlay(spec, row)
     const withPeople = this.applyPersonOverlay(spec, withFacet)
-    if (this.collectionCanUpdate(spec)) return withPeople
-    return this.applyMetaOverlay(spec, withPeople)
+    const withMeta = this.collectionCanUpdate(spec) ? withPeople : this.applyMetaOverlay(spec, withPeople)
+    return this.applyBannerOverlay(spec, withMeta)
   }
 
   private applyPersonOverlay(spec: CollectionSpec, row: DbRecord): DbRecord {
@@ -801,6 +809,14 @@ export class DatabaseService extends Service implements Database {
     }
   }
 
+  private applyBannerOverlay(spec: CollectionSpec, row: DbRecord): DbRecord {
+    const meta = this.facets.recordMeta(spec.path, row.id)
+    const next = { ...row }
+    delete next.banner
+    if (meta?.banner) next.banner = meta.banner
+    return next
+  }
+
   private collectionCanUpdate(spec: CollectionSpec) {
     return Boolean(spec.records?.update && spec.update)
   }
@@ -844,6 +860,7 @@ export class DatabaseService extends Service implements Database {
     const raw = parseContent(content)
     const current = await spec.get(parts[1]!)
     if (!current) throw new Error(`unknown record: ${spec.path}/${parts[1]}`)
+    const bannerPatch = takeBannerPatch(raw)
     if ('facet' in raw && schema.fields.facet) {
       if (!schema.fields.facet.writable || schema.fields.facet.computed) throw new Error(`field not writable: facet`)
       raw.facet = coerceFacetPatch(raw.facet, normalizeSchemaValue(this.decorateRecord(spec, current).facet), (id) =>
@@ -853,7 +870,7 @@ export class DatabaseService extends Service implements Database {
     if (!this.collectionCanUpdate(spec)) {
       const keys = Object.keys(raw)
       const overlayKeys = new Set(['facet', 'emoji', 'tags'])
-      if (!keys.length || keys.some((key) => !overlayKeys.has(key))) {
+      if ((keys.length && keys.some((key) => !overlayKeys.has(key))) || (!keys.length && !bannerPatch.present)) {
         throw new Error(`collection cannot update: ${spec.path}`)
       }
       let next: DbRecord = { ...this.decorateRecord(spec, current) }
@@ -878,20 +895,29 @@ export class DatabaseService extends Service implements Database {
           ...(meta.tags !== null ? { tags: meta.tags } : {}),
         }
       }
+      if (bannerPatch.present) {
+        const meta = this.facets.writeRecordMeta(spec.path, current.id, { banner: bannerPatch.value })
+        next = { ...next }
+        delete next.banner
+        if (meta.banner) next.banner = meta.banner
+      }
       await this.stampActor(spec.path, current.id)
       this.bump()
       return {
         kind: 'record' as const,
         path: `${spec.path}/${current.id}`,
-        value: withoutContent(spec, next),
+        value: withoutContent(spec, this.applyBannerOverlay(spec, next)),
       }
     }
     const patch = pickWritablePatch(schema, raw)
     await assertSameTableLinks(spec, patch, parts[1])
-    let record = await spec.update(parts[1]!, patch)
+    let record = Object.keys(patch).length ? await spec.update(parts[1]!, patch) : current
     await this.stampActor(spec.path, record.id)
     if (schema.fields.facet && 'facet' in patch) {
       record = { ...record, facet: this.persistRecordFacet(spec, record.id, patch.facet, record) }
+    }
+    if (bannerPatch.present) {
+      this.facets.writeRecordMeta(spec.path, record.id, { banner: bannerPatch.value })
     }
     this.indexFacetRecord(spec, this.decorateRecord(spec, record))
     this.bump()
@@ -907,7 +933,10 @@ export class DatabaseService extends Service implements Database {
     const schema = schemaFor(spec)
     const rows = parseRecords(content)
     const records: Record<string, unknown>[] = []
+    const banners: Array<PageBanner | null | undefined> = []
     for (const row of rows) {
+      const bannerPatch = takeBannerPatch(row)
+      banners.push(bannerPatch.present ? bannerPatch.value : undefined)
       if ('facet' in row && schema.fields.facet) {
         row.facet = coerceFacetPatch(row.facet, emptySchemaValue(), (id) => this.facets.get(id))
       }
@@ -916,8 +945,10 @@ export class DatabaseService extends Service implements Database {
       records.push(patch)
     }
     const created = await spec.create(records)
-    for (const record of created) {
+    for (const [index, record] of created.entries()) {
       await this.stampActor(spec.path, record.id)
+      const banner = banners[index]
+      if (banner !== undefined) this.facets.writeRecordMeta(spec.path, record.id, { banner })
       if (schema.fields.facet) {
         this.persistRecordFacet(spec, record.id, record.facet, record)
       }
