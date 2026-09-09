@@ -472,6 +472,18 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
         return true
       },
       handleKeyDown(_view, event) {
+        const mentionOpen =
+          typeof document !== 'undefined' && document.querySelector('[data-testid="page-mention"]')
+        if (
+          mentionOpen &&
+          (event.key === 'Enter' ||
+            event.key === 'Tab' ||
+            event.key === 'ArrowUp' ||
+            event.key === 'ArrowDown' ||
+            event.key === 'Escape')
+        ) {
+          return false
+        }
         const menu = live.current.slash
         const list = live.current.filtered
         if (menu?.open && list.length) {

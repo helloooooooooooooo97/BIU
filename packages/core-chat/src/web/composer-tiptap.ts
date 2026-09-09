@@ -1,4 +1,5 @@
 import type { Editor } from '@tiptap/react'
+import { mentionPickFromAttrs } from '@biu/core-editor/mention'
 import { formatPick, pickChipAttrs, pickKey, pickRefFromAttrs, splitPickStream, type PickRef } from '@biu/core-pick/web'
 
 function attrsToRef(attrs: Record<string, unknown>): PickRef | null {
@@ -28,8 +29,9 @@ export function serializeComposer(editor: Editor | null): { text: string; refs: 
         plain += '\n'
         return
       }
-      if (child.type.name === 'pickChip') {
-        const ref = attrsToRef(child.attrs)
+      if (child.type.name === 'pickChip' || child.type.name === 'mention') {
+        const ref =
+          child.type.name === 'mention' ? mentionPickFromAttrs(child.attrs) : attrsToRef(child.attrs)
         if (!ref) return
         refs.push(ref)
         text += formatPick(ref)
@@ -72,8 +74,8 @@ export function collectPickKeys(editor: Editor | null) {
   const keys = new Set<string>()
   if (!editor) return keys
   editor.state.doc.descendants((node) => {
-    if (node.type.name !== 'pickChip') return
-    const ref = attrsToRef(node.attrs)
+    if (node.type.name !== 'pickChip' && node.type.name !== 'mention') return
+    const ref = node.type.name === 'mention' ? mentionPickFromAttrs(node.attrs) : attrsToRef(node.attrs)
     if (ref) keys.add(pickKey(ref))
   })
   return keys

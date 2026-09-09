@@ -12,6 +12,7 @@ import {
   fetchMentionItems,
   mentionHref,
   mentionReveal,
+  mentionSuggestionContent,
   openMention,
 } from './mention.ts'
 
@@ -22,6 +23,19 @@ test('mention id encodes collection kind for jump targets', () => {
   assert.equal(mentionHref('session/abc'), '/s/abc')
   assert.deepEqual(mentionReveal('facet/f1'), { collection: '/facets', recordId: 'f1', unique: true })
   assert.equal(decodeMentionId('nope'), null)
+})
+
+test('mention suggestion inserts pickChip when the schema has it', () => {
+  const withPick = mentionSuggestionContent(
+    { nodes: { pickChip: {}, mention: {} } },
+    { id: 'page/p1', label: '首页' },
+  )
+  assert.equal(withPick[0]?.type, 'pickChip')
+  assert.equal((withPick[0] as { attrs: { kind: string; id: string; label: string } }).attrs.kind, 'page')
+  assert.equal((withPick[0] as { attrs: { kind: string; id: string; label: string } }).attrs.id, 'p1')
+  assert.equal((withPick[0] as { attrs: { kind: string; id: string; label: string } }).attrs.label, '首页')
+  const mentionOnly = mentionSuggestionContent({ nodes: { mention: {} } }, { id: 'task/t1', label: '任务甲' })
+  assert.equal(mentionOnly[0]?.type, 'mention')
 })
 
 test('fetchMentionItems lists pages tasks facets and sessions', async () => {
