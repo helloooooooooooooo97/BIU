@@ -589,6 +589,7 @@ export function CollectionBrowser({
   const [configOpen, setConfigOpen] = useState(false)
   const [groupOpen, setGroupOpen] = useState(false)
   const [layoutOpen, setLayoutOpen] = useState(false)
+  const [bulkMenuOpen, setBulkMenuOpen] = useState(false)
   const [wrapCells, setWrapCells] = useState(!!initialView?.wrap)
   const [truncateCells, setTruncateCells] = useState(initialView?.truncate !== false)
   const [groupBy, setGroupBy] = useState(initialView?.groupBy ?? '')
@@ -650,6 +651,7 @@ export function CollectionBrowser({
   const sortRef = useRef<HTMLDivElement>(null)
   const columnRef = useRef<HTMLDivElement>(null)
   const filterRef = useRef<HTMLDivElement>(null)
+  const bulkRef = useRef<HTMLDivElement>(null)
   const configRef = useRef<HTMLDivElement>(null)
   const groupRef = useRef<HTMLDivElement>(null)
   const layoutRef = useRef<HTMLDivElement>(null)
@@ -754,6 +756,10 @@ export function CollectionBrowser({
     if (searchOpen) searchInputRef.current?.focus()
   }, [searchOpen])
 
+  useEffect(() => {
+    if (!pickedIds.length) setBulkMenuOpen(false)
+  }, [pickedIds.length])
+
   function toggleMenu(which: 'view' | 'mode' | 'sort' | 'columns' | 'filter' | 'config' | 'group' | 'layout') {
     setViewMenuOpen(which === 'view' && !viewMenuOpen)
     setModeMenuOpen(which === 'mode' && !modeMenuOpen)
@@ -763,6 +769,7 @@ export function CollectionBrowser({
     setConfigOpen(which === 'config' && !configOpen)
     setGroupOpen(which === 'group' && !groupOpen)
     setLayoutOpen(which === 'layout' && !layoutOpen)
+    setBulkMenuOpen(false)
   }
 
   const reload = useCallback(async () => {
@@ -2898,64 +2905,6 @@ export function CollectionBrowser({
                 </span>
               ) : null}
             </div>
-            {pickedIds.length ? (
-              <div className="fsdb-bulk" data-testid="fsdb-bulk-bar">
-                <span className="fsdb-bulk-count">{pickedIds.length}</span>
-                {bulkFields.length ? (
-                  <button
-                    type="button"
-                    className="tasks-icon-btn"
-                    data-testid="fsdb-bulk-edit"
-                    aria-label="批量编辑"
-                    title={`编辑选中的 ${pickedIds.length} 条`}
-                    onClick={() => {
-                      setBulkEditKey(bulkFields[0]?.key ?? '')
-                      setBulkEditRaw('')
-                      setDlg({ kind: 'bulk-edit', ids: pickedIds })
-                    }}
-                  >
-                    <PencilSquareIcon aria-hidden className="size-[14px]" />
-                  </button>
-                ) : null}
-                {canFacet ? (
-                  <button
-                    type="button"
-                    className="tasks-icon-btn"
-                    data-testid="fsdb-bulk-facet"
-                    aria-label="打合集"
-                    title={`给选中的 ${pickedIds.length} 条打合集`}
-                    onClick={() => {
-                      setBulkFacetIds([])
-                      setDlg({ kind: 'bulk-facet', ids: pickedIds })
-                    }}
-                  >
-                    <RectangleStackIcon aria-hidden className="size-[14px]" />
-                  </button>
-                ) : null}
-                <button
-                  type="button"
-                  className="tasks-icon-btn"
-                  data-testid="fsdb-bulk-export"
-                  aria-label="导出选中"
-                  title={`导出选中的 ${pickedIds.length} 条`}
-                  onClick={() => exportPicked()}
-                >
-                  <ArrowDownTrayIcon aria-hidden className="size-[14px]" />
-                </button>
-                {canDelete ? (
-                  <button
-                    type="button"
-                    className="tasks-icon-btn is-danger"
-                    data-testid="fsdb-bulk-delete"
-                    aria-label="删除选中"
-                    title={`删除选中的 ${pickedIds.length} 条`}
-                    onClick={() => setDlg({ kind: 'delete-records', ids: pickedIds })}
-                  >
-                    <TrashGlyph aria-hidden className="size-[14px]" />
-                  </button>
-                ) : null}
-              </div>
-            ) : null}
             {canCreate ? (
               <button
                 type="button"
@@ -2980,6 +2929,91 @@ export function CollectionBrowser({
             ) : null}
             {!customView ? (
               <div className="tasks-table-wrap">
+                {pickedIds.length ? (
+                  <div className="fsdb-bulk" data-testid="fsdb-bulk-bar">
+                    <span className="fsdb-bulk-count">{pickedIds.length} 已选</span>
+                    {canDelete ? (
+                      <button
+                        type="button"
+                        className="tasks-icon-btn is-danger"
+                        data-testid="fsdb-bulk-delete"
+                        aria-label="删除选中"
+                        title={`删除选中的 ${pickedIds.length} 条`}
+                        onClick={() => setDlg({ kind: 'delete-records', ids: pickedIds })}
+                      >
+                        <TrashGlyph aria-hidden className="size-[14px]" />
+                      </button>
+                    ) : null}
+                    <div className="fsdb-bulk-more" ref={bulkRef}>
+                      <button
+                        type="button"
+                        className={`tasks-icon-btn${bulkMenuOpen ? ' is-active' : ''}`}
+                        data-testid="fsdb-bulk-more"
+                        aria-label="更多操作"
+                        aria-expanded={bulkMenuOpen}
+                        title="更多"
+                        onClick={() => setBulkMenuOpen((open) => !open)}
+                      >
+                        <EllipsisHorizontalIcon aria-hidden className="size-[14px]" />
+                      </button>
+                      {bulkMenuOpen ? (
+                        <HeadlessDismiss onDismiss={() => setBulkMenuOpen(false)} insideRef={bulkRef}>
+                          <div className="fsdb-bulk-menu" role="menu">
+                            {bulkFields.length ? (
+                              <button
+                                type="button"
+                                className="tasks-sort-item"
+                                data-testid="fsdb-bulk-edit"
+                                onClick={() => {
+                                  setBulkEditKey(bulkFields[0]?.key ?? '')
+                                  setBulkEditRaw('')
+                                  setDlg({ kind: 'bulk-edit', ids: pickedIds })
+                                  setBulkMenuOpen(false)
+                                }}
+                              >
+                                <span className="tasks-sort-item-label">
+                                  <PencilSquareIcon aria-hidden className="size-[14px]" />
+                                  编辑属性
+                                </span>
+                              </button>
+                            ) : null}
+                            {canFacet ? (
+                              <button
+                                type="button"
+                                className="tasks-sort-item"
+                                data-testid="fsdb-bulk-facet"
+                                onClick={() => {
+                                  setBulkFacetIds([])
+                                  setDlg({ kind: 'bulk-facet', ids: pickedIds })
+                                  setBulkMenuOpen(false)
+                                }}
+                              >
+                                <span className="tasks-sort-item-label">
+                                  <RectangleStackIcon aria-hidden className="size-[14px]" />
+                                  打合集
+                                </span>
+                              </button>
+                            ) : null}
+                            <button
+                              type="button"
+                              className="tasks-sort-item"
+                              data-testid="fsdb-bulk-export"
+                              onClick={() => {
+                                exportPicked()
+                                setBulkMenuOpen(false)
+                              }}
+                            >
+                              <span className="tasks-sort-item-label">
+                                <ArrowDownTrayIcon aria-hidden className="size-[14px]" />
+                                导出
+                              </span>
+                            </button>
+                          </div>
+                        </HeadlessDismiss>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
                 <div className="fsdb-check-rail">
                   <RowCheck ids={pickableIds} />
                 </div>
