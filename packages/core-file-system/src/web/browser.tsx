@@ -995,6 +995,9 @@ export function CollectionBrowser({
       .map((key) => allColumns.find((item) => item.key === key))
       .filter(Boolean) as typeof allColumns
   }, [allColumns, columnKeys, schema, schemaDefaultKeys])
+  const titleColKey = schema?.labelField && columns.some((col) => col.key === schema.labelField)
+    ? schema.labelField
+    : columns[0]?.key
   const hasColWidths = Object.keys(columnWidths).length > 0
 
   function startColResize(event: ReactPointerEvent<HTMLSpanElement>, colKey: string) {
@@ -2122,7 +2125,6 @@ export function CollectionBrowser({
   }
 
   function RowCheck({ id, ids }: { id?: string; ids?: string[] }) {
-    if (!canDelete) return null
     const list = id ? [id] : (ids ?? [])
     const on = list.length > 0 && list.every((item) => pickedIds.includes(item))
     return (
@@ -2160,7 +2162,7 @@ export function CollectionBrowser({
       <>
         {listed.map(({ row, depth, hasKids, kidCount }) => (
           <tr key={`${keyPrefix}${row.id}`} className={row.id === detailId ? 'is-active' : undefined} {...recordPick(row)}>
-            {columns.map((col, index) => (
+            {columns.map((col) => (
               <td
                 key={col.key}
                 style={colWidthStyle(columnWidths[col.key])}
@@ -2199,7 +2201,7 @@ export function CollectionBrowser({
                   setCellPop(cellUsesPop(kind, col.field.writable) ? { id: row.id, key: col.key } : null)
                 }}
               >
-                {index === 0 ? <RowCheck id={row.id} /> : null}
+                {col.key === titleColKey ? <RowCheck id={row.id} /> : null}
                 {col.key === schema?.labelField ? (
                   <RecordTitle row={row} depth={depth} hasKids={hasKids} kidCount={kidCount} />
                 ) : (
@@ -2873,7 +2875,7 @@ export function CollectionBrowser({
             </colgroup>
             <thead>
               <tr>
-                {columns.map((col, index) => {
+                {columns.map((col) => {
                   const flat = parseFacetFlatColumnKey(col.key)
                   const tone = flat ? schemaTagTone(flat.packId) : undefined
                   const width = colWidthStyle(columnWidths[col.key])
@@ -2886,7 +2888,7 @@ export function CollectionBrowser({
                       ...(tone ? { ['--biu-tag' as string]: tone } : {}),
                     }}
                   >
-                    {index === 0 ? <RowCheck ids={pickableIds} /> : null}
+                    {col.key === titleColKey ? <RowCheck ids={pickableIds} /> : null}
                     <span className="tasks-th">
                       <FieldGlyph kind={col.kind} />
                       {facetColumnTitle(col)}
