@@ -342,6 +342,13 @@ test('deletable tables can pick rows and bulk-act over the table header', () => 
   assert.doesNotMatch(browser, /skipBoolean/)
 })
 
+test('creating a record opens a new inspector pane instead of covering the view', () => {
+  const createFn = browser.slice(browser.indexOf('async function createRecord'), browser.indexOf('async function executeDeleteRecord'))
+  assert.match(createFn, /showRecordInInspector\(collectionPath, id\)/)
+  assert.doesNotMatch(createFn, /setOpenDetailId/)
+  assert.doesNotMatch(createFn, /onOpenRecord/)
+})
+
 test('create record sits at the right of the toolbar with a blue label', () => {
   assert.match(browser, /aria-label="排序"[\s\S]*aria-label="筛选"[\s\S]*aria-label="分组"/)
   assert.match(browser, /className="fsdb-create-btn"/)
