@@ -48,6 +48,17 @@ test('stepHtmlDeck stays on the last slide', () => {
   assert.equal(stepHtmlDeck(2, 1, 4), 3)
 })
 
+test('fullscreen deck centers a slide that is smaller than the viewport', async () => {
+  const { readFile } = await import('node:fs/promises')
+  const { resolve } = await import('node:path')
+  const src = await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/page-html-blocks/web.tsx'), 'utf8')
+  assert.match(src, /data-testid="html-deck-stage"/)
+  assert.match(src, /alignItems: 'safe center'/)
+  assert.match(src, /justifyContent: 'safe center'/)
+  assert.match(src, /data-testid="html-deck-slide"/)
+  assert.doesNotMatch(src, /justifyContent: 'stretch'/)
+})
+
 test('arrow keys drive the deck', () => {
   assert.equal(htmlDeckKeyAction('ArrowRight'), 1)
   assert.equal(htmlDeckKeyAction('ArrowLeft'), -1)

@@ -193,15 +193,17 @@ function HtmlDeckOverlay({
       }}
     >
       <div
+        data-testid="html-deck-stage"
         style={{
           flex: 1,
           minHeight: 0,
           width: '100%',
-          height: '100%',
           display: 'flex',
-          alignItems: 'stretch',
-          justifyContent: 'stretch',
-          overflow: 'hidden',
+          alignItems: 'safe center',
+          justifyContent: 'safe center',
+          overflow: 'auto',
+          padding: 32,
+          boxSizing: 'border-box',
         }}
       >
         {slide.kind === 'htmlframe' ? (
@@ -209,10 +211,21 @@ function HtmlDeckOverlay({
             title={`html-deck-${index}`}
             srcDoc={slide.html}
             sandbox="allow-scripts"
-            style={{ width: '100%', height: '100%', border: 'none', background: '#0b0b12' }}
+            style={{
+              flex: 'none',
+              width: 'min(100%, 960px)',
+              height: slide.height || 300,
+              maxHeight: '100%',
+              border: 'none',
+              background: '#0b0b12',
+            }}
           />
         ) : (
-          <div style={{ width: '100%', height: '100%', overflow: 'auto' }} dangerouslySetInnerHTML={{ __html: stamped }} />
+          <div
+            data-testid="html-deck-slide"
+            style={{ flex: 'none', maxWidth: '100%', maxHeight: '100%' }}
+            dangerouslySetInnerHTML={{ __html: stamped }}
+          />
         )}
       </div>
       <div
