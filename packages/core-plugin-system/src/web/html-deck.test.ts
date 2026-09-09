@@ -64,6 +64,7 @@ test('fullscreen deck centers a slide that is smaller than the viewport', async 
   assert.match(src, /alignItems: 'safe center'/)
   assert.match(src, /justifyContent: 'safe center'/)
   assert.match(src, /data-testid="html-deck-slide"/)
+  assert.match(src, /index >= total - 1 \? \{ opacity: 0\.35/)
   assert.doesNotMatch(src, /justifyContent: 'stretch'/)
 })
 

@@ -288,7 +288,7 @@ function HtmlDeckOverlay({
             pointerEvents: navHot ? 'auto' : 'none',
           }}
         >
-          <button type="button" style={barBtn} disabled={index <= 0} onClick={() => onIndex(stepHtmlDeck(index, -1, total))} aria-label="上一张">
+          <button type="button" style={{ ...barBtn, ...(index <= 0 ? { opacity: 0.35, cursor: 'default' } : {}) }} disabled={index <= 0} onClick={() => onIndex(stepHtmlDeck(index, -1, total))} aria-label="上一张">
             上一张
           </button>
           <span data-testid="html-deck-index" style={{ color: '#8b93a7', minWidth: 64, textAlign: 'center' }}>
@@ -296,7 +296,7 @@ function HtmlDeckOverlay({
           </span>
           <button
             type="button"
-            style={barBtn}
+            style={{ ...barBtn, ...(index >= total - 1 ? { opacity: 0.35, cursor: 'default' } : {}) }}
             disabled={index >= total - 1}
             onClick={() => onIndex(stepHtmlDeck(index, 1, total))}
             aria-label="下一张"

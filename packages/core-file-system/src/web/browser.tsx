@@ -3182,7 +3182,7 @@ export function CollectionBrowser({
                 type="button"
                 className="tasks-icon-btn"
                 aria-label="下一页"
-                disabled={(page + 1) * pageSize >= total}
+                disabled={total <= 0 || (page + 1) * pageSize >= total || (items.length > 0 && items.length < pageSize)}
                 onClick={() => setPage((prev) => prev + 1)}
               >
                 <ChevronRightIcon aria-hidden className="size-[14px]" />
