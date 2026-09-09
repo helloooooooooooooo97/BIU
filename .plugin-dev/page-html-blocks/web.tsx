@@ -395,6 +395,7 @@ function SizeGrip({
       window.removeEventListener('pointerup', up)
     }
   }, [])
+  if (!show) return null
   return (
     <button
       type="button"
@@ -412,6 +413,7 @@ function SizeGrip({
         drag.current = { x: event.clientX, y: event.clientY, w: box.offsetWidth, h: box.offsetHeight }
       }}
       style={{
+        appearance: 'none',
         position: 'absolute',
         right: 3,
         bottom: 3,
@@ -422,11 +424,8 @@ function SizeGrip({
         padding: 0,
         cursor: 'nwse-resize',
         border: 'none',
-        borderRadius: 2,
+        borderRadius: 0,
         background: 'linear-gradient(135deg, transparent 46%, #111 46%)',
-        opacity: show ? 1 : 0,
-        pointerEvents: show ? 'auto' : 'none',
-        transition: 'opacity .12s ease',
       }}
     />
   )
@@ -591,8 +590,8 @@ function HtmlDirectCard({ data, update, writable }: BlockProps) {
         overflow: sized ? 'auto' : undefined,
         boxSizing: 'border-box',
       }}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
+      onPointerEnter={() => setHover(true)}
+      onPointerLeave={() => setHover(false)}
     >
       {(hover || editing) && (
         <FloatBar
