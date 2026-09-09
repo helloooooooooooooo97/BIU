@@ -119,6 +119,9 @@ test('html banner is stored by file system and never written as a table field', 
   if (read.kind !== 'record') return
   assert.deepEqual(read.value.banner, { kind: 'html', html: '<div>cover</div>' })
   assert.equal('banner' in (await notes.get!('n1') ?? {}), false)
+  const listed = await db.list('/notes')
+  if (listed.kind !== 'collection') return
+  assert.equal('banner' in (listed.items.find((row) => row.id === 'n1') ?? {}), false)
   await db.update('/notes/n1', { banner: null })
   const cleared = await db.read('/notes/n1')
   if (cleared.kind !== 'record') return

@@ -638,7 +638,7 @@ export class DatabaseService extends Service implements Database {
         label: spec.label ?? spec.id,
         schema: schemaFor(spec),
         caps,
-        value: withoutContent(spec, this.decorateRecord(spec, record)),
+        value: withoutContent(spec, this.withBanner(spec, this.decorateRecord(spec, record))),
       }
     }
     throw new Error(`path too deep: ${normalizeCollectionPath(path)}`)
@@ -725,8 +725,16 @@ export class DatabaseService extends Service implements Database {
   private decorateRecord(spec: CollectionSpec, row: DbRecord): DbRecord {
     const withFacet = this.applyFacetOverlay(spec, row)
     const withPeople = this.applyPersonOverlay(spec, withFacet)
-    const withMeta = this.collectionCanUpdate(spec) ? withPeople : this.applyMetaOverlay(spec, withPeople)
-    return this.applyBannerOverlay(spec, withMeta)
+    if (this.collectionCanUpdate(spec)) return withPeople
+    return this.applyMetaOverlay(spec, withPeople)
+  }
+
+  private withBanner(spec: CollectionSpec, row: DbRecord): DbRecord {
+    const banner = this.facets.recordBanner(spec.path, row.id)
+    const next = { ...row }
+    delete next.banner
+    if (banner) next.banner = banner
+    return next
   }
 
   private applyPersonOverlay(spec: CollectionSpec, row: DbRecord): DbRecord {
@@ -809,14 +817,6 @@ export class DatabaseService extends Service implements Database {
     }
   }
 
-  private applyBannerOverlay(spec: CollectionSpec, row: DbRecord): DbRecord {
-    const meta = this.facets.recordMeta(spec.path, row.id)
-    const next = { ...row }
-    delete next.banner
-    if (meta?.banner) next.banner = meta.banner
-    return next
-  }
-
   private collectionCanUpdate(spec: CollectionSpec) {
     return Boolean(spec.records?.update && spec.update)
   }
@@ -848,7 +848,7 @@ export class DatabaseService extends Service implements Database {
     if (!spec) throw new Error(`unknown collection: /${parts[0]}`)
     const record = await spec.get(parts[1]!)
     if (!record) throw new Error(`unknown record: ${spec.path}/${parts[1]}`)
-    return { kind: 'record' as const, path: `${spec.path}/${record.id}`, schema: schemaFor(spec), value: withoutContent(spec, this.decorateRecord(spec, record)) }
+    return { kind: 'record' as const, path: `${spec.path}/${record.id}`, schema: schemaFor(spec), value: withoutContent(spec, this.withBanner(spec, this.decorateRecord(spec, record))) }
   }
 
   async update(path: string, content: unknown) {
@@ -896,17 +896,15 @@ export class DatabaseService extends Service implements Database {
         }
       }
       if (bannerPatch.present) {
-        const meta = this.facets.writeRecordMeta(spec.path, current.id, { banner: bannerPatch.value })
-        next = { ...next }
-        delete next.banner
-        if (meta.banner) next.banner = meta.banner
+        this.facets.writeRecordBanner(spec.path, current.id, bannerPatch.value)
+        next = this.withBanner(spec, next)
       }
       await this.stampActor(spec.path, current.id)
       this.bump()
       return {
         kind: 'record' as const,
         path: `${spec.path}/${current.id}`,
-        value: withoutContent(spec, this.applyBannerOverlay(spec, next)),
+        value: withoutContent(spec, this.withBanner(spec, next)),
       }
     }
     const patch = pickWritablePatch(schema, raw)
@@ -917,11 +915,11 @@ export class DatabaseService extends Service implements Database {
       record = { ...record, facet: this.persistRecordFacet(spec, record.id, patch.facet, record) }
     }
     if (bannerPatch.present) {
-      this.facets.writeRecordMeta(spec.path, record.id, { banner: bannerPatch.value })
+      this.facets.writeRecordBanner(spec.path, record.id, bannerPatch.value)
     }
     this.indexFacetRecord(spec, this.decorateRecord(spec, record))
     this.bump()
-    return { kind: 'record' as const, path: `${spec.path}/${record.id}`, value: withoutContent(spec, this.decorateRecord(spec, record)) }
+    return { kind: 'record' as const, path: `${spec.path}/${record.id}`, value: withoutContent(spec, this.withBanner(spec, this.decorateRecord(spec, record))) }
   }
 
   async create(path: string, content?: unknown) {
@@ -948,7 +946,7 @@ export class DatabaseService extends Service implements Database {
     for (const [index, record] of created.entries()) {
       await this.stampActor(spec.path, record.id)
       const banner = banners[index]
-      if (banner !== undefined) this.facets.writeRecordMeta(spec.path, record.id, { banner })
+      if (banner !== undefined) this.facets.writeRecordBanner(spec.path, record.id, banner)
       if (schema.fields.facet) {
         this.persistRecordFacet(spec, record.id, record.facet, record)
       }
@@ -961,7 +959,7 @@ export class DatabaseService extends Service implements Database {
       items: created.map((record) => ({
         kind: 'record' as const,
         path: `${spec.path}/${record.id}`,
-        value: withoutContent(spec, this.decorateRecord(spec, record)),
+        value: withoutContent(spec, this.withBanner(spec, this.decorateRecord(spec, record))),
       })),
     }
   }

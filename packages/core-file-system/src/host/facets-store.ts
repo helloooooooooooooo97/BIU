@@ -11,7 +11,7 @@ import {
   type PersonValue,
   type SchemaFieldValue,
 } from '@biu/type-file-system'
-import { parsePageBanner, serializePageBanner, type PageBanner } from '../page-banner.ts'
+import { parsePageBanner, type PageBanner } from '../page-banner.ts'
 
 type DatabaseSync = import('node:sqlite').DatabaseSync
 
@@ -131,14 +131,20 @@ export class FacetStore {
         tags_json TEXT,
         created_by_json TEXT,
         updated_by_json TEXT,
-        banner_json TEXT,
+        PRIMARY KEY (collection, record_id)
+      );
+      CREATE TABLE IF NOT EXISTS record_banners (
+        collection TEXT NOT NULL,
+        record_id TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        html TEXT NOT NULL,
         PRIMARY KEY (collection, record_id)
       );
     `)
     this.ensureNotesColumn()
     this.ensureCreatedAtColumn()
     this.ensurePersonMetaColumns()
-    this.ensureBannerColumn()
+    this.ensureBannerTable()
     return this
   }
 
@@ -166,11 +172,37 @@ export class FacetStore {
     if (!names.has('updated_by_json')) db.exec(`ALTER TABLE record_meta ADD COLUMN updated_by_json TEXT`)
   }
 
-  private ensureBannerColumn() {
+  private ensureBannerTable() {
     const db = this.db!
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS record_banners (
+        collection TEXT NOT NULL,
+        record_id TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        html TEXT NOT NULL,
+        PRIMARY KEY (collection, record_id)
+      )
+    `)
     const cols = db.prepare('PRAGMA table_info(record_meta)').all() as Array<{ name: string }>
-    if (cols.some((col) => col.name === 'banner_json')) return
-    db.exec(`ALTER TABLE record_meta ADD COLUMN banner_json TEXT`)
+    if (!cols.some((col) => col.name === 'banner_json')) return
+    const rows = db
+      .prepare('SELECT collection, record_id, banner_json FROM record_meta WHERE banner_json IS NOT NULL AND banner_json != \'\'')
+      .all() as Array<{ collection: string; record_id: string; banner_json: string }>
+    const put = db.prepare(
+      `INSERT INTO record_banners (collection, record_id, kind, html)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(collection, record_id) DO UPDATE SET kind = excluded.kind, html = excluded.html`,
+    )
+    for (const row of rows) {
+      let parsed: PageBanner | null = null
+      try {
+        parsed = parsePageBanner(JSON.parse(row.banner_json))
+      } catch {
+        parsed = parsePageBanner(row.banner_json)
+      }
+      if (!parsed) continue
+      put.run(row.collection, row.record_id, parsed.kind, parsed.html)
+    }
   }
 
   notes(id: string) {
@@ -333,16 +365,14 @@ export class FacetStore {
     tags: string[] | null
     createdBy: PersonValue | null
     updatedBy: PersonValue[]
-    banner: PageBanner | null
   } | null {
     const row = this.ensure()
-      .prepare('SELECT emoji, tags_json, created_by_json, updated_by_json, banner_json FROM record_meta WHERE collection = ? AND record_id = ?')
+      .prepare('SELECT emoji, tags_json, created_by_json, updated_by_json FROM record_meta WHERE collection = ? AND record_id = ?')
       .get(collection, recordId) as {
         emoji: string | null
         tags_json: string | null
         created_by_json?: string | null
         updated_by_json?: string | null
-        banner_json?: string | null
       } | undefined
     if (!row) return null
     let tags: string[] | null = null
@@ -372,21 +402,34 @@ export class FacetStore {
         return asPersonList(raw)
       }
     }
-    let banner: PageBanner | null = null
-    if (row.banner_json) {
-      try {
-        banner = parsePageBanner(JSON.parse(row.banner_json))
-      } catch {
-        banner = parsePageBanner(row.banner_json)
-      }
-    }
     return {
       emoji: row.emoji != null ? String(row.emoji) : null,
       tags,
       createdBy: parsePerson(row.created_by_json),
       updatedBy: parsePeople(row.updated_by_json),
-      banner,
     }
+  }
+
+  recordBanner(collection: string, recordId: string): PageBanner | null {
+    const row = this.ensure()
+      .prepare('SELECT kind, html FROM record_banners WHERE collection = ? AND record_id = ?')
+      .get(collection, recordId) as { kind?: string; html?: string } | undefined
+    if (!row || typeof row.html !== 'string' || !row.html.trim()) return null
+    return parsePageBanner({ kind: row.kind, html: row.html })
+  }
+
+  writeRecordBanner(collection: string, recordId: string, banner: PageBanner | null) {
+    const db = this.ensure()
+    if (!banner) {
+      db.prepare('DELETE FROM record_banners WHERE collection = ? AND record_id = ?').run(collection, recordId)
+      return null
+    }
+    db.prepare(
+      `INSERT INTO record_banners (collection, record_id, kind, html)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(collection, record_id) DO UPDATE SET kind = excluded.kind, html = excluded.html`,
+    ).run(collection, recordId, banner.kind, banner.html)
+    return this.recordBanner(collection, recordId)
   }
 
   writeRecordMeta(
@@ -397,19 +440,17 @@ export class FacetStore {
       tags?: string[]
       createdBy?: PersonValue | null
       updatedBy?: PersonValue[] | PersonValue | null
-      banner?: PageBanner | null
     },
-  ): { emoji: string | null; tags: string[] | null; createdBy: PersonValue | null; updatedBy: PersonValue[]; banner: PageBanner | null } {
+  ): { emoji: string | null; tags: string[] | null; createdBy: PersonValue | null; updatedBy: PersonValue[] } {
     this.ensure()
       .prepare(
-        `INSERT INTO record_meta (collection, record_id, emoji, tags_json, created_by_json, updated_by_json, banner_json)
-         VALUES (?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO record_meta (collection, record_id, emoji, tags_json, created_by_json, updated_by_json)
+         VALUES (?, ?, ?, ?, ?, ?)
          ON CONFLICT(collection, record_id) DO UPDATE SET
            emoji = COALESCE(excluded.emoji, record_meta.emoji),
            tags_json = COALESCE(excluded.tags_json, record_meta.tags_json),
            created_by_json = COALESCE(excluded.created_by_json, record_meta.created_by_json),
-           updated_by_json = COALESCE(excluded.updated_by_json, record_meta.updated_by_json),
-           banner_json = COALESCE(excluded.banner_json, record_meta.banner_json)`,
+           updated_by_json = COALESCE(excluded.updated_by_json, record_meta.updated_by_json)`,
       )
       .run(
         collection,
@@ -420,9 +461,8 @@ export class FacetStore {
           : null,
         patch.createdBy !== undefined ? JSON.stringify(patch.createdBy) : null,
         patch.updatedBy !== undefined ? JSON.stringify(asPersonList(patch.updatedBy)) : null,
-        serializePageBanner(patch.banner),
       )
-    return this.recordMeta(collection, recordId) ?? { emoji: null, tags: null, createdBy: null, updatedBy: [], banner: null }
+    return this.recordMeta(collection, recordId) ?? { emoji: null, tags: null, createdBy: null, updatedBy: [] }
   }
 
   removeRecord(collection: string, recordId: string) {
@@ -430,6 +470,7 @@ export class FacetStore {
     db.prepare('DELETE FROM facet_stamps WHERE collection = ? AND record_id = ?').run(collection, recordId)
     db.prepare('DELETE FROM facet_record_values WHERE collection = ? AND record_id = ?').run(collection, recordId)
     db.prepare('DELETE FROM record_meta WHERE collection = ? AND record_id = ?').run(collection, recordId)
+    db.prepare('DELETE FROM record_banners WHERE collection = ? AND record_id = ?').run(collection, recordId)
   }
 
   stampedIds(collection: string, tagIdOrLabel: string): Set<string> {

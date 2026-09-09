@@ -36,12 +36,6 @@ export function parsePageBanner(raw: unknown): PageBanner | null {
   return { kind, html }
 }
 
-export function serializePageBanner(banner: PageBanner | null | undefined): string | null {
-  if (banner === undefined) return null
-  if (!banner) return ''
-  return JSON.stringify({ kind: banner.kind, html: banner.html })
-}
-
 export function bannerSrcDoc(html: string) {
   const trimmed = html.trim()
   if (/^\s*<(!doctype|html[\s>])/i.test(trimmed)) return trimmed

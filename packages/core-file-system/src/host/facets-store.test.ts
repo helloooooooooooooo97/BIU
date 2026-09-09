@@ -49,9 +49,11 @@ test('sqlite file round-trips facet catalog and stamp index', async () => {
   store.replace([{ id: 'dp', label: '动态规划', fields: [{ key: 'complexity', type: 'string' }] }])
   store.indexRecord('/pages', 'home', '首页', ['dp'])
   store.indexRecord('/notes', 'n1', '草稿', ['dp'])
+  store.writeRecordBanner('/pages', 'home', { kind: 'html', html: '<section>cover</section>' })
 
   const again = new FacetStore()
   again.open(path)
+  assert.deepEqual(again.recordBanner('/pages', 'home'), { kind: 'html', html: '<section>cover</section>' })
   assert.equal(again.list()[0]?.label, '动态规划')
   const collected = again.collect('动态规划')
   assert.equal(collected.facet?.id, 'dp')
@@ -90,13 +92,13 @@ test('sqlite stores emoji and tags overlay without wiping the other', () => {
   assert.equal(store.recordMeta('/plugins', 'demo'), null)
 })
 
-test('sqlite stores html banner overlay without wiping emoji', () => {
+test('sqlite stores html banner in its own table without wrapping json', () => {
   const store = new FacetStore()
   store.writeRecordMeta('/pages', 'home', { emoji: '🏠' })
-  store.writeRecordMeta('/pages', 'home', { banner: { kind: 'htmlframe', html: '<div>live</div>' } })
+  store.writeRecordBanner('/pages', 'home', { kind: 'htmlframe', html: '<div>live</div>' })
   assert.equal(store.recordMeta('/pages', 'home')?.emoji, '🏠')
-  assert.deepEqual(store.recordMeta('/pages', 'home')?.banner, { kind: 'htmlframe', html: '<div>live</div>' })
-  store.writeRecordMeta('/pages', 'home', { banner: null })
-  assert.equal(store.recordMeta('/pages', 'home')?.banner, null)
+  assert.deepEqual(store.recordBanner('/pages', 'home'), { kind: 'htmlframe', html: '<div>live</div>' })
+  store.writeRecordBanner('/pages', 'home', null)
+  assert.equal(store.recordBanner('/pages', 'home'), null)
   assert.equal(store.recordMeta('/pages', 'home')?.emoji, '🏠')
 })
