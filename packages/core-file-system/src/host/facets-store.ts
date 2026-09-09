@@ -480,6 +480,13 @@ export class FacetStore {
     })
   }
 
+  forgetBannerGallery(id: string) {
+    const key = id.trim()
+    if (!key) return false
+    const result = this.ensure().prepare('DELETE FROM banner_gallery WHERE id = ?').run(key)
+    return Number(result.changes) > 0
+  }
+
   writeRecordMeta(
     collection: string,
     recordId: string,

@@ -1559,6 +1559,19 @@ export function apply(ctx: Context) {
   ctx.http.route('GET', '/api/db/banner-gallery', (route) =>
     send(route, () => ({ items: db.facets.listBannerGallery() })),
   )
+  ctx.http.route('POST', '/api/db/banner-gallery', async (route) => {
+    try {
+      const body = (await route.json()) as { id?: string }
+      const id = String(body?.id ?? '').trim()
+      if (!id) {
+        route.send(400, { error: 'id required' })
+        return
+      }
+      route.send(200, { ok: db.facets.forgetBannerGallery(id) })
+    } catch (error) {
+      route.send(400, { error: String(error) })
+    }
+  })
   ctx.http.route('GET', '/api/db/stat', (route) => send(route, () => db.stat(route.query.get('path') || '/')))
   ctx.http.route('GET', '/api/db/content', (route) => send(route, () => db.content(route.query.get('path') || '/')))
   ctx.http.route('POST', '/api/db/content', async (route) => {
