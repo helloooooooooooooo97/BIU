@@ -110,10 +110,22 @@ export function AppDialog({
     <div
       className="fsdb-dlg-backdrop"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !disabled) onCancel()
+        if (event.target === event.currentTarget) onCancel()
       }}
     >
-      <div className="fsdb-dlg" role="dialog" aria-modal="true" aria-label={title} onMouseDown={(event) => event.stopPropagation()}>
+      <div
+        className="fsdb-dlg"
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        onMouseDown={(event) => event.stopPropagation()}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') {
+            event.stopPropagation()
+            onCancel()
+          }
+        }}
+      >
         <div className="fsdb-dlg-title">{title}</div>
         <div className="fsdb-dlg-body">
           {input ? (
@@ -136,7 +148,7 @@ export function AppDialog({
         </div>
         <div className="fsdb-dlg-actions">
           {hideCancel ? null : (
-            <button type="button" className="fsdb-dlg-cancel" disabled={disabled} onClick={onCancel}>
+            <button type="button" className="fsdb-dlg-cancel" onClick={onCancel}>
               取消
             </button>
           )}
