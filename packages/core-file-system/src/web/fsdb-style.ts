@@ -237,7 +237,7 @@ const CSS = `
 .fsdb-page .tasks-table .fsdb-col-resizer::after{content:"";position:absolute;top:0;bottom:0;left:50%;width:4px;transform:translateX(-50%);background:transparent;pointer-events:none}
 .fsdb-page .tasks-table .fsdb-col-resizer:hover::after,.fsdb-page .tasks-table .fsdb-col-resizer.is-active::after{background:var(--dsw-pick,#5b9fd6)}
 .fsdb-page .tasks-table.is-col-resize{cursor:col-resize;user-select:none}
-.fsdb-row-check{position:relative;top:auto;left:auto;z-index:12;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;margin:0;transform:none;opacity:1;pointer-events:auto}
+.fsdb-row-check{position:relative;top:auto;left:auto;z-index:12;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;margin:0;transform:none;opacity:0;pointer-events:auto}
 .fsdb-check-slot.is-hover .fsdb-row-check,.fsdb-row-check.is-on,.fsdb-row-check:hover,.fsdb-row-check:focus-visible{opacity:1}
 .fsdb-page .tasks-th{display:inline-flex;align-items:center;gap:5px;font-weight:600;white-space:nowrap;flex-wrap:nowrap}
 .fsdb-page .tasks-th svg{color:inherit}
@@ -358,11 +358,10 @@ const CSS = `
 .fsdb-page-banner{position:relative;flex:none;box-sizing:border-box;margin:-80px -80px 16px calc(var(--fsdb-check-gutter) - 80px);width:calc(100% + 160px - var(--fsdb-check-gutter));height:240px;overflow:hidden;background:#161616;border-radius:0}
 .fsdb-detail-main .fsdb-page-banner{margin:-80px -80px 16px;width:calc(100% + 160px)}
 .fsdb-page-banner iframe{display:block;width:100%;height:100%;border:0;pointer-events:none;background:transparent}
-.fsdb-banner-title-actions{display:flex;align-items:center;min-height:22px;opacity:0;pointer-events:none}
-.fsdb-detail-title-row:hover .fsdb-banner-title-actions,.fsdb-detail-title-row:focus-within .fsdb-banner-title-actions{opacity:1;pointer-events:auto}
-.fsdb-banner-title-btns{display:inline-flex;align-items:center;gap:8px}
-.fsdb-banner-title-btns button{margin:0;border:0;padding:0;background:transparent;color:#ACA9A4;font:inherit;font-size:12px;font-weight:600;cursor:pointer}
-.fsdb-banner-title-btns button:hover{color:#F0EFED}
+.fsdb-banner-title-actions{position:absolute;left:0;bottom:100%;z-index:6;display:flex;align-items:center;margin:0 0 2px;min-height:0;opacity:0;pointer-events:none}
+.fsdb-detail-title-row:hover .fsdb-banner-title-actions,.fsdb-detail-title-row:focus-within .fsdb-banner-title-actions,.fsdb-banner-title-actions:has([data-state=open]){opacity:1;pointer-events:auto}
+.fsdb-banner-ico{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;margin:0;border:0;border-radius:6px;padding:0;background:transparent;color:#ACA9A4;cursor:pointer}
+.fsdb-banner-ico:hover,.fsdb-banner-ico[data-state=open]{background:var(--dsw-hover);color:#F0EFED}
 .fsdb-banner-pop{width:min(420px,calc(100vw - 32px));max-height:min(460px,70vh);display:flex;flex-direction:column;background:#252525;border:1px solid var(--dsw-border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.28);overflow:hidden;z-index:80}
 .fsdb-banner-pop-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border-bottom:1px solid var(--dsw-border)}
 .fsdb-banner-pop-tabs{display:flex;gap:2px}
@@ -442,7 +441,7 @@ const CSS = `
 .fsdb-prop-val .fsdb-plain-input:focus{text-overflow:clip}
 .fsdb-prop-val .fsdb-link{display:block;overflow-wrap:normal}
 .fsdb-detail-title-row{display:flex;align-items:flex-start;gap:12px;min-width:0;padding-bottom:16px}
-.fsdb-detail-title-block{display:flex;flex:1;min-width:0;flex-direction:column;gap:6px}
+.fsdb-detail-title-block{position:relative;display:flex;flex:1;min-width:0;flex-direction:column;gap:6px}
 .fsdb-detail-actionbar{position:sticky;top:calc(100% - 35px);z-index:26;display:flex;justify-content:center;width:100%;height:0;min-height:0;overflow:visible;pointer-events:none}
 .fsdb-page.is-plugins .fsdb-detail-actionbar{top:calc(100% - 55px)}
 .fsdb-detail-actions{pointer-events:auto;display:inline-flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:4px;margin:0;padding:0;background:transparent;transform:translateY(-100%)}

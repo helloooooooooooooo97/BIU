@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { forwardRef, useEffect, useMemo, useState } from 'react'
+import { PhotoIcon } from '@heroicons/react/16/solid'
 import { HeadlessPopover } from '@biu/public-ui'
 import { getPick } from '@biu/core-pick/web'
 import {
@@ -92,10 +93,6 @@ export function BannerTitleActions({
   const banner = parsePageBanner(value)
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<PageBannerKind>(banner?.kind ?? 'html')
-  const openTab = (next: PageBannerKind) => {
-    setTab(next)
-    setOpen(true)
-  }
   if (!writable) return null
   return (
     <div className="fsdb-banner-title-actions" data-testid="fsdb-banner-title-actions">
@@ -106,32 +103,15 @@ export function BannerTitleActions({
         align="start"
         sideOffset={6}
         trigger={
-          <span className="fsdb-banner-title-btns">
-            <button
-              type="button"
-              data-testid="fsdb-banner-static"
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={(event) => {
-                event.preventDefault()
-                event.stopPropagation()
-                openTab('html')
-              }}
-            >
-              静态背景
-            </button>
-            <button
-              type="button"
-              data-testid="fsdb-banner-live"
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={(event) => {
-                event.preventDefault()
-                event.stopPropagation()
-                openTab('htmlframe')
-              }}
-            >
-              动态背景
-            </button>
-          </span>
+          <button
+            type="button"
+            className="fsdb-banner-ico"
+            data-testid="fsdb-banner-open"
+            aria-label="背景"
+            title="背景"
+          >
+            <PhotoIcon aria-hidden className="size-[14px]" />
+          </button>
         }
       >
         <BannerGallery
@@ -154,23 +134,18 @@ export function BannerTitleActions({
   )
 }
 
-function BannerGallery({
-  tab,
-  onTab,
-  hasBanner,
-  path,
-  title,
-  onPick,
-  onRemove,
-}: {
-  tab: PageBannerKind
-  onTab: (next: PageBannerKind) => void
-  hasBanner: boolean
-  path?: string
-  title?: string
-  onPick: (next: BannerValue) => void
-  onRemove: () => void
-}) {
+const BannerGallery = forwardRef<
+  HTMLDivElement,
+  {
+    tab: PageBannerKind
+    onTab: (next: PageBannerKind) => void
+    hasBanner: boolean
+    path?: string
+    title?: string
+    onPick: (next: BannerValue) => void
+    onRemove: () => void
+  }
+>(function BannerGallery({ tab, onTab, hasBanner, path, title, onPick, onRemove }, ref) {
   const [mine, setMine] = useState<GalleryItem[]>([])
   useEffect(() => {
     let cancelled = false
@@ -187,7 +162,7 @@ function BannerGallery({
   }, [tab])
   const mineOfTab = mine.filter((item) => item.kind === tab)
   return (
-    <div className="fsdb-banner-pop" role="dialog" aria-label="选择背景" data-testid="fsdb-banner-gallery">
+    <div ref={ref} className="fsdb-banner-pop" role="dialog" aria-label="选择背景" data-testid="fsdb-banner-gallery">
       <div className="fsdb-banner-pop-bar">
         <div className="fsdb-banner-pop-tabs">
           <button type="button" aria-pressed={tab === 'html'} onClick={() => onTab('html')}>
@@ -254,7 +229,7 @@ function BannerGallery({
       </div>
     </div>
   )
-}
+})
 
 function BannerThumb({
   kind,
