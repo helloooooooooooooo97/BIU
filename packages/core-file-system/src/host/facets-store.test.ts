@@ -101,4 +101,6 @@ test('sqlite stores html banner in its own table without wrapping json', () => {
   store.writeRecordBanner('/pages', 'home', null)
   assert.equal(store.recordBanner('/pages', 'home'), null)
   assert.equal(store.recordMeta('/pages', 'home')?.emoji, '🏠')
+  store.writeRecordBanner('/pages', 'home', { kind: 'html', html: '<div>custom-cover</div>' })
+  assert.equal(store.listBannerGallery().some((item) => item.html.includes('custom-cover')), true)
 })

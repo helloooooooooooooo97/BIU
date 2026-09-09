@@ -1556,6 +1556,9 @@ export function apply(ctx: Context) {
     }),
   )
   ctx.http.route('GET', '/api/db/read', (route) => send(route, () => db.read(route.query.get('path') || '/')))
+  ctx.http.route('GET', '/api/db/banner-gallery', (route) =>
+    send(route, () => ({ items: db.facets.listBannerGallery() })),
+  )
   ctx.http.route('GET', '/api/db/stat', (route) => send(route, () => db.stat(route.query.get('path') || '/')))
   ctx.http.route('GET', '/api/db/content', (route) => send(route, () => db.content(route.query.get('path') || '/')))
   ctx.http.route('POST', '/api/db/content', async (route) => {
