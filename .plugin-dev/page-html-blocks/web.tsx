@@ -75,10 +75,10 @@ function SourceEditor({ html, onChange }: { html: string; onChange: (v: string) 
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: 12,
         lineHeight: 1.55,
-        color: '#d4d4d4',
-        background: '#0d1117',
-        border: '1px dashed #3b3b54',
-        borderRadius: 8,
+        color: '#111',
+        background: '#fff',
+        border: '2px solid #111',
+        borderRadius: 0,
         resize: 'vertical',
       }}
     />
@@ -103,6 +103,8 @@ function ExpandGlyph({ shrink }: { shrink?: boolean }) {
   )
 }
 
+const inkFace = "'Helvetica Neue', Arial, sans-serif"
+
 const barBtn: Record<string, unknown> = {
   cursor: 'pointer',
   border: 'none',
@@ -112,6 +114,23 @@ const barBtn: Record<string, unknown> = {
   color: '#c9cdd6',
   fontWeight: 700,
   fontSize: 11,
+  lineHeight: '16px',
+  display: 'inline-flex',
+  alignItems: 'center',
+}
+
+const pressBtn: Record<string, unknown> = {
+  cursor: 'pointer',
+  border: 'none',
+  borderRight: '2px solid #111',
+  borderRadius: 0,
+  padding: '6px 10px',
+  background: '#fff',
+  color: '#111',
+  fontFamily: inkFace,
+  fontWeight: 800,
+  fontSize: 10,
+  letterSpacing: '.12em',
   lineHeight: '16px',
   display: 'inline-flex',
   alignItems: 'center',
@@ -219,7 +238,7 @@ function HtmlDeckOverlay({
               maxHeight: '100%',
               overflow: 'auto',
               border: 'none',
-              background: '#0b0b12',
+              background: '#fff',
             }}
           />
         ) : (
@@ -404,7 +423,7 @@ function SizeGrip({
         cursor: 'nwse-resize',
         border: 'none',
         borderRadius: 2,
-        background: 'linear-gradient(135deg, transparent 50%, rgba(255,255,255,.55) 50%)',
+        background: 'linear-gradient(135deg, transparent 46%, #111 46%)',
         opacity: show ? 1 : 0,
         pointerEvents: show ? 'auto' : 'none',
         transition: 'opacity .12s ease',
@@ -416,7 +435,6 @@ function FloatBar({
   editing,
   setEditing,
   ro,
-  accent,
   onExpand,
   deck,
   onDeck,
@@ -427,7 +445,6 @@ function FloatBar({
   editing: boolean
   setEditing: (v: boolean) => void
   ro: boolean
-  accent: string
   onExpand: () => void
   deck: boolean
   onDeck?: (next: boolean) => void
@@ -435,15 +452,15 @@ function FloatBar({
   onResetSize?: () => void
   children?: unknown
 }) {
-  const seg = (active: boolean, onClick: () => void, label: string) => (
+  const seg = (active: boolean, onClick: () => void, label: string, on: string, onInk: string) => (
     <button
       type="button"
       tabIndex={-1}
       onClick={onClick}
       style={{
-        ...barBtn,
-        background: active ? accent : 'transparent',
-        color: active ? '#0d1117' : '#c9cdd6',
+        ...pressBtn,
+        background: active ? on : '#fff',
+        color: active ? onInk : '#111',
       }}
     >
       {label}
@@ -455,26 +472,27 @@ function FloatBar({
       data-biu-ignore
       style={{
         position: 'absolute',
-        top: 6,
-        right: 6,
+        top: 8,
+        right: 8,
         zIndex: 20,
         display: 'flex',
-        gap: 2,
-        alignItems: 'center',
-        padding: 3,
-        borderRadius: 10,
-        background: 'rgba(20,20,28,.88)',
-        border: '1px solid #3b3b54',
-        boxShadow: '0 4px 16px rgba(0,0,0,.4)',
-        font: '12px/1.4 ui-sans-serif, system-ui, sans-serif',
-        backdropFilter: 'blur(6px)',
+        gap: 0,
+        alignItems: 'stretch',
+        padding: 0,
+        borderRadius: 0,
+        background: '#fff',
+        border: '2px solid #111',
+        boxShadow: '4px 4px 0 #111',
+        fontFamily: inkFace,
+        fontSize: 10,
+        lineHeight: 1.2,
       }}
     >
       {children}
       {ro ? null : (
         <>
-          {seg(!editing, () => setEditing(false), '预览')}
-          {seg(editing, () => setEditing(true), '编辑')}
+          {seg(!editing, () => setEditing(false), '预览', '#1c7cff', '#fff')}
+          {seg(editing, () => setEditing(true), '编辑', '#ffd400', '#111')}
           {sized ? (
             <button
               type="button"
@@ -483,7 +501,7 @@ function FloatBar({
               title="恢复自适应宽高"
               aria-label="恢复自适应宽高"
               onClick={() => onResetSize?.()}
-              style={barBtn}
+              style={{ ...pressBtn, background: '#ffd400' }}
             >
               自适应
             </button>
@@ -497,9 +515,9 @@ function FloatBar({
             aria-pressed={deck}
             onClick={() => onDeck?.(!deck)}
             style={{
-              ...barBtn,
-              background: deck ? accent : 'transparent',
-              color: deck ? '#0d1117' : '#8b93a7',
+              ...pressBtn,
+              background: deck ? '#ff2a6d' : '#fff',
+              color: deck ? '#fff' : '#111',
             }}
           >
             演示
@@ -515,7 +533,7 @@ function FloatBar({
         aria-label="放大放映"
         onMouseDown={(event) => event.preventDefault()}
         onClick={onExpand}
-        style={barBtn}
+        style={{ ...pressBtn, borderRight: 'none' }}
       >
         <ExpandGlyph />
       </button>
@@ -527,14 +545,18 @@ function FloatBar({
    1) kind=html：直接渲染（无 iframe，无脚本）——内容裸渲染，无外框
    ============================================================ */
 
-const HTML_DIRECT_SAMPLE = `<div style="font-family:ui-sans-serif,system-ui;border-radius:12px;overflow:hidden;border:1px solid #30363d;background:linear-gradient(135deg,#1e1e1e,#27203f);color:#e6edf3;padding:18px 20px">
-  <div style="font-size:11px;letter-spacing:.14em;color:#a78bfa;font-weight:700;text-transform:uppercase">html · 直接渲染</div>
-  <div style="font-size:20px;font-weight:700;margin:8px 0 4px">静态富排版，不跑脚本</div>
-  <div style="color:#9ca3af;font-size:13px;line-height:1.75">HTML / CSS 原样呈现，适合做卡片、表格、配色版式、嵌入图片与幻灯片排版。脚本会被忽略。</div>
-  <div style="display:flex;gap:8px;margin-top:14px">
-    <span style="background:#7c5cfc;color:#0d1117;font-weight:700;border-radius:999px;padding:2px 12px;font-size:12px">静态内容</span>
-    <span style="background:#3b82f6;color:#0d1117;font-weight:700;border-radius:999px;padding:2px 12px;font-size:12px">直接进文档</span>
-    <span style="border:1px solid #30363d;color:#8b949e;border-radius:999px;padding:2px 12px;font-size:12px">无脚本</span>
+const HTML_DIRECT_SAMPLE = `<div style="font-family:'Helvetica Neue','Arial',sans-serif;background:#ffffff;border:2px solid #111;color:#111;margin:0;display:flex;flex-direction:column">
+  <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #111;padding:8px 12px;font-size:11px;letter-spacing:.15em">
+    <span style="font-weight:700">直出 HTML ・ 无脚本</span><span style="font-weight:800">自 2024</span>
+  </div>
+  <div style="background:#1c7cff;color:#fff;font-size:34px;font-weight:900;line-height:1.05;padding:16px;letter-spacing:-.02em">丰富<br>排版，<br>不跑脚本。</div>
+  <div style="display:flex;gap:0;flex:1">
+    <div style="flex:1.4;padding:12px;font-size:13px;line-height:1.7;font-weight:500">纯 HTML / CSS 直接进文档，适合卡片、表格、配色与杂志网格。这里的脚本会被忽略。</div>
+    <div style="flex:1;border-left:2px solid #111;display:flex;flex-direction:column;gap:6px;padding:12px;font-size:10px;font-weight:800">
+      <span style="background:#ffd400;padding:2px 6px">静态</span>
+      <span style="background:#ff2a6d;color:#fff;padding:2px 6px">无脚本</span>
+      <span style="border:1.5px solid #111;padding:2px 6px">直出</span>
+    </div>
   </div>
 </div>`
 
@@ -574,7 +596,6 @@ function HtmlDirectCard({ data, update, writable }: BlockProps) {
           editing={editing}
           setEditing={setEditing}
           ro={ro}
-          accent="#7c5cfc"
           onExpand={deck.start}
           deck={deckOn}
           onDeck={(next) => update({ deck: next })}
@@ -598,14 +619,20 @@ function HtmlDirectCard({ data, update, writable }: BlockProps) {
    同样无外框，iframe 本身不再描边
    ============================================================ */
 
-const HTML_FRAME_SAMPLE = `<div style="font-family:ui-sans-serif,system-ui;padding:14px 16px;background:linear-gradient(135deg,#0f172a,#1e3a5f);color:#e2e8f0;border-radius:10px">
-  <div style="font-size:11px;letter-spacing:.14em;color:#7dd3fc;font-weight:700;text-transform:uppercase">htmlframe · iframe 沙箱</div>
-  <div style="font-size:18px;font-weight:700;margin:8px 0 4px">隔离的小网页，可以跑脚本</div>
-  <p style="color:#94a3b8;font-size:13px;line-height:1.6;margin:0 0 10px">下面的按钮和小时钟就是这个 iframe 里自己跑的 JS：</p>
-  <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-    <button id="cnt" style="cursor:pointer;border:none;border-radius:8px;background:#38bdf8;color:#0f172a;font-weight:700;padding:6px 14px;font-size:13px">点我 +1</button>
-    <span id="num" style="font-size:16px;font-weight:700;color:#fbbf24">0</span>
-    <span id="clock" style="margin-left:auto;font-size:13px;color:#7dd3fc;font-variant-numeric:tabular-nums"></span>
+const HTML_FRAME_SAMPLE = `<div style="font-family:'Helvetica Neue','Arial',sans-serif;background:#ffffff;border:2px solid #111;color:#111;margin:0;display:flex;flex-direction:column">
+  <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #111;padding:8px 12px;font-size:11px;letter-spacing:.15em">
+    <span style="font-weight:700">沙箱 HTML ・ 可脚本</span><span style="font-weight:800">自 2024</span>
+  </div>
+  <div style="background:#1c7cff;color:#fff;font-size:34px;font-weight:900;line-height:1.05;padding:16px;letter-spacing:-.02em">丰富<br>排版，<br>能跑脚本。</div>
+  <div style="display:flex;gap:0;flex:1">
+    <div style="flex:1.4;padding:12px;font-size:13px;line-height:1.7;font-weight:500">同样是杂志网格，但这份在 iframe 里隔离运行。右侧色块和下方计数、时钟来自沙箱自己的 JS。</div>
+    <div style="flex:1;border-left:2px solid #111;display:flex;flex-direction:column;gap:6px;padding:12px;font-size:10px;font-weight:800">
+      <span style="background:#ffd400;padding:2px 6px">沙箱</span>
+      <span style="background:#ff2a6d;color:#fff;padding:2px 6px">可脚本</span>
+      <span style="border:1.5px solid #111;padding:2px 6px">IFRAME</span>
+      <button id="cnt" type="button" style="cursor:pointer;margin-top:4px;border:2px solid #111;background:#1c7cff;color:#fff;font:800 10px/1.2 'Helvetica Neue',Arial,sans-serif;padding:6px 8px">点一下 <span id="num">0</span></button>
+      <span id="clock" style="font-variant-numeric:tabular-nums;letter-spacing:.08em">--:--:--</span>
+    </div>
   </div>
 </div>
 <script>
@@ -660,16 +687,16 @@ function HtmlFrameCard({ data, update, writable }: BlockProps) {
       onMouseLeave={() => setHover(false)}
     >
       {(hover || editing) && (
-        <FloatBar editing={editing} setEditing={setEditing} ro={ro} accent="#38bdf8" onExpand={deck.start} deck={deckOn} onDeck={(next) => update({ deck: next })}>
+        <FloatBar editing={editing} setEditing={setEditing} ro={ro} onExpand={deck.start} deck={deckOn} onDeck={(next) => update({ deck: next })}>
           {ro ? null : (
-            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, paddingLeft: 6, color: '#8b93a7', fontSize: 11 }}>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '0 8px', color: '#111', fontSize: 10, fontWeight: 800, letterSpacing: '.12em', borderRight: '2px solid #111' }}>
               H
               <input
                 type="number"
                 min={80}
                 value={height}
                 onChange={(e) => update({ height: Number(e.target.value) || 300 })}
-                style={{ width: 52, border: '1px solid #3b3b54', borderRadius: 6, background: 'rgba(255,255,255,.05)', color: '#e6e6f0', padding: '1px 6px', fontSize: 12 }}
+                style={{ width: 52, border: '2px solid #111', borderRadius: 0, background: '#fff', color: '#111', padding: '1px 4px', fontSize: 12, fontFamily: inkFace }}
               />
             </label>
           )}
@@ -685,7 +712,7 @@ function HtmlFrameCard({ data, update, writable }: BlockProps) {
           srcDoc={html}
           sandbox="allow-scripts"
           onLoad={stampFrame}
-          style={{ display: 'block', width: '100%', height, border: 'none', background: '#15151f' }}
+          style={{ display: 'block', width: '100%', height, border: 'none', background: '#fff' }}
         />
       )}
       {deck.overlay}
