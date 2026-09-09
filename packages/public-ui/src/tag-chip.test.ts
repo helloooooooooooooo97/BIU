@@ -15,7 +15,7 @@ test('TagChip ships the tinted chip markup', () => {
   assert.match(src, /function TagChip/)
   assert.match(src, /className=\{\`biu-tag/)
   assert.match(src, /color-mix\(in srgb,var\(--biu-tag/)
-  assert.match(src, /28%,#F0EFED/)
+  assert.match(src, /16%,#fff/)
   assert.match(src, /22%,transparent/)
   assert.match(src, /function tagTextColor/)
   assert.match(src, /icon\?: ReactNode/)
