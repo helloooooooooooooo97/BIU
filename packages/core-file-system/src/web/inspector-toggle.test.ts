@@ -186,6 +186,7 @@ test('deletable tables can pick rows and bulk-act over the table header', () => 
   assert.match(browser, /\{pickedIds\.length\} 已选/)
   const bulkCss = readFileSync(resolve(import.meta.dirname, './fsdb-style.ts'), 'utf8')
   assert.match(bulkCss, /\.fsdb-bulk\{[^}]*position:absolute/)
+  assert.match(bulkCss, /\.fsdb-bulk\{[^}]*left:var\(--fsdb-check-gutter\)/)
   assert.match(bulkCss, /\.fsdb-bulk-count\{[^}]*color:var\(--dsw-pick/)
   assert.match(browser, /kind: 'delete-records'/)
   assert.match(browser, /kind: 'bulk-edit'/)
