@@ -2270,16 +2270,8 @@ export function CollectionBrowser({
                   setCellPop(cellUsesPop(kind, col.field.writable) ? { id: row.id, key: col.key } : null)
                 }}
               >
-                {col.key === titleColKey ? (
-                  <span className="fsdb-title-lead">
-                    <RowCheck id={row.id} />
-                    {col.key === schema?.labelField ? (
-                      <RecordTitle row={row} depth={depth} hasKids={hasKids} kidCount={kidCount} />
-                    ) : (
-                      <span className="fsdb-cell">{renderCell(row, col.key, col.field, 'table')}</span>
-                    )}
-                  </span>
-                ) : col.key === schema?.labelField ? (
+                {col.key === titleColKey ? <RowCheck id={row.id} /> : null}
+                {col.key === schema?.labelField ? (
                   <RecordTitle row={row} depth={depth} hasKids={hasKids} kidCount={kidCount} />
                 ) : (
                   <span className="fsdb-cell">{renderCell(row, col.key, col.field, 'table')}</span>
@@ -3011,8 +3003,8 @@ export function CollectionBrowser({
                       ...(tone ? { ['--biu-tag' as string]: tone } : {}),
                     }}
                   >
+                    {col.key === titleColKey ? <RowCheck ids={pickableIds} /> : null}
                     <span className="tasks-th">
-                      {col.key === titleColKey ? <RowCheck ids={pickableIds} /> : null}
                       <FieldGlyph kind={col.kind} />
                       {facetColumnTitle(col)}
                     </span>
