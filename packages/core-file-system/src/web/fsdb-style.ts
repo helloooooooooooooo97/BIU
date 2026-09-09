@@ -188,6 +188,8 @@ const CSS = `
 .fsdb-page .tasks-tree-toggle.is-empty{cursor:default;pointer-events:none}
 .fsdb-page .tasks-tree-toggle.is-empty:hover{background:transparent}
 .fsdb-page .fsdb-title-text{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.fsdb-page .fsdb-title-lead{display:flex;align-items:center;gap:0;min-width:0;width:100%;max-width:100%}
+.fsdb-page .fsdb-title-lead > .fsdb-title-host,.fsdb-page .fsdb-title-lead > .fsdb-cell{flex:1;min-width:0}
 .fsdb-page .fsdb-title-host{position:relative;display:inline-flex;align-items:center;gap:6px;min-width:0;width:100%;max-width:100%;flex:1;overflow:hidden}
 .fsdb-page .fsdb-table-record-icon{position:relative;flex:none;display:inline-flex;align-items:center}
 .fsdb-page .fsdb-table-emoji-btn{display:inline-flex;align-items:center;justify-content:center;margin:0;border:0;padding:0;background:transparent;color:inherit;font:inherit;line-height:1;cursor:pointer}
@@ -228,13 +230,9 @@ const CSS = `
 .fsdb-page .tasks-table .fsdb-col-resizer::after{content:"";position:absolute;top:0;bottom:0;left:50%;width:4px;transform:translateX(-50%);background:transparent;pointer-events:none}
 .fsdb-page .tasks-table .fsdb-col-resizer:hover::after,.fsdb-page .tasks-table .fsdb-col-resizer.is-active::after{background:var(--dsw-pick,#5b9fd6)}
 .fsdb-page .tasks-table.is-col-resize{cursor:col-resize;user-select:none}
-.fsdb-row-check{position:absolute;top:50%;left:0;z-index:3;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;margin:0;transform:translate(-100%,-50%);opacity:0;pointer-events:none}
-.fsdb-page .tasks-table td:has(.fsdb-title-host),.fsdb-page .tasks-table th:has(.fsdb-row-check){position:relative}
-.fsdb-page .tasks-table td:has(.fsdb-title-host)::before,.fsdb-page .tasks-table th:has(.fsdb-row-check)::before{content:"";position:absolute;left:calc(var(--fsdb-check-gutter) * -1);top:0;bottom:0;width:var(--fsdb-check-gutter)}
-.fsdb-page .tasks-table td:has(.fsdb-title-host) > .fsdb-row-check,.fsdb-page .tasks-table th:has(.fsdb-row-check) > .fsdb-row-check{left:0;margin-left:-4px}
-.tasks-table tbody tr:hover .fsdb-row-check,.tasks-queue-item:hover .fsdb-row-check,.tasks-minicard:hover .fsdb-row-check,.fsdb-row-check.is-on,.fsdb-row-check:focus-visible{opacity:1;pointer-events:auto}
-.fsdb-page .tasks-table:has(.fsdb-row-check.is-on) tbody .fsdb-row-check{opacity:1;pointer-events:auto}
-.fsdb-page .tasks-table thead .fsdb-row-check{opacity:1;pointer-events:auto}
+.fsdb-row-check{position:relative;z-index:3;display:inline-flex;flex:none;align-items:center;justify-content:center;width:18px;height:18px;margin:0 6px 0 0;vertical-align:middle;opacity:1;pointer-events:auto}
+.fsdb-row-check .fsdb-boolbox{width:15px;height:15px;border-color:var(--dsw-label-2);background:var(--dsw-surface)}
+.fsdb-row-check.is-on .fsdb-boolbox{border-color:transparent;background:var(--dsw-pick,#2383e2)}
 .fsdb-page .tasks-th{display:inline-flex;align-items:center;gap:5px;font-weight:600;white-space:nowrap;flex-wrap:nowrap}
 .fsdb-page .tasks-th svg{color:inherit}
 .fsdb-page .tasks-table tr{cursor:default}
@@ -350,7 +348,6 @@ const CSS = `
 .fsdb-page.is-sheet .tasks-main{padding:0;gap:8px;max-width:none}
 .fsdb-page.is-sheet .fsdb-right-body{overflow:hidden}
 .fsdb-page.is-sheet .tasks-table-wrap{width:100%;margin-left:0;padding-left:0}
-.fsdb-page.is-sheet .tasks-table td:has(.fsdb-title-host)::before,.fsdb-page.is-sheet .tasks-table th:has(.fsdb-row-check)::before{content:none;width:0}
 .fsdb-detail-aside{display:flex;flex-direction:column;gap:2px;padding:0 0 12px}
 .fsdb-detail-aside .fsdb-proprow-k,.fsdb-detail-aside .fsdb-prop>span:first-child,.fsdb-detail-aside .fsdb-proprow-label{color:#ACA9A4}
 .fsdb-detail-aside .fsdb-proprow-k svg,.fsdb-detail-aside .fsdb-prop>span:first-child svg{color:#ACA9A4;opacity:1}
