@@ -1,3 +1,4 @@
+import { stringify as stringifyYaml } from 'yaml'
 import { normalizeSchemaValue } from '@biu/type-file-system'
 
 const SKIP = new Set(['content', 'description', 'notes', 'body', 'banner'])
@@ -31,48 +32,6 @@ function asIso(value: unknown): string | undefined {
   if (!Number.isFinite(n) || n <= 0) return undefined
   const date = new Date(n)
   return Number.isNaN(date.getTime()) ? undefined : date.toISOString()
-}
-
-function yamlScalar(value: unknown): string {
-  if (value == null) return 'null'
-  if (typeof value === 'boolean') return value ? 'true' : 'false'
-  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
-  const text = String(value)
-  if (/[:#{}[\],&*?|<>=!%@`'"\\\n\r]/.test(text) || /^(true|false|null|~)$/i.test(text) || text === '') {
-    return JSON.stringify(text)
-  }
-  return text
-}
-
-function yamlDump(value: unknown, indent = 0): string {
-  const pad = '  '.repeat(indent)
-  if (value == null || typeof value !== 'object') return yamlScalar(value)
-  if (Array.isArray(value)) {
-    if (!value.length) return '[]'
-    return value
-      .map((item) => {
-        if (item && typeof item === 'object') {
-          const nested = yamlDump(item, indent + 1).split('\n')
-          return `${pad}- ${nested[0]}\n${nested.slice(1).map((line) => `${pad}  ${line}`).join('\n')}`.trimEnd()
-        }
-        return `${pad}- ${yamlScalar(item)}`
-      })
-      .join('\n')
-  }
-  const rec = value as Record<string, unknown>
-  const keys = Object.keys(rec).filter((key) => hasValue(rec[key]))
-  if (!keys.length) return '{}'
-  return keys
-    .map((key) => {
-      const child = rec[key]
-      if (child && typeof child === 'object') {
-        const nested = yamlDump(child, indent + 1)
-        if (nested === '[]' || nested === '{}') return `${pad}${key}: ${nested}`
-        return `${pad}${key}:\n${nested}`
-      }
-      return `${pad}${key}: ${yamlScalar(child)}`
-    })
-    .join('\n')
 }
 
 function facetMatter(raw: unknown) {
@@ -124,7 +83,7 @@ export function recordMatter(row: Record<string, unknown>, bodyKey?: string | nu
 }
 
 export function recordToMarkdown(row: Record<string, unknown>, body: string, bodyKey?: string | null): string {
-  const yaml = yamlDump(recordMatter(row, bodyKey)).trimEnd()
+  const yaml = stringifyYaml(recordMatter(row, bodyKey), { lineWidth: 0 }).trimEnd()
   return `---\n${yaml}\n---\n${body.replace(/^\n/, '')}`
 }
 
