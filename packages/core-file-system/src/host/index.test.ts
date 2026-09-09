@@ -101,6 +101,33 @@ test('root lists registered collections; record read/update follows schema', asy
   await assert.rejects(() => db.update('/notes/n1', { nope: 1 }), /unknown field/)
 })
 
+test('html banner is stored by file system and never written as a table field', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  const notes = notesCollection()
+  const seen: Record<string, unknown>[] = []
+  const innerUpdate = notes.update!
+  notes.update = async (id, patch) => {
+    seen.push({ ...patch })
+    return innerUpdate(id, patch)
+  }
+  db.register(notes)
+  const written = await db.update('/notes/n1', { banner: { kind: 'html', html: '<div>cover</div>' } })
+  assert.deepEqual(written.value.banner, { kind: 'html', html: '<div>cover</div>' })
+  assert.equal(seen.length, 0)
+  const read = await db.read('/notes/n1')
+  if (read.kind !== 'record') return
+  assert.deepEqual(read.value.banner, { kind: 'html', html: '<div>cover</div>' })
+  assert.equal('banner' in (await notes.get!('n1') ?? {}), false)
+  const listed = await db.list('/notes')
+  if (listed.kind !== 'collection') return
+  assert.equal('banner' in (listed.items.find((row) => row.id === 'n1') ?? {}), false)
+  await db.update('/notes/n1', { banner: null })
+  const cleared = await db.read('/notes/n1')
+  if (cleared.kind !== 'record') return
+  assert.equal('banner' in cleared.value, false)
+})
+
 test('computed fields come from list and cannot be written', async () => {
   const ctx = new Context()
   const db = new DatabaseService(ctx)
@@ -1001,6 +1028,11 @@ test('facet schema can be written on tables that cannot update other fields', as
   if (withTags.kind !== 'record') return
   assert.deepEqual(withTags.value.tags, ['host-ui', 'lab'])
   assert.equal(withTags.value.emoji, '🔌')
+  await db.update('/plugins/p1', { banner: { kind: 'htmlframe', html: '<script></script>' } })
+  const withBanner = await db.read('/plugins/p1')
+  if (withBanner.kind !== 'record') return
+  assert.deepEqual(withBanner.value.banner, { kind: 'htmlframe', html: '<script></script>' })
+  assert.equal(withBanner.value.emoji, '🔌')
 })
 
 test('writeContent can persist intro on tables that cannot update other fields', async () => {

@@ -11,6 +11,7 @@ import {
   type PersonValue,
   type SchemaFieldValue,
 } from '@biu/type-file-system'
+import { parsePageBanner, type PageBanner } from '../page-banner.ts'
 
 type DatabaseSync = import('node:sqlite').DatabaseSync
 
@@ -132,10 +133,18 @@ export class FacetStore {
         updated_by_json TEXT,
         PRIMARY KEY (collection, record_id)
       );
+      CREATE TABLE IF NOT EXISTS record_banners (
+        collection TEXT NOT NULL,
+        record_id TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        html TEXT NOT NULL,
+        PRIMARY KEY (collection, record_id)
+      );
     `)
     this.ensureNotesColumn()
     this.ensureCreatedAtColumn()
     this.ensurePersonMetaColumns()
+    this.ensureBannerTable()
     return this
   }
 
@@ -161,6 +170,39 @@ export class FacetStore {
     const names = new Set(cols.map((col) => col.name))
     if (!names.has('created_by_json')) db.exec(`ALTER TABLE record_meta ADD COLUMN created_by_json TEXT`)
     if (!names.has('updated_by_json')) db.exec(`ALTER TABLE record_meta ADD COLUMN updated_by_json TEXT`)
+  }
+
+  private ensureBannerTable() {
+    const db = this.db!
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS record_banners (
+        collection TEXT NOT NULL,
+        record_id TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        html TEXT NOT NULL,
+        PRIMARY KEY (collection, record_id)
+      )
+    `)
+    const cols = db.prepare('PRAGMA table_info(record_meta)').all() as Array<{ name: string }>
+    if (!cols.some((col) => col.name === 'banner_json')) return
+    const rows = db
+      .prepare('SELECT collection, record_id, banner_json FROM record_meta WHERE banner_json IS NOT NULL AND banner_json != \'\'')
+      .all() as Array<{ collection: string; record_id: string; banner_json: string }>
+    const put = db.prepare(
+      `INSERT INTO record_banners (collection, record_id, kind, html)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(collection, record_id) DO UPDATE SET kind = excluded.kind, html = excluded.html`,
+    )
+    for (const row of rows) {
+      let parsed: PageBanner | null = null
+      try {
+        parsed = parsePageBanner(JSON.parse(row.banner_json))
+      } catch {
+        parsed = parsePageBanner(row.banner_json)
+      }
+      if (!parsed) continue
+      put.run(row.collection, row.record_id, parsed.kind, parsed.html)
+    }
   }
 
   notes(id: string) {
@@ -368,10 +410,37 @@ export class FacetStore {
     }
   }
 
+  recordBanner(collection: string, recordId: string): PageBanner | null {
+    const row = this.ensure()
+      .prepare('SELECT kind, html FROM record_banners WHERE collection = ? AND record_id = ?')
+      .get(collection, recordId) as { kind?: string; html?: string } | undefined
+    if (!row || typeof row.html !== 'string' || !row.html.trim()) return null
+    return parsePageBanner({ kind: row.kind, html: row.html })
+  }
+
+  writeRecordBanner(collection: string, recordId: string, banner: PageBanner | null) {
+    const db = this.ensure()
+    if (!banner) {
+      db.prepare('DELETE FROM record_banners WHERE collection = ? AND record_id = ?').run(collection, recordId)
+      return null
+    }
+    db.prepare(
+      `INSERT INTO record_banners (collection, record_id, kind, html)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(collection, record_id) DO UPDATE SET kind = excluded.kind, html = excluded.html`,
+    ).run(collection, recordId, banner.kind, banner.html)
+    return this.recordBanner(collection, recordId)
+  }
+
   writeRecordMeta(
     collection: string,
     recordId: string,
-    patch: { emoji?: string; tags?: string[]; createdBy?: PersonValue | null; updatedBy?: PersonValue[] | PersonValue | null },
+    patch: {
+      emoji?: string
+      tags?: string[]
+      createdBy?: PersonValue | null
+      updatedBy?: PersonValue[] | PersonValue | null
+    },
   ): { emoji: string | null; tags: string[] | null; createdBy: PersonValue | null; updatedBy: PersonValue[] } {
     this.ensure()
       .prepare(
@@ -401,6 +470,7 @@ export class FacetStore {
     db.prepare('DELETE FROM facet_stamps WHERE collection = ? AND record_id = ?').run(collection, recordId)
     db.prepare('DELETE FROM facet_record_values WHERE collection = ? AND record_id = ?').run(collection, recordId)
     db.prepare('DELETE FROM record_meta WHERE collection = ? AND record_id = ?').run(collection, recordId)
+    db.prepare('DELETE FROM record_banners WHERE collection = ? AND record_id = ?').run(collection, recordId)
   }
 
   stampedIds(collection: string, tagIdOrLabel: string): Set<string> {
