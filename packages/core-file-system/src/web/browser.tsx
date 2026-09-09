@@ -2622,12 +2622,15 @@ export function CollectionBrowser({
             if (!activeViewId) return
             const path = savedViewRecordPath(collectionPath, activeViewId)
             if (!path) return
+            setViewBanner(next)
             void readJson<{ value?: { banner?: unknown } }>('/api/db/update', {
               method: 'POST',
               headers: { 'content-type': 'application/json' },
               body: JSON.stringify({ path, content: { banner: next } }),
             }).then((data) => {
               setViewBanner(data.value?.banner ?? next)
+            }).catch(() => {
+              setViewBanner(next)
             })
           }}
         />
