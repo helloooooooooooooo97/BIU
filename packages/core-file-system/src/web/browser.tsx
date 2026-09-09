@@ -2132,7 +2132,7 @@ export function CollectionBrowser({
     )
   }
 
-  function RecordActions({ row, place }: { row: DbRecord; place: 'row' | 'detail' }) {
+  function RecordActions({ row, place, onDone }: { row: DbRecord; place: 'row' | 'detail'; onDone?: () => void }) {
     const Actions = chrome?.Actions
     const Action = chrome?.Action
     const busy = actingRef.current
@@ -2146,27 +2146,49 @@ export function CollectionBrowser({
           {body}
         </div>
       ) : (
-        <div className="fsdb-detail-actionbar" data-testid="fsdb-detail-actions" data-biu-ignore aria-label="记录操作">
-          <div className="fsdb-detail-actions">{body}</div>
-        </div>
+        <>{body}</>
       )
+    const finish = (action: CollectionActionInfo) => {
+      void runAction(row, action)
+      onDone?.()
+    }
     if (Actions) {
       if (!placed.length) return null
-      return wrap(<Actions actions={placed} record={row} busy={busy} place={place} run={(action) => void runAction(row, action)} />)
+      return wrap(<Actions actions={placed} record={row} busy={busy} place={place} run={finish} />)
     }
     const actions = visibleActions(schema, row, place).filter((action) => {
       if (place !== 'detail' || !nested) return true
       return action.id !== 'open-split' && action.id !== 'open-page'
     })
-    const rowShown = actions.filter(
-      (action) => Action || actionIcon(action.id) || action.id === 'open-split' || action.id === 'open-page',
-    )
+    const rowShown =
+      place === 'detail'
+        ? actions
+        : actions.filter(
+            (action) => Action || actionIcon(action.id) || action.id === 'open-split' || action.id === 'open-page',
+          )
     if (!rowShown.length) return null
     return wrap(
       rowShown.map((action) => {
-        const run = () => void runAction(row, action)
+        const run = () => finish(action)
         if (Action) return <Action key={action.id} action={action} record={row} busy={busy} run={run} />
         const glyph = actionIcon(action.id)
+        if (place === 'detail') {
+          return (
+            <button
+              key={action.id}
+              type="button"
+              role="menuitem"
+              className={`fsdb-detail-more-item${action.tone === 'danger' ? ' is-danger' : ''}`}
+              title={action.label}
+              aria-label={`${action.label} ${labelOf(row)}`}
+              disabled={busy}
+              onClick={run}
+            >
+              {glyph}
+              {action.label}
+            </button>
+          )
+        }
         return (
           <button
             key={action.id}
@@ -3183,6 +3205,7 @@ export function CollectionBrowser({
           writePatch={writePatch}
           tableIcon={currentTable?.view?.icon}
           toolbar={<RecordActions row={selected} place="detail" />}
+          onDelete={canDelete ? () => setDlg({ kind: 'delete-record', row: selected }) : undefined}
           onOpenRecord={(recordId, collection) => onOpenRecord?.(recordId, activeViewId, collection)}
           onPrev={total > 1 ? () => void stepViewRecord(-1) : undefined}
           onNext={total > 1 ? () => void stepViewRecord(1) : undefined}

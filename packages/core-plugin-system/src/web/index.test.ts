@@ -63,13 +63,16 @@ test('plugin system web passes name/tags/action chrome into databaseUi', async (
   assert.equal(ui.last?.chrome.Action, undefined)
 })
 
-test('plugin chrome owns the whole action bar including the run toggle', async () => {
+test('plugin chrome owns the whole action menu including the run toggle', async () => {
   const { readFileSync } = await import('node:fs')
   const { resolve } = await import('node:path')
   const chrome = readFileSync(resolve(import.meta.dirname, './chrome.tsx'), 'utf8')
   assert.match(chrome, /function PluginActions/)
   assert.match(chrome, /Actions: PluginActions/)
   assert.match(chrome, /function PluginRunButton/)
+  assert.match(chrome, /place === 'detail' \? 'menuitem'/)
+  assert.match(chrome, /fsdb-detail-more-item/)
+  assert.doesNotMatch(chrome, /dock-icon-btn/)
   assert.doesNotMatch(chrome, /Action: PluginAction/)
 })
 

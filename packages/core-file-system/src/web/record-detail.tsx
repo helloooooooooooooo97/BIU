@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState, type ReactNode, type Dispatch, type SetStateAction } from 'react'
+import { cloneElement, isValidElement, useEffect, useRef, useState, type ReactElement, type ReactNode, type Dispatch, type SetStateAction } from 'react'
 import type { CollectionChrome } from '@biu/type-file-system/ui'
 import type { CollectionSchema, DbRecord, FieldSpec } from '@biu/type-file-system'
 import { ChevronDownIcon, ChevronUpIcon, EllipsisHorizontalIcon, HashtagIcon } from '@heroicons/react/16/solid'
 import { AnchorMenu, RecordEmojiBoard } from '@biu/public-ui'
+import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { contentFieldKey, fieldHasValue, formatField, resolveFieldType } from './fields.ts'
 import { LocalText } from './controls.tsx'
-import { FilePreview } from './fsdb-cells.tsx'
+import { FilePreview, placedActions } from './fsdb-cells.tsx'
 import { PropertyRow } from './property-row.tsx'
 import { TableGlyph } from './nav-glyphs.tsx'
 import { normalizeRecordEmoji, recordPreviewEmoji } from './sidebar-preview.ts'
@@ -84,11 +85,22 @@ function DetailTitleIcon({
 function DetailMore({
   record,
   Tools,
+  actions,
+  onDelete,
+  deleteLabel,
 }: {
   record: DbRecord
-  Tools: NonNullable<CollectionChrome['DetailTools']>
+  Tools?: CollectionChrome['DetailTools']
+  actions?: ReactNode
+  onDelete?: () => void
+  deleteLabel: string
 }) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null)
+  const close = () => setAnchor(null)
+  const actionMenu =
+    actions && isValidElement(actions)
+      ? cloneElement(actions as ReactElement<{ onDone?: () => void }>, { onDone: close })
+      : actions
   return (
     <>
       <button
@@ -106,13 +118,29 @@ function DetailMore({
       {anchor ? (
         <AnchorMenu
           anchor={anchor}
-          onClose={() => setAnchor(null)}
+          onClose={close}
           className="fsdb-detail-more-menu"
           role="menu"
           minWidth={168}
           placement="right"
         >
-          <Tools record={record} onDone={() => setAnchor(null)} />
+          {Tools ? <Tools record={record} onDone={close} /> : null}
+          {actionMenu}
+          {onDelete ? (
+            <button
+              type="button"
+              role="menuitem"
+              className="fsdb-detail-more-item is-danger"
+              data-testid="fsdb-detail-delete"
+              onClick={() => {
+                close()
+                onDelete()
+              }}
+            >
+              <TrashGlyph aria-hidden className="size-4" />
+              {deleteLabel}
+            </button>
+          ) : null}
         </AnchorMenu>
       ) : null}
     </>
@@ -139,6 +167,7 @@ export function RecordDetail({
   headingOutline = true,
   toolbar,
   collectionPath,
+  onDelete,
 }: {
   selected: DbRecord
   schema: CollectionSchema
@@ -159,6 +188,7 @@ export function RecordDetail({
   headingOutline?: boolean
   toolbar?: ReactNode
   collectionPath?: string
+  onDelete?: () => void
 }) {
   const mainRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -190,7 +220,6 @@ export function RecordDetail({
   return (
 <div className="fsdb-detail-stage">
           <div className="fsdb-detail-screen" role="main" aria-label="记录详情">
-            {toolbar}
             <div className="fsdb-detail-split">
               <div className="fsdb-detail-main" ref={mainRef}>
                 <div className="fsdb-detail-title-row">
@@ -355,7 +384,12 @@ export function RecordDetail({
             </div>
           </div>
           <HeadingOutline enabled={headingOutline} />
-          {onPrev || onNext || chrome?.DetailTools ? (
+          {(() => {
+            const showMore = Boolean(
+              chrome?.DetailTools || onDelete || chrome?.Actions || placedActions(schema, 'detail').length,
+            )
+            if (!onPrev && !onNext && !showMore) return null
+            return (
             <nav className="fsdb-detail-float-nav" aria-label="按视图顺序切换记录">
               {onPrev || onNext ? (
                 <button
@@ -369,7 +403,15 @@ export function RecordDetail({
                   <ChevronUpIcon aria-hidden />
                 </button>
               ) : null}
-              {chrome?.DetailTools ? <DetailMore record={selected} Tools={chrome.DetailTools} /> : null}
+              {showMore ? (
+                <DetailMore
+                  record={selected}
+                  Tools={chrome?.DetailTools}
+                  actions={toolbar}
+                  onDelete={onDelete}
+                  deleteLabel={collectionPath === '/pages' ? '删除页面' : '删除记录'}
+                />
+              ) : null}
               {onPrev || onNext ? (
                 <button
                   type="button"
@@ -383,7 +425,8 @@ export function RecordDetail({
                 </button>
               ) : null}
             </nav>
-          ) : null}
+            )
+          })()}
         </div>
   )
 }
