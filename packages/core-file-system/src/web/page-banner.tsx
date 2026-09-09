@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { PhotoIcon } from '@heroicons/react/16/solid'
 import { HeadlessPopover } from '@biu/public-ui'
 import { getPick } from '@biu/core-pick/web'
@@ -134,38 +134,45 @@ export function BannerTitleActions({
           </button>
         }
       >
-        <BannerGallery
-          tab={tab}
-          onTab={setTab}
-          hasBanner={Boolean(banner)}
-          path={path}
-          title={title}
-          onPick={(next) => {
-            onChange(next)
-            setOpen(false)
-          }}
-          onRemove={() => {
-            onChange(null)
-            setOpen(false)
-          }}
-        />
+        <div className="fsdb-banner-pop" role="dialog" aria-label="选择背景" data-testid="fsdb-banner-gallery">
+          <BannerGallery
+            tab={tab}
+            onTab={setTab}
+            hasBanner={Boolean(banner)}
+            path={path}
+            title={title}
+            onPick={(next) => {
+              onChange(next)
+              setOpen(false)
+            }}
+            onRemove={() => {
+              onChange(null)
+              setOpen(false)
+            }}
+          />
+        </div>
       </HeadlessPopover>
     </div>
   )
 }
 
-const BannerGallery = forwardRef<
-  HTMLDivElement,
-  {
-    tab: PageBannerKind
-    onTab: (next: PageBannerKind) => void
-    hasBanner: boolean
-    path?: string
-    title?: string
-    onPick: (next: BannerValue) => void
-    onRemove: () => void
-  }
->(function BannerGallery({ tab, onTab, hasBanner, path, title, onPick, onRemove }, ref) {
+function BannerGallery({
+  tab,
+  onTab,
+  hasBanner,
+  path,
+  title,
+  onPick,
+  onRemove,
+}: {
+  tab: PageBannerKind
+  onTab: (next: PageBannerKind) => void
+  hasBanner: boolean
+  path?: string
+  title?: string
+  onPick: (next: BannerValue) => void
+  onRemove: () => void
+}) {
   const [mine, setMine] = useState<GalleryItem[]>([])
   useEffect(() => {
     let cancelled = false
@@ -182,7 +189,7 @@ const BannerGallery = forwardRef<
   }, [tab])
   const mineOfTab = mine.filter((item) => item.kind === tab)
   return (
-    <div ref={ref} className="fsdb-banner-pop" role="dialog" aria-label="选择背景" data-testid="fsdb-banner-gallery">
+    <>
       <div className="fsdb-banner-pop-bar">
         <div className="fsdb-banner-pop-tabs">
           <button type="button" aria-pressed={tab === 'html'} onClick={() => onTab('html')}>
@@ -247,9 +254,9 @@ const BannerGallery = forwardRef<
           </div>
         </section>
       </div>
-    </div>
+    </>
   )
-})
+}
 
 function BannerThumb({
   kind,
