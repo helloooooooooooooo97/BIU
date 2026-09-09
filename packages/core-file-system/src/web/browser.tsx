@@ -831,6 +831,7 @@ export function CollectionBrowser({
   const detailIdRef = useRef<string | null>(null)
   detailIdRef.current = detailId
   const contentGen = useRef(0)
+  const recordGen = useRef(0)
   const pullDetailBody = useCallback(() => {
     const id = detailIdRef.current
     if (!id) {
@@ -847,6 +848,21 @@ export function CollectionBrowser({
         if (gen !== contentGen.current) return
         setDetailBody(null)
       })
+  }, [dataPath])
+  const pullDetailRecord = useCallback(() => {
+    const id = detailIdRef.current
+    if (!id) return
+    const gen = ++recordGen.current
+    void readJson<{ value?: DbRecord }>(`/api/db/read?path=${encodeURIComponent(`${dataPath}/${id}`)}`)
+      .then((data) => {
+        const row = data.value
+        if (gen !== recordGen.current || !row?.id) return
+        setDetailRow((prev) => {
+          if (prev?.id && prev.id !== row.id) return prev
+          return { ...prev, ...row, banner: row.banner ?? null }
+        })
+      })
+      .catch(() => undefined)
   }, [dataPath])
   const steppingView = useRef(false)
 
@@ -928,7 +944,10 @@ export function CollectionBrowser({
         const viewsTouched = pendingViews
         pendingViews = false
         void reloadRef.current()
-        if (detailIdRef.current) pullDetailBody()
+        if (detailIdRef.current) {
+          pullDetailBody()
+          pullDetailRecord()
+        }
         if (viewsTouched) void syncViewsRef.current()
       }, 120)
     }
@@ -944,7 +963,7 @@ export function CollectionBrowser({
       window.clearInterval(timer)
       window.removeEventListener('fsdb:change', onChange)
     }
-  }, [collectionPath, dataPath, nested, pullDetailBody])
+  }, [collectionPath, dataPath, nested, pullDetailBody, pullDetailRecord])
 
   useEffect(() => {
     void pullFacets()
