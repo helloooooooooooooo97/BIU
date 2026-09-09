@@ -19,6 +19,9 @@ test('pickFromLocus keeps path and markdown lines', () => {
   assert.equal(ref?.end_line, 4)
   assert.equal(ref?.text, 'hello block')
   assert.equal(pickFromLocus('/pages/p1', { start_line: 1, end_line: 1, text: '   ' }), null)
+  const named = pickFromLocus('/pages/p002', { start_line: 1, end_line: 1, text: '海报', selection: '海报' }, '/pages/p002', '爱乐之城')
+  assert.equal(named?.title, '爱乐之城')
+  assert.equal(named?.path, '/pages/p002')
 })
 
 test('pickFromEditor uses the current selection', () => {

@@ -12,7 +12,6 @@ import {
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { flushSync } from 'react-dom'
 import {
   ArrowPathIcon,
   ArrowsPointingOutIcon,
@@ -35,6 +34,7 @@ import {
   PencilSquareIcon,
   PlusIcon,
   RectangleStackIcon,
+  ArrowDownTrayIcon,
   Square2StackIcon,
   Squares2X2Icon,
   StarIcon,
@@ -42,6 +42,7 @@ import {
   ViewColumnsIcon,
 } from '@heroicons/react/16/solid'
 import type { CollectionActionInfo, CollectionInfo, CollectionSchema, CollectionSchemaPack, DbRecord, FieldSpec, FieldType } from '@biu/type-file-system'
+import { normalizeSchemaValue } from '@biu/type-file-system'
 import type { CollectionChrome, CollectionViewType, DatabaseUi } from '@biu/type-file-system/ui'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { DndGrip } from './dnd-grip.tsx'
@@ -100,6 +101,7 @@ import {
 } from './fsdb-cells.tsx'
 import { ensureFsdbStyle } from './fsdb-style.ts'
 import { RecordDetail } from './record-detail.tsx'
+import { PageBanner } from './page-banner.tsx'
 import { TableGlyph, ViewModeGlyph } from './nav-glyphs.tsx'
 import { countFittingViewTabs, splitVisibleViews } from './view-tabs.ts'
 import { getDatabaseUi } from './database-ui.ts'
@@ -129,6 +131,7 @@ import {
   subscribePageWidth,
 } from './page-width.ts'
 import { listCollection, readJson } from './db-client.ts'
+import { savedViewRecordPath } from '../paths.ts'
 import { findViewNeighbor, indexOnPage } from './view-adjacent.ts'
 import { rememberPreviewTotal, viewTotalKey } from './sidebar-preview.ts'
 import { mergeTableViews } from '../catalog-views.ts'
@@ -157,7 +160,7 @@ const EMPTY_VIEWS: CollectionViewType[] = []
 type StatResult = { schema?: CollectionSchema }
 
 function isListColumn(key: string) {
-  return key !== 'description' && key !== 'notes' && key !== 'content' && key !== 'emoji'
+  return key !== 'description' && key !== 'notes' && key !== 'content' && key !== 'emoji' && key !== 'banner'
 }
 
 const QUERY_NEST_IGNORE = `${HEADLESS_DISMISS_IGNORE}, .db-search-menu, .fsdb-cellselect-menu, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]`
@@ -544,13 +547,13 @@ export function CollectionBrowser({
   }, [lockedSource])
   const detailId = openDetailId
   const setDetailId = (id: string | null, row?: DbRecord | null) => {
-    flushSync(() => {
-      setOpenDetailId(id)
-      if (id && row) setDetailRow(row)
-      if (!id) setDetailRow(null)
+    setOpenDetailId(id)
+    if (id && row) setDetailRow(row)
+    if (!id) setDetailRow(null)
+    queueMicrotask(() => {
+      if (id) onOpenRecord?.(id, activeViewId, dataPath)
+      else onCloseRecord?.()
     })
-    if (id) onOpenRecord?.(id, activeViewId, dataPath)
-    else onCloseRecord?.()
   }
   const openRow = (row: DbRecord) => {
     const jump = chrome?.openRow?.(row)
@@ -588,6 +591,7 @@ export function CollectionBrowser({
   const [configOpen, setConfigOpen] = useState(false)
   const [groupOpen, setGroupOpen] = useState(false)
   const [layoutOpen, setLayoutOpen] = useState(false)
+  const [bulkMenuOpen, setBulkMenuOpen] = useState(false)
   const [wrapCells, setWrapCells] = useState(!!initialView?.wrap)
   const [truncateCells, setTruncateCells] = useState(initialView?.truncate !== false)
   const [groupBy, setGroupBy] = useState(initialView?.groupBy ?? '')
@@ -631,8 +635,13 @@ export function CollectionBrowser({
     | { kind: 'alert'; title: string; body: string }
     | { kind: 'delete-record'; row: DbRecord }
     | { kind: 'delete-records'; ids: string[] }
+    | { kind: 'bulk-edit'; ids: string[] }
+    | { kind: 'bulk-facet'; ids: string[] }
     | null
   >(null)
+  const [bulkEditKey, setBulkEditKey] = useState('')
+  const [bulkEditRaw, setBulkEditRaw] = useState('')
+  const [bulkFacetIds, setBulkFacetIds] = useState<string[]>([])
   const [dlgError, setDlgError] = useState('')
   const crumbRef = useRef<HTMLElement>(null)
   const viewRef = useRef<HTMLDivElement>(null)
@@ -644,6 +653,7 @@ export function CollectionBrowser({
   const sortRef = useRef<HTMLDivElement>(null)
   const columnRef = useRef<HTMLDivElement>(null)
   const filterRef = useRef<HTMLDivElement>(null)
+  const bulkRef = useRef<HTMLDivElement>(null)
   const configRef = useRef<HTMLDivElement>(null)
   const groupRef = useRef<HTMLDivElement>(null)
   const layoutRef = useRef<HTMLDivElement>(null)
@@ -748,6 +758,10 @@ export function CollectionBrowser({
     if (searchOpen) searchInputRef.current?.focus()
   }, [searchOpen])
 
+  useEffect(() => {
+    if (!pickedIds.length) setBulkMenuOpen(false)
+  }, [pickedIds.length])
+
   function toggleMenu(which: 'view' | 'mode' | 'sort' | 'columns' | 'filter' | 'config' | 'group' | 'layout') {
     setViewMenuOpen(which === 'view' && !viewMenuOpen)
     setModeMenuOpen(which === 'mode' && !modeMenuOpen)
@@ -757,6 +771,7 @@ export function CollectionBrowser({
     setConfigOpen(which === 'config' && !configOpen)
     setGroupOpen(which === 'group' && !groupOpen)
     setLayoutOpen(which === 'layout' && !layoutOpen)
+    setBulkMenuOpen(false)
   }
 
   const reload = useCallback(async () => {
@@ -816,6 +831,7 @@ export function CollectionBrowser({
   const detailIdRef = useRef<string | null>(null)
   detailIdRef.current = detailId
   const contentGen = useRef(0)
+  const recordGen = useRef(0)
   const pullDetailBody = useCallback(() => {
     const id = detailIdRef.current
     if (!id) {
@@ -832,6 +848,21 @@ export function CollectionBrowser({
         if (gen !== contentGen.current) return
         setDetailBody(null)
       })
+  }, [dataPath])
+  const pullDetailRecord = useCallback(() => {
+    const id = detailIdRef.current
+    if (!id) return
+    const gen = ++recordGen.current
+    void readJson<{ value?: DbRecord }>(`/api/db/read?path=${encodeURIComponent(`${dataPath}/${id}`)}`)
+      .then((data) => {
+        const row = data.value
+        if (gen !== recordGen.current || !row?.id) return
+        setDetailRow((prev) => {
+          if (prev?.id && prev.id !== row.id) return prev
+          return { ...prev, ...row, banner: row.banner ?? null }
+        })
+      })
+      .catch(() => undefined)
   }, [dataPath])
   const steppingView = useRef(false)
 
@@ -913,7 +944,10 @@ export function CollectionBrowser({
         const viewsTouched = pendingViews
         pendingViews = false
         void reloadRef.current()
-        if (detailIdRef.current) pullDetailBody()
+        if (detailIdRef.current) {
+          pullDetailBody()
+          pullDetailRecord()
+        }
         if (viewsTouched) void syncViewsRef.current()
       }, 120)
     }
@@ -929,7 +963,7 @@ export function CollectionBrowser({
       window.clearInterval(timer)
       window.removeEventListener('fsdb:change', onChange)
     }
-  }, [collectionPath, dataPath, nested, pullDetailBody])
+  }, [collectionPath, dataPath, nested, pullDetailBody, pullDetailRecord])
 
   useEffect(() => {
     void pullFacets()
@@ -970,6 +1004,17 @@ export function CollectionBrowser({
   const subsetLocked = lockedFilterKeys.length > 0
   const canCreate = Boolean(schema?.records?.create) && !subsetLocked
   const canDelete = Boolean(schema?.records?.delete) && !subsetLocked
+  const canFacet = Boolean(schema?.fields.facet?.writable) && !subsetLocked
+  const bulkFields = useMemo(
+    () =>
+      fieldEntries(schema).filter(({ key, field }) => {
+        if (!field.writable || field.computed) return false
+        if (key === 'id' || key === 'createdAt' || key === 'updatedAt' || key === 'createdBy' || key === 'updatedBy') return false
+        const kind = resolveFieldType(field)
+        return kind !== 'file' && kind !== 'action' && kind !== 'image' && kind !== 'attachment' && kind !== 'facet'
+      }),
+    [schema],
+  )
   useEffect(() => {
     setPickedIds([])
   }, [collectionPath])
@@ -1100,6 +1145,40 @@ export function CollectionBrowser({
     return flattenRows(rows).map((item) => item.row.id)
   }, [flattenRows, grouped, grouping, visible])
   const tableColSpan = Math.max(columns.length, 1)
+  const tableRef = useRef<HTMLTableElement>(null)
+  const [checkSlots, setCheckSlots] = useState<{ kind: 'head' | 'gap' | 'row'; id?: string; h: number }[]>([])
+  const [checkHover, setCheckHover] = useState<string | 'head' | null>(null)
+
+  useLayoutEffect(() => {
+    const table = tableRef.current
+    if (!table) {
+      setCheckSlots([])
+      return
+    }
+    const measure = () => {
+      const next: { kind: 'head' | 'gap' | 'row'; id?: string; h: number }[] = []
+      const head = table.tHead?.rows[0]
+      if (head) next.push({ kind: 'head', h: head.getBoundingClientRect().height })
+      for (const tr of table.tBodies[0]?.rows ?? []) {
+        const h = tr.getBoundingClientRect().height
+        if (tr.classList.contains('fsdb-group-row') || !tr.dataset.recordId) next.push({ kind: 'gap', h })
+        else next.push({ kind: 'row', id: tr.dataset.recordId, h })
+      }
+      setCheckSlots((prev) => {
+        if (
+          prev.length === next.length &&
+          prev.every((slot, i) => slot.kind === next[i]!.kind && slot.id === next[i]!.id && slot.h === next[i]!.h)
+        ) {
+          return prev
+        }
+        return next
+      })
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(table)
+    return () => ro.disconnect()
+  }, [collapsed, collapsedGroups, columns, grouping, grouped, items, page, pageSize, wrapCells, truncateCells, columnWidths])
 
   const listedSelected = detailId ? items.find((item) => item.id === detailId) : undefined
   const selected = useMemo(() => {
@@ -1157,6 +1236,29 @@ export function CollectionBrowser({
   }, [collectionPath, items, schema?.labelField, selected])
   const filterActive = countFilterRules(filterTree) > 0
   const activeView = views.find((view) => view.id === activeViewId)
+  const [viewBanner, setViewBanner] = useState<unknown>(null)
+  useEffect(() => {
+    if (sheet || !activeViewId) {
+      setViewBanner(null)
+      return
+    }
+    const path = savedViewRecordPath(collectionPath, activeViewId)
+    if (!path) {
+      setViewBanner(null)
+      return
+    }
+    let cancelled = false
+    void readJson<{ value?: { banner?: unknown } }>(`/api/db/read?path=${encodeURIComponent(path)}`)
+      .then((data) => {
+        if (!cancelled) setViewBanner(data.value?.banner ?? null)
+      })
+      .catch(() => {
+        if (!cancelled) setViewBanner(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [sheet, collectionPath, activeViewId])
   useSyncExternalStore(subscribeStarredViews, getStarredViewsVersion, () => 0)
   useSyncExternalStore(subscribePageWidth, getPageWidthVersion, () => 0)
   const viewStarred = Boolean(activeViewId && isViewStarred(getStarredViews(), collectionPath, activeViewId))
@@ -1192,15 +1294,6 @@ export function CollectionBrowser({
     }
     pullDetailBody()
   }, [collectionPath, dataPath, detailId, pullDetailBody])
-
-  useEffect(() => {
-    if (nested || !detailId) return
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setDetailId(null)
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [detailId, nested])
 
   useEffect(() => {
     if (dlg?.kind !== 'rename') return
@@ -1566,8 +1659,9 @@ export function CollectionBrowser({
       })
       const next = data.value
       if (next) {
-        setItems((prev) => prev.map((item) => (item.id === next.id ? { ...item, ...next } : item)))
-        setDetailRow((prev) => (prev?.id === next.id ? { ...prev, ...next } : prev))
+        const merge = (item: DbRecord) => (item.id === next.id ? { ...item, ...next, banner: next.banner ?? null } : item)
+        setItems((prev) => prev.map(merge))
+        setDetailRow((prev) => (prev?.id === next.id ? { ...prev, ...next, banner: next.banner ?? null } : prev))
         window.dispatchEvent(new Event('fsdb:change'))
         return
       }
@@ -1590,11 +1684,7 @@ export function CollectionBrowser({
       quietUntil.current = 0
       await reload()
       const id = data.items?.[0]?.value?.id
-      if (id) {
-        setOpenDetailId(id)
-        if (data.items?.[0]?.value) setDetailRow(data.items[0]!.value)
-        onOpenRecord?.(id, activeViewId, dataPath)
-      }
+      if (id) showRecordInInspector(collectionPath, id)
     } catch (err) {
       setError(String(err))
     }
@@ -1630,6 +1720,57 @@ export function CollectionBrowser({
       setError(String(err))
       quietUntil.current = 0
       await reload()
+    }
+  }
+
+  function csvCell(value: string) {
+    if (/[",\n\r]/.test(value)) return `"${value.replace(/"/g, '""')}"`
+    return value
+  }
+
+  function exportPicked() {
+    const rows = items.filter((row) => pickedIds.includes(row.id))
+    if (!rows.length) return
+    const header = columns.map((col) => csvCell(facetColumnTitle(col))).join(',')
+    const lines = rows.map((row) =>
+      columns
+        .map((col) => csvCell(formatField(row[col.key], col.field)))
+        .join(','),
+    )
+    const blob = new Blob([`\ufeff${[header, ...lines].join('\n')}`], { type: 'text/csv;charset=utf-8' })
+    const href = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = href
+    link.download = `${title || 'records'}.csv`
+    link.click()
+    URL.revokeObjectURL(href)
+  }
+
+  async function executeBulkEdit(ids: string[], key: string, raw: string) {
+    const field = schema?.fields[key]
+    if (!field) return
+    const rows = items.filter((row) => ids.includes(row.id))
+    try {
+      for (const row of rows) await writePatch(row, { [key]: parseFieldValue(field, raw) })
+      setPickedIds([])
+    } catch (err) {
+      setError(String(err))
+    }
+  }
+
+  async function executeBulkFacet(ids: string[], addTags: string[]) {
+    if (!addTags.length) return
+    const rows = items.filter((row) => ids.includes(row.id))
+    try {
+      for (const row of rows) {
+        const current = normalizeSchemaValue(row.facet)
+        const tags = [...current.tags]
+        for (const id of addTags) if (!tags.includes(id)) tags.push(id)
+        await writePatch(row, { facet: { tags, values: current.values } })
+      }
+      setPickedIds([])
+    } catch (err) {
+      setError(String(err))
     }
   }
 
@@ -2036,7 +2177,7 @@ export function CollectionBrowser({
     )
   }
 
-  function RecordActions({ row, place }: { row: DbRecord; place: 'row' | 'detail' }) {
+  function RecordActions({ row, place, onDone }: { row: DbRecord; place: 'row' | 'detail'; onDone?: () => void }) {
     const Actions = chrome?.Actions
     const Action = chrome?.Action
     const busy = actingRef.current
@@ -2050,27 +2191,49 @@ export function CollectionBrowser({
           {body}
         </div>
       ) : (
-        <div className="fsdb-detail-actionbar" data-testid="fsdb-detail-actions" data-biu-ignore aria-label="记录操作">
-          <div className="fsdb-detail-actions">{body}</div>
-        </div>
+        <>{body}</>
       )
+    const finish = (action: CollectionActionInfo) => {
+      void runAction(row, action)
+      onDone?.()
+    }
     if (Actions) {
       if (!placed.length) return null
-      return wrap(<Actions actions={placed} record={row} busy={busy} place={place} run={(action) => void runAction(row, action)} />)
+      return wrap(<Actions actions={placed} record={row} busy={busy} place={place} run={finish} />)
     }
     const actions = visibleActions(schema, row, place).filter((action) => {
       if (place !== 'detail' || !nested) return true
       return action.id !== 'open-split' && action.id !== 'open-page'
     })
-    const rowShown = actions.filter(
-      (action) => Action || actionIcon(action.id) || action.id === 'open-split' || action.id === 'open-page',
-    )
+    const rowShown =
+      place === 'detail'
+        ? actions
+        : actions.filter(
+            (action) => Action || actionIcon(action.id) || action.id === 'open-split' || action.id === 'open-page',
+          )
     if (!rowShown.length) return null
     return wrap(
       rowShown.map((action) => {
-        const run = () => void runAction(row, action)
+        const run = () => finish(action)
         if (Action) return <Action key={action.id} action={action} record={row} busy={busy} run={run} />
         const glyph = actionIcon(action.id)
+        if (place === 'detail') {
+          return (
+            <button
+              key={action.id}
+              type="button"
+              role="menuitem"
+              className={`fsdb-detail-more-item${action.tone === 'danger' ? ' is-danger' : ''}`}
+              title={action.label}
+              aria-label={`${action.label} ${labelOf(row)}`}
+              disabled={busy}
+              onClick={run}
+            >
+              {glyph}
+              {action.label}
+            </button>
+          )
+        }
         return (
           <button
             key={action.id}
@@ -2132,23 +2295,26 @@ export function CollectionBrowser({
   }
 
   function RowCheck({ id, ids }: { id?: string; ids?: string[] }) {
-    if (!canDelete) return null
     const list = id ? [id] : (ids ?? [])
+    const some = list.some((item) => pickedIds.includes(item))
     const on = list.length > 0 && list.every((item) => pickedIds.includes(item))
+    const marked = id ? on : some
+    const header = !id
     return (
       <button
         type="button"
-        className={`fsdb-boolbtn fsdb-row-check${on ? ' is-on' : ''}`}
-        aria-pressed={on}
-        aria-label={id ? (on ? '取消选择记录' : '选择记录') : on ? '取消全选' : '全选'}
-        title={id ? (on ? '取消选择' : '选择') : on ? '取消全选' : '全选'}
+        data-testid="fsdb-row-check"
+        className={`fsdb-boolbtn fsdb-row-check${marked ? ' is-on' : ''}`}
+        aria-pressed={marked}
+        aria-label={id ? (on ? '取消选择记录' : '选择记录') : some ? '取消选择' : '全选'}
+        title={id ? (on ? '取消选择' : '选择') : some ? '取消选择' : '全选'}
         onClick={(event) => {
           event.stopPropagation()
-          togglePicked(list, !on)
+          togglePicked(list, header ? !some : !on)
         }}
         onPointerDown={(event) => event.stopPropagation()}
       >
-        <BoolBox on={on}>{on ? <CheckIcon aria-hidden className="size-3" /> : null}</BoolBox>
+        <BoolBox on={marked}>{marked ? <CheckIcon aria-hidden className="size-3" /> : null}</BoolBox>
       </button>
     )
   }
@@ -2169,8 +2335,13 @@ export function CollectionBrowser({
     return (
       <>
         {listed.map(({ row, depth, hasKids, kidCount }) => (
-          <tr key={`${keyPrefix}${row.id}`} className={row.id === detailId ? 'is-active' : undefined} {...recordPick(row)}>
-            {columns.map((col, index) => (
+          <tr
+            key={`${keyPrefix}${row.id}`}
+            data-record-id={row.id}
+            className={row.id === detailId ? 'is-active' : undefined}
+            {...recordPick(row)}
+          >
+            {columns.map((col) => (
               <td
                 key={col.key}
                 style={colWidthStyle(columnWidths[col.key])}
@@ -2209,7 +2380,6 @@ export function CollectionBrowser({
                   setCellPop(cellUsesPop(kind, col.field.writable) ? { id: row.id, key: col.key } : null)
                 }}
               >
-                {index === 0 ? <RowCheck id={row.id} /> : null}
                 {col.key === schema?.labelField ? (
                   <RecordTitle row={row} depth={depth} hasKids={hasKids} kidCount={kidCount} />
                 ) : (
@@ -2333,12 +2503,10 @@ export function CollectionBrowser({
           onOpenRecord={(path, view, recordId, row) => {
             if (path === collectionPath) {
               applyView(view)
-              flushSync(() => {
-                setOpenDetailId(recordId)
-                if (row) setDetailRow(row)
-              })
+              setOpenDetailId(recordId)
+              if (row) setDetailRow(row)
             }
-            onOpenRecord?.(recordId, view.id, path)
+            queueMicrotask(() => onOpenRecord?.(recordId, view.id, path))
           }}
           expandedViewKey={expandedViewKey}
           onExpandedViewKeyChange={onExpandedViewKeyChange}
@@ -2463,12 +2631,37 @@ export function CollectionBrowser({
         {!detailId ? (
         <div className="tasks-main fsdb-main">
         {sheet ? null : (
+        <>
+        <PageBanner
+          value={viewBanner}
+          writable={Boolean(activeViewId)}
+          path={activeViewId ? savedViewRecordPath(collectionPath, activeViewId) : undefined}
+          title={activeView?.name ?? title}
+          onChange={(next) => {
+            if (!activeViewId) return
+            const path = savedViewRecordPath(collectionPath, activeViewId)
+            if (!path) return
+            setViewBanner(next)
+            void readJson<{ value?: { banner?: unknown } }>('/api/db/update', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ path, content: { banner: next } }),
+            }).then((data) => {
+              setViewBanner(data.value?.banner ?? next)
+            }).catch(() => {
+              setViewBanner(next)
+            })
+          }}
+        />
         <div className="fsdb-detail-title-row">
           <span className="fsdb-detail-title-icon" aria-hidden>
             <TableGlyph icon={currentTable?.view?.icon} className="size-8" />
           </span>
+          <div className="fsdb-detail-title-block">
           <h1 className="fsdb-detail-title">{activeView?.name ?? title}</h1>
+          </div>
         </div>
+        </>
         )}
         <div className="tasks-toolbar" ref={toolbarRef} data-biu-ignore>
           <div className="tasks-toolbar-left">
@@ -2656,6 +2849,47 @@ export function CollectionBrowser({
                 </HeadlessDismiss>
               ) : null}
             </div>
+            {activeView?.builtin ? null : (
+            <div className="tasks-filter-btn-wrap" ref={filterRef}>
+              <button
+                type="button"
+                className={`tasks-refresh tasks-rbar-btn${filterOpen || filterActive ? ' is-active' : ''}`}
+                aria-label="筛选"
+                title={filterActive ? `${countFilterRules(filterTree)} 条筛选` : '筛选'}
+                onClick={() => toggleMenu('filter')}
+              >
+                <FunnelIcon aria-hidden className="size-[14px]" />
+                {filterActive ? <span className="tasks-filter-dot" aria-hidden /> : null}
+              </button>
+              {filterOpen ? (
+                <HeadlessDismiss
+                  onDismiss={() => setFilterOpen(false)}
+                  insideRef={filterRef}
+                  ignoreSelector={QUERY_NEST_IGNORE}
+                  inside={(node) => node instanceof Element && Boolean(node.closest('.db-search-menu, .fsdb-cellselect-menu, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]'))}
+                >
+                <FilterQueryMenu
+                  tree={filterTree}
+                  fields={filterFields}
+                  valueOptions={(item) =>
+                    item.kind === 'boolean'
+                      ? [
+                          { value: 'true', label: '是' },
+                          { value: 'false', label: '否' },
+                        ]
+                      : item.kind === 'facet'
+                        ? uniqueValues(items, item.key, item.field).map((option) => ({
+                            value: option,
+                            label: loadFacets().find((tag) => tag.id === option)?.label ?? option,
+                          }))
+                        : uniqueValues(items, item.key, item.field).map((option) => ({ value: option, label: option }))
+                  }
+                  onChange={setFilterTree}
+                />
+                </HeadlessDismiss>
+              ) : null}
+            </div>
+            )}
             <div className="tasks-sort-wrap" ref={groupRef}>
               <button
                 type="button"
@@ -2736,47 +2970,6 @@ export function CollectionBrowser({
                 </HeadlessDismiss>
               ) : null}
             </div>
-            {activeView?.builtin ? null : (
-            <div className="tasks-filter-btn-wrap" ref={filterRef}>
-              <button
-                type="button"
-                className={`tasks-refresh tasks-rbar-btn${filterOpen || filterActive ? ' is-active' : ''}`}
-                aria-label="筛选"
-                title={filterActive ? `${countFilterRules(filterTree)} 条筛选` : '筛选'}
-                onClick={() => toggleMenu('filter')}
-              >
-                <FunnelIcon aria-hidden className="size-[14px]" />
-                {filterActive ? <span className="tasks-filter-dot" aria-hidden /> : null}
-              </button>
-              {filterOpen ? (
-                <HeadlessDismiss
-                  onDismiss={() => setFilterOpen(false)}
-                  insideRef={filterRef}
-                  ignoreSelector={QUERY_NEST_IGNORE}
-                  inside={(node) => node instanceof Element && Boolean(node.closest('.db-search-menu, .fsdb-cellselect-menu, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]'))}
-                >
-                <FilterQueryMenu
-                  tree={filterTree}
-                  fields={filterFields}
-                  valueOptions={(item) =>
-                    item.kind === 'boolean'
-                      ? [
-                          { value: 'true', label: '是' },
-                          { value: 'false', label: '否' },
-                        ]
-                      : item.kind === 'facet'
-                        ? uniqueValues(items, item.key, item.field).map((option) => ({
-                            value: option,
-                            label: loadFacets().find((tag) => tag.id === option)?.label ?? option,
-                          }))
-                        : uniqueValues(items, item.key, item.field).map((option) => ({ value: option, label: option }))
-                  }
-                  onChange={setFilterTree}
-                />
-                </HeadlessDismiss>
-              ) : null}
-            </div>
-            )}
             {mode === 'table' ? (
             <div className="tasks-filter-btn-wrap" ref={configRef}>
               <button
@@ -2838,18 +3031,6 @@ export function CollectionBrowser({
                 </span>
               ) : null}
             </div>
-            {canDelete && pickedIds.length ? (
-                <button
-                  type="button"
-                  className="tasks-icon-btn is-danger"
-                  data-testid="fsdb-bulk-delete"
-                  aria-label="删除选中"
-                  title={`删除选中的 ${pickedIds.length} 条`}
-                  onClick={() => setDlg({ kind: 'delete-records', ids: pickedIds })}
-                >
-                  <TrashGlyph aria-hidden className="size-[14px]" />
-                </button>
-              ) : null}
             {canCreate ? (
               <button
                 type="button"
@@ -2874,9 +3055,123 @@ export function CollectionBrowser({
             ) : null}
             {!customView ? (
               <div className="tasks-table-wrap">
+                {pickedIds.length ? (
+                  <div className="fsdb-bulk" data-testid="fsdb-bulk-bar">
+                    <span
+                      className="fsdb-bulk-count"
+                      role="button"
+                      tabIndex={0}
+                      title="取消选择"
+                      onClick={() => setPickedIds([])}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault()
+                          setPickedIds([])
+                        }
+                      }}
+                    >
+                      {pickedIds.length} 已选
+                    </span>
+                    {canDelete ? (
+                      <button
+                        type="button"
+                        className="tasks-icon-btn is-danger"
+                        data-testid="fsdb-bulk-delete"
+                        aria-label="删除选中"
+                        title={`删除选中的 ${pickedIds.length} 条`}
+                        onClick={() => setDlg({ kind: 'delete-records', ids: pickedIds })}
+                      >
+                        <TrashGlyph aria-hidden className="size-[14px]" />
+                      </button>
+                    ) : null}
+                    <div className="fsdb-bulk-more" ref={bulkRef}>
+                      <button
+                        type="button"
+                        className={`tasks-icon-btn${bulkMenuOpen ? ' is-active' : ''}`}
+                        data-testid="fsdb-bulk-more"
+                        aria-label="更多操作"
+                        aria-expanded={bulkMenuOpen}
+                        title="更多"
+                        onClick={() => setBulkMenuOpen((open) => !open)}
+                      >
+                        <EllipsisHorizontalIcon aria-hidden className="size-[14px]" />
+                      </button>
+                      {bulkMenuOpen ? (
+                        <HeadlessDismiss onDismiss={() => setBulkMenuOpen(false)} insideRef={bulkRef}>
+                          <div className="fsdb-bulk-menu" role="menu">
+                            {canFacet ? (
+                              <button
+                                type="button"
+                                className="tasks-sort-item"
+                                data-testid="fsdb-bulk-facet"
+                                onClick={() => {
+                                  setBulkFacetIds([])
+                                  setDlg({ kind: 'bulk-facet', ids: pickedIds })
+                                  setBulkMenuOpen(false)
+                                }}
+                              >
+                                <span className="tasks-sort-item-label">
+                                  <RectangleStackIcon aria-hidden className="size-[14px]" />
+                                  合集
+                                </span>
+                              </button>
+                            ) : null}
+                            <button
+                              type="button"
+                              className="tasks-sort-item"
+                              data-testid="fsdb-bulk-export"
+                              onClick={() => {
+                                exportPicked()
+                                setBulkMenuOpen(false)
+                              }}
+                            >
+                              <span className="tasks-sort-item-label">
+                                <ArrowDownTrayIcon aria-hidden className="size-[14px]" />
+                                导出
+                              </span>
+                            </button>
+                          </div>
+                        </HeadlessDismiss>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
+                <div className="tasks-table-stage" onMouseLeave={() => setCheckHover(null)}>
+                  <div className="fsdb-check-rail" data-testid="fsdb-check-rail">
+                    <div className="fsdb-check-stack">
+                      {checkSlots.map((slot, index) => (
+                        <div
+                          key={slot.kind === 'row' ? `${slot.id}-${index}` : `${slot.kind}-${index}`}
+                          className={`fsdb-check-slot${
+                            slot.kind === 'head' && checkHover === 'head'
+                              ? ' is-hover'
+                              : slot.kind === 'row' && slot.id === checkHover
+                                ? ' is-hover'
+                                : ''
+                          }`}
+                          style={{ height: slot.h }}
+                          onMouseEnter={() => {
+                            if (slot.kind === 'head') setCheckHover('head')
+                            else if (slot.id) setCheckHover(slot.id)
+                          }}
+                        >
+                          {slot.kind === 'head' ? <RowCheck ids={pickableIds} /> : null}
+                          {slot.kind === 'row' && slot.id ? <RowCheck id={slot.id} /> : null}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 <table
+                  ref={tableRef}
                   className={`tasks-table${wrapCells ? ' is-wrap' : ''}${truncateCells ? ' is-truncate' : ''}${hasColWidths ? ' is-cols-fixed' : ''}${resizingCol ? ' is-col-resize' : ''}`}
                   style={tableWidthStyle(columnWidths, columns.map((col) => col.key))}
+                  onMouseOver={(event) => {
+                    const hit = event.target as HTMLElement | null
+                    const tr = hit?.closest('tr')
+                    if (!tr || !event.currentTarget.contains(tr)) return
+                    if (tr.closest('thead')) setCheckHover('head')
+                    else setCheckHover(tr.dataset.recordId ?? null)
+                  }}
                 >
             <colgroup>
               {columns.map((col) => (
@@ -2885,7 +3180,7 @@ export function CollectionBrowser({
             </colgroup>
             <thead>
               <tr>
-                {columns.map((col, index) => {
+                {columns.map((col) => {
                   const flat = parseFacetFlatColumnKey(col.key)
                   const tone = flat ? schemaTagTone(flat.packId) : undefined
                   const width = colWidthStyle(columnWidths[col.key])
@@ -2898,7 +3193,6 @@ export function CollectionBrowser({
                       ...(tone ? { ['--biu-tag' as string]: tone } : {}),
                     }}
                   >
-                    {index === 0 ? <RowCheck ids={pickableIds} /> : null}
                     <span className="tasks-th">
                       <FieldGlyph kind={col.kind} />
                       {facetColumnTitle(col)}
@@ -2934,6 +3228,7 @@ export function CollectionBrowser({
                     )}
             </tbody>
           </table>
+                </div>
         </div>
             ) : null}
           </div>
@@ -2957,7 +3252,7 @@ export function CollectionBrowser({
                 type="button"
                 className="tasks-icon-btn"
                 aria-label="下一页"
-                disabled={(page + 1) * pageSize >= total}
+                disabled={total <= 0 || (page + 1) * pageSize >= total || (items.length > 0 && items.length < pageSize)}
                 onClick={() => setPage((prev) => prev + 1)}
               >
                 <ChevronRightIcon aria-hidden className="size-[14px]" />
@@ -2980,6 +3275,7 @@ export function CollectionBrowser({
           writePatch={writePatch}
           tableIcon={currentTable?.view?.icon}
           toolbar={<RecordActions row={selected} place="detail" />}
+          onDelete={canDelete ? () => setDlg({ kind: 'delete-record', row: selected }) : undefined}
           onOpenRecord={(recordId, collection) => onOpenRecord?.(recordId, activeViewId, collection)}
           onPrev={total > 1 ? () => void stepViewRecord(-1) : undefined}
           onNext={total > 1 ? () => void stepViewRecord(1) : undefined}
@@ -3039,6 +3335,80 @@ export function CollectionBrowser({
             void executeDeleteRecords(ids)
           }}
           body={<p>确定删除选中的 {dlg.ids.length} 条记录？删除后不可恢复。</p>}
+        />
+      ) : null}
+      {dlg?.kind === 'bulk-edit' ? (
+        <AppDialog
+          title={`编辑 ${dlg.ids.length} 条`}
+          confirm="写入"
+          disabled={!bulkEditKey}
+          onCancel={() => setDlg(null)}
+          onConfirm={() => {
+            const { ids } = dlg
+            const key = bulkEditKey
+            const raw = bulkEditRaw
+            setDlg(null)
+            void executeBulkEdit(ids, key, raw)
+          }}
+          body={
+            <div className="fsdb-bulk-form">
+              <label className="fsdb-bulk-label">
+                字段
+                <select className="fsdb-dlg-input" value={bulkEditKey} onChange={(event) => setBulkEditKey(event.target.value)}>
+                  {bulkFields.map((item) => (
+                    <option key={item.key} value={item.key}>
+                      {item.field.label || item.key}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="fsdb-bulk-label">
+                值
+                <input
+                  className="fsdb-dlg-input"
+                  value={bulkEditRaw}
+                  placeholder="写入到选中记录"
+                  onChange={(event) => setBulkEditRaw(event.target.value)}
+                />
+              </label>
+            </div>
+          }
+        />
+      ) : null}
+      {dlg?.kind === 'bulk-facet' ? (
+        <AppDialog
+          title={`合集 · ${dlg.ids.length} 条`}
+          confirm="贴上"
+          disabled={!bulkFacetIds.length}
+          onCancel={() => setDlg(null)}
+          onConfirm={() => {
+            const { ids } = dlg
+            const tags = bulkFacetIds
+            setDlg(null)
+            void executeBulkFacet(ids, tags)
+          }}
+          body={
+            loadFacets().length ? (
+              <div className="fsdb-bulk-form">
+                {loadFacets().map((pack) => {
+                  const on = bulkFacetIds.includes(pack.id)
+                  return (
+                    <CheckRow
+                      key={pack.id}
+                      label={pack.label || pack.id}
+                      icon={<RectangleStackIcon aria-hidden className="size-[14px]" />}
+                      on={on}
+                      onToggle={() =>
+                        setBulkFacetIds((prev) => (on ? prev.filter((id) => id !== pack.id) : [...prev, pack.id]))
+                      }
+                    />
+                  )
+                })}
+              </div>
+            ) : (
+              <p>还没有合集。先到合集库里建一个，再回来贴。</p>
+            )
+          }
         />
       ) : null}
       {dlg?.kind === 'action' ? (

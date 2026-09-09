@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { databaseRevealForTool, databaseRevealFromPath, normalizeCollectionPath } from './paths.ts'
+import { databaseRevealForTool, databaseRevealFromPath, normalizeCollectionPath, savedViewRecordPath } from './paths.ts'
 
 test('normalizeCollectionPath strips trailing slash and adds a leading one', () => {
   assert.equal(normalizeCollectionPath('/plugins/'), '/plugins')
@@ -59,4 +59,10 @@ test('databaseRevealForTool maps view db_update onto the source table', () => {
     }),
     { collection: '/pages', viewId: 'mine' },
   )
+})
+
+test('savedViewRecordPath matches /views row ids including builtin view ids', () => {
+  assert.equal(savedViewRecordPath('/pages', 'mine'), '/views/pages::mine')
+  assert.equal(savedViewRecordPath('pages/', 'builtin-all:/pages'), '/views/pages::builtin-all:/pages')
+  assert.equal(savedViewRecordPath('/', 'mine'), '')
 })

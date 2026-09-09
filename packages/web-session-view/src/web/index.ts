@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import { Service, type Context } from 'cordis'
 import { mergeInspectorBind, type SessionInspectorBind } from '@biu/type-session'
+import { captureLiveUiContext } from './live-ui-context.ts'
 import {
   compactSessionEvents,
   mergeDispatchedUsageIntoNodes,
@@ -125,11 +126,10 @@ export type InboxQueueItem = {
   text: string
 }
 
-/** 与 host DEFAULT_TAIL_TURNS 对齐；仅 loadOlder 分页仍用窗口拉取 */
-export const SESSION_TAIL_TURNS = 24
+/** 打开会话与上翻分页都只拉最近 / 更早的 100 轮，不再一次全量。 */
+export const SESSION_TAIL_TURNS = 100
 export const TRAJECTORY_TAIL_TURNS = 48
-/** 打开会话一次拉全量：上滑不再等网络；列表行常驻 DOM（content-visibility 跳过屏外绘制） */
-export const SESSION_LOAD_TURNS = 'all' as const
+export const SESSION_LOAD_TURNS = SESSION_TAIL_TURNS
 
 export interface UsageTrendPoint {
   seq: number
@@ -1364,6 +1364,7 @@ export class SessionViewService extends Service {
     if (!content && !pics.length) return
     const sessionId = await this.ensureSession()
     const tools = [...new Set(extraTools.map((name) => name.trim()).filter(Boolean))]
+    const liveContext = captureLiveUiContext(this)
     const busy = this.value.pending || this.value.agentStatus === 'running'
     const hasWake = this.value.inbox.some((item) => item.kind === 'wake')
     // 忙碌且已有 wake：再发 → inject；否则 wake。
@@ -1374,11 +1375,12 @@ export class SessionViewService extends Service {
     const imagePayload = pics.length ? { images: pics } : {}
     const body: Record<string, unknown> =
       effectiveKind === 'inject'
-        ? { text: content || '（图片）', kind: 'inject', ...(tools.length ? { extraTools: tools } : {}), ...imagePayload }
+        ? { text: content || '（图片）', kind: 'inject', ...(tools.length ? { extraTools: tools } : {}), ...(liveContext ? { liveContext } : {}), ...imagePayload }
         : {
             text: content || '（图片）',
             wait: false,
             ...(tools.length ? { extraTools: tools } : {}),
+            ...(liveContext ? { liveContext } : {}),
             ...imagePayload,
           }
 

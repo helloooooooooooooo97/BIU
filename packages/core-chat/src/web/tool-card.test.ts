@@ -25,4 +25,7 @@ test('tool panels match the step bar: sidebar fill, no border', () => {
   assert.match(css, /\.tool-call-chevron\.is-fail\s*\{[^}]*color:\s*#c4554d/s)
   assert.match(css, /\.tool-call-inspect\s*\{[^}]*opacity:\s*0/s)
   assert.match(css, /\.tool-call-head:hover \.tool-call-inspect/s)
+  assert.match(source, /tool-call-chars/)
+  assert.match(source, /toolOutputChars/)
+  assert.match(css, /\.tool-call-chars\s*\{[^}]*tabular-nums/s)
 })

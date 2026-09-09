@@ -10,7 +10,7 @@ import type { ChatProvider, LlmModelDef, LlmEndpointDef, ReasoningEffort, Thinki
 export type { ChatProvider, LlmModelDef, LlmEndpointDef, ReasoningEffort, ThinkingMode, ContextWindow, SpeedMode, ModelCapabilities } from './model-catalog.ts'
 export { LLM_ENDPOINT_PRESETS, LLM_MODEL_CATALOG } from './model-catalog.ts'
 import { currentSessionId } from '@biu/host-sessions/scope'
-import { isSessionCompactPoint, type SessionConfig, type SessionEvent } from '@biu/type-session'
+import { isSessionCompactPoint, sanitizeLiveUiContext, type SessionConfig, type SessionEvent } from '@biu/type-session'
 import { DEFAULT_TAIL_TURNS, sliceBeforeTurns, sliceTailTurns } from '@biu/host-sessions/window'
 import {
   DEFAULT_TRAJECTORY_TURNS,
@@ -1355,6 +1355,7 @@ export function apply(ctx: Context) {
       wait?: boolean
       extraTools?: string[]
       images?: Array<{ name?: string; mime?: string; url?: string }>
+      liveContext?: unknown
     }
     const agent = await ctx.agents.create(route.params.id)
     // re-sync in-memory LLM without rewriting disk
@@ -1371,11 +1372,13 @@ export function apply(ctx: Context) {
           }))
           .filter((img) => img.name && img.mime && img.url)
       : []
+    const liveContext = sanitizeLiveUiContext(payload.liveContext)
     const sendOpts = {
       ...(extraTools.length ? { extraTools } : {}),
       // 默认不等待整回合：聊天要靠 WS 推 chunk。显式 wait:true 才阻塞 HTTP。
       wait: payload.wait === true,
       ...(images.length ? { images } : {}),
+      ...(liveContext ? { liveContext } : {}),
     }
     if (payload.kind === 'inject') {
       agent.inject(payload.text ?? '', sendOpts)

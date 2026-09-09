@@ -31,7 +31,12 @@ test('compact schema drops identical builtins and user-only actions', () => {
   const compact = pack.schema(notesSchema())
   assert.equal('id' in ((compact.fields as object) ?? {}), false)
   assert.equal('createdAt' in ((compact.fields as object) ?? {}), false)
-  assert.equal('facet' in ((compact.fields as object) ?? {}), false)
+  assert.deepEqual((compact.fields as Record<string, unknown>).facet, {
+    type: 'facet',
+    label: '合集',
+    description:
+      '贴合集并填属性。一个合集：{tags:["facet-2"],values:{导演:"查泽雷"}}。多个合集 values 必须按 id 分组：{tags:["facet-2","awards"],values:{"facet-2":{导演:"查泽雷"},awards:{oscar:true}}}。省略 tags 只合并属性，不撕掉其它合集。',
+  })
   assert.equal('title' in ((compact.fields as object) ?? {}), false)
   assert.deepEqual((compact.fields as Record<string, unknown>).status, {
     type: 'string',

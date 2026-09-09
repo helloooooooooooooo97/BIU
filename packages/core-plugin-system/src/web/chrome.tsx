@@ -57,11 +57,11 @@ function matchWhen(record: DbRecord, when?: Record<string, unknown>) {
 }
 
 function btnClass(place: 'row' | 'detail', danger?: boolean) {
-  const base = place === 'detail' ? 'dock-icon-btn' : 'tasks-icon-btn'
-  return `${base}${danger ? ' is-danger' : ''}`
+  if (place === 'detail') return `fsdb-detail-more-item${danger ? ' is-danger' : ''}`
+  return `tasks-icon-btn${danger ? ' is-danger' : ''}`
 }
 
-function PluginAction({ action, busy, run, className }: FsActionProps & { className: string }) {
+function PluginAction({ action, busy, run, className, place }: FsActionProps & { className: string; place: 'row' | 'detail' }) {
   const icon =
     action.id === 'uninstall' ? (
       <TrashGlyph aria-hidden className="size-[14px]" />
@@ -71,6 +71,7 @@ function PluginAction({ action, busy, run, className }: FsActionProps & { classN
   return (
     <button
       type="button"
+      role={place === 'detail' ? 'menuitem' : undefined}
       className={className}
       title={action.label}
       data-dock-tip={action.label}
@@ -79,6 +80,7 @@ function PluginAction({ action, busy, run, className }: FsActionProps & { classN
       onClick={run}
     >
       {icon ?? action.label}
+      {place === 'detail' && icon ? action.label : null}
     </button>
   )
 }
@@ -87,25 +89,29 @@ function PluginRunButton({
   running,
   busy,
   className,
+  place,
   onClick,
 }: {
   running: boolean
   busy: boolean
   className: string
+  place: 'row' | 'detail'
   onClick: () => void
 }) {
   const label = running ? '停止' : '运行'
   return (
     <button
       type="button"
+      role={place === 'detail' ? 'menuitem' : undefined}
       className={className}
       title={label}
-      data-dock-tip={label}
+      data-dock-tip={place === 'detail' ? undefined : label}
       aria-label={label}
       disabled={busy}
       onClick={onClick}
     >
       {running ? <StopIcon aria-hidden className="size-[14px]" /> : <PlayIcon aria-hidden className="size-[14px]" />}
+      {place === 'detail' ? label : null}
     </button>
   )
 }
@@ -125,6 +131,7 @@ function PluginActions({ actions, record, busy, place, run }: FsActionsProps) {
         <PluginRunButton
           running={running}
           busy={busy}
+          place={place}
           className={cls}
           onClick={() => {
             if (current) run(current)
@@ -137,6 +144,7 @@ function PluginActions({ actions, record, busy, place, run }: FsActionsProps) {
           action={action}
           record={record}
           busy={busy}
+          place={place}
           run={() => run(action)}
           className={btnClass(place, action.tone === 'danger')}
         />

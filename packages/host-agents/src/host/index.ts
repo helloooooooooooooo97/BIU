@@ -1,7 +1,7 @@
 import { Service, type Context } from 'cordis'
 import type { LlmConfig } from '@biu/host-llm'
 import type { AgentTurn, ClaimedInput } from '@biu/type-agent-loop'
-import type { MessageSender } from '@biu/type-session'
+import type { MessageSender, LiveUiContext } from '@biu/type-session'
 
 export type { AgentTurn, LlmConfig }
 
@@ -12,6 +12,7 @@ export interface AgentSendOptions {
   /** 消息来源：Live 派工时传入 { type: 'session', sessionId } */
   sender?: MessageSender
   images?: Array<{ name: string; mime: string; url: string }>
+  liveContext?: LiveUiContext
 }
 
 export interface AgentHandle {
@@ -148,6 +149,7 @@ export class AgentsService extends Service {
           ...(extraTools.length ? { extraTools } : {}),
           ...(opts?.sender ? { sender: opts.sender } : {}),
           ...(images ? { images } : {}),
+          ...(opts?.liveContext ? { liveContext: opts.liveContext } : {}),
         }
 
         // Cursor 同款：忙碌且已有 wake 排队时，再发送 → inject（并入该 wake 的下一回合）
@@ -178,6 +180,7 @@ export class AgentsService extends Service {
           ...(extraTools.length ? { extraTools } : {}),
           ...(opts?.sender ? { sender: opts.sender } : {}),
           ...(images ? { images } : {}),
+          ...(opts?.liveContext ? { liveContext: opts.liveContext } : {}),
         })
         this.emitInbox(id)
       },

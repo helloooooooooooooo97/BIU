@@ -99,10 +99,8 @@ test('Backspace in the middle of a paragraph does not jump to the title', () => 
 test('Enter at the start of TipTap stays in the document', () => {
   const { editor, host } = makeEditor('hello')
   editor.chain().focus().setTextSelection(Selection.atStart(editor.state.doc)).run()
-  const title = listenTitle()
-  press(editor, 'Enter')
-  title.stop()
-  assert.equal(title.hits(), 0)
+  const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+  assert.equal(handleContentTitleNav(editor.view, event), false)
   editor.destroy()
   host.remove()
 })

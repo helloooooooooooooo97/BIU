@@ -1,13 +1,14 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { render } from '@testing-library/react'
-import { ENABLE_PAGE_BLOCK_PLUGIN, formatPageBlockFence, parsePageBlockMeta, requestEnablePageBlockPlugin } from './page-block-meta.ts'
+import { ENABLE_PAGE_BLOCK_PLUGIN, formatPageBlockFence, parsePageBlockData, parsePageBlockMeta, requestEnablePageBlockPlugin } from './page-block-meta.ts'
 import { PageBlockMissing } from './page-block-view.tsx'
 
 test('page block fence keeps plugin id in the document', () => {
   assert.deepEqual(parsePageBlockMeta('kind=excalidraw plugin=page-excalidraw'), {
     kind: 'excalidraw',
     plugin: 'page-excalidraw',
+    extras: {},
   })
   assert.match(
     formatPageBlockFence('excalidraw', 'page-excalidraw', { file: 'assets/a.json' }),
@@ -29,6 +30,47 @@ test('missing block shows stored source and asks to enable the stored plugin', (
   const enable = container.querySelector('[data-testid="page-block-enable"]')
   assert.equal(enable?.getAttribute('aria-label'), '启用')
   assert.ok(enable?.querySelector('svg'))
+})
+
+test('html pageBlock fence stores raw html and deck on the header', () => {
+  assert.deepEqual(parsePageBlockMeta('kind=html plugin=page-html-blocks deck=true'), {
+    kind: 'html',
+    plugin: 'page-html-blocks',
+    extras: { deck: true },
+  })
+  const src = formatPageBlockFence('html', 'page-html-blocks', {
+    html: '<div style="color:#fff">爱乐之城</div>',
+    deck: true,
+  })
+  assert.match(src, /:::pageBlock \{kind=html plugin=page-html-blocks deck=true\}/)
+  assert.match(src, /<div style="color:#fff">爱乐之城<\/div>/)
+  assert.doesNotMatch(src, /\\"/)
+  assert.doesNotMatch(src, /"html":/)
+  assert.deepEqual(parsePageBlockData('html', '<div>裸 HTML</div>', { deck: false }), {
+    deck: false,
+    html: '<div>裸 HTML</div>',
+  })
+  assert.equal(parsePageBlockData('html', '{"html":"<p>旧</p>","deck":true}').html, '<p>旧</p>')
+  const frame = formatPageBlockFence('htmlframe', 'page-html-blocks', {
+    html: '<html></html>',
+    deck: false,
+    height: 300,
+  })
+  assert.match(frame, /kind=htmlframe plugin=page-html-blocks deck=false height=300/)
+  assert.match(frame, /<html><\/html>/)
+  const sized = formatPageBlockFence('html', 'page-html-blocks', {
+    html: '<div>卡</div>',
+    deck: true,
+    width: '100%',
+    height: '100vh',
+  })
+  assert.match(sized, /width=100%/)
+  assert.match(sized, /height=100vh/)
+  assert.deepEqual(parsePageBlockMeta('kind=html plugin=page-html-blocks deck=true width=100% height=100vh').extras, {
+    deck: true,
+    width: '100%',
+    height: '100vh',
+  })
 })
 
 test('enable button only dispatches the stored plugin id', () => {

@@ -143,10 +143,14 @@ export function setInspectorDbPath(paneId: string, next?: string) {
   const path = next === undefined ? paneId : next
   const stored = isInspectorDatabasePath(path) ? path : ''
   if (stored) abandonedPanes.delete(id)
-  if ((paths.get(id) ?? '') === stored) return
+  if ((paths.get(id) ?? '') === stored) {
+    if (stored) mergeDuplicateInspectorPanes(id)
+    return
+  }
   if (!stored) paths.delete(id)
   else paths.set(id, stored)
   bump()
+  if (stored) mergeDuplicateInspectorPanes(id)
 }
 
 function listStoredPaneIds() {
@@ -178,6 +182,7 @@ export function restoreInspectorDbPaths(next?: Record<string, string>) {
   abandonedPanes.clear()
   for (const [paneId, path] of Object.entries(incoming)) paths.set(paneId, path)
   bump()
+  mergeDuplicateInspectorPanes()
 }
 
 /** 关掉检查器里这一栏时清掉路径，避免左侧再点同一页又把右侧弹回来。 */
@@ -195,13 +200,79 @@ export function inspectorCollectionTabId(collection: string) {
   return `database:${collection}`
 }
 
-function hrefPathKey(href: string) {
+/** 同一数据页：路径不含 query。 */
+export function inspectorPageKey(href: string) {
   return String(href || '').split('?')[0]
 }
 
 function paneWithHref(tabId: string, href: string) {
-  const key = hrefPathKey(href)
-  return paneIdsForTab(tabId).find((id) => hrefPathKey(getInspectorDbPath(id)) === key)
+  const key = inspectorPageKey(href)
+  if (!key) return undefined
+  return paneIdsForTab(tabId).find((id) => inspectorPageKey(getInspectorDbPath(id)) === key)
+}
+
+function paneWithPageKey(href: string) {
+  const key = inspectorPageKey(href)
+  if (!key) return undefined
+  for (const id of listStoredPaneIds()) {
+    if (inspectorPageKey(panePath(id)) === key) return id
+  }
+  return undefined
+}
+
+function pickCanonicalPane(ids: string[], prefer?: string) {
+  const base = ids.find((id) => !id.includes('::'))
+  if (base) return base
+  if (prefer && ids.includes(prefer)) return prefer
+  return ids.slice().sort()[0]!
+}
+
+function emitInspectorPanesClosed(ids: string[]) {
+  for (const id of ids) {
+    window.dispatchEvent(new CustomEvent('biu:inspector-pane-closed', { detail: id }))
+  }
+}
+
+/** 同一数据页只留一栏；关掉重复实例。 */
+export function mergeDuplicateInspectorPanes(prefer?: string) {
+  const groups = new Map<string, string[]>()
+  for (const paneId of listStoredPaneIds()) {
+    const key = inspectorPageKey(panePath(paneId))
+    if (!key) continue
+    const list = groups.get(key) ?? []
+    list.push(paneId)
+    groups.set(key, list)
+  }
+  const closed: string[] = []
+  for (const ids of groups.values()) {
+    if (ids.length < 2) continue
+    const keep = pickCanonicalPane(ids, prefer)
+    for (const id of ids) {
+      if (id === keep) continue
+      paths.delete(id)
+      abandonedPanes.add(id)
+      closed.push(id)
+    }
+  }
+  if (closed.length) {
+    bump()
+    emitInspectorPanesClosed(closed)
+  }
+  return closed
+}
+
+/** 加号再开同一张表的默认视图时，复用已有栏。 */
+export function reuseInspectorOfferPane(tabId: string, opened: string[]) {
+  const collection = tabId.startsWith('database:') ? tabId.slice('database:'.length) : ''
+  const defaultKey = collection ? inspectorPageKey(databaseAllViewPath(collection)) : ''
+  for (const id of opened) {
+    if (slotTabId(id) !== tabId) continue
+    const path = getInspectorDbPath(id)
+    if (!path) return id
+    const key = inspectorPageKey(path)
+    if (defaultKey && key === defaultKey) return id
+  }
+  return undefined
 }
 
 function revealInspectorPane(paneId: string, href: string) {
@@ -222,25 +293,23 @@ export function focusInspectorIfOpen(collection: string, href: string) {
   return true
 }
 
-/** 右侧检查器打开这条路径，中间主界面不动。默认同表实例一起改路径；unique 时同页只聚焦、不同页新开。 */
+/** 右侧检查器打开这条路径，中间主界面不动。同一数据页只聚焦；unique 时不同页才新开。 */
 export function showInInspector(collection: string, href: string, opts?: { unique?: boolean }) {
   const tabId = inspectorCollectionTabId(collection)
   const unique = opts?.unique === true
+  const same = paneWithHref(tabId, href) ?? paneWithPageKey(href)
+  if (same) {
+    revealInspectorPane(same, href)
+    return
+  }
   const paneIds = paneIdsForTab(tabId)
   if (unique) {
-    const same = paneWithHref(tabId, href)
-    if (same) {
-      revealInspectorPane(same, href)
-      return
-    }
     const live = paneIds.filter((id) => getInspectorDbPath(id))
     const target = live.length ? nextInspectorPaneId(tabId) : tabId
     revealInspectorPane(target, href)
     return
   }
-  for (const paneId of paneIds) setInspectorDbPath(paneId, href)
-  window.dispatchEvent(new Event('biu:inspector-open'))
-  window.dispatchEvent(new CustomEvent('biu:inspector-tab', { detail: tabId }))
+  revealInspectorPane(tabId, href)
 }
 
 /** 右侧检查器打开这条记录。同一页已在检查器里则只聚焦。 */

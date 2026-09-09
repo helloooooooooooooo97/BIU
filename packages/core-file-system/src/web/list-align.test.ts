@@ -8,7 +8,8 @@ const css = readFileSync(resolve(import.meta.dirname, './fsdb-style.ts'), 'utf8'
 test('list and detail share the chat column max width with side padding', () => {
   assert.match(css, /\.fsdb-main\{[^}]*max-width:var\(--dsw-chat-max-width\)/)
   assert.match(css, /\.fsdb-main\{[^}]*margin-inline:auto/)
-  assert.match(css, /\.fsdb-main\{[^}]*padding:80px 80px 16px/)
+  assert.match(css, /\.fsdb-main\{[^}]*padding:80px 80px 16px calc\(80px - var\(--fsdb-check-gutter\)\)/)
+  assert.match(css, /\.fsdb-page:not\(\.is-sheet\) \.fsdb-main > \.fsdb-detail-title-row,\.fsdb-page:not\(\.is-sheet\) \.fsdb-main > \.tasks-toolbar\{[^}]*padding-left:var\(--fsdb-check-gutter\)/)
   assert.match(css, /\.fsdb-main > \.fsdb-detail-title-row\{[^}]*flex:none/)
   assert.match(css, /\.fsdb-detail-title-row\{[^}]*padding-bottom:16px/)
   assert.match(css, /\.fsdb-detail-main\{[^}]*max-width:var\(--dsw-chat-max-width\)/)
@@ -29,7 +30,7 @@ test('list and detail share the chat column max width with side padding', () => 
   assert.match(css, /\.fsdb-page \.tasks-table \[data-dock-tip\]::after\{[^}]*z-index:80/)
   assert.match(css, /\.fsdb-page \.tasks-table\{[^}]*font-weight:600/)
   assert.match(css, /\.fsdb-cell\{[^}]*overflow:hidden/)
-  assert.match(css, /\.fsdb-page \.tasks-table td\{[^}]*overflow:hidden/)
+  assert.match(css, /\.fsdb-page \.tasks-table td\{[^}]*overflow:visible/)
   assert.match(css, /\.fsdb-page \.tasks-table:not\(\.is-wrap\) \.fsdb-cell > span:not\(\.fsdb-ref-chips\):not\(\.biu-tags\):not\(\.fsdb-person-list\)\{[^}]*text-overflow:ellipsis/)
   assert.doesNotMatch(css, /\.fsdb-page \.tasks-table th,\.fsdb-page \.tasks-table td\{[^}]*overflow:visible/)
   assert.match(css, /\.fsdb-page \.tasks-table \.biu-tag,\.fsdb-page \.fsdb-cell \.biu-tag,\.fsdb-page \.fsdb-proprow-v \.biu-tag,\.fsdb-page \.fsdb-proprow-v \.fsdb-token,\.fsdb-page \.tasks-table \.fsdb-token\{[^}]*font-weight:400/)

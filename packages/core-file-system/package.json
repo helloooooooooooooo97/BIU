@@ -12,6 +12,7 @@
     "./inspector-db-route": "./src/web/inspector-db-route.ts"
   },
   "dependencies": {
+    "@biu/core-pick": "0.1.0",
     "@biu/database-ui": "0.1.0",
     "@biu/host-plugin-loader": "0.1.0",
     "@biu/host-sessions": "0.1.0",

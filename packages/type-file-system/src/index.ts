@@ -233,7 +233,13 @@ export const BUILTIN_FIELDS = {
   content: { type: 'file', label: '内容' },
   emoji: { type: 'string', label: '图标', writable: true },
   tags: { type: 'multi-select', label: '标签', writable: true },
-  facet: { type: 'facet', label: '合集', writable: true },
+  facet: {
+    type: 'facet',
+    label: '合集',
+    writable: true,
+    description:
+      '贴合集并填属性。一个合集：{tags:["facet-2"],values:{导演:"查泽雷"}}。多个合集 values 必须按 id 分组：{tags:["facet-2","awards"],values:{"facet-2":{导演:"查泽雷"},awards:{oscar:true}}}。省略 tags 只合并属性，不撕掉其它合集。',
+  },
   parentId: { type: 'ref', label: '父级', writable: true },
   dependsOn: { type: 'multi-ref', label: '依赖', writable: true },
   createdBy: { type: 'person', label: '创建人', writable: false },

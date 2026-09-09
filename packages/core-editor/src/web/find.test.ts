@@ -1,7 +1,8 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { Editor } from '@tiptap/core'
-import { findInPmDoc, findRanges, wrapFindIndex } from './find-ranges.ts'
+import { NodeSelection } from '@tiptap/pm/state'
+import { findInPmDoc, findRanges, htmlVisibleText, wrapFindIndex } from './find-ranges.ts'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { applyEditorFind } from './find-plugin.ts'
@@ -45,6 +46,29 @@ test('findInPmDoc matches visible text positions', () => {
   editor.destroy()
 })
 
+test('htmlVisibleText keeps inner copy', () => {
+  assert.equal(htmlVisibleText('<div>爱乐之城</div>'), '爱乐之城')
+  assert.equal(htmlVisibleText('<script>x()</script><p>海报</p>'), '海报')
+})
+
+test('findInPmDoc highlights an html pageBlock once, not each inner match', () => {
+  const editor = new Editor({
+    extensions: pageEditorExtensions(),
+    content: `正文\n\n:::pageBlock {kind=html plugin=page-html-blocks}\n{"html":"<div>爱乐之城海报 爱乐之城</div>"}\n:::\n`,
+    contentType: 'markdown',
+  })
+  const hits = findInPmDoc(editor.state.doc, '爱乐之城')
+  assert.equal(hits.length, 1)
+  assert.equal(hits[0]?.node, true)
+  const next = applyEditorFind(editor, '爱乐之城', 0)
+  assert.equal(next.total, 1)
+  assert.equal(editor.state.selection instanceof NodeSelection, true)
+  if (editor.state.selection instanceof NodeSelection) {
+    assert.equal(editor.state.selection.node.type.name, 'pageBlock')
+  }
+  editor.destroy()
+})
+
 test('findInPmDoc matches across marks in one paragraph', () => {
   const editor = new Editor({
     extensions: pageEditorExtensions(),
@@ -70,6 +94,8 @@ test('tiptap find jump uses outline scroll, not ProseMirror scrollIntoView', () 
   assert.match(plugin, /scrollOutlineTarget/)
   assert.match(plugin, /scrollFindLikeOutline/)
   assert.match(plugin, /handleScrollToSelection/)
+  assert.match(plugin, /Decoration\.node/)
+  assert.match(plugin, /NodeSelection\.create/)
   assert.doesNotMatch(plugin, /tr\.scrollIntoView/)
 })
 
@@ -91,8 +117,10 @@ test('find bar pins to the inspector chrome, not the scrolling body', () => {
   assert.doesNotMatch(PAGE_EDITOR_STYLE, /\.page-find\{[^}]*position:sticky/)
 })
 
-test('find hits use rose tag text and wash', () => {
+test('find hits use rose tag text and wash; html blocks only get a pink frame', () => {
   assert.match(PAGE_EDITOR_STYLE, new RegExp(`\\.page-find-hit\\{[^}]*color:${TAG_TONE_ROSE}`))
   assert.match(PAGE_EDITOR_STYLE, /color-mix\(in srgb,#e255a1 22%,transparent\)/)
-  assert.match(PAGE_EDITOR_STYLE, /color-mix\(in srgb,#e255a1 34%,transparent\)/)
+  assert.match(PAGE_EDITOR_STYLE, /\.page-find-hit:not\(\.page-block\)/)
+  assert.match(PAGE_EDITOR_STYLE, /\.page-block\.page-find-hit\{[^}]*background:transparent/)
+  assert.match(PAGE_EDITOR_STYLE, /\.page-block\.page-find-hit/)
 })

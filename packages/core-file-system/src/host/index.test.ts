@@ -11,6 +11,8 @@ import type { CollectionSpec } from '@biu/type-file-system'
 import { REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
 import { facetsCollection } from './facets-collection.ts'
 import { runWithSession } from '@biu/host-sessions/scope'
+import { builtinAllViewId } from '../catalog-views.ts'
+import { savedViewRecordPath } from '../paths.ts'
 
 function notesCollection(): CollectionSpec {
   const rows = new Map<string, { id: string; title: string; status: string; pinned: boolean }>()
@@ -99,6 +101,67 @@ test('root lists registered collections; record read/update follows schema', asy
   assert.equal(written.value.status, 'done')
   await assert.rejects(() => db.update('/notes/n1', { pinned: true }), /not writable/)
   await assert.rejects(() => db.update('/notes/n1', { nope: 1 }), /unknown field/)
+})
+
+test('html banner is stored by file system and never written as a table field', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  const notes = notesCollection()
+  const seen: Record<string, unknown>[] = []
+  const innerUpdate = notes.update!
+  notes.update = async (id, patch) => {
+    seen.push({ ...patch })
+    return innerUpdate(id, patch)
+  }
+  db.register(notes)
+  const written = await db.update('/notes/n1', { banner: { kind: 'html', html: '<div>cover</div>' } })
+  assert.deepEqual(written.value.banner, { kind: 'html', html: '<div>cover</div>' })
+  assert.equal(seen.length, 0)
+  const read = await db.read('/notes/n1')
+  if (read.kind !== 'record') return
+  assert.deepEqual(read.value.banner, { kind: 'html', html: '<div>cover</div>' })
+  assert.equal('banner' in (await notes.get!('n1') ?? {}), false)
+  const listed = await db.list('/notes')
+  if (listed.kind !== 'collection') return
+  assert.equal('banner' in (listed.items.find((row) => row.id === 'n1') ?? {}), false)
+  await db.update('/notes/n1', { banner: null })
+  const cleared = await db.read('/notes/n1')
+  if (cleared.kind !== 'record') return
+  assert.equal('banner' in cleared.value, false)
+})
+
+test('each view keeps its own html banner outside list rows', async () => {
+  const ctx = new Context()
+  await ctx.plugin(tools)
+  class HttpStub extends Service {
+    constructor(c: Context) {
+      super(c, 'http')
+    }
+    route() {}
+    broadcast() {}
+  }
+  new HttpStub(ctx)
+  await ctx.plugin({ inject: ['tools', 'http'], apply: applyFileSystem })
+  const db = ctx.get('database') as DatabaseService
+  db.register(notesCollection())
+  const allPath = savedViewRecordPath('/notes', builtinAllViewId('/notes'))
+  await db.update(allPath, { banner: { kind: 'html', html: '<div>all</div>' } })
+  const all = await db.read(allPath)
+  if (all.kind !== 'record') return
+  assert.deepEqual(all.value.banner, { kind: 'html', html: '<div>all</div>' })
+  const created = await db.create('/views', [{ title: '看板', tablePath: '/notes', mode: 'graph' }])
+  const boardPath = created.items[0]?.path
+  assert.equal(typeof boardPath, 'string')
+  await db.update(boardPath!, { banner: { kind: 'htmlframe', html: '<div>board</div>' } })
+  const board = await db.read(boardPath!)
+  if (board.kind !== 'record') return
+  assert.deepEqual(board.value.banner, { kind: 'htmlframe', html: '<div>board</div>' })
+  const again = await db.read(allPath)
+  if (again.kind !== 'record') return
+  assert.deepEqual(again.value.banner, { kind: 'html', html: '<div>all</div>' })
+  const listed = await db.list('/views')
+  if (listed.kind !== 'collection') return
+  assert.ok(listed.items.every((row) => !('banner' in row)))
 })
 
 test('computed fields come from list and cannot be written', async () => {
@@ -654,7 +717,7 @@ test('agent db_stat omits builtin fields; service stat and list still include th
     caps?: string[]
   }
   assert.equal(agentStat.schema?.fields && 'id' in agentStat.schema.fields, false)
-  assert.equal(agentStat.schema?.fields && 'facet' in agentStat.schema.fields, false)
+  assert.equal((agentStat.schema?.fields as { facet?: { type?: string } } | undefined)?.facet?.type, 'facet')
   assert.ok(agentStat.schema?.fields && 'status' in agentStat.schema.fields)
   assert.equal(agentStat.schema?.records, undefined)
   assert.ok(agentStat.caps?.includes('list'))
@@ -1001,6 +1064,11 @@ test('facet schema can be written on tables that cannot update other fields', as
   if (withTags.kind !== 'record') return
   assert.deepEqual(withTags.value.tags, ['host-ui', 'lab'])
   assert.equal(withTags.value.emoji, '🔌')
+  await db.update('/plugins/p1', { banner: { kind: 'htmlframe', html: '<script></script>' } })
+  const withBanner = await db.read('/plugins/p1')
+  if (withBanner.kind !== 'record') return
+  assert.deepEqual(withBanner.value.banner, { kind: 'htmlframe', html: '<script></script>' })
+  assert.equal(withBanner.value.emoji, '🔌')
 })
 
 test('writeContent can persist intro on tables that cannot update other fields', async () => {
@@ -1058,6 +1126,68 @@ test('db_update /facets writes facet field packs', async () => {
   assert.equal('notes' in listed.items[0]!, false)
   const read = await db.content(`/facets/${id}`)
   assert.equal(read.value, '# 合集说明')
+})
+
+test('db_update page facet stores flat property values on the stamp', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  const pages = new Map<string, Record<string, unknown>>([['p1', { id: 'p1', title: '爱乐之城' }]])
+  db.register({
+    id: 'pages',
+    path: '/pages',
+    schema: { fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string', writable: true } } },
+    records: { update: true },
+    list: () => [...pages.values()] as { id: string }[],
+    get: (id) => pages.get(id) as { id: string } | undefined,
+    update: (id, patch) => {
+      const next = { ...pages.get(id), ...patch, id }
+      pages.set(id, next)
+      return next as { id: string }
+    },
+  })
+  db.register(facetsCollection(db.facets))
+  const created = await db.create('/facets', [{ title: '电影' }])
+  const id = String(created.items[0]?.value.id)
+  await db.update(`/facets/${id}`, {
+    fields: JSON.stringify([
+      { key: 'director', type: 'string', label: '导演' },
+      { key: 'year', type: 'number', label: '年份' },
+      { key: 'score', type: 'number', label: '评分' },
+    ]),
+  })
+  const tagged = await db.update('/pages/p1', {
+    facet: { tags: [id], values: { 导演: '查泽雷', 年份: 2016, 评分: 8.6 } },
+  })
+  assert.deepEqual(tagged.value.facet, {
+    tags: [id],
+    values: { [id]: { director: '查泽雷', year: 2016, score: 8.6 } },
+  })
+  assert.equal(db.facets.recordFacet('/pages', 'p1')?.values[id]?.director, '查泽雷')
+  const merged = await db.update('/pages/p1', { facet: { values: { 导演: 'Damien Chazelle' } } })
+  assert.equal(merged.value.facet.values[id].director, 'Damien Chazelle')
+  assert.equal(merged.value.facet.values[id].year, 2016)
+
+  const awards = await db.create('/facets', [{ title: '奖项' }])
+  const awardId = String(awards.items[0]?.value.id)
+  await db.update(`/facets/${awardId}`, {
+    fields: JSON.stringify([{ key: 'oscar', type: 'boolean', label: '奥斯卡' }]),
+  })
+  const both = await db.update('/pages/p1', {
+    facet: {
+      tags: [id, awardId],
+      values: {
+        [id]: { 导演: '查泽雷' },
+        [awardId]: { 奥斯卡: true },
+      },
+    },
+  })
+  assert.deepEqual(both.value.facet.tags, [id, awardId])
+  assert.equal(both.value.facet.values[id].director, '查泽雷')
+  assert.equal(both.value.facet.values[id].year, 2016)
+  assert.equal(both.value.facet.values[awardId].oscar, true)
+  const onlyAward = await db.update('/pages/p1', { facet: { values: { [awardId]: { oscar: false } } } })
+  assert.equal(onlyAward.value.facet.values[awardId].oscar, false)
+  assert.equal(onlyAward.value.facet.values[id].director, '查泽雷')
 })
 
 test('tables without records.create/delete reject create and delete', async () => {

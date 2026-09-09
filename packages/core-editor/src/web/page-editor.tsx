@@ -55,6 +55,26 @@ function asMarkdown(value: unknown) {
   return String(value)
 }
 
+function recordTitle(record: { title?: unknown; name?: unknown; id?: unknown }) {
+  return String(record.title ?? record.name ?? '').trim()
+}
+
+function stampLiveEditor(
+  root: HTMLElement | null,
+  next: { path?: string; title?: string; line?: number; insert?: number },
+) {
+  if (!root) return
+  if (next.path) root.dataset.livePath = next.path
+  else delete root.dataset.livePath
+  if (next.title) root.dataset.liveTitle = next.title
+  else delete root.dataset.liveTitle
+  if (next.line != null) root.dataset.liveLine = String(next.line)
+  else delete root.dataset.liveLine
+  if (next.insert != null) root.dataset.liveInsert = String(next.insert)
+  else delete root.dataset.liveInsert
+  root.dataset.liveAt = String(Date.now())
+}
+
 function holdSelection(event: MouseEvent) {
   event.preventDefault()
 }
@@ -280,6 +300,8 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
   const editorRef = useRef<Editor | null>(null)
   const pathRef = useRef(path)
   pathRef.current = path
+  const titleRef = useRef(recordTitle(record))
+  titleRef.current = recordTitle(record)
   const [findOpen, setFindOpen] = useState(false)
   const [findQuery, setFindQuery] = useState('')
   const [findIndex, setFindIndex] = useState(0)
@@ -311,7 +333,7 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
           if (isSendChatHotkey(event)) {
             event.preventDefault()
             const current = editorRef.current
-            const ref = current ? pickFromEditor(current, pathRef.current) : null
+            const ref = current ? pickFromEditor(current, pathRef.current, titleRef.current) : null
             if (ref) getPick()?.attach([ref])
             return true
           }
@@ -324,6 +346,18 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
             return false
           },
         },
+      },
+      onSelectionUpdate: ({ editor: current }) => {
+        const host = current.view.dom.closest('.page-editor')
+        if (host instanceof HTMLElement) {
+          const locus = markdownLocusFromSelection(current)
+          stampLiveEditor(host, {
+            path: pathRef.current,
+            title: titleRef.current,
+            line: locus?.start_line,
+            insert: locus?.insert,
+          })
+        }
       },
       onUpdate: ({ editor: current }) => {
         if (hydratedId.current !== record.id) return
@@ -413,11 +447,12 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
     const el = editor.view.dom
     bindEditorTextHost(el, {
       path: path || undefined,
+      title: recordTitle(record) || undefined,
       locusFromSelection: () => markdownLocusFromSelection(editor),
       locusFromElement: (node) => markdownLocusFromElement(editor, node),
     })
     return () => bindEditorTextHost(el, null)
-  }, [editor, source, path])
+  }, [editor, source, path, record])
 
   useEffect(() => {
     if (!editor || editor.isDestroyed || !source) return
@@ -502,9 +537,9 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
   }, [findOpen, findQuery, source, editor])
 
   const currentPick = () => {
-    if (source) return pickFromLocus(path, sourceFind.current?.getLocus() ?? null)
+    if (source) return pickFromLocus(path, sourceFind.current?.getLocus() ?? null, undefined, recordTitle(record))
     if (!editor || editor.isDestroyed) return null
-    return pickFromEditor(editor, path)
+    return pickFromEditor(editor, path, recordTitle(record))
   }
 
   const sendToChat = () => {

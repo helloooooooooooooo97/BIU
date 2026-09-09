@@ -64,6 +64,35 @@ test('heading stays a native h1 without node-view wrappers', () => {
   editor.destroy()
 })
 
+test('empty paragraphs serialize as blank lines, not &nbsp;', () => {
+  const editor = new Editor({
+    extensions: pageEditorExtensions(),
+    content: {
+      type: 'doc',
+      content: [
+        { type: 'paragraph' },
+        { type: 'paragraph' },
+        { type: 'paragraph', content: [{ type: 'text', text: 'hi' }] },
+        { type: 'paragraph' },
+        { type: 'paragraph' },
+      ],
+    },
+  })
+  const md = editor.getMarkdown()
+  assert.doesNotMatch(md, /&nbsp;/)
+  assert.match(md, /hi/)
+  editor.destroy()
+  const loaded = new Editor({
+    extensions: pageEditorExtensions(),
+    content: 'a\n\n&nbsp;\n\n&nbsp;\n\nb',
+    contentType: 'markdown',
+  })
+  assert.doesNotMatch(loaded.getMarkdown(), /&nbsp;/)
+  assert.match(loaded.getHTML(), /<p>a<\/p>/)
+  assert.match(loaded.getHTML(), /<p>b<\/p>/)
+  loaded.destroy()
+})
+
 test('slash suggestion uses a fixed high stacking context', async () => {
   const { readFile } = await import('node:fs/promises')
   const { resolve } = await import('node:path')

@@ -150,6 +150,14 @@ export function formatToolDetail(detail: string | undefined, toolKind?: ParsedTo
   return { kind: 'text', text: detail }
 }
 
+/** Bash 回复字数：stdout+stderr；其它工具用 detail 全文。折叠时也能看它是否在涨。 */
+export function toolOutputChars(detail: string | undefined, kind?: ParsedToolCall['kind']): number {
+  if (!detail) return 0
+  const formatted = formatToolDetail(detail, kind)
+  if (formatted?.kind === 'bash') return formatted.stdout.length + formatted.stderr.length
+  return detail.length
+}
+
 export function prettyJsonString(raw: string): string {
   const parsed = parseJsonValue(raw)
   if (parsed === undefined) return raw

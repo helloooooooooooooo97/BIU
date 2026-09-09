@@ -3,6 +3,8 @@ export type EditorTextLocus = { start_line: number; end_line: number; text: stri
 export type EditorTextHost = {
   /** db_content 路径，如 /pages/p002 */
   path?: string
+  /** 记录标题，如「爱乐之城」 */
+  title?: string
   locusFromSelection: () => EditorTextLocus | null
   locusFromElement: (el: Element) => EditorTextLocus | null
 }

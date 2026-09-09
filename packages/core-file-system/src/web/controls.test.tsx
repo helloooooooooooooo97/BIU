@@ -1,8 +1,10 @@
-import { test } from 'vitest'
+import { afterEach, test } from 'vitest'
 import assert from 'node:assert/strict'
 import { useState } from 'react'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, cleanup } from '@testing-library/react'
 import { AppDialog, LocalText } from './controls.tsx'
+
+afterEach(() => cleanup())
 
 test('named AppDialog keeps draft local so the parent does not re-render while typing', () => {
   let parentRenders = 0
@@ -35,6 +37,28 @@ test('named AppDialog keeps draft local so the parent does not re-render while t
   assert.equal(confirmed, '')
   fireEvent.click(screen.getByRole('button', { name: '保存' }))
   assert.equal(confirmed, '列表改名')
+})
+
+test('AppDialog keeps cancel enabled when confirm is disabled', () => {
+  let canceled = false
+  render(
+    <AppDialog
+      title="合集"
+      confirm="贴上"
+      disabled
+      body={<p>还没有合集</p>}
+      onCancel={() => {
+        canceled = true
+      }}
+      onConfirm={() => {}}
+    />,
+  )
+  const cancel = screen.getByRole('button', { name: '取消' }) as HTMLButtonElement
+  const ok = screen.getByRole('button', { name: '贴上' }) as HTMLButtonElement
+  assert.equal(cancel.disabled, false)
+  assert.equal(ok.disabled, true)
+  fireEvent.click(cancel)
+  assert.equal(canceled, true)
 })
 
 test('AppDialog can hide cancel so an alert only has a confirm button', () => {

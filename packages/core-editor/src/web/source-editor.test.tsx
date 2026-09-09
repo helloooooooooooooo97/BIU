@@ -15,8 +15,8 @@ test('source editor uses CodeMirror markdown highlighting and line numbers', () 
   assert.match(src, /page-source-editor/)
   assert.match(src, /getLocus/)
   assert.match(src, /isAtStart/)
-  assert.match(src, /cm-selectionLayer \.cm-selectionBackground[\s\S]*background: 'Highlight'/)
-  assert.doesNotMatch(src, /cm-selectionBackground[\s\S]*dsw-business/)
+  assert.match(src, /cm-selectionLayer \.cm-selectionBackground[\s\S]*dsw-pick/)
+  assert.doesNotMatch(src, /background: 'Highlight'/)
 })
 
 test('source editor mounts a CodeMirror view for markdown', async () => {

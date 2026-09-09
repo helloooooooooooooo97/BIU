@@ -8,7 +8,7 @@ export function isDocStartSelection(from: number, empty: boolean, docStart: numb
   return empty && from === docStart
 }
 
-/** 正文最开头空选区：上方向键或退格（Mac 上的 Delete）回到标题末尾。 */
+/** 正文最开头空选区：上方向键或退格（Mac 上的 Delete）回到标题末尾。回车只换行，不跳标题。 */
 export function shouldLeaveContentForTitle(
   key: string,
   flags: { shiftKey: boolean; altKey?: boolean; metaKey?: boolean; ctrlKey?: boolean; isComposing?: boolean },

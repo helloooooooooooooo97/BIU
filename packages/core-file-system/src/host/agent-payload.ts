@@ -17,7 +17,7 @@ export class AgentDbCompact {
     const fields: Record<string, unknown> = {}
     for (const [key, field] of Object.entries(schema.fields)) {
       const builtin = defaults[key]
-      if (builtin && this.specsMatch(field, builtin)) continue
+      if (key !== 'facet' && builtin && this.specsMatch(field, builtin)) continue
       fields[key] = this.field(key, field)
     }
     const actions = (schema.actions ?? []).map((item) => this.action(item)).filter(Boolean)
@@ -244,7 +244,7 @@ export class AgentDbCompact {
   }
 
   private skipListKey(key: string, keepMeta: boolean) {
-    if (key === 'path' || key === 'kind') return true
+    if (key === 'path' || key === 'kind' || key === 'banner') return true
     if (!keepMeta && LIST_META_KEYS.has(key)) return true
     return false
   }
