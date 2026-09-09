@@ -10,6 +10,7 @@ import {
   mergeCatalogViews,
   mergeTableViews,
   stubBuiltinAllView,
+  isBuiltinAllViewForCollection,
   stubBuiltinCatalogView,
   catalogRowOpenTarget,
   builtinTagViewId,
@@ -47,6 +48,12 @@ test('stub builtin catalog view from route id', () => {
   assert.equal(stubBuiltinCatalogView('user-1'), null)
   assert.equal(isBuiltinCatalogViewId('builtin-all:/sessions'), false)
   assert.equal(stubBuiltinCatalogView('builtin-all:/sessions'), null)
+})
+
+test('builtin all view ids belong to one collection', () => {
+  assert.equal(isBuiltinAllViewForCollection('builtin-all:/sessions', '/sessions'), true)
+  assert.equal(isBuiltinAllViewForCollection('builtin-all:/sessions', '/pages'), false)
+  assert.equal(isBuiltinAllViewForCollection('mine', '/sessions'), false)
 })
 
 test('every registered table gets a read-only 全部xx view', () => {
