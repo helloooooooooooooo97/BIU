@@ -229,11 +229,11 @@ const CSS = `
 .fsdb-page .tasks-table .fsdb-col-resizer:hover::after,.fsdb-page .tasks-table .fsdb-col-resizer.is-active::after{background:var(--dsw-pick,#5b9fd6)}
 .fsdb-page .tasks-table.is-col-resize{cursor:col-resize;user-select:none}
 .fsdb-page .tasks-table td:has(> .fsdb-row-check),.fsdb-page .tasks-table th:has(> .fsdb-row-check){position:relative;z-index:7;overflow:visible}
-.fsdb-check-rail{position:sticky;top:0;left:0;z-index:21;height:0;width:0;margin:0 0 0 calc(var(--fsdb-check-gutter) * -1);overflow:visible;pointer-events:none}
-.fsdb-check-rail .fsdb-row-check{left:2px;top:14px;transform:none;pointer-events:auto}
-.fsdb-row-check{position:absolute;top:50%;left:0;z-index:12;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;margin:0;transform:translate(calc(-100% - 4px),-50%);opacity:1;pointer-events:auto}
-.fsdb-row-check .fsdb-boolbox{width:15px;height:15px;border-color:#F0EFED;background:#202020}
-.fsdb-row-check.is-on .fsdb-boolbox{border-color:transparent;background:var(--dsw-pick,#2383e2)}
+.fsdb-check-rail{position:sticky;top:0;z-index:21;height:0;width:var(--fsdb-check-gutter);margin:0 0 0 calc(var(--fsdb-check-gutter) * -1);overflow:visible;pointer-events:none}
+.fsdb-check-rail .fsdb-row-check{left:0;top:10px;transform:none;pointer-events:auto}
+.fsdb-row-check{position:absolute;top:50%;left:0;z-index:12;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;margin:0;transform:translate(calc(-100% - 4px),-50%);opacity:0;pointer-events:auto}
+.tasks-table tbody tr:hover .fsdb-row-check,.tasks-table tbody tr:focus-within .fsdb-row-check,.fsdb-row-check.is-on,.fsdb-row-check:hover,.fsdb-row-check:focus-visible{opacity:1}
+.tasks-table-wrap:has(thead:hover) .fsdb-check-rail .fsdb-row-check,.fsdb-check-rail:hover .fsdb-row-check,.fsdb-check-rail .fsdb-row-check.is-on{opacity:1}
 .fsdb-page .tasks-th{display:inline-flex;align-items:center;gap:5px;font-weight:600;white-space:nowrap;flex-wrap:nowrap}
 .fsdb-page .tasks-th svg{color:inherit}
 .fsdb-page .tasks-table tr{cursor:default}
