@@ -260,12 +260,8 @@ export const SessionInspector = memo(function SessionInspector({
       if (!next) return
       const allowed = allowedTabs.includes(next) || allowedTabs.includes(slotTabId(next))
       if (!allowed) return
-      const existing = next.includes('::')
-        ? opened.find((id) => id === next)
-        : opened.find((id) => id === next || slotTabId(id) === next)
-      const id = existing ?? next
-      persistOpened(opened.includes(id) ? opened : [...opened, id])
-      setTab(id)
+      persistOpened(opened.includes(next) ? opened : [...opened, next])
+      setTab(next)
     }
     window.addEventListener('biu:inspector-tab', onTab)
     return () => window.removeEventListener('biu:inspector-tab', onTab)
