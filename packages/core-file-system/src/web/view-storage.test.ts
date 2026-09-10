@@ -104,9 +104,25 @@ test('savedViewFromRecord skips builtin rows and keeps filters', () => {
 })
 
 test('rememberRecords keeps titles when another inspector page overwrites the same collection', () => {
-  rememberRecords('/pages', [{ id: 'home', label: '首页' }])
-  rememberRecords('/pages', [{ id: 'draft', label: 'draft' }, { id: 'home', label: 'home' }])
-  const listed = loadRecords('/pages')
+  rememberRecords('/pages', [{ id: 'home', label: '首页' }], 'mine')
+  rememberRecords('/pages', [{ id: 'draft', label: 'draft' }, { id: 'home', label: 'home' }], 'mine')
+  const listed = loadRecords('/pages', 'mine')
   assert.equal(listed.find((row) => row.id === 'home')?.label, '首页')
   assert.equal(listed.find((row) => row.id === 'draft')?.label, 'draft')
+})
+
+test('rememberRecords scopes crumb rows to the current view', () => {
+  rememberRecords('/pages', [{ id: 'home', label: '首页' }, { id: 'notes', label: '笔记' }], 'all')
+  rememberRecords('/tasks', [{ id: 't1', label: '任务甲' }], 'board')
+  rememberRecords('/pages', [{ id: 'home', label: '首页' }], 'mine')
+  assert.deepEqual(
+    loadRecords('/pages', 'mine').map((row) => row.id),
+    ['home'],
+  )
+  assert.deepEqual(
+    loadRecords('/pages', 'all').map((row) => row.id),
+    ['home', 'notes'],
+  )
+  assert.equal(loadRecords('/pages', 'mine').some((row) => row.id === 't1'), false)
+  assert.equal(loadRecords('/pages', 'all').some((row) => row.id === 't1'), false)
 })
