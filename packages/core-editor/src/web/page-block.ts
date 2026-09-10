@@ -2,6 +2,7 @@ import { mergeAttributes, Node } from '@tiptap/core'
 import { ReactNodeViewRenderer } from '@tiptap/react'
 import { Plugin, PluginKey, type EditorState, type Transaction } from '@tiptap/pm/state'
 import type { Node as PmNode } from '@tiptap/pm/model'
+import { ReplaceStep } from '@tiptap/pm/transform'
 import { PageBlockView } from './page-block-view.tsx'
 import { getPageEditor } from './service.ts'
 import { formatPageBlockFence, parsePageBlockData, parsePageBlockMeta } from './page-block-meta.ts'
@@ -53,7 +54,17 @@ function nodePageBlockId(node: PmNode) {
   return isPageBlockId(node.attrs.id) ? String(node.attrs.id).trim() : ''
 }
 
-/** 打开旧文档、agent 写入无 id / 坏 id 的块时，在编辑器里补合法且不重复的 id。 */
+/** 整篇换文档（打开、离开源码、setContent）时再扫；日常编辑不跟。 */
+function shouldAssignPageBlockIds(transactions: readonly Transaction[], oldDoc: PmNode) {
+  return transactions.some((item) => {
+    if (item.getMeta(assignIdsKey)) return true
+    if (!item.docChanged) return false
+    const size = oldDoc.content.size
+    return item.steps.some((step) => step instanceof ReplaceStep && step.from === 0 && step.to === size)
+  })
+}
+
+/** 打开旧文档、源码贴完切回、agent 整篇写入时：缺 id / 坏 id / 重复 id 各补一次。 */
 export function assignPageBlockIds(state: EditorState): Transaction | null {
   const seen = new Set<string>()
   const patch: { pos: number; node: PmNode }[] = []
@@ -221,18 +232,9 @@ export const pageBlock = Node.create({
       }),
       new Plugin({
         key: assignIdsKey,
-        appendTransaction(transactions, _old, state) {
-          if (!transactions.some((item) => item.docChanged)) return null
+        appendTransaction(transactions, oldState, state) {
+          if (!shouldAssignPageBlockIds(transactions, oldState.doc)) return null
           return assignPageBlockIds(state)
-        },
-        view(editorView) {
-          const apply = () => {
-            if (editorView.isDestroyed) return
-            const tr = assignPageBlockIds(editorView.state)
-            if (tr) editorView.dispatch(tr)
-          }
-          apply()
-          return {}
         },
       }),
     ]
@@ -245,11 +247,10 @@ export const pageBlock = Node.create({
       editor.view.dispatch(editor.state.tr.setMeta(metaKey, true))
     })
     this.storage.stop = stop
-    // 构造时的 markdown 已在 state 里，但此时 dispatch 会被丢掉；下一拍再补缺 id。
     queueMicrotask(() => {
       if (editor.isDestroyed) return
       const tr = assignPageBlockIds(editor.state)
-      if (tr) editor.view.dispatch(tr)
+      if (tr) editor.view.dispatch(tr.setMeta(assignIdsKey, true))
     })
   },
 
