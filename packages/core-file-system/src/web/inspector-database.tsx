@@ -8,7 +8,7 @@ import { HeadlessDismiss, HEADLESS_DISMISS_IGNORE } from '@biu/public-ui'
 import { buildCrumbs, pathForCrumbTarget, type Crumb, type CrumbTarget } from './sidebar-nav.ts'
 import { CollectionBrowser } from './browser.tsx'
 import { CrumbTrail } from './crumb-trail.tsx'
-import { defaultViewId, loadRecords, loadViews, viewForPath } from './view-storage.ts'
+import { defaultViewId, loadRecords, loadViews, peekRecord, viewForPath } from './view-storage.ts'
 import { builtinAllViewId } from '../catalog-views.ts'
 import { DATA_MODULE, DATA_MODULE_ID, databaseAllViewPath, databaseRecordPath, databaseViewPath } from './database-path.ts'
 import {
@@ -139,9 +139,10 @@ function splitHref(href: string) {
 }
 
 function crumbsForRoute(
-  pathname: string,
+  href: string,
   tables: CollectionInfo[],
 ): { crumbs: Crumb[]; collection: string; viewId?: string; recordId?: string } {
+  const pathname = href.split('?')[0] || href
   const parsed = parseAppPath(pathname, [DATA_MODULE])
   const collection = parsed.kind === 'collection-view' || parsed.kind === 'record' ? parsed.collection : ''
   const table = tables.find((item) => item.path === collection)
@@ -152,8 +153,11 @@ function crumbsForRoute(
   const recordId = parsed.kind === 'record' ? parsed.recordId : undefined
   const resolvedView = collection ? viewForPath(collection, urlViewId) : null
   const activeViewId = resolvedView?.id ?? urlViewId
-  const records = collection ? loadRecords(collection) : []
-  const recordHit = recordId ? records.find((row) => row.id === recordId) : undefined
+  const listed = collection ? loadRecords(collection, activeViewId) : []
+  const recordHit =
+    recordId ? listed.find((row) => row.id === recordId) ?? peekRecord(collection, recordId) : undefined
+  const records =
+    recordId && recordHit && !listed.some((row) => row.id === recordId) ? [...listed, recordHit] : listed
   const crumbs = buildCrumbs({
     collection,
     collectionLabel: table ? tableLabel(table) : collection,

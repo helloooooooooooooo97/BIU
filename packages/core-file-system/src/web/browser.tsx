@@ -1232,9 +1232,9 @@ export function CollectionBrowser({
         mascot: recordPreviewMascot(selected),
       })
     }
-    rememberRecords(collectionPath, rows)
+    rememberRecords(collectionPath, rows, routeViewId ?? activeViewId ?? undefined)
     window.dispatchEvent(new Event('fsdb:crumb-labels'))
-  }, [collectionPath, items, schema?.labelField, selected])
+  }, [activeViewId, collectionPath, items, routeViewId, schema?.labelField, selected])
   const filterActive = countFilterRules(filterTree) > 0
   const activeView = views.find((view) => view.id === activeViewId)
   const [viewBanner, setViewBanner] = useState<unknown>(null)

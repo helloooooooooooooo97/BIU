@@ -33,6 +33,15 @@ export function loadViews(collectionPath: string): SavedView[] {
 export type CrumbRecord = { id: string; label: string; emoji?: string; mascot?: unknown }
 
 const memoryRecords = new Map<string, CrumbRecord[]>()
+const memoryRecordMeta = new Map<string, CrumbRecord>()
+
+function recordsKey(collectionPath: string, viewId?: string) {
+  return `${collectionPath}\0${viewId ?? ''}`
+}
+
+function recordMetaKey(collectionPath: string, recordId: string) {
+  return `${collectionPath}\0id:${recordId}`
+}
 
 function keepCrumbLabel(row: CrumbRecord, prev?: CrumbRecord) {
   const next = String(row.label ?? '').trim()
@@ -42,23 +51,28 @@ function keepCrumbLabel(row: CrumbRecord, prev?: CrumbRecord) {
   return next || last || row.id
 }
 
-export function rememberRecords(collectionPath: string, rows: CrumbRecord[]) {
-  const prev = memoryRecords.get(collectionPath) ?? []
-  const byId = new Map(prev.map((row) => [row.id, row]))
-  for (const row of rows) {
-    const last = byId.get(row.id)
-    byId.set(row.id, {
+export function rememberRecords(collectionPath: string, rows: CrumbRecord[], viewId?: string) {
+  const painted = rows.map((row) => {
+    const last = memoryRecordMeta.get(recordMetaKey(collectionPath, row.id))
+    const next = {
       ...last,
       ...row,
       label: keepCrumbLabel(row, last),
       emoji: row.emoji || last?.emoji,
-    })
-  }
-  memoryRecords.set(collectionPath, [...byId.values()])
+      mascot: row.mascot ?? last?.mascot,
+    }
+    memoryRecordMeta.set(recordMetaKey(collectionPath, row.id), next)
+    return next
+  })
+  memoryRecords.set(recordsKey(collectionPath, viewId), painted)
 }
 
-export function loadRecords(collectionPath: string): CrumbRecord[] {
-  return memoryRecords.get(collectionPath) ?? []
+export function loadRecords(collectionPath: string, viewId?: string): CrumbRecord[] {
+  return memoryRecords.get(recordsKey(collectionPath, viewId)) ?? []
+}
+
+export function peekRecord(collectionPath: string, recordId: string): CrumbRecord | undefined {
+  return memoryRecordMeta.get(recordMetaKey(collectionPath, recordId))
 }
 
 export function loadActiveViewId(collectionPath: string, listed: SavedView[]) {
