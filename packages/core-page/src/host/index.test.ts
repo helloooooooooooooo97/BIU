@@ -59,6 +59,8 @@ test('page plugin stores pages in SQLite under .page', async () => {
   assert.equal(registered[0]?.schema.fields.tags?.enum, undefined)
   assert.deepEqual(registered[0]?.schema.columns, ['title', 'tags', 'createdBy', 'updatedBy'])
   assert.deepEqual(registered[0]?.records, { update: true, create: true, delete: true })
+  assert.equal(registered[1]?.path, '/page-blocks')
+  assert.deepEqual(registered[1]?.records, { update: true })
 
   const spec = registered[0]!
   assert.equal((await spec.list()).length, 0)
@@ -112,6 +114,48 @@ test('page plugin stores pages in SQLite under .page', async () => {
   await assert.rejects(() => store.writeAsset('board.json', '{}'), (error) => error instanceof PageAssetConflictError)
   const overwritten = await store.writeAsset('board.json', '{}', { etag: asset.etag })
   assert.equal(overwritten.etag.length, 16)
+})
+
+test('page-blocks collection updates one fence by page::block id', async () => {
+  const ctx = new Context()
+  const registered: CollectionSpec[] = []
+  class FakeDb extends Service {
+    constructor(c: Context) {
+      super(c, 'database')
+    }
+    register(spec: CollectionSpec) {
+      registered.push(spec)
+    }
+  }
+  new FakeDb(ctx)
+  await ctx.plugin(tools)
+  const root = await mkdtemp(join(tmpdir(), 'page-blocks-'))
+  await ctx.plugin(fsPlugin, { root })
+  await ctx.plugin(page)
+  const pages = registered.find((item) => item.path === '/pages')!
+  const blocks = registered.find((item) => item.path === '/page-blocks')!
+  const created = await pages.create!([{
+    title: '海报',
+    notes: `:::pageBlock {kind=html plugin=page-html-blocks id=ab12cd34 deck=true}
+<div>旧</div>
+:::
+`,
+  }])
+  const pageId = created[0]!.id
+  const listed = await blocks.list()
+  assert.equal(listed.length, 1)
+  assert.equal(listed[0]?.id, `${pageId}::ab12cd34`)
+  assert.equal(listed[0]?.kind, 'html')
+  const updated = await blocks.update!(`${pageId}::ab12cd34`, {
+    data: { html: '<div>新</div>', deck: false },
+  })
+  assert.match(String(updated.data), /新/)
+  assert.match(String(updated.data), /"deck":false/)
+  const md = await readFile(join(root, `.page/${pageId}.md`), 'utf8')
+  assert.match(md, /id=ab12cd34 deck=false/)
+  assert.match(md, /<div>新<\/div>/)
+  assert.equal(blocks.create, undefined)
+  assert.equal(blocks.remove, undefined)
 })
 
 test('PagesStore reads existing markdown files from .page', async () => {
