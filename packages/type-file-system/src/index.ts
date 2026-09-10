@@ -33,6 +33,8 @@ export type FieldSpec = {
   computed?: boolean
   /** person：创建人一人；编辑人可多人。 */
   multiple?: boolean
+  /** ref / multi-ref 指向的表路径，缺省为本表。 */
+  collection?: string
 }
 
 export type AttachmentValue = { name: string; href: string; bytes?: number }

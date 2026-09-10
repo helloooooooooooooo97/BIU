@@ -36,7 +36,7 @@ function toRecord(row: IndexRow): DbRecord {
     title: row.title,
     pageId: row.page_id,
     blockId: row.block_id,
-    kind: row.kind,
+    blockKind: row.kind,
     plugin: row.plugin,
     data: row.data_json,
     ...recordBuiltinValues({ createdAt: row.page_created_at, updatedAt: row.page_updated_at }),
