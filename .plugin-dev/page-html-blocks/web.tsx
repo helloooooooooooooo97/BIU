@@ -775,22 +775,22 @@ export function apply(ctx: {
   ctx.pageEditor.registerBlock({
     kind: 'html',
     plugin: name,
-    label: 'HTML 直接渲染',
+    label: '排版',
     blockType: 'html',
     blockTypeLabel: 'HTML',
-    hint: 'HTML 直接渲染进文档；悬停可编辑，放大后按页内 HTML 块翻页放映',
-    aliases: ['html', 'html直', '静态html'],
+    hint: '用 HTML/CSS 做卡片和刊头，不跑脚本；悬停可编辑',
+    aliases: ['html', 'html直', '静态html', '直接渲染', '静态渲染'],
     defaults: { html: HTML_DIRECT_SAMPLE, deck: true },
     View: HtmlDirectCard,
   })
   ctx.pageEditor.registerBlock({
     kind: 'htmlframe',
     plugin: name,
-    label: 'HTML iframe 沙箱',
+    label: '小网页',
     blockType: 'html',
     blockTypeLabel: 'HTML',
-    hint: 'iframe 隔离小网页；放大后按页内 HTML 块翻页放映',
-    aliases: ['iframe', 'htmlf', 'frame', '幻灯片', 'slide'],
+    hint: '嵌一个能跑脚本的小页面；放大后可翻页放映',
+    aliases: ['iframe', 'htmlf', 'frame', '幻灯片', 'slide', '沙箱'],
     defaults: { html: HTML_FRAME_SAMPLE, height: 300, deck: true },
     View: HtmlFrameCard,
   })
