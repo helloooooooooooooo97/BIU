@@ -266,15 +266,15 @@ test('html and req page blocks register plugin id for slash', async () => {
   assert.match(req, /kind: 'req'/)
 })
 
-test('algorithm card keeps IME composition local until commit', async () => {
+test('algorithm card drafts locally and saves on blur like html source', async () => {
   const { readFile } = await import('node:fs/promises')
   const { resolve } = await import('node:path')
   const src = await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/page-algorithm/web.tsx'), 'utf8')
   assert.match(src, /function DraftField/)
-  assert.match(src, /onCompositionStart/)
-  assert.match(src, /onCompositionEnd/)
-  assert.match(src, /if \(composing\.current\) return/)
-  assert.match(src, /if \(!composing\.current && next !== valueRef\.current\)/)
+  assert.match(src, /onChange=\{\(event\) => setDraft\(event\.currentTarget\.value\)\}/)
+  assert.match(src, /onBlur=\{\(\) => \{[\s\S]*flush\(\)/)
+  assert.doesNotMatch(src, /onChange=\{\(event\) => \{[\s\S]*onCommitRef/)
+  assert.doesNotMatch(src, /onCompositionEnd/)
   assert.match(src, /testId="page-algorithm-title"/)
   assert.match(src, /testId="page-algorithm-prompt"/)
   assert.match(src, /testId="page-algorithm-code"/)

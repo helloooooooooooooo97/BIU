@@ -26,7 +26,7 @@ const DIFF_COLOR: Record<string, string> = {
   Hard: '#ff375f',
 }
 
-/** 草稿在本地；组字时不写回，避免 IME 被 pageBlock 更新打断。 */
+/** 草稿在本地；失焦/点到外部才写回，避免每次按键 update 把光标甩到末尾。 */
 function DraftField({
   as: Tag,
   value,
@@ -44,7 +44,6 @@ function DraftField({
 }) {
   const [draft, setDraft] = useState(value)
   const focused = useRef(false)
-  const composing = useRef(false)
   const draftRef = useRef(draft)
   const valueRef = useRef(value)
   const onCommitRef = useRef(onCommit)
@@ -61,7 +60,6 @@ function DraftField({
     [],
   )
   const flush = () => {
-    if (composing.current) return
     if (draftRef.current !== valueRef.current) onCommitRef.current(draftRef.current)
   }
   return (
@@ -79,23 +77,10 @@ function DraftField({
         focused.current = false
         flush()
       }}
-      onCompositionStart={() => {
-        composing.current = true
-      }}
-      onCompositionEnd={(event) => {
-        composing.current = false
-        const next = event.currentTarget.value
-        setDraft(next)
-        if (next !== valueRef.current) onCommitRef.current(next)
-      }}
       onKeyDown={(event) => {
         event.stopPropagation()
       }}
-      onChange={(event) => {
-        const next = event.currentTarget.value
-        setDraft(next)
-        if (!composing.current && next !== valueRef.current) onCommitRef.current(next)
-      }}
+      onChange={(event) => setDraft(event.currentTarget.value)}
       style={style}
     />
   )
