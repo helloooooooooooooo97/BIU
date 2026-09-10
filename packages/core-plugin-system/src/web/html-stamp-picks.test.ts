@@ -21,7 +21,7 @@ test('stamps every div and span plus semantic nodes', () => {
     </div>
   `
   document.body.append(root)
-  stampHtmlPickSurfaces(root, '0-abcd')
+  stampHtmlPickSurfaces(root, '0-abcd', { plugin: 'page-html-blocks' })
   const stamped = [...root.querySelectorAll('[data-html-pick]')]
   if (root.hasAttribute('data-html-pick') && !stamped.includes(root)) stamped.unshift(root)
   const tags = stamped.map((el) => el.tagName)
@@ -31,7 +31,7 @@ test('stamps every div and span plus semantic nodes', () => {
   assert.ok(tags.includes('SPAN'))
   assert.ok(tags.includes('BUTTON'))
   const chip = root.querySelector('.chip')
-  assert.equal(chip?.getAttribute('data-biu-kind'), 'html')
+  assert.equal(chip?.getAttribute('data-biu-plugin'), 'page-html-blocks')
   assert.equal(isHtmlPickSurface(chip!), true)
   const divs = [...root.querySelectorAll('div')]
   const spans = [...root.querySelectorAll('span')]
@@ -62,7 +62,7 @@ test('stampHtmlSource hits every poster div and span', () => {
       <span>🏆 奥斯卡最佳导演</span>
     </div>
   </div>`
-  const stamped = stampHtmlSource(html, '0-poster')
+  const stamped = stampHtmlSource(html, '0-poster', 'page-html-blocks')
   const wrap = document.createElement('div')
   wrap.innerHTML = stamped
   const divs = [...wrap.querySelectorAll('div')]

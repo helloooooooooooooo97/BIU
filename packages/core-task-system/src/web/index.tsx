@@ -15,6 +15,7 @@ export function apply(ctx: Context) {
       .registerView('/tasks', {
         id: 'graph',
         label: '依赖图',
+        plugin: name,
         Icon: ShareIcon,
         View: TaskDepGraph,
       })

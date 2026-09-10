@@ -103,6 +103,7 @@ export function PageBlockView({ node, updateAttributes, editor, getPos }: NodeVi
       data-page-block-plugin={plugin}
       data-page-block-id={blockId || undefined}
       data-page-block-capture=""
+      data-biu-plugin={plugin || undefined}
       data-biu-kind="plugin"
       data-biu-id={pickId}
       data-biu-label={pickLabel}

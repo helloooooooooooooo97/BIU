@@ -65,6 +65,10 @@ export function PageBlockStage({
       data-page-block={kind || undefined}
       data-page-block-plugin={plugin || undefined}
       data-page-block-id={String(row.blockId ?? '') || undefined}
+      data-biu-plugin={plugin || undefined}
+      data-biu-kind={plugin ? 'plugin' : undefined}
+      data-biu-id={plugin || undefined}
+      data-biu-label={spec?.label || kind || undefined}
       data-testid="page-block-stage"
     >
       {View ? (
@@ -125,6 +129,7 @@ export function PageBlocksView({ rows, onOpen }: FsViewProps) {
 export const pageBlocksCollectionView: CollectionViewType = {
   id: PAGE_BLOCKS_VIEW_ID,
   label: '组件',
+  plugin: 'core-editor-ui',
   Icon: RectangleGroupIcon,
   View: PageBlocksView,
 }
