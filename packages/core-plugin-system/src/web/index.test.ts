@@ -283,4 +283,6 @@ test('algorithm card drafts locally and saves on blur like html source', async (
   assert.doesNotMatch(src, /onChange=\{\(event\) => update\(\{ title:/)
   assert.doesNotMatch(src, /onChange=\{\(event\) => update\(\{ prompt:/)
   assert.doesNotMatch(src, /onChange=\{\(event\) => update\(\{ code:/)
+  assert.doesNotMatch(src, /data-biu-ignore/)
+  assert.doesNotMatch(src, /data-biu-plugin=\{name\}/)
 })

@@ -33,12 +33,14 @@ test('page-blocks view paints the registered block View', () => {
     />,
   )
   assert.equal(container.querySelector('[data-testid="html-ui"]')?.textContent, '<b>hi</b>')
+  assert.equal(container.querySelector('[data-testid="html-ui"]')?.getAttribute('data-biu-plugin'), 'page-html-blocks')
   assert.ok(container.querySelector('[data-testid="page-block-missing"]'))
 })
 
 test('gallery block writes notify other surfaces', () => {
   const src = readFileSync(resolve(import.meta.dirname, './page-blocks-view.tsx'), 'utf8')
   assert.match(src, /window.dispatchEvent\(new Event\('fsdb:change'\)\)/)
+  assert.match(src, /bindPageBlockPlugin/)
 })
 
 test('page-block detail content paints the registered View', () => {

@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { RectangleGroupIcon } from '@heroicons/react/16/solid'
 import type { DbRecord } from '@biu/type-file-system'
 import type { CollectionViewType, FsContentProps, FsViewProps } from '@biu/type-file-system/ui'
 import { PageBlockMissing } from './page-block-view.tsx'
+import { bindPageBlockPlugin } from './page-block-plugin-host.ts'
 import { getPageEditor, usePageEditorVersion } from './service.ts'
 
 export const PAGE_BLOCKS_VIEW_ID = 'blocks'
@@ -59,8 +60,11 @@ export function PageBlockStage({
     if (onChange) onChange(next)
     else void writeBlockData(String(row.id), next)
   }
+  const hostRef = useRef<HTMLDivElement | null>(null)
+  useLayoutEffect(() => bindPageBlockPlugin(hostRef.current, plugin), [plugin, kind, View, packed])
   return (
     <div
+      ref={hostRef}
       className="page-block"
       data-page-block={kind || undefined}
       data-page-block-plugin={plugin || undefined}
