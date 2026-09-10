@@ -69,11 +69,12 @@ test('views and events are system collections; tags sort with user tables', () =
     { path: '/facets' },
     { path: '/sessions' },
     { path: '/pages' },
+    { path: '/page-blocks' },
     { path: '/tasks' },
   ])
   assert.deepEqual(
     user.map((item) => item.path),
-    ['/sessions', '/tasks', '/pages', '/plugins', '/facets'],
+    ['/sessions', '/tasks', '/pages', '/page-blocks', '/plugins', '/facets'],
   )
   assert.deepEqual(
     system.map((item) => item.path),
