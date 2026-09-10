@@ -220,11 +220,9 @@ function HtmlDeckOverlay({
           flex: 1,
           minHeight: 0,
           width: '100%',
+          height: '100%',
           display: 'flex',
-          alignItems: 'safe center',
-          justifyContent: 'safe center',
-          overflow: 'auto',
-          padding: 32,
+          overflow: 'hidden',
           boxSizing: 'border-box',
         }}
       >
@@ -234,12 +232,11 @@ function HtmlDeckOverlay({
             srcDoc={slide.html}
             sandbox="allow-scripts"
             style={{
-              flex: 'none',
-              width: cssBoxSize(slide.width) ?? 'min(100%, 960px)',
-              height: cssBoxSize(slide.height) ?? '300px',
-              maxWidth: '100%',
-              maxHeight: '100%',
-              overflow: 'auto',
+              flex: 1,
+              width: '100%',
+              height: '100%',
+              minWidth: 0,
+              minHeight: 0,
               border: 'none',
               background: MAG_INK,
             }}
@@ -248,12 +245,13 @@ function HtmlDeckOverlay({
           <div
             data-testid="html-deck-slide"
             style={{
-              flex: 'none',
-              width: cssBoxSize(slide.width),
-              height: cssBoxSize(slide.height),
-              maxWidth: '100%',
-              maxHeight: '100%',
-              overflow: slide.width != null || slide.height != null ? 'auto' : undefined,
+              flex: 1,
+              width: '100%',
+              height: '100%',
+              minWidth: 0,
+              minHeight: 0,
+              overflow: 'auto',
+              boxSizing: 'border-box',
             }}
             dangerouslySetInnerHTML={{ __html: stamped }}
           />
@@ -548,7 +546,7 @@ function FloatBar({
    1) kind=html：直接渲染（无 iframe，无脚本）——内容裸渲染，无外框
    ============================================================ */
 
-const HTML_EDITORIAL_SAMPLE = `<div style="font-family:'Helvetica Neue','Arial',sans-serif;background:${MAG_INK};border:2px solid ${MAG_PAPER};color:${MAG_PAPER};margin:0;display:flex;flex-direction:column">
+const HTML_EDITORIAL_SAMPLE = `<div style="box-sizing:border-box;min-height:100%;height:100%;width:100%;font-family:'Helvetica Neue','Arial',sans-serif;background:${MAG_INK};border:2px solid ${MAG_PAPER};color:${MAG_PAPER};margin:0;display:flex;flex-direction:column">
   <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid ${MAG_PAPER};padding:8px 12px;padding-right:220px;font-size:11px;letter-spacing:.15em">
     <span style="font-weight:700">现代 ・ 美式</span><span style="font-weight:800">创立 2024</span>
   </div>
