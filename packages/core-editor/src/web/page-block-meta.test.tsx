@@ -8,11 +8,12 @@ test('page block fence keeps plugin id in the document', () => {
   assert.deepEqual(parsePageBlockMeta('kind=excalidraw plugin=page-excalidraw'), {
     kind: 'excalidraw',
     plugin: 'page-excalidraw',
+    id: '',
     extras: {},
   })
   assert.match(
-    formatPageBlockFence('excalidraw', 'page-excalidraw', { file: 'assets/a.json' }),
-    /:::pageBlock \{kind=excalidraw plugin=page-excalidraw\}/,
+    formatPageBlockFence('excalidraw', 'page-excalidraw', { file: 'assets/a.json' }, 'ab12cd34'),
+    /:::pageBlock \{kind=excalidraw plugin=page-excalidraw id=ab12cd34\}/,
   )
 })
 
@@ -36,6 +37,7 @@ test('html pageBlock fence stores raw html and deck on the header', () => {
   assert.deepEqual(parsePageBlockMeta('kind=html plugin=page-html-blocks deck=true'), {
     kind: 'html',
     plugin: 'page-html-blocks',
+    id: '',
     extras: { deck: true },
   })
   const src = formatPageBlockFence('html', 'page-html-blocks', {
@@ -66,10 +68,11 @@ test('html pageBlock fence stores raw html and deck on the header', () => {
   })
   assert.match(sized, /width=100%/)
   assert.match(sized, /height=100vh/)
-  assert.deepEqual(parsePageBlockMeta('kind=html plugin=page-html-blocks deck=true width=100% height=100vh').extras, {
-    deck: true,
-    width: '100%',
-    height: '100vh',
+  assert.deepEqual(parsePageBlockMeta('kind=html plugin=page-html-blocks id=ab12cd34 deck=true'), {
+    kind: 'html',
+    plugin: 'page-html-blocks',
+    id: 'ab12cd34',
+    extras: { deck: true },
   })
 })
 

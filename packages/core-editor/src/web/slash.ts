@@ -5,6 +5,7 @@ import Suggestion, { type SuggestionOptions } from '@tiptap/suggestion'
 import { SlashList } from './slash-list.tsx'
 import { placeSlashInWindow } from './slash-place.ts'
 import { slashMayOpen } from './editor-live.ts'
+import { createPageBlockId } from './page-block.ts'
 import { BASIC_BLOCK_TYPE, getPageEditor, type SlashInsert } from './service.ts'
 
 export type SlashItem = {
@@ -232,6 +233,7 @@ export function slashCatalog(): SlashItem[] {
             attrs: {
               kind: block.kind,
               plugin: block.plugin,
+              id: createPageBlockId(),
               data: typeof block.defaults === 'function' ? block.defaults() : { ...(block.defaults ?? {}) },
             },
           })
