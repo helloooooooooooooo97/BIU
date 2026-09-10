@@ -109,7 +109,7 @@ export const PAGE_EDITOR_STYLE = `
 .page-math-pop{position:fixed;z-index:10000;min-width:220px;max-width:min(360px,calc(100vw - 16px));padding:6px 8px;background:var(--dsw-sidebar);border:1px solid var(--dsw-border);border-radius:8px;box-shadow:0 8px 24px rgba(15,15,15,.16)}
 .page-math-pop-input{display:block;width:100%;margin:0;border:0;padding:2px 0;background:transparent;color:var(--dsw-label);font-family:var(--font-mono);font-size:13px;line-height:1.45;outline:none;resize:none}
 .page-editor .tiptap mark{border-radius:2px;padding:0 .08em}
-.page-blocks-view{min-width:0;flex:1;overflow:auto;padding:8px 12px 32px;display:flex;flex-direction:column;gap:20px}
+.page-blocks-view{min-width:0;min-height:0;flex:1;overflow:auto;padding:8px 12px 32px;display:flex;flex-direction:column;gap:20px}
 .page-blocks-view-card{min-width:0;display:flex;flex-direction:column;gap:8px}
 .page-blocks-view-title{align-self:flex-start;margin:0;border:0;padding:0;background:transparent;color:var(--dsw-label);font:inherit;font-size:13px;font-weight:650;cursor:pointer}
 .page-blocks-view-title:hover{color:var(--dsw-business)}

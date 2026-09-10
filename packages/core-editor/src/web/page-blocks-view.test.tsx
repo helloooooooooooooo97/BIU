@@ -37,6 +37,12 @@ test('page-blocks view paints the registered block View', () => {
   assert.ok(container.querySelector('[data-testid="page-block-missing"]'))
 })
 
+test('component gallery can scroll inside the collection stage', () => {
+  const css = readFileSync(resolve(import.meta.dirname, './style.ts'), 'utf8')
+  assert.match(css, /\.page-blocks-view\{[^}]*min-height:0/)
+  assert.match(css, /\.page-blocks-view\{[^}]*overflow:auto/)
+})
+
 test('gallery block writes notify other surfaces', () => {
   const src = readFileSync(resolve(import.meta.dirname, './page-blocks-view.tsx'), 'utf8')
   assert.match(src, /window.dispatchEvent\(new Event\('fsdb:change'\)\)/)
