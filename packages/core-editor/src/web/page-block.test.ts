@@ -85,7 +85,7 @@ test('html pageBlock markdown keeps raw html and deck on the fence', () => {
   assert.equal((block?.attrs?.data as { html?: string; deck?: boolean })?.html, '<div style="color:#fff">爱乐之城</div>')
   assert.equal((block?.attrs?.data as { deck?: boolean })?.deck, true)
   const out = editor.getMarkdown()
-  assert.match(out, /:::pageBlock \{kind=html plugin=page-html-blocks deck=true\}/)
+  assert.match(out, /:::pageBlock \{kind=html plugin=page-html-blocks id=[a-z0-9]+ deck=true\}/)
   assert.match(out, /<div style="color:#fff">爱乐之城<\/div>/)
   assert.doesNotMatch(out, /"html":/)
   editor.destroy()
@@ -130,7 +130,7 @@ test('pageBlock markdown keeps old fences without plugin id', () => {
   assert.equal(block?.attrs?.plugin, '')
   assert.deepEqual(block?.attrs?.data, { file: 'assets/excalidraw-demo.json' })
   const out = editor.getMarkdown()
-  assert.match(out, /:::pageBlock \{kind=excalidraw\}/)
+  assert.match(out, /:::pageBlock \{kind=excalidraw id=[a-z0-9]+\}/)
   assert.match(out, /"file": "assets\/excalidraw-demo.json"/)
   assert.doesNotMatch(out, /"elements"/)
   assert.doesNotMatch(out, /"height"/)
@@ -199,10 +199,30 @@ test('editor assigns a stable id when inserting or loading a pageBlock without o
     content: `:::pageBlock {kind=html plugin=page-html-blocks}\n<div>x</div>\n:::\n`,
     contentType: 'markdown',
   })
-  await new Promise((resolve) => setTimeout(resolve, 0))
+  await Promise.resolve()
   const block = editor.getJSON().content?.find((node) => node.type === 'pageBlock')
   assert.match(String(block?.attrs?.id ?? ''), /^[a-z0-9]{8}$/i)
   assert.match(editor.getMarkdown(), /:::pageBlock \{kind=html plugin=page-html-blocks id=[a-z0-9]+\}/)
+  editor.destroy()
+})
+
+test('setContent from agent without id or with a bad id gets a valid id', () => {
+  const editor = new Editor({
+    extensions: pageEditorExtensions(),
+    content: 'hello',
+    contentType: 'markdown',
+  })
+  editor.commands.setContent(
+    `:::pageBlock {kind=html plugin=page-html-blocks}\n<div>a</div>\n:::\n\n:::pageBlock {kind=html plugin=page-html-blocks id=no}\n<div>b</div>\n:::\n`,
+    { contentType: 'markdown', emitUpdate: false },
+  )
+  const ids = (editor.getJSON().content ?? [])
+    .filter((node) => node.type === 'pageBlock')
+    .map((node) => String(node.attrs?.id ?? ''))
+  assert.equal(ids.length, 2)
+  assert.match(ids[0]!, /^[a-z0-9]{8}$/i)
+  assert.match(ids[1]!, /^[a-z0-9]{8}$/i)
+  assert.notEqual(ids[0], ids[1])
   editor.destroy()
 })
 
