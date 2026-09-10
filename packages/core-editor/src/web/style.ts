@@ -14,7 +14,7 @@ export const PAGE_EDITOR_STYLE = `
 .page-block-handle-grip:active{cursor:grabbing}
 .page-block-handle-dots{display:block;width:10px;height:16px;background-image:radial-gradient(circle,currentColor 1.35px,transparent 1.45px);background-size:5px 5.2px;background-position:0 0}
 .page-block-handle-menu{position:absolute;left:26px;top:0;z-index:40;min-width:132px;padding:4px;display:flex;flex-direction:column;gap:1px;background:var(--dsw-sidebar);border:1px solid var(--dsw-border);border-radius:8px;box-shadow:0 8px 28px rgba(15,15,15,.12)}
-.page-block-handle-menu button{display:block;width:100%;margin:0;border:0;border-radius:6px;padding:6px 8px;background:transparent;color:var(--dsw-label);font:inherit;font-size:13px;font-weight:600;text-align:left;cursor:pointer}
+.page-block-handle-menu button{display:flex;align-items:center;gap:8px;width:100%;margin:0;border:0;border-radius:6px;padding:6px 8px;background:transparent;color:var(--dsw-label);font:inherit;font-size:13px;font-weight:600;text-align:left;cursor:pointer}
 .page-block-handle-menu button:hover{background:var(--dsw-hover)}
 .page-editor .tiptap>:first-child{margin-top:0}
 .page-editor .tiptap p,.page-editor .tiptap h1,.page-editor .tiptap h2,.page-editor .tiptap h3,.page-editor .tiptap ul,.page-editor .tiptap ol,.page-editor .tiptap blockquote,.page-editor .tiptap pre{margin:2px 0}
