@@ -1,6 +1,6 @@
 import { mergeAttributes, Node } from '@tiptap/core'
 import { ReactNodeViewRenderer } from '@tiptap/react'
-import { Plugin, PluginKey } from '@tiptap/pm/state'
+import { Plugin, PluginKey, type EditorState, type Transaction } from '@tiptap/pm/state'
 import type { Node as PmNode } from '@tiptap/pm/model'
 import { PageBlockView } from './page-block-view.tsx'
 import { getPageEditor } from './service.ts'
@@ -53,6 +53,30 @@ function nodePageBlockId(node: PmNode) {
   return isPageBlockId(node.attrs.id) ? String(node.attrs.id).trim() : ''
 }
 
+/** 打开旧文档、agent 写入无 id / 坏 id 的块时，在编辑器里补合法且不重复的 id。 */
+export function assignPageBlockIds(state: EditorState): Transaction | null {
+  const seen = new Set<string>()
+  const patch: { pos: number; node: PmNode }[] = []
+  state.doc.descendants((node, pos) => {
+    if (node.type.name !== 'pageBlock') return
+    const id = nodePageBlockId(node)
+    if (!id || seen.has(id)) {
+      patch.push({ pos, node })
+      return
+    }
+    seen.add(id)
+  })
+  if (!patch.length) return null
+  let tr = state.tr
+  for (const { pos, node } of patch.slice().sort((a, b) => b.pos - a.pos)) {
+    let next = createPageBlockId()
+    while (seen.has(next)) next = createPageBlockId()
+    seen.add(next)
+    tr = tr.setNodeMarkup(pos, undefined, { ...node.attrs, id: next })
+  }
+  return tr
+}
+
 export const pageBlock = Node.create({
   name: 'pageBlock',
   group: 'block',
@@ -101,7 +125,7 @@ export const pageBlock = Node.create({
   parseMarkdown: (token, helpers) => {
     const kind = String(token.attributes?.kind ?? 'card')
     const plugin = String(token.attributes?.plugin ?? '')
-    const id = isPageBlockId(token.attributes?.id) ? String(token.attributes.id) : ''
+    const id = isPageBlockId(token.attributes?.id) ? String(token.attributes.id) : createPageBlockId()
     const extras: Record<string, unknown> = {}
     if (typeof token.attributes?.deck === 'boolean') extras.deck = token.attributes.deck
     if (typeof token.attributes?.height === 'number') extras.height = token.attributes.height
@@ -197,36 +221,18 @@ export const pageBlock = Node.create({
       }),
       new Plugin({
         key: assignIdsKey,
-        view(editorView) {
-          queueMicrotask(() => {
-            if (editorView.isDestroyed) return
-            editorView.dispatch(editorView.state.tr.setMeta(assignIdsKey, true))
-          })
-          return {}
-        },
         appendTransaction(transactions, _old, state) {
-          const force = transactions.some((item) => item.getMeta(assignIdsKey))
-          if (!force && !transactions.some((item) => item.docChanged)) return null
-          const seen = new Set<string>()
-          const patch: { pos: number; node: PmNode }[] = []
-          state.doc.descendants((node, pos) => {
-            if (node.type.name !== 'pageBlock') return
-            const id = nodePageBlockId(node)
-            if (!id || seen.has(id)) {
-              patch.push({ pos, node })
-              return
-            }
-            seen.add(id)
-          })
-          if (!patch.length) return null
-          let tr = state.tr
-          for (const { pos, node } of patch.slice().sort((a, b) => b.pos - a.pos)) {
-            let next = createPageBlockId()
-            while (seen.has(next)) next = createPageBlockId()
-            seen.add(next)
-            tr = tr.setNodeMarkup(pos, undefined, { ...node.attrs, id: next })
+          if (!transactions.some((item) => item.docChanged)) return null
+          return assignPageBlockIds(state)
+        },
+        view(editorView) {
+          const apply = () => {
+            if (editorView.isDestroyed) return
+            const tr = assignPageBlockIds(editorView.state)
+            if (tr) editorView.dispatch(tr)
           }
-          return tr
+          apply()
+          return {}
         },
       }),
     ]
@@ -239,6 +245,12 @@ export const pageBlock = Node.create({
       editor.view.dispatch(editor.state.tr.setMeta(metaKey, true))
     })
     this.storage.stop = stop
+    // 构造时的 markdown 已在 state 里，但此时 dispatch 会被丢掉；下一拍再补缺 id。
+    queueMicrotask(() => {
+      if (editor.isDestroyed) return
+      const tr = assignPageBlockIds(editor.state)
+      if (tr) editor.view.dispatch(tr)
+    })
   },
 
   onDestroy() {
