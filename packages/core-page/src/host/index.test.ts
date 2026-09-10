@@ -167,6 +167,27 @@ test('page-blocks collection updates one fence by page::block id', async () => {
   assert.equal(blocks.remove, undefined)
 })
 
+test('clearing the last pageBlock fence drops the index row immediately', async () => {
+  const ctx = new Context()
+  await ctx.plugin(tools)
+  const root = await mkdtemp(join(tmpdir(), 'page-block-last-'))
+  await ctx.plugin(fsPlugin, { root })
+  const store = new PagesStore(ctx.fs.workspace as never, join(root, '.biu/assets'))
+  const index = new PageBlocksIndex(store, { hotWindowMs: 60_000, hotLimit: 0, warmLimit: 0 })
+  const pages = page.pagesCollection(store, index)
+  const fence = (id: string) => `:::pageBlock {kind=html plugin=page-html-blocks id=${id}}\n<div>${id}</div>\n:::\n`
+  const created = await pages.create!([{ title: '一页', notes: fence('aaaaaa11') + fence('bbbbbb22') }])
+  const id = created[0]!.id
+  assert.equal((await index.list()).length, 2)
+  await pages.update!(id, { notes: fence('aaaaaa11') })
+  assert.equal((await index.list()).length, 1)
+  await pages.update!(id, { notes: '只剩正文\n' })
+  assert.equal((await index.list()).length, 0)
+  const idle = await index.sync()
+  assert.equal(idle.scanned, 0)
+  assert.equal((await index.list()).length, 0)
+})
+
 test('page-block index scans a hot batch instead of every page', async () => {
   const ctx = new Context()
   await ctx.plugin(tools)
