@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { PhotoIcon, XMarkIcon } from '@heroicons/react/16/solid'
+import { PhotoIcon, Square2StackIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import { HeadlessPopover } from '@biu/public-ui'
 import { getPick } from '@biu/core-pick/web'
 import {
@@ -56,6 +56,71 @@ function askNewBanner(opts: {
   )
 }
 
+function askRemixBanner(opts: {
+  path?: string
+  title?: string
+  kind: PageBannerKind
+  style?: string
+  name: string
+  html: string
+}) {
+  const styleName = opts.style && opts.style in BANNER_STYLE_LABEL ? BANNER_STYLE_LABEL[opts.style as BannerStyleId] : ''
+  const kindName = opts.kind === 'htmlframe' ? '动态' : '静态'
+  const path = opts.path?.trim()
+  const draft = path
+    ? `请以「${opts.name}」这个${styleName}${kindName}背景做二创，给「${opts.title || path}」设计自己的内容。保留构图、色彩关系和层次，替换文案与主题。用 db_update path=${path}，content 只含 banner:{kind:"${opts.kind}",html}。html 用纯 CSS${opts.kind === 'htmlframe' ? '和脚本' : ''}，不要图片，不要改 content 正文。参考版式已附在选取里。`
+    : `请以「${opts.name}」这个${styleName}${kindName}背景做二创：用同一版式设计自己的内容，保留构图与层次，替换文案与主题，不要图片。参考版式已附在选取里。`
+  getPick()?.attach(
+    [
+      {
+        kind: 'html',
+        id: `banner-remix:${opts.name}`,
+        action: 'banner',
+        ...(path ? { path } : {}),
+        label: `${opts.name} · 二创`,
+        title: opts.title || opts.name,
+        text: opts.html,
+        route: typeof window === 'undefined' ? '' : window.location.pathname,
+      },
+    ],
+    { text: draft },
+  )
+}
+
+function BannerRemixBtn({
+  kind,
+  html,
+  name,
+  style,
+  path,
+  title,
+}: {
+  kind: PageBannerKind
+  html: string
+  name: string
+  style?: string
+  path?: string
+  title?: string
+}) {
+  return (
+    <button
+      type="button"
+      className="fsdb-banner-remix"
+      data-testid="fsdb-banner-remix"
+      aria-label="二创"
+      title="二创：用这个版式设计自己的内容"
+      onClick={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        askRemixBanner({ path, title, kind, style, name, html })
+      }}
+    >
+      <Square2StackIcon aria-hidden className="size-[12px]" />
+      二创
+    </button>
+  )
+}
+
 export function PageBanner({
   value,
   writable,
@@ -88,7 +153,19 @@ export function PageBanner({
       ) : null}
       {story ? (
         <div className="fsdb-banner-story" data-testid="fsdb-banner-story">
-          <div className="fsdb-banner-story-title">{story.title}</div>
+          <div className="fsdb-banner-story-head">
+            <div className="fsdb-banner-story-title">{story.title}</div>
+            {writable && banner ? (
+              <BannerRemixBtn
+                kind={banner.kind}
+                html={banner.html}
+                name={story.title}
+                style={story.style}
+                path={path}
+                title={title}
+              />
+            ) : null}
+          </div>
           <div className="fsdb-banner-story-note">{story.note}</div>
         </div>
       ) : null}
@@ -184,7 +261,23 @@ function BannerGallery({
 }) {
   const [mine, setMine] = useState<GalleryItem[]>([])
   const [mineTick, setMineTick] = useState(0)
-  const [tip, setTip] = useState<{ title: string; note: string; x: number; y: number } | null>(null)
+  const hideTip = useRef(0)
+  const [tip, setTip] = useState<{
+    title: string
+    note: string
+    x: number
+    y: number
+    kind: PageBannerKind
+    html: string
+    style?: string
+  } | null>(null)
+  const keepTip = () => {
+    window.clearTimeout(hideTip.current)
+  }
+  const scheduleHideTip = () => {
+    window.clearTimeout(hideTip.current)
+    hideTip.current = window.setTimeout(() => setTip(null), 180)
+  }
   useEffect(() => {
     let cancelled = false
     void readJson<{ items?: GalleryItem[] }>('/api/db/banner-gallery')
@@ -198,6 +291,7 @@ function BannerGallery({
       cancelled = true
     }
   }, [tab, mineTick])
+  useEffect(() => () => window.clearTimeout(hideTip.current), [])
   const mineOfTab = mine.filter((item) => item.kind === tab)
   return (
     <>
@@ -230,7 +324,10 @@ function BannerGallery({
                     html={item.html}
                     label={item.title}
                     note={item.note}
+                    style={item.style}
                     onHover={setTip}
+                    onKeep={keepTip}
+                    onLeave={scheduleHideTip}
                     onClick={() => onPick({ kind: item.kind, html: item.html })}
                   />
                 ))}
@@ -254,7 +351,10 @@ function BannerGallery({
                   kind={item.kind}
                   html={item.html}
                   label={item.title}
+                  style={item.style}
                   onHover={setTip}
+                  onKeep={keepTip}
+                  onLeave={scheduleHideTip}
                   onClick={() => onPick({ kind: item.kind, html: item.html })}
                 />
                 <button
@@ -292,8 +392,24 @@ function BannerGallery({
       </div>
         {tip
           ? createPortal(
-              <div className="fsdb-banner-fly" style={{ left: tip.x, top: tip.y }} role="tooltip">
-                <div className="fsdb-banner-fly-title">{tip.title}</div>
+              <div
+                className="fsdb-banner-fly"
+                style={{ left: tip.x, top: tip.y }}
+                role="tooltip"
+                onMouseEnter={keepTip}
+                onMouseLeave={scheduleHideTip}
+              >
+                <div className="fsdb-banner-fly-head">
+                  <div className="fsdb-banner-fly-title">{tip.title}</div>
+                  <BannerRemixBtn
+                    kind={tip.kind}
+                    html={tip.html}
+                    name={tip.title}
+                    style={tip.style}
+                    path={path}
+                    title={title}
+                  />
+                </div>
                 {tip.note ? <div className="fsdb-banner-fly-note">{tip.note}</div> : null}
               </div>,
               document.body,
@@ -308,20 +424,43 @@ function BannerThumb({
   html,
   label,
   note,
+  style,
   onHover,
+  onKeep,
+  onLeave,
   onClick,
 }: {
   kind: PageBannerKind
   html: string
   label: string
   note?: string
-  onHover?: (next: { title: string; note: string; x: number; y: number } | null) => void
+  style?: string
+  onHover?: (next: {
+    title: string
+    note: string
+    x: number
+    y: number
+    kind: PageBannerKind
+    html: string
+    style?: string
+  }) => void
+  onKeep?: () => void
+  onLeave?: () => void
   onClick: () => void
 }) {
   const src = useMemo(() => bannerSrcDoc(html), [html])
   const show = (el: HTMLElement) => {
     const box = el.getBoundingClientRect()
-    onHover?.({ title: label, note: note ?? '', x: box.left + box.width / 2, y: box.top })
+    onKeep?.()
+    onHover?.({
+      title: label,
+      note: note ?? '',
+      x: box.left + box.width / 2,
+      y: box.top,
+      kind,
+      html,
+      style,
+    })
   }
   return (
     <button
@@ -329,7 +468,7 @@ function BannerThumb({
       className="fsdb-banner-card"
       onClick={onClick}
       onMouseEnter={(event) => show(event.currentTarget)}
-      onMouseLeave={() => onHover?.(null)}
+      onMouseLeave={() => onLeave?.()}
     >
       <span className="fsdb-banner-thumb">
         <iframe title={label} srcDoc={src} sandbox={kind === 'htmlframe' ? 'allow-scripts' : ''} tabIndex={-1} />
