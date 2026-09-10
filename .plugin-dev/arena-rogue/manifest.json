@@ -1,8 +1,8 @@
 {
   "id": "arena-rogue",
-  "name": "俯视肉鸽",
-  "blurb": "2D 俯视肉鸽：十多种攻击、冲刺、清屏爆炸。窗口可全屏。WASD 移动，鼠标瞄准开火。",
-  "tags": ["game", "roguelike", "arena"],
+  "name": "枪火",
+  "blurb": "2D 枪战：十多种武器、冲刺、清屏爆炸。窗口可全屏。WASD 移动，鼠标瞄准开火。",
+  "tags": ["game", "shooter", "arena"],
   "author": "Biu",
   "authorUrl": "https://github.com/helloooooooooooooo97/biu-harness",
   "createdAt": 1788768000000,
