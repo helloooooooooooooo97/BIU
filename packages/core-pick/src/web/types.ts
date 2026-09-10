@@ -212,6 +212,7 @@ function pickChipName(ref: PickRef) {
 
 export function chipCaption(ref: PickRef) {
   if (ref.action === 'banner') return { name: ref.label || '背景', span: '' }
+  if (ref.action === 'view') return { name: ref.label || '呈现方式', span: '' }
   return { name: ref.action ? `${ref.label} · ${ref.action}` : pickChipName(ref), span: lineSpanLabel(ref) }
 }
 

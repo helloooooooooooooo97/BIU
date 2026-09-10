@@ -19,5 +19,7 @@ test('registers pick instructions on the system prompt', async () => {
   assert.match(text, /insert/)
   assert.match(text, /title/)
   assert.match(text, /action=banner/)
+  assert.match(text, /action=view/)
+  assert.match(text, /registerRowView/)
   assert.match(text, /db_update/)
 })
