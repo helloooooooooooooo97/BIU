@@ -19,6 +19,8 @@ export type PickRef = {
   selection?: string
   /** 无选区时：当前 markdown 行里插入点（0-based，插在 text[insert] 之前）。 */
   insert?: number
+  /** 登记这块 UI 的插件 id，改呈现/卡片时对着它 sandbox。 */
+  plugin?: string
 }
 
 export function pickKey(ref: PickRef) {
@@ -46,6 +48,7 @@ export function dedupePicks(refs: PickRef[]): PickRef[] {
       title: ref.title || prev.title,
       route: ref.route || prev.route,
       ...(ref.action || prev.action ? { action: ref.action || prev.action } : {}),
+      ...(ref.plugin || prev.plugin ? { plugin: ref.plugin || prev.plugin } : {}),
       ...locusFields(ref.start_line != null ? ref : prev),
       ...sourceFields(ref.path ? ref : prev),
     })
@@ -66,6 +69,7 @@ function pickPayload(ref: PickRef) {
   if (ref.title) data.title = ref.title
   if (ref.kind !== 'text' && ref.label) data.label = ref.label
   if (ref.path) data.path = ref.path
+  if (ref.plugin) data.plugin = ref.plugin
   if (ref.start_line != null) data.start_line = ref.start_line
   if (ref.end_line != null) data.end_line = ref.end_line
   if (ref.text) data.text = ref.text
@@ -112,6 +116,7 @@ function parsePickAttrs(raw: string): PickRef | null {
     label: attrs.label?.trim() || (kind === 'text' ? selection || text : '') || (Number.isInteger(Number(attrs.start_line)) ? `L${attrs.start_line}` : '') || id,
     route: attrs.route?.trim() || '',
     ...(attrs.title?.trim() ? { title: attrs.title.trim() } : {}),
+    ...(attrs.plugin?.trim() ? { plugin: attrs.plugin.trim() } : {}),
     ...sourceFields({ path: attrs.path?.trim() }),
     ...locusFields({
       start_line: Number.isInteger(start) && start >= 1 ? start : undefined,
@@ -281,6 +286,7 @@ export function pickChipAttrs(ref: PickRef) {
     route: ref.route,
     action: ref.action ?? null,
     path: ref.path ?? null,
+    plugin: ref.plugin ?? null,
     title: ref.title ?? null,
     start_line: ref.start_line ?? null,
     end_line: ref.end_line ?? null,
@@ -308,6 +314,7 @@ export function pickRefFromAttrs(attrs: Record<string, unknown>): PickRef | null
     route: String(attrs.route ?? ''),
     ...(action ? { action } : {}),
     ...sourceFields({ path, title: String(attrs.title ?? '').trim() }),
+    ...(String(attrs.plugin ?? '').trim() ? { plugin: String(attrs.plugin).trim() } : {}),
     ...locusFields({
       start_line: Number.isInteger(start) && start >= 1 ? start : undefined,
       end_line: Number.isInteger(end) && end >= 1 ? end : undefined,
@@ -318,10 +325,11 @@ export function pickRefFromAttrs(attrs: Record<string, unknown>): PickRef | null
   }
 }
 
-export function pickDomAttrs(kind: string, id: string, label?: string) {
+export function pickDomAttrs(kind: string, id: string, label?: string, plugin?: string) {
   return {
     'data-biu-kind': kind,
     'data-biu-id': id,
     ...(label ? { 'data-biu-label': label } : {}),
+    ...(plugin ? { 'data-biu-plugin': plugin } : {}),
   }
 }

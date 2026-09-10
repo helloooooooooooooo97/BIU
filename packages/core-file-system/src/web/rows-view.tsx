@@ -43,6 +43,7 @@ export function BoundFieldsRow({ fields, onOpen }: FsRowViewProps) {
 export const DEFAULT_ROW_VIEW: CollectionRowViewType = {
   id: 'card',
   label: '卡片',
+  plugin: 'core-file-system-ui',
   Icon: RectangleStackIcon,
   Row: BoundFieldsRow,
 }

@@ -161,10 +161,33 @@ import {
 const EMPTY_VIEWS: CollectionViewType[] = []
 const EMPTY_ROW_VIEWS: CollectionRowViewType[] = []
 
+function PluginSurface({
+  plugin,
+  label,
+  children,
+}: {
+  plugin?: string
+  label?: string
+  children: ReactNode
+}) {
+  if (!plugin) return children
+  return (
+    <div
+      className="fsdb-plugin-surface"
+      data-biu-plugin={plugin}
+      data-biu-kind="plugin"
+      data-biu-id={plugin}
+      data-biu-label={label || plugin}
+    >
+      {children}
+    </div>
+  )
+}
+
 function askNewPresentation(opts: { path: string; title?: string }) {
   const path = opts.path.trim()
   const name = opts.title?.trim() || path
-  const draft = `请为「${name}」添加一种新的呈现方式。先听我描述要看板、日历还是别的样子，再写无头插件：databaseUi.registerRowView("${path}", { id, label, Row }) 只换每一行；或 databaseUi.registerView("${path}", { id, label, View }) 整页自己画。不要改 packages/。用 sandbox + pack 安装。装好后会出现在查看模式菜单里。`
+  const draft = `请为「${name}」添加一种新的呈现方式。先听我描述要看板、日历还是别的样子，再写无头插件：databaseUi.registerRowView("${path}", { id, label, plugin: 本插件id, Row }) 只换每一行；或 databaseUi.registerView("${path}", { id, label, plugin: 本插件id, View }) 整页自己画。plugin 必须能被 pick 抓到。不要改 packages/。用 sandbox + pack 安装。装好后会出现在查看模式菜单里。`
   getPick()?.attach(
     path
       ? [
@@ -3140,16 +3163,20 @@ export function CollectionBrowser({
         <div className="fsdb-workspace">
           <div className="fsdb-stage">
             {customView ? (
-              <customView.View path={dataPath} rows={items} schema={schema} onOpen={openRow} />
+              <PluginSurface plugin={customView.plugin} label={customView.label}>
+                <customView.View path={dataPath} rows={items} schema={schema} onOpen={openRow} />
+              </PluginSurface>
             ) : null}
             {rowView ? (
-              <CollectionRowsShell
-                rows={items}
-                schema={schema}
-                columns={columns.map((item) => item.key)}
-                onOpen={openRow}
-                Row={rowView.Row}
-              />
+              <PluginSurface plugin={rowView.plugin} label={rowView.label}>
+                <CollectionRowsShell
+                  rows={items}
+                  schema={schema}
+                  columns={columns.map((item) => item.key)}
+                  onOpen={openRow}
+                  Row={rowView.Row}
+                />
+              </PluginSurface>
             ) : null}
             {!customView && !rowView ? (
               <div className="tasks-table-wrap">

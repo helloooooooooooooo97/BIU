@@ -117,6 +117,7 @@ function AlgorithmCard({
   return (
     <div
       data-testid="page-algorithm-card"
+      data-biu-plugin={name}
       style={{
         display: 'flex',
         flexWrap: 'wrap',

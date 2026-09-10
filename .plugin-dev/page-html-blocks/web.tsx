@@ -194,7 +194,7 @@ function HtmlDeckOverlay({
   }, [])
 
   if (!slide) return null
-  const stamped = slide.kind === 'html' ? stampHtmlSource(slide.html, `deck-${index}`) : ''
+  const stamped = slide.kind === 'html' ? stampHtmlSource(slide.html, `deck-${index}`, name) : ''
   return createPortal(
     <div
       ref={boxRef}
@@ -577,7 +577,7 @@ function HtmlDirectCard({ data, update, writable }: BlockProps) {
   const hostRef = useRef<HTMLDivElement | null>(null)
   const deck = useHtmlDeck(hostRef, 'html', html, { width, height, deck: deckOn })
   const stamped = useMemo(
-    () => stampHtmlSource(html, htmlBlockKey(hostRef.current?.closest('[data-page-block]') ?? null, html)),
+    () => stampHtmlSource(html, htmlBlockKey(hostRef.current?.closest('[data-page-block]') ?? null, html), name),
     [html],
   )
 
@@ -699,10 +699,10 @@ function HtmlFrameCard({ data, update, writable }: BlockProps) {
     if (!frame) return
     const host = hostRef.current?.closest('[data-page-block]') ?? null
     const key = htmlBlockKey(host, html)
-    stampHtmlPickSurfaces(frame, key)
+    stampHtmlPickSurfaces(frame, key, { plugin: name })
     try {
       const body = frame.contentDocument?.body
-      if (body) stampHtmlPickSurfaces(body, `${key}-doc`)
+      if (body) stampHtmlPickSurfaces(body, `${key}-doc`, { plugin: name })
     } catch {
       /* srcdoc + sandbox 可能读不到 contentDocument */
     }

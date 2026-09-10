@@ -97,6 +97,8 @@ export type CollectionViewType = {
   id: string
   label: string
   Icon?: ComponentType<{ className?: string }>
+  /** 登记该呈现的插件 id，pick 时注入 data-biu-plugin。 */
+  plugin?: string
   View: ComponentType<FsViewProps>
 }
 
@@ -104,6 +106,7 @@ export type CollectionRowViewType = {
   id: string
   label: string
   Icon?: ComponentType<{ className?: string }>
+  plugin?: string
   Row: ComponentType<FsRowViewProps>
 }
 

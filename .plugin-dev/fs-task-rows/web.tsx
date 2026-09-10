@@ -71,6 +71,7 @@ export function apply(ctx: {
       .registerRowView('/tasks', {
         id: 'task-card',
         label: '任务卡',
+        plugin: name,
         Row: TaskCardRow,
       })
       .dispose,

@@ -545,6 +545,8 @@ test('html surface pick carries page path and markdown lines like a block', () =
   const block = document.createElement('div')
   block.className = 'page-block'
   block.setAttribute('data-page-block', 'html')
+  block.setAttribute('data-page-block-plugin', 'page-html-blocks')
+  block.setAttribute('data-biu-plugin', 'page-html-blocks')
   const card = document.createElement('div')
   card.setAttribute('data-biu-kind', 'html')
   card.setAttribute('data-biu-id', 'html:0-abcd:0/1')
@@ -570,7 +572,9 @@ test('html surface pick carries page path and markdown lines like a block', () =
   assert.equal(hit.ref.end_line, 22)
   assert.equal(hit.ref.text, ':::html\n<div>静态富排版</div>\n:::')
   assert.equal(hit.ref.selection, '静态富排版，不跑脚本')
+  assert.equal(hit.ref.plugin, 'page-html-blocks')
   const packed = formatPicks([hit.ref])
+  assert.match(packed, /"plugin":"page-html-blocks"/)
   assert.match(packed, /"path":"\/pages\/p002"/)
   assert.match(packed, /"start_line":14/)
   bindEditorTextHost(root, null)

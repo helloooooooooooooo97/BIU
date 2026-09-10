@@ -6,6 +6,7 @@ const KIND = 'data-biu-kind'
 const ID = 'data-biu-id'
 const ACTION = 'data-biu-action'
 const LABEL = 'data-biu-label'
+const PLUGIN = 'data-biu-plugin'
 
 type ClientBox = { left: number; top: number; width: number; height: number }
 
@@ -52,6 +53,7 @@ export function resolvePickFromNode(
   let id: string | undefined
   let action: string | undefined
   let label: string | undefined
+  let plugin: string | undefined
   let highlight: HTMLElement | null = null
   let node: Element | null = start
   while (node && node !== document.documentElement) {
@@ -61,14 +63,21 @@ export function resolvePickFromNode(
       const nextId = read(node, ID)
       const nextAction = read(node, ACTION)
       const nextLabel = read(node, LABEL)
-      if (!highlight && (nextKind || nextId || nextAction || nextLabel)) highlight = node
+      const nextPlugin = read(node, PLUGIN) || read(node, 'data-page-block-plugin') || read(node, 'data-plugin-id')
+      if (!highlight && (nextKind || nextId || nextAction || nextLabel || nextPlugin)) highlight = node
       if (!kind) kind = nextKind
       if (!id) id = nextId
       if (!action) action = nextAction
       if (!label) label = nextLabel
+      if (!plugin) plugin = nextPlugin
     }
     if (kind && id && highlight) break
     node = node.parentElement
+  }
+  if (!plugin) {
+    const host = start.closest('[data-biu-plugin], [data-page-block-plugin], [data-plugin-id]')
+    plugin =
+      (host instanceof Element ? read(host, PLUGIN) || read(host, 'data-page-block-plugin') || read(host, 'data-plugin-id') : undefined)
   }
   if (!kind || !id || !highlight) return editorBlockPick(start, route, surface)
   return {
@@ -78,6 +87,7 @@ export function resolvePickFromNode(
         kind,
         id,
         ...(action ? { action } : {}),
+        ...(plugin ? { plugin } : {}),
         label: label || id,
         title: label || id,
         route,
@@ -138,6 +148,7 @@ function editorBlockPick(
   if (surface && !surface.contains(el)) return null
   const taggedKind = read(el, KIND)
   const taggedId = read(el, ID)
+  const taggedPlugin = read(el, PLUGIN) || read(el, 'data-page-block-plugin') || read(el, 'data-plugin-id')
   if (taggedKind && taggedId) {
     return {
       el,
@@ -147,6 +158,7 @@ function editorBlockPick(
             kind: taggedKind,
             id: taggedId,
             ...(read(el, ACTION) ? { action: read(el, ACTION) } : {}),
+            ...(taggedPlugin ? { plugin: taggedPlugin } : {}),
             label: read(el, LABEL) || taggedId,
             route,
           },
@@ -158,6 +170,7 @@ function editorBlockPick(
   }
   const tag = (el.getAttribute('data-page-block') || el.tagName).toLowerCase()
   const text = pickPreview(el.textContent ?? '', 80)
+  const hostPlugin = read(el, 'data-page-block-plugin') || taggedPlugin
   return {
     el,
     ref: withPickLocus(
@@ -165,6 +178,7 @@ function editorBlockPick(
         {
           kind: 'block',
           id: `${tag}:${pickIdFromText(text || tag)}`,
+          ...(hostPlugin ? { plugin: hostPlugin } : {}),
           label: text || tag,
           route,
         },

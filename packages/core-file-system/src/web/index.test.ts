@@ -40,6 +40,8 @@ test('collection browser renders extra views registered for that path', () => {
   assert.match(browser, /dbUi\?\.views\(collectionPath\)/)
   assert.match(browser, /dbUi\?\.rowViews\(collectionPath\)/)
   assert.match(browser, /<customView\.View/)
+  assert.match(browser, /function PluginSurface/)
+  assert.match(browser, /data-biu-plugin=\{plugin\}/)
   assert.match(browser, /<CollectionRowsShell/)
   assert.match(browser, /data-testid="fsdb-mode-plus"/)
   const modeMenu = browser.slice(browser.indexOf('查看模式'), browser.indexOf('data-testid="fsdb-mode-plus"') + 80)
