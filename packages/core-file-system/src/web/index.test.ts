@@ -83,6 +83,7 @@ test('tag collect table lives on the record board, not as sidebar views', () => 
   assert.doesNotMatch(detail, /chrome\?\.Board \? null/)
   assert.match(detail, /key === contentFieldKey\(schema\) && resolveFieldType\(field\) === 'file'/)
   assert.doesNotMatch(detail, /key === 'id' \|\| key === 'emoji' \|\| key === schema.labelField \|\| key === contentFieldKey\(schema\)/)
+  assert.match(browser, /keys\[0\] === bodyKey && schema\?\.fields\[bodyKey\]\?\.type === 'file'/)
   assert.match(browser, /field\.type !== 'file'/)
   assert.match(browser, /setDetailRow\(\(prev\) => \(prev\?\.id === row.id \? merge\(prev\) : prev\)\)/)
   assert.match(chrome, /label: '属性'/)

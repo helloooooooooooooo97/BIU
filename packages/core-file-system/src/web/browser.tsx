@@ -1650,7 +1650,7 @@ export function CollectionBrowser({
     try {
       const keys = Object.keys(content)
       quietUntil.current = Date.now() + 800
-      if (bodyKey && keys.length === 1 && keys[0] === bodyKey) {
+      if (bodyKey && keys.length === 1 && keys[0] === bodyKey && schema?.fields[bodyKey]?.type === 'file') {
         const data = await readJson<{ value?: unknown }>('/api/db/content', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },

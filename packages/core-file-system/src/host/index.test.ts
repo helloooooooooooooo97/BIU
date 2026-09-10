@@ -484,6 +484,39 @@ test('content is omitted from list/read and served on its own path', async () =>
   assert.deepEqual(written.value, { kind: 'note', body: { a: 2 } })
 })
 
+test('writeContent string fields keep JSON objects instead of [object Object]', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  const rows = new Map<string, Record<string, unknown>>([
+    ['b1', { id: 'b1', title: '块', data: '{"html":"old"}' }],
+  ])
+  db.register({
+    id: 'page-blocks',
+    path: '/page-blocks',
+    schema: {
+      contentField: 'data',
+      fields: {
+        ...REQUIRED_RECORD_FIELDS,
+        title: { type: 'string' },
+        data: { type: 'string', writable: true },
+      },
+    },
+    records: { update: true },
+    list: () => [...rows.values()] as { id: string }[],
+    get: (id) => rows.get(id) as { id: string } | undefined,
+    update: (id, patch) => {
+      const next = { ...rows.get(id), ...patch, id }
+      rows.set(id, next)
+      return next as { id: string }
+    },
+  })
+  const written = await db.writeContent('/page-blocks/b1', { html: '<p>new</p>', deck: false })
+  assert.equal(written.field, 'data')
+  assert.equal(written.value, '{"html":"<p>new</p>","deck":false}')
+  const updated = await db.update('/page-blocks/b1', { data: { html: '<b>via update</b>' } })
+  assert.equal(updated.value.data, '{"html":"<b>via update</b>"}')
+})
+
 test('editContent view/str_replace/replace_lines/insert/write', async () => {
   const ctx = new Context()
   const db = new DatabaseService(ctx)

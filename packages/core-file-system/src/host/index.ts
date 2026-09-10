@@ -309,6 +309,7 @@ function coerce(field: FieldSpec, value: unknown) {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     const rec = value as Record<string, unknown>
     if (typeof rec.sessionId === 'string' || rec.kind === 'agent' || rec.kind === 'user') return value
+    return JSON.stringify(value)
   }
   return String(value ?? '')
 }
