@@ -175,11 +175,9 @@ function HtmlDeckOverlay({
   }, [index, onIndex, total])
 
   useEffect(() => {
-    const el = boxRef.current
-    if (!el) return
+    const root = document.documentElement
     let gone = false
-    const enter = el.requestFullscreen?.bind(el)
-    void Promise.resolve(enter ? enter({ navigationUI: 'hide' }) : undefined).catch(() => {})
+    void Promise.resolve(root.requestFullscreen?.({ navigationUI: 'hide' })).catch(() => {})
     const onFs = () => {
       if (gone) return
       if (document.fullscreenElement) return
@@ -189,12 +187,24 @@ function HtmlDeckOverlay({
     return () => {
       gone = true
       document.removeEventListener('fullscreenchange', onFs)
-      if (document.fullscreenElement === el) void document.exitFullscreen?.()
+      if (document.fullscreenElement) void document.exitFullscreen?.()
     }
   }, [])
 
   if (!slide) return null
   const stamped = slide.kind === 'html' ? stampHtmlSource(slide.html, `deck-${index}`, name) : ''
+  const fill = {
+    position: 'absolute' as const,
+    inset: 0,
+    width: '100%',
+    height: '100%',
+    maxWidth: 'none',
+    maxHeight: 'none',
+    minWidth: 0,
+    minHeight: 0,
+    border: 'none',
+    boxSizing: 'border-box' as const,
+  }
   return createPortal(
     <div
       ref={boxRef}
@@ -204,8 +214,9 @@ function HtmlDeckOverlay({
       style={{
         position: 'fixed',
         inset: 0,
-        width: '100vw',
-        height: '100vh',
+        width: '100%',
+        height: '100%',
+        maxWidth: 'none',
         zIndex: 2147483646,
         display: 'flex',
         flexDirection: 'column',
@@ -214,14 +225,15 @@ function HtmlDeckOverlay({
         font: '13px/1.4 ui-sans-serif, system-ui, sans-serif',
       }}
     >
+      <style>{`[data-testid="html-deck"]:fullscreen,[data-testid="html-deck"]:-webkit-full-screen{inset:0!important;width:100%!important;height:100%!important;max-width:none!important;max-height:none!important}[data-testid="html-deck-slide"]>*{width:100%!important;height:100%!important;max-width:none!important;box-sizing:border-box}`}</style>
       <div
         data-testid="html-deck-stage"
         style={{
+          position: 'relative',
           flex: 1,
           minHeight: 0,
           width: '100%',
           height: '100%',
-          display: 'flex',
           overflow: 'hidden',
           boxSizing: 'border-box',
         }}
@@ -231,28 +243,12 @@ function HtmlDeckOverlay({
             title={`html-deck-${index}`}
             srcDoc={slide.html}
             sandbox="allow-scripts"
-            style={{
-              flex: 1,
-              width: '100%',
-              height: '100%',
-              minWidth: 0,
-              minHeight: 0,
-              border: 'none',
-              background: MAG_INK,
-            }}
+            style={{ ...fill, background: MAG_INK }}
           />
         ) : (
           <div
             data-testid="html-deck-slide"
-            style={{
-              flex: 1,
-              width: '100%',
-              height: '100%',
-              minWidth: 0,
-              minHeight: 0,
-              overflow: 'auto',
-              boxSizing: 'border-box',
-            }}
+            style={{ ...fill, overflow: 'auto', background: 'transparent' }}
             dangerouslySetInnerHTML={{ __html: stamped }}
           />
         )}
