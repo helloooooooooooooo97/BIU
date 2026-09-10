@@ -1,4 +1,4 @@
-import { builtinAllViewId, stubBuiltinAllView, stubBuiltinBlockKindView, stubBuiltinCatalogView, stubBuiltinTagView, isReadOnlyViewId } from '../catalog-views.ts'
+import { builtinAllViewId, stubBuiltinAllView, stubBuiltinBlockKindView, stubBuiltinCatalogView, stubBuiltinTagView, isReadOnlyViewId, isBuiltinAllViewForCollection } from '../catalog-views.ts'
 import { listCollection } from './db-client.ts'
 import { looksLikeFilterTree, normalizeFilterGroup, parseSortsInput } from '../query-logic.ts'
 import { normalizeSavedView, type SavedView } from './saved-view.ts'
@@ -94,7 +94,7 @@ export function viewForPath(collectionPath: string, routeViewId?: string): Saved
         stubBuiltinCatalogView(routeViewId) ??
         stubBuiltinTagView(routeViewId) ??
         stubBuiltinBlockKindView(routeViewId) ??
-        stubBuiltinAllView(routeViewId)
+        (isBuiltinAllViewForCollection(routeViewId, collectionPath) ? stubBuiltinAllView(routeViewId) : null)
       : undefined) ??
     listed.find((item) => item.id === loadActiveViewId(collectionPath, listed)) ??
     fallback ??

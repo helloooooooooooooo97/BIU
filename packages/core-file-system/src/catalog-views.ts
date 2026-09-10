@@ -47,6 +47,11 @@ export function isBuiltinAllViewId(id: string) {
   return id.startsWith(ALL_PREFIX)
 }
 
+export function isBuiltinAllViewForCollection(id: string, collectionPath: string) {
+  if (!isBuiltinAllViewId(id)) return false
+  return normalizeCollectionPath(id.slice(ALL_PREFIX.length)) === normalizeCollectionPath(collectionPath)
+}
+
 export function isReadOnlyViewId(id: string) {
   return isBuiltinAllViewId(id) || isBuiltinCatalogViewId(id) || isBuiltinTagViewId(id) || isBuiltinBlockKindViewId(id)
 }

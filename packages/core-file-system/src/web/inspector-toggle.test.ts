@@ -509,6 +509,7 @@ test('database extras sit after the record detail, not in the inspector', () => 
   assert.match(style, /\.fsdb-detail-title\{[^}]*font-size:32px/)
   assert.match(browser, /<h1 className="fsdb-detail-title">\{activeView\?\.name \?\? title\}<\/h1>/)
   assert.match(browser, /savedViewRecordPath\(collectionPath, activeViewId\)/)
+  assert.match(browser, /isReadOnlyViewId\(activeViewId\)/)
   assert.match(browser, /<PageBanner/)
   assert.match(browser, /<PageBanner[\s\S]*writable=\{Boolean\(activeViewId\)\}/)
   assert.doesNotMatch(browser, /<BannerTitleActions/)

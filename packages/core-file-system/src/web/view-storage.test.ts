@@ -23,6 +23,7 @@ test('tables default to the builtin 全部xx view', () => {
   assert.equal(defaultViewId(VIEWS_COLLECTION_PATH), builtinAllViewId(VIEWS_COLLECTION_PATH))
   assert.equal(viewForPath('/sessions')?.builtin, true)
   assert.deepEqual(viewForPath('/sessions')?.filters, {})
+  assert.equal(viewForPath('/pages', builtinAllViewId('/sessions'))?.id, builtinAllViewId('/pages'))
 })
 
 test('builtin view wrap is stored as display prefs and restored', () => {
