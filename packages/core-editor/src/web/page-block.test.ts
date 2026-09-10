@@ -248,6 +248,32 @@ test('copied pageBlocks do not share an id', () => {
   editor.destroy()
 })
 
+test('duplicate ids are not rewritten until the whole document is replaced', () => {
+  const editor = new Editor({
+    extensions: pageEditorExtensions(),
+    content: {
+      type: 'doc',
+      content: [{ type: 'pageBlock', attrs: { kind: 'html', id: 'ab12cd34', data: { html: '<div>a</div>' } } }],
+    },
+  })
+  editor.commands.insertContentAt(editor.state.doc.content.size, {
+    type: 'pageBlock',
+    attrs: { kind: 'html', id: 'ab12cd34', data: { html: '<div>b</div>' } },
+  })
+  const live = (editor.getJSON().content ?? [])
+    .filter((node) => node.type === 'pageBlock')
+    .map((node) => String(node.attrs?.id ?? ''))
+  assert.deepEqual(live, ['ab12cd34', 'ab12cd34'])
+  editor.commands.setContent(editor.getMarkdown(), { contentType: 'markdown', emitUpdate: false })
+  const calibrated = (editor.getJSON().content ?? [])
+    .filter((node) => node.type === 'pageBlock')
+    .map((node) => String(node.attrs?.id ?? ''))
+  assert.equal(calibrated[0], 'ab12cd34')
+  assert.notEqual(calibrated[1], calibrated[0])
+  assert.match(calibrated[1]!, /^[a-z0-9]{8}$/i)
+  editor.destroy()
+})
+
 test('pageBlock node view skips react update when attrs are unchanged', async () => {
   const { readFile } = await import('node:fs/promises')
   const { resolve } = await import('node:path')
