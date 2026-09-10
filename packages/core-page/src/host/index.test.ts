@@ -10,6 +10,7 @@ import * as fsPlugin from '@biu/host-fs'
 import * as page from './index.ts'
 import { dumpMarkdown, splitMarkdown } from './markdown.ts'
 import { ASSET_GC_GRACE_MS, PAGE_ASSETS, PAGE_ROOT, PageAssetConflictError, PagesStore, collectPageAssetNames } from './store.ts'
+import { PageBlocksIndex } from './page-blocks-index.ts'
 
 test('markdown frontmatter roundtrips YAML properties and body', () => {
   const raw = dumpMarkdown({ title: '首页', tags: ['red', 'prod'] }, '正文第一段\n')
@@ -157,6 +158,33 @@ test('page-blocks collection updates one fence by page::block id', async () => {
   assert.equal(blocks.create, undefined)
   assert.equal(blocks.remove, undefined)
 })
+
+test('page-block index scans a hot batch instead of every page', async () => {
+  const ctx = new Context()
+  await ctx.plugin(tools)
+  const root = await mkdtemp(join(tmpdir(), 'page-block-index-'))
+  await ctx.plugin(fsPlugin, { root })
+  const store = new PagesStore(ctx.fs.workspace as never, join(root, '.biu/assets'))
+  const index = new PageBlocksIndex(store, { hotWindowMs: 60_000, hotLimit: 1, warmLimit: 0 })
+  const fence = (id: string) => `:::pageBlock {kind=html plugin=page-html-blocks id=${id}}\n<div>${id}</div>\n:::\n`
+  await store.create({ title: 'a', notes: fence('aaaaaa11') })
+  await store.create({ title: 'b', notes: fence('bbbbbb22') })
+  await store.create({ title: 'c', notes: fence('cccccc33') })
+  const first = await index.sync()
+  assert.equal(first.scanned, 1)
+  assert.equal(first.dirty, 3)
+  assert.equal((await index.list()).length, 1)
+  const second = await index.sync()
+  assert.equal(second.scanned, 1)
+  assert.equal((await index.list()).length, 2)
+  await index.sync()
+  assert.equal((await index.list()).length, 3)
+  const idle = await index.sync()
+  assert.equal(idle.scanned, 0)
+  assert.equal(idle.dirty, 0)
+  assert.ok((await index.lastRunAt()) > 0)
+})
+
 
 test('PagesStore reads existing markdown files from .page', async () => {
   const ctx = new Context()

@@ -227,6 +227,10 @@ export class PagesStore {
     return db
   }
 
+  async sqlite() {
+    return this.openDb()
+  }
+
   private async migrateMarkdown() {
     if (!this.db) return
     let names: string[] = []
