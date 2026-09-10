@@ -2844,15 +2844,20 @@ export function CollectionBrowser({
                       }}
                     />
                   ))}
-                  {rowView ? (
+                  {extraViews.map((opt) => (
                     <CheckRow
-                      key={rowView.id}
-                      icon={<ModeGlyph id={rowView.id} extra={extraViews} rows={extraRows} />}
-                      label={rowView.label}
-                      on
-                      onToggle={() => undefined}
+                      key={opt.id}
+                      icon={<ModeGlyph id={opt.id} extra={extraViews} rows={extraRows} />}
+                      label={opt.label}
+                      on={mode === opt.id}
+                      onToggle={() => {
+                        setMode(opt.id)
+                        patchActiveView({ mode: opt.id })
+                        setModeMenuOpen(false)
+                        setModePlusOpen(false)
+                      }}
                     />
-                  ) : null}
+                  ))}
                   {extraRows.length ? (
                     <>
                       <button
@@ -2883,20 +2888,6 @@ export function CollectionBrowser({
                         : null}
                     </>
                   ) : null}
-                  {extraViews.map((opt) => (
-                    <CheckRow
-                      key={opt.id}
-                      icon={<ModeGlyph id={opt.id} extra={extraViews} rows={extraRows} />}
-                      label={opt.label}
-                      on={mode === opt.id}
-                      onToggle={() => {
-                        setMode(opt.id)
-                        patchActiveView({ mode: opt.id })
-                        setModeMenuOpen(false)
-                        setModePlusOpen(false)
-                      }}
-                    />
-                  ))}
                 </div>
                 </HeadlessDismiss>
               ) : null}
