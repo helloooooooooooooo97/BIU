@@ -1,6 +1,8 @@
 import { render } from '@testing-library/react'
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { Context } from 'cordis'
 import { PageEditorService } from './service.ts'
 import { parsePageBlockRowData, PageBlocksView, PageBlockContent } from './page-blocks-view.tsx'
@@ -32,6 +34,11 @@ test('page-blocks view paints the registered block View', () => {
   )
   assert.equal(container.querySelector('[data-testid="html-ui"]')?.textContent, '<b>hi</b>')
   assert.ok(container.querySelector('[data-testid="page-block-missing"]'))
+})
+
+test('gallery block writes notify other surfaces', () => {
+  const src = readFileSync(resolve(import.meta.dirname, './page-blocks-view.tsx'), 'utf8')
+  assert.match(src, /window.dispatchEvent\(new Event\('fsdb:change'\)\)/)
 })
 
 test('page-block detail content paints the registered View', () => {

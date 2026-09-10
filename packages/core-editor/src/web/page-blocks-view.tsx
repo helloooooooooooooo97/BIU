@@ -28,6 +28,7 @@ async function writeBlockData(id: string, data: Record<string, unknown>) {
   })
   const body = (await res.json()) as { error?: string }
   if (!res.ok) throw new Error(body.error || res.statusText)
+  window.dispatchEvent(new Event('fsdb:change'))
 }
 
 export function PageBlockStage({

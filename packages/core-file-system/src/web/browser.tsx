@@ -1656,7 +1656,15 @@ export function CollectionBrowser({
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ path: `${dataPath}/${row.id}`, value: content[bodyKey] }),
         })
-        setDetailBody(data.value ?? content[bodyKey])
+        const value = data.value ?? content[bodyKey]
+        setDetailBody(value)
+        const field = schema?.fields[bodyKey]
+        if (field && field.type !== 'file') {
+          const stored = value && typeof value === 'object' ? JSON.stringify(value) : value
+          const merge = (item: DbRecord) => (item.id === row.id ? { ...item, [bodyKey]: stored } : item)
+          setItems((prev) => prev.map(merge))
+          setDetailRow((prev) => (prev?.id === row.id ? merge(prev) : prev))
+        }
         window.dispatchEvent(new Event('fsdb:change'))
         return
       }
