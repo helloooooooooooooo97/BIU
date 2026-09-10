@@ -149,7 +149,7 @@ test('page-blocks collection updates one fence by page::block id', async () => {
   const listed = await blocks.list()
   assert.equal(listed.length, 1)
   assert.equal(listed[0]?.id, `${pageId}::ab12cd34`)
-  assert.equal(listed[0]?.kind, 'html')
+  assert.equal(listed[0]?.blockKind, 'html')
   const updated = await blocks.update!(`${pageId}::ab12cd34`, {
     data: { html: '<div>新</div>', deck: false },
   })

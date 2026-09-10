@@ -49,6 +49,35 @@ test('depend chips resolve title from the same table when the row is off this pa
   }
 })
 
+test('cross-table ref chips load the title from field.collection', async () => {
+  const original = globalThis.fetch
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = String(input)
+    assert.match(url, /\/api\/db\/read/)
+    assert.match(url, /%2Fpages%2Fp012/)
+    return new Response(JSON.stringify({ value: { id: 'p012', title: '算法笔记' } }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }) as typeof fetch
+  try {
+    const { container } = render(
+      <RecordLinkChips
+        field={{ type: 'ref', collection: '/pages' }}
+        fieldKey="pageId"
+        value="p012"
+        collectionPath="/page-blocks"
+        records={[{ id: 'p012::aaaa', title: 'Two Sum' }]}
+      />,
+    )
+    await waitFor(() => {
+      assert.equal(container.querySelector('.fsdb-ref-chip-title')?.textContent, '算法笔记')
+    })
+  } finally {
+    globalThis.fetch = original
+  }
+})
+
 test('ref picker lists titles and does not print ids beside them', () => {
   const src = readFileSync(resolve(import.meta.dirname, './record-link-cell.tsx'), 'utf8')
   assert.match(src, /crumbRecordLabel/)

@@ -43,13 +43,13 @@ export function pageBlocksCollection(store: PagesStore, index: PageBlocksIndex):
     },
     schema: {
       labelField: 'title',
-      columns: ['title', 'kind', 'plugin', 'pageId'],
+      columns: ['title', 'blockKind', 'plugin', 'pageId'],
       fields: {
         ...REQUIRED_RECORD_FIELDS,
         title: { type: 'string', label: '标题' },
-        pageId: { type: 'ref', label: '页面' },
+        pageId: { type: 'ref', label: '页面', collection: '/pages' },
         blockId: { type: 'string', label: '块 id' },
-        kind: { type: 'string', label: '类型' },
+        blockKind: { type: 'string', label: '类型' },
         plugin: { type: 'string', label: '插件', writable: true },
         data: {
           type: 'string',

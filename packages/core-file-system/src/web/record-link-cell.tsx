@@ -44,6 +44,11 @@ async function readPeer(collectionPath: string, id: string, labelField?: string)
   }
 }
 
+function linkCollection(field: FieldSpec | undefined, fallback?: string) {
+  const raw = typeof field?.collection === 'string' ? field.collection.trim() : ''
+  return raw || fallback || ''
+}
+
 function jumpRecord(collectionPath: string | undefined, id: string) {
   if (!collectionPath || !id) return
   showRecordInInspector(collectionPath, id)
@@ -100,8 +105,9 @@ export function RecordLinkChips({
   labelField?: string
 }) {
   const ids = recordLinkIds(field, value, fieldKey)
+  const peerPath = linkCollection(field, collectionPath)
   const seed = useMemo(() => asPeers(records ?? [], labelField), [labelField, records])
-  const labelOfId = useResolvedPeerLabels(ids, seed, collectionPath, labelField)
+  const labelOfId = useResolvedPeerLabels(ids, seed, peerPath, labelField)
   if (!ids.length) return null
   return (
     <span className="fsdb-ref-chips">
@@ -115,7 +121,7 @@ export function RecordLinkChips({
             title={label ? `在右侧打开 ${label}` : '在右侧打开'}
             onClick={(event) => {
               event.stopPropagation()
-              jumpRecord(collectionPath, id)
+              jumpRecord(peerPath, id)
             }}
           >
             <span className="fsdb-ref-chip-title">{label || '…'}</span>
@@ -152,6 +158,7 @@ export function RecordPickPanel({
 }) {
   ensureDbSearchStyle()
   const multiple = !isSingleRefField(field, fieldKey)
+  const peerPath = linkCollection(field, collectionPath)
   const selected = recordLinkIds(field, value, fieldKey)
   const [query, setQuery] = useState('')
   const [peers, setPeers] = useState<RecordLinkPeer[]>(() => asPeers(seed ?? [], labelField))
@@ -160,7 +167,7 @@ export function RecordPickPanel({
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    void loadTablePeers(collectionPath, labelField)
+    void loadTablePeers(peerPath, labelField)
       .then((rows) => {
         if (!cancelled) setPeers(rows)
       })
@@ -173,7 +180,7 @@ export function RecordPickPanel({
     return () => {
       cancelled = true
     }
-  }, [collectionPath, labelField])
+  }, [peerPath, labelField])
 
   const byId = useMemo(() => new Map(peers.map((item) => [item.id, item.label])), [peers])
   const selectedKey = selected.join('\0')
@@ -185,7 +192,7 @@ export function RecordPickPanel({
       return
     }
     let cancelled = false
-    void Promise.all(missing.map((id) => readPeer(collectionPath, id, labelField))).then((rows) => {
+    void Promise.all(missing.map((id) => readPeer(peerPath, id, labelField))).then((rows) => {
       if (cancelled) return
       const next: Record<string, string> = {}
       missing.forEach((id, index) => {
@@ -197,7 +204,7 @@ export function RecordPickPanel({
     return () => {
       cancelled = true
     }
-  }, [byId, collectionPath, labelField, selectedKey])
+  }, [byId, peerPath, labelField, selectedKey])
   const titleOf = (id: string) => {
     const labeled = byId.get(id) || extra[id]
     return labeled && labeled.trim() ? labeled : ''
@@ -227,7 +234,7 @@ export function RecordPickPanel({
   }
 
   function jump(id: string) {
-    jumpRecord(collectionPath, id)
+    jumpRecord(peerPath, id)
     onJump?.()
   }
 
