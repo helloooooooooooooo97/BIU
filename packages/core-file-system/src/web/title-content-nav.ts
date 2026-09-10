@@ -18,10 +18,12 @@ export function shouldLeaveContentForTitle(
   from: number,
   empty: boolean,
   docStart: number,
+  nested = false,
 ) {
   if (flags.isComposing) return false
   if (flags.shiftKey || flags.altKey || flags.metaKey || flags.ctrlKey) return false
   if (key !== 'ArrowUp' && key !== 'Backspace' && key !== 'Delete') return false
+  if (nested && (key === 'Backspace' || key === 'Delete')) return false
   return isDocStartSelection(from, empty, docStart)
 }
 
