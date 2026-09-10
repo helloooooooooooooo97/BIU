@@ -1,3 +1,6 @@
+const React = globalThis.React
+const { useEffect, useRef, useState } = React
+
 export const name = 'page-algorithm'
 export const inject = ['pageEditor']
 
@@ -21,6 +24,81 @@ const DIFF_COLOR: Record<string, string> = {
   Easy: '#00b8a3',
   Medium: '#ffc01e',
   Hard: '#ff375f',
+}
+
+/** 草稿在本地；组字时不写回，避免 IME 被 pageBlock 更新打断。 */
+function DraftField({
+  as: Tag,
+  value,
+  onCommit,
+  readOnly,
+  testId,
+  style,
+}: {
+  as: 'input' | 'textarea'
+  value: string
+  onCommit: (next: string) => void
+  readOnly?: boolean
+  testId: string
+  style: Record<string, unknown>
+}) {
+  const [draft, setDraft] = useState(value)
+  const focused = useRef(false)
+  const composing = useRef(false)
+  const draftRef = useRef(draft)
+  const valueRef = useRef(value)
+  const onCommitRef = useRef(onCommit)
+  draftRef.current = draft
+  valueRef.current = value
+  onCommitRef.current = onCommit
+  useEffect(() => {
+    if (!focused.current) setDraft(value)
+  }, [value])
+  useEffect(
+    () => () => {
+      if (draftRef.current !== valueRef.current) onCommitRef.current(draftRef.current)
+    },
+    [],
+  )
+  const flush = () => {
+    if (composing.current) return
+    if (draftRef.current !== valueRef.current) onCommitRef.current(draftRef.current)
+  }
+  return (
+    <Tag
+      data-testid={testId}
+      data-page-block-capture=""
+      data-biu-ignore
+      readOnly={readOnly}
+      spellCheck={Tag === 'textarea' ? false : undefined}
+      value={draft}
+      onFocus={() => {
+        focused.current = true
+      }}
+      onBlur={() => {
+        focused.current = false
+        flush()
+      }}
+      onCompositionStart={() => {
+        composing.current = true
+      }}
+      onCompositionEnd={(event) => {
+        composing.current = false
+        const next = event.currentTarget.value
+        setDraft(next)
+        if (next !== valueRef.current) onCommitRef.current(next)
+      }}
+      onKeyDown={(event) => {
+        event.stopPropagation()
+      }}
+      onChange={(event) => {
+        const next = event.currentTarget.value
+        setDraft(next)
+        if (!composing.current && next !== valueRef.current) onCommitRef.current(next)
+      }}
+      style={style}
+    />
+  )
 }
 
 function AlgorithmCard({
@@ -99,18 +177,20 @@ function AlgorithmCard({
             <option>Hard</option>
           </select>
         </div>
-        <input
-          data-testid="page-algorithm-title"
+        <DraftField
+          as="input"
+          testId="page-algorithm-title"
           readOnly={ro}
           value={title}
-          onChange={(event) => update({ title: event.target.value })}
+          onCommit={(next) => update({ title: next })}
           style={{ ...field, fontSize: 18, fontWeight: 700, marginBottom: 10 }}
         />
-        <textarea
-          data-testid="page-algorithm-prompt"
+        <DraftField
+          as="textarea"
+          testId="page-algorithm-prompt"
           readOnly={ro}
           value={prompt}
-          onChange={(event) => update({ prompt: event.target.value })}
+          onCommit={(next) => update({ prompt: next })}
           style={{ ...field, minHeight: 160 }}
         />
       </section>
@@ -140,12 +220,12 @@ function AlgorithmCard({
             <option value="cpp">C++</option>
           </select>
         </div>
-        <textarea
-          data-testid="page-algorithm-code"
+        <DraftField
+          as="textarea"
+          testId="page-algorithm-code"
           readOnly={ro}
-          spellCheck={false}
           value={code}
-          onChange={(event) => update({ code: event.target.value })}
+          onCommit={(next) => update({ code: next })}
           style={{
             ...field,
             flex: 1,
