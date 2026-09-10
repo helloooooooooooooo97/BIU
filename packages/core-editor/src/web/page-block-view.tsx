@@ -68,7 +68,8 @@ export function PageBlockView({ node, updateAttributes, editor, getPos }: NodeVi
   const spec = getPageEditor()?.block(kind)
   const cloneFrom = typeof data.cloneFrom === 'string' ? data.cloneFrom : ''
   const file = typeof data.file === 'string' ? data.file : ''
-  const pickId = `${plugin || 'page-block'}:${kind}`
+  const blockId = String(node.attrs.id ?? '').trim()
+  const pickId = blockId || `${plugin || 'page-block'}:${kind}`
   const pickLabel = spec?.label || kind
   const update = (patch: Record<string, unknown>, opts?: { replace?: boolean }) => {
     updateAttributes({ data: opts?.replace ? patch : { ...data, ...patch } })
@@ -100,6 +101,7 @@ export function PageBlockView({ node, updateAttributes, editor, getPos }: NodeVi
       className="page-block"
       data-page-block={kind}
       data-page-block-plugin={plugin}
+      data-page-block-id={blockId || undefined}
       data-page-block-capture=""
       data-biu-kind="plugin"
       data-biu-id={pickId}

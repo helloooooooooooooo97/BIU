@@ -8,6 +8,7 @@ import { formatPageBlockFence, parsePageBlockData, parsePageBlockMeta } from './
 
 const metaKey = new PluginKey('page-block-meta')
 const uniqueFilesKey = new PluginKey('page-block-unique-files')
+const assignIdsKey = new PluginKey('page-block-ids')
 
 function parseData(raw: string | null) {
   if (!raw) return {}
@@ -36,8 +37,20 @@ export function duplicateAssetPath(file: string) {
   const ext = dot >= 0 ? raw.slice(dot) : '.json'
   let stem = dot >= 0 ? raw.slice(0, dot) : raw
   stem = stem.replace(/-copy-[0-9a-f]{8}$/i, '')
-  const id = crypto.randomUUID().replace(/-/g, '').slice(0, 8)
+  const id = createPageBlockId()
   return `assets/${stem}-copy-${id}${ext}`
+}
+
+export function createPageBlockId() {
+  return crypto.randomUUID().replace(/-/g, '').slice(0, 8)
+}
+
+export function isPageBlockId(raw: unknown) {
+  return typeof raw === 'string' && /^[a-z0-9]{6,32}$/i.test(raw.trim())
+}
+
+function nodePageBlockId(node: PmNode) {
+  return isPageBlockId(node.attrs.id) ? String(node.attrs.id).trim() : ''
 }
 
 export const pageBlock = Node.create({
@@ -51,6 +64,7 @@ export const pageBlock = Node.create({
     return {
       kind: { default: 'card' },
       plugin: { default: '' },
+      id: { default: '' },
       data: { default: {}, rendered: false },
     }
   },
@@ -64,6 +78,7 @@ export const pageBlock = Node.create({
           return {
             kind: el.getAttribute('data-page-block') || 'card',
             plugin: el.getAttribute('data-page-block-plugin') || '',
+            id: el.getAttribute('data-page-block-id') || '',
             data: parseData(el.getAttribute('data-page-block-data')),
           }
         },
@@ -77,6 +92,7 @@ export const pageBlock = Node.create({
       mergeAttributes(HTMLAttributes, {
         'data-page-block': String(node.attrs.kind ?? 'card'),
         'data-page-block-plugin': String(node.attrs.plugin ?? ''),
+        'data-page-block-id': String(node.attrs.id ?? ''),
         'data-page-block-data': encodeURIComponent(JSON.stringify(node.attrs.data ?? {})),
       }),
     ]
@@ -85,19 +101,21 @@ export const pageBlock = Node.create({
   parseMarkdown: (token, helpers) => {
     const kind = String(token.attributes?.kind ?? 'card')
     const plugin = String(token.attributes?.plugin ?? '')
+    const id = isPageBlockId(token.attributes?.id) ? String(token.attributes.id) : ''
     const extras: Record<string, unknown> = {}
     if (typeof token.attributes?.deck === 'boolean') extras.deck = token.attributes.deck
     if (typeof token.attributes?.height === 'number') extras.height = token.attributes.height
     const data = parsePageBlockData(kind, String(token.content ?? ''), extras)
-    return helpers.createNode('pageBlock', { kind, plugin, data })
+    return helpers.createNode('pageBlock', { kind, plugin, id, data })
   },
 
   renderMarkdown: (node) => {
     const kind = String(node.attrs?.kind ?? 'card')
     const stored = String(node.attrs?.plugin ?? '').trim()
     const plugin = stored || getPageEditor()?.block(kind)?.plugin || ''
+    const id = nodePageBlockId(node as PmNode)
     const data = { ...((node.attrs?.data && typeof node.attrs.data === 'object' ? node.attrs.data : {}) as Record<string, unknown>) }
-    return formatPageBlockFence(kind, plugin, data)
+    return formatPageBlockFence(kind, plugin, data, id)
   },
 
   markdownTokenizer: {
@@ -109,11 +127,11 @@ export const pageBlock = Node.create({
     tokenize(src) {
       const match = src.match(/^:::pageBlock(?:\s+\{([^}]*)\})?\s*\n([\s\S]*?)\n:::/)
       if (!match) return undefined
-      const { kind, plugin, extras } = parsePageBlockMeta(match[1] ?? '')
+      const { kind, plugin, extras, id } = parsePageBlockMeta(match[1] ?? '')
       return {
         type: 'pageBlock',
         raw: match[0],
-        attributes: { kind, plugin, ...extras },
+        attributes: { kind, plugin, id, ...extras },
         content: match[2] ?? '',
       }
     },
@@ -130,6 +148,7 @@ export const pageBlock = Node.create({
         if (
           oldNode.attrs.kind === newNode.attrs.kind &&
           oldNode.attrs.plugin === newNode.attrs.plugin &&
+          oldNode.attrs.id === newNode.attrs.id &&
           JSON.stringify(oldNode.attrs.data) === JSON.stringify(newNode.attrs.data)
         ) {
           return true
@@ -172,6 +191,40 @@ export const pageBlock = Node.create({
             data.file = duplicateAssetPath(from)
             data.cloneFrom = from
             tr = tr.setNodeMarkup(pos, undefined, { ...node.attrs, data })
+          }
+          return tr
+        },
+      }),
+      new Plugin({
+        key: assignIdsKey,
+        view(editorView) {
+          queueMicrotask(() => {
+            if (editorView.isDestroyed) return
+            editorView.dispatch(editorView.state.tr.setMeta(assignIdsKey, true))
+          })
+          return {}
+        },
+        appendTransaction(transactions, _old, state) {
+          const force = transactions.some((item) => item.getMeta(assignIdsKey))
+          if (!force && !transactions.some((item) => item.docChanged)) return null
+          const seen = new Set<string>()
+          const patch: { pos: number; node: PmNode }[] = []
+          state.doc.descendants((node, pos) => {
+            if (node.type.name !== 'pageBlock') return
+            const id = nodePageBlockId(node)
+            if (!id || seen.has(id)) {
+              patch.push({ pos, node })
+              return
+            }
+            seen.add(id)
+          })
+          if (!patch.length) return null
+          let tr = state.tr
+          for (const { pos, node } of patch.slice().sort((a, b) => b.pos - a.pos)) {
+            let next = createPageBlockId()
+            while (seen.has(next)) next = createPageBlockId()
+            seen.add(next)
+            tr = tr.setNodeMarkup(pos, undefined, { ...node.attrs, id: next })
           }
           return tr
         },

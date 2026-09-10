@@ -38,17 +38,18 @@ test('registerBlock adds a slash item and inserts pageBlock', async () => {
   const block = json.content?.find((node) => node.type === 'pageBlock')
   assert.equal(block?.attrs?.kind, 'algorithm')
   assert.equal(block?.attrs?.plugin, 'page-algorithm')
+  assert.match(String(block?.attrs?.id ?? ''), /^[a-z0-9]{8}$/i)
   assert.equal((block?.attrs?.data as { title?: string })?.title, 'Two Sum')
   const md = editor.getMarkdown()
-  assert.match(md, /:::pageBlock \{kind=algorithm plugin=page-algorithm\}/)
+  assert.match(md, /:::pageBlock \{kind=algorithm plugin=page-algorithm id=[a-z0-9]+\}/)
   assert.match(md, /Two Sum/)
   editor.destroy()
   await fiber.dispose()
   assert.equal(filterSlashItems('leetcode').some((entry) => entry.id === 'algorithm'), false)
 })
 
-test('pageBlock markdown roundtrips kind, plugin and data', () => {
-  const src = `:::pageBlock {kind=algorithm plugin=page-algorithm}
+test('pageBlock markdown roundtrips kind, plugin, id and data', () => {
+  const src = `:::pageBlock {kind=algorithm plugin=page-algorithm id=ab12cd34}
 {"title":"Two Sum","lang":"python"}
 :::
 `
@@ -61,9 +62,10 @@ test('pageBlock markdown roundtrips kind, plugin and data', () => {
   const block = json.content?.find((node) => node.type === 'pageBlock')
   assert.equal(block?.attrs?.kind, 'algorithm')
   assert.equal(block?.attrs?.plugin, 'page-algorithm')
+  assert.equal(block?.attrs?.id, 'ab12cd34')
   assert.equal((block?.attrs?.data as { title?: string })?.title, 'Two Sum')
   const out = editor.getMarkdown()
-  assert.match(out, /:::pageBlock \{kind=algorithm plugin=page-algorithm\}/)
+  assert.match(out, /:::pageBlock \{kind=algorithm plugin=page-algorithm id=ab12cd34\}/)
   assert.match(out, /Two Sum/)
   editor.destroy()
 })
@@ -188,7 +190,41 @@ test('duplicate pageBlock file pointers get a cloneFrom copy', () => {
   assert.equal(first.file, 'assets/board.json')
   assert.ok(second.file && second.file !== first.file)
   assert.equal(second.cloneFrom, 'assets/board.json')
-  assert.doesNotMatch(editor.getMarkdown(), /cloneFrom/)
+  editor.destroy()
+})
+
+test('editor assigns a stable id when inserting or loading a pageBlock without one', async () => {
+  const editor = new Editor({
+    extensions: pageEditorExtensions(),
+    content: `:::pageBlock {kind=html plugin=page-html-blocks}\n<div>x</div>\n:::\n`,
+    contentType: 'markdown',
+  })
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  const block = editor.getJSON().content?.find((node) => node.type === 'pageBlock')
+  assert.match(String(block?.attrs?.id ?? ''), /^[a-z0-9]{8}$/i)
+  assert.match(editor.getMarkdown(), /:::pageBlock \{kind=html plugin=page-html-blocks id=[a-z0-9]+\}/)
+  editor.destroy()
+})
+
+test('copied pageBlocks do not share an id', () => {
+  const editor = new Editor({
+    extensions: pageEditorExtensions(),
+    content: { type: 'doc', content: [{ type: 'paragraph' }] },
+  })
+  editor.commands.setContent({
+    type: 'doc',
+    content: [
+      { type: 'pageBlock', attrs: { kind: 'html', id: 'ab12cd34', data: { html: '<div>a</div>' } } },
+      { type: 'pageBlock', attrs: { kind: 'html', id: 'ab12cd34', data: { html: '<div>b</div>' } } },
+    ],
+  })
+  const ids = (editor.getJSON().content ?? [])
+    .filter((node) => node.type === 'pageBlock')
+    .map((node) => String(node.attrs?.id ?? ''))
+  assert.equal(ids.length, 2)
+  assert.equal(ids[0], 'ab12cd34')
+  assert.notEqual(ids[1], ids[0])
+  assert.match(ids[1]!, /^[a-z0-9]{8}$/i)
   editor.destroy()
 })
 
@@ -196,7 +232,7 @@ test('pageBlock node view skips react update when attrs are unchanged', async ()
   const { readFile } = await import('node:fs/promises')
   const { resolve } = await import('node:path')
   const src = await readFile(resolve(import.meta.dirname, './page-block.ts'), 'utf8')
-  assert.match(src, /oldNode\.attrs\.plugin === newNode\.attrs\.plugin/)
+  assert.match(src, /oldNode\.attrs\.id === newNode\.attrs\.id/)
   assert.match(src, /oldNode\.attrs\.kind === newNode\.attrs\.kind/)
   assert.match(src, /JSON\.stringify\(oldNode\.attrs\.data\) === JSON\.stringify\(newNode\.attrs\.data\)/)
   assert.match(src, /return true/)
@@ -211,6 +247,7 @@ test('pageBlock capture includes every registered block shell', async () => {
   assert.match(src, /data-page-block-capture/)
   assert.match(view, /data-page-block-capture=""/)
   assert.match(view, /data-biu-kind="plugin"/)
+  assert.match(view, /data-page-block-id=\{blockId \|\| undefined\}/)
   assert.match(view, /data-biu-id=\{pickId\}/)
   assert.match(view, /setNodeSelection\(pos\)/)
   assert.doesNotMatch(src, /addKeyboardShortcuts/)

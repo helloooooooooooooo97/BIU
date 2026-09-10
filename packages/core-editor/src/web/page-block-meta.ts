@@ -6,6 +6,7 @@ const HTML_KINDS = new Set(['html', 'htmlframe'])
 export function parsePageBlockMeta(raw: string) {
   const kind = raw.match(/\bkind=["']?([a-z0-9-]+)/i)?.[1] ?? 'card'
   const plugin = raw.match(/\bplugin=["']?([a-z][a-z0-9-]*)/i)?.[1] ?? ''
+  const id = raw.match(/\bid=["']?([a-z0-9]{6,32})/i)?.[1] ?? ''
   const extras: Record<string, unknown> = {}
   const deck = raw.match(/\bdeck=(true|false|1|0)\b/i)?.[1]
   if (deck) extras.deck = /^(true|1)$/i.test(deck)
@@ -19,7 +20,7 @@ export function parsePageBlockMeta(raw: string) {
     const parsed = parseFenceSize(height)
     if (parsed != null) extras.height = parsed
   }
-  return { kind, plugin, extras }
+  return { kind, plugin, id, extras }
 }
 
 function parseFenceSize(raw: string): string | number | undefined {
@@ -56,9 +57,10 @@ export function parsePageBlockData(kind: string, raw: string, extras: Record<str
   return { ...extras }
 }
 
-function formatMeta(kind: string, plugin: string, extras: string[]) {
+function formatMeta(kind: string, plugin: string, extras: string[], id = '') {
   const parts = [`kind=${kind}`]
   if (plugin) parts.push(`plugin=${plugin}`)
+  if (id) parts.push(`id=${id}`)
   parts.push(...extras)
   return `{${parts.join(' ')}}`
 }
@@ -73,15 +75,15 @@ function htmlFenceExtras(data: Record<string, unknown>) {
   return extras
 }
 
-export function formatPageBlockFence(kind: string, plugin: string, data: Record<string, unknown>) {
+export function formatPageBlockFence(kind: string, plugin: string, data: Record<string, unknown>, id = '') {
   const body = { ...data }
   delete body.cloneFrom
   if (HTML_KINDS.has(kind)) {
     const html = typeof body.html === 'string' ? body.html : ''
     const extras = htmlFenceExtras(body)
-    return `:::pageBlock ${formatMeta(kind, plugin, extras)}\n${html}\n:::`
+    return `:::pageBlock ${formatMeta(kind, plugin, extras, id)}\n${html}\n:::`
   }
-  const meta = formatMeta(kind, plugin, [])
+  const meta = formatMeta(kind, plugin, [], id)
   return `:::pageBlock ${meta}\n${JSON.stringify(body, null, 2)}\n:::`
 }
 
