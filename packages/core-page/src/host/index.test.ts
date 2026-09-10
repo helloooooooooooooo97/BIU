@@ -1,5 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
+import { createRequire } from 'node:module'
 import { mkdtemp, mkdir, readFile, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -191,6 +192,45 @@ test('page-block index scans a hot batch instead of every page', async () => {
   assert.ok((await index.lastRunAt()) > 0)
 })
 
+
+test('pages sqlite drops leftover notes column after flushing to markdown', async () => {
+  const ctx = new Context()
+  await ctx.plugin(tools)
+  const root = await mkdtemp(join(tmpdir(), 'page-drop-notes-'))
+  await ctx.plugin(fsPlugin, { root })
+  await mkdir(join(root, PAGE_ROOT), { recursive: true })
+  const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as typeof import('node:sqlite')
+  const db = new DatabaseSync(join(root, PAGE_ROOT, 'pages.sqlite'))
+  db.exec(`
+    CREATE TABLE pages (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      tags_json TEXT NOT NULL DEFAULT '[]',
+      notes TEXT NOT NULL DEFAULT '',
+      parent_id TEXT,
+      depends_on_json TEXT NOT NULL DEFAULT '[]',
+      facet_json TEXT NOT NULL DEFAULT '{}',
+      emoji TEXT NOT NULL DEFAULT '',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `)
+  db.prepare(`
+    INSERT INTO pages (id, title, tags_json, notes, parent_id, depends_on_json, facet_json, emoji, created_at, updated_at)
+    VALUES (?, ?, '[]', ?, NULL, '[]', '{}', '', 1, 2)
+  `).run('legacy', '旧页', '只在 sqlite 里的正文\n')
+  db.close()
+  const store = new PagesStore(ctx.fs.workspace as never, join(root, '.biu/assets'))
+  const listed = await store.list()
+  assert.equal(listed.length, 1)
+  assert.equal(listed[0]?.id, 'legacy')
+  assert.equal(listed[0]?.notes, '')
+  const loaded = await store.get('legacy')
+  assert.equal(loaded?.notes, '只在 sqlite 里的正文\n')
+  const sqlite = await store.sqlite()
+  const cols = (sqlite.prepare('PRAGMA table_info(pages)').all() as Array<{ name: string }>).map((col) => col.name)
+  assert.equal(cols.includes('notes'), false)
+})
 
 test('PagesStore reads existing markdown files from .page', async () => {
   const ctx = new Context()
