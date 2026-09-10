@@ -97,6 +97,8 @@ test('pluginsCollection lists installed plugins and sandboxes in one table', asy
   assert.deepEqual(calls, ['open:demo', 'pack:draft-hello'])
   assert.equal(typeof spec.update, 'function')
   assert.equal(spec.schema.contentField, 'readme')
+  assert.match(String(spec.view?.blurb ?? ''), /示例写法/)
+  assert.match(String(spec.view?.blurb ?? ''), /:::pageBlock/)
   assert.equal(spec.schema.labelField, 'title')
   assert.ok(spec.schema.fields.title)
   assert.equal(spec.schema.fields.name, undefined)
