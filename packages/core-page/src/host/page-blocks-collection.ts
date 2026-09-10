@@ -32,7 +32,7 @@ export function pageBlocksCollection(store: PagesStore, index: PageBlocksIndex):
     path: '/page-blocks',
     label: '特殊块',
     view: {
-      moduleId: 'page',
+      moduleId: 'page-blocks',
       route: '/page-blocks',
       title: '特殊块',
       inspector: true,
