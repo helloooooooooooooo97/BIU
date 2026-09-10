@@ -1,0 +1,194 @@
+import type { DbRecord } from '@biu/type-file-system'
+import { recordBuiltinValues } from '@biu/type-file-system'
+import { listPageBlockFences, pageBlockData, pageBlockRecordId, parsePageBlockRecordId } from '@biu/core-editor/host'
+import type { PagesStore, PageRow } from './store.ts'
+
+export const PAGE_BLOCK_HOT_WINDOW_MS = 5 * 60 * 1000
+export const PAGE_BLOCK_HOT_LIMIT = 24
+export const PAGE_BLOCK_WARM_LIMIT = 8
+export const PAGE_BLOCK_TICK_MS = 15_000
+
+type Cover = { page_id: string; page_updated_at: number }
+type IndexRow = {
+  page_id: string
+  block_id: string
+  kind: string
+  plugin: string
+  title: string
+  data_json: string
+  page_created_at: number
+  page_updated_at: number
+}
+
+function blockTitle(kind: string, data: Record<string, unknown>) {
+  if (typeof data.title === 'string' && data.title.trim()) return data.title.trim()
+  if (typeof data.html === 'string' && data.html.trim()) {
+    const text = data.html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 48)
+    if (text) return text
+  }
+  if (typeof data.file === 'string' && data.file.trim()) return data.file.replace(/^assets\//, '')
+  return kind
+}
+
+function toRecord(row: IndexRow): DbRecord {
+  return {
+    id: pageBlockRecordId(row.page_id, row.block_id),
+    title: row.title,
+    pageId: row.page_id,
+    blockId: row.block_id,
+    kind: row.kind,
+    plugin: row.plugin,
+    data: row.data_json,
+    ...recordBuiltinValues({ createdAt: row.page_created_at, updatedAt: row.page_updated_at }),
+  }
+}
+
+export type PageBlocksIndexOptions = {
+  hotWindowMs?: number
+  hotLimit?: number
+  warmLimit?: number
+}
+
+/** 倒排只扫脏页：先最近窗口，再少量补旧的；每拍有上限。 */
+export class PageBlocksIndex {
+  constructor(
+    private store: PagesStore,
+    private opts: PageBlocksIndexOptions = {},
+  ) {}
+
+  private hotWindowMs() {
+    return this.opts.hotWindowMs ?? PAGE_BLOCK_HOT_WINDOW_MS
+  }
+
+  private hotLimit() {
+    return this.opts.hotLimit ?? PAGE_BLOCK_HOT_LIMIT
+  }
+
+  private warmLimit() {
+    return this.opts.warmLimit ?? PAGE_BLOCK_WARM_LIMIT
+  }
+
+  private async db() {
+    const sqlite = await this.store.sqlite()
+    sqlite.exec(`
+      CREATE TABLE IF NOT EXISTS page_block_index (
+        page_id TEXT NOT NULL,
+        block_id TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        plugin TEXT NOT NULL DEFAULT '',
+        title TEXT NOT NULL,
+        data_json TEXT NOT NULL,
+        page_created_at INTEGER NOT NULL DEFAULT 0,
+        page_updated_at INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (page_id, block_id)
+      );
+      CREATE INDEX IF NOT EXISTS page_block_index_page ON page_block_index(page_id);
+      CREATE TABLE IF NOT EXISTS page_block_cover (
+        page_id TEXT PRIMARY KEY,
+        page_updated_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS page_block_index_meta (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+    `)
+    return sqlite
+  }
+
+  lastRunAt() {
+    return this.readMeta('last_run_at').then((raw) => Number(raw) || 0)
+  }
+
+  private async readMeta(key: string) {
+    const db = await this.db()
+    const row = db.prepare('SELECT value FROM page_block_index_meta WHERE key = ?').get(key) as { value: string } | undefined
+    return row?.value ?? ''
+  }
+
+  private async writeMeta(key: string, value: string) {
+    const db = await this.db()
+    db.prepare('INSERT INTO page_block_index_meta(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(key, value)
+  }
+
+  async reindexPage(page: PageRow) {
+    const db = await this.db()
+    const fences = listPageBlockFences(page.notes).filter((item) => item.id)
+    db.exec('BEGIN')
+    try {
+      db.prepare('DELETE FROM page_block_index WHERE page_id = ?').run(page.id)
+      const insert = db.prepare(`
+        INSERT INTO page_block_index(
+          page_id, block_id, kind, plugin, title, data_json, page_created_at, page_updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+      for (const fence of fences) {
+        const data = pageBlockData(fence)
+        insert.run(
+          page.id,
+          fence.id,
+          fence.kind,
+          fence.plugin,
+          blockTitle(fence.kind, data),
+          JSON.stringify(data),
+          page.createdAt,
+          page.updatedAt,
+        )
+      }
+      db.prepare(
+        'INSERT INTO page_block_cover(page_id, page_updated_at) VALUES(?, ?) ON CONFLICT(page_id) DO UPDATE SET page_updated_at=excluded.page_updated_at',
+      ).run(page.id, page.updatedAt)
+      db.exec('COMMIT')
+    } catch (error) {
+      db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
+  async dropPage(pageId: string) {
+    const db = await this.db()
+    db.prepare('DELETE FROM page_block_index WHERE page_id = ?').run(pageId)
+    db.prepare('DELETE FROM page_block_cover WHERE page_id = ?').run(pageId)
+  }
+
+  async sync(now = Date.now()) {
+    const db = await this.db()
+    const pages = await this.store.list()
+    const live = new Set(pages.map((item) => item.id))
+    const covers = (db.prepare('SELECT page_id, page_updated_at FROM page_block_cover').all() as Cover[])
+    const coverAt = new Map(covers.map((item) => [item.page_id, item.page_updated_at]))
+    for (const item of covers) {
+      if (!live.has(item.page_id)) await this.dropPage(item.page_id)
+    }
+    const dirty = pages.filter((page) => (coverAt.get(page.id) ?? -1) < page.updatedAt)
+    const hotCut = now - this.hotWindowMs()
+    const hot = dirty.filter((page) => page.updatedAt >= hotCut).sort((a, b) => b.updatedAt - a.updatedAt || a.id.localeCompare(b.id))
+    const takeHot = hot.slice(0, this.hotLimit())
+    const taken = new Set(takeHot.map((item) => item.id))
+    const warm = dirty
+      .filter((page) => !taken.has(page.id))
+      .sort((a, b) => b.updatedAt - a.updatedAt || a.id.localeCompare(b.id))
+      .slice(0, this.warmLimit())
+    const batch = [...takeHot, ...warm]
+    for (const slim of batch) {
+      const page = await this.store.get(slim.id)
+      if (page) await this.reindexPage(page)
+    }
+    await this.writeMeta('last_run_at', String(now))
+    await this.writeMeta('last_batch', String(batch.length))
+    return { scanned: batch.length, dirty: dirty.length, lastRunAt: now }
+  }
+
+  async list() {
+    const db = await this.db()
+    const rows = db.prepare('SELECT * FROM page_block_index ORDER BY page_id, block_id').all() as IndexRow[]
+    return rows.map(toRecord)
+  }
+
+  async get(id: string) {
+    const parsed = parsePageBlockRecordId(id)
+    if (!parsed) return null
+    const db = await this.db()
+    const row = db.prepare('SELECT * FROM page_block_index WHERE page_id = ? AND block_id = ?').get(parsed.pageId, parsed.blockId) as IndexRow | undefined
+    return row ? toRecord(row) : null
+  }
+}

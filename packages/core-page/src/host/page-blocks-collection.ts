@@ -1,14 +1,8 @@
 import type { CollectionSpec, DbRecord } from '@biu/type-file-system'
-import { recordBuiltinValues, REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
-import {
-  listPageBlockFences,
-  pageBlockData,
-  pageBlockRecordId,
-  parsePageBlockRecordId,
-  patchPageBlockMarkdown,
-  type PageBlockFence,
-} from '@biu/core-editor/host'
-import type { PagesStore, PageRow } from './store.ts'
+import { REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
+import { parsePageBlockRecordId, patchPageBlockMarkdown } from '@biu/core-editor/host'
+import type { PagesStore } from './store.ts'
+import { PageBlocksIndex } from './page-blocks-index.ts'
 
 function asDataObject(raw: unknown): Record<string, unknown> | undefined {
   if (raw == null) return undefined
@@ -21,50 +15,18 @@ function asDataObject(raw: unknown): Record<string, unknown> | undefined {
   throw new Error('data must be a JSON object')
 }
 
-function blockTitle(kind: string, data: Record<string, unknown>) {
-  if (typeof data.title === 'string' && data.title.trim()) return data.title.trim()
-  if (typeof data.html === 'string' && data.html.trim()) {
-    const text = data.html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 48)
-    if (text) return text
-  }
-  if (typeof data.file === 'string' && data.file.trim()) return data.file.replace(/^assets\//, '')
-  return kind
-}
-
-function toRecord(page: PageRow, fence: PageBlockFence): DbRecord {
-  const data = pageBlockData(fence)
-  return {
-    id: pageBlockRecordId(page.id, fence.id),
-    title: blockTitle(fence.kind, data),
-    pageId: page.id,
-    blockId: fence.id,
-    kind: fence.kind,
-    plugin: fence.plugin,
-    data: JSON.stringify(data),
-    ...recordBuiltinValues({ createdAt: page.createdAt, updatedAt: page.updatedAt }),
-  }
-}
-
-async function fencesOn(store: PagesStore, pageId: string) {
-  const page = await store.get(pageId)
-  if (!page) return null
-  return {
-    page,
-    fences: listPageBlockFences(page.notes).filter((item) => item.id),
-  }
-}
-
-async function recordOf(store: PagesStore, id: string) {
+async function recordOf(store: PagesStore, index: PageBlocksIndex, id: string) {
+  const hit = await index.get(id)
+  if (hit) return hit
   const parsed = parsePageBlockRecordId(id)
   if (!parsed) return null
-  const found = await fencesOn(store, parsed.pageId)
-  if (!found) return null
-  const fence = found.fences.find((item) => item.id === parsed.blockId)
-  if (!fence) return null
-  return toRecord(found.page, fence)
+  const page = await store.get(parsed.pageId)
+  if (!page) return null
+  await index.reindexPage(page)
+  return index.get(id)
 }
 
-export function pageBlocksCollection(store: PagesStore): CollectionSpec {
+export function pageBlocksCollection(store: PagesStore, index: PageBlocksIndex): CollectionSpec {
   return {
     id: 'page-blocks',
     path: '/page-blocks',
@@ -75,7 +37,7 @@ export function pageBlocksCollection(store: PagesStore): CollectionSpec {
       title: '特殊块',
       inspector: true,
       blurb:
-        '页面 :::pageBlock 的投影。记录 id 为 <pageId>::<blockId>。改属性用 db_update：data 为 JSON 对象（默认合并），也可写 plugin。不改 id/kind，不能从本表新建或删除块。正文仍在对应页面的 notes。',
+        '页面 :::pageBlock 的增量倒排。记录 id 为 <pageId>::<blockId>。索引记 last_run_at，每拍只扫最近改过的页（热窗口优先，再少量补旧），不会一次重建全部。改属性用 db_update：data 为 JSON 对象（默认合并）。不能从本表新建或删除块。',
       order: 26,
       icon: 'puzzle-piece',
     },
@@ -99,24 +61,21 @@ export function pageBlocksCollection(store: PagesStore): CollectionSpec {
     },
     records: { update: true },
     list: async (query) => {
+      await index.sync()
       if (query?.ids?.length) {
         const rows: DbRecord[] = []
         for (const id of query.ids) {
-          const row = await recordOf(store, id)
+          const row = await recordOf(store, index, id)
           if (row) rows.push(row)
         }
         return rows
       }
-      const pages = await store.list()
-      const rows: DbRecord[] = []
-      for (const slim of pages) {
-        const found = await fencesOn(store, slim.id)
-        if (!found) continue
-        for (const fence of found.fences) rows.push(toRecord(found.page, fence))
-      }
-      return rows
+      return index.list()
     },
-    get: (id) => recordOf(store, id),
+    get: async (id) => {
+      await index.sync()
+      return recordOf(store, index, id)
+    },
     update: async (id, patch) => {
       const parsed = parsePageBlockRecordId(id)
       if (!parsed) throw new Error(`unknown pageBlock: ${id}`)
@@ -133,9 +92,10 @@ export function pageBlocksCollection(store: PagesStore): CollectionSpec {
         replace: patch.replace === true,
       })
       const next = await store.update(page.id, { notes })
-      const fence = listPageBlockFences(next.notes).find((item) => item.id === parsed.blockId)
-      if (!fence) throw new Error(`unknown pageBlock: ${id}`)
-      return toRecord(next, fence)
+      await index.reindexPage(next)
+      const row = await index.get(id)
+      if (!row) throw new Error(`unknown pageBlock: ${id}`)
+      return row
     },
   }
 }
