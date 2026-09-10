@@ -78,12 +78,19 @@ export type FsContentProps = {
   path?: string
 }
 
-/** 集合自定义呈现：谁 registerView(path)，谁才能在该 path 用这个 mode。 */
+/** 集合自定义呈现：谁 registerView(path)，谁才能在该 path 用这个 mode。整页自己画。 */
 export type FsViewProps = {
   path: string
   rows: DbRecord[]
   schema?: CollectionSchema
   onOpen: (row: DbRecord) => void
+}
+
+/** 行渲染：外壳只负责列表；插件只画这一行。fields 是当前视图勾上的可见列。 */
+export type FsRowViewProps = {
+  record: DbRecord
+  fields: Array<{ key: string; spec?: FieldSpec; value: unknown; label: string }>
+  onOpen: () => void
 }
 
 export type CollectionViewType = {
@@ -93,12 +100,22 @@ export type CollectionViewType = {
   View: ComponentType<FsViewProps>
 }
 
+export type CollectionRowViewType = {
+  id: string
+  label: string
+  Icon?: ComponentType<{ className?: string }>
+  Row: ComponentType<FsRowViewProps>
+}
+
 export interface DatabaseUi {
   decorate(path: string, chrome: CollectionChrome): { dispose: () => void }
-  /** 给指定集合登记一种查看模式。其它集合看不到、也不能选。 */
+  /** 给指定集合登记一种查看模式。其它集合看不到、也不能选。整页自己画。 */
   registerView(path: string, view: CollectionViewType): { dispose: () => void }
+  /** 登记一行的样子。path 为 * 时所有表都能用。外壳仍由 File System 画。 */
+  registerRowView(path: string, view: CollectionRowViewType): { dispose: () => void }
   chrome(path: string): CollectionChrome
   views(path: string): CollectionViewType[]
+  rowViews(path: string): CollectionRowViewType[]
   subscribe(listener: () => void): () => void
 }
 

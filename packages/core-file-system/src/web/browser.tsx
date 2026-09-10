@@ -43,7 +43,7 @@ import {
 } from '@heroicons/react/16/solid'
 import type { CollectionActionInfo, CollectionInfo, CollectionSchema, CollectionSchemaPack, DbRecord, FieldSpec, FieldType } from '@biu/type-file-system'
 import { normalizeSchemaValue } from '@biu/type-file-system'
-import type { CollectionChrome, CollectionViewType, DatabaseUi } from '@biu/type-file-system/ui'
+import type { CollectionChrome, CollectionRowViewType, CollectionViewType, DatabaseUi } from '@biu/type-file-system/ui'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { DndGrip } from './dnd-grip.tsx'
 import { BoolBox, ChatCount, RecordEmojiBoard, HeadlessDismiss, HeadlessPopover, HEADLESS_DISMISS_IGNORE, tagTextColor } from '@biu/public-ui'
@@ -106,6 +106,7 @@ import { PageBanner } from './page-banner.tsx'
 import { TableGlyph, ViewModeGlyph } from './nav-glyphs.tsx'
 import { countFittingViewTabs, splitVisibleViews } from './view-tabs.ts'
 import { getDatabaseUi } from './database-ui.ts'
+import { CollectionRowsShell } from './rows-view.tsx'
 import {
   activeViewStorageKey,
   getStarredViews,
@@ -157,6 +158,7 @@ import {
 } from '../query-logic.ts'
 
 const EMPTY_VIEWS: CollectionViewType[] = []
+const EMPTY_ROW_VIEWS: CollectionRowViewType[] = []
 
 type StatResult = { schema?: CollectionSchema }
 
@@ -496,9 +498,10 @@ export function CollectionBrowser({
     () => dbUi?.views(collectionPath) ?? EMPTY_VIEWS,
     () => dbUi?.views(collectionPath) ?? EMPTY_VIEWS,
   )
-  const modeChoices = useMemo(
-    () => [...VIEW_MODES, ...extraViews.map((view) => ({ id: view.id, label: view.label }))],
-    [extraViews],
+  const extraRows = useSyncExternalStore(
+    (fn) => (dbUi ? dbUi.subscribe(fn) : () => undefined),
+    () => dbUi?.rowViews(collectionPath) ?? EMPTY_ROW_VIEWS,
+    () => dbUi?.rowViews(collectionPath) ?? EMPTY_ROW_VIEWS,
   )
   const [query, setQuery] = useState(initialView?.query ?? '')
   const [page, setPage] = useState(0)
@@ -507,6 +510,7 @@ export function CollectionBrowser({
   const [fetchQuery, setFetchQuery] = useState(initialView?.query ?? '')
   const [mode, setMode] = useState<ViewMode>(initialView?.mode ?? 'table')
   const customView = extraViews.find((view) => view.id === mode)
+  const rowView = customView ? undefined : extraRows.find((view) => view.id === mode)
   const [sortField, setSortField] = useState(initialView?.sortField ?? 'title')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>(initialView?.sortDir ?? 'asc')
   const [sorts, setSorts] = useState<SortRule[]>(() =>
@@ -586,6 +590,7 @@ export function CollectionBrowser({
   })
   const [viewMenuOpen, setViewMenuOpen] = useState(false)
   const [modeMenuOpen, setModeMenuOpen] = useState(false)
+  const [modePlusOpen, setModePlusOpen] = useState(false)
   const [sortMenuOpen, setSortMenuOpen] = useState(false)
   const [columnMenuOpen, setColumnMenuOpen] = useState(false)
   const [filterOpen, setFilterOpen] = useState(false)
@@ -767,6 +772,7 @@ export function CollectionBrowser({
   function toggleMenu(which: 'view' | 'mode' | 'sort' | 'columns' | 'filter' | 'config' | 'group' | 'layout') {
     setViewMenuOpen(which === 'view' && !viewMenuOpen)
     setModeMenuOpen(which === 'mode' && !modeMenuOpen)
+    if (which !== 'mode' || modeMenuOpen) setModePlusOpen(false)
     setSortMenuOpen(which === 'sort' && !sortMenuOpen)
     setColumnMenuOpen(which === 'columns' && !columnMenuOpen)
     setFilterOpen(which === 'filter' && !filterOpen)
@@ -2810,25 +2816,84 @@ export function CollectionBrowser({
                 type="button"
                 className={`tasks-sort-btn${modeMenuOpen ? ' is-active' : ''}`}
                 aria-label="查看模式"
-                title={`模式：${modeChoices.find((item) => item.id === mode)?.label ?? mode}`}
+                title={`模式：${
+                  VIEW_MODES.find((item) => item.id === mode)?.label ??
+                  extraRows.find((item) => item.id === mode)?.label ??
+                  extraViews.find((item) => item.id === mode)?.label ??
+                  mode
+                }`}
                 onClick={() => toggleMenu('mode')}
               >
-                <ModeGlyph id={mode} extra={extraViews} />
+                <ModeGlyph id={mode} extra={extraViews} rows={extraRows} />
               </button>
               {modeMenuOpen ? (
-                <HeadlessDismiss onDismiss={() => setModeMenuOpen(false)} insideRef={modeRef}>
+                <HeadlessDismiss onDismiss={() => { setModeMenuOpen(false); setModePlusOpen(false) }} insideRef={modeRef}>
                 <div className="tasks-sort-menu" role="menu">
                   <div className="tasks-sort-head">查看模式</div>
-                  {modeChoices.map((opt) => (
+                  {VIEW_MODES.map((opt) => (
                     <CheckRow
                       key={opt.id}
-                      icon={<ModeGlyph id={opt.id} extra={extraViews} />}
+                      icon={<ModeGlyph id={opt.id} extra={extraViews} rows={extraRows} />}
                       label={opt.label}
                       on={mode === opt.id}
                       onToggle={() => {
                         setMode(opt.id)
                         patchActiveView({ mode: opt.id })
                         setModeMenuOpen(false)
+                        setModePlusOpen(false)
+                      }}
+                    />
+                  ))}
+                  {rowView ? (
+                    <CheckRow
+                      key={rowView.id}
+                      icon={<ModeGlyph id={rowView.id} extra={extraViews} rows={extraRows} />}
+                      label={rowView.label}
+                      on
+                      onToggle={() => undefined}
+                    />
+                  ) : null}
+                  {extraRows.length ? (
+                    <>
+                      <button
+                        type="button"
+                        className="fsdb-mode-plus"
+                        data-testid="fsdb-mode-plus"
+                        aria-label="自定义渲染"
+                        title="自定义渲染"
+                        onClick={() => setModePlusOpen((open) => !open)}
+                      >
+                        <PlusIcon aria-hidden className="size-[14px]" />
+                      </button>
+                      {modePlusOpen
+                        ? extraRows.map((opt) => (
+                            <CheckRow
+                              key={opt.id}
+                              icon={<ModeGlyph id={opt.id} extra={extraViews} rows={extraRows} />}
+                              label={opt.label}
+                              on={mode === opt.id}
+                              onToggle={() => {
+                                setMode(opt.id)
+                                patchActiveView({ mode: opt.id })
+                                setModeMenuOpen(false)
+                                setModePlusOpen(false)
+                              }}
+                            />
+                          ))
+                        : null}
+                    </>
+                  ) : null}
+                  {extraViews.map((opt) => (
+                    <CheckRow
+                      key={opt.id}
+                      icon={<ModeGlyph id={opt.id} extra={extraViews} rows={extraRows} />}
+                      label={opt.label}
+                      on={mode === opt.id}
+                      onToggle={() => {
+                        setMode(opt.id)
+                        patchActiveView({ mode: opt.id })
+                        setModeMenuOpen(false)
+                        setModePlusOpen(false)
                       }}
                     />
                   ))}
@@ -3062,7 +3127,16 @@ export function CollectionBrowser({
             {customView ? (
               <customView.View path={dataPath} rows={items} schema={schema} onOpen={openRow} />
             ) : null}
-            {!customView ? (
+            {rowView ? (
+              <CollectionRowsShell
+                rows={items}
+                schema={schema}
+                columns={columns.map((item) => item.key)}
+                onOpen={openRow}
+                Row={rowView.Row}
+              />
+            ) : null}
+            {!customView && !rowView ? (
               <div className="tasks-table-wrap">
                 {pickedIds.length ? (
                   <div className="fsdb-bulk" data-testid="fsdb-bulk-bar">

@@ -22,6 +22,7 @@ import { pickMainDataRoute, readMainDataRoute, writeMainDataRoute } from './main
 import { facetsChrome } from './facet-chrome.tsx'
 import { viewsChrome } from './views-chrome.ts'
 import { pageBlocksChrome } from './page-blocks-chrome.ts'
+import { DEFAULT_ROW_VIEW } from './rows-view.tsx'
 import { viewsForRegisteredCollection } from './collection-nav.ts'
 import { builtinAllViewId } from '../catalog-views.ts'
 import { normalizeCollectionPath } from '../paths.ts'
@@ -248,10 +249,12 @@ export function apply(ctx: Context) {
         return editor?.blocks?.() ?? []
       }),
     )
+    const cardRows = ui.registerRowView('*', DEFAULT_ROW_VIEW)
     return () => {
       views.dispose()
       facetsUi.dispose()
       blocksUi.dispose()
+      cardRows.dispose()
     }
   })
   ctx.inject(['pageEditor'], (inner) => {

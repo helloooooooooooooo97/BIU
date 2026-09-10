@@ -102,6 +102,22 @@ test('registerView is scoped to the collection that registered it', () => {
   assert.equal(ui.views('/tasks').length, 0)
 })
 
+test('registerRowView merges star path with the collection', () => {
+  const ctx = new Context()
+  const ui = new DatabaseUiService(ctx)
+  const Card = () => null
+  const Task = () => null
+  ui.registerRowView('*', { id: 'card', label: '卡片', Row: Card })
+  ui.registerRowView('/tasks', { id: 'task-card', label: '任务卡', Row: Task })
+  ui.registerRowView('/plugins', { id: 'plugin-card', label: '插件卡', Row: Card })
+  assert.equal(ui.rowViews('/tasks').map((item) => item.id).join(','), 'card,task-card')
+  assert.equal(ui.rowViews('/plugins').map((item) => item.id).join(','), 'card,plugin-card')
+  const later = ui.registerRowView('/tasks', { id: 'card', label: '任务默认卡', Row: Task })
+  assert.equal(ui.rowViews('/tasks').find((item) => item.id === 'card')?.label, '任务默认卡')
+  later.dispose()
+  assert.equal(ui.rowViews('/tasks').find((item) => item.id === 'card')?.label, '卡片')
+})
+
 test('refresh notifies chrome subscribers', () => {
   const ctx = new Context()
   const ui = new DatabaseUiService(ctx)

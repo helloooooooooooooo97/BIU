@@ -20,8 +20,14 @@ class FakeDatabaseUi extends Service implements DatabaseUi {
   registerView() {
     return { dispose() {} }
   }
+  registerRowView() {
+    return { dispose() {} }
+  }
   views() {
     return [] as CollectionViewType[]
+  }
+  rowViews() {
+    return []
   }
   subscribe() {
     return () => undefined
@@ -196,6 +202,17 @@ test('page-excalidraw sandbox stores scenes as page assets', async () => {
   assert.match(src, /height: 280/)
   assert.doesNotMatch(src, /h-\[280px\]/)
   assert.match(src, /refresh/)
+})
+
+test('task row plugin registers a row view, not a full collection View', async () => {
+  const { readFile } = await import('node:fs/promises')
+  const { resolve } = await import('node:path')
+  const src = await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/fs-task-rows/web.tsx'), 'utf8')
+  assert.match(src, /inject = \['databaseUi'\]/)
+  assert.match(src, /registerRowView\('\/tasks'/)
+  assert.match(src, /id: 'task-card'/)
+  assert.match(src, /label: '任务卡'/)
+  assert.doesNotMatch(src, /registerView\(/)
 })
 
 test('html and req page blocks register plugin id for slash', async () => {
