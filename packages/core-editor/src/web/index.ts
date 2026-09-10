@@ -6,7 +6,7 @@ import { PageEditor } from './page-editor.tsx'
 import { PageEditorService } from './service.ts'
 import { PAGE_EDITOR_STYLE } from './style.ts'
 import { SourceToggle } from './source-toggle.tsx'
-import { pageBlocksCollectionView } from './page-blocks-view.tsx'
+import { pageBlocksCollectionView, PageBlockContent } from './page-blocks-view.tsx'
 
 export { PageEditor, PageEditor as RecordEditor } from './page-editor.tsx'
 export { SourceToggle } from './source-toggle.tsx'
@@ -14,7 +14,7 @@ export { PageEditorService, BASIC_BLOCK_TYPE, getPageEditor, usePageEditorVersio
 export type { HeadingReplacement, PageBlockSpec, PageBlockViewProps, SlashCommandSpec, SlashInsert } from './service.ts'
 export { pageEditorExtensions } from './kit.ts'
 export { markdownLocusFromRange, markdownLocusFromSelection, markdownLocusFromElement } from './markdown-locus.ts'
-export { PageBlocksView, pageBlocksCollectionView, PAGE_BLOCKS_VIEW_ID } from './page-blocks-view.tsx'
+export { PageBlocksView, PageBlockContent, PageBlockStage, pageBlocksCollectionView, PAGE_BLOCKS_VIEW_ID } from './page-blocks-view.tsx'
 
 export const name = 'core-editor-ui'
 export const inject = ['databaseUi']
@@ -27,6 +27,7 @@ export function apply(ctx: Context) {
   for (const path of EDITOR_COLLECTIONS) {
     ctx.effect(() => ui.decorate(path, { Content: PageEditor, DetailTools: SourceToggle }).dispose)
   }
+  ctx.effect(() => ui.decorate('/page-blocks', { Content: PageBlockContent }).dispose)
   ctx.effect(() => ui.registerView('/page-blocks', pageBlocksCollectionView).dispose)
 }
 

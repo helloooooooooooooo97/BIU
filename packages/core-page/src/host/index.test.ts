@@ -68,6 +68,7 @@ test('page plugin stores pages in SQLite under .page', async () => {
   assert.equal(registered[1]?.view?.route, '/page-blocks')
   assert.notEqual(registered[1]?.view?.moduleId, registered[0]?.view?.moduleId)
   assert.deepEqual(registered[1]?.records, { update: true })
+  assert.equal(registered[1]?.schema.contentField, 'data')
 
   const spec = registered[0]!
   assert.equal((await spec.list()).length, 0)
