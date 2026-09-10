@@ -105,6 +105,7 @@ import { RecordDetail } from './record-detail.tsx'
 import { PageBanner } from './page-banner.tsx'
 import { TableGlyph, ViewModeGlyph } from './nav-glyphs.tsx'
 import { countFittingViewTabs, splitVisibleViews } from './view-tabs.ts'
+import { getPick } from '@biu/core-pick/web'
 import { getDatabaseUi } from './database-ui.ts'
 import { CollectionRowsShell } from './rows-view.tsx'
 import {
@@ -159,6 +160,28 @@ import {
 
 const EMPTY_VIEWS: CollectionViewType[] = []
 const EMPTY_ROW_VIEWS: CollectionRowViewType[] = []
+
+function askNewPresentation(opts: { path: string; title?: string }) {
+  const path = opts.path.trim()
+  const name = opts.title?.trim() || path
+  const draft = `请为「${name}」添加一种新的呈现方式。先听我描述要看板、日历还是别的样子，再写无头插件：databaseUi.registerRowView("${path}", { id, label, Row }) 只换每一行；或 databaseUi.registerView("${path}", { id, label, View }) 整页自己画。不要改 packages/。用 sandbox + pack 安装。装好后会出现在查看模式菜单里。`
+  getPick()?.attach(
+    path
+      ? [
+          {
+            kind: 'collection',
+            id: `view:${path}`,
+            action: 'view',
+            path,
+            label: '呈现方式',
+            title: name,
+            route: typeof window === 'undefined' ? '' : window.location.pathname,
+          },
+        ]
+      : [],
+    { text: draft },
+  )
+}
 
 type StatResult = { schema?: CollectionSchema }
 
@@ -590,7 +613,6 @@ export function CollectionBrowser({
   })
   const [viewMenuOpen, setViewMenuOpen] = useState(false)
   const [modeMenuOpen, setModeMenuOpen] = useState(false)
-  const [modePlusOpen, setModePlusOpen] = useState(false)
   const [sortMenuOpen, setSortMenuOpen] = useState(false)
   const [columnMenuOpen, setColumnMenuOpen] = useState(false)
   const [filterOpen, setFilterOpen] = useState(false)
@@ -772,7 +794,6 @@ export function CollectionBrowser({
   function toggleMenu(which: 'view' | 'mode' | 'sort' | 'columns' | 'filter' | 'config' | 'group' | 'layout') {
     setViewMenuOpen(which === 'view' && !viewMenuOpen)
     setModeMenuOpen(which === 'mode' && !modeMenuOpen)
-    if (which !== 'mode' || modeMenuOpen) setModePlusOpen(false)
     setSortMenuOpen(which === 'sort' && !sortMenuOpen)
     setColumnMenuOpen(which === 'columns' && !columnMenuOpen)
     setFilterOpen(which === 'filter' && !filterOpen)
@@ -2835,7 +2856,7 @@ export function CollectionBrowser({
                 <ModeGlyph id={mode} extra={extraViews} rows={extraRows} />
               </button>
               {modeMenuOpen ? (
-                <HeadlessDismiss onDismiss={() => { setModeMenuOpen(false); setModePlusOpen(false) }} insideRef={modeRef}>
+                <HeadlessDismiss onDismiss={() => setModeMenuOpen(false)} insideRef={modeRef}>
                 <div className="tasks-sort-menu" role="menu">
                   <div className="tasks-sort-head">查看模式</div>
                   {VIEW_MODES.map((opt) => (
@@ -2848,7 +2869,6 @@ export function CollectionBrowser({
                         setMode(opt.id)
                         patchActiveView({ mode: opt.id })
                         setModeMenuOpen(false)
-                        setModePlusOpen(false)
                       }}
                     />
                   ))}
@@ -2862,40 +2882,36 @@ export function CollectionBrowser({
                         setMode(opt.id)
                         patchActiveView({ mode: opt.id })
                         setModeMenuOpen(false)
-                        setModePlusOpen(false)
                       }}
                     />
                   ))}
-                  {extraRows.length ? (
-                    <>
-                      <button
-                        type="button"
-                        className="fsdb-mode-plus"
-                        data-testid="fsdb-mode-plus"
-                        aria-label="自定义渲染"
-                        title="自定义渲染"
-                        onClick={() => setModePlusOpen((open) => !open)}
-                      >
-                        <PlusIcon aria-hidden className="size-[14px]" />
-                      </button>
-                      {modePlusOpen
-                        ? extraRows.map((opt) => (
-                            <CheckRow
-                              key={opt.id}
-                              icon={<ModeGlyph id={opt.id} extra={extraViews} rows={extraRows} />}
-                              label={opt.label}
-                              on={mode === opt.id}
-                              onToggle={() => {
-                                setMode(opt.id)
-                                patchActiveView({ mode: opt.id })
-                                setModeMenuOpen(false)
-                                setModePlusOpen(false)
-                              }}
-                            />
-                          ))
-                        : null}
-                    </>
-                  ) : null}
+                  {extraRows.map((opt) => (
+                    <CheckRow
+                      key={opt.id}
+                      icon={<ModeGlyph id={opt.id} extra={extraViews} rows={extraRows} />}
+                      label={opt.label}
+                      on={mode === opt.id}
+                      onToggle={() => {
+                        setMode(opt.id)
+                        patchActiveView({ mode: opt.id })
+                        setModeMenuOpen(false)
+                      }}
+                    />
+                  ))}
+                  <button
+                    type="button"
+                    className="fsdb-mode-plus"
+                    data-testid="fsdb-mode-plus"
+                    aria-label="添加呈现方式"
+                    title="添加呈现方式"
+                    onClick={() => {
+                      setModeMenuOpen(false)
+                      askNewPresentation({ path: collectionPath, title })
+                    }}
+                  >
+                    <PlusIcon aria-hidden className="size-[14px]" />
+                    添加呈现方式
+                  </button>
                 </div>
                 </HeadlessDismiss>
               ) : null}

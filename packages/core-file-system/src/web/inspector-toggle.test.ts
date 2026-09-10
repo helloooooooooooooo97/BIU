@@ -439,7 +439,9 @@ test('filesystem list is table-only; extra modes come from registerView', () => 
   assert.match(browser, /aria-label="查看模式"/)
   assert.match(browser, /if \(customView\) return undefined/)
   assert.match(browser, /data-testid="fsdb-mode-plus"/)
+  assert.match(browser, /askNewPresentation/)
   assert.doesNotMatch(browser, /extraViews\.length \?/)
+  assert.doesNotMatch(browser, /modePlusOpen/)
 })
 
 test('filesystem header expands the shared left sidebar and toggles the right inspector', () => {
