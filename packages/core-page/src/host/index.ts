@@ -3,8 +3,10 @@ import type { Context } from 'cordis'
 import type { CollectionSpec } from '@biu/type-file-system'
 import { DATABASE_CHANNEL, REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
 import { PagesStore, PageAssetConflictError, type WorkspaceFs } from './store.ts'
+import { pageBlocksCollection } from './page-blocks-collection.ts'
 
 export { PAGE_ROOT, PAGE_ASSETS, ASSET_GC_GRACE_MS, collectPageAssetNames, PagesStore } from './store.ts'
+export { pageBlocksCollection } from './page-blocks-collection.ts'
 
 export function pagesCollection(store: PagesStore): CollectionSpec {
   return {
@@ -93,6 +95,7 @@ export function apply(ctx: Context) {
   // 否则工具调用（绑定项目）与 HTTP 请求（无 Session）会落到不同目录。
   const store = new PagesStore(ctx.fs.workspace as WorkspaceFs, dataPath(process.cwd(), 'assets'))
   ctx.database.register(pagesCollection(store))
+  ctx.database.register(pageBlocksCollection(store))
   servePageFile(ctx, store)
 }
 
