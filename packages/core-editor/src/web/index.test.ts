@@ -7,6 +7,7 @@ import { PageEditor } from './page-editor.tsx'
 
 class FakeDatabaseUi extends Service implements DatabaseUi {
   paths: string[] = []
+  registered: Array<{ path: string; id: string; label: string }> = []
   constructor(ctx: Context) {
     super(ctx, 'databaseUi')
   }
@@ -16,7 +17,8 @@ class FakeDatabaseUi extends Service implements DatabaseUi {
     assert.ok(chrome.DetailTools)
     return { dispose() {} }
   }
-  registerView(_path: string, _view: CollectionViewType) {
+  registerView(path: string, view: CollectionViewType) {
+    this.registered.push({ path, id: view.id, label: view.label })
     return { dispose() {} }
   }
   chrome() {
@@ -35,5 +37,6 @@ test('core-editor paints Content on pages, tasks, plugins and facets, not sessio
   const ui = new FakeDatabaseUi(ctx)
   await ctx.plugin(editorUi)
   assert.deepEqual(ui.paths, ['/pages', '/tasks', '/plugins', '/facets'])
+  assert.deepEqual(ui.registered, [{ path: '/page-blocks', id: 'blocks', label: '组件' }])
   assert.ok(ctx.pageEditor)
 })

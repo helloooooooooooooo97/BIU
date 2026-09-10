@@ -437,6 +437,7 @@ test('filesystem list is table-only; extra modes come from registerView', () => 
   assert.match(browser, /className="fsdb-title-host"/)
   assert.doesNotMatch(browser, /<th>操作<\/th>/)
   assert.match(browser, /aria-label="查看模式"/)
+  assert.match(browser, /if \(customView\) return undefined/)
   assert.doesNotMatch(browser, /extraViews\.length \?/)
 })
 

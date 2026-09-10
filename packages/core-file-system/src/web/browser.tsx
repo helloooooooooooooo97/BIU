@@ -600,6 +600,7 @@ export function CollectionBrowser({
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
   const listColumns = useMemo(() => {
+    if (customView) return undefined
     if (chrome?.cells) return undefined
     const currentSchema = stat?.schema
     const fieldKeys = currentSchema
@@ -613,7 +614,7 @@ export function CollectionBrowser({
     const visible = requested.filter((key) => allowed.has(key) || Boolean(parseFacetFlatColumnKey(key)))
     if (!visible.length) return undefined
     return listProjectionKeys({ schema: currentSchema, columns: visible, groupBy })
-  }, [chrome, columnKeys, facetCatalog, groupBy, stat])
+  }, [chrome, columnKeys, customView, facetCatalog, groupBy, stat])
   const listColumnsKey = listColumns?.join('\0') ?? ''
   const [refreshing, setRefreshing] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
