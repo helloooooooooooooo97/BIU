@@ -1,7 +1,7 @@
 {
   "id": "page-html-blocks",
   "name": "HTML",
-  "blurb": "斜杠插入排版（HTML/CSS 卡片，不跑脚本）或小网页（能跑脚本的独立页面）。",
+  "blurb": "斜杠插入静态HTML（不跑脚本）或动态HTML（能跑脚本）。",
   "tags": [
     "page",
     "editor",
