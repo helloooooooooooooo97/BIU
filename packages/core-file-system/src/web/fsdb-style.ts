@@ -320,6 +320,7 @@ const CSS = `
 .fsdb-pager .tasks-icon-btn:disabled{opacity:.4;cursor:default;color:var(--dsw-label-3)}
 .fsdb-pager .fsdb-pager-size-btn{width:auto}
 .fsdb-stage{display:flex;min-width:0;min-height:0;flex:1;flex-direction:column;overflow:hidden}
+.fsdb-plugin-surface{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 .fsdb-rows-view{display:flex;flex-direction:column;gap:10px;overflow:auto;flex:1;min-width:0;min-height:0;padding:8px 12px 24px}
 .fsdb-rows-view-item{min-width:0}
 .fsdb-row-card{display:flex;flex-direction:column;gap:6px;width:100%;margin:0;border:1px solid var(--dsw-border);border-radius:10px;padding:10px 12px;background:var(--dsw-surface);color:inherit;font:inherit;text-align:left;cursor:pointer}
