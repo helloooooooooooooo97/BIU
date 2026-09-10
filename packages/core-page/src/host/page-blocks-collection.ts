@@ -43,6 +43,7 @@ export function pageBlocksCollection(store: PagesStore, index: PageBlocksIndex):
     },
     schema: {
       labelField: 'title',
+      contentField: 'data',
       columns: ['title', 'blockKind', 'plugin', 'pageId'],
       fields: {
         ...REQUIRED_RECORD_FIELDS,

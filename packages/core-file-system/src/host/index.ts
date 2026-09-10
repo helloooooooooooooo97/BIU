@@ -158,6 +158,8 @@ function contentKey(spec: CollectionSpec) {
 function withoutContent(spec: CollectionSpec, row: DbRecord): DbRecord {
   const key = contentKey(spec)
   if (!Object.prototype.hasOwnProperty.call(row, key)) return row
+  const field = schemaFor(spec).fields[key]
+  if (field && field.type !== 'file') return row
   const next = { ...row }
   delete next[key]
   return next

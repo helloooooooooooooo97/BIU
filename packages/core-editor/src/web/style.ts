@@ -115,4 +115,5 @@ export const PAGE_EDITOR_STYLE = `
 .page-blocks-view-title:hover{color:var(--dsw-business)}
 .page-blocks-view .page-block{margin:0}
 .page-blocks-view .page-block iframe{pointer-events:auto}
+.page-blocks-detail{padding:0 0 32px}
 `

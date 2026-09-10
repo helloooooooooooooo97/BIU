@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { RectangleGroupIcon } from '@heroicons/react/16/solid'
 import type { DbRecord } from '@biu/type-file-system'
-import type { CollectionViewType, FsViewProps } from '@biu/type-file-system/ui'
+import type { CollectionViewType, FsContentProps, FsViewProps } from '@biu/type-file-system/ui'
 import { PageBlockMissing } from './page-block-view.tsx'
 import { getPageEditor, usePageEditorVersion } from './service.ts'
 
@@ -30,6 +30,64 @@ async function writeBlockData(id: string, data: Record<string, unknown>) {
   if (!res.ok) throw new Error(body.error || res.statusText)
 }
 
+export function PageBlockStage({
+  row,
+  raw,
+  writable = true,
+  onChange,
+}: {
+  row: DbRecord
+  raw?: unknown
+  writable?: boolean
+  onChange?: (next: Record<string, unknown>) => void
+}) {
+  usePageEditorVersion()
+  const kind = String(row.blockKind ?? row.kind ?? '').trim()
+  const plugin = String(row.plugin ?? '').trim()
+  const spec = getPageEditor()?.block(kind)
+  const View = spec?.View
+  const source = raw ?? row.data
+  const packed = typeof source === 'string' ? source : JSON.stringify(source ?? {})
+  const [data, setData] = useState(() => parsePageBlockRowData(source))
+  useEffect(() => {
+    setData(parsePageBlockRowData(source))
+  }, [packed])
+  const update = (patch: Record<string, unknown>, opts?: { replace?: boolean }) => {
+    const next = opts?.replace ? patch : { ...data, ...patch }
+    setData(next)
+    if (onChange) onChange(next)
+    else void writeBlockData(String(row.id), next)
+  }
+  return (
+    <div
+      className="page-block"
+      data-page-block={kind || undefined}
+      data-page-block-plugin={plugin || undefined}
+      data-page-block-id={String(row.blockId ?? '') || undefined}
+      data-testid="page-block-stage"
+    >
+      {View ? (
+        <View data={data} update={update} writable={writable} />
+      ) : (
+        <PageBlockMissing kind={kind || 'unknown'} plugin={plugin} data={data} />
+      )}
+    </div>
+  )
+}
+
+export function PageBlockContent({ record, value, writable, onChange }: FsContentProps) {
+  return (
+    <div className="page-editor page-blocks-view page-blocks-detail" data-testid="page-blocks-detail">
+      <PageBlockStage
+        row={record}
+        raw={value ?? record.data}
+        writable={writable}
+        onChange={(next) => onChange?.(next)}
+      />
+    </div>
+  )
+}
+
 function BlockCard({
   row,
   onOpen,
@@ -39,36 +97,14 @@ function BlockCard({
 }) {
   usePageEditorVersion()
   const kind = String(row.blockKind ?? row.kind ?? '').trim()
-  const plugin = String(row.plugin ?? '').trim()
   const spec = getPageEditor()?.block(kind)
-  const View = spec?.View
-  const [data, setData] = useState(() => parsePageBlockRowData(row.data))
-  useEffect(() => {
-    setData(parsePageBlockRowData(row.data))
-  }, [row.data])
   const title = String(row.title ?? spec?.label ?? kind)
-  const update = (patch: Record<string, unknown>, opts?: { replace?: boolean }) => {
-    const next = opts?.replace ? patch : { ...data, ...patch }
-    setData(next)
-    void writeBlockData(String(row.id), next)
-  }
   return (
     <article className="page-blocks-view-card" data-testid="page-blocks-view-card">
       <button type="button" className="page-blocks-view-title" onClick={() => onOpen(row)}>
         {title}
       </button>
-      <div
-        className="page-block"
-        data-page-block={kind || undefined}
-        data-page-block-plugin={plugin || undefined}
-        data-page-block-id={String(row.blockId ?? '') || undefined}
-      >
-        {View ? (
-          <View data={data} update={update} writable />
-        ) : (
-          <PageBlockMissing kind={kind || 'unknown'} plugin={plugin} data={data} />
-        )}
-      </div>
+      <PageBlockStage row={row} />
     </article>
   )
 }
