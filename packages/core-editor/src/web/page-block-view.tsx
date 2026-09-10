@@ -1,9 +1,10 @@
-import { useEffect, type MouseEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, type MouseEvent } from 'react'
 import type { NodeViewProps } from '@tiptap/react'
 import { NodeViewWrapper } from '@tiptap/react'
 import { PlayIcon } from '@heroicons/react/16/solid'
 import { getPageEditor, usePageEditorVersion } from './service.ts'
 import { formatPageBlockFence, requestEnablePageBlockPlugin } from './page-block-meta.ts'
+import { bindPageBlockPlugin } from './page-block-plugin-host.ts'
 
 function assetName(file: string) {
   return file.replace(/^assets\//, '')
@@ -75,6 +76,8 @@ export function PageBlockView({ node, updateAttributes, editor, getPos }: NodeVi
     updateAttributes({ data: opts?.replace ? patch : { ...data, ...patch } })
   }
   const View = spec?.View
+  const hostRef = useRef<HTMLElement | null>(null)
+  useLayoutEffect(() => bindPageBlockPlugin(hostRef.current, plugin), [plugin, kind, View, data])
 
   useEffect(() => {
     if (!cloneFrom || !file) return
@@ -98,6 +101,7 @@ export function PageBlockView({ node, updateAttributes, editor, getPos }: NodeVi
 
   return (
     <NodeViewWrapper
+      ref={hostRef}
       className="page-block"
       data-page-block={kind}
       data-page-block-plugin={plugin}

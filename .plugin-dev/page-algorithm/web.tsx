@@ -66,7 +66,6 @@ function DraftField({
     <Tag
       data-testid={testId}
       data-page-block-capture=""
-      data-biu-ignore
       readOnly={readOnly}
       spellCheck={Tag === 'textarea' ? false : undefined}
       value={draft}
@@ -117,7 +116,6 @@ function AlgorithmCard({
   return (
     <div
       data-testid="page-algorithm-card"
-      data-biu-plugin={name}
       style={{
         display: 'flex',
         flexWrap: 'wrap',
