@@ -124,6 +124,10 @@ export class DatabaseUiService extends Service implements DatabaseUi {
     }
   }
 
+  refresh() {
+    this.emit()
+  }
+
   private emit() {
     this.snapshot.clear()
     this.viewSnapshot.clear()

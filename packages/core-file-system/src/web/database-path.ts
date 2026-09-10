@@ -35,6 +35,7 @@ export function databaseRecordPath(collection: string, recordId: string, viewId?
 export const VIEWS_COLLECTION_PATH = '/views'
 export const FACETS_COLLECTION_PATH = '/facets'
 export const EVENTS_COLLECTION_PATH = '/events'
+export const PAGE_BLOCKS_COLLECTION_PATH = '/page-blocks'
 
 const SYSTEM_COLLECTION_ORDER = [VIEWS_COLLECTION_PATH, EVENTS_COLLECTION_PATH] as const
 

@@ -16,8 +16,15 @@ export function builtinCatalogViewId(collectionPath: string) {
 
 const TAG_PREFIX = 'builtin-tag:'
 
+const BLOCK_PREFIX = 'builtin-block:'
+
 export function isBuiltinCatalogViewId(id: string) {
-  return id.startsWith('builtin:') && !id.startsWith(ALL_PREFIX) && !id.startsWith(TAG_PREFIX)
+  return (
+    id.startsWith('builtin:') &&
+    !id.startsWith(ALL_PREFIX) &&
+    !id.startsWith(TAG_PREFIX) &&
+    !id.startsWith(BLOCK_PREFIX)
+  )
 }
 
 export function builtinTagViewId(tagId: string) {
@@ -41,7 +48,7 @@ export function isBuiltinAllViewId(id: string) {
 }
 
 export function isReadOnlyViewId(id: string) {
-  return isBuiltinAllViewId(id) || isBuiltinCatalogViewId(id) || isBuiltinTagViewId(id)
+  return isBuiltinAllViewId(id) || isBuiltinCatalogViewId(id) || isBuiltinTagViewId(id) || isBuiltinBlockKindViewId(id)
 }
 
 export function collectionNoun(table: TableRef) {
@@ -114,6 +121,62 @@ export function mergeTableViews(table: TableRef | undefined, user: SavedView[]):
   const extra = userViews(user)
   if (!table?.path || table.path === '/') return extra
   return [builtinAllView(table), ...extra]
+}
+
+export type BlockKindRef = { kind: string; label: string }
+
+export function builtinBlockKindViewId(kind: string) {
+  return `${BLOCK_PREFIX}${String(kind ?? '').trim()}`
+}
+
+export function isBuiltinBlockKindViewId(id: string) {
+  return id.startsWith(BLOCK_PREFIX)
+}
+
+export function blockKindFromViewId(id: string) {
+  return isBuiltinBlockKindViewId(id) ? id.slice(BLOCK_PREFIX.length) : ''
+}
+
+export function builtinBlockKindView(block: BlockKindRef): SavedView {
+  const kind = String(block.kind ?? '').trim()
+  return normalizeSavedView({
+    id: builtinBlockKindViewId(kind),
+    name: String(block.label ?? '').trim() || kind,
+    mode: 'table',
+    sortField: 'title',
+    sortDir: 'asc',
+    filters: { blockKind: kind },
+    columns: [],
+    groupBy: '',
+    tree: true,
+    wrap: false,
+    truncate: true,
+    query: '',
+    builtin: true,
+  })
+}
+
+export function stubBuiltinBlockKindView(id: string): SavedView | null {
+  if (!isBuiltinBlockKindViewId(id)) return null
+  const kind = blockKindFromViewId(id)
+  if (!kind) return null
+  return builtinBlockKindView({ kind, label: kind })
+}
+
+/** /page-blocks：全部组件 + 每种已登记块一条只读视图。 */
+export function mergePageBlockViews(table: TableRef | undefined, kinds: BlockKindRef[], user: SavedView[]): SavedView[] {
+  const extra = userViews(user)
+  const unique = new Map<string, BlockKindRef>()
+  for (const item of kinds) {
+    const kind = String(item.kind ?? '').trim()
+    if (!kind || unique.has(kind)) continue
+    unique.set(kind, { kind, label: String(item.label ?? '').trim() || kind })
+  }
+  const kindViews = [...unique.values()]
+    .sort((a, b) => a.kind.localeCompare(b.kind) || a.label.localeCompare(b.label))
+    .map(builtinBlockKindView)
+  if (!table?.path || table.path === '/') return [...kindViews, ...extra]
+  return [builtinAllView(table), ...kindViews, ...extra]
 }
 
 export type TagRef = { id: string; label: string }

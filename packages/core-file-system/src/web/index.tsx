@@ -17,10 +17,11 @@ import {
   collectionNavKey,
 } from './nav-boot.ts'
 import { defaultViewId, pullSavedViews, pushAllSavedViews } from './view-storage.ts'
-import { DATA_MODULE, DATA_MODULE_ID, DATA_MODULE_PATH, FACETS_COLLECTION_PATH, VIEWS_COLLECTION_PATH, sortDataCollections } from './database-path.ts'
+import { DATA_MODULE, DATA_MODULE_ID, DATA_MODULE_PATH, FACETS_COLLECTION_PATH, PAGE_BLOCKS_COLLECTION_PATH, VIEWS_COLLECTION_PATH, sortDataCollections } from './database-path.ts'
 import { pickMainDataRoute, readMainDataRoute, writeMainDataRoute } from './main-data-route.ts'
 import { facetsChrome } from './facet-chrome.tsx'
 import { viewsChrome } from './views-chrome.ts'
+import { pageBlocksChrome } from './page-blocks-chrome.ts'
 import { viewsForRegisteredCollection } from './collection-nav.ts'
 import { builtinAllViewId } from '../catalog-views.ts'
 import { normalizeCollectionPath } from '../paths.ts'
@@ -240,10 +241,36 @@ export function apply(ctx: Context) {
     if (!ui) return () => undefined
     const views = ui.decorate(VIEWS_COLLECTION_PATH, viewsChrome)
     const facetsUi = ui.decorate(FACETS_COLLECTION_PATH, facetsChrome)
+    const blocksUi = ui.decorate(
+      PAGE_BLOCKS_COLLECTION_PATH,
+      pageBlocksChrome(() => {
+        const editor = ctx.get('pageEditor') as { blocks?: () => Array<{ kind: string; label: string }> } | undefined
+        return editor?.blocks?.() ?? []
+      }),
+    )
     return () => {
       views.dispose()
       facetsUi.dispose()
+      blocksUi.dispose()
     }
+  })
+  ctx.inject(['pageEditor'], (inner) => {
+    const editor = inner.get('pageEditor') as {
+      subscribe: (fn: () => void) => () => void
+      blocks: () => Array<{ kind: string }>
+    }
+    let sig = ''
+    const stop = editor.subscribe(() => {
+      const next = editor
+        .blocks()
+        .map((item) => item.kind)
+        .sort()
+        .join('\0')
+      if (next === sig) return
+      sig = next
+      getDatabaseUi()?.refresh()
+    })
+    return () => stop()
   })
   const slots = ctx.get('slots') as SlotsService
   const appModules = ctx.get('appModules') as AppModulesService

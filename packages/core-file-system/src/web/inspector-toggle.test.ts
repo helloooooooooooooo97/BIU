@@ -129,6 +129,7 @@ test('table title opens record from the title-side button', () => {
   assert.doesNotMatch(browser, /stampRowOpenTarget/)
   const page = readFileSync(resolve(import.meta.dirname, './index.tsx'), 'utf8')
   assert.match(page, /viewsChrome/)
+  assert.match(page, /pageBlocksChrome/)
   assert.doesNotMatch(page, /openRegisteredRow/)
   assert.doesNotMatch(page, /onOpenRow=\{/)
   assert.doesNotMatch(page, /addSchemaTagField/)

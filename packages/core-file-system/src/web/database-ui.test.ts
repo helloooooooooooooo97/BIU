@@ -101,3 +101,14 @@ test('registerView is scoped to the collection that registered it', () => {
   first.dispose()
   assert.equal(ui.views('/tasks').length, 0)
 })
+
+test('refresh notifies chrome subscribers', () => {
+  const ctx = new Context()
+  const ui = new DatabaseUiService(ctx)
+  let n = 0
+  ui.subscribe(() => {
+    n += 1
+  })
+  ui.refresh()
+  assert.equal(n, 1)
+})
