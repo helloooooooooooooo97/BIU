@@ -10,7 +10,7 @@ export { PAGE_ROOT, PAGE_ASSETS, ASSET_GC_GRACE_MS, collectPageAssetNames, Pages
 export { pageBlocksCollection } from './page-blocks-collection.ts'
 export { PageBlocksIndex, PAGE_BLOCK_TICK_MS } from './page-blocks-index.ts'
 
-export function pagesCollection(store: PagesStore): CollectionSpec {
+export function pagesCollection(store: PagesStore, index: PageBlocksIndex): CollectionSpec {
   return {
     id: 'pages',
     path: '/pages',
@@ -41,15 +41,26 @@ export function pagesCollection(store: PagesStore): CollectionSpec {
     records: { update: true, create: true, delete: true },
     list: (query) => store.list(query?.ids),
     get: (id) => store.get(id),
-    update: (id, patch) => store.update(id, patch),
+    update: async (id, patch) => {
+      const row = await store.update(id, patch)
+      if ('notes' in patch) await index.reindexPage(row)
+      return row
+    },
     create: async (rows) => {
       const out = []
-      for (const fields of rows) out.push(await store.create(fields))
+      for (const fields of rows) {
+        const row = await store.create(fields)
+        await index.reindexPage(row)
+        out.push(row)
+      }
       return out
     },
     remove: async (query) => {
       const ids = query.ids ?? []
-      for (const id of ids) await store.remove(id)
+      for (const id of ids) {
+        await index.dropPage(id)
+        await store.remove(id)
+      }
       return ids
     },
   }
@@ -97,7 +108,7 @@ export function apply(ctx: Context) {
   // 否则工具调用（绑定项目）与 HTTP 请求（无 Session）会落到不同目录。
   const store = new PagesStore(ctx.fs.workspace as WorkspaceFs, dataPath(process.cwd(), 'assets'))
   const index = new PageBlocksIndex(store)
-  ctx.database.register(pagesCollection(store))
+  ctx.database.register(pagesCollection(store, index))
   ctx.database.register(pageBlocksCollection(store, index))
   servePageFile(ctx, store)
   const tick = setInterval(() => {
