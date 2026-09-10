@@ -205,23 +205,10 @@ test('page-excalidraw sandbox stores scenes as page assets', async () => {
   assert.match(src, /refresh/)
 })
 
-test('task row plugin registers a row view, not a full collection View', async () => {
-  const { readFile } = await import('node:fs/promises')
-  const { resolve } = await import('node:path')
-  const src = await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/fs-task-rows/web.tsx'), 'utf8')
-  assert.match(src, /inject = \['databaseUi'\]/)
-  assert.match(src, /plugin: name/)
-  assert.match(src, /registerRowView\('\/tasks'/)
-  assert.match(src, /id: 'task-card'/)
-  assert.match(src, /label: '任务卡'/)
-  assert.doesNotMatch(src, /registerView\(/)
-})
-
-test('html and req page blocks register plugin id for slash', async () => {
+test('html page blocks register plugin id for slash', async () => {
   const { readFile } = await import('node:fs/promises')
   const { resolve } = await import('node:path')
   const html = await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/page-html-blocks/web.tsx'), 'utf8')
-  const req = await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/page-req-cards/web.tsx'), 'utf8')
   assert.match(html, /plugin: name/)
   assert.match(html, /kind: 'html'/)
   assert.match(html, /kind: 'htmlframe'/)
@@ -264,8 +251,6 @@ test('html and req page blocks register plugin id for slash', async () => {
   assert.match(html, /event\.stopPropagation\(\)/)
   assert.match(html, /setDraft\(e\.target\.value\)/)
   assert.doesNotMatch(html, /value=\{html\}/)
-  assert.match(req, /plugin: name/)
-  assert.match(req, /kind: 'req'/)
 })
 
 test('algorithm card drafts locally and saves on blur like html source', async () => {

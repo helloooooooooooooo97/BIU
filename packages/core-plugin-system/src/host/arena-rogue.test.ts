@@ -8,6 +8,7 @@ test('arena-rogue is a resizable window plugin with 12 weapons and extras slot',
   const dir = resolve(import.meta.dirname, '../../../../.plugin-dev/arena-rogue')
   const manifest = JSON.parse(await readFile(resolve(dir, 'manifest.json'), 'utf8')) as {
     id: string
+    name?: string
     headless?: boolean
     shell?: { width: number; height: number; resizable?: boolean }
   }
@@ -15,6 +16,7 @@ test('arena-rogue is a resizable window plugin with 12 weapons and extras slot',
   const game = await readFile(resolve(dir, 'game.ts'), 'utf8')
   const weapons = await readFile(resolve(dir, 'weapons.ts'), 'utf8')
   assert.equal(manifest.id, 'arena-rogue')
+  assert.equal(manifest.name, '枪火')
   assert.equal(manifest.headless, undefined)
   assert.equal(manifest.shell?.resizable, true)
   assert.ok((manifest.shell?.width ?? 0) >= 800)
