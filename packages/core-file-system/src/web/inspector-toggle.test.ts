@@ -657,6 +657,12 @@ test('missing sort field falls back to title, not updatedAt', () => {
   assert.match(editor, /emptyFilterGroup\(\)/)
 })
 
+test('widget collection uses the grouped-rectangles glyph, not the plugin puzzle', () => {
+  const glyphs = readFileSync(resolve(import.meta.dirname, './table-glyph.tsx'), 'utf8')
+  assert.match(glyphs, /name === 'rectangle-group'/)
+  assert.match(glyphs, /<RectangleGroupIcon/)
+})
+
 test('page collection uses a document glyph, not the table/database icon', () => {
   const glyphs = readFileSync(resolve(import.meta.dirname, './table-glyph.tsx'), 'utf8')
   assert.match(glyphs, /name === 'document' \|\| name === 'document-text' \|\| name === 'page'/)
