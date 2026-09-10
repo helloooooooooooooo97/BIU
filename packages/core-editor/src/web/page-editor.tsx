@@ -575,7 +575,10 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
               Selection.atStart(editor.state.doc).from,
             ),
         )
-    if (atDocStart && shouldLeaveContentForTitle(event.key, event, 0, true, 0)) {
+    const nested = Boolean(
+      !source && editor && !editor.isDestroyed && editor.state.selection.$from.depth > 1,
+    )
+    if (atDocStart && shouldLeaveContentForTitle(event.key, event, 0, true, 0, nested)) {
       event.preventDefault()
       event.stopPropagation()
       if (!focusRecordTitleNear(event.currentTarget)) {

@@ -20,6 +20,9 @@ test('empty caret at doc start leaves for title on Backspace/Delete and ArrowUp'
   assert.equal(shouldLeaveContentForTitle('Backspace', { shiftKey: true }, 1, true, 1), false)
   assert.equal(shouldLeaveContentForTitle('Backspace', none, 2, true, 1), false)
   assert.equal(shouldLeaveContentForTitle('Backspace', none, 1, false, 1), false)
+  assert.equal(shouldLeaveContentForTitle('Backspace', none, 1, true, 1, true), false)
+  assert.equal(shouldLeaveContentForTitle('Delete', none, 1, true, 1, true), false)
+  assert.equal(shouldLeaveContentForTitle('ArrowUp', none, 1, true, 1, true), true)
 })
 
 function makeEditor(md: string) {
@@ -34,6 +37,13 @@ function makeEditor(md: string) {
       handleKeyDown: handleContentTitleNav,
     },
   })
+  return { editor, host }
+}
+
+function makeEmptyListEditor() {
+  const { editor, host } = makeEditor('hello')
+  editor.chain().focus().setContent('<ul><li><p></p></li></ul>').run()
+  editor.chain().focus().setTextSelection(Selection.atStart(editor.state.doc)).run()
   return { editor, host }
 }
 
@@ -177,4 +187,33 @@ test('Backspace at doc start focuses the title above properties', () => {
   assert.match(editor.getHTML(), /hello/)
   editor.destroy()
   main.remove()
+})
+
+test('Backspace in an empty list at doc start lifts the list instead of jumping to the title', () => {
+  const { editor, host } = makeEmptyListEditor()
+  assert.ok(editor.state.selection.$from.depth > 1)
+  assert.equal(
+    handleContentTitleNav(
+      editor.view,
+      new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true }),
+    ),
+    false,
+  )
+  const title = listenTitle()
+  press(editor, 'Backspace')
+  title.stop()
+  assert.equal(title.hits(), 0)
+  editor.destroy()
+  host.remove()
+})
+
+test('ArrowUp in an empty list at doc start still focuses the title', () => {
+  const { editor, host } = makeEmptyListEditor()
+  const title = listenTitle()
+  const event = press(editor, 'ArrowUp')
+  title.stop()
+  assert.equal(event.defaultPrevented, true)
+  assert.equal(title.hits(), 1)
+  editor.destroy()
+  host.remove()
 })
