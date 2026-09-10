@@ -7,6 +7,7 @@ import {
   TagIcon,
   PuzzlePieceIcon,
   RectangleStackIcon,
+  RectangleGroupIcon,
   TableCellsIcon,
 } from '@heroicons/react/16/solid'
 
@@ -22,5 +23,6 @@ export function TableGlyph({ icon, className = 'size-4' }: { icon?: string; clas
   if (name === 'eye') return <EyeIcon aria-hidden className={className} />
   if (name === 'tag') return <TagIcon aria-hidden className={className} />
   if (name === 'rectangle-stack' || name === 'collection') return <RectangleStackIcon aria-hidden className={className} />
+  if (name === 'rectangle-group' || name === 'squares-2x2' || name === 'widgets') return <RectangleGroupIcon aria-hidden className={className} />
   return <TableCellsIcon aria-hidden className={className} />
 }

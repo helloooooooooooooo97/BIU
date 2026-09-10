@@ -30,16 +30,16 @@ export function pageBlocksCollection(store: PagesStore, index: PageBlocksIndex):
   return {
     id: 'page-blocks',
     path: '/page-blocks',
-    label: '特殊块',
+    label: '组件',
     view: {
       moduleId: 'page-blocks',
       route: '/page-blocks',
-      title: '特殊块',
+      title: '组件',
       inspector: true,
       blurb:
-        '页面 :::pageBlock 的增量倒排。记录 id 为 <pageId>::<blockId>。索引记 last_run_at，每拍只扫最近改过的页（热窗口优先，再少量补旧），不会一次重建全部。改属性用 db_update：data 为 JSON 对象（默认合并）。不能从本表新建或删除块。',
+        '页面里嵌的 html、画板、算法题等。记录 id 为 <pageId>::<blockId>。索引记 last_run_at，每拍只扫最近改过的页（热窗口优先，再少量补旧），不会一次重建全部。改属性用 db_update：data 为 JSON 对象（默认合并）。不能从本表新建或删除。',
       order: 26,
-      icon: 'puzzle-piece',
+      icon: 'rectangle-group',
     },
     schema: {
       labelField: 'title',
