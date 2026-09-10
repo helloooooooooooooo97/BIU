@@ -135,11 +135,29 @@ test('duplicate inspector panes for the same data page collapse to one', () => {
   window.addEventListener('biu:inspector-pane-closed', onClosed)
   setInspectorDbPath('database:/pages', '/database/pages/record/p1')
   setInspectorDbPath('database:/pages::dup', '/database/pages/record/p1?view=all')
-  assert.equal(getInspectorDbPath('database:/pages'), '/database/pages/record/p1')
-  assert.equal(getInspectorDbPath('database:/pages::dup'), '')
-  assert.deepEqual(closed, ['database:/pages::dup'])
-  assert.equal(isInspectorPaneAbandoned('database:/pages::dup'), true)
+  assert.equal(getInspectorDbPath('database:/pages::dup'), '/database/pages/record/p1?view=all')
+  assert.equal(getInspectorDbPath('database:/pages'), '')
+  assert.deepEqual(closed, ['database:/pages'])
+  assert.equal(isInspectorPaneAbandoned('database:/pages'), true)
   window.removeEventListener('biu:inspector-pane-closed', onClosed)
+})
+
+test('a leftover canonical list path does not swallow a newly opened list pane', () => {
+  setInspectorDbPath('database:/pages', databaseAllViewPath('/pages'))
+  const live = 'database:/pages::live'
+  setInspectorDbPath(live, databaseAllViewPath('/pages'))
+  assert.equal(getInspectorDbPath(live), databaseAllViewPath('/pages'))
+  assert.equal(getInspectorDbPath('database:/pages'), '')
+})
+
+test('opening a collection list keeps an already-open record pane', () => {
+  setInspectorDbPath('database:/pages::doc', '/database/pages/record/p1')
+  showInInspector('/pages', databaseAllViewPath('/pages'), { unique: true })
+  assert.equal(getInspectorDbPath('database:/pages::doc'), '/database/pages/record/p1')
+  const lists = Object.entries(snapshotInspectorDbPaths()).filter(([, path]) => !path.includes('/record/'))
+  assert.equal(lists.length, 1)
+  assert.equal(lists[0]![1], databaseAllViewPath('/pages'))
+  assert.notEqual(lists[0]![0], 'database:/pages::doc')
 })
 
 test('plus offer reuses the default collection pane instead of opening another', () => {
@@ -148,6 +166,8 @@ test('plus offer reuses the default collection pane instead of opening another',
   assert.equal(reuseInspectorOfferPane('database:/pages', ['database:/pages::x']), 'database:/pages::x')
   setInspectorDbPath('database:/pages', '/database/pages/record/p1')
   assert.equal(reuseInspectorOfferPane('database:/pages', ['database:/pages']), undefined)
+  clearInspectorDbPath('database:/pages::empty')
+  assert.equal(reuseInspectorOfferPane('database:/pages', ['database:/pages::empty']), undefined)
 })
 
 test('showInInspector does not copy the same href onto every collection pane', () => {
