@@ -39,7 +39,8 @@ export const PAGE_BLOCKS_COLLECTION_PATH = '/page-blocks'
 
 const SYSTEM_COLLECTION_ORDER = [VIEWS_COLLECTION_PATH, EVENTS_COLLECTION_PATH] as const
 
-const USER_COLLECTION_ORDER = ['/sessions', '/tasks', '/pages', '/plugins', '/facets'] as const
+/** 用户表侧栏顺序。组件是页面里嵌的块，紧挨页面下面。 */
+const USER_COLLECTION_ORDER = ['/sessions', '/tasks', '/pages', '/page-blocks', '/plugins', '/facets'] as const
 
 /** 视图、事件由系统自己记下，侧栏归在系统数据。分面跨所有表，排在插件后面。 */
 export function isSystemCollection(path: string) {
