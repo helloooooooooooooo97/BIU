@@ -11,6 +11,7 @@ import {
 import { HeadlessPopover } from '@biu/public-ui'
 import { setChatOverlay } from './chat-overlay.ts'
 import { chromeIcon } from './chrome-icon.ts'
+import { applyNoticeClick } from './notice-open.ts'
 import { readMainDataRoute } from '@biu/core-file-system/main-data-route'
 
 export function ShellSettingsShortcuts() {
@@ -187,6 +188,19 @@ function NoticeBell({
   const unread = rows.filter((row) => row.read !== true && !noticeIsForSession(row, looking))
   const badge = unread.length > 99 ? '99+' : unread.length ? String(unread.length) : ''
 
+  const openRow = (row: NoticeRow) => {
+    const href = applyNoticeClick(row)
+    void fetch('/api/db/update', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ path: `/notices/${row.id}`, content: { read: true } }),
+    }).then(() => load())
+    onOpenChange(false)
+    if (!href) return
+    setChatOverlay(false)
+    navigate(href)
+  }
+
   return (
     <div className="shell-side-pop-wrap">
       <HeadlessPopover
@@ -222,30 +236,11 @@ function NoticeBell({
                       type="button"
                       className={`shell-notify-item${row.read === true ? '' : ' is-unread'}`}
                       data-testid="chrome-notify-item"
-                      onClick={() => {
-                        const href = noticeHref(row)
-                        void fetch('/api/db/update', {
-                          method: 'POST',
-                          headers: { 'content-type': 'application/json' },
-                          body: JSON.stringify({ path: `/notices/${row.id}`, content: { read: true } }),
-                        }).then(() => load())
-                        onOpenChange(false)
-                        if (!href) return
-                        const record = href.match(/^\/database(\/[^/]+)\/record\/([^/?#]+)/)
-                        if (record) {
-                          window.dispatchEvent(
-                            new CustomEvent('biu:inspector-reveal', {
-                              detail: {
-                                collection: record[1],
-                                recordId: decodeURIComponent(record[2]!),
-                                unique: true,
-                              },
-                            }),
-                          )
-                          return
-                        }
-                        navigate(href)
+                      onPointerDown={(event) => {
+                        if (event.button !== 0) return
+                        openRow(row)
                       }}
+                      onClick={() => openRow(row)}
                     >
                       {kind ? <span className="shell-notify-kind">{kind}</span> : null}
                       <span className="shell-notify-title">{row.title || '通知'}</span>

@@ -24,6 +24,7 @@ test('notices collection exposes an agent blurb and writable read flag', async (
   const spec = noticesCollection(store)
   assert.equal(spec.path, '/notices')
   assert.match(String(spec.view?.blurb), /db_list \/notices/)
+  assert.equal(spec.view?.inspector, true)
   const rows = await spec.list()
   assert.equal(rows[0]?.read, false)
   const updated = await spec.update!(String(rows[0]!.id), { read: true })

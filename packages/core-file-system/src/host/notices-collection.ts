@@ -15,7 +15,7 @@ export function noticesCollection(store: NoticesStore): CollectionSpec {
       moduleId: 'notices',
       route: '/db-notices',
       title: '通知',
-      inspector: false,
+      inspector: true,
       icon: 'bell',
       blurb: '给人看的收件箱，不是 agent 会话排队，也不是 /events 轨迹。列表 db_list /notices。未读 read=false。点铃铛或 db_update 把 read 写成 true。不要 db_create。任务完成、审批、回合结束由系统写入。',
       order: 18,
