@@ -1646,7 +1646,12 @@ body {
   top: auto !important;
   bottom: 12px;
   height: auto !important;
+  min-width: 0;
   min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .chat-overlay-panel.is-compose-only .chat-overlay-thread {

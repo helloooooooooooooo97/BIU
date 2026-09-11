@@ -695,23 +695,25 @@ function Shell(props: SlotProps) {
   const overlayHeader = (
     <header className="chat-view-header" data-biu-ignore>
       <div className="chat-view-header-left">
-        <button
-          type="button"
-          className={`chat-view-header-expand${overlayThread ? ' is-active' : ''}`}
-          title={overlayThread ? '收起对话' : '查看对话'}
-          aria-label={overlayThread ? '收起对话' : '查看对话'}
-          aria-pressed={overlayThread}
-          data-testid="chat-overlay-thread-toggle"
-          onClick={() => toggleOverlayThread()}
-        >
-          <ChatBubbleLeftRightIcon {...chromeIcon} />
-        </button>
-        {project ? (
-          <div className="chat-view-project" title={project.path ?? project.name}>
-            <FolderGlyph className="chat-view-project-icon" />
-            <span className="chat-view-project-name">{project.name}</span>
-          </div>
-        ) : null}
+        <div className="chat-view-project" title={project ? (project.path ?? project.name) : undefined}>
+          <button
+            type="button"
+            className={`chat-view-header-expand${overlayThread ? ' is-active' : ''}`}
+            title={overlayThread ? '收起对话' : '查看对话'}
+            aria-label={overlayThread ? '收起对话' : '查看对话'}
+            aria-pressed={overlayThread}
+            data-testid="chat-overlay-thread-toggle"
+            onClick={() => toggleOverlayThread()}
+          >
+            <ChatBubbleLeftRightIcon {...chromeIcon} />
+          </button>
+          {project ? (
+            <>
+              <FolderGlyph className="chat-view-project-icon" />
+              <span className="chat-view-project-name">{project.name}</span>
+            </>
+          ) : null}
+        </div>
       </div>
       <ChatSessionTitle useSessionView={useSessionView} sessionView={sessionView} />
       <div className="chat-view-header-right">

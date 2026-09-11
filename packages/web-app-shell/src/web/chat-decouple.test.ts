@@ -22,7 +22,7 @@ test('overlay chat is a resident floating window off the agent page', () => {
   assert.doesNotMatch(shell, /toggleChatOverlay/)
   assert.doesNotMatch(shell, /chat-overlay-pin/)
   const overlayHead = shell.slice(shell.indexOf('const overlayHeader'))
-  assert.match(overlayHead.slice(0, 1800), /chat-overlay-thread-toggle/)
+  assert.match(overlayHead.slice(0, 2200), /chat-overlay-thread-toggle[\s\S]*FolderGlyph/)
   assert.match(overlayHead.slice(0, 1800), /chat-view-project/)
   assert.doesNotMatch(overlayHead.slice(0, 1600), /layoutTools/)
   assert.doesNotMatch(overlayHead.slice(0, 1600), /chat-overlay-layout/)
