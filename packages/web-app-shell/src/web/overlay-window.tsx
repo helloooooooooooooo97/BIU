@@ -154,9 +154,11 @@ export function OverlayChatWindow({
       style={{ top: geom.y, left: geom.x, width: geom.w, height: geom.h, zIndex: z }}
       onPointerDown={bringFront}
     >
-      <div className="chat-overlay-head" data-testid="chat-overlay-head">
-        {header}
-      </div>
+      {threadOpen ? (
+        <div className="chat-overlay-head" data-testid="chat-overlay-head">
+          {header}
+        </div>
+      ) : null}
       <ChatPane thread={thread} dock={dock} />
       {handles.map((item) => (
         <div

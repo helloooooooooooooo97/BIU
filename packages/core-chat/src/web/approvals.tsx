@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from 'react'
 import {
   BoltIcon,
   CheckCircleIcon,
   CommandLineIcon,
   ExclamationCircleIcon,
   CircleStackIcon,
+  ChatBubbleLeftRightIcon,
   PaintBrushIcon,
   PauseIcon,
   Squares2X2Icon,
@@ -14,6 +15,13 @@ import { bindSessionView, type ChatNode, type DispatchedTaskRow, type SessionVie
 import { BrandCornerMascot, SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import { HeadlessDismiss } from '@biu/public-ui'
 import { ChatSidebar } from '@biu/web-app-shell/chat-sidebar'
+import {
+  getChatOverlay,
+  getOverlayThread,
+  subscribeChatOverlay,
+  subscribeOverlayThread,
+  toggleOverlayThread,
+} from '@biu/web-app-shell/chat-overlay'
 import { SessionProjectPanel } from './project-panel.tsx'
 
 type AgentMode = 'minimal' | 'file' | 'standard'
@@ -161,6 +169,8 @@ export function ApprovalsRail(props: SlotProps) {
   const approvalMode = useSessionView((state) => state.approvalMode)
   const nodes = useSessionView((state) => state.nodes)
   const histRatio = useMemo(() => latestHistRatio(nodes), [nodes])
+  const overlayOpen = useSyncExternalStore(subscribeChatOverlay, getChatOverlay, () => false)
+  const overlayThread = useSyncExternalStore(subscribeOverlayThread, getOverlayThread, () => false)
   const [agentMode, setAgentMode] = useState<AgentMode>('standard')
   const [modeBusy, setModeBusy] = useState(false)
   const [clearBusy, setClearBusy] = useState(false)
@@ -364,6 +374,19 @@ export function ApprovalsRail(props: SlotProps) {
           ) : null}
         </div>
         <div className="chat-dock-toolbar-end flex shrink-0 items-center justify-end gap-1">
+          {overlayOpen ? (
+            <button
+              type="button"
+              className={`project-chip project-chip-icon-only${overlayThread ? ' is-active' : ''}`}
+              title={overlayThread ? '收起对话' : '查看对话'}
+              aria-label={overlayThread ? '收起对话' : '查看对话'}
+              aria-pressed={overlayThread}
+              data-testid="chat-overlay-thread-toggle"
+              onClick={() => toggleOverlayThread()}
+            >
+              <ChatBubbleLeftRightIcon className="size-4" aria-hidden />
+            </button>
+          ) : null}
           <SessionProjectPanel {...props} />
           <DockIconMenu
             label="Agent 模式"
