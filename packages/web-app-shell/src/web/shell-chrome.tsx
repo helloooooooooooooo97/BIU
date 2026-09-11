@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode, type Ref } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
   ArrowDownTrayIcon,
@@ -8,10 +8,10 @@ import {
   Cog6ToothIcon,
   MagnifyingGlassIcon,
 } from '@heroicons/react/16/solid'
-import { HeadlessPopover } from '@biu/public-ui'
+import { AnchorMenu } from '@biu/public-ui'
 import { setChatOverlay } from './chat-overlay.ts'
 import { chromeIcon } from './chrome-icon.ts'
-import { applyNoticeClick } from './notice-open.ts'
+import { applyNoticeClick, noticeIdOf } from './notice-open.ts'
 import { readMainDataRoute } from '@biu/core-file-system/main-data-route'
 
 export function ShellSettingsShortcuts() {
@@ -101,6 +101,7 @@ function SideAction({
   onClick,
   icon,
   children,
+  buttonRef,
 }: {
   title: string
   active?: boolean
@@ -108,9 +109,11 @@ function SideAction({
   onClick: () => void
   icon: ReactNode
   children?: ReactNode
+  buttonRef?: Ref<HTMLButtonElement>
 }) {
   return (
     <button
+      ref={buttonRef}
       type="button"
       className={`app-side-actions-item${active ? ' is-active' : ''}`}
       title={title}
@@ -173,8 +176,24 @@ function NoticeBell({
 
   const load = useCallback(() => {
     void fetch('/api/db/list?path=/notices&sort=createdAt&dir=desc&limit=40&columns=title,body,kind,read,href,createdAt')
-      .then((res) => res.json() as Promise<{ items?: NoticeRow[] }>)
-      .then((data) => setRows(Array.isArray(data.items) ? data.items : []))
+      .then((res) => res.json() as Promise<{ items?: Array<Record<string, unknown>> }>)
+      .then((data) => {
+        const items = Array.isArray(data.items) ? data.items : []
+        setRows(
+          items.flatMap((item) => {
+            const id = noticeIdOf(item)
+            if (!id) return []
+            return [{
+              id,
+              title: String(item.title ?? ''),
+              body: String(item.body ?? ''),
+              kind: String(item.kind ?? ''),
+              read: item.read === true,
+              href: String(item.href ?? ''),
+            }]
+          }),
+        )
+      })
       .catch(() => setRows([]))
   }, [])
 
@@ -187,14 +206,19 @@ function NoticeBell({
 
   const unread = rows.filter((row) => row.read !== true && !noticeIsForSession(row, looking))
   const badge = unread.length > 99 ? '99+' : unread.length ? String(unread.length) : ''
+  const triggerRef = useRef<HTMLButtonElement>(null)
 
   const openRow = (row: NoticeRow) => {
+    if (!row.id) return
+    setRows((prev) => prev.map((item) => (item.id === row.id ? { ...item, read: true } : item)))
     const href = applyNoticeClick(row)
     void fetch('/api/db/update', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ path: `/notices/${row.id}`, content: { read: true } }),
-    }).then(() => load())
+    })
+      .then(() => load())
+      .catch(() => load())
     onOpenChange(false)
     if (!href) return
     setChatOverlay(false)
@@ -203,29 +227,32 @@ function NoticeBell({
 
   return (
     <div className="shell-side-pop-wrap">
-      <HeadlessPopover
-        open={open}
-        onOpenChange={onOpenChange}
-        side="right"
-        align="start"
-        sideOffset={8}
-        trigger={
-          <SideAction
-            title="通知"
-            active={open}
-            testId="chrome-notify"
-            icon={<BellIcon {...chromeIcon} />}
-            onClick={() => {}}
-          >
-            {badge ? (
-              <span className="shell-notify-badge" data-testid="chrome-notify-badge">
-                {badge}
-              </span>
-            ) : null}
-          </SideAction>
-        }
+      <SideAction
+        title="通知"
+        active={open}
+        testId="chrome-notify"
+        icon={<BellIcon {...chromeIcon} />}
+        buttonRef={triggerRef}
+        onClick={() => onOpenChange(!open)}
       >
-        <div className="shell-side-pop shell-notify-pop" role="dialog" aria-label="通知" data-testid="chrome-notify-pop">
+        {badge ? (
+          <span className="shell-notify-badge" data-testid="chrome-notify-badge">
+            {badge}
+          </span>
+        ) : null}
+      </SideAction>
+      {open ? (
+        <AnchorMenu
+          anchor={triggerRef.current}
+          onClose={() => onOpenChange(false)}
+          placement="right"
+          minWidth={320}
+          zIndex={80}
+          className="shell-side-pop shell-notify-pop"
+          role="dialog"
+          aria-label="通知"
+          data-testid="chrome-notify-pop"
+        >
           {rows.length ? (
             <ul className="shell-notify-list">
               {rows.map((row) => {
@@ -236,10 +263,6 @@ function NoticeBell({
                       type="button"
                       className={`shell-notify-item${row.read === true ? '' : ' is-unread'}`}
                       data-testid="chrome-notify-item"
-                      onPointerDown={(event) => {
-                        if (event.button !== 0) return
-                        openRow(row)
-                      }}
                       onClick={() => openRow(row)}
                     >
                       {kind ? <span className="shell-notify-kind">{kind}</span> : null}
@@ -253,8 +276,8 @@ function NoticeBell({
           ) : (
             <p className="shell-chrome-pop-empty">暂无通知</p>
           )}
-        </div>
-      </HeadlessPopover>
+        </AnchorMenu>
+      ) : null}
     </div>
   )
 }
