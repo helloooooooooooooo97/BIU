@@ -14,8 +14,8 @@ A pluggable, self-hosted agent OS where everything is a file.
 
 <p align="center">
   <img alt="version" src="https://img.shields.io/badge/version-v0.1.0-blue" />
-  <img alt="license" src="https://img.shields.io/github/license/helloooooooooooooo97/biu-harness" />
-  <img alt="stars" src="https://img.shields.io/github/stars/helloooooooooooooo97/biu-harness" />
+  <img alt="license" src="https://img.shields.io/github/license/helloooooooooooooo97/biu" />
+  <img alt="stars" src="https://img.shields.io/github/stars/helloooooooooooooo97/biu" />
   <img alt="node" src="https://img.shields.io/node/v/cordis" />
 </p>
 
@@ -324,7 +324,7 @@ Adding a capability: create `packages/cap-<id>`, split `exports` into `./host` a
 The root keeps only loaders and the manifest; all capabilities live in `packages/`, distinguished by prefix.
 
 ```
-biu-harness
+biu
 ├── host/                      # Node loader: reads the host table from json, plugin()
 │   ├── index.ts
 │   └── types.ts
@@ -416,8 +416,8 @@ Each `host-*` / `web-*` / `core-*` / `cap-*` source lives under `src/host/` and/
 Requires Node.js 20+ and npm. `main` and the dev branch `hmr-dev` are currently aligned.
 
 ```bash
-git clone https://github.com/helloooooooooooooo97/biu-harness.git
-cd biu-harness
+git clone https://github.com/helloooooooooooooo97/biu.git
+cd biu
 make          # installs deps, starts host and Vite
 ```
 

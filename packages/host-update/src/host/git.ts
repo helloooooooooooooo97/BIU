@@ -6,7 +6,7 @@ import { promisify } from 'node:util'
 const execFileAsync = promisify(execFile)
 
 /** 所有客户都从这份上游 main 拉更新，不跟本机 origin（可能是 fork / 私有镜像）绑定。 */
-export const DEFAULT_UPDATE_REMOTE = 'https://github.com/helloooooooooooooo97/biu-harness.git'
+export const DEFAULT_UPDATE_REMOTE = 'https://github.com/helloooooooooooooo97/biu.git'
 export const DEFAULT_UPDATE_REF = 'main'
 
 export function updateSource() {
