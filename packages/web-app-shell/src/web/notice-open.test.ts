@@ -26,15 +26,14 @@ test('noticeOpenHref always has a page to open', () => {
   assert.equal(noticeOpenHref({ id: 'n3', href: '/database/tasks/record/t1' }), '/database/tasks/record/t1')
 })
 
-test('applyNoticeClick reveals /notices then the linked record', () => {
+test('applyNoticeClick does not open notices in the inspector', () => {
   const seen: unknown[] = []
   const onReveal = (event: Event) => seen.push((event as CustomEvent).detail)
   window.addEventListener('biu:inspector-reveal', onReveal)
   const href = applyNoticeClick({ id: 'n9', href: '/database/tasks/record/t1' })
+  const noticeOnly = applyNoticeClick({ id: 'n1', href: '' })
   window.removeEventListener('biu:inspector-reveal', onReveal)
   assert.equal(href, '/database/tasks/record/t1')
-  assert.deepEqual(seen, [
-    { collection: '/notices', recordId: 'n9', unique: true },
-    { collection: '/tasks', recordId: 't1', unique: true },
-  ])
+  assert.equal(noticeOnly, '/database/notices/record/n1')
+  assert.deepEqual(seen, [{ collection: '/tasks', recordId: 't1', unique: true }])
 })

@@ -47,10 +47,9 @@ export function revealInspectorRecord(collection: string, recordId: string) {
   )
 }
 
-/** 检查器打开通知（及任务）；主界面跳到能看见的详情页。 */
+/** 主界面跳到能看见的详情页；任务等可进检查器，通知本身不进右侧选项。 */
 export function applyNoticeClick(row: NoticeClickRow) {
   const plan = noticeClickPlan(row)
-  if (plan.noticeId) revealInspectorRecord('/notices', plan.noticeId)
   if (plan.record) revealInspectorRecord(plan.record.collection, plan.record.recordId)
   return noticeOpenHref(row)
 }
