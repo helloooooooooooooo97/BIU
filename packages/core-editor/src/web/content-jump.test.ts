@@ -58,6 +58,17 @@ test('applyContentJump puts caret on the replaced markdown line', () => {
   editor.destroy()
 })
 
+test('applyContentJump lands on the matching line when the snippet appears twice', () => {
+  const md = '第一段重复\n\n中间\n\n第一段重复'
+  const editor = editorOf(md)
+  applyContentJump(editor, md, { path: '/pages/home', start_line: 5, end_line: 5 })
+  const from = editor.state.selection.from
+  const before = editor.state.doc.textBetween(0, from, '\n')
+  assert.match(before, /中间/)
+  assert.match(textAtCaret(editor), /第一段重复/)
+  editor.destroy()
+})
+
 test('tryContentJump waits until new text is in the doc then jumps', () => {
   clearContentJump()
   const before = '# 欢迎\n\n旧段落'

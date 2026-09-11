@@ -58,6 +58,7 @@ export function HeadingOutline({ enabled }: { enabled: boolean }) {
       const run = () => {
         const main = detailMain(mark.current)
         if (!main) return
+        if (main.querySelector('.page-editor, [data-testid="page-editor"]')) return
         scrollOutlineTarget(blockElBySnippet(main, text))
       }
       run()

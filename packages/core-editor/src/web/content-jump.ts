@@ -2,6 +2,7 @@ import type { Node as PmNode } from '@tiptap/pm/model'
 import type { Editor } from '@tiptap/core'
 import { CONTENT_JUMP_EVENT, parseContentJump, type ContentJump } from '@biu/type-file-system'
 import { editorHostIsLive } from './editor-live.ts'
+import { markdownLineText, posAfterMarkdownLine, posAtMarkdownLine } from './markdown-locus.ts'
 import { scrollOutlineTarget } from '@biu/public-ui'
 
 let pending: ContentJump | null = null
@@ -113,19 +114,20 @@ export function tryContentJump(editor: Editor, markdown: string, recordId: strin
   if (!pending || editor.isDestroyed) return false
   if (!jumpMatchesRecord(pending, recordId)) return false
   if (!jumpHostOk(editor)) return false
-  const snippet = snippetAtLine(markdown, pending.start_line)
-  if (!force && snippet && posAtSnippet(editor.state.doc, snippet) == null) return false
+  const want = markdownLineText(markdown, pending.start_line)
+  const live = markdownLineText(editor.getMarkdown(), pending.start_line)
+  if (!force && want.trim() && live !== want) return false
   applyContentJump(editor, markdown, pending)
   scheduleConsume()
   return true
 }
 
-export function applyContentJump(editor: Editor, markdown: string, jump: ContentJump) {
-  const startSnippet = snippetAtLine(markdown, jump.start_line)
-  const found = posAtSnippet(editor.state.doc, startSnippet)
-  const pos = safeTextPos(editor.state.doc, found ?? 1)
+export function applyContentJump(editor: Editor, _markdown: string, jump: ContentJump) {
+  const from = safeTextPos(editor.state.doc, posAtMarkdownLine(editor, jump.start_line))
+  const to = safeTextPos(editor.state.doc, posAfterMarkdownLine(editor, jump.end_line ?? jump.start_line))
   try {
-    editor.chain().focus().setTextSelection(pos).run()
+    if (to > from) editor.chain().focus().setTextSelection({ from, to }).run()
+    else editor.chain().focus().setTextSelection(from).run()
   } catch {
     editor.commands.focus()
   }
@@ -134,7 +136,7 @@ export function applyContentJump(editor: Editor, markdown: string, jump: Content
   } catch {
     /* jsdom 没有 layout */
   }
-  scrollCaret(editor, pos)
+  scrollCaret(editor, from)
 }
 
 function scrollCaret(editor: Editor, pos: number) {

@@ -537,6 +537,7 @@ test('database extras sit after the record detail, not in the inspector', () => 
   assert.match(outline, /scrollOutlineTarget/)
   assert.match(outline, /CONTENT_JUMP_EVENT/)
   assert.match(outline, /blockElBySnippet/)
+  assert.match(outline, /page-editor/)
   assert.doesNotMatch(outline, /document\.querySelector\('\.fsdb-detail-main'\)/)
   assert.match(style, /\.heading-outline-host\{[^}]*z-index:20/)
   assert.match(detail, /FOCUS_RECORD_CONTENT/)

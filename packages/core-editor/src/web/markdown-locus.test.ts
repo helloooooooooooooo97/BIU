@@ -2,7 +2,7 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { Editor } from '@tiptap/core'
 import { pageEditorExtensions } from './kit.ts'
-import { markdownLocusFromRange, markdownLocusFromSelection } from './markdown-locus.ts'
+import { markdownLocusFromRange, markdownLocusFromSelection, posAtMarkdownLine } from './markdown-locus.ts'
 
 function editorOf(markdown: string) {
   return new Editor({
@@ -124,5 +124,16 @@ test('block math node selection still has a markdown locus for ⌘L', () => {
   const locus = markdownLocusFromSelection(editor)
   assert.ok(locus)
   assert.match(locus.selection ?? locus.text, /\\sum x/)
+  editor.destroy()
+})
+
+test('posAtMarkdownLine inverts locus line numbers', () => {
+  const md = '# 欢迎\n\n第一段\n\nUNIQUESEL\n\n末段'
+  const editor = editorOf(md)
+  const pos = posAtMarkdownLine(editor, 5)
+  editor.commands.setTextSelection(Math.max(1, pos))
+  const locus = markdownLocusFromSelection(editor)
+  assert.equal(locus?.start_line, 5)
+  assert.match(locus?.text ?? '', /UNIQUESEL/)
   editor.destroy()
 })
