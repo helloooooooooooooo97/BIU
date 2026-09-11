@@ -8,6 +8,7 @@ import {
   Cog6ToothIcon,
   MagnifyingGlassIcon,
 } from '@heroicons/react/16/solid'
+import { HeadlessPopover } from '@biu/public-ui'
 import { setChatOverlay } from './chat-overlay.ts'
 import { chromeIcon } from './chrome-icon.ts'
 import { readMainDataRoute } from '@biu/core-file-system/main-data-route'
@@ -150,12 +151,19 @@ function noticeIsForSession(row: NoticeRow, sessionId: string) {
   return href === `/s/${sessionId}` || href === `/s/${encodeURIComponent(sessionId)}`
 }
 
+function noticeKindLabel(kind?: string) {
+  if (kind === 'approval') return '审批'
+  if (kind === 'task') return '任务'
+  if (kind === 'session') return '会话'
+  return ''
+}
+
 function NoticeBell({
   open,
-  onToggle,
+  onOpenChange,
 }: {
   open: boolean
-  onToggle: () => void
+  onOpenChange: (open: boolean) => void
 }) {
   const navigate = useNavigate()
   const location = useLocation()
@@ -163,7 +171,7 @@ function NoticeBell({
   const looking = sessionIdFromPath(location.pathname)
 
   const load = useCallback(() => {
-    void fetch('/api/db/list?path=/notices&sort=createdAt&dir=desc&limit=40')
+    void fetch('/api/db/list?path=/notices&sort=createdAt&dir=desc&limit=40&columns=title,body,kind,read,href,createdAt')
       .then((res) => res.json() as Promise<{ items?: NoticeRow[] }>)
       .then((data) => setRows(Array.isArray(data.items) ? data.items : []))
       .catch(() => setRows([]))
@@ -181,50 +189,77 @@ function NoticeBell({
 
   return (
     <div className="shell-side-pop-wrap">
-      <SideAction
-        title="通知"
-        active={open}
-        testId="chrome-notify"
-        icon={<BellIcon {...chromeIcon} />}
-        onClick={onToggle}
+      <HeadlessPopover
+        open={open}
+        onOpenChange={onOpenChange}
+        side="right"
+        align="start"
+        sideOffset={8}
+        trigger={
+          <SideAction
+            title="通知"
+            active={open}
+            testId="chrome-notify"
+            icon={<BellIcon {...chromeIcon} />}
+            onClick={() => {}}
+          >
+            {badge ? (
+              <span className="shell-notify-badge" data-testid="chrome-notify-badge">
+                {badge}
+              </span>
+            ) : null}
+          </SideAction>
+        }
       >
-        {badge ? (
-          <span className="shell-notify-badge" data-testid="chrome-notify-badge">
-            {badge}
-          </span>
-        ) : null}
-      </SideAction>
-      {open ? (
         <div className="shell-side-pop shell-notify-pop" role="dialog" aria-label="通知" data-testid="chrome-notify-pop">
           {rows.length ? (
             <ul className="shell-notify-list">
-              {rows.map((row) => (
-                <li key={row.id}>
-                  <button
-                    type="button"
-                    className={`shell-notify-item${row.read === true ? '' : ' is-unread'}`}
-                    data-testid="chrome-notify-item"
-                    onClick={() => {
-                      const href = noticeHref(row)
-                      void fetch('/api/db/update', {
-                        method: 'POST',
-                        headers: { 'content-type': 'application/json' },
-                        body: JSON.stringify({ path: `/notices/${row.id}`, content: { read: true } }),
-                      }).then(() => load())
-                      if (href) navigate(href)
-                    }}
-                  >
-                    <span className="shell-notify-title">{row.title || '通知'}</span>
-                    {row.body ? <span className="shell-notify-body">{row.body}</span> : null}
-                  </button>
-                </li>
-              ))}
+              {rows.map((row) => {
+                const kind = noticeKindLabel(row.kind)
+                return (
+                  <li key={row.id}>
+                    <button
+                      type="button"
+                      className={`shell-notify-item${row.read === true ? '' : ' is-unread'}`}
+                      data-testid="chrome-notify-item"
+                      onClick={() => {
+                        const href = noticeHref(row)
+                        void fetch('/api/db/update', {
+                          method: 'POST',
+                          headers: { 'content-type': 'application/json' },
+                          body: JSON.stringify({ path: `/notices/${row.id}`, content: { read: true } }),
+                        }).then(() => load())
+                        onOpenChange(false)
+                        if (!href) return
+                        const record = href.match(/^\/database(\/[^/]+)\/record\/([^/?#]+)/)
+                        if (record) {
+                          window.dispatchEvent(
+                            new CustomEvent('biu:inspector-reveal', {
+                              detail: {
+                                collection: record[1],
+                                recordId: decodeURIComponent(record[2]!),
+                                unique: true,
+                              },
+                            }),
+                          )
+                          return
+                        }
+                        navigate(href)
+                      }}
+                    >
+                      {kind ? <span className="shell-notify-kind">{kind}</span> : null}
+                      <span className="shell-notify-title">{row.title || '通知'}</span>
+                      {row.body ? <span className="shell-notify-body">{row.body}</span> : null}
+                    </button>
+                  </li>
+                )
+              })}
             </ul>
           ) : (
             <p className="shell-chrome-pop-empty">暂无通知</p>
           )}
         </div>
-      ) : null}
+      </HeadlessPopover>
     </div>
   )
 }
@@ -260,9 +295,7 @@ export function ShellSidePlaces({
       />
       <NoticeBell
         open={notifyOpen}
-        onToggle={() => {
-          setNotifyOpen((open) => !open)
-        }}
+        onOpenChange={setNotifyOpen}
       />
       <SideAction
         title="设置"

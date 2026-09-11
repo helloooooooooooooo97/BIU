@@ -1,5 +1,6 @@
 import { Service, type Context } from 'cordis'
 import type { ToolRequest } from '@biu/host-tools'
+import { currentSessionId } from '@biu/host-sessions/scope'
 
 const DEFAULT_HOLD_TIMEOUT_MS = 60_000
 
@@ -78,7 +79,10 @@ export function apply(ctx: Context) {
           kind: 'approval',
           title: `需要审批：${payload.name}`,
           body: payload.id,
-          href: '',
+          href: (() => {
+            const sid = String(currentSessionId() ?? '').trim()
+            return sid ? `/s/${encodeURIComponent(sid)}` : ''
+          })(),
           sourceKey: `approval:${payload.id}`,
         })
       } catch {

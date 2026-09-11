@@ -23,7 +23,7 @@ export function noticesCollection(store: NoticesStore): CollectionSpec {
     records: { update: true, create: false, delete: true },
     schema: {
       labelField: 'title',
-      columns: ['title', 'kind', 'read', 'createdAt'],
+      columns: ['title', 'kind', 'read', 'body', 'href', 'createdAt'],
       fields: {
         ...REQUIRED_RECORD_FIELDS,
         title: { type: 'string', label: '标题' },

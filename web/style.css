@@ -210,7 +210,10 @@ body {
 }
 
 .shell-notify-pop {
-  width: 280px;
+  position: relative;
+  top: auto;
+  left: auto;
+  width: 320px;
   max-height: min(70vh, 420px);
   overflow: auto;
   padding: 6px;
@@ -250,6 +253,13 @@ body {
   background: color-mix(in srgb, var(--dsw-business) 10%, transparent);
 }
 
+.shell-notify-kind {
+  color: var(--dsw-label-3);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
 .shell-notify-title {
   font-size: 13px;
   font-weight: 650;
@@ -263,20 +273,34 @@ body {
 }
 
 .shell-notify-badge {
-  position: absolute;
-  top: 4px;
-  left: 22px;
+  position: relative;
+  top: auto;
+  left: auto;
   z-index: 1;
-  min-width: 14px;
-  height: 14px;
-  padding: 0 4px;
+  margin-left: auto;
+  flex: 0 0 auto;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 5px;
   border-radius: 999px;
   background: #e24b4a;
   color: #fff;
   font-size: 10px;
   font-weight: 700;
-  line-height: 14px;
+  line-height: 16px;
   text-align: center;
+}
+
+.app-side-actions-item .shell-notify-badge {
+  position: relative;
+}
+
+.app-side-bar.is-narrow .app-side-actions-item .shell-notify-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  left: auto;
+  margin-left: 0;
 }
 
 .shell-side-places .app-side-actions-item {
