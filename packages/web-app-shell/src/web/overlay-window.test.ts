@@ -31,6 +31,7 @@ test('clicking the overlay close button actually closes the overlay', () => {
   document.body.append(host)
   root = createRoot(host)
   setChatOverlay(true)
+  setOverlayThread(true)
   const header = createElement(
     'button',
     { type: 'button', 'data-testid': 'chat-overlay-close' },
@@ -131,13 +132,14 @@ test('compose-only overlay shows the thread after send', () => {
   const panel = document.querySelector('[data-testid="chat-overlay-panel"]') as HTMLElement
   assert.ok(panel)
   assert.equal(panel.classList.contains('is-compose-only'), true)
-  assert.ok(document.querySelector('[data-testid="chat-overlay-head"]'))
+  assert.equal(document.querySelector('[data-testid="chat-overlay-head"]'), null)
   assert.equal(document.querySelector('[data-testid="chat-overlay-peek"]'), null)
   act(() => {
     revealOverlayThread()
   })
   assert.equal(getOverlayThread(), true)
   assert.equal(panel.classList.contains('is-compose-only'), false)
+  assert.ok(document.querySelector('[data-testid="chat-overlay-head"]'))
 })
 
 test('compose-only overlay closes when clicking outside; expanded does not', () => {

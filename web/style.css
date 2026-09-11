@@ -1654,18 +1654,28 @@ body {
   box-shadow: none;
 }
 
+.chat-overlay-panel.is-compose-only .chat-overlay-head {
+  display: none;
+}
+
 .chat-overlay-panel.is-compose-only .chat-overlay-thread {
+  display: none;
+}
+
+.chat-overlay-panel.is-compose-only .dock-approval-hint {
   display: none;
 }
 
 .chat-overlay-panel.is-compose-only .chat-pane {
   flex: none;
+  background: transparent;
 }
 
 .chat-overlay-panel.is-compose-only .chat-pane .chat-composer-dock {
   position: relative;
   bottom: auto;
-  padding: 8px 16px 16px;
+  padding: 0;
+  background: transparent;
 }
 
 .chat-overlay-panel.is-compose-only [data-testid^="chat-overlay-resize-"] {
