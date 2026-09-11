@@ -351,7 +351,9 @@ const CSS = `
 .fsdb-detail-screen{display:flex;min-width:0;width:100%;min-height:min-content;flex:1;flex-direction:column;overflow:visible}
 .fsdb-detail-screen .fsdb-detail-split,.fsdb-detail-screen > :not(header){flex:none;width:100%;min-height:min-content;overflow:visible}
 .fsdb-detail-screen > .fsdb-detail-actionbar{height:0;min-height:0}
-.fsdb-detail-float-nav{position:sticky;top:50%;align-self:flex-start;flex:none;z-index:24;display:flex;flex-direction:column;gap:4px;width:0;min-width:0;margin:0;padding:4px 0;border:0;border-radius:8px;background:#202020;box-shadow:0 1px 2px rgba(15,15,15,.04);overflow:visible;transform:translate(-40px,-50%)}
+.fsdb-detail-float-nav{position:sticky;top:50%;align-self:flex-start;flex:none;z-index:24;display:flex;flex-direction:column;gap:4px;width:0;min-width:0;margin:0;padding:4px 0;border:0;border-radius:8px;background:#202020;box-shadow:0 1px 2px rgba(15,15,15,.04);overflow:visible;transform:translate(-40px,-50%);opacity:0;transition:opacity .16s ease}
+.fsdb-detail-float-nav::before{content:'';position:absolute;top:-40px;bottom:-40px;left:-20px;width:64px}
+.fsdb-detail-float-nav:hover,.fsdb-detail-float-nav:focus-within,.fsdb-detail-float-nav:has([aria-expanded=true]){opacity:1}
 .fsdb-detail-float-btn{display:flex;width:24px;height:24px;align-items:center;justify-content:center;margin:0;border:0;border-radius:6px;padding:0;background:transparent;color:#F0EFED;cursor:pointer}
 .fsdb-detail-float-btn svg{width:16px;height:16px}
 .fsdb-detail-float-btn:hover:not(:disabled){background:rgba(255,255,255,.08);color:#F0EFED}
