@@ -73,12 +73,22 @@ type PreviewCache = { items: DbRecord[]; total: number; schema?: CollectionSchem
 
 const previewCache = new Map<string, PreviewCache>()
 
+function cachedDirectKidCount(path: string, recordId: string) {
+  for (const [key, cache] of previewCache) {
+    if (!key.startsWith(`${path}\0`)) continue
+    const parentKey = parentFieldKey(cache.schema, cache.items) ?? 'parentId'
+    return treeChildren(cache.items, parentKey, recordId).length
+  }
+  return 0
+}
+
 function ViewRecordPreview({
   path,
   view,
   open,
   recordKind,
   tableIcon,
+  rootId,
   onOpenRecord,
 }: {
   path: string
@@ -86,6 +96,7 @@ function ViewRecordPreview({
   open: boolean
   recordKind: string
   tableIcon?: string
+  rootId?: string
   onOpenRecord?: (recordId: string, row?: DbRecord) => void
 }) {
   const key = previewCacheKey(path, view)
@@ -357,9 +368,17 @@ function ViewRecordPreview({
     })
   }
 
+  const treeRoot = rootId || ''
+  const listed = treeRoot
+    ? renderRecords(state.items, treeRoot)
+    : buckets?.length
+      ? null
+      : renderRecords(state.items)
+
   return (
     <div className="fsdb-view-preview" role="list">
-      {buckets?.length ? (
+      {listed}
+      {!treeRoot && buckets?.length ? (
         buckets.map((bucket, index) => {
           const groupKey = bucket.key || 'unset'
           const expanded = openGroups[groupKey] ?? index === 0
@@ -404,22 +423,20 @@ function ViewRecordPreview({
             </div>
           )
         })
-      ) : (
-        renderRecords(state.items)
-      )}
+      ) : null}
       {state.loading && !state.items.length ? (
         <div className="fsdb-view-preview-hint">加载中…</div>
       ) : null}
       {state.error ? <div className="fsdb-view-preview-hint">{state.error}</div> : null}
-      {!state.loading && !state.error && !state.items.length ? (
+      {!treeRoot && !state.loading && !state.error && !state.items.length ? (
         <div className="fsdb-view-preview-hint">没有数据</div>
       ) : null}
-      {remaining > 0 && !capped ? (
+      {!treeRoot && remaining > 0 && !capped ? (
         <button type="button" className="fsdb-view-preview-more" disabled={state.loading} onClick={() => void loadMore()}>
           {state.loading ? '加载中…' : `还有 ${remaining} 条 · 加载更多`}
         </button>
       ) : null}
-      {capped ? <div className="fsdb-view-preview-hint">侧栏最多预览 {SIDEBAR_PREVIEW_MAX} 条，完整数据在主区</div> : null}
+      {!treeRoot && capped ? <div className="fsdb-view-preview-hint">侧栏最多预览 {SIDEBAR_PREVIEW_MAX} 条，完整数据在主区</div> : null}
     </div>
   )
 }
@@ -569,6 +586,37 @@ export const DataSidebar = memo(function DataSidebar({
       cancelled = true
     }
   }, [starredRecords])
+
+  const starredTreePreviewKey = starredRecordRows
+    .filter(({ table }) => isRecordTreeCollection(table.path))
+    .map(({ table }) => table.path)
+    .sort()
+    .join('|')
+
+  useEffect(() => {
+    if (!favOpen || !starredTreePreviewKey) return
+    let cancelled = false
+    const paths = starredTreePreviewKey.split('|')
+    void Promise.all(
+      paths.map((path) => {
+        const view = viewsFor(path).find((row) => row.id === builtinAllViewId(path)) ?? viewsFor(path)[0]
+        if (!view) return Promise.resolve()
+        const key = previewCacheKey(path, view)
+        if (previewCache.get(key)?.items.length) return Promise.resolve()
+        return fetchViewPreview(path, view, 0).then(
+          (page) => {
+            if (cancelled) return
+            previewCache.set(key, { items: page.items, total: page.total, schema: page.schema })
+            rememberPreviewTotal(key, page.total)
+          },
+          () => undefined,
+        )
+      }),
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [favOpen, starredTreePreviewKey, tables, views, collectionPath])
 
   function toggleStar(path: string, viewId: string) {
     persistStarredViews(toggleStarredView(getStarredViews(), path, viewId))
@@ -787,20 +835,48 @@ export const DataSidebar = memo(function DataSidebar({
                     const emoji = starredRecordEmoji(item)
                     const chromeIcon = getDatabaseUi()?.chrome(table.path).Icon
                     const view = viewsFor(table.path).find((row) => row.id === builtinAllViewId(table.path)) ?? viewsFor(table.path)[0]
+                    const nested = isRecordTreeCollection(table.path)
+                    const previewKey = `star-record:${table.path}:${item.recordId}`
+                    const expanded = expandedViewKey === previewKey
+                    const kidCount = nested ? cachedDirectKidCount(table.path, item.recordId) : 0
+                    const face = (
+                      <RecordMark
+                        record={recordMarkStub({ id: item.recordId, emoji, mascot: peekRecord(table.path, item.recordId)?.mascot })}
+                        tableIcon={table.view?.icon}
+                        Icon={chromeIcon}
+                      />
+                    )
                     return (
-                      <div key={`star-record:${table.path}:${item.recordId}`} className="min-w-0">
+                      <div key={previewKey} className="min-w-0">
                         <div
                           className="chat-session-row group is-pinned"
                           {...pickDomAttrs(recordPickKind(table.view?.moduleId || table.id), item.recordId, label)}
                         >
                           <div className="chat-session-row-main flex min-w-0 flex-1 items-center gap-1.5 py-1 text-left text-[14px] leading-5">
-                            <span className="grid size-6 shrink-0 place-items-center" aria-hidden>
-                              <RecordMark
-                                record={recordMarkStub({ id: item.recordId, emoji, mascot: peekRecord(table.path, item.recordId)?.mascot })}
-                                tableIcon={table.view?.icon}
-                                Icon={chromeIcon}
-                              />
-                            </span>
+                            {nested ? (
+                              <button
+                                type="button"
+                                className="relative grid size-6 shrink-0 place-items-center border-0 bg-transparent p-0 text-inherit"
+                                title={expanded ? '收起子记录' : '展开子记录'}
+                                aria-expanded={expanded}
+                                onClick={() => toggleViewPreview(previewKey)}
+                              >
+                                <span className="sidebar-rail-icon sidebar-group-fold">
+                                  <span className="sidebar-group-fold-face">{face}</span>
+                                  <span className="sidebar-group-fold-chevron">
+                                    {expanded ? (
+                                      <ChevronDownIcon className="size-4 shrink-0 opacity-80" />
+                                    ) : (
+                                      <ChevronRightIcon className="size-4 shrink-0 opacity-80" />
+                                    )}
+                                  </span>
+                                </span>
+                              </button>
+                            ) : (
+                              <span className="grid size-6 shrink-0 place-items-center" aria-hidden>
+                                {face}
+                              </span>
+                            )}
                             <button
                               type="button"
                               className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit"
@@ -817,9 +893,41 @@ export const DataSidebar = memo(function DataSidebar({
                               {label}
                             </button>
                           </div>
+                          {nested ? <ChatCount count={kidCount} title={`${kidCount} 个子记录`} /> : null}
                           <span className="grid size-6 shrink-0 place-items-center" title={tableName} aria-label={tableName}>
                             <TableGlyph icon={table.view?.icon} />
                           </span>
+                          {nested ? (
+                            <button
+                              type="button"
+                              className="sidebar-add"
+                              title={`在 ${label} 下添加子记录`}
+                              aria-label={`在 ${label} 下添加子记录`}
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                void (async () => {
+                                  try {
+                                    const data = await readJson<{ items?: Array<{ value?: DbRecord }> }>('/api/db/create', {
+                                      method: 'POST',
+                                      headers: { 'content-type': 'application/json' },
+                                      body: JSON.stringify({ path: table.path, records: [{ parentId: item.recordId }] }),
+                                    })
+                                    for (const key of [...previewCache.keys()]) {
+                                      if (key.startsWith(`${table.path}\0`)) previewCache.delete(key)
+                                    }
+                                    window.dispatchEvent(new Event('fsdb:change'))
+                                    if (expandedViewKey !== previewKey) toggleViewPreview(previewKey)
+                                    const created = data.items?.[0]?.value
+                                    if (created?.id && view) openRecord(table.path, view, created.id, created)
+                                  } catch {
+                                    /* ignore */
+                                  }
+                                })()
+                              }}
+                            >
+                              <PlusIcon className="size-4 shrink-0" />
+                            </button>
+                          ) : null}
                           <button
                             type="button"
                             className="chat-session-row-star is-on"
@@ -831,6 +939,19 @@ export const DataSidebar = memo(function DataSidebar({
                             <StarIcon className="size-4 shrink-0 text-[#f5b700]" />
                           </button>
                         </div>
+                        {nested && view ? (
+                          <SidebarFold open={expanded}>
+                            <ViewRecordPreview
+                              path={table.path}
+                              view={view}
+                              open={expanded}
+                              rootId={item.recordId}
+                              recordKind={recordPickKind(table.view?.moduleId || table.id)}
+                              tableIcon={table.view?.icon}
+                              onOpenRecord={(id, row) => openRecord(table.path, view, id, row)}
+                            />
+                          </SidebarFold>
+                        ) : null}
                       </div>
                     )
                   })}

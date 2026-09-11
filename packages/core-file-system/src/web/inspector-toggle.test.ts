@@ -135,6 +135,9 @@ test('starred pages and tasks also list in the sidebar favorites section', () =>
   assert.match(sidebar, /starredRecordRows\.map/)
   assert.match(sidebar, /star-record:\$\{table\.path\}:\$\{item\.recordId\}/)
   assert.match(sidebar, /starredRecordLabel\(item\)/)
+  assert.match(sidebar, /rootId=\{item\.recordId\}/)
+  assert.match(sidebar, /isRecordTreeCollection\(table\.path\)/)
+  assert.match(sidebar, /title=\{expanded \? '收起子记录' : '展开子记录'\}/)
   assert.doesNotMatch(sidebar, /\{starredRows\.length \?/)
 })
 
