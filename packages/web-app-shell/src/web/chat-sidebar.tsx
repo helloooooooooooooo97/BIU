@@ -371,7 +371,7 @@ export const ChatSidebar = memo(function ChatSidebar({
                   </div>
 
                   <SidebarFold open={!sectionCollapsed}>
-                    <div className="min-w-0 space-y-1.5 pt-0.5">
+                    <div className="flex min-w-0 flex-col gap-px pt-0.5">
                       {section.sessions
                         ? section.sessions.map((item) => (
                           <SessionRow
@@ -391,7 +391,7 @@ export const ChatSidebar = memo(function ChatSidebar({
                           const canAddHere = group.kind === 'project' || group.kind === 'ungrouped'
                           return (
                             <div key={group.key} className="min-w-0">
-                              <div className="sidebar-group-head mb-0.5">
+                              <div className="sidebar-group-head">
                                 <div
                                   role="button"
                                   tabIndex={0}
