@@ -128,6 +128,16 @@ test('pages and tasks sidebar records nest by parentId; other tables stay flat',
   assert.doesNotMatch(css, /\.chat-session-row:hover \.sidebar-group-fold-chevron/)
 })
 
+test('starred pages and tasks also list in the sidebar favorites section', () => {
+  const sidebar = readFileSync(resolve(import.meta.dirname, './data-sidebar.tsx'), 'utf8')
+  assert.match(sidebar, /const favCount = starredRows\.length \+ starredRecordRows\.length/)
+  assert.match(sidebar, /\{favCount \?/)
+  assert.match(sidebar, /starredRecordRows\.map/)
+  assert.match(sidebar, /star-record:\$\{table\.path\}:\$\{item\.recordId\}/)
+  assert.match(sidebar, /starredRecordLabel\(item\)/)
+  assert.doesNotMatch(sidebar, /\{starredRows\.length \?/)
+})
+
 test('table title opens record from the title-side button', () => {
   assert.match(browser, /data-testid="record-title-open"/)
   assert.match(browser, /data-testid="record-title-split"/)

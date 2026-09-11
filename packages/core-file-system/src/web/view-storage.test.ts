@@ -131,8 +131,9 @@ test('rememberRecords scopes crumb rows to the current view', () => {
 })
 
 test('starred records toggle by collection path and id', () => {
-  const next = toggleStarredRecord([], '/pages', 'home')
+  const next = toggleStarredRecord([], '/pages', 'home', { label: '首页' })
   assert.equal(isRecordStarred(next, '/pages', 'home'), true)
+  assert.equal(next[0]?.label, '首页')
   assert.equal(isRecordStarred(next, '/tasks', 'home'), false)
   assert.equal(isRecordStarred(toggleStarredRecord(next, '/pages', 'home'), '/pages', 'home'), false)
 })

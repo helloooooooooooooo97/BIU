@@ -303,7 +303,7 @@ export function toggleStarredView(items: StarredView[], path: string, viewId: st
   return [...items, { path, viewId }]
 }
 
-export type StarredRecord = { path: string; recordId: string }
+export type StarredRecord = { path: string; recordId: string; label?: string; emoji?: string }
 
 const STARRED_RECORDS_KEY = 'fsdb.starredRecords'
 
@@ -317,7 +317,10 @@ export function loadStarredRecords(): StarredRecord[] {
       const rec = item as Record<string, unknown>
       const path = String(rec.path ?? '').trim()
       const recordId = String(rec.recordId ?? '').trim()
-      return path && recordId ? [{ path, recordId }] : []
+      if (!path || !recordId) return []
+      const label = String(rec.label ?? '').trim()
+      const emoji = String(rec.emoji ?? '').trim()
+      return [{ path, recordId, ...(label ? { label } : {}), ...(emoji ? { emoji } : {}) }]
     })
   } catch {
     return []
@@ -354,9 +357,26 @@ export function isRecordStarred(items: StarredRecord[], path: string, recordId: 
   return items.some((item) => item.path === path && item.recordId === recordId)
 }
 
-export function toggleStarredRecord(items: StarredRecord[], path: string, recordId: string): StarredRecord[] {
+export function toggleStarredRecord(
+  items: StarredRecord[],
+  path: string,
+  recordId: string,
+  meta?: { label?: string; emoji?: string },
+): StarredRecord[] {
   if (isRecordStarred(items, path, recordId)) return items.filter((item) => item.path !== path || item.recordId !== recordId)
-  return [...items, { path, recordId }]
+  const label = String(meta?.label ?? '').trim()
+  const emoji = String(meta?.emoji ?? '').trim()
+  return [...items, { path, recordId, ...(label ? { label } : {}), ...(emoji ? { emoji } : {}) }]
+}
+
+export function starredRecordLabel(item: StarredRecord) {
+  const peeked = peekRecord(item.path, item.recordId)
+  const label = String(peeked?.label ?? item.label ?? '').trim()
+  return label && label !== item.recordId ? label : label || item.recordId
+}
+
+export function starredRecordEmoji(item: StarredRecord) {
+  return String(peekRecord(item.path, item.recordId)?.emoji ?? item.emoji ?? '').trim()
 }
 
 const DISPLAY_KEYS = [

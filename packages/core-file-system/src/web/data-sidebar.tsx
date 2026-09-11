@@ -42,8 +42,12 @@ import {
   isRecordStarred,
   isViewStarred,
   loadViews,
+  peekRecord,
   persistStarredRecords,
   persistStarredViews,
+  rememberRecords,
+  starredRecordEmoji,
+  starredRecordLabel,
   subscribeStarredRecords,
   subscribeStarredViews,
   toggleStarredRecord,
@@ -54,7 +58,7 @@ import { pickDomAttrs, recordPickKind, viewPickId } from './pick-dom.ts'
 import { toggleExpandedViewKey } from './sidebar-nav.ts'
 import { TableGlyph, ViewModeGlyph } from './nav-glyphs.tsx'
 import { getDatabaseUi } from './database-ui.ts'
-import { RecordMark } from './record-mark.tsx'
+import { RecordMark, recordMarkStub } from './record-mark.tsx'
 import { SidebarBrandLockup } from '@biu/public-mascot'
 
 type PreviewState = {
@@ -172,8 +176,11 @@ function ViewRecordPreview({
     setOpenKids((prev) => ({ ...prev, [id]: !prev[id] }))
   }
 
-  function toggleRecordStar(recordId: string) {
-    persistStarredRecords(toggleStarredRecord(getStarredRecords(), path, recordId))
+  function toggleRecordStar(row: DbRecord) {
+    const label = recordPreviewLabel(row)
+    const emoji = recordPreviewEmoji(row)
+    rememberRecords(path, [{ id: row.id, label, emoji }])
+    persistStarredRecords(toggleStarredRecord(getStarredRecords(), path, row.id, { label, emoji }))
   }
 
   async function createChild(row: DbRecord) {
@@ -336,7 +343,7 @@ function ViewRecordPreview({
               title={starred ? '取消收藏' : '收藏'}
               onClick={(event) => {
                 event.stopPropagation()
-                toggleRecordStar(row.id)
+                toggleRecordStar(row)
               }}
             >
               <StarIcon className={`size-4 shrink-0${starred ? ' text-[#f5b700]' : ''}`} />
@@ -460,7 +467,9 @@ export const DataSidebar = memo(function DataSidebar({
   const { user: userTables, system: systemTables } = useMemo(() => sortDataCollections(listedTables), [listedTables])
   const [openTables, setOpenTables] = useState<Record<string, boolean>>(() => ({ [collectionPath]: true }))
   useSyncExternalStore(subscribeStarredViews, getStarredViewsVersion, () => 0)
+  useSyncExternalStore(subscribeStarredRecords, getStarredRecordsVersion, () => 0)
   const starredViews = getStarredViews()
+  const starredRecords = getStarredRecords()
   const [favOpen, setFavOpen] = useState(() => {
     try {
       return localStorage.getItem('fsdb.favOpen') !== '0'
@@ -486,6 +495,12 @@ export const DataSidebar = memo(function DataSidebar({
     if (!table || !view) return []
     return [{ table, view }]
   })
+  const starredRecordRows = starredRecords.flatMap((item) => {
+    const table = listedTables.find((row) => row.path === item.path)
+    if (!table) return []
+    return [{ table, item }]
+  })
+  const favCount = starredRows.length + starredRecordRows.length
 
   const countJobs = useMemo(() => {
     const jobs: Array<{ path: string; view: SavedView }> = []
@@ -524,6 +539,36 @@ export const DataSidebar = memo(function DataSidebar({
       cancelled = true
     }
   }, [countJobKey, countJobs])
+
+  useEffect(() => {
+    let cancelled = false
+    void Promise.all(
+      starredRecords.map(async (item) => {
+        if (item.label || peekRecord(item.path, item.recordId)?.label) {
+          if (item.label) rememberRecords(item.path, [{ id: item.recordId, label: item.label, emoji: item.emoji }])
+          return
+        }
+        try {
+          const data = await readJson<{ value?: DbRecord }>(`/api/db/read?path=${encodeURIComponent(`${item.path}/${item.recordId}`)}`)
+          const row = data.value
+          if (cancelled || !row?.id) return
+          const label = recordPreviewLabel(row)
+          const emoji = recordPreviewEmoji(row)
+          rememberRecords(item.path, [{ id: row.id, label, emoji, mascot: row.mascot }])
+          persistStarredRecords(
+            getStarredRecords().map((entry) =>
+              entry.path === item.path && entry.recordId === item.recordId ? { ...entry, label, emoji } : entry,
+            ),
+          )
+        } catch {
+          /* ignore */
+        }
+      }),
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [starredRecords])
 
   function toggleStar(path: string, viewId: string) {
     persistStarredViews(toggleStarredView(getStarredViews(), path, viewId))
@@ -711,7 +756,7 @@ export const DataSidebar = memo(function DataSidebar({
   const body = (
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-3">
         <div className="mt-2 space-y-1.5">
-          {starredRows.length ? (
+          {favCount ? (
             <section className="min-w-0">
               <div className="sidebar-section-head min-w-0">
                 <div className="flex min-h-8 min-w-0 flex-1 items-center">
@@ -732,10 +777,63 @@ export const DataSidebar = memo(function DataSidebar({
                     <span className="min-w-0 flex-1 truncate tracking-normal">收藏</span>
                   </button>
                 </div>
-                <ChatCount count={starredRows.length} />
+                <ChatCount count={favCount} />
               </div>
               <SidebarFold open={favOpen}>
                 <div className="min-w-0 pt-0.5">
+                  {starredRecordRows.map(({ table, item }) => {
+                    const tableName = table.view?.title ?? table.label
+                    const label = starredRecordLabel(item)
+                    const emoji = starredRecordEmoji(item)
+                    const chromeIcon = getDatabaseUi()?.chrome(table.path).Icon
+                    const view = viewsFor(table.path).find((row) => row.id === builtinAllViewId(table.path)) ?? viewsFor(table.path)[0]
+                    return (
+                      <div key={`star-record:${table.path}:${item.recordId}`} className="min-w-0">
+                        <div
+                          className="chat-session-row group is-pinned"
+                          {...pickDomAttrs(recordPickKind(table.view?.moduleId || table.id), item.recordId, label)}
+                        >
+                          <div className="chat-session-row-main flex min-w-0 flex-1 items-center gap-1.5 py-1 text-left text-[14px] leading-5">
+                            <span className="grid size-6 shrink-0 place-items-center" aria-hidden>
+                              <RecordMark
+                                record={recordMarkStub({ id: item.recordId, emoji, mascot: peekRecord(table.path, item.recordId)?.mascot })}
+                                tableIcon={table.view?.icon}
+                                Icon={chromeIcon}
+                              />
+                            </span>
+                            <button
+                              type="button"
+                              className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit"
+                              title={label}
+                              onClick={() => {
+                                if (!view) return
+                                openRecord(table.path, view, item.recordId, {
+                                  id: item.recordId,
+                                  title: label,
+                                  emoji,
+                                })
+                              }}
+                            >
+                              {label}
+                            </button>
+                          </div>
+                          <span className="grid size-6 shrink-0 place-items-center" title={tableName} aria-label={tableName}>
+                            <TableGlyph icon={table.view?.icon} />
+                          </span>
+                          <button
+                            type="button"
+                            className="chat-session-row-star is-on"
+                            aria-pressed
+                            aria-label={`取消收藏 ${label}`}
+                            title="取消收藏"
+                            onClick={() => persistStarredRecords(toggleStarredRecord(getStarredRecords(), table.path, item.recordId))}
+                          >
+                            <StarIcon className="size-4 shrink-0 text-[#f5b700]" />
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
                   {starredRows.map(({ table, view }) => {
                     const tableName = table.view?.title ?? table.label
                     const active = table.path === collectionPath && view.id === activeViewId
