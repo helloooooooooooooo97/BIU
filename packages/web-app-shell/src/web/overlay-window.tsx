@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { ChatPane } from '@biu/public-ui'
 import {
   closeChatOverlay,
+  getOverlayThread,
   overlayLayoutGeom,
   readOverlayWinState,
+  subscribeOverlayThread,
   writeOverlayWinState,
   type OverlayWinGeom,
 } from './chat-overlay.ts'
@@ -21,6 +23,7 @@ export function OverlayChatWindow({
   thread: ReactNode
   dock: ReactNode
 }) {
+  const threadOpen = useSyncExternalStore(subscribeOverlayThread, getOverlayThread, () => false)
   const initial = readOverlayWinState()
   const [geom, setGeom] = useState<OverlayWinGeom>(initial)
   const [z, setZ] = useState(overlayZ)
@@ -134,7 +137,7 @@ export function OverlayChatWindow({
   return (
     <div
       ref={boxRef}
-      className="chat-overlay-panel"
+      className={`chat-overlay-panel${threadOpen ? '' : ' is-compose-only'}`}
       data-testid="chat-overlay-panel"
       data-overlay-layout="right"
       data-biu-ignore

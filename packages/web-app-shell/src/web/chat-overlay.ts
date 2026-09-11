@@ -218,9 +218,11 @@ export function openOverlayComposer(opts?: { revealThread?: boolean }) {
     requestComposerFocus()
     return
   }
+  const wasOpen = overlay
   setChatOverlay(true)
   setOverlayAutohide(false)
-  setOverlayThread(Boolean(opts?.revealThread))
+  if (opts?.revealThread) setOverlayThread(true)
+  else if (!wasOpen) setOverlayThread(false)
   requestComposerFocus()
 }
 

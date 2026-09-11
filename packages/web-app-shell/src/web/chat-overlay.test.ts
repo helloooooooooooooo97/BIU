@@ -229,6 +229,17 @@ test('pick opens a compose-only overlay; send reveals the thread', () => {
   assert.equal(getOverlayThread(), false)
 })
 
+test('pick on an already-open overlay keeps the revealed thread', () => {
+  setChatOverlay(false)
+  history.replaceState(null, '', '/database')
+  openOverlayComposer({ revealThread: false })
+  revealOverlayThread()
+  assert.equal(getOverlayThread(), true)
+  openOverlayComposer({ revealThread: false })
+  assert.equal(getOverlayThread(), true)
+  setChatOverlay(false)
+})
+
 test('closeChatOverlay is a no-op when already closed', () => {
   setChatOverlay(false)
   let closed = 0

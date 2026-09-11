@@ -37,7 +37,7 @@ describe('composer dock stacking above sticky user', () => {
     const css = readFileSync(resolve(root, 'web/style.css'), 'utf8')
     const composer = readFileSync(resolve(root, 'packages/core-chat/src/web/composer.tsx'), 'utf8')
     expect(css).toMatch(/\.chat-overlay-panel \{/)
-    expect(css).not.toMatch(/\.chat-overlay-panel\.is-compose-only \.chat-overlay-thread/)
+    expect(css).toMatch(/\.chat-overlay-panel\.is-compose-only \.chat-overlay-thread\s*\{[^}]*display:\s*none/s)
     expect(composer).toContain('revealOverlayThread')
     expect(composer).toContain('isComposerFocusPending')
     expect(composer).toContain('biu:composer-focus')
