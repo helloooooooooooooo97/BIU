@@ -83,6 +83,20 @@ test('after overlay closes, picks do not open the chat until pick mode is on aga
   assert.equal(pick.refs.length, 2)
 })
 
+test('entering pick mode emits pick-mode so the overlay can stay open', () => {
+  const ctx = new Context()
+  const pick = new PickService(ctx)
+  const modes: boolean[] = []
+  const onMode = (event: Event) => {
+    modes.push(Boolean((event as CustomEvent<{ picking?: boolean }>).detail?.picking))
+  }
+  window.addEventListener('biu:pick-mode', onMode)
+  pick.enter()
+  pick.exit()
+  window.removeEventListener('biu:pick-mode', onMode)
+  assert.deepEqual(modes, [true, false])
+})
+
 test('overlay-closed on window exits pick mode and keeps chips', () => {
   const ctx = new Context()
   const pick = new PickService(ctx)

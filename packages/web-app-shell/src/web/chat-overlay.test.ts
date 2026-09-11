@@ -245,6 +245,7 @@ test('toggleOverlayThread expands and collapses the overlay transcript', () => {
 test('collapsed overlay closes on outside click; expanded overlay stays', () => {
   setChatOverlay(true)
   setOverlayThread(false)
+  window.dispatchEvent(new CustomEvent('biu:pick-mode', { detail: { picking: false } }))
   const panel = document.createElement('div')
   panel.setAttribute('data-testid', 'chat-overlay-panel')
   const flyout = document.createElement('div')
@@ -257,6 +258,18 @@ test('collapsed overlay closes on outside click; expanded overlay stays', () => 
   assert.equal(shouldCloseOverlayOnOutside(document.body), false)
   panel.remove()
   flyout.remove()
+  setChatOverlay(false)
+})
+
+test('pick mode opens the overlay and blocks outside dismiss', () => {
+  setChatOverlay(false)
+  history.replaceState(null, '', '/database')
+  window.dispatchEvent(new CustomEvent('biu:pick-mode', { detail: { picking: true } }))
+  assert.equal(getChatOverlay(), true)
+  assert.equal(getOverlayThread(), false)
+  assert.equal(shouldCloseOverlayOnOutside(document.body), false)
+  window.dispatchEvent(new CustomEvent('biu:pick-mode', { detail: { picking: false } }))
+  assert.equal(shouldCloseOverlayOnOutside(document.body), true)
   setChatOverlay(false)
 })
 

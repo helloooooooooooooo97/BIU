@@ -56,7 +56,9 @@ test('pointerup prefers a text selection over object picks', () => {
   assert.match(overlay, /textPickFromSelection/)
   assert.match(overlay, /inReadable/)
   assert.match(overlay, /\.chat-stage/)
-  assert.match(overlay, /page-editor/)
+  assert.match(overlay, /\.page-bubble/)
+  assert.match(overlay, /started.editor/)
+  assert.match(overlay, /locusFromSelection/)
 })
 
 test('pointerup does not attach picks after pick mode has exited', () => {

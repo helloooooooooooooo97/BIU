@@ -245,6 +245,8 @@ describe('composer dock stacking above sticky user', () => {
     expect(kit).toMatch(/pageMention/)
     expect(composer).toMatch(/EditorContent/)
     expect(composer).toMatch(/insertPickChips/)
+    expect(composer).toMatch(/stillMissing/)
+    expect(composer).toMatch(/collectPickKeys\(editor\)/)
     expect(composer).toMatch(/takeDraft/)
     expect(composer).toMatch(/COMPOSER_PASTE_PICK_CHARS/)
     expect(composer).toMatch(/textPickFromPlain/)

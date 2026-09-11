@@ -192,12 +192,14 @@ export function toggleOverlayThread() {
   setOverlayThread(!overlayThread)
 }
 
-/** 收缩态点外面关掉；展开态或点在窗口/弹出菜单里则留下。 */
+/** 收缩态点外面关掉；展开态、选取态或点在窗口/弹出菜单里则留下。 */
 export const OVERLAY_OUTSIDE_KEEP =
   '[data-testid="chat-overlay-panel"], .composer-model-flyout, [data-testid="page-mention"], [data-testid="chat-session-title-pop"], [role="dialog"]'
 
+let pickLive = false
+
 export function shouldCloseOverlayOnOutside(target: EventTarget | null) {
-  if (!overlay || overlayThread) return false
+  if (!overlay || overlayThread || pickLive) return false
   if (!(target instanceof Node)) return true
   const el = target instanceof Element ? target : target.parentElement
   if (!el) return true
@@ -484,12 +486,20 @@ export function clampOverlayChatHeight(height: number, maxHeight = 800) {
   return Math.min(max, Math.max(OVERLAY_CHAT_HEIGHT_MIN, Math.round(height)))
 }
 
+function openPickOverlay() {
+  if (isChatPagePath(window.location.pathname)) {
+    requestComposerFocus()
+    return
+  }
+  openOverlayComposer({ revealThread: false })
+}
+
 if (typeof window !== 'undefined') {
   window.addEventListener('biu:pick-attached', () => {
-    if (isChatPagePath(window.location.pathname)) {
-      requestComposerFocus()
-      return
-    }
-    openOverlayComposer({ revealThread: false })
+    openPickOverlay()
+  })
+  window.addEventListener('biu:pick-mode', (event) => {
+    pickLive = Boolean((event as CustomEvent<{ picking?: boolean }>).detail?.picking)
+    if (pickLive) openPickOverlay()
   })
 }

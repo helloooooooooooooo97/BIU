@@ -613,10 +613,12 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
     if (!editor) return
     const missing = pickRefs.filter((ref) => !pickKeysRef.current.has(pickKey(ref)))
     const nextKeys = new Set(pickRefs.map((item) => pickKey(item)))
+    pickKeysRef.current = nextKeys
     queueMicrotask(() => {
       if (editor.isDestroyed) return
-      insertPickChips(editor, missing)
-      pickKeysRef.current = nextKeys
+      const stillMissing = missing.filter((ref) => !collectPickKeys(editor).has(pickKey(ref)))
+      insertPickChips(editor, stillMissing)
+      pickKeysRef.current = collectPickKeys(editor)
       const draft = pick?.takeDraft()
       if (draft?.text) {
         const prefix = serializeComposer(editor).plain.trim() ? ' ' : ''
