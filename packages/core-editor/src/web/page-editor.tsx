@@ -330,13 +330,6 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
             if (from !== to) setFindQuery(view.state.doc.textBetween(from, to))
             return true
           }
-          if (isSendChatHotkey(event)) {
-            event.preventDefault()
-            const current = editorRef.current
-            const ref = current ? pickFromEditor(current, pathRef.current, titleRef.current) : null
-            if (ref) getPick()?.attach([ref])
-            return true
-          }
           return handleContentTitleNav(view, event)
         },
         handleDOMEvents: {
