@@ -2275,6 +2275,7 @@ body {
 }
 
 .sidebar-group-head:hover .sidebar-add,
+.chat-session-row:hover .sidebar-add,
 .sidebar-add:focus {
   width: 24px;
   min-width: 24px;
@@ -2351,6 +2352,10 @@ body {
 
 .sidebar-session-list .fsdb-view-preview .fsdb-view-preview-records .chat-session-row > .chat-session-row-main {
   padding-left: 33px;
+}
+
+.fsdb-record-kids {
+  padding-left: 11px;
 }
 
 .fsdb-view-preview-hint,

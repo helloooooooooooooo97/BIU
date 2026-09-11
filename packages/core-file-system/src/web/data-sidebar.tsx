@@ -1,4 +1,4 @@
-import { memo, useEffect, useLayoutEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { memo, useEffect, useLayoutEffect, useMemo, useState, useSyncExternalStore, type MouseEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { ChatCount, RecordEmojiBoard, SidebarFold } from '@biu/public-ui'
 import {
@@ -12,9 +12,10 @@ import {
 } from '@heroicons/react/16/solid'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import type { CollectionInfo, CollectionSchema, DbRecord } from '@biu/type-file-system'
-import { groupField, groupRecords } from './fields.ts'
+import { groupField, groupRecords, parentFieldKey, treeChildren } from './fields.ts'
 import { builtinAllViewId } from '../catalog-views.ts'
-import { isSystemCollection, sortDataCollections } from './database-path.ts'
+import { isRecordTreeCollection, isSystemCollection, sortDataCollections } from './database-path.ts'
+import { readJson } from './db-client.ts'
 import { viewsForRegisteredCollection } from './collection-nav.ts'
 import type { SavedView } from './saved-view.ts'
 import {
@@ -34,12 +35,18 @@ import {
 } from './sidebar-preview.ts'
 import {
   activeViewStorageKey,
+  getStarredRecords,
+  getStarredRecordsVersion,
   getStarredViews,
   getStarredViewsVersion,
+  isRecordStarred,
   isViewStarred,
   loadViews,
+  persistStarredRecords,
   persistStarredViews,
+  subscribeStarredRecords,
   subscribeStarredViews,
+  toggleStarredRecord,
   toggleStarredView,
   withViewDisplay,
 } from './view-storage.ts'
@@ -87,9 +94,13 @@ function ViewRecordPreview({
     error: '',
   }))
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({})
+  const [openKids, setOpenKids] = useState<Record<string, boolean>>({})
   const [pickerId, setPickerId] = useState<string | null>(null)
   const [pickerAnchor, setPickerAnchor] = useState<HTMLElement | null>(null)
   const chromeIcon = getDatabaseUi()?.chrome(path).Icon
+  const nested = isRecordTreeCollection(path)
+  useSyncExternalStore(subscribeStarredRecords, getStarredRecordsVersion, () => 0)
+  const starredRecords = getStarredRecords()
 
   useEffect(() => {
     if (!open) return
@@ -155,67 +166,185 @@ function ViewRecordPreview({
     if (!grouping) return null
     return groupRecords(state.items, state.schema, view.groupBy).filter((bucket) => bucket.rows.length)
   }, [grouping, state.items, state.schema, view.groupBy])
+  const parentKey = nested ? parentFieldKey(state.schema, state.items) ?? 'parentId' : null
 
-  function renderRecords(rows: DbRecord[]) {
+  function toggleKid(id: string) {
+    setOpenKids((prev) => ({ ...prev, [id]: !prev[id] }))
+  }
+
+  function toggleRecordStar(recordId: string) {
+    persistStarredRecords(toggleStarredRecord(getStarredRecords(), path, recordId))
+  }
+
+  async function createChild(row: DbRecord) {
+    if (!parentKey) return
+    try {
+      const data = await readJson<{ items?: Array<{ value?: DbRecord }> }>('/api/db/create', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ path, records: [{ [parentKey]: row.id }] }),
+      })
+      const created = data.items?.[0]?.value
+      const items = created ? [...state.items, created] : state.items
+      const total = state.total + (created ? 1 : 0)
+      previewCache.set(key, { items, total, schema: state.schema })
+      rememberPreviewTotal(key, total)
+      setState((prev) => ({ ...prev, items, total }))
+      setOpenKids((prev) => ({ ...prev, [row.id]: true }))
+      window.dispatchEvent(new Event('fsdb:change'))
+      if (created?.id) onOpenRecord?.(created.id, created)
+    } catch (err) {
+      setState((prev) => ({ ...prev, error: String(err) }))
+    }
+  }
+
+  function recordFace(row: DbRecord) {
+    const emoji = recordPreviewEmoji(row)
+    return emoji ? <span className="fsdb-record-emoji">{emoji}</span> : <RecordMark record={row} tableIcon={tableIcon} Icon={chromeIcon} />
+  }
+
+  function emojiBoard(row: DbRecord) {
+    if (pickerId !== row.id || !pickerAnchor) return null
+    return (
+      <RecordEmojiBoard
+        anchor={pickerAnchor}
+        onPick={(next) => void saveEmoji(row, next)}
+        onClear={() => void saveEmoji(row, '')}
+        onClose={() => {
+          setPickerId(null)
+          setPickerAnchor(null)
+        }}
+      />
+    )
+  }
+
+  function openEmojiPicker(event: MouseEvent<HTMLElement>, row: DbRecord) {
+    event.preventDefault()
+    event.stopPropagation()
+    const btn = event.currentTarget
+    setPickerId((prev) => {
+      if (prev === row.id) {
+        setPickerAnchor(null)
+        return null
+      }
+      setPickerAnchor(btn)
+      return row.id
+    })
+  }
+
+  function renderRecords(scope: DbRecord[], parentId = '') {
+    const rows = parentKey ? treeChildren(scope, parentKey, parentId) : parentId ? [] : scope
     return rows.map((row) => {
-      const emoji = recordPreviewEmoji(row)
-      return (
-        <div
-          key={row.id}
-          className="chat-session-row"
-          role="listitem"
-          {...pickDomAttrs(recordKind, row.id, recordPreviewLabel(row))}
-        >
-          <div className="chat-session-row-main flex min-w-0 flex-1 items-center gap-1.5 py-1 text-left text-[14px] leading-5">
-            <span className="fsdb-record-icon relative grid size-6 shrink-0 place-items-center">
+      const label = recordPreviewLabel(row)
+      const kids = parentKey ? treeChildren(scope, parentKey, row.id) : []
+      const kidCount = kids.length
+      const expanded = Boolean(openKids[row.id])
+      const starred = isRecordStarred(starredRecords, path, row.id)
+      if (!nested) {
+        return (
+          <div
+            key={row.id}
+            className="chat-session-row"
+            role="listitem"
+            {...pickDomAttrs(recordKind, row.id, label)}
+          >
+            <div className="chat-session-row-main flex min-w-0 flex-1 items-center gap-1.5 py-1 text-left text-[14px] leading-5">
+              <span className="fsdb-record-icon relative grid size-6 shrink-0 place-items-center">
+                <button
+                  type="button"
+                  className="grid size-6 place-items-center border-0 bg-transparent p-0 text-[16px] leading-none text-inherit"
+                  title={recordPreviewEmoji(row) ? '更换图标' : '设置图标'}
+                  aria-label={recordPreviewEmoji(row) ? `更换 ${label} 的图标` : `设置 ${label} 的图标`}
+                  onClick={(event) => openEmojiPicker(event, row)}
+                >
+                  {recordFace(row)}
+                </button>
+                {emojiBoard(row)}
+              </span>
               <button
                 type="button"
-                className="grid size-6 place-items-center border-0 bg-transparent p-0 text-[16px] leading-none text-inherit"
-                title={emoji ? '更换图标' : '设置图标'}
-                aria-label={emoji ? `更换 ${recordPreviewLabel(row)} 的图标` : `设置 ${recordPreviewLabel(row)} 的图标`}
+                className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit"
+                title={label}
                 onClick={(event) => {
                   event.stopPropagation()
-                  const btn = event.currentTarget
-                  setPickerId((prev) => {
-                    if (prev === row.id) {
-                      setPickerAnchor(null)
-                      return null
-                    }
-                    setPickerAnchor(btn)
-                    return row.id
-                  })
+                  onOpenRecord?.(row.id, row)
                 }}
               >
-                {emoji ? (
-                  <span className="fsdb-record-emoji">{emoji}</span>
-                ) : (
-                  <RecordMark record={row} tableIcon={tableIcon} Icon={chromeIcon} />
-                )}
+                {label}
               </button>
-              {pickerId === row.id && pickerAnchor ? (
-                <RecordEmojiBoard
-                  anchor={pickerAnchor}
-                  onPick={(next) => void saveEmoji(row, next)}
-                  onClear={() => void saveEmoji(row, '')}
-                  onClose={() => {
-                    setPickerId(null)
-                    setPickerAnchor(null)
-                  }}
-                />
-              ) : null}
-            </span>
+            </div>
+          </div>
+        )
+      }
+      return (
+        <div key={row.id} className="min-w-0" role="listitem">
+          <div
+            className={`chat-session-row group${starred ? ' is-pinned' : ''}`}
+            {...pickDomAttrs(recordKind, row.id, label)}
+          >
+            <div className="chat-session-row-main flex min-w-0 flex-1 items-center gap-1.5 py-1 text-left text-[14px] leading-5">
+              <button
+                type="button"
+                className="relative grid size-6 shrink-0 place-items-center border-0 bg-transparent p-0 text-inherit"
+                title={expanded ? '收起子记录' : '展开子记录'}
+                aria-expanded={expanded}
+                onClick={() => toggleKid(row.id)}
+                onContextMenu={(event) => openEmojiPicker(event, row)}
+              >
+                <span className="sidebar-rail-icon sidebar-group-fold">
+                  <span className="sidebar-group-fold-face">{recordFace(row)}</span>
+                  <span className="sidebar-group-fold-chevron">
+                    {expanded ? (
+                      <ChevronDownIcon className="size-4 shrink-0 opacity-80" />
+                    ) : (
+                      <ChevronRightIcon className="size-4 shrink-0 opacity-80" />
+                    )}
+                  </span>
+                </span>
+                {emojiBoard(row)}
+              </button>
+              <button
+                type="button"
+                className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit"
+                title={label}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onOpenRecord?.(row.id, row)
+                }}
+              >
+                {label}
+              </button>
+            </div>
+            <ChatCount count={kidCount} title={`${kidCount} 个子记录`} />
             <button
               type="button"
-              className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit"
-              title={recordPreviewLabel(row)}
+              className="sidebar-add"
+              title={`在 ${label} 下添加子记录`}
+              aria-label={`在 ${label} 下添加子记录`}
               onClick={(event) => {
                 event.stopPropagation()
-                onOpenRecord?.(row.id, row)
+                void createChild(row)
               }}
             >
-              {recordPreviewLabel(row)}
+              <PlusIcon className="size-4 shrink-0" />
+            </button>
+            <button
+              type="button"
+              className={`chat-session-row-star${starred ? ' is-on' : ''}`}
+              aria-pressed={starred}
+              aria-label={starred ? `取消收藏 ${label}` : `收藏 ${label}`}
+              title={starred ? '取消收藏' : '收藏'}
+              onClick={(event) => {
+                event.stopPropagation()
+                toggleRecordStar(row.id)
+              }}
+            >
+              <StarIcon className={`size-4 shrink-0${starred ? ' text-[#f5b700]' : ''}`} />
             </button>
           </div>
+          <SidebarFold open={expanded}>
+            <div className="fsdb-record-kids">{renderRecords(scope, row.id)}</div>
+          </SidebarFold>
         </div>
       )
     })

@@ -55,6 +55,16 @@ export function parentFieldKey(schema: CollectionSchema | undefined, rows: DbRec
   return null
 }
 
+/** 当前列表里某条记录的直接子行（parent 不在列表里的当根）。 */
+export function treeChildren(rows: DbRecord[], parentKey: string, parentId: string): DbRecord[] {
+  const ids = new Set(rows.map((row) => row.id))
+  return rows.filter((row) => {
+    const raw = String(row[parentKey] ?? '')
+    const parent = raw && raw !== row.id && ids.has(raw) ? raw : ''
+    return parent === parentId
+  })
+}
+
 /** 当前数据里是否真有父子链接；没有则不当树形表。 */
 export function hasTreeLinks(rows: DbRecord[], parentKey: string | null): boolean {
   if (!parentKey || !rows.length) return false

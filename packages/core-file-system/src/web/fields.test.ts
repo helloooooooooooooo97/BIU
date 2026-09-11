@@ -2,7 +2,7 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import type { CollectionSchema } from '@biu/type-file-system'
 import { REQUIRED_RECORD_FIELDS, normalizeSchemaValue } from '@biu/type-file-system'
-import { defaultColumnKeys, facetFlatColumnKey, flattenFacetColumns, facetColumnTitle, inferPackFieldType, listProjectionKeys, parseFacetFlatColumnKey, patchFacetFlatValue, pinLabelColumn, contentFieldKey, flattenTree, formatField, fieldHasValue, groupField, groupRecords, hasTreeLinks, isViewModeId, matchActionWhen, overlayListed, previewActionRecord, parentFieldKey, readFacetFlatValue, recordLinkIds, resolveFieldType, uniqueValues } from './fields'
+import { defaultColumnKeys, facetFlatColumnKey, flattenFacetColumns, facetColumnTitle, inferPackFieldType, listProjectionKeys, parseFacetFlatColumnKey, patchFacetFlatValue, pinLabelColumn, contentFieldKey, flattenTree, formatField, fieldHasValue, groupField, groupRecords, hasTreeLinks, treeChildren, isViewModeId, matchActionWhen, overlayListed, previewActionRecord, parentFieldKey, readFacetFlatValue, recordLinkIds, resolveFieldType, uniqueValues } from './fields'
 import { placedActions, visibleActions } from './fsdb-cells.tsx'
 
 test('isViewModeId accepts builtin and custom slugs', () => {
@@ -254,6 +254,28 @@ test('parentFieldKey reads schema then parentId then data links', () => {
       ],
     ),
     'folder',
+  )
+})
+
+test('treeChildren lists direct kids and treats missing parents as roots', () => {
+  const rows = [
+    { id: 'p', title: 'parent' },
+    { id: 'c2', title: 'second', parentId: 'p' },
+    { id: 'c1', title: 'first', parentId: 'p' },
+    { id: 'g', title: 'grand', parentId: 'c1' },
+    { id: 'orphan', title: 'orphan', parentId: 'gone' },
+  ]
+  assert.deepEqual(
+    treeChildren(rows, 'parentId', '').map((row) => row.id),
+    ['p', 'orphan'],
+  )
+  assert.deepEqual(
+    treeChildren(rows, 'parentId', 'p').map((row) => row.id),
+    ['c2', 'c1'],
+  )
+  assert.deepEqual(
+    treeChildren(rows, 'parentId', 'c1').map((row) => row.id),
+    ['g'],
   )
 })
 

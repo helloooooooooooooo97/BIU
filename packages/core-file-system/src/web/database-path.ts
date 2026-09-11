@@ -37,6 +37,14 @@ export const FACETS_COLLECTION_PATH = '/facets'
 export const EVENTS_COLLECTION_PATH = '/events'
 export const NOTICES_COLLECTION_PATH = '/notices'
 export const PAGE_BLOCKS_COLLECTION_PATH = '/page-blocks'
+export const PAGES_COLLECTION_PATH = '/pages'
+export const TASKS_COLLECTION_PATH = '/tasks'
+
+/** 数据侧栏记录行按 parentId 嵌套：只有页面和任务。 */
+export function isRecordTreeCollection(path: string) {
+  const normalized = normalizeCollectionPath(path)
+  return normalized === PAGES_COLLECTION_PATH || normalized === TASKS_COLLECTION_PATH
+}
 
 const SYSTEM_COLLECTION_ORDER = [VIEWS_COLLECTION_PATH, EVENTS_COLLECTION_PATH, NOTICES_COLLECTION_PATH] as const
 

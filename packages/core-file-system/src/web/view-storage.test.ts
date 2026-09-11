@@ -8,6 +8,8 @@ import {
   persistViewDisplay,
   rememberRecords,
   savedViewFromRecord,
+  toggleStarredRecord,
+  isRecordStarred,
   viewDisplayKey,
   viewForPath,
   withViewDisplay,
@@ -126,4 +128,11 @@ test('rememberRecords scopes crumb rows to the current view', () => {
   )
   assert.equal(loadRecords('/pages', 'mine').some((row) => row.id === 't1'), false)
   assert.equal(loadRecords('/pages', 'all').some((row) => row.id === 't1'), false)
+})
+
+test('starred records toggle by collection path and id', () => {
+  const next = toggleStarredRecord([], '/pages', 'home')
+  assert.equal(isRecordStarred(next, '/pages', 'home'), true)
+  assert.equal(isRecordStarred(next, '/tasks', 'home'), false)
+  assert.equal(isRecordStarred(toggleStarredRecord(next, '/pages', 'home'), '/pages', 'home'), false)
 })

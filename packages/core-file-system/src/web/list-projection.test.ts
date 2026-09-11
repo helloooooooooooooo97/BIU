@@ -16,7 +16,7 @@ test('table list and previews pass view columns to /api/db/list', () => {
   assert.match(browser, /\/api\/db\/read\?path=/)
   assert.match(client, /if \(opts\.columns\?\.length\) params\.set\('columns'/)
   assert.match(host, /columns: parseListColumnsParam\(route\.query\.get\('columns'\)\)/)
-  assert.match(preview, /columns: \['title', 'emoji', 'mascot'\]/)
+  assert.match(preview, /columns: \['title', 'emoji', 'mascot', 'parentId'\]/)
   assert.match(people, /columns: \['title', 'mascot'\]/)
   assert.match(links, /columns: \['label'\]/)
 })

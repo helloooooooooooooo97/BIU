@@ -303,6 +303,62 @@ export function toggleStarredView(items: StarredView[], path: string, viewId: st
   return [...items, { path, viewId }]
 }
 
+export type StarredRecord = { path: string; recordId: string }
+
+const STARRED_RECORDS_KEY = 'fsdb.starredRecords'
+
+export function loadStarredRecords(): StarredRecord[] {
+  try {
+    const raw = localStorage.getItem(STARRED_RECORDS_KEY)
+    const parsed = raw ? (JSON.parse(raw) as unknown) : []
+    if (!Array.isArray(parsed)) return []
+    return parsed.flatMap((item) => {
+      if (!item || typeof item !== 'object') return []
+      const rec = item as Record<string, unknown>
+      const path = String(rec.path ?? '').trim()
+      const recordId = String(rec.recordId ?? '').trim()
+      return path && recordId ? [{ path, recordId }] : []
+    })
+  } catch {
+    return []
+  }
+}
+
+let starredRecords = loadStarredRecords()
+let starredRecordsVersion = 0
+const starredRecordListeners = new Set<() => void>()
+
+export function getStarredRecords() {
+  return starredRecords
+}
+
+export function subscribeStarredRecords(fn: () => void) {
+  starredRecordListeners.add(fn)
+  return () => {
+    starredRecordListeners.delete(fn)
+  }
+}
+
+export function getStarredRecordsVersion() {
+  return starredRecordsVersion
+}
+
+export function persistStarredRecords(items: StarredRecord[]) {
+  starredRecords = items
+  starredRecordsVersion += 1
+  localStorage.setItem(STARRED_RECORDS_KEY, JSON.stringify(items))
+  for (const fn of starredRecordListeners) fn()
+}
+
+export function isRecordStarred(items: StarredRecord[], path: string, recordId: string) {
+  return items.some((item) => item.path === path && item.recordId === recordId)
+}
+
+export function toggleStarredRecord(items: StarredRecord[], path: string, recordId: string): StarredRecord[] {
+  if (isRecordStarred(items, path, recordId)) return items.filter((item) => item.path !== path || item.recordId !== recordId)
+  return [...items, { path, recordId }]
+}
+
 const DISPLAY_KEYS = [
   'mode',
   'sortField',

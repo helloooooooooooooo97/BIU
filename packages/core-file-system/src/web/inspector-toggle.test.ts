@@ -109,6 +109,25 @@ test('sidebar records paint detail immediately without reloading the view', () =
   assert.match(detail, /<RecordEmojiBoard/)
 })
 
+test('pages and tasks sidebar records nest by parentId; other tables stay flat', () => {
+  const sidebar = readFileSync(resolve(import.meta.dirname, './data-sidebar.tsx'), 'utf8')
+  const css = readFileSync(resolve(import.meta.dirname, '../../../../web/style.css'), 'utf8')
+  const path = readFileSync(resolve(import.meta.dirname, './database-path.ts'), 'utf8')
+  assert.match(path, /PAGES_COLLECTION_PATH = '\/pages'/)
+  assert.match(path, /TASKS_COLLECTION_PATH = '\/tasks'/)
+  assert.match(path, /function isRecordTreeCollection/)
+  assert.match(sidebar, /isRecordTreeCollection\(path\)/)
+  assert.match(sidebar, /treeChildren\(scope, parentKey, parentId\)/)
+  assert.match(sidebar, /title=\{\`\$\{kidCount\} 个子记录\`\}/)
+  assert.match(sidebar, /在 \$\{label\} 下添加子记录/)
+  assert.match(sidebar, /toggleStarredRecord/)
+  assert.match(sidebar, /records: \[\{ \[parentKey\]: row\.id \}\]/)
+  assert.match(sidebar, /if \(!nested\)/)
+  assert.match(css, /\.chat-session-row:hover \.sidebar-add/)
+  assert.match(css, /\.fsdb-record-kids/)
+  assert.doesNotMatch(css, /\.chat-session-row:hover \.sidebar-group-fold-chevron/)
+})
+
 test('table title opens record from the title-side button', () => {
   assert.match(browser, /data-testid="record-title-open"/)
   assert.match(browser, /data-testid="record-title-split"/)

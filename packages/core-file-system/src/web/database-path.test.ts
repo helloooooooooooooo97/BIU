@@ -1,7 +1,7 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { parseAppPath } from '@biu/web-session-view'
-import { DATA_MODULE, databaseAllViewPath, databaseRecordPath, databaseViewPath, isSystemCollection, sortDataCollections, viewsCatalogSource } from './database-path.ts'
+import { DATA_MODULE, databaseAllViewPath, databaseRecordPath, databaseViewPath, isRecordTreeCollection, isSystemCollection, sortDataCollections, viewsCatalogSource } from './database-path.ts'
 
 const plugins = [DATA_MODULE]
 
@@ -50,6 +50,15 @@ test('table path without view still parses as a collection-view URL', () => {
     assert.equal(parsed.collection, '/tasks')
     assert.equal(parsed.viewId, undefined)
   }
+})
+
+test('only pages and tasks nest records in the data sidebar', () => {
+  assert.equal(isRecordTreeCollection('/pages'), true)
+  assert.equal(isRecordTreeCollection('/pages/'), true)
+  assert.equal(isRecordTreeCollection('/tasks'), true)
+  assert.equal(isRecordTreeCollection('/sessions'), false)
+  assert.equal(isRecordTreeCollection('/page-blocks'), false)
+  assert.equal(isRecordTreeCollection('/plugins'), false)
 })
 
 test('views catalog source is a query filter', () => {
