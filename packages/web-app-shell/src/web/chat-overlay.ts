@@ -192,6 +192,18 @@ export function toggleOverlayThread() {
   setOverlayThread(!overlayThread)
 }
 
+/** 收缩态点外面关掉；展开态或点在窗口/弹出菜单里则留下。 */
+export const OVERLAY_OUTSIDE_KEEP =
+  '[data-testid="chat-overlay-panel"], .composer-model-flyout, [data-testid="page-mention"], [data-testid="chat-session-title-pop"], [role="dialog"]'
+
+export function shouldCloseOverlayOnOutside(target: EventTarget | null) {
+  if (!overlay || overlayThread) return false
+  if (!(target instanceof Node)) return true
+  const el = target instanceof Element ? target : target.parentElement
+  if (!el) return true
+  return !el.closest(OVERLAY_OUTSIDE_KEEP)
+}
+
 let composerFocusPending = false
 
 export function requestComposerFocus() {

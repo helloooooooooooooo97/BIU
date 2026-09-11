@@ -24,6 +24,7 @@ import {
   revealOverlayThread,
   toggleOverlayThread,
   setOverlayThread,
+  shouldCloseOverlayOnOutside,
   getOverlayAutohide,
   setOverlayAutohide,
   requestOverlayAutohide,
@@ -238,6 +239,24 @@ test('toggleOverlayThread expands and collapses the overlay transcript', () => {
   assert.equal(getOverlayThread(), true)
   toggleOverlayThread()
   assert.equal(getOverlayThread(), false)
+  setChatOverlay(false)
+})
+
+test('collapsed overlay closes on outside click; expanded overlay stays', () => {
+  setChatOverlay(true)
+  setOverlayThread(false)
+  const panel = document.createElement('div')
+  panel.setAttribute('data-testid', 'chat-overlay-panel')
+  const flyout = document.createElement('div')
+  flyout.className = 'composer-model-flyout'
+  document.body.append(panel, flyout)
+  assert.equal(shouldCloseOverlayOnOutside(panel), false)
+  assert.equal(shouldCloseOverlayOnOutside(flyout), false)
+  assert.equal(shouldCloseOverlayOnOutside(document.body), true)
+  setOverlayThread(true)
+  assert.equal(shouldCloseOverlayOnOutside(document.body), false)
+  panel.remove()
+  flyout.remove()
   setChatOverlay(false)
 })
 

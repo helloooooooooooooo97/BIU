@@ -139,3 +139,40 @@ test('compose-only overlay shows the thread after send', () => {
   assert.equal(getOverlayThread(), true)
   assert.equal(panel.classList.contains('is-compose-only'), false)
 })
+
+test('compose-only overlay closes when clicking outside; expanded does not', () => {
+  host = document.createElement('div')
+  document.body.append(host)
+  root = createRoot(host)
+  setChatOverlay(true)
+  setOverlayThread(false)
+  act(() => {
+    root!.render(
+      createElement(OverlayChatWindow, {
+        header: createElement('div'),
+        thread: createElement('div'),
+        dock: createElement('div'),
+      }),
+    )
+  })
+  act(() => {
+    document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+  })
+  assert.equal(getChatOverlay(), false)
+
+  setChatOverlay(true)
+  setOverlayThread(true)
+  act(() => {
+    root!.render(
+      createElement(OverlayChatWindow, {
+        header: createElement('div'),
+        thread: createElement('div'),
+        dock: createElement('div'),
+      }),
+    )
+  })
+  act(() => {
+    document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+  })
+  assert.equal(getChatOverlay(), true)
+})

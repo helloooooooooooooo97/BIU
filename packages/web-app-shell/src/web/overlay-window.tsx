@@ -5,6 +5,7 @@ import {
   getOverlayThread,
   overlayLayoutGeom,
   readOverlayWinState,
+  shouldCloseOverlayOnOutside,
   subscribeOverlayThread,
   writeOverlayWinState,
   type OverlayWinGeom,
@@ -51,6 +52,15 @@ export function OverlayChatWindow({
     window.addEventListener('biu:overlay-focus', onFocus)
     return () => window.removeEventListener('biu:overlay-focus', onFocus)
   }, [bringFront])
+
+  useEffect(() => {
+    const onOutside = (event: PointerEvent) => {
+      if (!shouldCloseOverlayOnOutside(event.target)) return
+      closeChatOverlay()
+    }
+    document.addEventListener('pointerdown', onOutside)
+    return () => document.removeEventListener('pointerdown', onOutside)
+  }, [])
 
   useEffect(() => {
     const el = boxRef.current
