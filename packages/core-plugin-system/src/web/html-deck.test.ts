@@ -7,6 +7,8 @@ import {
   htmlDeckEnabled,
   htmlDeckIndex,
   htmlDeckKeyAction,
+  htmlLooksFillLayout,
+  HTML_FILL_HOST_PX,
   stepHtmlDeck,
 } from '../../../../.plugin-dev/page-html-blocks/html-deck.ts'
 
@@ -72,6 +74,14 @@ test('fullscreen deck fills the viewport', async () => {
   assert.doesNotMatch(src, /justifyContent: 'safe center'/)
   assert.doesNotMatch(src, /min\(100%, 960px\)/)
   assert.doesNotMatch(src, /padding: 32/)
+})
+
+test('poster html with height 100% and absolute children fills a host', () => {
+  const magazine = `<div style="min-height:100%;height:100%;display:flex"><p>刊</p></div>`
+  const poster = `<div style="height:100%;overflow:hidden;position:relative"><div style="position:absolute">初番</div><div style="position:absolute">二番</div><div style="position:absolute">三番</div></div>`
+  assert.equal(htmlLooksFillLayout(magazine), false)
+  assert.equal(htmlLooksFillLayout(poster), true)
+  assert.equal(HTML_FILL_HOST_PX, 280)
 })
 
 test('arrow keys drive the deck', () => {

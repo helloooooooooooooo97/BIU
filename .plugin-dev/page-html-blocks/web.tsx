@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom'
-import { bindHtmlSlide, collectHtmlSlides, cssBoxSize, htmlDeckEnabled, htmlDeckIndex, htmlDeckKeyAction, stepHtmlDeck } from './html-deck.ts'
+import { bindHtmlSlide, collectHtmlSlides, cssBoxSize, htmlDeckEnabled, htmlDeckIndex, htmlDeckKeyAction, htmlLooksFillLayout, HTML_FILL_HOST_PX, stepHtmlDeck } from './html-deck.ts'
 import { htmlBlockKey, stampHtmlPickSurfaces, stampHtmlSource } from './stamp-picks.ts'
 
 const React = globalThis.React
@@ -559,12 +559,16 @@ const HTML_EDITORIAL_SAMPLE = `<div style="box-sizing:border-box;min-height:100%
 
 const HTML_DIRECT_SAMPLE = HTML_EDITORIAL_SAMPLE
 
+const HTML_FILL_CSS = `.html-direct-fill-inner{height:100%;min-height:100%}.html-direct-fill-inner>:first-child{height:100%!important;min-height:100%;box-sizing:border-box}`
+
 function HtmlDirectCard({ data, update, writable }: BlockProps) {
   const ro = !writable
   const html = String(data.html ?? '')
   const width = data.width
   const height = data.height
-  const sized = (width != null && width !== '') || (height != null && height !== '')
+  const fill = htmlLooksFillLayout(html)
+  const fillHost = fill && (height == null || height === '')
+  const sized = (width != null && width !== '') || (height != null && height !== '') || fillHost
   const deckOn = htmlDeckEnabled(data.deck)
   const [editing, setEditing] = useState(false)
   const [hover, setHover] = useState(false)
@@ -579,10 +583,11 @@ function HtmlDirectCard({ data, update, writable }: BlockProps) {
     <div
       ref={hostRef}
       data-testid="page-html-direct"
+      className={fill ? 'html-direct-fill' : undefined}
       style={{
         position: 'relative',
         width: cssBoxSize(width) ?? '100%',
-        height: cssBoxSize(height),
+        height: cssBoxSize(height) ?? (fillHost ? HTML_FILL_HOST_PX : undefined),
         maxWidth: '100%',
         overflow: sized ? 'auto' : undefined,
         boxSizing: 'border-box',
@@ -590,6 +595,7 @@ function HtmlDirectCard({ data, update, writable }: BlockProps) {
       onPointerEnter={() => setHover(true)}
       onPointerLeave={() => setHover(false)}
     >
+      {fill ? <style>{HTML_FILL_CSS}</style> : null}
       {(hover || editing) && (
         <FloatBar
           editing={editing}
@@ -605,7 +611,11 @@ function HtmlDirectCard({ data, update, writable }: BlockProps) {
       {editing ? (
         <SourceEditor html={html} onChange={(v) => update({ html: v })} />
       ) : (
-        <div style={{ overflowX: sized ? undefined : 'auto' }} dangerouslySetInnerHTML={{ __html: stamped }} />
+        <div
+          className={fill ? 'html-direct-fill-inner' : undefined}
+          style={{ overflowX: sized ? undefined : 'auto', height: fill ? '100%' : undefined }}
+          dangerouslySetInnerHTML={{ __html: stamped }}
+        />
       )}
       {ro || editing ? null : <SizeGrip reveal={hover} boxRef={hostRef} onSize={(next) => update(next)} />}
       {deck.overlay}
