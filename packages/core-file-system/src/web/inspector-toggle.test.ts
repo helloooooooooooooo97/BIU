@@ -400,6 +400,8 @@ test('create record sits at the right of the toolbar with a blue label', () => {
   assert.match(css, /\.fsdb-check-slot\.is-hover \.fsdb-row-check/)
   assert.match(css, /\.fsdb-check-slot:hover \.fsdb-row-check/)
   assert.match(browser, /paintCheckHover/)
+  assert.match(browser, /CSS as DndCSS/)
+  assert.match(browser, /typeof CSS\.escape === 'function' \? CSS\.escape\(next\)/)
   assert.doesNotMatch(browser, /setCheckHover/)
   assert.match(browser, /data-check=\{slot\.kind === 'head' \? 'head' : slot\.id\}/)
   assert.match(css, /fsdb-check-rail/)

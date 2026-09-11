@@ -11,7 +11,7 @@ import {
 } from '@dnd-kit/core'
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
+import { CSS as DndCSS } from '@dnd-kit/utilities'
 import {
   ArrowPathIcon,
   ArrowsPointingOutIcon,
@@ -333,7 +333,7 @@ function ColumnDragRow({
     <ColumnRowShell
       rowRef={setNodeRef}
       className={isDragging ? 'is-drag' : undefined}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
+      style={{ transform: DndCSS.Transform.toString(transform), transition }}
       grip={
         <button type="button" className="fsdb-query-grip" aria-label="拖动调整列顺序" {...attributes} {...listeners}>
           <DndGrip />
@@ -1211,7 +1211,7 @@ export function CollectionBrowser({
         el.classList.remove('is-hover')
       }
       if (next) {
-        const hit = root.querySelector(`[data-check="${CSS.escape(next)}"]`)
+        const hit = root.querySelector(`[data-check="${typeof CSS !== 'undefined' && typeof CSS.escape === 'function' ? CSS.escape(next) : next}"]`)
         hit?.classList.add('is-hover')
       }
     }
