@@ -4384,6 +4384,21 @@ body {
   max-height: min(72vh, 640px);
   transform: translateY(-50%);
   pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.16s ease;
+}
+
+.chat-outline::before {
+  content: '';
+  position: absolute;
+  inset: -48px auto -48px -12px;
+  width: 40px;
+  pointer-events: auto;
+}
+
+.chat-outline:hover,
+.chat-outline:focus-within {
+  opacity: 1;
 }
 
 .chat-outline-rail {

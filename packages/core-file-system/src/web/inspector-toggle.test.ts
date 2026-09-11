@@ -480,6 +480,8 @@ test('database extras sit after the record detail, not in the inspector', () => 
   assert.match(style, /\.fsdb-detail-float-nav\{[^}]*background:#202020/)
   assert.match(style, /\.fsdb-detail-float-nav\{[^}]*width:0/)
   assert.match(style, /\.fsdb-detail-float-nav\{[^}]*translate\(-40px,-50%\)/)
+  assert.match(style, /\.fsdb-detail-float-nav\{[^}]*opacity:0/)
+  assert.match(style, /\.fsdb-detail-float-nav:hover,\.fsdb-detail-float-nav:focus-within,\.fsdb-detail-float-nav:has\(\[aria-expanded=true\]\)\{[^}]*opacity:1/)
   assert.match(style, /\.fsdb-detail-screen\{[^}]*width:100%/)
   assert.match(style, /\.fsdb-detail-float-btn\{[^}]*width:24px/)
   assert.match(style, /\.fsdb-detail-float-btn\{[^}]*color:#F0EFED/)
