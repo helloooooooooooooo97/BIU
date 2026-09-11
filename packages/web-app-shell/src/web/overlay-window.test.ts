@@ -19,6 +19,7 @@ afterEach(() => {
   host = null
   setChatOverlay(false)
   setOverlayThread(false)
+  window.dispatchEvent(new CustomEvent('biu:pick-mode', { detail: { picking: false } }))
   try {
     localStorage.removeItem('cordis.overlay.geom')
   } catch {
@@ -164,6 +165,28 @@ test('compose-only overlay closes when clicking outside; expanded does not', () 
 
   setChatOverlay(true)
   setOverlayThread(true)
+  act(() => {
+    root!.render(
+      createElement(OverlayChatWindow, {
+        header: createElement('div'),
+        thread: createElement('div'),
+        dock: createElement('div'),
+      }),
+    )
+  })
+  act(() => {
+    document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+  })
+  assert.equal(getChatOverlay(), true)
+})
+
+test('compose-only overlay stays while pick mode is on', () => {
+  host = document.createElement('div')
+  document.body.append(host)
+  root = createRoot(host)
+  window.dispatchEvent(new CustomEvent('biu:pick-mode', { detail: { picking: true } }))
+  setChatOverlay(true)
+  setOverlayThread(false)
   act(() => {
     root!.render(
       createElement(OverlayChatWindow, {
