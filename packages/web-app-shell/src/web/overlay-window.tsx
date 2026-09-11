@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
-import { ChatBubbleLeftRightIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import { ChatPane } from '@biu/public-ui'
 import {
   closeChatOverlay,
   getOverlayThread,
   overlayLayoutGeom,
   readOverlayWinState,
-  revealOverlayThread,
   subscribeOverlayThread,
   writeOverlayWinState,
   type OverlayWinGeom,
@@ -146,40 +144,9 @@ export function OverlayChatWindow({
       style={{ top: geom.y, left: geom.x, width: geom.w, height: geom.h, zIndex: z }}
       onPointerDown={bringFront}
     >
-      {threadOpen ? (
-        <div className="chat-overlay-head" data-testid="chat-overlay-head">
-          {header}
-        </div>
-      ) : (
-        <div className="chat-overlay-peek" data-testid="chat-overlay-peek">
-          <div className="chat-overlay-peek-chip">
-            <button
-              type="button"
-              className="chat-overlay-peek-open"
-              title="查看对话"
-              aria-label="查看对话"
-              onClick={() => revealOverlayThread()}
-            >
-              <ChatBubbleLeftRightIcon className="chat-overlay-peek-icon" aria-hidden />
-              查看对话
-            </button>
-            <button
-              type="button"
-              className="chat-overlay-peek-x"
-              title="关闭聊天窗口"
-              aria-label="关闭聊天窗口"
-              data-testid="chat-overlay-close"
-              onPointerDown={(event) => {
-                event.preventDefault()
-                event.stopPropagation()
-                closeChatOverlay()
-              }}
-            >
-              <XMarkIcon className="chat-overlay-peek-icon" aria-hidden />
-            </button>
-          </div>
-        </div>
-      )}
+      <div className="chat-overlay-head" data-testid="chat-overlay-head">
+        {header}
+      </div>
       <ChatPane thread={thread} dock={dock} />
       {handles.map((item) => (
         <div

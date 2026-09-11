@@ -5,6 +5,9 @@ import {
   subscribeChatOverlay,
   setChatOverlay,
   closeChatOverlay,
+  getOverlayThread,
+  subscribeOverlayThread,
+  toggleOverlayThread,
   requestOverlayFocus,
   requestInspectorClose,
   allocateShellColumns,
@@ -54,6 +57,7 @@ import {
   ChevronDoubleLeftIcon,
   ChevronDoubleRightIcon,
   AdjustmentsHorizontalIcon,
+  ChatBubbleLeftRightIcon,
   XMarkIcon,
 } from '@heroicons/react/16/solid'
 
@@ -231,6 +235,7 @@ function Shell(props: SlotProps) {
   const slots = props.slots as SlotsService
   const navigate = useNavigate()
   const location = useLocation()
+  const overlayThread = useSyncExternalStore(subscribeOverlayThread, getOverlayThread, () => false)
   const modules = useAppModules()
   const navReady = useAppModulesNavReady ? useAppModulesNavReady() : true
   const pluginModules = modules.filter((item) => item.id !== 'agent')
@@ -690,6 +695,17 @@ function Shell(props: SlotProps) {
   const overlayHeader = (
     <header className="chat-view-header" data-biu-ignore>
       <div className="chat-view-header-left">
+        <button
+          type="button"
+          className={`chat-view-header-expand${overlayThread ? ' is-active' : ''}`}
+          title={overlayThread ? '收起对话' : '查看对话'}
+          aria-label={overlayThread ? '收起对话' : '查看对话'}
+          aria-pressed={overlayThread}
+          data-testid="chat-overlay-thread-toggle"
+          onClick={() => toggleOverlayThread()}
+        >
+          <ChatBubbleLeftRightIcon {...chromeIcon} />
+        </button>
         {project ? (
           <div className="chat-view-project" title={project.path ?? project.name}>
             <FolderGlyph className="chat-view-project-icon" />

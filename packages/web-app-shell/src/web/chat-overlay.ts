@@ -188,6 +188,10 @@ export function setOverlayThread(next: boolean) {
   emitThread()
 }
 
+export function toggleOverlayThread() {
+  setOverlayThread(!overlayThread)
+}
+
 let composerFocusPending = false
 
 export function requestComposerFocus() {

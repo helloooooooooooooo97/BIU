@@ -22,6 +22,8 @@ import {
   isChatPagePath,
   openOverlayComposer,
   revealOverlayThread,
+  toggleOverlayThread,
+  setOverlayThread,
   getOverlayAutohide,
   setOverlayAutohide,
   requestOverlayAutohide,
@@ -227,6 +229,16 @@ test('pick opens a compose-only overlay; send reveals the thread', () => {
   assert.equal(getOverlayThread(), true)
   setChatOverlay(false)
   assert.equal(getOverlayThread(), false)
+})
+
+test('toggleOverlayThread expands and collapses the overlay transcript', () => {
+  setChatOverlay(true)
+  setOverlayThread(false)
+  toggleOverlayThread()
+  assert.equal(getOverlayThread(), true)
+  toggleOverlayThread()
+  assert.equal(getOverlayThread(), false)
+  setChatOverlay(false)
 })
 
 test('pick on an already-open overlay keeps the revealed thread', () => {
