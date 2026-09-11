@@ -14,8 +14,8 @@
 
 <p align="center">
   <img alt="version" src="https://img.shields.io/badge/version-v0.1.0-blue" />
-  <img alt="license" src="https://img.shields.io/github/license/helloooooooooooooo97/biu-harness" />
-  <img alt="stars" src="https://img.shields.io/github/stars/helloooooooooooooo97/biu-harness" />
+  <img alt="license" src="https://img.shields.io/github/license/helloooooooooooooo97/biu" />
+  <img alt="stars" src="https://img.shields.io/github/stars/helloooooooooooooo97/biu" />
   <img alt="node" src="https://img.shields.io/node/v/cordis" />
 </p>
 
@@ -323,7 +323,7 @@ flowchart TB
 根目录只保留加载器与清单；能力全部位于 `packages/`，按前缀即可清晰区分。
 
 ```
-biu-harness
+biu
 ├── host/                      # Node 加载器：读 json 的 host 表，plugin()
 │   ├── index.ts
 │   └── types.ts
@@ -415,8 +415,8 @@ biu-harness
 需要 Node.js 20+ 和 npm。`main` 与开发分支 `hmr-dev` 当前对齐。
 
 ```bash
-git clone https://github.com/helloooooooooooooo97/biu-harness.git
-cd biu-harness
+git clone https://github.com/helloooooooooooooo97/biu.git
+cd biu
 make          # 安装依赖，同时起 host 与 Vite
 ```
 
