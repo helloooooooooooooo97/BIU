@@ -40,6 +40,8 @@ import { SavedViewsStore, clientViewFromDbRow, viewsCollection, type StoredView 
 import { FacetStore } from './facets-store.ts'
 import { AssetConflictError, FileSystemAssets, collectAssetNames, isAssetFileName, parseIfMatch } from './assets-store.ts'
 import { facetsCollection } from './facets-collection.ts'
+import { noticesCollection } from './notices-collection.ts'
+import { NoticesService } from './notices-service.ts'
 import {
   asContentText,
   insertText,
@@ -1328,6 +1330,8 @@ export function apply(ctx: Context) {
     path: item.path,
     label: item.label ?? item.id,
   }))))
+  const notices = new NoticesService(ctx).open(process.env.VITEST ? ':memory:' : dataPath(process.cwd(), 'notices.json'))
+  db.register(noticesCollection(notices.store))
   ctx.tools.register({
     name: 'db_list',
     description: '列出 File System 路径：/ 为已登记表（path、中文名、view.blurb 说明书），/<表> 为列式记录（不含 content、默认不含 createdAt/updatedAt/createdBy/updatedBy）。默认每页 50，最多 200。columns 参数只取需要的列。表结构用 db_stat。',

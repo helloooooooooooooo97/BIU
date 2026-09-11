@@ -1,6 +1,7 @@
 import {
   CheckCircleIcon,
   ChatBubbleLeftRightIcon,
+  BellIcon,
   BoltIcon,
   DocumentIcon,
   EyeIcon,
@@ -20,6 +21,7 @@ export function TableGlyph({ icon, className = 'size-4' }: { icon?: string; clas
   if (name === 'chat-bubble' || name === 'chat-bubble-left-right') return <ChatBubbleLeftRightIcon aria-hidden className={className} />
   if (name === 'document' || name === 'document-text' || name === 'page') return <DocumentIcon aria-hidden className={className} />
   if (name === 'bolt') return <BoltIcon aria-hidden className={className} />
+  if (name === 'bell') return <BellIcon aria-hidden className={className} />
   if (name === 'eye') return <EyeIcon aria-hidden className={className} />
   if (name === 'tag') return <TagIcon aria-hidden className={className} />
   if (name === 'rectangle-stack' || name === 'collection') return <RectangleStackIcon aria-hidden className={className} />

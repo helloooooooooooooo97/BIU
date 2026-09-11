@@ -44,6 +44,12 @@ export class ApprovalsService extends Service {
     this.pending.delete(id)
     if (item.timer) clearTimeout(item.timer)
     item.resolve(allow)
+    try {
+      const notices = this.ctx.get('notices') as { markSourceRead?: (key: string) => void } | undefined
+      notices?.markSourceRead?.(`approval:${id}`)
+    } catch {
+      /* notices 未登记 */
+    }
     return { ok: true }
   }
 }
@@ -64,7 +70,21 @@ export const inject = ['tools']
 export function apply(ctx: Context) {
   const approvals = new ApprovalsService(ctx)
   ctx.inject(['http'], (inner) => {
-    approvals.setNotify((payload) => inner.http.broadcast('approval', payload))
+    approvals.setNotify((payload) => {
+      inner.http.broadcast('approval', payload)
+      try {
+        const notices = inner.get('notices') as { push?: (input: Record<string, string>) => void } | undefined
+        notices?.push?.({
+          kind: 'approval',
+          title: `需要审批：${payload.name}`,
+          body: payload.id,
+          href: '',
+          sourceKey: `approval:${payload.id}`,
+        })
+      } catch {
+        /* notices 未登记 */
+      }
+    })
     inner.http.route('GET', '/api/approvals', (route) => {
       route.send(200, { mode: approvals.mode, pending: approvals.list() })
     })
