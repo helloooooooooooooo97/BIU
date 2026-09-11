@@ -492,7 +492,7 @@ export function previewActionRecord(row: DbRecord, action: { id?: string; when?:
     if (row.installed === false && row.running !== true && row.enabled !== true) return row
     return { ...row, installed: false, running: false, enabled: false }
   }
-  if (action.id === 'pack' || action.id === 'create') {
+  if (action.id === 'pack') {
     if (row.installed === true) return row
     return { ...row, installed: true }
   }

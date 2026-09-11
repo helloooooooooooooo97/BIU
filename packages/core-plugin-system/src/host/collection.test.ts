@@ -90,7 +90,7 @@ test('pluginsCollection lists installed plugins and sandboxes in one table', asy
   assert.equal(draft?.shellWidth, undefined)
   assert.deepEqual(
     spec.actions?.map((item) => item.id),
-    ['create', 'sandbox', 'start', 'stop', 'pack', 'uninstall'],
+    ['sandbox', 'start', 'stop', 'pack', 'uninstall'],
   )
   await spec.actions!.find((item) => item.id === 'start')!.run('demo', demo!)
   await spec.actions!.find((item) => item.id === 'pack')!.run('draft-hello', draft!)
@@ -113,7 +113,7 @@ test('pluginsCollection lists installed plugins and sandboxes in one table', asy
   assert.deepEqual(spec.actions?.find((item) => item.id === 'start')?.when, { installed: true, running: false })
   assert.deepEqual(spec.actions?.find((item) => item.id === 'pack')?.when, { sandbox: true })
   assert.deepEqual(spec.actions?.find((item) => item.id === 'uninstall')?.when, { installed: true })
-  assert.equal(spec.actions?.find((item) => item.id === 'create')?.for, 'agent')
+  assert.equal(spec.actions?.find((item) => item.id === 'sandbox')?.for, 'agent')
   assert.equal(spec.actions?.find((item) => item.id === 'start')?.for, undefined)
 })
 

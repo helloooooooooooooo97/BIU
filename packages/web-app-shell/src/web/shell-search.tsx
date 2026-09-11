@@ -177,7 +177,7 @@ export function previewHitRecord(record: Record<string, unknown>, action: Search
     if (record.installed === false && record.running !== true && record.enabled !== true) return record
     return { ...record, installed: false, running: false, enabled: false }
   }
-  if (action.id === 'pack' || action.id === 'create') {
+  if (action.id === 'pack') {
     if (record.installed === true) return record
     return { ...record, installed: true }
   }
