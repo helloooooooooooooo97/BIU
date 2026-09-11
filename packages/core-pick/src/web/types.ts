@@ -205,6 +205,15 @@ export function lineSpanLabel(ref: PickRef) {
   return String(ref.start_line)
 }
 
+/** 有源码行号用行号；纯文本选区/长粘贴用字数。 */
+export function chipSpanLabel(ref: PickRef) {
+  const lines = lineSpanLabel(ref)
+  if (lines) return lines
+  if (ref.kind !== 'text') return ''
+  const n = (ref.selection || ref.text || '').length
+  return n > 0 ? String(n) : ''
+}
+
 function pickChipName(ref: PickRef) {
   if (ref.title?.trim()) return ref.title.trim()
   const file = ref.path?.split('/').filter(Boolean).pop() ?? ''
@@ -218,7 +227,7 @@ function pickChipName(ref: PickRef) {
 export function chipCaption(ref: PickRef) {
   if (ref.action === 'banner') return { name: ref.label || '背景', span: '' }
   if (ref.action === 'view') return { name: ref.label || '呈现方式', span: '' }
-  return { name: ref.action ? `${ref.label} · ${ref.action}` : pickChipName(ref), span: lineSpanLabel(ref) }
+  return { name: ref.action ? `${ref.label} · ${ref.action}` : pickChipName(ref), span: chipSpanLabel(ref) }
 }
 
 export function chipLabel(ref: PickRef) {
@@ -260,6 +269,13 @@ export function withHostSource(ref: PickRef, node: Node | null): PickRef {
   }
 }
 
+export function textPickFromPlain(route: string, raw: string): PickRef | null {
+  const selection = raw.trim()
+  const label = pickPreview(selection, 80)
+  if (!label) return null
+  return { kind: 'text', id: pickIdFromText(raw), label, route, selection }
+}
+
 /** 选取态下划到的一段正文；空选区返回 null。编辑器选区附带 Markdown 源码行号。 */
 export function textPickFromSelection(
   route: string,
@@ -267,15 +283,12 @@ export function textPickFromSelection(
 ): PickRef | null {
   if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return null
   const raw = selection.toString()
-  const label = pickPreview(raw, 80)
-  if (!label) return null
+  const base = textPickFromPlain(route, raw)
+  if (!base) return null
   const anchor = 'anchorNode' in selection ? (selection as Selection).anchorNode : null
   const host = editorHostFromNode(anchor)
   const locus = host ? host.locusFromSelection() : null
-  return withPickLocus(
-    withHostSource({ kind: 'text', id: pickIdFromText(raw), label, route, selection: raw.trim() }, anchor),
-    locus,
-  )
+  return withPickLocus(withHostSource(base, anchor), locus)
 }
 
 export function pickChipAttrs(ref: PickRef) {

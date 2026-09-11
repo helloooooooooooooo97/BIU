@@ -4361,6 +4361,34 @@ body {
 }
 
 /* 对话主列：预留 gutter，避免细滚动条出现时挤布局（样式走全局 * 规则） */
+.chat-select-bubble {
+  position: fixed;
+  z-index: 80;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--dsw-border);
+  border-radius: 10px;
+  background: var(--dsw-sidebar);
+  color: var(--dsw-label);
+  box-shadow: 0 8px 28px rgba(15, 15, 15, .12);
+  cursor: pointer;
+}
+
+.chat-select-bubble:hover {
+  background: var(--dsw-hover);
+}
+
+.chat-select-bubble-icon {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
 .chat-stage {
   scrollbar-gutter: stable;
 }

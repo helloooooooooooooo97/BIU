@@ -5,7 +5,7 @@ import { EditorContent, useEditor } from '@tiptap/react'
 import Placeholder from '@tiptap/extension-placeholder'
 import type { SlotProps } from '@biu/web-slots'
 import { bindSessionView, type SessionViewService } from '@biu/web-session-view'
-import { pickKey, usePickState, type PickService } from '@biu/core-pick/web'
+import { pickKey, textPickFromPlain, usePickState, type PickService } from '@biu/core-pick/web'
 import { HeadlessDismiss } from '@biu/public-ui'
 import { composerDocExtensions } from './composer-kit.ts'
 import {
@@ -33,6 +33,8 @@ const INPUT_DEBOUNCE_MS = 120
 const COMPACT_ROW_PAD_X = 20
 const COMPACT_ROW_GAP_X = 16
 const COMPOSER_LINE_PX = 28
+/** 粘贴超过这个字数时改成 pick 芯片，括号里显示字数。 */
+export const COMPOSER_PASTE_PICK_CHARS = 160
 
 /** 用「按钮还在同一行时」的编辑器宽度测是否折行，避免变方后变宽又缩回导致闪跳。 */
 function editorWrapsInCompactRow(form: HTMLElement, editorDom: HTMLElement) {
@@ -444,8 +446,9 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
     pendingImages,
     picked,
     catalog,
+    route: location.pathname,
   })
-  live.current = { slash, filtered, pick, pickRefs, pendingImages, picked, catalog }
+  live.current = { slash, filtered, pick, pickRefs, pendingImages, picked, catalog, route: location.pathname }
   const pickToolRef = useRef<(name: string) => void>(() => {})
   const activeIndexRef = useRef(0)
   activeIndexRef.current = activeIndex
@@ -466,9 +469,17 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
       },
       handlePaste(_view, event) {
         const images = collectClipboardImages(event.clipboardData)
-        if (!images.length) return false
+        if (images.length) {
+          event.preventDefault()
+          addImageFiles(images)
+          return true
+        }
+        const raw = event.clipboardData?.getData('text/plain') ?? ''
+        if (raw.trim().length < COMPOSER_PASTE_PICK_CHARS) return false
+        const ref = textPickFromPlain(live.current.route, raw)
+        if (!ref) return false
         event.preventDefault()
-        addImageFiles(images)
+        live.current.pick?.add(ref)
         return true
       },
       handleKeyDown(_view, event) {

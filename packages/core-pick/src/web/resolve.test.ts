@@ -1,7 +1,7 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { pickSurfaceAtPoint, resolvePickFromNode, resolvePickAtPoint, resolvePicksInRect, visiblePickBox, editorBlockElFromNode } from './resolve.ts'
-import { formatPicks, parsePicks, splitPickStream, chipLabel, chipCaption, dedupePicks, textPickFromSelection } from './types.ts'
+import { formatPicks, parsePicks, splitPickStream, chipLabel, chipCaption, dedupePicks, textPickFromSelection, textPickFromPlain } from './types.ts'
 import { bindEditorTextHost } from './editor-host.ts'
 
 test('splitPickStream keeps text and chips in order', () => {
@@ -88,6 +88,14 @@ test('formatPicks keeps page title for the agent', () => {
   assert.equal(parsed.refs[0]?.title, '爱乐之城')
   assert.equal(parsed.refs[0]?.path, '/pages/p002')
   assert.equal(chipLabel(parsed.refs[0]!), '爱乐之城 (1)')
+})
+
+test('text pick without source lines shows character count', () => {
+  const ref = textPickFromPlain('/s/abc', 'hello world this is a pasted blob')
+  assert.ok(ref)
+  assert.equal(chipCaption(ref).span, String(ref.selection?.length))
+  assert.match(chipLabel(ref), /\(\d+\)$/)
+  assert.equal(textPickFromPlain('/s/abc', '   '), null)
 })
 
 test('chip caption keeps line span off the truncated preview', () => {
