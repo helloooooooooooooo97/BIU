@@ -1198,8 +1198,25 @@ export function CollectionBrowser({
   }, [flattenRows, grouped, grouping, visible])
   const tableColSpan = Math.max(columns.length, 1)
   const tableRef = useRef<HTMLTableElement>(null)
+  const checkStackRef = useRef<HTMLDivElement>(null)
+  const checkHoverRef = useRef<string | 'head' | null>(null)
   const [checkSlots, setCheckSlots] = useState<{ kind: 'head' | 'gap' | 'row'; id?: string; h: number }[]>([])
-  const [checkHover, setCheckHover] = useState<string | 'head' | null>(null)
+
+  const paintCheckHover = useCallback((next: string | 'head' | null, force = false) => {
+    if (!force && checkHoverRef.current === next) return
+    const root = checkStackRef.current
+    if (root) {
+      for (const el of root.querySelectorAll('.fsdb-check-slot.is-hover')) {
+        if (next && el.getAttribute('data-check') === next) continue
+        el.classList.remove('is-hover')
+      }
+      if (next) {
+        const hit = root.querySelector(`[data-check="${CSS.escape(next)}"]`)
+        hit?.classList.add('is-hover')
+      }
+    }
+    checkHoverRef.current = next
+  }, [])
 
   useLayoutEffect(() => {
     const table = tableRef.current
@@ -1231,6 +1248,10 @@ export function CollectionBrowser({
     ro.observe(table)
     return () => ro.disconnect()
   }, [collapsed, collapsedGroups, columns, grouping, grouped, items, page, pageSize, wrapCells, truncateCells, columnWidths])
+
+  useLayoutEffect(() => {
+    paintCheckHover(checkHoverRef.current, true)
+  }, [checkSlots, paintCheckHover])
 
   const listedSelected = detailId ? items.find((item) => item.id === detailId) : undefined
   const selected = useMemo(() => {
@@ -3261,23 +3282,18 @@ export function CollectionBrowser({
                     </div>
                   </div>
                 ) : null}
-                <div className="tasks-table-stage" onMouseLeave={() => setCheckHover(null)}>
+                <div className="tasks-table-stage" onMouseLeave={() => paintCheckHover(null)}>
                   <div className="fsdb-check-rail" data-testid="fsdb-check-rail">
-                    <div className="fsdb-check-stack">
+                    <div className="fsdb-check-stack" ref={checkStackRef}>
                       {checkSlots.map((slot, index) => (
                         <div
                           key={slot.kind === 'row' ? `${slot.id}-${index}` : `${slot.kind}-${index}`}
-                          className={`fsdb-check-slot${
-                            slot.kind === 'head' && checkHover === 'head'
-                              ? ' is-hover'
-                              : slot.kind === 'row' && slot.id === checkHover
-                                ? ' is-hover'
-                                : ''
-                          }`}
+                          className="fsdb-check-slot"
+                          data-check={slot.kind === 'head' ? 'head' : slot.id}
                           style={{ height: slot.h }}
                           onMouseEnter={() => {
-                            if (slot.kind === 'head') setCheckHover('head')
-                            else if (slot.id) setCheckHover(slot.id)
+                            if (slot.kind === 'head') paintCheckHover('head')
+                            else if (slot.id) paintCheckHover(slot.id)
                           }}
                         >
                           {slot.kind === 'head' ? <RowCheck ids={pickableIds} /> : null}
@@ -3294,8 +3310,8 @@ export function CollectionBrowser({
                     const hit = event.target as HTMLElement | null
                     const tr = hit?.closest('tr')
                     if (!tr || !event.currentTarget.contains(tr)) return
-                    if (tr.closest('thead')) setCheckHover('head')
-                    else setCheckHover(tr.dataset.recordId ?? null)
+                    if (tr.closest('thead')) paintCheckHover('head')
+                    else paintCheckHover(tr.dataset.recordId ?? null)
                   }}
                 >
             <colgroup>
