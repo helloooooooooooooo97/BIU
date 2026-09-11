@@ -4397,8 +4397,8 @@ body {
 .chat-outline::before {
   content: '';
   position: absolute;
-  inset: -48px auto -48px -12px;
-  width: 40px;
+  inset: -96px auto -96px -24px;
+  width: 96px;
   pointer-events: auto;
 }
 
