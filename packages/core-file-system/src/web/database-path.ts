@@ -35,9 +35,10 @@ export function databaseRecordPath(collection: string, recordId: string, viewId?
 export const VIEWS_COLLECTION_PATH = '/views'
 export const FACETS_COLLECTION_PATH = '/facets'
 export const EVENTS_COLLECTION_PATH = '/events'
+export const NOTICES_COLLECTION_PATH = '/notices'
 export const PAGE_BLOCKS_COLLECTION_PATH = '/page-blocks'
 
-const SYSTEM_COLLECTION_ORDER = [VIEWS_COLLECTION_PATH, EVENTS_COLLECTION_PATH] as const
+const SYSTEM_COLLECTION_ORDER = [VIEWS_COLLECTION_PATH, EVENTS_COLLECTION_PATH, NOTICES_COLLECTION_PATH] as const
 
 /** 用户表侧栏顺序。组件是页面里嵌的块，紧挨页面下面。 */
 const USER_COLLECTION_ORDER = ['/sessions', '/tasks', '/pages', '/page-blocks', '/plugins', '/facets'] as const

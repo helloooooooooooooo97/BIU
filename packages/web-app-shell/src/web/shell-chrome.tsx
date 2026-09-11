@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import {
   ArrowDownTrayIcon,
   BellIcon,
@@ -126,6 +126,109 @@ function SideAction({
   )
 }
 
+type NoticeRow = {
+  id: string
+  title?: string
+  body?: string
+  kind?: string
+  read?: boolean
+  href?: string
+}
+
+function sessionIdFromPath(path: string) {
+  const match = path.match(/^\/s\/([^/]+)/)
+  return match ? decodeURIComponent(match[1]!) : ''
+}
+
+function noticeHref(row: NoticeRow) {
+  return String(row.href ?? '').trim()
+}
+
+function noticeIsForSession(row: NoticeRow, sessionId: string) {
+  if (!sessionId) return false
+  const href = noticeHref(row)
+  return href === `/s/${sessionId}` || href === `/s/${encodeURIComponent(sessionId)}`
+}
+
+function NoticeBell({
+  open,
+  onToggle,
+}: {
+  open: boolean
+  onToggle: () => void
+}) {
+  const navigate = useNavigate()
+  const location = useLocation()
+  const [rows, setRows] = useState<NoticeRow[]>([])
+  const looking = sessionIdFromPath(location.pathname)
+
+  const load = useCallback(() => {
+    void fetch('/api/db/list?path=/notices&sort=createdAt&dir=desc&limit=40')
+      .then((res) => res.json() as Promise<{ items?: NoticeRow[] }>)
+      .then((data) => setRows(Array.isArray(data.items) ? data.items : []))
+      .catch(() => setRows([]))
+  }, [])
+
+  useEffect(() => {
+    load()
+    const onChange = () => load()
+    window.addEventListener('fsdb:change', onChange)
+    return () => window.removeEventListener('fsdb:change', onChange)
+  }, [load])
+
+  const unread = rows.filter((row) => row.read !== true && !noticeIsForSession(row, looking))
+  const badge = unread.length > 99 ? '99+' : unread.length ? String(unread.length) : ''
+
+  return (
+    <div className="shell-side-pop-wrap">
+      <SideAction
+        title="通知"
+        active={open}
+        testId="chrome-notify"
+        icon={<BellIcon {...chromeIcon} />}
+        onClick={onToggle}
+      >
+        {badge ? (
+          <span className="shell-notify-badge" data-testid="chrome-notify-badge">
+            {badge}
+          </span>
+        ) : null}
+      </SideAction>
+      {open ? (
+        <div className="shell-side-pop shell-notify-pop" role="dialog" aria-label="通知" data-testid="chrome-notify-pop">
+          {rows.length ? (
+            <ul className="shell-notify-list">
+              {rows.map((row) => (
+                <li key={row.id}>
+                  <button
+                    type="button"
+                    className={`shell-notify-item${row.read === true ? '' : ' is-unread'}`}
+                    data-testid="chrome-notify-item"
+                    onClick={() => {
+                      const href = noticeHref(row)
+                      void fetch('/api/db/update', {
+                        method: 'POST',
+                        headers: { 'content-type': 'application/json' },
+                        body: JSON.stringify({ path: `/notices/${row.id}`, content: { read: true } }),
+                      }).then(() => load())
+                      if (href) navigate(href)
+                    }}
+                  >
+                    <span className="shell-notify-title">{row.title || '通知'}</span>
+                    {row.body ? <span className="shell-notify-body">{row.body}</span> : null}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="shell-chrome-pop-empty">暂无通知</p>
+          )}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 /** 公共入口：聊天与数据侧栏共用。 */
 export function ShellSidePlaces({
   activeId,
@@ -155,22 +258,12 @@ export function ShellSidePlaces({
           onSearch?.()
         }}
       />
-      <div className="shell-side-pop-wrap">
-        <SideAction
-          title="通知"
-          active={notifyOpen}
-          testId="chrome-notify"
-          icon={<BellIcon {...chromeIcon} />}
-          onClick={() => {
-            setNotifyOpen((open) => !open)
-          }}
-        />
-        {notifyOpen ? (
-          <div className="shell-side-pop" role="dialog" aria-label="通知">
-            <p className="shell-chrome-pop-empty">暂无通知</p>
-          </div>
-        ) : null}
-      </div>
+      <NoticeBell
+        open={notifyOpen}
+        onToggle={() => {
+          setNotifyOpen((open) => !open)
+        }}
+      />
       <SideAction
         title="设置"
         testId="chrome-settings"

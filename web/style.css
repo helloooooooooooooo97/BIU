@@ -209,6 +209,80 @@ body {
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
 }
 
+.shell-notify-pop {
+  width: 280px;
+  max-height: min(70vh, 420px);
+  overflow: auto;
+  padding: 6px;
+}
+
+.shell-notify-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.shell-notify-item {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  margin: 0;
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.shell-notify-item:hover {
+  background: var(--dsw-hover);
+}
+
+.shell-notify-item.is-unread {
+  background: color-mix(in srgb, var(--dsw-business) 10%, transparent);
+}
+
+.shell-notify-title {
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.shell-notify-body {
+  color: var(--dsw-label-3);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.shell-notify-badge {
+  position: absolute;
+  top: 4px;
+  left: 22px;
+  z-index: 1;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #e24b4a;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+}
+
+.shell-side-places .app-side-actions-item {
+  position: relative;
+}
+
 .shell-search-overlay {
   position: fixed;
   inset: 0;
