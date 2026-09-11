@@ -36,7 +36,8 @@ export function bumpRevealStart(startIndex: number, batch = CHAT_REVEAL_BATCH): 
   return Math.max(0, startIndex - Math.max(1, batch))
 }
 
-export const CHAT_NEAR_BOTTOM_PX = 96
+/** 输入栏垫了 pb-72 / 18rem，离真正 scroll 底还有一大截也算在看最新。 */
+export const CHAT_NEAR_BOTTOM_PX = 360
 const PIN_TOP_SLACK_PX = 8
 
 /** 贴底，或当时贴在视口顶的那条用户消息。回来滚到它重新贴顶。 */
@@ -92,8 +93,7 @@ export function offsetInScroller(el: HTMLElement, scroller: HTMLElement): number
 
 /** 当前贴顶的用户消息：已经顶到视口上沿的最后一条。 */
 export function captureChatScroll(parent: HTMLElement): ChatScrollMemory {
-  const distance = parent.scrollHeight - parent.scrollTop - parent.clientHeight
-  if (distance <= CHAT_NEAR_BOTTOM_PX) return { kind: 'bottom' }
+  if (isChatStuckToLatest(parent)) return { kind: 'bottom' }
   const parentTop = parent.getBoundingClientRect().top
   const users = parent.querySelectorAll<HTMLElement>('[data-chat-kind="user"][data-node-id]')
   let pin: HTMLElement | null = null
@@ -105,9 +105,21 @@ export function captureChatScroll(parent: HTMLElement): ChatScrollMemory {
   return { kind: 'pin', nodeId: id }
 }
 
+export function distanceFromChatBottom(parent: HTMLElement): number {
+  return parent.scrollHeight - parent.scrollTop - parent.clientHeight
+}
+
+export function isChatStuckToLatest(parent: HTMLElement): boolean {
+  return distanceFromChatBottom(parent) <= CHAT_NEAR_BOTTOM_PX
+}
+
+export function pinChatToLatest(parent: HTMLElement) {
+  parent.scrollTop = parent.scrollHeight
+}
+
 export function restoreChatScroll(parent: HTMLElement, memory: ChatScrollMemory): boolean {
   if (memory.kind === 'bottom') {
-    parent.scrollTop = parent.scrollHeight
+    pinChatToLatest(parent)
     return true
   }
   const turn = parent.querySelector(turnSelector(memory.nodeId))

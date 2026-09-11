@@ -40,9 +40,10 @@ import { UsageInline } from './usage-inline.tsx'
 import {
   bumpRevealStart,
   captureChatScroll,
-  CHAT_NEAR_BOTTOM_PX,
   firstPaintStartIndex,
   groupNodesIntoTurns,
+  isChatStuckToLatest,
+  pinChatToLatest,
   recalledChatScroll,
   rememberChatScroll,
   restoreChatScroll,
@@ -54,7 +55,6 @@ import {
 
 export { groupNodesIntoTurns } from './thread-reveal.ts'
 
-const NEAR_BOTTOM_PX = CHAT_NEAR_BOTTOM_PX
 /** 提早预取更早消息，避免滑到顶才开始请求 */
 const PREFETCH_OLDER_PX = 720
 
@@ -687,6 +687,7 @@ export const ChatNodeList = memo(function ChatNodeList({
   }, [])
 
   const turns = useMemo(() => groupNodesIntoTurns(nodes), [nodes])
+  const liveTurnId = turns.at(-1)?.[0]?.id
 
   return (
     <div className="chat-node-list">
@@ -708,7 +709,7 @@ export const ChatNodeList = memo(function ChatNodeList({
                   ? 'sticky top-0 z-1 bg-transparent'
                   : ''
               const skipPaint =
-                node.kind === 'reply' || node.kind === 'turn'
+                (node.kind === 'reply' || node.kind === 'turn') && anchor.id !== liveTurnId
                   ? '[content-visibility:auto] [contain-intrinsic-size:auto_160px]'
                   : ''
               return (
@@ -839,7 +840,7 @@ export const ChatThread = memo(function ChatThread(props: SlotProps) {
       scrollRef.current = parent
       setScrollEpoch((value) => value + 1)
     }
-  }, [sessionId])
+  })
 
   useLayoutEffect(() => {
     const mem = recalledChatScroll(sessionId)
@@ -858,7 +859,7 @@ export const ChatThread = memo(function ChatThread(props: SlotProps) {
     }
   }, [])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (pending) stickToBottomRef.current = true
   }, [pending])
 
@@ -886,8 +887,7 @@ export const ChatThread = memo(function ChatThread(props: SlotProps) {
     }
 
     const onScroll = () => {
-      const distance = parent.scrollHeight - parent.scrollTop - parent.clientHeight
-      stickToBottomRef.current = distance <= NEAR_BOTTOM_PX
+      stickToBottomRef.current = isChatStuckToLatest(parent)
       maybePrefetchOlder()
     }
     const onUserScroll = () => {
@@ -905,6 +905,19 @@ export const ChatThread = memo(function ChatThread(props: SlotProps) {
       parent.removeEventListener('scroll', onUserScroll)
     }
   }, [sessionId, scrollEpoch, hasMoreOlder, loadingOlder, sessionView])
+
+  useEffect(() => {
+    const root = rootRef.current
+    const parent = scrollRef.current
+    if (!root || !parent) return
+    const pin = () => {
+      if (!stickToBottomRef.current) return
+      pinChatToLatest(parent)
+    }
+    const ro = new ResizeObserver(pin)
+    ro.observe(root)
+    return () => ro.disconnect()
+  }, [sessionId, scrollEpoch])
 
   useEffect(() => {
     if (revealStart <= 0) return
@@ -951,7 +964,7 @@ export const ChatThread = memo(function ChatThread(props: SlotProps) {
     }
     if (sessionId) restoredForRef.current = sessionId
     if (stickToBottomRef.current) {
-      if (mountedNodes.length > 0) parent.scrollTop = parent.scrollHeight
+      if (mountedNodes.length > 0) pinChatToLatest(parent)
     } else if (prependHeightRef.current) {
       const delta = parent.scrollHeight - prependHeightRef.current
       if (delta) parent.scrollTop += delta
