@@ -5,7 +5,7 @@ import { createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { act } from 'react'
 import { OverlayChatWindow } from './overlay-window.tsx'
-import { closeChatOverlay, getChatOverlay, getOverlayThread, revealOverlayThread, setChatOverlay, setOverlayThread } from './chat-overlay.ts'
+import { closeChatOverlay, getChatOverlay, getOverlayThread, setChatOverlay, setOverlayThread } from './chat-overlay.ts'
 
 let root: Root | null = null
 let host: HTMLDivElement | null = null
@@ -88,6 +88,8 @@ test('overlay header close button has no layout control beside it', () => {
   host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
+  setChatOverlay(true)
+  setOverlayThread(true)
   act(() => {
     root!.render(
       createElement(OverlayChatWindow, {
@@ -129,9 +131,14 @@ test('compose-only overlay shows the thread after send', () => {
   const panel = document.querySelector('[data-testid="chat-overlay-panel"]') as HTMLElement
   assert.ok(panel)
   assert.equal(panel.classList.contains('is-compose-only'), true)
+  const peek = document.querySelector('[data-testid="chat-overlay-peek"]') as HTMLButtonElement | HTMLElement
+  assert.ok(peek)
+  const open = peek.querySelector('.chat-overlay-peek-open') as HTMLButtonElement
+  assert.ok(open)
   act(() => {
-    revealOverlayThread()
+    open.click()
   })
   assert.equal(getOverlayThread(), true)
   assert.equal(panel.classList.contains('is-compose-only'), false)
+  assert.equal(document.querySelector('[data-testid="chat-overlay-peek"]'), null)
 })
