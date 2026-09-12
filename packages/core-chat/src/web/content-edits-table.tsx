@@ -58,8 +58,8 @@ export const ContentEditsTable = memo(function ContentEditsTable({ files }: { fi
       <div className="flex items-center justify-between gap-2 border-b border-(--dsw-border) px-3 py-2">
         <div className="text-(length:--dsw-chat-ui-font-size) font-semibold text-(--dsw-label-2)">本回合文件系统内容的改动</div>
         <div className="flex items-center gap-2 text-[12px] font-semibold tabular-nums">
-          <span className="text-[#448361]">+{added}字</span>
-          <span className="text-[#c4554d]">−{removed}字</span>
+          <span className="text-[#448361]">+{added}</span>
+          <span className="text-[#c4554d]">−{removed}</span>
         </div>
       </div>
       <ul className="m-0 list-none p-0">
@@ -78,14 +78,14 @@ export const ContentEditsTable = memo(function ContentEditsTable({ files }: { fi
               className="text-[12px] font-semibold tabular-nums text-[#448361] hover:underline"
               onClick={() => revealContentEdit(file.path, file.jump_line)}
             >
-              +{file.added}字
+              +{file.added}
             </button>
             <button
               type="button"
               className="text-[12px] font-semibold tabular-nums text-[#c4554d] hover:underline"
               onClick={() => revealContentEdit(file.path, file.jump_line)}
             >
-              −{file.removed}字
+              −{file.removed}
             </button>
           </li>
         ))}
