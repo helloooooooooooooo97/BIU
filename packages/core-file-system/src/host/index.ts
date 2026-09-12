@@ -1141,7 +1141,7 @@ export class DatabaseService extends Service implements Database {
       field: current.field,
       command,
       ok: true as const,
-      ...(locus ? { start_line: locus.start_line, end_line: locus.end_line } : {}),
+      ...(locus ? { start_line: locus.start_line, end_line: locus.end_line, ...(locus.text ? { text: locus.text } : {}) } : {}),
     }
   }
 
