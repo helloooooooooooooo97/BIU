@@ -1,0 +1,16 @@
+{
+  "id": "page-browser",
+  "name": "浏览器",
+  "blurb": "页面里用 /browser 插入网页浏览器卡片：输入链接就能访问（嵌在 iframe 里），可放大全屏、可后退/刷新，站方禁止嵌入时会提示在新标签打开。",
+  "tags": [
+    "page",
+    "editor",
+    "browser",
+    "iframe",
+    "web"
+  ],
+  "author": "Biu",
+  "authorUrl": "https://github.com/helloooooooooooooo97/biu-harness",
+  "headless": true,
+  "createdAt": 1789204058242
+}
