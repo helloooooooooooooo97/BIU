@@ -23,7 +23,7 @@ test('electron scripts compile ts and reuse busy ports', async () => {
   assert.match(main, /is-flyout-open/)
   assert.match(main, /padding-left: 12px !important/)
   assert.match(main, /ensureBrowserPanel/)
-  assert.match(main, /browser-panel/)
+  assert.match(main, /page-browser/)
   assert.match(main, /inspectScript/)
   assert.match(main, /__biuPickOff/)
   assert.match(main, /__biuPickRoot/)
