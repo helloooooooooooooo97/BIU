@@ -940,26 +940,15 @@ export class DatabaseService extends Service implements Database {
     }
     this.indexFacetRecord(spec, this.decorateRecord(spec, record))
     this.bump()
-    const contentField = schema.contentField ?? 'content'
     const beforeSnap: Record<string, unknown> = {}
     const afterSnap: Record<string, unknown> = {}
     for (const key of Object.keys(patch)) {
-      if (key === contentField) continue
       beforeSnap[key] = current[key] ?? null
       afterSnap[key] = record[key] ?? null
     }
     const title = String(record.title ?? record.name ?? record.id).trim() || record.id
-    const recordPath = `${spec.path}/${record.id}`
-    if (Object.keys(beforeSnap).length) {
-      await this.ctx.get('contentTurns')?.recordUpdate(recordPath, title, beforeSnap, afterSnap)
-    }
-    if (contentField in patch) {
-      await this.ctx.get('contentTurns')?.recordEdit(
-        recordPath,
-        asContentText(current[contentField]),
-        asContentText(record[contentField]),
-        title,
-      )
+    if (Object.keys(patch).length) {
+      await this.ctx.get('contentTurns')?.recordUpdate(`${spec.path}/${record.id}`, title, beforeSnap, afterSnap)
     }
     return { kind: 'record' as const, path: `${spec.path}/${record.id}`, value: withoutContent(spec, this.withBanner(spec, this.decorateRecord(spec, record))) }
   }
@@ -1000,11 +989,9 @@ export class DatabaseService extends Service implements Database {
       path: `${spec.path}/${record.id}`,
       value: withoutContent(spec, this.withBanner(spec, this.decorateRecord(spec, record))),
     }))
-    for (const [index, item] of items.entries()) {
-      const raw = created[index]
+    for (const item of items) {
       const title = String(item.value.title ?? item.value.name ?? '').trim() || item.path
-      const text = raw ? asContentText(raw[contentKey(spec)]) : ''
-      await this.ctx.get('contentTurns')?.recordCreate(item.path, title, item.value, text)
+      await this.ctx.get('contentTurns')?.recordCreate(item.path, title, item.value)
     }
     return {
       kind: 'created' as const,
@@ -1036,13 +1023,7 @@ export class DatabaseService extends Service implements Database {
     for (const row of matched) {
       const rec = withoutContent(spec, this.withBanner(spec, this.decorateRecord(spec, row)))
       const title = String(rec.title ?? rec.name ?? row.id).trim() || row.id
-      let text = asContentText(row[contentKey(spec)])
-      try {
-        text = asContentText((await this.content(`${spec.path}/${row.id}`)).value)
-      } catch {
-        /* 正文可能只在行上 */
-      }
-      await this.ctx.get('contentTurns')?.recordDelete(`${spec.path}/${row.id}`, title, rec, text)
+      await this.ctx.get('contentTurns')?.recordDelete(`${spec.path}/${row.id}`, title, rec)
     }
     await spec.remove({ ids })
     for (const id of ids) this.facets.removeRecord(spec.path, id)
@@ -1099,62 +1080,18 @@ export class DatabaseService extends Service implements Database {
     const schema = schemaFor(spec)
     const field = schema.contentField ?? 'content'
     if (!schema.fields[field]) throw new Error(`no content field: ${field}`)
-    const current = await spec.get(parts[1]!)
-    if (!current) throw new Error(`unknown record: ${spec.path}/${parts[1]}`)
-    const before = asContentText(current[field])
     const patch = this.collectionCanUpdate(spec)
       ? pickWritablePatch(schema, { [field]: value })
       : { [field]: value }
     const record = await spec.update(parts[1]!, patch)
     await this.stampActor(spec.path, record.id)
     this.bump()
-    const after = asContentText(record[field])
-    const title = String(record.title ?? record.name ?? record.id).trim() || record.id
-    await this.ctx.get('contentTurns')?.recordEdit(`${spec.path}/${record.id}`, before, after, title)
     return {
       kind: 'content' as const,
       path: `${spec.path}/${record.id}`,
       field,
       value: record[field] ?? null,
     }
-  }
-
-  async restoreRecord(path: string, fields: Record<string, unknown>, content?: string) {
-    const parts = splitPath(path)
-    if (parts.length !== 2) throw new Error(`cannot restore: ${normalizeCollectionPath(path)}`)
-    const spec = this.collection(`/${parts[0]}`)
-    if (!spec) throw new Error(`unknown collection: /${parts[0]}`)
-    const schema = schemaFor(spec)
-    const field = schema.contentField ?? 'content'
-    const id = parts[1]!
-    const patch: Record<string, unknown> = {}
-    for (const [key, value] of Object.entries(fields)) {
-      if (key === 'id' || key === 'createdAt' || key === 'updatedAt' || key === 'createdBy' || key === 'updatedBy') continue
-      if (key === field) continue
-      const specField = schema.fields[key]
-      if (!specField?.writable || specField.computed) continue
-      try {
-        patch[key] = coerce(specField, value)
-      } catch {
-        /* 旧快照里可能有已删字段 */
-      }
-    }
-    const existing = spec.get ? await spec.get(id) : null
-    if (existing) {
-      if (Object.keys(patch).length && spec.update) await spec.update(id, patch)
-    } else {
-      if (!spec.create) throw new Error(`collection cannot create: ${spec.path}`)
-      const row = { ...patch, id }
-      if (content != null && schema.fields[field]?.writable) row[field] = content
-      await spec.create([row])
-    }
-    if (content != null && schema.fields[field]) {
-      await this.writeContent(path, content)
-    } else {
-      await this.stampActor(spec.path, id)
-      this.bump()
-    }
-    return this.read(path)
   }
 
   async contentTitle(path: string) {
@@ -1194,6 +1131,10 @@ export class DatabaseService extends Service implements Database {
             : replaceLinesText(text, args.start_line, args.end_line, args.new_str)
     await this.writeContent(path, next)
     const locus = mutationLocus(command, text, next, args)
+    const written = await this.content(current.path)
+    const after = asContentText(written.value)
+    const title = await this.contentTitle(current.path)
+    await this.ctx.get('contentTurns')?.recordEdit(current.path, text, after, title)
     return {
       kind: 'content' as const,
       path: current.path,
@@ -1436,7 +1377,7 @@ export function apply(ctx: Context) {
   }))))
   const notices = new NoticesService(ctx).open(process.env.VITEST ? ':memory:' : dataPath(process.cwd(), 'notices.json'))
   db.register(noticesCollection(notices.store))
-  new ContentTurnService(ctx, db).open(process.env.VITEST ? ':memory:' : dataPath(process.cwd(), 'wal.json'))
+  new ContentTurnService(ctx, db).open(process.env.VITEST ? ':memory:' : dataPath(process.cwd(), 'content-turns.json'))
   ctx.tools.register({
     name: 'db_list',
     description: '列出 File System 路径：/ 为已登记表（path、中文名、view.blurb 说明书），/<表> 为列式记录（不含 content、默认不含 createdAt/updatedAt/createdBy/updatedBy）。默认每页 50，最多 200。columns 参数只取需要的列。表结构用 db_stat。',
