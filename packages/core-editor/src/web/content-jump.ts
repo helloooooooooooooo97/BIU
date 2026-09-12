@@ -60,16 +60,16 @@ function jumpHostOk(editor: Editor) {
   return editorHostIsLive(editor)
 }
 
-function scheduleConsume() {
+function scheduleConsume(ms = 0) {
   if (typeof window === 'undefined') {
     pending = null
     return
   }
-  if (consumeTimer) return
+  if (consumeTimer) window.clearTimeout(consumeTimer)
   consumeTimer = window.setTimeout(() => {
     consumeTimer = 0
     pending = null
-  }, 0)
+  }, ms)
 }
 
 export function stripMarkdownLine(line: string) {
@@ -166,7 +166,7 @@ export function tryContentJump(editor: Editor, markdown: string, recordId: strin
   const needle = jumpNeedle(markdown, pending)
   if (!force && needle && posRangeForOverlap(editor.state.doc, needle) == null) return false
   applyContentJump(editor, markdown, pending, { navigate: pending.navigate === true })
-  scheduleConsume()
+  scheduleConsume(pending.navigate ? 400 : 0)
   return true
 }
 
@@ -202,6 +202,7 @@ export function applyContentJump(
     /* jsdom 没有 layout */
   }
   scrollCaret(editor, pos)
+  applyAgentEditMark(editor, range)
 }
 
 function scrollCaret(editor: Editor, pos: number) {
