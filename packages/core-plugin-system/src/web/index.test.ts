@@ -282,5 +282,8 @@ test('browser-panel is a session inspector tab and injects pick', async () => {
   assert.match(src, /requiresSession: true/)
   assert.match(src, /centerKinds: \['session'\]/)
   assert.doesNotMatch(src, /common: true/)
+  assert.doesNotMatch(src, /Tab: BrowserPanel/)
+  assert.match(src, /PAPER = '#191919'/)
+  assert.match(src, /inspector-stage-pane/)
   assert.match(src, /api\.inspect\(-1, -1\)/)
 })
