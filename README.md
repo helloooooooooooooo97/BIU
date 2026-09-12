@@ -336,9 +336,8 @@ biu
 ├── cordis.plugins.json        # Single plugin manifest (host / web / plugins tables)
 ├── Makefile                   # make / make stop / make restart
 ├── vite.config.ts
-├── LICENSE                    # PolyForm Noncommercial 1.0.0 (excluding Grok Bot character assets)
-├── COMMERCIAL.md              # How to request a commercial / organization grant
-├── NOTICE.md                  # Third-party character notice
+├── LICENSE                    # Apache License 2.0
+├── NOTICE.md                  # Apache NOTICE: copyright, grok-bot, third-party packages
 ├── docs/
 │   ├── plugin-packages.md     # Package prefix and entry conventions
 │   └── demo/                  # README screenshots: task / trajectory / usage
@@ -461,13 +460,14 @@ Alternatively: `npm run dev:host` and `npm run dev:web`.
 
 ## License
 
-From this revision on, Biu-written code and docs use the [PolyForm Noncommercial License 1.0.0](LICENSE):
+Biu-written code and docs in this revision use the [Apache License 2.0](LICENSE):
 
-- **Personal / noncommercial use is free** (hobby, study, private experiments).
-- **Organization use, production, SaaS, paid redistribution, and any commercial use** need a **prior written grant**. See [COMMERCIAL.md](COMMERCIAL.md).
+- **Use, modify, distribute, and commercialize** without a separate grant (no copyleft; you may embed in closed-source products).
+- **Patent grant:** each contributor licenses patent claims necessarily infringed by their contribution, so users are not held up by those contributor patents. Filing patent litigation about the Work terminates that grant (Apache-2.0 §3).
+- **NOTICE:** keep [NOTICE.md](NOTICE.md) and the license text when you redistribute; mark modified files as changed (Apache-2.0 §4).
 
-Already-published MIT copies cannot be recalled. The tighter terms apply to new versions only.
+Snapshots previously published under MIT or PolyForm Noncommercial stay under those terms. This tree is Apache-2.0 going forward.
 
-**Exception: the Grok Bot.** `public/grok-bot/` — its geometry, animation, and character design — is **not** under LICENSE or any Biu commercial grant. It is adapted from a learning extraction of Grok Bot.app and rights belong to xAI and other holders. It may be used for cloning and demos; before redistributing, shipping, or adopting it as a product mascot, assess the trademark/copyright risk yourself or replace it with your own character. See [NOTICE.md](NOTICE.md).
+**Exception: the Grok Bot.** `public/grok-bot/` — geometry, animation, and character design — is **not** Apache-2.0 Biu source. Rights belong to xAI and other holders. See [NOTICE.md](NOTICE.md).
 
 The software is provided "as is", without warranty of any kind.
