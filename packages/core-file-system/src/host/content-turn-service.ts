@@ -61,6 +61,10 @@ export class ContentTurnService extends Service {
     return this.store.summaries(sessionId, turn)
   }
 
+  snapshot(sessionId: string, turn: number, path: string) {
+    return this.store.snapshot(sessionId, turn, path)
+  }
+
   private openTurn(sessionId: string) {
     const peek = this.ctx.get('sessions') as { peek?: (id: string) => { events?: Array<{ type?: string; turn?: number }> } | undefined } | undefined
     const events = peek?.peek?.(sessionId)?.events ?? []

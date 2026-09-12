@@ -1380,7 +1380,20 @@ export function apply(ctx: Context) {
   ctx.http.route('POST', '/api/db/notices/clear', (route) => {
     route.send(200, { ok: true, cleared: notices.clear() })
   })
-  new ContentTurnService(ctx).open(process.env.VITEST ? ':memory:' : dataPath(process.cwd(), 'content-turns.json'))
+  const contentTurns = new ContentTurnService(ctx).open(
+    process.env.VITEST ? ':memory:' : dataPath(process.cwd(), 'content-turns.json'),
+  )
+  ctx.http.route('GET', '/api/content-turns/file', (route) => {
+    const session = String(route.query.get('session') ?? '').trim()
+    const turn = Number(route.query.get('turn'))
+    const path = String(route.query.get('path') ?? '').trim()
+    const file = contentTurns.snapshot(session, turn, path)
+    if (!file) {
+      route.send(404, { error: 'missing' })
+      return
+    }
+    route.send(200, { before: file.before, after: file.after })
+  })
   ctx.tools.register({
     name: 'db_list',
     description: '列出 File System 路径：/ 为已登记表（path、中文名、view.blurb 说明书），/<表> 为列式记录（不含 content、默认不含 createdAt/updatedAt/createdBy/updatedBy）。默认每页 50，最多 200。columns 参数只取需要的列。表结构用 db_stat。',

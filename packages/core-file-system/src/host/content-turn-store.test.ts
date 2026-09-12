@@ -38,6 +38,15 @@ test('trailing newline is not counted as a character', () => {
   assert.equal(sum[0]?.removed, 0)
 })
 
+test('snapshot returns before/after without putting them on summaries', () => {
+  const store = new ContentTurnStore().open(':memory:')
+  store.record({ sessionId: 's1', turn: 5, path: '/pages/p', title: '你好', before: '旧\n', after: '你好\n' })
+  const snap = store.snapshot('s1', 5, '/pages/p')
+  assert.equal(snap?.before, '旧\n')
+  assert.equal(snap?.after, '你好\n')
+  assert.equal(store.summaries('s1', 5)[0]?.added, 2)
+})
+
 test('summaries count characters and omit create ops', () => {
   const store = new ContentTurnStore().open(':memory:')
   store.recordOp('s1', 3, { op: 'create', path: '/pages/a', title: '你好' })
