@@ -1489,20 +1489,6 @@ export function apply(ctx: Context) {
     }
     tasks.report(id, report)
     tasks.update(id, { status })
-    if (status === 'done') {
-      try {
-        const notices = host.get('notices') as { push?: (input: Record<string, string>) => void } | undefined
-        notices?.push?.({
-          kind: 'task',
-          title: `任务完成：${row.title}`,
-          body: report.note || '',
-          href: `/database/tasks/record/${encodeURIComponent(id)}`,
-          sourceKey: `task:${id}:done`,
-        })
-      } catch {
-        /* notices 未登记 */
-      }
-    }
     const delivered = await reportBackToCreator(host, row, report)
     return { ...(await present(tasks.get(id)!)), delivered }
   }
