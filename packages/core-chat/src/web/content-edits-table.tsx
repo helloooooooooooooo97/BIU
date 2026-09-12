@@ -1,5 +1,5 @@
 import { memo, useEffect, useState } from 'react'
-import { ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/16/solid'
+import { ChevronDownIcon, ChevronRightIcon, CircleStackIcon } from '@heroicons/react/16/solid'
 import { CONTENT_JUMP_EVENT } from '@biu/type-file-system'
 import { lineDiff, type DiffLine } from './tool-format.ts'
 
@@ -204,7 +204,10 @@ export const ContentEditsTable = memo(function ContentEditsTable({
       data-testid="content-edits-table"
     >
       <div className="flex items-center justify-between gap-2 border-b border-(--dsw-border) px-3 py-2">
-        <div className="text-(length:--dsw-chat-ui-font-size) font-semibold text-(--dsw-label-2)">本回合文件系统内容的改动</div>
+        <div className="flex min-w-0 items-center gap-1.5 text-[12px] font-semibold text-(--dsw-label-2)">
+          <CircleStackIcon className="size-3.5 shrink-0" aria-hidden />
+          数据改动
+        </div>
         <div className="flex items-center gap-2 text-[12px] font-semibold tabular-nums">
           <span className="text-[#448361]">+{added}</span>
           <span className="text-[#c4554d]">−{removed}</span>
