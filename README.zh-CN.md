@@ -335,9 +335,8 @@ biu
 ├── cordis.plugins.json        # 唯一插件清单（host / web / plugins 三张表）
 ├── Makefile                   # make / make stop / make restart
 ├── vite.config.ts
-├── LICENSE                    # PolyForm Noncommercial 1.0.0（不含 Grok Bot 角色资产）
-├── COMMERCIAL.md              # 组织 / 商用如何申请单独授权
-├── NOTICE.md                  # 第三方角色声明
+├── LICENSE                    # Apache License 2.0
+├── NOTICE.md                  # Apache NOTICE：版权、Grok Bot、第三方依赖
 ├── docs/
 │   ├── plugin-packages.md     # 包前缀与入口约定
 │   └── demo/                  # README 截图：task / trajectory / usage
@@ -460,13 +459,14 @@ export CHAT_MODEL=deepseek-chat # 可选
 
 ## 许可
 
-从此版本起，仓库里 **Biu Agent OS 自己写的代码和文档** 使用 [PolyForm Noncommercial License 1.0.0](LICENSE)：
+本版本起，仓库里 **Biu Agent OS 自己写的代码和文档** 使用 [Apache License 2.0](LICENSE)：
 
-- **个人 / 非商业免费**（自学、兴趣、私有试验）。
-- **组织使用、生产部署、SaaS、有偿再分发及任何商用** 须 **事先取得书面授权**。申请方式见 [COMMERCIAL.md](COMMERCIAL.md)。
+- **免费使用、修改、分发、商用**，无传染性，可嵌进闭源产品，不必再申请单独商用授权。
+- **专利授权：** 贡献者把其贡献必然侵犯的相关专利一并授出，使用者不被这些专利诉讼要挟；若你就本作品提起专利诉讼，该专利许可终止（Apache-2.0 第 3 条）。
+- **NOTICE 义务：** 再分发须保留 [NOTICE.md](NOTICE.md) 与许可文本；改过的文件须标明「已修改」（Apache-2.0 第 4 条）。
 
-已经按 MIT 发布过的版本收不回来。收紧只对之后的版本生效。
+此前以 MIT 或 PolyForm Noncommercial 发布的快照仍按当时条款。本树之后适用 Apache-2.0。
 
-**例外：Grok Bot 机器人。** `public/grok-bot/` 里的几何、动画和角色外形 **不在** LICENSE 或 Biu 商用授权之内。它们改编自对 Grok Bot.app 的学习向抽取，权利属于 xAI 等权利人。可用于克隆与演示；二次分发、打包上线或当产品吉祥物前，**有商标 / 版权侵权风险**，请自行评估，或替换为自有角色。说明见 [NOTICE.md](NOTICE.md)。
+**例外：Grok Bot 机器人。** `public/grok-bot/` 里的几何、动画和角色外形 **不是** Apache-2.0 的 Biu 源码，权利属于 xAI 等权利人。说明见 [NOTICE.md](NOTICE.md)。
 
 软件「按原样」提供，作者不承担质量担保。

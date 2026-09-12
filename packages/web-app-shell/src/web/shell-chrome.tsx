@@ -19,12 +19,12 @@ export function ShellSettingsAbout() {
     <section data-testid="settings-about">
       <p className="m-0 px-2 text-[14px] font-semibold text-(--dsw-label)">Biu Agent OS</p>
       <p className="settings-muted m-0 px-2 pt-2">
-        个人 / 非商业免费。组织使用、生产部署与商用须事先取得书面授权。许可正文为 PolyForm Noncommercial 1.0.0，商用申请见仓库 COMMERCIAL.md。
+        Apache License 2.0：免费使用、修改、分发与商用；贡献者授予相关专利许可。再分发须保留 LICENSE 与 NOTICE，改过的文件须标明已修改。Grok Bot 角色素材见 NOTICE.md，不在本许可内。
       </p>
       <p className="settings-muted m-0 px-2 pt-2">
-        public/grok-bot/ 角色素材归 xAI，不在本许可或任何 Biu 商用授权内；二次分发与商用有侵权风险。详见 NOTICE.md。
+        public/grok-bot/ 角色素材归 xAI，不随 Apache-2.0 授权；二次分发与商用有侵权风险。详见 NOTICE.md。
       </p>
-      <p className="settings-muted m-0 px-2 pt-2">已按 MIT 发布的旧版本收不回来；收紧只对当前及之后版本生效。</p>
+      <p className="settings-muted m-0 px-2 pt-2">此前以 MIT 或 PolyForm Noncommercial 发布的快照条款不变；本版本起适用 Apache-2.0。</p>
     </section>
   )
 }
