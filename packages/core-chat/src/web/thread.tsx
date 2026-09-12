@@ -650,7 +650,7 @@ function NodeView({
             <LiveDispatchTable tasks={dispatchTasks} />
           ) : null}
           {sessionId && node.turn != null && node.contentEdits?.length ? (
-            <ContentEditsTable sessionId={sessionId} turn={node.turn} files={node.contentEdits} />
+            <ContentEditsTable files={node.contentEdits} />
           ) : null}
         </div>
         {!streaming ? (

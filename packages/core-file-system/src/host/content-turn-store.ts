@@ -7,13 +7,9 @@ export type ContentTurnFile = {
   title: string
   before: string
   after: string
-  reverted?: boolean
 }
 
-export type TurnOp =
-  | { op: 'create'; path: string; title: string; record: Record<string, unknown>; reverted?: boolean }
-  | { op: 'update'; path: string; title: string; before: Record<string, unknown>; after: Record<string, unknown>; reverted?: boolean }
-  | { op: 'delete'; path: string; title: string; record: Record<string, unknown>; reverted?: boolean }
+export type TurnOp = { op: 'create' | 'update' | 'delete'; path: string; title: string }
 
 export type ContentEditSummary = {
   path: string
@@ -21,7 +17,6 @@ export type ContentEditSummary = {
   added: number
   removed: number
   jump_line: number
-  reverted?: boolean
   kind?: 'content' | 'create' | 'update' | 'delete'
 }
 
@@ -100,78 +95,41 @@ export class ContentTurnStore {
   recordOp(sessionId: string, turn: number, op: TurnOp) {
     const bucket = this.bucket(sessionId, turn)
     if (!bucket || !op.path.trim()) return
-    bucket.ops.push(op)
+    if (bucket.ops.some((row) => row.op === op.op && row.path === op.path)) return
+    bucket.ops.push({ op: op.op, path: op.path, title: op.title })
     this.trim(sessionId.trim())
     this.flush()
-  }
-
-  markReverted(sessionId: string, turn: number, path?: string, kind?: ContentEditSummary['kind']) {
-    const files = this.data.sessions[sessionId.trim()]?.[String(turn)]
-    if (!files) return
-    const want = path?.trim()
-    if (!kind || kind === 'content') {
-      const keys = want ? [want] : Object.keys(files.files)
-      for (const key of keys) {
-        const row = files.files[key]
-        if (row) row.reverted = true
-      }
-    }
-    if (!kind || kind !== 'content') {
-      for (const op of files.ops) {
-        if (op.reverted) continue
-        if (want && op.path !== want) continue
-        if (kind && kind !== 'content' && op.op !== kind) continue
-        op.reverted = true
-      }
-    }
-    this.flush()
-  }
-
-  getFile(sessionId: string, turn: number, path: string) {
-    const want = path.trim()
-    const files = this.data.sessions[sessionId.trim()]?.[String(turn)]?.files ?? {}
-    if (files[want]) return files[want]!
-    return Object.values(files).find((row) => row.path === want || row.path.endsWith(want) || want.endsWith(row.path)) ?? null
-  }
-
-  listFiles(sessionId: string, turn: number) {
-    const files = this.data.sessions[sessionId.trim()]?.[String(turn)]?.files
-    return files ? Object.values(files) : []
-  }
-
-  listOps(sessionId: string, turn: number) {
-    return this.data.sessions[sessionId.trim()]?.[String(turn)]?.ops ?? []
   }
 
   summaries(sessionId: string, turn: number): ContentEditSummary[] {
     const content = this.listFiles(sessionId, turn)
       .map((row) => {
         const stats = diffLineStats(row.before, row.after)
-        const item: ContentEditSummary = {
+        return {
           path: row.path,
           title: row.title,
           added: stats.added,
           removed: stats.removed,
           jump_line: stats.jump_line,
-          kind: 'content',
+          kind: 'content' as const,
         }
-        if (row.reverted) item.reverted = true
-        return item
       })
-      .filter((row) => row.added > 0 || row.removed > 0 || row.reverted)
-    const ops = this.listOps(sessionId, turn).map((op) => {
-      const item: ContentEditSummary = {
-        path: op.path,
-        title: op.title,
-        added: op.op === 'create' ? 1 : 0,
-        removed: op.op === 'delete' ? 1 : 0,
-        jump_line: 1,
-        kind: op.op,
-      }
-      if (op.reverted) item.reverted = true
-      return item
-    })
+      .filter((row) => row.added > 0 || row.removed > 0)
+    const files = this.data.sessions[sessionId.trim()]?.[String(turn)]?.ops ?? []
+    const ops = files.map((op) => ({
+      path: op.path,
+      title: op.title,
+      added: op.op === 'create' ? 1 : 0,
+      removed: op.op === 'delete' ? 1 : 0,
+      jump_line: 1,
+      kind: op.op,
+    }))
     return [...ops, ...content]
+  }
+
+  listFiles(sessionId: string, turn: number) {
+    const files = this.data.sessions[sessionId.trim()]?.[String(turn)]?.files
+    return files ? Object.values(files) : []
   }
 
   private trim(sessionId: string) {

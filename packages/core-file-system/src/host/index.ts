@@ -1377,7 +1377,7 @@ export function apply(ctx: Context) {
   }))))
   const notices = new NoticesService(ctx).open(process.env.VITEST ? ':memory:' : dataPath(process.cwd(), 'notices.json'))
   db.register(noticesCollection(notices.store))
-  new ContentTurnService(ctx, db).open(process.env.VITEST ? ':memory:' : dataPath(process.cwd(), 'content-turns.json'))
+  new ContentTurnService(ctx).open(process.env.VITEST ? ':memory:' : dataPath(process.cwd(), 'content-turns.json'))
   ctx.tools.register({
     name: 'db_list',
     description: '列出 File System 路径：/ 为已登记表（path、中文名、view.blurb 说明书），/<表> 为列式记录（不含 content、默认不含 createdAt/updatedAt/createdBy/updatedBy）。默认每页 50，最多 200。columns 参数只取需要的列。表结构用 db_stat。',
@@ -1631,24 +1631,6 @@ export function apply(ctx: Context) {
     try {
       const body = (await route.json()) as { path?: string; value?: unknown }
       route.send(200, await db.writeContent(String(body?.path ?? ''), body?.value))
-    } catch (error) {
-      route.send(400, { error: String(error) })
-    }
-  })
-  ctx.http.route('POST', '/api/db/content-revert', async (route) => {
-    try {
-      const body = (await route.json()) as { sessionId?: string; turn?: number; path?: string; kind?: string }
-      const sessionId = String(body?.sessionId ?? '').trim()
-      const turn = Number(body?.turn)
-      if (!sessionId || !Number.isInteger(turn) || turn < 1) {
-        route.send(400, { error: 'sessionId and turn required' })
-        return
-      }
-      const path = String(body?.path ?? '').trim()
-      const kindRaw = String(body?.kind ?? '').trim()
-      const kind =
-        kindRaw === 'content' || kindRaw === 'create' || kindRaw === 'update' || kindRaw === 'delete' ? kindRaw : undefined
-      route.send(200, await ctx.contentTurns.revert(sessionId, turn, path || undefined, kind))
     } catch (error) {
       route.send(400, { error: String(error) })
     }

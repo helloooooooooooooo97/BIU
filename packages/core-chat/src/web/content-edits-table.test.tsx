@@ -64,8 +64,8 @@ describe('revealContentEdit', () => {
 })
 
 describe('ContentEditsTable', () => {
-  it('renders under the reply and reverts a single file', () => {
-    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ ok: true, results: [] }) }))
+  it('renders under the reply without a revert control', () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({}) }))
     vi.stubGlobal('fetch', fetchMock)
     const nodes: ChatNode[] = [
       { id: 'u-1', kind: 'user', text: '改首页' },
@@ -82,12 +82,8 @@ describe('ContentEditsTable', () => {
     expect(screen.getByTestId('content-edits-table')).toBeTruthy()
     expect(screen.getByText('本回合改动')).toBeTruthy()
     expect(screen.getByText('首页')).toBeTruthy()
-    fireEvent.click(screen.getByLabelText('撤销 首页'))
-    expect(JSON.parse(String((fetchMock.mock.calls[0] as [string, RequestInit])[1].body))).toEqual({
-      sessionId: 'sess-1',
-      turn: 3,
-      path: '/pages/home',
-    })
+    expect(screen.queryByLabelText('撤销 首页')).toBeNull()
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('lists all five 你好 pages as separate rows and reveals the clicked one in the inspector', () => {
