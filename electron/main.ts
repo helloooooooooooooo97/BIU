@@ -488,12 +488,12 @@ async function ensureBrowserPanel() {
       await fetch(`${host}/api/db/action`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ path: '/plugins/browser-panel', action: 'pack' }),
+        body: JSON.stringify({ path: '/plugins/page-browser', action: 'pack' }),
       })
       const start = await fetch(`${host}/api/db/action`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ path: '/plugins/browser-panel', action: 'start' }),
+        body: JSON.stringify({ path: '/plugins/page-browser', action: 'start' }),
       })
       if (start.ok || start.status === 400) {
         browserPanelReady = true

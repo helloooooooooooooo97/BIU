@@ -1,12 +1,14 @@
 {
   "id": "page-browser",
   "name": "浏览器",
-  "blurb": "页面里用 /browser 插入网页浏览器卡片：输入链接就能访问（嵌在 iframe 里），可放大全屏、可后退/刷新，站方禁止嵌入时会提示在新标签打开。",
+  "blurb": "页面 /browser 卡片 + 右侧栏真浏览器。卡片用 iframe；站点禁嵌时点跳转/侧栏打开，会进检查器里的原生浏览器继续看。",
   "tags": [
     "page",
     "editor",
     "browser",
     "iframe",
+    "inspector",
+    "electron",
     "web"
   ],
   "author": "Biu",

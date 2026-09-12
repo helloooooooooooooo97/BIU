@@ -10,11 +10,10 @@
  * 网页版（没有 window.biuBrowser）时给出提示，不报错。
  */
 
+import { BROWSER_OPEN_EVENT, BROWSER_TAB_ID, takePendingBrowserUrl } from './open.ts'
+
 const React = globalThis.React
 const { useCallback, useEffect, useLayoutEffect, useRef, useState } = React
-
-export const name = 'browser-panel'
-export const inject = ['slots', 'pick']
 
 /** core-pick 服务的最小接口（插件不能 import @biu/*，从 ctx.get('pick') 拿）。 */
 type PickApi = {
@@ -138,6 +137,24 @@ function BrowserPanel({ pick }: { pick?: PickApi }) {
     api.visible(show)
   }, [api])
 
+  useEffect(() => {
+    const goUrl = (raw: string) => {
+      const url = String(raw || '').trim()
+      if (!url || !api) return
+      setError('')
+      setAddr(url)
+      api.navigate(url)
+    }
+    const pending = takePendingBrowserUrl()
+    if (pending) goUrl(pending)
+    const onOpen = (event: Event) => {
+      const detail = (event as CustomEvent).detail as { url?: unknown } | undefined
+      if (typeof detail?.url === 'string') goUrl(detail.url)
+    }
+    window.addEventListener(BROWSER_OPEN_EVENT, onOpen)
+    return () => window.removeEventListener(BROWSER_OPEN_EVENT, onOpen)
+  }, [api])
+
   useLayoutEffect(() => {
     pushBounds()
     if (!api) return
@@ -184,7 +201,7 @@ function BrowserPanel({ pick }: { pick?: PickApi }) {
             route,
             title: state.title || route,
             path: route,
-            plugin: 'browser-panel',
+            plugin: 'page-browser',
             text: text || undefined,
             selection,
           }
@@ -413,7 +430,7 @@ function BrowserPanel({ pick }: { pick?: PickApi }) {
   )
 }
 
-export function apply(ctx: {
+export function placeInspectorBrowser(ctx: {
   slots: {
     place: (
       name: string,
@@ -424,10 +441,10 @@ export function apply(ctx: {
   get: (name: string) => unknown
 }) {
   ctx.slots.place('inspector-panels', BrowserPanel, {
-    key: 'browser-panel',
+    key: 'browser',
     order: 60,
     props: () => ({
-      tabId: 'browser',
+      tabId: BROWSER_TAB_ID,
       tabLabel: '浏览器',
       requiresSession: true,
       centerKinds: ['session'],
