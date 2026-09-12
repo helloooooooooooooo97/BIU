@@ -147,7 +147,6 @@ export const ContentEditsTable = memo(function ContentEditsTable({
   turn?: number
 }) {
   const visible = files.filter((file) => (file.kind === 'content' || !file.kind) && (file.added || file.removed))
-  const [open, setOpen] = useState(false)
   const [diffPath, setDiffPath] = useState<string | null>(null)
   if (!visible.length) return null
   const added = visible.reduce((n, file) => n + file.added, 0)
@@ -158,66 +157,56 @@ export const ContentEditsTable = memo(function ContentEditsTable({
       className="overflow-hidden rounded-[10px] border border-(--dsw-border) bg-(color-mix(in_srgb,var(--dsw-sidebar)_65%,transparent))"
       data-testid="content-edits-table"
     >
-      <button
-        type="button"
-        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left"
-        aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
-      >
-        <div className="flex min-w-0 items-center gap-1.5">
-          {open ? <ChevronDownIcon className="size-3.5 shrink-0 text-(--dsw-label-3)" /> : <ChevronRightIcon className="size-3.5 shrink-0 text-(--dsw-label-3)" />}
-          <div className="text-(length:--dsw-chat-ui-font-size) font-semibold text-(--dsw-label-2)">本回合文件系统内容的改动</div>
-        </div>
+      <div className="flex items-center justify-between gap-2 border-b border-(--dsw-border) px-3 py-2">
+        <div className="text-(length:--dsw-chat-ui-font-size) font-semibold text-(--dsw-label-2)">本回合文件系统内容的改动</div>
         <div className="flex items-center gap-2 text-[12px] font-semibold tabular-nums">
           <span className="text-[#448361]">+{added}</span>
           <span className="text-[#c4554d]">−{removed}</span>
         </div>
-      </button>
-      {open ? (
-        <ul className="m-0 list-none border-t border-(--dsw-border) p-0">
-          {visible.map((file) => {
-            const shown = diffPath === file.path
-            return (
-              <li key={file.path} className="border-t border-(--dsw-border) first:border-t-0">
-                <div className="flex items-center gap-2 px-3 py-1.5">
-                  <button
-                    type="button"
-                    className="shrink-0 text-(--dsw-label-3)"
-                    aria-expanded={shown}
-                    aria-label={shown ? `收起 ${contentEditLabel(file, visible)} 的 diff` : `查看 ${contentEditLabel(file, visible)} 的 diff`}
-                    onClick={() => setDiffPath(shown ? null : file.path)}
-                  >
-                    {shown ? <ChevronDownIcon className="size-3.5" /> : <ChevronRightIcon className="size-3.5" />}
-                  </button>
-                  <button
-                    type="button"
-                    className="min-w-0 flex-1 truncate text-left text-[13px] font-semibold text-(--dsw-label) hover:underline"
-                    title={file.path}
-                    onClick={() => revealContentEdit(file.path, file.jump_line)}
-                  >
-                    {contentEditLabel(file, visible)}
-                  </button>
-                  <button
-                    type="button"
-                    className="text-[12px] font-semibold tabular-nums text-[#448361] hover:underline"
-                    onClick={() => revealContentEdit(file.path, file.jump_line)}
-                  >
-                    +{file.added}
-                  </button>
-                  <button
-                    type="button"
-                    className="text-[12px] font-semibold tabular-nums text-[#c4554d] hover:underline"
-                    onClick={() => revealContentEdit(file.path, file.jump_line)}
-                  >
-                    −{file.removed}
-                  </button>
-                </div>
-                {shown && sessionId && turn != null ? <FileDiffView sessionId={sessionId} turn={turn} path={file.path} /> : null}
-              </li>
-            )
-          })}
-        </ul>
-      ) : null}
+      </div>
+      <ul className="m-0 list-none p-0">
+        {visible.map((file) => {
+          const shown = diffPath === file.path
+          return (
+            <li key={file.path} className="border-t border-(--dsw-border) first:border-t-0">
+              <div className="flex items-center gap-2 px-3 py-1.5">
+                <button
+                  type="button"
+                  className="shrink-0 text-(--dsw-label-3)"
+                  aria-expanded={shown}
+                  aria-label={shown ? `收起 ${contentEditLabel(file, visible)} 的 diff` : `查看 ${contentEditLabel(file, visible)} 的 diff`}
+                  onClick={() => setDiffPath(shown ? null : file.path)}
+                >
+                  {shown ? <ChevronDownIcon className="size-3.5" /> : <ChevronRightIcon className="size-3.5" />}
+                </button>
+                <button
+                  type="button"
+                  className="min-w-0 flex-1 truncate text-left text-[13px] font-semibold text-(--dsw-label) hover:underline"
+                  title={file.path}
+                  onClick={() => revealContentEdit(file.path, file.jump_line)}
+                >
+                  {contentEditLabel(file, visible)}
+                </button>
+                <button
+                  type="button"
+                  className="text-[12px] font-semibold tabular-nums text-[#448361] hover:underline"
+                  onClick={() => revealContentEdit(file.path, file.jump_line)}
+                >
+                  +{file.added}
+                </button>
+                <button
+                  type="button"
+                  className="text-[12px] font-semibold tabular-nums text-[#c4554d] hover:underline"
+                  onClick={() => revealContentEdit(file.path, file.jump_line)}
+                >
+                  −{file.removed}
+                </button>
+              </div>
+              {shown && sessionId && turn != null ? <FileDiffView sessionId={sessionId} turn={turn} path={file.path} /> : null}
+            </li>
+          )
+        })}
+      </ul>
     </div>
   )
 })
