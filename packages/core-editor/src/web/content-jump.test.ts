@@ -68,6 +68,7 @@ test('applyContentJump navigate still moves the caret when asked', () => {
   const editor = editorOf(md)
   applyContentJump(editor, md, { path: '/pages/home', start_line: 5, end_line: 5 }, { navigate: true })
   assert.match(textAtCaret(editor), /UNIQUE_NAV_ANCHOR/)
+  assert.match(editor.view.dom.innerHTML, /page-agent-edit/)
   editor.destroy()
 })
 
