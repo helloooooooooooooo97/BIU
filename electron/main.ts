@@ -100,45 +100,203 @@ type Cmd =
   | { type: 'inspect'; x: number; y: number }
   | { type: 'close' }
 
-const SNAP_EL = `{
-  tag: el.tagName.toLowerCase(),
-  id: el.id || '',
-  className: typeof el.className === 'string' ? el.className : '',
-  text: (el.innerText || el.textContent || '').trim().slice(0, 400),
-  html: el.outerHTML.slice(0, 2000),
-}`
-
-/** BrowserView 盖住网页，点选必须在访客页里接 click，不能靠外壳 DOM。 */
+/**
+ * 跟 core-pick overlay 同一套：pointerdown 起拖、move 画框、up 提交命中。
+ * BrowserView 盖住主窗口，主界面的 PickOverlay 收不到访客页指针。
+ */
 function inspectScript(x: number, y: number) {
   if (Number.isFinite(x) && Number.isFinite(y) && x >= 0 && y >= 0) {
     return `(() => {
       const el = document.elementFromPoint(${Math.round(x)}, ${Math.round(y)})
-      if (!el) return null
-      return ${SNAP_EL}
+      if (!el) return { items: [] }
+      return { items: [{
+        tag: el.tagName.toLowerCase(),
+        id: el.id || '',
+        className: typeof el.className === 'string' ? el.className : '',
+        text: (el.innerText || el.textContent || '').trim().slice(0, 400),
+        html: el.outerHTML.slice(0, 800),
+      }] }
     })()`
   }
   return `(() => {
     if (window.__biuPickOff) window.__biuPickOff()
     return new Promise((resolve) => {
-      const prev = document.documentElement.style.cursor
+      const FILL = 'rgba(91,159,214,.22)'
+      const STROKE = 'rgba(91,159,214,.4)'
+      const LINE = '#5b9fd6'
+      const DRAG = 6
+      const skip = new Set(['SCRIPT', 'STYLE', 'LINK', 'META', 'NOSCRIPT', 'HEAD', 'HTML'])
+      const SEL = 'a,button,img,p,h1,h2,h3,h4,h5,h6,li,td,th,article,section,blockquote,pre,figure,figcaption,label,summary,dt,dd,code,video'
+      const root = document.createElement('div')
+      root.id = '__biuPickRoot'
+      root.style.cssText = 'position:fixed;inset:0;z-index:2147483646;pointer-events:none;cursor:crosshair'
+      const marquee = document.createElement('div')
+      const hover = document.createElement('div')
+      const hits = document.createElement('div')
+      const boxCss = (border) =>
+        'position:absolute;box-sizing:border-box;pointer-events:none;border-radius:3px;border:1px solid ' + border
+      marquee.style.cssText = boxCss(LINE) + ';background:' + FILL + ';display:none'
+      hover.style.cssText = boxCss(STROKE) + ';background:' + FILL + ';display:none'
+      hits.style.cssText = 'position:absolute;inset:0;pointer-events:none'
+      root.append(marquee, hover, hits)
+      document.documentElement.appendChild(root)
+      const prevCursor = document.documentElement.style.cursor
       document.documentElement.style.cursor = 'crosshair'
-      const finish = (info) => {
-        document.documentElement.style.cursor = prev
-        window.removeEventListener('click', onClick, true)
-        window.__biuPickOff = null
-        resolve(info)
+      const snap = (el) => ({
+        tag: el.tagName.toLowerCase(),
+        id: el.id || '',
+        className: typeof el.className === 'string' ? el.className : '',
+        text: (el.innerText || el.textContent || '').trim().slice(0, 400),
+        html: el.outerHTML.slice(0, 800),
+      })
+      const overlap = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top
+      const usable = (el) => {
+        if (!(el instanceof Element) || skip.has(el.tagName) || root.contains(el)) return false
+        const r = el.getBoundingClientRect()
+        return r.width >= 4 && r.height >= 4
       }
-      window.__biuPickOff = () => finish(null)
-      function onClick(ev) {
+      const atPoint = (px, py) => {
+        for (const el of document.elementsFromPoint(px, py)) {
+          if (usable(el) && el !== document.body && el !== document.documentElement) return el
+        }
+        return null
+      }
+      const place = (node, r) => {
+        node.style.display = 'block'
+        node.style.left = r.left + 'px'
+        node.style.top = r.top + 'px'
+        node.style.width = r.width + 'px'
+        node.style.height = r.height + 'px'
+      }
+      const hitsInRect = (box) => {
+        let found = []
+        for (const el of document.body.querySelectorAll(SEL)) {
+          if (!usable(el)) continue
+          const r = el.getBoundingClientRect()
+          if (!overlap({ left: r.left, top: r.top, right: r.right, bottom: r.bottom }, box)) continue
+          found.push(el)
+        }
+        if (!found.length) {
+          for (const el of document.body.querySelectorAll('*')) {
+            if (!usable(el) || el === document.body) continue
+            const r = el.getBoundingClientRect()
+            if (!overlap({ left: r.left, top: r.top, right: r.right, bottom: r.bottom }, box)) continue
+            found.push(el)
+          }
+        }
+        const nested = new Set()
+        for (const a of found) {
+          for (const b of found) {
+            if (a !== b && a.contains(b)) nested.add(a)
+          }
+        }
+        return found.filter((el) => !nested.has(el)).slice(0, 40)
+      }
+      const paintHits = (els) => {
+        hits.replaceChildren()
+        for (const el of els) {
+          const node = document.createElement('div')
+          node.style.cssText = boxCss(STROKE) + ';background:' + FILL
+          place(node, el.getBoundingClientRect())
+          hits.appendChild(node)
+        }
+      }
+      let drag = null
+      const finish = (els) => {
+        document.documentElement.style.cursor = prevCursor
+        window.removeEventListener('pointerdown', onDown, true)
+        window.removeEventListener('pointermove', onMove, true)
+        window.removeEventListener('pointerup', onUp, true)
+        window.removeEventListener('click', onClick, true)
+        window.removeEventListener('keydown', onKey, true)
+        root.remove()
+        window.__biuPickOff = null
+        resolve({ items: (els || []).map(snap) })
+      }
+      const onMove = (ev) => {
+        if (drag) {
+          const dx = ev.clientX - drag.x
+          const dy = ev.clientY - drag.y
+          if (!drag.boxed && dx * dx + dy * dy >= DRAG * DRAG) drag.boxed = true
+          if (!drag.boxed) return
+          hover.style.display = 'none'
+          const left = Math.min(drag.x, ev.clientX)
+          const top = Math.min(drag.y, ev.clientY)
+          const width = Math.abs(ev.clientX - drag.x)
+          const height = Math.abs(ev.clientY - drag.y)
+          place(marquee, { left, top, width, height })
+          paintHits(hitsInRect({ left, top, right: left + width, bottom: top + height }))
+          return
+        }
+        const el = atPoint(ev.clientX, ev.clientY)
+        if (!el) {
+          hover.style.display = 'none'
+          return
+        }
+        place(hover, el.getBoundingClientRect())
+      }
+      const onDown = (ev) => {
+        if (ev.button !== 0) return
         ev.preventDefault()
         ev.stopPropagation()
-        const el = document.elementFromPoint(ev.clientX, ev.clientY)
-        if (!el) { finish(null); return }
-        finish(${SNAP_EL})
+        drag = { x: ev.clientX, y: ev.clientY, boxed: false }
       }
+      const onUp = (ev) => {
+        if (!drag) return
+        const started = drag
+        drag = null
+        ev.preventDefault()
+        ev.stopPropagation()
+        if (started.boxed) {
+          const left = Math.min(started.x, ev.clientX)
+          const top = Math.min(started.y, ev.clientY)
+          const width = Math.abs(ev.clientX - started.x)
+          const height = Math.abs(ev.clientY - started.y)
+          finish(hitsInRect({ left, top, right: left + width, bottom: top + height }))
+          return
+        }
+        const el = atPoint(ev.clientX, ev.clientY)
+        finish(el ? [el] : [])
+      }
+      const onClick = (ev) => {
+        ev.preventDefault()
+        ev.stopPropagation()
+      }
+      const onKey = (ev) => {
+        if (ev.key === 'Escape') {
+          ev.preventDefault()
+          finish([])
+        }
+      }
+      window.__biuPickOff = () => finish([])
+      window.addEventListener('pointerdown', onDown, true)
+      window.addEventListener('pointermove', onMove, true)
+      window.addEventListener('pointerup', onUp, true)
       window.addEventListener('click', onClick, true)
+      window.addEventListener('keydown', onKey, true)
     })
   })()`
+}
+
+function inspectedItems(raw: unknown): Array<{ tag: string; id: string; className: string; text: string; html: string }> {
+  if (!raw || typeof raw !== 'object') return []
+  if (Array.isArray(raw)) return raw.filter((item) => item && typeof item === 'object') as Array<{
+    tag: string
+    id: string
+    className: string
+    text: string
+    html: string
+  }>
+  const rec = raw as { items?: unknown; tag?: unknown }
+  if (Array.isArray(rec.items)) return rec.items.filter((item) => item && typeof item === 'object') as Array<{
+    tag: string
+    id: string
+    className: string
+    text: string
+    html: string
+  }>
+  if (typeof rec.tag === 'string') return [raw as { tag: string; id: string; className: string; text: string; html: string }]
+  return []
 }
 
 function send(channel: string, payload: unknown) {
@@ -225,7 +383,7 @@ ipcMain.on('biu:browser:cmd', async (_event, cmd: Cmd) => {
   if (cmd.type === 'inspect') {
     try {
       const info = await wc.executeJavaScript(inspectScript(cmd.x, cmd.y), true)
-      send('biu:browser:inspected', info)
+      send('biu:browser:inspected', { items: inspectedItems(info) })
     } catch (error) {
       send('biu:browser:error', { code: 0, desc: String((error as Error).message || error), url: '' })
     }
