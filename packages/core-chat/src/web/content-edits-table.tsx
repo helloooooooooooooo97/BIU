@@ -227,7 +227,7 @@ export const ContentEditsTable = memo(function ContentEditsTable({
                 </button>
                 <button
                   type="button"
-                  className="min-w-0 flex-1 truncate text-left text-[13px] font-semibold text-(--dsw-label) hover:underline"
+                  className="min-w-0 flex-1 truncate text-left text-[12px] font-semibold text-(--dsw-label) hover:underline"
                   title={file.path}
                   onClick={() => revealContentEdit(file.path, file.jump_line)}
                 >
