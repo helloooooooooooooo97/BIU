@@ -151,8 +151,8 @@ function FileDiffView({ sessionId, turn, path }: { sessionId: string; turn: numb
         if (line.type === 'skip') {
           const oldRange = line.oldFrom != null && line.oldTo != null ? `${line.oldFrom}–${line.oldTo}` : ''
           return (
-            <div key={`skip-${index}`} className="flex px-2 py-0.5 text-[#7B7B79]">
-              <span className="w-10 shrink-0 text-right tabular-nums">{oldRange}</span>
+            <div key={`skip-${index}`} className="flex px-3 py-0.5 text-[#7B7B79]">
+              <span className="w-7 shrink-0 text-right tabular-nums">{oldRange}</span>
               <span className="w-10 shrink-0" />
               <span className="min-w-0 flex-1 px-2 text-center">··· 未改 {line.count} 行</span>
             </div>
@@ -168,12 +168,12 @@ function FileDiffView({ sessionId, turn, path }: { sessionId: string; turn: numb
         return (
           <div
             key={`${index}-${line.type}`}
-            className={`flex whitespace-pre-wrap break-all px-2 ${rowClass}`}
+            className={`flex whitespace-pre-wrap break-all px-3 ${rowClass}`}
             data-old-line={line.oldLine ?? ''}
             data-new-line={line.newLine ?? ''}
           >
-            <span className="w-10 shrink-0 select-none text-right tabular-nums text-[#7B7B79]">{line.oldLine ?? ''}</span>
-            <span className="w-10 shrink-0 select-none text-right tabular-nums text-[#7B7B79]">{line.newLine ?? ''}</span>
+            <span className="w-7 shrink-0 select-none text-right tabular-nums text-[#7B7B79]">{line.oldLine ?? ''}</span>
+            <span className="w-7 shrink-0 select-none text-right tabular-nums text-[#7B7B79]">{line.newLine ?? ''}</span>
             <span className="w-4 shrink-0 select-none px-1 opacity-70">{prefix}</span>
             <span className="min-w-0 flex-1">{line.text || ' '}</span>
           </div>
@@ -221,7 +221,7 @@ export const ContentEditsTable = memo(function ContentEditsTable({
               <div className="flex items-center gap-2 px-3 py-1.5">
                 <button
                   type="button"
-                  className="shrink-0 text-(--dsw-label-3)"
+                  className="flex w-7 shrink-0 items-center justify-end text-(--dsw-label-3)"
                   aria-expanded={shown}
                   aria-label={shown ? `收起 ${contentEditLabel(file, visible)} 的 diff` : `查看 ${contentEditLabel(file, visible)} 的 diff`}
                   onClick={() => setDiffPath(shown ? null : file.path)}
