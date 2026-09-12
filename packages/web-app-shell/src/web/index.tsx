@@ -44,7 +44,7 @@ import { SessionInspector } from './session-inspector.tsx'
 import { SessionConfigDialog } from '@biu/web-session-view/dialog'
 import { FolderGlyph } from '@biu/web-session-view/folder-glyph'
 import { OverlayChatWindow } from './overlay-window.tsx'
-import { ShellSettingsShortcuts, ShellSettingsUpdate } from './shell-chrome.tsx'
+import { ShellSettingsAbout, ShellSettingsShortcuts, ShellSettingsUpdate } from './shell-chrome.tsx'
 import { ShellSearchPanel } from './shell-search.tsx'
 import { useSlotEntries } from '@biu/web-slots'
 import type { SlotsService } from '@biu/web-slots'
@@ -856,6 +856,7 @@ function Shell(props: SlotProps) {
                       { key: 'routes', label: '路由' },
                       { key: 'events', label: '事件' },
                       { key: 'update', label: '更新' },
+                      { key: 'about', label: '关于' },
                     ].map((item) => (
                       <li key={item.key}>
                         <button
@@ -881,6 +882,7 @@ function Shell(props: SlotProps) {
                     <section>{props.renderSlot('log')}</section>
                   ) : null}
                   {settingsTab === 'update' ? <ShellSettingsUpdate /> : null}
+                  {settingsTab === 'about' ? <ShellSettingsAbout /> : null}
                 </div>
               </div>
             </div>

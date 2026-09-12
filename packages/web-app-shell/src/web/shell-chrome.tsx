@@ -14,6 +14,21 @@ import { chromeIcon } from './chrome-icon.ts'
 import { applyNoticeClick, noticeIdOf } from './notice-open.ts'
 import { readMainDataRoute } from '@biu/core-file-system/main-data-route'
 
+export function ShellSettingsAbout() {
+  return (
+    <section data-testid="settings-about">
+      <p className="m-0 px-2 text-[14px] font-semibold text-(--dsw-label)">Biu Agent OS</p>
+      <p className="settings-muted m-0 px-2 pt-2">
+        个人 / 非商业免费。组织使用、生产部署与商用须事先取得书面授权。许可正文为 PolyForm Noncommercial 1.0.0，商用申请见仓库 COMMERCIAL.md。
+      </p>
+      <p className="settings-muted m-0 px-2 pt-2">
+        public/grok-bot/ 角色素材归 xAI，不在本许可或任何 Biu 商用授权内；二次分发与商用有侵权风险。详见 NOTICE.md。
+      </p>
+      <p className="settings-muted m-0 px-2 pt-2">已按 MIT 发布的旧版本收不回来；收紧只对当前及之后版本生效。</p>
+    </section>
+  )
+}
+
 export function ShellSettingsShortcuts() {
   return (
     <section data-testid="settings-shortcuts">
