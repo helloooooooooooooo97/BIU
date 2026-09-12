@@ -41,3 +41,13 @@ test('content turn store summaries keep reverted rows', () => {
   assert.equal(sum[0]?.reverted, true)
   assert.equal(sum[0]?.added, 1)
 })
+
+test('create ops show up beside content edits', () => {
+  const store = new ContentTurnStore().open(':memory:')
+  store.recordOp('s1', 3, { op: 'create', path: '/pages/a', title: '你好', record: { title: '你好' } })
+  store.recordOp('s1', 3, { op: 'create', path: '/pages/b', title: '你好', record: { title: '你好' } })
+  store.record({ sessionId: 's1', turn: 3, path: '/pages/a', title: '你好', before: '', after: '你好' })
+  const sum = store.summaries('s1', 3)
+  assert.equal(sum.filter((row) => row.kind === 'create').length, 2)
+  assert.equal(sum.filter((row) => row.kind === 'content').length, 1)
+})

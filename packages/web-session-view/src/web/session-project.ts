@@ -44,6 +44,7 @@ export type SessionEvent = {
         removed: number
         jump_line: number
         reverted?: boolean
+        kind?: 'content' | 'create' | 'update' | 'delete'
       }>
     }
 )
@@ -133,6 +134,7 @@ export type ChatNode =
         removed: number
         jump_line: number
         reverted?: boolean
+        kind?: 'content' | 'create' | 'update' | 'delete'
       }>
     }
   | { id: string; kind: 'turn'; text: string }

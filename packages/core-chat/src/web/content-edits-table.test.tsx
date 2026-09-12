@@ -80,6 +80,7 @@ describe('ContentEditsTable', () => {
     ]
     render(<ChatNodeList nodes={nodes} sessionId="sess-1" onInspect={() => undefined} onFork={() => undefined} />)
     expect(screen.getByTestId('content-edits-table')).toBeTruthy()
+    expect(screen.getByText('本回合改动')).toBeTruthy()
     expect(screen.getByText('首页')).toBeTruthy()
     fireEvent.click(screen.getByLabelText('撤销 首页'))
     expect(JSON.parse(String((fetchMock.mock.calls[0] as [string, RequestInit])[1].body))).toEqual({
