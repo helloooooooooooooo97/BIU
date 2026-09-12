@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { diffLineStats } from './line-diff.ts'
+import { diffCharStats } from './line-diff.ts'
 
 export type ContentTurnFile = {
   path: string
@@ -102,9 +102,9 @@ export class ContentTurnStore {
   }
 
   summaries(sessionId: string, turn: number): ContentEditSummary[] {
-    const content = this.listFiles(sessionId, turn)
+    return this.listFiles(sessionId, turn)
       .map((row) => {
-        const stats = diffLineStats(row.before, row.after)
+        const stats = diffCharStats(row.before, row.after)
         return {
           path: row.path,
           title: row.title,
@@ -115,21 +115,17 @@ export class ContentTurnStore {
         }
       })
       .filter((row) => row.added > 0 || row.removed > 0)
-    const files = this.data.sessions[sessionId.trim()]?.[String(turn)]?.ops ?? []
-    const ops = files.map((op) => ({
-      path: op.path,
-      title: op.title,
-      added: op.op === 'create' ? 1 : 0,
-      removed: op.op === 'delete' ? 1 : 0,
-      jump_line: 1,
-      kind: op.op,
-    }))
-    return [...ops, ...content]
   }
 
   listFiles(sessionId: string, turn: number) {
     const files = this.data.sessions[sessionId.trim()]?.[String(turn)]?.files
     return files ? Object.values(files) : []
+  }
+
+  /** 回合内某文件的 before/after；过期裁剪后没有。不进 session 事件，避免把全文再存一份。 */
+  snapshot(sessionId: string, turn: number, path: string) {
+    const files = this.data.sessions[sessionId.trim()]?.[String(turn)]?.files
+    return files?.[path.trim()] ?? null
   }
 
   private trim(sessionId: string) {

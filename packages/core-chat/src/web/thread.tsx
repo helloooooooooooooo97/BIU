@@ -43,7 +43,8 @@ import {
   captureChatScroll,
   firstPaintStartIndex,
   groupNodesIntoTurns,
-  isChatStuckToLatest,
+  distanceFromChatBottom,
+  nextStickToLatest,
   pinChatToLatest,
   PIN_TOP_SLACK_PX,
   recalledChatScroll,
@@ -650,7 +651,7 @@ function NodeView({
             <LiveDispatchTable tasks={dispatchTasks} />
           ) : null}
           {sessionId && node.turn != null && node.contentEdits?.length ? (
-            <ContentEditsTable files={node.contentEdits} />
+            <ContentEditsTable files={node.contentEdits} sessionId={sessionId} turn={node.turn} />
           ) : null}
         </div>
         {!streaming ? (
@@ -897,9 +898,23 @@ export const ChatThread = memo(function ChatThread(props: SlotProps) {
         })
     }
 
+    let lastTop = parent.scrollTop
+    const applyStick = (scrollingUp: boolean) => {
+      stickToBottomRef.current = nextStickToLatest({
+        stuck: stickToBottomRef.current,
+        distanceFromBottom: distanceFromChatBottom(parent),
+        scrollTop: parent.scrollTop,
+        scrollingUp,
+      })
+    }
     const onScroll = () => {
-      stickToBottomRef.current = isChatStuckToLatest(parent)
+      applyStick(parent.scrollTop < lastTop - 0.5)
+      lastTop = parent.scrollTop
       maybePrefetchOlder()
+    }
+    const onWheel = (event: WheelEvent) => {
+      // 滚轮先于 scroll；必须立刻松钉，否则 ResizeObserver / 贴底 layout 会把位移拽回去。
+      if (event.deltaY < 0) stickToBottomRef.current = false
     }
     const onUserScroll = () => {
       onScroll()
@@ -912,8 +927,10 @@ export const ChatThread = memo(function ChatThread(props: SlotProps) {
     }
     onScroll()
     parent.addEventListener('scroll', onUserScroll, { passive: true })
+    parent.addEventListener('wheel', onWheel, { passive: true })
     return () => {
       parent.removeEventListener('scroll', onUserScroll)
+      parent.removeEventListener('wheel', onWheel)
     }
   }, [sessionId, scrollEpoch, hasMoreOlder, loadingOlder, sessionView])
 

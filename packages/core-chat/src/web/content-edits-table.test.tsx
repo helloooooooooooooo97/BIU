@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { CONTENT_JUMP_EVENT } from '@biu/type-file-system'
 import { ChatNodeList } from './thread.tsx'
 import {
   INSPECTOR_REVEAL_EVENT,
+  compactEqualLines,
   contentEditLabel,
+  numberDiffLines,
   revealContentEdit,
   type ContentEditRow,
 } from './content-edits-table.tsx'
@@ -80,10 +82,32 @@ describe('ContentEditsTable', () => {
     ]
     render(<ChatNodeList nodes={nodes} sessionId="sess-1" onInspect={() => undefined} onFork={() => undefined} />)
     expect(screen.getByTestId('content-edits-table')).toBeTruthy()
-    expect(screen.getByText('本回合改动')).toBeTruthy()
+    expect(screen.getByText('本回合文件系统内容的改动')).toBeTruthy()
     expect(screen.getByText('首页')).toBeTruthy()
     expect(screen.queryByLabelText('撤销 首页')).toBeNull()
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('hides create rows and only lists content character edits', () => {
+    const nodes: ChatNode[] = [
+      { id: 'u-1', kind: 'user', text: '建页' },
+      {
+        id: 'r-1',
+        kind: 'reply',
+        copyText: '好了',
+        turn: 1,
+        parts: [{ id: 'a-1', kind: 'assistant', text: '好了' }],
+        contentEdits: [
+          { path: '/pages/new', title: '新页', added: 0, removed: 0, jump_line: 1, kind: 'create' },
+          { path: '/pages/home', title: '首页', added: 12, removed: 3, jump_line: 2, kind: 'content' },
+        ],
+      },
+    ]
+    render(<ChatNodeList nodes={nodes} sessionId="sess-hide" onInspect={() => undefined} onFork={() => undefined} />)
+    expect(screen.queryByText(/新建/)).toBeNull()
+    expect(screen.getByText('首页')).toBeTruthy()
+    expect(screen.getAllByText('+12').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('−3').length).toBeGreaterThan(0)
   })
 
   it('lists all five 你好 pages as separate rows and reveals the clicked one in the inspector', () => {
@@ -112,4 +136,77 @@ describe('ContentEditsTable', () => {
     expect(seen).toEqual([{ collection: '/pages', recordId: 'p4', unique: true }])
     window.removeEventListener(INSPECTOR_REVEAL_EVENT, onReveal)
   })
+
+  it('loads a file diff from content-turns when the row chevron is opened', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/api/content-turns/file')) {
+        return {
+          ok: true,
+          json: async () => ({ before: 'keep\na\nkeep2\n', after: 'keep\nb\nkeep2\n' }),
+        }
+      }
+      return { ok: true, json: async () => ({}) }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const nodes: ChatNode[] = [
+      { id: 'u-1', kind: 'user', text: '改' },
+      {
+        id: 'r-1',
+        kind: 'reply',
+        copyText: '好了',
+        turn: 7,
+        parts: [{ id: 'a-1', kind: 'assistant', text: '好了' }],
+        contentEdits: [{ path: '/pages/home', title: '首页', added: 1, removed: 1, jump_line: 2 }],
+      },
+    ]
+    render(<ChatNodeList nodes={nodes} sessionId="sess-diff" onInspect={() => undefined} onFork={() => undefined} />)
+    fireEvent.click(screen.getByLabelText('查看 首页 的 diff'))
+    await waitFor(() => expect(screen.getByTestId('content-edit-diff')).toBeTruthy())
+    expect(screen.getByTestId('content-edit-diff').textContent).toContain('a')
+    expect(screen.getByTestId('content-edit-diff').textContent).toContain('b')
+    const diff = screen.getByTestId('content-edit-diff')
+    expect(diff.querySelector('[data-old-line="2"]')?.textContent).toContain('a')
+    expect(diff.querySelector('[data-new-line="2"]')?.textContent).toContain('b')
+    expect(fetchMock.mock.calls.some((call) => String(call[0]).includes('session=sess-diff') && String(call[0]).includes('turn=7'))).toBe(true)
+  })
 })
+
+describe('numberDiffLines', () => {
+  it('tags add and remove with source line numbers', () => {
+    const rows = numberDiffLines([
+      { type: 'equal', text: 'keep' },
+      { type: 'remove', text: 'a' },
+      { type: 'add', text: 'b' },
+      { type: 'equal', text: 'keep2' },
+    ])
+    expect(rows[1]).toMatchObject({ type: 'remove', oldLine: 2 })
+    expect(rows[2]).toMatchObject({ type: 'add', newLine: 2 })
+    expect(rows[3]).toMatchObject({ type: 'equal', oldLine: 3, newLine: 3 })
+  })
+})
+
+describe('compactEqualLines', () => {
+  it('keeps unchanged lines next to edits and skips the rest', () => {
+    const rows = compactEqualLines(
+      [
+        { type: 'equal', text: '1' },
+        { type: 'equal', text: '2' },
+        { type: 'equal', text: '3' },
+        { type: 'equal', text: '4' },
+        { type: 'equal', text: '5' },
+        { type: 'add', text: 'x' },
+        { type: 'equal', text: '6' },
+        { type: 'equal', text: '7' },
+        { type: 'equal', text: '8' },
+        { type: 'equal', text: '9' },
+        { type: 'equal', text: '10' },
+      ],
+      2,
+      3,
+    )
+    expect(rows.some((row) => row.type === 'skip')).toBe(true)
+    expect(rows.some((row) => row.type === 'add' && row.text === 'x')).toBe(true)
+  })
+})
+
