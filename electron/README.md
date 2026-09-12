@@ -21,7 +21,7 @@ CSP `frame-ancestors` 限制（那是 iframe 才有的约束）。
 npm run electron:dev     # 编译 electron/main.ts，host/vite 已在跑就复用，否则自己起
 ```
 
-窗口里就是你现在的界面（**现有代码一行都没改**），右侧栏点 `+` 选「浏览器」即可。
+窗口里就是你现在的界面。macOS 红绿灯会让开左侧品牌行，不再叠在导航上。右侧栏点 `+` 选「浏览器」（要先开一个会话）。第一次启动会 pack + start `browser-panel`。
 
 其它：
 

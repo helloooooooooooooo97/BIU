@@ -97,6 +97,47 @@ type Cmd =
   | { type: 'inspect'; x: number; y: number }
   | { type: 'close' }
 
+const SNAP_EL = `{
+  tag: el.tagName.toLowerCase(),
+  id: el.id || '',
+  className: typeof el.className === 'string' ? el.className : '',
+  text: (el.innerText || el.textContent || '').trim().slice(0, 400),
+  html: el.outerHTML.slice(0, 2000),
+}`
+
+/** BrowserView 盖住网页，点选必须在访客页里接 click，不能靠外壳 DOM。 */
+function inspectScript(x: number, y: number) {
+  if (Number.isFinite(x) && Number.isFinite(y) && x >= 0 && y >= 0) {
+    return `(() => {
+      const el = document.elementFromPoint(${Math.round(x)}, ${Math.round(y)})
+      if (!el) return null
+      return ${SNAP_EL}
+    })()`
+  }
+  return `(() => {
+    if (window.__biuPickOff) window.__biuPickOff()
+    return new Promise((resolve) => {
+      const prev = document.documentElement.style.cursor
+      document.documentElement.style.cursor = 'crosshair'
+      const finish = (info) => {
+        document.documentElement.style.cursor = prev
+        window.removeEventListener('click', onClick, true)
+        window.__biuPickOff = null
+        resolve(info)
+      }
+      window.__biuPickOff = () => finish(null)
+      function onClick(ev) {
+        ev.preventDefault()
+        ev.stopPropagation()
+        const el = document.elementFromPoint(ev.clientX, ev.clientY)
+        if (!el) { finish(null); return }
+        finish(${SNAP_EL})
+      }
+      window.addEventListener('click', onClick, true)
+    })
+  })()`
+}
+
 function send(channel: string, payload: unknown) {
   if (win && !win.isDestroyed()) win.webContents.send(channel, payload)
 }
@@ -179,22 +220,8 @@ ipcMain.on('biu:browser:cmd', async (_event, cmd: Cmd) => {
     return
   }
   if (cmd.type === 'inspect') {
-    // 放大时的兜底：拿一个点上的元素信息
     try {
-      const info = await wc.executeJavaScript(
-        `(() => {
-          const el = document.elementFromPoint(${Math.round(cmd.x)}, ${Math.round(cmd.y)})
-          if (!el) return null
-          return {
-            tag: el.tagName.toLowerCase(),
-            id: el.id || '',
-            className: typeof el.className === 'string' ? el.className : '',
-            text: (el.innerText || el.textContent || '').trim().slice(0, 400),
-            html: el.outerHTML.slice(0, 2000),
-          }
-        })()`,
-        true,
-      )
+      const info = await wc.executeJavaScript(inspectScript(cmd.x, cmd.y), true)
       send('biu:browser:inspected', info)
     } catch (error) {
       send('biu:browser:error', { code: 0, desc: String((error as Error).message || error), url: '' })
@@ -211,7 +238,9 @@ async function createWindow() {
     minWidth: 960,
     minHeight: 600,
     backgroundColor: '#191919',
-    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+    ...(process.platform === 'darwin'
+      ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 16, y: 14 } }
+      : {}),
     webPreferences: {
       preload: join(electronRoot, 'preload.cjs'),
       contextIsolation: true,
@@ -233,11 +262,55 @@ async function createWindow() {
   win.on('enter-full-screen', relayout)
   win.on('leave-full-screen', relayout)
 
+  win.webContents.on('did-finish-load', () => {
+    void win?.webContents.insertCSS(ELECTRON_CHROME_CSS)
+    void win?.webContents.executeJavaScript(`document.documentElement.classList.add('biu-electron')`)
+    void ensureBrowserPanel()
+  })
+
   if (isDev) {
     await win.loadURL(DEV_URL)
     win.webContents.openDevTools({ mode: 'detach' })
   } else {
     await win.loadFile(join(electronRoot, '..', 'dist', 'index.html'))
+  }
+}
+
+/** 给红绿灯让出左侧栏品牌行，避免叠在已有导航上。 */
+const ELECTRON_CHROME_CSS = `
+html.biu-electron .app-side-bar-head-brand {
+  padding-left: 76px !important;
+  -webkit-app-region: drag;
+}
+html.biu-electron .app-side-bar-head-brand button,
+html.biu-electron .app-side-bar-head-brand a {
+  -webkit-app-region: no-drag;
+}
+html.biu-electron .app-shell.is-sidebar-collapsed > main,
+html.biu-electron .app-shell.is-left-hidden > main {
+  padding-left: 76px;
+}
+`
+
+async function ensureBrowserPanel() {
+  const host = process.env.BIU_HOST_URL || 'http://127.0.0.1:3141'
+  for (let i = 0; i < 25; i += 1) {
+    try {
+      await fetch(`${host}/api/db/action`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ path: '/plugins/browser-panel', action: 'pack' }),
+      })
+      const start = await fetch(`${host}/api/db/action`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ path: '/plugins/browser-panel', action: 'start' }),
+      })
+      if (start.ok || start.status === 400) return
+    } catch {
+      /* host 还没起来 */
+    }
+    await new Promise((resolve) => setTimeout(resolve, 400))
   }
 }
 

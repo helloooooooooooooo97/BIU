@@ -272,3 +272,15 @@ test('algorithm card drafts locally and saves on blur like html source', async (
   assert.doesNotMatch(src, /data-biu-ignore/)
   assert.doesNotMatch(src, /data-biu-plugin=\{name\}/)
 })
+
+test('browser-panel is a session inspector tab and injects pick', async () => {
+  const { readFile } = await import('node:fs/promises')
+  const { resolve } = await import('node:path')
+  const src = await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/browser-panel/web.tsx'), 'utf8')
+  assert.match(src, /export const inject = \['slots', 'pick'\]/)
+  assert.match(src, /tabId: 'browser'/)
+  assert.match(src, /requiresSession: true/)
+  assert.match(src, /centerKinds: \['session'\]/)
+  assert.doesNotMatch(src, /common: true/)
+  assert.match(src, /api\.inspect\(-1, -1\)/)
+})
