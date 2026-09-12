@@ -122,6 +122,12 @@ export class ContentTurnStore {
     return files ? Object.values(files) : []
   }
 
+  /** 回合内某文件的 before/after；过期裁剪后没有。不进 session 事件，避免把全文再存一份。 */
+  snapshot(sessionId: string, turn: number, path: string) {
+    const files = this.data.sessions[sessionId.trim()]?.[String(turn)]?.files
+    return files?.[path.trim()] ?? null
+  }
+
   private trim(sessionId: string) {
     const ids = Object.keys(this.data.sessions)
     if (ids.length > MAX_SESSIONS) {

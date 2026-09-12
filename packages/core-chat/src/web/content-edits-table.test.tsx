@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { CONTENT_JUMP_EVENT } from '@biu/type-file-system'
 import { ChatNodeList } from './thread.tsx'
 import {
   INSPECTOR_REVEAL_EVENT,
+  compactEqualLines,
   contentEditLabel,
   revealContentEdit,
   type ContentEditRow,
@@ -81,6 +82,7 @@ describe('ContentEditsTable', () => {
     render(<ChatNodeList nodes={nodes} sessionId="sess-1" onInspect={() => undefined} onFork={() => undefined} />)
     expect(screen.getByTestId('content-edits-table')).toBeTruthy()
     expect(screen.getByText('本回合文件系统内容的改动')).toBeTruthy()
+    fireEvent.click(screen.getByText('本回合文件系统内容的改动'))
     expect(screen.getByText('首页')).toBeTruthy()
     expect(screen.queryByLabelText('撤销 首页')).toBeNull()
     expect(fetchMock).not.toHaveBeenCalled()
@@ -102,6 +104,7 @@ describe('ContentEditsTable', () => {
       },
     ]
     render(<ChatNodeList nodes={nodes} sessionId="sess-hide" onInspect={() => undefined} onFork={() => undefined} />)
+    fireEvent.click(screen.getByText('本回合文件系统内容的改动'))
     expect(screen.queryByText(/新建/)).toBeNull()
     expect(screen.getByText('首页')).toBeTruthy()
     expect(screen.getAllByText('+12').length).toBeGreaterThan(0)
@@ -125,6 +128,7 @@ describe('ContentEditsTable', () => {
       },
     ]
     render(<ChatNodeList nodes={nodes} sessionId="sess-2" onInspect={() => undefined} onFork={() => undefined} />)
+    fireEvent.click(screen.getByText('本回合文件系统内容的改动'))
     const table = screen.getByTestId('content-edits-table')
     expect(table.querySelectorAll('li')).toHaveLength(5)
     expect(screen.getByText('你好 · p1')).toBeTruthy()
@@ -134,4 +138,61 @@ describe('ContentEditsTable', () => {
     expect(seen).toEqual([{ collection: '/pages', recordId: 'p4', unique: true }])
     window.removeEventListener(INSPECTOR_REVEAL_EVENT, onReveal)
   })
+
+  it('loads a file diff from content-turns when the row chevron is opened', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/api/content-turns/file')) {
+        return {
+          ok: true,
+          json: async () => ({ before: 'keep\na\nkeep2\n', after: 'keep\nb\nkeep2\n' }),
+        }
+      }
+      return { ok: true, json: async () => ({}) }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const nodes: ChatNode[] = [
+      { id: 'u-1', kind: 'user', text: '改' },
+      {
+        id: 'r-1',
+        kind: 'reply',
+        copyText: '好了',
+        turn: 7,
+        parts: [{ id: 'a-1', kind: 'assistant', text: '好了' }],
+        contentEdits: [{ path: '/pages/home', title: '首页', added: 1, removed: 1, jump_line: 2 }],
+      },
+    ]
+    render(<ChatNodeList nodes={nodes} sessionId="sess-diff" onInspect={() => undefined} onFork={() => undefined} />)
+    fireEvent.click(screen.getByText('本回合文件系统内容的改动'))
+    fireEvent.click(screen.getByLabelText('查看 首页 的 diff'))
+    await waitFor(() => expect(screen.getByTestId('content-edit-diff')).toBeTruthy())
+    expect(screen.getByTestId('content-edit-diff').textContent).toContain('a')
+    expect(screen.getByTestId('content-edit-diff').textContent).toContain('b')
+    expect(fetchMock.mock.calls.some((call) => String(call[0]).includes('session=sess-diff') && String(call[0]).includes('turn=7'))).toBe(true)
+  })
 })
+
+describe('compactEqualLines', () => {
+  it('keeps unchanged lines next to edits and skips the rest', () => {
+    const rows = compactEqualLines(
+      [
+        { type: 'equal', text: '1' },
+        { type: 'equal', text: '2' },
+        { type: 'equal', text: '3' },
+        { type: 'equal', text: '4' },
+        { type: 'equal', text: '5' },
+        { type: 'add', text: 'x' },
+        { type: 'equal', text: '6' },
+        { type: 'equal', text: '7' },
+        { type: 'equal', text: '8' },
+        { type: 'equal', text: '9' },
+        { type: 'equal', text: '10' },
+      ],
+      2,
+      3,
+    )
+    expect(rows.some((row) => row.type === 'skip')).toBe(true)
+    expect(rows.some((row) => row.type === 'add' && row.text === 'x')).toBe(true)
+  })
+})
+
