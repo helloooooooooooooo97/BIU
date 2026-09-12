@@ -17,7 +17,7 @@ export function noticesCollection(store: NoticesStore): CollectionSpec {
       title: '通知',
       inspector: false,
       icon: 'bell',
-      blurb: '给人看的收件箱，不是 agent 会话排队，也不是 /events 轨迹。列表 db_list /notices。未读 read=false。点铃铛或 db_update 把 read 写成 true。不要 db_create。任务完成、审批由系统写入。',
+      blurb: '给人看的收件箱。列表 db_list /notices。未读 read=false。不要 db_create。系统不再为审批或回合写通知。',
       order: 18,
     },
     records: { update: true, create: false, delete: true },

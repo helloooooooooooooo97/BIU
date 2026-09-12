@@ -4,6 +4,7 @@ import {
   ArrowDownTrayIcon,
   BellIcon,
   ChatBubbleLeftRightIcon,
+  CheckIcon,
   CircleStackIcon,
   Cog6ToothIcon,
   MagnifyingGlassIcon,
@@ -220,8 +221,16 @@ function NoticeBell({
   }, [load])
 
   const unread = rows.filter((row) => row.read !== true && !noticeIsForSession(row, looking))
+  const inbox = rows.filter((row) => row.read !== true)
   const badge = unread.length > 99 ? '99+' : unread.length ? String(unread.length) : ''
   const triggerRef = useRef<HTMLButtonElement>(null)
+
+  const clearAll = () => {
+    setRows([])
+    void fetch('/api/db/notices/clear', { method: 'POST' })
+      .then(() => load())
+      .catch(() => load())
+  }
 
   const openRow = (row: NoticeRow) => {
     if (!row.id) return
@@ -268,9 +277,24 @@ function NoticeBell({
           aria-label="通知"
           data-testid="chrome-notify-pop"
         >
-          {rows.length ? (
+          <div className="shell-notify-head">
+            <span className="shell-notify-head-title">通知</span>
+            {inbox.length ? (
+              <button
+                type="button"
+                className="shell-notify-clear"
+                data-testid="chrome-notify-clear"
+                title="全部已读并清空"
+                aria-label="全部已读并清空"
+                onClick={() => clearAll()}
+              >
+                <CheckIcon className="size-3.5" aria-hidden />
+              </button>
+            ) : null}
+          </div>
+          {inbox.length ? (
             <ul className="shell-notify-list">
-              {rows.map((row) => {
+              {inbox.map((row) => {
                 const kind = noticeKindLabel(row.kind)
                 return (
                   <li key={row.id}>

@@ -1,6 +1,5 @@
 import { Service, type Context } from 'cordis'
 import type { ToolRequest } from '@biu/host-tools'
-import { currentSessionId } from '@biu/host-sessions/scope'
 
 const DEFAULT_HOLD_TIMEOUT_MS = 60_000
 
@@ -73,21 +72,6 @@ export function apply(ctx: Context) {
   ctx.inject(['http'], (inner) => {
     approvals.setNotify((payload) => {
       inner.http.broadcast('approval', payload)
-      try {
-        const notices = inner.get('notices') as { push?: (input: Record<string, string>) => void } | undefined
-        notices?.push?.({
-          kind: 'approval',
-          title: `需要审批：${payload.name}`,
-          body: payload.id,
-          href: (() => {
-            const sid = String(currentSessionId() ?? '').trim()
-            return sid ? `/s/${encodeURIComponent(sid)}` : ''
-          })(),
-          sourceKey: `approval:${payload.id}`,
-        })
-      } catch {
-        /* notices 未登记 */
-      }
     })
     inner.http.route('GET', '/api/approvals', (route) => {
       route.send(200, { mode: approvals.mode, pending: approvals.list() })

@@ -1377,6 +1377,9 @@ export function apply(ctx: Context) {
   }))))
   const notices = new NoticesService(ctx).open(process.env.VITEST ? ':memory:' : dataPath(process.cwd(), 'notices.json'))
   db.register(noticesCollection(notices.store))
+  ctx.http.route('POST', '/api/db/notices/clear', (route) => {
+    route.send(200, { ok: true, cleared: notices.clear() })
+  })
   new ContentTurnService(ctx).open(process.env.VITEST ? ':memory:' : dataPath(process.cwd(), 'content-turns.json'))
   ctx.tools.register({
     name: 'db_list',

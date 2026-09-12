@@ -94,3 +94,11 @@ test('db_delete deny in auto mode blocks the tool', async () => {
   ctx.approvals.decide(item.id, false)
   await assert.rejects(() => invoke, /denied: db_delete/)
 })
+
+test('approvals do not push inbox notices', async () => {
+  const { readFileSync } = await import('node:fs')
+  const { resolve } = await import('node:path')
+  const src = readFileSync(resolve(import.meta.dirname, './index.ts'), 'utf8')
+  assert.doesNotMatch(src, /需要审批/)
+  assert.doesNotMatch(src, /notices\?\.push/)
+})

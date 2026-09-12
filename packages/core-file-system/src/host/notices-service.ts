@@ -26,6 +26,12 @@ export class NoticesService extends Service {
     return n
   }
 
+  clear() {
+    const n = this.store.clear()
+    if (n) this.bump()
+    return n
+  }
+
   private bump() {
     const http = this.ctx.get('http') as { broadcast?: (type: string, payload: unknown) => void } | undefined
     http?.broadcast?.(DATABASE_CHANNEL, { ts: Date.now() })

@@ -18,6 +18,15 @@ test('notices store dedupes unread source keys and marks read', () => {
   assert.equal(store.list().every((row) => row.read), true)
 })
 
+test('notices store clear drops every row', () => {
+  const store = new NoticesStore().open(':memory:')
+  store.push({ kind: 'task', title: 'A', sourceKey: 'task:a:done' })
+  store.push({ kind: 'session', title: 'B', sourceKey: 'session:1' })
+  assert.equal(store.clear(), 2)
+  assert.equal(store.list().length, 0)
+  assert.equal(store.clear(), 0)
+})
+
 test('notices collection exposes an agent blurb and writable read flag', async () => {
   const store = new NoticesStore().open(':memory:')
   store.push({ kind: 'approval', title: '需要审批：bash', sourceKey: 'approval:1' })
@@ -25,6 +34,7 @@ test('notices collection exposes an agent blurb and writable read flag', async (
   assert.equal(spec.path, '/notices')
   assert.match(String(spec.view?.blurb), /db_list \/notices/)
   assert.doesNotMatch(String(spec.view?.blurb), /回合结束/)
+  assert.doesNotMatch(String(spec.view?.blurb), /审批由系统写入/)
   assert.equal(spec.view?.inspector, false)
   const rows = await spec.list()
   assert.equal(rows[0]?.read, false)
