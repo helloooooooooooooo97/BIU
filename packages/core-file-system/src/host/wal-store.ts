@@ -44,6 +44,8 @@ type StoreShape = {
 
 const MAX_ENTRIES = 4000
 
+export const WAL_MAX_ENTRIES = MAX_ENTRIES
+
 export function actorKey(actor: WalActor) {
   if (actor.kind === 'agent' && actor.sessionId) return `agent:${actor.sessionId}:${actor.turn ?? 0}`
   return 'user'
@@ -129,6 +131,10 @@ export class WalStore {
   listTurn(sessionId: string, turn: number) {
     const sid = sessionId.trim()
     return this.data.entries.filter((row) => row.actor.kind === 'agent' && row.actor.sessionId === sid && row.actor.turn === turn)
+  }
+
+  listAll() {
+    return this.data.entries.slice()
   }
 
   append(input: {
