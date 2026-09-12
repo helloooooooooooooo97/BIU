@@ -36,6 +36,7 @@ import { MarkdownBody } from './markdown.tsx'
 import { UserBubbleEditor } from './user-bubble-editor.tsx'
 import { ToolCard } from './tool-card.tsx'
 import { LiveDispatchTable } from './live-dispatch-table.tsx'
+import { ContentEditsTable } from './content-edits-table.tsx'
 import { UsageInline } from './usage-inline.tsx'
 import {
   bumpRevealStart,
@@ -578,6 +579,7 @@ function NodeView({
   onFork,
   sessions = [],
   dispatchTasks,
+  sessionId,
 }: {
   node: ChatNode
   /** 用户消息发起的本回合回复（统计挂在用户气泡下） */
@@ -588,6 +590,7 @@ function NodeView({
   onFork: () => void | Promise<void>
   sessions?: SessionListItem[]
   dispatchTasks?: import('@biu/web-session-view').DispatchedTaskRow[]
+  sessionId?: string
 }) {
   const [expanded, setExpanded] = useState(false)
   // 避免每条用户消息 useLayoutEffect 读 layout（滚动时强制同步布局会卡）
@@ -645,6 +648,9 @@ function NodeView({
           {!streaming && dispatchTasks && dispatchTasks.length > 0 ? (
             <LiveDispatchTable tasks={dispatchTasks} />
           ) : null}
+          {sessionId && node.turn != null && node.contentEdits?.length ? (
+            <ContentEditsTable sessionId={sessionId} turn={node.turn} files={node.contentEdits} />
+          ) : null}
         </div>
         {!streaming ? (
           <div className="chat-reply-actions-row">
@@ -670,6 +676,7 @@ export const ChatNodeList = memo(function ChatNodeList({
   onFork,
   sessions = [],
   dispatchedTasksByTurn = {},
+  sessionId,
 }: {
   nodes: ChatNode[]
   onInspect: (callId: string) => void
@@ -679,6 +686,7 @@ export const ChatNodeList = memo(function ChatNodeList({
     string,
     import('@biu/web-session-view').DispatchedTaskRow[]
   >
+  sessionId?: string
 }) {
   const [detailsOpenByReply, setDetailsOpenByReply] = useState<Record<string, boolean>>({})
 
@@ -733,6 +741,7 @@ export const ChatNodeList = memo(function ChatNodeList({
                     onFork={onFork}
                     sessions={sessions}
                     dispatchTasks={dispatchTasks}
+                    sessionId={sessionId}
                   />
                 </div>
               )
@@ -994,6 +1003,7 @@ export const ChatThread = memo(function ChatThread(props: SlotProps) {
         onFork={onFork}
         sessions={sessions}
         dispatchedTasksByTurn={dispatchedTasksByTurn}
+        sessionId={sessionId}
       />
       {error ? (
         <div className="mt-4 rounded-xl bg-(--dsw-danger-soft) px-3 py-2 text-sm text-(--dsw-danger)">{error}</div>

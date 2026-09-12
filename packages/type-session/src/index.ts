@@ -43,6 +43,18 @@ export type SessionEventBody =
   | { type: 'assistant/chunk'; text: string; channel?: 'reasoning' }
   | { type: 'tool/call'; id: string; name: string; arguments: string }
   | { type: 'tool/result'; id: string; name: string; ok: boolean; detail: string }
+  | {
+      type: 'content/edits'
+      turn: number
+      files: Array<{
+        path: string
+        title: string
+        added: number
+        removed: number
+        jump_line: number
+        reverted?: boolean
+      }>
+    }
 
 export type SessionEvent = SessionEventBody & {
   seq: number

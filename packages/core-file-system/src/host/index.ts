@@ -42,6 +42,7 @@ import { AssetConflictError, FileSystemAssets, collectAssetNames, isAssetFileNam
 import { facetsCollection } from './facets-collection.ts'
 import { noticesCollection } from './notices-collection.ts'
 import { NoticesService } from './notices-service.ts'
+import { ContentTurnService } from './content-turn-service.ts'
 import {
   asContentText,
   insertText,
@@ -1062,6 +1063,15 @@ export class DatabaseService extends Service implements Database {
     }
   }
 
+  async contentTitle(path: string) {
+    const parts = splitPath(path)
+    if (parts.length !== 2) return path
+    const spec = this.collection(`/${parts[0]}`)
+    const record = spec ? await spec.get(parts[1]!) : null
+    const title = String(record?.title ?? record?.name ?? '').trim()
+    return title || parts[1] || path
+  }
+
   async editContent(path: string, args: Record<string, unknown> = {}) {
     const command = resolveContentCommand(args)
     const current = await this.content(path)
@@ -1090,6 +1100,8 @@ export class DatabaseService extends Service implements Database {
             : replaceLinesText(text, args.start_line, args.end_line, args.new_str)
     await this.writeContent(path, next)
     const locus = mutationLocus(command, text, next, args)
+    const title = await this.contentTitle(current.path)
+    await this.ctx.get('contentTurns')?.recordEdit(current.path, text, next, title)
     return {
       kind: 'content' as const,
       path: current.path,
@@ -1332,6 +1344,7 @@ export function apply(ctx: Context) {
   }))))
   const notices = new NoticesService(ctx).open(process.env.VITEST ? ':memory:' : dataPath(process.cwd(), 'notices.json'))
   db.register(noticesCollection(notices.store))
+  new ContentTurnService(ctx, db).open(process.env.VITEST ? ':memory:' : dataPath(process.cwd(), 'content-turns.json'))
   ctx.tools.register({
     name: 'db_list',
     description: '列出 File System 路径：/ 为已登记表（path、中文名、view.blurb 说明书），/<表> 为列式记录（不含 content、默认不含 createdAt/updatedAt/createdBy/updatedBy）。默认每页 50，最多 200。columns 参数只取需要的列。表结构用 db_stat。',
@@ -1585,6 +1598,21 @@ export function apply(ctx: Context) {
     try {
       const body = (await route.json()) as { path?: string; value?: unknown }
       route.send(200, await db.writeContent(String(body?.path ?? ''), body?.value))
+    } catch (error) {
+      route.send(400, { error: String(error) })
+    }
+  })
+  ctx.http.route('POST', '/api/db/content-revert', async (route) => {
+    try {
+      const body = (await route.json()) as { sessionId?: string; turn?: number; path?: string }
+      const sessionId = String(body?.sessionId ?? '').trim()
+      const turn = Number(body?.turn)
+      if (!sessionId || !Number.isInteger(turn) || turn < 1) {
+        route.send(400, { error: 'sessionId and turn required' })
+        return
+      }
+      const path = String(body?.path ?? '').trim()
+      route.send(200, await ctx.contentTurns.revert(sessionId, turn, path || undefined))
     } catch (error) {
       route.send(400, { error: String(error) })
     }

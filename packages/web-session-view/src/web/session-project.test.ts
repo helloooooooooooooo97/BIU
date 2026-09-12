@@ -43,6 +43,24 @@ test('projects user, streaming assistant, tool call/result from session events',
   if (user?.kind === 'user') assert.equal(user.ts, 2)
 })
 
+test('projectNodes attaches content/edits onto the turn reply', () => {
+  const files = [
+    { path: '/pages/home', title: '首页', added: 3, removed: 1, jump_line: 4 },
+  ]
+  const nodes = projectNodes([
+    { type: 'turn/start', turn: 2, seq: 1, ts: 1 },
+    { type: 'user/message', text: '改文档', kind: 'wake', seq: 2, ts: 2 },
+    { type: 'content/edits', turn: 2, files, seq: 3, ts: 3 },
+    { type: 'assistant/message', text: '已改', seq: 4, ts: 4 },
+    { type: 'turn/end', turn: 2, reason: 'complete', seq: 5, ts: 5 },
+  ])
+  const reply = nodes.find((node) => node.kind === 'reply')
+  assert.equal(reply?.kind, 'reply')
+  if (reply?.kind !== 'reply') return
+  assert.deepEqual(reply.contentEdits, files)
+  assert.equal(reply.copyText, '已改')
+})
+
 test('projectNodes keeps streamed DeepSeek reasoning as a think part', () => {
   const nodes = projectNodes([
     { type: 'turn/start', turn: 1, seq: 1, ts: 1 },
@@ -501,4 +519,22 @@ test('reply & step histPct is token-weighted average over all llm.chat usage', (
   // 各 step 单独保留自身 histPct
   assert.equal(reply.steps?.[0]?.histPct, 0.2)
   assert.equal(reply.steps?.[1]?.histPct, 0.8)
+})
+
+test('projectNodes attaches content/edits onto the turn reply', () => {
+  const files = [
+    { path: '/pages/home', title: '首页', added: 3, removed: 1, jump_line: 4 },
+  ]
+  const nodes = projectNodes([
+    { type: 'turn/start', turn: 2, seq: 1, ts: 1 },
+    { type: 'user/message', text: '改文档', kind: 'wake', seq: 2, ts: 2 },
+    { type: 'content/edits', turn: 2, files, seq: 3, ts: 3 },
+    { type: 'assistant/message', text: '已改', seq: 4, ts: 4 },
+    { type: 'turn/end', turn: 2, reason: 'complete', seq: 5, ts: 5 },
+  ])
+  const reply = nodes.find((node) => node.kind === 'reply')
+  assert.equal(reply?.kind, 'reply')
+  if (reply?.kind !== 'reply') return
+  assert.deepEqual(reply.contentEdits, files)
+  assert.equal(reply.copyText, '已改')
 })

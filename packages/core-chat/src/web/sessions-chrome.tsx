@@ -76,7 +76,12 @@ function SessionRecordChat({ record }: FsContentProps) {
       embed
       thread={
         <ChatStage variant="pane">
-          <ChatNodeList nodes={nodes} onInspect={() => undefined} onFork={() => undefined} />
+          <ChatNodeList
+            nodes={nodes}
+            sessionId={sessionId}
+            onInspect={() => undefined}
+            onFork={() => undefined}
+          />
         </ChatStage>
       }
     />
