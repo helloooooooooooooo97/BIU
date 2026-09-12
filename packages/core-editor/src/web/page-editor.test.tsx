@@ -95,6 +95,7 @@ test('page editor bridges cursor to the record title', async () => {
   assert.match(src, /FOCUS_RECORD_CONTENT/)
   assert.match(src, /jumpToPending/)
   assert.match(src, /CONTENT_JUMP_EVENT/)
+  assert.doesNotMatch(src, /tryContentJump\([^)]+navigate/)
   assert.match(src, /editorHostIsLive\(editor\)/)
   assert.match(src, /bindEditorTextHost/)
   assert.match(src, /markdownLocusFromSelection/)

@@ -50,15 +50,27 @@ test('snippetAtLine strips markdown markers', () => {
   assert.equal(snippetAtLine('# Title\n\n- **item**\nmore', 3), 'item')
 })
 
-test('applyContentJump puts caret on the replaced markdown line', () => {
+test('applyContentJump marks the replaced markdown without focusing', () => {
   const md = '# 欢迎\n\n第一段\n\nUNIQUE_JUMP_ANCHOR 改到这\n\n末段'
   const editor = editorOf(md)
+  const caret = editor.state.selection.from
   applyContentJump(editor, md, { path: '/pages/home', start_line: 5, end_line: 5 })
-  assert.match(textAtCaret(editor), /UNIQUE_JUMP_ANCHOR/)
+  assert.equal(editor.isFocused, false)
+  assert.equal(editor.state.selection.from, caret)
+  assert.match(editor.view.dom.innerHTML, /page-agent-edit/)
+  assert.match(editor.view.dom.textContent ?? '', /UNIQUE_JUMP_ANCHOR/)
   editor.destroy()
 })
 
-test('tryContentJump waits until new text is in the doc then jumps', () => {
+test('applyContentJump navigate still moves the caret when asked', () => {
+  const md = '# 欢迎\n\n第一段\n\nUNIQUE_NAV_ANCHOR 改到这\n\n末段'
+  const editor = editorOf(md)
+  applyContentJump(editor, md, { path: '/pages/home', start_line: 5, end_line: 5 }, { navigate: true })
+  assert.match(textAtCaret(editor), /UNIQUE_NAV_ANCHOR/)
+  editor.destroy()
+})
+
+test('tryContentJump waits until new text is in the doc then marks it', () => {
   clearContentJump()
   const before = '# 欢迎\n\n旧段落'
   const after = '# 欢迎\n\n改动段落 XYZ'
@@ -67,7 +79,9 @@ test('tryContentJump waits until new text is in the doc then jumps', () => {
   assert.equal(tryContentJump(editor, after, 'home', false), false)
   editor.commands.setContent(after, { contentType: 'markdown', emitUpdate: false })
   assert.equal(tryContentJump(editor, after, 'home', true), true)
-  assert.match(textAtCaret(editor), /改动段落 XYZ/)
+  assert.equal(editor.isFocused, false)
+  assert.match(editor.view.dom.innerHTML, /page-agent-edit/)
+  assert.match(editor.view.dom.textContent ?? '', /改动段落 XYZ/)
   editor.destroy()
 })
 
@@ -79,8 +93,8 @@ test('tryContentJump applies on every live editor before consuming', async () =>
   rememberContentJump({ path: '/pages/home', start_line: 3, end_line: 3 })
   assert.equal(tryContentJump(a, md, 'home', true), true)
   assert.equal(tryContentJump(b, md, 'home', true), true)
-  assert.match(textAtCaret(a), /UNIQUE_MULTI_JUMP/)
-  assert.match(textAtCaret(b), /UNIQUE_MULTI_JUMP/)
+  assert.match(a.view.dom.innerHTML, /page-agent-edit/)
+  assert.match(b.view.dom.innerHTML, /page-agent-edit/)
   await new Promise((resolve) => setTimeout(resolve, 10))
   assert.equal(peekContentJump(), null)
   a.destroy()
