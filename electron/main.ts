@@ -279,19 +279,46 @@ async function createWindow() {
   }
 }
 
-/** 给红绿灯让出左侧栏品牌行，避免叠在已有导航上。 */
+/** 红绿灯让位 + 顶栏拖窗；侧栏缩略浮窗贴左，不再为红绿灯留 76px。 */
 const ELECTRON_CHROME_CSS = `
 html.biu-electron .app-side-bar-head-brand {
   padding-left: 76px !important;
+}
+html.biu-electron .sidebar-flyout-host.is-collapsed.is-flyout-open .app-side-bar-head-brand,
+html.biu-electron .sidebar-flyout-host.is-collapsed:hover .app-side-bar-head-brand {
+  padding-left: 12px !important;
+}
+html.biu-electron .app-side-bar-head,
+html.biu-electron .chat-view-header {
   -webkit-app-region: drag;
 }
-html.biu-electron .app-side-bar-head-brand button,
-html.biu-electron .app-side-bar-head-brand a {
+html.biu-electron .app-side-bar-head button,
+html.biu-electron .app-side-bar-head a,
+html.biu-electron .app-side-bar-head input,
+html.biu-electron .app-side-bar-head [role="tablist"],
+html.biu-electron .chat-view-header button,
+html.biu-electron .chat-view-header a,
+html.biu-electron .chat-view-header input,
+html.biu-electron .inspector-add {
   -webkit-app-region: no-drag;
+}
+html.biu-electron .app-shell {
+  position: relative;
 }
 html.biu-electron .app-shell.is-sidebar-collapsed > main,
 html.biu-electron .app-shell.is-left-hidden > main {
   padding-left: 76px;
+}
+html.biu-electron .app-shell.is-sidebar-collapsed::before,
+html.biu-electron .app-shell.is-left-hidden::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 90;
+  width: 76px;
+  height: 44px;
+  -webkit-app-region: drag;
 }
 `
 
