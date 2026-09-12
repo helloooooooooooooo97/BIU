@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { mergeContentEditFiles } from './index.ts'
+import { mergeContentEditFiles } from '@biu/type-session'
 
 test('mergeContentEditFiles keeps later files when a stale snapshot only has the first', () => {
   const first = [{ path: '/pages/a', title: '你好', added: 1, removed: 0, jump_line: 1 }]

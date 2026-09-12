@@ -45,6 +45,7 @@ import {
   groupNodesIntoTurns,
   isChatStuckToLatest,
   pinChatToLatest,
+  PIN_TOP_SLACK_PX,
   recalledChatScroll,
   rememberChatScroll,
   restoreChatScroll,
@@ -887,6 +888,7 @@ export const ChatThread = memo(function ChatThread(props: SlotProps) {
         .then((loaded) => {
           if (!loaded) return
           requestAnimationFrame(() => {
+            if (beforeTop <= PIN_TOP_SLACK_PX) return
             parent.scrollTop = beforeTop + (parent.scrollHeight - beforeHeight)
           })
         })
@@ -976,7 +978,8 @@ export const ChatThread = memo(function ChatThread(props: SlotProps) {
       if (mountedNodes.length > 0) pinChatToLatest(parent)
     } else if (prependHeightRef.current) {
       const delta = parent.scrollHeight - prependHeightRef.current
-      if (delta) parent.scrollTop += delta
+      // 钉在顶上看更早内容时不要把 scrollTop 往下拽，否则会和上滑抢位置、抖死。
+      if (delta && parent.scrollTop > PIN_TOP_SLACK_PX) parent.scrollTop += delta
     }
     prependHeightRef.current = parent.scrollHeight
   }, [stickKey, mountedNodes.length, revealStart, sessionId])

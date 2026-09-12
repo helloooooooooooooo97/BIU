@@ -1,3 +1,5 @@
+import { mergeContentEditFiles } from '@biu/type-session'
+
 /** 与 host SessionEvent 对齐的瘦客户端类型（只投影 UI 需要的字段）。 */
 export type SessionEvent = {
   seq: number
@@ -516,7 +518,7 @@ export function projectNodes(events: SessionEvent[]): ChatNode[] {
       }
     } else if (event.type === 'content/edits') {
       const r = ensureReply(event.seq)
-      r.contentEdits = event.files
+      r.contentEdits = mergeContentEditFiles(r.contentEdits ?? [], event.files)
     } else if (event.type === 'turn/end') {
       flushReply(event.ts, true, event.reason)
       turnStartTs = undefined

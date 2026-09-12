@@ -61,6 +61,22 @@ export type SessionEvent = SessionEventBody & {
   ts: number
 }
 
+export type ContentEditFile = Extract<SessionEventBody, { type: 'content/edits' }>['files'][number]
+
+/** 同回合多次 content/edits 按 path 合并；后写覆盖同 path，其它 path 保留。 */
+export function mergeContentEditFiles<T extends { path: string }>(prev: T[], next: T[]): T[] {
+  const map = new Map<string, T>()
+  for (const file of prev) {
+    const path = String(file.path ?? '').trim()
+    if (path) map.set(path, file)
+  }
+  for (const file of next) {
+    const path = String(file.path ?? '').trim()
+    if (path) map.set(path, file)
+  }
+  return [...map.values()]
+}
+
 /** 对齐 dsh workspace：Session 绑定 host 本机绝对路径，Agent 工具直接以此为 cwd。 */
 export interface SessionProject {
   name: string

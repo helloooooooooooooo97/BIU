@@ -183,6 +183,16 @@ describe('chat scroll memory per session', () => {
     parent.scrollTop = 2100
     expect(isChatStuckToLatest(parent)).toBe(true)
   })
+
+  it('does not treat the top of a short thread as stuck-to-latest', () => {
+    const parent = document.createElement('div')
+    Object.defineProperty(parent, 'scrollHeight', { value: 1000, configurable: true })
+    Object.defineProperty(parent, 'clientHeight', { value: 800, configurable: true })
+    Object.defineProperty(parent, 'scrollTop', { value: 0, writable: true, configurable: true })
+    expect(isChatStuckToLatest(parent)).toBe(false)
+    parent.scrollTop = 200
+    expect(isChatStuckToLatest(parent)).toBe(true)
+  })
 })
 
 describe('thread follows the latest message', () => {

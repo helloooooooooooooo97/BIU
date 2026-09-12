@@ -38,7 +38,7 @@ export function bumpRevealStart(startIndex: number, batch = CHAT_REVEAL_BATCH): 
 
 /** 输入栏垫了 pb-72 / 18rem，离真正 scroll 底还有一大截也算在看最新。 */
 export const CHAT_NEAR_BOTTOM_PX = 360
-const PIN_TOP_SLACK_PX = 8
+export const PIN_TOP_SLACK_PX = 8
 
 /** 贴底，或当时贴在视口顶的那条用户消息。回来滚到它重新贴顶。 */
 export type ChatScrollMemory =
@@ -110,7 +110,10 @@ export function distanceFromChatBottom(parent: HTMLElement): number {
 }
 
 export function isChatStuckToLatest(parent: HTMLElement): boolean {
-  return distanceFromChatBottom(parent) <= CHAT_NEAR_BOTTOM_PX
+  if (distanceFromChatBottom(parent) > CHAT_NEAR_BOTTOM_PX) return false
+  // 内容刚好比视口高一点时，顶和底会同时落入 360px 阈值；钉在顶上时不要当成贴底。
+  if (parent.scrollTop <= PIN_TOP_SLACK_PX) return false
+  return true
 }
 
 export function pinChatToLatest(parent: HTMLElement) {
