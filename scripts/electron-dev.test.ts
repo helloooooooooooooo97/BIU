@@ -25,6 +25,10 @@ test('electron scripts compile ts and reuse busy ports', async () => {
   assert.match(main, /setBackgroundColor\('#191919'\)/)
   assert.match(main, /\^about:/)
   assert.match(main, /if \(browserPanelReady\) return/)
+  const openHandler = main.match(/setWindowOpenHandler\(\(\{ url \}\) => \{[\s\S]*?return \{ action: 'deny' \}/)?.[0]
+  assert.ok(openHandler)
+  assert.match(openHandler, /view\.webContents\.loadURL\(url\)/)
+  assert.doesNotMatch(openHandler, /openExternal/)
 
   const tsconfig = await readFile(resolve(import.meta.dirname, '../electron/tsconfig.json'), 'utf8')
   assert.doesNotMatch(tsconfig, /"noEmit": true/)

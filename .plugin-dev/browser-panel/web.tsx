@@ -88,8 +88,8 @@ function Glyph({ id }: { id: 'back' | 'forward' | 'reload' | 'open' | 'pick' | '
     )
   if (id === 'pick')
     return (
-      <svg {...common}>
-        <path d="M2.5 2.5h4v1.5H4v2.5H2.5v-4Zm11 0v4H12V4h-2.5V2.5h4Zm-11 11v-4H4V12h2.5v1.5h-4Zm11 0h-4V12h2.5V9.5H13v4Z" />
+      <svg {...common} width={16} height={16}>
+        <path d="M7.25 1.75a.75.75 0 0 1 1.5 0v1.5a.75.75 0 0 1-1.5 0v-1.5ZM11.536 2.904a.75.75 0 1 1 1.06 1.06l-1.06 1.061a.75.75 0 0 1-1.061-1.06l1.06-1.061ZM14.5 7.5a.75.75 0 0 0-.75-.75h-1.5a.75.75 0 0 0 0 1.5h1.5a.75.75 0 0 0 .75-.75ZM4.464 9.975a.75.75 0 0 1 1.061 1.06l-1.06 1.061a.75.75 0 1 1-1.061-1.06l1.06-1.061ZM4.5 7.5a.75.75 0 0 0-.75-.75h-1.5a.75.75 0 0 0 0 1.5h1.5a.75.75 0 0 0 .75-.75ZM5.525 3.964a.75.75 0 0 1-1.06 1.061l-1.061-1.06a.75.75 0 0 1 1.06-1.061l1.061 1.06ZM8.779 7.438a.75.75 0 0 0-1.368.366l-.396 5.283a.75.75 0 0 0 1.212.646l.602-.474.288 1.074a.75.75 0 1 0 1.449-.388l-.288-1.075.759.11a.75.75 0 0 0 .726-1.165L8.78 7.438Z" />
       </svg>
     )
   return (
@@ -264,9 +264,9 @@ function BrowserPanel({ pick }: { pick?: PickApi }) {
         </form>
         <button
           type="button"
-          style={{ ...iconBtn, color: picking ? '#1d4ed8' : undefined }}
-          title={picking ? '点页面里任意元素来引用' : '点选页面元素并引用'}
-          aria-label="点选页面元素"
+          style={{ ...iconBtn, color: picking ? '#5b9fd6' : undefined }}
+          title="选取"
+          aria-label="选取"
           data-testid="browser-panel-pick"
           onClick={() => {
             setPicking(true)
