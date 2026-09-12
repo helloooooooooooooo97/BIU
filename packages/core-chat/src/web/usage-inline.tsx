@@ -3,11 +3,12 @@ import {
   formatTrajectoryUsage,
   type TrajectoryUsage,
 } from '@biu/web-session-view'
-/** 跟 macOS 红绿灯黄/绿同一档，暗底上才够当点缀。 */
-const CACHE_RING = '#28C840'
-const HIST_RING = '#FEBC2E'
-const CACHE_TRACK = 'color-mix(in srgb, #28C840 22%, #191919)'
-const HIST_TRACK = 'color-mix(in srgb, #FEBC2E 22%, #191919)'
+import { TAG_TONE_GREEN, TAG_TONE_ORANGE } from '@biu/public-ui'
+
+const CACHE_RING = TAG_TONE_GREEN
+const HIST_RING = TAG_TONE_ORANGE
+const CACHE_TRACK = 'color-mix(in srgb, #448361 22%, #191919)'
+const HIST_TRACK = 'color-mix(in srgb, #d9730d 22%, #191919)'
 const RING_R = 4.5
 const RING_C = 2 * Math.PI * RING_R
 
