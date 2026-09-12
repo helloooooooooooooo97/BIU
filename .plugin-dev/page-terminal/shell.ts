@@ -1,118 +1,73 @@
 /**
- * 演示终端的内置命令表：纯前端模拟，不碰宿主的真 shell。
- * 想接真 shell 的话，可以把这里换成 host 侧服务。
+ * 页面终端的数据层：会话序列化 + mysql 连接参数。
  *
- * 另含「会话 <-> 块 data.session」的序列化：命令记录存在页面块详情里，
- * 刷新/换设备也在，格式对人可读（data.session.history）。
+ * 命令本身不再有「内置命令表」——除了 mysql 走客户端 batch 模式，
+ * 其余一律发给宿主侧的真 shell（见 host.ts / packages/host-terminal）。
+ *
+ * 会话 <-> 块 data.session 的序列化：记录存在页面块详情里，刷新/换设备也在。
  */
 
-export type TerminalResult = {
-  /** 输出文本；clear 时忽略 */
-  output: string
-  /** 非零退出：输出按错误色显示 */
-  failed?: boolean
-  type?: 'clear'
+/* ---------------- mysql 连接参数 ---------------- */
+
+export type MysqlProfile = {
+  host: string
+  port: number
+  user: string
+  password: string
+  database: string
 }
 
-const FILES: Record<string, string> = {
-  'readme.md': '# Demo workspace\n\nA tiny fake file system for the terminal card.\n',
-  'notes.txt': 'buy milk\nwrite the deck\nship it\n',
-  'src/index.ts': "export const hello = () => 'hi'\n",
+export const MYSQL_DEFAULT: MysqlProfile = {
+  host: '127.0.0.1',
+  port: 3306,
+  user: 'root',
+  password: '',
+  database: '',
 }
 
-const TREE = `demo/
-├── readme.md
-├── notes.txt
-└── src/
-    └── index.ts`
-
-const HELP = `可用命令
-  help            显示这份帮助
-  demo            逐条演示常见命令
-  ls [path]       列目录
-  cat <file>      看文件
-  echo <text>     原样输出
-  pwd             当前目录
-  date            当前时间
-  whoami          当前用户
-  tree            目录树
-  neofetch        系统信息
-  open <url>      在新标签打开链接
-  clear           清屏
-
-未识别的命令会返回 command not found。`
-
-function nowText() {
-  const d = new Date()
-  const p = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
-}
-
-function normalizeUrl(raw: string) {
-  const text = raw.trim()
-  if (!text) return ''
-  if (/^https?:\/\//i.test(text)) return text
-  if (/^[\w-]+(\.[\w-]+)+(\/\S*)?$/.test(text)) return `https://${text}`
-  return ''
-}
-
-export function runTerminalCommand(raw: string): TerminalResult {
-  const line = raw.trim()
-  if (!line) return { output: '' }
-  const [head, ...rest] = line.split(/\s+/)
-  const cmd = head.toLowerCase()
-  const arg = rest.join(' ')
-  switch (cmd) {
-    case 'help':
-    case '?':
-      return { output: HELP }
-    case 'demo':
-      return { output: '试试：ls → cat readme.md → tree → open example.com' }
-    case 'ls': {
-      const names = Object.keys(FILES).sort()
-      return { output: names.join('\n') }
-    }
-    case 'cat': {
-      if (!arg) return { output: '✗ cat: 需要一个文件名', failed: true }
-      const hit = FILES[arg]
-      if (hit == null) return { output: `✗ cat: ${arg}: No such file`, failed: true }
-      return { output: hit }
-    }
-    case 'echo':
-      return { output: arg }
-    case 'pwd':
-      return { output: '/home/demo' }
-    case 'date':
-      return { output: nowText() }
-    case 'whoami':
-      return { output: 'demo' }
-    case 'tree':
-      return { output: TREE }
-    case 'neofetch':
-      return {
-        output: [
-          'demo@biu',
-          '-------',
-          'OS: 页面终端卡片',
-          'Shell: page-terminal',
-          'Runtime: 宿主浏览器',
-          `Time: ${nowText()}`,
-        ].join('\n'),
-      }
-    case 'open': {
-      const url = normalizeUrl(arg)
-      if (!url) return { output: '✗ open: 需要 http(s) 链接', failed: true }
-      if (typeof window !== 'undefined') window.open(url, '_blank', 'noopener')
-      return { output: `→ 已打开 ${url}` }
-    }
-    case 'clear':
-      return { output: '', type: 'clear' }
-    case 'sudo':
-      return { output: '✗ 这里是演示终端，没有真 shell 可以提权', failed: true }
-    default:
-      return { output: `✗ command not found: ${head}（输入 help 看命令）`, failed: true }
+/** 连接参数写在块详情 data.mysql 里（围栏 JSON 的 mysql 字段），坏数据一律忽略。 */
+export function parseMysqlProfile(raw: unknown): MysqlProfile {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { ...MYSQL_DEFAULT }
+  const src = raw as Record<string, unknown>
+  const port = Number(src.port)
+  return {
+    host: String(src.host ?? '').trim() || MYSQL_DEFAULT.host,
+    port: Number.isFinite(port) && port > 0 && port < 65536 ? Math.round(port) : MYSQL_DEFAULT.port,
+    user: String(src.user ?? '').trim() || MYSQL_DEFAULT.user,
+    password: typeof src.password === 'string' ? src.password : '',
+    database: String(src.database ?? '').trim(),
   }
 }
+
+/** 打印用：密码只显示打码，不进终端历史里的明文。 */
+export function describeProfile(profile: MysqlProfile) {
+  const auth = profile.password ? `${profile.user}:***` : profile.user
+  const db = profile.database ? ` 库=${profile.database}` : ''
+  return `${auth}@${profile.host}:${profile.port}${db}`
+}
+
+export const MYSQL_SQL_HELP = '  SQL 模式下：一行或多行 SQL，行尾 ; 执行；`use 库名` 切库；exit / \\q 退出；help 看命令表'
+
+export const MYSQL_HELP_LINES = [
+  'mysql —— 真连本机 mysql 客户端（不是模拟）',
+  '（SQL 模式下也能直接用 `use 库名` 切库，不必退出来）',
+  '  mysql                    进入 SQL 模式，之后每行 SQL 以 ; 结束执行，exit 退出',
+  '  mysql -e "<SQL>"         直接执行一条 SQL',
+  '  mysql ping               测连接：版本 / 当前用户 / 端口 / 当前库',
+  '  mysql dbs                列出数据库（SHOW DATABASES）',
+  '  mysql tables [库]        列出表（先 use 一个库，或直接带上库名）',
+  '  mysql use <库>           切库（只影响本会话）',
+  '  mysql status             看当前连接参数（密码打码）',
+  '  mysql -h 主机 -P 端口 -u 用户 -p密码 -D 库   覆盖连接参数，可只给一部分',
+  '',
+  '连接参数的默认值来自块详情 data.mysql（围栏 JSON 的 mysql 字段）。',
+  '在终端里用 -h/-u/-p 改的只对本次会话有效，不会写进文档（避免密码落到 markdown 里）。',
+  '想换默认值：编辑围栏里 mysql 字段，例如',
+  '  "mysql": { "host": "127.0.0.1", "port": 3306, "user": "root", "password": "***", "database": "mysql" }',
+  '',
+  '写操作（INSERT/UPDATE/DELETE/DDL）会真的执行，请自己确认库和环境。',
+  '安全边界：这个终端只能跑 mysql 客户端，不是通用 shell；\\! / system / source 会被拒绝。',
+]
 
 /* ---------------- 会话持久化（写进页面块 data，不是宿主本地存储） ---------------- */
 
@@ -122,6 +77,8 @@ export type TerminalSession = {
   input: string
   cwd: string
   history: SavedLine[]
+  /** 还没换行的最后半行输出（不落盘；重挂时由服务端缓冲对齐） */
+  partial?: string
   /** 开过一次终端就为 true，配合记录里的 lines 判断种子只灌一次 */
   seeded?: boolean
 }
@@ -131,7 +88,7 @@ export const SESSION_MAX_CHARS = 4000
 export const SESSION_LINE_MAX = 600
 
 export function createSession(): TerminalSession {
-  return { input: '', cwd: '', history: [], seeded: false }
+  return { input: '', cwd: '', history: [], partial: '', seeded: false }
 }
 
 function asKind(raw: unknown): SavedLine['kind'] {
@@ -157,13 +114,14 @@ export function parseSession(raw: unknown): TerminalSession {
     input: String(src.input ?? ''),
     cwd: String(src.cwd ?? ''),
     history,
+    partial: '',
     seeded: src.seeded === true,
   }
 }
 
 /** 草稿（还没回车的输入）不落盘：省体积，也避免半截命令进文档。 */
 export function stripDraft(session: TerminalSession): TerminalSession {
-  return { input: '', cwd: session.cwd, history: session.history, seeded: session.seeded }
+  return { input: '', cwd: session.cwd, history: session.history, partial: '', seeded: session.seeded }
 }
 
 /** 写回前收口：限行数、限总字长（只从头部丢最老的），避免把文档撑爆。 */
