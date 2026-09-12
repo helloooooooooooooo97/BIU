@@ -48,8 +48,10 @@ function bridge(): Bridge | null {
 }
 
 const UI = 'ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif'
-const INK = '#1f2430'
-const BORDER = 'rgba(15,23,42,.16)'
+const INK = '#ececec'
+const PAPER = '#191919'
+const FIELD = '#121212'
+const BORDER = 'rgba(255,255,255,.1)'
 
 const BOOKMARKS: Array<{ label: string; url: string }> = [
   { label: 'example.com', url: 'https://example.com' },
@@ -110,10 +112,12 @@ function BrowserPanel({ pick }: { pick?: PickApi }) {
   const pushBounds = useCallback(() => {
     const el = stageRef.current
     if (!el || !api) return
+    const pane = el.closest('.inspector-stage-pane')
+    const active = !pane || pane.classList.contains('is-active')
     const r = el.getBoundingClientRect()
-    // 面板被切走时 rect 会全 0；此时告诉外壳藏起来
-    api.bounds({ x: r.left, y: r.top, width: r.width, height: r.height })
-    api.visible(r.width > 1 && r.height > 1)
+    const show = active && r.width > 1 && r.height > 1
+    api.bounds({ x: r.left, y: r.top, width: show ? r.width : 0, height: show ? r.height : 0 })
+    api.visible(show)
   }, [api])
 
   useLayoutEffect(() => {
@@ -201,7 +205,10 @@ function BrowserPanel({ pick }: { pick?: PickApi }) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, width: '100%' }}>
+    <div
+      data-testid="page-browser-panel"
+      style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, width: '100%', background: PAPER, color: INK }}
+    >
       {/* 工具条 */}
       <div
         style={{
@@ -210,6 +217,8 @@ function BrowserPanel({ pick }: { pick?: PickApi }) {
           gap: 4,
           padding: '5px 6px',
           borderBottom: `1px solid ${BORDER}`,
+          background: PAPER,
+          color: INK,
           fontFamily: UI,
           flex: 'none',
         }}
@@ -245,7 +254,7 @@ function BrowserPanel({ pick }: { pick?: PickApi }) {
               fontFamily: UI,
               fontSize: 12.5,
               color: INK,
-              background: 'var(--dsw-input, #fff)',
+              background: FIELD,
               border: `1px solid ${BORDER}`,
               borderRadius: 999,
               padding: '5px 12px',
@@ -290,7 +299,7 @@ function BrowserPanel({ pick }: { pick?: PickApi }) {
           position: 'relative',
           flex: 1,
           minHeight: 0,
-          background: '#fff',
+          background: PAPER,
           cursor: picking ? 'crosshair' : 'default',
         }}
       >
@@ -305,7 +314,7 @@ function BrowserPanel({ pick }: { pick?: PickApi }) {
               gap: 12,
               padding: 20,
               fontFamily: UI,
-              color: '#6b7280',
+              color: '#8b8b8b',
             }}
           >
             <div style={{ fontSize: 13, fontWeight: 700, color: INK }}>输入链接开始浏览</div>
@@ -320,7 +329,7 @@ function BrowserPanel({ pick }: { pick?: PickApi }) {
                     fontFamily: UI,
                     fontSize: 12,
                     color: INK,
-                    background: 'var(--dsw-surface, #fff)',
+                    background: FIELD,
                     border: `1px solid ${BORDER}`,
                     borderRadius: 999,
                     padding: '5px 12px',
@@ -395,7 +404,6 @@ export function apply(ctx: {
       tabLabel: '浏览器',
       requiresSession: true,
       centerKinds: ['session'],
-      Tab: BrowserPanel,
       pick: ctx.get('pick') as PickApi | undefined,
     }),
   })

@@ -22,7 +22,9 @@ test('electron scripts compile ts and reuse busy ports', async () => {
   assert.match(main, /browser-panel/)
   assert.match(main, /inspectScript/)
   assert.match(main, /__biuPickOff/)
-  assert.match(main, /addEventListener\('click', onClick, true\)/)
+  assert.match(main, /setBackgroundColor\('#191919'\)/)
+  assert.match(main, /\^about:/)
+  assert.match(main, /if \(browserPanelReady\) return/)
 
   const tsconfig = await readFile(resolve(import.meta.dirname, '../electron/tsconfig.json'), 'utf8')
   assert.doesNotMatch(tsconfig, /"noEmit": true/)

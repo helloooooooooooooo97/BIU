@@ -24,6 +24,7 @@ const isDev = process.env.BIU_ELECTRON_DEV === '1' || (!app.isPackaged && !exist
 /** 侧栏浏览器那块的原生视图。同一时间只开一个。 */
 let view: BrowserView | null = null
 let win: BrowserWindow | null = null
+let browserPanelReady = false
 
 /** 前端报上来的矩形（CSS 像素，相对窗口内容区）。 */
 let rect: { x: number; y: number; width: number; height: number } | null = null
@@ -54,16 +55,16 @@ function applyBounds() {
 }
 
 function createView() {
-  if (!win) return
+  if (!win || view) return
   view = new BrowserView({
     webPreferences: {
-      // 这是给「用户自己上网」用的视图，不是我们的代码，别给它任何宿主能力
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
       webSecurity: true,
     },
   })
+  view.setBackgroundColor('#191919')
   win.addBrowserView(view)
   view.webContents.setWindowOpenHandler(({ url }) => {
     // 外链交给系统浏览器，别在这个视图里越走越远
@@ -184,25 +185,25 @@ ipcMain.on('biu:browser:cmd', async (_event, cmd: Cmd) => {
     return
   }
 
-  // 自动建视图：前端一放面板就会先报 bounds，这里兜底
-  if (!view) createView()
-  if (!view) return
-  const wc = view.webContents
-
   if (cmd.type === 'navigate') {
     const url = cmd.url.trim()
-    if (!url) {
-      wc.loadURL('about:blank')
+    if (!url || /^about:/i.test(url)) {
+      destroyView()
       return
     }
     const fixed = /^https?:\/\//i.test(url) ? url : `https://${url}`
+    if (!view) createView()
+    if (!view) return
     try {
-      await wc.loadURL(fixed)
+      await view.webContents.loadURL(fixed)
     } catch (error) {
       send('biu:browser:error', { code: 0, desc: String((error as Error).message || error), url: fixed })
     }
     return
   }
+
+  if (!view) return
+  const wc = view.webContents
   if (cmd.type === 'back' && wc.canGoBack()) {
     wc.goBack()
     return
@@ -293,6 +294,7 @@ html.biu-electron .app-shell.is-left-hidden > main {
 `
 
 async function ensureBrowserPanel() {
+  if (browserPanelReady) return
   const host = process.env.BIU_HOST_URL || 'http://127.0.0.1:3141'
   for (let i = 0; i < 25; i += 1) {
     try {
@@ -306,7 +308,10 @@ async function ensureBrowserPanel() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ path: '/plugins/browser-panel', action: 'start' }),
       })
-      if (start.ok || start.status === 400) return
+      if (start.ok || start.status === 400) {
+        browserPanelReady = true
+        return
+      }
     } catch {
       /* host 还没起来 */
     }
