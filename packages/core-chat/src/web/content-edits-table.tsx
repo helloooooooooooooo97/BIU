@@ -200,12 +200,12 @@ function FileDiffView({ sessionId, turn, path }: { sessionId: string; turn: numb
         if (line.type === 'skip') {
           return (
             <div key={`skip-${index}`} className="flex px-3 py-0.5 text-[#7B7B79]">
-              <span className="w-3.5 shrink-0" />
               <span className="w-7 shrink-0" />
               <span className="min-w-0 flex-1 px-2 text-center">··· 未改 {line.count} 行</span>
             </div>
           )
         }
+        const lineNo = line.type === 'remove' ? line.oldLine : line.newLine
         const prefix = line.type === 'add' ? '+' : line.type === 'remove' ? '−' : ' '
         const rowClass =
           line.type === 'add'
@@ -220,8 +220,7 @@ function FileDiffView({ sessionId, turn, path }: { sessionId: string; turn: numb
             data-old-line={line.oldLine ?? ''}
             data-new-line={line.newLine ?? ''}
           >
-            <span className="w-3.5 shrink-0 select-none text-right tabular-nums text-[#7B7B79]">{line.oldLine ?? ''}</span>
-            <span className="w-7 shrink-0 select-none text-right tabular-nums text-[#7B7B79]">{line.newLine ?? ''}</span>
+            <span className="w-7 shrink-0 select-none text-right tabular-nums text-[#7B7B79]">{lineNo ?? ''}</span>
             <span className="w-4 shrink-0 select-none px-1 opacity-70">{prefix}</span>
             <span className="min-w-0 flex-1">{line.text || ' '}</span>
           </div>
