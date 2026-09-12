@@ -46,10 +46,32 @@ export function revealContentEdit(path: string, jumpLine: number) {
   )
 }
 
-export type CompactDiffRow = DiffLine | { type: 'skip'; count: number }
+export type NumberedDiffLine = DiffLine & { oldLine?: number; newLine?: number }
+export type CompactDiffRow = NumberedDiffLine | { type: 'skip'; count: number; oldFrom?: number; oldTo?: number; newFrom?: number; newTo?: number }
+
+export function numberDiffLines(lines: DiffLine[]): NumberedDiffLine[] {
+  let oldLine = 1
+  let newLine = 1
+  return lines.map((line) => {
+    if (line.type === 'equal') {
+      const row = { ...line, oldLine, newLine }
+      oldLine += 1
+      newLine += 1
+      return row
+    }
+    if (line.type === 'remove') {
+      const row = { ...line, oldLine }
+      oldLine += 1
+      return row
+    }
+    const row = { ...line, newLine }
+    newLine += 1
+    return row
+  })
+}
 
 /** 改动附近留两行上下文，中间未改的行收成「未改 N 行」。 */
-export function compactEqualLines(lines: DiffLine[], context = 2, minSkip = 4): CompactDiffRow[] {
+export function compactEqualLines(lines: NumberedDiffLine[], context = 2, minSkip = 4): CompactDiffRow[] {
   const keep = new Array(lines.length).fill(false)
   for (let i = 0; i < lines.length; i++) {
     if (lines[i]?.type !== 'equal') {
@@ -66,13 +88,24 @@ export function compactEqualLines(lines: DiffLine[], context = 2, minSkip = 4): 
       continue
     }
     let n = 0
+    const start = i
     while (i < lines.length && !keep[i]) {
       n += 1
       i += 1
     }
-    if (n >= minSkip) out.push({ type: 'skip', count: n })
-    else {
-      for (let k = i - n; k < i; k++) out.push(lines[k]!)
+    if (n >= minSkip) {
+      const first = lines[start]
+      const last = lines[i - 1]
+      out.push({
+        type: 'skip',
+        count: n,
+        oldFrom: first?.oldLine,
+        oldTo: last?.oldLine,
+        newFrom: first?.newLine,
+        newTo: last?.newLine,
+      })
+    } else {
+      for (let k = start; k < i; k++) out.push(lines[k]!)
     }
   }
   return out
@@ -93,7 +126,7 @@ function FileDiffView({ sessionId, turn, path }: { sessionId: string; turn: numb
           return
         }
         const body = (await res.json()) as { before?: string; after?: string }
-        setRows(compactEqualLines(lineDiff(body.before ?? '', body.after ?? '')))
+        setRows(compactEqualLines(numberDiffLines(lineDiff(body.before ?? '', body.after ?? ''))))
         setState('ok')
       })
       .catch((error: unknown) => {
@@ -110,12 +143,18 @@ function FileDiffView({ sessionId, turn, path }: { sessionId: string; turn: numb
     return <div className="px-3 py-2 text-[12px] text-(--dsw-label-3)">这份正文已过期，点标题仍可跳到当前文件。</div>
   }
   return (
-    <pre className="max-h-80 overflow-auto border-t border-(--dsw-border) py-1 font-mono text-[12px] leading-5" data-testid="content-edit-diff">
+    <pre
+      className="max-h-80 overflow-auto border-t border-(--dsw-border) py-1 font-mono text-[14px] leading-[1.65]"
+      data-testid="content-edit-diff"
+    >
       {rows.map((line, index) => {
         if (line.type === 'skip') {
+          const oldRange = line.oldFrom != null && line.oldTo != null ? `${line.oldFrom}–${line.oldTo}` : ''
           return (
-            <div key={`skip-${index}`} className="px-3 py-0.5 text-center text-(--dsw-label-3)">
-              ··· 未改 {line.count} 行
+            <div key={`skip-${index}`} className="flex px-2 py-0.5 text-[#7B7B79]">
+              <span className="w-10 shrink-0 text-right tabular-nums">{oldRange}</span>
+              <span className="w-10 shrink-0" />
+              <span className="min-w-0 flex-1 px-2 text-center">··· 未改 {line.count} 行</span>
             </div>
           )
         }
@@ -125,10 +164,17 @@ function FileDiffView({ sessionId, turn, path }: { sessionId: string; turn: numb
             ? 'bg-[color-mix(in_srgb,#448361_22%,transparent)] text-[#448361]'
             : line.type === 'remove'
               ? 'bg-[color-mix(in_srgb,#c4554d_22%,transparent)] text-[#c4554d]'
-              : 'text-(--dsw-label-2)'
+              : 'text-(--dsw-label)'
         return (
-          <div key={`${index}-${line.type}`} className={`flex whitespace-pre-wrap break-all px-2 ${rowClass}`}>
-            <span className="w-4 shrink-0 select-none opacity-70">{prefix}</span>
+          <div
+            key={`${index}-${line.type}`}
+            className={`flex whitespace-pre-wrap break-all px-2 ${rowClass}`}
+            data-old-line={line.oldLine ?? ''}
+            data-new-line={line.newLine ?? ''}
+          >
+            <span className="w-10 shrink-0 select-none text-right tabular-nums text-[#7B7B79]">{line.oldLine ?? ''}</span>
+            <span className="w-10 shrink-0 select-none text-right tabular-nums text-[#7B7B79]">{line.newLine ?? ''}</span>
+            <span className="w-4 shrink-0 select-none px-1 opacity-70">{prefix}</span>
             <span className="min-w-0 flex-1">{line.text || ' '}</span>
           </div>
         )

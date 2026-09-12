@@ -6,6 +6,7 @@ import {
   INSPECTOR_REVEAL_EVENT,
   compactEqualLines,
   contentEditLabel,
+  numberDiffLines,
   revealContentEdit,
   type ContentEditRow,
 } from './content-edits-table.tsx'
@@ -164,7 +165,24 @@ describe('ContentEditsTable', () => {
     await waitFor(() => expect(screen.getByTestId('content-edit-diff')).toBeTruthy())
     expect(screen.getByTestId('content-edit-diff').textContent).toContain('a')
     expect(screen.getByTestId('content-edit-diff').textContent).toContain('b')
+    const diff = screen.getByTestId('content-edit-diff')
+    expect(diff.querySelector('[data-old-line="2"]')?.textContent).toContain('a')
+    expect(diff.querySelector('[data-new-line="2"]')?.textContent).toContain('b')
     expect(fetchMock.mock.calls.some((call) => String(call[0]).includes('session=sess-diff') && String(call[0]).includes('turn=7'))).toBe(true)
+  })
+})
+
+describe('numberDiffLines', () => {
+  it('tags add and remove with source line numbers', () => {
+    const rows = numberDiffLines([
+      { type: 'equal', text: 'keep' },
+      { type: 'remove', text: 'a' },
+      { type: 'add', text: 'b' },
+      { type: 'equal', text: 'keep2' },
+    ])
+    expect(rows[1]).toMatchObject({ type: 'remove', oldLine: 2 })
+    expect(rows[2]).toMatchObject({ type: 'add', newLine: 2 })
+    expect(rows[3]).toMatchObject({ type: 'equal', oldLine: 3, newLine: 3 })
   })
 })
 
