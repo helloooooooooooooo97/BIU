@@ -42,6 +42,7 @@ import { AssetConflictError, FileSystemAssets, collectAssetNames, isAssetFileNam
 import { facetsCollection } from './facets-collection.ts'
 import { noticesCollection } from './notices-collection.ts'
 import { NoticesService } from './notices-service.ts'
+import { ContentTurnService } from './content-turn-service.ts'
 import {
   asContentText,
   insertText,
@@ -910,6 +911,17 @@ export class DatabaseService extends Service implements Database {
       }
       await this.stampActor(spec.path, current.id)
       this.bump()
+      const beforeRow = this.decorateRecord(spec, current)
+      const beforeSnap: Record<string, unknown> = {}
+      const afterSnap: Record<string, unknown> = {}
+      for (const key of Object.keys(raw)) {
+        beforeSnap[key] = beforeRow[key] ?? null
+        afterSnap[key] = next[key] ?? null
+      }
+      const title = String(next.title ?? next.name ?? current.id).trim() || current.id
+      if (Object.keys(beforeSnap).length) {
+        await this.ctx.get('contentTurns')?.recordUpdate(`${spec.path}/${current.id}`, title, beforeSnap, afterSnap)
+      }
       return {
         kind: 'record' as const,
         path: `${spec.path}/${current.id}`,
@@ -928,6 +940,16 @@ export class DatabaseService extends Service implements Database {
     }
     this.indexFacetRecord(spec, this.decorateRecord(spec, record))
     this.bump()
+    const beforeSnap: Record<string, unknown> = {}
+    const afterSnap: Record<string, unknown> = {}
+    for (const key of Object.keys(patch)) {
+      beforeSnap[key] = current[key] ?? null
+      afterSnap[key] = record[key] ?? null
+    }
+    const title = String(record.title ?? record.name ?? record.id).trim() || record.id
+    if (Object.keys(patch).length) {
+      await this.ctx.get('contentTurns')?.recordUpdate(`${spec.path}/${record.id}`, title, beforeSnap, afterSnap)
+    }
     return { kind: 'record' as const, path: `${spec.path}/${record.id}`, value: withoutContent(spec, this.withBanner(spec, this.decorateRecord(spec, record))) }
   }
 
@@ -962,14 +984,19 @@ export class DatabaseService extends Service implements Database {
       this.indexFacetRecord(spec, record)
     }
     this.bump()
+    const items = created.map((record) => ({
+      kind: 'record' as const,
+      path: `${spec.path}/${record.id}`,
+      value: withoutContent(spec, this.withBanner(spec, this.decorateRecord(spec, record))),
+    }))
+    for (const item of items) {
+      const title = String(item.value.title ?? item.value.name ?? '').trim() || item.path
+      await this.ctx.get('contentTurns')?.recordCreate(item.path, title, item.value)
+    }
     return {
       kind: 'created' as const,
       path: spec.path,
-      items: created.map((record) => ({
-        kind: 'record' as const,
-        path: `${spec.path}/${record.id}`,
-        value: withoutContent(spec, this.withBanner(spec, this.decorateRecord(spec, record))),
-      })),
+      items,
     }
   }
 
@@ -993,6 +1020,11 @@ export class DatabaseService extends Service implements Database {
     const matched = await this.matchCollectionRows(spec, listQuery, filter, q)
     const ids = [...new Set(matched.map((row) => row.id))]
     if (!ids.length) return { kind: 'deleted' as const, path: spec.path, ids }
+    for (const row of matched) {
+      const rec = withoutContent(spec, this.withBanner(spec, this.decorateRecord(spec, row)))
+      const title = String(rec.title ?? rec.name ?? row.id).trim() || row.id
+      await this.ctx.get('contentTurns')?.recordDelete(`${spec.path}/${row.id}`, title, rec)
+    }
     await spec.remove({ ids })
     for (const id of ids) this.facets.removeRecord(spec.path, id)
     this.bump()
@@ -1062,6 +1094,15 @@ export class DatabaseService extends Service implements Database {
     }
   }
 
+  async contentTitle(path: string) {
+    const parts = splitPath(path)
+    if (parts.length !== 2) return path
+    const spec = this.collection(`/${parts[0]}`)
+    const record = spec ? await spec.get(parts[1]!) : null
+    const title = String(record?.title ?? record?.name ?? '').trim()
+    return title || parts[1] || path
+  }
+
   async editContent(path: string, args: Record<string, unknown> = {}) {
     const command = resolveContentCommand(args)
     const current = await this.content(path)
@@ -1090,6 +1131,10 @@ export class DatabaseService extends Service implements Database {
             : replaceLinesText(text, args.start_line, args.end_line, args.new_str)
     await this.writeContent(path, next)
     const locus = mutationLocus(command, text, next, args)
+    const written = await this.content(current.path)
+    const after = asContentText(written.value)
+    const title = await this.contentTitle(current.path)
+    await this.ctx.get('contentTurns')?.recordEdit(current.path, text, after, title)
     return {
       kind: 'content' as const,
       path: current.path,
@@ -1332,6 +1377,23 @@ export function apply(ctx: Context) {
   }))))
   const notices = new NoticesService(ctx).open(process.env.VITEST ? ':memory:' : dataPath(process.cwd(), 'notices.json'))
   db.register(noticesCollection(notices.store))
+  ctx.http.route('POST', '/api/db/notices/clear', (route) => {
+    route.send(200, { ok: true, cleared: notices.clear() })
+  })
+  const contentTurns = new ContentTurnService(ctx).open(
+    process.env.VITEST ? ':memory:' : dataPath(process.cwd(), 'content-turns.json'),
+  )
+  ctx.http.route('GET', '/api/content-turns/file', (route) => {
+    const session = String(route.query.get('session') ?? '').trim()
+    const turn = Number(route.query.get('turn'))
+    const path = String(route.query.get('path') ?? '').trim()
+    const file = contentTurns.snapshot(session, turn, path)
+    if (!file) {
+      route.send(404, { error: 'missing' })
+      return
+    }
+    route.send(200, { before: file.before, after: file.after })
+  })
   ctx.tools.register({
     name: 'db_list',
     description: '列出 File System 路径：/ 为已登记表（path、中文名、view.blurb 说明书），/<表> 为列式记录（不含 content、默认不含 createdAt/updatedAt/createdBy/updatedBy）。默认每页 50，最多 200。columns 参数只取需要的列。表结构用 db_stat。',

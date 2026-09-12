@@ -1,0 +1,14 @@
+{
+  "id": "page-terminal",
+  "name": "终端",
+  "blurb": "页面里用 /terminal 插入一个可交互终端卡片：输入命令、看输出，右上角可全屏放大。",
+  "tags": [
+    "page",
+    "editor",
+    "terminal"
+  ],
+  "author": "Biu",
+  "authorUrl": "https://github.com/helloooooooooooooo97/biu-harness",
+  "headless": true,
+  "createdAt": 1789204035676
+}

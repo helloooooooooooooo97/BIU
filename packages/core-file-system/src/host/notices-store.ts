@@ -163,6 +163,14 @@ export class NoticesStore {
     return n
   }
 
+  clear() {
+    const n = this.rows.length
+    if (!n) return 0
+    this.rows = []
+    this.flush()
+    return n
+  }
+
   private flush() {
     if (!this.file || this.file === ':memory:') return
     writeFileSync(this.file, `${JSON.stringify(this.rows)}\n`)

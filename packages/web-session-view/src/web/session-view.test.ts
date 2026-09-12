@@ -352,6 +352,49 @@ test('ingest updates live tool/call arguments without duplicating the card', asy
   assert.equal(tool?.kind === 'tool' && tool.arguments, '{"title":"hello"}')
 })
 
+test('ingest merges live content/edits on the same seq so later files are not dropped', async () => {
+  mockFetch({
+    '/api/sessions': () => ({ sessions: [] }),
+    '/api/approvals': () => ({ mode: 'auto', pending: [] }),
+  })
+  const ctx = new Context()
+  await ctx.plugin(sessionView)
+  const view = ctx.sessionView as SessionViewService
+  view.ingest('s1', { type: 'session/open', version: 1, seq: 0, ts: 1 })
+  view.ingest('s1', { type: 'turn/start', turn: 1, seq: 1, ts: 2 })
+  view.ingest('s1', { type: 'user/message', text: '五页你好', kind: 'wake', seq: 2, ts: 3 })
+  view.ingest('s1', {
+    type: 'content/edits',
+    turn: 1,
+    seq: 4,
+    ts: 4,
+    files: [{ path: '/pages/p1', title: '你好', added: 1, removed: 0, jump_line: 1 }],
+  })
+  view.ingest('s1', {
+    type: 'content/edits',
+    turn: 1,
+    seq: 4,
+    ts: 5,
+    files: [
+      { path: '/pages/p1', title: '你好', added: 1, removed: 0, jump_line: 1 },
+      { path: '/pages/p2', title: '你好', added: 1, removed: 0, jump_line: 1 },
+      { path: '/pages/p3', title: '你好', added: 1, removed: 0, jump_line: 1 },
+      { path: '/pages/p4', title: '你好', added: 1, removed: 0, jump_line: 1 },
+      { path: '/pages/p5', title: '你好', added: 1, removed: 0, jump_line: 1 },
+    ],
+  })
+  view.ingest('s1', { type: 'assistant/message', text: '好了', seq: 5, ts: 6 })
+  view.ingest('s1', { type: 'turn/end', turn: 1, reason: 'complete', seq: 6, ts: 7 })
+  const reply = view.get().nodes.find((node) => node.kind === 'reply')
+  assert.equal(reply?.kind, 'reply')
+  if (reply?.kind !== 'reply') return
+  assert.equal(reply.contentEdits?.length, 5)
+  assert.deepEqual(
+    reply.contentEdits?.map((file) => file.path),
+    ['/pages/p1', '/pages/p2', '/pages/p3', '/pages/p4', '/pages/p5'],
+  )
+})
+
 test('load fetches full session turns and skips trajectory until ensureTrajectory', async () => {
   const calls: string[] = []
   globalThis.fetch = (async (input: RequestInfo | URL) => {

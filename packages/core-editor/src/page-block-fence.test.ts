@@ -58,6 +58,20 @@ test('patchPageBlockMarkdown rejects missing or duplicate ids', () => {
   assert.throws(() => patchPageBlockMarkdown(dup, 'ab12cd34', { data: { html: 'x' } }), /not unique/)
 })
 
+test('html fence with inline styles still yields the poster html', () => {
+  const md = `:::pageBlock {kind=html plugin=page-html-blocks id=d6ac31a5}
+<div style="box-sizing:border-box;height:100%;width:100%;overflow:hidden;position:relative;background:linear-gradient(170deg,#f3ecd8 0%,#eadfc2 100%)">
+<div style="position:absolute;left:26px;top:22px">番附</div>
+</div>
+:::
+`
+  const fences = listPageBlockFences(md)
+  assert.equal(fences.length, 1)
+  assert.equal(fences[0]?.kind, 'html')
+  assert.match(String(pageBlockData(fences[0]!).html), /番附/)
+  assert.match(String(pageBlockData(fences[0]!).html), /height:100%/)
+})
+
 test('pageBlock record id is page::block', () => {
   assert.equal(pageBlockRecordId('p001', 'ab12cd34'), 'p001::ab12cd34')
   assert.deepEqual(parsePageBlockRecordId('p001::ab12cd34'), { pageId: 'p001', blockId: 'ab12cd34' })

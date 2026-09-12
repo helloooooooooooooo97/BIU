@@ -1,3 +1,5 @@
+import { mergeContentEditFiles } from '@biu/type-session'
+
 /** 与 host SessionEvent 对齐的瘦客户端类型（只投影 UI 需要的字段）。 */
 export type SessionEvent = {
   seq: number
@@ -32,6 +34,19 @@ export type SessionEvent = {
   | { type: 'assistant/chunk'; text: string; channel?: 'reasoning' }
   | { type: 'tool/call'; id: string; name: string; arguments: string }
   | { type: 'tool/result'; id: string; name: string; ok: boolean; detail: string }
+  | {
+      type: 'content/edits'
+      turn: number
+      files: Array<{
+        path: string
+        title: string
+        added: number
+        removed: number
+        jump_line: number
+        reverted?: boolean
+        kind?: 'content' | 'create' | 'update' | 'delete'
+      }>
+    }
 )
 
 export interface TrajectoryUsage {
@@ -112,6 +127,15 @@ export type ChatNode =
       finished?: boolean
       /** turn/end reason，如 complete / cancelled */
       endReason?: string
+      contentEdits?: Array<{
+        path: string
+        title: string
+        added: number
+        removed: number
+        jump_line: number
+        reverted?: boolean
+        kind?: 'content' | 'create' | 'update' | 'delete'
+      }>
     }
   | { id: string; kind: 'turn'; text: string }
 
@@ -184,6 +208,7 @@ export function projectNodes(events: SessionEvent[]): ChatNode[] {
     steps: Map<number, ChatStepStat>
     /** step → 该 step 历史占比累加器 {sum, weight}。 */
     stepHist: Map<number, { sum: number; weight: number }>
+    contentEdits?: Extract<ChatNode, { kind: 'reply' }>['contentEdits']
   } | null = null
 
   function ensureReply(seq: number) {
@@ -265,7 +290,7 @@ export function projectNodes(events: SessionEvent[]): ChatNode[] {
   }
 
   function flushReply(endTs?: number, finished = false, reason?: string) {
-    if (!reply || reply.parts.length === 0) {
+    if (!reply || (reply.parts.length === 0 && !reply.contentEdits?.length)) {
       reply = null
       currentStep = undefined
       stepStartTs = undefined
@@ -308,6 +333,7 @@ export function projectNodes(events: SessionEvent[]): ChatNode[] {
       streaming: reply.streaming && !finished,
       finished,
       ...(reason ? { endReason: reason } : {}),
+      ...(reply.contentEdits?.length ? { contentEdits: reply.contentEdits } : {}),
     })
     reply = null
     currentStep = undefined
@@ -492,6 +518,9 @@ export function projectNodes(events: SessionEvent[]): ChatNode[] {
         r.tools.set(event.id, part)
         r.parts.push(part)
       }
+    } else if (event.type === 'content/edits') {
+      const r = ensureReply(event.seq)
+      r.contentEdits = mergeContentEditFiles(r.contentEdits ?? [], event.files)
     } else if (event.type === 'turn/end') {
       flushReply(event.ts, true, event.reason)
       turnStartTs = undefined
@@ -719,6 +748,10 @@ export function projectTrajectory(events: SessionEvent[]): TrajectoryRow[] {
     } else if (event.type === 'tool/result') {
       callId = event.id
       summary = `${event.name} → ${event.ok ? 'ok' : 'fail'}: ${event.detail.slice(0, 80)}`
+    } else if (event.type === 'content/edits') {
+      const add = event.files.reduce((n, file) => n + file.added, 0)
+      const del = event.files.reduce((n, file) => n + file.removed, 0)
+      summary = `db_content ${event.files.length} · +${add} −${del}`
     } else if (event.type === 'turn/end') {
       summary = `end · ${event.reason}`
     } else if (event.type === 'step/start' || event.type === 'step/end') {

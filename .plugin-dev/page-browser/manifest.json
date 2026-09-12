@@ -1,0 +1,18 @@
+{
+  "id": "page-browser",
+  "name": "浏览器",
+  "blurb": "页面 /browser 卡片 + 右侧栏真浏览器。卡片用 iframe；站点禁嵌时点跳转/侧栏打开，会进检查器里的原生浏览器继续看。",
+  "tags": [
+    "page",
+    "editor",
+    "browser",
+    "iframe",
+    "inspector",
+    "electron",
+    "web"
+  ],
+  "author": "Biu",
+  "authorUrl": "https://github.com/helloooooooooooooo97/biu-harness",
+  "headless": true,
+  "createdAt": 1789204058242
+}

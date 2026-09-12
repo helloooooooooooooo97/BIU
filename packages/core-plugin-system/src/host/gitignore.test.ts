@@ -21,4 +21,6 @@ test('compiled js beside package sources is ignored; grok-bot js stays tracked',
   assert.equal(ignored('.plugin-dev/page-algorithm/node_modules/foo/index.js'), true)
   assert.equal(ignored('public/grok-bot/src/character.js'), false)
   assert.equal(ignored('.plugin/page-html-blocks/web.js'), true)
+  assert.equal(ignored('electron/out/main.js'), true)
+  assert.equal(ignored('electron/preload.cjs'), false)
 })

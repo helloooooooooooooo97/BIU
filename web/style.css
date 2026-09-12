@@ -220,6 +220,47 @@ body {
   padding: 6px;
 }
 
+.shell-notify-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 28px;
+  padding: 2px 6px 6px;
+}
+
+.shell-notify-head-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dsw-label-2);
+}
+
+.shell-notify-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  color: var(--dsw-label-2);
+  background: transparent;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.shell-notify-pop:hover .shell-notify-clear,
+.shell-notify-clear:focus-visible {
+  opacity: 1;
+}
+
+.shell-notify-clear:hover {
+  color: var(--dsw-label);
+  background: var(--dsw-hover);
+}
+
 .shell-notify-list {
   margin: 0;
   padding: 0;
@@ -2425,10 +2466,13 @@ body {
 }
 
 .fsdb-record-emoji {
-  display: grid;
-  width: 24px;
-  height: 24px;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  overflow: hidden;
   font-size: 16px;
   line-height: 1;
 }

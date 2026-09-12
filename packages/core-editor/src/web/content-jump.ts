@@ -116,7 +116,7 @@ export function tryContentJump(editor: Editor, markdown: string, recordId: strin
   if (!jumpHostOk(editor)) return false
   const snippet = snippetAtLine(markdown, pending.start_line)
   if (!force && snippet && posAtSnippet(editor.state.doc, snippet) == null) return false
-  applyContentJump(editor, markdown, pending)
+  applyContentJump(editor, markdown, pending, { navigate: pending.navigate === true })
   scheduleConsume()
   return true
 }

@@ -9,6 +9,8 @@ import {
   firstPaintStartIndex,
   groupNodesIntoTurns,
   isChatStuckToLatest,
+  isChatPinnedToBottom,
+  nextStickToLatest,
   pinChatToLatest,
   recalledChatScroll,
   rememberChatScroll,
@@ -183,6 +185,34 @@ describe('chat scroll memory per session', () => {
     parent.scrollTop = 2100
     expect(isChatStuckToLatest(parent)).toBe(true)
   })
+
+  it('does not treat the top of a short thread as stuck-to-latest', () => {
+    const parent = document.createElement('div')
+    Object.defineProperty(parent, 'scrollHeight', { value: 1000, configurable: true })
+    Object.defineProperty(parent, 'clientHeight', { value: 800, configurable: true })
+    Object.defineProperty(parent, 'scrollTop', { value: 0, writable: true, configurable: true })
+    expect(isChatStuckToLatest(parent)).toBe(false)
+    parent.scrollTop = 200
+    expect(isChatStuckToLatest(parent)).toBe(true)
+  })
+
+  it('does not keep pin-follow when the user has already scrolled up a little', () => {
+    const parent = document.createElement('div')
+    Object.defineProperty(parent, 'scrollHeight', { value: 2400, configurable: true })
+    Object.defineProperty(parent, 'clientHeight', { value: 800, configurable: true })
+    Object.defineProperty(parent, 'scrollTop', { value: 1480, writable: true, configurable: true })
+    expect(isChatStuckToLatest(parent)).toBe(true)
+    expect(isChatPinnedToBottom(parent)).toBe(false)
+    expect(
+      nextStickToLatest({ stuck: true, distanceFromBottom: 120, scrollTop: 1480, scrollingUp: true }),
+    ).toBe(false)
+    expect(
+      nextStickToLatest({ stuck: true, distanceFromBottom: 120, scrollTop: 1480, scrollingUp: false }),
+    ).toBe(true)
+    expect(
+      nextStickToLatest({ stuck: false, distanceFromBottom: 20, scrollTop: 1580, scrollingUp: false }),
+    ).toBe(true)
+  })
 })
 
 describe('thread follows the latest message', () => {
@@ -192,5 +222,7 @@ describe('thread follows the latest message', () => {
     expect(src).toContain('ResizeObserver')
     expect(src).toContain('pinChatToLatest')
     expect(src).toContain('liveTurnId')
+    expect(src).toContain('event.deltaY < 0')
+    expect(src).toContain('nextStickToLatest')
   })
 })
