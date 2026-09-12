@@ -14,8 +14,8 @@ export interface UsagePanelProps {
 
 const IN = '#5b9fd6'
 const OUT = '#9aa0a8'
-const CACHE = '#448361'
-const COMPACT = '#c2920a'
+const CACHE = '#28C840'
+const COMPACT = '#FEBC2E'
 
 async function loadUsageTrend(sessionId: string): Promise<UsageTrend> {
   const res = await fetch(`/api/sessions/${sessionId}/usage-trend`)
