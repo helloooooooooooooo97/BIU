@@ -6,6 +6,8 @@ import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DatabaseService, apply as applyFileSystem } from './index.ts'
+import { ContentTurnService } from './content-turn-service.ts'
+import { asContentText } from './content-edit.ts'
 import { FileSystemAssets } from './assets-store.ts'
 import type { CollectionSpec } from '@biu/type-file-system'
 import { REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
@@ -1248,4 +1250,61 @@ test('tables without records.create/delete reject create and delete', async () =
       }),
     /必须提供 create/,
   )
+})
+
+test('wal delete revert restores the same id and file content', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  const turns = new ContentTurnService(ctx, db).open(':memory:')
+  const rows = new Map<string, Record<string, unknown>>([
+    ['p1', { id: 'p1', title: '页', notes: '完整正文' }],
+  ])
+  db.register({
+    id: 'pages',
+    path: '/pages',
+    schema: {
+      contentField: 'notes',
+      fields: {
+        ...REQUIRED_RECORD_FIELDS,
+        title: { type: 'string', writable: true },
+        notes: { type: 'file', writable: true },
+      },
+    },
+    records: { update: true, create: true, delete: true },
+    list: () => [...rows.values()] as { id: string }[],
+    get: (id) => rows.get(id) as { id: string } | undefined,
+    update: (id, patch) => {
+      const next = { ...rows.get(id), ...patch, id }
+      rows.set(id, next)
+      return next as { id: string }
+    },
+    create: async (records) => {
+      const out = []
+      for (const fields of records) {
+        const id = typeof fields.id === 'string' && fields.id ? fields.id : `n${rows.size}`
+        const row = { ...fields, id }
+        rows.set(id, row)
+        out.push(row as { id: string })
+      }
+      return out
+    },
+    remove: async (query) => {
+      for (const id of query.ids ?? []) rows.delete(id)
+      return query.ids ?? []
+    },
+  })
+  const sessions = {
+    peek: () => ({ events: [{ type: 'turn/start', turn: 1 }] }),
+    append: async () => undefined,
+  }
+  const get = turns.ctx.get.bind(turns.ctx)
+  turns.ctx.get = ((name: string) => (name === 'sessions' ? sessions : get(name))) as typeof turns.ctx.get
+  await runWithSession('sess-wal', async () => {
+    await db.remove('/pages', { ids: ['p1'] })
+  })
+  assert.equal(rows.has('p1'), false)
+  const done = await turns.revert('sess-wal', 1, '/pages/p1', 'delete')
+  assert.equal(done.ok, true)
+  assert.equal(rows.get('p1')?.id, 'p1')
+  assert.equal(asContentText((await db.content('/pages/p1')).value), '完整正文')
 })

@@ -1,8 +1,10 @@
 import { Service, type Context } from 'cordis'
 import { currentSessionId } from '@biu/host-sessions/scope'
-import type { ContentEditSummary, TurnOp } from './content-turn-store.ts'
-import { ContentTurnStore } from './content-turn-store.ts'
+import type { ContentEditSummary, WalActor, WalEntry } from './wal-store.ts'
+import { WalStore } from './wal-store.ts'
 import { asContentText } from './content-edit.ts'
+
+export type { ContentEditSummary } from './wal-store.ts'
 
 type ContentDb = {
   content: (path: string) => Promise<{ value: unknown }>
@@ -11,6 +13,7 @@ type ContentDb = {
   create?: (path: string, records: unknown) => Promise<unknown>
   remove?: (path: string, query: { ids: string[] }) => Promise<unknown>
   read?: (path: string) => Promise<{ value?: unknown }>
+  restoreRecord?: (path: string, fields: Record<string, unknown>, content?: string) => Promise<unknown>
 }
 
 function sameText(left: string, right: string) {
@@ -22,24 +25,18 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>
 }
 
-function writableClone(row: Record<string, unknown>) {
-  const next = { ...row }
-  delete next.id
-  delete next.createdAt
-  delete next.updatedAt
-  delete next.createdBy
-  delete next.updatedBy
-  return next
-}
-
 function splitRecordPath(path: string) {
   const parts = path.split('/').filter(Boolean)
   if (parts.length < 2) return null
   return { collection: `/${parts[0]}`, id: parts.slice(1).join('/') }
 }
 
+function stableJson(value: unknown) {
+  return JSON.stringify(value ?? null)
+}
+
 export class ContentTurnService extends Service {
-  store = new ContentTurnStore()
+  store = new WalStore()
   private reverting = false
   private publishChain: Promise<void> = Promise.resolve()
 
@@ -55,43 +52,61 @@ export class ContentTurnService extends Service {
     return this
   }
 
-  private scope() {
-    if (this.reverting) return null
+  private actor(): WalActor {
     const sessionId = String(currentSessionId() ?? '').trim()
-    if (!sessionId) return null
+    if (!sessionId) return { kind: 'user' }
     const turn = this.openTurn(sessionId)
-    if (turn == null) return null
-    return { sessionId, turn }
+    if (turn == null) return { kind: 'agent', sessionId }
+    return { kind: 'agent', sessionId, turn }
+  }
+
+  private afterWrite(actor: WalActor) {
+    if (actor.kind === 'agent' && actor.sessionId && actor.turn != null) {
+      return this.publishLatest(actor.sessionId, actor.turn)
+    }
+    return Promise.resolve()
   }
 
   async recordEdit(path: string, before: string, after: string, title: string) {
-    if (sameText(before, after)) return
-    const scope = this.scope()
-    if (!scope) return
-    this.store.record({ ...scope, path, title, before, after })
-    await this.publishLatest(scope.sessionId, scope.turn)
+    if (this.reverting || sameText(before, after)) return
+    const actor = this.actor()
+    this.store.append({ path, op: 'content', actor, title, beforeText: before, afterText: after })
+    await this.afterWrite(actor)
   }
 
-  async recordCreate(path: string, title: string, record: Record<string, unknown>) {
-    const scope = this.scope()
-    if (!scope) return
-    this.store.recordOp(scope.sessionId, scope.turn, { op: 'create', path, title, record })
-    await this.publishLatest(scope.sessionId, scope.turn)
+  async recordCreate(path: string, title: string, record: Record<string, unknown>, content = '') {
+    if (this.reverting) return
+    const actor = this.actor()
+    this.store.append({
+      path,
+      op: 'create',
+      actor,
+      title,
+      afterText: content,
+      afterMeta: record,
+    })
+    await this.afterWrite(actor)
   }
 
   async recordUpdate(path: string, title: string, before: Record<string, unknown>, after: Record<string, unknown>) {
-    if (JSON.stringify(before) === JSON.stringify(after)) return
-    const scope = this.scope()
-    if (!scope) return
-    this.store.recordOp(scope.sessionId, scope.turn, { op: 'update', path, title, before, after })
-    await this.publishLatest(scope.sessionId, scope.turn)
+    if (this.reverting || stableJson(before) === stableJson(after)) return
+    const actor = this.actor()
+    this.store.append({ path, op: 'update', actor, title, beforeMeta: before, afterMeta: after })
+    await this.afterWrite(actor)
   }
 
-  async recordDelete(path: string, title: string, record: Record<string, unknown>) {
-    const scope = this.scope()
-    if (!scope) return
-    this.store.recordOp(scope.sessionId, scope.turn, { op: 'delete', path, title, record })
-    await this.publishLatest(scope.sessionId, scope.turn)
+  async recordDelete(path: string, title: string, record: Record<string, unknown>, content = '') {
+    if (this.reverting) return
+    const actor = this.actor()
+    this.store.append({
+      path,
+      op: 'delete',
+      actor,
+      title,
+      beforeText: content,
+      beforeMeta: record,
+    })
+    await this.afterWrite(actor)
   }
 
   async revert(sessionId: string, turn: number, path?: string, kind?: ContentEditSummary['kind']) {
@@ -100,27 +115,20 @@ export class ContentTurnService extends Service {
     const results: Array<{ path: string; ok: boolean; error?: string }> = []
     this.reverting = true
     try {
-      const ops = this.store.listOps(sid, turn).slice().reverse()
-      for (const op of ops) {
-        if (op.reverted) continue
-        if (want && op.path !== want) continue
-        if (kind && kind !== 'content' && op.op !== kind) continue
-        if (kind === 'content') continue
-        results.push(await this.revertOp(sid, turn, op))
+      const rows = this.store
+        .listTurn(sid, turn)
+        .filter((row) => {
+          if (row.reverted) return false
+          if (want && row.path !== want) return false
+          if (kind && row.op !== kind) return false
+          return true
+        })
+        .slice()
+        .sort((a, b) => b.seq - a.seq)
+      if (want && kind && !rows.length) {
+        return { ok: false, results: [{ path: want, ok: false, error: 'missing' }] }
       }
-      if (!kind || kind === 'content') {
-        const files = want ? [this.store.getFile(sid, turn, want)].filter(Boolean) : this.store.listFiles(sid, turn)
-        if (want && kind === 'content' && !files.length) {
-          results.push({ path: want, ok: false, error: 'missing' })
-        }
-        for (const file of files) {
-          if (!file || file.reverted) {
-            if (file) results.push({ path: file.path, ok: true })
-            continue
-          }
-          results.push(await this.revertContent(sid, turn, file.path, file.before, file.after))
-        }
-      }
+      for (const row of rows) results.push(await this.revertEntry(row))
     } finally {
       this.reverting = false
     }
@@ -133,58 +141,59 @@ export class ContentTurnService extends Service {
     return this.store.summaries(sessionId, turn)
   }
 
-  private async revertContent(sessionId: string, turn: number, path: string, before: string, after: string) {
+  private async revertEntry(row: WalEntry): Promise<{ path: string; ok: boolean; error?: string }> {
     try {
-      const current = asContentText((await this.db.content(path)).value)
-      if (!sameText(current, after) && !sameText(current, before)) {
-        return { path, ok: false, error: 'diverged' }
-      }
-      if (!sameText(current, before)) await this.db.writeContent(path, before)
-      this.store.markReverted(sessionId, turn, path, 'content')
-      return { path, ok: true }
-    } catch (error) {
-      return { path, ok: false, error: String(error) }
-    }
-  }
-
-  private async revertOp(sessionId: string, turn: number, op: TurnOp) {
-    try {
-      const parts = splitRecordPath(op.path)
-      if (op.op === 'create') {
-        const live = await this.db.read?.(op.path).catch(() => null)
-        if (!live?.value) {
-          this.store.markReverted(sessionId, turn, op.path, 'create')
-          return { path: op.path, ok: true }
+      if (row.op === 'content') {
+        const before = this.store.getBlob(row.beforeBlob)
+        const after = this.store.getBlob(row.afterBlob)
+        const current = asContentText((await this.db.content(row.path)).value)
+        if (!sameText(current, after) && !sameText(current, before)) {
+          return { path: row.path, ok: false, error: 'diverged' }
         }
-        if (!parts || !this.db.remove) return { path: op.path, ok: false, error: 'cannot delete' }
-        await this.db.remove(parts.collection, { ids: [parts.id] })
-        this.store.markReverted(sessionId, turn, op.path, 'create')
-        return { path: op.path, ok: true }
+        if (!sameText(current, before)) await this.db.writeContent(row.path, before)
+        this.store.markReverted(row.seq)
+        return { path: row.path, ok: true }
       }
-      if (op.op === 'update') {
-        const live = asRecord((await this.db.read?.(op.path))?.value)
-        if (!live) return { path: op.path, ok: false, error: 'missing' }
-        const keys = Object.keys(op.after)
-        const slice = (row: Record<string, unknown>) => {
+      const parts = splitRecordPath(row.path)
+      if (row.op === 'create') {
+        const live = await this.db.read?.(row.path).catch(() => null)
+        if (!live?.value) {
+          this.store.markReverted(row.seq)
+          return { path: row.path, ok: true }
+        }
+        if (!parts || !this.db.remove) return { path: row.path, ok: false, error: 'cannot delete' }
+        await this.db.remove(parts.collection, { ids: [parts.id] })
+        this.store.markReverted(row.seq)
+        return { path: row.path, ok: true }
+      }
+      if (row.op === 'update') {
+        const live = asRecord((await this.db.read?.(row.path))?.value)
+        if (!live) return { path: row.path, ok: false, error: 'missing' }
+        const keys = Object.keys(row.afterMeta ?? {})
+        const slice = (rec: Record<string, unknown>) => {
           const next: Record<string, unknown> = {}
-          for (const key of keys) next[key] = row[key] ?? null
+          for (const key of keys) next[key] = rec[key] ?? null
           return next
         }
-        const now = JSON.stringify(slice(live))
-        if (now !== JSON.stringify(op.after) && now !== JSON.stringify(op.before)) {
-          return { path: op.path, ok: false, error: 'diverged' }
+        const now = stableJson(slice(live))
+        if (now !== stableJson(row.afterMeta) && now !== stableJson(row.beforeMeta)) {
+          return { path: row.path, ok: false, error: 'diverged' }
         }
-        if (!this.db.update) return { path: op.path, ok: false, error: 'cannot update' }
-        if (now !== JSON.stringify(op.before)) await this.db.update(op.path, op.before)
-        this.store.markReverted(sessionId, turn, op.path, 'update')
-        return { path: op.path, ok: true }
+        if (!this.db.update) return { path: row.path, ok: false, error: 'cannot update' }
+        if (now !== stableJson(row.beforeMeta)) await this.db.update(row.path, row.beforeMeta)
+        this.store.markReverted(row.seq)
+        return { path: row.path, ok: true }
       }
-      if (!this.db.create || !parts) return { path: op.path, ok: false, error: 'cannot create' }
-      await this.db.create(parts.collection, [writableClone(op.record)])
-      this.store.markReverted(sessionId, turn, op.path, 'delete')
-      return { path: op.path, ok: true }
+      if (!this.db.restoreRecord && !this.db.create) return { path: row.path, ok: false, error: 'cannot create' }
+      const fields = row.beforeMeta ?? {}
+      const text = this.store.getBlob(row.beforeBlob)
+      if (this.db.restoreRecord) await this.db.restoreRecord(row.path, fields, text)
+      else if (parts) await this.db.create(parts.collection, [{ ...fields, ...(text ? { content: text } : {}) }])
+      else return { path: row.path, ok: false, error: 'cannot create' }
+      this.store.markReverted(row.seq)
+      return { path: row.path, ok: true }
     } catch (error) {
-      return { path: op.path, ok: false, error: String(error) }
+      return { path: row.path, ok: false, error: String(error) }
     }
   }
 
