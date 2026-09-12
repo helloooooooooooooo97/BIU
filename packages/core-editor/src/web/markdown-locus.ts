@@ -16,6 +16,35 @@ function serialize(editor: Editor, doc: PmNode) {
   return editor.getMarkdown()
 }
 
+export function markdownLineText(md: string, line: number) {
+  return linesOf(md, line, line)
+}
+
+/** 当前文档里，该 1-based markdown 行开头的 ProseMirror 位置。 */
+export function posAtMarkdownLine(editor: Editor, line: number): number {
+  const doc = editor.state.doc
+  const full = serialize(editor, doc)
+  const target = clampLine(line, full)
+  let lo = 0
+  let hi = Math.max(0, doc.content.size)
+  while (lo < hi) {
+    const mid = Math.floor((lo + hi) / 2)
+    const prefix = serialize(editor, doc.cut(0, mid))
+    if (lineFromPrefix(prefix, full) < target) lo = mid + 1
+    else hi = mid
+  }
+  return lo
+}
+
+/** 该行之后（下一行开头；已是末行则文档末尾）。 */
+export function posAfterMarkdownLine(editor: Editor, line: number): number {
+  const doc = editor.state.doc
+  const full = serialize(editor, doc)
+  const last = clampLine(Number.MAX_SAFE_INTEGER, full)
+  if (line >= last) return doc.content.size
+  return posAtMarkdownLine(editor, line + 1)
+}
+
 function lineAtEnd(md: string) {
   if (!md) return 1
   return md.split('\n').length
