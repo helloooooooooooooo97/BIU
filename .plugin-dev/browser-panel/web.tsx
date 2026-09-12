@@ -24,6 +24,8 @@ type PickApi = {
   ) => void
 }
 
+type Inspected = { tag: string; id: string; className: string; text: string; html: string }
+
 type Bridge = {
   available: true
   navigate: (url: string) => void
@@ -38,7 +40,7 @@ type Bridge = {
   close: () => void
   onState: (fn: (s: { url: string; title: string; canGoBack: boolean; canGoForward: boolean; loading: boolean }) => void) => () => void
   onError: (fn: (e: { code: number; desc: string; url: string }) => void) => () => void
-  onInspected: (fn: (info: { tag: string; id: string; className: string; text: string; html: string } | null) => void) => () => void
+  onInspected: (fn: (info: Inspected | Inspected[] | null) => void) => () => void
 }
 
 function bridge(): Bridge | null {
@@ -80,10 +82,11 @@ function Glyph({ id }: { id: 'back' | 'forward' | 'reload' | 'open' | 'pick' | '
         <path d="M8 2.75a5.25 5.25 0 1 0 5.2 6.02.75.75 0 1 0-1.48-.24A3.75 3.75 0 1 1 8 4.25c.83 0 1.6.27 2.22.72l-1.1 1.1h3.4V2.67l-1.1 1.1A5.24 5.24 0 0 0 8 2.75Z" />
       </svg>
     )
-  if (id === 'open')
+  if (id === 'open' || id === 'external')
     return (
-      <svg {...common}>
-        <path d="M5.5 3.25a.75.75 0 0 1 .75-.75h6.5a.75.75 0 0 1 .75.75v6.5a.75.75 0 0 1-1.5 0V4.81l-7.22 7.22a.75.75 0 1 1-1.06-1.06L10.94 3.75H6.25a.75.75 0 0 1-.75-.5Z" />
+      <svg {...common} width={16} height={16}>
+        <path d="M6.22 8.72a.75.75 0 0 0 1.06 1.06l5.22-5.22v1.69a.75.75 0 0 0 1.5 0v-3.5a.75.75 0 0 0-.75-.75h-3.5a.75.75 0 0 0 0 1.5h1.69L6.22 8.72Z" />
+        <path d="M3.5 6.75c0-.69.56-1.25 1.25-1.25H7A.75.75 0 0 0 7 4H4.75A2.75 2.75 0 0 0 2 6.75v4.5A2.75 2.75 0 0 0 4.75 14h4.5A2.75 2.75 0 0 0 12 11.25V9a.75.75 0 0 0-1.5 0v2.25c0 .69-.56 1.25-1.25 1.25h-4.5c-.69 0-1.25-.56-1.25-1.25v-4.5Z" />
       </svg>
     )
   if (id === 'pick')
@@ -147,22 +150,25 @@ function BrowserPanel({ pick }: { pick?: PickApi }) {
     const offError = api.onError((e) => {
       setError(`${e.desc || '加载失败'}${e.code ? ` (${e.code})` : ''}`)
     })
-    const offInspect = api.onInspected((info) => {
+    const offInspect = api.onInspected((raw) => {
       setPicking(false)
-      if (!info) return
-      const label = `${info.tag}${info.id ? `#${info.id}` : ''}${info.className ? `.${String(info.className).split(/\s+/)[0]}` : ''}`
-      pick?.attach([
-        {
-          kind: 'dom',
-          id: `dom-${Date.now().toString(36)}`,
-          label,
-          action: 'DOM',
-          route: state.url,
-          title: label,
-          text: info.text,
-          selection: info.html,
-        },
-      ])
+      const list = Array.isArray(raw) ? raw : raw ? [raw] : []
+      if (!list.length) return
+      pick?.attach(
+        list.map((info, index) => {
+          const label = `${info.tag}${info.id ? `#${info.id}` : ''}${info.className ? `.${String(info.className).split(/\s+/)[0]}` : ''}`
+          return {
+            kind: 'dom',
+            id: `dom-${Date.now().toString(36)}-${index}`,
+            label,
+            action: 'DOM',
+            route: state.url,
+            title: label,
+            text: info.text,
+            selection: info.html,
+          }
+        }),
+      )
     })
     return () => {
       offState()
@@ -280,6 +286,7 @@ function BrowserPanel({ pick }: { pick?: PickApi }) {
           style={iconBtn}
           title="在系统浏览器打开"
           aria-label="在系统浏览器打开"
+          data-testid="browser-panel-external"
           onClick={() => state.url && api.openExternal(state.url)}
         >
           <Glyph id="external" />

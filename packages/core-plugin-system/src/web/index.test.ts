@@ -288,4 +288,7 @@ test('browser-panel is a session inspector tab and injects pick', async () => {
   assert.match(src, /api\.inspect\(-1, -1\)/)
   assert.match(src, /M7\.25 1\.75a\.75\.75 0 0 1 1\.5 0v1\.5/)
   assert.match(src, /aria-label="选取"/)
+  assert.match(src, /M6\.22 8\.72a\.75\.75 0 0 0 1\.06 1\.06l5\.22/)
+  assert.match(src, /browser-panel-external/)
+  assert.match(src, /Array\.isArray\(raw\)/)
 })
