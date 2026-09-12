@@ -67,8 +67,10 @@ function createView() {
   view.setBackgroundColor('#191919')
   win.addBrowserView(view)
   view.webContents.setWindowOpenHandler(({ url }) => {
-    // 外链交给系统浏览器，别在这个视图里越走越远
-    if (/^https?:/i.test(url)) void shell.openExternal(url)
+    // target=_blank / window.open：仍在这个视图里跳，不要丢给系统浏览器
+    if (/^https?:/i.test(url) && view && !view.webContents.isDestroyed()) {
+      void view.webContents.loadURL(url)
+    }
     return { action: 'deny' }
   })
   attachEvents(view.webContents)
