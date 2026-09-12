@@ -144,7 +144,7 @@ function FileDiffView({ sessionId, turn, path }: { sessionId: string; turn: numb
   }
   return (
     <pre
-      className="max-h-80 overflow-auto border-t border-(--dsw-border) py-1 font-mono text-[14px] leading-[1.65]"
+      className="max-h-80 overflow-auto border-t border-(--dsw-border) py-1 font-mono text-[12px] leading-5"
       data-testid="content-edit-diff"
     >
       {rows.map((line, index) => {
