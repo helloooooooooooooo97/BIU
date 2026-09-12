@@ -38,7 +38,25 @@ type Bridge = {
   close: () => void
   onState: (fn: (s: { url: string; title: string; canGoBack: boolean; canGoForward: boolean; loading: boolean }) => void) => () => void
   onError: (fn: (e: { code: number; desc: string; url: string }) => void) => () => void
-  onInspected: (fn: (info: { tag: string; id: string; className: string; text: string; html: string } | null) => void) => () => void
+  onInspected: (fn: (info: InspectedPayload) => void) => () => void
+}
+
+type DomSnap = { tag: string; id: string; className: string; text: string; html: string }
+type InspectedPayload = { items?: DomSnap[] } | DomSnap[] | DomSnap | null
+
+function inspectedList(info: InspectedPayload): DomSnap[] {
+  if (!info) return []
+  if (Array.isArray(info)) return info
+  if (typeof info === 'object' && Array.isArray(info.items)) return info.items
+  if (typeof info === 'object' && 'tag' in info && typeof info.tag === 'string') return [info]
+  return []
+}
+
+function pickIdFromText(raw: string) {
+  let hash = 0
+  const key = raw.replace(/\s+/g, ' ').trim()
+  for (let i = 0; i < key.length; i += 1) hash = (hash * 33 + key.charCodeAt(i)) >>> 0
+  return hash.toString(16)
 }
 
 function bridge(): Bridge | null {
@@ -149,20 +167,29 @@ function BrowserPanel({ pick }: { pick?: PickApi }) {
     })
     const offInspect = api.onInspected((info) => {
       setPicking(false)
-      if (!info) return
-      const label = `${info.tag}${info.id ? `#${info.id}` : ''}${info.className ? `.${String(info.className).split(/\s+/)[0]}` : ''}`
-      pick?.attach([
-        {
-          kind: 'dom',
-          id: `dom-${Date.now().toString(36)}`,
-          label,
-          action: 'DOM',
-          route: state.url,
-          title: label,
-          text: info.text,
-          selection: info.html,
-        },
-      ])
+      const snaps = inspectedList(info)
+      if (!snaps.length) return
+      const route = state.url || ''
+      pick?.attach(
+        snaps.map((item) => {
+          const text = (item.text || '').trim()
+          const css = String(item.className || '').split(/\s+/).find(Boolean)
+          const tagLabel = `${item.tag}${item.id ? `#${item.id}` : ''}${css ? `.${css}` : ''}`
+          const label = (text.replace(/\s+/g, ' ').slice(0, 80) || tagLabel).trim()
+          const selection = text || item.html || label
+          return {
+            kind: 'html',
+            id: pickIdFromText(`${route}|${item.tag}|${item.id}|${selection}`),
+            label,
+            route,
+            title: state.title || route,
+            path: route,
+            plugin: 'browser-panel',
+            text: text || undefined,
+            selection,
+          }
+        }),
+      )
     })
     return () => {
       offState()
