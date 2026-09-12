@@ -1,6 +1,7 @@
 import type { Node as PmNode } from '@tiptap/pm/model'
 import type { Editor } from '@tiptap/core'
 import { CONTENT_JUMP_EVENT, parseContentJump, type ContentJump } from '@biu/type-file-system'
+import { applyAgentEditMark } from './agent-edit-plugin.ts'
 import { editorHostIsLive } from './editor-live.ts'
 import { scrollOutlineTarget } from '@biu/public-ui'
 
@@ -120,10 +121,38 @@ export function tryContentJump(editor: Editor, markdown: string, recordId: strin
   return true
 }
 
-export function applyContentJump(editor: Editor, markdown: string, jump: ContentJump) {
+export function posRangeForJump(doc: PmNode, markdown: string, jump: ContentJump): { from: number; to: number } | null {
   const startSnippet = snippetAtLine(markdown, jump.start_line)
-  const found = posAtSnippet(editor.state.doc, startSnippet)
-  const pos = safeTextPos(editor.state.doc, found ?? 1)
+  const endSnippet = snippetAtLine(markdown, jump.end_line ?? jump.start_line)
+  const from = posAtSnippet(doc, startSnippet)
+  if (from == null) return null
+  const endAt = posAtSnippet(doc, endSnippet)
+  const endLen = Math.max(1, Math.min(48, endSnippet.length || startSnippet.length || 1))
+  let to = endAt != null ? endAt + endLen : from + Math.max(1, Math.min(48, startSnippet.length || 1))
+  if (to <= from) to = from + Math.max(1, Math.min(48, startSnippet.length || 1))
+  try {
+    const $from = doc.resolve(Math.min(from, doc.content.size))
+    const $to = doc.resolve(Math.min(to, doc.content.size))
+    const start = $from.start(Math.max(1, $from.depth))
+    const end = $to.end(Math.max(1, $to.depth))
+    if (end > start) return { from: start, to: end }
+  } catch {
+    /* resolve */
+  }
+  return { from, to: Math.min(doc.content.size, to) }
+}
+
+/** Agent 写正文：只标改动，不 focus、不滚视口。navigate 仅给用户主动跳转。 */
+export function applyContentJump(
+  editor: Editor,
+  markdown: string,
+  jump: ContentJump,
+  opts?: { navigate?: boolean },
+) {
+  const range = posRangeForJump(editor.state.doc, markdown, jump)
+  applyAgentEditMark(editor, range)
+  if (!opts?.navigate) return
+  const pos = safeTextPos(editor.state.doc, range?.from ?? 1)
   try {
     editor.chain().focus().setTextSelection(pos).run()
   } catch {
