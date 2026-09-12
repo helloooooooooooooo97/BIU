@@ -911,6 +911,17 @@ export class DatabaseService extends Service implements Database {
       }
       await this.stampActor(spec.path, current.id)
       this.bump()
+      const beforeRow = this.decorateRecord(spec, current)
+      const beforeSnap: Record<string, unknown> = {}
+      const afterSnap: Record<string, unknown> = {}
+      for (const key of Object.keys(raw)) {
+        beforeSnap[key] = beforeRow[key] ?? null
+        afterSnap[key] = next[key] ?? null
+      }
+      const title = String(next.title ?? next.name ?? current.id).trim() || current.id
+      if (Object.keys(beforeSnap).length) {
+        await this.ctx.get('contentTurns')?.recordUpdate(`${spec.path}/${current.id}`, title, beforeSnap, afterSnap)
+      }
       return {
         kind: 'record' as const,
         path: `${spec.path}/${current.id}`,
@@ -929,6 +940,16 @@ export class DatabaseService extends Service implements Database {
     }
     this.indexFacetRecord(spec, this.decorateRecord(spec, record))
     this.bump()
+    const beforeSnap: Record<string, unknown> = {}
+    const afterSnap: Record<string, unknown> = {}
+    for (const key of Object.keys(patch)) {
+      beforeSnap[key] = current[key] ?? null
+      afterSnap[key] = record[key] ?? null
+    }
+    const title = String(record.title ?? record.name ?? record.id).trim() || record.id
+    if (Object.keys(patch).length) {
+      await this.ctx.get('contentTurns')?.recordUpdate(`${spec.path}/${record.id}`, title, beforeSnap, afterSnap)
+    }
     return { kind: 'record' as const, path: `${spec.path}/${record.id}`, value: withoutContent(spec, this.withBanner(spec, this.decorateRecord(spec, record))) }
   }
 
@@ -963,14 +984,19 @@ export class DatabaseService extends Service implements Database {
       this.indexFacetRecord(spec, record)
     }
     this.bump()
+    const items = created.map((record) => ({
+      kind: 'record' as const,
+      path: `${spec.path}/${record.id}`,
+      value: withoutContent(spec, this.withBanner(spec, this.decorateRecord(spec, record))),
+    }))
+    for (const item of items) {
+      const title = String(item.value.title ?? item.value.name ?? '').trim() || item.path
+      await this.ctx.get('contentTurns')?.recordCreate(item.path, title, item.value)
+    }
     return {
       kind: 'created' as const,
       path: spec.path,
-      items: created.map((record) => ({
-        kind: 'record' as const,
-        path: `${spec.path}/${record.id}`,
-        value: withoutContent(spec, this.withBanner(spec, this.decorateRecord(spec, record))),
-      })),
+      items,
     }
   }
 
@@ -994,6 +1020,11 @@ export class DatabaseService extends Service implements Database {
     const matched = await this.matchCollectionRows(spec, listQuery, filter, q)
     const ids = [...new Set(matched.map((row) => row.id))]
     if (!ids.length) return { kind: 'deleted' as const, path: spec.path, ids }
+    for (const row of matched) {
+      const rec = withoutContent(spec, this.withBanner(spec, this.decorateRecord(spec, row)))
+      const title = String(rec.title ?? rec.name ?? row.id).trim() || row.id
+      await this.ctx.get('contentTurns')?.recordDelete(`${spec.path}/${row.id}`, title, rec)
+    }
     await spec.remove({ ids })
     for (const id of ids) this.facets.removeRecord(spec.path, id)
     this.bump()
@@ -1100,8 +1131,10 @@ export class DatabaseService extends Service implements Database {
             : replaceLinesText(text, args.start_line, args.end_line, args.new_str)
     await this.writeContent(path, next)
     const locus = mutationLocus(command, text, next, args)
+    const written = await this.content(current.path)
+    const after = asContentText(written.value)
     const title = await this.contentTitle(current.path)
-    await this.ctx.get('contentTurns')?.recordEdit(current.path, text, next, title)
+    await this.ctx.get('contentTurns')?.recordEdit(current.path, text, after, title)
     return {
       kind: 'content' as const,
       path: current.path,
@@ -1604,7 +1637,7 @@ export function apply(ctx: Context) {
   })
   ctx.http.route('POST', '/api/db/content-revert', async (route) => {
     try {
-      const body = (await route.json()) as { sessionId?: string; turn?: number; path?: string }
+      const body = (await route.json()) as { sessionId?: string; turn?: number; path?: string; kind?: string }
       const sessionId = String(body?.sessionId ?? '').trim()
       const turn = Number(body?.turn)
       if (!sessionId || !Number.isInteger(turn) || turn < 1) {
@@ -1612,7 +1645,10 @@ export function apply(ctx: Context) {
         return
       }
       const path = String(body?.path ?? '').trim()
-      route.send(200, await ctx.contentTurns.revert(sessionId, turn, path || undefined))
+      const kindRaw = String(body?.kind ?? '').trim()
+      const kind =
+        kindRaw === 'content' || kindRaw === 'create' || kindRaw === 'update' || kindRaw === 'delete' ? kindRaw : undefined
+      route.send(200, await ctx.contentTurns.revert(sessionId, turn, path || undefined, kind))
     } catch (error) {
       route.send(400, { error: String(error) })
     }
