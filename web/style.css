@@ -18,7 +18,8 @@
   --dsw-surface: var(--dsw-bg);
   --dsw-danger: #cf2d56;
   --dsw-danger-soft: rgba(207, 45, 86, 0.14);
-  --dsw-ok: #1f8a65;
+  --dsw-ok: #28C840;
+  --dsw-warn: #FEBC2E;
   --dsw-pick: #5b9fd6;
   --dsw-pick-fill: color-mix(in srgb, #5b9fd6 22%, transparent);
   --dsw-pick-stroke: color-mix(in srgb, #5b9fd6 40%, transparent);
@@ -1633,7 +1634,7 @@ body {
   box-sizing: border-box;
   padding-bottom: var(--brand-corner-clearance);
   background: #191919;
-  --dsw-ok: #448361;
+  --dsw-ok: #28C840;
   --dsw-danger: #c4554d;
   --dsw-danger-soft: color-mix(in srgb, #c4554d 14%, transparent);
 }
@@ -1730,7 +1731,7 @@ body {
   min-width: 0;
   min-height: 0;
   flex: 1;
-  --dsw-ok: #448361;
+  --dsw-ok: #28C840;
   --dsw-danger: #c4554d;
   --dsw-danger-soft: color-mix(in srgb, #c4554d 14%, transparent);
 }
@@ -3612,11 +3613,11 @@ body {
 }
 
 .traj-usage-ring.is-cache {
-  color: #448361;
+  color: #28C840;
 }
 
 .traj-usage-ring.is-hist {
-  color: #d9730d;
+  color: #FEBC2E;
 }
 
 .traj-usage-card {
@@ -3734,7 +3735,7 @@ body {
 }
 
 .usage-panel-meta-compact {
-  border: 1px solid color-mix(in srgb, #e2a938 40%, transparent);
+  border: 1px solid color-mix(in srgb, #FEBC2E 40%, transparent);
 }
 
 .usage-panel-meta-label {
@@ -3751,14 +3752,14 @@ body {
 }
 
 .usage-panel-meta-compact .usage-panel-meta-value {
-  color: #e2a938;
+  color: #FEBC2E;
 }
 
 .usage-panel-note {
   border-radius: 8px;
   padding: 7px 9px;
-  background: color-mix(in srgb, #e2a938 10%, transparent);
-  color: color-mix(in srgb, #e2a938 78%, #fff);
+  background: color-mix(in srgb, #FEBC2E 10%, transparent);
+  color: color-mix(in srgb, #FEBC2E 78%, #fff);
   font-size: 10px;
   line-height: 1.5;
 }
@@ -3910,9 +3911,9 @@ body {
 .usage-panel-warn {
   border-radius: 8px;
   padding: 7px 9px;
-  background: color-mix(in srgb, #e2a938 11%, transparent);
-  border-left: 2px solid #e2a938;
-  color: color-mix(in srgb, #e2a938 80%, #fff);
+  background: color-mix(in srgb, #FEBC2E 11%, transparent);
+  border-left: 2px solid #FEBC2E;
+  color: color-mix(in srgb, #FEBC2E 80%, #fff);
   font-size: 10px;
   line-height: 1.55;
 }
@@ -3956,8 +3957,8 @@ body {
 }
 
 .usage-panel-turn-steps.is-bad {
-  background: color-mix(in srgb, #e2a938 16%, transparent);
-  color: #e2a938;
+  background: color-mix(in srgb, #FEBC2E 16%, transparent);
+  color: #FEBC2E;
 }
 
 .usage-panel-turn-rhs {
@@ -4080,8 +4081,8 @@ body {
 }
 
 .traj-io-role-user {
-  color: #448361;
-  background: color-mix(in srgb, #448361 22%, transparent);
+  color: #28C840;
+  background: color-mix(in srgb, #28C840 22%, transparent);
 }
 
 .traj-io-role-assistant {
@@ -4172,8 +4173,8 @@ body {
 }
 
 .traj-tag-user {
-  color: #448361;
-  background: color-mix(in srgb, #448361 22%, transparent);
+  color: #28C840;
+  background: color-mix(in srgb, #28C840 22%, transparent);
 }
 
 .traj-tag-assistant {
@@ -4712,7 +4713,7 @@ body {
 
 .chat-reply-details .tool-call-head.is-open.is-ok::before,
 .chat-reply-details .tool-call-head.is-open.is-ok:hover::before {
-  background: color-mix(in srgb, #448361 22%, transparent);
+  background: color-mix(in srgb, #28C840 22%, transparent);
 }
 
 .chat-reply-details .tool-call-head.is-open.is-fail::before,
@@ -4894,7 +4895,7 @@ body {
 
 .tool-call-head.is-open.is-ok::before,
 .tool-call-head.is-open.is-ok:hover::before {
-  background: color-mix(in srgb, #448361 22%, transparent);
+  background: color-mix(in srgb, #28C840 22%, transparent);
 }
 
 .tool-call-head.is-open.is-fail::before,
@@ -4932,7 +4933,7 @@ body {
 }
 
 .tool-call-chevron.is-ok {
-  color: #448361;
+  color: #28C840;
 }
 
 .tool-call-chevron.is-fail {
@@ -4969,7 +4970,7 @@ body {
 }
 
 .tool-call-status.is-ok {
-  color: #448361;
+  color: #28C840;
 }
 
 .tool-call-status.is-fail {
