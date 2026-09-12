@@ -1467,7 +1467,7 @@ export function apply(ctx: Context) {
       'command=str_replace：old_str 必须在正文里唯一，替换为 new_str。',
       'command=replace_lines：按 1-based 闭区间 start_line..end_line 换成 new_str。',
       'command=insert：在 insert_line 之后插入 new_str（0 插到第一行前）。',
-      'command=write：整篇覆盖，传 value。写成功只返回 {ok, path}，不含全文。str_replace / replace_lines / insert 成功额外返回 start_line、end_line（改后正文的 1-based 行），编辑器会跳到该处。',
+      'command=write：整篇覆盖，传 value。写成功只返回 {ok, path}，不含全文。str_replace / replace_lines / insert 成功额外返回 start_line、end_line（改后正文的 1-based 行）。编辑器会标出该段改动，不抢输入焦点、不自动跳转；跳转只在用户主动点目录或查找时发生。',
     ].join(' '),
     parameters: {
       type: 'object',
