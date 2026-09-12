@@ -336,7 +336,8 @@ biu
 ├── cordis.plugins.json        # Single plugin manifest (host / web / plugins tables)
 ├── Makefile                   # make / make stop / make restart
 ├── vite.config.ts
-├── LICENSE                    # MIT (excluding Grok Bot character assets)
+├── LICENSE                    # PolyForm Noncommercial 1.0.0 (excluding Grok Bot character assets)
+├── COMMERCIAL.md              # How to request a commercial / organization grant
 ├── NOTICE.md                  # Third-party character notice
 ├── docs/
 │   ├── plugin-packages.md     # Package prefix and entry conventions
@@ -349,7 +350,7 @@ biu
 │   ├── mascot-blue.svg        # README mascots (BMW M tricolor)
 │   ├── mascot-violet.svg
 │   ├── mascot-red.svg
-│   └── grok-bot/              # Non-MIT: xAI character geometry replica
+│   └── grok-bot/              # Not under LICENSE: xAI character geometry replica
 └── packages/
     ├── type-session/          # Contracts; not in json
     ├── type-http/
@@ -460,8 +461,13 @@ Alternatively: `npm run dev:host` and `npm run dev:web`.
 
 ## License
 
-Code and docs written by Biu Agent OS are under the [MIT License](LICENSE): learn, modify, distribute, and use commercially, provided the copyright notice and license text are retained.
+From this revision on, Biu-written code and docs use the [PolyForm Noncommercial License 1.0.0](LICENSE):
 
-**Exception: the Grok Bot.** `public/grok-bot/` — its geometry, animation, and character design — is **not MIT**. It is adapted from a learning extraction of Grok Bot.app and rights belong to xAI and other holders. It may be used for cloning and demos; before redistributing, shipping, or adopting it as a product mascot, assess the trademark/copyright risk yourself or replace it with your own character. This project grants no rights to this part. See [NOTICE.md](NOTICE.md).
+- **Personal / noncommercial use is free** (hobby, study, private experiments).
+- **Organization use, production, SaaS, paid redistribution, and any commercial use** need a **prior written grant**. See [COMMERCIAL.md](COMMERCIAL.md).
 
-The MIT software is provided "as is", without warranty of any kind.
+Already-published MIT copies cannot be recalled. The tighter terms apply to new versions only.
+
+**Exception: the Grok Bot.** `public/grok-bot/` — its geometry, animation, and character design — is **not** under LICENSE or any Biu commercial grant. It is adapted from a learning extraction of Grok Bot.app and rights belong to xAI and other holders. It may be used for cloning and demos; before redistributing, shipping, or adopting it as a product mascot, assess the trademark/copyright risk yourself or replace it with your own character. See [NOTICE.md](NOTICE.md).
+
+The software is provided "as is", without warranty of any kind.

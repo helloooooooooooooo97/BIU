@@ -129,3 +129,14 @@ test('settings lists search and pick shortcuts', () => {
   assert.match(chrome, /⌘L/)
   assert.match(chrome, /选区送到对话/)
 })
+
+test('settings about states noncommercial license and grok-bot notice', () => {
+  const shell = readFileSync(resolve(import.meta.dirname, './index.tsx'), 'utf8')
+  const chrome = readFileSync(resolve(import.meta.dirname, './shell-chrome.tsx'), 'utf8')
+  assert.match(shell, /key: 'about'/)
+  assert.match(shell, /ShellSettingsAbout/)
+  assert.match(chrome, /data-testid="settings-about"/)
+  assert.match(chrome, /PolyForm Noncommercial/)
+  assert.match(chrome, /grok-bot/)
+  assert.match(chrome, /xAI/)
+})
