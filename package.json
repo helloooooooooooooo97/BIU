@@ -19,9 +19,9 @@
     "build": "vite build",
     "start": "tsx host/index.ts",
     "test": "vitest run",
-    "electron:dev": "concurrently -k \"npm:dev:host\" \"npm:dev:web\" \"npm:electron:wait\"",
-    "electron:wait": "wait-on tcp:5173 && electron electron/main.ts",
-    "electron:build": "npm run build && electron electron/main.ts"
+    "electron:dev": "node scripts/electron-dev.mjs",
+    "electron:wait": "node scripts/electron-launch.mjs",
+    "electron:build": "npm run build && env BIU_ELECTRON_DEV=0 node scripts/electron-launch.mjs"
   },
   "dependencies": {
     "@codemirror/commands": "^6.11.0",

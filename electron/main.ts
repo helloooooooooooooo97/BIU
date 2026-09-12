@@ -9,14 +9,17 @@
  */
 
 import { app, BrowserWindow, BrowserView, ipcMain, shell, session } from 'electron'
+import { existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
+const electronRoot = join(__dirname, '..')
 
-/** dev：vite 起的地址；打包：本地 dist 文件。 */
+/** dev：vite 起的地址；打包 / 无 dev 标记：本地 dist 文件。 */
 const DEV_URL = process.env.BIU_DEV_URL || 'http://127.0.0.1:5173'
-const isDev = !app.isPackaged
+const distIndex = join(electronRoot, '..', 'dist', 'index.html')
+const isDev = process.env.BIU_ELECTRON_DEV === '1' || (!app.isPackaged && !existsSync(distIndex) && process.env.BIU_ELECTRON_DEV !== '0')
 
 /** 侧栏浏览器那块的原生视图。同一时间只开一个。 */
 let view: BrowserView | null = null
@@ -210,7 +213,7 @@ async function createWindow() {
     backgroundColor: '#191919',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     webPreferences: {
-      preload: join(__dirname, 'preload.cjs'),
+      preload: join(electronRoot, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
@@ -234,13 +237,19 @@ async function createWindow() {
     await win.loadURL(DEV_URL)
     win.webContents.openDevTools({ mode: 'detach' })
   } else {
-    await win.loadFile(join(__dirname, '..', 'dist', 'index.html'))
+    await win.loadFile(join(electronRoot, '..', 'dist', 'index.html'))
   }
 }
 
 // 开发期开个 CDP 端口，方便自动化和排查（打包不加）
 if (isDev) {
   app.commandLine.appendSwitch('remote-debugging-port', '9222')
+}
+
+// 容器 / 无用户命名空间的 Linux 上 Chromium 沙箱会直接起不来
+if (process.platform === 'linux') {
+  app.commandLine.appendSwitch('no-sandbox')
+  app.commandLine.appendSwitch('disable-gpu-sandbox')
 }
 
 app.whenReady().then(async () => {

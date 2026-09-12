@@ -18,7 +18,7 @@ CSP `frame-ancestors` 限制（那是 iframe 才有的约束）。
 ## 跑起来
 
 ```bash
-npm run electron:dev     # 起 host + vite，等 5173 就绪后开 Electron 窗口
+npm run electron:dev     # 编译 electron/main.ts，host/vite 已在跑就复用，否则自己起
 ```
 
 窗口里就是你现在的界面（**现有代码一行都没改**），右侧栏点 `+` 选「浏览器」即可。
@@ -27,7 +27,7 @@ npm run electron:dev     # 起 host + vite，等 5173 就绪后开 Electron 窗�
 
 ```bash
 npm run dev              # 原来的网页版，照常可用（面板会提示需要 Electron）
-npm run electron:build   # 先 vite build，再用 dist 起 Electron
+npm run electron:build   # 先 vite build，再用 dist 起 Electron（不依赖 5173）
 ```
 
 ## 文件
@@ -59,6 +59,8 @@ npm run electron:build   # 先 vite build，再用 dist 起 Electron
 'biu:browser:error'     // { code, desc, url } —— 来自 did-fail-load，是真实原因
 'biu:browser:inspected' // { tag, id, className, text, html }
 ```
+
+主进程是 TypeScript，启动前会 `tsc` 成 `electron/out/main.js` 再交给 Electron（它不能直接加载 `.ts`）。Linux 容器里会带 `no-sandbox`，否则 Chromium 沙箱起不来。
 
 ## 已知的粗糙处（要改就从这里下手）
 
