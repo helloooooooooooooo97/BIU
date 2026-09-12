@@ -192,6 +192,7 @@ export class AgentDbCompact {
     if (field.description) out.description = field.description
     if (field.action) out.action = field.action
     if (field.computed) out.computed = true
+    if (field.collection) out.collection = field.collection
     return out
   }
 

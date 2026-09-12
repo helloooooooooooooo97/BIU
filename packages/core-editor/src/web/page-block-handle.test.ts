@@ -151,3 +151,16 @@ test('page block handle x uses the editor rail, not the node box', async () => {
   assert.match(src, /handleRailLeft\(hostBox\.left, contentBox\.left\)/)
   assert.doesNotMatch(src, /left: box\.left - hostBox\.left - HANDLE_RAIL/)
 })
+
+test('block handle menu puts an icon before each action', async () => {
+  const { readFile } = await import('node:fs/promises')
+  const { resolve } = await import('node:path')
+  const src = await readFile(resolve(import.meta.dirname, './page-block-handle.tsx'), 'utf8')
+  const css = await readFile(resolve(import.meta.dirname, './style.ts'), 'utf8')
+  assert.match(src, /<ArrowUpIcon[\s\S]*向上插入/)
+  assert.match(src, /<ArrowDownIcon[\s\S]*向下插入/)
+  assert.match(src, /<Square2StackIcon[\s\S]*复制/)
+  assert.match(src, /<TrashIcon[\s\S]*删除/)
+  assert.match(css, /\.page-block-handle-menu button\{[^}]*display:\s*flex/)
+  assert.match(css, /\.page-block-handle-menu button\{[^}]*gap:\s*8px/)
+})

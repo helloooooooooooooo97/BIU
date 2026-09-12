@@ -18,11 +18,17 @@ class FakeDatabaseUi extends Service implements DatabaseUi {
     this.registered.push({ path, view })
     return { dispose() {} }
   }
+  registerRowView() {
+    return { dispose() {} }
+  }
   chrome() {
     return this.last?.chrome ?? {}
   }
   views(path: string) {
     return this.registered.filter((item) => item.path === path).map((item) => item.view)
+  }
+  rowViews() {
+    return []
   }
   subscribe() {
     return () => undefined

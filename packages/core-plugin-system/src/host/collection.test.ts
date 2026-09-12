@@ -90,13 +90,15 @@ test('pluginsCollection lists installed plugins and sandboxes in one table', asy
   assert.equal(draft?.shellWidth, undefined)
   assert.deepEqual(
     spec.actions?.map((item) => item.id),
-    ['create', 'sandbox', 'start', 'stop', 'pack', 'uninstall'],
+    ['sandbox', 'start', 'stop', 'pack', 'uninstall'],
   )
   await spec.actions!.find((item) => item.id === 'start')!.run('demo', demo!)
   await spec.actions!.find((item) => item.id === 'pack')!.run('draft-hello', draft!)
   assert.deepEqual(calls, ['open:demo', 'pack:draft-hello'])
   assert.equal(typeof spec.update, 'function')
   assert.equal(spec.schema.contentField, 'readme')
+  assert.match(String(spec.view?.blurb ?? ''), /示例写法/)
+  assert.match(String(spec.view?.blurb ?? ''), /:::pageBlock/)
   assert.equal(spec.schema.labelField, 'title')
   assert.ok(spec.schema.fields.title)
   assert.equal(spec.schema.fields.name, undefined)
@@ -111,7 +113,7 @@ test('pluginsCollection lists installed plugins and sandboxes in one table', asy
   assert.deepEqual(spec.actions?.find((item) => item.id === 'start')?.when, { installed: true, running: false })
   assert.deepEqual(spec.actions?.find((item) => item.id === 'pack')?.when, { sandbox: true })
   assert.deepEqual(spec.actions?.find((item) => item.id === 'uninstall')?.when, { installed: true })
-  assert.equal(spec.actions?.find((item) => item.id === 'create')?.for, 'agent')
+  assert.equal(spec.actions?.find((item) => item.id === 'sandbox')?.for, 'agent')
   assert.equal(spec.actions?.find((item) => item.id === 'start')?.for, undefined)
 })
 

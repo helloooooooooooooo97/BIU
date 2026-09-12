@@ -330,13 +330,6 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
             if (from !== to) setFindQuery(view.state.doc.textBetween(from, to))
             return true
           }
-          if (isSendChatHotkey(event)) {
-            event.preventDefault()
-            const current = editorRef.current
-            const ref = current ? pickFromEditor(current, pathRef.current, titleRef.current) : null
-            if (ref) getPick()?.attach([ref])
-            return true
-          }
           return handleContentTitleNav(view, event)
         },
         handleDOMEvents: {
@@ -575,7 +568,10 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
               Selection.atStart(editor.state.doc).from,
             ),
         )
-    if (atDocStart && shouldLeaveContentForTitle(event.key, event, 0, true, 0)) {
+    const nested = Boolean(
+      !source && editor && !editor.isDestroyed && editor.state.selection.$from.depth > 1,
+    )
+    if (atDocStart && shouldLeaveContentForTitle(event.key, event, 0, true, 0, nested)) {
       event.preventDefault()
       event.stopPropagation()
       if (!focusRecordTitleNear(event.currentTarget)) {

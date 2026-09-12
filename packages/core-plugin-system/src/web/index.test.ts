@@ -20,8 +20,14 @@ class FakeDatabaseUi extends Service implements DatabaseUi {
   registerView() {
     return { dispose() {} }
   }
+  registerRowView() {
+    return { dispose() {} }
+  }
   views() {
     return [] as CollectionViewType[]
+  }
+  rowViews() {
+    return []
   }
   subscribe() {
     return () => undefined
@@ -105,7 +111,8 @@ test('plugin window hover controls sit on the right without a title bar', async 
   const { readFile } = await import('node:fs/promises')
   const { resolve } = await import('node:path')
   const src = await readFile(resolve(import.meta.dirname, './index.tsx'), 'utf8')
-  assert.match(src, /data-plugin-move/)
+  assert.match(src, /data-plugin-id=\{pluginId\}/)
+  assert.match(src, /data-biu-plugin=\{pluginId\}/)
   assert.match(src, /plugin-window-move/)
   assert.match(src, /Bars2Icon/)
   assert.match(src, /移动窗口/)
@@ -198,14 +205,19 @@ test('page-excalidraw sandbox stores scenes as page assets', async () => {
   assert.match(src, /refresh/)
 })
 
-test('html and req page blocks register plugin id for slash', async () => {
+test('html page blocks register plugin id for slash', async () => {
   const { readFile } = await import('node:fs/promises')
   const { resolve } = await import('node:path')
   const html = await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/page-html-blocks/web.tsx'), 'utf8')
-  const req = await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/page-req-cards/web.tsx'), 'utf8')
   assert.match(html, /plugin: name/)
   assert.match(html, /kind: 'html'/)
   assert.match(html, /kind: 'htmlframe'/)
+  assert.match(html, /label: '静态HTML'/)
+  assert.match(html, /label: '动态HTML'/)
+  assert.doesNotMatch(html, /label: '排版'/)
+  assert.doesNotMatch(html, /label: '小网页'/)
+  assert.doesNotMatch(html, /HTML 直接渲染/)
+  assert.doesNotMatch(html, /HTML iframe 沙箱/)
   assert.match(html, /stampHtmlSource/)
   assert.match(html, /data-biu-ignore/)
   assert.match(html, /data-page-block-expand/)
@@ -220,7 +232,8 @@ test('html and req page blocks register plugin id for slash', async () => {
   assert.doesNotMatch(html, /opacity: show \? 1 : 0/)
   assert.match(html, /deck: true/)
   assert.match(html, /现代 ・ 美式/)
-  assert.match(html, /创立 2024/)
+  assert.match(html, /min-height:100%/)
+  assert.match(html, /height:100%/)
   assert.match(html, /丰富<br>排版/)
   assert.match(html, /background:\$\{MAG_INK\}/)
   assert.match(html, /#0a0a0a/)
@@ -239,6 +252,23 @@ test('html and req page blocks register plugin id for slash', async () => {
   assert.match(html, /event\.stopPropagation\(\)/)
   assert.match(html, /setDraft\(e\.target\.value\)/)
   assert.doesNotMatch(html, /value=\{html\}/)
-  assert.match(req, /plugin: name/)
-  assert.match(req, /kind: 'req'/)
+})
+
+test('algorithm card drafts locally and saves on blur like html source', async () => {
+  const { readFile } = await import('node:fs/promises')
+  const { resolve } = await import('node:path')
+  const src = await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/page-algorithm/web.tsx'), 'utf8')
+  assert.match(src, /function DraftField/)
+  assert.match(src, /onChange=\{\(event\) => setDraft\(event\.currentTarget\.value\)\}/)
+  assert.match(src, /onBlur=\{\(\) => \{[\s\S]*flush\(\)/)
+  assert.doesNotMatch(src, /onChange=\{\(event\) => \{[\s\S]*onCommitRef/)
+  assert.doesNotMatch(src, /onCompositionEnd/)
+  assert.match(src, /testId="page-algorithm-title"/)
+  assert.match(src, /testId="page-algorithm-prompt"/)
+  assert.match(src, /testId="page-algorithm-code"/)
+  assert.doesNotMatch(src, /onChange=\{\(event\) => update\(\{ title:/)
+  assert.doesNotMatch(src, /onChange=\{\(event\) => update\(\{ prompt:/)
+  assert.doesNotMatch(src, /onChange=\{\(event\) => update\(\{ code:/)
+  assert.doesNotMatch(src, /data-biu-ignore/)
+  assert.doesNotMatch(src, /data-biu-plugin=\{name\}/)
 })

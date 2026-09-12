@@ -1,4 +1,4 @@
-# 俯视肉鸽
+# 枪火
 
 可全屏的窗口插件（`plugin-store-extras`，`shell.resizable: true`）。
 

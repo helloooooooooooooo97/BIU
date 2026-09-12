@@ -8,8 +8,21 @@ dist/
 *.log
 .DS_Store
 .vscode/
-src/**/*.js
-src/**/*.js.map
+*.tsbuildinfo
+
+# 中间带 / 的规则只相对仓库根。packages/foo/src 下的 tsc 旁路 js 要用 packages/**
+packages/**/*.js
+packages/**/*.js.map
+packages/**/*.d.ts
+packages/**/*.d.ts.map
+host/**/*.js
+host/**/*.js.map
+web/**/*.js
+web/**/*.js.map
+# 沙箱源码是 ts/tsx；pack 产物在 .plugin。这里挡住误编译进沙箱的 js 和依赖
+.plugin-dev/**/*.js
+.plugin-dev/**/*.js.map
+.plugin-dev/**/node_modules/
 
 # 页面数据（.page Markdown 存储），本地数据不纳入版本控制
 .page/

@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { Service, type Context } from 'cordis'
-import { mergeInspectorBind, type SessionInspectorBind } from '@biu/type-session'
+import { mergeInspectorBind, mergeContentEditFiles, type SessionInspectorBind } from '@biu/type-session'
 import { captureLiveUiContext } from './live-ui-context.ts'
 import {
   compactSessionEvents,
@@ -1506,6 +1506,21 @@ export class SessionViewService extends Service {
 }
 
 function upsertEvent(events: SessionEvent[], event: SessionEvent) {
+  if (event.type === 'content/edits') {
+    const idx = events.findLastIndex((item) => item.type === 'content/edits' && item.turn === event.turn)
+    if (idx >= 0) {
+      const prev = events[idx]
+      if (prev?.type === 'content/edits') {
+        const next = [...events]
+        next[idx] = {
+          ...prev,
+          files: mergeContentEditFiles(prev.files, event.files),
+          ts: event.ts,
+        }
+        return next
+      }
+    }
+  }
   if (event.type === 'tool/call') {
     const idx = events.findLastIndex((item) => item.type === 'tool/call' && item.id === event.id)
     if (idx >= 0) {
@@ -1518,6 +1533,13 @@ function upsertEvent(events: SessionEvent[], event: SessionEvent) {
     }
   }
   if (events.some((item) => item.seq === event.seq)) {
+    if (event.type === 'content/edits') {
+      return events.map((item) =>
+        item.seq === event.seq && item.type === 'content/edits'
+          ? { ...item, files: mergeContentEditFiles(item.files, event.files), ts: event.ts }
+          : item,
+      )
+    }
     if (event.type === 'tool/call') {
       return events.map((item) =>
         item.seq === event.seq && item.type === 'tool/call'

@@ -3,11 +3,17 @@ import type { Editor } from '@tiptap/core'
 import Mention from '@tiptap/extension-mention'
 import { ReactNodeViewRenderer, ReactRenderer } from '@tiptap/react'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
-import { pickKindTone } from '@biu/core-pick/web'
+import { pickChipAttrs, pickKindTone } from '@biu/core-pick/web'
 import { MentionList, type MentionPick } from './mention-list.tsx'
 import { mentionIconSpec } from './mention-kind.tsx'
 import { MentionChipView } from './mention-chip.tsx'
-import { MENTION_SCOPES, decodeMentionId, encodeMentionId, openMention } from './mention-ref.ts'
+import {
+  MENTION_SCOPES,
+  decodeMentionId,
+  encodeMentionId,
+  mentionPickFromAttrs,
+  openMention,
+} from './mention-ref.ts'
 import { placeSlashInWindow } from './slash-place.ts'
 import { slashMayOpen } from './editor-live.ts'
 
@@ -18,6 +24,7 @@ export {
   encodeMentionId,
   mentionCollection,
   mentionHref,
+  mentionPickFromAttrs,
   mentionReveal,
   openMention,
 } from './mention-ref.ts'
@@ -61,6 +68,24 @@ export async function fetchMentionItems(query: string, signal?: AbortSignal): Pr
     }),
   )
   return groups.flat()
+}
+
+/** 输入框 schema 有 pickChip 时插芯片；正文编辑器插 mention 节点。 */
+export function mentionSuggestionContent(
+  schema: { nodes: Record<string, unknown> },
+  props: { id: string; label: string },
+) {
+  const space = { type: 'text', text: ' ' }
+  if (schema.nodes.pickChip) {
+    return [
+      {
+        type: 'pickChip',
+        attrs: pickChipAttrs(mentionPickFromAttrs({ id: props.id, label: props.label })),
+      },
+      space,
+    ]
+  }
+  return [{ type: 'mention', attrs: { id: props.id, label: props.label } }, space]
 }
 
 function mentionAnchor(target: EventTarget | null, root: Element) {
@@ -170,8 +195,26 @@ export const pageMention = Mention.extend({
     allow: ({ editor, state, range }) => {
       if (!slashMayOpen(editor)) return false
       const $from = state.doc.resolve(range.from)
-      const type = state.schema.nodes.mention
-      return !!type && !!$from.parent.type.contentMatch.matchType(type)
+      const parent = $from.parent.type.contentMatch
+      const mention = state.schema.nodes.mention
+      const pick = state.schema.nodes.pickChip
+      return !!(mention && parent.matchType(mention)) || !!(pick && parent.matchType(pick))
+    },
+    command: ({ editor, range, props }) => {
+      const nodeAfter = editor.state.selection.$to.nodeAfter
+      const to = nodeAfter?.text?.startsWith(' ') ? range.to + 1 : range.to
+      editor
+        .chain()
+        .focus()
+        .insertContentAt(
+          { from: range.from, to },
+          mentionSuggestionContent(editor.schema, {
+            id: String(props.id ?? ''),
+            label: String(props.label ?? props.id ?? ''),
+          }),
+        )
+        .run()
+      window.getSelection()?.collapseToEnd()
     },
     items: async ({ query, editor, signal }) => {
       if (!slashMayOpen(editor)) return []

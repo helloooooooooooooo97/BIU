@@ -204,6 +204,7 @@ function PluginAppWindow({
       style={style}
       data-testid={`plugin-app-window-${extraId}`}
       data-plugin-id={pluginId}
+      data-biu-plugin={pluginId}
       data-shell-width={shell.width}
       data-shell-height={shell.height}
       data-shell-resizable={shell.resizable ? '1' : '0'}

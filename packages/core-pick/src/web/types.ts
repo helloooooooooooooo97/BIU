@@ -19,6 +19,8 @@ export type PickRef = {
   selection?: string
   /** 无选区时：当前 markdown 行里插入点（0-based，插在 text[insert] 之前）。 */
   insert?: number
+  /** 登记这块 UI 的插件 id，改呈现/卡片时对着它 sandbox。 */
+  plugin?: string
 }
 
 export function pickKey(ref: PickRef) {
@@ -46,6 +48,7 @@ export function dedupePicks(refs: PickRef[]): PickRef[] {
       title: ref.title || prev.title,
       route: ref.route || prev.route,
       ...(ref.action || prev.action ? { action: ref.action || prev.action } : {}),
+      ...(ref.plugin || prev.plugin ? { plugin: ref.plugin || prev.plugin } : {}),
       ...locusFields(ref.start_line != null ? ref : prev),
       ...sourceFields(ref.path ? ref : prev),
     })
@@ -66,6 +69,7 @@ function pickPayload(ref: PickRef) {
   if (ref.title) data.title = ref.title
   if (ref.kind !== 'text' && ref.label) data.label = ref.label
   if (ref.path) data.path = ref.path
+  if (ref.plugin) data.plugin = ref.plugin
   if (ref.start_line != null) data.start_line = ref.start_line
   if (ref.end_line != null) data.end_line = ref.end_line
   if (ref.text) data.text = ref.text
@@ -112,6 +116,7 @@ function parsePickAttrs(raw: string): PickRef | null {
     label: attrs.label?.trim() || (kind === 'text' ? selection || text : '') || (Number.isInteger(Number(attrs.start_line)) ? `L${attrs.start_line}` : '') || id,
     route: attrs.route?.trim() || '',
     ...(attrs.title?.trim() ? { title: attrs.title.trim() } : {}),
+    ...(attrs.plugin?.trim() ? { plugin: attrs.plugin.trim() } : {}),
     ...sourceFields({ path: attrs.path?.trim() }),
     ...locusFields({
       start_line: Number.isInteger(start) && start >= 1 ? start : undefined,
@@ -200,6 +205,15 @@ export function lineSpanLabel(ref: PickRef) {
   return String(ref.start_line)
 }
 
+/** 有源码行号用行号；纯文本选区/长粘贴用字数。 */
+export function chipSpanLabel(ref: PickRef) {
+  const lines = lineSpanLabel(ref)
+  if (lines) return lines
+  if (ref.kind !== 'text') return ''
+  const n = (ref.selection || ref.text || '').length
+  return n > 0 ? String(n) : ''
+}
+
 function pickChipName(ref: PickRef) {
   if (ref.title?.trim()) return ref.title.trim()
   const file = ref.path?.split('/').filter(Boolean).pop() ?? ''
@@ -212,7 +226,8 @@ function pickChipName(ref: PickRef) {
 
 export function chipCaption(ref: PickRef) {
   if (ref.action === 'banner') return { name: ref.label || '背景', span: '' }
-  return { name: ref.action ? `${ref.label} · ${ref.action}` : pickChipName(ref), span: lineSpanLabel(ref) }
+  if (ref.action === 'view') return { name: ref.label || '呈现方式', span: '' }
+  return { name: ref.action ? `${ref.label} · ${ref.action}` : pickChipName(ref), span: chipSpanLabel(ref) }
 }
 
 export function chipLabel(ref: PickRef) {
@@ -254,6 +269,13 @@ export function withHostSource(ref: PickRef, node: Node | null): PickRef {
   }
 }
 
+export function textPickFromPlain(route: string, raw: string): PickRef | null {
+  const selection = raw.trim()
+  const label = pickPreview(selection, 80)
+  if (!label) return null
+  return { kind: 'text', id: pickIdFromText(raw), label, route, selection }
+}
+
 /** 选取态下划到的一段正文；空选区返回 null。编辑器选区附带 Markdown 源码行号。 */
 export function textPickFromSelection(
   route: string,
@@ -261,15 +283,12 @@ export function textPickFromSelection(
 ): PickRef | null {
   if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return null
   const raw = selection.toString()
-  const label = pickPreview(raw, 80)
-  if (!label) return null
+  const base = textPickFromPlain(route, raw)
+  if (!base) return null
   const anchor = 'anchorNode' in selection ? (selection as Selection).anchorNode : null
   const host = editorHostFromNode(anchor)
   const locus = host ? host.locusFromSelection() : null
-  return withPickLocus(
-    withHostSource({ kind: 'text', id: pickIdFromText(raw), label, route, selection: raw.trim() }, anchor),
-    locus,
-  )
+  return withPickLocus(withHostSource(base, anchor), locus)
 }
 
 export function pickChipAttrs(ref: PickRef) {
@@ -280,6 +299,7 @@ export function pickChipAttrs(ref: PickRef) {
     route: ref.route,
     action: ref.action ?? null,
     path: ref.path ?? null,
+    plugin: ref.plugin ?? null,
     title: ref.title ?? null,
     start_line: ref.start_line ?? null,
     end_line: ref.end_line ?? null,
@@ -307,6 +327,7 @@ export function pickRefFromAttrs(attrs: Record<string, unknown>): PickRef | null
     route: String(attrs.route ?? ''),
     ...(action ? { action } : {}),
     ...sourceFields({ path, title: String(attrs.title ?? '').trim() }),
+    ...(String(attrs.plugin ?? '').trim() ? { plugin: String(attrs.plugin).trim() } : {}),
     ...locusFields({
       start_line: Number.isInteger(start) && start >= 1 ? start : undefined,
       end_line: Number.isInteger(end) && end >= 1 ? end : undefined,
@@ -317,10 +338,11 @@ export function pickRefFromAttrs(attrs: Record<string, unknown>): PickRef | null
   }
 }
 
-export function pickDomAttrs(kind: string, id: string, label?: string) {
+export function pickDomAttrs(kind: string, id: string, label?: string, plugin?: string) {
   return {
     'data-biu-kind': kind,
     'data-biu-id': id,
     ...(label ? { 'data-biu-label': label } : {}),
+    ...(plugin ? { 'data-biu-plugin': plugin } : {}),
   }
 }

@@ -22,6 +22,9 @@ import {
   isChatPagePath,
   openOverlayComposer,
   revealOverlayThread,
+  toggleOverlayThread,
+  setOverlayThread,
+  shouldCloseOverlayOnOutside,
   getOverlayAutohide,
   setOverlayAutohide,
   requestOverlayAutohide,
@@ -227,6 +230,58 @@ test('pick opens a compose-only overlay; send reveals the thread', () => {
   assert.equal(getOverlayThread(), true)
   setChatOverlay(false)
   assert.equal(getOverlayThread(), false)
+})
+
+test('toggleOverlayThread expands and collapses the overlay transcript', () => {
+  setChatOverlay(true)
+  setOverlayThread(false)
+  toggleOverlayThread()
+  assert.equal(getOverlayThread(), true)
+  toggleOverlayThread()
+  assert.equal(getOverlayThread(), false)
+  setChatOverlay(false)
+})
+
+test('collapsed overlay closes on outside click; expanded overlay stays', () => {
+  setChatOverlay(true)
+  setOverlayThread(false)
+  window.dispatchEvent(new CustomEvent('biu:pick-mode', { detail: { picking: false } }))
+  const panel = document.createElement('div')
+  panel.setAttribute('data-testid', 'chat-overlay-panel')
+  const flyout = document.createElement('div')
+  flyout.className = 'composer-model-flyout'
+  document.body.append(panel, flyout)
+  assert.equal(shouldCloseOverlayOnOutside(panel), false)
+  assert.equal(shouldCloseOverlayOnOutside(flyout), false)
+  assert.equal(shouldCloseOverlayOnOutside(document.body), true)
+  setOverlayThread(true)
+  assert.equal(shouldCloseOverlayOnOutside(document.body), false)
+  panel.remove()
+  flyout.remove()
+  setChatOverlay(false)
+})
+
+test('pick mode opens the overlay and blocks outside dismiss', () => {
+  setChatOverlay(false)
+  history.replaceState(null, '', '/database')
+  window.dispatchEvent(new CustomEvent('biu:pick-mode', { detail: { picking: true } }))
+  assert.equal(getChatOverlay(), true)
+  assert.equal(getOverlayThread(), false)
+  assert.equal(shouldCloseOverlayOnOutside(document.body), false)
+  window.dispatchEvent(new CustomEvent('biu:pick-mode', { detail: { picking: false } }))
+  assert.equal(shouldCloseOverlayOnOutside(document.body), true)
+  setChatOverlay(false)
+})
+
+test('pick on an already-open overlay keeps the revealed thread', () => {
+  setChatOverlay(false)
+  history.replaceState(null, '', '/database')
+  openOverlayComposer({ revealThread: false })
+  revealOverlayThread()
+  assert.equal(getOverlayThread(), true)
+  openOverlayComposer({ revealThread: false })
+  assert.equal(getOverlayThread(), true)
+  setChatOverlay(false)
 })
 
 test('closeChatOverlay is a no-op when already closed', () => {

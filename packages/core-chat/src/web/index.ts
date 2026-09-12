@@ -7,6 +7,7 @@ import { ApprovalsRail } from './approvals.tsx'
 import { ChatComposer } from './composer.tsx'
 import { ChatConfigBanner } from './config-banner.tsx'
 import { ChatLiveHud } from './live-hud.tsx'
+import { ChatSelectBubble } from './chat-select-bubble.tsx'
 import { ChatThread } from './thread.tsx'
 import { ChatMessageOutline } from './message-outline.tsx'
 import { TrajectoryView } from './trajectory.tsx'
@@ -48,6 +49,7 @@ export function apply(ctx: Context) {
     projectView: project,
   }
   const props = () => slotProps
+  ctx.slots.place('root-overlays', ChatSelectBubble, { key: 'chat-select-bubble', order: 12 })
   ctx.slots.place('stage', ChatThread, { key: 'chat-thread', order: 1, props })
   ctx.slots.place('stage-aside', ChatMessageOutline, { key: 'chat-outline', order: 1, props })
   ctx.slots.place('trajectory', TrajectoryView, { key: 'trajectory', order: 1, props })

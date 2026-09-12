@@ -14,7 +14,7 @@ export const PAGE_EDITOR_STYLE = `
 .page-block-handle-grip:active{cursor:grabbing}
 .page-block-handle-dots{display:block;width:10px;height:16px;background-image:radial-gradient(circle,currentColor 1.35px,transparent 1.45px);background-size:5px 5.2px;background-position:0 0}
 .page-block-handle-menu{position:absolute;left:26px;top:0;z-index:40;min-width:132px;padding:4px;display:flex;flex-direction:column;gap:1px;background:var(--dsw-sidebar);border:1px solid var(--dsw-border);border-radius:8px;box-shadow:0 8px 28px rgba(15,15,15,.12)}
-.page-block-handle-menu button{display:block;width:100%;margin:0;border:0;border-radius:6px;padding:6px 8px;background:transparent;color:var(--dsw-label);font:inherit;font-size:13px;font-weight:600;text-align:left;cursor:pointer}
+.page-block-handle-menu button{display:flex;align-items:center;gap:8px;width:100%;margin:0;border:0;border-radius:6px;padding:6px 8px;background:transparent;color:var(--dsw-label);font:inherit;font-size:13px;font-weight:600;text-align:left;cursor:pointer}
 .page-block-handle-menu button:hover{background:var(--dsw-hover)}
 .page-editor .tiptap>:first-child{margin-top:0}
 .page-editor .tiptap p,.page-editor .tiptap h1,.page-editor .tiptap h2,.page-editor .tiptap h3,.page-editor .tiptap ul,.page-editor .tiptap ol,.page-editor .tiptap blockquote,.page-editor .tiptap pre{margin:2px 0}
@@ -86,6 +86,13 @@ export const PAGE_EDITOR_STYLE = `
 .page-find-count{flex:none;min-width:2.4em;color:#7B7B79;font-size:12px;font-weight:600;text-align:right}
 .page-find-btn{flex:none;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;margin:0;border:0;border-radius:5px;padding:0;background:transparent;color:#EFEEEC;cursor:pointer}
 .page-find-btn:hover{background:var(--dsw-hover)}
+@keyframes page-agent-edit-fade{
+  0%,55%{color:${TAG_TONE_ROSE};background:color-mix(in srgb,${TAG_TONE_ROSE} 22%,transparent)}
+  100%{color:inherit;background:transparent}
+}
+.page-agent-edit{color:${TAG_TONE_ROSE};background:color-mix(in srgb,${TAG_TONE_ROSE} 22%,transparent);border-radius:2px;animation:page-agent-edit-fade 8s ease forwards}
+.page-editor .page-agent-edit,.page-editor .page-agent-edit *{color:${TAG_TONE_ROSE}}
+.page-source .page-agent-edit{color:${TAG_TONE_ROSE};background:color-mix(in srgb,${TAG_TONE_ROSE} 22%,transparent);border-radius:2px;animation:page-agent-edit-fade 8s ease forwards}
 .page-find-hit{color:${TAG_TONE_ROSE};background:color-mix(in srgb,${TAG_TONE_ROSE} 22%,transparent);border-radius:2px}
 .page-find-hit.is-current{background:color-mix(in srgb,${TAG_TONE_ROSE} 34%,transparent)}
 .page-editor .page-find-hit:not(.page-block),.page-editor .page-find-hit:not(.page-block) *{color:${TAG_TONE_ROSE}}
@@ -109,4 +116,11 @@ export const PAGE_EDITOR_STYLE = `
 .page-math-pop{position:fixed;z-index:10000;min-width:220px;max-width:min(360px,calc(100vw - 16px));padding:6px 8px;background:var(--dsw-sidebar);border:1px solid var(--dsw-border);border-radius:8px;box-shadow:0 8px 24px rgba(15,15,15,.16)}
 .page-math-pop-input{display:block;width:100%;margin:0;border:0;padding:2px 0;background:transparent;color:var(--dsw-label);font-family:var(--font-mono);font-size:13px;line-height:1.45;outline:none;resize:none}
 .page-editor .tiptap mark{border-radius:2px;padding:0 .08em}
+.page-blocks-view{min-width:0;min-height:0;flex:1;overflow:auto;padding:8px 12px 32px;display:flex;flex-direction:column;gap:20px}
+.page-blocks-view-card{min-width:0;display:flex;flex-direction:column;gap:8px}
+.page-blocks-view-title{align-self:flex-start;margin:0;border:0;padding:0;background:transparent;color:var(--dsw-label);font:inherit;font-size:13px;font-weight:650;cursor:pointer}
+.page-blocks-view-title:hover{color:var(--dsw-business)}
+.page-blocks-view .page-block{margin:0}
+.page-blocks-view .page-block iframe{pointer-events:auto}
+.page-blocks-detail{padding:0 0 32px}
 `

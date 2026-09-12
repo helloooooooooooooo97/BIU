@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type DragEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import type { Editor } from '@tiptap/core'
+import { ArrowDownIcon, ArrowUpIcon, Square2StackIcon, TrashIcon } from '@heroicons/react/16/solid'
 import { HeadlessDismiss } from '@biu/public-ui'
 import {
   beginHandleDrag,
@@ -144,15 +145,19 @@ export function PageBlockHandle({ editor }: { editor: Editor }) {
             data-testid="page-block-handle-menu"
           >
             <button type="button" role="menuitem" onMouseDown={run(() => insertParagraphBefore(editor, target.pos))}>
+              <ArrowUpIcon aria-hidden className="size-[14px]" />
               向上插入
             </button>
             <button type="button" role="menuitem" onMouseDown={run(() => insertParagraphAfter(editor, target.pos, target.node))}>
+              <ArrowDownIcon aria-hidden className="size-[14px]" />
               向下插入
             </button>
             <button type="button" role="menuitem" onMouseDown={run(() => duplicateHandleBlock(editor, target.pos, target.node))}>
+              <Square2StackIcon aria-hidden className="size-[14px]" />
               复制
             </button>
             <button type="button" role="menuitem" onMouseDown={run(() => deleteHandleBlock(editor, target.pos, target.node))}>
+              <TrashIcon aria-hidden className="size-[14px]" />
               删除
             </button>
           </div>

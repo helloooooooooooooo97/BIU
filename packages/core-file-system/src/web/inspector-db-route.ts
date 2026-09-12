@@ -221,9 +221,9 @@ function paneWithPageKey(href: string) {
 }
 
 function pickCanonicalPane(ids: string[], prefer?: string) {
+  if (prefer && ids.includes(prefer)) return prefer
   const base = ids.find((id) => !id.includes('::'))
   if (base) return base
-  if (prefer && ids.includes(prefer)) return prefer
   return ids.slice().sort()[0]!
 }
 
@@ -261,14 +261,20 @@ export function mergeDuplicateInspectorPanes(prefer?: string) {
   return closed
 }
 
-/** 加号再开同一张表的默认视图时，复用已有栏。 */
+function inspectorPathIsRecord(href: string) {
+  return inspectorPageKey(href).includes('/record/')
+}
+
+/** 加号再开同一张表的默认视图时，复用已有列表栏。详情栏和已关掉的栏不复用。 */
 export function reuseInspectorOfferPane(tabId: string, opened: string[]) {
   const collection = tabId.startsWith('database:') ? tabId.slice('database:'.length) : ''
   const defaultKey = collection ? inspectorPageKey(databaseAllViewPath(collection)) : ''
   for (const id of opened) {
     if (slotTabId(id) !== tabId) continue
+    if (isInspectorPaneAbandoned(id)) continue
     const path = getInspectorDbPath(id)
     if (!path) return id
+    if (inspectorPathIsRecord(path)) continue
     const key = inspectorPageKey(path)
     if (defaultKey && key === defaultKey) return id
   }

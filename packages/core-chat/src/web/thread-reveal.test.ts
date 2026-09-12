@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import type { ChatNode } from '@biu/web-session-view'
 import {
   bumpRevealStart,
@@ -6,6 +8,8 @@ import {
   CHAT_FIRST_PAINT_TURNS,
   firstPaintStartIndex,
   groupNodesIntoTurns,
+  isChatStuckToLatest,
+  pinChatToLatest,
   recalledChatScroll,
   rememberChatScroll,
   resetChatScrollMemoryForTests,
@@ -143,6 +147,14 @@ describe('chat scroll memory per session', () => {
     expect(captureChatScroll(parent)).toEqual({ kind: 'bottom' })
   })
 
+  it('still counts as latest inside the composer padding slack', () => {
+    const parent = document.createElement('div')
+    Object.defineProperty(parent, 'scrollHeight', { value: 2000, configurable: true })
+    Object.defineProperty(parent, 'scrollTop', { value: 920, writable: true, configurable: true })
+    Object.defineProperty(parent, 'clientHeight', { value: 800, configurable: true })
+    expect(captureChatScroll(parent)).toEqual({ kind: 'bottom' })
+  })
+
   it('restores by scrolling the turn box to the top, ignoring sticky visual offset', () => {
     const parent = document.createElement('div')
     Object.defineProperty(parent, 'scrollTop', { value: 1800, writable: true, configurable: true })
@@ -159,5 +171,36 @@ describe('chat scroll memory per session', () => {
     parent.append(turn)
     expect(restoreChatScroll(parent, { kind: 'pin', nodeId: 'u-3' })).toBe(true)
     expect(parent.scrollTop).toBe(1720)
+  })
+
+  it('pins the scroller onto the latest edge', () => {
+    const parent = document.createElement('div')
+    Object.defineProperty(parent, 'scrollHeight', { value: 2400, configurable: true })
+    Object.defineProperty(parent, 'scrollTop', { value: 100, writable: true, configurable: true })
+    Object.defineProperty(parent, 'clientHeight', { value: 800, configurable: true })
+    pinChatToLatest(parent)
+    expect(parent.scrollTop).toBe(2400)
+    parent.scrollTop = 2100
+    expect(isChatStuckToLatest(parent)).toBe(true)
+  })
+
+  it('does not treat the top of a short thread as stuck-to-latest', () => {
+    const parent = document.createElement('div')
+    Object.defineProperty(parent, 'scrollHeight', { value: 1000, configurable: true })
+    Object.defineProperty(parent, 'clientHeight', { value: 800, configurable: true })
+    Object.defineProperty(parent, 'scrollTop', { value: 0, writable: true, configurable: true })
+    expect(isChatStuckToLatest(parent)).toBe(false)
+    parent.scrollTop = 200
+    expect(isChatStuckToLatest(parent)).toBe(true)
+  })
+})
+
+describe('thread follows the latest message', () => {
+  it('pins on pending layout, resize, and does not skip-paint the live turn', () => {
+    const src = readFileSync(resolve(import.meta.dirname, './thread.tsx'), 'utf8')
+    expect(src).toMatch(/useLayoutEffect\(\(\) => \{\s*if \(pending\) stickToBottomRef\.current = true/s)
+    expect(src).toContain('ResizeObserver')
+    expect(src).toContain('pinChatToLatest')
+    expect(src).toContain('liveTurnId')
   })
 })

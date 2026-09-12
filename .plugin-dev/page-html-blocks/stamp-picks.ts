@@ -67,18 +67,26 @@ export function clearHtmlPickSurfaces(root: ParentNode) {
     el.removeAttribute('data-biu-kind')
     el.removeAttribute('data-biu-id')
     el.removeAttribute('data-biu-label')
+    el.removeAttribute('data-biu-plugin')
   }
 }
 
-export function stampHtmlPickSurfaces(root: HTMLElement, blockKey: string, opts?: { includeRoot?: boolean }) {
+export function stampHtmlPickSurfaces(root: HTMLElement, blockKey: string, opts?: { includeRoot?: boolean; plugin?: string }) {
   clearHtmlPickSurfaces(root)
   const prefix = `${HTML_PICK_KIND}:${blockKey}`
+  const plugin =
+    opts?.plugin?.trim() ||
+    root.closest('[data-biu-plugin], [data-page-block-plugin], [data-plugin-id]')?.getAttribute('data-biu-plugin') ||
+    root.closest('[data-page-block-plugin]')?.getAttribute('data-page-block-plugin') ||
+    root.closest('[data-plugin-id]')?.getAttribute('data-plugin-id') ||
+    ''
   const stamp = (el: HTMLElement, path: string) => {
     const label = surfaceLabel(el)
     el.setAttribute(HTML_PICK_MARK, '')
     el.setAttribute('data-biu-kind', HTML_PICK_KIND)
     el.setAttribute('data-biu-id', `${prefix}:${path}`)
     if (label) el.setAttribute('data-biu-label', label)
+    if (plugin) el.setAttribute('data-biu-plugin', plugin)
   }
   if (opts?.includeRoot !== false && isHtmlPickSurface(root)) stamp(root, 'root')
   const walk = (el: Element, path: string) => {
@@ -94,9 +102,9 @@ export function stampHtmlPickSurfaces(root: HTMLElement, blockKey: string, opts?
 }
 
 /** 把 pick 写进 HTML 字符串，避免 React 重绘 innerHTML 时冲掉内部属性。 */
-export function stampHtmlSource(html: string, blockKey: string) {
+export function stampHtmlSource(html: string, blockKey: string, plugin?: string) {
   const wrap = document.createElement('div')
   wrap.innerHTML = html
-  stampHtmlPickSurfaces(wrap, blockKey, { includeRoot: false })
+  stampHtmlPickSurfaces(wrap, blockKey, { includeRoot: false, plugin })
   return wrap.innerHTML
 }

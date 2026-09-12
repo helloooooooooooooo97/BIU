@@ -457,6 +457,7 @@ export class FacetStore {
   }
 
   rememberBannerGallery(banner: PageBanner, title = '自定义') {
+    if (isBannerPreset(banner)) return
     const html = banner.html.trim()
     if (!html) return
     const id = bannerGalleryId(banner.kind, html)
@@ -475,7 +476,7 @@ export class FacetStore {
       .all() as Array<{ id: string; kind: string; style: string; title: string; html: string }>
     return rows.flatMap((row) => {
       const parsed = parsePageBanner({ kind: row.kind, html: row.html })
-      if (!parsed) return []
+      if (!parsed || isBannerPreset(parsed)) return []
       return [{ id: row.id, kind: parsed.kind, style: row.style || 'mine', title: row.title || '自定义', html: parsed.html }]
     })
   }

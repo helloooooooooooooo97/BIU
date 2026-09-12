@@ -43,10 +43,39 @@ export type SessionEventBody =
   | { type: 'assistant/chunk'; text: string; channel?: 'reasoning' }
   | { type: 'tool/call'; id: string; name: string; arguments: string }
   | { type: 'tool/result'; id: string; name: string; ok: boolean; detail: string }
+  | {
+      type: 'content/edits'
+      turn: number
+      files: Array<{
+        path: string
+        title: string
+        added: number
+        removed: number
+        jump_line: number
+        reverted?: boolean
+        kind?: 'content' | 'create' | 'update' | 'delete'
+      }>
+    }
 
 export type SessionEvent = SessionEventBody & {
   seq: number
   ts: number
+}
+
+export type ContentEditFile = Extract<SessionEventBody, { type: 'content/edits' }>['files'][number]
+
+/** 同回合多次 content/edits 按 path 合并；后写覆盖同 path，其它 path 保留。 */
+export function mergeContentEditFiles<T extends { path: string; kind?: string }>(prev: T[], next: T[]): T[] {
+  const map = new Map<string, T>()
+  for (const file of prev) {
+    const path = String(file.path ?? '').trim()
+    if (path) map.set(`${file.kind ?? 'content'}:${path}`, file)
+  }
+  for (const file of next) {
+    const path = String(file.path ?? '').trim()
+    if (path) map.set(`${file.kind ?? 'content'}:${path}`, file)
+  }
+  return [...map.values()]
 }
 
 /** 对齐 dsh workspace：Session 绑定 host 本机绝对路径，Agent 工具直接以此为 cwd。 */

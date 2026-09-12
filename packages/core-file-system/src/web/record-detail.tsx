@@ -209,7 +209,8 @@ export function RecordDetail({
 
   const propertyEntries = Object.entries(schema.fields)
     .filter(([key, field]) => {
-      if (key === 'id' || key === 'emoji' || key === schema.labelField || key === contentFieldKey(schema)) return false
+      if (key === 'id' || key === 'emoji' || key === schema.labelField) return false
+      if (key === contentFieldKey(schema) && resolveFieldType(field) === 'file') return false
       if (chrome?.panes?.some((pane) => pane.id === key)) return false
       const kind = resolveFieldType(field)
       if (kind === 'facet' && !field.writable) return false

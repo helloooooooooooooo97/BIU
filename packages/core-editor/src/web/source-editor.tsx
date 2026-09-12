@@ -6,11 +6,15 @@ import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
 import { EditorSelection, EditorState, StateEffect, StateField } from '@codemirror/state'
 import { Decoration, EditorView, drawSelection, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers } from '@codemirror/view'
 import { tags } from '@lezer/highlight'
+import { CONTENT_JUMP_EVENT, parseContentJump } from '@biu/type-file-system'
+import { peekContentJump } from './content-jump.ts'
 import { findRanges, wrapFindIndex } from './find-ranges.ts'
 
 const findEffect = StateEffect.define<{ query: string; index: number }>()
+const agentEditEffect = StateEffect.define<{ from: number; to: number } | null>()
 const findHit = Decoration.mark({ class: 'page-find-hit' })
 const findCurrent = Decoration.mark({ class: 'page-find-hit is-current' })
+const agentEditMark = Decoration.mark({ class: 'page-agent-edit' })
 
 const findField = StateField.define({
   create: () => Decoration.none,
@@ -23,6 +27,36 @@ const findField = StateField.define({
         return Decoration.set(
           hits.map((hit, i) => (i === current ? findCurrent : findHit).range(hit.from, hit.to)),
         )
+      }
+    }
+    if (tr.docChanged) return value.map(tr.changes)
+    return value
+  },
+  provide: (field) => EditorView.decorations.from(field),
+})
+
+function applySourceAgentEdit(view: EditorView, raw: unknown) {
+  const jump = parseContentJump(raw)
+  if (!jump) return
+  const doc = view.state.doc
+  const start = Math.min(Math.max(1, jump.start_line), doc.lines)
+  const endLine = Math.min(Math.max(start, jump.end_line ?? jump.start_line), doc.lines)
+  const from = doc.line(start).from
+  const to = doc.line(endLine).to
+  view.dispatch({ effects: agentEditEffect.of({ from, to }) })
+  window.setTimeout(() => {
+    view.dispatch({ effects: agentEditEffect.of(null) })
+  }, 8000)
+}
+
+const agentEditField = StateField.define({
+  create: () => Decoration.none,
+  update(value, tr) {
+    for (const effect of tr.effects) {
+      if (effect.is(agentEditEffect)) {
+        const range = effect.value
+        if (!range || range.to <= range.from) return Decoration.none
+        return Decoration.set([agentEditMark.range(range.from, range.to)])
       }
     }
     if (tr.docChanged) return value.map(tr.changes)
@@ -99,6 +133,7 @@ export const SourceEditor = forwardRef<SourceEditorHandle, {
           history(),
           drawSelection(),
           findField,
+          agentEditField,
           lineNumbers(),
           highlightActiveLine(),
           highlightActiveLineGutter(),
@@ -181,7 +216,18 @@ export const SourceEditor = forwardRef<SourceEditorHandle, {
     view.dispatch({
       changes: { from: 0, to: view.state.doc.length, insert: value },
     })
+    applySourceAgentEdit(view, peekContentJump())
   }, [value])
+
+  useEffect(() => {
+    const onJump = (event: Event) => {
+      const view = viewRef.current
+      if (!view) return
+      applySourceAgentEdit(view, (event as CustomEvent).detail)
+    }
+    window.addEventListener(CONTENT_JUMP_EVENT, onJump)
+    return () => window.removeEventListener(CONTENT_JUMP_EVENT, onJump)
+  }, [])
 
   useEffect(
     () => () => {

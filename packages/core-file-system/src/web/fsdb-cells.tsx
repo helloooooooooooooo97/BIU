@@ -27,7 +27,7 @@ import {
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import type { CollectionSchema, DbRecord, FieldSpec, FieldType } from '@biu/type-file-system'
 import { actionVisibleToUser, asAttachmentList, asHttpHref, asImageSrc, asImageSrcList, asPerson, commitAttachments } from '@biu/type-file-system'
-import type { CollectionViewType } from '@biu/type-file-system/ui'
+import type { CollectionRowViewType, CollectionViewType } from '@biu/type-file-system/ui'
 import {
   asStringList,
   formatField,
@@ -56,9 +56,17 @@ export function actionIcon(id: string, opts?: { fallback?: boolean; className?: 
   return <BoltIcon aria-hidden className={cls} />
 }
 
-export function ModeGlyph({ id, extra }: { id: ViewMode; extra?: CollectionViewType[] }) {
+export function ModeGlyph({
+  id,
+  extra,
+  rows,
+}: {
+  id: ViewMode
+  extra?: CollectionViewType[]
+  rows?: CollectionRowViewType[]
+}) {
   const cls = 'size-[14px]'
-  const Custom = extra?.find((item) => item.id === id)?.Icon
+  const Custom = extra?.find((item) => item.id === id)?.Icon ?? rows?.find((item) => item.id === id)?.Icon
   if (Custom) return <Custom className={cls} />
   if (id === 'table') return <TableCellsIcon aria-hidden className={cls} />
   return <ShareIcon aria-hidden className={cls} />

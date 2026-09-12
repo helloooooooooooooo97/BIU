@@ -1,9 +1,10 @@
-import { useEffect, type MouseEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, type MouseEvent } from 'react'
 import type { NodeViewProps } from '@tiptap/react'
 import { NodeViewWrapper } from '@tiptap/react'
 import { PlayIcon } from '@heroicons/react/16/solid'
 import { getPageEditor, usePageEditorVersion } from './service.ts'
 import { formatPageBlockFence, requestEnablePageBlockPlugin } from './page-block-meta.ts'
+import { bindPageBlockPlugin } from './page-block-plugin-host.ts'
 
 function assetName(file: string) {
   return file.replace(/^assets\//, '')
@@ -68,12 +69,15 @@ export function PageBlockView({ node, updateAttributes, editor, getPos }: NodeVi
   const spec = getPageEditor()?.block(kind)
   const cloneFrom = typeof data.cloneFrom === 'string' ? data.cloneFrom : ''
   const file = typeof data.file === 'string' ? data.file : ''
-  const pickId = `${plugin || 'page-block'}:${kind}`
+  const blockId = String(node.attrs.id ?? '').trim()
+  const pickId = blockId || `${plugin || 'page-block'}:${kind}`
   const pickLabel = spec?.label || kind
   const update = (patch: Record<string, unknown>, opts?: { replace?: boolean }) => {
     updateAttributes({ data: opts?.replace ? patch : { ...data, ...patch } })
   }
   const View = spec?.View
+  const hostRef = useRef<HTMLElement | null>(null)
+  useLayoutEffect(() => bindPageBlockPlugin(hostRef.current, plugin), [plugin, kind, View, data])
 
   useEffect(() => {
     if (!cloneFrom || !file) return
@@ -97,10 +101,13 @@ export function PageBlockView({ node, updateAttributes, editor, getPos }: NodeVi
 
   return (
     <NodeViewWrapper
+      ref={hostRef}
       className="page-block"
       data-page-block={kind}
       data-page-block-plugin={plugin}
+      data-page-block-id={blockId || undefined}
       data-page-block-capture=""
+      data-biu-plugin={plugin || undefined}
       data-biu-kind="plugin"
       data-biu-id={pickId}
       data-biu-label={pickLabel}

@@ -46,6 +46,7 @@ export class PickService extends Service {
     this.marquee = null
     this.marqueeHits = []
     this.bump()
+    this.emitMode()
   }
 
   exit() {
@@ -55,6 +56,7 @@ export class PickService extends Service {
     this.marquee = null
     this.marqueeHits = []
     this.bump()
+    this.emitMode()
   }
 
   toggle() {
@@ -100,6 +102,11 @@ export class PickService extends Service {
   private emitAttached() {
     if (typeof window === 'undefined') return
     window.dispatchEvent(new Event('biu:pick-attached'))
+  }
+
+  private emitMode() {
+    if (typeof window === 'undefined') return
+    window.dispatchEvent(new CustomEvent('biu:pick-mode', { detail: { picking: this.picking } }))
   }
 
   removeLast() {

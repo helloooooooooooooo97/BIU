@@ -33,6 +33,8 @@ export type FieldSpec = {
   computed?: boolean
   /** person：创建人一人；编辑人可多人。 */
   multiple?: boolean
+  /** ref / multi-ref 指向的表路径，缺省为本表。 */
+  collection?: string
 }
 
 export type AttachmentValue = { name: string; href: string; bytes?: number }
@@ -639,11 +641,12 @@ export type ContentJump = {
   start_line: number
   end_line: number
   text?: string
+  navigate?: boolean
 }
 
 export function parseContentJump(raw: unknown): ContentJump | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
-  const rec = raw as { path?: unknown; start_line?: unknown; end_line?: unknown; text?: unknown }
+  const rec = raw as { path?: unknown; start_line?: unknown; end_line?: unknown; text?: unknown; navigate?: unknown }
   const start = Number(rec.start_line)
   if (!Number.isInteger(start) || start < 1) return null
   const endRaw = Number(rec.end_line)
@@ -654,6 +657,7 @@ export function parseContentJump(raw: unknown): ContentJump | null {
     start_line: start,
     end_line: end,
     ...(text ? { text } : {}),
+    ...(rec.navigate === true ? { navigate: true } : {}),
   }
 }
 

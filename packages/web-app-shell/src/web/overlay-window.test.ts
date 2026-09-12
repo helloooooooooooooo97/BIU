@@ -5,7 +5,7 @@ import { createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { act } from 'react'
 import { OverlayChatWindow } from './overlay-window.tsx'
-import { closeChatOverlay, getChatOverlay, setChatOverlay } from './chat-overlay.ts'
+import { closeChatOverlay, getChatOverlay, getOverlayThread, revealOverlayThread, setChatOverlay, setOverlayThread } from './chat-overlay.ts'
 
 let root: Root | null = null
 let host: HTMLDivElement | null = null
@@ -18,6 +18,8 @@ afterEach(() => {
   root = null
   host = null
   setChatOverlay(false)
+  setOverlayThread(false)
+  window.dispatchEvent(new CustomEvent('biu:pick-mode', { detail: { picking: false } }))
   try {
     localStorage.removeItem('cordis.overlay.geom')
   } catch {
@@ -30,6 +32,7 @@ test('clicking the overlay close button actually closes the overlay', () => {
   document.body.append(host)
   root = createRoot(host)
   setChatOverlay(true)
+  setOverlayThread(true)
   const header = createElement(
     'button',
     { type: 'button', 'data-testid': 'chat-overlay-close' },
@@ -71,6 +74,7 @@ test('overlay opens docked to the right and vertically centered', () => {
   })
   const panel = document.querySelector('[data-testid="chat-overlay-panel"]') as HTMLElement
   assert.ok(panel)
+  assert.equal(panel.classList.contains('is-compose-only'), true)
   assert.equal(panel.getAttribute('data-overlay-layout'), 'right')
   assert.equal(document.querySelector('[data-testid="chat-overlay-drag"]'), null)
   assert.ok(Number.parseFloat(panel.style.left) > 700)
@@ -86,6 +90,8 @@ test('overlay header close button has no layout control beside it', () => {
   host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
+  setChatOverlay(true)
+  setOverlayThread(true)
   act(() => {
     root!.render(
       createElement(OverlayChatWindow, {
@@ -108,4 +114,90 @@ test('overlay header close button has no layout control beside it', () => {
   assert.ok(right)
   assert.equal(right.querySelector('[data-testid="chat-overlay-layout-toggle"]'), null)
   assert.ok(right.querySelector('[data-testid="chat-overlay-close"]'))
+})
+
+test('compose-only overlay shows the thread after send', () => {
+  host = document.createElement('div')
+  document.body.append(host)
+  root = createRoot(host)
+  setChatOverlay(true)
+  act(() => {
+    root!.render(
+      createElement(OverlayChatWindow, {
+        header: createElement('div'),
+        thread: createElement('div', { 'data-testid': 'overlay-thread-stub' }),
+        dock: createElement('div'),
+      }),
+    )
+  })
+  const panel = document.querySelector('[data-testid="chat-overlay-panel"]') as HTMLElement
+  assert.ok(panel)
+  assert.equal(panel.classList.contains('is-compose-only'), true)
+  assert.equal(document.querySelector('[data-testid="chat-overlay-head"]'), null)
+  assert.equal(document.querySelector('[data-testid="chat-overlay-peek"]'), null)
+  act(() => {
+    revealOverlayThread()
+  })
+  assert.equal(getOverlayThread(), true)
+  assert.equal(panel.classList.contains('is-compose-only'), false)
+  assert.ok(document.querySelector('[data-testid="chat-overlay-head"]'))
+})
+
+test('compose-only overlay closes when clicking outside; expanded does not', () => {
+  host = document.createElement('div')
+  document.body.append(host)
+  root = createRoot(host)
+  setChatOverlay(true)
+  setOverlayThread(false)
+  act(() => {
+    root!.render(
+      createElement(OverlayChatWindow, {
+        header: createElement('div'),
+        thread: createElement('div'),
+        dock: createElement('div'),
+      }),
+    )
+  })
+  act(() => {
+    document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+  })
+  assert.equal(getChatOverlay(), false)
+
+  setChatOverlay(true)
+  setOverlayThread(true)
+  act(() => {
+    root!.render(
+      createElement(OverlayChatWindow, {
+        header: createElement('div'),
+        thread: createElement('div'),
+        dock: createElement('div'),
+      }),
+    )
+  })
+  act(() => {
+    document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+  })
+  assert.equal(getChatOverlay(), true)
+})
+
+test('compose-only overlay stays while pick mode is on', () => {
+  host = document.createElement('div')
+  document.body.append(host)
+  root = createRoot(host)
+  window.dispatchEvent(new CustomEvent('biu:pick-mode', { detail: { picking: true } }))
+  setChatOverlay(true)
+  setOverlayThread(false)
+  act(() => {
+    root!.render(
+      createElement(OverlayChatWindow, {
+        header: createElement('div'),
+        thread: createElement('div'),
+        dock: createElement('div'),
+      }),
+    )
+  })
+  act(() => {
+    document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+  })
+  assert.equal(getChatOverlay(), true)
 })

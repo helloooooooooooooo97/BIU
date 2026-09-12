@@ -7,6 +7,8 @@ import {
   htmlDeckEnabled,
   htmlDeckIndex,
   htmlDeckKeyAction,
+  htmlLooksFillLayout,
+  HTML_FILL_HOST_PX,
   stepHtmlDeck,
 } from '../../../../.plugin-dev/page-html-blocks/html-deck.ts'
 
@@ -56,16 +58,30 @@ test('stepHtmlDeck stays on the last slide', () => {
   assert.equal(stepHtmlDeck(2, 1, 4), 3)
 })
 
-test('fullscreen deck centers a slide that is smaller than the viewport', async () => {
+test('fullscreen deck fills the viewport', async () => {
   const { readFile } = await import('node:fs/promises')
   const { resolve } = await import('node:path')
   const src = await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/page-html-blocks/web.tsx'), 'utf8')
   assert.match(src, /data-testid="html-deck-stage"/)
-  assert.match(src, /alignItems: 'safe center'/)
-  assert.match(src, /justifyContent: 'safe center'/)
   assert.match(src, /data-testid="html-deck-slide"/)
   assert.match(src, /index >= total - 1 \? \{ opacity: 0\.35/)
-  assert.doesNotMatch(src, /justifyContent: 'stretch'/)
+  assert.match(src, /root\.requestFullscreen/)
+  assert.match(src, /document.documentElement/)
+  assert.match(src, /maxWidth: 'none'/)
+  assert.match(src, /html-deck-slide"\]>\*/)
+  assert.match(src, /max-width:none!important/)
+  assert.doesNotMatch(src, /alignItems: 'safe center'/)
+  assert.doesNotMatch(src, /justifyContent: 'safe center'/)
+  assert.doesNotMatch(src, /min\(100%, 960px\)/)
+  assert.doesNotMatch(src, /padding: 32/)
+})
+
+test('poster html with height 100% and absolute children fills a host', () => {
+  const magazine = `<div style="min-height:100%;height:100%;display:flex"><p>刊</p></div>`
+  const poster = `<div style="height:100%;overflow:hidden;position:relative"><div style="position:absolute">初番</div><div style="position:absolute">二番</div><div style="position:absolute">三番</div></div>`
+  assert.equal(htmlLooksFillLayout(magazine), false)
+  assert.equal(htmlLooksFillLayout(poster), true)
+  assert.equal(HTML_FILL_HOST_PX, 280)
 })
 
 test('arrow keys drive the deck', () => {

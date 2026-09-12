@@ -57,6 +57,7 @@ describe('顶栏三级标题', () => {
     expect(browser).toMatch(/rememberViews\(path, listed\)[\s\S]*localStorage\.setItem\(viewsKey\(path\)[\s\S]*fsdb:change/)
     expect(browser).toContain("window.dispatchEvent(new Event('fsdb:crumb-labels'))")
     expect(browser).toContain('rememberRecords')
+    expect(browser).toContain('routeViewId ?? activeViewId')
     expect(browser).toContain('crumbRecordLabel')
   })
 })

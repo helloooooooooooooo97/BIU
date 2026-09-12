@@ -13,6 +13,7 @@ import { pageTextStyle, pageHighlight, Color } from './color-marks.ts'
 import { headingSkin } from './heading-skin.ts'
 import { pageBlock } from './page-block.ts'
 import { pageFind } from './find-plugin.ts'
+import { pageAgentEdit } from './agent-edit-plugin.ts'
 import { slashCommand } from './slash.ts'
 import { pageMention } from './mention.ts'
 import { openMathPop } from './math-pop.ts'
@@ -225,6 +226,7 @@ export function pageEditorExtensions() {
     headingSkin,
     pageBlock,
     pageFind,
+    pageAgentEdit,
     slashCommand,
     pageMention,
   ]

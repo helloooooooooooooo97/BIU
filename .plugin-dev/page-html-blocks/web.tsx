@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom'
-import { bindHtmlSlide, collectHtmlSlides, cssBoxSize, htmlDeckEnabled, htmlDeckIndex, htmlDeckKeyAction, stepHtmlDeck } from './html-deck.ts'
+import { bindHtmlSlide, collectHtmlSlides, cssBoxSize, htmlDeckEnabled, htmlDeckIndex, htmlDeckKeyAction, htmlLooksFillLayout, HTML_FILL_HOST_PX, stepHtmlDeck } from './html-deck.ts'
 import { htmlBlockKey, stampHtmlPickSurfaces, stampHtmlSource } from './stamp-picks.ts'
 
 const React = globalThis.React
@@ -175,11 +175,9 @@ function HtmlDeckOverlay({
   }, [index, onIndex, total])
 
   useEffect(() => {
-    const el = boxRef.current
-    if (!el) return
+    const root = document.documentElement
     let gone = false
-    const enter = el.requestFullscreen?.bind(el)
-    void Promise.resolve(enter ? enter({ navigationUI: 'hide' }) : undefined).catch(() => {})
+    void Promise.resolve(root.requestFullscreen?.({ navigationUI: 'hide' })).catch(() => {})
     const onFs = () => {
       if (gone) return
       if (document.fullscreenElement) return
@@ -189,12 +187,24 @@ function HtmlDeckOverlay({
     return () => {
       gone = true
       document.removeEventListener('fullscreenchange', onFs)
-      if (document.fullscreenElement === el) void document.exitFullscreen?.()
+      if (document.fullscreenElement) void document.exitFullscreen?.()
     }
   }, [])
 
   if (!slide) return null
-  const stamped = slide.kind === 'html' ? stampHtmlSource(slide.html, `deck-${index}`) : ''
+  const stamped = slide.kind === 'html' ? stampHtmlSource(slide.html, `deck-${index}`, name) : ''
+  const fill = {
+    position: 'absolute' as const,
+    inset: 0,
+    width: '100%',
+    height: '100%',
+    maxWidth: 'none',
+    maxHeight: 'none',
+    minWidth: 0,
+    minHeight: 0,
+    border: 'none',
+    boxSizing: 'border-box' as const,
+  }
   return createPortal(
     <div
       ref={boxRef}
@@ -204,8 +214,9 @@ function HtmlDeckOverlay({
       style={{
         position: 'fixed',
         inset: 0,
-        width: '100vw',
-        height: '100vh',
+        width: '100%',
+        height: '100%',
+        maxWidth: 'none',
         zIndex: 2147483646,
         display: 'flex',
         flexDirection: 'column',
@@ -214,17 +225,16 @@ function HtmlDeckOverlay({
         font: '13px/1.4 ui-sans-serif, system-ui, sans-serif',
       }}
     >
+      <style>{`[data-testid="html-deck"]:fullscreen,[data-testid="html-deck"]:-webkit-full-screen{inset:0!important;width:100%!important;height:100%!important;max-width:none!important;max-height:none!important}[data-testid="html-deck-slide"]>*{width:100%!important;height:100%!important;max-width:none!important;box-sizing:border-box}`}</style>
       <div
         data-testid="html-deck-stage"
         style={{
+          position: 'relative',
           flex: 1,
           minHeight: 0,
           width: '100%',
-          display: 'flex',
-          alignItems: 'safe center',
-          justifyContent: 'safe center',
-          overflow: 'auto',
-          padding: 32,
+          height: '100%',
+          overflow: 'hidden',
           boxSizing: 'border-box',
         }}
       >
@@ -233,28 +243,12 @@ function HtmlDeckOverlay({
             title={`html-deck-${index}`}
             srcDoc={slide.html}
             sandbox="allow-scripts"
-            style={{
-              flex: 'none',
-              width: cssBoxSize(slide.width) ?? 'min(100%, 960px)',
-              height: cssBoxSize(slide.height) ?? '300px',
-              maxWidth: '100%',
-              maxHeight: '100%',
-              overflow: 'auto',
-              border: 'none',
-              background: MAG_INK,
-            }}
+            style={{ ...fill, background: MAG_INK }}
           />
         ) : (
           <div
             data-testid="html-deck-slide"
-            style={{
-              flex: 'none',
-              width: cssBoxSize(slide.width),
-              height: cssBoxSize(slide.height),
-              maxWidth: '100%',
-              maxHeight: '100%',
-              overflow: slide.width != null || slide.height != null ? 'auto' : undefined,
-            }}
+            style={{ ...fill, overflow: 'auto', background: 'transparent' }}
             dangerouslySetInnerHTML={{ __html: stamped }}
           />
         )}
@@ -548,7 +542,7 @@ function FloatBar({
    1) kind=html：直接渲染（无 iframe，无脚本）——内容裸渲染，无外框
    ============================================================ */
 
-const HTML_EDITORIAL_SAMPLE = `<div style="font-family:'Helvetica Neue','Arial',sans-serif;background:${MAG_INK};border:2px solid ${MAG_PAPER};color:${MAG_PAPER};margin:0;display:flex;flex-direction:column">
+const HTML_EDITORIAL_SAMPLE = `<div style="box-sizing:border-box;min-height:100%;height:100%;width:100%;font-family:'Helvetica Neue','Arial',sans-serif;background:${MAG_INK};border:2px solid ${MAG_PAPER};color:${MAG_PAPER};margin:0;display:flex;flex-direction:column">
   <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid ${MAG_PAPER};padding:8px 12px;padding-right:220px;font-size:11px;letter-spacing:.15em">
     <span style="font-weight:700">现代 ・ 美式</span><span style="font-weight:800">创立 2024</span>
   </div>
@@ -565,19 +559,23 @@ const HTML_EDITORIAL_SAMPLE = `<div style="font-family:'Helvetica Neue','Arial',
 
 const HTML_DIRECT_SAMPLE = HTML_EDITORIAL_SAMPLE
 
+const HTML_FILL_CSS = `.html-direct-fill-inner{height:100%;min-height:100%}.html-direct-fill-inner>:first-child{height:100%!important;min-height:100%;box-sizing:border-box}`
+
 function HtmlDirectCard({ data, update, writable }: BlockProps) {
   const ro = !writable
   const html = String(data.html ?? '')
   const width = data.width
   const height = data.height
-  const sized = (width != null && width !== '') || (height != null && height !== '')
+  const fill = htmlLooksFillLayout(html)
+  const fillHost = fill && (height == null || height === '')
+  const sized = (width != null && width !== '') || (height != null && height !== '') || fillHost
   const deckOn = htmlDeckEnabled(data.deck)
   const [editing, setEditing] = useState(false)
   const [hover, setHover] = useState(false)
   const hostRef = useRef<HTMLDivElement | null>(null)
   const deck = useHtmlDeck(hostRef, 'html', html, { width, height, deck: deckOn })
   const stamped = useMemo(
-    () => stampHtmlSource(html, htmlBlockKey(hostRef.current?.closest('[data-page-block]') ?? null, html)),
+    () => stampHtmlSource(html, htmlBlockKey(hostRef.current?.closest('[data-page-block]') ?? null, html), name),
     [html],
   )
 
@@ -585,10 +583,11 @@ function HtmlDirectCard({ data, update, writable }: BlockProps) {
     <div
       ref={hostRef}
       data-testid="page-html-direct"
+      className={fill ? 'html-direct-fill' : undefined}
       style={{
         position: 'relative',
         width: cssBoxSize(width) ?? '100%',
-        height: cssBoxSize(height),
+        height: cssBoxSize(height) ?? (fillHost ? HTML_FILL_HOST_PX : undefined),
         maxWidth: '100%',
         overflow: sized ? 'auto' : undefined,
         boxSizing: 'border-box',
@@ -596,6 +595,7 @@ function HtmlDirectCard({ data, update, writable }: BlockProps) {
       onPointerEnter={() => setHover(true)}
       onPointerLeave={() => setHover(false)}
     >
+      {fill ? <style>{HTML_FILL_CSS}</style> : null}
       {(hover || editing) && (
         <FloatBar
           editing={editing}
@@ -611,7 +611,11 @@ function HtmlDirectCard({ data, update, writable }: BlockProps) {
       {editing ? (
         <SourceEditor html={html} onChange={(v) => update({ html: v })} />
       ) : (
-        <div style={{ overflowX: sized ? undefined : 'auto' }} dangerouslySetInnerHTML={{ __html: stamped }} />
+        <div
+          className={fill ? 'html-direct-fill-inner' : undefined}
+          style={{ overflowX: sized ? undefined : 'auto', height: fill ? '100%' : undefined }}
+          dangerouslySetInnerHTML={{ __html: stamped }}
+        />
       )}
       {ro || editing ? null : <SizeGrip reveal={hover} boxRef={hostRef} onSize={(next) => update(next)} />}
       {deck.overlay}
@@ -699,10 +703,10 @@ function HtmlFrameCard({ data, update, writable }: BlockProps) {
     if (!frame) return
     const host = hostRef.current?.closest('[data-page-block]') ?? null
     const key = htmlBlockKey(host, html)
-    stampHtmlPickSurfaces(frame, key)
+    stampHtmlPickSurfaces(frame, key, { plugin: name })
     try {
       const body = frame.contentDocument?.body
-      if (body) stampHtmlPickSurfaces(body, `${key}-doc`)
+      if (body) stampHtmlPickSurfaces(body, `${key}-doc`, { plugin: name })
     } catch {
       /* srcdoc + sandbox 可能读不到 contentDocument */
     }
@@ -775,22 +779,22 @@ export function apply(ctx: {
   ctx.pageEditor.registerBlock({
     kind: 'html',
     plugin: name,
-    label: 'HTML 直接渲染',
+    label: '静态HTML',
     blockType: 'html',
     blockTypeLabel: 'HTML',
-    hint: 'HTML 直接渲染进文档；悬停可编辑，放大后按页内 HTML 块翻页放映',
-    aliases: ['html', 'html直', '静态html'],
+    hint: 'HTML/CSS 卡片和刊头，不跑脚本；悬停可编辑',
+    aliases: ['html', 'html直', '静态html', '排版', '直接渲染', '静态渲染', '静态演示'],
     defaults: { html: HTML_DIRECT_SAMPLE, deck: true },
     View: HtmlDirectCard,
   })
   ctx.pageEditor.registerBlock({
     kind: 'htmlframe',
     plugin: name,
-    label: 'HTML iframe 沙箱',
+    label: '动态HTML',
     blockType: 'html',
     blockTypeLabel: 'HTML',
-    hint: 'iframe 隔离小网页；放大后按页内 HTML 块翻页放映',
-    aliases: ['iframe', 'htmlf', 'frame', '幻灯片', 'slide'],
+    hint: '能跑脚本的独立页面；放大后可翻页放映',
+    aliases: ['iframe', 'htmlf', 'frame', '幻灯片', 'slide', '沙箱', '小网页', '动态演示'],
     defaults: { html: HTML_FRAME_SAMPLE, height: 300, deck: true },
     View: HtmlFrameCard,
   })

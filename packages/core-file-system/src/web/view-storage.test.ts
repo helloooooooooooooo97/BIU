@@ -8,6 +8,8 @@ import {
   persistViewDisplay,
   rememberRecords,
   savedViewFromRecord,
+  toggleStarredRecord,
+  isRecordStarred,
   viewDisplayKey,
   viewForPath,
   withViewDisplay,
@@ -23,6 +25,7 @@ test('tables default to the builtin 全部xx view', () => {
   assert.equal(defaultViewId(VIEWS_COLLECTION_PATH), builtinAllViewId(VIEWS_COLLECTION_PATH))
   assert.equal(viewForPath('/sessions')?.builtin, true)
   assert.deepEqual(viewForPath('/sessions')?.filters, {})
+  assert.equal(viewForPath('/pages', builtinAllViewId('/sessions'))?.id, builtinAllViewId('/pages'))
 })
 
 test('builtin view wrap is stored as display prefs and restored', () => {
@@ -104,9 +107,33 @@ test('savedViewFromRecord skips builtin rows and keeps filters', () => {
 })
 
 test('rememberRecords keeps titles when another inspector page overwrites the same collection', () => {
-  rememberRecords('/pages', [{ id: 'home', label: '首页' }])
-  rememberRecords('/pages', [{ id: 'draft', label: 'draft' }, { id: 'home', label: 'home' }])
-  const listed = loadRecords('/pages')
+  rememberRecords('/pages', [{ id: 'home', label: '首页' }], 'mine')
+  rememberRecords('/pages', [{ id: 'draft', label: 'draft' }, { id: 'home', label: 'home' }], 'mine')
+  const listed = loadRecords('/pages', 'mine')
   assert.equal(listed.find((row) => row.id === 'home')?.label, '首页')
   assert.equal(listed.find((row) => row.id === 'draft')?.label, 'draft')
+})
+
+test('rememberRecords scopes crumb rows to the current view', () => {
+  rememberRecords('/pages', [{ id: 'home', label: '首页' }, { id: 'notes', label: '笔记' }], 'all')
+  rememberRecords('/tasks', [{ id: 't1', label: '任务甲' }], 'board')
+  rememberRecords('/pages', [{ id: 'home', label: '首页' }], 'mine')
+  assert.deepEqual(
+    loadRecords('/pages', 'mine').map((row) => row.id),
+    ['home'],
+  )
+  assert.deepEqual(
+    loadRecords('/pages', 'all').map((row) => row.id),
+    ['home', 'notes'],
+  )
+  assert.equal(loadRecords('/pages', 'mine').some((row) => row.id === 't1'), false)
+  assert.equal(loadRecords('/pages', 'all').some((row) => row.id === 't1'), false)
+})
+
+test('starred records toggle by collection path and id', () => {
+  const next = toggleStarredRecord([], '/pages', 'home', { label: '首页' })
+  assert.equal(isRecordStarred(next, '/pages', 'home'), true)
+  assert.equal(next[0]?.label, '首页')
+  assert.equal(isRecordStarred(next, '/tasks', 'home'), false)
+  assert.equal(isRecordStarred(toggleStarredRecord(next, '/pages', 'home'), '/pages', 'home'), false)
 })

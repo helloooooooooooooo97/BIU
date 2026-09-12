@@ -18,6 +18,7 @@ import {
   normalizeSessionConfig,
   isSessionCompactPoint,
   sessionCompactSummaryText,
+  mergeContentEditFiles,
 } from '@biu/type-session'
 import {
   ensureSessionMascot,
@@ -418,6 +419,17 @@ export class SessionsService extends Service {
     this.cache.set(id, record)
     // chunk / 进行中的 tool/call：先内存追加并广播，落盘合并到下一帧，避免把事件循环卡死
     if (body.type === 'assistant/chunk') {
+      this.schedulePersist(id)
+    } else if (body.type === 'content/edits') {
+      const existing = record.events.slice(0, -1).findLast((item) => item.type === 'content/edits' && item.turn === body.turn)
+      if (existing && existing.type === 'content/edits') {
+        existing.files = mergeContentEditFiles(existing.files, body.files)
+        existing.ts = event.ts
+        record.events.pop()
+        this.schedulePersist(id)
+        this.ctx.emit('session/event', { sessionId: id, event: existing })
+        return existing
+      }
       this.schedulePersist(id)
     } else if (body.type === 'tool/call') {
       const existing = record.events.slice(0, -1).findLast((item) => item.type === 'tool/call' && item.id === body.id)

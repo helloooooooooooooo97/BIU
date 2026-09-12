@@ -210,7 +210,6 @@ export class PagesStore {
         id TEXT PRIMARY KEY,
         title TEXT NOT NULL,
         tags_json TEXT NOT NULL DEFAULT '[]',
-        notes TEXT NOT NULL DEFAULT '',
         parent_id TEXT,
         depends_on_json TEXT NOT NULL DEFAULT '[]',
         facet_json TEXT NOT NULL DEFAULT '{}',
@@ -224,7 +223,12 @@ export class PagesStore {
       db.exec(`ALTER TABLE pages ADD COLUMN depends_on_json TEXT NOT NULL DEFAULT '[]'`)
     }
     this.db = db
+    await this.flushSqliteNotesThenDrop()
     return db
+  }
+
+  async sqlite() {
+    return this.openDb()
   }
 
   private async migrateMarkdown() {
@@ -255,7 +259,27 @@ export class PagesStore {
     await this.backfillMarkdown(mdIds)
   }
 
-  /** sqlite 里已有、磁盘还没有 `.page/<id>.md` 的页，把 notes 写回 Markdown。 */
+  /** 旧库 `pages.notes` 先落盘再删列。sqlite 只留列表字段。 */
+  private async flushSqliteNotesThenDrop() {
+    if (!this.db) return
+    const cols = this.db.prepare('PRAGMA table_info(pages)').all() as Array<{ name: string }>
+    if (!cols.some((col) => col.name === 'notes')) return
+    let names: string[] = []
+    try {
+      names = await this.fs.list(PAGE_ROOT)
+    } catch {
+      names = []
+    }
+    const mdIds = new Set(names.filter((name) => name.endsWith('.md')).map((name) => name.slice(0, -3)))
+    const rows = this.db.prepare('SELECT * FROM pages').all() as SqlPage[]
+    for (const sql of rows) {
+      if (mdIds.has(sql.id)) continue
+      await this.persistMarkdown(rowFromSql(sql))
+    }
+    this.db.exec('ALTER TABLE pages DROP COLUMN notes')
+  }
+
+  /** sqlite 里已有、磁盘还没有 `.page/<id>.md` 的页，用列表字段写回 Markdown（正文为空）。 */
   private async backfillMarkdown(mdIds: Set<string>) {
     if (!this.db) return
     const rows = this.db.prepare('SELECT * FROM pages').all() as SqlPage[]
@@ -273,12 +297,11 @@ export class PagesStore {
     if (!this.db) return
     this.db.prepare(`
       INSERT INTO pages (
-        id, title, tags_json, notes, parent_id,
+        id, title, tags_json, parent_id,
         depends_on_json, facet_json, emoji, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         title=excluded.title, tags_json=excluded.tags_json,
-        notes=excluded.notes,
         parent_id=excluded.parent_id, depends_on_json=excluded.depends_on_json, facet_json=excluded.facet_json, emoji=excluded.emoji,
         updated_at=excluded.updated_at
     `).run(...sqlValues(row))
@@ -297,7 +320,7 @@ export class PagesStore {
       return rows
     }
     const listed = db.prepare(`
-      SELECT id, title, tags_json, '' AS notes, parent_id,
+      SELECT id, title, tags_json, parent_id,
         depends_on_json, facet_json, emoji, created_at, updated_at
       FROM pages ORDER BY id
     `).all() as SqlPage[]
@@ -407,11 +430,21 @@ export class PagesStore {
     } catch {
       return
     }
-    const db = await this.openDb()
+    await this.openDb()
     const live = new Set<string>()
-    const bodies = db.prepare('SELECT notes FROM pages').all() as Array<{ notes: string }>
-    for (const body of bodies) {
-      for (const name of collectPageAssetNames(body.notes)) live.add(name)
+    let pages: string[] = []
+    try {
+      pages = await this.fs.list(PAGE_ROOT)
+    } catch {
+      pages = []
+    }
+    for (const name of pages) {
+      if (!name.endsWith('.md')) continue
+      try {
+        for (const asset of collectPageAssetNames(await this.fs.read(`${PAGE_ROOT}/${name}`))) live.add(asset)
+      } catch {
+        /* skip unreadable */
+      }
     }
     for (const name of names) {
       if (name === '.gitkeep' || live.has(name) || !isPageAssetFileName(name)) continue
@@ -437,7 +470,7 @@ type SqlPage = {
   id: string
   title: string
   tags_json: string
-  notes: string
+  notes?: string
   parent_id: string | null
   depends_on_json: string
   facet_json: string
@@ -459,7 +492,6 @@ function sqlValues(row: PageRow) {
     row.id,
     row.title,
     JSON.stringify(row.tags),
-    row.notes ?? '',
     row.parentId,
     JSON.stringify(row.dependsOn),
     JSON.stringify(row.facet),
@@ -474,7 +506,7 @@ function rowFromSql(row: SqlPage): PageRow {
     id: row.id,
     title: row.title,
     tags: asStringList(parseJson(row.tags_json, [])),
-    notes: row.notes,
+    notes: row.notes ?? '',
     parentId: row.parent_id == null || row.parent_id === '' ? null : String(row.parent_id),
     dependsOn: asStringList(parseJson(row.depends_on_json ?? '[]', [])),
     facet: normalizeSchemaValue(parseJson(row.facet_json, emptySchemaValue())),

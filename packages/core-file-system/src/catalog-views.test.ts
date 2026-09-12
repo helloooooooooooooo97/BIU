@@ -3,13 +3,18 @@ import assert from 'node:assert/strict'
 import {
   builtinAllView,
   builtinAllViewId,
+  builtinBlockKindViewId,
   builtinCatalogViewId,
   builtinCatalogViews,
+  isBuiltinBlockKindViewId,
   isBuiltinCatalogViewId,
   isReadOnlyViewId,
   mergeCatalogViews,
+  mergePageBlockViews,
   mergeTableViews,
   stubBuiltinAllView,
+  stubBuiltinBlockKindView,
+  isBuiltinAllViewForCollection,
   stubBuiltinCatalogView,
   catalogRowOpenTarget,
   builtinTagViewId,
@@ -47,6 +52,12 @@ test('stub builtin catalog view from route id', () => {
   assert.equal(stubBuiltinCatalogView('user-1'), null)
   assert.equal(isBuiltinCatalogViewId('builtin-all:/sessions'), false)
   assert.equal(stubBuiltinCatalogView('builtin-all:/sessions'), null)
+})
+
+test('builtin all view ids belong to one collection', () => {
+  assert.equal(isBuiltinAllViewForCollection('builtin-all:/sessions', '/sessions'), true)
+  assert.equal(isBuiltinAllViewForCollection('builtin-all:/sessions', '/pages'), false)
+  assert.equal(isBuiltinAllViewForCollection('mine', '/sessions'), false)
 })
 
 test('every registered table gets a read-only 全部xx view', () => {
@@ -97,4 +108,36 @@ test('stamp rows open the source record, not a tag view', () => {
 test('builtin all views are read-only', () => {
   assert.equal(isReadOnlyViewId(builtinAllViewId('/sessions')), true)
   assert.equal(isReadOnlyViewId('user-traj'), false)
+})
+
+test('each registered page block kind gets a builtin view', () => {
+  const table = { path: '/page-blocks', label: '组件', view: { title: '组件' } }
+  const merged = mergePageBlockViews(
+    table,
+    [
+      { kind: 'excalidraw', label: '画板' },
+      { kind: 'html', label: 'HTML' },
+      { kind: 'html', label: '重复' },
+      { kind: '', label: '空' },
+    ],
+    [
+      { id: builtinBlockKindViewId('html'), name: '旧的', mode: 'table', sortField: 'id', sortDir: 'asc', filters: {}, columns: [] },
+      { id: 'mine', name: '置顶', mode: 'table', sortField: 'id', sortDir: 'asc', filters: {}, columns: [] },
+    ],
+  )
+  assert.equal(merged[0]?.id, builtinAllViewId('/page-blocks'))
+  assert.equal(merged[0]?.name, '全部组件')
+  assert.equal(merged[1]?.id, builtinBlockKindViewId('excalidraw'))
+  assert.equal(merged[1]?.name, '画板')
+  assert.deepEqual(merged[1]?.filters, { blockKind: 'excalidraw' })
+  assert.equal(merged[1]?.builtin, true)
+  assert.equal(merged[2]?.id, builtinBlockKindViewId('html'))
+  assert.equal(merged[2]?.name, 'HTML')
+  assert.equal(merged.filter((view) => view.id === builtinBlockKindViewId('html')).length, 1)
+  assert.equal(merged.some((view) => view.id === 'mine'), true)
+  assert.equal(isReadOnlyViewId(builtinBlockKindViewId('html')), true)
+  assert.equal(isBuiltinCatalogViewId(builtinBlockKindViewId('html')), false)
+  assert.equal(isBuiltinBlockKindViewId(builtinBlockKindViewId('algorithm')), true)
+  assert.equal(stubBuiltinBlockKindView('builtin-block:html')?.filters.blockKind, 'html')
+  assert.equal(stubBuiltinBlockKindView('user-1'), null)
 })

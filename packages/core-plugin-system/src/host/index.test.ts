@@ -54,17 +54,19 @@ test('restore skips a broken enabled plugin and continues', async () => {
     const ctx = new Context()
     const { adopted } = stubHub(ctx)
     const store = new PluginStoreService(ctx, pluginDir, join(dir, 'store.json'), join(dir, '.plugin-dev')).open()
-    await store.create({
+    await store.initSandbox({
       id: 'store-ok',
       name: 'Ok',
       hostJs: `export const name = 'store-ok'\nexport function apply() {}\n`,
     })
+    await store.pack('store-ok')
     await store.openPlugin('store-ok')
-    await store.create({
+    await store.initSandbox({
       id: 'store-bad',
       name: 'Bad',
       hostJs: `export const name = 'store-bad'\nexport function apply() {}\n`,
     })
+    await store.pack('store-bad')
     await store.openPlugin('store-bad')
     await writeFile(join(pluginDir, 'store-bad', 'host.js'), 'throw new SyntaxError("nope")\n')
     const ctx2 = new Context()
@@ -89,18 +91,19 @@ test('missing .plugin lists no plugins', async () => {
   }
 })
 
-test('create writes .plugin/<id>/; close keeps code; uninstall deletes .plugin/<id>/', async () => {
+test('sandbox then pack writes .plugin/<id>/; close keeps code; uninstall deletes .plugin/<id>/', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'plugin-root-'))
   const pluginDir = join(dir, '.plugin')
   try {
     const ctx = new Context()
     const { adopted, dropped, forks } = stubHub(ctx)
     const store = new PluginStoreService(ctx, pluginDir, join(dir, 'store.json'), join(dir, '.plugin-dev')).open()
-    const created = await store.create({
+    await store.initSandbox({
       id: 'store-echo',
       name: 'Echo',
       hostJs: `export const name = 'store-echo'\nexport function apply() {}\n`,
     })
+    const created = await store.pack('store-echo')
     assert.equal(created.pluginPath, join(pluginDir, 'store-echo'))
     const echo = (await store.list()).find((item) => item.id === 'store-echo')
     assert.ok(echo)

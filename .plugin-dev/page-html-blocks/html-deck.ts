@@ -16,6 +16,17 @@ export function cssBoxSize(value: unknown): string | undefined {
   return text || undefined
 }
 
+/** 海报式 HTML：根节点 height:100% + overflow:hidden，子级全 absolute，百分比高度相对 auto 父级为 0。 */
+export const HTML_FILL_HOST_PX = 280
+
+export function htmlLooksFillLayout(html: string) {
+  const head = html.trim().slice(0, 1600)
+  const pct = /\bheight\s*:\s*100%\b/i.test(head) || /\bheight\s*:\s*100vh\b/i.test(head)
+  const clipped = /\boverflow\s*:\s*hidden\b/i.test(head)
+  const abs = (html.match(/\bposition\s*:\s*absolute\b/gi) ?? []).length >= 3
+  return (pct && clipped) || (pct && abs) || (clipped && abs)
+}
+
 export function htmlDeckEnabled(deck: unknown) {
   return deck !== false
 }

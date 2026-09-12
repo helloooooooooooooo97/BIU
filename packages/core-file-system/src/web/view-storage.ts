@@ -1,4 +1,4 @@
-import { builtinAllViewId, stubBuiltinAllView, stubBuiltinCatalogView, stubBuiltinTagView, isReadOnlyViewId } from '../catalog-views.ts'
+import { builtinAllViewId, stubBuiltinAllView, stubBuiltinBlockKindView, stubBuiltinCatalogView, stubBuiltinTagView, isReadOnlyViewId, isBuiltinAllViewForCollection } from '../catalog-views.ts'
 import { listCollection } from './db-client.ts'
 import { looksLikeFilterTree, normalizeFilterGroup, parseSortsInput } from '../query-logic.ts'
 import { normalizeSavedView, type SavedView } from './saved-view.ts'
@@ -33,6 +33,15 @@ export function loadViews(collectionPath: string): SavedView[] {
 export type CrumbRecord = { id: string; label: string; emoji?: string; mascot?: unknown }
 
 const memoryRecords = new Map<string, CrumbRecord[]>()
+const memoryRecordMeta = new Map<string, CrumbRecord>()
+
+function recordsKey(collectionPath: string, viewId?: string) {
+  return `${collectionPath}\0${viewId ?? ''}`
+}
+
+function recordMetaKey(collectionPath: string, recordId: string) {
+  return `${collectionPath}\0id:${recordId}`
+}
 
 function keepCrumbLabel(row: CrumbRecord, prev?: CrumbRecord) {
   const next = String(row.label ?? '').trim()
@@ -42,23 +51,28 @@ function keepCrumbLabel(row: CrumbRecord, prev?: CrumbRecord) {
   return next || last || row.id
 }
 
-export function rememberRecords(collectionPath: string, rows: CrumbRecord[]) {
-  const prev = memoryRecords.get(collectionPath) ?? []
-  const byId = new Map(prev.map((row) => [row.id, row]))
-  for (const row of rows) {
-    const last = byId.get(row.id)
-    byId.set(row.id, {
+export function rememberRecords(collectionPath: string, rows: CrumbRecord[], viewId?: string) {
+  const painted = rows.map((row) => {
+    const last = memoryRecordMeta.get(recordMetaKey(collectionPath, row.id))
+    const next = {
       ...last,
       ...row,
       label: keepCrumbLabel(row, last),
       emoji: row.emoji || last?.emoji,
-    })
-  }
-  memoryRecords.set(collectionPath, [...byId.values()])
+      mascot: row.mascot ?? last?.mascot,
+    }
+    memoryRecordMeta.set(recordMetaKey(collectionPath, row.id), next)
+    return next
+  })
+  memoryRecords.set(recordsKey(collectionPath, viewId), painted)
 }
 
-export function loadRecords(collectionPath: string): CrumbRecord[] {
-  return memoryRecords.get(collectionPath) ?? []
+export function loadRecords(collectionPath: string, viewId?: string): CrumbRecord[] {
+  return memoryRecords.get(recordsKey(collectionPath, viewId)) ?? []
+}
+
+export function peekRecord(collectionPath: string, recordId: string): CrumbRecord | undefined {
+  return memoryRecordMeta.get(recordMetaKey(collectionPath, recordId))
 }
 
 export function loadActiveViewId(collectionPath: string, listed: SavedView[]) {
@@ -79,7 +93,8 @@ export function viewForPath(collectionPath: string, routeViewId?: string): Saved
       ? listed.find((item) => item.id === routeViewId) ??
         stubBuiltinCatalogView(routeViewId) ??
         stubBuiltinTagView(routeViewId) ??
-        stubBuiltinAllView(routeViewId)
+        stubBuiltinBlockKindView(routeViewId) ??
+        (isBuiltinAllViewForCollection(routeViewId, collectionPath) ? stubBuiltinAllView(routeViewId) : null)
       : undefined) ??
     listed.find((item) => item.id === loadActiveViewId(collectionPath, listed)) ??
     fallback ??
@@ -286,6 +301,82 @@ export function isViewStarred(items: StarredView[], path: string, viewId: string
 export function toggleStarredView(items: StarredView[], path: string, viewId: string): StarredView[] {
   if (isViewStarred(items, path, viewId)) return items.filter((item) => item.path !== path || item.viewId !== viewId)
   return [...items, { path, viewId }]
+}
+
+export type StarredRecord = { path: string; recordId: string; label?: string; emoji?: string }
+
+const STARRED_RECORDS_KEY = 'fsdb.starredRecords'
+
+export function loadStarredRecords(): StarredRecord[] {
+  try {
+    const raw = localStorage.getItem(STARRED_RECORDS_KEY)
+    const parsed = raw ? (JSON.parse(raw) as unknown) : []
+    if (!Array.isArray(parsed)) return []
+    return parsed.flatMap((item) => {
+      if (!item || typeof item !== 'object') return []
+      const rec = item as Record<string, unknown>
+      const path = String(rec.path ?? '').trim()
+      const recordId = String(rec.recordId ?? '').trim()
+      if (!path || !recordId) return []
+      const label = String(rec.label ?? '').trim()
+      const emoji = String(rec.emoji ?? '').trim()
+      return [{ path, recordId, ...(label ? { label } : {}), ...(emoji ? { emoji } : {}) }]
+    })
+  } catch {
+    return []
+  }
+}
+
+let starredRecords = loadStarredRecords()
+let starredRecordsVersion = 0
+const starredRecordListeners = new Set<() => void>()
+
+export function getStarredRecords() {
+  return starredRecords
+}
+
+export function subscribeStarredRecords(fn: () => void) {
+  starredRecordListeners.add(fn)
+  return () => {
+    starredRecordListeners.delete(fn)
+  }
+}
+
+export function getStarredRecordsVersion() {
+  return starredRecordsVersion
+}
+
+export function persistStarredRecords(items: StarredRecord[]) {
+  starredRecords = items
+  starredRecordsVersion += 1
+  localStorage.setItem(STARRED_RECORDS_KEY, JSON.stringify(items))
+  for (const fn of starredRecordListeners) fn()
+}
+
+export function isRecordStarred(items: StarredRecord[], path: string, recordId: string) {
+  return items.some((item) => item.path === path && item.recordId === recordId)
+}
+
+export function toggleStarredRecord(
+  items: StarredRecord[],
+  path: string,
+  recordId: string,
+  meta?: { label?: string; emoji?: string },
+): StarredRecord[] {
+  if (isRecordStarred(items, path, recordId)) return items.filter((item) => item.path !== path || item.recordId !== recordId)
+  const label = String(meta?.label ?? '').trim()
+  const emoji = String(meta?.emoji ?? '').trim()
+  return [...items, { path, recordId, ...(label ? { label } : {}), ...(emoji ? { emoji } : {}) }]
+}
+
+export function starredRecordLabel(item: StarredRecord) {
+  const peeked = peekRecord(item.path, item.recordId)
+  const label = String(peeked?.label ?? item.label ?? '').trim()
+  return label && label !== item.recordId ? label : label || item.recordId
+}
+
+export function starredRecordEmoji(item: StarredRecord) {
+  return String(peekRecord(item.path, item.recordId)?.emoji ?? item.emoji ?? '').trim()
 }
 
 const DISPLAY_KEYS = [

@@ -11,7 +11,7 @@ import {
 } from '@dnd-kit/core'
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
+import { CSS as DndCSS } from '@dnd-kit/utilities'
 import {
   ArrowPathIcon,
   ArrowsPointingOutIcon,
@@ -43,7 +43,7 @@ import {
 } from '@heroicons/react/16/solid'
 import type { CollectionActionInfo, CollectionInfo, CollectionSchema, CollectionSchemaPack, DbRecord, FieldSpec, FieldType } from '@biu/type-file-system'
 import { normalizeSchemaValue } from '@biu/type-file-system'
-import type { CollectionChrome, CollectionViewType, DatabaseUi } from '@biu/type-file-system/ui'
+import type { CollectionChrome, CollectionRowViewType, CollectionViewType, DatabaseUi } from '@biu/type-file-system/ui'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { DndGrip } from './dnd-grip.tsx'
 import { BoolBox, ChatCount, RecordEmojiBoard, HeadlessDismiss, HeadlessPopover, HEADLESS_DISMISS_IGNORE, tagTextColor } from '@biu/public-ui'
@@ -105,7 +105,9 @@ import { RecordDetail } from './record-detail.tsx'
 import { PageBanner } from './page-banner.tsx'
 import { TableGlyph, ViewModeGlyph } from './nav-glyphs.tsx'
 import { countFittingViewTabs, splitVisibleViews } from './view-tabs.ts'
+import { getPick } from '@biu/core-pick/web'
 import { getDatabaseUi } from './database-ui.ts'
+import { CollectionRowsShell } from './rows-view.tsx'
 import {
   activeViewStorageKey,
   getStarredViews,
@@ -135,7 +137,7 @@ import { listCollection, readJson } from './db-client.ts'
 import { savedViewRecordPath } from '../paths.ts'
 import { findViewNeighbor, indexOnPage } from './view-adjacent.ts'
 import { rememberPreviewTotal, viewTotalKey } from './sidebar-preview.ts'
-import { mergeTableViews } from '../catalog-views.ts'
+import { isReadOnlyViewId, mergeTableViews } from '../catalog-views.ts'
 import { SAVED_VIEW_EVENT, showRecordInInspector } from './inspector-db-route.ts'
 import { SchemaChips, SchemaFieldEditor, schemaTagTone } from './schema-field.tsx'
 import { CellPop, cellUsesPop } from './cell-pop.tsx'
@@ -157,6 +159,52 @@ import {
 } from '../query-logic.ts'
 
 const EMPTY_VIEWS: CollectionViewType[] = []
+const EMPTY_ROW_VIEWS: CollectionRowViewType[] = []
+
+function PluginSurface({
+  plugin,
+  label,
+  children,
+}: {
+  plugin?: string
+  label?: string
+  children: ReactNode
+}) {
+  if (!plugin) return children
+  return (
+    <div
+      className="fsdb-plugin-surface"
+      data-biu-plugin={plugin}
+      data-biu-kind="plugin"
+      data-biu-id={plugin}
+      data-biu-label={label || plugin}
+    >
+      {children}
+    </div>
+  )
+}
+
+function askNewPresentation(opts: { path: string; title?: string }) {
+  const path = opts.path.trim()
+  const name = opts.title?.trim() || path
+  const draft = `请为「${name}」添加一种新的呈现方式。先听我描述要看板、日历还是别的样子，再写无头插件：databaseUi.registerRowView("${path}", { id, label, plugin: 本插件id, Row }) 只换每一行；或 databaseUi.registerView("${path}", { id, label, plugin: 本插件id, View }) 整页自己画。plugin 必须能被 pick 抓到。不要改 packages/。用 sandbox + pack 安装。装好后会出现在查看模式菜单里。`
+  getPick()?.attach(
+    path
+      ? [
+          {
+            kind: 'collection',
+            id: `view:${path}`,
+            action: 'view',
+            path,
+            label: '呈现方式',
+            title: name,
+            route: typeof window === 'undefined' ? '' : window.location.pathname,
+          },
+        ]
+      : [],
+    { text: draft },
+  )
+}
 
 type StatResult = { schema?: CollectionSchema }
 
@@ -285,7 +333,7 @@ function ColumnDragRow({
     <ColumnRowShell
       rowRef={setNodeRef}
       className={isDragging ? 'is-drag' : undefined}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
+      style={{ transform: DndCSS.Transform.toString(transform), transition }}
       grip={
         <button type="button" className="fsdb-query-grip" aria-label="拖动调整列顺序" {...attributes} {...listeners}>
           <DndGrip />
@@ -496,9 +544,10 @@ export function CollectionBrowser({
     () => dbUi?.views(collectionPath) ?? EMPTY_VIEWS,
     () => dbUi?.views(collectionPath) ?? EMPTY_VIEWS,
   )
-  const modeChoices = useMemo(
-    () => [...VIEW_MODES, ...extraViews.map((view) => ({ id: view.id, label: view.label }))],
-    [extraViews],
+  const extraRows = useSyncExternalStore(
+    (fn) => (dbUi ? dbUi.subscribe(fn) : () => undefined),
+    () => dbUi?.rowViews(collectionPath) ?? EMPTY_ROW_VIEWS,
+    () => dbUi?.rowViews(collectionPath) ?? EMPTY_ROW_VIEWS,
   )
   const [query, setQuery] = useState(initialView?.query ?? '')
   const [page, setPage] = useState(0)
@@ -507,6 +556,7 @@ export function CollectionBrowser({
   const [fetchQuery, setFetchQuery] = useState(initialView?.query ?? '')
   const [mode, setMode] = useState<ViewMode>(initialView?.mode ?? 'table')
   const customView = extraViews.find((view) => view.id === mode)
+  const rowView = customView ? undefined : extraRows.find((view) => view.id === mode)
   const [sortField, setSortField] = useState(initialView?.sortField ?? 'title')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>(initialView?.sortDir ?? 'asc')
   const [sorts, setSorts] = useState<SortRule[]>(() =>
@@ -600,6 +650,7 @@ export function CollectionBrowser({
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
   const listColumns = useMemo(() => {
+    if (customView) return undefined
     if (chrome?.cells) return undefined
     const currentSchema = stat?.schema
     const fieldKeys = currentSchema
@@ -613,7 +664,7 @@ export function CollectionBrowser({
     const visible = requested.filter((key) => allowed.has(key) || Boolean(parseFacetFlatColumnKey(key)))
     if (!visible.length) return undefined
     return listProjectionKeys({ schema: currentSchema, columns: visible, groupBy })
-  }, [chrome, columnKeys, facetCatalog, groupBy, stat])
+  }, [chrome, columnKeys, customView, facetCatalog, groupBy, stat])
   const listColumnsKey = listColumns?.join('\0') ?? ''
   const [refreshing, setRefreshing] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
@@ -1147,8 +1198,25 @@ export function CollectionBrowser({
   }, [flattenRows, grouped, grouping, visible])
   const tableColSpan = Math.max(columns.length, 1)
   const tableRef = useRef<HTMLTableElement>(null)
+  const checkStackRef = useRef<HTMLDivElement>(null)
+  const checkHoverRef = useRef<string | 'head' | null>(null)
   const [checkSlots, setCheckSlots] = useState<{ kind: 'head' | 'gap' | 'row'; id?: string; h: number }[]>([])
-  const [checkHover, setCheckHover] = useState<string | 'head' | null>(null)
+
+  const paintCheckHover = useCallback((next: string | 'head' | null, force = false) => {
+    if (!force && checkHoverRef.current === next) return
+    const root = checkStackRef.current
+    if (root) {
+      for (const el of root.querySelectorAll('.fsdb-check-slot.is-hover')) {
+        if (next && el.getAttribute('data-check') === next) continue
+        el.classList.remove('is-hover')
+      }
+      if (next) {
+        const hit = root.querySelector(`[data-check="${typeof CSS !== 'undefined' && typeof CSS.escape === 'function' ? CSS.escape(next) : next}"]`)
+        hit?.classList.add('is-hover')
+      }
+    }
+    checkHoverRef.current = next
+  }, [])
 
   useLayoutEffect(() => {
     const table = tableRef.current
@@ -1180,6 +1248,10 @@ export function CollectionBrowser({
     ro.observe(table)
     return () => ro.disconnect()
   }, [collapsed, collapsedGroups, columns, grouping, grouped, items, page, pageSize, wrapCells, truncateCells, columnWidths])
+
+  useLayoutEffect(() => {
+    paintCheckHover(checkHoverRef.current, true)
+  }, [checkSlots, paintCheckHover])
 
   const listedSelected = detailId ? items.find((item) => item.id === detailId) : undefined
   const selected = useMemo(() => {
@@ -1232,14 +1304,14 @@ export function CollectionBrowser({
         mascot: recordPreviewMascot(selected),
       })
     }
-    rememberRecords(collectionPath, rows)
+    rememberRecords(collectionPath, rows, routeViewId ?? activeViewId ?? undefined)
     window.dispatchEvent(new Event('fsdb:crumb-labels'))
-  }, [collectionPath, items, schema?.labelField, selected])
+  }, [activeViewId, collectionPath, items, routeViewId, schema?.labelField, selected])
   const filterActive = countFilterRules(filterTree) > 0
   const activeView = views.find((view) => view.id === activeViewId)
   const [viewBanner, setViewBanner] = useState<unknown>(null)
   useEffect(() => {
-    if (sheet || !activeViewId) {
+    if (sheet || !activeViewId || isReadOnlyViewId(activeViewId)) {
       setViewBanner(null)
       return
     }
@@ -1643,13 +1715,21 @@ export function CollectionBrowser({
     try {
       const keys = Object.keys(content)
       quietUntil.current = Date.now() + 800
-      if (bodyKey && keys.length === 1 && keys[0] === bodyKey) {
+      if (bodyKey && keys.length === 1 && keys[0] === bodyKey && schema?.fields[bodyKey]?.type === 'file') {
         const data = await readJson<{ value?: unknown }>('/api/db/content', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ path: `${dataPath}/${row.id}`, value: content[bodyKey] }),
         })
-        setDetailBody(data.value ?? content[bodyKey])
+        const value = data.value ?? content[bodyKey]
+        setDetailBody(value)
+        const field = schema?.fields[bodyKey]
+        if (field && field.type !== 'file') {
+          const stored = value && typeof value === 'object' ? JSON.stringify(value) : value
+          const merge = (item: DbRecord) => (item.id === row.id ? { ...item, [bodyKey]: stored } : item)
+          setItems((prev) => prev.map(merge))
+          setDetailRow((prev) => (prev?.id === row.id ? merge(prev) : prev))
+        }
         window.dispatchEvent(new Event('fsdb:change'))
         return
       }
@@ -2809,19 +2889,24 @@ export function CollectionBrowser({
                 type="button"
                 className={`tasks-sort-btn${modeMenuOpen ? ' is-active' : ''}`}
                 aria-label="查看模式"
-                title={`模式：${modeChoices.find((item) => item.id === mode)?.label ?? mode}`}
+                title={`模式：${
+                  VIEW_MODES.find((item) => item.id === mode)?.label ??
+                  extraRows.find((item) => item.id === mode)?.label ??
+                  extraViews.find((item) => item.id === mode)?.label ??
+                  mode
+                }`}
                 onClick={() => toggleMenu('mode')}
               >
-                <ModeGlyph id={mode} extra={extraViews} />
+                <ModeGlyph id={mode} extra={extraViews} rows={extraRows} />
               </button>
               {modeMenuOpen ? (
                 <HeadlessDismiss onDismiss={() => setModeMenuOpen(false)} insideRef={modeRef}>
                 <div className="tasks-sort-menu" role="menu">
                   <div className="tasks-sort-head">查看模式</div>
-                  {modeChoices.map((opt) => (
+                  {VIEW_MODES.map((opt) => (
                     <CheckRow
                       key={opt.id}
-                      icon={<ModeGlyph id={opt.id} extra={extraViews} />}
+                      icon={<ModeGlyph id={opt.id} extra={extraViews} rows={extraRows} />}
                       label={opt.label}
                       on={mode === opt.id}
                       onToggle={() => {
@@ -2831,6 +2916,46 @@ export function CollectionBrowser({
                       }}
                     />
                   ))}
+                  {extraViews.map((opt) => (
+                    <CheckRow
+                      key={opt.id}
+                      icon={<ModeGlyph id={opt.id} extra={extraViews} rows={extraRows} />}
+                      label={opt.label}
+                      on={mode === opt.id}
+                      onToggle={() => {
+                        setMode(opt.id)
+                        patchActiveView({ mode: opt.id })
+                        setModeMenuOpen(false)
+                      }}
+                    />
+                  ))}
+                  {extraRows.map((opt) => (
+                    <CheckRow
+                      key={opt.id}
+                      icon={<ModeGlyph id={opt.id} extra={extraViews} rows={extraRows} />}
+                      label={opt.label}
+                      on={mode === opt.id}
+                      onToggle={() => {
+                        setMode(opt.id)
+                        patchActiveView({ mode: opt.id })
+                        setModeMenuOpen(false)
+                      }}
+                    />
+                  ))}
+                  <button
+                    type="button"
+                    className="fsdb-mode-plus"
+                    data-testid="fsdb-mode-plus"
+                    aria-label="添加呈现方式"
+                    title="添加呈现方式"
+                    onClick={() => {
+                      setModeMenuOpen(false)
+                      askNewPresentation({ path: collectionPath, title })
+                    }}
+                  >
+                    <PlusIcon aria-hidden className="size-[14px]" />
+                    添加呈现方式
+                  </button>
                 </div>
                 </HeadlessDismiss>
               ) : null}
@@ -3059,9 +3184,22 @@ export function CollectionBrowser({
         <div className="fsdb-workspace">
           <div className="fsdb-stage">
             {customView ? (
-              <customView.View path={dataPath} rows={items} schema={schema} onOpen={openRow} />
+              <PluginSurface plugin={customView.plugin} label={customView.label}>
+                <customView.View path={dataPath} rows={items} schema={schema} onOpen={openRow} />
+              </PluginSurface>
             ) : null}
-            {!customView ? (
+            {rowView ? (
+              <PluginSurface plugin={rowView.plugin} label={rowView.label}>
+                <CollectionRowsShell
+                  rows={items}
+                  schema={schema}
+                  columns={columns.map((item) => item.key)}
+                  onOpen={openRow}
+                  Row={rowView.Row}
+                />
+              </PluginSurface>
+            ) : null}
+            {!customView && !rowView ? (
               <div className="tasks-table-wrap">
                 {pickedIds.length ? (
                   <div className="fsdb-bulk" data-testid="fsdb-bulk-bar">
@@ -3144,23 +3282,18 @@ export function CollectionBrowser({
                     </div>
                   </div>
                 ) : null}
-                <div className="tasks-table-stage" onMouseLeave={() => setCheckHover(null)}>
+                <div className="tasks-table-stage" onMouseLeave={() => paintCheckHover(null)}>
                   <div className="fsdb-check-rail" data-testid="fsdb-check-rail">
-                    <div className="fsdb-check-stack">
+                    <div className="fsdb-check-stack" ref={checkStackRef}>
                       {checkSlots.map((slot, index) => (
                         <div
                           key={slot.kind === 'row' ? `${slot.id}-${index}` : `${slot.kind}-${index}`}
-                          className={`fsdb-check-slot${
-                            slot.kind === 'head' && checkHover === 'head'
-                              ? ' is-hover'
-                              : slot.kind === 'row' && slot.id === checkHover
-                                ? ' is-hover'
-                                : ''
-                          }`}
+                          className="fsdb-check-slot"
+                          data-check={slot.kind === 'head' ? 'head' : slot.id}
                           style={{ height: slot.h }}
                           onMouseEnter={() => {
-                            if (slot.kind === 'head') setCheckHover('head')
-                            else if (slot.id) setCheckHover(slot.id)
+                            if (slot.kind === 'head') paintCheckHover('head')
+                            else if (slot.id) paintCheckHover(slot.id)
                           }}
                         >
                           {slot.kind === 'head' ? <RowCheck ids={pickableIds} /> : null}
@@ -3177,8 +3310,8 @@ export function CollectionBrowser({
                     const hit = event.target as HTMLElement | null
                     const tr = hit?.closest('tr')
                     if (!tr || !event.currentTarget.contains(tr)) return
-                    if (tr.closest('thead')) setCheckHover('head')
-                    else setCheckHover(tr.dataset.recordId ?? null)
+                    if (tr.closest('thead')) paintCheckHover('head')
+                    else paintCheckHover(tr.dataset.recordId ?? null)
                   }}
                 >
             <colgroup>

@@ -40,6 +40,9 @@ import { SavedViewsStore, clientViewFromDbRow, viewsCollection, type StoredView 
 import { FacetStore } from './facets-store.ts'
 import { AssetConflictError, FileSystemAssets, collectAssetNames, isAssetFileName, parseIfMatch } from './assets-store.ts'
 import { facetsCollection } from './facets-collection.ts'
+import { noticesCollection } from './notices-collection.ts'
+import { NoticesService } from './notices-service.ts'
+import { ContentTurnService } from './content-turn-service.ts'
 import {
   asContentText,
   insertText,
@@ -158,6 +161,8 @@ function contentKey(spec: CollectionSpec) {
 function withoutContent(spec: CollectionSpec, row: DbRecord): DbRecord {
   const key = contentKey(spec)
   if (!Object.prototype.hasOwnProperty.call(row, key)) return row
+  const field = schemaFor(spec).fields[key]
+  if (field && field.type !== 'file') return row
   const next = { ...row }
   delete next[key]
   return next
@@ -307,6 +312,7 @@ function coerce(field: FieldSpec, value: unknown) {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     const rec = value as Record<string, unknown>
     if (typeof rec.sessionId === 'string' || rec.kind === 'agent' || rec.kind === 'user') return value
+    return JSON.stringify(value)
   }
   return String(value ?? '')
 }
@@ -905,6 +911,17 @@ export class DatabaseService extends Service implements Database {
       }
       await this.stampActor(spec.path, current.id)
       this.bump()
+      const beforeRow = this.decorateRecord(spec, current)
+      const beforeSnap: Record<string, unknown> = {}
+      const afterSnap: Record<string, unknown> = {}
+      for (const key of Object.keys(raw)) {
+        beforeSnap[key] = beforeRow[key] ?? null
+        afterSnap[key] = next[key] ?? null
+      }
+      const title = String(next.title ?? next.name ?? current.id).trim() || current.id
+      if (Object.keys(beforeSnap).length) {
+        await this.ctx.get('contentTurns')?.recordUpdate(`${spec.path}/${current.id}`, title, beforeSnap, afterSnap)
+      }
       return {
         kind: 'record' as const,
         path: `${spec.path}/${current.id}`,
@@ -923,6 +940,16 @@ export class DatabaseService extends Service implements Database {
     }
     this.indexFacetRecord(spec, this.decorateRecord(spec, record))
     this.bump()
+    const beforeSnap: Record<string, unknown> = {}
+    const afterSnap: Record<string, unknown> = {}
+    for (const key of Object.keys(patch)) {
+      beforeSnap[key] = current[key] ?? null
+      afterSnap[key] = record[key] ?? null
+    }
+    const title = String(record.title ?? record.name ?? record.id).trim() || record.id
+    if (Object.keys(patch).length) {
+      await this.ctx.get('contentTurns')?.recordUpdate(`${spec.path}/${record.id}`, title, beforeSnap, afterSnap)
+    }
     return { kind: 'record' as const, path: `${spec.path}/${record.id}`, value: withoutContent(spec, this.withBanner(spec, this.decorateRecord(spec, record))) }
   }
 
@@ -957,14 +984,19 @@ export class DatabaseService extends Service implements Database {
       this.indexFacetRecord(spec, record)
     }
     this.bump()
+    const items = created.map((record) => ({
+      kind: 'record' as const,
+      path: `${spec.path}/${record.id}`,
+      value: withoutContent(spec, this.withBanner(spec, this.decorateRecord(spec, record))),
+    }))
+    for (const item of items) {
+      const title = String(item.value.title ?? item.value.name ?? '').trim() || item.path
+      await this.ctx.get('contentTurns')?.recordCreate(item.path, title, item.value)
+    }
     return {
       kind: 'created' as const,
       path: spec.path,
-      items: created.map((record) => ({
-        kind: 'record' as const,
-        path: `${spec.path}/${record.id}`,
-        value: withoutContent(spec, this.withBanner(spec, this.decorateRecord(spec, record))),
-      })),
+      items,
     }
   }
 
@@ -988,6 +1020,11 @@ export class DatabaseService extends Service implements Database {
     const matched = await this.matchCollectionRows(spec, listQuery, filter, q)
     const ids = [...new Set(matched.map((row) => row.id))]
     if (!ids.length) return { kind: 'deleted' as const, path: spec.path, ids }
+    for (const row of matched) {
+      const rec = withoutContent(spec, this.withBanner(spec, this.decorateRecord(spec, row)))
+      const title = String(rec.title ?? rec.name ?? row.id).trim() || row.id
+      await this.ctx.get('contentTurns')?.recordDelete(`${spec.path}/${row.id}`, title, rec)
+    }
     await spec.remove({ ids })
     for (const id of ids) this.facets.removeRecord(spec.path, id)
     this.bump()
@@ -1057,6 +1094,15 @@ export class DatabaseService extends Service implements Database {
     }
   }
 
+  async contentTitle(path: string) {
+    const parts = splitPath(path)
+    if (parts.length !== 2) return path
+    const spec = this.collection(`/${parts[0]}`)
+    const record = spec ? await spec.get(parts[1]!) : null
+    const title = String(record?.title ?? record?.name ?? '').trim()
+    return title || parts[1] || path
+  }
+
   async editContent(path: string, args: Record<string, unknown> = {}) {
     const command = resolveContentCommand(args)
     const current = await this.content(path)
@@ -1085,6 +1131,10 @@ export class DatabaseService extends Service implements Database {
             : replaceLinesText(text, args.start_line, args.end_line, args.new_str)
     await this.writeContent(path, next)
     const locus = mutationLocus(command, text, next, args)
+    const written = await this.content(current.path)
+    const after = asContentText(written.value)
+    const title = await this.contentTitle(current.path)
+    await this.ctx.get('contentTurns')?.recordEdit(current.path, text, after, title)
     return {
       kind: 'content' as const,
       path: current.path,
@@ -1325,6 +1375,12 @@ export function apply(ctx: Context) {
     path: item.path,
     label: item.label ?? item.id,
   }))))
+  const notices = new NoticesService(ctx).open(process.env.VITEST ? ':memory:' : dataPath(process.cwd(), 'notices.json'))
+  db.register(noticesCollection(notices.store))
+  ctx.http.route('POST', '/api/db/notices/clear', (route) => {
+    route.send(200, { ok: true, cleared: notices.clear() })
+  })
+  new ContentTurnService(ctx).open(process.env.VITEST ? ':memory:' : dataPath(process.cwd(), 'content-turns.json'))
   ctx.tools.register({
     name: 'db_list',
     description: '列出 File System 路径：/ 为已登记表（path、中文名、view.blurb 说明书），/<表> 为列式记录（不含 content、默认不含 createdAt/updatedAt/createdBy/updatedBy）。默认每页 50，最多 200。columns 参数只取需要的列。表结构用 db_stat。',
@@ -1460,7 +1516,7 @@ export function apply(ctx: Context) {
       'command=str_replace：old_str 必须在正文里唯一，替换为 new_str。',
       'command=replace_lines：按 1-based 闭区间 start_line..end_line 换成 new_str。',
       'command=insert：在 insert_line 之后插入 new_str（0 插到第一行前）。',
-      'command=write：整篇覆盖，传 value。写成功只返回 {ok, path}，不含全文。str_replace / replace_lines / insert 成功额外返回 start_line、end_line（改后正文的 1-based 行），编辑器会跳到该处。',
+      'command=write：整篇覆盖，传 value。写成功只返回 {ok, path}，不含全文。str_replace / replace_lines / insert 成功额外返回 start_line、end_line（改后正文的 1-based 行）。编辑器会标出该段改动，不抢输入焦点、不自动跳转；跳转只在用户主动点目录或查找时发生。',
     ].join(' '),
     parameters: {
       type: 'object',

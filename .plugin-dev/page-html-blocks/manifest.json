@@ -1,7 +1,7 @@
 {
   "id": "page-html-blocks",
-  "name": "HTML 渲染块",
-  "blurb": "在页面里 / 插入可渲染的 HTML 块：html=直接渲染静态富排版（无脚本）；htmlframe=iframe 沙箱隔离渲染（可跑脚本，适合小应用/幻灯片）。",
+  "name": "HTML",
+  "blurb": "斜杠插入静态HTML（不跑脚本）或动态HTML（能跑脚本）。",
   "tags": [
     "page",
     "editor",

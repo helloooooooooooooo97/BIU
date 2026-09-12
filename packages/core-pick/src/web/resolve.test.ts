@@ -1,7 +1,7 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { pickSurfaceAtPoint, resolvePickFromNode, resolvePickAtPoint, resolvePicksInRect, visiblePickBox, editorBlockElFromNode } from './resolve.ts'
-import { formatPicks, parsePicks, splitPickStream, chipLabel, chipCaption, dedupePicks, textPickFromSelection } from './types.ts'
+import { formatPicks, parsePicks, splitPickStream, chipLabel, chipCaption, dedupePicks, textPickFromSelection, textPickFromPlain } from './types.ts'
 import { bindEditorTextHost } from './editor-host.ts'
 
 test('splitPickStream keeps text and chips in order', () => {
@@ -88,6 +88,14 @@ test('formatPicks keeps page title for the agent', () => {
   assert.equal(parsed.refs[0]?.title, '爱乐之城')
   assert.equal(parsed.refs[0]?.path, '/pages/p002')
   assert.equal(chipLabel(parsed.refs[0]!), '爱乐之城 (1)')
+})
+
+test('text pick without source lines shows character count', () => {
+  const ref = textPickFromPlain('/s/abc', 'hello world this is a pasted blob')
+  assert.ok(ref)
+  assert.equal(chipCaption(ref).span, String(ref.selection?.length))
+  assert.match(chipLabel(ref), /\(\d+\)$/)
+  assert.equal(textPickFromPlain('/s/abc', '   '), null)
 })
 
 test('chip caption keeps line span off the truncated preview', () => {
@@ -545,6 +553,8 @@ test('html surface pick carries page path and markdown lines like a block', () =
   const block = document.createElement('div')
   block.className = 'page-block'
   block.setAttribute('data-page-block', 'html')
+  block.setAttribute('data-page-block-plugin', 'page-html-blocks')
+  block.setAttribute('data-biu-plugin', 'page-html-blocks')
   const card = document.createElement('div')
   card.setAttribute('data-biu-kind', 'html')
   card.setAttribute('data-biu-id', 'html:0-abcd:0/1')
@@ -570,7 +580,9 @@ test('html surface pick carries page path and markdown lines like a block', () =
   assert.equal(hit.ref.end_line, 22)
   assert.equal(hit.ref.text, ':::html\n<div>静态富排版</div>\n:::')
   assert.equal(hit.ref.selection, '静态富排版，不跑脚本')
+  assert.equal(hit.ref.plugin, 'page-html-blocks')
   const packed = formatPicks([hit.ref])
+  assert.match(packed, /"plugin":"page-html-blocks"/)
   assert.match(packed, /"path":"\/pages\/p002"/)
   assert.match(packed, /"start_line":14/)
   bindEditorTextHost(root, null)

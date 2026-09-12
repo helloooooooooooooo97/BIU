@@ -1,7 +1,7 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { parseAppPath } from '@biu/web-session-view'
-import { DATA_MODULE, databaseAllViewPath, databaseRecordPath, databaseViewPath, isSystemCollection, sortDataCollections, viewsCatalogSource } from './database-path.ts'
+import { DATA_MODULE, databaseAllViewPath, databaseRecordPath, databaseViewPath, isRecordTreeCollection, isSystemCollection, sortDataCollections, viewsCatalogSource } from './database-path.ts'
 
 const plugins = [DATA_MODULE]
 
@@ -52,6 +52,15 @@ test('table path without view still parses as a collection-view URL', () => {
   }
 })
 
+test('only pages and tasks nest records in the data sidebar', () => {
+  assert.equal(isRecordTreeCollection('/pages'), true)
+  assert.equal(isRecordTreeCollection('/pages/'), true)
+  assert.equal(isRecordTreeCollection('/tasks'), true)
+  assert.equal(isRecordTreeCollection('/sessions'), false)
+  assert.equal(isRecordTreeCollection('/page-blocks'), false)
+  assert.equal(isRecordTreeCollection('/plugins'), false)
+})
+
 test('views catalog source is a query filter', () => {
   assert.equal(viewsCatalogSource('?source=%2Fevents'), '/events')
   assert.equal(viewsCatalogSource(''), '')
@@ -61,22 +70,25 @@ test('views and events are system collections; tags sort with user tables', () =
   assert.equal(isSystemCollection('/views'), true)
   assert.equal(isSystemCollection('/facets'), false)
   assert.equal(isSystemCollection('/events'), true)
+  assert.equal(isSystemCollection('/notices'), true)
   assert.equal(isSystemCollection('/sessions'), false)
   const { user, system } = sortDataCollections([
     { path: '/events' },
     { path: '/plugins' },
     { path: '/views' },
+    { path: '/notices' },
     { path: '/facets' },
     { path: '/sessions' },
     { path: '/pages' },
+    { path: '/page-blocks' },
     { path: '/tasks' },
   ])
   assert.deepEqual(
     user.map((item) => item.path),
-    ['/sessions', '/tasks', '/pages', '/plugins', '/facets'],
+    ['/sessions', '/tasks', '/pages', '/page-blocks', '/plugins', '/facets'],
   )
   assert.deepEqual(
     system.map((item) => item.path),
-    ['/views', '/events'],
+    ['/views', '/events', '/notices'],
   )
 })

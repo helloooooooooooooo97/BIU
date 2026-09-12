@@ -3,10 +3,14 @@ import type { Context } from 'cordis'
 import type { CollectionSpec } from '@biu/type-file-system'
 import { DATABASE_CHANNEL, REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
 import { PagesStore, PageAssetConflictError, type WorkspaceFs } from './store.ts'
+import { pageBlocksCollection } from './page-blocks-collection.ts'
+import { PAGE_BLOCK_TICK_MS, PageBlocksIndex } from './page-blocks-index.ts'
 
 export { PAGE_ROOT, PAGE_ASSETS, ASSET_GC_GRACE_MS, collectPageAssetNames, PagesStore } from './store.ts'
+export { pageBlocksCollection } from './page-blocks-collection.ts'
+export { PageBlocksIndex, PAGE_BLOCK_TICK_MS } from './page-blocks-index.ts'
 
-export function pagesCollection(store: PagesStore): CollectionSpec {
+export function pagesCollection(store: PagesStore, index: PageBlocksIndex): CollectionSpec {
   return {
     id: 'pages',
     path: '/pages',
@@ -16,7 +20,7 @@ export function pagesCollection(store: PagesStore): CollectionSpec {
       route: '/pages',
       title: '页面',
       inspector: true,
-      blurb: '每页正文在工作区 .page/<id>.md（YAML 头 + Markdown）。.page/pages.sqlite 只做列表索引，不扫全部文件。正文用 db_content；改标题/标签等用 db_update。合集用 db_update 写 facet：{tags:["facet-2"],values:{导演:"查泽雷"}}。图片和附件在仓库 .biu/assets。树用 parentId。新建 db_create，删除 db_delete。本表没有 db_action。',
+      blurb: '每页正文在工作区 .page/<id>.md（YAML 头 + Markdown）。.page/pages.sqlite 只做列表索引（无 notes 列），不扫全部文件。正文用 db_content；改标题/标签等用 db_update。合集用 db_update 写 facet：{tags:["facet-2"],values:{导演:"查泽雷"}}。图片和附件在仓库 .biu/assets。树用 parentId。新建 db_create，删除 db_delete。本表没有 db_action。',
       order: 25,
       icon: 'document',
     },
@@ -37,15 +41,26 @@ export function pagesCollection(store: PagesStore): CollectionSpec {
     records: { update: true, create: true, delete: true },
     list: (query) => store.list(query?.ids),
     get: (id) => store.get(id),
-    update: (id, patch) => store.update(id, patch),
+    update: async (id, patch) => {
+      const row = await store.update(id, patch)
+      if ('notes' in patch) await index.reindexPage(row)
+      return row
+    },
     create: async (rows) => {
       const out = []
-      for (const fields of rows) out.push(await store.create(fields))
+      for (const fields of rows) {
+        const row = await store.create(fields)
+        await index.reindexPage(row)
+        out.push(row)
+      }
       return out
     },
     remove: async (query) => {
       const ids = query.ids ?? []
-      for (const id of ids) await store.remove(id)
+      for (const id of ids) {
+        await index.dropPage(id)
+        await store.remove(id)
+      }
       return ids
     },
   }
@@ -92,7 +107,14 @@ export function apply(ctx: Context) {
   // 页面固定存到工作区根（defaultRoot），不随 Session 绑定项目路径漂移，
   // 否则工具调用（绑定项目）与 HTTP 请求（无 Session）会落到不同目录。
   const store = new PagesStore(ctx.fs.workspace as WorkspaceFs, dataPath(process.cwd(), 'assets'))
-  ctx.database.register(pagesCollection(store))
+  const index = new PageBlocksIndex(store)
+  ctx.database.register(pagesCollection(store, index))
+  ctx.database.register(pageBlocksCollection(store, index))
   servePageFile(ctx, store)
+  const tick = setInterval(() => {
+    void index.sync()
+  }, PAGE_BLOCK_TICK_MS)
+  tick.unref()
+  ctx.effect(() => () => clearInterval(tick))
 }
 

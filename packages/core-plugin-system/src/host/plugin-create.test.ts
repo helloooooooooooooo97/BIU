@@ -18,6 +18,11 @@ function stubHub(ctx: Context) {
   }
 }
 
+async function installViaSandbox(store: PluginStoreService, input: Parameters<PluginStoreService['initSandbox']>[0]) {
+  await store.initSandbox(input)
+  return store.pack(input.id)
+}
+
 test('list writes createdAt into old manifests and does not use directory ctime', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'plugin-created-at-'))
   try {
@@ -60,14 +65,14 @@ test('list writes createdAt into old manifests and does not use directory ctime'
   }
 })
 
-test('create compiles host source straight into .plugin/<id>/', async () => {
+test('sandbox then pack compiles host source into .plugin/<id>/', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'plugin-create-small-'))
   try {
     const ctx = new Context()
     stubHub(ctx)
     const pluginDir = join(dir, '.plugin')
     const store = new PluginStoreService(ctx, pluginDir, join(dir, 'store.json'), join(dir, '.plugin-dev')).open()
-    await store.create({
+    await installViaSandbox(store, {
       id: 'store-echo',
       name: 'Echo',
       tags: ['tool', 'demo'],
@@ -100,23 +105,21 @@ test('create compiles host source straight into .plugin/<id>/', async () => {
     assert.match(readme, /^# Echo\n/)
     await store.writeReadme('store-echo', '# Echo\n\n自定义介绍\n')
     assert.equal(await store.readReadme('store-echo'), '# Echo\n\n自定义介绍\n')
-    await assert.rejects(
-      () => store.create({ id: 'store-empty', name: 'Empty' }),
-      /hostJs and\/or webJs/,
-    )
+    await store.initSandbox({ id: 'store-empty', name: 'Empty' })
+    await assert.rejects(() => store.pack('store-empty'), /host\.ts/)
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
 })
 
-test('create writes manifest.shell from input', async () => {
+test('sandbox then pack writes manifest.shell from input', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'plugin-shell-'))
   try {
     const ctx = new Context()
     stubHub(ctx)
     const pluginDir = join(dir, '.plugin')
     const store = new PluginStoreService(ctx, pluginDir, join(dir, 'store.json'), join(dir, '.plugin-dev')).open()
-    await store.create({
+    await installViaSandbox(store, {
       id: 'store-game',
       name: 'Game',
       shell: { width: 640, height: 480, resizable: false },
@@ -136,7 +139,7 @@ test('create writes manifest.shell from input', async () => {
   }
 })
 
-test('create with web rejects missing shell size', async () => {
+test('sandbox with web rejects missing shell size', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'plugin-shell-required-'))
   try {
     const ctx = new Context()
@@ -149,7 +152,7 @@ test('create with web rejects missing shell size', async () => {
     ).open()
     await assert.rejects(
       () =>
-        store.create({
+        store.initSandbox({
           id: 'store-game',
           name: 'Game',
           webJs: `export const name = 'store-game'\nexport function apply() {}`,
@@ -184,7 +187,7 @@ test('pack with web rejects sandbox manifest without shell size', async () => {
   }
 })
 
-test('create and pack allow web without shell when headless', async () => {
+test('sandbox and pack allow web without shell when headless', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'plugin-headless-'))
   try {
     const ctx = new Context()
@@ -195,7 +198,7 @@ test('create and pack allow web without shell when headless', async () => {
       join(dir, 'store.json'),
       join(dir, '.plugin-dev'),
     ).open()
-    await store.create({
+    await installViaSandbox(store, {
       id: 'store-skin',
       name: 'Skin',
       headless: true,
@@ -287,7 +290,7 @@ test('pack bundles relative imports from sandbox', async () => {
   }
 })
 
-test('create/sandbox/pack live on the plugins collection, not as tools', () => {
+test('sandbox/pack live on the plugins collection, not as tools', () => {
   const spec = pluginsCollection({
     list: () => Promise.resolve([]),
     listSandboxes: () => Promise.resolve([]),
@@ -297,17 +300,14 @@ test('create/sandbox/pack live on the plugins collection, not as tools', () => {
     close() {},
     pack() {},
     uninstall() {},
-    create: async () => ({ id: 'x', pluginPath: '/tmp/x' }),
     initSandbox: async () => ({ id: 'x', sandboxPath: '/tmp/x' }),
   } as Store)
   const ids = spec.actions?.map((item) => item.id) ?? []
-  assert.deepEqual(ids, ['create', 'sandbox', 'start', 'stop', 'pack', 'uninstall'])
-  const create = spec.actions?.find((item) => item.id === 'create')
+  assert.deepEqual(ids, ['sandbox', 'start', 'stop', 'pack', 'uninstall'])
   const sandbox = spec.actions?.find((item) => item.id === 'sandbox')
   const pack = spec.actions?.find((item) => item.id === 'pack')
-  assert.equal(create?.allowMissing, true)
+  assert.equal(spec.actions?.find((item) => item.id === 'create'), undefined)
   assert.equal(sandbox?.allowMissing, true)
-  assert.match(JSON.stringify(create?.parameters), /storeShellFromRecord/)
   assert.match(JSON.stringify(sandbox?.parameters), /listing\.shell/)
   assert.match(String(pack?.parameters?.description ?? ''), /host\.ts/)
 })

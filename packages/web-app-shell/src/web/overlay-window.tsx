@@ -1,9 +1,12 @@
-import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { ChatPane } from '@biu/public-ui'
 import {
   closeChatOverlay,
+  getOverlayThread,
   overlayLayoutGeom,
   readOverlayWinState,
+  shouldCloseOverlayOnOutside,
+  subscribeOverlayThread,
   writeOverlayWinState,
   type OverlayWinGeom,
 } from './chat-overlay.ts'
@@ -21,6 +24,7 @@ export function OverlayChatWindow({
   thread: ReactNode
   dock: ReactNode
 }) {
+  const threadOpen = useSyncExternalStore(subscribeOverlayThread, getOverlayThread, () => false)
   const initial = readOverlayWinState()
   const [geom, setGeom] = useState<OverlayWinGeom>(initial)
   const [z, setZ] = useState(overlayZ)
@@ -48,6 +52,15 @@ export function OverlayChatWindow({
     window.addEventListener('biu:overlay-focus', onFocus)
     return () => window.removeEventListener('biu:overlay-focus', onFocus)
   }, [bringFront])
+
+  useEffect(() => {
+    const onOutside = (event: PointerEvent) => {
+      if (!shouldCloseOverlayOnOutside(event.target)) return
+      closeChatOverlay()
+    }
+    document.addEventListener('pointerdown', onOutside)
+    return () => document.removeEventListener('pointerdown', onOutside)
+  }, [])
 
   useEffect(() => {
     const el = boxRef.current
@@ -134,16 +147,18 @@ export function OverlayChatWindow({
   return (
     <div
       ref={boxRef}
-      className="chat-overlay-panel"
+      className={`chat-overlay-panel${threadOpen ? '' : ' is-compose-only'}`}
       data-testid="chat-overlay-panel"
       data-overlay-layout="right"
       data-biu-ignore
       style={{ top: geom.y, left: geom.x, width: geom.w, height: geom.h, zIndex: z }}
       onPointerDown={bringFront}
     >
-      <div className="chat-overlay-head" data-testid="chat-overlay-head">
-        {header}
-      </div>
+      {threadOpen ? (
+        <div className="chat-overlay-head" data-testid="chat-overlay-head">
+          {header}
+        </div>
+      ) : null}
       <ChatPane thread={thread} dock={dock} />
       {handles.map((item) => (
         <div

@@ -1,12 +1,14 @@
 {
   "name": "@biu/core-editor",
+  "license": "Apache-2.0",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "description": "Core-Editor：记录正文 Markdown 编辑器。不落盘，由各表经 File System 持久化。",
   "exports": {
     "./host": "./src/host/index.ts",
-    "./web": "./src/web/index.ts"
+    "./web": "./src/web/index.ts",
+    "./mention": "./src/web/mention.ts"
   },
   "peerDependencies": {
     "cordis": "4.0.0-rc.8",

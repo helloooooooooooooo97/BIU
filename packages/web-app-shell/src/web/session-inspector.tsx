@@ -12,6 +12,7 @@ import {
   DocumentIcon,
   PuzzlePieceIcon,
   RectangleStackIcon,
+  RectangleGroupIcon,
   TagIcon,
   BoltIcon,
   EyeIcon,
@@ -41,6 +42,7 @@ function captionTableIcon(icon?: string) {
   if (name === 'puzzle-piece' || name === 'puzzle') return PuzzlePieceIcon
   if (name === 'tag') return TagIcon
   if (name === 'rectangle-stack' || name === 'collection') return RectangleStackIcon
+  if (name === 'rectangle-group' || name === 'squares-2x2' || name === 'widgets') return RectangleGroupIcon
   if (name === 'check-circle' || name === 'check' || name === 'clipboard-document-list' || name === 'clipboard') return CheckCircleIcon
   if (name === 'chat-bubble' || name === 'chat-bubble-left-right') return ChatBubbleLeftRightIcon
   if (name === 'document' || name === 'document-text' || name === 'page') return DocumentIcon
@@ -260,12 +262,8 @@ export const SessionInspector = memo(function SessionInspector({
       if (!next) return
       const allowed = allowedTabs.includes(next) || allowedTabs.includes(slotTabId(next))
       if (!allowed) return
-      const existing = next.includes('::')
-        ? opened.find((id) => id === next)
-        : opened.find((id) => id === next || slotTabId(id) === next)
-      const id = existing ?? next
-      persistOpened(opened.includes(id) ? opened : [...opened, id])
-      setTab(id)
+      persistOpened(opened.includes(next) ? opened : [...opened, next])
+      setTab(next)
     }
     window.addEventListener('biu:inspector-tab', onTab)
     return () => window.removeEventListener('biu:inspector-tab', onTab)
