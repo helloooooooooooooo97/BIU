@@ -14,7 +14,7 @@ const React = globalThis.React
 const { useCallback, useEffect, useLayoutEffect, useRef, useState } = React
 
 export const name = 'browser-panel'
-export const inject = ['slots']
+export const inject = ['slots', 'pick']
 
 /** core-pick 服务的最小接口（插件不能 import @biu/*，从 ctx.get('pick') 拿）。 */
 type PickApi = {
@@ -261,7 +261,7 @@ function BrowserPanel({ pick }: { pick?: PickApi }) {
           data-testid="browser-panel-pick"
           onClick={() => {
             setPicking(true)
-            api.inspect(-1, -1) // 只是标记状态；真正取元素靠下面的点击
+            api.inspect(-1, -1)
           }}
         >
           <Glyph id="pick" />
@@ -393,8 +393,8 @@ export function apply(ctx: {
     props: () => ({
       tabId: 'browser',
       tabLabel: '浏览器',
-      // 不跟 session 绑定：任何时候都能开
-      common: true,
+      requiresSession: true,
+      centerKinds: ['session'],
       Tab: BrowserPanel,
       pick: ctx.get('pick') as PickApi | undefined,
     }),
