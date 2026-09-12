@@ -52,7 +52,16 @@ export function diffLineStats(before: string, after: string): LineDiffStats {
   return { added: b.length - shared, removed: a.length - shared, jump_line }
 }
 
-/** 共同前后缀之外的中间段：多了多少字、少了多少字。跳行仍按第一处行变化。 */
+function visibleChars(s: string) {
+  let n = 0
+  for (let k = 0; k < s.length; k++) {
+    const c = s.charCodeAt(k)
+    if (c !== 10 && c !== 13) n += 1
+  }
+  return n
+}
+
+/** 共同前后缀之外的中间段：多了多少字、少了多少字（不计换行）。跳行仍按第一处行变化。 */
 export function diffCharStats(before: string, after: string): LineDiffStats {
   if (before === after) return { added: 0, removed: 0, jump_line: 1 }
   let i = 0
@@ -61,8 +70,8 @@ export function diffCharStats(before: string, after: string): LineDiffStats {
   let j = 0
   while (j < min - i && before[before.length - 1 - j] === after[after.length - 1 - j]) j += 1
   return {
-    added: after.length - i - j,
-    removed: before.length - i - j,
+    added: visibleChars(after.slice(i, after.length - j)),
+    removed: visibleChars(before.slice(i, before.length - j)),
     jump_line: firstChangeLine(before.split('\n'), after.split('\n')),
   }
 }

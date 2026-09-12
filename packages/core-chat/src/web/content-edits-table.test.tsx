@@ -104,8 +104,8 @@ describe('ContentEditsTable', () => {
     render(<ChatNodeList nodes={nodes} sessionId="sess-hide" onInspect={() => undefined} onFork={() => undefined} />)
     expect(screen.queryByText(/新建/)).toBeNull()
     expect(screen.getByText('首页')).toBeTruthy()
-    expect(screen.getAllByText('+12字').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('−3字').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('+12').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('−3').length).toBeGreaterThan(0)
   })
 
   it('lists all five 你好 pages as separate rows and reveals the clicked one in the inspector', () => {
