@@ -8,7 +8,7 @@ test('content turn store keeps first before and latest after', () => {
   store.record({ sessionId: 's1', turn: 1, path: '/pages/p1', title: '首页', before: 'old\nmid\n', after: 'old\nmid\nend\n' })
   const sum = store.summaries('s1', 1)
   assert.equal(sum.length, 1)
-  assert.equal(sum[0]?.added, 8)
+  assert.equal(sum[0]?.added, 6)
   assert.equal(sum[0]?.removed, 0)
 })
 
@@ -28,6 +28,14 @@ test('five pages that all write 你好 still produce five summary rows', () => {
     assert.equal(row.added, 2)
     assert.equal(row.removed, 0)
   }
+})
+
+test('trailing newline is not counted as a character', () => {
+  const store = new ContentTurnStore().open(':memory:')
+  store.record({ sessionId: 's1', turn: 4, path: '/pages/p', title: '你好', before: '', after: '你好\n' })
+  const sum = store.summaries('s1', 4)
+  assert.equal(sum[0]?.added, 2)
+  assert.equal(sum[0]?.removed, 0)
 })
 
 test('summaries count characters and omit create ops', () => {
