@@ -422,7 +422,7 @@ export class SessionsService extends Service {
     } else if (body.type === 'content/edits') {
       const existing = record.events.slice(0, -1).findLast((item) => item.type === 'content/edits' && item.turn === body.turn)
       if (existing && existing.type === 'content/edits') {
-        existing.files = body.files
+        existing.files = mergeContentEditFiles(existing.files, body.files)
         existing.ts = event.ts
         record.events.pop()
         this.schedulePersist(id)
@@ -605,6 +605,20 @@ async function resolveHostProject(input: string): Promise<SessionProject> {
   const info = await stat(real)
   if (!info.isDirectory()) throw new Error(`project path is not a directory: ${real}`)
   return { name: basename(real) || real, path: real, boundAt: Date.now() }
+}
+
+/** 同回合多次 content/edits 按 path 合并，避免并行发布用旧快照把后写的文件盖掉。 */
+export function mergeContentEditFiles<T extends { path: string }>(prev: T[], next: T[]): T[] {
+  const map = new Map<string, T>()
+  for (const file of prev) {
+    const path = String(file.path ?? '').trim()
+    if (path) map.set(path, file)
+  }
+  for (const file of next) {
+    const path = String(file.path ?? '').trim()
+    if (path) map.set(path, file)
+  }
+  return [...map.values()]
 }
 
 export { sessionsCollection } from './sessions-collection.ts'

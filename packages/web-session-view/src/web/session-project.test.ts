@@ -61,6 +61,32 @@ test('projectNodes attaches content/edits onto the turn reply', () => {
   assert.equal(reply.copyText, '已改')
 })
 
+test('projectNodes keeps all five 你好 content edits on the reply', () => {
+  const files = [1, 2, 3, 4, 5].map((n) => ({
+    path: `/pages/p${n}`,
+    title: '你好',
+    added: 1,
+    removed: 0,
+    jump_line: 1,
+  }))
+  const nodes = projectNodes([
+    { type: 'turn/start', turn: 3, seq: 1, ts: 1 },
+    { type: 'user/message', text: '五页你好', kind: 'wake', seq: 2, ts: 2 },
+    { type: 'content/edits', turn: 3, files: files.slice(0, 1), seq: 3, ts: 3 },
+    { type: 'content/edits', turn: 3, files, seq: 4, ts: 4 },
+    { type: 'assistant/message', text: '好了', seq: 5, ts: 5 },
+    { type: 'turn/end', turn: 3, reason: 'complete', seq: 6, ts: 6 },
+  ])
+  const reply = nodes.find((node) => node.kind === 'reply')
+  assert.equal(reply?.kind, 'reply')
+  if (reply?.kind !== 'reply') return
+  assert.equal(reply.contentEdits?.length, 5)
+  assert.deepEqual(
+    reply.contentEdits?.map((file) => file.path),
+    ['/pages/p1', '/pages/p2', '/pages/p3', '/pages/p4', '/pages/p5'],
+  )
+})
+
 test('projectNodes keeps streamed DeepSeek reasoning as a think part', () => {
   const nodes = projectNodes([
     { type: 'turn/start', turn: 1, seq: 1, ts: 1 },
@@ -519,22 +545,4 @@ test('reply & step histPct is token-weighted average over all llm.chat usage', (
   // 各 step 单独保留自身 histPct
   assert.equal(reply.steps?.[0]?.histPct, 0.2)
   assert.equal(reply.steps?.[1]?.histPct, 0.8)
-})
-
-test('projectNodes attaches content/edits onto the turn reply', () => {
-  const files = [
-    { path: '/pages/home', title: '首页', added: 3, removed: 1, jump_line: 4 },
-  ]
-  const nodes = projectNodes([
-    { type: 'turn/start', turn: 2, seq: 1, ts: 1 },
-    { type: 'user/message', text: '改文档', kind: 'wake', seq: 2, ts: 2 },
-    { type: 'content/edits', turn: 2, files, seq: 3, ts: 3 },
-    { type: 'assistant/message', text: '已改', seq: 4, ts: 4 },
-    { type: 'turn/end', turn: 2, reason: 'complete', seq: 5, ts: 5 },
-  ])
-  const reply = nodes.find((node) => node.kind === 'reply')
-  assert.equal(reply?.kind, 'reply')
-  if (reply?.kind !== 'reply') return
-  assert.deepEqual(reply.contentEdits, files)
-  assert.equal(reply.copyText, '已改')
 })

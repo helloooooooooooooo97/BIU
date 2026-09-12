@@ -12,6 +12,7 @@ type ContentDb = {
 export class ContentTurnService extends Service {
   store = new ContentTurnStore()
   private reverting = false
+  private publishChain: Promise<void> = Promise.resolve()
 
   constructor(
     ctx: Context,
@@ -32,7 +33,7 @@ export class ContentTurnService extends Service {
     const turn = this.openTurn(sessionId)
     if (turn == null) return
     this.store.record({ sessionId, turn, path, title, before, after })
-    await this.publish(sessionId, turn)
+    await this.publishLatest(sessionId, turn)
   }
 
   async revert(sessionId: string, turn: number, path?: string) {
@@ -62,7 +63,7 @@ export class ContentTurnService extends Service {
     } finally {
       this.reverting = false
     }
-    await this.publish(sid, turn)
+    await this.publishLatest(sid, turn)
     return { ok: results.every((row) => row.ok), results }
   }
 
@@ -79,6 +80,14 @@ export class ContentTurnService extends Service {
       else if (event.type === 'turn/end') turn = null
     }
     return turn
+  }
+
+  private publishLatest(sessionId: string, turn: number) {
+    this.publishChain = this.publishChain.then(
+      () => this.publish(sessionId, turn),
+      () => this.publish(sessionId, turn),
+    )
+    return this.publishChain
   }
 
   private async publish(sessionId: string, turn: number) {

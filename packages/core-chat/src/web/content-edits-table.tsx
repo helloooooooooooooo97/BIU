@@ -1,8 +1,6 @@
 import { memo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { ArrowUturnLeftIcon } from '@heroicons/react/16/solid'
 import { CONTENT_JUMP_EVENT } from '@biu/type-file-system'
-import { setChatOverlay } from '@biu/web-app-shell/chat-overlay'
 
 export type ContentEditRow = {
   path: string
@@ -13,16 +11,36 @@ export type ContentEditRow = {
   reverted?: boolean
 }
 
-function recordHref(path: string) {
+export const INSPECTOR_REVEAL_EVENT = 'biu:inspector-reveal'
+
+export function recordParts(path: string) {
   const parts = path.split('/').filter(Boolean)
-  if (parts.length < 2) return ''
-  return `/database/${parts[0]}/record/${encodeURIComponent(parts.slice(1).join('/'))}`
+  if (parts.length < 2) return null
+  return { collection: `/${parts[0]}`, recordId: parts.slice(1).join('/') }
 }
 
-function jumpTo(path: string, line: number) {
+/** 同名标题（比如五页都叫「你好」）带上 id，避免看起来像同一条。 */
+export function contentEditLabel(file: ContentEditRow, files: ContentEditRow[]) {
+  const title = file.title.trim() || file.path
+  const dup = files.filter((row) => (row.title.trim() || row.path) === title).length > 1
+  if (!dup) return title
+  const id = recordParts(file.path)?.recordId
+  return id ? `${title} · ${id}` : title
+}
+
+/** 右侧检查器打开记录并跳到改动行；不改中间主界面、不关聊天。 */
+export function revealContentEdit(path: string, jumpLine: number) {
+  const parts = recordParts(path)
+  if (parts) {
+    window.dispatchEvent(
+      new CustomEvent(INSPECTOR_REVEAL_EVENT, {
+        detail: { collection: parts.collection, recordId: parts.recordId, unique: true },
+      }),
+    )
+  }
   window.dispatchEvent(
     new CustomEvent(CONTENT_JUMP_EVENT, {
-      detail: { path, start_line: line, end_line: line, navigate: true },
+      detail: { path, start_line: jumpLine, end_line: jumpLine, navigate: true },
     }),
   )
 }
@@ -36,7 +54,6 @@ export const ContentEditsTable = memo(function ContentEditsTable({
   turn: number
   files: ContentEditRow[]
 }) {
-  const navigate = useNavigate()
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState('')
   const visible = files.filter((file) => file.added || file.removed || file.reverted)
@@ -66,13 +83,6 @@ export const ContentEditsTable = memo(function ContentEditsTable({
     } finally {
       setBusy(null)
     }
-  }
-
-  const openFile = (file: ContentEditRow) => {
-    const href = recordHref(file.path)
-    setChatOverlay(false)
-    if (href) navigate(href)
-    jumpTo(file.path, file.jump_line)
   }
 
   return (
@@ -105,9 +115,9 @@ export const ContentEditsTable = memo(function ContentEditsTable({
             <button
               type="button"
               className="min-w-0 flex-1 truncate text-left text-[13px] font-semibold text-(--dsw-label) hover:underline"
-              onClick={() => openFile(file)}
+              onClick={() => revealContentEdit(file.path, file.jump_line)}
             >
-              {file.title || file.path}
+              {contentEditLabel(file, visible)}
             </button>
             {file.reverted ? (
               <span className="text-[12px] font-semibold text-(--dsw-label-3)">已撤销</span>
@@ -116,21 +126,21 @@ export const ContentEditsTable = memo(function ContentEditsTable({
                 <button
                   type="button"
                   className="text-[12px] font-semibold tabular-nums text-[#448361] hover:underline"
-                  onClick={() => openFile(file)}
+                  onClick={() => revealContentEdit(file.path, file.jump_line)}
                 >
                   +{file.added}
                 </button>
                 <button
                   type="button"
                   className="text-[12px] font-semibold tabular-nums text-[#c4554d] hover:underline"
-                  onClick={() => openFile(file)}
+                  onClick={() => revealContentEdit(file.path, file.jump_line)}
                 >
                   −{file.removed}
                 </button>
                 <button
                   type="button"
                   className="inline-flex items-center rounded-md p-1 text-(--dsw-label-2) hover:bg-(--dsw-hover)"
-                  aria-label={`撤销 ${file.title}`}
+                  aria-label={`撤销 ${contentEditLabel(file, visible)}`}
                   disabled={busy != null}
                   onClick={() => void revert(file.path)}
                 >
