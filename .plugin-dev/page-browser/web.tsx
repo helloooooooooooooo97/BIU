@@ -1,12 +1,14 @@
 import { createPortal } from 'react-dom'
 import { BLOCKED_HINT, BOOKMARKS, normalizeUrl } from './url.ts'
+import { openSidebarBrowser } from './open.ts'
+import { placeInspectorBrowser } from './panel.tsx'
 import { makeOverlay, relockAncestors, unlockAncestors, watchZoom } from './zoom.ts'
 
 const React = globalThis.React
 const { useEffect, useRef, useState } = React
 
 export const name = 'page-browser'
-export const inject = ['pageEditor']
+export const inject = ['pageEditor', 'slots', 'pick']
 
 const UI = 'ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif'
 const BAR = '#f2f3f5'
@@ -215,10 +217,10 @@ function BrowserSurface({
           <button
             type="button"
             tabIndex={-1}
-            title="在新标签打开"
-            aria-label="在新标签打开"
+            title="在侧栏浏览器打开"
+            aria-label="在侧栏浏览器打开"
             style={iconBtn}
-            onClick={() => src && window.open(src, '_blank', 'noopener')}
+            onClick={() => src && openSidebarBrowser(src)}
           >
             <Icon id="open" />
           </button>
@@ -328,7 +330,7 @@ function BrowserSurface({
             {src ? (
               <button
                 type="button"
-                onClick={() => window.open(src, '_blank', 'noopener')}
+                onClick={() => src && openSidebarBrowser(src)}
                 style={{
                   cursor: 'pointer',
                   border: 'none',
@@ -341,7 +343,7 @@ function BrowserSurface({
                   fontWeight: 700,
                 }}
               >
-                新标签打开
+                侧栏打开
               </button>
             ) : null}
           </div>
@@ -418,14 +420,23 @@ export function apply(ctx: {
       }) => unknown
     }) => void
   }
+  slots: {
+    place: (
+      name: string,
+      Component: (props: Record<string, unknown>) => unknown,
+      options?: { key?: string; order?: number; props?: () => Record<string, unknown> },
+    ) => { dispose?: () => void }
+  }
+  get: (name: string) => unknown
 }) {
+  placeInspectorBrowser(ctx)
   ctx.pageEditor.registerBlock({
     kind: 'browser',
     plugin: name,
     label: '浏览器',
     blockType: 'browser',
     blockTypeLabel: '浏览器',
-    hint: '输入链接就能访问的网页卡片；可放大、可新标签打开',
+    hint: '输入链接就能访问的网页卡片；禁嵌站点点跳转会进右侧栏真浏览器',
     aliases: ['browser', 'web', '浏览器', '网页', '网址', 'url', '链接'],
     defaults: () => ({ url: 'https://example.com', height: 420 }),
     View: BrowserCard,
