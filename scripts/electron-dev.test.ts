@@ -1,0 +1,28 @@
+import { test } from 'vitest'
+import assert from 'node:assert/strict'
+import { createServer } from 'node:net'
+import { readFile } from 'node:fs/promises'
+import { resolve } from 'node:path'
+import { portOpen } from './electron-launch.mjs'
+
+test('electron scripts compile ts and reuse busy ports', async () => {
+  const pkg = JSON.parse(await readFile(resolve(import.meta.dirname, '../package.json'), 'utf8'))
+  assert.equal(pkg.scripts['electron:dev'], 'node scripts/electron-dev.mjs')
+  assert.equal(pkg.scripts['electron:wait'], 'node scripts/electron-launch.mjs')
+  assert.match(pkg.scripts['electron:build'], /electron-launch/)
+  assert.doesNotMatch(JSON.stringify(pkg.scripts), /electron\/main\.ts/)
+
+  const main = await readFile(resolve(import.meta.dirname, '../electron/main.ts'), 'utf8')
+  assert.match(main, /no-sandbox/)
+  assert.match(main, /BIU_ELECTRON_DEV/)
+
+  const tsconfig = await readFile(resolve(import.meta.dirname, '../electron/tsconfig.json'), 'utf8')
+  assert.doesNotMatch(tsconfig, /"noEmit": true/)
+
+  assert.equal(await portOpen(1), false)
+  const server = createServer()
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const port = server.address().port
+  assert.equal(await portOpen(port), true)
+  await new Promise((resolve) => server.close(resolve))
+})

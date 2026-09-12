@@ -1,12 +1,13 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "strict": true,
     "skipLibCheck": true,
-    "noEmit": true,
+    "rootDir": ".",
+    "outDir": "out",
     "types": ["node", "electron"]
   },
-  "include": ["."]
+  "include": ["main.ts"]
 }
