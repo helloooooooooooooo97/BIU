@@ -80,10 +80,32 @@ describe('ContentEditsTable', () => {
     ]
     render(<ChatNodeList nodes={nodes} sessionId="sess-1" onInspect={() => undefined} onFork={() => undefined} />)
     expect(screen.getByTestId('content-edits-table')).toBeTruthy()
-    expect(screen.getByText('本回合改动')).toBeTruthy()
+    expect(screen.getByText('本回合文件系统内容的改动')).toBeTruthy()
     expect(screen.getByText('首页')).toBeTruthy()
     expect(screen.queryByLabelText('撤销 首页')).toBeNull()
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('hides create rows and only lists content character edits', () => {
+    const nodes: ChatNode[] = [
+      { id: 'u-1', kind: 'user', text: '建页' },
+      {
+        id: 'r-1',
+        kind: 'reply',
+        copyText: '好了',
+        turn: 1,
+        parts: [{ id: 'a-1', kind: 'assistant', text: '好了' }],
+        contentEdits: [
+          { path: '/pages/new', title: '新页', added: 0, removed: 0, jump_line: 1, kind: 'create' },
+          { path: '/pages/home', title: '首页', added: 12, removed: 3, jump_line: 2, kind: 'content' },
+        ],
+      },
+    ]
+    render(<ChatNodeList nodes={nodes} sessionId="sess-hide" onInspect={() => undefined} onFork={() => undefined} />)
+    expect(screen.queryByText(/新建/)).toBeNull()
+    expect(screen.getByText('首页')).toBeTruthy()
+    expect(screen.getAllByText('+12字').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('−3字').length).toBeGreaterThan(0)
   })
 
   it('lists all five 你好 pages as separate rows and reveals the clicked one in the inspector', () => {
