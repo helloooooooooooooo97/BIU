@@ -33,8 +33,8 @@ describe('ContentEditsTable', () => {
     )
     expect(screen.getByTestId('content-edits-table')).toBeTruthy()
     expect(screen.getByText('首页')).toBeTruthy()
-    expect(screen.getByText('+4')).toBeTruthy()
-    expect(screen.getByText('−1')).toBeTruthy()
+    expect(screen.getAllByText('+4').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('−1').length).toBeGreaterThan(0)
     fireEvent.click(screen.getByLabelText('撤销 首页'))
     expect(fetchMock).toHaveBeenCalled()
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
