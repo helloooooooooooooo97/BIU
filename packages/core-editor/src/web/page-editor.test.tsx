@@ -102,6 +102,10 @@ test('page editor bridges cursor to the record title', async () => {
   assert.match(src, /usePageSourceMode/)
   assert.match(src, /SourceEditor/)
   assert.match(src, /FindBar/)
+  const style = await readFile(resolve(import.meta.dirname, './style.ts'), 'utf8')
+  assert.match(style, /\.page-agent-edit\{[^}]*TAG_TONE_ROSE/)
+  assert.match(style, /\.page-find-hit\{[^}]*TAG_TONE_ROSE/)
+
   assert.match(src, /isFindHotkey/)
   assert.match(src, /ColorMenus/)
   assert.match(src, /HeadlessPopover/)
