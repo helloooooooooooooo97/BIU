@@ -18,7 +18,10 @@
     "dev:web": "vite",
     "build": "vite build",
     "start": "tsx host/index.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "electron:dev": "concurrently -k \"npm:dev:host\" \"npm:dev:web\" \"npm:electron:wait\"",
+    "electron:wait": "wait-on tcp:5173 && electron electron/main.ts",
+    "electron:build": "npm run build && electron electron/main.ts"
   },
   "dependencies": {
     "@codemirror/commands": "^6.11.0",
@@ -75,11 +78,13 @@
     "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^5.0.0",
     "concurrently": "^9.2.0",
+    "electron": "^33.4.11",
     "jsdom": "^29.1.1",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.20.5",
     "typescript": "^5.9.2",
     "vite": "^7.1.2",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.11",
+    "wait-on": "^8.0.5"
   }
 }
