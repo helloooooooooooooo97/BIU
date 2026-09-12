@@ -17,3 +17,7 @@ test('diffCharStats counts inserted and deleted characters', () => {
   assert.equal(swapped.added, 1)
   assert.equal(swapped.removed, 1)
 })
+
+test('diffLineStats is zero when text is unchanged', () => {
+  assert.deepEqual(diffLineStats('same\n', 'same\n'), { added: 0, removed: 0, jump_line: 1 })
+})
