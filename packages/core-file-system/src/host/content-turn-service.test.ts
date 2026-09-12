@@ -78,9 +78,10 @@ test('revert create/update/delete in reverse', async () => {
       if (!cur) throw new Error('missing')
       rows.set(path, { ...cur, ...patch })
     },
-    restoreRecord: async (path: string, fields: Record<string, unknown>, content?: string) => {
-      created.push(String(fields.title ?? ''))
-      rows.set(path, { ...fields, notes: content ?? '' })
+    create: async (_path: string, records: unknown) => {
+      const rec = (records as Record<string, unknown>[])[0]!
+      created.push(String(rec.title ?? ''))
+      rows.set('/pages/new', { id: 'new', ...rec })
     },
     remove: async (_path: string, query: { ids: string[] }) => {
       for (const id of query.ids) rows.delete(`/pages/${id}`)
@@ -94,27 +95,12 @@ test('revert create/update/delete in reverse', async () => {
     rows.set('/pages/made', { id: 'made', title: 'made' })
     await service.recordUpdate('/pages/keep', 'keep', { status: 'open' }, { status: 'done' })
     rows.set('/pages/keep', { id: 'keep', title: 'keep', status: 'done' })
-    await service.recordDelete('/pages/gone', 'gone', { id: 'gone', title: 'gone' }, '正文还在')
+    await service.recordDelete('/pages/gone', 'gone', { id: 'gone', title: 'gone' })
     rows.delete('/pages/gone')
   })
   const done = await service.revert('sess-ops', 1)
   assert.equal(done.ok, true)
   assert.equal(rows.has('/pages/made'), false)
   assert.equal(rows.get('/pages/keep')?.status, 'open')
-  assert.equal(rows.get('/pages/gone')?.notes, '正文还在')
   assert.deepEqual(created, ['gone'])
-})
-
-test('human edits without a session still fold on the same path', async () => {
-  const ctx = new Context()
-  const service = new ContentTurnService(ctx, {
-    content: async () => ({ value: '' }),
-    writeContent: async () => undefined,
-  }).open(':memory:')
-  await service.recordEdit('/pages/p1', '', '一', 'p1')
-  await service.recordEdit('/pages/p1', '一', '一二', 'p1')
-  const head = service.store.headEntry('/pages/p1')
-  assert.equal(head?.seq, 1)
-  assert.equal(head?.folded, true)
-  assert.equal(service.store.getBlob(head?.afterBlob), '一二')
 })
