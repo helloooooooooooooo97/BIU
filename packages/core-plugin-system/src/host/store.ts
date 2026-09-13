@@ -33,6 +33,8 @@ export type StoreListing = {
   lastRunAt: number | null
   hasHost: boolean
   hasWeb: boolean
+  /** 已安装 web.js 的内容短哈希，与加载 URL 的 v 参数一致。 */
+  webVersion?: string
   headless?: boolean
   shell?: StoreShell
 }
@@ -48,9 +50,14 @@ type StoreHub = {
 const ALLOWED_FILES = new Set(['manifest.json', 'host.js', 'web.js'])
 const README_FILE = 'README.md'
 
+/** 已安装 web.js 的短版本号：内容 SHA-1 前 12 位。 */
+export function hashPluginWebVersion(body: Buffer | string): string {
+  return createHash('sha1').update(body).digest('hex').slice(0, 12)
+}
+
 export function storeWebUrl(id: string, version?: string | number) {
   const base = `/api/plugin-store/files/${encodeURIComponent(id)}/web.js`
-  // 带上版本号（通常是 web.js 的 mtime），让前端的「挂载键」随每次重打包变化，
+  // 带上 web.js 内容短哈希，让前端的「挂载键」随每次重打包变化，
   // 从而触发真正的卸载 + 重新 import；否则前端会一直用最早加载的模块实例。
   return version === undefined ? base : `${base}?v=${encodeURIComponent(String(version))}`
 }
@@ -109,6 +116,16 @@ async function pluginDirStats(dir: string): Promise<Pick<StoreListing, 'bytes' |
     updatedAt,
     hasHost: existsSync(join(dir, 'host.js')),
     hasWeb: existsSync(join(dir, 'web.js')),
+  }
+}
+
+async function readInstalledWebVersion(dir: string): Promise<string | undefined> {
+  const webFile = join(dir, 'web.js')
+  if (!existsSync(webFile)) return undefined
+  try {
+    return hashPluginWebVersion(await readFile(webFile))
+  } catch {
+    return undefined
   }
 }
 
@@ -319,6 +336,7 @@ export class PluginStoreService extends Service {
       const manifest = await readManifest(dir)
       const enabled = this.isEnabled(manifest.id)
       const stats = await pluginDirStats(dir)
+      const webVersion = await readInstalledWebVersion(dir)
       items.push({
         ...manifest,
         enabled,
@@ -329,6 +347,7 @@ export class PluginStoreService extends Service {
         lastRunAt: this.state.lastRunAt[manifest.id] ?? null,
         hasHost: stats.hasHost,
         hasWeb: stats.hasWeb,
+        ...(webVersion ? { webVersion } : {}),
         ...(manifest.headless ? { headless: true } : { shell: parseStoreShell(manifest.shell) }),
       })
     }
@@ -457,17 +476,7 @@ export class PluginStoreService extends Service {
     const webFile = join(dir, 'web.js')
     const hostCode = existsSync(hostFile) ? (await readFile(hostFile, 'utf8')).trim() : ''
     const hasWeb = existsSync(webFile)
-    // 用 web.js 内容的短 hash 作为版本号：只要代码变了就一定变，
-    // 且不受写入时间戳精度影响（同一毫秒内重打包也能区分）。
-    let webVersion: string | undefined
-    if (hasWeb) {
-      try {
-        const body = await readFile(webFile)
-        webVersion = createHash('sha1').update(body).digest('hex').slice(0, 12)
-      } catch {
-        webVersion = undefined
-      }
-    }
+    const webVersion = await readInstalledWebVersion(dir)
     if (!hostCode && !hasWeb) throw new Error(`plugin ${manifest.id} has neither host nor web`)
     const mod = (hostCode
       ? await importHostFile(hostFile)
