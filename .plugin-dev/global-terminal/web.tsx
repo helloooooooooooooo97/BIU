@@ -307,19 +307,6 @@ function TerminalPane() {
   )
 }
 
-function TrafficLights() {
-  const dot = (color: string) => (
-    <span style={{ width: 12, height: 12, borderRadius: '50%', background: color, display: 'inline-block' }} />
-  )
-  return (
-    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }} aria-hidden="true">
-      {dot('#ff5f57')}
-      {dot('#febc2e')}
-      {dot('#28c840')}
-    </div>
-  )
-}
-
 function GlobalTerminal() {
   return (
     <main
@@ -344,18 +331,16 @@ function GlobalTerminal() {
         style={{
           height: 34,
           flex: '0 0 34px',
-          display: 'grid',
-          gridTemplateColumns: '1fr auto 1fr',
+          display: 'flex',
           alignItems: 'center',
+          justifyContent: 'center',
           padding: '0 12px',
           borderBottom: '1px solid var(--dsw-border, rgba(242,241,237,0.1))',
           background: 'color-mix(in srgb, var(--dsw-label, #f0efed) 4%, transparent)',
           userSelect: 'none',
         }}
       >
-        <TrafficLights />
         <span style={{ color: 'var(--dsw-label-3, rgba(242,241,237,0.45))', fontWeight: 500 }}>zsh</span>
-        <span />
       </header>
       <section
         style={{
