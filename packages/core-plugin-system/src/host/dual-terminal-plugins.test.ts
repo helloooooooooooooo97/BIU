@@ -34,6 +34,7 @@ describe('terminal store plugins', () => {
       assert.match(host, /node-pty/)
       assert.match(web, new RegExp(`/ws/${id}`))
       assert.match(web, /type:"resize"/)
+      assert.match(web, /FitAddon|addon-fit/)
       assert.doesNotMatch(web, /from"@biu\//)
     }
   })

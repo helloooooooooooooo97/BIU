@@ -293,6 +293,8 @@ export async function bundleStoreEntry(entryFile: string, kind: 'host' | 'web') 
     },
     conditions: ['production', 'import', 'module', 'browser', 'default'],
     plugins: storeBundlePlugins(kind),
+    // 沙箱目录通常没有自己的 node_modules；从仓库根解析 npm（如 @xterm/*）
+    nodePaths: [join(process.cwd(), 'node_modules')],
     // 原生模块不能打进 host.js，运行时走宿主 node_modules
     external: kind === 'host' ? ['node-pty'] : [],
   })
