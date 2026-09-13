@@ -1,5 +1,6 @@
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
+import { WebglAddon } from '@xterm/addon-webgl'
 import { createPortal } from 'react-dom'
 import '@xterm/xterm/css/xterm.css'
 import './xterm-skin.css'
@@ -48,7 +49,6 @@ function PtyPane({ active }: { active: boolean }) {
       cursorStyle: 'bar',
       fontSize: 13,
       fontFamily: MONO,
-      lineHeight: 1,
       scrollback: 10_000,
       theme: {
         background: TERM_BG,
@@ -62,32 +62,23 @@ function PtyPane({ active }: { active: boolean }) {
     const fit = new FitAddon()
     term.loadAddon(fit)
     term.open(el)
-    const helper = el.querySelector('textarea.xterm-helper-textarea, textarea')
-    const buryHelper = () => {
-      if (!(helper instanceof HTMLTextAreaElement)) return
-      helper.setAttribute('aria-hidden', 'true')
-      helper.tabIndex = -1
-      helper.style.setProperty('outline', 'none', 'important')
-      helper.style.setProperty('box-shadow', 'none', 'important')
-      helper.style.setProperty('opacity', '0', 'important')
-      helper.style.setProperty('color', 'transparent', 'important')
-      helper.style.setProperty('caret-color', 'transparent', 'important')
-      helper.style.setProperty('background', 'transparent', 'important')
-      helper.style.setProperty('left', '-9999em', 'important')
-      helper.style.setProperty('width', '0', 'important')
-      helper.style.setProperty('height', '0', 'important')
-    }
-    buryHelper()
-    const helperWatch = helper instanceof HTMLTextAreaElement ? new MutationObserver(buryHelper) : null
-    if (helper instanceof HTMLTextAreaElement) {
-      helperWatch?.observe(helper, { attributes: true, attributeFilter: ['style', 'class'] })
-      helper.addEventListener('focus', buryHelper)
-    }
     try {
-      fit.fit()
+      const webgl = new WebglAddon()
+      webgl.onContextLoss(() => webgl.dispose())
+      term.loadAddon(webgl)
     } catch {
-      /* 折叠时尺寸为 0 */
+      /* 无 WebGL 时用默认 canvas 渲染，和 VS Code 降级一样 */
     }
+    const doFit = () => {
+      if (el.clientWidth < 8 || el.clientHeight < 8) return
+      try {
+        fit.fit()
+      } catch {
+        /* ignore */
+      }
+    }
+    doFit()
+    requestAnimationFrame(doFit)
     termRef.current = term
     fitRef.current = fit
     const socket = new WebSocket(socketUrl(term.cols, term.rows))
@@ -105,37 +96,17 @@ function PtyPane({ active }: { active: boolean }) {
     socket.onmessage = (event) => {
       if (typeof event.data === 'string') term.write(event.data)
       else term.write(new Uint8Array(event.data as ArrayBuffer))
-      term.scrollToBottom()
     }
-    const onFit = () => {
-      try {
-        fit.fit()
-      } catch {
-        /* ignore */
-      }
-    }
-    window.addEventListener('resize', onFit)
-    const ro = new ResizeObserver(onFit)
+    window.addEventListener('resize', doFit)
+    const ro = new ResizeObserver(doFit)
     ro.observe(el)
-    const pane = el.parentElement
-    if (pane) ro.observe(pane)
-    const onWheel = (event: WheelEvent) => {
-      if (event.ctrlKey) return
-      event.stopPropagation()
-      const dy = event.deltaY
-      if (!dy) return
-      event.preventDefault()
-      const lines = Math.max(1, Math.round(Math.abs(dy) / 24)) * (dy > 0 ? 1 : -1)
-      term.scrollLines(lines)
-    }
-    el.addEventListener('wheel', onWheel, { capture: true, passive: false })
+    const onWheel = (event: WheelEvent) => event.stopPropagation()
+    el.addEventListener('wheel', onWheel, { capture: true })
     return () => {
       write.dispose()
       resized.dispose()
       ro.disconnect()
-      window.removeEventListener('resize', onFit)
-      helperWatch?.disconnect()
-      if (helper instanceof HTMLTextAreaElement) helper.removeEventListener('focus', buryHelper)
+      window.removeEventListener('resize', doFit)
       el.removeEventListener('wheel', onWheel, true)
       socket.close()
       term.dispose()
@@ -163,18 +134,17 @@ function PtyPane({ active }: { active: boolean }) {
       data-testid="page-terminal-xterm"
       data-page-block-capture=""
       style={{
-        display: active ? 'flex' : 'none',
-        flexDirection: 'column',
+        display: active ? 'block' : 'none',
         flex: 1,
         minHeight: 0,
         width: '100%',
-        height: 'auto',
+        height: '100%',
         position: 'relative',
         overflow: 'hidden',
         background: TERM_BG,
       }}
     >
-      <div ref={hostRef} style={{ flex: 1, minHeight: 0, width: '100%', height: 'auto' }} />
+      <div ref={hostRef} style={{ position: 'absolute', inset: 0 }} />
       {!ready ? (
         <div
           style={{

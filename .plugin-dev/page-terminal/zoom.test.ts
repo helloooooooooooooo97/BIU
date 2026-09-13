@@ -8,11 +8,10 @@ import { makeOverlay, watchZoom } from './zoom.ts'
 const dir = dirname(fileURLToPath(import.meta.url))
 const skin = readFileSync(join(dir, 'xterm-skin.css'), 'utf8')
 
-test('skin hides helper textarea and accessibility tree from layout', () => {
+test('skin keeps official xterm layout and only restyles the scrollbar', () => {
   assert.match(skin, /xterm-helper-textarea/)
-  assert.match(skin, /left: -9999em/)
   assert.match(skin, /outline: none/)
-  assert.match(skin, /xterm-accessibility-tree/)
+  assert.doesNotMatch(skin, /xterm-accessibility-tree/)
   assert.match(skin, /overflow-y: auto/)
   assert.match(skin, /scrollbar-width: thin/)
   assert.match(skin, /xterm-viewport::-webkit-scrollbar/)
