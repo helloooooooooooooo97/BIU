@@ -1,7 +1,6 @@
 import { FitAddon } from '@xterm/addon-fit'
 import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
-import { makeOverlay, relockAncestors, unlockAncestors, watchZoom } from './zoom.ts'
 
 const React = globalThis.React
 const { useEffect, useRef } = React
@@ -103,6 +102,18 @@ const STYLE_CSS = `
 .pt-pane .scrollbar > .slider:hover,
 .pt-pane .scrollbar > .slider.active {
   background: color-mix(in srgb, var(--dsw-label-2, rgba(242,241,237,0.72)) 70%, transparent) !important;
+}
+
+/* 原生全屏时铺满，并保证终端区域撑开 */
+[data-testid="page-terminal"]:fullscreen,
+[data-testid="page-terminal"]:-webkit-full-screen {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: #0f0f0f !important;
 }
 `
 
@@ -605,37 +616,37 @@ function ExpandIcon({ shrink }: { shrink?: boolean }) {
   )
 }
 
-/** 放大放映：不搬 DOM、不重建子树，只把当前块用 fixed 提升到全屏。
-   xterm 是命令式操作真实 DOM 的，搬动或重建都会丢节点，所以只改样式。
-   同时临时解开沿途祖先的 overflow/position（否则会被编辑器容器裁掉）。 */
-function useZoom() {
-  const [zoomed, setZoomed] = React.useState(false)
-  const slotRef = React.useRef<HTMLElement | null>(null)
+/** 放大放映：直接用浏览器原生 Fullscreen API。
+   好处：层级由浏览器保证（必然盖住导航栏）、Esc 退出由浏览器负责，
+   不需要自建覆盖层、搬 DOM 或处理层叠上下文。 */
+function useFullscreen() {
+  const ref = React.useRef<HTMLElement | null>(null)
+  const [full, setFull] = React.useState(false)
 
   const stop = React.useCallback(() => {
-    relockAncestors()
-    setZoomed(false)
-    window.dispatchEvent(new Event('resize'))
+    if (document.fullscreenElement) void document.exitFullscreen?.()
   }, [])
 
   const start = React.useCallback(() => {
-    const slot = slotRef.current
-    if (!slot) return
-    unlockAncestors(slot)
-    setZoomed(true)
-    // 让 xterm 重新测量尺寸。
-    requestAnimationFrame(() => window.dispatchEvent(new Event('resize')))
+    const el = ref.current
+    if (!el) return
+    void Promise.resolve(el.requestFullscreen?.({ navigationUI: 'hide' })).catch(() => {
+      // 浏览器拒绝（例如非用户手势触发）时忽略。
+    })
   }, [])
 
   React.useEffect(() => {
-    if (!zoomed) return
-    const overlay = slotRef.current
-    if (!overlay) return
-    const stopWatch = watchZoom(stop, overlay)
-    return () => stopWatch()
-  }, [zoomed, stop])
+    const onChange = () => {
+      const active = document.fullscreenElement === ref.current
+      setFull(active)
+      // 全屏切换后尺寸变了，让 xterm 重新测量。
+      requestAnimationFrame(() => window.dispatchEvent(new Event('resize')))
+    }
+    document.addEventListener('fullscreenchange', onChange)
+    return () => document.removeEventListener('fullscreenchange', onChange)
+  }, [])
 
-  return { zoomed, start, stop, slotRef }
+  return { full, start, stop, ref }
 }
 
 /** 终端设置面板：配置后端缓冲池参数（全局生效）。 */
@@ -773,7 +784,7 @@ function PageTerminal({
   // 会话键：存在块数据里，保证同一个块刷新/切页都能连回同一个 shell。
   // 没有就现生成一个并写回（writeable 时才写），生成后跟着 markdown 走。
   const [settingsOpen, setSettingsOpen] = React.useState(false)
-  const zoom = useZoom()
+  const fs = useFullscreen()
   const sessionKey = typeof data.sid === 'string' && data.sid ? data.sid : ''
   useEffect(() => {
     if (sessionKey || !writable) return
@@ -795,26 +806,15 @@ function PageTerminal({
 
   const body = (
     <section
-      ref={(el: HTMLElement | null) => {
-        zoom.slotRef.current = el
-      }}
+      // 注意：只记住非 null 的元素。放大时节点被移出 React 父级，
+      // React 会以 ref(null) 回调一次，否则会把我们的引用清掉、退出时搬不回来。
+      ref={fs.ref as never}
       data-testid="page-terminal"
       style={{
         display: 'flex',
         flexDirection: 'column',
-        ...(zoom.zoomed
-          ? {
-              position: 'fixed',
-              inset: 0,
-              width: '100vw',
-              height: '100vh',
-              zIndex: 2147483000,
-              border: 'none',
-              borderRadius: 0,
-            }
-          : {}),
-        border: zoom.zoomed ? 'none' : '1px solid var(--dsw-border, rgba(242,241,237,0.1))',
-        borderRadius: zoom.zoomed ? 0 : 8,
+        border: '1px solid var(--dsw-border, rgba(242,241,237,0.1))',
+        borderRadius: 8,
         overflow: 'hidden',
         background: '#191919',
       }}
@@ -858,11 +858,11 @@ function PageTerminal({
           <GearIcon />
         </IconButton>
         <IconButton
-          label={zoom.zoomed ? '退出全屏' : '全屏放大'}
-          active={zoom.zoomed}
-          onClick={() => (zoom.zoomed ? zoom.stop() : zoom.start())}
+          label={fs.full ? '退出全屏' : '全屏放大'}
+          active={fs.full}
+          onClick={() => (fs.full ? fs.stop() : fs.start())}
         >
-          <ExpandIcon shrink={zoom.zoomed} />
+          <ExpandIcon shrink={fs.full} />
         </IconButton>
       </header>
       {settingsOpen ? <SettingsPanel onClose={() => setSettingsOpen(false)} /> : null}
@@ -877,7 +877,7 @@ function PageTerminal({
           history={history}
           onHistory={(next) => update({ history: next })}
           sessionKey={sessionKey}
-          fill={zoom.zoomed}
+          fill={fs.full}
         />
       ) : null}
     </section>
