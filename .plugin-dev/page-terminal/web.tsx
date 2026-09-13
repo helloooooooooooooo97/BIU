@@ -1,5 +1,6 @@
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
+import '@xterm/xterm/css/xterm.css'
 import './xterm-skin.css'
 import { relockAncestors, unlockAncestors, watchZoom } from './zoom.ts'
 
@@ -56,11 +57,30 @@ function PtyPane({ active }: { active: boolean }) {
     term.loadAddon(fit)
     term.open(el)
     const helper = el.querySelector('textarea')
-    if (helper instanceof HTMLTextAreaElement) {
-      helper.setAttribute('tabindex', '-1')
+    const buryHelper = () => {
+      if (!(helper instanceof HTMLTextAreaElement)) return
       helper.setAttribute('aria-hidden', 'true')
-      helper.style.cssText =
-        'position:absolute;opacity:0;left:0;top:0;width:0;height:0;margin:0;padding:0;border:0;overflow:hidden;resize:none;pointer-events:none;color:transparent;caret-color:transparent;background:transparent'
+      helper.setAttribute('tabindex', '-1')
+      helper.style.setProperty('opacity', '0', 'important')
+      helper.style.setProperty('color', 'transparent', 'important')
+      helper.style.setProperty('caret-color', 'transparent', 'important')
+      helper.style.setProperty('background', 'transparent', 'important')
+      helper.style.setProperty('left', '-9999px', 'important')
+      helper.style.setProperty('top', '0', 'important')
+      helper.style.setProperty('width', '0', 'important')
+      helper.style.setProperty('height', '0', 'important')
+      helper.style.setProperty('font-size', '0', 'important')
+      helper.style.setProperty('overflow', 'hidden', 'important')
+      helper.style.setProperty('pointer-events', 'none', 'important')
+    }
+    buryHelper()
+    const helperWatch =
+      helper instanceof HTMLTextAreaElement
+        ? new MutationObserver(buryHelper)
+        : null
+    if (helper instanceof HTMLTextAreaElement) {
+      helperWatch?.observe(helper, { attributes: true, attributeFilter: ['style'] })
+      helper.addEventListener('input', buryHelper)
     }
     const onWheel = (event: WheelEvent) => {
       if (event.ctrlKey) return
@@ -101,6 +121,8 @@ function PtyPane({ active }: { active: boolean }) {
       resized.dispose()
       ro.disconnect()
       window.removeEventListener('resize', onFit)
+      helperWatch?.disconnect()
+      if (helper instanceof HTMLTextAreaElement) helper.removeEventListener('input', buryHelper)
       el.removeEventListener('wheel', onWheel)
       socket.close()
       term.dispose()
