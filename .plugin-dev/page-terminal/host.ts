@@ -13,6 +13,11 @@ type Socket = {
   on(event: 'message' | 'close' | 'error', listener: (data?: unknown) => void): void
 }
 
+/** PTY 可能在 socket 挂上之前就吐数据；`ws?.readyState === ws?.OPEN` 在 ws 为 null 时是 `undefined === undefined`。 */
+function isOpen(ws: Socket | null | undefined): ws is Socket {
+  return !!ws && ws.readyState === ws.OPEN
+}
+
 type Ctx = {
   sandbox: { wrap(request: { argv: string[] }): { cwd: string; env: NodeJS.ProcessEnv } }
   http: {
@@ -196,12 +201,23 @@ export function apply(ctx: Ctx) {
             // 超上限只留尾部，避免无限增长。
             current.buffer = tailLines(current.buffer.slice(-maxBytes), settings.replayLines)
           }
-          if (current.socket?.readyState === current.socket?.OPEN) current.socket.send(chunk)
+          const ws = current.socket
+          if (!isOpen(ws)) return
+          try {
+            ws.send(chunk)
+          } catch {
+            // 连接可能已断；数据已写入 buffer，下次重连会回放。
+          }
         })
         child.onExit(() => {
           const current = pool.get(key)
-          if (current && current.socket?.readyState === current.socket.OPEN) {
-            current.socket.close(1000, 'shell exited')
+          const ws = current?.socket
+          if (isOpen(ws)) {
+            try {
+              ws.close(1000, 'shell exited')
+            } catch {
+              // 忽略。
+            }
           }
           pool.delete(key)
         })
