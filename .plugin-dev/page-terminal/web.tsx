@@ -1,8 +1,9 @@
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
+import { createPortal } from 'react-dom'
 import '@xterm/xterm/css/xterm.css'
 import './xterm-skin.css'
-import { relockAncestors, unlockAncestors, watchZoom } from './zoom.ts'
+import { makeOverlay, relockAncestors, unlockAncestors, watchZoom } from './zoom.ts'
 
 const React = globalThis.React
 const { useEffect, useRef, useState } = React
@@ -47,7 +48,7 @@ function PtyPane({ active }: { active: boolean }) {
       cursorStyle: 'bar',
       fontSize: 13,
       fontFamily: MONO,
-      lineHeight: 1.35,
+      lineHeight: 1,
       scrollback: 10_000,
       theme: {
         background: TERM_BG,
@@ -104,6 +105,7 @@ function PtyPane({ active }: { active: boolean }) {
     socket.onmessage = (event) => {
       if (typeof event.data === 'string') term.write(event.data)
       else term.write(new Uint8Array(event.data as ArrayBuffer))
+      term.scrollToBottom()
     }
     const onFit = () => {
       try {
@@ -115,6 +117,8 @@ function PtyPane({ active }: { active: boolean }) {
     window.addEventListener('resize', onFit)
     const ro = new ResizeObserver(onFit)
     ro.observe(el)
+    const pane = el.parentElement
+    if (pane) ro.observe(pane)
     const onWheel = (event: WheelEvent) => {
       if (event.ctrlKey) return
       event.stopPropagation()
@@ -164,13 +168,13 @@ function PtyPane({ active }: { active: boolean }) {
         flex: 1,
         minHeight: 0,
         width: '100%',
-        height: '100%',
+        height: 'auto',
         position: 'relative',
         overflow: 'hidden',
         background: TERM_BG,
       }}
     >
-      <div ref={hostRef} style={{ flex: 1, minHeight: 0, width: '100%', height: '100%' }} />
+      <div ref={hostRef} style={{ flex: 1, minHeight: 0, width: '100%', height: 'auto' }} />
       {!ready ? (
         <div
           style={{
@@ -313,20 +317,26 @@ function TerminalCard({ data }: { data: Record<string, unknown>; update: (patch:
   const [zoom, setZoom] = useState(false)
   const height = blockHeight(data)
   const hostRef = useRef<HTMLDivElement | null>(null)
+  const [overlayEl, setOverlayEl] = useState<HTMLElement | null>(null)
   const [tabs, setTabs] = useState<string[]>(() => [newTabId()])
   const [active, setActive] = useState(() => tabs[0] ?? newTabId())
 
   useEffect(() => {
-    const host = hostRef.current
-    if (!host || !zoom) {
+    if (!zoom) {
+      setOverlayEl(null)
       relockAncestors()
       return
     }
-    unlockAncestors(host)
-    const stop = watchZoom(() => setZoom(false), host)
+    const host = hostRef.current
+    if (host) unlockAncestors(host)
+    const el = makeOverlay('page-terminal-zoom-host', TERM_BG)
+    setOverlayEl(el)
+    const stop = watchZoom(() => setZoom(false), el)
     return () => {
       stop()
+      el.remove()
       relockAncestors()
+      setOverlayEl(null)
     }
   }, [zoom])
 
@@ -345,31 +355,34 @@ function TerminalCard({ data }: { data: Record<string, unknown>; update: (patch:
     })
   }
 
+  const surface = (
+    <TerminalSurface
+      tabs={tabs}
+      active={active}
+      zoomed={zoom}
+      onZoom={() => setZoom(true)}
+      onClose={() => setZoom(false)}
+      onSelect={setActive}
+      onAdd={addTab}
+      onRemove={removeTab}
+    />
+  )
+
   return (
     <div
       ref={hostRef}
       data-testid="page-terminal"
       style={{
-        position: zoom ? 'fixed' : 'relative',
-        inset: zoom ? 0 : undefined,
-        zIndex: zoom ? 2147483000 : undefined,
+        position: 'relative',
         width: '100%',
-        height: zoom ? '100%' : height,
-        display: 'flex',
+        height: zoom ? 0 : height,
+        overflow: zoom ? 'hidden' : undefined,
+        display: zoom ? 'block' : 'flex',
         padding: zoom ? 0 : '2px 0 4px',
         boxSizing: 'border-box',
       }}
     >
-      <TerminalSurface
-        tabs={tabs}
-        active={active}
-        zoomed={zoom}
-        onZoom={() => setZoom(true)}
-        onClose={() => setZoom(false)}
-        onSelect={setActive}
-        onAdd={addTab}
-        onRemove={removeTab}
-      />
+      {overlayEl ? createPortal(surface, overlayEl) : surface}
     </div>
   )
 }
