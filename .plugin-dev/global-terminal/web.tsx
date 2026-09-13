@@ -133,7 +133,7 @@ function GlobalTerminal() {
             aria-hidden={tab.id !== active}
             style={{ position: 'absolute', inset: 0, display: tab.id === active ? 'block' : 'none' }}
           >
-            <TerminalSurface endpoint="/ws/global-terminal" autoFocus={tab.id === active} />
+            <TerminalSurface endpoint="/ws/global-terminal" active={tab.id === active} autoFocus={tab.id === active} />
           </div>
         ))}
       </div>

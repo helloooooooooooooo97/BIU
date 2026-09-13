@@ -43,4 +43,29 @@ describe('terminal store plugins', () => {
     assert.match(readme, /:::pageBlock \{kind=terminal plugin=page-terminal\}/)
     assert.match(readme, /"height": 360/)
   })
+
+  it('puts padding on xterm so FitAddon subtracts it from the grid', async () => {
+    for (const id of ['page-terminal', 'global-terminal']) {
+      const css = await readFile(pluginFile(id, 'terminal.css'), 'utf8')
+      const mountRule = css.match(/\.biu-terminal-mount\s*\{([^}]*)\}/)?.[1] ?? ''
+      const xtermRule = css.match(/\.biu-terminal-mount \.xterm\s*\{([^}]*)\}/)?.[1] ?? ''
+
+      assert.doesNotMatch(mountRule, /padding:/)
+      assert.match(xtermRule, /padding:/)
+      assert.match(xtermRule, /box-sizing:\s*border-box/)
+      assert.match(css, /\.xterm-scrollable-element/)
+    }
+  })
+
+  it('defers xterm opening until its page or tab is visible', async () => {
+    for (const id of ['page-terminal', 'global-terminal']) {
+      const terminal = await readFile(pluginFile(id, 'terminal.tsx'), 'utf8')
+      assert.match(terminal, /element\.checkVisibility/)
+      assert.match(terminal, /activeRef\.current/)
+      assert.match(terminal, /if \(!isVisible\(\)\) return/)
+      assert.match(terminal, /new IntersectionObserver\(scheduleFit\)/)
+    }
+    const global = await readFile(pluginFile('global-terminal', 'web.tsx'), 'utf8')
+    assert.match(global, /active=\{tab\.id === active\}/)
+  })
 })
