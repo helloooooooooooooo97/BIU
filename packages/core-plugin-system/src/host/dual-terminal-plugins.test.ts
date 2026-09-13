@@ -43,4 +43,17 @@ describe('terminal store plugins', () => {
     assert.match(readme, /:::pageBlock \{kind=terminal plugin=page-terminal\}/)
     assert.match(readme, /"height": 360/)
   })
+
+  it('puts padding on xterm so FitAddon subtracts it from the grid', async () => {
+    for (const id of ['page-terminal', 'global-terminal']) {
+      const css = await readFile(pluginFile(id, 'terminal.css'), 'utf8')
+      const mountRule = css.match(/\.biu-terminal-mount\s*\{([^}]*)\}/)?.[1] ?? ''
+      const xtermRule = css.match(/\.biu-terminal-mount \.xterm\s*\{([^}]*)\}/)?.[1] ?? ''
+
+      assert.doesNotMatch(mountRule, /padding:/)
+      assert.match(xtermRule, /padding:/)
+      assert.match(xtermRule, /box-sizing:\s*border-box/)
+      assert.match(css, /\.xterm-scrollable-element/)
+    }
+  })
 })
