@@ -1,31 +1,76 @@
-# 终端（page-terminal）
+# 页面终端
 
-在页面里用 `/` 插入一个 **终端卡片**：像真终端一样输入命令、看输出，右上角可以**全屏放大**（Esc 退出）。无头插件，不占运行窗口。
+在页面里用 `/` 插入**真实可交互的终端块**。每个块拥有独立 PTY 会话，会自动适配块尺寸，块被删除/页面卸载时关闭对应进程。无头插件，不占运行窗口。
 
-> 这是**本地演示终端**：命令表在 `shell.ts` 里，纯前端模拟（ls / cat / tree / echo / date / neofetch / open / help / demo / clear），**不会**执行宿主真 shell。要接真 shell 请改成 host 侧服务。
-
-## 设计要点
-
-- 卡片自带标题栏：左侧写「Terminal」，右侧 `clear`（清屏）和 `⤢`（放大）。
-- 放大 = 真全屏：覆盖层直接挂到 `document.body`（`position: fixed; inset: 0`，最高 z-index），并临时把沿途祖先的 `overflow` 放开，所以不会像 HTML 块那样被编辑区裁掉。Esc 或再点 ⤢ 退出，退出后祖先样式原样还原。
-- 放大前后**会话不丢**：输入过的命令、输出都在。
-- **命令记录存在块详情里**：写在块 `data.session.history`（不是浏览器 localStorage），刷新、换设备、导出 markdown 后在。围栏字段 `cwd` / `prompt` / `lines` 只当开场白，首次挂载灌一次，之后以 `session` 为准。正在输入、还没回车的那半截命令**不落盘**。
-- 输入行永远在最底部，Enter 执行；`help` 看命令表，`demo` 看引导。
-- 高度写在围栏头 `height=`（默认 320，最小 120），超出滚动。
+改页面或代写块之前，先照下面「示例写法」写 `:::pageBlock` 围栏。
 
 ## 示例写法
 
-围栏头：`kind=terminal plugin=page-terminal`。围栏体是 JSON：`cwd`、`prompt`、`lines`（开场输出，数组）、`height`。
+围栏头：`kind=terminal plugin=page-terminal`。围栏体是 JSON：`title`（标题，可省）、`height`（终端高度像素，默认 240）。
 
 ```md
 :::pageBlock {kind=terminal plugin=page-terminal}
 {
-  "cwd": "~/demo",
-  "prompt": "$",
-  "lines": ["Welcome to the demo terminal.", "输入 `help` 看命令，`demo` 看引导。"],
-  "height": 340
+  "title": "终端",
+  "height": 260
 }
 :::
 ```
 
 写入页面用 `db_content` 对应 page 的 markdown，按上面围栏粘贴或替换。斜杠插入时编辑器会补 `id=`；手写围栏可省略 `id`。
+
+## 结构
+
+- `host.ts`：注册 WebSocket 端点 `/ws/page-terminal`，用 node-pty 拉起登录 shell；
+维护**会话池**（见下）；转发输入输出与尺寸。
+- `web.tsx`：`pageEditor.registerBlock({ kind: 'terminal' })` 注册块；
+xterm + FitAddon 渲染 + 历史采集 + 历史面板。
+
+## 会话池（关页面不丢状态）
+
+前端只是「显示层」，**关掉前端不该杀掉后端进程**。
+
+
+| 操作            | 行为                                         |
+| ------------- | ------------------------------------------ |
+| 刷新 / 切页 / 块卸载 | 连接断开，**进程保留**，可重连                          |
+| 重开页面 / 同一块    | 按 `sid` **连回同一个 shell**（`cd`、`export` 都还在） |
+| 插件停用 / 卸载     | 杀掉全部会话                                     |
+| 超过 50 个会话     | LRU 淘汰最久没被连接的                              |
+
+
+**会话键** `sid` 存在块数据里（`:::pageBlock` 的 JSON 中），跟着 markdown 走，
+所以块在哪个页面、什么时候打开，都能连回它自己的 shell。
+
+**重连回放**：后端为每个会话保留最近 `MAX_BUFFER_BYTES`（512KB）的输出字节，
+重连时先发 `ESC[2J ESC[3J ESC[H` 清屏，再把最近 `MAX_REPLAY_LINES`（200 行）字节重放，
+然后接上实时流。按行截取时会避开残缺的 ANSI 序列。
+
+## 历史记录（写进块数据，供 agent 读）
+
+每次回车算一条命令，记录 `{ cmd, at, out? }`，写回块数据的 `history` 字段：
+
+```json
+"history": [
+  { "cmd": "cd ..", "at": 1789292949505 },
+  { "cmd": "ls",    "at": 1789292950106, "out": "LICENSE\ndocs\n..." }
+]
+```
+
+- 上限 **200 条**；每条输出最多前 **10 行** / 600 字符
+- 采集自 xterm 的 `onData`（纯用户按键，不受提示符格式影响）
+- 输出里会**剔掉泄露进来的下一条提示符**（`isPromptLike` 启发式判断）
+- 历史在 UI 上是**独立面板**（默认折叠），不往 xterm 里塞内容 —— 避免干扰真实 shell 输出
+
+## 实现注意事项（血泪总结，改前必读）
+
+xterm 在编辑器容器里跑，比独立页面麻烦得多：
+
+1. **helper-textarea 不能 `display:none`** —— 那是 xterm 接收键盘输入的节点，隐藏后会失去焦点，**整个终端打不了字**。要用「移出屏幕 + 透明 + 1px」的方式藏。
+2. **不能压 `.xterm-helpers`，也不能 `display:none` 字符测量元素** —— 测量元素住在 `.xterm-helpers` 里，压掉后它量不出字符宽度（width=0），**字间距错乱、光标消失**。
+3. **顶部若出现一行"会自己变的乱码"（`%%%%`/`zzzz`/`vvvv`）** —— 那是字符测量元素里的占位文本显形了。祖先的 `transform` / `backdrop-filter` 会改变定位包含块，让它的 `left:-119988px` 失效。修法：`clip-path: inset(100%)` 裁成 0 面积（仍在布局树、可测量，但不绘制）。
+4. **PTY 列数必须等于 xterm 列数** —— zsh 的提示符擦行序列宽度依赖列数，不一致会在屏幕上残留一行反显 `%`。要带实测尺寸建连、连发几次 resize、并监听 `term.onResize`。
+5. **不要往 PTY 写清屏序列** —— shell 开着 echo，会被原样回显成 `^[[2J` 乱码。清屏用前端 `term.reset()`。
+6. **向 head 注入 `<style>` 不要写「已存在同 id 就 return」** —— 旧版本留下的同 id 标签会一直挡着，新样式永远不生效。每次覆盖内容，并清理旧标签。
+7. **改完代码要 pack + 重载** —— 宿主不会自动重新 import 已挂载的插件。
+

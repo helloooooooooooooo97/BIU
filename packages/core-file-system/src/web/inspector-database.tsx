@@ -113,6 +113,7 @@ function useBindInspectorDbPath(paneId: string, tables: CollectionInfo[], seedCo
     const fallback = defaultInspectorDbPath(tables, seedCollection)
     if (fallback) setInspectorDbPath(paneId, fallback)
   }, [inspectorPath, paneId, seedCollection, tables])
+  if (isInspectorPaneAbandoned(paneId)) return inspectorPath
   return inspectorPath || defaultInspectorDbPath(tables, seedCollection)
 }
 

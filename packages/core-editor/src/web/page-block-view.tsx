@@ -111,7 +111,7 @@ export function PageBlockView({ node, updateAttributes, editor, getPos }: NodeVi
       data-biu-kind="plugin"
       data-biu-id={pickId}
       data-biu-label={pickLabel}
-      contentEditable="false"
+      contentEditable={false}
       data-testid={`page-block-${kind}`}
       onMouseDown={onMouseDown}
     >

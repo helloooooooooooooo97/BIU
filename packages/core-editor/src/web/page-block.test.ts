@@ -248,7 +248,7 @@ test('copied pageBlocks do not share an id', () => {
   editor.destroy()
 })
 
-test('duplicate ids are not rewritten until the whole document is replaced', () => {
+test('pasted pageBlocks with the same id are rewritten immediately', () => {
   const editor = new Editor({
     extensions: pageEditorExtensions(),
     content: {
@@ -263,14 +263,10 @@ test('duplicate ids are not rewritten until the whole document is replaced', () 
   const live = (editor.getJSON().content ?? [])
     .filter((node) => node.type === 'pageBlock')
     .map((node) => String(node.attrs?.id ?? ''))
-  assert.deepEqual(live, ['ab12cd34', 'ab12cd34'])
-  editor.commands.setContent(editor.getMarkdown(), { contentType: 'markdown', emitUpdate: false })
-  const calibrated = (editor.getJSON().content ?? [])
-    .filter((node) => node.type === 'pageBlock')
-    .map((node) => String(node.attrs?.id ?? ''))
-  assert.equal(calibrated[0], 'ab12cd34')
-  assert.notEqual(calibrated[1], calibrated[0])
-  assert.match(calibrated[1]!, /^[a-z0-9]{8}$/i)
+  assert.equal(live.length, 2)
+  assert.equal(live[0], 'ab12cd34')
+  assert.notEqual(live[1], live[0])
+  assert.match(live[1]!, /^[a-z0-9]{8}$/i)
   editor.destroy()
 })
 
@@ -292,6 +288,8 @@ test('pageBlock capture includes every registered block shell', async () => {
   assert.match(src, /closest\('\.page-block/)
   assert.match(src, /data-page-block-capture/)
   assert.match(view, /data-page-block-capture=""/)
+  assert.match(view, /contentEditable=\{false\}/)
+  assert.doesNotMatch(view, /contentEditable="false"/)
   assert.match(view, /bindPageBlockPlugin/)
   assert.match(view, /data-biu-plugin=\{plugin \|\| undefined\}/)
   assert.match(view, /data-biu-kind="plugin"/)

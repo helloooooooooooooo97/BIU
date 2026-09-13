@@ -175,7 +175,11 @@ test('web-only plugin opens without host.js', async () => {
     const sandboxes = await store.listSandboxes()
     assert.equal(sandboxes.find((row) => row.id === 'store-banner')?.hasWeb, true)
     await store.openPlugin('store-banner')
-    assert.equal(forks.get('store-banner')?.web, '/api/plugin-store/files/store-banner/web.js')
+    // web 入口会带上内容 hash 版本号（?v=...），用于让前端在重打包后重新加载。
+    assert.match(
+      String(forks.get('store-banner')?.web),
+      /^\/api\/plugin-store\/files\/store-banner\/web\.js\?v=[0-9a-f]+$/,
+    )
     await assert.rejects(() => store.readInstalledFile('store-banner', 'host.js'))
   } finally {
     await rm(dir, { recursive: true, force: true })

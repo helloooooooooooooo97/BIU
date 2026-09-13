@@ -1,14 +1,14 @@
 {
   "id": "page-terminal",
-  "name": "终端",
-  "blurb": "页面里用 /terminal 插入一个可交互终端卡片：输入命令、看输出，右上角可全屏放大。",
+  "name": "页面终端",
+  "blurb": "在页面里用 / 插入真实交互终端块。每个块一个独立 PTY，会话在后端常驻（LRU 保留 50 个），关页面重开可接着用；历史写进块数据，agent 读页面源码即可见。",
   "tags": [
     "page",
     "editor",
-    "terminal"
+    "terminal",
+    "pty"
   ],
   "author": "Biu",
-  "authorUrl": "https://github.com/helloooooooooooooo97/biu-harness",
   "headless": true,
-  "createdAt": 1789204035676
+  "createdAt": 1789292495394
 }
