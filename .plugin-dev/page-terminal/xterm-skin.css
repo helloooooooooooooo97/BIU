@@ -1,6 +1,6 @@
 /* 只作用在终端卡片内。 */
 .page-terminal-pty {
-  height: 100%;
+  height: auto;
   width: 100%;
   min-height: 0;
   overflow: hidden;
@@ -17,9 +17,12 @@
   outline: none;
 }
 .page-terminal-pty .xterm .xterm-helpers {
-  position: absolute;
-  top: 0;
-  left: 0;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
   z-index: 5;
   pointer-events: none;
 }
@@ -52,6 +55,27 @@
   cursor: default;
   position: absolute;
   inset: 0;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--dsw-label-3) 55%, transparent) transparent;
+}
+.page-terminal-pty .xterm .xterm-viewport::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.page-terminal-pty .xterm .xterm-viewport::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 999px;
+}
+.page-terminal-pty .xterm .xterm-viewport::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--dsw-label-3) 55%, transparent);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  min-height: 32px;
+}
+.page-terminal-pty .xterm .xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--dsw-label-2) 70%, transparent);
+  background-clip: padding-box;
 }
 .page-terminal-pty .xterm .xterm-screen {
   position: relative;
@@ -71,4 +95,18 @@
   top: 0;
   left: -9999em;
   line-height: normal;
+}
+.page-terminal-pty .xterm-accessibility,
+.page-terminal-pty .xterm-accessibility-tree,
+.page-terminal-pty .xterm-message,
+.page-terminal-pty .live-region {
+  position: absolute !important;
+  left: 0 !important;
+  top: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+  opacity: 0 !important;
+  color: transparent !important;
+  pointer-events: none !important;
 }
