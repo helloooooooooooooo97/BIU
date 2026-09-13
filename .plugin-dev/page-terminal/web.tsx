@@ -1,6 +1,7 @@
 import { FitAddon } from '@xterm/addon-fit'
 import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
+import { makeOverlay, relockAncestors, unlockAncestors, watchZoom } from './zoom.ts'
 
 const React = globalThis.React
 const { useEffect, useRef } = React
@@ -150,12 +151,15 @@ function TerminalSurface({
   history,
   onHistory,
   sessionKey,
+  fill,
 }: {
   height: number
   history: HistoryEntry[]
   onHistory: (next: HistoryEntry[]) => void
   /** 后端会话键：同一个块刷新/切页都能连回同一个 shell。 */
   sessionKey: string
+  /** 放大时撑满容器，而不是固定高度。 */
+  fill?: boolean
 }) {
   useTerminalStyle()
   const host = useRef<HTMLDivElement | null>(null)
@@ -359,7 +363,9 @@ function TerminalSurface({
       style={{
         position: 'relative',
         width: '100%',
-        height,
+        height: fill ? undefined : height,
+        flex: fill ? 1 : undefined,
+        minHeight: 0,
         padding: '8px 10px',
         boxSizing: 'border-box',
         overflow: 'hidden',
@@ -523,6 +529,115 @@ function HistoryPanel({
   )
 }
 
+/** 标题栏图标按钮。 */
+function IconButton({
+  label,
+  active,
+  onClick,
+  children,
+}: {
+  label: string
+  active?: boolean
+  onClick: () => void
+  children: unknown
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      style={{
+        flex: '0 0 auto',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 22,
+        height: 22,
+        border: 0,
+        padding: 0,
+        borderRadius: 5,
+        background: active ? 'color-mix(in srgb, var(--dsw-label, #f0efed) 12%, transparent)' : 'transparent',
+        color: 'inherit',
+        cursor: 'pointer',
+      }}
+    >
+      {children as never}
+    </button>
+  )
+}
+
+function GearIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <circle cx="8" cy="8" r="2.2" stroke="currentColor" strokeWidth="1.4" />
+      <path
+        d="M8 1.8v1.6M8 12.6v1.6M14.2 8h-1.6M3.4 8H1.8M12.4 3.6l-1.1 1.1M4.7 11.3l-1.1 1.1M12.4 12.4l-1.1-1.1M4.7 4.7 3.6 3.6"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+function ExpandIcon({ shrink }: { shrink?: boolean }) {
+  return shrink ? (
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path
+        d="M6.2 9.8 2.5 13.5M9.8 6.2l3.7-3.7M2.5 13.5h3.2M2.5 13.5v-3.2M13.5 2.5h-3.2M13.5 2.5v3.2"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  ) : (
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path
+        d="M9.5 6.5 13.5 2.5M13.5 2.5h-3.2M13.5 2.5v3.2M6.5 9.5 2.5 13.5M2.5 13.5h3.2M2.5 13.5v-3.2"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+/** 放大放映：不搬 DOM、不重建子树，只把当前块用 fixed 提升到全屏。
+   xterm 是命令式操作真实 DOM 的，搬动或重建都会丢节点，所以只改样式。
+   同时临时解开沿途祖先的 overflow/position（否则会被编辑器容器裁掉）。 */
+function useZoom() {
+  const [zoomed, setZoomed] = React.useState(false)
+  const slotRef = React.useRef<HTMLElement | null>(null)
+
+  const stop = React.useCallback(() => {
+    relockAncestors()
+    setZoomed(false)
+    window.dispatchEvent(new Event('resize'))
+  }, [])
+
+  const start = React.useCallback(() => {
+    const slot = slotRef.current
+    if (!slot) return
+    unlockAncestors(slot)
+    setZoomed(true)
+    // 让 xterm 重新测量尺寸。
+    requestAnimationFrame(() => window.dispatchEvent(new Event('resize')))
+  }, [])
+
+  React.useEffect(() => {
+    if (!zoomed) return
+    const overlay = slotRef.current
+    if (!overlay) return
+    const stopWatch = watchZoom(stop, overlay)
+    return () => stopWatch()
+  }, [zoomed, stop])
+
+  return { zoomed, start, stop, slotRef }
+}
+
 /** 终端设置面板：配置后端缓冲池参数（全局生效）。 */
 function SettingsPanel({ onClose }: { onClose: () => void }) {
   const React2 = React
@@ -658,6 +773,7 @@ function PageTerminal({
   // 会话键：存在块数据里，保证同一个块刷新/切页都能连回同一个 shell。
   // 没有就现生成一个并写回（writeable 时才写），生成后跟着 markdown 走。
   const [settingsOpen, setSettingsOpen] = React.useState(false)
+  const zoom = useZoom()
   const sessionKey = typeof data.sid === 'string' && data.sid ? data.sid : ''
   useEffect(() => {
     if (sessionKey || !writable) return
@@ -677,11 +793,28 @@ function PageTerminal({
         .filter((item) => item.cmd)
     : []
 
-  return (
+  const body = (
     <section
+      ref={(el: HTMLElement | null) => {
+        zoom.slotRef.current = el
+      }}
+      data-testid="page-terminal"
       style={{
-        border: '1px solid var(--dsw-border, rgba(242,241,237,0.1))',
-        borderRadius: 8,
+        display: 'flex',
+        flexDirection: 'column',
+        ...(zoom.zoomed
+          ? {
+              position: 'fixed',
+              inset: 0,
+              width: '100vw',
+              height: '100vh',
+              zIndex: 2147483000,
+              border: 'none',
+              borderRadius: 0,
+            }
+          : {}),
+        border: zoom.zoomed ? 'none' : '1px solid var(--dsw-border, rgba(242,241,237,0.1))',
+        borderRadius: zoom.zoomed ? 0 : 8,
         overflow: 'hidden',
         background: '#191919',
       }}
@@ -721,37 +854,16 @@ function PageTerminal({
             {title}
           </span>
         )}
-        <button
-          type="button"
-          onClick={() => setSettingsOpen((v) => !v)}
-          aria-label="终端设置"
-          aria-expanded={settingsOpen}
-          title="设置"
-          style={{
-            flex: '0 0 auto',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: 22,
-            height: 22,
-            border: 0,
-            padding: 0,
-            borderRadius: 5,
-            background: settingsOpen ? 'color-mix(in srgb, var(--dsw-label, #f0efed) 12%, transparent)' : 'transparent',
-            color: 'inherit',
-            cursor: 'pointer',
-          }}
+        <IconButton label="设置" active={settingsOpen} onClick={() => setSettingsOpen((v) => !v)}>
+          <GearIcon />
+        </IconButton>
+        <IconButton
+          label={zoom.zoomed ? '退出全屏' : '全屏放大'}
+          active={zoom.zoomed}
+          onClick={() => (zoom.zoomed ? zoom.stop() : zoom.start())}
         >
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <circle cx="8" cy="8" r="2.2" stroke="currentColor" strokeWidth="1.4" />
-            <path
-              d="M8 1.8v1.6M8 12.6v1.6M14.2 8h-1.6M3.4 8H1.8M12.4 3.6l-1.1 1.1M4.7 11.3l-1.1 1.1M12.4 12.4l-1.1-1.1M4.7 4.7 3.6 3.6"
-              stroke="currentColor"
-              strokeWidth="1.4"
-              strokeLinecap="round"
-            />
-          </svg>
-        </button>
+          <ExpandIcon shrink={zoom.zoomed} />
+        </IconButton>
       </header>
       {settingsOpen ? <SettingsPanel onClose={() => setSettingsOpen(false)} /> : null}
       <HistoryPanel
@@ -765,10 +877,13 @@ function PageTerminal({
           history={history}
           onHistory={(next) => update({ history: next })}
           sessionKey={sessionKey}
+          fill={zoom.zoomed}
         />
       ) : null}
     </section>
   )
+
+  return body
 }
 
 export function apply(ctx: {
