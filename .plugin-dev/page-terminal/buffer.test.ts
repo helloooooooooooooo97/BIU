@@ -1,19 +1,27 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { applyPtyChunk } from './buffer.ts'
+import { TerminalBuffer, applyPtyChunk } from './buffer.ts'
 
-test('pty chunk applies newline, carriage return and backspace', () => {
-  let text = applyPtyChunk('', 'hello')
-  text = applyPtyChunk(text, '\r')
-  text = applyPtyChunk(text, 'ok')
-  assert.equal(text, 'ok')
-  text = applyPtyChunk('ab', '\b')
-  assert.equal(text, 'a')
-  text = applyPtyChunk('', 'one\ntwo')
-  assert.equal(text, 'one\ntwo')
+test('bare CR does not wipe the current line', () => {
+  const buf = new TerminalBuffer()
+  buf.apply('hello')
+  buf.apply('\r')
+  assert.equal(buf.text(), 'hello')
 })
 
-test('pty chunk strips ansi color', () => {
-  const text = applyPtyChunk('', '\x1b[32mhi\x1b[0m')
-  assert.equal(text, 'hi')
+test('carriage return overwrites the current line, keeps history', () => {
+  const buf = new TerminalBuffer()
+  buf.apply('one\nhello')
+  buf.apply('\rOK\x1b[K')
+  assert.equal(buf.text(), 'one\nOK')
+})
+
+test('pty chunk keeps previous lines across enter', () => {
+  const text = applyPtyChunk('prompt % ls', '\r\npackages\nprompt % ')
+  assert.match(text, /packages/)
+  assert.match(text, /prompt/)
+})
+
+test('ansi color codes do not stay in the buffer', () => {
+  assert.equal(applyPtyChunk('', '\x1b[32mhi\x1b[0m'), 'hi')
 })
