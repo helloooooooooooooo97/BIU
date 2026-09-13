@@ -318,6 +318,14 @@ export function showInInspector(collection: string, href: string, opts?: { uniqu
   const paneIds = paneIdsForTab(tabId)
   if (unique) {
     const live = paneIds.filter((id) => getInspectorDbPath(id))
+    // 从「全部页面」这类列表栏打开同一条记录时，把这一栏切过去，不要再开一栏同页。
+    if (inspectorPathIsRecord(href)) {
+      const listPane = live.find((id) => !inspectorPathIsRecord(getInspectorDbPath(id)))
+      if (listPane) {
+        revealInspectorPane(listPane, href)
+        return
+      }
+    }
     const target = live.length ? nextInspectorPaneId(tabId) : tabId
     revealInspectorPane(target, href)
     return

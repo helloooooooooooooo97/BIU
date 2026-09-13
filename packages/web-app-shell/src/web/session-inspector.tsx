@@ -264,7 +264,7 @@ export const SessionInspector = memo(function SessionInspector({
       if (!next) return
       const allowed = allowedTabs.includes(next) || allowedTabs.includes(slotTabId(next))
       if (!allowed) return
-      if (isInspectorPaneAbandoned(next) && !getInspectorDbPath(next)) return
+      if (isInspectorPaneAbandoned(next)) return
       persistOpened(opened.includes(next) ? opened : [...opened, next])
       setTab(next)
     }

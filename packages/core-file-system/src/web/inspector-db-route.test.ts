@@ -1,6 +1,6 @@
 import { beforeEach, test } from 'vitest'
 import assert from 'node:assert/strict'
-import { databaseAllViewPath } from './database-path.ts'
+import { databaseAllViewPath, databaseRecordPath } from './database-path.ts'
 import {
   getInspectorDbPath,
   isInspectorDatabasePath,
@@ -100,13 +100,19 @@ test('showRecordInInspector focuses an already-open pane for the same page', () 
   assert.equal(getInspectorDbPath('database:/pages'), '')
 })
 
-test('showRecordInInspector opens a new pane when the collection view is already open', () => {
-  setInspectorDbPath('database:/pages', '/database/pages')
+test('showRecordInInspector reuses the collection pane instead of opening a second copy of the page', () => {
+  setInspectorDbPath('database:/pages', databaseAllViewPath('/pages'))
   showRecordInInspector('/pages', 'p-new')
-  assert.equal(getInspectorDbPath('database:/pages'), '/database/pages')
+  assert.equal(getInspectorDbPath('database:/pages'), '/database/pages/record/p-new')
   const extra = Object.keys(snapshotInspectorDbPaths()).filter((id) => id.startsWith('database:/pages::'))
-  assert.equal(extra.length, 1)
-  assert.equal(getInspectorDbPath(extra[0]!), '/database/pages/record/p-new')
+  assert.equal(extra.length, 0)
+})
+
+test('opening a page from the all-pages list then navigating that pane still keeps one tab', () => {
+  setInspectorDbPath('database:/pages', databaseAllViewPath('/pages'))
+  showRecordInInspector('/pages', 'same-page')
+  setInspectorDbPath('database:/pages', databaseRecordPath('/pages', 'same-page', 'builtin-all:/pages'))
+  assert.equal(Object.keys(snapshotInspectorDbPaths()).filter((id) => id.startsWith('database:/pages')).length, 1)
 })
 
 test('showRecordInInspector opens the inspector on this record', async () => {
