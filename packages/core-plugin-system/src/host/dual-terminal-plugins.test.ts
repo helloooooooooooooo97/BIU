@@ -77,7 +77,8 @@ describe('terminal store plugins', () => {
       const terminal = await readFile(pluginFile(id, 'terminal.tsx'), 'utf8')
       assert.match(terminal, /hasUserInput = true/)
       assert.match(terminal, /if \(disposed \|\| hasUserInput \|\| !terminal\) return/)
-      assert.match(terminal, /terminal\.clear\(\)/)
+      assert.match(terminal, /buffer\.getLine\(buffer\.baseY \+ buffer\.cursorY\)/)
+      assert.match(terminal, /\\u001b\[2J\\u001b\[H/)
       assert.match(terminal, /terminal\.scrollToBottom\(\)/)
       assert.match(terminal, /window\.clearTimeout\(startupTimer\)/)
     }

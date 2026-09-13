@@ -146,9 +146,13 @@ export function TerminalSurface({
             window.clearTimeout(startupTimer)
             startupTimer = window.setTimeout(() => {
               if (disposed || hasUserInput || !terminal) return
-              terminal.clear()
-              terminal.scrollToBottom()
-              terminal.refresh(0, terminal.rows - 1)
+              const buffer = terminal.buffer.active
+              const prompt = buffer.getLine(buffer.baseY + buffer.cursorY)?.translateToString(true) ?? ''
+              if (!prompt.trim()) return
+              terminal.write(`\u001b[2J\u001b[H${prompt}`, () => {
+                terminal?.scrollToBottom()
+                terminal?.refresh(0, terminal.rows - 1)
+              })
             }, 120)
           })
         })
