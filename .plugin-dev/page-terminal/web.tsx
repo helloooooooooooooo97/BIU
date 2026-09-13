@@ -1,13 +1,7 @@
-import { createPortal } from 'react-dom'
-import {
-  packSession,
-  parseSession,
-  runHostCommand,
-  sameSession,
-  stripDraft,
-  type TerminalSession,
-} from './shell.ts'
-import { makeOverlay, relockAncestors, unlockAncestors, watchZoom } from './zoom.ts'
+import { Terminal } from '@xterm/xterm'
+import { FitAddon } from '@xterm/addon-fit'
+import './xterm-skin.css'
+import { relockAncestors, unlockAncestors, watchZoom } from './zoom.ts'
 
 const React = globalThis.React
 const { useEffect, useRef, useState } = React
@@ -19,23 +13,6 @@ const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
 const INK = '#0b0e14'
 const PAPER = '#c9d1d9'
 const GREEN = '#3fb950'
-const ACCENT = '#e3b341'
-const ERR = '#ff7b72'
-const MAX_LINES = 400
-
-const SAMPLE = {
-  cwd: '.',
-  prompt: '$',
-  lines: ['工作区 shell。回车执行真实命令，例如 node -v 或 node -e "console.log(1)"。'],
-}
-
-type Line = { kind: 'in' | 'out' | 'err'; text: string }
-
-function parseLines(raw: unknown): string[] {
-  if (Array.isArray(raw)) return raw.map((item) => String(item ?? ''))
-  const text = String(raw ?? '')
-  return text ? text.split('\n') : []
-}
 
 function blockHeight(data: Record<string, unknown>) {
   const n = Number(data.height)
@@ -54,82 +31,117 @@ function Glyph({ shrink }: { shrink?: boolean }) {
   )
 }
 
-/* ---------------- 终端界面（放大时复用同一份） ---------------- */
+function wsUrl(cols: number, rows: number) {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws'
+  return `${proto}://${location.host}/ws/page-terminal?cols=${cols}&rows=${rows}`
+}
+
+function PtyPane({ active }: { active: boolean }) {
+  const hostRef = useRef<HTMLDivElement | null>(null)
+  const termRef = useRef<Terminal | null>(null)
+  const fitRef = useRef<FitAddon | null>(null)
+
+  useEffect(() => {
+    const el = hostRef.current
+    if (!el) return
+    const term = new Terminal({
+      cursorBlink: true,
+      fontSize: 13,
+      fontFamily: MONO,
+      allowProposedApi: false,
+      theme: { background: INK, foreground: PAPER, cursor: GREEN },
+    })
+    const fit = new FitAddon()
+    term.loadAddon(fit)
+    term.open(el)
+    fit.fit()
+    termRef.current = term
+    fitRef.current = fit
+    const socket = new WebSocket(wsUrl(term.cols, term.rows))
+    const write = term.onData((data) => {
+      if (socket.readyState === WebSocket.OPEN) socket.send(data)
+    })
+    const resized = term.onResize(({ cols, rows }) => {
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: 'resize', cols, rows }))
+      }
+    })
+    socket.onmessage = (event) => {
+      if (typeof event.data === 'string') term.write(event.data)
+      else term.write(new Uint8Array(event.data as ArrayBuffer))
+    }
+    const onFit = () => {
+      try {
+        fit.fit()
+      } catch {
+        /* 折叠时尺寸为 0 */
+      }
+    }
+    window.addEventListener('resize', onFit)
+    const ro = new ResizeObserver(onFit)
+    ro.observe(el)
+    return () => {
+      write.dispose()
+      resized.dispose()
+      ro.disconnect()
+      window.removeEventListener('resize', onFit)
+      socket.close()
+      term.dispose()
+      termRef.current = null
+      fitRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!active) return
+    const id = window.requestAnimationFrame(() => {
+      try {
+        fitRef.current?.fit()
+      } catch {
+        /* ignore */
+      }
+      termRef.current?.focus()
+    })
+    return () => window.cancelAnimationFrame(id)
+  }, [active])
+
+  return (
+    <div
+      className="page-terminal-pty"
+      data-testid="page-terminal-xterm"
+      data-page-block-capture=""
+      style={{
+        display: active ? 'block' : 'none',
+        flex: 1,
+        minHeight: 0,
+        width: '100%',
+        height: '100%',
+      }}
+    >
+      <div ref={hostRef} style={{ width: '100%', height: '100%' }} />
+    </div>
+  )
+}
 
 function TerminalSurface({
-  cwd,
-  prompt,
-  sample,
-  session,
+  tabs,
+  active,
   zoomed,
   onZoom,
   onClose,
-  onChange,
+  onSelect,
+  onAdd,
+  onRemove,
 }: {
-  cwd: string
-  prompt: string
-  sample: string[]
-  session: TerminalSession
+  tabs: string[]
+  active: string
   zoomed: boolean
   onZoom: () => void
   onClose?: () => void
-  onChange: () => void
+  onSelect: (id: string) => void
+  onAdd: () => void
+  onRemove: (id: string) => void
 }) {
-  const [busy, setBusy] = useState(false)
-  const scrollRef = useRef<HTMLDivElement | null>(null)
-  const inputRef = useRef<HTMLInputElement | null>(null)
-  const busyRef = useRef(false)
-  const history = session.history
-  const [draft, setDraft] = useState(session.input)
-
-  useEffect(() => {
-    const box = scrollRef.current
-    if (box) box.scrollTop = box.scrollHeight
-  }, [history.length, zoomed])
-
-  const push = (line: Line) => {
-    session.history = [...session.history, line].slice(-MAX_LINES)
-    onChange()
-  }
-
-  const run = async (raw: string) => {
-    if (busyRef.current) return
-    const cmd = raw.trim()
-    const echo = `${session.cwd} ${prompt}${cmd ? ` ${cmd}` : ''}`
-    session.input = ''
-    setDraft('')
-    onChange()
-    if (!cmd) {
-      push({ kind: 'in', text: echo })
-      return
-    }
-    if (cmd === 'clear') {
-      session.history = []
-      onChange()
-      return
-    }
-    busyRef.current = true
-    setBusy(true)
-    push({ kind: 'in', text: echo })
-    try {
-      const result = await runHostCommand(cmd)
-      const chunks = [
-        ...String(result.stdout).split('\n').map((text) => ({ kind: 'out' as const, text })),
-        ...String(result.stderr).split('\n').map((text) => ({ kind: 'err' as const, text })),
-      ].filter((line) => line.text.length > 0)
-      if (!chunks.length && result.code && result.code !== 0) {
-        push({ kind: 'err', text: `exit ${result.code}` })
-      } else {
-        for (const line of chunks) push(line)
-        if (result.code && result.code !== 0) push({ kind: 'err', text: `exit ${result.code}` })
-      }
-    } catch (error) {
-      push({ kind: 'err', text: String(error) })
-    }
-    busyRef.current = false
-    setBusy(false)
-  }
-
   const btn: Record<string, unknown> = {
     cursor: 'pointer',
     border: 'none',
@@ -143,6 +155,13 @@ function TerminalSurface({
     alignItems: 'center',
     gap: 4,
   }
+  const tabBtn = (on: boolean): Record<string, unknown> => ({
+    ...btn,
+    color: on ? PAPER : 'rgba(201,209,217,.55)',
+    background: on ? 'rgba(255,255,255,.08)' : 'transparent',
+    borderRadius: 6,
+    padding: '3px 8px',
+  })
 
   return (
     <div
@@ -159,8 +178,6 @@ function TerminalSurface({
         display: 'flex',
         flexDirection: 'column',
         fontFamily: MONO,
-        fontSize: 12.5,
-        lineHeight: 1.6,
         color: PAPER,
         overflow: 'hidden',
       }}
@@ -172,262 +189,129 @@ function TerminalSurface({
           alignItems: 'center',
           justifyContent: 'space-between',
           gap: 8,
-          padding: '4px 6px 4px 10px',
+          padding: '4px 6px 4px 8px',
           borderBottom: '1px solid rgba(201,209,217,.14)',
           background: 'rgba(255,255,255,.02)',
         }}
       >
-        <span style={{ color: 'rgba(201,209,217,.55)', fontSize: 10, letterSpacing: '.08em' }}>Terminal</span>
-        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0, flex: 1 }}>
+          <span style={{ color: 'rgba(201,209,217,.55)', fontSize: 10, letterSpacing: '.08em', marginRight: 4 }}>
+            Terminal
+          </span>
+          {tabs.map((id, index) => (
+            <span key={id} style={{ display: 'inline-flex', alignItems: 'center' }}>
+              <button type="button" tabIndex={-1} data-testid={`page-terminal-tab-${index}`} onClick={() => onSelect(id)} style={tabBtn(id === active)}>
+                {index + 1}
+              </button>
+              {tabs.length > 1 ? (
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  title="关闭此 Tab"
+                  aria-label="关闭此 Tab"
+                  onClick={() => onRemove(id)}
+                  style={{ ...btn, padding: '2px 4px', color: 'rgba(201,209,217,.45)' }}
+                >
+                  ×
+                </button>
+              ) : null}
+            </span>
+          ))}
+          <button type="button" tabIndex={-1} data-testid="page-terminal-tab-add" title="新建 Tab" aria-label="新建 Tab" onClick={onAdd} style={btn}>
+            +
+          </button>
+        </div>
+        {zoomed ? (
+          <button type="button" tabIndex={-1} data-testid="page-terminal-shrink" title="退出放大" aria-label="退出放大" onClick={() => onClose?.()} style={btn}>
+            <Glyph shrink />
+          </button>
+        ) : (
           <button
             type="button"
             tabIndex={-1}
-            title="清屏"
+            data-testid="page-terminal-zoom"
+            title="放大终端"
+            aria-label="放大终端"
             onMouseDown={(event) => event.preventDefault()}
-            onClick={() => {
-              session.history = []
-              onChange()
-            }}
+            onClick={onZoom}
             style={btn}
           >
-            clear
+            <Glyph />
           </button>
-          {zoomed ? (
-            <button
-              type="button"
-              tabIndex={-1}
-              data-testid="page-terminal-shrink"
-              title="退出放大"
-              aria-label="退出放大"
-              onClick={() => onClose?.()}
-              style={btn}
-            >
-              <Glyph shrink />
-            </button>
-          ) : (
-            <button
-              type="button"
-              tabIndex={-1}
-              data-testid="page-terminal-zoom"
-              title="放大终端"
-              aria-label="放大终端"
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={onZoom}
-              style={btn}
-            >
-              <Glyph />
-            </button>
-          )}
-        </span>
+        )}
       </div>
-
-      <div
-        ref={scrollRef}
-        data-testid="page-terminal-body"
-        onClick={() => inputRef.current?.focus()}
-        style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '10px 12px', cursor: 'text' }}
-      >
-        {history.map((line, i) => (
-          <div
-            key={`${i}-${line.text.slice(0, 10)}`}
-            style={{
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
-              color: line.kind === 'in' ? ACCENT : line.kind === 'err' ? ERR : PAPER,
-              fontWeight: line.kind === 'in' ? 700 : 400,
-            }}
-          >
-            {line.text || ' '}
-          </div>
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+        {tabs.map((id) => (
+          <PtyPane key={id} active={id === active} />
         ))}
-        <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
-          <span style={{ color: GREEN, fontWeight: 700, whiteSpace: 'nowrap' }}>
-            {cwd} {prompt}
-          </span>
-          <input
-            ref={inputRef}
-            data-testid="page-terminal-input"
-            data-page-block-capture=""
-            spellCheck={false}
-            value={draft}
-            disabled={busy}
-            aria-label="终端输入"
-            onKeyDown={(event) => {
-              event.stopPropagation()
-              if (event.key === 'Enter') {
-                event.preventDefault()
-                void run(session.input)
-              }
-            }}
-            onChange={(event) => {
-              setDraft(event.currentTarget.value)
-              session.input = event.currentTarget.value
-            }}
-            style={{
-              flex: 1,
-              minWidth: 40,
-              border: 'none',
-              outline: 'none',
-              background: 'transparent',
-              color: '#e6edf3',
-              font: 'inherit',
-              caretColor: GREEN,
-            }}
-          />
-        </div>
       </div>
     </div>
   )
 }
 
-/* ---------------- 页面块 ---------------- */
+function newTabId() {
+  return crypto.randomUUID().slice(0, 8)
+}
 
-function TerminalCard({
-  data,
-  update,
-  writable,
-}: {
-  data: Record<string, unknown>
-  update: (patch: Record<string, unknown>) => void
-  writable: boolean
-}) {
-  const cwd = String(data.cwd ?? '.')
-  const prompt = String(data.prompt ?? '$')
-  const sample = parseLines(data.lines)
+function TerminalCard({ data }: { data: Record<string, unknown>; update: (patch: Record<string, unknown>) => void; writable: boolean }) {
   const [zoom, setZoom] = useState(false)
-  const [hover, setHover] = useState(false)
   const height = blockHeight(data)
   const hostRef = useRef<HTMLDivElement | null>(null)
-  const [overlayEl, setOverlayEl] = useState<HTMLElement | null>(null)
-
-  // 会话存在块 data 里（详情可见），刷新/换设备都还在
-  const savedKey = JSON.stringify(data.session ?? null)
-  const sessionRef = useRef<TerminalSession | null>(null)
-  if (!sessionRef.current) {
-    const restored = parseSession(data.session)
-    restored.cwd = restored.cwd || cwd
-    // 首次打开：把围栏里的 lines 当开场输出灌一次
-    if (!restored.seeded) {
-      restored.seeded = true
-      if (!restored.history.length && sample.length) {
-        restored.history = sample.map((text) => ({ kind: 'out' as const, text }))
-      }
-    }
-    sessionRef.current = restored
-  }
-  const session = sessionRef.current
-  const timer = useRef<number | undefined>(undefined)
-  const savedRef = useRef(savedKey)
-  const dataRef = useRef(data)
-  dataRef.current = data
-  const [nonce, setNonce] = useState(0)
-
-  const pack = () => packSession(stripDraft({ ...session, cwd: session.cwd || cwd }))
-
-  // 攒一下再写：连续输出不会把文档刷爆；内容没变就不写
-  const flush = (delay = 350) => {
-    if (!writable) return
-    window.clearTimeout(timer.current)
-    timer.current = window.setTimeout(() => {
-      const packed = pack()
-      if (sameSession(packed, packSession(parseSession(dataRef.current.session)))) return
-      update({ session: packed })
-    }, delay)
-  }
-
-  // 围栏里还没落过会话：挂上就立刻写一次，之后刷新才不会又拿 lines 重灌
-  useEffect(() => {
-    if (!writable) return
-    const packed = pack()
-    if (sameSession(packed, packSession(parseSession(dataRef.current.session)))) return
-    update({ session: packed })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  // 外部改了 data.session（另一个窗口 / agent 改的）才重新灌
-  useEffect(() => {
-    if (savedKey === savedRef.current) return
-    savedRef.current = savedKey
-    const next = parseSession(data.session)
-    next.cwd = next.cwd || cwd
-    if (!next.seeded) next.seeded = true
-    sessionRef.current = next
-    setNonce((n) => n + 1)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [savedKey])
-
-  // 关掉块之前把还在攒的改动落下去
-  useEffect(
-    () => () => {
-      window.clearTimeout(timer.current)
-      if (!writable) return
-      const packed = pack()
-      if (!sameSession(packed, packSession(parseSession(dataRef.current.session)))) update({ session: packed })
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
-  )
+  const [tabs, setTabs] = useState<string[]>(() => [newTabId()])
+  const [active, setActive] = useState(() => tabs[0] ?? newTabId())
 
   useEffect(() => {
-    if (!zoom) {
-      setOverlayEl(null)
+    const host = hostRef.current
+    if (!host || !zoom) {
+      relockAncestors()
       return
     }
-    const host = hostRef.current
-    if (host) unlockAncestors(host)
-    const el = makeOverlay('page-terminal-zoom-host', INK)
-    setOverlayEl(el)
-    const stop = watchZoom(() => setZoom(false), el)
+    unlockAncestors(host)
+    const stop = watchZoom(() => setZoom(false), host)
     return () => {
       stop()
-      el.remove()
       relockAncestors()
-      setOverlayEl(null)
     }
   }, [zoom])
 
-  const surface = (zoomed: boolean) => (
-    <TerminalSurface
-      key={`${zoomed ? 'zoom' : 'card'}-${nonce}`}
-      cwd={session.cwd || cwd}
-      prompt={prompt}
-      sample={sample}
-      session={session}
-      zoomed={zoomed}
-      onZoom={() => setZoom(true)}
-      onClose={() => setZoom(false)}
-      onChange={() => {
-        setNonce((n) => n + 1)
-        flush()
-      }}
-    />
-  )
+  const addTab = () => {
+    const id = newTabId()
+    setTabs((list) => [...list, id])
+    setActive(id)
+  }
+
+  const removeTab = (id: string) => {
+    setTabs((list) => {
+      if (list.length <= 1) return list
+      const next = list.filter((item) => item !== id)
+      if (id === active) setActive(next[next.length - 1] ?? next[0])
+      return next
+    })
+  }
 
   return (
     <div
       ref={hostRef}
       data-testid="page-terminal"
-      style={{ position: 'relative', width: '100%', height, display: 'flex' }}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
+      style={{
+        position: zoom ? 'fixed' : 'relative',
+        inset: zoom ? 0 : undefined,
+        zIndex: zoom ? 2147483000 : undefined,
+        width: '100%',
+        height: zoom ? '100%' : height,
+        display: 'flex',
+      }}
     >
-      {surface(false)}
-      {hover && !writable ? (
-        <span
-          data-biu-ignore
-          style={{
-            position: 'absolute',
-            right: 10,
-            bottom: 4,
-            fontFamily: MONO,
-            fontSize: 10,
-            color: 'rgba(201,209,217,.4)',
-          }}
-        >
-          workspace shell · node
-        </span>
-      ) : null}
-      {overlayEl ? createPortal(surface(true), overlayEl) : null}
+      <TerminalSurface
+        tabs={tabs}
+        active={active}
+        zoomed={zoom}
+        onZoom={() => setZoom(true)}
+        onClose={() => setZoom(false)}
+        onSelect={setActive}
+        onAdd={addTab}
+        onRemove={removeTab}
+      />
     </div>
   )
 }
@@ -457,9 +341,9 @@ export function apply(ctx: {
     label: '终端',
     blockType: 'terminal',
     blockTypeLabel: '终端',
-    hint: '工作区真 shell：回车在宿主执行命令（node / ls 等），右上角可放大',
+    hint: '本机登录 SHELL 的真终端（PTY）。一张卡片可开多个 Tab。',
     aliases: ['terminal', 'shell', '终端', '命令行', 'console', 'cmd'],
-    defaults: () => ({ ...SAMPLE }),
+    defaults: () => ({ height: 320 }),
     View: TerminalCard,
   })
 }

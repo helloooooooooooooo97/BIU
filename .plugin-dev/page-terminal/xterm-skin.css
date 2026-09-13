@@ -1,0 +1,86 @@
+/* xterm 样式只挂在卡片里，不进全局，避免弄坏聊天文字。 */
+.page-terminal-pty {
+  height: 100%;
+  width: 100%;
+  min-height: 0;
+}
+.page-terminal-pty .xterm {
+  position: relative;
+  height: 100%;
+  width: 100%;
+  cursor: text;
+  user-select: none;
+  -webkit-user-select: none;
+  font-feature-settings: 'liga' 0;
+}
+.page-terminal-pty .xterm:focus,
+.page-terminal-pty .xterm.focus {
+  outline: none;
+}
+.page-terminal-pty .xterm .xterm-helpers {
+  position: absolute;
+  top: 0;
+  z-index: 5;
+}
+.page-terminal-pty .xterm .xterm-helper-textarea {
+  position: absolute;
+  opacity: 0;
+  left: -9999em;
+  top: 0;
+  width: 0;
+  height: 0;
+  z-index: -5;
+  white-space: nowrap;
+  overflow: hidden;
+  resize: none;
+  padding: 0;
+  border: 0;
+  margin: 0;
+}
+.page-terminal-pty .xterm .xterm-viewport {
+  background-color: #0b0e14;
+  overflow-y: scroll;
+  cursor: default;
+  position: absolute;
+  right: 0;
+  left: 0;
+  top: 0;
+  bottom: 0;
+}
+.page-terminal-pty .xterm .xterm-screen {
+  position: relative;
+}
+.page-terminal-pty .xterm .xterm-screen canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+.page-terminal-pty .xterm .xterm-scroll-area {
+  visibility: hidden;
+}
+.page-terminal-pty .xterm-char-measure-element {
+  display: inline-block;
+  visibility: hidden;
+  position: absolute;
+  top: 0;
+  left: -9999em;
+  line-height: normal;
+}
+.page-terminal-pty .xterm .xterm-accessibility,
+.page-terminal-pty .xterm .xterm-message {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  z-index: 10;
+  color: transparent;
+  overflow: hidden;
+}
+.page-terminal-pty .live-region {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
