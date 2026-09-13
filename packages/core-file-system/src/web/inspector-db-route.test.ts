@@ -182,6 +182,43 @@ test('inspectorPageKey ignores view query', () => {
   assert.equal(inspectorPageKey('/database/pages/record/p1?view=all'), '/database/pages/record/p1')
 })
 
+test('inspectorPageKey treats the same record leaf as one page even with a view in the path', () => {
+  assert.equal(
+    inspectorPageKey('/database/pages/view/all/record/p1'),
+    inspectorPageKey('/database/pages/record/p1'),
+  )
+})
+
+test('opening the same record leaf with a view path focuses the existing pane', () => {
+  const tabs: string[] = []
+  const onTab = (event: Event) => {
+    const detail = (event as CustomEvent).detail
+    if (typeof detail === 'string') tabs.push(detail)
+  }
+  window.addEventListener('biu:inspector-tab', onTab)
+  setInspectorDbPath('database:/pages', '/database/pages/record/p1')
+  showInInspector('/pages', '/database/pages/view/all/record/p1', { unique: true })
+  assert.equal(Object.keys(snapshotInspectorDbPaths()).length, 1)
+  assert.equal(getInspectorDbPath('database:/pages'), '/database/pages/view/all/record/p1')
+  assert.deepEqual(tabs, ['database:/pages'])
+  window.removeEventListener('biu:inspector-tab', onTab)
+})
+
+test('duplicate panes for the same record leaf collapse and keep the canonical tab', () => {
+  const tabs: string[] = []
+  const onTab = (event: Event) => {
+    const detail = (event as CustomEvent).detail
+    if (typeof detail === 'string') tabs.push(detail)
+  }
+  window.addEventListener('biu:inspector-tab', onTab)
+  setInspectorDbPath('database:/pages', '/database/pages/record/p1')
+  showInInspector('/pages', '/database/pages/record/p1', { unique: true })
+  assert.equal(getInspectorDbPath('database:/pages'), '/database/pages/record/p1')
+  assert.equal(Object.keys(snapshotInspectorDbPaths()).filter((id) => id.startsWith('database:/pages')).length, 1)
+  assert.equal(tabs.at(-1), 'database:/pages')
+  window.removeEventListener('biu:inspector-tab', onTab)
+})
+
 test('unique inspector reveal focuses the same page and opens a new pane for a different page', () => {
   setInspectorDbPath('database:/notes', '/database/notes/record/n1')
   showInInspector('/notes', '/database/notes/record/n1?view=all', { unique: true })
