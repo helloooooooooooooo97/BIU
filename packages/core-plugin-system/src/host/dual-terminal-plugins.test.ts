@@ -56,4 +56,16 @@ describe('terminal store plugins', () => {
       assert.match(css, /\.xterm-scrollable-element/)
     }
   })
+
+  it('defers xterm opening until its page or tab is visible', async () => {
+    for (const id of ['page-terminal', 'global-terminal']) {
+      const terminal = await readFile(pluginFile(id, 'terminal.tsx'), 'utf8')
+      assert.match(terminal, /element\.checkVisibility/)
+      assert.match(terminal, /activeRef\.current/)
+      assert.match(terminal, /if \(!isVisible\(\)\) return/)
+      assert.match(terminal, /new IntersectionObserver\(scheduleFit\)/)
+    }
+    const global = await readFile(pluginFile('global-terminal', 'web.tsx'), 'utf8')
+    assert.match(global, /active=\{tab\.id === active\}/)
+  })
 })
