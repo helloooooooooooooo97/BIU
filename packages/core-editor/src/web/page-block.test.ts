@@ -288,6 +288,8 @@ test('pageBlock capture includes every registered block shell', async () => {
   assert.match(src, /closest\('\.page-block/)
   assert.match(src, /data-page-block-capture/)
   assert.match(view, /data-page-block-capture=""/)
+  assert.match(view, /contentEditable=\{false\}/)
+  assert.doesNotMatch(view, /contentEditable="false"/)
   assert.match(view, /bindPageBlockPlugin/)
   assert.match(view, /data-biu-plugin=\{plugin \|\| undefined\}/)
   assert.match(view, /data-biu-kind="plugin"/)
