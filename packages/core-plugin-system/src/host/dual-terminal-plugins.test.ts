@@ -79,7 +79,7 @@ describe('terminal store plugins', () => {
       assert.match(terminal, /if \(disposed \|\| hasUserInput \|\| !terminal\) return/)
       assert.match(terminal, /buffer\.getLine\(buffer\.baseY \+ buffer\.cursorY\)/)
       assert.match(terminal, /\\u001b\[2J\\u001b\[H/)
-      assert.match(terminal, /terminal\.scrollToBottom\(\)/)
+      assert.match(terminal, /terminal\?\.scrollToBottom\(\)/)
       assert.match(terminal, /window\.clearTimeout\(startupTimer\)/)
     }
   })
