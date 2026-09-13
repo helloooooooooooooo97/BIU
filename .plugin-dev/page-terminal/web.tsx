@@ -61,6 +61,27 @@ function PtyPane({ active }: { active: boolean }) {
     const fit = new FitAddon()
     term.loadAddon(fit)
     term.open(el)
+    const helper = el.querySelector('textarea.xterm-helper-textarea, textarea')
+    const buryHelper = () => {
+      if (!(helper instanceof HTMLTextAreaElement)) return
+      helper.setAttribute('aria-hidden', 'true')
+      helper.tabIndex = -1
+      helper.style.setProperty('outline', 'none', 'important')
+      helper.style.setProperty('box-shadow', 'none', 'important')
+      helper.style.setProperty('opacity', '0', 'important')
+      helper.style.setProperty('color', 'transparent', 'important')
+      helper.style.setProperty('caret-color', 'transparent', 'important')
+      helper.style.setProperty('background', 'transparent', 'important')
+      helper.style.setProperty('left', '-9999em', 'important')
+      helper.style.setProperty('width', '0', 'important')
+      helper.style.setProperty('height', '0', 'important')
+    }
+    buryHelper()
+    const helperWatch = helper instanceof HTMLTextAreaElement ? new MutationObserver(buryHelper) : null
+    if (helper instanceof HTMLTextAreaElement) {
+      helperWatch?.observe(helper, { attributes: true, attributeFilter: ['style', 'class'] })
+      helper.addEventListener('focus', buryHelper)
+    }
     try {
       fit.fit()
     } catch {
@@ -94,11 +115,24 @@ function PtyPane({ active }: { active: boolean }) {
     window.addEventListener('resize', onFit)
     const ro = new ResizeObserver(onFit)
     ro.observe(el)
+    const onWheel = (event: WheelEvent) => {
+      if (event.ctrlKey) return
+      event.stopPropagation()
+      const dy = event.deltaY
+      if (!dy) return
+      event.preventDefault()
+      const lines = Math.max(1, Math.round(Math.abs(dy) / 24)) * (dy > 0 ? 1 : -1)
+      term.scrollLines(lines)
+    }
+    el.addEventListener('wheel', onWheel, { capture: true, passive: false })
     return () => {
       write.dispose()
       resized.dispose()
       ro.disconnect()
       window.removeEventListener('resize', onFit)
+      helperWatch?.disconnect()
+      if (helper instanceof HTMLTextAreaElement) helper.removeEventListener('focus', buryHelper)
+      el.removeEventListener('wheel', onWheel, true)
       socket.close()
       term.dispose()
       termRef.current = null
@@ -125,16 +159,18 @@ function PtyPane({ active }: { active: boolean }) {
       data-testid="page-terminal-xterm"
       data-page-block-capture=""
       style={{
-        display: active ? 'block' : 'none',
+        display: active ? 'flex' : 'none',
+        flexDirection: 'column',
         flex: 1,
         minHeight: 0,
         width: '100%',
         height: '100%',
         position: 'relative',
+        overflow: 'hidden',
         background: TERM_BG,
       }}
     >
-      <div ref={hostRef} style={{ width: '100%', height: '100%' }} />
+      <div ref={hostRef} style={{ flex: 1, minHeight: 0, width: '100%', height: '100%' }} />
       {!ready ? (
         <div
           style={{
