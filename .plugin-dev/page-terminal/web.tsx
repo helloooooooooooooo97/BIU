@@ -1,7 +1,4 @@
-import { Terminal } from '@xterm/xterm'
-import { FitAddon } from '@xterm/addon-fit'
-import '@xterm/xterm/css/xterm.css'
-import './xterm-skin.css'
+import { applyPtyChunk, keyToPty } from './buffer.ts'
 import { relockAncestors, unlockAncestors, watchZoom } from './zoom.ts'
 
 const React = globalThis.React
@@ -11,25 +8,16 @@ export const name = 'page-terminal'
 export const inject = ['pageEditor']
 
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
-const INK = '#0b0e14'
-const PAPER = '#c9d1d9'
-const GREEN = '#3fb950'
+const UI = 'ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+const BODY = '#202020'
+const INK = 'rgba(255,255,255,.86)'
+const MUTED = 'rgba(255,255,255,.45)'
+const LINE = 'rgba(255,255,255,.08)'
+const TAB_ON = 'rgba(255,255,255,.08)'
 
 function blockHeight(data: Record<string, unknown>) {
   const n = Number(data.height)
-  return Number.isFinite(n) && n >= 120 ? Math.round(n) : 320
-}
-
-function Glyph({ shrink }: { shrink?: boolean }) {
-  return (
-    <svg width={12} height={12} viewBox="0 0 16 16" fill="currentColor" aria-hidden>
-      {shrink ? (
-        <path d="M6 2h1.6v3.4H11V7H6V2Zm4 12H8.4V10.6H5V9h5v5Z" />
-      ) : (
-        <path d="M9 2h5v5h-1.5V4.56L8.78 8.28 7.72 7.22 11.44 3.5H9V2ZM2 9h1.5v2.44l3.72-3.72 1.06 1.06L4.56 12.5H7V14H2V9Z" />
-      )}
-    </svg>
-  )
+  return Number.isFinite(n) && n >= 160 ? Math.round(n) : 360
 }
 
 function wsUrl(cols: number, rows: number) {
@@ -37,127 +25,113 @@ function wsUrl(cols: number, rows: number) {
   return `${proto}://${location.host}/ws/page-terminal?cols=${cols}&rows=${rows}`
 }
 
+function measure(el: HTMLElement) {
+  const cs = getComputedStyle(el)
+  const padX = Number.parseFloat(cs.paddingLeft) + Number.parseFloat(cs.paddingRight)
+  const padY = Number.parseFloat(cs.paddingTop) + Number.parseFloat(cs.paddingBottom)
+  const probe = document.createElement('span')
+  probe.textContent = '0'
+  probe.style.cssText = `position:absolute;visibility:hidden;font:${cs.font}`
+  el.appendChild(probe)
+  const cw = probe.getBoundingClientRect().width || 8
+  const ch = Number.parseFloat(cs.lineHeight) || 18
+  probe.remove()
+  const cols = Math.max(20, Math.floor((el.clientWidth - padX) / cw))
+  const rows = Math.max(8, Math.floor((el.clientHeight - padY) / ch))
+  return { cols, rows }
+}
+
 function PtyPane({ active }: { active: boolean }) {
-  const hostRef = useRef<HTMLDivElement | null>(null)
-  const termRef = useRef<Terminal | null>(null)
-  const fitRef = useRef<FitAddon | null>(null)
+  const paneRef = useRef<HTMLDivElement | null>(null)
+  const stick = useRef(true)
+  const socketRef = useRef<WebSocket | null>(null)
+  const [text, setText] = useState('')
 
   useEffect(() => {
-    const el = hostRef.current
+    const el = paneRef.current
     if (!el) return
-    const term = new Terminal({
-      cursorBlink: true,
-      fontSize: 13,
-      fontFamily: MONO,
-      scrollback: 10_000,
-      allowProposedApi: false,
-      theme: { background: INK, foreground: PAPER, cursor: GREEN },
-    })
-    const fit = new FitAddon()
-    term.loadAddon(fit)
-    term.open(el)
-    const helper = el.querySelector('textarea')
-    const buryHelper = () => {
-      if (!(helper instanceof HTMLTextAreaElement)) return
-      helper.setAttribute('aria-hidden', 'true')
-      helper.setAttribute('tabindex', '-1')
-      helper.style.setProperty('opacity', '0', 'important')
-      helper.style.setProperty('color', 'transparent', 'important')
-      helper.style.setProperty('caret-color', 'transparent', 'important')
-      helper.style.setProperty('background', 'transparent', 'important')
-      helper.style.setProperty('left', '-9999px', 'important')
-      helper.style.setProperty('top', '0', 'important')
-      helper.style.setProperty('width', '0', 'important')
-      helper.style.setProperty('height', '0', 'important')
-      helper.style.setProperty('font-size', '0', 'important')
-      helper.style.setProperty('overflow', 'hidden', 'important')
-      helper.style.setProperty('pointer-events', 'none', 'important')
+    const size = measure(el)
+    const socket = new WebSocket(wsUrl(size.cols, size.rows))
+    socketRef.current = socket
+    const decode = (data: unknown) => {
+      if (typeof data === 'string') return data
+      return new TextDecoder().decode(data as ArrayBuffer)
     }
-    buryHelper()
-    const helperWatch =
-      helper instanceof HTMLTextAreaElement
-        ? new MutationObserver(buryHelper)
-        : null
-    if (helper instanceof HTMLTextAreaElement) {
-      helperWatch?.observe(helper, { attributes: true, attributeFilter: ['style'] })
-      helper.addEventListener('input', buryHelper)
-    }
-    const onWheel = (event: WheelEvent) => {
-      if (event.ctrlKey) return
-      const dy = event.deltaY
-      if (!dy) return
-      const lines = Math.max(1, Math.round(Math.abs(dy) / 24)) * (dy > 0 ? 1 : -1)
-      term.scrollLines(lines)
-    }
-    el.addEventListener('wheel', onWheel, { passive: true })
-    fit.fit()
-    termRef.current = term
-    fitRef.current = fit
-    const socket = new WebSocket(wsUrl(term.cols, term.rows))
-    const write = term.onData((data) => {
-      if (socket.readyState === WebSocket.OPEN) socket.send(data)
-    })
-    const resized = term.onResize(({ cols, rows }) => {
-      if (socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({ type: 'resize', cols, rows }))
-      }
-    })
     socket.onmessage = (event) => {
-      if (typeof event.data === 'string') term.write(event.data)
-      else term.write(new Uint8Array(event.data as ArrayBuffer))
+      setText((prev) => applyPtyChunk(prev, decode(event.data)))
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (event.metaKey && event.key.toLowerCase() === 'v') return
+      const seq = keyToPty(event)
+      if (seq == null) return
+      event.preventDefault()
+      event.stopPropagation()
+      if (socket.readyState === WebSocket.OPEN) socket.send(seq)
+    }
+    const onPaste = (event: ClipboardEvent) => {
+      const paste = event.clipboardData?.getData('text')
+      if (!paste) return
+      event.preventDefault()
+      if (socket.readyState === WebSocket.OPEN) socket.send(paste)
     }
     const onFit = () => {
-      try {
-        fit.fit()
-      } catch {
-        /* 折叠时尺寸为 0 */
-      }
+      if (socket.readyState !== WebSocket.OPEN) return
+      const next = measure(el)
+      socket.send(JSON.stringify({ type: 'resize', cols: next.cols, rows: next.rows }))
     }
-    window.addEventListener('resize', onFit)
+    el.addEventListener('keydown', onKey)
+    el.addEventListener('paste', onPaste)
     const ro = new ResizeObserver(onFit)
     ro.observe(el)
     return () => {
-      write.dispose()
-      resized.dispose()
+      el.removeEventListener('keydown', onKey)
+      el.removeEventListener('paste', onPaste)
       ro.disconnect()
-      window.removeEventListener('resize', onFit)
-      helperWatch?.disconnect()
-      if (helper instanceof HTMLTextAreaElement) helper.removeEventListener('input', buryHelper)
-      el.removeEventListener('wheel', onWheel)
       socket.close()
-      term.dispose()
-      termRef.current = null
-      fitRef.current = null
+      socketRef.current = null
     }
   }, [])
 
   useEffect(() => {
-    if (!active) return
-    const id = window.requestAnimationFrame(() => {
-      try {
-        fitRef.current?.fit()
-      } catch {
-        /* ignore */
-      }
-      termRef.current?.focus()
-    })
-    return () => window.cancelAnimationFrame(id)
-  }, [active])
+    const el = paneRef.current
+    if (!el || !active) return
+    if (stick.current) el.scrollTop = el.scrollHeight
+    el.focus()
+  }, [text, active])
 
   return (
     <div
-      className="page-terminal-pty"
-      data-testid="page-terminal-xterm"
+      ref={paneRef}
+      data-testid="page-terminal-body"
       data-page-block-capture=""
+      tabIndex={0}
+      spellCheck={false}
+      onClick={() => paneRef.current?.focus()}
+      onScroll={(event) => {
+        const box = event.currentTarget
+        stick.current = box.scrollHeight - box.scrollTop - box.clientHeight < 28
+      }}
       style={{
         display: active ? 'block' : 'none',
         flex: 1,
         minHeight: 0,
         width: '100%',
-        height: '100%',
+        overflow: 'auto',
+        outline: 'none',
+        padding: '12px 14px 16px',
+        boxSizing: 'border-box',
+        whiteSpace: 'pre-wrap',
+        wordBreak: 'break-word',
+        fontFamily: MONO,
+        fontSize: 13,
+        lineHeight: 1.45,
+        color: INK,
+        background: BODY,
+        cursor: 'text',
+        caretColor: 'transparent',
       }}
     >
-      <div ref={hostRef} style={{ width: '100%', height: '100%' }} />
+      {text}
     </div>
   )
 }
@@ -181,26 +155,17 @@ function TerminalSurface({
   onAdd: () => void
   onRemove: (id: string) => void
 }) {
-  const btn: Record<string, unknown> = {
+  const quiet: Record<string, unknown> = {
     cursor: 'pointer',
     border: 'none',
     background: 'transparent',
-    color: PAPER,
-    fontFamily: MONO,
-    fontSize: 11,
-    fontWeight: 700,
-    padding: '4px 9px',
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 4,
-  }
-  const tabBtn = (on: boolean): Record<string, unknown> => ({
-    ...btn,
-    color: on ? PAPER : 'rgba(201,209,217,.55)',
-    background: on ? 'rgba(255,255,255,.08)' : 'transparent',
+    color: MUTED,
+    fontFamily: UI,
+    fontSize: 12,
+    fontWeight: 500,
+    padding: '4px 8px',
     borderRadius: 6,
-    padding: '3px 8px',
-  })
+  }
 
   return (
     <div
@@ -210,14 +175,12 @@ function TerminalSurface({
         flex: 1,
         minHeight: 0,
         width: '100%',
-        background: INK,
-        border: zoomed ? 'none' : '1px solid rgba(201,209,217,.18)',
+        background: BODY,
+        border: zoomed ? 'none' : `1px solid ${LINE}`,
         borderRadius: zoomed ? 0 : 8,
         boxSizing: 'border-box',
         display: 'flex',
         flexDirection: 'column',
-        fontFamily: MONO,
-        color: PAPER,
         overflow: 'hidden',
       }}
     >
@@ -226,60 +189,60 @@ function TerminalSurface({
         style={{
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between',
           gap: 8,
-          padding: '4px 6px 4px 8px',
-          borderBottom: '1px solid rgba(201,209,217,.14)',
-          background: 'rgba(255,255,255,.02)',
+          minHeight: 36,
+          padding: '4px 8px 4px 12px',
+          borderBottom: `1px solid ${LINE}`,
+          background: 'rgba(255,255,255,.03)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0, flex: 1 }}>
-          <span style={{ color: 'rgba(201,209,217,.55)', fontSize: 10, letterSpacing: '.08em', marginRight: 4 }}>
-            Terminal
-          </span>
+        <span style={{ fontFamily: UI, fontSize: 12, fontWeight: 500, color: MUTED, letterSpacing: '-0.01em', flexShrink: 0 }}>
+          终端
+        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 2, minWidth: 0, flex: 1, overflow: 'auto' }}>
           {tabs.map((id, index) => (
-            <span key={id} style={{ display: 'inline-flex', alignItems: 'center' }}>
-              <button type="button" tabIndex={-1} data-testid={`page-terminal-tab-${index}`} onClick={() => onSelect(id)} style={tabBtn(id === active)}>
-                {index + 1}
+            <span key={id} style={{ display: 'inline-flex', alignItems: 'center', flexShrink: 0 }}>
+              <button
+                type="button"
+                tabIndex={-1}
+                data-testid={`page-terminal-tab-${index}`}
+                onClick={() => onSelect(id)}
+                style={{
+                  ...quiet,
+                  color: id === active ? INK : MUTED,
+                  background: id === active ? TAB_ON : 'transparent',
+                  boxShadow: id === active ? `inset 0 -2px 0 ${INK}` : 'none',
+                  borderRadius: 0,
+                  padding: '6px 10px',
+                }}
+              >
+                {index === 0 ? '会话' : `会话 ${index + 1}`}
               </button>
               {tabs.length > 1 ? (
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  title="关闭此 Tab"
-                  aria-label="关闭此 Tab"
-                  onClick={() => onRemove(id)}
-                  style={{ ...btn, padding: '2px 4px', color: 'rgba(201,209,217,.45)' }}
-                >
+                <button type="button" tabIndex={-1} title="关闭" aria-label="关闭" onClick={() => onRemove(id)} style={{ ...quiet, padding: '2px 6px' }}>
                   ×
                 </button>
               ) : null}
             </span>
           ))}
-          <button type="button" tabIndex={-1} data-testid="page-terminal-tab-add" title="新建 Tab" aria-label="新建 Tab" onClick={onAdd} style={btn}>
+          <button type="button" tabIndex={-1} data-testid="page-terminal-tab-add" title="新建会话" aria-label="新建会话" onClick={onAdd} style={quiet}>
             +
           </button>
         </div>
-        {zoomed ? (
-          <button type="button" tabIndex={-1} data-testid="page-terminal-shrink" title="退出放大" aria-label="退出放大" onClick={() => onClose?.()} style={btn}>
-            <Glyph shrink />
-          </button>
-        ) : (
-          <button
-            type="button"
-            tabIndex={-1}
-            data-testid="page-terminal-zoom"
-            title="放大终端"
-            aria-label="放大终端"
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={onZoom}
-            style={btn}
-          >
-            <Glyph />
-          </button>
-        )}
+        <button
+          type="button"
+          tabIndex={-1}
+          data-testid={zoomed ? 'page-terminal-shrink' : 'page-terminal-zoom'}
+          title={zoomed ? '退出全屏' : '全屏'}
+          aria-label={zoomed ? '退出全屏' : '全屏'}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => (zoomed ? onClose?.() : onZoom())}
+          style={quiet}
+        >
+          {zoomed ? '收起' : '全屏'}
+        </button>
       </div>
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', background: BODY }}>
         {tabs.map((id) => (
           <PtyPane key={id} active={id === active} />
         ))}
@@ -339,6 +302,8 @@ function TerminalCard({ data }: { data: Record<string, unknown>; update: (patch:
         width: '100%',
         height: zoom ? '100%' : height,
         display: 'flex',
+        padding: zoom ? 0 : '2px 0 4px',
+        boxSizing: 'border-box',
       }}
     >
       <TerminalSurface
@@ -380,9 +345,9 @@ export function apply(ctx: {
     label: '终端',
     blockType: 'terminal',
     blockTypeLabel: '终端',
-    hint: '本机登录 SHELL 的真终端（PTY）。一张卡片可开多个 Tab。',
+    hint: '本机 SHELL。点进窗口打字，多会话 Tab。',
     aliases: ['terminal', 'shell', '终端', '命令行', 'console', 'cmd'],
-    defaults: () => ({ height: 320 }),
+    defaults: () => ({ height: 360 }),
     View: TerminalCard,
   })
 }
