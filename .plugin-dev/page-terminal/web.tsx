@@ -1,7 +1,7 @@
 import { FitAddon } from '@xterm/addon-fit'
-import { relockAncestors, unlockAncestors } from './zoom.ts'
 import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
+import { makeOverlay, relockAncestors, unlockAncestors, watchZoom } from './zoom.ts'
 
 const React = globalThis.React
 const { useEffect, useRef } = React
@@ -103,18 +103,6 @@ const STYLE_CSS = `
 .pt-pane .scrollbar > .slider:hover,
 .pt-pane .scrollbar > .slider.active {
   background: color-mix(in srgb, var(--dsw-label-2, rgba(242,241,237,0.72)) 70%, transparent) !important;
-}
-
-/* 原生全屏时铺满，并保证终端区域撑开 */
-[data-testid="page-terminal"]:fullscreen,
-[data-testid="page-terminal"]:-webkit-full-screen {
-  width: 100% !important;
-  height: 100% !important;
-  max-width: none !important;
-  max-height: none !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  background: #0f0f0f !important;
 }
 `
 
@@ -617,28 +605,53 @@ function ExpandIcon({ shrink }: { shrink?: boolean }) {
   )
 }
 
-/** 窗口内全屏：把块用 position:fixed 铺满视口，盖住导航栏，但**不**触发浏览器全屏。
-   Esc 或再点按钮退出。 */
+/** 放大放映：不搬 DOM、不重建子树，只把当前块用 fixed 提升到全屏。
+   xterm 是命令式操作真实 DOM 的，搬动或重建都会丢节点，所以只改样式。
+   同时临时解开沿途祖先的 overflow/position（否则会被编辑器容器裁掉）。 */
+/** 放大：把块的真实 DOM 节点搬到 document.body 顶层，并铺满视口。
+   为什么必须搬到 body：
+     宿主把界面切成多层容器，各层常带 position:relative / z-index，
+     会形成各自的层叠上下文（例如检查器的 .app-side-bar-head 是 relative+z-index:3）。
+     节点留在原容器里时，z-index 再大也只在那个上下文内生效，
+     压不住其它分支里的 UI（顶部 tab 栏就压不住）。
+     挂到 body 顶层才能真正浮在一切之上。
+   为什么不重建 React 子树 / 用 Portal：xterm 命令式持有真实 DOM，
+   重建会让它画在脱离文档的节点上（实测黑屏）。
+   还原靠原位置留下的注释锚点。 */
 function useZoom() {
-  const ref = React.useRef<HTMLElement | null>(null)
-  const [full, setFull] = React.useState(false)
+  const [zoomed, setZoomed] = React.useState(false)
+  const slotRef = React.useRef<HTMLElement | null>(null)
+  const markRef = React.useRef<Comment | null>(null)
 
   const stop = React.useCallback(() => {
+    const slot = slotRef.current
+    const mark = markRef.current
+    if (slot && mark && mark.parentNode) {
+      mark.parentNode.insertBefore(slot, mark)
+      mark.remove()
+    }
+    markRef.current = null
     relockAncestors()
-    setFull(false)
+    setZoomed(false)
     requestAnimationFrame(() => window.dispatchEvent(new Event('resize')))
   }, [])
 
   const start = React.useCallback(() => {
-    const el = ref.current
-    if (!el) return
-    unlockAncestors(el)
-    setFull(true)
+    const slot = slotRef.current
+    if (!slot || markRef.current) return
+    // 原位留注释锚点，退出时据此还原。
+    const mark = document.createComment('page-terminal-zoom-anchor')
+    slot.parentNode?.insertBefore(mark, slot)
+    markRef.current = mark
+    unlockAncestors(mark)
+    document.body.appendChild(slot)
+    setZoomed(true)
     requestAnimationFrame(() => window.dispatchEvent(new Event('resize')))
   }, [])
 
+  // Esc 退出。用原生 keydown，捕获阶段优先。
   React.useEffect(() => {
-    if (!full) return
+    if (!zoomed) return
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
       event.preventDefault()
@@ -646,15 +659,13 @@ function useZoom() {
       stop()
     }
     window.addEventListener('keydown', onKey, true)
-    return () => {
-      window.removeEventListener('keydown', onKey, true)
-    }
-  }, [full, stop])
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [zoomed, stop])
 
-  // 卸载时确保还原。
+  // 卸载兜底还原。
   React.useEffect(() => () => relockAncestors(), [])
 
-  return { full, start, stop, ref }
+  return { zoomed, start, stop, slotRef }
 }
 
 /** 终端设置面板：配置后端缓冲池参数（全局生效）。 */
@@ -792,7 +803,7 @@ function PageTerminal({
   // 会话键：存在块数据里，保证同一个块刷新/切页都能连回同一个 shell。
   // 没有就现生成一个并写回（writeable 时才写），生成后跟着 markdown 走。
   const [settingsOpen, setSettingsOpen] = React.useState(false)
-  const fs = useZoom()
+  const zoom = useZoom()
   const sessionKey = typeof data.sid === 'string' && data.sid ? data.sid : ''
   useEffect(() => {
     if (sessionKey || !writable) return
@@ -814,25 +825,24 @@ function PageTerminal({
 
   const body = (
     <section
-      // 注意：只记住非 null 的元素。放大时节点被移出 React 父级，
-      // React 会以 ref(null) 回调一次，否则会把我们的引用清掉、退出时搬不回来。
-      ref={fs.ref as never}
+      ref={(el: HTMLElement | null) => {
+        zoom.slotRef.current = el
+      }}
       data-testid="page-terminal"
       style={{
         display: 'flex',
         flexDirection: 'column',
-        // 全屏时：fixed 铺满视口，层级压过导航栏。
-        ...(fs.full
+        ...(zoom.zoomed
           ? {
               position: 'fixed',
               inset: 0,
-              width: '100vw',
-              height: '100vh',
-              zIndex: 2147483000,
+              width: '100%',
+              height: '100%',
+              zIndex: 2147483647,
             }
           : {}),
-        border: fs.full ? 'none' : '1px solid var(--dsw-border, rgba(242,241,237,0.1))',
-        borderRadius: fs.full ? 0 : 8,
+        border: zoom.zoomed ? 'none' : '1px solid var(--dsw-border, rgba(242,241,237,0.1))',
+        borderRadius: zoom.zoomed ? 0 : 8,
         overflow: 'hidden',
         background: '#191919',
       }}
@@ -876,11 +886,11 @@ function PageTerminal({
           <GearIcon />
         </IconButton>
         <IconButton
-          label={fs.full ? '退出全屏' : '全屏放大'}
-          active={fs.full}
-          onClick={() => (fs.full ? fs.stop() : fs.start())}
+          label={zoom.zoomed ? '退出全屏' : '全屏放大'}
+          active={zoom.zoomed}
+          onClick={() => (zoom.zoomed ? zoom.stop() : zoom.start())}
         >
-          <ExpandIcon shrink={fs.full} />
+          <ExpandIcon shrink={zoom.zoomed} />
         </IconButton>
       </header>
       {settingsOpen ? <SettingsPanel onClose={() => setSettingsOpen(false)} /> : null}
@@ -895,7 +905,7 @@ function PageTerminal({
           history={history}
           onHistory={(next) => update({ history: next })}
           sessionKey={sessionKey}
-          fill={fs.full}
+          fill={zoom.zoomed}
         />
       ) : null}
     </section>

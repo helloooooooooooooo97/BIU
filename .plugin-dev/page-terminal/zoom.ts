@@ -1,37 +1,25 @@
 /**
- * 窗口内全屏（不触发浏览器 Fullscreen API）：
- * 把块用 position:fixed 铺满视口，同时临时解开沿途祖先的限制。
- *
- * 为什么要解锁祖先：
- *  1. 祖先的 overflow:hidden 会把 fixed 元素裁掉；
- *  2. 祖先的 transform / filter / backdrop-filter / will-change / contain
- *     等会创建「层叠上下文」，把子元素的 z-index 锁在里面，导致盖不住顶层 UI。
- * 只改内联样式，退出时原样还原。
+ * 页面块插件的全屏放大：fixed 覆盖层直接挂在 body，
+ * 并临时把沿途祖先的 overflow/包含块限制改写掉（只动内联样式，退出时原样还原）。
+ * 不依赖 HTML 页面块的 :::pageBlock 约定，纯 DOM。
  */
 
-const PREV = 'data-zoom-prev-style'
+const OWN = 'data-page-zoom-own'
+const PREV = 'data-page-zoom-prev-style'
+const CLOSE = 'data-page-zoom-close'
 
-type Prev = Record<string, string>
-
+type Prev = { overflow: string; position: string }
 const restored = new WeakMap<HTMLElement, Prev>()
 const watched = new Set<HTMLElement>()
 
-/** 会创建层叠上下文的属性，全屏期间要临时清掉。 */
-const CONTEXT_PROPS = [
-  'transform',
-  'filter',
-  'backdrop-filter',
-  '-webkit-backdrop-filter',
-  'will-change',
-  'contain',
-  'perspective',
-  'isolation',
-] as const
+function key(el: HTMLElement) {
+  return el.tagName + '|' + el.className
+}
 
-const ALL_PROPS = [...CONTEXT_PROPS, 'overflow', 'position'] as const
-
+/** 需要临时放开的祖先：会裁剪、或会当 fixed 包含块/层叠上下文的都可能挡住覆盖层。 */
 function shouldPatch(el: HTMLElement) {
   if (el === document.body || el === document.documentElement) return false
+  if (el.closest('[data-page-zoom-own]')) return false
   return true
 }
 
@@ -43,37 +31,77 @@ export function unlockAncestors(from: HTMLElement) {
     el = el.parentElement
   }
   for (const node of chain) {
-    const prev: Prev = {}
-    for (const prop of ALL_PROPS) prev[prop] = node.style.getPropertyValue(prop)
-    restored.set(node, prev)
-    node.setAttribute(PREV, JSON.stringify(prev))
+    restored.set(node, { overflow: node.style.overflow, position: node.style.position })
+    node.setAttribute(PREV, JSON.stringify(restored.get(node)))
+    node.style.overflow = 'visible'
+    node.style.position = 'static'
     watched.add(node)
-
-    node.style.setProperty('overflow', 'visible', 'important')
     node.style.setProperty('position', 'static', 'important')
-    node.style.setProperty('transform', 'none', 'important')
-    node.style.setProperty('filter', 'none', 'important')
-    node.style.setProperty('backdrop-filter', 'none', 'important')
-    node.style.setProperty('-webkit-backdrop-filter', 'none', 'important')
-    node.style.setProperty('will-change', 'auto', 'important')
-    node.style.setProperty('contain', 'none', 'important')
-    node.style.setProperty('perspective', 'none', 'important')
-    node.style.setProperty('isolation', 'auto', 'important')
+    node.style.setProperty('overflow', 'visible', 'important')
   }
 }
 
 export function relockAncestors() {
   for (const node of [...watched]) {
     const prev = restored.get(node)
-    for (const prop of ALL_PROPS) node.style.removeProperty(prop)
+    node.style.removeProperty('position')
+    node.style.removeProperty('overflow')
     if (prev) {
-      for (const prop of ALL_PROPS) {
-        const value = prev[prop]
-        if (value) node.style.setProperty(prop, value)
-      }
+      node.style.position = prev.position
+      node.style.overflow = prev.overflow
     }
     node.removeAttribute(PREV)
     restored.delete(node)
     watched.delete(node)
   }
+}
+
+/** 覆盖层：position: fixed, inset: 0，最高层级，底色由调用方给。 */
+export function makeOverlay(testId: string, background: string) {
+  const el = document.createElement('div')
+  el.setAttribute('data-testid', testId)
+  el.setAttribute(OWN, '')
+  el.style.cssText = [
+    'position:fixed',
+    'inset:0',
+    'width:100%',
+    'height:100%',
+    'max-width:none',
+    'max-height:none',
+    'margin:0',
+    'padding:0',
+    'box-sizing:border-box',
+    'display:flex',
+    'flex-direction:column',
+    'overflow:hidden',
+    `background:${background}`,
+    'z-index:2147483000',
+  ].join(';')
+  document.body.appendChild(el)
+  return el
+}
+
+export function raiseOverlay(el: HTMLElement) {
+  document.body.appendChild(el)
+}
+
+/** 放大期间：吃掉 Esc（留给插件自己关），并保证覆盖层始终是 body 的最后一个孩子。 */
+export function watchZoom(onEscape: () => void, overlay: HTMLElement) {
+  const onKey = (event: KeyboardEvent) => {
+    if (event.key !== 'Escape') return
+    event.preventDefault()
+    event.stopPropagation()
+    onEscape()
+  }
+  const observer = new MutationObserver(() => raiseOverlay(overlay))
+  window.addEventListener('keydown', onKey, true)
+  observer.observe(document.body, { childList: true })
+  return () => {
+    window.removeEventListener('keydown', onKey, true)
+    observer.disconnect()
+  }
+}
+
+export function markCloseButton(button: HTMLElement) {
+  button.setAttribute(CLOSE, '')
 }
