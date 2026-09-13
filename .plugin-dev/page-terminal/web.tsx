@@ -2,7 +2,7 @@ import { createPortal } from 'react-dom'
 import {
   packSession,
   parseSession,
-  runTerminalCommand,
+  runHostCommand,
   sameSession,
   stripDraft,
   type TerminalSession,
@@ -24,9 +24,9 @@ const ERR = '#ff7b72'
 const MAX_LINES = 400
 
 const SAMPLE = {
-  cwd: '~/demo',
+  cwd: '.',
   prompt: '$',
-  lines: ['Welcome to the demo terminal.', 'Type `help` for commands, `demo` for a tour.'],
+  lines: ['工作区 shell。回车执行真实命令，例如 node -v 或 node -e "console.log(1)"。'],
 }
 
 type Line = { kind: 'in' | 'out' | 'err'; text: string }
@@ -103,8 +103,7 @@ function TerminalSurface({
       push({ kind: 'in', text: echo })
       return
     }
-    const result = runTerminalCommand(cmd)
-    if (result.type === 'clear') {
+    if (cmd === 'clear') {
       session.history = []
       onChange()
       return
@@ -112,9 +111,20 @@ function TerminalSurface({
     busyRef.current = true
     setBusy(true)
     push({ kind: 'in', text: echo })
-    for (const text of result.output.split('\n')) {
-      push({ kind: result.failed ? 'err' : 'out', text })
-      await new Promise((resolve) => setTimeout(resolve, 45))
+    try {
+      const result = await runHostCommand(cmd)
+      const chunks = [
+        ...String(result.stdout).split('\n').map((text) => ({ kind: 'out' as const, text })),
+        ...String(result.stderr).split('\n').map((text) => ({ kind: 'err' as const, text })),
+      ].filter((line) => line.text.length > 0)
+      if (!chunks.length && result.code && result.code !== 0) {
+        push({ kind: 'err', text: `exit ${result.code}` })
+      } else {
+        for (const line of chunks) push(line)
+        if (result.code && result.code !== 0) push({ kind: 'err', text: `exit ${result.code}` })
+      }
+    } catch (error) {
+      push({ kind: 'err', text: String(error) })
     }
     busyRef.current = false
     setBusy(false)
@@ -281,7 +291,7 @@ function TerminalCard({
   update: (patch: Record<string, unknown>) => void
   writable: boolean
 }) {
-  const cwd = String(data.cwd ?? '~/demo')
+  const cwd = String(data.cwd ?? '.')
   const prompt = String(data.prompt ?? '$')
   const sample = parseLines(data.lines)
   const [zoom, setZoom] = useState(false)
@@ -414,7 +424,7 @@ function TerminalCard({
             color: 'rgba(201,209,217,.4)',
           }}
         >
-          help · demo · ls · tree
+          workspace shell · node
         </span>
       ) : null}
       {overlayEl ? createPortal(surface(true), overlayEl) : null}
@@ -447,7 +457,7 @@ export function apply(ctx: {
     label: '终端',
     blockType: 'terminal',
     blockTypeLabel: '终端',
-    hint: '可交互终端卡片，输入命令看输出；右上角可放大到全屏',
+    hint: '工作区真 shell：回车在宿主执行命令（node / ls 等），右上角可放大',
     aliases: ['terminal', 'shell', '终端', '命令行', 'console', 'cmd'],
     defaults: () => ({ ...SAMPLE }),
     View: TerminalCard,
