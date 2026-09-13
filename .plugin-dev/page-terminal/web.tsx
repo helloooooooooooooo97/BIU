@@ -533,17 +533,20 @@ function HistoryPanel({
 function IconButton({
   label,
   active,
+  dataZoomExit,
   onClick,
   children,
 }: {
   label: string
   active?: boolean
+  dataZoomExit?: boolean
   onClick: () => void
   children: unknown
 }) {
   return (
     <button
       type="button"
+      data-zoom-exit={dataZoomExit ? '' : undefined}
       onClick={onClick}
       aria-label={label}
       title={label}
@@ -622,6 +625,9 @@ function useZoom() {
   const [zoomed, setZoomed] = React.useState(false)
   const slotRef = React.useRef<HTMLElement | null>(null)
   const markRef = React.useRef<Comment | null>(null)
+  const nativeOffRef = React.useRef<(() => void) | null>(null)
+
+  const stopRef = React.useRef<() => void>(() => {})
 
   const stop = React.useCallback(() => {
     const slot = slotRef.current
@@ -631,10 +637,13 @@ function useZoom() {
       mark.remove()
     }
     markRef.current = null
+    nativeOffRef.current?.()
+    nativeOffRef.current = null
     relockAncestors()
     setZoomed(false)
     requestAnimationFrame(() => window.dispatchEvent(new Event('resize')))
   }, [])
+  stopRef.current = stop
 
   const start = React.useCallback(() => {
     const slot = slotRef.current
@@ -647,6 +656,19 @@ function useZoom() {
     document.body.appendChild(slot)
     setZoomed(true)
     requestAnimationFrame(() => window.dispatchEvent(new Event('resize')))
+    // 节点被搬走后，React 的合成事件委托链会断，onClick 不再触发。
+    // 补一个原生监听，保证放大后还能点按钮退出。
+    window.setTimeout(() => {
+      const btn = slot.querySelector('[data-zoom-exit]') as HTMLElement | null
+      if (!btn) return
+      const handler = (event: Event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        stopRef.current()
+      }
+      btn.addEventListener('click', handler, true)
+      nativeOffRef.current = () => btn.removeEventListener('click', handler, true)
+    }, 0)
   }, [])
 
   // Esc 退出。用原生 keydown，捕获阶段优先。
@@ -888,6 +910,7 @@ function PageTerminal({
         <IconButton
           label={zoom.zoomed ? '退出全屏' : '全屏放大'}
           active={zoom.zoomed}
+          dataZoomExit
           onClick={() => (zoom.zoomed ? zoom.stop() : zoom.start())}
         >
           <ExpandIcon shrink={zoom.zoomed} />
