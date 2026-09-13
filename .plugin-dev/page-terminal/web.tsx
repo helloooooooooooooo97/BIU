@@ -1,12 +1,12 @@
+import { Terminal } from '@xterm/xterm'
+import { FitAddon } from '@xterm/addon-fit'
+import '@xterm/xterm/css/xterm.css'
+import './xterm-skin.css'
+import { relockAncestors, unlockAncestors, watchZoom } from './zoom.ts'
+
 const React = globalThis.React
 const { useEffect, useRef, useState } = React
 type CSSProperties = import('react').CSSProperties
-import { EditorView, keymap, drawSelection } from '@codemirror/view'
-import { Prec, EditorState } from '@codemirror/state'
-import { StreamLanguage, HighlightStyle, syntaxHighlighting } from '@codemirror/language'
-import { tags as t } from '@lezer/highlight'
-import { TerminalBuffer, keyToPty } from './buffer.ts'
-import { relockAncestors, unlockAncestors, watchZoom } from './zoom.ts'
 
 export const name = 'page-terminal'
 export const inject = ['pageEditor']
@@ -17,216 +17,128 @@ const LINE = 'color-mix(in srgb, var(--text) 8%, transparent)'
 const MUTED = 'color-mix(in srgb, var(--text) 45%, transparent)'
 const INK = 'var(--text)'
 const CARD = 'var(--bg)'
-const BODY = 'color-mix(in srgb, var(--text) 3.5%, var(--bg))'
 const TAB_ON = 'color-mix(in srgb, var(--text) 6%, transparent)'
-const CH = 8.4
-const LH = 18
-
-function socketUrl() {
-  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
-  return `${proto}//${location.host}/ws/page-terminal`
-}
+const TERM_BG = '#1c1c1e'
+const TERM_FG = '#e8e8ed'
+const TERM_CURSOR = '#e8e8ed'
+const TERM_SEL = '#3a6ff0'
 
 function blockHeight(data: Record<string, unknown>) {
   const n = Number(data.height)
   return Number.isFinite(n) && n >= 160 ? n : 360
 }
 
-const termLang = StreamLanguage.define({
-  token(stream) {
-    if (stream.match(/^\$ |^% |^# |^❯ |^➜ /)) return 'meta'
-    if (stream.match(/^(error|Error|ERROR|fatal|Fatal)\b/)) return 'invalid'
-    if (stream.match(/^(warning|Warning|WARN)\b/)) return 'keyword'
-    if (stream.match(/^(\/|[A-Za-z]:\\)[^\s]+/)) return 'string'
-    if (stream.match(/^[0-9]+/)) return 'number'
-    stream.next()
-    return null
-  },
-})
-
-const termHighlight = HighlightStyle.define([
-  { tag: t.meta, color: '#7aa2f7' },
-  { tag: t.invalid, color: '#f7768e' },
-  { tag: t.keyword, color: '#e0af68' },
-  { tag: t.string, color: '#9ece6a' },
-  { tag: t.number, color: '#bb9af7' },
-])
-
-const termTheme = EditorView.theme({
-  '&': {
-    height: '100%',
-    background: 'transparent',
-    fontFamily: MONO,
-    fontSize: '12.5px',
-    color: INK,
-  },
-  '.cm-scroller': {
-    overflow: 'auto',
-    fontFamily: MONO,
-    lineHeight: `${LH}px`,
-    padding: '10px 14px 14px',
-  },
-  '.cm-content': { caretColor: INK, padding: 0, minHeight: '100%' },
-  '.cm-gutters': { display: 'none' },
-  '.cm-cursor': { borderLeftWidth: '2px', borderLeftColor: INK },
-  '&.cm-focused .cm-cursor': { borderLeftColor: INK },
-  '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': {
-    background: 'color-mix(in srgb, #2f6fed 28%, transparent) !important',
-  },
-})
+function socketUrl(cols: number, rows: number) {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
+  return `${proto}//${location.host}/ws/page-terminal?cols=${cols}&rows=${rows}`
+}
 
 function PtyPane({ active }: { active: boolean }) {
-  const wrapRef = useRef<HTMLDivElement | null>(null)
-  const viewRef = useRef<EditorView | null>(null)
-  const bufRef = useRef(new TerminalBuffer(80, 24))
-  const sockRef = useRef<WebSocket | null>(null)
-  const sizeRef = useRef({ cols: 80, rows: 24 })
+  const hostRef = useRef<HTMLDivElement | null>(null)
+  const termRef = useRef<Terminal | null>(null)
+  const fitRef = useRef<FitAddon | null>(null)
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
-    const host = wrapRef.current
-    if (!host) return
-    const buf = bufRef.current
-
-    const sendKey = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'c' && !event.shiftKey) {
-        const sel = viewRef.current?.state.selection.main
-        if (sel && !sel.empty) return false
-      }
-      if (event.metaKey && event.key.toLowerCase() === 'v') return false
-      const bytes = keyToPty(event)
-      if (bytes == null) return false
-      event.preventDefault()
-      sockRef.current?.readyState === 1 && sockRef.current.send(bytes)
-      return true
-    }
-
-    const view = new EditorView({
-      parent: host,
-      state: EditorState.create({
-        doc: '',
-        extensions: [
-          EditorView.editable.of(true),
-          EditorView.lineWrapping,
-          drawSelection(),
-          syntaxHighlighting(termHighlight),
-          termLang,
-          termTheme,
-          Prec.highest(
-            keymap.of([
-              {
-                any: (_view, event) => sendKey(event),
-              },
-            ]),
-          ),
-          EditorView.inputHandler.of(() => true),
-          EditorView.domEventHandlers({
-            paste(event) {
-              const text = event.clipboardData?.getData('text') ?? ''
-              if (!text) return false
-              event.preventDefault()
-              sockRef.current?.readyState === 1 && sockRef.current.send(text)
-              return true
-            },
-          }),
-        ],
-      }),
+    const el = hostRef.current
+    if (!el) return
+    const term = new Terminal({
+      cursorBlink: true,
+      cursorStyle: 'bar',
+      fontSize: 13,
+      fontFamily: MONO,
+      lineHeight: 1.35,
+      scrollback: 10_000,
+      theme: {
+        background: TERM_BG,
+        foreground: TERM_FG,
+        cursor: TERM_CURSOR,
+        cursorAccent: TERM_BG,
+        selectionBackground: TERM_SEL,
+        selectionForeground: TERM_FG,
+      },
     })
-    viewRef.current = view
-
-    const paint = () => {
-      const next = buf.text()
-      const cur = buf.cursor()
-      const pos = Math.min(next.length, cur)
-      view.dispatch({
-        changes: { from: 0, to: view.state.doc.length, insert: next },
-        selection: { anchor: pos, head: pos },
-        scrollIntoView: true,
-      })
+    const fit = new FitAddon()
+    term.loadAddon(fit)
+    term.open(el)
+    try {
+      fit.fit()
+    } catch {
+      /* 折叠时尺寸为 0 */
     }
-
-    const open = () => {
-      const sock = new WebSocket(socketUrl())
-      sock.binaryType = 'arraybuffer'
-      sockRef.current = sock
-      sock.onopen = () => {
-        setReady(true)
-        sock.send(JSON.stringify({ type: 'resize', cols: sizeRef.current.cols, rows: sizeRef.current.rows }))
+    termRef.current = term
+    fitRef.current = fit
+    const socket = new WebSocket(socketUrl(term.cols, term.rows))
+    socket.binaryType = 'arraybuffer'
+    const write = term.onData((data) => {
+      if (socket.readyState === WebSocket.OPEN) socket.send(data)
+    })
+    const resized = term.onResize(({ cols, rows }) => {
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: 'resize', cols, rows }))
       }
-      sock.onclose = () => setReady(false)
-      sock.onmessage = (event) => {
-        const data = event.data
-        if (typeof data === 'string') {
-          if (data.startsWith('{"type":"exit"')) {
-            try {
-              const msg = JSON.parse(data) as { reason?: string }
-              buf.write(`\r\n[进程结束${msg.reason ? `: ${msg.reason}` : ''}]\r\n`)
-              paint()
-              return
-            } catch {
-              /* pty text */
-            }
-          }
-          buf.write(data)
-          paint()
-          return
-        }
-        buf.write(new TextDecoder().decode(data instanceof ArrayBuffer ? data : new Uint8Array(data)))
-        paint()
+    })
+    socket.onopen = () => setReady(true)
+    socket.onclose = () => setReady(false)
+    socket.onmessage = (event) => {
+      if (typeof event.data === 'string') term.write(event.data)
+      else term.write(new Uint8Array(event.data as ArrayBuffer))
+    }
+    const onFit = () => {
+      try {
+        fit.fit()
+      } catch {
+        /* ignore */
       }
     }
-    open()
-
-    const fit = () => {
-      const scroller = view.scrollDOM
-      const w = scroller.clientWidth
-      const h = scroller.clientHeight
-      if (w < 40 || h < 40) return
-      const cols = Math.max(20, Math.floor((w - 8) / CH))
-      const rows = Math.max(8, Math.floor(h / LH))
-      if (cols === sizeRef.current.cols && rows === sizeRef.current.rows) return
-      sizeRef.current = { cols, rows }
-      buf.resize(cols, rows)
-      sockRef.current?.readyState === 1 && sockRef.current.send(JSON.stringify({ type: 'resize', cols, rows }))
-    }
-    fit()
-    const ro = new ResizeObserver(fit)
-    ro.observe(host)
-
+    window.addEventListener('resize', onFit)
+    const ro = new ResizeObserver(onFit)
+    ro.observe(el)
     return () => {
+      write.dispose()
+      resized.dispose()
       ro.disconnect()
-      sockRef.current?.close()
-      sockRef.current = null
-      view.destroy()
-      viewRef.current = null
+      window.removeEventListener('resize', onFit)
+      socket.close()
+      term.dispose()
+      termRef.current = null
+      fitRef.current = null
     }
   }, [])
 
   useEffect(() => {
     if (!active) return
-    const id = requestAnimationFrame(() => viewRef.current?.focus())
+    const id = requestAnimationFrame(() => {
+      try {
+        fitRef.current?.fit()
+      } catch {
+        /* ignore */
+      }
+      termRef.current?.focus()
+    })
     return () => cancelAnimationFrame(id)
   }, [active])
 
   return (
     <div
-      ref={wrapRef}
+      className="page-terminal-pty"
       data-testid="page-terminal-xterm"
-      onMouseDown={() => viewRef.current?.focus()}
+      data-page-block-capture=""
       style={{
-        display: active ? 'flex' : 'none',
-        flexDirection: 'column',
+        display: active ? 'block' : 'none',
         flex: 1,
         minHeight: 0,
+        width: '100%',
+        height: '100%',
         position: 'relative',
-        cursor: 'text',
+        background: TERM_BG,
       }}
     >
+      <div ref={hostRef} style={{ width: '100%', height: '100%' }} />
       {!ready ? (
         <div
           style={{
             position: 'absolute',
-            zIndex: 1,
             inset: 0,
             pointerEvents: 'none',
             display: 'flex',
@@ -234,7 +146,7 @@ function PtyPane({ active }: { active: boolean }) {
             justifyContent: 'center',
             fontFamily: UI,
             fontSize: 12,
-            color: MUTED,
+            color: 'rgba(232,232,237,.45)',
           }}
         >
           连接中…
@@ -278,6 +190,7 @@ function TerminalSurface({
   }
   return (
     <div
+      data-testid="page-terminal-surface"
       style={{
         flex: 1,
         minHeight: 0,
@@ -290,6 +203,7 @@ function TerminalSurface({
       }}
     >
       <div
+        data-biu-ignore
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -346,7 +260,7 @@ function TerminalSurface({
           {zoomed ? '收起' : '全屏'}
         </button>
       </div>
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', background: BODY }}>
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', background: TERM_BG }}>
         {tabs.map((id) => (
           <PtyPane key={id} active={id === active} />
         ))}
