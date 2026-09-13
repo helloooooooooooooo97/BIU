@@ -188,6 +188,27 @@ test('clearing the last pageBlock fence drops the index row immediately', async 
   assert.equal((await index.list()).length, 0)
 })
 
+test('reindex rewrites duplicate pageBlock ids instead of crashing', async () => {
+  const ctx = new Context()
+  await ctx.plugin(tools)
+  const root = await mkdtemp(join(tmpdir(), 'page-block-dup-'))
+  await ctx.plugin(fsPlugin, { root })
+  const store = new PagesStore(ctx.fs.workspace as never, join(root, '.biu/assets'))
+  const index = new PageBlocksIndex(store, { hotWindowMs: 60_000, hotLimit: 8, warmLimit: 8 })
+  const fence = (id: string, body: string) => `:::pageBlock {kind=html plugin=page-html-blocks id=${id}}\n<div>${body}</div>\n:::\n`
+  const created = await store.create({ title: '粘贴崩了', notes: fence('ab12cd34', 'a') + fence('ab12cd34', 'b') })
+  await index.reindexPage(created)
+  const listed = await index.list()
+  assert.equal(listed.length, 2)
+  const ids = listed.map((row) => String(row.blockId)).sort()
+  assert.equal(new Set(ids).size, 2)
+  assert.equal(ids.includes('ab12cd34'), true)
+  const md = await readFile(join(root, `.page/${created.id}.md`), 'utf8')
+  const fences = md.match(/id=([a-z0-9]+)/gi) ?? []
+  assert.equal(fences.length, 2)
+  assert.notEqual(fences[0], fences[1])
+})
+
 test('page-block index scans a hot batch instead of every page', async () => {
   const ctx = new Context()
   await ctx.plugin(tools)
