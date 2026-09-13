@@ -37,7 +37,7 @@ test('extra ws path does not abort the hub /ws handshake', async () => {
   const fiber = await ctx.plugin(http, { port, host: '127.0.0.1', publicDir })
   await ready
   try {
-    ctx.http.ws('/ws/page-terminal', (socket) => {
+    ctx.http.ws('/ws/plugin-extra', (socket) => {
       socket.send('pty')
     })
 
@@ -52,7 +52,7 @@ test('extra ws path does not abort the hub /ws handshake', async () => {
     assert.match(hub, /"type":"hello"/)
 
     const extra = await new Promise<string>((resolve, reject) => {
-      const ws = new WebSocket(`ws://127.0.0.1:${port}/ws/page-terminal`)
+      const ws = new WebSocket(`ws://127.0.0.1:${port}/ws/plugin-extra`)
       ws.on('message', (raw) => {
         resolve(String(raw))
         ws.close()
