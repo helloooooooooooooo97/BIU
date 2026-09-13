@@ -1,0 +1,14 @@
+{
+  "id": "page-terminal",
+  "name": "页面终端",
+  "blurb": "可嵌入页面的真实交互终端。每个终端块拥有独立 PTY，会自动适配块尺寸并在页面卸载时关闭进程。",
+  "tags": [
+    "page",
+    "editor",
+    "terminal",
+    "pty"
+  ],
+  "author": "Biu",
+  "headless": true,
+  "createdAt": 1789284300000
+}
