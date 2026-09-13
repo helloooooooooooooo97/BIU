@@ -58,11 +58,6 @@ export function TerminalSurface({
       if (disposed || !element.isConnected) return
       const bounds = element.getBoundingClientRect()
       if (!activeRef.current || bounds.width < 20 || bounds.height < 20) return false
-      try {
-        if (element.checkVisibility && !element.checkVisibility()) return false
-      } catch {
-        // Older Chromium versions may expose a partial checkVisibility implementation.
-      }
       const style = window.getComputedStyle(element)
       return style.display !== 'none' && style.visibility !== 'hidden' && style.contentVisibility !== 'hidden'
     }
@@ -121,6 +116,13 @@ export function TerminalSurface({
         }
         terminal.textarea.setAttribute('aria-label', '全局终端输入')
         terminal.textarea.setAttribute('autocomplete', 'off')
+        Object.assign(terminal.element.style, {
+          width: '100%',
+          height: '100%',
+          padding: '9px 8px 5px 10px',
+          overflow: 'hidden',
+          boxSizing: 'border-box',
+        })
         socket = new WebSocket(socketUrl(endpoint, terminal.cols, terminal.rows))
         input = terminal.onData((data) => send({ type: 'input', data }))
         resize = terminal.onResize(({ cols, rows }) => send({ type: 'resize', cols, rows }))
@@ -190,20 +192,45 @@ export function TerminalSurface({
     <div
       className={`biu-terminal-surface ${className}`}
       data-terminal-state={state}
+      style={{
+        position: 'relative',
+        display: 'block',
+        width: '100%',
+        height: '100%',
+        minWidth: 0,
+        minHeight: 0,
+        overflow: 'hidden',
+        background: '#111318',
+        boxSizing: 'border-box',
+        contain: 'strict',
+      }}
       onMouseDown={(event) => {
         event.stopPropagation()
         instance.current?.focus()
       }}
       onWheel={(event) => event.stopPropagation()}
     >
-      <div ref={host} className="biu-terminal-mount" />
-      {state === 'connecting' ? <div className="biu-terminal-status">正在连接终端…</div> : null}
+      <div ref={host} className="biu-terminal-mount" style={{ position: 'absolute', inset: 0, overflow: 'hidden', boxSizing: 'border-box' }} />
+      {state === 'connecting' ? <div className="biu-terminal-status" style={statusStyle}>正在连接终端…</div> : null}
       {state === 'closed' || state === 'error' ? (
-        <div className="biu-terminal-status biu-terminal-status-error">
+        <div className="biu-terminal-status biu-terminal-status-error" style={{ ...statusStyle, background: 'rgb(17 19 24 / 92%)' }}>
           <span>{state === 'error' ? '终端连接失败' : '终端已退出'}</span>
           <button type="button" onClick={reconnect}>重新打开</button>
         </div>
       ) : null}
     </div>
   )
+}
+
+const statusStyle = {
+  position: 'absolute',
+  inset: 0,
+  zIndex: 2,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 10,
+  color: '#9ba3b2',
+  background: '#111318',
+  font: '12px ui-sans-serif, system-ui, sans-serif',
 }
