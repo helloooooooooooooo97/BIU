@@ -85,7 +85,7 @@ test('list and detail share the chat column max width with side padding', () => 
   assert.match(css, /\.inspector-database-page \.fsdb-right-body\{[^}]*overflow:hidden/)
   assert.match(css, /\.inspector-database-page \.fsdb-right-body>\*,\.inspector-database-page \.fsdb-main\{[^}]*overflow:hidden/)
   assert.match(css, /\.fsdb-pager\{[^}]*margin-top:auto/)
-  assert.match(css, /\.fsdb-page\{[^}]*--fsdb-pager-lift:calc\(1rem \+ 44px \+ 5px \+ 25px - 30px\)/)
+  assert.match(css, /\.fsdb-page\{[^}]*--fsdb-pager-lift:calc\(1rem \+ 44px \+ 25px \+ 25px - 30px\)/)
   assert.match(css, /\.inspector-database-page \.fsdb-pager\{[^}]*var\(--fsdb-pager-lift\)/)
   assert.match(css, /\.fsdb-page \.tasks-table\{[^}]*border-left:0|border:0/)
   assert.match(css, /\.fsdb-page \.tasks-table th,\.fsdb-page \.tasks-table td\{[^}]*border-right:1px solid color-mix\(in srgb,var\(--dsw-border\) 80%,transparent\)/)
