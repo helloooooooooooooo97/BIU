@@ -1,10 +1,11 @@
+/** @vitest-environment node */
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { describe, it } from 'vitest'
 import { bundleStoreEntry, parseStoreManifest } from './plugin-create.ts'
 
-const root = resolve(import.meta.dirname, '../../../../..')
+const root = resolve(import.meta.dirname, '../../../..')
 
 function pluginFile(id: string, file: string) {
   return resolve(root, '.plugin-dev', id, file)
