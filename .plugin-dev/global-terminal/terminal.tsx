@@ -52,6 +52,8 @@ export function TerminalSurface({
     let socket: WebSocket | null = null
     let input: { dispose(): void } | null = null
     let resize: { dispose(): void } | null = null
+    let startupTimer = 0
+    let hasUserInput = false
     setState('connecting')
 
     const isVisible = () => {
@@ -124,7 +126,11 @@ export function TerminalSurface({
           boxSizing: 'border-box',
         })
         socket = new WebSocket(socketUrl(endpoint, terminal.cols, terminal.rows))
-        input = terminal.onData((data) => send({ type: 'input', data }))
+        input = terminal.onData((data) => {
+          hasUserInput = true
+          window.clearTimeout(startupTimer)
+          send({ type: 'input', data })
+        })
         resize = terminal.onResize(({ cols, rows }) => send({ type: 'resize', cols, rows }))
         socket.addEventListener('open', () => {
           if (disposed || !terminal) return
@@ -134,7 +140,17 @@ export function TerminalSurface({
           if (autoFocus && activeRef.current) terminal.focus()
         })
         socket.addEventListener('message', (event) => {
-          if (!disposed && terminal) terminal.write(typeof event.data === 'string' ? event.data : '')
+          if (disposed || !terminal) return
+          terminal.write(typeof event.data === 'string' ? event.data : '', () => {
+            if (disposed || hasUserInput || !terminal) return
+            window.clearTimeout(startupTimer)
+            startupTimer = window.setTimeout(() => {
+              if (disposed || hasUserInput || !terminal) return
+              terminal.clear()
+              terminal.scrollToBottom()
+              terminal.refresh(0, terminal.rows - 1)
+            }, 120)
+          })
         })
         socket.addEventListener('error', () => {
           if (!disposed) setState('error')
@@ -153,6 +169,7 @@ export function TerminalSurface({
     const scheduleFit = () => {
       cancelAnimationFrame(frame)
       cancelAnimationFrame(secondFrame)
+      window.clearTimeout(startupTimer)
       frame = requestAnimationFrame(() => {
         openVisibleTerminal()
         // Font metrics and the xterm viewport settle one frame after the first fit.
