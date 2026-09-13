@@ -2,6 +2,7 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import './terminal.css'
+import { ensureXtermRuntimeStyle } from './runtime-style.ts'
 
 const React = globalThis.React
 const { useCallback, useEffect, useLayoutEffect, useRef, useState } = React
@@ -52,8 +53,6 @@ export function TerminalSurface({
     let socket: WebSocket | null = null
     let input: { dispose(): void } | null = null
     let resize: { dispose(): void } | null = null
-    let startupTimer = 0
-    let hasUserInput = false
     setState('connecting')
 
     const isVisible = () => {
@@ -71,6 +70,7 @@ export function TerminalSurface({
     const openVisibleTerminal = () => {
       if (!isVisible()) return
       if (!terminal) {
+        ensureXtermRuntimeStyle()
         terminal = new Terminal({
           allowProposedApi: false,
           convertEol: false,
@@ -126,11 +126,7 @@ export function TerminalSurface({
           boxSizing: 'border-box',
         })
         socket = new WebSocket(socketUrl(endpoint, terminal.cols, terminal.rows))
-        input = terminal.onData((data) => {
-          hasUserInput = true
-          window.clearTimeout(startupTimer)
-          send({ type: 'input', data })
-        })
+        input = terminal.onData((data) => send({ type: 'input', data }))
         resize = terminal.onResize(({ cols, rows }) => send({ type: 'resize', cols, rows }))
         socket.addEventListener('open', () => {
           if (disposed || !terminal) return
@@ -140,21 +136,7 @@ export function TerminalSurface({
           if (autoFocus && activeRef.current) terminal.focus()
         })
         socket.addEventListener('message', (event) => {
-          if (disposed || !terminal) return
-          terminal.write(typeof event.data === 'string' ? event.data : '', () => {
-            if (disposed || hasUserInput || !terminal) return
-            window.clearTimeout(startupTimer)
-            startupTimer = window.setTimeout(() => {
-              if (disposed || hasUserInput || !terminal) return
-              const buffer = terminal.buffer.active
-              const prompt = buffer.getLine(buffer.baseY + buffer.cursorY)?.translateToString(true) ?? ''
-              if (!prompt.trim()) return
-              terminal.write(`\u001b[2J\u001b[H${prompt}`, () => {
-                terminal?.scrollToBottom()
-                terminal?.refresh(0, terminal.rows - 1)
-              })
-            }, 120)
-          })
+          if (!disposed && terminal) terminal.write(typeof event.data === 'string' ? event.data : '')
         })
         socket.addEventListener('error', () => {
           if (!disposed) setState('error')
@@ -173,7 +155,6 @@ export function TerminalSurface({
     const scheduleFit = () => {
       cancelAnimationFrame(frame)
       cancelAnimationFrame(secondFrame)
-      window.clearTimeout(startupTimer)
       frame = requestAnimationFrame(() => {
         openVisibleTerminal()
         // Font metrics and the xterm viewport settle one frame after the first fit.

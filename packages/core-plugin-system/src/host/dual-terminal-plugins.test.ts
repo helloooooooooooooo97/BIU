@@ -72,15 +72,16 @@ describe('terminal store plugins', () => {
     assert.match(global, /active=\{tab\.id === active\}/)
   })
 
-  it('removes shell startup padding only before the first user input', async () => {
+  it('injects critical xterm helper styles without relying on imported CSS', async () => {
     for (const id of ['page-terminal', 'global-terminal']) {
       const terminal = await readFile(pluginFile(id, 'terminal.tsx'), 'utf8')
-      assert.match(terminal, /hasUserInput = true/)
-      assert.match(terminal, /if \(disposed \|\| hasUserInput \|\| !terminal\) return/)
-      assert.match(terminal, /buffer\.getLine\(buffer\.baseY \+ buffer\.cursorY\)/)
-      assert.match(terminal, /\\u001b\[2J\\u001b\[H/)
-      assert.match(terminal, /terminal\?\.scrollToBottom\(\)/)
-      assert.match(terminal, /window\.clearTimeout\(startupTimer\)/)
+      const runtimeStyle = await readFile(pluginFile(id, 'runtime-style.ts'), 'utf8')
+      assert.match(terminal, /ensureXtermRuntimeStyle\(\)/)
+      assert.match(runtimeStyle, /\.xterm-helper-textarea/)
+      assert.match(runtimeStyle, /opacity:\s*0 !important/)
+      assert.match(runtimeStyle, /\.xterm-width-cache-measure-container/)
+      assert.match(runtimeStyle, /visibility:\s*hidden !important/)
+      assert.match(runtimeStyle, /document\.head\.appendChild\(style\)/)
     }
   })
 })
