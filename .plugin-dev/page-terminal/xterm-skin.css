@@ -1,0 +1,57 @@
+/* 只作用在终端卡片内，避免 xterm 默认样式漏到编辑器。 */
+.page-terminal-pty {
+  height: 100%;
+  width: 100%;
+  min-height: 0;
+  overflow: hidden;
+  padding: 8px 10px 10px;
+  box-sizing: border-box;
+}
+.page-terminal-pty .xterm {
+  position: relative;
+  height: 100%;
+  width: 100%;
+  cursor: text;
+  padding: 0;
+}
+.page-terminal-pty .xterm:focus,
+.page-terminal-pty .xterm.focus {
+  outline: none;
+}
+.page-terminal-pty .xterm .xterm-helpers {
+  position: absolute;
+  top: 0;
+  z-index: 5;
+}
+/* 接键盘的 textarea 必须透明，否则左上角会画出一块假输入 */
+.page-terminal-pty textarea.xterm-helper-textarea,
+.page-terminal-pty .xterm-helper-textarea {
+  opacity: 0 !important;
+  color: transparent !important;
+  caret-color: transparent !important;
+  background: transparent !important;
+  border: 0 !important;
+  resize: none !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  white-space: nowrap !important;
+}
+.page-terminal-pty .xterm .xterm-viewport {
+  overflow-y: auto !important;
+}
+.page-terminal-pty .xterm .composition-view {
+  color: inherit;
+  opacity: 1;
+}
+.page-terminal-pty .xterm .xterm-scroll-area {
+  visibility: hidden;
+}
+.page-terminal-pty .xterm-char-measure-element {
+  display: inline-block;
+  visibility: hidden;
+  position: absolute;
+  top: 0;
+  left: -9999em;
+  line-height: normal;
+}
