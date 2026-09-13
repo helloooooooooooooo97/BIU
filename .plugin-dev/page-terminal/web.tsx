@@ -233,12 +233,15 @@ function TerminalSurface({
       data-testid="page-terminal-surface"
       style={{
         flex: 1,
+        alignSelf: 'stretch',
+        width: '100%',
+        height: zoomed ? '100%' : undefined,
         minHeight: 0,
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
         background: CARD,
-        border: `1px solid ${LINE}`,
+        border: zoomed ? 'none' : `1px solid ${LINE}`,
         borderRadius: zoomed ? 0 : 10,
       }}
     >
