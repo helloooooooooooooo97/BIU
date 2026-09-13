@@ -20,6 +20,15 @@ type Ctx = {
   effect(effect: () => void | (() => void), label?: string): void
 }
 
+type Session = {
+  key: string
+  pty: IPty
+  buffer: string
+  socket: Socket | null
+}
+
+const BUFFER_MAX = 512 * 1024
+
 /** 用户登录 shell：优先 $SHELL，其次 macOS 默认 zsh。 */
 function loginShell() {
   const configured = String(process.env.SHELL ?? '').trim()
@@ -43,83 +52,126 @@ function dim(value: unknown, fallback: number, min: number, max: number) {
   return Number.isFinite(n) ? Math.max(min, Math.min(max, Math.floor(n))) : fallback
 }
 
+function isOpen(ws: Socket | null | undefined): ws is Socket {
+  return !!ws && ws.readyState === ws.OPEN
+}
+
 export function apply(ctx: Ctx) {
-  const sessions = new Set<IPty>()
+  const pool = new Map<string, Session>()
+
+  const kill = (session: Session) => {
+    pool.delete(session.key)
+    try {
+      session.pty.kill()
+    } catch {
+      // 已退出。
+    }
+  }
 
   ctx.effect(() => () => {
-    for (const s of sessions) {
-      try {
-        s.kill()
-      } catch {
-        // 已退出。
-      }
-    }
-    sessions.clear()
+    for (const session of [...pool.values()]) kill(session)
   }, 'global-terminal.cleanup')
 
   ctx.http.ws('/ws/global-terminal', (socket, request) => {
     const q = new URL(request.url ?? '/', 'http://localhost').searchParams
-    const shell = loginShell()
-    const sandbox = ctx.sandbox.wrap({ argv: [shell] })
-    let session: IPty
+    const cols = dim(q.get('cols'), 100, 20, 500)
+    const rows = dim(q.get('rows'), 30, 8, 400)
+    const key = String(q.get('session') ?? '').trim() || 'main'
+    let session = pool.get(key)
 
-    try {
-      session = pty.spawn(shell, ['-il'], {
-        name: 'xterm-256color',
-        cols: dim(q.get('cols'), 100, 20, 500),
-        rows: dim(q.get('rows'), 30, 8, 400),
-        cwd: sandbox.cwd,
-        env: {
-          ...process.env,
-          ...sandbox.env,
-          TERM: 'xterm-256color',
-          COLORTERM: 'truecolor',
-          LANG: process.env.LANG ?? 'en_US.UTF-8',
-        },
-      })
-    } catch (error) {
-      socket.close(1011, error instanceof Error ? error.message : String(error))
-      return
-    }
-
-    sessions.add(session)
-    let alive = true
-
-    const stream = session.onData((chunk) => {
-      if (socket.readyState === socket.OPEN) socket.send(chunk)
-    })
-
-    const dispose = () => {
-      if (!alive) return
-      alive = false
-      stream.dispose()
-      sessions.delete(session)
+    if (session) {
       try {
-        session.kill()
+        session.pty.resize(cols, rows)
       } catch {
-        // 已退出。
+        // 进程可能刚退。
+      }
+    } else {
+      const shell = loginShell()
+      const sandbox = ctx.sandbox.wrap({ argv: [shell] })
+      try {
+        const child = pty.spawn(shell, ['-il'], {
+          name: 'xterm-256color',
+          cols,
+          rows,
+          cwd: sandbox.cwd,
+          env: {
+            ...process.env,
+            ...sandbox.env,
+            TERM: 'xterm-256color',
+            COLORTERM: 'truecolor',
+            LANG: process.env.LANG ?? 'en_US.UTF-8',
+          },
+        })
+        session = { key, pty: child, buffer: '', socket: null }
+        pool.set(key, session)
+        child.onData((chunk) => {
+          const current = pool.get(key)
+          if (!current || current.pty !== child) return
+          current.buffer += chunk
+          if (current.buffer.length > BUFFER_MAX) current.buffer = current.buffer.slice(-BUFFER_MAX)
+          const ws = current.socket
+          if (!isOpen(ws)) return
+          try {
+            ws.send(chunk)
+          } catch {
+            // 连接可能已断；数据仍在 buffer。
+          }
+        })
+        child.onExit(() => {
+          const current = pool.get(key)
+          const ws = current?.socket
+          if (isOpen(ws)) {
+            try {
+              ws.close(1000, 'shell exited')
+            } catch {
+              // 忽略。
+            }
+          }
+          pool.delete(key)
+        })
+      } catch (error) {
+        socket.close(1011, error instanceof Error ? error.message : String(error))
+        return
       }
     }
 
-    session.onExit(() => {
-      sessions.delete(session)
-      if (socket.readyState === socket.OPEN) socket.close(1000, 'shell exited')
-    })
+    if (session.socket && session.socket !== socket) {
+      try {
+        session.socket.close(1000, 'superseded')
+      } catch {
+        // 忽略。
+      }
+    }
+    session.socket = socket
+    if (session.buffer) {
+      try {
+        socket.send('\x1b[2J\x1b[3J\x1b[H')
+        socket.send(session.buffer)
+      } catch {
+        // 连接可能已断。
+      }
+    }
 
     socket.on('message', (raw) => {
+      const current = pool.get(key)
+      if (!current) return
       let msg: { type?: string; data?: unknown; cols?: unknown; rows?: unknown }
       try {
         msg = JSON.parse(text(raw))
       } catch {
         return
       }
-      if (msg.type === 'input') session.write(String(msg.data ?? ''))
+      if (msg.type === 'input') current.pty.write(String(msg.data ?? ''))
       if (msg.type === 'resize') {
-        session.resize(dim(msg.cols, 100, 20, 500), dim(msg.rows, 30, 8, 400))
+        current.pty.resize(dim(msg.cols, 100, 20, 500), dim(msg.rows, 30, 8, 400))
       }
     })
 
-    socket.on('close', dispose)
-    socket.on('error', dispose)
+    const detach = () => {
+      const current = pool.get(key)
+      if (current?.socket === socket) current.socket = null
+    }
+    socket.on('close', detach)
+    socket.on('error', detach)
   })
 }

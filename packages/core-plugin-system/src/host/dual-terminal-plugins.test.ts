@@ -32,6 +32,11 @@ describe('terminal store plugins', () => {
 
       assert.match(host, new RegExp(`/ws/${id}`))
       assert.match(host, /node-pty/)
+      if (id === 'global-terminal') {
+        assert.match(host, /session/)
+        assert.match(host, /socket=null/)
+        assert.doesNotMatch(host, /socket\.on\('close', dispose\)/)
+      }
       assert.match(web, new RegExp(`/ws/${id}`))
       assert.match(web, /type:"resize"/)
       assert.match(web, /FitAddon|addon-fit/)

@@ -227,7 +227,7 @@ function TerminalPane() {
       requestAnimationFrame(() => {
         fitted()
         socket = new WebSocket(
-          `${protocol}//${location.host}/ws/global-terminal?cols=${term.cols}&rows=${term.rows}`,
+          `${protocol}//${location.host}/ws/global-terminal?cols=${term.cols}&rows=${term.rows}&session=main`,
         )
         wireSocket(socket)
       })
