@@ -82,4 +82,15 @@ describe('terminal store plugins', () => {
     assert.match(host, /maxSessions/)
     assert.match(host, /session/)
   })
+
+  it('global terminal persists command history in localStorage with a stable session', async () => {
+    const web = await readFile(pluginFile('global-terminal', 'web.tsx'), 'utf8')
+    const host = await readFile(pluginFile('global-terminal', 'host.ts'), 'utf8')
+    assert.match(web, /HISTORY_MAX/)
+    assert.match(web, /biu:plugin:global-terminal:history/)
+    assert.match(web, /biu:plugin:global-terminal:sid/)
+    assert.match(web, /localStorage/)
+    assert.match(host, /session/)
+    assert.match(host, /buffer/)
+  })
 })

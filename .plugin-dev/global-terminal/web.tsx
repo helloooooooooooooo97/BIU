@@ -8,6 +8,55 @@ const { useEffect, useRef } = React
 export const name = 'global-terminal'
 export const inject = ['slots']
 
+const HISTORY_MAX = 200
+const HISTORY_OUT_LINES = 10
+const HISTORY_OUT_CHARS = 600
+const OUTPUT_SETTLE_MS = 600
+const SID_KEY = 'biu:plugin:global-terminal:sid'
+const HISTORY_KEY = 'biu:plugin:global-terminal:history'
+
+type HistoryEntry = { cmd: string; at: number; out?: string }
+
+function loadSid() {
+  try {
+    const existing = localStorage.getItem(SID_KEY)?.trim()
+    if (existing) return existing
+    const sid = `g${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
+    localStorage.setItem(SID_KEY, sid)
+    return sid
+  } catch {
+    return 'main'
+  }
+}
+
+function parseHistory(raw: unknown): HistoryEntry[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
+    .map((item) => ({
+      cmd: String(item.cmd ?? ''),
+      at: Number(item.at) || 0,
+      ...(typeof item.out === 'string' && item.out ? { out: item.out } : {}),
+    }))
+    .filter((item) => item.cmd)
+}
+
+function loadHistory(): HistoryEntry[] {
+  try {
+    return parseHistory(JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'))
+  } catch {
+    return []
+  }
+}
+
+function saveHistory(next: HistoryEntry[]) {
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(next))
+  } catch {
+    // 配额满就丢掉，不影响终端本身。
+  }
+}
+
 // xterm 会在容器里塞进一批「辅助节点」，样式没生效时它们会露出来
 // （表现为一个能打字的输入框 + 一行乱码）。这里主动压制。
 //
@@ -181,9 +230,142 @@ function useTerminalStyle() {
   }, [])
 }
 
-function TerminalPane() {
+function formatSpan(ms: number) {
+  if (!Number.isFinite(ms) || ms < 0) return ''
+  const min = Math.floor(ms / 60000)
+  if (min < 1) return '刚刚'
+  if (min < 60) return `${min} 分钟`
+  const hour = Math.floor(min / 60)
+  if (hour < 24) return `${hour} 小时`
+  return `${Math.floor(hour / 24)} 天`
+}
+
+function HistoryPanel({ history, onClear }: { history: HistoryEntry[]; onClear: () => void }) {
+  const [open, setOpen] = React.useState(false)
+  if (history.length === 0) return null
+  const mono = '"SF Mono", Menlo, Monaco, Consolas, monospace'
+  const counts = new Map<string, number>()
+  for (const entry of history) {
+    const head = entry.cmd.trim().split(/\s+/)[0] || entry.cmd.trim()
+    counts.set(head, (counts.get(head) ?? 0) + 1)
+  }
+  const top = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 4)
+  const span =
+    history.length > 1 && history[0].at && history[history.length - 1].at
+      ? formatSpan(history[history.length - 1].at - history[0].at)
+      : ''
+  return (
+    <div
+      style={{
+        flex: 'none',
+        borderBottom: '1px solid var(--dsw-border, rgba(242,241,237,0.1))',
+        background: 'color-mix(in srgb, var(--dsw-bg, #191919) 70%, transparent)',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          height: 26,
+          padding: '0 10px',
+          color: 'var(--dsw-label-3, rgba(242,241,237,0.45))',
+          font: '11px ui-sans-serif, system-ui, sans-serif',
+          userSelect: 'none',
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 5,
+            minWidth: 0,
+            border: 0,
+            padding: 0,
+            background: 'transparent',
+            color: 'inherit',
+            font: 'inherit',
+            cursor: 'pointer',
+            overflow: 'hidden',
+          }}
+        >
+          <span style={{ display: 'inline-block', transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 120ms ease', fontSize: 9 }}>
+            ▶
+          </span>
+          历史记录
+          <span style={{ opacity: 0.7 }}>{history.length} 条</span>
+          {top.length > 0 ? (
+            <span style={{ opacity: 0.55, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              · {top.map(([name, n]) => `${name}×${n}`).join(' · ')}
+            </span>
+          ) : null}
+          {span ? <span style={{ opacity: 0.45 }}>· {span}</span> : null}
+        </button>
+        <span style={{ flex: 1 }} />
+        <button
+          type="button"
+          onClick={onClear}
+          style={{ border: 0, padding: 0, background: 'transparent', color: 'inherit', font: 'inherit', cursor: 'pointer' }}
+        >
+          清空
+        </button>
+      </div>
+      {open ? (
+        <div
+          style={{
+            maxHeight: 180,
+            overflowY: 'auto',
+            padding: '4px 10px 10px',
+            fontFamily: mono,
+            fontSize: 12,
+            lineHeight: 1.45,
+            color: 'var(--dsw-label-2, rgba(242,241,237,0.72))',
+          }}
+        >
+          {history.map((entry, index) => (
+            <div key={`${entry.at}-${index}`} style={{ marginTop: index === 0 ? 0 : 6 }}>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <span style={{ color: '#4cc38a', flex: '0 0 auto' }}>$</span>
+                <span style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{entry.cmd}</span>
+              </div>
+              {entry.out ? (
+                <pre
+                  style={{
+                    margin: '2px 0 0',
+                    paddingLeft: 14,
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-all',
+                    color: 'var(--dsw-label-3, rgba(242,241,237,0.45))',
+                    font: 'inherit',
+                  }}
+                >
+                  {entry.out}
+                </pre>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function TerminalPane({
+  history,
+  onHistory,
+  sessionKey,
+}: {
+  history: HistoryEntry[]
+  onHistory: (next: HistoryEntry[]) => void
+  sessionKey: string
+}) {
   useTerminalStyle()
   const host = useRef<HTMLDivElement | null>(null)
+  const historyHold = useRef(history)
+  historyHold.current = history
 
   useEffect(() => {
     const element = host.current
@@ -227,7 +409,7 @@ function TerminalPane() {
       requestAnimationFrame(() => {
         fitted()
         socket = new WebSocket(
-          `${protocol}//${location.host}/ws/global-terminal?cols=${term.cols}&rows=${term.rows}&session=main`,
+          `${protocol}//${location.host}/ws/global-terminal?cols=${term.cols}&rows=${term.rows}&session=${encodeURIComponent(sessionKey)}`,
         )
         wireSocket(socket)
       })
@@ -245,11 +427,90 @@ function TerminalPane() {
       })
       // 纯直通：PTY 字节交给 xterm 解析，不做任何清屏/干预。
       ws.addEventListener('message', (event) => {
-        term.write(typeof event.data === 'string' ? event.data : '')
+        const chunk = typeof event.data === 'string' ? event.data : ''
+        term.write(chunk)
+        recordOutput(chunk)
       })
     }
 
+    let pendingLine = ''
+    let capturing = false
+    let outBuffer = ''
+    let outTimer: number | undefined
+
+    const stripAnsi = (text: string) =>
+      text
+        .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '')
+        .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '')
+        .replace(/\x1b[()][0-9A-Za-z]/g, '')
+        .replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '')
+
+    const isPromptLike = (line: string) => {
+      const text = line.trim()
+      if (!text) return false
+      if (/^[%\s]+$/.test(text)) return true
+      if (/^\S*@\S*\s*[:~\/.]/.test(text)) return true
+      if (/^\([^)]*\)\s*\S*@\S*/.test(text)) return true
+      if (/[@~\/]/.test(text) && /[%$#]\s*$/.test(text)) return true
+      return false
+    }
+
+    const flushHistory = () => {
+      if (outTimer) {
+        window.clearTimeout(outTimer)
+        outTimer = undefined
+      }
+      if (!capturing) return
+      capturing = false
+      const clean = stripAnsi(outBuffer)
+        .split('\n')
+        .map((line) => line.replace(/\s+$/, ''))
+        .filter((line) => !isPromptLike(line))
+        .filter((line, index, all) => !(index === all.length - 1 && line === ''))
+      outBuffer = ''
+      if (clean.length === 0) return
+      const out = clean.slice(0, HISTORY_OUT_LINES).join('\n').slice(0, HISTORY_OUT_CHARS)
+      const list = [...historyHold.current]
+      const last = list[list.length - 1]
+      if (!last || last.out !== undefined) return
+      last.out = out || undefined
+      onHistory(list)
+    }
+
+    const recordOutput = (chunk: string) => {
+      if (!capturing) return
+      outBuffer += chunk
+      if (outTimer) window.clearTimeout(outTimer)
+      outTimer = window.setTimeout(flushHistory, OUTPUT_SETTLE_MS)
+    }
+
+    const recordInput = (data: string) => {
+      for (const ch of data) {
+        if (ch === '\r' || ch === '\n') {
+          const cmd = pendingLine.trim()
+          pendingLine = ''
+          if (!cmd) continue
+          const next = [...historyHold.current, { cmd, at: Date.now() }]
+          if (next.length > HISTORY_MAX) next.splice(0, next.length - HISTORY_MAX)
+          onHistory(next)
+          capturing = true
+          outBuffer = ''
+          continue
+        }
+        if (ch === '\x7f' || ch === '\b') {
+          pendingLine = pendingLine.slice(0, -1)
+          continue
+        }
+        if (ch === '\x03' || ch === '\x04' || ch === '\x1b') {
+          pendingLine = ''
+          continue
+        }
+        if (ch >= ' ') pendingLine += ch
+      }
+    }
+
     const dataSub = term.onData((data) => {
+      recordInput(data)
       if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'input', data }))
     })
 
@@ -272,6 +533,7 @@ function TerminalPane() {
     resizeObs.observe(element)
 
     return () => {
+      if (outTimer) window.clearTimeout(outTimer)
       cancelAnimationFrame(raf)
       observer.disconnect()
       resizeObs.disconnect()
@@ -284,7 +546,7 @@ function TerminalPane() {
       }
       term.dispose()
     }
-  }, [])
+  }, [onHistory, sessionKey])
 
   return (
     <div
@@ -308,6 +570,13 @@ function TerminalPane() {
 }
 
 function GlobalTerminal() {
+  const sessionKey = React.useMemo(() => loadSid(), [])
+  const [history, setHistory] = React.useState<HistoryEntry[]>(() => loadHistory())
+  const onHistory = React.useCallback((next: HistoryEntry[]) => {
+    setHistory(next)
+    saveHistory(next)
+  }, [])
+
   return (
     <main
       data-testid="global-terminal"
@@ -342,16 +611,16 @@ function GlobalTerminal() {
       >
         <span style={{ color: 'var(--dsw-label-3, rgba(242,241,237,0.45))', fontWeight: 500 }}>zsh</span>
       </header>
+      <HistoryPanel history={history} onClear={() => onHistory([])} />
       <section
         style={{
           position: 'relative',
           flex: 1,
           minHeight: 0,
-          // 不再叠一层底色，让窗口的毛玻璃直接透到终端里。
           background: 'transparent',
         }}
       >
-        <TerminalPane />
+        <TerminalPane history={history} onHistory={onHistory} sessionKey={sessionKey} />
       </section>
     </main>
   )
