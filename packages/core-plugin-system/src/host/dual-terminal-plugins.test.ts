@@ -39,6 +39,17 @@ describe('terminal store plugins', () => {
     }
   })
 
+  it('installs xterm from the plugin package.json instead of the host', async () => {
+    const src = await readFile(resolve(import.meta.dirname, './plugin-create.ts'), 'utf8')
+    const pagePkg = JSON.parse(await readFile(pluginFile('page-terminal', 'package.json'), 'utf8')) as {
+      dependencies?: Record<string, string>
+    }
+    assert.match(src, /ensureSandboxNpm/)
+    assert.doesNotMatch(src, /nodePaths/)
+    assert.ok(pagePkg.dependencies?.['@xterm/xterm'])
+    assert.ok(pagePkg.dependencies?.['@xterm/addon-fit'])
+  })
+
   it('documents the complete page block fence', async () => {
     const readme = await readFile(pluginFile('page-terminal', 'README.md'), 'utf8')
     assert.match(readme, /:::pageBlock \{kind=terminal plugin=page-terminal\}/)
