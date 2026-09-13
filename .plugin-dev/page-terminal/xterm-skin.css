@@ -3,6 +3,7 @@
   height: 100%;
   width: 100%;
   min-height: 0;
+  overflow: hidden;
 }
 .page-terminal-pty .xterm {
   position: relative;
@@ -21,25 +22,31 @@
   position: absolute;
   top: 0;
   z-index: 5;
+  pointer-events: none;
 }
-.page-terminal-pty .xterm .xterm-helper-textarea {
-  position: absolute;
-  opacity: 0;
-  left: -9999em;
-  top: 0;
-  width: 0;
-  height: 0;
-  z-index: -5;
-  white-space: nowrap;
-  overflow: hidden;
-  resize: none;
-  padding: 0;
-  border: 0;
-  margin: 0;
+/* xterm 用来接键盘的 textarea：必须藏掉，否则左上角会露出一块输入框 */
+.page-terminal-pty textarea,
+.page-terminal-pty .xterm-helper-textarea {
+  position: absolute !important;
+  opacity: 0 !important;
+  left: 0 !important;
+  top: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  resize: none !important;
+  overflow: hidden !important;
+  color: transparent !important;
+  caret-color: transparent !important;
+  background: transparent !important;
+  pointer-events: none !important;
+  z-index: -1 !important;
 }
 .page-terminal-pty .xterm .xterm-viewport {
   background-color: #0b0e14;
-  overflow-y: scroll;
+  overflow-y: auto !important;
   cursor: default;
   position: absolute;
   right: 0;
@@ -76,6 +83,7 @@
   z-index: 10;
   color: transparent;
   overflow: hidden;
+  pointer-events: none;
 }
 .page-terminal-pty .live-region {
   position: absolute;

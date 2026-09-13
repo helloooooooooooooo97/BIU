@@ -48,12 +48,28 @@ function PtyPane({ active }: { active: boolean }) {
       cursorBlink: true,
       fontSize: 13,
       fontFamily: MONO,
+      scrollback: 10_000,
       allowProposedApi: false,
       theme: { background: INK, foreground: PAPER, cursor: GREEN },
     })
     const fit = new FitAddon()
     term.loadAddon(fit)
     term.open(el)
+    const helper = el.querySelector('textarea')
+    if (helper instanceof HTMLTextAreaElement) {
+      helper.setAttribute('tabindex', '-1')
+      helper.setAttribute('aria-hidden', 'true')
+      helper.style.cssText =
+        'position:absolute;opacity:0;left:0;top:0;width:0;height:0;margin:0;padding:0;border:0;overflow:hidden;resize:none;pointer-events:none;color:transparent;caret-color:transparent;background:transparent'
+    }
+    const onWheel = (event: WheelEvent) => {
+      if (event.ctrlKey) return
+      const dy = event.deltaY
+      if (!dy) return
+      const lines = Math.max(1, Math.round(Math.abs(dy) / 24)) * (dy > 0 ? 1 : -1)
+      term.scrollLines(lines)
+    }
+    el.addEventListener('wheel', onWheel, { passive: true })
     fit.fit()
     termRef.current = term
     fitRef.current = fit
@@ -85,6 +101,7 @@ function PtyPane({ active }: { active: boolean }) {
       resized.dispose()
       ro.disconnect()
       window.removeEventListener('resize', onFit)
+      el.removeEventListener('wheel', onWheel)
       socket.close()
       term.dispose()
       termRef.current = null
