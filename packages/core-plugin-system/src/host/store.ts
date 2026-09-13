@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
 import { dirname, join, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { Service, type Context, type Plugin } from 'cordis'
@@ -47,8 +48,11 @@ type StoreHub = {
 const ALLOWED_FILES = new Set(['manifest.json', 'host.js', 'web.js'])
 const README_FILE = 'README.md'
 
-export function storeWebUrl(id: string) {
-  return `/api/plugin-store/files/${encodeURIComponent(id)}/web.js`
+export function storeWebUrl(id: string, version?: string | number) {
+  const base = `/api/plugin-store/files/${encodeURIComponent(id)}/web.js`
+  // 带上版本号（通常是 web.js 的 mtime），让前端的「挂载键」随每次重打包变化，
+  // 从而触发真正的卸载 + 重新 import；否则前端会一直用最早加载的模块实例。
+  return version === undefined ? base : `${base}?v=${encodeURIComponent(String(version))}`
 }
 
 export function defaultPluginDir() {
@@ -255,6 +259,7 @@ export class PluginStoreService extends Service {
     const sandboxReadme = join(sandbox, README_FILE)
     if (existsSync(sandboxReadme)) await writeFile(join(dest, README_FILE), await readFile(sandboxReadme))
     else await this.ensureReadme(dest, manifest.name, manifest.blurb)
+    // 运行中才重新挂载（保持原有语义）；停止状态下的重载请用 reload。
     if (this.isEnabled(manifest.id)) await this.mountFromDisk(manifest, dest)
     return { id: manifest.id, sandboxPath: sandbox, pluginPath: dest }
   }
@@ -338,6 +343,20 @@ export class PluginStoreService extends Service {
     const manifest = await readManifest(hit)
     this.setEnabled(manifest.id, true)
     this.touchLastRun(manifest.id)
+    await this.mountFromDisk(manifest, hit)
+    this.invalidateList()
+    return (await this.list()).find((item) => item.id === manifest.id)
+  }
+
+  /**
+   * 重载：重新挂载已安装的插件，让 snapshot 里的 web 入口带上最新内容 hash，
+   * 前端据此 dispose 旧模块并重新 import —— 改完代码即可生效，无需反复 start。
+   */
+  async reload(id: string) {
+    if (!isSafeId(id)) throw new Error(`invalid plugin id: ${id}`)
+    const hit = await this.findPluginDir(id)
+    if (!hit) throw new Error(`unknown store plugin: ${id}`)
+    const manifest = await readManifest(hit)
     await this.mountFromDisk(manifest, hit)
     this.invalidateList()
     return (await this.list()).find((item) => item.id === manifest.id)
@@ -438,6 +457,17 @@ export class PluginStoreService extends Service {
     const webFile = join(dir, 'web.js')
     const hostCode = existsSync(hostFile) ? (await readFile(hostFile, 'utf8')).trim() : ''
     const hasWeb = existsSync(webFile)
+    // 用 web.js 内容的短 hash 作为版本号：只要代码变了就一定变，
+    // 且不受写入时间戳精度影响（同一毫秒内重打包也能区分）。
+    let webVersion: string | undefined
+    if (hasWeb) {
+      try {
+        const body = await readFile(webFile)
+        webVersion = createHash('sha1').update(body).digest('hex').slice(0, 12)
+      } catch {
+        webVersion = undefined
+      }
+    }
     if (!hostCode && !hasWeb) throw new Error(`plugin ${manifest.id} has neither host nor web`)
     const mod = (hostCode
       ? await importHostFile(hostFile)
@@ -451,7 +481,7 @@ export class PluginStoreService extends Service {
       inject: mod.inject,
       togglable: true,
       enabled: true,
-      web: hasWeb ? storeWebUrl(manifest.id) : undefined,
+      web: hasWeb ? storeWebUrl(manifest.id, webVersion) : undefined,
       packageName: `store:${manifest.id}`,
     }
     await this.hub().adopt(entry)

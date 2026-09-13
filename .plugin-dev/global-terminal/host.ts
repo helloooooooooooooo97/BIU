@@ -14,25 +14,23 @@ type Socket = {
   on(event: 'message' | 'close' | 'error', listener: (data?: unknown) => void): void
 }
 
-type TerminalContext = {
-  sandbox: {
-    wrap(request: { argv: string[] }): { cwd: string; env: NodeJS.ProcessEnv }
-  }
-  http: {
-    ws(path: string, listener: (socket: Socket, request: IncomingMessage) => void): void
-  }
+type Ctx = {
+  sandbox: { wrap(request: { argv: string[] }): { cwd: string; env: NodeJS.ProcessEnv } }
+  http: { ws(path: string, listener: (socket: Socket, request: IncomingMessage) => void): void }
   effect(effect: () => void | (() => void), label?: string): void
 }
 
-function userShell() {
+/** 用户登录 shell：优先 $SHELL，其次 macOS 默认 zsh。 */
+function loginShell() {
   const configured = String(process.env.SHELL ?? '').trim()
-  if (configured) return configured
-  if (process.platform === 'win32') return process.env.COMSPEC || 'cmd.exe'
-  if (existsSync('/bin/bash')) return '/bin/bash'
+  if (configured && existsSync(configured)) return configured
+  for (const candidate of ['/bin/zsh', '/bin/bash', '/bin/sh']) {
+    if (existsSync(candidate)) return candidate
+  }
   return '/bin/sh'
 }
 
-function messageText(raw: unknown) {
+function text(raw: unknown) {
   if (typeof raw === 'string') return raw
   if (Buffer.isBuffer(raw)) return raw.toString('utf8')
   if (Array.isArray(raw)) return Buffer.concat(raw.filter(Buffer.isBuffer)).toString('utf8')
@@ -40,44 +38,43 @@ function messageText(raw: unknown) {
   return String(raw ?? '')
 }
 
-function size(value: unknown, fallback: number, minimum: number) {
-  const number = Number(value)
-  return Number.isFinite(number) ? Math.max(minimum, Math.min(500, Math.floor(number))) : fallback
+function dim(value: unknown, fallback: number, min: number, max: number) {
+  const n = Number(value)
+  return Number.isFinite(n) ? Math.max(min, Math.min(max, Math.floor(n))) : fallback
 }
 
-export function apply(ctx: TerminalContext) {
-  const children = new Set<IPty>()
+export function apply(ctx: Ctx) {
+  const sessions = new Set<IPty>()
 
-  ctx.effect(() => {
-    return () => {
-      for (const child of children) {
-        try {
-          child.kill()
-        } catch {
-          // The PTY may already have exited.
-        }
+  ctx.effect(() => () => {
+    for (const s of sessions) {
+      try {
+        s.kill()
+      } catch {
+        // 已退出。
       }
-      children.clear()
     }
+    sessions.clear()
   }, 'global-terminal.cleanup')
 
   ctx.http.ws('/ws/global-terminal', (socket, request) => {
-    const url = new URL(request.url ?? '/', 'http://localhost')
-    const shell = userShell()
-    const wrapped = ctx.sandbox.wrap({ argv: [shell] })
-    let child: IPty
+    const q = new URL(request.url ?? '/', 'http://localhost').searchParams
+    const shell = loginShell()
+    const sandbox = ctx.sandbox.wrap({ argv: [shell] })
+    let session: IPty
 
     try {
-      child = pty.spawn(shell, process.platform === 'win32' ? [] : ['-il'], {
+      session = pty.spawn(shell, ['-il'], {
         name: 'xterm-256color',
-        cols: size(url.searchParams.get('cols'), 100, 20),
-        rows: size(url.searchParams.get('rows'), 30, 8),
-        cwd: wrapped.cwd,
+        cols: dim(q.get('cols'), 100, 20, 500),
+        rows: dim(q.get('rows'), 30, 8, 400),
+        cwd: sandbox.cwd,
         env: {
           ...process.env,
-          ...wrapped.env,
+          ...sandbox.env,
           TERM: 'xterm-256color',
           COLORTERM: 'truecolor',
+          LANG: process.env.LANG ?? 'en_US.UTF-8',
         },
       })
     } catch (error) {
@@ -85,43 +82,44 @@ export function apply(ctx: TerminalContext) {
       return
     }
 
-    children.add(child)
-    let closed = false
-    const output = child.onData((data) => {
-      if (socket.readyState === socket.OPEN) socket.send(data)
+    sessions.add(session)
+    let alive = true
+
+    const stream = session.onData((chunk) => {
+      if (socket.readyState === socket.OPEN) socket.send(chunk)
     })
 
-    const close = () => {
-      if (closed) return
-      closed = true
-      output.dispose()
-      children.delete(child)
+    const dispose = () => {
+      if (!alive) return
+      alive = false
+      stream.dispose()
+      sessions.delete(session)
       try {
-        child.kill()
+        session.kill()
       } catch {
-        // The PTY may already have exited.
+        // 已退出。
       }
     }
 
-    child.onExit(() => {
-      children.delete(child)
+    session.onExit(() => {
+      sessions.delete(session)
       if (socket.readyState === socket.OPEN) socket.close(1000, 'shell exited')
     })
+
     socket.on('message', (raw) => {
+      let msg: { type?: string; data?: unknown; cols?: unknown; rows?: unknown }
       try {
-        const message = JSON.parse(messageText(raw)) as {
-          type?: string
-          data?: unknown
-          cols?: unknown
-          rows?: unknown
-        }
-        if (message.type === 'input') child.write(String(message.data ?? ''))
-        if (message.type === 'resize') child.resize(size(message.cols, 100, 20), size(message.rows, 30, 8))
+        msg = JSON.parse(text(raw))
       } catch {
-        // Ignore malformed control messages.
+        return
+      }
+      if (msg.type === 'input') session.write(String(msg.data ?? ''))
+      if (msg.type === 'resize') {
+        session.resize(dim(msg.cols, 100, 20, 500), dim(msg.rows, 30, 8, 400))
       }
     })
-    socket.on('close', close)
-    socket.on('error', close)
+
+    socket.on('close', dispose)
+    socket.on('error', dispose)
   })
 }
