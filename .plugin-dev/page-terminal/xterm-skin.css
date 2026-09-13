@@ -73,22 +73,17 @@
   left: -9999em;
   line-height: normal;
 }
+.page-terminal-pty .xterm .xterm-helpers,
+.page-terminal-pty .xterm .composition-view,
 .page-terminal-pty .xterm .xterm-accessibility,
-.page-terminal-pty .xterm .xterm-message {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  right: 0;
-  z-index: 10;
-  color: transparent;
-  overflow: hidden;
-  pointer-events: none;
-}
+.page-terminal-pty .xterm .xterm-accessibility-tree,
+.page-terminal-pty .xterm .xterm-message,
 .page-terminal-pty .live-region {
-  position: absolute;
-  left: -9999px;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
+  opacity: 0 !important;
+  color: transparent !important;
+  pointer-events: none !important;
+}
+.page-terminal-pty .xterm-accessibility-tree {
+  white-space: pre;
+  user-select: none !important;
 }
