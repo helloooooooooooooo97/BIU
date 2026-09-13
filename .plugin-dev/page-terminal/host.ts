@@ -1,5 +1,4 @@
 import { existsSync } from 'node:fs'
-import type { IncomingMessage } from 'node:http'
 import * as pty from 'node-pty'
 import type { IPty } from 'node-pty'
 
@@ -16,16 +15,39 @@ type Socket = {
 
 type Ctx = {
   sandbox: { wrap(request: { argv: string[] }): { cwd: string; env: NodeJS.ProcessEnv } }
-  http: { ws(path: string, listener: (socket: Socket, request: IncomingMessage) => void): void }
+  http: {
+    ws(path: string, listener: (socket: Socket, request: { url?: string }) => void): void
+    route(
+      method: 'GET' | 'POST',
+      pattern: string,
+      handler: (route: {
+        params: Record<string, string>
+        query: URLSearchParams
+        json: <T = unknown>() => Promise<T>
+        bytes: () => Promise<Buffer>
+        send(status: number, body: unknown): void
+      }) => void | Promise<void>,
+    ): void
+  }
   effect(effect: () => void | (() => void), label?: string): void
 }
 
-/** 最多在后台保留多少个终端会话（LRU 淘汰）。 */
-const MAX_SESSIONS = 50
-/** 每个会话最多缓存多少字节的输出，用于重连回放。 */
-const MAX_BUFFER_BYTES = 512 * 1024
-/** 回放时最多保留多少行，防止把屏幕刷爆。 */
-const MAX_REPLAY_LINES = 200
+/** 缓冲池默认配置，可通过设置面板调整（存内存，随插件生命周期）。 */
+const DEFAULT_SETTINGS = {
+  /** 最多在后台保留多少个终端会话（LRU 淘汰）。 */
+  maxSessions: 50,
+  /** 每个会话最多缓存多少 KB 输出，用于重连回放。 */
+  bufferKB: 512,
+  /** 回放时最多保留多少行。 */
+  replayLines: 200,
+}
+type Settings = typeof DEFAULT_SETTINGS
+
+const SETTINGS_LIMITS = {
+  maxSessions: { min: 1, max: 200 },
+  bufferKB: { min: 64, max: 4096 },
+  replayLines: { min: 50, max: 2000 },
+}
 
 type PooledSession = {
   key: string
@@ -77,6 +99,31 @@ function tailLines(buffer: string, maxLines: number) {
 export function apply(ctx: Ctx) {
   const pool = new Map<string, PooledSession>()
   let seq = 0
+  let settings: Settings = { ...DEFAULT_SETTINGS }
+
+  const clamp = (value: unknown, fallback: number, min: number, max: number) => {
+    const n = Number(value)
+    if (!Number.isFinite(n)) return fallback
+    return Math.max(min, Math.min(max, Math.floor(n)))
+  }
+
+  const sanitize = (raw: Partial<Settings> | undefined): Settings => ({
+    maxSessions: clamp(raw?.maxSessions, DEFAULT_SETTINGS.maxSessions, SETTINGS_LIMITS.maxSessions.min, SETTINGS_LIMITS.maxSessions.max),
+    bufferKB: clamp(raw?.bufferKB, DEFAULT_SETTINGS.bufferKB, SETTINGS_LIMITS.bufferKB.min, SETTINGS_LIMITS.bufferKB.max),
+    replayLines: clamp(raw?.replayLines, DEFAULT_SETTINGS.replayLines, SETTINGS_LIMITS.replayLines.min, SETTINGS_LIMITS.replayLines.max),
+  })
+
+  // 设置接口：前端设置面板读写缓冲池参数。
+  ctx.http.route('GET', '/api/page-terminal/settings', (route) => {
+    route.send(200, { settings, defaults: DEFAULT_SETTINGS, limits: SETTINGS_LIMITS, sessions: pool.size })
+  })
+  ctx.http.route('POST', '/api/page-terminal/settings', async (route) => {
+    const body = (await route.json<Partial<Settings>>().catch(() => ({}))) ?? {}
+    settings = sanitize({ ...settings, ...body })
+    // 改小容量后立刻按新上限淘汰。
+    evictIfNeeded()
+    route.send(200, { settings, sessions: pool.size })
+  })
 
   const kill = (session: PooledSession) => {
     pool.delete(session.key)
@@ -96,7 +143,7 @@ export function apply(ctx: Ctx) {
 
   /** 超出容量时淘汰最久没被连接的会话。 */
   const evictIfNeeded = () => {
-    while (pool.size > MAX_SESSIONS) {
+    while (pool.size > settings.maxSessions) {
       let oldest: PooledSession | null = null
       for (const session of pool.values()) {
         if (!oldest || session.lastSeen < oldest.lastSeen) oldest = session
@@ -144,9 +191,10 @@ export function apply(ctx: Ctx) {
           const current = pool.get(key)
           if (!current || current.pty !== child) return
           current.buffer += chunk
-          if (current.buffer.length > MAX_BUFFER_BYTES) {
+          const maxBytes = settings.bufferKB * 1024
+          if (current.buffer.length > maxBytes) {
             // 超上限只留尾部，避免无限增长。
-            current.buffer = tailLines(current.buffer.slice(-MAX_BUFFER_BYTES), MAX_REPLAY_LINES)
+            current.buffer = tailLines(current.buffer.slice(-maxBytes), settings.replayLines)
           }
           if (current.socket?.readyState === current.socket?.OPEN) current.socket.send(chunk)
         })
@@ -176,7 +224,7 @@ export function apply(ctx: Ctx) {
 
     // 回放历史：先清屏，再把这之前的输出重放一遍，接上就是完整画面。
     if (session.buffer) {
-      const replay = tailLines(session.buffer, MAX_REPLAY_LINES)
+      const replay = tailLines(session.buffer, settings.replayLines)
       try {
         socket.send('\x1b[2J\x1b[3J\x1b[H')
         socket.send(replay)

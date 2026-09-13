@@ -523,6 +523,127 @@ function HistoryPanel({
   )
 }
 
+/** 终端设置面板：配置后端缓冲池参数（全局生效）。 */
+function SettingsPanel({ onClose }: { onClose: () => void }) {
+  const React2 = React
+  const [state, setState] = React2.useState<{
+    loading: boolean
+    error?: string
+    settings?: Record<string, number>
+    limits?: Record<string, { min: number; max: number }>
+    sessions?: number
+  }>({ loading: true })
+
+  React2.useEffect(() => {
+    let cancelled = false
+    fetch('/api/page-terminal/settings')
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled) setState({ loading: false, settings: data.settings, limits: data.limits, sessions: data.sessions })
+      })
+      .catch((err) => {
+        if (!cancelled) setState({ loading: false, error: String(err) })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const patch = (key: string, value: number) => {
+    setState((cur) => ({ ...cur, settings: { ...(cur.settings ?? {}), [key]: value } }))
+    fetch('/api/page-terminal/settings', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ [key]: value }),
+    })
+      .then((res) => res.json())
+      .then((data) => setState((cur) => ({ ...cur, settings: data.settings, sessions: data.sessions })))
+      .catch(() => {
+        // 忽略：下次打开会重读。
+      })
+  }
+
+  const row = (key: string, label: string, hint: string) => {
+    const value = state.settings?.[key]
+    const limit = state.limits?.[key]
+    return (
+      <label
+        key={key}
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr auto',
+          gap: 4,
+          padding: '6px 10px',
+        }}
+      >
+        <span style={{ color: 'var(--dsw-label-2, rgba(242,241,237,0.72))' }}>{label}</span>
+        <input
+          type="number"
+          value={value ?? ''}
+          min={limit?.min}
+          max={limit?.max}
+          disabled={state.loading}
+          onChange={(event) => patch(key, Number(event.target.value))}
+          style={{
+            width: 76,
+            border: '1px solid var(--dsw-border, rgba(242,241,237,0.1))',
+            borderRadius: 5,
+            padding: '2px 6px',
+            background: 'color-mix(in srgb, var(--dsw-bg, #191919) 60%, transparent)',
+            color: 'var(--dsw-label, #f0efed)',
+            font: 'inherit',
+            textAlign: 'right',
+          }}
+        />
+        <span style={{ gridColumn: '1 / -1', color: 'var(--dsw-label-3, rgba(242,241,237,0.45))', fontSize: 10 }}>
+          {hint}
+          {limit ? `（${limit.min}–${limit.max}）` : ''}
+        </span>
+      </label>
+    )
+  }
+
+  return (
+    <div
+      style={{
+        borderBottom: '1px solid var(--dsw-border, rgba(242,241,237,0.1))',
+        background: 'color-mix(in srgb, var(--dsw-bg, #191919) 80%, transparent)',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          height: 26,
+          padding: '0 10px',
+          color: 'var(--dsw-label-3, rgba(242,241,237,0.45))',
+        }}
+      >
+        缓冲池设置
+        <span style={{ flex: 1 }} />
+        {typeof state.sessions === 'number' ? <span style={{ marginRight: 8 }}>当前 {state.sessions} 个会话</span> : null}
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="关闭设置"
+          style={{ border: 0, padding: 0, background: 'transparent', color: 'inherit', font: 'inherit', cursor: 'pointer' }}
+        >
+          收起
+        </button>
+      </div>
+      {state.error ? (
+        <div style={{ padding: '6px 10px', color: '#ff6369' }}>读取失败：{state.error}</div>
+      ) : (
+        <>
+          {row('maxSessions', '后台保留终端数', '关掉页面后仍留在后台的会话数量，超出按最久未用淘汰')}
+          {row('bufferKB', '回放缓冲 (KB)', '每个会话最多缓存的输出，用于重连时回放')}
+          {row('replayLines', '回放行数', '重连时最多回放多少行')}
+        </>
+      )}
+    </div>
+  )
+}
+
 function PageTerminal({
   data,
   update,
@@ -536,6 +657,7 @@ function PageTerminal({
   const height = typeof data.height === 'number' && data.height > 0 ? Math.min(900, data.height) : DEFAULTS.height
   // 会话键：存在块数据里，保证同一个块刷新/切页都能连回同一个 shell。
   // 没有就现生成一个并写回（writeable 时才写），生成后跟着 markdown 走。
+  const [settingsOpen, setSettingsOpen] = React.useState(false)
   const sessionKey = typeof data.sid === 'string' && data.sid ? data.sid : ''
   useEffect(() => {
     if (sessionKey || !writable) return
@@ -578,6 +700,7 @@ function PageTerminal({
           userSelect: 'none',
         }}
       >
+        <span style={{ flex: '0 0 auto', color: 'var(--dsw-label-2, rgba(242,241,237,0.72))' }}>终端</span>
         {writable ? (
           <input
             value={title}
@@ -588,16 +711,49 @@ function PageTerminal({
               minWidth: 0,
               border: 0,
               background: 'transparent',
-              color: 'var(--dsw-label-2, rgba(242,241,237,0.72))',
+              color: 'var(--dsw-label-3, rgba(242,241,237,0.45))',
               font: 'inherit',
               outline: 'none',
             }}
           />
         ) : (
-          <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</span>
+          <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--dsw-label-3, rgba(242,241,237,0.45))' }}>
+            {title}
+          </span>
         )}
-        <span style={{ whiteSpace: 'nowrap' }}>zsh</span>
+        <button
+          type="button"
+          onClick={() => setSettingsOpen((v) => !v)}
+          aria-label="终端设置"
+          aria-expanded={settingsOpen}
+          title="设置"
+          style={{
+            flex: '0 0 auto',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 22,
+            height: 22,
+            border: 0,
+            padding: 0,
+            borderRadius: 5,
+            background: settingsOpen ? 'color-mix(in srgb, var(--dsw-label, #f0efed) 12%, transparent)' : 'transparent',
+            color: 'inherit',
+            cursor: 'pointer',
+          }}
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <circle cx="8" cy="8" r="2.2" stroke="currentColor" strokeWidth="1.4" />
+            <path
+              d="M8 1.8v1.6M8 12.6v1.6M14.2 8h-1.6M3.4 8H1.8M12.4 3.6l-1.1 1.1M4.7 11.3l-1.1 1.1M12.4 12.4l-1.1-1.1M4.7 4.7 3.6 3.6"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              strokeLinecap="round"
+            />
+          </svg>
+        </button>
       </header>
+      {settingsOpen ? <SettingsPanel onClose={() => setSettingsOpen(false)} /> : null}
       <HistoryPanel
         history={history}
         writable={writable}
