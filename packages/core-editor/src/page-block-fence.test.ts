@@ -6,6 +6,7 @@ import {
   pageBlockRecordId,
   parsePageBlockRecordId,
   patchPageBlockMarkdown,
+  uniquifyPageBlockMarkdown,
 } from './page-block-fence.ts'
 
 const doc = `前言
@@ -70,6 +71,25 @@ test('html fence with inline styles still yields the poster html', () => {
   assert.equal(fences[0]?.kind, 'html')
   assert.match(String(pageBlockData(fences[0]!).html), /番附/)
   assert.match(String(pageBlockData(fences[0]!).html), /height:100%/)
+})
+
+test('uniquifyPageBlockMarkdown keeps the first id and rewrites duplicates', () => {
+  const dup = `:::pageBlock {kind=html plugin=page-html-blocks id=ab12cd34}
+<div>a</div>
+:::
+
+:::pageBlock {kind=html plugin=page-html-blocks id=ab12cd34}
+<div>b</div>
+:::
+`
+  const next = uniquifyPageBlockMarkdown(dup)
+  assert.equal(next.changed, true)
+  const ids = listPageBlockFences(next.markdown).map((item) => item.id)
+  assert.equal(ids.length, 2)
+  assert.equal(ids[0], 'ab12cd34')
+  assert.notEqual(ids[1], ids[0])
+  assert.match(ids[1]!, /^[a-z0-9]{8}$/i)
+  assert.equal(uniquifyPageBlockMarkdown(next.markdown).changed, false)
 })
 
 test('pageBlock record id is page::block', () => {

@@ -1,6 +1,6 @@
 import type { DbRecord } from '@biu/type-file-system'
 import { recordBuiltinValues } from '@biu/type-file-system'
-import { listPageBlockFences, pageBlockData, pageBlockRecordId, parsePageBlockRecordId } from '@biu/core-editor/host'
+import { listPageBlockFences, pageBlockData, pageBlockRecordId, parsePageBlockRecordId, uniquifyPageBlockMarkdown } from '@biu/core-editor/host'
 import type { PagesStore, PageRow } from './store.ts'
 
 export const PAGE_BLOCK_HOT_WINDOW_MS = 5 * 60 * 1000
@@ -111,32 +111,37 @@ export class PageBlocksIndex {
   }
 
   async reindexPage(page: PageRow) {
+    const unique = uniquifyPageBlockMarkdown(page.notes)
+    const row = unique.changed ? await this.store.update(page.id, { notes: unique.markdown }) : page
     const db = await this.db()
-    const fences = listPageBlockFences(page.notes).filter((item) => item.id)
+    const fences = listPageBlockFences(row.notes).filter((item) => item.id)
     db.exec('BEGIN')
     try {
-      db.prepare('DELETE FROM page_block_index WHERE page_id = ?').run(page.id)
+      db.prepare('DELETE FROM page_block_index WHERE page_id = ?').run(row.id)
       const insert = db.prepare(`
         INSERT INTO page_block_index(
           page_id, block_id, kind, plugin, title, data_json, page_created_at, page_updated_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `)
+      const seen = new Set<string>()
       for (const fence of fences) {
+        if (seen.has(fence.id)) continue
+        seen.add(fence.id)
         const data = pageBlockData(fence)
         insert.run(
-          page.id,
+          row.id,
           fence.id,
           fence.kind,
           fence.plugin,
           blockTitle(fence.kind, data),
           JSON.stringify(data),
-          page.createdAt,
-          page.updatedAt,
+          row.createdAt,
+          row.updatedAt,
         )
       }
       db.prepare(
         'INSERT INTO page_block_cover(page_id, page_updated_at) VALUES(?, ?) ON CONFLICT(page_id) DO UPDATE SET page_updated_at=excluded.page_updated_at',
-      ).run(page.id, page.updatedAt)
+      ).run(row.id, row.updatedAt)
       db.exec('COMMIT')
     } catch (error) {
       db.exec('ROLLBACK')
@@ -171,7 +176,12 @@ export class PageBlocksIndex {
     const batch = [...takeHot, ...warm]
     for (const slim of batch) {
       const page = await this.store.get(slim.id)
-      if (page) await this.reindexPage(page)
+      if (!page) continue
+      try {
+        await this.reindexPage(page)
+      } catch {
+        /* 单页索引失败不拖垮 host */
+      }
     }
     await this.writeMeta('last_run_at', String(now))
     await this.writeMeta('last_batch', String(batch.length))
