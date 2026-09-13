@@ -43,7 +43,7 @@ const CSS = `
 .fsdb-main > :not(.fsdb-page-banner){box-sizing:border-box;width:100%;max-width:var(--dsw-chat-max-width);margin-inline:auto;padding-right:80px;padding-left:calc(80px - var(--fsdb-check-gutter))}
 .fsdb-main:not(:has(> .fsdb-page-banner)){padding-top:80px}
 .fsdb-page.is-full-width .fsdb-main > :not(.fsdb-page-banner),.fsdb-page.is-full-width .fsdb-detail-main > :not(.fsdb-page-banner){max-width:none}
-.fsdb-page{--fsdb-pager-lift:calc(1rem + 44px + 25px + 25px - 30px);--fsdb-check-gutter:26px;--fsdb-row-tools-w:72px}
+.fsdb-page{--fsdb-pager-lift:calc(1rem + 44px + 5px + 25px - 30px);--fsdb-check-gutter:26px;--fsdb-row-tools-w:72px}
 .fsdb-page:not(.inspector-database-page) .fsdb-main{padding-bottom:var(--fsdb-pager-lift)}
 .inspector-database-page .fsdb-main{padding-bottom:0}
 .fsdb-agent-follow{display:flex;min-width:0;min-height:0;flex:1;flex-direction:column;overflow:hidden}
