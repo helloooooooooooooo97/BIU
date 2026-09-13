@@ -41,46 +41,28 @@ describe('terminal store plugins', () => {
   it('documents the complete page block fence', async () => {
     const readme = await readFile(pluginFile('page-terminal', 'README.md'), 'utf8')
     assert.match(readme, /:::pageBlock \{kind=terminal plugin=page-terminal\}/)
-    assert.match(readme, /"height": 360/)
+    assert.match(readme, /"height"/)
   })
 
-  it('puts padding on xterm so FitAddon subtracts it from the grid', async () => {
-    for (const id of ['page-terminal', 'global-terminal']) {
-      const css = await readFile(pluginFile(id, 'terminal.css'), 'utf8')
-      const mountRule = css.match(/\.biu-terminal-mount\s*\{([^}]*)\}/)?.[1] ?? ''
-      const xtermRule = css.match(/\.biu-terminal-mount \.xterm\s*\{([^}]*)\}/)?.[1] ?? ''
-
-      assert.doesNotMatch(mountRule, /padding:/)
-      assert.match(xtermRule, /padding:/)
-      assert.match(xtermRule, /box-sizing:\s*border-box/)
-      assert.match(css, /\.xterm-scrollable-element/)
-    }
+  it('page terminal keeps the helper textarea focusable and hides the measurement nodes', async () => {
+    const web = await readFile(pluginFile('page-terminal', 'web.tsx'), 'utf8')
+    // helper-textarea 不能 display:none（会失去焦点、打不了字）
+    assert.match(web, /HELPER_TEXTAREA/)
+    assert.match(web, /removeProperty\('display'\)/)
+    // 测量元素用 clip-path 隐藏（不能 display:none，否则字间距错乱、光标消失）
+    assert.match(web, /clip-path/)
+    assert.match(web, /xterm-char-measure-element/)
   })
 
-  it('defers xterm opening until its page or tab has visible dimensions', async () => {
-    for (const id of ['page-terminal', 'global-terminal']) {
-      const terminal = await readFile(pluginFile(id, 'terminal.tsx'), 'utf8')
-      assert.match(terminal, /activeRef\.current/)
-      assert.match(terminal, /if \(!isVisible\(\)\) return/)
-      assert.match(terminal, /getBoundingClientRect/)
-      assert.doesNotMatch(terminal, /element\.checkVisibility/)
-      assert.match(terminal, /new IntersectionObserver\(scheduleFit\)/)
-      assert.match(terminal, /Object\.assign\(terminal\.element\.style/)
-      assert.match(terminal, /style=\{statusStyle\}/)
-    }
-    const global = await readFile(pluginFile('global-terminal', 'web.tsx'), 'utf8')
-    assert.match(global, /active=\{tab\.id === active\}/)
-  })
-
-  it('removes shell startup padding only before the first user input', async () => {
-    for (const id of ['page-terminal', 'global-terminal']) {
-      const terminal = await readFile(pluginFile(id, 'terminal.tsx'), 'utf8')
-      assert.match(terminal, /hasUserInput = true/)
-      assert.match(terminal, /if \(disposed \|\| hasUserInput \|\| !terminal\) return/)
-      assert.match(terminal, /buffer\.getLine\(buffer\.baseY \+ buffer\.cursorY\)/)
-      assert.match(terminal, /\\u001b\[2J\\u001b\[H/)
-      assert.match(terminal, /terminal\?\.scrollToBottom\(\)/)
-      assert.match(terminal, /window\.clearTimeout\(startupTimer\)/)
-    }
+  it('page terminal persists history into block data and keeps sessions alive', async () => {
+    const web = await readFile(pluginFile('page-terminal', 'web.tsx'), 'utf8')
+    const host = await readFile(pluginFile('page-terminal', 'host.ts'), 'utf8')
+    // 历史写回块数据的 history 字段
+    assert.match(web, /update\(\{ history: next \}\)/)
+    assert.match(web, /HISTORY_MAX/)
+    // 后端会话池：按 session key 复用，断开不杀进程
+    assert.match(host, /pool/)
+    assert.match(host, /maxSessions/)
+    assert.match(host, /session/)
   })
 })

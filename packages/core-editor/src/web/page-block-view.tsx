@@ -93,11 +93,7 @@ export function PageBlockView({ node, updateAttributes, editor, getPos }: NodeVi
 
   const onMouseDown = (event: MouseEvent) => {
     if (!editor.isEditable || editor.isDestroyed) return
-    if (event.target instanceof Element) {
-      if (event.target.closest('textarea, input, select, button, a')) return
-      const capture = event.target.closest('[data-page-block-capture]')
-      if (capture && capture !== event.currentTarget) return
-    }
+    if (event.target instanceof Element && event.target.closest('textarea, input, select, button, a')) return
     const pos = getPos()
     if (typeof pos !== 'number') return
     editor.chain().setNodeSelection(pos).run()
