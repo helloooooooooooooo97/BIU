@@ -1,11 +1,10 @@
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
-import { WebglAddon } from '@xterm/addon-webgl'
 import '@xterm/xterm/css/xterm.css'
 import './terminal.css'
 
 const React = globalThis.React
-const { useCallback, useEffect, useRef, useState } = React
+const { useCallback, useEffect, useLayoutEffect, useRef, useState } = React
 
 type ConnectionState = 'connecting' | 'open' | 'closed' | 'error'
 
@@ -28,6 +27,7 @@ export function TerminalSurface({
 }) {
   const host = useRef<HTMLDivElement | null>(null)
   const instance = useRef<Terminal | null>(null)
+  const layout = useRef<() => void>(() => {})
   const [attempt, setAttempt] = useState(0)
   const [state, setState] = useState<ConnectionState>('connecting')
 
@@ -36,12 +36,14 @@ export function TerminalSurface({
     setAttempt((value) => value + 1)
   }, [])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const element = host.current
     if (!element) return
 
     let disposed = false
     let frame = 0
+    let secondFrame = 0
+    setState('connecting')
     const terminal = new Terminal({
       allowProposedApi: false,
       convertEol: false,
@@ -79,24 +81,37 @@ export function TerminalSurface({
     terminal.loadAddon(fit)
     terminal.open(element)
     instance.current = terminal
-
-    try {
-      const webgl = new WebglAddon()
-      webgl.onContextLoss(() => webgl.dispose())
-      terminal.loadAddon(webgl)
-    } catch {
-      // Canvas renderer is a supported fallback.
+    if (!terminal.element || !terminal.textarea) {
+      instance.current = null
+      terminal.dispose()
+      setState('error')
+      return
     }
+    terminal.textarea.setAttribute('aria-label', '页面终端输入')
+    terminal.textarea.setAttribute('autocomplete', 'off')
 
-    const doFit = () => {
-      if (disposed || element.clientWidth < 20 || element.clientHeight < 20) return
+    const fitVisibleTerminal = () => {
+      if (disposed || !element.isConnected) return
+      const bounds = element.getBoundingClientRect()
+      if (bounds.width < 20 || bounds.height < 20) return
       try {
         fit.fit()
+        terminal.refresh(0, terminal.rows - 1)
       } catch {
-        // Layout can briefly be zero while a page is switching.
+        // Ignore transient zero-size layouts while the page is switching.
       }
     }
-    doFit()
+    const scheduleFit = () => {
+      cancelAnimationFrame(frame)
+      cancelAnimationFrame(secondFrame)
+      frame = requestAnimationFrame(() => {
+        fitVisibleTerminal()
+        // Font metrics and the xterm viewport settle one frame after the first fit.
+        secondFrame = requestAnimationFrame(fitVisibleTerminal)
+      })
+    }
+    layout.current = scheduleFit
+    scheduleFit()
 
     const socket = new WebSocket(socketUrl(endpoint, terminal.cols, terminal.rows))
     const send = (message: Record<string, unknown>) => {
@@ -104,16 +119,13 @@ export function TerminalSurface({
     }
     const input = terminal.onData((data) => send({ type: 'input', data }))
     const resize = terminal.onResize(({ cols, rows }) => send({ type: 'resize', cols, rows }))
-    const observer = new ResizeObserver(() => {
-      cancelAnimationFrame(frame)
-      frame = requestAnimationFrame(doFit)
-    })
+    const observer = new ResizeObserver(scheduleFit)
     observer.observe(element)
 
     socket.addEventListener('open', () => {
       if (disposed) return
       setState('open')
-      doFit()
+      scheduleFit()
       send({ type: 'resize', cols: terminal.cols, rows: terminal.rows })
       if (autoFocus) terminal.focus()
     })
@@ -130,21 +142,32 @@ export function TerminalSurface({
     return () => {
       disposed = true
       cancelAnimationFrame(frame)
+      cancelAnimationFrame(secondFrame)
       observer.disconnect()
       input.dispose()
       resize.dispose()
       socket.close()
+      layout.current = () => {}
       if (instance.current === terminal) instance.current = null
       terminal.dispose()
     }
   }, [endpoint, attempt])
 
   useEffect(() => {
+    layout.current()
     if (autoFocus && state === 'open') instance.current?.focus()
   }, [autoFocus, state])
 
   return (
-    <div className={`biu-terminal-surface ${className}`} data-terminal-state={state}>
+    <div
+      className={`biu-terminal-surface ${className}`}
+      data-terminal-state={state}
+      onMouseDown={(event) => {
+        event.stopPropagation()
+        instance.current?.focus()
+      }}
+      onWheel={(event) => event.stopPropagation()}
+    >
       <div ref={host} className="biu-terminal-mount" />
       {state === 'connecting' ? <div className="biu-terminal-status">正在连接终端…</div> : null}
       {state === 'closed' || state === 'error' ? (
