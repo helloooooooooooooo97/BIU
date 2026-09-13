@@ -1,4 +1,5 @@
 import { FitAddon } from '@xterm/addon-fit'
+import { relockAncestors, unlockAncestors } from './zoom.ts'
 import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
 
@@ -616,35 +617,42 @@ function ExpandIcon({ shrink }: { shrink?: boolean }) {
   )
 }
 
-/** 放大放映：直接用浏览器原生 Fullscreen API。
-   好处：层级由浏览器保证（必然盖住导航栏）、Esc 退出由浏览器负责，
-   不需要自建覆盖层、搬 DOM 或处理层叠上下文。 */
-function useFullscreen() {
+/** 窗口内全屏：把块用 position:fixed 铺满视口，盖住导航栏，但**不**触发浏览器全屏。
+   Esc 或再点按钮退出。 */
+function useZoom() {
   const ref = React.useRef<HTMLElement | null>(null)
   const [full, setFull] = React.useState(false)
 
   const stop = React.useCallback(() => {
-    if (document.fullscreenElement) void document.exitFullscreen?.()
+    relockAncestors()
+    setFull(false)
+    requestAnimationFrame(() => window.dispatchEvent(new Event('resize')))
   }, [])
 
   const start = React.useCallback(() => {
     const el = ref.current
     if (!el) return
-    void Promise.resolve(el.requestFullscreen?.({ navigationUI: 'hide' })).catch(() => {
-      // 浏览器拒绝（例如非用户手势触发）时忽略。
-    })
+    unlockAncestors(el)
+    setFull(true)
+    requestAnimationFrame(() => window.dispatchEvent(new Event('resize')))
   }, [])
 
   React.useEffect(() => {
-    const onChange = () => {
-      const active = document.fullscreenElement === ref.current
-      setFull(active)
-      // 全屏切换后尺寸变了，让 xterm 重新测量。
-      requestAnimationFrame(() => window.dispatchEvent(new Event('resize')))
+    if (!full) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      event.stopPropagation()
+      stop()
     }
-    document.addEventListener('fullscreenchange', onChange)
-    return () => document.removeEventListener('fullscreenchange', onChange)
-  }, [])
+    window.addEventListener('keydown', onKey, true)
+    return () => {
+      window.removeEventListener('keydown', onKey, true)
+    }
+  }, [full, stop])
+
+  // 卸载时确保还原。
+  React.useEffect(() => () => relockAncestors(), [])
 
   return { full, start, stop, ref }
 }
@@ -784,7 +792,7 @@ function PageTerminal({
   // 会话键：存在块数据里，保证同一个块刷新/切页都能连回同一个 shell。
   // 没有就现生成一个并写回（writeable 时才写），生成后跟着 markdown 走。
   const [settingsOpen, setSettingsOpen] = React.useState(false)
-  const fs = useFullscreen()
+  const fs = useZoom()
   const sessionKey = typeof data.sid === 'string' && data.sid ? data.sid : ''
   useEffect(() => {
     if (sessionKey || !writable) return
@@ -813,8 +821,18 @@ function PageTerminal({
       style={{
         display: 'flex',
         flexDirection: 'column',
-        border: '1px solid var(--dsw-border, rgba(242,241,237,0.1))',
-        borderRadius: 8,
+        // 全屏时：fixed 铺满视口，层级压过导航栏。
+        ...(fs.full
+          ? {
+              position: 'fixed',
+              inset: 0,
+              width: '100vw',
+              height: '100vh',
+              zIndex: 2147483000,
+            }
+          : {}),
+        border: fs.full ? 'none' : '1px solid var(--dsw-border, rgba(242,241,237,0.1))',
+        borderRadius: fs.full ? 0 : 8,
         overflow: 'hidden',
         background: '#191919',
       }}
