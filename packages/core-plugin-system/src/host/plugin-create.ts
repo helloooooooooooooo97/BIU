@@ -293,6 +293,8 @@ export async function bundleStoreEntry(entryFile: string, kind: 'host' | 'web') 
     },
     conditions: ['production', 'import', 'module', 'browser', 'default'],
     plugins: storeBundlePlugins(kind),
+    // 原生模块不能打进 host.js，运行时走宿主 node_modules
+    external: kind === 'host' ? ['node-pty'] : [],
   })
   const text = result.outputFiles?.[0]?.text
   if (!text?.trim()) throw new Error(`${kind} bundle is empty`)
