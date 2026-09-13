@@ -69,6 +69,7 @@ function resolveListenConfig(config?: HttpListenConfig) {
 export class HttpService extends Service {
   private routes: Route[] = []
   private sockets = new Set<WebSocket>()
+  private server: Server | null = null
 
   constructor(ctx: Context, public config: { port: number; host: string; publicDir: string }) {
     super(ctx, 'http')
@@ -76,6 +77,7 @@ export class HttpService extends Service {
       const server = createServer((req, res) => {
         void this.dispatch(req, res)
       })
+      this.server = server
       const wss = new WebSocketServer({ server, path: '/ws' })
       wss.on('connection', (socket) => {
         this.sockets.add(socket)
@@ -104,6 +106,7 @@ export class HttpService extends Service {
         new Promise<void>((resolve) => {
           for (const socket of this.sockets) socket.close()
           wss.close()
+          this.server = null
           server.close(() => resolve())
         })
     }, 'http.listen')
@@ -121,6 +124,25 @@ export class HttpService extends Service {
         this.ctx.emit(HUB_CHANGE)
       }
     }, `http.route ${method} ${pattern}`)
+  }
+
+  /** 在已有 HTTP 服务上再挂一条 WebSocket 路径。 */
+  ws(path: string, handler: (socket: WebSocket, request: IncomingMessage) => void) {
+    return this.ctx.effect(() => {
+      let wss: WebSocketServer | undefined
+      const attach = () => {
+        if (!this.server || wss) return
+        wss = new WebSocketServer({ server: this.server, path })
+        wss.on('connection', handler)
+      }
+      attach()
+      const off = this.ctx.on('http/ready', () => attach())
+      return () => {
+        if (typeof off === 'function') off()
+        wss?.close()
+        wss = undefined
+      }
+    }, `http.ws ${path}`)
   }
 
   broadcast(type: string, payload: unknown) {

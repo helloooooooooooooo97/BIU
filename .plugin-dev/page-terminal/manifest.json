@@ -1,7 +1,7 @@
 {
   "id": "page-terminal",
   "name": "终端",
-  "blurb": "页面里用 /terminal 插入终端卡片：回车在宿主工作区执行真实 shell（含 node），输出写回卡片。右上角可全屏放大。",
+  "blurb": "页面里的真终端：xterm + 宿主 PTY，登录本机 SHELL。",
   "tags": [
     "page",
     "editor",
