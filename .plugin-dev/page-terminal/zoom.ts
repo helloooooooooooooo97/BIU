@@ -73,6 +73,7 @@ export function makeOverlay(testId: string, background: string) {
     'box-sizing:border-box',
     'display:flex',
     'flex-direction:column',
+    'align-items:stretch',
     'overflow:hidden',
     `background:${background}`,
     'z-index:2147483000',
