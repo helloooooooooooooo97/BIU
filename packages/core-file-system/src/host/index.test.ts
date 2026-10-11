@@ -1930,6 +1930,11 @@ test('desktop records keep personal and workspace ownership', async () => {
     assert.equal(personal.kind === 'created' && personal.items[0]?.value.shareScope, '私人')
     assert.equal(space.kind === 'created' && space.items[0]?.value.shareScope, '空间')
     assert.equal(local.kind === 'created' && local.items[0]?.value.shareScope, '本地')
+    rows.set('side-created', { id: 'side-created', title: '旁路创建' })
+    await runWithAccount(ada.id, () => db.touchActor('/docs', 'side-created'))
+    assert.equal(localIds.has('side-created'), true)
+    const sideCreated = await runWithAccount(ada.id, () => db.read('/docs/side-created'))
+    assert.equal(sideCreated.kind === 'record' && sideCreated.value.shareScope, '本地')
     const owner = collab.collectionRecordOwners?.(workspace.id, '/docs')
     if (local.kind === 'created') assert.equal(owner?.get(String(local.items[0]?.value.id)), ada.id)
   } finally {

@@ -1509,9 +1509,23 @@ export class DatabaseService extends Service implements Database {
     }
   }
 
-  /** 侧栏「添加聊天」走 sessions.create，不经过表格的 create，这里补同一套创建人/编辑人。 */
+  /** 侧栏「添加聊天」走 sessions.create，不经过表格的 create，这里补创建人和本地归属。 */
   async touchActor(collection: string, recordId: string) {
     await this.stampActor(collection, recordId)
+    if (isOnlineRuntime()) return
+    try {
+      const account = this.ctx.get('account') as {
+        markLocal?: (collection: string, id: string) => void
+        workspaceLocation?: (workspaceId: string) => 'device' | 'cloud'
+        store?: { activeWorkspaceId?: () => string | null }
+      } | undefined
+      const workspaceId = account?.store?.activeWorkspaceId?.() ?? ''
+      if (!workspaceId || account?.workspaceLocation?.(workspaceId) !== 'cloud') {
+        account?.markLocal?.(collection, recordId)
+      }
+    } catch {
+      /* 没有账号服务时只记录创建人 */
+    }
   }
 
   private async stampActor(collection: string, recordId: string) {
