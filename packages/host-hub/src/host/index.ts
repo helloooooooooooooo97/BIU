@@ -44,13 +44,9 @@ export class HubService extends Service {
       if (snapTimer) return
       snapTimer = setTimeout(() => {
         snapTimer = null
-        if (process.env.BIU_ONLINE === '1') {
-          // Snapshot contains an account-specific plugin manifest. Push only an
-          // invalidation signal; every browser pulls its own filtered snapshot.
-          ctx.http.broadcast('plugins/changed', { ts: Date.now() })
-        } else {
-          ctx.http.broadcast(HUB_CHANNEL_SNAPSHOT, this.snapshot())
-        }
+        // Snapshot contains an account-specific plugin manifest. Push only an
+        // invalidation signal; every browser pulls its own filtered snapshot.
+        ctx.http.broadcast('plugins/changed', { ts: Date.now() })
       }, 40)
     }
     ctx.on('internal/status', pushSnapshot)
@@ -119,7 +115,6 @@ export class HubService extends Service {
 
   snapshotFor(accountId: string, workspaceId: string) {
     const snapshot = this.snapshot()
-    if (process.env.BIU_ONLINE !== '1') return snapshot
     const store = (
       this.ctx.get('account') as {
         store?: { canAccessPlugin?(accountId: string, workspaceId: string, pluginId: string): boolean }
@@ -259,7 +254,7 @@ export async function apply(ctx: Context) {
     route.res.setHeader('vary', 'Authorization, Cookie, X-Biu-Workspace-Id')
     route.send(200, ctx.hub.snapshotFor(currentAccountId(), currentRequestWorkspaceId()))
   })
-  if (process.env.BIU_ONLINE !== '1') ctx.http.broadcast(HUB_CHANNEL_SNAPSHOT, ctx.hub.snapshot())
+  ctx.http.broadcast('plugins/changed', { ts: Date.now() })
   ctx.http.route('POST', '/api/plugins/:id', async (route) => {
     const payload = (await route.json()) as { enabled?: boolean }
     try {

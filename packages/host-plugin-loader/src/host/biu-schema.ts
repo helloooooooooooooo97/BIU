@@ -233,6 +233,26 @@ export const BIU_TABLES: Record<string, TableSpec> = {
     columns: ['key', 'value'],
     indexes: [],
   },
+  cloud_connections: {
+    columns: [
+      'local_account_id',
+      'origin',
+      'remote_account_id',
+      'remote_name',
+      'remote_email',
+      'token',
+      'connected_at',
+    ],
+    indexes: [],
+  },
+  workspace_place: {
+    columns: ['workspace_id', 'place'],
+    indexes: ['workspace_place_place'],
+  },
+  session_execution_leases: {
+    columns: ['session_id', 'account_id', 'lease_id', 'executor_id', 'expires_at', 'created_at'],
+    indexes: ['session_execution_leases_expiry'],
+  },
   plugin_packages: {
     columns: [
       'id',
@@ -273,7 +293,7 @@ export const BIU_TABLES: Record<string, TableSpec> = {
   },
 }
 
-export const LATEST_BIU_SCHEMA = 37
+export const LATEST_BIU_SCHEMA = 38
 
 export const CREATE_CORE_SQL = `
 CREATE TABLE IF NOT EXISTS pages (
@@ -639,6 +659,29 @@ CREATE TABLE IF NOT EXISTS collab_state (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS cloud_connections (
+  local_account_id TEXT PRIMARY KEY,
+  origin TEXT NOT NULL,
+  remote_account_id TEXT NOT NULL,
+  remote_name TEXT NOT NULL DEFAULT '',
+  remote_email TEXT NOT NULL DEFAULT '',
+  token TEXT NOT NULL,
+  connected_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS workspace_place (
+  workspace_id TEXT PRIMARY KEY,
+  place TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS workspace_place_place ON workspace_place(place);
+CREATE TABLE IF NOT EXISTS session_execution_leases (
+  session_id TEXT PRIMARY KEY,
+  account_id TEXT NOT NULL,
+  lease_id TEXT NOT NULL UNIQUE,
+  executor_id TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS session_execution_leases_expiry ON session_execution_leases(expires_at);
 CREATE TABLE IF NOT EXISTS plugin_packages (
   id TEXT NOT NULL,
   version TEXT NOT NULL,

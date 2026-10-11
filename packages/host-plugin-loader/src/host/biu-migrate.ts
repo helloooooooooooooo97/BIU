@@ -524,6 +524,33 @@ export const BIU_MIGRATIONS: Migration[] = [
       DROP TABLE IF EXISTS instance_roles;
     `)
   } },
+  { version: 38, module: 'host-account', name: 'local-cloud.identity-boundary', up: (db) => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS cloud_connections (
+        local_account_id TEXT PRIMARY KEY,
+        origin TEXT NOT NULL,
+        remote_account_id TEXT NOT NULL,
+        remote_name TEXT NOT NULL DEFAULT '',
+        remote_email TEXT NOT NULL DEFAULT '',
+        token TEXT NOT NULL,
+        connected_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS workspace_place (
+        workspace_id TEXT PRIMARY KEY,
+        place TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS workspace_place_place ON workspace_place(place);
+      CREATE TABLE IF NOT EXISTS session_execution_leases (
+        session_id TEXT PRIMARY KEY,
+        account_id TEXT NOT NULL,
+        lease_id TEXT NOT NULL UNIQUE,
+        executor_id TEXT NOT NULL,
+        expires_at INTEGER NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS session_execution_leases_expiry ON session_execution_leases(expires_at);
+    `)
+  } },
 ]
 
 export function assertBiuMigrationLog(rows: Array<{ version: number }> = BIU_MIGRATIONS) {

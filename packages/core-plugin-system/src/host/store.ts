@@ -543,11 +543,11 @@ export class PluginStoreService extends Service {
     return this.withViewerLoads(items)
   }
 
-  /** 线上每人一份加载记录。进程里的 host 仍只挂一份，没人加载时才卸下。 */
+  /** 每个账号、空间一份加载记录。进程里的 host 仍只挂一份，没人加载时才卸下。 */
   private withViewerLoads(items: StoreListing[]) {
-    if (process.env.BIU_ONLINE !== '1') return items
     const accountId = currentAccountId()
     const workspaceId = currentRequestWorkspaceId()
+    if (!accountId || !workspaceId) return items
     const loaded = new Set(this.accountStore()?.pluginLoadsFor?.(accountId, workspaceId) ?? [])
     return items.map((item) => ({ ...item, enabled: loaded.has(item.id), running: loaded.has(item.id) }))
   }
@@ -581,11 +581,10 @@ export class PluginStoreService extends Service {
 
   async openPlugin(id: string) {
     if (!isSafeId(id)) throw new Error(`invalid plugin id: ${id}`)
-    if (process.env.BIU_ONLINE === '1') {
-      const accountId = currentAccountId()
-      const workspaceId = currentRequestWorkspaceId()
-      const account = this.accountStore()
-      if (!accountId || !workspaceId || !account?.isMember?.(accountId, workspaceId)) throw new Error('需要登录')
+    const accountId = currentAccountId()
+    const workspaceId = currentRequestWorkspaceId()
+    const account = this.accountStore()
+    if (accountId && workspaceId && account?.isMember?.(accountId, workspaceId)) {
       await this.ensurePacked(id)
       try {
         await this.mountInstalled(id)
@@ -619,11 +618,10 @@ export class PluginStoreService extends Service {
   /** 关闭：停运行，.plugin 代码留着。线上只停当前这个人。 */
   async close(id: string) {
     if (!isSafeId(id)) throw new Error(`invalid plugin id: ${id}`)
-    if (process.env.BIU_ONLINE === '1') {
-      const accountId = currentAccountId()
-      const workspaceId = currentRequestWorkspaceId()
-      const account = this.accountStore()
-      if (!accountId || !workspaceId || !account?.isMember?.(accountId, workspaceId)) throw new Error('需要登录')
+    const accountId = currentAccountId()
+    const workspaceId = currentRequestWorkspaceId()
+    const account = this.accountStore()
+    if (accountId && workspaceId && account?.isMember?.(accountId, workspaceId)) {
       account.setPluginLoad?.(accountId, workspaceId, id, false)
       const still = account.loadedPluginIds?.().includes(id)
       if (!still) await this.hub().drop(id)
@@ -741,9 +739,7 @@ export class PluginStoreService extends Service {
   }
 
   async restore() {
-    const ids = process.env.BIU_ONLINE === '1'
-      ? [...new Set([...(this.accountStore()?.loadedPluginIds?.() ?? []), ...this.state.enabled])]
-      : this.state.enabled
+    const ids = [...new Set([...(this.accountStore()?.loadedPluginIds?.() ?? []), ...this.state.enabled])]
     for (const id of ids) {
       const hit = await this.findPluginDir(id)
       if (!hit) continue

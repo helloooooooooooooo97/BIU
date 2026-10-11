@@ -159,6 +159,15 @@ function WorkspaceMemberProfile() {
 
 export function ShellSettingsAccount() {
   const [account, setAccount] = useState<{ name: string; email: string }>({ name: '', email: '' })
+  const [cloud, setCloud] = useState<{
+    available: boolean
+    connected: boolean
+    origin?: string
+    account?: { name?: string; email?: string }
+  }>({ available: false, connected: false })
+  const [cloudEmail, setCloudEmail] = useState('')
+  const [cloudPassword, setCloudPassword] = useState('')
+  const [cloudMessage, setCloudMessage] = useState('')
   const [sessions, setSessions] = useState<Array<Record<string, unknown>>>([])
   const [currentPassword, setCurrentPassword] = useState('')
   const [nextPassword, setNextPassword] = useState('')
@@ -168,18 +177,33 @@ export function ShellSettingsAccount() {
     accountFetch(token, '/api/account/sessions')
       .then((body) => setSessions((body.sessions as Array<Record<string, unknown>>) ?? []))
       .catch(() => setSessions([]))
+  const loadCloud = () =>
+    accountFetch(token, '/api/account/cloud')
+      .then((body) =>
+        setCloud({
+          available: body.available === true,
+          connected: body.connected === true,
+          origin: typeof body.origin === 'string' ? body.origin : undefined,
+          account:
+            body.account && typeof body.account === 'object'
+              ? (body.account as { name?: string; email?: string })
+              : undefined,
+        }),
+      )
+      .catch(() => setCloud({ available: false, connected: false }))
   useEffect(() => {
     if (!token) return
     void accountFetch(token, '/api/account/me')
       .then((body) => setAccount({ name: String(body.name ?? body.email ?? ''), email: String(body.email ?? '') }))
       .catch(() => setAccount({ name: '', email: '' }))
     void loadSessions()
+    void loadCloud()
   }, [token])
   return (
     <section className="settings-account" data-testid="settings-account">
       <header className="settings-account-head">
         <h3 className="settings-account-title">账户</h3>
-        <p className="settings-muted settings-account-lead">同一个账号用于所有空间。账号名和登录邮箱不可修改。</p>
+        <p className="settings-muted settings-account-lead">本地账号只管理这台设备的数据；云端账号是独立的可选连接。</p>
       </header>
       <div className="settings-account-row">
         <div className="settings-account-copy">
@@ -187,6 +211,75 @@ export function ShellSettingsAccount() {
           <p className="settings-muted settings-account-hint" data-testid="settings-account-global-name">
             {account.name || account.email || '未设置'}
           </p>
+        </div>
+      </div>
+      <div className="settings-account-row">
+        <div className="settings-account-copy">
+          <p className="settings-account-label">云端账号</p>
+          {cloud.connected ? (
+            <div className="settings-account-actions">
+              <span className="settings-muted settings-account-hint">
+                {cloud.account?.name || cloud.account?.email || '已连接'}{cloud.origin ? ` · ${cloud.origin}` : ''}
+              </span>
+              <button
+                type="button"
+                className="settings-account-action"
+                onClick={() => {
+                  setCloudMessage('')
+                  void accountFetch(token, '/api/account/cloud', { method: 'DELETE' })
+                    .then(() => {
+                      setCloudPassword('')
+                      setCloudMessage('已断开云端账号，本机数据没有变化。')
+                      void loadCloud()
+                      window.dispatchEvent(new Event(ACCOUNT_EVENT))
+                    })
+                    .catch((error) => setCloudMessage(error instanceof Error ? error.message : '断开失败'))
+                }}
+              >
+                断开
+              </button>
+            </div>
+          ) : cloud.available ? (
+            <form
+              className="settings-account-actions"
+              onSubmit={(event) => {
+                event.preventDefault()
+                setCloudMessage('')
+                void accountFetch(token, '/api/account/cloud/login', {
+                  method: 'POST',
+                  body: JSON.stringify({ email: cloudEmail.trim(), password: cloudPassword }),
+                })
+                  .then(() => {
+                    setCloudPassword('')
+                    setCloudMessage('云端账号已登录。')
+                    void loadCloud()
+                    window.dispatchEvent(new Event(ACCOUNT_EVENT))
+                  })
+                  .catch((error) => setCloudMessage(error instanceof Error ? error.message : '云端登录失败'))
+              }}
+            >
+              <input
+                className="settings-account-input"
+                type="email"
+                placeholder="云端邮箱"
+                value={cloudEmail}
+                onChange={(event) => setCloudEmail(event.target.value)}
+              />
+              <input
+                className="settings-account-input"
+                type="password"
+                placeholder="云端密码"
+                value={cloudPassword}
+                onChange={(event) => setCloudPassword(event.target.value)}
+              />
+              <button className="settings-account-action" type="submit" disabled={!cloudEmail.trim() || !cloudPassword}>
+                登录云端
+              </button>
+            </form>
+          ) : (
+            <p className="settings-muted settings-account-hint">当前没有配置中心服务，单机功能可以完整使用。</p>
+          )}
+          {cloudMessage ? <p className="settings-muted settings-account-hint">{cloudMessage}</p> : null}
         </div>
       </div>
       <div className="settings-account-row">
@@ -530,7 +623,7 @@ function AuthBackdrop() {
   )
 }
 
-type CollabWorkspace = { id: string; name: string; role: string }
+type CollabWorkspace = { id: string; name: string; role: string; location?: 'device' | 'cloud' }
 type CollabMember = { id: string; name: string; email?: string; role: string }
 type CollabPresence = { accountId: string; name: string; collection: string; recordId: string }
 
@@ -561,6 +654,7 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
   const [open, setOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [newWorkspaceName, setNewWorkspaceName] = useState('')
+  const [newWorkspaceLocation, setNewWorkspaceLocation] = useState<'device' | 'cloud'>('device')
   const [createError, setCreateError] = useState('')
   const triggerRef = useRef<HTMLButtonElement>(null)
 
@@ -611,7 +705,7 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
     setCreateError('')
     void accountFetch(token, '/api/account/workspaces', {
       method: 'POST',
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, location: newWorkspaceLocation }),
     })
       .then(async (body) => {
         const created = body as CollabWorkspace
@@ -652,24 +746,35 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
           data-testid="shell-workspace-menu"
         >
           <p className="shell-workspace-menu-title">切换空间</p>
-          <div className="shell-workspace-menu-list">
-            {workspaces.map((workspace) => (
-              <button
-                key={workspace.id}
-                type="button"
-                role="menuitemradio"
-                aria-checked={workspace.id === active}
-                className={`shell-workspace-menu-item${workspace.id === active ? ' is-active' : ''}`}
-                onClick={() => switchTo(workspace.id)}
-              >
-                <span className="shell-workspace-menu-copy">
-                  <strong>{workspace.name}</strong>
-                  <small>{workspaceRoleLabel(workspace.role)}</small>
-                </span>
-                {workspace.id === active ? <CheckIcon className="size-4" /> : null}
-              </button>
-            ))}
-          </div>
+          {(['device', 'cloud'] as const).map((location) => {
+            const rows = workspaces.filter((workspace) => (workspace.location ?? 'device') === location)
+            if (!rows.length) return null
+            return (
+              <div className="shell-workspace-menu-list" key={location}>
+                <p className="shell-workspace-menu-title">{location === 'device' ? '本机空间' : '云端空间'}</p>
+                {rows.map((workspace) => (
+                  <button
+                    key={workspace.id}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={workspace.id === active}
+                    className={`shell-workspace-menu-item${workspace.id === active ? ' is-active' : ''}`}
+                    onClick={() => switchTo(workspace.id)}
+                  >
+                    <span className="shell-workspace-menu-copy">
+                      <strong>{workspace.name}</strong>
+                      <small>
+                        {location === 'device'
+                          ? `仅保存在这台设备 · ${workspaceRoleLabel(workspace.role)}`
+                          : workspaceRoleLabel(workspace.role)}
+                      </small>
+                    </span>
+                    {workspace.id === active ? <CheckIcon className="size-4" /> : null}
+                  </button>
+                ))}
+              </div>
+            )
+          })}
           <div className="shell-workspace-menu-actions">
             {creating ? (
               <form
@@ -687,6 +792,22 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
                   placeholder="新空间名称"
                   onChange={(event) => setNewWorkspaceName(event.target.value)}
                 />
+                <div className="settings-account-actions">
+                  <button
+                    type="button"
+                    className={newWorkspaceLocation === 'device' ? 'is-active' : ''}
+                    onClick={() => setNewWorkspaceLocation('device')}
+                  >
+                    本机
+                  </button>
+                  <button
+                    type="button"
+                    className={newWorkspaceLocation === 'cloud' ? 'is-active' : ''}
+                    onClick={() => setNewWorkspaceLocation('cloud')}
+                  >
+                    云端
+                  </button>
+                </div>
                 {createError ? <p>{createError}</p> : null}
                 <div>
                   <button type="button" onClick={() => {

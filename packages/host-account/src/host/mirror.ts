@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import type { Context } from 'cordis'
-import { runWithAccount } from '@biu/host-plugin-loader/data-dir'
+import { runWithAccount, runWithRequestWorkspace } from '@biu/host-plugin-loader/data-dir'
 import type { SessionRecord } from '@biu/type-session'
 
 export type MirrorSnapshot = {
@@ -169,13 +169,26 @@ export async function applySnapshot(ctx: Context, snapshot: MirrorSnapshot, mode
   }
 }
 
-export async function exchangeSnapshot(ctx: Context, origin: string, token: string, accountId: string) {
+export async function exchangeSnapshot(
+  ctx: Context,
+  origin: string,
+  token: string,
+  accountId: string,
+  workspaceId = '',
+) {
   const root = origin.replace(/\/$/, '')
-  const headers = { authorization: `Bearer ${token}` }
+  const headers = {
+    authorization: `Bearer ${token}`,
+    ...(workspaceId ? { 'x-biu-workspace-id': workspaceId } : {}),
+  }
   const pulled = await fetch(`${root}/api/replica/snapshot`, { headers })
   if (!pulled.ok) return
   const body = (await pulled.json()) as MirrorSnapshot
-  await runWithAccount(accountId, () => applySnapshot(ctx, body, 'cache'))
+  await runWithAccount(accountId, () =>
+    workspaceId
+      ? runWithRequestWorkspace(workspaceId, () => applySnapshot(ctx, body, 'cache'))
+      : applySnapshot(ctx, body, 'cache'),
+  )
 }
 
 function cloudLogin(ctx: Context) {

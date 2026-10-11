@@ -126,7 +126,11 @@ export class CollabStore {
   readonly authorization: AuthorizationService
 
   constructor(private db: DatabaseSync) {
-    this.authorization = new AuthorizationService(db, (accountId) => this.accountActiveWorkspace(accountId))
+    this.authorization = new AuthorizationService(db, (accountId) => {
+      const requested = currentRequestWorkspaceId()
+      if (requested && this.isMember(accountId, requested)) return requested
+      return this.accountActiveWorkspace(accountId)
+    })
     this.ensureBuiltInRoot()
   }
 
@@ -359,6 +363,68 @@ export class CollabStore {
     if (!row || row.account_id !== actorId) throw new CollabError('会话不存在', 404)
     this.db.prepare('UPDATE auth_sessions SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL').run(now, sessionId)
     return { id: sessionId }
+  }
+
+  acquireExecutionLease(
+    accountId: string,
+    sessionId: string,
+    executorId: string,
+    ttlMs = 90_000,
+    now = Date.now(),
+  ) {
+    this.db.prepare('DELETE FROM session_execution_leases WHERE expires_at <= ?').run(now)
+    const existing = this.db
+      .prepare('SELECT account_id, executor_id, expires_at FROM session_execution_leases WHERE session_id = ?')
+      .get(sessionId) as { account_id: string; executor_id: string; expires_at: number } | undefined
+    if (existing) {
+      throw new CollabError(`这个会话正在由 ${existing.executor_id || '另一台设备'} 运行`, 409)
+    }
+    const leaseId = id('lease')
+    const expiresAt = now + Math.max(30_000, Math.min(5 * 60_000, ttlMs))
+    this.db
+      .prepare(
+        `INSERT INTO session_execution_leases
+          (session_id, account_id, lease_id, executor_id, expires_at, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(sessionId, accountId, leaseId, executorId.trim().slice(0, 120) || 'device', expiresAt, now)
+    return { leaseId, sessionId, expiresAt }
+  }
+
+  renewExecutionLease(accountId: string, sessionId: string, leaseId: string, ttlMs = 90_000, now = Date.now()) {
+    const expiresAt = now + Math.max(30_000, Math.min(5 * 60_000, ttlMs))
+    const result = this.db
+      .prepare(
+        `UPDATE session_execution_leases SET expires_at = ?
+         WHERE session_id = ? AND account_id = ? AND lease_id = ? AND expires_at > ?`,
+      )
+      .run(expiresAt, sessionId, accountId, leaseId, now)
+    if (!result.changes) throw new CollabError('执行租约已失效', 409)
+    return { leaseId, sessionId, expiresAt }
+  }
+
+  requireExecutionLease(accountId: string, sessionId: string, leaseId: string, now = Date.now()) {
+    const row = this.db
+      .prepare(
+        `SELECT lease_id FROM session_execution_leases
+         WHERE session_id = ? AND account_id = ? AND lease_id = ? AND expires_at > ?`,
+      )
+      .get(sessionId, accountId, leaseId, now) as { lease_id?: string } | undefined
+    if (!row) throw new CollabError('执行租约不存在或已失效', 409)
+  }
+
+  releaseExecutionLease(accountId: string, sessionId: string, leaseId: string) {
+    this.db
+      .prepare('DELETE FROM session_execution_leases WHERE session_id = ? AND account_id = ? AND lease_id = ?')
+      .run(sessionId, accountId, leaseId)
+    return { ok: true }
+  }
+
+  hasExecutionLease(sessionId: string, now = Date.now()) {
+    const row = this.db
+      .prepare('SELECT 1 AS ok FROM session_execution_leases WHERE session_id = ? AND expires_at > ?')
+      .get(sessionId, now) as { ok?: number } | undefined
+    return Boolean(row)
   }
 
   issueMcpCredential(

@@ -590,10 +590,12 @@ export function CollectionBrowser({
     let live = true
     void fetch('/api/profile')
       .then((res) => (res.ok ? res.json() : null))
-      .then((body: { localData?: boolean } | null) => {
-        if (!live || !body?.localData) return
-        setLocalData(true)
-        setCreateScope((current) => (current === 'personal' ? 'local' : current))
+      .then((body: { localData?: boolean; dataLocation?: 'device' | 'cloud' } | null) => {
+        if (!live) return
+        const device = body?.dataLocation === 'device' || body?.localData === true
+        setLocalData(device)
+        if (device) setCreateScope('local')
+        else setCreateScope((current) => (current === 'local' ? 'personal' : current))
       })
       .catch(() => undefined)
     return () => {
@@ -3351,14 +3353,16 @@ export function CollectionBrowser({
                     aria-expanded={createScopeOpen}
                     title={
                       createScope === 'local'
-                        ? '存在这台机器上，仍属于当前账号和空间'
+                        ? '本机空间，数据只存在这台设备'
                         : createScope === 'workspace'
                           ? '空间内容，全部成员可编辑'
                           : createScope === 'shared'
                             ? '公开链接，所有人可查看'
                             : '私人内容，仅自己可处理'
                     }
-                    onClick={() => setCreateScopeOpen((open) => !open)}
+                    onClick={() => {
+                      if (!localData) setCreateScopeOpen((open) => !open)
+                    }}
                   >
                     {createScope === 'local' ? (
                       <ComputerDesktopIcon aria-hidden className="size-[14px]" />
@@ -3369,9 +3373,9 @@ export function CollectionBrowser({
                     ) : (
                       <UserIcon aria-hidden className="size-[14px]" />
                     )}
-                    <ChevronDownIcon aria-hidden className="size-[12px]" />
+                    {!localData ? <ChevronDownIcon aria-hidden className="size-[12px]" /> : null}
                   </button>
-                  {createScopeOpen ? (
+                  {createScopeOpen && !localData ? (
                     <div className="fsdb-create-scope-menu" role="menu">
                       <button
                         type="button"
@@ -3409,20 +3413,6 @@ export function CollectionBrowser({
                         <GlobeAltIcon aria-hidden className="size-[14px]" />
                         共享
                       </button>
-                      {localData ? (
-                        <button
-                          type="button"
-                          role="menuitem"
-                          className={createScope === 'local' ? 'is-on' : ''}
-                          onClick={() => {
-                            setCreateScope('local')
-                            setCreateScopeOpen(false)
-                          }}
-                        >
-                          <ComputerDesktopIcon aria-hidden className="size-[14px]" />
-                          本地
-                        </button>
-                      ) : null}
                     </div>
                   ) : null}
                   </div>
