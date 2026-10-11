@@ -763,7 +763,11 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
                   >
                     <span className="shell-workspace-menu-copy">
                       <strong>{workspace.name}</strong>
-                      <small>{location === 'device' ? '仅保存在这台设备' : workspaceRoleLabel(workspace.role)}</small>
+                      <small>
+                        {location === 'device'
+                          ? `仅保存在这台设备 · ${workspaceRoleLabel(workspace.role)}`
+                          : workspaceRoleLabel(workspace.role)}
+                      </small>
                     </span>
                     {workspace.id === active ? <CheckIcon className="size-4" /> : null}
                   </button>
