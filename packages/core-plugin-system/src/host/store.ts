@@ -547,7 +547,7 @@ export class PluginStoreService extends Service {
   private withViewerLoads(items: StoreListing[]) {
     const accountId = currentAccountId()
     const workspaceId = currentRequestWorkspaceId()
-    if (!accountId || !workspaceId) return items.map((item) => ({ ...item, enabled: false, running: false }))
+    if (!accountId || !workspaceId) return items
     const loaded = new Set(this.accountStore()?.pluginLoadsFor?.(accountId, workspaceId) ?? [])
     return items.map((item) => ({ ...item, enabled: loaded.has(item.id), running: loaded.has(item.id) }))
   }

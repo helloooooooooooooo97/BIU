@@ -809,6 +809,24 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   ctx.http.route('POST', '/api/account/invites/:token/accept', async (route) => {
     try {
       const me = actor(route)
+      const connection = process.env.BIU_ONLINE !== '1' ? account.cloudConnection(me.id) : null
+      if (connection) {
+        const relayed = await relayAccount(route, account, me.id, `/api/account/invites/${route.params.token}/accept`)
+        if (!relayed) throw new CollabError('请先登录云端账号', 401)
+        if (relayed.status < 300) {
+          try {
+            const listed = await fetch(`${connection.origin}/api/account/workspaces`, {
+              headers: { authorization: `Bearer ${connection.token}` },
+            })
+            const payload = (await listed.json().catch(() => ({}))) as Record<string, unknown>
+            if (listed.ok) cacheWorkspaceList(account, me.id, payload)
+          } catch {
+            /* 接受已经成功，空间列表稍后刷新 */
+          }
+        }
+        route.send(relayed.status, relayed.payload)
+        return
+      }
       const result = account.store.acceptWorkspaceInvite(me.id, route.params.token!)
       ctx.http.broadcast('database', { ts: Date.now() })
       route.send(200, result)

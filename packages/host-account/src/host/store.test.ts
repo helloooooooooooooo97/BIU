@@ -644,3 +644,21 @@ test('cross-workspace matrix denies strangers, viewers who write, and revoked se
     else process.env.BIU_ONLINE = previous
   }
 })
+
+test('session execution leases exclude other devices and can be released', () => {
+  const collab = store()
+  const ada = collab.register('', Date.now(), 'secret1', 'lease-ada@example.com')
+  const now = Date.now()
+  const first = collab.acquireExecutionLease(ada.id, 'session-1', 'Ada laptop', 60_000, now)
+  assert.equal(collab.hasExecutionLease('session-1', now + 1), true)
+  assert.throws(
+    () => collab.acquireExecutionLease(ada.id, 'session-1', 'Ada desktop', 60_000, now + 1),
+    /正在由 Ada laptop 运行/,
+  )
+  assert.doesNotThrow(() => collab.requireExecutionLease(ada.id, 'session-1', first.leaseId, now + 1))
+  collab.renewExecutionLease(ada.id, 'session-1', first.leaseId, 90_000, now + 2)
+  collab.releaseExecutionLease(ada.id, 'session-1', first.leaseId)
+  assert.equal(collab.hasExecutionLease('session-1', now + 3), false)
+  const next = collab.acquireExecutionLease(ada.id, 'session-1', 'Ada desktop', 60_000, now + 4)
+  assert.notEqual(next.leaseId, first.leaseId)
+})
