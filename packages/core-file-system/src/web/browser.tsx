@@ -108,6 +108,7 @@ import {
 } from './fsdb-cells.tsx'
 import { ShareButton, SharePanel, ShareRoleDetail, ShareScopeDetail } from './share-popover.tsx'
 import { ensureFsdbStyle } from './fsdb-style.ts'
+import { workspaceColumnsForLocation } from './workspace-columns.ts'
 import { RecordDetail } from './record-detail.tsx'
 import { PageBanner } from './page-banner.tsx'
 import { TableGlyph, ViewModeGlyph } from './nav-glyphs.tsx'
@@ -1143,14 +1144,14 @@ export function CollectionBrowser({
   const entries = useMemo(() => fieldEntries(schema), [schema])
   const rowActionColumn = placedActions(schema, 'row').length > 0
   const allColumns = useMemo(
-    () => [
+    () => workspaceColumnsForLocation([
       ...entries.filter((item) => isListColumn(item.key) && item.key !== bodyKey && resolveFieldType(item.field) !== 'file'),
       ...(rowActionColumn
         ? [{ key: 'actions', kind: 'action' as const, field: { type: 'action' as const, label: '动作' } }]
         : []),
       ...flattenFacetColumns(facetCatalog),
-    ],
-    [bodyKey, entries, facetCatalog, rowActionColumn],
+    ], localData),
+    [bodyKey, entries, facetCatalog, localData, rowActionColumn],
   )
   const allColumnKeys = useMemo(() => allColumns.map((item) => item.key), [allColumns])
   const schemaDefaultKeys = useMemo(
