@@ -1798,7 +1798,7 @@ body {
   position: relative;
   min-height: 100vh;
   overflow: hidden;
-  background: #080912;
+  background: #050505;
   color: #f8f8fc;
   font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
@@ -1807,9 +1807,9 @@ body {
   inset: 0;
   overflow: hidden;
   background:
-    radial-gradient(circle at 18% 18%, rgba(70, 49, 192, .22), transparent 30%),
-    radial-gradient(circle at 78% 80%, rgba(16, 190, 166, .1), transparent 28%),
-    linear-gradient(125deg, #080812 0%, #0b0b18 44%, #06070d 100%);
+    radial-gradient(circle at 18% 18%, rgba(255, 255, 255, .075), transparent 30%),
+    radial-gradient(circle at 78% 80%, rgba(255, 255, 255, .035), transparent 28%),
+    linear-gradient(125deg, #050505 0%, #101010 44%, #030303 100%);
   pointer-events: none;
 }
 .auth-grid {
@@ -1834,16 +1834,16 @@ body {
   height: 42vw;
   left: -14vw;
   top: 6vh;
-  background: #4a2ac2;
-  opacity: .22;
+  background: #fff;
+  opacity: .06;
 }
 .auth-aurora-two {
   width: 32vw;
   height: 32vw;
   left: 34vw;
   bottom: -18vw;
-  background: #00b8a2;
-  opacity: .14;
+  background: #a8a8a8;
+  opacity: .05;
   animation-delay: -9s;
 }
 .auth-orbit {
@@ -1852,7 +1852,7 @@ body {
   top: 50%;
   width: min(47vw, 690px);
   aspect-ratio: 1;
-  border: 1px solid rgba(184, 172, 255, .14);
+  border: 1px solid rgba(255, 255, 255, .11);
   border-radius: 50%;
   transform: translateY(-50%) rotate(-18deg) scaleY(.36);
 }
@@ -1864,12 +1864,12 @@ body {
   top: 48%;
   right: -4px;
   border-radius: 50%;
-  background: #c7baff;
-  box-shadow: 0 0 22px #a991ff;
+  background: #fff;
+  box-shadow: 0 0 22px rgba(255,255,255,.8);
 }
 .auth-orbit-two {
   transform: translateY(-50%) rotate(27deg) scaleY(.48);
-  border-color: rgba(85, 229, 211, .11);
+  border-color: rgba(255, 255, 255, .08);
 }
 .auth-orbit-two::after {
   left: 6%;
@@ -1877,8 +1877,8 @@ body {
   top: 70%;
   width: 5px;
   height: 5px;
-  background: #59e4d3;
-  box-shadow: 0 0 18px #34d9c4;
+  background: #bdbdbd;
+  box-shadow: 0 0 18px rgba(255,255,255,.65);
 }
 .auth-planet {
   position: absolute;
@@ -1892,9 +1892,9 @@ body {
   border-radius: 50%;
   background:
     radial-gradient(circle at 33% 27%, rgba(255,255,255,.38), transparent 8%),
-    radial-gradient(circle at 38% 34%, #9185e9 0%, #443a96 27%, #17183c 58%, #090a14 76%);
+    radial-gradient(circle at 38% 34%, #d7d7d7 0%, #777 27%, #252525 58%, #080808 76%);
   box-shadow:
-    -38px -15px 80px rgba(101, 76, 220, .25),
+    -38px -15px 80px rgba(255, 255, 255, .11),
     25px 30px 90px rgba(0, 0, 0, .8),
     inset -45px -35px 70px rgba(0, 0, 0, .68);
   animation: auth-breathe 7s ease-in-out infinite;
@@ -1906,7 +1906,7 @@ body {
   left: -15%;
   width: 130%;
   height: 16%;
-  border: solid rgba(207, 199, 255, .15);
+  border: solid rgba(255, 255, 255, .13);
   border-width: 1px 0;
   border-radius: 50%;
   transform: rotate(-18deg);
@@ -1971,8 +1971,8 @@ body {
   height: 5px;
   margin-right: 8px;
   border-radius: 50%;
-  background: #65e4b0;
-  box-shadow: 0 0 10px #65e4b0;
+  background: #fff;
+  box-shadow: 0 0 10px rgba(255,255,255,.8);
 }
 .auth-stage {
   flex: 1;
@@ -1991,7 +1991,7 @@ body {
 }
 .auth-kicker {
   margin: 0;
-  color: #a99cf3;
+  color: rgba(255,255,255,.5);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: .28em;
@@ -2005,7 +2005,7 @@ body {
 }
 .auth-showcase h1 em {
   color: transparent;
-  background: linear-gradient(96deg, #fff 10%, #a697ff 48%, #65ddcf);
+  background: linear-gradient(96deg, #fff 10%, #cacaca 52%, #727272);
   background-clip: text;
   -webkit-background-clip: text;
   font-style: normal;
@@ -2040,7 +2040,7 @@ body {
   position: absolute;
   inset: 12% 0 -8% 15%;
   border-radius: 50%;
-  background: rgba(104, 77, 228, .28);
+  background: rgba(255, 255, 255, .09);
   filter: blur(65px);
 }
 .auth-panel {
@@ -2066,7 +2066,7 @@ body {
   right: 12%;
   top: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(218,211,255,.78), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.7), transparent);
 }
 .auth-panel-heading {
   position: relative;
@@ -2115,7 +2115,7 @@ body {
   width: 16px;
   height: 16px;
   border: 1px solid rgba(255,255,255,.18);
-  border-top-color: #aa9cf5;
+  border-top-color: #fff;
   border-radius: 50%;
   animation: auth-spin .8s linear infinite;
 }
@@ -2148,9 +2148,9 @@ body {
   transition: border-color .18s, box-shadow .18s, background .18s;
 }
 .auth-field:focus {
-  border-color: rgba(168,151,255,.72);
-  background: rgba(13, 11, 29, .72);
-  box-shadow: 0 0 0 3px rgba(135,111,255,.12), 0 0 26px rgba(111,84,236,.1);
+  border-color: rgba(255,255,255,.66);
+  background: rgba(20, 20, 20, .78);
+  box-shadow: 0 0 0 3px rgba(255,255,255,.08), 0 0 26px rgba(255,255,255,.06);
 }
 .auth-field::placeholder {
   color: rgba(255,255,255,.25);
@@ -2164,14 +2164,14 @@ body {
   margin-top: 3px;
   border: 1px solid rgba(255,255,255,.18);
   border-radius: 12px;
-  background: linear-gradient(100deg, #765fe8, #9c70eb 52%, #56bfc1);
-  color: #fff;
+  background: #f4f4f4;
+  color: #090909;
   padding: 14px 17px;
   font: inherit;
   font-size: 12px;
   font-weight: 650;
   letter-spacing: .05em;
-  box-shadow: 0 12px 28px rgba(103,72,215,.28);
+  box-shadow: 0 12px 28px rgba(0,0,0,.32);
   cursor: pointer;
   transition: transform .18s, box-shadow .18s;
 }
@@ -2182,7 +2182,7 @@ body {
   bottom: 0;
   left: -60%;
   width: 45%;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,.25), transparent);
+  background: linear-gradient(90deg, transparent, rgba(0,0,0,.12), transparent);
   transform: skewX(-20deg);
   transition: left .55s ease;
 }
@@ -2197,7 +2197,8 @@ body {
 }
 .auth-go:hover {
   transform: translateY(-1px);
-  box-shadow: 0 16px 36px rgba(103,72,215,.38);
+  background: #fff;
+  box-shadow: 0 16px 36px rgba(0,0,0,.42);
 }
 .auth-go:hover::before {
   left: 120%;
@@ -2217,7 +2218,7 @@ body {
 .auth-switch {
   border: 0;
   background: transparent;
-  color: #b5a8ff;
+  color: rgba(255,255,255,.78);
   padding: 0;
   font: inherit;
   font-size: 11px;
