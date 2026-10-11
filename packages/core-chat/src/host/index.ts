@@ -45,6 +45,23 @@ type CloudExecution = {
   finishing?: Promise<void>
 }
 
+const CLOUD_SESSION_SECRET_KEYS = new Set(['apikey', 'apikeys', 'authorization', 'xapikey'])
+
+export function redactCloudSessionSecrets(record: SessionRecord): SessionRecord {
+  const scrub = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(scrub)
+    if (!value || typeof value !== 'object') return value
+    const out: Record<string, unknown> = {}
+    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+      const normalized = key.toLowerCase().replace(/[-_]/g, '')
+      if (CLOUD_SESSION_SECRET_KEYS.has(normalized)) continue
+      out[key] = scrub(child)
+    }
+    return out
+  }
+  return scrub(record) as SessionRecord
+}
+
 function accountRuntime(ctx: Context) {
   try {
     return ctx.get('account') as {
@@ -161,9 +178,42 @@ function hint(key: string) {
 
 function readPersisted(accountId = ''): Partial<ChatConfig> | null {
   try {
-    return JSON.parse(readFileSync(configPath(accountId), 'utf8')) as Partial<ChatConfig>
+    return cloudSafePersistedConfig(
+      JSON.parse(readFileSync(configPath(accountId), 'utf8')) as Partial<ChatConfig>,
+    )
   } catch {
     return null
+  }
+}
+
+export function cloudSafePersistedConfig(
+  saved: Partial<ChatConfig> | null,
+  online = process.env.BIU_ONLINE === '1',
+): Partial<ChatConfig> | null {
+  if (!saved || !online) return saved
+  const safe = { ...saved, apiKeys: emptyKeys() } as Partial<ChatConfig> & { apiKey?: unknown }
+  delete safe.apiKey
+  return safe
+}
+
+export function persistedChatConfig(config: ChatConfig, online = process.env.BIU_ONLINE === '1') {
+  return {
+    endpointId: config.endpointId,
+    provider: config.provider,
+    model: config.model,
+    systemPrompt: config.systemPrompt,
+    agentMode: config.agentMode,
+    extraTools: config.extraTools,
+    thinking: config.thinking,
+    reasoningEffort: config.reasoningEffort,
+    contextWindow: config.contextWindow,
+    speed: config.speed,
+    modelPrefs: config.modelPrefs,
+    ...(!online ? { apiKeys: config.apiKeys } : {}),
+    baseUrls: config.baseUrls,
+    customEndpoints: config.customEndpoints,
+    customModels: config.customModels,
+    blockedEndpoints: config.blockedEndpoints,
   }
 }
 
@@ -172,32 +222,7 @@ function writePersisted(config: ChatConfig, accountId = '') {
   const dir = dataDir(dataHome())
   mkdirSync(dir, { recursive: true })
   mkdirSync(dirname(path), { recursive: true })
-  writeFileSync(
-    path,
-    `${JSON.stringify(
-      {
-        endpointId: config.endpointId,
-        provider: config.provider,
-        model: config.model,
-        systemPrompt: config.systemPrompt,
-        agentMode: config.agentMode,
-        extraTools: config.extraTools,
-        thinking: config.thinking,
-        reasoningEffort: config.reasoningEffort,
-        contextWindow: config.contextWindow,
-        speed: config.speed,
-        modelPrefs: config.modelPrefs,
-        apiKeys: config.apiKeys,
-        baseUrls: config.baseUrls,
-        customEndpoints: config.customEndpoints,
-        customModels: config.customModels,
-        blockedEndpoints: config.blockedEndpoints,
-      },
-      null,
-      2,
-    )}\n`,
-    'utf8',
-  )
+  writeFileSync(path, `${JSON.stringify(persistedChatConfig(config), null, 2)}\n`, 'utf8')
 }
 
 function parseAgentMode(value: unknown, fallback: AgentToolMode): AgentToolMode {
@@ -1209,7 +1234,7 @@ export function apply(ctx: Context) {
       try {
         const record = await ctx.sessions.get(sessionId)
         if (record) {
-          const cloudRecord: SessionRecord = { ...record }
+          const cloudRecord = redactCloudSessionSecrets(record)
           delete cloudRecord.project
           const response = await fetch(
             `${execution.origin}/api/sessions/${encodeURIComponent(sessionId)}/execution-sync`,
