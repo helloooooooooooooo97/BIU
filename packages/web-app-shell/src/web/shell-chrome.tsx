@@ -356,119 +356,176 @@ export function AuthGate({ children }: { children: ReactNode }) {
   if (token) {
     return (
       <div className="auth-gate" data-testid="auth-verifying">
-        <div className="auth-sky" aria-hidden />
-        <p className="auth-status">正在验证登录状态</p>
+        <AuthBackdrop />
+        <div className="auth-status">
+          <span className="auth-status-spinner" />
+          正在验证登录状态
+        </div>
       </div>
     )
   }
 
   return (
     <div className="auth-gate" data-testid="auth-gate">
-      <div className="auth-sky" aria-hidden>
-        <div className="auth-horizon" />
+      <AuthBackdrop />
+      <div className="auth-shell">
+        <header className="auth-topbar">
+          <div className="auth-brand">
+            <span className="auth-brand-mark">B</span>
+            <span>BIU</span>
+          </div>
+          <span className="auth-system-state"><i /> SYSTEM ONLINE</span>
+        </header>
+        <section className="auth-stage">
+          <div className="auth-showcase">
+            <p className="auth-kicker">YOUR AGENT WORKSPACE</p>
+            <h1>Ideas at<br /><em>light speed.</em></h1>
+            <p className="auth-showcase-copy">让灵感、数据与智能体，在同一个空间持续运转。</p>
+            <div className="auth-capabilities">
+              <span>∞ Persistent</span>
+              <span>⌁ Connected</span>
+              <span>✦ Intelligent</span>
+            </div>
+          </div>
+          <div className="auth-card-wrap">
+            <div className="auth-card-glow" />
+            {guestInvite ? (
+              <form
+                className="auth-panel"
+                data-testid="auth-guest-invite"
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  setJoining(true)
+                  void accountFetch('', `/api/account/guest-invites/${encodeURIComponent(guestInvite)}/accept`, {
+                    method: 'POST',
+                    body: JSON.stringify({ name: guestName.trim() }),
+                  })
+                    .then((body) => {
+                      const url = new URL(window.location.href)
+                      url.searchParams.delete('guestInvite')
+                      window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
+                      writeAccountToken(String(body.token ?? ''))
+                      if (body.workspaceId) writeWorkspaceId(String(body.workspaceId))
+                      setError('')
+                    })
+                    .catch((err) => setError(err instanceof Error ? err.message : '临时访客链接无效'))
+                    .finally(() => setJoining(false))
+                }}
+              >
+                <div className="auth-panel-heading">
+                  <span className="auth-panel-icon">↗</span>
+                  <p className="auth-kicker">GUEST ACCESS</p>
+                  <h2>以访客身份进入</h2>
+                  <p className="auth-lead">无需注册，只能访问这条邀请链接中的内容。</p>
+                </div>
+                {error ? <p className="auth-error">{error}</p> : null}
+                <label className="auth-label">
+                  你的称呼 <span>可选</span>
+                  <input
+                    className="auth-field"
+                    value={guestName}
+                    maxLength={40}
+                    placeholder="如何称呼你？"
+                    data-testid="auth-guest-name"
+                    onChange={(event) => setGuestName(event.target.value)}
+                  />
+                </label>
+                <button type="submit" className="auth-go" disabled={joining}>
+                  <span>{joining ? '正在进入' : '进入空间'}</span><b>→</b>
+                </button>
+              </form>
+            ) : (
+              <form
+                className="auth-panel"
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  const path = mode === 'register' ? '/api/account/register' : '/api/account/login'
+                  void accountFetch('', path, {
+                    method: 'POST',
+                    body: JSON.stringify({ email: name.trim(), password }),
+                  })
+                    .then((body) => {
+                      writeAccountToken(String(body.token ?? ''))
+                      if (body.workspaceId) writeWorkspaceId(String(body.workspaceId))
+                      setPassword('')
+                      setError('')
+                    })
+                    .catch((err) => setError(err instanceof Error ? err.message : '登录失败'))
+                }}
+              >
+                <div className="auth-panel-heading">
+                  <span className="auth-panel-icon">{mode === 'register' ? '+' : '↗'}</span>
+                  <p className="auth-kicker">{mode === 'register' ? 'NEW ACCOUNT' : 'WELCOME BACK'}</p>
+                  <h2>{mode === 'register' ? '创建你的空间' : '登录 Biu'}</h2>
+                  <p className="auth-lead">
+                    {workspaceInvite ? '登录或注册后，用邀请链接加入空间。' : mode === 'register' ? '从这里开始你的智能工作流。' : '继续上次未完成的创造。'}
+                  </p>
+                </div>
+                {error ? <p className="auth-error">{error}</p> : null}
+                <label className="auth-label">
+                  邮箱
+                  <input
+                    className="auth-field"
+                    value={name}
+                    maxLength={40}
+                    placeholder="name@email.com"
+                    type={mode === 'register' ? 'email' : 'text'}
+                    autoComplete="username"
+                    data-testid="auth-name"
+                    onChange={(event) => setName(event.target.value)}
+                  />
+                </label>
+                <label className="auth-label">
+                  密码
+                  <input
+                    className="auth-field"
+                    type="password"
+                    value={password}
+                    placeholder={mode === 'register' ? '至少 6 位' : '输入你的密码'}
+                    autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
+                    data-testid="auth-password"
+                    onChange={(event) => setPassword(event.target.value)}
+                  />
+                </label>
+                <button type="submit" className="auth-go" data-testid="auth-submit">
+                  <span>{mode === 'register' ? '创建账号' : '进入工作空间'}</span><b>→</b>
+                </button>
+                <div className="auth-panel-footer">
+                  <span>{mode === 'register' ? '已经有账号？' : '第一次来到 Biu？'}</span>
+                  <button
+                    type="button"
+                    className="auth-switch"
+                    data-testid="auth-switch"
+                    onClick={() => setMode((current) => (current === 'login' ? 'register' : 'login'))}
+                  >
+                    {mode === 'register' ? '直接登录' : '创建账号'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </section>
+        <footer className="auth-bottom">
+          <span>BIU AGENT OS</span>
+          <span>ONE SPACE. UNLIMITED POSSIBILITY.</span>
+        </footer>
       </div>
-      {guestInvite ? (
-        <form
-          className="auth-panel"
-          data-testid="auth-guest-invite"
-          onSubmit={(event) => {
-            event.preventDefault()
-            setJoining(true)
-            void accountFetch('', `/api/account/guest-invites/${encodeURIComponent(guestInvite)}/accept`, {
-              method: 'POST',
-              body: JSON.stringify({ name: guestName.trim() }),
-            })
-              .then((body) => {
-                const url = new URL(window.location.href)
-                url.searchParams.delete('guestInvite')
-                window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
-                writeAccountToken(String(body.token ?? ''))
-                if (body.workspaceId) writeWorkspaceId(String(body.workspaceId))
-                setError('')
-              })
-              .catch((err) => setError(err instanceof Error ? err.message : '临时访客链接无效'))
-              .finally(() => setJoining(false))
-          }}
-        >
-          <p className="auth-kicker">GUEST ACCESS</p>
-          <h1 className="auth-word">访客</h1>
-          <p className="auth-lead">无需注册。只能打开这条链接里的内容，到期后自动失效。</p>
-          {error ? <p className="auth-error">{error}</p> : null}
-          <input
-            className="auth-field"
-            value={guestName}
-            maxLength={40}
-            placeholder="你的称呼（可选）"
-            data-testid="auth-guest-name"
-            onChange={(event) => setGuestName(event.target.value)}
-          />
-          <button type="submit" className="auth-go" disabled={joining}>
-            {joining ? '正在进入' : '进入'}
-          </button>
-        </form>
-      ) : (
-      <form
-        className="auth-panel"
-        onSubmit={(event) => {
-          event.preventDefault()
-          const path = mode === 'register' ? '/api/account/register' : '/api/account/login'
-          void accountFetch('', path, {
-            method: 'POST',
-            body: JSON.stringify({ email: name.trim(), password }),
-          })
-            .then((body) => {
-              writeAccountToken(String(body.token ?? ''))
-              if (body.workspaceId) writeWorkspaceId(String(body.workspaceId))
-              setPassword('')
-              setError('')
-            })
-            .catch((err) => setError(err instanceof Error ? err.message : '登录失败'))
-        }}
-      >
-        <p className="auth-kicker">{mode === 'register' ? 'CREATE ACCOUNT' : 'SIGN IN'}</p>
-        <h1 className="auth-word">BIU</h1>
-        <p className="auth-lead">
-          {workspaceInvite ? '登录或注册后，用邀请链接加入空间。' : '一个账号，进入你的全部空间。'}
-        </p>
-        {error ? <p className="auth-error">{error}</p> : null}
-        <label className="auth-label">
-          邮箱
-          <input
-            className="auth-field"
-            value={name}
-            maxLength={40}
-            placeholder={mode === 'register' ? 'name@email.com' : '账号或邮箱'}
-            type={mode === 'register' ? 'email' : 'text'}
-            autoComplete="username"
-            data-testid="auth-name"
-            onChange={(event) => setName(event.target.value)}
-          />
-        </label>
-        <label className="auth-label">
-          密码
-          <input
-            className="auth-field"
-            type="password"
-            value={password}
-            placeholder="至少 6 位"
-            autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
-            data-testid="auth-password"
-            onChange={(event) => setPassword(event.target.value)}
-          />
-        </label>
-        <button type="submit" className="auth-go" data-testid="auth-submit">
-          {mode === 'register' ? '注册并进入' : '登录'}
-        </button>
-        <button
-          type="button"
-          className="auth-switch"
-          data-testid="auth-switch"
-          onClick={() => setMode((current) => (current === 'login' ? 'register' : 'login'))}
-        >
-          {mode === 'register' ? '已有账号，去登录' : '没有账号，去注册'}
-        </button>
-      </form>
-      )}
+    </div>
+  )
+}
+
+function AuthBackdrop() {
+  return (
+    <div className="auth-backdrop" aria-hidden>
+      <div className="auth-grid" />
+      <div className="auth-aurora auth-aurora-one" />
+      <div className="auth-aurora auth-aurora-two" />
+      <div className="auth-orbit auth-orbit-one" />
+      <div className="auth-orbit auth-orbit-two" />
+      <div className="auth-planet">
+        <span className="auth-planet-shine" />
+      </div>
+      <div className="auth-noise" />
     </div>
   )
 }
