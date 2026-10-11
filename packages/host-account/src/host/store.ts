@@ -126,7 +126,11 @@ export class CollabStore {
   readonly authorization: AuthorizationService
 
   constructor(private db: DatabaseSync) {
-    this.authorization = new AuthorizationService(db, (accountId) => this.accountActiveWorkspace(accountId))
+    this.authorization = new AuthorizationService(db, (accountId) => {
+      const requested = currentRequestWorkspaceId()
+      if (requested && this.isMember(accountId, requested)) return requested
+      return this.accountActiveWorkspace(accountId)
+    })
     this.ensureBuiltInRoot()
   }
 
