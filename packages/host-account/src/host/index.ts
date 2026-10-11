@@ -231,6 +231,9 @@ function configuredRemoteOrigin() {
 async function relayAccount(route: RouteContext, account: AccountService, localAccountId: string, path: string) {
   const connection = account.cloudConnection(localAccountId)
   if (!connection) return null
+  const activeWorkspaceId = account.store.activeWorkspaceId()
+  const cloudWorkspaceId =
+    activeWorkspaceId && account.workspaceLocation(activeWorkspaceId) === 'cloud' ? activeWorkspaceId : ''
   const method = route.req.method ?? 'GET'
   const hasBody = method !== 'GET' && method !== 'HEAD'
   const raw = hasBody ? await route.json().catch(() => ({})) : undefined
@@ -240,6 +243,7 @@ async function relayAccount(route: RouteContext, account: AccountService, localA
       method,
       headers: {
         authorization: `Bearer ${connection.token}`,
+        ...(cloudWorkspaceId ? { 'x-biu-workspace-id': cloudWorkspaceId } : {}),
         ...(hasBody ? { 'content-type': 'application/json' } : {}),
       },
       body: hasBody ? JSON.stringify(raw ?? {}) : undefined,

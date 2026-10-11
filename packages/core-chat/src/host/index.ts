@@ -38,6 +38,7 @@ function sessionIsCloud(ctx: Context, id: string) {
 type CloudExecution = {
   sessionId: string
   leaseId: string
+  workspaceId: string
   origin: string
   token: string
   heartbeat: ReturnType<typeof setInterval>
@@ -1155,13 +1156,16 @@ export function apply(ctx: Context) {
   const beginCloudExecution = async (sessionId: string) => {
     if (process.env.BIU_ONLINE === '1' || !sessionIsCloud(ctx, sessionId)) return null
     const localAccountId = currentAccountId()
-    const connection = localAccountId ? accountRuntime(ctx)?.cloudConnection?.(localAccountId) : null
+    const runtime = accountRuntime(ctx)
+    const connection = localAccountId ? runtime?.cloudConnection?.(localAccountId) : null
     if (!connection) throw new Error('请先登录云端账号')
+    const workspaceId = runtime?.store?.activeWorkspaceId() ?? ''
     const response = await fetch(`${connection.origin}/api/sessions/${encodeURIComponent(sessionId)}/execution-lease`, {
       method: 'POST',
       headers: {
         authorization: `Bearer ${connection.token}`,
         'content-type': 'application/json',
+        ...(workspaceId ? { 'x-biu-workspace-id': workspaceId } : {}),
       },
       body: JSON.stringify({ executorId: `desktop:${localAccountId}` }),
     })
@@ -1173,6 +1177,7 @@ export function apply(ctx: Context) {
         headers: {
           authorization: `Bearer ${connection.token}`,
           'content-type': 'application/json',
+          ...(workspaceId ? { 'x-biu-workspace-id': workspaceId } : {}),
         },
         body: JSON.stringify({ leaseId: payload.leaseId }),
       }).catch(() => undefined)
@@ -1180,6 +1185,7 @@ export function apply(ctx: Context) {
     const execution = {
       sessionId,
       leaseId: payload.leaseId,
+      workspaceId,
       origin: connection.origin,
       token: connection.token,
       heartbeat,
@@ -1205,6 +1211,7 @@ export function apply(ctx: Context) {
           headers: {
             authorization: `Bearer ${execution.token}`,
             'content-type': 'application/json',
+            ...(execution.workspaceId ? { 'x-biu-workspace-id': execution.workspaceId } : {}),
           },
           body: JSON.stringify({ leaseId: execution.leaseId, record: cloudRecord }),
         },
@@ -1221,6 +1228,7 @@ export function apply(ctx: Context) {
         headers: {
           authorization: `Bearer ${execution.token}`,
           'content-type': 'application/json',
+          ...(execution.workspaceId ? { 'x-biu-workspace-id': execution.workspaceId } : {}),
         },
         body: JSON.stringify({ leaseId: execution.leaseId }),
       }).catch(() => undefined)
