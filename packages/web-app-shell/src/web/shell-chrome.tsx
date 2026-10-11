@@ -17,6 +17,7 @@ import {
   EyeSlashIcon,
   MagnifyingGlassIcon,
   PlusIcon,
+  XMarkIcon,
 } from '@heroicons/react/16/solid'
 import { AnchorMenu, ConfirmDialog } from '@biu/public-ui'
 import { chromeIcon } from './chrome-icon.ts'
