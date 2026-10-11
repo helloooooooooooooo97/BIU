@@ -622,8 +622,8 @@ make          # 安装依赖，同时起 host 与 Vite
 | | 地址 |
 |--|------|
 | UI | http://127.0.0.1:5173 |
-| API / WS | http://127.0.0.1:3141 |
-| 局域网只读分享 | `http://<局域网IP>:3142/share/...`（工作台仍只在本机） |
+| API / WS | `http://<局域网IP>:3141`（需要账号鉴权） |
+| 局域网只读分享 | `http://<局域网IP>:3141/share/...`（与 API 复用端口） |
 
 未配置 Key 时，发送消息只会得到本地回声。请点击输入框旁的 **＋ 配置模型**，或：
 
@@ -646,7 +646,7 @@ export CHAT_MODEL=deepseek-chat # 可选
 |------|--|
 | `make` / `make restart` | 安装依赖并启动 host 与 web / 停止后重新启动 |
 | `make host` / `make web` | 仅启动 host / 仅启动 web |
-| `make stop` | 释放 `3141` / `3142` / `5173` |
+| `make stop` | 释放 `3141` / `5173` |
 | `npm test` | Vitest |
 | `npx tsc --noEmit` | 类型检查 |
 
@@ -654,9 +654,9 @@ export CHAT_MODEL=deepseek-chat # 可选
 
 | 变量 | 默认 | |
 |------|------|--|
-| `PORT` / `HTTP_HOST` | `3141` / `127.0.0.1` | 本机工作台（不要改成 `0.0.0.0`，否则整个站点会暴露到局域网） |
-| `SHARE_PORT` / `SHARE_HOST` | `3142` / `0.0.0.0` | `make` / `npm run dev` 默认打开；只放行分享页。`SHARE_PORT=0` 关闭 |
-| `SHARE_PUBLIC_URL` | 自动探测局域网 IPv4 | 复制链接用的 origin，例如 `http://192.168.1.8:3142` |
+| `PORT` / `HTTP_HOST` | `3141` / `0.0.0.0` | 工作台、API 与局域网分享复用的监听地址；账号 API 需要鉴权 |
+| `SHARE_PORT` | 默认与 `PORT` 相同 | 分享链接使用主服务端口，不再启动额外监听器 |
+| `SHARE_PUBLIC_URL` | 自动探测局域网 IPv4 | 复制链接用的 origin，例如 `http://192.168.1.8:3141` |
 | `SHARE_PROXY_UI` | `dev:host` 默认指向 Vite | 开发时分享页走 `5173`；`npm start` 用构建产物 |
 | `CORDIS_WORKSPACE` | `.workspace` | 默认工作区 |
 | `DEEPSEEK_API_KEY` 等 | | 也可只在 UI 里存 |

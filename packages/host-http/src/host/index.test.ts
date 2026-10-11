@@ -46,6 +46,25 @@ test('port zero reports the actual bound port', async () => {
   }
 })
 
+test('sharing can reuse the authenticated workstation listener', async () => {
+  const previous = process.env.SHARE_PORT
+  const port = await freePort()
+  const ctx = new Context()
+  const ready = new Promise<number>((resolve) => ctx.on('http/ready', ({ port: actual }) => resolve(actual)))
+  const shareReady = new Promise<number>((resolve) => ctx.on('http/share-ready', ({ port: actual }) => resolve(actual)))
+  const fiber = await ctx.plugin(http, { port, host: '127.0.0.1', sharePort: port })
+  try {
+    const [actual, share] = await Promise.all([ready, shareReady])
+    assert.equal(actual, port)
+    assert.equal(share, port)
+    assert.equal(process.env.SHARE_PORT, String(port))
+  } finally {
+    await fiber.dispose()
+    if (previous === undefined) delete process.env.SHARE_PORT
+    else process.env.SHARE_PORT = previous
+  }
+})
+
 test('occupied requested port falls back when enabled', async () => {
   const blocker = createServer()
   await new Promise<void>((resolve, reject) => {

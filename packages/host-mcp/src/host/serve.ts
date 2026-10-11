@@ -187,7 +187,7 @@ export function applyHostServer(ctx: Context) {
       tools: [...FILE_TOOL_NAMES],
       clients: mcpClientSnippets(url, token),
       note:
-        'MCP 协议对各客户端相同。局域网走分享口（默认 0.0.0.0），工作台仍只在本机。' +
+        'MCP 与工作台复用同一个局域网端口，账号 API 与 MCP 均执行鉴权。' +
         '调用必须带 Authorization: Bearer <token>；token 只在本机 info 里明文给出。',
     }
   }

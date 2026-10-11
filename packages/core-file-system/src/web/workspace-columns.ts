@@ -1,6 +1,6 @@
-const collaborationColumnKeys = new Set(['shareScope', 'shareRole'])
+const localOnlyHiddenColumnKeys = new Set(['shareRole'])
 
 export function workspaceColumnsForLocation<T extends { key: string }>(columns: T[], localData: boolean) {
   if (!localData) return columns
-  return columns.filter((column) => !collaborationColumnKeys.has(column.key))
+  return columns.filter((column) => !localOnlyHiddenColumnKeys.has(column.key))
 }

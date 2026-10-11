@@ -98,11 +98,11 @@ export type HttpListenConfig = {
   shareHost?: string
 }
 
-function defaultSharePort() {
+function defaultSharePort(port: number) {
   const raw = process.env.SHARE_PORT
   if (raw !== undefined && raw !== '') return Number(raw)
   if (process.env.VITEST) return 0
-  return 3142
+  return port
 }
 
 function defaultPublicDir() {
@@ -136,10 +136,11 @@ function asHtml(data: Buffer) {
 }
 
 function resolveListenConfig(config?: HttpListenConfig) {
-  const sharePortRaw = config?.sharePort ?? defaultSharePort()
+  const port = Number(config?.port ?? process.env.PORT ?? 3141)
+  const sharePortRaw = config?.sharePort ?? defaultSharePort(port)
   return {
-    port: Number(config?.port ?? process.env.PORT ?? 3141),
-    host: config?.host ?? process.env.HTTP_HOST ?? '127.0.0.1',
+    port,
+    host: config?.host ?? process.env.HTTP_HOST ?? '0.0.0.0',
     publicDir: config?.publicDir ?? defaultPublicDir(),
     fallbackPort: config?.fallbackPort ?? process.env.BIU_PORT_FALLBACK === '1',
     sharePort: Number.isFinite(sharePortRaw) ? sharePortRaw : 0,
@@ -220,8 +221,12 @@ export class HttpService extends Service {
       server.listen(config.port, host, () => {
         const address = server.address()
         const port = address && typeof address !== 'string' ? address.port : config.port
+        if (config.sharePort > 0 && config.sharePort === config.port) {
+          process.env.SHARE_PORT = String(port)
+          ctx.emit('http/share-ready', { port })
+        }
         ctx.emit('http/ready', { port })
-        ctx.logger('http').info(`listening on http://${host}:${port}${host === '0.0.0.0' ? ' (内网可达，整站暴露)' : ''}`)
+        ctx.logger('http').info(`listening on http://${host}:${port}${host === '0.0.0.0' ? ' (内网可达，工作台 API 需要鉴权)' : ''}`)
       })
       return () =>
         new Promise<void>((resolve) => {
@@ -591,7 +596,7 @@ export class HttpService extends Service {
         res.end(JSON.stringify({ error: 'not found' }))
         return
       }
-      const proxied = shareOnly ? await this.proxyShareUi(url.pathname, res) : false
+      const proxied = await this.proxyShareUi(url.pathname, res)
       if (proxied) return
       await this.serveStatic(url.pathname, res, shareOnly)
       return
