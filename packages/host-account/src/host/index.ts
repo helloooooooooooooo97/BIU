@@ -307,6 +307,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     workspaceId: string,
     path: string,
   ) {
+    if (process.env.BIU_ONLINE === '1') return false
     if (account.workspaceLocation(workspaceId) !== 'cloud') return false
     const relayed = await relayAccount(route, account, localAccountId, path)
     if (!relayed) throw new CollabError('请先登录云端账号', 401)
