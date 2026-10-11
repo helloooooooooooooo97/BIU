@@ -125,7 +125,7 @@ test('table and view rows only expand from the fold column', () => {
   assert.match(sidebar, /data-collection-kind/)
   assert.match(sidebar, /isSystemCollection/)
   assert.match(sidebar, /className="sidebar-add"/)
-  assert.match(sidebar, /onAddView\(table\.path, scope\)/)
+  assert.match(sidebar, /onAddView\(table\.path\)/)
   assert.match(css, /\.sidebar-group-fold:hover \.sidebar-group-fold-chevron/)
   assert.doesNotMatch(css, /\.chat-session-row:hover \.sidebar-group-fold-chevron/)
 })
