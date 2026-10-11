@@ -176,6 +176,52 @@ test('account settings are global and workspace switcher lives in the sidebar he
   assert.equal(settingsOpened, true)
 })
 
+test('workspace creation uses centered local and online cards with default names', async () => {
+  localStorage.setItem('biu.account.token', 'tok')
+  const createBodies: Array<Record<string, unknown>> = []
+  globalThis.fetch = (async (path: string, init?: RequestInit) => {
+    const url = String(path)
+    if (url.endsWith('/active') && init?.method === 'POST') return json({ error: 'stop reload' }, 500)
+    if (url.endsWith('/active')) return json({ workspaceId: 'ws_local' })
+    if (url.endsWith('/workspaces') && init?.method === 'POST') {
+      createBodies.push(JSON.parse(String(init.body)) as Record<string, unknown>)
+      return json({ id: `ws_${createBodies.length}`, name: 'created', role: 'owner' }, 201)
+    }
+    if (url.endsWith('/workspaces')) {
+      return json({
+        workspaces: [
+          { id: 'ws_local', name: '本机项目', role: 'owner', location: 'device' },
+          { id: 'ws_cloud', name: '云端项目', role: 'owner', location: 'cloud' },
+        ],
+      })
+    }
+    return json({})
+  }) as typeof fetch
+
+  render(<ShellWorkspaceSwitcher />)
+  const switcher = await screen.findByTestId('shell-workspace-switcher')
+  assert.equal(switcher.querySelectorAll('.shell-workspace-switch-icon').length, 1)
+  fireEvent.click(switcher)
+  const menu = await screen.findByTestId('shell-workspace-menu')
+  assert.equal(menu.querySelectorAll('.shell-workspace-menu-icon').length, 2)
+  fireEvent.click(screen.getByText('创建新空间'))
+
+  const dialog = await screen.findByRole('dialog', { name: '创建新空间' })
+  assert.equal(dialog.querySelectorAll('.shell-workspace-create-card').length, 2)
+  assert.equal(dialog.querySelectorAll('.shell-workspace-create-card-icon svg').length, 2)
+  assert.equal(screen.queryByLabelText('新空间名称'), null)
+
+  fireEvent.click(screen.getByRole('button', { name: /创建本地空间/ }))
+  await waitFor(() => assert.deepEqual(createBodies[0], { name: '本地空间', location: 'device' }))
+  await waitFor(() => assert.match(screen.getByRole('alert').textContent ?? '', /stop reload/))
+  fireEvent.click(screen.getByRole('button', { name: /创建在线空间/ }))
+  await waitFor(() => assert.deepEqual(createBodies[1], { name: '在线空间', location: 'cloud' }))
+
+  const css = readFileSync(resolve(import.meta.dirname, '../../../../web/style.css'), 'utf8')
+  assert.match(css, /\.shell-workspace-switcher\s*\{[^}]*font-size:\s*13px;[^}]*font-weight:\s*500;/s)
+  assert.match(css, /\.shell-workspace-create-overlay\s*\{[^}]*position:\s*fixed;[^}]*place-items:\s*center;/s)
+})
+
 test('online MCP settings choose tools and manage scoped credentials', async () => {
   localStorage.setItem('biu.account.token', 'tok')
   sessionStorage.setItem('biu.workspaceId', 'ws_1')

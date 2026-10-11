@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode, type Ref } from 'react'
+import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
   ArrowRightStartOnRectangleIcon,
@@ -8,6 +9,8 @@ import {
   CheckIcon,
   CircleStackIcon,
   ClipboardDocumentIcon,
+  CloudIcon,
+  ComputerDesktopIcon,
   Cog6ToothIcon,
   CameraIcon,
   EyeIcon,
@@ -653,8 +656,7 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
   const [active, setActive] = useState('')
   const [open, setOpen] = useState(false)
   const [creating, setCreating] = useState(false)
-  const [newWorkspaceName, setNewWorkspaceName] = useState('')
-  const [newWorkspaceLocation, setNewWorkspaceLocation] = useState<'device' | 'cloud'>('device')
+  const [creatingLocation, setCreatingLocation] = useState<'device' | 'cloud' | null>(null)
   const [createError, setCreateError] = useState('')
   const triggerRef = useRef<HTMLButtonElement>(null)
 
@@ -698,14 +700,15 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
       body: JSON.stringify({ workspaceId }),
     }).then(() => window.location.reload())
   }
-  const createWorkspace = () => {
+  const createWorkspace = (location: 'device' | 'cloud') => {
     const token = readAccountToken()
-    const name = newWorkspaceName.trim()
-    if (!token || !name) return
+    if (!token || creatingLocation) return
+    const name = location === 'device' ? '本地空间' : '在线空间'
     setCreateError('')
+    setCreatingLocation(location)
     void accountFetch(token, '/api/account/workspaces', {
       method: 'POST',
-      body: JSON.stringify({ name, location: newWorkspaceLocation }),
+      body: JSON.stringify({ name, location }),
     })
       .then(async (body) => {
         const created = body as CollabWorkspace
@@ -715,7 +718,10 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
         })
         window.location.reload()
       })
-      .catch((error) => setCreateError(error instanceof Error ? error.message : '创建失败'))
+      .catch((error) => {
+        setCreatingLocation(null)
+        setCreateError(error instanceof Error ? error.message : '创建失败')
+      })
   }
   return (
     <div className="shell-workspace-switch-wrap">
@@ -729,6 +735,9 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
         data-testid="shell-workspace-switcher"
         onClick={() => setOpen((value) => !value)}
       >
+        {current.location === 'cloud'
+          ? <CloudIcon aria-hidden className="shell-workspace-switch-icon" />
+          : <ComputerDesktopIcon aria-hidden className="shell-workspace-switch-icon" />}
         <span className="shell-workspace-switch-copy">
           <strong>{current.name}</strong>
         </span>
@@ -761,6 +770,9 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
                     className={`shell-workspace-menu-item${workspace.id === active ? ' is-active' : ''}`}
                     onClick={() => switchTo(workspace.id)}
                   >
+                    {location === 'cloud'
+                      ? <CloudIcon aria-hidden className="shell-workspace-menu-icon" />
+                      : <ComputerDesktopIcon aria-hidden className="shell-workspace-menu-icon" />}
                     <span className="shell-workspace-menu-copy">
                       <strong>{workspace.name}</strong>
                       <small>
@@ -776,54 +788,14 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
             )
           })}
           <div className="shell-workspace-menu-actions">
-            {creating ? (
-              <form
-                className="shell-workspace-create"
-                onSubmit={(event) => {
-                  event.preventDefault()
-                  createWorkspace()
-                }}
-              >
-                <input
-                  autoFocus
-                  value={newWorkspaceName}
-                  maxLength={40}
-                  aria-label="新空间名称"
-                  placeholder="新空间名称"
-                  onChange={(event) => setNewWorkspaceName(event.target.value)}
-                />
-                <div className="settings-account-actions">
-                  <button
-                    type="button"
-                    className={newWorkspaceLocation === 'device' ? 'is-active' : ''}
-                    onClick={() => setNewWorkspaceLocation('device')}
-                  >
-                    本机
-                  </button>
-                  <button
-                    type="button"
-                    className={newWorkspaceLocation === 'cloud' ? 'is-active' : ''}
-                    onClick={() => setNewWorkspaceLocation('cloud')}
-                  >
-                    云端
-                  </button>
-                </div>
-                {createError ? <p>{createError}</p> : null}
-                <div>
-                  <button type="button" onClick={() => {
-                    setCreating(false)
-                    setNewWorkspaceName('')
-                    setCreateError('')
-                  }}>取消</button>
-                  <button type="submit" disabled={!newWorkspaceName.trim()}>创建</button>
-                </div>
-              </form>
-            ) : (
-              <button type="button" className="shell-workspace-menu-action" onClick={() => setCreating(true)}>
-                <PlusIcon className="size-4" />
-                <span>创建新空间</span>
-              </button>
-            )}
+            <button type="button" className="shell-workspace-menu-action" onClick={() => {
+              setOpen(false)
+              setCreateError('')
+              setCreating(true)
+            }}>
+              <PlusIcon className="size-4" />
+              <span>创建新空间</span>
+            </button>
             <button
               type="button"
               className="shell-workspace-menu-action"
@@ -848,6 +820,58 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
             </button>
           </div>
         </AnchorMenu>
+      ) : null}
+      {creating && typeof document !== 'undefined' ? createPortal(
+        <div
+          className="shell-workspace-create-overlay"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !creatingLocation) setCreating(false)
+          }}
+        >
+          <section className="shell-workspace-create-dialog" role="dialog" aria-modal="true" aria-label="创建新空间">
+            <header>
+              <div>
+                <h2>创建新空间</h2>
+                <p>选择数据保存的位置，创建后也可以继续添加其他空间。</p>
+              </div>
+              <button
+                type="button"
+                aria-label="关闭"
+                disabled={Boolean(creatingLocation)}
+                onClick={() => setCreating(false)}
+              >
+                <XMarkIcon className="size-4" />
+              </button>
+            </header>
+            <div className="shell-workspace-create-cards">
+              <button
+                type="button"
+                className="shell-workspace-create-card"
+                disabled={Boolean(creatingLocation)}
+                onClick={() => createWorkspace('device')}
+              >
+                <span className="shell-workspace-create-card-icon"><ComputerDesktopIcon aria-hidden /></span>
+                <strong>本地空间</strong>
+                <small>数据只保存在当前设备，不上传云端。可通过局域网链接临时分享。</small>
+                <em>{creatingLocation === 'device' ? '正在创建…' : '创建本地空间'}</em>
+              </button>
+              <button
+                type="button"
+                className="shell-workspace-create-card"
+                disabled={Boolean(creatingLocation)}
+                onClick={() => createWorkspace('cloud')}
+              >
+                <span className="shell-workspace-create-card-icon"><CloudIcon aria-hidden /></span>
+                <strong>在线空间</strong>
+                <small>数据保存在云端，可使用成员、权限和在线协作功能。</small>
+                <em>{creatingLocation === 'cloud' ? '正在创建…' : '创建在线空间'}</em>
+              </button>
+            </div>
+            {createError ? <p className="shell-workspace-create-error" role="alert">{createError}</p> : null}
+          </section>
+        </div>,
+        document.body,
       ) : null}
     </div>
   )

@@ -1564,9 +1564,17 @@ body {
   background: transparent;
   color: var(--dsw-label);
   font: inherit;
-  font-size: 14px;
-  font-weight: 650;
+  font-size: 13px;
+  font-weight: 500;
   outline: none;
+}
+
+.shell-workspace-switch-icon,
+.shell-workspace-menu-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  color: var(--dsw-label-2);
 }
 
 .shell-workspace-switch-wrap {
@@ -1583,8 +1591,10 @@ body {
 }
 
 .shell-workspace-switch-copy strong {
+  display: block;
   max-width: 100%;
   overflow: hidden;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1627,7 +1637,6 @@ body {
   min-width: 0;
   height: 34px;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
   border: 0;
   border-radius: 7px;
@@ -1648,6 +1657,7 @@ body {
 .shell-workspace-menu-copy {
   display: flex;
   min-width: 0;
+  flex: 1;
   flex-direction: column;
   align-items: flex-start;
   line-height: 1.15;
@@ -1706,57 +1716,173 @@ body {
   height: 39px;
 }
 
-.shell-workspace-create {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 4px;
+.shell-workspace-create-overlay {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: color-mix(in srgb, #050505 52%, transparent);
+  backdrop-filter: blur(3px);
 }
 
-.shell-workspace-create input {
-  width: 100%;
-  height: 32px;
+.shell-workspace-create-dialog {
+  width: min(620px, 100%);
   border: 1px solid var(--dsw-border);
-  border-radius: 7px;
-  padding: 0 8px;
-  outline: none;
+  border-radius: 14px;
+  padding: 22px;
   background: var(--dsw-surface);
+  box-shadow: var(--dsw-shadow-lv2);
   color: var(--dsw-label);
   font: inherit;
-  font-size: 13px;
 }
 
-.shell-workspace-create input:focus {
-  border-color: var(--dsw-pick);
-}
-
-.shell-workspace-create p {
-  margin: 0;
-  color: var(--dsw-danger);
-  font-size: 11px;
-}
-
-.shell-workspace-create > div {
+.shell-workspace-create-dialog > header {
   display: flex;
-  justify-content: flex-end;
-  gap: 6px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
 }
 
-.shell-workspace-create button {
-  height: 28px;
-  border: 0;
-  border-radius: 6px;
-  padding: 0 9px;
-  background: var(--dsw-hover);
-  color: var(--dsw-label);
-  font: inherit;
+.shell-workspace-create-dialog h2,
+.shell-workspace-create-dialog p {
+  margin: 0;
+}
+
+.shell-workspace-create-dialog h2 {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.shell-workspace-create-dialog header p {
+  margin-top: 5px;
+  color: var(--dsw-label-3);
   font-size: 12px;
+}
+
+.shell-workspace-create-dialog header > button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--dsw-label-2);
   cursor: pointer;
 }
 
-.shell-workspace-create button:disabled {
-  opacity: 0.45;
+.shell-workspace-create-dialog header > button:hover {
+  background: var(--dsw-hover);
+  color: var(--dsw-label);
+}
+
+.shell-workspace-create-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.shell-workspace-create-card {
+  display: flex;
+  min-height: 220px;
+  flex-direction: column;
+  align-items: flex-start;
+  border: 1px solid var(--dsw-border);
+  border-radius: 12px;
+  padding: 20px;
+  background: transparent;
+  color: var(--dsw-label);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
+}
+
+.shell-workspace-create-card:hover {
+  border-color: var(--dsw-label-3);
+  background: var(--dsw-hover);
+  transform: translateY(-1px);
+}
+
+.shell-workspace-create-card:focus-visible {
+  outline: 2px solid var(--dsw-pick);
+  outline-offset: 2px;
+}
+
+.shell-workspace-create-card:disabled,
+.shell-workspace-create-dialog header > button:disabled {
+  opacity: 0.55;
   cursor: default;
+  transform: none;
+}
+
+.shell-workspace-create-card-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  margin-bottom: 26px;
+  border: 1px solid var(--dsw-border);
+  border-radius: 10px;
+  background: var(--dsw-surface);
+}
+
+.shell-workspace-create-card-icon svg {
+  width: 21px;
+  height: 21px;
+}
+
+.shell-workspace-create-card strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.shell-workspace-create-card small {
+  margin-top: 7px;
+  color: var(--dsw-label-3);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.shell-workspace-create-card em {
+  margin-top: auto;
+  padding-top: 22px;
+  color: var(--dsw-label-2);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 600;
+}
+
+.shell-workspace-create-error {
+  margin-top: 12px !important;
+  color: var(--dsw-danger);
+  font-size: 12px;
+}
+
+@media (max-width: 620px) {
+  .shell-workspace-create-overlay {
+    padding: 14px;
+  }
+
+  .shell-workspace-create-dialog {
+    padding: 18px;
+  }
+
+  .shell-workspace-create-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .shell-workspace-create-card {
+    min-height: 170px;
+  }
+
+  .shell-workspace-create-card-icon {
+    margin-bottom: 18px;
+  }
 }
 
 .sidebar-brand-mascot,
