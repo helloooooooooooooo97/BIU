@@ -353,13 +353,23 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }, [token, verified, workspaceInvite])
 
   if (token && verified && !joining) return children
-  if (token) return <div className="auth-gate" data-testid="auth-verifying">正在验证登录状态…</div>
+  if (token) {
+    return (
+      <div className="auth-gate" data-testid="auth-verifying">
+        <div className="auth-sky" aria-hidden />
+        <p className="auth-status">正在验证登录状态</p>
+      </div>
+    )
+  }
 
   return (
     <div className="auth-gate" data-testid="auth-gate">
+      <div className="auth-sky" aria-hidden>
+        <div className="auth-horizon" />
+      </div>
       {guestInvite ? (
         <form
-          className="settings-account auth-gate-card"
+          className="auth-panel"
           data-testid="auth-guest-invite"
           onSubmit={(event) => {
             event.preventDefault()
@@ -380,28 +390,25 @@ export function AuthGate({ children }: { children: ReactNode }) {
               .finally(() => setJoining(false))
           }}
         >
-          <header className="settings-account-head">
-            <h3 className="settings-account-title">以临时访客身份进入</h3>
-            <p className="settings-muted settings-account-lead">无需注册，只能访问链接指定的内容；权限会在链接设定的时间后自动失效。</p>
-          </header>
-          {error ? <p className="settings-account-error">{error}</p> : null}
-          <div className="settings-account-actions auth-gate-fields">
-            <input
-              className="settings-account-input"
-              value={guestName}
-              maxLength={40}
-              placeholder="你的称呼（可选）"
-              data-testid="auth-guest-name"
-              onChange={(event) => setGuestName(event.target.value)}
-            />
-            <button type="submit" className="settings-account-action" disabled={joining}>
-              {joining ? '正在进入…' : '进入分享内容'}
-            </button>
-          </div>
+          <p className="auth-kicker">GUEST ACCESS</p>
+          <h1 className="auth-word">访客</h1>
+          <p className="auth-lead">无需注册。只能打开这条链接里的内容，到期后自动失效。</p>
+          {error ? <p className="auth-error">{error}</p> : null}
+          <input
+            className="auth-field"
+            value={guestName}
+            maxLength={40}
+            placeholder="你的称呼（可选）"
+            data-testid="auth-guest-name"
+            onChange={(event) => setGuestName(event.target.value)}
+          />
+          <button type="submit" className="auth-go" disabled={joining}>
+            {joining ? '正在进入' : '进入'}
+          </button>
         </form>
       ) : (
       <form
-        className="settings-account auth-gate-card"
+        className="auth-panel"
         onSubmit={(event) => {
           event.preventDefault()
           const path = mode === 'register' ? '/api/account/register' : '/api/account/login'
@@ -418,45 +425,48 @@ export function AuthGate({ children }: { children: ReactNode }) {
             .catch((err) => setError(err instanceof Error ? err.message : '登录失败'))
         }}
       >
-        <header className="settings-account-head">
-          <h3 className="settings-account-title">{mode === 'register' ? '注册' : '登录'}</h3>
-          <p className="settings-muted settings-account-lead">
-            {workspaceInvite ? '登录或注册后即可通过邀请链接加入空间。' : '登录之后才能进入。登录邮箱和密码在所有工作区都一样。'}
-          </p>
-        </header>
-        {error ? <p className="settings-account-error">{error}</p> : null}
-        <div className="settings-account-actions auth-gate-fields">
+        <p className="auth-kicker">{mode === 'register' ? 'CREATE ACCOUNT' : 'SIGN IN'}</p>
+        <h1 className="auth-word">BIU</h1>
+        <p className="auth-lead">
+          {workspaceInvite ? '登录或注册后，用邀请链接加入空间。' : '一个账号，进入你的全部空间。'}
+        </p>
+        {error ? <p className="auth-error">{error}</p> : null}
+        <label className="auth-label">
+          邮箱
           <input
-            className="settings-account-input"
+            className="auth-field"
             value={name}
             maxLength={40}
-            placeholder={mode === 'register' ? '登录邮箱' : '账号或邮箱'}
+            placeholder={mode === 'register' ? 'name@email.com' : '账号或邮箱'}
             type={mode === 'register' ? 'email' : 'text'}
             autoComplete="username"
             data-testid="auth-name"
             onChange={(event) => setName(event.target.value)}
           />
+        </label>
+        <label className="auth-label">
+          密码
           <input
-            className="settings-account-input"
+            className="auth-field"
             type="password"
             value={password}
-            placeholder="密码"
+            placeholder="至少 6 位"
             autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
             data-testid="auth-password"
             onChange={(event) => setPassword(event.target.value)}
           />
-          <button type="submit" className="settings-account-action" data-testid="auth-submit">
-            {mode === 'register' ? '注册并进入' : '登录'}
-          </button>
-          <button
-            type="button"
-            className="settings-account-action"
-            data-testid="auth-switch"
-            onClick={() => setMode((current) => (current === 'login' ? 'register' : 'login'))}
-          >
-            {mode === 'register' ? '已有账号，去登录' : '没有账号，去注册'}
-          </button>
-        </div>
+        </label>
+        <button type="submit" className="auth-go" data-testid="auth-submit">
+          {mode === 'register' ? '注册并进入' : '登录'}
+        </button>
+        <button
+          type="button"
+          className="auth-switch"
+          data-testid="auth-switch"
+          onClick={() => setMode((current) => (current === 'login' ? 'register' : 'login'))}
+        >
+          {mode === 'register' ? '已有账号，去登录' : '没有账号，去注册'}
+        </button>
       </form>
       )}
     </div>
