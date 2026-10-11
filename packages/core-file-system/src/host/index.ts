@@ -12,6 +12,8 @@ import {
   readEditorContentRecord,
   writeEditorContent,
   ASSET_GC_INTERVAL_MS,
+  isDesktopRuntime,
+  isOnlineRuntime,
 } from '@biu/host-plugin-loader/data-dir'
 import { asPublicProfile, readWorkspaceProfile, writeWorkspaceProfile } from '@biu/host-workspace'
 import { roleCoversAction, type Action as PermissionAction, type AuthorizationService } from '@biu/host-account/authorization'
@@ -181,7 +183,7 @@ function schemaFor(spec: CollectionSpec): CollectionSchema {
       computed: true,
       writable: false,
       sortable: true,
-      enum: process.env.BIU_ONLINE === '0' ? ['私人', '空间', '共享', '本地'] : ['私人', '空间', '共享'],
+      enum: isDesktopRuntime() ? ['私人', '空间', '共享', '本地'] : ['私人', '空间', '共享'],
       description: '计算属性。私人表示只有创建者能看到；空间表示空间成员能看到且没有外部协作者；共享是公开链接，所有人可查看。本地表示记录存在这台机器上，仍属于当前账号和空间。',
     }
     fields.shareRole = {
@@ -2541,7 +2543,7 @@ export function apply(ctx: Context) {
     }
   } | undefined
   const activeDataLocation = (): 'device' | 'cloud' => {
-    if (process.env.BIU_ONLINE === '1') return 'cloud'
+    if (isOnlineRuntime()) return 'cloud'
     const workspaceId = account?.store?.activeWorkspaceId?.()
     return workspaceId && account?.workspaceLocation?.(workspaceId) === 'cloud' ? 'cloud' : 'device'
   }
@@ -2934,7 +2936,7 @@ export function apply(ctx: Context) {
     }
   }
   ctx.http.route('GET', '/api/profile', (route) => {
-    let dataLocation: 'device' | 'cloud' = process.env.BIU_ONLINE === '1' ? 'cloud' : 'device'
+    let dataLocation: 'device' | 'cloud' = isOnlineRuntime() ? 'cloud' : 'device'
     try {
       const account = ctx.get('account') as {
         store?: { activeWorkspaceId(): string | null }
@@ -3065,8 +3067,8 @@ export function apply(ctx: Context) {
       let cloud:
         | { origin: string; token: string }
         | null = null
-      let activeLocation: 'device' | 'cloud' = process.env.BIU_ONLINE === '1' ? 'cloud' : 'device'
-      if (process.env.BIU_ONLINE !== '1') {
+      let activeLocation: 'device' | 'cloud' = isOnlineRuntime() ? 'cloud' : 'device'
+      if (!isOnlineRuntime()) {
         try {
           const account = ctx.get('account') as {
             store?: { activeWorkspaceId(): string | null }
@@ -3083,7 +3085,7 @@ export function apply(ctx: Context) {
           /* 本机无账号服务时只允许本地创建 */
         }
       }
-      if (process.env.BIU_ONLINE !== '1' && activeLocation === 'cloud') {
+      if (isDesktopRuntime() && activeLocation === 'cloud') {
         if (!cloud) {
           route.send(401, { error: '请先登录云端账号' })
           return
@@ -3319,7 +3321,7 @@ export function apply(ctx: Context) {
       if (
         body.enabled !== false &&
         activeDataLocation() === 'cloud' &&
-        process.env.BIU_ONLINE !== '1' &&
+        !isOnlineRuntime() &&
         process.env.BIU_REMOTE_ORIGIN
       ) {
         const localIds =

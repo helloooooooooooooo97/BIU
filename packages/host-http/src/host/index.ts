@@ -14,6 +14,7 @@ import {
   profilePath,
   runWithAccount,
   runWithRequestWorkspace,
+  isOnlineRuntime,
 } from '@biu/host-plugin-loader/data-dir'
 import { isShareApiPath, isSharePublicPath } from './share-gate.ts'
 
@@ -295,7 +296,7 @@ export class HttpService extends Service {
     return this.ctx.effect(() => {
       const wss = new WebSocketServer({ noServer: true })
       wss.on('connection', (socket, request) => {
-        if (process.env.BIU_ONLINE === '1') {
+        if (isOnlineRuntime()) {
           const auth = this.authenticateSocket(request)
           if (auth.error) {
             socket.close(auth.error, auth.error === 4403 ? 'workspace' : 'tenant')
@@ -429,7 +430,7 @@ export class HttpService extends Service {
     if (accountId && workspaceId && store?.isMember && !store.isMember(accountId, workspaceId)) {
       return { accountId, workspaceId, token, error: 4403 as const }
     }
-    if (process.env.BIU_ONLINE === '1' && (!accountId || !workspaceId)) {
+    if (isOnlineRuntime() && (!accountId || !workspaceId)) {
       return { accountId, workspaceId, token, error: 4401 as const }
     }
     return { accountId, workspaceId, token, error: 0 as const }
@@ -547,11 +548,11 @@ export class HttpService extends Service {
         )?.store
         const requestedWorkspace = await runWithAccount(accountId, async () => {
           if (headerWorkspace) return headerWorkspace
-          if (process.env.BIU_ONLINE !== '1' || !accountId) return ''
+          if (!isOnlineRuntime() || !accountId) return ''
           return String(accountStore?.activeWorkspaceId?.() ?? '').trim()
         })
         if (
-          process.env.BIU_ONLINE === '1' &&
+          isOnlineRuntime() &&
           hasAccountSystem &&
           accountId &&
           url.pathname.startsWith('/api/') &&
@@ -566,7 +567,7 @@ export class HttpService extends Service {
           context.send(403, { error: '不在这个空间' })
           return
         }
-        if (process.env.BIU_ONLINE === '1' && match.pluginId) {
+        if (isOnlineRuntime() && match.pluginId) {
           const allowed = accountStore?.canAccessPlugin?.(accountId, requestedWorkspace, match.pluginId)
           if (!allowed) {
             context.send(404, { error: 'not found' })

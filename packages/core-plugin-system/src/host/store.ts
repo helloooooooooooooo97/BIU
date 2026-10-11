@@ -31,6 +31,7 @@ import {
   readEditorContent,
   runWithRequestWorkspace,
   writeEditorContent,
+  isOnlineRuntime,
 } from '@biu/host-plugin-loader/data-dir'
 
 export type StoreListing = {
@@ -353,7 +354,7 @@ export class PluginStoreService extends Service {
 
   /** 在 .plugin-dev/<id>/ 开沙箱，不写入已安装目录。线上任何空间成员都能开。 */
   async initSandbox(input: PluginCreateInput) {
-    if (process.env.BIU_ONLINE === '1') this.requireWorkspaceMember()
+    if (isOnlineRuntime()) this.requireWorkspaceMember()
     const id = String(input.id ?? '').trim()
     const name = String(input.name ?? '').trim()
     if (!isSafeId(id)) throw new Error(`invalid plugin id: ${id}`)
@@ -390,7 +391,7 @@ export class PluginStoreService extends Service {
 
   /** 把沙箱 bundle 进 .plugin/<id>/。 */
   async pack(id: string) {
-    if (process.env.BIU_ONLINE === '1') this.requireWorkspaceMember()
+    if (isOnlineRuntime()) this.requireWorkspaceMember()
     if (!isSafeId(id)) throw new Error(`invalid plugin id: ${id}`)
     const sandbox = this.sandboxPath(id)
     if (!existsSync(join(sandbox, 'manifest.json'))) throw new Error(`sandbox not found: ${sandbox}`)
@@ -458,7 +459,7 @@ export class PluginStoreService extends Service {
 
   /** 空间成员看得到 .plugin-dev；实例草稿权限仍单独放行。 */
   private canSeeSandboxes() {
-    if (process.env.BIU_ONLINE !== '1') return true
+    if (!isOnlineRuntime()) return true
     const accountId = currentAccountId()
     const workspaceId = currentRequestWorkspaceId()
     return Boolean(accountId && workspaceId && this.accountStore()?.isMember?.(accountId, workspaceId))
@@ -635,7 +636,7 @@ export class PluginStoreService extends Service {
 
   /** 卸载：停运行，只删 .plugin/<id>/，不动 .plugin-dev。 */
   async uninstall(id: string) {
-    if (process.env.BIU_ONLINE === '1') this.requireWorkspaceMember()
+    if (isOnlineRuntime()) this.requireWorkspaceMember()
     if (!isSafeId(id)) throw new Error(`invalid plugin id: ${id}`)
     await this.hub().drop(id)
     this.setEnabled(id, false)
@@ -717,7 +718,7 @@ export class PluginStoreService extends Service {
   }
 
   async writeReadme(id: string, markdown: string) {
-    if (process.env.BIU_ONLINE === '1') this.requireWorkspaceMember()
+    if (isOnlineRuntime()) this.requireWorkspaceMember()
     const text = String(markdown ?? '')
     const sqlitePath = this.contentSqlitePath()
     mkdirSync(dirname(sqlitePath), { recursive: true })
@@ -747,7 +748,7 @@ export class PluginStoreService extends Service {
         const manifest = await readManifest(hit)
         const stats = await pluginDirStats(hit)
         const codeVersion = (await hashInstalledPluginCode(hit)) ?? 'empty'
-        if (process.env.BIU_ONLINE === '1') {
+        if (isOnlineRuntime()) {
           this.accountStore()?.syncInstalledPluginPackage?.({
             id: manifest.id,
             version: codeVersion,
@@ -770,7 +771,7 @@ export class PluginStoreService extends Service {
 
   async readInstalledFile(id: string, file: string) {
     if (!isSafeId(id) || !ALLOWED_FILES.has(file)) throw new Error('not found')
-    if (process.env.BIU_ONLINE === '1') {
+    if (isOnlineRuntime()) {
       const accountId = currentAccountId()
       const workspaceId = currentRequestWorkspaceId()
       if (!accountId || !workspaceId || !this.accountStore()?.canAccessPlugin?.(accountId, workspaceId, id)) {
@@ -836,11 +837,11 @@ export async function openStore(ctx: Context) {
   ctx.http.route('GET', '/api/plugin-store/files/:id/:file', async (route) => {
     try {
       const requestedWorkspace = String(route.query.get('workspaceId') ?? currentRequestWorkspaceId()).trim()
-      if (process.env.BIU_ONLINE === '1' && !currentAccountId()) {
+      if (isOnlineRuntime() && !currentAccountId()) {
         route.send(401, { error: '需要登录' })
         return
       }
-      if (process.env.BIU_ONLINE === '1' && !requestedWorkspace) {
+      if (isOnlineRuntime() && !requestedWorkspace) {
         route.send(400, { error: '需要空间' })
         return
       }
@@ -872,7 +873,7 @@ export async function openStore(ctx: Context) {
       } | undefined
     )?.store
     const canManagePackages =
-      process.env.BIU_ONLINE !== '1' || Boolean(accountId && workspaceId && account?.isMember?.(accountId, workspaceId))
+      !isOnlineRuntime() || Boolean(accountId && workspaceId && account?.isMember?.(accountId, workspaceId))
     const plugins = (await store.list())
       .filter((item) => !item.builtin && !store.isBuiltin(item.id))
       .map((item) => ({

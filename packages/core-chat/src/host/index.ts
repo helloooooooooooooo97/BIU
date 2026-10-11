@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { currentAccountId, dataDir, dataHome, dataPath } from '@biu/host-plugin-loader/data-dir'
+import { currentAccountId, dataDir, dataHome, dataPath, isOnlineRuntime } from '@biu/host-plugin-loader/data-dir'
 import { Service, type Context } from 'cordis'
 import type { ChatMessage } from './chat-types.ts'
 import { isAgentToolMode, normalizeAgentMode, type AgentToolMode } from '@biu/host-tools'
@@ -129,7 +129,7 @@ interface ChatConfig {
 }
 
 function configPath(accountId = '') {
-  const localAccount = process.env.BIU_ONLINE !== '1' ? accountId.trim().replace(/[^a-zA-Z0-9_-]/g, '') : ''
+  const localAccount = !isOnlineRuntime() ? accountId.trim().replace(/[^a-zA-Z0-9_-]/g, '') : ''
   return localAccount
     ? dataPath(dataHome(), 'chat-config', `${localAccount}.json`)
     : dataPath(dataHome(), 'chat-config.json')
@@ -188,7 +188,7 @@ function readPersisted(accountId = ''): Partial<ChatConfig> | null {
 
 export function cloudSafePersistedConfig(
   saved: Partial<ChatConfig> | null,
-  online = process.env.BIU_ONLINE === '1',
+  online = isOnlineRuntime(),
 ): Partial<ChatConfig> | null {
   if (!saved || !online) return saved
   const safe = { ...saved, apiKeys: emptyKeys() } as Partial<ChatConfig> & { apiKey?: unknown }
@@ -196,7 +196,7 @@ export function cloudSafePersistedConfig(
   return safe
 }
 
-export function persistedChatConfig(config: ChatConfig, online = process.env.BIU_ONLINE === '1') {
+export function persistedChatConfig(config: ChatConfig, online = isOnlineRuntime()) {
   return {
     endpointId: config.endpointId,
     provider: config.provider,
@@ -511,7 +511,7 @@ export class ChatService extends Service {
   }
 
   activateAccount(accountId = currentAccountId()) {
-    const next = process.env.BIU_ONLINE === '1' ? '' : accountId
+    const next = isOnlineRuntime() ? '' : accountId
     if (next === this.activeAccountId) return
     this.activeAccountId = next
     this.config = mergePersisted(defaults(), readPersisted(next))
@@ -560,7 +560,7 @@ export class ChatService extends Service {
       capabilities: inferModelCapabilities(this.config.model, this.config.provider),
       /** 当前默认入口是否已配置（兼容旧语义，供 banner 等使用）。 */
       configured: current ? endpointConfigured(this.config, current) : Boolean((this.config.apiKeys[this.config.provider] ?? '').trim()),
-      acceptsApiKeys: process.env.BIU_ONLINE !== '1',
+      acceptsApiKeys: !isOnlineRuntime(),
       secretsLocalOnly: true,
       hint: hint(this.config.apiKeys[this.config.endpointId] ?? this.config.apiKeys[this.config.provider] ?? ''),
       baseUrl: current ? effectiveBaseUrl(this.config, current) : '',
@@ -1180,7 +1180,7 @@ export function apply(ctx: Context) {
   const cloudExecutions = new Map<string, CloudExecution>()
 
   const beginCloudExecution = async (sessionId: string) => {
-    if (process.env.BIU_ONLINE === '1' || !sessionIsCloud(ctx, sessionId)) return null
+    if (isOnlineRuntime() || !sessionIsCloud(ctx, sessionId)) return null
     const previous = cloudExecutions.get(sessionId)
     if (previous) {
       if (!previous.finishing) return previous
@@ -1321,7 +1321,7 @@ export function apply(ctx: Context) {
     const includesSecret =
       typeof payload.apiKey === 'string' ||
       Boolean(payload.setApiKey && Object.values(payload.setApiKey).some((value) => typeof value === 'string' && value.length > 0))
-    if (process.env.BIU_ONLINE === '1' && includesSecret) {
+    if (isOnlineRuntime() && includesSecret) {
       route.send(403, { error: 'AI API Token 只能保存在运行 Agent 的设备上' })
       return
     }
@@ -1336,7 +1336,7 @@ export function apply(ctx: Context) {
       model?: string
     }
     try {
-      if (process.env.BIU_ONLINE === '1' && typeof payload.apiKey === 'string' && payload.apiKey.trim()) {
+      if (isOnlineRuntime() && typeof payload.apiKey === 'string' && payload.apiKey.trim()) {
         route.send(403, { ok: false, detail: 'AI API Token 只能在本机测试，不能发送到云端' })
         return
       }
@@ -1368,7 +1368,7 @@ export function apply(ctx: Context) {
       typeof payload.id === 'string' && /^[0-9a-f-]{36}$/i.test(payload.id)
         ? payload.id
         : globalThis.crypto.randomUUID()
-    if (process.env.BIU_ONLINE !== '1') {
+    if (!isOnlineRuntime()) {
       const runtime = accountRuntime(ctx)
       const workspaceId = runtime?.store?.activeWorkspaceId() ?? ''
       if (workspaceId && runtime?.workspaceLocation?.(workspaceId) === 'cloud') {
@@ -1399,7 +1399,7 @@ export function apply(ctx: Context) {
     const record = await ctx.sessions.create(sessionId, {
       ...(typeof payload.title === 'string' ? { title: payload.title } : {}),
     })
-    if (process.env.BIU_ONLINE !== '1') {
+    if (!isOnlineRuntime()) {
       const runtime = accountRuntime(ctx)
       const workspaceId = runtime?.store?.activeWorkspaceId() ?? ''
       if (workspaceId && runtime?.workspaceLocation?.(workspaceId) === 'cloud') {
@@ -1768,7 +1768,7 @@ export function apply(ctx: Context) {
       liveContext?: unknown
     }
     if (!(await visibleSession(route.params.id))) return route.send(404, { error: 'unknown session' })
-    if (process.env.BIU_ONLINE === '1' && accountRuntime(ctx)?.store?.hasExecutionLease(route.params.id)) {
+    if (isOnlineRuntime() && accountRuntime(ctx)?.store?.hasExecutionLease(route.params.id)) {
       return route.send(409, { error: '这个会话正在桌面设备上运行' })
     }
     const shouldExecute = payload.kind !== 'inject' || ctx.agents.isBusy(route.params.id)

@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import type { Context } from 'cordis'
-import { runWithAccount, runWithRequestWorkspace } from '@biu/host-plugin-loader/data-dir'
+import { isOnlineRuntime, runWithAccount, runWithRequestWorkspace } from '@biu/host-plugin-loader/data-dir'
 import type { SessionRecord } from '@biu/type-session'
 
 export type MirrorSnapshot = {
@@ -193,7 +193,7 @@ export async function exchangeSnapshot(
 
 function cloudLogin(ctx: Context) {
   const origin = process.env.BIU_REMOTE_ORIGIN?.replace(/\/$/, '')
-  if (process.env.BIU_ONLINE === '1' || !origin) return null
+  if (isOnlineRuntime() || !origin) return null
   const account = accountOf(ctx)
   const token = account?.replica?.active?.()?.token
   if (!token) throw new Error('需要登录云端才能分享')
@@ -278,7 +278,7 @@ export async function forwardCloud(
   path: string,
   init: { method?: string; body?: unknown } = {},
 ): Promise<{ status: number; body: unknown } | null> {
-  if (process.env.BIU_ONLINE === '1' || !process.env.BIU_REMOTE_ORIGIN) return null
+  if (isOnlineRuntime() || !process.env.BIU_REMOTE_ORIGIN) return null
   if (!accountOf(ctx)?.isRemote?.(collection, id)) return null
   const login = cloudLogin(ctx)
   if (!login) return null

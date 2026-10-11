@@ -1,5 +1,5 @@
 import { Service, type Context } from 'cordis'
-import { biuSqlitePath, openAndMigrateBiu } from '@biu/host-plugin-loader/data-dir'
+import { biuSqlitePath, isOnlineRuntime, openAndMigrateBiu } from '@biu/host-plugin-loader/data-dir'
 import type { RouteContext } from '@biu/type-http'
 import { CollabError, CollabStore } from './store.ts'
 import { httpRemote, RecordReplica } from './replica.ts'
@@ -52,7 +52,7 @@ export class AccountService extends Service {
       PRIMARY KEY (collection, local_id)
     )`)
     const origin = process.env.BIU_REMOTE_ORIGIN
-    if (process.env.BIU_ONLINE !== '1' && origin) {
+    if (!isOnlineRuntime() && origin) {
       this.replica = new RecordReplica(db, httpRemote(origin))
       const timer = setInterval(() => {
         const device = this.replica?.active()
@@ -73,7 +73,7 @@ export class AccountService extends Service {
         workspaceMembersCollection(
           this.store,
           (workspaceId) => this.workspaceLocation(workspaceId) === 'cloud',
-          process.env.BIU_ONLINE === '1',
+          isOnlineRuntime(),
         ),
       ),
     )
@@ -202,7 +202,7 @@ export class AccountService extends Service {
   }
 
   workspaceLocation(workspaceId: string): 'device' | 'cloud' {
-    if (process.env.BIU_ONLINE === '1') return 'cloud'
+    if (isOnlineRuntime()) return 'cloud'
     const row = this.db.prepare('SELECT place FROM workspace_place WHERE workspace_id = ?').get(workspaceId) as
       | { place?: string }
       | undefined
@@ -233,7 +233,7 @@ function rememberLogin(route: RouteContext, token: string) {
 }
 
 function configuredRemoteOrigin() {
-  if (process.env.BIU_ONLINE === '1') return ''
+  if (isOnlineRuntime()) return ''
   return process.env.BIU_REMOTE_ORIGIN?.replace(/\/$/, '') || ''
 }
 
@@ -307,7 +307,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     workspaceId: string,
     path: string,
   ) {
-    if (process.env.BIU_ONLINE === '1') return false
+    if (isOnlineRuntime()) return false
     if (account.workspaceLocation(workspaceId) !== 'cloud') return false
     const relayed = await relayAccount(route, account, localAccountId, path)
     if (!relayed) throw new CollabError('请先登录云端账号', 401)
@@ -322,7 +322,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   }
 
   async function connectCloud(route: RouteContext, action: 'login' | 'register') {
-    if (process.env.BIU_ONLINE === '1') throw new CollabError('服务端不能连接另一个云端账号', 400)
+    if (isOnlineRuntime()) throw new CollabError('服务端不能连接另一个云端账号', 400)
     const local = actor(route)
     const origin = configuredRemoteOrigin()
     if (!origin) throw new CollabError('还没有配置云端服务地址', 400)
@@ -386,7 +386,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
 
   ctx.http.route('GET', '/api/account/cloud', async (route) => {
     try {
-      if (process.env.BIU_ONLINE === '1') return route.send(200, { available: false, connected: false })
+      if (isOnlineRuntime()) return route.send(200, { available: false, connected: false })
       const me = actor(route)
       const connection = account.cloudConnection(me.id)
       route.send(200, {
@@ -832,7 +832,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   ctx.http.route('POST', '/api/account/invites/:token/accept', async (route) => {
     try {
       const me = actor(route)
-      const connection = process.env.BIU_ONLINE !== '1' ? account.cloudConnection(me.id) : null
+      const connection = !isOnlineRuntime() ? account.cloudConnection(me.id) : null
       if (connection) {
         const relayed = await relayAccount(route, account, me.id, `/api/account/invites/${route.params.token}/accept`)
         if (!relayed) throw new CollabError('请先登录云端账号', 401)
@@ -850,7 +850,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
         route.send(relayed.status, relayed.payload)
         return
       }
-      if (process.env.BIU_ONLINE !== '1') throw new CollabError('本机空间不提供成员邀请', 403)
+      if (!isOnlineRuntime()) throw new CollabError('本机空间不提供成员邀请', 403)
       const result = account.store.acceptWorkspaceInvite(me.id, route.params.token!)
       ctx.http.broadcast('database', { ts: Date.now() })
       route.send(200, result)
@@ -861,7 +861,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
 
   ctx.http.route('POST', '/api/account/guest-invites/:token/accept', async (route) => {
     try {
-      if (process.env.BIU_ONLINE !== '1') throw new CollabError('本机空间不提供访客邀请', 403)
+      if (!isOnlineRuntime()) throw new CollabError('本机空间不提供访客邀请', 403)
       const body = (await route.json()) as { name?: string }
       const result = account.store.acceptGuestInvite(route.params.token!, String(body.name ?? ''))
       rememberLogin(route, result.token)
