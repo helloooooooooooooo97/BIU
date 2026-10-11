@@ -273,7 +273,26 @@ function Shell(props: SlotProps) {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [settingsTab, setSettingsTab] = useState<string>('account')
+  const [workspaceLocation, setWorkspaceLocation] = useState<'device' | 'cloud'>('device')
   const [configOpen, setConfigOpen] = useState(false)
+  useEffect(() => {
+    if (!settingsOpen) return
+    let live = true
+    void fetch('/api/profile')
+      .then((response) => (response.ok ? response.json() : null))
+      .then((profile: { dataLocation?: 'device' | 'cloud' } | null) => {
+        if (!live) return
+        const next = profile?.dataLocation === 'cloud' ? 'cloud' : 'device'
+        setWorkspaceLocation(next)
+        if (next === 'device') setSettingsTab((current) => (current === 'members' ? 'workspace' : current))
+      })
+      .catch(() => {
+        if (live) setWorkspaceLocation('device')
+      })
+    return () => {
+      live = false
+    }
+  }, [settingsOpen])
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try {
       return localStorage.getItem('cordis.sidebar.collapsed') === '1'
@@ -873,7 +892,7 @@ function Shell(props: SlotProps) {
                     { key: 'events', label: '事件', Icon: QueueListIcon },
                     { key: 'update', label: '更新', Icon: ArrowDownTrayIcon },
                     { key: 'about', label: '关于', Icon: InformationCircleIcon },
-                  ].map((item) => (
+                  ].filter((item) => item.key !== 'members' || workspaceLocation === 'cloud').map((item) => (
                     <li key={item.key}>
                       <button
                         type="button"
@@ -900,7 +919,7 @@ function Shell(props: SlotProps) {
                 <div className="settings-pane">
                   {settingsTab === 'account' ? <ShellSettingsAccount /> : null}
                   {settingsTab === 'workspace' ? <ShellSettingsWorkspace /> : null}
-                  {settingsTab === 'members' ? <ShellSettingsMembers /> : null}
+                  {settingsTab === 'members' && workspaceLocation === 'cloud' ? <ShellSettingsMembers /> : null}
                   {settingsTab === 'appearance' ? <ShellSettingsAppearance /> : null}
                   {settingsTab === 'mcp' ? <ShellSettingsMcp onLeave={() => setSettingsOpen(false)} /> : null}
                   {settingsTab === 'shortcuts' ? <ShellSettingsShortcuts /> : null}

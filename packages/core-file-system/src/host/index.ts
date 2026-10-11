@@ -2514,7 +2514,9 @@ export function apply(ctx: Context) {
   savedViews.open(process.env.VITEST ? ':memory:' : biuSqlitePath())
   const account = ctx.get('account') as {
     authorization?: AuthorizationService
+    workspaceLocation?: (workspaceId: string) => 'device' | 'cloud'
     store?: {
+      activeWorkspaceId?: () => string | null
       members: (accountId: string, workspaceId: string) => Array<{
         id: string
         name: string
@@ -2538,6 +2540,11 @@ export function apply(ctx: Context) {
       }>
     }
   } | undefined
+  const activeDataLocation = (): 'device' | 'cloud' => {
+    if (process.env.BIU_ONLINE === '1') return 'cloud'
+    const workspaceId = account?.store?.activeWorkspaceId?.()
+    return workspaceId && account?.workspaceLocation?.(workspaceId) === 'cloud' ? 'cloud' : 'device'
+  }
   db.viewCatalog = savedViews
   ctx.inject(['sessions'], (inner) => {
     inner.sessions.viewAccess = (id, record) => db.allowsViaView('/sessions', { ...record, id })
@@ -3251,7 +3258,7 @@ export function apply(ctx: Context) {
       }
       const accountId = currentAccountId()
       const workspaceId = currentRequestWorkspaceId()
-      if (accountId && workspaceId && account?.store?.externallySharedRecords) {
+      if (activeDataLocation() === 'cloud' && accountId && workspaceId && account?.store?.externallySharedRecords) {
         for (const record of account.store.externallySharedRecords(accountId, workspaceId)) {
           const key = `${record.collection}\t${record.record_id}`
           if (listedRecords.has(key)) continue
@@ -3309,7 +3316,12 @@ export function apply(ctx: Context) {
       const collection = String(body.collection ?? '')
       const recordId = String(body.recordId ?? '')
       await db.requirePath(kind === 'record' ? `${collection}/${recordId}` : collection, 'resource:share')
-      if (body.enabled !== false && process.env.BIU_ONLINE !== '1' && process.env.BIU_REMOTE_ORIGIN) {
+      if (
+        body.enabled !== false &&
+        activeDataLocation() === 'cloud' &&
+        process.env.BIU_ONLINE !== '1' &&
+        process.env.BIU_REMOTE_ORIGIN
+      ) {
         const localIds =
           kind === 'record'
             ? [recordId]

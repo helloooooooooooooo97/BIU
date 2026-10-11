@@ -915,11 +915,11 @@ export function ShellSettingsCollab({ panel = 'members' }: { panel?: 'workspace'
   }, [token])
 
   useEffect(() => {
-    if (!token || !workspaceId) return
+    if (panel !== 'members' || !token || !workspaceId) return
     void loadWorkspace(token, workspaceId).catch((err) => {
       setError(err instanceof Error ? err.message : '无法读取工作区')
     })
-  }, [token, workspaceId, loadWorkspace])
+  }, [panel, token, workspaceId, loadWorkspace])
 
   const workspaceRole = workspaces.find((row) => row.id === workspaceId)?.role
   const canManage = workspaceRole === 'owner' || workspaceRole === 'admin'

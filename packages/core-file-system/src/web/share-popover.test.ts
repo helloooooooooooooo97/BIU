@@ -83,6 +83,17 @@ test('share panel separates public sharing from internal and external collaborat
   assert.match(databaseHost, /collab:/)
 })
 
+test('device workspace keeps LAN links but hides collaboration and cloud publishing', () => {
+  const src = readFileSync(resolve(import.meta.dirname, './share-popover.tsx'), 'utf8')
+  const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
+  const databaseHost = readFileSync(resolve(import.meta.dirname, '../host/index.ts'), 'utf8')
+  assert.match(src, /localOnly \? '局域网分享' : '公开分享'/)
+  assert.match(src, /!localOnly && \(\(target\.kind === 'record'/)
+  assert.match(src, /同一局域网/)
+  assert.match(browser, /localOnly=\{localData\}/)
+  assert.match(databaseHost, /activeDataLocation\(\) === 'cloud'/)
+})
+
 test('collaborator sections are stacked without a redundant popover heading', () => {
   const src = readFileSync(resolve(import.meta.dirname, './share-popover.tsx'), 'utf8')
   const internalAt = src.indexOf('<h3>内部协作者</h3>')

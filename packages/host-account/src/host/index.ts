@@ -68,7 +68,15 @@ export class AccountService extends Service {
         this.replica.remember({ accountId: payload.accountId, workspaceId: '', token: payload.token })
       })
     }
-    ctx.inject(['database'], (inner) => inner.database.register(workspaceMembersCollection(this.store)))
+    ctx.inject(['database'], (inner) =>
+      inner.database.register(
+        workspaceMembersCollection(
+          this.store,
+          (workspaceId) => this.workspaceLocation(workspaceId) === 'cloud',
+          process.env.BIU_ONLINE === '1',
+        ),
+      ),
+    )
     ctx.on('dispose', () => db.close())
   }
 
@@ -194,6 +202,7 @@ export class AccountService extends Service {
   }
 
   workspaceLocation(workspaceId: string): 'device' | 'cloud' {
+    if (process.env.BIU_ONLINE === '1') return 'cloud'
     const row = this.db.prepare('SELECT place FROM workspace_place WHERE workspace_id = ?').get(workspaceId) as
       | { place?: string }
       | undefined
@@ -303,6 +312,12 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     if (!relayed) throw new CollabError('请先登录云端账号', 401)
     route.send(relayed.status, relayed.payload)
     return true
+  }
+
+  function requireCollaborativeWorkspace(workspaceId: string) {
+    if (!workspaceId || account.workspaceLocation(workspaceId) !== 'cloud') {
+      throw new CollabError('本机空间仅供当前本地账号使用，不提供成员、分享或权限功能', 404)
+    }
   }
 
   async function connectCloud(route: RouteContext, action: 'login' | 'register') {
@@ -768,6 +783,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     try {
       const me = actor(route)
       if (await relayCloudWorkspace(route, me.id, route.params.id!, `/api/account/workspaces/${route.params.id}/members`)) return
+      requireCollaborativeWorkspace(route.params.id!)
       route.send(200, { members: account.store.members(me.id, route.params.id!) })
     } catch (error) {
       fail(route, error)
@@ -778,6 +794,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     try {
       const me = actor(route)
       if (await relayCloudWorkspace(route, me.id, route.params.id!, `/api/account/workspaces/${route.params.id}/members`)) return
+      requireCollaborativeWorkspace(route.params.id!)
       const body = (await route.json()) as { accountId?: string; email?: string }
       const email = String(body.email ?? '').trim()
       const members = email
@@ -793,6 +810,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     try {
       const me = actor(route)
       if (await relayCloudWorkspace(route, me.id, route.params.id!, `/api/account/workspaces/${route.params.id}/invites`)) return
+      requireCollaborativeWorkspace(route.params.id!)
       const body = (await route.json()) as { role?: string; expiresInHours?: number }
       const role = body.role === 'member' ? 'member' : 'viewer'
       const invite = account.store.createWorkspaceInvite(
@@ -831,6 +849,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
         route.send(relayed.status, relayed.payload)
         return
       }
+      if (process.env.BIU_ONLINE !== '1') throw new CollabError('本机空间不提供成员邀请', 403)
       const result = account.store.acceptWorkspaceInvite(me.id, route.params.token!)
       ctx.http.broadcast('database', { ts: Date.now() })
       route.send(200, result)
@@ -841,6 +860,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
 
   ctx.http.route('POST', '/api/account/guest-invites/:token/accept', async (route) => {
     try {
+      if (process.env.BIU_ONLINE !== '1') throw new CollabError('本机空间不提供访客邀请', 403)
       const body = (await route.json()) as { name?: string }
       const result = account.store.acceptGuestInvite(route.params.token!, String(body.name ?? ''))
       rememberLogin(route, result.token)
@@ -862,6 +882,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
           `/api/account/workspaces/${route.params.id}/members/${route.params.accountId}`,
         )
       ) return
+      requireCollaborativeWorkspace(route.params.id!)
       account.store.removeMember(me.id, route.params.id!, route.params.accountId!)
       ctx.http.disconnectTenant(route.params.accountId!, route.params.id!)
       route.send(200, { members: account.store.members(me.id, route.params.id!) })
@@ -881,6 +902,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
           `/api/account/workspaces/${route.params.id}/members/${route.params.accountId}`,
         )
       ) return
+      requireCollaborativeWorkspace(route.params.id!)
       const body = (await route.json()) as { role?: string }
       const role = String(body.role ?? '')
       if (role !== 'owner' && role !== 'admin' && role !== 'member' && role !== 'viewer') {
@@ -897,6 +919,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     try {
       const me = actor(route)
       if (await relayCloudWorkspace(route, me.id, route.params.id!, `/api/account/workspaces/${route.params.id}/groups`)) return
+      requireCollaborativeWorkspace(route.params.id!)
       route.send(200, { groups: account.store.groups(me.id, route.params.id!) })
     } catch (error) {
       fail(route, error)
@@ -907,6 +930,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     try {
       const me = actor(route)
       if (await relayCloudWorkspace(route, me.id, route.params.id!, `/api/account/workspaces/${route.params.id}/groups`)) return
+      requireCollaborativeWorkspace(route.params.id!)
       const body = (await route.json()) as { name?: string }
       route.send(201, account.store.createGroup(me.id, route.params.id!, String(body.name ?? '')))
     } catch (error) {
@@ -925,6 +949,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
           `/api/account/workspaces/${route.params.id}/groups/${route.params.groupId}/members`,
         )
       ) return
+      requireCollaborativeWorkspace(route.params.id!)
       const body = (await route.json()) as { email?: string }
       route.send(
         200,
@@ -955,6 +980,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
           `/api/account/access${route.query.toString() ? `?${route.query.toString()}` : ''}`,
         ))
       ) return
+      requireCollaborativeWorkspace(activeWorkspace ?? '')
       const collection = String(route.query.get('collection') ?? '')
       const viewId = String(route.query.get('viewId') ?? '')
       route.send(
@@ -973,6 +999,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       const me = actor(route)
       const activeWorkspace = account.store.activeWorkspaceId()
       if (activeWorkspace && (await relayCloudWorkspace(route, me.id, activeWorkspace, '/api/account/access'))) return
+      requireCollaborativeWorkspace(activeWorkspace ?? '')
       const body = (await route.json()) as {
         collection?: string
         recordId?: string
@@ -1011,6 +1038,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       const me = actor(route)
       const activeWorkspace = account.store.activeWorkspaceId()
       if (activeWorkspace && (await relayCloudWorkspace(route, me.id, activeWorkspace, '/api/account/access'))) return
+      requireCollaborativeWorkspace(activeWorkspace ?? '')
       const body = (await route.json()) as {
         collection?: string
         recordId?: string
@@ -1052,6 +1080,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
         activeWorkspace &&
         (await relayCloudWorkspace(route, me.id, activeWorkspace, '/api/account/access/guest-invite'))
       ) return
+      requireCollaborativeWorkspace(activeWorkspace ?? '')
       const body = (await route.json()) as {
         collection?: string
         recordId?: string
@@ -1195,6 +1224,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     try {
       const me = actor(route)
       const body = (await route.json()) as { workspaceId?: string; collection?: string; recordId?: string }
+      requireCollaborativeWorkspace(String(body.workspaceId ?? ''))
       account.store.pulse(
         me.id,
         String(body.workspaceId ?? ''),

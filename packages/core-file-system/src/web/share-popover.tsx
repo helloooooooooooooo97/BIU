@@ -94,9 +94,11 @@ function ShareToggle({
 export function ShareButton({
   target,
   buttonClassName = 'chat-view-header-expand',
+  localOnly = false,
 }: {
   target: ShareTarget | null
   buttonClassName?: string
+  localOnly?: boolean
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState(false)
@@ -117,7 +119,7 @@ export function ShareButton({
       </button>
       {open ? (
         <HeadlessDismiss onDismiss={() => setOpen(false)} insideRef={wrapRef}>
-          <SharePanel target={target} />
+          <SharePanel target={target} localOnly={localOnly} />
         </HeadlessDismiss>
       ) : null}
     </div>
@@ -941,7 +943,15 @@ export function ShareRoleDetail({
   )
 }
 
-export function SharePanel({ target, embedded = false }: { target: ShareTarget; embedded?: boolean }) {
+export function SharePanel({
+  target,
+  embedded = false,
+  localOnly = false,
+}: {
+  target: ShareTarget
+  embedded?: boolean
+  localOnly?: boolean
+}) {
   const [tab, setTab] = useState<'public' | 'collaboration'>('public')
   const [share, setShare] = useState<ShareInfo | null>(null)
   const [resources, setResources] = useState<ShareResourceStats>({ pages: 0, plugins: 0, collections: 0, pluginIds: [] })
@@ -950,6 +960,9 @@ export function SharePanel({ target, embedded = false }: { target: ShareTarget; 
   const [copied, setCopied] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  useEffect(() => {
+    if (localOnly && tab !== 'public') setTab('public')
+  }, [localOnly, tab])
 
   const params = new URLSearchParams({
     kind: target.kind,
@@ -1087,9 +1100,9 @@ export function SharePanel({ target, embedded = false }: { target: ShareTarget; 
           data-testid="fsdb-share-public-tab"
           onClick={() => setTab('public')}
         >
-          公开分享
+          {localOnly ? '局域网分享' : '公开分享'}
         </button>
-        {(target.kind === 'record' && target.recordId) || (target.kind === 'view' && target.viewId) ? (
+        {!localOnly && ((target.kind === 'record' && target.recordId) || (target.kind === 'view' && target.viewId)) ? (
           <button
             type="button"
             role="tab"
@@ -1109,8 +1122,10 @@ export function SharePanel({ target, embedded = false }: { target: ShareTarget; 
         {!share ? (
           <div className="fsdb-share-empty">
             <span>
-              <p className="fsdb-share-empty-title">公开链接</p>
-              <p className="fsdb-share-empty-copy">获得链接的人可以查看</p>
+              <p className="fsdb-share-empty-title">{localOnly ? '局域网链接' : '公开链接'}</p>
+              <p className="fsdb-share-empty-copy">
+                {localOnly ? '仅在本机服务运行且处于同一局域网时可访问' : '获得链接的人可以查看'}
+              </p>
             </span>
             <button
               type="button"
@@ -1125,7 +1140,7 @@ export function SharePanel({ target, embedded = false }: { target: ShareTarget; 
         ) : (
           <>
             <div className="fsdb-share-public-state">
-              <span><i aria-hidden />公开链接已开启</span>
+              <span><i aria-hidden />{localOnly ? '局域网链接已开启' : '公开链接已开启'}</span>
               <button
                 type="button"
                 disabled={busy}
@@ -1171,7 +1186,7 @@ export function SharePanel({ target, embedded = false }: { target: ShareTarget; 
       </section>
       {share ? (
         <>
-          <section className="fsdb-share-settings" aria-label="公开链接设置">
+          <section className="fsdb-share-settings" aria-label={localOnly ? '局域网链接设置' : '公开链接设置'}>
             <div className="fsdb-share-setting">
               <span className="fsdb-share-setting-copy">
                 <strong>密码保护</strong>

@@ -2092,6 +2092,7 @@ export function CollectionBrowser({
 
   function renderCell(row: DbRecord, key: string, field: FieldSpec, surface: 'table' | 'detail' = 'detail') {
     if (key === 'shareScope') {
+      if (localData) return <span>{String(row[key] ?? '本地')}</span>
       return (
         <ShareScopeDetail
           collection={collectionPath}
@@ -2102,6 +2103,7 @@ export function CollectionBrowser({
       )
     }
     if (key === 'shareRole') {
+      if (localData) return <span>{String(row[key] ?? '')}</span>
       return (
         <ShareRoleDetail
           collection={collectionPath}
@@ -2819,6 +2821,7 @@ export function CollectionBrowser({
             ) : null}
             {isSystemCollection(collectionPath) || isIndexCollection(collectionPath) || (collectionPath === '/plugins' && detailRow?.builtin === true) ? null : (
             <ShareButton
+              localOnly={localData}
               target={
                 detailId
                   ? {
@@ -3706,6 +3709,7 @@ export function CollectionBrowser({
             nested && detailId ? (
               <SharePanel
                 embedded
+                localOnly={localData}
                 target={{
                   kind: 'record',
                   collection: collectionPath,
