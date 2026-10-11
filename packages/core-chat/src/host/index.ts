@@ -42,6 +42,7 @@ type CloudExecution = {
   origin: string
   token: string
   heartbeat: ReturnType<typeof setInterval>
+  finishing?: Promise<void>
 }
 
 function accountRuntime(ctx: Context) {
@@ -1155,6 +1156,11 @@ export function apply(ctx: Context) {
 
   const beginCloudExecution = async (sessionId: string) => {
     if (process.env.BIU_ONLINE === '1' || !sessionIsCloud(ctx, sessionId)) return null
+    const previous = cloudExecutions.get(sessionId)
+    if (previous) {
+      if (!previous.finishing) return previous
+      await previous.finishing
+    }
     const localAccountId = currentAccountId()
     const runtime = accountRuntime(ctx)
     const connection = localAccountId ? runtime?.cloudConnection?.(localAccountId) : null
@@ -1197,47 +1203,60 @@ export function apply(ctx: Context) {
   const finishCloudExecution = async (sessionId: string) => {
     const execution = cloudExecutions.get(sessionId)
     if (!execution) return
-    cloudExecutions.delete(sessionId)
-    clearInterval(execution.heartbeat)
-    try {
-      const record = await ctx.sessions.get(sessionId)
-      if (!record) return
-      const cloudRecord: SessionRecord = { ...record }
-      delete cloudRecord.project
-      const response = await fetch(
-        `${execution.origin}/api/sessions/${encodeURIComponent(sessionId)}/execution-sync`,
-        {
-          method: 'POST',
+    if (execution.finishing) return execution.finishing
+    execution.finishing = (async () => {
+      clearInterval(execution.heartbeat)
+      try {
+        const record = await ctx.sessions.get(sessionId)
+        if (record) {
+          const cloudRecord: SessionRecord = { ...record }
+          delete cloudRecord.project
+          const response = await fetch(
+            `${execution.origin}/api/sessions/${encodeURIComponent(sessionId)}/execution-sync`,
+            {
+              method: 'POST',
+              headers: {
+                authorization: `Bearer ${execution.token}`,
+                'content-type': 'application/json',
+                ...(execution.workspaceId ? { 'x-biu-workspace-id': execution.workspaceId } : {}),
+              },
+              body: JSON.stringify({ leaseId: execution.leaseId, record: cloudRecord }),
+            },
+          )
+          if (!response.ok) {
+            const body = (await response.json().catch(() => ({}))) as { error?: string }
+            console.warn('[chat] cloud session sync failed', sessionId, body.error || response.status)
+          }
+        }
+      } catch (error) {
+        console.warn('[chat] cloud session sync failed', sessionId, error)
+      } finally {
+        await fetch(`${execution.origin}/api/sessions/${encodeURIComponent(sessionId)}/execution-lease`, {
+          method: 'DELETE',
           headers: {
             authorization: `Bearer ${execution.token}`,
             'content-type': 'application/json',
             ...(execution.workspaceId ? { 'x-biu-workspace-id': execution.workspaceId } : {}),
           },
-          body: JSON.stringify({ leaseId: execution.leaseId, record: cloudRecord }),
-        },
-      )
-      if (!response.ok) {
-        const body = (await response.json().catch(() => ({}))) as { error?: string }
-        console.warn('[chat] cloud session sync failed', sessionId, body.error || response.status)
+          body: JSON.stringify({ leaseId: execution.leaseId }),
+        }).catch(() => undefined)
+        if (cloudExecutions.get(sessionId) === execution) cloudExecutions.delete(sessionId)
       }
-    } catch (error) {
-      console.warn('[chat] cloud session sync failed', sessionId, error)
-    } finally {
-      void fetch(`${execution.origin}/api/sessions/${encodeURIComponent(sessionId)}/execution-lease`, {
-        method: 'DELETE',
-        headers: {
-          authorization: `Bearer ${execution.token}`,
-          'content-type': 'application/json',
-          ...(execution.workspaceId ? { 'x-biu-workspace-id': execution.workspaceId } : {}),
-        },
-        body: JSON.stringify({ leaseId: execution.leaseId }),
-      }).catch(() => undefined)
-    }
+    })()
+    return execution.finishing
   }
 
-  ctx.on('session/finished', (event) => {
-    const sessionId = String((event as { sessionId?: string }).sessionId ?? '')
-    if (sessionId) void finishCloudExecution(sessionId)
+  ctx.on('agent/status', (event) => {
+    const payload = event as { sessionId?: string; status?: string }
+    const sessionId = String(payload.sessionId ?? '')
+    if (
+      sessionId &&
+      payload.status === 'idle' &&
+      !ctx.agents.isBusy(sessionId) &&
+      ctx.agents.inboxPending(sessionId) === 0
+    ) {
+      void finishCloudExecution(sessionId)
+    }
   })
   ctx.on('dispose', () => {
     for (const execution of cloudExecutions.values()) clearInterval(execution.heartbeat)
@@ -1727,7 +1746,8 @@ export function apply(ctx: Context) {
     if (process.env.BIU_ONLINE === '1' && accountRuntime(ctx)?.store?.hasExecutionLease(route.params.id)) {
       return route.send(409, { error: '这个会话正在桌面设备上运行' })
     }
-    if (!cloudExecutions.has(route.params.id)) {
+    const shouldExecute = payload.kind !== 'inject' || ctx.agents.isBusy(route.params.id)
+    if (shouldExecute) {
       try {
         await beginCloudExecution(route.params.id)
       } catch (error) {
