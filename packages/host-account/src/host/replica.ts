@@ -152,6 +152,13 @@ export class RecordReplica {
     this.activeId = device.accountId
   }
 
+  forget(accountId: string) {
+    this.db.prepare('DELETE FROM replica_devices WHERE account_id = ?').run(accountId)
+    this.db.prepare('DELETE FROM replica_cursors WHERE account_id = ?').run(accountId)
+    this.db.prepare('DELETE FROM replica_outbox WHERE account_id = ?').run(accountId)
+    if (this.activeId === accountId) this.activeId = ''
+  }
+
   active() {
     return this.devices().find((item) => item.accountId === this.activeId) ?? null
   }

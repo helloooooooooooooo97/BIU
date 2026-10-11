@@ -155,7 +155,7 @@ export class ToolsService extends Service {
 
   private visible(name: string) {
     const pluginId = this.pluginIds.get(this.resolveName(name))
-    if (process.env.BIU_ONLINE === '1' && pluginId) {
+    if (pluginId && currentAccountId()) {
       const store = (
         this.ctx.get('account') as {
           store?: { canAccessPlugin?(accountId: string, workspaceId: string, pluginId: string): boolean }

@@ -2927,7 +2927,18 @@ export function apply(ctx: Context) {
     }
   }
   ctx.http.route('GET', '/api/profile', (route) => {
-    route.send(200, { ...asPublicProfile(), localData: process.env.BIU_ONLINE === '0' })
+    let dataLocation: 'device' | 'cloud' = process.env.BIU_ONLINE === '1' ? 'cloud' : 'device'
+    try {
+      const account = ctx.get('account') as {
+        store?: { activeWorkspaceId(): string | null }
+        workspaceLocation?: (workspaceId: string) => 'device' | 'cloud'
+      }
+      const workspaceId = account.store?.activeWorkspaceId()
+      if (workspaceId && account.workspaceLocation) dataLocation = account.workspaceLocation(workspaceId)
+    } catch {
+      /* 没有账号服务时沿用宿主位置 */
+    }
+    route.send(200, { ...asPublicProfile(), localData: dataLocation === 'device', dataLocation })
   })
   ctx.http.route('POST', '/api/profile', async (route) => {
     try {
@@ -3044,19 +3055,46 @@ export function apply(ctx: Context) {
       }
       const scope =
         body?.scope === 'workspace' ? 'workspace' : body?.scope === 'shared' ? 'shared' : body?.scope === 'local' ? 'local' : 'personal'
-      const origin = process.env.BIU_ONLINE === '0' ? process.env.BIU_REMOTE_ORIGIN?.replace(/\/$/, '') || '' : ''
-      if (origin && scope !== 'local') {
-        const headers: Record<string, string> = { 'content-type': 'application/json' }
-        const authorization = route.req.headers.authorization
-        const cookie = route.req.headers.cookie
-        if (authorization) headers.authorization = String(authorization)
-        else if (cookie) headers.cookie = String(cookie)
+      let cloud:
+        | { origin: string; token: string }
+        | null = null
+      let activeLocation: 'device' | 'cloud' = process.env.BIU_ONLINE === '1' ? 'cloud' : 'device'
+      if (process.env.BIU_ONLINE !== '1') {
+        try {
+          const account = ctx.get('account') as {
+            store?: { activeWorkspaceId(): string | null }
+            workspaceLocation?: (workspaceId: string) => 'device' | 'cloud'
+            cloudConnection?: (localAccountId: string) => { origin: string; token: string } | null
+          }
+          const workspaceId = account.store?.activeWorkspaceId()
+          if (workspaceId && account.workspaceLocation) activeLocation = account.workspaceLocation(workspaceId)
+          const accountId = currentAccountId()
+          if (activeLocation === 'cloud' && accountId && account.cloudConnection) {
+            cloud = account.cloudConnection(accountId)
+          }
+        } catch {
+          /* 本机无账号服务时只允许本地创建 */
+        }
+      }
+      if (process.env.BIU_ONLINE !== '1' && activeLocation === 'cloud') {
+        if (!cloud) {
+          route.send(401, { error: '请先登录云端账号' })
+          return
+        }
+        const headers: Record<string, string> = {
+          'content-type': 'application/json',
+          authorization: `Bearer ${cloud.token}`,
+        }
         let remote: Response
         try {
-          remote = await fetch(`${origin}/api/db/create`, {
+          remote = await fetch(`${cloud.origin}/api/db/create`, {
             method: 'POST',
             headers,
-            body: JSON.stringify({ path: body?.path, records: body?.records ?? body?.content, scope }),
+            body: JSON.stringify({
+              path: body?.path,
+              records: body?.records ?? body?.content,
+              scope: scope === 'local' ? 'personal' : scope,
+            }),
           })
         } catch {
           route.send(503, { error: '云端暂时连不上' })
@@ -3084,7 +3122,9 @@ export function apply(ctx: Context) {
         route.send(remote.status, payload)
         return
       }
-      const created = await db.create(String(body?.path ?? ''), body?.records ?? body?.content, { scope })
+      const created = await db.create(String(body?.path ?? ''), body?.records ?? body?.content, {
+        scope: activeLocation === 'device' ? 'local' : scope,
+      })
       route.send(200, created)
     } catch (error) {
       route.send(400, { error: String(error) })

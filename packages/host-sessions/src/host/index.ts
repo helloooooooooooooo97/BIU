@@ -412,6 +412,14 @@ export class SessionsService extends Service {
     return healed
   }
 
+  /** 用来自受信任同步端的完整记录替换本地缓存与持久化副本。 */
+  async replace(record: SessionRecord) {
+    this.clearPersistTimer(record.id)
+    await this.persist(record)
+    this.attachSession(record.id)
+    return record
+  }
+
   /** 启动时把磁盘上崩溃残留的 partial / 未闭合 turn 一次修完并写回。 */
   async healPersistedLogs() {
     let ids: string[] = []

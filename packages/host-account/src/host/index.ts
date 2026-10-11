@@ -1,6 +1,5 @@
 import { Service, type Context } from 'cordis'
 import { biuSqlitePath, openAndMigrateBiu } from '@biu/host-plugin-loader/data-dir'
-import { readWorkspaceProfile } from '@biu/host-workspace'
 import type { RouteContext } from '@biu/type-http'
 import { CollabError, CollabStore } from './store.ts'
 import { httpRemote, RecordReplica } from './replica.ts'
@@ -14,6 +13,15 @@ export const name = 'account'
 export const inject = ['http']
 
 type AccountConfig = { sqlitePath?: string }
+type CloudConnection = {
+  localAccountId: string
+  origin: string
+  remoteAccountId: string
+  remoteName: string
+  remoteEmail: string
+  token: string
+  connectedAt: number
+}
 
 export class AccountService extends Service {
   store: CollabStore
@@ -49,7 +57,7 @@ export class AccountService extends Service {
       const timer = setInterval(() => {
         const device = this.replica?.active()
         if (!device?.token) return
-        void exchangeSnapshot(ctx, origin, device.token, device.accountId).catch((error) => {
+        void exchangeSnapshot(ctx, origin, device.token, device.accountId, device.workspaceId).catch((error) => {
           console.warn('[replica] sync failed', error)
         })
       }, 3000)
@@ -61,10 +69,6 @@ export class AccountService extends Service {
       })
     }
     ctx.inject(['database'], (inner) => inner.database.register(workspaceMembersCollection(this.store)))
-    if (process.env.BIU_ONLINE !== '1') {
-      const profile = readWorkspaceProfile()
-      this.store.bootstrapLocal({ accountName: profile.name || '我', workspaceName: '本机' })
-    }
     ctx.on('dispose', () => db.close())
   }
 
@@ -126,6 +130,84 @@ export class AccountService extends Service {
       )
       .run(collection, localId, cloudId)
   }
+
+  cloudConnection(localAccountId: string): CloudConnection | null {
+    const row = this.db
+      .prepare(
+        `SELECT local_account_id, origin, remote_account_id, remote_name, remote_email, token, connected_at
+         FROM cloud_connections WHERE local_account_id = ?`,
+      )
+      .get(localAccountId) as
+      | {
+          local_account_id: string
+          origin: string
+          remote_account_id: string
+          remote_name: string
+          remote_email: string
+          token: string
+          connected_at: number
+        }
+      | undefined
+    return row
+      ? {
+          localAccountId: row.local_account_id,
+          origin: row.origin,
+          remoteAccountId: row.remote_account_id,
+          remoteName: row.remote_name,
+          remoteEmail: row.remote_email,
+          token: row.token,
+          connectedAt: row.connected_at,
+        }
+      : null
+  }
+
+  saveCloudConnection(input: Omit<CloudConnection, 'connectedAt'> & { connectedAt?: number }) {
+    const connectedAt = input.connectedAt ?? Date.now()
+    this.db
+      .prepare(
+        `INSERT INTO cloud_connections
+          (local_account_id, origin, remote_account_id, remote_name, remote_email, token, connected_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(local_account_id) DO UPDATE SET
+           origin = excluded.origin,
+           remote_account_id = excluded.remote_account_id,
+           remote_name = excluded.remote_name,
+           remote_email = excluded.remote_email,
+           token = excluded.token,
+           connected_at = excluded.connected_at`,
+      )
+      .run(
+        input.localAccountId,
+        input.origin,
+        input.remoteAccountId,
+        input.remoteName,
+        input.remoteEmail,
+        input.token,
+        connectedAt,
+      )
+    return this.cloudConnection(input.localAccountId)!
+  }
+
+  removeCloudConnection(localAccountId: string) {
+    this.db.prepare('DELETE FROM cloud_connections WHERE local_account_id = ?').run(localAccountId)
+    this.replica?.forget(localAccountId)
+  }
+
+  workspaceLocation(workspaceId: string): 'device' | 'cloud' {
+    const row = this.db.prepare('SELECT place FROM workspace_place WHERE workspace_id = ?').get(workspaceId) as
+      | { place?: string }
+      | undefined
+    return row?.place === 'cloud' ? 'cloud' : 'device'
+  }
+
+  markCloudWorkspace(workspaceId: string) {
+    this.db
+      .prepare(
+        `INSERT INTO workspace_place (workspace_id, place) VALUES (?, 'cloud')
+         ON CONFLICT(workspace_id) DO UPDATE SET place = 'cloud'`,
+      )
+      .run(workspaceId)
+  }
 }
 
 function bearer(route: RouteContext) {
@@ -141,24 +223,23 @@ function rememberLogin(route: RouteContext, token: string) {
   route.res.setHeader('set-cookie', `biu_account=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Strict`)
 }
 
-function remoteOrigin() {
+function configuredRemoteOrigin() {
   if (process.env.BIU_ONLINE === '1') return ''
   return process.env.BIU_REMOTE_ORIGIN?.replace(/\/$/, '') || ''
 }
 
-async function relayAccount(route: RouteContext, path: string) {
-  const origin = remoteOrigin()
-  if (!origin) return null
-  const token = bearer(route)
+async function relayAccount(route: RouteContext, account: AccountService, localAccountId: string, path: string) {
+  const connection = account.cloudConnection(localAccountId)
+  if (!connection) return null
   const method = route.req.method ?? 'GET'
   const hasBody = method !== 'GET' && method !== 'HEAD'
   const raw = hasBody ? await route.json().catch(() => ({})) : undefined
   let res: Response
   try {
-    res = await fetch(`${origin}${path}`, {
+    res = await fetch(`${connection.origin}${path}`, {
       method,
       headers: {
-        ...(token ? { authorization: `Bearer ${token}` } : {}),
+        authorization: `Bearer ${connection.token}`,
         ...(hasBody ? { 'content-type': 'application/json' } : {}),
       },
       body: hasBody ? JSON.stringify(raw ?? {}) : undefined,
@@ -184,6 +265,7 @@ function cacheWorkspaceList(account: AccountService, accountId: string, payload:
       role: row.role,
       createdAt: row.createdAt,
     })
+    account.markCloudWorkspace(String(row.id))
   }
 }
 
@@ -206,10 +288,140 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     return found
   }
 
+  async function relayCloudWorkspace(
+    route: RouteContext,
+    localAccountId: string,
+    workspaceId: string,
+    path: string,
+  ) {
+    if (account.workspaceLocation(workspaceId) !== 'cloud') return false
+    const relayed = await relayAccount(route, account, localAccountId, path)
+    if (!relayed) throw new CollabError('请先登录云端账号', 401)
+    route.send(relayed.status, relayed.payload)
+    return true
+  }
+
+  async function connectCloud(route: RouteContext, action: 'login' | 'register') {
+    if (process.env.BIU_ONLINE === '1') throw new CollabError('服务端不能连接另一个云端账号', 400)
+    const local = actor(route)
+    const origin = configuredRemoteOrigin()
+    if (!origin) throw new CollabError('还没有配置云端服务地址', 400)
+    const body = (await route.json()) as { email?: string; password?: string }
+    let remote: Response
+    try {
+      remote = await fetch(`${origin}/api/account/${action}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: String(body.email ?? ''), password: String(body.password ?? '') }),
+      })
+    } catch {
+      throw new CollabError('云端暂时连不上', 503)
+    }
+    const payload = (await remote.json().catch(() => ({}))) as {
+      id?: string
+      name?: string
+      token?: string
+      workspaceId?: string
+      error?: string
+    }
+    if (!remote.ok || !payload.id || !payload.token) {
+      throw new CollabError(payload.error || (action === 'login' ? '云端登录失败' : '云端注册失败'), remote.status || 400)
+    }
+    const connection = account.saveCloudConnection({
+      localAccountId: local.id,
+      origin,
+      remoteAccountId: payload.id,
+      remoteName: payload.name || String(body.email ?? ''),
+      remoteEmail: String(body.email ?? '').trim().toLowerCase(),
+      token: payload.token,
+    })
+    let workspaces: unknown[] = []
+    try {
+      const listed = await fetch(`${origin}/api/account/workspaces`, {
+        headers: { authorization: `Bearer ${payload.token}` },
+      })
+      const listedBody = (await listed.json().catch(() => ({}))) as Record<string, unknown>
+      if (listed.ok) {
+        cacheWorkspaceList(account, local.id, listedBody)
+        workspaces = Array.isArray(listedBody.workspaces) ? listedBody.workspaces : []
+      }
+    } catch {
+      /* 登录已经成功，空间稍后重试加载 */
+    }
+    const workspaceId = String(payload.workspaceId ?? '')
+    if (workspaceId) {
+      account.markCloudWorkspace(workspaceId)
+      account.replica?.remember({ accountId: local.id, workspaceId, token: payload.token })
+    }
+    return {
+      account: {
+        id: connection.remoteAccountId,
+        name: connection.remoteName,
+        email: connection.remoteEmail,
+      },
+      workspaceId,
+      workspaces,
+    }
+  }
+
+  ctx.http.route('GET', '/api/account/cloud', async (route) => {
+    try {
+      if (process.env.BIU_ONLINE === '1') return route.send(200, { available: false, connected: false })
+      const me = actor(route)
+      const connection = account.cloudConnection(me.id)
+      route.send(200, {
+        available: Boolean(configuredRemoteOrigin()),
+        connected: Boolean(connection),
+        ...(connection
+          ? {
+              account: {
+                id: connection.remoteAccountId,
+                name: connection.remoteName,
+                email: connection.remoteEmail,
+              },
+              origin: connection.origin,
+            }
+          : {}),
+      })
+    } catch (error) {
+      fail(route, error)
+    }
+  })
+
+  ctx.http.route('POST', '/api/account/cloud/login', async (route) => {
+    try {
+      route.send(200, await connectCloud(route, 'login'))
+    } catch (error) {
+      fail(route, error)
+    }
+  })
+
+  ctx.http.route('POST', '/api/account/cloud/register', async (route) => {
+    try {
+      route.send(201, await connectCloud(route, 'register'))
+    } catch (error) {
+      fail(route, error)
+    }
+  })
+
+  ctx.http.route('DELETE', '/api/account/cloud', async (route) => {
+    try {
+      const me = actor(route)
+      account.removeCloudConnection(me.id)
+      route.send(200, { ok: true })
+    } catch (error) {
+      fail(route, error)
+    }
+  })
+
   ctx.http.route('GET', '/api/account/active', async (route) => {
     try {
       actor(route)
-      route.send(200, { workspaceId: account.store.activeWorkspaceId() })
+      const workspaceId = account.store.activeWorkspaceId()
+      route.send(200, {
+        workspaceId,
+        ...(workspaceId ? { location: account.workspaceLocation(workspaceId) } : {}),
+      })
     } catch (error) {
       fail(route, error)
     }
@@ -217,21 +429,15 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
 
   ctx.http.route('POST', '/api/account/active', async (route) => {
     try {
-      const relayed = await relayAccount(route, '/api/account/active')
-      if (relayed) {
-        if (relayed.status < 300) {
-          const me = actor(route)
-          const workspaceId = String(relayed.payload.workspaceId ?? '')
-          if (workspaceId && account.store.isMember(me.id, workspaceId)) account.store.setActive(me.id, workspaceId)
-        }
-        route.send(relayed.status, relayed.payload)
-        return
-      }
       const me = actor(route)
       const body = (await route.json()) as { workspaceId?: string }
       const workspaceId = account.store.setActive(me.id, String(body.workspaceId ?? ''))
+      if (account.workspaceLocation(workspaceId) === 'cloud') {
+        const connection = account.cloudConnection(me.id)
+        if (connection) account.replica?.remember({ accountId: me.id, workspaceId, token: connection.token })
+      }
       ctx.http.broadcast('database', { ts: Date.now() })
-      route.send(200, { workspaceId })
+      route.send(200, { workspaceId, location: account.workspaceLocation(workspaceId) })
     } catch (error) {
       fail(route, error)
     }
@@ -244,44 +450,6 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       const email = String(body.email ?? '')
       if (!password.trim()) throw new CollabError('密码不能为空', 400)
       if (!email.trim()) throw new CollabError('邮箱不能为空', 400)
-      const origin = process.env.BIU_REMOTE_ORIGIN
-      if (process.env.BIU_ONLINE !== '1' && origin) {
-        try {
-          const remote = await fetch(`${origin.replace(/\/$/, '')}/api/account/register`, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ email, password }),
-          })
-          const payload = (await remote.json().catch(() => ({}))) as {
-            id?: string
-            name?: string
-            token?: string
-            workspaceId?: string
-            error?: string
-          }
-          if (!remote.ok || !payload.token || !payload.id) {
-            route.send(remote.status, payload.error ? payload : { error: '注册失败' })
-            return
-          }
-          const adopted = account.store.ensureRemoteAccount({
-            id: payload.id,
-            name: payload.name || email,
-            email,
-            token: payload.token,
-            workspaceId: String(payload.workspaceId ?? ''),
-          })
-          account.replica?.remember({
-            accountId: adopted.id,
-            workspaceId: adopted.workspaceId,
-            token: adopted.token,
-          })
-          rememberLogin(route, adopted.token)
-          route.send(201, { id: adopted.id, name: payload.name, token: adopted.token, workspaceId: adopted.workspaceId })
-          return
-        } catch {
-          /* 集中部署不在时仍在本机注册 */
-        }
-      }
       const created = account.store.register('', Date.now(), password, email)
       const workspaceId = account.store.enter(created.id)
       const session = account.store.openSession(created.id, String(route.req.headers['user-agent'] ?? '浏览器').slice(0, 120))
@@ -296,44 +464,6 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   ctx.http.route('POST', '/api/account/login', async (route) => {
     try {
       const body = (await route.json()) as { email?: string; password?: string }
-      const origin = process.env.BIU_REMOTE_ORIGIN
-      if (process.env.BIU_ONLINE !== '1' && origin) {
-        try {
-          const remote = await fetch(`${origin.replace(/\/$/, '')}/api/account/login`, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ email: body.email ?? '', password: body.password ?? '' }),
-          })
-          const payload = (await remote.json().catch(() => ({}))) as {
-            id?: string
-            name?: string
-            token?: string
-            workspaceId?: string
-            error?: string
-          }
-          if (!remote.ok || !payload.token || !payload.id) {
-            route.send(remote.status, payload.error ? payload : { error: '登录失败' })
-            return
-          }
-          const adopted = account.store.ensureRemoteAccount({
-            id: payload.id,
-            name: payload.name || String(body.email ?? ''),
-            email: String(body.email ?? ''),
-            token: payload.token,
-            workspaceId: String(payload.workspaceId ?? ''),
-          })
-          account.replica?.remember({
-            accountId: adopted.id,
-            workspaceId: adopted.workspaceId,
-            token: adopted.token,
-          })
-          rememberLogin(route, adopted.token)
-          route.send(200, { id: adopted.id, name: payload.name, token: adopted.token, workspaceId: adopted.workspaceId })
-          return
-        } catch {
-          /* 集中部署不在时仍用本机账号 */
-        }
-      }
       const found = account.store.login(
         String(body.email ?? ''),
         String(body.password ?? ''),
@@ -341,11 +471,6 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       )
       const workspaceId = account.store.enter(found.id)
       rememberLogin(route, found.token)
-      account.replica?.remember({
-        accountId: found.id,
-        workspaceId: String(workspaceId),
-        token: found.token,
-      })
       ctx.http.broadcast('database', { ts: Date.now() })
       route.send(200, {
         id: found.id,
@@ -482,7 +607,10 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
 
   ctx.http.route('GET', '/api/account/workspace-profile', async (route) => {
     try {
-      route.send(200, account.store.workspaceProfile(actor(route).id))
+      const me = actor(route)
+      const workspaceId = account.store.activeWorkspaceId()
+      if (workspaceId && (await relayCloudWorkspace(route, me.id, workspaceId, '/api/account/workspace-profile'))) return
+      route.send(200, account.store.workspaceProfile(me.id))
     } catch (error) {
       fail(route, error)
     }
@@ -491,6 +619,8 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   ctx.http.route('POST', '/api/account/workspace-profile', async (route) => {
     try {
       const me = actor(route)
+      const workspaceId = account.store.activeWorkspaceId()
+      if (workspaceId && (await relayCloudWorkspace(route, me.id, workspaceId, '/api/account/workspace-profile'))) return
       const body = (await route.json()) as { name?: unknown; avatar?: unknown }
       route.send(
         200,
@@ -506,14 +636,35 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
 
   ctx.http.route('GET', '/api/account/workspaces', async (route) => {
     try {
-      const relayed = await relayAccount(route, '/api/account/workspaces')
-      if (relayed) {
-        if (relayed.status < 300) cacheWorkspaceList(account, actor(route).id, relayed.payload)
-        route.send(relayed.status, relayed.payload)
-        return
-      }
       const me = actor(route)
-      route.send(200, { workspaces: account.store.listWorkspaces(me.id) })
+      const local = account.store
+        .listWorkspaces(me.id)
+        .filter((workspace) => account.workspaceLocation(workspace.id) === 'device')
+        .map((workspace) => ({ ...workspace, location: 'device' as const }))
+      let cloud: Array<Record<string, unknown>> = account.store
+        .listWorkspaces(me.id)
+        .filter((workspace) => account.workspaceLocation(workspace.id) === 'cloud')
+        .map((workspace) => ({ ...workspace, location: 'cloud' as const }))
+      let cloudUnavailable = false
+      try {
+        const relayed = await relayAccount(route, account, me.id, '/api/account/workspaces')
+        if (relayed?.status && relayed.status < 300) {
+          cacheWorkspaceList(account, me.id, relayed.payload)
+          cloud = (Array.isArray(relayed.payload.workspaces) ? relayed.payload.workspaces : []).map((workspace) => ({
+            ...(workspace as Record<string, unknown>),
+            location: 'cloud',
+          }))
+        } else if (relayed) {
+          cloudUnavailable = true
+        }
+      } catch {
+        cloudUnavailable = true
+      }
+      route.send(200, {
+        workspaces: [...local, ...cloud],
+        cloudConnected: Boolean(account.cloudConnection(me.id)),
+        cloudUnavailable,
+      })
     } catch (error) {
       fail(route, error)
     }
@@ -521,29 +672,46 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
 
   ctx.http.route('POST', '/api/account/workspaces', async (route) => {
     try {
-      const relayed = await relayAccount(route, '/api/account/workspaces')
-      if (relayed) {
-        if (relayed.status < 300) {
-          const me = actor(route)
-          const row = relayed.payload as { id?: string; name?: string; ownerId?: string; role?: string; createdAt?: number }
-          if (row.id) {
-            account.store.upsertPulledWorkspace({
-              accountId: me.id,
-              id: String(row.id),
-              name: String(row.name ?? ''),
-              ownerId: row.ownerId,
-              role: row.role || 'owner',
-              createdAt: row.createdAt,
-            })
-            account.store.setActive(me.id, String(row.id))
-          }
+      const me = actor(route)
+      const body = (await route.json()) as { name?: string; location?: string }
+      if (body.location === 'cloud') {
+        const connection = account.cloudConnection(me.id)
+        if (!connection) throw new CollabError('请先登录云端账号', 401)
+        let response: Response
+        try {
+          response = await fetch(`${connection.origin}/api/account/workspaces`, {
+            method: 'POST',
+            headers: { authorization: `Bearer ${connection.token}`, 'content-type': 'application/json' },
+            body: JSON.stringify({ name: body.name }),
+          })
+        } catch {
+          throw new CollabError('云端暂时连不上', 503)
         }
-        route.send(relayed.status, relayed.payload)
+        const payload = (await response.json().catch(() => ({}))) as {
+          id?: string
+          name?: string
+          ownerId?: string
+          role?: string
+          createdAt?: number
+          error?: string
+        }
+        if (!response.ok || !payload.id) throw new CollabError(payload.error || '创建云端空间失败', response.status)
+        account.store.upsertPulledWorkspace({
+          accountId: me.id,
+          id: payload.id,
+          name: String(payload.name ?? body.name ?? ''),
+          ownerId: payload.ownerId,
+          role: payload.role || 'owner',
+          createdAt: payload.createdAt,
+        })
+        account.markCloudWorkspace(payload.id)
+        account.store.setActive(me.id, payload.id)
+        account.replica?.remember({ accountId: me.id, workspaceId: payload.id, token: connection.token })
+        route.send(201, { ...payload, location: 'cloud' })
         return
       }
-      const me = actor(route)
-      const body = (await route.json()) as { name?: string }
-      route.send(201, account.store.createWorkspace(me.id, String(body.name ?? '')))
+      const workspace = account.store.createWorkspace(me.id, String(body.name ?? ''))
+      route.send(201, { ...workspace, location: 'device' })
     } catch (error) {
       fail(route, error)
     }
@@ -551,27 +719,41 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
 
   ctx.http.route('PATCH', '/api/account/workspaces/:id', async (route) => {
     try {
-      const relayed = await relayAccount(route, `/api/account/workspaces/${route.params.id}`)
-      if (relayed) {
-        if (relayed.status < 300) {
-          const me = actor(route)
-          const row = relayed.payload as { id?: string; name?: string; ownerId?: string; role?: string; createdAt?: number }
-          if (row.id) {
-            account.store.upsertPulledWorkspace({
-              accountId: me.id,
-              id: String(row.id),
-              name: String(row.name ?? ''),
-              ownerId: row.ownerId,
-              role: row.role,
-              createdAt: row.createdAt,
-            })
-          }
-        }
-        route.send(relayed.status, relayed.payload)
-        return
-      }
       const me = actor(route)
       const body = (await route.json()) as { name?: string }
+      if (account.workspaceLocation(route.params.id!) === 'cloud') {
+        const connection = account.cloudConnection(me.id)
+        if (!connection) throw new CollabError('请先登录云端账号', 401)
+        let response: Response
+        try {
+          response = await fetch(`${connection.origin}/api/account/workspaces/${route.params.id}`, {
+            method: 'PATCH',
+            headers: { authorization: `Bearer ${connection.token}`, 'content-type': 'application/json' },
+            body: JSON.stringify(body),
+          })
+        } catch {
+          throw new CollabError('云端暂时连不上', 503)
+        }
+        const payload = (await response.json().catch(() => ({}))) as {
+          id?: string
+          name?: string
+          ownerId?: string
+          role?: string
+          createdAt?: number
+          error?: string
+        }
+        if (!response.ok || !payload.id) throw new CollabError(payload.error || '重命名云端空间失败', response.status)
+        account.store.upsertPulledWorkspace({
+          accountId: me.id,
+          id: payload.id,
+          name: String(payload.name ?? ''),
+          ownerId: payload.ownerId,
+          role: payload.role,
+          createdAt: payload.createdAt,
+        })
+        route.send(200, { ...payload, location: 'cloud' })
+        return
+      }
       route.send(200, account.store.renameWorkspace(me.id, route.params.id!, String(body.name ?? '')))
     } catch (error) {
       fail(route, error)
@@ -581,6 +763,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   ctx.http.route('GET', '/api/account/workspaces/:id/members', async (route) => {
     try {
       const me = actor(route)
+      if (await relayCloudWorkspace(route, me.id, route.params.id!, `/api/account/workspaces/${route.params.id}/members`)) return
       route.send(200, { members: account.store.members(me.id, route.params.id!) })
     } catch (error) {
       fail(route, error)
@@ -590,6 +773,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   ctx.http.route('POST', '/api/account/workspaces/:id/members', async (route) => {
     try {
       const me = actor(route)
+      if (await relayCloudWorkspace(route, me.id, route.params.id!, `/api/account/workspaces/${route.params.id}/members`)) return
       const body = (await route.json()) as { accountId?: string; email?: string }
       const email = String(body.email ?? '').trim()
       const members = email
@@ -604,6 +788,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   ctx.http.route('POST', '/api/account/workspaces/:id/invites', async (route) => {
     try {
       const me = actor(route)
+      if (await relayCloudWorkspace(route, me.id, route.params.id!, `/api/account/workspaces/${route.params.id}/invites`)) return
       const body = (await route.json()) as { role?: string; expiresInHours?: number }
       const role = body.role === 'member' ? 'member' : 'viewer'
       const invite = account.store.createWorkspaceInvite(
@@ -647,6 +832,14 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   ctx.http.route('DELETE', '/api/account/workspaces/:id/members/:accountId', async (route) => {
     try {
       const me = actor(route)
+      if (
+        await relayCloudWorkspace(
+          route,
+          me.id,
+          route.params.id!,
+          `/api/account/workspaces/${route.params.id}/members/${route.params.accountId}`,
+        )
+      ) return
       account.store.removeMember(me.id, route.params.id!, route.params.accountId!)
       ctx.http.disconnectTenant(route.params.accountId!, route.params.id!)
       route.send(200, { members: account.store.members(me.id, route.params.id!) })
@@ -658,6 +851,14 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   ctx.http.route('PATCH', '/api/account/workspaces/:id/members/:accountId', async (route) => {
     try {
       const me = actor(route)
+      if (
+        await relayCloudWorkspace(
+          route,
+          me.id,
+          route.params.id!,
+          `/api/account/workspaces/${route.params.id}/members/${route.params.accountId}`,
+        )
+      ) return
       const body = (await route.json()) as { role?: string }
       const role = String(body.role ?? '')
       if (role !== 'owner' && role !== 'admin' && role !== 'member' && role !== 'viewer') {
@@ -673,6 +874,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   ctx.http.route('GET', '/api/account/workspaces/:id/groups', async (route) => {
     try {
       const me = actor(route)
+      if (await relayCloudWorkspace(route, me.id, route.params.id!, `/api/account/workspaces/${route.params.id}/groups`)) return
       route.send(200, { groups: account.store.groups(me.id, route.params.id!) })
     } catch (error) {
       fail(route, error)
@@ -682,6 +884,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   ctx.http.route('POST', '/api/account/workspaces/:id/groups', async (route) => {
     try {
       const me = actor(route)
+      if (await relayCloudWorkspace(route, me.id, route.params.id!, `/api/account/workspaces/${route.params.id}/groups`)) return
       const body = (await route.json()) as { name?: string }
       route.send(201, account.store.createGroup(me.id, route.params.id!, String(body.name ?? '')))
     } catch (error) {
@@ -692,6 +895,14 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   ctx.http.route('POST', '/api/account/workspaces/:id/groups/:groupId/members', async (route) => {
     try {
       const me = actor(route)
+      if (
+        await relayCloudWorkspace(
+          route,
+          me.id,
+          route.params.id!,
+          `/api/account/workspaces/${route.params.id}/groups/${route.params.groupId}/members`,
+        )
+      ) return
       const body = (await route.json()) as { email?: string }
       route.send(
         200,
@@ -712,6 +923,16 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   ctx.http.route('GET', '/api/account/access', async (route) => {
     try {
       const me = actor(route)
+      const activeWorkspace = account.store.activeWorkspaceId()
+      if (
+        activeWorkspace &&
+        (await relayCloudWorkspace(
+          route,
+          me.id,
+          activeWorkspace,
+          `/api/account/access${route.query.toString() ? `?${route.query.toString()}` : ''}`,
+        ))
+      ) return
       const collection = String(route.query.get('collection') ?? '')
       const viewId = String(route.query.get('viewId') ?? '')
       route.send(
@@ -728,6 +949,8 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   ctx.http.route('POST', '/api/account/access', async (route) => {
     try {
       const me = actor(route)
+      const activeWorkspace = account.store.activeWorkspaceId()
+      if (activeWorkspace && (await relayCloudWorkspace(route, me.id, activeWorkspace, '/api/account/access'))) return
       const body = (await route.json()) as {
         collection?: string
         recordId?: string
@@ -764,6 +987,8 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   ctx.http.route('DELETE', '/api/account/access', async (route) => {
     try {
       const me = actor(route)
+      const activeWorkspace = account.store.activeWorkspaceId()
+      if (activeWorkspace && (await relayCloudWorkspace(route, me.id, activeWorkspace, '/api/account/access'))) return
       const body = (await route.json()) as {
         collection?: string
         recordId?: string
@@ -800,6 +1025,11 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   ctx.http.route('POST', '/api/account/access/guest-invite', async (route) => {
     try {
       const me = actor(route)
+      const activeWorkspace = account.store.activeWorkspaceId()
+      if (
+        activeWorkspace &&
+        (await relayCloudWorkspace(route, me.id, activeWorkspace, '/api/account/access/guest-invite'))
+      ) return
       const body = (await route.json()) as {
         collection?: string
         recordId?: string
