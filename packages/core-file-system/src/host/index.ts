@@ -1404,7 +1404,7 @@ export class DatabaseService extends Service implements Database {
 
   private hasPublicShare(collection: string, id: string) {
     try {
-      return Boolean(this.shares.find('record', collection, '', id))
+      return Boolean(this.shares.findRecord(collection, id))
     } catch {
       return false
     }

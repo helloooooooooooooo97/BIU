@@ -2092,13 +2092,13 @@ export function CollectionBrowser({
 
   function renderCell(row: DbRecord, key: string, field: FieldSpec, surface: 'table' | 'detail' = 'detail') {
     if (key === 'shareScope') {
-      if (localData) return <span>{String(row[key] ?? '私人')}</span>
       return (
         <ShareScopeDetail
           collection={collectionPath}
           recordId={row.id}
-          label={String(row[key] ?? '')}
+          label={String(row[key] ?? (localData ? '私人' : ''))}
           tableLabel={currentTable?.label}
+          localOnly={localData}
         />
       )
     }
