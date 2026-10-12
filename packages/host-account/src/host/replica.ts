@@ -140,6 +140,8 @@ export class RecordReplica {
         state TEXT NOT NULL
       );
     `)
+    const saved = this.devices()[0]
+    if (saved) this.activeId = saved.accountId
   }
 
   remember(device: Device) {
