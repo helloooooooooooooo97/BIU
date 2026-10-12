@@ -642,6 +642,97 @@ export class CollabStore {
     return workspace
   }
 
+  /** 所有者输入完整空间名称后，硬删除空间及其记录、成员和授权。 */
+  deleteWorkspace(actorId: string, workspaceId: string, confirmName: string) {
+    this.requireRole(actorId, workspaceId, 'owner')
+    const row = this.db.prepare('SELECT name FROM workspaces WHERE id = ?').get(workspaceId) as { name?: string } | undefined
+    if (!row) throw new CollabError('空间不存在', 404)
+    if (confirmName !== row.name) throw new CollabError('请输入完整的空间名称以确认删除', 400)
+    const records = this.db
+      .prepare('SELECT collection, record_id FROM record_owners WHERE workspace_id = ?')
+      .all(workspaceId) as Array<{ collection: string; record_id: string }>
+    const tables = this.db
+      .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'`)
+      .all() as Array<{ name: string }>
+    const columnsOf = (table: string) =>
+      (this.db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map((column) => column.name)
+    const sessionIds = records.filter((record) => record.collection === '/sessions').map((record) => record.record_id)
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      for (const table of tables) {
+        if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(table.name)) continue
+        const columns = columnsOf(table.name)
+        if (table.name === 'auth_sessions' && columns.includes('workspace_id')) {
+          this.db.prepare('UPDATE auth_sessions SET workspace_id = ? WHERE workspace_id = ?').run('', workspaceId)
+          continue
+        }
+        if (!columns.includes('workspace_id')) continue
+        this.db.prepare(`DELETE FROM ${table.name} WHERE workspace_id = ?`).run(workspaceId)
+      }
+      const direct: Record<string, string> = {
+        '/pages': 'pages',
+        '/tasks': 'tasks',
+        '/sessions': 'sessions',
+        '/facets': 'facets',
+      }
+      for (const [collection, table] of Object.entries(direct)) {
+        if (!tables.some((item) => item.name === table)) continue
+        const stmt = this.db.prepare(`DELETE FROM ${table} WHERE id = ?`)
+        for (const record of records) {
+          if (record.collection === collection) stmt.run(record.record_id)
+        }
+      }
+      if (tables.some((item) => item.name === 'saved_views')) {
+        const stmt = this.db.prepare('DELETE FROM saved_views WHERE view_id = ?')
+        for (const record of records) stmt.run(record.record_id)
+      }
+      for (const table of tables) {
+        if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(table.name)) continue
+        const columns = columnsOf(table.name)
+        if (!columns.includes('record_id')) continue
+        const hasCollection = columns.includes('collection')
+        const stmt = this.db.prepare(
+          hasCollection
+            ? `DELETE FROM ${table.name} WHERE collection = ? AND record_id = ?`
+            : `DELETE FROM ${table.name} WHERE record_id = ?`,
+        )
+        for (const record of records) {
+          if (hasCollection) stmt.run(record.collection, record.record_id)
+          else stmt.run(record.record_id)
+        }
+      }
+      for (const table of tables) {
+        if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(table.name)) continue
+        if (!columnsOf(table.name).includes('page_id')) continue
+        const stmt = this.db.prepare(`DELETE FROM ${table.name} WHERE page_id = ?`)
+        for (const record of records) {
+          if (record.collection === '/pages') stmt.run(record.record_id)
+        }
+      }
+      if (tables.some((item) => item.name === 'facet_stamps')) {
+        const stmt = this.db.prepare('DELETE FROM facet_stamps WHERE facet_id = ?')
+        for (const record of records) {
+          if (record.collection === '/facets') stmt.run(record.record_id)
+        }
+      }
+      if (tables.some((item) => item.name === 'shares')) {
+        const stmt = this.db.prepare('DELETE FROM shares WHERE record_id = ? OR view_id = ?')
+        for (const record of records) stmt.run(record.record_id, record.record_id)
+      }
+      this.db.prepare('DELETE FROM workspaces WHERE id = ?').run(workspaceId)
+      this.db.prepare('UPDATE accounts SET active_workspace_id = ? WHERE active_workspace_id = ?').run('', workspaceId)
+      if (this.stateValue('active') === workspaceId) this.writeState('active', '')
+      if (this.stateValue('home') === workspaceId) this.writeState('home', '')
+      this.db.exec('COMMIT')
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+    const next = this.listWorkspaces(actorId)[0]
+    if (next) this.setActive(actorId, next.id)
+    return { id: workspaceId, deleted: true as const, sessionIds, activeWorkspaceId: next?.id ?? '' }
+  }
+
   addMember(actorId: string, workspaceId: string, accountId: string, now = Date.now()) {
     this.requireManager(actorId, workspaceId)
     this.requireAccount(accountId)

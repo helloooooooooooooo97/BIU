@@ -1,5 +1,7 @@
+import { existsSync } from 'node:fs'
 import { Service, type Context } from 'cordis'
-import { biuSqlitePath, isOnlineRuntime, openAndMigrateBiu } from '@biu/host-plugin-loader/data-dir'
+import { biuSqlitePath, eventsSqlitePath, isOnlineRuntime, openAndMigrateBiu, openSqlite } from '@biu/host-plugin-loader/data-dir'
+import { openAndMigrateEvents } from '@biu/host-plugin-loader/events-migrate'
 import type { RouteContext } from '@biu/type-http'
 import { CollabError, CollabStore } from './store.ts'
 import { httpRemote, RecordReplica } from './replica.ts'
@@ -279,6 +281,21 @@ function cacheWorkspaceList(account: AccountService, accountId: string, payload:
       createdAt: row.createdAt,
     })
     account.markCloudWorkspace(String(row.id))
+  }
+}
+
+function purgeSessionEvents(sessionIds: string[]) {
+  if (!sessionIds.length) return
+  const path = eventsSqlitePath()
+  if (!existsSync(path)) return
+  const db = openSqlite(path, { foreignKeys: false })
+  try {
+    const stmt = db.prepare('DELETE FROM events WHERE session_id = ?')
+    for (const id of sessionIds) stmt.run(id)
+  } catch {
+    /* 事件库还没有这张表时，空间记录本身已经删除。 */
+  } finally {
+    db.close()
   }
 }
 
@@ -803,6 +820,36 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
         return
       }
       route.send(200, account.store.renameWorkspace(me.id, route.params.id!, String(body.name ?? '')))
+    } catch (error) {
+      fail(route, error)
+    }
+  })
+
+  ctx.http.route('DELETE', '/api/account/workspaces/:id', async (route) => {
+    try {
+      const me = actor(route)
+      const body = (await route.json().catch(() => ({}))) as { name?: string }
+      const confirmName = String(body.name ?? '')
+      const workspaceId = route.params.id!
+      if (!isOnlineRuntime() && account.workspaceLocation(workspaceId) === 'cloud') {
+        const connection = account.cloudConnection(me.id)
+        if (!connection) throw new CollabError('请先登录云端账号', 401)
+        let response: Response
+        try {
+          response = await fetch(`${connection.origin}/api/account/workspaces/${workspaceId}`, {
+            method: 'DELETE',
+            headers: { authorization: `Bearer ${connection.token}`, 'content-type': 'application/json' },
+            body: JSON.stringify({ name: confirmName }),
+          })
+        } catch {
+          throw new CollabError('云端暂时连不上', 503)
+        }
+        const payload = (await response.json().catch(() => ({}))) as { error?: string; activeWorkspaceId?: string }
+        if (!response.ok) throw new CollabError(payload.error || '删除云端空间失败', response.status)
+      }
+      const deleted = account.store.deleteWorkspace(me.id, workspaceId, confirmName)
+      purgeSessionEvents(deleted.sessionIds)
+      route.send(200, { id: deleted.id, deleted: true, activeWorkspaceId: deleted.activeWorkspaceId })
     } catch (error) {
       fail(route, error)
     }

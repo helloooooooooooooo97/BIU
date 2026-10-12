@@ -122,6 +122,36 @@ test('owners and managers can rename a workspace but regular members cannot', ()
   assert.throws(() => collab.renameWorkspace(ada.id, workspace.id, '  '), /不能为空/)
 })
 
+test('deleting a workspace requires its exact name and hard-deletes its data', () => {
+  const collab = store()
+  const ada = collab.register('Ada')
+  const bob = collab.register('Bob')
+  const workspace = collab.createWorkspace(ada.id, '本地空间')
+  const other = collab.createWorkspace(ada.id, '留下')
+  collab.addMember(ada.id, workspace.id, bob.id)
+  collab.setActive(ada.id, workspace.id)
+  const db = (collab as unknown as { db: import('node:sqlite').DatabaseSync }).db
+  db.prepare('INSERT INTO pages (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)').run('page-1', '笔记', 1, 1)
+  collab.attach(workspace.id, '/pages', 'page-1', 1)
+  db.prepare(
+    `INSERT INTO editor_content (collection, record_id, body, updated_at, version) VALUES ('/pages', 'page-1', '正文', 1, 1)`,
+  ).run()
+
+  assert.throws(() => collab.deleteWorkspace(bob.id, workspace.id, '本地空间'), /所有者/)
+  assert.throws(() => collab.deleteWorkspace(ada.id, workspace.id, '本地'), /空间名称/)
+  const deleted = collab.deleteWorkspace(ada.id, workspace.id, '本地空间')
+  assert.equal(deleted.deleted, true)
+  assert.equal(deleted.activeWorkspaceId, other.id)
+  assert.equal(db.prepare('SELECT id FROM workspaces WHERE id = ?').get(workspace.id), undefined)
+  assert.equal(db.prepare('SELECT id FROM pages WHERE id = ?').get('page-1'), undefined)
+  assert.equal(db.prepare('SELECT body FROM editor_content WHERE record_id = ?').get('page-1'), undefined)
+  assert.equal(
+    (db.prepare('SELECT COUNT(*) AS n FROM workspace_members WHERE workspace_id = ?').get(workspace.id) as { n: number }).n,
+    0,
+  )
+  assert.equal(collab.listWorkspaces(ada.id).some((row) => row.id === other.id), true)
+})
+
 test('plugin packages record without instance roles', () => {
   const previous = process.env.BIU_ONLINE
   process.env.BIU_ONLINE = '1'
