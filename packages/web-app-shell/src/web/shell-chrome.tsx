@@ -7,6 +7,7 @@ import {
   BellIcon,
   ChatBubbleLeftRightIcon,
   CheckIcon,
+  ChevronRightIcon,
   CircleStackIcon,
   ClipboardDocumentIcon,
   CloudIcon,
@@ -727,8 +728,10 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
   const [creatingLocation, setCreatingLocation] = useState<'device' | 'cloud' | null>(null)
   const [createError, setCreateError] = useState('')
   const [localAccount, setLocalAccount] = useState('')
-  const [cloudAccount, setCloudAccount] = useState('')
+  const [cloudAccounts, setCloudAccounts] = useState<Array<{ id: string; email?: string; name?: string; origin?: string; active?: boolean }>>([])
+  const [cloudMenuOpen, setCloudMenuOpen] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
+  const cloudExpandRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -741,8 +744,7 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
           accountFetch(token, '/api/account/active') as Promise<{ workspaceId?: string }>,
           accountFetch(token, '/api/account/me') as Promise<{ email?: string; name?: string }>,
           accountFetch(token, '/api/account/cloud').catch(() => ({})) as Promise<{
-            connected?: boolean
-            account?: { email?: string; name?: string }
+            accounts?: Array<{ id: string; email?: string; name?: string; origin?: string; active?: boolean }>
           }>,
         ])
         if (cancelled) return
@@ -751,8 +753,7 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
         setActive(workspaceId)
         if (workspaceId) writeWorkspaceId(workspaceId)
         setLocalAccount(String(me.email || me.name || ''))
-        const remote = cloud.account && typeof cloud.account === 'object' ? cloud.account : undefined
-        setCloudAccount(cloud.connected && remote ? String(remote.email || remote.name || '') : '')
+        setCloudAccounts(Array.isArray(cloud.accounts) ? cloud.accounts : [])
       } catch {
         if (!cancelled) setWorkspaces([])
       }
@@ -823,7 +824,11 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
       {open ? (
         <AnchorMenu
           anchor={triggerRef.current}
-          onClose={() => setOpen(false)}
+          onClose={() => {
+            setOpen(false)
+            setCloudMenuOpen(false)
+          }}
+          inside={(node) => node instanceof Element && Boolean(node.closest('.shell-workspace-cloud-accounts'))}
           placement="bottom"
           minWidth={240}
           zIndex={100}
@@ -892,31 +897,80 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
                 <ArrowRightStartOnRectangleIcon aria-hidden />
               </button>
             </div>
-            {cloudAccount ? (
-              <div className="shell-workspace-menu-account" data-testid="shell-workspace-cloud-account">
-                <CloudIcon aria-hidden />
-                <span className="shell-workspace-menu-copy">
-                  <strong>{cloudAccount}</strong>
-                </span>
+            <div className="shell-workspace-menu-account" data-testid="shell-workspace-cloud-account">
+              <CloudIcon aria-hidden />
+              <span className="shell-workspace-menu-copy">
+                <strong className={cloudAccounts.some((item) => item.active) ? '' : 'is-empty'}>
+                  {cloudAccounts.find((item) => item.active)?.email
+                    || cloudAccounts.find((item) => item.active)?.name
+                    || '暂时无账号'}
+                </strong>
+              </span>
+              <span className="shell-workspace-menu-account-actions">
                 <button
                   type="button"
-                  aria-label="退出"
+                  aria-label="退出云端账号"
                   data-testid="shell-workspace-cloud-logout"
                   onClick={() => {
                     const token = readAccountToken()
                     void accountFetch(token, '/api/account/cloud', { method: 'DELETE' })
-                      .then(() => {
-                        setCloudAccount('')
-                        window.dispatchEvent(new Event(ACCOUNT_EVENT))
-                      })
+                      .then(() => window.dispatchEvent(new Event(ACCOUNT_EVENT)))
                       .catch(() => undefined)
                   }}
                 >
                   <ArrowRightStartOnRectangleIcon aria-hidden />
                 </button>
-              </div>
-            ) : null}
+                <button
+                  ref={cloudExpandRef}
+                  type="button"
+                  aria-label="更多在线账号"
+                  aria-expanded={cloudMenuOpen}
+                  data-testid="shell-workspace-cloud-expand"
+                  onClick={() => setCloudMenuOpen((value) => !value)}
+                >
+                  <ChevronRightIcon aria-hidden />
+                </button>
+              </span>
+            </div>
           </div>
+        </AnchorMenu>
+      ) : null}
+      {open && cloudMenuOpen ? (
+        <AnchorMenu
+          anchor={cloudExpandRef.current}
+          onClose={() => setCloudMenuOpen(false)}
+          placement="right"
+          minWidth={220}
+          zIndex={120}
+          className="shell-workspace-menu shell-workspace-cloud-accounts"
+          role="menu"
+          aria-label="在线账号"
+          data-testid="shell-workspace-cloud-accounts"
+        >
+          {cloudAccounts.length ? cloudAccounts.map((item) => (
+            <button
+              key={`${item.origin ?? ''} ${item.id}`}
+              type="button"
+              className={`shell-workspace-menu-item${item.active ? ' is-active' : ''}`}
+              onClick={() => {
+                const token = readAccountToken()
+                void accountFetch(token, '/api/account/cloud/active', {
+                  method: 'POST',
+                  body: JSON.stringify({ remoteAccountId: item.id, origin: item.origin }),
+                })
+                  .then(() => {
+                    setCloudMenuOpen(false)
+                    window.dispatchEvent(new Event(ACCOUNT_EVENT))
+                  })
+                  .catch(() => undefined)
+              }}
+            >
+              <CloudIcon aria-hidden className="shell-workspace-menu-icon" />
+              <span className="shell-workspace-menu-copy">
+                <strong>{item.email || item.name || '在线账号'}</strong>
+              </span>
+            </button>
+          )) : <p className="shell-workspace-cloud-empty">暂无在线账号</p>}
         </AnchorMenu>
       ) : null}
       {creating && typeof document !== 'undefined' ? createPortal(

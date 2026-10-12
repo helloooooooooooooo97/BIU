@@ -1736,7 +1736,15 @@ body {
   color: var(--dsw-label-2);
 }
 
-.shell-workspace-menu-account button {
+.shell-workspace-menu-account-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+}
+
+.shell-workspace-menu-account button,
+.shell-workspace-menu-account-actions button {
   display: grid;
   flex: none;
   width: 16px;
@@ -1751,9 +1759,30 @@ body {
   cursor: pointer;
 }
 
-.shell-workspace-menu-account button svg {
+.shell-workspace-menu-account button svg,
+.shell-workspace-menu-account-actions button svg {
   width: 16px;
   height: 16px;
+}
+
+.shell-workspace-menu-copy strong.is-empty {
+  color: var(--dsw-label-3);
+  font-weight: 500;
+}
+
+.shell-workspace-cloud-accounts {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px;
+}
+
+.shell-workspace-cloud-empty {
+  margin: 0;
+  padding: 8px;
+  color: var(--dsw-label-3);
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .shell-workspace-menu-account button:hover {
