@@ -2583,6 +2583,20 @@ body {
   white-space: nowrap;
 }
 
+.settings-cloud-accounts {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  margin-top: 10px;
+}
+
+.settings-cloud-accounts .settings-member-row > .settings-member-identity strong,
+.settings-cloud-accounts .settings-member-row > .settings-member-identity small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .settings-cloud-connect {
   display: flex;
   flex-direction: column;

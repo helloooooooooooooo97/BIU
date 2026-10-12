@@ -68,7 +68,7 @@ export class AccountService extends Service {
         if (!localAccountId) return
         this.syncReplicaCredential(localAccountId)
       })
-      const saved = this.db.prepare('SELECT local_account_id FROM cloud_connections').all() as Array<{ local_account_id: string }>
+      const saved = this.db.prepare('SELECT local_account_id FROM cloud_connections WHERE active = 1').all() as Array<{ local_account_id: string }>
       for (const row of saved) this.syncReplicaCredential(row.local_account_id)
     }
     ctx.inject(['database'], (inner) =>
@@ -146,7 +146,8 @@ export class AccountService extends Service {
     const row = this.db
       .prepare(
         `SELECT local_account_id, origin, remote_account_id, remote_name, remote_email, token, connected_at
-         FROM cloud_connections WHERE local_account_id = ?`,
+         FROM cloud_connections WHERE local_account_id = ? AND active = 1
+         ORDER BY connected_at DESC LIMIT 1`,
       )
       .get(localAccountId) as
       | {
@@ -159,33 +160,63 @@ export class AccountService extends Service {
           connected_at: number
         }
       | undefined
-    return row
-      ? {
-          localAccountId: row.local_account_id,
-          origin: row.origin,
-          remoteAccountId: row.remote_account_id,
-          remoteName: row.remote_name,
-          remoteEmail: row.remote_email,
-          token: row.token,
-          connectedAt: row.connected_at,
-        }
-      : null
+    return row ? this.cloudRow(row) : null
+  }
+
+  listCloudConnections(localAccountId: string): Array<CloudConnection & { active: boolean }> {
+    const rows = this.db
+      .prepare(
+        `SELECT local_account_id, origin, remote_account_id, remote_name, remote_email, token, connected_at, active
+         FROM cloud_connections WHERE local_account_id = ?
+         ORDER BY active DESC, connected_at DESC`,
+      )
+      .all(localAccountId) as Array<{
+        local_account_id: string
+        origin: string
+        remote_account_id: string
+        remote_name: string
+        remote_email: string
+        token: string
+        connected_at: number
+        active: number
+      }>
+    return rows.map((row) => ({ ...this.cloudRow(row), active: row.active === 1 }))
+  }
+
+  private cloudRow(row: {
+    local_account_id: string
+    origin: string
+    remote_account_id: string
+    remote_name: string
+    remote_email: string
+    token: string
+    connected_at: number
+  }): CloudConnection {
+    return {
+      localAccountId: row.local_account_id,
+      origin: row.origin,
+      remoteAccountId: row.remote_account_id,
+      remoteName: row.remote_name,
+      remoteEmail: row.remote_email,
+      token: row.token,
+      connectedAt: row.connected_at,
+    }
   }
 
   saveCloudConnection(input: Omit<CloudConnection, 'connectedAt'> & { connectedAt?: number }) {
     const connectedAt = input.connectedAt ?? Date.now()
+    this.db.prepare('UPDATE cloud_connections SET active = 0 WHERE local_account_id = ?').run(input.localAccountId)
     this.db
       .prepare(
         `INSERT INTO cloud_connections
-          (local_account_id, origin, remote_account_id, remote_name, remote_email, token, connected_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(local_account_id) DO UPDATE SET
-           origin = excluded.origin,
-           remote_account_id = excluded.remote_account_id,
+          (local_account_id, origin, remote_account_id, remote_name, remote_email, token, connected_at, active)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+         ON CONFLICT(local_account_id, origin, remote_account_id) DO UPDATE SET
            remote_name = excluded.remote_name,
            remote_email = excluded.remote_email,
            token = excluded.token,
-           connected_at = excluded.connected_at`,
+           connected_at = excluded.connected_at,
+           active = 1`,
       )
       .run(
         input.localAccountId,
@@ -204,7 +235,9 @@ export class AccountService extends Service {
   /** 已关联的云端身份。当前请求没有账号时，一台设备只有一条关联也可以取到。 */
   linkedCloud(localAccountId = currentAccountId()) {
     if (localAccountId) return this.cloudConnection(localAccountId)
-    const rows = this.db.prepare('SELECT local_account_id FROM cloud_connections').all() as Array<{ local_account_id: string }>
+    const rows = this.db
+      .prepare('SELECT local_account_id FROM cloud_connections WHERE active = 1')
+      .all() as Array<{ local_account_id: string }>
     if (rows.length !== 1) return null
     return this.cloudConnection(rows[0]?.local_account_id ?? '')
   }
@@ -223,9 +256,33 @@ export class AccountService extends Service {
     })
   }
 
-  removeCloudConnection(localAccountId: string) {
-    this.db.prepare('DELETE FROM cloud_connections WHERE local_account_id = ?').run(localAccountId)
+  /** 断开当前连接，保留已关联的云端账号和令牌。 */
+  disconnectCloud(localAccountId: string) {
+    this.db.prepare('UPDATE cloud_connections SET active = 0 WHERE local_account_id = ?').run(localAccountId)
     this.replica?.forget(localAccountId)
+  }
+
+  activateCloud(localAccountId: string, origin: string, remoteAccountId: string) {
+    const row = this.db
+      .prepare(
+        `SELECT token FROM cloud_connections
+         WHERE local_account_id = ? AND origin = ? AND remote_account_id = ?`,
+      )
+      .get(localAccountId, origin, remoteAccountId) as { token?: string } | undefined
+    if (!row?.token) throw new CollabError('还没有关联这个云端账号', 404)
+    this.db.prepare('UPDATE cloud_connections SET active = 0 WHERE local_account_id = ?').run(localAccountId)
+    this.db
+      .prepare(
+        `UPDATE cloud_connections SET active = 1, connected_at = ?
+         WHERE local_account_id = ? AND origin = ? AND remote_account_id = ?`,
+      )
+      .run(Date.now(), localAccountId, origin, remoteAccountId)
+    this.syncReplicaCredential(localAccountId)
+    return this.cloudConnection(localAccountId)!
+  }
+
+  removeCloudConnection(localAccountId: string) {
+    this.disconnectCloud(localAccountId)
   }
 
   workspaceLocation(workspaceId: string): 'device' | 'cloud' {
@@ -440,9 +497,17 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       if (isOnlineRuntime()) return route.send(200, { available: false, connected: false })
       const me = actor(route)
       const connection = account.cloudConnection(me.id)
+      const accounts = account.listCloudConnections(me.id).map((item) => ({
+        id: item.remoteAccountId,
+        name: item.remoteName,
+        email: item.remoteEmail,
+        origin: item.origin,
+        active: item.active,
+      }))
       route.send(200, {
         available: Boolean(configuredRemoteOrigin()),
         connected: Boolean(connection),
+        accounts,
         ...(connection
           ? {
               account: {
@@ -488,6 +553,21 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
         if (!(error instanceof CollabError) || error.status !== 409) throw error
         route.send(200, { ...(await connectCloudIdentity(local, 'login', local.email, password)), created: false })
       }
+    } catch (error) {
+      fail(route, error)
+    }
+  })
+
+  ctx.http.route('POST', '/api/account/cloud/active', async (route) => {
+    try {
+      const me = actor(route)
+      const body = (await route.json()) as { remoteAccountId?: string; origin?: string }
+      const connection = account.activateCloud(me.id, String(body.origin ?? ''), String(body.remoteAccountId ?? ''))
+      ctx.http.broadcast('database', { ts: Date.now() })
+      route.send(200, {
+        account: { id: connection.remoteAccountId, name: connection.remoteName, email: connection.remoteEmail },
+        origin: connection.origin,
+      })
     } catch (error) {
       fail(route, error)
     }

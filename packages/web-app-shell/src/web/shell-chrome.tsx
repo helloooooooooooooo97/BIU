@@ -167,8 +167,9 @@ export function ShellSettingsAccount() {
     available: boolean
     connected: boolean
     origin?: string
-    account?: { name?: string; email?: string }
-  }>({ available: false, connected: false })
+    account?: { id?: string; name?: string; email?: string }
+    accounts: Array<{ id: string; name?: string; email?: string; origin?: string; active?: boolean }>
+  }>({ available: false, connected: false, accounts: [] })
   const [cloudEmail, setCloudEmail] = useState('')
   const [cloudPassword, setCloudPassword] = useState('')
   const [cloudMessage, setCloudMessage] = useState('')
@@ -190,11 +191,14 @@ export function ShellSettingsAccount() {
           origin: typeof body.origin === 'string' ? body.origin : undefined,
           account:
             body.account && typeof body.account === 'object'
-              ? (body.account as { name?: string; email?: string })
+              ? (body.account as { id?: string; name?: string; email?: string })
               : undefined,
+          accounts: Array.isArray(body.accounts)
+            ? (body.accounts as Array<{ id: string; name?: string; email?: string; origin?: string; active?: boolean }>)
+            : [],
         }),
       )
-      .catch(() => setCloud({ available: false, connected: false }))
+      .catch(() => setCloud({ available: false, connected: false, accounts: [] }))
   useEffect(() => {
     if (!token) return
     void accountFetch(token, '/api/account/me')
@@ -220,30 +224,60 @@ export function ShellSettingsAccount() {
       <div className="settings-account-row">
         <div className="settings-account-copy">
           <p className="settings-account-label">云端账号</p>
-          {cloud.connected ? (
-            <div className="settings-account-actions">
-              <span className="settings-muted settings-account-hint">
-                {cloud.account?.name || cloud.account?.email || '已连接'}{cloud.origin ? ` · ${cloud.origin}` : ''}
-              </span>
-              <button
-                type="button"
-                className="settings-account-action"
-                onClick={() => {
-                  setCloudMessage('')
-                  void accountFetch(token, '/api/account/cloud', { method: 'DELETE' })
-                    .then(() => {
-                      setCloudPassword('')
-                      setCloudMessage('已断开云端账号，本机数据没有变化。')
-                      void loadCloud()
-                      window.dispatchEvent(new Event(ACCOUNT_EVENT))
-                    })
-                    .catch((error) => setCloudMessage(error instanceof Error ? error.message : '断开失败'))
-                }}
-              >
-                断开
-              </button>
+          <p className="settings-muted settings-account-hint">可以关联多个云端账号，同一时间连接其中一个。断开后关联记录会保留。</p>
+          {cloud.accounts.length ? (
+            <div className="settings-cloud-accounts" data-testid="settings-cloud-accounts">
+              {cloud.accounts.map((item) => (
+                <div className="settings-member-row" key={`${item.origin ?? ''} ${item.id}`}>
+                  <span className="settings-member-identity">
+                    <strong>{item.email || item.name || '云端账号'}</strong>
+                    <small>{item.active ? `已连接${item.origin ? ` · ${item.origin}` : ''}` : (item.origin || '未连接')}</small>
+                  </span>
+                  <span className="settings-member-controls">
+                    {item.active ? (
+                      <button
+                        type="button"
+                        className="settings-account-action"
+                        onClick={() => {
+                          setCloudMessage('')
+                          void accountFetch(token, '/api/account/cloud', { method: 'DELETE' })
+                            .then(() => {
+                              setCloudMessage('已断开当前云端账号，关联记录还在。')
+                              void loadCloud()
+                              window.dispatchEvent(new Event(ACCOUNT_EVENT))
+                            })
+                            .catch((error) => setCloudMessage(error instanceof Error ? error.message : '断开失败'))
+                        }}
+                      >
+                        断开
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="settings-account-action"
+                        onClick={() => {
+                          setCloudMessage('')
+                          void accountFetch(token, '/api/account/cloud/active', {
+                            method: 'POST',
+                            body: JSON.stringify({ remoteAccountId: item.id, origin: item.origin }),
+                          })
+                            .then(() => {
+                              setCloudMessage('已切换云端账号。')
+                              void loadCloud()
+                              window.dispatchEvent(new Event(ACCOUNT_EVENT))
+                            })
+                            .catch((error) => setCloudMessage(error instanceof Error ? error.message : '连接失败'))
+                        }}
+                      >
+                        连接
+                      </button>
+                    )}
+                  </span>
+                </div>
+              ))}
             </div>
-          ) : cloud.available ? (
+          ) : null}
+          {cloud.available ? (
             <div className="settings-cloud-connect">
               <form
                 className="settings-account-actions"
@@ -278,7 +312,7 @@ export function ShellSettingsAccount() {
                   onChange={(event) => setCloudPassword(event.target.value)}
                 />
                 <button className="settings-account-action" type="submit" disabled={!cloudEmail.trim() || !cloudPassword}>
-                  登录云端
+                  登录并关联
                 </button>
               </form>
               <div className="settings-cloud-sync">

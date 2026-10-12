@@ -242,8 +242,9 @@ export const BIU_TABLES: Record<string, TableSpec> = {
       'remote_email',
       'token',
       'connected_at',
+      'active',
     ],
-    indexes: [],
+    indexes: ['cloud_connections_active'],
   },
   workspace_place: {
     columns: ['workspace_id', 'place'],
@@ -293,7 +294,7 @@ export const BIU_TABLES: Record<string, TableSpec> = {
   },
 }
 
-export const LATEST_BIU_SCHEMA = 39
+export const LATEST_BIU_SCHEMA = 40
 
 export const CREATE_CORE_SQL = `
 CREATE TABLE IF NOT EXISTS pages (
@@ -661,14 +662,17 @@ CREATE TABLE IF NOT EXISTS collab_state (
   value TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS cloud_connections (
-  local_account_id TEXT PRIMARY KEY,
+  local_account_id TEXT NOT NULL,
   origin TEXT NOT NULL,
   remote_account_id TEXT NOT NULL,
   remote_name TEXT NOT NULL DEFAULT '',
   remote_email TEXT NOT NULL DEFAULT '',
   token TEXT NOT NULL,
-  connected_at INTEGER NOT NULL
+  connected_at INTEGER NOT NULL,
+  active INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (local_account_id, origin, remote_account_id)
 );
+CREATE INDEX IF NOT EXISTS cloud_connections_active ON cloud_connections(local_account_id, active);
 CREATE TABLE IF NOT EXISTS workspace_place (
   workspace_id TEXT PRIMARY KEY,
   place TEXT NOT NULL
