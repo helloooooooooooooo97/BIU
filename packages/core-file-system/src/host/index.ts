@@ -3180,7 +3180,7 @@ export function apply(ctx: Context) {
         return
       }
       const created = await db.create(String(body?.path ?? ''), body?.records ?? body?.content, {
-        scope: activeLocation === 'device' ? 'local' : scope,
+        scope: activeLocation === 'device' && scope !== 'shared' ? 'local' : scope,
       })
       route.send(200, created)
     } catch (error) {
@@ -3343,7 +3343,7 @@ export function apply(ctx: Context) {
       route.send(404, { error: 'not found' })
       return
     }
-    const share = shares.find(kind, collection, viewId, recordId)
+    const share = kind === 'record' ? shares.findRecord(collection, recordId) : shares.find(kind, collection, viewId, recordId)
     const resources = await sharePreviewOf(kind, collection, viewId, recordId)
     route.send(200, {
       share: share ? { ...share, url: publicShareUrl(route.req, share.token) } : null,
@@ -3408,7 +3408,8 @@ export function apply(ctx: Context) {
         return
       }
       if (body.enabled === false) {
-        shares.revokeTarget(kind, collection, body.viewId ?? '', body.recordId ?? '')
+        if (kind === 'record') shares.revokeRecord(collection, recordId)
+        else shares.revokeTarget(kind, collection, body.viewId ?? '', body.recordId ?? '')
         route.send(200, { share: null })
         return
       }

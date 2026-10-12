@@ -1932,7 +1932,11 @@ test('desktop records keep personal and workspace ownership', async () => {
     assert.equal(local.kind === 'created' && local.items[0]?.value.shareScope, '私人')
     const shared = await runWithAccount(ada.id, () => db.create('/docs', [{ title: '局域网' }], { scope: 'shared' }))
     assert.equal(shared.kind === 'created' && shared.items[0]?.value.shareScope, '共享')
-    if (shared.kind === 'created') assert.equal(localIds.has(String(shared.items[0]?.value.id)), true)
+    if (shared.kind === 'created') {
+      const id = String(shared.items[0]?.value.id)
+      assert.equal(localIds.has(id), true)
+      assert.ok(db.shares.findRecord('/docs', id))
+    }
     rows.set('side-created', { id: 'side-created', title: '旁路创建' })
     await runWithAccount(ada.id, () => db.touchActor('/docs', 'side-created'))
     assert.equal(localIds.has('side-created'), true)
