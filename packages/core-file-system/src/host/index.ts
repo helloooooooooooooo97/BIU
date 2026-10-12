@@ -745,6 +745,25 @@ export class DatabaseService extends Service implements Database {
     return [...this.collections.values()].sort((a, b) => a.path.localeCompare(b.path))
   }
 
+  /** 成员只出现在云端空间的系统数据里。本地空间不提供这张表。 */
+  membersInSystemData() {
+    if (isOnlineRuntime()) return true
+    const workspaceId = this.collabStore()?.activeWorkspaceId?.() ?? ''
+    if (!workspaceId) return false
+    try {
+      const account = this.ctx.get('account') as { workspaceLocation?: (id: string) => string } | undefined
+      return account?.workspaceLocation?.(workspaceId) === 'cloud'
+    } catch {
+      return false
+    }
+  }
+
+  publishCollection(item: CollectionSpec): CollectionInfo {
+    const info = publicCollection(item)
+    if (item.path === '/workspace-members' && !this.membersInSystemData()) return { ...info, view: null }
+    return info
+  }
+
   private async loadCollectionRows(spec: CollectionSpec, query: CollectionListQuery) {
     this.ownershipCache = null
     this.ownerCache = null
@@ -1203,7 +1222,7 @@ export class DatabaseService extends Service implements Database {
       return {
         kind: 'root' as const,
         path: '/',
-        collections: this.collectionsList().map(publicCollection),
+        collections: this.collectionsList().map((item) => this.publishCollection(item)),
       }
     }
     const spec = this.collection(`/${parts[0]}`)
@@ -1276,7 +1295,7 @@ export class DatabaseService extends Service implements Database {
       return {
         kind: 'root' as const,
         path: '/',
-        items: this.collectionsList().map(publicCollection),
+        items: this.collectionsList().map((item) => this.publishCollection(item)),
       }
     }
     if (parts.length !== 1) throw new Error(`cannot list: ${normalizeCollectionPath(path)}`)
@@ -2591,13 +2610,7 @@ export function apply(ctx: Context) {
   const shares = db.shares
   shares.open(process.env.VITEST ? ':memory:' : biuSqlitePath())
   const facets = db.facets
-  db.register(viewsCollection(savedViews, () => db.collectionsList().map((item) => ({
-    id: item.id,
-    path: item.path,
-    kind: 'collection' as const,
-    label: item.label ?? item.id,
-    view: item.view ?? null,
-  })), () => currentAccountId()))
+  db.register(viewsCollection(savedViews, () => db.collectionsList().map((item) => db.publishCollection(item)), () => currentAccountId()))
   db.register(facetsCollection(facets, () => db.collectionsList().map((item) => ({
     id: item.id,
     path: item.path,
