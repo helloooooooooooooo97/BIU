@@ -254,6 +254,43 @@ test('local account requests keep the linked cloud credential', async () => {
   }
 })
 
+test('restart resumes a saved cloud link without asking for the password again', async () => {
+  const previousOnline = process.env.BIU_ONLINE
+  const previousOrigin = process.env.BIU_REMOTE_ORIGIN
+  process.env.BIU_ONLINE = '0'
+  process.env.BIU_REMOTE_ORIGIN = 'http://127.0.0.1:9'
+  const dir = mkdtempSync(join(tmpdir(), 'biu-cloud-resume-'))
+  dirs.push(dir)
+  const sqlitePath = join(dir, 'biu.sqlite')
+  const first = new Context()
+  const saved = new account.AccountService(first, { sqlitePath })
+  const ada = saved.store.register('', Date.now(), 'secret1', 'resume-ada@example.com')
+  saved.saveCloudConnection({
+    localAccountId: ada.id,
+    origin: 'http://127.0.0.1:9',
+    remoteAccountId: 'remote-ada',
+    remoteName: 'Ada',
+    remoteEmail: 'resume-ada@example.com',
+    token: 'cloud-token',
+  })
+  saved.replica?.remember({ accountId: ada.id, workspaceId: 'cloud-ws', token: 'cloud-token' })
+  first.emit('dispose')
+
+  const second = new Context()
+  const resumed = new account.AccountService(second, { sqlitePath })
+  try {
+    assert.equal(resumed.cloudConnection(ada.id)?.token, 'cloud-token')
+    assert.equal(resumed.replica?.active()?.token, 'cloud-token')
+    assert.equal(resumed.replica?.active()?.workspaceId, 'cloud-ws')
+  } finally {
+    second.emit('dispose')
+    if (previousOnline === undefined) delete process.env.BIU_ONLINE
+    else process.env.BIU_ONLINE = previousOnline
+    if (previousOrigin === undefined) delete process.env.BIU_REMOTE_ORIGIN
+    else process.env.BIU_REMOTE_ORIGIN = previousOrigin
+  }
+})
+
 test('a finished session is queued and a second account is not required', async () => {
   const { replica, ada, workspace } = pair()
   const queued = replica.enqueueFinishedSession({
