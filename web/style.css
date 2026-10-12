@@ -1737,19 +1737,23 @@ body {
 }
 
 .shell-workspace-menu-account button {
+  display: grid;
   flex: none;
-  height: auto;
+  width: 16px;
+  height: 16px;
   margin: 0;
+  place-items: center;
   border: 0;
-  border-radius: 6px;
+  border-radius: 4px;
   padding: 0;
   background: transparent;
-  color: var(--dsw-label-3);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1;
+  color: var(--dsw-label-2);
   cursor: pointer;
+}
+
+.shell-workspace-menu-account button svg {
+  width: 16px;
+  height: 16px;
 }
 
 .shell-workspace-menu-account button:hover {
