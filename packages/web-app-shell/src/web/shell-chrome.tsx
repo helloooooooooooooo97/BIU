@@ -817,7 +817,6 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
                     <strong>{workspace.name}</strong>
                   </span>
                   <small className="shell-workspace-menu-role">{workspaceRoleLabel(workspace.role)}</small>
-                  {workspace.id === active ? <CheckIcon className="size-4" /> : null}
                 </button>
               )
             })}

@@ -172,6 +172,7 @@ test('account settings are global and workspace switcher lives in the sidebar he
   assert.match(menuText, /Notes/)
   assert.match(menuText, /查看者/)
   assert.doesNotMatch(menuText, /切换空间|本机空间|云端空间|仅保存在这台设备/)
+  assert.equal(screen.getByRole('menuitemradio', { checked: true }).querySelectorAll('svg').length, 1)
   const css = readFileSync(resolve(import.meta.dirname, '../../../../web/style.css'), 'utf8')
   assert.match(css, /\.shell-workspace-menu-item\s*\{[^}]*align-items:\s*center/s)
   assert.match(css, /\.shell-workspace-menu-role\s*\{[^}]*font-size:\s*13px/s)
