@@ -1,6 +1,8 @@
 node_modules/
 dist/
 .biu/
+.cloud-data/
+.local-data/
 .desktop-data/
 .cordis/
 # 已安装插件是本地产物，整目录不入库

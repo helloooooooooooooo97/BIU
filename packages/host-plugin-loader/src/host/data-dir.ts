@@ -271,7 +271,7 @@ export function adoptPackedUserData(fromRoot: string, dataRoot = dataHome(), wor
   for (const name of ['.plugin', '.plugin-dev', '.workspace']) {
     copyMerge(join(from, name), join(workspace, name))
   }
-  // 开发仓库的根目录同时是云端数据。本机 BIU_HOME 只能复制，不能把这份 .biu 删掉。
+  // 开发仓库根目录如果还有旧的 .biu，本机 BIU_HOME 只能复制，不能删掉。
   const liveCheckout = existsSync(join(from, 'package.json')) && existsSync(join(from, 'packages'))
   if (!liveCheckout) {
     for (const name of [DATA_DIR_NAME, LEGACY_DATA_DIR_NAME, LEGACY_PAGE_ROOT]) {
