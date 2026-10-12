@@ -2590,6 +2590,21 @@ body {
   cursor: default;
 }
 
+.settings-account-action.is-danger {
+  border-color: transparent;
+  background: #c2410c;
+  color: #fff;
+}
+
+.settings-account-action.is-danger:hover:not(:disabled) {
+  background: #9a3412;
+}
+
+.settings-account-action.is-danger:disabled {
+  background: var(--dsw-hover);
+  color: var(--dsw-label-3);
+}
+
 .settings-account-id {
   max-width: 168px;
   overflow: hidden;

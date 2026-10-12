@@ -922,6 +922,7 @@ export function ShellSettingsCollab({ panel = 'members' }: { panel?: 'workspace'
   const [workspaceInviteUrl, setWorkspaceInviteUrl] = useState('')
   const [presence, setPresence] = useState<CollabPresence[]>([])
   const [pendingRemove, setPendingRemove] = useState<CollabMember | null>(null)
+  const [deleteName, setDeleteName] = useState('')
   const [error, setError] = useState('')
 
   const remember = (next: string) => {
@@ -960,6 +961,7 @@ export function ShellSettingsCollab({ panel = 'members' }: { panel?: 'workspace'
         setWorkspaces(rows)
         setWorkspaceId(nextWorkspaceId)
         setWorkspaceName(rows.find((row) => row.id === nextWorkspaceId)?.name ?? '')
+        setDeleteName('')
         setError('')
       } catch (err) {
         if (gone) return
@@ -979,8 +981,11 @@ export function ShellSettingsCollab({ panel = 'members' }: { panel?: 'workspace'
     })
   }, [panel, token, workspaceId, loadWorkspace])
 
-  const workspaceRole = workspaces.find((row) => row.id === workspaceId)?.role
+  const currentWorkspace = workspaces.find((row) => row.id === workspaceId)
+  const workspaceRole = currentWorkspace?.role
+  const savedWorkspaceName = currentWorkspace?.name ?? ''
   const canManage = workspaceRole === 'owner' || workspaceRole === 'admin'
+  const canDeleteWorkspace = workspaceRole === 'owner'
   const canChangeRoles = workspaceRole === 'owner'
   const removePendingMember = () => {
     if (!pendingRemove) return
@@ -1008,6 +1013,7 @@ export function ShellSettingsCollab({ panel = 'members' }: { panel?: 'workspace'
       </header>
       {error ? <p className="settings-account-error" data-testid="settings-collab-error">{error}</p> : null}
       {panel === 'workspace' ? (
+      <>
       <form
         className="settings-account-row"
         onSubmit={(event) => {
@@ -1053,6 +1059,59 @@ export function ShellSettingsCollab({ panel = 'members' }: { panel?: 'workspace'
           </button>
         </div>
       </form>
+      {canDeleteWorkspace ? (
+      <form
+        className="settings-account-row"
+        onSubmit={(event) => {
+          event.preventDefault()
+          if (!token || !workspaceId || deleteName !== savedWorkspaceName) return
+          void accountFetch(token, `/api/account/workspaces/${workspaceId}`, {
+            method: 'DELETE',
+            body: JSON.stringify({ name: deleteName }),
+          })
+            .then((body) => {
+              const nextId = String((body as { activeWorkspaceId?: string }).activeWorkspaceId ?? '')
+              setWorkspaces((rows) => {
+                const remaining = rows.filter((row) => row.id !== workspaceId)
+                setWorkspaceName(remaining.find((row) => row.id === nextId)?.name ?? '')
+                return remaining
+              })
+              setWorkspaceId(nextId)
+              setDeleteName('')
+              setError('')
+              window.dispatchEvent(new Event(ACCOUNT_EVENT))
+            })
+            .catch((err) => setError(err instanceof Error ? err.message : '删除空间失败'))
+        }}
+      >
+        <div className="settings-account-copy">
+          <label className="settings-account-label" htmlFor="settings-workspace-delete-name">删除空间</label>
+          <p className="settings-muted settings-account-hint">
+            删除后无法恢复。请重新输入空间名称「{savedWorkspaceName}」确认。该空间下的页面、任务、会话和其他数据会永久删除。
+          </p>
+        </div>
+        <div className="settings-account-actions">
+          <input
+            id="settings-workspace-delete-name"
+            className="settings-account-input"
+            value={deleteName}
+            maxLength={40}
+            placeholder="输入空间名称"
+            data-testid="settings-workspace-delete-name"
+            onChange={(event) => setDeleteName(event.target.value)}
+          />
+          <button
+            type="submit"
+            className="settings-account-action is-danger"
+            disabled={!token || !workspaceId || deleteName !== savedWorkspaceName}
+            data-testid="settings-workspace-delete"
+          >
+            删除空间
+          </button>
+        </div>
+      </form>
+      ) : null}
+      </>
       ) : null}
       {panel === 'members' ? (
       <>
