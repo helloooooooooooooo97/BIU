@@ -1,30 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 
-const DEMOS = [
-  {
-    id: 'research',
-    label: '深度研究',
-    title: '新能源汽车出海研究',
-    prompt: '整理主要市场、竞品和政策，生成一份可以继续编辑的研究报告。',
-    steps: ['读取空间中的 8 份资料', '检索市场与政策信息', '建立竞品对比数据库', '写入研究结论'],
-    output: '研究报告已更新 · 竞品表新增 24 条记录',
-  },
-  {
-    id: 'product',
-    label: '产品规划',
-    title: '移动端产品迭代',
-    prompt: '分析用户反馈，整理高频问题并生成下一版本的产品计划。',
-    steps: ['读取 326 条用户反馈', '归纳问题与使用场景', '按影响程度排列优先级', '创建版本任务'],
-    output: '版本计划已创建 · 12 项任务等待确认',
-  },
-  {
-    id: 'content',
-    label: '内容创作',
-    title: '新品发布内容',
-    prompt: '根据品牌资料和产品页面，准备发布文章、社交文案与素材清单。',
-    steps: ['读取品牌规范与产品资料', '生成内容叙事结构', '撰写三种渠道版本', '整理素材与发布计划'],
-    output: '发布方案已完成 · 3 份内容可继续编辑',
-  },
+const PRODUCT_SURFACES = [
+  { id: 'page', label: '页面', path: '/pages?landingPreview=1' },
+  { id: 'database', label: '数据库', path: '/database?landingPreview=1' },
+  { id: 'chat', label: '会话', path: '/?landingPreview=1' },
 ] as const
 
 const SOLUTIONS = [
@@ -39,8 +18,8 @@ const SOLUTIONS = [
 export function MarketingHome({ onLogin, onStart }: { onLogin: () => void; onStart: () => void }) {
   const siteRef = useRef<HTMLDivElement>(null)
   const [task, setTask] = useState('')
-  const [activeDemo, setActiveDemo] = useState(0)
-  const demo = DEMOS[activeDemo]!
+  const [activeSurface, setActiveSurface] = useState(0)
+  const surface = PRODUCT_SURFACES[activeSurface]!
 
   useEffect(() => {
     const root = siteRef.current
@@ -125,47 +104,32 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: () => void; onSta
             <p className="site-section-label">从任务到结果</p>
             <h2>看见 BIU 如何工作。</h2>
             <div className="site-demo-tabs" role="tablist" aria-label="产品演示">
-              {DEMOS.map((item, index) => (
+              {PRODUCT_SURFACES.map((item, index) => (
                 <button
                   type="button"
                   role="tab"
-                  aria-selected={activeDemo === index}
-                  className={activeDemo === index ? 'is-active' : ''}
+                  aria-selected={activeSurface === index}
+                  className={activeSurface === index ? 'is-active' : ''}
                   key={item.id}
-                  onClick={() => setActiveDemo(index)}
+                  onClick={() => setActiveSurface(index)}
                 >
                   {item.label}
                 </button>
               ))}
             </div>
           </div>
-          <div className="site-demo-shell">
-            <aside className="site-demo-sidebar">
-              <strong>BIU</strong>
-              <span className="is-current">⌁　{demo.title}</span>
-              <span>□　页面</span>
-              <span>▦　数据库</span>
-              <span>◌　会话</span>
-            </aside>
-            <div className="site-demo-document">
-              <div className="site-demo-toolbar"><span>空间 / {demo.label}</span><i>•••</i></div>
-              <p className="site-demo-kicker">{demo.label}</p>
-              <h3>{demo.title}</h3>
-              <div className="site-demo-lines"><span /><span /><span /></div>
-              <div className="site-demo-table">
-                <span>项目</span><span>状态</span><span>更新时间</span>
-                <strong>核心资料</strong><em>已读取</em><small>刚刚</small>
-                <strong>分析结果</strong><em>已更新</em><small>刚刚</small>
-              </div>
+          <div className="site-demo-real-frame">
+            <div className="site-demo-browser-bar" aria-hidden>
+              <i /><i /><i />
+              <span>BIU · {surface.label}</span>
+              <em>真实产品界面 · 无用户数据</em>
             </div>
-            <aside className="site-demo-agent">
-              <p>交给 BIU</p>
-              <blockquote>{demo.prompt}</blockquote>
-              <ol>
-                {demo.steps.map((step, index) => <li key={step}><i>✓</i><span>{step}</span><small>{index + 1}</small></li>)}
-              </ol>
-              <div className="site-demo-result"><i>✓</i><span>{demo.output}</span></div>
-            </aside>
+            <iframe
+              key={surface.id}
+              src={surface.path}
+              title={`BIU ${surface.label}界面预览`}
+              tabIndex={-1}
+            />
           </div>
         </section>
 

@@ -12,6 +12,7 @@ import {
   ShellSettingsWorkspace,
   ShellWorkspaceSwitcher,
   defaultSessionPath,
+  readAccountToken,
 } from './shell-chrome.tsx'
 
 afterEach(() => cleanup())
@@ -47,6 +48,20 @@ test('the app stays on the login gate until a token exists', async () => {
   await waitFor(() => assert.equal(screen.getByTestId('inside').textContent, 'in'))
   assert.equal(calls.includes('/api/account/me'), true)
   cleanup()
+})
+
+test('landing preview renders the real app shell without reading account data', () => {
+  localStorage.setItem('biu.account.token', 'private-token')
+  window.history.replaceState({}, '', '/?landingPreview=1')
+  assert.equal(readAccountToken(), '')
+  render(
+    <AuthGate>
+      <div data-testid="preview-shell">real shell</div>
+    </AuthGate>,
+  )
+  assert.equal(screen.getByTestId('preview-shell').textContent, 'real shell')
+  window.history.replaceState({}, '', '/')
+  localStorage.clear()
 })
 
 test('a stale workspace does not send the user back to login after they sign in', async () => {

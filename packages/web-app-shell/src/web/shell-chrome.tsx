@@ -32,16 +32,21 @@ import { getPagePrefs, hydratePagePrefs, subscribePageWidth } from '@biu/core-fi
 import { MarketingHome } from './marketing-home.tsx'
 import { clearWorkspaceId, readWorkspaceId, writeWorkspaceId } from './tenant-fetch.ts'
 
+function isLandingPreview() {
+  return typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('landingPreview') === '1'
+}
+
 if (typeof window !== 'undefined') {
   const originalFetch = window.fetch.bind(window)
   window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
-    const token = localStorage.getItem('biu.account.token') ?? ''
-    const workspaceId = readWorkspaceId()
-    if (!token && !workspaceId) return originalFetch(input, init)
+    const preview = isLandingPreview()
+    const token = preview ? '' : (localStorage.getItem('biu.account.token') ?? '')
+    const workspaceId = preview ? '' : readWorkspaceId()
+    if (!token && !workspaceId && !preview) return originalFetch(input, init)
     const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined))
     if (token && !headers.has('authorization')) headers.set('authorization', `Bearer ${token}`)
     if (workspaceId && !headers.has('x-biu-workspace-id')) headers.set('x-biu-workspace-id', workspaceId)
-    return originalFetch(input, { ...init, headers })
+    return originalFetch(input, { ...init, credentials: preview ? 'omit' : init?.credentials, headers })
   }
 }
 
@@ -437,6 +442,7 @@ bridgeLegacyAccountCookie()
 
 export function readAccountToken() {
   if (typeof localStorage === 'undefined') return ''
+  if (isLandingPreview()) return ''
   return localStorage.getItem(ACCOUNT_KEY) ?? ''
 }
 
@@ -527,6 +533,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     }
   }, [token, verified, workspaceInvite])
 
+  if (isLandingPreview()) return children
   if (token && verified && !joining) return children
   if (!token && !authOpen && !guestInvite && !workspaceInvite) {
     return (
