@@ -253,7 +253,7 @@ test('workspace creation uses centered local and online cards with default names
   await waitFor(() => assert.deepEqual(createBodies[1], { name: '在线空间', location: 'cloud' }))
 
   const css = readFileSync(resolve(import.meta.dirname, '../../../../web/style.css'), 'utf8')
-  assert.match(css, /\.shell-workspace-switcher\s*\{[^}]*font-size:\s*13px;[^}]*font-weight:\s*500;/s)
+  assert.match(css, /\.shell-workspace-switcher\s*\{[^}]*font-size:\s*14px;[^}]*font-weight:\s*500;/s)
   assert.match(css, /\.shell-workspace-create-overlay\s*\{[^}]*position:\s*fixed;[^}]*place-items:\s*center;/s)
 })
 
