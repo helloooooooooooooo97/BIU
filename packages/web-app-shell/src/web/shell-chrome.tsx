@@ -750,6 +750,7 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
   const [creatingLocation, setCreatingLocation] = useState<'device' | 'cloud' | null>(null)
   const [createError, setCreateError] = useState('')
   const [localAccount, setLocalAccount] = useState('')
+  const [hostOnline, setHostOnline] = useState(false)
   const [cloudAccounts, setCloudAccounts] = useState<Array<{ id: string; email?: string; name?: string; origin?: string; active?: boolean }>>([])
   const [cloudMenuOpen, setCloudMenuOpen] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -764,7 +765,7 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
         const [listed, current, me, cloud] = await Promise.all([
           accountFetch(token, '/api/account/workspaces') as Promise<{ workspaces?: CollabWorkspace[] }>,
           accountFetch(token, '/api/account/active') as Promise<{ workspaceId?: string }>,
-          accountFetch(token, '/api/account/me') as Promise<{ email?: string; name?: string }>,
+          accountFetch(token, '/api/account/me') as Promise<{ email?: string; name?: string; online?: boolean }>,
           accountFetch(token, '/api/account/cloud').catch(() => ({})) as Promise<{
             accounts?: Array<{ id: string; email?: string; name?: string; origin?: string; active?: boolean }>
           }>,
@@ -775,6 +776,7 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
         setActive(workspaceId)
         if (workspaceId) writeWorkspaceId(workspaceId)
         setLocalAccount(String(me.email || me.name || ''))
+        setHostOnline(me.online === true)
         setCloudAccounts(Array.isArray(cloud.accounts) ? cloud.accounts : [])
       } catch {
         if (!cancelled) setWorkspaces([])
@@ -910,38 +912,47 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
               <Cog6ToothIcon className="size-4" />
               <span>空间设置</span>
             </button>
-            <div className="shell-workspace-menu-account" data-testid="shell-workspace-local-account">
-              <ComputerDesktopIcon aria-hidden />
-              <span className="shell-workspace-menu-copy">
-                <strong>{localAccount || '本机账号'}</strong>
-              </span>
-              <button
-                type="button"
-                aria-label="退出"
-                data-testid="shell-workspace-local-logout"
-                onClick={() => {
-                  setOpen(false)
-                  writeAccountToken('')
-                }}
-              >
-                <ArrowRightStartOnRectangleIcon aria-hidden />
-              </button>
-            </div>
+            {hostOnline ? null : (
+              <div className="shell-workspace-menu-account" data-testid="shell-workspace-local-account">
+                <ComputerDesktopIcon aria-hidden />
+                <span className="shell-workspace-menu-copy">
+                  <strong>{localAccount || '本机账号'}</strong>
+                </span>
+                <button
+                  type="button"
+                  aria-label="退出"
+                  data-testid="shell-workspace-local-logout"
+                  onClick={() => {
+                    setOpen(false)
+                    writeAccountToken('')
+                  }}
+                >
+                  <ArrowRightStartOnRectangleIcon aria-hidden />
+                </button>
+              </div>
+            )}
             <div className="shell-workspace-menu-account" data-testid="shell-workspace-cloud-account">
               <CloudIcon aria-hidden />
               <span className="shell-workspace-menu-copy">
-                <strong className={cloudAccounts.some((item) => item.active) ? '' : 'is-empty'}>
-                  {cloudAccounts.find((item) => item.active)?.email
-                    || cloudAccounts.find((item) => item.active)?.name
-                    || '暂时无账号'}
+                <strong className={!hostOnline && !cloudAccounts.some((item) => item.active) ? 'is-empty' : ''}>
+                  {hostOnline
+                    ? (localAccount || '云端账号')
+                    : (cloudAccounts.find((item) => item.active)?.email
+                      || cloudAccounts.find((item) => item.active)?.name
+                      || '暂时无账号')}
                 </strong>
               </span>
               <span className="shell-workspace-menu-account-actions">
                 <button
                   type="button"
-                  aria-label="退出云端账号"
+                  aria-label="退出"
                   data-testid="shell-workspace-cloud-logout"
                   onClick={() => {
+                    if (hostOnline) {
+                      setOpen(false)
+                      writeAccountToken('')
+                      return
+                    }
                     const token = readAccountToken()
                     void accountFetch(token, '/api/account/cloud', { method: 'DELETE' })
                       .then(() => window.dispatchEvent(new Event(ACCOUNT_EVENT)))
@@ -950,22 +961,24 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
                 >
                   <ArrowRightStartOnRectangleIcon aria-hidden />
                 </button>
-                <button
-                  ref={cloudExpandRef}
-                  type="button"
-                  aria-label="更多在线账号"
-                  aria-expanded={cloudMenuOpen}
-                  data-testid="shell-workspace-cloud-expand"
-                  onClick={() => setCloudMenuOpen((value) => !value)}
-                >
-                  <ChevronRightIcon aria-hidden />
-                </button>
+                {hostOnline ? null : (
+                  <button
+                    ref={cloudExpandRef}
+                    type="button"
+                    aria-label="更多在线账号"
+                    aria-expanded={cloudMenuOpen}
+                    data-testid="shell-workspace-cloud-expand"
+                    onClick={() => setCloudMenuOpen((value) => !value)}
+                  >
+                    <ChevronRightIcon aria-hidden />
+                  </button>
+                )}
               </span>
             </div>
           </div>
         </AnchorMenu>
       ) : null}
-      {open && cloudMenuOpen ? (
+      {open && cloudMenuOpen && !hostOnline ? (
         <AnchorMenu
           anchor={cloudExpandRef.current}
           onClose={() => setCloudMenuOpen(false)}

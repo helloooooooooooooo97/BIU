@@ -753,7 +753,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   ctx.http.route('GET', '/api/account/me', async (route) => {
     try {
       const me = actor(route)
-      route.send(200, me)
+      route.send(200, { ...me, online: isOnlineRuntime() })
     } catch (error) {
       fail(route, error)
     }

@@ -237,6 +237,23 @@ test('account settings are global and workspace switcher lives in the sidebar he
   assert.equal(screen.getByTestId('shell-workspace-cloud-accounts').textContent, '暂无在线账号')
   fireEvent.click(screen.getByText('空间设置'))
   assert.equal(settingsOpened, true)
+  cleanup()
+
+  globalThis.fetch = (async (path: string) => {
+    const url = String(path)
+    if (url.endsWith('/me')) return json({ id: 'acc_1', email: 'ada@example.com', online: true })
+    if (url.endsWith('/active')) return json({ workspaceId: 'ws_1' })
+    if (url.endsWith('/workspaces')) return json({ workspaces: [{ id: 'ws_1', name: 'Main', role: 'owner', location: 'cloud' }] })
+    if (url.endsWith('/cloud')) return json({ available: false, connected: false })
+    return json({})
+  }) as typeof fetch
+  render(<ShellWorkspaceSwitcher />)
+  fireEvent.click(await screen.findByTestId('shell-workspace-switcher'))
+  const onlineMenu = await screen.findByTestId('shell-workspace-menu')
+  assert.equal(screen.queryByTestId('shell-workspace-local-account'), null)
+  assert.equal(screen.getByTestId('shell-workspace-cloud-account').textContent, 'ada@example.com')
+  assert.equal(screen.queryByTestId('shell-workspace-cloud-expand'), null)
+  assert.equal(onlineMenu.querySelectorAll('.shell-workspace-cloud-accounts').length, 0)
 })
 
 test('account settings can create and link a cloud account from the local identity', async () => {
