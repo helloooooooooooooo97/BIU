@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import type { Context } from 'cordis'
-import { isOnlineRuntime, runWithAccount, runWithRequestWorkspace } from '@biu/host-plugin-loader/data-dir'
+import { currentAccountId, isOnlineRuntime, runWithAccount, runWithRequestWorkspace } from '@biu/host-plugin-loader/data-dir'
 import type { SessionRecord } from '@biu/type-session'
 
 export type MirrorSnapshot = {
@@ -32,6 +32,7 @@ type AccountLike = {
   copiedCloud?: (collection: string, id: string) => string
   rememberCopy?: (collection: string, localId: string, cloudId: string) => void
   replica?: { active?: () => { token?: string; accountId?: string } | null }
+  linkedCloud?: (localAccountId?: string) => { origin: string; token: string } | null
 }
 
 function sessionsOf(ctx: Context) {
@@ -195,9 +196,14 @@ function cloudLogin(ctx: Context) {
   const origin = process.env.BIU_REMOTE_ORIGIN?.replace(/\/$/, '')
   if (isOnlineRuntime() || !origin) return null
   const account = accountOf(ctx)
-  const token = account?.replica?.active?.()?.token
+  const linked = account?.linkedCloud?.()
+  const token = linked?.token || ''
   if (!token) throw new Error('需要登录云端才能分享')
-  return { origin, token, accountId: account?.replica?.active?.()?.accountId || '' }
+  return {
+    origin: linked?.origin || origin,
+    token,
+    accountId: currentAccountId() || account?.replica?.active?.()?.accountId || '',
+  }
 }
 
 export async function publishToCloud(ctx: Context, collection: string, ids: string[]) {
