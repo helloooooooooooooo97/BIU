@@ -1651,6 +1651,23 @@ body {
   background: var(--dsw-hover);
 }
 
+html:not(.dark) .shell-workspace-menu .shell-workspace-menu-icon,
+html:not(.dark) .shell-workspace-menu-action svg,
+html:not(.dark) .shell-workspace-menu-account > svg,
+html:not(.dark) .shell-workspace-menu-account button,
+html:not(.dark) .shell-workspace-menu-account-actions button {
+  color: #91918e;
+}
+
+html:not(.dark) .shell-workspace-menu-item:hover .shell-workspace-menu-icon,
+html:not(.dark) .shell-workspace-menu-item.is-active .shell-workspace-menu-icon,
+html:not(.dark) .shell-workspace-menu-action:hover svg,
+html:not(.dark) .shell-workspace-menu-account:hover > svg,
+html:not(.dark) .shell-workspace-menu-account button:hover,
+html:not(.dark) .shell-workspace-menu-account-actions button:hover {
+  color: var(--dsw-label);
+}
+
 .shell-workspace-menu-copy {
   display: flex;
   min-width: 0;
@@ -1747,12 +1764,12 @@ body {
 .shell-workspace-menu-account-actions button {
   display: grid;
   flex: none;
-  width: 16px;
-  height: 16px;
-  margin: 0;
+  width: 22px;
+  height: 22px;
+  margin: -3px;
   place-items: center;
   border: 0;
-  border-radius: 4px;
+  border-radius: 6px;
   padding: 0;
   background: transparent;
   color: var(--dsw-label-2);
@@ -1761,6 +1778,7 @@ body {
 
 .shell-workspace-menu-account button svg,
 .shell-workspace-menu-account-actions button svg {
+  display: block;
   width: 16px;
   height: 16px;
 }
