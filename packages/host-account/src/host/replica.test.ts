@@ -484,3 +484,74 @@ test('the cloud server creates an online workspace for the signed-in account', a
     else process.env.BIU_ONLINE = previousOnline
   }
 })
+
+test('disconnecting the cloud hides its workspaces from the desktop list', async () => {
+  const previousOnline = process.env.BIU_ONLINE
+  const previousOrigin = process.env.BIU_REMOTE_ORIGIN
+  process.env.BIU_ONLINE = '0'
+  const remote = createServer((req, res) => {
+    const path = req.url ?? ''
+    res.setHeader('content-type', 'application/json')
+    if (path === '/api/account/login') {
+      res.end(JSON.stringify({ id: 'remote-ada', name: 'ada@example.com', token: 'remote-token', workspaceId: 'cloud-ws' }))
+      return
+    }
+    if (path === '/api/account/workspaces') {
+      res.end(JSON.stringify({ workspaces: [{ id: 'cloud-ws', name: '在线空间', role: 'owner' }] }))
+      return
+    }
+    res.statusCode = 404
+    res.end(JSON.stringify({ error: 'not found' }))
+  })
+  await new Promise<void>((resolve, reject) => {
+    remote.once('error', reject)
+    remote.listen(0, '127.0.0.1', () => resolve())
+  })
+  const remoteAddress = remote.address()
+  assert.ok(remoteAddress && typeof remoteAddress !== 'string')
+  process.env.BIU_REMOTE_ORIGIN = `http://127.0.0.1:${remoteAddress.port}`
+  const dir = mkdtempSync(join(tmpdir(), 'biu-cloud-hidden-'))
+  dirs.push(dir)
+  const publicDir = join(dir, 'public')
+  mkdirSync(publicDir)
+  writeFileSync(join(publicDir, 'index.html'), '<html></html>')
+  const ctx = new Context()
+  const ready = new Promise<number>((resolve) => ctx.on('http/ready', ({ port }) => resolve(port)))
+  const httpFiber = await ctx.plugin(http, { port: 0, host: '127.0.0.1', publicDir, sharePort: 0 })
+  const accountFiber = await ctx.plugin(account, { sqlitePath: join(dir, 'local.sqlite') })
+  const port = await ready
+  const origin = `http://127.0.0.1:${port}`
+  try {
+    const registered = (await fetch(`${origin}/api/account/register`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'ada@example.com', password: 'secret1' }),
+    }).then((res) => res.json())) as { token: string }
+    const headers = { authorization: `Bearer ${registered.token}`, 'content-type': 'application/json' }
+    assert.equal((await fetch(`${origin}/api/account/cloud/login`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ email: 'ada@example.com', password: 'secret1' }),
+    })).status, 200)
+    const connected = (await fetch(`${origin}/api/account/workspaces`, { headers }).then((res) => res.json())) as {
+      workspaces: Array<{ location: string; name: string }>
+    }
+    assert.equal(connected.workspaces.some((workspace) => workspace.location === 'cloud' && workspace.name === '在线空间'), true)
+    assert.equal((await fetch(`${origin}/api/account/cloud`, { method: 'DELETE', headers })).status, 200)
+    const hidden = (await fetch(`${origin}/api/account/workspaces`, { headers }).then((res) => res.json())) as {
+      workspaces: Array<{ location: string }>
+      cloudConnected: boolean
+    }
+    assert.equal(hidden.cloudConnected, false)
+    assert.equal(hidden.workspaces.some((workspace) => workspace.location === 'cloud'), false)
+    assert.equal(hidden.workspaces.some((workspace) => workspace.location === 'device'), true)
+  } finally {
+    await accountFiber.dispose()
+    await httpFiber.dispose()
+    await new Promise<void>((resolve, reject) => remote.close((error) => (error ? reject(error) : resolve())))
+    if (previousOnline === undefined) delete process.env.BIU_ONLINE
+    else process.env.BIU_ONLINE = previousOnline
+    if (previousOrigin === undefined) delete process.env.BIU_REMOTE_ORIGIN
+    else process.env.BIU_REMOTE_ORIGIN = previousOrigin
+  }
+})
