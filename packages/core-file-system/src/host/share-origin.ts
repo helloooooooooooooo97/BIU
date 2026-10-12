@@ -14,10 +14,10 @@ export function resolvedSharePort() {
   const raw = process.env.SHARE_PORT
   if (raw !== undefined && raw !== '') return Number(raw)
   if (process.env.VITEST) return 0
-  return 3142
+  return Number(process.env.PORT ?? 3141)
 }
 
-/** Origin LAN guests should open. Localhost Host headers are not reused when SHARE_PORT is set. */
+/** Origin LAN guests should open. The main authenticated listener also serves share links. */
 export function publicShareOrigin(req?: IncomingMessage) {
   const env = process.env.SHARE_PUBLIC_URL?.replace(/\/$/, '')
   if (env) return env

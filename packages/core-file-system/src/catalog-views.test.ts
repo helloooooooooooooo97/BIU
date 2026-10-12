@@ -32,6 +32,7 @@ import {
 test('scoped builtin views preserve their base view and lock data ownership', () => {
   const base = builtinAllView({ path: '/pages', label: '页面' })
   const scoped = builtinScopeView(base, 'workspace')
+  assert.equal(scoped.name, '空间页面')
   assert.equal(scoped.id, builtinScopeViewId('workspace', base.id))
   assert.deepEqual(scoped.filters, { $scope: 'workspace' })
   assert.equal(isReadOnlyViewId(scoped.id), true)
@@ -116,8 +117,10 @@ test('every registered table gets a read-only 全部xx view', () => {
     { id: builtinAllViewId('/sessions'), name: '假的', mode: 'table', sortField: 'id', sortDir: 'asc', filters: {}, columns: [] },
     { id: 'mine', name: '置顶', mode: 'table', sortField: 'id', sortDir: 'asc', filters: {}, columns: [] },
   ])
-  assert.deepEqual(merged.slice(0, 3).map((view) => view.name), ['私人数据', '空间数据', '共享数据'])
-  assert.equal(merged.filter((view) => view.id === builtinAllViewId('/sessions')).length, 0)
+  assert.equal(all.groupBy, 'shareScope')
+  assert.deepEqual(merged.slice(0, 1).map((view) => view.name), ['全部会话'])
+  assert.equal(merged.some((view) => view.name === '私人会话'), false)
+  assert.equal(merged.filter((view) => view.id === builtinAllViewId('/sessions')).length, 1)
   assert.equal(merged.some((view) => view.id === 'mine'), true)
   assert.equal(stubBuiltinAllView('builtin-all:/pages')?.name, '全部pages')
 })
@@ -145,8 +148,8 @@ test('tags collection uses the same view list as other tables', () => {
   assert.equal(isBuiltinCatalogViewId(builtinTagViewId('dp')), false)
   const table = { path: '/facets', label: '合集', view: { title: '合集' } }
   const merged = mergeTableViews(table, [{ id: 'mine', name: '置顶', mode: 'table', sortField: 'id', sortDir: 'asc', filters: {}, columns: [] }])
-  assert.equal(merged[0]?.name, '私人数据')
-  assert.equal(merged[2]?.name, '共享数据')
+  assert.equal(merged[0]?.name, '全部合集')
+  assert.equal(merged.some((view) => view.name === '私人合集'), false)
   assert.equal(merged.some((view) => isBuiltinTagViewId(view.id)), false)
   assert.equal(merged.some((view) => view.id === 'mine'), true)
 })

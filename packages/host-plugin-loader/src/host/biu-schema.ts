@@ -134,7 +134,7 @@ export const BIU_TABLES: Record<string, TableSpec> = {
     indexes: [],
   },
   accounts: {
-    columns: ['id', 'name', 'token', 'password_hash', 'created_at', 'email', 'active_workspace_id'],
+    columns: ['id', 'name', 'token', 'password_hash', 'created_at', 'email', 'active_workspace_id', 'must_change_password'],
     indexes: ['accounts_token', 'accounts_email'],
   },
   workspaces: {
@@ -154,6 +154,7 @@ export const BIU_TABLES: Record<string, TableSpec> = {
       'role',
       'collection',
       'record_id',
+      'view_id',
       'resource_role',
       'expires_at',
       'max_uses',
@@ -167,6 +168,18 @@ export const BIU_TABLES: Record<string, TableSpec> = {
   guest_sessions: {
     columns: ['id', 'account_id', 'workspace_id', 'expires_at', 'revoked_at', 'created_at', 'last_seen_at'],
     indexes: ['guest_sessions_account'],
+  },
+  auth_sessions: {
+    columns: ['id', 'account_id', 'token_hash', 'device_name', 'expires_at', 'revoked_at', 'created_at', 'last_seen_at'],
+    indexes: ['auth_sessions_account'],
+  },
+  mcp_credentials: {
+    columns: ['id', 'token_hash', 'account_id', 'workspace_id', 'allowed_tools', 'expires_at', 'revoked_at', 'created_at'],
+    indexes: ['mcp_credentials_member'],
+  },
+  mcp_audit_log: {
+    columns: ['id', 'credential_id', 'account_id', 'workspace_id', 'tool_name', 'success', 'created_at'],
+    indexes: ['mcp_audit_workspace'],
   },
   workspace_groups: {
     columns: ['id', 'workspace_id', 'name', 'created_by', 'created_at'],
@@ -196,6 +209,10 @@ export const BIU_TABLES: Record<string, TableSpec> = {
     columns: ['workspace_id', 'collection', 'record_id', 'subject_type', 'subject_id', 'role', 'granted_by', 'created_at'],
     indexes: ['record_grants_subject'],
   },
+  view_grants: {
+    columns: ['workspace_id', 'collection', 'view_id', 'subject_type', 'subject_id', 'role', 'granted_by', 'created_at'],
+    indexes: ['view_grants_subject'],
+  },
   record_owners: {
     columns: ['workspace_id', 'collection', 'record_id', 'owner_id', 'version', 'updated_at'],
     indexes: [],
@@ -216,9 +233,67 @@ export const BIU_TABLES: Record<string, TableSpec> = {
     columns: ['key', 'value'],
     indexes: [],
   },
+  cloud_connections: {
+    columns: [
+      'local_account_id',
+      'origin',
+      'remote_account_id',
+      'remote_name',
+      'remote_email',
+      'token',
+      'connected_at',
+    ],
+    indexes: [],
+  },
+  workspace_place: {
+    columns: ['workspace_id', 'place'],
+    indexes: ['workspace_place_place'],
+  },
+  session_execution_leases: {
+    columns: ['session_id', 'account_id', 'lease_id', 'executor_id', 'expires_at', 'created_at'],
+    indexes: ['session_execution_leases_expiry'],
+  },
+  plugin_packages: {
+    columns: [
+      'id',
+      'version',
+      'package_hash',
+      'package_path',
+      'source_kind',
+      'trust_state',
+      'tenant_mode',
+      'has_web',
+      'has_host',
+      'manifest_json',
+      'installed_by',
+      'created_at',
+      'updated_at',
+    ],
+    indexes: ['plugin_packages_trust'],
+  },
+  plugin_assignments: {
+    columns: ['workspace_id', 'plugin_id', 'plugin_version', 'subject_type', 'subject_id', 'created_by', 'created_at'],
+    indexes: ['plugin_assignments_subject', 'plugin_assignments_plugin'],
+  },
+  plugin_workspace_config: {
+    columns: ['workspace_id', 'plugin_id', 'config_json', 'updated_by', 'updated_at'],
+    indexes: [],
+  },
+  plugin_account_config: {
+    columns: ['workspace_id', 'plugin_id', 'account_id', 'config_json', 'updated_at'],
+    indexes: ['plugin_account_config_account'],
+  },
+  plugin_loads: {
+    columns: ['workspace_id', 'account_id', 'plugin_id', 'loaded_at'],
+    indexes: ['plugin_loads_plugin'],
+  },
+  plugin_audit_log: {
+    columns: ['id', 'account_id', 'workspace_id', 'plugin_id', 'action', 'detail_json', 'created_at'],
+    indexes: ['plugin_audit_created', 'plugin_audit_workspace'],
+  },
 }
 
-export const LATEST_BIU_SCHEMA = 30
+export const LATEST_BIU_SCHEMA = 38
 
 export const CREATE_CORE_SQL = `
 CREATE TABLE IF NOT EXISTS pages (
@@ -403,7 +478,8 @@ CREATE TABLE IF NOT EXISTS accounts (
   password_hash TEXT NOT NULL DEFAULT '',
   created_at INTEGER NOT NULL,
   email TEXT,
-  active_workspace_id TEXT NOT NULL DEFAULT ''
+  active_workspace_id TEXT NOT NULL DEFAULT '',
+  must_change_password INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS accounts_token ON accounts(token);
 CREATE UNIQUE INDEX IF NOT EXISTS accounts_email ON accounts(email) WHERE email IS NOT NULL AND length(email) > 0;
@@ -432,6 +508,7 @@ CREATE TABLE IF NOT EXISTS workspace_invites (
   role TEXT NOT NULL,
   collection TEXT NOT NULL DEFAULT '',
   record_id TEXT NOT NULL DEFAULT '',
+  view_id TEXT NOT NULL DEFAULT '',
   resource_role TEXT NOT NULL DEFAULT 'viewer',
   expires_at INTEGER NOT NULL,
   max_uses INTEGER NOT NULL DEFAULT 1,
@@ -452,6 +529,38 @@ CREATE TABLE IF NOT EXISTS guest_sessions (
   last_seen_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS guest_sessions_account ON guest_sessions(account_id);
+CREATE TABLE IF NOT EXISTS auth_sessions (
+  id TEXT PRIMARY KEY,
+  account_id TEXT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  device_name TEXT NOT NULL DEFAULT '',
+  expires_at INTEGER,
+  revoked_at INTEGER,
+  created_at INTEGER NOT NULL,
+  last_seen_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS auth_sessions_account ON auth_sessions(account_id, revoked_at);
+CREATE TABLE IF NOT EXISTS mcp_credentials (
+  id TEXT PRIMARY KEY,
+  token_hash TEXT NOT NULL UNIQUE,
+  account_id TEXT NOT NULL,
+  workspace_id TEXT NOT NULL,
+  allowed_tools TEXT NOT NULL DEFAULT '',
+  expires_at INTEGER,
+  revoked_at INTEGER,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS mcp_credentials_member ON mcp_credentials(account_id, workspace_id);
+CREATE TABLE IF NOT EXISTS mcp_audit_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  credential_id TEXT NOT NULL,
+  account_id TEXT NOT NULL,
+  workspace_id TEXT NOT NULL,
+  tool_name TEXT NOT NULL,
+  success INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS mcp_audit_workspace ON mcp_audit_log(workspace_id, created_at);
 CREATE TABLE IF NOT EXISTS workspace_groups (
   id TEXT PRIMARY KEY,
   workspace_id TEXT NOT NULL,
@@ -517,6 +626,19 @@ CREATE TABLE IF NOT EXISTS record_grants (
 );
 CREATE INDEX IF NOT EXISTS record_grants_subject
   ON record_grants(workspace_id, subject_type, subject_id);
+CREATE TABLE IF NOT EXISTS view_grants (
+  workspace_id TEXT NOT NULL,
+  collection TEXT NOT NULL,
+  view_id TEXT NOT NULL,
+  subject_type TEXT NOT NULL,
+  subject_id TEXT NOT NULL,
+  role TEXT NOT NULL,
+  granted_by TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (workspace_id, collection, view_id, subject_type, subject_id)
+);
+CREATE INDEX IF NOT EXISTS view_grants_subject
+  ON view_grants(workspace_id, subject_type, subject_id);
 CREATE TABLE IF NOT EXISTS edit_locks (
   workspace_id TEXT NOT NULL,
   collection TEXT NOT NULL,
@@ -537,6 +659,101 @@ CREATE TABLE IF NOT EXISTS collab_state (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS cloud_connections (
+  local_account_id TEXT PRIMARY KEY,
+  origin TEXT NOT NULL,
+  remote_account_id TEXT NOT NULL,
+  remote_name TEXT NOT NULL DEFAULT '',
+  remote_email TEXT NOT NULL DEFAULT '',
+  token TEXT NOT NULL,
+  connected_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS workspace_place (
+  workspace_id TEXT PRIMARY KEY,
+  place TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS workspace_place_place ON workspace_place(place);
+CREATE TABLE IF NOT EXISTS session_execution_leases (
+  session_id TEXT PRIMARY KEY,
+  account_id TEXT NOT NULL,
+  lease_id TEXT NOT NULL UNIQUE,
+  executor_id TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS session_execution_leases_expiry ON session_execution_leases(expires_at);
+CREATE TABLE IF NOT EXISTS plugin_packages (
+  id TEXT NOT NULL,
+  version TEXT NOT NULL,
+  package_hash TEXT NOT NULL,
+  package_path TEXT NOT NULL,
+  source_kind TEXT NOT NULL,
+  trust_state TEXT NOT NULL,
+  tenant_mode TEXT NOT NULL,
+  has_web INTEGER NOT NULL DEFAULT 0,
+  has_host INTEGER NOT NULL DEFAULT 0,
+  manifest_json TEXT NOT NULL DEFAULT '{}',
+  installed_by TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (id, version)
+);
+CREATE INDEX IF NOT EXISTS plugin_packages_trust
+  ON plugin_packages(trust_state, id);
+CREATE TABLE IF NOT EXISTS plugin_assignments (
+  workspace_id TEXT NOT NULL,
+  plugin_id TEXT NOT NULL,
+  plugin_version TEXT NOT NULL DEFAULT '',
+  subject_type TEXT NOT NULL,
+  subject_id TEXT NOT NULL,
+  created_by TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (workspace_id, plugin_id, subject_type, subject_id)
+);
+CREATE INDEX IF NOT EXISTS plugin_assignments_subject
+  ON plugin_assignments(workspace_id, subject_type, subject_id);
+CREATE INDEX IF NOT EXISTS plugin_assignments_plugin
+  ON plugin_assignments(workspace_id, plugin_id);
+CREATE TABLE IF NOT EXISTS plugin_workspace_config (
+  workspace_id TEXT NOT NULL,
+  plugin_id TEXT NOT NULL,
+  config_json TEXT NOT NULL DEFAULT '{}',
+  updated_by TEXT NOT NULL,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (workspace_id, plugin_id)
+);
+CREATE TABLE IF NOT EXISTS plugin_account_config (
+  workspace_id TEXT NOT NULL,
+  plugin_id TEXT NOT NULL,
+  account_id TEXT NOT NULL,
+  config_json TEXT NOT NULL DEFAULT '{}',
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (workspace_id, plugin_id, account_id)
+);
+CREATE INDEX IF NOT EXISTS plugin_account_config_account
+  ON plugin_account_config(account_id, workspace_id);
+CREATE TABLE IF NOT EXISTS plugin_loads (
+  workspace_id TEXT NOT NULL,
+  account_id TEXT NOT NULL,
+  plugin_id TEXT NOT NULL,
+  loaded_at INTEGER NOT NULL,
+  PRIMARY KEY (workspace_id, account_id, plugin_id)
+);
+CREATE INDEX IF NOT EXISTS plugin_loads_plugin
+  ON plugin_loads(plugin_id);
+CREATE TABLE IF NOT EXISTS plugin_audit_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  account_id TEXT NOT NULL,
+  workspace_id TEXT NOT NULL DEFAULT '',
+  plugin_id TEXT NOT NULL DEFAULT '',
+  action TEXT NOT NULL,
+  detail_json TEXT NOT NULL DEFAULT '{}',
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS plugin_audit_created
+  ON plugin_audit_log(created_at DESC);
+CREATE INDEX IF NOT EXISTS plugin_audit_workspace
+  ON plugin_audit_log(workspace_id, created_at DESC);
 `
 
 export const CREATE_EDITOR_SQL = `

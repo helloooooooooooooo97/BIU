@@ -16,7 +16,8 @@ import { runWithSession } from '@biu/host-sessions/scope'
 import { openAndMigrateBiu, runWithAccount } from '@biu/host-plugin-loader/data-dir'
 import { CollabStore } from '@biu/host-account/store'
 import { workspaceMembersCollection } from '@biu/host-account/workspace-members-collection'
-import { builtinAllViewId } from '../catalog-views.ts'
+import { builtinAllViewId, stubBuiltinAllView, stubBuiltinMemberView } from '../catalog-views.ts'
+import { matchListFilterRecord } from '../query-logic.ts'
 import { savedViewRecordPath } from '../paths.ts'
 
 function notesCollection(): CollectionSpec {
@@ -1800,6 +1801,9 @@ test('create scope separates personal and workspace records and viewers stay rea
   collab.addMemberByEmail(ada.id, workspace.id, bob.email)
   collab.setActive(ada.id, workspace.id)
   collab.setActive(bob.id, workspace.id)
+  collab.authorization.setMemberViewMatcher((workspaceId, viewId, accountId) => {
+    return viewId === builtinAllViewId('/workspace-members') && collab.isMember(accountId, workspaceId)
+  })
 
   await runWithAccount(ada.id, () => db.create('/docs', [{ title: 'Private' }], { scope: 'personal' }))
   await runWithAccount(ada.id, () => db.create('/docs', [{ title: 'Shared' }], { scope: 'workspace' }))
@@ -1808,6 +1812,11 @@ test('create scope separates personal and workspace records and viewers stay rea
   assert.deepEqual(personal.items.map((row) => row.title), ['Private'])
   assert.deepEqual(shared.items.map((row) => row.title), ['Shared'])
   assert.deepEqual((await runWithAccount(bob.id, () => db.list('/docs'))).items.map((row) => row.title), ['Shared'])
+  const granted = runWithAccount(ada.id, () => collab.recordAccess(ada.id, '/docs', 'd2'))
+  assert.equal(granted.memberViews.find((row) => row.id === builtinAllViewId('/workspace-members'))?.role, 'editor')
+  assert.equal((await runWithAccount(ada.id, () => db.list('/docs'))).items.find((row) => row.title === 'Shared')?.shareScope, '空间')
+  const edited = await runWithAccount(bob.id, () => db.update('/docs/d2', { title: 'Shared edited' }))
+  assert.equal(edited.kind, 'record')
 
   collab.updateMemberRole(ada.id, workspace.id, bob.id, 'viewer')
   const viewerStat = await runWithAccount(bob.id, () => db.stat('/docs'))
@@ -1824,6 +1833,361 @@ test('create scope separates personal and workspace records and viewers stay rea
     () => runWithAccount(bob.id, () => db.update('/docs/d2', { title: 'Blocked' })),
     /unknown record/,
   )
+})
+
+test('shared create is a public view link', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  db.shares.open(':memory:')
+  const rows = new Map<string, DbRecord>()
+  db.register({
+    id: 'docs',
+    path: '/docs',
+    schema: {
+      fields: {
+        ...REQUIRED_RECORD_FIELDS,
+        title: { type: 'string', writable: true },
+      },
+    },
+    records: { create: true },
+    list: () => [...rows.values()],
+    get: (id) => rows.get(id) ?? null,
+    create: (records) => records.map((record) => {
+      const row = { id: 'pub', title: String(record.title ?? 'Doc') }
+      rows.set(row.id, row)
+      return row
+    }),
+  })
+  const dir = mkdtempSync(join(tmpdir(), 'biu-db-public-share-'))
+  const collab = new CollabStore(openAndMigrateBiu(join(dir, 'biu.sqlite')))
+  class AccountBridge extends Service {
+    store = collab
+    authorization = collab.authorization
+    constructor(inner: Context) {
+      super(inner, 'account')
+    }
+  }
+  await ctx.plugin(AccountBridge)
+  const ada = collab.register('', Date.now(), 'secret1', 'public-ada@example.com')
+  const workspace = collab.createWorkspace(ada.id, 'Public')
+  collab.setActive(ada.id, workspace.id)
+  const created = await runWithAccount(ada.id, () => db.create('/docs', [{ title: '公开' }], { scope: 'shared' }))
+  assert.equal(created.kind, 'created')
+  if (created.kind !== 'created') return
+  assert.equal(created.items[0]?.value.shareScope, '共享')
+  const link = db.shares.find('record', '/docs', '', 'pub')
+  assert.ok(link)
+  assert.equal(link?.hasPassword, false)
+  assert.equal(link?.allowCopy, false)
+  const listed = await runWithAccount(ada.id, () => db.list('/docs', { $scope: 'shared' }))
+  assert.deepEqual(listed.items.map((row) => row.title), ['公开'])
+})
+
+test('desktop records keep personal and workspace ownership', async () => {
+  const previous = process.env.BIU_ONLINE
+  process.env.BIU_ONLINE = '0'
+  try {
+    const ctx = new Context()
+    const db = new DatabaseService(ctx)
+    const rows = new Map<string, DbRecord>()
+    let seq = 0
+    db.register({
+      id: 'docs',
+      path: '/docs',
+      schema: { fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string', writable: true } } },
+      records: { create: true },
+      list: () => [...rows.values()],
+      get: (id) => rows.get(id) ?? null,
+      create: (records) => records.map((record) => {
+        const row = { id: `d${++seq}`, title: String(record.title ?? 'Doc') }
+        rows.set(row.id, row)
+        return row
+      }),
+    })
+    const dir = mkdtempSync(join(tmpdir(), 'biu-db-local-owner-'))
+    const collab = new CollabStore(openAndMigrateBiu(join(dir, 'biu.sqlite')))
+    const localIds = new Set<string>()
+    class AccountBridge extends Service {
+      store = collab
+      authorization = collab.authorization
+      constructor(inner: Context) {
+        super(inner, 'account')
+      }
+      isLocal(_collection: string, id: string) {
+        return localIds.has(id)
+      }
+      markLocal(_collection: string, id: string) {
+        localIds.add(id)
+      }
+    }
+    await ctx.plugin(AccountBridge)
+    const ada = collab.register('', Date.now(), 'secret1', 'local-ada@example.com')
+    const workspace = collab.createWorkspace(ada.id, 'Local')
+    collab.setActive(ada.id, workspace.id)
+    const personal = await runWithAccount(ada.id, () => db.create('/docs', [{ title: '私人' }], { scope: 'personal' }))
+    const space = await runWithAccount(ada.id, () => db.create('/docs', [{ title: '空间' }], { scope: 'workspace' }))
+    const local = await runWithAccount(ada.id, () => db.create('/docs', [{ title: '本机' }], { scope: 'local' }))
+    assert.equal(personal.kind === 'created' && personal.items[0]?.value.shareScope, '私人')
+    assert.equal(space.kind === 'created' && space.items[0]?.value.shareScope, '空间')
+    assert.equal(local.kind === 'created' && local.items[0]?.value.shareScope, '本地')
+    rows.set('side-created', { id: 'side-created', title: '旁路创建' })
+    await runWithAccount(ada.id, () => db.touchActor('/docs', 'side-created'))
+    assert.equal(localIds.has('side-created'), true)
+    const owner = collab.collectionRecordOwners?.(workspace.id, '/docs')
+    if (local.kind === 'created') assert.equal(owner?.get(String(local.items[0]?.value.id)), ada.id)
+  } finally {
+    if (previous === undefined) delete process.env.BIU_ONLINE
+    else process.env.BIU_ONLINE = previous
+  }
+})
+
+test('a builtin member view grant lets the other workspace member read personal records', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  const rows = new Map<string, DbRecord>()
+  db.register({
+    id: 'docs',
+    path: '/docs',
+    schema: {
+      fields: {
+        ...REQUIRED_RECORD_FIELDS,
+        title: { type: 'string', writable: true },
+      },
+    },
+    records: { create: true, update: true },
+    list: () => [...rows.values()],
+    get: (id) => rows.get(id) ?? null,
+    create: (records) => records.map((record) => {
+      const row = { id: 'inherited', title: String(record.title ?? 'Inherited') }
+      rows.set(row.id, row)
+      return row
+    }),
+    update: (id, patch) => {
+      const row = { ...rows.get(id)!, ...patch, id }
+      rows.set(id, row)
+      return row
+    },
+  })
+  const dir = mkdtempSync(join(tmpdir(), 'biu-db-view-inherit-'))
+  const collab = new CollabStore(openAndMigrateBiu(join(dir, 'biu.sqlite')))
+  class AccountBridge extends Service {
+    store = collab
+    authorization = collab.authorization
+    constructor(inner: Context) {
+      super(inner, 'account')
+    }
+  }
+  await ctx.plugin(AccountBridge)
+  const ada = collab.register('', Date.now(), 'secret1', 'inherit-ada@example.com')
+  const bob = collab.register('', Date.now(), 'secret1', 'inherit-bob@example.com')
+  const workspace = collab.createWorkspace(ada.id, 'Inherited')
+  collab.addMemberByEmail(ada.id, workspace.id, bob.email)
+  collab.setActive(ada.id, workspace.id)
+  collab.setActive(bob.id, workspace.id)
+  db.viewCatalog = { viewsFor: () => [] }
+  collab.authorization.setMemberViewMatcher((workspaceId, viewId, accountId) => {
+    const view = stubBuiltinMemberView(viewId) ?? stubBuiltinAllView(viewId)
+    if (!view) return false
+    const member = collab.members(accountId, workspaceId).find((item) => item.id === accountId)
+    if (!member) return false
+    return matchListFilterRecord(
+      {
+        id: member.id,
+        title: member.name,
+        name: member.name,
+        email: member.email,
+        role: member.role,
+        membershipKind: member.member_kind,
+        joinedAt: member.created_at,
+      },
+      view.filters,
+    )
+  })
+  await runWithAccount(ada.id, () => db.create('/docs', [{ title: 'Ada private' }], { scope: 'personal' }))
+  await runWithAccount(ada.id, () => collab.grantViewMemberView(ada.id, '/docs', builtinAllViewId('/docs'), 'builtin-member:member', 'editor'))
+  const seen = await runWithAccount(bob.id, () => db.list('/docs'))
+  assert.deepEqual(seen.items.map((row) => row.title), ['Ada private'])
+})
+
+test('granting the all-members view lets the other member read the owner private records', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  const rows = new Map<string, DbRecord>()
+  let seq = 0
+  db.register({
+    id: 'tasks',
+    path: '/tasks',
+    schema: {
+      fields: {
+        ...REQUIRED_RECORD_FIELDS,
+        title: { type: 'string', writable: true },
+      },
+    },
+    records: { create: true, update: true },
+    list: () => [...rows.values()],
+    get: (id) => rows.get(id) ?? null,
+    create: (records) => records.map((record) => {
+      const row = { id: `m${++seq}`, title: String(record.title ?? `Task ${seq}`) }
+      rows.set(row.id, row)
+      return row
+    }),
+    update: (id, patch) => {
+      const row = { ...rows.get(id)!, ...patch, id }
+      rows.set(id, row)
+      return row
+    },
+  })
+  const dir = mkdtempSync(join(tmpdir(), 'biu-db-all-members-'))
+  const collab = new CollabStore(openAndMigrateBiu(join(dir, 'biu.sqlite')))
+  class AccountBridge extends Service {
+    store = collab
+    authorization = collab.authorization
+    constructor(inner: Context) {
+      super(inner, 'account')
+    }
+  }
+  await ctx.plugin(AccountBridge)
+  const ada = collab.register('', Date.now(), 'secret1', 'all-members-ada@example.com')
+  const bob = collab.register('', Date.now(), 'secret1', 'all-members-bob@example.com')
+  const workspace = collab.createWorkspace(ada.id, 'All members')
+  collab.addMemberByEmail(ada.id, workspace.id, bob.email)
+  collab.setActive(ada.id, workspace.id)
+  collab.setActive(bob.id, workspace.id)
+  db.viewCatalog = { viewsFor: () => [] }
+  collab.authorization.setMemberViewMatcher((workspaceId, viewId, accountId) => {
+    const view = stubBuiltinMemberView(viewId) ?? stubBuiltinAllView(viewId)
+    if (!view) return false
+    const member = collab.members(accountId, workspaceId).find((item) => item.id === accountId)
+    if (!member) return false
+    return matchListFilterRecord(
+      {
+        id: member.id,
+        title: member.name,
+        name: member.name,
+        email: member.email,
+        role: member.role,
+        membershipKind: member.member_kind,
+        joinedAt: member.created_at,
+      },
+      view.filters,
+    )
+  })
+  await runWithAccount(ada.id, () => db.create('/tasks', [{ title: 'A空间' }], { scope: 'workspace' }))
+  await runWithAccount(ada.id, () => db.create('/tasks', [{ title: 'A私人' }], { scope: 'personal' }))
+  await runWithAccount(ada.id, () => collab.grantViewMemberView(
+    ada.id,
+    '/tasks',
+    builtinAllViewId('/tasks'),
+    builtinAllViewId('/workspace-members'),
+    'editor',
+  ))
+  const bobList = await runWithAccount(bob.id, () => db.list('/tasks'))
+  assert.deepEqual(bobList.items.map((row) => row.title).sort(), ['A私人', 'A空间'])
+  assert.equal(bobList.items.find((row) => row.title === 'A私人')?.shareScope, '空间')
+  assert.equal(bobList.items.find((row) => row.title === 'A私人')?.shareRole, '编辑')
+  assert.equal(bobList.items.find((row) => row.title === 'A空间')?.shareRole, '编辑')
+  const adaList = await runWithAccount(ada.id, () => db.list('/tasks'))
+  assert.equal(adaList.items.find((row) => row.title === 'A私人')?.shareRole, '管理')
+  assert.equal(adaList.schema.fields.shareRole?.label, '权限')
+  assert.equal(adaList.schema.fields.shareRole?.enum?.join(','), '管理,编辑,阅读')
+  const spaceId = String(bobList.items.find((row) => row.title === 'A空间')?.id ?? '')
+  const privateId = String(bobList.items.find((row) => row.title === 'A私人')?.id ?? '')
+  const spaceChain = runWithAccount(bob.id, () => collab.recordAccess(bob.id, '/tasks', spaceId)).roleChain
+  assert.equal(spaceChain[0]?.detail, '通过成员视图授权')
+  assert.equal(spaceChain[0]?.role, 'editor')
+  const ownChain = runWithAccount(ada.id, () => collab.recordAccess(ada.id, '/tasks', privateId)).roleChain
+  assert.equal(ownChain[0]?.detail, '你是创建者')
+  assert.equal(ownChain[0]?.role, 'owner')
+})
+
+test('sharing one person all-tasks view does not reclassify the other person private tasks', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  const rows = new Map<string, DbRecord>()
+  let seq = 0
+  db.register({
+    id: 'tasks',
+    path: '/tasks',
+    schema: {
+      fields: {
+        ...REQUIRED_RECORD_FIELDS,
+        title: { type: 'string', writable: true },
+      },
+    },
+    records: { create: true, update: true },
+    list: () => [...rows.values()],
+    get: (id) => rows.get(id) ?? null,
+    create: (records) => records.map((record) => {
+      const row = { id: `t${++seq}`, title: String(record.title ?? `Task ${seq}`) }
+      rows.set(row.id, row)
+      return row
+    }),
+    update: (id, patch) => {
+      const row = { ...rows.get(id)!, ...patch, id }
+      rows.set(id, row)
+      return row
+    },
+  })
+  const dir = mkdtempSync(join(tmpdir(), 'biu-db-all-view-owner-'))
+  const collab = new CollabStore(openAndMigrateBiu(join(dir, 'biu.sqlite')))
+  class AccountBridge extends Service {
+    store = collab
+    authorization = collab.authorization
+    constructor(inner: Context) {
+      super(inner, 'account')
+    }
+  }
+  await ctx.plugin(AccountBridge)
+  const ada = collab.register('', Date.now(), 'secret1', 'all-ada@example.com')
+  const bob = collab.register('', Date.now(), 'secret1', 'all-bob@example.com')
+  const workspace = collab.createWorkspace(ada.id, 'All tasks')
+  collab.addMemberByEmail(ada.id, workspace.id, bob.email)
+  collab.setActive(ada.id, workspace.id)
+  collab.setActive(bob.id, workspace.id)
+  db.viewCatalog = { viewsFor: () => [] }
+  collab.authorization.setMemberViewMatcher((workspaceId, viewId, accountId) => {
+    const view = stubBuiltinMemberView(viewId) ?? stubBuiltinAllView(viewId)
+    if (!view) return false
+    const member = collab.members(accountId, workspaceId).find((item) => item.id === accountId)
+    if (!member) return false
+    return matchListFilterRecord(
+      {
+        id: member.id,
+        title: member.name,
+        name: member.name,
+        email: member.email,
+        role: member.role,
+        membershipKind: member.member_kind,
+        joinedAt: member.created_at,
+      },
+      view.filters,
+    )
+  })
+
+  await runWithAccount(ada.id, () => db.create('/tasks', [{ title: 'A空间' }], { scope: 'workspace' }))
+  await runWithAccount(ada.id, () => db.create('/tasks', [{ title: 'A私人' }], { scope: 'personal' }))
+  await runWithAccount(bob.id, () => db.create('/tasks', [{ title: 'B空间' }], { scope: 'workspace' }))
+  await runWithAccount(bob.id, () => db.create('/tasks', [{ title: 'B私人' }], { scope: 'personal' }))
+  await runWithAccount(bob.id, () => collab.grantViewMemberView(
+    bob.id,
+    '/tasks',
+    builtinAllViewId('/tasks'),
+    'builtin-member:member',
+    'editor',
+  ))
+
+  const scopeOf = (items: DbRecord[], title: string) => items.find((row) => row.title === title)?.shareScope
+  const adaList = await runWithAccount(ada.id, () => db.list('/tasks'))
+  assert.deepEqual(adaList.items.map((row) => row.title).sort(), ['A私人', 'A空间', 'B私人', 'B空间'])
+  assert.equal(scopeOf(adaList.items, 'A私人'), '私人')
+  assert.equal(scopeOf(adaList.items, 'A空间'), '空间')
+  assert.equal(scopeOf(adaList.items, 'B私人'), '空间')
+  assert.equal(scopeOf(adaList.items, 'B空间'), '空间')
+
+  const bobList = await runWithAccount(bob.id, () => db.list('/tasks'))
+  assert.deepEqual(bobList.items.map((row) => row.title).sort(), ['A空间', 'B私人', 'B空间'])
+  assert.equal(scopeOf(bobList.items, 'B私人'), '空间')
+  assert.equal(bobList.items.some((row) => row.title === 'A私人'), false)
 })
 
 test('workspace member tags use file-system metadata instead of role updates', async () => {
@@ -1851,4 +2215,245 @@ test('workspace member tags use file-system metadata instead of role updates', a
   )
   assert.deepEqual(updated.value.tags, ['213'])
   assert.equal(collab.members(ada.id, workspace.id).find((row) => row.id === bob.id)?.role, 'member')
+})
+
+test('index rows follow the user records each person can read and omit share', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  const pages = new Map<string, { id: string; title: string }>()
+  const blocks: Array<{ id: string; title: string; collection: string; pageId: string }> = []
+  db.register({
+    id: 'pages',
+    path: '/pages',
+    schema: { fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string', writable: true } } },
+    records: { create: true, update: true },
+    list: () => [...pages.values()],
+    get: (id) => pages.get(id) ?? null,
+    create: (records) => records.map((record) => {
+      const row = { id: `p${pages.size + 1}`, title: String(record.title ?? '') }
+      pages.set(row.id, row)
+      blocks.push({ id: `pages::${row.id}::b`, title: `${row.title}组件`, collection: '/pages', pageId: row.id })
+      return row
+    }),
+    update: (id, patch) => {
+      const row = { ...pages.get(id)!, ...patch, id }
+      pages.set(id, row)
+      return row
+    },
+  })
+  db.register({
+    id: 'page-blocks',
+    path: '/page-blocks',
+    schema: { fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string' }, collection: { type: 'string' }, pageId: { type: 'string' } } },
+    list: () => blocks,
+    get: (id) => blocks.find((row) => row.id === id) ?? null,
+  })
+  db.register(facetsCollection(db.facets, () => [{ id: 'pages', path: '/pages', label: '页面' }]))
+  const dir = mkdtempSync(join(tmpdir(), 'biu-db-index-'))
+  const collab = new CollabStore(openAndMigrateBiu(join(dir, 'biu.sqlite')))
+  class AccountBridge extends Service {
+    store = collab
+    authorization = collab.authorization
+    constructor(inner: Context) {
+      super(inner, 'account')
+    }
+  }
+  await ctx.plugin(AccountBridge)
+  const ada = collab.register('', Date.now(), 'secret1', 'index-ada@example.com')
+  const bob = collab.register('', Date.now(), 'secret1', 'index-bob@example.com')
+  const workspace = collab.createWorkspace(ada.id, 'Index')
+  collab.addMemberByEmail(ada.id, workspace.id, bob.email)
+  collab.setActive(ada.id, workspace.id)
+  collab.setActive(bob.id, workspace.id)
+  collab.authorization.setMemberViewMatcher((workspaceId, viewId, accountId) => {
+    const view = stubBuiltinAllView(viewId)
+    if (!view) return false
+    return collab.isMember(accountId, workspaceId)
+  })
+
+  const personal = await runWithAccount(ada.id, () => db.create('/pages', [{ title: '私人' }], { scope: 'personal' }))
+  const shared = await runWithAccount(ada.id, () => db.create('/pages', [{ title: '空间' }], { scope: 'workspace' }))
+  const personalId = personal.items[0]!.value.id
+  const sharedId = shared.items[0]!.value.id
+  const hidden = await runWithAccount(ada.id, () => db.create('/facets', [{ title: '只贴私人' }]))
+  const shown = await runWithAccount(ada.id, () => db.create('/facets', [{ title: '贴在空间' }]))
+  const hiddenId = String(hidden.items[0]!.value.id)
+  const shownId = String(shown.items[0]!.value.id)
+  await runWithAccount(ada.id, () => db.update(`/pages/${personalId}`, { facet: { tags: [hiddenId], values: {} } }))
+  await runWithAccount(ada.id, () => db.update(`/pages/${sharedId}`, { facet: { tags: [shownId], values: {} } }))
+
+  const adaBlocks = await runWithAccount(ada.id, () => db.list('/page-blocks'))
+  const bobBlocks = await runWithAccount(bob.id, () => db.list('/page-blocks'))
+  assert.deepEqual(adaBlocks.items.map((row) => row.title).sort(), ['私人组件', '空间组件'])
+  assert.deepEqual(bobBlocks.items.map((row) => row.title), ['空间组件'])
+  assert.equal(adaBlocks.items[0]?.shareScope, undefined)
+  const blockStat = await runWithAccount(ada.id, () => db.stat('/page-blocks'))
+  if (blockStat.kind === 'collection') assert.equal(blockStat.schema.fields.shareScope, undefined)
+
+  const adaFacets = await runWithAccount(ada.id, () => db.list('/facets'))
+  const bobFacets = await runWithAccount(bob.id, () => db.list('/facets'))
+  assert.deepEqual(adaFacets.items.map((row) => row.id).sort(), [hiddenId, shownId].sort())
+  assert.deepEqual(bobFacets.items.map((row) => row.id), [shownId])
+  const bobStamps = await runWithAccount(bob.id, () => db.list('/facets', { facetId: hiddenId }))
+  assert.equal(bobStamps.items.length, 0)
+  const adaStamps = await runWithAccount(ada.id, () => db.list('/facets', { facetId: hiddenId }))
+  assert.equal(adaStamps.items.length, 1)
+})
+
+test('builtin plugins stay visible in the workspace plugin list', async () => {
+  const previous = process.env.BIU_ONLINE
+  process.env.BIU_ONLINE = '1'
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  db.register({
+    id: 'plugins',
+    path: '/plugins',
+    schema: {
+      labelField: 'title',
+      fields: {
+        ...REQUIRED_RECORD_FIELDS,
+        title: { type: 'string' },
+        builtin: { type: 'boolean' },
+      },
+    },
+    list: () => [
+      { id: 'api-playground', title: 'API 调试块', builtin: true, author: 'BIU官方' },
+      { id: 'my-draft', title: '我的草稿', author: 'Ada' },
+    ],
+    get: (id) => (id === 'api-playground'
+      ? { id, title: 'API 调试块', builtin: true }
+      : null),
+  })
+  const dir = mkdtempSync(join(tmpdir(), 'biu-db-builtin-plugin-'))
+  const collab = new CollabStore(openAndMigrateBiu(join(dir, 'biu.sqlite')))
+  class AccountBridge extends Service {
+    store = collab
+    authorization = collab.authorization
+    constructor(inner: Context) {
+      super(inner, 'account')
+    }
+  }
+  try {
+    await ctx.plugin(AccountBridge)
+    const ada = collab.register('', Date.now(), 'secret1', 'plugin-ada@example.com')
+    const bob = collab.register('', Date.now(), 'secret1', 'plugin-bob@example.com')
+    const workspace = collab.createWorkspace(ada.id, 'Plugins')
+    collab.addMemberByEmail(ada.id, workspace.id, bob.email)
+    collab.setActive(ada.id, workspace.id)
+    collab.setActive(bob.id, workspace.id)
+    const bobList = await runWithAccount(bob.id, () => db.list('/plugins'))
+    assert.deepEqual(bobList.items.map((row) => row.id), ['api-playground'])
+    assert.equal(bobList.items[0]?.shareScope, '共享')
+    assert.equal(bobList.items[0]?.shareRole, '阅读')
+    assert.equal(bobList.items[0]?.createdBy && (bobList.items[0].createdBy as { name?: string }).name, 'BIU官方')
+    assert.equal((bobList.items[0]?.createdBy as { url?: string }).url, 'https://github.com/helloooooooooooooo97/biu')
+    assert.equal((bobList.items[0]?.updatedBy as Array<{ url?: string }>)[0]?.url, 'https://github.com/helloooooooooooooo97/biu')
+    const read = await runWithAccount(bob.id, () => db.read('/plugins/api-playground'))
+    assert.equal(read.kind === 'record' && read.value.id, 'api-playground')
+    const sharedOnly = await runWithAccount(bob.id, () => db.list('/plugins', { $scope: 'shared' }))
+    assert.deepEqual(sharedOnly.items.map((row) => row.id), ['api-playground'])
+    await assert.rejects(
+      () => runWithAccount(bob.id, () => db.update('/plugins/api-playground', { title: '改掉' })),
+      /INSUFFICIENT_PERMISSION/,
+    )
+    db.facets.markDeleted('/plugins', 'api-playground')
+    const stillListed = await runWithAccount(bob.id, () => db.list('/plugins'))
+    assert.deepEqual(stillListed.items.map((item) => item.id), ['api-playground'])
+    const stillRead = await runWithAccount(bob.id, () => db.read('/plugins/api-playground'))
+    assert.equal(stillRead.kind === 'record' && stillRead.value.id, 'api-playground')
+    const bin = await runWithAccount(bob.id, () => db.listTrash())
+    assert.deepEqual(bin.items.map((item) => item.id), [])
+  } finally {
+    if (previous === undefined) delete process.env.BIU_ONLINE
+    else process.env.BIU_ONLINE = previous
+  }
+})
+
+test('a member sandbox is private until the owner shares it', async () => {
+  const previous = process.env.BIU_ONLINE
+  process.env.BIU_ONLINE = '1'
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  const rows = new Map<string, { id: string; title: string; sandbox: boolean }>()
+  db.register({
+    id: 'plugins',
+    path: '/plugins',
+    schema: {
+      labelField: 'title',
+      fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string' }, sandbox: { type: 'boolean' } },
+    },
+    list: () => [...rows.values()],
+    get: (id) => rows.get(id) ?? null,
+    actions: [
+      {
+        id: 'sandbox',
+        label: '开沙箱',
+        allowMissing: true,
+        requiredAction: 'resource:read',
+        run: async (id) => {
+          rows.set(id, { id, title: id, sandbox: true })
+        },
+      },
+      {
+        id: 'pack',
+        label: '安装',
+        requiredAction: 'resource:read',
+        run: async (id) => rows.get(id),
+      },
+    ],
+  })
+  const dir = mkdtempSync(join(tmpdir(), 'biu-db-private-plugin-'))
+  const collab = new CollabStore(openAndMigrateBiu(join(dir, 'biu.sqlite')))
+  class AccountBridge extends Service {
+    store = collab
+    authorization = collab.authorization
+    constructor(inner: Context) {
+      super(inner, 'account')
+    }
+  }
+  try {
+    await ctx.plugin(AccountBridge)
+    const ada = collab.register('', Date.now(), 'secret1', 'private-ada@example.com')
+    const bob = collab.register('', Date.now(), 'secret1', 'private-bob@example.com')
+    const cara = collab.register('', Date.now(), 'secret1', 'private-cara@example.com')
+    const workspace = collab.createWorkspace(ada.id, 'Plugins')
+    collab.addMemberByEmail(ada.id, workspace.id, bob.email)
+    collab.addMemberByEmail(ada.id, workspace.id, cara.email)
+    collab.updateMemberRole(ada.id, workspace.id, cara.id, 'viewer')
+    collab.setActive(ada.id, workspace.id)
+    collab.setActive(bob.id, workspace.id)
+    collab.setActive(cara.id, workspace.id)
+    await runWithAccount(cara.id, () => db.action('/plugins/cara-plug', 'sandbox'))
+    await runWithAccount(ada.id, () => db.action('/plugins/ada-plug', 'sandbox'))
+    const adaList = await runWithAccount(ada.id, () => db.list('/plugins'))
+    assert.deepEqual(adaList.items.map((row) => row.id), ['ada-plug'])
+    assert.equal(adaList.items[0]?.shareScope, '私人')
+    assert.deepEqual(adaList.items[0]?.createdBy, { kind: 'user', name: ada.name, accountId: ada.id })
+    assert.deepEqual(adaList.items[0]?.updatedBy, [{ kind: 'user', name: ada.name, accountId: ada.id }])
+    const bobList = await runWithAccount(bob.id, () => db.list('/plugins'))
+    assert.deepEqual(bobList.items.map((row) => row.id), [])
+    await assert.rejects(() => runWithAccount(bob.id, () => db.action('/plugins/ada-plug', 'pack')), /unknown record/)
+    collab.authorization.grant(
+      ada.id,
+      { type: 'record', workspaceId: workspace.id, collection: '/plugins', recordId: 'ada-plug' },
+      'account',
+      bob.id,
+      'viewer',
+      Date.now(),
+    )
+    const shared = await runWithAccount(bob.id, () => db.list('/plugins'))
+    assert.deepEqual(shared.items.map((row) => row.id), ['ada-plug'])
+    await runWithAccount(bob.id, () => db.action('/plugins/ada-plug', 'pack'))
+    const edited = await runWithAccount(ada.id, () => db.list('/plugins'))
+    assert.deepEqual(edited.items[0]?.createdBy, { kind: 'user', name: ada.name, accountId: ada.id })
+    assert.deepEqual(edited.items[0]?.updatedBy, [
+      { kind: 'user', name: ada.name, accountId: ada.id },
+      { kind: 'user', name: bob.name, accountId: bob.id },
+    ])
+    const caraList = await runWithAccount(cara.id, () => db.list('/plugins'))
+    assert.deepEqual(caraList.items.map((row) => row.id), ['cara-plug'])
+  } finally {
+    if (previous === undefined) delete process.env.BIU_ONLINE
+    else process.env.BIU_ONLINE = previous
+  }
 })

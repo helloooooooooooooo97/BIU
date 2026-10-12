@@ -60,3 +60,20 @@ test('workspace members collection lists and manages only the active workspace',
   )
   assert.notEqual(await runWithAccount(ada.id, () => collection.get(cara.id)), null)
 })
+
+test('a device-only workspace exposes no member collection or mutations', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'biu-local-members-collection-'))
+  dirs.push(dir)
+  const store = new CollabStore(openAndMigrateBiu(join(dir, 'biu.sqlite')))
+  const ada = store.register('', Date.now(), 'secret1', 'local-ada@example.com')
+  const workspace = store.createWorkspace(ada.id, 'Private device')
+  store.setActive(ada.id, workspace.id)
+  const collection = workspaceMembersCollection(store, () => false, false)
+
+  assert.equal(collection.view, undefined)
+  assert.deepEqual(await runWithAccount(ada.id, () => collection.list()), [])
+  await assert.rejects(
+    () => runWithAccount(ada.id, () => collection.create!([{ email: 'nobody@example.com' }])),
+    /本机空间不提供成员功能/,
+  )
+})

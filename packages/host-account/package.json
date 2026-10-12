@@ -8,6 +8,8 @@
   "exports": {
     ".": "./src/host/index.ts",
     "./store": "./src/host/store.ts",
+    "./replica": "./src/host/replica.ts",
+    "./mirror": "./src/host/mirror.ts",
     "./authorization": "./src/host/authorization.ts",
     "./workspace-members-collection": "./src/host/workspace-members-collection.ts"
   },

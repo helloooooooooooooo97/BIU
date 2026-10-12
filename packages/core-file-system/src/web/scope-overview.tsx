@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ClockIcon, CircleStackIcon } from '@heroicons/react/16/solid'
 import type { CollectionInfo, DbRecord } from '@biu/type-file-system'
-import { builtinAllViewId, builtinScopeViewId, DATA_SCOPE_LABEL, type DataScope } from '../catalog-views.ts'
+import { builtinAllViewId, scopedCollectionName, type DataScope } from '../catalog-views.ts'
 import { sortDataCollections } from './database-path.ts'
 import { listCollection } from './db-client.ts'
 import { TableGlyph } from './nav-glyphs.tsx'
@@ -112,9 +112,9 @@ export function ScopeOverview({
                         key={scope}
                         type="button"
                         className="rounded-lg bg-(--dsw-hover) px-2 py-2 text-left hover:bg-(--dsw-border)"
-                        onClick={() => onOpenTable(table.path, builtinScopeViewId(scope, builtinAllViewId(table.path)))}
+                        onClick={() => onOpenTable(table.path, builtinAllViewId(table.path))}
                       >
-                        <span className="block text-xs text-(--dsw-label-2)">{DATA_SCOPE_LABEL[scope]}</span>
+                        <span className="block text-xs text-(--dsw-label-2)">{scopedCollectionName(table, scope)}</span>
                         <strong className="text-sm">{tableCounts?.[scope] ?? 0}</strong>
                       </button>
                     ))}
@@ -132,7 +132,7 @@ export function ScopeOverview({
               {loading ? <p className="p-4 text-sm text-(--dsw-label-3)">加载中…</p> : null}
               {!loading && !rows.length ? <p className="p-4 text-sm text-(--dsw-label-3)">还没有数据</p> : null}
               {rows.map(({ table, record, scope, timestamp }) => {
-                const viewId = builtinScopeViewId(scope, builtinAllViewId(table.path))
+                const viewId = builtinAllViewId(table.path)
                 return (
                   <button
                     key={`${table.path}:${scope}:${record.id}`}
@@ -143,7 +143,7 @@ export function ScopeOverview({
                     <span className="text-lg">{String(record.emoji ?? '') || '•'}</span>
                     <span className="min-w-0 flex-1">
                       <strong className="block truncate text-sm">{recordLabel(record)}</strong>
-                      <span className="text-xs text-(--dsw-label-3)">{table.view?.title ?? table.label} · {DATA_SCOPE_LABEL[scope]}</span>
+                      <span className="text-xs text-(--dsw-label-3)">{scopedCollectionName(table, scope)}</span>
                     </span>
                     {timestamp ? (
                       <time className="text-xs text-(--dsw-label-3)">

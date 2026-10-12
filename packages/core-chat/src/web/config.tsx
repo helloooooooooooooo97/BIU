@@ -54,6 +54,8 @@ interface ChatPublicConfig {
   providers?: Record<string, ProviderView>
   endpoints?: EndpointView[]
   modelCatalog?: ModelDef[]
+  acceptsApiKeys?: boolean
+  secretsLocalOnly?: boolean
 }
 
 const OFFICIAL_IDS = ['deepseek', 'anthropic', 'openai'] as const
@@ -82,6 +84,7 @@ export function ChatConfig(props?: { onClose?: () => void }) {
   const [endpoints, setEndpoints] = useState<EndpointView[]>([])
   const [modelCatalog, setModelCatalog] = useState<ModelDef[]>([])
   const [providers, setProviders] = useState<Record<string, ProviderView> | null>(null)
+  const [acceptsApiKeys, setAcceptsApiKeys] = useState(true)
 
   const [keyDraft, setKeyDraft] = useState('')
   const [urlDraft, setUrlDraft] = useState('')
@@ -242,6 +245,7 @@ export function ChatConfig(props?: { onClose?: () => void }) {
     const cats = Array.isArray(data.modelCatalog) ? data.modelCatalog : []
     setModelCatalog(cats)
     if (data.providers) setProviders(data.providers)
+    setAcceptsApiKeys(data.acceptsApiKeys !== false)
 
     const eid = preferActive || data.endpointId || data.provider || 'deepseek'
     setDefaultEndpointId(data.endpointId || data.provider || eid)
@@ -881,17 +885,21 @@ export function ChatConfig(props?: { onClose?: () => void }) {
                   />
                 </div>
 
-                <div className="flex items-center gap-3 rounded-md px-2 py-2 hover:bg-(--dsw-hover)">
-                  <div className="w-18 shrink-0 text-[12px] text-(--dsw-label-3)">API Key</div>
-                  <input
-                    className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 py-[6px] text-[13px] text-(--dsw-label) outline-none placeholder:text-(--dsw-placeholder) hover:border-(--dsw-border) focus:border-(--dsw-label-3) focus:bg-(--dsw-input)"
-                    type="password"
-                    autoComplete="off"
-                    placeholder="sk-…（可选，稍后可补）"
-                    value={newKey}
-                    onChange={(e) => setNewKey(e.target.value)}
-                  />
-                </div>
+                {acceptsApiKeys ? (
+                  <div className="flex items-center gap-3 rounded-md px-2 py-2 hover:bg-(--dsw-hover)">
+                    <div className="w-18 shrink-0 text-[12px] text-(--dsw-label-3)">API Key</div>
+                    <input
+                      className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 py-[6px] text-[13px] text-(--dsw-label) outline-none placeholder:text-(--dsw-placeholder) hover:border-(--dsw-border) focus:border-(--dsw-label-3) focus:bg-(--dsw-input)"
+                      type="password"
+                      autoComplete="off"
+                      placeholder="sk-…（可选，稍后可补）"
+                      value={newKey}
+                      onChange={(e) => setNewKey(e.target.value)}
+                    />
+                  </div>
+                ) : (
+                  <p className="px-2 text-[11px] text-(--dsw-label-3)">AI API Token 只能配置在运行 Agent 的本机，云端不会接收或保存。</p>
+                )}
               </div>
               <div className="flex items-center justify-end gap-2 border-t border-(--dsw-border) px-4 py-2.5">
                 {error ? (
@@ -947,7 +955,7 @@ export function ChatConfig(props?: { onClose?: () => void }) {
               </div>
 
               <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-3">
-                <label className="flex flex-col gap-1.5">
+                {acceptsApiKeys ? <label className="flex flex-col gap-1.5">
                   <span className="flex items-center justify-between text-[11px] font-semibold text-(--dsw-label-3)">
                     <span>API Key</span>
                     <button
@@ -985,7 +993,11 @@ export function ChatConfig(props?: { onClose?: () => void }) {
                   {testHint ? (
                     <span className="text-[11px] text-(--dsw-ok)">{testHint}</span>
                   ) : null}
-                </label>
+                </label> : (
+                  <div className="rounded-lg border border-(--dsw-border) bg-(--dsw-hover) px-3 py-2.5 text-[11px] leading-5 text-(--dsw-label-3)">
+                    AI API Token 只能保存在运行 Agent 的设备上，不能上传到云端。当前服务仅使用管理员配置的模型凭据。
+                  </div>
+                )}
 
                 {!isOfficial(active.id) ? (
                   <label className="flex flex-col gap-1.5">

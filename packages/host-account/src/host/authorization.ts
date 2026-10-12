@@ -50,7 +50,7 @@ export type Decision =
     }
 
 export type ResourcePolicyInput = {
-  ownership?: 'personal' | 'workspace'
+  ownership?: 'personal' | 'workspace' | 'shared'
   accessMode?: AccessMode
   memberDefaultRole?: 'viewer' | 'editor'
   parentCollection?: string
@@ -61,7 +61,7 @@ type PolicyRow = {
   workspace_id: string
   collection: string
   record_id: string
-  ownership: 'personal' | 'workspace'
+  ownership: 'personal' | 'workspace' | 'shared'
   owner_account_id: string
   access_mode: AccessMode
   member_default_role: 'viewer' | 'editor'
@@ -73,6 +73,17 @@ const ROLE_RANK: Record<ResourceRole, number> = { viewer: 1, editor: 2, manager:
 
 function maxRole(roles: ResourceRole[]) {
   return roles.sort((a, b) => ROLE_RANK[b] - ROLE_RANK[a])[0] ?? null
+}
+
+export function roleCoversAction(role: ResourceRole, action: Action) {
+  return ROLE_RANK[role] >= ROLE_RANK[requiredRole(action)]
+}
+
+function memberAccessRole(policy: PolicyRow, membership: string): ResourceRole {
+  if (membership === 'owner' || membership === 'admin') return 'manager'
+  if (membership === 'viewer') return 'viewer'
+  if (policy.ownership === 'workspace' || policy.member_default_role === 'editor') return 'editor'
+  return 'viewer'
 }
 
 function requiredRole(action: Action): ResourceRole {
@@ -112,6 +123,10 @@ export class AuthorizationService {
 
   setMemberViewMatcher(matcher: (workspaceId: string, viewId: string, accountId: string) => boolean) {
     this.memberViewMatcher = matcher
+  }
+
+  matchesMemberView(workspaceId: string, viewId: string, accountId: string) {
+    return Boolean(this.memberViewMatcher?.(workspaceId, viewId, accountId))
   }
 
   authorize(actor: Actor | null, action: Action, resource: ResourceRef): Decision {
@@ -197,7 +212,7 @@ export class AuthorizationService {
     return resources.filter(({ resource }) => this.authorize(actor, action, resource).allowed).map(({ value }) => value)
   }
 
-  scopeCurrent(resource: Extract<ResourceRef, { type: 'record' }>): 'personal' | 'workspace' | null {
+  scopeCurrent(resource: Extract<ResourceRef, { type: 'record' }>): 'personal' | 'workspace' | 'shared' | null {
     const actor = this.currentActor()
     if (!actor || actor.workspaceId !== resource.workspaceId) return null
     return this.resourceScope(resource, new Set(), 0)
@@ -207,7 +222,7 @@ export class AuthorizationService {
     resource: Extract<ResourceRef, { type: 'record' }>,
     visited: Set<string>,
     depth: number,
-  ): 'personal' | 'workspace' | null {
+  ): 'personal' | 'workspace' | 'shared' | null {
     const key = `${resource.workspaceId}\t${resource.collection}\t${resource.recordId}`
     if (visited.has(key) || depth > 64) return null
     visited.add(key)
@@ -233,6 +248,7 @@ export class AuthorizationService {
         depth + 1,
       )
     }
+    if (policy.ownership === 'shared') return 'shared'
     return policy.ownership === 'workspace' || policy.access_mode === 'members' ? 'workspace' : 'personal'
   }
 
@@ -357,6 +373,73 @@ export class AuthorizationService {
     }
   }
 
+  /** 当前用户在这条记录上的权限是怎么来的。继承会逐级展开，视图授权由调用方另算。 */
+  roleChain(accountId: string, resource: Extract<ResourceRef, { type: 'record' }>) {
+    return this.collectRoleChain(accountId, resource, new Set(), 0, true)
+  }
+
+  private collectRoleChain(
+    accountId: string,
+    resource: Extract<ResourceRef, { type: 'record' }>,
+    visited: Set<string>,
+    depth: number,
+    top: boolean,
+  ): Array<{ id: string; title: string; detail: string; role: ResourceRole }> {
+    const key = `${resource.workspaceId}\t${resource.collection}\t${resource.recordId}`
+    if (visited.has(key) || depth > 64) return []
+    visited.add(key)
+    const title = top ? '这条内容' : '上一级内容'
+    const policy = this.policy(resource)
+    if (!policy) {
+      const legacy = this.db
+        .prepare(
+          `SELECT owner_id FROM record_owners
+           WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
+        )
+        .get(resource.workspaceId, resource.collection, resource.recordId) as { owner_id: string } | undefined
+      if (!legacy) return []
+      if (legacy.owner_id === accountId) return [{ id: key, title, detail: '你是创建者', role: 'owner' }]
+      const role: ResourceRole = this.membership(accountId, resource.workspaceId) === 'viewer' ? 'viewer' : 'editor'
+      return [{ id: key, title, detail: '沿用空间里的旧记录', role }]
+    }
+    if (policy.owner_account_id === accountId) return [{ id: key, title, detail: '你是创建者', role: 'owner' }]
+    const direct = this.directRole(accountId, resource)
+    if (direct) {
+      const detail = direct.source === 'group-grant'
+        ? '通过成员组授权'
+        : direct.source === 'view-grant'
+          ? '通过成员视图授权'
+          : direct.source === 'direct-grant'
+            ? '直接授权给你'
+            : '按空间角色授权'
+      return [{ id: key, title, detail, role: direct.effectiveRole }]
+    }
+    if (policy.access_mode === 'members' && this.membershipKind(accountId, resource.workspaceId) === 'member') {
+      const membership = this.membership(accountId, resource.workspaceId)
+      const role = memberAccessRole(policy, membership)
+      const detail = role === 'manager' ? '空间管理者默认可管理' : role === 'viewer' ? '查看者只能阅读' : '空间成员默认可编辑'
+      return [{ id: key, title, detail, role }]
+    }
+    if (policy.access_mode === 'inherit' && policy.parent_record_id) {
+      const parent = this.collectRoleChain(
+        accountId,
+        {
+          type: 'record',
+          workspaceId: resource.workspaceId,
+          collection: policy.parent_collection || resource.collection,
+          recordId: policy.parent_record_id,
+        },
+        visited,
+        depth + 1,
+        false,
+      )
+      if (!parent.length) return []
+      const concrete = parent[parent.length - 1]!
+      return [{ id: key, title, detail: '权限继承自上一级', role: concrete.role }, ...parent]
+    }
+    return []
+  }
+
   private effectiveRole(
     accountId: string,
     resource: Extract<ResourceRef, { type: 'record' }>,
@@ -390,7 +473,10 @@ export class AuthorizationService {
     if (policy.access_mode === 'private' || policy.access_mode === 'restricted') return null
     if (policy.access_mode === 'members') {
       if (this.membershipKind(accountId, resource.workspaceId) !== 'member') return null
-      return { effectiveRole: policy.member_default_role, source: 'workspace-default' }
+      return {
+        effectiveRole: memberAccessRole(policy, this.membership(accountId, resource.workspaceId)),
+        source: 'workspace-default',
+      }
     }
     if (policy.access_mode === 'inherit' && policy.parent_record_id) {
       const inherited = this.effectiveRole(

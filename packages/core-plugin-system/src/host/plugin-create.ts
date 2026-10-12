@@ -13,6 +13,7 @@ export type PluginCreateInput = {
   tags?: string[]
   author?: string
   authorUrl?: string
+  builtin?: boolean
   headless?: boolean
   shell?: StoreShell | Record<string, unknown>
   hostJs?: string
@@ -26,6 +27,7 @@ export type StoreManifestFields = {
   tags: string[]
   author: string
   authorUrl: string
+  builtin?: boolean
   createdAt: number
   headless?: boolean
   shell?: StoreShell
@@ -46,7 +48,7 @@ export function parseTags(value: unknown): string[] {
 }
 
 export function buildStoreManifest(
-  input: Pick<PluginCreateInput, 'id' | 'name' | 'blurb' | 'tags' | 'author' | 'authorUrl' | 'shell' | 'headless'>,
+  input: Pick<PluginCreateInput, 'id' | 'name' | 'blurb' | 'tags' | 'author' | 'authorUrl' | 'shell' | 'headless' | 'builtin'>,
   existing?: Partial<StoreManifestFields>,
   now = Date.now(),
 ): StoreManifestFields {
@@ -60,6 +62,7 @@ export function buildStoreManifest(
     author: String(input.author ?? existing?.author ?? '').trim(),
     authorUrl: String(input.authorUrl ?? existing?.authorUrl ?? '').trim(),
     createdAt: Number.isFinite(createdAt) && createdAt > 0 ? createdAt : now,
+    ...(input.builtin === true || existing?.builtin === true ? { builtin: true as const } : {}),
     ...(headless ? { headless: true } : {}),
     ...(!headless && declaredStoreShell(input.shell ?? existing?.shell)
       ? { shell: parseStoreShell(input.shell ?? existing?.shell) }
@@ -81,6 +84,7 @@ export function parseStoreManifest(raw: unknown): StoreManifestFields {
       tags: parseTags(data.tags),
       author: data.author != null ? String(data.author) : undefined,
       authorUrl: data.authorUrl != null ? String(data.authorUrl) : data.author_url != null ? String(data.author_url) : undefined,
+      builtin: data.builtin === true,
       headless: data.headless === true,
       shell: data.shell,
     },
@@ -103,12 +107,22 @@ export async function persistStoreManifestCreatedAt(dir: string, now = Date.now(
   return manifest
 }
 
-const HOST_ENTRIES = ['host.ts', 'host.tsx', 'host.js']
-const WEB_ENTRIES = ['web.tsx', 'web.ts', 'web.js']
+const HOST_ENTRIES = ['host/index.ts', 'host/index.tsx', 'host/index.js']
+const WEB_ENTRIES = ['web/index.tsx', 'web/index.ts', 'web/index.js']
 const NATIVE_PLUGIN_DEPENDENCIES = new Set(['node-pty'])
 
 export function findEntry(dir: string, names: string[]) {
   return names.map((name) => join(dir, name)).find((path) => existsSync(path)) ?? null
+}
+
+/** 入口可以在 host/ 或 web/ 里，包根目录仍是带 manifest.json 的那一层。 */
+export function pluginRoot(dir: string) {
+  let current = dir
+  while (current && current !== dirname(current)) {
+    if (existsSync(join(current, 'manifest.json'))) return current
+    current = dirname(current)
+  }
+  return dir
 }
 
 function mimeForAsset(file: string) {
@@ -419,11 +433,11 @@ export async function bundleStoreEntry(entryFile: string, kind: 'host' | 'web') 
 }
 
 async function bundleStoreEntryUnlocked(entryFile: string, kind: 'host' | 'web') {
-  const sandbox = dirname(entryFile)
+  const sandbox = pluginRoot(dirname(entryFile))
   await ensureSandboxNpm(sandbox)
   const { build } = await import('esbuild')
   const result = await build({
-    absWorkingDir: dirname(entryFile),
+    absWorkingDir: sandbox,
     entryPoints: [entryFile],
     bundle: true,
     minify: true,
@@ -469,7 +483,7 @@ const CONTRACT = [
 
 export const PLUGIN_SANDBOX_DESCRIPTION = [
   '这是安装插件的第一步，不是新建代理。用户说「再开一个 agent」请 db_create /sessions。',
-  '开沙箱：只建/更新 .plugin-dev/<id>/（manifest.json、package.json，可选起点 host.ts / web.tsx），不进已安装目录。',
+  '开沙箱：只建/更新 .plugin-dev/<id>/（manifest.json、package.json，可选起点 host/index.ts / web/index.tsx），不进已安装目录。',
   '然后用 bash / 文件工具在沙箱里写代码、相对 import。调完必须 db_action action=pack 才会打进 .plugin/<id>/。',
   '卸载删 .plugin/<id>/，沙箱还在。',
   CONTRACT,
@@ -477,7 +491,7 @@ export const PLUGIN_SANDBOX_DESCRIPTION = [
 
 export const PLUGIN_PACK_DESCRIPTION = [
   '把 .plugin-dev/<id>/ 沙箱打包进 .plugin/<id>/（manifest.json + bundle 后的 host.js / web.js）。',
-  '入口：host.ts|tsx|js 与 web.tsx|ts|js，至少要有一个。有窗口的 web 必须已写 shell.width/height；无头插件写 headless: true 即可。已打开的插件会重新挂上。',
+  '入口：host/index.ts|tsx|js 与 web/index.tsx|ts|js，至少要有一个。宿主只在 Node 跑，页面只在浏览器跑，两边分开放。有窗口的 web 必须已写 shell.width/height；无头插件写 headless: true 即可。已打开的插件会重新挂上。',
   '每个沙箱都有 package.json。npm 依赖写在里面，pack 会在该目录 install，打进 bundle；没有第三方包时 dependencies 为空对象。不要把插件依赖加到宿主 package.json。',
 ].join(' ')
 
@@ -536,11 +550,11 @@ export const PLUGIN_SANDBOX_PROPERTIES = {
   ...ID_NAME_BLURB,
   hostJs: {
     type: 'string',
-    description: '可选。写入沙箱 host.ts 的起点，大逻辑请在沙箱目录里改。',
+    description: '可选。写入沙箱 host/index.ts 的起点，大逻辑请在 host 目录里改。',
   },
   webJs: {
     type: 'string',
-    description: '可选。写入沙箱 web.tsx 的起点。',
+    description: '可选。写入沙箱 web/index.tsx 的起点。',
   },
 }
 

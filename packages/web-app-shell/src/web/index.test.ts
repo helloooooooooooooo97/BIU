@@ -134,7 +134,9 @@ test('settings appearance toggles day and night themes', () => {
   assert.match(shell, /ShellSettingsAccount/)
   assert.match(shell, /ShellSettingsAppearance/)
   assert.match(chrome, /data-testid="settings-account"/)
-  assert.match(chrome, /账号名和登录邮箱不可修改/)
+  assert.match(chrome, /本地账号只管理这台设备的数据/)
+  assert.match(chrome, /云端账号是独立的可选连接/)
+  assert.match(chrome, /\/api\/account\/cloud\/login/)
   assert.match(chrome, /我的成员资料/)
   assert.match(chrome, /data-testid="settings-appearance"/)
   assert.match(chrome, /日间模式/)
@@ -185,7 +187,7 @@ test('settings appearance toggles day and night themes', () => {
   assert.match(css, /html:not\(\.dark\) \.hljs/)
   assert.match(html, /color-scheme/)
   assert.doesNotMatch(html, /localStorage/)
-  assert.doesNotMatch(html, /biu\.theme/)
+  assert.match(html, /biu\.theme\.bootstrap/)
 })
 
 test('settings lists an MCP pane for host token and clients', () => {
@@ -230,7 +232,7 @@ test('settings about states Apache-2.0 license and grok-bot notice', () => {
   assert.match(shell, /ShellSettingsAbout/)
   assert.match(chrome, /data-testid="settings-about"/)
   assert.match(chrome, /Apache License 2\.0/)
-  assert.doesNotMatch(chrome, /MIT/)
+  assert.doesNotMatch(chrome, /\bMIT\b/)
   assert.doesNotMatch(chrome, /PolyForm/)
   assert.match(chrome, /grok-bot/)
 })

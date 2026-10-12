@@ -14,7 +14,7 @@ test('ready banner prints OSC-8 clickable Local / API / Share links', () => {
   const text = formatReadyBanner({
     ui: 'http://127.0.0.1:3141/',
     api: 'http://127.0.0.1:3141/',
-    share: 'http://192.168.1.8:3142/',
+    share: 'http://192.168.1.8:3141/',
   })
   assert.match(text, /▄▄▄▄▄▄▄▄▄▄▄▄      ▄▄▄▄▄▄      ▄▄▄      ▄▄▄/)
   assert.match(text, /\x1b\]8;;http:\/\/127\.0\.0\.1:3141\//)

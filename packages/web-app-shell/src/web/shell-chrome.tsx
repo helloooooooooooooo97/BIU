@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode, type Ref } from 'react'
+import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
   ArrowRightStartOnRectangleIcon,
@@ -8,12 +9,15 @@ import {
   CheckIcon,
   CircleStackIcon,
   ClipboardDocumentIcon,
+  CloudIcon,
+  ComputerDesktopIcon,
   Cog6ToothIcon,
   CameraIcon,
   EyeIcon,
   EyeSlashIcon,
   MagnifyingGlassIcon,
   PlusIcon,
+  XMarkIcon,
 } from '@heroicons/react/16/solid'
 import { AnchorMenu, ConfirmDialog } from '@biu/public-ui'
 import { chromeIcon } from './chrome-icon.ts'
@@ -24,13 +28,17 @@ import { persistWorkspaceProfile, useWorkspaceProfile } from '@biu/public-ui'
 import { LayoutPrefsMenu } from '@biu/core-file-system/layout-prefs-menu'
 import { getPagePrefs, hydratePagePrefs, subscribePageWidth } from '@biu/core-file-system/page-width'
 
+import { clearWorkspaceId, readWorkspaceId, writeWorkspaceId } from './tenant-fetch.ts'
+
 if (typeof window !== 'undefined') {
   const originalFetch = window.fetch.bind(window)
   window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
     const token = localStorage.getItem('biu.account.token') ?? ''
-    if (!token) return originalFetch(input, init)
+    const workspaceId = readWorkspaceId()
+    if (!token && !workspaceId) return originalFetch(input, init)
     const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined))
-    if (!headers.has('authorization')) headers.set('authorization', `Bearer ${token}`)
+    if (token && !headers.has('authorization')) headers.set('authorization', `Bearer ${token}`)
+    if (workspaceId && !headers.has('x-biu-workspace-id')) headers.set('x-biu-workspace-id', workspaceId)
     return originalFetch(input, { ...init, headers })
   }
 }
@@ -155,18 +163,52 @@ function WorkspaceMemberProfile() {
 
 export function ShellSettingsAccount() {
   const [account, setAccount] = useState<{ name: string; email: string }>({ name: '', email: '' })
+  const [cloud, setCloud] = useState<{
+    available: boolean
+    connected: boolean
+    origin?: string
+    account?: { name?: string; email?: string }
+  }>({ available: false, connected: false })
+  const [cloudEmail, setCloudEmail] = useState('')
+  const [cloudPassword, setCloudPassword] = useState('')
+  const [syncPassword, setSyncPassword] = useState('')
+  const [cloudMessage, setCloudMessage] = useState('')
+  const [sessions, setSessions] = useState<Array<Record<string, unknown>>>([])
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [nextPassword, setNextPassword] = useState('')
+  const [message, setMessage] = useState('')
+  const token = readAccountToken()
+  const loadSessions = () =>
+    accountFetch(token, '/api/account/sessions')
+      .then((body) => setSessions((body.sessions as Array<Record<string, unknown>>) ?? []))
+      .catch(() => setSessions([]))
+  const loadCloud = () =>
+    accountFetch(token, '/api/account/cloud')
+      .then((body) =>
+        setCloud({
+          available: body.available === true,
+          connected: body.connected === true,
+          origin: typeof body.origin === 'string' ? body.origin : undefined,
+          account:
+            body.account && typeof body.account === 'object'
+              ? (body.account as { name?: string; email?: string })
+              : undefined,
+        }),
+      )
+      .catch(() => setCloud({ available: false, connected: false }))
   useEffect(() => {
-    const token = localStorage.getItem(ACCOUNT_KEY) ?? ''
     if (!token) return
     void accountFetch(token, '/api/account/me')
       .then((body) => setAccount({ name: String(body.name ?? body.email ?? ''), email: String(body.email ?? '') }))
       .catch(() => setAccount({ name: '', email: '' }))
-  }, [])
+    void loadSessions()
+    void loadCloud()
+  }, [token])
   return (
     <section className="settings-account" data-testid="settings-account">
       <header className="settings-account-head">
         <h3 className="settings-account-title">账户</h3>
-        <p className="settings-muted settings-account-lead">同一个账号用于所有空间。账号名和登录邮箱不可修改。</p>
+        <p className="settings-muted settings-account-lead">本地账号只管理这台设备的数据；云端账号是独立的可选连接。</p>
       </header>
       <div className="settings-account-row">
         <div className="settings-account-copy">
@@ -178,10 +220,178 @@ export function ShellSettingsAccount() {
       </div>
       <div className="settings-account-row">
         <div className="settings-account-copy">
+          <p className="settings-account-label">云端账号</p>
+          {cloud.connected ? (
+            <div className="settings-account-actions">
+              <span className="settings-muted settings-account-hint">
+                {cloud.account?.name || cloud.account?.email || '已连接'}{cloud.origin ? ` · ${cloud.origin}` : ''}
+              </span>
+              <button
+                type="button"
+                className="settings-account-action"
+                onClick={() => {
+                  setCloudMessage('')
+                  void accountFetch(token, '/api/account/cloud', { method: 'DELETE' })
+                    .then(() => {
+                      setCloudPassword('')
+                      setCloudMessage('已断开云端账号，本机数据没有变化。')
+                      void loadCloud()
+                      window.dispatchEvent(new Event(ACCOUNT_EVENT))
+                    })
+                    .catch((error) => setCloudMessage(error instanceof Error ? error.message : '断开失败'))
+                }}
+              >
+                断开
+              </button>
+            </div>
+          ) : cloud.available ? (
+            <div className="settings-cloud-connect">
+              <form
+                className="settings-account-actions"
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  setCloudMessage('')
+                  void accountFetch(token, '/api/account/cloud/login', {
+                    method: 'POST',
+                    body: JSON.stringify({ email: cloudEmail.trim(), password: cloudPassword }),
+                  })
+                    .then(() => {
+                      setCloudPassword('')
+                      setCloudMessage('云端账号已登录。')
+                      void loadCloud()
+                      window.dispatchEvent(new Event(ACCOUNT_EVENT))
+                    })
+                    .catch((error) => setCloudMessage(error instanceof Error ? error.message : '云端登录失败'))
+                }}
+              >
+                <input
+                  className="settings-account-input"
+                  type="email"
+                  placeholder="云端邮箱"
+                  value={cloudEmail}
+                  onChange={(event) => setCloudEmail(event.target.value)}
+                />
+                <input
+                  className="settings-account-input"
+                  type="password"
+                  placeholder="云端密码"
+                  value={cloudPassword}
+                  onChange={(event) => setCloudPassword(event.target.value)}
+                />
+                <button className="settings-account-action" type="submit" disabled={!cloudEmail.trim() || !cloudPassword}>
+                  登录云端
+                </button>
+              </form>
+              <div className="settings-cloud-sync">
+                <p className="settings-muted settings-account-hint">
+                  或使用本地邮箱 {account.email || '（未设置）'} 和当前密码创建并关联云端账号。创建后两边的密码分别修改。
+                </p>
+                <form
+                  className="settings-account-actions"
+                  onSubmit={(event) => {
+                    event.preventDefault()
+                    setCloudMessage('')
+                    void accountFetch(token, '/api/account/cloud/sync-create', {
+                      method: 'POST',
+                      body: JSON.stringify({ currentPassword: syncPassword }),
+                    })
+                      .then((body) => {
+                        setSyncPassword('')
+                        setCloudMessage(body.created === true ? '云端账号已创建并关联。' : '已有云端账号已关联。')
+                        void loadCloud()
+                        window.dispatchEvent(new Event(ACCOUNT_EVENT))
+                      })
+                      .catch((error) => setCloudMessage(error instanceof Error ? error.message : '创建并关联失败'))
+                  }}
+                >
+                  <input
+                    className="settings-account-input"
+                    type="password"
+                    aria-label="当前本地密码"
+                    placeholder="当前本地密码"
+                    value={syncPassword}
+                    onChange={(event) => setSyncPassword(event.target.value)}
+                  />
+                  <button
+                    className="settings-account-action"
+                    type="submit"
+                    data-testid="settings-cloud-sync-create"
+                    disabled={!account.email || !syncPassword}
+                  >
+                    创建并关联
+                  </button>
+                </form>
+              </div>
+            </div>
+          ) : (
+            <p className="settings-muted settings-account-hint">当前没有配置中心服务，单机功能可以完整使用。</p>
+          )}
+          {cloudMessage ? <p className="settings-muted settings-account-hint">{cloudMessage}</p> : null}
+        </div>
+      </div>
+      <div className="settings-account-row">
+        <div className="settings-account-copy">
           <p className="settings-account-label">登录邮箱</p>
           <p className="settings-muted settings-account-hint" data-testid="settings-account-email">
             {account.email || '未设置'}
           </p>
+        </div>
+      </div>
+      <form
+        className="settings-account-row"
+        onSubmit={(event) => {
+          event.preventDefault()
+          setMessage('')
+          void accountFetch(token, '/api/account/password', {
+            method: 'POST',
+            body: JSON.stringify({ currentPassword, nextPassword }),
+          })
+            .then(() => {
+              setCurrentPassword('')
+              setNextPassword('')
+              setMessage('密码已修改，其他设备已退出。')
+              void loadSessions()
+            })
+            .catch((error) => setMessage(error instanceof Error ? error.message : '修改失败'))
+        }}
+      >
+        <div className="settings-account-copy">
+          <p className="settings-account-label">修改密码</p>
+          <div className="settings-account-actions">
+            <input className="settings-account-input" type="password" placeholder="当前密码" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} />
+            <input className="settings-account-input" type="password" placeholder="新密码（至少 6 位）" value={nextPassword} onChange={(event) => setNextPassword(event.target.value)} />
+            <button className="settings-account-action" type="submit">修改密码</button>
+          </div>
+          {message ? <p className="settings-muted settings-account-hint">{message}</p> : null}
+        </div>
+      </form>
+      <div className="settings-account-row">
+        <div className="settings-account-copy">
+          <p className="settings-account-label">登录设备</p>
+          <div className="settings-account-actions" data-testid="settings-account-sessions">
+            {sessions.map((session) => (
+              <div className="settings-member-row" key={String(session.id)}>
+                <span>{String(session.device_name || '设备')}</span>
+                <span className="settings-muted">
+                  {session.revoked_at
+                    ? '已退出'
+                    : `最近使用：${new Date(Number(session.last_seen_at)).toLocaleString()} · 到期：${new Date(Number(session.expires_at)).toLocaleString()}`}
+                </span>
+                {!session.revoked_at ? (
+                  <button
+                    type="button"
+                    className="settings-account-action"
+                    onClick={() => {
+                      void accountFetch(token, `/api/account/sessions/${encodeURIComponent(String(session.id))}`, { method: 'DELETE' })
+                        .then(loadSessions)
+                    }}
+                  >
+                    移除
+                  </button>
+                ) : null}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </section>
@@ -209,7 +419,10 @@ export function writeAccountToken(next: string) {
     void fetch('/api/account/logout', { method: 'POST' }).catch(() => undefined)
   }
   if (next) localStorage.setItem(ACCOUNT_KEY, next)
-  else localStorage.removeItem(ACCOUNT_KEY)
+  else {
+    localStorage.removeItem(ACCOUNT_KEY)
+    clearWorkspaceId()
+  }
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(ACCOUNT_EVENT))
 }
 
@@ -280,115 +493,184 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }, [token, verified, workspaceInvite])
 
   if (token && verified && !joining) return children
-  if (token) return <div className="auth-gate" data-testid="auth-verifying">正在验证登录状态…</div>
+  if (token) {
+    return (
+      <div className="auth-gate" data-testid="auth-verifying">
+        <AuthBackdrop />
+        <div className="auth-status">
+          <span className="auth-status-spinner" />
+          正在验证登录状态
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="auth-gate" data-testid="auth-gate">
-      {guestInvite ? (
-        <form
-          className="settings-account auth-gate-card"
-          data-testid="auth-guest-invite"
-          onSubmit={(event) => {
-            event.preventDefault()
-            setJoining(true)
-            void accountFetch('', `/api/account/guest-invites/${encodeURIComponent(guestInvite)}/accept`, {
-              method: 'POST',
-              body: JSON.stringify({ name: guestName.trim() }),
-            })
-              .then((body) => {
-                const url = new URL(window.location.href)
-                url.searchParams.delete('guestInvite')
-                window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
-                writeAccountToken(String(body.token ?? ''))
-                setError('')
-              })
-              .catch((err) => setError(err instanceof Error ? err.message : '临时访客链接无效'))
-              .finally(() => setJoining(false))
-          }}
-        >
-          <header className="settings-account-head">
-            <h3 className="settings-account-title">以临时访客身份进入</h3>
-            <p className="settings-muted settings-account-lead">无需注册，只能访问链接指定的内容；权限会在链接设定的时间后自动失效。</p>
-          </header>
-          {error ? <p className="settings-account-error">{error}</p> : null}
-          <div className="settings-account-actions auth-gate-fields">
-            <input
-              className="settings-account-input"
-              value={guestName}
-              maxLength={40}
-              placeholder="你的称呼（可选）"
-              data-testid="auth-guest-name"
-              onChange={(event) => setGuestName(event.target.value)}
-            />
-            <button type="submit" className="settings-account-action" disabled={joining}>
-              {joining ? '正在进入…' : '进入分享内容'}
-            </button>
+      <AuthBackdrop />
+      <div className="auth-shell">
+        <header className="auth-topbar">
+          <div className="auth-brand">
+            <span className="auth-brand-mark">B</span>
+            <span>BIU</span>
           </div>
-        </form>
-      ) : (
-      <form
-        className="settings-account auth-gate-card"
-        onSubmit={(event) => {
-          event.preventDefault()
-          const path = mode === 'register' ? '/api/account/register' : '/api/account/login'
-          void accountFetch('', path, {
-            method: 'POST',
-            body: JSON.stringify({ email: name.trim(), password }),
-          })
-            .then((body) => {
-              writeAccountToken(String(body.token ?? ''))
-              setPassword('')
-              setError('')
-            })
-            .catch((err) => setError(err instanceof Error ? err.message : '登录失败'))
-        }}
-      >
-        <header className="settings-account-head">
-          <h3 className="settings-account-title">{mode === 'register' ? '注册' : '登录'}</h3>
-          <p className="settings-muted settings-account-lead">
-            {workspaceInvite ? '登录或注册后即可通过邀请链接加入空间。' : '登录之后才能进入。登录邮箱和密码在所有工作区都一样。'}
-          </p>
+          <span className="auth-system-state"><i /> SYSTEM ONLINE</span>
         </header>
-        {error ? <p className="settings-account-error">{error}</p> : null}
-        <div className="settings-account-actions auth-gate-fields">
-          <input
-            className="settings-account-input"
-            value={name}
-            maxLength={40}
-            placeholder="登录邮箱"
-            type="email"
-            autoComplete="email"
-            data-testid="auth-name"
-            onChange={(event) => setName(event.target.value)}
-          />
-          <input
-            className="settings-account-input"
-            type="password"
-            value={password}
-            placeholder="密码"
-            autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
-            data-testid="auth-password"
-            onChange={(event) => setPassword(event.target.value)}
-          />
-          <button type="submit" className="settings-account-action" data-testid="auth-submit">
-            {mode === 'register' ? '注册并进入' : '登录'}
-          </button>
-          <button
-            type="button"
-            className="settings-account-action"
-            data-testid="auth-switch"
-            onClick={() => setMode((current) => (current === 'login' ? 'register' : 'login'))}
-          >
-            {mode === 'register' ? '已有账号，去登录' : '没有账号，去注册'}
-          </button>
-        </div>
-      </form>
-      )}
+        <section className="auth-stage">
+          <div className="auth-showcase">
+            <p className="auth-kicker">YOUR AGENT WORKSPACE</p>
+            <h1>Ideas at<br /><em>light speed.</em></h1>
+            <p className="auth-showcase-copy">让灵感、数据与智能体，在同一个空间持续运转。</p>
+            <div className="auth-capabilities">
+              <span>∞ Persistent</span>
+              <span>⌁ Connected</span>
+              <span>✦ Intelligent</span>
+            </div>
+          </div>
+          <div className="auth-card-wrap">
+            <div className="auth-card-glow" />
+            {guestInvite ? (
+              <form
+                className="auth-panel"
+                data-testid="auth-guest-invite"
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  setJoining(true)
+                  void accountFetch('', `/api/account/guest-invites/${encodeURIComponent(guestInvite)}/accept`, {
+                    method: 'POST',
+                    body: JSON.stringify({ name: guestName.trim() }),
+                  })
+                    .then((body) => {
+                      const url = new URL(window.location.href)
+                      url.searchParams.delete('guestInvite')
+                      window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
+                      writeAccountToken(String(body.token ?? ''))
+                      if (body.workspaceId) writeWorkspaceId(String(body.workspaceId))
+                      setError('')
+                    })
+                    .catch((err) => setError(err instanceof Error ? err.message : '临时访客链接无效'))
+                    .finally(() => setJoining(false))
+                }}
+              >
+                <div className="auth-panel-heading">
+                  <span className="auth-panel-icon">↗</span>
+                  <p className="auth-kicker">GUEST ACCESS</p>
+                  <h2>以访客身份进入</h2>
+                  <p className="auth-lead">无需注册，只能访问这条邀请链接中的内容。</p>
+                </div>
+                {error ? <p className="auth-error">{error}</p> : null}
+                <label className="auth-label">
+                  你的称呼 <span>可选</span>
+                  <input
+                    className="auth-field"
+                    value={guestName}
+                    maxLength={40}
+                    placeholder="如何称呼你？"
+                    data-testid="auth-guest-name"
+                    onChange={(event) => setGuestName(event.target.value)}
+                  />
+                </label>
+                <button type="submit" className="auth-go" disabled={joining}>
+                  <span>{joining ? '正在进入' : '进入空间'}</span><b>→</b>
+                </button>
+              </form>
+            ) : (
+              <form
+                className="auth-panel"
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  const path = mode === 'register' ? '/api/account/register' : '/api/account/login'
+                  void accountFetch('', path, {
+                    method: 'POST',
+                    body: JSON.stringify({ email: name.trim(), password }),
+                  })
+                    .then((body) => {
+                      writeAccountToken(String(body.token ?? ''))
+                      if (body.workspaceId) writeWorkspaceId(String(body.workspaceId))
+                      setPassword('')
+                      setError('')
+                    })
+                    .catch((err) => setError(err instanceof Error ? err.message : '登录失败'))
+                }}
+              >
+                <div className="auth-panel-heading">
+                  <span className="auth-panel-icon">{mode === 'register' ? '+' : '↗'}</span>
+                  <p className="auth-kicker">{mode === 'register' ? 'NEW ACCOUNT' : 'WELCOME BACK'}</p>
+                  <h2>{mode === 'register' ? '创建你的空间' : '登录 Biu'}</h2>
+                  <p className="auth-lead">
+                    {workspaceInvite ? '登录或注册后，用邀请链接加入空间。' : mode === 'register' ? '从这里开始你的智能工作流。' : '继续上次未完成的创造。'}
+                  </p>
+                </div>
+                {error ? <p className="auth-error">{error}</p> : null}
+                <label className="auth-label">
+                  邮箱
+                  <input
+                    className="auth-field"
+                    value={name}
+                    maxLength={40}
+                    placeholder="name@email.com"
+                    type={mode === 'register' ? 'email' : 'text'}
+                    autoComplete="username"
+                    data-testid="auth-name"
+                    onChange={(event) => setName(event.target.value)}
+                  />
+                </label>
+                <label className="auth-label">
+                  密码
+                  <input
+                    className="auth-field"
+                    type="password"
+                    value={password}
+                    placeholder={mode === 'register' ? '至少 6 位' : '输入你的密码'}
+                    autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
+                    data-testid="auth-password"
+                    onChange={(event) => setPassword(event.target.value)}
+                  />
+                </label>
+                <button type="submit" className="auth-go" data-testid="auth-submit">
+                  <span>{mode === 'register' ? '创建账号' : '进入工作空间'}</span><b>→</b>
+                </button>
+                <div className="auth-panel-footer">
+                  <span>{mode === 'register' ? '已经有账号？' : '第一次来到 Biu？'}</span>
+                  <button
+                    type="button"
+                    className="auth-switch"
+                    data-testid="auth-switch"
+                    onClick={() => setMode((current) => (current === 'login' ? 'register' : 'login'))}
+                  >
+                    {mode === 'register' ? '直接登录' : '创建账号'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </section>
+        <footer className="auth-bottom">
+          <span>BIU AGENT OS</span>
+          <span>ONE SPACE. UNLIMITED POSSIBILITY.</span>
+        </footer>
+      </div>
     </div>
   )
 }
 
-type CollabWorkspace = { id: string; name: string; role: string }
+function AuthBackdrop() {
+  return (
+    <div className="auth-backdrop" aria-hidden>
+      <div className="auth-grid" />
+      <div className="auth-aurora auth-aurora-one" />
+      <div className="auth-aurora auth-aurora-two" />
+      <div className="auth-orbit auth-orbit-one" />
+      <div className="auth-orbit auth-orbit-two" />
+      <div className="auth-planet">
+        <span className="auth-planet-shine" />
+      </div>
+      <div className="auth-noise" />
+    </div>
+  )
+}
+
+type CollabWorkspace = { id: string; name: string; role: string; location?: 'device' | 'cloud' }
 type CollabMember = { id: string; name: string; email?: string; role: string }
 type CollabPresence = { accountId: string; name: string; collection: string; recordId: string }
 
@@ -418,7 +700,7 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
   const [active, setActive] = useState('')
   const [open, setOpen] = useState(false)
   const [creating, setCreating] = useState(false)
-  const [newWorkspaceName, setNewWorkspaceName] = useState('')
+  const [creatingLocation, setCreatingLocation] = useState<'device' | 'cloud' | null>(null)
   const [createError, setCreateError] = useState('')
   const triggerRef = useRef<HTMLButtonElement>(null)
 
@@ -434,7 +716,9 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
         ])
         if (cancelled) return
         setWorkspaces(listed.workspaces ?? [])
-        setActive(String(current.workspaceId ?? ''))
+        const workspaceId = String(current.workspaceId ?? '')
+        setActive(workspaceId)
+        if (workspaceId) writeWorkspaceId(workspaceId)
       } catch {
         if (!cancelled) setWorkspaces([])
       }
@@ -454,19 +738,21 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
     setOpen(false)
     if (!token || !workspaceId || workspaceId === active) return
     setActive(workspaceId)
+    writeWorkspaceId(workspaceId)
     void accountFetch(token, '/api/account/active', {
       method: 'POST',
       body: JSON.stringify({ workspaceId }),
     }).then(() => window.location.reload())
   }
-  const createWorkspace = () => {
+  const createWorkspace = (location: 'device' | 'cloud') => {
     const token = readAccountToken()
-    const name = newWorkspaceName.trim()
-    if (!token || !name) return
+    if (!token || creatingLocation) return
+    const name = location === 'device' ? '本地空间' : '在线空间'
     setCreateError('')
+    setCreatingLocation(location)
     void accountFetch(token, '/api/account/workspaces', {
       method: 'POST',
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, location }),
     })
       .then(async (body) => {
         const created = body as CollabWorkspace
@@ -476,7 +762,10 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
         })
         window.location.reload()
       })
-      .catch((error) => setCreateError(error instanceof Error ? error.message : '创建失败'))
+      .catch((error) => {
+        setCreatingLocation(null)
+        setCreateError(error instanceof Error ? error.message : '创建失败')
+      })
   }
   return (
     <div className="shell-workspace-switch-wrap">
@@ -490,6 +779,9 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
         data-testid="shell-workspace-switcher"
         onClick={() => setOpen((value) => !value)}
       >
+        {current.location === 'cloud'
+          ? <CloudIcon aria-hidden className="shell-workspace-switch-icon" />
+          : <ComputerDesktopIcon aria-hidden className="shell-workspace-switch-icon" />}
         <span className="shell-workspace-switch-copy">
           <strong>{current.name}</strong>
         </span>
@@ -506,58 +798,38 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
           aria-label="选择空间"
           data-testid="shell-workspace-menu"
         >
-          <p className="shell-workspace-menu-title">切换空间</p>
           <div className="shell-workspace-menu-list">
-            {workspaces.map((workspace) => (
-              <button
-                key={workspace.id}
-                type="button"
-                role="menuitemradio"
-                aria-checked={workspace.id === active}
-                className={`shell-workspace-menu-item${workspace.id === active ? ' is-active' : ''}`}
-                onClick={() => switchTo(workspace.id)}
-              >
-                <span className="shell-workspace-menu-copy">
-                  <strong>{workspace.name}</strong>
-                  <small>{workspaceRoleLabel(workspace.role)}</small>
-                </span>
-                {workspace.id === active ? <CheckIcon className="size-4" /> : null}
-              </button>
-            ))}
+            {workspaces.map((workspace) => {
+              const location = workspace.location ?? 'device'
+              return (
+                <button
+                  key={workspace.id}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={workspace.id === active}
+                  className={`shell-workspace-menu-item${workspace.id === active ? ' is-active' : ''}`}
+                  onClick={() => switchTo(workspace.id)}
+                >
+                  {location === 'cloud'
+                    ? <CloudIcon aria-hidden className="shell-workspace-menu-icon" />
+                    : <ComputerDesktopIcon aria-hidden className="shell-workspace-menu-icon" />}
+                  <span className="shell-workspace-menu-copy">
+                    <strong>{workspace.name}</strong>
+                  </span>
+                  <small className="shell-workspace-menu-role">{workspaceRoleLabel(workspace.role)}</small>
+                </button>
+              )
+            })}
           </div>
           <div className="shell-workspace-menu-actions">
-            {creating ? (
-              <form
-                className="shell-workspace-create"
-                onSubmit={(event) => {
-                  event.preventDefault()
-                  createWorkspace()
-                }}
-              >
-                <input
-                  autoFocus
-                  value={newWorkspaceName}
-                  maxLength={40}
-                  aria-label="新空间名称"
-                  placeholder="新空间名称"
-                  onChange={(event) => setNewWorkspaceName(event.target.value)}
-                />
-                {createError ? <p>{createError}</p> : null}
-                <div>
-                  <button type="button" onClick={() => {
-                    setCreating(false)
-                    setNewWorkspaceName('')
-                    setCreateError('')
-                  }}>取消</button>
-                  <button type="submit" disabled={!newWorkspaceName.trim()}>创建</button>
-                </div>
-              </form>
-            ) : (
-              <button type="button" className="shell-workspace-menu-action" onClick={() => setCreating(true)}>
-                <PlusIcon className="size-4" />
-                <span>创建新空间</span>
-              </button>
-            )}
+            <button type="button" className="shell-workspace-menu-action" onClick={() => {
+              setOpen(false)
+              setCreateError('')
+              setCreating(true)
+            }}>
+              <PlusIcon className="size-4" />
+              <span>创建新空间</span>
+            </button>
             <button
               type="button"
               className="shell-workspace-menu-action"
@@ -582,6 +854,58 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
             </button>
           </div>
         </AnchorMenu>
+      ) : null}
+      {creating && typeof document !== 'undefined' ? createPortal(
+        <div
+          className="shell-workspace-create-overlay"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !creatingLocation) setCreating(false)
+          }}
+        >
+          <section className="shell-workspace-create-dialog" role="dialog" aria-modal="true" aria-label="创建新空间">
+            <header>
+              <div>
+                <h2>创建新空间</h2>
+                <p>选择数据保存的位置，创建后也可以继续添加其他空间。</p>
+              </div>
+              <button
+                type="button"
+                aria-label="关闭"
+                disabled={Boolean(creatingLocation)}
+                onClick={() => setCreating(false)}
+              >
+                <XMarkIcon className="size-4" />
+              </button>
+            </header>
+            <div className="shell-workspace-create-cards">
+              <button
+                type="button"
+                className="shell-workspace-create-card"
+                disabled={Boolean(creatingLocation)}
+                onClick={() => createWorkspace('device')}
+              >
+                <span className="shell-workspace-create-card-icon"><ComputerDesktopIcon aria-hidden /></span>
+                <strong>本地空间</strong>
+                <small>数据只保存在当前设备，不上传云端。可通过局域网链接临时分享。</small>
+                <em>{creatingLocation === 'device' ? '正在创建…' : '创建本地空间'}</em>
+              </button>
+              <button
+                type="button"
+                className="shell-workspace-create-card"
+                disabled={Boolean(creatingLocation)}
+                onClick={() => createWorkspace('cloud')}
+              >
+                <span className="shell-workspace-create-card-icon"><CloudIcon aria-hidden /></span>
+                <strong>在线空间</strong>
+                <small>数据保存在云端，可使用成员、权限和在线协作功能。</small>
+                <em>{creatingLocation === 'cloud' ? '正在创建…' : '创建在线空间'}</em>
+              </button>
+            </div>
+            {createError ? <p className="shell-workspace-create-error" role="alert">{createError}</p> : null}
+          </section>
+        </div>,
+        document.body,
       ) : null}
     </div>
   )
@@ -649,11 +973,11 @@ export function ShellSettingsCollab({ panel = 'members' }: { panel?: 'workspace'
   }, [token])
 
   useEffect(() => {
-    if (!token || !workspaceId) return
+    if (panel !== 'members' || !token || !workspaceId) return
     void loadWorkspace(token, workspaceId).catch((err) => {
       setError(err instanceof Error ? err.message : '无法读取工作区')
     })
-  }, [token, workspaceId, loadWorkspace])
+  }, [panel, token, workspaceId, loadWorkspace])
 
   const workspaceRole = workspaces.find((row) => row.id === workspaceId)?.role
   const canManage = workspaceRole === 'owner' || workspaceRole === 'admin'
@@ -1061,6 +1385,9 @@ type McpHostInfo = {
   tools?: string[]
   clients?: Record<string, unknown>
   note?: string
+  online?: boolean
+  workspaceId?: string
+  credentialId?: string
 }
 
 const MCP_CLIENTS: Array<{ id: string; name: string; blurb: string }> = [
@@ -1084,6 +1411,20 @@ export function ShellSettingsMcp({ onLeave }: { onLeave?: () => void }) {
   const [copied, setCopied] = useState('')
   const [rotating, setRotating] = useState(false)
   const [confirmRotate, setConfirmRotate] = useState(false)
+  const [allowedTools, setAllowedTools] = useState<string[]>(['db_list', 'db_read', 'db_stat', 'db_content'])
+  const [credentials, setCredentials] = useState<Array<Record<string, unknown>>>([])
+  const [auditEvents, setAuditEvents] = useState<Array<Record<string, unknown>>>([])
+
+  const loadCredentialData = useCallback((workspaceId: string) => {
+    const token = readAccountToken()
+    void Promise.all([
+      accountFetch(token, `/api/account/mcp/credentials?workspaceId=${encodeURIComponent(workspaceId)}`),
+      accountFetch(token, `/api/account/mcp/audit?workspaceId=${encodeURIComponent(workspaceId)}`).catch(() => ({ events: [] })),
+    ]).then(([credentialsBody, auditBody]) => {
+      setCredentials((credentialsBody.credentials as Array<Record<string, unknown>>) ?? [])
+      setAuditEvents((auditBody.events as Array<Record<string, unknown>>) ?? [])
+    })
+  }, [])
 
   const load = useCallback(() => {
     void fetch('/api/mcp/info')
@@ -1098,11 +1439,18 @@ export function ShellSettingsMcp({ onLeave }: { onLeave?: () => void }) {
           tools: data.tools,
           clients: data.clients,
           note: data.note,
+          online: data.online,
+          workspaceId: data.workspaceId,
         })
+        if (data.online) {
+          const available = new Set(data.tools ?? [])
+          setAllowedTools((current) => current.filter((tool) => available.has(tool)))
+        }
+        if (data.online && data.workspaceId) loadCredentialData(data.workspaceId)
         setError('')
       })
       .catch((err) => setError(String(err instanceof Error ? err.message : err)))
-  }, [])
+  }, [loadCredentialData])
 
   useEffect(() => {
     load()
@@ -1123,6 +1471,25 @@ export function ShellSettingsMcp({ onLeave }: { onLeave?: () => void }) {
     setConfirmRotate(false)
     setRotating(true)
     try {
+      if (info.online) {
+        const token = readAccountToken()
+        if (info.credentialId) {
+          await accountFetch(token, `/api/account/mcp/credentials/${encodeURIComponent(info.credentialId)}`, { method: 'DELETE' })
+        }
+        const created = await accountFetch(token, '/api/account/mcp/credentials', {
+          method: 'POST',
+          body: JSON.stringify({ workspaceId: info.workspaceId, expiresInHours: 24 * 90, allowedTools }),
+        })
+        setInfo({
+          ...info,
+          token: String(created.token ?? ''),
+          credentialId: String(created.id ?? ''),
+        })
+        setReveal(true)
+        loadCredentialData(String(info.workspaceId ?? ''))
+        setError('')
+        return
+      }
       const res = await fetch('/api/mcp/rotate', {
         method: 'POST',
         headers: { Authorization: `Bearer ${info.token}` },
@@ -1168,7 +1535,7 @@ export function ShellSettingsMcp({ onLeave }: { onLeave?: () => void }) {
             <button
               type="button"
               className="settings-mcp-icon-btn"
-              disabled={!info}
+              disabled={!info?.token}
               data-testid="settings-mcp-copy-url"
               title={copied === 'url' ? '已复制' : '复制地址'}
               aria-label={copied === 'url' ? '已复制' : '复制地址'}
@@ -1199,7 +1566,7 @@ export function ShellSettingsMcp({ onLeave }: { onLeave?: () => void }) {
             <button
               type="button"
               className="settings-mcp-icon-btn"
-              disabled={!info}
+              disabled={!info?.token}
               data-testid="settings-mcp-reveal"
               title={reveal ? '隐藏 token' : '显示 token'}
               aria-label={reveal ? '隐藏 token' : '显示 token'}
@@ -1228,7 +1595,7 @@ export function ShellSettingsMcp({ onLeave }: { onLeave?: () => void }) {
             data-testid="settings-mcp-rotate"
             onClick={() => setConfirmRotate(true)}
           >
-            {rotating ? '正在生成…' : '重新生成 token'}
+            {rotating ? '正在生成…' : info?.token ? '重新生成 token' : '生成空间 token'}
           </button>
           <button
             type="button"
@@ -1258,7 +1625,7 @@ export function ShellSettingsMcp({ onLeave }: { onLeave?: () => void }) {
             <button
               type="button"
               className="settings-mcp-enable"
-              disabled={!info}
+              disabled={!info?.token}
               data-testid={`settings-mcp-copy-${client.id}`}
               onClick={() => info && void copy(client.id, mcpSnippet(info, client.id))}
             >
@@ -1267,11 +1634,65 @@ export function ShellSettingsMcp({ onLeave }: { onLeave?: () => void }) {
           </article>
         ))}
       </div>
+      {info?.online ? (
+        <>
+          <h4 className="settings-pane-subtitle">允许的工具</h4>
+          <div className="settings-mcp-grid" data-testid="settings-mcp-allowed-tools">
+            {(info.tools ?? []).map((tool) => (
+              <label key={tool} className="settings-mcp-card">
+                <input
+                  type="checkbox"
+                  checked={allowedTools.includes(tool)}
+                  onChange={(event) =>
+                    setAllowedTools((current) =>
+                      event.target.checked ? [...new Set([...current, tool])] : current.filter((name) => name !== tool),
+                    )
+                  }
+                />
+                <code>{tool}</code>
+              </label>
+            ))}
+          </div>
+          <h4 className="settings-pane-subtitle">空间凭证</h4>
+          <div className="settings-mcp-fields" data-testid="settings-mcp-credentials">
+            {credentials.map((credential) => (
+              <div className="settings-mcp-field-row" key={String(credential.id)}>
+                <code>{String(credential.id)}</code>
+                <span className="settings-muted">
+                  {credential.revoked_at ? '已撤销' : `到期：${new Date(Number(credential.expires_at)).toLocaleString()}`}
+                </span>
+                {!credential.revoked_at ? (
+                  <button
+                    type="button"
+                    className="settings-mcp-rotate"
+                    onClick={() => {
+                      void accountFetch(readAccountToken(), `/api/account/mcp/credentials/${encodeURIComponent(String(credential.id))}`, { method: 'DELETE' })
+                        .then(() => loadCredentialData(String(info.workspaceId ?? '')))
+                    }}
+                  >
+                    撤销
+                  </button>
+                ) : null}
+              </div>
+            ))}
+          </div>
+          <h4 className="settings-pane-subtitle">最近调用</h4>
+          <div className="settings-mcp-fields" data-testid="settings-mcp-audit">
+            {auditEvents.map((event) => (
+              <div className="settings-mcp-field-row" key={String(event.id)}>
+                <code>{String(event.tool_name)}</code>
+                <span className="settings-muted">{event.success ? '成功' : '失败'}</span>
+                <span className="settings-muted">{new Date(Number(event.created_at)).toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      ) : null}
       {confirmRotate ? (
         <ConfirmDialog
-          title="重新生成 MCP token"
-          message="重新生成后，已经配置好的客户端会立即失效，需要重新复制并更新所有客户端配置。"
-          confirmLabel="重新生成"
+          title={info?.token ? '重新生成 MCP token' : '生成空间 MCP token'}
+          message={info?.token ? '重新生成后，当前 token 会立即失效，需要重新复制并更新客户端配置。' : '这个 token 只允许访问当前空间，并会在 90 天后过期。'}
+          confirmLabel={info?.token ? '重新生成' : '生成'}
           danger
           testId="settings-mcp-rotate-dialog"
           onCancel={() => setConfirmRotate(false)}

@@ -437,6 +437,120 @@ export const BIU_MIGRATIONS: Migration[] = [
       CREATE INDEX IF NOT EXISTS guest_sessions_account ON guest_sessions(account_id);
     `)
   } },
+  { version: 31, module: 'host-account', name: 'account.sessions-and-mcp', up: (db) => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS auth_sessions (
+        id TEXT PRIMARY KEY,
+        account_id TEXT NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        device_name TEXT NOT NULL DEFAULT '',
+        expires_at INTEGER,
+        revoked_at INTEGER,
+        created_at INTEGER NOT NULL,
+        last_seen_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS auth_sessions_account ON auth_sessions(account_id, revoked_at);
+      CREATE TABLE IF NOT EXISTS mcp_credentials (
+        id TEXT PRIMARY KEY,
+        token_hash TEXT NOT NULL UNIQUE,
+        account_id TEXT NOT NULL,
+        workspace_id TEXT NOT NULL,
+        allowed_tools TEXT NOT NULL DEFAULT '',
+        expires_at INTEGER,
+        revoked_at INTEGER,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS mcp_credentials_member ON mcp_credentials(account_id, workspace_id);
+    `)
+  } },
+  { version: 32, module: 'host-account', name: 'account.mcp-audit', up: (db) => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS mcp_audit_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        credential_id TEXT NOT NULL,
+        account_id TEXT NOT NULL,
+        workspace_id TEXT NOT NULL,
+        tool_name TEXT NOT NULL,
+        success INTEGER NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS mcp_audit_workspace ON mcp_audit_log(workspace_id, created_at);
+    `)
+  } },
+  { version: 33, module: 'host-account', name: 'instance.roles-and-plugin-access', up: (db) => {
+    // These tables are part of CREATE_CORE_SQL so fresh databases and upgraded
+    // databases always receive exactly the same contract.
+    db.exec(CREATE_CORE_SQL)
+  } },
+  { version: 34, module: 'host-account', name: 'account.force-initial-password-change', up: (db) => {
+    addColumn(db, 'accounts', 'must_change_password', 'must_change_password INTEGER NOT NULL DEFAULT 0')
+  } },
+  { version: 35, module: 'host-account', name: 'access.view-collaborators', up: (db) => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS view_grants (
+        workspace_id TEXT NOT NULL,
+        collection TEXT NOT NULL,
+        view_id TEXT NOT NULL,
+        subject_type TEXT NOT NULL,
+        subject_id TEXT NOT NULL,
+        role TEXT NOT NULL,
+        granted_by TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY (workspace_id, collection, view_id, subject_type, subject_id)
+      );
+      CREATE INDEX IF NOT EXISTS view_grants_subject
+        ON view_grants(workspace_id, subject_type, subject_id);
+    `)
+    addColumn(db, 'workspace_invites', 'view_id', "view_id TEXT NOT NULL DEFAULT ''")
+  } },
+  { version: 36, module: 'host-account', name: 'plugin.per-user-load', up: (db) => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS plugin_loads (
+        workspace_id TEXT NOT NULL,
+        account_id TEXT NOT NULL,
+        plugin_id TEXT NOT NULL,
+        loaded_at INTEGER NOT NULL,
+        PRIMARY KEY (workspace_id, account_id, plugin_id)
+      );
+      CREATE INDEX IF NOT EXISTS plugin_loads_plugin ON plugin_loads(plugin_id);
+    `)
+  } },
+  { version: 37, module: 'host-account', name: 'drop.instance.roles', up: (db) => {
+    db.exec(`
+      DROP INDEX IF EXISTS instance_role_members_account;
+      DROP INDEX IF EXISTS instance_role_permissions_permission;
+      DROP TABLE IF EXISTS instance_role_members;
+      DROP TABLE IF EXISTS instance_role_permissions;
+      DROP TABLE IF EXISTS instance_roles;
+    `)
+  } },
+  { version: 38, module: 'host-account', name: 'local-cloud.identity-boundary', up: (db) => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS cloud_connections (
+        local_account_id TEXT PRIMARY KEY,
+        origin TEXT NOT NULL,
+        remote_account_id TEXT NOT NULL,
+        remote_name TEXT NOT NULL DEFAULT '',
+        remote_email TEXT NOT NULL DEFAULT '',
+        token TEXT NOT NULL,
+        connected_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS workspace_place (
+        workspace_id TEXT PRIMARY KEY,
+        place TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS workspace_place_place ON workspace_place(place);
+      CREATE TABLE IF NOT EXISTS session_execution_leases (
+        session_id TEXT PRIMARY KEY,
+        account_id TEXT NOT NULL,
+        lease_id TEXT NOT NULL UNIQUE,
+        executor_id TEXT NOT NULL,
+        expires_at INTEGER NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS session_execution_leases_expiry ON session_execution_leases(expires_at);
+    `)
+  } },
 ]
 
 export function assertBiuMigrationLog(rows: Array<{ version: number }> = BIU_MIGRATIONS) {

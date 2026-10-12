@@ -612,13 +612,9 @@ async function startHost() {
   if (!existsSync(entry)) {
     throw new Error(`packed host missing: ${entry}`)
   }
-  const requestedPort = Number.isInteger(hostPort) && hostPort > 0 ? hostPort : 0
-  const shareHost = process.env.SHARE_HOST || '0.0.0.0'
-  const requestedSharePort = Number(process.env.SHARE_PORT || 3142)
-  const sharePort = await availablePort(
-    Number.isInteger(requestedSharePort) && requestedSharePort > 0 ? requestedSharePort : 3142,
-    shareHost,
-  )
+  const hostBind = process.env.HTTP_HOST || '0.0.0.0'
+  const preferredPort = Number.isInteger(hostPort) && hostPort > 0 ? hostPort : 3141
+  const requestedPort = await availablePort(preferredPort, hostBind)
   const home = app.getPath('userData')
   const workspace = process.env.CORDIS_WORKSPACE || join(home, 'workspace')
   const pluginDir = process.env.BIU_PLUGIN_DIR || join(workspace, '.plugin')
@@ -633,10 +629,10 @@ async function startHost() {
       ELECTRON_RUN_AS_NODE: '1',
       PORT: String(requestedPort),
       BIU_PORT_FALLBACK: '1',
-      HTTP_HOST: process.env.HTTP_HOST || '127.0.0.1',
-      SHARE_PORT: String(sharePort),
-      // 分享链接使用局域网 IP；只监听 loopback 会让其他设备收到 ERR_CONNECTION_REFUSED。
-      SHARE_HOST: shareHost,
+      BIU_ONLINE: '0',
+      HTTP_HOST: hostBind,
+      // 局域网分享复用经过账号鉴权的工作台端口，不再启动第二个 listener。
+      SHARE_PORT: String(requestedPort),
       BIU_HOME: home,
       CORDIS_WORKSPACE: workspace,
       BIU_PLUGIN_DIR: pluginDir,

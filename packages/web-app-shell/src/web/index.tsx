@@ -63,7 +63,6 @@ import {
   InformationCircleIcon,
   LinkIcon,
   MapIcon,
-  PuzzlePieceIcon,
   QueueListIcon,
   SwatchIcon,
   UserCircleIcon,
@@ -274,7 +273,26 @@ function Shell(props: SlotProps) {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [settingsTab, setSettingsTab] = useState<string>('account')
+  const [workspaceLocation, setWorkspaceLocation] = useState<'device' | 'cloud'>('device')
   const [configOpen, setConfigOpen] = useState(false)
+  useEffect(() => {
+    if (!settingsOpen) return
+    let live = true
+    void fetch('/api/profile')
+      .then((response) => (response.ok ? response.json() : null))
+      .then((profile: { dataLocation?: 'device' | 'cloud' } | null) => {
+        if (!live) return
+        const next = profile?.dataLocation === 'cloud' ? 'cloud' : 'device'
+        setWorkspaceLocation(next)
+        if (next === 'device') setSettingsTab((current) => (current === 'members' ? 'workspace' : current))
+      })
+      .catch(() => {
+        if (live) setWorkspaceLocation('device')
+      })
+    return () => {
+      live = false
+    }
+  }, [settingsOpen])
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try {
       return localStorage.getItem('cordis.sidebar.collapsed') === '1'
@@ -868,14 +886,13 @@ function Shell(props: SlotProps) {
                     { key: 'workspace', label: '空间', Icon: CircleStackIcon },
                     { key: 'members', label: '成员', Icon: UserGroupIcon },
                     { key: 'appearance', label: '外观', Icon: SwatchIcon },
-                    { key: 'plugins', label: '插件', Icon: PuzzlePieceIcon },
                     { key: 'mcp', label: 'MCP', Icon: LinkIcon },
                     { key: 'shortcuts', label: '快捷键', Icon: CommandLineIcon },
                     { key: 'routes', label: '路由', Icon: MapIcon },
                     { key: 'events', label: '事件', Icon: QueueListIcon },
                     { key: 'update', label: '更新', Icon: ArrowDownTrayIcon },
                     { key: 'about', label: '关于', Icon: InformationCircleIcon },
-                  ].map((item) => (
+                  ].filter((item) => item.key !== 'members' || workspaceLocation === 'cloud').map((item) => (
                     <li key={item.key}>
                       <button
                         type="button"
@@ -902,15 +919,8 @@ function Shell(props: SlotProps) {
                 <div className="settings-pane">
                   {settingsTab === 'account' ? <ShellSettingsAccount /> : null}
                   {settingsTab === 'workspace' ? <ShellSettingsWorkspace /> : null}
-                  {settingsTab === 'members' ? <ShellSettingsMembers /> : null}
+                  {settingsTab === 'members' && workspaceLocation === 'cloud' ? <ShellSettingsMembers /> : null}
                   {settingsTab === 'appearance' ? <ShellSettingsAppearance /> : null}
-                  {settingsTab === 'plugins' ? (
-                    <section>
-                      <h3 className="settings-pane-title">插件</h3>
-                      <p className="settings-muted settings-pane-lead">安装、开关和管理页面块。</p>
-                      {props.renderSlot('sidebar')}
-                    </section>
-                  ) : null}
                   {settingsTab === 'mcp' ? <ShellSettingsMcp onLeave={() => setSettingsOpen(false)} /> : null}
                   {settingsTab === 'shortcuts' ? <ShellSettingsShortcuts /> : null}
                   {settingsTab === 'routes' ? (

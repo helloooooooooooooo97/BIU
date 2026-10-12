@@ -47,6 +47,11 @@ export const LEGACY_DATA_DIR_NAME = '.cordis'
 export const LEGACY_PAGE_ROOT = '.page'
 export const PAGE_ROOT = `${DATA_DIR_NAME}/page`
 export const PAGE_DB = `${DATA_DIR_NAME}/biu.sqlite`
+
+/** Runtime mode is read lazily so tests and embedded hosts can set it before boot. */
+export const isOnlineRuntime = () => process.env.BIU_ONLINE === '1'
+export const isDesktopRuntime = () => !isOnlineRuntime()
+
 /** Leftover page-only folder; new files go under `.biu/assets`. */
 export const PAGE_ASSETS = `${DATA_DIR_NAME}/page/assets`
 export const ASSETS_ROOT = `${DATA_DIR_NAME}/assets`
@@ -118,12 +123,15 @@ export function migrateDataDir(parent: string): string {
   migrateLegacyPageDir(parent)
   adoptTwoSqlite(dest)
   adoptCasAssets(dest)
+  mkdirSync(dest, { recursive: true })
+  let db: ReturnType<typeof openAndMigrateBiu> | undefined
   try {
-    const db = openAndMigrateBiu(join(dest, 'biu.sqlite'), { dataDir: dest, workspace: parent })
+    db = openAndMigrateBiu(join(dest, 'biu.sqlite'), { dataDir: dest, workspace: parent })
     db.exec('PRAGMA wal_checkpoint(TRUNCATE)')
-    db.close()
   } catch {
     /* dummy sqlite from tests */
+  } finally {
+    db?.close()
   }
   return dest
 }
@@ -142,15 +150,55 @@ export function runWithWorkspace<T>(scope: WorkspaceScope, fn: () => T): T {
 }
 
 const accountScope = new AsyncLocalStorage<string>()
+const requestWorkspaceScope = new AsyncLocalStorage<string>()
+const pluginScope = new AsyncLocalStorage<string>()
+
+export type McpTenant = {
+  credentialId: string
+  accountId: string
+  workspaceId: string
+  role: string
+  allowedTools: string[]
+}
+
+const mcpTenantScope = new AsyncLocalStorage<McpTenant>()
+
+export function currentMcpTenant() {
+  return mcpTenantScope.getStore() ?? null
+}
+
+export function runWithMcpTenant<T>(tenant: McpTenant, fn: () => T): T {
+  return mcpTenantScope.run(tenant, fn)
+}
 
 export function currentAccountId() {
   return accountScope.getStore() || ''
+}
+
+/** 浏览器这次请求显式选择的空间。没有请求头时为空。 */
+export function currentRequestWorkspaceId() {
+  return requestWorkspaceScope.getStore() || ''
+}
+
+/** Store 插件 apply/执行期间的包 ID，供 HTTP、WS 和工具注册边界捕获。 */
+export function currentPluginId() {
+  return pluginScope.getStore() || ''
+}
+
+export function runWithPlugin<T>(pluginId: string, fn: () => T): T {
+  if (!pluginId) return fn()
+  return pluginScope.run(pluginId, fn)
 }
 
 /** 这次 HTTP 请求是哪个登录账号。没有 token 时是空字符串。 */
 export function runWithAccount<T>(accountId: string, fn: () => T): T {
   if (!accountId) return fn()
   return accountScope.run(accountId, fn)
+}
+
+export function runWithRequestWorkspace<T>(workspaceId: string, fn: () => T): T {
+  if (!workspaceId) return fn()
+  return requestWorkspaceScope.run(workspaceId, fn)
 }
 
 /** Packaged Electron sets BIU_HOME to userData so replacing the .app does not wipe notes. */

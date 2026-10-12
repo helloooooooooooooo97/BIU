@@ -1,4 +1,4 @@
-import { cloneElement, isValidElement, useEffect, useRef, useState, type ReactElement, type ReactNode, type Dispatch, type SetStateAction } from 'react'
+import { useEffect, useRef, useState, type ReactNode, type Dispatch, type SetStateAction } from 'react'
 import type { CollectionChrome, FsDetailPane } from '@biu/type-file-system/ui'
 import type { CollectionSchema, DbRecord, FieldSpec } from '@biu/type-file-system'
 import { ChevronDownIcon, ChevronLeftIcon, ChevronUpIcon, EllipsisHorizontalIcon, HashtagIcon, ShareIcon } from '@heroicons/react/16/solid'
@@ -6,7 +6,7 @@ import { AnchorMenu, RecordEmojiBoard } from '@biu/public-ui'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { contentFieldKey, fieldHasValue, formatField, resolveFieldType } from './fields.ts'
 import { LocalText } from './controls.tsx'
-import { FilePreview, placedActions } from './fsdb-cells.tsx'
+import { FilePreview } from './fsdb-cells.tsx'
 import { PropertyRow } from './property-row.tsx'
 import { FacetPackEditor } from './schema-field.tsx'
 import { TableGlyph } from './nav-glyphs.tsx'
@@ -134,7 +134,6 @@ function DetailTitleIcon({
 function DetailMore({
   record,
   Tools,
-  actions,
   onDelete,
   deleteLabel,
   share,
@@ -142,7 +141,6 @@ function DetailMore({
 }: {
   record: DbRecord
   Tools?: CollectionChrome['DetailTools']
-  actions?: ReactNode
   onDelete?: () => void
   deleteLabel: string
   share?: ReactNode
@@ -154,10 +152,6 @@ function DetailMore({
     setAnchor(null)
     setShareItem(null)
   }
-  const actionMenu =
-    actions && isValidElement(actions)
-      ? cloneElement(actions as ReactElement<{ onDone?: () => void }>, { onDone: close })
-      : actions
   return (
     <>
       <button
@@ -183,7 +177,6 @@ function DetailMore({
           inside={(node) => node instanceof Element && Boolean(node.closest('.fsdb-detail-more-menu.has-share'))}
         >
           {Tools ? <Tools record={record} onDone={close} /> : null}
-          {actionMenu}
           {share ? (
             <button
               type="button"
@@ -255,7 +248,7 @@ export function RecordDetail({
   canPrev,
   canNext,
   headingOutline = true,
-  toolbar,
+  actionProperty,
   share,
   collectionPath,
   recordKind = 'record',
@@ -279,7 +272,7 @@ export function RecordDetail({
   canPrev?: boolean
   canNext?: boolean
   headingOutline?: boolean
-  toolbar?: ReactNode
+  actionProperty?: ReactNode
   share?: ReactNode
   collectionPath?: string
   recordKind?: string
@@ -430,6 +423,11 @@ export function RecordDetail({
                       </PropertyRow>
                     )
                   })}
+                  {actionProperty ? (
+                    <PropertyRow field={{ type: 'action', label: '动作' }} fieldKey="actions">
+                      <div className="fsdb-prop-val is-actions">{actionProperty}</div>
+                    </PropertyRow>
+                  ) : null}
                 </div>
                 {renderDetailPanes(chrome?.panes?.filter((pane) => pane.place === 'properties'), selected, onOpenRecord, 'fsdb-detail-prop-panes')}
                 {contentFieldKey(schema) && schema.fields[contentFieldKey(schema)!] ? (() => {
@@ -507,9 +505,7 @@ export function RecordDetail({
           </div>
           <HeadingOutline enabled={headingOutline} />
           {(() => {
-            const showMore = Boolean(share) || (!readOnly && Boolean(
-              chrome?.DetailTools || onDelete || chrome?.Actions || placedActions(schema, 'detail').length,
-            ))
+            const showMore = Boolean(share) || (!readOnly && Boolean(chrome?.DetailTools || onDelete))
             if (!onPrev && !onNext && !showMore) return null
             return (
             <nav className={`fsdb-detail-float-nav${share ? ' has-share' : ''}`} aria-label="按视图顺序切换记录">
@@ -529,7 +525,6 @@ export function RecordDetail({
                 <DetailMore
                   record={selected}
                   Tools={chrome?.DetailTools}
-                  actions={toolbar}
                   onDelete={onDelete}
                   deleteLabel={collectionPath === '/pages' ? '删除页面' : '删除记录'}
                   share={share}

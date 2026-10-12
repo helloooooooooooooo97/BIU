@@ -33,8 +33,16 @@ function asRecord(row: MemberRow): DbRecord {
   }
 }
 
-export function workspaceMembersCollection(store: CollabStore): CollectionSpec {
-  const rows = () => store.currentMembers().map(asRecord)
+export function workspaceMembersCollection(
+  store: CollabStore,
+  collaborativeWorkspace: (workspaceId: string) => boolean = () => true,
+  exposeView = true,
+): CollectionSpec {
+  const rows = () => {
+    const workspaceId = store.activeWorkspaceId()
+    if (!workspaceId || !collaborativeWorkspace(workspaceId)) return []
+    return store.currentMembers().map(asRecord)
+  }
   const list = async (query?: CollectionListQuery) => {
     let items = rows()
     if (query?.ids?.length) {
@@ -51,13 +59,14 @@ export function workspaceMembersCollection(store: CollabStore): CollectionSpec {
     const actorId = currentAccountId()
     const workspaceId = store.activeWorkspaceId()
     if (!actorId || !workspaceId) throw new Error('permission denied: UNAUTHENTICATED')
+    if (!collaborativeWorkspace(workspaceId)) throw new Error('本机空间不提供成员功能')
     return { actorId, workspaceId }
   }
   return {
     id: 'workspace-members',
     path: WORKSPACE_MEMBERS_COLLECTION_PATH,
     label: '成员',
-    view: {
+    ...(exposeView ? { view: {
       moduleId: 'workspace-members-db',
       route: '/db-workspace-members',
       title: '成员',
@@ -66,7 +75,7 @@ export function workspaceMembersCollection(store: CollabStore): CollectionSpec {
         '当前工作区成员目录。db_list 查看成员；Owner 可用 db_update 将 role 限定为 owner|admin|member|viewer；Owner/Admin 可用 db_create 邀请、db_delete 移除其有权管理的成员。viewer 只能查看获准的数据，不能创建或编辑。修改 tags 等元数据不会改变角色。',
       order: 18,
       icon: 'users',
-    },
+    } } : {}),
     records: { update: true, create: true, delete: true },
     schema: {
       labelField: 'title',

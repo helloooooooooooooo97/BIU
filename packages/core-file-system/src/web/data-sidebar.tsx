@@ -7,14 +7,14 @@ import {
   ChevronRightIcon,
   PencilSquareIcon,
   PlusIcon,
-  Squares2X2Icon,
+  RectangleStackIcon,
   StarIcon,
 } from '@heroicons/react/16/solid'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import type { CollectionInfo, CollectionSchema, DbRecord } from '@biu/type-file-system'
 import { groupField, groupRecords, parentFieldKey, treeChildren } from './fields.ts'
-import { builtinAllViewId, builtinScopeViewId, type DataScope } from '../catalog-views.ts'
-import { isRecordTreeCollection, isSystemCollection, sortDataCollections } from './database-path.ts'
+import { builtinAllViewId, type DataScope } from '../catalog-views.ts'
+import { isIndexCollection, isRecordTreeCollection, isSystemCollection, sortDataCollections } from './database-path.ts'
 import { readJson } from './db-client.ts'
 import { viewsForRegisteredCollection } from './collection-nav.ts'
 import type { SavedView } from './saved-view.ts'
@@ -395,7 +395,7 @@ function ViewRecordPreview({
                   >
                     <span className="sidebar-rail-icon sidebar-group-fold">
                       <span className="sidebar-group-fold-face">
-                        <Squares2X2Icon className="size-4 shrink-0" />
+                        <RectangleStackIcon aria-hidden className="size-[14px] shrink-0" />
                       </span>
                       <span className="sidebar-group-fold-chevron">
                         {expanded ? (
@@ -480,13 +480,16 @@ export const DataSidebar = memo(function DataSidebar({
 }) {
   const listedTables = useMemo(() => {
     const raw = tables.length ? tables : ([{ path: collectionPath, label: title, view: { title } }] as CollectionInfo[])
-    const { user, system } = sortDataCollections(raw)
-    return [...user, ...system]
+    const { user, index, system } = sortDataCollections(raw)
+    return [...user, ...index, ...system]
   }, [collectionPath, tables, title])
-  const { user: userTables, system: systemTables } = useMemo(() => sortDataCollections(listedTables), [listedTables])
-  const [openTables, setOpenTables] = useState<Record<string, boolean>>(() => ({
-    [`user:${collectionPath}`]: true,
-  }))
+  const { user: userTables, index: indexTables, system: systemTables } = useMemo(() => sortDataCollections(listedTables), [listedTables])
+  const [openTables, setOpenTables] = useState<Record<string, boolean>>(() => {
+    const group = isIndexCollection(collectionPath) ? 'index' : isSystemCollection(collectionPath) ? 'system' : 'user'
+    return {
+      [`${group}:${collectionPath}`]: true,
+    }
+  })
   useSyncExternalStore(subscribeStarredViews, getStarredViewsVersion, () => 0)
   useSyncExternalStore(subscribeStarredRecords, getStarredRecordsVersion, () => 0)
   const starredViews = getStarredViews()
@@ -499,6 +502,7 @@ export const DataSidebar = memo(function DataSidebar({
     }
   })
   const [userOpen, setUserOpen] = useState(true)
+  const [indexOpen, setIndexOpen] = useState(true)
   const [systemOpen, setSystemOpen] = useState(false)
   const [expandedViewKeyLocal, setExpandedViewKeyLocal] = useState<string | null>(null)
   const expandedViewKey = expandedViewKeyProp !== undefined ? expandedViewKeyProp : expandedViewKeyLocal
@@ -535,6 +539,13 @@ export const DataSidebar = memo(function DataSidebar({
         }
       }
     }
+    if (indexOpen) {
+      for (const table of indexTables) {
+        if (openTables[`index:${table.path}`]) {
+          for (const view of viewsFor(table.path)) jobs.push({ path: table.path, view })
+        }
+      }
+    }
     if (systemOpen) {
       for (const table of systemTables) {
         if (openTables[`system:${table.path}`]) {
@@ -543,7 +554,7 @@ export const DataSidebar = memo(function DataSidebar({
       }
     }
     return jobs
-  }, [userOpen, systemOpen, favOpen, userTables, systemTables, listedTables, openTables, starredRows, tables, views, collectionPath])
+  }, [userOpen, indexOpen, systemOpen, favOpen, userTables, indexTables, systemTables, listedTables, openTables, starredRows, tables, views, collectionPath])
 
   const countJobKey = countJobs.map((job) => viewTotalKey(job.path, job.view)).join('|')
   useEffect(() => {
@@ -645,7 +656,7 @@ export const DataSidebar = memo(function DataSidebar({
     onOpenRecord?.(path, view, recordId, row)
   }
 
-  function renderTableRows(rows: CollectionInfo[], group: 'user' | 'system' = 'system') {
+  function renderTableRows(rows: CollectionInfo[], group: 'user' | 'index' | 'system' = 'system') {
     return rows.map((table) => {
       const name = table.view?.title ?? table.label
       const tableStateKey = `${group}:${table.path}`
@@ -686,7 +697,7 @@ export const DataSidebar = memo(function DataSidebar({
                 className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit outline-none hover:text-(--dsw-sidebar-fg-active) focus-visible:ring-1 focus-visible:ring-(--dsw-border)"
                 onClick={() => onOpenTable?.(
                   table.path,
-                  group === 'user' ? builtinScopeViewId('personal', builtinAllViewId(table.path)) : builtinAllViewId(table.path),
+                  builtinAllViewId(table.path),
                 )}
               >
                 {name}
@@ -1059,6 +1070,31 @@ export const DataSidebar = memo(function DataSidebar({
               <div className="flex min-w-0 flex-col gap-px" data-testid="sidebar-user-collections">
                 {userTables.length ? renderTableRows(userTables, 'user') : (
                   <div className="px-1 py-1 text-[12px] text-(--dsw-label-3)">还没有用户数据表</div>
+                )}
+              </div>
+            </SidebarFold>
+          </section>
+
+          <section className="min-w-0">
+            <div className="sidebar-section-head min-w-0">
+              <div className="flex min-h-8 min-w-0 flex-1 items-center">
+                <button
+                  type="button"
+                  className="flex h-full min-w-0 flex-1 items-center gap-2 text-left text-[12px] font-bold tracking-wider"
+                  aria-expanded={indexOpen}
+                  title="从你能看到的用户数据反查出来"
+                  data-testid="sidebar-index-home"
+                  onClick={() => setIndexOpen((prev) => !prev)}
+                >
+                  <span className="min-w-0 flex-1 truncate tracking-normal">索引数据</span>
+                </button>
+              </div>
+              <ChatCount count={indexTables.length} />
+            </div>
+            <SidebarFold open={indexOpen}>
+              <div className="flex min-w-0 flex-col gap-px" data-testid="sidebar-index-collections">
+                {indexTables.length ? renderTableRows(indexTables, 'index') : (
+                  <div className="px-1 py-1 text-[12px] text-(--dsw-label-3)">还没有索引数据</div>
                 )}
               </div>
             </SidebarFold>
