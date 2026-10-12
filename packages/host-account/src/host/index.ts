@@ -262,6 +262,20 @@ function configuredRemoteOrigin() {
   return process.env.BIU_REMOTE_ORIGIN?.replace(/\/$/, '') || ''
 }
 
+/** 本地保存的云端令牌是否还被对方认。连不上时保持原状态，避免重启瞬间把有效连接清掉。 */
+async function remoteSessionState(connection: { origin: string; token: string }): Promise<'accepted' | 'rejected' | 'unreachable'> {
+  try {
+    const response = await fetch(`${connection.origin}/api/account/me`, {
+      headers: { authorization: `Bearer ${connection.token}` },
+      signal: AbortSignal.timeout(2500),
+    })
+    if (response.status === 401) return 'rejected'
+    return 'accepted'
+  } catch {
+    return 'unreachable'
+  }
+}
+
 async function relayAccount(route: RouteContext, account: AccountService, localAccountId: string, path: string) {
   const connection = account.linkedCloud(localAccountId)
   if (!connection) return null
@@ -437,7 +451,11 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     try {
       if (isOnlineRuntime()) return route.send(200, { available: false, connected: false })
       const me = actor(route)
-      const connection = account.cloudConnection(me.id)
+      let connection = account.cloudConnection(me.id)
+      if (connection && (await remoteSessionState(connection)) === 'rejected') {
+        account.removeCloudConnection(me.id)
+        connection = null
+      }
       route.send(200, {
         available: Boolean(configuredRemoteOrigin()),
         connected: Boolean(connection),
@@ -763,6 +781,11 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       const me = actor(route)
       const body = (await route.json()) as { name?: string; location?: string }
       if (body.location === 'cloud') {
+        if (isOnlineRuntime()) {
+          const workspace = account.store.createWorkspace(me.id, String(body.name ?? ''))
+          route.send(201, { ...workspace, location: 'cloud' })
+          return
+        }
         const connection = account.cloudConnection(me.id)
         if (!connection) throw new CollabError('请先登录云端账号', 401)
         let response: Response
@@ -782,6 +805,10 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
           role?: string
           createdAt?: number
           error?: string
+        }
+        if (response.status === 401) {
+          account.removeCloudConnection(me.id)
+          throw new CollabError('云端登录已失效，请重新登录云端账号', 401)
         }
         if (!response.ok || !payload.id) throw new CollabError(payload.error || '创建云端空间失败', response.status)
         account.store.upsertPulledWorkspace({
