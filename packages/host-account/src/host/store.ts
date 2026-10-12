@@ -197,8 +197,8 @@ export class CollabStore {
       createdAt: now,
     }
     this.db
-      .prepare('INSERT INTO accounts (id, name, token, password_hash, created_at, email) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(account.id, account.name, account.token, secret ? hashPassword(secret) : '', account.createdAt, normalized || null)
+      .prepare('INSERT INTO accounts (id, name, token, password_hash, created_at, email, password_recall) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(account.id, account.name, account.token, secret ? hashPassword(secret) : '', account.createdAt, normalized || null, secret)
     return account
   }
 
@@ -221,6 +221,7 @@ export class CollabStore {
       throw new CollabError('邮箱或密码不对', 401)
     }
     const session = this.openSession(row.id, deviceName.slice(0, 120))
+    this.rememberPassword(row.id, password)
     return {
       id: row.id,
       name: row.name,
@@ -229,6 +230,15 @@ export class CollabStore {
       createdAt: row.created_at,
       mustChangePassword: Boolean(row.must_change_password),
     }
+  }
+
+  rememberPassword(accountId: string, password: string) {
+    this.db.prepare('UPDATE accounts SET password_recall = ? WHERE id = ?').run(password, accountId)
+  }
+
+  recalledPassword(accountId: string) {
+    const row = this.db.prepare('SELECT password_recall FROM accounts WHERE id = ?').get(accountId) as { password_recall?: string } | undefined
+    return row?.password_recall || ''
   }
 
   assertPassword(accountId: string, password: string) {
@@ -243,8 +253,8 @@ export class CollabStore {
     if (next.length < 6) throw new CollabError('密码至少 6 位', 400)
     this.assertPassword(accountId, currentPassword)
     this.db
-      .prepare('UPDATE accounts SET password_hash = ?, must_change_password = 0 WHERE id = ?')
-      .run(hashPassword(next), accountId)
+      .prepare('UPDATE accounts SET password_hash = ?, must_change_password = 0, password_recall = ? WHERE id = ?')
+      .run(hashPassword(next), next, accountId)
     const keepHash = keepToken ? this.digestToken(keepToken) : ''
     this.db
       .prepare('UPDATE auth_sessions SET revoked_at = ? WHERE account_id = ? AND revoked_at IS NULL AND token_hash != ?')
