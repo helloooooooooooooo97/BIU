@@ -1615,20 +1615,10 @@ body {
   box-shadow: var(--dsw-shadow-lv2);
 }
 
-.shell-workspace-menu-title {
-  margin: 0;
-  padding: 5px 8px 8px;
-  border-bottom: 1px solid var(--dsw-border);
-  color: var(--dsw-label-3);
-  font-size: 11px;
-  font-weight: 700;
-}
-
 .shell-workspace-menu-list {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding-top: 4px;
 }
 
 .shell-workspace-menu-item {
@@ -1658,23 +1648,23 @@ body {
   display: flex;
   min-width: 0;
   flex: 1;
-  flex-direction: column;
-  align-items: flex-start;
-  line-height: 1.15;
+  align-items: center;
 }
 
 .shell-workspace-menu-copy strong {
   max-width: 100%;
   overflow: hidden;
-  font-weight: 600;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.shell-workspace-menu-copy small {
+.shell-workspace-menu-role {
+  flex: none;
   color: var(--dsw-label-3);
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 500;
+  line-height: 1;
 }
 
 .shell-workspace-menu-actions {

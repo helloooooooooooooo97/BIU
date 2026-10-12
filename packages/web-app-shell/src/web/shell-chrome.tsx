@@ -798,39 +798,30 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
           aria-label="选择空间"
           data-testid="shell-workspace-menu"
         >
-          <p className="shell-workspace-menu-title">切换空间</p>
-          {(['device', 'cloud'] as const).map((location) => {
-            const rows = workspaces.filter((workspace) => (workspace.location ?? 'device') === location)
-            if (!rows.length) return null
-            return (
-              <div className="shell-workspace-menu-list" key={location}>
-                <p className="shell-workspace-menu-title">{location === 'device' ? '本机空间' : '云端空间'}</p>
-                {rows.map((workspace) => (
-                  <button
-                    key={workspace.id}
-                    type="button"
-                    role="menuitemradio"
-                    aria-checked={workspace.id === active}
-                    className={`shell-workspace-menu-item${workspace.id === active ? ' is-active' : ''}`}
-                    onClick={() => switchTo(workspace.id)}
-                  >
-                    {location === 'cloud'
-                      ? <CloudIcon aria-hidden className="shell-workspace-menu-icon" />
-                      : <ComputerDesktopIcon aria-hidden className="shell-workspace-menu-icon" />}
-                    <span className="shell-workspace-menu-copy">
-                      <strong>{workspace.name}</strong>
-                      <small>
-                        {location === 'device'
-                          ? `仅保存在这台设备 · ${workspaceRoleLabel(workspace.role)}`
-                          : workspaceRoleLabel(workspace.role)}
-                      </small>
-                    </span>
-                    {workspace.id === active ? <CheckIcon className="size-4" /> : null}
-                  </button>
-                ))}
-              </div>
-            )
-          })}
+          <div className="shell-workspace-menu-list">
+            {workspaces.map((workspace) => {
+              const location = workspace.location ?? 'device'
+              return (
+                <button
+                  key={workspace.id}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={workspace.id === active}
+                  className={`shell-workspace-menu-item${workspace.id === active ? ' is-active' : ''}`}
+                  onClick={() => switchTo(workspace.id)}
+                >
+                  {location === 'cloud'
+                    ? <CloudIcon aria-hidden className="shell-workspace-menu-icon" />
+                    : <ComputerDesktopIcon aria-hidden className="shell-workspace-menu-icon" />}
+                  <span className="shell-workspace-menu-copy">
+                    <strong>{workspace.name}</strong>
+                  </span>
+                  <small className="shell-workspace-menu-role">{workspaceRoleLabel(workspace.role)}</small>
+                  {workspace.id === active ? <CheckIcon className="size-4" /> : null}
+                </button>
+              )
+            })}
+          </div>
           <div className="shell-workspace-menu-actions">
             <button type="button" className="shell-workspace-menu-action" onClick={() => {
               setOpen(false)
