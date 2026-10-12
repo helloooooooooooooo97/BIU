@@ -358,7 +358,7 @@ export function ShellSettingsAccount() {
       <div className="settings-account-row">
         <div className="settings-account-copy">
           <p className="settings-account-label">登录设备</p>
-          <div className="settings-account-actions" data-testid="settings-account-sessions">
+          <div className="settings-account-sessions" data-testid="settings-account-sessions">
             {sessions.map((session) => (
               <div className="settings-member-row" key={String(session.id)}>
                 <span>{String(session.device_name || '设备')}</span>
