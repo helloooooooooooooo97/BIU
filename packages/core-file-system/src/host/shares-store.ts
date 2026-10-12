@@ -86,6 +86,16 @@ export class SharesStore {
     return row ? publicShare(row) : null
   }
 
+  /** 记录分享会带上当时的视图 id，归属判断不能只查空 view_id。 */
+  findRecord(collection: string, recordId: string): ShareRecord | null {
+    const id = String(recordId ?? '').trim()
+    if (!id) return null
+    const row = this.conn().prepare(
+      'SELECT * FROM shares WHERE kind = ? AND collection = ? AND record_id = ? ORDER BY updated_at DESC LIMIT 1',
+    ).get('record', normalizeCollectionPath(collection), id) as ShareRow | undefined
+    return row ? publicShare(row) : null
+  }
+
   verifyPassword(token: string, password: string) {
     const row = this.conn().prepare('SELECT password_salt, password_hash FROM shares WHERE token = ?').get(token) as
       | { password_salt: string; password_hash: string }

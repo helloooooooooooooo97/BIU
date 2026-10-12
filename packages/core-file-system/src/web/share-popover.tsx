@@ -625,11 +625,13 @@ export function ShareScopeDetail({
   recordId,
   label,
   tableLabel = '',
+  localOnly = false,
 }: {
   collection: string
   recordId: string
   label: string
   tableLabel?: string
+  localOnly?: boolean
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -642,6 +644,19 @@ export function ShareScopeDetail({
 
   useEffect(() => {
     if (!open) return
+    if (localOnly) {
+      const shared = label === '共享'
+      setScope(shared ? 'shared' : 'personal')
+      setDirect([])
+      setChain([{
+        id: 'stored',
+        title: '这条内容自己的归属',
+        detail: shared ? '已开启局域网链接，同一局域网可查看' : '只有创建者，数据留在本机',
+        result: shared ? '共享' : '私人',
+      }])
+      setError('')
+      return
+    }
     let cancelled = false
     void (async () => {
       const [access, recordPage, viewPage, memberViewPage] = await Promise.all([
@@ -735,7 +750,7 @@ export function ShareScopeDetail({
     return () => {
       cancelled = true
     }
-  }, [open, collection, recordId, tableLabel])
+  }, [open, collection, recordId, tableLabel, localOnly, label])
 
   return (
     <div className="fsdb-scope-detail" ref={wrapRef}>
