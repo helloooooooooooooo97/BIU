@@ -2704,6 +2704,71 @@ body {
   line-height: 1.6;
 }
 
+.settings-workspace-accounts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.settings-workspace-account {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 8px 10px;
+  border: 1px solid var(--dsw-border);
+  border-radius: 10px;
+}
+
+.settings-workspace-account > svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  color: var(--dsw-label-2);
+}
+
+.settings-workspace-account-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  line-height: 1.3;
+}
+
+.settings-workspace-account-copy strong,
+.settings-workspace-account-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-workspace-account-copy strong {
+  color: var(--dsw-label);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.settings-workspace-account-copy small {
+  color: var(--dsw-label-3);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.settings-workspace-account .settings-account-action {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.settings-workspace-account .settings-account-action svg {
+  width: 14px;
+  height: 14px;
+}
+
 .settings-members-section {
   flex-direction: column;
   align-items: stretch;

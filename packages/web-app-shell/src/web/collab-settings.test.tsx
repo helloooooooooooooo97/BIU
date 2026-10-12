@@ -70,7 +70,8 @@ test('workspace and member settings are separate and workspace switching stays o
     const url = String(path)
     calls.push(`${init?.method ?? 'GET'} ${url}`)
     if (url.endsWith('/login')) return json({ id: 'acc_1', name: 'Ada', token: 'tok' })
-    if (url.endsWith('/me')) return json({ id: 'acc_1', name: 'Ada' })
+    if (url.endsWith('/me')) return json({ id: 'acc_1', name: 'Ada', email: 'ada@example.com' })
+    if (url.endsWith('/cloud') && (init?.method ?? 'GET') === 'GET') return json({ connected: false, accounts: [] })
     if (url.endsWith('/workspaces') && (init?.method ?? 'GET') === 'GET') {
       return json({ workspaces: [{ id: 'ws_1', name: 'Main', role: 'owner' }] })
     }
@@ -102,6 +103,9 @@ test('workspace and member settings are separate and workspace switching stays o
     fireEvent.click(screen.getByTestId('settings-collab-save'))
   })
   await waitFor(() => assert.equal(calls.includes('PATCH /api/account/workspaces/ws_1'), true))
+  assert.equal(screen.getByTestId('settings-workspace-local-account').textContent, 'ada@example.com')
+  assert.equal(screen.queryByTestId('settings-workspace-cloud-account'), null)
+  assert.equal(screen.getByTestId('settings-workspace-local-logout').textContent, '退出')
   assert.equal((screen.getByTestId('settings-collab-workspace') as HTMLInputElement).value, 'Notes')
   assert.equal(screen.queryByText('新建'), null)
   cleanup()
