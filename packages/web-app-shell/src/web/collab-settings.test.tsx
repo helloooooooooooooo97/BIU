@@ -47,6 +47,38 @@ test('the app stays on the login gate until a token exists', async () => {
   cleanup()
 })
 
+test('a stale workspace does not send the user back to login after they sign in', async () => {
+  localStorage.clear()
+  sessionStorage.clear()
+  localStorage.setItem('biu.workspaceId', 'ws_old')
+  sessionStorage.setItem('biu.workspaceId', 'ws_old')
+  let meCalls = 0
+  globalThis.fetch = (async (path: string) => {
+    const url = String(path)
+    if (url.endsWith('/login')) return json({ id: 'acc_1', token: 'tok', workspaceId: 'ws_new' })
+    if (url.endsWith('/me')) {
+      meCalls += 1
+      if (meCalls === 1) return json({ error: '不在这个空间' }, 403)
+      return json({ id: 'acc_1' })
+    }
+    return json({})
+  }) as typeof fetch
+  render(
+    <AuthGate>
+      <div data-testid="inside">in</div>
+    </AuthGate>,
+  )
+  fireEvent.change(screen.getByTestId('auth-name'), { target: { value: 'ada@example.com' } })
+  fireEvent.change(screen.getByTestId('auth-password'), { target: { value: 'secret1' } })
+  await act(async () => {
+    fireEvent.click(screen.getByTestId('auth-submit'))
+  })
+  await waitFor(() => assert.equal(screen.getByTestId('inside').textContent, 'in'))
+  assert.equal(meCalls, 2)
+  assert.equal(screen.queryByTestId('auth-gate'), null)
+  cleanup()
+})
+
 test('primary navigation does not call the removed chat overlay setter', () => {
   const source = readFileSync(resolve(import.meta.dirname, './shell-chrome.tsx'), 'utf8')
   assert.doesNotMatch(source, /setChatOverlay/)

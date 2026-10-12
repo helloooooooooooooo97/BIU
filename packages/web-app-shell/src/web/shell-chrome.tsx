@@ -480,7 +480,15 @@ export function AuthGate({ children }: { children: ReactNode }) {
     }
     let live = true
     setVerified(false)
-    void accountFetch(token, '/api/account/me')
+    const confirm = () => accountFetch(token, '/api/account/me')
+    void confirm()
+      .catch(async (err) => {
+        if (err instanceof Error && err.message === '不在这个空间') {
+          clearWorkspaceId()
+          return confirm()
+        }
+        throw err
+      })
       .then(() => {
         if (live) setVerified(true)
       })
@@ -610,6 +618,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
                     body: JSON.stringify({ email: name.trim(), password }),
                   })
                     .then((body) => {
+                      clearWorkspaceId()
                       writeAccountToken(String(body.token ?? ''))
                       if (body.workspaceId) writeWorkspaceId(String(body.workspaceId))
                       setPassword('')

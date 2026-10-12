@@ -568,7 +568,14 @@ export class HttpService extends Service {
           return
         }
         if (accountId && token) this.ctx.emit('account/request', { accountId, token })
-        if (accountId && requestedWorkspace && accountStore?.isMember && !accountStore.isMember(accountId, requestedWorkspace)) {
+        const identityRoute = url.pathname === '/api/account/me'
+        if (
+          !identityRoute &&
+          accountId &&
+          requestedWorkspace &&
+          accountStore?.isMember &&
+          !accountStore.isMember(accountId, requestedWorkspace)
+        ) {
           context.send(403, { error: '不在这个空间' })
           return
         }
