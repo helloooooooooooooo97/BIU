@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
   ArrowDownTrayIcon,
+  ArrowRightStartOnRectangleIcon,
   BellIcon,
   ChatBubbleLeftRightIcon,
   CheckIcon,
@@ -881,13 +882,14 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
               </span>
               <button
                 type="button"
+                aria-label="退出"
                 data-testid="shell-workspace-local-logout"
                 onClick={() => {
                   setOpen(false)
                   writeAccountToken('')
                 }}
               >
-                退出
+                <ArrowRightStartOnRectangleIcon aria-hidden />
               </button>
             </div>
             {cloudAccount ? (
@@ -898,6 +900,7 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
                 </span>
                 <button
                   type="button"
+                  aria-label="退出"
                   data-testid="shell-workspace-cloud-logout"
                   onClick={() => {
                     const token = readAccountToken()
@@ -909,7 +912,7 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
                       .catch(() => undefined)
                   }}
                 >
-                  退出
+                  <ArrowRightStartOnRectangleIcon aria-hidden />
                 </button>
               </div>
             ) : null}
