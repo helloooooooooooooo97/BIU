@@ -240,6 +240,7 @@ test('online HTTP and WebSocket enforce account and workspace boundaries', async
   const fiber = await ctx.plugin(http, { port: 0, host: '127.0.0.1', publicDir, sharePort: 0 })
   const port = await ready
   ctx.http.route('GET', '/api/db/list', (route) => route.send(200, { ok: true }))
+  ctx.http.route('GET', '/api/account/me', (route) => route.send(200, { id: 'ada' }))
   ctx.http.ws('/ws/plugin-extra', (socket) => socket.send('secured'))
   try {
     assert.equal((await fetch(`http://127.0.0.1:${port}/api/db/list`)).status, 401)
@@ -250,8 +251,16 @@ test('online HTTP and WebSocket enforce account and workspace boundaries', async
         await fetch(`http://127.0.0.1:${port}/api/db/list`, {
           headers: { Authorization: 'Bearer ada-token', 'X-Biu-Workspace-Id': 'ws-b' },
         })
-      ).status,
+      )      .status,
       403,
+    )
+    assert.equal(
+      (
+        await fetch(`http://127.0.0.1:${port}/api/account/me`, {
+          headers: { Authorization: 'Bearer ada-token', 'X-Biu-Workspace-Id': 'ws-missing' },
+        })
+      ).status,
+      200,
     )
     assert.equal(
       (
