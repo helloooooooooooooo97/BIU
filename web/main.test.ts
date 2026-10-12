@@ -13,6 +13,8 @@ test('web entry boots without top-level await', () => {
   assert.doesNotMatch(src, /^for \(const item of webRuntimeLoaders\) \{\n  const mod = await item.load\(\)/m)
   assert.doesNotMatch(src, /const ctx = new Context\(\)\n\s*const ctx = new Context\(\)/)
   assert.match(css, /\.site\s*\{[^}]*height:\s*100%;[^}]*overflow-y:\s*auto;/s)
+  assert.match(css, /\.site \[data-reveal\]\s*\{[^}]*opacity:\s*0;[^}]*translate3d\(0,\s*42px,\s*0\)/s)
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)/)
 })
 
 
