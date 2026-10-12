@@ -554,6 +554,28 @@ export const BIU_MIGRATIONS: Migration[] = [
   { version: 39, module: 'host-account', name: 'account.password-recall', up: (db) => {
     db.exec(`ALTER TABLE accounts ADD COLUMN password_recall TEXT NOT NULL DEFAULT ''`)
   } },
+  { version: 40, module: 'host-account', name: 'cloud.many-accounts', up: (db) => {
+    db.exec(`
+      CREATE TABLE cloud_connections_v40 (
+        local_account_id TEXT NOT NULL,
+        origin TEXT NOT NULL,
+        remote_account_id TEXT NOT NULL,
+        remote_name TEXT NOT NULL DEFAULT '',
+        remote_email TEXT NOT NULL DEFAULT '',
+        token TEXT NOT NULL,
+        connected_at INTEGER NOT NULL,
+        active INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (local_account_id, origin, remote_account_id)
+      );
+      INSERT INTO cloud_connections_v40
+        (local_account_id, origin, remote_account_id, remote_name, remote_email, token, connected_at, active)
+      SELECT local_account_id, origin, remote_account_id, remote_name, remote_email, token, connected_at, 1
+      FROM cloud_connections;
+      DROP TABLE cloud_connections;
+      ALTER TABLE cloud_connections_v40 RENAME TO cloud_connections;
+      CREATE INDEX IF NOT EXISTS cloud_connections_active ON cloud_connections(local_account_id, active);
+    `)
+  } },
 ]
 
 export function assertBiuMigrationLog(rows: Array<{ version: number }> = BIU_MIGRATIONS) {
