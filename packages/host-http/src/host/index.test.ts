@@ -286,6 +286,13 @@ test('online HTTP and WebSocket enforce account and workspace boundaries', async
       socket.once('error', reject)
     })
     assert.equal(securedWs, 'secured')
+    const previewWs = await new Promise<number>((resolve) => {
+      const socket = new WebSocket(`ws://127.0.0.1:${port}/ws/plugin-extra?landingPreview=1&workspaceId=ws-a`, {
+        headers: { Cookie: 'biu_account=ada-token' },
+      })
+      socket.once('close', (code) => resolve(code))
+    })
+    assert.equal(previewWs, 4401)
     const legacyWs = await new Promise<WebSocket>((resolve, reject) => {
       const socket = new WebSocket(`ws://127.0.0.1:${port}/ws?workspaceId=ws-a`, {
         headers: { Cookie: 'biu_legacy_account=ada-token' },

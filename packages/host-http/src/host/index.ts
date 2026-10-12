@@ -416,8 +416,9 @@ export class HttpService extends Service {
       .map((part) => part.trim())
       .find((part) => part.startsWith('biu_account=') || part.startsWith('biu_legacy_account='))
     const cookieToken = encoded ? decodeURIComponent(encoded.slice(encoded.indexOf('=') + 1)) : ''
-    const token = url.searchParams.get('token') ?? cookieToken
-    const workspaceId = url.searchParams.get('workspaceId') ?? ''
+    const preview = url.searchParams.get('landingPreview') === '1'
+    const token = preview ? '' : (url.searchParams.get('token') ?? cookieToken)
+    const workspaceId = preview ? '' : (url.searchParams.get('workspaceId') ?? '')
     let accountId = ''
     const store = (
       this.ctx.get('account') as {

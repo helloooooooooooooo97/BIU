@@ -128,8 +128,9 @@ export class SnapshotService extends Service {
   private connect() {
     try {
       const proto = location.protocol === 'https:' ? 'wss' : 'ws'
-      const workspaceId = sessionStorage.getItem('biu.workspaceId') || localStorage.getItem('biu.workspaceId') || ''
-      const query = workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : ''
+      const preview = new URLSearchParams(location.search).get('landingPreview') === '1'
+      const workspaceId = preview ? '' : (sessionStorage.getItem('biu.workspaceId') || localStorage.getItem('biu.workspaceId') || '')
+      const query = preview ? '?landingPreview=1' : workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : ''
       const ws = new WebSocket(`${proto}://${location.host}/ws${query}`)
       ws.onopen = () => {
         void this.pull()
