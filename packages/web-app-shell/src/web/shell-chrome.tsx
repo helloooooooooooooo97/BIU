@@ -893,14 +893,24 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
             })}
           </div>
           <div className="shell-workspace-menu-actions">
-            <button type="button" className="shell-workspace-menu-action" onClick={() => {
-              setOpen(false)
-              setCreateError('')
-              setCreating(true)
-            }}>
+            <button
+              type="button"
+              className="shell-workspace-menu-action"
+              disabled={Boolean(creatingLocation)}
+              onClick={() => {
+                setCreateError('')
+                if (hostOnline) {
+                  createWorkspace('cloud')
+                  return
+                }
+                setOpen(false)
+                setCreating(true)
+              }}
+            >
               <PlusIcon className="size-4" />
-              <span>创建新空间</span>
+              <span>{hostOnline && creatingLocation ? '正在创建…' : '创建新空间'}</span>
             </button>
+            {hostOnline && createError ? <p className="shell-workspace-create-error" role="alert">{createError}</p> : null}
             <button
               type="button"
               className="shell-workspace-menu-action"
@@ -1028,7 +1038,7 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
             <header>
               <div>
                 <h2>创建新空间</h2>
-                <p>{hostOnline ? '新空间的数据保存在云端。' : '选择数据保存的位置，创建后也可以继续添加其他空间。'}</p>
+                <p>选择数据保存的位置，创建后也可以继续添加其他空间。</p>
               </div>
               <button
                 type="button"
@@ -1040,19 +1050,17 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
               </button>
             </header>
             <div className="shell-workspace-create-cards">
-              {hostOnline ? null : (
-                <button
-                  type="button"
-                  className="shell-workspace-create-card"
-                  disabled={Boolean(creatingLocation)}
-                  onClick={() => createWorkspace('device')}
-                >
-                  <span className="shell-workspace-create-card-icon"><ComputerDesktopIcon aria-hidden /></span>
-                  <strong>本地空间</strong>
-                  <small>数据只保存在当前设备，不上传云端。可通过局域网链接临时分享。</small>
-                  <em>{creatingLocation === 'device' ? '正在创建…' : '创建本地空间'}</em>
-                </button>
-              )}
+              <button
+                type="button"
+                className="shell-workspace-create-card"
+                disabled={Boolean(creatingLocation)}
+                onClick={() => createWorkspace('device')}
+              >
+                <span className="shell-workspace-create-card-icon"><ComputerDesktopIcon aria-hidden /></span>
+                <strong>本地空间</strong>
+                <small>数据只保存在当前设备，不上传云端。可通过局域网链接临时分享。</small>
+                <em>{creatingLocation === 'device' ? '正在创建…' : '创建本地空间'}</em>
+              </button>
               <button
                 type="button"
                 className="shell-workspace-create-card"
