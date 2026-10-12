@@ -354,31 +354,38 @@ test('a local account can create or reuse the matching cloud identity', async ()
   process.env.BIU_ONLINE = '0'
   let registerConflict = false
   const actions: string[] = []
+  const passwords: string[] = []
   const remote = createServer((req, res) => {
     const path = req.url ?? ''
-    res.setHeader('content-type', 'application/json')
-    if (path === '/api/account/register') {
-      actions.push('register')
-      if (registerConflict) {
-        res.statusCode = 409
-        res.end(JSON.stringify({ error: '这个邮箱已经注册过' }))
-      } else {
-        res.statusCode = 201
-        res.end(JSON.stringify({ id: 'remote-ada', name: 'ada@example.com', token: 'remote-token', workspaceId: 'cloud-ws' }))
+    const chunks: Buffer[] = []
+    req.on('data', (chunk) => chunks.push(chunk as Buffer))
+    req.on('end', () => {
+      const body = JSON.parse(Buffer.concat(chunks).toString() || '{}') as { password?: string }
+      res.setHeader('content-type', 'application/json')
+      if (path === '/api/account/register' || path === '/api/account/login') passwords.push(String(body.password ?? ''))
+      if (path === '/api/account/register') {
+        actions.push('register')
+        if (registerConflict) {
+          res.statusCode = 409
+          res.end(JSON.stringify({ error: '这个邮箱已经注册过' }))
+        } else {
+          res.statusCode = 201
+          res.end(JSON.stringify({ id: 'remote-ada', name: 'ada@example.com', token: 'remote-token', workspaceId: 'cloud-ws' }))
+        }
+        return
       }
-      return
-    }
-    if (path === '/api/account/login') {
-      actions.push('login')
-      res.end(JSON.stringify({ id: 'remote-ada', name: 'ada@example.com', token: 'remote-token', workspaceId: 'cloud-ws' }))
-      return
-    }
-    if (path === '/api/account/workspaces') {
-      res.end(JSON.stringify({ workspaces: [{ id: 'cloud-ws', name: '在线空间', role: 'owner' }] }))
-      return
-    }
-    res.statusCode = 404
-    res.end(JSON.stringify({ error: 'not found' }))
+      if (path === '/api/account/login') {
+        actions.push('login')
+        res.end(JSON.stringify({ id: 'remote-ada', name: 'ada@example.com', token: 'remote-token', workspaceId: 'cloud-ws' }))
+        return
+      }
+      if (path === '/api/account/workspaces') {
+        res.end(JSON.stringify({ workspaces: [{ id: 'cloud-ws', name: '在线空间', role: 'owner' }] }))
+        return
+      }
+      res.statusCode = 404
+      res.end(JSON.stringify({ error: 'not found' }))
+    })
   })
   await new Promise<void>((resolve, reject) => {
     remote.once('error', reject)
@@ -415,6 +422,7 @@ test('a local account can create or reuse the matching cloud identity', async ()
     assert.equal(created.status, 201)
     assert.equal(((await created.json()) as { created: boolean }).created, true)
     assert.deepEqual(actions, ['register'])
+    assert.deepEqual(passwords, ['secret1'])
 
     await fetch(`${origin}/api/account/cloud`, { method: 'DELETE', headers })
     registerConflict = true
@@ -423,9 +431,10 @@ test('a local account can create or reuse the matching cloud identity', async ()
       headers,
       body: JSON.stringify({}),
     })
-    assert.equal(reused.status, 409)
-    assert.match(((await reused.json()) as { error?: string }).error ?? '', /请直接登录云端/)
-    assert.deepEqual(actions, ['register', 'register'])
+    assert.equal(reused.status, 200)
+    assert.equal(((await reused.json()) as { created: boolean }).created, false)
+    assert.deepEqual(actions, ['register', 'register', 'login'])
+    assert.deepEqual(passwords, ['secret1', 'secret1', 'secret1'])
   } finally {
     await accountFiber.dispose()
     await httpFiber.dispose()

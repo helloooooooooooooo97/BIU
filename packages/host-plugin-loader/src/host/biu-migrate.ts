@@ -551,6 +551,9 @@ export const BIU_MIGRATIONS: Migration[] = [
       CREATE INDEX IF NOT EXISTS session_execution_leases_expiry ON session_execution_leases(expires_at);
     `)
   } },
+  { version: 39, module: 'host-account', name: 'account.password-recall', up: (db) => {
+    db.exec(`ALTER TABLE accounts ADD COLUMN password_recall TEXT NOT NULL DEFAULT ''`)
+  } },
 ]
 
 export function assertBiuMigrationLog(rows: Array<{ version: number }> = BIU_MIGRATIONS) {

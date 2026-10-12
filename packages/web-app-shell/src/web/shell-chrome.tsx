@@ -283,7 +283,7 @@ export function ShellSettingsAccount() {
               </form>
               <div className="settings-cloud-sync">
                 <p className="settings-muted settings-account-hint">
-                  或使用本地邮箱 {account.email || '（未设置）'} 创建并关联云端账号。
+                  或使用本地邮箱 {account.email || '（未设置）'} 和当前登录密码创建并关联云端账号。创建后两边的密码分别修改。
                 </p>
                 <form
                   className="settings-account-actions"
