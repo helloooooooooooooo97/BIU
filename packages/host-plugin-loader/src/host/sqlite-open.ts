@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync, renameSync, rmSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname } from 'node:path'
 
@@ -26,17 +26,66 @@ function ensureSqliteDir(path: string) {
   mkdirSync(dirname(path), { recursive: true })
 }
 
+function isCorruptSqlite(error: unknown) {
+  const err = error as { errcode?: number; code?: string; message?: string }
+  return err?.errcode === 11 || err?.errcode === 26 || err?.code === 'SQLITE_CORRUPT' || err?.code === 'SQLITE_NOTADB' || /malformed|corrupt|not a database/i.test(String(err?.message ?? ''))
+}
+
+function sqliteSidecars(path: string) {
+  return [path, `${path}-wal`, `${path}-shm`]
+}
+
+function dropSidecars(path: string) {
+  for (const file of [`${path}-wal`, `${path}-shm`]) {
+    if (existsSync(file)) rmSync(file, { force: true })
+  }
+}
+
+function quarantineSqlite(path: string) {
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+  for (const file of sqliteSidecars(path)) {
+    if (!existsSync(file)) continue
+    renameSync(file, `${file}.corrupt-${stamp}`)
+  }
+  console.warn(`[sqlite] 数据库已损坏，已移到旁边并重新创建: ${path}`)
+}
+
 export function openSqlite(path: string, opts?: { foreignKeys?: boolean; checkpointOnOpen?: boolean }) {
   const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as typeof import('node:sqlite')
   ensureSqliteDir(path)
-  let db: DatabaseSync
-  try {
-    db = new DatabaseSync(path)
-  } catch (error) {
-    if (error instanceof Error && path && !error.message.includes(path)) error.message = `${error.message}: ${path}`
-    throw error
+  const recoverable = Boolean(path) && path !== ':memory:' && !path.includes('mode=memory')
+  const openFresh = () => {
+    const db = new DatabaseSync(path)
+    configureSqlite(db, opts)
+    return db
   }
-  configureSqlite(db, opts)
+  let db: DatabaseSync | undefined
+  try {
+    db = openFresh()
+  } catch (error) {
+    try {
+      db?.close()
+    } catch {
+      /* the handle may not exist */
+    }
+    if (!recoverable || !isCorruptSqlite(error)) {
+      if (error instanceof Error && path && !error.message.includes(path)) error.message = `${error.message}: ${path}`
+      throw error
+    }
+    dropSidecars(path)
+    try {
+      db = openFresh()
+    } catch (retry) {
+      try {
+        db?.close()
+      } catch {
+        /* the handle may not exist */
+      }
+      if (!isCorruptSqlite(retry)) throw retry
+      quarantineSqlite(path)
+      db = openFresh()
+    }
+  }
   if (opts?.checkpointOnOpen) {
     try {
       db.exec('PRAGMA wal_checkpoint(TRUNCATE)')
