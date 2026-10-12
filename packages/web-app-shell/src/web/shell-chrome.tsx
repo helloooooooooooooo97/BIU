@@ -1048,46 +1048,46 @@ export function ShellSettingsCollab({ panel = 'members' }: { panel?: 'workspace'
       {error ? <p className="settings-account-error" data-testid="settings-collab-error">{error}</p> : null}
       {panel === 'workspace' ? (
       <>
-      <div className="settings-workspace-accounts" data-testid="settings-workspace-accounts">
-        <div className="settings-workspace-account">
-          <ComputerDesktopIcon aria-hidden />
-          <span className="settings-workspace-account-copy">
-            <strong>本地账号</strong>
-            <small data-testid="settings-workspace-local-account">{localAccount || '当前设备'}</small>
-          </span>
-          <button
-            type="button"
-            className="settings-account-action"
-            data-testid="settings-workspace-local-logout"
-            onClick={() => writeAccountToken('')}
-          >
-            <ArrowRightStartOnRectangleIcon aria-hidden />
-            退出
-          </button>
-        </div>
-        {cloudAccount ? (
-          <div className="settings-workspace-account" data-testid="settings-workspace-cloud-account">
-            <CloudIcon aria-hidden />
-            <span className="settings-workspace-account-copy">
-              <strong>云端账号</strong>
-              <small>{cloudAccount}</small>
-            </span>
+      <div data-testid="settings-workspace-accounts">
+        <div className="settings-account-row">
+          <div className="settings-account-copy settings-workspace-account-identity">
+            <ComputerDesktopIcon aria-hidden />
+            <span data-testid="settings-workspace-local-account">{localAccount || '当前设备'}</span>
+          </div>
+          <div className="settings-account-actions">
             <button
               type="button"
               className="settings-account-action"
-              data-testid="settings-workspace-cloud-logout"
-              onClick={() => {
-                void accountFetch(token, '/api/account/cloud', { method: 'DELETE' })
-                  .then(() => {
-                    setCloudAccount('')
-                    window.dispatchEvent(new Event(ACCOUNT_EVENT))
-                  })
-                  .catch((err) => setError(err instanceof Error ? err.message : '退出云端账号失败'))
-              }}
+              data-testid="settings-workspace-local-logout"
+              onClick={() => writeAccountToken('')}
             >
-              <ArrowRightStartOnRectangleIcon aria-hidden />
               退出
             </button>
+          </div>
+        </div>
+        {cloudAccount ? (
+          <div className="settings-account-row" data-testid="settings-workspace-cloud-account">
+            <div className="settings-account-copy settings-workspace-account-identity">
+              <CloudIcon aria-hidden />
+              <span>{cloudAccount}</span>
+            </div>
+            <div className="settings-account-actions">
+              <button
+                type="button"
+                className="settings-account-action"
+                data-testid="settings-workspace-cloud-logout"
+                onClick={() => {
+                  void accountFetch(token, '/api/account/cloud', { method: 'DELETE' })
+                    .then(() => {
+                      setCloudAccount('')
+                      window.dispatchEvent(new Event(ACCOUNT_EVENT))
+                    })
+                    .catch((err) => setError(err instanceof Error ? err.message : '退出云端账号失败'))
+                }}
+              >
+                退出
+              </button>
+            </div>
           </div>
         ) : null}
       </div>
