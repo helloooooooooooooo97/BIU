@@ -464,18 +464,6 @@ function recordsFingerprint(rows: Array<DbRecord & { path?: string }>) {
   return JSON.stringify(rows)
 }
 
-function isPendingRow(row: { id?: unknown }) {
-  return String(row.id ?? '').startsWith('pending:')
-}
-
-function mergeListedItems<T extends { id?: unknown }>(prev: T[], listed: T[]) {
-  const pending = prev.filter((item) => isPendingRow(item) && !listed.some((row) => row.id === item.id))
-  const next = pending.length ? [...pending, ...listed] : listed
-  return recordsFingerprint(prev as Array<DbRecord & { path?: string }>) === recordsFingerprint(next as Array<DbRecord & { path?: string }>)
-    ? prev
-    : next
-}
-
 const LIST_CACHE_MAX = 8
 const listCache = new Map<string, { items: Array<DbRecord & { path?: string }>; total: number; stat: StatResult | null }>()
 
@@ -740,6 +728,7 @@ export function CollectionBrowser({
   const noticeTimer = useRef<number>(0)
   const quietUntil = useRef(0)
   const reloadGen = useRef(0)
+  const confirmedCreates = useRef(new Set<string>())
   const hydratePath = useRef('')
   const viewsRef = useRef<SavedView[]>([])
   const skipPersistGen = useRef(0)
@@ -917,9 +906,11 @@ export function CollectionBrowser({
         prev?.schema && JSON.stringify(prev.schema) === JSON.stringify(nextSchema) ? prev : { ...nextStat, schema: nextSchema },
       )
       setItems((prev) => {
-        const next = mergeListedItems(prev, listed.items)
-        setTotal(listed.total + next.filter(isPendingRow).length)
-        return next
+        const kept = prev.filter((item) => confirmedCreates.current.has(String(item.id)) && !listed.items.some((row) => row.id === item.id))
+        for (const row of listed.items) confirmedCreates.current.delete(String(row.id))
+        const next = kept.length ? [...kept, ...listed.items] : listed.items
+        setTotal(listed.total + kept.length)
+        return recordsFingerprint(prev) === recordsFingerprint(next) ? prev : next
       })
       const openId = detailIdRef.current
       if (openId) {
@@ -1928,17 +1919,6 @@ export function CollectionBrowser({
 
   async function createRecord() {
     if (!canCreate) return
-    const tempId = `pending:${crypto.randomUUID()}`
-    const now = Date.now()
-    const optimistic: DbRecord = {
-      id: tempId,
-      title: '',
-      shareScope: createScope === 'shared' ? '共享' : createScope === 'workspace' ? '空间' : '私人',
-      createdAt: now,
-      updatedAt: now,
-    }
-    setItems((prev) => [optimistic, ...prev.filter((item) => item.id !== tempId)])
-    setTotal((count) => count + 1)
     try {
       const data = await readJson<{ items?: Array<{ value?: DbRecord }> }>('/api/db/create', {
         method: 'POST',
@@ -1948,17 +1928,16 @@ export function CollectionBrowser({
       const value = data.items?.[0]?.value
       const id = value?.id
       if (!id) {
-        setItems((prev) => prev.filter((item) => item.id !== tempId))
-        setTotal((count) => Math.max(0, count - 1))
+        setError('没有写入')
         return
       }
-      setItems((prev) => prev.map((item) => (item.id === tempId ? { ...optimistic, ...value, id } : item)))
+      confirmedCreates.current.add(id)
+      setItems((prev) => [value, ...prev.filter((item) => item.id !== id)])
+      setTotal((count) => count + 1)
       quietUntil.current = 0
       void reload()
       window.setTimeout(() => showRecordInInspector(collectionPath, id), 0)
     } catch (err) {
-      setItems((prev) => prev.filter((item) => item.id !== tempId))
-      setTotal((count) => Math.max(0, count - 1))
       setError(String(err))
     }
   }
