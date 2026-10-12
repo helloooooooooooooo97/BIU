@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { Service, type Context } from 'cordis'
 import { biuSqlitePath, currentAccountId, eventsSqlitePath, isOnlineRuntime, openAndMigrateBiu, openSqlite } from '@biu/host-plugin-loader/data-dir'
@@ -479,15 +480,13 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     try {
       if (isOnlineRuntime()) throw new CollabError('服务端不能连接另一个云端账号', 400)
       const local = actor(route)
-      const body = (await route.json()) as { currentPassword?: string }
-      const password = String(body.currentPassword ?? '')
-      account.store.assertPassword(local.id, password)
       if (!local.email) throw new CollabError('本地账号没有可同步的邮箱', 400)
+      const password = randomBytes(18).toString('base64url')
       try {
         route.send(201, { ...(await connectCloudIdentity(local, 'register', local.email, password)), created: true })
       } catch (error) {
         if (!(error instanceof CollabError) || error.status !== 409) throw error
-        route.send(200, { ...(await connectCloudIdentity(local, 'login', local.email, password)), created: false })
+        throw new CollabError('这个邮箱已经有云端账号，请直接登录云端', 409)
       }
     } catch (error) {
       fail(route, error)

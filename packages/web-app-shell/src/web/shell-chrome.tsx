@@ -171,7 +171,6 @@ export function ShellSettingsAccount() {
   }>({ available: false, connected: false })
   const [cloudEmail, setCloudEmail] = useState('')
   const [cloudPassword, setCloudPassword] = useState('')
-  const [syncPassword, setSyncPassword] = useState('')
   const [cloudMessage, setCloudMessage] = useState('')
   const [sessions, setSessions] = useState<Array<Record<string, unknown>>>([])
   const [currentPassword, setCurrentPassword] = useState('')
@@ -284,7 +283,7 @@ export function ShellSettingsAccount() {
               </form>
               <div className="settings-cloud-sync">
                 <p className="settings-muted settings-account-hint">
-                  或使用本地邮箱 {account.email || '（未设置）'} 和当前密码创建并关联云端账号。创建后两边的密码分别修改。
+                  或使用本地邮箱 {account.email || '（未设置）'} 创建并关联云端账号。
                 </p>
                 <form
                   className="settings-account-actions"
@@ -293,30 +292,21 @@ export function ShellSettingsAccount() {
                     setCloudMessage('')
                     void accountFetch(token, '/api/account/cloud/sync-create', {
                       method: 'POST',
-                      body: JSON.stringify({ currentPassword: syncPassword }),
+                      body: JSON.stringify({}),
                     })
-                      .then((body) => {
-                        setSyncPassword('')
-                        setCloudMessage(body.created === true ? '云端账号已创建并关联。' : '已有云端账号已关联。')
+                      .then(() => {
+                        setCloudMessage('云端账号已创建并关联。')
                         void loadCloud()
                         window.dispatchEvent(new Event(ACCOUNT_EVENT))
                       })
                       .catch((error) => setCloudMessage(error instanceof Error ? error.message : '创建并关联失败'))
                   }}
                 >
-                  <input
-                    className="settings-account-input"
-                    type="password"
-                    aria-label="当前本地密码"
-                    placeholder="当前本地密码"
-                    value={syncPassword}
-                    onChange={(event) => setSyncPassword(event.target.value)}
-                  />
                   <button
                     className="settings-account-action"
                     type="submit"
                     data-testid="settings-cloud-sync-create"
-                    disabled={!account.email || !syncPassword}
+                    disabled={!account.email}
                   >
                     创建并关联
                   </button>
