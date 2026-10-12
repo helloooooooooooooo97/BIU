@@ -1697,22 +1697,39 @@ html:not(.dark) .shell-workspace-menu-item.is-active .shell-workspace-menu-icon 
 }
 
 .shell-workspace-menu-action {
+  position: relative;
+  isolation: isolate;
   display: flex;
   width: 100%;
-  min-height: 36px;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   border: 0;
   border-radius: 8px;
   padding: 8px;
   background: transparent;
-  color: var(--dsw-label);
+  color: var(--dsw-sidebar-fg);
   font-family: var(--font-sans);
   font-size: 14px;
   font-weight: 500;
   line-height: 1.2;
   text-align: left;
   cursor: pointer;
+  transition: none;
+}
+
+.shell-workspace-menu-action::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: transparent;
+}
+
+.shell-workspace-menu-action > * {
+  position: relative;
+  z-index: 1;
 }
 
 .shell-workspace-menu-action svg {
@@ -1723,6 +1740,10 @@ html:not(.dark) .shell-workspace-menu-item.is-active .shell-workspace-menu-icon 
 }
 
 .shell-workspace-menu-action:hover {
+  color: var(--dsw-sidebar-fg-active);
+}
+
+.shell-workspace-menu-action:hover::before {
   background: var(--dsw-hover);
 }
 
