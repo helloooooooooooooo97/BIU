@@ -325,6 +325,27 @@ test('workspace creation uses centered local and online cards with default names
   const css = readFileSync(resolve(import.meta.dirname, '../../../../web/style.css'), 'utf8')
   assert.match(css, /\.shell-workspace-switcher\s*\{[^}]*font-size:\s*14px;[^}]*font-weight:\s*500;/s)
   assert.match(css, /\.shell-workspace-create-overlay\s*\{[^}]*position:\s*fixed;[^}]*place-items:\s*center;/s)
+  cleanup()
+
+  const onlineBodies: Array<Record<string, unknown>> = []
+  globalThis.fetch = (async (path: string, init?: RequestInit) => {
+    const url = String(path)
+    if (url.endsWith('/me')) return json({ email: 'ada@example.com', online: true })
+    if (url.endsWith('/active') && init?.method === 'POST') return json({ error: 'stop reload' }, 500)
+    if (url.endsWith('/active')) return json({ workspaceId: 'ws_cloud' })
+    if (url.endsWith('/workspaces') && init?.method === 'POST') {
+      onlineBodies.push(JSON.parse(String(init.body)) as Record<string, unknown>)
+      return json({ id: 'ws_new', name: '在线空间', role: 'owner', location: 'cloud' }, 201)
+    }
+    if (url.endsWith('/workspaces')) return json({ workspaces: [{ id: 'ws_cloud', name: '云端项目', role: 'owner', location: 'cloud' }] })
+    return json({})
+  }) as typeof fetch
+  render(<ShellWorkspaceSwitcher />)
+  fireEvent.click(await screen.findByTestId('shell-workspace-switcher'))
+  fireEvent.click(screen.getByText('创建新空间'))
+  assert.equal(screen.queryByRole('dialog', { name: '创建新空间' }), null)
+  await waitFor(() => assert.deepEqual(onlineBodies[0], { name: '在线空间', location: 'cloud' }))
+  await waitFor(() => assert.match(screen.getByRole('alert').textContent ?? '', /stop reload/))
 })
 
 test('online MCP settings choose tools and manage scoped credentials', async () => {

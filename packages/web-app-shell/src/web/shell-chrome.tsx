@@ -893,14 +893,24 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
             })}
           </div>
           <div className="shell-workspace-menu-actions">
-            <button type="button" className="shell-workspace-menu-action" onClick={() => {
-              setOpen(false)
-              setCreateError('')
-              setCreating(true)
-            }}>
+            <button
+              type="button"
+              className="shell-workspace-menu-action"
+              disabled={Boolean(creatingLocation)}
+              onClick={() => {
+                setCreateError('')
+                if (hostOnline) {
+                  createWorkspace('cloud')
+                  return
+                }
+                setOpen(false)
+                setCreating(true)
+              }}
+            >
               <PlusIcon className="size-4" />
-              <span>创建新空间</span>
+              <span>{hostOnline && creatingLocation ? '正在创建…' : '创建新空间'}</span>
             </button>
+            {hostOnline && createError ? <p className="shell-workspace-create-error" role="alert">{createError}</p> : null}
             <button
               type="button"
               className="shell-workspace-menu-action"
