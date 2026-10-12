@@ -14,7 +14,7 @@ export default defineConfig({
   server: {
     port: Number(process.env.BIU_WEB_PORT || 5173),
     strictPort: true,
-    host: '127.0.0.1',
+    host: true,
     watch: {
       // 商店插件写在仓库根 .plugin，不能触发 Vite 整页刷新
       ignored: ['**/.plugin/**', '**/.plugin-dev/**'],
