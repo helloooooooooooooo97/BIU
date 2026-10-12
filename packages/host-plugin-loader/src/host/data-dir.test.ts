@@ -140,6 +140,18 @@ test('adoptPackedUserData moves pack-host leftovers into userData and keeps dest
   assert.equal(existsSync(join(pack, DATA_DIR_NAME)), false)
 })
 
+test('adoptPackedUserData keeps the dev checkout database when copying into a desktop home', () => {
+  const pack = mkdtempSync(join(tmpdir(), 'biu-dev-'))
+  const home = mkdtempSync(join(tmpdir(), 'biu-desktop-'))
+  mkdirSync(join(pack, 'packages'), { recursive: true })
+  mkdirSync(join(pack, DATA_DIR_NAME), { recursive: true })
+  writeFileSync(join(pack, 'package.json'), '{}')
+  writeFileSync(join(pack, DATA_DIR_NAME, 'online-marker.txt'), 'keep')
+  adoptPackedUserData(pack, home, join(home, 'workspace'))
+  assert.equal(readFileSync(join(home, DATA_DIR_NAME, 'online-marker.txt'), 'utf8'), 'keep')
+  assert.equal(readFileSync(join(pack, DATA_DIR_NAME, 'online-marker.txt'), 'utf8'), 'keep')
+})
+
 test('migrateDataDir folds leftover asset layers into CAS and rewrites refs', () => {
   const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as typeof import('node:sqlite')
   const root = mkdtempSync(join(tmpdir(), 'biu-cas-'))
