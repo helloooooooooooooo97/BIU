@@ -1606,8 +1606,10 @@ body {
 }
 
 .shell-workspace-menu {
+  display: flex;
   max-height: min(420px, calc(100vh - 72px));
-  overflow: auto;
+  flex-direction: column;
+  overflow: hidden;
   padding: 6px;
   border: 1px solid var(--dsw-border);
   border-radius: 10px;
@@ -1617,8 +1619,11 @@ body {
 
 .shell-workspace-menu-list {
   display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 2px;
+  overflow: auto;
 }
 
 .shell-workspace-menu-item {
@@ -1669,6 +1674,7 @@ body {
 
 .shell-workspace-menu-actions {
   display: flex;
+  flex: 0 0 auto;
   flex-direction: column;
   gap: 2px;
   margin-top: 6px;
@@ -1681,29 +1687,37 @@ body {
   width: 100%;
   height: 34px;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   border: 0;
   border-radius: 7px;
   padding: 0 8px;
   background: transparent;
-  color: var(--dsw-label-2);
-  font: inherit;
+  color: var(--dsw-label);
+  font-family: var(--font-sans);
   font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
   text-align: left;
   cursor: pointer;
 }
 
+.shell-workspace-menu-action svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  color: var(--dsw-label-2);
+}
+
 .shell-workspace-menu-action:hover {
   background: var(--dsw-hover);
-  color: var(--dsw-label);
 }
 
 .shell-workspace-menu-action.is-logout {
-  margin-top: 4px;
-  border-top: 1px solid var(--dsw-border);
-  border-radius: 0 0 7px 7px;
-  padding-top: 4px;
-  height: 39px;
+  margin-top: 0;
+  border-top: 0;
+  border-radius: 7px;
+  padding-top: 0;
+  height: 34px;
 }
 
 .shell-workspace-create-overlay {
