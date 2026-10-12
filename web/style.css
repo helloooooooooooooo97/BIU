@@ -1626,16 +1626,23 @@ body {
   overflow: auto;
 }
 
+.shell-workspace-menu-item,
+.shell-workspace-menu-action,
+.shell-workspace-menu-account {
+  box-sizing: border-box;
+  height: 36px;
+  min-height: 36px;
+}
+
 .shell-workspace-menu-item {
   display: flex;
   width: 100%;
   min-width: 0;
-  min-height: 36px;
   align-items: center;
   gap: 8px;
   border: 0;
   border-radius: 8px;
-  padding: 8px;
+  padding: 0 8px;
   background: transparent;
   color: var(--dsw-label);
   font: inherit;
@@ -1702,10 +1709,10 @@ html:not(.dark) .shell-workspace-menu-item.is-active .shell-workspace-menu-icon 
   display: flex;
   width: 100%;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   border: 0;
   border-radius: 8px;
-  padding: 8px;
+  padding: 0 8px;
   background: transparent;
   color: var(--dsw-sidebar-fg);
   font-family: var(--font-sans);
@@ -1751,11 +1758,10 @@ html:not(.dark) .shell-workspace-menu-item.is-active .shell-workspace-menu-icon 
   display: flex;
   width: 100%;
   min-width: 0;
-  min-height: 36px;
   align-items: center;
   gap: 8px;
   border-radius: 8px;
-  padding: 8px;
+  padding: 0 8px;
   color: var(--dsw-label);
   font-size: 14px;
   font-weight: 500;
