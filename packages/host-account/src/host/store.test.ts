@@ -329,6 +329,8 @@ test('login accepts the password set at register and rejects the rest', () => {
   assert.equal(collab.activeWorkspaceId(), workspaceId)
   assert.equal(collab.listWorkspaces(ada.id)[0]?.name, '我的工作区')
   assert.equal(collab.enter(ada.id), workspaceId)
+  assert.doesNotThrow(() => collab.assertPassword(ada.id, 'secret1'))
+  assert.throws(() => collab.assertPassword(ada.id, 'wrong'), /当前密码不对/)
   const saved = collab.saveWorkspaceProfile(ada.id, { name: '蓝团', avatar: '' })
   assert.equal(saved.name, '蓝团')
   assert.equal(saved.email, 'ada@example.com')

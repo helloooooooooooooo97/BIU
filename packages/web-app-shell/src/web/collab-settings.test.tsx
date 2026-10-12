@@ -176,6 +176,31 @@ test('account settings are global and workspace switcher lives in the sidebar he
   assert.equal(settingsOpened, true)
 })
 
+test('account settings can create and link a cloud account from the local identity', async () => {
+  localStorage.setItem('biu.account.token', 'tok')
+  let syncBody: Record<string, unknown> | null = null
+  globalThis.fetch = (async (path: string, init?: RequestInit) => {
+    const url = String(path)
+    if (url.endsWith('/me')) return json({ id: 'acc_1', name: 'Ada', email: 'ada@example.com' })
+    if (url.endsWith('/sessions')) return json({ sessions: [] })
+    if (url.endsWith('/cloud/sync-create') && init?.method === 'POST') {
+      syncBody = JSON.parse(String(init.body)) as Record<string, unknown>
+      return json({ created: true }, 201)
+    }
+    if (url.endsWith('/cloud')) return json({ available: true, connected: false })
+    return json({})
+  }) as typeof fetch
+
+  render(<ShellSettingsAccount />)
+  const sync = await screen.findByTestId('settings-cloud-sync-create')
+  await waitFor(() => assert.match(screen.getByText(/使用本地邮箱/).textContent ?? '', /ada@example\.com/))
+  assert.equal(sync.hasAttribute('disabled'), true)
+  fireEvent.change(screen.getByLabelText('当前本地密码'), { target: { value: 'secret1' } })
+  fireEvent.click(sync)
+  await waitFor(() => assert.deepEqual(syncBody, { currentPassword: 'secret1' }))
+  await waitFor(() => assert.match(screen.getByText('云端账号已创建并关联。').textContent ?? '', /已创建并关联/))
+})
+
 test('workspace creation uses centered local and online cards with default names', async () => {
   localStorage.setItem('biu.account.token', 'tok')
   const createBodies: Array<Record<string, unknown>> = []

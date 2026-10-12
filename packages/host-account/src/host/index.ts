@@ -321,18 +321,21 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     }
   }
 
-  async function connectCloud(route: RouteContext, action: 'login' | 'register') {
+  async function connectCloudIdentity(
+    local: { id: string },
+    action: 'login' | 'register',
+    email: string,
+    password: string,
+  ) {
     if (isOnlineRuntime()) throw new CollabError('服务端不能连接另一个云端账号', 400)
-    const local = actor(route)
     const origin = configuredRemoteOrigin()
     if (!origin) throw new CollabError('还没有配置云端服务地址', 400)
-    const body = (await route.json()) as { email?: string; password?: string }
     let remote: Response
     try {
       remote = await fetch(`${origin}/api/account/${action}`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ email: String(body.email ?? ''), password: String(body.password ?? '') }),
+        body: JSON.stringify({ email, password }),
       })
     } catch {
       throw new CollabError('云端暂时连不上', 503)
@@ -351,8 +354,8 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       localAccountId: local.id,
       origin,
       remoteAccountId: payload.id,
-      remoteName: payload.name || String(body.email ?? ''),
-      remoteEmail: String(body.email ?? '').trim().toLowerCase(),
+      remoteName: payload.name || email,
+      remoteEmail: email.trim().toLowerCase(),
       token: payload.token,
     })
     let workspaces: unknown[] = []
@@ -382,6 +385,12 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       workspaceId,
       workspaces,
     }
+  }
+
+  async function connectCloud(route: RouteContext, action: 'login' | 'register') {
+    const local = actor(route)
+    const body = (await route.json()) as { email?: string; password?: string }
+    return connectCloudIdentity(local, action, String(body.email ?? ''), String(body.password ?? ''))
   }
 
   ctx.http.route('GET', '/api/account/cloud', async (route) => {
@@ -419,6 +428,25 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   ctx.http.route('POST', '/api/account/cloud/register', async (route) => {
     try {
       route.send(201, await connectCloud(route, 'register'))
+    } catch (error) {
+      fail(route, error)
+    }
+  })
+
+  ctx.http.route('POST', '/api/account/cloud/sync-create', async (route) => {
+    try {
+      if (isOnlineRuntime()) throw new CollabError('服务端不能连接另一个云端账号', 400)
+      const local = actor(route)
+      const body = (await route.json()) as { currentPassword?: string }
+      const password = String(body.currentPassword ?? '')
+      account.store.assertPassword(local.id, password)
+      if (!local.email) throw new CollabError('本地账号没有可同步的邮箱', 400)
+      try {
+        route.send(201, { ...(await connectCloudIdentity(local, 'register', local.email, password)), created: true })
+      } catch (error) {
+        if (!(error instanceof CollabError) || error.status !== 409) throw error
+        route.send(200, { ...(await connectCloudIdentity(local, 'login', local.email, password)), created: false })
+      }
     } catch (error) {
       fail(route, error)
     }

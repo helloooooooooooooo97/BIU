@@ -231,11 +231,17 @@ export class CollabStore {
     }
   }
 
+  assertPassword(accountId: string, password: string) {
+    const row = this.db.prepare('SELECT password_hash FROM accounts WHERE id = ?').get(accountId) as { password_hash: string } | undefined
+    if (!row?.password_hash || !verifyPassword(password, row.password_hash)) {
+      throw new CollabError('当前密码不对', 401)
+    }
+  }
+
   changePassword(accountId: string, currentPassword: string, nextPassword: string, keepToken = '', now = Date.now()) {
     const next = nextPassword.trim()
     if (next.length < 6) throw new CollabError('密码至少 6 位', 400)
-    const row = this.db.prepare('SELECT password_hash FROM accounts WHERE id = ?').get(accountId) as { password_hash: string } | undefined
-    if (!row?.password_hash || !verifyPassword(currentPassword, row.password_hash)) throw new CollabError('当前密码不对', 401)
+    this.assertPassword(accountId, currentPassword)
     this.db
       .prepare('UPDATE accounts SET password_hash = ?, must_change_password = 0 WHERE id = ?')
       .run(hashPassword(next), accountId)

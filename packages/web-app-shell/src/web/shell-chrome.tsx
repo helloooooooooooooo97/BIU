@@ -171,6 +171,7 @@ export function ShellSettingsAccount() {
   }>({ available: false, connected: false })
   const [cloudEmail, setCloudEmail] = useState('')
   const [cloudPassword, setCloudPassword] = useState('')
+  const [syncPassword, setSyncPassword] = useState('')
   const [cloudMessage, setCloudMessage] = useState('')
   const [sessions, setSessions] = useState<Array<Record<string, unknown>>>([])
   const [currentPassword, setCurrentPassword] = useState('')
@@ -244,42 +245,84 @@ export function ShellSettingsAccount() {
               </button>
             </div>
           ) : cloud.available ? (
-            <form
-              className="settings-account-actions"
-              onSubmit={(event) => {
-                event.preventDefault()
-                setCloudMessage('')
-                void accountFetch(token, '/api/account/cloud/login', {
-                  method: 'POST',
-                  body: JSON.stringify({ email: cloudEmail.trim(), password: cloudPassword }),
-                })
-                  .then(() => {
-                    setCloudPassword('')
-                    setCloudMessage('云端账号已登录。')
-                    void loadCloud()
-                    window.dispatchEvent(new Event(ACCOUNT_EVENT))
+            <div className="settings-cloud-connect">
+              <form
+                className="settings-account-actions"
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  setCloudMessage('')
+                  void accountFetch(token, '/api/account/cloud/login', {
+                    method: 'POST',
+                    body: JSON.stringify({ email: cloudEmail.trim(), password: cloudPassword }),
                   })
-                  .catch((error) => setCloudMessage(error instanceof Error ? error.message : '云端登录失败'))
-              }}
-            >
-              <input
-                className="settings-account-input"
-                type="email"
-                placeholder="云端邮箱"
-                value={cloudEmail}
-                onChange={(event) => setCloudEmail(event.target.value)}
-              />
-              <input
-                className="settings-account-input"
-                type="password"
-                placeholder="云端密码"
-                value={cloudPassword}
-                onChange={(event) => setCloudPassword(event.target.value)}
-              />
-              <button className="settings-account-action" type="submit" disabled={!cloudEmail.trim() || !cloudPassword}>
-                登录云端
-              </button>
-            </form>
+                    .then(() => {
+                      setCloudPassword('')
+                      setCloudMessage('云端账号已登录。')
+                      void loadCloud()
+                      window.dispatchEvent(new Event(ACCOUNT_EVENT))
+                    })
+                    .catch((error) => setCloudMessage(error instanceof Error ? error.message : '云端登录失败'))
+                }}
+              >
+                <input
+                  className="settings-account-input"
+                  type="email"
+                  placeholder="云端邮箱"
+                  value={cloudEmail}
+                  onChange={(event) => setCloudEmail(event.target.value)}
+                />
+                <input
+                  className="settings-account-input"
+                  type="password"
+                  placeholder="云端密码"
+                  value={cloudPassword}
+                  onChange={(event) => setCloudPassword(event.target.value)}
+                />
+                <button className="settings-account-action" type="submit" disabled={!cloudEmail.trim() || !cloudPassword}>
+                  登录云端
+                </button>
+              </form>
+              <div className="settings-cloud-sync">
+                <p className="settings-muted settings-account-hint">
+                  或使用本地邮箱 {account.email || '（未设置）'} 和当前密码创建并关联云端账号。创建后两边的密码分别修改。
+                </p>
+                <form
+                  className="settings-account-actions"
+                  onSubmit={(event) => {
+                    event.preventDefault()
+                    setCloudMessage('')
+                    void accountFetch(token, '/api/account/cloud/sync-create', {
+                      method: 'POST',
+                      body: JSON.stringify({ currentPassword: syncPassword }),
+                    })
+                      .then((body) => {
+                        setSyncPassword('')
+                        setCloudMessage(body.created === true ? '云端账号已创建并关联。' : '已有云端账号已关联。')
+                        void loadCloud()
+                        window.dispatchEvent(new Event(ACCOUNT_EVENT))
+                      })
+                      .catch((error) => setCloudMessage(error instanceof Error ? error.message : '创建并关联失败'))
+                  }}
+                >
+                  <input
+                    className="settings-account-input"
+                    type="password"
+                    aria-label="当前本地密码"
+                    placeholder="当前本地密码"
+                    value={syncPassword}
+                    onChange={(event) => setSyncPassword(event.target.value)}
+                  />
+                  <button
+                    className="settings-account-action"
+                    type="submit"
+                    data-testid="settings-cloud-sync-create"
+                    disabled={!account.email || !syncPassword}
+                  >
+                    创建并关联
+                  </button>
+                </form>
+              </div>
+            </div>
           ) : (
             <p className="settings-muted settings-account-hint">当前没有配置中心服务，单机功能可以完整使用。</p>
           )}
