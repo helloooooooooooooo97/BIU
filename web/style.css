@@ -1764,12 +1764,12 @@ html:not(.dark) .shell-workspace-menu-account-actions button:hover {
 .shell-workspace-menu-account-actions button {
   display: grid;
   flex: none;
-  width: 16px;
-  height: 16px;
-  margin: 0;
+  width: 22px;
+  height: 22px;
+  margin: -3px;
   place-items: center;
   border: 0;
-  border-radius: 4px;
+  border-radius: 6px;
   padding: 0;
   background: transparent;
   color: var(--dsw-label-2);
@@ -1778,6 +1778,7 @@ html:not(.dark) .shell-workspace-menu-account-actions button:hover {
 
 .shell-workspace-menu-account button svg,
 .shell-workspace-menu-account-actions button svg {
+  display: block;
   width: 16px;
   height: 16px;
 }
