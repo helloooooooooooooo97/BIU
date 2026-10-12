@@ -6,11 +6,13 @@ import { act } from 'react'
 
 test('web entry boots without top-level await', () => {
   const src = readFileSync(resolve(import.meta.dirname, './main.tsx'), 'utf8')
+  const css = readFileSync(resolve(import.meta.dirname, './style.css'), 'utf8')
   assert.match(src, /applyStoredTheme/)
   assert.match(src, /不用 top-level await/)
   assert.match(src, /export const webBoot = \(async \(\) =>/)
   assert.doesNotMatch(src, /^for \(const item of webRuntimeLoaders\) \{\n  const mod = await item.load\(\)/m)
   assert.doesNotMatch(src, /const ctx = new Context\(\)\n\s*const ctx = new Context\(\)/)
+  assert.match(css, /\.site\s*\{[^}]*height:\s*100%;[^}]*overflow-y:\s*auto;/s)
 })
 
 
