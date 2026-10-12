@@ -1714,6 +1714,48 @@ body {
   background: var(--dsw-hover);
 }
 
+.shell-workspace-menu-account {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  align-items: center;
+  gap: 8px;
+  border-radius: 8px;
+  padding: 8px;
+  color: var(--dsw-label);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.shell-workspace-menu-account > svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  color: var(--dsw-label-2);
+}
+
+.shell-workspace-menu-account button {
+  flex: none;
+  height: 24px;
+  margin: 0;
+  border: 0;
+  border-radius: 6px;
+  padding: 0 8px;
+  background: transparent;
+  color: var(--dsw-label-2);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.shell-workspace-menu-account button:hover {
+  background: var(--dsw-hover);
+  color: var(--dsw-label);
+}
+
 .shell-workspace-menu-action.is-logout {
   margin-top: 0;
   border-top: 0;
@@ -2702,30 +2744,6 @@ body {
   font-size: 13px;
   font-weight: 500;
   line-height: 1.6;
-}
-
-.settings-workspace-account-identity {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 8px;
-  color: var(--dsw-label);
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.settings-workspace-account-identity svg {
-  width: 16px;
-  height: 16px;
-  flex: none;
-  color: var(--dsw-label-2);
-}
-
-.settings-workspace-account-identity span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .settings-members-section {

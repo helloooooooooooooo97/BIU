@@ -726,6 +726,8 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
   const [creating, setCreating] = useState(false)
   const [creatingLocation, setCreatingLocation] = useState<'device' | 'cloud' | null>(null)
   const [createError, setCreateError] = useState('')
+  const [localAccount, setLocalAccount] = useState('')
+  const [cloudAccount, setCloudAccount] = useState('')
   const triggerRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
@@ -734,15 +736,23 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
       const token = readAccountToken()
       if (!token) return
       try {
-        const [listed, current] = await Promise.all([
+        const [listed, current, me, cloud] = await Promise.all([
           accountFetch(token, '/api/account/workspaces') as Promise<{ workspaces?: CollabWorkspace[] }>,
           accountFetch(token, '/api/account/active') as Promise<{ workspaceId?: string }>,
+          accountFetch(token, '/api/account/me') as Promise<{ email?: string; name?: string }>,
+          accountFetch(token, '/api/account/cloud').catch(() => ({})) as Promise<{
+            connected?: boolean
+            account?: { email?: string; name?: string }
+          }>,
         ])
         if (cancelled) return
         setWorkspaces(listed.workspaces ?? [])
         const workspaceId = String(current.workspaceId ?? '')
         setActive(workspaceId)
         if (workspaceId) writeWorkspaceId(workspaceId)
+        setLocalAccount(String(me.email || me.name || ''))
+        const remote = cloud.account && typeof cloud.account === 'object' ? cloud.account : undefined
+        setCloudAccount(cloud.connected && remote ? String(remote.email || remote.name || '') : '')
       } catch {
         if (!cancelled) setWorkspaces([])
       }
@@ -865,6 +875,45 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
               <Cog6ToothIcon className="size-4" />
               <span>空间设置</span>
             </button>
+            <div className="shell-workspace-menu-account" data-testid="shell-workspace-local-account">
+              <ComputerDesktopIcon aria-hidden />
+              <span className="shell-workspace-menu-copy">
+                <strong>{localAccount || '本机账号'}</strong>
+              </span>
+              <button
+                type="button"
+                data-testid="shell-workspace-local-logout"
+                onClick={() => {
+                  setOpen(false)
+                  writeAccountToken('')
+                }}
+              >
+                退出
+              </button>
+            </div>
+            {cloudAccount ? (
+              <div className="shell-workspace-menu-account" data-testid="shell-workspace-cloud-account">
+                <CloudIcon aria-hidden />
+                <span className="shell-workspace-menu-copy">
+                  <strong>{cloudAccount}</strong>
+                </span>
+                <button
+                  type="button"
+                  data-testid="shell-workspace-cloud-logout"
+                  onClick={() => {
+                    const token = readAccountToken()
+                    void accountFetch(token, '/api/account/cloud', { method: 'DELETE' })
+                      .then(() => {
+                        setCloudAccount('')
+                        window.dispatchEvent(new Event(ACCOUNT_EVENT))
+                      })
+                      .catch(() => undefined)
+                  }}
+                >
+                  退出
+                </button>
+              </div>
+            ) : null}
             <button
               type="button"
               className="shell-workspace-menu-action is-logout"
@@ -948,8 +997,6 @@ export function ShellSettingsCollab({ panel = 'members' }: { panel?: 'workspace'
   const [pendingRemove, setPendingRemove] = useState<CollabMember | null>(null)
   const [deleteName, setDeleteName] = useState('')
   const [error, setError] = useState('')
-  const [localAccount, setLocalAccount] = useState('')
-  const [cloudAccount, setCloudAccount] = useState('')
 
   const remember = (next: string) => {
     setToken(next)
@@ -989,14 +1036,6 @@ export function ShellSettingsCollab({ panel = 'members' }: { panel?: 'workspace'
         setWorkspaceName(rows.find((row) => row.id === nextWorkspaceId)?.name ?? '')
         setDeleteName('')
         setError('')
-        const me = (await accountFetch(token, '/api/account/me')) as { email?: string; name?: string }
-        setLocalAccount(String(me.email || me.name || ''))
-        const cloud = (await accountFetch(token, '/api/account/cloud').catch(() => ({}))) as {
-          connected?: boolean
-          account?: { email?: string; name?: string }
-        }
-        const remote = cloud.account && typeof cloud.account === 'object' ? cloud.account : undefined
-        setCloudAccount(cloud.connected && remote ? String(remote.email || remote.name || '') : '')
       } catch (err) {
         if (gone) return
         remember('')
@@ -1048,49 +1087,6 @@ export function ShellSettingsCollab({ panel = 'members' }: { panel?: 'workspace'
       {error ? <p className="settings-account-error" data-testid="settings-collab-error">{error}</p> : null}
       {panel === 'workspace' ? (
       <>
-      <div data-testid="settings-workspace-accounts">
-        <div className="settings-account-row">
-          <div className="settings-account-copy settings-workspace-account-identity">
-            <ComputerDesktopIcon aria-hidden />
-            <span data-testid="settings-workspace-local-account">{localAccount || '当前设备'}</span>
-          </div>
-          <div className="settings-account-actions">
-            <button
-              type="button"
-              className="settings-account-action"
-              data-testid="settings-workspace-local-logout"
-              onClick={() => writeAccountToken('')}
-            >
-              退出
-            </button>
-          </div>
-        </div>
-        {cloudAccount ? (
-          <div className="settings-account-row" data-testid="settings-workspace-cloud-account">
-            <div className="settings-account-copy settings-workspace-account-identity">
-              <CloudIcon aria-hidden />
-              <span>{cloudAccount}</span>
-            </div>
-            <div className="settings-account-actions">
-              <button
-                type="button"
-                className="settings-account-action"
-                data-testid="settings-workspace-cloud-logout"
-                onClick={() => {
-                  void accountFetch(token, '/api/account/cloud', { method: 'DELETE' })
-                    .then(() => {
-                      setCloudAccount('')
-                      window.dispatchEvent(new Event(ACCOUNT_EVENT))
-                    })
-                    .catch((err) => setError(err instanceof Error ? err.message : '退出云端账号失败'))
-                }}
-              >
-                退出
-              </button>
-            </div>
-          </div>
-        ) : null}
-      </div>
       <form
         className="settings-account-row"
         onSubmit={(event) => {
