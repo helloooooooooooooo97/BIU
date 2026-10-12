@@ -39,7 +39,6 @@ import {
   Squares2X2Icon,
   StarIcon,
   TableCellsIcon,
-  ComputerDesktopIcon,
   GlobeAltIcon,
   UserIcon,
   UsersIcon,
@@ -595,7 +594,7 @@ export function CollectionBrowser({
         if (!live) return
         const device = body?.dataLocation === 'device' || body?.localData === true
         setLocalData(device)
-        if (device) setCreateScope('local')
+        if (device) setCreateScope((current) => (current === 'shared' ? 'shared' : 'personal'))
         else setCreateScope((current) => (current === 'local' ? 'personal' : current))
       })
       .catch(() => undefined)
@@ -2093,7 +2092,7 @@ export function CollectionBrowser({
 
   function renderCell(row: DbRecord, key: string, field: FieldSpec, surface: 'table' | 'detail' = 'detail') {
     if (key === 'shareScope') {
-      if (localData) return <span>{String(row[key] ?? '本地')}</span>
+      if (localData) return <span>{String(row[key] ?? '私人')}</span>
       return (
         <ShareScopeDetail
           collection={collectionPath}
@@ -3356,30 +3355,28 @@ export function CollectionBrowser({
                     aria-label="新建归属"
                     aria-expanded={createScopeOpen}
                     title={
-                      createScope === 'local'
-                        ? '本机空间，数据只存在这台设备'
-                        : createScope === 'workspace'
-                          ? '空间内容，全部成员可编辑'
-                          : createScope === 'shared'
-                            ? '公开链接，所有人可查看'
+                      createScope === 'workspace'
+                        ? '空间内容，全部成员可编辑'
+                        : createScope === 'shared'
+                          ? localData
+                            ? '共享到局域网，数据仍留在本机'
+                            : '公开链接，所有人可查看'
+                          : localData
+                            ? '私人内容，仅自己可处理，数据留在本机'
                             : '私人内容，仅自己可处理'
                     }
-                    onClick={() => {
-                      if (!localData) setCreateScopeOpen((open) => !open)
-                    }}
+                    onClick={() => setCreateScopeOpen((open) => !open)}
                   >
-                    {createScope === 'local' ? (
-                      <ComputerDesktopIcon aria-hidden className="size-[14px]" />
-                    ) : createScope === 'workspace' ? (
+                    {createScope === 'workspace' ? (
                       <UsersIcon aria-hidden className="size-[14px]" />
                     ) : createScope === 'shared' ? (
                       <GlobeAltIcon aria-hidden className="size-[14px]" />
                     ) : (
                       <UserIcon aria-hidden className="size-[14px]" />
                     )}
-                    {!localData ? <ChevronDownIcon aria-hidden className="size-[12px]" /> : null}
+                    <ChevronDownIcon aria-hidden className="size-[12px]" />
                   </button>
-                  {createScopeOpen && !localData ? (
+                  {createScopeOpen ? (
                     <div className="fsdb-create-scope-menu" role="menu">
                       <button
                         type="button"
@@ -3393,18 +3390,20 @@ export function CollectionBrowser({
                         <UserIcon aria-hidden className="size-[14px]" />
                         私人
                       </button>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className={createScope === 'workspace' ? 'is-on' : ''}
-                        onClick={() => {
-                          setCreateScope('workspace')
-                          setCreateScopeOpen(false)
-                        }}
-                      >
-                        <UsersIcon aria-hidden className="size-[14px]" />
-                        空间
-                      </button>
+                      {localData ? null : (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className={createScope === 'workspace' ? 'is-on' : ''}
+                          onClick={() => {
+                            setCreateScope('workspace')
+                            setCreateScopeOpen(false)
+                          }}
+                        >
+                          <UsersIcon aria-hidden className="size-[14px]" />
+                          空间
+                        </button>
+                      )}
                       <button
                         type="button"
                         role="menuitem"

@@ -183,8 +183,8 @@ function schemaFor(spec: CollectionSpec): CollectionSchema {
       computed: true,
       writable: false,
       sortable: true,
-      enum: isDesktopRuntime() ? ['私人', '空间', '共享', '本地'] : ['私人', '空间', '共享'],
-      description: '计算属性。私人表示只有创建者能看到；空间表示空间成员能看到且没有外部协作者；共享是公开链接，所有人可查看。本地表示记录存在这台机器上，仍属于当前账号和空间。',
+      enum: ['私人', '空间', '共享'],
+      description: '计算属性。私人表示只有创建者能看到；空间表示空间成员能看到且没有外部协作者；共享是公开链接或局域网链接，所有人可查看。本机空间的私人和共享都存在这台设备上。',
     }
     fields.shareRole = {
       type: 'select',
@@ -1396,8 +1396,10 @@ export class DatabaseService extends Service implements Database {
 
   private shareScopeLabel(collection: string, id: string, record: DbRecord, stored: 'personal' | 'workspace' | 'shared') {
     if (this.hasPublicShare(collection, id) || stored === 'shared') return '共享'
-    if (this.localMarked(collection, id)) return '本地'
-    return SHARE_SCOPE_LABEL[this.effectiveScope(collection, record, stored)]
+    const scope = this.effectiveScope(collection, record, stored)
+    if (scope === 'workspace') return '空间'
+    if (this.localMarked(collection, id) || scope === 'personal') return '私人'
+    return SHARE_SCOPE_LABEL[scope]
   }
 
   private hasPublicShare(collection: string, id: string) {
@@ -1525,6 +1527,31 @@ export class DatabaseService extends Service implements Database {
       ...row,
       ...(meta.createdBy ? { createdBy: this.namedPerson(meta.createdBy) } : {}),
       ...(editors.length ? { updatedBy: editors } : {}),
+    }
+  }
+
+  /** 本机空间：私人与共享都留在这台设备。 */
+  private deviceWorkspace() {
+    if (isOnlineRuntime()) return false
+    try {
+      const account = this.ctx.get('account') as {
+        workspaceLocation?: (workspaceId: string) => 'device' | 'cloud'
+        store?: { activeWorkspaceId?: () => string | null }
+      } | undefined
+      const workspaceId = account?.store?.activeWorkspaceId?.() ?? ''
+      if (workspaceId && account?.workspaceLocation) return account.workspaceLocation(workspaceId) === 'device'
+    } catch {
+      /* 没有账号服务时按桌面运行时处理 */
+    }
+    return true
+  }
+
+  private markDeviceRecord(collection: string, id: string) {
+    try {
+      const account = this.ctx.get('account') as { markLocal?: (collection: string, id: string) => void } | undefined
+      account?.markLocal?.(collection, id)
+    } catch {
+      /* 没有账号库时仍按当前归属挂到空间 */
     }
   }
 
@@ -1849,14 +1876,7 @@ export class DatabaseService extends Service implements Database {
         })
         if (shared) this.markPublicView(spec.path, record.id)
         if (workspaceOwned && !parentRecordId) this.grantAllMembersEditable(spec.path, record.id)
-        if (local) {
-          try {
-            const account = this.ctx.get('account') as { markLocal?: (collection: string, id: string) => void } | undefined
-            account?.markLocal?.(spec.path, record.id)
-          } catch {
-            /* 没有账号库时仍按私人挂到当前空间 */
-          }
-        }
+        if (local || this.deviceWorkspace()) this.markDeviceRecord(spec.path, record.id)
       }
     }
     this.bump()
