@@ -3088,12 +3088,13 @@ export function apply(ctx: Context) {
             store?: { activeWorkspaceId(): string | null }
             workspaceLocation?: (workspaceId: string) => 'device' | 'cloud'
             cloudConnection?: (localAccountId: string) => { origin: string; token: string } | null
+            linkedCloud?: (localAccountId?: string) => { origin: string; token: string } | null
           }
           const workspaceId = account.store?.activeWorkspaceId()
           if (workspaceId && account.workspaceLocation) activeLocation = account.workspaceLocation(workspaceId)
           const accountId = currentAccountId()
-          if (activeLocation === 'cloud' && accountId && account.cloudConnection) {
-            cloud = account.cloudConnection(accountId)
+          if (activeLocation === 'cloud') {
+            cloud = account.linkedCloud?.(accountId) ?? (accountId ? account.cloudConnection?.(accountId) ?? null : null)
           }
         } catch {
           /* 本机无账号服务时只允许本地创建 */
