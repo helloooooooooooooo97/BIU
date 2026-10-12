@@ -715,6 +715,19 @@ function workspaceRoleLabel(role: string) {
   return '编辑者'
 }
 
+/** 进入一个空间时打开最近更新的会话。没有会话时回到首页。 */
+export function defaultSessionPath(sessions: Array<{ id?: string; updatedAt?: number }>) {
+  let best: { id: string; updatedAt: number } | undefined
+  for (const item of sessions) {
+    if (!item.id) continue
+    const updatedAt = Number(item.updatedAt) || 0
+    if (!best || updatedAt > best.updatedAt || (updatedAt === best.updatedAt && item.id.localeCompare(best.id) < 0)) {
+      best = { id: item.id, updatedAt }
+    }
+  }
+  return best ? `/s/${encodeURIComponent(best.id)}` : '/'
+}
+
 async function accountFetch(token: string, path: string, init?: RequestInit) {
   const res = await fetch(path, {
     ...init,
@@ -786,7 +799,13 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
     void accountFetch(token, '/api/account/active', {
       method: 'POST',
       body: JSON.stringify({ workspaceId }),
-    }).then(() => window.location.reload())
+    })
+      .then(() => accountFetch(token, '/api/sessions'))
+      .then((body) => {
+        const sessions = (body as { sessions?: Array<{ id?: string; updatedAt?: number }> }).sessions ?? []
+        window.location.assign(defaultSessionPath(sessions))
+      })
+      .catch(() => window.location.assign('/'))
   }
   const createWorkspace = (location: 'device' | 'cloud') => {
     const token = readAccountToken()
@@ -800,11 +819,13 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
     })
       .then(async (body) => {
         const created = body as CollabWorkspace
+        writeWorkspaceId(created.id)
         await accountFetch(token, '/api/account/active', {
           method: 'POST',
           body: JSON.stringify({ workspaceId: created.id }),
         })
-        window.location.reload()
+        const listed = await accountFetch(token, '/api/sessions') as { sessions?: Array<{ id?: string; updatedAt?: number }> }
+        window.location.assign(defaultSessionPath(listed.sessions ?? []))
       })
       .catch((error) => {
         setCreatingLocation(null)

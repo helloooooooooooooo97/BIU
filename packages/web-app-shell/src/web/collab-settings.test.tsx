@@ -11,6 +11,7 @@ import {
   ShellSettingsMcp,
   ShellSettingsWorkspace,
   ShellWorkspaceSwitcher,
+  defaultSessionPath,
 } from './shell-chrome.tsx'
 
 afterEach(() => cleanup())
@@ -77,6 +78,18 @@ test('a stale workspace does not send the user back to login after they sign in'
   assert.equal(meCalls, 2)
   assert.equal(screen.queryByTestId('auth-gate'), null)
   cleanup()
+})
+
+test('switching spaces opens that space default session url', () => {
+  assert.equal(defaultSessionPath([]), '/')
+  assert.equal(
+    defaultSessionPath([
+      { id: 'older', updatedAt: 1 },
+      { id: 'newer', updatedAt: 5 },
+    ]),
+    '/s/newer',
+  )
+  assert.equal(defaultSessionPath([{ id: 'a b', updatedAt: 1 }]), '/s/a%20b')
 })
 
 test('primary navigation does not call the removed chat overlay setter', () => {
