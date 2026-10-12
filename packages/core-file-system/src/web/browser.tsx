@@ -728,6 +728,7 @@ export function CollectionBrowser({
   const noticeTimer = useRef<number>(0)
   const quietUntil = useRef(0)
   const reloadGen = useRef(0)
+  const confirmedCreates = useRef(new Set<string>())
   const hydratePath = useRef('')
   const viewsRef = useRef<SavedView[]>([])
   const skipPersistGen = useRef(0)
@@ -904,13 +905,18 @@ export function CollectionBrowser({
       setStat((prev) =>
         prev?.schema && JSON.stringify(prev.schema) === JSON.stringify(nextSchema) ? prev : { ...nextStat, schema: nextSchema },
       )
-      setItems((prev) => (recordsFingerprint(prev) === recordsFingerprint(listed.items) ? prev : listed.items))
+      setItems((prev) => {
+        const kept = prev.filter((item) => confirmedCreates.current.has(String(item.id)) && !listed.items.some((row) => row.id === item.id))
+        for (const row of listed.items) confirmedCreates.current.delete(String(row.id))
+        const next = kept.length ? [...kept, ...listed.items] : listed.items
+        setTotal(listed.total + kept.length)
+        return recordsFingerprint(prev) === recordsFingerprint(next) ? prev : next
+      })
       const openId = detailIdRef.current
       if (openId) {
         const hit = listed.items.find((item) => item.id === openId)
         if (hit) setDetailRow((prev) => (prev?.id === openId ? overlayListed(prev, hit, listColumns) : prev))
       }
-      setTotal(listed.total)
       rememberListCache(dataPath, { items: listed.items, total: listed.total, stat: { ...nextStat, schema: nextSchema } })
       if (activeViewId) {
         rememberPreviewTotal(
@@ -1919,10 +1925,18 @@ export function CollectionBrowser({
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ path: dataPath, records: [{}], scope: createScope }),
       })
+      const value = data.items?.[0]?.value
+      const id = value?.id
+      if (!id) {
+        setError('没有写入')
+        return
+      }
+      confirmedCreates.current.add(id)
+      setItems((prev) => [value, ...prev.filter((item) => item.id !== id)])
+      setTotal((count) => count + 1)
       quietUntil.current = 0
-      await reload()
-      const id = data.items?.[0]?.value?.id
-      if (id) showRecordInInspector(collectionPath, id)
+      void reload()
+      window.setTimeout(() => showRecordInInspector(collectionPath, id), 0)
     } catch (err) {
       setError(String(err))
     }
