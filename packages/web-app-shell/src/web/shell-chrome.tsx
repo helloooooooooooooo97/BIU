@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState, type ReactNode, type Ref } fr
 import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
-  ArrowRightStartOnRectangleIcon,
   ArrowDownTrayIcon,
   BellIcon,
   ChatBubbleLeftRightIcon,
@@ -914,17 +913,6 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
                 </button>
               </div>
             ) : null}
-            <button
-              type="button"
-              className="shell-workspace-menu-action is-logout"
-              onClick={() => {
-                setOpen(false)
-                writeAccountToken('')
-              }}
-            >
-              <ArrowRightStartOnRectangleIcon className="size-4" />
-              <span>退出登录</span>
-            </button>
           </div>
         </AnchorMenu>
       ) : null}
