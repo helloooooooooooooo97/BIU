@@ -1651,6 +1651,23 @@ body {
   background: var(--dsw-hover);
 }
 
+html:not(.dark) .shell-workspace-menu .shell-workspace-menu-icon,
+html:not(.dark) .shell-workspace-menu-action svg,
+html:not(.dark) .shell-workspace-menu-account > svg,
+html:not(.dark) .shell-workspace-menu-account button,
+html:not(.dark) .shell-workspace-menu-account-actions button {
+  color: #91918e;
+}
+
+html:not(.dark) .shell-workspace-menu-item:hover .shell-workspace-menu-icon,
+html:not(.dark) .shell-workspace-menu-item.is-active .shell-workspace-menu-icon,
+html:not(.dark) .shell-workspace-menu-action:hover svg,
+html:not(.dark) .shell-workspace-menu-account:hover > svg,
+html:not(.dark) .shell-workspace-menu-account button:hover,
+html:not(.dark) .shell-workspace-menu-account-actions button:hover {
+  color: var(--dsw-label);
+}
+
 .shell-workspace-menu-copy {
   display: flex;
   min-width: 0;
