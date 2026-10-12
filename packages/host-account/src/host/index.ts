@@ -853,6 +853,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     try {
       const me = actor(route)
       const body = (await route.json()) as { name?: string; location?: string }
+      if (isOnlineRuntime() && body.location !== 'cloud') throw new CollabError('云端只能创建云端空间', 400)
       if (body.location === 'cloud') {
         if (isOnlineRuntime()) {
           const workspace = account.store.createWorkspace(me.id, String(body.name ?? ''))
