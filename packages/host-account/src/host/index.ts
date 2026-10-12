@@ -76,7 +76,7 @@ export class AccountService extends Service {
         workspaceMembersCollection(
           this.store,
           (workspaceId) => this.workspaceLocation(workspaceId) === 'cloud',
-          isOnlineRuntime(),
+          true,
         ),
       ),
     )
