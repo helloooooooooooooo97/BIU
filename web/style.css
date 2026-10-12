@@ -2579,6 +2579,10 @@ body {
   white-space: nowrap;
 }
 
+.settings-account-sessions .settings-account-action {
+  white-space: nowrap;
+}
+
 .settings-cloud-connect {
   display: flex;
   flex-direction: column;
