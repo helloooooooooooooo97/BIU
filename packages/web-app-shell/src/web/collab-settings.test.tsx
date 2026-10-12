@@ -38,6 +38,7 @@ test('the app stays on the login gate until a token exists', async () => {
   )
   assert.equal(screen.queryByTestId('inside'), null)
   assert.equal(screen.getByTestId('auth-gate').textContent?.includes('登录'), true)
+  fireEvent.click(screen.getByTestId('site-login'))
   fireEvent.change(screen.getByTestId('auth-name'), { target: { value: 'ada@example.com' } })
   fireEvent.change(screen.getByTestId('auth-password'), { target: { value: 'secret1' } })
   await act(async () => {
@@ -69,6 +70,7 @@ test('a stale workspace does not send the user back to login after they sign in'
       <div data-testid="inside">in</div>
     </AuthGate>,
   )
+  fireEvent.click(screen.getByTestId('site-login'))
   fireEvent.change(screen.getByTestId('auth-name'), { target: { value: 'ada@example.com' } })
   fireEvent.change(screen.getByTestId('auth-password'), { target: { value: 'secret1' } })
   await act(async () => {
