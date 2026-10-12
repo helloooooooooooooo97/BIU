@@ -407,18 +407,10 @@ test('a local account can create or reuse the matching cloud identity', async ()
     }).then((res) => res.json())) as { token: string }
     const headers = { authorization: `Bearer ${registered.token}`, 'content-type': 'application/json' }
 
-    const wrong = await fetch(`${origin}/api/account/cloud/sync-create`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ currentPassword: 'wrong' }),
-    })
-    assert.equal(wrong.status, 401)
-    assert.deepEqual(actions, [])
-
     const created = await fetch(`${origin}/api/account/cloud/sync-create`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ currentPassword: 'secret1' }),
+      body: JSON.stringify({}),
     })
     assert.equal(created.status, 201)
     assert.equal(((await created.json()) as { created: boolean }).created, true)
@@ -429,11 +421,11 @@ test('a local account can create or reuse the matching cloud identity', async ()
     const reused = await fetch(`${origin}/api/account/cloud/sync-create`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ currentPassword: 'secret1' }),
+      body: JSON.stringify({}),
     })
-    assert.equal(reused.status, 200)
-    assert.equal(((await reused.json()) as { created: boolean }).created, false)
-    assert.deepEqual(actions, ['register', 'register', 'login'])
+    assert.equal(reused.status, 409)
+    assert.match(((await reused.json()) as { error?: string }).error ?? '', /请直接登录云端/)
+    assert.deepEqual(actions, ['register', 'register'])
   } finally {
     await accountFiber.dispose()
     await httpFiber.dispose()

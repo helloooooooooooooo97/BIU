@@ -204,10 +204,10 @@ test('account settings can create and link a cloud account from the local identi
   render(<ShellSettingsAccount />)
   const sync = await screen.findByTestId('settings-cloud-sync-create')
   await waitFor(() => assert.match(screen.getByText(/使用本地邮箱/).textContent ?? '', /ada@example\.com/))
-  assert.equal(sync.hasAttribute('disabled'), true)
-  fireEvent.change(screen.getByLabelText('当前本地密码'), { target: { value: 'secret1' } })
+  assert.equal(sync.hasAttribute('disabled'), false)
+  assert.equal(screen.queryByLabelText('当前本地密码'), null)
   fireEvent.click(sync)
-  await waitFor(() => assert.deepEqual(syncBody, { currentPassword: 'secret1' }))
+  await waitFor(() => assert.deepEqual(syncBody, {}))
   await waitFor(() => assert.match(screen.getByText('云端账号已创建并关联。').textContent ?? '', /已创建并关联/))
 })
 
