@@ -66,6 +66,7 @@ function accountRuntime(ctx: Context) {
   try {
     return ctx.get('account') as {
       cloudConnection?: (localAccountId: string) => { origin: string; token: string } | null
+      linkedCloud?: (localAccountId?: string) => { origin: string; token: string } | null
       markRemote?: (collection: string, id: string) => void
       workspaceLocation?: (workspaceId: string) => 'device' | 'cloud'
       store?: {
@@ -1188,7 +1189,7 @@ export function apply(ctx: Context) {
     }
     const localAccountId = currentAccountId()
     const runtime = accountRuntime(ctx)
-    const connection = localAccountId ? runtime?.cloudConnection?.(localAccountId) : null
+    const connection = runtime?.linkedCloud?.(localAccountId) ?? (localAccountId ? runtime?.cloudConnection?.(localAccountId) : null)
     if (!connection) throw new Error('请先登录云端账号')
     const workspaceId = runtime?.store?.activeWorkspaceId() ?? ''
     const response = await fetch(`${connection.origin}/api/sessions/${encodeURIComponent(sessionId)}/execution-lease`, {
@@ -1373,7 +1374,7 @@ export function apply(ctx: Context) {
       const workspaceId = runtime?.store?.activeWorkspaceId() ?? ''
       if (workspaceId && runtime?.workspaceLocation?.(workspaceId) === 'cloud') {
         const localAccountId = currentAccountId()
-        const connection = localAccountId ? runtime.cloudConnection?.(localAccountId) : null
+        const connection = runtime.linkedCloud?.(localAccountId) ?? (localAccountId ? runtime.cloudConnection?.(localAccountId) : null)
         if (!connection) return route.send(401, { error: '请先登录云端账号' })
         let remote: Response
         try {

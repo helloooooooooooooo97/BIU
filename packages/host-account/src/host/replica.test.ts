@@ -222,6 +222,38 @@ test('secrets and plugin directories are not queued', async () => {
   assert.equal(replica.read(workspace.id, '/pages', 'p1', 'secret'), null)
 })
 
+test('local account requests keep the linked cloud credential', async () => {
+  const previousOnline = process.env.BIU_ONLINE
+  const previousOrigin = process.env.BIU_REMOTE_ORIGIN
+  process.env.BIU_ONLINE = '0'
+  process.env.BIU_REMOTE_ORIGIN = 'http://127.0.0.1:9'
+  const dir = mkdtempSync(join(tmpdir(), 'biu-cloud-link-'))
+  dirs.push(dir)
+  const ctx = new Context()
+  const service = new account.AccountService(ctx, { sqlitePath: join(dir, 'biu.sqlite') })
+  try {
+    const ada = service.store.register('', Date.now(), 'secret1', 'linked-ada@example.com')
+    service.saveCloudConnection({
+      localAccountId: ada.id,
+      origin: 'http://cloud.example',
+      remoteAccountId: 'remote-ada',
+      remoteName: 'Ada',
+      remoteEmail: 'linked-ada@example.com',
+      token: 'cloud-token',
+    })
+    service.replica?.remember({ accountId: ada.id, workspaceId: 'cloud-ws', token: 'cloud-token' })
+    ctx.emit('account/request', { accountId: ada.id, token: 'local-session-token' })
+    assert.equal(service.replica?.active()?.token, 'cloud-token')
+    assert.equal(service.replica?.active()?.workspaceId, 'cloud-ws')
+  } finally {
+    ctx.emit('dispose')
+    if (previousOnline === undefined) delete process.env.BIU_ONLINE
+    else process.env.BIU_ONLINE = previousOnline
+    if (previousOrigin === undefined) delete process.env.BIU_REMOTE_ORIGIN
+    else process.env.BIU_REMOTE_ORIGIN = previousOrigin
+  }
+})
+
 test('a finished session is queued and a second account is not required', async () => {
   const { replica, ada, workspace } = pair()
   const queued = replica.enqueueFinishedSession({

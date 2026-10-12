@@ -1,7 +1,6 @@
 import { existsSync } from 'node:fs'
 import { Service, type Context } from 'cordis'
-import { biuSqlitePath, eventsSqlitePath, isOnlineRuntime, openAndMigrateBiu, openSqlite } from '@biu/host-plugin-loader/data-dir'
-import { openAndMigrateEvents } from '@biu/host-plugin-loader/events-migrate'
+import { biuSqlitePath, currentAccountId, eventsSqlitePath, isOnlineRuntime, openAndMigrateBiu, openSqlite } from '@biu/host-plugin-loader/data-dir'
 import type { RouteContext } from '@biu/type-http'
 import { CollabError, CollabStore } from './store.ts'
 import { httpRemote, RecordReplica } from './replica.ts'
@@ -65,9 +64,9 @@ export class AccountService extends Service {
       }, 3000)
       ctx.on('dispose', () => clearInterval(timer))
       ctx.on('account/request', (event) => {
-        const payload = event as { accountId?: string; token?: string }
-        if (!payload.accountId || !payload.token || !this.replica) return
-        this.replica.remember({ accountId: payload.accountId, workspaceId: '', token: payload.token })
+        const localAccountId = String((event as { accountId?: string }).accountId ?? '')
+        if (!localAccountId) return
+        this.syncReplicaCredential(localAccountId)
       })
     }
     ctx.inject(['database'], (inner) =>
@@ -195,7 +194,31 @@ export class AccountService extends Service {
         input.token,
         connectedAt,
       )
-    return this.cloudConnection(input.localAccountId)!
+    const saved = this.cloudConnection(input.localAccountId)!
+    this.syncReplicaCredential(input.localAccountId)
+    return saved
+  }
+
+  /** 已关联的云端身份。当前请求没有账号时，一台设备只有一条关联也可以取到。 */
+  linkedCloud(localAccountId = currentAccountId()) {
+    if (localAccountId) return this.cloudConnection(localAccountId)
+    const rows = this.db.prepare('SELECT local_account_id FROM cloud_connections').all() as Array<{ local_account_id: string }>
+    if (rows.length !== 1) return null
+    return this.cloudConnection(rows[0]?.local_account_id ?? '')
+  }
+
+  syncReplicaCredential(localAccountId: string) {
+    if (!this.replica || !localAccountId) return
+    const connection = this.cloudConnection(localAccountId)
+    if (!connection) return
+    const active = this.store.activeWorkspaceId()
+    const currentCloud = active && this.workspaceLocation(active) === 'cloud' ? active : ''
+    const previous = this.replica.devices().find((item) => item.accountId === localAccountId)
+    this.replica.remember({
+      accountId: localAccountId,
+      workspaceId: currentCloud || previous?.workspaceId || '',
+      token: connection.token,
+    })
   }
 
   removeCloudConnection(localAccountId: string) {
@@ -240,7 +263,7 @@ function configuredRemoteOrigin() {
 }
 
 async function relayAccount(route: RouteContext, account: AccountService, localAccountId: string, path: string) {
-  const connection = account.cloudConnection(localAccountId)
+  const connection = account.linkedCloud(localAccountId)
   if (!connection) return null
   const activeWorkspaceId = account.store.activeWorkspaceId()
   const cloudWorkspaceId =
