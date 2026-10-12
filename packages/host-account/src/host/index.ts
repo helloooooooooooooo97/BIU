@@ -747,24 +747,42 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
         .listWorkspaces(me.id)
         .filter((workspace) => account.workspaceLocation(workspace.id) === 'device')
         .map((workspace) => ({ ...workspace, location: 'device' as const }))
-      let cloud: Array<Record<string, unknown>> = account.store
-        .listWorkspaces(me.id)
-        .filter((workspace) => account.workspaceLocation(workspace.id) === 'cloud')
-        .map((workspace) => ({ ...workspace, location: 'cloud' as const }))
+      const cachedCloud = () =>
+        account.store
+          .listWorkspaces(me.id)
+          .filter((workspace) => account.workspaceLocation(workspace.id) === 'cloud')
+          .map((workspace) => ({ ...workspace, location: 'cloud' as const }))
+      let cloud: Array<Record<string, unknown>> = isOnlineRuntime() ? cachedCloud() : []
       let cloudUnavailable = false
-      try {
-        const relayed = await relayAccount(route, account, me.id, '/api/account/workspaces')
-        if (relayed?.status && relayed.status < 300) {
-          cacheWorkspaceList(account, me.id, relayed.payload)
-          cloud = (Array.isArray(relayed.payload.workspaces) ? relayed.payload.workspaces : []).map((workspace) => ({
-            ...(workspace as Record<string, unknown>),
-            location: 'cloud',
-          }))
-        } else if (relayed) {
-          cloudUnavailable = true
+      if (!isOnlineRuntime()) {
+        const connection = account.cloudConnection(me.id)
+        if (connection) {
+          cloud = cachedCloud()
+          try {
+            const relayed = await relayAccount(route, account, me.id, '/api/account/workspaces')
+            if (relayed?.status === 401) {
+              account.removeCloudConnection(me.id)
+              cloud = []
+            } else if (relayed?.status && relayed.status < 300) {
+              cacheWorkspaceList(account, me.id, relayed.payload)
+              cloud = (Array.isArray(relayed.payload.workspaces) ? relayed.payload.workspaces : []).map((workspace) => ({
+                ...(workspace as Record<string, unknown>),
+                location: 'cloud',
+              }))
+            } else if (relayed) {
+              cloudUnavailable = true
+            }
+          } catch {
+            cloudUnavailable = true
+          }
         }
-      } catch {
-        cloudUnavailable = true
+        if (!account.cloudConnection(me.id)) {
+          const active = account.store.activeWorkspaceId()
+          const device = local[0]
+          if (active && account.workspaceLocation(active) === 'cloud' && device) {
+            account.store.setActive(me.id, device.id)
+          }
+        }
       }
       route.send(200, {
         workspaces: [...local, ...cloud],
