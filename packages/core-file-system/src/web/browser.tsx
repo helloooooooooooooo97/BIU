@@ -464,6 +464,18 @@ function recordsFingerprint(rows: Array<DbRecord & { path?: string }>) {
   return JSON.stringify(rows)
 }
 
+function isPendingRow(row: { id?: unknown }) {
+  return String(row.id ?? '').startsWith('pending:')
+}
+
+function mergeListedItems<T extends { id?: unknown }>(prev: T[], listed: T[]) {
+  const pending = prev.filter((item) => isPendingRow(item) && !listed.some((row) => row.id === item.id))
+  const next = pending.length ? [...pending, ...listed] : listed
+  return recordsFingerprint(prev as Array<DbRecord & { path?: string }>) === recordsFingerprint(next as Array<DbRecord & { path?: string }>)
+    ? prev
+    : next
+}
+
 const LIST_CACHE_MAX = 8
 const listCache = new Map<string, { items: Array<DbRecord & { path?: string }>; total: number; stat: StatResult | null }>()
 
@@ -904,13 +916,16 @@ export function CollectionBrowser({
       setStat((prev) =>
         prev?.schema && JSON.stringify(prev.schema) === JSON.stringify(nextSchema) ? prev : { ...nextStat, schema: nextSchema },
       )
-      setItems((prev) => (recordsFingerprint(prev) === recordsFingerprint(listed.items) ? prev : listed.items))
+      setItems((prev) => {
+        const next = mergeListedItems(prev, listed.items)
+        setTotal(listed.total + next.filter(isPendingRow).length)
+        return next
+      })
       const openId = detailIdRef.current
       if (openId) {
         const hit = listed.items.find((item) => item.id === openId)
         if (hit) setDetailRow((prev) => (prev?.id === openId ? overlayListed(prev, hit, listColumns) : prev))
       }
-      setTotal(listed.total)
       rememberListCache(dataPath, { items: listed.items, total: listed.total, stat: { ...nextStat, schema: nextSchema } })
       if (activeViewId) {
         rememberPreviewTotal(
@@ -1913,17 +1928,37 @@ export function CollectionBrowser({
 
   async function createRecord() {
     if (!canCreate) return
+    const tempId = `pending:${crypto.randomUUID()}`
+    const now = Date.now()
+    const optimistic: DbRecord = {
+      id: tempId,
+      title: '',
+      shareScope: createScope === 'shared' ? '共享' : createScope === 'workspace' ? '空间' : '私人',
+      createdAt: now,
+      updatedAt: now,
+    }
+    setItems((prev) => [optimistic, ...prev.filter((item) => item.id !== tempId)])
+    setTotal((count) => count + 1)
     try {
       const data = await readJson<{ items?: Array<{ value?: DbRecord }> }>('/api/db/create', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ path: dataPath, records: [{}], scope: createScope }),
       })
+      const value = data.items?.[0]?.value
+      const id = value?.id
+      if (!id) {
+        setItems((prev) => prev.filter((item) => item.id !== tempId))
+        setTotal((count) => Math.max(0, count - 1))
+        return
+      }
+      setItems((prev) => prev.map((item) => (item.id === tempId ? { ...optimistic, ...value, id } : item)))
       quietUntil.current = 0
-      await reload()
-      const id = data.items?.[0]?.value?.id
-      if (id) showRecordInInspector(collectionPath, id)
+      void reload()
+      window.setTimeout(() => showRecordInInspector(collectionPath, id), 0)
     } catch (err) {
+      setItems((prev) => prev.filter((item) => item.id !== tempId))
+      setTotal((count) => Math.max(0, count - 1))
       setError(String(err))
     }
   }
