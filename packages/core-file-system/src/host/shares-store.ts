@@ -121,11 +121,14 @@ export class SharesStore {
     if (!kind) throw new Error('invalid share kind')
     const collection = normalizeCollectionPath(input.collection)
     if (!collection || collection === '/') throw new Error('invalid collection')
-    const viewId = String(input.viewId ?? '').trim()
+    const requestedViewId = String(input.viewId ?? '').trim()
     const recordId = String(input.recordId ?? '').trim()
     if (kind === 'record' && !recordId) throw new Error('record share needs recordId')
     const now = Date.now()
-    const existing = this.find(kind, collection, viewId, recordId)
+    const existing = kind === 'record'
+      ? this.findRecord(collection, recordId)
+      : this.find(kind, collection, requestedViewId, recordId)
+    const viewId = existing?.kind === 'record' ? existing.viewId : requestedViewId
     let salt = ''
     let hash = ''
     if (input.password === undefined) {
