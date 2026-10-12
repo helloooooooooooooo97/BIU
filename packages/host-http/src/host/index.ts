@@ -238,46 +238,6 @@ export class HttpService extends Service {
           server.close(() => resolve())
         })
     }, 'http.listen')
-    const sharePort = config.sharePort
-    if (sharePort > 0 && sharePort !== config.port) {
-      ctx.effect(() => {
-        const shareHost = config.shareHost ?? '0.0.0.0'
-        const shareServer = createServer((req, res) => {
-          void this.dispatch(req, res, true)
-        })
-        shareServer.on('upgrade', (_req, socket) => {
-          socket.destroy()
-        })
-        let shareFallbackUsed = false
-        shareServer.on('error', (error: NodeJS.ErrnoException) => {
-          if (error.code === 'EADDRINUSE' && sharePort > 0 && !shareFallbackUsed) {
-            shareFallbackUsed = true
-            shareServer.listen(0, shareHost)
-            return
-          }
-          if (error.code === 'EADDRINUSE') {
-            ctx.logger('http').error(
-              `分享端口 ${sharePort} 已被占用。换 SHARE_PORT，或 lsof -ti:${sharePort} | xargs kill`,
-            )
-          } else {
-            ctx.logger('http').error(error)
-          }
-        })
-        shareServer.listen(sharePort, shareHost, () => {
-          const address = shareServer.address()
-          const actualPort = address && typeof address !== 'string' ? address.port : sharePort
-          process.env.SHARE_PORT = String(actualPort)
-          ctx.emit('http/share-ready', { port: actualPort })
-          ctx.logger('http').info(
-            `share-only listening on http://${shareHost}:${actualPort} （/share、/api/share、token 保护的 /api/mcp；不暴露本机工作台）`,
-          )
-        })
-        return () =>
-          new Promise<void>((resolve) => {
-            shareServer.close(() => resolve())
-          })
-      }, 'http.share.listen')
-    }
   }
 
   route(method: Method, pattern: string, handler: RouteHandler) {

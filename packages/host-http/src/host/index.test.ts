@@ -91,8 +91,7 @@ test('occupied requested port falls back when enabled', async () => {
   }
 })
 
-test('occupied share port falls back when enabled', async () => {
-  const prevShare = process.env.SHARE_PORT
+test('an occupied extra share port is not opened', async () => {
   const blocker = createServer()
   await new Promise<void>((resolve, reject) => {
     blocker.once('error', reject)
@@ -101,7 +100,7 @@ test('occupied share port falls back when enabled', async () => {
   const address = blocker.address()
   assert.ok(address && typeof address !== 'string')
   const ctx = new Context()
-  const shareReady = new Promise<number>((resolve) => ctx.on('http/share-ready', ({ port }) => resolve(port)))
+  const ready = new Promise<number>((resolve) => ctx.on('http/ready', ({ port }) => resolve(port)))
   const fiber = await ctx.plugin(http, {
     port: 0,
     host: '127.0.0.1',
@@ -110,15 +109,14 @@ test('occupied share port falls back when enabled', async () => {
     shareHost: '127.0.0.1',
   })
   try {
-    const port = await shareReady
+    const port = await ready
     assert.notEqual(port, address.port)
     assert.ok(port > 0)
-    assert.equal(process.env.SHARE_PORT, String(port))
+    const held = blocker.address()
+    assert.ok(held && typeof held !== 'string' && held.port === address.port)
   } finally {
     await fiber.dispose()
     await new Promise<void>((resolve, reject) => blocker.close((error) => (error ? reject(error) : resolve())))
-    if (prevShare === undefined) delete process.env.SHARE_PORT
-    else process.env.SHARE_PORT = prevShare
   }
 })
 
@@ -163,22 +161,19 @@ test('extra ws path does not abort the hub /ws handshake', async () => {
   }
 })
 
-test('share listener serves /api/share but not the workstation APIs', async () => {
+test('share routes stay on the workstation port', async () => {
   const base = await mkdtemp(join(tmpdir(), 'cordis-http-share-'))
   const publicDir = join(base, 'public')
   await mkdir(publicDir, { recursive: true })
   await writeFile(join(publicDir, 'index.html'), '<html>app</html>')
   const port = await freePort()
-  const sharePort = await freePort()
+  const unused = await freePort()
   const ctx = new Context()
   const ready = new Promise<void>((resolve) => {
     ctx.on('http/ready', () => resolve())
   })
-  const shareReady = new Promise<void>((resolve) => {
-    ctx.on('http/share-ready', () => resolve())
-  })
-  const fiber = await ctx.plugin(http, { port, host: '127.0.0.1', publicDir, sharePort, shareHost: '127.0.0.1' })
-  await Promise.all([ready, shareReady])
+  const fiber = await ctx.plugin(http, { port, host: '127.0.0.1', publicDir, sharePort: unused, shareHost: '127.0.0.1' })
+  await ready
   ctx.http.route('GET', '/api/db/list', (route) => {
     route.send(200, { leaked: true })
   })
@@ -186,15 +181,13 @@ test('share listener serves /api/share but not the workstation APIs', async () =
     route.send(200, { token: route.params.token })
   })
   try {
-    const blocked = await fetch(`http://127.0.0.1:${sharePort}/api/db/list`)
-    assert.equal(blocked.status, 404)
-    const share = await fetch(`http://127.0.0.1:${sharePort}/api/share/abc`)
+    const share = await fetch(`http://127.0.0.1:${port}/api/share/abc`)
     assert.equal(share.status, 200)
     assert.equal((await share.json()).token, 'abc')
     const local = await fetch(`http://127.0.0.1:${port}/api/db/list`)
     assert.equal(local.status, 200)
-    const root = await fetch(`http://127.0.0.1:${sharePort}/`)
-    assert.equal(root.status, 404)
+    const extra = await fetch(`http://127.0.0.1:${unused}/api/share/abc`).catch((error: Error) => error)
+    assert.ok(extra instanceof Error)
   } finally {
     await fiber.dispose()
   }
