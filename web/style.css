@@ -9407,9 +9407,9 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   flex-direction: column;
   gap: 12px;
   padding: 30px 28px 28px;
-  border: 1px solid rgba(255, 255, 255, .1);
+  border: 0;
   border-radius: 20px;
-  background: rgba(255, 255, 255, .03);
+  background: #2a2e36;
 }
 .site-capability-grid h3 { margin: 0; font-size: 20px; font-weight: 600; }
 .site-capability-grid p { margin: 0; font-size: 15px; line-height: 1.7; color: rgba(255, 255, 255, .58); }
@@ -9446,7 +9446,7 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   padding: 30px 28px;
   border: 0;
   border-radius: 20px;
-  background: rgba(255, 255, 255, .04);
+  background: #2a2e36;
 }
 .site-voice-grid p { margin: 0 0 18px; font-size: 16px; line-height: 1.7; }
 .site-voice-grid cite { font-size: 13px; font-style: normal; color: rgba(255, 255, 255, .45); }
