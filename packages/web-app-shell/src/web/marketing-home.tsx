@@ -1,4 +1,9 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type MouseEvent } from 'react'
+
+function followAuth(event: MouseEvent<HTMLAnchorElement>, action: () => void) {
+  event.preventDefault()
+  action()
+}
 
 const PRODUCT_SURFACES = [
   { id: 'page', label: '页面', path: '/pages?landingPreview=1' },
@@ -59,8 +64,8 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: () => void; onSta
           <a href="#ecosystem">扩展</a>
         </nav>
         <div className="site-nav-actions">
-          <button type="button" className="site-login" data-testid="site-login" onClick={onLogin}>登录</button>
-          <button type="button" className="site-start" data-testid="site-start" onClick={onStart}>开始使用</button>
+          <a className="site-login" data-testid="site-login" href="/login" onClick={(event) => followAuth(event, onLogin)}>登录</a>
+          <a className="site-start" data-testid="site-start" href="/register" onClick={(event) => followAuth(event, onStart)}>开始使用</a>
         </div>
       </header>
       <main>
@@ -145,7 +150,7 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: () => void; onSta
                 <h3>{item.title}</h3>
                 <p>{item.body}</p>
                 <small>{item.output}</small>
-                <button type="button" onClick={onStart} aria-label={`开始${item.title}`}>开始</button>
+                <a href="/register" onClick={(event) => followAuth(event, onStart)} aria-label={`开始${item.title}`}>开始</a>
               </article>
             ))}
           </div>
@@ -238,7 +243,7 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: () => void; onSta
         <section className="site-final-cta" data-reveal>
           <p className="site-section-label">开始使用 BIU</p>
           <h2>给知识一个归处。<br />给工作一个继续的地方。</h2>
-          <button type="button" onClick={onStart}>创建你的空间</button>
+          <a href="/register" onClick={(event) => followAuth(event, onStart)}>创建你的空间</a>
         </section>
       </main>
       <footer className="site-footer">
@@ -246,7 +251,7 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: () => void; onSta
         <div className="site-footer-columns">
           <div><strong>产品</strong><a href="#product">产品演示</a><a href="#spaces">本机与云端</a><a href="#ecosystem">扩展能力</a></div>
           <div><strong>解决方案</strong><a href="#solutions">研究与分析</a><a href="#solutions">产品与项目</a><a href="#solutions">内容与创作</a></div>
-          <div><strong>开始</strong><button type="button" onClick={onLogin}>登录</button><button type="button" onClick={onStart}>创建空间</button></div>
+          <div><strong>开始</strong><a href="/login" onClick={(event) => followAuth(event, onLogin)}>登录</a><a href="/register" onClick={(event) => followAuth(event, onStart)}>创建空间</a></div>
         </div>
         <p>让知识留下，让工作继续。</p>
       </footer>

@@ -8495,9 +8495,13 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
 }
 .site-login,
 .site-start {
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
   border: 0;
   background: transparent;
   color: var(--site-ink);
+  text-decoration: none;
   font: inherit;
   font-size: 14px;
   font-weight: 500;
@@ -8596,7 +8600,9 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   line-height: 1.55;
 }
 .site-hero-cta,
+.site-final-cta a,
 .site-final-cta button {
+  display: inline-block;
   margin-top: 28px;
   border: 0;
   border-radius: 8px;
@@ -8606,8 +8612,10 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   font: inherit;
   font-size: 15px;
   font-weight: 560;
+  text-decoration: none;
   cursor: pointer;
 }
+.site-final-cta a:hover,
 .site-final-cta button:hover,
 .site-start:hover { background: #1e40af; }
 .site-hero-cta span,
@@ -9049,6 +9057,7 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   padding-top: 28px;
   color: #8b939e;
 }
+.site-solution-grid a,
 .site-solution-grid button {
   position: absolute;
   right: 16px;
@@ -9060,8 +9069,10 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   color: var(--site-ink);
   font: inherit;
   font-size: 13px;
+  text-decoration: none;
   cursor: pointer;
 }
+.site-solution-grid a:hover,
 .site-solution-grid button:hover { background: var(--site-cobalt); color: #fff; }
 .site-continuity {
   padding: 96px 48px;

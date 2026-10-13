@@ -28,6 +28,18 @@ function json(body: unknown, status = 200) {
   })
 }
 
+test('opening /register shows the register page', () => {
+  localStorage.clear()
+  window.history.replaceState({}, '', '/register')
+  render(
+    <AuthGate>
+      <div data-testid="inside">in</div>
+    </AuthGate>,
+  )
+  assert.equal(screen.getByRole('heading', { name: '注册' }).textContent, '注册')
+  assert.equal(screen.queryByTestId('inside'), null)
+})
+
 test('opening /login shows the login page', () => {
   localStorage.clear()
   window.history.replaceState({}, '', '/login')
