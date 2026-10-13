@@ -28,7 +28,7 @@ export const COMPARE_PAGES: ComparePage[] = [
   {
     slug: 'vs-linux',
     title: 'BIU vs Linux',
-    category: '操作系统',
+    category: '基础设施',
     opening: 'Linux 用「一切皆文件」抹平了异构硬件，用一组系统调用统一了所有设备的读写。BIU 做的是同一件事，只是把坐标换成了数据：一切皆路径，一切皆 /<table>/<id>。',
     useWhen: '需要通用操作系统、进程隔离、网络栈、跑原生程序',
     biuWhen: '需要把工作区里的页面、数据、会话、智能体当成同一种可寻址对象来读写和扩展',
@@ -47,6 +47,33 @@ export const COMPARE_PAGES: ComparePage[] = [
       { dimension: '进程与资源隔离', them: '✅ 强（namespaces / cgroups）', biu: '⚠️ 插件沙箱较薄，未做资源硬限' },
       { dimension: '跑任意原生程序', them: '✅ 这就是它的工作', biu: '❌ 不是通用 OS' },
       { dimension: '形态', them: '内核 + 发行版', biu: '内核（应用在它之上长出）' },
+    ],
+  },
+  {
+    slug: 'vs-k8s',
+    title: 'BIU vs Kubernetes',
+    category: '基础设施',
+    opening: 'k8s 用「一切皆声明式对象」抹平了机器：写一份 YAML，控制面把它收敛成实际运行的资源。BIU 把同一套思路放回一页文档里 —— 在页面里声明一个插件就得到一个能力，声明多个就组合出一套服务。',
+    useWhen: '需要容器编排、多副本调度、自愈、把机器当资源池',
+    biuWhen: '需要在页面里直接声明能力：一个页面上声明几个插件，就得到一套可用的服务',
+    columns: ['k8s', 'BIU'],
+    rows: [
+      { dimension: '核心主张', them: '一切皆声明式对象', biu: '一切皆 /<table>/<id>，声明即生效' },
+      { dimension: '声明在哪写', them: 'YAML 文件，交给 kubectl apply', biu: '直接写在页面正文里（或以页面块形式插入）' },
+      { dimension: '声明的单位', them: '一个资源对象（Pod / Service / CRD）', biu: '一个插件：<plugin kind="…" />' },
+      { dimension: '声明之后发生什么', them: '控制面调谐，把实际状态拉向期望', biu: '✅ 立刻挂载运行，无需 apply / 等待调度' },
+      { dimension: '一个页面/文件能放几个', them: '⚠️ 通常一份 YAML 一类资源，多个靠多文件或 List', biu: '✅ 一页里可以声明任意多个插件，各管一块' },
+      { dimension: '多个如何组合成服务', them: 'Service / Ingress 把多个 Pod 串起来', biu: '✅ 同页多个插件各占一块，页面本身就是组合结果' },
+      { dimension: '谁写声明', them: '⚠️ 平台团队写 YAML 和 Operator', biu: '✅ 人和智能体都在正文里直接写' },
+      { dimension: '扩展的粒度', them: 'CRD + controller（重）', biu: '一个插件一块界面/能力（轻）' },
+      { dimension: '入口', them: 'kubectl / API Server', biu: 'db_read / db_update / db_create' },
+      { dimension: '自报状态', them: 'status 字段 + events', biu: 'db_list / + 每个表的 blurb' },
+      { dimension: '权限模型', them: '✅ RBAC + ServiceAccount', biu: '✅ 数据视图 × 成员视图匹配' },
+      { dimension: '可追溯', them: '✅ 声明与事件都可读', biu: '✅ 只追加事件流，界面是它的投影' },
+      { dimension: '资源隔离', them: '✅ 强（Pod / quota / limit / namespace）', biu: '⚠️ 插件沙箱较薄，未做资源硬限' },
+      { dimension: '多副本与高可用', them: '✅ 副本、探针、自愈', biu: '❌ 未做多副本调度' },
+      { dimension: '跑任意容器', them: '✅ 这就是它的工作', biu: '❌ 不是编排系统' },
+      { dimension: '形态', them: '控制面 + 节点', biu: '内核（应用在它之上长出）' },
     ],
   },
   {
@@ -89,27 +116,9 @@ export const COMPARE_PAGES: ComparePage[] = [
     ],
   },
   {
-    slug: 'vs-feishu',
-    title: 'BIU vs 飞书',
-    category: '办公协作',
-    opening: '飞书把 IM、会议、多维表格和 AI 做成了一体化最强。BIU 不比这套套件，它比的是数据归属：智能体是数据，而不是套件里的一个功能。',
-    useWhen: '组织沟通、会议、审批流程、多维表格搭业务系统',
-    biuWhen: '需要智能体重度参与工作、数据边界自己掌控、工具链要能自己扩展',
-    columns: ['飞书', 'BIU'],
-    rows: [
-      { dimension: 'IM / 会议 / 日历', them: '✅ 最强（BIU 没有）', biu: '❌ 无此能力' },
-      { dimension: '表格', them: '✅ 多维表格（千万行）', biu: '✅ 内核原生表' },
-      { dimension: '会话', them: '✅ IM 即会话', biu: '✅ 会话是表的一行，可被智能体读' },
-      { dimension: '数据在哪', them: '只有云端', biu: '建空间时选：本机 / 云端' },
-      { dimension: '智能体', them: '⚠️ Aily / 知识问答（套件内功能）', biu: '✅ 一等公民，本身是数据' },
-      { dimension: '块类型', them: '平台定义', biu: '可安装插件定义' },
-      { dimension: '扩展归属', them: '平台', biu: '人和智能体都能建' },
-    ],
-  },
-  {
     slug: 'vs-cursor',
     title: 'BIU vs Cursor',
-    category: '编码',
+    category: 'AI 应用',
     opening: 'Cursor 把智能体放进了编辑器。BIU 走得更远一步 —— 智能体本身就是数据，可以被读写、复制和分享。',
     useWhen: '在编辑器里写代码、需要深度代码理解与补全',
     biuWhen: '需要多个智能体协作、产出要沉淀成可复用对象、工作区不限于代码',
@@ -128,7 +137,7 @@ export const COMPARE_PAGES: ComparePage[] = [
   {
     slug: 'vs-chatgpt',
     title: 'BIU vs ChatGPT',
-    category: '编码',
+    category: 'AI 应用',
     opening: 'ChatGPT 定义了对话式 AI。BIU 关心的是对话结束之后 —— 产出去了哪里。',
     useWhen: '快速问答、头脑风暴、学习与通用对话',
     biuWhen: '产出要留成可寻址的记录、智能体要能读写你的工作区',
@@ -146,7 +155,7 @@ export const COMPARE_PAGES: ComparePage[] = [
   {
     slug: 'vs-claude',
     title: 'BIU vs Claude',
-    category: '编码',
+    category: 'AI 应用',
     opening: 'Claude 在长文理解和代码上很强，MCP 让工具连接标准化。BIU 的差别在于：智能体不只能调用工具，它本身就是可寻址的数据。',
     useWhen: '长文档分析、代码协作、通过 MCP 连接外部工具',
     biuWhen: '工具要能自己造、多个智能体要能协作、数据边界要自己掌控',
@@ -164,7 +173,7 @@ export const COMPARE_PAGES: ComparePage[] = [
   {
     slug: 'vs-obsidian',
     title: 'BIU vs Obsidian',
-    category: '本地优先',
+    category: '文件管理',
     opening: 'Obsidian 证明了本地优先能赢。BIU 走得更远 —— 既有本地的透明，又有空间的结构。',
     useWhen: '纯本地笔记、Markdown 文件、社区插件生态',
     biuWhen: '既要本地，也要协作与结构化数据，还要智能体能读写',
@@ -183,10 +192,10 @@ export const COMPARE_PAGES: ComparePage[] = [
 ]
 
 export const COMPARE_CATEGORIES = [
-  { name: '操作系统', slugs: ['vs-linux'] },
-  { name: '办公协作', slugs: ['vs-office', 'vs-notion', 'vs-feishu'] },
-  { name: '编码', slugs: ['vs-cursor', 'vs-chatgpt', 'vs-claude'] },
-  { name: '本地优先', slugs: ['vs-obsidian'] },
+  { name: '基础设施', slugs: ['vs-linux', 'vs-k8s'] },
+  { name: '办公协作', slugs: ['vs-office', 'vs-notion'] },
+  { name: 'AI 应用', slugs: ['vs-cursor', 'vs-chatgpt', 'vs-claude'] },
+  { name: '文件管理', slugs: ['vs-obsidian'] },
 ] as const
 
 function CompareTable({ page }: { page: ComparePage }) {
@@ -215,7 +224,7 @@ function CompareTable({ page }: { page: ComparePage }) {
 export function MarketingCompareIndex({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
   usePageMeta({
     title: '对比',
-    description: '和每个领域最好的产品比：Office、Notion、飞书、Cursor、ChatGPT、Claude、Obsidian。',
+    description: '和每个领域最好的产品比：Linux、Kubernetes、Office、Notion、Cursor、ChatGPT、Claude、Obsidian。',
     path: '/compare',
   })
   const bySlug = new Map(COMPARE_PAGES.map((page) => [page.slug, page]))
@@ -308,21 +317,6 @@ export function MarketingCompareDetail({ onLogin, onStart }: { onLogin: SiteActi
             <h2>用 BIU 当你需要</h2>
             <p>{page.biuWhen}</p>
           </article>
-        </section>
-
-        <section className="site-coordinate" data-reveal>
-          <h2>它站在什么坐标上</h2>
-          <table>
-            <thead><tr><th></th><th>Linux</th><th>BIU</th></tr></thead>
-            <tbody>
-              <tr><td>一切是路径</td><td>一切皆文件</td><td>一切皆 /&lt;table&gt;/&lt;id&gt;</td></tr>
-              <tr><td>系统调用</td><td>read / write</td><td>db_read / db_update</td></tr>
-              <tr><td>设备操作</td><td>ioctl</td><td>db_action</td></tr>
-              <tr><td>自报状态</td><td>/proc</td><td>db_list / + blurb</td></tr>
-              <tr><td>驱动注册</td><td>modules</td><td>插件注册表</td></tr>
-              <tr><td>抹平异构</td><td>VFS</td><td>File System</td></tr>
-            </tbody>
-          </table>
         </section>
 
         {others.length ? (

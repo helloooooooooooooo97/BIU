@@ -74,18 +74,18 @@ test('每个官网路径都能渲染，且各页有独立 h1', () => {
   }
 })
 
-test('对比页：操作系统 + 三类别 8 个对手都在，且 BIU 列如实标注弱点', () => {
+test('对比页：基础设施 + 三类别 7 个对手都在，且 BIU 列如实标注弱点', () => {
   renderSite('/compare')
-  for (const name of ['BIU vs Linux', 'BIU vs Office', 'BIU vs Notion', 'BIU vs 飞书', 'BIU vs Cursor', 'BIU vs ChatGPT', 'BIU vs Claude', 'BIU vs Obsidian']) {
+  for (const name of ['BIU vs Linux', 'BIU vs Kubernetes', 'BIU vs Office', 'BIU vs Notion', 'BIU vs Cursor', 'BIU vs ChatGPT', 'BIU vs Claude', 'BIU vs Obsidian']) {
     assert.ok(screen.getAllByText(name).length > 0, `缺少 ${name}`)
   }
   cleanup()
 
   // 详情页照表渲染，且承认对手强项（BIU 列有 ❌ 或 ⚠️）
-  renderSite('/compare/vs-feishu')
-  assert.match(screen.getByRole('heading', { level: 1 }).textContent ?? '', /BIU vs 飞书/)
+  renderSite('/compare/vs-notion')
+  assert.match(screen.getByRole('heading', { level: 1 }).textContent ?? '', /BIU vs Notion/)
   assert.ok(screen.getAllByText(/❌/).length > 0, 'BIU 列必须如实标注没有的能力')
-  assert.ok(screen.getAllByText(/用 飞书 当你需要/).length > 0, '必须承认对手适用场景')
+  assert.ok(screen.getAllByText(/用 Notion 当你需要/).length > 0, '必须承认对手适用场景')
   cleanup()
 })
 
@@ -163,12 +163,12 @@ test('安全页：权限模型讲的是数据视图 × 成员视图，不是四�
   cleanup()
 })
 
-test('对比页：Linux 对比归入操作系统，且 BIU 列不回避弱项', () => {
+test('对比页：Linux 对比归入基础设施，且 BIU 列不回避弱项', () => {
   renderSite('/compare/vs-linux')
   const body = document.body.textContent ?? ''
 
   assert.match(screen.getByRole('heading', { level: 1 }).textContent ?? '', /BIU vs Linux/)
-  assert.match(body, /操作系统/, '应归入「操作系统」')
+  assert.match(body, /基础设施/, '应归入「基础设施」')
   assert.match(body, /一切皆文件/, '要有 Linux 的核心主张')
   assert.match(body, /一切皆 \/<table>\/<id>/, '要有 BIU 的对应主张')
   assert.match(body, /VFS/, '要有抹平异构对应')
@@ -180,5 +180,32 @@ test('对比页：Linux 对比归入操作系统，且 BIU 列不回避弱项', 
 
   // 承认对方适用场景
   assert.match(body, /用 Linux 当你需要/)
+  cleanup()
+})
+
+test('对比页：Kubernetes 对比独立成页，归入基础设施，且 BIU 列不回避弱项', () => {
+  renderSite('/compare/vs-k8s')
+  const body = document.body.textContent ?? ''
+
+  assert.match(screen.getByRole('heading', { level: 1 }).textContent ?? '', /BIU vs Kubernetes/)
+  assert.match(body, /基础设施/, '应归入「基础设施」')
+  assert.match(body, /一切皆声明式对象/, '要有 k8s 的核心主张')
+  assert.match(body, /一切皆 \/<table>\/<id>/, '要有 BIU 的对应主张')
+  assert.match(body, /API Server/, '要有入口对应')
+
+  // 核心差异：声明写在页面里，一页可声明多个插件，组合成服务
+  assert.match(body, /kubectl apply/, '要有 k8s 的声明方式')
+  assert.match(body, /写在页面正文里/, '要讲清 BIU 的声明写在哪')
+  assert.match(body, /<plugin kind=/, '要给出插件的声明写法')
+  assert.match(body, /任意多个插件/, '要点明一页可以声明多个插件')
+  assert.match(body, /页面本身就是组合结果/, '要讲清多个插件如何组合成服务')
+
+  // 纪律：不做编排、没有多副本，这两条必须如实写 ❌
+  assert.match(body, /不是编排系统/, '要承认 BIU 不是编排系统')
+  assert.match(body, /未做多副本调度/, '要承认 BIU 没有多副本调度')
+  assert.ok(screen.getAllByText(/❌/).length > 0, 'BIU 列必须如实标注没有的能力')
+
+  // 承认对方适用场景
+  assert.match(body, /用 k8s 当你需要/)
   cleanup()
 })

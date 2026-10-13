@@ -8475,7 +8475,6 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
 .site-compare-body,
 .site-compare-when,
 .site-compare-more,
-.site-coordinate,
 .site-page-hero,
 .site-block-list,
 .site-roi,
@@ -9674,7 +9673,11 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 .site-compare-index { max-width: var(--site-content); margin: 0 auto; padding: 8px var(--site-gutter) 72px; }
 .site-compare-group { margin-bottom: 56px; }
 .site-compare-group > h2 { margin: 0 0 22px; font-size: clamp(20px, 2.4vw, 26px); font-weight: 600; }
-.site-compare-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }
+/* 分类卡片：固定三列，卡片宽度不随该分类下有几张卡而变。
+   不用 auto-fit —— 它会把空轨道塌掉，导致 2 张卡各占 1/2、1 张卡撑满整行。 */
+.site-compare-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; align-items: stretch; }
+@media (max-width: 960px) { .site-compare-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .site-compare-cards { grid-template-columns: minmax(0, 1fr); } }
 .site-compare-card {
   display: flex;
   flex-direction: column;
@@ -9682,31 +9685,62 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   padding: 26px 24px;
   border: 1px solid rgba(255, 255, 255, .07);
   border-radius: 20px;
+  background: #202020;
   text-decoration: none;
   color: inherit;
-  transition: border-color .18s ease, transform .18s ease;
+  transition: background-color .18s ease, border-color .18s ease, transform .18s ease;
 }
-.site-compare-card:hover { background: rgba(255, 255, 255, .035); transform: translateY(-2px); }
+.site-compare-card:hover {
+  /* 底色是 #202020，hover 需要比它更亮才看得出来 */
+  background: #2a2a2a;
+  border-color: rgba(255, 255, 255, .14);
+  transform: translateY(-2px);
+}
 .site-compare-card h3 { margin: 0; font-size: 18px; font-weight: 600; }
 .site-compare-card p { margin: 0; flex: 1; font-size: 14px; line-height: 1.7; color: rgba(255, 255, 255, .56); }
 .site-compare-card span { font-size: 13px; color: rgba(255, 255, 255, .8); }
 
 /* 对比页：详情表 */
-.site-compare-body { max-width: var(--site-content); margin: 0 auto; padding: 0 var(--site-gutter) 72px; }
-.site-compare-table { width: 100%; border-collapse: collapse; font-size: 15px; }
+.site-compare-body {
+  max-width: var(--site-content);
+  margin: 0 auto;
+  padding: 0 var(--site-gutter) 72px;
+}
+/* 对照表：三列各占 1/3，固定等宽 —— 内容长短不影响列宽。
+   行用 display: contents 把单元格直接铺进 grid，行首加一条通栏分隔线。 */
+.site-compare-table {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 100%;
+  font-size: 15px;
+}
+.site-compare-table thead,
+.site-compare-table tbody,
+.site-compare-table tr { display: contents; }
 .site-compare-table th,
 .site-compare-table td {
+  min-width: 0;
   padding: 16px 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, .1);
   text-align: left;
   vertical-align: top;
   line-height: 1.65;
+  overflow-wrap: anywhere;
 }
-.site-compare-table thead th { font-size: 13px; font-weight: 500; color: rgba(255, 255, 255, .48); }
-.site-compare-table tbody th { width: 26%; color: rgba(255, 255, 255, .84); font-weight: 500; }
+/* 每个格子顶上一条线，等价于原来每行一条 border-bottom */
+.site-compare-table thead th,
+.site-compare-table tbody th,
+.site-compare-table tbody td { border-top: 1px solid rgba(255, 255, 255, .1); }
+.site-compare-table thead th { font-size: 13px; font-weight: 500; color: rgba(255, 255, 255, .48); border-top: 0; }
+.site-compare-table tbody th { color: rgba(255, 255, 255, .84); font-weight: 500; }
 .site-compare-table td { color: rgba(255, 255, 255, .58); }
 .site-compare-table th.is-biu,
 .site-compare-table td.is-biu { color: #fff; background: rgba(255, 255, 255, .035); }
+
+/* 窄屏下三列等宽会挤成豆腐块，改为整体横向滚动 */
+@media (max-width: 720px) {
+  .site-compare-body { overflow-x: auto; }
+  .site-compare-table { grid-template-columns: repeat(3, minmax(190px, 1fr)); min-width: 600px; }
+}
 
 .site-compare-when {
   display: grid;
@@ -9719,15 +9753,6 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 .site-compare-when article { padding: 26px 24px; border: 1px solid rgba(255, 255, 255, .1); border-radius: 18px; }
 .site-compare-when h2 { margin: 0 0 10px; font-size: 17px; font-weight: 600; }
 .site-compare-when p { margin: 0; font-size: 15px; line-height: 1.75; color: rgba(255, 255, 255, .58); }
-
-.site-coordinate { max-width: var(--site-content); margin: 0 auto; padding: 0 var(--site-gutter) 72px; }
-.site-coordinate h2 { margin: 0 0 22px; font-size: clamp(20px, 2.4vw, 26px); font-weight: 600; }
-.site-coordinate table { width: 100%; border-collapse: collapse; font-size: 15px; }
-.site-coordinate th,
-.site-coordinate td { padding: 13px 14px; border-bottom: 1px solid rgba(255, 255, 255, .1); text-align: left; }
-.site-coordinate thead th { font-size: 13px; font-weight: 500; color: rgba(255, 255, 255, .45); }
-.site-coordinate tbody td:last-child { color: #fff; }
-.site-coordinate tbody td { color: rgba(255, 255, 255, .58); }
 
 .site-compare-more { max-width: var(--site-content); margin: 0 auto; padding: 0 var(--site-gutter) 72px; }
 .site-compare-more h2 { margin: 0 0 22px; font-size: 20px; font-weight: 600; }
