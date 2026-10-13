@@ -84,7 +84,7 @@ export function parseDatabaseRest(pathname: string, module: AppModule): AppRoute
 export function parseAppPath(pathname: string, plugins: AppModule[] = []): AppRoute {
   const path = normalizePath(pathname)
   if (path === '/login') return { kind: 'auth', mode: 'login' }
-  if (path === '/register') return { kind: 'auth', mode: 'register' }
+  if (path === '/register' || path === '/signup') return { kind: 'auth', mode: 'register' }
   const hit = matchRegisteredModule(path, plugins)
   if (hit) {
     const nested = parseDatabaseRest(path, hit)
@@ -112,7 +112,7 @@ export function parseAppPath(pathname: string, plugins: AppModule[] = []): AppRo
 
 export function isKnownAppPath(pathname: string, plugins: AppModule[] = []): boolean {
   const path = normalizePath(pathname)
-  if (path === '/' || path === '/login' || path === '/register') return true
+  if (path === '/' || path === '/login' || path === '/register' || path === '/signup') return true
   if (/^\/share\/[^/]+(?:\/r\/[^/]+)?$/.test(path)) return true
   if (matchRegisteredModule(path, plugins)) return true
   return /^\/s\/[^/]+(?:\/(chat|debug|trajectory))?$/.test(path)

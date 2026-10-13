@@ -35,6 +35,7 @@ test('parseAppPath covers home, session, and registered plugin modules', () => {
   assert.deepEqual(parseAppPath('/database', plugins), { kind: 'module', moduleId: 'database', path: '/database' })
   assert.deepEqual(parseAppPath('/login'), { kind: 'auth', mode: 'login' })
   assert.deepEqual(parseAppPath('/register'), { kind: 'auth', mode: 'register' })
+  assert.deepEqual(parseAppPath('/signup'), { kind: 'auth', mode: 'register' })
   assert.deepEqual(parseAppPath('/share/tok'), { kind: 'share', token: 'tok' })
   assert.deepEqual(parseAppPath('/share/tok/r/p001'), { kind: 'share', token: 'tok', recordId: 'p001' })
   assert.equal(isKnownAppPath('/share/tok'), true)

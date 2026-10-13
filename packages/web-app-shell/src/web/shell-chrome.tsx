@@ -29,7 +29,7 @@ import { persistWorkspaceProfile, useWorkspaceProfile } from '@biu/public-ui'
 import { LayoutPrefsMenu } from '@biu/core-file-system/layout-prefs-menu'
 import { getPagePrefs, hydratePagePrefs, subscribePageWidth } from '@biu/core-file-system/page-width'
 
-import { MarketingHome } from './marketing-home.tsx'
+import { MarketingSite } from './marketing-site/index.tsx'
 import { clearWorkspaceId, readWorkspaceId, writeWorkspaceId } from './tenant-fetch.ts'
 
 function isLandingPreview() {
@@ -588,9 +588,31 @@ export function AuthGate({ children }: { children: ReactNode }) {
   if (token && verified && !joining) return children
   if (!token && !authOpen && !authRoute && !guestInvite && !workspaceInvite) {
     return (
-      <MarketingHome
-        onLogin={() => goAuth('login')}
-        onStart={() => goAuth('register')}
+      <MarketingSite
+        onLogin={() => {
+          setMode('login')
+          setAuthOpen(true)
+        }}
+        onStart={() => {
+          setMode('register')
+          setAuthOpen(true)
+        }}
+        auth={{
+          mode,
+          onModeChange: setMode,
+          onSubmit: async ({ email, password: secret }) => {
+            const path = mode === 'register' ? '/api/account/register' : '/api/account/login'
+            const body = await accountFetch('', path, {
+              method: 'POST',
+              body: JSON.stringify({ email, password: secret }),
+            })
+            clearWorkspaceId()
+            writeAccountToken(String(body.token ?? ''))
+            if (body.workspaceId) writeWorkspaceId(String(body.workspaceId))
+            setPassword('')
+            setError('')
+          },
+        }}
       />
     )
   }
