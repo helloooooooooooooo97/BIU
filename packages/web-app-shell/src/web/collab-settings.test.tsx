@@ -15,7 +15,10 @@ import {
   readAccountToken,
 } from './shell-chrome.tsx'
 
-afterEach(() => cleanup())
+afterEach(() => {
+  window.history.replaceState({}, '', '/')
+  cleanup()
+})
 
 function json(body: unknown, status = 200) {
   return Promise.resolve({
@@ -24,6 +27,19 @@ function json(body: unknown, status = 200) {
     json: () => Promise.resolve(body),
   })
 }
+
+test('opening /login shows the login page', () => {
+  localStorage.clear()
+  window.history.replaceState({}, '', '/login')
+  render(
+    <AuthGate>
+      <div data-testid="inside">in</div>
+    </AuthGate>,
+  )
+  assert.equal(screen.queryByTestId('site-login'), null)
+  assert.equal(screen.getByRole('heading', { name: '登录' }).textContent, '登录')
+  assert.equal(screen.queryByTestId('inside'), null)
+})
 
 test('the app stays on the login gate until a token exists', async () => {
   localStorage.clear()
@@ -40,6 +56,7 @@ test('the app stays on the login gate until a token exists', async () => {
   assert.equal(screen.queryByTestId('inside'), null)
   assert.equal(screen.getByTestId('auth-gate').textContent?.includes('登录'), true)
   fireEvent.click(screen.getByTestId('site-login'))
+  assert.equal(window.location.pathname, '/login')
   fireEvent.change(screen.getByTestId('auth-name'), { target: { value: 'ada@example.com' } })
   fireEvent.change(screen.getByTestId('auth-password'), { target: { value: 'secret1' } })
   await act(async () => {
@@ -86,6 +103,7 @@ test('a stale workspace does not send the user back to login after they sign in'
     </AuthGate>,
   )
   fireEvent.click(screen.getByTestId('site-login'))
+  assert.equal(window.location.pathname, '/login')
   fireEvent.change(screen.getByTestId('auth-name'), { target: { value: 'ada@example.com' } })
   fireEvent.change(screen.getByTestId('auth-password'), { target: { value: 'secret1' } })
   await act(async () => {
