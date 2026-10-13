@@ -7,12 +7,12 @@ const PRODUCT_SURFACES = [
 ] as const
 
 const SOLUTIONS = [
-  { index: '01', title: '研究与分析', body: '收集资料、建立关系、生成对比表，并把结论留在可继续追问的研究空间。', output: '研究报告 · 数据库 · 对比矩阵' },
-  { index: '02', title: '产品与项目', body: '从用户反馈和项目资料中整理需求、任务、决策与版本计划。', output: 'PRD · 项目计划 · 任务数据库' },
-  { index: '03', title: '内容与创作', body: '让素材、草稿、反馈和不同发布版本共享同一份创作上下文。', output: '文章 · 脚本 · 发布计划' },
-  { index: '04', title: '团队知识', body: '把文档、流程和讨论变成团队可以查询、维护并继续使用的知识。', output: '团队 Wiki · 流程库 · 决策记录' },
-  { index: '05', title: '私人工作', body: '把个人资料与工作流留在本机，保持离线可用和清晰的数据边界。', output: '本机页面 · 私人资料 · 离线空间' },
-  { index: '06', title: '团队协作', body: '让成员围绕同一个云端空间共享页面、数据、会话和智能体。', output: '成员权限 · 协作空间 · 共享上下文' },
+  { title: '研究与分析', body: '收集资料、建立关系、生成对比表，并把结论留在可继续追问的研究空间。', output: '研究报告、数据库、对比矩阵' },
+  { title: '产品与项目', body: '从用户反馈和项目资料中整理需求、任务、决策与版本计划。', output: '需求文档、项目计划、任务数据库' },
+  { title: '内容与创作', body: '让素材、草稿、反馈和不同发布版本共享同一份创作上下文。', output: '文章、脚本、发布计划' },
+  { title: '团队知识', body: '把文档、流程和讨论变成团队可以查询、维护并继续使用的知识。', output: '团队手册、流程库、决策记录' },
+  { title: '私人工作', body: '把个人资料与工作流留在本机，保持离线可用和清晰的数据边界。', output: '本机页面、私人资料、离线空间' },
+  { title: '团队协作', body: '让成员围绕同一个云端空间共享页面、数据、会话和智能体。', output: '成员权限、协作空间、共享上下文' },
 ] as const
 
 export function MarketingHome({ onLogin, onStart }: { onLogin: () => void; onStart: () => void }) {
@@ -65,14 +65,7 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: () => void; onSta
       </header>
       <main>
         <section className="site-hero">
-          <div className="site-hero-art" aria-hidden>
-            <span className="site-hero-orb site-hero-orb-one" />
-            <span className="site-hero-orb site-hero-orb-two" />
-            <span className="site-hero-line site-hero-line-one" />
-            <span className="site-hero-line site-hero-line-two" />
-          </div>
           <div className="site-hero-copy" data-reveal>
-            <p className="site-eyebrow">BIU · 智能工作空间</p>
             <h1>让知识留下，<br />让工作继续。</h1>
             <p className="site-hero-lead">页面、数据、会话与智能体，共享同一个空间上下文。</p>
             <form className="site-task-box" onSubmit={submitTask}>
@@ -90,7 +83,14 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: () => void; onSta
               ))}
             </div>
           </div>
-          <p className="site-scroll-note">向下探索</p>
+          <aside className="site-hero-sheet" aria-label="空间里留下的内容">
+            <p>这个空间里已经留下</p>
+            <ol>
+              <li><strong>页面</strong><span>背景、资料和想法写在同一页</span></li>
+              <li><strong>数据</strong><span>任务、关系和状态可以继续查</span></li>
+              <li><strong>会话</strong><span>讨论和结果写回空间，而不是关掉就没了</span></li>
+            </ol>
+          </aside>
         </section>
 
         <section className="site-intro" id="product" data-reveal>
@@ -141,12 +141,11 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: () => void; onSta
           </div>
           <div className="site-solution-grid">
             {SOLUTIONS.map((item) => (
-              <article key={item.index} data-reveal>
-                <span className="site-solution-index">{item.index}</span>
+              <article key={item.title} data-reveal>
                 <h3>{item.title}</h3>
                 <p>{item.body}</p>
                 <small>{item.output}</small>
-                <button type="button" onClick={onStart} aria-label={`开始${item.title}`}>↗</button>
+                <button type="button" onClick={onStart} aria-label={`开始${item.title}`}>开始</button>
               </article>
             ))}
           </div>
@@ -158,13 +157,13 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: () => void; onSta
             <h2>不必每次重新解释<br />你正在做什么。</h2>
           </div>
           <div className="site-context-flow" data-reveal aria-label="空间上下文">
-            <div><span>01</span><strong>页面</strong><p>背景、资料与想法</p></div>
-            <i>→</i>
-            <div><span>02</span><strong>数据</strong><p>任务、关系与状态</p></div>
-            <i>→</i>
-            <div><span>03</span><strong>会话</strong><p>讨论、执行与结果</p></div>
-            <i>→</i>
-            <div><span>04</span><strong>空间</strong><p>持续积累的上下文</p></div>
+            <div><strong>页面</strong><p>背景、资料与想法</p></div>
+            <i aria-hidden>然后</i>
+            <div><strong>数据</strong><p>任务、关系与状态</p></div>
+            <i aria-hidden>然后</i>
+            <div><strong>会话</strong><p>讨论、执行与结果</p></div>
+            <i aria-hidden>然后</i>
+            <div><strong>空间</strong><p>持续积累的上下文</p></div>
           </div>
         </section>
 
@@ -175,13 +174,11 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: () => void; onSta
           </div>
           <div className="site-space-options">
             <article data-reveal>
-              <span className="site-space-index">01</span>
               <h3>云端空间</h3>
               <p>随时访问，与团队一起工作。成员、权限与在线协作都在空间中管理。</p>
               <small>多设备 · 成员权限 · 在线协作</small>
             </article>
-            <article data-reveal>
-              <span className="site-space-index">02</span>
+            <article className="is-local" data-reveal>
               <h3>本机空间</h3>
               <p>数据留在当前设备。适合私人资料、离线工作和需要完全本地控制的内容。</p>
               <small>本地保存 · 离线可用 · 清晰边界</small>
@@ -241,7 +238,7 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: () => void; onSta
         <section className="site-final-cta" data-reveal>
           <p className="site-section-label">开始使用 BIU</p>
           <h2>给知识一个归处。<br />给工作一个继续的地方。</h2>
-          <button type="button" onClick={onStart}>创建你的空间 <span>↗</span></button>
+          <button type="button" onClick={onStart}>创建你的空间</button>
         </section>
       </main>
       <footer className="site-footer">
