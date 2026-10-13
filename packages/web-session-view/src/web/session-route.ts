@@ -17,6 +17,7 @@ export type InspectorCenterKind = 'session' | 'collection-view' | 'record' | 'ta
 
 export type AppRoute =
   | { kind: 'home' }
+  | { kind: 'auth'; mode: 'login' | 'register' }
   | { kind: 'share'; token: string; recordId?: string }
   | { kind: 'session'; sessionId: string; view: RouteView }
   | { kind: 'module'; moduleId: string; path: string }
@@ -82,6 +83,8 @@ export function parseDatabaseRest(pathname: string, module: AppModule): AppRoute
 
 export function parseAppPath(pathname: string, plugins: AppModule[] = []): AppRoute {
   const path = normalizePath(pathname)
+  if (path === '/login') return { kind: 'auth', mode: 'login' }
+  if (path === '/register' || path === '/signup') return { kind: 'auth', mode: 'register' }
   const hit = matchRegisteredModule(path, plugins)
   if (hit) {
     const nested = parseDatabaseRest(path, hit)
@@ -109,7 +112,7 @@ export function parseAppPath(pathname: string, plugins: AppModule[] = []): AppRo
 
 export function isKnownAppPath(pathname: string, plugins: AppModule[] = []): boolean {
   const path = normalizePath(pathname)
-  if (path === '/') return true
+  if (path === '/' || path === '/login' || path === '/register' || path === '/signup') return true
   if (/^\/share\/[^/]+(?:\/r\/[^/]+)?$/.test(path)) return true
   if (matchRegisteredModule(path, plugins)) return true
   return /^\/s\/[^/]+(?:\/(chat|debug|trajectory))?$/.test(path)
@@ -117,6 +120,7 @@ export function isKnownAppPath(pathname: string, plugins: AppModule[] = []): boo
 
 export function buildAppPath(route: AppRoute): string {
   if (route.kind === 'home') return '/'
+  if (route.kind === 'auth') return route.mode === 'register' ? '/register' : '/login'
   if (route.kind === 'share') {
     const base = `/share/${encodeURIComponent(route.token)}`
     return route.recordId ? `${base}/r/${encodeURIComponent(route.recordId)}` : base

@@ -465,6 +465,13 @@ function readAuthRoute(): 'login' | 'register' | null {
   return null
 }
 
+function setBrowserPath(path: string, mode: 'push' | 'replace' = 'push') {
+  if (typeof window === 'undefined' || window.location.pathname === path) return
+  if (mode === 'replace') window.history.replaceState({}, '', path)
+  else window.history.pushState({}, '', path)
+  window.dispatchEvent(new PopStateEvent('popstate'))
+}
+
 export function AuthGate({ children }: { children: ReactNode }) {
   const initialRoute = readAuthRoute()
   const [token, setToken] = useState(readAccountToken)
@@ -508,17 +515,13 @@ export function AuthGate({ children }: { children: ReactNode }) {
     setAuthOpen(true)
     setAuthRoute(next)
     const path = next === 'register' ? '/register' : '/login'
-    if (typeof window !== 'undefined' && window.location.pathname !== path) {
-      window.history.pushState({}, '', path)
-    }
+    setBrowserPath(path)
   }
 
   function leaveAuth() {
     setAuthOpen(false)
     setAuthRoute(null)
-    if (typeof window !== 'undefined' && (window.location.pathname === '/login' || window.location.pathname === '/register')) {
-      window.history.pushState({}, '', '/')
-    }
+    setBrowserPath('/')
   }
 
   useEffect(() => {
@@ -572,6 +575,14 @@ export function AuthGate({ children }: { children: ReactNode }) {
       live = false
     }
   }, [token, verified, workspaceInvite])
+
+  useEffect(() => {
+    if (!token || !verified) return
+    if (window.location.pathname !== '/login' && window.location.pathname !== '/register') return
+    setBrowserPath('/', 'replace')
+    setAuthRoute(null)
+    setAuthOpen(false)
+  }, [token, verified])
 
   if (isLandingPreview()) return children
   if (token && verified && !joining) return children
@@ -672,7 +683,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
                 setPassword('')
                 setError('')
                 if (window.location.pathname === '/login' || window.location.pathname === '/register') {
-                  window.history.replaceState({}, '', '/')
+                  setBrowserPath('/', 'replace')
                   setAuthRoute(null)
                 }
               })

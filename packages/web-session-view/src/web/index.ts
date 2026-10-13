@@ -400,6 +400,7 @@ export class SessionViewService extends Service {
    * 只有 `/s/:id` 才换成主 Session。搜索把页面/其它记录开到左侧、进数据模块，都不改全局会话。
    * 冷启动还没有会话时，给悬浮窗补最近一条。 */
   async applyRoute(route: AppRoute) {
+    if (route.kind === 'auth') return
     if (route.kind === 'session') {
       if (this.value.sessionId !== route.sessionId) {
         try {

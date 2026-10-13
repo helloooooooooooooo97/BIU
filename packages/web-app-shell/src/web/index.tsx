@@ -632,6 +632,7 @@ function Shell(props: SlotProps) {
       !navReady && location.pathname !== '/' && !location.pathname.startsWith('/s/')
     if (waitingOnNav) return
     const route = parseAppPath(location.pathname, pluginModules)
+    if (route.kind === 'auth') return
     void sessionView.applyRoute(route).catch(() => undefined)
   }, [location.pathname, navReady, sessionView, appModules.version()])
 
