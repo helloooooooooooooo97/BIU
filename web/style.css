@@ -8506,11 +8506,25 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   -webkit-backdrop-filter: blur(16px);
 }
 .site-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   color: #fff;
   font-size: 17px;
   font-weight: 600;
   letter-spacing: -0.03em;
   text-decoration: none;
+}
+/* 导航栏的品牌标记：跟着用户在品牌页调好的配色走。
+   高度锁在 24px，避免自定义圆角方底把导航栏撑高。 */
+.site-brand-mark {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  display: block;
+}
+.site-brand-text {
+  line-height: 1;
 }
 .site-nav-links {
   display: flex;
@@ -10034,3 +10048,185 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   transition: border-color .18s ease, color .18s ease;
 }
 .site-usecase-more-links a:hover { background: rgba(255, 255, 255, .09); color: #fff; }
+
+/* ---------- 品牌页 ---------- */
+.site-brand-hero {
+  max-width: var(--site-content);
+  margin: 0 auto;
+  padding: 0 var(--site-gutter) 72px;
+  display: flex;
+  justify-content: center;
+}
+.site-brand-hero svg { width: min(420px, 70vw); height: auto; }
+
+.site-brand-anatomy,
+.site-brand-studio,
+.site-brand-rules {
+  max-width: var(--site-content);
+  margin: 0 auto;
+  padding: 0 var(--site-gutter) 72px;
+}
+.site-brand-anatomy > h2,
+.site-brand-studio > h2,
+.site-brand-rules > h2 {
+  margin: 0 0 24px;
+  font-size: clamp(20px, 2.4vw, 26px);
+  font-weight: 600;
+}
+.site-brand-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 18px;
+}
+.site-brand-grid article { padding: 24px; border-radius: 18px; background: #202020; }
+.site-brand-grid h3 { margin: 0 0 10px; font-size: 16px; font-weight: 600; }
+.site-brand-grid p { margin: 0; font-size: 14px; line-height: 1.75; color: rgba(255, 255, 255, .58); }
+
+.site-brand-note { margin: 0 0 24px; font-size: 15px; color: rgba(255, 255, 255, .58); }
+
+/* 调节器：左侧预览，右侧控件 */
+.brand-studio {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 32px;
+  /* 左边预览要跟右侧那摞控件等高，所以不能用 start —— 那样各按自身高度。 */
+  align-items: stretch;
+}
+@media (max-width: 860px) { .brand-studio { grid-template-columns: minmax(0, 1fr); } }
+
+.brand-studio-preview {
+  padding: 24px;
+  border-radius: 22px;
+  /* 黑色波点底：径向渐变重复铺开，点距 22px、半径 1.6px。 */
+  background-color: #0d0d0d;
+  background-image: radial-gradient(rgba(255, 255, 255, .16) 1.6px, transparent 1.6px);
+  background-size: 22px 22px;
+  background-position: 0 0;
+  /* 等高由 grid 的 stretch 决定，这里只负责把标记居中。 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.brand-studio-preview svg {
+  display: block;
+  width: 240px;
+  height: 240px;
+  flex: none;
+}
+
+.brand-studio-controls { display: grid; gap: 18px; }
+.brand-field {
+  margin: 0;
+  padding: 20px;
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 18px;
+}
+.brand-field legend {
+  padding: 0 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, .48);
+}
+.brand-row {
+  display: grid;
+  grid-template-columns: 84px auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+}
+.brand-row-label { font-size: 14px; color: rgba(255, 255, 255, .72); }
+.brand-row input[type="color"] {
+  width: 44px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, .18);
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+.brand-row input[type="range"] { width: 100%; accent-color: #fff; cursor: pointer; }
+.brand-hex {
+  max-width: 110px;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 8px;
+  background: #161616;
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+}
+.brand-value { font-size: 13px; color: rgba(255, 255, 255, .48); text-align: right; }
+.brand-check { display: flex; align-items: center; gap: 10px; padding: 8px 0; font-size: 14px; color: rgba(255, 255, 255, .72); cursor: pointer; }
+
+.brand-presets { display: flex; flex-wrap: wrap; gap: 10px; }
+.brand-preset {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 999px;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.brand-preset:hover { background: #2a2a2a; }
+.brand-preset-chip { width: 16px; height: 16px; border-radius: 5px; }
+
+.site-brand-rules ul { margin: 0; padding-left: 20px; display: grid; gap: 10px; }
+.site-brand-rules li { font-size: 14px; line-height: 1.75; color: rgba(255, 255, 255, .58); }
+.site-brand-back { margin: 28px 0 0; font-size: 14px; }
+.site-brand-back a { color: rgba(255, 255, 255, .72); text-decoration: none; }
+.site-brand-back a:hover { color: #fff; }
+
+/* 品牌页：三块 = B/I/U 的说明 */
+.site-brand-facets {
+  max-width: var(--site-content);
+  margin: 0 auto;
+  padding: 0 var(--site-gutter) 72px;
+}
+.site-brand-facets > h2 {
+  margin: 0 0 16px;
+  font-size: clamp(20px, 2.4vw, 26px);
+  font-weight: 600;
+}
+.site-brand-facet-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 18px;
+  margin-top: 28px;
+}
+.site-brand-facet-grid article {
+  padding: 26px 24px;
+  border-radius: 18px;
+  background: #202020;
+}
+.site-brand-facet-letter {
+  margin: 0 0 14px;
+  font-size: 34px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  color: rgba(255, 255, 255, .34);
+}
+.site-brand-facet-grid h3 {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0 0 10px;
+  font-size: 16px;
+  font-weight: 600;
+}
+.site-brand-facet-where {
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, .4);
+}
+.site-brand-facet-grid p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.75;
+  color: rgba(255, 255, 255, .58);
+}

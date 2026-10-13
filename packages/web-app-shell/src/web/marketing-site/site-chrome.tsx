@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { useReveal } from './use-reveal.ts'
+import { BrandMark, useBrandConfig } from './brand-mark.tsx'
 import { Link, NavLink } from 'react-router-dom'
 
 export type SiteAction = () => void
@@ -10,12 +11,16 @@ export type SiteChromeProps = {
   onStart: SiteAction
 }
 
+/** 导航栏品牌标记的显示尺寸（与 style.css 的 .site-brand-mark 保持一致）。 */
+const NAV_BRAND_PX = 24
+
 const NAV_PRIMARY = [
   { label: '产品', to: '/product' },
   { label: '场景', to: '/use-cases' },
   { label: '定价', to: '/pricing' },
   { label: '安全', to: '/security' },
   { label: '对比', to: '/compare' },
+  { label: '品牌', to: '/brand' },
 ] as const
 
 const FOOTER_COLUMNS = [
@@ -50,10 +55,30 @@ const FOOTER_COLUMNS = [
 
 export function SiteHeader({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
   const [menuOpen, setMenuOpen] = useState(false)
+  // 用户在品牌页调好的配置会推到这里，导航栏标记随之更新。
+  const brand = useBrandConfig()
 
   return (
     <header className="site-nav" data-menu-open={menuOpen ? '1' : '0'}>
-      <Link className="site-brand" to="/" onClick={() => setMenuOpen(false)}>BIU</Link>
+      <Link className="site-brand" to="/" onClick={() => setMenuOpen(false)}>
+        <BrandMark
+          className="site-brand-mark"
+          colors={[brand.c0, brand.c1, brand.c2]}
+          stroke={brand.stroke}
+          // 颜色、粗细、圆的比例全部跟随用户在品牌页的设定 ——
+          // 导航栏是同一枚标记的另一处呈现，不该有自己的一套参数。
+          strokeWidth={brand.strokeWidth}
+          lineWidth={brand.lineWidth}
+          background={brand.background}
+          showBackground={brand.showBackground}
+          circleRatio={brand.circleRatio}
+          scene="icon"
+          // 24px 是 CSS 里定死的显示尺寸；组件靠它保证线条不缩成亚像素。
+          displayWidth={NAV_BRAND_PX}
+          title="BIU"
+        />
+        <span className="site-brand-text">BIU</span>
+      </Link>
       {/* 移动端汉堡按钮 */}
       <button
         type="button"

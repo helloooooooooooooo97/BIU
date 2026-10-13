@@ -8,6 +8,7 @@ import { MarketingDownload } from './download.tsx'
 import { MarketingSecurity } from './security.tsx'
 import { MarketingCompareDetail, MarketingCompareIndex } from './compare.tsx'
 import { MarketingUseCaseDetail, MarketingUseCases } from './use-cases.tsx'
+import { MarketingBrand } from './brand.tsx'
 import { type AuthMode, MarketingAuth } from './auth.tsx'
 import { usePageMeta } from './use-page-meta.ts'
 
@@ -41,9 +42,11 @@ function Placeholder({ label, title, body, onLogin, onStart }: PlaceholderProps)
           <p className="site-page-lead">{body}</p>
         </section>
         <section className="site-final-cta" data-reveal>
-          <p className="site-section-label">开始使用 BIU</p>
-          <h2>先创建你的空间。</h2>
-          <button type="button" onClick={onStart}>创建你的空间 <span>↗</span></button>
+          <div className="site-container">
+            <p className="site-section-label">开始使用 BIU</p>
+            <h2>先创建你的空间。</h2>
+            <button type="button" onClick={onStart}>创建你的空间 <span>↗</span></button>
+          </div>
         </section>
     </SiteChrome>
   )
@@ -116,6 +119,7 @@ export function MarketingSite({ onLogin, onStart, auth }: MarketingSiteProps) {
       <Route path="/login" element={authElement} />
       <Route path="/signup" element={authElement} />
       <Route path="/compare/:slug" element={<MarketingCompareDetail onLogin={onLogin} onStart={onStart} />} />
+      <Route path="/brand" element={<MarketingBrand onLogin={onLogin} onStart={onStart} />} />
       <Route path="/use-cases" element={<MarketingUseCases onLogin={onLogin} onStart={onStart} />} />
       <Route path="/use-cases/:slug" element={<MarketingUseCaseDetail onLogin={onLogin} onStart={onStart} />} />
       {Object.entries(PLACEHOLDERS).map(([path, content]) => (
@@ -150,6 +154,7 @@ export const SITE_PATHS = [
   '/security',
   '/compare',
   '/use-cases',
+  '/brand',
   '/enterprise',
   '/changelog',
   '/about',

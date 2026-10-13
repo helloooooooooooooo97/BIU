@@ -20,10 +20,10 @@ function navItems(): HTMLElement[] {
   return Array.from(nav.children) as HTMLElement[]
 }
 
-test('导航项高度一致：五项都是裸链接，没有包装层', () => {
+test('导航项高度一致：各项都是裸链接，没有包装层', () => {
   renderHome()
   const items = navItems()
-  assert.equal(items.length, 5, '产品 / 场景 / 定价 / 安全 / 对比')
+  assert.equal(items.length, 6, '产品 / 场景 / 定价 / 安全 / 对比 / 品牌')
 
   // 「产品」不再有二级菜单，所以也不需要 wrapper —— 五项是同一种节点。
   for (const item of items) {
@@ -47,7 +47,7 @@ test('所有导航项指向真实路由', () => {
   const hrefs = Array.from(
     screen.getByRole('navigation', { name: '官网' }).querySelectorAll('a'),
   ).map((a) => a.getAttribute('href'))
-  for (const expected of ['/product', '/use-cases', '/pricing', '/security', '/compare']) {
+  for (const expected of ['/product', '/use-cases', '/pricing', '/security', '/compare', '/brand']) {
     assert.ok(hrefs.includes(expected), `导航缺 ${expected}`)
   }
 })
