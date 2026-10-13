@@ -174,7 +174,6 @@ export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; o
             <h2>{useCase.title}</h2>
             <p>{useCase.summary}</p>
             <small>{useCase.output}</small>
-            <span className="site-usecase-more">查看做法 →</span>
           </Link>
         ))}
       </section>

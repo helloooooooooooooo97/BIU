@@ -253,7 +253,6 @@ export function MarketingCompareIndex({ onLogin, onStart }: { onLogin: SiteActio
                     <Link key={slug} to={`/compare/${slug}`} className="site-compare-card">
                       <h3>{page.title}</h3>
                       <p>{page.opening}</p>
-                      <span>查看对比 →</span>
                     </Link>
                   )
                 })}
@@ -326,7 +325,6 @@ export function MarketingCompareDetail({ onLogin, onStart }: { onLogin: SiteActi
               {others.map((item) => (
                 <Link key={item.slug} to={`/compare/${item.slug}`} className="site-compare-card">
                   <h3>{item.title}</h3>
-                  <span>查看对比 →</span>
                 </Link>
               ))}
             </div>
