@@ -15,18 +15,21 @@ const PRODUCT_SURFACES = [
     label: '页面与数据',
     image: '/site/demo-file-system.png',
     alt: 'BIU File System：会话与页面是同一个工作区里并列打开的普通表',
+    caption: 'BIU 把资料、页面、数据库和对话收进同一个上下文。智能体可以理解工作、使用工具，并把结果写回空间。',
   },
   {
     id: 'component',
     label: '组件',
     image: '/site/demo-component.png',
     alt: 'BIU 组件：页面里组合可复用的视频块，同一组件在专属编辑器中打开',
+    caption: '按场景做自己的组件。设计、艺术、研究或日常事务，都可以把常用的一块内容做成组件，放进页面里反复使用。',
   },
   {
     id: 'context',
     label: '会话上下文',
     image: '/site/demo-context.png',
     alt: 'BIU 上下文：页面、会话、插件等工作区项目成为可移除的上下文标签',
+    caption: '用智能光标引用文件系统里的任意内容，把它带进当前会话，作为这一轮要处理的上下文。',
   },
 ] as const
 
@@ -114,7 +117,6 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
           <div className="site-demo-heading">
             <p className="site-section-label">从任务到结果</p>
             <h2>看见 BIU 如何工作。</h2>
-            <p className="site-demo-lead">BIU 把资料、页面、数据库和对话收进同一个上下文。智能体可以理解工作、使用工具，并把结果写回空间。</p>
             <div className="site-demo-tabs" role="tablist" aria-label="产品演示">
               {PRODUCT_SURFACES.map((item, index) => (
                 <button
@@ -142,6 +144,7 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
               decoding="async"
             />
           </div>
+          <p className="site-demo-caption">{surface.caption}</p>
         </section>
 
         <section className="site-capabilities" aria-label="核心能力">

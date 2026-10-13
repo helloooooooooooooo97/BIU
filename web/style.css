@@ -8908,6 +8908,13 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   object-fit: contain;
   object-position: top left;
 }
+.site-demo-caption {
+  margin: 20px 0 0;
+  max-width: 40em;
+  color: rgba(0, 0, 0, .62);
+  font-size: 16px;
+  line-height: 1.7;
+}
 .site-solutions {
   padding: 140px var(--site-gutter);
   background: #f2f0eb;
