@@ -180,9 +180,11 @@ export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; o
       </section>
 
       <section className="site-final-cta" data-reveal>
-        <p className="site-section-label">开始使用 BIU</p>
-        <h2>从你的场景开始。</h2>
-        <button type="button" onClick={onStart}>创建你的空间 <span>↗</span></button>
+        <div className="site-container">
+          <p className="site-section-label">开始使用 BIU</p>
+          <h2>从你的场景开始。</h2>
+          <button type="button" onClick={onStart}>创建你的空间 <span>↗</span></button>
+        </div>
       </section>
     </SiteChrome>
   )
@@ -266,9 +268,11 @@ export function MarketingUseCaseDetail({ onLogin, onStart }: { onLogin: SiteActi
       </section>
 
       <section className="site-final-cta" data-reveal>
-        <p className="site-section-label">开始使用 BIU</p>
-        <h2>试试你自己的场景。</h2>
-        <button type="button" onClick={onStart}>创建你的空间 <span>↗</span></button>
+        <div className="site-container">
+          <p className="site-section-label">开始使用 BIU</p>
+          <h2>试试你自己的场景。</h2>
+          <button type="button" onClick={onStart}>创建你的空间 <span>↗</span></button>
+        </div>
       </section>
     </SiteChrome>
   )

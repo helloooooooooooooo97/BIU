@@ -8474,7 +8474,19 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
 .site-compare-index,
 .site-compare-body,
 .site-compare-when,
-.site-page-hero {
+.site-compare-more,
+.site-coordinate,
+.site-page-hero,
+.site-block-list,
+.site-roi,
+.site-plans,
+.site-space-compare,
+.site-security-blocks,
+.site-compliance,
+.site-role-table,
+.site-continuity,
+.site-ecosystem,
+.site-platforms {
   width: 100%;
   max-width: var(--site-content);
   margin-inline: auto;
@@ -8973,6 +8985,10 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   cursor: pointer;
 }
 .site-continuity {
+  width: 100%;
+  max-width: var(--site-content);
+  margin-inline: auto;
+  box-sizing: border-box;
   padding: 140px var(--site-gutter);
 }
 .site-continuity-heading,
@@ -9022,6 +9038,10 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   font-size: 12px;
 }
 .site-ecosystem {
+  width: 100%;
+  max-width: var(--site-content);
+  margin-inline: auto;
+  box-sizing: border-box;
   padding: 140px var(--site-gutter);
 }
 .site-ecosystem-grid {
@@ -9067,7 +9087,13 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   display: grid;
   grid-template-columns: 1fr 1.1fr;
   gap: 7vw;
-  padding: 140px var(--site-gutter);
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  box-sizing: border-box;
+  /* 浅色底通栏，文字左缘与 .site-container 对齐 */
+  padding-block: 140px;
+  padding-inline: max(var(--site-gutter), calc((100% - (var(--site-content) - 2 * var(--site-gutter))) / 2));
   background: #f2f0eb;
   color: #111;
 }
@@ -9335,8 +9361,10 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 
 /* 站内页通用 hero */
 .site-page-hero {
+  width: 100%;
   max-width: var(--site-content);
   margin: 0 auto;
+  box-sizing: border-box;
   padding: 168px var(--site-gutter) 72px;
 }
 .site-page-hero h1 {

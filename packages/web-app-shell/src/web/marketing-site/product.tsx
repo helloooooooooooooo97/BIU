@@ -161,9 +161,11 @@ export function MarketingProduct({ onLogin, onStart }: { onLogin: SiteAction; on
         </section>
 
         <section className="site-final-cta" data-reveal>
-          <p className="site-section-label">开始使用 BIU</p>
-          <h2>把工作放进一个空间。</h2>
-          <button type="button" onClick={onStart}>创建你的空间 <span>↗</span></button>
+          <div className="site-container">
+            <p className="site-section-label">开始使用 BIU</p>
+            <h2>把工作放进一个空间。</h2>
+            <button type="button" onClick={onStart}>创建你的空间 <span>↗</span></button>
+          </div>
         </section>
     </SiteChrome>
   )
