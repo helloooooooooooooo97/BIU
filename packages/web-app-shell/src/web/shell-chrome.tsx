@@ -589,14 +589,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
   if (!token && !authOpen && !authRoute && !guestInvite && !workspaceInvite) {
     return (
       <MarketingSite
-        onLogin={() => {
-          setMode('login')
-          setAuthOpen(true)
-        }}
-        onStart={() => {
-          setMode('register')
-          setAuthOpen(true)
-        }}
+        onLogin={() => goAuth('login')}
+        onStart={() => goAuth('register')}
         auth={{
           mode,
           onModeChange: setMode,
