@@ -2038,8 +2038,8 @@ html:not(.dark) .shell-workspace-menu-item.is-active .shell-workspace-menu-icon 
   min-height: 100vh;
   display: grid;
   place-items: center;
-  background: #fff;
-  color: #0d0d0d;
+  background: #000;
+  color: #fff;
   font-family: "SF Pro Display", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif;
   -webkit-font-smoothing: antialiased;
 }
@@ -2059,7 +2059,7 @@ html:not(.dark) .shell-workspace-menu-item.is-active .shell-workspace-menu-icon 
 .auth-lead,
 .auth-status {
   margin: 0;
-  color: #5d5d5d;
+  color: #b5b5b5;
   font-size: 14px;
   line-height: 1.5;
 }
@@ -2070,7 +2070,7 @@ html:not(.dark) .shell-workspace-menu-item.is-active .shell-workspace-menu-icon 
   display: flex;
   flex-direction: column;
   gap: 6px;
-  color: #0d0d0d;
+  color: #fff;
   font-size: 13px;
   font-weight: 500;
 }
@@ -2093,8 +2093,8 @@ html:not(.dark) .shell-workspace-menu-item.is-active .shell-workspace-menu-icon 
   margin-top: 4px;
   border: 0;
   border-radius: 8px;
-  background: #0d0d0d;
-  color: #fff;
+  background: #fff;
+  color: #000;
   font: inherit;
   font-size: 14px;
   font-weight: 500;
@@ -2106,14 +2106,14 @@ html:not(.dark) .shell-workspace-menu-item.is-active .shell-workspace-menu-icon 
 .auth-back {
   border: 0;
   background: transparent;
-  color: #5d5d5d;
+  color: #b5b5b5;
   padding: 0;
   font: inherit;
   font-size: 13px;
   cursor: pointer;
 }
 .auth-switch:hover,
-.auth-back:hover { color: #0d0d0d; }
+.auth-back:hover { color: #fff; }
 .auth-error {
   margin: 0;
   color: #b42318;

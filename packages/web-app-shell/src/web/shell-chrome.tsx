@@ -458,12 +458,21 @@ export function writeAccountToken(next: string) {
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(ACCOUNT_EVENT))
 }
 
+function readAuthRoute(): 'login' | 'register' | null {
+  if (typeof window === 'undefined') return null
+  if (window.location.pathname === '/login') return 'login'
+  if (window.location.pathname === '/register') return 'register'
+  return null
+}
+
 export function AuthGate({ children }: { children: ReactNode }) {
+  const initialRoute = readAuthRoute()
   const [token, setToken] = useState(readAccountToken)
   const [verified, setVerified] = useState(false)
   const [joining, setJoining] = useState(false)
-  const [mode, setMode] = useState<'login' | 'register'>('login')
-  const [authOpen, setAuthOpen] = useState(false)
+  const [mode, setMode] = useState<'login' | 'register'>(initialRoute ?? 'login')
+  const [authRoute, setAuthRoute] = useState<'login' | 'register' | null>(initialRoute)
+  const [authOpen, setAuthOpen] = useState(Boolean(initialRoute))
   const [name, setName] = useState('')
   const [guestName, setGuestName] = useState('')
   const [password, setPassword] = useState('')
@@ -480,6 +489,37 @@ export function AuthGate({ children }: { children: ReactNode }) {
       window.removeEventListener('storage', sync)
     }
   }, [])
+
+  useEffect(() => {
+    const sync = () => {
+      const next = readAuthRoute()
+      setAuthRoute(next)
+      if (next) {
+        setMode(next)
+        setAuthOpen(true)
+      }
+    }
+    window.addEventListener('popstate', sync)
+    return () => window.removeEventListener('popstate', sync)
+  }, [])
+
+  function goAuth(next: 'login' | 'register') {
+    setMode(next)
+    setAuthOpen(true)
+    setAuthRoute(next)
+    const path = next === 'register' ? '/register' : '/login'
+    if (typeof window !== 'undefined' && window.location.pathname !== path) {
+      window.history.pushState({}, '', path)
+    }
+  }
+
+  function leaveAuth() {
+    setAuthOpen(false)
+    setAuthRoute(null)
+    if (typeof window !== 'undefined' && (window.location.pathname === '/login' || window.location.pathname === '/register')) {
+      window.history.pushState({}, '', '/')
+    }
+  }
 
   useEffect(() => {
     if (!token) {
@@ -535,17 +575,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   if (isLandingPreview()) return children
   if (token && verified && !joining) return children
-  if (!token && !authOpen && !guestInvite && !workspaceInvite) {
+  if (!token && !authOpen && !authRoute && !guestInvite && !workspaceInvite) {
     return (
       <MarketingHome
-        onLogin={() => {
-          setMode('login')
-          setAuthOpen(true)
-        }}
-        onStart={() => {
-          setMode('register')
-          setAuthOpen(true)
-        }}
+        onLogin={() => goAuth('login')}
+        onStart={() => goAuth('register')}
       />
     )
   }
@@ -615,6 +649,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
                 if (body.workspaceId) writeWorkspaceId(String(body.workspaceId))
                 setPassword('')
                 setError('')
+                if (window.location.pathname === '/login' || window.location.pathname === '/register') {
+                  window.history.replaceState({}, '', '/')
+                  setAuthRoute(null)
+                }
               })
               .catch((err) => setError(err instanceof Error ? err.message : '登录失败'))
           }}
@@ -655,13 +693,13 @@ export function AuthGate({ children }: { children: ReactNode }) {
               type="button"
               className="auth-switch"
               data-testid="auth-switch"
-              onClick={() => setMode((current) => (current === 'login' ? 'register' : 'login'))}
+              onClick={() => goAuth(mode === 'login' ? 'register' : 'login')}
             >
               {mode === 'register' ? '已有账号，去登录' : '没有账号，去注册'}
             </button>
           </p>
           {workspaceInvite ? null : (
-            <button type="button" className="auth-back" onClick={() => setAuthOpen(false)}>返回</button>
+            <button type="button" className="auth-back" onClick={leaveAuth}>返回</button>
           )}
         </form>
       )}
