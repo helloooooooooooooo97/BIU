@@ -80,12 +80,6 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
   return (
     <SiteChrome onLogin={onLogin} onStart={onStart}>
         <section className="site-hero">
-          <div className="site-hero-art" aria-hidden>
-            <span className="site-hero-orb site-hero-orb-one" />
-            <span className="site-hero-orb site-hero-orb-two" />
-            <span className="site-hero-line site-hero-line-one" />
-            <span className="site-hero-line site-hero-line-two" />
-          </div>
           <div className="site-hero-copy site-container" data-reveal>
             <p className="site-eyebrow">BIU · 智能工作空间</p>
             <h1>让知识留下，<br />让工作继续。</h1>

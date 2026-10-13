@@ -8594,44 +8594,6 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   background: linear-gradient(transparent, rgba(0, 0, 0, .72));
   pointer-events: none;
 }
-.site-hero-art {
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(ellipse at 70% 38%, rgba(255, 255, 255, .17), transparent 34%),
-    radial-gradient(circle at 29% 22%, rgba(104, 119, 255, .12), transparent 23%),
-    linear-gradient(145deg, #020202 15%, #101010 56%, #000 100%);
-}
-.site-hero-orb {
-  position: absolute;
-  border: 1px solid rgba(255, 255, 255, .16);
-  border-radius: 50%;
-}
-.site-hero-orb-one {
-  width: min(54vw, 760px);
-  aspect-ratio: 1;
-  top: 6%;
-  right: 5%;
-  box-shadow: inset 80px 20px 140px rgba(255, 255, 255, .06);
-}
-.site-hero-orb-two {
-  width: min(30vw, 430px);
-  aspect-ratio: 1;
-  top: 23%;
-  right: 17%;
-  border-color: rgba(255, 255, 255, .1);
-}
-.site-hero-line {
-  position: absolute;
-  width: 70vw;
-  height: 24vw;
-  right: -10vw;
-  top: 25%;
-  border: 1px solid rgba(255, 255, 255, .1);
-  border-radius: 50%;
-  transform: rotate(-14deg);
-}
-.site-hero-line-two { transform: rotate(22deg); opacity: .58; }
 .site-hero-copy {
   position: relative;
   z-index: 2;
@@ -9201,20 +9163,12 @@ html:not(.has-js) .site [data-reveal] {
   opacity: 1;
   transform: translate3d(0, 0, 0);
 }
-.site-space-options article:nth-child(2),
-.site-hero-orb-one {
+.site-space-options article:nth-child(2) {
   animation: site-orbit-drift 18s ease-in-out infinite alternate;
-}
-.site-hero-line-one {
-  animation: site-line-drift 22s ease-in-out infinite alternate;
 }
 @keyframes site-orbit-drift {
   from { transform: translate3d(-1.5%, -1%, 0) scale(.98); }
   to { transform: translate3d(2%, 1.5%, 0) scale(1.025); }
-}
-@keyframes site-line-drift {
-  from { transform: rotate(-14deg) translate3d(-1%, 0, 0); }
-  to { transform: rotate(-9deg) translate3d(2%, 1%, 0); }
 }
 @media (max-width: 800px) {
   .site-nav { grid-template-columns: auto 1fr; padding: 0 20px; }
@@ -9308,10 +9262,6 @@ html:not(.has-js) .site [data-reveal] {
     opacity: 1;
     transform: none;
     transition: none;
-  }
-  .site-hero-orb-one,
-  .site-hero-line-one {
-    animation: none;
   }
 }
 
