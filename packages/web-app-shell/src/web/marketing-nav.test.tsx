@@ -23,7 +23,7 @@ function navItems(): HTMLElement[] {
 test('导航项高度一致：「产品」与其他项不能错位', () => {
   renderHome()
   const items = navItems()
-  assert.equal(items.length, 5, '产品 / 用例 / 定价 / 安全 / 对比')
+  assert.equal(items.length, 5, '产品 / 场景 / 定价 / 安全 / 对比')
 
   // 每一项的直接子节点都必须是「产品」那种 wrapper 或裸链接，
   // 共同要求：在同一套 flex 容器里、行高一致。

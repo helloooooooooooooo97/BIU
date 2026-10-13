@@ -152,7 +152,7 @@ export const USE_CASE_CATEGORIES = USE_CASES
 /** 用例总览页 */
 export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
   usePageMeta({
-    title: '用例',
+    title: '场景',
     description: '研究与分析、产品与项目、内容与创作、团队知识、私人工作、团队协作 —— 六个真实场景下 BIU 怎么用。',
     path: '/use-cases',
   })
@@ -160,14 +160,14 @@ export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; o
   return (
     <SiteChrome onLogin={onLogin} onStart={onStart}>
       <section className="site-page-hero" data-reveal>
-        <p className="site-section-label">用例</p>
+        <p className="site-section-label">场景</p>
         <h1>为真实工作而生。</h1>
         <p className="site-page-lead">
           从一个问题开始，交付可以继续使用的页面、数据和空间。选一个场景看具体怎么做。
         </p>
       </section>
 
-      <section className="site-usecase-grid" aria-label="用例">
+      <section className="site-usecase-grid" aria-label="场景">
         {USE_CASES.map((useCase) => (
           <Link key={useCase.slug} to={`/use-cases/${useCase.slug}`} className="site-usecase-card">
             <span className="site-solution-index">{useCase.index}</span>
@@ -196,7 +196,7 @@ export function MarketingUseCaseDetail({ onLogin, onStart }: { onLogin: SiteActi
   const useCase = USE_CASES.find((item) => item.slug === slug)
 
   usePageMeta({
-    title: useCase ? useCase.title : '用例',
+    title: useCase ? useCase.title : '场景',
     description: useCase ? useCase.summary : 'BIU 的真实工作场景。',
     path: `/use-cases/${slug ?? ''}`,
   })
@@ -205,9 +205,9 @@ export function MarketingUseCaseDetail({ onLogin, onStart }: { onLogin: SiteActi
     return (
       <SiteChrome onLogin={onLogin} onStart={onStart}>
         <section className="site-page-hero">
-          <p className="site-section-label">用例</p>
+          <p className="site-section-label">场景</p>
           <h1>没有这个场景。</h1>
-          <p className="site-page-lead"><Link to="/use-cases">返回用例总览</Link></p>
+          <p className="site-page-lead"><Link to="/use-cases">返回场景总览</Link></p>
         </section>
       </SiteChrome>
     )
@@ -218,7 +218,7 @@ export function MarketingUseCaseDetail({ onLogin, onStart }: { onLogin: SiteActi
   return (
     <SiteChrome onLogin={onLogin} onStart={onStart}>
       <section className="site-page-hero" data-reveal>
-        <p className="site-section-label">用例 · {useCase.index}</p>
+        <p className="site-section-label">场景 · {useCase.index}</p>
         <h1>{useCase.title}</h1>
         <p className="site-page-lead">{useCase.summary}</p>
         <p className="site-usecase-output">交付物：{useCase.output}</p>
