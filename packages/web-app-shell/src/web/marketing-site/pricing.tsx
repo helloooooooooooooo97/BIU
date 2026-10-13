@@ -181,9 +181,11 @@ export function MarketingPricing({ onLogin, onStart }: { onLogin: SiteAction; on
         </section>
 
         <section className="site-final-cta" data-reveal>
-          <p className="site-section-label">开始使用 BIU</p>
-          <h2>先免费用起来。</h2>
-          <button type="button" onClick={onStart}>创建你的空间 <span>↗</span></button>
+          <div className="site-container">
+            <p className="site-section-label">开始使用 BIU</p>
+            <h2>先免费用起来。</h2>
+            <button type="button" onClick={onStart}>创建你的空间 <span>↗</span></button>
+          </div>
         </section>
     </SiteChrome>
   )

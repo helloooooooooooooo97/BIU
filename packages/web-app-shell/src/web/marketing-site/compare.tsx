@@ -248,9 +248,11 @@ export function MarketingCompareIndex({ onLogin, onStart }: { onLogin: SiteActio
         </section>
 
         <section className="site-final-cta" data-reveal>
-          <p className="site-section-label">开始使用 BIU</p>
-          <h2>看完对比，自己试一次。</h2>
-          <button type="button" onClick={onStart}>创建你的空间 <span>↗</span></button>
+          <div className="site-container">
+            <p className="site-section-label">开始使用 BIU</p>
+            <h2>看完对比，自己试一次。</h2>
+            <button type="button" onClick={onStart}>创建你的空间 <span>↗</span></button>
+          </div>
         </section>
     </SiteChrome>
   )
@@ -332,9 +334,11 @@ export function MarketingCompareDetail({ onLogin, onStart }: { onLogin: SiteActi
         ) : null}
 
         <section className="site-final-cta" data-reveal>
-          <p className="site-section-label">开始使用 BIU</p>
-          <h2>看完对比，自己试一次。</h2>
-          <button type="button" onClick={onStart}>创建你的空间 <span>↗</span></button>
+          <div className="site-container">
+            <p className="site-section-label">开始使用 BIU</p>
+            <h2>看完对比，自己试一次。</h2>
+            <button type="button" onClick={onStart}>创建你的空间 <span>↗</span></button>
+          </div>
         </section>
     </SiteChrome>
   )
