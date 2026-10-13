@@ -8563,7 +8563,7 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   min-height: 100svh;
   overflow: hidden;
   padding: 112px 0 64px;
-  background: #050505;
+  background: #000;
 }
 .site-hero::after {
   content: "";
@@ -8697,20 +8697,20 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
 }
 .site-space-section {
   padding: var(--site-section-gap) var(--site-gutter);
-  background: #f2f0eb;
-  color: #0a0a0a;
+  background: #000;
+  color: #fff;
 }
-.site-space-section .site-section-label { color: rgba(0, 0, 0, .52); }
+.site-space-section .site-section-label { color: rgba(255, 255, 255, .62); }
 .site-space-heading h2 { margin-top: var(--site-label-gap); }
 .site-space-options { margin-top: var(--site-heading-gap); }
 .site-space-options article {
   display: grid;
   grid-template-columns: 56px 1fr;
   padding: 32px 0 38px;
-  border-top: 1px solid rgba(0, 0, 0, .2);
+  border-top: 1px solid rgba(255, 255, 255, .2);
 }
 .site-space-index {
-  color: rgba(0, 0, 0, .45);
+  color: rgba(255, 255, 255, .45);
   font-size: 12px;
 }
 .site-space-options h3 {
@@ -8723,7 +8723,7 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   grid-column: 2;
   max-width: 520px;
   margin: 14px 0 0;
-  color: rgba(0, 0, 0, .6);
+  color: rgba(255, 255, 255, .62);
   font-size: 15px;
   line-height: 1.55;
 }
@@ -8765,10 +8765,7 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   min-height: 620px;
   box-sizing: border-box;
   padding: var(--site-section-gap) 0;
-  background:
-    radial-gradient(circle at 75% 35%, rgba(142, 155, 255, .25), transparent 30%),
-    radial-gradient(circle at 65% 75%, rgba(255, 255, 255, .13), transparent 35%),
-    #111;
+  background: #000;
 }
 .site-final-cta h2 {
   max-width: 880px;
@@ -8829,14 +8826,13 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   border-color: rgba(255, 255, 255, .34);
   color: #fff;
 }
-/* 产品演示：通栏浅色区块，内部元素各自居中（深浅交替的呼吸点） */
 .site-product-demo {
   width: 100%;
   max-width: none;
   margin: 0;
   padding: var(--site-section-gap) 0;
-  background: #f2f0eb;
-  color: #0a0a0a;
+  background: #000;
+  color: #fff;
 }
 .site-product-demo > * {
   width: 100%;
@@ -8849,11 +8845,11 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   margin-bottom: var(--site-heading-gap);
 }
 /* label 与标题上下排版 */
-.site-demo-heading .site-section-label { margin: 0 0 var(--site-label-gap); color: rgba(0, 0, 0, .52); }
+.site-demo-heading .site-section-label { margin: 0 0 var(--site-label-gap); color: rgba(255, 255, 255, .62); }
 .site-demo-lead {
   margin: var(--site-heading-gap) 0 0;
   max-width: 640px;
-  color: rgba(0, 0, 0, .6);
+  color: rgba(255, 255, 255, .72);
   font-size: 16px;
   line-height: 1.75;
 }
@@ -8879,15 +8875,15 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   border: 0;
   border-radius: 999px;
   padding: 8px 13px;
-  background: rgba(0, 0, 0, .06);
-  color: rgba(0, 0, 0, .58);
+  background: rgba(255, 255, 255, .08);
+  color: rgba(255, 255, 255, .72);
   font: inherit;
   font-size: 13px;
   cursor: pointer;
 }
 .site-demo-tabs button.is-active {
-  background: #0a0a0a;
-  color: #fff;
+  background: #fff;
+  color: #000;
 }
 .site-demo-real-frame {
   overflow: visible;
@@ -9022,7 +9018,7 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
 .site-space-options small {
   grid-column: 2;
   margin-top: 22px;
-  color: rgba(0, 0, 0, .4);
+  color: rgba(255, 255, 255, .45);
   font-size: 12px;
 }
 .site-ecosystem {
