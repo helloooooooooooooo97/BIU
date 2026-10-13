@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { useReveal } from './use-reveal.ts'
-import { Link, NavLink, useLocation } from 'react-router-dom'
+import { Link, NavLink } from 'react-router-dom'
 
 export type SiteAction = () => void
 
@@ -16,15 +16,6 @@ const NAV_PRIMARY = [
   { label: '定价', to: '/pricing' },
   { label: '安全', to: '/security' },
   { label: '对比', to: '/compare' },
-] as const
-
-const PRODUCT_SUB = [
-  { label: 'File System', to: '/product#file-system' },
-  { label: 'Agent 工作台', to: '/product#agent' },
-  { label: '任务看板', to: '/product#tasks' },
-  { label: '页面与数据库', to: '/product#pages' },
-  { label: '插件系统', to: '/product#plugins' },
-  { label: '本机与云端', to: '/product#spaces' },
 ] as const
 
 const FOOTER_COLUMNS = [
@@ -58,8 +49,6 @@ const FOOTER_COLUMNS = [
 ] as const
 
 export function SiteHeader({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
-  const { pathname } = useLocation()
-  const productActive = pathname.startsWith('/product')
   const [menuOpen, setMenuOpen] = useState(false)
 
   return (
@@ -77,20 +66,7 @@ export function SiteHeader({ onLogin, onStart }: { onLogin: SiteAction; onStart:
         <span aria-hidden>{menuOpen ? '✕' : '☰'}</span>
       </button>
       <nav className="site-nav-links" aria-label="官网" onClick={() => setMenuOpen(false)}>
-        <div className="site-nav-group">
-          <NavLink
-            to="/product"
-            className={({ isActive }) => (isActive || productActive ? 'is-active' : '')}
-          >
-            产品
-          </NavLink>
-          <div className="site-nav-menu" role="menu" aria-label="产品">
-            {PRODUCT_SUB.map((item) => (
-              <Link key={item.to} to={item.to} role="menuitem">{item.label}</Link>
-            ))}
-          </div>
-        </div>
-        {NAV_PRIMARY.slice(1).map((item) => (
+        {NAV_PRIMARY.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}

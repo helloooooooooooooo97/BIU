@@ -26,6 +26,30 @@ export type ComparePage = {
 
 export const COMPARE_PAGES: ComparePage[] = [
   {
+    slug: 'vs-linux',
+    title: 'BIU vs Linux',
+    category: '操作系统',
+    opening: 'Linux 用「一切皆文件」抹平了异构硬件，用一组系统调用统一了所有设备的读写。BIU 做的是同一件事，只是把坐标换成了数据：一切皆路径，一切皆 /<table>/<id>。',
+    useWhen: '需要通用操作系统、进程隔离、网络栈、跑原生程序',
+    biuWhen: '需要把工作区里的页面、数据、会话、智能体当成同一种可寻址对象来读写和扩展',
+    columns: ['Linux', 'BIU'],
+    rows: [
+      { dimension: '核心主张', them: '一切皆文件', biu: '一切皆 /<table>/<id>' },
+      { dimension: '系统调用', them: 'read / write / open', biu: 'db_read / db_update / db_create' },
+      { dimension: '设备专有操作', them: 'ioctl', biu: 'db_action' },
+      { dimension: '自报状态', them: '/proc', biu: 'db_list / + 每个表的 blurb' },
+      { dimension: '驱动 / 能力注册', them: '内核模块 modules', biu: '插件注册表（sandbox → pack → mount）' },
+      { dimension: '抹平异构', them: 'VFS', biu: 'File System' },
+      { dimension: '扩展是否需要重启', them: '⚠️ 模块可热加载，内核本身要重启', biu: '✅ 插件热装卸，内核不动' },
+      { dimension: '扩展者是谁', them: '驱动开发者', biu: '✅ 人和智能体用同一套 db_*' },
+      { dimension: '权限模型', them: '✅ 用户 / 组 / 能力位（成熟）', biu: '✅ 数据视图 × 成员视图匹配' },
+      { dimension: '底层可见', them: '✅ /dev /procfs，直接读', biu: '✅ 两栖：db_* 或直接读盘' },
+      { dimension: '进程与资源隔离', them: '✅ 强（namespaces / cgroups）', biu: '⚠️ 插件沙箱较薄，未做资源硬限' },
+      { dimension: '跑任意原生程序', them: '✅ 这就是它的工作', biu: '❌ 不是通用 OS' },
+      { dimension: '形态', them: '内核 + 发行版', biu: '内核（应用在它之上长出）' },
+    ],
+  },
+  {
     slug: 'vs-office',
     title: 'BIU vs Office',
     category: '办公协作',
@@ -138,25 +162,6 @@ export const COMPARE_PAGES: ComparePage[] = [
     ],
   },
   {
-    slug: 'vs-manus',
-    title: 'BIU vs Manus',
-    category: '代理',
-    opening: 'Manus 证明了一个智能体能自主完成复杂任务。BIU 问的是另一个问题：它交付的结果，是不是也在你的工作区里、和你写的东西放在一起。',
-    useWhen: '需要一次性拿到完整交付结果、不需要长期维护同一份工作区',
-    biuWhen: '你和智能体要在同一份数据上持续工作、产出要能积累复用',
-    columns: ['Manus', 'BIU'],
-    rows: [
-      { dimension: '交付方式', them: '黑盒交付一个结果', biu: '你和智能体在同一份数据上工作' },
-      { dimension: '产出物归属', them: '在它的会话 / 沙箱里', biu: '在你的工作区，可寻址' },
-      { dimension: '复用', them: '重新跑一遍', biu: '沉降为表 / 技能 / 页面' },
-      { dimension: '分享', them: '分享一个结果', biu: '分享可运行单元（正文 + 附件 + 插件源码）' },
-      { dimension: '能力边界', them: '平台预置功能', biu: '插件可装，智能体自己也能造' },
-      { dimension: '任务协作', them: '会话内', biu: '看板总线，多智能体依赖成图' },
-      { dimension: '数据在哪', them: '云端', biu: '建空间时选：本机 / 云端' },
-      { dimension: '开箱即用的托管体验', them: '✅ 强', biu: '⚠️ 本机优先，需自己部署' },
-    ],
-  },
-  {
     slug: 'vs-obsidian',
     title: 'BIU vs Obsidian',
     category: '本地优先',
@@ -178,9 +183,9 @@ export const COMPARE_PAGES: ComparePage[] = [
 ]
 
 export const COMPARE_CATEGORIES = [
+  { name: '操作系统', slugs: ['vs-linux'] },
   { name: '办公协作', slugs: ['vs-office', 'vs-notion', 'vs-feishu'] },
   { name: '编码', slugs: ['vs-cursor', 'vs-chatgpt', 'vs-claude'] },
-  { name: '代理', slugs: ['vs-manus'] },
   { name: '本地优先', slugs: ['vs-obsidian'] },
 ] as const
 
@@ -210,7 +215,7 @@ function CompareTable({ page }: { page: ComparePage }) {
 export function MarketingCompareIndex({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
   usePageMeta({
     title: '对比',
-    description: '和每个领域最好的产品比：Office、Notion、飞书、Cursor、ChatGPT、Claude、Manus、Obsidian。',
+    description: '和每个领域最好的产品比：Office、Notion、飞书、Cursor、ChatGPT、Claude、Obsidian。',
     path: '/compare',
   })
   const bySlug = new Map(COMPARE_PAGES.map((page) => [page.slug, page]))
@@ -221,6 +226,7 @@ export function MarketingCompareIndex({ onLogin, onStart }: { onLogin: SiteActio
           <p className="site-section-label">对比</p>
           <h1>和每个领域最好的产品比。</h1>
           <p className="site-page-lead">
+            不要问 BIU 能做什么，问问 BIU 不能做什么。
             它们各自只解决一个面 —— 结构、协作、对话、本地、自主。
             BIU 不是在这些面上做得更好，是把这些面合成一个内核。
           </p>

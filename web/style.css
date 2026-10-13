@@ -8482,7 +8482,6 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
 .site-plans,
 .site-space-compare,
 .site-security-blocks,
-.site-compliance,
 .site-role-table,
 .site-continuity,
 .site-ecosystem,
@@ -8519,10 +8518,8 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   align-items: center;
   gap: 28px;
 }
-/* 所有导航项统一盒模型与行高：
-   产品那层 wrapper、其余裸 <a>，以及日后新增项都按同一套规则走。 */
-.site-nav-links > a,
-.site-nav-group {
+/* 所有导航项统一盒模型与行高，日后新增项都按同一套规则走。 */
+.site-nav-links > a {
   display: flex;
   align-items: center;
   min-height: 20px;
@@ -9317,47 +9314,8 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
    新增于官网拆分：/product /pricing /download /security /compare
    ========================================================================== */
 
-/* 导航：产品二级菜单 */
-/* 产品是唯一带二级菜单的项，外面多包了一层。
-   这一层要和其他裸 <a> 是同一套 flex item 盒模型，否则「产品」
-   会和用例 / 定价 / 安全 / 对比不在同一高度。 */
-.site-nav-group {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-.site-nav-group > a { display: block; }
+/* 导航项当前态（与裸 <a> 同一套盒模型） */
 .site-nav-links a.is-active { color: #fff; }
-.site-nav-menu {
-  position: absolute;
-  top: calc(100% + 12px);
-  left: 50%;
-  transform: translateX(-50%) translateY(6px);
-  min-width: 190px;
-  padding: 8px;
-  border: 1px solid rgba(255, 255, 255, .12);
-  border-radius: 14px;
-  background: rgba(12, 12, 14, .96);
-  backdrop-filter: blur(18px);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, .55);
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity .18s ease, transform .18s ease, visibility .18s;
-}
-.site-nav-group:hover .site-nav-menu,
-.site-nav-group:focus-within .site-nav-menu {
-  opacity: 1;
-  visibility: visible;
-  transform: translateX(-50%) translateY(0);
-}
-.site-nav-menu a {
-  display: block;
-  padding: 8px 12px;
-  border-radius: 9px;
-  font-size: 14px;
-  color: rgba(255, 255, 255, .72);
-}
-.site-nav-menu a:hover { background: rgba(255, 255, 255, .08); color: #fff; }
 
 /* 站内页通用 hero */
 .site-page-hero {
@@ -9654,9 +9612,63 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 .site-security-blocks article { padding: 34px 0; border-top: 1px solid rgba(255, 255, 255, .1); }
 .site-security-blocks h2 { margin: 10px 0 12px; font-size: clamp(22px, 2.6vw, 30px); font-weight: 600; }
 .site-security-blocks p { margin: 0; max-width: 640px; font-size: 16px; line-height: 1.8; color: rgba(255, 255, 255, .6); }
-.site-compliance { max-width: var(--site-content); margin: 0 auto; padding: 0 var(--site-gutter) 88px; }
-.site-compliance h2 { margin: 0 0 16px; font-size: clamp(22px, 2.6vw, 30px); font-weight: 600; }
-.site-compliance p { font-size: 16px; line-height: 1.8; color: rgba(255, 255, 255, .6); }
+
+/* ==========================================================================
+   安全页：权限模型（数据视图 × 成员视图）
+   ========================================================================== */
+.site-permission { max-width: var(--site-content); margin: 0 auto; padding: 8px var(--site-gutter) 88px; }
+.site-permission h2 { margin: 10px 0 18px; font-size: clamp(22px, 2.6vw, 30px); font-weight: 600; }
+.site-permission-lead { margin: 0 0 44px; max-width: 680px; font-size: 16px; line-height: 1.8; color: rgba(255, 255, 255, .6); }
+.site-permission-lead strong { color: #fff; font-weight: 600; }
+
+/* 三步匹配：桌面横排，箭头落在中间 */
+.site-permission-formula {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  margin-bottom: 56px;
+}
+.site-permission-term {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 26px 24px;
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 20px;
+}
+.site-permission-step { font-size: 12px; letter-spacing: .06em; color: rgba(255, 255, 255, .45); }
+.site-permission-term strong { font-size: 18px; font-weight: 600; }
+.site-permission-term p { margin: 0; font-size: 14px; line-height: 1.75; color: rgba(255, 255, 255, .56); }
+/* 运算符（× / =）骑在卡片之间的缝上 */
+.site-permission-term i {
+  position: absolute;
+  top: 50%;
+  right: -14px;
+  transform: translateY(-50%);
+  font-style: normal;
+  font-size: 15px;
+  color: rgba(255, 255, 255, .3);
+}
+
+.site-permission-points { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
+.site-permission-points article {
+  padding: 24px 22px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, .035);
+}
+.site-permission-points h3 { margin: 0 0 10px; font-size: 16px; font-weight: 600; }
+.site-permission-points p { margin: 0; font-size: 14px; line-height: 1.75; color: rgba(255, 255, 255, .56); }
+
+.site-role-table .is-biu th,
+.site-role-table .is-biu td { color: #fff; background: rgba(255, 255, 255, .035); }
+.site-permission-note { margin: 22px 0 0; max-width: 680px; font-size: 14px; line-height: 1.75; color: rgba(255, 255, 255, .48); }
+
+@media (max-width: 800px) {
+  .site-permission-formula { grid-template-columns: 1fr; }
+  /* 竖排时运算符落在卡片下方 */
+  .site-permission-term i { top: auto; bottom: -16px; right: auto; left: 50%; transform: translateX(-50%); }
+}
 
 /* 对比页：总览 */
 .site-compare-index { max-width: var(--site-content); margin: 0 auto; padding: 8px var(--site-gutter) 72px; }
@@ -9740,7 +9752,6 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   .site-page-hero { padding: 128px 20px 48px; }
   .site-block { grid-template-columns: 1fr; gap: 8px; }
   .site-roi-body { grid-template-columns: 1fr; }
-  .site-nav-menu { display: none; }
 }
 
 /* ==========================================================================
@@ -9918,7 +9929,6 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
     visibility: visible;
   }
   .site-nav-links a { padding: 12px 4px; font-size: 16px; }
-  .site-nav-group { display: block; }
   .site-nav-actions button { width: 100%; padding: 13px 16px; }
 }
 

@@ -74,9 +74,9 @@ test('每个官网路径都能渲染，且各页有独立 h1', () => {
   }
 })
 
-test('对比页：四类别 9 个对手都在，且 BIU 列如实标注弱点', () => {
+test('对比页：操作系统 + 三类别 8 个对手都在，且 BIU 列如实标注弱点', () => {
   renderSite('/compare')
-  for (const name of ['BIU vs Office', 'BIU vs Notion', 'BIU vs 飞书', 'BIU vs Cursor', 'BIU vs ChatGPT', 'BIU vs Claude', 'BIU vs Manus', 'BIU vs Obsidian']) {
+  for (const name of ['BIU vs Linux', 'BIU vs Office', 'BIU vs Notion', 'BIU vs 飞书', 'BIU vs Cursor', 'BIU vs ChatGPT', 'BIU vs Claude', 'BIU vs Obsidian']) {
     assert.ok(screen.getAllByText(name).length > 0, `缺少 ${name}`)
   }
   cleanup()
@@ -122,7 +122,63 @@ test('每页写入独立的 title / description / canonical（规划 §7.2）', 
     cleanup()
   }
   // 对比详情页 title 用页面标题
+  renderSite('/compare/vs-obsidian')
+  assert.match(document.title, /BIU vs Obsidian · BIU/)
+  cleanup()
+})
+
+test('对比页不再和 Manus 对比（我们不是同一类东西）', () => {
+  renderSite('/compare')
+  assert.equal(/Manus/.test(document.body.textContent ?? ''), false, '对比总览不应出现 Manus')
+  cleanup()
+
+  // 旧路径直接访问 → 落到「没有这个对比页」，而不是残留一个半成品页面
   renderSite('/compare/vs-manus')
-  assert.match(document.title, /BIU vs Manus · BIU/)
+  assert.match(screen.getByRole('heading', { level: 1 }).textContent ?? '', /没有这个对比页/)
+  cleanup()
+})
+
+test('安全页：权限模型讲的是数据视图 × 成员视图，不是四个空间角色', () => {
+  renderSite('/security')
+  const body = document.body.textContent ?? ''
+
+  // 正确的模型：两个维度做匹配
+  assert.match(body, /数据视图/, '要讲数据视图')
+  assert.match(body, /成员视图/, '要讲成员视图')
+  assert.match(body, /谁能看到什么，是一次匹配的结果/, '要有模型主张')
+
+  // 三个灵活点
+  assert.match(body, /授权对象是条件，不是名单/, '要讲条件授权')
+  assert.match(body, /可见性是算出来的/, '要讲可见性是派生值')
+  assert.match(body, /继承/, '要讲继承')
+
+  // 对比表要有 BIU 这一行，且明确指出两边都是条件
+  assert.match(body, /两边都是条件/)
+
+  // 回归防护：不能退回「四个空间角色 = 权限模型」的旧说法
+  assert.equal(/权限角色/.test(body), false, '不应再出现「权限角色」小节')
+  assert.equal(/按所有者、管理者、编辑者、查看者划分权限/.test(body), false, '不应再用空间角色描述权限模型')
+
+  // 但空间角色仍是模型的一层输入 —— 不在这个页面上讲，避免混淆
+  cleanup()
+})
+
+test('对比页：Linux 对比归入操作系统，且 BIU 列不回避弱项', () => {
+  renderSite('/compare/vs-linux')
+  const body = document.body.textContent ?? ''
+
+  assert.match(screen.getByRole('heading', { level: 1 }).textContent ?? '', /BIU vs Linux/)
+  assert.match(body, /操作系统/, '应归入「操作系统」')
+  assert.match(body, /一切皆文件/, '要有 Linux 的核心主张')
+  assert.match(body, /一切皆 \/<table>\/<id>/, '要有 BIU 的对应主张')
+  assert.match(body, /VFS/, '要有抹平异构对应')
+  assert.match(body, /插件注册表/, '要有驱动注册对应')
+
+  // 纪律：不是通用 OS 这条必须如实写 ❌
+  assert.match(body, /不是通用 OS/, '要承认 BIU 不是通用操作系统')
+  assert.ok(screen.getAllByText(/❌/).length > 0, 'BIU 列必须如实标注没有的能力')
+
+  // 承认对方适用场景
+  assert.match(body, /用 Linux 当你需要/)
   cleanup()
 })

@@ -10,31 +10,53 @@ const SECTIONS = [
   {
     index: '02',
     title: '云端空间',
-    body: '需要多设备访问和成员协作时使用。空间内的操作受账号鉴权保护，成员权限按角色划分。',
-  },
-  {
-    index: '03',
-    title: '权限模型',
-    body: '空间按所有者、管理者、编辑者、查看者划分权限；敏感操作进入待确认状态，不会静默执行。',
-  },
-  {
-    index: '04',
-    title: '可追溯',
-    body: '动作写入只追加的事件流，界面是它的投影。状态和「它是怎么变成这样的」都能查到。',
+    body: '需要多设备访问和成员协作时使用。空间内的操作受账号鉴权保护，敏感操作进入待确认状态，不会静默执行。',
   },
 ] as const
 
-const ROLES = [
-  ['所有者', '全部权限，含删除空间'],
-  ['管理者', '成员与权限管理'],
-  ['编辑者', '读写内容与数据'],
-  ['查看者', '只读访问'],
+/**
+ * 权限模型：数据视图 × 成员视图。
+ *
+ * 这里刻意不写「所有者 / 管理者 / 编辑者 / 查看者」那一套 —— 那是空间里的成员角色，
+ * 只是模型的一层输入。真正决定「谁能看到什么」的是两个视图的匹配。
+ * 依据：authorization.ts 的 viewGrantRole / recordMatchesGrantedView / effectiveDataScope。
+ */
+const MATCH_STEPS = [
+  {
+    step: '数据视图',
+    detail: '谁的范围',
+    body: '被授权的不是一张表或某一行，而是你在界面上存的任意视图。视图就是一串筛选条件（条件也持久化为数据），记录落不落在里面当场算。',
+  },
+  {
+    step: '成员视图',
+    detail: '谁在里面',
+    body: '授权对象也不必须是某个人，可以是一个动态成员视图 —— 比如「空间成员」「外部成员」「临时访客」。条件满足就自动进入授权范围。',
+  },
+  {
+    step: '匹配即授权',
+    detail: '角色 + 可见性',
+    body: '两个视图一匹配，就得到这个人的角色和这条记录的可见范围。同一个人被多处授权时取较高的那一级，不冲突。',
+  },
+] as const
+
+const FLEX_POINTS = [
+  ['授权对象是条件，不是名单', '新人加入空间就落进「空间成员」视图，自动获得该视图上挂着的全部授权，不必逐条加人；成员转为外部后落进「外部成员」视图，权限自动收缩。'],
+  ['授权范围和筛选是同一件事', '视图本来就是筛选条件，所以「权限分组」不需要另建一套概念。你在界面上存下的那个视图，可以直接当授权范围用。'],
+  ['可见性是算出来的，不是存下来的', '一条内容是私人、空间还是共享，取决于它落在哪些被授权的视图里，而不是它自己带的一个标签。'],
+  ['继承，且能把来路说清', '内容之间可以继承权限，不必每条自己定义。查看时能逐级展开你的权限是怎么来的 —— 创建者、视图授权，还是继承自上一级。'],
+] as const
+
+const COMPETITORS = [
+  ['Notion', '页面级授权，群组是一份名单'],
+  ['飞书', '部门来自组织架构，由外部系统同步'],
+  ['Cursor', '团队席位制，基本没有内容级授权'],
+  ['BIU', '授权对象和数据范围都是条件，两边都对得上才生效'],
 ] as const
 
 export function MarketingSecurity({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
   usePageMeta({
     title: '安全',
-    description: '本机空间数据不出设备，云端空间支持成员权限。数据边界由产品结构决定，不是设置项。',
+    description: '本机空间数据不出设备，云端空间支持成员权限。权限不是一张名单，是数据范围与成员范围的一次匹配。',
     path: '/security',
   })
 
@@ -58,22 +80,53 @@ export function MarketingSecurity({ onLogin, onStart }: { onLogin: SiteAction; o
           ))}
         </section>
 
+        <section className="site-permission" data-reveal>
+          <p className="site-section-label">权限模型</p>
+          <h2>谁能看到什么，是一次匹配的结果。</h2>
+          <p className="site-permission-lead">
+            常见做法是维护一张名单：把人和内容一个个对应起来。BIU 不这么做 ——
+            <strong>两边都是条件，匹配上了才生效。</strong>
+          </p>
+
+          <div className="site-permission-formula" aria-label="权限模型">
+            {MATCH_STEPS.map((item, index) => (
+              <div key={item.step} className="site-permission-term">
+                <span className="site-permission-step">{item.step}</span>
+                <strong>{item.detail}</strong>
+                <p>{item.body}</p>
+                {index < MATCH_STEPS.length - 1 ? <i aria-hidden>{index === 0 ? '×' : '='}</i> : null}
+              </div>
+            ))}
+          </div>
+
+          <div className="site-permission-points">
+            {FLEX_POINTS.map(([title, body]) => (
+              <article key={title} data-reveal>
+                <h3>{title}</h3>
+                <p>{body}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
         <section className="site-role-table" data-reveal>
-          <h2>权限角色</h2>
+          <h2>为什么这样更灵活</h2>
           <table>
+            <thead>
+              <tr><th>产品</th><th>授权是怎么表达的</th></tr>
+            </thead>
             <tbody>
-              {ROLES.map(([role, detail]) => (
-                <tr key={role}><th>{role}</th><td>{detail}</td></tr>
+              {COMPETITORS.map(([name, detail]) => (
+                <tr key={name} className={name === 'BIU' ? 'is-biu' : ''}>
+                  <th>{name}</th>
+                  <td>{detail}</td>
+                </tr>
               ))}
             </tbody>
           </table>
-        </section>
-
-        <section className="site-compliance" data-reveal>
-          <h2>合规状态</h2>
-          <p>
-            我们只列出已经完成的认证。当前尚未取得第三方安全认证 ——
-            与其贴一个还没拿到的标志，不如如实说明进度。
+          <p className="site-permission-note">
+            这不是单独做出来的一套权限功能。因为视图本身是数据、成员本身也是数据，
+            「用条件当授权对象」才有可能 —— 权限模型是 File System 的一个投影。
           </p>
         </section>
 
