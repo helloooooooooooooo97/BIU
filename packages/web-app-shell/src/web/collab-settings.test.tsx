@@ -53,7 +53,7 @@ test('opening /login shows the login page', () => {
   assert.equal(screen.queryByTestId('inside'), null)
 })
 
-test('the app stays on the login gate until a token exists', async () => {
+test('the app shows the marketing site until a token exists', async () => {
   localStorage.clear()
   const calls: string[] = []
   globalThis.fetch = (async (path: string) => {
@@ -61,14 +61,16 @@ test('the app stays on the login gate until a token exists', async () => {
     return json(String(path).endsWith('/me') ? { id: 'acc_1' } : { token: 'tok' })
   }) as typeof fetch
   render(
-    <AuthGate>
-      <div data-testid="inside">in</div>
-    </AuthGate>,
+    <MemoryRouter initialEntries={['/']}>
+      <AuthGate>
+        <div data-testid="inside">in</div>
+      </AuthGate>
+    </MemoryRouter>,
   )
+  // 未登录时不再显示「登录门」，而是官网首页 —— 登录从 site-login 弹出。
   assert.equal(screen.queryByTestId('inside'), null)
-  assert.equal(screen.getByTestId('auth-gate').textContent?.includes('登录'), true)
+  assert.ok(screen.getByTestId('site-login'), '未登录应看到官网的登录入口')
   fireEvent.click(screen.getByTestId('site-login'))
-  assert.equal(window.location.pathname, '/login')
   fireEvent.change(screen.getByTestId('auth-name'), { target: { value: 'ada@example.com' } })
   fireEvent.change(screen.getByTestId('auth-password'), { target: { value: 'secret1' } })
   await act(async () => {
@@ -110,9 +112,11 @@ test('a stale workspace does not send the user back to login after they sign in'
     return json({})
   }) as typeof fetch
   render(
-    <AuthGate>
-      <div data-testid="inside">in</div>
-    </AuthGate>,
+    <MemoryRouter initialEntries={['/']}>
+      <AuthGate>
+        <div data-testid="inside">in</div>
+      </AuthGate>
+    </MemoryRouter>,
   )
   fireEvent.click(screen.getByTestId('site-login'))
   assert.equal(window.location.pathname, '/login')
@@ -273,7 +277,12 @@ test('account settings are global and workspace switcher lives in the sidebar he
   assert.match(css, /\.shell-workspace-menu-action\s*\{[^}]*font-family:\s*var\(--font-sans\)/s)
   assert.doesNotMatch(css, /\.shell-workspace-menu-action\.is-logout/)
   assert.match(css, /\.shell-workspace-menu-actions\s*\{[^}]*gap:\s*1px/s)
-  assert.match(css, /\.shell-workspace-menu-account\s*\{[^}]*min-height:\s*36px;[^}]*padding:\s*8px/s)
+  // 行高统一由 .shell-workspace-menu-item/-action/-account 这组选择器给出，
+  // 单独查 `.shell-workspace-menu-account {` 会落空 —— 按组规则断言。
+  assert.match(
+    css,
+    /\.shell-workspace-menu-item,[\s\S]*?\.shell-workspace-menu-action,[\s\S]*?\.shell-workspace-menu-account\s*\{[^}]*min-height:\s*36px;/s,
+  )
   assert.match(screen.getByTestId('shell-workspace-menu').textContent ?? '', /创建新空间/)
   assert.equal(screen.queryByText('退出登录'), null)
   assert.equal(screen.getByTestId('shell-workspace-local-account').textContent, 'ada@example.com')
@@ -420,4 +429,78 @@ test('online MCP settings choose tools and manage scoped credentials', async () 
   fireEvent.click(await screen.findByText('生成'))
   await waitFor(() => assert.deepEqual(createBody?.allowedTools, ['db_list']))
   assert.equal((screen.getByTestId('settings-mcp-token') as HTMLInputElement).value, 'secret')
+})
+
+test('网络错误不清 token —— 一次抖动不应把用户登出', async () => {
+  localStorage.clear()
+  localStorage.setItem('biu.account.token', 'keep-me')
+  globalThis.fetch = (async () => {
+    throw new TypeError('Failed to fetch')
+  }) as typeof fetch
+
+  render(
+    <AuthGate>
+      <div data-testid="inside">in</div>
+    </AuthGate>,
+  )
+
+  // 退避重试全部失败后，token 必须还在 —— 否则刷新也回不来。
+  await waitFor(() => assert.equal(localStorage.getItem('biu.account.token'), 'keep-me'))
+  assert.equal(readAccountToken(), 'keep-me')
+  cleanup()
+  localStorage.clear()
+})
+
+test('5xx 不清 token，401 才清', async () => {
+  localStorage.clear()
+  localStorage.setItem('biu.account.token', 'keep-me')
+  globalThis.fetch = (async () => json({ error: '服务端炸了' }, 500)) as typeof fetch
+
+  render(
+    <MemoryRouter initialEntries={['/']}>
+      <AuthGate>
+        <div data-testid="inside">in</div>
+      </AuthGate>
+    </MemoryRouter>,
+  )
+  await waitFor(() => assert.equal(localStorage.getItem('biu.account.token'), 'keep-me'))
+  cleanup()
+
+  // 401 是凭证真的失效 —— 此时才清。
+  localStorage.setItem('biu.account.token', 'stale')
+  globalThis.fetch = (async () => json({ error: '凭证已过期' }, 401)) as typeof fetch
+  render(
+    <MemoryRouter initialEntries={['/']}>
+      <AuthGate>
+        <div data-testid="inside">in</div>
+      </AuthGate>
+    </MemoryRouter>,
+  )
+  await waitFor(() => assert.equal(localStorage.getItem('biu.account.token'), null))
+  cleanup()
+  localStorage.clear()
+})
+
+test('网络抖动恢复后自动进入应用，不用手动刷新', async () => {
+  localStorage.clear()
+  localStorage.setItem('biu.account.token', 'tok')
+  let calls = 0
+  globalThis.fetch = (async (path: string) => {
+    if (!String(path).endsWith('/me')) return json({})
+    calls += 1
+    // 前两次模拟 dev server 重启期间的失败，之后恢复。
+    if (calls <= 2) throw new TypeError('Failed to fetch')
+    return json({ id: 'acc_1' })
+  }) as typeof fetch
+
+  render(
+    <AuthGate>
+      <div data-testid="inside">in</div>
+    </AuthGate>,
+  )
+
+  await waitFor(() => assert.equal(screen.getByTestId('inside').textContent, 'in'), { timeout: 5000 })
+  assert.ok(calls >= 3, '应当重试到成功为止')
+  cleanup()
+  localStorage.clear()
 })

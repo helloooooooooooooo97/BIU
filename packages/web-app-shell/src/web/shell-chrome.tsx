@@ -430,6 +430,8 @@ export function ShellSettingsAccount() {
 }
 
 const ACCOUNT_KEY = 'biu.account.token'
+/** 校验失败后的重试间隔（ms）：退避三次，覆盖 dev server 重启的窗口。 */
+const VERIFY_RETRY_DELAYS = [400, 1200, 3000] as const
 const ACCOUNT_EVENT = 'biu:account-token'
 
 function bridgeLegacyAccountCookie() {
@@ -530,26 +532,46 @@ export function AuthGate({ children }: { children: ReactNode }) {
       return
     }
     let live = true
+    let timer: ReturnType<typeof setTimeout> | undefined
     setVerified(false)
     const confirm = () => accountFetch(token, '/api/account/me')
-    void confirm()
-      .catch(async (err) => {
-        if (err instanceof Error && err.message === '不在这个空间') {
-          clearWorkspaceId()
-          return confirm()
-        }
-        throw err
-      })
-      .then(() => {
-        if (live) setVerified(true)
-      })
-      .catch((err) => {
-        if (!live) return
-        writeAccountToken('')
-        setError(err instanceof Error ? err.message : '登录已失效')
-      })
+
+    // 网络类失败（dev server 重启、断网、5xx）退避重试。
+    // 凭证失效（401/403）不重试 —— 重试也没用，直接清 token。
+    const attempt = (round: number) => {
+      void confirm()
+        .catch(async (err) => {
+          if (err instanceof Error && err.message === '不在这个空间') {
+            clearWorkspaceId()
+            return confirm()
+          }
+          throw err
+        })
+        .then(() => {
+          if (live) setVerified(true)
+        })
+        .catch((err) => {
+          if (!live) return
+          if (isAuthFailure(err)) {
+            // 凭证真的失效，才清 token。
+            writeAccountToken('')
+            setError(err instanceof Error ? err.message : '登录已失效')
+            return
+          }
+          // 非凭证问题：保留 token，退避后重试，不踢出登录态。
+          if (round < VERIFY_RETRY_DELAYS.length) {
+            setError('网络异常，正在重试')
+            timer = setTimeout(() => attempt(round + 1), VERIFY_RETRY_DELAYS[round])
+            return
+          }
+          setError('网络异常，未能确认登录状态')
+        })
+    }
+    attempt(0)
+
     return () => {
       live = false
+      if (timer) clearTimeout(timer)
     }
   }, [token])
 
@@ -758,6 +780,15 @@ export function defaultSessionPath(sessions: Array<{ id?: string; updatedAt?: nu
   return best ? `/s/${encodeURIComponent(best.id)}` : '/'
 }
 
+/** 带 HTTP 状态码的请求错误，用于区分「凭证失效」和「网络/服务故障」。 */
+export type AccountFetchError = Error & { status?: number }
+
+/** 只有这两个状态码才算凭证真的失效，此时才应该清 token。 */
+export function isAuthFailure(err: unknown): boolean {
+  const status = (err as AccountFetchError | null)?.status
+  return status === 401 || status === 403
+}
+
 async function accountFetch(token: string, path: string, init?: RequestInit) {
   const res = await fetch(path, {
     ...init,
@@ -768,7 +799,12 @@ async function accountFetch(token: string, path: string, init?: RequestInit) {
     },
   })
   const body = (await res.json().catch(() => ({}))) as { error?: string }
-  if (!res.ok) throw new Error(body.error || '请求失败')
+  if (!res.ok) {
+    // message 保持原样（调用方按文案判断），另附 status 供上层区分。
+    const err = new Error(body.error || '请求失败') as AccountFetchError
+    err.status = res.status
+    throw err
+  }
   return body as Record<string, unknown>
 }
 
