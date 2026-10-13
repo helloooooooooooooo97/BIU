@@ -1,0 +1,119 @@
+import { afterEach, test } from 'vitest'
+import assert from 'node:assert/strict'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
+import { MarketingSite } from './marketing-site/index.tsx'
+
+afterEach(() => cleanup())
+
+type Creds = { email: string; password: string }
+
+function renderSite(path: string, onSubmit: (c: Creds) => Promise<void>) {
+  cleanup()
+  let mode: 'login' | 'register' = path === '/signup' ? 'register' : 'login'
+  const view = render(
+    <MemoryRouter initialEntries={[path]}>
+      <MarketingSite
+        onLogin={() => {}}
+        onStart={() => {}}
+        auth={{ mode, onModeChange: (next) => { mode = next }, onSubmit }}
+      />
+    </MemoryRouter>,
+  )
+  return view
+}
+
+test('/login 与 /signup 是独立路由，且带品牌区与返回官网', () => {
+  renderSite('/login', async () => {})
+  assert.match(screen.getByRole('heading', { level: 2 }).textContent ?? '', /登录/)
+  assert.ok(screen.getByText('BIU'), '有品牌区')
+  assert.ok(screen.getByText('返回官网'), '有返回入口')
+  assert.match(document.title, /登录 · BIU/)
+  cleanup()
+
+  renderSite('/signup', async () => {})
+  assert.match(screen.getByRole('heading', { level: 2 }).textContent ?? '', /创建账号/)
+  assert.match(document.title, /注册 · BIU/)
+  cleanup()
+})
+
+test('邮箱字段用 email 类型与正确的 autoComplete（P0-14 #3/#4）', () => {
+  renderSite('/login', async () => {})
+  const email = screen.getByTestId('auth-name') as HTMLInputElement
+  assert.equal(email.getAttribute('type'), 'email')
+  assert.equal(email.getAttribute('autocomplete'), 'email')
+  const pwd = screen.getByTestId('auth-password') as HTMLInputElement
+  assert.equal(pwd.getAttribute('autocomplete'), 'current-password')
+  cleanup()
+})
+
+test('密码可显示/隐藏切换（P0-14 #2）', () => {
+  renderSite('/login', async () => {})
+  const pwd = screen.getByTestId('auth-password') as HTMLInputElement
+  assert.equal(pwd.getAttribute('type'), 'password')
+  fireEvent.click(screen.getByTestId('auth-reveal'))
+  assert.equal(pwd.getAttribute('type'), 'text')
+  fireEvent.click(screen.getByTestId('auth-reveal'))
+  assert.equal(pwd.getAttribute('type'), 'password')
+  cleanup()
+})
+
+test('注册时密码强度实时校验（P0-14 #12）', () => {
+  renderSite('/signup', async () => {})
+  const pwd = screen.getByTestId('auth-password')
+  fireEvent.change(pwd, { target: { value: 'abc' } })
+  assert.match(screen.getByTestId('auth-strength').textContent ?? '', /太短|还差/)
+  fireEvent.change(pwd, { target: { value: 'abcd1234!X' } })
+  assert.match(screen.getByTestId('auth-strength').textContent ?? '', /很强|可用/)
+  cleanup()
+})
+
+test('邮箱格式不合法时拦住提交（P0-14 #3）', async () => {
+  let called = 0
+  renderSite('/login', async () => { called += 1 })
+  fireEvent.change(screen.getByTestId('auth-name'), { target: { value: 'not-an-email' } })
+  fireEvent.change(screen.getByTestId('auth-password'), { target: { value: 'secret123' } })
+  fireEvent.click(screen.getByTestId('auth-submit'))
+  await waitFor(() => assert.match(screen.getByTestId('auth-error').textContent ?? '', /有效的邮箱/))
+  assert.equal(called, 0, '不应发起请求')
+  cleanup()
+})
+
+test('提交时按钮进入 loading 态，成功后不再复位（P0-14 #7）', async () => {
+  let resolve: () => void = () => {}
+  const pending = new Promise<void>((r) => { resolve = r })
+  renderSite('/login', async () => pending)
+  fireEvent.change(screen.getByTestId('auth-name'), { target: { value: 'a@b.com' } })
+  fireEvent.change(screen.getByTestId('auth-password'), { target: { value: 'secret123' } })
+  fireEvent.click(screen.getByTestId('auth-submit'))
+  await waitFor(() => assert.match(screen.getByTestId('auth-submit').textContent ?? '', /登录中/))
+  assert.ok((screen.getByTestId('auth-submit') as HTMLButtonElement).disabled, 'loading 时应禁用')
+  resolve()
+  cleanup()
+})
+
+test('网络错误与后端错误区分提示（P0-14 #9）', async () => {
+  renderSite('/login', async () => { throw new Error('Failed to fetch') })
+  fireEvent.change(screen.getByTestId('auth-name'), { target: { value: 'a@b.com' } })
+  fireEvent.change(screen.getByTestId('auth-password'), { target: { value: 'secret123' } })
+  fireEvent.click(screen.getByTestId('auth-submit'))
+  await waitFor(() => assert.match(screen.getByTestId('auth-error').textContent ?? '', /网络连接不可用/))
+  cleanup()
+
+  renderSite('/login', async () => { throw new Error('密码不正确') })
+  fireEvent.change(screen.getByTestId('auth-name'), { target: { value: 'a@b.com' } })
+  fireEvent.change(screen.getByTestId('auth-password'), { target: { value: 'secret123' } })
+  fireEvent.click(screen.getByTestId('auth-submit'))
+  await waitFor(() => assert.match(screen.getByTestId('auth-error').textContent ?? '', /密码不正确/))
+  cleanup()
+})
+
+test('移动端有汉堡菜单按钮且可展开（P0-12）', () => {
+  renderSite('/', async () => {})
+  const toggle = screen.getByTestId('site-menu-toggle')
+  assert.equal(toggle.getAttribute('aria-expanded'), 'false')
+  fireEvent.click(toggle)
+  assert.equal(toggle.getAttribute('aria-expanded'), 'true')
+  assert.match(toggle.getAttribute('aria-label') ?? '', /关闭菜单/)
+  cleanup()
+})
