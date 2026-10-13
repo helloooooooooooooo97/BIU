@@ -12,7 +12,7 @@ export type SiteChromeProps = {
 
 const NAV_PRIMARY = [
   { label: '产品', to: '/product' },
-  { label: '用例', to: '/use-cases' },
+  { label: '场景', to: '/use-cases' },
   { label: '定价', to: '/pricing' },
   { label: '安全', to: '/security' },
   { label: '对比', to: '/compare' },

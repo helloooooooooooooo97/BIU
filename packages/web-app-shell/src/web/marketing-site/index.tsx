@@ -73,7 +73,7 @@ const PLACEHOLDERS: Record<string, { label: string; title: string; body: string 
   '/customers': {
     label: '客户案例',
     title: '他们怎么用 BIU。',
-    body: '真实案例正在征集中。在此之前，用例页有详细的工作流演示。',
+    body: '真实案例正在征集中。在此之前，场景页有详细的工作流演示。',
   },
   '/help': {
     label: '帮助中心',
