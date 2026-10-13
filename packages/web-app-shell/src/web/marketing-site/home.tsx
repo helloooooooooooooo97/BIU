@@ -52,11 +52,11 @@ const CAPABILITIES = [
   },
 ] as const
 
-// 用户证言：真实用户证言待 P3 补齐，这里先标注为「团队自述」。
-const VOICES = [
-  { quote: '智能体读的就是我写的那一份数据，不用再复制粘贴给它。', who: 'BIU 团队' },
-  { quote: '产出会留下来变成页面和表，下一轮直接接着用。', who: 'BIU 团队' },
-  { quote: '敏感资料放本机空间，边界是清楚的。', who: 'BIU 团队' },
+/** 还没有真实用户证言。这里写工作做完后空间里留下什么，不伪装成评价。 */
+const OUTCOMES = [
+  { title: '同一份数据', body: '智能体读的就是你写在空间里的页面和表，不用再复制粘贴一份给它。' },
+  { title: '结果留得下', body: '讨论和生成的内容写回页面和表，下一轮从这里接着做。' },
+  { title: '边界清楚', body: '私人资料放在本机空间；要一起改的内容再放到云端空间。' },
 ] as const
 
 export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
@@ -80,17 +80,10 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
   return (
     <SiteChrome onLogin={onLogin} onStart={onStart}>
         <section className="site-hero">
-          <div className="site-hero-art" aria-hidden>
-            <span className="site-hero-orb site-hero-orb-one" />
-            <span className="site-hero-orb site-hero-orb-two" />
-            <span className="site-hero-line site-hero-line-one" />
-            <span className="site-hero-line site-hero-line-two" />
-          </div>
           <div className="site-hero-copy site-container" data-reveal>
-            <p className="site-eyebrow">BIU · 智能工作空间</p>
             <h1>让知识留下，<br />让工作继续。</h1>
             <p className="site-hero-lead">
-              人和智能体共享同一个空间：页面、数据、会话、任务都在一处，<strong>数据留在你的设备上</strong>。
+              人和智能体共享同一个空间。页面、数据、会话和任务都在一处，数据留在你的设备上。
             </p>
             <form className="site-task-box" onSubmit={submitTask}>
               <input
@@ -107,14 +100,11 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
               ))}
             </div>
           </div>
-          <p className="site-scroll-note">向下探索</p>
         </section>
 
         <section className="site-product-demo" data-reveal>
           <div className="site-demo-heading">
-            <p className="site-section-label">从任务到结果</p>
-            <h2>看见 BIU 如何工作。</h2>
-            <p className="site-demo-lead">BIU 把资料、页面、数据库和对话收进同一个上下文。智能体可以理解工作、使用工具，并把结果写回空间。</p>
+            <h2>打开空间，就是这样。</h2>
             <div className="site-demo-tabs" role="tablist" aria-label="产品演示">
               {PRODUCT_SURFACES.map((item, index) => (
                 <button
@@ -147,14 +137,14 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
         <section className="site-capabilities" aria-label="核心能力">
           <div className="site-capabilities-heading" data-reveal>
             <p className="site-section-label">核心能力</p>
-            <h2>三条，说清 BIU 是什么。</h2>
+            <h2>页面、智能体、数据放在同一处。</h2>
           </div>
           <div className="site-capability-grid">
             {CAPABILITIES.map((item) => (
               <article key={item.index} data-reveal>
                 <h3>{item.title}</h3>
                 <p>{item.body}</p>
-                <Link to={item.to}>了解更多 →</Link>
+                <Link to={item.to}>在产品页看细节</Link>
               </article>
             ))}
           </div>
@@ -168,41 +158,37 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
             </div>
             <div className="site-space-options">
               <article data-reveal>
-                <span className="site-space-index">01</span>
                 <h3>云端空间</h3>
-                <p>随时访问，与团队一起工作。成员、权限与在线协作都在空间中管理。</p>
-                <small>多设备 · 成员权限 · 在线协作</small>
+                <p>随时访问，和团队一起改。成员和权限在这个空间里管理。</p>
+                <small>适合多设备和在线协作</small>
               </article>
               <article data-reveal>
-                <span className="site-space-index">02</span>
                 <h3>本机空间</h3>
-                <p>数据留在当前设备。适合私人资料、离线工作和需要完全本地控制的内容。</p>
-                <small>本地保存 · 离线可用 · 清晰边界</small>
+                <p>数据留在当前设备。私人资料和离线工作放在这里。</p>
+                <small>适合只在这台设备上保存</small>
               </article>
             </div>
           </div>
         </section>
 
-        <section className="site-voices" aria-label="用户评价">
+        <section className="site-voices" aria-label="做完之后留下什么">
           <div className="site-voices-heading" data-reveal>
-            <p className="site-section-label">使用感受</p>
-            <h2>他们怎么用它。</h2>
+            <h2>做完之后，空间里留下这些。</h2>
           </div>
           <div className="site-voice-grid">
-            {VOICES.map((voice) => (
-              <blockquote key={voice.quote} data-reveal>
-                <p>{voice.quote}</p>
-                <cite>{voice.who}</cite>
-              </blockquote>
+            {OUTCOMES.map((item) => (
+              <article key={item.title} data-reveal>
+                <h3>{item.title}</h3>
+                <p>{item.body}</p>
+              </article>
             ))}
           </div>
         </section>
 
         <section className="site-final-cta" data-reveal>
           <div className="site-container">
-            <p className="site-section-label">开始使用 BIU</p>
             <h2>给知识一个归处。<br />给工作一个继续的地方。</h2>
-            <button type="button" onClick={onStart}>创建你的空间 <span>↗</span></button>
+            <button type="button" onClick={onStart}>创建你的空间</button>
           </div>
         </section>
     </SiteChrome>
