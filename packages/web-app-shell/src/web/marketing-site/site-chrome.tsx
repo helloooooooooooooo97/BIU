@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { useReveal } from './use-reveal.ts'
 import { BRAND_PRINT_TILE, BrandMark, BrandPrint, useBrandConfig } from './brand-mark.tsx'
 import { Link, NavLink } from 'react-router-dom'
@@ -6,6 +6,9 @@ import { formatStars, useGitHubStats } from './github.ts'
 import { downloadPageLongImage } from './page-shot.ts'
 
 export type SiteAction = () => void
+
+/** 独立部署的官网没有账号服务，导航和页脚都不放「登录」。 */
+export const SiteLoginContext = createContext(true)
 
 export type SiteChromeProps = {
   children: ReactNode
@@ -132,6 +135,7 @@ export function SiteHeader({ onLogin, onStart }: { onLogin: SiteAction; onStart:
   const [menuOpen, setMenuOpen] = useState(false)
   // 用户在品牌页调好的配置会推到这里，导航栏标记随之更新。
   const brand = useBrandConfig()
+  const showLogin = useContext(SiteLoginContext)
 
   return (
     <header className="site-nav" data-menu-open={menuOpen ? '1' : '0'}>
@@ -177,7 +181,7 @@ export function SiteHeader({ onLogin, onStart }: { onLogin: SiteAction; onStart:
         ))}
       </nav>
       <div className="site-nav-actions">
-        <button type="button" className="site-login" data-testid="site-login" onClick={onLogin}>登录</button>
+        {showLogin ? <button type="button" className="site-login" data-testid="site-login" onClick={onLogin}>登录</button> : null}
         <Link className="site-start" data-testid="site-start" to="/download"><DownloadIcon />下载</Link>
       </div>
     </header>
@@ -204,6 +208,7 @@ function DownloadPageButton() {
 }
 
 export function SiteFooter({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
+  const showLogin = useContext(SiteLoginContext)
   return (
     <footer className="site-footer">
       <div className="site-footer-columns">
@@ -222,7 +227,7 @@ export function SiteFooter({ onLogin, onStart }: { onLogin: SiteAction; onStart:
         </div>
         <div>
           <strong>开始</strong>
-          <button type="button" onClick={onLogin}>登录</button>
+          {showLogin ? <button type="button" onClick={onLogin}>登录</button> : null}
           <Link to="/download">下载</Link>
           <a href={`mailto:${CONTACT_EMAIL}`}>联系我们</a>
         </div>

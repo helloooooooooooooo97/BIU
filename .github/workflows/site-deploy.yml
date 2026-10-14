@@ -1,0 +1,48 @@
+name: site-deploy
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - biu-online
+    paths:
+      - 'packages/web-app-shell/src/web/marketing-site/**'
+      - 'web/site-main.tsx'
+      - 'web/style.css'
+      - 'site.html'
+      - 'public/**'
+      - 'vite.site.config.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/site-deploy.yml'
+
+concurrency:
+  group: site-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      PROJECT: biu-site
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+      # 官网只需要前端依赖：跳过 Electron 二进制下载，构建快很多。
+      - run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      - run: npm run build:site
+      - name: Skip when Cloudflare secrets are missing
+        if: env.CLOUDFLARE_API_TOKEN == '' || env.CLOUDFLARE_ACCOUNT_ID == ''
+        run: echo "::warning::未配置 CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID，只构建不部署。"
+      - name: Deploy to Cloudflare Pages
+        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
+        run: |
+          npx --yes wrangler@4 pages project create "$PROJECT" --production-branch=biu-online || true
+          npx --yes wrangler@4 pages deploy dist-site --project-name="$PROJECT" --branch=biu-online --commit-dirty=true

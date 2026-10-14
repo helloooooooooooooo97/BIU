@@ -29,6 +29,8 @@
     "dev:host:nowatch": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--preserve-symlinks\" PORT=3141 HTTP_HOST=0.0.0.0 BIU_HOME=.cloud-data SHARE_PROXY_UI=http://127.0.0.1:5173 tsx host/index.ts",
     "dev:web": "sh -c 'node scripts/wait-port.mjs 3141 && exec vite'",
     "build": "vite build",
+    "build:site": "vite build --config vite.site.config.ts",
+    "preview:site": "vite preview --config vite.site.config.ts",
     "start": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--preserve-symlinks\" PORT=3141 HTTP_HOST=0.0.0.0 BIU_HOME=.cloud-data tsx host/index.ts",
     "test": "vitest run",
     "electron:dev": "node scripts/electron-dev.mjs",
