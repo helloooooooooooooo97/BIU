@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { GITHUB_URL, SiteChrome, SiteFinalCta, type SiteAction } from './site-chrome.tsx'
+import { DownloadIcon, GITHUB_URL, GitHubIcon, SiteChrome, SiteFinalCta, type SiteAction } from './site-chrome.tsx'
 import { usePageMeta } from './use-page-meta.ts'
 
 /**
@@ -84,8 +84,8 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
               把它们放进同一页，就是一套为你的客户准备好的服务。
             </p>
             <div className="site-cta-actions">
-              <Link className="site-cta-primary" to="/download">免费下载 <span>↗</span></Link>
-              <a className="site-cta-secondary" href={GITHUB_URL} target="_blank" rel="noreferrer">GitHub</a>
+              <Link className="site-cta-primary" to="/download"><DownloadIcon />免费下载</Link>
+              <a className="site-cta-secondary" href={GITHUB_URL} target="_blank" rel="noreferrer"><GitHubIcon />GitHub</a>
             </div>
           </div>
           <p className="site-scroll-note">向下探索</p>
@@ -176,8 +176,8 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
               <article data-reveal>
                 <span className="site-space-index">02</span>
                 <h3>云端空间</h3>
-                <p>需要多设备访问、和团队一起工作时使用。成员、权限与在线协作都在空间里管理。</p>
-                <small>多设备 · 成员权限 · 在线协作</small>
+                <p>需要多设备访问、和团队一起工作时使用。成员、权限与在线协作都在空间里管理。官方云端服务即将上线，现在可以先自部署。</p>
+                <small>多设备 · 成员权限 · 在线协作 · 即将上线</small>
               </article>
             </div>
           </div>

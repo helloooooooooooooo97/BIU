@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type RefObject } from 'react'
 
 /**
- * BIU 品牌标记：圆被两条线切成三块，三块就是 B / I / U 三个字母。
+ * BIU 品牌标记：B、I、U 三个字母刚好拼成这个形状 ——
+ * 贯穿圆心的斜线是 I，它右上方被短线分开的两小块是 B 的两个弧，左下的半圆是 U。
  *
  * 几何取自设计稿（1080 视图框）：
  *   圆心 (450, 615)，半径 290
@@ -9,10 +10,11 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, type RefObjec
  * 两线的交点在圆心偏右下一点，不是过圆心的直径 —— 所以三块大小并不相等。
  *
  * 三块与字母、画面方位的对应（colors 下标即下方顺序）：
- *   colors[0]  232.7°→320.6°（88°） 右上 → B
- *   colors[1]  320.6°→52.5°（92°）  右下 → I
- *   colors[2]  52.5°→232.7°（180°） 左下 → U
- * 默认单色即用明度区分：B 最亮、I 中间、U 最暗。
+ *   colors[0]  232.7°→320.6°（88°） 右上偏上 → B 的上弧
+ *   colors[1]  320.6°→52.5°（92°）  右上偏右 → B 的下弧
+ *   colors[2]  52.5°→232.7°（180°） 左下半圆 → U
+ *   232.7° ↔ 52.5° 那条贯穿圆心的斜线 → I
+ * 默认单色即用明度区分：最亮、中间、最暗依次排开。
  */
 
 /** 画布中心与「背景方块」的半边长。背景是固定的，圆在其中按比例缩放。 */
@@ -43,7 +45,7 @@ function p([x, y]: [number, number]) {
  * 两条线都过圆心，把圆分成三块。分界角取自设计稿：
  *   线 1：232.7° ↔ 52.5°
  *   线 2：320.6° ↔ 140.6°（只画 320.6° 这一侧到圆心的一段）
- * 于是三块是：232.7→320.6（左上）、320.6→52.5（右上）、52.5→232.7（下方大块）。
+ * 于是三块是：232.7→320.6、320.6→52.5（B 的两个弧）、52.5→232.7（U）；线 1 就是 I。
  */
 const SPLIT = { a: 232.7, b: 320.6, c: 52.5 } as const
 
@@ -72,7 +74,7 @@ const VB_SIZE = BOX * 2
 const MIN_STROKE_PX = 1
 
 export type BrandMarkProps = {
-  /** 三块扇区的填充色：左上 / 右上 / 下方大块。 */
+  /** 三块扇区的填充色：B 上弧 / B 下弧 / U。 */
   colors?: [string, string, string]
   /** 圆的描边色。 */
   stroke?: string
@@ -208,7 +210,7 @@ export const BRAND_PRINT_MARK = 24
 
 /**
  * 预设配色。
- * 三色依次对应 B（右上）/ I（右下）/ U（下方）三块。
+ * 三色依次对应 B 上弧 / B 下弧 / U 三块。
  * 命名都按颜色本身的观感来，不借用他人商标名。
  */
 const PRESETS: Array<{ name: string; colors: [string, string, string] }> = [
@@ -408,7 +410,7 @@ export function BrandPrint({
 }
 
 export const BRAND_DEFAULT: BrandConfig = {
-  // 默认暖灰：三块是 B/I/U，靠明度拉开层次（B 最浅、U 最深）。
+  // 默认暖灰：三块靠明度拉开层次（B 的两弧较浅、U 最深）。
   // 这是一组浅色，所以线条取深色 —— 白线在最浅的那块上对比度只有 1.34:1，
   // 等于看不见；深色线条能到 13:1。
   c0: '#e8ddd3',
@@ -552,9 +554,9 @@ export function BrandStudio() {
 
       <div className="brand-studio-controls">
         <fieldset className="brand-field">
-          <legend>三个字母的颜色</legend>
-          <ColorRow label="B" value={c0} onChange={(v) => patch('c0', v)} testId="brand-color-0" />
-          <ColorRow label="I" value={c1} onChange={(v) => patch('c1', v)} testId="brand-color-1" />
+          <legend>三个块的颜色</legend>
+          <ColorRow label="B 上弧" value={c0} onChange={(v) => patch('c0', v)} testId="brand-color-0" />
+          <ColorRow label="B 下弧" value={c1} onChange={(v) => patch('c1', v)} testId="brand-color-1" />
           <ColorRow label="U" value={c2} onChange={(v) => patch('c2', v)} testId="brand-color-2" />
         </fieldset>
 
@@ -570,7 +572,7 @@ export function BrandStudio() {
             testId="brand-stroke-width"
           />
           <RangeRow
-            label="线的粗细"
+            label="I 线粗细"
             value={lineWidth}
             min={0}
             max={40}

@@ -60,7 +60,7 @@ export const COMPARE_PAGES: ComparePage[] = [
     rows: [
       { dimension: '核心主张', them: '一切皆声明式对象', biu: '一切皆 /<table>/<id>，声明即生效' },
       { dimension: '声明在哪写', them: 'YAML 文件，交给 kubectl apply', biu: '直接写在页面正文里（或以页面块形式插入）' },
-      { dimension: '声明的单位', them: '一个资源对象（Pod / Service / CRD）', biu: '一个插件：<plugin kind="…" />' },
+      { dimension: '声明的单位', them: '一个资源对象（Pod / Service / CRD）', biu: '一个块：:::pageBlock {kind=… plugin=…}，后面跟一段 JSON' },
       { dimension: '声明之后发生什么', them: '控制面调谐，把实际状态拉向期望', biu: '✅ 立刻挂载运行，无需 apply / 等待调度' },
       { dimension: '一个页面/文件能放几个', them: '⚠️ 通常一份 YAML 一类资源，多个靠多文件或 List', biu: '✅ 一页里可以声明任意多个插件，各管一块' },
       { dimension: '多个如何组合成服务', them: 'Service / Ingress 把多个 Pod 串起来', biu: '✅ 同页多个插件各占一块，页面本身就是组合结果' },
@@ -80,7 +80,7 @@ export const COMPARE_PAGES: ComparePage[] = [
     slug: 'vs-office',
     title: 'BIU vs Office',
     category: '文档管理',
-    opening: 'Office 定义了结构化办公。BIU 把这套结构放回一份可被智能体读写的数据里。',
+    opening: 'Office 定义了结构化办公：文档、表格、演示各是一个应用、一种文件。BIU 把它们放进同一个页面 —— 每一种内容都是一个块，读写同一份数据，智能体也能直接操作。',
     useWhen: '需要精确排版的长文档、复杂公式、给外部交付的标准格式文件',
     biuWhen: '需要结构化数据、智能体能读写工作区、产出能沉淀复用',
     columns: ['Office', 'BIU'],
@@ -89,9 +89,10 @@ export const COMPARE_PAGES: ComparePage[] = [
       { dimension: '文档', them: '✅ Word（排版最强）', biu: '✅ 页面' },
       { dimension: '表格', them: '✅ Excel（标杆）', biu: '✅ 表是内核一等公民' },
       { dimension: '幻灯片', them: '✅ PowerPoint', biu: '⚠️ 块即组件，能力较基础' },
+      { dimension: '几种内容放在一起', them: '⚠️ Word / Excel / PPT 是三个应用，靠嵌入对象和链接互通', biu: '✅ 文档、表格和各种插件块放在同一页，读写同一份数据' },
       { dimension: '数据在哪', them: '本机文件（协作靠 SharePoint）', biu: '建空间时选：本机 / 云端' },
       { dimension: '离线', them: '✅', biu: '✅ 本机空间' },
-      { dimension: '智能体操作面', them: '⚠️ Copilot 附加', biu: '✅ 一等公民，可读写工作区' },
+      { dimension: '智能体操作面', them: '⚠️ Copilot 在各个应用里分别工作', biu: '✅ 一等公民，可读写整个工作区' },
       { dimension: '扩展归属', them: '微软开发者', biu: '人和智能体都能建插件' },
       { dimension: '形态', them: '应用套件', biu: '内核' },
     ],
@@ -110,7 +111,7 @@ export const COMPARE_PAGES: ComparePage[] = [
       { dimension: '按属性筛选', them: '✅ 数据库视图可以按属性过滤', biu: '✅ 视图可以按 facet 的字段筛选' },
       { dimension: '页面里能放什么', them: '⚠️ 块类型由 Notion 定义；嵌入的网页只是一个 iframe，读不到工作区的数据', biu: '✅ 块由可安装插件提供，人和智能体都能写；同页的插件共用一份数据，一页就是一套服务' },
       { dimension: '分享出去的是什么', them: '页面内容与链接', biu: '✅ 正文、附件和插件源码一起打包，对方打开就能用' },
-      { dimension: '数据在哪', them: '只有云端，离线 ❌', biu: '✅ 建空间时选：本机 / 云端，本机空间离线可用' },
+      { dimension: '数据在哪', them: '⚠️ 云端为主，离线只能打开提前下载的页面', biu: '✅ 建空间时选：本机 / 云端，本机空间离线可用' },
       { dimension: '授权给谁、授到哪', them: '⚠️ 人、群组（名单）；范围是页面 / 数据库这些实体', biu: '✅ 可以是具体账号，也可以是一个成员视图 —— 授权对象是 view_id，本身带筛选条件' },
       { dimension: '授权与数据的关系', them: '⚠️ 先建页面再往里加人，权限挂在实体上，新内容要逐条补授权', biu: '✅ 条件先写好，新记录只要符合条件就自动落进授权范围' },
       { dimension: '权限怎么算出来', them: '⚠️ 看 / 评 / 编 / 全权按页给；来源通常只告诉你「有权限」', biu: '✅ viewer / editor / manager / owner 多来源取最高，并逐级展开：直接授予 / 成员组 / 成员视图 / 继承自上一条 / 空间默认' },
@@ -118,6 +119,7 @@ export const COMPARE_PAGES: ComparePage[] = [
       { dimension: '边角控制', them: '⚠️ 邀请外部人粒度较粗；改权限要页面所有者及以上', biu: '✅ internal / external / guest 分类，有外部协作者自动升 shared；share 与 manage-permissions 拆成两个动作' },
       { dimension: '智能体的权限', them: '⚠️ 以「集成」身份接入，按页面逐个分享给它，粒度到页面', biu: '✅ 智能体是独立 actor，同一套授权判定，按记录裁到你的可见范围' },
       { dimension: '智能体', them: '⚠️ Notion AI 能读写页面和数据库，但不能给工作区新增一种块', biu: '✅ 与人在同一份数据上操作，可被调度，还能自己写插件' },
+      { dimension: '模板与集成市场', them: '✅ 海量模板与第三方集成', biu: '❌ 还没有模板市场，接外部服务要自己写插件或接 MCP' },
       { dimension: '成熟度', them: '✅ 协同编辑与权限打磨多年，模板与生态海量', biu: '⚠️ 模型更细，但协同编辑、权限打磨与插件生态都还没到 Notion 同级' },
     ],
   },
@@ -195,16 +197,16 @@ export const COMPARE_PAGES: ComparePage[] = [
     slug: 'vs-cursor',
     title: 'BIU vs Cursor',
     category: '编码 Harness',
-    opening: 'Cursor 把智能体放进了编辑器。BIU 走得更远一步 —— 智能体本身就是数据，可以被读写、复制和分享。',
+    opening: 'Cursor 把智能体放进了编辑器，专注写代码。BIU 面向的不只是代码 —— 智能体和它的产出都是工作区里的数据，可以被读写、复制和分享。BIU 的设计也借鉴了 Cursor 的智能体原生思路。',
     useWhen: '在编辑器里写代码、需要深度代码理解与补全',
     biuWhen: '需要多个智能体协作、产出要沉淀成可复用对象、工作区不限于代码',
     columns: ['Cursor', 'BIU'],
     rows: [
       { dimension: '智能体地位', them: '编辑器里的工具', biu: '智能体就是数据' },
       { dimension: '核心对象', them: '由编辑器应用预定义', biu: '核心对象是数据本身' },
-      { dimension: '代码放哪', them: '你的 IDE / 项目', biu: '工作区记录 /<table>/<id>' },
-      { dimension: '多智能体', them: '⚠️ 靠人在编辑器里切换', biu: '✅ 任务看板当总线' },
-      { dimension: '上下文', them: '✅ @ 引用 + 代码索引（很强）', biu: '同一地址空间，读动作痕迹' },
+      { dimension: '工作对象', them: '代码仓库', biu: '页面、表格、任务、插件，代码只是其中一类' },
+      { dimension: '多智能体', them: '✅ 支持并行智能体与云端智能体', biu: '✅ 任务看板分工，依赖关系成图' },
+      { dimension: '上下文', them: '✅ @ 引用 + 代码索引（很强）', biu: '读工作区里的页面、数据和操作记录' },
       { dimension: '产出沉淀', them: '⚠️ 落在你项目里', biu: '✅ 沉淀为表 / 技能 / 页面' },
       { dimension: '代码补全体验', them: '✅ 强（BIU 不专精）', biu: '⚠️ 非专精领域' },
       { dimension: '形态', them: '应用', biu: '内核' },
@@ -230,7 +232,7 @@ export const COMPARE_PAGES: ComparePage[] = [
       { dimension: '多 agent', them: '✅ 支持编排', biu: '✅ 任务看板当总线，依赖成图' },
       { dimension: '模型选择', them: '以 DeepSeek 为主，可接入其他', biu: '✅ 模型可配，不绑定厂商' },
       { dimension: '编码专精', them: '✅ 深，专注真实工程任务', biu: '⚠️ 非专精领域' },
-      { dimension: '生态与成熟度', them: '✅ 开场即对标 Codex / Claude Code', biu: '⚠️ 插件生态刚起步' },
+      { dimension: '生态与成熟度', them: '✅ 专注编码，对标 Codex / Claude Code', biu: '⚠️ 插件生态刚起步' },
       { dimension: '形态', them: '终端 agent 运行时', biu: '内核' },
     ],
   },
@@ -268,9 +270,9 @@ export const COMPARE_PAGES: ComparePage[] = [
     rows: [
       { dimension: '基本单位', them: '对话（message）', biu: '可寻址路径 /<table>/<id>' },
       { dimension: '产出物去哪', them: '⚠️ 主要留在对话里，可用 Canvas 与项目整理', biu: '✅ 沉淀成页面 / 表 / 技能' },
-      { dimension: '产出 UI 的成本', them: '智能体写上百行 HTML/CSS/JS，下次重写', biu: '写三个字段（kind + plugin + JSON），一个插件复用' },
+      { dimension: '产出界面的成本', them: '⚠️ 每次生成一段新的 HTML / 代码', biu: '✅ 写三个字段（kind + plugin + JSON），一个插件多处复用' },
       { dimension: '智能体能否扩展系统', them: '⚠️ 可用 GPTs 与连接器扩展，但改不了工作区本身', biu: '✅ 可创建插件，挂进页面就能用' },
-      { dimension: '上下文', them: '靠平台检索拼装', biu: '与环境同一地址空间' },
+      { dimension: '上下文', them: '对话、记忆与上传的文件', biu: '工作区里的页面与数据，和你看到的是同一份' },
       { dimension: '通用知识问答', them: '✅ 强（BIU 不专精）', biu: '⚠️ 取决于所配模型' },
       { dimension: '数据在哪', them: '云端', biu: '建空间时选：本机 / 云端' },
     ],
@@ -284,10 +286,10 @@ export const COMPARE_PAGES: ComparePage[] = [
     biuWhen: '工具要能自己造、多个智能体要能协作、数据边界要自己掌控',
     columns: ['Claude', 'BIU'],
     rows: [
-      { dimension: '智能体地位', them: '工具', biu: '智能体就是数据' },
+      { dimension: '智能体地位', them: '对话里的助手', biu: '工作区里的一条记录，可被调度、复制' },
       { dimension: '能否扩展自身', them: '⚠️ 靠 MCP 连接外部', biu: '✅ 智能体自己造插件' },
       { dimension: '产出沉淀', them: '⚠️ Artifacts 与项目能保留产出，但不是工作区里的数据', biu: '✅ 沉淀为可寻址对象' },
-      { dimension: '多智能体协作', them: '⚠️ 有限', biu: '✅ 看板总线，依赖成图' },
+      { dimension: '多智能体协作', them: '⚠️ 以单个对话为主', biu: '✅ 任务看板分工，依赖关系成图' },
       { dimension: '长文理解', them: '✅ 强（BIU 不专精）', biu: '⚠️ 取决于所配模型' },
       { dimension: '数据在哪', them: '云端', biu: '建空间时选：本机 / 云端' },
       { dimension: '形态', them: '应用', biu: '内核' },
@@ -297,15 +299,16 @@ export const COMPARE_PAGES: ComparePage[] = [
     slug: 'vs-obsidian',
     title: 'BIU vs Obsidian',
     category: '文档管理',
-    opening: 'Obsidian 证明了本地优先能赢。BIU 走得更远 —— 既有本地的透明，又有空间的结构。',
+    opening: 'Obsidian 证明了本地优先能赢，它的社区插件也能在笔记里渲染画板和查询。BIU 和它最像，差别在于插件块读写的是结构化数据，智能体也在同一个工作区里。',
     useWhen: '纯本地笔记、Markdown 文件、社区插件生态',
     biuWhen: '既要本地，也要协作与结构化数据，还要智能体能读写',
     columns: ['Obsidian', 'BIU'],
     rows: [
       { dimension: '数据在哪', them: '本机文件夹', biu: '建空间时选：本机 / 云端' },
       { dimension: '离线', them: '✅', biu: '✅ 本机空间' },
-      { dimension: '协作', them: '❌ 靠第三方同步 / Git', biu: '✅ 云端空间（成员 / 权限）' },
-      { dimension: '结构化数据', them: '⚠️ 靠插件在文件上「算」', biu: '✅ 表是内核一等公民' },
+      { dimension: '协作', them: '⚠️ 官方 Sync 可多端同步，没有实时多人协作', biu: '⚠️ 云端空间支持成员与权限，官方云端服务即将上线' },
+      { dimension: '结构化数据', them: '⚠️ 属性 + Bases 视图，底层仍是 Markdown 文件', biu: '✅ 表是内核一等公民' },
+      { dimension: '页面里的插件', them: '✅ 社区插件可在笔记里渲染（如 Excalidraw、Dataview）', biu: '✅ 插件块读写同一份数据，分享时随页面一起打包' },
       { dimension: '数据可见性', them: '✅ 纯文件（最透明）', biu: '✅ 两栖：接口或直接读盘' },
       { dimension: '智能体', them: '⚠️ 靠社区插件接模型', biu: '✅ 一等公民，同一地址空间' },
       { dimension: '插件生态', them: '✅ 社区生态成熟', biu: '⚠️ 生态起步阶段' },
@@ -322,6 +325,38 @@ export const COMPARE_CATEGORIES = [
   { name: '通用助手', slugs: ['vs-chatgpt', 'vs-claude'] },
 ] as const
 
+const MARKS = [
+  { emoji: '✅', kind: 'yes', label: '支持' },
+  { emoji: '⚠️', kind: 'partial', label: '部分支持' },
+  { emoji: '❌', kind: 'no', label: '不支持' },
+] as const
+
+/** 表格里的 ✅ / ⚠️ / ❌ 换成同色系的圆形标记；原字符留在 DOM 里，读屏和复制都还在。 */
+function CompareCell({ text }: { text: string }) {
+  const mark = MARKS.find((item) => text.startsWith(item.emoji))
+  if (!mark) return <>{text}</>
+  const rest = text.slice(mark.emoji.length).trim()
+  return (
+    <span className="site-compare-cell">
+      <span className="site-mark" data-mark={mark.kind} title={mark.label}>{mark.emoji}</span>
+      <span>{rest || mark.label}</span>
+    </span>
+  )
+}
+
+function CompareLegend() {
+  return (
+    <p className="site-compare-legend" aria-label="图例">
+      {MARKS.map((item) => (
+        <span key={item.kind}>
+          <span className="site-mark" data-mark={item.kind} aria-hidden />
+          {item.label}
+        </span>
+      ))}
+    </p>
+  )
+}
+
 function CompareTable({ page }: { page: ComparePage }) {
   return (
     <table className="site-compare-table">
@@ -336,8 +371,8 @@ function CompareTable({ page }: { page: ComparePage }) {
         {page.rows.map((row) => (
           <tr key={row.dimension}>
             <th scope="row">{row.dimension}</th>
-            <td>{row.them}</td>
-            <td className="is-biu">{row.biu}</td>
+            <td><CompareCell text={row.them} /></td>
+            <td className="is-biu"><CompareCell text={row.biu} /></td>
           </tr>
         ))}
       </tbody>
@@ -425,7 +460,11 @@ export function MarketingCompareDetail({ onLogin, onStart }: { onLogin: SiteActi
         </section>
 
         <section className="site-compare-body" data-reveal>
+          <CompareLegend />
           <CompareTable page={page} />
+          <p className="site-compare-note">
+            信息截至 2026 年 10 月。如有出入，欢迎<a href={`${GITHUB_URL}/issues`} target="_blank" rel="noreferrer">在 GitHub 提出</a>。
+          </p>
         </section>
 
         <section className="site-compare-when" data-reveal>

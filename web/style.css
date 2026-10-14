@@ -8681,6 +8681,7 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
 .site-cta-secondary {
   display: inline-flex;
   align-items: center;
+  gap: 8px;
   border-radius: 999px;
   padding: 11px 16px;
   font-size: 14px;
@@ -8688,7 +8689,7 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   text-decoration: none;
 }
 .site-cta-primary { background: #fff; color: #000; }
-.site-cta-primary span { margin-left: 16px; }
+.site-icon { flex: none; display: block; }
 .site-cta-secondary {
   color: #fff;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .28);
@@ -9356,6 +9357,10 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 .site-plans-grid ul { margin: 0; padding-left: 18px; flex: 1; }
 .site-plans-grid li { margin-bottom: 8px; font-size: 14px; line-height: 1.65; color: rgba(255, 255, 255, .88); }
 .site-plans-grid .site-plan-cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   padding: 12px 18px;
   text-align: center;
   text-decoration: none;
@@ -9368,7 +9373,8 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   cursor: pointer;
 }
 .site-plans-grid .is-featured .site-plan-cta { border-color: #fff; background: #fff; color: #000; }
-.site-plans-grid .site-plan-cta:hover { background: #fff; color: #000; }
+.site-plans-grid .site-plan-cta:not(:disabled):hover { background: #fff; color: #000; }
+.site-plans-grid .site-plan-cta:disabled { border-color: rgba(255, 255, 255, .12); color: rgba(255, 255, 255, .45); cursor: default; }
 
 /* 通用表格风格（本机/云端、系统要求、权限） */
 .site-space-compare,
@@ -9533,7 +9539,16 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   transform: translateY(-2px);
 }
 .site-compare-card h3 { margin: 0; font-size: 18px; font-weight: 600; }
-.site-compare-card p { margin: 0; font-size: 14px; line-height: 1.7; color: rgba(255, 255, 255, .88); }
+.site-compare-card p {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  font-size: 14px;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, .6);
+}
 
 /* 对比页：详情表 */
 .site-compare-body {
@@ -9571,6 +9586,38 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 .site-compare-table th.is-biu,
 .site-compare-table td.is-biu { color: #fff; background: rgba(255, 255, 255, .035); }
 
+/* ✅ ⚠️ ❌ 的彩色 emoji 和黑白站点不搭：字符留在 DOM 里，画面上换成同色系圆标。 */
+.site-compare-cell { display: flex; align-items: flex-start; gap: 10px; }
+.site-mark {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin-top: 3px;
+  border-radius: 50%;
+  font-size: 0;
+  line-height: 1;
+}
+.site-mark::before { font-size: 12px; font-weight: 700; }
+.site-mark[data-mark="yes"] { background: #fff; color: #000; }
+.site-mark[data-mark="yes"]::before { content: '✓'; }
+.site-mark[data-mark="partial"] { box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .55); color: rgba(255, 255, 255, .88); }
+.site-mark[data-mark="partial"]::before { content: '−'; }
+.site-mark[data-mark="no"] { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .22); color: rgba(255, 255, 255, .45); }
+.site-mark[data-mark="no"]::before { content: '×'; }
+.site-compare-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, .6);
+}
+.site-compare-legend > span { display: inline-flex; align-items: center; gap: 8px; }
+.site-compare-legend .site-mark { margin-top: 0; }
+.site-compare-body .site-compare-note { margin-top: 20px; }
+
 /* 窄屏下三列等宽会挤成豆腐块，改为整体横向滚动 */
 @media (max-width: 800px) {
   .site-compare-body { overflow-x: auto; }
@@ -9591,6 +9638,63 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 
 .site-compare-more { max-width: var(--site-content); margin: 0 auto; padding: 0 var(--site-gutter) 72px; }
 .site-compare-more h2 { margin: 0 0 22px; font-size: 20px; font-weight: 600; }
+
+/* 博客：总览是一列编号条目，文章页正文收窄到易读的行宽 */
+.site-blog-list { max-width: var(--site-content); margin: 0 auto; padding: 8px var(--site-gutter) 72px; }
+.site .site-blog-item {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  gap: 24px;
+  padding: 30px 0;
+  border-top: 1px solid rgba(255, 255, 255, .1);
+  color: #fff;
+  text-decoration: none;
+}
+.site .site-blog-item:last-child { border-bottom: 1px solid rgba(255, 255, 255, .1); }
+.site-blog-index,
+.site-blog-item time { font-size: 13px; color: rgba(255, 255, 255, .45); }
+.site-blog-item h2 { margin: 0 0 10px; font-size: clamp(20px, 2.4vw, 26px); font-weight: 600; letter-spacing: -.02em; }
+.site-blog-item p { margin: 0; max-width: 46em; font-size: 16px; line-height: 1.7; color: rgba(255, 255, 255, .6); }
+.site .site-blog-item:hover p { color: rgba(255, 255, 255, .88); }
+.site-article { max-width: var(--site-content); margin: 0 auto; padding: 112px var(--site-gutter) 72px; box-sizing: border-box; }
+.site-article-head h1 {
+  margin: var(--site-label-gap) 0 0;
+  font-size: clamp(32px, 3.4vw, 52px);
+  font-weight: 600;
+  letter-spacing: -.03em;
+  line-height: 1.15;
+}
+.site-article-head .site-section-label a { color: inherit; text-decoration: none; }
+.site-article-head .site-page-lead { margin-top: 20px; }
+.site-article-body { max-width: 46em; margin-top: 56px; }
+.site-article-body h2 { margin: 48px 0 16px; font-size: 24px; font-weight: 600; letter-spacing: -.02em; }
+.site-article-body p { margin: 0 0 18px; font-size: 16px; line-height: 1.9; color: rgba(255, 255, 255, .88); }
+.site-article-body pre {
+  margin: 0 0 18px;
+  padding: 18px 20px;
+  border-radius: 12px;
+  background: #0f0f0f;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06);
+  overflow-x: auto;
+  font-size: 14px;
+  line-height: 1.8;
+}
+.site-article-next {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  max-width: 46em;
+  margin-top: 56px;
+  padding-top: 24px;
+  border-top: 1px solid rgba(255, 255, 255, .1);
+  font-size: 14px;
+  color: rgba(255, 255, 255, .45);
+}
+.site-article-next a { color: #fff; text-decoration: none; }
+@media (max-width: 800px) {
+  .site .site-blog-item { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .site-article { padding-top: 96px; }
+}
 
 /* 页脚法务行 */
 .site-footer-legal { font-size: 13px; color: rgba(255, 255, 255, .88); }
