@@ -1,6 +1,6 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { useReveal } from './use-reveal.ts'
-import { BrandMark, BrandPrint, useBrandConfig } from './brand-mark.tsx'
+import { BRAND_PRINT_TILE, BrandMark, BrandPrint, useBrandConfig } from './brand-mark.tsx'
 import { Link, NavLink } from 'react-router-dom'
 
 export type SiteAction = () => void
@@ -137,16 +137,56 @@ export function SiteFooter({ onLogin, onStart }: { onLogin: SiteAction; onStart:
   )
 }
 
+/** 印花比正文滚得慢，形成纵深。 */
+const PRINT_PARALLAX = 0.35
+
+/**
+ * 页面往下滚时印花往上走。位移按格子取模，所以图案只需比视口多出一格高，
+ * 而且只改 transform，不重绘 SVG。
+ */
+function usePrintParallax(rootRef: RefObject<HTMLElement | null>, printRef: RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    const root = rootRef.current
+    const print = printRef.current
+    if (!root || !print) return
+    if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
+    let frame = 0
+    const apply = () => {
+      frame = 0
+      const shift = (root.scrollTop * PRINT_PARALLAX) % BRAND_PRINT_TILE
+      print.style.setProperty('--print-shift', `${-shift}px`)
+    }
+    const onScroll = () => {
+      if (frame) return
+      frame = requestAnimationFrame(apply)
+    }
+    root.addEventListener('scroll', onScroll, { passive: true })
+    apply()
+    return () => {
+      root.removeEventListener('scroll', onScroll)
+      if (frame) cancelAnimationFrame(frame)
+    }
+  }, [rootRef, printRef])
+}
+
 /** 站内页共用的外壳：顶部导航 + 正文 + 页脚。 */
 export function SiteChrome({ children, onLogin, onStart }: SiteChromeProps) {
   // .site 是页面唯一的滚动容器（见 style.css）。
   // ref 挂在这里，页面组件不必再套一层无样式的 div —— 那层 div 会让
   // .site 的 height:100% 失去参照，进而使 overflow 失效、整页滚不动。
   const ref = useReveal<HTMLDivElement>()
+  const printRef = useRef<HTMLDivElement>(null)
+  usePrintParallax(ref, printRef)
   const brand = useBrandConfig()
   return (
     <div className="site" ref={ref}>
-      <div className="site-print" aria-hidden data-testid="site-print">
+      <div
+        className="site-print"
+        aria-hidden
+        data-testid="site-print"
+        ref={printRef}
+        style={{ ['--print-tile' as string]: `${BRAND_PRINT_TILE}px` }}
+      >
         <BrandPrint config={brand} />
       </div>
       <SiteHeader onLogin={onLogin} onStart={onStart} />

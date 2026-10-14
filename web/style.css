@@ -8464,8 +8464,11 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
 .site-print-sheet {
   display: block;
   width: 100%;
-  height: 100%;
+  /* 多出一格高，滚动位移按格子取模时下沿不露底。 */
+  height: calc(100% + var(--print-tile, 0px));
   opacity: 0.25;
+  transform: translate3d(0, var(--print-shift, 0px), 0);
+  will-change: transform;
 }
 .site > main {
   position: relative;
