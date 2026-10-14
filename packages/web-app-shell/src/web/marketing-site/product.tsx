@@ -143,10 +143,10 @@ export function MarketingProduct({ onLogin, onStart }: { onLogin: SiteAction; on
 
         <section className="site-continuity">
           <div className="site-continuity-heading" data-reveal>
-            <p className="site-section-label">做一页服务</p>
+            <p className="site-section-label">页面即服务</p>
             <h2>四步，把几个软件<br />组合成一页</h2>
           </div>
-          <div className="site-context-flow" data-reveal aria-label="做一页服务">
+          <div className="site-context-flow" data-reveal aria-label="页面即服务">
             {PAGE_FLOW.map((item, index) => (
               <span key={item.step} className="site-context-item">
                 <div>
