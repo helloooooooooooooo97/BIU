@@ -32,11 +32,13 @@ test('opening /register shows the register page', () => {
   localStorage.clear()
   window.history.replaceState({}, '', '/register')
   render(
-    <AuthGate>
-      <div data-testid="inside">in</div>
-    </AuthGate>,
+    <MemoryRouter initialEntries={['/register']}>
+      <AuthGate>
+        <div data-testid="inside">in</div>
+      </AuthGate>
+    </MemoryRouter>,
   )
-  assert.equal(screen.getByRole('heading', { name: '注册' }).textContent, '注册')
+  assert.equal(screen.getByRole('heading', { name: '创建账号' }).textContent, '创建账号')
   assert.equal(screen.queryByTestId('inside'), null)
 })
 
@@ -44,12 +46,15 @@ test('opening /login shows the login page', () => {
   localStorage.clear()
   window.history.replaceState({}, '', '/login')
   render(
-    <AuthGate>
-      <div data-testid="inside">in</div>
-    </AuthGate>,
+    <MemoryRouter initialEntries={['/login']}>
+      <AuthGate>
+        <div data-testid="inside">in</div>
+      </AuthGate>
+    </MemoryRouter>,
   )
-  assert.equal(screen.queryByTestId('site-login'), null)
+  assert.ok(screen.getByTestId('site-login'), '登录页使用官网顶栏')
   assert.equal(screen.getByRole('heading', { name: '登录' }).textContent, '登录')
+  assert.ok(screen.getByText('返回官网'))
   assert.equal(screen.queryByTestId('inside'), null)
 })
 
@@ -60,17 +65,16 @@ test('the app shows the marketing site until a token exists', async () => {
     calls.push(String(path))
     return json(String(path).endsWith('/me') ? { id: 'acc_1' } : { token: 'tok' })
   }) as typeof fetch
+  window.history.replaceState({}, '', '/login')
   render(
-    <MemoryRouter initialEntries={['/']}>
+    <MemoryRouter initialEntries={['/login']}>
       <AuthGate>
         <div data-testid="inside">in</div>
       </AuthGate>
     </MemoryRouter>,
   )
-  // 未登录时不再显示「登录门」，而是官网首页 —— 登录从 site-login 弹出。
   assert.equal(screen.queryByTestId('inside'), null)
-  assert.ok(screen.getByTestId('site-login'), '未登录应看到官网的登录入口')
-  fireEvent.click(screen.getByTestId('site-login'))
+  assert.ok(screen.getByTestId('auth-name'), '登录页有邮箱')
   fireEvent.change(screen.getByTestId('auth-name'), { target: { value: 'ada@example.com' } })
   fireEvent.change(screen.getByTestId('auth-password'), { target: { value: 'secret1' } })
   await act(async () => {
@@ -111,14 +115,14 @@ test('a stale workspace does not send the user back to login after they sign in'
     }
     return json({})
   }) as typeof fetch
+  window.history.replaceState({}, '', '/login')
   render(
-    <MemoryRouter initialEntries={['/']}>
+    <MemoryRouter initialEntries={['/login']}>
       <AuthGate>
         <div data-testid="inside">in</div>
       </AuthGate>
     </MemoryRouter>,
   )
-  fireEvent.click(screen.getByTestId('site-login'))
   assert.equal(window.location.pathname, '/login')
   fireEvent.change(screen.getByTestId('auth-name'), { target: { value: 'ada@example.com' } })
   fireEvent.change(screen.getByTestId('auth-password'), { target: { value: 'secret1' } })

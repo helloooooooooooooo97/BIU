@@ -26,7 +26,7 @@ function renderSite(path: string, onSubmit: (c: Creds) => Promise<void>) {
 test('/login 与 /signup 是独立路由，且带品牌区与返回官网', () => {
   renderSite('/login', async () => {})
   assert.match(screen.getByRole('heading', { level: 2 }).textContent ?? '', /登录/)
-  assert.ok(screen.getByText('BIU'), '有品牌区')
+  assert.equal(document.querySelector('.auth-brand-name')?.textContent, 'BIU')
   assert.ok(screen.getByText('返回官网'), '有返回入口')
   assert.match(document.title, /登录 · BIU/)
   cleanup()

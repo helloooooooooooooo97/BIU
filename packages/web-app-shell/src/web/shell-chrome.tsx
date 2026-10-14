@@ -30,6 +30,7 @@ import { LayoutPrefsMenu } from '@biu/core-file-system/layout-prefs-menu'
 import { getPagePrefs, hydratePagePrefs, subscribePageWidth } from '@biu/core-file-system/page-width'
 
 import { MarketingSite } from './marketing-site/index.tsx'
+import { BrandPrint, useBrandConfig } from './marketing-site/brand-mark.tsx'
 import { clearWorkspaceId, readWorkspaceId, writeWorkspaceId } from './tenant-fetch.ts'
 
 function isLandingPreview() {
@@ -463,7 +464,7 @@ export function writeAccountToken(next: string) {
 function readAuthRoute(): 'login' | 'register' | null {
   if (typeof window === 'undefined') return null
   if (window.location.pathname === '/login') return 'login'
-  if (window.location.pathname === '/register') return 'register'
+  if (window.location.pathname === '/register' || window.location.pathname === '/signup') return 'register'
   return null
 }
 
@@ -475,6 +476,7 @@ function setBrowserPath(path: string, mode: 'push' | 'replace' = 'push') {
 }
 
 export function AuthGate({ children }: { children: ReactNode }) {
+  const brand = useBrandConfig()
   const initialRoute = readAuthRoute()
   const [token, setToken] = useState(readAccountToken)
   const [verified, setVerified] = useState(false)
@@ -503,10 +505,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
     const sync = () => {
       const next = readAuthRoute()
       setAuthRoute(next)
-      if (next) {
-        setMode(next)
-        setAuthOpen(true)
-      }
+      setAuthOpen(Boolean(next))
+      if (next) setMode(next)
     }
     window.addEventListener('popstate', sync)
     return () => window.removeEventListener('popstate', sync)
@@ -608,14 +608,21 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   if (isLandingPreview()) return children
   if (token && verified && !joining) return children
-  if (!token && !authOpen && !authRoute && !guestInvite && !workspaceInvite) {
+  if (!token && !guestInvite) {
     return (
       <MarketingSite
         onLogin={() => goAuth('login')}
         onStart={() => goAuth('register')}
         auth={{
           mode,
-          onModeChange: setMode,
+          onModeChange: (next) => {
+            setMode(next)
+            setAuthOpen(true)
+            setAuthRoute(next)
+            setBrowserPath(next === 'register' ? '/register' : '/login')
+          },
+          onBack: leaveAuth,
+          workspaceInvite: Boolean(workspaceInvite),
           onSubmit: async ({ email, password: secret }) => {
             const path = mode === 'register' ? '/api/account/register' : '/api/account/login'
             const body = await accountFetch('', path, {
@@ -635,6 +642,9 @@ export function AuthGate({ children }: { children: ReactNode }) {
   if (token) {
     return (
       <div className="auth-gate" data-testid="auth-verifying">
+        <div className="site-print" aria-hidden>
+          <BrandPrint config={brand} />
+        </div>
         <p className="auth-status">正在验证登录状态</p>
       </div>
     )
@@ -642,6 +652,9 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   return (
     <div className="auth-gate" data-testid="auth-gate">
+      <div className="site-print" aria-hidden>
+        <BrandPrint config={brand} />
+      </div>
       {guestInvite ? (
         <form
           className="auth-panel"
