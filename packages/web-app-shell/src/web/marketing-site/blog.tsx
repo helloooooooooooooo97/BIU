@@ -1,191 +1,80 @@
 import { Link, useParams } from 'react-router-dom'
 import { SiteChrome, SiteFinalCta, type SiteAction } from './site-chrome.tsx'
 import { usePageMeta } from './use-page-meta.ts'
+import { BLOG_AUTHOR, BLOG_POSTS, readingMinutes, type Paragraph } from './blog-posts.ts'
 
-/** 段落是字符串；代码块用 { code } 表示。 */
-type Paragraph = string | { code: string }
-
-export type BlogPost = {
-  slug: string
-  title: string
-  summary: string
-  date: string
-  sections: { heading?: string; body: Paragraph[] }[]
-}
-
-export const BLOG_POSTS: BlogPost[] = [
-  {
-    slug: 'all-in-one',
-    title: 'All in One，不是把功能堆进一个应用',
-    summary: '多数「一体化」产品是在一个应用里不断加功能。BIU 走的是另一条路：让页面装下软件，用页面去组合软件。',
-    date: '2026-10-14',
-    sections: [
-      {
-        body: [
-          '说到 All in One，大家通常想到的是一个什么都有的应用：文档、表格、看板、日历、AI 助手，一个账号全包。问题是，这些功能都是厂商预先做好的。你需要的第七种工具它没有，就只能再开一个软件，把数据搬来搬去。',
-          'BIU 理解的 All in One 不是「功能都在一个应用里」，而是「任何软件都能放进同一个页面」。',
-        ],
-      },
-      {
-        heading: '块就是软件',
-        body: [
-          '在 BIU 里，页面上的每一块都是一个插件渲染出来的活组件：一张表、一块 Excalidraw 画板、一道能运行的算法题、一个视频剪辑器。块的类型不是平台写死的，装一个插件就多一种块。',
-          '写法很简单，一段声明加一段数据：',
-          { code: ':::pageBlock {kind=algorithm plugin=page-algorithm}\n{ "title": "1. Two Sum", "lang": "python" }\n:::' },
-          'kind 和 plugin 说明谁来渲染，后面的 JSON 是它要的数据。人可以写，智能体也可以写。',
-        ],
-      },
-      {
-        heading: '页面把软件组合起来',
-        body: [
-          '一页里可以放任意多个块，它们读写同一份数据。页面上的属性（标题、标签，以及你需要的任何字段）就是这些插件共同的运行环境。于是一页不再是一份文档，而是一套服务：一节课、一个项目、一次实验、一份交给客户的方案。',
-          '这也是我们和 Notion 最大的不同。Notion 把块模型做成了标准，但它的块类型是固定的，嵌进来的网页只是一个读不到工作区数据的 iframe。BIU 借了它的块模型，只是把块类型交给了插件。',
-        ],
-      },
-      {
-        heading: '分享的是一页能用的软件',
-        body: [
-          '因为块来自插件，插件是代码，分享页面时 BIU 会把正文、附件和用到的插件源码一起打包。对方打开就能用，不用再装一遍工具、再搭一遍环境。',
-          '这就是我们说的「用页面组合软件去服务客户」：你做好的不是一份说明，而是一页能直接交付的软件。',
-        ],
-      },
-    ],
-  },
-  {
-    slug: 'page-is-the-boundary',
-    title: '页面，是唯一有边界的单位',
-    summary: '同一个插件放进两个页面，会表现出两种行为，却只有一份代码。页面属性就是插件的环境，这让 BIU 天然支持页面级的多租户。',
-    date: '2026-10-14',
-    sections: [
-      {
-        body: [
-          '在 BIU 里，块（Component）声明自己「是什么」，但「放在哪、按什么顺序、和谁一起」由页面决定。页面是整个体系里唯一带边界的单位，它有四层边界。',
-        ],
-      },
-      {
-        heading: '四层边界',
-        body: [
-          '逻辑：块的 id 是「页面 id::块 id」，天然带命名空间，不同页面的同名块不会相撞。',
-          '组织：顺序、布局和上下文都属于页面 —— 一页就是一次实验、一节课、一个项目。',
-          '交付：分享时以页为单位解析依赖，把插件源码一起带走。',
-          '环境：页面为里面的插件提供一组变量，同一份插件在不同页面里表现不同。',
-        ],
-      },
-      {
-        heading: '页面属性就是环境',
-        body: [
-          '我们没有另开一个 env 字段。页面已有的属性，本身就是插件读到的环境：',
-          { code: '同一个插件（一份代码）\n  ↓ 挂在不同页面\n页 A   title: 入门练习   tags: [easy, python]\n页 B   title: 算法冲刺   tags: [hard, rust]\n  ↓\n两种行为，没有第二份实现' },
-          '作用域由页面边界决定，而不是插件自己的配置。所以同一个插件可以同时服务很多个客户、很多个班级，彼此隔离。',
-        ],
-      },
-      {
-        heading: '组件是有限的原子，页面是无限的配方',
-        body: [
-          '块声明「要什么」，页面声明「怎么排」和「什么环境」。系统把这两层声明收敛成真实界面。于是做一页服务，就是写一份声明，而不是搭一个界面 —— 智能体做起来也一样轻松。',
-        ],
-      },
-    ],
-  },
-  {
-    slug: 'fewer-atoms',
-    title: '更少的原子，更多的组合',
-    summary: '要任务就造「任务」、要文档就造「文档」，功能越多概念越多。BIU 只用六种原子和一套操作，加一个领域只是再组合一次。',
-    date: '2026-10-14',
-    sections: [
-      {
-        body: [
-          '很多系统的概念和功能是一一对应的：要任务就造一套任务机制，要文档就造一套文档机制。N 个功能，N 套接口，调用方（界面、智能体、脚本）也要适配 N 遍。',
-        ],
-      },
-      {
-        heading: '六种原子',
-        body: [
-          'BIU 的原子集很小：',
-          { code: '路径 · 表 · 记录 · schema · 操作 · blurb' },
-          '任务、页面、技能、插件、合集、组件、会话、事件……都由这六种原子组合而成。每张表还会用 blurb 介绍自己是什么、能做什么，智能体不需要预先知道它长什么样。',
-        ],
-      },
-      {
-        heading: '一套操作',
-        body: [
-          '无论哪个领域，读写方式都一样，只有路径不同：',
-          { code: 'db_list   /tasks\ndb_read   /pages/<id>\ndb_update /page-blocks/<pageId>::<blockId>\ndb_create /plugins' },
-          '所以新增一个领域不需要再设计一套 API，登记一张表，它就和已有的表一样可读、可写、可查。',
-        ],
-      },
-      {
-        heading: '这不是「系统很简单」',
-        body: [
-          '该学的概念仍然要学。它说的是另一件事：概念和用法的个数，不随功能增长。也正因为如此，插件本身也能是一张表里的数据 —— 人和智能体都能用同一套操作造出新能力。',
-        ],
-      },
-    ],
-  },
-  {
-    slug: 'accumulate',
-    title: '让每一轮工作都留下来',
-    summary: '普通智能体的好结果用完就沉进聊天记录。在 BIU 里，结果会落成页面、块、技能和表 —— 人和智能体共享同一份积累。',
-    date: '2026-10-14',
-    sections: [
-      {
-        body: [
-          '用过 AI 助手的人都有这种体验：上周它帮你做了一张很好的对比表，这周想接着用，却要在聊天记录里翻半天，最后干脆让它重新生成一遍。',
-        ],
-      },
-      {
-        heading: '上下文不靠猜',
-        body: [
-          '在 BIU 里，人和智能体读写的是同一个工作区。你在页面上改了什么，智能体用同一套操作就能读到；它改了什么，界面上你立刻就能看到。不用每次重新交代背景 —— 你写到哪，它读到哪。',
-        ],
-      },
-      {
-        heading: '复用，而不是重新生成',
-        body: [
-          '让多数智能体做一个界面，意味着让它写上百行 HTML 和 JS，下次再写一遍。在 BIU 里，它只要写一个块声明，指向已经存在的插件，剩下的只是数据。一份插件可以被很多个页面复用，迭代页面约等于改一段 JSON。',
-        ],
-      },
-      {
-        heading: '沉淀是一次普通的写入',
-        body: [
-          '因为一切都是数据，好的结果可以直接落成一页、一个块、一个技能或一张表，不需要额外的机制。系统因此能一轮轮长起来，而不是每轮归零。',
-          '这对人同样成立：今天交给智能体的知识，明天依然可用，而且你能清楚看到它存在哪里。',
-        ],
-      },
-    ],
-  },
-  {
-    slug: 'open-and-transparent',
-    title: '开源、免费，数据看得见',
-    summary: '为什么 BIU 选择以 Apache 2.0 开源？因为一个装着你全部软件和数据的页面，应该是你能检查、能带走的。',
-    date: '2026-10-14',
-    sections: [
-      {
-        heading: '文件是底座，不是牢笼',
-        body: [
-          'BIU 的底层是 SQLite、目录和日志，但这层抽象没有把数据锁在接口后面。页面正文在 .biu/biu.sqlite，附件在 .biu/assets，技能文件真的能在磁盘上打开。你可以只用 BIU 的接口，也可以直接读盘。',
-          '所有动作都写进一条只追加的事件记录，界面只是它的投影。出了问题，可以沿着记录追溯「状态是怎么变成这样的」。',
-        ],
-      },
-      {
-        heading: '本机优先',
-        body: [
-          '桌面版把数据存在你自己的电脑上，离线也能用。智能体用你自己配置的模型密钥（DeepSeek、OpenAI、Anthropic 等），只有这一轮需要的内容会发给模型服务。',
-        ],
-      },
-      {
-        heading: '为什么免费',
-        body: [
-          '我们希望更多人用页面去组合软件，而不是先被价格挡在门外。代码以 Apache 2.0 发布，可以商用、修改和再分发；桌面版和自部署都不收费。官方云端服务还在准备中，上线时会公布价格。',
-          '欢迎在 GitHub 上提 issue、提交插件，或者发邮件到 348876414@qq.com 告诉我们你用页面组合出了什么。',
-        ],
-      },
-    ],
-  },
-]
+export { BLOG_AUTHOR, BLOG_POSTS, readingMinutes }
+export type { BlogPost } from './blog-posts.ts'
 
 function PostDate({ date }: { date: string }) {
   return <time dateTime={date}>{date.replace(/-/g, '.')}</time>
+}
+
+const DIAGRAM_TEXT = { fill: '#fff', fontSize: 14, textAnchor: 'middle' as const }
+const DIAGRAM_DIM = { fill: 'rgba(255,255,255,.6)', fontSize: 12, textAnchor: 'middle' as const }
+const DIAGRAM_BOX = { fill: '#0f0f0f', stroke: 'rgba(255,255,255,.28)', rx: 12 }
+
+function PageEnvDiagram() {
+  return (
+    <svg viewBox="0 0 640 260" role="img" aria-label="一个插件挂在页 A 和页 B 上，读到不同的属性">
+      <rect x="230" y="16" width="180" height="56" {...DIAGRAM_BOX} />
+      <text x="320" y="41" {...DIAGRAM_TEXT}>算法题卡片</text>
+      <text x="320" y="60" {...DIAGRAM_DIM}>一份插件代码</text>
+      <path d="M290 72 160 140M350 72 480 140" stroke="rgba(255,255,255,.4)" fill="none" />
+      <rect x="40" y="140" width="240" height="96" {...DIAGRAM_BOX} />
+      <text x="160" y="168" {...DIAGRAM_TEXT}>页 A · 入门练习</text>
+      <text x="160" y="192" {...DIAGRAM_DIM}>tags: easy, python</text>
+      <text x="160" y="216" {...DIAGRAM_DIM}>→ 出简单题，Python 模板</text>
+      <rect x="360" y="140" width="240" height="96" {...DIAGRAM_BOX} />
+      <text x="480" y="168" {...DIAGRAM_TEXT}>页 B · 算法冲刺</text>
+      <text x="480" y="192" {...DIAGRAM_DIM}>tags: hard, rust</text>
+      <text x="480" y="216" {...DIAGRAM_DIM}>→ 出难题，Rust 模板</text>
+    </svg>
+  )
+}
+
+const ATOMS = ['路径', '表', '记录', 'schema', '操作', 'blurb'] as const
+const ENTITIES = ['任务', '页面', '插件', '会话', '技能', '合集'] as const
+
+function AtomsDiagram() {
+  return (
+    <svg viewBox="0 0 640 220" role="img" aria-label="六种原子组合出任务、页面、插件、会话、技能、合集">
+      {ATOMS.map((atom, i) => (
+        <g key={atom}>
+          <rect x={20 + i * 102} y="20" width="88" height="44" {...DIAGRAM_BOX} />
+          <text x={64 + i * 102} y="47" {...DIAGRAM_TEXT}>{atom}</text>
+        </g>
+      ))}
+      <path d="M320 72v44" stroke="rgba(255,255,255,.4)" />
+      <text x="336" y="100" {...DIAGRAM_DIM} textAnchor="start">组合</text>
+      {ENTITIES.map((entity, i) => (
+        <g key={entity}>
+          <rect x={20 + i * 102} y="124" width="88" height="44" rx="12" fill="rgba(255,255,255,.06)" />
+          <text x={64 + i * 102} y="151" {...DIAGRAM_TEXT}>{entity}</text>
+        </g>
+      ))}
+      <text x="320" y="200" {...DIAGRAM_DIM}>同一套 db_list / db_read / db_update / db_create</text>
+    </svg>
+  )
+}
+
+function ArticleParagraph({ paragraph }: { paragraph: Paragraph }) {
+  if (typeof paragraph === 'string') return <p>{paragraph}</p>
+  if ('code' in paragraph) return <pre><code>{paragraph.code}</code></pre>
+  if ('image' in paragraph) {
+    return (
+      <figure className="site-article-figure">
+        <img src={paragraph.image} alt={paragraph.alt} loading="lazy" decoding="async" />
+        <figcaption>{paragraph.caption}</figcaption>
+      </figure>
+    )
+  }
+  return (
+    <figure className="site-article-figure site-article-diagram">
+      {paragraph.diagram === 'page-env' ? <PageEnvDiagram /> : <AtomsDiagram />}
+      <figcaption>{paragraph.caption}</figcaption>
+    </figure>
+  )
 }
 
 /** 博客总览 */
@@ -201,6 +90,7 @@ export function MarketingBlog({ onLogin, onStart }: { onLogin: SiteAction; onSta
         <p className="site-section-label">博客</p>
         <h1>BIU 是怎么想的</h1>
         <p className="site-page-lead">关于 All in One、页面与插件、智能体和开源的几篇长文。先读第一篇，就知道 BIU 为什么长成现在这样。</p>
+        <p className="site-blog-feed"><a href="/rss.xml">RSS 订阅</a> · 作者：{BLOG_AUTHOR.name}</p>
       </section>
 
       <section className="site-blog-list" aria-label="文章">
@@ -253,15 +143,18 @@ export function MarketingBlogPost({ onLogin, onStart }: { onLogin: SiteAction; o
           <p className="site-section-label"><Link to="/blog">博客</Link> · <PostDate date={post.date} /></p>
           <h1>{post.title}</h1>
           <p className="site-page-lead">{post.summary}</p>
+          <p className="site-article-byline">
+            <span className="site-article-avatar" aria-hidden>B</span>
+            <span>{BLOG_AUTHOR.name}</span>
+            <span>约 {readingMinutes(post)} 分钟读完</span>
+            <a href={`mailto:${BLOG_AUTHOR.email}`}>写信给我们</a>
+          </p>
         </header>
         <div className="site-article-body">
           {post.sections.map((section, i) => (
             <section key={section.heading ?? i}>
               {section.heading ? <h2>{section.heading}</h2> : null}
-              {section.body.map((paragraph, j) => (typeof paragraph === 'string'
-                ? <p key={j}>{paragraph}</p>
-                : <pre key={j}><code>{paragraph.code}</code></pre>
-              ))}
+              {section.body.map((paragraph, j) => <ArticleParagraph key={j} paragraph={paragraph} />)}
             </section>
           ))}
         </div>

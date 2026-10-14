@@ -1,34 +1,68 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { DownloadIcon, GITHUB_URL, GitHubIcon, SiteChrome, SiteFinalCta, type SiteAction } from './site-chrome.tsx'
+import { DownloadIcon, GitHubButton, SiteChrome, SiteFinalCta, type SiteAction } from './site-chrome.tsx'
 import { usePageMeta } from './use-page-meta.ts'
 
 /**
- * 产品截图。
- * P0-13：原先这里嵌 3 个 iframe，每个都会完整加载一次 BIU web 应用 —— 首屏 LCP 被拖死。
- * 换成 docs/demo 里的真实产品截图（已拷到 public/site/），首屏不再发 3 个应用。
- * 长期目标（P2-30）：换成不注册就能跑的受限沙盒。
+ * 真实界面：全部是 BIU 深色主题下的截图 / 录屏（public/site/）。
+ * 不嵌 iframe —— 每个 iframe 都会完整加载一次 web 应用，首屏会被拖死。
  */
 const PRODUCT_SURFACES = [
   {
-    id: 'component',
-    label: '组件',
-    image: '/site/demo-component.png',
-    alt: 'BIU 组件：页面里放着一个视频剪辑块，同一个组件也能在专属编辑器里打开',
+    id: 'page',
+    label: '一页服务',
+    video: { webm: '/site/demo-allinone.webm', mp4: '/site/demo-allinone.mp4' },
+    image: '/site/demo-allinone.webp',
+    alt: 'BIU 页面：一份算法面试陪跑，刊头、Excalidraw 画板、算法题卡片、代码运行块和 offer 对比矩阵放在同一页',
   },
   {
-    id: 'file-system',
-    label: '页面与数据',
-    image: '/site/demo-file-system.png',
-    alt: 'BIU 页面与数据：会话、页面、表格在同一个工作区里并排打开',
+    id: 'plugins',
+    label: '插件',
+    image: '/site/shot-plugins.webp',
+    alt: 'BIU 插件表：Excalidraw 画板、算法题卡片、代码运行块等插件，一键安装、启用',
   },
   {
-    id: 'context',
-    label: '会话上下文',
-    image: '/site/demo-context.png',
-    alt: 'BIU 会话上下文：页面、插件等工作区里的东西直接作为上下文交给智能体',
+    id: 'share',
+    label: '分享',
+    image: '/site/shot-share.webp',
+    alt: 'BIU 分享页：对方打开链接，页面里的画板和算法题卡片照样能用',
+  },
+  {
+    id: 'agent',
+    label: '智能体',
+    image: '/site/shot-agent.webp',
+    alt: 'BIU 会话：输入 @ 就能把页面和任务交给智能体当上下文',
   },
 ] as const
+
+/** 工作区里现成的插件，每张卡一句话说清它在页面里做什么。 */
+const PLUGIN_WALL = [
+  { glyph: '✎', name: 'Excalidraw 画板', body: '手绘风白板，放大就能画，源文件跟着页面走。' },
+  { glyph: '{}', name: '算法题卡片', body: '左边题面，右边代码，LeetCode 风的练习块。' },
+  { glyph: '▶', name: '代码运行块', body: 'Python、Go、Java 等十几种语言，页面里直接跑。' },
+  { glyph: '⚖', name: '方案对比块', body: '多方案 × 多维度加权打分，自动给出推荐。' },
+  { glyph: '◧', name: '视频编排', body: '用时间线脚本剪辑，前端实时合成预览。' },
+  { glyph: '</>', name: 'HTML', body: '静态卡片或能跑脚本的小应用，放映模式一键全屏。' },
+  { glyph: '$_', name: '页面终端', body: '真实交互终端，每个块一个独立会话。' },
+  { glyph: '⇄', name: 'API 调试块', body: '填好请求点发送，响应和历史都留在页面里。' },
+  { glyph: '◎', name: '浏览器', body: '网页卡片，点开就是侧栏里的真浏览器。' },
+  { glyph: '✓', name: '页面回归检查', body: '写一组断言，点一下逐条跑，对比上一次结果。' },
+  { glyph: '≡', name: '页面目录', body: '列出这一页的标题，点击跳转。' },
+  { glyph: '✦', name: '枪火', body: '2D 小游戏。连游戏都能是一个插件。' },
+] as const
+
+function usePrefersReducedMotion() {
+  const [reduced, setReduced] = useState(false)
+  useEffect(() => {
+    const query = typeof window !== 'undefined' ? window.matchMedia?.('(prefers-reduced-motion: reduce)') : undefined
+    if (!query) return
+    setReduced(query.matches)
+    const onChange = () => setReduced(query.matches)
+    query.addEventListener?.('change', onChange)
+    return () => query.removeEventListener?.('change', onChange)
+  }, [])
+  return reduced
+}
 
 /** All in One 的三层意思，每条指向产品页对应锚点。 */
 const PILLARS = [
@@ -72,6 +106,7 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
   })
   const [activeSurface, setActiveSurface] = useState(0)
   const surface = PRODUCT_SURFACES[activeSurface]!
+  const reducedMotion = usePrefersReducedMotion()
 
   return (
     <SiteChrome onLogin={onLogin} onStart={onStart}>
@@ -85,8 +120,17 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
             </p>
             <div className="site-cta-actions">
               <Link className="site-cta-primary" to="/download"><DownloadIcon />免费下载</Link>
-              <a className="site-cta-secondary" href={GITHUB_URL} target="_blank" rel="noreferrer"><GitHubIcon />GitHub</a>
+              <GitHubButton label="GitHub" />
             </div>
+            <img
+              className="site-hero-shot"
+              src="/site/shot-page.webp"
+              alt=""
+              width={1600}
+              height={1000}
+              loading="lazy"
+              decoding="async"
+            />
           </div>
           <p className="site-scroll-note">向下探索</p>
         </section>
@@ -94,8 +138,8 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
         <section className="site-product-demo" data-reveal>
           <div className="site-demo-heading">
             <p className="site-section-label">真实界面</p>
-            <h2>页面里放的是软件，不是截图</h2>
-            <p className="site-demo-lead">视频剪辑块就嵌在页面里，也能在专属编辑器里打开。页面、表格、会话都在同一个工作区，智能体看到的和你看到的是同一份东西。</p>
+            <h2>一页，就是一套服务</h2>
+            <p className="site-demo-lead">这是一份算法面试陪跑：刊头、Excalidraw 画板、算法题卡片、代码运行块、offer 对比矩阵，各是一个插件。放在同一页，就是交给学员的整套服务；分享出去，对方打开照样能用。</p>
             <div className="site-demo-tabs" role="tablist" aria-label="产品演示">
               {PRODUCT_SURFACES.map((item, index) => (
                 <button
@@ -112,16 +156,36 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
             </div>
           </div>
           <div className="site-demo-real-frame">
-            <img
-              key={surface.id}
-              className="site-demo-shot"
-              src={surface.image}
-              alt={surface.alt}
-              width={1920}
-              height={1080}
-              loading="lazy"
-              decoding="async"
-            />
+            {'video' in surface ? (
+              <video
+                key={surface.id}
+                className="site-demo-shot"
+                poster={surface.image}
+                aria-label={surface.alt}
+                width={1600}
+                height={1000}
+                autoPlay={!reducedMotion}
+                controls={reducedMotion}
+                muted
+                loop
+                playsInline
+                preload="metadata"
+              >
+                <source src={surface.video.webm} type="video/webm" />
+                <source src={surface.video.mp4} type="video/mp4" />
+              </video>
+            ) : (
+              <img
+                key={surface.id}
+                className="site-demo-shot"
+                src={surface.image}
+                alt={surface.alt}
+                width={1600}
+                height={1000}
+                loading="lazy"
+                decoding="async"
+              />
+            )}
           </div>
         </section>
 
@@ -142,6 +206,26 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
           <p className="site-capabilities-note" data-reveal>
             多数文档工具的块类型是固定的，嵌进来的网页也读不到你的数据。BIU 的块由插件提供，谁都能写，写好就能和页面里的其他块一起工作。
             <Link to="/compare/vs-notion">看和 Notion 的对比 →</Link>
+          </p>
+        </section>
+
+        <section className="site-plugin-wall" aria-label="插件">
+          <div className="site-plugin-wall-heading" data-reveal>
+            <p className="site-section-label">插件</p>
+            <h2>今天就能放进页面的软件</h2>
+            <p>下面这些都是工作区里现成的插件，装上就多一种块。缺的那一个，可以让智能体写一个。</p>
+          </div>
+          <div className="site-plugin-grid">
+            {PLUGIN_WALL.map((item) => (
+              <article key={item.name} data-reveal>
+                <span className="site-plugin-glyph" aria-hidden>{item.glyph}</span>
+                <h3>{item.name}</h3>
+                <p>{item.body}</p>
+              </article>
+            ))}
+          </div>
+          <p className="site-plugin-wall-note" data-reveal>
+            <Link to="/product#plugins">插件怎么写、怎么装 →</Link>
           </p>
         </section>
 

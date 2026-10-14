@@ -317,6 +317,9 @@ export const COMPARE_PAGES: ComparePage[] = [
   },
 ]
 
+/** 被问得最多的三组，放在总览最上面。 */
+export const COMPARE_FEATURED = ['vs-notion', 'vs-obsidian', 'vs-chatgpt'] as const
+
 export const COMPARE_CATEGORIES = [
   { name: '基础设施', slugs: ['vs-linux', 'vs-k8s'] },
   { name: '文档管理', slugs: ['vs-office', 'vs-obsidian', 'vs-notion'] },
@@ -401,6 +404,22 @@ export function MarketingCompareIndex({ onLogin, onStart }: { onLogin: SiteActio
         </section>
 
         <section className="site-compare-index">
+          <div className="site-compare-group site-compare-featured" data-reveal>
+            <h2>最常被问</h2>
+            <div className="site-compare-cards">
+              {COMPARE_FEATURED.map((slug) => {
+                const page = bySlug.get(slug)
+                if (!page) return null
+                return (
+                  <Link key={slug} to={`/compare/${slug}`} className="site-compare-card">
+                    <small>{page.category}</small>
+                    <h3>{page.title}</h3>
+                    <p>{page.opening}</p>
+                  </Link>
+                )
+              })}
+            </div>
+          </div>
           {COMPARE_CATEGORIES.map((category) => (
             <div key={category.name} className="site-compare-group" data-reveal>
               <h2>{category.name}</h2>

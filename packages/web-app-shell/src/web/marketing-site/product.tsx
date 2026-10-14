@@ -7,6 +7,8 @@ type Block = {
   title: string
   lead: string
   points: string[]
+  image: string
+  alt: string
 }
 
 const BLOCKS: Block[] = [
@@ -20,6 +22,8 @@ const BLOCKS: Block[] = [
       '页面上的属性就是这些插件共同的运行环境 —— 同一个插件放进不同页面，读到的是各自的配置和数据。',
       '多个块读写同一份数据，所以它们是一套服务，而不是几个互不相干的嵌入。',
     ],
+    image: '/site/shot-page.webp',
+    alt: '一个页面里放着刊头、Excalidraw 画板和算法题卡片，各是一个插件',
   },
   {
     id: 'plugins',
@@ -31,6 +35,8 @@ const BLOCKS: Block[] = [
       '插件先在沙箱里写、在页面里试，满意了再打包，人和智能体都能做。',
       '每个块本身也是一条数据，可以被查询、复制、复用到别的页面。',
     ],
+    image: '/site/shot-plugins.webp',
+    alt: '插件表：每个插件一行，安装、启用、停止都在这里',
   },
   {
     id: 'share',
@@ -42,6 +48,8 @@ const BLOCKS: Block[] = [
       '对方打开就能用，不需要再装一遍工具、再搭一遍环境。',
       '适合把一套做好的服务交给客户、学生或同事。',
     ],
+    image: '/site/shot-share.webp',
+    alt: '分享出去的页面：对方打开链接，画板和算法题卡片照样能用',
   },
   {
     id: 'agent',
@@ -53,6 +61,8 @@ const BLOCKS: Block[] = [
       '它的产出直接写成页面、表格、任务，下一轮接着用。',
       '缺工具时，它可以自己写一个插件挂进页面。',
     ],
+    image: '/site/shot-agent.webp',
+    alt: '会话输入框里输入 @，页面和任务直接成为智能体的上下文',
   },
   {
     id: 'tasks',
@@ -64,6 +74,8 @@ const BLOCKS: Block[] = [
       '上游完成后自动交给下游，执行轨迹和任务卡并排查看。',
       '人也可以随时接手、改派或验收。',
     ],
+    image: '/site/shot-tasks.webp',
+    alt: '任务表：每条任务有状态、优先级和难度，可以派给某个智能体',
   },
   {
     id: 'spaces',
@@ -75,6 +87,8 @@ const BLOCKS: Block[] = [
       '云端空间：多设备访问、成员权限、在线协作；可以自部署，官方云端服务即将上线。',
       '数据是透明的：既能通过接口读写，也能直接在磁盘上找到。',
     ],
+    image: '/site/shot-spaces.webp',
+    alt: '空间切换菜单：在不同空间之间切换，或创建新空间',
   },
 ]
 
@@ -112,14 +126,17 @@ export function MarketingProduct({ onLogin, onStart }: { onLogin: SiteAction; on
         <section className="site-block-list">
           {BLOCKS.map((block) => (
             <article key={block.id} id={block.id} className="site-block" data-reveal>
-              <span className="site-block-index">{block.index}</span>
-              <div>
+              <div className="site-block-copy">
+                <span className="site-block-index">{block.index}</span>
                 <h2>{block.title}</h2>
                 <p className="site-block-lead">{block.lead}</p>
                 <ul>
                   {block.points.map((point) => <li key={point}>{point}</li>)}
                 </ul>
               </div>
+              <figure className="site-block-media">
+                <img src={block.image} alt={block.alt} loading="lazy" decoding="async" />
+              </figure>
             </article>
           ))}
         </section>

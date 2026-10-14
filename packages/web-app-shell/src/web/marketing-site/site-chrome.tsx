@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'rea
 import { useReveal } from './use-reveal.ts'
 import { BRAND_PRINT_TILE, BrandMark, BrandPrint, useBrandConfig } from './brand-mark.tsx'
 import { Link, NavLink } from 'react-router-dom'
+import { formatStars, useGitHubStats } from './github.ts'
 
 export type SiteAction = () => void
 
@@ -44,6 +45,17 @@ export function DownloadIcon() {
   )
 }
 
+/** GitHub 按钮：拿到星标数就跟在后面显示，拿不到就只是一个按钮。 */
+export function GitHubButton({ label, className = 'site-cta-secondary' }: { label: string; className?: string }) {
+  const { stars } = useGitHubStats()
+  return (
+    <a className={className} href={GITHUB_URL} target="_blank" rel="noreferrer">
+      <GitHubIcon />{label}
+      {stars !== undefined ? <span className="site-gh-stars" aria-label={`${stars} 个星标`}>★ {formatStars(stars)}</span> : null}
+    </a>
+  )
+}
+
 type FooterLink = { label: string; to: string } | { label: string; href: string }
 
 const FOOTER_COLUMNS: ReadonlyArray<{ title: string; links: readonly FooterLink[] }> = [
@@ -60,7 +72,7 @@ const FOOTER_COLUMNS: ReadonlyArray<{ title: string; links: readonly FooterLink[
     title: '开源',
     links: [
       { label: 'GitHub', href: GITHUB_URL },
-      { label: '版本发布', href: `${GITHUB_URL}/releases` },
+      { label: '更新日志', to: '/changelog' },
       { label: '问题反馈', href: `${GITHUB_URL}/issues` },
       { label: 'Apache 2.0 许可', href: `${GITHUB_URL}/blob/main/LICENSE` },
     ],
@@ -70,6 +82,7 @@ const FOOTER_COLUMNS: ReadonlyArray<{ title: string; links: readonly FooterLink[
     links: [
       { label: '对比', to: '/compare' },
       { label: '安全', to: '/security' },
+      { label: '文档', to: '/docs' },
       { label: '博客', to: '/blog' },
       { label: '品牌', to: '/brand' },
     ],
@@ -85,7 +98,7 @@ export function SiteFinalCta({ title, label = '开源 · 免费' }: { title: Rea
         <h2>{title}</h2>
         <div className="site-cta-actions">
           <Link className="site-cta-primary" to="/download"><DownloadIcon />免费下载</Link>
-          <a className="site-cta-secondary" href={GITHUB_URL} target="_blank" rel="noreferrer"><GitHubIcon />在 GitHub 查看源码</a>
+          <GitHubButton label="在 GitHub 查看源码" />
         </div>
       </div>
     </section>

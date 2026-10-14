@@ -46,10 +46,20 @@ test('landing page embeds real empty product surfaces and opens account actions'
   // P0-13：演示区用静态截图，不再嵌 iframe（iframe 会完整加载 web 应用三次）
   assert.equal(screen.queryByTitle('BIU 页面界面预览'), null, '不应再有 iframe 预览')
 
-  fireEvent.click(screen.getByRole('tab', { name: '组件' }))
-  const shot = screen.getByRole('img', { name: /BIU 组件/ }) as HTMLImageElement
-  assert.equal(shot.getAttribute('src'), '/site/demo-component.png')
+  const video = document.querySelector('video.site-demo-shot') as HTMLVideoElement
+  assert.ok(video, '默认标签是「一页服务」录屏')
+  assert.equal(video.getAttribute('poster'), '/site/demo-allinone.webp')
+  assert.deepEqual(Array.from(video.querySelectorAll('source')).map((s) => s.getAttribute('src')), ['/site/demo-allinone.webm', '/site/demo-allinone.mp4'])
+  assert.ok(video.muted && video.loop, '自动播放的录屏必须静音循环')
+
+  fireEvent.click(screen.getByRole('tab', { name: '插件' }))
+  const shot = screen.getByRole('img', { name: /BIU 插件/ }) as HTMLImageElement
+  assert.equal(shot.getAttribute('src'), '/site/shot-plugins.webp')
   assert.equal(shot.getAttribute('loading'), 'lazy')
+
+  const wall = screen.getByRole('region', { name: '插件' })
+  assert.ok(wall.querySelectorAll('article').length >= 8, '首页插件墙列出现成的插件')
+  assert.match(wall.textContent ?? '', /Excalidraw/)
 
   fireEvent.click(screen.getByTestId('site-login'))
   assert.equal(screen.getByTestId('site-start').getAttribute('href'), '/download')
@@ -797,4 +807,82 @@ test('品牌页已接入路由与导航', () => {
   const brandLink = Array.from(nav.querySelectorAll('a')).find((a) => a.getAttribute('href') === '/brand')
   assert.ok(brandLink, '导航应出现 /brand 入口')
   assert.equal(brandLink!.textContent, '品牌')
+})
+
+test('下载页：按系统给主按钮，命令一键复制', async () => {
+  const { detectPlatform } = await import('./marketing-site/download.tsx')
+  assert.equal(detectPlatform({ userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' }), 'mac')
+  assert.equal(detectPlatform({ userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }), 'windows')
+  assert.equal(detectPlatform({ userAgent: 'Mozilla/5.0 (X11; Linux x86_64)' }), 'linux')
+  assert.equal(detectPlatform({ userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)' }), null)
+
+  renderSite('/download')
+  const grid = document.querySelector('.site-platform-grid')!
+  assert.deepEqual(Array.from(grid.querySelectorAll('h2')).map((h) => h.textContent), ['macOS', 'Windows', 'Linux'], 'Mac 只有一张卡')
+  const commands = Array.from(document.querySelectorAll('.site-copy-cmd code')).map((c) => c.textContent ?? '')
+  assert.ok(commands.some((c) => c.startsWith('xattr -dr com.apple.quarantine')), 'xattr 命令要能直接复制')
+  assert.ok(screen.getAllByRole('button', { name: '复制命令' }).length >= 2)
+  cleanup()
+})
+
+test('对比页：最常被问的三个排在最前', () => {
+  renderSite('/compare')
+  const featured = document.querySelector('.site-compare-featured')!
+  assert.match(featured.querySelector('h2')?.textContent ?? '', /最常被问/)
+  const links = Array.from(featured.querySelectorAll('a')).map((a) => a.getAttribute('href'))
+  assert.deepEqual(links, ['/compare/vs-notion', '/compare/vs-obsidian', '/compare/vs-chatgpt'])
+  assert.equal(document.querySelector('.site-compare-group'), featured, '「最常被问」是第一组')
+  cleanup()
+})
+
+test('场景页：卡片写明组合了哪些块，团队协作说明云端现状', () => {
+  renderSite('/use-cases')
+  const chips = document.querySelectorAll('.site-usecase-card .site-block-chips')
+  assert.ok(chips.length >= 6, '每张场景卡都列出组合的块')
+  cleanup()
+  renderSite('/use-cases/collaboration')
+  assert.ok(screen.getByRole('heading', { name: '这一页里组合了哪些块' }))
+  assert.match(document.querySelector('.site-usecase-note')?.textContent ?? '', /官方云端服务即将上线/)
+  cleanup()
+})
+
+test('产品页：每个板块配一张真实截图', () => {
+  renderSite('/product')
+  const images = Array.from(document.querySelectorAll('.site-block-media img'))
+  assert.ok(images.length >= 6)
+  assert.ok(images.every((img) => /^\/site\/shot-.+\.webp$/.test(img.getAttribute('src') ?? '')), '截图统一用 webp')
+  cleanup()
+})
+
+test('文档与更新日志不再是占位页', async () => {
+  renderSite('/docs')
+  const cards = Array.from(document.querySelectorAll('.site-doc-card'))
+  assert.ok(cards.length >= 4)
+  assert.ok(cards.every((a) => a.getAttribute('href')?.startsWith('https://github.com/helloooooooooooooo97/biu/')))
+  cleanup()
+  renderSite('/changelog')
+  assert.equal(screen.getByRole('heading', { level: 1 }).textContent, 'BIU 在变')
+  assert.ok(await screen.findByRole('link', { name: 'GitHub Releases' }), '读不到 GitHub 时给出兜底链接')
+  cleanup()
+})
+
+test('博客：有 RSS、作者署名，rss.xml 与文章同步', async () => {
+  const { BLOG_POSTS } = await import('./marketing-site/blog.tsx')
+  const { buildBlogRss } = await import('./marketing-site/blog-rss.ts')
+  renderSite('/blog')
+  assert.equal(screen.getByRole('link', { name: 'RSS 订阅' }).getAttribute('href'), '/rss.xml')
+  cleanup()
+  renderSite(`/blog/${BLOG_POSTS[0]!.slug}`)
+  const byline = document.querySelector('.site-article-byline')!
+  assert.match(byline.textContent ?? '', /BIU 团队/)
+  assert.match(byline.textContent ?? '', /分钟读完/)
+  cleanup()
+  const rss = readFileSync(resolve(process.cwd(), 'public/rss.xml'), 'utf8')
+  assert.equal(rss, buildBlogRss(process.env.BIU_SITE_URL ?? ''), 'public/rss.xml 过期了：npx tsx scripts/build-blog-rss.ts')
+})
+
+test('更新日志：Release 正文去掉 Markdown 记号', async () => {
+  const { releaseLines } = await import('./marketing-site/resources.tsx')
+  const body = "## macOS\n```bash\nxattr -dr x\n```\n## What's Changed\n* feat: 会话列表 by @someone in https://github.com/a/b/pull/3\n用 `make` 启动"
+  assert.deepEqual(releaseLines(body), ['macOS', 'xattr -dr x', 'feat: 会话列表（#3）', '用 make 启动'])
 })
