@@ -68,6 +68,7 @@ test('home 收窄后：深度内容下沉，导航指向独立页', () => {
   assert.ok(tile, '官网背景用重复图案铺满')
   assert.equal(tile?.getAttribute('width'), '28')
   assert.equal(tile?.getAttribute('height'), '28')
+  assert.equal(tile?.querySelector('rect'), null, '印花只要圆，不要圆角方底')
   const nav = screen.getByRole('navigation', { name: '官网' })
   assert.match(nav.textContent ?? '', /产品/)
   assert.match(nav.textContent ?? '', /定价/)
