@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState } from 'react'
-import { DownloadIcon, GITHUB_URL, SiteChrome, type SiteAction } from './site-chrome.tsx'
+import { DownloadIcon, GITHUB_URL, SiteChrome, SiteFaq, type SiteAction } from './site-chrome.tsx'
 import { formatDate, formatStars, useGitHubStats } from './github.ts'
 import { usePageMeta } from './use-page-meta.ts'
 
@@ -27,6 +27,13 @@ const SOURCE_STEPS = [
   'git clone https://github.com/helloooooooooooooo97/biu.git',
   'cd biu',
   'make',
+] as const
+
+const DOWNLOAD_FAQ = [
+  ['Mac 该选 Apple 芯片还是 Intel？', '点左上角苹果菜单 →「关于本机」：芯片一栏写 Apple M 系列就选 Apple 芯片，写 Intel 就选 Intel 芯片。'],
+  ['Windows 弹出 SmartScreen 拦截怎么办？', '选「更多信息」→「仍要运行」。代码全部开源，可以在 GitHub 上核对。'],
+  ['没有模型密钥能用吗？', '页面、表格和插件都能用；智能体需要配置一个模型密钥，DeepSeek、OpenAI、Anthropic 任选其一。'],
+  ['有手机版吗？', '目前只有桌面版：macOS 和 Windows 有安装包，Linux 从源码运行。'],
 ] as const
 
 /** 只用来决定先给哪个按钮；猜错了，下面三个平台都还在。 */
@@ -164,6 +171,8 @@ export function MarketingDownload({ onLogin, onStart }: { onLogin: SiteAction; o
             所有历史版本见 <a href={`${GITHUB_URL}/releases`} target="_blank" rel="noreferrer">版本发布</a>。
           </p>
         </section>
+
+        <SiteFaq title="安装遇到问题" items={DOWNLOAD_FAQ} />
     </SiteChrome>
   )
 }

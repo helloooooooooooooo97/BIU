@@ -1,4 +1,4 @@
-import { SiteChrome, SiteFinalCta, type SiteAction } from './site-chrome.tsx'
+import { SiteChrome, SiteFaq, SiteFinalCta, type SiteAction } from './site-chrome.tsx'
 import { usePageMeta } from './use-page-meta.ts'
 
 type Block = {
@@ -124,6 +124,14 @@ const ECOSYSTEM = [
   },
 ] as const
 
+const PRODUCT_FAQ = [
+  ['页面和普通文档有什么区别？', '文档只装文字；页面里每一块都是一个插件提供的软件，多个块读写同一份数据，合起来是一套服务。'],
+  ['插件从哪来？', '内置一批常用的，比如表格、画板、代码运行；也可以自己写，或者让智能体写。先在沙箱里试，满意了再打包。'],
+  ['对方打开分享的页面，要先装插件吗？', '不用。分享时正文、附件和页面用到的插件源码一起打包，对方打开就能用。'],
+  ['智能体能用哪些模型？', 'DeepSeek、OpenAI、Anthropic 等，用的是你自己的密钥。'],
+  ['本机空间和云端空间能同时用吗？', '可以。两种空间各自成立：私人资料放本机，协作内容放云端。'],
+] as const
+
 export function MarketingProduct({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
   usePageMeta({
     title: '产品',
@@ -198,6 +206,8 @@ export function MarketingProduct({ onLogin, onStart }: { onLogin: SiteAction; on
             ))}
           </div>
         </section>
+
+        <SiteFaq title="关于产品" items={PRODUCT_FAQ} />
 
         <SiteFinalCta title="先做一页" />
     </SiteChrome>

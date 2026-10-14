@@ -961,3 +961,28 @@ test('更新日志：Release 正文去掉 Markdown 记号', async () => {
   const body = "## macOS\n```bash\nxattr -dr x\n```\n## What's Changed\n* feat: 会话列表 by @someone in https://github.com/a/b/pull/3\n用 `make` 启动"
   assert.deepEqual(releaseLines(body), ['macOS', 'xattr -dr x', 'feat: 会话列表（#3）', '用 make 启动'])
 })
+
+test('常见问题：首页、产品、场景子页、对比、安全、定价、下载各有一组，博客与品牌不放', () => {
+  const expected: [string, string][] = [
+    ['/', '第一次听说 BIU'],
+    ['/product', '关于产品'],
+    ['/use-cases/research', '你可能想知道'],
+    ['/compare', '关于对比'],
+    ['/security', '关于数据'],
+    ['/pricing', '关于免费'],
+    ['/download', '安装遇到问题'],
+  ]
+  for (const [path, title] of expected) {
+    renderSite(path)
+    const faq = document.querySelector('.site-faq')
+    assert.ok(faq, `${path} 有常见问题`)
+    assert.equal(faq!.querySelector('h2')?.textContent, title)
+    assert.ok(faq!.querySelectorAll('details').length >= 2, `${path} 至少两问`)
+    cleanup()
+  }
+  for (const path of ['/blog', '/brand']) {
+    renderSite(path)
+    assert.equal(document.querySelector('.site-faq'), null, `${path} 不放常见问题`)
+    cleanup()
+  }
+})
