@@ -37,8 +37,8 @@ export function MarketingBrand({ onLogin, onStart }: { onLogin: SiteAction; onSt
         <p className="site-section-label">品牌</p>
         <h1>一个圆、两条线、三个块</h1>
         <p className="site-page-lead">
-          标记不是装饰。它说明 BIU 是什么：一个整体的空间，被结构切成可命名的部分，
-          但每一部分都还在同一个圆里。下面的颜色和线条都可以调 —— 这是你的空间，不是我们的。
+          标记不是装饰。它说明 BIU 是什么：一个圆是一个页面，里面切出的几块是各自独立的软件，
+          但它们都还在同一个圆里。下面的颜色和线条都可以调，调成你自己的版本。
         </p>
       </section>
 

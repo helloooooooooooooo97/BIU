@@ -23,35 +23,55 @@ const NAV_PRIMARY = [
   { label: '品牌', to: '/brand' },
 ] as const
 
-const FOOTER_COLUMNS = [
+export const GITHUB_URL = 'https://github.com/helloooooooooooooo97/biu'
+
+type FooterLink = { label: string; to: string } | { label: string; href: string }
+
+const FOOTER_COLUMNS: ReadonlyArray<{ title: string; links: readonly FooterLink[] }> = [
   {
     title: '产品',
     links: [
       { label: '产品总览', to: '/product' },
+      { label: '场景', to: '/use-cases' },
       { label: '定价', to: '/pricing' },
       { label: '下载', to: '/download' },
+    ],
+  },
+  {
+    title: '开源',
+    links: [
+      { label: 'GitHub', href: GITHUB_URL },
+      { label: '版本发布', href: `${GITHUB_URL}/releases` },
+      { label: '问题反馈', href: `${GITHUB_URL}/issues` },
+      { label: 'Apache 2.0 许可', href: `${GITHUB_URL}/blob/main/LICENSE` },
+    ],
+  },
+  {
+    title: '了解',
+    links: [
+      { label: '对比', to: '/compare' },
+      { label: '安全', to: '/security' },
+      { label: '品牌', to: '/brand' },
       { label: '本机与云端', to: '/product#spaces' },
     ],
   },
-  {
-    title: '资源',
-    links: [
-      { label: '文档', to: '/docs' },
-      { label: '更新日志', to: '/changelog' },
-      { label: '帮助中心', to: '/help' },
-      { label: '对比', to: '/compare' },
-    ],
-  },
-  {
-    title: '公司',
-    links: [
-      { label: '关于', to: '/about' },
-      { label: '博客', to: '/blog' },
-      { label: '客户案例', to: '/customers' },
-      { label: '安全', to: '/security' },
-    ],
-  },
-] as const
+]
+
+/** 每页底部的收尾行动：开源项目的入口只有两个 —— 下载，或者去看源码。 */
+export function SiteFinalCta({ title, label = '开源 · 免费' }: { title: ReactNode; label?: string }) {
+  return (
+    <section className="site-final-cta" data-reveal>
+      <div className="site-container">
+        <p className="site-section-label">{label}</p>
+        <h2>{title}</h2>
+        <div className="site-cta-actions">
+          <Link className="site-cta-primary" to="/download">免费下载 <span>↗</span></Link>
+          <a className="site-cta-secondary" href={GITHUB_URL} target="_blank" rel="noreferrer">在 GitHub 查看源码</a>
+        </div>
+      </div>
+    </section>
+  )
+}
 
 export function SiteHeader({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -116,8 +136,9 @@ export function SiteFooter({ onLogin, onStart }: { onLogin: SiteAction; onStart:
         {FOOTER_COLUMNS.map((column) => (
           <div key={column.title}>
             <strong>{column.title}</strong>
-            {column.links.map((link) => (
-              <Link key={`${column.title}:${link.to}`} to={link.to}>{link.label}</Link>
+            {column.links.map((link) => ('to' in link
+              ? <Link key={link.label} to={link.to}>{link.label}</Link>
+              : <a key={link.label} href={link.href} target="_blank" rel="noreferrer">{link.label}</a>
             ))}
           </div>
         ))}
@@ -128,9 +149,9 @@ export function SiteFooter({ onLogin, onStart }: { onLogin: SiteAction; onStart:
         </div>
       </div>
       <div className="site-footer-base">
-        <p className="site-footer-tagline">BIU · 让知识留下，让工作继续。</p>
+        <p className="site-footer-tagline">BIU · 用一个页面，组合所有软件</p>
         <p className="site-footer-legal">
-          <Link to="/security">安全</Link> · <Link to="/terms">隐私</Link> · <Link to="/terms">条款</Link> · © 2026 BIU
+          <Link to="/security">安全</Link> · <Link to="/terms">隐私与条款</Link> · Apache 2.0 · © 2026 BIU
         </p>
       </div>
     </footer>

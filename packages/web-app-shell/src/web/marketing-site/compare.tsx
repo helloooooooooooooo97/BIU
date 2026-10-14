@@ -1,5 +1,5 @@
 import { Link, useParams } from 'react-router-dom'
-import { SiteChrome, type SiteAction } from './site-chrome.tsx'
+import { GITHUB_URL, SiteChrome, SiteFinalCta, type SiteAction } from './site-chrome.tsx'
 import { usePageMeta } from './use-page-meta.ts'
 
 /**
@@ -100,23 +100,24 @@ export const COMPARE_PAGES: ComparePage[] = [
     slug: 'vs-notion',
     title: 'BIU vs Notion',
     category: '文档管理',
-    opening: 'Notion 把块模型和空间协作做成了心智标准。BIU 在这一层上多了一步：字段不必长在表里，而是作为属性挂在记录外面 —— 要给数据加一项信息，不用改表；权限也不用长在页面树里，它可以把「一组筛选条件」当成授权对象 —— 谁符合这个视图，谁就拿到这个角色。',
+    opening: 'Notion 把块模型和空间协作做成了心智标准，但它的块类型是固定的，页面里装不进新的软件。BIU 的块来自插件 —— 一页可以组合表格、画板、代码练习、视频剪辑，它们读写同一份数据。数据和权限上也多走了一步：属性可以挂在记录外面，不用改表；授权对象可以是一组筛选条件，而不是一份名单。',
     useWhen: '成熟的设计协作、海量模板、团队已经在用 Notion、权限只要「页面级 + 群组」就够',
-    biuWhen: '要给已有数据加属性而不动原表、同一批数据要能同时从多个角度组织、授权要按条件圈人而不是按名单、智能体要能读写工作区',
+    biuWhen: '要在一页里组合几个软件交给客户或团队、要给已有数据加属性而不动原表、同一批数据要能同时从多个角度组织、授权要按条件圈人而不是按名单、智能体要能读写工作区',
     columns: ['Notion', 'BIU'],
     rows: [
       { dimension: '给数据加一项信息', them: '⚠️ 改数据库 schema，动的是表本身、影响该表所有行；系统表还改不了', biu: '✅ 挂一个 facet：属性存在记录之外，原表不动，只影响被挂上的那些记录 —— 任意记录都能挂' },
       { dimension: '一条记录的组织方式', them: '⚠️ 一个页面属于一个数据库，多视角靠关联、rollup 或复制', biu: '✅ 可同时挂多个 facet，一个 facet 还能横跨不同的表' },
       { dimension: '按属性筛选', them: '✅ 数据库视图可以按属性过滤', biu: '✅ 视图可以按 facet 的字段筛选' },
-      { dimension: '块模型', them: '封闭集，类型由 Notion 定义', biu: '块类型来自可安装插件' },
+      { dimension: '页面里能放什么', them: '⚠️ 块类型由 Notion 定义；嵌入的网页只是一个 iframe，读不到工作区的数据', biu: '✅ 块由可安装插件提供，人和智能体都能写；同页的插件共用一份数据，一页就是一套服务' },
+      { dimension: '分享出去的是什么', them: '页面内容与链接', biu: '✅ 正文、附件和插件源码一起打包，对方打开就能用' },
       { dimension: '数据在哪', them: '只有云端，离线 ❌', biu: '✅ 建空间时选：本机 / 云端，本机空间离线可用' },
       { dimension: '授权给谁、授到哪', them: '⚠️ 人、群组（名单）；范围是页面 / 数据库这些实体', biu: '✅ 可以是具体账号，也可以是一个成员视图 —— 授权对象是 view_id，本身带筛选条件' },
       { dimension: '授权与数据的关系', them: '⚠️ 先建页面再往里加人，权限挂在实体上，新内容要逐条补授权', biu: '✅ 条件先写好，新记录只要符合条件就自动落进授权范围' },
       { dimension: '权限怎么算出来', them: '⚠️ 看 / 评 / 编 / 全权按页给；来源通常只告诉你「有权限」', biu: '✅ viewer / editor / manager / owner 多来源取最高，并逐级展开：直接授予 / 成员组 / 成员视图 / 继承自上一条 / 空间默认' },
       { dimension: '权限继承', them: '⚠️ 子页面继承父页面，父页在别人名下就没法重挂', biu: '✅ 记录可挂父级（inherit / private / members / restricted），父级不在你名下时也能继承' },
       { dimension: '边角控制', them: '⚠️ 邀请外部人粒度较粗；改权限要页面所有者及以上', biu: '✅ internal / external / guest 分类，有外部协作者自动升 shared；share 与 manage-permissions 拆成两个动作' },
-      { dimension: '智能体的权限', them: '⚠️ 以「集成」身份接入，基本全量可见', biu: '✅ 智能体是独立 actor，同一套授权判定，按记录裁到你的可见范围' },
-      { dimension: '智能体', them: '⚠️ AI 是附加功能，在侧栏，结果要手动搬进页面', biu: '✅ 一等公民，与人在同一份数据上操作，可被调度、可创建' },
+      { dimension: '智能体的权限', them: '⚠️ 以「集成」身份接入，按页面逐个分享给它，粒度到页面', biu: '✅ 智能体是独立 actor，同一套授权判定，按记录裁到你的可见范围' },
+      { dimension: '智能体', them: '⚠️ Notion AI 能读写页面和数据库，但不能给工作区新增一种块', biu: '✅ 与人在同一份数据上操作，可被调度，还能自己写插件' },
       { dimension: '成熟度', them: '✅ 协同编辑与权限打磨多年，模板与生态海量', biu: '⚠️ 模型更细，但协同编辑、权限打磨与插件生态都还没到 Notion 同级' },
     ],
   },
@@ -193,7 +194,7 @@ export const COMPARE_PAGES: ComparePage[] = [
   {
     slug: 'vs-cursor',
     title: 'BIU vs Cursor',
-    category: 'IDE 助手',
+    category: '编码 Harness',
     opening: 'Cursor 把智能体放进了编辑器。BIU 走得更远一步 —— 智能体本身就是数据，可以被读写、复制和分享。',
     useWhen: '在编辑器里写代码、需要深度代码理解与补全',
     biuWhen: '需要多个智能体协作、产出要沉淀成可复用对象、工作区不限于代码',
@@ -204,7 +205,7 @@ export const COMPARE_PAGES: ComparePage[] = [
       { dimension: '代码放哪', them: '你的 IDE / 项目', biu: '工作区记录 /<table>/<id>' },
       { dimension: '多智能体', them: '⚠️ 靠人在编辑器里切换', biu: '✅ 任务看板当总线' },
       { dimension: '上下文', them: '✅ @ 引用 + 代码索引（很强）', biu: '同一地址空间，读动作痕迹' },
-      { dimension: '产出沉淀', them: '⚠️ 落在你项目里', biu: '✅ 沉降为表 / 技能 / 页面' },
+      { dimension: '产出沉淀', them: '⚠️ 落在你项目里', biu: '✅ 沉淀为表 / 技能 / 页面' },
       { dimension: '代码补全体验', them: '✅ 强（BIU 不专精）', biu: '⚠️ 非专精领域' },
       { dimension: '形态', them: '应用', biu: '内核' },
     ],
@@ -224,7 +225,7 @@ export const COMPARE_PAGES: ComparePage[] = [
       { dimension: '智能体自己是什么', them: '⚠️ Harness 的配置与运行时对象', biu: '✅ 一条可寻址的记录' },
       { dimension: '插件化', them: '✅ 支持，开放式插件生态', biu: '✅ 声明即插件，写进页面就挂载' },
       { dimension: '扩展谁来做', them: '⚠️ 写插件的开发者', biu: '✅ 人和智能体同一套 db_*' },
-      { dimension: '产出落在哪', them: '⚠️ 你在终端里那个项目目录', biu: '✅ 沉降为表 / 技能 / 页面，可寻址' },
+      { dimension: '产出落在哪', them: '⚠️ 你在终端里那个项目目录', biu: '✅ 沉淀为表 / 技能 / 页面，可寻址' },
       { dimension: '界面', them: '终端（TUI）', biu: '✅ 页面本身也是数据，可直接编辑与复用' },
       { dimension: '多 agent', them: '✅ 支持编排', biu: '✅ 任务看板当总线，依赖成图' },
       { dimension: '模型选择', them: '以 DeepSeek 为主，可接入其他', biu: '✅ 模型可配，不绑定厂商' },
@@ -248,7 +249,7 @@ export const COMPARE_PAGES: ComparePage[] = [
       { dimension: '扩展谁来做', them: '⚠️ 写 TypeScript 的开发者', biu: '✅ 人和智能体同一套 db_*' },
       { dimension: '基础工具数', them: '刻意极简（4 个）', biu: '⚠️ db_* 一族，能力面更宽但不如它精简' },
       { dimension: '环境是什么', them: '本机文件系统 + 终端', biu: '/<table>/<id>，文件只是其中一类' },
-      { dimension: '产出落在哪', them: '⚠️ 项目目录与会话', biu: '✅ 沉降为表 / 技能 / 页面，可寻址' },
+      { dimension: '产出落在哪', them: '⚠️ 项目目录与会话', biu: '✅ 沉淀为表 / 技能 / 页面，可寻址' },
       { dimension: '界面', them: '终端（TUI），可复用组件', biu: '✅ 界面是数据，可被读写、复制、分享' },
       { dimension: '多 agent', them: '⚠️ 单 agent loop，编排层较弱', biu: '✅ 任务看板当总线，依赖成图' },
       { dimension: '嵌入到别处', them: '✅ 强，设计目标就是可嵌入', biu: '⚠️ 以内核为中心，嵌入要适配' },
@@ -266,9 +267,9 @@ export const COMPARE_PAGES: ComparePage[] = [
     columns: ['ChatGPT', 'BIU'],
     rows: [
       { dimension: '基本单位', them: '对话（message）', biu: '可寻址路径 /<table>/<id>' },
-      { dimension: '产出物去哪', them: '沉进聊天历史，复用要重新找', biu: '沉降成页面 / 表 / 技能' },
+      { dimension: '产出物去哪', them: '⚠️ 主要留在对话里，可用 Canvas 与项目整理', biu: '✅ 沉淀成页面 / 表 / 技能' },
       { dimension: '产出 UI 的成本', them: '智能体写上百行 HTML/CSS/JS，下次重写', biu: '写三个字段（kind + plugin + JSON），一个插件复用' },
-      { dimension: '智能体能否扩展系统', them: '❌ 能力由平台预置', biu: '✅ 可创建插件' },
+      { dimension: '智能体能否扩展系统', them: '⚠️ 可用 GPTs 与连接器扩展，但改不了工作区本身', biu: '✅ 可创建插件，挂进页面就能用' },
       { dimension: '上下文', them: '靠平台检索拼装', biu: '与环境同一地址空间' },
       { dimension: '通用知识问答', them: '✅ 强（BIU 不专精）', biu: '⚠️ 取决于所配模型' },
       { dimension: '数据在哪', them: '云端', biu: '建空间时选：本机 / 云端' },
@@ -285,7 +286,7 @@ export const COMPARE_PAGES: ComparePage[] = [
     rows: [
       { dimension: '智能体地位', them: '工具', biu: '智能体就是数据' },
       { dimension: '能否扩展自身', them: '⚠️ 靠 MCP 连接外部', biu: '✅ 智能体自己造插件' },
-      { dimension: '产出沉淀', them: '❌ 沉进对话', biu: '✅ 沉降为可寻址对象' },
+      { dimension: '产出沉淀', them: '⚠️ Artifacts 与项目能保留产出，但不是工作区里的数据', biu: '✅ 沉淀为可寻址对象' },
       { dimension: '多智能体协作', them: '⚠️ 有限', biu: '✅ 看板总线，依赖成图' },
       { dimension: '长文理解', them: '✅ 强（BIU 不专精）', biu: '⚠️ 取决于所配模型' },
       { dimension: '数据在哪', them: '云端', biu: '建空间时选：本机 / 云端' },
@@ -306,9 +307,9 @@ export const COMPARE_PAGES: ComparePage[] = [
       { dimension: '协作', them: '❌ 靠第三方同步 / Git', biu: '✅ 云端空间（成员 / 权限）' },
       { dimension: '结构化数据', them: '⚠️ 靠插件在文件上「算」', biu: '✅ 表是内核一等公民' },
       { dimension: '数据可见性', them: '✅ 纯文件（最透明）', biu: '✅ 两栖：接口或直接读盘' },
-      { dimension: '智能体', them: '❌ 靠第三方接模型', biu: '✅ 一等公民，同一地址空间' },
+      { dimension: '智能体', them: '⚠️ 靠社区插件接模型', biu: '✅ 一等公民，同一地址空间' },
       { dimension: '插件生态', them: '✅ 社区生态成熟', biu: '⚠️ 生态起步阶段' },
-      { dimension: '可追溯', them: '❌', biu: '✅ 只追加事件流' },
+      { dimension: '可追溯', them: '⚠️ 靠 Git 或同步服务的版本历史', biu: '✅ 只追加事件流' },
     ],
   },
 ]
@@ -317,8 +318,7 @@ export const COMPARE_CATEGORIES = [
   { name: '基础设施', slugs: ['vs-linux', 'vs-k8s'] },
   { name: '文档管理', slugs: ['vs-office', 'vs-obsidian', 'vs-notion'] },
   { name: '应用搭建', slugs: ['vs-airtable', 'vs-retool', 'vs-supabase'] },
-  { name: 'IDE 助手', slugs: ['vs-cursor'] },
-  { name: '编码 Harness', slugs: ['vs-dsh', 'vs-pi'] },
+  { name: '编码 Harness', slugs: ['vs-cursor', 'vs-dsh', 'vs-pi'] },
   { name: '通用助手', slugs: ['vs-chatgpt', 'vs-claude'] },
 ] as const
 
@@ -359,9 +359,9 @@ export function MarketingCompareIndex({ onLogin, onStart }: { onLogin: SiteActio
           <p className="site-section-label">对比</p>
           <h1>和每个领域最好的产品比</h1>
           <p className="site-page-lead">
-            不要问 BIU 能做什么，问问 BIU 不能做什么。
-            它们各自只解决一个面 —— 结构、协作、对话、本地、自主。
-            BIU 不是在这些面上做得更好，是把这些面合成一个内核。
+            这些产品各自在一个面上做到了最好 —— 结构、协作、对话、本地、编码。
+            BIU 想做的是把这些面装进同一个页面：文档、表格、应用和智能体共用一份数据。
+            每张表都如实写出 BIU 还做不到的地方。
           </p>
         </section>
 
@@ -383,15 +383,12 @@ export function MarketingCompareIndex({ onLogin, onStart }: { onLogin: SiteActio
               </div>
             </div>
           ))}
+          <p className="site-compare-note">
+            信息截至 2026 年 10 月。产品更新很快，如有出入，欢迎<a href={`${GITHUB_URL}/issues`} target="_blank" rel="noreferrer">在 GitHub 提出</a>。
+          </p>
         </section>
 
-        <section className="site-final-cta" data-reveal>
-          <div className="site-container">
-            <p className="site-section-label">开始使用 BIU</p>
-            <h2>看完对比，自己试一次</h2>
-            <button type="button" onClick={onStart}>创建你的空间 <span>↗</span></button>
-          </div>
-        </section>
+        <SiteFinalCta title="看完对比，自己试一次" />
     </SiteChrome>
   )
 }
@@ -455,13 +452,7 @@ export function MarketingCompareDetail({ onLogin, onStart }: { onLogin: SiteActi
           </section>
         ) : null}
 
-        <section className="site-final-cta" data-reveal>
-          <div className="site-container">
-            <p className="site-section-label">开始使用 BIU</p>
-            <h2>看完对比，自己试一次</h2>
-            <button type="button" onClick={onStart}>创建你的空间 <span>↗</span></button>
-          </div>
-        </section>
+        <SiteFinalCta title="看完对比，自己试一次" />
     </SiteChrome>
   )
 }

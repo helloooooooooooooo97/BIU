@@ -1,6 +1,6 @@
 import { Route, Routes, useLocation } from 'react-router-dom'
 import type { SiteAction } from './site-chrome.tsx'
-import { SiteChrome } from './site-chrome.tsx'
+import { SiteChrome, SiteFinalCta } from './site-chrome.tsx'
 import { MarketingHome } from './home.tsx'
 import { MarketingProduct } from './product.tsx'
 import { MarketingPricing } from './pricing.tsx'
@@ -34,7 +34,7 @@ type PlaceholderProps = {
 
 /** 规划中已登记、尚未开发的页面：先给一个诚实的占位，不留 404。 */
 function Placeholder({ label, title, body, onLogin, onStart }: PlaceholderProps) {
-  usePageMeta({ title: title.replace(/[。.]$/, ''), description: body, path: typeof window === 'undefined' ? '/' : window.location.pathname })
+  usePageMeta({ title, description: body, path: typeof window === 'undefined' ? '/' : window.location.pathname })
   return (
     <SiteChrome onLogin={onLogin} onStart={onStart}>
         <section className="site-page-hero" data-reveal>
@@ -42,13 +42,7 @@ function Placeholder({ label, title, body, onLogin, onStart }: PlaceholderProps)
           <h1>{title}</h1>
           <p className="site-page-lead">{body}</p>
         </section>
-        <section className="site-final-cta" data-reveal>
-          <div className="site-container">
-            <p className="site-section-label">开始使用 BIU</p>
-            <h2>先创建你的空间</h2>
-            <button type="button" onClick={onStart}>创建你的空间 <span>↗</span></button>
-          </div>
-        </section>
+        <SiteFinalCta title="先把 BIU 用起来" />
     </SiteChrome>
   )
 }
@@ -56,42 +50,42 @@ function Placeholder({ label, title, body, onLogin, onStart }: PlaceholderProps)
 const PLACEHOLDERS: Record<string, { label: string; title: string; body: string }> = {
   '/enterprise': {
     label: '企业',
-    title: '为组织而生的空间。',
-    body: '私有部署、权限模型、审计与 SSO 能力正在整理中。有具体需求可以直接联系销售。',
+    title: '在自己的服务器上运行',
+    body: 'BIU 以 Apache 2.0 开源，可以直接自部署。部署指南正在整理中，有问题欢迎在 GitHub 提 issue。',
   },
   '/changelog': {
     label: '更新日志',
-    title: 'BIU 在变。',
-    body: '每条更新独立成页，可以单独分享和搜索。内容正在整理中。',
+    title: 'BIU 在变',
+    body: '每个版本的更新说明目前发布在 GitHub Releases，官网的更新日志页正在整理中。',
   },
   '/about': {
     label: '关于',
-    title: '真正有用的智能，不应该打断工作。',
-    body: 'BIU 是一套让人、知识与智能体共同工作的空间系统。团队与理念页面正在编写中。',
+    title: '用一个页面，组合所有软件',
+    body: 'BIU 是一个开源的 All in One 工作空间：页面里的每一块都是插件提供的软件。团队与理念页面正在编写中。',
   },
   '/blog': {
     label: '博客',
-    title: '设计与实现。',
-    body: 'File System 设计、多智能体协作模型、本机优先架构、插件系统实践。首批文章正在撰写中。',
+    title: '设计与实现',
+    body: '页面如何组合插件、多智能体协作、本机优先架构、插件开发实践。首批文章正在撰写中。',
   },
   '/customers': {
     label: '客户案例',
-    title: '他们怎么用 BIU。',
+    title: '他们怎么用 BIU',
     body: '真实案例正在征集中。在此之前，场景页有详细的工作流演示。',
   },
   '/help': {
     label: '帮助中心',
-    title: '开始之前，你可能想知道。',
+    title: '开始之前，你可能想知道',
     body: '快速开始、分主题文档、常见问题与教程正在整理中。',
   },
   '/docs': {
     label: '文档',
-    title: '把 BIU 用起来。',
+    title: '把 BIU 用起来',
     body: '安装、配置模型密钥、File System 接口与插件开发的文档正在整理中。',
   },
   '/terms': {
     label: '法务',
-    title: '条款与隐私。',
+    title: '条款与隐私',
     body: '服务条款与隐私政策的正式文本正在准备中。',
   },
 }
@@ -138,8 +132,8 @@ export function MarketingSite({ onLogin, onStart, auth }: MarketingSiteProps) {
         element={
           <Placeholder
             label="404"
-            title="这一页还没建。"
-            body="官网正在搭建中。回到首页看看已有的内容。"
+            title="这一页还没建"
+            body="这个地址暂时没有内容，回到首页看看已有的页面吧。"
             onLogin={onLogin}
             onStart={onStart}
           />

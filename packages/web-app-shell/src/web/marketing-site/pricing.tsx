@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { SiteChrome, type SiteAction } from './site-chrome.tsx'
+import { Link } from 'react-router-dom'
+import { GITHUB_URL, SiteChrome, SiteFinalCta, type SiteAction } from './site-chrome.tsx'
 import { usePageMeta } from './use-page-meta.ts'
 
 /** 常见工具单价（每用户每月，美元）——源自 Notion 定价页的思路：让用户自己算。 */
@@ -17,56 +18,48 @@ type Plan = {
   price: string
   cadence: string
   features: readonly string[]
-  cta: string
+  cta: { label: string; kind: 'download' | 'github' | 'cloud' }
   featured: boolean
 }
 
 const PLANS: readonly Plan[] = [
   {
-    name: '免费',
+    name: '桌面版',
     price: '$0',
-    cadence: '个人起步',
-    featured: false,
-    features: ['本机空间', '页面与数据库', '基础智能体会话'],
-    cta: '立即使用',
-  },
-  {
-    name: '个人',
-    price: '按需',
-    cadence: '每用户每月',
-    features: ['本机 + 云端空间', '自定义模型', '插件与技能', '更多智能体额度'],
-    cta: '立即使用',
+    cadence: 'macOS / Windows',
     featured: true,
+    features: ['本机空间，数据存在自己电脑上', '页面、表格、插件、智能体全部功能', '自带模型密钥（DeepSeek / OpenAI / Anthropic）'],
+    cta: { label: '免费下载', kind: 'download' },
   },
   {
-    name: '团队',
-    price: '按需',
-    cadence: '每用户每月',
+    name: '自部署',
+    price: '$0',
+    cadence: 'Apache 2.0 开源',
     featured: false,
-    features: ['云端协作空间', '成员权限', '任务看板与多智能体', '共享上下文'],
-    cta: '联系我们',
+    features: ['完整源码，可审计、可修改', '部署在自己的服务器上', '可商用，保留许可与 NOTICE 即可'],
+    cta: { label: '查看源码', kind: 'github' },
   },
   {
-    name: '企业',
-    price: '定制',
-    cadence: '按规模',
+    name: '云端空间',
+    price: '$0',
+    cadence: '目前免费',
     featured: false,
-    features: ['私有部署', 'SSO 与审计', '专属支持', '合规协助'],
-    cta: '联系销售',
+    features: ['多设备访问', '成员与权限', '在线协作'],
+    cta: { label: '创建云端空间', kind: 'cloud' },
   },
 ] as const
 
 const PRICING_FAQ = [
-  ['本机空间要付费吗？', '本机空间的数据保存在当前设备。免费档即可使用基础能力，超出额度部分再按需升级。'],
-  ['本机和云端可以同时用吗？', '可以。两种空间各自成立，按工作内容选择：敏感资料留本机，协作内容放云端。'],
-  ['怎么升级或降级？', '在空间设置里随时调整，变更立即生效，按实际使用周期折算。'],
-  ['支持退款吗？', '支持。未使用完的周期可申请退回，具体见服务条款。'],
+  ['为什么免费？', 'BIU 是开源项目，代码以 Apache 2.0 许可发布。我们希望更多人用页面去组合软件，而不是先被价格挡在门外。'],
+  ['可以商用吗？', '可以。Apache 2.0 允许商用、修改和再分发，只需保留许可文本与 NOTICE，并标明改过的文件。'],
+  ['模型调用要花钱吗？', 'BIU 本身不收费。智能体调用的是你自己配置的模型服务，费用由模型服务商按它们的价格收取。'],
+  ['以后会收费吗？', '开源代码和桌面版会一直免费。如果将来云端托管推出付费档，会提前公告，并保证你的数据可以完整导出。'],
 ] as const
 
 export function MarketingPricing({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
   usePageMeta({
     title: '定价',
-    description: '把知识库、项目管理、AI 助手、会议记录、搜索和日程收进一个空间。用 ROI 计算器算算现在花了多少。',
+    description: 'BIU 开源、免费：桌面版、自部署、云端空间目前都不收费。用计算器看看把这些工具收进一个页面能省多少。',
     path: '/pricing',
   })
   const [selected, setSelected] = useState<string[]>(['knowledge', 'project', 'ai'])
@@ -84,19 +77,41 @@ export function MarketingPricing({ onLogin, onStart }: { onLogin: SiteAction; on
   )
   const yearly = monthly * 12 * Math.max(1, seats)
 
+  const renderCta = (plan: Plan) => {
+    if (plan.cta.kind === 'download') return <Link className="site-plan-cta" to="/download">{plan.cta.label}</Link>
+    if (plan.cta.kind === 'github') {
+      return <a className="site-plan-cta" href={GITHUB_URL} target="_blank" rel="noreferrer">{plan.cta.label}</a>
+    }
+    return <button type="button" className="site-plan-cta" onClick={onStart}>{plan.cta.label}</button>
+  }
+
   return (
     <SiteChrome onLogin={onLogin} onStart={onStart}>
         <section className="site-page-hero" data-reveal>
           <p className="site-section-label">定价</p>
-          <h1>更少工具，更多产出</h1>
+          <h1>免费，而且开源</h1>
           <p className="site-page-lead">
-            把知识库、项目管理、AI 助手、会议记录、搜索和日程收进一个空间。
-            先算算现在花了多少。
+            BIU 以 Apache 2.0 开源。桌面版、自部署和云端空间目前都不收费，你只需要为自己选的模型付费。
           </p>
         </section>
 
+        <section className="site-plans" aria-label="使用方式">
+          <div className="site-plans-grid">
+            {PLANS.map((plan) => (
+              <article key={plan.name} className={plan.featured ? 'is-featured' : ''} data-reveal>
+                <h3>{plan.name}</h3>
+                <p className="site-plan-price">{plan.price}<span>{plan.cadence}</span></p>
+                <ul>
+                  {plan.features.map((feature) => <li key={feature}>{feature}</li>)}
+                </ul>
+                {renderCta(plan)}
+              </article>
+            ))}
+          </div>
+        </section>
+
         <section className="site-roi" data-reveal aria-label="成本对比">
-          <h2>你现在的工具成本</h2>
+          <h2>这些工具，现在每月花多少</h2>
           <div className="site-roi-body">
             <fieldset className="site-roi-tools">
               <legend className="sr-only">正在使用的工具</legend>
@@ -126,26 +141,11 @@ export function MarketingPricing({ onLogin, onStart }: { onLogin: SiteAction; on
               <p className="site-roi-number">
                 <strong>${monthly}</strong><span>/人/月</span>
               </p>
-              <p className="site-roi-total">合计约 <strong>${yearly.toLocaleString('en-US')}</strong> / 年</p>
+              <p className="site-roi-total">合计约 <strong>${yearly.toLocaleString('en-US')}</strong> / 年，BIU 是 <strong>$0</strong></p>
               <p className="site-roi-note">
-                这些能力在 BIU 里由同一个空间承担 —— 结果是按你选的工具算出来的。
+                在 BIU 里，这些能力可以是同一个页面里的几个插件块。模型调用费用另算，取决于你选的服务商。
               </p>
             </div>
-          </div>
-        </section>
-
-        <section className="site-plans" aria-label="套餐">
-          <div className="site-plans-grid">
-            {PLANS.map((plan) => (
-              <article key={plan.name} className={plan.featured ? 'is-featured' : ''} data-reveal>
-                <h3>{plan.name}</h3>
-                <p className="site-plan-price">{plan.price}<span>{plan.cadence}</span></p>
-                <ul>
-                  {plan.features.map((feature) => <li key={feature}>{feature}</li>)}
-                </ul>
-                <button type="button" onClick={plan.cta === '立即使用' ? onStart : onLogin}>{plan.cta}</button>
-              </article>
-            ))}
           </div>
         </section>
 
@@ -156,11 +156,11 @@ export function MarketingPricing({ onLogin, onStart }: { onLogin: SiteAction; on
               <tr><th>维度</th><th>本机空间</th><th>云端空间</th></tr>
             </thead>
             <tbody>
-              <tr><td>数据位置</td><td>留在当前设备</td><td>云端托管</td></tr>
+              <tr><td>数据位置</td><td>你自己的电脑</td><td>云端托管</td></tr>
               <tr><td>离线</td><td>可用</td><td>需要网络</td></tr>
               <tr><td>多设备</td><td>—</td><td>支持</td></tr>
               <tr><td>成员协作</td><td>—</td><td>支持权限管理</td></tr>
-              <tr><td>适合</td><td>私人资料、敏感内容</td><td>团队共享、在线协作</td></tr>
+              <tr><td>价格</td><td>免费</td><td>目前免费</td></tr>
             </tbody>
           </table>
         </section>
@@ -168,7 +168,7 @@ export function MarketingPricing({ onLogin, onStart }: { onLogin: SiteAction; on
         <section className="site-faq">
           <div className="site-faq-heading" data-reveal>
             <p className="site-section-label">常见问题</p>
-            <h2>关于计费</h2>
+            <h2>关于免费</h2>
           </div>
           <div className="site-faq-list" data-reveal>
             {PRICING_FAQ.map(([question, answer]) => (
@@ -180,13 +180,7 @@ export function MarketingPricing({ onLogin, onStart }: { onLogin: SiteAction; on
           </div>
         </section>
 
-        <section className="site-final-cta" data-reveal>
-          <div className="site-container">
-            <p className="site-section-label">开始使用 BIU</p>
-            <h2>先免费用起来</h2>
-            <button type="button" onClick={onStart}>创建你的空间 <span>↗</span></button>
-          </div>
-        </section>
+        <SiteFinalCta title="现在就免费用起来" />
     </SiteChrome>
   )
 }

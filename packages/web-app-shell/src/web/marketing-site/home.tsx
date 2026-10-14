@@ -1,6 +1,6 @@
-import { useState, type FormEvent } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { SiteChrome, type SiteAction } from './site-chrome.tsx'
+import { GITHUB_URL, SiteChrome, SiteFinalCta, type SiteAction } from './site-chrome.tsx'
 import { usePageMeta } from './use-page-meta.ts'
 
 /**
@@ -11,94 +11,81 @@ import { usePageMeta } from './use-page-meta.ts'
  */
 const PRODUCT_SURFACES = [
   {
-    id: 'file-system',
-    label: '页面与数据',
-    image: '/site/demo-file-system.png',
-    alt: 'BIU File System：会话与页面是同一个工作区里并列打开的普通表',
-  },
-  {
     id: 'component',
     label: '组件',
     image: '/site/demo-component.png',
-    alt: 'BIU 组件：页面里组合可复用的视频块，同一组件在专属编辑器中打开',
+    alt: 'BIU 组件：页面里放着一个视频剪辑块，同一个组件也能在专属编辑器里打开',
+  },
+  {
+    id: 'file-system',
+    label: '页面与数据',
+    image: '/site/demo-file-system.png',
+    alt: 'BIU 页面与数据：会话、页面、表格在同一个工作区里并排打开',
   },
   {
     id: 'context',
     label: '会话上下文',
     image: '/site/demo-context.png',
-    alt: 'BIU 上下文：页面、会话、插件等工作区项目成为可移除的上下文标签',
+    alt: 'BIU 会话上下文：页面、插件等工作区里的东西直接作为上下文交给智能体',
   },
 ] as const
 
-/** 首页核心能力：三条，每条指向产品页对应锚点。 */
-const CAPABILITIES = [
+/** All in One 的三层意思，每条指向产品页对应锚点。 */
+const PILLARS = [
   {
-    index: '01',
-    title: 'File System',
-    body: '页面、表格、任务、插件都是同一个工作区里可寻址的对象。',
-    to: '/product#file-system',
+    title: '块就是软件',
+    body: '页面里的每一块都是一个真正能用的小软件：表格、画板、代码练习、视频剪辑……它们来自可安装的插件，不是平台写死的几种格式。',
+    to: '/product#plugins',
   },
   {
-    index: '02',
-    title: 'Agent 工作台',
-    body: '人和智能体操作同一份数据，不是两套需要同步的副本。',
-    to: '/product#agent',
+    title: '页面把软件组合起来',
+    body: '一页里放几个插件，就组合出一套服务。它们读写同一份数据，页面上的属性就是它们共同的运行环境。',
+    to: '/product#pages',
   },
   {
-    index: '03',
-    title: '数据自主',
-    body: '本机空间数据不出设备；云端空间按需协作。',
-    to: '/product#spaces',
+    title: '分享的是一页能用的软件',
+    body: '分享页面时，正文、附件和用到的插件源码一起打包。对方打开就能用，而不是收到一份截图或一个链接。',
+    to: '/product#share',
   },
 ] as const
 
-// 用户证言：真实用户证言待 P3 补齐，这里先标注为「团队自述」。
-const VOICES = [
-  { quote: '智能体读的就是我写的那一份数据，不用再复制粘贴给它。', who: 'BIU 团队' },
-  { quote: '产出会留下来变成页面和表，下一轮直接接着用。', who: 'BIU 团队' },
-  { quote: '敏感资料放本机空间，边界是清楚的。', who: 'BIU 团队' },
+const AGENT_POINTS = [
+  {
+    title: '读得到你的页面',
+    body: '智能体和你操作的是同一份数据，不用把资料复制粘贴给它。',
+  },
+  {
+    title: '产出直接落成页面',
+    body: '结果写成页面、表格或任务，不会沉在聊天记录里，下一轮接着用。',
+  },
+  {
+    title: '自己能造插件',
+    body: '缺一个工具，就让智能体写一个插件挂进页面。扩展不再只属于开发者。',
+  },
 ] as const
 
 export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
   usePageMeta({
-    title: 'BIU · 智能工作空间',
-    description: '人和智能体共享同一个空间：页面、数据、会话、任务都在一处，数据留在你的设备上。',
+    title: 'BIU · 用一个页面，组合所有软件',
+    description: '开源、免费的 All in One 工作空间：页面里的每一块都是一个插件提供的真软件，一个页面就能把它们组合成服务。',
     path: '/',
   })
-  const [task, setTask] = useState('')
   const [activeSurface, setActiveSurface] = useState(0)
   const surface = PRODUCT_SURFACES[activeSurface]!
-
-  const submitTask = (event: FormEvent) => {
-    event.preventDefault()
-    // 冷启动阶段没有匿名沙盒，用户输入先转交注册流程。
-    // TODO(P2-30)：首屏真能跑（不注册跑受限沙盒）后，改为透传首条消息。
-    void task
-    onStart()
-  }
 
   return (
     <SiteChrome onLogin={onLogin} onStart={onStart}>
         <section className="site-hero">
           <div className="site-hero-copy site-container" data-reveal>
-            <p className="site-eyebrow">BIU · 智能工作空间</p>
-            <h1>让知识留下，<br />让工作继续</h1>
+            <p className="site-eyebrow">开源 · 免费 · All in One</p>
+            <h1>一个页面，<br />组合所有软件</h1>
             <p className="site-hero-lead">
-              人和智能体共享同一个空间：页面、数据、会话、任务都在一处，<strong>数据留在你的设备上</strong>。
+              在 BIU 里，页面上的每一块都是一个真正能用的软件 —— 表格、画板、代码练习、视频剪辑，都来自插件。
+              把它们放进同一页，就是一套为你的客户准备好的服务。
             </p>
-            <form className="site-task-box" onSubmit={submitTask}>
-              <input
-                value={task}
-                onChange={(event) => setTask(event.target.value)}
-                aria-label="你想完成什么"
-                placeholder="你想在这个空间里完成什么？"
-              />
-              <button type="submit" aria-label="开始任务">↑</button>
-            </form>
-            <div className="site-task-suggestions" aria-label="任务示例">
-              {['整理研究报告', '创建项目空间', '分析资料并生成表格'].map((item) => (
-                <button type="button" key={item} onClick={() => setTask(item)}>{item}</button>
-              ))}
+            <div className="site-cta-actions">
+              <Link className="site-cta-primary" to="/download">免费下载 <span>↗</span></Link>
+              <a className="site-cta-secondary" href={GITHUB_URL} target="_blank" rel="noreferrer">GitHub</a>
             </div>
           </div>
           <p className="site-scroll-note">向下探索</p>
@@ -106,9 +93,9 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
 
         <section className="site-product-demo" data-reveal>
           <div className="site-demo-heading">
-            <p className="site-section-label">从任务到结果</p>
-            <h2>看见 BIU 如何工作</h2>
-            <p className="site-demo-lead">BIU 把资料、页面、数据库和对话收进同一个上下文。智能体可以理解工作、使用工具，并把结果写回空间。</p>
+            <p className="site-section-label">真实界面</p>
+            <h2>页面里放的是软件，不是截图</h2>
+            <p className="site-demo-lead">视频剪辑块就嵌在页面里，也能在专属编辑器里打开。页面、表格、会话都在同一个工作区，智能体看到的和你看到的是同一份东西。</p>
             <div className="site-demo-tabs" role="tablist" aria-label="产品演示">
               {PRODUCT_SURFACES.map((item, index) => (
                 <button
@@ -138,17 +125,36 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
           </div>
         </section>
 
-        <section className="site-capabilities" aria-label="核心能力">
+        <section className="site-capabilities" aria-label="All in One">
           <div className="site-capabilities-heading" data-reveal>
-            <p className="site-section-label">核心能力</p>
-            <h2>三条，说清 BIU 是什么</h2>
+            <p className="site-section-label">All in One</p>
+            <h2>不是把功能堆在一起，<br />是让页面装下软件</h2>
           </div>
           <div className="site-capability-grid">
-            {CAPABILITIES.map((item) => (
-              <article key={item.index} data-reveal>
+            {PILLARS.map((item) => (
+              <article key={item.title} data-reveal>
                 <h3>{item.title}</h3>
                 <p>{item.body}</p>
                 <Link to={item.to}>了解更多 →</Link>
+              </article>
+            ))}
+          </div>
+          <p className="site-capabilities-note" data-reveal>
+            多数文档工具的块类型是固定的，嵌进来的网页也读不到你的数据。BIU 的块由插件提供，谁都能写，写好就能和页面里的其他块一起工作。
+            <Link to="/compare/vs-notion">看和 Notion 的对比 →</Link>
+          </p>
+        </section>
+
+        <section className="site-agent" aria-label="智能体">
+          <div className="site-agent-heading" data-reveal>
+            <p className="site-section-label">智能体</p>
+            <h2>智能体也住在页面里</h2>
+          </div>
+          <div className="site-agent-grid">
+            {AGENT_POINTS.map((item) => (
+              <article key={item.title} data-reveal>
+                <h3>{item.title}</h3>
+                <p>{item.body}</p>
               </article>
             ))}
           </div>
@@ -163,42 +169,21 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
             <div className="site-space-options">
               <article data-reveal>
                 <span className="site-space-index">01</span>
-                <h3>云端空间</h3>
-                <p>随时访问，与团队一起工作。成员、权限与在线协作都在空间中管理。</p>
-                <small>多设备 · 成员权限 · 在线协作</small>
+                <h3>本机空间</h3>
+                <p>页面、表格和附件都存在你自己的电脑上，离线也能用。只有调用模型时，相关内容才会发给你配置的模型服务。</p>
+                <small>本地保存 · 离线可用 · 自带模型密钥</small>
               </article>
               <article data-reveal>
                 <span className="site-space-index">02</span>
-                <h3>本机空间</h3>
-                <p>数据留在当前设备。适合私人资料、离线工作和需要完全本地控制的内容。</p>
-                <small>本地保存 · 离线可用 · 清晰边界</small>
+                <h3>云端空间</h3>
+                <p>需要多设备访问、和团队一起工作时使用。成员、权限与在线协作都在空间里管理。</p>
+                <small>多设备 · 成员权限 · 在线协作</small>
               </article>
             </div>
           </div>
         </section>
 
-        <section className="site-voices" aria-label="用户评价">
-          <div className="site-voices-heading" data-reveal>
-            <p className="site-section-label">使用感受</p>
-            <h2>他们怎么用它</h2>
-          </div>
-          <div className="site-voice-grid">
-            {VOICES.map((voice) => (
-              <blockquote key={voice.quote} data-reveal>
-                <p>{voice.quote}</p>
-                <cite>{voice.who}</cite>
-              </blockquote>
-            ))}
-          </div>
-        </section>
-
-        <section className="site-final-cta" data-reveal>
-          <div className="site-container">
-            <p className="site-section-label">开始使用 BIU</p>
-            <h2>给知识一个归处<br />给工作一个继续的地方</h2>
-            <button type="button" onClick={onStart}>创建你的空间 <span>↗</span></button>
-          </div>
-        </section>
+        <SiteFinalCta title={<>开源，免费，<br />现在就能用</>} />
     </SiteChrome>
   )
 }

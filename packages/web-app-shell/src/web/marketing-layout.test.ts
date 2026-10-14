@@ -56,7 +56,7 @@ function countTracks(value: string): number {
 const SECTIONS = [
   '.site-hero', '.site-capabilities',
   '.site-product-demo', '.site-space-section',
-  '.site-voices', '.site-faq', '.site-final-cta',
+  '.site-agent', '.site-faq', '.site-final-cta',
 ]
 
 /** 采集某个 selector 在 base 中声明的水平留白（含 longhand 覆盖） */
@@ -98,7 +98,7 @@ test('布局容器宽度只有一套（不再 1000/1160 混用）', () => {
   // 只认「区块级容器」：负责居中和左右边距的那些。
   // 文字块的 max-width（hero 文案、标题行宽）是排版度量，允许不同。
   const containers = [
-    '.site-capabilities', '.site-voices', '.site-plans',
+    '.site-capabilities', '.site-agent', '.site-plans',
     '.site-platforms', '.site-compare-index', '.site-compare-body', '.site-compare-when',
     '.site-compare-more', '.site-usecase-grid', '.site-usecase-pain', '.site-usecase-how',
     '.site-usecase-more', '.site-block-list', '.site-roi', '.site-security-blocks',

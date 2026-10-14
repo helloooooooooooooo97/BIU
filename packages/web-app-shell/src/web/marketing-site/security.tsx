@@ -1,16 +1,26 @@
-import { SiteChrome, type SiteAction } from './site-chrome.tsx'
+import { SiteChrome, SiteFinalCta, type SiteAction } from './site-chrome.tsx'
 import { usePageMeta } from './use-page-meta.ts'
 
 const SECTIONS = [
   {
     index: '01',
     title: '本机空间',
-    body: '数据保存在当前设备。页面正文在本地数据库，附件在同设备的资源目录 —— 不会因为使用产品而上传到我们的服务器。',
+    body: '数据保存在你自己的电脑上：页面和表格在本地数据库，附件在同一台电脑的资源目录里。使用本机空间不会把数据上传到我们的服务器。',
   },
   {
     index: '02',
     title: '云端空间',
     body: '需要多设备访问和成员协作时使用。空间内的操作受账号鉴权保护，敏感操作进入待确认状态，不会静默执行。',
+  },
+  {
+    index: '03',
+    title: '模型调用',
+    body: '智能体工作时，会把这一轮需要的内容发给你配置的模型服务（DeepSeek、OpenAI、Anthropic 等），用的是你自己的密钥。在本机空间里，请求从你的电脑直接发往模型服务。',
+  },
+  {
+    index: '04',
+    title: '开源可审计',
+    body: '全部代码以 Apache 2.0 开源。数据存在哪、发给了谁，可以直接读源码核对；动作写进只追加的事件记录，事后也查得到。',
   },
 ] as const
 
@@ -48,15 +58,14 @@ const FLEX_POINTS = [
 
 const COMPETITORS = [
   ['Notion', '页面级授权，群组是一份名单'],
-  ['飞书', '部门来自组织架构，由外部系统同步'],
-  ['Cursor', '团队席位制，基本没有内容级授权'],
+  ['飞书', '协作者是人、群或部门，按文档逐个添加'],
   ['BIU', '授权对象和数据范围都是条件，两边都对得上才生效'],
 ] as const
 
 export function MarketingSecurity({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
   usePageMeta({
     title: '安全',
-    description: '本机空间数据不出设备，云端空间支持成员权限。权限不是一张名单，是数据范围与成员范围的一次匹配。',
+    description: '本机空间数据存在自己电脑上，模型用你自己的密钥，代码开源可审计。权限不是一张名单，是数据范围与成员范围的一次匹配。',
     path: '/security',
   })
 
@@ -66,7 +75,7 @@ export function MarketingSecurity({ onLogin, onStart }: { onLogin: SiteAction; o
           <p className="site-section-label">安全</p>
           <h1>你的数据在哪里，由你决定</h1>
           <p className="site-page-lead">
-            多数协作产品只有云端一种形态。BIU 提供本机空间，数据边界是产品结构决定的，不是设置项。
+            BIU 开源，数据存在哪、流向哪里都能核对。本机空间的边界由产品结构决定，不是一个设置项。
           </p>
         </section>
 
@@ -130,13 +139,7 @@ export function MarketingSecurity({ onLogin, onStart }: { onLogin: SiteAction; o
           </p>
         </section>
 
-        <section className="site-final-cta" data-reveal>
-          <div className="site-container">
-            <p className="site-section-label">开始使用 BIU</p>
-            <h2>把边界握在自己手里</h2>
-            <button type="button" onClick={onStart}>创建你的空间 <span>↗</span></button>
-          </div>
-        </section>
+        <SiteFinalCta title="把边界握在自己手里" />
     </SiteChrome>
   )
 }
