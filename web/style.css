@@ -8462,6 +8462,14 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   height: 100%;
   opacity: 0.5;
 }
+/* 印花上盖一层从下往上褪掉的黑，和首页标题区同一套渐变。 */
+.site-print::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, .72), transparent 55%);
+  pointer-events: none;
+}
 .site > main {
   position: relative;
   z-index: 1;
@@ -8605,13 +8613,6 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   overflow: hidden;
   padding: 112px 0 64px;
   background: transparent;
-}
-.site-hero::after {
-  content: "";
-  position: absolute;
-  inset: 45% 0 0;
-  background: linear-gradient(transparent, rgba(0, 0, 0, .72));
-  pointer-events: none;
 }
 .site-hero-copy {
   position: relative;
