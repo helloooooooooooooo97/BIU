@@ -16,6 +16,10 @@ export type UseCase = {
   how: { title: string; body: string }[]
   /** 子页：常见问题 */
   faq: [string, string][]
+  /** 这一页里组合了哪些块（插件或内置的表格、任务） */
+  blocks: string[]
+  /** 如实说明的限制，例如官方云端还没上线 */
+  note?: string
 }
 
 export const USE_CASES: UseCase[] = [
@@ -35,6 +39,7 @@ export const USE_CASES: UseCase[] = [
       { title: '结论留得住', body: '智能体的产出沉淀成页面、数据库、对比矩阵，不是一个会被刷掉的回答。' },
       { title: '对比可维护', body: '对比表就是一张真表，加一列维度不需要改代码，也不用重做。' },
     ],
+    blocks: ['浏览器', '表格', '方案对比块', 'Excalidraw 画板'],
     faq: [
       ['能存多少资料？', '资料存在你的空间里（本机或云端，创建时选择），容量取决于空间的存储配置。'],
       ['智能体会自己找资料吗？', '可以。它能读取空间里的页面与数据，也能通过 MCP 调用外部服务。'],
@@ -56,6 +61,7 @@ export const USE_CASES: UseCase[] = [
       { title: '决策留痕', body: '动作写入只追加的事件流 —— 状态和「它是怎么变成这样的」都查得到。' },
       { title: '智能体是协作者', body: '任务卡带 assignee 与 dependsOn，多智能体靠看板协作，不靠群聊。' },
     ],
+    blocks: ['表格', '任务', '方案对比块', 'API 调试块'],
     faq: [
       ['能做多人协作吗？', '云端空间支持成员与权限，角色分查看者 / 编辑者 / 管理者 / 所有者四档。'],
       ['和现有项目管理工具什么关系？', '可以并行使用。BIU 的价值是把需求、任务、决策与上下文放在同一处，不需要三份同步。'],
@@ -77,6 +83,7 @@ export const USE_CASES: UseCase[] = [
       { title: '一页装下整套工具', body: '文稿、素材板、剪辑、排期表都是同一页里的插件块，不用在几个软件之间来回切。' },
       { title: '分享的是可运行单元', body: '分享一个页面时，正文、附件和它引用的插件源码一起走，对方得到的是能跑的东西。' },
     ],
+    blocks: ['视频编排', 'HTML', 'Excalidraw 画板', '页面目录'],
     faq: [
       ['支持哪些内容格式？', '页面是 Markdown；图片、音视频、文件作为附件；复杂内容用插件块渲染。'],
       ['能发布到外部平台吗？', '可以通过 MCP 连接外部服务，把内容推送到目标平台。'],
@@ -98,6 +105,7 @@ export const USE_CASES: UseCase[] = [
       { title: '智能体读得到', body: '智能体与人在同一地址空间，读的是同一份知识，回答有据可查。' },
       { title: '维护成本低', body: '加一个维度、加一条记录都是写数据，不需要改代码或做迁移。' },
     ],
+    blocks: ['页面目录', '代码运行块', '页面终端', '表格'],
     faq: [
       ['和现有 Wiki 的区别？', 'BIU 里知识不是静态文本：它能被智能体读取、能被任务引用、能随维度演进。'],
       ['权限怎么控制？', '云端空间按成员角色和视图授权控制；本机空间的数据存在你自己的电脑上。'],
@@ -119,6 +127,7 @@ export const USE_CASES: UseCase[] = [
       { title: '两栖透明', body: '可以用接口读写，也可以直接读盘。抽象是便利，不是牢笼。' },
       { title: '模型用你自己的', body: '智能体用你配置的模型密钥工作，只有这一轮需要的内容会发给模型服务，空间里的其他数据不动。' },
     ],
+    blocks: ['表格', 'Excalidraw 画板', '代码运行块', '算法题卡片'],
     faq: [
       ['本机空间要联网吗？', '平时不需要联网。调用模型时需要网络，这一轮相关的内容会发给你配置的模型服务，其余数据仍只在本机。'],
       ['本机和云端能同时用吗？', '可以。两种空间各自成立，按内容选择：私人资料放本机，协作内容放云端。'],
@@ -140,6 +149,8 @@ export const USE_CASES: UseCase[] = [
       { title: '成员与权限', body: '查看者 / 编辑者 / 管理者 / 所有者四档角色，还能按视图授权；敏感操作进入待确认状态。' },
       { title: '可追溯', body: '只追加的事件流记录每个动作，界面是它的投影 —— 状态和来历都清楚。' },
     ],
+    blocks: ['任务', '表格', '页面回归检查块', 'HTML'],
+    note: '云端空间现在可以部署在你自己的服务器上；官方云端服务即将上线。',
     faq: [
       ['和普通协作文档的区别？', 'BIU 的成员不只是编辑文本：共享的是页面、数据、会话和智能体的完整上下文。'],
       ['能审计吗？', '每个动作都写进只追加的事件记录，事后可以逐条追溯。'],
@@ -148,6 +159,14 @@ export const USE_CASES: UseCase[] = [
 ]
 
 export const USE_CASE_CATEGORIES = USE_CASES
+
+function BlockChips({ blocks }: { blocks: string[] }) {
+  return (
+    <ul className="site-block-chips" aria-label="组合的块">
+      {blocks.map((name) => <li key={name}>{name}</li>)}
+    </ul>
+  )
+}
 
 /** 用例总览页 */
 export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
@@ -173,6 +192,8 @@ export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; o
             <span className="site-solution-index">{useCase.index}</span>
             <h2>{useCase.title}</h2>
             <p>{useCase.summary}</p>
+            <BlockChips blocks={useCase.blocks} />
+            {useCase.note ? <p className="site-usecase-note">{useCase.note}</p> : null}
             <small>{useCase.output}</small>
           </Link>
         ))}
@@ -215,6 +236,12 @@ export function MarketingUseCaseDetail({ onLogin, onStart }: { onLogin: SiteActi
         <h1>{useCase.title}</h1>
         <p className="site-page-lead">{useCase.summary}</p>
         <p className="site-usecase-output">交付物：{useCase.output}</p>
+        {useCase.note ? <p className="site-usecase-note">{useCase.note}</p> : null}
+      </section>
+
+      <section className="site-usecase-blocks" data-reveal>
+        <h2>这一页里组合了哪些块</h2>
+        <BlockChips blocks={useCase.blocks} />
       </section>
 
       <section className="site-usecase-pain" data-reveal>
