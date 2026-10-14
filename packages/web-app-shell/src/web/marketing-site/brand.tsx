@@ -73,6 +73,25 @@ export function MarketingBrand({ onLogin, onStart }: { onLogin: SiteAction; onSt
         <p className="site-brand-note">三块各一个颜色，线条粗细可以单独控制。</p>
         <BrandStudio />
       </section>
+
+      <section className="site-brand-motion" data-reveal>
+        <h2>动起来</h2>
+        <p className="site-brand-note">圆、两条弦和三个块一起跳。颜色跟着上面的调节走。</p>
+        <div className="site-brand-motion-stage">
+          <BrandMark
+            colors={[brand.c0, brand.c1, brand.c2]}
+            stroke={brand.stroke}
+            strokeWidth={brand.strokeWidth}
+            lineWidth={brand.lineWidth}
+            background={brand.background}
+            showBackground={false}
+            circleRatio={brand.circleRatio}
+            motion="hop"
+            displayWidth={200}
+            title="BIU 动效"
+          />
+        </div>
+      </section>
     </SiteChrome>
   )
 }
