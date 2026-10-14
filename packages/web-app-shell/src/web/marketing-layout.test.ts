@@ -263,10 +263,12 @@ test('卡片圆角统一 20px，hover 不再跳到 #2a2a2a', () => {
 
 test('印花只在内容栏两侧露出：横向渐变蒙版，栏内透明', () => {
   const body = baseRules.find(([s]) => s === '.site-print')?.[1] ?? ''
-  assert.match(body, /--print-edge:\s*calc\(\(100% - var\(--site-content\)\) \/ 2\)/)
+  assert.match(body, /--print-side:\s*max\(0px, calc\(\(100% - var\(--site-content\)\) \/ 2 \+ var\(--site-gutter\)\)\)/)
   assert.match(body, /(?<!-webkit-)mask-image:\s*var\(--print-mask\)/)
   assert.match(body, /-webkit-mask-image:\s*var\(--print-mask\)/)
-  assert.match(body, /transparent calc\(var\(--print-edge\) \+ var\(--site-gutter\)\)/, '内容栏左缘起必须全透明')
+  assert.match(body, /transparent var\(--print-side\),\s*transparent calc\(100% - var\(--print-side\)\)/, '内容栏（含留白）内必须全透明')
+  const alphas = [...body.matchAll(/rgba\(0, 0, 0, ([\d.]+)\)/g)].map((m) => Number(m[1]))
+  assert.ok(alphas.length >= 12, '渐变要多点缓动取样，不能只有首尾两点（线性过渡会出现分界线）')
 })
 
 test('深色官网里不再残留浅色主题的黑字编号', () => {
