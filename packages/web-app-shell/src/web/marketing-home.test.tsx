@@ -686,6 +686,10 @@ test('品牌标记：两块是 B 的两弧、半圆是 U，方位与明度都不
 
 test('标签页图标、README 横条、分享卡片都是当前品牌标记（深海配色），与默认配置同步', async () => {
   const { buildFaviconSvg, buildLockupSvg, buildOgImageSvg } = await import('./marketing-site/brand-assets.tsx')
+  const { BRAND_DEFAULT } = await import('./marketing-site/brand-mark.tsx')
+  assert.equal(BRAND_DEFAULT.strokeWidth, 0, '默认不画圆的描边')
+  assert.equal(BRAND_DEFAULT.lineWidth, 0, '默认不画分割线')
+  assert.equal(BRAND_DEFAULT.circleRatio, 0.7)
   const read = (name: string) => readFileSync(resolve(process.cwd(), 'public', name), 'utf8')
   const hint = '过期了：npx tsx scripts/build-brand-assets.tsx'
   assert.equal(read('favicon.svg'), buildFaviconSvg(), `favicon.svg ${hint}`)
