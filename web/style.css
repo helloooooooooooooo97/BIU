@@ -9481,7 +9481,7 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   transition: background .16s ease, color .16s ease;
 }
 .site-roi-tools label.is-on {
-  background: rgba(255, 255, 255, .11);
+  background: #0f0f0f;
   color: #fff;
 }
 .site-roi-tools label.is-on em { color: rgba(255, 255, 255, .88); }
