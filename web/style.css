@@ -10267,6 +10267,222 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 @media (max-width: 800px) { .site-plugin-wall { padding: 88px 20px; } }
 @media (max-width: 520px) { .site-plugin-grid { grid-template-columns: minmax(0, 1fr); } }
 
+/* ---------- 首页：场景 / 对比 / 想法，三扇门 ----------
+   跟在数据控制后面、FAQ 前面。场景是目录行，对比是三张实底卡片，
+   想法是描边文章加一条品牌带 —— 三种版式，避免又叠一层同样的深色卡。 */
+.site-home-entry {
+  width: 100%;
+  margin: 0;
+  box-sizing: border-box;
+  padding: var(--site-section-gap) 0;
+}
+.site-home-entry > * {
+  width: 100%;
+  max-width: var(--site-content);
+  margin-inline: auto;
+  box-sizing: border-box;
+  padding-inline: var(--site-gutter);
+  min-width: 0;
+}
+.site-home-entry-heading h2 {
+  margin: var(--site-label-gap) 0 16px;
+  font-size: clamp(32px, 3.4vw, 52px);
+  line-height: 1.08;
+  font-weight: 600;
+  letter-spacing: -.02em;
+}
+.site-home-entry-heading p:not(.site-section-label) {
+  margin: 0 0 var(--site-heading-gap);
+  max-width: 640px;
+  font-size: 16px;
+  line-height: 1.75;
+  color: rgba(255, 255, 255, .6);
+}
+.site-home-entry-more { margin: 28px 0 0; font-size: 14px; }
+.site-home-entry-more a { color: #fff; text-decoration: none; }
+.site-home-entry-more a:hover { text-decoration: underline; }
+
+.site-scene-grid { border-bottom: 1px solid rgba(255, 255, 255, .14); }
+.site-scene-row {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  column-gap: 8px;
+  align-items: start;
+  padding: 26px 0 28px;
+  border-top: 1px solid rgba(255, 255, 255, .14);
+  color: #fff;
+  text-decoration: none;
+}
+.site-scene-index {
+  padding-top: 6px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, .45);
+  font-variant-numeric: tabular-nums;
+}
+.site-scene-copy { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.site-scene-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+.site-scene-title h3 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -.02em;
+  line-height: 1.3;
+}
+.site-scene-title > span {
+  flex: none;
+  color: rgba(255, 255, 255, .35);
+  font-size: 16px;
+  transition: transform .2s ease, color .2s ease;
+}
+.site-scene-row p {
+  margin: 0;
+  max-width: 36em;
+  font-size: 14px;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, .6);
+}
+.site-scene-copy small {
+  font-size: 12px;
+  color: rgba(255, 255, 255, .45);
+}
+.site-scene-row:hover p { color: rgba(255, 255, 255, .88); }
+.site-scene-row:hover .site-scene-title > span { color: #fff; transform: translateX(4px); }
+
+@media (min-width: 801px) {
+  .site-scene-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 56px;
+  }
+}
+
+.site-home-compare-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  align-items: stretch;
+}
+.site-home-compare-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 28px 26px 24px;
+  border-radius: 20px;
+  background: #0f0f0f;
+  color: #fff;
+  text-decoration: none;
+}
+.site-home-compare-card:hover { background: #181818; }
+.site-home-compare-card small { font-size: 12px; color: rgba(255, 255, 255, .45); }
+.site-home-compare-card h3 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -.03em;
+  line-height: 1.15;
+}
+.site-home-compare-card p {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, .88);
+}
+.site-home-compare-card > span {
+  margin-top: auto;
+  padding-top: 8px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, .88);
+}
+
+.site-idea-posts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.site-idea-post {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 220px;
+  padding: 28px 26px 24px;
+  border-radius: 20px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14);
+  color: #fff;
+  text-decoration: none;
+}
+.site-idea-post:hover { background: #181818; box-shadow: none; }
+.site-idea-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, .45);
+}
+.site-idea-post h3 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -.02em;
+  line-height: 1.35;
+}
+.site-idea-post p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, .6);
+}
+.site-idea-go { margin-top: auto; padding-top: 8px; font-size: 14px; color: rgba(255, 255, 255, .88); }
+.site-idea-brand-wrap { margin-top: 18px; }
+.site-idea-brand {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 28px;
+  align-items: center;
+  padding: 28px 32px;
+  border-radius: 20px;
+  background: #0f0f0f;
+  color: #fff;
+  text-decoration: none;
+}
+.site-idea-brand:hover { background: #181818; }
+.site-idea-mark { display: block; width: 96px; height: auto; }
+.site-idea-brand-copy { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.site-idea-brand h3 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -.02em;
+  line-height: 1.3;
+}
+.site-idea-brand p {
+  margin: 0;
+  max-width: 40em;
+  font-size: 16px;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, .88);
+}
+@media (max-width: 960px) {
+  .site-home-compare-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 800px) {
+  .site-home-entry { padding: 88px 0; }
+  .site-idea-posts { grid-template-columns: minmax(0, 1fr); }
+  .site-idea-brand { grid-template-columns: 72px minmax(0, 1fr); gap: 18px; padding: 22px 20px; }
+  .site-idea-mark { width: 72px; }
+}
+@media (max-width: 640px) {
+  .site-home-compare-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .site-scene-title > span { transition: none; }
+}
+
 /* ---------- 下载页：主按钮 / 可复制命令 ---------- */
 .site-download-primary { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin-top: 32px; }
 .site-download-alt { font-size: 14px; color: rgba(255, 255, 255, .6); text-decoration: none; }

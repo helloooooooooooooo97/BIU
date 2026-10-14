@@ -265,7 +265,8 @@ test('键盘焦点可见：官网有统一的 focus-visible 样式', () => {
 
 test('卡片圆角统一 20px，hover 不再跳到 #2a2a2a', () => {
   const cards = ['.site-context-item > div', '.site-ecosystem-grid article', '.site-permission-points article',
-    '.site-compare-when article', '.site-usecase-how-grid article', '.site-brand-grid article']
+    '.site-compare-when article', '.site-usecase-how-grid article', '.site-brand-grid article',
+    '.site-home-compare-card', '.site-idea-post', '.site-idea-brand']
   const bad: string[] = []
   for (const sel of cards) {
     const body = baseRules.filter(([s]) => s === sel).map(([, b]) => b).join(';')
