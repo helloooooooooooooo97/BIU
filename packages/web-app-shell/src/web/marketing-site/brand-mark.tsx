@@ -262,18 +262,41 @@ export type BrandConfig = {
 
 /** 中线那一列印花的相对透明度；越往两侧越接近 1。 */
 export const BRAND_PRINT_FLOOR = 0.15
+/** 中线那一列印花的相对尺寸；越往两侧越接近 1。 */
+export const BRAND_PRINT_MIN_SCALE = 0.6
+/** 尺寸分几档。每档一个 pattern，档位少一点，DOM 也就少一点。 */
+const PRINT_SIZE_LEVELS = 5
 
-/**
- * 某一列印花的相对透明度：按列中心离视口中线的距离走 smoothstep，
- * 中线最淡、两侧最实。每一枚标记各取一个透明度，渐变靠标记本身表达，
- * 不用蒙版去裁 —— 也就不会出现被切掉半个的标记和可见的分界线。
- */
-export function brandPrintAlpha(center: number, width: number): number {
+/** 列中心离视口中线的远近，0 = 中线，1 = 视口边缘，按 smoothstep 缓动。 */
+function printEase(center: number, width: number): number {
   if (width <= 0) return 1
   const half = width / 2
   const t = Math.min(1, Math.abs(center - half) / half)
-  const eased = t * t * (3 - 2 * t)
+  return t * t * (3 - 2 * t)
+}
+
+/**
+ * 某一列印花的相对透明度：中线最淡、两侧最实。每一枚标记各取一个透明度，
+ * 渐变靠标记本身表达，不用蒙版去裁 —— 也就不会出现被切掉半个的标记和可见的分界线。
+ */
+export function brandPrintAlpha(center: number, width: number): number {
+  const eased = printEase(center, width)
   return Math.round((BRAND_PRINT_FLOOR + (1 - BRAND_PRINT_FLOOR) * eased) * 100) / 100
+}
+
+/** 某一列印花落在第几档尺寸（0 最小，PRINT_SIZE_LEVELS - 1 为原尺寸）。 */
+export function brandPrintLevel(center: number, width: number): number {
+  return Math.round(printEase(center, width) * (PRINT_SIZE_LEVELS - 1))
+}
+
+/** 把颜色压成同明度的灰：同色系印花只留形状和明暗，不带色相。 */
+export function toMonoGray(hex: string): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim())
+  if (!m) return hex
+  const n = parseInt(m[1], 16)
+  const y = Math.round(0.2126 * (n >> 16) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255))
+  const g = y.toString(16).padStart(2, '0')
+  return `#${g}${g}${g}`
 }
 
 function useViewportWidth(ref: RefObject<SVGSVGElement | null>) {
@@ -295,61 +318,88 @@ function useViewportWidth(ref: RefObject<SVGSVGElement | null>) {
 }
 
 /**
- * 一整张重复印花。标记只画一次（SVG pattern），再按列切成竖条，
- * 每条一个透明度 —— 几十个 rect，而不是逐枚挂上千个组件。
- * 透明度只随列变化，竖向滚动视差按格子循环时画面不跳。
+ * 一整张重复印花。标记按尺寸档位各画一次（SVG pattern），再按列切成竖条，
+ * 每条引用自己那一档、带自己的透明度 —— 几十个 rect，而不是逐枚挂上千个组件。
+ * 尺寸和透明度只随列变化，竖向滚动视差按格子循环时画面不跳。
+ *
+ * tone="mono" 把三块和线条压成同明度的灰；fade={false} 关掉透明度渐变
+ * （尺寸渐变保留，用来与底层逐枚对齐，比如鼠标聚光那一层）。
  */
 export function BrandPrint({
   config,
   tile = BRAND_PRINT_TILE,
   mark = BRAND_PRINT_MARK,
+  tone = 'color',
+  fade = true,
+  layer,
 }: {
   config: BrandConfig
   tile?: number
   mark?: number
+  tone?: 'color' | 'mono'
+  fade?: boolean
+  layer?: string
 }) {
   const ref = useRef<SVGSVGElement>(null)
   const width = useViewportWidth(ref)
-  const patternId = `site-brand-print-${useId().replace(/:/g, '')}`
+  const idBase = `site-brand-print-${useId().replace(/:/g, '')}`
+  const paint = tone === 'mono' ? toMonoGray : (color: string) => color
+  const colors: [string, string, string] = [paint(config.c0), paint(config.c1), paint(config.c2)]
+  const stroke = paint(config.stroke)
   const r = MAX_R * Math.min(1, Math.max(0.05, config.circleRatio))
-  const scale = mark / VB_SIZE
-  const lift = (lineWidth: number) => {
-    if (lineWidth <= 0) return 0
-    const onScreen = lineWidth * scale
-    return onScreen >= MIN_STROKE_PX ? lineWidth : MIN_STROKE_PX / scale
-  }
-  const inset = (tile - mark) / 2
   // 网格以视口中线对称：中线正好落在两列之间或一列正中，左右渐变一致。
   const offset = (((width / 2 - tile / 2) % tile) + tile) % tile
-  const columns: Array<{ x: number; alpha: number }> = []
+  const columns: Array<{ x: number; alpha: number; level: number }> = []
   for (let x = offset - tile; x < width; x += tile) {
-    columns.push({ x, alpha: brandPrintAlpha(x + tile / 2, width) })
+    const center = x + tile / 2
+    columns.push({ x, alpha: fade ? brandPrintAlpha(center, width) : 1, level: brandPrintLevel(center, width) })
   }
+  const levels = [...new Set(columns.map((column) => column.level))].sort((a, b) => a - b)
   return (
-    <svg className="site-print-sheet" width="100%" height="100%" ref={ref}>
+    <svg className="site-print-sheet" width="100%" height="100%" ref={ref} data-print-layer={layer}>
       <defs>
-        <pattern id={patternId} x={offset} width={tile} height={tile} patternUnits="userSpaceOnUse">
-          <svg x={inset} y={inset} width={mark} height={mark} viewBox={VIEW_BOX}>
-            <BrandMarkShapes
-              colors={[config.c0, config.c1, config.c2]}
-              r={r}
-              background={config.background}
-              showBackground={false}
-              stroke={config.stroke}
-              strokePx={lift(config.strokeWidth)}
-              linePx={lift(config.lineWidth)}
-            />
-          </svg>
-        </pattern>
+        {levels.map((level) => {
+          const size = mark * (BRAND_PRINT_MIN_SCALE + ((1 - BRAND_PRINT_MIN_SCALE) * level) / (PRINT_SIZE_LEVELS - 1))
+          const scale = size / VB_SIZE
+          const lift = (lineWidth: number) => {
+            if (lineWidth <= 0) return 0
+            return lineWidth * scale >= MIN_STROKE_PX ? lineWidth : MIN_STROKE_PX / scale
+          }
+          const inset = (tile - size) / 2
+          return (
+            <pattern
+              key={level}
+              id={`${idBase}-${level}`}
+              data-print-level={level}
+              x={offset}
+              width={tile}
+              height={tile}
+              patternUnits="userSpaceOnUse"
+            >
+              <svg x={inset} y={inset} width={size} height={size} viewBox={VIEW_BOX}>
+                <BrandMarkShapes
+                  colors={colors}
+                  r={r}
+                  background={config.background}
+                  showBackground={false}
+                  stroke={stroke}
+                  strokePx={lift(config.strokeWidth)}
+                  linePx={lift(config.lineWidth)}
+                />
+              </svg>
+            </pattern>
+          )
+        })}
       </defs>
       {columns.map((column) => (
         <rect
           key={column.x}
           data-print-column
+          data-print-level={column.level}
           x={column.x}
           width={tile}
           height="100%"
-          fill={`url(#${patternId})`}
+          fill={`url(#${idBase}-${column.level})`}
           opacity={column.alpha}
         />
       ))}

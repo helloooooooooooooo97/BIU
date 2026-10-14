@@ -69,13 +69,20 @@ test('home 收窄后：深度内容下沉，导航指向独立页', () => {
   assert.equal(tile?.getAttribute('width'), '42')
   assert.equal(tile?.getAttribute('height'), '42')
   assert.equal(tile?.querySelector('rect'), null, '印花只要圆，不要圆角方底')
-  const alphas = [...print.querySelectorAll('rect[data-print-column]')].map((rect) => Number(rect.getAttribute('opacity')))
+  const base = print.querySelector('[data-print-layer="base"]') as SVGSVGElement
+  const columns = [...base.querySelectorAll('rect[data-print-column]')]
+  const alphas = columns.map((rect) => Number(rect.getAttribute('opacity')))
   assert.ok(alphas.length > 10, '印花按列切条，每列一个透明度')
   const middle = Math.min(...alphas)
   assert.ok(middle >= 0.15 && middle < 0.3, '中线那列最淡，但仍然看得见')
   assert.equal(Math.max(alphas[0], alphas[alphas.length - 1]), 1, '最外侧一列不打折')
   const left = alphas.slice(0, alphas.indexOf(middle) + 1)
   assert.ok(left.every((alpha, i) => i === 0 || alpha <= left[i - 1]), '从左缘到中线逐列变淡')
+  const levels = columns.map((rect) => Number(rect.getAttribute('data-print-level')))
+  assert.equal(levels[alphas.indexOf(middle)], 0, '中线那列标记最小')
+  assert.equal(Math.max(levels[0], levels[levels.length - 1]), 4, '最外侧一列是原尺寸')
+  const fills = [...base.querySelectorAll('path[fill]')].map((path) => path.getAttribute('fill') ?? '')
+  assert.ok(fills.length > 0 && fills.every((fill) => /^#([0-9a-f]{2})\1\1$/i.test(fill) || fill === 'none'), '底层印花是同色系的灰')
   const nav = screen.getByRole('navigation', { name: '官网' })
   assert.match(nav.textContent ?? '', /产品/)
   assert.match(nav.textContent ?? '', /定价/)
@@ -97,6 +104,25 @@ test('印花随滚动向上走，速度慢于正文，并按格子循环', async
   fireEvent.scroll(root)
   await new Promise((resolve) => requestAnimationFrame(() => resolve(null)))
   assert.equal(print.style.getPropertyValue('--print-shift'), '-28px', '走过一格后从头循环（70 mod 42）')
+  cleanup()
+})
+
+test('鼠标聚光：彩色层只在鼠标附近露出，触屏不触发', async () => {
+  renderSite('/product')
+  const print = screen.getByTestId('site-print')
+  const spot = screen.getByTestId('site-print-spot')
+  const root = print.closest('.site') as HTMLElement
+  const columns = [...spot.querySelectorAll('rect[data-print-column]')]
+  assert.ok(columns.length > 0 && columns.every((rect) => rect.getAttribute('opacity') === '1'), '彩色层不再叠透明度渐变')
+  fireEvent.pointerMove(root, { pointerType: 'touch', clientX: 10, clientY: 10 })
+  assert.equal(print.dataset.spot, undefined, '触屏没有悬停，不点亮')
+  fireEvent.pointerMove(root, { pointerType: 'mouse', clientX: 300, clientY: 200 })
+  await new Promise((resolve) => requestAnimationFrame(() => resolve(null)))
+  assert.equal(print.dataset.spot, 'on')
+  assert.equal(print.style.getPropertyValue('--spot-x'), '300px')
+  assert.equal(print.style.getPropertyValue('--spot-y'), '200px')
+  fireEvent.pointerLeave(root)
+  assert.equal(print.dataset.spot, undefined, '鼠标离开后熄灭')
   cleanup()
 })
 
