@@ -9308,6 +9308,13 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   box-sizing: border-box;
   padding: 168px var(--site-gutter) 72px;
 }
+/* 场景总览：标题和六张卡片之间的空隙原来叠了 hero 底距，比卡片下方留白大一截。 */
+.site-page-hero:has(+ .site-usecase-grid) {
+  padding-bottom: 28px;
+}
+.site-page-hero:has(+ .site-usecase-grid) .site-page-lead {
+  margin-bottom: 0;
+}
 .site-page-hero h1 {
   margin: 14px 0 20px;
   font-size: clamp(34px, 5vw, 58px);
@@ -9964,7 +9971,7 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   gap: 18px;
   max-width: var(--site-content);
   margin: 0 auto;
-  padding: 8px var(--site-gutter) 72px;
+  padding: 0 var(--site-gutter) 28px;
 }
 .site-usecase-card {
   display: flex;
@@ -9981,6 +9988,10 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 .site-usecase-card h2 { margin: 0; font-size: 18px; font-weight: 600; }
 .site-usecase-card p { margin: 0; flex: 1; font-size: 14px; line-height: 1.7; color: rgba(255, 255, 255, .88); }
 .site-usecase-card small { font-size: 12px; letter-spacing: .02em; color: rgba(255, 255, 255, .88); }
+.site-usecase-card .site-solution-index {
+  color: rgba(255, 255, 255, .55);
+  line-height: 1;
+}
 
 /* 用例页：交付物行 */
 .site-usecase-output {
