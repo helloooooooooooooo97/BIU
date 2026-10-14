@@ -149,7 +149,7 @@ export const USE_CASES: UseCase[] = [
       { title: '成员与权限', body: '查看者 / 编辑者 / 管理者 / 所有者四档角色，还能按视图授权；敏感操作进入待确认状态。' },
       { title: '可追溯', body: '只追加的事件流记录每个动作，界面是它的投影 —— 状态和来历都清楚。' },
     ],
-    blocks: ['任务', '表格', '页面回归检查块', 'HTML'],
+    blocks: ['任务', '表格', '方案对比块', '页面目录'],
     note: '云端空间现在可以部署在你自己的服务器上；官方云端服务即将上线。',
     faq: [
       ['和普通协作文档的区别？', 'BIU 的成员不只是编辑文本：共享的是页面、数据、会话和智能体的完整上下文。'],
@@ -192,9 +192,10 @@ export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; o
             <span className="site-solution-index">{useCase.index}</span>
             <h2>{useCase.title}</h2>
             <p>{useCase.summary}</p>
-            <BlockChips blocks={useCase.blocks} />
-            {useCase.note ? <p className="site-usecase-note">{useCase.note}</p> : null}
-            <small>{useCase.output}</small>
+            <div className="site-usecase-card-blocks">
+              <span>这一页里有</span>
+              <BlockChips blocks={useCase.blocks} />
+            </div>
           </Link>
         ))}
       </section>

@@ -9981,7 +9981,6 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 18px;
-  align-items: start;
   max-width: var(--site-content);
   margin: 0 auto;
   padding: 8px var(--site-gutter) 72px;
@@ -10000,7 +9999,8 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 .site-usecase-card:hover { background: #181818; transform: translateY(-2px); }
 .site-usecase-card h2 { margin: 0; font-size: 18px; font-weight: 600; line-height: 1.3; }
 .site-usecase-card p { margin: 0; font-size: 14px; line-height: 1.7; color: rgba(255, 255, 255, .88); }
-.site-usecase-card small { display: block; margin: 0; font-size: 12px; line-height: 1.4; letter-spacing: .02em; color: rgba(255, 255, 255, .88); }
+.site-usecase-card-blocks { margin-top: auto; padding-top: 10px; }
+.site-usecase-card-blocks > span { display: block; margin-bottom: 8px; font-size: 12px; line-height: 1.4; color: rgba(255, 255, 255, .45); }
 .site-usecase-card .site-solution-index { line-height: 1; }
 
 /* 用例页：交付物行 */
