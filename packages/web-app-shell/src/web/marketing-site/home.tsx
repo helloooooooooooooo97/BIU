@@ -14,8 +14,8 @@ const PRODUCT_SURFACES = [
     video: { webm: '/site/demo-allinone.webm', mp4: '/site/demo-allinone.mp4' },
     image: '/site/demo-allinone.webp',
     size: [3840, 2400],
-    title: '一页，就是一套服务',
-    lead: '这是一份算法面试陪跑：刊头、Excalidraw 画板、算法题卡片、代码运行块、offer 对比矩阵，各是一个插件。放在同一页，就是交给学员的整套服务；分享出去，对方打开照样能用。',
+    title: '一份算法面试陪跑，一页交付',
+    lead: '刊头、Excalidraw 画板、算法题卡片、代码运行块、offer 对比矩阵，各是一个插件。放进同一页，就是交给学员的整套服务。',
     alt: 'BIU 页面：一份算法面试陪跑，刊头、Excalidraw 画板、算法题卡片、代码运行块和 offer 对比矩阵放在同一页',
   },
   {
@@ -168,8 +168,7 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
         <section className="site-product-demo" data-reveal>
           <div className="site-demo-heading">
             <p className="site-section-label">真实界面</p>
-            <h2>{surface.title}</h2>
-            <p className="site-demo-lead" aria-live="polite">{surface.lead}</p>
+            <h2>一页，就是一套服务</h2>
             <div className="site-demo-tabs" role="tablist" aria-label="产品演示">
               {PRODUCT_SURFACES.map((item, index) => (
                 <button
@@ -184,6 +183,10 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
                 </button>
               ))}
             </div>
+          </div>
+          <div className="site-demo-caption" role="tabpanel" aria-live="polite">
+            <h3>{surface.title}</h3>
+            <p className="site-demo-lead">{surface.lead}</p>
           </div>
           <div className="site-demo-real-frame">
             {'video' in surface ? (
