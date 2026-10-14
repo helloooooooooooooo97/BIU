@@ -279,6 +279,16 @@ function sessionsEqual(a: SessionListItem[], b: SessionListItem[]): boolean {
 /** send 乐观 busy 后，列表短暂仍可能 busy:false；超过此时长以列表为准。 */
 export const BUSY_HOLD_MS = 1500
 
+/** 官网未登录时本地没有账号 token。无 localStorage 的测试环境仍视为可拉列表。 */
+function hasAccountToken() {
+  if (typeof localStorage === 'undefined') return true
+  try {
+    return Boolean(localStorage.getItem('biu.account.token'))
+  } catch {
+    return true
+  }
+}
+
 export function turnInProgress(events: { type: string }[]) {
   for (let i = events.length - 1; i >= 0; i--) {
     const type = events[i]?.type
@@ -307,7 +317,8 @@ export class SessionViewService extends Service {
 
   constructor(ctx: Context) {
     super(ctx, 'sessionView')
-    void this.refreshSessions()
+    // 官网未登录时没有账号 token，会话列表接口会 401。等进入工作台再拉。
+    if (hasAccountToken()) void this.refreshSessions()
     void this.refreshApprovals()
     this.ctx.effect(() => () => this.stopDispatchedPoll())
     if (typeof window !== 'undefined') {
