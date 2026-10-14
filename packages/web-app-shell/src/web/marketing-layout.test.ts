@@ -55,7 +55,7 @@ function countTracks(value: string): number {
 
 const SECTIONS = [
   '.site-hero', '.site-capabilities',
-  '.site-product-demo', '.site-solutions', '.site-space-section',
+  '.site-product-demo', '.site-space-section',
   '.site-voices', '.site-faq', '.site-final-cta',
 ]
 
@@ -234,6 +234,36 @@ test('板块间距：小字→大字、大字→内容 各自统一', () => {
     if (!bodies.some((b) => b.includes('var(--site-label-gap)'))) bad.push(`${sel} 未走 label token`)
   }
   assert.deepEqual(bad, [], `这些板块的小字间距没统一：\n${bad.join('\n')}`)
+})
+
+const siteCss = css.slice(css.indexOf('\n.site {\n'))
+
+test('官网字号只走一套刻度，不再出现 11/15/17/19/25px 这种相邻档', () => {
+  const used = new Set([...siteCss.matchAll(/font-size:\s*(\d+)px/g)].map((m) => Number(m[1])))
+  const stray = [11, 15, 17, 19, 25].filter((n) => used.has(n))
+  assert.deepEqual(stray, [], `这些字号应并入相邻档：${stray.join(', ')}`)
+})
+
+test('键盘焦点可见：官网有统一的 focus-visible 样式', () => {
+  assert.match(siteCss, /\.site :focus-visible\s*\{[^}]*outline:\s*2px solid #fff/)
+})
+
+test('卡片圆角统一 20px，hover 不再跳到 #2a2a2a', () => {
+  const cards = ['.site-context-item > div', '.site-ecosystem-grid article', '.site-permission-points article',
+    '.site-compare-when article', '.site-usecase-how-grid article', '.site-brand-grid article']
+  const bad: string[] = []
+  for (const sel of cards) {
+    const body = baseRules.filter(([s]) => s === sel).map(([, b]) => b).join(';')
+    const r = body.match(/border-radius:\s*([^;]+)/)
+    if (!r || r[1].trim() !== '20px') bad.push(`${sel} -> ${r?.[1] ?? '无'}`)
+  }
+  assert.deepEqual(bad, [], `卡片圆角不统一：\n${bad.join('\n')}`)
+  assert.doesNotMatch(siteCss, /#2a2a2a/)
+})
+
+test('深色官网里不再残留浅色主题的黑字编号', () => {
+  const body = baseRules.find(([s]) => s === '.site-solution-index')?.[1] ?? ''
+  assert.doesNotMatch(body, /rgba\(0,\s*0,\s*0/)
 })
 
 test('选中态不用白色描边（靠底色区分）', () => {

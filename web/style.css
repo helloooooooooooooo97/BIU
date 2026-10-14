@@ -8491,7 +8491,6 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
 /* 站点区块统一容器：定宽 + 居中 + 统一左右留白。
    （原来部分区块通栏靠 padding 撑，部分区块定宽居中，宽屏下边缘对不齐。） */
 .site-hero-copy,
-.site-proof,
 .site-usecase-grid,
 .site-usecase-pain,
 .site-usecase-how,
@@ -8535,7 +8534,7 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   align-items: center;
   gap: 8px;
   color: #fff;
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 600;
   letter-spacing: -0.03em;
   text-decoration: none;
@@ -8667,26 +8666,6 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   font-size: 12px;
   writing-mode: vertical-rl;
 }
-.site-intro {
-  width: 100%;
-  max-width: var(--site-content);
-  margin-inline: auto;
-  box-sizing: border-box;
-  padding: var(--site-section-gap) var(--site-gutter) calc(var(--site-section-gap) + 20px);
-}
-/* label → 标题 → 正文：上下排版，不再左右分栏 */
-.site-intro .site-section-label { margin: 0 0 var(--site-label-gap); }
-.site-intro-copy {
-  margin: var(--site-heading-gap) 0 0;
-  max-width: 640px;
-  color: rgba(255, 255, 255, .88);
-  font-size: 16px;
-  line-height: 1.75;
-}
-.site-intro h2 {
-  max-width: 880px;
-}
-.site-intro h2,
 .site-space-heading h2,
 .site-final-cta h2 {
   margin: 0;
@@ -8729,40 +8708,6 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   max-width: 520px;
   margin: 14px 0 0;
   color: rgba(255, 255, 255, .88);
-  font-size: 15px;
-  line-height: 1.55;
-}
-.site-manifesto {
-  display: grid;
-  grid-template-columns: 1fr 1.4fr;
-  min-height: 680px;
-  background: #080808;
-}
-.site-manifesto-mark {
-  display: grid;
-  place-items: center;
-  overflow: hidden;
-  color: #111;
-  font-size: min(62vw, 720px);
-  font-weight: 600;
-  line-height: 1;
-  background: radial-gradient(circle, #2d2d2d, #0a0a0a 64%);
-}
-.site-manifesto-copy {
-  align-self: center;
-  padding: 80px 9vw 80px 5vw;
-}
-.site-manifesto blockquote {
-  margin: 28px 0;
-  font-size: clamp(36px, 4.3vw, 64px);
-  font-weight: 500;
-  letter-spacing: -.045em;
-  line-height: 1.08;
-}
-.site-manifesto-copy > p:last-child {
-  max-width: 550px;
-  margin: 0;
-  color: rgba(255, 255, 255, .88);
   font-size: 16px;
   line-height: 1.55;
 }
@@ -8797,7 +8742,7 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   color: #fff;
   padding: 10px 12px;
   font: inherit;
-  font-size: 15px;
+  font-size: 16px;
   outline: none;
 }
 .site-task-box input::placeholder { color: rgba(255, 255, 255, .88); }
@@ -8808,7 +8753,7 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   border-radius: 10px;
   background: #fff;
   color: #000;
-  font-size: 19px;
+  font-size: 20px;
   cursor: pointer;
 }
 .site-task-suggestions {
@@ -8859,7 +8804,6 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   line-height: 1.75;
 }
 .site-demo-heading h2,
-.site-solutions-heading h2,
 .site-continuity-heading h2,
 .site-ecosystem-heading h2,
 .site-faq-heading h2 {
@@ -8909,73 +8853,9 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   object-fit: contain;
   object-position: top left;
 }
-.site-solutions {
-  padding: 140px var(--site-gutter);
-  background: #f2f0eb;
-  color: #111;
-}
-.site-solutions .site-section-label { color: rgba(0, 0, 0, .5); }
-.site-solutions-heading {
-  display: grid;
-  grid-template-columns: 1fr 2fr;
-  gap: 24px;
-  margin-bottom: 90px;
-}
-.site-solutions-heading p:last-child {
-  grid-column: 2;
-  max-width: 500px;
-  margin: 0;
-  color: rgba(0, 0, 0, .58);
-  font-size: 16px;
-  line-height: 1.5;
-}
-.site-solution-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  border-top: 1px solid rgba(0, 0, 0, .22);
-  border-left: 1px solid rgba(0, 0, 0, .22);
-}
-.site-solution-grid article {
-  position: relative;
-  min-height: 300px;
-  padding: 25px;
-  border-right: 1px solid rgba(0, 0, 0, .22);
-  border-bottom: 1px solid rgba(0, 0, 0, .22);
-  box-sizing: border-box;
-}
 .site-solution-index {
-  color: rgba(0, 0, 0, .42);
-  font-size: 11px;
-}
-.site-solution-grid h3 {
-  margin: 62px 0 12px;
-  font-size: 28px;
-  font-weight: 500;
-  letter-spacing: -.035em;
-}
-.site-solution-grid p {
-  max-width: 380px;
-  margin: 0;
-  color: rgba(0, 0, 0, .6);
-  font-size: 14px;
-  line-height: 1.5;
-}
-.site-solution-grid small {
-  position: absolute;
-  left: 25px;
-  bottom: 24px;
-  color: rgba(0, 0, 0, .42);
-}
-.site-solution-grid button {
-  position: absolute;
-  right: 20px;
-  top: 20px;
-  width: 34px;
-  height: 34px;
-  border: 1px solid rgba(0, 0, 0, .18);
-  border-radius: 50%;
-  background: transparent;
-  cursor: pointer;
+  color: rgba(255, 255, 255, .55);
+  font-size: 12px;
 }
 .site-continuity {
   width: 100%;
@@ -9001,13 +8881,13 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
 .site-context-item > div {
   min-height: 180px;
   padding: 22px;
-  border-radius: 6px;
+  border-radius: 20px;
   background: #0f0f0f;
   box-sizing: border-box;
 }
 .site-context-flow span {
   color: rgba(255, 255, 255, .88);
-  font-size: 11px;
+  font-size: 12px;
 }
 .site-context-flow strong {
   display: block;
@@ -9046,7 +8926,7 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
 .site-ecosystem-grid article {
   min-height: 420px;
   padding: 25px;
-  border-radius: 5px;
+  border-radius: 20px;
   background: #0f0f0f;
   box-sizing: border-box;
 }
@@ -9065,7 +8945,7 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
 }
 .site-ecosystem-grid h3 {
   margin: 0;
-  font-size: 25px;
+  font-size: 24px;
   font-weight: 500;
   letter-spacing: -.035em;
 }
@@ -9100,7 +8980,7 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
 .site-faq-list details:last-child { border-bottom: 1px solid rgba(0, 0, 0, .24); }
 .site-faq-list summary {
   padding: 25px 8px;
-  font-size: 17px;
+  font-size: 18px;
   cursor: pointer;
 }
 .site-faq-list details p {
@@ -9203,23 +9083,16 @@ html:not(.has-js) .site [data-reveal] {
   }
   .site-hero h1 { font-size: clamp(36px, 10vw, 44px); }
   .site-scroll-note { display: none; }
-  .site-intro {
-    padding: 88px 20px;
-  }
-  .site-intro h2,
-  .site-intro-copy { margin-top: var(--site-heading-gap); }
   .site-task-box { margin-top: 24px; }
   .site-task-suggestions { display: none; }
   /* 产品演示已通栏浅色：留白交回自身内部容器，这里只压窄间距 */
   .site-product-demo { padding: 88px 0; }
   .site-demo-heading,
-  .site-solutions-heading,
   .site-continuity-heading,
   .site-ecosystem-heading {
     grid-template-columns: 1fr;
   }
   .site-demo-heading h2,
-  .site-solutions-heading h2,
   .site-continuity-heading h2,
   .site-ecosystem-heading h2 {
     grid-column: 1;
@@ -9234,22 +9107,17 @@ html:not(.has-js) .site [data-reveal] {
     min-height: 0;
     aspect-ratio: 16 / 9;
   }
-  .site-solutions { padding: 88px 20px; }
-  .site-solution-grid { grid-template-columns: 1fr; }
   .site-continuity { padding: 88px 20px; }
   .site-context-flow {
     grid-template-columns: 1fr;
     margin-top: 64px;
   }
   .site-context-flow > i { transform: rotate(90deg); justify-self: center; }
-  .site-space-inner,
-  .site-manifesto {
+  .site-space-inner {
     grid-template-columns: 1fr;
   }
   .site-space-section { padding: 88px 0; }
   .site-space-options { margin-top: var(--site-heading-gap); }
-  .site-manifesto-mark { min-height: 360px; }
-  .site-manifesto-copy { padding: 80px 20px; }
   .site-ecosystem { padding: 88px 20px; }
   .site-ecosystem-grid { grid-template-columns: 1fr; margin-top: 64px; }
   .site-ecosystem-grid article { min-height: 360px; }
@@ -9259,20 +9127,15 @@ html:not(.has-js) .site [data-reveal] {
   }
   .site-faq-list { margin-top: 48px; }
   .site-final-cta { min-height: 520px; padding: 64px 0; }
-  /* 统一窄屏栅格：这三个区块原先没有移动端覆盖，
+  /* 统一窄屏栅格：这两个区块原先没有移动端覆盖，
      会和邻居（20px）错开 12px。 */
-  .site-proof { padding-left: 20px; padding-right: 20px; }
   .site-capabilities,
   .site-voices { padding-left: 0; padding-right: 0; }
   /* 多页基础样式在本段之后声明；提高特异性，避免 32px 桌面留白反盖窄屏值。 */
-  .site .site-proof { padding-left: 20px; padding-right: 20px; }
   .site .site-capabilities,
   .site .site-voices { padding-left: 0; padding-right: 0; }
-  .site-proof > *,
   .site-capabilities > *,
   .site-voices > * { min-width: 0; }
-  .site .site-proof-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .site .site-proof-strip li { padding: 22px 18px; }
   .site-capability-grid,
   .site-voice-grid { grid-template-columns: minmax(0, 1fr); }
   .site-final-cta h2 { margin-top: var(--site-label-gap); font-size: clamp(36px, 10vw, 44px); }
@@ -9320,34 +9183,10 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 }
 .site-page-lead {
   max-width: 640px;
-  font-size: 17px;
+  font-size: 18px;
   line-height: 1.75;
   color: rgba(255, 255, 255, .88);
 }
-
-/* 社会证明条 */
-.site-proof { max-width: var(--site-content); margin: 0 auto; padding: 8px var(--site-gutter) var(--site-section-gap); }
-.site-proof-strip {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 0;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  border: 0;
-  border-radius: 20px;
-  overflow: hidden;
-  background: rgba(255, 255, 255, .12);
-}
-.site-proof-strip li {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 26px 24px;
-  background: transparent;
-}
-.site-proof-strip strong { font-size: 24px; font-weight: 600; letter-spacing: -.01em; }
-.site-proof-strip span { font-size: 13px; color: rgba(255, 255, 255, .88); }
 
 /* 首页核心能力三条：区块通栏，内容仍走统一容器。 */
 .site-capabilities {
@@ -9386,7 +9225,7 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   background: #0f0f0f;
 }
 .site-capability-grid h3 { margin: 0; font-size: 20px; font-weight: 600; }
-.site-capability-grid p { margin: 0; font-size: 15px; line-height: 1.7; color: rgba(255, 255, 255, .88); }
+.site-capability-grid p { margin: 0; font-size: 16px; line-height: 1.7; color: rgba(255, 255, 255, .88); }
 .site-capability-grid a {
   margin-top: auto;
   font-size: 14px;
@@ -9443,9 +9282,9 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 }
 .site-block-index { font-size: 14px; color: rgba(255, 255, 255, .88); }
 .site-block h2 { margin: 0 0 8px; font-size: clamp(24px, 3vw, 34px); font-weight: 600; letter-spacing: -.02em; }
-.site-block-lead { margin: 0 0 18px; font-size: 17px; color: rgba(255, 255, 255, .88); }
+.site-block-lead { margin: 0 0 18px; font-size: 18px; color: rgba(255, 255, 255, .88); }
 .site-block ul { margin: 0; padding-left: 18px; }
-.site-block li { margin-bottom: 10px; font-size: 15px; line-height: 1.75; color: rgba(255, 255, 255, .88); }
+.site-block li { margin-bottom: 10px; font-size: 16px; line-height: 1.75; color: rgba(255, 255, 255, .88); }
 
 /* 上下文流程：用 span 包裹以便加箭头 */
 .site-context-item { display: contents; }
@@ -9510,7 +9349,7 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 .site-roi-number { margin: 0; display: flex; align-items: baseline; gap: 6px; }
 .site-roi-number strong { font-size: 44px; font-weight: 600; letter-spacing: -.03em; }
 .site-roi-number span { font-size: 14px; color: rgba(255, 255, 255, .88); }
-.site-roi-total { margin: 0; font-size: 15px; color: rgba(255, 255, 255, .88); }
+.site-roi-total { margin: 0; font-size: 16px; color: rgba(255, 255, 255, .88); }
 .site-roi-note { margin: auto 0 0; font-size: 13px; line-height: 1.7; color: rgba(255, 255, 255, .88); }
 
 /* 定价页：套餐 */
@@ -9557,7 +9396,7 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 .site-role-table h2 { margin: 0 0 22px; font-size: clamp(22px, 2.6vw, 30px); font-weight: 600; }
 .site-space-compare table,
 .site-requirements table,
-.site-role-table table { width: 100%; border-collapse: collapse; font-size: 15px; }
+.site-role-table table { width: 100%; border-collapse: collapse; font-size: 16px; }
 .site-space-compare th,
 .site-space-compare td,
 .site-requirements th,
@@ -9649,14 +9488,14 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   right: -14px;
   transform: translateY(-50%);
   font-style: normal;
-  font-size: 15px;
+  font-size: 16px;
   color: rgba(255, 255, 255, .88);
 }
 
 .site-permission-points { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
 .site-permission-points article {
   padding: 24px 22px;
-  border-radius: 18px;
+  border-radius: 20px;
   background: #0f0f0f;
 }
 .site-permission-points h3 { margin: 0 0 10px; font-size: 16px; font-weight: 600; }
@@ -9693,8 +9532,8 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   transition: background-color .18s ease, transform .18s ease;
 }
 .site-compare-card:hover {
-  /* 底色是 #0f0f0f，hover 需要比它更亮才看得出来 */
-  background: #2a2a2a;
+  /* 底色是 #0f0f0f，hover 只提一档，跳太亮会显得突兀 */
+  background: #181818;
   transform: translateY(-2px);
 }
 .site-compare-card h3 { margin: 0; font-size: 18px; font-weight: 600; }
@@ -9712,7 +9551,7 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   width: 100%;
-  font-size: 15px;
+  font-size: 16px;
 }
 .site-compare-table thead,
 .site-compare-table tbody,
@@ -9737,7 +9576,7 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 .site-compare-table td.is-biu { color: #fff; background: rgba(255, 255, 255, .035); }
 
 /* 窄屏下三列等宽会挤成豆腐块，改为整体横向滚动 */
-@media (max-width: 720px) {
+@media (max-width: 800px) {
   .site-compare-body { overflow-x: auto; }
   .site-compare-table { grid-template-columns: repeat(3, minmax(190px, 1fr)); min-width: 600px; }
 }
@@ -9750,9 +9589,9 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   margin: 0 auto;
   padding: 0 var(--site-gutter) 72px;
 }
-.site-compare-when article { padding: 26px 24px; border-radius: 18px; background: #0f0f0f; }
-.site-compare-when h2 { margin: 0 0 10px; font-size: 17px; font-weight: 600; }
-.site-compare-when p { margin: 0; font-size: 15px; line-height: 1.75; color: rgba(255, 255, 255, .88); }
+.site-compare-when article { padding: 26px 24px; border-radius: 20px; background: #0f0f0f; }
+.site-compare-when h2 { margin: 0 0 10px; font-size: 18px; font-weight: 600; }
+.site-compare-when p { margin: 0; font-size: 16px; line-height: 1.75; color: rgba(255, 255, 255, .88); }
 
 .site-compare-more { max-width: var(--site-content); margin: 0 auto; padding: 0 var(--site-gutter) 72px; }
 .site-compare-more h2 { margin: 0 0 22px; font-size: 20px; font-weight: 600; }
@@ -9792,19 +9631,6 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   width: min(320px, 100%);
   margin-inline: auto;
 }
-.site-auth-main {
-  position: relative;
-  z-index: 1;
-  width: min(360px, calc(100% - 48px));
-  padding: 96px 0 64px;
-}
-.site-auth-foot {
-  margin: 28px 0 0;
-  text-align: center;
-  font-size: 13px;
-}
-.site-auth-foot a { color: rgba(255, 255, 255, .88); text-decoration: none; }
-.site-auth-foot a:hover { color: #fff; }
 
 /* 品牌区 */
 .auth-brand {
@@ -9869,7 +9695,7 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   border-radius: 12px;
   background: rgba(255, 255, 255, .03);
   color: #fff;
-  font-size: 15px;
+  font-size: 16px;
   font-family: inherit;
 }
 .site-auth .auth-field:focus {
@@ -9885,7 +9711,7 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   border-radius: 999px;
   background: #fff;
   color: #000;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 500;
   font-family: inherit;
   cursor: pointer;
@@ -9923,7 +9749,7 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   border-radius: 11px;
   background: transparent;
   color: #fff;
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1;
   cursor: pointer;
 }
@@ -9981,14 +9807,11 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   color: inherit;
   transition: background-color .18s ease, transform .18s ease;
 }
-.site-usecase-card:hover { background: #2a2a2a; transform: translateY(-2px); }
+.site-usecase-card:hover { background: #181818; transform: translateY(-2px); }
 .site-usecase-card h2 { margin: 0; font-size: 18px; font-weight: 600; line-height: 1.3; }
 .site-usecase-card p { margin: 0; font-size: 14px; line-height: 1.7; color: rgba(255, 255, 255, .88); }
 .site-usecase-card small { display: block; margin: 0; font-size: 12px; line-height: 1.4; letter-spacing: .02em; color: rgba(255, 255, 255, .88); }
-.site-usecase-card .site-solution-index {
-  color: rgba(255, 255, 255, .55);
-  line-height: 1;
-}
+.site-usecase-card .site-solution-index { line-height: 1; }
 
 /* 用例页：交付物行 */
 .site-usecase-output {
@@ -10005,9 +9828,9 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 .site-usecase-pain li {
   position: relative;
   padding: 18px 22px 18px 46px;
-  border-radius: 16px;
+  border-radius: 20px;
   background: #0f0f0f;
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.7;
   color: rgba(255, 255, 255, .88);
 }
@@ -10027,9 +9850,9 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 18px;
 }
-.site-usecase-how-grid article { padding: 26px 24px; border-radius: 18px; background: #0f0f0f; }
-.site-usecase-how-grid h3 { margin: 0 0 10px; font-size: 17px; font-weight: 600; }
-.site-usecase-how-grid p { margin: 0; font-size: 15px; line-height: 1.75; color: rgba(255, 255, 255, .88); }
+.site-usecase-how-grid article { padding: 26px 24px; border-radius: 20px; background: #0f0f0f; }
+.site-usecase-how-grid h3 { margin: 0 0 10px; font-size: 18px; font-weight: 600; }
+.site-usecase-how-grid p { margin: 0; font-size: 16px; line-height: 1.75; color: rgba(255, 255, 255, .88); }
 
 /* 用例页：其他场景 */
 .site-usecase-more { max-width: var(--site-content); margin: 0 auto; padding: 0 var(--site-gutter) 72px; }
@@ -10073,11 +9896,11 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 18px;
 }
-.site-brand-grid article { padding: 24px; border-radius: 18px; background: #0f0f0f; }
+.site-brand-grid article { padding: 24px; border-radius: 20px; background: #0f0f0f; }
 .site-brand-grid h3 { margin: 0 0 10px; font-size: 16px; font-weight: 600; }
 .site-brand-grid p { margin: 0; font-size: 14px; line-height: 1.75; color: rgba(255, 255, 255, .88); }
 
-.site-brand-note { margin: 0 0 24px; font-size: 15px; color: rgba(255, 255, 255, .88); }
+.site-brand-note { margin: 0 0 24px; font-size: 16px; color: rgba(255, 255, 255, .88); }
 
 /* 调节器：左侧预览，右侧控件 */
 .brand-studio {
@@ -10087,7 +9910,7 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   /* 左边预览要跟右侧那摞控件等高，所以不能用 start —— 那样各按自身高度。 */
   align-items: stretch;
 }
-@media (max-width: 860px) { .brand-studio { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 800px) { .brand-studio { grid-template-columns: minmax(0, 1fr); } }
 
 .brand-studio-preview {
   padding: 24px;
@@ -10107,7 +9930,7 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   margin: 0;
   padding: 20px;
   border: 1px solid rgba(255, 255, 255, .1);
-  border-radius: 18px;
+  border-radius: 20px;
 }
 .brand-field legend {
   padding: 0 8px;
@@ -10160,6 +9983,62 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   font-size: 13px;
   cursor: pointer;
 }
-.brand-preset:hover { background: #2a2a2a; }
+.brand-preset:hover { background: #181818; }
 .brand-preset-chip { width: 16px; height: 16px; border-radius: 5px; }
 
+/* ---------- 全站统一：卡片描边 / 交互过渡 / 键盘焦点 ---------- */
+/* 卡片和纯黑底只差一点点亮度，部分屏幕上分不清边界；
+   用内描边而不是 border，不改变卡片尺寸。 */
+.site-context-item > div,
+.site-ecosystem-grid article,
+.site-capability-grid article,
+.site-voice-grid blockquote,
+.site-plans-grid article,
+.site-platform-grid article,
+.site-permission-term,
+.site-permission-points article,
+.site-compare-card,
+.site-compare-when article,
+.site-usecase-card,
+.site-usecase-pain li,
+.site-usecase-how-grid article,
+.site-brand-grid article {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06);
+}
+.site-plans-grid article.is-featured {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16);
+}
+
+.site a,
+.site button,
+.site summary,
+.site-roi-tools label {
+  transition: color .16s ease, background-color .16s ease, border-color .16s ease, opacity .16s ease;
+}
+.site .site-compare-card,
+.site .site-usecase-card {
+  transition: background-color .18s ease, transform .18s ease;
+}
+.site-nav-links a { color: rgba(255, 255, 255, .88); }
+.site-nav-links a:hover,
+.site-nav-links a.is-active { color: #fff; }
+.site-start:hover,
+.site-final-cta button:hover,
+.site-task-box button:hover,
+.site-auth .auth-go:hover:not(:disabled) { background: rgba(255, 255, 255, .86); }
+.site-demo-tabs button:not(.is-active):hover { background: rgba(255, 255, 255, .14); color: #fff; }
+.site-footer-columns a:hover,
+.site-footer-columns button:hover { color: #fff; }
+
+.site :focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+.site-task-box:focus-within { border-color: rgba(255, 255, 255, .5); }
+.site-task-box input:focus-visible { outline: none; }
+@media (prefers-reduced-motion: reduce) {
+  .site a,
+  .site button,
+  .site .site-compare-card,
+  .site .site-usecase-card { transition: none; }
+}
