@@ -90,7 +90,8 @@ test('landing page embeds real empty product surfaces and opens account actions'
 
   fireEvent.click(screen.getByTestId('site-login'))
   assert.equal(screen.getByTestId('site-start').getAttribute('href'), '/download')
-  assert.equal(screen.getByTestId('site-start').textContent, '免费下载')
+  assert.equal(screen.getByTestId('site-start').textContent, '下载')
+  assert.doesNotMatch(document.body.textContent ?? '', /免费下载/, '按钮只写「下载」')
   assert.ok(screen.getByTestId('site-start').querySelector('svg.site-icon'), '导航下载按钮带下载图标')
   assert.equal(login, 1)
   assert.equal(start, 0)
@@ -315,7 +316,7 @@ test('按钮图标、联系邮箱、云端未上线都如实呈现', () => {
   renderSite('/')
   const actions = document.querySelector('.site-hero .site-cta-actions')!
   const [download, github] = Array.from(actions.querySelectorAll('a'))
-  assert.ok(download!.querySelector('svg.site-icon'), '免费下载用图标，不用 ↗ 字符')
+  assert.ok(download!.querySelector('svg.site-icon'), '下载用图标，不用 ↗ 字符')
   assert.doesNotMatch(download!.textContent ?? '', /↗/)
   assert.ok(github!.firstElementChild?.matches('svg.site-icon'), 'GitHub 图标在文字左边')
   assert.ok(document.querySelector('a[href="mailto:348876414@qq.com"]'), '页脚有联系邮箱')

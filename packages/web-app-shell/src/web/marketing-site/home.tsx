@@ -143,7 +143,7 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
               把它们放进同一页，就是一套为你的客户准备好的服务。
             </p>
             <div className="site-cta-actions">
-              <Link className="site-cta-primary" to="/download"><DownloadIcon />免费下载</Link>
+              <Link className="site-cta-primary" to="/download"><DownloadIcon />下载</Link>
               <GitHubButton label="GitHub" />
             </div>
             <img
