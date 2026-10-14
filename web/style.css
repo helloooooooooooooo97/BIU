@@ -8995,7 +8995,7 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   gap: 16px;
   margin-top: 100px;
 }
-.site-context-flow > div {
+.site-context-item > div {
   min-height: 180px;
   padding: 22px;
   border-radius: 6px;
@@ -9044,7 +9044,7 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   min-height: 420px;
   padding: 25px;
   border-radius: 5px;
-  background: #151515;
+  background: #0f0f0f;
   box-sizing: border-box;
 }
 .site-ecosystem-symbol {
