@@ -161,7 +161,7 @@ const HOME_FAQ = [
 export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
   usePageMeta({
     title: 'BIU · 用一个页面，组合所有软件',
-    description: '开源、免费的 All in One 工作空间：页面里的每一块都是一个插件提供的真软件，一个页面就能把它们组合成服务。',
+    description: '改变世界构建、存储、组合、分发、衍生软件的方式，定义下一代人与 AI 协作的媒介。一个页面，组合所有软件。',
     path: '/',
   })
   const [activeSurface, setActiveSurface] = useState(0)
@@ -173,15 +173,33 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
     <SiteChrome onLogin={onLogin} onStart={onStart}>
         <section className="site-hero">
           <div className="site-hero-copy site-container" data-reveal>
-            <p className="site-eyebrow">开源 · 免费 · All in One</p>
-            <h1>一个页面，<br />组合所有软件</h1>
-            <p className="site-hero-lead">
-              在 BIU 里，页面上的每一块都是一个真正能用的软件 —— 表格、画板、代码练习、视频剪辑，都来自插件。
-              把它们放进同一页，就是一套为你的客户准备好的服务。
+            <p className="site-hero-epigraph">
+              <span>媒介即讯息</span>
+              <cite>马歇尔·麦克卢汉</cite>
             </p>
-            <div className="site-cta-actions">
-              <Link className="site-cta-primary" to="/download"><DownloadIcon />下载</Link>
-              <GitHubButton label="GitHub" />
+            <h1 aria-label="改变世界构建、存储、组合、分发、衍生软件的方式">
+              <span className="site-hero-frame">改变世界</span>
+              <span className="site-hero-verbs">
+                <span>构建</span>
+                <span>存储</span>
+                <span>组合</span>
+                <span>分发</span>
+                <span>衍生</span>
+              </span>
+              <span className="site-hero-frame">软件的方式</span>
+            </h1>
+            <p className="site-hero-define">定义下一代人与 AI 协作的媒介</p>
+            <div className="site-hero-product">
+              <p className="site-eyebrow">开源 · 免费 · All in One</p>
+              <p className="site-hero-product-line">一个页面，组合所有软件</p>
+              <p className="site-hero-lead">
+                在 BIU 里，页面上的每一块都是一个真正能用的软件 —— 表格、画板、代码练习、视频剪辑，都来自插件。
+                把它们放进同一页，就是一套为你的客户准备好的服务。
+              </p>
+              <div className="site-cta-actions">
+                <Link className="site-cta-primary" to="/download"><DownloadIcon />下载</Link>
+                <GitHubButton label="GitHub" />
+              </div>
             </div>
             <img
               className="site-hero-shot"
