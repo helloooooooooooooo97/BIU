@@ -621,7 +621,6 @@ export function AuthGate({ children }: { children: ReactNode }) {
             setAuthRoute(next)
             setBrowserPath(next === 'register' ? '/register' : '/login')
           },
-          onBack: leaveAuth,
           workspaceInvite: Boolean(workspaceInvite),
           onSubmit: async ({ email, password: secret }) => {
             const path = mode === 'register' ? '/api/account/register' : '/api/account/login'

@@ -9651,22 +9651,6 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   margin-inline: auto;
 }
 
-/* 品牌区 */
-.auth-brand {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 28px;
-  text-align: center;
-}
-.auth-brand-mark {
-  width: 48px;
-  height: 48px;
-}
-.auth-brand-name { font-size: 16px; font-weight: 600; letter-spacing: .01em; }
-.auth-brand-tag { font-size: 13px; color: rgba(255, 255, 255, .9); }
-
 /* 密码框 + 显示切换 */
 .auth-field-wrap { position: relative; display: block; }
 .auth-reveal {
@@ -9705,7 +9689,6 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 
 /* 官网深色主题下的表单样式覆写（原 auth-* 是浅色登录页） */
 .site-auth .auth-panel { width: min(320px, 100%); margin-inline: auto; gap: 14px; }
-.site-auth .auth-panel h2 { margin: 0 0 4px; font-size: 30px; color: #fff; text-align: center; }
 .site-auth .auth-label { font-size: 13px; color: rgba(255, 255, 255, .9); }
 .site-auth .auth-field {
   width: 100%;

@@ -23,11 +23,14 @@ function renderSite(path: string, onSubmit: (c: Creds) => Promise<void>) {
   return view
 }
 
-test('/login 与 /signup 是独立路由，且带品牌区与返回官网', () => {
+test('/login 与 /signup 是独立路由，表单之外不放品牌区和返回入口', () => {
   renderSite('/login', async () => {})
-  assert.match(screen.getByRole('heading', { level: 2 }).textContent ?? '', /登录/)
-  assert.equal(document.querySelector('.auth-brand-name')?.textContent, 'BIU')
-  assert.ok(screen.getByText('返回官网'), '有返回入口')
+  const heading = screen.getByRole('heading', { level: 2 })
+  assert.match(heading.textContent ?? '', /登录/)
+  assert.ok(heading.classList.contains('sr-only'), '标题只给读屏用，不占视觉')
+  const panel = screen.getByTestId('auth-login')
+  assert.equal(panel.querySelector('svg'), null, '表单里不再放 logo')
+  assert.doesNotMatch(panel.textContent ?? '', /智能工作空间|返回官网/)
   assert.match(document.title, /登录 · BIU/)
   cleanup()
 
