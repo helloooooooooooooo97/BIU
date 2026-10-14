@@ -8482,6 +8482,22 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   position: relative;
   z-index: 1;
 }
+.site-footer::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  left: 50%;
+  width: 100vw;
+  top: 45%;
+  bottom: 0;
+  transform: translateX(-50%);
+  background: linear-gradient(to top, rgba(0, 0, 0, .72), transparent);
+  pointer-events: none;
+}
+.site-footer > * {
+  position: relative;
+  z-index: 1;
+}
 /* 内容容器：背景满宽、内容定宽。
    通栏区块（英雄/数据控制/结尾CTA）用它把内容拉回同一基准线。 */
 .site-container {
@@ -8500,8 +8516,6 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
    （原来部分区块通栏靠 padding 撑，部分区块定宽居中，宽屏下边缘对不齐。） */
 .site-hero-copy,
 .site-proof,
-.site-capabilities,
-.site-voices,
 .site-usecase-grid,
 .site-usecase-pain,
 .site-usecase-how,
@@ -9268,13 +9282,13 @@ html:not(.has-js) .site [data-reveal] {
   .site-final-cta { min-height: 520px; padding: 64px 0; }
   /* 统一窄屏栅格：这三个区块原先没有移动端覆盖，
      会和邻居（20px）错开 12px。 */
-  .site-proof,
+  .site-proof { padding-left: 20px; padding-right: 20px; }
   .site-capabilities,
-  .site-voices { padding-left: 20px; padding-right: 20px; }
+  .site-voices { padding-left: 0; padding-right: 0; }
   /* 多页基础样式在本段之后声明；提高特异性，避免 32px 桌面留白反盖窄屏值。 */
-  .site .site-proof,
+  .site .site-proof { padding-left: 20px; padding-right: 20px; }
   .site .site-capabilities,
-  .site .site-voices { padding-left: 20px; padding-right: 20px; }
+  .site .site-voices { padding-left: 0; padding-right: 0; }
   .site-proof > *,
   .site-capabilities > *,
   .site-voices > * { min-width: 0; }
@@ -9356,13 +9370,19 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 .site-proof-strip strong { font-size: 24px; font-weight: 600; letter-spacing: -.01em; }
 .site-proof-strip span { font-size: 13px; color: #fff; }
 
-/* 首页核心能力三条（深色：与相邻区块保持深浅交替） */
+/* 首页核心能力三条：区块通栏，内容仍走统一容器。 */
 .site-capabilities {
+  width: 100%;
+  margin: 0;
+  box-sizing: border-box;
+  padding: var(--site-section-gap) 0;
+}
+.site-capabilities > * {
   width: 100%;
   max-width: var(--site-content);
   margin-inline: auto;
   box-sizing: border-box;
-  padding: var(--site-section-gap) var(--site-gutter);
+  padding-inline: var(--site-gutter);
 }
 .site-capabilities-heading h2 {
   margin: var(--site-label-gap) 0 var(--site-heading-gap);
@@ -9396,13 +9416,19 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 }
 .site-capability-grid a:hover { color: #fff; }
 
-/* 用户评价（深色：与相邻区块保持深浅交替） */
+/* 使用感受：区块通栏，内容仍走统一容器。 */
 .site-voices {
+  width: 100%;
+  margin: 0;
+  box-sizing: border-box;
+  padding: var(--site-section-gap) 0;
+}
+.site-voices > * {
   width: 100%;
   max-width: var(--site-content);
   margin-inline: auto;
   box-sizing: border-box;
-  padding: var(--site-section-gap) var(--site-gutter);
+  padding-inline: var(--site-gutter);
 }
 .site-voices-heading h2 {
   margin: var(--site-label-gap) 0 var(--site-heading-gap);
