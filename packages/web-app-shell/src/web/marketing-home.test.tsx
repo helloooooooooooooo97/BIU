@@ -52,9 +52,9 @@ test('landing page embeds real empty product surfaces and opens account actions'
   assert.equal(shot.getAttribute('loading'), 'lazy')
 
   fireEvent.click(screen.getByTestId('site-login'))
-  fireEvent.click(screen.getByTestId('site-start'))
+  assert.equal(screen.getByTestId('site-start').getAttribute('href'), '/download')
   assert.equal(login, 1)
-  assert.equal(start, 1)
+  assert.equal(start, 0)
   cleanup()
 })
 
