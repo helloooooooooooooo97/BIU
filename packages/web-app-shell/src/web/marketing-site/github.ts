@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react'
 
 const REPO_API = 'https://api.github.com/repos/helloooooooooooooo97/biu'
-const CACHE_KEY = 'biu.site.github.v1'
-/** 未登录的 GitHub API 每小时只有 60 次，一个会话里只问一次就够。 */
+export const GITHUB_CACHE_KEY = 'biu.site.github.v2'
+/**
+ * 未登录的 GitHub API 每个 IP 每小时只有 60 次，超了就 403。
+ * 缓存放 localStorage 让所有标签页共用；过期或请求失败时仍显示上一次拿到的数，不让星标凭空消失。
+ */
 const CACHE_TTL = 60 * 60 * 1000
 
 export type ReleaseAsset = { name: string; url: string }
@@ -35,22 +38,28 @@ function canFetch() {
   return !/jsdom/i.test(navigator.userAgent)
 }
 
-function readCache(): GitHubStats | null {
+type CacheEntry = { at: number; stats: GitHubStats }
+
+function readCache(): CacheEntry | null {
   try {
-    const raw = sessionStorage.getItem(CACHE_KEY)
+    const raw = localStorage.getItem(GITHUB_CACHE_KEY)
     if (!raw) return null
-    const parsed = JSON.parse(raw) as { at: number; stats: GitHubStats }
-    return Date.now() - parsed.at < CACHE_TTL ? parsed.stats : null
+    const parsed = JSON.parse(raw) as CacheEntry
+    return parsed && typeof parsed.at === 'number' && parsed.stats ? parsed : null
   } catch {
     return null
   }
 }
 
-function writeCache(stats: GitHubStats) {
+function isFresh(entry: CacheEntry | null) {
+  return Boolean(entry && Date.now() - entry.at < CACHE_TTL && entry.stats.stars !== undefined && entry.stats.release)
+}
+
+function writeCache(entry: CacheEntry) {
   try {
-    sessionStorage.setItem(CACHE_KEY, JSON.stringify({ at: Date.now(), stats }))
+    localStorage.setItem(GITHUB_CACHE_KEY, JSON.stringify(entry))
   } catch {
-    /* 隐私模式下 sessionStorage 可能不可写 */
+    /* 隐私模式下 localStorage 可能不可写 */
   }
 }
 
@@ -67,22 +76,27 @@ let pending: Promise<GitHubStats> | null = null
 
 export function loadGitHubStats(): Promise<GitHubStats> {
   const cached = readCache()
-  if (cached) return Promise.resolve(cached)
-  if (!canFetch()) return Promise.resolve({})
+  if (cached && isFresh(cached)) return Promise.resolve(cached.stats)
+  if (!canFetch()) return Promise.resolve(cached?.stats ?? {})
   pending ??= Promise.all([
     getJson<{ stargazers_count?: number }>(REPO_API),
     getJson<RawRelease>(`${REPO_API}/releases/latest`),
   ]).then(([repo, release]) => {
-    const stats: GitHubStats = { stars: repo?.stargazers_count, release: release ? toRelease(release) : undefined }
-    if (stats.stars !== undefined || stats.release) writeCache(stats)
-    else pending = null
+    const complete = repo?.stargazers_count !== undefined && Boolean(release)
+    const stats: GitHubStats = {
+      stars: repo?.stargazers_count ?? cached?.stats.stars,
+      release: release ? toRelease(release) : cached?.stats.release,
+    }
+    // 只拿到一半（多半是被限流）时保留旧时间戳，下次进页面再补，不把缺数据的结果当成新鲜缓存
+    if (stats.stars !== undefined || stats.release) writeCache({ at: complete ? Date.now() : cached?.at ?? 0, stats })
+    if (!complete) pending = null
     return stats
   })
   return pending
 }
 
 export function useGitHubStats(): GitHubStats {
-  const [stats, setStats] = useState<GitHubStats>(() => readCache() ?? {})
+  const [stats, setStats] = useState<GitHubStats>(() => readCache()?.stats ?? {})
   useEffect(() => {
     let cancelled = false
     void loadGitHubStats().then((next) => {
