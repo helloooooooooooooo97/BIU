@@ -93,8 +93,6 @@ export type BrandMarkProps = {
    * 线条按比例加粗到可见下限，避免亚像素描边发虚。
    */
   scene?: 'default' | 'icon'
-  /** hop：整枚标记轻轻蹲下再跳起，圆、线、三块一起动。 */
-  motion?: 'hop'
   /**
    * 实际显示宽度（像素）。SVG 里的线宽是 viewBox 单位，
    * 不知道真实尺寸就没法保证线条落在清晰的正像素上 —— 这正是毛边的来源。
@@ -114,7 +112,6 @@ export function BrandMark({
   className,
   title = 'BIU 品牌标记',
   scene = 'default',
-  motion,
   displayWidth,
 }: BrandMarkProps) {
   // 圆的实际半径：只受 circleRatio 影响，背景方块保持 ViewBox 大小不变。
@@ -140,7 +137,6 @@ export function BrandMark({
       viewBox={VIEW_BOX}
       role="img"
       aria-label={title}
-      data-motion={motion}
       xmlns="http://www.w3.org/2000/svg"
     >
       {title ? <title>{title}</title> : null}

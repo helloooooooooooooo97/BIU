@@ -10049,15 +10049,13 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 .site-brand-hero svg { width: min(420px, 70vw); height: auto; }
 
 .site-brand-anatomy,
-.site-brand-studio,
-.site-brand-motion {
+.site-brand-studio {
   max-width: var(--site-content);
   margin: 0 auto;
   padding: 0 var(--site-gutter) 72px;
 }
 .site-brand-anatomy > h2,
-.site-brand-studio > h2,
-.site-brand-motion > h2 {
+.site-brand-studio > h2 {
   margin: 0 0 24px;
   font-size: clamp(20px, 2.4vw, 26px);
   font-weight: 600;
@@ -10156,30 +10154,4 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 }
 .brand-preset:hover { background: #2a2a2a; }
 .brand-preset-chip { width: 16px; height: 16px; border-radius: 5px; }
-
-.site-brand-motion-stage {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 280px;
-}
-.site-brand-motion-stage svg {
-  width: min(200px, 46vw);
-  height: auto;
-}
-.site-brand-motion-stage svg[data-motion="hop"] {
-  transform-box: fill-box;
-  transform-origin: 50% 72%;
-  animation: brand-mark-hop 1.35s cubic-bezier(.22, .9, .3, 1) infinite;
-}
-@keyframes brand-mark-hop {
-  0%, 58%, 100% { transform: translateY(0) rotate(0deg) scale(1, 1); }
-  8% { transform: translateY(8%) rotate(-7deg) scale(1.1, 0.84); }
-  26% { transform: translateY(-34%) rotate(8deg) scale(0.92, 1.1); }
-  40% { transform: translateY(0) rotate(-3deg) scale(1.08, 0.88); }
-  50% { transform: translateY(-12%) rotate(2deg) scale(0.98, 1.05); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .site-brand-motion-stage svg[data-motion="hop"] { animation: none; }
-}
 
