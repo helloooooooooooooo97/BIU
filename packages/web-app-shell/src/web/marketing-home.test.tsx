@@ -928,7 +928,7 @@ test('产品页：每个板块配一张真实截图', () => {
   assert.deepEqual(cards.map((card) => card.querySelector('p')?.textContent), ['插件', '技能', 'MCP'])
   assert.ok(cards.every((card) => card.querySelector('.site-ecosystem-code code')?.textContent), '每张卡带一段真实写法')
   assert.ok(cards.every((card) => !/。$/.test(card.querySelector('h3')?.textContent ?? '')), '卡片标题不带句号')
-  assert.equal(document.querySelector('.site-final-cta h2')?.textContent, '先做一页')
+  assert.equal(document.querySelector('.site-final-cta h2')?.textContent, '亲手试一页')
   cleanup()
 })
 
