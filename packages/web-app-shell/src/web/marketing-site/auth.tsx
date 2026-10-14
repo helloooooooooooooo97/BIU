@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { BrandMark, useBrandConfig } from './brand-mark.tsx'
 import { SiteChrome, type SiteAction } from './site-chrome.tsx'
 import { usePageMeta } from './use-page-meta.ts'
 
@@ -9,7 +8,6 @@ export type AuthPanelProps = {
   mode: AuthMode
   onModeChange: (mode: AuthMode) => void
   onSubmit: (credentials: { email: string; password: string }) => Promise<void>
-  onBack: () => void
   /** 交给外层展示的附加错误（如网络错误由外层判定） */
   externalError?: string
   workspaceInvite?: boolean
@@ -36,7 +34,7 @@ function isEmail(value: string) {
 /**
  * 登录 / 注册表单。
  * 规划 §4.13 的 14 项修复都在这里：
- *  - 品牌区 / autoFocus / 邮箱 type=email / autoComplete 语义
+ *  - autoFocus / 邮箱 type=email / autoComplete 语义
  *  - 提交 loading 态 / 密码显示切换 / 密码强度实时校验
  *  - 错误区分网络与后端 / 验证态骨架屏
  */
@@ -44,11 +42,9 @@ export function AuthPanel({
   mode,
   onModeChange,
   onSubmit,
-  onBack,
   externalError,
   workspaceInvite,
 }: AuthPanelProps) {
-  const brand = useBrandConfig()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -110,26 +106,8 @@ export function AuthPanel({
       noValidate
       data-testid={mode === 'register' ? 'auth-register' : 'auth-login'}
     >
-      {/* P0-14 第 2 项：品牌区 */}
-      <div className="auth-brand">
-        <BrandMark
-          className="auth-brand-mark"
-          colors={[brand.c0, brand.c1, brand.c2]}
-          stroke={brand.stroke}
-          strokeWidth={brand.strokeWidth}
-          lineWidth={brand.lineWidth}
-          background={brand.background}
-          showBackground={brand.showBackground}
-          circleRatio={brand.circleRatio}
-          scene="icon"
-          displayWidth={48}
-          title="BIU"
-        />
-        <span className="auth-brand-name">BIU</span>
-        <span className="auth-brand-tag">智能工作空间</span>
-      </div>
-
-      <h2>{mode === 'register' ? '创建账号' : '登录'}</h2>
+      {/* 顶栏已有品牌和回官网的入口，这里只留表单；标题仅供读屏识别页面。 */}
+      <h2 className="sr-only">{mode === 'register' ? '创建账号' : '登录'}</h2>
       {workspaceInvite ? <p className="auth-lead">登录或注册后加入这个空间。</p> : null}
       {externalError ? <p className="auth-error" role="alert">{externalError}</p> : null}
       {error ? <p className="auth-error" role="alert" data-testid="auth-error">{error}</p> : null}
@@ -197,10 +175,6 @@ export function AuthPanel({
           {mode === 'register' ? '已有账号，去登录' : '没有账号，去注册'}
         </button>
       </p>
-
-      {workspaceInvite ? null : (
-        <button type="button" className="auth-back" onClick={onBack}>返回官网</button>
-      )}
     </form>
   )
 }
@@ -210,7 +184,6 @@ export function MarketingAuth({
   mode,
   onModeChange,
   onSubmit,
-  onBack,
   onLogin,
   onStart,
   workspaceInvite,
@@ -218,7 +191,6 @@ export function MarketingAuth({
   mode: AuthMode
   onModeChange: (mode: AuthMode) => void
   onSubmit: (credentials: { email: string; password: string }) => Promise<void>
-  onBack: () => void
   onLogin: SiteAction
   onStart: SiteAction
   workspaceInvite?: boolean
@@ -239,7 +211,6 @@ export function MarketingAuth({
           mode={mode}
           onModeChange={onModeChange}
           onSubmit={onSubmit}
-          onBack={onBack}
           workspaceInvite={workspaceInvite}
         />
       </section>

@@ -54,7 +54,7 @@ test('opening /login shows the login page', () => {
   )
   assert.ok(screen.getByTestId('site-login'), '登录页使用官网顶栏')
   assert.equal(screen.getByRole('heading', { name: '登录' }).textContent, '登录')
-  assert.ok(screen.getByText('返回官网'))
+  assert.equal(screen.queryByText('返回官网'), null, '顶栏已能回官网，表单不再重复放返回入口')
   assert.equal(screen.queryByTestId('inside'), null)
 })
 

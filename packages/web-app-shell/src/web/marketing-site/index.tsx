@@ -20,7 +20,6 @@ export type MarketingSiteProps = {
     mode: AuthMode
     onModeChange: (mode: AuthMode) => void
     onSubmit: (credentials: { email: string; password: string }) => Promise<void>
-    onBack?: SiteAction
     workspaceInvite?: boolean
   }
 }
@@ -107,7 +106,6 @@ export function MarketingSite({ onLogin, onStart, auth }: MarketingSiteProps) {
       mode={auth.mode}
       onModeChange={auth.onModeChange}
       onSubmit={auth.onSubmit}
-      onBack={auth.onBack ?? onLogin}
       onLogin={onLogin}
       onStart={onStart}
       workspaceInvite={auth.workspaceInvite}
