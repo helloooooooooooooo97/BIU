@@ -8791,9 +8791,8 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
 /* label 与标题上下排版 */
 .site-demo-heading .site-section-label { margin: 0 0 var(--site-label-gap); color: rgba(255, 255, 255, .88); }
 .site-demo-caption { margin-bottom: 28px; }
-.site-demo-caption h3 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -.01em; }
 .site-demo-lead {
-  margin: 8px 0 0;
+  margin: 0;
   max-width: 640px;
   /* 切换标签时说明文字长短不一，留足两行，下面的画面不跳 */
   min-height: calc(2 * 1.75em);
