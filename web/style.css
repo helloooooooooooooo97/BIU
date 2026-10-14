@@ -9118,7 +9118,6 @@ html:not(.has-js) .site [data-reveal] {
 }
 @media (max-width: 800px) {
   .site-nav { grid-template-columns: auto 1fr; padding: 0 20px; }
-  .site-nav-links { display: none; }
   .site-hero {
     min-height: 0;
     padding: 104px 0 56px;
@@ -9948,32 +9947,68 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 @media (max-width: 800px) {
   .site-menu-toggle { display: grid; place-items: center; }
 
-  /* 收起态：链接与操作按钮隐藏；展开态：竖排铺开 */
   .site-nav-links,
   .site-nav-actions {
-    position: fixed;
-    left: 0;
-    right: 0;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 4px;
-    padding: 12px 20px;
-    background: rgba(0, 0, 0, .97);
-    backdrop-filter: blur(18px);
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity .2s ease, visibility .2s;
+    display: none;
   }
-  .site-nav-links { top: 64px; border-top: 1px solid rgba(255, 255, 255, .1); }
-  .site-nav-actions { top: calc(64px + 200px); padding-bottom: 20px; }
+
+  /* 平时 height:64px 会压过 top/bottom。展开后拉满视口，盖住页面。 */
+  .site-nav[data-menu-open="1"] {
+    height: 100dvh;
+    bottom: 0;
+    z-index: 40;
+    align-content: start;
+    align-items: stretch;
+    overflow: auto;
+    background: #000;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .site:has(.site-nav[data-menu-open="1"]) {
+    overflow: hidden;
+  }
 
   .site-nav[data-menu-open="1"] .site-nav-links,
   .site-nav[data-menu-open="1"] .site-nav-actions {
-    opacity: 1;
-    visibility: visible;
+    display: flex;
+    grid-column: 1 / -1;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    width: 100%;
+    margin: 0;
+    padding: 4px 12px 8px;
+    background: transparent;
   }
-  .site-nav-links a { padding: 12px 4px; font-size: 16px; }
-  .site-nav-actions button { width: 100%; padding: 13px 16px; }
+
+  .site-nav[data-menu-open="1"] .site-nav-links {
+    border-top: 1px solid rgba(255, 255, 255, .1);
+    padding-top: 12px;
+  }
+
+  .site-nav[data-menu-open="1"] .site-nav-links a,
+  .site-nav[data-menu-open="1"] .site-nav-actions a,
+  .site-nav[data-menu-open="1"] .site-nav-actions button {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    height: auto;
+    min-height: 48px;
+    box-sizing: border-box;
+    padding: 14px 8px;
+    border-radius: 10px;
+    font-size: 16px;
+    text-align: left;
+  }
+
+  .site-nav[data-menu-open="1"] .site-start {
+    justify-content: center;
+    height: 44px;
+    min-height: 44px;
+    margin-top: 8px;
+    border-radius: 999px;
+  }
 }
 
 /* 用例页：总览网格 */
