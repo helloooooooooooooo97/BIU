@@ -410,7 +410,7 @@ export function BrandPrint({
 }
 
 export const BRAND_DEFAULT: BrandConfig = {
-  // 默认深海：三块都偏深，线条取白色才分得开。
+  // 默认深海，不画描边和分割线，三块只靠颜色区分。
   // 与 public/favicon.svg 同源，改这里后跑 npx tsx scripts/build-brand-assets.tsx（同时更新 README 横条与分享卡片）。
   c0: '#1e3a8a',
   c1: '#0ea5e9',
@@ -419,8 +419,8 @@ export const BRAND_DEFAULT: BrandConfig = {
   background: '#ffffff',
   // 线宽以 viewBox 单位计（坐标系宽 596），不是屏幕像素 ——
   // 这样标记缩到 24px 或放到 420px，线条与圆的粗细比例都一致。
-  strokeWidth: 7.5,
-  lineWidth: 7.5,
+  strokeWidth: 0,
+  lineWidth: 0,
   showBackground: true,
   circleRatio: 0.7,
 }

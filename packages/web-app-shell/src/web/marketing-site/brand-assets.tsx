@@ -13,7 +13,7 @@ function markSvg(displayWidth: number) {
       lineWidth={BRAND_DEFAULT.lineWidth}
       background={BRAND_DEFAULT.background}
       showBackground
-      circleRatio={1}
+      circleRatio={BRAND_DEFAULT.circleRatio}
       displayWidth={displayWidth}
       title="BIU"
     />,
@@ -24,7 +24,7 @@ function placed(markup: string, x: number, y: number, size: number) {
   return markup.replace('<svg ', `<svg x="${x}" y="${y}" width="${size}" height="${size}" `)
 }
 
-/** 标签页图标最小只有 16px：圆放到最大，线宽按 16px 保底，免得缩小后糊掉。 */
+/** 标签页图标：和导航栏标记同一套默认参数。 */
 export function buildFaviconSvg() {
   return `${markSvg(16)}\n`
 }
