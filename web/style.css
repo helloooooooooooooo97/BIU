@@ -8793,6 +8793,8 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
 .site-demo-lead {
   margin: var(--site-heading-gap) 0 0;
   max-width: 640px;
+  /* 切换标签时说明文字长短不一，留足三行，下面的标签和画面不跳 */
+  min-height: calc(3 * 1.75em);
   color: rgba(255, 255, 255, .88);
   font-size: 16px;
   line-height: 1.75;

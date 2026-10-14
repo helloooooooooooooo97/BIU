@@ -56,12 +56,17 @@ test('landing page embeds real empty product surfaces and opens account actions'
   const shot = screen.getByRole('img', { name: /BIU 插件/ }) as HTMLImageElement
   assert.equal(shot.getAttribute('src'), '/site/shot-plugins.webp')
   assert.equal(shot.getAttribute('loading'), 'lazy')
+  const lead = () => document.querySelector('.site-demo-lead')?.textContent ?? ''
+  const titles = new Set<string>()
   for (const [tab, src] of [['组件', 'demo-component'], ['页面与数据', 'demo-file-system'], ['会话上下文', 'demo-context']] as const) {
     fireEvent.click(screen.getByRole('tab', { name: tab }))
+    assert.doesNotMatch(lead(), /算法面试陪跑/, `切到「${tab}」后说明文字要跟着换`)
+    titles.add(document.querySelector('.site-demo-heading h2')?.textContent ?? '')
     const img = document.querySelector('img.site-demo-shot') as HTMLImageElement
     assert.equal(img.getAttribute('src'), `/site/${src}.webp`, `「${tab}」用回原来那张真实截图`)
     assert.equal(img.getAttribute('width'), '3840')
   }
+  assert.equal(titles.size, 3, '每个标签有自己的标题')
 
   const wall = screen.getByRole('region', { name: '插件' })
   assert.ok(wall.querySelectorAll('article').length >= 8, '首页插件墙列出现成的插件')
