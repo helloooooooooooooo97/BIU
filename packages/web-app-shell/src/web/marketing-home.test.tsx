@@ -362,7 +362,7 @@ test('对比页：harness 这类对手的能力不比 BIU 弱，不应滥用 ❌
 
 test('品牌页：三块颜色各自可调，滑块改的是对应扇区而不是摆设', () => {
   renderSite('/brand')
-  assert.match(screen.getByRole('heading', { level: 1 }).textContent ?? '', /一个圆、两条弦、三个块/)
+  assert.match(screen.getByRole('heading', { level: 1 }).textContent ?? '', /一个圆、两条线、三个块/)
 
   // 页面里有两个标记（hero 展示 + 调节器预览），调节器是后一个。
   const svg = screen.getAllByRole('img', { name: 'BIU 品牌标记' }).at(-1)!
@@ -390,11 +390,11 @@ test('品牌页：三块颜色各自可调，滑块改的是对应扇区而不�
   cleanup()
 })
 
-test('品牌页：线宽滑块真的改到圆与弦的描边', () => {
+test('品牌页：线宽滑块真的改到圆与线的描边', () => {
   renderSite('/brand')
   const svg = screen.getAllByRole('img', { name: 'BIU 品牌标记' }).at(-1)!
   const strokedBefore = Array.from(svg.querySelectorAll('[stroke]')).map((n) => n.getAttribute('stroke-width'))
-  assert.ok(strokedBefore.length >= 3, '圆 + 两条弦都应带描边')
+  assert.ok(strokedBefore.length >= 3, '圆 + 两条线都应带描边')
 
   fireEvent.change(screen.getByTestId('brand-stroke-width'), { target: { value: '9' } })
   const circle = svg.querySelector('circle')
@@ -402,12 +402,12 @@ test('品牌页：线宽滑块真的改到圆与弦的描边', () => {
   cleanup()
 })
 
-test('品牌页：构成与标题对齐 —— 一个圆、两条弦、三个块，再加一句主张', () => {
+test('品牌页：构成与标题对齐 —— 一个圆、两条线、三个块，再加一句主张', () => {
   renderSite('/brand')
   const body = document.body.textContent ?? ''
 
   // 前三条与 h1 逐字对齐（量词统一），第四条才是主张。
-  for (const item of ['一个圆', '两条弦', '三个块']) {
+  for (const item of ['一个圆', '两条线', '三个块']) {
     assert.match(body, new RegExp(item), `构成应包含「${item}」`)
   }
   assert.match(body, /三生万物/, '第四条主张')

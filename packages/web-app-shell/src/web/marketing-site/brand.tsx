@@ -9,8 +9,8 @@ const ANATOMY = [
     body: '闭合的圆，是空间本身 —— 知识与工作发生的地方，边界清楚。',
   },
   {
-    title: '两条弦',
-    body: '两条弦切进圆里，把一个整体分成可命名的块。结构不是外加的框，是从内容里切出来的。',
+    title: '两条线',
+    body: '两条线切进圆里，把一个整体分成可命名的块。结构不是外加的框，是从内容里切出来的。',
   },
   {
     title: '三个块',
@@ -35,7 +35,7 @@ export function MarketingBrand({ onLogin, onStart }: { onLogin: SiteAction; onSt
     <SiteChrome onLogin={onLogin} onStart={onStart}>
       <section className="site-page-hero" data-reveal>
         <p className="site-section-label">品牌</p>
-        <h1>一个圆、两条弦、三个块</h1>
+        <h1>一个圆、两条线、三个块</h1>
         <p className="site-page-lead">
           标记不是装饰。它说明 BIU 是什么：一个整体的空间，被结构切成可命名的部分，
           但每一部分都还在同一个圆里。下面的颜色和线条都可以调 —— 这是你的空间，不是我们的。
@@ -76,7 +76,7 @@ export function MarketingBrand({ onLogin, onStart }: { onLogin: SiteAction; onSt
 
       <section className="site-brand-motion" data-reveal>
         <h2>动起来</h2>
-        <p className="site-brand-note">圆、两条弦和三个块一起跳。颜色跟着上面的调节走。</p>
+        <p className="site-brand-note">圆、两条线和三个块一起跳。颜色跟着上面的调节走。</p>
         <div className="site-brand-motion-stage">
           <BrandMark
             colors={[brand.c0, brand.c1, brand.c2]}

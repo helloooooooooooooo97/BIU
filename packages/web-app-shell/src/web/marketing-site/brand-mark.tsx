@@ -78,7 +78,7 @@ export type BrandMarkProps = {
   stroke?: string
   /** 圆的描边粗细。 */
   strokeWidth?: number
-  /** 两条弦的粗细。 */
+  /** 两条线的粗细。 */
   lineWidth?: number
   /** 圆的半径占背景方块的比例（0–1）。背景不变，只缩放圆。 */
   circleRatio?: number
@@ -93,7 +93,7 @@ export type BrandMarkProps = {
    * 线条按比例加粗到可见下限，避免亚像素描边发虚。
    */
   scene?: 'default' | 'icon'
-  /** hop：整枚标记轻轻蹲下再跳起，圆、弦、三块一起动。 */
+  /** hop：整枚标记轻轻蹲下再跳起，圆、线、三块一起动。 */
   motion?: 'hop'
   /**
    * 实际显示宽度（像素）。SVG 里的线宽是 viewBox 单位，
@@ -467,7 +467,7 @@ export function BrandStudio() {
             testId="brand-stroke-width"
           />
           <RangeRow
-            label="弦的粗细"
+            label="线的粗细"
             value={lineWidth}
             min={0}
             max={40}
