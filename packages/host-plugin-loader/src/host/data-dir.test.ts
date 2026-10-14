@@ -140,6 +140,18 @@ test('adoptPackedUserData moves pack-host leftovers into userData and keeps dest
   assert.equal(existsSync(join(pack, DATA_DIR_NAME)), false)
 })
 
+test('adoptPackedUserData does not create .biu in a dev checkout that has none', () => {
+  const pack = mkdtempSync(join(tmpdir(), 'biu-dev-empty-'))
+  const home = mkdtempSync(join(tmpdir(), 'biu-home-empty-'))
+  mkdirSync(join(pack, 'packages'), { recursive: true })
+  writeFileSync(join(pack, 'package.json'), '{}')
+  adoptPackedUserData(pack, home, join(home, 'workspace'))
+  assert.equal(existsSync(join(pack, DATA_DIR_NAME)), false)
+  assert.equal(existsSync(join(pack, LEGACY_DATA_DIR_NAME)), false)
+  assert.equal(existsSync(join(pack, LEGACY_PAGE_ROOT)), false)
+  assert.equal(existsSync(join(home, DATA_DIR_NAME, 'biu.sqlite')), true)
+})
+
 test('adoptPackedUserData keeps the dev checkout database when copying into a desktop home', () => {
   const pack = mkdtempSync(join(tmpdir(), 'biu-dev-'))
   const home = mkdtempSync(join(tmpdir(), 'biu-desktop-'))
