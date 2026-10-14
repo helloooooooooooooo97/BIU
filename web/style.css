@@ -8887,12 +8887,19 @@ video.site-demo-shot[controls] { pointer-events: auto; }
   box-sizing: border-box;
   padding: 140px var(--site-gutter);
 }
-.site-continuity-heading,
-.site-ecosystem-heading,
 .site-faq-heading {
   display: grid;
   grid-template-columns: 1fr 2fr;
   gap: 24px;
+}
+/* 小标签在上，标题在下。这两处标题不再排到标签右边。 */
+.site-continuity-heading,
+.site-ecosystem-heading {
+  display: block;
+}
+.site-continuity-heading .site-section-label,
+.site-ecosystem-heading .site-section-label {
+  margin: 0 0 var(--site-label-gap);
 }
 .site-context-flow {
   display: grid;
