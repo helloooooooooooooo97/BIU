@@ -244,6 +244,46 @@ test('定位：All in One、开源免费，文案不夸大', () => {
   cleanup()
 })
 
+test('博客：总览列出每篇文章，文章页能打开并链到下一篇', () => {
+  renderSite('/blog')
+  assert.match(screen.getByRole('heading', { level: 1 }).textContent ?? '', /BIU 是怎么想的/)
+  const links = Array.from(document.querySelectorAll('a.site-blog-item')).map((a) => a.getAttribute('href'))
+  assert.ok(links.length >= 4, '至少四篇理念文章')
+  assert.ok(links.includes('/blog/all-in-one'), '第一篇讲 All in One')
+  cleanup()
+
+  renderSite('/blog/all-in-one')
+  assert.match(screen.getByRole('heading', { level: 1 }).textContent ?? '', /All in One/)
+  assert.match(document.body.textContent ?? '', /:::pageBlock/)
+  assert.ok(screen.getByRole('navigation', { name: '下一篇' }).querySelector('a[href^="/blog/"]'))
+  cleanup()
+
+  renderSite('/blog/nope')
+  assert.match(screen.getByRole('heading', { level: 1 }).textContent ?? '', /没有这篇文章/)
+  cleanup()
+})
+
+test('按钮图标、联系邮箱、云端未上线都如实呈现', () => {
+  renderSite('/')
+  const actions = document.querySelector('.site-hero .site-cta-actions')!
+  const [download, github] = Array.from(actions.querySelectorAll('a'))
+  assert.ok(download!.querySelector('svg.site-icon'), '免费下载用图标，不用 ↗ 字符')
+  assert.doesNotMatch(download!.textContent ?? '', /↗/)
+  assert.ok(github!.firstElementChild?.matches('svg.site-icon'), 'GitHub 图标在文字左边')
+  assert.ok(document.querySelector('a[href="mailto:348876414@qq.com"]'), '页脚有联系邮箱')
+  cleanup()
+
+  renderSite('/pricing')
+  const soon = screen.getByRole('button', { name: '即将上线' }) as HTMLButtonElement
+  assert.ok(soon.disabled, '官方云端还没上线，按钮不可点')
+  cleanup()
+
+  renderSite('/compare/vs-notion')
+  assert.ok(document.querySelector('.site-compare-legend'), '对比表有图例')
+  assert.ok(document.querySelector('.site-mark[data-mark="no"]'), '❌ 渲染成同色系标记')
+  cleanup()
+})
+
 test('未知路径不 404 空白，给出诚实占位', () => {
   renderSite('/not-a-real-page')
   assert.match(screen.getByRole('heading', { level: 1 }).textContent ?? '', /这一页还没建/)
@@ -341,7 +381,7 @@ test('对比页：Kubernetes 对比独立成页，归入基础设施，且 BIU �
   // 核心差异：声明写在页面里，一页可声明多个插件，组合成服务
   assert.match(body, /kubectl apply/, '要有 k8s 的声明方式')
   assert.match(body, /写在页面正文里/, '要讲清 BIU 的声明写在哪')
-  assert.match(body, /<plugin kind=/, '要给出插件的声明写法')
+  assert.match(body, /:::pageBlock \{kind=… plugin=…\}/, '要给出块的真实声明写法')
   assert.match(body, /任意多个插件/, '要点明一页可以声明多个插件')
   assert.match(body, /页面本身就是组合结果/, '要讲清多个插件如何组合成服务')
 
@@ -449,7 +489,7 @@ test('品牌页：三块颜色各自可调，滑块改的是对应扇区而不�
 
   // 页面里有两个标记（hero 展示 + 调节器预览），调节器是后一个。
   const svg = screen.getAllByRole('img', { name: 'BIU 品牌标记' }).at(-1)!
-  // svg 里三条带 fill 的 path 渲染顺序：左上块 / 右上块 / 下方大块，与滑块 0/1/2 一一对应。
+  // svg 里三条带 fill 的 path 渲染顺序：B 上弧 / B 下弧 / U，与滑块 0/1/2 一一对应。
   const fillOf = () => Array.from(svg.querySelectorAll('path[fill]')).map((w) => w.getAttribute('fill'))
   const before = fillOf()
   assert.equal(before.length, 3, '应有三块扇区')
@@ -457,16 +497,16 @@ test('品牌页：三块颜色各自可调，滑块改的是对应扇区而不�
 
   // 三个滑块各自的标签必须和画面上那块对得上，且互不串色。
   fireEvent.change(screen.getByTestId('brand-color-0'), { target: { value: '#123456' } })
-  assert.equal(fillOf()[0], '#123456', '滑块 0「左上块」应改到左上那块')
+  assert.equal(fillOf()[0], '#123456', '滑块 0「B 上弧」应改到那一块')
   fireEvent.change(screen.getByTestId('brand-color-1'), { target: { value: '#654321' } })
-  assert.equal(fillOf()[1], '#654321', '滑块 1「右上块」应改到右上那块')
+  assert.equal(fillOf()[1], '#654321', '滑块 1「B 下弧」应改到那一块')
   fireEvent.change(screen.getByTestId('brand-color-2'), { target: { value: '#0f0f0f' } })
   const after = fillOf()
-  assert.equal(after[2], '#0f0f0f', '滑块 2「下方大块」应改到下方那块')
-  assert.equal(after[0], '#123456', '左上不应被后续操作带着改')
-  assert.equal(after[1], '#654321', '右上不应被后续操作带着改')
+  assert.equal(after[2], '#0f0f0f', '滑块 2「U」应改到左下半圆')
+  assert.equal(after[0], '#123456', 'B 上弧不应被后续操作带着改')
+  assert.equal(after[1], '#654321', 'B 下弧不应被后续操作带着改')
 
-  // 三块必须都真正被填色，不留空 —— 曾经漏填过下方大块。
+  // 三块必须都真正被填色，不留空 —— 曾经漏填过 U 那块。
   for (const [i, fill] of after.entries()) {
     assert.ok(fill && fill !== 'none', `第 ${i} 块必须有填充色，实际是 ${fill}`)
   }
@@ -507,7 +547,8 @@ test('品牌页：说明这个标记刚好是 BIU 三个字母', () => {
   renderSite('/brand')
   const body = document.body.textContent ?? ''
 
-  assert.match(body, /拼成 B、I、U 三个字母/, '要点出三块拼成 BIU')
+  assert.match(body, /B、I、U 三个字母刚好拼成这个形状/, '要点出 BIU 三个字母拼成标记')
+  assert.match(body, /右上的两个小块是 B 的两个弧，贯穿的斜线是 I，左下的半圆是 U/, '字母与部位要对得上：I 是线，不是块')
   assert.match(body, /标记本身就是名字/, '要说清形状即名字')
   assert.doesNotMatch(body, /使用规则/, '品牌页不再单列使用规则')
   assert.doesNotMatch(body, /三块，三个字母，三层意思/, '不再单列三块寓意')
@@ -606,7 +647,7 @@ test('品牌页：粗细可以调到 0（等于隐藏线条），且不被可见
   cleanup()
 })
 
-test('品牌标记：三块分别是 B / I / U，方位与明度都不能改错', () => {
+test('品牌标记：两块是 B 的两弧、半圆是 U，方位与明度都不能改错', () => {
   renderSite('/brand')
   const svg = screen.getAllByRole('img', { name: 'BIU 品牌标记' }).at(-1)!
   const paths = Array.from(svg.querySelectorAll('path[fill]'))
@@ -619,15 +660,15 @@ test('品牌标记：三块分别是 B / I / U，方位与明度都不能改错'
     assert.ok(m, '扇区应有弧线')
     return Math.round(Math.atan2(Number(m![2]) - 615, Number(m![1]) - 450) * 180 / Math.PI)
   }
-  assert.equal(endAngle(0), -39, 'colors[0] 应结束于 -39°（右上 = B）')
-  assert.equal(endAngle(1), 52, 'colors[1] 应结束于 52°（右下 = I）')
-  assert.equal(endAngle(2), -127, 'colors[2] 应结束于 -127°（左下 = U）')
+  assert.equal(endAngle(0), -39, 'colors[0] 应结束于 -39°（B 的上弧）')
+  assert.equal(endAngle(1), 52, 'colors[1] 应结束于 52°（B 的下弧）')
+  assert.equal(endAngle(2), -127, 'colors[2] 应结束于 -127°（左下半圆 = U）')
 
   // 默认是「暖灰」这一组固定色，不是无彩度灰阶 —— 以前这条断言写的是
   // 「R=G=B」，那是旧默认（纯灰）留下的，换成暖灰后 R>G>B 成了固有特征，
   // 旧断言会把正确实现判成错的。现在钉两件真正重要的事：
   //   1) 三个值就是暖灰那三个，别被谁顺手换成别的色；
-  //   2) 明度必须递降、B 最亮 —— 三块靠明度分层次，改错就糊成一块。
+  //   2) 明度必须递降、B 上弧最亮 —— 三块靠明度分层次，改错就糊成一块。
   const lum = (hex: string) => parseInt(hex.slice(1, 3), 16)
   const fills = paths.map((n) => n.getAttribute('fill')!)
   assert.deepEqual(
@@ -635,8 +676,8 @@ test('品牌标记：三块分别是 B / I / U，方位与明度都不能改错'
     ['#e8ddd3', '#b3a498', '#6b5f55'],
     `默认应为暖灰三色，实际：${fills.join(' / ')}`,
   )
-  assert.ok(lum(fills[0]!) > lum(fills[1]!), `B 应比 I 亮：${fills[0]} vs ${fills[1]}`)
-  assert.ok(lum(fills[1]!) > lum(fills[2]!), `I 应比 U 亮：${fills[1]} vs ${fills[2]}`)
+  assert.ok(lum(fills[0]!) > lum(fills[1]!), `B 上弧应比下弧亮：${fills[0]} vs ${fills[1]}`)
+  assert.ok(lum(fills[1]!) > lum(fills[2]!), `B 下弧应比 U 亮：${fills[1]} vs ${fills[2]}`)
   // 暖灰是暖调：红通道 > 绿 > 蓝。这条能挡住「换成冷灰/纯灰」这类误改。
   for (const fill of fills) {
     const [r, g, b] = [fill.slice(1, 3), fill.slice(3, 5), fill.slice(5, 7)]
@@ -745,7 +786,7 @@ test('品牌页：预设按钮一次改三块颜色', () => {
   const svg = screen.getAllByRole('img', { name: 'BIU 品牌标记' }).at(-1)!
   fireEvent.click(screen.getByRole('button', { name: /深海/ }))
   const fills = Array.from(svg.querySelectorAll('path[fill]')).map((w) => w.getAttribute('fill'))
-  // 渲染顺序即 colors[0] / colors[1] / colors[2]：左上 / 右上 / 下方大块
+  // 渲染顺序即 colors[0] / colors[1] / colors[2]：B 上弧 / B 下弧 / U
   assert.deepEqual(fills, ['#1e3a8a', '#0ea5e9', '#0f172a'], '深海预设应落到三块上')
   cleanup()
 })

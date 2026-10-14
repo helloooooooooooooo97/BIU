@@ -9,6 +9,7 @@ import { MarketingSecurity } from './security.tsx'
 import { MarketingCompareDetail, MarketingCompareIndex } from './compare.tsx'
 import { MarketingUseCaseDetail, MarketingUseCases } from './use-cases.tsx'
 import { MarketingBrand } from './brand.tsx'
+import { MarketingBlog, MarketingBlogPost } from './blog.tsx'
 import { type AuthMode, MarketingAuth } from './auth.tsx'
 import { usePageMeta } from './use-page-meta.ts'
 
@@ -61,12 +62,7 @@ const PLACEHOLDERS: Record<string, { label: string; title: string; body: string 
   '/about': {
     label: '关于',
     title: '用一个页面，组合所有软件',
-    body: 'BIU 是一个开源的 All in One 工作空间：页面里的每一块都是插件提供的软件。团队与理念页面正在编写中。',
-  },
-  '/blog': {
-    label: '博客',
-    title: '设计与实现',
-    body: '页面如何组合插件、多智能体协作、本机优先架构、插件开发实践。首批文章正在撰写中。',
+    body: 'BIU 是一个开源的 All in One 工作空间：页面里的每一块都是插件提供的软件。理念可以先看博客，联系我们：348876414@qq.com。',
   },
   '/customers': {
     label: '客户案例',
@@ -86,7 +82,7 @@ const PLACEHOLDERS: Record<string, { label: string; title: string; body: string 
   '/terms': {
     label: '法务',
     title: '条款与隐私',
-    body: '服务条款与隐私政策的正式文本正在准备中。',
+    body: '服务条款与隐私政策的正式文本正在准备中。有疑问请发邮件到 348876414@qq.com。',
   },
 }
 
@@ -117,6 +113,8 @@ export function MarketingSite({ onLogin, onStart, auth }: MarketingSiteProps) {
       <Route path="/register" element={authElement} />
       <Route path="/signup" element={authElement} />
       <Route path="/compare/:slug" element={<MarketingCompareDetail onLogin={onLogin} onStart={onStart} />} />
+      <Route path="/blog" element={<MarketingBlog onLogin={onLogin} onStart={onStart} />} />
+      <Route path="/blog/:slug" element={<MarketingBlogPost onLogin={onLogin} onStart={onStart} />} />
       <Route path="/brand" element={<MarketingBrand onLogin={onLogin} onStart={onStart} />} />
       <Route path="/use-cases" element={<MarketingUseCases onLogin={onLogin} onStart={onStart} />} />
       <Route path="/use-cases/:slug" element={<MarketingUseCaseDetail onLogin={onLogin} onStart={onStart} />} />

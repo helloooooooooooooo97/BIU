@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { GITHUB_URL, SiteChrome, SiteFinalCta, type SiteAction } from './site-chrome.tsx'
+import { DownloadIcon, GITHUB_URL, GitHubIcon, SiteChrome, SiteFinalCta, type SiteAction } from './site-chrome.tsx'
 import { usePageMeta } from './use-page-meta.ts'
 
 /** 常见工具单价（每用户每月，美元）——源自 Notion 定价页的思路：让用户自己算。 */
@@ -18,7 +18,7 @@ type Plan = {
   price: string
   cadence: string
   features: readonly string[]
-  cta: { label: string; kind: 'download' | 'github' | 'cloud' }
+  cta: { label: string; kind: 'download' | 'github' | 'soon' }
   featured: boolean
 }
 
@@ -40,12 +40,12 @@ const PLANS: readonly Plan[] = [
     cta: { label: '查看源码', kind: 'github' },
   },
   {
-    name: '云端空间',
-    price: '$0',
-    cadence: '目前免费',
+    name: '官方云端',
+    price: '即将上线',
+    cadence: '价格上线时公布',
     featured: false,
-    features: ['多设备访问', '成员与权限', '在线协作'],
-    cta: { label: '创建云端空间', kind: 'cloud' },
+    features: ['多设备访问', '成员与权限', '在线协作', '上线前可以先自部署，功能相同'],
+    cta: { label: '即将上线', kind: 'soon' },
   },
 ] as const
 
@@ -53,13 +53,14 @@ const PRICING_FAQ = [
   ['为什么免费？', 'BIU 是开源项目，代码以 Apache 2.0 许可发布。我们希望更多人用页面去组合软件，而不是先被价格挡在门外。'],
   ['可以商用吗？', '可以。Apache 2.0 允许商用、修改和再分发，只需保留许可文本与 NOTICE，并标明改过的文件。'],
   ['模型调用要花钱吗？', 'BIU 本身不收费。智能体调用的是你自己配置的模型服务，费用由模型服务商按它们的价格收取。'],
-  ['以后会收费吗？', '开源代码和桌面版会一直免费。如果将来云端托管推出付费档，会提前公告，并保证你的数据可以完整导出。'],
+  ['以后会收费吗？', '开源代码、桌面版和自部署会一直免费。官方云端服务还在准备中，上线时会公布价格，你的数据随时可以完整导出。'],
+  ['有问题怎么联系？', '在 GitHub 提 issue，或发邮件到 348876414@qq.com。'],
 ] as const
 
 export function MarketingPricing({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
   usePageMeta({
     title: '定价',
-    description: 'BIU 开源、免费：桌面版、自部署、云端空间目前都不收费。用计算器看看把这些工具收进一个页面能省多少。',
+    description: 'BIU 开源、免费：桌面版和自部署不收费，官方云端即将上线。用计算器看看把这些工具收进一个页面能省多少。',
     path: '/pricing',
   })
   const [selected, setSelected] = useState<string[]>(['knowledge', 'project', 'ai'])
@@ -78,11 +79,11 @@ export function MarketingPricing({ onLogin, onStart }: { onLogin: SiteAction; on
   const yearly = monthly * 12 * Math.max(1, seats)
 
   const renderCta = (plan: Plan) => {
-    if (plan.cta.kind === 'download') return <Link className="site-plan-cta" to="/download">{plan.cta.label}</Link>
+    if (plan.cta.kind === 'download') return <Link className="site-plan-cta" to="/download"><DownloadIcon />{plan.cta.label}</Link>
     if (plan.cta.kind === 'github') {
-      return <a className="site-plan-cta" href={GITHUB_URL} target="_blank" rel="noreferrer">{plan.cta.label}</a>
+      return <a className="site-plan-cta" href={GITHUB_URL} target="_blank" rel="noreferrer"><GitHubIcon />{plan.cta.label}</a>
     }
-    return <button type="button" className="site-plan-cta" onClick={onStart}>{plan.cta.label}</button>
+    return <button type="button" className="site-plan-cta" disabled>{plan.cta.label}</button>
   }
 
   return (
@@ -91,7 +92,7 @@ export function MarketingPricing({ onLogin, onStart }: { onLogin: SiteAction; on
           <p className="site-section-label">定价</p>
           <h1>免费，而且开源</h1>
           <p className="site-page-lead">
-            BIU 以 Apache 2.0 开源。桌面版、自部署和云端空间目前都不收费，你只需要为自己选的模型付费。
+            BIU 以 Apache 2.0 开源。桌面版和自部署都不收费，你只需要为自己选的模型付费；官方云端服务即将上线。
           </p>
         </section>
 
@@ -160,7 +161,7 @@ export function MarketingPricing({ onLogin, onStart }: { onLogin: SiteAction; on
               <tr><td>离线</td><td>可用</td><td>需要网络</td></tr>
               <tr><td>多设备</td><td>—</td><td>支持</td></tr>
               <tr><td>成员协作</td><td>—</td><td>支持权限管理</td></tr>
-              <tr><td>价格</td><td>免费</td><td>目前免费</td></tr>
+              <tr><td>价格</td><td>免费</td><td>自部署免费；官方云端即将上线</td></tr>
             </tbody>
           </table>
         </section>
