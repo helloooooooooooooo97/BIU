@@ -176,6 +176,15 @@ test('长图文件名跟路径走', async () => {
   assert.equal(pageShotName('/blog/saas-to-paas'), 'biu-blog-saas-to-paas.png')
 })
 
+test('产品页两处标题在小标签下方，不再排到右边', () => {
+  assert.match(css, /\.site-continuity-heading,\s*\.site-ecosystem-heading\s*\{[^}]*display:\s*block/s)
+  assert.doesNotMatch(css, /\.site-continuity-heading,\s*\.site-ecosystem-heading,\s*\.site-faq-heading/)
+})
+
+test('长图生成时印花铺满整页，不再固定在视口', () => {
+  assert.match(css, /\.site\.is-capturing \.site-print\s*\{[^}]*position:\s*absolute/s, '印花在长图里要跟着内容铺满')
+})
+
 test('页脚：列区是 5 列（产品/开源/了解/分享/开始并排，不换行）', () => {
   const cols = [...css.matchAll(/\.site-footer-columns\s*\{([^}]*)\}/g)].map((m) => m[1])
   const base0 = cols[0] ?? ''
