@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { DownloadIcon, GITHUB_URL, SiteChrome, type SiteAction } from './site-chrome.tsx'
 import { formatDate, formatStars, useGitHubStats } from './github.ts'
 import { usePageMeta } from './use-page-meta.ts'
@@ -66,10 +66,10 @@ export function MarketingDownload({ onLogin, onStart }: { onLogin: SiteAction; o
 
   const urlOf = (id: PackageId) => release?.assets.find((asset) => PACKAGES[id].file.test(asset.name))?.url ?? RELEASES_PAGE
   const meta = [
-    release ? `最新版本 ${release.tag}` : '',
-    release?.publishedAt ? `更新于 ${formatDate(release.publishedAt)}` : '',
-    stars !== undefined ? `GitHub ★ ${formatStars(stars)}` : '',
-  ].filter(Boolean)
+    release ? `最新版本 ${release.tag}` : null,
+    release?.publishedAt ? `更新于 ${formatDate(release.publishedAt)}` : null,
+    stars !== undefined ? <>GitHub <span className="site-gh-star" aria-hidden>★</span> {formatStars(stars)}</> : null,
+  ].filter((item) => item !== null)
 
   usePageMeta({
     title: '下载',
@@ -95,7 +95,11 @@ export function MarketingDownload({ onLogin, onStart }: { onLogin: SiteAction; o
               <a className="site-download-alt" href={urlOf('mac-intel')}>Intel 芯片的 Mac →</a>
             ) : null}
           </div>
-          {meta.length ? <p className="site-download-meta">{meta.join(' · ')}</p> : null}
+          {meta.length ? (
+            <p className="site-download-meta">
+              {meta.map((item, index) => <Fragment key={index}>{index ? ' · ' : null}{item}</Fragment>)}
+            </p>
+          ) : null}
         </section>
 
         <section className="site-platforms" aria-label="平台">
