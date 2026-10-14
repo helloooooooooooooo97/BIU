@@ -46,7 +46,7 @@ function Placeholder({ label, title, body, onLogin, onStart }: PlaceholderProps)
         <section className="site-final-cta" data-reveal>
           <div className="site-container">
             <p className="site-section-label">开始使用 BIU</p>
-            <h2>先创建你的空间。</h2>
+            <h2>先创建你的空间</h2>
             <button type="button" onClick={onStart}>创建你的空间 <span>↗</span></button>
           </div>
         </section>

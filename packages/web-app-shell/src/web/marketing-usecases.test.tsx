@@ -21,7 +21,7 @@ test('用例总览：六个场景全部渲染，且不再是占位页', () => {
   // 占位页曾是「正在开发中」，这里必须已经不出现
   assert.equal(document.body.textContent?.includes('子页正在开发中'), false, '不再是占位页')
 
-  assert.ok(screen.getByText('为真实工作而生。'), '总览标题存在')
+  assert.ok(screen.getByText('为真实工作而生'), '总览标题存在')
   for (const useCase of USE_CASES) {
     assert.ok(screen.getByText(useCase.title), `缺少场景 ${useCase.title}`)
     assert.ok(screen.getByText(useCase.summary), `缺少场景简介 ${useCase.title}`)
@@ -74,7 +74,7 @@ test('用例子页：其他场景链接指向兄弟页，不自指', () => {
 
 test('未知 slug：给诚实提示，不是 404 崩溃', () => {
   renderAt('/use-cases/does-not-exist')
-  assert.ok(screen.getByText('没有这个场景。'), '未知 slug 有兜底')
+  assert.ok(screen.getByText('没有这个场景'), '未知 slug 有兜底')
 })
 
 test('总览页的每个标题都出现在子页里（导航闭环）', () => {

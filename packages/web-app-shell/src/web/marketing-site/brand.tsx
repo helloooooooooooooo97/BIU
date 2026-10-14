@@ -35,7 +35,7 @@ export function MarketingBrand({ onLogin, onStart }: { onLogin: SiteAction; onSt
     <SiteChrome onLogin={onLogin} onStart={onStart}>
       <section className="site-page-hero" data-reveal>
         <p className="site-section-label">品牌</p>
-        <h1>一个圆、两条弦、三个块。</h1>
+        <h1>一个圆、两条弦、三个块</h1>
         <p className="site-page-lead">
           标记不是装饰。它说明 BIU 是什么：一个整体的空间，被结构切成可命名的部分，
           但每一部分都还在同一个圆里。下面的颜色和线条都可以调 —— 这是你的空间，不是我们的。
@@ -49,7 +49,7 @@ export function MarketingBrand({ onLogin, onStart }: { onLogin: SiteAction; onSt
           strokeWidth={brand.strokeWidth}
           lineWidth={brand.lineWidth}
           background={brand.background}
-          showBackground={brand.showBackground}
+          showBackground={false}
           circleRatio={brand.circleRatio}
           // 与 .site-brand-hero svg 的 min(420px, 70vw) 对应，供线条保底换算。
           displayWidth={420}

@@ -88,7 +88,7 @@ export function MarketingPricing({ onLogin, onStart }: { onLogin: SiteAction; on
     <SiteChrome onLogin={onLogin} onStart={onStart}>
         <section className="site-page-hero" data-reveal>
           <p className="site-section-label">定价</p>
-          <h1>更少工具，更多产出。</h1>
+          <h1>更少工具，更多产出</h1>
           <p className="site-page-lead">
             把知识库、项目管理、AI 助手、会议记录、搜索和日程收进一个空间。
             先算算现在花了多少。
@@ -168,7 +168,7 @@ export function MarketingPricing({ onLogin, onStart }: { onLogin: SiteAction; on
         <section className="site-faq">
           <div className="site-faq-heading" data-reveal>
             <p className="site-section-label">常见问题</p>
-            <h2>关于计费。</h2>
+            <h2>关于计费</h2>
           </div>
           <div className="site-faq-list" data-reveal>
             {PRICING_FAQ.map(([question, answer]) => (
@@ -183,7 +183,7 @@ export function MarketingPricing({ onLogin, onStart }: { onLogin: SiteAction; on
         <section className="site-final-cta" data-reveal>
           <div className="site-container">
             <p className="site-section-label">开始使用 BIU</p>
-            <h2>先免费用起来。</h2>
+            <h2>先免费用起来</h2>
             <button type="button" onClick={onStart}>创建你的空间 <span>↗</span></button>
           </div>
         </section>

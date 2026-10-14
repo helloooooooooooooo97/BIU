@@ -68,7 +68,7 @@ export function MarketingDownload({ onLogin, onStart }: { onLogin: SiteAction; o
     <SiteChrome onLogin={onLogin} onStart={onStart}>
         <section className="site-page-hero" data-reveal>
           <p className="site-section-label">下载</p>
-          <h1>在你的设备上运行。</h1>
+          <h1>在你的设备上运行</h1>
           <p className="site-page-lead">
             安装包来自 GitHub 最新 tag{tag ? ` ${tag}` : ''}。macOS 分 Apple 芯片和 Intel，Windows 是 x64 安装程序。
           </p>
@@ -104,7 +104,7 @@ export function MarketingDownload({ onLogin, onStart }: { onLogin: SiteAction; o
 
         <section className="site-local-note" data-reveal>
           <p className="site-section-label">本机空间</p>
-          <h2>数据留在你的设备上。</h2>
+          <h2>数据留在你的设备上</h2>
           <p>
             本机空间把页面、数据库和附件保存在当前设备，离线可用。
             需要协作时再使用云端空间 —— 两种空间各自成立，创建时由你决定。
@@ -114,7 +114,7 @@ export function MarketingDownload({ onLogin, onStart }: { onLogin: SiteAction; o
         <section className="site-final-cta" data-reveal>
           <div className="site-container">
             <p className="site-section-label">开始使用 BIU</p>
-            <h2>先在本机跑起来。</h2>
+            <h2>先在本机跑起来</h2>
             <button type="button" onClick={onStart}>创建你的空间 <span>↗</span></button>
           </div>
         </section>

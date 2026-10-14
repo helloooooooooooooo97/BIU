@@ -64,7 +64,7 @@ export function MarketingSecurity({ onLogin, onStart }: { onLogin: SiteAction; o
     <SiteChrome onLogin={onLogin} onStart={onStart}>
         <section className="site-page-hero" data-reveal>
           <p className="site-section-label">安全</p>
-          <h1>你的数据在哪里，由你决定。</h1>
+          <h1>你的数据在哪里，由你决定</h1>
           <p className="site-page-lead">
             多数协作产品只有云端一种形态。BIU 提供本机空间，数据边界是产品结构决定的，不是设置项。
           </p>
@@ -82,7 +82,7 @@ export function MarketingSecurity({ onLogin, onStart }: { onLogin: SiteAction; o
 
         <section className="site-permission" data-reveal>
           <p className="site-section-label">权限模型</p>
-          <h2>谁能看到什么，是一次匹配的结果。</h2>
+          <h2>谁能看到什么，是一次匹配的结果</h2>
           <p className="site-permission-lead">
             常见做法是维护一张名单：把人和内容一个个对应起来。BIU 不这么做 ——
             <strong>两边都是条件，匹配上了才生效。</strong>
@@ -133,7 +133,7 @@ export function MarketingSecurity({ onLogin, onStart }: { onLogin: SiteAction; o
         <section className="site-final-cta" data-reveal>
           <div className="site-container">
             <p className="site-section-label">开始使用 BIU</p>
-            <h2>把边界握在自己手里。</h2>
+            <h2>把边界握在自己手里</h2>
             <button type="button" onClick={onStart}>创建你的空间 <span>↗</span></button>
           </div>
         </section>
