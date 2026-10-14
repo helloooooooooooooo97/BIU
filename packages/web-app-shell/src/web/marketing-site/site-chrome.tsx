@@ -51,7 +51,7 @@ export function GitHubButton({ label, className = 'site-cta-secondary' }: { labe
   return (
     <a className={className} href={GITHUB_URL} target="_blank" rel="noreferrer">
       <GitHubIcon />{label}
-      {stars !== undefined ? <span className="site-gh-stars" aria-label={`${stars} 个星标`}>★ {formatStars(stars)}</span> : null}
+      {stars !== undefined ? <span className="site-gh-stars" aria-label={`${stars} 个星标`}><span className="site-gh-star" aria-hidden>★</span>{formatStars(stars)}</span> : null}
     </a>
   )
 }
@@ -98,7 +98,7 @@ export function SiteFinalCta({ title, label = '开源 · 免费' }: { title: Rea
         <h2>{title}</h2>
         <div className="site-cta-actions">
           <Link className="site-cta-primary" to="/download"><DownloadIcon />免费下载</Link>
-          <GitHubButton label="在 GitHub 查看源码" />
+          <GitHubButton label="GitHub" />
         </div>
       </div>
     </section>

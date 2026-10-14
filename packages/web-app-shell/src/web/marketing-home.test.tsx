@@ -79,6 +79,11 @@ test('landing page embeds real empty product surfaces and opens account actions'
   fireEvent.click(screen.getByRole('tab', { name: '组件' }))
   assert.match(lead(), /散落.*重新收集.*结构化/, '组件说明讲的是把散在各页的插件收集成结构化的表')
 
+  const finalGitHub = document.querySelector('.site-final-cta a[href*="github.com"]')!
+  assert.match(finalGitHub.textContent ?? '', /^GitHub/, '底部按钮直接写 GitHub')
+  assert.doesNotMatch(finalGitHub.textContent ?? '', /查看源码/)
+  assert.match(readFileSync(resolve(process.cwd(), 'web/style.css'), 'utf8'), /\.site-gh-star\s*\{\s*color:\s*#e3b341/, '星标用 GitHub 的黄色')
+
   const wall = screen.getByRole('region', { name: '插件' })
   assert.ok(wall.querySelectorAll('article').length >= 8, '首页插件墙列出现成的插件')
   assert.match(wall.textContent ?? '', /Excalidraw/)

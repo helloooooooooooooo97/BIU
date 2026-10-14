@@ -8649,13 +8649,17 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
 }
 .site-hero-shot { display: none; }
 .site-gh-stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   margin-left: 2px;
   padding-left: 10px;
-  border-left: 1px solid currentColor;
+  border-left: 1px solid rgba(255, 255, 255, .3);
+  color: rgba(255, 255, 255, .7);
   font-size: 13px;
   font-variant-numeric: tabular-nums;
-  opacity: .7;
 }
+.site-gh-star { color: #e3b341; }
 .site-eyebrow,
 .site-section-label {
   margin: 0;
