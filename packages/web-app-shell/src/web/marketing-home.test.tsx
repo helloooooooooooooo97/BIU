@@ -915,6 +915,14 @@ test('产品页：每个板块配一张真实截图', () => {
   const images = Array.from(document.querySelectorAll('.site-block-media img'))
   assert.ok(images.length >= 6)
   assert.ok(images.every((img) => /^\/site\/shot-.+\.webp$/.test(img.getAttribute('src') ?? '')), '截图统一用 webp')
+
+  const extend = document.querySelector('#ecosystem')!
+  assert.equal(extend.querySelector('h2')?.textContent, '缺什么，自己补上')
+  const cards = [...extend.querySelectorAll('article')]
+  assert.deepEqual(cards.map((card) => card.querySelector('p')?.textContent), ['插件', '技能', 'MCP'])
+  assert.ok(cards.every((card) => card.querySelector('.site-ecosystem-code code')?.textContent), '每张卡带一段真实写法')
+  assert.ok(cards.every((card) => !/。$/.test(card.querySelector('h3')?.textContent ?? '')), '卡片标题不带句号')
+  assert.equal(document.querySelector('.site-final-cta h2')?.textContent, '先做一页')
   cleanup()
 })
 

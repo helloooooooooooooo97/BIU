@@ -99,10 +99,29 @@ const PAGE_FLOW = [
   { step: '04', title: '分享', body: '对方拿到能用的一页' },
 ] as const
 
+/** 三种补法：缺口是什么、怎么补，加一段真实写法当例子。 */
 const ECOSYSTEM = [
-  { symbol: '＋', name: 'Plugins', title: '给页面增加一种新软件。', body: '一个插件就是一种块。写好后能在任何页面里使用，也能随页面一起分享。' },
-  { symbol: '／', name: 'Skills', title: '把做事的方法写下来。', body: '团队的规范和流程写成技能，智能体会在合适的时候用上。' },
-  { symbol: '⌁', name: 'MCP', title: '连接空间外的服务。', body: '通过 MCP 调用外部工具和数据，权限边界清楚。' },
+  {
+    name: '插件',
+    title: '页面缺一种块',
+    body: '写一个插件，就多一种块。之后每一页都能放，分享时跟着页面一起走。',
+    file: '页面正文',
+    code: ':::pageBlock {kind=checkin plugin=page-checkin}\n{ "title": "第 3 周签到" }\n:::',
+  },
+  {
+    name: '技能',
+    title: '智能体不懂你的做法',
+    body: '把规范和流程写成技能，智能体做到这一步时会照着做。',
+    file: 'SKILL.md',
+    code: '---\nname: 批改作业\ndescription: 批改算法题时按这份标准打分\n---\n先看思路，再看代码，最后看边界。',
+  },
+  {
+    name: 'MCP',
+    title: '资料在别的系统里',
+    body: '接上一台 MCP 服务器，智能体就能直接去查，不用你复制过来。',
+    file: 'MCP 服务器',
+    code: '{\n  "name": "github",\n  "command": "npx",\n  "args": ["-y", "@modelcontextprotocol/server-github"]\n}',
+  },
 ] as const
 
 export function MarketingProduct({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
@@ -162,22 +181,25 @@ export function MarketingProduct({ onLogin, onStart }: { onLogin: SiteAction; on
 
         <section className="site-ecosystem" id="ecosystem">
           <div className="site-ecosystem-heading" data-reveal>
-            <p className="site-section-label">扩展 BIU</p>
-            <h2>把你的工具与方法<br />带进页面</h2>
+            <p className="site-section-label">扩展</p>
+            <h2>缺什么，自己补上</h2>
           </div>
           <div className="site-ecosystem-grid">
             {ECOSYSTEM.map((item) => (
               <article key={item.name} data-reveal>
-                <div className="site-ecosystem-symbol">{item.symbol}</div>
                 <p>{item.name}</p>
                 <h3>{item.title}</h3>
                 <span>{item.body}</span>
+                <figure className="site-ecosystem-code">
+                  <figcaption>{item.file}</figcaption>
+                  <pre><code>{item.code}</code></pre>
+                </figure>
               </article>
             ))}
           </div>
         </section>
 
-        <SiteFinalCta title="做你的第一页服务" />
+        <SiteFinalCta title="先做一页" />
     </SiteChrome>
   )
 }
