@@ -2,7 +2,7 @@ import { afterEach, test } from 'vitest'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { MarketingHome } from './marketing-home.tsx'
 import { MarketingSite } from './marketing-site/index.tsx'
@@ -100,8 +100,9 @@ test('landing page embeds real empty product surfaces and opens account actions'
 
 test('home 收窄后：深度内容下沉，导航指向独立页', () => {
   renderSite('/')
-  // 原首页的 6 张解决方案卡已移到 /use-cases
-  assert.equal(screen.queryByText('研究与分析'), null)
+  // 场景痛点、完整对照表留在内页，首页只开门
+  assert.equal(screen.queryByText(/资料散在几十个标签页/), null)
+  assert.equal(screen.queryByText('BIU vs Linux'), null)
   // 导航里有独立页面入口
   const print = screen.getByTestId('site-print')
   const tile = print.querySelector('pattern')
@@ -129,6 +130,49 @@ test('home 收窄后：深度内容下沉，导航指向独立页', () => {
   assert.match(nav.textContent ?? '', /对比/)
   // 首页主张：All in One —— 页面组合软件
   assert.match(screen.getByRole('heading', { level: 1 }).textContent ?? '', /组合所有软件/)
+  cleanup()
+})
+
+test('首页三扇门通向场景、对比和想法，深度留在内页', () => {
+  renderSite('/')
+  const faq = document.querySelector('.site-faq')!
+  const scenes = screen.getByRole('region', { name: '场景' })
+  const compare = screen.getByRole('region', { name: '对比' })
+  const ideas = screen.getByRole('region', { name: '想法' })
+  assert.ok(scenes.compareDocumentPosition(compare) & Node.DOCUMENT_POSITION_FOLLOWING, '对比在场景后面')
+  assert.ok(compare.compareDocumentPosition(ideas) & Node.DOCUMENT_POSITION_FOLLOWING, '想法在对比后面')
+  assert.ok(ideas.compareDocumentPosition(faq) & Node.DOCUMENT_POSITION_FOLLOWING, '三扇门在 FAQ 前面')
+
+  const sceneLinks = within(scenes).getAllByRole('link')
+  assert.deepEqual(
+    sceneLinks.slice(0, 6).map((link) => link.getAttribute('href')),
+    ['/use-cases/research', '/use-cases/product', '/use-cases/content', '/use-cases/team-knowledge', '/use-cases/personal', '/use-cases/collaboration'],
+  )
+  assert.match(sceneLinks[0]?.textContent ?? '', /研究与分析/)
+  assert.match(sceneLinks[0]?.textContent ?? '', /研究报告 · 数据库 · 对比矩阵/)
+  assert.equal(sceneLinks[6]?.getAttribute('href'), '/use-cases')
+  assert.equal(screen.queryByText(/资料散在几十个标签页/), null, '痛点正文留在场景页')
+
+  const compareLinks = within(compare).getAllByRole('link')
+  assert.deepEqual(
+    compareLinks.slice(0, 3).map((link) => link.getAttribute('href')),
+    ['/compare/vs-notion', '/compare/vs-obsidian', '/compare/vs-chatgpt'],
+  )
+  assert.match(compareLinks[0]?.textContent ?? '', /Notion/)
+  assert.match(compareLinks[0]?.textContent ?? '', /块的种类由插件决定/)
+  assert.doesNotMatch(compare.textContent ?? '', /要在一页里组合几个软件交给客户/, '不把长对照贴进卡片')
+  assert.equal(compareLinks[3]?.getAttribute('href'), '/compare')
+  assert.equal(screen.queryByText('BIU vs Linux'), null)
+  assert.equal(screen.queryByText('一切皆文件'), null)
+
+  const ideaLinks = within(ideas).getAllByRole('link')
+  assert.equal(ideaLinks[0]?.getAttribute('href'), '/blog/all-in-one')
+  assert.equal(ideaLinks[1]?.getAttribute('href'), '/blog/saas-to-paas')
+  assert.match(ideaLinks[0]?.textContent ?? '', /分钟读完/)
+  assert.equal(ideaLinks[2]?.getAttribute('href'), '/brand')
+  assert.match(ideaLinks[2]?.textContent ?? '', /一个圆、两条线、三个块/)
+  assert.ok(ideaLinks[2]?.querySelector('svg.site-idea-mark'), '品牌入口画的是活的标记')
+  assert.equal(ideaLinks[3]?.getAttribute('href'), '/blog')
   cleanup()
 })
 

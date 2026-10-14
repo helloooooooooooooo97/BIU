@@ -3,6 +3,10 @@ import { Link } from 'react-router-dom'
 import { DownloadIcon, GitHubButton, SiteChrome, SiteFaq, SiteFinalCta, type SiteAction } from './site-chrome.tsx'
 import { usePageMeta } from './use-page-meta.ts'
 import { asset } from './site-base.ts'
+import { USE_CASES } from './use-cases.tsx'
+import { COMPARE_FEATURED, COMPARE_PAGES } from './compare.tsx'
+import { BLOG_POSTS, readingMinutes } from './blog-posts.ts'
+import { BrandMark, useBrandConfig } from './brand-mark.tsx'
 
 /**
  * 真实界面：BIU 的截图 / 录屏（public/site/），按 2–3 倍像素拍摄，2 倍屏上也清楚。
@@ -123,6 +127,29 @@ const AGENT_POINTS = [
   },
 ] as const
 
+/**
+ * 首页只放三个最常被拿来问的对手。一句话是给卡片的，
+ * 长对照表留在对比页 —— Notion 的 biuWhen 太长，不能直接贴上来。
+ */
+const HOME_COMPARE_LINE = {
+  'vs-notion': '块的种类由插件决定，一页可以装下几个软件。',
+  'vs-obsidian': '同样可以留在本机，插件块读写的是结构化数据。',
+  'vs-chatgpt': '结果落成页面，下一轮接着用，不沉在聊天记录里。',
+} as const
+
+const HOME_COMPARES = COMPARE_FEATURED.flatMap((slug) => {
+  const page = COMPARE_PAGES.find((item) => item.slug === slug)
+  const line = HOME_COMPARE_LINE[slug]
+  return page && line ? [{ page, line }] : []
+})
+
+/** 日期相同则保持稿序，取最前面两篇作为首页入口。 */
+const HOME_POSTS = BLOG_POSTS
+  .map((post, index) => ({ post, index }))
+  .sort((a, b) => (a.post.date < b.post.date ? 1 : a.post.date > b.post.date ? -1 : a.index - b.index))
+  .slice(0, 2)
+  .map(({ post }) => post)
+
 const HOME_FAQ = [
   ['BIU 是什么？', '一个桌面应用：用页面把几个软件组合成一套服务，智能体和你在同一个工作区里干活。做好的页面可以整页分享，对方打开就能用。'],
   ['和 Notion 有什么不同？', 'Notion 里块的种类由平台决定；BIU 的块来自插件，缺一种就装一个或写一个，分享时插件源码跟着页面一起走。'],
@@ -140,6 +167,7 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
   const [activeSurface, setActiveSurface] = useState(0)
   const surface = PRODUCT_SURFACES[activeSurface]!
   const reducedMotion = usePrefersReducedMotion()
+  const brand = useBrandConfig()
 
   return (
     <SiteChrome onLogin={onLogin} onStart={onStart}>
@@ -300,6 +328,98 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
               </article>
             </div>
           </div>
+        </section>
+
+        <section className="site-home-entry" aria-label="场景">
+          <div className="site-home-entry-heading" data-reveal>
+            <p className="site-section-label">场景</p>
+            <h2>这些工作，都能装进一页</h2>
+            <p>选一个你正在做的事。交付物、痛点和做法都在对应的那一页，这里只留一句话。</p>
+          </div>
+          <div className="site-scene-grid">
+            {USE_CASES.map((useCase) => (
+              <Link key={useCase.slug} className="site-scene-row" to={`/use-cases/${useCase.slug}`} data-reveal>
+                <span className="site-scene-index">{useCase.index}</span>
+                <span className="site-scene-copy">
+                  <span className="site-scene-title">
+                    <h3>{useCase.title}</h3>
+                    <span aria-hidden>→</span>
+                  </span>
+                  <p>{useCase.summary}</p>
+                  <small>{useCase.output}</small>
+                </span>
+              </Link>
+            ))}
+          </div>
+          <p className="site-home-entry-more" data-reveal>
+            <Link to="/use-cases">全部场景 →</Link>
+          </p>
+        </section>
+
+        <section className="site-home-entry" aria-label="对比">
+          <div className="site-home-entry-heading" data-reveal>
+            <p className="site-section-label">对比</p>
+            <h2>和你已经在用的工具比</h2>
+            <p>三个最常被拿来问的。完整对照表，包括我们做不到的地方，都在对比页。</p>
+          </div>
+          <div className="site-home-compare-grid">
+            {HOME_COMPARES.map(({ page, line }) => (
+              <Link key={page.slug} className="site-home-compare-card" to={`/compare/${page.slug}`} data-reveal>
+                <small>{page.category}</small>
+                <h3>{page.columns[0]}</h3>
+                <p>{line}</p>
+                <span>看对比 →</span>
+              </Link>
+            ))}
+          </div>
+          <p className="site-home-entry-more" data-reveal>
+            <Link to="/compare">全部对比 →</Link>
+          </p>
+        </section>
+
+        <section className="site-home-entry" aria-label="想法">
+          <div className="site-home-entry-heading" data-reveal>
+            <p className="site-section-label">想法</p>
+            <h2>BIU 为什么长成这样</h2>
+            <p>产品页讲怎么用。这里是两篇把理由讲完的文章，以及标记本身在说的那句话。</p>
+          </div>
+          <div className="site-idea-posts">
+            {HOME_POSTS.map((post) => (
+              <Link key={post.slug} className="site-idea-post" to={`/blog/${post.slug}`} data-reveal>
+                <span className="site-idea-meta">
+                  <time dateTime={post.date}>{post.date.replace(/-/g, '.')}</time>
+                  <span>约 {readingMinutes(post)} 分钟读完</span>
+                </span>
+                <h3>{post.title}</h3>
+                <p>{post.summary}</p>
+                <span className="site-idea-go">阅读 →</span>
+              </Link>
+            ))}
+          </div>
+          <div className="site-idea-brand-wrap" data-reveal>
+            <Link className="site-idea-brand" to="/brand">
+              <BrandMark
+                className="site-idea-mark"
+                colors={[brand.c0, brand.c1, brand.c2]}
+                stroke={brand.stroke}
+                strokeWidth={brand.strokeWidth}
+                lineWidth={brand.lineWidth}
+                background={brand.background}
+                showBackground={false}
+                circleRatio={brand.circleRatio}
+                displayWidth={96}
+                title="BIU"
+              />
+              <span className="site-idea-brand-copy">
+                <h3>一个圆、两条线、三个块</h3>
+                <p>一个圆是一个页面，里面切出的几块是各自独立的软件，但它们都还在同一个圆里。</p>
+                <span className="site-idea-go">看品牌 →</span>
+              </span>
+            </Link>
+          </div>
+          <p className="site-home-entry-more" data-reveal>
+            <Link to="/blog">全部文章 →</Link>
+          </p>
         </section>
 
         <SiteFaq title="第一次听说 BIU" items={HOME_FAQ} />
