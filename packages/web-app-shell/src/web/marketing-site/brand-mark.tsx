@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type RefObject } from 'react'
 
 /**
  * BIU 品牌标记：圆被两条线切成三块，三块就是 B / I / U 三个字母。
@@ -260,7 +260,45 @@ export type BrandConfig = {
   circleRatio: number
 }
 
-/** 一整张重复印花。一枚 SVG pattern 铺满，不逐个挂组件。 */
+/** 中线那一列印花的相对透明度；越往两侧越接近 1。 */
+export const BRAND_PRINT_FLOOR = 0.15
+
+/**
+ * 某一列印花的相对透明度：按列中心离视口中线的距离走 smoothstep，
+ * 中线最淡、两侧最实。每一枚标记各取一个透明度，渐变靠标记本身表达，
+ * 不用蒙版去裁 —— 也就不会出现被切掉半个的标记和可见的分界线。
+ */
+export function brandPrintAlpha(center: number, width: number): number {
+  if (width <= 0) return 1
+  const half = width / 2
+  const t = Math.min(1, Math.abs(center - half) / half)
+  const eased = t * t * (3 - 2 * t)
+  return Math.round((BRAND_PRINT_FLOOR + (1 - BRAND_PRINT_FLOOR) * eased) * 100) / 100
+}
+
+function useViewportWidth(ref: RefObject<SVGSVGElement | null>) {
+  const [width, setWidth] = useState(() => (typeof window === 'undefined' ? 0 : window.innerWidth))
+  useEffect(() => {
+    const node = ref.current
+    if (!node) return
+    const read = () => setWidth(node.getBoundingClientRect().width || window.innerWidth)
+    read()
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', read)
+      return () => window.removeEventListener('resize', read)
+    }
+    const observer = new ResizeObserver(read)
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [ref])
+  return width
+}
+
+/**
+ * 一整张重复印花。标记只画一次（SVG pattern），再按列切成竖条，
+ * 每条一个透明度 —— 几十个 rect，而不是逐枚挂上千个组件。
+ * 透明度只随列变化，竖向滚动视差按格子循环时画面不跳。
+ */
 export function BrandPrint({
   config,
   tile = BRAND_PRINT_TILE,
@@ -270,18 +308,27 @@ export function BrandPrint({
   tile?: number
   mark?: number
 }) {
+  const ref = useRef<SVGSVGElement>(null)
+  const width = useViewportWidth(ref)
+  const patternId = `site-brand-print-${useId().replace(/:/g, '')}`
   const r = MAX_R * Math.min(1, Math.max(0.05, config.circleRatio))
   const scale = mark / VB_SIZE
-  const lift = (width: number) => {
-    if (width <= 0) return 0
-    const onScreen = width * scale
-    return onScreen >= MIN_STROKE_PX ? width : MIN_STROKE_PX / scale
+  const lift = (lineWidth: number) => {
+    if (lineWidth <= 0) return 0
+    const onScreen = lineWidth * scale
+    return onScreen >= MIN_STROKE_PX ? lineWidth : MIN_STROKE_PX / scale
   }
   const inset = (tile - mark) / 2
+  // 网格以视口中线对称：中线正好落在两列之间或一列正中，左右渐变一致。
+  const offset = (((width / 2 - tile / 2) % tile) + tile) % tile
+  const columns: Array<{ x: number; alpha: number }> = []
+  for (let x = offset - tile; x < width; x += tile) {
+    columns.push({ x, alpha: brandPrintAlpha(x + tile / 2, width) })
+  }
   return (
-    <svg className="site-print-sheet" width="100%" height="100%">
+    <svg className="site-print-sheet" width="100%" height="100%" ref={ref}>
       <defs>
-        <pattern id="site-brand-print" width={tile} height={tile} patternUnits="userSpaceOnUse">
+        <pattern id={patternId} x={offset} width={tile} height={tile} patternUnits="userSpaceOnUse">
           <svg x={inset} y={inset} width={mark} height={mark} viewBox={VIEW_BOX}>
             <BrandMarkShapes
               colors={[config.c0, config.c1, config.c2]}
@@ -295,7 +342,17 @@ export function BrandPrint({
           </svg>
         </pattern>
       </defs>
-      <rect width="100%" height="100%" fill="url(#site-brand-print)" />
+      {columns.map((column) => (
+        <rect
+          key={column.x}
+          data-print-column
+          x={column.x}
+          width={tile}
+          height="100%"
+          fill={`url(#${patternId})`}
+          opacity={column.alpha}
+        />
+      ))}
     </svg>
   )
 }

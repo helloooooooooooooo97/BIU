@@ -8452,8 +8452,8 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   /* 大字(标题) → 下方内容 的间距 */
   --site-heading-gap: 40px;
 }
-/* 品牌印花：固定在滚动内容后面，只在内容栏左右两侧露出。
-   内容栏（含左右留白）保持纯黑；视口窄于内容栏时两侧没有空间，印花整体隐去。 */
+/* 品牌印花：固定在滚动内容后面，正文透明处透出。
+   渐变不靠蒙版：每一列标记自带透明度（中线最淡、两侧最实），见 BrandPrint。 */
 .site-print {
   position: fixed;
   inset: 0;
@@ -8461,37 +8461,13 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   margin: 0;
   pointer-events: none;
   overflow: hidden;
-  /* 渐变铺满整条侧边：从内容栏外缘（含留白）到视口边缘，
-     按 smoothstep 缓动取样，起止两端都没有可见的分界线。 */
-  --print-side: max(0px, calc((100% - var(--site-content)) / 2 + var(--site-gutter)));
-  --print-mask: linear-gradient(90deg,
-    #000 0,
-    rgba(0, 0, 0, 0.957) calc(var(--print-side) * 0.125),
-    rgba(0, 0, 0, 0.844) calc(var(--print-side) * 0.25),
-    rgba(0, 0, 0, 0.684) calc(var(--print-side) * 0.375),
-    rgba(0, 0, 0, 0.5) calc(var(--print-side) * 0.5),
-    rgba(0, 0, 0, 0.316) calc(var(--print-side) * 0.625),
-    rgba(0, 0, 0, 0.156) calc(var(--print-side) * 0.75),
-    rgba(0, 0, 0, 0.043) calc(var(--print-side) * 0.875),
-    transparent var(--print-side),
-    transparent calc(100% - var(--print-side)),
-    rgba(0, 0, 0, 0.043) calc(100% - var(--print-side) * 0.875),
-    rgba(0, 0, 0, 0.156) calc(100% - var(--print-side) * 0.75),
-    rgba(0, 0, 0, 0.316) calc(100% - var(--print-side) * 0.625),
-    rgba(0, 0, 0, 0.5) calc(100% - var(--print-side) * 0.5),
-    rgba(0, 0, 0, 0.684) calc(100% - var(--print-side) * 0.375),
-    rgba(0, 0, 0, 0.844) calc(100% - var(--print-side) * 0.25),
-    rgba(0, 0, 0, 0.957) calc(100% - var(--print-side) * 0.125),
-    #000 100%);
-  -webkit-mask-image: var(--print-mask);
-  mask-image: var(--print-mask);
 }
 .site-print-sheet {
   display: block;
   width: 100%;
   /* 多出一格高，滚动位移按格子取模时下沿不露底。 */
   height: calc(100% + var(--print-tile, 0px));
-  /* 只剩两侧可见、不再压在正文下，可以比满铺时亮一些 */
+  /* 两侧标记透明度为 1，中线一列只有 0.15 倍，整体上限可以比满铺均匀时高 */
   opacity: 0.36;
   transform: translate3d(0, var(--print-shift, 0px), 0);
   will-change: transform;
