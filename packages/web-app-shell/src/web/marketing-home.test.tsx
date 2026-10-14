@@ -85,6 +85,8 @@ test('landing page embeds real empty product surfaces and opens account actions'
 
   fireEvent.click(screen.getByTestId('site-login'))
   assert.equal(screen.getByTestId('site-start').getAttribute('href'), '/download')
+  assert.equal(screen.getByTestId('site-start').textContent, '免费下载')
+  assert.ok(screen.getByTestId('site-start').querySelector('svg.site-icon'), '导航下载按钮带下载图标')
   assert.equal(login, 1)
   assert.equal(start, 0)
   cleanup()

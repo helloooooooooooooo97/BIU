@@ -8617,6 +8617,7 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
 .site-start {
   display: inline-flex;
   align-items: center;
+  gap: 6px;
   height: 36px;
   padding: 0 14px;
   border-radius: 999px;

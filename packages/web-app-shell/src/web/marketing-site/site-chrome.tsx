@@ -155,7 +155,7 @@ export function SiteHeader({ onLogin, onStart }: { onLogin: SiteAction; onStart:
       </nav>
       <div className="site-nav-actions">
         <button type="button" className="site-login" data-testid="site-login" onClick={onLogin}>登录</button>
-        <Link className="site-start" data-testid="site-start" to="/download">下载</Link>
+        <Link className="site-start" data-testid="site-start" to="/download"><DownloadIcon />免费下载</Link>
       </div>
     </header>
   )
