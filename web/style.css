@@ -9492,7 +9492,7 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   flex-direction: column;
   gap: 14px;
   padding: 26px;
-  background: rgba(255, 255, 255, .03);
+  background: #0f0f0f;
 }
 .site-roi-seats { display: flex; align-items: center; gap: 10px; font-size: 14px; color: rgba(255, 255, 255, .88); }
 .site-roi-seats input {
@@ -9527,7 +9527,7 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 }
 .site-plans-grid article.is-featured {
   border-color: rgba(255, 255, 255, .45);
-  background: linear-gradient(180deg, rgba(255, 255, 255, .07), rgba(255, 255, 255, .015));
+  background: #0f0f0f;
 }
 .site-plans-grid h3 { margin: 0; font-size: 18px; font-weight: 600; }
 .site-plan-price { margin: 0; display: flex; flex-direction: column; gap: 4px; font-size: 32px; font-weight: 600; letter-spacing: -.02em; }
