@@ -69,7 +69,7 @@ const PLACEHOLDERS: Record<string, { label: string; title: string; body: string 
   },
   '/help': {
     label: '帮助中心',
-    title: '开始之前，你可能想知道',
+    title: '帮助文档正在整理',
     body: '快速开始、分主题文档、常见问题与教程正在整理中。',
   },
   '/terms': {
@@ -130,8 +130,8 @@ export function MarketingSite({ onLogin, onStart, auth, login = true }: Marketin
         element={
           <Placeholder
             label="404"
-            title="这一页还没建"
-            body="这个地址暂时没有内容，回到首页看看已有的页面吧。"
+            title="页面不存在"
+            body="这个地址没有对应的页面，请返回首页。"
             onLogin={onLogin}
             onStart={onStart}
           />

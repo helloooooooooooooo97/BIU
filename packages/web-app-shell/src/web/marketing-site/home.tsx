@@ -151,11 +151,11 @@ const HOME_POSTS = BLOG_POSTS
   .map(({ post }) => post)
 
 const HOME_FAQ = [
-  ['BIU 是什么？', '一个桌面应用：用页面把几个软件组合成一套服务，智能体和你在同一个工作区里干活。做好的页面可以整页分享，对方打开就能用。'],
-  ['和 Notion 有什么不同？', 'Notion 里块的种类由平台决定；BIU 的块来自插件，缺一种就装一个或写一个，分享时插件源码跟着页面一起走。'],
-  ['要花钱吗？', '不要。BIU 开源免费，桌面版和自部署都不收费。智能体调用的是你自己配置的模型服务，费用由模型服务商收取。'],
-  ['数据存在哪？', '创建空间时由你选：本机空间存在你自己的电脑上，云端空间存在你部署的服务器上。'],
-  ['需要会写代码吗？', '不需要。日常用页面、表格和现成的插件就够；想要一种新的块，可以让智能体帮你写。'],
+  ['BIU 是什么', 'BIU 是桌面应用：用页面把若干软件组合成一套服务，智能体与用户在同一工作区中工作。页面可以整页分享，接收方打开即可使用。'],
+  ['与 Notion 的差异', 'Notion 的块类型由平台规定。BIU 的块来自插件，缺少的类型可以安装或编写；分享时，插件源码随页面一并交付。'],
+  ['定价', 'BIU 开源且免费，桌面版与自部署不收费。智能体调用的是用户自行配置的模型服务，费用由模型服务商收取。'],
+  ['数据存放位置', '创建空间时由用户选择：本机空间存放在用户自己的电脑上，云端空间存放在用户部署的服务器上。'],
+  ['是否需要编程', '日常使用页面、表格和现成插件即可。需要新的块时，可以由智能体编写。'],
 ] as const
 
 export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
@@ -440,7 +440,7 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
           </p>
         </section>
 
-        <SiteFaq title="第一次听说 BIU" items={HOME_FAQ} />
+        <SiteFaq title="关于 BIU" items={HOME_FAQ} />
 
         <SiteFinalCta title={<>开源，免费，<br />现在就能用</>} />
     </SiteChrome>

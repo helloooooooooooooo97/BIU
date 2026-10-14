@@ -50,11 +50,11 @@ const PLANS: readonly Plan[] = [
 ] as const
 
 const PRICING_FAQ = [
-  ['为什么免费？', 'BIU 是开源项目，代码以 Apache 2.0 许可发布。我们希望更多人用页面去组合软件，而不是先被价格挡在门外。'],
-  ['可以商用吗？', '可以。Apache 2.0 允许商用、修改和再分发，只需保留许可文本与 NOTICE，并标明改过的文件。'],
-  ['模型调用要花钱吗？', 'BIU 本身不收费。智能体调用的是你自己配置的模型服务，费用由模型服务商按它们的价格收取。'],
-  ['以后会收费吗？', '开源代码、桌面版和自部署会一直免费。官方云端服务还在准备中，上线时会公布价格，你的数据随时可以完整导出。'],
-  ['有问题怎么联系？', '在 GitHub 提 issue，或发邮件到 348876414@qq.com。'],
+  ['为何免费', 'BIU 是开源项目，代码以 Apache 2.0 许可发布。桌面版与自部署不收费，以便用页面组合软件。'],
+  ['商用许可', 'Apache 2.0 允许商用、修改和再分发。使用时须保留许可文本与 NOTICE，并标明修改过的文件。'],
+  ['模型调用费用', 'BIU 本身不收费。智能体调用的是用户自行配置的模型服务，费用由模型服务商按其价格收取。'],
+  ['后续收费安排', '开源代码、桌面版和自部署持续免费。官方云端服务尚在准备，上线时另行公布价格。数据可随时完整导出。'],
+  ['联系方式', '可在 GitHub 提交 issue，或发送邮件至 348876414@qq.com。'],
 ] as const
 
 export function MarketingPricing({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
@@ -166,7 +166,7 @@ export function MarketingPricing({ onLogin, onStart }: { onLogin: SiteAction; on
           </table>
         </section>
 
-        <SiteFaq title="关于免费" items={PRICING_FAQ} />
+        <SiteFaq title="定价说明" items={PRICING_FAQ} />
 
         <SiteFinalCta title="现在就免费用起来" />
     </SiteChrome>

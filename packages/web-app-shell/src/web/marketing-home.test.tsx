@@ -395,7 +395,7 @@ test('按钮图标、联系邮箱、云端未上线都如实呈现', () => {
 
 test('未知路径不 404 空白，给出诚实占位', () => {
   renderSite('/not-a-real-page')
-  assert.match(screen.getByRole('heading', { level: 1 }).textContent ?? '', /这一页还没建/)
+  assert.match(screen.getByRole('heading', { level: 1 }).textContent ?? '', /页面不存在/)
   cleanup()
 })
 
@@ -1022,13 +1022,13 @@ test('更新日志：Release 正文去掉 Markdown 记号', async () => {
 
 test('常见问题：首页、产品、场景子页、对比、安全、定价、下载各有一组，博客与品牌不放', () => {
   const expected: [string, string][] = [
-    ['/', '第一次听说 BIU'],
+    ['/', '关于 BIU'],
     ['/product', '关于产品'],
-    ['/use-cases/research', '你可能想知道'],
+    ['/use-cases/research', '关于此场景'],
     ['/compare', '关于对比'],
     ['/security', '关于数据'],
-    ['/pricing', '关于免费'],
-    ['/download', '安装遇到问题'],
+    ['/pricing', '定价说明'],
+    ['/download', '安装说明'],
   ]
   for (const [path, title] of expected) {
     renderSite(path)
@@ -1057,6 +1057,6 @@ test('独立部署的官网：导航和页脚都没有登录，/login 落到 404
   assert.ok(screen.getByTestId('site-start'), '下载按钮还在')
   cleanup()
   standalone('/login')
-  assert.equal(screen.getByRole('heading', { level: 1 }).textContent, '这一页还没建')
+  assert.equal(screen.getByRole('heading', { level: 1 }).textContent, '页面不存在')
   cleanup()
 })
