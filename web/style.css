@@ -8541,6 +8541,16 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   margin-inline: auto;
   box-sizing: border-box;
 }
+/* 生成长图：.site 平时是视口高的滚动容器，展开成内容全高，导航改成相对页顶 */
+.site.is-capturing {
+  position: relative;
+  height: auto !important;
+  overflow: visible !important;
+}
+.site.is-capturing .site-nav {
+  position: absolute;
+  top: 0;
+}
 .site-nav {
   position: fixed;
   z-index: 20;
@@ -9026,7 +9036,7 @@ video.site-demo-shot[controls] { pointer-events: auto; }
 }
 .site-footer-columns {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 48px;
 }
 .site-footer-columns > div {

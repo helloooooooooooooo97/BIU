@@ -319,6 +319,9 @@ test('按钮图标、联系邮箱、云端未上线都如实呈现', () => {
   assert.doesNotMatch(download!.textContent ?? '', /↗/)
   assert.ok(github!.firstElementChild?.matches('svg.site-icon'), 'GitHub 图标在文字左边')
   assert.ok(document.querySelector('a[href="mailto:348876414@qq.com"]'), '页脚有联系邮箱')
+  const share = [...document.querySelectorAll('.site-footer-columns strong')].map((node) => node.textContent)
+  assert.ok(share.includes('分享'), '页脚有分享列')
+  assert.equal(screen.getByRole('button', { name: '下载本页' }).textContent, '下载本页')
   cleanup()
 
   renderSite('/pricing')

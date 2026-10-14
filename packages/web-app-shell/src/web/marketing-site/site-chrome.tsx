@@ -3,6 +3,7 @@ import { useReveal } from './use-reveal.ts'
 import { BRAND_PRINT_TILE, BrandMark, BrandPrint, useBrandConfig } from './brand-mark.tsx'
 import { Link, NavLink } from 'react-router-dom'
 import { formatStars, useGitHubStats } from './github.ts'
+import { downloadPageLongImage } from './page-shot.ts'
 
 export type SiteAction = () => void
 
@@ -161,6 +162,25 @@ export function SiteHeader({ onLogin, onStart }: { onLogin: SiteAction; onStart:
   )
 }
 
+function DownloadPageButton() {
+  const [state, setState] = useState<'idle' | 'busy' | 'error'>('idle')
+  const label = state === 'busy' ? '正在生成…' : state === 'error' ? '生成失败，再试一次' : '下载本页'
+  return (
+    <button
+      type="button"
+      disabled={state === 'busy'}
+      onClick={() => {
+        setState('busy')
+        void downloadPageLongImage()
+          .then(() => setState('idle'))
+          .catch(() => setState('error'))
+      }}
+    >
+      {label}
+    </button>
+  )
+}
+
 export function SiteFooter({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
   return (
     <footer className="site-footer">
@@ -174,6 +194,10 @@ export function SiteFooter({ onLogin, onStart }: { onLogin: SiteAction; onStart:
             ))}
           </div>
         ))}
+        <div>
+          <strong>分享</strong>
+          <DownloadPageButton />
+        </div>
         <div>
           <strong>开始</strong>
           <button type="button" onClick={onLogin}>登录</button>
