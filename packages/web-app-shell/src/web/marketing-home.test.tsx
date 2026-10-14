@@ -292,6 +292,15 @@ test('博客：总览列出每篇文章，文章页能打开并链到下一篇',
   assert.ok(screen.getByRole('navigation', { name: '下一篇' }).querySelector('a[href^="/blog/"]'))
   cleanup()
 
+  renderSite('/blog/saas-to-paas')
+  assert.match(screen.getByRole('heading', { level: 1 }).textContent ?? '', /从 SaaS 到 PaaS/)
+  assert.deepEqual(
+    Array.from(document.querySelectorAll('h2')).map((h) => h.textContent?.split('：')[0]).slice(0, 5),
+    ['创建', '存储', '分发', '组合', '衍生'],
+    '五个角度依次讲',
+  )
+  cleanup()
+
   renderSite('/blog/nope')
   assert.match(screen.getByRole('heading', { level: 1 }).textContent ?? '', /没有这篇文章/)
   cleanup()
