@@ -90,6 +90,28 @@ const FOOTER_COLUMNS: ReadonlyArray<{ title: string; links: readonly FooterLink[
   },
 ]
 
+export type FaqItem = readonly [question: string, answer: string]
+
+/** 各页的常见问题：只回答这一页读者真正会卡住的地方。 */
+export function SiteFaq({ title, items }: { title: string; items: readonly FaqItem[] }) {
+  return (
+    <section className="site-faq">
+      <div className="site-faq-heading" data-reveal>
+        <p className="site-section-label">常见问题</p>
+        <h2>{title}</h2>
+      </div>
+      <div className="site-faq-list" data-reveal>
+        {items.map(([question, answer]) => (
+          <details key={question}>
+            <summary>{question}</summary>
+            <p>{answer}</p>
+          </details>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 /** 每页底部的收尾行动：开源项目的入口只有两个 —— 下载，或者去看源码。 */
 export function SiteFinalCta({ title, label = '开源 · 免费' }: { title: ReactNode; label?: string }) {
   return (

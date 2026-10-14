@@ -1,5 +1,5 @@
 import { Link, useParams } from 'react-router-dom'
-import { SiteChrome, SiteFinalCta, type SiteAction } from './site-chrome.tsx'
+import { SiteChrome, SiteFaq, SiteFinalCta, type SiteAction } from './site-chrome.tsx'
 import { usePageMeta } from './use-page-meta.ts'
 
 export type UseCase = {
@@ -264,20 +264,7 @@ export function MarketingUseCaseDetail({ onLogin, onStart }: { onLogin: SiteActi
         </div>
       </section>
 
-      <section className="site-faq">
-        <div className="site-faq-heading" data-reveal>
-          <p className="site-section-label">常见问题</p>
-          <h2>你可能想知道</h2>
-        </div>
-        <div className="site-faq-list" data-reveal>
-          {useCase.faq.map(([question, answer]) => (
-            <details key={question}>
-              <summary>{question}</summary>
-              <p>{answer}</p>
-            </details>
-          ))}
-        </div>
-      </section>
+      <SiteFaq title="你可能想知道" items={useCase.faq} />
 
       <section className="site-usecase-more" data-reveal>
         <h2>其他场景</h2>

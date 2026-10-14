@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { DownloadIcon, GITHUB_URL, GitHubIcon, SiteChrome, SiteFinalCta, type SiteAction } from './site-chrome.tsx'
+import { DownloadIcon, GITHUB_URL, GitHubIcon, SiteChrome, SiteFaq, SiteFinalCta, type SiteAction } from './site-chrome.tsx'
 import { usePageMeta } from './use-page-meta.ts'
 
 /** 常见工具单价（每用户每月，美元）——源自 Notion 定价页的思路：让用户自己算。 */
@@ -166,20 +166,7 @@ export function MarketingPricing({ onLogin, onStart }: { onLogin: SiteAction; on
           </table>
         </section>
 
-        <section className="site-faq">
-          <div className="site-faq-heading" data-reveal>
-            <p className="site-section-label">常见问题</p>
-            <h2>关于免费</h2>
-          </div>
-          <div className="site-faq-list" data-reveal>
-            {PRICING_FAQ.map(([question, answer]) => (
-              <details key={question}>
-                <summary>{question}</summary>
-                <p>{answer}</p>
-              </details>
-            ))}
-          </div>
-        </section>
+        <SiteFaq title="关于免费" items={PRICING_FAQ} />
 
         <SiteFinalCta title="现在就免费用起来" />
     </SiteChrome>

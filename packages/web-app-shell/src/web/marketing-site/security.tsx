@@ -1,4 +1,4 @@
-import { SiteChrome, SiteFinalCta, type SiteAction } from './site-chrome.tsx'
+import { SiteChrome, SiteFaq, SiteFinalCta, type SiteAction } from './site-chrome.tsx'
 import { usePageMeta } from './use-page-meta.ts'
 
 const SECTIONS = [
@@ -60,6 +60,14 @@ const COMPETITORS = [
   ['Notion', '页面级授权，群组是一份名单'],
   ['飞书', '协作者是人、群或部门，按文档逐个添加'],
   ['BIU', '授权对象和数据范围都是条件，两边都对得上才生效'],
+] as const
+
+const SECURITY_FAQ = [
+  ['你们能看到我的数据吗？', '本机空间的数据不会上传到我们的服务器；云端空间部署在你自己的服务器上时，数据同样在你手里。'],
+  ['哪些内容会发给模型？', '只有智能体这一轮需要的内容，发给你配置的模型服务，用的是你自己的密钥。空间里的其他数据不动。'],
+  ['智能体会不会自己删改东西？', '敏感操作会进入待确认状态，由你确认后才执行；每个动作都写进只追加的事件记录，事后可以逐条查。'],
+  ['新成员要一个个授权吗？', '不用。授权对象可以是「空间成员」这样的成员视图，新人加入后自动获得挂在这个视图上的权限。'],
+  ['发现安全问题怎么报告？', '请发邮件到 348876414@qq.com。'],
 ] as const
 
 export function MarketingSecurity({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
@@ -138,6 +146,8 @@ export function MarketingSecurity({ onLogin, onStart }: { onLogin: SiteAction; o
             「用条件当授权对象」才有可能 —— 权限模型是 File System 的一个投影。
           </p>
         </section>
+
+        <SiteFaq title="关于数据" items={SECURITY_FAQ} />
 
         <SiteFinalCta title="把边界握在自己手里" />
     </SiteChrome>

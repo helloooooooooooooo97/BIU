@@ -1,5 +1,5 @@
 import { Link, useParams } from 'react-router-dom'
-import { GITHUB_URL, SiteChrome, SiteFinalCta, type SiteAction } from './site-chrome.tsx'
+import { GITHUB_URL, SiteChrome, SiteFaq, SiteFinalCta, type SiteAction } from './site-chrome.tsx'
 import { usePageMeta } from './use-page-meta.ts'
 
 /**
@@ -383,6 +383,12 @@ function CompareTable({ page }: { page: ComparePage }) {
   )
 }
 
+const COMPARE_FAQ = [
+  ['这些对比是谁写的？', '是我们自己写的，尽量只写能核对的事实，也写出了 BIU 还做不到的地方。有出入的地方欢迎在 GitHub 提出。'],
+  ['BIU 能完全替代这些工具吗？', '不一定。每篇对比都写了什么时候该用对方、什么时候该用 BIU，按你的需要选。'],
+  ['可以和它们一起用吗？', '可以。BIU 的价值是把文档、表格、应用和智能体放进同一个页面，不要求你放弃现有工具。'],
+] as const
+
 export function MarketingCompareIndex({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
   usePageMeta({
     title: '对比',
@@ -441,6 +447,8 @@ export function MarketingCompareIndex({ onLogin, onStart }: { onLogin: SiteActio
             信息截至 2026 年 10 月。产品更新很快，如有出入，欢迎<a href={`${GITHUB_URL}/issues`} target="_blank" rel="noreferrer">在 GitHub 提出</a>。
           </p>
         </section>
+
+        <SiteFaq title="关于对比" items={COMPARE_FAQ} />
 
         <SiteFinalCta title="看完对比，自己试一次" />
     </SiteChrome>

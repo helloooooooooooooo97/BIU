@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { DownloadIcon, GitHubButton, SiteChrome, SiteFinalCta, type SiteAction } from './site-chrome.tsx'
+import { DownloadIcon, GitHubButton, SiteChrome, SiteFaq, SiteFinalCta, type SiteAction } from './site-chrome.tsx'
 import { usePageMeta } from './use-page-meta.ts'
 
 /**
@@ -120,6 +120,14 @@ const AGENT_POINTS = [
     title: '自己能造插件',
     body: '缺一个工具，就让智能体写一个插件挂进页面。扩展不再只属于开发者。',
   },
+] as const
+
+const HOME_FAQ = [
+  ['BIU 是什么？', '一个桌面应用：用页面把几个软件组合成一套服务，智能体和你在同一个工作区里干活。做好的页面可以整页分享，对方打开就能用。'],
+  ['和 Notion 有什么不同？', 'Notion 里块的种类由平台决定；BIU 的块来自插件，缺一种就装一个或写一个，分享时插件源码跟着页面一起走。'],
+  ['要花钱吗？', '不要。BIU 开源免费，桌面版和自部署都不收费。智能体调用的是你自己配置的模型服务，费用由模型服务商收取。'],
+  ['数据存在哪？', '创建空间时由你选：本机空间存在你自己的电脑上，云端空间存在你部署的服务器上。'],
+  ['需要会写代码吗？', '不需要。日常用页面、表格和现成的插件就够；想要一种新的块，可以让智能体帮你写。'],
 ] as const
 
 export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
@@ -292,6 +300,8 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
             </div>
           </div>
         </section>
+
+        <SiteFaq title="第一次听说 BIU" items={HOME_FAQ} />
 
         <SiteFinalCta title={<>开源，免费，<br />现在就能用</>} />
     </SiteChrome>
