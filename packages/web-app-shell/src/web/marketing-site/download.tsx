@@ -30,10 +30,10 @@ const SOURCE_STEPS = [
 ] as const
 
 const DOWNLOAD_FAQ = [
-  ['Mac 该选 Apple 芯片还是 Intel？', '点左上角苹果菜单 →「关于本机」：芯片一栏写 Apple M 系列就选 Apple 芯片，写 Intel 就选 Intel 芯片。'],
-  ['Windows 弹出 SmartScreen 拦截怎么办？', '选「更多信息」→「仍要运行」。代码全部开源，可以在 GitHub 上核对。'],
-  ['没有模型密钥能用吗？', '页面、表格和插件都能用；智能体需要配置一个模型密钥，DeepSeek、OpenAI、Anthropic 任选其一。'],
-  ['有手机版吗？', '目前只有桌面版：macOS 和 Windows 有安装包，Linux 从源码运行。'],
+  ['如何选择 macOS 安装包', '打开苹果菜单中的「关于本机」。芯片一栏为 Apple M 系列时选择 Apple 芯片，为 Intel 时选择 Intel 芯片。'],
+  ['Windows SmartScreen 拦截', '选择「更多信息」，再选择「仍要运行」。代码全部开源，可在 GitHub 核对。'],
+  ['未配置模型密钥', '页面、表格和插件可以正常使用。智能体需要配置模型密钥，可选 DeepSeek、OpenAI 或 Anthropic。'],
+  ['移动端', '目前提供桌面版。macOS 与 Windows 提供安装包，Linux 从源码运行。'],
 ] as const
 
 /** 只用来决定先给哪个按钮；猜错了，下面三个平台都还在。 */
@@ -172,7 +172,7 @@ export function MarketingDownload({ onLogin, onStart }: { onLogin: SiteAction; o
           </p>
         </section>
 
-        <SiteFaq title="安装遇到问题" items={DOWNLOAD_FAQ} />
+        <SiteFaq title="安装说明" items={DOWNLOAD_FAQ} />
     </SiteChrome>
   )
 }

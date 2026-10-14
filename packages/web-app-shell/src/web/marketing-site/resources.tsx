@@ -8,7 +8,7 @@ const REPO_FILE = `${GITHUB_URL}/blob/main`
 
 const DOCS = [
   { title: '快速开始', body: '三行命令从源码跑起来，或者直接下载桌面版。', href: `${REPO_FILE}/README.zh-CN.md#快速开始` },
-  { title: '桌面版安装', body: 'macOS 未公证安装包怎么打开、Windows SmartScreen 怎么放行、数据目录在哪。', href: `${REPO_FILE}/docs/desktop-install.md` },
+  { title: '桌面版安装', body: 'macOS 未公证安装包的打开方式、Windows SmartScreen 的放行步骤，以及数据目录位置。', href: `${REPO_FILE}/docs/desktop-install.md` },
   { title: '为什么是 File System', body: '路径、表、记录、schema、操作、blurb —— 六个原子怎么组合出所有东西。', href: `${REPO_FILE}/README.zh-CN.md#为什么是-file-system` },
   { title: '架构', body: 'Host 与 Web 两侧的插件、事件流和存储各在哪一层。', href: `${REPO_FILE}/README.zh-CN.md#架构` },
   { title: '插件包与热插拔', body: '插件怎么声明、怎么在沙箱里写、怎么打包装进工作区。', href: `${REPO_FILE}/docs/plugin-packages.md` },

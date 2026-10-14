@@ -384,9 +384,9 @@ function CompareTable({ page }: { page: ComparePage }) {
 }
 
 const COMPARE_FAQ = [
-  ['这些对比是谁写的？', '是我们自己写的，尽量只写能核对的事实，也写出了 BIU 还做不到的地方。有出入的地方欢迎在 GitHub 提出。'],
-  ['BIU 能完全替代这些工具吗？', '不一定。每篇对比都写了什么时候该用对方、什么时候该用 BIU，按你的需要选。'],
-  ['可以和它们一起用吗？', '可以。BIU 的价值是把文档、表格、应用和智能体放进同一个页面，不要求你放弃现有工具。'],
+  ['对比的编写者', '对比由 BIU 编写，只记录可以核对的事实，并写明尚未做到的部分。若有出入，欢迎在 GitHub 提出。'],
+  ['能否替代现有工具', '不能一概替代。每篇对比都写明何时适合继续使用对方，何时适合使用 BIU。'],
+  ['能否与现有工具并用', '可以并行使用。BIU 将文档、表格、应用和智能体放在同一个页面中，不要求放弃现有工具。'],
 ] as const
 
 export function MarketingCompareIndex({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
