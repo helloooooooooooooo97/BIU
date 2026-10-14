@@ -10,6 +10,7 @@ import { MarketingCompareDetail, MarketingCompareIndex } from './compare.tsx'
 import { MarketingUseCaseDetail, MarketingUseCases } from './use-cases.tsx'
 import { MarketingBrand } from './brand.tsx'
 import { MarketingBlog, MarketingBlogPost } from './blog.tsx'
+import { MarketingChangelog, MarketingDocs } from './resources.tsx'
 import { type AuthMode, MarketingAuth } from './auth.tsx'
 import { usePageMeta } from './use-page-meta.ts'
 
@@ -54,11 +55,6 @@ const PLACEHOLDERS: Record<string, { label: string; title: string; body: string 
     title: '在自己的服务器上运行',
     body: 'BIU 以 Apache 2.0 开源，可以直接自部署。部署指南正在整理中，有问题欢迎在 GitHub 提 issue。',
   },
-  '/changelog': {
-    label: '更新日志',
-    title: 'BIU 在变',
-    body: '每个版本的更新说明目前发布在 GitHub Releases，官网的更新日志页正在整理中。',
-  },
   '/about': {
     label: '关于',
     title: '用一个页面，组合所有软件',
@@ -73,11 +69,6 @@ const PLACEHOLDERS: Record<string, { label: string; title: string; body: string 
     label: '帮助中心',
     title: '开始之前，你可能想知道',
     body: '快速开始、分主题文档、常见问题与教程正在整理中。',
-  },
-  '/docs': {
-    label: '文档',
-    title: '把 BIU 用起来',
-    body: '安装、配置模型密钥、File System 接口与插件开发的文档正在整理中。',
   },
   '/terms': {
     label: '法务',
@@ -115,6 +106,8 @@ export function MarketingSite({ onLogin, onStart, auth }: MarketingSiteProps) {
       <Route path="/compare/:slug" element={<MarketingCompareDetail onLogin={onLogin} onStart={onStart} />} />
       <Route path="/blog" element={<MarketingBlog onLogin={onLogin} onStart={onStart} />} />
       <Route path="/blog/:slug" element={<MarketingBlogPost onLogin={onLogin} onStart={onStart} />} />
+      <Route path="/docs" element={<MarketingDocs onLogin={onLogin} onStart={onStart} />} />
+      <Route path="/changelog" element={<MarketingChangelog onLogin={onLogin} onStart={onStart} />} />
       <Route path="/brand" element={<MarketingBrand onLogin={onLogin} onStart={onStart} />} />
       <Route path="/use-cases" element={<MarketingUseCases onLogin={onLogin} onStart={onStart} />} />
       <Route path="/use-cases/:slug" element={<MarketingUseCaseDetail onLogin={onLogin} onStart={onStart} />} />
