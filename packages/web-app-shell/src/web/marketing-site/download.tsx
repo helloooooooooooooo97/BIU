@@ -1,24 +1,31 @@
+import { useEffect, useState } from 'react'
 import { SiteChrome, type SiteAction } from './site-chrome.tsx'
 import { usePageMeta } from './use-page-meta.ts'
 
-const PLATFORMS = [
+const RELEASE_API = 'https://api.github.com/repos/helloooooooooooooo97/biu/releases/latest'
+const RELEASES_PAGE = 'https://github.com/helloooooooooooooo97/biu/releases/latest'
+
+const PACKAGES = [
   {
-    id: 'macos',
-    name: 'macOS',
-    detail: 'Apple Silicon / Intel',
-    steps: ['下载 .dmg', '拖入「应用程序」', '首次打开若提示已损坏，执行 xattr -dr com.apple.quarantine /Applications/Biu.app'],
+    id: 'mac-arm64',
+    os: 'macOS',
+    name: 'Apple 芯片',
+    file: /-mac-arm64\.dmg$/,
+    steps: ['下载 .dmg', '拖入「应用程序」', '若提示已损坏：xattr -dr com.apple.quarantine /Applications/Biu.app'],
+  },
+  {
+    id: 'mac-intel',
+    os: 'macOS',
+    name: 'Intel',
+    file: /-mac-x64\.dmg$/,
+    steps: ['下载 .dmg', '拖入「应用程序」', '若提示已损坏：xattr -dr com.apple.quarantine /Applications/Biu.app'],
   },
   {
     id: 'windows',
-    name: 'Windows',
-    detail: 'Windows 10 及以上',
-    steps: ['下载安装包', '运行安装程序', '按向导完成安装'],
-  },
-  {
-    id: 'linux',
-    name: 'Linux',
-    detail: '需要 Node.js 20+',
-    steps: ['git clone 仓库', '执行 make', '访问 http://127.0.0.1:5173'],
+    os: 'Windows',
+    name: 'Windows 10 及以上',
+    file: /-win-x64\.exe$/,
+    steps: ['下载 .exe', '运行安装程序', 'SmartScreen 选「更多信息」→「仍要运行」'],
   },
 ] as const
 
@@ -30,9 +37,30 @@ const REQUIREMENTS = [
 ] as const
 
 export function MarketingDownload({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
+  const [tag, setTag] = useState('')
+  const [urls, setUrls] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    let cancelled = false
+    fetch(RELEASE_API)
+      .then((response) => response.json())
+      .then((release: { tag_name?: string; assets?: Array<{ name: string; browser_download_url: string }> }) => {
+        if (cancelled) return
+        const next: Record<string, string> = {}
+        for (const item of PACKAGES) {
+          const asset = release.assets?.find((entry) => item.file.test(entry.name))
+          if (asset) next[item.id] = asset.browser_download_url
+        }
+        setTag(release.tag_name ?? '')
+        setUrls(next)
+      })
+      .catch(() => undefined)
+    return () => { cancelled = true }
+  }, [])
+
   usePageMeta({
     title: '下载',
-    description: 'macOS / Windows / Linux 安装说明。本机空间的数据保存在当前设备，不需要上传。',
+    description: 'macOS 与 Windows 安装包，来自 GitHub Releases 的最新 tag。',
     path: '/download',
   })
 
@@ -42,20 +70,22 @@ export function MarketingDownload({ onLogin, onStart }: { onLogin: SiteAction; o
           <p className="site-section-label">下载</p>
           <h1>在你的设备上运行。</h1>
           <p className="site-page-lead">
-            本机空间的数据保存在当前设备，不需要上传。选一个平台开始。
+            安装包来自 GitHub 最新 tag{tag ? ` ${tag}` : ''}。macOS 分 Apple 芯片和 Intel，Windows 是 x64 安装程序。
           </p>
         </section>
 
         <section className="site-platforms" aria-label="平台">
           <div className="site-platform-grid">
-            {PLATFORMS.map((platform) => (
-              <article key={platform.id} data-reveal>
-                <h2>{platform.name}</h2>
-                <p className="site-platform-detail">{platform.detail}</p>
+            {PACKAGES.map((item) => (
+              <article key={item.id} data-reveal>
+                <h2>{item.os}</h2>
+                <p className="site-platform-detail">{item.name}</p>
                 <ol>
-                  {platform.steps.map((step) => <li key={step}>{step}</li>)}
+                  {item.steps.map((step) => <li key={step}>{step}</li>)}
                 </ol>
-                <button type="button" onClick={onStart}>获取 {platform.name} 版本</button>
+                <a href={urls[item.id] ?? RELEASES_PAGE}>
+                  下载 {item.os}{item.id === 'mac-intel' ? ' Intel' : item.id === 'mac-arm64' ? '（Apple 芯片）' : ''}
+                </a>
               </article>
             ))}
           </div>

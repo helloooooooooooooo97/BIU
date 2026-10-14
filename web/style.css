@@ -8460,7 +8460,7 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   display: block;
   width: 100%;
   height: 100%;
-  opacity: 0.18;
+  opacity: 0.25;
 }
 .site > main {
   position: relative;
@@ -8581,11 +8581,14 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   cursor: pointer;
 }
 .site-start {
+  display: inline-flex;
+  align-items: center;
   height: 36px;
   padding: 0 14px;
   border-radius: 999px;
   background: #fff;
   color: #000;
+  text-decoration: none;
 }
 .site-login {
   height: 36px;
@@ -9580,15 +9583,19 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 .site-platform-detail { margin: 0; font-size: 13px; color: rgba(255, 255, 255, .45); }
 .site-platform-grid ol { margin: 0; padding-left: 18px; flex: 1; }
 .site-platform-grid li { margin-bottom: 8px; font-size: 14px; line-height: 1.65; color: rgba(255, 255, 255, .6); }
+.site-platform-grid a,
 .site-platform-grid button {
+  display: inline-block;
   padding: 12px 18px;
   border: 1px solid rgba(255, 255, 255, .28);
   border-radius: 999px;
   background: transparent;
   color: #fff;
   font-size: 14px;
+  text-decoration: none;
   cursor: pointer;
 }
+.site-platform-grid a:hover,
 .site-platform-grid button:hover { background: #fff; color: #000; }
 .site-local-note { max-width: var(--site-content); margin: 0 auto; padding: 0 var(--site-gutter) 88px; }
 .site-local-note h2 { margin: 12px 0 16px; font-size: clamp(24px, 3vw, 34px); font-weight: 600; }
@@ -9772,6 +9779,8 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   place-items: center;
 }
 .auth-site-main {
+  position: relative;
+  z-index: 1;
   width: min(360px, calc(100% - 48px));
   padding: 96px 0 64px;
 }
@@ -10071,11 +10080,7 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 .brand-studio-preview {
   padding: 24px;
   border-radius: 22px;
-  /* 黑色波点底：径向渐变重复铺开，点距 22px、半径 1.6px。 */
-  background-color: #0d0d0d;
-  background-image: radial-gradient(rgba(255, 255, 255, .16) 1.6px, transparent 1.6px);
-  background-size: 22px 22px;
-  background-position: 0 0;
+  background: #0d0d0d;
   /* 等高由 grid 的 stretch 决定，这里只负责把标记居中。 */
   display: flex;
   align-items: center;
