@@ -39,6 +39,20 @@ export interface Snapshot {
 
 const empty: Snapshot = { seq: 0, plugins: [], pages: [], routes: [], events: [], services: [] }
 
+function hasAccountToken() {
+  if (typeof localStorage === 'undefined') return true
+  try {
+    return Boolean(localStorage.getItem('biu.account.token'))
+  } catch {
+    return true
+  }
+}
+
+function isLandingPreview() {
+  if (typeof window === 'undefined') return false
+  return new URLSearchParams(window.location.search).get('landingPreview') === '1'
+}
+
 export class SnapshotService extends Service {
   private value: Snapshot = empty
   private listeners = new Set<() => void>()
@@ -46,9 +60,27 @@ export class SnapshotService extends Service {
   /** 401/403 或租户握手被拒后不再重连，避免官网未登录时轮询 /api/snapshot。 */
   private authStopped = false
   private socket: WebSocket | null = null
+  private booted = false
 
   constructor(ctx: Context) {
     super(ctx, 'snapshot')
+    // 官网未登录时拉快照会 401。等账号 token 出现再连。
+    if (typeof window === 'undefined' || hasAccountToken() || isLandingPreview()) {
+      this.start()
+      return
+    }
+    const onToken = () => {
+      if (!hasAccountToken()) return
+      window.removeEventListener('biu:account-token', onToken)
+      this.start()
+    }
+    window.addEventListener('biu:account-token', onToken)
+    this.ctx.effect(() => () => window.removeEventListener('biu:account-token', onToken))
+  }
+
+  private start() {
+    if (this.booted) return
+    this.booted = true
     void this.boot()
   }
 

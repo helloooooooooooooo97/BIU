@@ -317,9 +317,22 @@ export class SessionViewService extends Service {
 
   constructor(ctx: Context) {
     super(ctx, 'sessionView')
-    // 官网未登录时没有账号 token，会话列表接口会 401。等进入工作台再拉。
-    if (hasAccountToken()) void this.refreshSessions()
-    void this.refreshApprovals()
+    const start = () => {
+      void this.refreshSessions()
+      void this.refreshApprovals()
+    }
+    // 官网未登录时这两个接口都会 401。等进入工作台再拉。
+    if (typeof window === 'undefined' || hasAccountToken()) {
+      start()
+    } else {
+      const onToken = () => {
+        if (!hasAccountToken()) return
+        window.removeEventListener('biu:account-token', onToken)
+        start()
+      }
+      window.addEventListener('biu:account-token', onToken)
+      this.ctx.effect(() => () => window.removeEventListener('biu:account-token', onToken))
+    }
     this.ctx.effect(() => () => this.stopDispatchedPoll())
     if (typeof window !== 'undefined') {
       const onLibrary = () => this.scheduleRefreshSessions()
