@@ -257,12 +257,19 @@ function copyMerge(src: string, dest: string) {
  * Copy leftover pack-host / cwd data into the durable home.
  * Destination already-present files win. Plugin trees are copied, never renamed out of the app bundle.
  */
+function hasPackedData(parent: string) {
+  return [DATA_DIR_NAME, LEGACY_DATA_DIR_NAME, LEGACY_PAGE_ROOT].some((name) => existsSync(join(parent, name)))
+}
+
 export function adoptPackedUserData(fromRoot: string, dataRoot = dataHome(), workspace = join(dataRoot, 'workspace')) {
   const from = resolve(fromRoot)
   const dest = resolve(dataRoot)
-  migrateDataDir(from)
-  migrateDataDir(dest)
-  if (from === dest) {
+  const same = from === dest
+  // 数据根已经分开时，不要在仓库根目录凭空造一个 .biu。
+  // 只有旧目录真的还在，才就地迁移再复制过去。
+  if (same || hasPackedData(from)) migrateDataDir(from)
+  if (!same) migrateDataDir(dest)
+  if (same) {
     migrateLegacyPageDir(from, dest)
     return dest
   }
