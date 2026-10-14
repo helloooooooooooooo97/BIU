@@ -90,7 +90,6 @@ export function MarketingBlog({ onLogin, onStart }: { onLogin: SiteAction; onSta
         <p className="site-section-label">博客</p>
         <h1>BIU 是怎么想的</h1>
         <p className="site-page-lead">关于 All in One、页面与插件、智能体和开源的几篇长文。先读第一篇，就知道 BIU 为什么长成现在这样。</p>
-        <p className="site-blog-feed"><a href="/rss.xml">RSS 订阅</a> · 作者：{BLOG_AUTHOR.name}</p>
       </section>
 
       <section className="site-blog-list" aria-label="文章">

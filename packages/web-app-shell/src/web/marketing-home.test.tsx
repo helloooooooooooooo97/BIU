@@ -912,19 +912,17 @@ test('文档与更新日志不再是占位页', async () => {
   cleanup()
 })
 
-test('博客：有 RSS、作者署名，rss.xml 与文章同步', async () => {
+test('博客：不提供 RSS，文章有作者署名', async () => {
   const { BLOG_POSTS } = await import('./marketing-site/blog.tsx')
-  const { buildBlogRss } = await import('./marketing-site/blog-rss.ts')
   renderSite('/blog')
-  assert.equal(screen.getByRole('link', { name: 'RSS 订阅' }).getAttribute('href'), '/rss.xml')
+  assert.equal(screen.queryByRole('link', { name: /RSS/ }), null)
   cleanup()
   renderSite(`/blog/${BLOG_POSTS[0]!.slug}`)
   const byline = document.querySelector('.site-article-byline')!
   assert.match(byline.textContent ?? '', /BIU 团队/)
   assert.match(byline.textContent ?? '', /分钟读完/)
   cleanup()
-  const rss = readFileSync(resolve(process.cwd(), 'public/rss.xml'), 'utf8')
-  assert.equal(rss, buildBlogRss(process.env.BIU_SITE_URL ?? ''), 'public/rss.xml 过期了：npx tsx scripts/build-blog-rss.ts')
+  assert.doesNotMatch(readFileSync(resolve(process.cwd(), 'index.html'), 'utf8'), /rss/i)
 })
 
 test('更新日志：Release 正文去掉 Markdown 记号', async () => {
