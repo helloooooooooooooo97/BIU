@@ -32,6 +32,8 @@ function renderSite(initialPath = '/') {
   return { login: () => login, start: () => start }
 }
 
+const GITHUB_CACHE = 'biu.site.github.v1'
+
 test('landing page embeds real empty product surfaces and opens account actions', () => {
   let login = 0
   let start = 0
@@ -873,6 +875,14 @@ test('下载页：按系统给主按钮，命令一键复制', async () => {
   const commands = Array.from(document.querySelectorAll('.site-copy-cmd code')).map((c) => c.textContent ?? '')
   assert.ok(commands.some((c) => c.startsWith('xattr -dr com.apple.quarantine')), 'xattr 命令要能直接复制')
   assert.ok(screen.getAllByRole('button', { name: '复制命令' }).length >= 2)
+  cleanup()
+
+  sessionStorage.setItem(GITHUB_CACHE, JSON.stringify({ at: Date.now(), stats: { stars: 12, release: { tag: 'v1.0.0', publishedAt: '', url: '', body: '', assets: [] } } }))
+  renderSite('/download')
+  const meta = document.querySelector('.site-download-meta')!
+  assert.equal(meta.textContent, '最新版本 v1.0.0 · GitHub ★ 12')
+  assert.ok(meta.querySelector('.site-gh-star'), '下载页的星标也用黄色')
+  sessionStorage.removeItem(GITHUB_CACHE)
   cleanup()
 })
 
