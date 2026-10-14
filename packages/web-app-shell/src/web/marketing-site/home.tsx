@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { DownloadIcon, GitHubButton, SiteChrome, SiteFaq, SiteFinalCta, type SiteAction } from './site-chrome.tsx'
 import { usePageMeta } from './use-page-meta.ts'
+import { asset } from './site-base.ts'
 
 /**
  * 真实界面：BIU 的截图 / 录屏（public/site/），按 2–3 倍像素拍摄，2 倍屏上也清楚。
@@ -156,7 +157,7 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
             </div>
             <img
               className="site-hero-shot"
-              src="/site/shot-page.webp"
+              src={asset('/site/shot-page.webp')}
               alt=""
               width={1600}
               height={1000}
@@ -194,7 +195,7 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
               <video
                 key={surface.id}
                 className="site-demo-shot"
-                poster={surface.image}
+                poster={asset(surface.image)}
                 aria-label={surface.alt}
                 width={surface.size[0]}
                 height={surface.size[1]}
@@ -205,14 +206,14 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
                 playsInline
                 preload="metadata"
               >
-                <source src={surface.video.webm} type="video/webm" />
-                <source src={surface.video.mp4} type="video/mp4" />
+                <source src={asset(surface.video.webm)} type="video/webm" />
+                <source src={asset(surface.video.mp4)} type="video/mp4" />
               </video>
             ) : (
               <img
                 key={surface.id}
                 className="site-demo-shot"
-                src={surface.image}
+                src={asset(surface.image)}
                 alt={surface.alt}
                 width={surface.size[0]}
                 height={surface.size[1]}

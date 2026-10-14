@@ -1,5 +1,6 @@
 import { SiteChrome, SiteFaq, SiteFinalCta, type SiteAction } from './site-chrome.tsx'
 import { usePageMeta } from './use-page-meta.ts'
+import { asset } from './site-base.ts'
 
 type Block = {
   id: string
@@ -162,7 +163,7 @@ export function MarketingProduct({ onLogin, onStart }: { onLogin: SiteAction; on
                 </ul>
               </div>
               <figure className="site-block-media">
-                <img src={block.image} alt={block.alt} loading="lazy" decoding="async" />
+                <img src={asset(block.image)} alt={block.alt} loading="lazy" decoding="async" />
               </figure>
             </article>
           ))}

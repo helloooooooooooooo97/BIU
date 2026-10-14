@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { asset } from './site-base.ts'
 
 export type PageMeta = {
   title: string
@@ -39,7 +40,7 @@ export function usePageMeta({ title, description, path, image }: PageMeta) {
   useEffect(() => {
     const fullTitle = title === SITE_NAME ? title : `${title} · ${SITE_NAME}`
     const url = typeof window === 'undefined' ? path : new URL(path, window.location.origin).toString()
-    const ogImage = typeof window === 'undefined' ? (image ?? DEFAULT_IMAGE) : new URL(image ?? DEFAULT_IMAGE, window.location.origin).toString()
+    const ogImage = typeof window === 'undefined' ? (image ?? DEFAULT_IMAGE) : new URL(asset(image ?? DEFAULT_IMAGE), window.location.origin).toString()
 
     document.title = fullTitle
     setMeta('name', 'description', description)
