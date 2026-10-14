@@ -308,7 +308,7 @@ export const BRAND_DEFAULT: BrandConfig = {
   c1: '#b3a498',
   c2: '#6b5f55',
   stroke: '#1a1a1a',
-  background: '#0a0a0a',
+  background: '#ffffff',
   // 线宽以 viewBox 单位计（坐标系宽 596），不是屏幕像素 ——
   // 这样标记缩到 24px 或放到 420px，线条与圆的粗细比例都一致。
   strokeWidth: 7.5,

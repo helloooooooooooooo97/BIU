@@ -161,7 +161,7 @@ export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; o
     <SiteChrome onLogin={onLogin} onStart={onStart}>
       <section className="site-page-hero" data-reveal>
         <p className="site-section-label">场景</p>
-        <h1>为真实工作而生。</h1>
+        <h1>为真实工作而生</h1>
         <p className="site-page-lead">
           从一个问题开始，交付可以继续使用的页面、数据和空间。选一个场景看具体怎么做。
         </p>
@@ -181,7 +181,7 @@ export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; o
       <section className="site-final-cta" data-reveal>
         <div className="site-container">
           <p className="site-section-label">开始使用 BIU</p>
-          <h2>从你的场景开始。</h2>
+          <h2>从你的场景开始</h2>
           <button type="button" onClick={onStart}>创建你的空间 <span>↗</span></button>
         </div>
       </section>
@@ -205,7 +205,7 @@ export function MarketingUseCaseDetail({ onLogin, onStart }: { onLogin: SiteActi
       <SiteChrome onLogin={onLogin} onStart={onStart}>
         <section className="site-page-hero">
           <p className="site-section-label">场景</p>
-          <h1>没有这个场景。</h1>
+          <h1>没有这个场景</h1>
           <p className="site-page-lead"><Link to="/use-cases">返回场景总览</Link></p>
         </section>
       </SiteChrome>
@@ -245,7 +245,7 @@ export function MarketingUseCaseDetail({ onLogin, onStart }: { onLogin: SiteActi
       <section className="site-faq">
         <div className="site-faq-heading" data-reveal>
           <p className="site-section-label">常见问题</p>
-          <h2>你可能想知道。</h2>
+          <h2>你可能想知道</h2>
         </div>
         <div className="site-faq-list" data-reveal>
           {useCase.faq.map(([question, answer]) => (
@@ -269,7 +269,7 @@ export function MarketingUseCaseDetail({ onLogin, onStart }: { onLogin: SiteActi
       <section className="site-final-cta" data-reveal>
         <div className="site-container">
           <p className="site-section-label">开始使用 BIU</p>
-          <h2>试试你自己的场景。</h2>
+          <h2>试试你自己的场景</h2>
           <button type="button" onClick={onStart}>创建你的空间 <span>↗</span></button>
         </div>
       </section>

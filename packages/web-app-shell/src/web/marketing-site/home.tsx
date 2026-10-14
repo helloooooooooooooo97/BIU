@@ -82,7 +82,7 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
         <section className="site-hero">
           <div className="site-hero-copy site-container" data-reveal>
             <p className="site-eyebrow">BIU · 智能工作空间</p>
-            <h1>让知识留下，<br />让工作继续。</h1>
+            <h1>让知识留下，<br />让工作继续</h1>
             <p className="site-hero-lead">
               人和智能体共享同一个空间：页面、数据、会话、任务都在一处，<strong>数据留在你的设备上</strong>。
             </p>
@@ -107,7 +107,7 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
         <section className="site-product-demo" data-reveal>
           <div className="site-demo-heading">
             <p className="site-section-label">从任务到结果</p>
-            <h2>看见 BIU 如何工作。</h2>
+            <h2>看见 BIU 如何工作</h2>
             <p className="site-demo-lead">BIU 把资料、页面、数据库和对话收进同一个上下文。智能体可以理解工作、使用工具，并把结果写回空间。</p>
             <div className="site-demo-tabs" role="tablist" aria-label="产品演示">
               {PRODUCT_SURFACES.map((item, index) => (
@@ -141,7 +141,7 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
         <section className="site-capabilities" aria-label="核心能力">
           <div className="site-capabilities-heading" data-reveal>
             <p className="site-section-label">核心能力</p>
-            <h2>三条，说清 BIU 是什么。</h2>
+            <h2>三条，说清 BIU 是什么</h2>
           </div>
           <div className="site-capability-grid">
             {CAPABILITIES.map((item) => (
@@ -158,7 +158,7 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
           <div className="site-space-inner site-container">
             <div className="site-space-heading" data-reveal>
               <p className="site-section-label">数据控制</p>
-              <h2>数据在哪里，<br />由你决定。</h2>
+              <h2>数据在哪里，<br />由你决定</h2>
             </div>
             <div className="site-space-options">
               <article data-reveal>
@@ -180,7 +180,7 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
         <section className="site-voices" aria-label="用户评价">
           <div className="site-voices-heading" data-reveal>
             <p className="site-section-label">使用感受</p>
-            <h2>他们怎么用它。</h2>
+            <h2>他们怎么用它</h2>
           </div>
           <div className="site-voice-grid">
             {VOICES.map((voice) => (
@@ -195,7 +195,7 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
         <section className="site-final-cta" data-reveal>
           <div className="site-container">
             <p className="site-section-label">开始使用 BIU</p>
-            <h2>给知识一个归处。<br />给工作一个继续的地方。</h2>
+            <h2>给知识一个归处<br />给工作一个继续的地方</h2>
             <button type="button" onClick={onStart}>创建你的空间 <span>↗</span></button>
           </div>
         </section>

@@ -102,7 +102,7 @@ export function MarketingProduct({ onLogin, onStart }: { onLogin: SiteAction; on
     <SiteChrome onLogin={onLogin} onStart={onStart}>
         <section className="site-page-hero" data-reveal>
           <p className="site-section-label">产品</p>
-          <h1>一套内核，支撑全部工作。</h1>
+          <h1>一套内核，支撑全部工作</h1>
           <p className="site-page-lead">
             BIU 不是把功能堆在一起，而是让页面、数据、会话、任务和智能体共享同一条寻址体系。
             下面逐个说明它是什么。
@@ -127,7 +127,7 @@ export function MarketingProduct({ onLogin, onStart }: { onLogin: SiteAction; on
         <section className="site-continuity">
           <div className="site-continuity-heading" data-reveal>
             <p className="site-section-label">持续上下文</p>
-            <h2>不必每次重新解释<br />你正在做什么。</h2>
+            <h2>不必每次重新解释<br />你正在做什么</h2>
           </div>
           <div className="site-context-flow" data-reveal aria-label="空间上下文">
             {CONTEXT_FLOW.map((item, index) => (
@@ -146,7 +146,7 @@ export function MarketingProduct({ onLogin, onStart }: { onLogin: SiteAction; on
         <section className="site-ecosystem" id="ecosystem">
           <div className="site-ecosystem-heading" data-reveal>
             <p className="site-section-label">扩展 BIU</p>
-            <h2>把你的工具与知识<br />带进空间。</h2>
+            <h2>把你的工具与知识<br />带进空间</h2>
           </div>
           <div className="site-ecosystem-grid">
             {ECOSYSTEM.map((item) => (
@@ -163,7 +163,7 @@ export function MarketingProduct({ onLogin, onStart }: { onLogin: SiteAction; on
         <section className="site-final-cta" data-reveal>
           <div className="site-container">
             <p className="site-section-label">开始使用 BIU</p>
-            <h2>把工作放进一个空间。</h2>
+            <h2>把工作放进一个空间</h2>
             <button type="button" onClick={onStart}>创建你的空间 <span>↗</span></button>
           </div>
         </section>

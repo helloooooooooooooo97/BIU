@@ -357,7 +357,7 @@ export function MarketingCompareIndex({ onLogin, onStart }: { onLogin: SiteActio
     <SiteChrome onLogin={onLogin} onStart={onStart}>
         <section className="site-page-hero" data-reveal>
           <p className="site-section-label">对比</p>
-          <h1>和每个领域最好的产品比。</h1>
+          <h1>和每个领域最好的产品比</h1>
           <p className="site-page-lead">
             不要问 BIU 能做什么，问问 BIU 不能做什么。
             它们各自只解决一个面 —— 结构、协作、对话、本地、自主。
@@ -388,7 +388,7 @@ export function MarketingCompareIndex({ onLogin, onStart }: { onLogin: SiteActio
         <section className="site-final-cta" data-reveal>
           <div className="site-container">
             <p className="site-section-label">开始使用 BIU</p>
-            <h2>看完对比，自己试一次。</h2>
+            <h2>看完对比，自己试一次</h2>
             <button type="button" onClick={onStart}>创建你的空间 <span>↗</span></button>
           </div>
         </section>
@@ -410,7 +410,7 @@ export function MarketingCompareDetail({ onLogin, onStart }: { onLogin: SiteActi
       <SiteChrome onLogin={onLogin} onStart={onStart}>
         <section className="site-page-hero">
           <p className="site-section-label">对比</p>
-          <h1>没有这个对比页。</h1>
+          <h1>没有这个对比页</h1>
           <p className="site-page-lead"><Link to="/compare">返回对比总览</Link></p>
         </section>
       </SiteChrome>
@@ -458,7 +458,7 @@ export function MarketingCompareDetail({ onLogin, onStart }: { onLogin: SiteActi
         <section className="site-final-cta" data-reveal>
           <div className="site-container">
             <p className="site-section-label">开始使用 BIU</p>
-            <h2>看完对比，自己试一次。</h2>
+            <h2>看完对比，自己试一次</h2>
             <button type="button" onClick={onStart}>创建你的空间 <span>↗</span></button>
           </div>
         </section>
