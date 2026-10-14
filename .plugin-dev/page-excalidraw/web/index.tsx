@@ -39,7 +39,7 @@ type DrawApi = {
 }
 
 function emptyScene(): Scene {
-  return { elements: [], appState: { theme: 'dark', showWelcomeScreen: false }, files: {} }
+  return { elements: [], appState: { showWelcomeScreen: false }, files: {} }
 }
 
 function withoutCollab(appState: unknown): Record<string, unknown> {
@@ -116,6 +116,20 @@ function fitView(api: DrawApi | null) {
   if (!api) return
   api.refresh?.()
   api.scrollToContent?.(undefined, { fitToContent: true, animate: false })
+}
+
+function readAppTheme(): 'light' | 'dark' {
+  return document.documentElement.classList.contains('dark') ? 'dark' : 'light'
+}
+
+function useAppTheme() {
+  const [theme, setTheme] = useState(readAppTheme)
+  useEffect(() => {
+    const observer = new MutationObserver(() => setTheme(readAppTheme()))
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
+    return () => observer.disconnect()
+  }, [])
+  return theme
 }
 
 const UI_OPTIONS = { canvasActions: { loadScene: false, saveToActiveFile: false } } as const
@@ -309,6 +323,7 @@ function PersistentDraw(props: {
   expanded: boolean
 }) {
   const file = props.file
+  const theme = useAppTheme()
   const pending = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastSaved = useRef('')
   const etagRef = useRef(hosts.get(file)?.etag ?? '')
@@ -375,7 +390,7 @@ function PersistentDraw(props: {
   return (
     <div style={{ height: '100%', width: '100%', isolation: 'isolate', overflow: 'hidden' }}>
       <Excalidraw
-        theme="dark"
+        theme={theme}
         initialData={props.initialData as never}
         viewModeEnabled={false}
         zenModeEnabled={!props.expanded}
