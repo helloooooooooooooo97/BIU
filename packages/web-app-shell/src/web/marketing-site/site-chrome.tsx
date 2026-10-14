@@ -1,10 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { useReveal } from './use-reveal.ts'
-import { BrandMark, useBrandConfig } from './brand-mark.tsx'
+import { BrandMark, BrandPrint, useBrandConfig } from './brand-mark.tsx'
 import { Link, NavLink } from 'react-router-dom'
-
-/** 铺满一屏的品牌印花，多留几枚给大屏。 */
-const SITE_PRINT_COUNT = 24
 
 export type SiteAction = () => void
 
@@ -150,20 +147,7 @@ export function SiteChrome({ children, onLogin, onStart }: SiteChromeProps) {
   return (
     <div className="site" ref={ref}>
       <div className="site-print" aria-hidden data-testid="site-print">
-        {Array.from({ length: SITE_PRINT_COUNT }, (_, index) => (
-          <BrandMark
-            key={index}
-            colors={[brand.c0, brand.c1, brand.c2]}
-            stroke={brand.stroke}
-            strokeWidth={brand.strokeWidth}
-            lineWidth={brand.lineWidth}
-            background={brand.background}
-            showBackground={brand.showBackground}
-            circleRatio={brand.circleRatio}
-            displayWidth={84}
-            title=""
-          />
-        ))}
+        <BrandPrint config={brand} />
       </div>
       <SiteHeader onLogin={onLogin} onStart={onStart} />
       <main>{children}</main>

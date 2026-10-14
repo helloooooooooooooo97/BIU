@@ -139,8 +139,39 @@ export function BrandMark({
       aria-label={title}
       xmlns="http://www.w3.org/2000/svg"
     >
-      <title>{title}</title>
+      {title ? <title>{title}</title> : null}
+      <BrandMarkShapes
+        colors={colors}
+        r={r}
+        background={background}
+        showBackground={showBackground}
+        stroke={stroke}
+        strokePx={strokePx}
+        linePx={linePx}
+      />
+    </svg>
+  )
+}
 
+function BrandMarkShapes({
+  colors,
+  r,
+  background,
+  showBackground,
+  stroke,
+  strokePx,
+  linePx,
+}: {
+  colors: [string, string, string]
+  r: number
+  background: string
+  showBackground: boolean
+  stroke: string
+  strokePx: number
+  linePx: number
+}) {
+  return (
+    <>
       {showBackground ? (
         <rect
           x={CX - BOX}
@@ -151,23 +182,10 @@ export function BrandMark({
           fill={background}
         />
       ) : null}
-
-      {/* 三块扇区，从圆心切出。colors 下标与 UI 标签一一对应：
-          colors[0]=左上块, colors[1]=右上块, colors[2]=下方大块。 */}
       <path d={sector(SPLIT.a, SPLIT.b, r)} fill={colors[0]} />
       <path d={sector(SPLIT.b, SPLIT.c, r)} fill={colors[1]} />
       <path d={sector(SPLIT.c, SPLIT.a, r)} fill={colors[2]} />
-
-      <circle
-        cx={CX}
-        cy={CY}
-        r={r}
-        fill="none"
-        stroke={stroke}
-        strokeWidth={strokePx}
-      />
-
-      {/* 两条线：线 1 是完整直径，线 2 从圆上画到圆心 */}
+      <circle cx={CX} cy={CY} r={r} fill="none" stroke={stroke} strokeWidth={strokePx} />
       <path
         d={`M ${p(onCircle(SPLIT.a, r))} L ${p(onCircle(SPLIT.c, r))}`}
         stroke={stroke}
@@ -180,9 +198,13 @@ export function BrandMark({
         strokeWidth={linePx}
         strokeLinecap="round"
       />
-    </svg>
+    </>
   )
 }
+
+/** 印花单元：小标记 + 紧间距，铺满视口。 */
+export const BRAND_PRINT_TILE = 28
+export const BRAND_PRINT_MARK = 16
 
 /**
  * 预设配色。
@@ -236,6 +258,46 @@ export type BrandConfig = {
   lineWidth: number
   showBackground: boolean
   circleRatio: number
+}
+
+/** 一整张重复印花。一枚 SVG pattern 铺满，不逐个挂组件。 */
+export function BrandPrint({
+  config,
+  tile = BRAND_PRINT_TILE,
+  mark = BRAND_PRINT_MARK,
+}: {
+  config: BrandConfig
+  tile?: number
+  mark?: number
+}) {
+  const r = MAX_R * Math.min(1, Math.max(0.05, config.circleRatio))
+  const scale = mark / VB_SIZE
+  const lift = (width: number) => {
+    if (width <= 0) return 0
+    const onScreen = width * scale
+    return onScreen >= MIN_STROKE_PX ? width : MIN_STROKE_PX / scale
+  }
+  const inset = (tile - mark) / 2
+  return (
+    <svg className="site-print-sheet" width="100%" height="100%">
+      <defs>
+        <pattern id="site-brand-print" width={tile} height={tile} patternUnits="userSpaceOnUse">
+          <svg x={inset} y={inset} width={mark} height={mark} viewBox={VIEW_BOX}>
+            <BrandMarkShapes
+              colors={[config.c0, config.c1, config.c2]}
+              r={r}
+              background={config.background}
+              showBackground={config.showBackground}
+              stroke={config.stroke}
+              strokePx={lift(config.strokeWidth)}
+              linePx={lift(config.lineWidth)}
+            />
+          </svg>
+        </pattern>
+      </defs>
+      <rect width="100%" height="100%" fill="url(#site-brand-print)" />
+    </svg>
+  )
 }
 
 export const BRAND_DEFAULT: BrandConfig = {
