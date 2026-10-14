@@ -207,8 +207,8 @@ function BrandMarkShapes({
 }
 
 /** 印花单元：小标记 + 紧间距，铺满视口。 */
-export const BRAND_PRINT_TILE = 56
-export const BRAND_PRINT_MARK = 32
+export const BRAND_PRINT_TILE = 42
+export const BRAND_PRINT_MARK = 24
 
 /**
  * 预设配色。
