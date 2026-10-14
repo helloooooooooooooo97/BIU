@@ -10307,9 +10307,7 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   .site-release > a { grid-column: auto; }
 }
 
-/* ---------- 博客：署名 / RSS / 配图 ---------- */
-.site-blog-feed { margin: 20px 0 0; font-size: 13px; color: rgba(255, 255, 255, .45); }
-.site-blog-feed a { color: #fff; }
+/* ---------- 博客：署名 / 配图 ---------- */
 .site-article-byline {
   display: flex;
   flex-wrap: wrap;
