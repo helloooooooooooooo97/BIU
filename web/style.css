@@ -8447,6 +8447,33 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   /* 大字(标题) → 下方内容 的间距 */
   --site-heading-gap: 40px;
 }
+/* 品牌印花：固定在滚动内容后面，正文透明处透出。 */
+.site-print {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  justify-content: center;
+  gap: 96px 120px;
+  margin: 0;
+  padding: 28px 20px 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.site-print svg {
+  flex: 0 0 auto;
+  width: 84px;
+  height: 84px;
+  opacity: 0.28;
+}
+.site-print svg:nth-child(odd) { transform: rotate(-8deg); }
+.site-print svg:nth-child(3n) { transform: rotate(7deg); margin-top: 28px; }
+.site > main {
+  position: relative;
+  z-index: 1;
+}
 /* 内容容器：背景满宽、内容定宽。
    通栏区块（英雄/数据控制/结尾CTA）用它把内容拉回同一基准线。 */
 .site-container {
@@ -8585,7 +8612,7 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   min-height: 100svh;
   overflow: hidden;
   padding: 112px 0 64px;
-  background: #000;
+  background: transparent;
 }
 .site-hero::after {
   content: "";
@@ -8681,7 +8708,7 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
 }
 .site-space-section {
   padding: var(--site-section-gap) var(--site-gutter);
-  background: #000;
+  background: transparent;
   color: #fff;
 }
 .site-space-section .site-section-label { color: rgba(255, 255, 255, .62); }
@@ -8749,7 +8776,7 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   min-height: 620px;
   box-sizing: border-box;
   padding: var(--site-section-gap) 0;
-  background: #000;
+  background: transparent;
 }
 .site-final-cta h2 {
   max-width: 880px;
@@ -8815,7 +8842,7 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   max-width: none;
   margin: 0;
   padding: var(--site-section-gap) 0;
-  background: #000;
+  background: transparent;
   color: #fff;
 }
 .site-product-demo > * {
@@ -9090,6 +9117,8 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   line-height: 1.55;
 }
 .site-footer {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-content: start;
