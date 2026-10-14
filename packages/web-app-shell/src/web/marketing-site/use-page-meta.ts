@@ -9,7 +9,7 @@ export type PageMeta = {
 }
 
 const SITE_NAME = 'BIU'
-const DEFAULT_IMAGE = '/brand-lockup.svg'
+const DEFAULT_IMAGE = '/og-image.png'
 
 function setMeta(attr: 'name' | 'property', key: string, content: string) {
   let tag = document.head.querySelector<HTMLMetaElement>(`meta[${attr}="${key}"]`)

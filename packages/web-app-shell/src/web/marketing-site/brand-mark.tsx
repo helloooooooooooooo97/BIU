@@ -411,7 +411,7 @@ export function BrandPrint({
 
 export const BRAND_DEFAULT: BrandConfig = {
   // 默认深海：三块都偏深，线条取白色才分得开。
-  // 与 public/favicon.svg 同源，改这里后跑 npx tsx scripts/build-favicon.tsx。
+  // 与 public/favicon.svg 同源，改这里后跑 npx tsx scripts/build-brand-assets.tsx（同时更新 README 横条与分享卡片）。
   c0: '#1e3a8a',
   c1: '#0ea5e9',
   c2: '#0f172a',

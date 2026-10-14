@@ -684,13 +684,25 @@ test('品牌标记：两块是 B 的两弧、半圆是 U，方位与明度都不
   cleanup()
 })
 
-test('标签页图标是当前品牌标记（深海配色），与默认配置同步', async () => {
-  const { buildFaviconSvg } = await import('./marketing-site/brand-favicon.tsx')
-  const favicon = readFileSync(resolve(process.cwd(), 'public/favicon.svg'), 'utf8')
-  assert.equal(favicon, buildFaviconSvg(), 'public/favicon.svg 过期了：npx tsx scripts/build-favicon.tsx')
-  for (const color of ['#1e3a8a', '#0ea5e9', '#0f172a']) assert.match(favicon, new RegExp(`fill="${color}"`))
+test('标签页图标、README 横条、分享卡片都是当前品牌标记（深海配色），与默认配置同步', async () => {
+  const { buildFaviconSvg, buildLockupSvg, buildOgImageSvg } = await import('./marketing-site/brand-assets.tsx')
+  const read = (name: string) => readFileSync(resolve(process.cwd(), 'public', name), 'utf8')
+  const hint = '过期了：npx tsx scripts/build-brand-assets.tsx'
+  assert.equal(read('favicon.svg'), buildFaviconSvg(), `favicon.svg ${hint}`)
+  assert.equal(read('brand-lockup.svg'), buildLockupSvg(), `brand-lockup.svg ${hint}`)
+  assert.equal(read('og-image.svg'), buildOgImageSvg(), `og-image.svg ${hint}`)
+  for (const name of ['favicon.svg', 'brand-lockup.svg', 'og-image.svg']) {
+    for (const color of ['#1e3a8a', '#0ea5e9', '#0f172a']) assert.match(read(name), new RegExp(`fill="${color}"`), `${name} 应为深海配色`)
+  }
+  const png = readFileSync(resolve(process.cwd(), 'public/og-image.png'))
+  assert.equal(png.readUInt32BE(16), 1200, '分享卡片宽 1200')
+  assert.equal(png.readUInt32BE(20), 630, '分享卡片高 630')
+
   const html = readFileSync(resolve(process.cwd(), 'index.html'), 'utf8')
   assert.match(html, /<link rel="icon" type="image\/svg\+xml" href="\/favicon\.svg/)
+  assert.match(html, /<meta property="og:image" content="\/og-image\.png" \/>/, '爬虫不执行脚本，og:image 要写在静态 HTML 里')
+  const meta = readFileSync(resolve(process.cwd(), 'packages/web-app-shell/src/web/marketing-site/use-page-meta.ts'), 'utf8')
+  assert.match(meta, /DEFAULT_IMAGE = '\/og-image\.png'/)
 })
 
 test('品牌页：圆的大小可调，且不影响背景方块', () => {
