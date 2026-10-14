@@ -63,6 +63,8 @@ test('home 收窄后：深度内容下沉，导航指向独立页', () => {
   // 原首页的 6 张解决方案卡已移到 /use-cases
   assert.equal(screen.queryByText('研究与分析'), null)
   // 导航里有独立页面入口
+  const print = screen.getByTestId('site-print')
+  assert.equal(print.querySelectorAll('svg').length, 24, '官网背景用品牌图标铺印花')
   const nav = screen.getByRole('navigation', { name: '官网' })
   assert.match(nav.textContent ?? '', /产品/)
   assert.match(nav.textContent ?? '', /定价/)

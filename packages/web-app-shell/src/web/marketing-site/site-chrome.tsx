@@ -3,6 +3,9 @@ import { useReveal } from './use-reveal.ts'
 import { BrandMark, useBrandConfig } from './brand-mark.tsx'
 import { Link, NavLink } from 'react-router-dom'
 
+/** 铺满一屏的品牌印花，多留几枚给大屏。 */
+const SITE_PRINT_COUNT = 24
+
 export type SiteAction = () => void
 
 export type SiteChromeProps = {
@@ -143,8 +146,25 @@ export function SiteChrome({ children, onLogin, onStart }: SiteChromeProps) {
   // ref 挂在这里，页面组件不必再套一层无样式的 div —— 那层 div 会让
   // .site 的 height:100% 失去参照，进而使 overflow 失效、整页滚不动。
   const ref = useReveal<HTMLDivElement>()
+  const brand = useBrandConfig()
   return (
     <div className="site" ref={ref}>
+      <div className="site-print" aria-hidden data-testid="site-print">
+        {Array.from({ length: SITE_PRINT_COUNT }, (_, index) => (
+          <BrandMark
+            key={index}
+            colors={[brand.c0, brand.c1, brand.c2]}
+            stroke={brand.stroke}
+            strokeWidth={brand.strokeWidth}
+            lineWidth={brand.lineWidth}
+            background={brand.background}
+            showBackground={brand.showBackground}
+            circleRatio={brand.circleRatio}
+            displayWidth={84}
+            title=""
+          />
+        ))}
+      </div>
       <SiteHeader onLogin={onLogin} onStart={onStart} />
       <main>{children}</main>
       <SiteFooter onLogin={onLogin} onStart={onStart} />
