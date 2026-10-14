@@ -287,7 +287,7 @@ export function BrandPrint({
               colors={[config.c0, config.c1, config.c2]}
               r={r}
               background={config.background}
-              showBackground={config.showBackground}
+              showBackground={false}
               stroke={config.stroke}
               strokePx={lift(config.strokeWidth)}
               linePx={lift(config.lineWidth)}
