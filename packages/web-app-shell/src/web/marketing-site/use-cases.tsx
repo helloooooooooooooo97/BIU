@@ -193,7 +193,6 @@ export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; o
             <h2>{useCase.title}</h2>
             <p>{useCase.summary}</p>
             <div className="site-usecase-card-blocks">
-              <span>这一页里有</span>
               <BlockChips blocks={useCase.blocks} />
             </div>
           </Link>

@@ -906,6 +906,7 @@ test('场景页：卡片写明组合了哪些块，团队协作说明云端现�
   assert.ok(chips.length >= 6, '每张场景卡都列出组合的块')
   const cards = [...document.querySelectorAll('.site-usecase-card')]
   assert.ok(cards.every((card) => !card.querySelector('small, .site-usecase-note')), '卡片只留一组块清单，交付物和云端说明放进子页')
+  assert.ok(cards.every((card) => !card.textContent?.includes('这一页里有')), '块清单不加小标题')
   const collaboration = cards.find((card) => card.querySelector('h2')?.textContent === '团队协作')!
   assert.ok(!/页面回归检查块|HTML/.test(collaboration.textContent ?? ''), '团队协作只放协作相关的块')
   cleanup()
