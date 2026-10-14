@@ -9,6 +9,8 @@ test('LAN share listener allows share API, MCP, and SPA, not the workstation', (
   assert.equal(isSharePublicPath('/share/abc/r/1'), true)
   assert.equal(isSharePublicPath('/assets/index.js'), true)
   assert.equal(isSharePublicPath('/web/main.tsx'), true)
+  assert.equal(isSharePublicPath('/favicon.svg'), true)
+  assert.equal(isSharePublicPath('/og-image.png'), true)
   assert.equal(isSharePublicPath('/'), false)
   assert.equal(isSharePublicPath('/s/session'), false)
   assert.equal(isSharePublicPath('/api/db/list'), false)

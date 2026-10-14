@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+<rect width="1200" height="630" fill="#000000"/>
+<svg x="120" y="175" width="280" height="280" viewBox="160 325 580 580" xmlns="http://www.w3.org/2000/svg"><title>BIU</title><rect x="160" y="325" width="580" height="580" rx="96" fill="#ffffff"></rect><path d="M 450 615 L 284.0 397.0 A 274 274 0 0 1 661.7 441.1 Z" fill="#1e3a8a"></path><path d="M 450 615 L 661.7 441.1 A 274 274 0 0 1 616.8 832.4 Z" fill="#0ea5e9"></path><path d="M 450 615 L 616.8 832.4 A 274 274 0 1 1 284.0 397.0 Z" fill="#0f172a"></path><circle cx="450" cy="615" r="274" fill="none" stroke="#ffffff" stroke-width="7.5"></circle><path d="M 284.0 397.0 L 616.8 832.4" stroke="#ffffff" stroke-width="7.5" stroke-linecap="round"></path><path d="M 661.7 441.1 L 450 615" stroke="#ffffff" stroke-width="7.5" stroke-linecap="round"></path></svg>
+<g font-family="ui-sans-serif, system-ui, -apple-system, 'PingFang SC', 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" fill="#ffffff">
+<text x="470" y="282" font-size="96" font-weight="700" letter-spacing="-2">BIU</text>
+<text x="470" y="368" font-size="48" font-weight="600">一个页面，组合所有软件</text>
+<text x="470" y="430" font-size="26" fill-opacity=".6">开源 · 免费 · All in One</text>
+</g>
+</svg>

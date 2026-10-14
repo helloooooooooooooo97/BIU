@@ -725,7 +725,8 @@ biu
 │   └── link-cordis-plugins.mjs
 ├── public/
 │   ├── favicon.svg            # brand mark (white square)
-│   ├── brand-lockup.svg       # README: mark + Biu Agent OS tag
+│   ├── brand-lockup.svg       # README: BIU mark + Biu Agent OS tag
+│   ├── og-image.png           # share card (og:image), from scripts/build-brand-assets.tsx
 │   ├── mascot-blue.svg        # README mascots (BMW M palette)
 │   ├── mascot-violet.svg
 │   ├── mascot-red.svg
