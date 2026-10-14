@@ -8546,6 +8546,13 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   position: relative;
   height: auto !important;
   overflow: visible !important;
+  /* 黑色底在合成时另铺；这里留空，印花才能从透明处透出来 */
+  background: transparent !important;
+}
+/* 印花平时固定在视口上，长图展开后要跟着内容铺满整页 */
+.site.is-capturing .site-print {
+  position: absolute;
+  inset: 0;
 }
 .site.is-capturing .site-nav {
   position: absolute;
