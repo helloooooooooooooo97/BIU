@@ -8452,7 +8452,9 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   /* 大字(标题) → 下方内容 的间距 */
   --site-heading-gap: 40px;
 }
-/* 品牌印花：固定在滚动内容后面，正文透明处透出。 */
+/* 品牌印花：固定在滚动内容后面，只在内容栏左右两侧露出。
+   内容栏（含左右留白）保持纯黑，从栏外 160px 处开始向视口边缘渐显；
+   视口窄于内容栏时两侧没有空间，印花整体隐去。 */
 .site-print {
   position: fixed;
   inset: 0;
@@ -8460,13 +8462,24 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   margin: 0;
   pointer-events: none;
   overflow: hidden;
+  --print-edge: calc((100% - var(--site-content)) / 2);
+  --print-mask: linear-gradient(90deg,
+    #000 0,
+    #000 max(0px, calc(var(--print-edge) - 160px)),
+    transparent calc(var(--print-edge) + var(--site-gutter)),
+    transparent calc(100% - var(--print-edge) - var(--site-gutter)),
+    #000 min(100%, calc(100% - var(--print-edge) + 160px)),
+    #000 100%);
+  -webkit-mask-image: var(--print-mask);
+  mask-image: var(--print-mask);
 }
 .site-print-sheet {
   display: block;
   width: 100%;
   /* 多出一格高，滚动位移按格子取模时下沿不露底。 */
   height: calc(100% + var(--print-tile, 0px));
-  opacity: 0.25;
+  /* 只剩两侧可见、不再压在正文下，可以比满铺时亮一些 */
+  opacity: 0.32;
   transform: translate3d(0, var(--print-shift, 0px), 0);
   will-change: transform;
 }
@@ -9066,13 +9079,6 @@ html:not(.has-js) .site [data-reveal] {
   opacity: 1;
   transform: translate3d(0, 0, 0);
 }
-.site-space-options article:nth-child(2) {
-  animation: site-orbit-drift 18s ease-in-out infinite alternate;
-}
-@keyframes site-orbit-drift {
-  from { transform: translate3d(-1.5%, -1%, 0) scale(.98); }
-  to { transform: translate3d(2%, 1.5%, 0) scale(1.025); }
-}
 @media (max-width: 800px) {
   .site-nav { grid-template-columns: auto 1fr; padding: 0 20px; }
   .site-nav-links { display: none; }
@@ -9318,6 +9324,7 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   border: 0;
   border-radius: 12px;
   background: rgba(255, 255, 255, .04);
+  color: rgba(255, 255, 255, .6);
   font-size: 14px;
   cursor: pointer;
   transition: background .16s ease, color .16s ease;
@@ -9325,9 +9332,11 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 .site-roi-tools label.is-on {
   background: #0f0f0f;
   color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06);
 }
+.site-roi-tools label:not(.is-on):hover { color: rgba(255, 255, 255, .88); }
+.site-roi-tools label em { margin-left: auto; font-style: normal; font-size: 13px; color: rgba(255, 255, 255, .45); }
 .site-roi-tools label.is-on em { color: rgba(255, 255, 255, .88); }
-.site-roi-tools label em { margin-left: auto; font-style: normal; font-size: 13px; color: rgba(255, 255, 255, .88); }
 .site-roi-tools input { accent-color: #fff; }
 .site-roi-result {
   display: flex;
@@ -9365,10 +9374,6 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   gap: 16px;
   padding: 30px 26px;
   border-radius: 20px;
-  background: #0f0f0f;
-}
-.site-plans-grid article.is-featured {
-  border-color: rgba(255, 255, 255, .45);
   background: #0f0f0f;
 }
 .site-plans-grid h3 { margin: 0; font-size: 18px; font-weight: 600; }
