@@ -9962,6 +9962,7 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 18px;
+  align-items: start;
   max-width: var(--site-content);
   margin: 0 auto;
   padding: 8px var(--site-gutter) 72px;
@@ -9978,9 +9979,13 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   transition: background-color .18s ease, transform .18s ease;
 }
 .site-usecase-card:hover { background: #2a2a2a; transform: translateY(-2px); }
-.site-usecase-card h2 { margin: 0; font-size: 18px; font-weight: 600; }
-.site-usecase-card p { margin: 0; flex: 1; font-size: 14px; line-height: 1.7; color: rgba(255, 255, 255, .88); }
-.site-usecase-card small { font-size: 12px; letter-spacing: .02em; color: rgba(255, 255, 255, .88); }
+.site-usecase-card h2 { margin: 0; font-size: 18px; font-weight: 600; line-height: 1.3; }
+.site-usecase-card p { margin: 0; font-size: 14px; line-height: 1.7; color: rgba(255, 255, 255, .88); }
+.site-usecase-card small { display: block; margin: 0; font-size: 12px; line-height: 1.4; letter-spacing: .02em; color: rgba(255, 255, 255, .88); }
+.site-usecase-card .site-solution-index {
+  color: rgba(255, 255, 255, .55);
+  line-height: 1;
+}
 
 /* 用例页：交付物行 */
 .site-usecase-output {
