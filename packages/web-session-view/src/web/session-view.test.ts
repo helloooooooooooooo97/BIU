@@ -1091,3 +1091,21 @@ test('empty switching session still ingests the outgoing user bubble', async () 
     true,
   )
 })
+
+test('未登录不请求会话和审批，登录后再拉', async () => {
+  localStorage.removeItem('biu.account.token')
+  const calls = mockFetch({
+    '/api/sessions': () => ({ sessions: [] }),
+    '/api/approvals': () => ({ mode: 'auto', pending: [] }),
+  })
+  const ctx = new Context()
+  await ctx.plugin(sessionView)
+  await new Promise((resolve) => setTimeout(resolve, 30))
+  assert.equal(calls.length, 0, '官网未登录不应打工作台接口')
+  localStorage.setItem('biu.account.token', 'tok')
+  window.dispatchEvent(new Event('biu:account-token'))
+  await new Promise((resolve) => setTimeout(resolve, 30))
+  assert.equal(calls.some((call) => call.url.includes('/api/sessions')), true)
+  assert.equal(calls.some((call) => call.url.includes('/api/approvals')), true)
+  localStorage.removeItem('biu.account.token')
+})
