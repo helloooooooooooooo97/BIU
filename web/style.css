@@ -10049,15 +10049,13 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 .site-brand-hero svg { width: min(420px, 70vw); height: auto; }
 
 .site-brand-anatomy,
-.site-brand-studio,
-.site-brand-rules {
+.site-brand-studio {
   max-width: var(--site-content);
   margin: 0 auto;
   padding: 0 var(--site-gutter) 72px;
 }
 .site-brand-anatomy > h2,
-.site-brand-studio > h2,
-.site-brand-rules > h2 {
+.site-brand-studio > h2 {
   margin: 0 0 24px;
   font-size: clamp(20px, 2.4vw, 26px);
   font-weight: 600;
@@ -10085,9 +10083,6 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 
 .brand-studio-preview {
   padding: 24px;
-  border-radius: 22px;
-  background: #0d0d0d;
-  /* 等高由 grid 的 stretch 决定，这里只负责把标记居中。 */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -10160,58 +10155,3 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 .brand-preset:hover { background: #2a2a2a; }
 .brand-preset-chip { width: 16px; height: 16px; border-radius: 5px; }
 
-.site-brand-rules ul { margin: 0; padding-left: 20px; display: grid; gap: 10px; }
-.site-brand-rules li { font-size: 14px; line-height: 1.75; color: rgba(255, 255, 255, .88); }
-.site-brand-back { margin: 28px 0 0; font-size: 14px; }
-.site-brand-back a { color: rgba(255, 255, 255, .88); text-decoration: none; }
-.site-brand-back a:hover { color: #fff; }
-
-/* 品牌页：三块 = B/I/U 的说明 */
-.site-brand-facets {
-  max-width: var(--site-content);
-  margin: 0 auto;
-  padding: 0 var(--site-gutter) 72px;
-}
-.site-brand-facets > h2 {
-  margin: 0 0 16px;
-  font-size: clamp(20px, 2.4vw, 26px);
-  font-weight: 600;
-}
-.site-brand-facet-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 18px;
-  margin-top: 28px;
-}
-.site-brand-facet-grid article {
-  padding: 26px 24px;
-  border-radius: 18px;
-  background: #202020;
-}
-.site-brand-facet-letter {
-  margin: 0 0 14px;
-  font-size: 34px;
-  font-weight: 600;
-  line-height: 1;
-  letter-spacing: -0.04em;
-  color: rgba(255, 255, 255, .88);
-}
-.site-brand-facet-grid h3 {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  margin: 0 0 10px;
-  font-size: 16px;
-  font-weight: 600;
-}
-.site-brand-facet-where {
-  font-size: 12px;
-  font-weight: 500;
-  color: rgba(255, 255, 255, .88);
-}
-.site-brand-facet-grid p {
-  margin: 0;
-  font-size: 14px;
-  line-height: 1.75;
-  color: rgba(255, 255, 255, .88);
-}

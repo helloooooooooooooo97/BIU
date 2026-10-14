@@ -419,27 +419,14 @@ test('品牌页：构成与标题对齐 —— 一个圆、两条弦、三个块
   cleanup()
 })
 
-test('品牌页：说明这个标记刚好是 BIU 三个字母，并讲清三块的寓意', () => {
+test('品牌页：说明这个标记刚好是 BIU 三个字母', () => {
   renderSite('/brand')
   const body = document.body.textContent ?? ''
 
-  // 字母这件事必须出现，而且要说明是形状拼出来的。
   assert.match(body, /拼成 B、I、U 三个字母/, '要点出三块拼成 BIU')
   assert.match(body, /标记本身就是名字/, '要说清形状即名字')
-
-  // 三块的寓意。
-  assert.match(body, /本地空间/, 'B 块的寓意')
-  assert.match(body, /云端空间/, 'I 块的寓意')
-  assert.match(body, /公共底座/, 'U 块的寓意')
-  assert.match(body, /托住上面两块/, '要说清底座与另两块的关系')
-
-  // 纪律：字母来自形状，寓意是产品上的约定 —— 不能把约定讲成图形天然如此。
-  assert.match(body, /前者是形状，后者是约定/, '必须区分「形状」与「约定」，不能编造隐喻')
-
-  // 三块各自的方位要写对（B 右上 / I 右下 / U 下方），方位写错就等于讲错标记。
-  assert.match(body, /右上/)
-  assert.match(body, /右下/)
-  assert.match(body, /下方/)
+  assert.doesNotMatch(body, /使用规则/, '品牌页不再单列使用规则')
+  assert.doesNotMatch(body, /三块，三个字母，三层意思/, '不再单列三块寓意')
   cleanup()
 })
 

@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom'
 import type { SiteAction } from './site-chrome.tsx'
 import { SiteChrome } from './site-chrome.tsx'
 import { BrandMark, BrandStudio, useBrandConfig } from './brand-mark.tsx'
@@ -21,41 +20,6 @@ const ANATOMY = [
     title: '三生万物',
     body: '三块是固定的，颜色和线条不是。同一个标记可以长成每个人自己的样子 —— 一千个人有一千个自己的 BIU。',
   },
-]
-
-/**
- * 三块各是什么。
- * 方位按实际几何：B 在右上、I 在右下、U 占下方半圆。
- * 「本地 / 云端 / 底座」是产品上的约定，不是形状自带的含义 ——
- * 文案里要说明这一点，别把它讲成「图形天然如此」。
- */
-const FACETS = [
-  {
-    letter: 'B',
-    where: '右上',
-    title: '本地空间',
-    body: '数据躺在你自己的机器上。离线也能读写，不经过任何服务器。',
-  },
-  {
-    letter: 'I',
-    where: '右下',
-    title: '云端空间',
-    body: '同一套接口，数据放在云端。协作、共享、跨设备都在这里发生。',
-  },
-  {
-    letter: 'U',
-    where: '下方',
-    title: '公共底座',
-    body: '最大的一块，托住上面两块。无论数据在哪，都在同一套接口与权限之下 —— 这是标记真正的主张。',
-  },
-]
-
-const RULES = [
-  '最小尺寸：正文里不小于 24px，导航与图标位不小于 20px。',
-  '留白：四周至少留出圆半径 1/4 的空白，不要把别的元素贴上去。',
-  '单色场景：三块可以取同一颜色的不同明度，但不要用渐变替代分块。',
-  '不要旋转、不要拉伸。圆的形状本身承载识别度。',
-  '底色深时用白色描边；底色浅时需要提高描边对比（见下方调节器）。',
 ]
 
 export function MarketingBrand({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
@@ -104,46 +68,10 @@ export function MarketingBrand({ onLogin, onStart }: { onLogin: SiteAction; onSt
         </div>
       </section>
 
-      <section className="site-brand-facets" data-reveal>
-        <h2>三块，三个字母，三层意思</h2>
-        <p className="site-brand-note">
-          形状上它们是 B、I、U 三个字母；产品上它们各是一层空间。
-          字母是三块拼出来的，寓意是我们给这三块的分工 —— 前者是形状，后者是约定。
-        </p>
-        <div className="site-brand-facet-grid">
-          {FACETS.map((facet) => (
-            <article key={facet.letter}>
-              <p className="site-brand-facet-letter" aria-hidden>
-                {facet.letter}
-              </p>
-              <h3>
-                {facet.title}
-                <span className="site-brand-facet-where">{facet.where}</span>
-              </h3>
-              <p>{facet.body}</p>
-            </article>
-          ))}
-        </div>
-      </section>
-
       <section className="site-brand-studio" data-reveal>
         <h2>定义我的 BIU</h2>
-        <p className="site-brand-note">
-          三块各一个颜色，线条粗细可以单独控制。改完的样子可以直接拿去用。
-        </p>
+        <p className="site-brand-note">三块各一个颜色，线条粗细可以单独控制。</p>
         <BrandStudio />
-      </section>
-
-      <section className="site-brand-rules" data-reveal>
-        <h2>使用规则</h2>
-        <ul>
-          {RULES.map((rule) => (
-            <li key={rule}>{rule}</li>
-          ))}
-        </ul>
-        <p className="site-brand-back">
-          <Link to="/product">看看产品怎么用这套标记 →</Link>
-        </p>
       </section>
     </SiteChrome>
   )
