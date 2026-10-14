@@ -674,26 +674,23 @@ test('品牌标记：两块是 B 的两弧、半圆是 U，方位与明度都不
   assert.equal(endAngle(1), 52, 'colors[1] 应结束于 52°（B 的下弧）')
   assert.equal(endAngle(2), -127, 'colors[2] 应结束于 -127°（左下半圆 = U）')
 
-  // 默认是「暖灰」这一组固定色，不是无彩度灰阶 —— 以前这条断言写的是
-  // 「R=G=B」，那是旧默认（纯灰）留下的，换成暖灰后 R>G>B 成了固有特征，
-  // 旧断言会把正确实现判成错的。现在钉两件真正重要的事：
-  //   1) 三个值就是暖灰那三个，别被谁顺手换成别的色；
-  //   2) 明度必须递降、B 上弧最亮 —— 三块靠明度分层次，改错就糊成一块。
-  const lum = (hex: string) => parseInt(hex.slice(1, 3), 16)
+  // 默认是「深海」三色，与标签页图标同一套
   const fills = paths.map((n) => n.getAttribute('fill')!)
   assert.deepEqual(
     fills.map((f) => f.toLowerCase()),
-    ['#e8ddd3', '#b3a498', '#6b5f55'],
-    `默认应为暖灰三色，实际：${fills.join(' / ')}`,
+    ['#1e3a8a', '#0ea5e9', '#0f172a'],
+    `默认应为深海三色，实际：${fills.join(' / ')}`,
   )
-  assert.ok(lum(fills[0]!) > lum(fills[1]!), `B 上弧应比下弧亮：${fills[0]} vs ${fills[1]}`)
-  assert.ok(lum(fills[1]!) > lum(fills[2]!), `B 下弧应比 U 亮：${fills[1]} vs ${fills[2]}`)
-  // 暖灰是暖调：红通道 > 绿 > 蓝。这条能挡住「换成冷灰/纯灰」这类误改。
-  for (const fill of fills) {
-    const [r, g, b] = [fill.slice(1, 3), fill.slice(3, 5), fill.slice(5, 7)]
-    assert.ok(r! > g! && g! > b!, `暖灰应保持 R>G>B 的暖调：${fill}`)
-  }
   cleanup()
+})
+
+test('标签页图标是当前品牌标记（深海配色），与默认配置同步', async () => {
+  const { buildFaviconSvg } = await import('./marketing-site/brand-favicon.tsx')
+  const favicon = readFileSync(resolve(process.cwd(), 'public/favicon.svg'), 'utf8')
+  assert.equal(favicon, buildFaviconSvg(), 'public/favicon.svg 过期了：npx tsx scripts/build-favicon.tsx')
+  for (const color of ['#1e3a8a', '#0ea5e9', '#0f172a']) assert.match(favicon, new RegExp(`fill="${color}"`))
+  const html = readFileSync(resolve(process.cwd(), 'index.html'), 'utf8')
+  assert.match(html, /<link rel="icon" type="image\/svg\+xml" href="\/favicon\.svg/)
 })
 
 test('品牌页：圆的大小可调，且不影响背景方块', () => {

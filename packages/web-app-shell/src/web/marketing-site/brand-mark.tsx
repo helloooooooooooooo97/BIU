@@ -14,7 +14,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, type RefObjec
  *   colors[1]  320.6°→52.5°（92°）  右上偏右 → B 的下弧
  *   colors[2]  52.5°→232.7°（180°） 左下半圆 → U
  *   232.7° ↔ 52.5° 那条贯穿圆心的斜线 → I
- * 默认单色即用明度区分：最亮、中间、最暗依次排开。
+ * 默认深海配色（BRAND_DEFAULT），标签页图标 public/favicon.svg 由它生成。
  */
 
 /** 画布中心与「背景方块」的半边长。背景是固定的，圆在其中按比例缩放。 */
@@ -410,13 +410,12 @@ export function BrandPrint({
 }
 
 export const BRAND_DEFAULT: BrandConfig = {
-  // 默认暖灰：三块靠明度拉开层次（B 的两弧较浅、U 最深）。
-  // 这是一组浅色，所以线条取深色 —— 白线在最浅的那块上对比度只有 1.34:1，
-  // 等于看不见；深色线条能到 13:1。
-  c0: '#e8ddd3',
-  c1: '#b3a498',
-  c2: '#6b5f55',
-  stroke: '#1a1a1a',
+  // 默认深海：三块都偏深，线条取白色才分得开。
+  // 与 public/favicon.svg 同源，改这里后跑 npx tsx scripts/build-favicon.tsx。
+  c0: '#1e3a8a',
+  c1: '#0ea5e9',
+  c2: '#0f172a',
+  stroke: '#ffffff',
   background: '#ffffff',
   // 线宽以 viewBox 单位计（坐标系宽 596），不是屏幕像素 ——
   // 这样标记缩到 24px 或放到 420px，线条与圆的粗细比例都一致。
