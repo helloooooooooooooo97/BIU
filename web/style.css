@@ -8621,7 +8621,7 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
 .site-eyebrow,
 .site-section-label {
   margin: 0;
-  color: rgba(255, 255, 255, .86);
+  color: rgba(255, 255, 255, .94);
   font-size: 13px;
   font-weight: 500;
   letter-spacing: -.01em;
@@ -8637,7 +8637,7 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
 .site-hero-lead {
   max-width: 520px;
   margin: var(--site-heading-gap) 0 0;
-  color: rgba(255, 255, 255, .72);
+  color: rgba(255, 255, 255, .94);
   font-size: 18px;
   letter-spacing: -.02em;
   line-height: 1.5;
@@ -8661,7 +8661,7 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   right: 32px;
   bottom: 72px;
   margin: 0;
-  color: rgba(255, 255, 255, .86);
+  color: rgba(255, 255, 255, .94);
   font-size: 12px;
   writing-mode: vertical-rl;
 }
@@ -8677,7 +8677,7 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
 .site-intro-copy {
   margin: var(--site-heading-gap) 0 0;
   max-width: 640px;
-  color: rgba(255, 255, 255, .62);
+  color: rgba(255, 255, 255, .94);
   font-size: 16px;
   line-height: 1.75;
 }
@@ -8703,7 +8703,7 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   background: transparent;
   color: #fff;
 }
-.site-space-section .site-section-label { color: rgba(255, 255, 255, .86); }
+.site-space-section .site-section-label { color: rgba(255, 255, 255, .94); }
 .site-space-heading h2 { margin-top: var(--site-label-gap); }
 .site-space-options { margin-top: var(--site-heading-gap); }
 .site-space-options article {
@@ -8713,7 +8713,7 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   border-top: 1px solid rgba(255, 255, 255, .2);
 }
 .site-space-index {
-  color: rgba(255, 255, 255, .86);
+  color: rgba(255, 255, 255, .94);
   font-size: 12px;
 }
 .site-space-options h3 {
@@ -8726,7 +8726,7 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   grid-column: 2;
   max-width: 520px;
   margin: 14px 0 0;
-  color: rgba(255, 255, 255, .86);
+  color: rgba(255, 255, 255, .94);
   font-size: 15px;
   line-height: 1.55;
 }
@@ -8760,7 +8760,7 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
 .site-manifesto-copy > p:last-child {
   max-width: 550px;
   margin: 0;
-  color: rgba(255, 255, 255, .58);
+  color: rgba(255, 255, 255, .94);
   font-size: 16px;
   line-height: 1.55;
 }
@@ -8798,7 +8798,7 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   font-size: 15px;
   outline: none;
 }
-.site-task-box input::placeholder { color: rgba(255, 255, 255, .48); }
+.site-task-box input::placeholder { color: rgba(255, 255, 255, .7); }
 .site-task-box button {
   width: 42px;
   height: 42px;
@@ -8820,7 +8820,7 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   border-radius: 999px;
   padding: 7px 11px;
   background: rgba(0, 0, 0, .2);
-  color: rgba(255, 255, 255, .86);
+  color: rgba(255, 255, 255, .94);
   font: inherit;
   font-size: 12px;
   cursor: pointer;
@@ -8848,11 +8848,11 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   margin-bottom: var(--site-heading-gap);
 }
 /* label 与标题上下排版 */
-.site-demo-heading .site-section-label { margin: 0 0 var(--site-label-gap); color: rgba(255, 255, 255, .86); }
+.site-demo-heading .site-section-label { margin: 0 0 var(--site-label-gap); color: rgba(255, 255, 255, .94); }
 .site-demo-lead {
   margin: var(--site-heading-gap) 0 0;
   max-width: 640px;
-  color: rgba(255, 255, 255, .72);
+  color: rgba(255, 255, 255, .94);
   font-size: 16px;
   line-height: 1.75;
 }
@@ -8879,7 +8879,7 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   border-radius: 999px;
   padding: 8px 13px;
   background: rgba(255, 255, 255, .08);
-  color: rgba(255, 255, 255, .86);
+  color: rgba(255, 255, 255, .94);
   font: inherit;
   font-size: 13px;
   cursor: pointer;
@@ -9004,7 +9004,7 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   box-sizing: border-box;
 }
 .site-context-flow span {
-  color: rgba(255, 255, 255, .86);
+  color: rgba(255, 255, 255, .94);
   font-size: 11px;
 }
 .site-context-flow strong {
@@ -9015,17 +9015,17 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
 }
 .site-context-flow p {
   margin: 8px 0 0;
-  color: rgba(255, 255, 255, .86);
+  color: rgba(255, 255, 255, .94);
   font-size: 12px;
 }
 .site-context-flow > i {
-  color: rgba(255, 255, 255, .35);
+  color: rgba(255, 255, 255, .94);
   font-style: normal;
 }
 .site-space-options small {
   grid-column: 2;
   margin-top: 22px;
-  color: rgba(255, 255, 255, .86);
+  color: rgba(255, 255, 255, .94);
   font-size: 12px;
 }
 .site-ecosystem {
@@ -9052,13 +9052,13 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   display: grid;
   height: 200px;
   place-items: center;
-  color: rgba(255, 255, 255, .68);
+  color: rgba(255, 255, 255, .94);
   font-size: 90px;
   font-weight: 200;
 }
 .site-ecosystem-grid article > p {
   margin: 16px 0 8px;
-  color: rgba(255, 255, 255, .86);
+  color: rgba(255, 255, 255, .94);
   font-size: 12px;
 }
 .site-ecosystem-grid h3 {
@@ -9070,7 +9070,7 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
 .site-ecosystem-grid article > span {
   display: block;
   margin-top: 12px;
-  color: rgba(255, 255, 255, .86);
+  color: rgba(255, 255, 255, .94);
   font-size: 13px;
   line-height: 1.5;
 }
@@ -9132,7 +9132,7 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
 .site-footer-tagline,
 .site-footer-legal {
   margin: 0;
-  color: rgba(255, 255, 255, .86);
+  color: rgba(255, 255, 255, .94);
   font-size: 13px;
   line-height: 1.6;
 }
@@ -9157,7 +9157,7 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
 .site-footer-columns button {
   border: 0;
   background: transparent;
-  color: rgba(255, 255, 255, .86);
+  color: rgba(255, 255, 255, .94);
   padding: 0;
   font: inherit;
   font-size: 13px;
@@ -9320,7 +9320,7 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   max-width: 640px;
   font-size: 17px;
   line-height: 1.75;
-  color: rgba(255, 255, 255, .62);
+  color: rgba(255, 255, 255, .94);
 }
 
 /* 社会证明条 */
@@ -9345,7 +9345,7 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   background: transparent;
 }
 .site-proof-strip strong { font-size: 24px; font-weight: 600; letter-spacing: -.01em; }
-.site-proof-strip span { font-size: 13px; color: rgba(255, 255, 255, .86); }
+.site-proof-strip span { font-size: 13px; color: rgba(255, 255, 255, .94); }
 
 /* 首页核心能力三条（深色：与相邻区块保持深浅交替） */
 .site-capabilities {
@@ -9378,11 +9378,11 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   background: #202020;
 }
 .site-capability-grid h3 { margin: 0; font-size: 20px; font-weight: 600; }
-.site-capability-grid p { margin: 0; font-size: 15px; line-height: 1.7; color: rgba(255, 255, 255, .86); }
+.site-capability-grid p { margin: 0; font-size: 15px; line-height: 1.7; color: rgba(255, 255, 255, .94); }
 .site-capability-grid a {
   margin-top: auto;
   font-size: 14px;
-  color: rgba(255, 255, 255, .86);
+  color: rgba(255, 255, 255, .94);
   text-decoration: none;
 }
 .site-capability-grid a:hover { color: #fff; }
@@ -9415,7 +9415,7 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   background: #202020;
 }
 .site-voice-grid p { margin: 0 0 18px; font-size: 16px; line-height: 1.7; }
-.site-voice-grid cite { font-size: 13px; font-style: normal; color: rgba(255, 255, 255, .86); }
+.site-voice-grid cite { font-size: 13px; font-style: normal; color: rgba(255, 255, 255, .94); }
 
 /* 产品页：板块列表 */
 .site-block-list { max-width: var(--site-content); margin: 0 auto; padding: 24px var(--site-gutter) 96px; }
@@ -9427,11 +9427,11 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   border-top: 1px solid rgba(255, 255, 255, .1);
   scroll-margin-top: 120px;
 }
-.site-block-index { font-size: 14px; color: rgba(255, 255, 255, .86); }
+.site-block-index { font-size: 14px; color: rgba(255, 255, 255, .94); }
 .site-block h2 { margin: 0 0 8px; font-size: clamp(24px, 3vw, 34px); font-weight: 600; letter-spacing: -.02em; }
-.site-block-lead { margin: 0 0 18px; font-size: 17px; color: rgba(255, 255, 255, .78); }
+.site-block-lead { margin: 0 0 18px; font-size: 17px; color: rgba(255, 255, 255, .94); }
 .site-block ul { margin: 0; padding-left: 18px; }
-.site-block li { margin-bottom: 10px; font-size: 15px; line-height: 1.75; color: rgba(255, 255, 255, .86); }
+.site-block li { margin-bottom: 10px; font-size: 15px; line-height: 1.75; color: rgba(255, 255, 255, .94); }
 
 /* 上下文流程：用 span 包裹以便加箭头 */
 .site-context-item { display: contents; }
@@ -9473,8 +9473,8 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   background: rgba(255, 255, 255, .11);
   color: #fff;
 }
-.site-roi-tools label.is-on em { color: rgba(255, 255, 255, .72); }
-.site-roi-tools label em { margin-left: auto; font-style: normal; font-size: 13px; color: rgba(255, 255, 255, .86); }
+.site-roi-tools label.is-on em { color: rgba(255, 255, 255, .94); }
+.site-roi-tools label em { margin-left: auto; font-style: normal; font-size: 13px; color: rgba(255, 255, 255, .94); }
 .site-roi-tools input { accent-color: #fff; }
 .site-roi-result {
   display: flex;
@@ -9483,7 +9483,7 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   padding: 26px;
   background: rgba(255, 255, 255, .03);
 }
-.site-roi-seats { display: flex; align-items: center; gap: 10px; font-size: 14px; color: rgba(255, 255, 255, .86); }
+.site-roi-seats { display: flex; align-items: center; gap: 10px; font-size: 14px; color: rgba(255, 255, 255, .94); }
 .site-roi-seats input {
   width: 84px;
   padding: 8px 10px;
@@ -9495,9 +9495,9 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 }
 .site-roi-number { margin: 0; display: flex; align-items: baseline; gap: 6px; }
 .site-roi-number strong { font-size: 44px; font-weight: 600; letter-spacing: -.03em; }
-.site-roi-number span { font-size: 14px; color: rgba(255, 255, 255, .86); }
-.site-roi-total { margin: 0; font-size: 15px; color: rgba(255, 255, 255, .86); }
-.site-roi-note { margin: auto 0 0; font-size: 13px; line-height: 1.7; color: rgba(255, 255, 255, .86); }
+.site-roi-number span { font-size: 14px; color: rgba(255, 255, 255, .94); }
+.site-roi-total { margin: 0; font-size: 15px; color: rgba(255, 255, 255, .94); }
+.site-roi-note { margin: auto 0 0; font-size: 13px; line-height: 1.7; color: rgba(255, 255, 255, .94); }
 
 /* 定价页：套餐 */
 .site-plans { max-width: var(--site-content); margin: 0 auto; padding: 0 var(--site-gutter) 96px; }
@@ -9520,9 +9520,9 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 }
 .site-plans-grid h3 { margin: 0; font-size: 18px; font-weight: 600; }
 .site-plan-price { margin: 0; display: flex; flex-direction: column; gap: 4px; font-size: 32px; font-weight: 600; letter-spacing: -.02em; }
-.site-plan-price span { font-size: 13px; font-weight: 400; color: rgba(255, 255, 255, .86); }
+.site-plan-price span { font-size: 13px; font-weight: 400; color: rgba(255, 255, 255, .94); }
 .site-plans-grid ul { margin: 0; padding-left: 18px; flex: 1; }
-.site-plans-grid li { margin-bottom: 8px; font-size: 14px; line-height: 1.65; color: rgba(255, 255, 255, .86); }
+.site-plans-grid li { margin-bottom: 8px; font-size: 14px; line-height: 1.65; color: rgba(255, 255, 255, .94); }
 .site-plans-grid button {
   padding: 12px 18px;
   border: 1px solid rgba(255, 255, 255, .28);
@@ -9555,12 +9555,12 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   text-align: left;
   vertical-align: top;
 }
-.site-space-compare thead th { color: rgba(255, 255, 255, .86); font-weight: 500; font-size: 13px; }
+.site-space-compare thead th { color: rgba(255, 255, 255, .94); font-weight: 500; font-size: 13px; }
 .site-requirements th,
-.site-role-table th { width: 150px; color: rgba(255, 255, 255, .8); font-weight: 500; }
+.site-role-table th { width: 150px; color: rgba(255, 255, 255, .94); font-weight: 500; }
 .site-space-compare td,
 .site-requirements td,
-.site-role-table td { color: rgba(255, 255, 255, .6); }
+.site-role-table td { color: rgba(255, 255, 255, .94); }
 
 /* 下载页 */
 .site-platforms { max-width: var(--site-content); margin: 0 auto; padding: 8px var(--site-gutter) 72px; }
@@ -9574,9 +9574,9 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   background: #202020;
 }
 .site-platform-grid h2 { margin: 0; font-size: 20px; font-weight: 600; }
-.site-platform-detail { margin: 0; font-size: 13px; color: rgba(255, 255, 255, .86); }
+.site-platform-detail { margin: 0; font-size: 13px; color: rgba(255, 255, 255, .94); }
 .site-platform-grid ol { margin: 0; padding-left: 18px; flex: 1; }
-.site-platform-grid li { margin-bottom: 8px; font-size: 14px; line-height: 1.65; color: rgba(255, 255, 255, .86); }
+.site-platform-grid li { margin-bottom: 8px; font-size: 14px; line-height: 1.65; color: rgba(255, 255, 255, .94); }
 .site-platform-grid button {
   padding: 12px 18px;
   border: 1px solid rgba(255, 255, 255, .28);
@@ -9589,20 +9589,20 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 .site-platform-grid button:hover { background: #fff; color: #000; }
 .site-local-note { max-width: var(--site-content); margin: 0 auto; padding: 0 var(--site-gutter) 88px; }
 .site-local-note h2 { margin: 12px 0 16px; font-size: clamp(24px, 3vw, 34px); font-weight: 600; }
-.site-local-note p { font-size: 16px; line-height: 1.8; color: rgba(255, 255, 255, .6); }
+.site-local-note p { font-size: 16px; line-height: 1.8; color: rgba(255, 255, 255, .94); }
 
 /* 安全页 */
 .site-security-blocks { max-width: var(--site-content); margin: 0 auto; padding: 8px var(--site-gutter) 72px; }
 .site-security-blocks article { padding: 34px 0; border-top: 1px solid rgba(255, 255, 255, .1); }
 .site-security-blocks h2 { margin: 10px 0 12px; font-size: clamp(22px, 2.6vw, 30px); font-weight: 600; }
-.site-security-blocks p { margin: 0; max-width: 640px; font-size: 16px; line-height: 1.8; color: rgba(255, 255, 255, .6); }
+.site-security-blocks p { margin: 0; max-width: 640px; font-size: 16px; line-height: 1.8; color: rgba(255, 255, 255, .94); }
 
 /* ==========================================================================
    安全页：权限模型（数据视图 × 成员视图）
    ========================================================================== */
 .site-permission { max-width: var(--site-content); margin: 0 auto; padding: 8px var(--site-gutter) 88px; }
 .site-permission h2 { margin: 10px 0 18px; font-size: clamp(22px, 2.6vw, 30px); font-weight: 600; }
-.site-permission-lead { margin: 0 0 44px; max-width: 680px; font-size: 16px; line-height: 1.8; color: rgba(255, 255, 255, .6); }
+.site-permission-lead { margin: 0 0 44px; max-width: 680px; font-size: 16px; line-height: 1.8; color: rgba(255, 255, 255, .94); }
 .site-permission-lead strong { color: #fff; font-weight: 600; }
 
 /* 三步匹配：桌面横排，箭头落在中间 */
@@ -9621,9 +9621,9 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   border-radius: 20px;
   background: #202020;
 }
-.site-permission-step { font-size: 12px; letter-spacing: .06em; color: rgba(255, 255, 255, .86); }
+.site-permission-step { font-size: 12px; letter-spacing: .06em; color: rgba(255, 255, 255, .94); }
 .site-permission-term strong { font-size: 18px; font-weight: 600; }
-.site-permission-term p { margin: 0; font-size: 14px; line-height: 1.75; color: rgba(255, 255, 255, .86); }
+.site-permission-term p { margin: 0; font-size: 14px; line-height: 1.75; color: rgba(255, 255, 255, .94); }
 /* 运算符（× / =）骑在卡片之间的缝上 */
 .site-permission-term i {
   position: absolute;
@@ -9632,7 +9632,7 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   transform: translateY(-50%);
   font-style: normal;
   font-size: 15px;
-  color: rgba(255, 255, 255, .86);
+  color: rgba(255, 255, 255, .94);
 }
 
 .site-permission-points { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
@@ -9642,11 +9642,11 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   background: #202020;
 }
 .site-permission-points h3 { margin: 0 0 10px; font-size: 16px; font-weight: 600; }
-.site-permission-points p { margin: 0; font-size: 14px; line-height: 1.75; color: rgba(255, 255, 255, .86); }
+.site-permission-points p { margin: 0; font-size: 14px; line-height: 1.75; color: rgba(255, 255, 255, .94); }
 
 .site-role-table .is-biu th,
 .site-role-table .is-biu td { color: #fff; background: rgba(255, 255, 255, .035); }
-.site-permission-note { margin: 22px 0 0; max-width: 680px; font-size: 14px; line-height: 1.75; color: rgba(255, 255, 255, .86); }
+.site-permission-note { margin: 22px 0 0; max-width: 680px; font-size: 14px; line-height: 1.75; color: rgba(255, 255, 255, .94); }
 
 @media (max-width: 800px) {
   .site-permission-formula { grid-template-columns: 1fr; }
@@ -9680,7 +9680,7 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   transform: translateY(-2px);
 }
 .site-compare-card h3 { margin: 0; font-size: 18px; font-weight: 600; }
-.site-compare-card p { margin: 0; font-size: 14px; line-height: 1.7; color: rgba(255, 255, 255, .86); }
+.site-compare-card p { margin: 0; font-size: 14px; line-height: 1.7; color: rgba(255, 255, 255, .94); }
 
 /* 对比页：详情表 */
 .site-compare-body {
@@ -9712,9 +9712,9 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 .site-compare-table thead th,
 .site-compare-table tbody th,
 .site-compare-table tbody td { border-top: 1px solid rgba(255, 255, 255, .1); }
-.site-compare-table thead th { font-size: 13px; font-weight: 500; color: rgba(255, 255, 255, .86); border-top: 0; }
-.site-compare-table tbody th { color: rgba(255, 255, 255, .84); font-weight: 500; }
-.site-compare-table td { color: rgba(255, 255, 255, .58); }
+.site-compare-table thead th { font-size: 13px; font-weight: 500; color: rgba(255, 255, 255, .94); border-top: 0; }
+.site-compare-table tbody th { color: rgba(255, 255, 255, .94); font-weight: 500; }
+.site-compare-table td { color: rgba(255, 255, 255, .94); }
 .site-compare-table th.is-biu,
 .site-compare-table td.is-biu { color: #fff; background: rgba(255, 255, 255, .035); }
 
@@ -9734,14 +9734,14 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 }
 .site-compare-when article { padding: 26px 24px; border-radius: 18px; background: #202020; }
 .site-compare-when h2 { margin: 0 0 10px; font-size: 17px; font-weight: 600; }
-.site-compare-when p { margin: 0; font-size: 15px; line-height: 1.75; color: rgba(255, 255, 255, .86); }
+.site-compare-when p { margin: 0; font-size: 15px; line-height: 1.75; color: rgba(255, 255, 255, .94); }
 
 .site-compare-more { max-width: var(--site-content); margin: 0 auto; padding: 0 var(--site-gutter) 72px; }
 .site-compare-more h2 { margin: 0 0 22px; font-size: 20px; font-weight: 600; }
 
 /* 页脚法务行 */
-.site-footer-legal { font-size: 13px; color: rgba(255, 255, 255, .86); }
-.site-footer-legal a { color: rgba(255, 255, 255, .86); text-decoration: none; }
+.site-footer-legal { font-size: 13px; color: rgba(255, 255, 255, .94); }
+.site-footer-legal a { color: rgba(255, 255, 255, .94); text-decoration: none; }
 .site-footer-legal a:hover { color: #fff; }
 
 .sr-only {
@@ -9777,7 +9777,7 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   text-align: center;
   font-size: 13px;
 }
-.auth-site-foot a { color: rgba(255, 255, 255, .5); text-decoration: none; }
+.auth-site-foot a { color: rgba(255, 255, 255, .94); text-decoration: none; }
 .auth-site-foot a:hover { color: #fff; }
 
 /* 品牌区 */
@@ -9799,7 +9799,7 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   font-size: 17px;
 }
 .auth-brand-name { font-size: 16px; font-weight: 600; letter-spacing: .01em; }
-.auth-brand-tag { font-size: 12px; color: rgba(255, 255, 255, .86); }
+.auth-brand-tag { font-size: 12px; color: rgba(255, 255, 255, .94); }
 
 /* 密码框 + 显示切换 */
 .auth-field-wrap { position: relative; display: block; }
@@ -9812,7 +9812,7 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   border: 0;
   border-radius: 7px;
   background: transparent;
-  color: rgba(255, 255, 255, .86);
+  color: rgba(255, 255, 255, .94);
   font-size: 12px;
   cursor: pointer;
 }
@@ -9825,7 +9825,7 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   gap: 8px;
   margin: -4px 0 0;
   font-size: 12px;
-  color: rgba(255, 255, 255, .86);
+  color: rgba(255, 255, 255, .94);
 }
 .auth-strength-bar {
   width: 40px;
@@ -9840,7 +9840,7 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 /* 官网深色主题下的表单样式覆写（原 auth-* 是浅色登录页） */
 .auth-site .auth-panel { width: 100%; gap: 14px; }
 .auth-site .auth-panel h2 { margin: 0 0 4px; font-size: 30px; color: #fff; }
-.auth-site .auth-label { font-size: 13px; color: rgba(255, 255, 255, .86); }
+.auth-site .auth-label { font-size: 13px; color: rgba(255, 255, 255, .94); }
 .auth-site .auth-field {
   width: 100%;
   padding: 13px 14px;
@@ -9856,7 +9856,7 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   border-color: rgba(255, 255, 255, .5);
   background: rgba(255, 255, 255, .06);
 }
-.auth-site .auth-field::placeholder { color: rgba(255, 255, 255, .3); }
+.auth-site .auth-field::placeholder { color: rgba(255, 255, 255, .7); }
 .auth-site .auth-go {
   margin-top: 6px;
   padding: 13px 18px;
@@ -9874,7 +9874,7 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 .auth-site .auth-back {
   border: 0;
   background: transparent;
-  color: rgba(255, 255, 255, .86);
+  color: rgba(255, 255, 255, .94);
   font-size: 13px;
   font-family: inherit;
   cursor: pointer;
@@ -9890,7 +9890,7 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   color: #ff9b9b;
   font-size: 13px;
 }
-.auth-site .auth-lead { margin: 0; font-size: 13px; color: rgba(255, 255, 255, .86); }
+.auth-site .auth-lead { margin: 0; font-size: 13px; color: rgba(255, 255, 255, .94); }
 
 /* 移动端汉堡菜单（P0-12） */
 .site-menu-toggle {
@@ -9961,15 +9961,15 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 }
 .site-usecase-card:hover { background: #2a2a2a; transform: translateY(-2px); }
 .site-usecase-card h2 { margin: 0; font-size: 18px; font-weight: 600; }
-.site-usecase-card p { margin: 0; flex: 1; font-size: 14px; line-height: 1.7; color: rgba(255, 255, 255, .86); }
-.site-usecase-card small { font-size: 12px; letter-spacing: .02em; color: rgba(255, 255, 255, .86); }
+.site-usecase-card p { margin: 0; flex: 1; font-size: 14px; line-height: 1.7; color: rgba(255, 255, 255, .94); }
+.site-usecase-card small { font-size: 12px; letter-spacing: .02em; color: rgba(255, 255, 255, .94); }
 
 /* 用例页：交付物行 */
 .site-usecase-output {
   margin: 14px 0 0;
   font-size: 13px;
   letter-spacing: .02em;
-  color: rgba(255, 255, 255, .86);
+  color: rgba(255, 255, 255, .94);
 }
 
 /* 用例页：现在的麻烦 */
@@ -9983,13 +9983,13 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   background: #202020;
   font-size: 15px;
   line-height: 1.7;
-  color: rgba(255, 255, 255, .86);
+  color: rgba(255, 255, 255, .94);
 }
 .site-usecase-pain li::before {
   content: '✕';
   position: absolute;
   left: 22px;
-  color: rgba(255, 255, 255, .86);
+  color: rgba(255, 255, 255, .94);
   font-size: 13px;
 }
 
@@ -10003,7 +10003,7 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 }
 .site-usecase-how-grid article { padding: 26px 24px; border-radius: 18px; background: #202020; }
 .site-usecase-how-grid h3 { margin: 0 0 10px; font-size: 17px; font-weight: 600; }
-.site-usecase-how-grid p { margin: 0; font-size: 15px; line-height: 1.75; color: rgba(255, 255, 255, .86); }
+.site-usecase-how-grid p { margin: 0; font-size: 15px; line-height: 1.75; color: rgba(255, 255, 255, .94); }
 
 /* 用例页：其他场景 */
 .site-usecase-more { max-width: var(--site-content); margin: 0 auto; padding: 0 var(--site-gutter) 72px; }
@@ -10015,7 +10015,7 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   border-radius: 999px;
   font-size: 14px;
   text-decoration: none;
-  color: rgba(255, 255, 255, .86);
+  color: rgba(255, 255, 255, .94);
   transition: border-color .18s ease, color .18s ease;
 }
 .site-usecase-more-links a:hover { background: rgba(255, 255, 255, .09); color: #fff; }
@@ -10051,9 +10051,9 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 }
 .site-brand-grid article { padding: 24px; border-radius: 18px; background: #202020; }
 .site-brand-grid h3 { margin: 0 0 10px; font-size: 16px; font-weight: 600; }
-.site-brand-grid p { margin: 0; font-size: 14px; line-height: 1.75; color: rgba(255, 255, 255, .86); }
+.site-brand-grid p { margin: 0; font-size: 14px; line-height: 1.75; color: rgba(255, 255, 255, .94); }
 
-.site-brand-note { margin: 0 0 24px; font-size: 15px; color: rgba(255, 255, 255, .86); }
+.site-brand-note { margin: 0 0 24px; font-size: 15px; color: rgba(255, 255, 255, .94); }
 
 /* 调节器：左侧预览，右侧控件 */
 .brand-studio {
@@ -10096,7 +10096,7 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   padding: 0 8px;
   font-size: 13px;
   font-weight: 500;
-  color: rgba(255, 255, 255, .86);
+  color: rgba(255, 255, 255, .94);
 }
 .brand-row {
   display: grid;
@@ -10105,7 +10105,7 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   gap: 12px;
   padding: 8px 0;
 }
-.brand-row-label { font-size: 14px; color: rgba(255, 255, 255, .86); }
+.brand-row-label { font-size: 14px; color: rgba(255, 255, 255, .94); }
 .brand-row input[type="color"] {
   width: 44px;
   height: 28px;
@@ -10126,8 +10126,8 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   font: inherit;
   font-size: 13px;
 }
-.brand-value { font-size: 13px; color: rgba(255, 255, 255, .86); text-align: right; }
-.brand-check { display: flex; align-items: center; gap: 10px; padding: 8px 0; font-size: 14px; color: rgba(255, 255, 255, .86); cursor: pointer; }
+.brand-value { font-size: 13px; color: rgba(255, 255, 255, .94); text-align: right; }
+.brand-check { display: flex; align-items: center; gap: 10px; padding: 8px 0; font-size: 14px; color: rgba(255, 255, 255, .94); cursor: pointer; }
 
 .brand-presets { display: flex; flex-wrap: wrap; gap: 10px; }
 .brand-preset {
@@ -10147,9 +10147,9 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 .brand-preset-chip { width: 16px; height: 16px; border-radius: 5px; }
 
 .site-brand-rules ul { margin: 0; padding-left: 20px; display: grid; gap: 10px; }
-.site-brand-rules li { font-size: 14px; line-height: 1.75; color: rgba(255, 255, 255, .86); }
+.site-brand-rules li { font-size: 14px; line-height: 1.75; color: rgba(255, 255, 255, .94); }
 .site-brand-back { margin: 28px 0 0; font-size: 14px; }
-.site-brand-back a { color: rgba(255, 255, 255, .72); text-decoration: none; }
+.site-brand-back a { color: rgba(255, 255, 255, .94); text-decoration: none; }
 .site-brand-back a:hover { color: #fff; }
 
 /* 品牌页：三块 = B/I/U 的说明 */
@@ -10180,7 +10180,7 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   font-weight: 600;
   line-height: 1;
   letter-spacing: -0.04em;
-  color: rgba(255, 255, 255, .34);
+  color: rgba(255, 255, 255, .94);
 }
 .site-brand-facet-grid h3 {
   display: flex;
@@ -10193,11 +10193,11 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 .site-brand-facet-where {
   font-size: 12px;
   font-weight: 500;
-  color: rgba(255, 255, 255, .86);
+  color: rgba(255, 255, 255, .94);
 }
 .site-brand-facet-grid p {
   margin: 0;
   font-size: 14px;
   line-height: 1.75;
-  color: rgba(255, 255, 255, .86);
+  color: rgba(255, 255, 255, .94);
 }
