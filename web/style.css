@@ -2043,6 +2043,11 @@ html:not(.dark) .shell-workspace-menu-item.is-active .shell-workspace-menu-icon 
   font-family: "SF Pro Display", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+.auth-gate .auth-panel,
+.auth-gate .auth-status {
+  position: relative;
+  z-index: 1;
+}
 .auth-panel {
   width: min(320px, calc(100% - 48px));
   display: flex;
@@ -9774,23 +9779,28 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 /* ==========================================================================
    官网登录 / 注册独立页（P0-14）
    ========================================================================== */
-.auth-site {
+.site-auth {
   display: grid;
   place-items: center;
+  min-height: calc(100dvh - 64px);
+  padding: 112px var(--site-gutter) 72px;
 }
-.auth-site-main {
+.site-auth .auth-panel {
+  width: min(360px, 100%);
+}
+.site-auth-main {
   position: relative;
   z-index: 1;
   width: min(360px, calc(100% - 48px));
   padding: 96px 0 64px;
 }
-.auth-site-foot {
+.site-auth-foot {
   margin: 28px 0 0;
   text-align: center;
   font-size: 13px;
 }
-.auth-site-foot a { color: rgba(255, 255, 255, .5); text-decoration: none; }
-.auth-site-foot a:hover { color: #fff; }
+.site-auth-foot a { color: rgba(255, 255, 255, .5); text-decoration: none; }
+.site-auth-foot a:hover { color: #fff; }
 
 /* 品牌区 */
 .auth-brand {
@@ -9850,10 +9860,10 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 .auth-strength[data-level="3"] .auth-strength-bar { background: #4bb96f; }
 
 /* 官网深色主题下的表单样式覆写（原 auth-* 是浅色登录页） */
-.auth-site .auth-panel { width: 100%; gap: 14px; }
-.auth-site .auth-panel h2 { margin: 0 0 4px; font-size: 30px; color: #fff; }
-.auth-site .auth-label { font-size: 13px; color: rgba(255, 255, 255, .55); }
-.auth-site .auth-field {
+.site-auth .auth-panel { width: 100%; gap: 14px; }
+.site-auth .auth-panel h2 { margin: 0 0 4px; font-size: 30px; color: #fff; }
+.site-auth .auth-label { font-size: 13px; color: rgba(255, 255, 255, .55); }
+.site-auth .auth-field {
   width: 100%;
   padding: 13px 14px;
   border: 1px solid rgba(255, 255, 255, .16);
@@ -9863,13 +9873,13 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   font-size: 15px;
   font-family: inherit;
 }
-.auth-site .auth-field:focus {
+.site-auth .auth-field:focus {
   outline: none;
   border-color: rgba(255, 255, 255, .5);
   background: rgba(255, 255, 255, .06);
 }
-.auth-site .auth-field::placeholder { color: rgba(255, 255, 255, .3); }
-.auth-site .auth-go {
+.site-auth .auth-field::placeholder { color: rgba(255, 255, 255, .3); }
+.site-auth .auth-go {
   margin-top: 6px;
   padding: 13px 18px;
   border: 0;
@@ -9881,9 +9891,9 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   font-family: inherit;
   cursor: pointer;
 }
-.auth-site .auth-go:disabled { opacity: .38; cursor: default; }
-.auth-site .auth-switch,
-.auth-site .auth-back {
+.site-auth .auth-go:disabled { opacity: .38; cursor: default; }
+.site-auth .auth-switch,
+.site-auth .auth-back {
   border: 0;
   background: transparent;
   color: rgba(255, 255, 255, .5);
@@ -9892,9 +9902,9 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   cursor: pointer;
   padding: 6px 8px;
 }
-.auth-site .auth-switch:hover,
-.auth-site .auth-back:hover { color: #fff; }
-.auth-site .auth-error {
+.site-auth .auth-switch:hover,
+.site-auth .auth-back:hover { color: #fff; }
+.site-auth .auth-error {
   margin: 0;
   padding: 10px 12px;
   border-radius: 10px;
@@ -9902,7 +9912,7 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   color: #ff9b9b;
   font-size: 13px;
 }
-.auth-site .auth-lead { margin: 0; font-size: 13px; color: rgba(255, 255, 255, .5); }
+.site-auth .auth-lead { margin: 0; font-size: 13px; color: rgba(255, 255, 255, .5); }
 
 /* 移动端汉堡菜单（P0-12） */
 .site-menu-toggle {

@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { Link } from 'react-router-dom'
-import { BrandPrint, useBrandConfig } from './brand-mark.tsx'
+import { SiteChrome, type SiteAction } from './site-chrome.tsx'
 import { usePageMeta } from './use-page-meta.ts'
 
 export type AuthMode = 'login' | 'register'
@@ -198,11 +197,17 @@ export function MarketingAuth({
   onModeChange,
   onSubmit,
   onBack,
+  onLogin,
+  onStart,
+  workspaceInvite,
 }: {
   mode: AuthMode
   onModeChange: (mode: AuthMode) => void
   onSubmit: (credentials: { email: string; password: string }) => Promise<void>
   onBack: () => void
+  onLogin: SiteAction
+  onStart: SiteAction
+  workspaceInvite?: boolean
 }) {
   usePageMeta({
     title: mode === 'register' ? '注册' : '登录',
@@ -213,18 +218,17 @@ export function MarketingAuth({
     path: mode === 'register' ? '/signup' : '/login',
   })
 
-  const brand = useBrandConfig()
   return (
-    <div className="site auth-site">
-      <div className="site-print" aria-hidden>
-        <BrandPrint config={brand} />
-      </div>
-      <main className="auth-site-main">
-        <AuthPanel mode={mode} onModeChange={onModeChange} onSubmit={onSubmit} onBack={onBack} />
-        <p className="auth-site-foot">
-          <Link to="/">← 返回官网</Link>
-        </p>
-      </main>
-    </div>
+    <SiteChrome onLogin={onLogin} onStart={onStart}>
+      <section className="site-auth">
+        <AuthPanel
+          mode={mode}
+          onModeChange={onModeChange}
+          onSubmit={onSubmit}
+          onBack={onBack}
+          workspaceInvite={workspaceInvite}
+        />
+      </section>
+    </SiteChrome>
   )
 }

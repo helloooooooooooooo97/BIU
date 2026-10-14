@@ -20,6 +20,8 @@ export type MarketingSiteProps = {
     mode: AuthMode
     onModeChange: (mode: AuthMode) => void
     onSubmit: (credentials: { email: string; password: string }) => Promise<void>
+    onBack?: SiteAction
+    workspaceInvite?: boolean
   }
 }
 
@@ -105,7 +107,10 @@ export function MarketingSite({ onLogin, onStart, auth }: MarketingSiteProps) {
       mode={auth.mode}
       onModeChange={auth.onModeChange}
       onSubmit={auth.onSubmit}
-      onBack={onLogin}
+      onBack={auth.onBack ?? onLogin}
+      onLogin={onLogin}
+      onStart={onStart}
+      workspaceInvite={auth.workspaceInvite}
     />
   ) : null
   return (
@@ -117,6 +122,7 @@ export function MarketingSite({ onLogin, onStart, auth }: MarketingSiteProps) {
       <Route path="/security" element={<MarketingSecurity onLogin={onLogin} onStart={onStart} />} />
       <Route path="/compare" element={<MarketingCompareIndex onLogin={onLogin} onStart={onStart} />} />
       <Route path="/login" element={authElement} />
+      <Route path="/register" element={authElement} />
       <Route path="/signup" element={authElement} />
       <Route path="/compare/:slug" element={<MarketingCompareDetail onLogin={onLogin} onStart={onStart} />} />
       <Route path="/brand" element={<MarketingBrand onLogin={onLogin} onStart={onStart} />} />
