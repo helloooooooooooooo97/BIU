@@ -8472,6 +8472,31 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   transform: translate3d(0, var(--print-shift, 0px), 0);
   will-change: transform;
 }
+/* 鼠标聚光：彩色那一层叠在灰色底层上，只在鼠标附近露出。
+   衰减按 smoothstep 多点取样，光圈边缘看不出一道环。 */
+.site-print-spot {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity .4s ease;
+  --spot-r: 220px;
+  --spot-mask: radial-gradient(circle var(--spot-r) at var(--spot-x, 50%) var(--spot-y, 50%),
+    #000 0,
+    rgba(0, 0, 0, .9) 25%,
+    rgba(0, 0, 0, .5) 50%,
+    rgba(0, 0, 0, .1) 75%,
+    transparent 100%);
+  -webkit-mask-image: var(--spot-mask);
+  mask-image: var(--spot-mask);
+}
+.site-print[data-spot="on"] .site-print-spot { opacity: 1; }
+.site-print-spot .site-print-sheet { opacity: .9; }
+@media (pointer: coarse) {
+  .site-print-spot { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .site-print-spot { transition: none; }
+}
 .site > main {
   position: relative;
   z-index: 1;

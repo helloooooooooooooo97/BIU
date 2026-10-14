@@ -169,6 +169,43 @@ function usePrintParallax(rootRef: RefObject<HTMLElement | null>, printRef: RefO
   }, [rootRef, printRef])
 }
 
+/**
+ * 鼠标聚光：平时印花是同色系的灰，鼠标附近那一圈露出真实三色。
+ * 只认鼠标（触屏没有悬停），坐标写进 CSS 变量，由彩色层的径向蒙版跟随。
+ */
+function usePrintSpotlight(rootRef: RefObject<HTMLElement | null>, printRef: RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    const root = rootRef.current
+    const print = printRef.current
+    if (!root || !print) return
+    let frame = 0
+    let x = 0
+    let y = 0
+    const apply = () => {
+      frame = 0
+      print.style.setProperty('--spot-x', `${x}px`)
+      print.style.setProperty('--spot-y', `${y}px`)
+    }
+    const onMove = (event: PointerEvent) => {
+      if (event.pointerType && event.pointerType !== 'mouse') return
+      x = event.clientX
+      y = event.clientY
+      print.dataset.spot = 'on'
+      if (!frame) frame = requestAnimationFrame(apply)
+    }
+    const onLeave = () => {
+      delete print.dataset.spot
+    }
+    root.addEventListener('pointermove', onMove, { passive: true })
+    root.addEventListener('pointerleave', onLeave)
+    return () => {
+      root.removeEventListener('pointermove', onMove)
+      root.removeEventListener('pointerleave', onLeave)
+      if (frame) cancelAnimationFrame(frame)
+    }
+  }, [rootRef, printRef])
+}
+
 /** 站内页共用的外壳：顶部导航 + 正文 + 页脚。 */
 export function SiteChrome({ children, onLogin, onStart }: SiteChromeProps) {
   // .site 是页面唯一的滚动容器（见 style.css）。
@@ -177,6 +214,7 @@ export function SiteChrome({ children, onLogin, onStart }: SiteChromeProps) {
   const ref = useReveal<HTMLDivElement>()
   const printRef = useRef<HTMLDivElement>(null)
   usePrintParallax(ref, printRef)
+  usePrintSpotlight(ref, printRef)
   const brand = useBrandConfig()
   return (
     <div className="site" ref={ref}>
@@ -187,7 +225,10 @@ export function SiteChrome({ children, onLogin, onStart }: SiteChromeProps) {
         ref={printRef}
         style={{ ['--print-tile' as string]: `${BRAND_PRINT_TILE}px` }}
       >
-        <BrandPrint config={brand} />
+        <BrandPrint config={brand} tone="mono" layer="base" />
+        <div className="site-print-spot" data-testid="site-print-spot">
+          <BrandPrint config={brand} fade={false} layer="spot" />
+        </div>
       </div>
       <SiteHeader onLogin={onLogin} onStart={onStart} />
       <main>{children}</main>
