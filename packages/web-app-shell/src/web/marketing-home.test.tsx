@@ -32,8 +32,6 @@ function renderSite(initialPath = '/') {
   return { login: () => login, start: () => start }
 }
 
-const GITHUB_CACHE = 'biu.site.github.v1'
-
 test('landing page embeds real empty product surfaces and opens account actions', () => {
   let login = 0
   let start = 0
@@ -877,12 +875,14 @@ test('下载页：按系统给主按钮，命令一键复制', async () => {
   assert.ok(screen.getAllByRole('button', { name: '复制命令' }).length >= 2)
   cleanup()
 
-  sessionStorage.setItem(GITHUB_CACHE, JSON.stringify({ at: Date.now(), stats: { stars: 12, release: { tag: 'v1.0.0', publishedAt: '', url: '', body: '', assets: [] } } }))
+  const { GITHUB_CACHE_KEY } = await import('./marketing-site/github.ts')
+  // 过期很久的缓存也照样显示：限流时星标数不能消失
+  localStorage.setItem(GITHUB_CACHE_KEY, JSON.stringify({ at: 0, stats: { stars: 12, release: { tag: 'v1.0.0', publishedAt: '', url: '', body: '', assets: [] } } }))
   renderSite('/download')
   const meta = document.querySelector('.site-download-meta')!
   assert.equal(meta.textContent, '最新版本 v1.0.0 · GitHub ★ 12')
   assert.ok(meta.querySelector('.site-gh-star'), '下载页的星标也用黄色')
-  sessionStorage.removeItem(GITHUB_CACHE)
+  localStorage.removeItem(GITHUB_CACHE_KEY)
   cleanup()
 })
 
