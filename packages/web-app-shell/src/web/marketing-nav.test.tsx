@@ -23,7 +23,11 @@ function navItems(): HTMLElement[] {
 test('导航项高度一致：各项都是裸链接，没有包装层', () => {
   renderHome()
   const items = navItems()
-  assert.equal(items.length, 7, '产品 / 场景 / 定价 / 安全 / 对比 / 博客 / 品牌')
+  assert.deepEqual(
+    items.map((item) => item.textContent),
+    ['产品', '场景', '对比', '安全', '博客', '品牌', '定价'],
+    '是什么 → 用在哪 → 和别人有什么不同 → 放心吗 → 延伸阅读 → 认识品牌 → 多少钱',
+  )
 
   // 「产品」不再有二级菜单，所以也不需要 wrapper —— 五项是同一种节点。
   for (const item of items) {
