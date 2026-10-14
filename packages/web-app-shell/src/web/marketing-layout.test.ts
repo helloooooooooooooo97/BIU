@@ -170,12 +170,18 @@ test('窄屏：所有区块统一收到 20px', () => {
   assert.deepEqual(missing, [], `这些区块没有窄屏留白覆盖，会和邻居错位：${missing.join(', ')}`)
 })
 
-test('页脚：列区是 4 列（产品/资源/公司/开始并排，不换行）', () => {
+test('长图文件名跟路径走', async () => {
+  const { pageShotName } = await import('./marketing-site/page-shot.ts')
+  assert.equal(pageShotName('/'), 'biu-home.png')
+  assert.equal(pageShotName('/blog/saas-to-paas'), 'biu-blog-saas-to-paas.png')
+})
+
+test('页脚：列区是 5 列（产品/开源/了解/分享/开始并排，不换行）', () => {
   const cols = [...css.matchAll(/\.site-footer-columns\s*\{([^}]*)\}/g)].map((m) => m[1])
   const base0 = cols[0] ?? ''
   const m = base0.match(/grid-template-columns\s*:\s*repeat\((\d+)/)
   assert.ok(m, '未找到列区列数定义')
-  assert.equal(Number(m[1]), 4, '「开始」必须和前三列并排，不能单独换行')
+  assert.equal(Number(m[1]), 5, '「开始」必须和前面几列并排，不能单独换行')
 })
 
 test('页脚：内容走全站容器基准（不是硬编码 padding）', () => {
@@ -190,7 +196,7 @@ test('页脚：内容走全站容器基准（不是硬编码 padding）', () => 
   )
 })
 
-test('页脚：四列在上，底部行（BIU 左 / 法务右）在下', () => {
+test('页脚：列区在上，底部行（BIU 左 / 法务右）在下', () => {
   const tsx = readFileSync(
     resolve(process.cwd(), 'packages/web-app-shell/src/web/marketing-site/site-chrome.tsx'),
     'utf8',
