@@ -33,3 +33,4 @@ web/**/*.js.map
 
 # 页面数据已迁入 .biu；保留 .page/ 以免旧工作区误提交
 .page/
+dist-site/

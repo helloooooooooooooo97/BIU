@@ -1,6 +1,6 @@
 import { Route, Routes, useLocation } from 'react-router-dom'
 import type { SiteAction } from './site-chrome.tsx'
-import { SiteChrome, SiteFinalCta } from './site-chrome.tsx'
+import { SiteChrome, SiteFinalCta, SiteLoginContext } from './site-chrome.tsx'
 import { MarketingHome } from './home.tsx'
 import { MarketingProduct } from './product.tsx'
 import { MarketingPricing } from './pricing.tsx'
@@ -24,6 +24,8 @@ export type MarketingSiteProps = {
     onSubmit: (credentials: { email: string; password: string }) => Promise<void>
     workspaceInvite?: boolean
   }
+  /** false：独立部署的静态官网，没有登录入口和登录页。 */
+  login?: boolean
 }
 
 type PlaceholderProps = {
@@ -81,7 +83,7 @@ const PLACEHOLDERS: Record<string, { label: string; title: string; body: string 
  * 官网路由。
  * 挂在 BrowserRouter 内，登录态判断由外层 Shell 负责 —— 这里只管路径。
  */
-export function MarketingSite({ onLogin, onStart, auth }: MarketingSiteProps) {
+export function MarketingSite({ onLogin, onStart, auth, login = true }: MarketingSiteProps) {
   const authElement = auth ? (
     <MarketingAuth
       mode={auth.mode}
@@ -93,6 +95,7 @@ export function MarketingSite({ onLogin, onStart, auth }: MarketingSiteProps) {
     />
   ) : null
   return (
+    <SiteLoginContext.Provider value={login}>
     <Routes>
       <Route path="/" element={<MarketingHome onLogin={onLogin} onStart={onStart} />} />
       <Route path="/product" element={<MarketingProduct onLogin={onLogin} onStart={onStart} />} />
@@ -100,9 +103,13 @@ export function MarketingSite({ onLogin, onStart, auth }: MarketingSiteProps) {
       <Route path="/download" element={<MarketingDownload onLogin={onLogin} onStart={onStart} />} />
       <Route path="/security" element={<MarketingSecurity onLogin={onLogin} onStart={onStart} />} />
       <Route path="/compare" element={<MarketingCompareIndex onLogin={onLogin} onStart={onStart} />} />
-      <Route path="/login" element={authElement} />
-      <Route path="/register" element={authElement} />
-      <Route path="/signup" element={authElement} />
+      {login ? (
+        <>
+          <Route path="/login" element={authElement} />
+          <Route path="/register" element={authElement} />
+          <Route path="/signup" element={authElement} />
+        </>
+      ) : null}
       <Route path="/compare/:slug" element={<MarketingCompareDetail onLogin={onLogin} onStart={onStart} />} />
       <Route path="/blog" element={<MarketingBlog onLogin={onLogin} onStart={onStart} />} />
       <Route path="/blog/:slug" element={<MarketingBlogPost onLogin={onLogin} onStart={onStart} />} />
@@ -131,6 +138,7 @@ export function MarketingSite({ onLogin, onStart, auth }: MarketingSiteProps) {
         }
       />
     </Routes>
+    </SiteLoginContext.Provider>
   )
 }
 

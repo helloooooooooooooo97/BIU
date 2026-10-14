@@ -986,3 +986,19 @@ test('常见问题：首页、产品、场景子页、对比、安全、定价�
     cleanup()
   }
 })
+
+test('独立部署的官网：导航和页脚都没有登录，/login 落到 404', () => {
+  const standalone = (path: string) => render(
+    <MemoryRouter initialEntries={[path]}>
+      <MarketingSite login={false} onLogin={() => {}} onStart={() => {}} />
+    </MemoryRouter>,
+  )
+  standalone('/')
+  assert.equal(screen.queryByTestId('site-login'), null)
+  assert.equal(screen.queryAllByRole('button', { name: '登录' }).length, 0, '页脚也不放登录')
+  assert.ok(screen.getByTestId('site-start'), '下载按钮还在')
+  cleanup()
+  standalone('/login')
+  assert.equal(screen.getByRole('heading', { level: 1 }).textContent, '这一页还没建')
+  cleanup()
+})
