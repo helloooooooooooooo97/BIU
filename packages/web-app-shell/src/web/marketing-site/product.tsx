@@ -1,4 +1,4 @@
-import { SiteChrome, type SiteAction } from './site-chrome.tsx'
+import { SiteChrome, SiteFinalCta, type SiteAction } from './site-chrome.tsx'
 import { usePageMeta } from './use-page-meta.ts'
 
 type Block = {
@@ -11,58 +11,58 @@ type Block = {
 
 const BLOCKS: Block[] = [
   {
-    id: 'file-system',
-    index: '01',
-    title: 'File System',
-    lead: '一切皆可寻址。',
-    points: [
-      '页面、表格、任务、技能、插件，都是同一个空间里带路径的对象。',
-      '人用界面操作，智能体用同一套接口读写 —— 没有第二份副本要同步。',
-      '底层是真数据：可以用接口读，也可以直接读盘。',
-    ],
-  },
-  {
-    id: 'agent',
-    index: '02',
-    title: 'Agent 工作台',
-    lead: '人和智能体操作同一份数据。',
-    points: [
-      '上下文不是猜出来的：智能体读得到你在页面上留下的改动。',
-      '产出会沉淀成页面、表、技能，下一轮直接接着用。',
-      '智能体本身也是数据，可以被创建、复制、分享。',
-    ],
-  },
-  {
-    id: 'tasks',
-    index: '03',
-    title: '任务看板',
-    lead: '多智能体靠看板协作，不靠群聊。',
-    points: [
-      '任务卡带 assignee、dependsOn，依赖关系就是一张图。',
-      '上游完成后可以自动触发下游，状态机统一：idle → pending → delivered → done。',
-      '执行轨迹和任务卡在同一个面板里对照查看。',
-    ],
-  },
-  {
     id: 'pages',
-    index: '04',
-    title: '页面与数据库',
-    lead: '富文本和结构化数据在同一个空间。',
+    index: '01',
+    title: '页面',
+    lead: '页面是容器，用来把软件组合起来。',
     points: [
-      '页面正文、附件、表记录共享同一条寻址体系。',
-      '页面里可以嵌组件块，块来自插件，可以聚合、复用。',
-      '维度（facet）不需要改代码：加一个维度就是写一条记录，零迁移。',
+      '一页里可以写正文，也可以插入任意多个插件块：一张表、一块画板、一个代码练习、一段视频剪辑，各管一块。',
+      '页面上的属性就是这些插件共同的运行环境 —— 同一个插件放进不同页面，读到的是各自的配置和数据。',
+      '多个块读写同一份数据，所以它们是一套服务，而不是几个互不相干的嵌入。',
     ],
   },
   {
     id: 'plugins',
-    index: '05',
-    title: '插件系统',
-    lead: '一切即插件。',
+    index: '02',
+    title: '插件',
+    lead: '页面里的每一块，都是一个插件提供的软件。',
     points: [
-      '新能力就是新插件：沙箱里写代码，打包，挂载。',
-      '插件和数据是对等的一等公民 —— 所以内容能带着依赖一起走。',
-      '人和智能体都能创建插件，扩展不再专属开发者。',
+      '块的类型不是平台写死的，装一个插件就多一种块。',
+      '插件先在沙箱里写、在页面里试，满意了再打包，人和智能体都能做。',
+      '每个块本身也是一条数据，可以被查询、复制、复用到别的页面。',
+    ],
+  },
+  {
+    id: 'share',
+    index: '03',
+    title: '分享',
+    lead: '交出去的是一页能用的软件。',
+    points: [
+      '分享页面时，正文、附件和它用到的插件源码一起打包。',
+      '对方打开就能用，不需要再装一遍工具、再搭一遍环境。',
+      '适合把一套做好的服务交给客户、学生或同事。',
+    ],
+  },
+  {
+    id: 'agent',
+    index: '04',
+    title: '智能体',
+    lead: '和你在同一个工作区里干活。',
+    points: [
+      '智能体读的就是你的页面和表格，不用复制粘贴资料给它。',
+      '它的产出直接写成页面、表格、任务，下一轮接着用。',
+      '缺工具时，它可以自己写一个插件挂进页面。',
+    ],
+  },
+  {
+    id: 'tasks',
+    index: '05',
+    title: '任务看板',
+    lead: '多个智能体靠看板分工，不靠群聊。',
+    points: [
+      '每张任务卡写清楚负责人和依赖，依赖关系就是一张图。',
+      '上游完成后自动交给下游，执行轨迹和任务卡并排查看。',
+      '人也可以随时接手、改派或验收。',
     ],
   },
   {
@@ -71,30 +71,30 @@ const BLOCKS: Block[] = [
     title: '本机与云端',
     lead: '两种空间，创建时由你决定。',
     points: [
-      '本机空间：数据保存在当前设备，离线可用，边界清晰。',
+      '本机空间：数据存在你自己的电脑上，离线可用；模型用你自己的密钥。',
       '云端空间：多设备访问、成员权限、在线协作。',
-      '不是「先本地再同步」，是两种各自成立的空间形态。',
+      '数据是透明的：既能通过接口读写，也能直接在磁盘上找到。',
     ],
   },
 ]
 
-const CONTEXT_FLOW = [
-  { step: '01', title: '页面', body: '背景、资料与想法' },
-  { step: '02', title: '数据', body: '任务、关系与状态' },
-  { step: '03', title: '会话', body: '讨论、执行与结果' },
-  { step: '04', title: '空间', body: '持续积累的上下文' },
+const PAGE_FLOW = [
+  { step: '01', title: '写正文', body: '背景、说明与资料' },
+  { step: '02', title: '放插件块', body: '表格、画板、练习、剪辑' },
+  { step: '03', title: '设页面属性', body: '插件共同的运行环境' },
+  { step: '04', title: '分享', body: '对方拿到能用的一页' },
 ] as const
 
 const ECOSYSTEM = [
-  { symbol: '＋', name: 'Plugins', title: '为 BIU 增加新的产品能力。', body: '页面模块、工作台工具和领域功能都可以成为插件。' },
-  { symbol: '／', name: 'Skills', title: '把专业方法变成可重复的工作流。', body: '让智能体发现并使用团队已有的知识与规范。' },
-  { symbol: '⌁', name: 'MCP', title: '连接外部服务、工具与数据。', body: '在清晰的权限边界内调用空间之外的能力。' },
+  { symbol: '＋', name: 'Plugins', title: '给页面增加一种新软件。', body: '一个插件就是一种块。写好后能在任何页面里使用，也能随页面一起分享。' },
+  { symbol: '／', name: 'Skills', title: '把做事的方法写下来。', body: '团队的规范和流程写成技能，智能体会在合适的时候用上。' },
+  { symbol: '⌁', name: 'MCP', title: '连接空间外的服务。', body: '通过 MCP 调用外部工具和数据，权限边界清楚。' },
 ] as const
 
 export function MarketingProduct({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
   usePageMeta({
     title: '产品',
-    description: 'File System、Agent 工作台、任务看板、页面与数据库、插件系统、本机与云端 —— 逐个说明 BIU 是什么。',
+    description: '页面把插件组合成服务：页面、插件、分享、智能体、任务看板、本机与云端 —— 逐个说明 BIU 怎么做到 All in One。',
     path: '/product',
   })
 
@@ -102,10 +102,10 @@ export function MarketingProduct({ onLogin, onStart }: { onLogin: SiteAction; on
     <SiteChrome onLogin={onLogin} onStart={onStart}>
         <section className="site-page-hero" data-reveal>
           <p className="site-section-label">产品</p>
-          <h1>一套内核，支撑全部工作</h1>
+          <h1>页面是容器，插件是软件</h1>
           <p className="site-page-lead">
-            BIU 不是把功能堆在一起，而是让页面、数据、会话、任务和智能体共享同一条寻址体系。
-            下面逐个说明它是什么。
+            BIU 的 All in One 不是把功能堆在一个应用里，而是让一个页面装下多个软件，并让它们共用同一份数据。
+            下面逐个说明它是怎么做到的。
           </p>
         </section>
 
@@ -126,18 +126,18 @@ export function MarketingProduct({ onLogin, onStart }: { onLogin: SiteAction; on
 
         <section className="site-continuity">
           <div className="site-continuity-heading" data-reveal>
-            <p className="site-section-label">持续上下文</p>
-            <h2>不必每次重新解释<br />你正在做什么</h2>
+            <p className="site-section-label">做一页服务</p>
+            <h2>四步，把几个软件<br />组合成一页</h2>
           </div>
-          <div className="site-context-flow" data-reveal aria-label="空间上下文">
-            {CONTEXT_FLOW.map((item, index) => (
+          <div className="site-context-flow" data-reveal aria-label="做一页服务">
+            {PAGE_FLOW.map((item, index) => (
               <span key={item.step} className="site-context-item">
                 <div>
                   <span>{item.step}</span>
                   <strong>{item.title}</strong>
                   <p>{item.body}</p>
                 </div>
-                {index < CONTEXT_FLOW.length - 1 ? <i aria-hidden>→</i> : null}
+                {index < PAGE_FLOW.length - 1 ? <i aria-hidden>→</i> : null}
               </span>
             ))}
           </div>
@@ -146,7 +146,7 @@ export function MarketingProduct({ onLogin, onStart }: { onLogin: SiteAction; on
         <section className="site-ecosystem" id="ecosystem">
           <div className="site-ecosystem-heading" data-reveal>
             <p className="site-section-label">扩展 BIU</p>
-            <h2>把你的工具与知识<br />带进空间</h2>
+            <h2>把你的工具与方法<br />带进页面</h2>
           </div>
           <div className="site-ecosystem-grid">
             {ECOSYSTEM.map((item) => (
@@ -160,13 +160,7 @@ export function MarketingProduct({ onLogin, onStart }: { onLogin: SiteAction; on
           </div>
         </section>
 
-        <section className="site-final-cta" data-reveal>
-          <div className="site-container">
-            <p className="site-section-label">开始使用 BIU</p>
-            <h2>把工作放进一个空间</h2>
-            <button type="button" onClick={onStart}>创建你的空间 <span>↗</span></button>
-          </div>
-        </section>
+        <SiteFinalCta title="做你的第一页服务" />
     </SiteChrome>
   )
 }

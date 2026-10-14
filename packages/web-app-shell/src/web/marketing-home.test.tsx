@@ -41,7 +41,7 @@ test('landing page embeds real empty product surfaces and opens account actions'
     </MemoryRouter>,
   )
 
-  assert.match(screen.getByRole('heading', { level: 1 }).textContent ?? '', /让知识留下.*让工作继续/)
+  assert.match(screen.getByRole('heading', { level: 1 }).textContent ?? '', /一个页面.*组合所有软件/)
 
   // P0-13：演示区用静态截图，不再嵌 iframe（iframe 会完整加载 web 应用三次）
   assert.equal(screen.queryByTitle('BIU 页面界面预览'), null, '不应再有 iframe 预览')
@@ -87,8 +87,8 @@ test('home 收窄后：深度内容下沉，导航指向独立页', () => {
   assert.match(nav.textContent ?? '', /产品/)
   assert.match(nav.textContent ?? '', /定价/)
   assert.match(nav.textContent ?? '', /对比/)
-  // 首页仍保留核心能力三条 + 数据控制
-  assert.match(screen.getByRole('heading', { level: 1 }).textContent ?? '', /让知识留下/)
+  // 首页主张：All in One —— 页面组合软件
+  assert.match(screen.getByRole('heading', { level: 1 }).textContent ?? '', /组合所有软件/)
   cleanup()
 })
 
@@ -128,8 +128,8 @@ test('鼠标聚光：彩色层只在鼠标附近露出，触屏不触发', async
 
 test('每个官网路径都能渲染，且各页有独立 h1', () => {
   const cases: Array<[string, RegExp]> = [
-    ['/product', /一套内核/],
-    ['/pricing', /更少工具/],
+    ['/product', /页面是容器，插件是软件/],
+    ['/pricing', /免费，而且开源/],
     ['/download', /在你的设备上运行/],
     ['/security', /你的数据在哪里/],
     ['/compare', /和每个领域最好的产品比/],
@@ -206,6 +206,41 @@ test('定价页 ROI 计算器按选项实时重算', () => {
   // 再勾一个会议记录 18 => 72
   fireEvent.click(screen.getByText('会议记录'))
   assert.match(screen.getByText('/人/月').parentElement?.textContent ?? '', /\$72/)
+  cleanup()
+})
+
+test('定位：All in One、开源免费，文案不夸大', () => {
+  renderSite('/')
+  let body = document.body.textContent ?? ''
+  assert.match(body, /开源 · 免费 · All in One/)
+  assert.equal(document.querySelector('.site-task-box'), null, '首页不再放会丢掉输入的任务框')
+  assert.doesNotMatch(body, /BIU 团队/, '不放团队自述冒充用户证言')
+  const github = Array.from(document.querySelectorAll('a')).filter((a) => a.getAttribute('href') === 'https://github.com/helloooooooooooooo97/biu')
+  assert.ok(github.length >= 2, '首屏和收尾都要有 GitHub 入口')
+  cleanup()
+
+  renderSite('/pricing')
+  body = document.body.textContent ?? ''
+  assert.match(body, /Apache 2\.0/)
+  assert.doesNotMatch(body, /联系销售|退款|按需/, '开源免费，不再有销售与计费话术')
+  cleanup()
+
+  renderSite('/compare')
+  body = document.body.textContent ?? ''
+  assert.doesNotMatch(body, /问问 BIU 不能做什么/)
+  assert.match(body, /信息截至 2026 年 10 月/)
+  cleanup()
+
+  renderSite('/compare/vs-notion')
+  body = document.body.textContent ?? ''
+  assert.match(body, /页面里能放什么/, 'Notion 对比要讲清页面内插件扩展')
+  assert.doesNotMatch(body, /结果要手动搬进页面|基本全量可见/, '对手描述要准确')
+  cleanup()
+
+  renderSite('/security')
+  body = document.body.textContent ?? ''
+  assert.match(body, /模型调用/)
+  assert.doesNotMatch(document.querySelector('.site-role-table')?.textContent ?? '', /Cursor/, '安全页不和没有内容权限的产品比权限')
   cleanup()
 })
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { SiteChrome, type SiteAction } from './site-chrome.tsx'
+import { GITHUB_URL, SiteChrome, type SiteAction } from './site-chrome.tsx'
 import { usePageMeta } from './use-page-meta.ts'
 
 const RELEASE_API = 'https://api.github.com/repos/helloooooooooooooo97/biu/releases/latest'
@@ -11,14 +11,14 @@ const PACKAGES = [
     os: 'macOS',
     name: 'Apple 芯片',
     file: /-mac-arm64\.dmg$/,
-    steps: ['下载 .dmg', '拖入「应用程序」', '若提示已损坏：xattr -dr com.apple.quarantine /Applications/Biu.app'],
+    steps: ['下载 .dmg', '拖入「应用程序」', '首次打开若提示「已损坏」，在终端执行：xattr -dr com.apple.quarantine /Applications/Biu.app'],
   },
   {
     id: 'mac-intel',
     os: 'macOS',
     name: 'Intel',
     file: /-mac-x64\.dmg$/,
-    steps: ['下载 .dmg', '拖入「应用程序」', '若提示已损坏：xattr -dr com.apple.quarantine /Applications/Biu.app'],
+    steps: ['下载 .dmg', '拖入「应用程序」', '首次打开若提示「已损坏」，在终端执行：xattr -dr com.apple.quarantine /Applications/Biu.app'],
   },
   {
     id: 'windows',
@@ -30,10 +30,16 @@ const PACKAGES = [
 ] as const
 
 const REQUIREMENTS = [
-  ['Node.js', '20 或更高（源码运行）'],
-  ['系统', 'macOS / Windows 10+ / 主流 Linux'],
+  ['系统', 'macOS（Apple 芯片 / Intel）、Windows 10 及以上'],
   ['内存', '建议 8 GB 以上'],
-  ['网络', '配置模型密钥后需要联网调用模型'],
+  ['模型', '自带密钥：DeepSeek / OpenAI / Anthropic 任选其一'],
+  ['网络', '平时可离线；调用模型时需要联网'],
+] as const
+
+const SOURCE_STEPS = [
+  'git clone https://github.com/helloooooooooooooo97/biu.git',
+  'cd biu',
+  'make',
 ] as const
 
 export function MarketingDownload({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
@@ -60,7 +66,7 @@ export function MarketingDownload({ onLogin, onStart }: { onLogin: SiteAction; o
 
   usePageMeta({
     title: '下载',
-    description: 'macOS 与 Windows 安装包，来自 GitHub Releases 的最新 tag。',
+    description: '免费下载 BIU 桌面版：macOS 与 Windows 安装包，或在 Linux 上从源码运行。',
     path: '/download',
   })
 
@@ -70,7 +76,7 @@ export function MarketingDownload({ onLogin, onStart }: { onLogin: SiteAction; o
           <p className="site-section-label">下载</p>
           <h1>在你的设备上运行</h1>
           <p className="site-page-lead">
-            安装包来自 GitHub 最新 tag{tag ? ` ${tag}` : ''}。macOS 分 Apple 芯片和 Intel，Windows 是 x64 安装程序。
+            免费下载，开箱即用{tag ? `，当前版本 ${tag}` : ''}。macOS 分 Apple 芯片和 Intel，Windows 是 x64 安装程序；Linux 可以从源码运行。
           </p>
         </section>
 
@@ -103,20 +109,14 @@ export function MarketingDownload({ onLogin, onStart }: { onLogin: SiteAction; o
         </section>
 
         <section className="site-local-note" data-reveal>
-          <p className="site-section-label">本机空间</p>
-          <h2>数据留在你的设备上</h2>
+          <p className="site-section-label">从源码运行</p>
+          <h2>Linux 或想自己改代码</h2>
+          <p>需要 Node.js 20 或更高版本和 npm。执行完会同时启动服务和界面，浏览器打开 http://127.0.0.1:5173 即可。</p>
+          <pre className="site-source-steps"><code>{SOURCE_STEPS.join('\n')}</code></pre>
           <p>
-            本机空间把页面、数据库和附件保存在当前设备，离线可用。
-            需要协作时再使用云端空间 —— 两种空间各自成立，创建时由你决定。
+            为什么 macOS 会提示「已损坏」：安装包还没有做苹果公证，系统会拦下来自网络的未公证应用。
+            安装步骤里那行 xattr 命令只是去掉这个下载标记，代码全部开源，可以在 <a href={GITHUB_URL} target="_blank" rel="noreferrer">GitHub</a> 上核对。
           </p>
-        </section>
-
-        <section className="site-final-cta" data-reveal>
-          <div className="site-container">
-            <p className="site-section-label">开始使用 BIU</p>
-            <h2>先在本机跑起来</h2>
-            <button type="button" onClick={onStart}>创建你的空间 <span>↗</span></button>
-          </div>
         </section>
     </SiteChrome>
   )

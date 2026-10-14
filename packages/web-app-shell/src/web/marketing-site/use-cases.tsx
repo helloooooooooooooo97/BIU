@@ -1,5 +1,5 @@
 import { Link, useParams } from 'react-router-dom'
-import { SiteChrome, type SiteAction } from './site-chrome.tsx'
+import { SiteChrome, SiteFinalCta, type SiteAction } from './site-chrome.tsx'
 import { usePageMeta } from './use-page-meta.ts'
 
 export type UseCase = {
@@ -32,7 +32,7 @@ export const USE_CASES: UseCase[] = [
     ],
     how: [
       { title: '资料进得来', body: '把网页、文档、笔记都收进同一个空间，页面和表共享同一条寻址体系。' },
-      { title: '结论留得住', body: '智能体的产出沉降成页面、数据库、对比矩阵，不是一个会被刷掉的回答。' },
+      { title: '结论留得住', body: '智能体的产出沉淀成页面、数据库、对比矩阵，不是一个会被刷掉的回答。' },
       { title: '对比可维护', body: '对比表就是一张真表，加一列维度不需要改代码，也不用重做。' },
     ],
     faq: [
@@ -57,7 +57,7 @@ export const USE_CASES: UseCase[] = [
       { title: '智能体是协作者', body: '任务卡带 assignee 与 dependsOn，多智能体靠看板协作，不靠群聊。' },
     ],
     faq: [
-      ['能做多人协作吗？', '云端空间支持成员与权限（所有者 / 管理者 / 编辑者 / 查看者）。'],
+      ['能做多人协作吗？', '云端空间支持成员与权限，角色分查看者 / 编辑者 / 管理者 / 所有者四档。'],
       ['和现有项目管理工具什么关系？', '可以并行使用。BIU 的价值是把需求、任务、决策与上下文放在同一处，不需要三份同步。'],
     ],
   },
@@ -74,7 +74,7 @@ export const USE_CASES: UseCase[] = [
     ],
     how: [
       { title: '素材与草稿同源', body: '素材作为附件进空间，草稿就是页面，二者共享同一套寻址。' },
-      { title: '组件可复用', body: '页面里的块来自插件，可聚合、可复用 —— 写一次多处引用。' },
+      { title: '一页装下整套工具', body: '文稿、素材板、剪辑、排期表都是同一页里的插件块，不用在几个软件之间来回切。' },
       { title: '分享的是可运行单元', body: '分享一个页面时，正文、附件和它引用的插件源码一起走，对方得到的是能跑的东西。' },
     ],
     faq: [
@@ -100,7 +100,7 @@ export const USE_CASES: UseCase[] = [
     ],
     faq: [
       ['和现有 Wiki 的区别？', 'BIU 里知识不是静态文本：它能被智能体读取、能被任务引用、能随维度演进。'],
-      ['权限怎么控制？', '云端空间按成员角色划分；本机空间数据不出设备。'],
+      ['权限怎么控制？', '云端空间按成员角色和视图授权控制；本机空间的数据存在你自己的电脑上。'],
     ],
   },
   {
@@ -115,13 +115,13 @@ export const USE_CASES: UseCase[] = [
       '不放心把私人资料交给第三方托管。',
     ],
     how: [
-      { title: '本机空间', body: '数据保存在当前设备，离线可用 —— 不是「先上传再同步下来」。' },
+      { title: '本机空间', body: '数据存在你自己的电脑上，离线可用 —— 不是「先上传再同步下来」。' },
       { title: '两栖透明', body: '可以用接口读写，也可以直接读盘。抽象是便利，不是牢笼。' },
-      { title: '智能体也在本机', body: '本机空间里智能体照样工作，不需要为了用 AI 把数据交出去。' },
+      { title: '模型用你自己的', body: '智能体用你配置的模型密钥工作，只有这一轮需要的内容会发给模型服务，空间里的其他数据不动。' },
     ],
     faq: [
-      ['本机空间要联网吗？', '不需要联网即可使用；调用模型时需要网络，但数据仍留在本机。'],
-      ['以后能改成云端吗？', '两种空间各自成立，按工作内容选择；迁移能力见文档。'],
+      ['本机空间要联网吗？', '平时不需要联网。调用模型时需要网络，这一轮相关的内容会发给你配置的模型服务，其余数据仍只在本机。'],
+      ['本机和云端能同时用吗？', '可以。两种空间各自成立，按内容选择：私人资料放本机，协作内容放云端。'],
     ],
   },
   {
@@ -137,12 +137,12 @@ export const USE_CASES: UseCase[] = [
     ],
     how: [
       { title: '共享上下文', body: '页面、数据、会话与智能体都在同一个云端空间，成员围绕同一份数据工作。' },
-      { title: '成员与权限', body: '所有者 / 管理者 / 编辑者 / 查看者四档角色，敏感操作进入待确认状态。' },
+      { title: '成员与权限', body: '查看者 / 编辑者 / 管理者 / 所有者四档角色，还能按视图授权；敏感操作进入待确认状态。' },
       { title: '可追溯', body: '只追加的事件流记录每个动作，界面是它的投影 —— 状态和来历都清楚。' },
     ],
     faq: [
       ['和普通协作文档的区别？', 'BIU 的成员不只是编辑文本：共享的是页面、数据、会话和智能体的完整上下文。'],
-      ['能审计吗？', '动作写入只追加的事件流，可追溯。企业版提供审计与 SSO。'],
+      ['能审计吗？', '每个动作都写进只追加的事件记录，事后可以逐条追溯。'],
     ],
   },
 ]
@@ -163,7 +163,7 @@ export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; o
         <p className="site-section-label">场景</p>
         <h1>为真实工作而生</h1>
         <p className="site-page-lead">
-          从一个问题开始，交付可以继续使用的页面、数据和空间。选一个场景看具体怎么做。
+          每个场景的交付物都是一页：页面里组合好这件事需要的软件，交给自己、团队或客户直接用。选一个场景看具体怎么做。
         </p>
       </section>
 
@@ -178,13 +178,7 @@ export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; o
         ))}
       </section>
 
-      <section className="site-final-cta" data-reveal>
-        <div className="site-container">
-          <p className="site-section-label">开始使用 BIU</p>
-          <h2>从你的场景开始</h2>
-          <button type="button" onClick={onStart}>创建你的空间 <span>↗</span></button>
-        </div>
-      </section>
+      <SiteFinalCta title="从你的场景开始" />
     </SiteChrome>
   )
 }
@@ -266,13 +260,7 @@ export function MarketingUseCaseDetail({ onLogin, onStart }: { onLogin: SiteActi
         </div>
       </section>
 
-      <section className="site-final-cta" data-reveal>
-        <div className="site-container">
-          <p className="site-section-label">开始使用 BIU</p>
-          <h2>试试你自己的场景</h2>
-          <button type="button" onClick={onStart}>创建你的空间 <span>↗</span></button>
-        </div>
-      </section>
+      <SiteFinalCta title="试试你自己的场景" />
     </SiteChrome>
   )
 }
