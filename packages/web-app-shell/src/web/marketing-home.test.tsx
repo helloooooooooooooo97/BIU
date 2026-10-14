@@ -47,7 +47,7 @@ test('landing page embeds real empty product surfaces and opens account actions'
   assert.equal(screen.queryByTitle('BIU 页面界面预览'), null, '不应再有 iframe 预览')
 
   const video = document.querySelector('video.site-demo-shot') as HTMLVideoElement
-  assert.ok(video, '默认标签是「一页服务」录屏')
+  assert.ok(video, '默认标签是「页面」录屏')
   assert.equal(video.getAttribute('poster'), '/site/demo-allinone.webp')
   assert.deepEqual(Array.from(video.querySelectorAll('source')).map((s) => s.getAttribute('src')), ['/site/demo-allinone.webm', '/site/demo-allinone.mp4'])
   assert.ok(video.muted && video.loop, '自动播放的录屏必须静音循环')
@@ -57,20 +57,27 @@ test('landing page embeds real empty product surfaces and opens account actions'
   assert.equal(shot.getAttribute('src'), '/site/shot-plugins.webp')
   assert.equal(shot.getAttribute('loading'), 'lazy')
   const tablist = screen.getByRole('tablist', { name: '产品演示' })
-  const caption = document.querySelector('.site-demo-caption')!
+  assert.deepEqual(
+    Array.from(tablist.querySelectorAll('[role="tab"]')).map((tab) => tab.textContent),
+    ['页面', '插件', '分享', '组件', '数据', '引用'],
+  )
+  const caption = document.querySelector('.site-demo-lead')!
   assert.ok(tablist.compareDocumentPosition(caption) & Node.DOCUMENT_POSITION_FOLLOWING, '说明文字在切换按钮下面')
   assert.ok(caption.compareDocumentPosition(document.querySelector('.site-demo-shot')!) & Node.DOCUMENT_POSITION_FOLLOWING, '说明文字在画面上面')
+  assert.equal(document.querySelector('.site-product-demo h3'), null, '说明文字不带标题')
   const lead = () => document.querySelector('.site-demo-lead')?.textContent ?? ''
-  const titles = new Set<string>()
-  for (const [tab, src] of [['组件', 'demo-component'], ['页面与数据', 'demo-file-system'], ['会话上下文', 'demo-context']] as const) {
+  const leads = new Set<string>()
+  for (const [tab, src] of [['组件', 'demo-component'], ['数据', 'demo-file-system'], ['引用', 'demo-context']] as const) {
     fireEvent.click(screen.getByRole('tab', { name: tab }))
     assert.doesNotMatch(lead(), /算法面试陪跑/, `切到「${tab}」后说明文字要跟着换`)
-    titles.add(document.querySelector('.site-demo-caption h3')?.textContent ?? '')
+    leads.add(lead())
     const img = document.querySelector('img.site-demo-shot') as HTMLImageElement
     assert.equal(img.getAttribute('src'), `/site/${src}.webp`, `「${tab}」用回原来那张真实截图`)
     assert.equal(img.getAttribute('width'), '3840')
   }
-  assert.equal(titles.size, 3, '每个标签有自己的标题')
+  assert.equal(leads.size, 3, '每个标签有自己的说明')
+  fireEvent.click(screen.getByRole('tab', { name: '组件' }))
+  assert.match(lead(), /散落.*重新收集.*结构化/, '组件说明讲的是把散在各页的插件收集成结构化的表')
 
   const wall = screen.getByRole('region', { name: '插件' })
   assert.ok(wall.querySelectorAll('article').length >= 8, '首页插件墙列出现成的插件')

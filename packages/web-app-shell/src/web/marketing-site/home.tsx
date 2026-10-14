@@ -10,48 +10,19 @@ import { usePageMeta } from './use-page-meta.ts'
 const PRODUCT_SURFACES = [
   {
     id: 'page',
-    label: '一页服务',
+    label: '页面',
     video: { webm: '/site/demo-allinone.webm', mp4: '/site/demo-allinone.mp4' },
     image: '/site/demo-allinone.webp',
     size: [3840, 2400],
-    title: '一份算法面试陪跑，一页交付',
-    lead: '刊头、Excalidraw 画板、算法题卡片、代码运行块、offer 对比矩阵，各是一个插件。放进同一页，就是交给学员的整套服务。',
+    lead: '先有一页。刊头、画板、算法题、代码运行、offer 对比放在一起，就是交给学员的一整套算法面试陪跑服务。',
     alt: 'BIU 页面：一份算法面试陪跑，刊头、Excalidraw 画板、算法题卡片、代码运行块和 offer 对比矩阵放在同一页',
-  },
-  {
-    id: 'component',
-    label: '组件',
-    image: '/site/demo-component.webp',
-    size: [3840, 2160],
-    title: '同一个组件，嵌进页面，也能单独打开',
-    lead: '左边是嵌在页面里的视频剪辑块，右边是同一个组件的专属编辑器：预览、时间线、源码声明和终端并排。在哪边改，两边看到的都是同一份。',
-    alt: 'BIU 组件：页面里放着视频剪辑块，同一个组件在专属编辑器里打开，预览、时间线、源码声明和终端并排',
-  },
-  {
-    id: 'file-system',
-    label: '页面与数据',
-    image: '/site/demo-file-system.webp',
-    size: [3840, 2160],
-    title: '会话、页面、任务，都是一张表',
-    lead: '工作区里的东西都是普通的表，用同一套筛选、视图和地址。分栏打开，会话表和页面表可以并排看、并排改。',
-    alt: 'BIU 页面与数据：会话表和页面表在同一个工作区里分栏并排打开',
-  },
-  {
-    id: 'context',
-    label: '会话上下文',
-    image: '/site/demo-context.webp',
-    size: [3840, 2160],
-    title: '选中什么，智能体就读什么',
-    lead: '页面、会话、插件都能加进输入框，变成一个个可以移除的上下文标签。交给智能体的就是你选中的这些资料，不多也不少。',
-    alt: 'BIU 会话上下文：页面、会话、插件作为可移除的标签放进输入框，交给智能体',
   },
   {
     id: 'plugins',
     label: '插件',
     image: '/site/shot-plugins.webp',
     size: [3840, 2400],
-    title: '装一个插件，就多一种块',
-    lead: '插件也是一张表：Excalidraw 画板、算法题卡片、代码运行块……装上、启用、停用都在这里。缺的那一种，可以让智能体写一个。',
+    lead: '页面上的每一块都来自一个插件。装一个插件，就多一种块；缺的那一种，让智能体写一个。',
     alt: 'BIU 插件表：Excalidraw 画板、算法题卡片、代码运行块等插件，一键安装、启用',
   },
   {
@@ -59,9 +30,32 @@ const PRODUCT_SURFACES = [
     label: '分享',
     image: '/site/shot-share.webp',
     size: [3840, 2400],
-    title: '分享出去的，是一页能用的软件',
-    lead: '分享页面时，正文、附件和用到的插件一起打包。对方打开链接不用装任何东西，画板和算法题卡片照样能用。',
+    lead: '插件跟着页面走。分享时正文、附件和用到的插件一起打包，对方打开链接，画板和算法题照样能用。',
     alt: 'BIU 分享页：对方打开链接，页面里的画板和算法题卡片照样能用',
+  },
+  {
+    id: 'component',
+    label: '组件',
+    image: '/site/demo-component.webp',
+    size: [3840, 2160],
+    lead: '页面多了，同一种插件会散落在各处。组件把它们重新收集起来，按类型结构化成表，每一个都能单独打开、编辑。',
+    alt: 'BIU 组件：散落在各个页面里的视频编排块被收集成一张表，同一个组件在专属编辑器里打开',
+  },
+  {
+    id: 'data',
+    label: '数据',
+    image: '/site/demo-file-system.webp',
+    size: [3840, 2160],
+    lead: '不只是组件。会话、页面、任务、插件，工作区里的一切都是表，用同一套筛选、视图和地址，还能分栏并排看。',
+    alt: 'BIU 数据：会话表和页面表在同一个工作区里分栏并排打开',
+  },
+  {
+    id: 'reference',
+    label: '引用',
+    image: '/site/demo-context.webp',
+    size: [3840, 2160],
+    lead: '都是结构化的数据，就能被直接引用。把页面、会话、组件加进输入框，智能体读的就是你选中的这些，不多也不少。',
+    alt: 'BIU 引用：页面、会话、插件作为可移除的标签放进输入框，交给智能体',
   },
 ] as const
 
@@ -185,7 +179,6 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
             </div>
           </div>
           <div className="site-demo-caption" role="tabpanel" aria-live="polite">
-            <h3>{surface.title}</h3>
             <p className="site-demo-lead">{surface.lead}</p>
           </div>
           <div className="site-demo-real-frame">
