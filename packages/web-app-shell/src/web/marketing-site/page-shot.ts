@@ -1,3 +1,5 @@
+import { sitePath } from './site-base.ts'
+
 /** 把当前官网页收成一张长图并下载。html-to-image 只在点击时加载。 */
 
 const MAX_EDGE = 16000
@@ -68,7 +70,7 @@ export async function downloadPageLongImage(root: HTMLElement = document.querySe
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = pageShotName(location.pathname)
+    link.download = pageShotName(sitePath(location.pathname))
     link.click()
     URL.revokeObjectURL(url)
   } finally {

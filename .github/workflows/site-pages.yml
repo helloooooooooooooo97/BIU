@@ -1,0 +1,61 @@
+name: site-pages
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - biu-online
+    paths:
+      - 'packages/web-app-shell/src/web/marketing-site/**'
+      - 'web/site-main.tsx'
+      - 'web/style.css'
+      - 'site.html'
+      - 'public/**'
+      - 'vite.site.config.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/site-pages.yml'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: site-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      # 项目站点挂在 https://<owner>.github.io/biu/ 下。
+      - run: npm run build:site
+        env:
+          SITE_BASE: /biu/
+      # GitHub Pages 没有 SPA 回退：未知路径会返回 404.html，复制一份首页让前端路由接手。
+      - run: cp dist-site/index.html dist-site/404.html && touch dist-site/.nojekyll
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist-site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

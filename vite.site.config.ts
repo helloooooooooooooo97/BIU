@@ -21,6 +21,8 @@ function siteHtmlAsIndex(): Plugin {
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), siteHtmlAsIndex()],
+  // GitHub Pages 的项目站点挂在 /biu/ 下，构建时用 SITE_BASE=/biu/ 指定；Cloudflare Pages 在根路径。
+  base: process.env.SITE_BASE || '/',
   appType: 'spa',
   build: {
     outDir: resolve(root, 'dist-site'),

@@ -2,6 +2,7 @@ import { Link, useParams } from 'react-router-dom'
 import { SiteChrome, SiteFinalCta, type SiteAction } from './site-chrome.tsx'
 import { usePageMeta } from './use-page-meta.ts'
 import { BLOG_AUTHOR, BLOG_POSTS, readingMinutes, type Paragraph } from './blog-posts.ts'
+import { asset } from './site-base.ts'
 
 export { BLOG_AUTHOR, BLOG_POSTS, readingMinutes }
 export type { BlogPost } from './blog-posts.ts'
@@ -64,7 +65,7 @@ function ArticleParagraph({ paragraph }: { paragraph: Paragraph }) {
   if ('image' in paragraph) {
     return (
       <figure className="site-article-figure">
-        <img src={paragraph.image} alt={paragraph.alt} loading="lazy" decoding="async" />
+        <img src={asset(paragraph.image)} alt={paragraph.alt} loading="lazy" decoding="async" />
         <figcaption>{paragraph.caption}</figcaption>
       </figure>
     )

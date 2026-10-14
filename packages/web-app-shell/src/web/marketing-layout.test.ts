@@ -300,3 +300,10 @@ test('选中态不用白色描边（靠底色区分）', () => {
   }
   assert.deepEqual(bad, [], `这些选中态还在用高对比白边框：\n${bad.join('\n')}`)
 })
+
+test('官网资源路径：根路径部署时原样返回，站内路径去掉部署前缀', async () => {
+  const { asset, sitePath } = await import('./marketing-site/site-base.ts')
+  assert.equal(asset('/site/shot-page.webp'), '/site/shot-page.webp')
+  assert.equal(asset('https://example.com/a.png'), 'https://example.com/a.png')
+  assert.equal(sitePath('/pricing'), '/pricing')
+})
