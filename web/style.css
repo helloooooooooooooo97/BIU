@@ -8462,15 +8462,23 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   height: 100%;
   opacity: 0.5;
 }
-/* 印花上盖一层从下往上褪掉的黑，和首页标题区同一套渐变。 */
-.site-print::after {
+.site > main {
+  position: relative;
+  z-index: 1;
+}
+/* 每个区块自己的底边渐变，用来把相邻 section 分开。浅色 FAQ 不加。 */
+.site > main > section {
+  position: relative;
+}
+.site > main > section:not(.site-faq)::after {
   content: "";
   position: absolute;
-  inset: 0;
-  background: linear-gradient(to top, rgba(0, 0, 0, .72), transparent 55%);
+  z-index: 0;
+  inset: 45% 0 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, .72), transparent);
   pointer-events: none;
 }
-.site > main {
+.site > main > section > * {
   position: relative;
   z-index: 1;
 }
