@@ -78,6 +78,21 @@ test('home 收窄后：深度内容下沉，导航指向独立页', () => {
   cleanup()
 })
 
+test('印花随滚动向上走，速度慢于正文，并按格子循环', async () => {
+  renderSite('/product')
+  const print = screen.getByTestId('site-print')
+  const root = print.closest('.site') as HTMLElement
+  root.scrollTop = 100
+  fireEvent.scroll(root)
+  await new Promise((resolve) => requestAnimationFrame(() => resolve(null)))
+  assert.equal(print.style.getPropertyValue('--print-shift'), '-35px', '滚 100px，印花走 35px')
+  root.scrollTop = 200
+  fireEvent.scroll(root)
+  await new Promise((resolve) => requestAnimationFrame(() => resolve(null)))
+  assert.equal(print.style.getPropertyValue('--print-shift'), '-28px', '走过一格后从头循环（70 mod 42）')
+  cleanup()
+})
+
 test('每个官网路径都能渲染，且各页有独立 h1', () => {
   const cases: Array<[string, RegExp]> = [
     ['/product', /一套内核/],
