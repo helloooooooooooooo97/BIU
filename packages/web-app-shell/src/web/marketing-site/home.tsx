@@ -4,7 +4,7 @@ import { DownloadIcon, GitHubButton, SiteChrome, SiteFinalCta, type SiteAction }
 import { usePageMeta } from './use-page-meta.ts'
 
 /**
- * 真实界面：全部是 BIU 深色主题下的截图 / 录屏（public/site/）。
+ * 真实界面：BIU 的截图 / 录屏（public/site/），按 2–3 倍像素拍摄，2 倍屏上也清楚。
  * 不嵌 iframe —— 每个 iframe 都会完整加载一次 web 应用，首屏会被拖死。
  */
 const PRODUCT_SURFACES = [
@@ -13,25 +13,43 @@ const PRODUCT_SURFACES = [
     label: '一页服务',
     video: { webm: '/site/demo-allinone.webm', mp4: '/site/demo-allinone.mp4' },
     image: '/site/demo-allinone.webp',
+    size: [3840, 2400],
     alt: 'BIU 页面：一份算法面试陪跑，刊头、Excalidraw 画板、算法题卡片、代码运行块和 offer 对比矩阵放在同一页',
+  },
+  {
+    id: 'component',
+    label: '组件',
+    image: '/site/demo-component.webp',
+    size: [3840, 2160],
+    alt: 'BIU 组件：页面里放着视频剪辑块，同一个组件在专属编辑器里打开，预览、时间线、源码声明和终端并排',
+  },
+  {
+    id: 'file-system',
+    label: '页面与数据',
+    image: '/site/demo-file-system.webp',
+    size: [3840, 2160],
+    alt: 'BIU 页面与数据：会话表和页面表在同一个工作区里分栏并排打开',
+  },
+  {
+    id: 'context',
+    label: '会话上下文',
+    image: '/site/demo-context.webp',
+    size: [3840, 2160],
+    alt: 'BIU 会话上下文：页面、会话、插件作为可移除的标签放进输入框，交给智能体',
   },
   {
     id: 'plugins',
     label: '插件',
     image: '/site/shot-plugins.webp',
+    size: [3840, 2400],
     alt: 'BIU 插件表：Excalidraw 画板、算法题卡片、代码运行块等插件，一键安装、启用',
   },
   {
     id: 'share',
     label: '分享',
     image: '/site/shot-share.webp',
+    size: [3840, 2400],
     alt: 'BIU 分享页：对方打开链接，页面里的画板和算法题卡片照样能用',
-  },
-  {
-    id: 'agent',
-    label: '智能体',
-    image: '/site/shot-agent.webp',
-    alt: 'BIU 会话：输入 @ 就能把页面和任务交给智能体当上下文',
   },
 ] as const
 
@@ -162,8 +180,8 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
                 className="site-demo-shot"
                 poster={surface.image}
                 aria-label={surface.alt}
-                width={1600}
-                height={1000}
+                width={surface.size[0]}
+                height={surface.size[1]}
                 autoPlay={!reducedMotion}
                 controls={reducedMotion}
                 muted
@@ -180,8 +198,8 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
                 className="site-demo-shot"
                 src={surface.image}
                 alt={surface.alt}
-                width={1600}
-                height={1000}
+                width={surface.size[0]}
+                height={surface.size[1]}
                 loading="lazy"
                 decoding="async"
               />
