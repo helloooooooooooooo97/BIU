@@ -8466,7 +8466,7 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   position: relative;
   z-index: 1;
 }
-/* 每个区块自己的底边渐变，用来把相邻 section 分开。浅色 FAQ 不加。 */
+/* 每个区块盖一层 50% 黑，用来把相邻 section 分开。浅色 FAQ 不加。 */
 .site > main > section {
   position: relative;
 }
@@ -8474,8 +8474,8 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   content: "";
   position: absolute;
   z-index: 0;
-  inset: 45% 0 0;
-  background: linear-gradient(to top, rgba(0, 0, 0, .72), transparent);
+  inset: 0;
+  background: rgba(0, 0, 0, .5);
   pointer-events: none;
 }
 .site > main > section > * {
@@ -8488,10 +8488,10 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   z-index: 0;
   left: 50%;
   width: 100vw;
-  top: 45%;
+  top: 0;
   bottom: 0;
   transform: translateX(-50%);
-  background: linear-gradient(to top, rgba(0, 0, 0, .72), transparent);
+  background: rgba(0, 0, 0, .5);
   pointer-events: none;
 }
 .site-footer > * {
