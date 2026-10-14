@@ -29,7 +29,7 @@ const PLANS: readonly Plan[] = [
     cadence: 'macOS / Windows',
     featured: true,
     features: ['本机空间，数据存在自己电脑上', '页面、表格、插件、智能体全部功能', '自带模型密钥（DeepSeek / OpenAI / Anthropic）'],
-    cta: { label: '免费下载', kind: 'download' },
+    cta: { label: '下载', kind: 'download' },
   },
   {
     name: '自部署',

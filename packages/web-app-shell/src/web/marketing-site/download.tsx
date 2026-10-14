@@ -73,7 +73,7 @@ export function MarketingDownload({ onLogin, onStart }: { onLogin: SiteAction; o
 
   usePageMeta({
     title: '下载',
-    description: '免费下载 BIU 桌面版：macOS 与 Windows 安装包，或在 Linux 上从源码运行。',
+    description: '下载 BIU 桌面版：macOS 与 Windows 安装包，或在 Linux 上从源码运行。',
     path: '/download',
   })
 
@@ -88,7 +88,7 @@ export function MarketingDownload({ onLogin, onStart }: { onLogin: SiteAction; o
         <section className="site-page-hero" data-reveal>
           <p className="site-section-label">下载</p>
           <h1>在你的设备上运行</h1>
-          <p className="site-page-lead">免费下载，开箱即用。数据存在你自己的电脑上，模型用你自己的密钥。</p>
+          <p className="site-page-lead">下载后开箱即用。数据存在你自己的电脑上，模型用你自己的密钥。</p>
           <div className="site-download-primary">
             <a className="site-cta-primary" href={primary.href}><DownloadIcon />{primary.label}</a>
             {platform === 'mac' || platform === null ? (

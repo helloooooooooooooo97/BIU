@@ -98,7 +98,7 @@ export function SiteFinalCta({ title, label = '开源 · 免费' }: { title: Rea
         <p className="site-section-label">{label}</p>
         <h2>{title}</h2>
         <div className="site-cta-actions">
-          <Link className="site-cta-primary" to="/download"><DownloadIcon />免费下载</Link>
+          <Link className="site-cta-primary" to="/download"><DownloadIcon />下载</Link>
           <GitHubButton label="GitHub" />
         </div>
       </div>
@@ -156,7 +156,7 @@ export function SiteHeader({ onLogin, onStart }: { onLogin: SiteAction; onStart:
       </nav>
       <div className="site-nav-actions">
         <button type="button" className="site-login" data-testid="site-login" onClick={onLogin}>登录</button>
-        <Link className="site-start" data-testid="site-start" to="/download"><DownloadIcon />免费下载</Link>
+        <Link className="site-start" data-testid="site-start" to="/download"><DownloadIcon />下载</Link>
       </div>
     </header>
   )
@@ -201,7 +201,7 @@ export function SiteFooter({ onLogin, onStart }: { onLogin: SiteAction; onStart:
         <div>
           <strong>开始</strong>
           <button type="button" onClick={onLogin}>登录</button>
-          <Link to="/download">免费下载</Link>
+          <Link to="/download">下载</Link>
           <a href={`mailto:${CONTACT_EMAIL}`}>联系我们</a>
         </div>
       </div>
