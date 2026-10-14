@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { BrandMark, useBrandConfig } from './brand-mark.tsx'
 import { SiteChrome, type SiteAction } from './site-chrome.tsx'
 import { usePageMeta } from './use-page-meta.ts'
 
@@ -47,6 +48,7 @@ export function AuthPanel({
   externalError,
   workspaceInvite,
 }: AuthPanelProps) {
+  const brand = useBrandConfig()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -110,7 +112,19 @@ export function AuthPanel({
     >
       {/* P0-14 第 2 项：品牌区 */}
       <div className="auth-brand">
-        <span className="auth-brand-mark" aria-hidden>B</span>
+        <BrandMark
+          className="auth-brand-mark"
+          colors={[brand.c0, brand.c1, brand.c2]}
+          stroke={brand.stroke}
+          strokeWidth={brand.strokeWidth}
+          lineWidth={brand.lineWidth}
+          background={brand.background}
+          showBackground={brand.showBackground}
+          circleRatio={brand.circleRatio}
+          scene="icon"
+          displayWidth={48}
+          title="BIU"
+        />
         <span className="auth-brand-name">BIU</span>
         <span className="auth-brand-tag">智能工作空间</span>
       </div>
