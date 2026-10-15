@@ -287,7 +287,7 @@ test('account settings are global and workspace switcher lives in the sidebar he
     css,
     /\.shell-workspace-menu-item,[\s\S]*?\.shell-workspace-menu-action,[\s\S]*?\.shell-workspace-menu-account\s*\{[^}]*min-height:\s*36px;/s,
   )
-  assert.match(screen.getByTestId('shell-workspace-menu').textContent ?? '', /创建新空间/)
+  assert.match(screen.getByTestId('shell-workspace-menu').textContent ?? '', /创建空间/)
   assert.equal(screen.queryByText('退出登录'), null)
   assert.equal(screen.getByTestId('shell-workspace-local-account').textContent, 'ada@example.com')
   assert.equal(screen.getByTestId('shell-workspace-local-logout').getAttribute('aria-label'), '退出')
@@ -369,7 +369,7 @@ test('workspace creation uses centered local and online cards with default names
   fireEvent.click(switcher)
   const menu = await screen.findByTestId('shell-workspace-menu')
   assert.equal(menu.querySelectorAll('.shell-workspace-menu-icon').length, 2)
-  fireEvent.click(screen.getByText('创建新空间'))
+  fireEvent.click(screen.getByText('创建空间'))
 
   const dialog = await screen.findByRole('dialog', { name: '创建新空间' })
   assert.equal(dialog.querySelectorAll('.shell-workspace-create-card').length, 2)
@@ -402,7 +402,7 @@ test('workspace creation uses centered local and online cards with default names
   }) as typeof fetch
   render(<ShellWorkspaceSwitcher />)
   fireEvent.click(await screen.findByTestId('shell-workspace-switcher'))
-  fireEvent.click(screen.getByText('创建新空间'))
+  fireEvent.click(screen.getByText('创建空间'))
   assert.equal(screen.queryByRole('dialog', { name: '创建新空间' }), null)
   await waitFor(() => assert.deepEqual(onlineBodies[0], { name: '云端空间', location: 'cloud' }))
   await waitFor(() => assert.match(screen.getByRole('alert').textContent ?? '', /stop reload/))

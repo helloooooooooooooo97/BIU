@@ -986,7 +986,7 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
               }}
             >
               <PlusIcon className="size-4" />
-              <span>{hostOnline && creatingLocation ? '正在创建…' : '创建新空间'}</span>
+              <span>{hostOnline && creatingLocation ? '正在创建…' : '创建空间'}</span>
             </button>
             {hostOnline && createError ? <p className="shell-workspace-create-error" role="alert">{createError}</p> : null}
             <button
