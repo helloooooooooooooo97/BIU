@@ -51,7 +51,7 @@ export class AccountService extends Service {
       this.replica = new RecordReplica(db, httpRemote(origin))
       const timer = setInterval(() => {
         const device = this.replica?.active()
-        if (!device?.token) return
+        if (!device?.token || !device.workspaceId) return
         void exchangeSnapshot(ctx, origin, device.token, device.accountId, device.workspaceId).catch((error) => {
           console.warn('[replica] sync failed', error)
         })

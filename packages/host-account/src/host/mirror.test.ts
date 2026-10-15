@@ -5,7 +5,7 @@ import { test } from 'vitest'
 import { Context } from 'cordis'
 import { Service } from 'cordis'
 import type { SessionRecord } from '@biu/type-session'
-import { applySnapshot, takeSnapshot } from './mirror.ts'
+import { applySnapshot, exchangeSnapshot, takeSnapshot } from './mirror.ts'
 
 test('cache keeps local sessions and replaces cloud sessions', async () => {
   const ctx = new Context()
@@ -91,4 +91,19 @@ test('desktop caches cloud rows but does not copy local records onto the cloud',
   assert.doesNotMatch(mirror, /cloudCopyId/)
   assert.doesNotMatch(account, /record_cloud_copy/)
   assert.match(mirror, /workspaceLocation/)
+})
+
+test('replica snapshot exchange does not run without a cloud workspace', async () => {
+  const previous = globalThis.fetch
+  let called = 0
+  globalThis.fetch = (async () => {
+    called += 1
+    return new Response('{}')
+  }) as typeof fetch
+  try {
+    await exchangeSnapshot(new Context(), 'http://127.0.0.1:9', 'token', 'ada', '')
+    assert.equal(called, 0)
+  } finally {
+    globalThis.fetch = previous
+  }
 })
