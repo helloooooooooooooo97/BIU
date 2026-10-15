@@ -71,6 +71,8 @@ test('share panel separates public sharing from internal and external collaborat
   assert.match(src, /数据归属链路/)
   assert.match(src, /fsdb-scope-chain/)
   assert.match(src, /effectiveDataScope/)
+  assert.match(src, /<ScopeMark scope=\{scope\} \/>/)
+  assert.doesNotMatch(src, /ScopeMark scope=\{label \|\| scope\}/)
   assert.match(src, /内部协作者/)
   assert.match(src, /外部协作者/)
   assert.match(src, /collaboratorKind/)

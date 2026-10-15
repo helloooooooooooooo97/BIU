@@ -565,6 +565,11 @@ function roleLabel(role: string) {
   return '可编辑'
 }
 
+function collectionDataViews(collection: string, items: DbRecord[]) {
+  const all = builtinAllView({ path: collection })
+  return [{ id: all.id, name: all.name, filters: all.filters }, ...viewRows(items)]
+}
+
 function viewRows(items: DbRecord[]) {
   return items.flatMap((row) => {
     const id = String(row.viewId ?? '').trim()
@@ -643,7 +648,6 @@ export function ShareScopeDetail({
   const [error, setError] = useState('')
 
   useEffect(() => {
-    if (!open) return
     if (localOnly) {
       const shared = label === '共享'
       setScope(shared ? 'shared' : 'personal')
@@ -682,7 +686,7 @@ export function ShareScopeDetail({
       ])
       if (cancelled) return
       const record = recordPage.items[0] ?? null
-      const dataViews = viewRows(viewPage.items)
+      const dataViews = collectionDataViews(collection, viewPage.items)
       const memberViews = [
         { ...builtinAllView({ path: '/workspace-members' }), name: builtinAllView({ path: '/workspace-members' }).name },
         ...builtinMemberViews().map((view) => ({ id: view.id, name: view.name, filters: view.filters })),
@@ -767,7 +771,7 @@ export function ShareScopeDetail({
           setOpen((prev) => !prev)
         }}
       >
-        <ScopeMark scope={label || scope} />
+        <ScopeMark scope={scope} />
       </button>
       {open && box ? createPortal(
         <HeadlessDismiss
@@ -862,7 +866,7 @@ export function ShareRoleDetail({
       ])
       if (cancelled) return
       const record = recordPage.items[0] ?? null
-      const dataViews = viewRows(viewPage.items)
+      const dataViews = collectionDataViews(collection, viewPage.items)
       const memberViews = [
         { ...builtinAllView({ path: '/workspace-members' }), name: builtinAllView({ path: '/workspace-members' }).name },
         ...builtinMemberViews().map((view) => ({ id: view.id, name: view.name, filters: view.filters })),
