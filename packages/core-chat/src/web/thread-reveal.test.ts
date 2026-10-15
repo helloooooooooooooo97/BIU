@@ -232,9 +232,13 @@ describe('chat scroll memory per session', () => {
 })
 
 describe('thread follows the latest message', () => {
-  it('pins a sent user turn to the top and only follows while stuck to the bottom', () => {
+  it('pins a sent message to the bottom and only follows while stuck to the bottom', () => {
     const src = readFileSync(resolve(import.meta.dirname, './thread.tsx'), 'utf8')
-    expect(src).toContain("restoreChatScroll(parent, { kind: 'pin', nodeId: latestUserId })")
+    const sendFollow = src.slice(src.indexOf('followedUserRef.current === latestUserId'), src.indexOf('maybePrefetchOlder'))
+    expect(sendFollow).toContain('pinChatToLatest(parent)')
+    expect(sendFollow).not.toContain("kind: 'pin'")
+    expect(sendFollow).not.toContain('skipNextLayoutPin')
+    expect(sendFollow).not.toContain('skipNextResizePin')
     expect(src).toContain('followedUserRef.current === latestUserId')
     expect(src).toContain('ResizeObserver')
     expect(src).toContain('pinChatToLatest')

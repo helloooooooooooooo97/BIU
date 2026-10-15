@@ -798,8 +798,6 @@ export const ChatThread = memo(function ChatThread(props: SlotProps) {
   const stickToBottomRef = useRef(true)
   const followedUserRef = useRef('')
   const ignoreNextScrollRef = useRef(false)
-  const skipNextLayoutPinRef = useRef(false)
-  const skipNextResizePinRef = useRef(false)
   const sessionIdRef = useRef(sessionId)
   sessionIdRef.current = sessionId
   const restoredForRef = useRef<string | null>(null)
@@ -875,8 +873,6 @@ export const ChatThread = memo(function ChatThread(props: SlotProps) {
     maxScrollRef.current = 0
     followedUserRef.current = ''
     ignoreNextScrollRef.current = false
-    skipNextLayoutPinRef.current = false
-    skipNextResizePinRef.current = false
   }, [sessionId])
 
   useEffect(() => {
@@ -896,9 +892,7 @@ export const ChatThread = memo(function ChatThread(props: SlotProps) {
     followedUserRef.current = latestUserId
     if (parent) {
       ignoreNextScrollRef.current = true
-      skipNextLayoutPinRef.current = true
-      skipNextResizePinRef.current = true
-      restoreChatScroll(parent, { kind: 'pin', nodeId: latestUserId })
+      pinChatToLatest(parent)
     }
   }, [pending, latestUserId, scrollEpoch])
 
@@ -987,10 +981,6 @@ export const ChatThread = memo(function ChatThread(props: SlotProps) {
     if (!root || !parent) return
     const pin = () => {
       if (!stickToBottomRef.current) return
-      if (skipNextResizePinRef.current) {
-        skipNextResizePinRef.current = false
-        return
-      }
       pinChatToLatest(parent)
     }
     const ro = new ResizeObserver(pin)
@@ -1046,11 +1036,7 @@ export const ChatThread = memo(function ChatThread(props: SlotProps) {
     if (sessionId) restoredForRef.current = sessionId
     const revealedOlder = didRevealOlderTurns(previousRevealStartRef.current, revealStart)
     if (stickToBottomRef.current) {
-      if (skipNextLayoutPinRef.current) {
-        skipNextLayoutPinRef.current = false
-      } else if (mountedNodes.length > 0) {
-        pinChatToLatest(parent)
-      }
+      if (mountedNodes.length > 0) pinChatToLatest(parent)
     } else if (revealedOlder && prependHeightRef.current) {
       const delta = parent.scrollHeight - prependHeightRef.current
       // 钉在顶上看更早内容时不要把 scrollTop 往下拽，否则会和上滑抢位置、抖死。
