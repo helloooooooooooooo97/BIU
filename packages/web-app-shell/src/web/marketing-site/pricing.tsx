@@ -5,12 +5,12 @@ import { usePageMeta } from './use-page-meta.ts'
 
 /** 常见工具单价（每用户每月，美元）——源自 Notion 定价页的思路：让用户自己算。 */
 const TOOL_COSTS = [
-  { id: 'knowledge', label: '知识库', price: 10 },
-  { id: 'project', label: '项目管理', price: 24 },
-  { id: 'ai', label: 'AI 助手', price: 20 },
-  { id: 'meeting', label: '会议记录', price: 18 },
-  { id: 'search', label: '搜索', price: 35 },
-  { id: 'calendar', label: '日程', price: 15 },
+  { id: 'knowledge', label: 'Knowledge base', price: 10 },
+  { id: 'project', label: 'Project management', price: 24 },
+  { id: 'ai', label: 'AI assistant', price: 20 },
+  { id: 'meeting', label: 'Meeting notes', price: 18 },
+  { id: 'search', label: 'Search', price: 35 },
+  { id: 'calendar', label: 'Calendar', price: 15 },
 ] as const
 
 type Plan = {
@@ -24,43 +24,43 @@ type Plan = {
 
 const PLANS: readonly Plan[] = [
   {
-    name: '桌面版',
+    name: 'Desktop',
     price: '$0',
     cadence: 'macOS / Windows',
     featured: true,
-    features: ['本机空间，数据存在自己电脑上', '页面、表格、插件、智能体全部功能', '自带模型密钥（DeepSeek / OpenAI / Anthropic）'],
-    cta: { label: '下载', kind: 'download' },
+    features: ['Local spaces keep data on your computer', 'Full access to pages, tables, plugins, and agents', 'Bring your own model keys (DeepSeek / OpenAI / Anthropic)'],
+    cta: { label: 'Download', kind: 'download' },
   },
   {
-    name: '自部署',
+    name: 'Self-hosted',
     price: '$0',
-    cadence: 'Apache 2.0 开源',
+    cadence: 'Apache 2.0 open source',
     featured: false,
-    features: ['完整源码，可审计、可修改', '部署在自己的服务器上', '可商用，保留许可与 NOTICE 即可'],
-    cta: { label: '查看源码', kind: 'github' },
+    features: ['Complete source code to audit and modify', 'Deploy on your own servers', 'Commercial use allowed with the license and NOTICE retained'],
+    cta: { label: 'View source', kind: 'github' },
   },
   {
-    name: '官方云端',
-    price: '即将上线',
-    cadence: '价格上线时公布',
+    name: 'BIU Cloud',
+    price: 'Coming soon',
+    cadence: 'Pricing to be announced',
     featured: false,
-    features: ['多设备访问', '成员与权限', '在线协作', '上线前可以先自部署，功能相同'],
-    cta: { label: '即将上线', kind: 'soon' },
+    features: ['Multi-device access', 'Members and permissions', 'Online collaboration', 'Self-host the same features today'],
+    cta: { label: 'Coming soon', kind: 'soon' },
   },
 ] as const
 
 const PRICING_FAQ = [
-  ['为何免费', 'BIU 是开源项目，代码以 Apache 2.0 许可发布。桌面版与自部署不收费，以便用页面组合软件。'],
-  ['商用许可', 'Apache 2.0 允许商用、修改和再分发。使用时须保留许可文本与 NOTICE，并标明修改过的文件。'],
-  ['模型调用费用', 'BIU 本身不收费。智能体调用的是用户自行配置的模型服务，费用由模型服务商按其价格收取。'],
-  ['后续收费安排', '开源代码、桌面版和自部署持续免费。官方云端服务尚在准备，上线时另行公布价格。数据可随时完整导出。'],
-  ['联系方式', '可在 GitHub 提交 issue，或发送邮件至 348876414@qq.com。'],
+  ['Why is BIU free?', 'BIU is open source under the Apache 2.0 license. The desktop app and self-hosted version are free, so anyone can compose software with pages.'],
+  ['Can I use BIU commercially?', 'Yes. Apache 2.0 permits commercial use, modification, and redistribution. You must retain the license and NOTICE files and identify modified files.'],
+  ['What do model calls cost?', 'BIU does not charge for model usage. Agents call the model provider you configure, and that provider bills you at its standard rates.'],
+  ['Will BIU charge in the future?', 'The source code, desktop app, and self-hosted version will remain free. Pricing for BIU Cloud will be announced at launch. You can export all your data at any time.'],
+  ['How can I get in touch?', 'Open an issue on GitHub or email 348876414@qq.com.'],
 ] as const
 
 export function MarketingPricing({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
   usePageMeta({
-    title: '定价',
-    description: 'BIU 开源、免费：桌面版和自部署不收费，官方云端即将上线。用计算器看看把这些工具收进一个页面能省多少。',
+    title: 'Pricing',
+    description: 'BIU is free and open source. The desktop app and self-hosted version cost nothing, and BIU Cloud is coming soon.',
     path: '/pricing',
   })
   const [selected, setSelected] = useState<string[]>(['knowledge', 'project', 'ai'])
@@ -89,14 +89,15 @@ export function MarketingPricing({ onLogin, onStart }: { onLogin: SiteAction; on
   return (
     <SiteChrome onLogin={onLogin} onStart={onStart}>
         <section className="site-page-hero" data-reveal>
-          <p className="site-section-label">定价</p>
-          <h1>免费，而且开源</h1>
+          <p className="site-section-label">Pricing</p>
+          <h1>Free and open source</h1>
           <p className="site-page-lead">
-            BIU 以 Apache 2.0 开源。桌面版和自部署都不收费，你只需要为自己选的模型付费；官方云端服务即将上线。
+            BIU is open source under Apache 2.0. The desktop app and self-hosted version are free—you only pay
+            your chosen model provider. BIU Cloud is coming soon.
           </p>
         </section>
 
-        <section className="site-plans" aria-label="使用方式">
+        <section className="site-plans" aria-label="Ways to use BIU">
           <div className="site-plans-grid">
             {PLANS.map((plan) => (
               <article key={plan.name} className={plan.featured ? 'is-featured' : ''} data-reveal>
@@ -111,11 +112,11 @@ export function MarketingPricing({ onLogin, onStart }: { onLogin: SiteAction; on
           </div>
         </section>
 
-        <section className="site-roi" data-reveal aria-label="成本对比">
-          <h2>这些工具，现在每月花多少</h2>
+        <section className="site-roi" data-reveal aria-label="Cost comparison">
+          <h2>What do these tools cost today?</h2>
           <div className="site-roi-body">
             <fieldset className="site-roi-tools">
-              <legend className="sr-only">正在使用的工具</legend>
+              <legend className="sr-only">Tools you currently use</legend>
               {TOOL_COSTS.map((tool) => (
                 <label key={tool.id} className={selected.includes(tool.id) ? 'is-on' : ''}>
                   <input
@@ -124,13 +125,13 @@ export function MarketingPricing({ onLogin, onStart }: { onLogin: SiteAction; on
                     onChange={() => toggleTool(tool.id)}
                   />
                   <span>{tool.label}</span>
-                  <em>${tool.price}/人</em>
+                  <em>${tool.price}/user</em>
                 </label>
               ))}
             </fieldset>
             <div className="site-roi-result">
               <label className="site-roi-seats">
-                团队人数
+                Team size
                 <input
                   type="number"
                   min={1}
@@ -140,35 +141,36 @@ export function MarketingPricing({ onLogin, onStart }: { onLogin: SiteAction; on
                 />
               </label>
               <p className="site-roi-number">
-                <strong>${monthly}</strong><span>/人/月</span>
+                <strong>${monthly}</strong><span>/user/month</span>
               </p>
-              <p className="site-roi-total">合计约 <strong>${yearly.toLocaleString('en-US')}</strong> / 年，BIU 是 <strong>$0</strong></p>
+              <p className="site-roi-total">About <strong>${yearly.toLocaleString('en-US')}</strong> / year in total. BIU is <strong>$0</strong>.</p>
               <p className="site-roi-note">
-                在 BIU 里，这些能力可以是同一个页面里的几个插件块。模型调用费用另算，取决于你选的服务商。
+                In BIU, these capabilities can live as plugin blocks on one page. Model usage is billed separately
+                by your chosen provider.
               </p>
             </div>
           </div>
         </section>
 
         <section className="site-space-compare" data-reveal>
-          <h2>本机空间 vs 云端空间</h2>
+          <h2>Local spaces vs. cloud spaces</h2>
           <table>
             <thead>
-              <tr><th>维度</th><th>本机空间</th><th>云端空间</th></tr>
+              <tr><th>Category</th><th>Local space</th><th>Cloud space</th></tr>
             </thead>
             <tbody>
-              <tr><td>数据位置</td><td>你自己的电脑</td><td>云端托管</td></tr>
-              <tr><td>离线</td><td>可用</td><td>需要网络</td></tr>
-              <tr><td>多设备</td><td>—</td><td>支持</td></tr>
-              <tr><td>成员协作</td><td>—</td><td>支持权限管理</td></tr>
-              <tr><td>价格</td><td>免费</td><td>自部署免费；官方云端即将上线</td></tr>
+              <tr><td>Data location</td><td>Your computer</td><td>Cloud-hosted</td></tr>
+              <tr><td>Offline access</td><td>Available</td><td>Internet required</td></tr>
+              <tr><td>Multiple devices</td><td>—</td><td>Supported</td></tr>
+              <tr><td>Team collaboration</td><td>—</td><td>Permission controls</td></tr>
+              <tr><td>Price</td><td>Free</td><td>Free to self-host; BIU Cloud coming soon</td></tr>
             </tbody>
           </table>
         </section>
 
-        <SiteFaq title="定价说明" items={PRICING_FAQ} />
+        <SiteFaq title="Pricing FAQ" items={PRICING_FAQ} />
 
-        <SiteFinalCta title="现在就免费用起来" />
+        <SiteFinalCta title="Start using BIU for free" />
     </SiteChrome>
   )
 }

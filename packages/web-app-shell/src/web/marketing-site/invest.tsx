@@ -2,49 +2,49 @@ import { Link } from 'react-router-dom'
 import { CONTACT_EMAIL, SiteChrome, SiteFaq, SiteFinalCta, type SiteAction } from './site-chrome.tsx'
 import { usePageMeta } from './use-page-meta.ts'
 
-export const INVEST_MAIL = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent('BIU 投资洽谈')}`
+export const INVEST_MAIL = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent('Investing in BIU')}`
 
 /** 每一行的数字出自对应文章的参考资料。 */
 const VISION_ROWS = [
   {
-    verb: '构建',
+    verb: 'Build',
     slug: 'build-software',
-    context: '智能体在真实数据上构建，每一次修改都立即作用于正在运行的服务。',
-    economy: '全球软件支出 1.468 万亿美元（2026）；构建者从 4840 万开发者扩展到 11.4 亿知识工作者。',
+    context: 'Agents build against real data, and every change takes effect immediately in a live service.',
+    economy: '$1.468 trillion in global software spending (2026); the pool of builders expands from 48.4 million developers to 1.14 billion knowledge workers.',
   },
   {
-    verb: '存储',
+    verb: 'Store',
     slug: 'store-software',
-    context: '结构化属性与自由正文同存一页，智能体按字段精确检索，减少整段文本的猜测。',
-    economy: '公有云支出 2029 年达 1.49 万亿美元；全球近九成数据为非结构化，知识工作者 19% 的时间用于找信息。',
+    context: 'Structured properties and free-form text coexist on one page, letting agents retrieve exact fields instead of guessing from long passages.',
+    economy: 'Public-cloud spending reaches $1.49 trillion in 2029; nearly 90% of global data is unstructured, and knowledge workers spend 19% of their time finding information.',
   },
   {
-    verb: '组合',
+    verb: 'Compose',
     slug: 'compose-software',
-    context: '一项工作的数据、规则与历史集中在一处，智能体拿到的是完整而精准的上下文。',
-    economy: '生成式 AI 每年 2.6–4.4 万亿美元的价值，取决于上下文；企业平均 897 款应用，仅 29% 互通。',
+    context: 'A project’s data, rules, and history live together, giving agents complete and precise context.',
+    economy: 'Generative AI’s $2.6–4.4 trillion in annual value depends on context; enterprises use 897 applications on average, and only 29% are integrated.',
   },
   {
-    verb: '分发',
+    verb: 'Distribute',
     slug: 'distribute-software',
-    context: '权限随页面计算，智能体代表谁、能看到什么、能做什么，都有明确的边界。',
-    economy: 'App Store 生态 2024 年促成约 1.3 万亿美元交易；一个链接即可交付，无需打包、上架与 30% 佣金。',
+    context: 'Permissions are computed with the page, clearly bounding whom an agent represents, what it can see, and what it can do.',
+    economy: 'The App Store ecosystem facilitated about $1.3 trillion in commerce in 2024; one link delivers the product without packaging, store review, or a 30% commission.',
   },
   {
-    verb: '衍生',
+    verb: 'Derive',
     slug: 'derive-software',
-    context: '智能体引用已有的插件、仓库与页面，在其上扩展和叠加，能力持续累积。',
-    economy: '开源软件的需求侧价值约 8.8 万亿美元；GitHub 6.3 亿个仓库，等待被更多人复用。',
+    context: 'Agents reference existing plugins, repositories, and pages, extending and layering them so capabilities keep accumulating.',
+    economy: 'Open-source software has roughly $8.8 trillion in demand-side value; 630 million GitHub repositories are waiting to be reused more broadly.',
   },
 ] as const
 
 export function VisionTable() {
   return (
-    <div className="site-vision-table" role="table" aria-label="五个动词" data-reveal>
+    <div className="site-vision-table" role="table" aria-label="Five verbs" data-reveal>
       <div className="site-vision-row site-vision-head" role="row">
-        <span role="columnheader">动词</span>
-        <span role="columnheader">Agent 的上下文</span>
-        <span role="columnheader">经济规模</span>
+        <span role="columnheader">Verb</span>
+        <span role="columnheader">Agent context</span>
+        <span role="columnheader">Economic scale</span>
       </div>
       {VISION_ROWS.map((row, index) => (
         <div className="site-vision-row" role="row" key={row.slug}>
@@ -65,60 +65,62 @@ export function VisionTable() {
 const THESIS = [
   {
     index: '01',
-    title: '软件的生产方式正在改变',
-    body: 'Gartner 预测，2026 年全球软件支出达到 1.468 万亿美元；到 2028 年，33% 的企业软件应用将内置智能体能力，2024 年这一比例不到 1%。软件的构建者，正在从 4840 万开发者扩展到 11.4 亿知识工作者。',
+    title: 'How software is produced is changing',
+    body: 'Gartner forecasts global software spending of $1.468 trillion in 2026. By 2028, 33% of enterprise software applications will include agentic capabilities, up from less than 1% in 2024. The pool of software builders is expanding from 48.4 million developers to 1.14 billion knowledge workers.',
   },
   {
     index: '02',
-    title: '智能体需要一种新的媒介',
-    body: '企业平均使用 897 款应用，只有 29% 彼此集成；95% 的 IT 负责人认为集成是落地 AI 的障碍。麦肯锡估算生成式 AI 每年可创造 2.6–4.4 万亿美元的价值，兑现它的前提，是智能体拿到完整的上下文。',
+    title: 'Agents need a new medium',
+    body: 'Enterprises use 897 applications on average, yet only 29% are integrated; 95% of IT leaders see integration as a barrier to deploying AI effectively. McKinsey estimates that generative AI could create $2.6–4.4 trillion in value each year—but realizing it requires giving agents complete context.',
   },
   {
     index: '03',
-    title: '页面就是这种媒介',
-    body: '在 BIU 里，一个页面装下软件、数据和人。构建、存储、组合、分发、衍生，五个环节在同一页里完成，智能体与用户在同一个工作区中协作。',
+    title: 'The page is that medium',
+    body: 'In BIU, one page brings together software, data, and people. Building, storing, composing, distributing, and deriving all happen on that page, where agents and users collaborate in the same workspace.',
   },
 ] as const
 
 const TODAY = [
-  ['开源桌面应用', '以 Apache 2.0 开源，桌面版免费下载，代码可审计，也可自部署。', '/download'],
-  ['插件即软件', '页面里的每一块都由插件提供：表格、画板、代码练习、视频剪辑，写好就能和其他块一起工作。', '/product'],
-  ['整页分享', '一个链接交付整套服务，接收方打开即可使用，无需安装与上架。', '/use-cases'],
-  ['条件匹配的权限', '数据视图与成员视图两边都是条件，访问时计算可见范围，继承关系可追溯。', '/security'],
+  ['Open-source desktop app', 'Released under Apache 2.0, the desktop app is free to download, auditable, and self-hostable.', '/download'],
+  ['Plugins are software', 'Every block on a page comes from a plugin: tables, whiteboards, coding exercises, video editors. Once written, each works alongside every other block.', '/product'],
+  ['Share the whole page', 'One link delivers the complete service. Recipients can open and use it immediately, with no installation or app-store listing.', '/use-cases'],
+  ['Condition-based permissions', 'Both data and member views are conditions. Visibility is computed at access time, and inherited permissions remain traceable.', '/security'],
 ] as const
 
 const INVEST_FAQ = [
-  ['怎样联系你们', `请发送邮件至 ${CONTACT_EMAIL}，注明机构、关注方向与联系方式。`],
-  ['可以先看产品吗', 'BIU 开源，桌面版可直接下载试用；代码全部在 GitHub 上公开。'],
-  ['数据的出处在哪里', '页面中的市场数据出自 Gartner、IDC、麦肯锡、哈佛商学院等机构，五篇动词文章末尾列有完整的参考资料。'],
+  ['How can I contact you?', `Email ${CONTACT_EMAIL} and include your organization, areas of interest, and contact details.`],
+  ['Can I see the product first?', 'BIU is open source. You can download and try the desktop app directly, and all code is public on GitHub.'],
+  ['Where does the data come from?', 'The market data comes from Gartner, IDC, McKinsey, Harvard Business School, and other institutions. Full references appear at the end of the five verb articles.'],
 ] as const
 
 export function MarketingInvest({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
   usePageMeta({
-    title: '投资',
-    description: 'BIU 是一家 AI 原生的软件公司，用一个页面完成软件的构建、存储、组合、分发与衍生，这五个环节各自对应一个万亿美元量级的市场。',
+    title: 'Invest',
+    description: 'BIU is an AI-native software company that brings software building, storage, composition, distribution, and derivation onto one page—five markets worth trillions of dollars each.',
     path: '/invest',
   })
 
   return (
     <SiteChrome onLogin={onLogin} onStart={onStart}>
       <section className="site-page-hero" data-reveal>
-        <p className="site-section-label">投资</p>
-        <h1>投资下一家万亿美元 AI 公司</h1>
+        <p className="site-section-label">Invest</p>
+        <h1>Invest in the next trillion-dollar AI company</h1>
         <p className="site-page-lead">
-          BIU 是一家 AI 原生的软件公司，做的是人与智能体协作的媒介：用一个页面完成软件的构建、存储、组合、分发与衍生。这五个环节各自对应一个万亿美元量级的市场，智能体正在重写它们。我们正在寻找认同这一判断的投资人。
+          BIU is an AI-native software company building the medium for human–agent collaboration. One page brings
+          together software building, storage, composition, distribution, and derivation—five markets worth trillions
+          of dollars each. Agents are rewriting all five, and we are looking for investors who share this conviction.
         </p>
         <div className="site-cta-actions site-invest-actions">
           <a className="site-cta-primary" href={INVEST_MAIL}>
-            联系我们
+            Contact us
           </a>
           <Link className="site-cta-secondary" to="/product">
-            了解产品
+            Explore the product
           </Link>
         </div>
       </section>
 
-      <section className="site-security-blocks site-invest-thesis" aria-label="判断">
+      <section className="site-security-blocks site-invest-thesis" aria-label="Investment thesis">
         {THESIS.map((item) => (
           <article key={item.index} data-reveal>
             <span className="site-solution-index">{item.index}</span>
@@ -128,19 +130,19 @@ export function MarketingInvest({ onLogin, onStart }: { onLogin: SiteAction; onS
         ))}
       </section>
 
-      <section className="site-home-entry site-vision" aria-label="五个市场">
+      <section className="site-home-entry site-vision" aria-label="Five markets">
         <div className="site-home-entry-heading" data-reveal>
-          <p className="site-section-label">市场</p>
-          <h2>五个动词，五个万亿美元市场</h2>
-          <p>每个动词链到一篇完整的论证，数据出处列在文章末尾的参考资料里。</p>
+          <p className="site-section-label">Markets</p>
+          <h2>Five verbs, five trillion-dollar markets</h2>
+          <p>Each verb links to the full case, with sources listed in the references at the end.</p>
         </div>
         <VisionTable />
       </section>
 
-      <section className="site-home-entry site-invest-today" aria-label="已经做到的">
+      <section className="site-home-entry site-invest-today" aria-label="Available today">
         <div className="site-home-entry-heading" data-reveal>
-          <p className="site-section-label">产品</p>
-          <h2>今天已经可以用</h2>
+          <p className="site-section-label">Product</p>
+          <h2>Ready to use today</h2>
         </div>
         <div className="site-invest-today-grid" data-reveal>
           {TODAY.map(([title, body, to]) => (
@@ -152,22 +154,22 @@ export function MarketingInvest({ onLogin, onStart }: { onLogin: SiteAction; onS
         </div>
       </section>
 
-      <section className="site-home-entry" aria-label="联系">
+      <section className="site-home-entry" aria-label="Contact">
         <div className="site-vision-invest" data-reveal>
           <div>
-            <h2>和我们聊聊</h2>
-            <p>欢迎来信交流产品路线与融资计划。来信请注明机构与关注方向。</p>
+            <h2>Let’s talk</h2>
+            <p>We welcome conversations about our product roadmap and fundraising plans. Please include your organization and areas of interest.</p>
             <p className="site-vision-note">{CONTACT_EMAIL}</p>
           </div>
           <a className="site-cta-primary" href={INVEST_MAIL}>
-            联系我们
+            Contact us
           </a>
         </div>
       </section>
 
-      <SiteFaq title="关于投资" items={INVEST_FAQ} />
+      <SiteFaq title="About investing" items={INVEST_FAQ} />
 
-      <SiteFinalCta title="先亲手试一页" />
+      <SiteFinalCta title="Try a page for yourself first" />
     </SiteChrome>
   )
 }

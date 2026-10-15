@@ -7,37 +7,37 @@ import { usePageMeta } from './use-page-meta.ts'
 const REPO_FILE = `${GITHUB_URL}/blob/main`
 
 const DOCS = [
-  { title: '快速开始', body: '三行命令从源码跑起来，或者直接下载桌面版。', href: `${REPO_FILE}/README.zh-CN.md#快速开始` },
-  { title: '桌面版安装', body: 'macOS 未公证安装包的打开方式、Windows SmartScreen 的放行步骤，以及数据目录位置。', href: `${REPO_FILE}/docs/desktop-install.md` },
-  { title: '为什么是 File System', body: '路径、表、记录、schema、操作、blurb —— 六个原子怎么组合出所有东西。', href: `${REPO_FILE}/README.zh-CN.md#为什么是-file-system` },
-  { title: '架构', body: 'Host 与 Web 两侧的插件、事件流和存储各在哪一层。', href: `${REPO_FILE}/README.zh-CN.md#架构` },
-  { title: '插件包与热插拔', body: '插件怎么声明、怎么在沙箱里写、怎么打包装进工作区。', href: `${REPO_FILE}/docs/plugin-packages.md` },
+  { title: 'Quick start', body: 'Run BIU from source with three commands, or download the desktop app.', href: `${REPO_FILE}/README.zh-CN.md#快速开始` },
+  { title: 'Desktop installation', body: 'Open an unnotarized macOS build, allow the app through Windows SmartScreen, and find your local data directory.', href: `${REPO_FILE}/docs/desktop-install.md` },
+  { title: 'Why a File System?', body: 'See how six primitives—paths, tables, records, schemas, operations, and blurbs—compose everything in BIU.', href: `${REPO_FILE}/README.zh-CN.md#为什么是-file-system` },
+  { title: 'Architecture', body: 'Learn where plugins, event flows, and storage live across the Host and Web layers.', href: `${REPO_FILE}/README.zh-CN.md#架构` },
+  { title: 'Plugin packages and hot swapping', body: 'Learn how to declare plugins, build them in the sandbox, and package them for a workspace.', href: `${REPO_FILE}/docs/plugin-packages.md` },
   { title: 'English README', body: 'The same overview in English.', href: `${REPO_FILE}/README.md` },
 ] as const
 
 export function MarketingDocs({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
   usePageMeta({
-    title: '文档',
-    description: 'BIU 的文档目前放在 GitHub 仓库里：快速开始、桌面版安装、File System 设计、架构与插件开发。',
+    title: 'Documentation',
+    description: 'Explore BIU documentation on GitHub, including quick start, desktop installation, File System design, architecture, and plugin development.',
     path: '/docs',
   })
   return (
     <SiteChrome onLogin={onLogin} onStart={onStart}>
       <section className="site-page-hero" data-reveal>
-        <p className="site-section-label">文档</p>
-        <h1>把 BIU 用起来</h1>
-        <p className="site-page-lead">文档和代码放在一起维护，都在 GitHub 仓库里。下面是最常用的几篇。</p>
+        <p className="site-section-label">Documentation</p>
+        <h1>Get started with BIU</h1>
+        <p className="site-page-lead">Documentation is maintained alongside the code in the GitHub repository. Start with these popular guides.</p>
       </section>
-      <section className="site-doc-grid" aria-label="文档">
+      <section className="site-doc-grid" aria-label="Documentation">
         {DOCS.map((doc) => (
           <a key={doc.title} className="site-doc-card" href={doc.href} target="_blank" rel="noreferrer" data-reveal>
             <h2>{doc.title}</h2>
             <p>{doc.body}</p>
-            <span>在 GitHub 阅读 →</span>
+            <span>Read on GitHub →</span>
           </a>
         ))}
       </section>
-      <SiteFinalCta title="先把 BIU 用起来" />
+      <SiteFinalCta title="Start building with BIU" />
     </SiteChrome>
   )
 }
@@ -58,8 +58,8 @@ export function releaseLines(body: string, limit = 12) {
 
 export function MarketingChangelog({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
   usePageMeta({
-    title: '更新日志',
-    description: 'BIU 每个版本的更新说明，直接读自 GitHub Releases。',
+    title: 'Changelog',
+    description: 'Read the release notes for every BIU version, sourced directly from GitHub Releases.',
     path: '/changelog',
   })
   const [releases, setReleases] = useState<Release[] | null>(null)
@@ -74,15 +74,15 @@ export function MarketingChangelog({ onLogin, onStart }: { onLogin: SiteAction; 
   return (
     <SiteChrome onLogin={onLogin} onStart={onStart}>
       <section className="site-page-hero" data-reveal>
-        <p className="site-section-label">更新日志</p>
-        <h1>BIU 在变</h1>
-        <p className="site-page-lead">每个版本的说明直接读自 GitHub Releases，和安装包同一处发布。</p>
+        <p className="site-section-label">Changelog</p>
+        <h1>What’s new in BIU</h1>
+        <p className="site-page-lead">Release notes come directly from GitHub Releases, where each installer is published.</p>
       </section>
-      <section className="site-changelog" aria-label="版本">
-        {releases === null ? <p className="site-changelog-empty">正在从 GitHub 读取版本…</p> : null}
+      <section className="site-changelog" aria-label="Releases">
+        {releases === null ? <p className="site-changelog-empty">Loading releases from GitHub…</p> : null}
         {releases?.length === 0 ? (
           <p className="site-changelog-empty">
-            暂时读不到 GitHub，可以直接去 <a href={`${GITHUB_URL}/releases`} target="_blank" rel="noreferrer">GitHub Releases</a> 查看。
+            GitHub is temporarily unavailable. View releases directly on <a href={`${GITHUB_URL}/releases`} target="_blank" rel="noreferrer">GitHub Releases</a>.
           </p>
         ) : null}
         {releases?.map((release) => {
@@ -96,13 +96,13 @@ export function MarketingChangelog({ onLogin, onStart }: { onLogin: SiteAction; 
               {lines.length ? (
                 <ul>{lines.map((line, index) => <li key={`${index}-${line}`}>{line}</li>)}</ul>
               ) : (
-                <p>这个版本没有写说明。</p>
+                <p>No release notes were provided for this version.</p>
               )}
-              <a href={release.url} target="_blank" rel="noreferrer">完整说明与安装包 →</a>
+              <a href={release.url} target="_blank" rel="noreferrer">Full release notes and installers →</a>
             </article>
           )
         })}
-        <p className="site-changelog-foot">想第一时间拿到新版本？<Link to="/download">下载页</Link>永远指向最新版。</p>
+        <p className="site-changelog-foot">Want the latest version? The <Link to="/download">download page</Link> always points to the newest release.</p>
       </section>
     </SiteChrome>
   )

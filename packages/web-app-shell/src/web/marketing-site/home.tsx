@@ -16,69 +16,69 @@ import { INVEST_MAIL, VisionTable } from './invest.tsx'
 const PRODUCT_SURFACES = [
   {
     id: 'page',
-    label: '页面',
+    label: 'Pages',
     video: { webm: '/site/demo-allinone.webm', mp4: '/site/demo-allinone.mp4' },
     image: '/site/demo-allinone.webp',
     size: [3840, 2400],
-    lead: '在 BIU 里，页面上的每一块都是一个真正能用的软件 —— 表格、画板、代码练习、视频剪辑，都来自插件。把它们放进同一页，就是一套为你的客户准备好的服务：刊头、画板、算法题、代码运行、offer 对比放在一起，就是交给学员的一整套算法面试陪跑服务。',
-    alt: 'BIU 页面：一份算法面试陪跑，刊头、Excalidraw 画板、算法题卡片、代码运行块和 offer 对比矩阵放在同一页',
+    lead: 'In BIU, every block is fully functional software—from tables and whiteboards to coding exercises and video editing—all powered by plugins. Combine them on one page to create a complete service for your customers. For example, a header, whiteboard, coding challenges, code runner, and offer comparison become an end-to-end technical interview coaching experience.',
+    alt: 'A BIU page for technical interview coaching, with a header, Excalidraw whiteboard, coding challenge cards, a code runner, and an offer comparison matrix',
   },
   {
     id: 'plugins',
-    label: '插件',
+    label: 'Plugins',
     image: '/site/shot-plugins.webp',
     size: [3840, 2400],
-    lead: '页面上的每一块都来自一个插件。装一个插件，就多一种块；缺的那一种，让智能体写一个。',
-    alt: 'BIU 插件表：Excalidraw 画板、算法题卡片、代码运行块等插件，一键安装、启用',
+    lead: 'Every block on a page comes from a plugin. Install a plugin to add a new block type—or ask an agent to build the one you need.',
+    alt: 'BIU plugin table with one-click installation and activation for Excalidraw whiteboards, coding challenge cards, code runners, and more',
   },
   {
     id: 'share',
-    label: '分享',
+    label: 'Share',
     image: '/site/shot-share.webp',
     size: [3840, 2400],
-    lead: '插件跟着页面走。分享时正文、附件和用到的插件一起打包，对方打开链接，画板和算法题照样能用。',
-    alt: 'BIU 分享页：对方打开链接，页面里的画板和算法题卡片照样能用',
+    lead: 'Plugins travel with the page. When you share, the content, attachments, and plugins are bundled together, so whiteboards and coding challenges still work for anyone who opens the link.',
+    alt: 'A shared BIU page where whiteboards and coding challenge cards remain fully interactive',
   },
   {
     id: 'component',
-    label: '组件',
+    label: 'Components',
     image: '/site/demo-component.webp',
     size: [3840, 2160],
-    lead: '页面多了，同一种插件会散落在各处。组件把它们重新收集起来，按类型结构化成表，每一个都能单独打开、编辑。',
-    alt: 'BIU 组件：散落在各个页面里的视频编排块被收集成一张表，同一个组件在专属编辑器里打开',
+    lead: 'As pages multiply, instances of the same plugin spread across your workspace. Components bring them back together in structured tables, where each one can be opened and edited independently.',
+    alt: 'BIU components collecting video editing blocks from multiple pages into a table, with one component open in its dedicated editor',
   },
   {
     id: 'data',
-    label: '数据',
+    label: 'Data',
     image: '/site/demo-file-system.webp',
     size: [3840, 2160],
-    lead: '不只是组件。会话、页面、任务、插件，工作区里的一切都是表，用同一套筛选、视图和地址，还能分栏并排看。',
-    alt: 'BIU 数据：会话表和页面表在同一个工作区里分栏并排打开',
+    lead: 'It goes beyond components. Conversations, pages, tasks, and plugins are all tables, with shared filters, views, and URLs—and you can open them side by side.',
+    alt: 'BIU data with conversation and page tables open side by side in the same workspace',
   },
   {
     id: 'reference',
-    label: '引用',
+    label: 'References',
     image: '/site/demo-context.webp',
     size: [3840, 2160],
-    lead: '都是结构化的数据，就能被直接引用。把页面、会话、组件加进输入框，智能体读的就是你选中的这些，不多也不少。',
-    alt: 'BIU 引用：页面、会话、插件作为可移除的标签放进输入框，交给智能体',
+    lead: 'Structured data can be referenced directly. Add pages, conversations, or components to the prompt, and the agent reads exactly what you selected—nothing more, nothing less.',
+    alt: 'BIU references with pages, conversations, and plugins added to a prompt as removable tags for an agent',
   },
 ] as const
 
 /** 工作区里现成的插件，每张卡一句话说清它在页面里做什么。 */
 const PLUGIN_WALL = [
-  { glyph: '✎', name: 'Excalidraw 画板', body: '手绘风白板，放大就能画，源文件跟着页面走。' },
-  { glyph: '{}', name: '算法题卡片', body: '左边题面，右边代码，LeetCode 风的练习块。' },
-  { glyph: '▶', name: '代码运行块', body: 'Python、Go、Java 等十几种语言，页面里直接跑。' },
-  { glyph: '⚖', name: '方案对比块', body: '多方案 × 多维度加权打分，自动给出推荐。' },
-  { glyph: '◧', name: '视频编排', body: '用时间线脚本剪辑，前端实时合成预览。' },
-  { glyph: '</>', name: 'HTML', body: '静态卡片或能跑脚本的小应用，放映模式一键全屏。' },
-  { glyph: '$_', name: '页面终端', body: '真实交互终端，每个块一个独立会话。' },
-  { glyph: '⇄', name: 'API 调试块', body: '填好请求点发送，响应和历史都留在页面里。' },
-  { glyph: '◎', name: '浏览器', body: '网页卡片，点开就是侧栏里的真浏览器。' },
-  { glyph: '✓', name: '页面回归检查', body: '写一组断言，点一下逐条跑，对比上一次结果。' },
-  { glyph: '≡', name: '页面目录', body: '列出这一页的标题，点击跳转。' },
-  { glyph: '✦', name: '枪火', body: '2D 小游戏。连游戏都能是一个插件。' },
+  { glyph: '✎', name: 'Excalidraw Whiteboard', body: 'A hand-drawn whiteboard. Zoom in and start drawing; the source file stays with the page.' },
+  { glyph: '{}', name: 'Coding Challenge', body: 'The prompt on the left, code on the right—a LeetCode-style practice block.' },
+  { glyph: '▶', name: 'Code Runner', body: 'Run Python, Go, Java, and more than a dozen other languages right on the page.' },
+  { glyph: '⚖', name: 'Option Comparison', body: 'Score multiple options across weighted criteria and get an automatic recommendation.' },
+  { glyph: '◧', name: 'Video Editor', body: 'Edit with timeline scripts and preview the composition in real time.' },
+  { glyph: '</>', name: 'HTML', body: 'Build a static card or a scriptable mini app, then present it full-screen in one click.' },
+  { glyph: '$_', name: 'Page Terminal', body: 'A real interactive terminal, with an independent session for every block.' },
+  { glyph: '⇄', name: 'API Client', body: 'Configure a request and send it; responses and history stay on the page.' },
+  { glyph: '◎', name: 'Browser', body: 'A web card that opens into a real browser in the sidebar.' },
+  { glyph: '✓', name: 'Page Regression Tests', body: 'Write assertions, run them one by one, and compare results with the previous run.' },
+  { glyph: '≡', name: 'Table of Contents', body: 'List every heading on the page and jump to any section.' },
+  { glyph: '✦', name: 'Gunfire', body: 'A 2D mini game—because even a game can be a plugin.' },
 ] as const
 
 function usePrefersReducedMotion() {
@@ -97,34 +97,34 @@ function usePrefersReducedMotion() {
 /** All in One 的三层意思，每条指向产品页对应锚点。 */
 const PILLARS = [
   {
-    title: '块就是软件',
-    body: '页面里的每一块都是一个真正能用的小软件：表格、画板、代码练习、视频剪辑……它们来自可安装的插件，不是平台写死的几种格式。',
+    title: 'Blocks are software',
+    body: 'Every block on a page is fully functional software: a table, whiteboard, coding exercise, video editor, and more. Blocks come from installable plugins, not a fixed set of platform-defined formats.',
     to: '/product#plugins',
   },
   {
-    title: '页面把软件组合起来',
-    body: '一页里放几个插件，就组合出一套服务。它们读写同一份数据，页面上的属性就是它们共同的运行环境。',
+    title: 'Pages compose software',
+    body: 'Combine plugins on a page to create a complete service. They read and write the same data, while page properties provide their shared runtime environment.',
     to: '/product#pages',
   },
   {
-    title: '分享的是一页能用的软件',
-    body: '分享页面时，正文、附件和用到的插件源码一起打包。对方打开就能用，而不是收到一份截图或一个链接。',
+    title: 'Share working software',
+    body: 'When you share a page, its content, attachments, and plugin source code are bundled together. Recipients can use it immediately—not just view a screenshot or follow another link.',
     to: '/product#share',
   },
 ] as const
 
 const AGENT_POINTS = [
   {
-    title: '读得到你的页面',
-    body: '智能体和你操作的是同一份数据，不用把资料复制粘贴给它。',
+    title: 'Understands your pages',
+    body: 'Agents work with the same data you do, so there is no need to copy and paste context.',
   },
   {
-    title: '产出直接落成页面',
-    body: '结果写成页面、表格或任务，不会沉在聊天记录里，下一轮接着用。',
+    title: 'Turns output into pages',
+    body: 'Results become pages, tables, or tasks instead of disappearing into chat history, ready for the next step.',
   },
   {
-    title: '自己能造插件',
-    body: '缺一个工具，就让智能体写一个插件挂进页面。扩展不再只属于开发者。',
+    title: 'Builds its own plugins',
+    body: 'Missing a tool? Ask an agent to build a plugin and add it to the page. Extensibility is no longer just for developers.',
   },
 ] as const
 
@@ -133,9 +133,9 @@ const AGENT_POINTS = [
  * 长对照表留在对比页 —— Notion 的 biuWhen 太长，不能直接贴上来。
  */
 const HOME_COMPARE_LINE = {
-  'vs-notion': '块的种类由插件决定，一页可以装下几个软件。',
-  'vs-obsidian': '同样可以留在本机，插件块读写的是结构化数据。',
-  'vs-chatgpt': '结果落成页面，下一轮接着用，不沉在聊天记录里。',
+  'vs-notion': 'Plugins define your block types, so one page can contain multiple kinds of software.',
+  'vs-obsidian': 'Keep your data local while plugin blocks read and write structured data.',
+  'vs-chatgpt': 'Results become reusable pages instead of getting buried in chat history.',
 } as const
 
 const HOME_COMPARES = COMPARE_FEATURED.flatMap((slug) => {
@@ -145,11 +145,11 @@ const HOME_COMPARES = COMPARE_FEATURED.flatMap((slug) => {
 })
 
 const HERO_VERBS = [
-  ['构建', 'build-software'],
-  ['存储', 'store-software'],
-  ['组合', 'compose-software'],
-  ['分发', 'distribute-software'],
-  ['衍生', 'derive-software'],
+  ['build', 'build-software'],
+  ['store', 'store-software'],
+  ['compose', 'compose-software'],
+  ['distribute', 'distribute-software'],
+  ['derive', 'derive-software'],
 ] as const
 
 /** 日期相同则保持稿序，取最前面两篇作为首页入口。 */
@@ -160,16 +160,16 @@ const HOME_POSTS = BLOG_POSTS
   .map(({ post }) => post)
 
 const HOME_FAQ = [
-  ['BIU 是什么', 'BIU 是桌面应用：用页面把若干软件组合成一套服务，智能体与用户在同一工作区中工作。页面可以整页分享，接收方打开即可使用。'],
-  ['定价', 'BIU 开源且免费，桌面版与自部署不收费。智能体调用的是用户自行配置的模型服务，费用由模型服务商收取。'],
-  ['数据存放位置', '创建空间时由用户选择：本机空间存放在用户自己的电脑上，云端空间存放在用户部署的服务器上。'],
-  ['是否需要编程', '日常使用页面、表格和现成插件即可。需要新的块时，可以由智能体编写。'],
+  ['What is BIU?', 'BIU is a desktop app that combines software into complete services using pages. Agents and users work in the same workspace, and entire pages can be shared as ready-to-use experiences.'],
+  ['How much does BIU cost?', 'BIU is open source and free. The desktop app and self-hosted edition have no license fee. Agents use model services that you configure, and those providers bill you directly.'],
+  ['Where is my data stored?', 'You choose when creating a space. Local spaces stay on your computer; cloud spaces live on a server you deploy.'],
+  ['Do I need to know how to code?', 'No. You can work with pages, tables, and ready-made plugins. When you need a new block, an agent can build it for you.'],
 ] as const
 
 export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
   usePageMeta({
-    title: 'BIU · 用一个页面，组合所有软件',
-    description: '改变世界构建、存储、组合、分发、衍生软件的方式，定义下一代人与 AI 协作的媒介。一个页面，组合所有软件。',
+    title: 'BIU · Compose All Your Software on One Page',
+    description: 'Transform how the world builds, stores, composes, distributes, and derives software. The next medium for human–AI collaboration.',
     path: '/',
   })
   const [activeSurface, setActiveSurface] = useState(0)
@@ -182,11 +182,11 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
         <section className="site-hero">
           <div className="site-hero-copy site-container" data-reveal>
             <p className="site-hero-epigraph">
-              <span>媒介即讯息</span>
-              <cite>马歇尔·麦克卢汉</cite>
+              <span>The medium is the message</span>
+              <cite>Marshall McLuhan</cite>
             </p>
-            <h1 aria-label="改变世界构建、存储、组合、分发、衍生软件的方式">
-              <span>改变世界</span>
+            <h1 aria-label="Transform how the world builds, stores, composes, distributes, and derives software">
+              <span>Transform how the world</span>
               <span className="site-hero-verbs">
                 {HERO_VERBS.map(([word, slug], index) => (
                   <Link key={slug} to={`/blog/${slug}`}>
@@ -195,18 +195,18 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
                   </Link>
                 ))}
               </span>
-              <span>软件的方式</span>
+              <span>software</span>
             </h1>
-            <p className="site-hero-sub">定义下一代人与 AI 协作的媒介</p>
+            <p className="site-hero-sub">The next medium for human–AI collaboration</p>
           </div>
           <div className="site-hero-band site-container" data-reveal>
             <div className="site-hero-band-inner">
               <div>
-                <p className="site-eyebrow">开源 · 免费 · All in One</p>
-                <h2>一个页面，组合所有软件</h2>
+                <p className="site-eyebrow">Open Source · Free · All in One</p>
+                <h2>Compose all your software on one page</h2>
               </div>
               <div className="site-cta-actions">
-                <Link className="site-cta-primary" to="/download"><DownloadIcon />下载</Link>
+                <Link className="site-cta-primary" to="/download"><DownloadIcon />Download</Link>
                 <GitHubButton label="GitHub" />
               </div>
               <img
@@ -224,9 +224,9 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
 
         <section className="site-product-demo" data-reveal>
           <div className="site-demo-heading">
-            <p className="site-section-label">真实界面</p>
-            <h2>一页，就是一套服务</h2>
-            <div className="site-demo-tabs" role="tablist" aria-label="产品演示">
+            <p className="site-section-label">See It in Action</p>
+            <h2>One page. One complete service.</h2>
+            <div className="site-demo-tabs" role="tablist" aria-label="Product demo">
               {PRODUCT_SURFACES.map((item, index) => (
                 <button
                   type="button"
@@ -281,28 +281,28 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
         <section className="site-capabilities" aria-label="All in One">
           <div className="site-capabilities-heading" data-reveal>
             <p className="site-section-label">All in One</p>
-            <h2>不是把功能堆在一起，<br />是让页面装下软件</h2>
+            <h2>More than bundled features.<br />Pages that run software.</h2>
           </div>
           <div className="site-capability-grid">
             {PILLARS.map((item) => (
               <article key={item.title} data-reveal>
                 <h3>{item.title}</h3>
                 <p>{item.body}</p>
-                <Link to={item.to}>了解更多 →</Link>
+                <Link to={item.to}>Learn more →</Link>
               </article>
             ))}
           </div>
           <p className="site-capabilities-note" data-reveal>
-            多数文档工具的块类型是固定的，嵌进来的网页也读不到你的数据。BIU 的块由插件提供，谁都能写，写好就能和页面里的其他块一起工作。
-            <Link to="/compare/vs-notion">看和 Notion 的对比 →</Link>
+            Most document tools offer a fixed set of blocks, and embedded web pages cannot access your data. BIU blocks come from plugins anyone can build, and every plugin can work with the other blocks on the page.
+            <Link to="/compare/vs-notion">Compare BIU with Notion →</Link>
           </p>
         </section>
 
-        <section className="site-plugin-wall" aria-label="插件">
+        <section className="site-plugin-wall" aria-label="Plugins">
           <div className="site-plugin-wall-heading" data-reveal>
-            <p className="site-section-label">插件</p>
-            <h2>今天就能放进页面的软件</h2>
-            <p>下面这些都是工作区里现成的插件，装上就多一种块。缺的那一个，可以让智能体写一个。</p>
+            <p className="site-section-label">Plugins</p>
+            <h2>Software you can add today</h2>
+            <p>These plugins are ready for your workspace. Install one to add a new block type, or ask an agent to build what is missing.</p>
           </div>
           <div className="site-plugin-grid">
             {PLUGIN_WALL.map((item) => (
@@ -314,14 +314,14 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
             ))}
           </div>
           <p className="site-plugin-wall-note" data-reveal>
-            <Link to="/product#plugins">插件怎么写、怎么装 →</Link>
+            <Link to="/product#plugins">Build and install plugins →</Link>
           </p>
         </section>
 
-        <section className="site-agent" aria-label="智能体">
+        <section className="site-agent" aria-label="Agents">
           <div className="site-agent-heading" data-reveal>
-            <p className="site-section-label">智能体</p>
-            <h2>智能体也住在页面里</h2>
+            <p className="site-section-label">Agents</p>
+            <h2>Agents live on the page, too</h2>
           </div>
           <div className="site-agent-grid">
             {AGENT_POINTS.map((item) => (
@@ -336,31 +336,31 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
         <section className="site-space-section" id="spaces">
           <div className="site-space-inner site-container">
             <div className="site-space-heading" data-reveal>
-              <p className="site-section-label">数据控制</p>
-              <h2>数据在哪里，<br />由你决定</h2>
+              <p className="site-section-label">Data Control</p>
+              <h2>Your data lives<br />where you choose</h2>
             </div>
             <div className="site-space-options">
               <article data-reveal>
                 <span className="site-space-index">01</span>
-                <h3>本机空间</h3>
-                <p>页面、表格和附件都存在你自己的电脑上，离线也能用。只有调用模型时，相关内容才会发给你配置的模型服务。</p>
-                <small>本地保存 · 离线可用 · 自带模型密钥</small>
+                <h3>Local Space</h3>
+                <p>Pages, tables, and attachments stay on your computer and work offline. Relevant content is sent to your configured model service only when you invoke a model.</p>
+                <small>Local storage · Offline access · Bring your own model key</small>
               </article>
               <article data-reveal>
                 <span className="site-space-index">02</span>
-                <h3>云端空间</h3>
-                <p>需要多设备访问、和团队一起工作时使用。成员、权限与在线协作都在空间里管理。官方云端服务即将上线，现在可以先自部署。</p>
-                <small>多设备 · 成员权限 · 在线协作 · 即将上线</small>
+                <h3>Cloud Space</h3>
+                <p>Use a cloud space for access across devices and team collaboration. Manage members, permissions, and real-time work in one place. BIU Cloud is coming soon; self-hosting is available now.</p>
+                <small>Multiple devices · Member permissions · Online collaboration · Coming soon</small>
               </article>
             </div>
           </div>
         </section>
 
-        <section className="site-home-entry" aria-label="场景">
+        <section className="site-home-entry" aria-label="Use cases">
           <div className="site-home-entry-heading" data-reveal>
-            <p className="site-section-label">场景</p>
-            <h2>这些工作，都能装进一页</h2>
-            <p>选一个你正在做的事。交付物、痛点和做法都在对应的那一页，这里只留一句话。</p>
+            <p className="site-section-label">Use Cases</p>
+            <h2>Bring the whole workflow onto one page</h2>
+            <p>Choose what you are working on. Each page covers the deliverables, challenges, and workflow in detail.</p>
           </div>
           <div className="site-scene-grid">
             {USE_CASES.map((useCase) => (
@@ -378,15 +378,15 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
             ))}
           </div>
           <p className="site-home-entry-more" data-reveal>
-            <Link to="/use-cases">全部场景 →</Link>
+            <Link to="/use-cases">View all use cases →</Link>
           </p>
         </section>
 
-        <section className="site-home-entry" aria-label="对比">
+        <section className="site-home-entry" aria-label="Comparisons">
           <div className="site-home-entry-heading" data-reveal>
-            <p className="site-section-label">对比</p>
-            <h2>和你已经在用的工具比</h2>
-            <p>三个最常被拿来问的。完整对照表，包括我们做不到的地方，都在对比页。</p>
+            <p className="site-section-label">Compare</p>
+            <h2>See how BIU compares</h2>
+            <p>Explore our three most requested comparisons. Full breakdowns—including where BIU falls short—are available on each comparison page.</p>
           </div>
           <div className="site-home-compare-grid">
             {HOME_COMPARES.map(({ page, line }) => (
@@ -394,31 +394,31 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
                 <small>{page.category}</small>
                 <h3>{page.columns[0]}</h3>
                 <p>{line}</p>
-                <span>看对比 →</span>
+                <span>View comparison →</span>
               </Link>
             ))}
           </div>
           <p className="site-home-entry-more" data-reveal>
-            <Link to="/compare">全部对比 →</Link>
+            <Link to="/compare">View all comparisons →</Link>
           </p>
         </section>
 
-        <section className="site-home-entry" aria-label="想法">
+        <section className="site-home-entry" aria-label="Ideas">
           <div className="site-home-entry-heading" data-reveal>
-            <p className="site-section-label">想法</p>
-            <h2>BIU 为什么长成这样</h2>
-            <p>产品页讲怎么用。这里是两篇把理由讲完的文章，以及标记本身在说的那句话。</p>
+            <p className="site-section-label">Ideas</p>
+            <h2>Why BIU works this way</h2>
+            <p>The product page explains how BIU works. These articles explain why—and the mark tells a story of its own.</p>
           </div>
           <div className="site-idea-posts">
             {HOME_POSTS.map((post) => (
               <Link key={post.slug} className="site-idea-post" to={`/blog/${post.slug}`} data-reveal>
                 <span className="site-idea-meta">
                   <time dateTime={post.date}>{post.date.replace(/-/g, '.')}</time>
-                  <span>约 {readingMinutes(post)} 分钟读完</span>
+                  <span>{readingMinutes(post)} min read</span>
                 </span>
                 <h3>{post.title}</h3>
                 <p>{post.summary}</p>
-                <span className="site-idea-go">阅读 →</span>
+                <span className="site-idea-go">Read →</span>
               </Link>
             ))}
           </div>
@@ -437,44 +437,44 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
                 title="BIU"
               />
               <span className="site-idea-brand-copy">
-                <h3>一个圆、两条线、三个块</h3>
-                <p>标记本身就是名字：右上的两个小块是 B，贯穿的斜线是 I，左下的半圆是 U，三个字母刚好拼成这个圆。</p>
-                <span className="site-idea-go">看品牌 →</span>
+                <h3>One circle, two lines, three blocks</h3>
+                <p>The mark spells the name: two blocks in the upper right form the B, the diagonal line forms the I, and the semicircle in the lower left forms the U. Together, the three letters complete the circle.</p>
+                <span className="site-idea-go">Explore the brand →</span>
               </span>
             </Link>
           </div>
           <p className="site-home-entry-more" data-reveal>
-            <Link to="/blog">全部文章 →</Link>
+            <Link to="/blog">View all articles →</Link>
           </p>
         </section>
 
-        <section className="site-home-entry site-vision" aria-label="愿景">
+        <section className="site-home-entry site-vision" aria-label="Vision">
           <div className="site-home-entry-heading" data-reveal>
-            <p className="site-section-label">愿景</p>
-            <h2>五个动词，五个万亿美元市场</h2>
+            <p className="site-section-label">Vision</p>
+            <h2>Five verbs. Five trillion-dollar markets.</h2>
             <p>
-              软件的构建、存储、组合、分发与衍生，各自对应一个万亿美元量级的市场。智能体正在重写这五个环节，BIU 让它们在同一个页面里完成。我们正在寻找相信这一判断的投资人。
+              Building, storing, composing, distributing, and deriving software each represent a trillion-dollar market. Agents are reshaping all five, and BIU brings them together on one page. We are looking for investors who share this conviction.
             </p>
           </div>
           <VisionTable />
           <div className="site-vision-invest" data-reveal>
             <div>
-              <h3>投资下一家万亿美元 AI 公司</h3>
-              <p>欢迎来信交流产品路线与融资计划。来信请注明机构与关注方向。</p>
-              <p className="site-vision-note">表中数据出自 Gartner、IDC、麦肯锡、哈佛商学院等机构，每篇文章末尾列有完整的参考资料。</p>
+              <h3>Invest in the next trillion-dollar AI company</h3>
+              <p>Contact us to discuss our product roadmap and fundraising plans. Please include your organization and areas of interest.</p>
+              <p className="site-vision-note">Table data is sourced from Gartner, IDC, McKinsey, Harvard Business School, and other institutions. Full references appear at the end of each article.</p>
             </div>
             <a className="site-cta-primary" href={INVEST_MAIL}>
-              联系我们
+              Contact us
             </a>
           </div>
           <p className="site-home-entry-more" data-reveal>
-            <Link to="/invest">完整的投资逻辑 →</Link>
+            <Link to="/invest">Read the full investment thesis →</Link>
           </p>
         </section>
 
-        <SiteFaq title="关于 BIU" items={HOME_FAQ} />
+        <SiteFaq title="About BIU" items={HOME_FAQ} />
 
-        <SiteFinalCta title={<>开源，免费，<br />现在就能用</>} />
+        <SiteFinalCta title={<>Open source. Free.<br />Ready today.</>} />
     </SiteChrome>
   )
 }

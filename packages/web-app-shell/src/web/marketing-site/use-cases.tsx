@@ -26,134 +26,134 @@ export const USE_CASES: UseCase[] = [
   {
     slug: 'research',
     index: '01',
-    title: '研究与分析',
-    summary: '收集资料、建立关系、生成对比表，并把结论留在可继续追问的研究空间。',
-    output: '研究报告 · 数据库 · 对比矩阵',
+    title: 'Research & Analysis',
+    summary: 'Gather sources, connect the dots, build comparison tables, and keep findings in a research space you can continue exploring.',
+    output: 'Research report · Database · Comparison matrix',
     pain: [
-      '资料散在几十个标签页和文档里，换个问题就要重新找一遍。',
-      '让 AI 帮忙查一遍，结论落在聊天记录里，过两天要用还得再问。',
-      '对比表做在临时文档里，数据一更新就全散了。',
+      'Sources are scattered across dozens of tabs and documents, so every new question means searching all over again.',
+      'AI research ends up buried in chat history, forcing you to ask again when you need it later.',
+      'Comparison tables live in temporary documents and fall apart as soon as the data changes.',
     ],
     how: [
-      { title: '资料进得来', body: '把网页、文档、笔记都收进同一个空间，页面和表共享同一条寻址体系。' },
-      { title: '结论留得住', body: '智能体的产出沉淀成页面、数据库、对比矩阵，不是一个会被刷掉的回答。' },
-      { title: '对比可维护', body: '对比表就是一张真表，加一列维度不需要改代码，也不用重做。' },
+      { title: 'Bring every source in', body: 'Collect web pages, documents, and notes in one space, where pages and tables share the same addressing system.' },
+      { title: 'Keep the findings', body: 'Agent output becomes pages, databases, and comparison matrices—not answers that disappear in a chat.' },
+      { title: 'Keep comparisons current', body: 'A comparison table is a real table. Add a dimension without changing code or rebuilding it.' },
     ],
-    blocks: ['浏览器', '表格', '方案对比块', 'Excalidraw 画板'],
+    blocks: ['Browser', 'Table', 'Option comparison block', 'Excalidraw canvas'],
     faq: [
-      ['资料容量', '资料存放在所选空间（本机或云端）中，容量取决于该空间的存储配置。'],
-      ['智能体如何获取资料', '智能体可以读取空间中的页面与数据，也可以通过 MCP 调用外部服务。'],
+      ['Source capacity', 'Sources are stored in the selected space, local or cloud. Capacity depends on that space’s storage configuration.'],
+      ['How agents access sources', 'Agents can read pages and data in the space and call external services through MCP.'],
     ],
   },
   {
     slug: 'product',
     index: '02',
-    title: '产品与项目',
-    summary: '从用户反馈和项目资料中整理需求、任务、决策与版本计划。',
-    output: 'PRD · 项目计划 · 任务数据库',
+    title: 'Product & Projects',
+    summary: 'Turn user feedback and project materials into requirements, tasks, decisions, and release plans.',
+    output: 'PRD · Project plan · Task database',
     pain: [
-      '反馈在表格里，需求在文档里，任务在另一个看板里 —— 三处各有一份，对不齐。',
-      '决策当时讨论了，过一个月谁也说不清为什么这么定。',
-      '版本计划靠人肉同步，改一次要通知一圈。',
+      'Feedback, requirements, and tasks live in three different tools—and never quite stay in sync.',
+      'Decisions get discussed, but a month later no one remembers why they were made.',
+      'Release plans rely on manual updates, and every change means notifying everyone.',
     ],
     how: [
-      { title: '需求是记录，不是文档片段', body: '每条反馈、需求、任务都是可寻址的记录，能互相引用。' },
-      { title: '决策留痕', body: '动作写入只追加的事件流 —— 状态和「它是怎么变成这样的」都查得到。' },
-      { title: '智能体是协作者', body: '任务卡带 assignee 与 dependsOn，多智能体靠看板协作，不靠群聊。' },
+      { title: 'Requirements are records, not document fragments', body: 'Every piece of feedback, requirement, and task is an addressable record that can reference the others.' },
+      { title: 'Preserve the decision trail', body: 'Actions are written to an append-only event stream, so both the current state and how it got there remain visible.' },
+      { title: 'Agents are collaborators', body: 'Task cards include assignee and dependsOn fields, so multiple agents coordinate through the board instead of group chat.' },
     ],
-    blocks: ['表格', '任务', '方案对比块', 'API 调试块'],
+    blocks: ['Table', 'Tasks', 'Option comparison block', 'API debugger block'],
     faq: [
-      ['多人协作', '云端空间提供成员与权限，角色分为查看者、编辑者、管理者、所有者。'],
-      ['与现有项目管理工具的关系', '可以并行使用。BIU 把需求、任务、决策与上下文放在同一处，无需在多套系统之间同步。'],
+      ['Team collaboration', 'Cloud spaces provide membership and permissions with viewer, editor, manager, and owner roles.'],
+      ['How it works with existing project tools', 'Use them side by side. BIU keeps requirements, tasks, decisions, and context together, eliminating synchronization across multiple systems.'],
     ],
   },
   {
     slug: 'content',
     index: '03',
-    title: '内容与创作',
-    summary: '让素材、草稿、反馈和不同发布版本共享同一份创作上下文。',
-    output: '文章 · 脚本 · 发布计划',
+    title: 'Content & Creation',
+    summary: 'Keep source material, drafts, feedback, and published versions in one shared creative context.',
+    output: 'Articles · Scripts · Publishing plan',
     pain: [
-      '素材在一个盘里，草稿在另一个工具里，反馈在聊天记录里。',
-      '同一篇内容的多个版本散落各处，改到哪一版说不清。',
-      '发布计划靠脑子记。',
+      'Source material is on one drive, drafts in another tool, and feedback in chat history.',
+      'Versions of the same piece are scattered everywhere, making it unclear which one is current.',
+      'The publishing schedule lives in your head.',
     ],
     how: [
-      { title: '素材与草稿同源', body: '素材作为附件进空间，草稿就是页面，二者共享同一套寻址。' },
-      { title: '一页装下整套工具', body: '文稿、素材板、剪辑、排期表都是同一页里的插件块，不用在几个软件之间来回切。' },
-      { title: '分享的是可运行单元', body: '分享一个页面时，正文、附件和它引用的插件源码一起走，对方得到的是能跑的东西。' },
+      { title: 'Source material and drafts stay together', body: 'Source material enters the space as attachments, while drafts are pages. Both use the same addressing system.' },
+      { title: 'A complete toolkit on one page', body: 'Copy, mood boards, editing tools, and schedules are plugin blocks on the same page—no switching between apps.' },
+      { title: 'Share a working unit', body: 'When you share a page, its content, attachments, and referenced plugin source travel together. The recipient gets something that runs.' },
     ],
-    blocks: ['视频编排', 'HTML', 'Excalidraw 画板', '页面目录'],
+    blocks: ['Video editor', 'HTML', 'Excalidraw canvas', 'Page directory'],
     faq: [
-      ['支持的内容格式', '页面为 Markdown。图片、音视频和文件作为附件。复杂内容由插件块渲染。'],
-      ['向外部平台发布', '可以通过 MCP 连接外部服务，将内容推送到目标平台。'],
+      ['Supported content formats', 'Pages use Markdown. Images, audio, video, and files are attachments. Plugin blocks render complex content.'],
+      ['Publishing to external platforms', 'Connect external services through MCP to push content to your target platforms.'],
     ],
   },
   {
     slug: 'team-knowledge',
     index: '04',
-    title: '团队知识',
-    summary: '把文档、流程和讨论变成团队可以查询、维护并继续使用的知识。',
-    output: '团队 Wiki · 流程库 · 决策记录',
+    title: 'Team Knowledge',
+    summary: 'Turn documents, processes, and discussions into knowledge your team can search, maintain, and use.',
+    output: 'Team Wiki · Process library · Decision log',
     pain: [
-      'Wiki 建了没人维护，半年后就过期了。',
-      '新人问的问题，答案在某个人的聊天记录里。',
-      '流程文档和实际执行对不上。',
+      'The Wiki gets created but not maintained, and is outdated six months later.',
+      'Answers to new hires’ questions are buried in someone else’s chat history.',
+      'Documented processes no longer match how work actually gets done.',
     ],
     how: [
-      { title: '知识和执行在同一处', body: '文档、任务、会话共享一个空间上下文 —— 不是两套系统各自演进。' },
-      { title: '智能体读得到', body: '智能体与人在同一地址空间，读的是同一份知识，回答有据可查。' },
-      { title: '维护成本低', body: '加一个维度、加一条记录都是写数据，不需要改代码或做迁移。' },
+      { title: 'Knowledge and execution in one place', body: 'Documents, tasks, and conversations share one space context instead of evolving in separate systems.' },
+      { title: 'Accessible to agents', body: 'Agents and people share the same address space and knowledge, so every answer can be traced to its source.' },
+      { title: 'Low maintenance overhead', body: 'Adding a dimension or record is simply writing data—no code changes or migrations required.' },
     ],
-    blocks: ['页面目录', '代码运行块', '页面终端', '表格'],
+    blocks: ['Page directory', 'Code runner block', 'Page terminal', 'Table'],
     faq: [
-      ['与现有 Wiki 的区别', 'BIU 中的知识不是静态文本：可以被智能体读取，被任务引用，并随维度演进。'],
-      ['权限如何控制', '云端空间按成员角色和视图授权。本机空间的数据存放在用户自己的电脑上。'],
+      ['How it differs from an existing Wiki', 'Knowledge in BIU is not static text: agents can read it, tasks can reference it, and it can evolve across dimensions.'],
+      ['How permissions work', 'Cloud spaces grant access by member role and view. Data in local spaces remains on the user’s computer.'],
     ],
   },
   {
     slug: 'personal',
     index: '05',
-    title: '私人工作',
-    summary: '把个人资料与工作流留在本机，保持离线可用和清晰的数据边界。',
-    output: '本机页面 · 私人资料 · 离线空间',
+    title: 'Personal Work',
+    summary: 'Keep personal information and workflows on your own computer, available offline with clear data boundaries.',
+    output: 'Local pages · Private data · Offline space',
     pain: [
-      '个人笔记和工作资料混在一个云端账号里，边界模糊。',
-      '断网就什么都做不了。',
-      '不放心把私人资料交给第三方托管。',
+      'Personal notes and work files are mixed in one cloud account with unclear boundaries.',
+      'Nothing works without an internet connection.',
+      'You do not want to entrust private information to a third-party host.',
     ],
     how: [
-      { title: '本机空间', body: '数据存在你自己的电脑上，离线可用 —— 不是「先上传再同步下来」。' },
-      { title: '两栖透明', body: '可以用接口读写，也可以直接读盘。抽象是便利，不是牢笼。' },
-      { title: '模型用你自己的', body: '智能体用你配置的模型密钥工作，只有这一轮需要的内容会发给模型服务，空间里的其他数据不动。' },
+      { title: 'Local spaces', body: 'Data stays on your computer and works offline—it is not uploaded first and then synced back down.' },
+      { title: 'Transparent by design', body: 'Read and write through the API or access files directly. Abstraction is a convenience, not a cage.' },
+      { title: 'Use your own model', body: 'Agents use the model credentials you configure. Only the content needed for the current turn is sent to the model service; everything else in the space stays put.' },
     ],
-    blocks: ['表格', 'Excalidraw 画板', '代码运行块', '算法题卡片'],
+    blocks: ['Table', 'Excalidraw canvas', 'Code runner block', 'Coding exercise card'],
     faq: [
-      ['本机空间的网络要求', '日常使用无需联网。调用模型时需要网络，仅当前这一轮的相关内容会发送至所配置的模型服务，其余数据仍只在本机。'],
-      ['本机与云端并用', '两种空间可以并存。私人资料放在本机，协作内容放在云端。'],
+      ['Network requirements for local spaces', 'Everyday use works offline. Model calls require a connection, and only content relevant to the current turn is sent to the configured model service. All other data remains local.'],
+      ['Using local and cloud spaces together', 'Both can coexist. Keep private information local and collaborative content in the cloud.'],
     ],
   },
   {
     slug: 'collaboration',
     index: '06',
-    title: '团队协作',
-    summary: '让成员围绕同一个云端空间共享页面、数据、会话和智能体。',
-    output: '成员权限 · 协作空间 · 共享上下文',
+    title: 'Team Collaboration',
+    summary: 'Give every member shared access to pages, data, conversations, and agents in one cloud space.',
+    output: 'Member permissions · Collaborative space · Shared context',
     pain: [
-      '每个人用自己的 AI 助手，产出进不了团队的知识库。',
-      '讨论在一个工具，产出在另一个工具，上下文来回搬。',
-      '新人接手要花很久搞清来龙去脉。',
+      'Everyone uses a separate AI assistant, and the output never reaches the team knowledge base.',
+      'Discussion happens in one tool and output in another, forcing context to move back and forth.',
+      'New team members spend too long reconstructing the full story.',
     ],
     how: [
-      { title: '共享上下文', body: '页面、数据、会话与智能体都在同一个云端空间，成员围绕同一份数据工作。' },
-      { title: '成员与权限', body: '查看者 / 编辑者 / 管理者 / 所有者四档角色，还能按视图授权；敏感操作进入待确认状态。' },
-      { title: '可追溯', body: '只追加的事件流记录每个动作，界面是它的投影 —— 状态和来历都清楚。' },
+      { title: 'Shared context', body: 'Pages, data, conversations, and agents all live in one cloud space, so members work from the same data.' },
+      { title: 'Members and permissions', body: 'Viewer, editor, manager, and owner roles combine with view-based authorization. Sensitive actions enter a pending-confirmation state.' },
+      { title: 'Fully traceable', body: 'An append-only event stream records every action, and the interface is its projection—making both state and provenance clear.' },
     ],
-    blocks: ['任务', '表格', '方案对比块', '页面目录'],
-    note: '云端空间现在可以部署在你自己的服务器上；官方云端服务即将上线。',
+    blocks: ['Tasks', 'Table', 'Option comparison block', 'Page directory'],
+    note: 'Cloud spaces can currently be deployed on your own server; the official cloud service is coming soon.',
     faq: [
-      ['与普通协作文档的区别', '成员共享的不只是文本，还包括页面、数据、会话和智能体的完整上下文。'],
-      ['审计', '每个动作都写入只追加的事件记录，事后可以逐条追溯。'],
+      ['How it differs from standard collaborative documents', 'Members share more than text: they share the complete context of pages, data, conversations, and agents.'],
+      ['Auditing', 'Every action is written to an append-only event log and can be traced individually afterward.'],
     ],
   },
 ]
@@ -162,7 +162,7 @@ export const USE_CASE_CATEGORIES = USE_CASES
 
 function BlockChips({ blocks }: { blocks: string[] }) {
   return (
-    <ul className="site-block-chips" aria-label="组合的块">
+    <ul className="site-block-chips" aria-label="Combined blocks">
       {blocks.map((name) => <li key={name}>{name}</li>)}
     </ul>
   )
@@ -171,22 +171,22 @@ function BlockChips({ blocks }: { blocks: string[] }) {
 /** 用例总览页 */
 export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
   usePageMeta({
-    title: '场景',
-    description: '研究与分析、产品与项目、内容与创作、团队知识、私人工作、团队协作 —— 六个真实场景下 BIU 怎么用。',
+    title: 'Use Cases',
+    description: 'See how BIU works across six real-world use cases: research, product and projects, content creation, team knowledge, personal work, and collaboration.',
     path: '/use-cases',
   })
 
   return (
     <SiteChrome onLogin={onLogin} onStart={onStart}>
       <section className="site-page-hero" data-reveal>
-        <p className="site-section-label">场景</p>
-        <h1>为真实工作而生</h1>
+        <p className="site-section-label">Use Cases</p>
+        <h1>Built for real work</h1>
         <p className="site-page-lead">
-          每个场景的交付物都是一页：页面里组合好这件事需要的软件，交给自己、团队或客户直接用。选一个场景看具体怎么做。
+          Every deliverable is a page that combines the software the job requires, ready for you, your team, or your clients to use. Choose a use case to see how it works.
         </p>
       </section>
 
-      <section className="site-usecase-grid" aria-label="场景">
+      <section className="site-usecase-grid" aria-label="Use cases">
         {USE_CASES.map((useCase) => (
           <Link key={useCase.slug} to={`/use-cases/${useCase.slug}`} className="site-usecase-card">
             <span className="site-solution-index">{useCase.index}</span>
@@ -199,7 +199,7 @@ export function MarketingUseCases({ onLogin, onStart }: { onLogin: SiteAction; o
         ))}
       </section>
 
-      <SiteFinalCta title="从你的场景开始" />
+      <SiteFinalCta title="Start with your use case" />
     </SiteChrome>
   )
 }
@@ -210,8 +210,8 @@ export function MarketingUseCaseDetail({ onLogin, onStart }: { onLogin: SiteActi
   const useCase = USE_CASES.find((item) => item.slug === slug)
 
   usePageMeta({
-    title: useCase ? useCase.title : '场景',
-    description: useCase ? useCase.summary : 'BIU 的真实工作场景。',
+    title: useCase ? useCase.title : 'Use Cases',
+    description: useCase ? useCase.summary : 'Real-world ways to work with BIU.',
     path: `/use-cases/${slug ?? ''}`,
   })
 
@@ -219,9 +219,9 @@ export function MarketingUseCaseDetail({ onLogin, onStart }: { onLogin: SiteActi
     return (
       <SiteChrome onLogin={onLogin} onStart={onStart}>
         <section className="site-page-hero">
-          <p className="site-section-label">场景</p>
-          <h1>没有这个场景</h1>
-          <p className="site-page-lead"><Link to="/use-cases">返回场景总览</Link></p>
+          <p className="site-section-label">Use Cases</p>
+          <h1>Use case not found</h1>
+          <p className="site-page-lead"><Link to="/use-cases">Back to all use cases</Link></p>
         </section>
       </SiteChrome>
     )
@@ -232,27 +232,27 @@ export function MarketingUseCaseDetail({ onLogin, onStart }: { onLogin: SiteActi
   return (
     <SiteChrome onLogin={onLogin} onStart={onStart}>
       <section className="site-page-hero" data-reveal>
-        <p className="site-section-label">场景 · {useCase.index}</p>
+        <p className="site-section-label">Use Case · {useCase.index}</p>
         <h1>{useCase.title}</h1>
         <p className="site-page-lead">{useCase.summary}</p>
-        <p className="site-usecase-output">交付物：{useCase.output}</p>
+        <p className="site-usecase-output">Deliverables: {useCase.output}</p>
         {useCase.note ? <p className="site-usecase-note">{useCase.note}</p> : null}
       </section>
 
       <section className="site-usecase-blocks" data-reveal>
-        <h2>这一页里组合了哪些块</h2>
+        <h2>Blocks combined on this page</h2>
         <BlockChips blocks={useCase.blocks} />
       </section>
 
       <section className="site-usecase-pain" data-reveal>
-        <h2>现在的麻烦</h2>
+        <h2>What gets in the way today</h2>
         <ul>
           {useCase.pain.map((item) => <li key={item}>{item}</li>)}
         </ul>
       </section>
 
       <section className="site-usecase-how">
-        <h2 data-reveal>BIU 怎么做</h2>
+        <h2 data-reveal>How BIU helps</h2>
         <div className="site-usecase-how-grid">
           {useCase.how.map((item) => (
             <article key={item.title} data-reveal>
@@ -263,10 +263,10 @@ export function MarketingUseCaseDetail({ onLogin, onStart }: { onLogin: SiteActi
         </div>
       </section>
 
-      <SiteFaq title="关于此场景" items={useCase.faq} />
+      <SiteFaq title="About this use case" items={useCase.faq} />
 
       <section className="site-usecase-more" data-reveal>
-        <h2>其他场景</h2>
+        <h2>More use cases</h2>
         <div className="site-usecase-more-links">
           {others.map((item) => (
             <Link key={item.slug} to={`/use-cases/${item.slug}`}>{item.title} →</Link>
@@ -274,7 +274,7 @@ export function MarketingUseCaseDetail({ onLogin, onStart }: { onLogin: SiteActi
         </div>
       </section>
 
-      <SiteFinalCta title="试试你自己的场景" />
+      <SiteFinalCta title="Try it with your own workflow" />
     </SiteChrome>
   )
 }

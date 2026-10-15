@@ -4,6 +4,7 @@ import { BRAND_PRINT_TILE, BrandMark, BrandPrint, useBrandConfig } from './brand
 import { Link, NavLink } from 'react-router-dom'
 import { formatStars, useGitHubStats } from './github.ts'
 import { downloadPageLongImage } from './page-shot.ts'
+import { useSiteLocale } from './locale.tsx'
 
 export type SiteAction = () => void
 
@@ -20,14 +21,14 @@ export type SiteChromeProps = {
 const NAV_BRAND_PX = 24
 
 const NAV_PRIMARY = [
-  { label: '产品', to: '/product' },
-  { label: '场景', to: '/use-cases' },
-  { label: '对比', to: '/compare' },
-  { label: '安全', to: '/security' },
-  { label: '博客', to: '/blog' },
-  { label: '品牌', to: '/brand' },
-  { label: '定价', to: '/pricing' },
-  { label: '投资', to: '/invest' },
+  { label: 'Product', to: '/product' },
+  { label: 'Use Cases', to: '/use-cases' },
+  { label: 'Compare', to: '/compare' },
+  { label: 'Security', to: '/security' },
+  { label: 'Blog', to: '/blog' },
+  { label: 'Brand', to: '/brand' },
+  { label: 'Pricing', to: '/pricing' },
+  { label: 'Invest', to: '/invest' },
 ] as const
 
 export const GITHUB_URL = 'https://github.com/helloooooooooooooo97/biu'
@@ -56,7 +57,7 @@ export function GitHubButton({ label, className = 'site-cta-secondary' }: { labe
   return (
     <a className={className} href={GITHUB_URL} target="_blank" rel="noreferrer">
       <GitHubIcon />{label}
-      {stars !== undefined ? <span className="site-gh-stars" aria-label={`${stars} 个星标`}><span className="site-gh-star" aria-hidden>★</span>{formatStars(stars)}</span> : null}
+      {stars !== undefined ? <span className="site-gh-stars" aria-label={`${stars} GitHub stars`}><span className="site-gh-star" aria-hidden>★</span>{formatStars(stars)}</span> : null}
     </a>
   )
 }
@@ -65,32 +66,32 @@ type FooterLink = { label: string; to: string } | { label: string; href: string 
 
 const FOOTER_COLUMNS: ReadonlyArray<{ title: string; links: readonly FooterLink[] }> = [
   {
-    title: '产品',
+    title: 'Product',
     links: [
-      { label: '产品总览', to: '/product' },
-      { label: '场景', to: '/use-cases' },
-      { label: '定价', to: '/pricing' },
-      { label: '下载', to: '/download' },
+      { label: 'Overview', to: '/product' },
+      { label: 'Use Cases', to: '/use-cases' },
+      { label: 'Pricing', to: '/pricing' },
+      { label: 'Download', to: '/download' },
     ],
   },
   {
-    title: '开源',
+    title: 'Open Source',
     links: [
       { label: 'GitHub', href: GITHUB_URL },
-      { label: '更新日志', to: '/changelog' },
-      { label: '问题反馈', href: `${GITHUB_URL}/issues` },
-      { label: 'Apache 2.0 许可', href: `${GITHUB_URL}/blob/main/LICENSE` },
+      { label: 'Changelog', to: '/changelog' },
+      { label: 'Report an Issue', href: `${GITHUB_URL}/issues` },
+      { label: 'Apache 2.0 License', href: `${GITHUB_URL}/blob/main/LICENSE` },
     ],
   },
   {
-    title: '了解',
+    title: 'Resources',
     links: [
-      { label: '对比', to: '/compare' },
-      { label: '安全', to: '/security' },
-      { label: '文档', to: '/docs' },
-      { label: '博客', to: '/blog' },
-      { label: '品牌', to: '/brand' },
-      { label: '投资', to: '/invest' },
+      { label: 'Compare', to: '/compare' },
+      { label: 'Security', to: '/security' },
+      { label: 'Docs', to: '/docs' },
+      { label: 'Blog', to: '/blog' },
+      { label: 'Brand', to: '/brand' },
+      { label: 'Invest', to: '/invest' },
     ],
   },
 ]
@@ -102,7 +103,7 @@ export function SiteFaq({ title, items }: { title: string; items: readonly FaqIt
   return (
     <section className="site-faq">
       <div className="site-faq-heading" data-reveal>
-        <p className="site-section-label">常见问题</p>
+        <p className="site-section-label">FAQ</p>
         <h2>{title}</h2>
       </div>
       <div className="site-faq-list" data-reveal>
@@ -118,14 +119,14 @@ export function SiteFaq({ title, items }: { title: string; items: readonly FaqIt
 }
 
 /** 每页底部的收尾行动：开源项目的入口只有两个 —— 下载，或者去看源码。 */
-export function SiteFinalCta({ title, label = '开源 · 免费' }: { title: ReactNode; label?: string }) {
+export function SiteFinalCta({ title, label = 'Open Source · Free' }: { title: ReactNode; label?: string }) {
   return (
     <section className="site-final-cta" data-reveal>
       <div className="site-container">
         <p className="site-section-label">{label}</p>
         <h2>{title}</h2>
         <div className="site-cta-actions">
-          <Link className="site-cta-primary" to="/download"><DownloadIcon />下载</Link>
+          <Link className="site-cta-primary" to="/download"><DownloadIcon />Download</Link>
           <GitHubButton label="GitHub" />
         </div>
       </div>
@@ -138,6 +139,7 @@ export function SiteHeader({ onLogin, onStart }: { onLogin: SiteAction; onStart:
   // 用户在品牌页调好的配置会推到这里，导航栏标记随之更新。
   const brand = useBrandConfig()
   const showLogin = useContext(SiteLoginContext)
+  const { toggleLocale } = useSiteLocale()
 
   return (
     <header className="site-nav" data-menu-open={menuOpen ? '1' : '0'}>
@@ -164,14 +166,14 @@ export function SiteHeader({ onLogin, onStart }: { onLogin: SiteAction; onStart:
       <button
         type="button"
         className="site-menu-toggle"
-        aria-label={menuOpen ? '关闭菜单' : '打开菜单'}
+        aria-label={menuOpen ? 'Close menu' : 'Open menu'}
         aria-expanded={menuOpen}
         data-testid="site-menu-toggle"
         onClick={() => setMenuOpen((current) => !current)}
       >
         <span aria-hidden>{menuOpen ? '✕' : '☰'}</span>
       </button>
-      <nav className="site-nav-links" aria-label="官网" onClick={() => setMenuOpen(false)}>
+      <nav className="site-nav-links" aria-label="Main navigation" onClick={() => setMenuOpen(false)}>
         {NAV_PRIMARY.map((item) => (
           <NavLink
             key={item.to}
@@ -183,8 +185,19 @@ export function SiteHeader({ onLogin, onStart }: { onLogin: SiteAction; onStart:
         ))}
       </nav>
       <div className="site-nav-actions">
-        {showLogin ? <button type="button" className="site-login" data-testid="site-login" onClick={onLogin}>登录</button> : null}
-        <Link className="site-start" data-testid="site-start" to="/download"><DownloadIcon />下载</Link>
+        <button
+          type="button"
+          className="site-login site-language"
+          aria-label="Switch to Chinese"
+          onClick={() => {
+            toggleLocale()
+            setMenuOpen(false)
+          }}
+        >
+          中文
+        </button>
+        {showLogin ? <button type="button" className="site-login" data-testid="site-login" onClick={onLogin}>Log in</button> : null}
+        <Link className="site-start" data-testid="site-start" to="/download"><DownloadIcon />Download</Link>
       </div>
     </header>
   )
@@ -192,7 +205,7 @@ export function SiteHeader({ onLogin, onStart }: { onLogin: SiteAction; onStart:
 
 function DownloadPageButton() {
   const [state, setState] = useState<'idle' | 'busy' | 'error'>('idle')
-  const label = state === 'busy' ? '正在生成…' : state === 'error' ? '生成失败，再试一次' : '下载本页'
+  const label = state === 'busy' ? 'Generating…' : state === 'error' ? 'Generation failed. Try again' : 'Download this page'
   return (
     <button
       type="button"
@@ -224,20 +237,20 @@ export function SiteFooter({ onLogin, onStart }: { onLogin: SiteAction; onStart:
           </div>
         ))}
         <div>
-          <strong>分享</strong>
+          <strong>Share</strong>
           <DownloadPageButton />
         </div>
         <div>
-          <strong>开始</strong>
-          {showLogin ? <button type="button" onClick={onLogin}>登录</button> : null}
-          <Link to="/download">下载</Link>
-          <a href={`mailto:${CONTACT_EMAIL}`}>联系我们</a>
+          <strong>Get Started</strong>
+          {showLogin ? <button type="button" onClick={onLogin}>Log in</button> : null}
+          <Link to="/download">Download</Link>
+          <a href={`mailto:${CONTACT_EMAIL}`}>Contact us</a>
         </div>
       </div>
       <div className="site-footer-base">
-        <p className="site-footer-tagline">BIU · 用一个页面，组合所有软件</p>
+        <p className="site-footer-tagline">BIU · Compose All Your Software on One Page</p>
         <p className="site-footer-legal">
-          <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a> · <Link to="/terms">隐私与条款</Link> · Apache 2.0 · © 2026 BIU
+          <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a> · <Link to="/terms">Privacy & Terms</Link> · Apache 2.0 · © 2026 BIU
         </p>
       </div>
     </footer>

@@ -9,18 +9,18 @@ const QUARANTINE_FIX = 'xattr -dr com.apple.quarantine /Applications/Biu.app'
 type Platform = 'mac' | 'windows' | 'linux'
 
 const PACKAGES = {
-  'mac-arm64': { label: 'Apple 芯片', file: /-mac-arm64\.dmg$/ },
-  'mac-intel': { label: 'Intel 芯片', file: /-mac-x64\.dmg$/ },
+  'mac-arm64': { label: 'Apple silicon', file: /-mac-arm64\.dmg$/ },
+  'mac-intel': { label: 'Intel processor', file: /-mac-x64\.dmg$/ },
   windows: { label: 'Windows x64', file: /-win-x64\.exe$/ },
 } as const
 
 type PackageId = keyof typeof PACKAGES
 
 const REQUIREMENTS = [
-  ['系统', 'macOS（Apple 芯片 / Intel）、Windows 10 及以上'],
-  ['内存', '建议 8 GB 以上'],
-  ['模型', '自带密钥：DeepSeek / OpenAI / Anthropic 任选其一'],
-  ['网络', '平时可离线；调用模型时需要联网'],
+  ['System', 'macOS (Apple silicon / Intel) or Windows 10 and later'],
+  ['Memory', '8 GB or more recommended'],
+  ['Model', 'Bring your own key for DeepSeek, OpenAI, or Anthropic'],
+  ['Network', 'Works offline; model calls require an internet connection'],
 ] as const
 
 const SOURCE_STEPS = [
@@ -30,10 +30,10 @@ const SOURCE_STEPS = [
 ] as const
 
 const DOWNLOAD_FAQ = [
-  ['如何选择 macOS 安装包', '打开苹果菜单中的「关于本机」。芯片一栏为 Apple M 系列时选择 Apple 芯片，为 Intel 时选择 Intel 芯片。'],
-  ['Windows SmartScreen 拦截', '选择「更多信息」，再选择「仍要运行」。代码全部开源，可在 GitHub 核对。'],
-  ['未配置模型密钥', '页面、表格和插件可以正常使用。智能体需要配置模型密钥，可选 DeepSeek、OpenAI 或 Anthropic。'],
-  ['移动端', '目前提供桌面版。macOS 与 Windows 提供安装包，Linux 从源码运行。'],
+  ['Which macOS installer should I choose?', 'Open About This Mac from the Apple menu. Choose Apple silicon for an Apple M-series chip, or Intel for an Intel processor.'],
+  ['What if Windows SmartScreen blocks the installer?', 'Select More info, then Run anyway. The complete source code is available for review on GitHub.'],
+  ['Can I use BIU without a model API key?', 'Pages, tables, and plugins work normally. Agents require a key for DeepSeek, OpenAI, or Anthropic.'],
+  ['Is there a mobile app?', 'BIU is currently available for desktop. Installers are provided for macOS and Windows, while Linux runs from source.'],
 ] as const
 
 /** 只用来决定先给哪个按钮；猜错了，下面三个平台都还在。 */
@@ -59,7 +59,7 @@ function CopyCommand({ command }: { command: string }) {
   return (
     <div className="site-copy-cmd">
       <code>{command}</code>
-      <button type="button" onClick={copy} aria-label={copied ? '已复制' : '复制命令'}>{copied ? '已复制' : '复制'}</button>
+      <button type="button" onClick={copy} aria-label={copied ? 'Copied' : 'Copy command'}>{copied ? 'Copied' : 'Copy'}</button>
     </div>
   )
 }
@@ -73,33 +73,33 @@ export function MarketingDownload({ onLogin, onStart }: { onLogin: SiteAction; o
 
   const urlOf = (id: PackageId) => release?.assets.find((asset) => PACKAGES[id].file.test(asset.name))?.url ?? RELEASES_PAGE
   const meta = [
-    release ? `最新版本 ${release.tag}` : null,
-    release?.publishedAt ? `更新于 ${formatDate(release.publishedAt)}` : null,
+    release ? `Latest release ${release.tag}` : null,
+    release?.publishedAt ? `Updated ${formatDate(release.publishedAt)}` : null,
     stars !== undefined ? <>GitHub <span className="site-gh-star" aria-hidden>★</span> {formatStars(stars)}</> : null,
   ].filter((item) => item !== null)
 
   usePageMeta({
-    title: '下载',
-    description: '下载 BIU 桌面版：macOS 与 Windows 安装包，或在 Linux 上从源码运行。',
+    title: 'Download',
+    description: 'Download BIU for macOS or Windows, or run it from source on Linux.',
     path: '/download',
   })
 
   const primary = platform === 'windows'
-    ? { href: urlOf('windows'), label: '下载 Windows 版' }
+    ? { href: urlOf('windows'), label: 'Download for Windows' }
     : platform === 'linux'
-      ? { href: '#source', label: '在 Linux 上从源码运行' }
-      : { href: urlOf('mac-arm64'), label: '下载 macOS 版（Apple 芯片）' }
+      ? { href: '#source', label: 'Run from source on Linux' }
+      : { href: urlOf('mac-arm64'), label: 'Download for macOS (Apple silicon)' }
 
   return (
     <SiteChrome onLogin={onLogin} onStart={onStart}>
         <section className="site-page-hero" data-reveal>
-          <p className="site-section-label">下载</p>
-          <h1>在你的设备上运行</h1>
-          <p className="site-page-lead">下载后开箱即用。数据存在你自己的电脑上，模型用你自己的密钥。</p>
+          <p className="site-section-label">Download</p>
+          <h1>Run BIU on your device</h1>
+          <p className="site-page-lead">Ready to use after installation. Your data stays on your computer, and your models use your own API keys.</p>
           <div className="site-download-primary">
             <a className="site-cta-primary" href={primary.href}><DownloadIcon />{primary.label}</a>
             {platform === 'mac' || platform === null ? (
-              <a className="site-download-alt" href={urlOf('mac-intel')}>Intel 芯片的 Mac →</a>
+              <a className="site-download-alt" href={urlOf('mac-intel')}>Mac with an Intel processor →</a>
             ) : null}
           </div>
           {meta.length ? (
@@ -109,48 +109,48 @@ export function MarketingDownload({ onLogin, onStart }: { onLogin: SiteAction; o
           ) : null}
         </section>
 
-        <section className="site-platforms" aria-label="平台">
+        <section className="site-platforms" aria-label="Platforms">
           <div className="site-platform-grid">
             <article data-reveal className={platform === 'mac' ? 'is-current' : ''}>
               <h2>macOS</h2>
-              <p className="site-platform-detail">Apple 芯片与 Intel 各一个安装包{platform === 'mac' ? ' · 你的系统' : ''}</p>
+              <p className="site-platform-detail">Separate installers for Apple silicon and Intel{platform === 'mac' ? ' · Your system' : ''}</p>
               <ol>
-                <li>下载 .dmg，拖入「应用程序」</li>
-                <li>首次打开若提示「已损坏」，在终端执行：</li>
+                <li>Download the .dmg and drag BIU into Applications</li>
+                <li>If macOS says the app is damaged when first opened, run this command in Terminal:</li>
               </ol>
               <CopyCommand command={QUARANTINE_FIX} />
               <div className="site-platform-actions">
-                <a href={urlOf('mac-arm64')}>Apple 芯片</a>
-                <a href={urlOf('mac-intel')}>Intel 芯片</a>
+                <a href={urlOf('mac-arm64')}>Apple silicon</a>
+                <a href={urlOf('mac-intel')}>Intel processor</a>
               </div>
             </article>
             <article data-reveal className={platform === 'windows' ? 'is-current' : ''}>
               <h2>Windows</h2>
-              <p className="site-platform-detail">Windows 10 及以上 · x64{platform === 'windows' ? ' · 你的系统' : ''}</p>
+              <p className="site-platform-detail">Windows 10 or later · x64{platform === 'windows' ? ' · Your system' : ''}</p>
               <ol>
-                <li>下载 .exe，运行安装程序</li>
-                <li>SmartScreen 拦截时，选「更多信息」→「仍要运行」</li>
+                <li>Download the .exe and run the installer</li>
+                <li>If SmartScreen blocks it, select More info → Run anyway</li>
               </ol>
               <div className="site-platform-actions">
-                <a href={urlOf('windows')}>下载 Windows 版</a>
+                <a href={urlOf('windows')}>Download for Windows</a>
               </div>
             </article>
             <article data-reveal className={platform === 'linux' ? 'is-current' : ''}>
               <h2>Linux</h2>
-              <p className="site-platform-detail">从源码运行{platform === 'linux' ? ' · 你的系统' : ''}</p>
+              <p className="site-platform-detail">Run from source{platform === 'linux' ? ' · Your system' : ''}</p>
               <ol>
-                <li>需要 Node.js 20 或更高版本和 npm</li>
-                <li>三行命令，浏览器打开 http://127.0.0.1:5173</li>
+                <li>Requires Node.js 20 or later and npm</li>
+                <li>Run three commands, then open http://127.0.0.1:5173 in your browser</li>
               </ol>
               <div className="site-platform-actions">
-                <a href="#source">查看命令</a>
+                <a href="#source">View commands</a>
               </div>
             </article>
           </div>
         </section>
 
         <section className="site-requirements" data-reveal>
-          <h2>系统要求</h2>
+          <h2>System requirements</h2>
           <table>
             <tbody>
               {REQUIREMENTS.map(([item, detail]) => (
@@ -161,18 +161,19 @@ export function MarketingDownload({ onLogin, onStart }: { onLogin: SiteAction; o
         </section>
 
         <section className="site-local-note" id="source" data-reveal>
-          <p className="site-section-label">从源码运行</p>
-          <h2>Linux 或想自己改代码</h2>
-          <p>执行完会同时启动服务和界面，浏览器打开 http://127.0.0.1:5173 即可。</p>
+          <p className="site-section-label">Run from source</p>
+          <h2>For Linux or custom development</h2>
+          <p>These commands start both the service and the interface. Open http://127.0.0.1:5173 in your browser.</p>
           <CopyCommand command={SOURCE_STEPS.join('\n')} />
           <p>
-            为什么 macOS 会提示「已损坏」：安装包还没有做苹果公证，系统会拦下来自网络的未公证应用。
-            那行 xattr 命令只是去掉这个下载标记，代码全部开源，可以在 <a href={GITHUB_URL} target="_blank" rel="noreferrer">GitHub</a> 上核对。
-            所有历史版本见 <a href={`${GITHUB_URL}/releases`} target="_blank" rel="noreferrer">版本发布</a>。
+            Why macOS may say the app is damaged: the installer has not yet been notarized by Apple, so macOS blocks
+            the downloaded app. The xattr command only removes that download quarantine flag. The complete source code
+            is available for review on <a href={GITHUB_URL} target="_blank" rel="noreferrer">GitHub</a>.
+            See <a href={`${GITHUB_URL}/releases`} target="_blank" rel="noreferrer">all releases</a>.
           </p>
         </section>
 
-        <SiteFaq title="安装说明" items={DOWNLOAD_FAQ} />
+        <SiteFaq title="Installation FAQ" items={DOWNLOAD_FAQ} />
     </SiteChrome>
   )
 }

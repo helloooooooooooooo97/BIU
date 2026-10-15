@@ -15,7 +15,7 @@ export type BlogPost = {
   references?: { title: string; publisher: string; year: string; url: string }[]
 }
 
-export const BLOG_AUTHOR = { name: 'BIU 团队', email: '348876414@qq.com' }
+export const BLOG_AUTHOR = { name: 'The BIU Team', email: '348876414@qq.com' }
 
 /** 中文按每分钟 400 字估算，代码块和图不计。 */
 export function readingMinutes(post: BlogPost) {
@@ -28,291 +28,291 @@ export function readingMinutes(post: BlogPost) {
 export const BLOG_POSTS: BlogPost[] = [
   {
     slug: 'all-in-one',
-    title: 'All in One，不是把功能堆进一个应用',
-    summary: '多数「一体化」产品是在一个应用里不断加功能。BIU 走的是另一条路：让页面装下软件，用页面去组合软件。',
+    title: 'All in One Is Not About Packing Features into One App',
+    summary: 'Most “all-in-one” products keep adding features to a single app. BIU takes another path: putting software inside pages and using pages to compose software.',
     date: '2026-10-14',
     sections: [
       {
         body: [
-          '说到 All in One，大家通常想到的是一个什么都有的应用：文档、表格、看板、日历、AI 助手，一个账号全包。问题是，这些功能都是厂商预先做好的。你需要的第七种工具它没有，就只能再开一个软件，把数据搬来搬去。',
-          'BIU 理解的 All in One 不是「功能都在一个应用里」，而是「任何软件都能放进同一个页面」。',
+          'When people hear All in One, they usually imagine an app with everything: documents, spreadsheets, boards, calendars, and an AI assistant, all under one account. The problem is that every feature was chosen and built in advance by the vendor. If the seventh tool you need is missing, you must open yet another app and move data back and forth.',
+          'For BIU, All in One does not mean “every feature in one app.” It means “any software can live on the same page.”',
         ],
       },
       {
-        heading: '块就是软件',
+        heading: 'Blocks are software',
         body: [
-          '在 BIU 里，页面上的每一块都是一个插件渲染出来的活组件：一张表、一块 Excalidraw 画板、一道能运行的算法题、一个视频剪辑器。块的类型不是平台写死的，装一个插件就多一种块。',
-          '写法很简单，一段声明加一段数据：',
+          'In BIU, every block on a page is a live component rendered by a plugin: a table, an Excalidraw canvas, an executable coding challenge, or a video editor. Block types are not hard-coded by the platform; installing a plugin adds a new type.',
+          'The format is simple: one declaration and one piece of data:',
           { code: ':::pageBlock {kind=algorithm plugin=page-algorithm}\n{ "title": "1. Two Sum", "lang": "python" }\n:::' },
-          'kind 和 plugin 说明谁来渲染，后面的 JSON 是它要的数据。人可以写，智能体也可以写。',
+          'kind and plugin identify what renders the block; the JSON that follows is its data. A person can write it, and so can an agent.',
         ],
       },
       {
-        heading: '页面把软件组合起来',
+        heading: 'Pages compose software',
         body: [
-          '一页里可以放任意多个块，它们读写同一份数据。页面上的属性（标题、标签，以及你需要的任何字段）就是这些插件共同的运行环境。于是一页不再是一份文档，而是一套服务：一节课、一个项目、一次实验、一份交给客户的方案。',
-          { image: '/site/demo-allinone.webp', alt: '一份算法面试陪跑页面：刊头、Excalidraw 画板、算法题卡片和代码运行块在同一页', caption: '一页算法面试陪跑：刊头、画板、算法题、代码运行、offer 对比，各是一个插件。' },
-          '这也是我们和 Notion 最大的不同。Notion 把块模型做成了标准，但它的块类型是固定的，嵌进来的网页只是一个读不到工作区数据的 iframe。BIU 借了它的块模型，只是把块类型交给了插件。',
+          'A page can contain any number of blocks, all reading and writing the same data. Page properties—title, tags, and any fields you need—form the shared runtime environment for those plugins. A page is no longer merely a document, but an entire service: a lesson, a project, an experiment, or a client deliverable.',
+          { image: '/site/demo-allinone.webp', alt: 'An algorithm interview coaching page with a header, Excalidraw canvas, coding challenge card, and code runner on one page', caption: 'One algorithm interview coaching page: the header, canvas, coding challenge, code runner, and offer comparison are each plugins.' },
+          'This is also our biggest difference from Notion. Notion established the block model as a standard, but its block types are fixed, and an embedded webpage is only an iframe that cannot read workspace data. BIU borrows the block model while handing block types over to plugins.',
         ],
       },
       {
-        heading: '分享的是一页能用的软件',
+        heading: 'Share a working page of software',
         body: [
-          '因为块来自插件，插件是代码，分享页面时 BIU 会把正文、附件和用到的插件源码一起打包。对方打开就能用，不用再装一遍工具、再搭一遍环境。',
-          { image: '/site/shot-share.webp', alt: '分享出去的页面里，画板和算法题卡片照样能用', caption: '对方打开分享链接，看到的不是截图，画板和算法题都还能用。' },
-          '这就是我们说的「用页面组合软件去服务客户」：你做好的不是一份说明，而是一页能直接交付的软件。',
+          'Because blocks come from plugins and plugins are code, BIU packages the page body, attachments, and plugin source together when a page is shared. Recipients can use it immediately, without reinstalling tools or rebuilding the environment.',
+          { image: '/site/shot-share.webp', alt: 'The whiteboard and coding challenge remain usable on a shared page', caption: 'Recipients opening the shared link see more than a screenshot: the whiteboard and coding challenge still work.' },
+          'This is what we mean by “compose software with pages to serve clients”: what you create is not an instruction sheet, but a page of software ready to deliver.',
         ],
       },
     ],
   },
   {
     slug: 'saas-to-paas',
-    title: '软件即服务与页面即服务：从 SaaS 到 PaaS',
-    summary: 'SaaS 把软件做成了服务，但服务的单位是厂商定义的应用。从创建、存储、分发、组合、衍生五个角度，讲为什么服务的单位应该是页面。',
+    title: 'Software as a Service and Page as a Service: From SaaS to PaaS',
+    summary: 'SaaS turned software into a service, but the unit of service remains an app defined by its vendor. Looking at creation, storage, distribution, composition, and derivation shows why the page should be that unit.',
     date: '2026-10-14',
     sections: [
       {
         body: [
-          '先说清楚一个撞名。行业里的 PaaS 通常指 Platform as a Service，平台即服务。这篇说的是另一个 PaaS：Page as a Service，页面即服务。',
-          'SaaS 让软件不用再装，打开浏览器就能用。它解决了软件怎么交到用户手里的问题，却留下了另一个问题：用户拿这些软件去服务自己的客户时，服务被拆碎了。',
-          '举个例子。一位算法面试陪跑老师，用在线文档写讲义，用 Excalidraw 画思路，用 LeetCode 布置题目，用表格做 offer 对比。他交给学员的是一套服务，可这套服务分散在四个软件里，学员要注册四个账号，数据在四家厂商手里。',
-          '同一件事在 BIU 里是一页：刊头、画板、算法题、代码运行、offer 对比放在一起，每一块都是一个插件。下面从五个角度说，为什么服务的单位应该是页面，而不是应用。',
-          { image: '/site/demo-allinone.webp', alt: '一份算法面试陪跑页面：刊头、Excalidraw 画板、算法题卡片和代码运行块在同一页', caption: '一页算法面试陪跑，就是交给学员的整套服务。' },
+          'First, a naming clarification. In the industry, PaaS usually means Platform as a Service. This article uses a different PaaS: Page as a Service.',
+          'SaaS made software usable without installation: open a browser and begin. It solved how software reaches users, but left another problem behind. When users employ those products to serve their own clients, the service is fragmented.',
+          'Consider an algorithm interview coach who writes lessons in an online document, draws ideas in Excalidraw, assigns problems in LeetCode, and compares offers in a spreadsheet. The coach delivers one service, but it is scattered across four products. Students need four accounts, and their data sits with four vendors.',
+          'In BIU, the same service is one page: header, canvas, coding challenges, code execution, and offer comparison together, each as a plugin. The five perspectives below explain why the unit of service should be a page rather than an app.',
+          { image: '/site/demo-allinone.webp', alt: 'An algorithm interview coaching page with a header, Excalidraw canvas, coding challenge card, and code runner on one page', caption: 'One algorithm interview coaching page is the complete service delivered to a student.' },
         ],
       },
       {
-        heading: '创建：谁来造服务',
+        heading: 'Create: who builds the service',
         body: [
-          'SaaS 里，服务由厂商来造。功能边界由产品经理决定，所有客户用同一套界面，差异只能靠配置项。缺一个功能，要么提需求等排期，要么再买一个软件。',
-          'PaaS 里，服务由直接面对客户的人来造。页面上的块来自插件，缺哪一种，就让智能体写一个。做一页服务，是写一份声明，而不是搭一个界面：',
+          'In SaaS, the vendor builds the service. Product managers define its boundaries, every customer uses the same interface, and configuration is the only source of variation. If a feature is missing, you either request it and wait or buy another product.',
+          'In PaaS, the person serving the client builds the service. Page blocks come from plugins; when a type is missing, an agent can write it. Creating a page of service means writing a declaration, not assembling an interface:',
           { code: ':::pageBlock {kind=algorithm plugin=page-algorithm}\n{ "title": "1. Two Sum", "lang": "python" }\n:::' },
-          '块声明「要什么」，页面声明「怎么排」和「在什么环境下」。造服务的人，从软件厂商变成了服务者自己。',
+          'The block declares “what,” while the page declares “how it is arranged” and “in what environment.” The builder shifts from the software vendor to the service provider.',
         ],
       },
       {
-        heading: '存储：数据在哪',
+        heading: 'Store: where the data lives',
         body: [
-          'SaaS 里，数据锁在各家厂商的数据库里。一份服务的数据被拆进 N 个软件，能不能导出、怎么导出，由厂商决定。想把讲义里的题目和练习记录放在一起看，先得把数据搬到同一个地方。',
-          'PaaS 里，一页里所有块的数据都在同一个工作区，而且都是结构化的表。页面属性就是这些插件共同的环境，画板、算法题和对比表读的是同一份数据。桌面版把它存在你自己的电脑上，人和智能体读写的也是同一份。',
-          '数据从分散在各家厂商，变成以页面为单位、由你自己掌握。',
+          'In SaaS, data is locked in each vendor’s database. One service is split across N products, and vendors decide whether and how it can be exported. To view lesson problems alongside practice records, you must first move them into one place.',
+          'In PaaS, every block on a page stores its data in the same workspace as structured tables. Page properties are the plugins’ shared environment; the canvas, coding challenges, and comparison table read the same data. The desktop app stores it on your own computer, and people and agents read and write the same copy.',
+          'Data moves from many vendors into pages under your own control.',
         ],
       },
       {
-        heading: '分发：怎么交到客户手里',
+        heading: 'Distribute: how it reaches clients',
         body: [
-          'SaaS 分发的是账号。客户要注册、开权限、学一遍界面，用到几个软件就重复几遍。服务者还得逐个确认：学员能不能看到这份文档，有没有这张表的编辑权限。',
-          'PaaS 分发的是链接。分享页面时，正文、附件和用到的插件源码一起打包，对方打开就能用，画板和算法题照样能交互。页面本身就是隔离的单位，一页对应一个学员，或者一个班。',
-          { image: '/site/shot-share.webp', alt: '分享出去的页面里，画板和算法题卡片照样能用', caption: '对方打开链接，拿到的是一页能用的软件，不是截图。' },
-          '交付物从一堆账号，变成一个链接。',
+          'SaaS distributes accounts. Clients register, receive permissions, and learn an interface, repeating the process for every product. Providers must verify each permission: can this student see the document, and can they edit the table?',
+          'PaaS distributes links. When a page is shared, its body, attachments, and plugin source are packaged together. Recipients open it and can immediately interact with the canvas and coding challenges. The page itself is the isolation boundary: one page per student or per class.',
+          { image: '/site/shot-share.webp', alt: 'The whiteboard and coding challenge remain usable on a shared page', caption: 'Opening the link gives the recipient a working page of software, not a screenshot.' },
+          'The deliverable changes from a bundle of accounts to one link.',
         ],
       },
       {
-        heading: '组合：多个软件怎么一起工作',
+        heading: 'Compose: how multiple programs work together',
         body: [
-          'SaaS 之间靠 API、自动化工具这类胶水连起来，或者用 iframe 嵌进来。嵌进来的东西读不到彼此的数据，组合 N 个 SaaS 就是 N 次集成，任何一家改了接口，链路就断。',
-          'PaaS 里，同一页的块天然读写同一份数据和环境。无论是页面、任务、插件还是会话，都用同一套操作，只有路径不同：',
+          'SaaS products connect through glue such as APIs and automation tools, or are embedded in iframes. Embedded products cannot read one another’s data; composing N SaaS products means N integrations, and any vendor interface change can break the chain.',
+          'In PaaS, blocks on the same page naturally read and write the same data and environment. Pages, tasks, plugins, and sessions all use the same operations, differing only by path:',
           { code: 'db_list   /tasks\ndb_read   /pages/<id>\ndb_update /page-blocks/<pageId>::<blockId>' },
-          '组合不再是一个集成项目，而是把块放进同一页。',
+          'Composition stops being an integration project and becomes placing blocks on the same page.',
         ],
       },
       {
-        heading: '衍生：一份服务怎么长出更多服务',
+        heading: 'Derive: how one service grows into more',
         body: [
-          'SaaS 里，给新客户复制一套服务，意味着新开一个租户、重新配置一遍。厂商的产品你没法分叉，你做的改进也留不下来。',
-          'PaaS 里，复制一页，改几个页面属性，就是给下一位学员的服务。插件只有一份代码，放进不同页面，读到不同的属性，表现出不同的行为。拿到分享页的人，也可以在它的基础上改出自己的版本。',
-          '页面多了，散落在各页的同一种插件会被收集成组件，按类型结构化成表；好的结果会落成新的页面和技能，变成下一次的起点。智能体也能读着旧页面，衍生出新页面。服务从一次性交付，变成可以不断繁殖的配方。',
+          'In SaaS, copying a service for a new client means opening a new tenant and configuring it again. You cannot fork the vendor’s product, and your improvements do not accumulate.',
+          'In PaaS, copying a page and changing a few properties creates the next student’s service. A plugin has one codebase, but reads different properties on different pages and behaves accordingly. Recipients of shared pages can also adapt them into their own versions.',
+          'As pages multiply, instances of the same plugin across them are collected as components and structured into tables by type. Good results become new pages and skills—the starting point for the next round. Agents can read old pages and derive new ones. A service changes from a one-off deliverable into a recipe that continually reproduces.',
         ],
       },
       {
-        heading: 'SaaS 不会消失，它会退到页面里',
+        heading: 'SaaS will not disappear; it will recede into the page',
         body: [
-          '这不是说 SaaS 会被取代。更可能的是，SaaS 退到页面里，成为其中的一块：一个插件背后可以是任何服务，页面负责把它们组合起来，交到客户手里。',
-          'SaaS 让每个人都能用上软件；PaaS 想让每个人都能用软件去服务别人。创建归服务者，存储归用户，分发是一个链接，组合是原生的，衍生没有上限。这就是我们说的从 SaaS 到 PaaS。',
+          'This does not mean SaaS will be replaced. More likely, it will recede into the page as one of its blocks: any service can sit behind a plugin, while the page composes those services and delivers them to the client.',
+          'SaaS made software available to everyone; PaaS aims to let everyone use software to serve others. Creation belongs to the provider, storage to the user, distribution is one link, composition is native, and derivation has no ceiling. That is what we mean by moving from SaaS to PaaS.',
         ],
       },
     ],
   },
   {
     slug: 'page-is-the-boundary',
-    title: '页面，是唯一有边界的单位',
-    summary: '同一个插件放进两个页面，会表现出两种行为，却只有一份代码。页面属性就是插件的环境，这让 BIU 天然支持页面级的多租户。',
+    title: 'The Page Is the Only Bounded Unit',
+    summary: 'The same plugin behaves differently on two pages while sharing one codebase. Page properties form the plugin environment, giving BIU native page-level multitenancy.',
     date: '2026-10-14',
     sections: [
       {
         body: [
-          '在 BIU 里，块（Component）声明自己「是什么」，但「放在哪、按什么顺序、和谁一起」由页面决定。页面是整个体系里唯一带边界的单位，它有四层边界。',
+          'In BIU, a block (Component) declares “what it is,” but the page decides where it goes, in what order, and alongside what. The page is the only bounded unit in the system, with four layers of boundaries.',
         ],
       },
       {
-        heading: '四层边界',
+        heading: 'Four layers of boundaries',
         body: [
-          '逻辑：块的 id 是「页面 id::块 id」，天然带命名空间，不同页面的同名块不会相撞。',
-          '组织：顺序、布局和上下文都属于页面 —— 一页就是一次实验、一节课、一个项目。',
-          '交付：分享时以页为单位解析依赖，把插件源码一起带走。',
-          '环境：页面为里面的插件提供一组变量，同一份插件在不同页面里表现不同。',
+          'Logic: a block ID is “page ID::block ID,” providing a natural namespace so identically named blocks on different pages never collide.',
+          'Organization: order, layout, and context all belong to the page—a page is an experiment, a lesson, or a project.',
+          'Delivery: dependencies are resolved per page when sharing, and plugin source travels with it.',
+          'Environment: the page provides variables to its plugins, so the same plugin behaves differently on different pages.',
         ],
       },
       {
-        heading: '页面属性就是环境',
+        heading: 'Page properties are the environment',
         body: [
-          '我们没有另开一个 env 字段。页面已有的属性，本身就是插件读到的环境：',
-          { diagram: 'page-env', caption: '同一个插件挂在两个页面上，读到两组属性，表现出两种行为。' },
-          '作用域由页面边界决定，而不是插件自己的配置。所以同一个插件可以同时服务很多个客户、很多个班级，彼此隔离。',
+          'We did not add a separate env field. The page’s existing properties are themselves the environment read by plugins:',
+          { diagram: 'page-env', caption: 'The same plugin on two pages reads two sets of properties and exhibits two behaviors.' },
+          'Scope is determined by the page boundary, not by a plugin’s own configuration. One plugin can therefore serve many clients and classes at once while keeping them isolated.',
         ],
       },
       {
-        heading: '组件是有限的原子，页面是无限的配方',
+        heading: 'Components are finite atoms; pages are infinite recipes',
         body: [
-          '块声明「要什么」，页面声明「怎么排」和「什么环境」。系统把这两层声明收敛成真实界面。于是做一页服务，就是写一份声明，而不是搭一个界面 —— 智能体做起来也一样轻松。',
+          'Blocks declare “what,” while pages declare “how to arrange it” and “in what environment.” The system resolves both layers into a real interface. Building a page of service therefore means writing a declaration rather than assembling a UI—and it is just as easy for an agent.',
         ],
       },
     ],
   },
   {
     slug: 'fewer-atoms',
-    title: '更少的原子，更多的组合',
-    summary: '要任务就造「任务」、要文档就造「文档」，功能越多概念越多。BIU 只用六种原子和一套操作，加一个领域只是再组合一次。',
+    title: 'Fewer Atoms, More Combinations',
+    summary: 'Systems often create a “task” mechanism for tasks and a “document” mechanism for documents, adding concepts with every feature. BIU uses only six atoms and one set of operations; adding a domain is another composition.',
     date: '2026-10-14',
     sections: [
       {
         body: [
-          '很多系统的概念和功能是一一对应的：要任务就造一套任务机制，要文档就造一套文档机制。N 个功能，N 套接口，调用方（界面、智能体、脚本）也要适配 N 遍。',
+          'Many systems map concepts one-to-one with features: tasks get a task mechanism, documents get a document mechanism. N features create N interfaces, and every caller—the UI, agents, and scripts—must adapt N times.',
         ],
       },
       {
-        heading: '六种原子',
+        heading: 'Six atoms',
         body: [
-          'BIU 的原子集很小：',
-          { diagram: 'atoms', caption: '六种原子组合出任务、页面、插件、会话……新增一个领域只是再组合一次。' },
-          '任务、页面、技能、插件、合集、组件、会话、事件……都由这六种原子组合而成。每张表还会用 blurb 介绍自己是什么、能做什么，智能体不需要预先知道它长什么样。',
+          'BIU has a very small set of atoms:',
+          { diagram: 'atoms', caption: 'Six atoms combine into tasks, pages, plugins, sessions, and more. Adding a domain is simply another composition.' },
+          'Tasks, pages, skills, plugins, collections, components, sessions, and events are all composed from these six atoms. Each table also uses a blurb to explain what it is and what it can do, so an agent does not need to know its shape in advance.',
         ],
       },
       {
-        heading: '一套操作',
+        heading: 'One set of operations',
         body: [
-          '无论哪个领域，读写方式都一样，只有路径不同：',
+          'Every domain is read and written in the same way; only the path changes:',
           { code: 'db_list   /tasks\ndb_read   /pages/<id>\ndb_update /page-blocks/<pageId>::<blockId>\ndb_create /plugins' },
-          '所以新增一个领域不需要再设计一套 API，登记一张表，它就和已有的表一样可读、可写、可查。',
+          'Adding a domain therefore requires no new API. Register a table, and it becomes readable, writable, and queryable like every existing table.',
         ],
       },
       {
-        heading: '这不是「系统很简单」',
+        heading: 'This does not mean “the system is simple”',
         body: [
-          '该学的概念仍然要学。它说的是另一件事：概念和用法的个数，不随功能增长。也正因为如此，插件本身也能是一张表里的数据 —— 人和智能体都能用同一套操作造出新能力。',
+          'The concepts that matter still have to be learned. The point is different: the number of concepts and usage patterns does not grow with the number of features. That is also why plugins can themselves be data in a table—people and agents can create new capabilities through the same operations.',
         ],
       },
     ],
   },
   {
     slug: 'accumulate',
-    title: '让每一轮工作都留下来',
-    summary: '普通智能体的好结果用完就沉进聊天记录。在 BIU 里，结果会落成页面、块、技能和表 —— 人和智能体共享同一份积累。',
+    title: 'Make Every Round of Work Last',
+    summary: 'Good results from ordinary agents sink into chat history after use. In BIU, results become pages, blocks, skills, and tables—a shared body of work for people and agents.',
     date: '2026-10-14',
     sections: [
       {
         body: [
-          '用过 AI 助手的人都有这种体验：上周它帮你做了一张很好的对比表，这周想接着用，却要在聊天记录里翻半天，最后干脆让它重新生成一遍。',
+          'Anyone who has used an AI assistant knows the experience: last week it made an excellent comparison table; this week, continuing from it means digging through chat history until you finally ask it to generate the table again.',
         ],
       },
       {
-        heading: '上下文不靠猜',
+        heading: 'Context without guesswork',
         body: [
-          '在 BIU 里，人和智能体读写的是同一个工作区。你在页面上改了什么，智能体用同一套操作就能读到；它改了什么，界面上你立刻就能看到。不用每次重新交代背景 —— 你写到哪，它读到哪。',
-          { image: '/site/shot-agent.webp', alt: '会话输入框里输入 @，列出工作区里的页面和任务', caption: '输入 @，页面和任务直接成为这一轮的上下文。' },
+          'In BIU, people and agents read and write the same workspace. Whatever you change on a page is available to the agent through the same operations; whatever it changes appears immediately in the interface. You do not have to restate the background every time—it reads where you left off.',
+          { image: '/site/shot-agent.webp', alt: 'Typing @ in the conversation box lists pages and tasks from the workspace', caption: 'Type @ to bring pages and tasks directly into the context for this round.' },
         ],
       },
       {
-        heading: '复用，而不是重新生成',
+        heading: 'Reuse instead of regeneration',
         body: [
-          '让多数智能体做一个界面，意味着让它写上百行 HTML 和 JS，下次再写一遍。在 BIU 里，它只要写一个块声明，指向已经存在的插件，剩下的只是数据。一份插件可以被很多个页面复用，迭代页面约等于改一段 JSON。',
+          'Asking most agents to build an interface means generating hundreds of lines of HTML and JS, then doing it again next time. In BIU, an agent writes one block declaration pointing to an existing plugin; everything else is data. One plugin can be reused across many pages, and iterating on a page is roughly equivalent to editing a piece of JSON.',
         ],
       },
       {
-        heading: '沉淀是一次普通的写入',
+        heading: 'Accumulation is an ordinary write',
         body: [
-          '因为一切都是数据，好的结果可以直接落成一页、一个块、一个技能或一张表，不需要额外的机制。系统因此能一轮轮长起来，而不是每轮归零。',
-          '这对人同样成立：今天交给智能体的知识，明天依然可用，而且你能清楚看到它存在哪里。',
+          'Because everything is data, a good result can directly become a page, block, skill, or table without any extra mechanism. The system grows round by round instead of resetting to zero.',
+          'The same applies to people: knowledge you give an agent today remains available tomorrow, and you can see exactly where it is stored.',
         ],
       },
     ],
   },
   {
     slug: 'open-and-transparent',
-    title: '开源、免费，数据看得见',
-    summary: '为什么 BIU 选择以 Apache 2.0 开源？因为一个装着你全部软件和数据的页面，应该是你能检查、能带走的。',
+    title: 'Open Source, Free, and Transparent Data',
+    summary: 'Why is BIU open source under Apache 2.0? Because a page containing all your software and data should be inspectable and portable.',
     date: '2026-10-14',
     sections: [
       {
-        heading: '文件是底座，不是牢笼',
+        heading: 'Files are a foundation, not a cage',
         body: [
-          'BIU 的底层是 SQLite、目录和日志，但这层抽象没有把数据锁在接口后面。页面正文在 .biu/biu.sqlite，附件在 .biu/assets，技能文件真的能在磁盘上打开。你可以只用 BIU 的接口，也可以直接读盘。',
-          '所有动作都写进一条只追加的事件记录，界面只是它的投影。出了问题，可以沿着记录追溯「状态是怎么变成这样的」。',
+          'BIU is built on SQLite, directories, and logs, but this abstraction does not lock data behind an interface. Page content lives in .biu/biu.sqlite, attachments in .biu/assets, and skill files can genuinely be opened from disk. You can use only BIU’s interfaces or read the disk directly.',
+          'Every action is written to an append-only event log, and the interface is merely its projection. When something goes wrong, you can follow the record to understand how the state came to be.',
         ],
       },
       {
-        heading: '本机优先',
+        heading: 'Local-first',
         body: [
-          '桌面版把数据存在你自己的电脑上，离线也能用。智能体用你自己配置的模型密钥（DeepSeek、OpenAI、Anthropic 等），只有这一轮需要的内容会发给模型服务。',
+          'The desktop app stores data on your own computer and works offline. Agents use model keys you configure yourself—DeepSeek, OpenAI, Anthropic, and others—and only the content needed for the current round is sent to the model provider.',
         ],
       },
       {
-        heading: '为什么免费',
+        heading: 'Why it is free',
         body: [
-          '我们希望更多人用页面去组合软件，而不是先被价格挡在门外。代码以 Apache 2.0 发布，可以商用、修改和再分发；桌面版和自部署都不收费。官方云端服务还在准备中，上线时会公布价格。',
-          '欢迎在 GitHub 上提 issue、提交插件，或者发邮件到 348876414@qq.com 告诉我们你用页面组合出了什么。',
+          'We want more people to compose software with pages rather than encounter a price barrier first. The code is released under Apache 2.0 and may be used commercially, modified, and redistributed; both the desktop app and self-hosting are free. Our official cloud service is still in development, and pricing will be announced when it launches.',
+          'Open an issue on GitHub, submit a plugin, or email 348876414@qq.com to tell us what you have composed with pages.',
         ],
       },
     ],
   },
   {
     slug: 'build-software',
-    title: '构建：软件与数据同时生长',
-    summary: '传统软件要先开发完成，才能开始服务。BIU 让服务从第一行数据开始，软件随数据一起长出来。全球软件支出已达 1.47 万亿美元，构建方式的改变，触及的是整个软件产业的生产函数。',
+    title: 'Build: Software and Data Grow Together',
+    summary: 'Traditional software must be finished before service can begin. BIU starts service with the first line of data, letting software grow alongside it. With global software spending at $1.47 trillion, changing how we build changes the production function of the entire industry.',
     date: '2026-10-14',
     sections: [
       {
         body: [
-          '这是「改变世界构建、存储、组合、分发、衍生软件的方式」系列的第一篇。每篇讨论一个动词，从两个角度展开：它对智能体的上下文意味着什么，以及它背后的经济规模。',
-          '软件工程有一条默认的时间线：先有需求，再开发、测试、上线，最后才有人使用、才有数据。软件是容器，数据是后来装进去的东西。容器没有做完，服务就无法开始。',
+          'This is the first article in our series on changing how the world builds, stores, composes, distributes, and derives software. Each article examines one verb from two perspectives: what it means for agent context, and the economic scale behind it.',
+          'Software engineering follows a default timeline: requirements first, then development, testing, and launch; only afterward do users and data arrive. Software is the container, and data is something added later. Until the container is finished, service cannot begin.',
         ],
       },
       {
-        heading: '先有软件，后有数据',
+        heading: 'Software first, data later',
         body: [
-          '这条时间线的代价有长期的统计。Standish Group 跟踪软件项目三十年，2020 年的报告显示，只有 31% 的项目按时、按预算交付并取得满意结果，50% 延期、超支或缩减范围，19% 失败 [3]。1994 年的首份报告中，问题项目平均超出原定预算 189%、原定工期 222% [4]。',
-          '更深的问题在于，需求只有在服务过程中才会真正浮现。一位老师开设算法陪跑课，到第三周才发现需要一张按难度统计错题的表。此时软件已经定型，新的需求只能排进下一个版本。软件总是在追赶服务。',
+          'The cost of this timeline has been measured for decades. After tracking software projects for thirty years, the Standish Group reported in 2020 that only 31% were delivered on time and on budget with satisfactory results; 50% were late, over budget, or reduced in scope, and 19% failed [3]. In its first 1994 report, troubled projects averaged 189% over their original budgets and 222% over their original schedules [4].',
+          'The deeper problem is that requirements truly emerge only during service. An algorithm coach may discover in week three that students need a table summarizing mistakes by difficulty. By then the software is fixed, and the new requirement must wait for another release. Software is always chasing the service.',
         ],
       },
       {
-        heading: '数据先行，软件随行',
+        heading: 'Data first, software alongside it',
         body: [
-          'BIU 把这条时间线并行了。服务从写下第一行数据开始：一页讲义、一道题目、一份学员名单，当天就可以交给学员使用。页面本身既是数据，也是软件运行的地方。',
-          '需要新的能力时，软件在服务进行中加入。页面上的每一块都是一段声明加一段数据：',
+          'BIU makes this timeline parallel. Service begins with the first line of data: a lesson page, a problem, or a student list can be used by students that same day. The page is both data and the place where software runs.',
+          'When a new capability is needed, software joins while the service is underway. Every block is a declaration plus data:',
           { code: ':::pageBlock {kind=algorithm plugin=page-algorithm}\n{ "title": "1. Two Sum", "lang": "python" }\n:::' },
-          '缺少的那种块，由智能体当场编写成插件，挂进页面，直接读取已经存在的数据。表的字段可以随时增加，已有记录随即获得新的结构。第三周出现的需求，第三周就能满足。',
+          'An agent writes a missing block type as a plugin on the spot, attaches it to the page, and reads the existing data directly. Table fields can be added at any time, immediately giving existing records new structure. A need discovered in week three can be met in week three.',
         ],
       },
       {
-        heading: 'Agent 的上下文：面向真实数据构建',
+        heading: 'Agent context: build against real data',
         body: [
-          '传统开发里，工程师面对的是需求文档和测试数据；智能体写代码时，面对的往往是一段描述和一个空白的项目。它只能猜测数据长什么样，写出来的界面要等真实数据进来才知道是否可用。',
-          '在 BIU 里，智能体构建插件时，页面上已经有真实的数据、真实的字段和真实的使用记录。它读到的上下文就是这份服务当下的状态，写出的插件第一次运行就作用在真实数据上。',
-          '构建的产出也更小。智能体不必每次生成上百行界面代码，只需写一段声明，指向已有的插件，剩下的是数据。产出越小，出错越少，验证越快，下一轮迭代的上下文也越干净。',
+          'In traditional development, engineers work from requirements and test data; when an agent writes code, it often sees only a description and an empty project. It must guess the shape of the data, and nobody knows whether its interface works until real data arrives.',
+          'In BIU, real data, fields, and usage records already exist on the page when an agent builds a plugin. Its context is the service’s current state, and the plugin operates on real data the first time it runs.',
+          'The output is smaller too. Instead of generating hundreds of lines of UI code each time, the agent writes a declaration pointing to an existing plugin; the rest is data. Smaller output means fewer errors, faster validation, and cleaner context for the next iteration.',
         ],
       },
       {
-        heading: '经济规模：一个万亿美元的生产函数',
+        heading: 'Economic scale: a trillion-dollar production function',
         body: [
-          'Gartner 预测，2026 年全球软件支出达到 1.468 万亿美元，同比增长 15.5% [1]。这是企业每年为「构建好的软件」支付的费用，尚未计入自建软件的人力成本。',
-          '供给端却极为集中。SlashData 估算，全球活跃软件开发者约 4840 万人 [2]；Gartner 估算，全球知识工作者在 2023 年达到 11.4 亿人 [5]。平均约 24 位知识工作者，才对应一位能构建软件的人。绝大多数需求，从未进入构建流程。',
-          '智能体正在改变这一比例。Gartner 预测，到 2028 年 33% 的企业软件应用将内置智能体能力，2024 年这一比例不到 1% [6]。当构建只需要说清需求，供给端从 4840 万人扩展到 11.4 亿人，构建软件的方式就决定了这一万亿美元市场的下一种分配方式。',
+          'Gartner forecasts global software spending of $1.468 trillion in 2026, up 15.5% year over year [1]. That is what enterprises pay annually for “software already built,” excluding the labor cost of software built in-house.',
+          'Supply is highly concentrated. SlashData estimates 48.4 million active software developers worldwide [2], while Gartner estimated 1.14 billion knowledge workers in 2023 [5]. There is roughly one person able to build software for every 24 knowledge workers. Most needs never enter the development pipeline.',
+          'Agents are changing that ratio. Gartner predicts that 33% of enterprise software applications will include agentic capabilities by 2028, up from less than 1% in 2024 [6]. When building requires only articulating a need, supply expands from 48.4 million people to 1.14 billion, and the method of building software determines how this trillion-dollar market is redistributed.',
         ],
       },
       {
-        heading: '构建成为服务的一部分',
+        heading: 'Building becomes part of the service',
         body: [
-          '当数据与软件同步生长，构建就从一个独立的前置阶段，变成服务过程中的持续动作。服务者边服务边构建，每一次调整都基于真实的数据和真实的反馈。',
-          '下一篇讨论存储：当软件与数据一起生长，它们应该以什么样的结构留存下来。',
+          'When data and software grow together, building changes from an independent preliminary phase into a continuous part of service. Providers build while serving, and every adjustment is grounded in real data and feedback.',
+          'The next article examines storage: when software and data grow together, what structure should preserve them?',
         ],
       },
     ],
@@ -327,60 +327,60 @@ export const BLOG_POSTS: BlogPost[] = [
   },
   {
     slug: 'store-software',
-    title: '存储：在一页里融合结构化与非结构化',
-    summary: '全球每年新生成的数据中约九成是非结构化的，多数 AI 工具产出的仍是文件和 HTML。BIU 的页面同时容纳正文与结构化的块，让每一份内容都能被索引、查询和复用。',
+    title: 'Store: Unite Structured and Unstructured Content on One Page',
+    summary: 'About 90% of newly generated data worldwide is unstructured, and most AI tools still produce files and HTML. BIU pages hold prose and structured blocks together, making every piece of content indexable, queryable, and reusable.',
     date: '2026-10-14',
     sections: [
       {
         body: [
-          '这是系列的第二篇。上一篇讨论构建，这一篇讨论存储：软件和数据生长出来之后，应该以什么样的结构留存下来。',
+          'This is the second article in the series. The previous article examined building; this one asks how software and data should be structured once they have grown.',
         ],
       },
       {
-        heading: '无结构的洪流',
+        heading: 'A flood without structure',
         body: [
-          'IDC 估算，2025 年全球生成的数据约为 201.7 ZB，其中非结构化数据约 180.7 ZB，占比接近九成 [1]。在企业内部，2023 年结构化数据仅占新生成数据的不到 12% [1]。',
-          '今天的 AI 工具进一步放大了这股洪流。它们擅长生成一份 Markdown 文档、一个 HTML 页面、一段可以运行的脚本。这些产出对人可读，对系统却是一整块文本。想找出「过去一个月所有标记为困难的算法题」，只能重新阅读每一份文件。',
-          '找信息本身就是一项巨大的成本。麦肯锡的研究显示，知识型员工约 19% 的工作时间用于追踪完成任务所需的信息 [2]。内容越积越多，可用的却越来越少。',
+          'IDC estimates that the world generated about 201.7 ZB of data in 2025, including roughly 180.7 ZB of unstructured data—nearly 90% [1]. Within enterprises, structured data accounted for less than 12% of newly generated data in 2023 [1].',
+          'Today’s AI tools amplify this flood. They excel at generating Markdown documents, HTML pages, and runnable scripts. People can read these outputs, but systems see each as one undifferentiated block of text. Finding “every coding challenge marked hard in the past month” requires rereading every file.',
+          'Finding information is itself enormously expensive. McKinsey found that knowledge workers spend about 19% of their time tracking down information needed to complete tasks [2]. As content accumulates, less of it remains usable.',
         ],
       },
       {
-        heading: '同一页里的两种内容',
+        heading: 'Two kinds of content on one page',
         body: [
-          'BIU 的页面同时承载两种内容。正文是自由书写的段落，适合叙述、解释和思考；块是结构化的数据，每一块都有明确的类型和字段，适合题目、表格、对比和记录。',
-          '两者在同一页里自然交织：讲义的段落之间嵌着算法题块，题块里是结构化的题面、语言和提交记录。页面属性同样是结构化的，并作为环境提供给页面里的所有插件。',
-          { diagram: 'page-env', caption: '页面属性是结构化的环境：同一个插件在两页里读到两组字段。' },
+          'A BIU page carries two kinds of content. Its body contains freely written paragraphs for narrative, explanation, and thought; its blocks are structured data, each with an explicit type and fields suited to problems, tables, comparisons, and records.',
+          'The two interweave naturally on one page: coding challenge blocks appear between lesson paragraphs, with structured prompts, languages, and submission records inside. Page properties are structured as well and serve as the environment for every plugin on the page.',
+          { diagram: 'page-env', caption: 'Page properties form a structured environment: the same plugin reads two sets of fields on two pages.' },
         ],
       },
       {
-        heading: '可复用的结构',
+        heading: 'Reusable structure',
         body: [
-          '结构化的价值首先体现在索引上。工作区里的一切都是表：页面、块、任务、插件、会话。散落在各页的同一种块会被收集成组件，按类型结构化成表，可以按任意字段筛选、排序和建立视图。',
-          '其次体现在复用上。一种块的结构定义一次，就能在任意页面里反复使用；一份数据写入一次，就能被多个视图、多个插件和智能体同时读取。结构本身成为可以积累的资产。',
-          '存放位置由使用者决定：本机空间存放在自己的电脑上，云端空间存放在自己部署的服务器上。无论放在哪里，结构都随数据一起留存。',
+          'The first value of structure is indexing. Everything in a workspace is a table: pages, blocks, tasks, plugins, and sessions. Blocks of the same kind scattered across pages are collected as components and structured into tables by type, ready to filter, sort, and view by any field.',
+          'The second is reuse. Define a block structure once and use it repeatedly on any page; write data once and let multiple views, plugins, and agents read it simultaneously. Structure itself becomes a durable asset.',
+          'Users choose where it lives: local spaces stay on their computers, while cloud spaces stay on servers they deploy. Wherever the data goes, its structure remains with it.',
         ],
       },
       {
-        heading: 'Agent 的上下文：检索代替通读',
+        heading: 'Agent context: retrieve instead of reread',
         body: [
-          '面对非结构化内容，智能体只有两种办法：把整份文件塞进上下文，或者用向量检索取回几段相似的文本。前者受限于上下文长度，后者可能取回无关的片段。',
-          '斯坦福大学等机构的研究表明，即使是长上下文模型，当关键信息位于长输入的中间位置时，回答准确率也会显著下降；在检索增强场景中，增加检索文档带来的提升很快饱和 [3]。把更多文本交给模型，并不等于给了它更好的上下文。',
-          '在 BIU 里，智能体可以用结构化的方式取数：列出某一类组件，按字段筛选记录，读取某一页的某一块。它拿到的是精确的记录，而不是一段需要再理解一遍的文本。上下文更短，信息更准。',
+          'With unstructured content, an agent has only two options: place the entire file in context or use vector retrieval to recover similar passages. The first is limited by context length; the second may return irrelevant fragments.',
+          'Research from Stanford and other institutions shows that even long-context models become significantly less accurate when key information sits in the middle of a long input; in retrieval-augmented settings, gains from adding more retrieved documents quickly plateau [3]. Giving a model more text is not the same as giving it better context.',
+          'In BIU, agents retrieve data structurally: list components of a type, filter records by field, or read one block on one page. They receive exact records, not passages that must be interpreted again. Context is shorter and information more precise.',
         ],
       },
       {
-        heading: '经济规模：数据的托管与检索',
+        heading: 'Economic scale: hosting and retrieving data',
         body: [
-          'Gartner 预测，2026 年全球公有云终端用户支出约 8500 亿美元，2029 年将达到 1.49 万亿美元 [4][5]。这是全球为托管软件与数据支付的费用，其中 SaaS 一项在 2025 年即达 2991 亿美元 [4]。',
-          '检索成本同样以万亿计。全球约 11.4 亿知识工作者 [6]，若约 19% 的工作时间用于寻找信息 [2]，相当于两亿余人的全职工作量。让内容自带结构、可被精确检索，释放的是这部分时间。',
-          '存储的方式决定了数据能否被理解。谁定义了人与 AI 共同使用的数据结构，谁就站在这一万亿美元市场的入口。',
+          'Gartner forecasts roughly $850 billion in worldwide public-cloud end-user spending in 2026, rising to $1.49 trillion in 2029 [4][5]. This is what the world pays to host software and data; SaaS alone reached $299.1 billion in 2025 [4].',
+          'Retrieval costs are likewise measured in trillions. With about 1.14 billion knowledge workers worldwide [6], spending roughly 19% of their time finding information [2] equals the full-time labor of more than 200 million people. Giving content inherent structure and precise retrieval frees that time.',
+          'How data is stored determines whether it can be understood. Whoever defines the data structure shared by people and AI stands at the gateway to this trillion-dollar market.',
         ],
       },
       {
-        heading: '让内容可以被理解',
+        heading: 'Make content understandable',
         body: [
-          '融合结构化与非结构化，意味着内容既保留了书写的自由，又具备了被系统理解的能力。人读的是一页完整的讲义，系统看到的是一组可以查询的记录。',
-          '下一篇讨论组合：当内容有了结构，并存放在同一个地方，多个软件和智能体如何在其上协作。',
+          'Uniting structured and unstructured content preserves the freedom to write while making content understandable to systems. People read a complete lesson page; the system sees queryable records.',
+          'The next article examines composition: once content has structure and lives in one place, how can multiple programs and agents collaborate on it?',
         ],
       },
     ],
@@ -395,53 +395,53 @@ export const BLOG_POSTS: BlogPost[] = [
   },
   {
     slug: 'compose-software',
-    title: '组合：为 AI 提供精准的上下文',
-    summary: '企业平均使用 897 款应用，只有 29% 彼此打通。BIU 把页面、数据、插件和会话集成在同一个系统里，智能体读到的正是这一轮需要的内容。生成式 AI 每年 2.6 至 4.4 万亿美元的潜在价值，取决于这一层。',
+    title: 'Compose: Give AI Precise Context',
+    summary: 'Enterprises use 897 applications on average, but only 29% are integrated. BIU brings pages, data, plugins, and conversations into one system, so agents read exactly what the current round needs. Generative AI’s potential annual value of $2.6–4.4 trillion depends on this layer.',
     date: '2026-10-14',
     sections: [
       {
         body: [
-          '这是系列的第三篇。前两篇讨论软件如何构建、数据如何存储，这一篇讨论组合：多个软件集成为一个系统，对人和 AI 意味着什么。',
+          'This is the third article in the series. The first two examined how software is built and data is stored; this one asks what integrating multiple programs into one system means for people and AI.',
         ],
       },
       {
-        heading: '碎片化的软件栈',
+        heading: 'The fragmented software stack',
         body: [
-          'MuleSoft 2025 年的调查覆盖 1050 位企业 IT 负责人：企业平均使用 897 款应用，其中只有 29% 彼此集成；95% 的受访者认为，集成是有效落地 AI 的障碍 [1]。',
-          '碎片化的代价落在每个人身上。《哈佛商业评论》发表的一项研究跟踪了三家财富 500 强企业的 137 名员工：他们平均每天在应用和网站之间切换约 1200 次，每周因此花费近 4 小时重新进入状态，约占全年工作时间的 9% [2]。',
+          'MuleSoft’s 2025 survey covered 1,050 enterprise IT leaders: organizations used 897 applications on average, only 29% of which were integrated; 95% of respondents said integration obstructed effective AI adoption [1].',
+          'Everyone bears the cost of fragmentation. A Harvard Business Review study tracked 137 employees at three Fortune 500 companies: they switched between applications and websites about 1,200 times per day on average and spent nearly 4 hours each week regaining focus—about 9% of their annual working time [2].',
         ],
       },
       {
-        heading: '集成在同一个系统里',
+        heading: 'Integrated in one system',
         body: [
-          'BIU 把这些内容集成在同一个工作区里。页面、块、任务、插件和会话都是表，使用同一套操作，只有路径不同：',
+          'BIU integrates this content in one workspace. Pages, blocks, tasks, plugins, and conversations are all tables using the same operations, with only their paths differing:',
           { code: 'db_list   /tasks\ndb_read   /pages/<id>\ndb_update /page-blocks/<pageId>::<blockId>' },
-          '同一页里的块读写同一份数据，共享同一组页面属性。算法题块写入的提交记录，对比表块可以直接读取。组合不需要额外的接口，把块放进同一页，它们就开始协作。',
-          { diagram: 'atoms', caption: '六种原子组合出任务、页面、插件、会话……新增一个领域只是再组合一次。' },
+          'Blocks on the same page read and write the same data and share the same page properties. A comparison-table block can directly read submission records written by a coding-challenge block. Composition needs no additional interface: place blocks on the same page and they begin collaborating.',
+          { diagram: 'atoms', caption: 'Six atoms combine into tasks, pages, plugins, sessions, and more. Adding a domain is simply another composition.' },
         ],
       },
       {
-        heading: 'Agent 的上下文：引用代替转述',
+        heading: 'Agent context: reference instead of retell',
         body: [
-          '在应用分立的世界里，一份工作的上下文分散在文档、看板、表格和聊天记录里。人可以凭记忆把它们串起来，智能体只能看到你粘贴给它的那一部分。给得太少，它会猜；给得太多，关键信息被淹没在长文本的中间 [3]。',
-          '在 BIU 里，因为一切都是结构化的数据，并且位于同一个系统里，你可以把页面、组件或会话直接引用进输入框。智能体读到的就是你选中的这些内容，范围清晰，数量恰当。',
-          { image: '/site/shot-agent.webp', alt: '会话输入框里输入 @，列出工作区里的页面和任务', caption: '输入 @，页面和任务直接成为这一轮的上下文。' },
-          '智能体写回的结果同样落在这个系统里：一页、一个块、一张表或一个技能。人在界面上立即看到，下一轮协作直接基于它继续。上下文从需要反复转述的背景，变成随时可以精确引用的数据。',
+          'In a world of separate applications, work context is scattered across documents, boards, spreadsheets, and chat histories. People connect them from memory; an agent sees only what you paste. Give it too little and it guesses; give it too much and key information is buried in the middle of long text [3].',
+          'In BIU, everything is structured data in the same system, so pages, components, and conversations can be referenced directly in the input. The agent reads precisely what you selected, with clear scope and an appropriate amount.',
+          { image: '/site/shot-agent.webp', alt: 'Typing @ in the conversation box lists pages and tasks from the workspace', caption: 'Type @ to bring pages and tasks directly into the context for this round.' },
+          'The agent’s output lands in the same system as a page, block, table, or skill. People see it immediately in the interface, and the next collaboration continues from it. Context changes from background that must be repeatedly retold into data that can be referenced precisely at any time.',
         ],
       },
       {
-        heading: '经济规模：AI 价值的兑现层',
+        heading: 'Economic scale: the layer that realizes AI’s value',
         body: [
-          '麦肯锡估算，生成式 AI 在 63 个应用场景中每年可创造 2.6 万亿至 4.4 万亿美元的经济价值；若计入嵌入现有软件带来的影响，这一数字约再翻一倍 [4]。这些价值能否兑现，取决于 AI 能否拿到准确、完整的业务上下文。',
-          '碎片化的成本同样以万亿计。若全球约 11.4 亿知识工作者 [5] 都有约 9% 的工作时间消耗在应用切换上 [2]，相当于一亿余人的全职工作量。',
-          '组合层连接了这两端：它消除切换带来的损耗，也为 AI 提供可以直接使用的上下文。哪一层成为人与 AI 共同的工作台，哪一层就承接生成式 AI 的主要价值。',
+          'McKinsey estimates that generative AI could create $2.6–4.4 trillion in annual economic value across 63 use cases; including its impact when embedded in existing software could roughly double that figure [4]. Realizing this value depends on whether AI receives accurate, complete business context.',
+          'Fragmentation also costs trillions. If the world’s roughly 1.14 billion knowledge workers [5] spend about 9% of their time switching applications [2], that equals the full-time labor of more than 100 million people.',
+          'The composition layer connects both ends: it removes switching losses and gives AI directly usable context. Whichever layer becomes the shared workspace for people and AI will capture the main value of generative AI.',
         ],
       },
       {
-        heading: '组合即理解',
+        heading: 'Composition is understanding',
         body: [
-          '当软件集成为一个系统，组合同时完成了两件事：让软件彼此协作，也让 AI 理解这份工作的全貌。这正是我们说的「定义下一代人与 AI 协作的媒介」。',
-          '下一篇讨论分发：组合好的服务，如何以最简单的方式交到别人手里。',
+          'When software is integrated into one system, composition does two things at once: it lets programs collaborate and lets AI understand the whole of the work. This is what we mean by “defining the medium for the next generation of human–AI collaboration.”',
+          'The next article examines distribution: how can a composed service reach others in the simplest possible way?',
         ],
       },
     ],
@@ -455,58 +455,58 @@ export const BLOG_POSTS: BlogPost[] = [
   },
   {
     slug: 'distribute-software',
-    title: '分发：一个页面，就是一次发布',
-    summary: '仅 App Store 一个生态，2024 年就促成了近 1.3 万亿美元的交易。BIU 让分享一页即是发布一款软件，免去打包、下载、安装与上架，并以条件匹配的权限模型精确控制谁能看到什么。',
+    title: 'Distribute: One Page Is One Release',
+    summary: 'The App Store ecosystem alone facilitated nearly $1.3 trillion in commerce in 2024. BIU makes sharing a page equivalent to releasing software, eliminating packaging, downloading, installation, and store review while precisely controlling visibility through condition-matched permissions.',
     date: '2026-10-14',
     sections: [
       {
         body: [
-          '这是系列的第四篇。前三篇讨论软件如何构建、存储与组合，这一篇讨论分发：组合好的服务，如何抵达使用它的人。',
+          'This is the fourth article in the series. The first three examined how software is built, stored, and composed; this one asks how a composed service reaches the people who use it.',
         ],
       },
       {
-        heading: '漫长的发布链路',
+        heading: 'The long release pipeline',
         body: [
-          '一款软件从写完到被人用上，要经过一条漫长的链路：打包成安装包，上传到分发渠道，提交应用商店审核，用户下载、安装、注册、登录。每一个环节都有成本，每一个环节都会流失用户。',
-          '渠道本身也在收费。App Store 对数字商品和服务收取 30% 的佣金，年收入不超过 100 万美元的小型开发者为 15% [1]。对个人和小团队来说，这条链路几乎无法负担，大量本可以成为软件的服务，最终只能以文档、截图或视频的形式交付。',
+          'Software travels a long road from completion to use: package an installer, upload it to a distribution channel, submit it for app-store review, then ask users to download, install, register, and sign in. Every step has a cost and loses users.',
+          'The channels charge as well. The App Store takes a 30% commission on digital goods and services, or 15% from small developers earning no more than $1 million annually [1]. For individuals and small teams, this pipeline is nearly unaffordable, so many services that could be software are ultimately delivered as documents, screenshots, or videos.',
         ],
       },
       {
-        heading: '分享一页，即是发布',
+        heading: 'Sharing a page is publishing',
         body: [
-          '在 BIU 里，分发的单位是页面。分享一页时，系统以页为单位解析依赖，把正文、附件和用到的插件源码一起打包。对方打开链接，画板可以继续画，算法题可以继续运行。',
-          { image: '/site/shot-share.webp', alt: '分享出去的页面里，画板和算法题卡片照样能用', caption: '对方打开链接，拿到的是一页能用的软件。' },
-          '这一过程不需要打包工具，不需要分发渠道，也不需要审核。写好一页，分享出去，对方即可使用。',
+          'In BIU, the page is the unit of distribution. When a page is shared, the system resolves dependencies per page and packages its body, attachments, and plugin source together. Recipients open the link and can keep drawing on the canvas and running coding challenges.',
+          { image: '/site/shot-share.webp', alt: 'The whiteboard and coding challenge remain usable on a shared page', caption: 'Opening the link gives the recipient a working page of software.' },
+          'The process needs no packaging tool, distribution channel, or review. Write a page, share it, and the recipient can use it.',
         ],
       },
       {
-        heading: '以条件为单位的权限',
+        heading: 'Permissions defined by conditions',
         body: [
-          '分发得越容易，权限就越重要。BIU 的权限模型由两个视图匹配而成：数据视图描述「哪些内容」，成员视图描述「哪些人」，两者匹配，就得到这个人对这些内容的角色和可见范围。',
-          '授权对象是条件，而非名单。新成员加入空间，就自动落入「空间成员」视图，获得挂在该视图上的全部授权；成员转为外部，权限随之收缩。可见性在访问时当场计算，内容之间可以继承权限，并能逐级展开权限的来路。',
-          '一页分享给一个班级，每位学员只看到属于自己的那部分记录，这只需要一次授权。',
+          'The easier distribution becomes, the more important permissions are. BIU’s permission model matches two views: a data view describes “which content,” and a member view describes “which people.” Their match determines a person’s role and visibility over that content.',
+          'Authorization targets conditions, not lists. A new member automatically enters the “space members” view and receives every permission attached to it; if the member becomes external, those permissions narrow accordingly. Visibility is computed at access time, content can inherit permissions, and each source of authority can be traced step by step.',
+          'Share one page with a class and let each student see only their own records—all with one authorization.',
         ],
       },
       {
-        heading: 'Agent 的上下文：随页面一起抵达',
+        heading: 'Agent context: arrives with the page',
         body: [
-          '应用分发出去的是界面，上下文留在了服务者那一端。接收方的智能体若要协助，需要重新获取背景、重新理解结构。',
-          'BIU 分发的页面自带上下文：正文、结构化的块、页面属性和插件一起抵达。接收方的智能体打开这一页，读到的就是完整、有结构的服务本身。权限模型同样约束智能体，它能读写的范围，与它所代表的人完全一致。',
+          'An application distributes an interface while leaving context with the provider. To help, the recipient’s agent must reacquire the background and understand the structure again.',
+          'A BIU page carries its context: body, structured blocks, page properties, and plugins arrive together. When the recipient’s agent opens it, it reads the complete, structured service itself. The permission model constrains agents too; their read and write scope exactly matches that of the people they represent.',
         ],
       },
       {
-        heading: '经济规模：万亿美元的分发通道',
+        heading: 'Economic scale: a trillion-dollar distribution channel',
         body: [
-          'Apple 委托的研究显示，2024 年 App Store 生态促成了近 1.3 万亿美元的交易与销售，其中数字商品与服务 1310 亿美元，实体商品与服务 1.014 万亿美元，应用内广告 1500 亿美元；规模在五年内翻了一倍以上 [2]。',
-          '这仅仅是一个平台的数据。它说明，控制软件分发通道的平台，承接的是万亿美元量级的经济活动。',
-          '页面是一种新的分发通道：发布门槛从「成为开发者并通过审核」降到「写好一页」。当每一位服务者都能直接把软件交到客户手里，分发的版图将被重新划分。',
+          'Research commissioned by Apple found that the App Store ecosystem facilitated nearly $1.3 trillion in transactions and sales in 2024: $131 billion in digital goods and services, $1.014 trillion in physical goods and services, and $150 billion in in-app advertising. Its scale more than doubled in five years [2].',
+          'That is only one platform. It shows that platforms controlling software distribution carry trillions of dollars in economic activity.',
+          'The page is a new distribution channel: the threshold falls from “become a developer and pass review” to “write a page.” When every service provider can deliver software directly to clients, the distribution landscape will be redrawn.',
         ],
       },
       {
-        heading: '人人都能发布软件',
+        heading: 'Everyone can publish software',
         body: [
-          '当发布只需要一个页面，并且权限可以精确表达，服务者就无需先成为软件公司，才能把软件交到客户手里。',
-          '最后一篇讨论衍生：一款软件被分发出去之后，别人如何在它的基础上，继续构建自己需要的能力。',
+          'When publishing requires only a page and permissions can be expressed precisely, providers no longer need to become software companies before delivering software to clients.',
+          'The final article examines derivation: once software has been distributed, how can others continue building the capabilities they need on top of it?',
         ],
       },
     ],
@@ -517,57 +517,57 @@ export const BLOG_POSTS: BlogPost[] = [
   },
   {
     slug: 'derive-software',
-    title: '衍生：在别人的软件之上，叠加你的能力',
-    summary: '哈佛商学院估算，开源软件的需求侧价值高达 8.8 万亿美元。在 BIU 里，智能体可以引用已有的插件，对其功能做扩展与叠加；VS Code 插件、DeepSeek harness 插件，甚至一个 GitHub 链接，都能被引入进来。',
+    title: 'Derive: Layer Your Capabilities on Other People’s Software',
+    summary: 'Harvard Business School estimates the demand-side value of open-source software at $8.8 trillion. In BIU, agents can reference existing plugins and extend or layer their capabilities; VS Code extensions, DeepSeek harness plugins, and even a GitHub link can be brought in.',
     date: '2026-10-14',
     sections: [
       {
         body: [
-          '这是系列的最后一篇。构建、存储、组合、分发描述的是一款软件从无到有、再到他人手中的过程；衍生讨论的是之后发生的事：软件如何在他人手中继续生长。',
+          'This is the final article in the series. Building, storing, composing, and distributing describe software’s journey from nothing into other people’s hands. Derivation asks what happens next: how software continues to grow in those hands.',
         ],
       },
       {
-        heading: '复用创造的价值',
+        heading: 'The value created by reuse',
         body: [
-          '软件史上最大的价值，来自复用。哈佛商学院的研究估算，若开源软件不存在，使用它的企业要自行重写，所需成本约 8.8 万亿美元；企业的软件支出将是现在的 3.5 倍 [1]。',
-          '可供衍生的素材也在快速增长。GitHub 2025 年的报告显示，平台上已有超过 1.8 亿名开发者、6.3 亿个仓库，仅 2025 年就新增 1.21 亿个 [2]。VS Code 插件市场的扩展数量超过 10 万个 [3]。',
-          '然而，这些能力大多被锁在各自的生态里。VS Code 的插件只能在 VS Code 里运行；一个 GitHub 上的项目，要变成工作流里可用的一部分，中间隔着大量集成工作。',
+          'The greatest value in software history comes from reuse. Harvard Business School research estimates that without open-source software, firms using it would spend about $8.8 trillion rewriting it themselves; corporate software spending would be 3.5 times its current level [1].',
+          'The material available for derivation is growing rapidly. GitHub’s 2025 report counted more than 180 million developers and 630 million repositories on the platform, including 121 million added in 2025 alone [2]. The VS Code Marketplace has more than 100,000 extensions [3].',
+          'Yet most of these capabilities remain locked in their respective ecosystems. VS Code extensions run only in VS Code; turning a GitHub project into a usable part of a workflow requires substantial integration work.',
         ],
       },
       {
-        heading: '引用，然后扩展',
+        heading: 'Reference, then extend',
         body: [
-          '在 BIU 里，插件本身也是工作区表里的数据，可以被读取、引用和复制。智能体可以引用一个已有的插件，在它的基础上扩展功能，或者把几个插件的能力叠加在一起，形成一个新的插件。',
-          '一位老师写好了算法题插件，另一位老师可以让智能体引用它，叠加一个按知识点统计错题的视图，变成自己需要的版本。原作者无需参与，衍生出的插件同样可以继续被别人引用。',
+          'In BIU, plugins are themselves data in workspace tables: they can be read, referenced, and copied. An agent can reference an existing plugin, extend its functionality, or layer several plugins’ capabilities into a new one.',
+          'If one teacher has written a coding-challenge plugin, another can ask an agent to reference it and add a view that groups mistakes by concept, producing the version they need. The original author need not participate, and the derived plugin can itself be referenced by others.',
         ],
       },
       {
-        heading: '跨越生态的边界',
+        heading: 'Cross ecosystem boundaries',
         body: [
-          '引用的对象并不局限于 BIU 里的插件。智能体可以读取 VS Code 的插件、DeepSeek harness 的插件，甚至一个 GitHub 仓库的链接，理解其中的功能，再把它引入为页面里可以使用的一块。',
-          '这意味着整个开源世界已有的能力，都可以成为构建服务的素材。不需要等待某个功能被移植过来，只需要指给智能体看。',
+          'References are not limited to BIU plugins. An agent can read a VS Code extension, a DeepSeek harness plugin, or even a GitHub repository link, understand its functionality, and bring it into a page as a usable block.',
+          'This means the capabilities of the entire open-source world can become material for building services. There is no need to wait for a feature to be ported; simply point the agent to it.',
         ],
       },
       {
-        heading: 'Agent 的上下文：以已有的软件为起点',
+        heading: 'Agent context: start from existing software',
         body: [
-          '让智能体从零生成一款软件，它的上下文只有一段描述。让它衍生一款软件，它的上下文是一份经过验证、正在运行的代码，以及这份代码在页面里读写的真实数据。',
-          '起点越扎实，结果越可靠。智能体做的是增量：保留原插件已经正确的部分，只写新增的那一层。改动更小，审查更容易，衍生链条上的每一环都可以追溯来源。',
+          'Ask an agent to generate software from scratch and its context is only a description. Ask it to derive software and its context is validated, running code plus the real data that code reads and writes on the page.',
+          'A stronger starting point produces a more reliable result. The agent works incrementally: it preserves what the original plugin already gets right and writes only the added layer. Changes are smaller, review is easier, and every link in the derivation chain remains traceable.',
         ],
       },
       {
-        heading: '经济规模：把 8.8 万亿美元的存量变成增量',
+        heading: 'Economic scale: turn an $8.8 trillion stock into growth',
         body: [
-          '8.8 万亿美元衡量的是开源软件被复用所避免的重写成本 [1]。它证明了复用的经济规模，也揭示了缺口：这些价值几乎只被开发者获取。研究同时发现，96% 的需求侧价值由 5% 的开源开发者创造 [1]。',
-          '当智能体可以替使用者引用、改写和叠加这些软件，复用的受益者就从 4840 万名开发者扩展到所有知识工作者。衍生把一笔沉淀的存量，变成可以持续产生新软件的增量。',
+          '$8.8 trillion measures the rewriting cost avoided through open-source reuse [1]. It proves the economic scale of reuse while exposing a gap: almost only developers can capture this value. The research also found that 96% of demand-side value is created by 5% of open-source developers [1].',
+          'When agents can reference, modify, and layer this software for users, the beneficiaries of reuse expand from 48.4 million developers to all knowledge workers. Derivation turns a stock of accumulated value into a continuing source of new software.',
         ],
       },
       {
-        heading: '每一款软件，都是起点',
+        heading: 'Every piece of software is a starting point',
         body: [
-          '页面同样可以衍生。复制一页，改几个属性，就是给下一位客户的服务；拿到分享页的人，可以在它的基础上改写出自己的版本。好的结果沉淀为组件、技能和新的页面，成为下一次构建的起点。',
-          '构建与数据同步，存储兼具结构与自由，组合为 AI 提供精准的上下文，分发只需一个页面，衍生让每一款软件都能长出下一款。',
-          '这五个动词合在一起，就是我们想做的事：改变世界构建、存储、组合、分发、衍生软件的方式，定义下一代人与 AI 协作的媒介。麦克卢汉说，媒介即讯息。我们相信，页面会成为这样的媒介。',
+          'Pages can be derived too. Copy a page and change a few properties to create a service for the next client; recipients of shared pages can adapt them into their own versions. Good results settle into components, skills, and new pages—the starting point for the next build.',
+          'Building stays synchronized with data; storage combines structure with freedom; composition gives AI precise context; distribution requires only a page; and derivation lets every piece of software grow into the next.',
+          'Together, these five verbs describe what we want to do: change how the world builds, stores, composes, distributes, and derives software, defining the medium for the next generation of human–AI collaboration. Marshall McLuhan said, “The medium is the message.” We believe the page will become that medium.',
         ],
       },
     ],
