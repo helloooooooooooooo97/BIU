@@ -9,6 +9,7 @@ import { MarketingSecurity } from './security.tsx'
 import { MarketingCompareDetail, MarketingCompareIndex } from './compare.tsx'
 import { MarketingUseCaseDetail, MarketingUseCases } from './use-cases.tsx'
 import { MarketingBrand } from './brand.tsx'
+import { MarketingInvest } from './invest.tsx'
 import { MarketingBlog, MarketingBlogPost } from './blog.tsx'
 import { MarketingChangelog, MarketingDocs } from './resources.tsx'
 import { type AuthMode, MarketingAuth } from './auth.tsx'
@@ -116,6 +117,7 @@ export function MarketingSite({ onLogin, onStart, auth, login = true }: Marketin
       <Route path="/docs" element={<MarketingDocs onLogin={onLogin} onStart={onStart} />} />
       <Route path="/changelog" element={<MarketingChangelog onLogin={onLogin} onStart={onStart} />} />
       <Route path="/brand" element={<MarketingBrand onLogin={onLogin} onStart={onStart} />} />
+      <Route path="/invest" element={<MarketingInvest onLogin={onLogin} onStart={onStart} />} />
       <Route path="/use-cases" element={<MarketingUseCases onLogin={onLogin} onStart={onStart} />} />
       <Route path="/use-cases/:slug" element={<MarketingUseCaseDetail onLogin={onLogin} onStart={onStart} />} />
       {Object.entries(PLACEHOLDERS).map(([path, content]) => (
@@ -152,6 +154,7 @@ export const SITE_PATHS = [
   '/compare',
   '/use-cases',
   '/brand',
+  '/invest',
   '/enterprise',
   '/changelog',
   '/about',

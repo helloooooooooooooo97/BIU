@@ -27,6 +27,7 @@ const NAV_PRIMARY = [
   { label: '博客', to: '/blog' },
   { label: '品牌', to: '/brand' },
   { label: '定价', to: '/pricing' },
+  { label: '投资', to: '/invest' },
 ] as const
 
 export const GITHUB_URL = 'https://github.com/helloooooooooooooo97/biu'
@@ -89,6 +90,7 @@ const FOOTER_COLUMNS: ReadonlyArray<{ title: string; links: readonly FooterLink[
       { label: '文档', to: '/docs' },
       { label: '博客', to: '/blog' },
       { label: '品牌', to: '/brand' },
+      { label: '投资', to: '/invest' },
     ],
   },
 ]

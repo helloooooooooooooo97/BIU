@@ -406,6 +406,23 @@ test('博客：总览列出每篇文章，文章页能打开并链到下一篇',
     '愿景表的五个动词链到对应文章',
   )
   assert.match(vision.querySelector('a.site-cta-primary')?.getAttribute('href') ?? '', /^mailto:348876414@qq\.com\?subject=/)
+  assert.ok(vision.querySelector('a[href="/invest"]'), '愿景链到投资页')
+  assert.equal(
+    screen.getByRole('navigation', { name: '官网' }).querySelector('a[href="/invest"]')?.textContent,
+    '投资',
+    '顶部导航有投资入口',
+  )
+  cleanup()
+
+  renderSite('/invest')
+  assert.equal(screen.getByRole('heading', { level: 1 }).textContent, '投资下一个万亿美元独角兽')
+  assert.equal(document.title, '投资 · BIU')
+  assert.deepEqual(
+    [...screen.getByRole('region', { name: '五个市场' }).querySelectorAll('[role="rowheader"] a')].map((a) => a.getAttribute('href')),
+    series.map((slug) => `/blog/${slug}`),
+    '投资页列出五个动词市场',
+  )
+  assert.ok(document.querySelectorAll('a[href^="mailto:348876414@qq.com?subject="]').length >= 2, '首屏和页尾都能联系我们')
   cleanup()
 
   renderSite('/blog/nope')
