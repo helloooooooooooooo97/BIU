@@ -19,7 +19,7 @@ type PackageId = keyof typeof PACKAGES
 const REQUIREMENTS = [
   ['系统', 'macOS（Apple 芯片 / Intel）、Windows 10 及以上'],
   ['内存', '建议 8 GB 以上'],
-  ['模型', '自带密钥：DeepSeek / OpenAI / Anthropic 任选其一'],
+  ['模型', '自带密钥，任意模型'],
   ['网络', '平时可离线；调用模型时需要联网'],
 ] as const
 
@@ -32,7 +32,7 @@ const SOURCE_STEPS = [
 const DOWNLOAD_FAQ = [
   ['如何选择 macOS 安装包', '打开苹果菜单中的「关于本机」。芯片一栏为 Apple M 系列时选择 Apple 芯片，为 Intel 时选择 Intel 芯片。'],
   ['Windows SmartScreen 拦截', '选择「更多信息」，再选择「仍要运行」。代码全部开源，可在 GitHub 核对。'],
-  ['未配置模型密钥', '页面、表格和插件可以正常使用。智能体需要配置模型密钥，可选 DeepSeek、OpenAI 或 Anthropic。'],
+  ['未配置模型密钥', '页面、表格和插件可以正常使用。智能体需要配置模型密钥，任意模型均可。'],
   ['移动端', '目前提供桌面版。macOS 与 Windows 提供安装包，Linux 从源码运行。'],
 ] as const
 

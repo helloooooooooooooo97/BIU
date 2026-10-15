@@ -28,7 +28,7 @@ const PLANS: readonly Plan[] = [
     price: '$0',
     cadence: 'macOS / Windows',
     featured: true,
-    features: ['本机空间，数据存在自己电脑上', '页面、表格、插件、智能体全部功能', '自带模型密钥（DeepSeek / OpenAI / Anthropic）'],
+    features: ['本机空间，数据存在自己电脑上', '页面、表格、插件、智能体全部功能', '自带模型密钥，任意模型'],
     cta: { label: '下载', kind: 'download' },
   },
   {
