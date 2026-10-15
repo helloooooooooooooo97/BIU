@@ -387,11 +387,25 @@ test('博客：总览列出每篇文章，文章页能打开并链到下一篇',
   series.forEach((slug, i) => {
     renderSite(`/blog/${slug}`)
     assert.match(screen.getByRole('heading', { level: 1 }).textContent ?? '', new RegExp(`^${'构建存储组合分发衍生'.slice(i * 2, i * 2 + 2)}：`))
+    const refs = screen.getByRole('region', { name: '参考资料' }).querySelectorAll('ol > li a[href^="https://"]')
+    assert.ok(refs.length > 0, '每篇文章都列出参考资料')
+    const cited = Math.max(...[...(document.querySelector('.site-article-body')?.textContent ?? '').matchAll(/\[(\d+)\]/g)].map((m) => Number(m[1])))
+    assert.ok(cited <= refs.length, '正文引用编号都有对应条目')
     if (i < series.length - 1) {
       assert.equal(screen.getByRole('navigation', { name: '下一篇' }).querySelector('a')?.getAttribute('href'), `/blog/${series[i + 1]}`, '五篇按顺序接着读')
     }
     cleanup()
   })
+
+  renderSite('/')
+  const vision = screen.getByRole('region', { name: '愿景' })
+  assert.deepEqual(
+    [...vision.querySelectorAll('[role="rowheader"] a')].map((a) => a.getAttribute('href')),
+    series.map((slug) => `/blog/${slug}`),
+    '愿景表的五个动词链到对应文章',
+  )
+  assert.match(vision.querySelector('a.site-cta-primary')?.getAttribute('href') ?? '', /^mailto:348876414@qq\.com\?subject=/)
+  cleanup()
 
   renderSite('/blog/nope')
   assert.match(screen.getByRole('heading', { level: 1 }).textContent ?? '', /没有这篇文章/)

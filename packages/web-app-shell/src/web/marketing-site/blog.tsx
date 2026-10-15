@@ -158,6 +158,23 @@ export function MarketingBlogPost({ onLogin, onStart }: { onLogin: SiteAction; o
             </section>
           ))}
         </div>
+        {post.references?.length ? (
+          <section className="site-article-refs" aria-label="参考资料">
+            <h2>参考资料</h2>
+            <ol>
+              {post.references.map((ref) => (
+                <li key={ref.url}>
+                  <a href={ref.url} target="_blank" rel="noreferrer">
+                    {ref.title}
+                  </a>
+                  <span>
+                    {ref.publisher} · {ref.year}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </section>
+        ) : null}
         <nav className="site-article-next" aria-label="下一篇">
           <span>下一篇</span>
           <Link to={`/blog/${next.slug}`}>{next.title} →</Link>
