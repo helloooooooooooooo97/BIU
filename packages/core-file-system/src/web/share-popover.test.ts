@@ -83,11 +83,10 @@ test('share panel separates public sharing from internal and external collaborat
   assert.match(databaseHost, /collab:/)
 })
 
-test('cloud and online workspaces hide the title cloud mark', () => {
+test('table titles do not show a cloud mark', () => {
   const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
-  const databaseHost = readFileSync(resolve(import.meta.dirname, '../host/index.ts'), 'utf8')
-  assert.match(browser, /row\.remote === true && localData/)
-  assert.match(databaseHost, /if \(this\.membersInSystemData\(\)\) return false/)
+  assert.doesNotMatch(browser, /aria-label="云端"/)
+  assert.doesNotMatch(browser, /row\.remote === true/)
 })
 
 test('device workspace keeps LAN links but hides collaboration and cloud publishing', () => {
