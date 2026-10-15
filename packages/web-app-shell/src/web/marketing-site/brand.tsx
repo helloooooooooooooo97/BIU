@@ -14,7 +14,7 @@ const ANATOMY = [
   },
   {
     title: '三个块',
-    body: '右上的两个小块是 B 的两个弧，贯穿的斜线是 I，左下的半圆是 U。B、I、U 三个字母刚好拼成这个形状 —— 标记本身就是名字。',
+    body: '上方 B 的两块，一块是私人空间，一块是公共空间；下方的 U 是底座，稳稳承托起这两个空间。',
   },
   {
     title: '三生万物',
@@ -37,8 +37,8 @@ export function MarketingBrand({ onLogin, onStart }: { onLogin: SiteAction; onSt
         <p className="site-section-label">品牌</p>
         <h1>一个圆、两条线、三个块</h1>
         <p className="site-page-lead">
-          标记不是装饰。它说明 BIU 是什么：一个圆是一个页面，里面切出的几块是各自独立的软件，
-          但它们都还在同一个圆里。下面的颜色和线条都可以调，调成你自己的版本。
+          标记本身就是名字：右上的两个小块是 B 的两个弧，贯穿的斜线是 I，左下的半圆是 U，
+          B、I、U 三个字母刚好拼成这个形状。下面的颜色和线条都可以调，调成你自己的版本。
         </p>
       </section>
 
