@@ -45,12 +45,13 @@ test('landing page embeds real empty product surfaces and opens account actions'
   assert.equal(h1.getAttribute('aria-label'), '改变世界构建、存储、组合、分发、衍生软件的方式')
   assert.deepEqual(
     Array.from(h1.children).map((node) => node.textContent),
-    ['改变世界', '构建/存储/组合/分发/衍生', '软件的方式'],
+    ['改变世界', '构建01存储02组合03分发04衍生05', '软件的方式'],
     'slogan 分三行，同一种字',
   )
   const verbLinks = Array.from(h1.querySelectorAll('.site-hero-verbs a'))
+  assert.ok(verbLinks.every((link) => link.querySelector('sup')?.getAttribute('aria-hidden') === 'true'), '编号只作装饰')
   assert.deepEqual(
-    verbLinks.map((link) => [link.textContent, link.getAttribute('href')]),
+    verbLinks.map((link) => [link.firstChild?.textContent, link.getAttribute('href')]),
     [
       ['构建', '/blog/build-software'],
       ['存储', '/blog/store-software'],
@@ -60,7 +61,6 @@ test('landing page embeds real empty product surfaces and opens account actions'
     ],
     '五个词各自通向一篇文章',
   )
-  assert.ok(Array.from(h1.querySelectorAll('.site-hero-sep')).every((sep) => sep.getAttribute('aria-hidden') === 'true'), '分隔线不读出来')
   const band = document.querySelector('.site-hero-band')!
   assert.ok(band.closest('.site-hero'), '产品句和下载入口在首屏底部')
   assert.equal(document.querySelector('.site-hero-epigraph span')?.textContent, '媒介即讯息')
