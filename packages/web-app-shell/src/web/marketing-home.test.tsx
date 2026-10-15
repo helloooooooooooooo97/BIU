@@ -44,15 +44,22 @@ test('landing page embeds real empty product surfaces and opens account actions'
   const h1 = screen.getByRole('heading', { level: 1 })
   assert.equal(h1.getAttribute('aria-label'), '改变世界构建、存储、组合、分发、衍生软件的方式')
   assert.deepEqual(
-    Array.from(h1.querySelectorAll('span')).map((node) => node.textContent),
-    ['改变世界', '构建', '存储', '组合', '分发', '衍生', '软件的方式'],
+    Array.from(h1.children).map((node) => node.textContent),
+    ['改变世界', '构建存储组合分发衍生', '软件的方式'],
+    'slogan 分三行，同一种字',
   )
+  assert.deepEqual(
+    Array.from(h1.querySelectorAll('.site-hero-verbs span')).map((node) => node.textContent),
+    ['构建', '存储', '组合', '分发', '衍生'],
+  )
+  const band = document.querySelector('.site-hero-band')!
+  assert.ok(band.closest('.site-hero'), '产品句和下载入口在首屏底部')
   assert.equal(document.querySelector('.site-hero-epigraph span')?.textContent, '媒介即讯息')
   assert.match(document.querySelector('.site-hero-epigraph cite')?.textContent ?? '', /麦克卢汉/)
   assert.equal(document.querySelector('.site-hero-sub')?.textContent, '定义下一代人与 AI 协作的媒介')
-  const productLine = document.querySelector('.site-product-intro h2')
+  const productLine = document.querySelector('.site-hero-band h2')
   assert.equal(productLine?.textContent, '一个页面，组合所有软件')
-  assert.equal(document.querySelector('.site-product-intro .site-eyebrow')?.textContent, '开源 · 免费 · All in One')
+  assert.equal(document.querySelector('.site-hero-band .site-eyebrow')?.textContent, '开源 · 免费 · All in One')
   assert.ok(h1.compareDocumentPosition(productLine!) & Node.DOCUMENT_POSITION_FOLLOWING, '产品句在主张下面')
   assert.ok(productLine!.compareDocumentPosition(document.querySelector('.site-hero-lead')!) & Node.DOCUMENT_POSITION_FOLLOWING, '说明在产品句下面')
   assert.equal(document.querySelector('.site-hero .site-section-label'), null)
@@ -144,7 +151,7 @@ test('home 收窄后：深度内容下沉，导航指向独立页', () => {
   assert.match(nav.textContent ?? '', /对比/)
   // 首页主张：All in One —— 页面组合软件
   assert.match(screen.getByRole('heading', { level: 1 }).getAttribute('aria-label') ?? '', /构建、存储、组合、分发、衍生/)
-  assert.equal(document.querySelector('.site-product-intro h2')?.textContent, '一个页面，组合所有软件')
+  assert.equal(document.querySelector('.site-hero-band h2')?.textContent, '一个页面，组合所有软件')
   cleanup()
 })
 
@@ -373,7 +380,7 @@ test('博客：总览列出每篇文章，文章页能打开并链到下一篇',
 
 test('按钮图标、联系邮箱、云端未上线都如实呈现', () => {
   renderSite('/')
-  const actions = document.querySelector('.site-product-intro .site-cta-actions')!
+  const actions = document.querySelector('.site-hero-band .site-cta-actions')!
   const [download, github] = Array.from(actions.querySelectorAll('a'))
   assert.ok(download!.querySelector('svg.site-icon'), '下载用图标，不用 ↗ 字符')
   assert.doesNotMatch(download!.textContent ?? '', /↗/)

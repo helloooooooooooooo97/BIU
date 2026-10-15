@@ -238,7 +238,7 @@ test('板块间距：小字→大字、大字→内容 各自统一', () => {
 
   // 这些板块的「小字→大字」必须走同一个 token
   const labelSels = [
-    '.site-hero h1', '.site-product-intro h2', '.site-demo-heading .site-section-label',
+    '.site-hero h1', '.site-demo-heading .site-section-label',
     '.site-space-heading h2',
   ]
   const bad: string[] = []
