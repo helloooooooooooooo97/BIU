@@ -45,12 +45,8 @@ test('landing page embeds real empty product surfaces and opens account actions'
   assert.equal(h1.getAttribute('aria-label'), '改变世界构建、存储、组合、分发、衍生软件的方式')
   assert.deepEqual(
     Array.from(h1.children).map((node) => node.textContent),
-    ['改变世界', '构建存储组合分发衍生', '软件的方式'],
-    'slogan 分三行，同一种字',
-  )
-  assert.deepEqual(
-    Array.from(h1.querySelectorAll('.site-hero-verbs span')).map((node) => node.textContent),
-    ['构建', '存储', '组合', '分发', '衍生'],
+    ['改变世界', '构建、存储、组合、分发、衍生', '软件的方式'],
+    'slogan 分三行，同一种字，动词之间用顿号',
   )
   const band = document.querySelector('.site-hero-band')!
   assert.ok(band.closest('.site-hero'), '产品句和下载入口在首屏底部')
@@ -61,7 +57,8 @@ test('landing page embeds real empty product surfaces and opens account actions'
   assert.equal(productLine?.textContent, '一个页面，组合所有软件')
   assert.equal(document.querySelector('.site-hero-band .site-eyebrow')?.textContent, '开源 · 免费 · All in One')
   assert.ok(h1.compareDocumentPosition(productLine!) & Node.DOCUMENT_POSITION_FOLLOWING, '产品句在主张下面')
-  assert.ok(productLine!.compareDocumentPosition(document.querySelector('.site-hero-lead')!) & Node.DOCUMENT_POSITION_FOLLOWING, '说明在产品句下面')
+  assert.equal(document.querySelector('.site-hero-lead'), null, '首屏不放长说明')
+  assert.match(document.querySelector('.site-demo-lead')?.textContent ?? '', /^在 BIU 里，页面上的每一块都是一个真正能用的软件.*算法面试陪跑/, '说明并进真实界面「页面」的介绍')
   assert.equal(document.querySelector('.site-hero .site-section-label'), null)
 
   // P0-13：演示区用静态截图，不再嵌 iframe（iframe 会完整加载 web 应用三次）

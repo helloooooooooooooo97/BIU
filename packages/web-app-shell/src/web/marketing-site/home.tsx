@@ -19,7 +19,7 @@ const PRODUCT_SURFACES = [
     video: { webm: '/site/demo-allinone.webm', mp4: '/site/demo-allinone.mp4' },
     image: '/site/demo-allinone.webp',
     size: [3840, 2400],
-    lead: '先有一页。刊头、画板、算法题、代码运行、offer 对比放在一起，就是交给学员的一整套算法面试陪跑服务。',
+    lead: '在 BIU 里，页面上的每一块都是一个真正能用的软件 —— 表格、画板、代码练习、视频剪辑，都来自插件。把它们放进同一页，就是一套为你的客户准备好的服务：刊头、画板、算法题、代码运行、offer 对比放在一起，就是交给学员的一整套算法面试陪跑服务。',
     alt: 'BIU 页面：一份算法面试陪跑，刊头、Excalidraw 画板、算法题卡片、代码运行块和 offer 对比矩阵放在同一页',
   },
   {
@@ -179,10 +179,10 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
             <h1 aria-label="改变世界构建、存储、组合、分发、衍生软件的方式">
               <span>改变世界</span>
               <span className="site-hero-verbs">
-                <span>构建</span>
-                <span>存储</span>
-                <span>组合</span>
-                <span>分发</span>
+                <span>构建、</span>
+                <span>存储、</span>
+                <span>组合、</span>
+                <span>分发、</span>
                 <span>衍生</span>
               </span>
               <span>软件的方式</span>
@@ -195,10 +195,6 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
                 <p className="site-eyebrow">开源 · 免费 · All in One</p>
                 <h2>一个页面，组合所有软件</h2>
               </div>
-              <p className="site-hero-lead">
-                在 BIU 里，页面上的每一块都是一个真正能用的软件 —— 表格、画板、代码练习、视频剪辑，都来自插件。
-                把它们放进同一页，就是一套为你的客户准备好的服务。
-              </p>
               <div className="site-cta-actions">
                 <Link className="site-cta-primary" to="/download"><DownloadIcon />下载</Link>
                 <GitHubButton label="GitHub" />

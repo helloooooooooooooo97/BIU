@@ -8708,17 +8708,17 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
 .site-hero h1 {
   margin: var(--site-label-gap) 0 0;
   color: #fff;
-  font-size: clamp(48px, 6.4vw, 92px);
+  font-size: clamp(44px, 5.4vw, 76px);
   font-weight: 600;
   letter-spacing: -.05em;
-  line-height: 1.06;
+  line-height: 1.08;
 }
 .site-hero h1 > span { display: block; }
 .site-hero-verbs {
   display: flex;
   flex-wrap: wrap;
-  column-gap: .3em;
 }
+.site-hero-verbs span { white-space: nowrap; }
 .site-hero-sub {
   margin: var(--site-heading-gap) 0 0;
   color: rgba(255, 255, 255, .72);
@@ -8733,7 +8733,7 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
 }
 .site-hero-band-inner {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: end;
   gap: 48px;
   padding-top: 32px;
@@ -8746,24 +8746,9 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   letter-spacing: -.03em;
   line-height: 1.25;
 }
-.site-hero-band .site-hero-lead {
-  max-width: none;
-  margin: 0;
-  color: rgba(255, 255, 255, .72);
-  font-size: 16px;
-  line-height: 1.6;
-}
 .site-hero-band .site-cta-actions {
   flex-wrap: nowrap;
   margin-top: 0;
-}
-.site-hero-lead {
-  max-width: 520px;
-  margin: var(--site-heading-gap) 0 0;
-  color: rgba(255, 255, 255, .88);
-  font-size: 18px;
-  letter-spacing: -.02em;
-  line-height: 1.5;
 }
 .site-cta-actions {
   display: flex;
