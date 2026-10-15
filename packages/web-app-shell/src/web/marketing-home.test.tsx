@@ -44,16 +44,19 @@ test('landing page embeds real empty product surfaces and opens account actions'
   const h1 = screen.getByRole('heading', { level: 1 })
   assert.equal(h1.getAttribute('aria-label'), '改变世界构建、存储、组合、分发、衍生软件的方式')
   assert.deepEqual(
-    Array.from(h1.querySelectorAll('.site-hero-verbs span')).map((node) => node.textContent),
-    ['构建', '存储', '组合', '分发', '衍生'],
+    Array.from(h1.querySelectorAll('span')).map((node) => node.textContent),
+    ['改变世界', '构建', '存储', '组合', '分发', '衍生', '软件的方式'],
   )
-  assert.equal(document.querySelector('.site-hero-epigraph span')?.textContent, '媒介即讯息')
-  assert.match(document.querySelector('.site-hero-epigraph cite')?.textContent ?? '', /麦克卢汉/)
-  assert.equal(document.querySelector('.site-hero-define')?.textContent, '定义下一代人与 AI 协作的媒介')
-  const productLine = document.querySelector('.site-hero-product-line')
-  assert.equal(productLine?.textContent, '一个页面，组合所有软件')
-  assert.ok(h1.compareDocumentPosition(productLine!) & Node.DOCUMENT_POSITION_FOLLOWING, '产品句在主张下面')
-  assert.ok(productLine!.compareDocumentPosition(document.querySelector('.site-hero-lead')!) & Node.DOCUMENT_POSITION_FOLLOWING, '说明在产品句下面')
+  const lines = Array.from(document.querySelectorAll('.site-hero-line')).map((node) => node.textContent)
+  assert.deepEqual(lines, ['定义下一代人与 AI 协作的媒介', '媒介即讯息', '一个页面，组合所有的软件'])
+  assert.match(document.querySelector('.site-hero-cite')?.textContent ?? '', /麦克卢汉/)
+  const productLine = document.querySelectorAll('.site-hero-line')[2]!
+  assert.ok(h1.compareDocumentPosition(productLine) & Node.DOCUMENT_POSITION_FOLLOWING, '产品句在主张下面')
+  assert.ok(productLine.compareDocumentPosition(document.querySelector('.site-hero-lead')!) & Node.DOCUMENT_POSITION_FOLLOWING, '说明在产品句下面')
+  assert.deepEqual(
+    Array.from(document.querySelectorAll('.site-hero .site-section-label, .site-manifesto .site-section-label')).map((node) => node.textContent),
+    ['愿景', '影响', '引用', '方式'],
+  )
 
   // P0-13：演示区用静态截图，不再嵌 iframe（iframe 会完整加载 web 应用三次）
   assert.equal(screen.queryByTitle('BIU 页面界面预览'), null, '不应再有 iframe 预览')
@@ -142,7 +145,7 @@ test('home 收窄后：深度内容下沉，导航指向独立页', () => {
   assert.match(nav.textContent ?? '', /对比/)
   // 首页主张：All in One —— 页面组合软件
   assert.match(screen.getByRole('heading', { level: 1 }).getAttribute('aria-label') ?? '', /构建、存储、组合、分发、衍生/)
-  assert.equal(document.querySelector('.site-hero-product-line')?.textContent, '一个页面，组合所有软件')
+  assert.equal(document.querySelectorAll('.site-hero-line')[2]?.textContent, '一个页面，组合所有的软件')
   cleanup()
 })
 
@@ -371,7 +374,7 @@ test('博客：总览列出每篇文章，文章页能打开并链到下一篇',
 
 test('按钮图标、联系邮箱、云端未上线都如实呈现', () => {
   renderSite('/')
-  const actions = document.querySelector('.site-hero .site-cta-actions')!
+  const actions = document.querySelector('.site-manifesto .site-cta-actions')!
   const [download, github] = Array.from(actions.querySelectorAll('a'))
   assert.ok(download!.querySelector('svg.site-icon'), '下载用图标，不用 ↗ 字符')
   assert.doesNotMatch(download!.textContent ?? '', /↗/)
