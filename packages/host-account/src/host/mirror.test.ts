@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { test } from 'vitest'
 import { Context } from 'cordis'
 import { Service } from 'cordis'
 import type { SessionRecord } from '@biu/type-session'
-import { applySnapshot, cloudCopyId, takeSnapshot } from './mirror.ts'
+import { applySnapshot, takeSnapshot } from './mirror.ts'
 
 test('cache keeps local sessions and replaces cloud sessions', async () => {
   const ctx = new Context()
@@ -80,10 +82,13 @@ test('cache keeps local sessions and replaces cloud sessions', async () => {
   assert.equal(snapshot.sessions.find((item) => item.id === 'fresh')?.config?.title, 'new-cloud')
 })
 
-test('cloud copy ids are new and task ids keep the task prefix', () => {
-  const page = cloudCopyId('/pages')
-  const task = cloudCopyId('/tasks')
-  assert.notEqual(page, task)
-  assert.match(page, /^c[0-9a-f]+$/)
-  assert.match(task, /^task_[0-9a-f]+$/)
+test('desktop caches cloud rows but does not copy local records onto the cloud', () => {
+  const mirror = readFileSync(resolve(import.meta.dirname, './mirror.ts'), 'utf8')
+  const account = readFileSync(resolve(import.meta.dirname, './index.ts'), 'utf8')
+  assert.match(mirror, /markRemote/)
+  assert.match(mirror, /isRemote/)
+  assert.doesNotMatch(mirror, /publishToCloud/)
+  assert.doesNotMatch(mirror, /cloudCopyId/)
+  assert.doesNotMatch(account, /record_cloud_copy/)
+  assert.match(mirror, /workspaceLocation/)
 })

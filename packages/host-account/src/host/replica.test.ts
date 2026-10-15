@@ -536,7 +536,7 @@ test('disconnecting the cloud hides its workspaces from the desktop list', async
     const connected = (await fetch(`${origin}/api/account/workspaces`, { headers }).then((res) => res.json())) as {
       workspaces: Array<{ location: string; name: string }>
     }
-    assert.equal(connected.workspaces.some((workspace) => workspace.location === 'cloud' && workspace.name === '在线空间'), true)
+    assert.equal(connected.workspaces.some((workspace) => workspace.location === 'cloud' && workspace.name === '云端空间'), true)
     assert.equal((await fetch(`${origin}/api/account/cloud`, { method: 'DELETE', headers })).status, 200)
     const hidden = (await fetch(`${origin}/api/account/workspaces`, { headers }).then((res) => res.json())) as {
       workspaces: Array<{ location: string }>
