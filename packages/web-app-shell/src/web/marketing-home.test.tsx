@@ -1036,6 +1036,7 @@ test('常见问题：首页、产品、场景子页、对比、安全、定价�
     assert.ok(faq, `${path} 有常见问题`)
     assert.equal(faq!.querySelector('h2')?.textContent, title)
     assert.ok(faq!.querySelectorAll('details').length >= 2, `${path} 至少两问`)
+    if (path === '/') assert.equal(faq!.textContent?.includes('与 Notion 的差异'), false)
     cleanup()
   }
   for (const path of ['/blog', '/brand']) {
