@@ -28,7 +28,7 @@ const PLANS: readonly Plan[] = [
     price: '$0',
     cadence: 'macOS / Windows',
     featured: true,
-    features: ['Local spaces keep data on your computer', 'Full access to pages, tables, plugins, and agents', 'Bring your own model keys (DeepSeek / OpenAI / Anthropic)'],
+    features: ['Local spaces keep data on your computer', 'Full access to pages, tables, plugins, and agents', 'Bring your own key for any model'],
     cta: { label: 'Download', kind: 'download' },
   },
   {

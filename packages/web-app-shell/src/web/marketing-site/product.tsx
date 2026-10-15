@@ -129,7 +129,7 @@ const PRODUCT_FAQ = [
   ['How are pages different from documents?', 'Documents hold text. Every block on a BIU page is software provided by a plugin. Multiple blocks read and write the same data, combining into a complete service.'],
   ['Where do plugins come from?', 'The workspace includes common plugins for tables, whiteboards, code execution, and more. You or an agent can also build new ones. Test a new plugin in the sandbox before packaging it.'],
   ['What happens to plugins on shared pages?', 'The page content, attachments, and plugin source code are packaged together. Recipients can open and use the page without installing anything else.'],
-  ['Which models are supported?', 'BIU supports DeepSeek, OpenAI, Anthropic, and other providers using your own API keys.'],
+  ['Which models are supported?', 'Any model works. BIU uses the API keys you provide.'],
   ['Can local and cloud spaces coexist?', 'Yes. Keep private information in local spaces and collaborative work in cloud spaces.'],
 ] as const
 

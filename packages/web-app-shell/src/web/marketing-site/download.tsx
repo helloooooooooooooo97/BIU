@@ -19,7 +19,7 @@ type PackageId = keyof typeof PACKAGES
 const REQUIREMENTS = [
   ['System', 'macOS (Apple silicon / Intel) or Windows 10 and later'],
   ['Memory', '8 GB or more recommended'],
-  ['Model', 'Bring your own key for DeepSeek, OpenAI, or Anthropic'],
+  ['Model', 'Bring your own key for any model'],
   ['Network', 'Works offline; model calls require an internet connection'],
 ] as const
 
@@ -32,7 +32,7 @@ const SOURCE_STEPS = [
 const DOWNLOAD_FAQ = [
   ['Which macOS installer should I choose?', 'Open About This Mac from the Apple menu. Choose Apple silicon for an Apple M-series chip, or Intel for an Intel processor.'],
   ['What if Windows SmartScreen blocks the installer?', 'Select More info, then Run anyway. The complete source code is available for review on GitHub.'],
-  ['Can I use BIU without a model API key?', 'Pages, tables, and plugins work normally. Agents require a key for DeepSeek, OpenAI, or Anthropic.'],
+  ['Can I use BIU without a model API key?', 'Pages, tables, and plugins work normally. Agents require a model API key; any model works.'],
   ['Is there a mobile app?', 'BIU is currently available for desktop. Installers are provided for macOS and Windows, while Linux runs from source.'],
 ] as const
 
