@@ -10364,7 +10364,8 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   line-height: 1.75;
   color: rgba(255, 255, 255, .6);
 }
-.site-home-entry-more { margin: 28px 0 0; font-size: 14px; }
+/* 只用 margin-top。margin 简写会把左右写成 0，盖掉上面的 auto，链接就贴到视口左边。 */
+.site-home-entry-more { margin-top: 28px; font-size: 14px; }
 .site-home-entry-more a { color: #fff; text-decoration: none; }
 .site-home-entry-more a:hover { text-decoration: underline; }
 

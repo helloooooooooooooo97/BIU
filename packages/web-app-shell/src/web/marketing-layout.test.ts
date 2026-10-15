@@ -277,6 +277,12 @@ test('卡片圆角统一 20px，hover 不再跳到 #2a2a2a', () => {
   assert.doesNotMatch(siteCss, /#2a2a2a/)
 })
 
+test('首页「全部」链接不用 margin 简写，否则会贴到视口左边', () => {
+  const body = baseRules.find(([sel]) => sel === '.site-home-entry-more')?.[1] ?? ''
+  assert.match(body, /margin-top\s*:/)
+  assert.doesNotMatch(body, /(?:^|;)\s*margin\s*:/)
+})
+
 test('印花不用蒙版裁切（渐变由每列标记自带透明度表达）', () => {
   const body = baseRules.find(([s]) => s === '.site-print')?.[1] ?? ''
   assert.doesNotMatch(body, /mask/)
