@@ -105,6 +105,8 @@ test('device workspace keeps LAN links but hides collaboration and cloud publish
   assert.match(databaseHost, /activeDataLocation\(\) === 'cloud'/)
   assert.doesNotMatch(databaseHost, /publishToCloud/)
   assert.doesNotMatch(sharesPost, /localIds/)
+  assert.doesNotMatch(sharesPost, /body.enabled !== false/)
+  assert.match(databaseHost, /\/api\/db\/shares\?\$\{search\}/)
 })
 
 test('collaborator sections are stacked without a redundant popover heading', () => {

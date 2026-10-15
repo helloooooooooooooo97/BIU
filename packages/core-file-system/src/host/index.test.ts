@@ -2106,6 +2106,8 @@ test('granting the all-members view lets the other member read the owner private
   const ownChain = runWithAccount(ada.id, () => collab.recordAccess(ada.id, '/tasks', privateId)).roleChain
   assert.equal(ownChain[0]?.detail, '你是创建者')
   assert.equal(ownChain[0]?.role, 'owner')
+  db.facets.replaceContentRefs('/tasks', privateId, ['via-view.png'])
+  assert.doesNotThrow(() => runWithAccount(bob.id, () => db.requireAsset('via-view.png', 'resource:read')))
 })
 
 test('sharing one person all-tasks view does not reclassify the other person private tasks', async () => {

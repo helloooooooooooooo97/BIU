@@ -72,7 +72,7 @@ function claim(ctx: Context, collection: string, id: string) {
     const account = ctx.get('account') as
       | { store?: { activeWorkspaceId(): string | null; attach(workspaceId: string, collection: string, recordId: string): void } }
       | undefined
-    const workspaceId = account?.store?.activeWorkspaceId()
+    const workspaceId = currentRequestWorkspaceId() || account?.store?.activeWorkspaceId()
     if (!workspaceId || !account?.store) return
     account.store.attach(workspaceId, collection, id)
   } catch {
@@ -178,10 +178,11 @@ export async function exchangeSnapshot(
   accountId: string,
   workspaceId = '',
 ) {
+  if (!workspaceId) return
   const root = origin.replace(/\/$/, '')
   const headers = {
     authorization: `Bearer ${token}`,
-    ...(workspaceId ? { 'x-biu-workspace-id': workspaceId } : {}),
+    'x-biu-workspace-id': workspaceId,
   }
   const pulled = await fetch(`${root}/api/replica/snapshot`, { headers })
   if (!pulled.ok) return
