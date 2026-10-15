@@ -8651,12 +8651,14 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
 .site-hero {
   position: relative;
   display: flex;
-  align-items: flex-start;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 72px;
   box-sizing: border-box;
   min-height: 100vh;
   min-height: 100svh;
   overflow: hidden;
-  padding: 128px 0 72px;
+  padding: 128px 0 56px;
   background: transparent;
 }
 .site-hero-copy {
@@ -8704,36 +8706,56 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
 }
 .site-hero-epigraph cite::before { content: "— "; }
 .site-hero h1 {
-  display: flex;
-  flex-wrap: nowrap;
-  column-gap: 0.38em;
   margin: var(--site-label-gap) 0 0;
   color: #fff;
-  font-size: clamp(22px, 2.6vw, 36px);
+  font-size: clamp(48px, 6.4vw, 92px);
   font-weight: 600;
-  letter-spacing: -.04em;
-  line-height: 1.2;
-  white-space: nowrap;
+  letter-spacing: -.05em;
+  line-height: 1.06;
+}
+.site-hero h1 > span { display: block; }
+.site-hero-verbs {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: .3em;
 }
 .site-hero-sub {
-  margin: 20px 0 0;
-  max-width: 22em;
-  color: rgba(255, 255, 255, .88);
-  font-size: 20px;
-  font-weight: 500;
+  margin: var(--site-heading-gap) 0 0;
+  color: rgba(255, 255, 255, .72);
+  font-size: clamp(20px, 1.8vw, 26px);
+  font-weight: 400;
   letter-spacing: -.02em;
-  line-height: 1.45;
+  line-height: 1.4;
 }
-.site-product-intro {
-  box-sizing: border-box;
-  padding: 0 0 var(--site-section-gap);
+.site-hero-band {
+  position: relative;
+  z-index: 2;
 }
-.site-product-intro h2 {
-  margin: var(--site-label-gap) 0 0;
-  font-size: clamp(32px, 3.4vw, 52px);
+.site-hero-band-inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) auto;
+  align-items: end;
+  gap: 48px;
+  padding-top: 32px;
+  border-top: 1px solid rgba(255, 255, 255, .14);
+}
+.site-hero-band h2 {
+  margin: 12px 0 0;
+  font-size: 28px;
   font-weight: 500;
-  letter-spacing: -.045em;
-  line-height: 1.08;
+  letter-spacing: -.03em;
+  line-height: 1.25;
+}
+.site-hero-band .site-hero-lead {
+  max-width: none;
+  margin: 0;
+  color: rgba(255, 255, 255, .72);
+  font-size: 16px;
+  line-height: 1.6;
+}
+.site-hero-band .site-cta-actions {
+  flex-wrap: nowrap;
+  margin-top: 0;
 }
 .site-hero-lead {
   max-width: 520px;
@@ -8766,16 +8788,6 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
 .site-cta-secondary {
   color: #fff;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .28);
-}
-.site-scroll-note {
-  position: absolute;
-  z-index: 2;
-  right: 32px;
-  bottom: 72px;
-  margin: 0;
-  color: rgba(255, 255, 255, .88);
-  font-size: 12px;
-  writing-mode: vertical-rl;
 }
 .site-space-heading h2,
 .site-final-cta h2 {
@@ -9162,13 +9174,16 @@ html:not(.has-js) .site [data-reveal] {
   .site-nav { grid-template-columns: auto 1fr; padding: 0 20px; }
   .site-hero {
     min-height: 0;
+    gap: 56px;
     padding: 104px 0 56px;
   }
-  .site-hero h1 {
-    flex-wrap: wrap;
-    white-space: normal;
-    font-size: clamp(22px, 6vw, 28px);
+  .site-hero h1 { font-size: clamp(36px, 10vw, 48px); }
+  .site-hero-band-inner {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: 24px;
   }
+  .site-hero-band .site-cta-actions { flex-wrap: wrap; }
   .site-hero-shot {
     display: block;
     width: 100%;
@@ -9177,7 +9192,6 @@ html:not(.has-js) .site [data-reveal] {
     border-radius: 12px;
     box-shadow: 0 0 0 1px rgba(255, 255, 255, .08);
   }
-  .site-scroll-note { display: none; }
   /* 产品演示已通栏浅色：留白交回自身内部容器，这里只压窄间距 */
   .site-product-demo { padding: 88px 0; }
   .site-demo-heading,

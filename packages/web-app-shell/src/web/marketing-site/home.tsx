@@ -178,38 +178,41 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
             </p>
             <h1 aria-label="改变世界构建、存储、组合、分发、衍生软件的方式">
               <span>改变世界</span>
-              <span>构建</span>
-              <span>存储</span>
-              <span>组合</span>
-              <span>分发</span>
-              <span>衍生</span>
+              <span className="site-hero-verbs">
+                <span>构建</span>
+                <span>存储</span>
+                <span>组合</span>
+                <span>分发</span>
+                <span>衍生</span>
+              </span>
               <span>软件的方式</span>
             </h1>
             <p className="site-hero-sub">定义下一代人与 AI 协作的媒介</p>
           </div>
-          <p className="site-scroll-note">向下探索</p>
-        </section>
-        <section className="site-product-intro">
-          <div className="site-container" data-reveal>
-            <p className="site-eyebrow">开源 · 免费 · All in One</p>
-            <h2>一个页面，组合所有软件</h2>
-            <p className="site-hero-lead">
-              在 BIU 里，页面上的每一块都是一个真正能用的软件 —— 表格、画板、代码练习、视频剪辑，都来自插件。
-              把它们放进同一页，就是一套为你的客户准备好的服务。
-            </p>
-            <div className="site-cta-actions">
-              <Link className="site-cta-primary" to="/download"><DownloadIcon />下载</Link>
-              <GitHubButton label="GitHub" />
+          <div className="site-hero-band site-container" data-reveal>
+            <div className="site-hero-band-inner">
+              <div>
+                <p className="site-eyebrow">开源 · 免费 · All in One</p>
+                <h2>一个页面，组合所有软件</h2>
+              </div>
+              <p className="site-hero-lead">
+                在 BIU 里，页面上的每一块都是一个真正能用的软件 —— 表格、画板、代码练习、视频剪辑，都来自插件。
+                把它们放进同一页，就是一套为你的客户准备好的服务。
+              </p>
+              <div className="site-cta-actions">
+                <Link className="site-cta-primary" to="/download"><DownloadIcon />下载</Link>
+                <GitHubButton label="GitHub" />
+              </div>
+              <img
+                className="site-hero-shot"
+                src={asset('/site/shot-page.webp')}
+                alt=""
+                width={1600}
+                height={1000}
+                loading="lazy"
+                decoding="async"
+              />
             </div>
-            <img
-              className="site-hero-shot"
-              src={asset('/site/shot-page.webp')}
-              alt=""
-              width={1600}
-              height={1000}
-              loading="lazy"
-              decoding="async"
-            />
           </div>
         </section>
 
