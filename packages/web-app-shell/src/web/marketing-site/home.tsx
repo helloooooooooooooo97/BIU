@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { DownloadIcon, GitHubButton, SiteChrome, SiteFaq, SiteFinalCta, type SiteAction } from './site-chrome.tsx'
 import { usePageMeta } from './use-page-meta.ts'
@@ -143,6 +143,14 @@ const HOME_COMPARES = COMPARE_FEATURED.flatMap((slug) => {
   return page && line ? [{ page, line }] : []
 })
 
+const HERO_VERBS = [
+  ['构建', 'build-software'],
+  ['存储', 'store-software'],
+  ['组合', 'compose-software'],
+  ['分发', 'distribute-software'],
+  ['衍生', 'derive-software'],
+] as const
+
 /** 日期相同则保持稿序，取最前面两篇作为首页入口。 */
 const HOME_POSTS = BLOG_POSTS
   .map((post, index) => ({ post, index }))
@@ -179,11 +187,12 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
             <h1 aria-label="改变世界构建、存储、组合、分发、衍生软件的方式">
               <span>改变世界</span>
               <span className="site-hero-verbs">
-                <span>构建、</span>
-                <span>存储、</span>
-                <span>组合、</span>
-                <span>分发、</span>
-                <span>衍生</span>
+                {HERO_VERBS.map(([word, slug], index) => (
+                  <Fragment key={slug}>
+                    {index ? <span className="site-hero-sep" aria-hidden>/</span> : null}
+                    <Link to={`/blog/${slug}`}>{word}</Link>
+                  </Fragment>
+                ))}
               </span>
               <span>软件的方式</span>
             </h1>

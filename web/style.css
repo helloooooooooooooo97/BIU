@@ -8710,8 +8710,24 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
 .site-hero-verbs {
   display: flex;
   flex-wrap: wrap;
+  align-items: baseline;
 }
-.site-hero-verbs span { white-space: nowrap; }
+.site-hero-verbs a {
+  color: inherit;
+  white-space: nowrap;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: .16em;
+  text-decoration-color: rgba(255, 255, 255, .18);
+  transition: text-decoration-color .2s ease;
+}
+.site-hero-verbs a:hover,
+.site-hero-verbs a:focus-visible { text-decoration-color: rgba(255, 255, 255, .88); }
+.site-hero-sep {
+  margin: 0 .32em;
+  color: rgba(255, 255, 255, .24);
+  font-weight: 200;
+}
 .site-hero-sub,
 .site-hero-band h2 {
   font-size: clamp(22px, 2.4vw, 28px);

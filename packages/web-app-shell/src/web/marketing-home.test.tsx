@@ -45,9 +45,22 @@ test('landing page embeds real empty product surfaces and opens account actions'
   assert.equal(h1.getAttribute('aria-label'), '改变世界构建、存储、组合、分发、衍生软件的方式')
   assert.deepEqual(
     Array.from(h1.children).map((node) => node.textContent),
-    ['改变世界', '构建、存储、组合、分发、衍生', '软件的方式'],
-    'slogan 分三行，同一种字，动词之间用顿号',
+    ['改变世界', '构建/存储/组合/分发/衍生', '软件的方式'],
+    'slogan 分三行，同一种字',
   )
+  const verbLinks = Array.from(h1.querySelectorAll('.site-hero-verbs a'))
+  assert.deepEqual(
+    verbLinks.map((link) => [link.textContent, link.getAttribute('href')]),
+    [
+      ['构建', '/blog/build-software'],
+      ['存储', '/blog/store-software'],
+      ['组合', '/blog/compose-software'],
+      ['分发', '/blog/distribute-software'],
+      ['衍生', '/blog/derive-software'],
+    ],
+    '五个词各自通向一篇文章',
+  )
+  assert.ok(Array.from(h1.querySelectorAll('.site-hero-sep')).every((sep) => sep.getAttribute('aria-hidden') === 'true'), '分隔线不读出来')
   const band = document.querySelector('.site-hero-band')!
   assert.ok(band.closest('.site-hero'), '产品句和下载入口在首屏底部')
   assert.equal(document.querySelector('.site-hero-epigraph span')?.textContent, '媒介即讯息')
@@ -369,6 +382,16 @@ test('博客：总览列出每篇文章，文章页能打开并链到下一篇',
     '五个角度依次讲',
   )
   cleanup()
+
+  const series = ['build-software', 'store-software', 'compose-software', 'distribute-software', 'derive-software']
+  series.forEach((slug, i) => {
+    renderSite(`/blog/${slug}`)
+    assert.match(screen.getByRole('heading', { level: 1 }).textContent ?? '', new RegExp(`^${'构建存储组合分发衍生'.slice(i * 2, i * 2 + 2)}：`))
+    if (i < series.length - 1) {
+      assert.equal(screen.getByRole('navigation', { name: '下一篇' }).querySelector('a')?.getAttribute('href'), `/blog/${series[i + 1]}`, '五篇按顺序接着读')
+    }
+    cleanup()
+  })
 
   renderSite('/blog/nope')
   assert.match(screen.getByRole('heading', { level: 1 }).textContent ?? '', /没有这篇文章/)
