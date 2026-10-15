@@ -7963,11 +7963,26 @@ html.dark .composer-send:disabled {
 
 .composer-tool-chip.is-pick>span.pick-chip-name,
 .user-pick-chip>span.pick-chip-name {
+  display: inline-flex;
+  align-items: center;
   min-width: 0;
   padding-right: 2px;
   overflow: hidden;
-  text-overflow: ellipsis;
   line-height: 1;
+}
+
+.composer-tool-chip.is-pick>span.pick-chip-name>.pick-chip-host,
+.user-pick-chip>span.pick-chip-name>.pick-chip-host {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-tool-chip.is-pick>span.pick-chip-name>.pick-chip-field,
+.user-pick-chip>span.pick-chip-name>.pick-chip-field {
+  flex: none;
+  white-space: nowrap;
 }
 
 .composer-tool-chip.is-pick>span.pick-chip-lines,

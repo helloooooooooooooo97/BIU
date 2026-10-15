@@ -55,5 +55,7 @@ test('pick chips can show the facet close mark', () => {
   assert.match(src, /biu-tag-x/)
   assert.match(src, /TagChipCloseMark/)
   assert.match(src, /pick-chip-name/)
+  assert.match(src, /pick-chip-host/)
+  assert.match(src, /pick-chip-field/)
   assert.match(src, /pick-chip-lines/)
 })
