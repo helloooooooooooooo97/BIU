@@ -7,6 +7,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { MarketingHome } from './marketing-home.tsx'
 import { MarketingSite } from './marketing-site/index.tsx'
 import { BrandMark, resetBrandConfigCache } from './marketing-site/brand-mark.tsx'
+import { SITE_LOCALE_KEY } from './marketing-site/locale.tsx'
 
 // 品牌调节器会把配置写进 localStorage。测试之间必须隔离，
 // 否则前一个用例存的颜色会污染后一个的「默认值」断言。
@@ -31,6 +32,25 @@ function renderSite(initialPath = '/') {
   )
   return { login: () => login, start: () => start }
 }
+
+test('language switch keeps the current page and remembers the selected locale', async () => {
+  renderSite('/product')
+  assert.ok(screen.getByRole('heading', { level: 1, name: 'Pages are containers. Plugins are software.' }))
+
+  fireEvent.click(screen.getByRole('button', { name: 'Switch to Chinese' }))
+  assert.ok(await screen.findByRole('heading', { level: 1, name: '页面是容器，插件是软件' }))
+  assert.equal(localStorage.getItem(SITE_LOCALE_KEY), 'zh')
+  assert.equal(document.documentElement.lang, 'zh-CN')
+
+  cleanup()
+  renderSite('/product')
+  assert.ok(await screen.findByRole('heading', { level: 1, name: '页面是容器，插件是软件' }), '刷新后仍保持中文和当前页面')
+
+  fireEvent.click(screen.getByRole('button', { name: '切换到英文' }))
+  assert.ok(await screen.findByRole('heading', { level: 1, name: 'Pages are containers. Plugins are software.' }))
+  assert.equal(localStorage.getItem(SITE_LOCALE_KEY), 'en')
+  assert.equal(document.documentElement.lang, 'en')
+})
 
 test('landing page embeds real empty product surfaces and opens account actions', () => {
   let login = 0

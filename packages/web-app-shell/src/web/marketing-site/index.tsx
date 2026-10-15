@@ -1,3 +1,4 @@
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { Route, Routes, useLocation } from 'react-router-dom'
 import type { SiteAction } from './site-chrome.tsx'
 import { SiteChrome, SiteFinalCta, SiteLoginContext } from './site-chrome.tsx'
@@ -14,6 +15,12 @@ import { MarketingBlog, MarketingBlogPost } from './blog.tsx'
 import { MarketingChangelog, MarketingDocs } from './resources.tsx'
 import { type AuthMode, MarketingAuth } from './auth.tsx'
 import { usePageMeta } from './use-page-meta.ts'
+import { readSiteLocale, saveSiteLocale, SiteLocaleContext, type SiteLocale } from './locale.tsx'
+
+const ChineseMarketingSite = lazy(async () => {
+  const module = await import('./zh/index.tsx')
+  return { default: module.MarketingSite }
+})
 
 export type MarketingSiteProps = {
   onLogin: SiteAction
@@ -84,7 +91,7 @@ const PLACEHOLDERS: Record<string, { label: string; title: string; body: string 
  * 官网路由。
  * 挂在 BrowserRouter 内，登录态判断由外层 Shell 负责 —— 这里只管路径。
  */
-export function MarketingSite({ onLogin, onStart, auth, login = true }: MarketingSiteProps) {
+function EnglishMarketingSite({ onLogin, onStart, auth, login = true }: MarketingSiteProps) {
   const authElement = auth ? (
     <MarketingAuth
       mode={auth.mode}
@@ -141,6 +148,34 @@ export function MarketingSite({ onLogin, onStart, auth, login = true }: Marketin
       />
     </Routes>
     </SiteLoginContext.Provider>
+  )
+}
+
+export function MarketingSite(props: MarketingSiteProps) {
+  const [locale, setLocaleState] = useState<SiteLocale>(readSiteLocale)
+  const localeValue = useMemo(() => ({
+    locale,
+    setLocale: (next: SiteLocale) => {
+      saveSiteLocale(next)
+      setLocaleState(next)
+    },
+    toggleLocale: () => {
+      const next = locale === 'en' ? 'zh' : 'en'
+      saveSiteLocale(next)
+      setLocaleState(next)
+    },
+  }), [locale])
+
+  useEffect(() => {
+    document.documentElement.lang = locale === 'zh' ? 'zh-CN' : 'en'
+  }, [locale])
+
+  return (
+    <SiteLocaleContext.Provider value={localeValue}>
+      <Suspense fallback={<div className="site" aria-busy="true" />}>
+        {locale === 'zh' ? <ChineseMarketingSite {...props} /> : <EnglishMarketingSite {...props} />}
+      </Suspense>
+    </SiteLocaleContext.Provider>
   )
 }
 
