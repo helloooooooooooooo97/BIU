@@ -203,6 +203,7 @@ test('首页三扇门通向场景、对比和想法，深度留在内页', () =>
   assert.match(ideaLinks[0]?.textContent ?? '', /分钟读完/)
   assert.equal(ideaLinks[2]?.getAttribute('href'), '/brand')
   assert.match(ideaLinks[2]?.textContent ?? '', /一个圆、两条线、三个块/)
+  assert.match(ideaLinks[2]?.textContent ?? '', /标记本身就是名字.*B.*I.*U/, '首页品牌入口与品牌页同步讲 BIU 与标记的关系')
   assert.ok(ideaLinks[2]?.querySelector('svg.site-idea-mark'), '品牌入口画的是活的标记')
   assert.equal(ideaLinks[3]?.getAttribute('href'), '/blog')
   cleanup()
@@ -699,9 +700,13 @@ test('品牌页：说明这个标记刚好是 BIU 三个字母', () => {
   renderSite('/brand')
   const body = document.body.textContent ?? ''
 
-  assert.match(body, /B、I、U 三个字母刚好拼成这个形状/, '要点出 BIU 三个字母拼成标记')
-  assert.match(body, /右上的两个小块是 B 的两个弧，贯穿的斜线是 I，左下的半圆是 U/, '字母与部位要对得上：I 是线，不是块')
-  assert.match(body, /标记本身就是名字/, '要说清形状即名字')
+  const lead = document.querySelector('.site-page-hero .site-page-lead')?.textContent ?? ''
+  assert.match(lead, /B、I、U 三个字母刚好拼成这个形状/, '标题下方点出 BIU 三个字母拼成标记')
+  assert.match(lead, /右上的两个小块是 B 的两个弧，贯穿的斜线是 I，左下的半圆是 U/, '字母与部位要对得上：I 是线，不是块')
+  assert.match(lead, /标记本身就是名字/, '要说清形状即名字')
+  const blocks = [...document.querySelectorAll('.site-brand-grid article')].find((a) => a.querySelector('h3')?.textContent === '三个块')
+  assert.match(blocks?.textContent ?? '', /私人空间.*公共空间.*U 是底座/, '三个块讲私人空间、公共空间与底座')
+  assert.doesNotMatch(blocks?.textContent ?? '', /拼成/, '字母关系放在标题下方')
   assert.doesNotMatch(body, /使用规则/, '品牌页不再单列使用规则')
   assert.doesNotMatch(body, /三块，三个字母，三层意思/, '不再单列三块寓意')
   cleanup()

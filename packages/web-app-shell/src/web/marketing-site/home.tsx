@@ -473,7 +473,7 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
               />
               <span className="site-idea-brand-copy">
                 <h3>一个圆、两条线、三个块</h3>
-                <p>一个圆是一个页面，里面切出的几块是各自独立的软件，但它们都还在同一个圆里。</p>
+                <p>标记本身就是名字：右上的两个小块是 B，贯穿的斜线是 I，左下的半圆是 U，三个字母刚好拼成这个圆。</p>
                 <span className="site-idea-go">看品牌 →</span>
               </span>
             </Link>
