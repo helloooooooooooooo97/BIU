@@ -29,18 +29,12 @@ import { forwardCloud } from '@biu/host-account/mirror'
 function workspaceIsCloud(ctx: Context) {
   if (isOnlineRuntime()) return true
   try {
-    const workspaceId = currentRequestWorkspaceId()
-    const account = ctx.get('account') as { workspaceLocation?: (id: string) => string } | undefined
+    const account = ctx.get('account') as {
+      workspaceLocation?: (id: string) => string
+      store?: { activeWorkspaceId?: () => string | null }
+    } | undefined
+    const workspaceId = currentRequestWorkspaceId() || account?.store?.activeWorkspaceId?.() || ''
     return Boolean(workspaceId && account?.workspaceLocation?.(workspaceId) === 'cloud')
-  } catch {
-    return false
-  }
-}
-
-function sessionIsCloud(ctx: Context, id: string) {
-  try {
-    const account = ctx.get('account') as { isRemote?: (collection: string, id: string) => boolean } | undefined
-    return Boolean(account?.isRemote?.('/sessions', id))
   } catch {
     return false
   }
@@ -1192,7 +1186,7 @@ export function apply(ctx: Context) {
   const cloudExecutions = new Map<string, CloudExecution>()
 
   const beginCloudExecution = async (sessionId: string) => {
-    if (isOnlineRuntime() || !sessionIsCloud(ctx, sessionId)) return null
+    if (isOnlineRuntime() || !workspaceIsCloud(ctx)) return null
     const previous = cloudExecutions.get(sessionId)
     if (previous) {
       if (!previous.finishing) return previous
@@ -1496,7 +1490,6 @@ export function apply(ctx: Context) {
         ...(item.mascot ? { mascot: item.mascot } : {}),
         tags: item.config?.tags ?? [],
         pinned: Boolean(item.config?.pinned),
-        ...(sessionIsCloud(ctx, item.id) && !workspaceIsCloud(ctx) ? { remote: true } : {}),
         ...(item.config?.inspector ? { inspector: item.config.inspector } : {}),
         ...(item.config?.goal ? { goal: item.config.goal } : {}),
       })),

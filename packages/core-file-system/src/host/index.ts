@@ -18,7 +18,7 @@ import {
 import { asPublicProfile, readWorkspaceProfile, writeWorkspaceProfile } from '@biu/host-workspace'
 import { roleCoversAction, type Action as PermissionAction, type AuthorizationService } from '@biu/host-account/authorization'
 import { isRegisteredBuiltinPlugin } from '@biu/host-account/store'
-import { forwardCloud, publishToCloud } from '@biu/host-account/mirror'
+import { forwardCloud } from '@biu/host-account/mirror'
 import { Service, type Context } from 'cordis'
 import {
   DATABASE_CHANNEL,
@@ -1388,7 +1388,6 @@ export class DatabaseService extends Service implements Database {
     const stored = this.ownershipOf(spec.path, String(row.id ?? ''))
     return {
       ...withMeta,
-      ...(this.cloudMarked(spec.path, String(row.id ?? '')) ? { remote: true } : {}),
       shareScope: this.shareScopeLabel(spec.path, String(row.id ?? ''), withMeta, stored),
       shareRole: this.shareRoleLabel(spec, withMeta),
     }
@@ -1414,16 +1413,6 @@ export class DatabaseService extends Service implements Database {
     try {
       const account = this.ctx.get('account') as { isLocal?: (collection: string, id: string) => boolean } | undefined
       return Boolean(account?.isLocal?.(collection, id))
-    } catch {
-      return false
-    }
-  }
-
-  private cloudMarked(collection: string, id: string) {
-    if (this.membersInSystemData()) return false
-    try {
-      const account = this.ctx.get('account') as { isRemote?: (collection: string, id: string) => boolean } | undefined
-      return Boolean(account?.isRemote?.(collection, id))
     } catch {
       return false
     }
@@ -3386,39 +3375,12 @@ export function apply(ctx: Context) {
         !isOnlineRuntime() &&
         process.env.BIU_REMOTE_ORIGIN
       ) {
-        const localIds =
-          kind === 'record'
-            ? [recordId]
-            : ((await db.syncedRecords()).find((item) => item.path === collection)?.records ?? [])
-                .map((record) => String(record.id))
-                .filter((id) => {
-                  try {
-                    const account = ctx.get('account') as { isRemote?: (collection: string, id: string) => boolean }
-                    return !account?.isRemote?.(collection, id)
-                  } catch {
-                    return true
-                  }
-                })
-        const copies = await publishToCloud(ctx, collection, localIds)
-        if (kind === 'record' && copies[recordId]) body.recordId = copies[recordId]
-        let token = ''
-        try {
-          const account = ctx.get('account') as { replica?: { active?: () => { token?: string } | null } }
-          token = account.replica?.active?.()?.token || ''
-        } catch {
-          token = ''
+        const forwarded = await forwardCloud(ctx, collection, recordId, '/api/db/shares', { body })
+        if (forwarded) {
+          route.send(forwarded.status, forwarded.body)
+          return
         }
-        const forwarded = await fetch(`${process.env.BIU_REMOTE_ORIGIN.replace(/\/$/, '')}/api/db/shares`, {
-          method: 'POST',
-          headers: {
-            'content-type': 'application/json',
-            ...(token
-              ? { authorization: `Bearer ${token}` }
-              : { cookie: String(route.req.headers.cookie ?? '') }),
-          },
-          body: JSON.stringify(body),
-        })
-        route.send(forwarded.status, await forwarded.json().catch(() => ({})))
+        route.send(401, { error: '请先登录云端账号' })
         return
       }
       if (body.enabled === false) {
