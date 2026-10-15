@@ -306,5 +306,8 @@ describe('composer dock stacking above sticky user', () => {
     expect(composer).toMatch(/live\.current\.pick\?\.add\(ref\)/)
     expect(node).not.toMatch(/ReactNodeViewRenderer/)
     expect(node).toMatch(/queueMicrotask/)
+    expect(node).toMatch(/title: \{ default: null \}/)
+    expect(node).toMatch(/field: \{ default: null \}/)
+    expect(node).toMatch(/plugin: \{ default: null \}/)
   })
 })
