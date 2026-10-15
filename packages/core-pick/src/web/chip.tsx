@@ -79,10 +79,22 @@ export function PickKindGlyph({ kind }: { kind: string }) {
 
 export function PickChipLabel({ pick }: { pick: PickRef }) {
   const { name, span } = chipCaption(pick)
+  const field = pick.field ? pick.label?.trim() || pick.field : ''
+  const host = pick.field ? pick.title?.trim() ?? '' : ''
+  const split = Boolean(field && host && host !== field)
   return (
     <>
       <PickKindGlyph kind={pick.kind} />
-      <span className="pick-chip-name">{name}</span>
+      <span className="pick-chip-name">
+        {split ? (
+          <>
+            <span className="pick-chip-host">{host}</span>
+            <span className="pick-chip-field">{` · ${field}`}</span>
+          </>
+        ) : (
+          <span className="pick-chip-host">{name}</span>
+        )}
+      </span>
       {span ? <span className="pick-chip-lines">({span})</span> : null}
     </>
   )
