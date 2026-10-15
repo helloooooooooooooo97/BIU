@@ -8665,6 +8665,7 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   position: relative;
   z-index: 2;
   max-width: var(--site-content);
+  margin-block: auto;
 }
 .site-hero-shot { display: none; }
 .site-gh-stars {
