@@ -459,7 +459,7 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
           <VisionTable />
           <div className="site-vision-invest" data-reveal>
             <div>
-              <h3>投资下一个万亿美元独角兽</h3>
+              <h3>人与 AI 协作的下一代软件平台</h3>
               <p>欢迎来信交流产品路线与融资计划。来信请注明机构与关注方向。</p>
               <p className="site-vision-note">表中数据出自 Gartner、IDC、麦肯锡、哈佛商学院等机构，每篇文章末尾列有完整的参考资料。</p>
             </div>

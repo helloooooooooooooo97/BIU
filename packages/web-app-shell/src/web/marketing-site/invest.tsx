@@ -96,7 +96,7 @@ const INVEST_FAQ = [
 export function MarketingInvest({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
   usePageMeta({
     title: '投资',
-    description: '软件的构建、存储、组合、分发与衍生，各自对应一个万亿美元量级的市场。BIU 让这五个环节在同一个页面里完成。',
+    description: 'BIU 是一家 AI 原生的软件公司，用一个页面完成软件的构建、存储、组合、分发与衍生，这五个环节各自对应一个万亿美元量级的市场。',
     path: '/invest',
   })
 
@@ -104,9 +104,9 @@ export function MarketingInvest({ onLogin, onStart }: { onLogin: SiteAction; onS
     <SiteChrome onLogin={onLogin} onStart={onStart}>
       <section className="site-page-hero" data-reveal>
         <p className="site-section-label">投资</p>
-        <h1>投资下一个万亿美元独角兽</h1>
+        <h1>人与 AI 协作的下一代软件平台</h1>
         <p className="site-page-lead">
-          软件的构建、存储、组合、分发与衍生，各自对应一个万亿美元量级的市场。智能体正在重写这五个环节，BIU 让它们在同一个页面里完成。我们正在寻找相信这一判断的投资人。
+          BIU 是一家 AI 原生的软件公司，做的是人与智能体协作的媒介：用一个页面完成软件的构建、存储、组合、分发与衍生。这五个环节各自对应一个万亿美元量级的市场，智能体正在重写它们。我们正在寻找认同这一判断的投资人。
         </p>
         <div className="site-cta-actions site-invest-actions">
           <a className="site-cta-primary" href={INVEST_MAIL}>
