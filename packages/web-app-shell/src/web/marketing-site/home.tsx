@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { DownloadIcon, GitHubButton, SiteChrome, SiteFaq, SiteFinalCta, type SiteAction } from './site-chrome.tsx'
 import { usePageMeta } from './use-page-meta.ts'
@@ -188,10 +188,10 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
               <span>改变世界</span>
               <span className="site-hero-verbs">
                 {HERO_VERBS.map(([word, slug], index) => (
-                  <Fragment key={slug}>
-                    {index ? <span className="site-hero-sep" aria-hidden>/</span> : null}
-                    <Link to={`/blog/${slug}`}>{word}</Link>
-                  </Fragment>
+                  <Link key={slug} to={`/blog/${slug}`}>
+                    {word}
+                    <sup aria-hidden>{String(index + 1).padStart(2, '0')}</sup>
+                  </Link>
                 ))}
               </span>
               <span>软件的方式</span>
