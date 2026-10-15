@@ -380,7 +380,7 @@ test('a local account can create or reuse the matching cloud identity', async ()
         return
       }
       if (path === '/api/account/workspaces') {
-        res.end(JSON.stringify({ workspaces: [{ id: 'cloud-ws', name: '在线空间', role: 'owner' }] }))
+        res.end(JSON.stringify({ workspaces: [{ id: 'cloud-ws', name: '云端空间', role: 'owner' }] }))
         return
       }
       res.statusCode = 404
@@ -469,12 +469,12 @@ test('the cloud server creates an online workspace for the signed-in account', a
     const created = await fetch(`${origin}/api/account/workspaces`, {
       method: 'POST',
       headers: { authorization: `Bearer ${registered.token}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ name: '在线空间', location: 'cloud' }),
+      body: JSON.stringify({ name: '云端空间' }),
     })
     assert.equal(created.status, 201)
     const body = (await created.json()) as { id?: string; name?: string; location?: string; error?: string }
     assert.equal(body.error, undefined)
-    assert.equal(body.name, '在线空间')
+    assert.equal(body.name, '云端空间')
     assert.equal(body.location, 'cloud')
     assert.ok(body.id)
   } finally {
@@ -497,7 +497,7 @@ test('disconnecting the cloud hides its workspaces from the desktop list', async
       return
     }
     if (path === '/api/account/workspaces') {
-      res.end(JSON.stringify({ workspaces: [{ id: 'cloud-ws', name: '在线空间', role: 'owner' }] }))
+      res.end(JSON.stringify({ workspaces: [{ id: 'cloud-ws', name: '云端空间', role: 'owner' }] }))
       return
     }
     res.statusCode = 404

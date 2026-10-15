@@ -376,11 +376,11 @@ test('workspace creation uses centered local and online cards with default names
   assert.equal(dialog.querySelectorAll('.shell-workspace-create-card-icon svg').length, 2)
   assert.equal(screen.queryByLabelText('新空间名称'), null)
 
-  fireEvent.click(screen.getByRole('button', { name: /创建本地空间/ }))
-  await waitFor(() => assert.deepEqual(createBodies[0], { name: '本地空间', location: 'device' }))
+  fireEvent.click(screen.getByRole('button', { name: /创建本机空间/ }))
+  await waitFor(() => assert.deepEqual(createBodies[0], { name: '本机空间', location: 'device' }))
   await waitFor(() => assert.match(screen.getByRole('alert').textContent ?? '', /stop reload/))
-  fireEvent.click(screen.getByRole('button', { name: /创建在线空间/ }))
-  await waitFor(() => assert.deepEqual(createBodies[1], { name: '在线空间', location: 'cloud' }))
+  fireEvent.click(screen.getByRole('button', { name: /创建云端空间/ }))
+  await waitFor(() => assert.deepEqual(createBodies[1], { name: '云端空间', location: 'cloud' }))
 
   const css = readFileSync(resolve(import.meta.dirname, '../../../../web/style.css'), 'utf8')
   assert.match(css, /\.shell-workspace-switcher\s*\{[^}]*font-size:\s*14px;[^}]*font-weight:\s*500;/s)
@@ -395,7 +395,7 @@ test('workspace creation uses centered local and online cards with default names
     if (url.endsWith('/active')) return json({ workspaceId: 'ws_cloud' })
     if (url.endsWith('/workspaces') && init?.method === 'POST') {
       onlineBodies.push(JSON.parse(String(init.body)) as Record<string, unknown>)
-      return json({ id: 'ws_new', name: '在线空间', role: 'owner', location: 'cloud' }, 201)
+      return json({ id: 'ws_new', name: '云端空间', role: 'owner', location: 'cloud' }, 201)
     }
     if (url.endsWith('/workspaces')) return json({ workspaces: [{ id: 'ws_cloud', name: '云端项目', role: 'owner', location: 'cloud' }] })
     return json({})
@@ -404,7 +404,7 @@ test('workspace creation uses centered local and online cards with default names
   fireEvent.click(await screen.findByTestId('shell-workspace-switcher'))
   fireEvent.click(screen.getByText('创建新空间'))
   assert.equal(screen.queryByRole('dialog', { name: '创建新空间' }), null)
-  await waitFor(() => assert.deepEqual(onlineBodies[0], { name: '在线空间', location: 'cloud' }))
+  await waitFor(() => assert.deepEqual(onlineBodies[0], { name: '云端空间', location: 'cloud' }))
   await waitFor(() => assert.match(screen.getByRole('alert').textContent ?? '', /stop reload/))
 })
 
