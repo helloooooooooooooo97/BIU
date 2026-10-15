@@ -238,7 +238,7 @@ test('板块间距：小字→大字、大字→内容 各自统一', () => {
 
   // 这些板块的「小字→大字」必须走同一个 token
   const labelSels = [
-    '.site-hero h1', '.site-demo-heading .site-section-label',
+    '.site-hero h1', '.site-hero-line', '.site-demo-heading .site-section-label',
     '.site-space-heading h2',
   ]
   const bad: string[] = []
@@ -249,6 +249,20 @@ test('板块间距：小字→大字、大字→内容 各自统一', () => {
     if (!bodies.some((b) => b.includes('var(--site-label-gap)'))) bad.push(`${sel} 未走 label token`)
   }
   assert.deepEqual(bad, [], `这些板块的小字间距没统一：\n${bad.join('\n')}`)
+
+  const typeOf = (sel: string) => {
+    const body = baseRules.find(([s]) => s === sel)?.[1] ?? ''
+    return {
+      size: body.match(/font-size:\s*([^;]+)/)?.[1].trim() ?? '',
+      weight: body.match(/font-weight:\s*([^;]+)/)?.[1].trim() ?? '',
+      tracking: body.match(/letter-spacing:\s*([^;]+)/)?.[1].trim() ?? '',
+    }
+  }
+  assert.deepEqual(typeOf('.site-hero h1'), typeOf('.site-hero-line'), '愿景与后三句用同一种字')
+  const narrowHero = medias
+    .filter((m) => /max-width:\s*800px/.test(m.cond))
+    .flatMap((m) => rules(m.seg))
+  assert.equal(narrowHero.some(([sel]) => sel === '.site-hero h1' || sel === '.site-hero-line'), false, '窄屏不再单独改这四句的字号')
 })
 
 const siteCss = css.slice(css.indexOf('\n.site {\n'))

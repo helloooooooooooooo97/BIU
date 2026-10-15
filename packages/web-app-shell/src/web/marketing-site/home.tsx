@@ -160,7 +160,7 @@ const HOME_FAQ = [
 export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
   usePageMeta({
     title: 'BIU · 用一个页面，组合所有软件',
-    description: '改变世界构建、存储、组合、分发、衍生软件的方式，定义下一代人与 AI 协作的媒介。一个页面，组合所有软件。',
+    description: '改变世界构建、存储、组合、分发、衍生软件的方式，定义下一代人与 AI 协作的媒介。一个页面，组合所有的软件。',
     path: '/',
   })
   const [activeSurface, setActiveSurface] = useState(0)
@@ -170,35 +170,42 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
 
   return (
     <SiteChrome onLogin={onLogin} onStart={onStart}>
-        <section className="site-hero">
+        <section className="site-hero" aria-label="愿景">
           <div className="site-hero-copy site-container" data-reveal>
-            <p className="site-hero-epigraph">
-              <span>媒介即讯息</span>
-              <cite>马歇尔·麦克卢汉</cite>
-            </p>
+            <p className="site-section-label">愿景</p>
             <h1 aria-label="改变世界构建、存储、组合、分发、衍生软件的方式">
-              <span className="site-hero-frame">改变世界</span>
-              <span className="site-hero-verbs">
-                <span>构建</span>
-                <span>存储</span>
-                <span>组合</span>
-                <span>分发</span>
-                <span>衍生</span>
-              </span>
-              <span className="site-hero-frame">软件的方式</span>
+              <span>改变世界</span>
+              <span>构建</span>
+              <span>存储</span>
+              <span>组合</span>
+              <span>分发</span>
+              <span>衍生</span>
+              <span>软件的方式</span>
             </h1>
-            <p className="site-hero-define">定义下一代人与 AI 协作的媒介</p>
-            <div className="site-hero-product">
-              <p className="site-eyebrow">开源 · 免费 · All in One</p>
-              <p className="site-hero-product-line">一个页面，组合所有软件</p>
-              <p className="site-hero-lead">
-                在 BIU 里，页面上的每一块都是一个真正能用的软件 —— 表格、画板、代码练习、视频剪辑，都来自插件。
-                把它们放进同一页，就是一套为你的客户准备好的服务。
-              </p>
-              <div className="site-cta-actions">
-                <Link className="site-cta-primary" to="/download"><DownloadIcon />下载</Link>
-                <GitHubButton label="GitHub" />
-              </div>
+          </div>
+          <p className="site-scroll-note">向下探索</p>
+        </section>
+        <section className="site-manifesto" aria-label="影响、引用与方式">
+          <div className="site-manifesto-beat site-container" data-reveal>
+            <p className="site-section-label">影响</p>
+            <p className="site-hero-line">定义下一代人与 AI 协作的媒介</p>
+          </div>
+          <div className="site-manifesto-beat site-container" data-reveal>
+            <p className="site-section-label">引用</p>
+            <p className="site-hero-line">媒介即讯息</p>
+            <cite className="site-hero-cite">马歇尔·麦克卢汉</cite>
+          </div>
+          <div className="site-manifesto-beat site-container" data-reveal>
+            <p className="site-section-label">方式</p>
+            <p className="site-hero-line">一个页面，组合所有的软件</p>
+            <p className="site-eyebrow">开源 · 免费 · All in One</p>
+            <p className="site-hero-lead">
+              在 BIU 里，页面上的每一块都是一个真正能用的软件 —— 表格、画板、代码练习、视频剪辑，都来自插件。
+              把它们放进同一页，就是一套为你的客户准备好的服务。
+            </p>
+            <div className="site-cta-actions">
+              <Link className="site-cta-primary" to="/download"><DownloadIcon />下载</Link>
+              <GitHubButton label="GitHub" />
             </div>
             <img
               className="site-hero-shot"
@@ -210,7 +217,6 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
               decoding="async"
             />
           </div>
-          <p className="site-scroll-note">向下探索</p>
         </section>
 
         <section className="site-product-demo" data-reveal>
