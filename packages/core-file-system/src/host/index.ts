@@ -64,6 +64,7 @@ import { SharesStore, dropSharesForRemovedViews } from './shares-store.ts'
 import { builtinAllView, builtinAllViewId, builtinMemberViews, displayNameForView, isReadOnlyViewId, stubBuiltinAllView, stubBuiltinMemberView } from '../catalog-views.ts'
 import { isIndexCollection, isSystemCollection } from '../web/database-path.ts'
 import { effectiveDataScope, highestViewRole, recordMatchesGrantedView, type DataScopeName, type ViewGrantRole } from '../view-access.ts'
+import { recordMatchesSharedView, resolveSharedView, type SharedViewDef } from '../share-view-match.ts'
 import { buildShareSnapshot } from './share-payload.ts'
 import { FileSystemAssets, collectAssetNames, assetNamesFromMarkdown, assetNamesFromHtml, isAssetFileName, isHashedAssetName, mimeOfAsset, AssetConflictError, parseIfMatch } from './assets-store.ts'
 import { facetsCollection, parseStampRecordId } from './facets-collection.ts'
@@ -678,13 +679,14 @@ export class DatabaseService extends Service implements Database {
   facets = new FacetStore()
   shares = new SharesStore()
   assets = new FileSystemAssets()
-  viewCatalog?: { viewsFor(collectionPath: string): Array<{ id: string; filters?: Record<string, unknown> }> }
+  viewCatalog?: { viewsFor(collectionPath: string): SharedViewDef[] }
   private ownershipCache: { key: string; map: Map<string, 'personal' | 'workspace' | 'shared'> } | null = null
   private ownerCache: { key: string; map: Map<string, string> } | null = null
   private viewAudienceCache: {
     key: string
     rows: Array<{ view_id: string; subject_type: 'account' | 'member_view'; subject_id: string; granted_by?: string; member_kind: string }>
   } | null = null
+  private viewShareCache: { key: string; views: SharedViewDef[] } | null = null
   recycleAssets?: () => void
 
   private bumpQueued = false
@@ -768,6 +770,7 @@ export class DatabaseService extends Service implements Database {
     this.ownershipCache = null
     this.ownerCache = null
     this.viewAudienceCache = null
+    this.viewShareCache = null
     const rows = await spec.list(query)
     const listed = !query.ids?.length ? rows : rows.filter((row) => query.ids!.includes(row.id))
     const hidden = this.facets.deletedIds(spec.path)
@@ -781,6 +784,7 @@ export class DatabaseService extends Service implements Database {
       this.ownershipCache = null
       this.ownerCache = null
       this.viewAudienceCache = null
+      this.viewShareCache = null
     }
   }
 
@@ -1396,19 +1400,42 @@ export class DatabaseService extends Service implements Database {
   }
 
   private shareScopeLabel(collection: string, id: string, record: DbRecord, stored: 'personal' | 'workspace' | 'shared') {
-    if (this.hasPublicShare(collection, id) || stored === 'shared') return '共享'
+    if (this.hasPublicShare(collection, id, record, stored) || stored === 'shared') return '共享'
     const scope = this.effectiveScope(collection, record, stored)
     if (scope === 'workspace') return '空间'
     if (scope === 'personal') return '私人'
     return SHARE_SCOPE_LABEL[scope]
   }
 
-  private hasPublicShare(collection: string, id: string) {
+  private hasPublicShare(collection: string, id: string, record?: DbRecord, stored?: DataScopeName) {
     try {
-      return Boolean(this.shares.findRecord(collection, id))
+      if (this.shares.findRecord(collection, id)) return true
     } catch {
-      return false
+      /* 分享库还没打开时，仍按视图链接现算 */
     }
+    if (!record || !stored) return false
+    return this.sharedViewsFor(collection).some((view) => recordMatchesSharedView(record, view, stored))
+  }
+
+  private sharedViewsFor(collection: string): SharedViewDef[] {
+    if (this.viewShareCache?.key === collection) return this.viewShareCache.views
+    let shares: Array<{ viewId: string }> = []
+    try {
+      shares = this.shares.listViews(collection)
+    } catch {
+      shares = []
+    }
+    const saved = [
+      builtinAllView({ path: collection }),
+      ...(this.viewCatalog?.viewsFor(collection) ?? []),
+    ]
+    const views: SharedViewDef[] = []
+    for (const share of shares) {
+      const view = resolveSharedView(share.viewId, saved)
+      if (view) views.push(view)
+    }
+    this.viewShareCache = { key: collection, views }
+    return views
   }
 
   /** 当前用户对这一条的权限。记录上的角色和视图授权取较高的一级。 */

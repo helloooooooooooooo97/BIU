@@ -7,13 +7,9 @@ import { savedViewRecordPath } from '../paths.ts'
 import { displayNameForView, isReadOnlyViewId } from '../catalog-views.ts'
 import type { ShareRecord } from './shares-store.ts'
 import { asPublicProfile } from '@biu/host-workspace'
-import { encodeListFilter, resolveViewFilterTree } from '../query-logic.ts'
+import { viewShareListFilter } from '../share-view-match.ts'
 
 const SHARE_LIMIT = 200
-
-function asFilter(view: { filters?: Record<string, string>; filterTree?: unknown }) {
-  return encodeListFilter(view.filters ?? {}, resolveViewFilterTree(view as { filters?: Record<string, string>; filterTree?: import('../query-logic.ts').FilterGroup | null }))
-}
 
 function asStat(raw: unknown) {
   return raw as { kind?: string; schema?: CollectionSchema; label?: string; view?: { title?: string } | null }
@@ -99,7 +95,7 @@ export async function buildShareSnapshot(
     truncate: stored?.truncate,
     pageSize: stored?.pageSize,
   }
-  const listed = (await db.list(share.collection, asFilter(view), {
+  const listed = (await db.list(share.collection, viewShareListFilter(view), {
     q: String(view.query ?? ''),
     sortField: view.sortField,
     sortDir: view.sortDir,

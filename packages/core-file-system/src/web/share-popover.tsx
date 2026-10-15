@@ -5,7 +5,9 @@ import { HeadlessDismiss } from '@biu/public-ui'
 import { listCollection, readJson } from './db-client.ts'
 import { mintSharePin, shareClipboardText, type ShareResourceStats } from '../share-resources.ts'
 import { builtinAllView, builtinMemberViews, isBuiltinAllViewId, parseBuiltinScopeViewId, scopedCollectionName } from '../catalog-views.ts'
+import { recordMatchesSharedView, resolveSharedView } from '../share-view-match.ts'
 import { effectiveDataScope, grantAudienceKind, recordMatchesGrantedView } from '../view-access.ts'
+import type { FilterGroup } from '../query-logic.ts'
 import type { DbRecord } from '@biu/type-file-system'
 
 export type ShareKind = 'view' | 'record'
@@ -567,21 +569,32 @@ function roleLabel(role: string) {
 
 function collectionDataViews(collection: string, items: DbRecord[]) {
   const all = builtinAllView({ path: collection })
-  return [{ id: all.id, name: all.name, filters: all.filters }, ...viewRows(items)]
+  return [{ id: all.id, name: all.name, filters: all.filters, filterTree: all.filterTree }, ...viewRows(items)]
+}
+
+function parseJsonObject(value: unknown): Record<string, unknown> | undefined {
+  if (value && typeof value === 'object' && !Array.isArray(value)) return value as Record<string, unknown>
+  if (typeof value !== 'string' || !value.trim()) return undefined
+  try {
+    const parsed = JSON.parse(value) as unknown
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : undefined
+  } catch {
+    return undefined
+  }
 }
 
 function viewRows(items: DbRecord[]) {
   return items.flatMap((row) => {
     const id = String(row.viewId ?? '').trim()
     if (!id) return []
-    let filters: Record<string, unknown> | undefined
-    try {
-      const parsed = JSON.parse(String(row.filters ?? '{}'))
-      filters = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : undefined
-    } catch {
-      filters = undefined
-    }
-    return [{ id, name: String(row.title ?? id), filters }]
+    const filters = parseJsonObject(row.filters)
+    const tree = parseJsonObject(row.filterTree)
+    return [{
+      id,
+      name: String(row.title ?? id),
+      filters,
+      filterTree: tree?.kind === 'group' ? tree as unknown as FilterGroup : undefined,
+    }]
   })
 }
 
@@ -649,17 +662,79 @@ export function ShareScopeDetail({
 
   useEffect(() => {
     if (localOnly) {
-      const shared = label === '共享'
-      setScope(shared ? 'shared' : 'personal')
       setDirect([])
-      setChain([{
-        id: 'stored',
-        title: '这条内容自己的归属',
-        detail: shared ? '已开启局域网链接，同一局域网可查看' : '只有创建者，数据留在本机',
-        result: shared ? '共享' : '私人',
-      }])
-      setError('')
-      return
+      if (!open) {
+        setScope(label === '共享' ? 'shared' : label === '空间' ? 'workspace' : 'personal')
+        setError('')
+        return
+      }
+      let cancelled = false
+      void (async () => {
+        const [sharesPage, recordPage, viewPage] = await Promise.all([
+          readJson<{ shares?: Array<{ kind?: string; collection?: string; viewId?: string; recordId?: string; title?: string }> }>('/api/db/shares'),
+          listCollection({ path: collection, limit: 1, filters: { id: recordId } }),
+          listCollection({
+            path: '/views',
+            limit: 200,
+            filters: { tablePath: collection },
+            columns: ['title', 'tablePath', 'viewId', 'filters', 'filterTree'],
+          }),
+        ])
+        if (cancelled) return
+        const record = recordPage.items[0] ?? { id: recordId }
+        const saved = collectionDataViews(collection, viewPage.items)
+        const stored = label === '空间' ? 'workspace' as const : 'personal' as const
+        const listed = sharesPage.shares ?? []
+        const recordShare = listed.some((share) => (
+          share.kind === 'record' && share.collection === collection && share.recordId === recordId
+        ))
+        const viewHits = listed.flatMap((share) => {
+          if (share.kind !== 'view' || share.collection !== collection) return []
+          const view = resolveSharedView(String(share.viewId ?? ''), saved)
+          if (!view || !recordMatchesSharedView(record, view, stored)) return []
+          return [{
+            id: String(share.viewId ?? view.id),
+            title: String(share.title || view.name || share.viewId || '').trim() || view.id,
+          }]
+        })
+        const shared = recordShare || viewHits.length > 0
+        setScope(shared ? 'shared' : stored)
+        setChain([
+          {
+            id: 'stored',
+            title: '这条内容自己的归属',
+            detail: '只有创建者，数据留在本机',
+            result: stored === 'workspace' ? '空间' : '私人',
+          },
+          ...(recordShare ? [{
+            id: 'record-link',
+            title: '记录局域网链接',
+            detail: '已开启局域网链接，同一局域网可查看',
+            result: '共享',
+          }] : []),
+          ...viewHits.map((view) => ({
+            id: `view:${view.id}`,
+            title: `命中已分享的视图「${view.title}」`,
+            detail: '已开启局域网链接，同一局域网可查看',
+            result: '共享',
+          })),
+        ])
+        setError('')
+      })().catch((err) => {
+        if (cancelled) return
+        const shared = label === '共享'
+        setScope(shared ? 'shared' : label === '空间' ? 'workspace' : 'personal')
+        setChain([{
+          id: 'stored',
+          title: '这条内容自己的归属',
+          detail: shared ? '已开启局域网链接，同一局域网可查看' : '只有创建者，数据留在本机',
+          result: shared ? '共享' : '私人',
+        }])
+        setError(err instanceof Error ? err.message : '无法读取局域网链接')
+      })
+      return () => {
+        cancelled = true
+      }
     }
     let cancelled = false
     void (async () => {
@@ -778,11 +853,11 @@ export function ShareScopeDetail({
           onDismiss={() => setOpen(false)}
           inside={(node) => Boolean(wrapRef.current?.contains(node) || panelRef.current?.contains(node))}
         >
-          <div ref={panelRef} className="fsdb-scope-panel" role="dialog" aria-label="数据归属链路" style={{ top: box.top, left: box.left }}>
+          <div ref={panelRef} className="fsdb-scope-panel" role="dialog" aria-label={localOnly ? '局域网链接' : '数据归属链路'} style={{ top: box.top, left: box.left }}>
             <header className="fsdb-scope-head">
               <div>
-                <strong>数据归属</strong>
-                <em>直接协作者和匹配到的视图，取最宽的一档</em>
+                <strong>{localOnly ? '局域网链接' : '数据归属'}</strong>
+                <em>{localOnly ? '这条记录命中的局域网链接' : '直接协作者和匹配到的视图，取最宽的一档'}</em>
               </div>
               <b className={`fsdb-scope-pill is-${scope}`}><ScopeMark scope={scope} /></b>
             </header>
