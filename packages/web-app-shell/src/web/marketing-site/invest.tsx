@@ -87,8 +87,40 @@ const TODAY = [
   ['Condition-based permissions', 'Both data and member views are conditions. Visibility is computed at access time, and inherited permissions remain traceable.', '/security'],
 ] as const
 
+const BUSINESS = [
+  ['Open source · Acquisition', 'The desktop app, self-hosted version, and source code remain free. Open source builds trust and word of mouth, and drives user growth.'],
+  ['BIU Cloud · Subscriptions', 'Multi-device access, members and permissions, and online collaboration, sold per seat to individuals and teams. Pricing will be announced at launch.'],
+  ['Enterprise & ecosystem · Expansion', 'Support and services for private enterprise deployments, plus plugin distribution with developer revenue sharing.'],
+] as const
+
+const ROADMAP = [
+  {
+    index: '01',
+    title: 'Launch BIU Cloud and start subscription revenue',
+    body: 'Bring multi-device access, members and permissions, and online collaboration to the cloud. Local and cloud spaces coexist, and data can be exported at any time.',
+  },
+  {
+    index: '02',
+    title: 'Build the plugin ecosystem so software keeps deriving',
+    body: 'Open plugin development, distribution, and referencing, so agents can turn VS Code extensions, GitHub repositories, and existing pages into new capabilities, backed by developer revenue sharing.',
+  },
+  {
+    index: '03',
+    title: 'Expand into teams and enterprises',
+    body: 'Offer teams member management and traceable permissions, and offer enterprises private deployment and support, growing page-by-page services into a company’s system of work.',
+  },
+] as const
+
+const FUNDS = [
+  ['R&D', 'Agent capabilities and cloud infrastructure.'],
+  ['Ecosystem', 'Plugin developers, templates, and community.'],
+  ['Growth', 'Open-source community, content, and early customers.'],
+  ['Team', 'Engineering, product, and design talent.'],
+] as const
+
 const INVEST_FAQ = [
   ['How can I contact you?', `Email ${CONTACT_EMAIL} and include your organization, areas of interest, and contact details.`],
+  ['How can I get the business plan?', `Email ${CONTACT_EMAIL} and we will reply with our business plan and round details.`],
   ['Can I see the product first?', 'BIU is open source. You can download and try the desktop app directly, and all code is public on GitHub.'],
   ['Where does the data come from?', 'The market data comes from Gartner, IDC, McKinsey, Harvard Business School, and other institutions. Full references appear at the end of the five verb articles.'],
 ] as const
@@ -150,6 +182,54 @@ export function MarketingInvest({ onLogin, onStart }: { onLogin: SiteAction; onS
               <h3>{title}</h3>
               <p>{body}</p>
             </Link>
+          ))}
+        </div>
+      </section>
+
+      <section className="site-home-entry" aria-label="Business model">
+        <div className="site-home-entry-heading" data-reveal>
+          <p className="site-section-label">Business model</p>
+          <h2>Open source drives adoption. Cloud and enterprise drive revenue.</h2>
+          <p>Like most successful open-source companies, the core product is free. Revenue comes from hosted services, team collaboration, and enterprise support.</p>
+        </div>
+        <div className="site-invest-today-grid is-three" data-reveal>
+          {BUSINESS.map(([title, body]) => (
+            <div key={title}>
+              <h3>{title}</h3>
+              <p>{body}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="site-home-entry" aria-label="Plan after funding">
+        <div className="site-home-entry-heading" data-reveal>
+          <p className="site-section-label">Plan</p>
+          <h2>Three steps after this round</h2>
+        </div>
+        <div className="site-security-blocks site-invest-roadmap">
+          {ROADMAP.map((item) => (
+            <article key={item.index} data-reveal>
+              <span className="site-solution-index">{item.index}</span>
+              <h2>{item.title}</h2>
+              <p>{item.body}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="site-home-entry" aria-label="Use of funds">
+        <div className="site-home-entry-heading" data-reveal>
+          <p className="site-section-label">This round</p>
+          <h2>Where the funds go</h2>
+          <p>The round size, valuation, and financial projections are in our business plan. Email us to request it.</p>
+        </div>
+        <div className="site-invest-today-grid" data-reveal>
+          {FUNDS.map(([title, body]) => (
+            <div key={title}>
+              <h3>{title}</h3>
+              <p>{body}</p>
+            </div>
           ))}
         </div>
       </section>

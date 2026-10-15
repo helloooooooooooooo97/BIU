@@ -52,6 +52,23 @@ test('language switch keeps the current page and remembers the selected locale',
   assert.equal(document.documentElement.lang, 'en')
 })
 
+test('投资页有商业模式、融资后的计划与资金用途，中英文同步', async () => {
+  renderSite('/invest')
+  for (const name of ['Business model', 'Plan after funding', 'Use of funds']) {
+    assert.ok(screen.getByRole('region', { name }), `英文投资页有「${name}」`)
+  }
+  assert.equal(screen.getByRole('region', { name: 'Plan after funding' }).querySelectorAll('article').length, 3)
+  cleanup()
+
+  localStorage.setItem(SITE_LOCALE_KEY, 'zh')
+  renderSite('/invest')
+  assert.ok(await screen.findByRole('heading', { level: 1, name: '投资下一家万亿美元 AI 公司' }))
+  for (const name of ['商业模式', '融资后的计划', '资金用途']) {
+    assert.ok(screen.getByRole('region', { name }), `中文投资页有「${name}」`)
+  }
+  assert.match(screen.getByRole('region', { name: '资金用途' }).textContent ?? '', /商业计划书/)
+})
+
 test('landing page embeds real empty product surfaces and opens account actions', () => {
   let login = 0
   let start = 0

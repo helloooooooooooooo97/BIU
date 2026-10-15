@@ -87,8 +87,40 @@ const TODAY = [
   ['条件匹配的权限', '数据视图与成员视图两边都是条件，访问时计算可见范围，继承关系可追溯。', '/security'],
 ] as const
 
+const BUSINESS = [
+  ['开源免费 · 获取用户', '桌面版、自部署版本与源代码保持免费。开源带来信任与口碑，是用户增长的入口。'],
+  ['BIU Cloud · 订阅收入', '多设备访问、成员与权限、在线协作。面向个人与团队按席位订阅，定价在上线时公布。'],
+  ['企业与生态 · 扩展收入', '企业私有部署的支持与服务；插件生态的分发与开发者分成。'],
+] as const
+
+const ROADMAP = [
+  {
+    index: '01',
+    title: '上线 BIU Cloud，开启订阅收入',
+    body: '把多设备访问、成员与权限、在线协作带到云端。本机空间与云端空间并存，数据随时可以导出。',
+  },
+  {
+    index: '02',
+    title: '建设插件生态，让软件持续衍生',
+    body: '开放插件的开发、分发与引用，让智能体把 VS Code 插件、GitHub 仓库与已有页面接入为新的能力，并建立开发者分成机制。',
+  },
+  {
+    index: '03',
+    title: '进入团队与企业',
+    body: '面向团队提供成员管理与可追溯的权限，面向企业提供私有部署与支持服务，把一页一页的服务扩展为一家公司的工作系统。',
+  },
+] as const
+
+const FUNDS = [
+  ['研发', '智能体能力与云端基础设施。'],
+  ['生态', '插件开发者、模板与社区。'],
+  ['增长', '开源社区、内容与早期客户。'],
+  ['团队', '工程、产品与设计人才。'],
+] as const
+
 const INVEST_FAQ = [
   ['怎样联系你们', `请发送邮件至 ${CONTACT_EMAIL}，注明机构、关注方向与联系方式。`],
+  ['怎样获取商业计划书', `请发送邮件至 ${CONTACT_EMAIL}，我们会回复商业计划书与融资细节。`],
   ['可以先看产品吗', 'BIU 开源，桌面版可直接下载试用；代码全部在 GitHub 上公开。'],
   ['数据的出处在哪里', '页面中的市场数据出自 Gartner、IDC、麦肯锡、哈佛商学院等机构，五篇动词文章末尾列有完整的参考资料。'],
 ] as const
@@ -148,6 +180,54 @@ export function MarketingInvest({ onLogin, onStart }: { onLogin: SiteAction; onS
               <h3>{title}</h3>
               <p>{body}</p>
             </Link>
+          ))}
+        </div>
+      </section>
+
+      <section className="site-home-entry" aria-label="商业模式">
+        <div className="site-home-entry-heading" data-reveal>
+          <p className="site-section-label">商业模式</p>
+          <h2>开源获取用户，云端与企业带来收入</h2>
+          <p>与多数成功的开源公司一样，核心产品免费开放，收入来自托管服务、团队协作与企业支持。</p>
+        </div>
+        <div className="site-invest-today-grid is-three" data-reveal>
+          {BUSINESS.map(([title, body]) => (
+            <div key={title}>
+              <h3>{title}</h3>
+              <p>{body}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="site-home-entry" aria-label="融资后的计划">
+        <div className="site-home-entry-heading" data-reveal>
+          <p className="site-section-label">计划</p>
+          <h2>融资之后的三步</h2>
+        </div>
+        <div className="site-security-blocks site-invest-roadmap">
+          {ROADMAP.map((item) => (
+            <article key={item.index} data-reveal>
+              <span className="site-solution-index">{item.index}</span>
+              <h2>{item.title}</h2>
+              <p>{item.body}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="site-home-entry" aria-label="资金用途">
+        <div className="site-home-entry-heading" data-reveal>
+          <p className="site-section-label">本轮融资</p>
+          <h2>资金用在哪里</h2>
+          <p>融资金额、估值与财务预测写在商业计划书里，欢迎来信索取。</p>
+        </div>
+        <div className="site-invest-today-grid" data-reveal>
+          {FUNDS.map(([title, body]) => (
+            <div key={title}>
+              <h3>{title}</h3>
+              <p>{body}</p>
+            </div>
           ))}
         </div>
       </section>
