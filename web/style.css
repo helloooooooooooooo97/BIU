@@ -8685,40 +8685,56 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   font-weight: 500;
   letter-spacing: -.01em;
 }
-.site-hero h1 {
-  margin: var(--site-label-gap) 0 0;
-  font-size: clamp(32px, 3.4vw, 52px);
-  font-weight: 600;
-  letter-spacing: -.045em;
-  line-height: 1.2;
+.site-hero-epigraph {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 14px;
+  margin: 0;
   color: #fff;
-}
-.site-hero-line {
-  margin: var(--site-label-gap) 0 0;
-  font-size: clamp(32px, 3.4vw, 52px);
-  font-weight: 600;
-  letter-spacing: -.045em;
-  line-height: 1.2;
-  color: #fff;
-}
-.site-hero h1 span { display: block; }
-.site-manifesto {
-  box-sizing: border-box;
-  padding: 0 0 var(--site-section-gap);
-}
-.site-manifesto-beat + .site-manifesto-beat { margin-top: var(--site-section-gap); }
-.site-hero-cite {
-  display: block;
-  margin: 20px 0 0;
-  color: rgba(255, 255, 255, .45);
   font-size: 13px;
+  font-weight: 500;
+  letter-spacing: .18em;
+}
+.site-hero-epigraph cite {
+  color: rgba(255, 255, 255, .45);
   font-style: normal;
   font-weight: 400;
   letter-spacing: .04em;
 }
-.site-hero-cite::before { content: "— "; }
-.site-manifesto .site-eyebrow { margin-top: var(--site-heading-gap); }
-.site-manifesto .site-hero-lead { margin-top: 16px; }
+.site-hero-epigraph cite::before { content: "— "; }
+.site-hero h1 {
+  display: flex;
+  flex-wrap: nowrap;
+  column-gap: 0.38em;
+  margin: var(--site-label-gap) 0 0;
+  color: #fff;
+  font-size: clamp(22px, 2.6vw, 36px);
+  font-weight: 600;
+  letter-spacing: -.04em;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.site-hero-sub {
+  margin: 20px 0 0;
+  max-width: 22em;
+  color: rgba(255, 255, 255, .88);
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -.02em;
+  line-height: 1.45;
+}
+.site-product-intro {
+  box-sizing: border-box;
+  padding: 0 0 var(--site-section-gap);
+}
+.site-product-intro h2 {
+  margin: var(--site-label-gap) 0 0;
+  font-size: clamp(32px, 3.4vw, 52px);
+  font-weight: 500;
+  letter-spacing: -.045em;
+  line-height: 1.08;
+}
 .site-hero-lead {
   max-width: 520px;
   margin: var(--site-heading-gap) 0 0;
@@ -9144,7 +9160,15 @@ html:not(.has-js) .site [data-reveal] {
 }
 @media (max-width: 800px) {
   .site-nav { grid-template-columns: auto 1fr; padding: 0 20px; }
-  .site-hero { padding: 104px 0 56px; }
+  .site-hero {
+    min-height: 0;
+    padding: 104px 0 56px;
+  }
+  .site-hero h1 {
+    flex-wrap: wrap;
+    white-space: normal;
+    font-size: clamp(22px, 6vw, 28px);
+  }
   .site-hero-shot {
     display: block;
     width: 100%;
