@@ -890,7 +890,7 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
   const createWorkspace = (location: 'device' | 'cloud') => {
     const token = readAccountToken()
     if (!token || creatingLocation) return
-    const name = location === 'device' ? '本地空间' : '在线空间'
+    const name = location === 'device' ? '本机空间' : '云端空间'
     setCreateError('')
     setCreatingLocation(location)
     void accountFetch(token, '/api/account/workspaces', {
@@ -1135,9 +1135,9 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
                 onClick={() => createWorkspace('device')}
               >
                 <span className="shell-workspace-create-card-icon"><ComputerDesktopIcon aria-hidden /></span>
-                <strong>本地空间</strong>
+                <strong>本机空间</strong>
                 <small>数据只保存在当前设备，不上传云端。可通过局域网链接临时分享。</small>
-                <em>{creatingLocation === 'device' ? '正在创建…' : '创建本地空间'}</em>
+                <em>{creatingLocation === 'device' ? '正在创建…' : '创建本机空间'}</em>
               </button>
               <button
                 type="button"
@@ -1146,9 +1146,9 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
                 onClick={() => createWorkspace('cloud')}
               >
                 <span className="shell-workspace-create-card-icon"><CloudIcon aria-hidden /></span>
-                <strong>在线空间</strong>
+                <strong>云端空间</strong>
                 <small>数据保存在云端，可使用成员、权限和在线协作功能。</small>
-                <em>{creatingLocation === 'cloud' ? '正在创建…' : '创建在线空间'}</em>
+                <em>{creatingLocation === 'cloud' ? '正在创建…' : '创建云端空间'}</em>
               </button>
             </div>
             {createError ? <p className="shell-workspace-create-error" role="alert">{createError}</p> : null}
