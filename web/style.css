@@ -10422,7 +10422,7 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   text-decoration: none;
 }
 .site-invest-today-grid > * + * { padding-left: 24px; border-left: 1px solid rgba(255, 255, 255, .14); }
-.site .site-invest-roadmap { padding: 0; }
+.site .site-invest-roadmap { padding-block: 0; }
 .site .site-invest-today-grid h3 { margin: 0 0 10px; font-size: 18px; font-weight: 600; color: #fff; }
 .site-invest-today-grid p { margin: 0; font-size: 14px; line-height: 1.7; color: rgba(255, 255, 255, .6); }
 .site-invest-today-grid a:hover h3 { text-decoration: underline; text-underline-offset: 4px; }
