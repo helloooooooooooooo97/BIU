@@ -2467,3 +2467,59 @@ test('a member sandbox is private until the owner shares it', async () => {
     else process.env.BIU_ONLINE = previous
   }
 })
+
+test('a lan view share marks matching records shared without stamping ownership', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  const rows = new Map<string, DbRecord>([
+    ['open1', { id: 'open1', title: '进行中', status: 'open' }],
+    ['done1', { id: 'done1', title: '已完成', status: 'done' }],
+  ])
+  db.register({
+    id: 'docs',
+    path: '/docs',
+    schema: {
+      fields: {
+        ...REQUIRED_RECORD_FIELDS,
+        title: { type: 'string', writable: true },
+        status: { type: 'string', writable: true },
+      },
+    },
+    list: () => [...rows.values()],
+    get: (id) => rows.get(id) ?? null,
+  })
+  db.viewCatalog = {
+    viewsFor: (path) => path === '/docs' ? [{ id: 'open', name: '进行中', filters: { status: 'open' } }] : [],
+  }
+  const scopeOf = (items: DbRecord[], title: string) => items.find((row) => row.title === title)?.shareScope
+  assert.equal(scopeOf((await db.list('/docs')).items, '进行中'), '私人')
+  db.shares.upsert({ kind: 'view', collection: '/docs', viewId: 'open' })
+  const listed = await db.list('/docs')
+  assert.equal(scopeOf(listed.items, '进行中'), '共享')
+  assert.equal(scopeOf(listed.items, '已完成'), '私人')
+  assert.equal(db.shares.findRecord('/docs', 'open1'), null)
+  db.shares.revokeView('/docs', 'open')
+  assert.equal(scopeOf((await db.list('/docs')).items, '进行中'), '私人')
+  db.shares.upsert({ kind: 'record', collection: '/docs', recordId: 'done1' })
+  db.shares.upsert({ kind: 'view', collection: '/docs', viewId: 'open' })
+  const mixed = await db.list('/docs')
+  assert.equal(scopeOf(mixed.items, '进行中'), '共享')
+  assert.equal(scopeOf(mixed.items, '已完成'), '共享')
+  db.shares.revokeView('/docs', 'open')
+  const keepRecord = await db.list('/docs')
+  assert.equal(scopeOf(keepRecord.items, '进行中'), '私人')
+  assert.equal(scopeOf(keepRecord.items, '已完成'), '共享')
+  db.viewCatalog = {
+    viewsFor: (path) => path === '/docs' ? [{ id: 'open', name: '进行中', filters: { status: 'done' } }] : [],
+  }
+  db.shares.upsert({ kind: 'view', collection: '/docs', viewId: 'open' })
+  const shifted = await db.list('/docs')
+  assert.equal(scopeOf(shifted.items, '进行中'), '私人')
+  assert.equal(scopeOf(shifted.items, '已完成'), '共享')
+  db.shares.revokeView('/docs', 'open')
+  db.shares.revokeRecord('/docs', 'done1')
+  db.shares.upsert({ kind: 'view', collection: '/docs', viewId: builtinAllViewId('/docs') })
+  const all = await db.list('/docs')
+  assert.equal(scopeOf(all.items, '进行中'), '共享')
+  assert.equal(scopeOf(all.items, '已完成'), '共享')
+})

@@ -109,6 +109,26 @@ test('device workspace keeps LAN links but hides collaboration and cloud publish
   assert.match(databaseHost, /\/api\/db\/shares\?\$\{search\}/)
 })
 
+test('device share scope detail lists matching lan view links instead of echoing the chip', () => {
+  const src = readFileSync(resolve(import.meta.dirname, './share-popover.tsx'), 'utf8')
+  const host = readFileSync(resolve(import.meta.dirname, '../host/index.ts'), 'utf8')
+  const detail = src.slice(src.indexOf('export function ShareScopeDetail'), src.indexOf('export function ShareRoleDetail'))
+  const localBlock = detail.slice(detail.indexOf('if (localOnly)'), detail.indexOf('const [access, recordPage'))
+  assert.match(localBlock, /\/api\/db\/shares/)
+  assert.match(localBlock, /命中已分享的视图/)
+  assert.match(localBlock, /recordMatchesSharedView/)
+  assert.doesNotMatch(localBlock, /\/api\/account\/access/)
+  assert.match(detail, /localOnly \? '局域网链接' : '数据归属链路'/)
+  assert.match(detail, /这条记录命中的局域网链接/)
+  assert.match(host, /sharedViewsFor/)
+  assert.match(host, /recordMatchesSharedView/)
+  assert.doesNotMatch(sharesPostOf(host), /markPublicView/)
+})
+
+function sharesPostOf(host: string) {
+  return host.slice(host.indexOf("POST', '/api/db/shares'"), host.indexOf("GET', '/api/share/:token'"))
+}
+
 test('collaborator sections are stacked without a redundant popover heading', () => {
   const src = readFileSync(resolve(import.meta.dirname, './share-popover.tsx'), 'utf8')
   const internalAt = src.indexOf('<h3>内部协作者</h3>')

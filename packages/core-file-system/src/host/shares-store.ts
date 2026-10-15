@@ -204,6 +204,13 @@ export class SharesStore {
     const rows = this.conn().prepare('SELECT * FROM shares ORDER BY updated_at DESC, token DESC').all() as ShareRow[]
     return rows.map(publicShare)
   }
+
+  listViews(collection: string): ShareRecord[] {
+    const rows = this.conn().prepare(
+      'SELECT * FROM shares WHERE kind = ? AND collection = ? ORDER BY updated_at DESC, token DESC',
+    ).all('view', normalizeCollectionPath(collection)) as ShareRow[]
+    return rows.map(publicShare)
+  }
 }
 
 export function dropSharesForRemovedViews(

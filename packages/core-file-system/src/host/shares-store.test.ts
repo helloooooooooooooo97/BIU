@@ -110,6 +110,8 @@ test('list returns every share', () => {
   store.upsert({ kind: 'record', collection: '/pages', recordId: 'p1' })
   const keys = store.list().map((item) => item.kind + ':' + (item.viewId || item.recordId)).sort()
   assert.deepEqual(keys, ['record:p1', 'view:older'])
+  assert.deepEqual(store.listViews('/pages').map((item) => item.viewId), ['older'])
+  assert.deepEqual(store.listViews('/notes'), [])
 })
 
 test('parseSharePath only accepts /share tokens', () => {
