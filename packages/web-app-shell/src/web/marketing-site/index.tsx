@@ -47,36 +47,36 @@ function Placeholder({ label, title, body, onLogin, onStart }: PlaceholderProps)
           <h1>{title}</h1>
           <p className="site-page-lead">{body}</p>
         </section>
-        <SiteFinalCta title="先把 BIU 用起来" />
+        <SiteFinalCta title="Start using BIU today" />
     </SiteChrome>
   )
 }
 
 const PLACEHOLDERS: Record<string, { label: string; title: string; body: string }> = {
   '/enterprise': {
-    label: '企业',
-    title: '在自己的服务器上运行',
-    body: 'BIU 以 Apache 2.0 开源，可以直接自部署。部署指南正在整理中，有问题欢迎在 GitHub 提 issue。',
+    label: 'Enterprise',
+    title: 'Run BIU on your own infrastructure',
+    body: 'BIU is open source under Apache 2.0 and ready to self-host. Our deployment guide is in progress; in the meantime, open an issue on GitHub if you need help.',
   },
   '/about': {
-    label: '关于',
-    title: '用一个页面，组合所有软件',
-    body: 'BIU 是一个开源的 All in One 工作空间：页面里的每一块都是插件提供的软件。理念可以先看博客，联系我们：348876414@qq.com。',
+    label: 'About',
+    title: 'Compose all your software on one page',
+    body: 'BIU is an open-source All in One workspace where every block is software powered by a plugin. Read our blog to learn more about the vision, or contact us at 348876414@qq.com.',
   },
   '/customers': {
-    label: '客户案例',
-    title: '他们怎么用 BIU',
-    body: '真实案例正在征集中。在此之前，场景页有详细的工作流演示。',
+    label: 'Customer Stories',
+    title: 'How teams use BIU',
+    body: 'We are currently collecting customer stories. In the meantime, explore detailed workflow demos on our use case pages.',
   },
   '/help': {
-    label: '帮助中心',
-    title: '帮助文档正在整理',
-    body: '快速开始、分主题文档、常见问题与教程正在整理中。',
+    label: 'Help Center',
+    title: 'Documentation is on the way',
+    body: 'Quickstarts, topic guides, FAQs, and tutorials are currently in development.',
   },
   '/terms': {
-    label: '法务',
-    title: '条款与隐私',
-    body: '服务条款与隐私政策的正式文本正在准备中。有疑问请发邮件到 348876414@qq.com。',
+    label: 'Legal',
+    title: 'Terms & Privacy',
+    body: 'Our formal Terms of Service and Privacy Policy are in preparation. For questions, email 348876414@qq.com.',
   },
 }
 
@@ -132,8 +132,8 @@ export function MarketingSite({ onLogin, onStart, auth, login = true }: Marketin
         element={
           <Placeholder
             label="404"
-            title="页面不存在"
-            body="这个地址没有对应的页面，请返回首页。"
+            title="Page not found"
+            body="There is no page at this address. Please return to the home page."
             onLogin={onLogin}
             onStart={onStart}
           />

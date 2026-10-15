@@ -116,7 +116,7 @@ export function formatStars(count: number) {
 export function formatDate(iso: string) {
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return ''
-  return `${date.getFullYear()} 年 ${date.getMonth() + 1} 月 ${date.getDate()} 日`
+  return new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', day: 'numeric' }).format(date)
 }
 
 export async function loadReleases(limit = 20): Promise<Release[]> {

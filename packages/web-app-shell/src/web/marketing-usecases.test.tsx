@@ -19,9 +19,9 @@ test('用例总览：六个场景全部渲染，且不再是占位页', () => {
   renderAt('/use-cases')
 
   // 占位页曾是「正在开发中」，这里必须已经不出现
-  assert.equal(document.body.textContent?.includes('子页正在开发中'), false, '不再是占位页')
+  assert.equal(document.body.textContent?.includes('Subpage under development'), false, '不再是占位页')
 
-  assert.ok(screen.getByText('为真实工作而生'), '总览标题存在')
+  assert.ok(screen.getByText('Built for real work'), '总览标题存在')
   for (const useCase of USE_CASES) {
     assert.ok(screen.getByText(useCase.title), `缺少场景 ${useCase.title}`)
     assert.ok(screen.getByText(useCase.summary), `缺少场景简介 ${useCase.title}`)
@@ -46,8 +46,8 @@ test('用例子页：每个 slug 都能独立打开，含痛点/做法/FAQ', () 
 
     assert.ok(screen.getByText(useCase.title), `${useCase.slug}: 标题`)
     assert.ok(document.body.textContent?.includes(useCase.output), `${useCase.slug}: 交付物`)
-    assert.ok(screen.getByText('现在的麻烦'), `${useCase.slug}: 痛点段`)
-    assert.ok(screen.getByText('BIU 怎么做'), `${useCase.slug}: 做法段`)
+    assert.ok(screen.getByText('What gets in the way today'), `${useCase.slug}: 痛点段`)
+    assert.ok(screen.getByText('How BIU helps'), `${useCase.slug}: 做法段`)
 
     for (const pain of useCase.pain) {
       assert.ok(screen.getByText(pain), `${useCase.slug}: 痛点 ${pain}`)
@@ -58,7 +58,7 @@ test('用例子页：每个 slug 都能独立打开，含痛点/做法/FAQ', () 
     for (const [question] of useCase.faq) {
       assert.ok(screen.getByText(question), `${useCase.slug}: FAQ ${question}`)
     }
-    assert.ok(screen.getByText('其他场景'), `${useCase.slug}: 交叉导航`)
+    assert.ok(screen.getByText('More use cases'), `${useCase.slug}: 交叉导航`)
   }
 })
 
@@ -74,7 +74,7 @@ test('用例子页：其他场景链接指向兄弟页，不自指', () => {
 
 test('未知 slug：给诚实提示，不是 404 崩溃', () => {
   renderAt('/use-cases/does-not-exist')
-  assert.ok(screen.getByText('没有这个场景'), '未知 slug 有兜底')
+  assert.ok(screen.getByText('Use case not found'), '未知 slug 有兜底')
 })
 
 test('总览页的每个标题都出现在子页里（导航闭环）', () => {

@@ -21,14 +21,14 @@ function loadImage(blob: Blob) {
     }
     image.onerror = () => {
       URL.revokeObjectURL(url)
-      reject(new Error('生成失败'))
+      reject(new Error('Failed to generate image'))
     }
     image.src = url
   })
 }
 
 export async function downloadPageLongImage(root: HTMLElement = document.querySelector('.site') as HTMLElement) {
-  if (!root) throw new Error('找不到页面')
+  if (!root) throw new Error('Page not found')
   root.classList.add('is-capturing')
   const revealed = [...root.querySelectorAll<HTMLElement>('[data-reveal]:not(.is-visible)')]
   for (const node of revealed) node.classList.add('is-visible')
@@ -51,13 +51,13 @@ export async function downloadPageLongImage(root: HTMLElement = document.querySe
     const stripBlob = print ? await toBlob(print, { pixelRatio, backgroundColor: 'transparent' }) : null
     if (print) print.style.visibility = 'hidden'
     const pageBlob = await toBlob(root, { pixelRatio, backgroundColor: 'transparent' })
-    if (!pageBlob) throw new Error('生成失败')
+    if (!pageBlob) throw new Error('Failed to generate image')
     const page = await loadImage(pageBlob)
     const canvas = document.createElement('canvas')
     canvas.width = page.width
     canvas.height = page.height
     const ctx = canvas.getContext('2d')
-    if (!ctx) throw new Error('生成失败')
+    if (!ctx) throw new Error('Failed to generate image')
     ctx.fillStyle = '#000000'
     ctx.fillRect(0, 0, canvas.width, canvas.height)
     if (stripBlob) {
@@ -66,7 +66,7 @@ export async function downloadPageLongImage(root: HTMLElement = document.querySe
     }
     ctx.drawImage(page, 0, 0)
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
-    if (!blob) throw new Error('生成失败')
+    if (!blob) throw new Error('Failed to generate image')
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url

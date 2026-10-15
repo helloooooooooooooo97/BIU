@@ -4,23 +4,23 @@ import { usePageMeta } from './use-page-meta.ts'
 const SECTIONS = [
   {
     index: '01',
-    title: '本机空间',
-    body: '数据保存在你自己的电脑上：页面和表格在本地数据库，附件在同一台电脑的资源目录里。使用本机空间不会把数据上传到我们的服务器。',
+    title: 'Local spaces',
+    body: 'Your data stays on your computer: pages and tables live in a local database, and attachments remain in a local asset directory. Local spaces do not upload data to our servers.',
   },
   {
     index: '02',
-    title: '云端空间',
-    body: '需要多设备访问和成员协作时使用，可以部署在你自己的服务器上（官方云端服务即将上线）。空间内的操作受账号鉴权保护，敏感操作进入待确认状态，不会静默执行。',
+    title: 'Cloud spaces',
+    body: 'Use a cloud space for multi-device access and team collaboration. You can deploy it on your own server, with BIU Cloud coming soon. Account authentication protects workspace actions, and sensitive operations require confirmation instead of running silently.',
   },
   {
     index: '03',
-    title: '模型调用',
-    body: '智能体工作时，会把这一轮需要的内容发给你配置的模型服务（DeepSeek、OpenAI、Anthropic 等），用的是你自己的密钥。在本机空间里，请求从你的电脑直接发往模型服务。',
+    title: 'Model calls',
+    body: 'When an agent runs, it sends only the content needed for that run to your configured model provider, such as DeepSeek, OpenAI, or Anthropic, using your own API key. In a local space, requests go directly from your computer to the provider.',
   },
   {
     index: '04',
-    title: '开源可审计',
-    body: '全部代码以 Apache 2.0 开源。数据的存放位置与发送对象，可以直接阅读源码核对；动作写入只追加的事件记录，事后可以查阅。发现安全问题，请发送邮件至 348876414@qq.com。',
+    title: 'Open and auditable',
+    body: 'All code is open source under Apache 2.0. You can inspect the source to verify where data is stored and where it is sent. Actions are recorded in an append-only event log for later review. To report a security issue, email 348876414@qq.com.',
   },
 ] as const
 
@@ -33,57 +33,58 @@ const SECTIONS = [
  */
 const MATCH_STEPS = [
   {
-    step: '数据视图',
-    detail: '谁的范围',
-    body: '被授权的不是一张表或某一行，而是你在界面上存的任意视图。视图就是一串筛选条件（条件也持久化为数据），记录落不落在里面当场算。',
+    step: 'Data view',
+    detail: 'Which records',
+    body: 'Permissions apply to any view saved in the interface, not to a whole table or a specific row. A view is a set of filters—also persisted as data—and record membership is evaluated dynamically.',
   },
   {
-    step: '成员视图',
-    detail: '谁在里面',
-    body: '授权对象也不必须是某个人，可以是一个动态成员视图 —— 比如「空间成员」「外部成员」「临时访客」。条件满足就自动进入授权范围。',
+    step: 'Member view',
+    detail: 'Which people',
+    body: 'Access does not have to be granted to a specific person. It can target a dynamic member view such as workspace members, external members, or temporary guests. Anyone who meets the conditions is included automatically.',
   },
   {
-    step: '匹配即授权',
-    detail: '角色 + 可见性',
-    body: '两个视图一匹配，就得到这个人的角色和这条记录的可见范围。同一个人被多处授权时取较高的那一级，不冲突。',
+    step: 'Match grants access',
+    detail: 'Role + visibility',
+    body: 'When the two views match, they determine the person’s role and the record’s visibility. If someone receives access from multiple sources, the highest level applies without conflict.',
   },
 ] as const
 
 const FLEX_POINTS = [
-  ['授权对象是条件，不是名单', '新人加入空间就落进「空间成员」视图，自动获得该视图上挂着的全部授权，不必逐条加人；成员转为外部后落进「外部成员」视图，权限自动收缩。'],
-  ['授权范围和筛选是同一件事', '视图本来就是筛选条件，所以「权限分组」不需要另建一套概念。你在界面上存下的那个视图，可以直接当授权范围用。'],
-  ['可见性是算出来的，不是存下来的', '一条内容是私人、空间还是共享，取决于它落在哪些被授权的视图里，而不是它自己带的一个标签。'],
-  ['继承，且能把来路说清', '内容之间可以继承权限，不必每条自己定义。查看时能逐级展开你的权限是怎么来的 —— 创建者、视图授权，还是继承自上一级。'],
+  ['Conditions, not access lists', 'New members enter the workspace members view and automatically receive every permission attached to it. If they become external members, they move to that view and their access narrows automatically.'],
+  ['Access scopes are filters', 'Because views are already defined by filters, permission groups need no separate abstraction. Any view saved in the interface can become an access scope.'],
+  ['Visibility is computed, not stored', 'Whether content is private, workspace-wide, or shared depends on which authorized views include it—not on a fixed label attached to the content.'],
+  ['Inheritance with a clear audit trail', 'Content can inherit permissions instead of defining each one separately. You can trace access back through every level—to the creator, a view grant, or inheritance from a parent.'],
 ] as const
 
 const COMPETITORS = [
-  ['Notion', '页面级授权，群组是一份名单'],
-  ['飞书', '协作者是人、群或部门，按文档逐个添加'],
-  ['BIU', '授权对象和数据范围都是条件，两边都对得上才生效'],
+  ['Notion', 'Page-level access, with groups maintained as lists'],
+  ['Lark', 'Collaborators are people, groups, or departments added to each document'],
+  ['BIU', 'Both recipients and data scopes are conditions; access applies only when they match'],
 ] as const
 
 const SECURITY_FAQ = [
-  ['官方是否访问用户数据', '本机空间的数据不会上传至 BIU 的服务器。云端空间若部署在用户自己的服务器上，数据同样由用户持有。'],
-  ['发送给模型的内容', '只有智能体当前这一轮所需的内容会发送至用户配置的模型服务，并使用用户自己的密钥。空间中的其余数据不会发送。'],
-  ['智能体的修改权限', '敏感操作进入待确认状态，经用户确认后才执行。每个动作写入只追加的事件记录，事后可以逐条查阅。'],
-  ['新成员如何获得权限', '授权对象可以是「空间成员」这样的成员视图。新成员加入后，自动获得挂在该视图上的权限，无需逐一授予。'],
-  ['如何报告安全问题', '请发送邮件至 348876414@qq.com。'],
+  ['Can BIU access my data?', 'Data in local spaces is never uploaded to BIU servers. If you deploy a cloud space on your own server, you retain control of that data as well.'],
+  ['What content is sent to model providers?', 'Only content required for the agent’s current run is sent to your configured model provider using your own API key. Other workspace data is not sent.'],
+  ['What can agents modify?', 'Sensitive operations require your confirmation before they run. Every action is written to an append-only event log that you can review later.'],
+  ['How do new members receive access?', 'Access can target a member view such as workspace members. New members automatically receive the permissions attached to that view, with no individual grants required.'],
+  ['How do I report a security issue?', 'Email 348876414@qq.com.'],
 ] as const
 
 export function MarketingSecurity({ onLogin, onStart }: { onLogin: SiteAction; onStart: SiteAction }) {
   usePageMeta({
-    title: '安全',
-    description: '本机空间数据存在自己电脑上，模型用你自己的密钥，代码开源可审计。权限不是一张名单，是数据范围与成员范围的一次匹配。',
+    title: 'Security',
+    description: 'Keep local-space data on your computer, use your own model keys, and audit the open-source code. BIU permissions match data scopes with member scopes.',
     path: '/security',
   })
 
   return (
     <SiteChrome onLogin={onLogin} onStart={onStart}>
         <section className="site-page-hero" data-reveal>
-          <p className="site-section-label">安全</p>
-          <h1>你的数据在哪里，由你决定</h1>
+          <p className="site-section-label">Security</p>
+          <h1>You decide where your data lives</h1>
           <p className="site-page-lead">
-            BIU 开源，数据的存放位置与流向都可以核对。本机空间的边界由产品结构决定，不是一项设置。
+            BIU is open source, so you can verify where data is stored and where it goes. Local-space boundaries are
+            built into the product architecture, not controlled by a preference.
           </p>
         </section>
 
@@ -98,14 +99,14 @@ export function MarketingSecurity({ onLogin, onStart }: { onLogin: SiteAction; o
         </section>
 
         <section className="site-permission" data-reveal>
-          <p className="site-section-label">权限模型</p>
-          <h2>谁能看到什么，是一次匹配的结果</h2>
+          <p className="site-section-label">Permission model</p>
+          <h2>Access is the result of a match</h2>
           <p className="site-permission-lead">
-            常见做法是维护一张名单：把人和内容一个个对应起来。BIU 不这么做 ——
-            <strong>两边都是条件，匹配上了才生效。</strong>
+            Most systems maintain access lists that map people to content one by one. BIU works differently:
+            <strong> both sides are conditions, and access applies only when they match.</strong>
           </p>
 
-          <div className="site-permission-formula" aria-label="权限模型">
+          <div className="site-permission-formula" aria-label="Permission model">
             {MATCH_STEPS.map((item, index) => (
               <div key={item.step} className="site-permission-term">
                 <span className="site-permission-step">{item.step}</span>
@@ -127,10 +128,10 @@ export function MarketingSecurity({ onLogin, onStart }: { onLogin: SiteAction; o
         </section>
 
         <section className="site-role-table" data-reveal>
-          <h2>为什么这样更灵活</h2>
+          <h2>Why this model is more flexible</h2>
           <table>
             <thead>
-              <tr><th>产品</th><th>授权是怎么表达的</th></tr>
+              <tr><th>Product</th><th>How access is defined</th></tr>
             </thead>
             <tbody>
               {COMPETITORS.map(([name, detail]) => (
@@ -142,14 +143,14 @@ export function MarketingSecurity({ onLogin, onStart }: { onLogin: SiteAction; o
             </tbody>
           </table>
           <p className="site-permission-note">
-            这不是单独做出来的一套权限功能。因为视图本身是数据、成员本身也是数据，
-            「用条件当授权对象」才有可能 —— 权限模型是 File System 的一个投影。
+            This is not a separate permission layer. Views are data, and members are data, which makes conditions
+            viable access targets. The permission model is a projection of the File System.
           </p>
         </section>
 
-        <SiteFaq title="关于数据" items={SECURITY_FAQ} />
+        <SiteFaq title="About your data" items={SECURITY_FAQ} />
 
-        <SiteFinalCta title="把边界握在自己手里" />
+        <SiteFinalCta title="Stay in control of your boundaries" />
     </SiteChrome>
   )
 }
