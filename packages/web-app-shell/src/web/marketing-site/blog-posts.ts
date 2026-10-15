@@ -11,6 +11,8 @@ export type BlogPost = {
   summary: string
   date: string
   sections: { heading?: string; body: Paragraph[] }[]
+  /** 正文中的 [n] 对应第 n 条。 */
+  references?: { title: string; publisher: string; year: string; url: string }[]
 }
 
 export const BLOG_AUTHOR = { name: 'BIU 团队', email: '348876414@qq.com' }
@@ -265,20 +267,20 @@ export const BLOG_POSTS: BlogPost[] = [
   {
     slug: 'build-software',
     title: '构建：软件与数据同时生长',
-    summary: '传统软件要先开发完成，才能开始服务，数据总是排在软件之后。在 BIU 里，服务从第一行数据开始，软件随着数据一起长出来。',
+    summary: '传统软件要先开发完成，才能开始服务。BIU 让服务从第一行数据开始，软件随数据一起长出来。全球软件支出已达 1.47 万亿美元，构建方式的改变，触及的是整个软件产业的生产函数。',
     date: '2026-10-14',
     sections: [
       {
         body: [
-          '这是「改变世界构建、存储、组合、分发、衍生软件的方式」系列的第一篇。五篇文章分别讨论这五个动词，以及 BIU 在每一个动词上做出的选择。',
-          '软件工程有一条默认的时间线：先有需求，再开发，然后测试、上线，最后才有人开始使用、开始产生数据。软件是容器，数据是后来装进去的东西。容器没有做完，服务就无法开始。',
+          '这是「改变世界构建、存储、组合、分发、衍生软件的方式」系列的第一篇。每篇讨论一个动词，从两个角度展开：它对智能体的上下文意味着什么，以及它背后的经济规模。',
+          '软件工程有一条默认的时间线：先有需求，再开发、测试、上线，最后才有人使用、才有数据。软件是容器，数据是后来装进去的东西。容器没有做完，服务就无法开始。',
         ],
       },
       {
         heading: '先有软件，后有数据',
         body: [
-          '这条时间线带来一个结构性的延迟。一位老师想开一门算法陪跑课，在传统路径里，他要么等一款合适的软件出现，要么找人开发一款。开发周期以月计，而他的学员下周就要开始练习。',
-          '更深的问题在于，需求只有在服务过程中才会真正浮现。学员做到第三周，老师才发现需要一张按难度统计错题的表。此时软件已经定型，新的需求只能排进下一个版本。软件总是在追赶服务。',
+          '这条时间线的代价有长期的统计。Standish Group 跟踪软件项目三十年，2020 年的报告显示，只有 31% 的项目按时、按预算交付并取得满意结果，50% 延期、超支或缩减范围，19% 失败 [3]。1994 年的首份报告中，问题项目平均超出原定预算 189%、原定工期 222% [4]。',
+          '更深的问题在于，需求只有在服务过程中才会真正浮现。一位老师开设算法陪跑课，到第三周才发现需要一张按难度统计错题的表。此时软件已经定型，新的需求只能排进下一个版本。软件总是在追赶服务。',
         ],
       },
       {
@@ -287,22 +289,46 @@ export const BLOG_POSTS: BlogPost[] = [
           'BIU 把这条时间线并行了。服务从写下第一行数据开始：一页讲义、一道题目、一份学员名单，当天就可以交给学员使用。页面本身既是数据，也是软件运行的地方。',
           '需要新的能力时，软件在服务进行中加入。页面上的每一块都是一段声明加一段数据：',
           { code: ':::pageBlock {kind=algorithm plugin=page-algorithm}\n{ "title": "1. Two Sum", "lang": "python" }\n:::' },
-          '缺少的那种块，可以由智能体当场编写成插件，挂进页面，直接读取已经存在的数据。表的字段可以随时增加，已有的记录随即获得新的结构。第三周才出现的需求，第三周就能满足。',
+          '缺少的那种块，由智能体当场编写成插件，挂进页面，直接读取已经存在的数据。表的字段可以随时增加，已有记录随即获得新的结构。第三周出现的需求，第三周就能满足。',
+        ],
+      },
+      {
+        heading: 'Agent 的上下文：面向真实数据构建',
+        body: [
+          '传统开发里，工程师面对的是需求文档和测试数据；智能体写代码时，面对的往往是一段描述和一个空白的项目。它只能猜测数据长什么样，写出来的界面要等真实数据进来才知道是否可用。',
+          '在 BIU 里，智能体构建插件时，页面上已经有真实的数据、真实的字段和真实的使用记录。它读到的上下文就是这份服务当下的状态，写出的插件第一次运行就作用在真实数据上。',
+          '构建的产出也更小。智能体不必每次生成上百行界面代码，只需写一段声明，指向已有的插件，剩下的是数据。产出越小，出错越少，验证越快，下一轮迭代的上下文也越干净。',
+        ],
+      },
+      {
+        heading: '经济规模：一个万亿美元的生产函数',
+        body: [
+          'Gartner 预测，2026 年全球软件支出达到 1.468 万亿美元，同比增长 15.5% [1]。这是企业每年为「构建好的软件」支付的费用，尚未计入自建软件的人力成本。',
+          '供给端却极为集中。SlashData 估算，全球活跃软件开发者约 4840 万人 [2]；Gartner 估算，全球知识工作者在 2023 年达到 11.4 亿人 [5]。平均约 24 位知识工作者，才对应一位能构建软件的人。绝大多数需求，从未进入构建流程。',
+          '智能体正在改变这一比例。Gartner 预测，到 2028 年 33% 的企业软件应用将内置智能体能力，2024 年这一比例不到 1% [6]。当构建只需要说清需求，供给端从 4840 万人扩展到 11.4 亿人，构建软件的方式就决定了这一万亿美元市场的下一种分配方式。',
         ],
       },
       {
         heading: '构建成为服务的一部分',
         body: [
           '当数据与软件同步生长，构建就从一个独立的前置阶段，变成服务过程中的持续动作。服务者边服务边构建，每一次调整都基于真实的数据和真实的反馈。',
-          '这改变了构建的节奏：从「做完再用」，变成「边用边长」。下一篇讨论存储：当软件与数据一起生长，它们应该以什么样的结构存放。',
+          '下一篇讨论存储：当软件与数据一起生长，它们应该以什么样的结构留存下来。',
         ],
       },
+    ],
+    references: [
+      { title: 'Gartner Forecasts Worldwide IT Spending to Grow 14.2% in 2026, Totaling $6.37 Trillion', publisher: 'Gartner', year: '2026', url: 'https://www.gartner.com/en/newsroom/press-releases/2026-07-27-gartner-forecasts-worldwide-it-spending-to-grow-14-point-2-percent-in-2026-totaling-6-point-37-trillion' },
+      { title: 'Developer Population Sizing: 48.4 million developers worldwide', publisher: 'SlashData', year: '2025', url: 'https://www.slashdata.co/research/developer-population' },
+      { title: 'CHAOS 2020: Beyond Infinity', publisher: 'Standish Group', year: '2020', url: 'https://opencommons.org/images/8/8d/Project-success-qrc-standish-group-chaos-report-2020.pdf' },
+      { title: 'The CHAOS Report', publisher: 'Standish Group', year: '1994', url: 'https://opencommons.org/images/6/6a/Chaos_report_1994.pdf' },
+      { title: 'Gartner Says Worldwide Social Software and Collaboration Revenue to Nearly Double by 2023', publisher: 'Gartner', year: '2019', url: 'https://www.gartner.com/en/newsroom/press-releases/09-24-2019-gartner-says-worldwide-social-software-and-collaboration-revenue-to-nearly-double-by-2023' },
+      { title: 'Gartner Predicts Over 40% of Agentic AI Projects Will Be Canceled by End of 2027', publisher: 'Gartner', year: '2025', url: 'https://www.gartner.com/en/newsroom/press-releases/2025-06-25-gartner-predicts-over-40-percent-of-agentic-ai-projects-will-be-canceled-by-end-of-2027' },
     ],
   },
   {
     slug: 'store-software',
     title: '存储：在一页里融合结构化与非结构化',
-    summary: '多数 AI 工具产出的是文件和 HTML，内容丰富，却难以检索和复用。BIU 的页面同时容纳自由书写的正文和结构化的块，让每一份内容都可以被索引、查询和再利用。',
+    summary: '全球每年新生成的数据中约九成是非结构化的，多数 AI 工具产出的仍是文件和 HTML。BIU 的页面同时容纳正文与结构化的块，让每一份内容都能被索引、查询和复用。',
     date: '2026-10-14',
     sections: [
       {
@@ -311,17 +337,18 @@ export const BLOG_POSTS: BlogPost[] = [
         ],
       },
       {
-        heading: '无结构的产出',
+        heading: '无结构的洪流',
         body: [
-          '今天的 AI 工具擅长生成内容：一份 Markdown 文档、一个 HTML 页面、一段可以运行的脚本。这些产出对人来说可读，对系统来说却是一个整体的文本块。想找出「过去一个月所有标记为困难的算法题」，只能重新阅读每一份文件。',
-          '无结构的内容很难被索引，也很难被复用。每一次生成都是一次性的，下一次需要同样的东西，只能再生成一遍。内容越积越多，可用的却越来越少。',
+          'IDC 估算，2025 年全球生成的数据约为 201.7 ZB，其中非结构化数据约 180.7 ZB，占比接近九成 [1]。在企业内部，2023 年结构化数据仅占新生成数据的不到 12% [1]。',
+          '今天的 AI 工具进一步放大了这股洪流。它们擅长生成一份 Markdown 文档、一个 HTML 页面、一段可以运行的脚本。这些产出对人可读，对系统却是一整块文本。想找出「过去一个月所有标记为困难的算法题」，只能重新阅读每一份文件。',
+          '找信息本身就是一项巨大的成本。麦肯锡的研究显示，知识型员工约 19% 的工作时间用于追踪完成任务所需的信息 [2]。内容越积越多，可用的却越来越少。',
         ],
       },
       {
         heading: '同一页里的两种内容',
         body: [
           'BIU 的页面同时承载两种内容。正文是自由书写的段落，适合叙述、解释和思考；块是结构化的数据，每一块都有明确的类型和字段，适合题目、表格、对比和记录。',
-          '两者在同一页里自然交织：讲义的段落之间嵌着算法题块，题块里是结构化的题面、语言和提交记录。页面的属性，例如标题、标签和你定义的任何字段，同样是结构化的，并作为环境提供给页面里的所有插件。',
+          '两者在同一页里自然交织：讲义的段落之间嵌着算法题块，题块里是结构化的题面、语言和提交记录。页面属性同样是结构化的，并作为环境提供给页面里的所有插件。',
           { diagram: 'page-env', caption: '页面属性是结构化的环境：同一个插件在两页里读到两组字段。' },
         ],
       },
@@ -330,7 +357,23 @@ export const BLOG_POSTS: BlogPost[] = [
         body: [
           '结构化的价值首先体现在索引上。工作区里的一切都是表：页面、块、任务、插件、会话。散落在各页的同一种块会被收集成组件，按类型结构化成表，可以按任意字段筛选、排序和建立视图。',
           '其次体现在复用上。一种块的结构定义一次，就能在任意页面里反复使用；一份数据写入一次，就能被多个视图、多个插件和智能体同时读取。结构本身成为可以积累的资产。',
-          '数据存放的位置由你决定：本机空间存放在你自己的电脑上，云端空间存放在你部署的服务器上。无论放在哪里，结构都随数据一起留存。',
+          '存放位置由使用者决定：本机空间存放在自己的电脑上，云端空间存放在自己部署的服务器上。无论放在哪里，结构都随数据一起留存。',
+        ],
+      },
+      {
+        heading: 'Agent 的上下文：检索代替通读',
+        body: [
+          '面对非结构化内容，智能体只有两种办法：把整份文件塞进上下文，或者用向量检索取回几段相似的文本。前者受限于上下文长度，后者可能取回无关的片段。',
+          '斯坦福大学等机构的研究表明，即使是长上下文模型，当关键信息位于长输入的中间位置时，回答准确率也会显著下降；在检索增强场景中，增加检索文档带来的提升很快饱和 [3]。把更多文本交给模型，并不等于给了它更好的上下文。',
+          '在 BIU 里，智能体可以用结构化的方式取数：列出某一类组件，按字段筛选记录，读取某一页的某一块。它拿到的是精确的记录，而不是一段需要再理解一遍的文本。上下文更短，信息更准。',
+        ],
+      },
+      {
+        heading: '经济规模：数据的托管与检索',
+        body: [
+          'Gartner 预测，2026 年全球公有云终端用户支出约 8500 亿美元，2029 年将达到 1.49 万亿美元 [4][5]。这是全球为托管软件与数据支付的费用，其中 SaaS 一项在 2025 年即达 2991 亿美元 [4]。',
+          '检索成本同样以万亿计。全球约 11.4 亿知识工作者 [6]，若约 19% 的工作时间用于寻找信息 [2]，相当于两亿余人的全职工作量。让内容自带结构、可被精确检索，释放的是这部分时间。',
+          '存储的方式决定了数据能否被理解。谁定义了人与 AI 共同使用的数据结构，谁就站在这一万亿美元市场的入口。',
         ],
       },
       {
@@ -341,23 +384,31 @@ export const BLOG_POSTS: BlogPost[] = [
         ],
       },
     ],
+    references: [
+      { title: 'Worldwide Global DataSphere Structured and Unstructured Data Forecast, 2024–2028', publisher: 'IDC', year: '2024', url: 'https://techcontentwave.com/files/1763389937_64b594fd4f7f5607256a.pdf' },
+      { title: 'The social economy: Unlocking value and productivity through social technologies', publisher: 'McKinsey Global Institute', year: '2012', url: 'https://www.mckinsey.com/mgi/media-center/social-media-productivity-payoff' },
+      { title: 'Lost in the Middle: How Language Models Use Long Contexts', publisher: 'Transactions of the ACL, 12:157–173', year: '2024', url: 'https://aclanthology.org/2024.tacl-1.9/' },
+      { title: 'Gartner Forecasts Worldwide Public Cloud End-User Spending to Total $723 Billion in 2025', publisher: 'Gartner', year: '2024', url: 'https://www.gartner.com/en/newsroom/press-releases/2024-11-19-gartner-forecasts-worldwide-public-cloud-end-user-spending-to-total-723-billion-dollars-in-2025' },
+      { title: 'Forecast: Public Cloud Services, Worldwide, 2023-2029, 4Q25', publisher: 'Gartner', year: '2025', url: 'https://www.gartner.com/en/documents/7281230' },
+      { title: 'Gartner Says Worldwide Social Software and Collaboration Revenue to Nearly Double by 2023', publisher: 'Gartner', year: '2019', url: 'https://www.gartner.com/en/newsroom/press-releases/09-24-2019-gartner-says-worldwide-social-software-and-collaboration-revenue-to-nearly-double-by-2023' },
+    ],
   },
   {
     slug: 'compose-software',
     title: '组合：为 AI 提供精准的上下文',
-    summary: '应用各自为政时，AI 的上下文散落在各处，只能靠复制粘贴拼凑。BIU 把页面、数据、插件和会话集成在同一个系统里，智能体读到的正是这一轮需要的内容。',
+    summary: '企业平均使用 897 款应用，只有 29% 彼此打通。BIU 把页面、数据、插件和会话集成在同一个系统里，智能体读到的正是这一轮需要的内容。生成式 AI 每年 2.6 至 4.4 万亿美元的潜在价值，取决于这一层。',
     date: '2026-10-14',
     sections: [
       {
         body: [
-          '这是系列的第三篇。前两篇讨论软件如何构建、数据如何存储，这一篇讨论组合：多个软件集成在一起，对人和 AI 意味着什么。',
+          '这是系列的第三篇。前两篇讨论软件如何构建、数据如何存储，这一篇讨论组合：多个软件集成为一个系统，对人和 AI 意味着什么。',
         ],
       },
       {
-        heading: '散落的上下文',
+        heading: '碎片化的软件栈',
         body: [
-          '在应用分立的世界里，一份工作的上下文分散在许多地方：需求在文档里，进度在看板里，数据在表格里，讨论在聊天记录里。人可以凭记忆把它们串起来，AI 却只能看到你粘贴给它的那一部分。',
-          '于是每一次与 AI 协作，都要先花时间交代背景。给得太少，它会猜；给得太多，关键信息被淹没。即使借助连接器把多个应用接入，AI 拿到的也往往是格式各异、彼此割裂的片段。',
+          'MuleSoft 2025 年的调查覆盖 1050 位企业 IT 负责人：企业平均使用 897 款应用，其中只有 29% 彼此集成；95% 的受访者认为，集成是有效落地 AI 的障碍 [1]。',
+          '碎片化的代价落在每个人身上。《哈佛商业评论》发表的一项研究跟踪了三家财富 500 强企业的 137 名员工：他们平均每天在应用和网站之间切换约 1200 次，每周因此花费近 4 小时重新进入状态，约占全年工作时间的 9% [2]。',
         ],
       },
       {
@@ -366,29 +417,46 @@ export const BLOG_POSTS: BlogPost[] = [
           'BIU 把这些内容集成在同一个工作区里。页面、块、任务、插件和会话都是表，使用同一套操作，只有路径不同：',
           { code: 'db_list   /tasks\ndb_read   /pages/<id>\ndb_update /page-blocks/<pageId>::<blockId>' },
           '同一页里的块读写同一份数据，共享同一组页面属性。算法题块写入的提交记录，对比表块可以直接读取。组合不需要额外的接口，把块放进同一页，它们就开始协作。',
+          { diagram: 'atoms', caption: '六种原子组合出任务、页面、插件、会话……新增一个领域只是再组合一次。' },
         ],
       },
       {
-        heading: '精准的上下文',
+        heading: 'Agent 的上下文：引用代替转述',
         body: [
-          '集成带来的最大收益，在于 AI 的上下文。因为一切都是结构化的数据，并且位于同一个系统里，你可以把页面、组件或会话直接引用进输入框，智能体读到的就是你选中的这些内容，范围清晰，数量恰当。',
+          '在应用分立的世界里，一份工作的上下文分散在文档、看板、表格和聊天记录里。人可以凭记忆把它们串起来，智能体只能看到你粘贴给它的那一部分。给得太少，它会猜；给得太多，关键信息被淹没在长文本的中间 [3]。',
+          '在 BIU 里，因为一切都是结构化的数据，并且位于同一个系统里，你可以把页面、组件或会话直接引用进输入框。智能体读到的就是你选中的这些内容，范围清晰，数量恰当。',
           { image: '/site/shot-agent.webp', alt: '会话输入框里输入 @，列出工作区里的页面和任务', caption: '输入 @，页面和任务直接成为这一轮的上下文。' },
           '智能体写回的结果同样落在这个系统里：一页、一个块、一张表或一个技能。人在界面上立即看到，下一轮协作直接基于它继续。上下文从需要反复转述的背景，变成随时可以精确引用的数据。',
         ],
       },
       {
+        heading: '经济规模：AI 价值的兑现层',
+        body: [
+          '麦肯锡估算，生成式 AI 在 63 个应用场景中每年可创造 2.6 万亿至 4.4 万亿美元的经济价值；若计入嵌入现有软件带来的影响，这一数字约再翻一倍 [4]。这些价值能否兑现，取决于 AI 能否拿到准确、完整的业务上下文。',
+          '碎片化的成本同样以万亿计。若全球约 11.4 亿知识工作者 [5] 都有约 9% 的工作时间消耗在应用切换上 [2]，相当于一亿余人的全职工作量。',
+          '组合层连接了这两端：它消除切换带来的损耗，也为 AI 提供可以直接使用的上下文。哪一层成为人与 AI 共同的工作台，哪一层就承接生成式 AI 的主要价值。',
+        ],
+      },
+      {
         heading: '组合即理解',
         body: [
-          '当软件集成为一个系统，组合就同时完成了两件事：让软件彼此协作，也让 AI 理解这份工作的全貌。这正是我们说的「定义下一代人与 AI 协作的媒介」。',
+          '当软件集成为一个系统，组合同时完成了两件事：让软件彼此协作，也让 AI 理解这份工作的全貌。这正是我们说的「定义下一代人与 AI 协作的媒介」。',
           '下一篇讨论分发：组合好的服务，如何以最简单的方式交到别人手里。',
         ],
       },
+    ],
+    references: [
+      { title: '2025 Connectivity Benchmark Report', publisher: 'MuleSoft / Salesforce', year: '2025', url: 'https://www.salesforce.com/blog/mulesoft-connectivity-benchmark-2025/' },
+      { title: 'How Much Time and Energy Do We Waste Toggling Between Applications?', publisher: 'Harvard Business Review', year: '2022', url: 'https://hbr.org/2022/08/how-much-time-and-energy-do-we-waste-toggling-between-applications' },
+      { title: 'Lost in the Middle: How Language Models Use Long Contexts', publisher: 'Transactions of the ACL, 12:157–173', year: '2024', url: 'https://aclanthology.org/2024.tacl-1.9/' },
+      { title: 'The economic potential of generative AI: The next productivity frontier', publisher: 'McKinsey & Company', year: '2023', url: 'https://www.mckinsey.com/capabilities/tech-and-ai/our-insights/the-economic-potential-of-generative-ai-the-next-productivity-frontier' },
+      { title: 'Gartner Says Worldwide Social Software and Collaboration Revenue to Nearly Double by 2023', publisher: 'Gartner', year: '2019', url: 'https://www.gartner.com/en/newsroom/press-releases/09-24-2019-gartner-says-worldwide-social-software-and-collaboration-revenue-to-nearly-double-by-2023' },
     ],
   },
   {
     slug: 'distribute-software',
     title: '分发：一个页面，就是一次发布',
-    summary: '传统软件的分发要经过打包、下载、安装和上架审核。在 BIU 里，分享一页就是发布一款软件，配合以条件为单位的权限模型，谁能看到什么都可以精确表达。',
+    summary: '仅 App Store 一个生态，2024 年就促成了近 1.3 万亿美元的交易。BIU 让分享一页即是发布一款软件，免去打包、下载、安装与上架，并以条件匹配的权限模型精确控制谁能看到什么。',
     date: '2026-10-14',
     sections: [
       {
@@ -400,7 +468,7 @@ export const BLOG_POSTS: BlogPost[] = [
         heading: '漫长的发布链路',
         body: [
           '一款软件从写完到被人用上，要经过一条漫长的链路：打包成安装包，上传到分发渠道，提交应用商店审核，用户下载、安装、注册、登录。每一个环节都有成本，每一个环节都会流失用户。',
-          '对个人和小团队来说，这条链路几乎无法负担。于是大量本可以成为软件的服务，最终只能以文档、截图或视频的形式交付。',
+          '渠道本身也在收费。App Store 对数字商品和服务收取 30% 的佣金，年收入不超过 100 万美元的小型开发者为 15% [1]。对个人和小团队来说，这条链路几乎无法负担，大量本可以成为软件的服务，最终只能以文档、截图或视频的形式交付。',
         ],
       },
       {
@@ -408,30 +476,49 @@ export const BLOG_POSTS: BlogPost[] = [
         body: [
           '在 BIU 里，分发的单位是页面。分享一页时，系统以页为单位解析依赖，把正文、附件和用到的插件源码一起打包。对方打开链接，画板可以继续画，算法题可以继续运行。',
           { image: '/site/shot-share.webp', alt: '分享出去的页面里，画板和算法题卡片照样能用', caption: '对方打开链接，拿到的是一页能用的软件。' },
-          '这一过程不需要打包工具，不需要分发渠道，也不需要审核。软件的分发从未如此简单：写好一页，分享出去，对方即可使用。',
+          '这一过程不需要打包工具，不需要分发渠道，也不需要审核。写好一页，分享出去，对方即可使用。',
         ],
       },
       {
         heading: '以条件为单位的权限',
         body: [
           '分发得越容易，权限就越重要。BIU 的权限模型由两个视图匹配而成：数据视图描述「哪些内容」，成员视图描述「哪些人」，两者匹配，就得到这个人对这些内容的角色和可见范围。',
-          '授权对象是条件，而非名单。新成员加入空间，就自动落入「空间成员」视图，获得挂在该视图上的全部授权；成员转为外部，权限随之收缩。授权范围就是你在界面上保存的筛选视图，可见性在访问时当场计算。',
-          '内容之间可以继承权限，查看时能逐级展开权限的来路：来自创建者、来自视图授权，还是继承自上一级。一页分享给一个班级，每位学员只看到属于自己的那部分记录，这只需要一次授权。',
+          '授权对象是条件，而非名单。新成员加入空间，就自动落入「空间成员」视图，获得挂在该视图上的全部授权；成员转为外部，权限随之收缩。可见性在访问时当场计算，内容之间可以继承权限，并能逐级展开权限的来路。',
+          '一页分享给一个班级，每位学员只看到属于自己的那部分记录，这只需要一次授权。',
+        ],
+      },
+      {
+        heading: 'Agent 的上下文：随页面一起抵达',
+        body: [
+          '应用分发出去的是界面，上下文留在了服务者那一端。接收方的智能体若要协助，需要重新获取背景、重新理解结构。',
+          'BIU 分发的页面自带上下文：正文、结构化的块、页面属性和插件一起抵达。接收方的智能体打开这一页，读到的就是完整、有结构的服务本身。权限模型同样约束智能体，它能读写的范围，与它所代表的人完全一致。',
+        ],
+      },
+      {
+        heading: '经济规模：万亿美元的分发通道',
+        body: [
+          'Apple 委托的研究显示，2024 年 App Store 生态促成了近 1.3 万亿美元的交易与销售，其中数字商品与服务 1310 亿美元，实体商品与服务 1.014 万亿美元，应用内广告 1500 亿美元；规模在五年内翻了一倍以上 [2]。',
+          '这仅仅是一个平台的数据。它说明，控制软件分发通道的平台，承接的是万亿美元量级的经济活动。',
+          '页面是一种新的分发通道：发布门槛从「成为开发者并通过审核」降到「写好一页」。当每一位服务者都能直接把软件交到客户手里，分发的版图将被重新划分。',
         ],
       },
       {
         heading: '人人都能发布软件',
         body: [
-          '当发布只需要一个页面，并且权限可以精确表达，服务者就无需先成为软件公司，才能把软件交到客户手里。一位老师、一位顾问、一个小团队，都可以直接发布一页完整可用的软件。',
+          '当发布只需要一个页面，并且权限可以精确表达，服务者就无需先成为软件公司，才能把软件交到客户手里。',
           '最后一篇讨论衍生：一款软件被分发出去之后，别人如何在它的基础上，继续构建自己需要的能力。',
         ],
       },
+    ],
+    references: [
+      { title: "Apple's App Store generated nearly $1.3 trillion in sales in 2024", publisher: 'Yahoo Finance', year: '2025', url: 'https://uk.finance.yahoo.com/news/apples-app-store-generated-nearly-13-trillion-in-sales-in-2024-130002805.html' },
+      { title: 'The Global App Store and Its Growth', publisher: 'Analysis Group, commissioned by Apple', year: '2025', url: 'https://www.apple.com/newsroom/pdfs/2024-Apple-Global-Ecosystem-Report-June2025.pdf' },
     ],
   },
   {
     slug: 'derive-software',
     title: '衍生：在别人的软件之上，叠加你的能力',
-    summary: '在 BIU 里，智能体可以引用已有的插件，对它的功能做扩展与叠加；VS Code 的插件、DeepSeek harness 的插件，甚至一个 GitHub 链接，都可以被引入进来。每一款软件，都是下一款软件的起点。',
+    summary: '哈佛商学院估算，开源软件的需求侧价值高达 8.8 万亿美元。在 BIU 里，智能体可以引用已有的插件，对其功能做扩展与叠加；VS Code 插件、DeepSeek harness 插件，甚至一个 GitHub 链接，都能被引入进来。',
     date: '2026-10-14',
     sections: [
       {
@@ -440,34 +527,54 @@ export const BLOG_POSTS: BlogPost[] = [
         ],
       },
       {
-        heading: '封闭的终点',
+        heading: '复用创造的价值',
         body: [
-          '传统软件交付之后，就成了一个封闭的终点。使用者只能使用厂商提供的功能，想增加一项能力，要么等待厂商更新，要么从头开发一款新的软件。即使软件开源，基于它做扩展也需要读懂代码、搭建环境、维护分叉。',
-          '不同生态之间更是彼此隔绝。VS Code 的插件只能在 VS Code 里运行，一个 GitHub 上的开源项目，要变成你工作流里可用的一部分，中间隔着大量的集成工作。',
+          '软件史上最大的价值，来自复用。哈佛商学院的研究估算，若开源软件不存在，使用它的企业要自行重写，所需成本约 8.8 万亿美元；企业的软件支出将是现在的 3.5 倍 [1]。',
+          '可供衍生的素材也在快速增长。GitHub 2025 年的报告显示，平台上已有超过 1.8 亿名开发者、6.3 亿个仓库，仅 2025 年就新增 1.21 亿个 [2]。VS Code 插件市场的扩展数量超过 10 万个 [3]。',
+          '然而，这些能力大多被锁在各自的生态里。VS Code 的插件只能在 VS Code 里运行；一个 GitHub 上的项目，要变成工作流里可用的一部分，中间隔着大量集成工作。',
         ],
       },
       {
         heading: '引用，然后扩展',
         body: [
           '在 BIU 里，插件本身也是工作区表里的数据，可以被读取、引用和复制。智能体可以引用一个已有的插件，在它的基础上扩展功能，或者把几个插件的能力叠加在一起，形成一个新的插件。',
-          '一位老师写好了算法题插件，另一位老师可以让智能体引用它，叠加一个按知识点统计错题的视图，变成自己需要的版本。原插件的作者无需参与，衍生出的插件同样可以继续被别人引用。',
+          '一位老师写好了算法题插件，另一位老师可以让智能体引用它，叠加一个按知识点统计错题的视图，变成自己需要的版本。原作者无需参与，衍生出的插件同样可以继续被别人引用。',
         ],
       },
       {
         heading: '跨越生态的边界',
         body: [
           '引用的对象并不局限于 BIU 里的插件。智能体可以读取 VS Code 的插件、DeepSeek harness 的插件，甚至一个 GitHub 仓库的链接，理解其中的功能，再把它引入为页面里可以使用的一块。',
-          '这意味着整个开源世界已有的能力，都可以成为你构建服务的素材。你不需要等待某个功能被移植过来，只需要指给智能体看。',
+          '这意味着整个开源世界已有的能力，都可以成为构建服务的素材。不需要等待某个功能被移植过来，只需要指给智能体看。',
+        ],
+      },
+      {
+        heading: 'Agent 的上下文：以已有的软件为起点',
+        body: [
+          '让智能体从零生成一款软件，它的上下文只有一段描述。让它衍生一款软件，它的上下文是一份经过验证、正在运行的代码，以及这份代码在页面里读写的真实数据。',
+          '起点越扎实，结果越可靠。智能体做的是增量：保留原插件已经正确的部分，只写新增的那一层。改动更小，审查更容易，衍生链条上的每一环都可以追溯来源。',
+        ],
+      },
+      {
+        heading: '经济规模：把 8.8 万亿美元的存量变成增量',
+        body: [
+          '8.8 万亿美元衡量的是开源软件被复用所避免的重写成本 [1]。它证明了复用的经济规模，也揭示了缺口：这些价值几乎只被开发者获取。研究同时发现，96% 的需求侧价值由 5% 的开源开发者创造 [1]。',
+          '当智能体可以替使用者引用、改写和叠加这些软件，复用的受益者就从 4840 万名开发者扩展到所有知识工作者。衍生把一笔沉淀的存量，变成可以持续产生新软件的增量。',
         ],
       },
       {
         heading: '每一款软件，都是起点',
         body: [
           '页面同样可以衍生。复制一页，改几个属性，就是给下一位客户的服务；拿到分享页的人，可以在它的基础上改写出自己的版本。好的结果沉淀为组件、技能和新的页面，成为下一次构建的起点。',
-          '衍生让软件从封闭的终点，变成开放的起点。构建与数据同步，存储兼具结构与自由，组合为 AI 提供精准的上下文，分发只需一个页面，衍生让每一款软件都能长出下一款。',
+          '构建与数据同步，存储兼具结构与自由，组合为 AI 提供精准的上下文，分发只需一个页面，衍生让每一款软件都能长出下一款。',
           '这五个动词合在一起，就是我们想做的事：改变世界构建、存储、组合、分发、衍生软件的方式，定义下一代人与 AI 协作的媒介。麦克卢汉说，媒介即讯息。我们相信，页面会成为这样的媒介。',
         ],
       },
+    ],
+    references: [
+      { title: 'The Value of Open Source Software (Working Paper 24-038)', publisher: 'Harvard Business School', year: '2024', url: 'https://www.hbs.edu/faculty/Pages/item.aspx?num=65230' },
+      { title: 'Octoverse 2025: A new developer joins GitHub every second', publisher: 'GitHub', year: '2025', url: 'https://github.blog/news-insights/octoverse/octoverse-a-new-developer-joins-github-every-second-as-ai-leads-typescript-to-1/' },
+      { title: 'Celebrating 50 Million Developers: The Journey of Visual Studio and Visual Studio Code', publisher: 'Microsoft', year: '2025', url: 'https://developer.microsoft.com/blog/celebrating-50-million-developers-the-journey-of-visual-studio-and-visual-studio-code/' },
     ],
   },
 ]

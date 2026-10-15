@@ -151,6 +151,42 @@ const HERO_VERBS = [
   ['衍生', 'derive-software'],
 ] as const
 
+/** 每一行的数字出自对应文章的参考资料。 */
+const VISION_ROWS = [
+  {
+    verb: '构建',
+    slug: 'build-software',
+    context: '智能体在真实数据上构建，每一次修改都立即作用于正在运行的服务。',
+    economy: '全球软件支出 1.468 万亿美元（2026）；构建者从 4840 万开发者扩展到 11.4 亿知识工作者。',
+  },
+  {
+    verb: '存储',
+    slug: 'store-software',
+    context: '结构化属性与自由正文同存一页，智能体按字段精确检索，减少整段文本的猜测。',
+    economy: '公有云支出 2029 年达 1.49 万亿美元；全球近九成数据为非结构化，知识工作者 19% 的时间用于找信息。',
+  },
+  {
+    verb: '组合',
+    slug: 'compose-software',
+    context: '一项工作的数据、规则与历史集中在一处，智能体拿到的是完整而精准的上下文。',
+    economy: '生成式 AI 每年 2.6–4.4 万亿美元的价值，取决于上下文；企业平均 897 款应用，仅 29% 互通。',
+  },
+  {
+    verb: '分发',
+    slug: 'distribute-software',
+    context: '权限随页面计算，智能体代表谁、能看到什么、能做什么，都有明确的边界。',
+    economy: 'App Store 生态 2024 年促成约 1.3 万亿美元交易；一个链接即可交付，无需打包、上架与 30% 佣金。',
+  },
+  {
+    verb: '衍生',
+    slug: 'derive-software',
+    context: '智能体引用已有的插件、仓库与页面，在其上扩展和叠加，能力持续累积。',
+    economy: '开源软件的需求侧价值约 8.8 万亿美元；GitHub 6.3 亿个仓库，等待被更多人复用。',
+  },
+] as const
+
+const INVEST_MAIL = 'mailto:348876414@qq.com?subject=' + encodeURIComponent('BIU 投资洽谈')
+
 /** 日期相同则保持稿序，取最前面两篇作为首页入口。 */
 const HOME_POSTS = BLOG_POSTS
   .map((post, index) => ({ post, index }))
@@ -445,6 +481,45 @@ export function MarketingHome({ onLogin, onStart }: { onLogin: SiteAction; onSta
           <p className="site-home-entry-more" data-reveal>
             <Link to="/blog">全部文章 →</Link>
           </p>
+        </section>
+
+        <section className="site-home-entry site-vision" aria-label="愿景">
+          <div className="site-home-entry-heading" data-reveal>
+            <p className="site-section-label">愿景</p>
+            <h2>五个动词，五个万亿美元市场</h2>
+            <p>
+              软件的构建、存储、组合、分发与衍生，各自对应一个万亿美元量级的市场。智能体正在重写这五个环节，BIU 让它们在同一个页面里完成。我们正在寻找相信这一判断的投资人。
+            </p>
+          </div>
+          <div className="site-vision-table" role="table" aria-label="五个动词" data-reveal>
+            <div className="site-vision-row site-vision-head" role="row">
+              <span role="columnheader">动词</span>
+              <span role="columnheader">Agent 的上下文</span>
+              <span role="columnheader">经济规模</span>
+            </div>
+            {VISION_ROWS.map((row, index) => (
+              <div className="site-vision-row" role="row" key={row.slug}>
+                <span role="rowheader">
+                  <Link to={`/blog/${row.slug}`}>
+                    <sup aria-hidden>{String(index + 1).padStart(2, '0')}</sup>
+                    {row.verb}
+                  </Link>
+                </span>
+                <span role="cell">{row.context}</span>
+                <span role="cell">{row.economy}</span>
+              </div>
+            ))}
+          </div>
+          <div className="site-vision-invest" data-reveal>
+            <div>
+              <h3>投资下一个万亿美元独角兽</h3>
+              <p>欢迎来信交流产品路线与融资计划。来信请注明机构与关注方向。</p>
+              <p className="site-vision-note">表中数据出自 Gartner、IDC、麦肯锡、哈佛商学院等机构，每篇文章末尾列有完整的参考资料。</p>
+            </div>
+            <a className="site-cta-primary" href={INVEST_MAIL}>
+              联系我们
+            </a>
+          </div>
         </section>
 
         <SiteFaq title="关于 BIU" items={HOME_FAQ} />
