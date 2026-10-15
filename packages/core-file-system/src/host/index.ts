@@ -1420,6 +1420,7 @@ export class DatabaseService extends Service implements Database {
   }
 
   private cloudMarked(collection: string, id: string) {
+    if (this.membersInSystemData()) return false
     try {
       const account = this.ctx.get('account') as { isRemote?: (collection: string, id: string) => boolean } | undefined
       return Boolean(account?.isRemote?.(collection, id))

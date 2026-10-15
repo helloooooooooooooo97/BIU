@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { currentAccountId, dataDir, dataHome, dataPath, isOnlineRuntime } from '@biu/host-plugin-loader/data-dir'
+import { currentAccountId, currentRequestWorkspaceId, dataDir, dataHome, dataPath, isOnlineRuntime } from '@biu/host-plugin-loader/data-dir'
 import { Service, type Context } from 'cordis'
 import type { ChatMessage } from './chat-types.ts'
 import { isAgentToolMode, normalizeAgentMode, type AgentToolMode } from '@biu/host-tools'
@@ -25,6 +25,17 @@ import { readArtifactFile } from '@biu/host-sessions/artifacts'
 import { collectLiveDispatchedTasks } from '@biu/host-live-sessions/usage'
 import { loadLiveDispatchTasks, registerChatInspectorRoutes } from './inspector.ts'
 import { forwardCloud } from '@biu/host-account/mirror'
+
+function workspaceIsCloud(ctx: Context) {
+  if (isOnlineRuntime()) return true
+  try {
+    const workspaceId = currentRequestWorkspaceId()
+    const account = ctx.get('account') as { workspaceLocation?: (id: string) => string } | undefined
+    return Boolean(workspaceId && account?.workspaceLocation?.(workspaceId) === 'cloud')
+  } catch {
+    return false
+  }
+}
 
 function sessionIsCloud(ctx: Context, id: string) {
   try {
@@ -1485,7 +1496,7 @@ export function apply(ctx: Context) {
         ...(item.mascot ? { mascot: item.mascot } : {}),
         tags: item.config?.tags ?? [],
         pinned: Boolean(item.config?.pinned),
-        ...(sessionIsCloud(ctx, item.id) ? { remote: true } : {}),
+        ...(sessionIsCloud(ctx, item.id) && !workspaceIsCloud(ctx) ? { remote: true } : {}),
         ...(item.config?.inspector ? { inspector: item.config.inspector } : {}),
         ...(item.config?.goal ? { goal: item.config.goal } : {}),
       })),
