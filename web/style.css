@@ -8691,19 +8691,14 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 6px 14px;
+  gap: 4px 12px;
   margin: 0;
-  color: #fff;
+  color: rgba(255, 255, 255, .56);
   font-size: 13px;
-  font-weight: 500;
-  letter-spacing: .18em;
-}
-.site-hero-epigraph cite {
-  color: rgba(255, 255, 255, .45);
-  font-style: normal;
   font-weight: 400;
-  letter-spacing: .04em;
+  letter-spacing: 0;
 }
+.site-hero-epigraph cite { font-style: normal; }
 .site-hero-epigraph cite::before { content: "— "; }
 .site-hero h1 {
   margin: var(--site-label-gap) 0 0;
@@ -8712,6 +8707,8 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   font-weight: 600;
   letter-spacing: -.02em;
   line-height: 1.12;
+  font-feature-settings: "halt";
+  text-spacing-trim: trim-all;
 }
 .site-hero h1 > span { display: block; }
 .site-hero-verbs {
@@ -8720,12 +8717,12 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
 }
 .site-hero-verbs span { white-space: nowrap; }
 .site-hero-sub {
-  margin: var(--site-heading-gap) 0 0;
-  color: rgba(255, 255, 255, .72);
-  font-size: clamp(20px, 1.8vw, 26px);
+  margin: 24px 0 0;
+  color: rgba(255, 255, 255, .56);
+  font-size: 18px;
   font-weight: 400;
-  letter-spacing: -.02em;
-  line-height: 1.4;
+  letter-spacing: 0;
+  line-height: 1.5;
 }
 .site-hero-band {
   position: relative;
@@ -8754,18 +8751,21 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   margin-top: var(--site-heading-gap);
 }
 .site-cta-primary,
 .site-cta-secondary {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  box-sizing: border-box;
+  height: 36px;
   border-radius: 999px;
-  padding: 11px 16px;
+  padding: 0 14px;
   font-size: 14px;
   font-weight: 500;
+  line-height: 1;
   text-decoration: none;
 }
 .site-cta-primary { background: #fff; color: #000; }
