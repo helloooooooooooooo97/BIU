@@ -2094,6 +2094,7 @@ test('granting the all-members view lets the other member read the owner private
   assert.equal(bobList.items.find((row) => row.title === 'A私人')?.shareRole, '编辑')
   assert.equal(bobList.items.find((row) => row.title === 'A空间')?.shareRole, '编辑')
   const adaList = await runWithAccount(ada.id, () => db.list('/tasks'))
+  assert.equal(adaList.items.find((row) => row.title === 'A私人')?.shareScope, '空间')
   assert.equal(adaList.items.find((row) => row.title === 'A私人')?.shareRole, '管理')
   assert.equal(adaList.schema.fields.shareRole?.label, '权限')
   assert.equal(adaList.schema.fields.shareRole?.enum?.join(','), '管理,编辑,阅读')

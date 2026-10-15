@@ -965,8 +965,8 @@ export class DatabaseService extends Service implements Database {
   ): ViewGrantRole | null {
     const store = this.collabStore()
     const authorization = this.authorization()
-    if (!store?.viewGrantsFor || !authorization || !this.viewCatalog) return null
-    const saved = this.viewCatalog.viewsFor(collection)
+    if (!store?.viewGrantsFor || !authorization) return null
+    const saved = [builtinAllView({ path: collection }), ...(this.viewCatalog?.viewsFor(collection) ?? [])]
     const roles: ViewGrantRole[] = []
     for (const grant of store.viewGrantsFor(workspaceId, collection)) {
       const subjectMatches = grant.subject_type === 'account'
@@ -1448,16 +1448,29 @@ export class DatabaseService extends Service implements Database {
 
   private effectiveScope(collection: string, record: DbRecord, stored: DataScopeName): DataScopeName {
     const store = this.collabStore()
-    const workspaceId = store?.activeWorkspaceId?.() ?? ''
-    if (!store?.viewGrantAudiences || !workspaceId || !this.viewCatalog) return stored
+    const workspaceId = store?.activeWorkspaceId?.() || currentRequestWorkspaceId() || ''
+    if (!workspaceId) return stored
     const key = `${workspaceId}\t${collection}`
+    const grantRows = store.viewGrantAudiences?.(workspaceId, collection)
+      ?? store.viewGrantsFor?.(workspaceId, collection)?.map((row) => ({
+        view_id: row.view_id,
+        subject_type: row.subject_type,
+        subject_id: row.subject_id,
+        granted_by: row.granted_by,
+        member_kind: '',
+      }))
+      ?? []
     if (!this.viewAudienceCache || this.viewAudienceCache.key !== key) {
-      this.viewAudienceCache = { key, rows: store.viewGrantAudiences(workspaceId, collection) }
+      this.viewAudienceCache = { key, rows: grantRows }
     }
     const memberViews = [
       builtinAllView({ path: '/workspace-members' }),
       ...builtinMemberViews(),
-      ...this.viewCatalog.viewsFor('/workspace-members'),
+      ...(this.viewCatalog?.viewsFor('/workspace-members') ?? []),
+    ]
+    const dataViews = [
+      builtinAllView({ path: collection }),
+      ...(this.viewCatalog?.viewsFor(collection) ?? []),
     ]
     return effectiveDataScope(
       stored,
@@ -1469,7 +1482,7 @@ export class DatabaseService extends Service implements Database {
         memberKind: row.member_kind,
         grantedBy: row.granted_by,
       })),
-      this.viewCatalog.viewsFor(collection),
+      dataViews,
       memberViews,
       this.recordOwner(collection, String(record.id ?? '')),
     )
