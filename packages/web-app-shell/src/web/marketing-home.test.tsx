@@ -415,7 +415,7 @@ test('博客：总览列出每篇文章，文章页能打开并链到下一篇',
   cleanup()
 
   renderSite('/invest')
-  assert.equal(screen.getByRole('heading', { level: 1 }).textContent, '人与 AI 协作的下一代软件平台')
+  assert.equal(screen.getByRole('heading', { level: 1 }).textContent, '投资下一家万亿美元 AI 公司')
   assert.equal(document.title, '投资 · BIU')
   assert.deepEqual(
     [...screen.getByRole('region', { name: '五个市场' }).querySelectorAll('[role="rowheader"] a')].map((a) => a.getAttribute('href')),

@@ -104,7 +104,7 @@ export function MarketingInvest({ onLogin, onStart }: { onLogin: SiteAction; onS
     <SiteChrome onLogin={onLogin} onStart={onStart}>
       <section className="site-page-hero" data-reveal>
         <p className="site-section-label">投资</p>
-        <h1>人与 AI 协作的下一代软件平台</h1>
+        <h1>投资下一家万亿美元 AI 公司</h1>
         <p className="site-page-lead">
           BIU 是一家 AI 原生的软件公司，做的是人与智能体协作的媒介：用一个页面完成软件的构建、存储、组合、分发与衍生。这五个环节各自对应一个万亿美元量级的市场，智能体正在重写它们。我们正在寻找认同这一判断的投资人。
         </p>
