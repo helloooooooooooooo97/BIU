@@ -98,6 +98,8 @@ function closePaneLabel(paneId: string, kind?: string) {
   if (kind === 'collection' || path.startsWith('/database/')) return '关闭表格'
   return '关闭此栏'
 }
+
+export type SessionInspectorProps = {
   open: boolean
   width: number
   onWidthChange: (width: number) => void
