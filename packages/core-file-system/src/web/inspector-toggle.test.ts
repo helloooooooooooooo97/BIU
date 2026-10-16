@@ -582,6 +582,8 @@ test('create record sits at the right of the toolbar with a blue label', () => {
   const titleFn = browser.slice(browser.indexOf('function RecordTitle'), browser.indexOf('function PluginSurface'))
   assert.match(titleFn, /<RecordOpenControls/)
   assert.doesNotMatch(titleFn, /<RecordRowTools/)
+  assert.match(titleFn, /<RecordMark record=\{row\} tableIcon=\{tableIcon\} \/>/)
+  assert.match(titleFn, /toolsLive \|\| \(tree && kidCount > 0\) \? \(/)
   assert.match(browser, /key === 'actions'\) return/)
   assert.match(readFileSync(resolve(import.meta.dirname, './column-order-menu.tsx'), 'utf8'), /item.key === 'actions'/)
   assert.match(browser, /pinActionColumn/)

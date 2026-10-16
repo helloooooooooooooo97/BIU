@@ -413,12 +413,12 @@ function RecordTitle({
         {openDetail && toolsLive ? (
           <TableRecordIcon row={row} label={label} tableIcon={tableIcon} Icon={Icon} onWriteEmoji={onWriteEmoji} />
         ) : (
-          <RecordMark record={row} tableIcon={tableIcon} Icon={Icon} />
+          <RecordMark record={row} tableIcon={tableIcon} />
         )}
         <span className="fsdb-title-text">{body}</span>
       </span>
-      <span className="tasks-row-tools-slot">
-        {toolsLive || (tree && kidCount > 0) ? (
+      {toolsLive || (tree && kidCount > 0) ? (
+        <span className="tasks-row-tools-slot">
           <RecordOpenControls
             row={row}
             kidCount={tree ? kidCount : 0}
@@ -428,8 +428,8 @@ function RecordTitle({
             onOpenSplit={onOpenSplit}
             onOpenRow={onOpenRow}
           />
-        ) : null}
-      </span>
+        </span>
+      ) : null}
     </>
   )
 }

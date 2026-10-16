@@ -45,6 +45,12 @@ test('unmeasured viewport still paints a first screen', () => {
   assert.ok(slice.end < 200)
 })
 
+test('unmeasured first screen stays well under a 100-row page', () => {
+  const slice = tableWindowSlice(100, 0, 0)
+  assert.ok(slice.end <= 24)
+  assert.ok(slice.padBottom > 0)
+})
+
 test('viewport measure is skipped when it would paint the same window', () => {
   const prev = { top: 0, height: TABLE_WINDOW_VIEWPORT_FALLBACK }
   const next = { top: 0, height: 600 }
