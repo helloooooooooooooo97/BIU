@@ -1,4 +1,4 @@
-import { Fragment, lazy, Suspense, type ComponentProps, type PointerEvent as ReactPointerEvent, type RefObject, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { Fragment, createContext, lazy, memo, Suspense, type ComponentProps, type PointerEvent as ReactPointerEvent, type RefObject, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import {
   ArrowPathIcon,
   ArrowsPointingOutIcon,
@@ -679,6 +679,57 @@ type TablePaintNode =
   | { kind: 'group-head'; key: string; groupKey: string; label: string; count: number }
   | { kind: 'row'; key: string; keyPrefix: string; row: DbRecord; depth: number; hasKids: boolean; kidCount: number }
   | { kind: 'group-pager'; key: string; groupKey: string; count: number; pageIndex: number }
+
+type TablePaintBag = {
+  colSpan: number
+  error: string
+  renderNode: (node: TablePaintNode) => ReactNode
+}
+
+const TABLE_PAINT_REF: RefObject<TablePaintBag> = {
+  current: { colSpan: 1, error: '', renderNode: () => null },
+}
+
+const TablePaintCtx = createContext<RefObject<TablePaintBag>>(TABLE_PAINT_REF)
+
+type TableBodyProps = {
+  nodes: TablePaintNode[]
+  start: number
+  end: number
+  padTop: number
+  padBottom: number
+  colSpan: number
+  colKeys: string
+  error: string
+  pickMode: boolean
+}
+
+const TableBody = memo(function TableBody({
+  nodes,
+  start,
+  end,
+  padTop,
+  padBottom,
+  colSpan,
+}: TableBodyProps) {
+  const bag = useContext(TablePaintCtx).current
+  const span = colSpan || bag.colSpan
+  const padRow = (px: number, side: 'top' | 'bottom') =>
+    px <= 0 ? null : (
+      <tr key={`pad-${side}`} className="fsdb-table-pad" aria-hidden>
+        <td colSpan={span} style={{ height: px, padding: 0, border: 0 }} />
+      </tr>
+    )
+  return (
+    <tbody>
+      {padRow(padTop, 'top')}
+      {nodes.slice(start, end).map((node) => (
+        <Fragment key={node.key}>{bag.renderNode(node)}</Fragment>
+      ))}
+      {padRow(padBottom, 'bottom')}
+    </tbody>
+  )
+})
 
 export function CollectionBrowser({
   moduleId,
@@ -1720,6 +1771,7 @@ export function CollectionBrowser({
     return nodes
   }, [collapsedGroups, flattenRows, groupPages, grouped, grouping, pageSize, visible])
   const tableColSpan = Math.max(columns.length, 1)
+  const tablePaintRef = useRef<TablePaintBag>({ colSpan: 1, error: '', renderNode: () => null })
   const tableRef = useRef<HTMLTableElement>(null)
   const tableWrapRef = useRef<HTMLDivElement>(null)
   const tableStageRef = useRef<HTMLDivElement>(null)
@@ -3099,15 +3151,6 @@ export function CollectionBrowser({
     return <>{listed.map((item) => tableRecordRow(item.row, item.depth, item.hasKids, item.kidCount, `${keyPrefix}${item.row.id}`))}</>
   }
 
-  function tablePadRow(px: number, side: 'top' | 'bottom') {
-    if (px <= 0) return null
-    return (
-      <tr key={`pad-${side}`} className="fsdb-table-pad" aria-hidden>
-        <td colSpan={tableColSpan} style={{ height: px, padding: 0, border: 0 }} />
-      </tr>
-    )
-  }
-
   function renderPaintNode(node: TablePaintNode) {
     if (node.kind === 'empty') return tableBodyRows([])
     if (node.kind === 'row') return tableRecordRow(node.row, node.depth, node.hasKids, node.kidCount, node.key)
@@ -3236,6 +3279,12 @@ export function CollectionBrowser({
     wrapCells,
     sheet,
   ])
+
+  tablePaintRef.current = {
+    colSpan: tableColSpan,
+    error,
+    renderNode: renderPaintNode,
+  }
 
   return (
     <div
@@ -4120,13 +4169,19 @@ export function CollectionBrowser({
                 })}
               </tr>
             </thead>
-            <tbody>
-                    {tablePadRow(tableWindow.padTop, 'top')}
-                    {tablePaintNodes.slice(tableWindow.start, tableWindow.end).map((node) => (
-                      <Fragment key={node.key}>{renderPaintNode(node)}</Fragment>
-                    ))}
-                    {tablePadRow(tableWindow.padBottom, 'bottom')}
-            </tbody>
+            <TablePaintCtx.Provider value={tablePaintRef}>
+            <TableBody
+              nodes={tablePaintNodes}
+              start={tableWindow.start}
+              end={tableWindow.end}
+              padTop={tableWindow.padTop}
+              padBottom={tableWindow.padBottom}
+              colSpan={tableColSpan}
+              colKeys={columns.map((col) => col.key).join('\0')}
+              error={error}
+              pickMode={pickMode}
+            />
+            </TablePaintCtx.Provider>
           </table>
                 </div>
         </div>
