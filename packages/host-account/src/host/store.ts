@@ -1299,6 +1299,13 @@ export class CollabStore {
     return rows.map((row) => row.plugin_id)
   }
 
+  /** 安装包删掉之后，所有账号在这个插件上的运行记录一起清掉。 */
+  forgetPluginLoads(pluginId: string) {
+    const id = pluginId.trim()
+    if (!id) return
+    this.db.prepare('DELETE FROM plugin_loads WHERE plugin_id = ?').run(id)
+  }
+
   loadedPluginIds() {
     const rows = this.db
       .prepare('SELECT DISTINCT plugin_id FROM plugin_loads ORDER BY plugin_id')

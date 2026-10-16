@@ -294,6 +294,7 @@ export class PluginStoreService extends Service {
           recordPluginPackage?(accountId: string, input: Record<string, unknown>): void
           syncInstalledPluginPackage?(input: Record<string, unknown>): boolean
           removePluginPackage?(accountId: string, pluginId: string): void
+          forgetPluginLoads?(pluginId: string): void
         }
       } | undefined
     )?.store
@@ -640,6 +641,7 @@ export class PluginStoreService extends Service {
     if (!isSafeId(id)) throw new Error(`invalid plugin id: ${id}`)
     await this.hub().drop(id)
     this.setEnabled(id, false)
+    this.accountStore()?.forgetPluginLoads?.(id)
     const dest = this.pluginPath(id)
     if (isPathInside(this.pluginDir, dest) && !isPathInside(this.sandboxDir, dest) && existsSync(dest)) {
       await rm(dest, { recursive: true, force: true })

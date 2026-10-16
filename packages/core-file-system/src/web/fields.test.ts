@@ -112,6 +112,30 @@ test('previewActionRecord flips running from action when', () => {
   assert.equal(previewActionRecord({ id: 'draft', sandbox: true }, { id: 'pack', when: { sandbox: true } }).installed, true)
 })
 
+test('installed plugin actions show run or stop with uninstall, and install only after uninstall', () => {
+  const schema: CollectionSchema = {
+    fields: { ...REQUIRED_RECORD_FIELDS },
+    actions: [
+      { id: 'start', label: '运行', when: { installed: true, running: false } },
+      { id: 'stop', label: '停止', when: { installed: true, running: true } },
+      { id: 'pack', label: '安装', when: { sandbox: true, installed: false } },
+      { id: 'uninstall', label: '卸载', when: { installed: true } },
+    ],
+  }
+  const installed = { id: 'page-toc', installed: true, running: true, sandbox: true, builtin: true }
+  assert.deepEqual(visibleActions(schema, installed, 'row').map((item) => item.id), ['stop', 'uninstall'])
+  assert.deepEqual(
+    visibleActions(schema, { ...installed, running: false }, 'row').map((item) => item.id),
+    ['start', 'uninstall'],
+  )
+  const removed = previewActionRecord(installed, { id: 'uninstall', when: { installed: true } })
+  assert.deepEqual(visibleActions(schema, removed, 'row').map((item) => item.id), ['pack'])
+  assert.deepEqual(
+    visibleActions(schema, { id: 'draft', sandbox: true }, 'row').map((item) => item.id),
+    ['pack'],
+  )
+})
+
 test('placedActions keeps start and stop so chrome.Actions can own the pair', () => {
   const schema: CollectionSchema = {
     fields: { ...REQUIRED_RECORD_FIELDS },
