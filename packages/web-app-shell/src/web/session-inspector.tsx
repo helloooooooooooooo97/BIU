@@ -90,7 +90,14 @@ function PaneLeafIcon({
   return <Squares2X2Icon {...chromeIcon} />
 }
 
-export type SessionInspectorProps = {
+function closePaneLabel(paneId: string, kind?: string) {
+  const path = getInspectorDbPath(paneId).split('?')[0]
+  if (kind === 'record' && /\/pages(?:\/|$)/.test(path)) return '关闭页面'
+  if (kind === 'record') return '关闭记录'
+  if (kind === 'view') return '关闭视图'
+  if (kind === 'collection' || path.startsWith('/database/')) return '关闭表格'
+  return '关闭此栏'
+}
   open: boolean
   width: number
   onWidthChange: (width: number) => void
@@ -513,9 +520,9 @@ export const SessionInspector = memo(function SessionInspector({
                 >
                   {tab ? getInspectorPaneMenu(tab) : null}
                   {(() => {
-                    const active = headerTabs.find((item) => item.id === tab)
-                    const name = (getInspectorCaption(tab)?.label || active?.label || '').trim()
-                    if (!tab || !name) return null
+                    if (!tab) return null
+                    const kind = getInspectorCaption(tab)?.kind
+                    const label = closePaneLabel(tab, kind)
                     return (
                       <button
                         type="button"
@@ -527,7 +534,8 @@ export const SessionInspector = memo(function SessionInspector({
                           closeOpenedTab(tab)
                         }}
                       >
-                        {`关闭 ${name}`}
+                        <XMarkIcon {...chromeIcon} />
+                        {label}
                       </button>
                     )
                   })()}

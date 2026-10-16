@@ -3020,7 +3020,7 @@ select.settings-account-input {
 }
 
 .inspector-more-menu {
-  min-width: 168px;
+  width: max-content;
   max-height: min(70vh, 480px);
   overflow: auto;
   border: 1px solid var(--dsw-border);
@@ -3031,6 +3031,11 @@ select.settings-account-input {
   display: flex;
   flex-direction: column;
   gap: 1px;
+}
+
+.inspector-more-menu .fsdb-detail-more-item {
+  width: auto;
+  white-space: nowrap;
 }
 
 .inspector-add-menu.is-fixed {
