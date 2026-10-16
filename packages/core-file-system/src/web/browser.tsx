@@ -142,6 +142,8 @@ import {
   subscribePageWidth,
 } from './page-width.ts'
 import { LayoutPrefsMenu } from './layout-prefs-menu.tsx'
+import { reportInspectorPaneMenu } from './inspector-pane-menu.tsx'
+import { ViewPaneMenu } from './pane-more-menu.tsx'
 import { HttpError, listCollection, readJson } from './db-client.ts'
 import { savedViewRecordPath } from '../paths.ts'
 import { findViewNeighbor, indexOnPage } from './view-adjacent.ts'
@@ -1445,6 +1447,32 @@ export function CollectionBrowser({
   const viewStarred = Boolean(activeViewId && isViewStarred(getStarredViews(), collectionPath, activeViewId))
   const pageWidth = getPageWidth()
   const pagePrefs = getPagePrefs()
+  useLayoutEffect(() => {
+    if (!inspectorPaneId || !embed || detailId) return
+    const canShare = Boolean(activeViewId) && !isSystemCollection(collectionPath) && !isIndexCollection(collectionPath)
+    reportInspectorPaneMenu(
+      inspectorPaneId,
+      <ViewPaneMenu
+        collectionPath={collectionPath}
+        viewId={activeViewId}
+        share={
+          canShare && activeViewId ? (
+            <SharePanel
+              embedded
+              localOnly={localData}
+              target={{
+                kind: 'view',
+                collection: collectionPath,
+                viewId: activeViewId,
+                title: activeView?.name ?? title,
+              }}
+            />
+          ) : null
+        }
+      />,
+    )
+    return () => reportInspectorPaneMenu(inspectorPaneId, null)
+  }, [activeView?.name, activeViewId, collectionPath, detailId, embed, inspectorPaneId, localData, title])
 
   useEffect(() => {
     hydratedDetail.current = ''
