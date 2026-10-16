@@ -77,6 +77,16 @@ export function viewTotalKey(path: string, view: Pick<SavedView, 'id' | 'sortFie
   return previewCacheKey(path, view)
 }
 
+export function orderViewTotalJobs<T extends { path: string }>(jobs: T[], collectionPath: string) {
+  return jobs
+    .map((job, index) => ({ job, index }))
+    .sort((a, b) => {
+      const diff = Number(a.job.path !== collectionPath) - Number(b.job.path !== collectionPath)
+      return diff !== 0 ? diff : a.index - b.index
+    })
+    .map((item) => item.job)
+}
+
 export async function fetchViewTotal(
   path: string,
   view: Pick<SavedView, 'id' | 'sortField' | 'sortDir' | 'filters' | 'query'>,

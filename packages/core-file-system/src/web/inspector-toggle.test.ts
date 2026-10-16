@@ -51,6 +51,15 @@ test('data sidebar keeps shares out of the navigation sections', () => {
   assert.doesNotMatch(sidebar, /shareCount/)
 })
 
+test('data sidebar loads view totals idle and current collection first', () => {
+  const sidebar = readFileSync(resolve(import.meta.dirname, './data-sidebar.tsx'), 'utf8')
+  assert.match(sidebar, /orderViewTotalJobs\(countJobs, collectionPath\)/)
+  assert.match(sidebar, /job.path === collectionPath/)
+  assert.match(sidebar, /for \(const job of rest\)/)
+  assert.match(sidebar, /requestIdleCallback/)
+  assert.doesNotMatch(sidebar, /Promise\.all\(\s*countJobs/)
+})
+
 test('data sidebar brand sits left with a collapse control on the right', () => {
   const sidebar = readFileSync(resolve(import.meta.dirname, './data-sidebar.tsx'), 'utf8')
   assert.match(sidebar, /app-side-bar-head-brand/)
@@ -504,6 +513,13 @@ test('create record sits at the right of the toolbar with a blue label', () => {
   assert.doesNotMatch(css, /\.fsdb-row-check \.fsdb-boolbox/)
   assert.match(css, /\.tasks-table\{[^}]*border-collapse:separate/)
   assert.match(browser, /function tableBodyRows/)
+  assert.match(browser, /tableWindowSlice/)
+  assert.match(browser, /tableWrapRef/)
+  assert.match(browser, /tablePaintNodes/)
+  assert.match(browser, /fsdb-table-pad/)
+  assert.match(browser, /wrapCells/)
+  assert.match(browser, /tableWindow\.start, tableWindow\.end/)
+  assert.match(css, /\.fsdb-page \.tasks-table tr\.fsdb-table-pad td/)
   assert.match(browser, /markCellOn/)
   assert.doesNotMatch(browser, /<TableBodyRows/)
   assert.match(browser, /fsdb-check-rail/)
