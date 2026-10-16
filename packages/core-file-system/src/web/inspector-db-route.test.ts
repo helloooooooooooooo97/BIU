@@ -1,6 +1,7 @@
 import { beforeEach, test } from 'vitest'
 import assert from 'node:assert/strict'
-import { databaseAllViewPath, databaseRecordPath } from './database-path.ts'
+import { builtinAllViewId } from '../catalog-views.ts'
+import { databaseAllViewPath, databaseRecordPath, databaseViewPath } from './database-path.ts'
 import {
   getInspectorDbPath,
   isInspectorDatabasePath,
@@ -10,6 +11,7 @@ import {
   showRecordInInspector,
   showInInspector,
   applyDatabaseReveal,
+  rememberInspectorWorkingView,
   applyDatabaseChannelPayload,
   isInspectorAgentWorking,
   setInspectorAgentWorking,
@@ -283,9 +285,9 @@ test('applyDatabaseReveal opens the table, or the record when an id is present',
   applyDatabaseReveal({ collection: '/tasks' })
   assert.equal(getInspectorDbPath('database:/tasks'), databaseAllViewPath('/tasks'))
   applyDatabaseReveal({ collection: '/tasks', recordId: 't9' })
-  assert.equal(getInspectorDbPath('database:/tasks'), '/database/tasks/record/t9')
+  assert.equal(getInspectorDbPath('database:/tasks'), databaseRecordPath('/tasks', 't9', builtinAllViewId('/tasks')))
   applyDatabaseReveal({ collection: '/' })
-  assert.equal(getInspectorDbPath('database:/tasks'), '/database/tasks/record/t9')
+  assert.equal(getInspectorDbPath('database:/tasks'), databaseRecordPath('/tasks', 't9', builtinAllViewId('/tasks')))
 })
 
 test('applyDatabaseChannelPayload marks the table as agent-working until done', () => {
@@ -384,6 +386,26 @@ test('applyDatabaseChannelPayload ignores other sessions and unsigned broadcasts
 test('applyDatabaseReveal opens a saved view when viewId is present', () => {
   applyDatabaseReveal({ collection: '/tasks', viewId: 'board-1' })
   assert.equal(getInspectorDbPath('database:/tasks'), '/database/tasks/view/board-1')
+})
+
+test('applyDatabaseReveal keeps the working view when the tool reveal has no viewId', () => {
+  rememberInspectorWorkingView('/pages', 'bug')
+  applyDatabaseReveal({ collection: '/pages' })
+  assert.equal(getInspectorDbPath('database:/pages'), databaseViewPath('/pages', 'bug'))
+  applyDatabaseReveal({ collection: '/pages', recordId: 'p9' })
+  assert.equal(getInspectorDbPath('database:/pages'), databaseRecordPath('/pages', 'p9', 'bug'))
+})
+
+test('applyDatabaseReveal keeps the list already open instead of the all view', () => {
+  setInspectorDbPath('database:/pages', databaseViewPath('/pages', 'bug'))
+  applyDatabaseReveal({ collection: '/pages' })
+  assert.equal(getInspectorDbPath('database:/pages'), databaseViewPath('/pages', 'bug'))
+})
+
+test('a revealed view becomes the working view for later table operations', () => {
+  applyDatabaseReveal({ collection: '/pages', viewId: 'bug' })
+  applyDatabaseReveal({ collection: '/pages' })
+  assert.equal(getInspectorDbPath('database:/pages'), databaseViewPath('/pages', 'bug'))
 })
 
 test('applyDatabaseChannelPayload upserts a created view then opens it', () => {
