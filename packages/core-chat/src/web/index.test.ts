@@ -1,5 +1,7 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { Context } from 'cordis'
 import { MapIcon } from '@heroicons/react/16/solid'
 import '@biu/type-host-context'
@@ -37,5 +39,27 @@ test('one plugin fills thread, trajectory, composer and approvals dock', async (
   assert.equal(usage.props?.().requiresSession, true)
   assert.deepEqual(traj.props?.().centerKinds, ['session'])
   assert.deepEqual(usage.props?.().centerKinds, ['session'])
+})
+
+test('chat-ui first paint does not statically import thread, composer, or antd', () => {
+  const index = readFileSync(resolve(import.meta.dirname, './index.ts'), 'utf8')
+  const chrome = readFileSync(resolve(import.meta.dirname, './sessions-chrome.tsx'), 'utf8')
+  const hud = readFileSync(resolve(import.meta.dirname, './live-hud.tsx'), 'utf8')
+  const thumbs = readFileSync(resolve(import.meta.dirname, './image-thumbs.tsx'), 'utf8')
+  const tools = readFileSync(resolve(import.meta.dirname, './tool-card.tsx'), 'utf8')
+  assert.doesNotMatch(index, /from '\.\/thread\.tsx'/)
+  assert.doesNotMatch(index, /from '\.\/composer\.tsx'/)
+  assert.doesNotMatch(index, /from '\.\/live-hud\.tsx'/)
+  assert.doesNotMatch(index, /from '\.\/approvals\.tsx'/)
+  assert.doesNotMatch(index, /from '\.\/trajectory\.tsx'/)
+  assert.doesNotMatch(index, /from '\.\/usage-panel\.tsx'/)
+  assert.match(index, /lazySlot\(\(\) => import\('\.\/thread\.tsx'\)/)
+  assert.match(index, /lazySlot\(\(\) => import\('\.\/composer\.tsx'\)/)
+  assert.doesNotMatch(chrome, /from '\.\/thread\.tsx'/)
+  assert.match(chrome, /lazy\(\(\) => import\('\.\/thread\.tsx'\)/)
+  assert.doesNotMatch(hud, /from '\.\/thread\.tsx'/)
+  assert.match(hud, /from '\.\/reply-display\.ts'/)
+  assert.doesNotMatch(thumbs, /from 'antd'/)
+  assert.doesNotMatch(tools, /from 'antd'/)
 })
 

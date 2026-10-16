@@ -7929,6 +7929,13 @@ html.dark .composer-send:disabled {
   cursor: zoom-in;
 }
 
+.chat-image-preview img {
+  max-width: min(92vw, 1200px);
+  max-height: 88vh;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
 .composer-image-thumb img,
 .composer-image-thumb .ant-image-img {
   display: block;
@@ -8081,10 +8088,14 @@ html.dark .composer-send:disabled {
   color: inherit;
 }
 
-.tool-artifact .ant-image {
+.tool-artifact .ant-image,
+.tool-artifact-open {
   display: block;
   width: 100%;
+  padding: 0;
+  border: 0;
   background: color-mix(in srgb, var(--dsw-sidebar) 92%, #fff);
+  cursor: zoom-in;
 }
 
 .tool-artifact .ant-image-img,

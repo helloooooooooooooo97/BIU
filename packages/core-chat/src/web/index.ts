@@ -1,17 +1,9 @@
-import { createElement } from 'react'
+import { createElement, lazy, Suspense, type ComponentType } from 'react'
 import type { Context } from 'cordis'
 import { SignalIcon, MapIcon } from '@heroicons/react/16/solid'
 import { bindSessionView, type SessionViewService } from '@biu/web-session-view'
 import type { SlotProps } from '@biu/web-slots'
-import { ApprovalsRail } from './approvals.tsx'
-import { ChatComposer } from './composer.tsx'
-import { ChatConfigBanner } from './config-banner.tsx'
-import { ChatLiveHud } from './live-hud.tsx'
 import { ChatSelectBubble } from './chat-select-bubble.tsx'
-import { ChatThread } from './thread.tsx'
-import { ChatMessageOutline } from './message-outline.tsx'
-import { TrajectoryView } from './trajectory.tsx'
-import { UsagePanel } from './usage-panel.tsx'
 import { bindProjectView, type ProjectViewService } from '@biu/web-project-view'
 import type { PickService } from '@biu/core-pick/web'
 import type { DatabaseUi } from '@biu/type-file-system/ui'
@@ -19,6 +11,24 @@ import { sessionsChrome } from './sessions-chrome.tsx'
 
 export const name = 'chat-ui'
 export const inject = ['slots', 'sessionView', 'projectView']
+
+function lazySlot<P extends object>(load: () => Promise<{ default: ComponentType<P> }>): ComponentType<P> {
+  const Comp = lazy(load)
+  return function LazySlot(props: P) {
+    return createElement(Suspense, { fallback: null }, createElement(Comp, props))
+  }
+}
+
+const ChatThread = lazySlot(() => import('./thread.tsx').then((m) => ({ default: m.ChatThread })))
+const ChatMessageOutline = lazySlot(() =>
+  import('./message-outline.tsx').then((m) => ({ default: m.ChatMessageOutline })),
+)
+const TrajectoryView = lazySlot(() => import('./trajectory.tsx').then((m) => ({ default: m.TrajectoryView })))
+const UsagePanel = lazySlot(() => import('./usage-panel.tsx').then((m) => ({ default: m.UsagePanel })))
+const ChatComposer = lazySlot(() => import('./composer.tsx').then((m) => ({ default: m.ChatComposer })))
+const ChatConfigBanner = lazySlot(() => import('./config-banner.tsx').then((m) => ({ default: m.ChatConfigBanner })))
+const ApprovalsRail = lazySlot(() => import('./approvals.tsx').then((m) => ({ default: m.ApprovalsRail })))
+const ChatLiveHud = lazySlot(() => import('./live-hud.tsx').then((m) => ({ default: m.ChatLiveHud })))
 
 function InspectorTrajectory(props: SlotProps) {
   return createElement(

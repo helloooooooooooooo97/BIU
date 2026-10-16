@@ -49,6 +49,9 @@ test('tool panels match the step bar: sidebar fill, no border', () => {
   assert.match(source, /parsed\.kind === 'str_replace'/)
   assert.match(source, /detail\.kind === 'chart'/)
   assert.match(source, /className="tool-chart"/)
+  assert.doesNotMatch(source, /from 'antd'/)
+  assert.doesNotMatch(source, /Image\.PreviewGroup/)
+  assert.match(source, /tool-artifact-open/)
 })
 
 test('any tool result can be zoomed: shared float chrome, no height caps inside', () => {

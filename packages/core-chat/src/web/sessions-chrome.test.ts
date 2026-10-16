@@ -20,6 +20,8 @@ test('session table uses mascot as the standalone icon property, title is just t
   assert.equal(typeof chrome.Content, 'function')
   assert.match(src, /ChatPane/)
   assert.match(src, /ChatStage/)
+  assert.doesNotMatch(src, /from '\.\/thread\.tsx'/)
+  assert.match(src, /lazy\(\(\) => import\('\.\/thread\.tsx'\)/)
   assert.match(src, /embed/)
   assert.doesNotMatch(src, /session-outline-host/)
   assert.doesNotMatch(src, /createPortal/)

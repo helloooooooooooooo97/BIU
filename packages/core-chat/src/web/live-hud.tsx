@@ -9,7 +9,7 @@ import type { SlotProps } from '@biu/web-slots'
 import { bindSessionView } from '@biu/web-session-view'
 import { UsageInline } from './usage-inline.tsx'
 import { MarkdownBody } from './markdown.tsx'
-import { splitReplyForDisplay } from './thread.tsx'
+import { splitReplyForDisplay } from './reply-display.ts'
 import {
   extractLiveHud,
   formatDuration,

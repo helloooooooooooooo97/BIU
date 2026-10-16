@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { ChatPane, ChatStage } from '@biu/public-ui'
 import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import { MASCOT_COLOR_NAME, MASCOT_EYE_NAME, MASCOT_SHAPE_NAME } from '@biu/type-session'
@@ -12,7 +12,7 @@ import {
   type SessionEvent,
   type TrajectoryUsage,
 } from '@biu/web-session-view'
-import { ChatNodeList } from './thread.tsx'
+const ChatNodeList = lazy(() => import('./thread.tsx').then((m) => ({ default: m.ChatNodeList })))
 
 function sessionMascot(record: DbRecord) {
   const raw = record.mascot
@@ -102,12 +102,14 @@ function SessionRecordChat({ record, value }: FsContentProps) {
       embed
       thread={
         <ChatStage variant="pane">
-          <ChatNodeList
-            nodes={nodes}
-            sessionId={sessionId}
-            onInspect={() => undefined}
-            onFork={() => undefined}
-          />
+          <Suspense fallback={null}>
+            <ChatNodeList
+              nodes={nodes}
+              sessionId={sessionId}
+              onInspect={() => undefined}
+              onFork={() => undefined}
+            />
+          </Suspense>
         </ChatStage>
       }
     />
