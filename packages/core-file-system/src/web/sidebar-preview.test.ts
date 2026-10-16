@@ -4,6 +4,7 @@ import {
   getPreviewTotal,
   nextPreviewLimit,
   normalizeRecordEmoji,
+  orderViewTotalJobs,
   previewCacheKey,
   previewColumns,
   recordPreviewLabel,
@@ -52,4 +53,12 @@ test('preview pages stay small and stop at max', () => {
   assert.equal(nextPreviewLimit(20, 25), 5)
   assert.equal(nextPreviewLimit(100, 500), 0)
   assert.equal(nextPreviewLimit(25, 25), 0)
+})
+
+test('view total jobs put the open collection first and keep the rest stable', () => {
+  const jobs = [{ path: '/pages' }, { path: '/tasks' }, { path: '/pages' }, { path: '/skills' }]
+  assert.deepEqual(
+    orderViewTotalJobs(jobs, '/tasks').map((job) => job.path),
+    ['/tasks', '/pages', '/pages', '/skills'],
+  )
 })

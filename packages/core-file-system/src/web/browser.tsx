@@ -147,6 +147,7 @@ import { ViewPaneMenu } from './pane-more-menu.tsx'
 import { HttpError, listCollection, readJson } from './db-client.ts'
 import { savedViewRecordPath } from '../paths.ts'
 import { findViewNeighbor, indexOnPage } from './view-adjacent.ts'
+import { tableWindowSlice } from './table-window.ts'
 import { rememberPreviewTotal, viewTotalKey } from './sidebar-preview.ts'
 import { catalogLockFilters, isReadOnlyViewId, mergeTableViews, parseBuiltinScopeViewId, stubBuiltinBlockKindView, viewsForScope, type DataScope } from '../catalog-views.ts'
 import { SAVED_VIEW_EVENT, rememberInspectorWorkingView, showRecordInInspector } from './inspector-db-route.ts'
@@ -487,6 +488,12 @@ const EMPTY_FILTERS: Record<string, string> = {}
 const CELL_POP_DRAG_PX = 6
 const CELL_POP_IGNORE =
   '.fsdb-row-check, .fsdb-col-resizer, .tasks-row-tools, .tasks-title-open, .fsdb-action-btn, .fsdb-action-tag, .fsdb-boolbtn, .fsdb-thumb-btn, .fsdb-thumb, .ant-image, .fsdb-file-tools, .fsdb-ref-chip, .db-datetime, .ant-picker, .fsdb-scope-detail'
+
+type TablePaintNode =
+  | { kind: 'empty'; key: string }
+  | { kind: 'group-head'; key: string; groupKey: string; label: string; count: number }
+  | { kind: 'row'; key: string; keyPrefix: string; row: DbRecord; depth: number; hasKids: boolean; kidCount: number }
+  | { kind: 'group-pager'; key: string; groupKey: string; count: number; pageIndex: number }
 
 export function CollectionBrowser({
   moduleId,
@@ -1289,11 +1296,79 @@ export function CollectionBrowser({
     const rows = grouping ? grouped.flatMap((group) => group.rows) : visible
     return flattenRows(rows).map((item) => item.row.id)
   }, [flattenRows, grouped, grouping, visible])
+  const tablePaintNodes = useMemo(() => {
+    const nodes: TablePaintNode[] = []
+    if (grouping) {
+      if (!grouped.length) {
+        nodes.push({ kind: 'empty', key: 'empty' })
+        return nodes
+      }
+      for (const group of grouped) {
+        const groupKey = group.key || 'unset'
+        nodes.push({
+          kind: 'group-head',
+          key: `gh:${groupKey}`,
+          groupKey,
+          label: group.label,
+          count: group.rows.length,
+        })
+        if (collapsedGroups[groupKey]) continue
+        const pages = Math.max(1, Math.ceil(group.rows.length / pageSize))
+        const pageIndex = Math.min(groupPages[groupKey] ?? 0, pages - 1)
+        const listed = flattenRows(group.rows.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize))
+        for (const item of listed) {
+          nodes.push({
+            kind: 'row',
+            key: `${groupKey}:${item.row.id}`,
+            keyPrefix: `${group.key}:`,
+            row: item.row,
+            depth: item.depth,
+            hasKids: item.hasKids,
+            kidCount: item.kidCount,
+          })
+        }
+        nodes.push({
+          kind: 'group-pager',
+          key: `gp:${groupKey}`,
+          groupKey,
+          count: group.rows.length,
+          pageIndex,
+        })
+      }
+      return nodes
+    }
+    const listed = flattenRows(visible)
+    if (!listed.length) {
+      nodes.push({ kind: 'empty', key: 'empty' })
+      return nodes
+    }
+    for (const item of listed) {
+      nodes.push({
+        kind: 'row',
+        key: item.row.id,
+        keyPrefix: '',
+        row: item.row,
+        depth: item.depth,
+        hasKids: item.hasKids,
+        kidCount: item.kidCount,
+      })
+    }
+    return nodes
+  }, [collapsedGroups, flattenRows, groupPages, grouped, grouping, pageSize, visible])
   const tableColSpan = Math.max(columns.length, 1)
   const tableRef = useRef<HTMLTableElement>(null)
+  const tableWrapRef = useRef<HTMLDivElement>(null)
   const checkStackRef = useRef<HTMLDivElement>(null)
   const checkHoverRef = useRef<string | 'head' | null>(null)
+  const [tableScroll, setTableScroll] = useState({ top: 0, height: 0 })
   const [checkSlots, setCheckSlots] = useState<{ kind: 'head' | 'gap' | 'row'; id?: string; top: number; h: number }[]>([])
+  const tableWindow = useMemo(
+    () =>
+      wrapCells
+        ? { start: 0, end: tablePaintNodes.length, padTop: 0, padBottom: 0 }
+        : tableWindowSlice(tablePaintNodes.length, tableScroll.top, tableScroll.height),
+    [tablePaintNodes.length, tableScroll.height, tableScroll.top, wrapCells],
+  )
 
   const paintCheckHover = useCallback((next: string | 'head' | null, force = false) => {
     if (!force && checkHoverRef.current === next) return
@@ -1352,11 +1427,58 @@ export function CollectionBrowser({
       cancelAnimationFrame(raf)
       ro.disconnect()
     }
-  }, [collapsed, collapsedGroups, columns, grouping, grouped, items, page, pageSize, wrapCells, truncateCells, columnWidths])
+  }, [
+    collapsed,
+    collapsedGroups,
+    columns,
+    grouping,
+    grouped,
+    items,
+    page,
+    pageSize,
+    tableWindow.start, tableWindow.end, tableWindow.padTop, tableWindow.padBottom,
+    wrapCells,
+    truncateCells,
+    columnWidths,
+  ])
 
   useLayoutEffect(() => {
     paintCheckHover(checkHoverRef.current, true)
   }, [checkSlots, paintCheckHover])
+
+  useLayoutEffect(() => {
+    const wrap = tableWrapRef.current
+    if (!wrap) return
+    let raf = 0
+    const sync = () => {
+      const top = wrap.scrollTop
+      const height = wrap.clientHeight
+      setTableScroll((prev) => (prev.top === top && prev.height === height ? prev : { top, height }))
+    }
+    const onScroll = () => {
+      if (raf) return
+      raf = requestAnimationFrame(() => {
+        raf = 0
+        sync()
+      })
+    }
+    sync()
+    wrap.addEventListener('scroll', onScroll, { passive: true })
+    const ro = new ResizeObserver(onScroll)
+    ro.observe(wrap)
+    return () => {
+      cancelAnimationFrame(raf)
+      wrap.removeEventListener('scroll', onScroll)
+      ro.disconnect()
+    }
+  }, [customView, rowView])
+
+  useLayoutEffect(() => {
+    const wrap = tableWrapRef.current
+    if (!wrap) return
+    wrap.scrollTop = 0
+    setTableScroll((prev) => ({ top: 0, height: wrap.clientHeight || prev.height }))
+  }, [activeViewId, collectionPath, groupBy, page, pageSize, query])
 
   const listedSelected = detailId ? items.find((item) => item.id === detailId) : undefined
   const selected = useMemo(() => {
@@ -2611,81 +2733,135 @@ export function CollectionBrowser({
     )
   }
 
+  function tableRecordRow(row: DbRecord, depth: number, hasKids: boolean, kidCount: number, rowKey: string) {
+    const cellPick = cellPickRef.current
+    return (
+      <tr
+        key={rowKey}
+        data-record-id={row.id}
+        className={row.id === detailId ? 'is-active' : undefined}
+        {...recordPick(row)}
+      >
+        {columns.map((col) => (
+          <td
+            key={col.key}
+            {...cellPickOf(row, col.key, col.field)}
+            style={colWidthStyle(columnWidths[col.key])}
+            className={[
+              col.key === schema?.labelField ? 'is-pin-col' : '',
+              cellPick?.id === row.id && cellPick.key === col.key
+                ? cellFieldWritable(col.field)
+                  ? 'is-cell-on'
+                  : 'is-cell-on is-cell-ro'
+                : '',
+            ].filter(Boolean).join(' ') || undefined}
+            onPointerDown={(event) => {
+              if (event.button !== 0) return
+              const hit = event.target as HTMLElement | null
+              if (hit?.closest(CELL_POP_IGNORE)) return
+              const td = event.currentTarget
+              cellAnchorRef.current = td
+              cellPickRef.current = { id: row.id, key: col.key }
+              markCellOn(td, cellFieldWritable(col.field))
+              cellPopPtrRef.current = { x: event.clientX, y: event.clientY, dragged: false }
+            }}
+            onPointerMove={(event) => {
+              const start = cellPopPtrRef.current
+              if (!start || start.dragged) return
+              if (Math.hypot(event.clientX - start.x, event.clientY - start.y) < CELL_POP_DRAG_PX) return
+              start.dragged = true
+              setCellPop(null)
+            }}
+            onClick={(event) => {
+              const hit = event.target as HTMLElement | null
+              if (hit?.closest(CELL_POP_IGNORE)) return
+              const start = cellPopPtrRef.current
+              cellPopPtrRef.current = null
+              if (start?.dragged) return
+              if (start && Math.hypot(event.clientX - start.x, event.clientY - start.y) >= CELL_POP_DRAG_PX) return
+              const kind = resolveFieldType(col.field)
+              setCellPop(cellUsesPop(kind, col.field.writable) ? { id: row.id, key: col.key } : null)
+            }}
+          >
+            {col.key === schema?.labelField ? (
+              <RecordTitle row={row} depth={depth} hasKids={hasKids} kidCount={kidCount} />
+            ) : col.key === 'actions' ? (
+              <RecordActions row={row} />
+            ) : (
+              <span className="fsdb-cell">{renderCell(row, col.key, col.field, 'table')}</span>
+            )}
+          </td>
+        ))}
+      </tr>
+    )
+  }
+
   function tableBodyRows(rows: DbRecord[], keyPrefix = '') {
     const listed = flattenRows(rows)
-    const span = tableColSpan
-    const cellPick = cellPickRef.current
     if (!listed.length) {
       return (
         <tr>
-          <td colSpan={span} className="fsdb-empty">
+          <td colSpan={tableColSpan} className="fsdb-empty">
             {error ? '加载失败' : '暂无记录'}
           </td>
         </tr>
       )
     }
+    return <>{listed.map((item) => tableRecordRow(item.row, item.depth, item.hasKids, item.kidCount, `${keyPrefix}${item.row.id}`))}</>
+  }
+
+  function tablePadRow(px: number, side: 'top' | 'bottom') {
+    if (px <= 0) return null
     return (
-      <>
-        {listed.map(({ row, depth, hasKids, kidCount }) => (
-          <tr
-            key={`${keyPrefix}${row.id}`}
-            data-record-id={row.id}
-            className={row.id === detailId ? 'is-active' : undefined}
-            {...recordPick(row)}
-          >
-            {columns.map((col) => (
-              <td
-                key={col.key}
-                {...cellPickOf(row, col.key, col.field)}
-                style={colWidthStyle(columnWidths[col.key])}
-                className={[
-                  col.key === schema?.labelField ? 'is-pin-col' : '',
-                  cellPick?.id === row.id && cellPick.key === col.key
-                    ? cellFieldWritable(col.field)
-                      ? 'is-cell-on'
-                      : 'is-cell-on is-cell-ro'
-                    : '',
-                ].filter(Boolean).join(' ') || undefined}
-                onPointerDown={(event) => {
-                  if (event.button !== 0) return
-                  const hit = event.target as HTMLElement | null
-                  if (hit?.closest(CELL_POP_IGNORE)) return
-                  const td = event.currentTarget
-                  cellAnchorRef.current = td
-                  cellPickRef.current = { id: row.id, key: col.key }
-                  markCellOn(td, cellFieldWritable(col.field))
-                  cellPopPtrRef.current = { x: event.clientX, y: event.clientY, dragged: false }
-                }}
-                onPointerMove={(event) => {
-                  const start = cellPopPtrRef.current
-                  if (!start || start.dragged) return
-                  if (Math.hypot(event.clientX - start.x, event.clientY - start.y) < CELL_POP_DRAG_PX) return
-                  start.dragged = true
-                  setCellPop(null)
-                }}
-                onClick={(event) => {
-                  const hit = event.target as HTMLElement | null
-                  if (hit?.closest(CELL_POP_IGNORE)) return
-                  const start = cellPopPtrRef.current
-                  cellPopPtrRef.current = null
-                  if (start?.dragged) return
-                  if (start && Math.hypot(event.clientX - start.x, event.clientY - start.y) >= CELL_POP_DRAG_PX) return
-                  const kind = resolveFieldType(col.field)
-                  setCellPop(cellUsesPop(kind, col.field.writable) ? { id: row.id, key: col.key } : null)
-                }}
+      <tr key={`pad-${side}`} className="fsdb-table-pad" aria-hidden>
+        <td colSpan={tableColSpan} style={{ height: px, padding: 0, border: 0 }} />
+      </tr>
+    )
+  }
+
+  function renderPaintNode(node: TablePaintNode) {
+    if (node.kind === 'empty') return tableBodyRows([])
+    if (node.kind === 'row') return tableRecordRow(node.row, node.depth, node.hasKids, node.kidCount, node.key)
+    if (node.kind === 'group-head') {
+      return (
+        <tr className="fsdb-group-row">
+          <td colSpan={tableColSpan}>
+            <GroupHead groupKey={node.groupKey} label={node.label} count={node.count} />
+          </td>
+        </tr>
+      )
+    }
+    const pages = Math.max(1, Math.ceil(node.count / pageSize))
+    const pageIndex = Math.min(node.pageIndex, pages - 1)
+    return (
+      <tr className="fsdb-group-pager">
+        <td colSpan={tableColSpan}>
+          <div className="fsdb-pager">
+            <span className="fsdb-pager-meta">{node.count}</span>
+            <div className="fsdb-pager-nav">
+              <PagerSizeControl pageSize={pageSize} onChange={setPageSize} />
+              <button
+                type="button"
+                className="tasks-icon-btn"
+                aria-label="上一页"
+                disabled={pageIndex <= 0}
+                onClick={() => setGroupPages((prev) => ({ ...prev, [node.groupKey]: Math.max(0, pageIndex - 1) }))}
               >
-                {col.key === schema?.labelField ? (
-                  <RecordTitle row={row} depth={depth} hasKids={hasKids} kidCount={kidCount} />
-                ) : col.key === 'actions' ? (
-                  <RecordActions row={row} />
-                ) : (
-                  <span className="fsdb-cell">{renderCell(row, col.key, col.field, 'table')}</span>
-                )}
-              </td>
-            ))}
-          </tr>
-        ))}
-      </>
+                <ChevronLeftIcon aria-hidden className="size-[14px]" />
+              </button>
+              <button
+                type="button"
+                className="tasks-icon-btn"
+                aria-label="下一页"
+                disabled={(pageIndex + 1) * pageSize >= node.count}
+                onClick={() => setGroupPages((prev) => ({ ...prev, [node.groupKey]: pageIndex + 1 }))}
+              >
+                <ChevronRightIcon aria-hidden className="size-[14px]" />
+              </button>
+            </div>
+          </div>
+        </td>
+      </tr>
     )
   }
 
@@ -3489,7 +3665,7 @@ export function CollectionBrowser({
               </PluginSurface>
             ) : null}
             {!customView && !rowView ? (
-              <div className="tasks-table-wrap">
+              <div className="tasks-table-wrap" ref={tableWrapRef}>
                 {pickedIds.length ? (
                   <div className="fsdb-bulk" data-testid="fsdb-bulk-bar">
                     <span
@@ -3641,61 +3817,11 @@ export function CollectionBrowser({
               </tr>
             </thead>
             <tbody>
-                    {grouping ? (
-                      grouped.length ? (
-                        grouped.map((group) => (
-                          <Fragment key={group.key || 'unset'}>
-                            <tr className="fsdb-group-row">
-                              <td colSpan={tableColSpan}>
-                                <GroupHead groupKey={group.key || 'unset'} label={group.label} count={group.rows.length} />
-                              </td>
-                            </tr>
-                            {collapsedGroups[group.key || 'unset'] ? null : (() => {
-                              const key = group.key || 'unset'
-                              const pages = Math.max(1, Math.ceil(group.rows.length / pageSize))
-                              const pageIndex = Math.min(groupPages[key] ?? 0, pages - 1)
-                              return (
-                              <>
-                                {tableBodyRows(group.rows.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize), `${group.key}:`)}
-                                <tr className="fsdb-group-pager">
-                                  <td colSpan={tableColSpan}>
-                                    <div className="fsdb-pager">
-                                      <span className="fsdb-pager-meta">{group.rows.length}</span>
-                                      <div className="fsdb-pager-nav">
-                                        <PagerSizeControl pageSize={pageSize} onChange={setPageSize} />
-                                        <button
-                                          type="button"
-                                          className="tasks-icon-btn"
-                                          aria-label="上一页"
-                                          disabled={pageIndex <= 0}
-                                          onClick={() => setGroupPages((prev) => ({ ...prev, [key]: Math.max(0, pageIndex - 1) }))}
-                                        >
-                                          <ChevronLeftIcon aria-hidden className="size-[14px]" />
-                                        </button>
-                                        <button
-                                          type="button"
-                                          className="tasks-icon-btn"
-                                          aria-label="下一页"
-                                          disabled={(pageIndex + 1) * pageSize >= group.rows.length}
-                                          onClick={() => setGroupPages((prev) => ({ ...prev, [key]: pageIndex + 1 }))}
-                                        >
-                                          <ChevronRightIcon aria-hidden className="size-[14px]" />
-                                        </button>
-                                      </div>
-                                    </div>
-                                  </td>
-                                </tr>
-                              </>
-                              )
-                            })()}
-                          </Fragment>
-                        ))
-                      ) : (
-                        tableBodyRows([])
-                      )
-                    ) : (
-                      tableBodyRows(visible)
-                    )}
+                    {tablePadRow(tableWindow.padTop, 'top')}
+                    {tablePaintNodes.slice(tableWindow.start, tableWindow.end).map((node) => (
+                      <Fragment key={node.key}>{renderPaintNode(node)}</Fragment>
+                    ))}
+                    {tablePadRow(tableWindow.padBottom, 'bottom')}
             </tbody>
           </table>
                 </div>

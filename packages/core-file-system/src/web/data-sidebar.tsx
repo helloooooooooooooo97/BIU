@@ -25,6 +25,7 @@ import {
   getPreviewTotal,
   getPreviewTotalsVersion,
   nextPreviewLimit,
+  orderViewTotalJobs,
   previewCacheKey,
   recordPreviewEmoji,
   recordPreviewLabel,
@@ -560,18 +561,36 @@ export const DataSidebar = memo(function DataSidebar({
   const countJobKey = countJobs.map((job) => viewTotalKey(job.path, job.view)).join('|')
   useEffect(() => {
     let cancelled = false
-    void Promise.all(
-      countJobs.map((job) => {
-        if (getPreviewTotal(viewTotalKey(job.path, job.view)) != null) return Promise.resolve()
-        return fetchViewTotal(job.path, job.view).catch(() => {
+    const jobs = orderViewTotalJobs(countJobs, collectionPath)
+    const urgent = jobs.filter((job) => job.path === collectionPath)
+    const rest = jobs.filter((job) => job.path !== collectionPath)
+    void (async () => {
+      await Promise.all(
+        urgent.map((job) => {
+          if (getPreviewTotal(viewTotalKey(job.path, job.view)) != null) return Promise.resolve()
+          return fetchViewTotal(job.path, job.view).catch(() => {
+            if (cancelled) return
+          })
+        }),
+      )
+      for (const job of rest) {
+        if (cancelled) return
+        if (getPreviewTotal(viewTotalKey(job.path, job.view)) != null) continue
+        await new Promise<void>((resolve) => {
+          const ric = window.requestIdleCallback
+          if (typeof ric === 'function') ric(() => resolve(), { timeout: 200 })
+          else window.setTimeout(() => resolve(), 0)
+        })
+        if (cancelled) return
+        await fetchViewTotal(job.path, job.view).catch(() => {
           if (cancelled) return
         })
-      }),
-    )
+      }
+    })()
     return () => {
       cancelled = true
     }
-  }, [countJobKey, countJobs])
+  }, [collectionPath, countJobKey, countJobs])
 
   useEffect(() => {
     let cancelled = false
