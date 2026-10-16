@@ -147,6 +147,7 @@ test('record snapshot only includes the shared row', async () => {
   const share = shares.upsert({ kind: 'record', collection: '/notes', recordId: 'open' })
   const snap = await buildShareSnapshot(db, views, share)
   assert.deepEqual(snap.records.map((row) => row.id), ['open'])
+  assert.equal(snap.records[0]?.shareRole, '阅读')
   assert.equal(snap.contents.open, 'ok')
   assert.equal(snap.schema.fields.title?.writable, false)
   assert.equal(snap.allowCopy, true)
@@ -237,4 +238,5 @@ test('builtin view snapshot titles use 全部 plus the collection label', async 
   assert.equal(snap.title, '全部页面')
   assert.equal(snap.collectionLabel, '页面')
   assert.equal(snap.view?.name, '全部页面')
+  assert.equal(snap.records[0]?.shareRole, '阅读')
 })

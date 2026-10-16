@@ -1440,6 +1440,11 @@ export class DatabaseService extends Service implements Database {
 
   /** 当前用户对这一条的权限。记录上的角色和视图授权取较高的一级。 */
   private shareRoleLabel(spec: CollectionSpec, record: DbRecord) {
+    const id = String(record.id ?? '')
+    // 本机局域网链接没有协作者角色。分享出去的人只能看，不要显示成管理。
+    if (this.deviceWorkspace() && this.hasPublicShare(spec.path, id, record, this.ownershipOf(spec.path, id))) {
+      return '阅读'
+    }
     const authorization = this.authorization()
     const actor = authorization?.currentActor()
     if (!authorization || !actor) return '管理'
