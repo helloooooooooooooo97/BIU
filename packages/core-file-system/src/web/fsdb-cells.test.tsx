@@ -127,6 +127,7 @@ test('table image cells skip antd; editors still use Image preview', () => {
   const mediaField = readFileSync(resolve(import.meta.dirname, './cell-media-field.tsx'), 'utf8')
   const thumbs = readFileSync(resolve(import.meta.dirname, '../../../core-chat/src/web/image-thumbs.tsx'), 'utf8')
   const tools = readFileSync(resolve(import.meta.dirname, '../../../core-chat/src/web/tool-card.tsx'), 'utf8')
+  assert.match(cells, /deferMissing=\{plain\}/)
   assert.doesNotMatch(cells, /from 'antd'/)
   assert.doesNotMatch(cells, /Image\.PreviewGroup/)
   assert.doesNotMatch(cells, /fsdb-lightbox/)

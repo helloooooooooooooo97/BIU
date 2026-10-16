@@ -68,13 +68,14 @@ function useResolvedPeerLabels(
   seed: RecordLinkPeer[] | undefined,
   collectionPath: string | undefined,
   labelField?: string,
+  deferMissing?: boolean,
 ) {
   const seedMap = useMemo(() => new Map((seed ?? []).map((item) => [item.id, item.label])), [seed])
   const idKey = ids.join('\0')
   const [extra, setExtra] = useState<Record<string, string>>({})
   useEffect(() => {
     const missing = ids.filter((id) => !seedMap.has(id))
-    if (!collectionPath || !missing.length) {
+    if (deferMissing || !collectionPath || !missing.length) {
       setExtra({})
       return
     }
@@ -91,7 +92,7 @@ function useResolvedPeerLabels(
     return () => {
       cancelled = true
     }
-  }, [collectionPath, idKey, labelField, seedMap])
+  }, [collectionPath, deferMissing, idKey, labelField, seedMap])
   return (id: string) => {
     const labeled = seedMap.get(id) || extra[id]
     return labeled && labeled.trim() ? labeled : ''
@@ -105,6 +106,7 @@ export function RecordLinkChips({
   records,
   collectionPath,
   labelField,
+  deferMissing,
 }: {
   field?: FieldSpec
   fieldKey: string
@@ -112,11 +114,12 @@ export function RecordLinkChips({
   records?: DbRecord[]
   collectionPath?: string
   labelField?: string
+  deferMissing?: boolean
 }) {
   const ids = recordLinkIds(field, value, fieldKey)
   const peerPath = linkCollection(field, collectionPath)
   const seed = useMemo(() => asPeers(records ?? [], labelField), [labelField, records])
-  const labelOfId = useResolvedPeerLabels(ids, seed, peerPath, labelField)
+  const labelOfId = useResolvedPeerLabels(ids, seed, peerPath, labelField, deferMissing)
   if (!ids.length) return null
   return (
     <span className="fsdb-ref-chips">
@@ -133,7 +136,7 @@ export function RecordLinkChips({
               jumpRecord(peerPath, id)
             }}
           >
-            <span className="fsdb-ref-chip-title">{label || '…'}</span>
+            <span className="fsdb-ref-chip-title">{label || (deferMissing ? id : '…')}</span>
             <ArrowTopRightOnSquareIcon className="size-3 shrink-0 opacity-70" aria-hidden />
           </button>
         )

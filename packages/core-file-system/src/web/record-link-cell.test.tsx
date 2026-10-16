@@ -78,6 +78,35 @@ test('cross-table ref chips load the title from field.collection', async () => {
   }
 })
 
+test('table chips do not fetch missing peers on first paint', async () => {
+  let calls = 0
+  const original = globalThis.fetch
+  globalThis.fetch = (async () => {
+    calls += 1
+    return new Response(JSON.stringify({ value: { id: 'n2', title: '依赖页' } }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }) as typeof fetch
+  try {
+    const { container } = render(
+      <RecordLinkChips
+        field={{ type: 'ref' }}
+        fieldKey="parentId"
+        value="n2"
+        collectionPath="/notes"
+        records={[{ id: 'n1', title: '当前' }]}
+        deferMissing
+      />,
+    )
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    assert.equal(calls, 0)
+    assert.equal(container.querySelector('.fsdb-ref-chip-title')?.textContent, 'n2')
+  } finally {
+    globalThis.fetch = original
+  }
+})
+
 test('cross-table chips share one read for the same peer id', async () => {
   let calls = 0
   const original = globalThis.fetch

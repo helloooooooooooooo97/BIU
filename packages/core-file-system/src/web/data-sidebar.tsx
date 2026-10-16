@@ -1,7 +1,6 @@
-import { memo, useEffect, useLayoutEffect, useMemo, useState, useSyncExternalStore, type MouseEvent } from 'react'
+import { lazy, memo, Suspense, useEffect, useLayoutEffect, useMemo, useState, useSyncExternalStore, type MouseEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { ChatCount } from '@biu/public-ui/chat-count'
-import { RecordEmojiBoard } from '@biu/public-ui/emoji-board'
 import { SidebarFold } from '@biu/public-ui/sidebar-fold'
 import {
   ChevronDoubleLeftIcon,
@@ -69,6 +68,8 @@ import { TableGlyph, ViewModeGlyph } from './nav-glyphs.tsx'
 import { getDatabaseUi } from './database-ui.ts'
 import { RecordMark, recordMarkStub } from './record-mark.tsx'
 import { SidebarBrandLockup } from '@biu/public-mascot'
+
+const RecordEmojiBoard = lazy(() => import('@biu/public-ui/emoji-board').then((m) => ({ default: m.RecordEmojiBoard })))
 
 type PreviewState = {
   items: DbRecord[]
@@ -268,15 +269,17 @@ function ViewRecordPreview({
   function emojiBoard(row: DbRecord) {
     if (pickerId !== row.id || !pickerAnchor) return null
     return (
-      <RecordEmojiBoard
-        anchor={pickerAnchor}
-        onPick={(next) => void saveEmoji(row, next)}
-        onClear={() => void saveEmoji(row, '')}
-        onClose={() => {
-          setPickerId(null)
-          setPickerAnchor(null)
-        }}
-      />
+      <Suspense fallback={null}>
+        <RecordEmojiBoard
+          anchor={pickerAnchor}
+          onPick={(next) => void saveEmoji(row, next)}
+          onClear={() => void saveEmoji(row, '')}
+          onClose={() => {
+            setPickerId(null)
+            setPickerAnchor(null)
+          }}
+        />
+      </Suspense>
     )
   }
 
@@ -615,7 +618,8 @@ export const DataSidebar = memo(function DataSidebar({
   const countJobKey = countJobs.map((job) => viewTotalKey(job.path, job.view)).join('|')
   useEffect(() => {
     let cancelled = false
-    const idle = window.setTimeout(() => {
+    const stop = whenListIdle(() => {
+      if (cancelled) return
       const jobs = orderViewTotalJobs(countJobs, collectionPath)
       const urgent = jobs.filter((job) => job.path === collectionPath)
       const rest = jobs.filter((job) => job.path !== collectionPath)
@@ -645,37 +649,41 @@ export const DataSidebar = memo(function DataSidebar({
     }, VIEW_TOTAL_IDLE_MS)
     return () => {
       cancelled = true
-      window.clearTimeout(idle)
+      stop()
     }
   }, [collectionPath, countJobKey, countJobs])
 
   useEffect(() => {
     let cancelled = false
-    void Promise.all(
-      starredRecords.map(async (item) => {
-        if (item.label || peekRecord(item.path, item.recordId)?.label) {
-          if (item.label) rememberRecords(item.path, [{ id: item.recordId, label: item.label, emoji: item.emoji }])
-          return
-        }
-        try {
-          const data = await readJson<{ value?: DbRecord }>(`/api/db/read?path=${encodeURIComponent(`${item.path}/${item.recordId}`)}`)
-          const row = data.value
-          if (cancelled || !row?.id) return
-          const label = recordPreviewLabel(row)
-          const emoji = recordPreviewEmoji(row)
-          rememberRecords(item.path, [{ id: row.id, label, emoji, mascot: row.mascot }])
-          persistStarredRecords(
-            getStarredRecords().map((entry) =>
-              entry.path === item.path && entry.recordId === item.recordId ? { ...entry, label, emoji } : entry,
-            ),
-          )
-        } catch {
-          /* ignore */
-        }
-      }),
-    )
+    const stop = whenListIdle(() => {
+      if (cancelled) return
+      void Promise.all(
+        starredRecords.map(async (item) => {
+          if (item.label || peekRecord(item.path, item.recordId)?.label) {
+            if (item.label) rememberRecords(item.path, [{ id: item.recordId, label: item.label, emoji: item.emoji }])
+            return
+          }
+          try {
+            const data = await readJson<{ value?: DbRecord }>(`/api/db/read?path=${encodeURIComponent(`${item.path}/${item.recordId}`)}`)
+            const row = data.value
+            if (cancelled || !row?.id) return
+            const label = recordPreviewLabel(row)
+            const emoji = recordPreviewEmoji(row)
+            rememberRecords(item.path, [{ id: row.id, label, emoji, mascot: row.mascot }])
+            persistStarredRecords(
+              getStarredRecords().map((entry) =>
+                entry.path === item.path && entry.recordId === item.recordId ? { ...entry, label, emoji } : entry,
+              ),
+            )
+          } catch {
+            /* ignore */
+          }
+        }),
+      )
+    })
     return () => {
       cancelled = true
+      stop()
     }
   }, [starredRecords])
 

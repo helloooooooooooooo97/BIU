@@ -71,7 +71,6 @@ import {
 import { listGroupedCollection } from './group-list.ts'
 import { AppDialog, CheckRow } from './controls.tsx'
 import { DataSidebar } from './data-sidebar.tsx'
-import { ScopeOverview } from './scope-overview.tsx'
 import { buildCrumbs, type CrumbTarget } from './sidebar-nav.ts'
 import { CrumbTrail } from './crumb-trail.tsx'
 import { fieldPickAttrs, pickDomAttrs, recordPickKind, recordSourcePath } from './pick-dom.ts'
@@ -168,6 +167,7 @@ const LazyShareButton = lazy(() => import('./share-popover.tsx').then((m) => ({ 
 const LazySharePanel = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.SharePanel })))
 const LazyShareRoleDetail = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.ShareRoleDetail })))
 const LazyShareScopeDetail = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.ShareScopeDetail })))
+const ScopeOverview = lazy(() => import('./scope-overview.tsx').then((m) => ({ default: m.ScopeOverview })))
 
 function ShareButton(props: ComponentProps<typeof LazyShareButton>) {
   return <Suspense fallback={null}><LazyShareButton {...props} /></Suspense>
@@ -582,6 +582,7 @@ export function CollectionBrowser({
   const noticeTimer = useRef<number>(0)
   const quietUntil = useRef(0)
   const reloadGen = useRef(0)
+  const reloadInflightRef = useRef<{ key: string; promise: Promise<boolean> } | null>(null)
   const listReadySent = useRef(false)
   const confirmedCreates = useRef(new Set<string>())
   const hydratePath = useRef('')
@@ -744,9 +745,13 @@ export function CollectionBrowser({
   const skipColumnReload = useRef(false)
   const itemsRef = useRef(items)
   itemsRef.current = items
+  const reloadKey = `${dataPath}\0${groupBy ? JSON.stringify(groupPages) : page}\0${pageSize}\0${fetchQuery}\0${sortField}\0${sortDir}\0${sortsStateKey(sorts)}\0${JSON.stringify(queryFilters)}\0${activeViewId ?? ''}\0${groupBy}\0${groupFillKeys.join('\0')}\0${wrapCells ? 1 : 0}`
   const reload = useCallback(async () => {
     if (Date.now() < quietUntil.current) return true
+    const hit = reloadInflightRef.current
+    if (hit?.key === reloadKey) return hit.promise
     const gen = ++reloadGen.current
+    const promise = (async () => {
     const listOpts = {
       path: dataPath,
       query: fetchQuery,
@@ -860,10 +865,16 @@ export function CollectionBrowser({
       setError(String(err))
       return false
     }
-  }, [activeViewId, collectionPath, dataPath, fetchQuery, groupBy, groupFillKeys, listColumns, queryFilters, page, pageSize, sortDir, sortField, sorts, wrapCells])
+    })()
+    reloadInflightRef.current = { key: reloadKey, promise }
+    try {
+      return await promise
+    } finally {
+      if (reloadInflightRef.current?.promise === promise) reloadInflightRef.current = null
+    }
+  }, [activeViewId, collectionPath, dataPath, fetchQuery, groupBy, groupFillKeys, listColumns, queryFilters, page, pageSize, reloadKey, sortDir, sortField, sorts, wrapCells])
   const reloadRef = useRef(reload)
   reloadRef.current = reload
-  const reloadKey = `${dataPath}\0${groupBy ? JSON.stringify(groupPages) : page}\0${pageSize}\0${fetchQuery}\0${sortField}\0${sortDir}\0${sortsStateKey(sorts)}\0${JSON.stringify(queryFilters)}\0${activeViewId ?? ''}\0${groupBy}\0${groupFillKeys.join('\0')}\0${wrapCells ? 1 : 0}`
   const detailIdRef = useRef<string | null>(null)
   detailIdRef.current = detailId
   const contentGen = useRef(0)
@@ -1036,6 +1047,7 @@ export function CollectionBrowser({
   useEffect(() => {
     return whenListIdle(() => {
       void pullFacets()
+      void syncViewsRef.current()
     })
   }, [collectionPath])
 
@@ -1777,6 +1789,11 @@ export function CollectionBrowser({
       viewsRef.current.find((item) => item.id === routeViewId) ?? viewForPath(collectionPath, routeViewId)
     if (view) applyView(view)
   }, [collectionPath, routeViewId])
+
+  useEffect(() => {
+    if (!viewMenuOpen) return
+    void syncViewsRef.current()
+  }, [viewMenuOpen])
 
   function commitView(view: SavedView) {
     persistViews([...views, view])
@@ -3022,11 +3039,13 @@ export function CollectionBrowser({
         />
       ) : null}
       {scopeHome && !nested ? (
-        <ScopeOverview
-          tables={tables}
-          onOpenTable={(path, viewId) => onOpenTable?.(path, viewId)}
-          onOpenRecord={(path, viewId, recordId) => onOpenRecord?.(recordId, viewId, path)}
-        />
+        <Suspense fallback={null}>
+          <ScopeOverview
+            tables={tables}
+            onOpenTable={(path, viewId) => onOpenTable?.(path, viewId)}
+            onOpenRecord={(path, viewId, recordId) => onOpenRecord?.(recordId, viewId, path)}
+          />
+        </Suspense>
       ) : (
       <div className="fsdb-right">
         {nested ? null : (

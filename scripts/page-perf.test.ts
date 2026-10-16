@@ -58,7 +58,10 @@ test('page plugin perf helpers stay as separate scripts in one folder', () => {
   assert.match(sources['discover-routes.mjs'], /hit.id = route.id/)
   assert.match(sources['interact.mjs'], /下一页/)
   assert.match(sources['interact.mjs'], /tasks-search/)
+  assert.match(sources['interact.mjs'], /tasks-search-wrap/)
+  assert.doesNotMatch(sources['interact.mjs'], /querySelector\('button\[aria-label="搜索"\]'\)/)
   assert.match(sources['interact.mjs'], /tasks-tree-toggle/)
+  assert.match(sources['measure-routes.mjs'], /loadingFailed/)
 })
 
 test('resourceKind splits snapshot, list, and store web.js', () => {

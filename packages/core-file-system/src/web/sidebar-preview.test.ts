@@ -1,5 +1,7 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import {
   getPreviewTotal,
   nextPreviewLimit,
@@ -101,6 +103,8 @@ test('block/tag stub views only fetch a total when they are the open view', () =
 test('view totals wait past first paint so ready is not blocked', () => {
   assert.equal(VIEW_TOTAL_IDLE_MS, 2800)
   assert.equal(VIEW_PREVIEW_IDLE_MS, 800)
+  const src = readFileSync(resolve(import.meta.dirname, './sidebar-preview.ts'), 'utf8')
+  assert.doesNotMatch(src, /setTimeout\(run, 8000\)/)
 })
 
 test('sidebar preview waits until the painted list is marked ready', () => {

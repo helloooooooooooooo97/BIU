@@ -8,7 +8,7 @@ export function stressInteractSource() {
       next.click()
       out.pager = true
     }
-    const searchBtn = document.querySelector('button[aria-label="搜索"]')
+    const searchBtn = document.querySelector('.tasks-search-wrap button[aria-label="搜索"]')
     if (searchBtn) searchBtn.click()
     const input = document.querySelector('input.tasks-search')
     if (input) {

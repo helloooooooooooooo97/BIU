@@ -232,20 +232,48 @@ export function savedViewFromRecord(row: { viewId?: unknown; title?: unknown; mo
   })
 }
 
-let viewsPull: Promise<boolean> | null = null
-let viewsPulledAt = 0
+const viewsPullByKey = new Map<string, Promise<boolean>>()
+const viewsPulledAtByKey = new Map<string, number>()
 let viewsIdle = 0
 let viewsIdleResolve: ((changed: boolean) => void) | null = null
+let viewsIdlePaths: readonly string[] = []
 const VIEWS_PULL_TTL_MS = 2500
 const VIEWS_PULL_IDLE_MS = 2800
+const VIEWS_PULL_LIMIT = 80
+const VIEWS_PULL_COLUMNS = [
+  'title',
+  'tablePath',
+  'viewId',
+  'mode',
+  'sortField',
+  'sortDir',
+  'sorts',
+  'query',
+  'groupBy',
+  'columns',
+  'filters',
+  'filterTree',
+  'tree',
+  'wrap',
+  'truncate',
+  'pageSize',
+  'columnWidths',
+] as const
+
+function viewsPullKey(collectionPaths: readonly string[]) {
+  return collectionPaths.map((path) => String(path ?? '').trim()).filter(Boolean).sort().join('\0') || '*'
+}
 
 export async function pullSavedViews(
   collectionPaths: readonly string[] = [],
   opts?: { idle?: boolean },
 ) {
+  const key = viewsPullKey(collectionPaths)
+  const pending = viewsPullByKey.get(key)
   if (opts?.idle) {
-    if (viewsPull) return viewsPull
-    if (viewsPulledAt && Date.now() - viewsPulledAt < VIEWS_PULL_TTL_MS) return false
+    if (pending) return pending
+    const pulledAt = viewsPulledAtByKey.get(key) ?? 0
+    if (pulledAt && Date.now() - pulledAt < VIEWS_PULL_TTL_MS) return false
     if (viewsIdle) return new Promise<boolean>((resolve) => {
       const prev = viewsIdleResolve
       viewsIdleResolve = (changed) => {
@@ -253,13 +281,15 @@ export async function pullSavedViews(
         resolve(changed)
       }
     })
+    viewsIdlePaths = collectionPaths
     return new Promise<boolean>((resolve) => {
       viewsIdleResolve = resolve
       viewsIdle = window.setTimeout(() => {
         viewsIdle = 0
         const done = viewsIdleResolve
         viewsIdleResolve = null
-        void pullSavedViews(collectionPaths).then(done ?? (() => undefined), () => done?.(false))
+        const paths = viewsIdlePaths
+        void pullSavedViews(paths).then(done ?? (() => undefined), () => done?.(false))
       }, VIEWS_PULL_IDLE_MS)
     })
   }
@@ -269,50 +299,49 @@ export async function pullSavedViews(
   }
   const idleDone = viewsIdleResolve
   viewsIdleResolve = null
-  if (viewsPull) {
-    if (idleDone) void viewsPull.then(idleDone)
-    return viewsPull
+  if (pending) {
+    if (idleDone) void pending.then(idleDone)
+    return pending
   }
-  if (viewsPulledAt && Date.now() - viewsPulledAt < VIEWS_PULL_TTL_MS) {
+  const pulledAt = viewsPulledAtByKey.get(key) ?? 0
+  if (pulledAt && Date.now() - pulledAt < VIEWS_PULL_TTL_MS) {
     idleDone?.(false)
     return false
   }
-  viewsPull = pullSavedViewsNow(collectionPaths).finally(() => {
-    viewsPull = null
-    viewsPulledAt = Date.now()
+  const request = pullSavedViewsNow(collectionPaths).finally(() => {
+    if (viewsPullByKey.get(key) === request) viewsPullByKey.delete(key)
+    viewsPulledAtByKey.set(key, Date.now())
   })
-  if (idleDone) void viewsPull.then(idleDone)
-  return viewsPull
+  viewsPullByKey.set(key, request)
+  if (idleDone) void request.then(idleDone)
+  return request
 }
 
 async function pullSavedViewsNow(collectionPaths: readonly string[] = []) {
   try {
-    const page = await listCollection({
-      path: '/views',
-      limit: 200,
-      offset: 0,
-      columns: [
-        'title',
-        'tablePath',
-        'viewId',
-        'mode',
-        'sortField',
-        'sortDir',
-        'sorts',
-        'query',
-        'groupBy',
-        'columns',
-        'filters',
-        'filterTree',
-        'tree',
-        'wrap',
-        'truncate',
-        'pageSize',
-        'columnWidths',
-      ],
-    })
+    const fetchPaths = [...new Set(collectionPaths.map((path) => String(path ?? '').trim()).filter(Boolean))]
+    const pages = fetchPaths.length
+      ? await Promise.all(
+          fetchPaths.map((tablePath) =>
+            listCollection({
+              path: '/views',
+              limit: VIEWS_PULL_LIMIT,
+              offset: 0,
+              filters: { tablePath },
+              columns: [...VIEWS_PULL_COLUMNS],
+            }),
+          ),
+        )
+      : [
+          await listCollection({
+            path: '/views',
+            limit: 200,
+            offset: 0,
+            columns: [...VIEWS_PULL_COLUMNS],
+          }),
+        ]
     const byPath = new Map<string, SavedView[]>()
-    for (const row of page.items) {
+    for (const row of pages.flatMap((page) => page.items)) {
       const tablePath = String(row.tablePath ?? '').trim()
       const view = savedViewFromRecord(row)
       if (!tablePath || !view) continue
@@ -320,7 +349,7 @@ async function pullSavedViewsNow(collectionPaths: readonly string[] = []) {
       list.push(view)
       byPath.set(tablePath, list)
     }
-    const paths = new Set([...collectionPaths, ...byPath.keys()])
+    const paths = new Set([...fetchPaths, ...byPath.keys()])
     let changed = false
     for (const path of paths) {
       const views = byPath.get(path) ?? []

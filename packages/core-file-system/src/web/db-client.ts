@@ -11,6 +11,7 @@ export class HttpError extends Error {
   }
 }
 
+const GET_INFLIGHT_HOLD_MS = 400
 const getInflight = new Map<string, Promise<unknown>>()
 
 async function readJsonNow<T>(path: string, init?: RequestInit): Promise<T> {
@@ -30,7 +31,7 @@ export async function readJson<T>(path: string, init?: RequestInit): Promise<T> 
     (body) => {
       setTimeout(() => {
         if (getInflight.get(path) === request) getInflight.delete(path)
-      }, 32)
+      }, GET_INFLIGHT_HOLD_MS)
       return body
     },
     (error) => {
@@ -85,7 +86,7 @@ export async function listCollection(opts: {
       const items = Array.isArray(body.items) ? body.items : []
       setTimeout(() => {
         if (listInflight.get(key) === request) listInflight.delete(key)
-      }, 32)
+      }, GET_INFLIGHT_HOLD_MS)
       return {
         items,
         total: typeof body.total === 'number' ? body.total : items.length,

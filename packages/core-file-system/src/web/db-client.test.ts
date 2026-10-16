@@ -26,6 +26,25 @@ test('listCollection shares identical in-flight requests', async () => {
   }
 })
 
+test('listCollection keeps the last page briefly so a remount does not refetch', async () => {
+  let calls = 0
+  const original = globalThis.fetch
+  globalThis.fetch = (async () => {
+    calls += 1
+    return new Response(JSON.stringify({ items: [{ id: 'n1' }], total: 1 }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })
+  }) as typeof fetch
+  try {
+    await listCollection({ path: '/notes', limit: 20, query: 'hold' })
+    await listCollection({ path: '/notes', limit: 20, query: 'hold' })
+    assert.equal(calls, 1)
+  } finally {
+    globalThis.fetch = original
+  }
+})
+
 test('readJson shares identical in-flight GET requests', async () => {
   let calls = 0
   const original = globalThis.fetch

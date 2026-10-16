@@ -29,14 +29,17 @@ test('share page stays off the data first-paint graph until a share route opens'
   assert.match(page, /parseSharePath\(location\.pathname\)/)
 })
 
-test('saved views catalog waits until the first list is ready and only notifies when it changed', () => {
+test('saved views catalog waits until the first list is ready and only pulls the open table', () => {
   const page = readFileSync(resolve(import.meta.dirname, './index.tsx'), 'utf8')
   const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
-  assert.match(page, /pullSavedViews\(/)
-  assert.match(page, /\{\s*idle:\s*true\s*\}/)
-  assert.match(page, /fsdb:list-ready/)
+  const views = readFileSync(resolve(import.meta.dirname, './view-storage.ts'), 'utf8')
+  assert.doesNotMatch(page, /pullSavedViews/)
+  assert.doesNotMatch(page, /setTimeout\(pull, 8000\)/)
   assert.match(browser, /fsdb:list-ready/)
-  assert.match(page, /if \(changed\) window\.dispatchEvent\(new CustomEvent\('fsdb:change'/)
+  assert.match(browser, /void syncViewsRef\.current\(\)/)
+  assert.match(browser, /if \(!viewMenuOpen\) return/)
+  assert.match(views, /filters: \{ tablePath \}/)
+  assert.match(views, /VIEWS_PULL_LIMIT = 80/)
 })
 
 test('database page no longer registers collection shortcuts on the dock', () => {

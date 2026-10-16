@@ -17,7 +17,7 @@ import {
   bootLoadCollections,
   collectionNavKey,
 } from './nav-boot.ts'
-import { defaultViewId, pullSavedViews } from './view-storage.ts'
+import { defaultViewId } from './view-storage.ts'
 import { DATA_MODULE, DATA_MODULE_ID, DATA_MODULE_PATH, FACETS_COLLECTION_PATH, PAGE_BLOCKS_COLLECTION_PATH, VIEWS_COLLECTION_PATH, sortDataCollections } from './database-path.ts'
 import { pickMainDataRoute, readMainDataRoute, writeMainDataRoute } from './main-data-route.ts'
 import { facetsChrome } from './facet-chrome.tsx'
@@ -81,7 +81,6 @@ function CollectionPage(props: SlotProps) {
     const { user, index, system } = sortDataCollections(tables)
     return [...user, ...index, ...system]
   }, [tables])
-  const tablePathsKey = orderedTables.map((table) => table.path).join('\0')
   const ui = getDatabaseUi()
   const location = useLocation()
   const navigate = useNavigate()
@@ -137,28 +136,6 @@ function CollectionPage(props: SlotProps) {
       opts,
     )
   }
-
-  useEffect(() => {
-    if (!orderedTables.length) return
-    const paths = orderedTables.map((table) => table.path)
-    let delay = 0
-    const pull = () => {
-      void pullSavedViews(paths, { idle: true }).then((changed) => {
-        if (changed) window.dispatchEvent(new CustomEvent('fsdb:change', { detail: { views: true } }))
-      })
-    }
-    const onListReady = () => {
-      window.clearTimeout(delay)
-      delay = window.setTimeout(pull, 800)
-    }
-    window.addEventListener('fsdb:list-ready', onListReady)
-    const fallback = window.setTimeout(pull, 8000)
-    return () => {
-      window.removeEventListener('fsdb:list-ready', onListReady)
-      window.clearTimeout(delay)
-      window.clearTimeout(fallback)
-    }
-  }, [tablePathsKey])
 
   useEffect(() => {
     if (isLegacyDatabasePath(location.pathname) && (parsed.kind === 'collection-view' || parsed.kind === 'record')) {

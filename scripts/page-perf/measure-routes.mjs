@@ -105,10 +105,15 @@ function collectRequests(events, requests, t0) {
         row.mime = ev.params.response?.mimeType
       }
     }
-    if (ev.method === 'Network.loadingFinished') {
+    if (ev.method === 'Network.loadingFinished' || ev.method === 'Network.loadingFailed') {
       const row = requests.get(ev.params.requestId)
       if (row) {
-        row.bytes = ev.params.encodedDataLength || 0
+        if (ev.method === 'Network.loadingFinished') row.bytes = ev.params.encodedDataLength || 0
+        else {
+          row.status = row.status || 0
+          row.canceled = Boolean(ev.params.canceled)
+          row.error = ev.params.errorText
+        }
         if (typeof row.startAbs === 'number' && typeof ev.params.timestamp === 'number') {
           row.duration = Math.round((ev.params.timestamp - row.startAbs) * 1000)
         }

@@ -832,6 +832,8 @@ test('agent view writes reload saved views without a full page refresh', () => {
 
 test('collection reload does not follow callback identity', () => {
   assert.match(browser, /const reloadKey = /)
+  assert.match(browser, /reloadInflightRef/)
+  assert.match(browser, /hit\?\.key === reloadKey/)
   assert.match(browser, /sortsStateKey\(sorts\)/)
   assert.doesNotMatch(browser, /JSON\.stringify\(sorts\)/)
   assert.doesNotMatch(browser, /reloadKey = .*listColumnsKey/)
@@ -852,7 +854,7 @@ test('collection reload does not follow callback identity', () => {
   assert.doesNotMatch(browser, /lockedFilters = \{\}/)
   assert.match(browser, /void pullFacets\(\)/)
   assert.doesNotMatch(browser, /pullFacets\(\),\s*\n\s*\]\)/)
-  assert.match(browser, /whenListIdle\(\(\) => \{\s*\n\s*void pullFacets\(\)/)
+  assert.match(browser, /whenListIdle\(\(\) => \{\s*\n\s*void pullFacets\(\)\s*\n\s*void syncViewsRef\.current\(\)/)
   assert.match(browser, /if \(routeRecordId\)/)
   assert.match(browser, /VIEW_PREVIEW_IDLE_MS/)
   assert.match(browser, /if \(!routeRecordId \|\| statHoldRef\.current\?\.schema\) return/)
@@ -863,8 +865,10 @@ test('collection reload does not follow callback identity', () => {
   assert.match(browser, /lazy\(\(\) => import\('\.\/field-value-pop/)
   assert.match(browser, /lazy\(\(\) => import\('\.\/cell-pop-draft/)
   assert.match(browser, /lazy\(\(\) => import\('\.\/record-detail/)
+  assert.match(browser, /lazy\(\(\) => import\('\.\/scope-overview/)
   assert.doesNotMatch(browser, /from '@biu\/database-ui'/)
   assert.doesNotMatch(browser, /from '\.\/record-detail/)
+  assert.doesNotMatch(browser, /from '\.\/scope-overview/)
 })
 
 test('pager keeps the current page when filter objects are only recreated', () => {

@@ -336,6 +336,7 @@ export function DefaultCell({
         collectionPath={collectionPath}
         records={records}
         labelField={labelField}
+        deferMissing={plain}
       />
     )
   }

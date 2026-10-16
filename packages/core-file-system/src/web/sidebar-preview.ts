@@ -51,16 +51,13 @@ export function whenListIdle(fn: () => void, idleMs = VIEW_PREVIEW_IDLE_MS) {
     }
   }
   const onReady = () => {
-    window.clearTimeout(fallback)
     window.removeEventListener('fsdb:list-ready', onReady)
     timer = window.setTimeout(run, idleMs)
   }
   window.addEventListener('fsdb:list-ready', onReady)
-  const fallback = window.setTimeout(run, 8000)
   return () => {
     cancelled = true
     window.clearTimeout(timer)
-    window.clearTimeout(fallback)
     window.removeEventListener('fsdb:list-ready', onReady)
   }
 }
