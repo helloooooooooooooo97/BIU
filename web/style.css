@@ -6268,15 +6268,19 @@ html.dark .app-side-bar .chat-session-row-star:not(.is-on) svg {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  gap: 4px;
+  height: 28px;
   margin: 0;
-  padding: 0;
+  padding: 0 8px;
   border: 1px solid var(--dsw-border);
   border-radius: 10px;
   background: var(--dsw-sidebar);
-  color: var(--dsw-label);
+  color: var(--dsw-sidebar-fg);
   box-shadow: var(--dsw-shadow);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  transform: translateX(-50%);
   cursor: pointer;
 }
 
@@ -6286,8 +6290,14 @@ html.dark .app-side-bar .chat-session-row-star:not(.is-on) svg {
 
 .chat-select-bubble-icon {
   display: block;
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
+  flex: none;
+  color: var(--dsw-icon);
+}
+
+.chat-select-bubble-key {
+  flex: none;
 }
 
 /* 底部输入栏 + dock 悬浮控件：叠在对话内容之上 */
@@ -8404,6 +8414,7 @@ html:not(.dark) .page-slash-item.is-active,
 html:not(.dark) .page-slash-label,
 html:not(.dark) .page-bubble button:not(.is-on),
 html:not(.dark) .page-bubble-letter,
+html:not(.dark) .chat-select-bubble,
 html:not(.dark) .inspector-add-menu,
 html:not(.dark) .inspector-add-owner,
 html:not(.dark) .inspector-add-row,
@@ -8440,6 +8451,7 @@ html:not(.dark) .page-slash-icon svg,
 html:not(.dark) .page-slash .pick-kind-icon,
 html:not(.dark) .page-bubble button:not(.is-on) svg,
 html:not(.dark) .page-bubble-chat-icon,
+html:not(.dark) .chat-select-bubble-icon,
 html:not(.dark) .inspector-add-row-main svg,
 html:not(.dark) .inspector-add-close,
 html:not(.dark) .inspector-add-close svg,
