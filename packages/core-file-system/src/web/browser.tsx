@@ -731,6 +731,57 @@ const TableBody = memo(function TableBody({
   )
 })
 
+function ViewTabFit({
+  views,
+  toolbarRef,
+  toolbarRightRef,
+  searchExpanded,
+  children,
+}: {
+  views: SavedView[]
+  toolbarRef: RefObject<HTMLDivElement | null>
+  toolbarRightRef: RefObject<HTMLDivElement | null>
+  searchExpanded: boolean
+  children: (fit: number) => ReactNode
+}) {
+  const viewMeasureRef = useRef<HTMLDivElement>(null)
+  const [viewTabFit, setViewTabFit] = useState(99)
+  useLayoutEffect(() => {
+    function measure() {
+      const toolbar = toolbarRef.current
+      const right = toolbarRightRef.current
+      const row = viewMeasureRef.current
+      if (!toolbar || !right || !row) return
+      const tabs = Array.from(row.querySelectorAll('[data-view-measure]')) as HTMLElement[]
+      const available = Math.max(0, toolbar.clientWidth - right.offsetWidth - 12)
+      const next = countFittingViewTabs(tabs.map((el) => el.offsetWidth), available, 2)
+      setViewTabFit((prev) => (prev === next ? prev : next))
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    if (toolbarRef.current) ro.observe(toolbarRef.current)
+    if (toolbarRightRef.current) ro.observe(toolbarRightRef.current)
+    window.addEventListener('resize', measure)
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('resize', measure)
+    }
+  }, [searchExpanded, toolbarRef, toolbarRightRef, views])
+  return (
+    <>
+      <div className="tasks-viewtabs-measure" ref={viewMeasureRef} aria-hidden>
+        {views.map((view) => (
+          <button key={view.id} type="button" className="tasks-viewdd-btn tasks-viewtab" tabIndex={-1} data-view-measure={view.id}>
+            <ViewModeGlyph mode={view.mode} className="size-[14px]" />
+            <span className="tasks-viewdd-name">{view.name}</span>
+          </button>
+        ))}
+      </div>
+      {children(viewTabFit)}
+    </>
+  )
+}
+
 export function CollectionBrowser({
   moduleId,
   collectionPath,
@@ -1032,8 +1083,6 @@ export function CollectionBrowser({
   const viewRef = useRef<HTMLDivElement>(null)
   const toolbarRef = useRef<HTMLDivElement>(null)
   const toolbarRightRef = useRef<HTMLDivElement>(null)
-  const viewMeasureRef = useRef<HTMLDivElement>(null)
-  const [viewTabFit, setViewTabFit] = useState(99)
   const modeRef = useRef<HTMLDivElement>(null)
   const sortRef = useRef<HTMLDivElement>(null)
   const columnRef = useRef<HTMLDivElement>(null)
@@ -1115,29 +1164,6 @@ export function CollectionBrowser({
     window.addEventListener('biu:toggle-module-sidebar', onToggle)
     return () => window.removeEventListener('biu:toggle-module-sidebar', onToggle)
   }, [collectionPath, nested, moduleId])
-
-  useLayoutEffect(() => {
-    if (sheet) return
-    function measure() {
-      const toolbar = toolbarRef.current
-      const right = toolbarRightRef.current
-      const row = viewMeasureRef.current
-      if (!toolbar || !right || !row) return
-      const tabs = Array.from(row.querySelectorAll('[data-view-measure]')) as HTMLElement[]
-      const available = Math.max(0, toolbar.clientWidth - right.offsetWidth - 12)
-      const next = countFittingViewTabs(tabs.map((el) => el.offsetWidth), available, 2)
-      setViewTabFit((prev) => (prev === next ? prev : next))
-    }
-    measure()
-    const ro = new ResizeObserver(measure)
-    if (toolbarRef.current) ro.observe(toolbarRef.current)
-    if (toolbarRightRef.current) ro.observe(toolbarRightRef.current)
-    window.addEventListener('resize', measure)
-    return () => {
-      ro.disconnect()
-      window.removeEventListener('resize', measure)
-    }
-  }, [sheet, views, searchExpanded])
 
   useEffect(() => {
     if (searchOpen) searchInputRef.current?.focus()
@@ -3081,6 +3107,27 @@ export function CollectionBrowser({
     setCellPop(cellUsesPop(kind, col.field.writable) ? { id: cell.id, key: cell.key } : null)
   }
 
+  function paintTableCell(row: DbRecord, key: string, field: FieldSpec) {
+    if (key === 'shareScope' || key === 'shareRole') return renderCell(row, key, field, 'table')
+    const kind = resolveFieldType(field)
+    if (
+      kind === 'boolean' ||
+      kind === 'action' ||
+      kind === 'facet' ||
+      kind === 'url' ||
+      kind === 'image' ||
+      kind === 'attachment' ||
+      kind === 'file'
+    ) {
+      return renderCell(row, key, field, 'table')
+    }
+    if (parseFacetFlatColumnKey(key) || isRecordLinkField(field, key) || chrome?.cells?.[key]) {
+      return renderCell(row, key, field, 'table')
+    }
+    const text = cellValueText(row, key, field)
+    return text ? <span>{text}</span> : null
+  }
+
   function tableRecordRow(row: DbRecord, depth: number, hasKids: boolean, kidCount: number, rowKey: string) {
     const cellPick = cellPickRef.current
     return (
@@ -3129,7 +3176,7 @@ export function CollectionBrowser({
                 <RecordActions row={row} />
               </HoverMount>
             ) : (
-              <span className="fsdb-cell">{renderCell(row, col.key, col.field, 'table')}</span>
+              <span className="fsdb-cell">{paintTableCell(row, col.key, col.field)}</span>
             )}
           </td>
         ))}
@@ -3488,14 +3535,8 @@ export function CollectionBrowser({
           <div className="tasks-toolbar-left">
             {sheet ? null : (
             <div className="tasks-viewdd-wrap" ref={viewRef}>
-              <div className="tasks-viewtabs-measure" ref={viewMeasureRef} aria-hidden>
-                {views.map((view) => (
-                  <button key={view.id} type="button" className="tasks-viewdd-btn tasks-viewtab" tabIndex={-1} data-view-measure={view.id}>
-                    <ViewModeGlyph mode={view.mode} className="size-[14px]" />
-                    <span className="tasks-viewdd-name">{view.name}</span>
-                  </button>
-                ))}
-              </div>
+              <ViewTabFit views={views} toolbarRef={toolbarRef} toolbarRightRef={toolbarRightRef} searchExpanded={searchExpanded}>
+                {(viewTabFit) => (
               <div className="tasks-viewtabs">
                 {(views.length ? splitVisibleViews(views, viewTabFit, activeViewId ?? undefined).shown : []).map((view) => (
                   <button
@@ -3529,6 +3570,8 @@ export function CollectionBrowser({
                   </button>
                 ) : null}
               </div>
+                )}
+              </ViewTabFit>
               {viewMenuOpen ? (
                 <HeadlessDismiss onDismiss={() => setViewMenuOpen(false)} insideRef={viewRef}>
                 <div className="tasks-viewdd-menu" role="menu">
