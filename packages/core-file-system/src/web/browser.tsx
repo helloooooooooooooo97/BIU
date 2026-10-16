@@ -1019,7 +1019,7 @@ export function CollectionBrowser({
   }, [activeViewId, collectionPath, dataPath, fetchQuery, groupBy, listColumns, queryFilters, page, pageSize, sortDir, sortField, sorts])
   const reloadRef = useRef(reload)
   reloadRef.current = reload
-  const reloadKey = `${dataPath}\0${groupBy ? JSON.stringify(groupPages) : page}\0${pageSize}\0${fetchQuery}\0${sortField}\0${sortDir}\0${sortsStateKey(sorts)}\0${JSON.stringify(queryFilters)}\0${activeViewId ?? ''}\0${listColumnsKey}\0${groupBy}`
+  const reloadKey = `${dataPath}\0${groupBy ? JSON.stringify(groupPages) : page}\0${pageSize}\0${fetchQuery}\0${sortField}\0${sortDir}\0${sortsStateKey(sorts)}\0${JSON.stringify(queryFilters)}\0${activeViewId ?? ''}\0${columnKeys.join('\0')}\0${groupBy}`
   const detailIdRef = useRef<string | null>(null)
   detailIdRef.current = detailId
   const contentGen = useRef(0)
@@ -1121,11 +1121,14 @@ export function CollectionBrowser({
         setFilters(next.filters)
         setFilterTree(resolveViewFilterTree(next))
         setColumnKeys(next.columns)
+        setColumnWidths(normalizeColumnWidths(next.columnWidths))
         setGroupBy(next.groupBy ?? '')
         setShowTree(next.tree !== false)
         setWrapCells(!!next.wrap)
         setTruncateCells(next.truncate !== false)
         setQuery(next.query ?? '')
+        setFetchQuery(next.query ?? '')
+        setPageSize(normalizePageSize(next.pageSize))
       }
     } else {
       setViews([])

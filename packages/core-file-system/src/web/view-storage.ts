@@ -232,17 +232,56 @@ export function savedViewFromRecord(row: { viewId?: unknown; title?: unknown; mo
   })
 }
 
-let viewsPull: Promise<void> | null = null
+let viewsPull: Promise<boolean> | null = null
 let viewsPulledAt = 0
+let viewsIdle = 0
+let viewsIdleResolve: ((changed: boolean) => void) | null = null
 const VIEWS_PULL_TTL_MS = 2500
+const VIEWS_PULL_IDLE_MS = 2800
 
-export async function pullSavedViews(collectionPaths: readonly string[] = []) {
-  if (viewsPull) return viewsPull
-  if (viewsPulledAt && Date.now() - viewsPulledAt < VIEWS_PULL_TTL_MS) return
+export async function pullSavedViews(
+  collectionPaths: readonly string[] = [],
+  opts?: { idle?: boolean },
+) {
+  if (opts?.idle) {
+    if (viewsPull) return viewsPull
+    if (viewsPulledAt && Date.now() - viewsPulledAt < VIEWS_PULL_TTL_MS) return false
+    if (viewsIdle) return new Promise<boolean>((resolve) => {
+      const prev = viewsIdleResolve
+      viewsIdleResolve = (changed) => {
+        prev?.(changed)
+        resolve(changed)
+      }
+    })
+    return new Promise<boolean>((resolve) => {
+      viewsIdleResolve = resolve
+      viewsIdle = window.setTimeout(() => {
+        viewsIdle = 0
+        const done = viewsIdleResolve
+        viewsIdleResolve = null
+        void pullSavedViews(collectionPaths).then(done ?? (() => undefined), () => done?.(false))
+      }, VIEWS_PULL_IDLE_MS)
+    })
+  }
+  if (viewsIdle) {
+    window.clearTimeout(viewsIdle)
+    viewsIdle = 0
+  }
+  const idleDone = viewsIdleResolve
+  viewsIdleResolve = null
+  if (viewsPull) {
+    if (idleDone) void viewsPull.then(idleDone)
+    return viewsPull
+  }
+  if (viewsPulledAt && Date.now() - viewsPulledAt < VIEWS_PULL_TTL_MS) {
+    idleDone?.(false)
+    return false
+  }
   viewsPull = pullSavedViewsNow(collectionPaths).finally(() => {
     viewsPull = null
     viewsPulledAt = Date.now()
   })
+  if (idleDone) void viewsPull.then(idleDone)
   return viewsPull
 }
 
@@ -282,8 +321,12 @@ async function pullSavedViewsNow(collectionPaths: readonly string[] = []) {
       byPath.set(tablePath, list)
     }
     const paths = new Set([...collectionPaths, ...byPath.keys()])
+    let changed = false
     for (const path of paths) {
       const views = byPath.get(path) ?? []
+      const prev = JSON.stringify(memoryViews.get(path) ?? [])
+      const next = JSON.stringify(views)
+      if (prev !== next) changed = true
       rememberViews(path, views)
       try {
         if (views.length) localStorage.setItem(viewsKey(path), JSON.stringify(views))
@@ -292,8 +335,9 @@ async function pullSavedViewsNow(collectionPaths: readonly string[] = []) {
         /* ignore */
       }
     }
+    return changed
   } catch {
-    /* ignore */
+    return false
   }
 }
 

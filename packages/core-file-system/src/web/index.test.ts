@@ -16,6 +16,13 @@ test('shell matches the data module by extra.moduleId database', () => {
   assert.equal(String(extra.moduleId ?? slotKey), 'database')
 })
 
+test('saved views catalog waits until idle and only notifies when it changed', () => {
+  const page = readFileSync(resolve(import.meta.dirname, './index.tsx'), 'utf8')
+  assert.match(page, /pullSavedViews\(/)
+  assert.match(page, /\{\s*idle:\s*true\s*\}/)
+  assert.match(page, /if \(changed\) window\.dispatchEvent\(new CustomEvent\('fsdb:change'/)
+})
+
 test('database page no longer registers collection shortcuts on the dock', () => {
   const page = readFileSync(resolve(import.meta.dirname, './index.tsx'), 'utf8')
   assert.doesNotMatch(page, /DATA_DOCK_TOOLS/)

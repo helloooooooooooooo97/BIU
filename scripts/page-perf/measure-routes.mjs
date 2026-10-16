@@ -166,6 +166,7 @@ async function measureRoute(session, route) {
   await session.send('Page.navigate', { url }, session.sessionId)
   let contentAt = null
   let readyAt = null
+  let readyNetwork = null
   let shell = null
   const deadline = Date.now() + deadlineMs
   while (Date.now() < deadline) {
@@ -181,7 +182,10 @@ async function measureRoute(session, route) {
     if (contentAt == null && visible && value.textLen > 20) contentAt = Date.now() - t0
     const inflightApi = [...requests.values()].filter((req) => /\/api\//.test(req.url) && req.end == null && Date.now() - t0 - (req.start || 0) < 8_000).length
     if (contentAt != null && value.loadingBlocks === 0 && inflightApi === 0 && (value.composer || value.table || value.textLen > 80)) {
-      if (readyAt == null) readyAt = Date.now() - t0
+      if (readyAt == null) {
+        readyAt = Date.now() - t0
+        readyNetwork = summarizeNetwork([...requests.values()].filter((row) => row.url).map((row) => ({ ...row })))
+      }
       if (Date.now() - t0 >= readyAt + settleMs) break
     }
   }
@@ -251,6 +255,7 @@ async function measureRoute(session, route) {
     longTasks: perf.longTasks || [],
     hub: hubSpans(hub, t0),
     network: net,
+    networkReady: readyNetwork,
     logs: [...new Set(logs)].slice(0, 12),
     fails: [...new Set(fails)].slice(0, 12),
     interact,
@@ -264,7 +269,7 @@ function bottleneckNotes(rows) {
     notes.push({
       id: 'plugin-web-serial',
       title: '商店 web.js 在每次刷新里串行 import',
-      detail: `有 ${pluginSerial.length} 条路线的 ${pluginSerial[0].network.pluginWeb} 个 web.js 几乎不重叠。ui-hub 对 snapshot 里每个商店包 await import，和当前打开的是不是页面块无关。`,
+      detail: `有 ${pluginSerial.length} 条路线的 ${pluginSerial[0].network.pluginWeb} 个 web.js 几乎不重叠。页面块应只 import 当前页请求的商店包。`,
     })
   }
   const busted = rows.some((row) => (row.network?.groups || []).some((group) => group.kind === 'plugin-web' && group.bytes > 50_000))
@@ -275,7 +280,9 @@ function bottleneckNotes(rows) {
       detail: 'snapshot 已经带 ?v=codeVersion。ui-hub 再拼 &v=时间戳，每次刷新都重新拉商店包。',
     })
   }
-  const lists = rows.map((row) => (row.network?.groups || []).find((group) => group.kind === 'db-list')).filter(Boolean)
+  const lists = rows
+    .map((row) => ((row.networkReady || row.network)?.groups || []).find((group) => group.kind === 'db-list'))
+    .filter(Boolean)
   const maxList = lists.reduce((max, row) => Math.max(max, row.count), 0)
   const maxListWait = lists.reduce((max, row) => Math.max(max, row.maxMs || 0), 0)
   if (maxList >= 8) {
@@ -337,6 +344,7 @@ try {
       pluginWeb: samples[samples.length - 1]?.network?.pluginWeb ?? 0,
       pluginWebSerial: samples.some((row) => row.network?.pluginWebSerial),
       dbList: samples[samples.length - 1]?.network?.groups?.find((group) => group.kind === 'db-list')?.count ?? 0,
+      dbListReady: samples[samples.length - 1]?.networkReady?.groups?.find((group) => group.kind === 'db-list')?.count ?? 0,
       longTaskMs: median(samples.map((row) => row.longTaskMs)),
       tableRows: samples[samples.length - 1]?.shell?.tableRows ?? 0,
       interact: samples[samples.length - 1]?.interact ?? null,

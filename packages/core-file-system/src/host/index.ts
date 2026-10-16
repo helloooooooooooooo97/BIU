@@ -630,6 +630,22 @@ export function listNeedsMatchOverlay(
   return false
 }
 
+/** spec.list 真正用到的查询。分组筛选在内存里做，好让并发的组页共用一次整表扫描。 */
+export function specListQuery(query: CollectionListQuery): CollectionListQuery {
+  const facetId = String(query.filter?.facetId ?? '').trim()
+  const sessionId = String(query.filter?.sessionId ?? '').trim()
+  const filter = {
+    ...(facetId ? { facetId } : {}),
+    ...(sessionId ? { sessionId } : {}),
+  }
+  return {
+    ...(query.q != null ? { q: query.q } : {}),
+    ...(query.trash != null ? { trash: query.trash } : {}),
+    ...(query.ids != null ? { ids: query.ids } : {}),
+    ...(Object.keys(filter).length ? { filter } : {}),
+  }
+}
+
 function sortRecords(rows: DbRecord[], field: string, dir: 'asc' | 'desc', sorts?: Array<{ field: string; dir: 'asc' | 'desc' }>) {
   const rules = normalizeSorts(sorts, field, dir)
   return sortRecordsBy(rows, rules)
@@ -709,6 +725,8 @@ export class DatabaseService extends Service implements Database {
     rows: Array<{ view_id: string; subject_type: 'account' | 'member_view'; subject_id: string; granted_by?: string; member_kind: string }>
   } | null = null
   private viewShareCache: { key: string; views: SharedViewDef[] } | null = null
+  private inflightMatches = new Map<string, Promise<DbRecord[]>>()
+  private inflightScans = new Map<string, Promise<DbRecord[]>>()
   recycleAssets?: () => void
 
   private bumpQueued = false
@@ -1197,19 +1215,53 @@ export class DatabaseService extends Service implements Database {
     q: string,
     overlay = true,
   ) {
+    const key = `${spec.path}\t${query.trash ? 1 : 0}\t${q}\t${overlay ? 1 : 0}\t${JSON.stringify(query.filter ?? {})}\t${(query.ids ?? []).join(',')}`
+    const hit = this.inflightMatches.get(key)
+    if (hit) return hit
+    const pending = this.matchCollectionRowsNow(spec, query, filter, q, overlay)
+    this.inflightMatches.set(key, pending)
+    pending.finally(() => {
+      if (this.inflightMatches.get(key) === pending) this.inflightMatches.delete(key)
+    })
+    return pending
+  }
+
+  private scanCollectionRows(spec: CollectionSpec, query: CollectionListQuery, overlay: boolean) {
+    const load = specListQuery(query)
+    const key = `${spec.path}\t${load.trash ? 1 : 0}\t${load.q ?? ''}\t${overlay ? 1 : 0}\t${JSON.stringify(load.filter ?? {})}\t${(load.ids ?? []).join(',')}`
+    const hit = this.inflightScans.get(key)
+    if (hit) return hit
+    const pending = this.scanCollectionRowsNow(spec, load, overlay)
+    this.inflightScans.set(key, pending)
+    pending.finally(() => {
+      if (this.inflightScans.get(key) === pending) this.inflightScans.delete(key)
+    })
+    return pending
+  }
+
+  private async scanCollectionRowsNow(spec: CollectionSpec, query: CollectionListQuery, overlay: boolean) {
+    const rows = await this.loadCollectionRows(spec, query)
+    if (!overlay) return rows
+    return rows.map((row) => this.applyMetaOverlay(spec, this.applyFacetOverlay(spec, row)))
+  }
+
+  private async matchCollectionRowsNow(
+    spec: CollectionSpec,
+    query: CollectionListQuery,
+    filter: Record<string, unknown> | undefined,
+    q: string,
+    overlay = true,
+  ) {
     let schema = schemaFor(spec)
     const packs = this.facets.list()
-    const rows = await this.loadCollectionRows(spec, query)
     const tagFilter = spec.path === '/facets' ? String(filter?.facetId ?? '').trim() : ''
     const tagPack = tagFilter ? this.facets.get(tagFilter) : null
+    const rows = await this.scanCollectionRows(spec, query, Boolean(tagFilter || overlay))
     if (tagFilter) {
       schema = schemaWithTagPack(schema, tagPack)
       await this.hydrateFacetStamps(rows, tagPack)
     }
-    const stamped = tagFilter || overlay
-      ? rows.map((row) => this.applyMetaOverlay(spec, this.applyFacetOverlay(spec, row)))
-      : rows
-    return stamped.filter((row) => matchListFilter(row, filter, schema, packs) && matchQuery(row, q, packs))
+    return rows.filter((row) => matchListFilter(row, filter, schema, packs) && matchQuery(row, q, packs))
   }
 
   private async hydrateFacetStamps(rows: DbRecord[], pack: CollectionSchemaPack | null) {

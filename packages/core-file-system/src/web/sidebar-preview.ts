@@ -5,6 +5,7 @@ import { listCollection, readJson } from './db-client.ts'
 
 export const SIDEBAR_PREVIEW_PAGE = 20
 export const SIDEBAR_PREVIEW_MAX = 100
+export const VIEW_TOTAL_IDLE_MS = 2800
 
 export type PreviewPage = {
   items: DbRecord[]
@@ -78,15 +79,16 @@ export function viewTotalKey(path: string, view: Pick<SavedView, 'id' | 'sortFie
   return previewCacheKey(path, view)
 }
 
-/** 块类型/合集内置视图很多，只给当前正在看的那一条拉总数。 */
+/** 块类型/合集内置视图很多，只给当前正在看的那一条拉总数。当前表的活动视图由 list 自己写入。 */
 export function shouldFetchViewTotal(opts: {
   path: string
   view: Pick<SavedView, 'id'>
   collectionPath: string
   activeViewId?: string | null
 }) {
-  if (!isBuiltinBlockKindViewId(opts.view.id) && !isBuiltinTagViewId(opts.view.id)) return true
-  return opts.path === opts.collectionPath && opts.view.id === opts.activeViewId
+  const current = opts.path === opts.collectionPath && opts.view.id === opts.activeViewId
+  if (isBuiltinBlockKindViewId(opts.view.id) || isBuiltinTagViewId(opts.view.id)) return current
+  return !current
 }
 
 export function orderViewTotalJobs<T extends { path: string }>(jobs: T[], collectionPath: string) {

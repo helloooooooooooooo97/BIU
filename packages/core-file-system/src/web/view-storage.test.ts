@@ -168,9 +168,11 @@ test('rememberRecords scopes crumb rows to the current view', () => {
 
 test('saved views pull shares one in-flight list and a short ttl', () => {
   const src = readFileSync(resolve(import.meta.dirname, './view-storage.ts'), 'utf8')
-  assert.match(src, /let viewsPull: Promise<void> \| null = null/)
+  assert.match(src, /let viewsPull: Promise<boolean> \| null = null/)
   assert.match(src, /VIEWS_PULL_TTL_MS = 2500/)
+  assert.match(src, /VIEWS_PULL_IDLE_MS = 2800/)
   assert.match(src, /if \(viewsPull\) return viewsPull/)
+  assert.match(src, /opts\?: \{ idle\?: boolean \}/)
 })
 
 test('starred records toggle by collection path and id', () => {

@@ -33,6 +33,7 @@ import {
   rememberPreviewTotal,
   SIDEBAR_PREVIEW_MAX,
   subscribePreviewTotals,
+  VIEW_TOTAL_IDLE_MS,
   viewTotalKey,
   writeRecordEmoji,
 } from './sidebar-preview.ts'
@@ -574,34 +575,37 @@ export const DataSidebar = memo(function DataSidebar({
   const countJobKey = countJobs.map((job) => viewTotalKey(job.path, job.view)).join('|')
   useEffect(() => {
     let cancelled = false
-    const jobs = orderViewTotalJobs(countJobs, collectionPath)
-    const urgent = jobs.filter((job) => job.path === collectionPath)
-    const rest = jobs.filter((job) => job.path !== collectionPath)
-    void (async () => {
-      await Promise.all(
-        urgent.map((job) => {
-          if (getPreviewTotal(viewTotalKey(job.path, job.view)) != null) return Promise.resolve()
-          return fetchViewTotal(job.path, job.view).catch(() => {
+    const idle = window.setTimeout(() => {
+      const jobs = orderViewTotalJobs(countJobs, collectionPath)
+      const urgent = jobs.filter((job) => job.path === collectionPath)
+      const rest = jobs.filter((job) => job.path !== collectionPath)
+      void (async () => {
+        await Promise.all(
+          urgent.map((job) => {
+            if (getPreviewTotal(viewTotalKey(job.path, job.view)) != null) return Promise.resolve()
+            return fetchViewTotal(job.path, job.view).catch(() => {
+              if (cancelled) return
+            })
+          }),
+        )
+        for (const job of rest) {
+          if (cancelled) return
+          if (getPreviewTotal(viewTotalKey(job.path, job.view)) != null) continue
+          await new Promise<void>((resolve) => {
+            const ric = window.requestIdleCallback
+            if (typeof ric === 'function') ric(() => resolve(), { timeout: 200 })
+            else window.setTimeout(() => resolve(), 0)
+          })
+          if (cancelled) return
+          await fetchViewTotal(job.path, job.view).catch(() => {
             if (cancelled) return
           })
-        }),
-      )
-      for (const job of rest) {
-        if (cancelled) return
-        if (getPreviewTotal(viewTotalKey(job.path, job.view)) != null) continue
-        await new Promise<void>((resolve) => {
-          const ric = window.requestIdleCallback
-          if (typeof ric === 'function') ric(() => resolve(), { timeout: 200 })
-          else window.setTimeout(() => resolve(), 0)
-        })
-        if (cancelled) return
-        await fetchViewTotal(job.path, job.view).catch(() => {
-          if (cancelled) return
-        })
-      }
-    })()
+        }
+      })()
+    }, VIEW_TOTAL_IDLE_MS)
     return () => {
       cancelled = true
+      window.clearTimeout(idle)
     }
   }, [collectionPath, countJobKey, countJobs])
 

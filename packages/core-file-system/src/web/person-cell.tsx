@@ -15,6 +15,9 @@ const USER: PersonValue = { kind: 'user', name: '用户' }
 const SYSTEM: PersonValue = { kind: 'system', name: '系统' }
 
 let agentsInflight: Promise<ChatPerson[]> | null = null
+let agentsListed: ChatPerson[] | null = null
+let agentsListedAt = 0
+const AGENTS_TTL_MS = 8000
 
 export function agentNameLooksLikeId(name: string, sessionId: string) {
   const text = name.trim()
@@ -31,6 +34,7 @@ export function resolveAgentName(person: PersonValue, sessions: ReadonlyMap<stri
 }
 
 export async function loadAgents(): Promise<ChatPerson[]> {
+  if (agentsListed && Date.now() - agentsListedAt < AGENTS_TTL_MS) return agentsListed
   if (agentsInflight) return agentsInflight
   const request = listCollection({
     path: '/sessions',
@@ -39,8 +43,8 @@ export async function loadAgents(): Promise<ChatPerson[]> {
     sortDir: 'desc',
     columns: ['title', 'mascot'],
   })
-    .then((page) =>
-      page.items
+    .then((page) => {
+      const rows = page.items
         .filter((item) => typeof item?.id === 'string' && item.id)
         .map((item) => {
           const id = String(item.id)
@@ -53,8 +57,11 @@ export async function loadAgents(): Promise<ChatPerson[]> {
             name: String(item.title ?? '').trim() || id.slice(0, 8),
             ...(mascot ? { mascot } : {}),
           }
-        }),
-    )
+        })
+      agentsListed = rows
+      agentsListedAt = Date.now()
+      return rows
+    })
     .finally(() => {
       agentsInflight = null
     })

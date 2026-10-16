@@ -39,6 +39,8 @@ test('page plugin perf helpers stay as separate scripts in one folder', () => {
   assert.match(sources['seed-local.mjs'], /\/api\/db\/create/)
   assert.match(sources['measure-routes.mjs'], /\/database/)
   assert.match(sources['measure-routes.mjs'], /plugin-web-serial/)
+  assert.match(sources['measure-routes.mjs'], /networkReady/)
+  assert.match(sources['measure-routes.mjs'], /dbListReady/)
   assert.match(sources['measure-routes.mjs'], /inspectLocalShellSource/)
   assert.match(sources['measure-routes.mjs'], /BIU_PERF_ONLY/)
   assert.match(sources['seed-local.mjs'], /BIU_PERF_PAGES/)

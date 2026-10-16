@@ -14,6 +14,7 @@ import {
   pageRouteNeedsStoreWeb,
   runtimeWebModuleHref,
   runtimeWebPlugin,
+  storeWebPluginRequested,
 } from './index.ts'
 import { uiPackageLoaders } from 'virtual:cordis-ui-loaders'
 
@@ -60,6 +61,8 @@ test('store web plugins are the packed store packages, not core ui', () => {
   assert.equal(pageRouteNeedsStoreWeb('/database/pages/record/p000'), true)
   assert.equal(pageRouteNeedsStoreWeb('/database/tasks'), false)
   assert.equal(pageRouteNeedsStoreWeb('/'), false)
+  assert.equal(storeWebPluginRequested({ id: 'page-toc', packageName: 'store:page-toc' }, ['page-toc']), true)
+  assert.equal(storeWebPluginRequested({ id: 'page-excalidraw', packageName: 'store:page-excalidraw' }, ['page-toc']), false)
 })
 
 test('runtimeWebPlugin keeps inject when default is apply', () => {
@@ -87,7 +90,8 @@ test('ui-hub unloads disabled plugins before importing new ones', async () => {
   assert.match(src, /biu:enable-page-block-plugin/)
   assert.match(src, /runtimeWebModuleHref/)
   assert.match(src, /Promise\.all/)
-  assert.match(src, /storeWebRequested = true/)
+  assert.match(src, /storeWebRequested\.add\(plugin\)/)
+  assert.match(src, /storeWebPluginRequested\(row, storeWebRequested\)/)
   assert.match(src, /isStoreWebPlugin/)
 })
 

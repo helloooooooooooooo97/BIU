@@ -12,6 +12,7 @@ import {
   crumbRecordLabel,
   rememberPreviewTotal,
   SIDEBAR_PREVIEW_PAGE,
+  VIEW_TOTAL_IDLE_MS,
   viewTotalKey,
 } from './sidebar-preview.ts'
 
@@ -69,9 +70,14 @@ test('block/tag stub views only fetch a total when they are the open view', () =
     shouldFetchViewTotal({ path: '/page-blocks', view: block, collectionPath: '/page-blocks', activeViewId: block.id }),
     true,
   )
-  assert.equal(shouldFetchViewTotal({ path: '/page-blocks', view: all, collectionPath: '/page-blocks', activeViewId: all.id }), true)
+  assert.equal(shouldFetchViewTotal({ path: '/page-blocks', view: all, collectionPath: '/page-blocks', activeViewId: all.id }), false)
   assert.equal(shouldFetchViewTotal({ path: '/page-blocks', view: user, collectionPath: '/page-blocks', activeViewId: all.id }), true)
+  assert.equal(shouldFetchViewTotal({ path: '/page-blocks', view: all, collectionPath: '/tasks', activeViewId: all.id }), true)
   assert.equal(shouldFetchViewTotal({ path: '/facets', view: tag, collectionPath: '/tasks', activeViewId: tag.id }), false)
+})
+
+test('view totals wait past first paint so ready is not blocked', () => {
+  assert.equal(VIEW_TOTAL_IDLE_MS, 2800)
 })
 
 test('view total jobs put the open collection first and keep the rest stable', () => {

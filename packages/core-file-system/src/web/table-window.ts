@@ -1,6 +1,6 @@
 export const TABLE_ROW_PX = 37
 export const TABLE_WRAP_ROW_PX = 96
-export const TABLE_WINDOW_OVERSCAN = 10
+export const TABLE_WINDOW_OVERSCAN = 4
 export const TABLE_WINDOW_VIEWPORT_FALLBACK = 960
 
 export type TableWindowSlice = {

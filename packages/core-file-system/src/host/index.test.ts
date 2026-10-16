@@ -6,7 +6,7 @@ import { mkdtemp, writeFile } from 'node:fs/promises'
 import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { DatabaseService, apply as applyFileSystem, databaseHttpFailure, listNeedsMatchOverlay } from './index.ts'
+import { DatabaseService, apply as applyFileSystem, databaseHttpFailure, listNeedsMatchOverlay, specListQuery } from './index.ts'
 import { FileSystemAssets } from './assets-store.ts'
 import type { CollectionSpec, DbRecord } from '@biu/type-file-system'
 import { REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
@@ -2538,9 +2538,64 @@ test('list match overlay is only loaded for overlay fields, search, or tree filt
   assert.equal(listNeedsMatchOverlay({ $tree: { root: 'n1' } }, '', 'title'), true)
 })
 
+test('spec.list query keeps facet and session filters and drops group filters', () => {
+  assert.deepEqual(specListQuery({ q: 'hi', trash: true, ids: ['a'], filter: { status: 'open', $scope: 'personal' } }), {
+    q: 'hi',
+    trash: true,
+    ids: ['a'],
+  })
+  assert.deepEqual(specListQuery({ filter: { facetId: 'work', status: 'open' } }), { filter: { facetId: 'work' } })
+  assert.deepEqual(specListQuery({ filter: { sessionId: 's1' } }), { filter: { sessionId: 's1' } })
+})
+
+test('concurrent lists of one collection share a single spec.list scan', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  const rows = Array.from({ length: 12 }, (_, index) => ({
+    id: `n${index}`,
+    title: `笔记${index}`,
+    status: index % 2 ? 'open' : 'done',
+  }))
+  let lists = 0
+  db.register({
+    id: 'notes',
+    path: '/notes',
+    schema: {
+      fields: {
+        ...REQUIRED_RECORD_FIELDS,
+        title: { type: 'string', writable: true },
+        status: { type: 'string', writable: true, enum: ['open', 'done'] },
+      },
+    },
+    list: async () => {
+      lists += 1
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      return [...rows]
+    },
+    get: (id) => rows.find((row) => row.id === id) ?? null,
+  })
+  const [open, done, again] = await Promise.all([
+    db.list('/notes', { status: 'open' }, { limit: 20 }),
+    db.list('/notes', { status: 'done' }, { limit: 20 }),
+    db.list('/notes', { status: 'open' }, { limit: 1 }),
+  ])
+  assert.equal(lists, 1)
+  assert.equal(open.kind, 'collection')
+  assert.equal(done.kind, 'collection')
+  assert.equal(again.kind, 'collection')
+  if (open.kind !== 'collection' || done.kind !== 'collection' || again.kind !== 'collection') return
+  assert.equal(open.items.length, 6)
+  assert.equal(done.items.length, 6)
+  assert.equal(again.items.length, 1)
+  assert.equal(again.total, 6)
+})
+
 test('collection list preloads authorization scans and releases them', () => {
   const host = readFileSync(resolve(import.meta.dirname, './index.ts'), 'utf8')
   assert.match(host, /auth\.preloadCollection\(actor\.workspaceId, spec\.path, actor\.accountId\)/)
+  assert.match(host, /private inflightMatches/)
+  assert.match(host, /private inflightScans/)
+  assert.match(host, /specListQuery\(query\)/)
   assert.match(
     host,
     /try \{\s*const overlay = listNeedsMatchOverlay\(liveFilter, q, sortField, page\?\.sorts\)[\s\S]*?\} finally \{\s*if \(auth && actor\) \{[\s\S]*?releaseCollection\(actor\.workspaceId, spec\.path, actor\.accountId\)/,

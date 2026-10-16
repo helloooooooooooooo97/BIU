@@ -36,6 +36,18 @@ export function pageRouteNeedsStoreWeb(pathname: string) {
   return /\/pages\/record\//.test(pathname)
 }
 
+/** 只挂当前页面请求启用的商店包，不把 snapshot 里其余 web.js 一起拉下来。 */
+export function storeWebPluginRequested(
+  row: { id: string; packageName?: string },
+  requested: Iterable<string>,
+) {
+  const want = new Set([...requested].map((id) => id.trim()).filter(Boolean))
+  if (want.has(row.id)) return true
+  const pack = String(row.packageName ?? '')
+  if (pack.startsWith('store:') && want.has(pack.slice('store:'.length))) return true
+  return false
+}
+
 /** 动态 import 得到的是模块命名空间；不要只用 default，否则会丢掉 inject / name。 */
 export function runtimeWebPlugin(loaded: unknown): Plugin | undefined {
   if (loaded == null) return undefined
@@ -91,10 +103,10 @@ export function apply(ctx: Context) {
   const forkWebs = new Map<string, string>()
   let pending = false
   let running = false
-  let storeWebRequested = false
+  const storeWebRequested = new Set<string>()
 
   function shouldLoadStoreWeb() {
-    return storeWebRequested
+    return storeWebRequested.size > 0
   }
 
   async function resolvePlugin(_id: string, web?: string): Promise<Plugin | undefined> {
@@ -183,7 +195,7 @@ export function apply(ctx: Context) {
       }
 
       if (shouldLoadStoreWeb()) {
-        const pendingStore = storeRows.filter((row) => !forks.has(row.id))
+        const pendingStore = storeRows.filter((row) => !forks.has(row.id) && storeWebPluginRequested(row, storeWebRequested))
         const imported = await Promise.all(
           pendingStore.map(async (row) => {
             if (row.web && isRuntimeWebModule(row.web)) clientLog('info', 'ui-hub', `加载 ${row.id} 的 web.js`, row.web)
@@ -228,8 +240,9 @@ export function apply(ctx: Context) {
   })
   lastMountKey = mountKey()
   if (typeof window !== 'undefined') {
-    window.addEventListener('biu:enable-page-block-plugin', () => {
-      storeWebRequested = true
+    window.addEventListener('biu:enable-page-block-plugin', (event) => {
+      const plugin = String((event as CustomEvent<{ plugin?: unknown }>).detail?.plugin ?? '').trim()
+      if (plugin) storeWebRequested.add(plugin)
       void sync()
     })
   }

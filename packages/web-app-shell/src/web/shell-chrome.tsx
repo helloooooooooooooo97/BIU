@@ -2103,6 +2103,8 @@ function noticeKindLabel(kind?: string) {
   return ''
 }
 
+const NOTICES_PULL_IDLE_MS = 2800
+
 function NoticeBell({
   open,
   onOpenChange,
@@ -2139,7 +2141,7 @@ function NoticeBell({
   }, [])
 
   useEffect(() => {
-    load()
+    const idle = window.setTimeout(load, NOTICES_PULL_IDLE_MS)
     let timer = 0
     const onChange = (event: Event) => {
       if ((event as CustomEvent<{ views?: boolean }>).detail?.views) return
@@ -2148,6 +2150,7 @@ function NoticeBell({
     }
     window.addEventListener('fsdb:change', onChange)
     return () => {
+      window.clearTimeout(idle)
       window.clearTimeout(timer)
       window.removeEventListener('fsdb:change', onChange)
     }

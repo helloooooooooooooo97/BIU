@@ -126,8 +126,11 @@ function CollectionPage(props: SlotProps) {
 
   useEffect(() => {
     if (!orderedTables.length) return
-    void pullSavedViews(orderedTables.map((table) => table.path)).then(() => {
-      window.dispatchEvent(new CustomEvent('fsdb:change', { detail: { views: true } }))
+    void pullSavedViews(
+      orderedTables.map((table) => table.path),
+      { idle: true },
+    ).then((changed) => {
+      if (changed) window.dispatchEvent(new CustomEvent('fsdb:change', { detail: { views: true } }))
     })
   }, [tablePathsKey])
 
