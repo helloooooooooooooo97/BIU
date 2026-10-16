@@ -82,11 +82,12 @@ export function normalizeSavedView(view: SavedView): SavedView {
 }
 
 export const PAGE_SIZES = [20, 50, 100] as const
+export const DEFAULT_VIEW_PAGE_SIZE = PAGE_SIZES[0]
 
 export function normalizePageSize(value: unknown) {
   const n = Number(value)
   if (PAGE_SIZES.includes(n as (typeof PAGE_SIZES)[number])) return n
-  return 50
+  return DEFAULT_VIEW_PAGE_SIZE
 }
 
 export function viewStateKey(

@@ -816,7 +816,7 @@ test('pager keeps the current page when filter objects are only recreated', () =
   const page = readFileSync(resolve(import.meta.dirname, './index.tsx'), 'utf8')
   const inspector = readFileSync(resolve(import.meta.dirname, './inspector-database.tsx'), 'utf8')
   assert.match(browser, /const queryFiltersKey = JSON.stringify\(queryFilters\)/)
-  assert.match(browser, /\[fetchQuery, queryFiltersKey, sortField, sortDir, pageSize, collectionPath, dataPath\]/)
+  assert.match(browser, /\[fetchQuery, queryFiltersKey, sortField, sortDir, pageSize, groupBy, collectionPath, dataPath\]/)
   assert.doesNotMatch(browser, /\[fetchQuery, queryFilters, sortField/)
   assert.match(browser, /tables\s*\n\s*\.map\(\(table\) => table\.path\)/)
   assert.doesNotMatch(browser, /tablePathsKey = tables\.map/)

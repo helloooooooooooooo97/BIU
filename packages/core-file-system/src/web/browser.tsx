@@ -63,6 +63,7 @@ import {
   formatField,
   fieldValueOptions,
   groupField,
+  groupListKeys,
   groupRecords,
   groupableFields,
   hasTreeLinks,
@@ -77,8 +78,10 @@ import {
   readFacetFlatValue,
   resolveFieldType,
   uniqueValues,
+  type GroupBucket,
   type ViewMode,
 } from './fields.ts'
+import { listGroupedCollection } from './group-list.ts'
 import { DbMenu, DbSearchOption } from '@biu/database-ui'
 import { AppDialog, CellSelect, CheckRow, LocalText } from './controls.tsx'
 import { DataSidebar } from './data-sidebar.tsx'
@@ -468,12 +471,15 @@ function recordsFingerprint(rows: Array<DbRecord & { path?: string }>) {
 }
 
 const LIST_CACHE_MAX = 8
-const listCache = new Map<string, { items: Array<DbRecord & { path?: string }>; total: number; stat: StatResult | null }>()
+type ListCacheSnap = {
+  items: Array<DbRecord & { path?: string }>
+  total: number
+  stat: StatResult | null
+  groupBuckets?: GroupBucket[]
+}
+const listCache = new Map<string, ListCacheSnap>()
 
-function rememberListCache(
-  path: string,
-  snap: { items: Array<DbRecord & { path?: string }>; total: number; stat: StatResult | null },
-) {
+function rememberListCache(path: string, snap: ListCacheSnap) {
   if (listCache.has(path)) listCache.delete(path)
   listCache.set(path, snap)
   while (listCache.size > LIST_CACHE_MAX) {
@@ -719,6 +725,9 @@ export function CollectionBrowser({
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
   const [groupPages, setGroupPages] = useState<Record<string, number>>({})
+  const [groupBuckets, setGroupBuckets] = useState<GroupBucket[]>([])
+  const groupPagesRef = useRef(groupPages)
+  groupPagesRef.current = groupPages
   const listColumns = useMemo(() => {
     if (customView) return undefined
     if (chrome?.cells) return undefined
@@ -897,29 +906,79 @@ export function CollectionBrowser({
     setBulkMenuOpen(false)
   }
 
+  const schemaRef = useRef(stat?.schema)
+  schemaRef.current = stat?.schema
+  const itemsRef = useRef(items)
+  itemsRef.current = items
   const reload = useCallback(async () => {
     if (Date.now() < quietUntil.current) return true
     const gen = ++reloadGen.current
+    const listOpts = {
+      path: dataPath,
+      query: fetchQuery,
+      sortField,
+      sortDir,
+      sorts,
+      filters: queryFilters,
+      columns: listColumns,
+    }
     try {
-      const [nextStat, listed] = await Promise.all([
-        readJson<StatResult>(`/api/db/stat?path=${encodeURIComponent(dataPath)}`),
-        listCollection({
-          path: dataPath,
-          limit: groupBy ? 200 : pageSize,
-          offset: groupBy ? 0 : page * pageSize,
-          query: fetchQuery,
-          sortField,
-          sortDir,
-          sorts,
-          filters: queryFilters,
-          columns: listColumns,
-        }),
-      ])
+      const nextStatPromise = readJson<StatResult>(`/api/db/stat?path=${encodeURIComponent(dataPath)}`)
+      const extraGroupValues = (schema?: CollectionSchema) => {
+        const group = groupField(schema, groupBy)
+        if (!group || group.field.enum?.length) return []
+        return uniqueValues(itemsRef.current, group.key, group.field)
+      }
+      const loadGroups = (schema?: CollectionSchema) =>
+        listGroupedCollection({
+          ...listOpts,
+          groupBy,
+          schema,
+          extraValues: extraGroupValues(schema),
+          pageSize,
+          groupPages: groupPagesRef.current,
+          list: listCollection,
+        })
+      let nextStat: StatResult
+      let listed: { items: Array<DbRecord & { path?: string }>; total: number; schema?: CollectionSchema }
+      let buckets: GroupBucket[] = []
+      const loadUngrouped = () => listCollection({ ...listOpts, limit: pageSize, offset: page * pageSize })
+      if (groupBy) {
+        const cachedSchema = schemaRef.current
+        const cachedKeys = cachedSchema ? groupListKeys(cachedSchema, groupBy, extraGroupValues(cachedSchema)) : []
+        if (cachedKeys.length) {
+          const [statResult, grouped] = await Promise.all([nextStatPromise, loadGroups(cachedSchema)])
+          nextStat = statResult
+          if (gen !== reloadGen.current) return true
+          if (grouped) {
+            listed = grouped
+            buckets = grouped.buckets
+          } else {
+            listed = await loadUngrouped()
+          }
+        } else {
+          nextStat = await nextStatPromise
+          if (gen !== reloadGen.current) return true
+          const grouped = await loadGroups(nextStat.schema)
+          if (gen !== reloadGen.current) return true
+          if (grouped) {
+            listed = grouped
+            buckets = grouped.buckets
+          } else {
+            listed = await loadUngrouped()
+          }
+        }
+      } else {
+        const [statResult, ungrouped] = await Promise.all([nextStatPromise, loadUngrouped()])
+        nextStat = statResult
+        listed = ungrouped
+      }
       if (gen !== reloadGen.current) return true
       const nextSchema = listed.schema ?? nextStat.schema
       setStat((prev) =>
         prev?.schema && JSON.stringify(prev.schema) === JSON.stringify(nextSchema) ? prev : { ...nextStat, schema: nextSchema },
       )
+      setGroupBuckets((prev) => (JSON.stringify(prev) === JSON.stringify(buckets) ? prev : buckets))
       setItems((prev) => {
         const kept = prev.filter((item) => confirmedCreates.current.has(String(item.id)) && !listed.items.some((row) => row.id === item.id))
         for (const row of listed.items) confirmedCreates.current.delete(String(row.id))
@@ -932,7 +991,12 @@ export function CollectionBrowser({
         const hit = listed.items.find((item) => item.id === openId)
         if (hit) setDetailRow((prev) => (prev?.id === openId ? overlayListed(prev, hit, listColumns) : prev))
       }
-      rememberListCache(dataPath, { items: listed.items, total: listed.total, stat: { ...nextStat, schema: nextSchema } })
+      rememberListCache(dataPath, {
+        items: listed.items,
+        total: listed.total,
+        stat: { ...nextStat, schema: nextSchema },
+        groupBuckets: buckets,
+      })
       if (activeViewId) {
         rememberPreviewTotal(
           viewTotalKey(collectionPath, {
@@ -955,7 +1019,7 @@ export function CollectionBrowser({
   }, [activeViewId, collectionPath, dataPath, fetchQuery, groupBy, listColumns, queryFilters, page, pageSize, sortDir, sortField, sorts])
   const reloadRef = useRef(reload)
   reloadRef.current = reload
-  const reloadKey = `${dataPath}\0${groupBy ? 0 : page}\0${groupBy ? 'grouped' : pageSize}\0${fetchQuery}\0${sortField}\0${sortDir}\0${JSON.stringify(sorts)}\0${JSON.stringify(queryFilters)}\0${activeViewId ?? ''}\0${listColumnsKey}\0${groupBy}`
+  const reloadKey = `${dataPath}\0${groupBy ? JSON.stringify(groupPages) : page}\0${pageSize}\0${fetchQuery}\0${sortField}\0${sortDir}\0${JSON.stringify(sorts)}\0${JSON.stringify(queryFilters)}\0${activeViewId ?? ''}\0${listColumnsKey}\0${groupBy}`
   const detailIdRef = useRef<string | null>(null)
   detailIdRef.current = detailId
   const contentGen = useRef(0)
@@ -1010,7 +1074,8 @@ export function CollectionBrowser({
 
   useEffect(() => {
     setPage((prev) => (prev === 0 ? prev : 0))
-  }, [fetchQuery, queryFiltersKey, sortField, sortDir, pageSize, collectionPath, dataPath])
+    setGroupPages((prev) => (Object.keys(prev).length ? {} : prev))
+  }, [fetchQuery, queryFiltersKey, sortField, sortDir, pageSize, groupBy, collectionPath, dataPath])
 
   async function refreshNow() {
     if (refreshing) return
@@ -1035,6 +1100,9 @@ export function CollectionBrowser({
     setItems(cached?.items ?? [])
     setStat(cached?.stat ?? null)
     setTotal(cached?.total ?? 0)
+    setGroupBuckets(cached?.groupBuckets ?? [])
+    setGroupPages({})
+    setCollapsedGroups({})
     setError('')
     setPage(0)
     const stored = viewForPath(collectionPath, routeViewId)
@@ -1278,10 +1346,10 @@ export function CollectionBrowser({
   const visible = items
 
   const grouped = useMemo(() => {
-    const buckets = groupRecords(visible, schema, groupBy)
-    if (!grouping) return buckets
-    return buckets.filter((item) => item.rows.length)
-  }, [groupBy, grouping, schema, visible])
+    if (!grouping) return groupRecords(visible, schema, groupBy)
+    if (groupBuckets.length) return groupBuckets.filter((item) => (item.total ?? item.rows.length) > 0)
+    return groupRecords(visible, schema, groupBy).filter((item) => item.rows.length)
+  }, [groupBuckets, groupBy, grouping, schema, visible])
   const parentKey = useMemo(() => parentFieldKey(schema, items), [items, schema])
   const treeable = useMemo(() => hasTreeLinks(items, parentKey), [items, parentKey])
   const treeOn = treeable && showTree
@@ -1305,17 +1373,19 @@ export function CollectionBrowser({
       }
       for (const group of grouped) {
         const groupKey = group.key || 'unset'
+        const count = group.total ?? group.rows.length
         nodes.push({
           kind: 'group-head',
           key: `gh:${groupKey}`,
           groupKey,
           label: group.label,
-          count: group.rows.length,
+          count,
         })
         if (collapsedGroups[groupKey]) continue
-        const pages = Math.max(1, Math.ceil(group.rows.length / pageSize))
+        const pages = Math.max(1, Math.ceil(count / pageSize))
         const pageIndex = Math.min(groupPages[groupKey] ?? 0, pages - 1)
-        const listed = flattenRows(group.rows.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize))
+        const paged = group.total != null ? group.rows : group.rows.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize)
+        const listed = flattenRows(paged)
         for (const item of listed) {
           nodes.push({
             kind: 'row',
@@ -1331,7 +1401,7 @@ export function CollectionBrowser({
           kind: 'group-pager',
           key: `gp:${groupKey}`,
           groupKey,
-          count: group.rows.length,
+          count,
           pageIndex,
         })
       }
@@ -1971,13 +2041,26 @@ export function CollectionBrowser({
     await executeAction(row, action)
   }
 
+  function mapListedRecords(map: (row: DbRecord) => DbRecord) {
+    setItems((prev) => {
+      const next = prev.map((item) => map(item) as typeof item)
+      return recordsFingerprint(prev) === recordsFingerprint(next) ? prev : next
+    })
+    setGroupBuckets((prev) =>
+      prev.map((group) => ({
+        ...group,
+        rows: group.rows.map((row) => map(row)),
+      })),
+    )
+  }
+
   async function executeAction(row: DbRecord, action: CollectionActionInfo) {
     if (actingRef.current) return
     const preview = previewActionRecord(row, action)
     actingRef.current = true
     setActing(true)
     if (preview !== row) {
-      setItems((prev) => prev.map((item) => (item.id === row.id ? overlayListed(item, preview, listColumns) : item)))
+      mapListedRecords((item) => (item.id === row.id ? overlayListed(item, preview, listColumns) : item))
       setDetailRow((prev) => (prev?.id === row.id ? overlayListed(prev, preview, listColumns) : prev))
     }
     try {
@@ -1992,7 +2075,7 @@ export function CollectionBrowser({
         void reloadRef.current()
       }, 800)
     } catch (err) {
-      setItems((prev) => prev.map((item) => (item.id === row.id ? row : item)))
+      mapListedRecords((item) => (item.id === row.id ? row : item))
       setDetailRow((prev) => (prev?.id === row.id ? row : prev))
       setDlg({ kind: 'alert', title: `${action.label}失败`, body: String(err) })
       quietUntil.current = 0
@@ -2048,7 +2131,7 @@ export function CollectionBrowser({
         if (field && field.type !== 'file') {
           const stored = value && typeof value === 'object' ? JSON.stringify(value) : value
           const merge = (item: DbRecord) => (item.id === row.id ? { ...item, [bodyKey]: stored } : item)
-          setItems((prev) => prev.map(merge))
+          mapListedRecords(merge)
           setDetailRow((prev) => (prev?.id === row.id ? merge(prev) : prev))
         }
         return
@@ -2061,7 +2144,7 @@ export function CollectionBrowser({
       const next = data.value
       if (next) {
         const merge = (item: DbRecord) => (item.id === next.id ? { ...item, ...next, banner: next.banner ?? null } : item)
-        setItems((prev) => prev.map(merge))
+        mapListedRecords(merge)
         setDetailRow((prev) => (prev?.id === next.id ? { ...prev, ...next, banner: next.banner ?? null } : prev))
         window.dispatchEvent(new Event('fsdb:change'))
         return

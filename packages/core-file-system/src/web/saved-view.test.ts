@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { colWidthStyle, normalizeSavedView, tableWidthStyle, viewStateKey, type SavedView } from './saved-view.ts'
+import { colWidthStyle, DEFAULT_VIEW_PAGE_SIZE, normalizePageSize, normalizeSavedView, tableWidthStyle, viewStateKey, type SavedView } from './saved-view.ts'
 
 const base: SavedView = {
   id: '1',
@@ -24,7 +24,10 @@ test('normalizeSavedView keeps custom mode slugs and rejects junk', () => {
   assert.equal(junk.truncate, true)
   assert.equal(junk.wrap, false)
   assert.equal(junk.query, '')
-  assert.equal(junk.pageSize, 50)
+  assert.equal(DEFAULT_VIEW_PAGE_SIZE, 20)
+  assert.equal(junk.pageSize, 20)
+  assert.equal(normalizePageSize(50), 50)
+  assert.equal(normalizePageSize(undefined), 20)
   assert.deepEqual(junk.columnWidths, {})
   const fromFlat = normalizeSavedView({
     ...base,

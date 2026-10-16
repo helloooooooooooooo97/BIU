@@ -469,7 +469,91 @@ function groupBucketLabel(kind: FieldType, key: string, field?: FieldSpec) {
   return key
 }
 
-export function groupRecords(rows: DbRecord[], schema: CollectionSchema | undefined, preferred?: string) {
+export type GroupBucket = {
+  key: string
+  label: string
+  rows: DbRecord[]
+  total?: number
+}
+
+const SHARE_SCOPE_FILTER: Record<string, 'personal' | 'workspace' | 'shared'> = {
+  私人: 'personal',
+  空间: 'workspace',
+  共享: 'shared',
+}
+
+/** 分组表头的稳定 key：schema enum / 布尔，而不是当前这一页里碰巧出现的值。 */
+export function groupListKeys(
+  schema: CollectionSchema | undefined,
+  preferred?: string,
+  extraValues: string[] = [],
+): { key: string; label: string }[] {
+  const group = groupField(schema, preferred)
+  if (!group) return []
+  const kind = resolveFieldType(group.field)
+  if (kind === 'boolean') {
+    return [
+      { key: 'true', label: groupBucketLabel(kind, 'true', group.field) },
+      { key: 'false', label: groupBucketLabel(kind, 'false', group.field) },
+    ]
+  }
+  const declared = group.field.enum?.length ? group.field.enum.map(String) : []
+  const values: string[] = []
+  const seen = new Set<string>()
+  for (const value of [...declared, ...extraValues]) {
+    const key = String(value ?? '')
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    values.push(key)
+  }
+  if (!values.length) return []
+  const listed = values.map((key) => ({ key, label: groupBucketLabel(kind, key, group.field) }))
+  if (group.key !== 'shareScope') listed.push({ key: '', label: '未填' })
+  return listed
+}
+
+/** 每一组自己的列表过滤。分享列是计算属性，必须走 $scope，不能 eq shareScope。 */
+export function groupListFilter(groupBy: string, groupKey: string): Record<string, unknown> {
+  if (groupBy === 'shareScope') {
+    const scope = SHARE_SCOPE_FILTER[groupKey]
+    return scope ? { $scope: scope } : {}
+  }
+  if (!groupKey) {
+    return {
+      $tree: {
+        kind: 'group',
+        id: 'group-empty',
+        combinator: 'and',
+        children: [{ kind: 'rule', id: 'group-empty-rule', field: groupBy, op: 'is_empty', value: '' }],
+      },
+    }
+  }
+  return { [groupBy]: groupKey }
+}
+
+/** 视图筛选和组筛选叠在一起。$scope 冲突表示这组在当前视图里不可能有行。 */
+export function mergeListFilters(
+  base: Record<string, unknown>,
+  extra: Record<string, unknown>,
+): Record<string, unknown> | null {
+  const baseScope = typeof base.$scope === 'string' ? base.$scope : ''
+  const extraScope = typeof extra.$scope === 'string' ? extra.$scope : ''
+  if (baseScope && extraScope && baseScope !== extraScope) return null
+  const out: Record<string, unknown> = { ...base, ...extra }
+  const left = base.$tree
+  const right = extra.$tree
+  if (left && right && typeof left === 'object' && typeof right === 'object' && !Array.isArray(left) && !Array.isArray(right)) {
+    out.$tree = {
+      kind: 'group',
+      id: 'group-and',
+      combinator: 'and',
+      children: [left, right],
+    }
+  }
+  return out
+}
+
+export function groupRecords(rows: DbRecord[], schema: CollectionSchema | undefined, preferred?: string): GroupBucket[] {
   const group = groupField(schema, preferred)
   if (!group) return [{ key: '', label: '全部', rows }]
   const kind = resolveFieldType(group.field)
