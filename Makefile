@@ -15,6 +15,7 @@ install:
 
 # 停掉 dev 进程并等到它们退出。
 # 只看端口会提前返回：node 关掉监听之后还占着 sqlite，马上再起就会锁库或端口冲突。
+# 页面开着时 Vite 不会自己退出，所以只等一小段时间，没退就结束进程。
 stop:
 	@node scripts/stop-dev.mjs
 

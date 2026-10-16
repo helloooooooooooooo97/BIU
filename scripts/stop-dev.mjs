@@ -106,34 +106,20 @@ async function listProcesses() {
 }
 
 async function listListeners() {
-  const found = []
-  for (const port of DEV_PORTS) {
-    try {
-      const { stdout } = await execFileAsync('lsof', ['-nP', `-tiTCP:${port}`, '-sTCP:LISTEN'])
-      found.push(...parseListenerPids(stdout))
-    } catch (error) {
-      if (error?.code === 1 || error?.code === '1') continue
-      if (error?.code === 'ENOENT') throw new Error('需要 lsof 才能停止 dev 进程')
-      const stderr = `${error?.stderr ?? ''}`
-      if (/no such file|not found|cannot identify/i.test(stderr)) continue
-      throw error
-    }
-  }
-  return [...new Set(found)]
-}
-
-async function isGone(pid) {
   try {
-    process.kill(pid, 0)
-  } catch {
-    return true
-  }
-  try {
-    const { stdout } = await execFileAsync('ps', ['-o', 'state=', '-p', String(pid)])
-    const state = stdout.trim()
-    return state === '' || state.startsWith('Z')
-  } catch {
-    return true
+    const { stdout } = await execFileAsync('lsof', [
+      '-nP',
+      '-sTCP:LISTEN',
+      '-t',
+      ...DEV_PORTS.map((port) => `-iTCP:${port}`),
+    ])
+    return parseListenerPids(stdout)
+  } catch (error) {
+    if (error?.code === 1 || error?.code === '1') return []
+    if (error?.code === 'ENOENT') throw new Error('需要 lsof 才能停止 dev 进程')
+    const stderr = `${error?.stderr ?? ''}`
+    if (/no such file|not found|cannot identify/i.test(stderr)) return []
+    throw error
   }
 }
 
@@ -142,6 +128,15 @@ function signal(pid, name) {
     process.kill(pid, name)
   } catch {
     // 进程已经退出
+  }
+}
+
+function isGone(pid) {
+  try {
+    process.kill(pid, 0)
+    return false
+  } catch {
+    return true
   }
 }
 
@@ -171,12 +166,6 @@ async function cwdForSeeds(processes, readers) {
   return cwdByPid
 }
 
-function describe(processes, pid) {
-  const command = processes.find((proc) => proc.pid === pid)?.command ?? ''
-  const short = command.length > 160 ? `${command.slice(0, 157)}...` : command
-  return short ? `${pid} ${short}` : String(pid)
-}
-
 export async function runStop({
   listProcesses: readProcesses,
   listListeners: readListeners,
@@ -187,8 +176,10 @@ export async function runStop({
   isGone: exited,
   sleep,
   now = () => Date.now(),
-  termGraceMs = 8000,
-  killGraceMs = 2000,
+  // Vite 的 SIGTERM 会等浏览器连接断开，页面开着就一直不退。
+  // 拖满几秒也还是要杀掉，所以只给一小段时间，没退就结束掉。
+  termGraceMs = 400,
+  killGraceMs = 400,
   log = () => {},
 }) {
   const processes = await readProcesses()
@@ -199,42 +190,42 @@ export async function runStop({
     log(`${DEV_PORTS.join(' ')} 已空闲`)
     return
   }
-  log(`结束 dev 进程\n${targets.map((pid) => describe(processes, pid)).join('\n')}`)
+  log('结束 dev 进程')
   for (const pid of targets) send(pid, 'SIGTERM')
 
-  const waitClear = async (graceMs) => {
+  const waitGone = async (pids, graceMs) => {
     const start = now()
     for (;;) {
       const alive = []
-      for (const pid of targets) {
+      for (const pid of pids) {
         if (!(await exited(pid))) alive.push(pid)
       }
-      const listening = await readListeners()
-      if (alive.length === 0 && listening.length === 0) return { alive, listening }
-      if (now() - start >= graceMs) return { alive, listening }
-      await sleep(100)
+      if (alive.length === 0) return alive
+      if (now() - start >= graceMs) return alive
+      await sleep(50)
     }
   }
 
-  let result = await waitClear(termGraceMs)
-  if (result.alive.length || result.listening.length) {
+  let alive = await waitGone(targets, termGraceMs)
+  if (alive.length) {
     const latest = await readProcesses()
+    const stillListening = await readListeners()
     const again = selectStopPids({
       processes: latest,
-      listeners: result.listening,
+      listeners: stillListening,
       selfPid,
       repoRoot: root,
       cwdByPid: root ? await cwdForSeeds(latest, readProcessCwd) : new Map(),
     })
-    const force = [...new Set([...result.alive, ...again])].sort((a, b) => a - b)
-    log(`强制结束 ${force.join(' ')}`)
+    const force = [...new Set([...alive, ...again])].sort((a, b) => a - b)
     for (const pid of force) send(pid, 'SIGKILL')
-    result = await waitClear(killGraceMs)
+    alive = await waitGone(force, killGraceMs)
   }
-  if (result.alive.length || result.listening.length) {
+  const stillListening = alive.length ? [] : await readListeners()
+  if (alive.length || stillListening.length) {
     const detail = [
-      result.alive.length ? `进程 ${result.alive.join(' ')}` : '',
-      result.listening.length ? `端口上的进程 ${result.listening.join(' ')}` : '',
+      alive.length ? `进程 ${alive.join(' ')}` : '',
+      stillListening.length ? `端口上的进程 ${stillListening.join(' ')}` : '',
     ].filter(Boolean).join('，')
     throw new Error(`dev 没有停干净：${detail}`)
   }

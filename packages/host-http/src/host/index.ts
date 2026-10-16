@@ -230,11 +230,12 @@ export class HttpService extends Service {
       })
       return () =>
         new Promise<void>((resolve) => {
-          for (const socket of this.sockets) socket.close()
+          for (const socket of this.sockets) socket.terminate()
           server.off('upgrade', onUpgrade)
           hub.close()
           this.wsServers.delete('/ws')
           this.server = null
+          server.closeAllConnections?.()
           server.close(() => resolve())
         })
     }, 'http.listen')

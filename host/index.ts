@@ -7,6 +7,13 @@ import './types.ts'
 
 process.env.BIU_ONLINE = process.env.BIU_ONLINE || '1'
 
+// tsx 发现这里监听了信号就不会再代为退出。直接退出，端口和 sqlite 马上让出来。
+function exitOnStop() {
+  process.exit(0)
+}
+process.once('SIGTERM', exitOnStop)
+process.once('SIGINT', exitOnStop)
+
 const rootDir = findRepoRoot()
 const dataRoot = process.env.BIU_HOME || rootDir
 adoptPackedUserData(rootDir, dataRoot, process.env.CORDIS_WORKSPACE || join(dataRoot, 'workspace'))
