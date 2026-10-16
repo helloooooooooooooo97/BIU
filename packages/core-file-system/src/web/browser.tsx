@@ -131,6 +131,15 @@ import { HttpError, listCollection, readJson } from './db-client.ts'
 import { savedViewRecordPath } from '../paths.ts'
 import { findViewNeighbor, indexOnPage } from './view-adjacent.ts'
 import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, TABLE_WINDOW_VIEWPORT_FALLBACK, tableWindowSlice, tableWindowUnchanged } from './table-window.ts'
+import {
+  idleBoolInnerHtml,
+  idleEmptyUsageInnerHtml,
+  idleSelectInnerHtml,
+  idleTableRowHtml,
+  idleTextInnerHtml,
+  idleTitleInnerHtml,
+  type IdleTableTd,
+} from './table-idle-html.ts'
 import { isPaintedListReady, markPaintedListReady, rememberPreviewTotal, resetPaintedListReady, viewTotalKey, whenListIdle } from './sidebar-preview.ts'
 import { catalogLockFilters, isReadOnlyViewId, mergeTableViews, parseBuiltinScopeViewId, stubBuiltinBlockKindView, viewsForScope, type DataScope } from '../catalog-views.ts'
 import { SAVED_VIEW_EVENT, rememberInspectorWorkingView, showRecordInInspector } from './inspector-db-route.ts'
@@ -219,6 +228,35 @@ function HoverMount({ children }: { children: ReactNode }) {
     <span className="tasks-hover-mount" onMouseEnter={() => { if (!live) setLive(true) }}>
       {live ? children : null}
     </span>
+  )
+}
+
+function TableIdleRow({
+  recordId,
+  className,
+  pick,
+  html,
+  renderLive,
+}: {
+  recordId: string
+  className?: string
+  pick: object
+  html: string
+  renderLive: () => ReactNode
+}) {
+  const [live, setLive] = useState(false)
+  const liveRef = useRef(renderLive)
+  liveRef.current = renderLive
+  if (live) return liveRef.current()
+  return (
+    <tr
+      data-record-id={recordId}
+      data-table-idle=""
+      className={className}
+      {...pick}
+      onMouseEnter={() => setLive(true)}
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
   )
 }
 
@@ -362,6 +400,7 @@ function RecordTitle({
   onOpenSplit,
   onOpenRow,
   onWriteEmoji,
+  toolsArmed = false,
 }: {
   row: DbRecord
   label: string
@@ -380,8 +419,9 @@ function RecordTitle({
   onOpenSplit: () => void
   onOpenRow: () => void
   onWriteEmoji: (next: string) => void
+  toolsArmed?: boolean
 }) {
-  const [toolsLive, setToolsLive] = useState(false)
+  const [toolsLive, setToolsLive] = useState(toolsArmed)
   const armTools = () => {
     if (!toolsLive) setToolsLive(true)
   }
@@ -3128,7 +3168,30 @@ export function CollectionBrowser({
     return text ? <span>{text}</span> : null
   }
 
-  function tableRecordRow(row: DbRecord, depth: number, hasKids: boolean, kidCount: number, rowKey: string) {
+  function idleTableCellInner(row: DbRecord, key: string, field: FieldSpec) {
+    if (key === 'actions') return ''
+    if (key === schema?.labelField) {
+      return idleTitleInnerHtml(labelOf(row), idleTableIconKind(currentTable?.view?.icon), recordPreviewEmoji(row))
+    }
+    if (key === 'shareScope' || key === 'shareRole') {
+      return idleTextInnerHtml(cellValueText(row, key, field) || String(row[key] ?? ''))
+    }
+    const kind = resolveFieldType(field)
+    if (kind === 'boolean') {
+      const raw = parseFacetFlatColumnKey(key) ? readFacetFlatValue(row, key, facetSourceKey(schema)) : row[key]
+      return idleBoolInnerHtml(raw === true || raw === 'true')
+    }
+    if (kind === 'facet') {
+      const tags = loadFacets()
+      const parsed = normalizeSchemaValue(row[key])
+      const labels = parsed.tags.map((id) => tags.find((tag) => tag.id === id)?.label ?? id)
+      return idleSelectInnerHtml(labels.join('、'))
+    }
+    if (key === 'usage' && !(Number(row[key]) > 0)) return idleEmptyUsageInnerHtml()
+    return idleTextInnerHtml(cellValueText(row, key, field))
+  }
+
+  function tableLiveRow(row: DbRecord, depth: number, hasKids: boolean, kidCount: number, rowKey: string, toolsArmed = false) {
     const cellPick = cellPickRef.current
     return (
       <tr
@@ -3170,6 +3233,7 @@ export function CollectionBrowser({
                 onOpenSplit={() => showRecordInInspector(collectionPath, row.id)}
                 onOpenRow={() => openRow(row)}
                 onWriteEmoji={(next) => void writePatch(row, { emoji: next })}
+                toolsArmed={toolsArmed}
               />
             ) : col.key === 'actions' ? (
               <HoverMount>
@@ -3181,6 +3245,31 @@ export function CollectionBrowser({
           </td>
         ))}
       </tr>
+    )
+  }
+
+  function tableRecordRow(row: DbRecord, depth: number, hasKids: boolean, kidCount: number, rowKey: string) {
+    if (treeOn) return tableLiveRow(row, depth, hasKids, kidCount, rowKey)
+    const cells: IdleTableTd[] = columns.map((col) => {
+      const pick = cellPickOf(row, col.key, col.field)
+      const attrs = Object.keys(pick).length ? (pick as Record<string, string | number | boolean | undefined>) : undefined
+      return {
+        key: col.key,
+        inner: idleTableCellInner(row, col.key, col.field),
+        className: col.key === schema?.labelField ? 'is-pin-col' : undefined,
+        style: colWidthStyle(columnWidths[col.key]),
+        attrs,
+      }
+    })
+    return (
+      <TableIdleRow
+        key={rowKey}
+        recordId={row.id}
+        className={row.id === detailId ? 'is-active' : undefined}
+        pick={recordPick(row)}
+        html={idleTableRowHtml(cells)}
+        renderLive={() => tableLiveRow(row, depth, hasKids, kidCount, rowKey, true)}
+      />
     )
   }
 
