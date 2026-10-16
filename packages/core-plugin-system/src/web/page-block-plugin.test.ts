@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
+import { clientLogSnapshot, resetClientLogs } from '@biu/web-event-log/log'
 import {
   ENABLE_PAGE_BLOCK_PLUGIN,
   pageBlockPluginFromEvent,
@@ -51,12 +52,14 @@ function stubFetch(handler: (url: string, init?: RequestInit) => { status: numbe
 }
 
 test('already running plugin is left alone so start does not 400', async () => {
+  resetClientLogs()
   const fetchMock = stubFetch(() => ({ status: 200, body: { value: { installed: true, running: true } } }))
   try {
     await startStorePlugin('page-running')
   } finally {
     fetchMock.restore()
   }
+  assert.match(clientLogSnapshot().map((item) => item.message).join('\n'), /page-running 已在运行，跳过 start/)
   assert.deepEqual(
     fetchMock.calls.map((call) => call.method),
     ['GET'],

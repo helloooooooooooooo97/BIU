@@ -3716,14 +3716,20 @@ export function apply(ctx: Context) {
   ctx.http.route('GET', '/api/doc/file/:name', serveDbFile)
   ctx.http.route('PUT', '/api/doc/file/:name', putDbFile)
   ctx.http.route('POST', '/api/db/action', async (route) => {
+    let path = ''
+    let action = ''
     try {
       const body = (await route.json()) as { path?: string; action?: string; args?: unknown }
+      path = String(body?.path ?? '')
+      action = String(body?.action ?? '')
       const extra =
         body?.args && typeof body.args === 'object' && !Array.isArray(body.args)
           ? (body.args as Record<string, unknown>)
           : undefined
-      route.send(200, await db.action(String(body?.path ?? ''), String(body?.action ?? ''), extra))
+      route.send(200, await db.action(path, action, extra))
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      ctx.logger('database').warn(`action ${action || '(none)'} ${path || '(none)'}: ${message}`)
       route.send(400, { error: String(error) })
     }
   })

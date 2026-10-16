@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { clientLog } from '@biu/web-event-log/log'
 
 /** 文档里的块只认自己写下的插件 id，编辑器不猜、不查插件表。 */
 export const ENABLE_PAGE_BLOCK_PLUGIN = 'biu:enable-page-block-plugin'
@@ -168,6 +169,7 @@ export function requestEnablePageBlockPlugin(plugin: string, kind: string) {
   const id = plugin.trim()
   if (!id || typeof window === 'undefined') return
   if (pageBlockPluginPhase(id) === 'loading') return
+  clientLog('info', 'page-block', `${kind || 'unknown'}（${id}）还没有视图，请求启用`)
   setPageBlockPluginPhase(id, 'loading')
   window.dispatchEvent(new CustomEvent(ENABLE_PAGE_BLOCK_PLUGIN, { detail: { plugin: id, kind } }))
 }

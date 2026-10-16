@@ -6,7 +6,8 @@
   "type": "module",
   "description": "事件日志面板",
   "exports": {
-    ".": "./src/web/index.tsx"
+    ".": "./src/web/index.tsx",
+    "./log": "./src/web/log.ts"
   },
   "peerDependencies": {
     "cordis": "4.0.0-rc.8",
