@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ArrowPathIcon, CheckIcon, EyeIcon, LinkIcon, PencilSquareIcon, ShareIcon, ShieldCheckIcon, UserIcon, UsersIcon, XMarkIcon } from '@heroicons/react/16/solid'
-import { HeadlessDismiss } from '@biu/public-ui'
+import { HeadlessDismiss } from '@biu/public-ui/headless-dismiss'
 import { listCollection, readJson } from './db-client.ts'
 import { mintSharePin, shareClipboardText, type ShareResourceStats } from '../share-resources.ts'
 import { builtinAllView, builtinMemberViews, isBuiltinAllViewId, parseBuiltinScopeViewId, scopedCollectionName } from '../catalog-views.ts'

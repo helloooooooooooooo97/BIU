@@ -48,6 +48,7 @@ test('chat-ui first paint does not statically import thread, composer, or antd',
   const thumbs = readFileSync(resolve(import.meta.dirname, './image-thumbs.tsx'), 'utf8')
   const tools = readFileSync(resolve(import.meta.dirname, './tool-card.tsx'), 'utf8')
   assert.doesNotMatch(index, /from '\.\/thread\.tsx'/)
+  assert.doesNotMatch(index, /from '\.\/sessions-chrome\.tsx'/)
   assert.doesNotMatch(index, /from '\.\/composer\.tsx'/)
   assert.doesNotMatch(index, /from '\.\/live-hud\.tsx'/)
   assert.doesNotMatch(index, /from '\.\/approvals\.tsx'/)

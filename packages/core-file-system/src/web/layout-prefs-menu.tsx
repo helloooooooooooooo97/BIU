@@ -1,5 +1,5 @@
 import { CheckIcon } from '@heroicons/react/16/solid'
-import { BoolBox } from '@biu/public-ui'
+import { BoolBox } from '@biu/public-ui/bool-box'
 import { persistPagePrefs, type BodyScale, type PagePrefs } from './page-width.ts'
 
 const BOOLS: { key: keyof Pick<PagePrefs, 'wide' | 'outlineExpand' | 'outlinePin' | 'navPin'>; label: string; testId: string }[] = [

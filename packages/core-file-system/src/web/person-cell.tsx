@@ -3,7 +3,8 @@ import { ArrowPathIcon, CpuChipIcon, UserIcon } from '@heroicons/react/16/solid'
 import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import { asPerson, asPersonList, personKey, type PersonValue } from '@biu/type-file-system'
 import { listCollection } from './db-client.ts'
-import { profileDisplayName, useWorkspaceProfile } from '@biu/public-ui'
+import { useWorkspaceProfile } from '@biu/public-ui/use-workspace-profile'
+import { profileDisplayName } from '@biu/public-ui/workspace-profile'
 
 type ChatPerson = {
   id: string

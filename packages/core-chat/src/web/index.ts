@@ -7,7 +7,6 @@ import { ChatSelectBubble } from './chat-select-bubble.tsx'
 import { bindProjectView, type ProjectViewService } from '@biu/web-project-view'
 import type { PickService } from '@biu/core-pick/web'
 import type { DatabaseUi } from '@biu/type-file-system/ui'
-import { sessionsChrome } from './sessions-chrome.tsx'
 
 export const name = 'chat-ui'
 export const inject = ['slots', 'sessionView', 'projectView']
@@ -99,9 +98,12 @@ export function apply(ctx: Context) {
   })
   ctx.inject(['databaseUi'], (inner) => {
     const ui = inner.get('databaseUi') as DatabaseUi
-    const sessions = ui.decorate('/sessions', sessionsChrome())
+    let sessions: { dispose: () => void } | undefined
+    void import('./sessions-chrome.tsx').then((mod) => {
+      sessions = ui.decorate('/sessions', mod.sessionsChrome())
+    })
     return () => {
-      sessions.dispose()
+      sessions?.dispose()
     }
   })
 }

@@ -16,7 +16,7 @@ import { PlusIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import type { FieldSpec, FieldType } from '@biu/type-file-system'
 import { CellSelect } from '@biu/database-ui'
-import { overlayZ } from '@biu/public-ui'
+import { overlayZ } from '@biu/public-ui/overlay-portal'
 import { FieldGlyph } from './fsdb-cells.tsx'
 import { DndGrip } from './dnd-grip.tsx'
 import {

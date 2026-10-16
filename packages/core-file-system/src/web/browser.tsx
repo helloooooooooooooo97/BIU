@@ -1,18 +1,5 @@
 import { Fragment, lazy, Suspense, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import {
-  DndContext,
-  DragOverlay,
-  PointerSensor,
-  closestCenter,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-  type DragStartEvent,
-} from '@dnd-kit/core'
-import { restrictToVerticalAxis } from '@dnd-kit/modifiers'
-import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
-import { CSS as DndCSS } from '@dnd-kit/utilities'
-import {
   ArrowPathIcon,
   ArrowsPointingOutIcon,
   ArrowsUpDownIcon,
@@ -48,16 +35,16 @@ import type { CollectionActionInfo, CollectionInfo, CollectionSchema, Collection
 import { normalizeSchemaValue } from '@biu/type-file-system'
 import type { CollectionChrome, CollectionRowViewType, CollectionViewType, DatabaseUi } from '@biu/type-file-system/ui'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
-import { DndGrip } from './dnd-grip.tsx'
-import { BoolBox, ChatCount, RecordEmojiBoard, HeadlessDismiss, HeadlessPopover, HEADLESS_DISMISS_IGNORE, tagTextColor, tagTone as schemaTagTone } from '@biu/public-ui'
-import { zipMarkdownPack, contentToMarkdown, markdownFileName, recordToMarkdown } from './export-markdown.ts'
+import { BoolBox } from '@biu/public-ui/bool-box'
+import { ChatCount } from '@biu/public-ui/chat-count'
+import { HeadlessDismiss, HEADLESS_DISMISS_IGNORE } from '@biu/public-ui/headless-dismiss'
+import { tagTextColor, tagTone as schemaTagTone } from '@biu/public-ui/tag-chip'
 import {
   contentFieldKey,
   defaultColumnKeys,
   facetSourceKey,
   flattenFacetColumns,
   facetColumnTitle,
-  facetFlatColumnKey,
   fieldEntries,
   flattenTree,
   formatField,
@@ -175,6 +162,8 @@ const FilterQueryMenu = lazy(() => import('./query-menus.tsx').then((m) => ({ de
 const FieldValuePop = lazy(() => import('./field-value-pop.tsx').then((m) => ({ default: m.FieldValuePop })))
 const CellPopDraft = lazy(() => import('./cell-pop-draft.tsx').then((m) => ({ default: m.CellPopDraft })))
 const RecordDetail = lazy(() => import('./record-detail.tsx').then((m) => ({ default: m.RecordDetail })))
+const ColumnOrderMenu = lazy(() => import('./column-order-menu.tsx').then((m) => ({ default: m.ColumnOrderMenu })))
+const RecordEmojiBoard = lazy(() => import('@biu/public-ui/emoji-board').then((m) => ({ default: m.RecordEmojiBoard })))
 
 const EMPTY_VIEWS: CollectionViewType[] = []
 const EMPTY_ROW_VIEWS: CollectionRowViewType[] = []
@@ -254,241 +243,6 @@ function isListColumn(key: string) {
 }
 
 const QUERY_NEST_IGNORE = `${HEADLESS_DISMISS_IGNORE}, .db-search-menu, .fsdb-cellselect-menu, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]`
-
-function FacetColumnPackRow({
-  pack,
-  visibleKeys,
-  onToggle,
-}: {
-  pack: CollectionSchemaPack
-  visibleKeys: Set<string>
-  onToggle: (key: string) => void
-}) {
-  const [open, setOpen] = useState(false)
-  const tone = schemaTagTone(pack.id)
-  const anyOn = pack.fields.some((field) => visibleKeys.has(facetFlatColumnKey(pack.id, field.key)))
-
-  return (
-    <HeadlessPopover
-      open={open}
-      onOpenChange={setOpen}
-      side="left"
-      align="start"
-      sideOffset={6}
-      trigger={
-        <button
-          type="button"
-          className={`fsdb-checkrow${anyOn || open ? ' is-on' : ''}`}
-          aria-haspopup="menu"
-          aria-expanded={open}
-          aria-label={`${pack.label}属性`}
-        >
-          <span className="fsdb-checkrow-label">
-            <span className="fsdb-checkrow-icon">
-              <FieldGlyph kind="facet" />
-            </span>
-            <span className="fsdb-col-facet-name" style={tone ? { color: tagTextColor(tone) } : undefined}>
-              {pack.label}
-            </span>
-          </span>
-          <span className={`fsdb-col-facet-dot${anyOn ? ' is-on' : ''}`} aria-hidden />
-        </button>
-      }
-    >
-      <div className="fsdb-col-facet-flyout" data-fsdb-col-flyout role="menu">
-        {pack.fields.length ? (
-          pack.fields.map((field) => {
-            const key = facetFlatColumnKey(pack.id, field.key)
-            return (
-              <CheckRow
-                key={field.key}
-                icon={<FieldGlyph kind={resolveFieldType(field)} />}
-                label={field.label ?? field.key}
-                on={visibleKeys.has(key)}
-                onToggle={() => onToggle(key)}
-              />
-            )
-          })
-        ) : (
-          <div className="tasks-viewdd-empty">还没有属性</div>
-        )}
-      </div>
-    </HeadlessPopover>
-  )
-}
-
-function ColumnMenuCheck({
-  col,
-  on,
-  locked,
-  onToggle,
-}: {
-  col: { key: string; kind: FieldType; field: FieldSpec }
-  on: boolean
-  locked?: boolean
-  onToggle: () => void
-}) {
-  return (
-    <CheckRow
-      icon={<FieldGlyph kind={col.kind} />}
-      label={col.field.label ?? col.key}
-      on={on}
-      locked={locked}
-      onToggle={onToggle}
-    />
-  )
-}
-
-function ColumnRowShell({
-  grip,
-  children,
-  className,
-  rowRef,
-  style,
-}: {
-  grip: ReactNode
-  children: ReactNode
-  className?: string
-  rowRef?: (node: HTMLElement | null) => void
-  style?: { transform?: string; transition?: string }
-}) {
-  return (
-    <div ref={rowRef} className={`fsdb-col-drag-row${className ? ` ${className}` : ''}`} style={style}>
-      {grip}
-      {children}
-    </div>
-  )
-}
-
-function ColumnDragRow({
-  col,
-  on,
-  onToggle,
-}: {
-  col: { key: string; kind: FieldType; field: FieldSpec }
-  on: boolean
-  onToggle: () => void
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: col.key })
-  return (
-    <ColumnRowShell
-      rowRef={setNodeRef}
-      className={isDragging ? 'is-drag' : undefined}
-      style={{ transform: DndCSS.Transform.toString(transform), transition }}
-      grip={
-        <button type="button" className="fsdb-query-grip" aria-label="拖动调整列顺序" {...attributes} {...listeners}>
-          <DndGrip />
-        </button>
-      }
-    >
-      <ColumnMenuCheck col={col} on={on} onToggle={onToggle} />
-    </ColumnRowShell>
-  )
-}
-
-function ColumnOrderMenu({
-  columns,
-  allColumns,
-  labelField,
-  facetCatalog,
-  onToggle,
-  onReorder,
-}: {
-  columns: Array<{ key: string; kind: FieldType; field: FieldSpec }>
-  allColumns: Array<{ key: string; kind: FieldType; field: FieldSpec }>
-  labelField?: string
-  facetCatalog: CollectionSchemaPack[]
-  onToggle: (key: string) => void
-  onReorder: (next: string[]) => void
-}) {
-  const [activeId, setActiveId] = useState<string | null>(null)
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
-  const visibleKeys = new Set(columns.map((item) => item.key))
-  const hidden = allColumns.filter((item) => !parseFacetFlatColumnKey(item.key) && !visibleKeys.has(item.key))
-  const menuCols = [
-    ...columns.filter((item) => item.key === labelField),
-    ...columns.filter((item) => item.key !== labelField),
-    ...hidden,
-  ]
-  const locked = new Set([labelField, 'actions'].filter(Boolean))
-  const sortableIds = menuCols.filter((item) => !locked.has(item.key)).map((item) => item.key)
-  const active = menuCols.find((item) => item.key === activeId)
-
-  return (
-    <>
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        modifiers={[restrictToVerticalAxis]}
-        onDragStart={(event: DragStartEvent) => setActiveId(String(event.active.id))}
-        onDragCancel={() => setActiveId(null)}
-        onDragEnd={(event: DragEndEvent) => {
-          const overId = event.over?.id
-          setActiveId(null)
-          if (overId == null || event.active.id === overId) return
-          const from = sortableIds.indexOf(String(event.active.id))
-          const to = sortableIds.indexOf(String(overId))
-          if (from < 0 || to < 0) return
-          const next = moveList(sortableIds, from, to)
-          const visible = next.filter((key) => visibleKeys.has(key) && key !== labelField && key !== 'actions')
-          const head = [labelField, visibleKeys.has('actions') ? 'actions' : ''].filter(Boolean) as string[]
-          onReorder([...head, ...visible])
-        }}
-      >
-        {menuCols
-          .filter((item) => item.key === labelField || item.key === 'actions')
-          .map((item) => (
-            <ColumnRowShell
-              key={item.key}
-              grip={
-                <span className="fsdb-query-grip is-locked" aria-hidden>
-                  <DndGrip />
-                </span>
-              }
-            >
-              <ColumnMenuCheck col={item} on locked onToggle={() => onToggle(item.key)} />
-            </ColumnRowShell>
-          ))}
-        <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
-          {menuCols
-            .filter((item) => item.key !== labelField && item.key !== 'actions')
-            .map((item) => (
-              <ColumnDragRow
-                key={item.key}
-                col={item}
-                on={visibleKeys.has(item.key)}
-                onToggle={() => onToggle(item.key)}
-              />
-            ))}
-        </SortableContext>
-        <DragOverlay zIndex={280}>
-          {active ? (
-            <div className="fsdb-query-drag-overlay" data-fsdb-sort-overlay>
-              <div className="fsdb-col-drag-row">
-                <button type="button" className="fsdb-query-grip" tabIndex={-1}>
-                  <DndGrip />
-                </button>
-                <ColumnMenuCheck col={active} on={visibleKeys.has(active.key)} onToggle={() => {}} />
-              </div>
-            </div>
-          ) : null}
-        </DragOverlay>
-      </DndContext>
-      {facetCatalog.map((pack) => (
-        <ColumnRowShell
-          key={pack.id}
-          grip={
-            <span className="fsdb-query-grip is-locked" aria-hidden>
-              <DndGrip />
-            </span>
-          }
-        >
-          <FacetColumnPackRow pack={pack} visibleKeys={visibleKeys} onToggle={onToggle} />
-        </ColumnRowShell>
-      ))}
-    </>
-  )
-}
 
 function recordsFingerprint(rows: Array<DbRecord & { path?: string }>) {
   return JSON.stringify(rows)
@@ -2379,6 +2133,7 @@ export function CollectionBrowser({
     const ids = pickedIds.filter(Boolean)
     if (!ids.length) return
     try {
+      const { zipMarkdownPack, contentToMarkdown, markdownFileName, recordToMarkdown } = await import('./export-markdown.ts')
       const files: Array<{ name: string; text: string }> = []
       for (const id of ids) {
         const listed = items.find((row) => row.id === id)
@@ -2824,23 +2579,25 @@ export function CollectionBrowser({
           />
         </button>
         {open && anchor ? (
-          <RecordEmojiBoard
-            anchor={anchor}
-            onPick={(next) => {
-              void writePatch(row, { emoji: normalizeRecordEmoji(next) })
-              setOpen(false)
-              setAnchor(null)
-            }}
-            onClear={() => {
-              void writePatch(row, { emoji: '' })
-              setOpen(false)
-              setAnchor(null)
-            }}
-            onClose={() => {
-              setOpen(false)
-              setAnchor(null)
-            }}
-          />
+          <Suspense fallback={null}>
+            <RecordEmojiBoard
+              anchor={anchor}
+              onPick={(next) => {
+                void writePatch(row, { emoji: normalizeRecordEmoji(next) })
+                setOpen(false)
+                setAnchor(null)
+              }}
+              onClear={() => {
+                void writePatch(row, { emoji: '' })
+                setOpen(false)
+                setAnchor(null)
+              }}
+              onClose={() => {
+                setOpen(false)
+                setAnchor(null)
+              }}
+            />
+          </Suspense>
         ) : null}
       </span>
     )
@@ -3752,14 +3509,16 @@ export function CollectionBrowser({
                 <div className="tasks-sort-menu fsdb-col-menu" role="menu">
                   <div className="tasks-sort-head">可见列</div>
                   <div className="fsdb-col-menu-list">
-                  <ColumnOrderMenu
-                    columns={columns}
-                    allColumns={allColumns}
-                    labelField={schema?.labelField}
-                    facetCatalog={facetCatalog}
-                    onToggle={toggleColumn}
-                    onReorder={setVisibleColumns}
-                  />
+                  <Suspense fallback={null}>
+                    <ColumnOrderMenu
+                      columns={columns}
+                      allColumns={allColumns}
+                      labelField={schema?.labelField}
+                      facetCatalog={facetCatalog}
+                      onToggle={toggleColumn}
+                      onReorder={setVisibleColumns}
+                    />
+                  </Suspense>
                   </div>
                 </div>
                 </HeadlessDismiss>

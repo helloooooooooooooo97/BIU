@@ -1,6 +1,6 @@
 import { memo, useEffect, useRef, useState } from 'react'
 import { bindSessionView, type SessionViewService } from '@biu/web-session-view'
-import { HeadlessDismiss } from '@biu/public-ui'
+import { HeadlessDismiss } from '@biu/public-ui/headless-dismiss'
 
 export const ChatSessionTitle = memo(function ChatSessionTitle({
   useSessionView,

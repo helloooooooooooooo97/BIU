@@ -1,7 +1,8 @@
 import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { isMascotDancing, subscribeMascotDance } from '@biu/public-mascot'
-import { ChatCount, SidebarFold } from '@biu/public-ui'
+import { ChatCount } from '@biu/public-ui/chat-count'
+import { SidebarFold } from '@biu/public-ui/sidebar-fold'
 import {
   bindSessionView,
   type SessionListItem,

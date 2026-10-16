@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode, type Ref } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode, type Ref } from 'react'
 import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
@@ -20,17 +20,20 @@ import {
   PlusIcon,
   XMarkIcon,
 } from '@heroicons/react/16/solid'
-import { AnchorMenu, ConfirmDialog } from '@biu/public-ui'
+import { AnchorMenu } from '@biu/public-ui/anchor-menu'
+import { ConfirmDialog } from '@biu/public-ui/confirm-dialog'
 import { chromeIcon } from './chrome-icon.ts'
 import { applyNoticeClick, noticeIdOf } from './notice-open.ts'
 import { readMainDataRoute } from '@biu/core-file-system/main-data-route'
 import { persistTheme, readTheme, type ThemeMode } from './theme.ts'
-import { persistWorkspaceProfile, useWorkspaceProfile } from '@biu/public-ui'
+import { persistWorkspaceProfile } from '@biu/public-ui/workspace-profile'
+import { useWorkspaceProfile } from '@biu/public-ui/use-workspace-profile'
 import { LayoutPrefsMenu } from '@biu/core-file-system/layout-prefs-menu'
 import { getPagePrefs, hydratePagePrefs, subscribePageWidth } from '@biu/core-file-system/page-width'
 
-import { MarketingSite } from './marketing-site/index.tsx'
 import { BrandPrint, useBrandConfig } from './marketing-site/brand-mark.tsx'
+
+const MarketingSite = lazy(() => import('./marketing-site/index.tsx').then((m) => ({ default: m.MarketingSite })))
 import { clearWorkspaceId, readWorkspaceId, writeWorkspaceId } from './tenant-fetch.ts'
 
 function isLandingPreview() {
@@ -611,32 +614,34 @@ export function AuthGate({ children }: { children: ReactNode }) {
   if (token && !joining) return children
   if (!token && !guestInvite) {
     return (
-      <MarketingSite
-        onLogin={() => goAuth('login')}
-        onStart={() => goAuth('register')}
-        auth={{
-          mode,
-          onModeChange: (next) => {
-            setMode(next)
-            setAuthOpen(true)
-            setAuthRoute(next)
-            setBrowserPath(next === 'register' ? '/register' : '/login')
-          },
-          workspaceInvite: Boolean(workspaceInvite),
-          onSubmit: async ({ email, password: secret }) => {
-            const path = mode === 'register' ? '/api/account/register' : '/api/account/login'
-            const body = await accountFetch('', path, {
-              method: 'POST',
-              body: JSON.stringify({ email, password: secret }),
-            })
-            clearWorkspaceId()
-            writeAccountToken(String(body.token ?? ''))
-            if (body.workspaceId) writeWorkspaceId(String(body.workspaceId))
-            setPassword('')
-            setError('')
-          },
-        }}
-      />
+      <Suspense fallback={null}>
+        <MarketingSite
+          onLogin={() => goAuth('login')}
+          onStart={() => goAuth('register')}
+          auth={{
+            mode,
+            onModeChange: (next) => {
+              setMode(next)
+              setAuthOpen(true)
+              setAuthRoute(next)
+              setBrowserPath(next === 'register' ? '/register' : '/login')
+            },
+            workspaceInvite: Boolean(workspaceInvite),
+            onSubmit: async ({ email, password: secret }) => {
+              const path = mode === 'register' ? '/api/account/register' : '/api/account/login'
+              const body = await accountFetch('', path, {
+                method: 'POST',
+                body: JSON.stringify({ email, password: secret }),
+              })
+              clearWorkspaceId()
+              writeAccountToken(String(body.token ?? ''))
+              if (body.workspaceId) writeWorkspaceId(String(body.workspaceId))
+              setPassword('')
+              setError('')
+            },
+          }}
+        />
+      </Suspense>
     )
   }
   if (token) {

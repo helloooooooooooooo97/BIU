@@ -1,6 +1,6 @@
 import { useState, useSyncExternalStore, type ReactNode } from 'react'
 import { AdjustmentsHorizontalIcon, CheckIcon, ChevronLeftIcon, ShareIcon, StarIcon } from '@heroicons/react/16/solid'
-import { AnchorMenu } from '@biu/public-ui'
+import { AnchorMenu } from '@biu/public-ui/anchor-menu'
 import { dismissInspectorPaneMenu } from './inspector-pane-menu.tsx'
 import { getPagePrefs, getPageWidthVersion, persistPagePrefs, subscribePageWidth } from './page-width.ts'
 import { getStarredViews, getStarredViewsVersion, isViewStarred, persistStarredViews, subscribeStarredViews, toggleStarredView } from './view-storage.ts'

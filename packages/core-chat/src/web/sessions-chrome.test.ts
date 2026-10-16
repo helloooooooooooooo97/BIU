@@ -47,5 +47,5 @@ test('session table uses mascot as the standalone icon property, title is just t
   assert.doesNotMatch(src, /ApprovalsRail/)
   assert.doesNotMatch(src, /session-record-log/)
   const index = readFileSync(resolve(import.meta.dirname, './index.ts'), 'utf8')
-  assert.match(index, /decorate\('\/sessions', sessionsChrome/)
+  assert.match(index, /decorate\('\/sessions', mod\.sessionsChrome/)
 })

@@ -28,7 +28,7 @@ import type { SlotsService } from '@biu/web-slots'
 import { inspectorTabFromEvent, requestInspectorAction } from './chat-overlay.ts'
 import { getInspectorCaption, getInspectorCaptionVersion, subscribeInspectorCaptions } from './inspector-captions.ts'
 import { inspectorPanelMatches, inspectorViewProps, nextRepeatableTabId, pruneOpenedForCollections, resolveInspectorTab, slotTabId } from './inspector-panels.ts'
-import { HeadlessDismiss } from '@biu/public-ui'
+import { HeadlessDismiss } from '@biu/public-ui/headless-dismiss'
 import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import {
   getInspectorDbPath,

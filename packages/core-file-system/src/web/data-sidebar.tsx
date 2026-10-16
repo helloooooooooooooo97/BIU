@@ -1,6 +1,8 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useState, useSyncExternalStore, type MouseEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { ChatCount, RecordEmojiBoard, SidebarFold } from '@biu/public-ui'
+import { ChatCount } from '@biu/public-ui/chat-count'
+import { RecordEmojiBoard } from '@biu/public-ui/emoji-board'
+import { SidebarFold } from '@biu/public-ui/sidebar-fold'
 import {
   ChevronDoubleLeftIcon,
   ChevronDownIcon,

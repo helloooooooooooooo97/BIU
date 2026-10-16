@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useState, useSyncExternalStore, type ComponentType } from 'react'
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useState, useSyncExternalStore, type ComponentType } from 'react'
 import type { Context } from 'cordis'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { CircleStackIcon } from '@heroicons/react/16/solid'
@@ -8,7 +8,7 @@ import type { CollectionChrome } from '@biu/type-file-system/ui'
 import { isLegacyDatabasePath, parseAppPath } from '@biu/web-session-view'
 import { pathForCenter, pathForCrumbTarget, type CrumbTarget } from './sidebar-nav.ts'
 import { CollectionBrowser } from './browser.tsx'
-import { ShareRoot } from './share-page.tsx'
+import { parseSharePath } from '../share-snapshot.ts'
 import { DatabaseInspectorBrowse, DatabaseInspectorTab, bindInspectorSnapshot, collectionTabIcon } from './inspector-database.tsx'
 import { applyDatabaseChannelPayload } from './inspector-db-route.ts'
 import { InspectorFollowToggle } from './inspector-follow.tsx'
@@ -26,6 +26,22 @@ import { pageBlocksChrome } from './page-blocks-chrome.ts'
 import { viewsForRegisteredCollection } from './collection-nav.ts'
 import { builtinAllViewId } from '../catalog-views.ts'
 import { normalizeCollectionPath } from '../paths.ts'
+
+const ShareRoot = lazy(() => import('./share-page.tsx').then((m) => ({ default: m.ShareRoot })))
+
+function ShareRootSlot(props: {
+  chrome?: CollectionChrome
+  chromeFor?: (collection: string) => CollectionChrome | undefined
+  loadPlugins?: (token: string, pluginIds: string[], password: string) => Promise<void>
+}) {
+  const location = useLocation()
+  if (!parseSharePath(location.pathname)) return null
+  return (
+    <Suspense fallback={null}>
+      <ShareRoot {...props} />
+    </Suspense>
+  )
+}
 
 type SlotsService = {
   place: (slot: string, view: unknown, opts: { key: string; order?: number; props?: () => Record<string, unknown> }) => { dispose?: () => unknown }
@@ -343,7 +359,7 @@ export function apply(ctx: Context) {
   }
 
   slots.place('root-overlays', RegisterErrorBanner, { key: 'fsdb-nav-errors', order: 80 })
-  slots.place('root-overlays', ShareRoot, {
+  slots.place('root-overlays', ShareRootSlot, {
     key: 'fsdb-share-root',
     order: 90,
     props: () => ({

@@ -1,4 +1,5 @@
-import { BoolBox, TagChip, TagChips } from '@biu/public-ui'
+import { BoolBox } from '@biu/public-ui/bool-box'
+import { TagChip, TagChips } from '@biu/public-ui/tag-chip'
 import {
   ArchiveBoxArrowDownIcon,
   ArrowDownTrayIcon,

@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
+import { lazy, memo, Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import {
   getChatOverlay,
@@ -43,16 +43,18 @@ import { BrandCornerMascot, DanceStage } from '@biu/public-mascot'
 import { SessionInspector } from './session-inspector.tsx'
 import { SessionConfigDialog } from '@biu/web-session-view/dialog'
 import { FolderGlyph } from '@biu/web-session-view/folder-glyph'
-import { OverlayChatWindow } from './overlay-window.tsx'
 import { AuthGate, ShellSettingsAbout, ShellSettingsAccount, ShellSettingsAppearance, ShellSettingsMembers, ShellSettingsMcp, ShellSettingsShortcuts, ShellSettingsUpdate, ShellSettingsWorkspace } from './shell-chrome.tsx'
-import { hydrateWorkspaceProfile } from '@biu/public-ui'
+import { hydrateWorkspaceProfile } from '@biu/public-ui/workspace-profile'
 import { hydrateTheme } from './theme.ts'
 import { hydratePagePrefs } from '@biu/core-file-system/page-width'
-import { ShellSearchPanel, isGlobalSearchHotkey } from './shell-search.tsx'
+import { isGlobalSearchHotkey } from './search-hotkey.ts'
 import { useSlotEntries } from '@biu/web-slots'
 import type { SlotsService } from '@biu/web-slots'
 import { chromeIcon } from './chrome-icon.ts'
-import { ChatDockStack, ChatStage } from '@biu/public-ui'
+import { ChatDockStack, ChatStage } from '@biu/public-ui/chat-pane'
+
+const OverlayChatWindow = lazy(() => import('./overlay-window.tsx').then((m) => ({ default: m.OverlayChatWindow })))
+const ShellSearchPanel = lazy(() => import('./shell-search.tsx').then((m) => ({ default: m.ShellSearchPanel })))
 import {
   ChevronDoubleLeftIcon,
   ChevronDoubleRightIcon,
@@ -166,11 +168,13 @@ const AgentMainPanels = memo(function AgentMainPanels({
   const overlayNode =
     overlayMounted && overlayOpen && !showCenter
       ? createPortal(
-        <OverlayChatWindow
-          header={header}
-          thread={overlayStage}
-          dock={overlayDock}
-        />,
+        <Suspense fallback={null}>
+          <OverlayChatWindow
+            header={header}
+            thread={overlayStage}
+            dock={overlayDock}
+          />
+        </Suspense>,
         document.body,
       )
       : null
@@ -955,17 +959,19 @@ function Shell(props: SlotProps) {
         : null}
       {searchOpen
         ? createPortal(
-          <ShellSearchPanel
-            sessions={danceSessions.map((item) => ({
-              id: item.id,
-              title: item.title,
-              tags: item.tags,
-              updatedAt: item.updatedAt,
-              mascot: item.mascot,
-            }))}
-            onClose={() => setSearchOpen(false)}
-            focusSeq={searchFocusSeq}
-          />,
+          <Suspense fallback={null}>
+            <ShellSearchPanel
+              sessions={danceSessions.map((item) => ({
+                id: item.id,
+                title: item.title,
+                tags: item.tags,
+                updatedAt: item.updatedAt,
+                mascot: item.mascot,
+              }))}
+              onClose={() => setSearchOpen(false)}
+              focusSeq={searchFocusSeq}
+            />
+          </Suspense>,
           document.body,
         )
         : null}

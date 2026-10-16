@@ -28,7 +28,7 @@ function json(body: unknown, status = 200) {
   })
 }
 
-test('opening /register shows the register page', () => {
+test('opening /register shows the register page', async () => {
   localStorage.clear()
   window.history.replaceState({}, '', '/register')
   render(
@@ -38,11 +38,11 @@ test('opening /register shows the register page', () => {
       </AuthGate>
     </MemoryRouter>,
   )
-  assert.equal(screen.getByRole('heading', { name: '创建账号' }).textContent, '创建账号')
+  assert.equal((await screen.findByRole('heading', { name: '创建账号' })).textContent, '创建账号')
   assert.equal(screen.queryByTestId('inside'), null)
 })
 
-test('opening /login shows the login page', () => {
+test('opening /login shows the login page', async () => {
   localStorage.clear()
   window.history.replaceState({}, '', '/login')
   render(
@@ -52,7 +52,7 @@ test('opening /login shows the login page', () => {
       </AuthGate>
     </MemoryRouter>,
   )
-  assert.ok(screen.getByTestId('site-login'), '登录页使用官网顶栏')
+  assert.ok(await screen.findByTestId('site-login'), '登录页使用官网顶栏')
   assert.equal(screen.getByRole('heading', { name: '登录' }).textContent, '登录')
   assert.equal(screen.queryByText('返回官网'), null, '顶栏已能回官网，表单不再重复放返回入口')
   assert.equal(screen.queryByTestId('inside'), null)
@@ -74,7 +74,7 @@ test('the app shows the marketing site until a token exists', async () => {
     </MemoryRouter>,
   )
   assert.equal(screen.queryByTestId('inside'), null)
-  assert.ok(screen.getByTestId('auth-name'), '登录页有邮箱')
+  assert.ok(await screen.findByTestId('auth-name'), '登录页有邮箱')
   fireEvent.change(screen.getByTestId('auth-name'), { target: { value: 'ada@example.com' } })
   fireEvent.change(screen.getByTestId('auth-password'), { target: { value: 'secret1' } })
   await act(async () => {
@@ -124,6 +124,7 @@ test('a stale workspace does not send the user back to login after they sign in'
     </MemoryRouter>,
   )
   assert.equal(window.location.pathname, '/login')
+  await screen.findByTestId('auth-name')
   fireEvent.change(screen.getByTestId('auth-name'), { target: { value: 'ada@example.com' } })
   fireEvent.change(screen.getByTestId('auth-password'), { target: { value: 'secret1' } })
   await act(async () => {

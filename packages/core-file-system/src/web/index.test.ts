@@ -22,6 +22,13 @@ test('collection URL without a view paints 全部 immediately, not the last dens
   assert.match(page, /go\(\{ collection: parsed.collection, viewId: builtinAllViewId\(parsed.collection\) \}/)
 })
 
+test('share page stays off the data first-paint graph until a share route opens', () => {
+  const page = readFileSync(resolve(import.meta.dirname, './index.tsx'), 'utf8')
+  assert.doesNotMatch(page, /from '\.\/share-page\.tsx'/)
+  assert.match(page, /import\('\.\/share-page\.tsx'\)/)
+  assert.match(page, /parseSharePath\(location\.pathname\)/)
+})
+
 test('saved views catalog waits until the first list is ready and only notifies when it changed', () => {
   const page = readFileSync(resolve(import.meta.dirname, './index.tsx'), 'utf8')
   const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
