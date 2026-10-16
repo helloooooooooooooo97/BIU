@@ -61,7 +61,7 @@ export async function listGroupedCollection(opts: {
         filters,
         columns: opts.columns,
       })
-      return { ...item, rows: listed.items, total: listed.total, schema: listed.schema }
+      return { ...item, rows: full ? listed.items : [], total: listed.total, schema: listed.schema }
     }),
   )
   const buckets = pages

@@ -1,4 +1,4 @@
-import { Fragment, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { Fragment, lazy, Suspense, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import {
   DndContext,
   DragOverlay,
@@ -49,7 +49,7 @@ import { normalizeSchemaValue } from '@biu/type-file-system'
 import type { CollectionChrome, CollectionRowViewType, CollectionViewType, DatabaseUi } from '@biu/type-file-system/ui'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { DndGrip } from './dnd-grip.tsx'
-import { BoolBox, ChatCount, RecordEmojiBoard, HeadlessDismiss, HeadlessPopover, HEADLESS_DISMISS_IGNORE, tagTextColor } from '@biu/public-ui'
+import { BoolBox, ChatCount, RecordEmojiBoard, HeadlessDismiss, HeadlessPopover, HEADLESS_DISMISS_IGNORE, tagTextColor, tagTone as schemaTagTone } from '@biu/public-ui'
 import { zipMarkdownPack, contentToMarkdown, markdownFileName, recordToMarkdown } from './export-markdown.ts'
 import {
   contentFieldKey,
@@ -82,8 +82,7 @@ import {
   type ViewMode,
 } from './fields.ts'
 import { listGroupedCollection } from './group-list.ts'
-import { DbMenu, DbSearchOption } from '@biu/database-ui'
-import { AppDialog, CellSelect, CheckRow, LocalText } from './controls.tsx'
+import { AppDialog, CheckRow } from './controls.tsx'
 import { DataSidebar } from './data-sidebar.tsx'
 import { ScopeOverview } from './scope-overview.tsx'
 import { buildCrumbs, type CrumbTarget } from './sidebar-nav.ts'
@@ -111,7 +110,6 @@ import {
 import { ShareButton, SharePanel, ShareRoleDetail, ShareScopeDetail, ShareScopeLabel } from './share-popover.tsx'
 import { ensureFsdbStyle } from './fsdb-style.ts'
 import { workspaceColumnsForLocation } from './workspace-columns.ts'
-import { RecordDetail } from './record-detail.tsx'
 import { PageBanner } from './page-banner.tsx'
 import { TableGlyph, ViewModeGlyph } from './nav-glyphs.tsx'
 import { isIndexCollection, isSystemCollection } from './database-path.ts'
@@ -151,15 +149,11 @@ import { HttpError, listCollection, readJson } from './db-client.ts'
 import { savedViewRecordPath } from '../paths.ts'
 import { findViewNeighbor, indexOnPage } from './view-adjacent.ts'
 import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, tableWindowSlice } from './table-window.ts'
-import { markPaintedListReady, rememberPreviewTotal, resetPaintedListReady, viewTotalKey } from './sidebar-preview.ts'
+import { markPaintedListReady, rememberPreviewTotal, resetPaintedListReady, viewTotalKey, whenListIdle, VIEW_PREVIEW_IDLE_MS } from './sidebar-preview.ts'
 import { catalogLockFilters, isReadOnlyViewId, mergeTableViews, parseBuiltinScopeViewId, stubBuiltinBlockKindView, viewsForScope, type DataScope } from '../catalog-views.ts'
 import { SAVED_VIEW_EVENT, rememberInspectorWorkingView, showRecordInInspector } from './inspector-db-route.ts'
-import { SchemaFieldEditor, schemaTagTone } from './schema-field.tsx'
 import { CellPop, cellUsesPop } from './cell-pop.tsx'
-import { CellPopDraft } from './cell-pop-draft.tsx'
-import { FieldValuePop } from './field-value-pop.tsx'
 import { loadFacets, pullFacets, subscribeFacets } from './facet-catalog.ts'
-import { FilterQueryMenu, SortQueryMenu } from './query-menus.tsx'
 import {
   collectQueryFields,
   isCustomSorts,
@@ -174,6 +168,13 @@ import {
   type FilterGroup,
   type SortRule,
 } from '../query-logic.ts'
+
+const SchemaFieldEditor = lazy(() => import('./schema-field.tsx').then((m) => ({ default: m.SchemaFieldEditor })))
+const SortQueryMenu = lazy(() => import('./query-menus.tsx').then((m) => ({ default: m.SortQueryMenu })))
+const FilterQueryMenu = lazy(() => import('./query-menus.tsx').then((m) => ({ default: m.FilterQueryMenu })))
+const FieldValuePop = lazy(() => import('./field-value-pop.tsx').then((m) => ({ default: m.FieldValuePop })))
+const CellPopDraft = lazy(() => import('./cell-pop-draft.tsx').then((m) => ({ default: m.CellPopDraft })))
+const RecordDetail = lazy(() => import('./record-detail.tsx').then((m) => ({ default: m.RecordDetail })))
 
 const EMPTY_VIEWS: CollectionViewType[] = []
 const EMPTY_ROW_VIEWS: CollectionRowViewType[] = []
@@ -1262,18 +1263,42 @@ export function CollectionBrowser({
   }, [collectionPath, dataPath, nested, pullDetailBody, pullDetailRecord])
 
   useEffect(() => {
-    void pullFacets()
+    return whenListIdle(() => {
+      void pullFacets()
+    })
   }, [collectionPath])
 
   useEffect(() => subscribeFacets(undefined, () => setFacetCatalog(loadFacets())), [])
+
+  useEffect(() => {
+    if (!routeRecordId || statHoldRef.current?.schema) return
+    let cancelled = false
+    void readJson<StatResult>(`/api/db/stat?path=${encodeURIComponent(dataPath)}`).then((nextStat) => {
+      if (cancelled || !nextStat?.schema) return
+      setStat((prev) => (prev?.schema ? prev : nextStat))
+    }).catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [dataPath, routeRecordId])
+
+  useEffect(() => {
+    if (routeRecordId) void import('./record-detail.tsx')
+  }, [routeRecordId])
 
   useEffect(() => {
     if (skipColumnReload.current) {
       skipColumnReload.current = false
       return
     }
+    if (routeRecordId) {
+      const timer = window.setTimeout(() => {
+        void reloadRef.current()
+      }, VIEW_PREVIEW_IDLE_MS)
+      return () => window.clearTimeout(timer)
+    }
     void reloadRef.current()
-  }, [reloadKey])
+  }, [reloadKey, routeRecordId])
 
   useLayoutEffect(() => {
     setOpenDetailId(routeRecordId)
@@ -2570,6 +2595,7 @@ export function CollectionBrowser({
       const value = readFacetFlatValue(row, key, source)
       if (field.writable && kind !== 'file') {
         return (
+          <Suspense fallback={<DefaultCell field={field} fieldKey={key} records={items} collectionPath={collectionPath} labelField={schema?.labelField} value={value} />}>
           <FieldValuePop
             record={row}
             fieldKey={key}
@@ -2587,6 +2613,7 @@ export function CollectionBrowser({
             labelField={schema?.labelField}
             onSubmit={(next) => writeCellValue(row, key, field, next)}
           />
+          </Suspense>
         )
       }
       return <DefaultCell field={field} fieldKey={key} records={items} collectionPath={collectionPath} labelField={schema?.labelField} value={value} />
@@ -2594,6 +2621,7 @@ export function CollectionBrowser({
     if (kind === 'facet') {
       if (field.writable) {
         return (
+          <Suspense fallback={<DefaultCell field={field} fieldKey={key} records={items} collectionPath={collectionPath} labelField={schema?.labelField} value={row[key]} />}>
           <SchemaFieldEditor
             collectionPath={collectionPath}
             record={row}
@@ -2601,9 +2629,11 @@ export function CollectionBrowser({
             writable
             onChange={(next) => void writePatch(row, { [key]: next })}
           />
+          </Suspense>
         )
       }
       return (
+        <Suspense fallback={<DefaultCell field={field} fieldKey={key} records={items} collectionPath={collectionPath} labelField={schema?.labelField} value={row[key]} />}>
         <FieldValuePop
           record={row}
           fieldKey={key}
@@ -2612,6 +2642,7 @@ export function CollectionBrowser({
           collectionPath={collectionPath}
           onSubmit={() => {}}
         />
+        </Suspense>
       )
     }
     if (kind === 'action') {
@@ -2630,6 +2661,7 @@ export function CollectionBrowser({
     if (Custom) return <Custom field={key} spec={field} value={row[key]} record={row} fallback={fallback} />
     if (kind !== 'file') {
       return (
+        <Suspense fallback={<DefaultCell field={field} fieldKey={key} records={items} collectionPath={collectionPath} labelField={schema?.labelField} value={row[key]} />}>
         <FieldValuePop
           record={row}
           fieldKey={key}
@@ -2641,6 +2673,7 @@ export function CollectionBrowser({
           labelField={schema?.labelField}
           onSubmit={field.writable ? (next) => writeCellValue(row, key, field, next) : () => {}}
         />
+        </Suspense>
       )
     }
     return <DefaultCell field={field} fieldKey={key} records={items} collectionPath={collectionPath} labelField={schema?.labelField} value={row[key]} />
@@ -2670,6 +2703,7 @@ export function CollectionBrowser({
         anchor={cellAnchorRef.current}
         onClose={() => setCellPop(null)}
       >
+        <Suspense fallback={null}>
         <CellPopDraft
           record={row}
           fieldKey={key}
@@ -2682,6 +2716,7 @@ export function CollectionBrowser({
           onClose={() => setCellPop(null)}
           onSubmit={(raw) => writeCellValue(row, key, field, raw)}
         />
+        </Suspense>
       </CellPop>
     )
   }
@@ -3601,7 +3636,9 @@ export function CollectionBrowser({
                   ignoreSelector={QUERY_NEST_IGNORE}
                   inside={(node) => node instanceof Element && Boolean(node.closest('.db-search-menu, .fsdb-cellselect-menu, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]'))}
                 >
+                <Suspense fallback={null}>
                 <SortQueryMenu sorts={sorts} fields={sortFields} onChange={applySorts} />
+                </Suspense>
                 </HeadlessDismiss>
               ) : null}
             </div>
@@ -3624,6 +3661,7 @@ export function CollectionBrowser({
                   ignoreSelector={QUERY_NEST_IGNORE}
                   inside={(node) => node instanceof Element && Boolean(node.closest('.db-search-menu, .fsdb-cellselect-menu, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]'))}
                 >
+                <Suspense fallback={null}>
                 <FilterQueryMenu
                   tree={filterTree}
                   fields={filterFields}
@@ -3642,6 +3680,7 @@ export function CollectionBrowser({
                   }
                   onChange={setFilterTree}
                 />
+                </Suspense>
                 </HeadlessDismiss>
               ) : null}
             </div>
@@ -4089,6 +4128,7 @@ export function CollectionBrowser({
         </div>
       </div>
         ) : selected && schema ? (
+        <Suspense fallback={null}>
         <RecordDetail
           selected={selected}
           schema={schema}
@@ -4128,6 +4168,7 @@ export function CollectionBrowser({
           recordKind={recordKind}
           inspectorPaneId={inspectorPaneId}
         />
+        </Suspense>
       ) : null}
         </div>
         </div>

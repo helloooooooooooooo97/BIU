@@ -8,8 +8,9 @@ import {
   type SchemaFieldValue,
 } from '@biu/type-file-system'
 import { TagChip, TagChips } from '@biu/public-ui'
-import { DbSearchOption, ensureDbSearchStyle } from '@biu/database-ui'
-import { FieldEditor, fieldDraftValue, parseFieldValue } from './fsdb-cells.tsx'
+import { DbSearchOption, ensureDbSearchStyle } from '@biu/database-ui/search'
+import { fieldDraftValue, parseFieldValue } from './fsdb-cells.tsx'
+import { FieldEditor } from './field-editor.tsx'
 import { loadFacets, persistFacets, slugFacetId, subscribeFacets } from './facet-catalog.ts'
 import { PersonPickPanel } from './person-cell.tsx'
 import { RecordPickPanel } from './record-link-cell.tsx'

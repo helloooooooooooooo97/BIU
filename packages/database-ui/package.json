@@ -6,7 +6,8 @@
   "type": "module",
   "description": "Database 共用 cell / 搜索弹出层",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./search": "./src/search-menu.tsx"
   },
   "dependencies": {
     "antd": "^6.6.1",

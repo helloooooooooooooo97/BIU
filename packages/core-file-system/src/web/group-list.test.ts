@@ -65,7 +65,7 @@ test('grouped collection fetches each group page instead of a mixed 200', async 
 
 test('wrap groups larger than the window only fully fetch the first group', async () => {
   const limits: number[] = []
-  await listGroupedCollection({
+  const page = await listGroupedCollection({
     path: '/tasks',
     groupBy: 'status',
     schema,
@@ -77,6 +77,14 @@ test('wrap groups larger than the window only fully fetch the first group', asyn
     },
   })
   assert.deepEqual(limits, [100, 1, 1])
+  assert.deepEqual(
+    page!.buckets.map((item) => [item.key, item.total, item.rows.length]),
+    [
+      ['todo', 80, 1],
+      ['doing', 80, 0],
+      ['done', 80, 0],
+    ],
+  )
 })
 
 test('scrolled wrap groups can fill later buckets at page size', async () => {

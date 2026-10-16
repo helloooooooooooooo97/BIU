@@ -1,37 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { CheckCircleIcon } from '@heroicons/react/16/solid'
-import { CellMulti } from '@biu/database-ui'
 import { overlayPortalRoot } from '@biu/public-ui'
-
-export { CellSelect } from '@biu/database-ui'
-
-export function TokenMultiSelect({
-  values,
-  options,
-  onChange,
-  allowCreate = true,
-  multiple = true,
-  autoOpen = false,
-}: {
-  values: string[]
-  options: Array<string | { value: string; label: string }>
-  onChange: (next: string[]) => void
-  allowCreate?: boolean
-  multiple?: boolean
-  autoOpen?: boolean
-}) {
-  return (
-    <CellMulti
-      values={values}
-      options={options.map((item) => typeof item === 'string' ? { value: item, label: item } : item)}
-      onChange={onChange}
-      allowCreate={allowCreate}
-      multiple={multiple}
-      autoOpen={autoOpen}
-    />
-  )
-}
 
 export function CheckRow({
   label,
