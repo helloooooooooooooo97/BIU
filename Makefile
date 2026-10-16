@@ -1,4 +1,4 @@
-.PHONY: dev host web test install stop restart build rebuild pack
+.PHONY: dev host web test install stop restart deploy build rebuild pack
 
 # 默认：装依赖并同时起集中部署 host(:3141)+Vite(:5173) 与本机 host(:3151)+Vite(:5174)
 dev: install
@@ -22,6 +22,9 @@ stop:
 # 先停再启。stop 会等到旧进程退出。
 restart: stop
 	@$(MAKE) --no-print-directory dev
+
+# 浏览器里直接用，不打包。5173 云端（.cloud-data），5174 本机（.local-data）。
+deploy: restart
 
 test:
 	npm test
