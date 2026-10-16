@@ -9,10 +9,15 @@ const taskTarget = Math.max(0, Number(process.env.BIU_PERF_TASKS || 3000))
 const sessionTarget = Math.max(0, Number(process.env.BIU_PERF_SESSIONS || 200))
 const folderTarget = Math.max(0, Number(process.env.BIU_PERF_FOLDERS || 50))
 const contentTarget = Math.max(0, Number(process.env.BIU_PERF_CONTENT || 80))
+const skillTarget = Math.max(0, Number(process.env.BIU_PERF_SKILLS || 40))
+const facetTarget = Math.max(0, Number(process.env.BIU_PERF_FACETS || 40))
 const pagePrefix = '压测页 '
 const folderPrefix = '压测夹 '
 const taskPrefix = '压测任务 '
 const sessionPrefix = '压测会话 '
+const skillPrefix = '压测技能 '
+const facetPrefix = '压测合集 '
+const blockPageTitle = '压测块页'
 const viewTitle = '压测百行'
 const statuses = ['todo', 'doing', 'done', 'failed']
 const priorities = ['low', 'med', 'high']
@@ -158,18 +163,49 @@ async function ensureDenseView(tablePath) {
 
 const taskView = await ensureDenseView('/tasks')
 const pageView = await ensureDenseView('/pages')
+const skills = await ensurePrefixed('/skills', skillPrefix, skillTarget, (index) => ({
+  title: `${skillPrefix}${index}`,
+  description: '本机空间压测技能，给技能表和记录页用。',
+  enabled: true,
+}))
+const facets = await ensurePrefixed('/facets', facetPrefix, facetTarget, (index) => ({
+  title: `${facetPrefix}${index}`,
+}))
+let blockPage = (await listPage('/pages', { q: blockPageTitle, limit: 5, columns: 'id,title' })).items.find(
+  (row) => String(row.title || '') === blockPageTitle,
+)
+if (!blockPage) {
+  const created = await createBatch('/pages', [{ title: blockPageTitle }])
+  blockPage = created[0] || null
+}
+if (blockPage?.id) {
+  const fences = Array.from({ length: 12 }, (_, index) => {
+    const id = `stress${String(index + 1).padStart(2, '0')}`
+    return `:::pageBlock {kind=html plugin=page-html-blocks id=${id}}\n<p>压测块 ${index + 1}</p>\n:::`
+  })
+  await apiJson('/api/db/content', {
+    method: 'POST',
+    body: JSON.stringify({ path: `/pages/${blockPage.id}`, value: `# ${blockPageTitle}\n\n${fences.join('\n\n')}` }),
+  })
+}
 const pageCount = await listPage('/pages', { limit: 1 })
 const taskCount = await listPage('/tasks', { limit: 1 })
 const sessionCount = await listPage('/sessions', { limit: 1 })
+const skillCount = await listPage('/skills', { limit: 1 })
+const facetCount = await listPage('/facets', { limit: 1 })
+const blockCount = await listPage('/page-blocks', { limit: 1 })
 const stat = await apiJson('/api/db/stat?path=/')
 
 console.log(
   JSON.stringify(
     {
       workspaceId,
-      pages: { ...pages, total: pageCount.total, folders: folders.seeded, nested },
-      tasks: { ...tasks, total: taskCount.total },
-      sessions: { ...sessions, total: sessionCount.total },
+      pages: { path: pages.path, prefix: pages.prefix, existing: pages.existing, created: pages.created, seeded: pages.seeded, total: pageCount.total, folders: folders.seeded, nested, blockPage: blockPage?.id || null },
+      tasks: { path: tasks.path, prefix: tasks.prefix, existing: tasks.existing, created: tasks.created, seeded: tasks.seeded, total: taskCount.total },
+      sessions: { path: sessions.path, prefix: sessions.prefix, existing: sessions.existing, created: sessions.created, seeded: sessions.seeded, total: sessionCount.total },
+      skills: { path: skills.path, prefix: skills.prefix, existing: skills.existing, created: skills.created, seeded: skills.seeded, total: skillCount.total },
+      facets: { path: facets.path, prefix: facets.prefix, existing: facets.existing, created: facets.created, seeded: facets.seeded, total: facetCount.total },
+      pageBlocks: blockCount.total,
       contentWrote,
       views: { tasks: taskView, pages: pageView },
       collections: (stat.collections || []).map((row) => row.path),

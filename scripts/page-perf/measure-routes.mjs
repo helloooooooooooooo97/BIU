@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 /** 对本机空间各页做刷新压测：壳就绪、API 瀑布、商店 web.js、long task、堆。 */
 import { inspectLocalShellSource, inspectPageBlocksSource, openPageSession, readPerfEnv, resourceKind } from './cdp.mjs'
+import { discoverLocalSpaceRoutes } from './discover-routes.mjs'
+import { inspectInteractSource, stressInteractSource } from './interact.mjs'
 
 const { token, workspaceId, chrome } = readPerfEnv()
 const origin = String(process.env.BIU_PERF_ORIGIN ?? 'http://127.0.0.1:5174').replace(/\/$/, '')
@@ -25,65 +27,16 @@ async function apiJson(path) {
   return body
 }
 
-async function listSome(path, limit = 8, columns = 'id,title') {
-  const params = new URLSearchParams({ path, limit: String(limit), columns, sort: 'id', dir: 'asc' })
-  const page = await apiJson(`/api/db/list?${params}`)
-  return Array.isArray(page.items) ? page.items : []
-}
-
 function appUrl(path) {
   return `${origin}${path.startsWith('/') ? path : `/${path}`}`
 }
 
 async function discoverRoutes() {
-  const stat = await apiJson('/api/db/stat?path=/')
-  const collections = (stat.collections || []).map((row) => ({
-    id: row.id,
-    path: row.path,
-    label: row.view?.title || row.label || row.id,
-  }))
-  const sessions = await listSome('/sessions', 5)
-  const pages = await listSome('/pages', 20)
-  const seedListed = await apiJson(`/api/db/list?${new URLSearchParams({ path: '/pages', limit: '5', q: '压测页', columns: 'id,title' })}`)
-  const tasks = await listSome('/tasks', 5)
-  const heavyListed = await apiJson(`/api/db/list?${new URLSearchParams({ path: '/pages', limit: '5', q: '十插件', columns: 'id,title' })}`)
-  const denseViews = await apiJson(`/api/db/list?${new URLSearchParams({ path: '/views', limit: '20', q: '压测百行', columns: 'id,title,tablePath,viewId,pageSize,groupBy' })}`)
-  const heavyPage =
-    (Array.isArray(heavyListed.items) ? heavyListed.items.find((row) => String(row.title || '').includes('十插件')) : null) ||
-    pages.find((row) => String(row.title || '').includes('十插件')) ||
-    pages[0]
-  const seedPage =
-    (Array.isArray(seedListed.items) ? seedListed.items.find((row) => String(row.title || '').startsWith('压测页 ')) : null) ||
-    pages.find((row) => row.id !== heavyPage?.id)
-  const session = sessions[0]
-  const task = tasks[0]
-  const denseRoutes = (Array.isArray(denseViews.items) ? denseViews.items : [])
-    .filter((row) => row.tablePath && row.viewId)
-    .map((row) => ({
-      id: `view:${row.tablePath}:${row.viewId}`,
-      label: `${row.title} ${row.tablePath} pageSize=${row.pageSize || ''} group=${row.groupBy || ''}`,
-      path: `/database/${encodeURIComponent(String(row.tablePath).replace(/^\//, ''))}/view/${encodeURIComponent(String(row.viewId))}`,
-    }))
-  const routes = [
-    { id: 'home', label: '工作台首页', path: '/' },
-    session ? { id: 'session', label: `会话 ${session.title || session.id}`, path: `/s/${session.id}` } : null,
-    { id: 'database', label: '数据库入口', path: '/database' },
-    ...collections.map((row) => ({
-      id: `collection:${row.id}`,
-      label: `表 ${row.label}`,
-      path: `/database/${encodeURIComponent(String(row.path).replace(/^\//, ''))}`,
-    })),
-    heavyPage
-      ? { id: 'page-plugins', label: `记录 ${heavyPage.title || heavyPage.id}`, path: `/database/pages/record/${encodeURIComponent(heavyPage.id)}` }
-      : null,
-    seedPage
-      ? { id: 'page-seed', label: `记录 ${seedPage.title || seedPage.id}`, path: `/database/pages/record/${encodeURIComponent(seedPage.id)}` }
-      : null,
-    task ? { id: 'task-record', label: `任务 ${task.title || task.id}`, path: `/database/tasks/record/${encodeURIComponent(task.id)}` } : null,
-    ...denseRoutes,
-  ].filter(Boolean)
-  const selected = only.length ? routes.filter((row) => only.includes(row.id) || only.includes(row.path)) : routes
-  return { collections, session, heavyPage, seedPage, task, routes: selected }
+  const discovered = await discoverLocalSpaceRoutes(apiJson)
+  const selected = only.length
+    ? discovered.routes.filter((row) => only.includes(row.id) || only.includes(row.path) || only.includes(row.kind))
+    : discovered.routes
+  return { ...discovered, routes: selected }
 }
 
 function summarizeNetwork(requests) {
@@ -232,7 +185,19 @@ async function measureRoute(session, route) {
       if (Date.now() - t0 >= readyAt + settleMs) break
     }
   }
-  if (route.id.startsWith('page-') || route.path.includes('/pages/record/')) {
+  let interact = null
+  if (route.interact) {
+    const clicked = await session.send('Runtime.evaluate', { expression: stressInteractSource(), returnByValue: true }, session.sessionId)
+    await new Promise((resolve) => setTimeout(resolve, 900))
+    const events = session.take()
+    collectRequests(events, requests, t0)
+    collectLogs(events, logs, fails, hub)
+    const after = await session.send('Runtime.evaluate', { expression: inspectInteractSource(), returnByValue: true }, session.sessionId)
+    const snap = await session.send('Runtime.evaluate', { expression: inspectLocalShellSource(), returnByValue: true }, session.sessionId)
+    if (snap.result?.value) shell = { ...shell, ...snap.result.value }
+    interact = { ...(clicked.result?.value || {}), ...(after.result?.value || {}) }
+  }
+  if (route.id.startsWith('page-') || route.path.includes('/pages/record/') || route.interact === 'page') {
     const blocks = await session.send('Runtime.evaluate', { expression: inspectPageBlocksSource(), returnByValue: true }, session.sessionId)
     shell = { ...shell, blocks: blocks.result?.value }
   }
@@ -288,6 +253,7 @@ async function measureRoute(session, route) {
     network: net,
     logs: [...new Set(logs)].slice(0, 12),
     fails: [...new Set(fails)].slice(0, 12),
+    interact,
   }
 }
 
@@ -373,6 +339,7 @@ try {
       dbList: samples[samples.length - 1]?.network?.groups?.find((group) => group.kind === 'db-list')?.count ?? 0,
       longTaskMs: median(samples.map((row) => row.longTaskMs)),
       tableRows: samples[samples.length - 1]?.shell?.tableRows ?? 0,
+      interact: samples[samples.length - 1]?.interact ?? null,
       heapUsed: samples[samples.length - 1]?.heapUsed ?? null,
       fails: [...new Set(samples.flatMap((row) => row.fails))],
       last: samples[samples.length - 1],
@@ -386,7 +353,8 @@ const report = {
   workspaceId,
   origin,
   runs,
-  routes: discovered.routes.map((row) => row.path),
+  coverage: discovered.coverage,
+  routes: discovered.routes.map((row) => ({ id: row.id, kind: row.kind, path: row.path, label: row.label })),
   results,
   bottlenecks: bottleneckNotes(results.map((row) => row.last).filter(Boolean)),
 }

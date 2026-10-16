@@ -102,6 +102,7 @@ export function inspectLocalShellSource() {
     const composer = Boolean(document.querySelector('.composer-pill, [data-testid="chat-empty"], [data-testid="chat-turn"]'))
     const table = Boolean(document.querySelector('.fsdb-page, [data-collection-kind], [data-page-block]'))
     const tableRows = document.querySelectorAll('.tasks-table tbody tr[data-record-id], .fsdb-page tbody tr[data-record-id]').length
+    const chatTurns = document.querySelectorAll('[data-testid="chat-turn"], .chat-turn, [data-turn]').length
     const loadingBlocks = document.querySelectorAll('[data-plugin-phase="loading"]').length
     const title =
       document.querySelector('h1')?.textContent?.trim() ||
@@ -109,7 +110,7 @@ export function inspectLocalShellSource() {
       document.title
     const textLen = (document.body?.innerText || '').length
     const longTasks = Array.isArray(window.__biuPerf?.longTasks) ? window.__biuPerf.longTasks : []
-    return { splash, gate, shell, workspace, composer, table, tableRows, loadingBlocks, title, textLen, longTasks }
+    return { splash, gate, shell, workspace, composer, table, tableRows, chatTurns, loadingBlocks, title, textLen, longTasks }
   })()`
 }
 
