@@ -1,5 +1,53 @@
+import { useSyncExternalStore } from 'react'
+
 /** 文档里的块只认自己写下的插件 id，编辑器不猜、不查插件表。 */
 export const ENABLE_PAGE_BLOCK_PLUGIN = 'biu:enable-page-block-plugin'
+export const PAGE_BLOCK_PLUGIN_PHASE = 'biu:page-block-plugin-phase'
+
+export type PageBlockPluginPhase = 'idle' | 'loading' | 'failed' | 'ready'
+
+const phases = new Map<string, PageBlockPluginPhase>()
+let phaseVersion = 0
+const phaseListeners = new Set<() => void>()
+
+function emitPhase() {
+  phaseVersion += 1
+  for (const fn of phaseListeners) fn()
+}
+
+export function pageBlockPluginPhase(plugin: string): PageBlockPluginPhase {
+  return phases.get(plugin.trim()) ?? 'idle'
+}
+
+export function setPageBlockPluginPhase(plugin: string, phase: PageBlockPluginPhase) {
+  const id = plugin.trim()
+  if (!id) return
+  if (phase === 'idle') phases.delete(id)
+  else phases.set(id, phase)
+  emitPhase()
+}
+
+export function usePageBlockPluginPhase(plugin: string) {
+  useSyncExternalStore(
+    (fn) => {
+      phaseListeners.add(fn)
+      return () => phaseListeners.delete(fn)
+    },
+    () => phaseVersion,
+    () => 0,
+  )
+  return pageBlockPluginPhase(plugin)
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener(PAGE_BLOCK_PLUGIN_PHASE, (event) => {
+    const detail = (event as CustomEvent<{ plugin?: unknown; phase?: unknown }>).detail
+    const plugin = typeof detail?.plugin === 'string' ? detail.plugin.trim() : ''
+    const phase = detail?.phase
+    if (!plugin || (phase !== 'ready' && phase !== 'failed' && phase !== 'loading' && phase !== 'idle')) return
+    setPageBlockPluginPhase(plugin, phase)
+  })
+}
 
 const HTML_KINDS = new Set(['html', 'htmlframe'])
 const VIDEO_KINDS = new Set(['video'])
@@ -104,8 +152,22 @@ export function formatPageBlockFence(kind: string, plugin: string, data: Record<
   return `:::pageBlock ${meta}\n${JSON.stringify(body, null, 2)}\n:::`
 }
 
+export function blockDataUnchanged(current: Record<string, unknown>, next: Record<string, unknown>) {
+  if (current === next) return true
+  const left = Object.keys(current)
+  const right = Object.keys(next)
+  if (left.length !== right.length) return false
+  for (const key of right) {
+    if (Object.is(current[key], next[key])) continue
+    if (JSON.stringify(current[key]) !== JSON.stringify(next[key])) return false
+  }
+  return true
+}
+
 export function requestEnablePageBlockPlugin(plugin: string, kind: string) {
   const id = plugin.trim()
   if (!id || typeof window === 'undefined') return
+  if (pageBlockPluginPhase(id) === 'loading') return
+  setPageBlockPluginPhase(id, 'loading')
   window.dispatchEvent(new CustomEvent(ENABLE_PAGE_BLOCK_PLUGIN, { detail: { plugin: id, kind } }))
 }

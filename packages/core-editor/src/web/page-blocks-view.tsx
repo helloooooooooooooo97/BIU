@@ -1,8 +1,9 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ArrowsPointingOutIcon, RectangleGroupIcon, ViewColumnsIcon } from '@heroicons/react/16/solid'
 import type { DbRecord } from '@biu/type-file-system'
 import type { CollectionViewType, FsContentProps, FsViewProps } from '@biu/type-file-system/ui'
 import { PageBlockMissing } from './page-block-view.tsx'
+import { blockDataUnchanged, requestEnablePageBlockPlugin, usePageBlockPluginPhase } from './page-block-meta.ts'
 import { bindPageBlockPlugin } from './page-block-plugin-host.ts'
 import { getPageEditor, usePageEditorVersion } from './service.ts'
 
@@ -153,6 +154,7 @@ export function PageBlockStage({
   const plugin = String(row.plugin ?? '').trim()
   const spec = getPageEditor()?.block(kind)
   const View = spec?.View
+  const phase = usePageBlockPluginPhase(plugin)
   const source = raw ?? row.data
   const packed = typeof source === 'string' ? source : JSON.stringify(source ?? {})
   const recordTitle = String(row.title ?? '').trim()
@@ -161,20 +163,32 @@ export function PageBlockStage({
     if (recordTitle) parsed.title = recordTitle
     return parsed
   })
+  const dataRef = useRef(data)
+  dataRef.current = data
   useEffect(() => {
     const parsed = parsePageBlockRowData(source)
     if (recordTitle) parsed.title = recordTitle
-    setData(parsed)
+    setData((prev) => (blockDataUnchanged(prev, parsed) ? prev : parsed))
   }, [packed, recordTitle])
-  const update = (patch: Record<string, unknown>, opts?: { replace?: boolean }) => {
-    const next = mergeLiveBlockData(data, patch, { replace: opts?.replace, title: recordTitle })
+  const onChangeRef = useRef(onChange)
+  onChangeRef.current = onChange
+  const rowId = String(row.id)
+  const update = useCallback((patch: Record<string, unknown>, opts?: { replace?: boolean }) => {
+    const next = mergeLiveBlockData(dataRef.current, patch, { replace: opts?.replace, title: recordTitle })
+    if (blockDataUnchanged(dataRef.current, next)) return
+    dataRef.current = next
     setData(next)
     const toWrite = persistBlockDataPatch(next, patch)
-    if (onChange) onChange(toWrite)
-    else void writeBlockData(String(row.id), toWrite)
-  }
+    const report = onChangeRef.current
+    if (report) report(toWrite)
+    else void writeBlockData(rowId, toWrite)
+  }, [recordTitle, rowId])
   const hostRef = useRef<HTMLDivElement | null>(null)
-  useLayoutEffect(() => bindPageBlockPlugin(hostRef.current, plugin), [plugin, kind, View, packed])
+  useLayoutEffect(() => bindPageBlockPlugin(hostRef.current, plugin), [plugin])
+  useLayoutEffect(() => {
+    if (View || !plugin || phase !== 'idle') return
+    requestEnablePageBlockPlugin(plugin, kind)
+  }, [View, kind, phase, plugin])
   return (
     <div
       ref={hostRef}
@@ -191,7 +205,7 @@ export function PageBlockStage({
       {View ? (
         <View data={data} update={update} writable={writable} />
       ) : (
-        <PageBlockMissing kind={kind || 'unknown'} plugin={plugin} data={data} />
+        <PageBlockMissing kind={kind || 'unknown'} plugin={plugin} data={data} phase={phase} />
       )}
     </div>
   )

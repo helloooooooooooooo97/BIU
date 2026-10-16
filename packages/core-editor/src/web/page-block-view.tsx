@@ -1,10 +1,17 @@
-import { memo, useEffect, useLayoutEffect, useRef, type MouseEvent } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, type MouseEvent } from 'react'
 import type { NodeViewProps } from '@tiptap/react'
 import { NodeViewWrapper } from '@tiptap/react'
 import { PlayIcon } from '@heroicons/react/16/solid'
 import { RenderBoundary } from '@biu/public-ui'
 import { getPageEditor, usePageEditorVersion } from './service.ts'
-import { formatPageBlockFence, requestEnablePageBlockPlugin } from './page-block-meta.ts'
+import {
+  blockDataUnchanged,
+  formatPageBlockFence,
+  requestEnablePageBlockPlugin,
+  setPageBlockPluginPhase,
+  usePageBlockPluginPhase,
+  type PageBlockPluginPhase,
+} from './page-block-meta.ts'
 import { bindPageBlockPlugin } from './page-block-plugin-host.ts'
 
 function assetName(file: string) {
@@ -30,17 +37,29 @@ async function copyPageAsset(from: string, to: string) {
   })
 }
 
-export function PageBlockMissing({ kind, plugin, data }: { kind: string; plugin: string; data: Record<string, unknown> }) {
+export function PageBlockMissing({
+  kind,
+  plugin,
+  data,
+  phase = 'idle',
+}: {
+  kind: string
+  plugin: string
+  data: Record<string, unknown>
+  phase?: PageBlockPluginPhase
+}) {
   const source = formatPageBlockFence(kind, plugin, data)
+  const loading = phase === 'loading'
   return (
-    <div className="page-block-missing" data-testid="page-block-missing">
+    <div className="page-block-missing" data-testid="page-block-missing" data-plugin-phase={phase}>
       <div className="page-block-missing-head">
         {plugin ? (
           <code className="page-block-missing-id">{plugin}</code>
         ) : (
           <span className="page-block-missing-state">没有插件 id</span>
         )}
-        {plugin ? (
+        {loading ? <span className="page-block-missing-state">正在加载</span> : null}
+        {plugin && !loading ? (
           <button
             type="button"
             className="page-block-missing-enable"
@@ -50,6 +69,7 @@ export function PageBlockMissing({ kind, plugin, data }: { kind: string; plugin:
             onClick={(event) => {
               event.preventDefault()
               event.stopPropagation()
+              setPageBlockPluginPhase(plugin, 'idle')
               requestEnablePageBlockPlugin(plugin, kind)
             }}
           >
@@ -57,7 +77,7 @@ export function PageBlockMissing({ kind, plugin, data }: { kind: string; plugin:
           </button>
         ) : null}
       </div>
-      <pre className="page-block-missing-source">{source}</pre>
+      {loading ? null : <pre className="page-block-missing-source">{source}</pre>}
     </div>
   )
 }
@@ -83,16 +103,27 @@ export const PageBlockView = memo(function PageBlockView({ node, updateAttribute
   const blockId = String(node.attrs.id ?? '').trim()
   const pickId = blockId || `${plugin || 'page-block'}:${kind}`
   const pickLabel = spec?.label || kind
-  const update = (patch: Record<string, unknown>, opts?: { replace?: boolean }) => {
-    const next = opts?.replace ? { ...patch } : { ...data, ...patch }
-    if (!Object.prototype.hasOwnProperty.call(patch, 'title') && typeof data.title === 'string') {
-      next.title = data.title
-    }
-    updateAttributes({ data: next })
-  }
   const View = spec?.View
+  const phase = usePageBlockPluginPhase(plugin)
+  const dataRef = useRef(data)
+  dataRef.current = data
+  const updateAttributesRef = useRef(updateAttributes)
+  updateAttributesRef.current = updateAttributes
+  const update = useCallback((patch: Record<string, unknown>, opts?: { replace?: boolean }) => {
+    const current = dataRef.current
+    const next = opts?.replace ? { ...patch } : { ...current, ...patch }
+    if (!Object.prototype.hasOwnProperty.call(patch, 'title') && typeof current.title === 'string') {
+      next.title = current.title
+    }
+    if (blockDataUnchanged(current, next)) return
+    updateAttributesRef.current({ data: next })
+  }, [])
   const hostRef = useRef<HTMLElement | null>(null)
-  useLayoutEffect(() => bindPageBlockPlugin(hostRef.current, plugin), [plugin, kind, View, data])
+  useLayoutEffect(() => bindPageBlockPlugin(hostRef.current, plugin), [plugin])
+  useLayoutEffect(() => {
+    if (View || !plugin || phase !== 'idle') return
+    requestEnablePageBlockPlugin(plugin, kind)
+  }, [View, kind, phase, plugin])
 
   useEffect(() => {
     if (!cloneFrom || !file) return
@@ -141,7 +172,7 @@ export const PageBlockView = memo(function PageBlockView({ node, updateAttribute
           <View data={data} update={update} writable />
         </RenderBoundary>
       ) : (
-        <PageBlockMissing kind={kind} plugin={plugin} data={data} />
+        <PageBlockMissing kind={kind} plugin={plugin} data={data} phase={phase} />
       )}
     </NodeViewWrapper>
   )

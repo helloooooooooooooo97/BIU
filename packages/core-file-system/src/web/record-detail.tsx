@@ -281,21 +281,26 @@ export function RecordDetail({
 
   const deleteRef = useRef(onDelete)
   deleteRef.current = onDelete
+  const selectedRef = useRef(selected)
+  selectedRef.current = selected
+  const shareRef = useRef(share)
+  shareRef.current = share
   useLayoutEffect(() => {
     if (!inspectorPaneId) return
+    const row = selectedRef.current
     reportInspectorPaneMenu(
       inspectorPaneId,
       <RecordPaneMenu
-        record={selected}
+        record={row}
         Tools={readOnly ? undefined : chrome?.DetailTools}
         onDelete={!readOnly && deleteRef.current ? () => deleteRef.current?.() : undefined}
         deleteLabel={collectionPath === '/pages' ? '删除页面' : '删除记录'}
-        share={share}
+        share={shareRef.current}
         shareLabel={collectionPath === '/pages' ? '分享页面' : '分享记录'}
       />,
     )
     return () => reportInspectorPaneMenu(inspectorPaneId, null)
-  }, [chrome?.DetailTools, collectionPath, inspectorPaneId, readOnly, selected, share])
+  }, [chrome?.DetailTools, collectionPath, inspectorPaneId, readOnly, selected.id])
 
   const [facetOpen, setFacetOpen] = useState(false)
   useEffect(() => {
