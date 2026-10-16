@@ -429,6 +429,8 @@ export class SessionsService extends Service {
       return
     }
     for (const id of ids) {
+      // 让出事件循环，登录和第一次打开会话不用等全部日志修完。
+      await new Promise((resolve) => setImmediate(resolve))
       try {
         await this.get(id)
       } catch {
