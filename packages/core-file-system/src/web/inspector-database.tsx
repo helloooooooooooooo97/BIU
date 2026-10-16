@@ -166,7 +166,7 @@ function crumbsForRoute(
     viewName: resolvedView?.name,
     views: views.map((item) => ({ id: item.id, name: item.name, mode: item.mode })),
     recordId,
-    recordLabel: recordHit?.label ?? recordId,
+    recordLabel: recordHit?.label,
     records,
   })
   return { crumbs, collection, viewId: activeViewId, recordId }

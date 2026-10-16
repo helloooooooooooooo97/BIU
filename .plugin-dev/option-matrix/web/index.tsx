@@ -363,6 +363,7 @@ export function apply(ctx: {
     blockTypeLabel: '测试',
     hint: '多方案 × 多维度加权对比矩阵：改权重/打分，总分与推荐实时变；越低越好的维度自动反向计入',
     aliases: ['matrix', 'option', 'compare', '对比', '矩阵', '选型', '方案对比'],
+    assets: [],
     defaults: () => DEFAULTS,
     View: ({ data, update, writable }: { data: Record<string, unknown>; update: (patch: Record<string, unknown>) => void; writable: boolean }) =>
       React.createElement(OptionMatrix, { data: data as Data, update, writable }),

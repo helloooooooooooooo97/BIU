@@ -4,8 +4,10 @@ import { resolve } from 'node:path'
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { clientLogSnapshot, resetClientLogs } from '@biu/web-event-log/log'
+import { requestEnablePageBlockPlugin, setPageBlockPluginPhase } from '../../../core-editor/src/web/page-block-meta.ts'
 import {
   ENABLE_PAGE_BLOCK_PLUGIN,
+  listenEnablePageBlockPlugin,
   pageBlockPluginFromEvent,
   pluginRecordHref,
   startStorePlugin,
@@ -25,6 +27,7 @@ test('enabling a page block starts the plugin and stays on the page', () => {
   assert.match(listen, /startStorePlugin\(plugin\)/)
   assert.match(listen, /reportPhase\(plugin, 'ready'\)/)
   assert.match(listen, /reportPhase\(plugin, 'failed'\)/)
+  assert.match(listen, /pendingEnableIds/)
   assert.doesNotMatch(listen, /pushState/)
   assert.doesNotMatch(listen, /pluginRecordHref/)
 })
@@ -107,4 +110,23 @@ test('missing plugin does not post an action', async () => {
     fetchMock.restore()
   }
   assert.equal(fetchMock.calls.some((call) => call.method === 'POST'), false)
+})
+
+test('listener catches page blocks that asked to start before it mounted', async () => {
+  setPageBlockPluginPhase('page-late', 'idle')
+  const fetchMock = stubFetch((url) => {
+    if (url.includes('/api/db/read')) return { status: 200, body: { value: { installed: true, running: true } } }
+    return { status: 200, body: { ok: true } }
+  })
+  requestEnablePageBlockPlugin('page-late', 'toc')
+  const stop = listenEnablePageBlockPlugin()
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    assert.equal(fetchMock.calls.some((call) => decodeURIComponent(call.url).includes('/plugins/page-late')), true)
+    assert.equal(fetchMock.calls.some((call) => call.action === 'start'), false)
+  } finally {
+    stop()
+    fetchMock.restore()
+    setPageBlockPluginPhase('page-late', 'idle')
+  }
 })

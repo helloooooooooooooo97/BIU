@@ -102,6 +102,7 @@ test('device workspace keeps LAN links but hides collaboration and cloud publish
   assert.match(src, /!localOnly && \(\(target\.kind === 'record'/)
   assert.match(src, /同一局域网/)
   assert.match(browser, /localOnly=\{localData\}/)
+  assert.match(browser, /localOnly=\{localKnown \? localData : null\}/)
   assert.match(databaseHost, /activeDataLocation\(\) === 'cloud'/)
   assert.doesNotMatch(databaseHost, /publishToCloud/)
   assert.doesNotMatch(sharesPost, /localIds/)
@@ -118,11 +119,22 @@ test('device share scope detail lists matching lan view links instead of echoing
   assert.match(localBlock, /命中已分享的视图/)
   assert.match(localBlock, /recordMatchesSharedView/)
   assert.doesNotMatch(localBlock, /\/api\/account\/access/)
+  assert.match(detail, /localOnly == null/)
   assert.match(detail, /localOnly \? '局域网链接' : '数据归属链路'/)
   assert.match(detail, /这条记录命中的局域网链接/)
   assert.match(host, /sharedViewsFor/)
   assert.match(host, /recordMatchesSharedView/)
   assert.doesNotMatch(sharesPostOf(host), /markPublicView/)
+})
+
+test('device workspace access read answers locally instead of 404', () => {
+  const src = readFileSync(resolve(process.cwd(), 'packages/host-account/src/host/index.ts'), 'utf8')
+  const get = src.slice(src.indexOf("GET', '/api/account/access'"), src.indexOf("POST', '/api/account/access'"))
+  const post = src.slice(src.indexOf("POST', '/api/account/access'"), src.indexOf("DELETE', '/api/account/access'"))
+  assert.match(get, /workspaceLocation\(activeWorkspace\) !== 'cloud'/)
+  assert.match(get, /local: true/)
+  assert.doesNotMatch(get, /requireCollaborativeWorkspace/)
+  assert.match(post, /requireCollaborativeWorkspace/)
 })
 
 function sharesPostOf(host: string) {

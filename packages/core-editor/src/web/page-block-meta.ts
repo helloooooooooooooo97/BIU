@@ -4,6 +4,14 @@ import { clientLog } from '@biu/web-event-log/log'
 /** 文档里的块只认自己写下的插件 id，编辑器不猜、不查插件表。 */
 export const ENABLE_PAGE_BLOCK_PLUGIN = 'biu:enable-page-block-plugin'
 export const PAGE_BLOCK_PLUGIN_PHASE = 'biu:page-block-plugin-phase'
+/** 启用请求先记在这里。监听还没挂上时事件会丢，后挂上的监听靠这份名单补上。 */
+export const PENDING_PAGE_BLOCK_ENABLES = '__biuPendingPageBlockEnables'
+
+function pendingPageBlockEnables() {
+  const host = globalThis as typeof globalThis & { [PENDING_PAGE_BLOCK_ENABLES]?: Map<string, string> }
+  if (!host[PENDING_PAGE_BLOCK_ENABLES]) host[PENDING_PAGE_BLOCK_ENABLES] = new Map()
+  return host[PENDING_PAGE_BLOCK_ENABLES]
+}
 
 export type PageBlockPluginPhase = 'idle' | 'loading' | 'failed' | 'ready'
 
@@ -46,6 +54,7 @@ if (typeof window !== 'undefined') {
     const plugin = typeof detail?.plugin === 'string' ? detail.plugin.trim() : ''
     const phase = detail?.phase
     if (!plugin || (phase !== 'ready' && phase !== 'failed' && phase !== 'loading' && phase !== 'idle')) return
+    if (phase === 'ready' || phase === 'failed') pendingPageBlockEnables().delete(plugin)
     setPageBlockPluginPhase(plugin, phase)
   })
 }
@@ -169,6 +178,7 @@ export function requestEnablePageBlockPlugin(plugin: string, kind: string) {
   const id = plugin.trim()
   if (!id || typeof window === 'undefined') return
   if (pageBlockPluginPhase(id) === 'loading') return
+  pendingPageBlockEnables().set(id, kind || '')
   clientLog('info', 'page-block', `${kind || 'unknown'}（${id}）还没有视图，请求启用`)
   setPageBlockPluginPhase(id, 'loading')
   window.dispatchEvent(new CustomEvent(ENABLE_PAGE_BLOCK_PLUGIN, { detail: { plugin: id, kind } }))

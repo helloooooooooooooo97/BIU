@@ -9,7 +9,7 @@ import { Context, Service } from 'cordis'
 import { WebSocket } from 'ws'
 import * as http from './index.ts'
 import { deliverTenantEvent } from './index.ts'
-import { currentAccountId } from '@biu/host-plugin-loader/data-dir'
+import { currentAccountId, currentRequestWorkspaceId } from '@biu/host-plugin-loader/data-dir'
 
 async function freePort() {
   return await new Promise<number>((resolve, reject) => {
@@ -333,6 +333,47 @@ test('online HTTP and WebSocket enforce account and workspace boundaries', async
     memberships.delete('ada:ws-a')
     ctx.http.disconnectTenant('ada', 'ws-a')
     assert.equal(await closed, 4403)
+  } finally {
+    await fiber.dispose()
+    if (previous === undefined) delete process.env.BIU_ONLINE
+    else process.env.BIU_ONLINE = previous
+  }
+})
+
+test('local HTTP uses the active workspace when the header is missing', async () => {
+  const previous = process.env.BIU_ONLINE
+  delete process.env.BIU_ONLINE
+  const base = await mkdtemp(join(tmpdir(), 'cordis-http-local-ws-'))
+  const publicDir = join(base, 'public')
+  await mkdir(publicDir, { recursive: true })
+  await writeFile(join(publicDir, 'index.html'), '<html></html>')
+  const ctx = new Context()
+  class FakeAccount extends Service {
+    store = {
+      accountByToken: (token: string) => (token === 'ada-token' ? { id: 'ada' } : null),
+      isMember: (accountId: string, workspaceId: string) => accountId === 'ada' && workspaceId === 'ws-local',
+      activeWorkspaceId: () => (currentAccountId() === 'ada' ? 'ws-local' : null),
+    }
+    constructor(inner: Context) {
+      super(inner, 'account')
+    }
+  }
+  const ready = new Promise<number>((resolve) => ctx.on('http/ready', ({ port }) => resolve(port)))
+  await ctx.plugin(FakeAccount)
+  const fiber = await ctx.plugin(http, { port: 0, host: '127.0.0.1', publicDir, sharePort: 0 })
+  const port = await ready
+  ctx.http.route('GET', '/api/db/workspace', (route) => {
+    route.send(200, { workspaceId: currentRequestWorkspaceId() })
+  })
+  try {
+    const missing = await fetch(`http://127.0.0.1:${port}/api/db/workspace`, {
+      headers: { Authorization: 'Bearer ada-token' },
+    })
+    assert.equal(missing.status, 200)
+    assert.equal((await missing.json()).workspaceId, 'ws-local')
+    const src = readFileSync(join(import.meta.dirname, 'index.ts'), 'utf8')
+    assert.doesNotMatch(src, /if \(!isOnlineRuntime\(\) \|\| !accountId\) return ''/)
+    assert.match(src, /hasAccountSystem &&[\s\S]*!requestedWorkspace/)
   } finally {
     await fiber.dispose()
     if (previous === undefined) delete process.env.BIU_ONLINE
