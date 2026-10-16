@@ -222,6 +222,218 @@ function HoverMount({ children }: { children: ReactNode }) {
   )
 }
 
+function TableRecordIcon({
+  row,
+  label,
+  tableIcon,
+  Icon,
+  onWriteEmoji,
+}: {
+  row: DbRecord
+  label: string
+  tableIcon?: string
+  Icon?: CollectionChrome['Icon']
+  onWriteEmoji: (next: string) => void
+}) {
+  const emoji = recordPreviewEmoji(row)
+  const [open, setOpen] = useState(false)
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null)
+  return (
+    <span className="fsdb-table-record-icon">
+      <button
+        type="button"
+        className="fsdb-table-emoji-btn"
+        title={emoji ? '更换图标' : '设置图标'}
+        aria-label={emoji ? `更换 ${label} 的图标` : `设置 ${label} 的图标`}
+        onClick={(event) => {
+          event.stopPropagation()
+          const btn = event.currentTarget
+          setOpen((prev) => {
+            if (prev) {
+              setAnchor(null)
+              return false
+            }
+            setAnchor(btn)
+            return true
+          })
+        }}
+        onPointerDown={(event) => event.stopPropagation()}
+      >
+        <RecordMark record={row} tableIcon={tableIcon} Icon={Icon} />
+      </button>
+      {open && anchor ? (
+        <Suspense fallback={null}>
+          <RecordEmojiBoard
+            anchor={anchor}
+            onPick={(next) => {
+              onWriteEmoji(normalizeRecordEmoji(next))
+              setOpen(false)
+              setAnchor(null)
+            }}
+            onClear={() => {
+              onWriteEmoji('')
+              setOpen(false)
+              setAnchor(null)
+            }}
+            onClose={() => {
+              setOpen(false)
+              setAnchor(null)
+            }}
+          />
+        </Suspense>
+      ) : null}
+    </span>
+  )
+}
+
+function RecordOpenControls({
+  row,
+  kidCount = 0,
+  toolsLive = true,
+  nested,
+  pick,
+  onOpenSplit,
+  onOpenRow,
+}: {
+  row: DbRecord
+  kidCount?: number
+  toolsLive?: boolean
+  nested: boolean
+  pick: object
+  onOpenSplit: () => void
+  onOpenRow: () => void
+}) {
+  return (
+    <span className="tasks-title-aside">
+      {toolsLive && !nested ? (
+        <button
+          type="button"
+          className="tasks-icon-btn tasks-title-open"
+          data-testid="record-title-split"
+          aria-label="在右侧打开"
+          title="在右侧打开"
+          onClick={(event) => {
+            event.stopPropagation()
+            onOpenSplit()
+          }}
+        >
+          <ViewColumnsIcon aria-hidden className="size-[14px]" />
+        </button>
+      ) : null}
+      <span className="tasks-title-zoom">
+        {kidCount > 0 ? <ChatCount count={kidCount} className="tasks-tree-count" title={`${kidCount} 项`} /> : null}
+        {toolsLive ? (
+          <button
+            type="button"
+            className="tasks-icon-btn tasks-title-open"
+            data-testid="record-title-open"
+            {...pick}
+            data-biu-action="open"
+            aria-label="查看详情"
+            title="查看详情"
+            onClick={(event) => {
+              event.stopPropagation()
+              onOpenRow()
+            }}
+          >
+            <ArrowsPointingOutIcon aria-hidden className="size-[14px]" />
+          </button>
+        ) : null}
+      </span>
+    </span>
+  )
+}
+
+function RecordTitle({
+  row,
+  body,
+  label,
+  openDetail = true,
+  depth = 0,
+  hasKids = false,
+  kidCount = 0,
+  treeOn,
+  collapsed,
+  onToggleCollapsed,
+  tableIcon,
+  Icon,
+  nested,
+  pick,
+  onOpenSplit,
+  onOpenRow,
+  onWriteEmoji,
+}: {
+  row: DbRecord
+  body: ReactNode
+  label: string
+  openDetail?: boolean
+  depth?: number
+  hasKids?: boolean
+  kidCount?: number
+  treeOn: boolean
+  collapsed: boolean
+  onToggleCollapsed: () => void
+  tableIcon?: string
+  Icon?: CollectionChrome['Icon']
+  nested: boolean
+  pick: object
+  onOpenSplit: () => void
+  onOpenRow: () => void
+  onWriteEmoji: (next: string) => void
+}) {
+  const [toolsLive, setToolsLive] = useState(false)
+  const armTools = () => {
+    if (!toolsLive) setToolsLive(true)
+  }
+  const tree = openDetail && treeOn
+  return (
+    <>
+      <span className="fsdb-title-host" style={tree ? { paddingLeft: depth * 16 } : undefined} onMouseEnter={armTools}>
+        {tree ? (
+          hasKids ? (
+            <button
+              type="button"
+              className="tasks-tree-toggle"
+              aria-label={collapsed ? '展开子记录' : '收起子记录'}
+              onClick={(event) => {
+                event.stopPropagation()
+                onToggleCollapsed()
+              }}
+            >
+              {collapsed ? (
+                <ChevronRightIcon aria-hidden className="size-[14px]" />
+              ) : (
+                <ChevronDownIcon aria-hidden className="size-[14px]" />
+              )}
+            </button>
+          ) : (
+            <span className="tasks-tree-toggle is-empty" aria-hidden />
+          )
+        ) : null}
+        {openDetail && toolsLive ? (
+          <TableRecordIcon row={row} label={label} tableIcon={tableIcon} Icon={Icon} onWriteEmoji={onWriteEmoji} />
+        ) : (
+          <RecordMark record={row} tableIcon={tableIcon} Icon={Icon} />
+        )}
+        <span className="fsdb-title-text">{body}</span>
+      </span>
+      <span className="tasks-row-tools-slot">
+        {toolsLive || (tree && kidCount > 0) ? (
+          <RecordOpenControls
+            row={row}
+            kidCount={tree ? kidCount : 0}
+            toolsLive={toolsLive}
+            nested={nested}
+            pick={pick}
+            onOpenSplit={onOpenSplit}
+            onOpenRow={onOpenRow}
+          />
+        ) : null}
+      </span>
+    </>
+  )
+}
+
 function PluginSurface({
   plugin,
   label,
@@ -2653,187 +2865,13 @@ export function CollectionBrowser({
     )
   }
 
-  function RecordTitle({
-    row,
-    openDetail = true,
-    depth = 0,
-    hasKids = false,
-    kidCount = 0,
-  }: {
-    row: DbRecord
-    openDetail?: boolean
-    depth?: number
-    hasKids?: boolean
-    kidCount?: number
-  }) {
-    const [toolsLive, setToolsLive] = useState(false)
-    const armTools = () => {
-      if (!toolsLive) setToolsLive(true)
-    }
+  function titleBody(row: DbRecord) {
     const key = schema?.labelField
     const field = key && schema ? schema.fields[key] : undefined
-    const body =
-      key && field?.writable ? (
-        renderCell(row, key, field, 'table')
-      ) : chrome?.Title ? (
-        <chrome.Title record={row} label={labelOf(row)} />
-      ) : key && field ? (
-        renderCell(row, key, field, 'table')
-      ) : (
-        <>{labelOf(row)}</>
-      )
-    const tree = openDetail && treeOn
-    const host = (
-      <span className="fsdb-title-host" style={tree ? { paddingLeft: depth * 16 } : undefined} onMouseEnter={armTools}>
-        {tree ? (
-          hasKids ? (
-            <button
-              type="button"
-              className="tasks-tree-toggle"
-              aria-label={collapsed[row.id] ? '展开子记录' : '收起子记录'}
-              onClick={(event) => {
-                event.stopPropagation()
-                setCollapsed((prev) => ({ ...prev, [row.id]: !prev[row.id] }))
-              }}
-            >
-              {collapsed[row.id] ? (
-                <ChevronRightIcon aria-hidden className="size-[14px]" />
-              ) : (
-                <ChevronDownIcon aria-hidden className="size-[14px]" />
-              )}
-            </button>
-          ) : (
-            <span className="tasks-tree-toggle is-empty" aria-hidden />
-          )
-        ) : null}
-        {openDetail && toolsLive ? (
-          <TableRecordIcon row={row} />
-        ) : (
-          <RecordMark
-            record={row}
-            tableIcon={currentTable?.view?.icon}
-            Icon={chrome?.Icon}
-          />
-        )}
-        <span className="fsdb-title-text">{body}</span>
-      </span>
-    )
-    return (
-      <>
-        {host}
-        <span className="tasks-row-tools-slot">
-          {toolsLive || (tree && kidCount > 0) ? (
-            <RecordOpenControls row={row} kidCount={tree ? kidCount : 0} toolsLive={toolsLive} />
-          ) : null}
-        </span>
-      </>
-    )
-  }
-
-  function TableRecordIcon({ row }: { row: DbRecord }) {
-    const emoji = recordPreviewEmoji(row)
-    const [open, setOpen] = useState(false)
-    const [anchor, setAnchor] = useState<HTMLElement | null>(null)
-    return (
-      <span className="fsdb-table-record-icon">
-        <button
-          type="button"
-          className="fsdb-table-emoji-btn"
-          title={emoji ? '更换图标' : '设置图标'}
-          aria-label={emoji ? `更换 ${labelOf(row)} 的图标` : `设置 ${labelOf(row)} 的图标`}
-          onClick={(event) => {
-            event.stopPropagation()
-            const btn = event.currentTarget
-            setOpen((prev) => {
-              if (prev) {
-                setAnchor(null)
-                return false
-              }
-              setAnchor(btn)
-              return true
-            })
-          }}
-          onPointerDown={(event) => event.stopPropagation()}
-        >
-          <RecordMark
-            record={row}
-            tableIcon={currentTable?.view?.icon}
-            Icon={chrome?.Icon}
-          />
-        </button>
-        {open && anchor ? (
-          <Suspense fallback={null}>
-            <RecordEmojiBoard
-              anchor={anchor}
-              onPick={(next) => {
-                void writePatch(row, { emoji: normalizeRecordEmoji(next) })
-                setOpen(false)
-                setAnchor(null)
-              }}
-              onClear={() => {
-                void writePatch(row, { emoji: '' })
-                setOpen(false)
-                setAnchor(null)
-              }}
-              onClose={() => {
-                setOpen(false)
-                setAnchor(null)
-              }}
-            />
-          </Suspense>
-        ) : null}
-      </span>
-    )
-  }
-
-  function RecordOpenControls({
-    row,
-    kidCount = 0,
-    toolsLive = true,
-  }: {
-    row: DbRecord
-    kidCount?: number
-    toolsLive?: boolean
-  }) {
-    return (
-      <span className="tasks-title-aside">
-        {toolsLive && !nested ? (
-          <button
-            type="button"
-            className="tasks-icon-btn tasks-title-open"
-            data-testid="record-title-split"
-            aria-label="在右侧打开"
-            title="在右侧打开"
-            onClick={(event) => {
-              event.stopPropagation()
-              showRecordInInspector(collectionPath, row.id)
-            }}
-          >
-            <ViewColumnsIcon aria-hidden className="size-[14px]" />
-          </button>
-        ) : null}
-        <span className="tasks-title-zoom">
-          {kidCount > 0 ? <ChatCount count={kidCount} className="tasks-tree-count" title={`${kidCount} 项`} /> : null}
-          {toolsLive ? (
-            <button
-              type="button"
-              className="tasks-icon-btn tasks-title-open"
-              data-testid="record-title-open"
-              {...recordPick(row)}
-              data-biu-action="open"
-              aria-label="查看详情"
-              title="查看详情"
-              onClick={(event) => {
-                event.stopPropagation()
-                openRow(row)
-              }}
-            >
-              <ArrowsPointingOutIcon aria-hidden className="size-[14px]" />
-            </button>
-          ) : null}
-        </span>
-      </span>
-    )
+    if (key && field?.writable) return renderCell(row, key, field, 'table')
+    if (chrome?.Title) return <chrome.Title record={row} label={labelOf(row)} />
+    if (key && field) return renderCell(row, key, field, 'table')
+    return labelOf(row)
   }
 
   function RecordActions({ row }: { row: DbRecord }) {
@@ -3016,7 +3054,24 @@ export function CollectionBrowser({
             ].filter(Boolean).join(' ') || undefined}
           >
             {col.key === schema?.labelField ? (
-              <RecordTitle row={row} depth={depth} hasKids={hasKids} kidCount={kidCount} />
+              <RecordTitle
+                row={row}
+                body={titleBody(row)}
+                label={labelOf(row)}
+                depth={depth}
+                hasKids={hasKids}
+                kidCount={kidCount}
+                treeOn={treeOn}
+                collapsed={Boolean(collapsed[row.id])}
+                onToggleCollapsed={() => setCollapsed((prev) => ({ ...prev, [row.id]: !prev[row.id] }))}
+                tableIcon={currentTable?.view?.icon}
+                Icon={chrome?.Icon}
+                nested={nested}
+                pick={recordPick(row)}
+                onOpenSplit={() => showRecordInInspector(collectionPath, row.id)}
+                onOpenRow={() => openRow(row)}
+                onWriteEmoji={(next) => void writePatch(row, { emoji: next })}
+              />
             ) : col.key === 'actions' ? (
               <HoverMount>
                 <RecordActions row={row} />
