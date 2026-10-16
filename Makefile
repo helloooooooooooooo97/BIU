@@ -33,9 +33,10 @@ test:
 build:
 	npm run build
 
-# 打包后部署运行：先释放占用端口，再 vite build，最后 npm start（无 Vite，UI 由 :3141 提供 dist）
+# 打包后同时跑云端和本机：先停，再 vite build。无 Vite，两边都直接提供 dist。
+# 3141 云端（.cloud-data），3151 本机（.local-data）。
 rebuild: stop build
-	npm start
+	npm run start:both
 
 # macOS dmg / Windows exe：见 docs/desktop-install.md；CI tag v* 走 GitHub Release
 pack:
