@@ -1880,18 +1880,6 @@ export function apply(ctx: Context) {
     agent.cancel()
     route.send(200, { ok: true })
   })
-  // 清空上下文：不经过大模型，仅向会话事件日志插入一条 context_clear tool/call 记录（作为压缩点）。
-  ctx.http.route('POST', '/api/sessions/:id/clear-context', async (route) => {
-    const id = route.params.id
-    if (!(await visibleSession(id))) return route.send(404, { error: 'unknown session' })
-    const event = await ctx.sessions.append(id, {
-      type: 'tool/call',
-      id: crypto.randomUUID(),
-      name: 'context_clear',
-      arguments: '{}',
-    })
-    route.send(200, { ok: true, sessionId: id, seq: event.seq, ts: event.ts })
-  })
   ctx.http.route('POST', '/api/sessions/:id/inbox/flush', async (route) => {
     const id = route.params.id
     if (!(await visibleSession(id))) return route.send(404, { error: 'unknown session' })

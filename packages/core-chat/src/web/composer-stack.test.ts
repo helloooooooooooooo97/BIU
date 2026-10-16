@@ -155,12 +155,12 @@ describe('composer dock stacking above sticky user', () => {
     expect(css).toMatch(/\.composer-pill\.has-chips[\s\S]*border-radius:\s*var\(--dsw-radius-bubble\)/)
   })
 
-  it('uses facet tones for pick chips and the clear-context control, not the plus', () => {
+  it('uses facet tones for pick chips and dock controls, not the plus', () => {
     const css = readFileSync(resolve(root, 'web/style.css'), 'utf8')
     const chip = readFileSync(resolve(root, 'packages/core-pick/src/web/chip.tsx'), 'utf8')
     const node = readFileSync(resolve(root, 'packages/core-chat/src/web/composer-pick-node.tsx'), 'utf8')
     const approvals = readFileSync(resolve(root, 'packages/core-chat/src/web/approvals.tsx'), 'utf8')
-    expect(css).toMatch(/\.project-chip\.project-chip-clear-ctx:hover:not\(:disabled\)\s*\{[^}]*color:\s*#d9730d/s)
+    expect(css).not.toMatch(/project-chip-clear-ctx/)
     expect(css).not.toMatch(/\.project-chip-hist-bar/)
     expect(css).toMatch(/\.composer-plus\s*\{[^}]*background:\s*var\(--dsw-bubble\)/s)
     // 加号 / 模型入口 / 芯片 / dock 按钮与项目文件夹同一套底和字色。
@@ -224,7 +224,7 @@ describe('composer dock stacking above sticky user', () => {
     expect(css).toMatch(/\.pick-overlay-marquee[\s\S]*background:\s*var\(--dsw-pick-fill\)/)
   })
 
-  it('uses facet orange fill on clear-context only when there is history', () => {
+  it('keeps tool status colors independent of the removed clear-context chip', () => {
     const css = readFileSync(resolve(root, 'web/style.css'), 'utf8')
     const approvals = readFileSync(resolve(root, 'packages/core-chat/src/web/approvals.tsx'), 'utf8')
     expect(css).not.toMatch(/\.project-chip-hist-bar/)

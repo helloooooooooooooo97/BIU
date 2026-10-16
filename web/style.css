@@ -4683,10 +4683,6 @@ html.dark .app-side-bar .chat-session-row-star:not(.is-on) svg {
   color: var(--dsw-icon-active);
 }
 
-.project-chip.project-chip-clear-ctx:hover:not(:disabled) {
-  color: #d9730d;
-}
-
 .project-chip.project-chip-pick-toggle:hover:not(:disabled),
 .project-chip.project-chip-pick-toggle.is-active,
 .project-chip.project-chip-pick-toggle.is-active:hover:not(:disabled),
@@ -4774,7 +4770,6 @@ html.dark .app-side-bar .chat-session-row-star:not(.is-on) svg {
   opacity: 0;
 }
 
-.project-chip-clear-ctx[data-dock-tip]::after,
 [data-dock-tip-at='ne']::after {
   left: 100%;
   bottom: calc(100% + 6px);
