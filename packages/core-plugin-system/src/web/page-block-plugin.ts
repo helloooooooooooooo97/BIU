@@ -13,14 +13,56 @@ export function pluginRecordHref(id: string) {
   })
 }
 
-export async function startStorePlugin(id: string) {
+type PluginFlags = { installed: boolean; running: boolean; sandbox: boolean }
+
+const starting = new Map<string, Promise<void>>()
+
+function flag(value: unknown) {
+  return value === true || value === 'true'
+}
+
+async function readPluginFlags(id: string): Promise<PluginFlags | null> {
+  const res = await fetch(`/api/db/read?path=${encodeURIComponent(`/plugins/${id}`)}`)
+  if (res.status === 404) return null
+  const body = (await res.json().catch(() => ({}))) as { error?: string; value?: Record<string, unknown> }
+  if (!res.ok) throw new Error(body.error || res.statusText)
+  const value = body.value ?? {}
+  return { installed: flag(value.installed), running: flag(value.running), sandbox: flag(value.sandbox) }
+}
+
+async function postPluginAction(id: string, action: 'pack' | 'start') {
   const res = await fetch('/api/db/action', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ path: `/plugins/${id}`, action: 'start' }),
+    body: JSON.stringify({ path: `/plugins/${id}`, action }),
   })
   const body = (await res.json().catch(() => ({}))) as { error?: string }
   if (!res.ok) throw new Error(body.error || res.statusText)
+}
+
+/**
+ * 页面里把插件跑起来。start 的 when 是「已安装且未运行」：
+ * 已经在跑再调会 400，纯沙箱要先 pack。先看记录，只发能成功的动作。
+ */
+export function startStorePlugin(id: string) {
+  const pending = starting.get(id)
+  if (pending) return pending
+  const job = enableStorePlugin(id).finally(() => {
+    if (starting.get(id) === job) starting.delete(id)
+  })
+  starting.set(id, job)
+  return job
+}
+
+async function enableStorePlugin(id: string) {
+  const row = await readPluginFlags(id)
+  if (!row) throw new Error(`unknown plugin: ${id}`)
+  if (row.running) return
+  if (!row.installed) {
+    if (!row.sandbox) throw new Error(`plugin not installed: ${id}`)
+    await postPluginAction(id, 'pack')
+  }
+  await postPluginAction(id, 'start')
 }
 
 export function pageBlockPluginFromEvent(event: Event) {

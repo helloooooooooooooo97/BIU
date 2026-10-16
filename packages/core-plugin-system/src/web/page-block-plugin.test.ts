@@ -7,6 +7,7 @@ import {
   ENABLE_PAGE_BLOCK_PLUGIN,
   pageBlockPluginFromEvent,
   pluginRecordHref,
+  startStorePlugin,
 } from './page-block-plugin.ts'
 
 test('page block enable href is the plugin record, not guessed from kind', () => {
@@ -25,4 +26,82 @@ test('enabling a page block starts the plugin and stays on the page', () => {
   assert.match(listen, /reportPhase\(plugin, 'failed'\)/)
   assert.doesNotMatch(listen, /pushState/)
   assert.doesNotMatch(listen, /pluginRecordHref/)
+})
+
+function stubFetch(handler: (url: string, init?: RequestInit) => { status: number; body: unknown }) {
+  const calls: Array<{ url: string; method: string; action?: string }> = []
+  const original = globalThis.fetch
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input)
+    const method = init?.method ?? 'GET'
+    let action: string | undefined
+    if (typeof init?.body === 'string') {
+      action = (JSON.parse(init.body) as { action?: string }).action
+    }
+    calls.push({ url, method, action })
+    const result = handler(url, init)
+    return new Response(JSON.stringify(result.body), { status: result.status, headers: { 'content-type': 'application/json' } })
+  }) as typeof fetch
+  return {
+    calls,
+    restore() {
+      globalThis.fetch = original
+    },
+  }
+}
+
+test('already running plugin is left alone so start does not 400', async () => {
+  const fetchMock = stubFetch(() => ({ status: 200, body: { value: { installed: true, running: true } } }))
+  try {
+    await startStorePlugin('page-running')
+  } finally {
+    fetchMock.restore()
+  }
+  assert.deepEqual(
+    fetchMock.calls.map((call) => call.method),
+    ['GET'],
+  )
+  assert.equal(fetchMock.calls.some((call) => call.action), false)
+})
+
+test('installed plugin that is not running is started', async () => {
+  const fetchMock = stubFetch((url) => {
+    if (url.includes('/api/db/read')) return { status: 200, body: { value: { installed: true } } }
+    return { status: 200, body: { ok: true } }
+  })
+  try {
+    await startStorePlugin('page-installed')
+  } finally {
+    fetchMock.restore()
+  }
+  assert.deepEqual(
+    fetchMock.calls.map((call) => call.action).filter(Boolean),
+    ['start'],
+  )
+})
+
+test('sandbox plugin is packed before start', async () => {
+  const fetchMock = stubFetch((url) => {
+    if (url.includes('/api/db/read')) return { status: 200, body: { value: { sandbox: true } } }
+    return { status: 200, body: { ok: true } }
+  })
+  try {
+    await startStorePlugin('page-sandbox')
+  } finally {
+    fetchMock.restore()
+  }
+  assert.deepEqual(
+    fetchMock.calls.map((call) => call.action).filter(Boolean),
+    ['pack', 'start'],
+  )
+})
+
+test('missing plugin does not post an action', async () => {
+  const fetchMock = stubFetch(() => ({ status: 404, body: { error: 'not found' } }))
+  try {
+    await assert.rejects(() => startStorePlugin('page-missing'), /unknown plugin/)
+  } finally {
+    fetchMock.restore()
+  }
+  assert.equal(fetchMock.calls.some((call) => call.method === 'POST'), false)
 })
