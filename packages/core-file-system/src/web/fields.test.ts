@@ -2,7 +2,7 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import type { CollectionSchema } from '@biu/type-file-system'
 import { REQUIRED_RECORD_FIELDS, normalizeSchemaValue } from '@biu/type-file-system'
-import { defaultColumnKeys, facetFlatColumnKey, flattenFacetColumns, facetColumnTitle, inferPackFieldType, listProjectionKeys, parseFacetFlatColumnKey, patchFacetFlatValue, pinActionColumn, pinLabelColumn, contentFieldKey, flattenTree, formatField, fieldHasValue, fieldValueOptions, groupField, groupRecords, hasTreeLinks, treeChildren, isViewModeId, matchActionWhen, overlayListed, previewActionRecord, parentFieldKey, readFacetFlatValue, recordLinkIds, resolveFieldType, uniqueValues } from './fields'
+import { defaultColumnKeys, facetFlatColumnKey, flattenFacetColumns, facetColumnTitle, inferPackFieldType, listProjectionKeys, parseFacetFlatColumnKey, patchFacetFlatValue, pinActionColumn, pinLabelColumn, contentFieldKey, flattenTree, formatField, fieldHasValue, fieldValueOptions, groupField, groupListFilter, groupListKeys, groupRecords, hasTreeLinks, treeChildren, isViewModeId, matchActionWhen, mergeListFilters, overlayListed, previewActionRecord, parentFieldKey, readFacetFlatValue, recordLinkIds, resolveFieldType, uniqueValues } from './fields'
 import { placedActions, visibleActions } from './fsdb-cells.tsx'
 
 test('isViewModeId accepts builtin and custom slugs', () => {
@@ -235,6 +235,56 @@ test('groupField only groups when a select/multi-select key is chosen', () => {
   assert.equal(groupField(schema, 'status')?.key, 'status')
   assert.equal(groupField(schema, 'tags')?.key, 'tags')
   assert.equal(groupField(schema, 'title'), null)
+})
+
+test('groupListKeys uses schema enum and adds 未填 except shareScope', () => {
+  assert.deepEqual(
+    groupListKeys(schema, 'status').map((item) => item.key),
+    ['todo', 'doing', 'done', ''],
+  )
+  const scoped = groupListKeys(
+    {
+      labelField: 'title',
+      fields: {
+        ...REQUIRED_RECORD_FIELDS,
+        title: { type: 'string' },
+        shareScope: { type: 'select', enum: ['私人', '空间', '共享'] },
+      },
+    },
+    'shareScope',
+  )
+  assert.deepEqual(
+    scoped.map((item) => item.key),
+    ['私人', '空间', '共享'],
+  )
+  assert.deepEqual(groupListKeys(schema, 'tags'), [])
+  assert.deepEqual(
+    groupListKeys(schema, 'tags', ['game']).map((item) => item.key),
+    ['game', ''],
+  )
+})
+
+test('groupListFilter maps shareScope labels to $scope and empty to is_empty', () => {
+  assert.deepEqual(groupListFilter('shareScope', '私人'), { $scope: 'personal' })
+  assert.deepEqual(groupListFilter('shareScope', '空间'), { $scope: 'workspace' })
+  assert.deepEqual(groupListFilter('shareScope', '共享'), { $scope: 'shared' })
+  assert.deepEqual(groupListFilter('status', 'doing'), { status: 'doing' })
+  const empty = groupListFilter('status', '')
+  const tree = empty.$tree as { children?: Array<{ op?: string; field?: string }> }
+  assert.equal(tree.children?.[0]?.op, 'is_empty')
+  assert.equal(tree.children?.[0]?.field, 'status')
+})
+
+test('mergeListFilters ANDs trees and rejects conflicting $scope', () => {
+  assert.equal(mergeListFilters({ $scope: 'personal' }, { $scope: 'workspace' }), null)
+  assert.deepEqual(mergeListFilters({ $scope: 'personal' }, { status: 'todo' }), { $scope: 'personal', status: 'todo' })
+  const merged = mergeListFilters(
+    { $tree: { kind: 'group', id: 'a', combinator: 'and', children: [] } },
+    groupListFilter('status', ''),
+  )
+  const tree = merged?.$tree as { combinator?: string; children?: unknown[] }
+  assert.equal(tree.combinator, 'and')
+  assert.equal(tree.children?.length, 2)
 })
 
 test('groupRecords without a field keeps a single bucket', () => {

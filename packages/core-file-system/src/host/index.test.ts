@@ -877,9 +877,9 @@ test('list paginates collection records and reports total', async () => {
   assert.equal(first.kind, 'collection')
   if (first.kind !== 'collection') return
   assert.equal(first.total, 60)
-  assert.equal(first.limit, 50)
+  assert.equal(first.limit, 20)
   assert.equal(first.offset, 0)
-  assert.equal(first.items.length, 50)
+  assert.equal(first.items.length, 20)
   const second = await db.list('/paged', undefined, { limit: 20, offset: 50, sortField: 'title', sortDir: 'asc' })
   assert.equal(second.kind, 'collection')
   if (second.kind !== 'collection') return

@@ -613,7 +613,7 @@ function sortRecords(rows: DbRecord[], field: string, dir: 'asc' | 'desc', sorts
   return sortRecordsBy(rows, rules)
 }
 
-export const DEFAULT_PAGE_SIZE = 50
+export const DEFAULT_PAGE_SIZE = 20
 export const MAX_PAGE_SIZE = 200
 const HARD_DELETE_PATHS = new Set(['/events', '/trash', '/workspace-members'])
 
@@ -2714,7 +2714,7 @@ export function apply(ctx: Context) {
   })
   ctx.tools.register({
     name: 'db_list',
-    description: '列出 File System 路径：/ 为已登记表（path、中文名、view.blurb 说明书），/<表> 为列式记录（不含 content、默认不含 createdAt/updatedAt/createdBy/updatedBy）。默认每页 50，最多 200。columns 参数只取需要的列。表结构用 db_stat。',
+    description: '列出 File System 路径：/ 为已登记表（path、中文名、view.blurb 说明书），/<表> 为列式记录（不含 content、默认不含 createdAt/updatedAt/createdBy/updatedBy）。默认每页 20，最多 200。columns 参数只取需要的列。表结构用 db_stat。',
     parameters: {
       type: 'object',
       properties: {
@@ -2723,7 +2723,7 @@ export function apply(ctx: Context) {
         q: { type: 'string', description: '可选，全文搜索' },
         sortField: { type: 'string' },
         sortDir: { type: 'string', enum: ['asc', 'desc'] },
-        limit: { type: 'number', description: '每页条数，默认 50，最大 200' },
+        limit: { type: 'number', description: '每页条数，默认 20，最大 200' },
         offset: { type: 'number' },
         columns: {
           type: 'array',
