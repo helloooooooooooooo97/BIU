@@ -1,6 +1,7 @@
 import { buildAppPath } from '@biu/web-session-view'
 
 export const ENABLE_PAGE_BLOCK_PLUGIN = 'biu:enable-page-block-plugin'
+export const PAGE_BLOCK_PLUGIN_PHASE = 'biu:page-block-plugin-phase'
 
 export function pluginRecordHref(id: string) {
   return buildAppPath({
@@ -28,19 +29,17 @@ export function pageBlockPluginFromEvent(event: Event) {
   return plugin
 }
 
+function reportPhase(plugin: string, phase: 'ready' | 'failed') {
+  window.dispatchEvent(new CustomEvent(PAGE_BLOCK_PLUGIN_PHASE, { detail: { plugin, phase } }))
+}
+
 export function listenEnablePageBlockPlugin() {
   const onEnable = (event: Event) => {
     const plugin = pageBlockPluginFromEvent(event)
     if (!plugin) return
     void startStorePlugin(plugin)
-      .catch(() => undefined)
-      .finally(() => {
-        const href = pluginRecordHref(plugin)
-        if (window.location.pathname !== href) {
-          window.history.pushState({}, '', href)
-          window.dispatchEvent(new PopStateEvent('popstate'))
-        }
-      })
+      .then(() => reportPhase(plugin, 'ready'))
+      .catch(() => reportPhase(plugin, 'failed'))
   }
   window.addEventListener(ENABLE_PAGE_BLOCK_PLUGIN, onEnable)
   return () => window.removeEventListener(ENABLE_PAGE_BLOCK_PLUGIN, onEnable)

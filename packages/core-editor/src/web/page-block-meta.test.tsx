@@ -1,7 +1,7 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { render } from '@testing-library/react'
-import { ENABLE_PAGE_BLOCK_PLUGIN, formatPageBlockFence, parsePageBlockData, parsePageBlockMeta, requestEnablePageBlockPlugin } from './page-block-meta.ts'
+import { blockDataUnchanged, ENABLE_PAGE_BLOCK_PLUGIN, formatPageBlockFence, pageBlockPluginPhase, parsePageBlockData, parsePageBlockMeta, requestEnablePageBlockPlugin, setPageBlockPluginPhase } from './page-block-meta.ts'
 import { PageBlockMissing } from './page-block-view.tsx'
 
 test('page block fence keeps plugin id in the document', () => {
@@ -99,7 +99,24 @@ test('html pageBlock fence keeps title on the header', () => {
   assert.equal(parsePageBlockMeta(src.match(/\{([^}]*)\}/)?.[1] ?? '').extras.title, '海报 HTML')
 })
 
+test('unchanged block data does not count as an edit', () => {
+  assert.equal(blockDataUnchanged({ sid: 'a', n: 1 }, { sid: 'a', n: 1 }), true)
+  assert.equal(blockDataUnchanged({ sid: 'a' }, { sid: 'b' }), false)
+  assert.equal(blockDataUnchanged({ nested: { on: true } }, { nested: { on: true } }), true)
+})
+
+test('loading plugin hides the fence and keeps the block shell', () => {
+  const { container } = render(
+    <PageBlockMissing kind="excalidraw" plugin="page-excalidraw" data={{ file: 'assets/a.json' }} phase="loading" />,
+  )
+  assert.equal(container.querySelector('[data-testid="page-block-missing"]')?.getAttribute('data-plugin-phase'), 'loading')
+  assert.match(container.textContent ?? '', /正在加载/)
+  assert.equal(container.querySelector('.page-block-missing-source'), null)
+  assert.equal(container.querySelector('[data-testid="page-block-enable"]'), null)
+})
+
 test('enable button only dispatches the stored plugin id', () => {
+  setPageBlockPluginPhase('page-excalidraw', 'idle')
   const seen: string[] = []
   const onEnable = (event: Event) => {
     seen.push(String((event as CustomEvent<{ plugin?: string }>).detail?.plugin ?? ''))

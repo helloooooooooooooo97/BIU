@@ -246,7 +246,7 @@ export function pluginsCollection(store: PluginStoreService): CollectionSpec {
       {
         id: 'pack',
         label: '安装',
-        when: { sandbox: true },
+        when: { sandbox: true, installed: false },
         description: PLUGIN_PACK_DESCRIPTION,
         requiredAction: 'resource:read',
         parameters: { type: 'object', description: PLUGIN_PACK_DESCRIPTION, properties: {} },

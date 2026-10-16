@@ -67,6 +67,13 @@ export type SlashCommandSpec = {
 }
 
 let bound: PageEditorService | undefined
+let generation = 0
+const waiters = new Set<() => void>()
+
+function noteEditorBinding() {
+  generation += 1
+  for (const fn of waiters) fn()
+}
 
 export function getPageEditor() {
   return bound
@@ -82,8 +89,12 @@ export class PageEditorService extends Service {
   constructor(ctx: Context) {
     super(ctx, 'pageEditor')
     bound = this
+    noteEditorBinding()
     ctx.effect(() => () => {
-      if (bound === this) bound = undefined
+      if (bound === this) {
+        bound = undefined
+        noteEditorBinding()
+      }
     })
   }
 
@@ -163,10 +174,17 @@ export class PageEditorService extends Service {
 }
 
 export function usePageEditorVersion(editor?: PageEditorService) {
-  const svc = editor ?? bound
   return useSyncExternalStore(
-    (fn) => (svc ? svc.subscribe(fn) : () => undefined),
-    () => svc?.version() ?? 0,
+    (fn) => {
+      const svc = editor ?? getPageEditor()
+      const off = svc ? svc.subscribe(fn) : () => undefined
+      if (!editor) waiters.add(fn)
+      return () => {
+        off()
+        waiters.delete(fn)
+      }
+    },
+    () => generation + ((editor ?? getPageEditor())?.version() ?? 0),
     () => 0,
   )
 }
