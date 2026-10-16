@@ -27,7 +27,12 @@ test('share page uses matching side padding on small screens', () => {
 test('share layout prefs follow host outline expand and nav pin', () => {
   const css = readFileSync(resolve(import.meta.dirname, './fsdb-style.ts'), 'utf8')
   const src = readFileSync(resolve(import.meta.dirname, './share-page.tsx'), 'utf8')
+  const prefs = readFileSync(resolve(import.meta.dirname, './page-width.ts'), 'utf8')
   assert.match(src, /LayoutPrefsMenu/)
+  assert.match(src, /SHARE_PAGE_PREFS/)
+  assert.match(src, /onChange=\{changeSharePrefs\}/)
+  assert.doesNotMatch(src, /persistPagePrefs/)
+  assert.match(prefs, /export const SHARE_PAGE_PREFS[\s\S]*wide: true[\s\S]*outlinePin: true[\s\S]*navPin: true/)
   assert.match(src, /chat-view-project/)
   assert.match(css, /\.fsdb-share-page\{[^}]*color:var\(--dsw-label\)/)
   assert.doesNotMatch(css, /\.fsdb-share-page\{[^}]*color:var\(--dsw-label,#2c2c2b\)/)

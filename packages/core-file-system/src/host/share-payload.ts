@@ -23,6 +23,11 @@ function asContentRead(raw: unknown) {
   return raw as { value?: unknown }
 }
 
+/** 分享页上的人只能看。不要把创建者自己的「管理」带出去。 */
+function audienceRecord(record: DbRecord): DbRecord {
+  return { ...record, shareRole: '阅读' }
+}
+
 function withResources(
   snap: Omit<ShareSnapshot, 'resources' | 'pluginIds' | 'sharePlugins' | 'allowCopy'>,
   share: ShareRecord,
@@ -73,7 +78,7 @@ export async function buildShareSnapshot(
       title: String(record.title ?? record.name ?? collectionLabel),
       collectionLabel,
       schema,
-      records: [{ ...record, [schema.contentField ?? 'notes']: undefined }],
+      records: [audienceRecord({ ...record, [schema.contentField ?? 'notes']: undefined })],
       contents,
       assets: [...collectAssetNames(record, content, record.banner)],
       banner: record.banner ?? null,
@@ -102,7 +107,7 @@ export async function buildShareSnapshot(
     sorts: view.sorts,
     limit: SHARE_LIMIT,
   })) as { items?: DbRecord[] }
-  const records = listed.items ?? []
+  const records = (listed.items ?? []).map(audienceRecord)
   const contents: Record<string, unknown> = {}
   for (const row of records) {
     try {

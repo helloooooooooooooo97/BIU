@@ -23,6 +23,16 @@ const DEFAULT_PREFS: PagePrefs = {
   bodyGap: 'md',
 }
 
+/** 局域网和外部分享页的默认版式，不写入访问者自己的配置。 */
+export const SHARE_PAGE_PREFS: PagePrefs = {
+  wide: true,
+  outlineExpand: true,
+  outlinePin: true,
+  navPin: true,
+  bodySize: 'md',
+  bodyGap: 'md',
+}
+
 function asScale(value: unknown, fallback: BodyScale): BodyScale {
   return typeof value === 'string' && SCALES.has(value as BodyScale) ? (value as BodyScale) : fallback
 }

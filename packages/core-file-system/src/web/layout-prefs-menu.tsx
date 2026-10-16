@@ -19,11 +19,14 @@ export function LayoutPrefsMenu({
   prefs,
   testPrefix = 'fsdb-layout',
   className,
+  onChange,
 }: {
   prefs: PagePrefs
   testPrefix?: string
   className?: string
+  onChange?: (patch: Partial<PagePrefs>) => void
 }) {
+  const apply = onChange ?? persistPagePrefs
   return (
     <div className={className ? `fsdb-layout-menu ${className}` : 'fsdb-layout-menu'} role="menu" data-testid={`${testPrefix}-menu`}>
       {BOOLS.map((item) => {
@@ -36,7 +39,7 @@ export function LayoutPrefsMenu({
             className="fsdb-layout-row"
             aria-checked={on}
             data-testid={item.testId}
-            onClick={() => persistPagePrefs({ [item.key]: !on })}
+            onClick={() => apply({ [item.key]: !on })}
           >
             <span>{item.label}</span>
             <BoolBox on={on}>{on ? <CheckIcon aria-hidden className="size-3" /> : null}</BoolBox>
@@ -54,7 +57,7 @@ export function LayoutPrefsMenu({
               className={`fsdb-layout-opt${prefs.bodySize === item.value ? ' is-active' : ''}`}
               aria-checked={prefs.bodySize === item.value}
               data-testid={`${testPrefix}-size-${item.value}`}
-              onClick={() => persistPagePrefs({ bodySize: item.value })}
+              onClick={() => apply({ bodySize: item.value })}
             >
               {item.label}
             </button>
@@ -72,7 +75,7 @@ export function LayoutPrefsMenu({
               className={`fsdb-layout-opt${prefs.bodyGap === item.value ? ' is-active' : ''}`}
               aria-checked={prefs.bodyGap === item.value}
               data-testid={`${testPrefix}-gap-${item.value}`}
-              onClick={() => persistPagePrefs({ bodyGap: item.value })}
+              onClick={() => apply({ bodyGap: item.value })}
             >
               {item.label}
             </button>

@@ -3714,7 +3714,7 @@ export function CollectionBrowser({
           writeOne={writeOne}
           writePatch={writePatch}
           tableIcon={currentTable?.view?.icon}
-          readOnly={selected.shareRole === '阅读'}
+          readOnly={selected.shareRole === '阅读' && (!localData || selected.builtin === true)}
           actionProperty={rowActionColumn ? <RecordActions row={selected} /> : null}
           share={
             nested && detailId ? (

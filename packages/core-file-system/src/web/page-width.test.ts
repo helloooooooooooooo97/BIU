@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { persistPageWidth, getPageWidth, persistPagePrefs, getPagePrefs, hydratePagePrefs } from './page-width.ts'
+import { persistPageWidth, getPageWidth, persistPagePrefs, getPagePrefs, hydratePagePrefs, SHARE_PAGE_PREFS } from './page-width.ts'
 
 test('page width persists full and max', () => {
   persistPageWidth('max')
@@ -9,6 +9,17 @@ test('page width persists full and max', () => {
   assert.equal(getPageWidth(), 'full')
   persistPageWidth('max')
   assert.equal(getPageWidth(), 'max')
+})
+
+test('share pages default to wide layout with pinned outline and pager', () => {
+  assert.deepEqual(SHARE_PAGE_PREFS, {
+    wide: true,
+    outlineExpand: true,
+    outlinePin: true,
+    navPin: true,
+    bodySize: 'md',
+    bodyGap: 'md',
+  })
 })
 
 test('page prefs store reading chrome and body scale', () => {
