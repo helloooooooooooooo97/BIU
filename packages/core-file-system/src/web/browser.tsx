@@ -212,6 +212,16 @@ function ShareScopeDetail(props: ComponentProps<typeof LazyShareScopeDetail>) {
 
 const EMPTY_VIEWS: CollectionViewType[] = []
 const EMPTY_ROW_VIEWS: CollectionRowViewType[] = []
+const EMPTY_PICK = {}
+
+function HoverMount({ children }: { children: ReactNode }) {
+  const [live, setLive] = useState(false)
+  return (
+    <span className="tasks-hover-mount" onMouseEnter={() => { if (!live) setLive(true) }}>
+      {live ? children : null}
+    </span>
+  )
+}
 
 function PluginSurface({
   plugin,
@@ -2411,18 +2421,22 @@ export function CollectionBrowser({
   const recordKind = recordPickKind(currentTable?.view?.moduleId || currentTable?.id)
   const recordPathOf = (row: DbRecord) => recordSourcePath(collectionPath, row.id)
   const recordPick = (row: DbRecord) =>
-    pickDomAttrs(recordKind, row.id, labelOf(row), { path: recordPathOf(row), title: labelOf(row) })
+    pickMode
+      ? pickDomAttrs(recordKind, row.id, labelOf(row), { path: recordPathOf(row), title: labelOf(row) })
+      : EMPTY_PICK
   const cellValueText = (row: DbRecord, key: string, field: FieldSpec) => {
     const raw = parseFacetFlatColumnKey(key) ? readFacetFlatValue(row, key, facetSourceKey(schema)) : row[key]
     return formatField(field, raw)
   }
   const cellPickOf = (row: DbRecord, key: string, field: FieldSpec) =>
-    fieldPickAttrs(recordKind, row.id, key, {
-      label: field.label ?? key,
-      title: labelOf(row),
-      path: recordPathOf(row),
-      ...(pickMode ? { text: cellValueText(row, key, field) } : {}),
-    })
+    pickMode
+      ? fieldPickAttrs(recordKind, row.id, key, {
+          label: field.label ?? key,
+          title: labelOf(row),
+          path: recordPathOf(row),
+          text: cellValueText(row, key, field),
+        })
+      : EMPTY_PICK
 
   function renderCell(row: DbRecord, key: string, field: FieldSpec, surface: 'table' | 'detail' = 'detail') {
     if (key === 'shareScope') {
@@ -2654,6 +2668,10 @@ export function CollectionBrowser({
     hasKids?: boolean
     kidCount?: number
   }) {
+    const [toolsLive, setToolsLive] = useState(false)
+    const armTools = () => {
+      if (!toolsLive) setToolsLive(true)
+    }
     const key = schema?.labelField
     const field = key && schema ? schema.fields[key] : undefined
     const body =
@@ -2668,7 +2686,7 @@ export function CollectionBrowser({
       )
     const tree = openDetail && treeOn
     const host = (
-      <span className="fsdb-title-host" style={tree ? { paddingLeft: depth * 16 } : undefined}>
+      <span className="fsdb-title-host" style={tree ? { paddingLeft: depth * 16 } : undefined} onMouseEnter={armTools}>
         {tree ? (
           hasKids ? (
             <button
@@ -2706,7 +2724,9 @@ export function CollectionBrowser({
       <>
         {host}
         <span className="tasks-row-tools-slot">
-          <RecordOpenControls row={row} kidCount={tree ? kidCount : 0} />
+          {toolsLive || (tree && kidCount > 0) ? (
+            <RecordOpenControls row={row} kidCount={tree ? kidCount : 0} toolsLive={toolsLive} />
+          ) : null}
         </span>
       </>
     )
@@ -2768,10 +2788,18 @@ export function CollectionBrowser({
     )
   }
 
-  function RecordOpenControls({ row, kidCount = 0 }: { row: DbRecord; kidCount?: number }) {
+  function RecordOpenControls({
+    row,
+    kidCount = 0,
+    toolsLive = true,
+  }: {
+    row: DbRecord
+    kidCount?: number
+    toolsLive?: boolean
+  }) {
     return (
       <span className="tasks-title-aside">
-        {!nested ? (
+        {toolsLive && !nested ? (
           <button
             type="button"
             className="tasks-icon-btn tasks-title-open"
@@ -2788,21 +2816,23 @@ export function CollectionBrowser({
         ) : null}
         <span className="tasks-title-zoom">
           {kidCount > 0 ? <ChatCount count={kidCount} className="tasks-tree-count" title={`${kidCount} 项`} /> : null}
-          <button
-            type="button"
-            className="tasks-icon-btn tasks-title-open"
-            data-testid="record-title-open"
-            {...recordPick(row)}
-            data-biu-action="open"
-            aria-label="查看详情"
-            title="查看详情"
-            onClick={(event) => {
-              event.stopPropagation()
-              openRow(row)
-            }}
-          >
-            <ArrowsPointingOutIcon aria-hidden className="size-[14px]" />
-          </button>
+          {toolsLive ? (
+            <button
+              type="button"
+              className="tasks-icon-btn tasks-title-open"
+              data-testid="record-title-open"
+              {...recordPick(row)}
+              data-biu-action="open"
+              aria-label="查看详情"
+              title="查看详情"
+              onClick={(event) => {
+                event.stopPropagation()
+                openRow(row)
+              }}
+            >
+              <ArrowsPointingOutIcon aria-hidden className="size-[14px]" />
+            </button>
+          ) : null}
         </span>
       </span>
     )
@@ -2973,7 +3003,9 @@ export function CollectionBrowser({
             {col.key === schema?.labelField ? (
               <RecordTitle row={row} depth={depth} hasKids={hasKids} kidCount={kidCount} />
             ) : col.key === 'actions' ? (
-              <RecordActions row={row} />
+              <HoverMount>
+                <RecordActions row={row} />
+              </HoverMount>
             ) : (
               <span className="fsdb-cell">{renderCell(row, col.key, col.field, 'table')}</span>
             )}
@@ -3451,7 +3483,13 @@ export function CollectionBrowser({
                 aria-label="搜索"
                 aria-expanded={searchExpanded}
                 title="搜索"
-                onClick={() => setSearchOpen((open) => (searchExpanded && !query ? false : true))}
+                onClick={() => {
+                  if (query) {
+                    searchInputRef.current?.focus()
+                    return
+                  }
+                  setSearchOpen((open) => !open)
+                }}
               >
                 <MagnifyingGlassIcon aria-hidden className="size-[14px]" />
               </button>
