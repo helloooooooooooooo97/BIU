@@ -191,7 +191,13 @@ async function measureRoute(session, route) {
       if (req.status == null && age >= 1_200) return false
       return age < 8_000
     }).length
-    if (contentAt != null && value.loadingBlocks === 0 && inflightApi === 0 && (value.composer || value.table || value.textLen > 80)) {
+    const painted =
+      route.kind === 'home'
+        ? Boolean(value.composer || value.textLen > 80)
+        : route.kind === 'record' || String(route.id).startsWith('page-')
+          ? Boolean(value.table || value.composer || value.textLen > 80)
+          : Boolean(value.listReady || (value.table && value.tableRows > 0))
+    if (contentAt != null && value.loadingBlocks === 0 && inflightApi === 0 && painted) {
       if (readyAt == null) {
         readyAt = Date.now() - t0
         readyNetwork = summarizeNetwork([...requests.values()].filter((row) => row.url).map((row) => ({ ...row })))

@@ -70,7 +70,6 @@ import {
 } from './fields.ts'
 import { listGroupedCollection } from './group-list.ts'
 import { AppDialog, CheckRow } from './controls.tsx'
-import { DataSidebar } from './data-sidebar.tsx'
 import { buildCrumbs, type CrumbTarget } from './sidebar-nav.ts'
 import { CrumbTrail } from './crumb-trail.tsx'
 import { fieldPickAttrs, pickDomAttrs, recordPickKind, recordSourcePath } from './pick-dom.ts'
@@ -168,6 +167,7 @@ const LazySharePanel = lazy(() => import('./share-popover.tsx').then((m) => ({ d
 const LazyShareRoleDetail = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.ShareRoleDetail })))
 const LazyShareScopeDetail = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.ShareScopeDetail })))
 const ScopeOverview = lazy(() => import('./scope-overview.tsx').then((m) => ({ default: m.ScopeOverview })))
+const DataSidebar = lazy(() => import('./data-sidebar.tsx').then((m) => ({ default: m.DataSidebar })))
 
 function ShareButton(props: ComponentProps<typeof LazyShareButton>) {
   return <Suspense fallback={null}><LazyShareButton {...props} /></Suspense>
@@ -550,6 +550,10 @@ export function CollectionBrowser({
   const [groupBuckets, setGroupBuckets] = useState<GroupBucket[]>([])
   const groupPagesRef = useRef(groupPages)
   groupPagesRef.current = groupPages
+  const groupBucketsRef = useRef(groupBuckets)
+  groupBucketsRef.current = groupBuckets
+  const loadedIdentityRef = useRef('')
+  const loadedPagesRef = useRef<Record<string, number>>({})
   const listColumns = useMemo(() => {
     if (customView) return undefined
     const currentSchema = stat?.schema
@@ -584,6 +588,8 @@ export function CollectionBrowser({
   const reloadGen = useRef(0)
   const reloadInflightRef = useRef<{ key: string; promise: Promise<boolean> } | null>(null)
   const listReadySent = useRef(false)
+  const [listPainted, setListPainted] = useState(false)
+  const [sidebarPaint, setSidebarPaint] = useState(false)
   const confirmedCreates = useRef(new Set<string>())
   const hydratePath = useRef('')
   const viewsRef = useRef<SavedView[]>([])
@@ -745,7 +751,8 @@ export function CollectionBrowser({
   const skipColumnReload = useRef(false)
   const itemsRef = useRef(items)
   itemsRef.current = items
-  const reloadKey = `${dataPath}\0${groupBy ? JSON.stringify(groupPages) : page}\0${pageSize}\0${fetchQuery}\0${sortField}\0${sortDir}\0${sortsStateKey(sorts)}\0${JSON.stringify(queryFilters)}\0${activeViewId ?? ''}\0${groupBy}\0${groupFillKeys.join('\0')}\0${wrapCells ? 1 : 0}`
+  const listIdentityKey = `${dataPath}\0${pageSize}\0${fetchQuery}\0${sortField}\0${sortDir}\0${sortsStateKey(sorts)}\0${JSON.stringify(queryFilters)}\0${activeViewId ?? ''}\0${groupBy}\0${wrapCells ? 1 : 0}`
+  const reloadKey = `${listIdentityKey}\0${groupBy ? JSON.stringify(groupPages) : page}\0${groupFillKeys.join('\0')}`
   const reload = useCallback(async () => {
     if (Date.now() < quietUntil.current) return true
     const hit = reloadInflightRef.current
@@ -781,6 +788,8 @@ export function CollectionBrowser({
           groupPages: groupPagesRef.current,
           wrap: wrapCells,
           fillKeys: groupFillKeys,
+          previous: loadedIdentityRef.current === listIdentityKey ? groupBucketsRef.current : undefined,
+          previousPages: loadedPagesRef.current,
           list: listCollection,
         })
       let nextStat: StatResult
@@ -854,15 +863,24 @@ export function CollectionBrowser({
         )
       }
       setError('')
+      loadedIdentityRef.current = listIdentityKey
+      loadedPagesRef.current = { ...groupPagesRef.current }
       if (!listReadySent.current) {
         listReadySent.current = true
         markPaintedListReady()
+        setListPainted(true)
         window.dispatchEvent(new Event('fsdb:list-ready'))
       }
       return true
     } catch (err) {
       if (gen !== reloadGen.current) return false
       setError(String(err))
+      if (!listReadySent.current) {
+        listReadySent.current = true
+        markPaintedListReady()
+        setListPainted(true)
+        window.dispatchEvent(new Event('fsdb:list-ready'))
+      }
       return false
     }
     })()
@@ -872,7 +890,7 @@ export function CollectionBrowser({
     } finally {
       if (reloadInflightRef.current?.promise === promise) reloadInflightRef.current = null
     }
-  }, [activeViewId, collectionPath, dataPath, fetchQuery, groupBy, groupFillKeys, listColumns, queryFilters, page, pageSize, reloadKey, sortDir, sortField, sorts, wrapCells])
+  }, [activeViewId, collectionPath, dataPath, fetchQuery, groupBy, groupFillKeys, listColumns, listIdentityKey, queryFilters, page, pageSize, reloadKey, sortDir, sortField, sorts, wrapCells])
   const reloadRef = useRef(reload)
   reloadRef.current = reload
   const detailIdRef = useRef<string | null>(null)
@@ -951,6 +969,10 @@ export function CollectionBrowser({
     setHydrated(false)
     hydratePath.current = ''
     listReadySent.current = false
+    setListPainted(false)
+    setSidebarPaint(false)
+    loadedIdentityRef.current = ''
+    loadedPagesRef.current = {}
     resetPaintedListReady()
     skipColumnReload.current = false
     setCollapsed({})
@@ -1082,6 +1104,34 @@ export function CollectionBrowser({
     }
     void reloadRef.current()
   }, [reloadKey, routeRecordId])
+
+  useEffect(() => {
+    if (nested) return
+    let cancelled = false
+    const show = () => {
+      if (!cancelled) setSidebarPaint(true)
+    }
+    if (listPainted) {
+      const ric = window.requestIdleCallback
+      if (typeof ric === 'function') {
+        const idleId = ric(show, { timeout: 240 })
+        return () => {
+          cancelled = true
+          window.cancelIdleCallback(idleId)
+        }
+      }
+      const timer = window.setTimeout(show, 0)
+      return () => {
+        cancelled = true
+        window.clearTimeout(timer)
+      }
+    }
+    const timer = window.setTimeout(show, 1200)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [listPainted, nested])
 
   useLayoutEffect(() => {
     setOpenDetailId(routeRecordId)
@@ -1394,7 +1444,7 @@ export function CollectionBrowser({
     checkHoverRef.current = next
   }, [])
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     const table = tableRef.current
     if (!table) {
       setCheckSlots([])
@@ -3008,8 +3058,10 @@ export function CollectionBrowser({
     <div
       className={`fsdb-page tasks-root${nested ? ' inspector-database-page' : ''}${sheet ? ' is-sheet' : ''}${!sheet && pageWidth === 'full' ? ' is-full-width' : ''}${collectionPath === '/plugins' ? ' is-plugins' : ''}`}
       data-testid={embed ? 'inspector-database' : sheet ? 'fsdb-collect-sheet' : undefined}
+      data-list-ready={listPainted ? '1' : undefined}
     >
-      {!nested ? (
+      {!nested && sidebarPaint ? (
+        <Suspense fallback={null}>
         <DataSidebar
           tables={tables}
           collectionPath={collectionPath}
@@ -3037,6 +3089,7 @@ export function CollectionBrowser({
           onExpandedViewKeyChange={onExpandedViewKeyChange}
           onCollapse={toggleViewsOpen}
         />
+        </Suspense>
       ) : null}
       {scopeHome && !nested ? (
         <Suspense fallback={null}>

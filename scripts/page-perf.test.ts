@@ -65,6 +65,8 @@ test('page plugin perf helpers stay as separate scripts in one folder', () => {
   assert.match(sources['measure-routes.mjs'], /loadingFailed/)
   assert.match(sources['measure-routes.mjs'], /awaitPromise/)
   assert.match(sources['measure-routes.mjs'], /req.status == null && age >= 1_200/)
+  assert.match(sources['measure-routes.mjs'], /value.listReady/)
+  assert.match(sources['cdp.mjs'], /data-list-ready="1"/)
 })
 
 test('resourceKind splits snapshot, list, and store web.js', () => {
@@ -74,6 +76,7 @@ test('resourceKind splits snapshot, list, and store web.js', () => {
   assert.equal(resourceKind('http://127.0.0.1:5174/packages/core-chat/src/web/index.ts'), 'module')
   assert.match(inspectLocalShellSource(), /data-testid="app-shell"/)
   assert.match(inspectLocalShellSource(), /tableRows/)
+  assert.match(inspectLocalShellSource(), /listReady/)
   assert.match(inspectLocalShellSource(), /chatTurns/)
   assert.match(stressInteractSource(), /下一页/)
 })

@@ -130,7 +130,37 @@ test('grouped table fetch no longer uses a mixed 200-row page', () => {
   assert.match(browser, /listGroupedCollection\(/)
   assert.match(browser, /wrap: wrapCells/)
   assert.match(browser, /fillKeys: groupFillKeys/)
+  assert.match(browser, /previous: loadedIdentityRef/)
   assert.match(browser, /JSON\.stringify\(groupPages\)/)
   assert.match(browser, /count = group\.total \?\? group\.rows\.length/)
   assert.match(browser, /group\.total != null \? group\.rows/)
+})
+
+test('grouped pager reuses buckets whose page did not change', async () => {
+  const calls: Array<{ status?: unknown; offset: number }> = []
+  const previous = [
+    { key: 'todo', label: 'todo', rows: [{ id: 't1', title: 'a', status: 'todo' }], total: 40 },
+    { key: 'doing', label: 'doing', rows: [{ id: 'd1', title: 'b', status: 'doing' }], total: 1 },
+  ]
+  const page = await listGroupedCollection({
+    path: '/tasks',
+    groupBy: 'status',
+    schema,
+    pageSize: 20,
+    groupPages: { todo: 1 },
+    previous,
+    previousPages: { todo: 0, doing: 0, done: 0 },
+    list: async (input) => {
+      calls.push({ status: input.filters?.status, offset: input.offset ?? 0 })
+      return { items: [{ id: 't2', title: 'next', status: 'todo' }], total: 40, schema }
+    },
+  })
+  assert.deepEqual(calls, [{ status: 'todo', offset: 20 }])
+  assert.deepEqual(
+    page!.buckets.map((item) => [item.key, item.total, item.rows.map((row) => row.id)]),
+    [
+      ['todo', 40, ['t2']],
+      ['doing', 1, ['d1']],
+    ],
+  )
 })

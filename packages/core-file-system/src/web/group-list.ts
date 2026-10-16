@@ -27,6 +27,8 @@ export async function listGroupedCollection(opts: {
   sorts?: SortRule[]
   filters?: Record<string, unknown>
   columns?: string[]
+  previous?: GroupBucket[]
+  previousPages?: Record<string, number>
   list: (input: {
     path: string
     limit: number
@@ -44,12 +46,29 @@ export async function listGroupedCollection(opts: {
   const pageSize = Math.max(1, opts.pageSize)
   const fullCount = groupedFullFetchCount(pageSize, keys.length, opts.wrap)
   const filled = new Set(opts.fillKeys ?? [])
+  const previous = opts.previous
+  const prevByKey = new Map((previous ?? []).map((bucket) => [bucket.key || 'unset', bucket]))
+  const prevPages = opts.previousPages ?? {}
   const pages = await Promise.all(
     keys.map(async (item, index) => {
       const filters = mergeListFilters(opts.filters ?? {}, groupListFilter(opts.groupBy, item.key))
       if (!filters) return { ...item, rows: [] as DbRecord[], total: 0, schema: undefined as CollectionSchema | undefined }
-      const pageIndex = Math.max(0, opts.groupPages?.[item.key || 'unset'] ?? 0)
-      const full = index < fullCount || filled.has(item.key) || filled.has(item.key || 'unset')
+      const groupKey = item.key || 'unset'
+      const pageIndex = Math.max(0, opts.groupPages?.[groupKey] ?? 0)
+      const full = index < fullCount || filled.has(item.key) || filled.has(groupKey)
+      const prev = prevByKey.get(groupKey)
+      const samePage = pageIndex === (prevPages[groupKey] ?? 0)
+      if (previous && samePage) {
+        if (full && prev && prev.rows.length > 0) {
+          return { ...item, rows: prev.rows, total: prev.total ?? prev.rows.length, schema: undefined as CollectionSchema | undefined }
+        }
+        if (!full && prev) {
+          return { ...item, rows: [] as DbRecord[], total: prev.total ?? 0, schema: undefined as CollectionSchema | undefined }
+        }
+        if (!prev) {
+          return { ...item, rows: [] as DbRecord[], total: 0, schema: undefined as CollectionSchema | undefined }
+        }
+      }
       const listed = await opts.list({
         path: opts.path,
         limit: full ? pageSize : 1,

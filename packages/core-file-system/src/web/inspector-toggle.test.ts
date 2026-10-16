@@ -75,6 +75,10 @@ test('data sidebar brand sits left with a collapse control on the right', () => 
   assert.match(browser, /onCollapse=\{toggleViewsOpen\}/)
   assert.match(browser, /biu:toggle-shell-sidebar/)
   assert.match(sidebar, /shell-module-sidebar/)
+  assert.doesNotMatch(browser, /from '\.\/data-sidebar\.tsx'/)
+  assert.match(browser, /import\('\.\/data-sidebar\.tsx'\)/)
+  assert.match(browser, /data-list-ready=\{listPainted \? '1' : undefined\}/)
+  assert.match(browser, /sidebarPaint/)
 })
 
 test('user and system collection sections fold independently', () => {

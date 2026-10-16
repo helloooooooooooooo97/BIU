@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useRef, useSyncExternalStore, type ComponentType } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useSyncExternalStore, type ComponentType } from 'react'
 import { CircleStackIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import type { SlotProps } from '@biu/type-slots'
 import type { CollectionInfo } from '@biu/type-file-system'
 import type { CollectionChrome } from '@biu/type-file-system/ui'
 import { parseAppPath } from '@biu/web-session-view'
 import { buildCrumbs, pathForCrumbTarget, type Crumb, type CrumbTarget } from './sidebar-nav.ts'
-import { CollectionBrowser } from './browser.tsx'
 import { CrumbTrail } from './crumb-trail.tsx'
 import { defaultViewId, loadRecords, loadViews, peekRecord, viewForPath } from './view-storage.ts'
 import { builtinAllViewId } from '../catalog-views.ts'
@@ -21,6 +20,8 @@ import {
 import { getDatabaseUi } from './database-ui.ts'
 import { TableGlyph } from './nav-glyphs.tsx'
 import { viewsForRegisteredCollection } from './collection-nav.ts'
+
+const CollectionBrowser = lazy(() => import('./browser.tsx').then((m) => ({ default: m.CollectionBrowser })))
 
 const tabIcons = new Map<string, ComponentType<{ className?: string }>>()
 
@@ -308,6 +309,7 @@ export function DatabaseInspectorBrowse(props: SlotProps) {
       data-testid="fsdb-agent-follow"
       aria-busy={liveWorking || agentWorking}
     >
+    <Suspense fallback={null}>
     <CollectionBrowser
       embed
       moduleId={DATA_MODULE_ID}
@@ -339,6 +341,7 @@ export function DatabaseInspectorBrowse(props: SlotProps) {
       onCrumbTarget={(target) => goInspector(id, target)}
       inspectorPaneId={id}
     />
+    </Suspense>
     </div>
   )
 }

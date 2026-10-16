@@ -7,7 +7,6 @@ import { DATABASE_CHANNEL, type CollectionInfo } from '@biu/type-file-system'
 import type { CollectionChrome } from '@biu/type-file-system/ui'
 import { isLegacyDatabasePath, parseAppPath } from '@biu/web-session-view'
 import { pathForCenter, pathForCrumbTarget, type CrumbTarget } from './sidebar-nav.ts'
-import { CollectionBrowser } from './browser.tsx'
 import { parseSharePath } from '../share-snapshot.ts'
 import { DatabaseInspectorBrowse, DatabaseInspectorTab, bindInspectorSnapshot, collectionTabIcon } from './inspector-database.tsx'
 import { applyDatabaseChannelPayload } from './inspector-db-route.ts'
@@ -28,6 +27,11 @@ import { builtinAllViewId } from '../catalog-views.ts'
 import { normalizeCollectionPath } from '../paths.ts'
 
 const ShareRoot = lazy(() => import('./share-page.tsx').then((m) => ({ default: m.ShareRoot })))
+const CollectionBrowser = lazy(() => import('./browser.tsx').then((m) => ({ default: m.CollectionBrowser })))
+
+if (typeof window !== 'undefined' && /(?:^|\/)database(?:\/|$)/.test(window.location.pathname)) {
+  void import('./browser.tsx')
+}
 
 function ShareRootSlot(props: {
   chrome?: CollectionChrome
@@ -184,6 +188,7 @@ function CollectionPage(props: SlotProps) {
   if (!currentPath) return null
   const title = row?.view?.title ?? row?.label ?? currentPath.replace(/^\//, '')
   return (
+    <Suspense fallback={null}>
     <CollectionBrowser
       moduleId={DATA_MODULE_ID}
       collectionPath={currentPath}
@@ -214,14 +219,25 @@ function CollectionPage(props: SlotProps) {
       }
       onCrumbTarget={(target: CrumbTarget) => navigate(pathForCrumbTarget(target))}
     />
+    </Suspense>
   )
 }
 
+let collectionsInflight: Promise<CollectionInfo[]> | null = null
+
 async function loadCollections(): Promise<CollectionInfo[]> {
-  const res = await fetch('/api/db/stat?path=/')
-  const body = (await res.json()) as { collections?: CollectionInfo[]; error?: string }
-  if (!res.ok) throw new Error(body.error || res.statusText)
-  return body.collections ?? []
+  if (collectionsInflight) return collectionsInflight
+  collectionsInflight = (async () => {
+    const res = await fetch('/api/db/stat?path=/')
+    const body = (await res.json()) as { collections?: CollectionInfo[]; error?: string }
+    if (!res.ok) throw new Error(body.error || res.statusText)
+    return body.collections ?? []
+  })()
+  try {
+    return await collectionsInflight
+  } finally {
+    collectionsInflight = null
+  }
 }
 
 let navErrors: string[] = []
@@ -300,6 +316,7 @@ export function apply(ctx: Context) {
   const mounted = new Map<string, () => void>()
   const inspectorOffers = new Map<string, () => void>()
   let liveTables: CollectionInfo[] = []
+  let snapshotCollections: CollectionInfo[] = []
 
   function syncInspectorOffers(tables: CollectionInfo[]) {
     const wanted = tables.filter((row) => row.view?.inspector)
@@ -413,11 +430,16 @@ export function apply(ctx: Context) {
   const sync = async (rows?: CollectionInfo[]) => {
     let next = rows
     if (!next) {
-      try {
-        next = await loadCollections()
-      } catch {
-        return
+      if (collectionNavKey(snapshotCollections)) next = snapshotCollections
+      else {
+        try {
+          next = await loadCollections()
+        } catch {
+          return
+        }
       }
+    } else {
+      snapshotCollections = next
     }
     await runSync(next)
     if (!collectionNavKey(next)) return
@@ -442,7 +464,8 @@ export function apply(ctx: Context) {
     })
     let lastKey = ''
     const fromSnap = () => {
-      const rows = snapshot.get?.().collections ?? []
+      const rows = (snapshot.get?.().collections ?? []) as CollectionInfo[]
+      snapshotCollections = rows
       const key = collectionNavKey(rows)
       if (!key || key === lastKey) return
       lastKey = key
@@ -475,13 +498,13 @@ export function apply(ctx: Context) {
     }
   })
   void bootLoadCollections(loadCollections, {
-    stopped: () => stopped,
+    stopped: () => stopped || Boolean(collectionNavKey(snapshotCollections)),
     onUpdate: (rows) => {
-      if (stopped || !collectionNavKey(rows)) return
+      if (stopped || collectionNavKey(snapshotCollections) || !collectionNavKey(rows)) return
       void sync(rows)
     },
   }).then((rows) => {
-    if (stopped) return
+    if (stopped || collectionNavKey(snapshotCollections)) return
     return sync(rows)
   })
 }

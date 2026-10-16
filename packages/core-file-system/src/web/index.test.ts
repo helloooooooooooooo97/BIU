@@ -29,6 +29,20 @@ test('share page stays off the data first-paint graph until a share route opens'
   assert.match(page, /parseSharePath\(location\.pathname\)/)
 })
 
+test('collection browser stays off plugin apply until a data route paints', () => {
+  const page = readFileSync(resolve(import.meta.dirname, './index.tsx'), 'utf8')
+  const inspector = readFileSync(resolve(import.meta.dirname, './inspector-database.tsx'), 'utf8')
+  const chrome = readFileSync(resolve(import.meta.dirname, './facet-chrome.tsx'), 'utf8')
+  assert.doesNotMatch(page, /from '\.\/browser\.tsx'/)
+  assert.match(page, /import\('\.\/browser\.tsx'\)/)
+  assert.doesNotMatch(inspector, /from '\.\/browser\.tsx'/)
+  assert.match(inspector, /import\('\.\/browser\.tsx'\)/)
+  assert.doesNotMatch(chrome, /from '\.\/facet-collect/)
+  assert.match(chrome, /import\('\.\/facet-collect/)
+  assert.match(page, /collectionNavKey\(snapshotCollections\)/)
+  assert.match(page, /stopped \|\| Boolean\(collectionNavKey\(snapshotCollections\)\)/)
+})
+
 test('saved views catalog waits until the first list is ready and only pulls the open table', () => {
   const page = readFileSync(resolve(import.meta.dirname, './index.tsx'), 'utf8')
   const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
