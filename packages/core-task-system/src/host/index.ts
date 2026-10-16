@@ -1086,16 +1086,21 @@ export class TasksService extends Service {
       params.push(`%${filter.creatorSessionId.trim()}%`)
     }
     const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : ''
+    const join = filter.q?.trim()
+      ? `LEFT JOIN editor_content c ON c.collection = '/tasks' AND c.record_id = tasks.id`
+      : ''
     const rows = this.db
       .prepare(
         `SELECT tasks.* FROM tasks
-         LEFT JOIN editor_content c ON c.collection = '/tasks' AND c.record_id = tasks.id
+         ${join}
          ${where} ORDER BY
           CASE status WHEN 'doing' THEN 0 WHEN 'todo' THEN 1 ELSE 2 END,
           sort DESC, updated_at DESC`,
       )
       .all(...params) as Array<Record<string, unknown>>
-    return rows.map((row) => this.withEditorDescription(mapRow(row)))
+    const mapped = rows.map((row) => mapRow(row))
+    if (!filter.q?.trim()) return mapped
+    return mapped.map((row) => this.withEditorDescription(row))
   }
 
   get(id: string): TaskRow | undefined {

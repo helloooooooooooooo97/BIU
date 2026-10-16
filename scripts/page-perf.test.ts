@@ -29,6 +29,10 @@ test('page plugin perf helpers stay as separate scripts in one folder', () => {
   assert.match(sources['measure-routes.mjs'], /inspectLocalShellSource/)
   assert.match(sources['measure-routes.mjs'], /BIU_PERF_ONLY/)
   assert.match(sources['seed-local.mjs'], /BIU_PERF_PAGES/)
+  assert.match(sources['seed-local.mjs'], /BIU_PERF_SESSIONS/)
+  assert.match(sources['seed-local.mjs'], /3000/)
+  assert.match(sources['seed-local.mjs'], /压测百行/)
+  assert.match(sources['measure-routes.mjs'], /压测百行/)
 })
 
 test('resourceKind splits snapshot, list, and store web.js', () => {
@@ -37,4 +41,5 @@ test('resourceKind splits snapshot, list, and store web.js', () => {
   assert.equal(resourceKind('http://127.0.0.1:3151/api/plugin-store/files/page-toc/web.js?v=abc'), 'plugin-web')
   assert.equal(resourceKind('http://127.0.0.1:5174/packages/core-chat/src/web/index.ts'), 'module')
   assert.match(inspectLocalShellSource(), /data-testid="app-shell"/)
+  assert.match(inspectLocalShellSource(), /tableRows/)
 })

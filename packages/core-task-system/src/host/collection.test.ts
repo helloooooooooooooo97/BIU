@@ -65,6 +65,36 @@ test('tasksCollection maps /tasks rows with rolled-up usage', async () => {
   assert.deepEqual(spec.actions?.find((item) => item.id === 'deliver')?.placement, ['row', 'detail'])
 })
 
+test('tasksCollection get reads one row instead of listing the table', async () => {
+  let listed = 0
+  const tasks: TasksLike = {
+    list() {
+      listed += 1
+      return [
+        { id: 't1', title: '写方案', status: 'todo' },
+        { id: 't2', title: '其他', status: 'todo' },
+      ]
+    },
+    get(id) {
+      return id === 't1' ? { id: 't1', title: '写方案', status: 'todo', parentId: 'p' } : undefined
+    },
+    update(id, patch) {
+      return { id, title: '写方案', status: patch.status ?? 'todo' }
+    },
+    create(input) {
+      return { id: 'new', title: input.title, status: 'todo' }
+    },
+    delete() {
+      return true
+    },
+  }
+  const spec = tasksCollection(tasks)
+  const row = await spec.get!('t1')
+  assert.equal(row?.title, '写方案')
+  assert.equal(row?.parentId, 'p')
+  assert.equal(listed, 0)
+})
+
 test('tasksCollection lets agents write assignee and stamps the creating session', async () => {
   const created: Array<Record<string, unknown>> = []
   const updated: Array<Record<string, unknown>> = []
