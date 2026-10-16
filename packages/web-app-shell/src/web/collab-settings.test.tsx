@@ -485,6 +485,21 @@ test('5xx 不清 token，401 才清', async () => {
   localStorage.clear()
 })
 
+test('refresh with a saved token opens the app without a verifying splash', () => {
+  localStorage.clear()
+  localStorage.setItem('biu.account.token', 'tok')
+  globalThis.fetch = (async () => new Promise(() => undefined)) as typeof fetch
+  render(
+    <AuthGate>
+      <div data-testid="inside">in</div>
+    </AuthGate>,
+  )
+  assert.equal(screen.getByTestId('inside').textContent, 'in')
+  assert.equal(screen.queryByTestId('auth-verifying'), null)
+  cleanup()
+  localStorage.clear()
+})
+
 test('网络抖动恢复后自动进入应用，不用手动刷新', async () => {
   localStorage.clear()
   localStorage.setItem('biu.account.token', 'tok')
@@ -503,8 +518,9 @@ test('网络抖动恢复后自动进入应用，不用手动刷新', async () =>
     </AuthGate>,
   )
 
-  await waitFor(() => assert.equal(screen.getByTestId('inside').textContent, 'in'), { timeout: 5000 })
-  assert.ok(calls >= 3, '应当重试到成功为止')
+  assert.equal(screen.getByTestId('inside').textContent, 'in')
+  assert.equal(screen.queryByTestId('auth-verifying'), null)
+  await waitFor(() => assert.ok(calls >= 3, '应当重试到成功为止'), { timeout: 5000 })
   cleanup()
   localStorage.clear()
 })

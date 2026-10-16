@@ -607,7 +607,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }, [token, verified])
 
   if (isLandingPreview()) return children
-  if (token && verified && !joining) return children
+  // 本地已有 token 就进应用。刷新不必先整页卡在「正在验证登录状态」等 /me。
+  if (token && !joining) return children
   if (!token && !guestInvite) {
     return (
       <MarketingSite
