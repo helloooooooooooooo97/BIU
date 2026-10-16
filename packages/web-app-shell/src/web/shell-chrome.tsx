@@ -2141,7 +2141,13 @@ function NoticeBell({
   }, [])
 
   useEffect(() => {
-    const idle = window.setTimeout(load, NOTICES_PULL_IDLE_MS)
+    let idle = 0
+    const startIdle = () => {
+      window.clearTimeout(idle)
+      idle = window.setTimeout(load, 800)
+    }
+    idle = window.setTimeout(load, NOTICES_PULL_IDLE_MS)
+    window.addEventListener('fsdb:list-ready', startIdle)
     let timer = 0
     const onChange = (event: Event) => {
       if ((event as CustomEvent<{ views?: boolean }>).detail?.views) return
@@ -2152,6 +2158,7 @@ function NoticeBell({
     return () => {
       window.clearTimeout(idle)
       window.clearTimeout(timer)
+      window.removeEventListener('fsdb:list-ready', startIdle)
       window.removeEventListener('fsdb:change', onChange)
     }
   }, [load])

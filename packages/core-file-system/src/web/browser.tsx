@@ -584,7 +584,11 @@ export function CollectionBrowser({
   const [draft, setDraft] = useState<Record<string, string>>({})
   const [acting, setActing] = useState(false)
   const actingRef = useRef(false)
-  const initialView = viewForPath(collectionPath, routeViewId)
+  const initialView = (() => {
+    const stored = viewForPath(collectionPath, routeViewId)
+    const listed = listedViews(collectionPath, loadViews(collectionPath))
+    return pickViewForRoute(listed, collectionPath, routeViewId) || stored || listed[0] || null
+  })()
   const dbUi = getDatabaseUi()
   const extraViews = useSyncExternalStore(
     (fn) => (dbUi ? dbUi.subscribe(fn) : () => undefined),
@@ -752,6 +756,7 @@ export function CollectionBrowser({
   const noticeTimer = useRef<number>(0)
   const quietUntil = useRef(0)
   const reloadGen = useRef(0)
+  const listReadySent = useRef(false)
   const confirmedCreates = useRef(new Set<string>())
   const hydratePath = useRef('')
   const viewsRef = useRef<SavedView[]>([])
@@ -1010,6 +1015,10 @@ export function CollectionBrowser({
         )
       }
       setError('')
+      if (!listReadySent.current) {
+        listReadySent.current = true
+        window.dispatchEvent(new Event('fsdb:list-ready'))
+      }
       return true
     } catch (err) {
       if (gen !== reloadGen.current) return false
@@ -1094,6 +1103,7 @@ export function CollectionBrowser({
   useLayoutEffect(() => {
     setHydrated(false)
     hydratePath.current = ''
+    listReadySent.current = false
     setCollapsed({})
     hydratedDetail.current = ''
     const cached = listCache.get(dataPath)
@@ -1120,7 +1130,13 @@ export function CollectionBrowser({
         setSorts(normalizeSorts(next.sorts, next.sortField, next.sortDir))
         setFilters(next.filters)
         setFilterTree(resolveViewFilterTree(next))
-        setColumnKeys(next.columns)
+        setColumnKeys(
+          pinActionColumn(
+            cached?.stat?.schema,
+            next.columns,
+            placedActions(cached?.stat?.schema, 'row').length > 0,
+          ),
+        )
         setColumnWidths(normalizeColumnWidths(next.columnWidths))
         setGroupBy(next.groupBy ?? '')
         setShowTree(next.tree !== false)
@@ -2988,7 +3004,7 @@ export function CollectionBrowser({
     setViews(listedViewsNow)
     const listed = viewsRef.current
     const view = pickViewForRoute(listed, collectionPath, routeViewId)
-    if (view) applyView(view)
+    if (view && view.id !== activeViewIdRef.current) applyView(view)
     setHydrated(true)
   }, [allColumnKeys, collectionPath, dataPath, routeViewId, schema, schemaDefaultKeys])
 

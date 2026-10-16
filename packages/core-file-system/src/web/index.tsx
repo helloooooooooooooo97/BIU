@@ -126,12 +126,24 @@ function CollectionPage(props: SlotProps) {
 
   useEffect(() => {
     if (!orderedTables.length) return
-    void pullSavedViews(
-      orderedTables.map((table) => table.path),
-      { idle: true },
-    ).then((changed) => {
-      if (changed) window.dispatchEvent(new CustomEvent('fsdb:change', { detail: { views: true } }))
-    })
+    const paths = orderedTables.map((table) => table.path)
+    let delay = 0
+    const pull = () => {
+      void pullSavedViews(paths, { idle: true }).then((changed) => {
+        if (changed) window.dispatchEvent(new CustomEvent('fsdb:change', { detail: { views: true } }))
+      })
+    }
+    const onListReady = () => {
+      window.clearTimeout(delay)
+      delay = window.setTimeout(pull, 800)
+    }
+    window.addEventListener('fsdb:list-ready', onListReady)
+    const fallback = window.setTimeout(pull, 8000)
+    return () => {
+      window.removeEventListener('fsdb:list-ready', onListReady)
+      window.clearTimeout(delay)
+      window.clearTimeout(fallback)
+    }
   }, [tablePathsKey])
 
   useEffect(() => {

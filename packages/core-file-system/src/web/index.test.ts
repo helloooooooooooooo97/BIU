@@ -16,10 +16,13 @@ test('shell matches the data module by extra.moduleId database', () => {
   assert.equal(String(extra.moduleId ?? slotKey), 'database')
 })
 
-test('saved views catalog waits until idle and only notifies when it changed', () => {
+test('saved views catalog waits until the first list is ready and only notifies when it changed', () => {
   const page = readFileSync(resolve(import.meta.dirname, './index.tsx'), 'utf8')
+  const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
   assert.match(page, /pullSavedViews\(/)
   assert.match(page, /\{\s*idle:\s*true\s*\}/)
+  assert.match(page, /fsdb:list-ready/)
+  assert.match(browser, /fsdb:list-ready/)
   assert.match(page, /if \(changed\) window\.dispatchEvent\(new CustomEvent\('fsdb:change'/)
 })
 
