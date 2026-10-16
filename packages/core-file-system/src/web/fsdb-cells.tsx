@@ -28,7 +28,7 @@ import {
 } from '@heroicons/react/16/solid'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import type { CollectionSchema, DbRecord, FieldSpec, FieldType } from '@biu/type-file-system'
-import { actionVisibleToUser, asAttachmentList, asHttpHref, asImageSrc, asImageSrcList, asPerson, commitAttachments } from '@biu/type-file-system'
+import { actionVisibleToUser, asAttachmentList, asHttpHref, asImageSrc, asImageSrcList, asPerson, asPersonList, commitAttachments } from '@biu/type-file-system'
 import type { CollectionRowViewType, CollectionViewType } from '@biu/type-file-system/ui'
 import {
   asStringList,
@@ -328,6 +328,7 @@ export function DefaultCell({
   labelField,
   onRun,
   onChange,
+  plain,
 }: {
   field: FieldSpec
   value: unknown
@@ -337,6 +338,7 @@ export function DefaultCell({
   labelField?: string
   onRun?: () => void
   onChange?: (next: unknown) => void
+  plain?: boolean
 }) {
   const kind = resolveFieldType(field)
   if (kind === 'action') {
@@ -357,6 +359,9 @@ export function DefaultCell({
   if (kind === 'select' || kind === 'multi-select') {
     const tags = kind === 'multi-select' ? asStringList(value) : String(value ?? '') ? [String(value)] : []
     if (!tags.length) return null
+    if (plain) {
+      return <span className="fsdb-select-text">{tags.map((tag) => enumDisplayLabel(field, tag)).join('、')}</span>
+    }
     return (
       <TagChips>
         {tags.map((tag) => (
@@ -369,6 +374,14 @@ export function DefaultCell({
     return <BoolCell on={value === true || value === 'true'} />
   }
   if (kind === 'person') {
+    if (plain) {
+      const text = asPersonList(value)
+        .map((item) => item.name)
+        .filter(Boolean)
+        .join('、')
+      if (!text) return null
+      return <span className="fsdb-person-text">{text}</span>
+    }
     return <PersonFace value={value} />
   }
   if (kind === 'datetime') {

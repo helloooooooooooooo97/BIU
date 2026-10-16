@@ -2424,6 +2424,7 @@ export function CollectionBrowser({
             collectionPath={collectionPath}
             labelField={schema?.labelField}
             value={readFacetFlatValue(row, key, facetSourceKey(schema))}
+            plain
             onChange={
               field.writable && (kind === 'attachment' || kind === 'datetime')
                 ? (next) => writeCellValue(row, key, field, next)
@@ -2442,6 +2443,7 @@ export function CollectionBrowser({
           collectionPath={collectionPath}
           labelField={schema?.labelField}
           value={row[key]}
+          plain
           onChange={
             field.writable && (kind === 'attachment' || kind === 'datetime')
               ? (next) => writeCellValue(row, key, field, next)

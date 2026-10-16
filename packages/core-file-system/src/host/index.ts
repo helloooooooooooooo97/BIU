@@ -646,6 +646,24 @@ export function specListQuery(query: CollectionListQuery): CollectionListQuery {
   }
 }
 
+/** SQLite 扫描是同步的。套两层 setImmediate，中间那次 poll 才能读到一起进来的分组请求。 */
+function shareInflight<T>(map: Map<string, Promise<T>>, key: string, run: () => Promise<T>): Promise<T> {
+  const hit = map.get(key)
+  if (hit) return hit
+  const pending = new Promise<T>((resolve, reject) => {
+    setImmediate(() => {
+      setImmediate(() => {
+        run().then(resolve, reject)
+      })
+    })
+  })
+  map.set(key, pending)
+  pending.finally(() => {
+    if (map.get(key) === pending) map.delete(key)
+  })
+  return pending
+}
+
 function sortRecords(rows: DbRecord[], field: string, dir: 'asc' | 'desc', sorts?: Array<{ field: string; dir: 'asc' | 'desc' }>) {
   const rules = normalizeSorts(sorts, field, dir)
   return sortRecordsBy(rows, rules)
@@ -654,6 +672,13 @@ function sortRecords(rows: DbRecord[], field: string, dir: 'asc' | 'desc', sorts
 export const DEFAULT_PAGE_SIZE = 20
 export const MAX_PAGE_SIZE = 200
 const HARD_DELETE_PATHS = new Set(['/events', '/trash', '/workspace-members'])
+
+type VisibleSortedPack = {
+  rows: DbRecord[]
+  personal: DbRecord[]
+  workspace: DbRecord[]
+  shared: DbRecord[]
+}
 
 type WorkspaceMembership = {
   active: string | null
@@ -727,6 +752,7 @@ export class DatabaseService extends Service implements Database {
   private viewShareCache: { key: string; views: SharedViewDef[] } | null = null
   private inflightMatches = new Map<string, Promise<DbRecord[]>>()
   private inflightScans = new Map<string, Promise<DbRecord[]>>()
+  private inflightVisible = new Map<string, Promise<VisibleSortedPack>>()
   recycleAssets?: () => void
 
   private bumpQueued = false
@@ -1216,27 +1242,113 @@ export class DatabaseService extends Service implements Database {
     overlay = true,
   ) {
     const key = `${spec.path}\t${query.trash ? 1 : 0}\t${q}\t${overlay ? 1 : 0}\t${JSON.stringify(query.filter ?? {})}\t${(query.ids ?? []).join(',')}`
-    const hit = this.inflightMatches.get(key)
-    if (hit) return hit
-    const pending = this.matchCollectionRowsNow(spec, query, filter, q, overlay)
-    this.inflightMatches.set(key, pending)
-    pending.finally(() => {
-      if (this.inflightMatches.get(key) === pending) this.inflightMatches.delete(key)
-    })
-    return pending
+    return shareInflight(this.inflightMatches, key, () => this.matchCollectionRowsNow(spec, query, filter, q, overlay))
   }
 
   private scanCollectionRows(spec: CollectionSpec, query: CollectionListQuery, overlay: boolean) {
     const load = specListQuery(query)
     const key = `${spec.path}\t${load.trash ? 1 : 0}\t${load.q ?? ''}\t${overlay ? 1 : 0}\t${JSON.stringify(load.filter ?? {})}\t${(load.ids ?? []).join(',')}`
-    const hit = this.inflightScans.get(key)
-    if (hit) return hit
-    const pending = this.scanCollectionRowsNow(spec, load, overlay)
-    this.inflightScans.set(key, pending)
-    pending.finally(() => {
-      if (this.inflightScans.get(key) === pending) this.inflightScans.delete(key)
-    })
-    return pending
+    return shareInflight(this.inflightScans, key, () => this.scanCollectionRowsNow(spec, load, overlay))
+  }
+
+  private listRemapsRecords(path: string) {
+    return path === '/trash' || path === '/events' || path === '/facets' || path === '/page-blocks'
+  }
+
+  private preloadRelatedCollections(
+    specPath: string,
+    rows: DbRecord[],
+    auth: AuthorizationService,
+    actor: { workspaceId?: string; accountId?: string },
+  ) {
+    const extraScans: string[] = []
+    const workspaceId = String(actor.workspaceId ?? '')
+    const accountId = String(actor.accountId ?? '')
+    if (!workspaceId || !this.listRemapsRecords(specPath)) return extraScans
+    const seen = new Set([specPath])
+    for (const row of rows) {
+      const target = this.scopeTarget(specPath, String(row.id ?? ''), row)
+      if (!target.collection || seen.has(target.collection)) continue
+      seen.add(target.collection)
+      extraScans.push(target.collection)
+      auth.preloadCollection(workspaceId, target.collection, accountId)
+    }
+    return extraScans
+  }
+
+  /** 并发的分组页共用一次授权和排序。组筛选、$scope 在内存里切。 */
+  private visibleSortedCollectionRows(
+    spec: CollectionSpec,
+    query: CollectionListQuery,
+    sortField: string,
+    sortDir: 'asc' | 'desc',
+    sorts: Array<{ field: string; dir: 'asc' | 'desc' }> | undefined,
+    overlay: boolean,
+  ) {
+    const load = specListQuery(query)
+    const actor = this.authorization()?.currentActor()
+    const actorKey = actor
+      ? `${actor.workspaceId}\t${actor.accountId}`
+      : `${this.collabStore()?.activeWorkspaceId() ?? ''}\t${currentAccountId()}`
+    const rules = normalizeSorts(sorts, sortField, sortDir)
+    const key = `${spec.path}\t${load.trash ? 1 : 0}\t${load.q ?? ''}\t${overlay ? 1 : 0}\t${JSON.stringify(load.filter ?? {})}\t${(load.ids ?? []).join(',')}\t${JSON.stringify(rules)}\t${actorKey}`
+    return shareInflight(this.inflightVisible, key, () =>
+      this.visibleSortedCollectionRowsNow(spec, query, sortField, sortDir, sorts, overlay),
+    )
+  }
+
+  private async visibleSortedCollectionRowsNow(
+    spec: CollectionSpec,
+    query: CollectionListQuery,
+    sortField: string,
+    sortDir: 'asc' | 'desc',
+    sorts: Array<{ field: string; dir: 'asc' | 'desc' }> | undefined,
+    overlay: boolean,
+  ) {
+    const tagFilter = spec.path === '/facets' ? String(query.filter?.facetId ?? '').trim() : ''
+    const rows = await this.scanCollectionRows(spec, query, Boolean(tagFilter || overlay))
+    if (tagFilter) await this.hydrateFacetStamps(rows, this.facets.get(tagFilter))
+    const auth = this.authorization()
+    const actor = auth?.currentActor()
+    const extraScans = auth && actor ? this.preloadRelatedCollections(spec.path, rows, auth, actor) : []
+    try {
+      const visible = sortRecords(this.visibleRecords(spec.path, rows), sortField, sortDir, sorts)
+      return this.partitionVisibleRows(spec.path, visible)
+    } finally {
+      if (auth && actor) {
+        for (const collection of extraScans) {
+          auth.releaseCollection(actor.workspaceId, collection, actor.accountId)
+        }
+      }
+    }
+  }
+
+  private partitionVisibleRows(collection: string, rows: DbRecord[]): VisibleSortedPack {
+    const authorization = this.authorization()
+    const actor = authorization?.currentActor()
+    if (!authorization || !actor) {
+      return { rows, personal: rows, workspace: rows, shared: rows }
+    }
+    const personal: DbRecord[] = []
+    const workspace: DbRecord[] = []
+    const shared: DbRecord[] = []
+    for (const row of rows) {
+      if (collection === '/plugins' && (row as { builtin?: unknown }).builtin === true) {
+        shared.push(row)
+        continue
+      }
+      const target = this.scopeTarget(collection, String(row.id ?? ''), row)
+      const scope = authorization.scopeCurrent({
+        type: 'record',
+        workspaceId: actor.workspaceId ?? '',
+        collection: target.collection,
+        recordId: target.id,
+      })
+      if (scope === 'personal') personal.push(row)
+      else if (scope === 'workspace') workspace.push(row)
+      else if (scope === 'shared') shared.push(row)
+    }
+    return { rows, personal, workspace, shared }
   }
 
   private async scanCollectionRowsNow(spec: CollectionSpec, query: CollectionListQuery, overlay: boolean) {
@@ -1293,6 +1405,9 @@ export class DatabaseService extends Service implements Database {
   }
 
   private bump() {
+    this.inflightMatches.clear()
+    this.inflightScans.clear()
+    this.inflightVisible.clear()
     this.ctx.emit('database/change')
     if (this.bumpQueued) return
     this.bumpQueued = true
@@ -1424,25 +1539,15 @@ export class DatabaseService extends Service implements Database {
     }
     const auth = this.authorization()
     const actor = auth?.currentActor()
-    const extraScans: string[] = []
     if (auth && actor) auth.preloadCollection(actor.workspaceId, spec.path, actor.accountId)
     try {
       const overlay = listNeedsMatchOverlay(liveFilter, q, sortField, page?.sorts)
-      const matched = await this.matchCollectionRows(spec, query, liveFilter, q, overlay)
-      if (auth && actor) {
-        const seen = new Set([spec.path])
-        for (const row of matched) {
-          const target = this.scopeTarget(spec.path, String(row.id ?? ''), row)
-          if (!target.collection || seen.has(target.collection)) continue
-          seen.add(target.collection)
-          extraScans.push(target.collection)
-          auth.preloadCollection(actor.workspaceId, target.collection, actor.accountId)
-        }
-      }
+      const pack = await this.visibleSortedCollectionRows(spec, query, sortField, sortDir, page?.sorts, overlay)
+      const visible = scopeFilter ? pack[scopeFilter] : pack.rows
       const tagFilter = spec.path === '/facets' ? String(filter?.facetId ?? '').trim() : ''
       if (tagFilter) schema = schemaWithTagPack(schema, this.facets.get(tagFilter))
-      const visible = this.visibleRecords(spec.path, sortRecords(matched, sortField, sortDir, page?.sorts))
-      const sorted = this.recordsInScope(spec.path, visible, scopeFilter)
+      const packs = this.facets.list()
+      const sorted = visible.filter((row) => matchListFilter(row, liveFilter, schema, packs) && matchQuery(row, q, packs))
       const total = sorted.length
       const slice = this.decorateSlice(spec, sorted.slice(offset, offset + limit))
       return {
@@ -1467,9 +1572,6 @@ export class DatabaseService extends Service implements Database {
       }
     } finally {
       if (auth && actor) {
-        for (const collection of extraScans) {
-          auth.releaseCollection(actor.workspaceId, collection, actor.accountId)
-        }
         auth.releaseCollection(actor.workspaceId, spec.path, actor.accountId)
       }
     }

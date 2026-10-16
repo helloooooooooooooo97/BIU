@@ -97,6 +97,15 @@ test('url cells open in a new tab instead of downloading', () => {
   assert.equal(container.querySelector('.fsdb-file-name')?.textContent, 'https://example.com/page')
 })
 
+test('plain table cells skip tag chips and person faces', () => {
+  const select = render(<DefaultCell field={{ type: 'select', enum: ['open', 'done'] }} value="open" plain />)
+  assert.equal(select.container.querySelector('.biu-tag'), null)
+  assert.equal(select.container.querySelector('.fsdb-select-text')?.textContent, 'open')
+  const person = render(<DefaultCell field={{ type: 'person' }} value={{ kind: 'user', name: 'Ada' }} plain />)
+  assert.equal(person.container.querySelector('.fsdb-person-list'), null)
+  assert.equal(person.container.querySelector('.fsdb-person-text')?.textContent, 'Ada')
+})
+
 test('empty cells render no placeholder copy', () => {
   const text = render(<DefaultCell field={{ type: 'string' }} value="" />)
   assert.equal(text.container.textContent, '')

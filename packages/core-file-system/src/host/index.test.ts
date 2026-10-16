@@ -2548,6 +2548,46 @@ test('spec.list query keeps facet and session filters and drops group filters', 
   assert.deepEqual(specListQuery({ filter: { sessionId: 's1' } }), { filter: { sessionId: 's1' } })
 })
 
+test('concurrent lists share a scan even when spec.list is synchronous', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  const rows = Array.from({ length: 8 }, (_, index) => ({
+    id: `n${index}`,
+    title: `笔记${index}`,
+    status: index % 2 ? 'open' : 'done',
+  }))
+  let lists = 0
+  db.register({
+    id: 'notes',
+    path: '/notes',
+    schema: {
+      fields: {
+        ...REQUIRED_RECORD_FIELDS,
+        title: { type: 'string', writable: true },
+        status: { type: 'string', writable: true, enum: ['open', 'done'] },
+      },
+    },
+    list: async () => {
+      lists += 1
+      return [...rows]
+    },
+    get: (id) => rows.find((row) => row.id === id) ?? null,
+  })
+  const [open, done, personal] = await Promise.all([
+    db.list('/notes', { status: 'open' }, { limit: 20 }),
+    db.list('/notes', { status: 'done' }, { limit: 20 }),
+    db.list('/notes', { $scope: 'personal' }, { limit: 20 }),
+  ])
+  assert.equal(lists, 1)
+  assert.equal(open.kind, 'collection')
+  assert.equal(done.kind, 'collection')
+  assert.equal(personal.kind, 'collection')
+  if (open.kind !== 'collection' || done.kind !== 'collection' || personal.kind !== 'collection') return
+  assert.equal(open.items.length, 4)
+  assert.equal(done.items.length, 4)
+  assert.equal(personal.items.length, 8)
+})
+
 test('concurrent lists of one collection share a single spec.list scan', async () => {
   const ctx = new Context()
   const db = new DatabaseService(ctx)
@@ -2574,20 +2614,34 @@ test('concurrent lists of one collection share a single spec.list scan', async (
     },
     get: (id) => rows.find((row) => row.id === id) ?? null,
   })
-  const [open, done, again] = await Promise.all([
+  const [open, done, again, personal, workspace] = await Promise.all([
     db.list('/notes', { status: 'open' }, { limit: 20 }),
     db.list('/notes', { status: 'done' }, { limit: 20 }),
     db.list('/notes', { status: 'open' }, { limit: 1 }),
+    db.list('/notes', { $scope: 'personal' }, { limit: 20 }),
+    db.list('/notes', { $scope: 'workspace' }, { limit: 20 }),
   ])
   assert.equal(lists, 1)
   assert.equal(open.kind, 'collection')
   assert.equal(done.kind, 'collection')
   assert.equal(again.kind, 'collection')
-  if (open.kind !== 'collection' || done.kind !== 'collection' || again.kind !== 'collection') return
+  assert.equal(personal.kind, 'collection')
+  assert.equal(workspace.kind, 'collection')
+  if (
+    open.kind !== 'collection' ||
+    done.kind !== 'collection' ||
+    again.kind !== 'collection' ||
+    personal.kind !== 'collection' ||
+    workspace.kind !== 'collection'
+  ) {
+    return
+  }
   assert.equal(open.items.length, 6)
   assert.equal(done.items.length, 6)
   assert.equal(again.items.length, 1)
   assert.equal(again.total, 6)
+  assert.equal(personal.items.length, 12)
+  assert.equal(workspace.items.length, 12)
 })
 
 test('collection list preloads authorization scans and releases them', () => {
@@ -2595,6 +2649,12 @@ test('collection list preloads authorization scans and releases them', () => {
   assert.match(host, /auth\.preloadCollection\(actor\.workspaceId, spec\.path, actor\.accountId\)/)
   assert.match(host, /private inflightMatches/)
   assert.match(host, /private inflightScans/)
+  assert.match(host, /private inflightVisible/)
+  assert.match(host, /visibleSortedCollectionRows/)
+  assert.match(host, /partitionVisibleRows/)
+  assert.match(host, /shareInflight/)
+  assert.match(host, /setImmediate\(\(\) => \{\s*setImmediate/)
+  assert.match(host, /inflightVisible\.clear\(\)/)
   assert.match(host, /specListQuery\(query\)/)
   assert.match(
     host,
