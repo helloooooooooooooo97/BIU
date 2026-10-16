@@ -36,15 +36,7 @@ export function whenListIdle(fn: () => void, idleMs = VIEW_PREVIEW_IDLE_MS) {
     }
   }
   if (paintedListReady) {
-    const ric = window.requestIdleCallback
-    if (typeof ric === 'function') {
-      const idleId = ric(run, { timeout: Math.min(400, idleMs) })
-      return () => {
-        cancelled = true
-        window.cancelIdleCallback(idleId)
-      }
-    }
-    timer = window.setTimeout(run, 0)
+    timer = window.setTimeout(run, idleMs)
     return () => {
       cancelled = true
       window.clearTimeout(timer)

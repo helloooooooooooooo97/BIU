@@ -30,6 +30,18 @@ export function tableWindowSlice(
   }
 }
 
+export function tableWindowUnchanged(
+  count: number,
+  prev: { top: number; height: number },
+  next: { top: number; height: number },
+  rowPx = TABLE_ROW_PX,
+) {
+  if (prev.top === next.top && prev.height === next.height) return true
+  const a = tableWindowSlice(count, prev.top, prev.height, rowPx)
+  const b = tableWindowSlice(count, next.top, next.height, rowPx)
+  return a.start === b.start && a.end === b.end && a.padTop === b.padTop && a.padBottom === b.padBottom
+}
+
 /** 一页已经超过一屏时，首屏只拉进入视口的组；其余组先拿总数。 */
 export function groupedFullFetchCount(
   pageSize: number,

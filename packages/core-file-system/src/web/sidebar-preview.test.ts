@@ -105,6 +105,9 @@ test('view totals wait past first paint so ready is not blocked', () => {
   assert.equal(VIEW_PREVIEW_IDLE_MS, 800)
   const src = readFileSync(resolve(import.meta.dirname, './sidebar-preview.ts'), 'utf8')
   assert.doesNotMatch(src, /setTimeout\(run, 8000\)/)
+  assert.match(src, /setTimeout\(run, idleMs\)/)
+  assert.doesNotMatch(src, /Math.min\(400, idleMs\)/)
+  assert.doesNotMatch(src, /requestIdleCallback/)
 })
 
 test('sidebar preview waits until the painted list is marked ready', () => {

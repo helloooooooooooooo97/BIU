@@ -79,6 +79,9 @@ test('data sidebar brand sits left with a collapse control on the right', () => 
   assert.match(browser, /import\('\.\/data-sidebar\.tsx'\)/)
   assert.match(browser, /data-list-ready=\{listPainted \? '1' : undefined\}/)
   assert.match(browser, /sidebarPaint/)
+  assert.match(browser, /function IdleDataSidebar/)
+  assert.match(browser, /<IdleDataSidebar/)
+  assert.doesNotMatch(browser, /setSidebarPaint\(false\)/)
 })
 
 test('user and system collection sections fold independently', () => {
@@ -537,6 +540,8 @@ test('create record sits at the right of the toolbar with a blue label', () => {
   assert.match(css, /\.tasks-table\{[^}]*border-collapse:separate/)
   assert.match(browser, /function tableBodyRows/)
   assert.match(browser, /tableWindowSlice/)
+  assert.match(browser, /tableWindowUnchanged/)
+  assert.match(browser, /TABLE_WINDOW_VIEWPORT_FALLBACK/)
   assert.match(browser, /tableWrapRef/)
   assert.match(browser, /tablePaintNodes/)
   assert.match(browser, /fsdb-table-pad/)

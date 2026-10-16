@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, TABLE_WINDOW_VIEWPORT_FALLBACK, groupedFullFetchCount, tableWindowSlice } from './table-window.ts'
+import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, TABLE_WINDOW_VIEWPORT_FALLBACK, groupedFullFetchCount, tableWindowSlice, tableWindowUnchanged } from './table-window.ts'
 
 test('table window keeps overscan around the viewport', () => {
   const slice = tableWindowSlice(200, 0, TABLE_ROW_PX * 10)
@@ -43,6 +43,14 @@ test('unmeasured viewport still paints a first screen', () => {
   assert.equal(slice.start, 0)
   assert.ok(slice.end >= Math.ceil(TABLE_WINDOW_VIEWPORT_FALLBACK / TABLE_ROW_PX))
   assert.ok(slice.end < 200)
+})
+
+test('viewport measure is skipped when it would paint the same window', () => {
+  const prev = { top: 0, height: TABLE_WINDOW_VIEWPORT_FALLBACK }
+  const next = { top: 0, height: 600 }
+  assert.equal(tableWindowUnchanged(20, prev, next), true)
+  assert.equal(tableWindowUnchanged(200, prev, next), false)
+  assert.equal(tableWindowUnchanged(20, prev, prev), true)
 })
 
 test('grouped first paint fetches every group when a page still fits the window', () => {

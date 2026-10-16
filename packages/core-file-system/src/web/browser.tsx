@@ -130,7 +130,7 @@ import { ViewPaneMenu } from './pane-more-menu.tsx'
 import { HttpError, listCollection, readJson } from './db-client.ts'
 import { savedViewRecordPath } from '../paths.ts'
 import { findViewNeighbor, indexOnPage } from './view-adjacent.ts'
-import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, tableWindowSlice } from './table-window.ts'
+import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, TABLE_WINDOW_VIEWPORT_FALLBACK, tableWindowSlice, tableWindowUnchanged } from './table-window.ts'
 import { markPaintedListReady, rememberPreviewTotal, resetPaintedListReady, viewTotalKey, whenListIdle } from './sidebar-preview.ts'
 import { catalogLockFilters, isReadOnlyViewId, mergeTableViews, parseBuiltinScopeViewId, stubBuiltinBlockKindView, viewsForScope, type DataScope } from '../catalog-views.ts'
 import { SAVED_VIEW_EVENT, rememberInspectorWorkingView, showRecordInInspector } from './inspector-db-route.ts'
@@ -167,6 +167,35 @@ const ScopeOverview = lazy(() => import('./scope-overview.tsx').then((m) => ({ d
 const DataSidebar = lazy(() => import('./data-sidebar.tsx').then((m) => ({ default: m.DataSidebar })))
 const LayoutPrefsMenu = lazy(() => import('./layout-prefs-menu.tsx').then((m) => ({ default: m.LayoutPrefsMenu })))
 const CollectionRowsShell = lazy(() => import('./rows-view.tsx').then((m) => ({ default: m.CollectionRowsShell })))
+
+function IdleDataSidebar({
+  listPainted,
+  ...props
+}: { listPainted: boolean } & ComponentProps<typeof DataSidebar>) {
+  const [sidebarPaint, setSidebarPaint] = useState(false)
+  useEffect(() => {
+    if (!listPainted || sidebarPaint) return
+    let cancelled = false
+    const show = () => {
+      if (!cancelled) setSidebarPaint(true)
+    }
+    const ric = window.requestIdleCallback
+    if (typeof ric === 'function') {
+      const idleId = ric(show, { timeout: 240 })
+      return () => {
+        cancelled = true
+        window.cancelIdleCallback(idleId)
+      }
+    }
+    const timer = window.setTimeout(show, 240)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [listPainted, sidebarPaint])
+  if (!sidebarPaint) return null
+  return <DataSidebar {...props} />
+}
 
 function ShareButton(props: ComponentProps<typeof LazyShareButton>) {
   return <Suspense fallback={null}><LazyShareButton {...props} /></Suspense>
@@ -703,7 +732,6 @@ export function CollectionBrowser({
   const reloadInflightRef = useRef<{ key: string; promise: Promise<boolean> } | null>(null)
   const listReadySent = useRef(false)
   const [listPainted, setListPainted] = useState(false)
-  const [sidebarPaint, setSidebarPaint] = useState(false)
   const [pickMode, setPickMode] = useState(false)
   const confirmedCreates = useRef(new Set<string>())
   const hydratePath = useRef('')
@@ -1085,7 +1113,6 @@ export function CollectionBrowser({
     hydratePath.current = ''
     listReadySent.current = false
     setListPainted(false)
-    setSidebarPaint(false)
     loadedIdentityRef.current = ''
     loadedPagesRef.current = {}
     resetPaintedListReady()
@@ -1222,34 +1249,6 @@ export function CollectionBrowser({
     if (routeRecordId) return
     void reloadRef.current()
   }, [reloadKey, routeRecordId])
-
-  useEffect(() => {
-    if (nested) return
-    let cancelled = false
-    const show = () => {
-      if (!cancelled) setSidebarPaint(true)
-    }
-    if (listPainted) {
-      const ric = window.requestIdleCallback
-      if (typeof ric === 'function') {
-        const idleId = ric(show, { timeout: 240 })
-        return () => {
-          cancelled = true
-          window.cancelIdleCallback(idleId)
-        }
-      }
-      const timer = window.setTimeout(show, 0)
-      return () => {
-        cancelled = true
-        window.clearTimeout(timer)
-      }
-    }
-    const timer = window.setTimeout(show, 1200)
-    return () => {
-      cancelled = true
-      window.clearTimeout(timer)
-    }
-  }, [listPainted, nested])
 
   useLayoutEffect(() => {
     setOpenDetailId(routeRecordId)
@@ -1506,7 +1505,9 @@ export function CollectionBrowser({
   const tableStageRef = useRef<HTMLDivElement>(null)
   const checkStackRef = useRef<HTMLDivElement>(null)
   const checkHoverRef = useRef<string | 'head' | null>(null)
-  const [tableScroll, setTableScroll] = useState({ top: 0, height: 0 })
+  const [tableScroll, setTableScroll] = useState({ top: 0, height: TABLE_WINDOW_VIEWPORT_FALLBACK })
+  const tablePaintCountRef = useRef(0)
+  const wrapCellsRef = useRef(false)
   const tableWindow = useMemo(
     () =>
       tableWindowSlice(
@@ -1517,6 +1518,8 @@ export function CollectionBrowser({
       ),
     [tablePaintNodes.length, tableScroll.height, tableScroll.top, wrapCells],
   )
+  tablePaintCountRef.current = tablePaintNodes.length
+  wrapCellsRef.current = wrapCells
 
   useEffect(() => {
     if (!grouping) return
@@ -1584,7 +1587,12 @@ export function CollectionBrowser({
     const sync = () => {
       const top = wrap.scrollTop
       const height = wrap.clientHeight
-      setTableScroll((prev) => (prev.top === top && prev.height === height ? prev : { top, height }))
+      const rowPx = wrapCellsRef.current ? TABLE_WRAP_ROW_PX : TABLE_ROW_PX
+      const count = tablePaintCountRef.current
+      setTableScroll((prev) => {
+        const next = { top, height: height || prev.height }
+        return tableWindowUnchanged(count, prev, next, rowPx) ? prev : next
+      })
     }
     const onScroll = () => {
       if (raf) return
@@ -1608,7 +1616,11 @@ export function CollectionBrowser({
     const wrap = tableWrapRef.current
     if (!wrap) return
     wrap.scrollTop = 0
-    setTableScroll((prev) => ({ top: 0, height: wrap.clientHeight || prev.height }))
+    setTableScroll((prev) => {
+      const next = { top: 0, height: wrap.clientHeight || prev.height }
+      const rowPx = wrapCellsRef.current ? TABLE_WRAP_ROW_PX : TABLE_ROW_PX
+      return tableWindowUnchanged(tablePaintCountRef.current, prev, next, rowPx) ? prev : next
+    })
   }, [activeViewId, collectionPath, groupBy, page, pageSize, query])
 
   const listedSelected = detailId ? items.find((item) => item.id === detailId) : undefined
@@ -2466,7 +2478,7 @@ export function CollectionBrowser({
           <DefaultCell
             field={field}
             fieldKey={key}
-            records={items}
+            records={isRecordLinkField(field, key) ? items : undefined}
             collectionPath={collectionPath}
             labelField={schema?.labelField}
             value={readFacetFlatValue(row, key, facetSourceKey(schema))}
@@ -2485,7 +2497,7 @@ export function CollectionBrowser({
         <DefaultCell
           field={field}
           fieldKey={key}
-          records={items}
+          records={isRecordLinkField(field, key) ? items : undefined}
           collectionPath={collectionPath}
           labelField={schema?.labelField}
           value={row[key]}
@@ -3129,9 +3141,10 @@ export function CollectionBrowser({
       data-testid={embed ? 'inspector-database' : sheet ? 'fsdb-collect-sheet' : undefined}
       data-list-ready={listPainted ? '1' : undefined}
     >
-      {!nested && sidebarPaint ? (
+      {!nested ? (
         <Suspense fallback={null}>
-        <DataSidebar
+        <IdleDataSidebar
+          listPainted={listPainted}
           tables={tables}
           collectionPath={collectionPath}
           title={title}
