@@ -366,7 +366,121 @@ test('web-only plugin opens without host.js', async () => {
     )
     assert.equal(listed.codeVersion, await hashInstalledPluginCode(join(dir, '.plugin', 'store-banner')))
     await assert.rejects(() => store.readInstalledFile('store-banner', 'host.js'))
+    assert.match(await store.readInstalledFile('store-banner', 'web.js'), /store-banner-web/)
   } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('local host serves web.js for a loaded plugin that store.json did not enable', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'plugin-loaded-web-'))
+  const previous = process.env.BIU_ONLINE
+  delete process.env.BIU_ONLINE
+  try {
+    const ctx = new Context()
+    stubHub(ctx)
+    const loaded = new Set(['page-algorithm'])
+    ;(ctx as unknown as { get(name: string): unknown }).get = (name: string) =>
+      name === 'account'
+        ? {
+            store: {
+              loadedPluginIds: () => [...loaded],
+              canAccessPlugin: () => false,
+            },
+          }
+        : undefined
+    const store = new PluginStoreService(ctx, join(dir, '.plugin'), join(dir, 'store.json'), join(dir, '.plugin-dev')).open()
+    await store.initSandbox({
+      id: 'page-algorithm',
+      name: '算法题卡片',
+      headless: true,
+      webJs: `export const name = 'page-algorithm'\nexport function apply() {}\n`,
+    })
+    await store.pack('page-algorithm')
+    assert.equal((await store.list()).find((row) => row.id === 'page-algorithm')?.enabled, false)
+    assert.match(await store.readInstalledFile('page-algorithm', 'web.js'), /page-algorithm/)
+    loaded.delete('page-algorithm')
+    await assert.rejects(() => store.readInstalledFile('page-algorithm', 'web.js'), /not found/)
+  } finally {
+    if (previous === undefined) delete process.env.BIU_ONLINE
+    else process.env.BIU_ONLINE = previous
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('local host serves web.js when this account loaded the plugin', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'plugin-account-web-'))
+  const previous = process.env.BIU_ONLINE
+  delete process.env.BIU_ONLINE
+  try {
+    const ctx = new Context()
+    stubHub(ctx)
+    ;(ctx as unknown as { get(name: string): unknown }).get = (name: string) =>
+      name === 'account'
+        ? {
+            store: {
+              loadedPluginIds: () => [],
+              canAccessPlugin: (accountId: string, workspaceId: string, pluginId: string) =>
+                accountId === 'ada' && workspaceId === 'ws_local' && pluginId === 'page-html-blocks',
+            },
+          }
+        : undefined
+    const store = new PluginStoreService(ctx, join(dir, '.plugin'), join(dir, 'store.json'), join(dir, '.plugin-dev')).open()
+    await store.initSandbox({
+      id: 'page-html-blocks',
+      name: 'HTML 块',
+      headless: true,
+      webJs: `export const name = 'page-html-blocks'\nexport function apply() {}\n`,
+    })
+    await store.pack('page-html-blocks')
+    const body = await runWithAccount('ada', () =>
+      runWithRequestWorkspace('ws_local', () => store.readInstalledFile('page-html-blocks', 'web.js')),
+    )
+    assert.match(body, /page-html-blocks/)
+    await assert.rejects(
+      () => runWithAccount('bob', () => runWithRequestWorkspace('ws_local', () => store.readInstalledFile('page-html-blocks', 'web.js'))),
+      /not found/,
+    )
+  } finally {
+    if (previous === undefined) delete process.env.BIU_ONLINE
+    else process.env.BIU_ONLINE = previous
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('online host still hides plugin files without this workspace load', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'plugin-online-web-'))
+  const previous = process.env.BIU_ONLINE
+  delete process.env.BIU_ONLINE
+  try {
+    const ctx = new Context()
+    stubHub(ctx)
+    ;(ctx as unknown as { get(name: string): unknown }).get = (name: string) =>
+      name === 'account'
+        ? {
+            store: {
+              isMember: () => true,
+              loadedPluginIds: () => ['page-algorithm'],
+              canAccessPlugin: () => false,
+            },
+          }
+        : undefined
+    const store = new PluginStoreService(ctx, join(dir, '.plugin'), join(dir, 'store.json'), join(dir, '.plugin-dev')).open()
+    await store.initSandbox({
+      id: 'page-algorithm',
+      name: '算法题卡片',
+      headless: true,
+      webJs: `export const name = 'page-algorithm'\nexport function apply() {}\n`,
+    })
+    await store.pack('page-algorithm')
+    process.env.BIU_ONLINE = '1'
+    await assert.rejects(
+      () => runWithAccount('ada', () => runWithRequestWorkspace('ws_cloud', () => store.readInstalledFile('page-algorithm', 'web.js'))),
+      /not found/,
+    )
+  } finally {
+    if (previous === undefined) delete process.env.BIU_ONLINE
+    else process.env.BIU_ONLINE = previous
     await rm(dir, { recursive: true, force: true })
   }
 })
