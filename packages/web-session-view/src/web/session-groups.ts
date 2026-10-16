@@ -69,6 +69,16 @@ export function groupSessionsByProject(sessions: SessionListItem[]): SessionSide
     group.sessions.push(item)
   }
 
+  if (!map.has(UNGROUPED_PROJECT_KEY)) {
+    map.set(UNGROUPED_PROJECT_KEY, {
+      key: UNGROUPED_PROJECT_KEY,
+      label: '未分组',
+      sessions: [],
+      updatedAt: 0,
+      kind: 'ungrouped',
+    })
+  }
+
   const groups = [...map.values()]
   for (const group of groups) sortGroupSessions(group)
   groups.sort((a, b) => {
@@ -147,7 +157,7 @@ export interface SidebarSection {
 /**
  * 两板块并存：收藏 / (项目|标签)，自上而下。
  * - 收藏区：所有 pinned 会话（直接携带，不嵌套分组）；无则省去该 section。
- * - 数据分组区：按 groupBy 决定——'project' 按绑定 folder path 分组（未绑定归「未分组」）；
+ * - 数据分组区：按 groupBy 决定——'project' 按绑定 folder path 分组（未绑定归「未分组」，没有会话也保留这一组）；
  *   'tag' 按 tag 分组（一条会话可出现在多个标签下，无标签归「未标签」）。
  */
 export function buildSidebarSections(

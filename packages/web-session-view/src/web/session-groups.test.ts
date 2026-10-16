@@ -62,6 +62,20 @@ test('groupSessionsByProject groups by path and puts bare chats in Ungrouped', (
   )
 })
 
+test('project sidebar keeps an empty ungrouped row so a chat can be added without a project', () => {
+  const onlyProjects = groupSessionsByProject([
+    item({ id: 'a', updatedAt: 2, project: { name: 'alpha', path: '/tmp/alpha', boundAt: 1 } }),
+  ])
+  assert.equal(onlyProjects.at(-1)?.key, UNGROUPED_PROJECT_KEY)
+  assert.equal(onlyProjects.at(-1)?.label, '未分组')
+  assert.deepEqual(onlyProjects.at(-1)?.sessions, [])
+
+  const none = groupSessionsByProject([])
+  assert.equal(none.length, 1)
+  assert.equal(none[0]?.key, UNGROUPED_PROJECT_KEY)
+  assert.deepEqual(none[0]?.sessions, [])
+})
+
 test('sidebar order follows the latest user or assistant message, not later tool saves', () => {
   const groups = groupSessionsByProject([
     item({ id: 'tooling', title: '工具中', updatedAt: 90, lastMessageAt: 10 }),
