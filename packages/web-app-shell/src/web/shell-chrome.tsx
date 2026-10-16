@@ -2108,8 +2108,6 @@ function noticeKindLabel(kind?: string) {
   return ''
 }
 
-const NOTICES_PULL_IDLE_MS = 2800
-
 function NoticeBell({
   open,
   onOpenChange,
@@ -2145,32 +2143,27 @@ function NoticeBell({
       .catch(() => setRows([]))
   }, [])
 
+  const pulled = useRef(false)
   useEffect(() => {
-    let idle = 0
-    const startIdle = () => {
-      window.clearTimeout(idle)
-      idle = window.setTimeout(load, 800)
-    }
-    idle = window.setTimeout(load, NOTICES_PULL_IDLE_MS)
-    window.addEventListener('fsdb:list-ready', startIdle)
+    if (!open) return
+    pulled.current = true
+    load()
+  }, [load, open])
+
+  useEffect(() => {
     let timer = 0
     const onChange = (event: Event) => {
+      if (!pulled.current) return
       if ((event as CustomEvent<{ views?: boolean }>).detail?.views) return
       window.clearTimeout(timer)
       timer = window.setTimeout(load, 8000)
     }
     window.addEventListener('fsdb:change', onChange)
     return () => {
-      window.clearTimeout(idle)
       window.clearTimeout(timer)
-      window.removeEventListener('fsdb:list-ready', startIdle)
       window.removeEventListener('fsdb:change', onChange)
     }
   }, [load])
-
-  useEffect(() => {
-    if (open) load()
-  }, [load, open])
 
   const unread = rows.filter((row) => row.read !== true && !noticeIsForSession(row, looking))
   const inbox = rows.filter((row) => row.read !== true)

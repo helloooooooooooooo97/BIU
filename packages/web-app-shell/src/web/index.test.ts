@@ -75,6 +75,8 @@ test('center stage keeps modules mounted without a page fade', () => {
   assert.match(shell, /sidebarCollapsedRef\.current/)
   assert.match(shell, /paintColumnDrag/)
   assert.doesNotMatch(shell, /if \(moduleId !== activeId\) return null/)
+  assert.match(shell, /visited.current.add\(activeId\)/)
+  assert.match(shell, /!visited.current.has\(moduleId\)/)
   assert.match(css, /\.app-stage-pane\.is-active[\s\S]*?opacity:\s*1/)
   assert.match(css, /\.app-stage-pane[\s\S]*?content-visibility:\s*hidden/)
   assert.doesNotMatch(css, /\.app-stage-pane\s*\{[^}]*transition:\s*[\s\S]*opacity 220ms/s)

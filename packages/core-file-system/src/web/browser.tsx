@@ -1,4 +1,4 @@
-import { Fragment, lazy, Suspense, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { Fragment, lazy, Suspense, type ComponentProps, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import {
   ArrowPathIcon,
   ArrowsPointingOutIcon,
@@ -94,7 +94,7 @@ import {
   visibleActions,
   placedActions,
 } from './fsdb-cells.tsx'
-import { ShareButton, SharePanel, ShareRoleDetail, ShareScopeDetail, ShareScopeLabel } from './share-popover.tsx'
+import { ShareScopeLabel } from './share-scope-label.tsx'
 import { ensureFsdbStyle } from './fsdb-style.ts'
 import { workspaceColumnsForLocation } from './workspace-columns.ts'
 import { PageBanner } from './page-banner.tsx'
@@ -164,6 +164,23 @@ const CellPopDraft = lazy(() => import('./cell-pop-draft.tsx').then((m) => ({ de
 const RecordDetail = lazy(() => import('./record-detail.tsx').then((m) => ({ default: m.RecordDetail })))
 const ColumnOrderMenu = lazy(() => import('./column-order-menu.tsx').then((m) => ({ default: m.ColumnOrderMenu })))
 const RecordEmojiBoard = lazy(() => import('@biu/public-ui/emoji-board').then((m) => ({ default: m.RecordEmojiBoard })))
+const LazyShareButton = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.ShareButton })))
+const LazySharePanel = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.SharePanel })))
+const LazyShareRoleDetail = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.ShareRoleDetail })))
+const LazyShareScopeDetail = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.ShareScopeDetail })))
+
+function ShareButton(props: ComponentProps<typeof LazyShareButton>) {
+  return <Suspense fallback={null}><LazyShareButton {...props} /></Suspense>
+}
+function SharePanel(props: ComponentProps<typeof LazySharePanel>) {
+  return <Suspense fallback={null}><LazySharePanel {...props} /></Suspense>
+}
+function ShareRoleDetail(props: ComponentProps<typeof LazyShareRoleDetail>) {
+  return <Suspense fallback={null}><LazyShareRoleDetail {...props} /></Suspense>
+}
+function ShareScopeDetail(props: ComponentProps<typeof LazyShareScopeDetail>) {
+  return <Suspense fallback={null}><LazyShareScopeDetail {...props} /></Suspense>
+}
 
 const EMPTY_VIEWS: CollectionViewType[] = []
 const EMPTY_ROW_VIEWS: CollectionRowViewType[] = []

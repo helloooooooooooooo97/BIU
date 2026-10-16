@@ -36,7 +36,7 @@ import {
   moduleIdFromPath,
   type AppModulesService,
 } from '@biu/web-app-modules'
-import { ChatSidebar } from './chat-sidebar.tsx'
+const ChatSidebar = lazy(() => import('./chat-sidebar.tsx').then((m) => ({ default: m.ChatSidebar })))
 import { ShellSidebarFrame } from './shell-sidebar-frame.tsx'
 import { ChatSessionTitle } from './chat-session-title.tsx'
 import { BrandCornerMascot, DanceStage } from '@biu/public-mascot'
@@ -214,6 +214,8 @@ const PluginModuleStage = memo(function PluginModuleStage({
   activeId: string
   renderSlot: SlotProps['renderSlot']
 }) {
+  const visited = useRef(new Set<string>())
+  if (activeId) visited.current.add(activeId)
   const entries = useSlotEntries(slots, 'app-modules')
   const sorted = [...entries].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
   return (
@@ -222,6 +224,7 @@ const PluginModuleStage = memo(function PluginModuleStage({
         const extra = entry.props?.() ?? {}
         const moduleId = String(extra.moduleId ?? extra.id ?? entry.id)
         const active = moduleId === activeId
+        if (!active && !visited.current.has(moduleId)) return null
         const Component = entry.Component
         return (
           <div
@@ -508,6 +511,8 @@ function Shell(props: SlotProps) {
   const routeSessionId = appRoute.kind === 'session' ? appRoute.sessionId : null
   const agentHref = sessionId ? `/s/${sessionId}` : '/'
   const showChatSidebar = activeModule === 'agent'
+  const visitedChatSidebar = useRef(false)
+  if (showChatSidebar) visitedChatSidebar.current = true
   const sidebarCol = sidebarCollapsed ? 0 : sidebarWidth
   const sidebarNarrow = sidebarWidth < SIDEBAR_LABEL_AT
   const sidebarShowTags = sidebarWidth >= SIDEBAR_TAG_AT
@@ -812,15 +817,19 @@ function Shell(props: SlotProps) {
               aria-hidden={!showChatSidebar}
               inert={!showChatSidebar || undefined}
             >
-              <ChatSidebar
-                embedded
-                visible
-                narrow={sidebarNarrow}
-                showTags={sidebarShowTags}
-                routeSessionId={routeSessionId}
-                useSessionView={useSessionView}
-                sessionView={sessionView}
-              />
+              {showChatSidebar || visitedChatSidebar.current ? (
+                <Suspense fallback={null}>
+                  <ChatSidebar
+                    embedded
+                    visible
+                    narrow={sidebarNarrow}
+                    showTags={sidebarShowTags}
+                    routeSessionId={routeSessionId}
+                    useSessionView={useSessionView}
+                    sessionView={sessionView}
+                  />
+                </Suspense>
+              ) : null}
             </div>
             <div
               id="shell-module-sidebar"

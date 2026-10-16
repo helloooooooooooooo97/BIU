@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowPathIcon, CheckIcon, EyeIcon, LinkIcon, PencilSquareIcon, ShareIcon, ShieldCheckIcon, UserIcon, UsersIcon, XMarkIcon } from '@heroicons/react/16/solid'
+import { ArrowPathIcon, CheckIcon, EyeIcon, LinkIcon, PencilSquareIcon, ShareIcon, ShieldCheckIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import { HeadlessDismiss } from '@biu/public-ui/headless-dismiss'
 import { listCollection, readJson } from './db-client.ts'
+import { ScopeMark, ShareScopeLabel, scopeText } from './share-scope-label.tsx'
+
+export { ShareScopeLabel } from './share-scope-label.tsx'
 import { mintSharePin, shareClipboardText, type ShareResourceStats } from '../share-resources.ts'
 import { builtinAllView, builtinMemberViews, isBuiltinAllViewId, parseBuiltinScopeViewId, scopedCollectionName } from '../catalog-views.ts'
 import { recordMatchesSharedView, resolveSharedView } from '../share-view-match.ts'
@@ -598,12 +601,6 @@ function viewRows(items: DbRecord[]) {
   })
 }
 
-function scopeText(scope: string) {
-  if (scope === 'shared') return '共享'
-  if (scope === 'workspace') return '空间'
-  return '私人'
-}
-
 function accessText(role: string) {
   if (role === '管理' || role === '编辑' || role === '阅读') return role
   if (role === 'owner' || role === 'manager') return '管理'
@@ -625,25 +622,6 @@ function AccessMark({ role }: { role: string }) {
       ? <PencilSquareIcon aria-hidden className="size-[14px]" />
       : <EyeIcon aria-hidden className="size-[14px]" />
   return <>{icon}{text}</>
-}
-
-function ScopeMark({ scope }: { scope: string }) {
-  const text = scope === '私人' || scope === '空间' || scope === '共享' ? scope : scopeText(scope)
-  const icon = text === '空间'
-    ? <UsersIcon aria-hidden className="size-[14px]" />
-    : text === '共享'
-      ? <ShareIcon aria-hidden className="size-[14px]" />
-      : <UserIcon aria-hidden className="size-[14px]" />
-  return <>{icon}{text}</>
-}
-
-/** 表格里只画归属标签，点开详情再拉协作者。 */
-export function ShareScopeLabel({ label }: { label: string }) {
-  return (
-    <span className="fsdb-scope-chip">
-      <ScopeMark scope={label} />
-    </span>
-  )
 }
 
 /** 分享属性标签。归属看条目自己的协作者；点开后看直接授权和从视图继承来的权限。 */
