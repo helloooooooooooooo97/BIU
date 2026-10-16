@@ -96,7 +96,7 @@ import { ShareScopeLabel } from './share-scope-label.tsx'
 import { ensureFsdbStyle } from './fsdb-style.ts'
 import { workspaceColumnsForLocation } from './workspace-columns.ts'
 import { PageBanner } from './page-banner.tsx'
-import { TableGlyph, ViewModeGlyph } from './nav-glyphs.tsx'
+import { TableGlyph, ViewModeGlyph, idleTableIconKind } from './nav-glyphs.tsx'
 import { isIndexCollection, isSystemCollection } from './database-path.ts'
 import { countFittingViewTabs, splitVisibleViews } from './view-tabs.ts'
 import { getDatabaseUi } from './database-ui.ts'
@@ -387,9 +387,14 @@ function RecordTitle({
   }
   const tree = openDetail && treeOn
   if (!toolsLive && !tree) {
+    const emoji = recordPreviewEmoji(row)
     return (
       <span className="fsdb-title-host" onMouseEnter={armTools}>
-        <RecordMark record={row} tableIcon={tableIcon} />
+        {emoji ? (
+          <span className="fsdb-record-emoji">{emoji}</span>
+        ) : (
+          <span className="fsdb-record-mark is-sm" data-icon={idleTableIconKind(tableIcon)} aria-hidden />
+        )}
         <span className="fsdb-title-text">{label}</span>
       </span>
     )
@@ -3099,7 +3104,10 @@ export function CollectionBrowser({
   }
 
   function paintTableCell(row: DbRecord, key: string, field: FieldSpec) {
-    if (key === 'shareScope' || key === 'shareRole') return renderCell(row, key, field, 'table')
+    if (key === 'shareScope' || key === 'shareRole') {
+      const text = cellValueText(row, key, field) || String(row[key] ?? '')
+      return text ? <span>{text}</span> : null
+    }
     const kind = resolveFieldType(field)
     if (
       kind === 'boolean' ||
@@ -3113,6 +3121,7 @@ export function CollectionBrowser({
       return renderCell(row, key, field, 'table')
     }
     if (parseFacetFlatColumnKey(key) || isRecordLinkField(field, key) || chrome?.cells?.[key]) {
+      if (key === 'usage' && !(Number(row[key]) > 0)) return <span className="traj-usage-empty">—</span>
       return renderCell(row, key, field, 'table')
     }
     const text = cellValueText(row, key, field)
