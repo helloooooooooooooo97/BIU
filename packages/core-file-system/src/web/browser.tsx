@@ -130,7 +130,7 @@ import { ViewPaneMenu } from './pane-more-menu.tsx'
 import { HttpError, listCollection, readJson } from './db-client.ts'
 import { savedViewRecordPath } from '../paths.ts'
 import { findViewNeighbor, indexOnPage } from './view-adjacent.ts'
-import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, TABLE_WINDOW_VIEWPORT_FALLBACK, TABLE_COL_VIEWPORT_FALLBACK, tableColumnEstimate, tableColumnFit, tableColumnSlice, tableColumnUnchanged, tableWindowSlice, tableWindowUnchanged } from './table-window.ts'
+import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, TABLE_WINDOW_VIEWPORT_FALLBACK, TABLE_COL_VIEWPORT_FALLBACK, tableColumnEstimate, tableColumnFit, tableColumnSlice, tableColumnUnchanged, tableWindowSlice, tableWindowUnchanged, type TableColumnSlice } from './table-window.ts'
 import {
   idleBoolInnerHtml,
   idleEmptyUsageInnerHtml,
@@ -755,6 +755,7 @@ type TableBodyProps = {
   colKeys: string
   error: string
   pickMode: boolean
+  activeRowId: string | null
 }
 
 const TableBody = memo(function TableBody({
@@ -779,6 +780,252 @@ const TableBody = memo(function TableBody({
       {nodes.slice(start, end).map((node) => bag.renderNode(node))}
       {padRow(padBottom, 'bottom')}
     </tbody>
+  )
+})
+
+function windowedColumnsOf<T>(columns: T[], colWindow: TableColumnSlice) {
+  const next = columns.slice(0, colWindow.pin)
+  for (let i = colWindow.start; i < colWindow.end; i += 1) next.push(columns[i]!)
+  return next
+}
+
+function padColBox(px: number) {
+  const v = `${Math.max(0, Math.round(px))}px`
+  return { width: v, minWidth: v, maxWidth: v }
+}
+
+const EMPTY_COL_WINDOW: TableColumnSlice = { pin: 0, start: 0, end: 0, padLeft: 0, padRight: 0 }
+
+type TableChromeBag = {
+  paintHeadTh: (col: { key: string }) => ReactNode
+  onPointerDown: ComponentProps<'table'>['onPointerDown']
+  onPointerMove: ComponentProps<'table'>['onPointerMove']
+  onClick: (event: { target: EventTarget | null; currentTarget: EventTarget; clientX: number; clientY: number }) => void
+  onMouseOver: ComponentProps<'table'>['onMouseOver']
+}
+
+type WindowedTableProps = {
+  columns: { key: string }[]
+  columnWidths: Record<string, number>
+  columnPinCount: number
+  wrapCells: boolean
+  truncateCells: boolean
+  resizingCol: string | null
+  nodes: TablePaintNode[]
+  error: string
+  pickMode: boolean
+  resetKey: string
+  forceLiveChecks: boolean
+  checkLayoutExtra: string
+  paintRef: RefObject<TablePaintBag>
+  chromeRef: RefObject<TableChromeBag>
+  colWindowRef: RefObject<TableColumnSlice>
+  tableRef: RefObject<HTMLTableElement | null>
+  wrapRef: RefObject<HTMLDivElement | null>
+  stageRef: RefObject<HTMLDivElement | null>
+  checkStackRef: RefObject<HTMLDivElement | null>
+  checkHoverRef: RefObject<string | 'head' | null>
+  paintCheckHover: (next: string | 'head' | null, force?: boolean) => void
+  renderCheckHead: () => ReactNode
+  renderCheckRow: (id: string) => ReactNode
+  onVisibleRange?: (start: number, end: number) => void
+  activeRowId: string | null
+}
+
+const WindowedTable = memo(function WindowedTable({
+  columns,
+  columnWidths,
+  columnPinCount,
+  wrapCells,
+  truncateCells,
+  resizingCol,
+  nodes,
+  error,
+  pickMode,
+  resetKey,
+  forceLiveChecks,
+  checkLayoutExtra,
+  paintRef,
+  chromeRef,
+  colWindowRef,
+  tableRef,
+  wrapRef,
+  stageRef,
+  checkStackRef,
+  checkHoverRef,
+  paintCheckHover,
+  renderCheckHead,
+  renderCheckRow,
+  onVisibleRange,
+  activeRowId,
+}: WindowedTableProps) {
+  const [tableScroll, setTableScroll] = useState({
+    top: 0,
+    height: TABLE_WINDOW_VIEWPORT_FALLBACK,
+    left: 0,
+    width: TABLE_COL_VIEWPORT_FALLBACK,
+  })
+  const paintCountRef = useRef(0)
+  const wrapCellsRef = useRef(false)
+  const columnMetaRef = useRef({ count: 0, pin: 0, widths: [] as number[] })
+  const columnPx = useMemo(
+    () =>
+      tableColumnFit(
+        columns.map((col, index) => tableColumnEstimate(col.key, columnWidths[col.key], index < columnPinCount)),
+        tableScroll.width,
+      ),
+    [columnPinCount, columnWidths, columns, tableScroll.width],
+  )
+  const colWindow = useMemo(
+    () => tableColumnSlice(columns.length, columnPinCount, tableScroll.left, tableScroll.width, columnPx),
+    [columnPinCount, columnPx, columns.length, tableScroll.left, tableScroll.width],
+  )
+  columnMetaRef.current = { count: columns.length, pin: columnPinCount, widths: columnPx }
+  colWindowRef.current = colWindow
+  const windowedColumns = useMemo(() => windowedColumnsOf(columns, colWindow), [colWindow, columns])
+  const tableColSpan = Math.max(
+    windowedColumns.length + (colWindow.padLeft > 0 ? 1 : 0) + (colWindow.padRight > 0 ? 1 : 0),
+    1,
+  )
+  const paintedTablePx = useMemo(() => {
+    let sum = Math.max(0, colWindow.padLeft) + Math.max(0, colWindow.padRight)
+    for (let i = 0; i < colWindow.pin; i += 1) sum += columnPx[i] || 0
+    for (let i = colWindow.start; i < colWindow.end; i += 1) sum += columnPx[i] || 0
+    return Math.max(sum, 1)
+  }, [colWindow.end, colWindow.padLeft, colWindow.padRight, colWindow.pin, colWindow.start, columnPx])
+  const tableWindow = useMemo(
+    () =>
+      tableWindowSlice(
+        nodes.length,
+        tableScroll.top,
+        tableScroll.height,
+        wrapCells ? TABLE_WRAP_ROW_PX : TABLE_ROW_PX,
+      ),
+    [nodes.length, tableScroll.height, tableScroll.top, wrapCells],
+  )
+  paintCountRef.current = nodes.length
+  wrapCellsRef.current = wrapCells
+  paintRef.current.colSpan = tableColSpan
+
+  useEffect(() => {
+    onVisibleRange?.(tableWindow.start, tableWindow.end)
+  }, [onVisibleRange, tableWindow.end, tableWindow.start])
+
+  useEffect(() => {
+    const wrap = wrapRef.current
+    if (!wrap) return
+    let raf = 0
+    const sync = () => {
+      const top = wrap.scrollTop
+      const height = wrap.clientHeight
+      const left = wrap.scrollLeft
+      const width = wrap.clientWidth
+      const rowPx = wrapCellsRef.current ? TABLE_WRAP_ROW_PX : TABLE_ROW_PX
+      const count = paintCountRef.current
+      const cols = columnMetaRef.current
+      setTableScroll((prev) => {
+        const next = {
+          top,
+          height: height || prev.height,
+          left,
+          width: width || prev.width,
+        }
+        const rowSame = tableWindowUnchanged(count, prev, next, rowPx)
+        const colSame = tableColumnUnchanged(cols.count, cols.pin, prev, next, cols.widths)
+        return rowSame && colSame ? prev : next
+      })
+    }
+    const onScroll = () => {
+      if (raf) return
+      raf = requestAnimationFrame(() => {
+        raf = 0
+        sync()
+      })
+    }
+    wrap.addEventListener('scroll', onScroll, { passive: true })
+    const ro = new ResizeObserver(onScroll)
+    ro.observe(wrap)
+    return () => {
+      cancelAnimationFrame(raf)
+      wrap.removeEventListener('scroll', onScroll)
+      ro.disconnect()
+    }
+  }, [wrapRef])
+
+  useLayoutEffect(() => {
+    const wrap = wrapRef.current
+    if (!wrap) return
+    if (wrap.scrollTop) wrap.scrollTop = 0
+    setTableScroll((prev) => (prev.top === 0 ? prev : { ...prev, top: 0 }))
+  }, [resetKey, wrapRef])
+
+  const checkLayoutKey = [
+    tableWindow.start, tableWindow.end, tableWindow.padTop, tableWindow.padBottom,
+    colWindow.start, colWindow.end, colWindow.padLeft, colWindow.padRight,
+    wrapCells ? 1 : 0,
+    truncateCells ? 1 : 0,
+    columns.length,
+    checkLayoutExtra,
+  ].join('\0')
+  const chrome = chromeRef.current
+  const paintedColStyle = (index: number) => colWidthStyle(columnPx[index]) ?? padColBox(columnPx[index] || 72)
+
+  return (
+    <div className="tasks-table-stage" ref={stageRef} onMouseLeave={() => paintCheckHover(null)}>
+      <TableCheckRail
+        tableRef={tableRef}
+        stackRef={checkStackRef}
+        stageRef={stageRef}
+        hoverRef={checkHoverRef}
+        layoutKey={checkLayoutKey}
+        forceLive={forceLiveChecks}
+        paintCheckHover={paintCheckHover}
+        renderHead={renderCheckHead}
+        renderRow={renderCheckRow}
+      />
+      <table
+        ref={tableRef}
+        className={`tasks-table${wrapCells ? ' is-wrap' : ''} is-cols-fixed${truncateCells ? ' is-truncate' : ''}${resizingCol ? ' is-col-resize' : ''}`}
+        style={{ width: `${paintedTablePx}px`, minWidth: `${paintedTablePx}px`, maxWidth: `${paintedTablePx}px` }}
+        onPointerDown={chrome.onPointerDown}
+        onPointerMove={chrome.onPointerMove}
+        onClick={chrome.onClick}
+        onMouseOver={chrome.onMouseOver}
+      >
+        <colgroup>
+          {columns.slice(0, colWindow.pin).map((col, index) => (
+            <col key={col.key} style={paintedColStyle(index)} />
+          ))}
+          {colWindow.padLeft > 0 ? <col key="pad-left" style={padColBox(colWindow.padLeft)} /> : null}
+          {columns.slice(colWindow.start, colWindow.end).map((col, index) => (
+            <col key={col.key} style={paintedColStyle(colWindow.start + index)} />
+          ))}
+          {colWindow.padRight > 0 ? <col key="pad-right" style={padColBox(colWindow.padRight)} /> : null}
+        </colgroup>
+        <thead>
+          <tr>
+            {columns.slice(0, colWindow.pin).map((col) => chrome.paintHeadTh(col))}
+            {colWindow.padLeft > 0 ? <th key="pad-left" className="fsdb-col-pad" aria-hidden style={padColBox(colWindow.padLeft)} /> : null}
+            {columns.slice(colWindow.start, colWindow.end).map((col) => chrome.paintHeadTh(col))}
+            {colWindow.padRight > 0 ? <th key="pad-right" className="fsdb-col-pad" aria-hidden style={padColBox(colWindow.padRight)} /> : null}
+          </tr>
+        </thead>
+        <TablePaintCtx.Provider value={paintRef}>
+          <TableBody
+            nodes={nodes}
+            start={tableWindow.start}
+            end={tableWindow.end}
+            padTop={tableWindow.padTop}
+            padBottom={tableWindow.padBottom}
+            colSpan={tableColSpan}
+            colKeys={`${windowedColumns.map((col) => col.key).join('\0')}\0${colWindow.padLeft}:${colWindow.padRight}`}
+            error={error}
+            pickMode={pickMode}
+            activeRowId={activeRowId}
+          />
+        </TablePaintCtx.Provider>
+      </table>
+    </div>
   )
 })
 
@@ -1677,6 +1924,15 @@ export function CollectionBrowser({
       .filter(Boolean) as typeof allColumns
   }, [allColumns, columnKeys, rowActionColumn, schema, schemaDefaultKeys])
 
+  const colWindowRef = useRef<TableColumnSlice>(EMPTY_COL_WINDOW)
+  const tableChromeRef = useRef<TableChromeBag>({
+    paintHeadTh: () => null,
+    onPointerDown: undefined,
+    onPointerMove: undefined,
+    onClick: undefined,
+    onMouseOver: undefined,
+  })
+
   function startColResize(event: ReactPointerEvent<HTMLSpanElement>, colKey: string) {
     if (event.button !== 0) return
     event.preventDefault()
@@ -1687,8 +1943,9 @@ export function CollectionBrowser({
     const heads = Array.from(table.querySelectorAll('thead th:not(.fsdb-col-pad)'))
     const startX = event.clientX
     const snapshot: Record<string, number> = {}
-    for (let i = 0; i < windowedColumns.length; i += 1) {
-      const key = windowedColumns[i]!.key
+    const windowed = windowedColumnsOf(columns, colWindowRef.current)
+    for (let i = 0; i < windowed.length; i += 1) {
+      const key = windowed[i]!.key
       const measured = heads[i]?.getBoundingClientRect().width ?? 120
       snapshot[key] = columnWidths[key] ?? Math.round(measured)
     }
@@ -1854,62 +2111,26 @@ export function CollectionBrowser({
   const tableStageRef = useRef<HTMLDivElement>(null)
   const checkStackRef = useRef<HTMLDivElement>(null)
   const checkHoverRef = useRef<string | 'head' | null>(null)
-  const [tableScroll, setTableScroll] = useState({
-    top: 0,
-    height: TABLE_WINDOW_VIEWPORT_FALLBACK,
-    left: 0,
-    width: TABLE_COL_VIEWPORT_FALLBACK,
-  })
-  const tablePaintCountRef = useRef(0)
-  const wrapCellsRef = useRef(false)
-  const columnMetaRef = useRef({ count: 0, pin: 0, widths: [] as number[] })
   const columnPinCount = columns[0]?.key === schema?.labelField ? 1 : 0
-  const columnPx = useMemo(
-    () =>
-      tableColumnFit(
-        columns.map((col, index) => tableColumnEstimate(col.key, columnWidths[col.key], index < columnPinCount)),
-        tableScroll.width,
-      ),
-    [columnPinCount, columnWidths, columns, tableScroll.width],
-  )
-  const colWindow = useMemo(
-    () => tableColumnSlice(columns.length, columnPinCount, tableScroll.left, tableScroll.width, columnPx),
-    [columnPinCount, columnPx, columns.length, tableScroll.left, tableScroll.width],
-  )
-  columnMetaRef.current = { count: columns.length, pin: columnPinCount, widths: columnPx }
-  const windowedColumns = useMemo(() => {
-    const next = columns.slice(0, colWindow.pin)
-    for (let i = colWindow.start; i < colWindow.end; i += 1) next.push(columns[i]!)
-    return next
-  }, [colWindow.end, colWindow.pin, colWindow.start, columns])
-  const tableColSpan = Math.max(
-    windowedColumns.length + (colWindow.padLeft > 0 ? 1 : 0) + (colWindow.padRight > 0 ? 1 : 0),
-    1,
-  )
-  const paintedTablePx = useMemo(() => {
-    let sum = Math.max(0, colWindow.padLeft) + Math.max(0, colWindow.padRight)
-    for (let i = 0; i < colWindow.pin; i += 1) sum += columnPx[i] || 0
-    for (let i = colWindow.start; i < colWindow.end; i += 1) sum += columnPx[i] || 0
-    return Math.max(sum, 1)
-  }, [colWindow.end, colWindow.padLeft, colWindow.padRight, colWindow.pin, colWindow.start, columnPx])
-  const tableWindow = useMemo(
-    () =>
-      tableWindowSlice(
-        tablePaintNodes.length,
-        tableScroll.top,
-        tableScroll.height,
-        wrapCells ? TABLE_WRAP_ROW_PX : TABLE_ROW_PX,
-      ),
-    [tablePaintNodes.length, tableScroll.height, tableScroll.top, wrapCells],
-  )
-  tablePaintCountRef.current = tablePaintNodes.length
-  wrapCellsRef.current = wrapCells
+  const tableResetKey = `${activeViewId ?? ''}\0${collectionPath}\0${groupBy}\0${page}\0${pageSize}\0${query}`
+  const checkLayoutExtra = [
+    grouping ? 1 : 0,
+    page,
+    pageSize,
+    detailId ?? '',
+    pickedIds.join(','),
+    items.map((row) => row.id).join(','),
+    grouped.map((group) => `${group.key}:${group.rows.length}`).join(','),
+    JSON.stringify(collapsed),
+    JSON.stringify(collapsedGroups),
+    JSON.stringify(columnWidths),
+  ].join('\0')
 
-  useEffect(() => {
+  const onVisibleRange = useCallback((start: number, end: number) => {
     if (!grouping) return
-    const until = Math.min(tablePaintNodes.length, tableWindow.end + TABLE_WINDOW_OVERSCAN)
+    const until = Math.min(tablePaintNodes.length, end + TABLE_WINDOW_OVERSCAN)
     const needed = new Set<string>()
-    for (let i = tableWindow.start; i < until; i += 1) {
+    for (let i = start; i < until; i += 1) {
       const node = tablePaintNodes[i]
       if (!node) continue
       if (node.kind === 'group-head' || node.kind === 'group-pager') needed.add(node.groupKey)
@@ -1935,7 +2156,7 @@ export function CollectionBrowser({
       }
       return changed ? next : prev
     })
-  }, [grouped, grouping, groupPages, pageSize, tablePaintNodes, tableWindow.end, tableWindow.start])
+  }, [grouped, grouping, groupPages, pageSize, tablePaintNodes])
 
   const paintCheckHover = useCallback((next: string | 'head' | null, force = false) => {
     if (!force && checkHoverRef.current === next) return
@@ -1949,69 +2170,8 @@ export function CollectionBrowser({
     checkHoverRef.current = next
   }, [])
 
-  const checkLayoutKey = [
-    tableWindow.start, tableWindow.end, tableWindow.padTop, tableWindow.padBottom,
-    colWindow.start, colWindow.end, colWindow.padLeft, colWindow.padRight,
-    wrapCells ? 1 : 0,
-    truncateCells ? 1 : 0,
-    columns.length,
-    grouping ? 1 : 0,
-    page,
-    pageSize,
-    items.map((row) => row.id).join(','),
-    grouped.map((group) => `${group.key}:${group.rows.length}`).join(','),
-    JSON.stringify(collapsed),
-    JSON.stringify(collapsedGroups),
-    JSON.stringify(columnWidths),
-  ].join('\0')
-
-  useEffect(() => {
-    const wrap = tableWrapRef.current
-    if (!wrap) return
-    let raf = 0
-    const sync = () => {
-      const top = wrap.scrollTop
-      const height = wrap.clientHeight
-      const left = wrap.scrollLeft
-      const width = wrap.clientWidth
-      const rowPx = wrapCellsRef.current ? TABLE_WRAP_ROW_PX : TABLE_ROW_PX
-      const count = tablePaintCountRef.current
-      const cols = columnMetaRef.current
-      setTableScroll((prev) => {
-        const next = {
-          top,
-          height: height || prev.height,
-          left,
-          width: width || prev.width,
-        }
-        const rowSame = tableWindowUnchanged(count, prev, next, rowPx)
-        const colSame = tableColumnUnchanged(cols.count, cols.pin, prev, next, cols.widths)
-        return rowSame && colSame ? prev : next
-      })
-    }
-    const onScroll = () => {
-      if (raf) return
-      raf = requestAnimationFrame(() => {
-        raf = 0
-        sync()
-      })
-    }
-    wrap.addEventListener('scroll', onScroll, { passive: true })
-    const ro = new ResizeObserver(onScroll)
-    ro.observe(wrap)
-    return () => {
-      cancelAnimationFrame(raf)
-      wrap.removeEventListener('scroll', onScroll)
-      ro.disconnect()
-    }
-  }, [customView, rowView])
-
-  useLayoutEffect(() => {
-    const wrap = tableWrapRef.current
-    if (!wrap) return
-    if (wrap.scrollTop) wrap.scrollTop = 0
-    setTableScroll((prev) => (prev.top === 0 ? prev : { ...prev, top: 0 }))
-  }, [activeViewId, collectionPath, groupBy, page, pageSize, query])
+  const renderCheckHead = useCallback(() => <RowCheck ids={pickableIds} />, [pickableIds, pickedIds])
+  const renderCheckRow = useCallback((id: string) => <RowCheck id={id} />, [pickedIds])
 
   const listedSelected = detailId ? items.find((item) => item.id === detailId) : undefined
   const selected = useMemo(() => {
@@ -3190,18 +3350,9 @@ export function CollectionBrowser({
     setCellPop(cellUsesPop(kind, col.field.writable) ? { id: cell.id, key: cell.key } : null)
   }
 
-  function padColStyle(px: number) {
-    const v = `${Math.max(0, Math.round(px))}px`
-    return { width: v, minWidth: v, maxWidth: v }
-  }
-
-  function paintedColStyle(index: number) {
-    return colWidthStyle(columnPx[index]) ?? padColStyle(columnPx[index] || 72)
-  }
-
   function paintColPad(px: number, side: 'left' | 'right') {
     if (px <= 0) return null
-    return <td key={`pad-${side}`} className="fsdb-col-pad" aria-hidden style={padColStyle(px)} />
+    return <td key={`pad-${side}`} className="fsdb-col-pad" aria-hidden style={padColBox(px)} />
   }
 
   function paintHeadTh(col: (typeof columns)[number]) {
@@ -3228,6 +3379,7 @@ export function CollectionBrowser({
 
   function idlePaintedCells(row: DbRecord) {
     const cells: IdleTableTd[] = []
+    const colWindow = colWindowRef.current
     const pushCol = (col: (typeof columns)[number]) => {
       const pick = cellPickOf(row, col.key, col.field)
       const attrs = Object.keys(pick).length ? (pick as Record<string, string | number | boolean | undefined>) : undefined
@@ -3240,7 +3392,7 @@ export function CollectionBrowser({
     }
     const pushPad = (side: 'left' | 'right', px: number) => {
       if (px <= 0) return
-      cells.push({ key: '', inner: '', className: 'fsdb-col-pad', style: padColStyle(px) })
+      cells.push({ key: '', inner: '', className: 'fsdb-col-pad', style: padColBox(px) })
     }
     for (let i = 0; i < colWindow.pin; i += 1) pushCol(columns[i]!)
     pushPad('left', colWindow.padLeft)
@@ -3299,6 +3451,7 @@ export function CollectionBrowser({
 
   function tableLiveRow(row: DbRecord, depth: number, hasKids: boolean, kidCount: number, rowKey: string, toolsArmed = false) {
     const cellPick = cellPickRef.current
+    const colWindow = colWindowRef.current
     const paintLiveTd = (col: (typeof columns)[number]) => (
       <td
         key={col.key}
@@ -3376,7 +3529,7 @@ export function CollectionBrowser({
     if (!listed.length) {
       return (
         <tr key="empty">
-          <td colSpan={tableColSpan} className="fsdb-empty">
+          <td colSpan={tablePaintRef.current.colSpan} className="fsdb-empty">
             {error ? '加载失败' : '暂无记录'}
           </td>
         </tr>
@@ -3391,7 +3544,7 @@ export function CollectionBrowser({
     if (node.kind === 'group-head') {
       return (
         <tr key={node.key} className="fsdb-group-row">
-          <td colSpan={tableColSpan}>
+          <td colSpan={tablePaintRef.current.colSpan}>
             <GroupHead groupKey={node.groupKey} label={node.label} count={node.count} />
           </td>
         </tr>
@@ -3401,7 +3554,7 @@ export function CollectionBrowser({
     const pageIndex = Math.min(node.pageIndex, pages - 1)
     return (
       <tr key={node.key} className="fsdb-group-pager">
-        <td colSpan={tableColSpan}>
+        <td colSpan={tablePaintRef.current.colSpan}>
           <div className="fsdb-pager">
             <span className="fsdb-pager-meta">{node.count}</span>
             <div className="fsdb-pager-nav">
@@ -3515,9 +3668,22 @@ export function CollectionBrowser({
   ])
 
   tablePaintRef.current = {
-    colSpan: tableColSpan,
+    colSpan: tablePaintRef.current.colSpan,
     error,
     renderNode: renderPaintNode,
+  }
+  tableChromeRef.current = {
+    paintHeadTh: (col) => paintHeadTh(col as (typeof columns)[number]),
+    onPointerDown: onTablePointerDown,
+    onPointerMove: onTablePointerMove,
+    onClick: onTableClick,
+    onMouseOver: (event) => {
+      const hit = event.target as HTMLElement | null
+      const tr = hit?.closest('tr')
+      if (!tr || !event.currentTarget.contains(tr)) return
+      if (tr.closest('thead')) paintCheckHover('head')
+      else paintCheckHover(tr.dataset.recordId ?? null)
+    },
   }
 
   return (
@@ -4338,66 +4504,33 @@ export function CollectionBrowser({
                     </div>
                   </div>
                 ) : null}
-                <div className="tasks-table-stage" ref={tableStageRef} onMouseLeave={() => paintCheckHover(null)}>
-                  <TableCheckRail
-                    tableRef={tableRef}
-                    stackRef={checkStackRef}
-                    stageRef={tableStageRef}
-                    hoverRef={checkHoverRef}
-                    layoutKey={checkLayoutKey}
-                    forceLive={pickedIds.length > 0}
-                    paintCheckHover={paintCheckHover}
-                    renderHead={() => <RowCheck ids={pickableIds} />}
-                    renderRow={(id) => <RowCheck id={id} />}
-                  />
-                <table
-                  ref={tableRef}
-                  className={`tasks-table${wrapCells ? ' is-wrap' : ''} is-cols-fixed${truncateCells ? ' is-truncate' : ''}${resizingCol ? ' is-col-resize' : ''}`}
-                  style={{ width: `${paintedTablePx}px`, minWidth: `${paintedTablePx}px`, maxWidth: `${paintedTablePx}px` }}
-                  onPointerDown={onTablePointerDown}
-                  onPointerMove={onTablePointerMove}
-                  onClick={onTableClick}
-                  onMouseOver={(event) => {
-                    const hit = event.target as HTMLElement | null
-                    const tr = hit?.closest('tr')
-                    if (!tr || !event.currentTarget.contains(tr)) return
-                    if (tr.closest('thead')) paintCheckHover('head')
-                    else paintCheckHover(tr.dataset.recordId ?? null)
-                  }}
-                >
-            <colgroup>
-              {columns.slice(0, colWindow.pin).map((col, index) => (
-                <col key={col.key} style={paintedColStyle(index)} />
-              ))}
-              {colWindow.padLeft > 0 ? <col key="pad-left" style={padColStyle(colWindow.padLeft)} /> : null}
-              {columns.slice(colWindow.start, colWindow.end).map((col, index) => (
-                <col key={col.key} style={paintedColStyle(colWindow.start + index)} />
-              ))}
-              {colWindow.padRight > 0 ? <col key="pad-right" style={padColStyle(colWindow.padRight)} /> : null}
-            </colgroup>
-            <thead>
-              <tr>
-                {columns.slice(0, colWindow.pin).map(paintHeadTh)}
-                {colWindow.padLeft > 0 ? <th key="pad-left" className="fsdb-col-pad" aria-hidden style={padColStyle(colWindow.padLeft)} /> : null}
-                {columns.slice(colWindow.start, colWindow.end).map(paintHeadTh)}
-                {colWindow.padRight > 0 ? <th key="pad-right" className="fsdb-col-pad" aria-hidden style={padColStyle(colWindow.padRight)} /> : null}
-              </tr>
-            </thead>
-            <TablePaintCtx.Provider value={tablePaintRef}>
-            <TableBody
-              nodes={tablePaintNodes}
-              start={tableWindow.start}
-              end={tableWindow.end}
-              padTop={tableWindow.padTop}
-              padBottom={tableWindow.padBottom}
-              colSpan={tableColSpan}
-              colKeys={`${windowedColumns.map((col) => col.key).join('\0')}\0${colWindow.padLeft}:${colWindow.padRight}`}
-              error={error}
-              pickMode={pickMode}
-            />
-            </TablePaintCtx.Provider>
-          </table>
-                </div>
+                <WindowedTable
+                  columns={columns}
+                  columnWidths={columnWidths}
+                  columnPinCount={columnPinCount}
+                  wrapCells={wrapCells}
+                  truncateCells={truncateCells}
+                  resizingCol={resizingCol}
+                  nodes={tablePaintNodes}
+                  error={error}
+                  pickMode={pickMode}
+                  resetKey={tableResetKey}
+                  forceLiveChecks={pickedIds.length > 0}
+                  checkLayoutExtra={checkLayoutExtra}
+                  paintRef={tablePaintRef}
+                  chromeRef={tableChromeRef}
+                  colWindowRef={colWindowRef}
+                  tableRef={tableRef}
+                  wrapRef={tableWrapRef}
+                  stageRef={tableStageRef}
+                  checkStackRef={checkStackRef}
+                  checkHoverRef={checkHoverRef}
+                  paintCheckHover={paintCheckHover}
+                  renderCheckHead={renderCheckHead}
+                  renderCheckRow={renderCheckRow}
+                  onVisibleRange={onVisibleRange}
+                  activeRowId={detailId}
+                />
         </div>
             ) : null}
           </div>
