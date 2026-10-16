@@ -31,17 +31,26 @@ async function loadTablePeers(path: string, labelField?: string): Promise<Record
   return asPeers(rows, labelField ?? first.schema?.labelField)
 }
 
+const peerReads = new Map<string, Promise<RecordLinkPeer | null>>()
+
 async function readPeer(collectionPath: string, id: string, labelField?: string): Promise<RecordLinkPeer | null> {
-  try {
-    const body = await readJson<{ value?: DbRecord }>(
-      `/api/db/read?path=${encodeURIComponent(`${collectionPath}/${id}`)}`,
-    )
-    const row = body.value
-    if (!row?.id) return null
-    return { id: row.id, label: labelOf(row, labelField) }
-  } catch {
-    return null
-  }
+  const key = `${collectionPath}\0${id}\0${labelField ?? ''}`
+  const pending = peerReads.get(key)
+  if (pending) return pending
+  const request = (async () => {
+    try {
+      const body = await readJson<{ value?: DbRecord }>(
+        `/api/db/read?path=${encodeURIComponent(`${collectionPath}/${id}`)}`,
+      )
+      const row = body.value
+      if (!row?.id) return null
+      return { id: row.id, label: labelOf(row, labelField) }
+    } catch {
+      return null
+    }
+  })()
+  peerReads.set(key, request)
+  return request
 }
 
 function linkCollection(field: FieldSpec | undefined, fallback?: string) {

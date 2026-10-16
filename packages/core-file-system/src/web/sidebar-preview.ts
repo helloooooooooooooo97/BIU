@@ -1,4 +1,5 @@
 import type { CollectionSchema, DbRecord } from '@biu/type-file-system'
+import { isBuiltinBlockKindViewId, isBuiltinTagViewId } from '../catalog-views.ts'
 import type { SavedView } from './saved-view.ts'
 import { listCollection, readJson } from './db-client.ts'
 
@@ -75,6 +76,17 @@ export function subscribePreviewTotals(fn: () => void) {
 
 export function viewTotalKey(path: string, view: Pick<SavedView, 'id' | 'sortField' | 'sortDir' | 'filters' | 'query'>) {
   return previewCacheKey(path, view)
+}
+
+/** 块类型/合集内置视图很多，只给当前正在看的那一条拉总数。 */
+export function shouldFetchViewTotal(opts: {
+  path: string
+  view: Pick<SavedView, 'id'>
+  collectionPath: string
+  activeViewId?: string | null
+}) {
+  if (!isBuiltinBlockKindViewId(opts.view.id) && !isBuiltinTagViewId(opts.view.id)) return true
+  return opts.path === opts.collectionPath && opts.view.id === opts.activeViewId
 }
 
 export function orderViewTotalJobs<T extends { path: string }>(jobs: T[], collectionPath: string) {

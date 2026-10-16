@@ -47,7 +47,7 @@ export function normalizeSorts(raw: unknown, sortField = 'title', sortDir: 'asc'
       if (!field || seen.has(field)) continue
       seen.add(field)
       out.push({
-        id: String(rec.id ?? '').trim() || queryNodeId('s'),
+        id: String(rec.id ?? '').trim() || `s:${field}`,
         field,
         dir: rec.dir === 'desc' ? 'desc' : 'asc',
       })
@@ -56,7 +56,7 @@ export function normalizeSorts(raw: unknown, sortField = 'title', sortDir: 'asc'
     if (Array.isArray(raw)) return out
   }
   const field = String(sortField || 'title').trim() || 'title'
-  return [{ id: queryNodeId('s'), field, dir: sortDir === 'desc' ? 'desc' : 'asc' }]
+  return [{ id: `s:${field}`, field, dir: sortDir === 'desc' ? 'desc' : 'asc' }]
 }
 
 export function normalizeFilterGroup(raw: unknown): FilterGroup {

@@ -7,7 +7,7 @@ import type { DbRecord } from '@biu/type-file-system'
 import {
   mergeDispatchedUsageIntoNodes,
   projectNodes,
-  SESSION_LOAD_TURNS,
+  TRAJECTORY_TAIL_TURNS,
   type ChatNode,
   type SessionEvent,
   type TrajectoryUsage,
@@ -78,9 +78,12 @@ function SessionRecordChat({ record, value }: FsContentProps) {
   const [nodes, setNodes] = useState<ChatNode[]>(() => nodesFromContent(value) ?? [])
   useEffect(() => {
     const seeded = nodesFromContent(value)
-    if (seeded) setNodes(seeded)
+    if (seeded?.length) {
+      setNodes(seeded)
+      return
+    }
     const ac = new AbortController()
-    void fetch(`/api/sessions/${sessionId}?turns=${SESSION_LOAD_TURNS}`, { signal: ac.signal })
+    void fetch(`/api/sessions/${sessionId}?turns=${TRAJECTORY_TAIL_TURNS}`, { signal: ac.signal })
       .then((res) => (res.ok ? res.json() : null))
       .then((body) => {
         if (!body || !Array.isArray(body.events)) return

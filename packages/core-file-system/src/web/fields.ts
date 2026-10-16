@@ -437,10 +437,11 @@ export function recordLinkIds(field: FieldSpec | string | undefined, value: unkn
 
 export function uniqueValues(rows: DbRecord[], key: string, field: FieldSpec): string[] {
   const set = new Set<string>()
+  const kind = resolveFieldType(field)
   for (const row of rows) {
-    if (resolveFieldType(field) === 'multi-select' || resolveFieldType(field) === 'multi-ref') {
+    if (kind === 'multi-select' || kind === 'multi-ref') {
       for (const item of asStringList(row[key])) set.add(item)
-    } else if (resolveFieldType(field) === 'facet') {
+    } else if (kind === 'facet') {
       for (const item of normalizeSchemaValue(row[key]).tags) set.add(item)
     } else if (row[key] != null && row[key] !== '') {
       set.add(String(row[key]))

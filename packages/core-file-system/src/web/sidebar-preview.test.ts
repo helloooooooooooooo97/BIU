@@ -5,6 +5,7 @@ import {
   nextPreviewLimit,
   normalizeRecordEmoji,
   orderViewTotalJobs,
+  shouldFetchViewTotal,
   previewCacheKey,
   previewColumns,
   recordPreviewLabel,
@@ -53,6 +54,24 @@ test('preview pages stay small and stop at max', () => {
   assert.equal(nextPreviewLimit(20, 25), 5)
   assert.equal(nextPreviewLimit(100, 500), 0)
   assert.equal(nextPreviewLimit(25, 25), 0)
+})
+
+test('block/tag stub views only fetch a total when they are the open view', () => {
+  const block = { id: 'builtin-block:terminal' }
+  const tag = { id: 'builtin-tag:work' }
+  const all = { id: 'builtin-all:/page-blocks' }
+  const user = { id: 'mine' }
+  assert.equal(
+    shouldFetchViewTotal({ path: '/page-blocks', view: block, collectionPath: '/page-blocks', activeViewId: all.id }),
+    false,
+  )
+  assert.equal(
+    shouldFetchViewTotal({ path: '/page-blocks', view: block, collectionPath: '/page-blocks', activeViewId: block.id }),
+    true,
+  )
+  assert.equal(shouldFetchViewTotal({ path: '/page-blocks', view: all, collectionPath: '/page-blocks', activeViewId: all.id }), true)
+  assert.equal(shouldFetchViewTotal({ path: '/page-blocks', view: user, collectionPath: '/page-blocks', activeViewId: all.id }), true)
+  assert.equal(shouldFetchViewTotal({ path: '/facets', view: tag, collectionPath: '/tasks', activeViewId: tag.id }), false)
 })
 
 test('view total jobs put the open collection first and keep the rest stable', () => {

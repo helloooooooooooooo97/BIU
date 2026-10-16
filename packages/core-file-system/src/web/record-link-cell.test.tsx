@@ -78,10 +78,50 @@ test('cross-table ref chips load the title from field.collection', async () => {
   }
 })
 
+test('cross-table chips share one read for the same peer id', async () => {
+  let calls = 0
+  const original = globalThis.fetch
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    calls += 1
+    const url = String(input)
+    assert.match(url, /%2Fpages%2Fp-share-1/)
+    return new Response(JSON.stringify({ value: { id: 'p-share-1', title: '同一页' } }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }) as typeof fetch
+  try {
+    const { container } = render(
+      <div>
+        <RecordLinkChips
+          field={{ type: 'ref', collection: '/pages' }}
+          fieldKey="pageId"
+          value="p-share-1"
+          collectionPath="/page-blocks"
+        />
+        <RecordLinkChips
+          field={{ type: 'ref', collection: '/pages' }}
+          fieldKey="pageId"
+          value="p-share-1"
+          collectionPath="/page-blocks"
+        />
+      </div>,
+    )
+    await waitFor(() => {
+      const titles = [...container.querySelectorAll('.fsdb-ref-chip-title')].map((node) => node.textContent)
+      assert.deepEqual(titles, ['同一页', '同一页'])
+    })
+    assert.equal(calls, 1)
+  } finally {
+    globalThis.fetch = original
+  }
+})
+
 test('ref picker lists titles and does not print ids beside them', () => {
   const src = readFileSync(resolve(import.meta.dirname, './record-link-cell.tsx'), 'utf8')
   assert.match(src, /crumbRecordLabel/)
   assert.match(src, /\/api\/db\/read/)
+  assert.match(src, /const peerReads = new Map/)
   assert.doesNotMatch(src, /fsdb-ref-id/)
   assert.doesNotMatch(src, /id\.slice\(0, 8\)/)
 })

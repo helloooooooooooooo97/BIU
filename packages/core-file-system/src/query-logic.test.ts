@@ -107,6 +107,8 @@ test('normalizeSorts falls back to a single field', () => {
   assert.equal(sorts.length, 1)
   assert.equal(sorts[0]?.field, 'dueAt')
   assert.equal(sorts[0]?.dir, 'desc')
+  assert.equal(sorts[0]?.id, 's:dueAt')
+  assert.equal(normalizeSorts(undefined, 'dueAt', 'desc')[0]?.id, sorts[0]?.id)
 })
 
 test('empty filterTree falls back to flat filters from the agent', () => {

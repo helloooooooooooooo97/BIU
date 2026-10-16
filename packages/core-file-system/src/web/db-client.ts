@@ -46,7 +46,9 @@ export async function listCollection(opts: {
     dir: opts.sortDir === 'desc' ? 'desc' : 'asc',
     filter: JSON.stringify(opts.filters ?? {}),
   })
-  if (opts.sorts?.length) params.set('sorts', JSON.stringify(opts.sorts))
+  if (opts.sorts?.length) {
+    params.set('sorts', JSON.stringify(opts.sorts.map((item) => ({ field: item.field, dir: item.dir }))))
+  }
   if (opts.columns?.length) params.set('columns', opts.columns.join(','))
   const key = params.toString()
   const pending = listInflight.get(key)
