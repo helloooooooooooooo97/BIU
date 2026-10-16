@@ -79,7 +79,7 @@ export function skillsCollection(skills: SkillsService): CollectionSpec {
         },
       },
     },
-    list: () => skills.list().map((item) => asRecord(item, false, skills.filesOf(item.id))),
+    list: () => skills.list().map((item) => asRecord(item, false)),
     get: (id) => {
       const skill = skills.recordOrNull(id)
       return skill ? asRecord(skill, true, skills.filesOf(skill.id)) : null
