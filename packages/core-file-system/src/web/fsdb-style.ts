@@ -404,6 +404,7 @@ const CSS = `
 .fsdb-detail-more-item.is-danger{color:var(--dsw-danger)}
 .fsdb-detail-more-item.is-danger:hover{background:color-mix(in srgb,var(--dsw-danger) 16%,transparent)}
 .fsdb-detail-more-item svg{flex:none;width:16px;height:16px;color:var(--dsw-icon)}
+.fsdb-detail-more-item svg.is-starred{color:#f5b700}
 .fsdb-detail-more-item .fsdb-detail-more-caret{margin-left:auto}
 .fsdb-detail-more-item.is-danger svg{color:var(--dsw-danger)}
 .fsdb-detail-split{display:flex;flex-direction:column;flex:none;width:100%;min-height:min-content;overflow:visible}

@@ -19,6 +19,11 @@ test('embedded record details can share their explicit record target', () => {
   assert.match(detail, /placement="left"/)
   assert.doesNotMatch(detail, /data-testid="fsdb-detail-more"/)
   assert.match(detail, /reportInspectorPaneMenu/)
+  assert.match(detail, /PaneConfigMenuItem/)
+  const recordMenu = detail.slice(detail.indexOf('function RecordPaneMenu'), detail.indexOf('export function RecordDetail'))
+  assert.ok(recordMenu.indexOf('data-testid="fsdb-detail-delete"') < recordMenu.indexOf('data-testid="fsdb-detail-share"'))
+  assert.ok(recordMenu.indexOf('data-testid="fsdb-detail-share"') < recordMenu.indexOf('<Tools'))
+  assert.ok(recordMenu.indexOf('<Tools') < recordMenu.indexOf('<PaneConfigMenuItem'))
   assert.doesNotMatch(detail, /\{share\}\s*\{onPrev/)
   assert.match(style, /\.inspector-database-page \.fsdb-detail-float-nav\.has-share\{opacity:1\}/)
   assert.match(style, /\.fsdb-detail-more-menu\.has-share/)
@@ -927,6 +932,26 @@ test('inspector crumbs lock the first level to an icon', () => {
 test('Escape does not pop record detail back to the list crumb', () => {
   assert.doesNotMatch(browser, /if \(event.key === 'Escape'\) setDetailId\(null\)/)
   assert.doesNotMatch(browser, /window.addEventListener\('keydown', onKey\)/)
+})
+
+test('inspector view menu offers share, star, and width, and detail keeps width too', () => {
+  const menu = readFileSync(resolve(import.meta.dirname, './pane-more-menu.tsx'), 'utf8')
+  assert.match(browser, /<ViewPaneMenu/)
+  assert.match(browser, /if \(!inspectorPaneId \|\| !embed \|\| detailId\) return/)
+  assert.match(browser, /kind: 'view'/)
+  assert.match(menu, /data-testid="fsdb-view-share"/)
+  assert.match(menu, /data-testid="fsdb-view-star"/)
+  assert.match(menu, /data-testid="fsdb-pane-config"/)
+  assert.match(menu, /data-testid="fsdb-pane-width-wide"/)
+  assert.match(menu, /data-testid="fsdb-pane-width-narrow"/)
+  assert.match(menu, /宽屏/)
+  assert.match(menu, /窄屏/)
+  assert.match(menu, /persistPagePrefs\(\{ wide: true \}\)/)
+  assert.match(menu, /persistPagePrefs\(\{ wide: false \}\)/)
+  const viewMenu = menu.slice(menu.indexOf('function ViewPaneMenu'), menu.length)
+  assert.ok(viewMenu.indexOf('data-testid="fsdb-view-share"') < viewMenu.indexOf('data-testid="fsdb-view-star"'))
+  assert.ok(viewMenu.indexOf('data-testid="fsdb-view-star"') < viewMenu.indexOf('<PaneConfigMenuItem'))
+  assert.match(detail, /<PaneConfigMenuItem \/>/)
 })
 
 test('collection header has a layout config control next to the star', () => {

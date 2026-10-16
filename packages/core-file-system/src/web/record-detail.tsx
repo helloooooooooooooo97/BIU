@@ -17,6 +17,7 @@ import { HeadingOutline } from './heading-outline.tsx'
 import { PageBanner } from './page-banner.tsx'
 import { fieldPickAttrs, recordSourcePath } from './pick-dom.ts'
 import { dismissInspectorPaneMenu, reportInspectorPaneMenu } from './inspector-pane-menu.tsx'
+import { PaneConfigMenuItem } from './pane-more-menu.tsx'
 
 function renderDetailPanes(
   panes: FsDetailPane[] | undefined,
@@ -154,7 +155,21 @@ function RecordPaneMenu({
   }
   return (
     <>
-      {Tools ? <Tools record={record} onDone={close} /> : null}
+      {onDelete ? (
+        <button
+          type="button"
+          role="menuitem"
+          className="fsdb-detail-more-item is-danger"
+          data-testid="fsdb-detail-delete"
+          onClick={() => {
+            close()
+            onDelete()
+          }}
+        >
+          <TrashGlyph aria-hidden className="size-4" />
+          {deleteLabel}
+        </button>
+      ) : null}
       {share ? (
         <button
           type="button"
@@ -173,21 +188,8 @@ function RecordPaneMenu({
           <ChevronLeftIcon aria-hidden className="fsdb-detail-more-caret" />
         </button>
       ) : null}
-      {onDelete ? (
-        <button
-          type="button"
-          role="menuitem"
-          className="fsdb-detail-more-item is-danger"
-          data-testid="fsdb-detail-delete"
-          onClick={() => {
-            close()
-            onDelete()
-          }}
-        >
-          <TrashGlyph aria-hidden className="size-4" />
-          {deleteLabel}
-        </button>
-      ) : null}
+      {Tools ? <Tools record={record} onDone={close} /> : null}
+      <PaneConfigMenuItem />
       {share && shareItem ? (
         <AnchorMenu
           anchor={shareItem}
@@ -279,26 +281,21 @@ export function RecordDetail({
 
   const deleteRef = useRef(onDelete)
   deleteRef.current = onDelete
-  const showPaneActions = Boolean(share) || (!readOnly && Boolean(chrome?.DetailTools || onDelete))
   useLayoutEffect(() => {
     if (!inspectorPaneId) return
-    if (!showPaneActions) {
-      reportInspectorPaneMenu(inspectorPaneId, null)
-      return
-    }
     reportInspectorPaneMenu(
       inspectorPaneId,
       <RecordPaneMenu
         record={selected}
-        Tools={chrome?.DetailTools}
-        onDelete={deleteRef.current ? () => deleteRef.current?.() : undefined}
+        Tools={readOnly ? undefined : chrome?.DetailTools}
+        onDelete={!readOnly && deleteRef.current ? () => deleteRef.current?.() : undefined}
         deleteLabel={collectionPath === '/pages' ? '删除页面' : '删除记录'}
         share={share}
         shareLabel={collectionPath === '/pages' ? '分享页面' : '分享记录'}
       />,
     )
     return () => reportInspectorPaneMenu(inspectorPaneId, null)
-  }, [chrome?.DetailTools, collectionPath, inspectorPaneId, readOnly, selected, showPaneActions])
+  }, [chrome?.DetailTools, collectionPath, inspectorPaneId, readOnly, selected, share])
 
   const [facetOpen, setFacetOpen] = useState(false)
   useEffect(() => {
