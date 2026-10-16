@@ -1129,17 +1129,29 @@ export async function openSessionHttpPayload(ctx: Context, id: string, limitTurn
     ...(record.mascot ? { mascot: record.mascot } : {}),
     ...(record.config ? { config: record.config } : {}),
   }
-  let summaries: Awaited<ReturnType<typeof ctx.sessions.listSummaries>> = []
+  let liveTasks: Awaited<ReturnType<typeof loadLiveDispatchTasks>> = []
   try {
-    summaries = liveSessionItems(ctx, await ctx.sessions.listSummaries())
+    liveTasks = await loadLiveDispatchTasks(ctx, record.id)
   } catch {
-    summaries = []
+    liveTasks = []
+  }
+  const workerIds = new Set(
+    liveTasks.map((task) => task.sessionId).filter((id) => id && id !== record.id),
+  )
+  let summaries: Awaited<ReturnType<typeof ctx.sessions.listSummaries>> = []
+  if (workerIds.size) {
+    try {
+      summaries = liveSessionItems(ctx, await ctx.sessions.listSummaries())
+    } catch {
+      summaries = []
+    }
   }
   const workers = []
   const titles = new Map<string, string>()
   const mascots = new Map<string, NonNullable<(typeof summaries)[number]['mascot']>>()
   const projects = new Map<string, { name: string; path?: string }>()
   for (const item of summaries) {
+    if (!workerIds.has(item.id)) continue
     titles.set(item.id, item.title)
     if (item.mascot) mascots.set(item.id, item.mascot)
     if (item.project?.name) {
@@ -1148,19 +1160,14 @@ export async function openSessionHttpPayload(ctx: Context, id: string, limitTurn
         ...(item.project.path ? { path: item.project.path } : {}),
       })
     }
-    if (item.id === record.id) continue
-    try {
-      const worker = await ctx.sessions.require(item.id)
-      workers.push({ id: item.id, events: worker.events })
-    } catch {
-      // 别的会话读失败不能挡住当前这条。表格详情只读这一条，侧栏打开却会扫全部。
-    }
   }
-  let liveTasks: Awaited<ReturnType<typeof loadLiveDispatchTasks>> = []
-  try {
-    liveTasks = await loadLiveDispatchTasks(ctx, record.id)
-  } catch {
-    liveTasks = []
+  for (const id of workerIds) {
+    try {
+      const worker = await ctx.sessions.require(id)
+      workers.push({ id, events: worker.events })
+    } catch {
+      // 执行会话读失败不能挡住当前这条。
+    }
   }
   const dispatched = collectLiveDispatchedTasks(record.id, record.events, workers, liveTasks)
   payload.dispatchedUsage = dispatched.total

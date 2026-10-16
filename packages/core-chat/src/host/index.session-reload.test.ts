@@ -47,3 +47,38 @@ test('a sent message is still readable after refresh, even if another session de
     await rm(dir, { recursive: true, force: true })
   }
 })
+
+test('opening a session does not read every other session log', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'biu-session-open-'))
+  const path = join(dir, 'biu.sqlite')
+  const ctx = new Context()
+  const store = await ctx.plugin(sessionStore, { driver: 'sqlite', path })
+  const live = await ctx.plugin(sessions)
+  try {
+    const target = await ctx.sessions.create('当前')
+    const others: string[] = []
+    for (let i = 0; i < 20; i += 1) {
+      const created = await ctx.sessions.create(`其他 ${i}`)
+      others.push(created.id)
+      for (let n = 0; n < 30; n += 1) {
+        await ctx.sessions.append(created.id, { type: 'user/message', text: `日志 ${n}`, kind: 'wake' })
+      }
+    }
+    const required: string[] = []
+    const original = ctx.sessions.require.bind(ctx.sessions)
+    ctx.sessions.require = async (id: string) => {
+      required.push(id)
+      return original(id)
+    }
+    const started = performance.now()
+    const opened = await openSessionHttpPayload(ctx, target.id, 20)
+    const elapsed = performance.now() - started
+    assert.equal(opened.status, 200)
+    assert.deepEqual(required.filter((id) => id !== target.id), [])
+    assert.ok(elapsed < 400, `打开会话用了 ${Math.round(elapsed)}ms`)
+  } finally {
+    await live.dispose()
+    await store.dispose()
+    await rm(dir, { recursive: true, force: true })
+  }
+})

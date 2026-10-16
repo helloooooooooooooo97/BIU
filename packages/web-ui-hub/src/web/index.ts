@@ -34,6 +34,22 @@ export function runtimeWebPlugin(loaded: unknown): Plugin | undefined {
   return loaded as Plugin
 }
 
+/** 会话输入框在这两块挂上之后就能画。其余界面（文件库、编辑器）再加载。 */
+export const SESSION_UI_FIRST = ['core-pick', 'core-chat'] as const
+
+export function orderUiPlugins<T extends { id: string }>(rows: T[]): T[] {
+  const rank = (id: string) => {
+    const first = SESSION_UI_FIRST.indexOf(id as (typeof SESSION_UI_FIRST)[number])
+    if (first >= 0) return first
+    if (id === 'core-file-system') return SESSION_UI_FIRST.length
+    return SESSION_UI_FIRST.length + 1
+  }
+  return rows
+    .map((row, index) => ({ row, index }))
+    .sort((a, b) => rank(a.row.id) - rank(b.row.id) || a.index - b.index)
+    .map((item) => item.row)
+}
+
 export function apply(ctx: Context) {
   if (typeof globalThis !== 'undefined') {
     const g = globalThis as typeof globalThis & {
@@ -85,7 +101,7 @@ export function apply(ctx: Context) {
           if (plugin.enabled) return true
           return plugin.state === 'pending' || plugin.state === 'loading' || plugin.state === 'active'
         })
-        .sort((a, b) => Number(b.id === 'core-file-system') - Number(a.id === 'core-file-system'))
+      const orderedRows = orderUiPlugins(enabledRows)
       const enabledIds = new Set(enabledRows.map((plugin) => plugin.id))
 
       const webOf = new Map(enabledRows.map((plugin) => [plugin.id, plugin.web]))
@@ -100,7 +116,12 @@ export function apply(ctx: Context) {
         forkWebs.delete(id)
       }
 
-      for (const row of enabledRows) {
+      let yieldForComposer = false
+      for (const row of orderedRows) {
+        if (yieldForComposer && !SESSION_UI_FIRST.includes(row.id as (typeof SESSION_UI_FIRST)[number])) {
+          yieldForComposer = false
+          await new Promise((resolve) => setTimeout(resolve, 0))
+        }
         if (forks.has(row.id)) continue
         const loaded = await resolvePlugin(row.id, row.web)
         if (!loaded) continue
@@ -110,6 +131,7 @@ export function apply(ctx: Context) {
         forks.set(row.id, fiber)
         forkWebs.set(row.id, row.web ?? '')
         await fiber
+        if (SESSION_UI_FIRST.includes(row.id as (typeof SESSION_UI_FIRST)[number])) yieldForComposer = true
       }
 
       const fsUi = rows.some(

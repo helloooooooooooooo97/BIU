@@ -7,7 +7,7 @@ import * as snapshot from '@biu/web-snapshot'
 import * as sessionView from '@biu/web-session-view'
 import * as projectView from '@biu/web-project-view'
 import * as uiHub from './index.ts'
-import { isRuntimeWebModule, runtimeWebPlugin } from './index.ts'
+import { isRuntimeWebModule, orderUiPlugins, runtimeWebPlugin } from './index.ts'
 import { uiPackageLoaders } from 'virtual:cordis-ui-loaders'
 
 const Dummy = () => null
@@ -53,6 +53,17 @@ test('ui-hub unloads disabled plugins before importing new ones', async () => {
   assert.ok(disposeAt > 0 && importAt > 0 && disposeAt < importAt)
   assert.match(src, /g\.React = React/)
   assert.match(src, /g\.ReactJSXRuntime/)
+})
+
+test('session composer plugins mount before the file library and editor', () => {
+  const ordered = orderUiPlugins([
+    { id: 'core-editor' },
+    { id: 'core-file-system' },
+    { id: 'core-task-system' },
+    { id: 'core-chat' },
+    { id: 'core-pick' },
+  ]).map((row) => row.id)
+  assert.deepEqual(ordered, ['core-pick', 'core-chat', 'core-file-system', 'core-editor', 'core-task-system'])
 })
 
 test('ui-hub mounts configured ui packages including chat', async () => {
