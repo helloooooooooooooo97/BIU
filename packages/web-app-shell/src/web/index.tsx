@@ -250,6 +250,7 @@ function Shell(props: SlotProps) {
   const navReady = useAppModulesNavReady ? useAppModulesNavReady() : true
   const pluginModules = modules.filter((item) => item.id !== 'agent')
   const sessionId = useSessionView((state) => state.sessionId)
+  const overlayOpen = useSyncExternalStore(subscribeChatOverlay, getChatOverlay, () => false)
   const collections = useSnapshot((state) => state.collections)
   const danceSessions = useSessionView((state) => state.sessions)
   const dancing = useSyncExternalStore(
@@ -635,6 +636,11 @@ function Shell(props: SlotProps) {
     if (route.kind === 'auth') return
     void sessionView.applyRoute(route).catch(() => undefined)
   }, [location.pathname, navReady, sessionView, appModules.version()])
+
+  useEffect(() => {
+    if (!overlayOpen) return
+    void sessionView.ensureSessionThread()
+  }, [overlayOpen, sessionView])
 
   useEffect(() => {
     const onMissing = (event: Event) => {

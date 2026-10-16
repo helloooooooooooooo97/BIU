@@ -422,7 +422,7 @@ export class SessionViewService extends Service {
 
   /** URL → 状态：只由路由层调用，不回写 URL。
    * 只有 `/s/:id` 才换成主 Session。搜索把页面/其它记录开到左侧、进数据模块，都不改全局会话。
-   * 冷启动还没有会话时，给悬浮窗补最近一条。 */
+   * 聊天首页冷启动拉最近一条；数据页只绑 sessionId，不拉 turns，等悬浮窗打开再补正文。 */
   async applyRoute(route: AppRoute) {
     if (route.kind === 'auth') return
     if (route.kind === 'session') {
@@ -456,7 +456,33 @@ export class SessionViewService extends Service {
       if (this.wantsTrajectory(route.view)) void this.ensureTrajectory()
       return
     }
-    if (!this.value.sessionId) await this.loadMostRecentSession()
+    if (route.kind === 'home') {
+      if (!this.value.sessionId) await this.loadMostRecentSession()
+      return
+    }
+    if (!this.value.sessionId) await this.bindMostRecentSession()
+  }
+
+  private async bindMostRecentSession(skipId?: string) {
+    if (!this.value.sessions.length) await this.refreshSessions()
+    const latest = mostRecentSessionId(this.value.sessions.filter((item) => item.id !== skipId))
+    if (!latest || this.value.sessionId === latest) return
+    const listedProject = this.value.sessions.find((item) => item.id === latest)?.project
+    this.replace({
+      sessionId: latest,
+      events: [],
+      nodes: [],
+      trajectory: [],
+      project: listedProject,
+      view: 'chat',
+      error: undefined,
+      hasMoreOlder: false,
+      loadingOlder: false,
+      trajectoryHasMore: false,
+      trajectoryLoading: false,
+      totalTurns: 0,
+      switchingSession: false,
+    })
   }
 
   private async loadMostRecentSession(skipId?: string) {
@@ -465,6 +491,16 @@ export class SessionViewService extends Service {
     if (!latest) return
     if (this.value.sessionId === latest) return
     await this.load(latest, { view: 'chat' })
+  }
+
+  /** 悬浮窗 / 发消息前补齐当前会话正文。数据页冷启动只绑了 id。 */
+  async ensureSessionThread() {
+    if (!this.value.sessionId) {
+      await this.loadMostRecentSession()
+      return
+    }
+    if (this.value.events.length || this.value.nodes.length) return
+    await this.load(this.value.sessionId, { view: this.value.view || 'chat' })
   }
 
   /** 路由指向已删除/不存在的会话：不报 404，回首页并打开最近一条。 */

@@ -237,10 +237,10 @@ test('groupField only groups when a select/multi-select key is chosen', () => {
   assert.equal(groupField(schema, 'title'), null)
 })
 
-test('groupListKeys uses schema enum and adds 未填 except shareScope', () => {
+test('groupListKeys uses schema enum and skips 未填 when enum is declared', () => {
   assert.deepEqual(
     groupListKeys(schema, 'status').map((item) => item.key),
-    ['todo', 'doing', 'done', ''],
+    ['todo', 'doing', 'done'],
   )
   const scoped = groupListKeys(
     {

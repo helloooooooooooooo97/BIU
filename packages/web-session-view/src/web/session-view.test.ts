@@ -961,6 +961,33 @@ test('home cold-start picks latest chat; opening pages or data does not switch s
   assert.equal(view.get().sessionId, 'old')
 })
 
+test('database cold-start binds latest session without loading turns until overlay', async () => {
+  const calls = mockFetch({
+    '/api/sessions': () => ({
+      sessions: [
+        { id: 'old', title: 'old', eventCount: 1, updatedAt: 1 },
+        { id: 'new', title: 'new', eventCount: 1, updatedAt: 9 },
+      ],
+    }),
+    '/api/sessions/new?turns=': () => ({
+      id: 'new',
+      events: [{ type: 'session/open', version: 1, seq: 0, ts: 1 }],
+      hasMore: false,
+      totalTurns: 0,
+    }),
+    '/api/approvals': () => ({ mode: 'auto', pending: [] }),
+  })
+  const ctx = new Context()
+  await ctx.plugin(sessionView)
+  const view = ctx.sessionView as SessionViewService
+  await view.refreshSessions()
+  await view.applyRoute({ kind: 'module', moduleId: 'database', path: '/database' })
+  assert.equal(view.get().sessionId, 'new')
+  assert.equal(calls.some((row) => row.url.includes('turns=')), false)
+  await view.ensureSessionThread()
+  assert.equal(calls.some((row) => row.url.includes('/api/sessions/new?turns=')), true)
+})
+
 test('missing session route does not surface 404 and opens the latest chat', async () => {
   const gone: string[] = []
   const onMissing = (event: Event) => {

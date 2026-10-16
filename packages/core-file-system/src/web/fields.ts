@@ -509,7 +509,7 @@ export function groupListKeys(
   }
   if (!values.length) return []
   const listed = values.map((key) => ({ key, label: groupBucketLabel(kind, key, group.field) }))
-  if (group.key !== 'shareScope') listed.push({ key: '', label: '未填' })
+  if (group.key !== 'shareScope' && !group.field.enum?.length) listed.push({ key: '', label: '未填' })
   return listed
 }
 

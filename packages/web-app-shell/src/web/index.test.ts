@@ -52,6 +52,11 @@ test('refresh does not send unfinished plugin routes home', () => {
   assert.match(shell, /navigate\('\/', \{ replace: true \}\)/)
 })
 
+test('overlay open loads session thread that database routes skipped', () => {
+  const shell = readFileSync(resolve(import.meta.dirname, './index.tsx'), 'utf8')
+  assert.match(shell, /if \(!overlayOpen\) return\n\s*void sessionView.ensureSessionThread\(\)/)
+})
+
 test('center stage keeps modules mounted without a page fade', () => {
   const shell = readFileSync(resolve(import.meta.dirname, './index.tsx'), 'utf8')
   const css = readFileSync(resolve(import.meta.dirname, '../../../../web/style.css'), 'utf8')

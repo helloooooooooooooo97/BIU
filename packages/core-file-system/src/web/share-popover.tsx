@@ -637,6 +637,15 @@ function ScopeMark({ scope }: { scope: string }) {
   return <>{icon}{text}</>
 }
 
+/** 表格里只画归属标签，点开详情再拉协作者。 */
+export function ShareScopeLabel({ label }: { label: string }) {
+  return (
+    <span className="fsdb-scope-chip">
+      <ScopeMark scope={label} />
+    </span>
+  )
+}
+
 /** 分享属性标签。归属看条目自己的协作者；点开后看直接授权和从视图继承来的权限。 */
 export function ShareScopeDetail({
   collection,

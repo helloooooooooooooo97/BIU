@@ -372,14 +372,9 @@ export function DefaultCell({
     return <PersonFace value={value} />
   }
   if (kind === 'datetime') {
-    return (
-      <CellDateTime
-        value={value}
-        empty="空"
-        writable={Boolean(onChange)}
-        onChange={(next) => onChange?.(next)}
-      />
-    )
+    const text = formatField(field, value)
+    if (!text) return null
+    return <span className="fsdb-datetime-text">{text}</span>
   }
   if (kind === 'url' || kind === 'image' || kind === 'attachment' || kind === 'file') {
     return <FilePreview value={value} compact kind={kind} onChange={kind === 'attachment' ? onChange : undefined} />

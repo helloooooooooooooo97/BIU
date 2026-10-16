@@ -24,6 +24,18 @@ function push(routes, seen, route) {
   routes.push(route)
 }
 
+function retarget(routes, seen, route) {
+  const hit = routes.find((row) => row.path === route.path)
+  if (hit) {
+    hit.id = route.id
+    hit.kind = route.kind
+    hit.label = route.label
+    hit.interact = route.interact
+    return
+  }
+  push(routes, seen, route)
+}
+
 async function listSome(apiJson, path, limit = 5, columns = 'id,title') {
   const params = new URLSearchParams({ path, limit: String(limit), columns, sort: 'id', dir: 'asc' })
   const page = await apiJson(`/api/db/list?${params}`)
@@ -147,7 +159,7 @@ export async function discoverLocalSpaceRoutes(apiJson) {
     })
   }
   if (heavyPage?.id) {
-    push(routes, seen, {
+    retarget(routes, seen, {
       id: 'page-plugins',
       kind: 'record',
       label: `记录 ${heavyPage.title || heavyPage.id}`,
@@ -156,7 +168,7 @@ export async function discoverLocalSpaceRoutes(apiJson) {
     })
   }
   if (blockPage?.id) {
-    push(routes, seen, {
+    retarget(routes, seen, {
       id: 'page-blocks-seed',
       kind: 'record',
       label: `记录 ${blockPage.title || blockPage.id}`,

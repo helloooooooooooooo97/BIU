@@ -52,7 +52,6 @@ test('grouped collection fetches each group page instead of a mixed 200', async 
       { status: 'todo', empty: false, limit: 20, offset: 0 },
       { status: 'doing', empty: false, limit: 20, offset: 20 },
       { status: 'done', empty: false, limit: 20, offset: 0 },
-      { status: undefined, empty: true, limit: 20, offset: 0 },
     ],
   )
   assert.deepEqual(

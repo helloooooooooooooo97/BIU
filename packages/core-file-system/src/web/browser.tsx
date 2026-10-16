@@ -108,7 +108,7 @@ import {
   visibleActions,
   placedActions,
 } from './fsdb-cells.tsx'
-import { ShareButton, SharePanel, ShareRoleDetail, ShareScopeDetail } from './share-popover.tsx'
+import { ShareButton, SharePanel, ShareRoleDetail, ShareScopeDetail, ShareScopeLabel } from './share-popover.tsx'
 import { ensureFsdbStyle } from './fsdb-style.ts'
 import { workspaceColumnsForLocation } from './workspace-columns.ts'
 import { RecordDetail } from './record-detail.tsx'
@@ -2358,11 +2358,13 @@ export function CollectionBrowser({
 
   function renderCell(row: DbRecord, key: string, field: FieldSpec, surface: 'table' | 'detail' = 'detail') {
     if (key === 'shareScope') {
+      const label = String(row[key] ?? (localData ? '私人' : ''))
+      if (surface === 'table') return <ShareScopeLabel label={label} />
       return (
         <ShareScopeDetail
           collection={collectionPath}
           recordId={row.id}
-          label={String(row[key] ?? (localData ? '私人' : ''))}
+          label={label}
           tableLabel={currentTable?.label}
           localOnly={localKnown ? localData : null}
         />
