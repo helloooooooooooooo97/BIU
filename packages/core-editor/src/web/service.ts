@@ -1,6 +1,7 @@
 import { useSyncExternalStore, type ComponentType } from 'react'
 import { Service, type Context } from 'cordis'
 import { registerBlockAssets } from '@biu/type-file-system'
+import { clientLog } from '@biu/web-event-log/log'
 
 export type HeadingLevel = 1 | 2 | 3
 
@@ -134,6 +135,7 @@ export class PageEditorService extends Service {
     const blockTypeLabel =
       String(spec.blockTypeLabel ?? '').trim() || (blockType === BASIC_BLOCK_TYPE ? '基础模块' : spec.label)
     const next = { ...spec, plugin, blockType, blockTypeLabel }
+    clientLog('info', 'page-block', `登记块 ${spec.kind}（${plugin}）`)
     return this.ctx.effect(() => {
       this.customBlocks.set(spec.kind, next)
       this.bump()

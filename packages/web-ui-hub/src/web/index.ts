@@ -1,4 +1,5 @@
 import type { Context, Fiber, Plugin } from 'cordis'
+import { clientLog, clientLogErrorText } from '@biu/web-event-log/log'
 import * as React from 'react'
 import * as ReactDOM from 'react-dom'
 import * as ReactJSXRuntime from 'react/jsx-runtime'
@@ -80,7 +81,7 @@ export function apply(ctx: Context) {
       try {
         return await import(/* @vite-ignore */ `${href}${bust}`)
       } catch (error) {
-        console.error(`ui-hub: failed to load ${web}`, error)
+        clientLog('error', 'ui-hub', `${_id} web 加载失败: ${clientLogErrorText(error)}`, web)
         return undefined
       }
     }
@@ -123,14 +124,27 @@ export function apply(ctx: Context) {
           await new Promise((resolve) => setTimeout(resolve, 0))
         }
         if (forks.has(row.id)) continue
+        if (row.web && isRuntimeWebModule(row.web)) clientLog('info', 'ui-hub', `加载 ${row.id} 的 web.js`, row.web)
         const loaded = await resolvePlugin(row.id, row.web)
         if (!loaded) continue
         const plugin = runtimeWebPlugin(loaded)
-        if (!plugin) continue
+        if (!plugin) {
+          clientLog('error', 'ui-hub', `${row.id} 的 web.js 没有 apply`)
+          continue
+        }
         const fiber = ctx.plugin(plugin)
         forks.set(row.id, fiber)
         forkWebs.set(row.id, row.web ?? '')
-        await fiber
+        try {
+          await fiber
+        } catch (error) {
+          clientLog('error', 'ui-hub', `${row.id} 挂载失败: ${clientLogErrorText(error)}`)
+          forks.delete(row.id)
+          forkWebs.delete(row.id)
+          await fiber.dispose().catch(() => undefined)
+          continue
+        }
+        if (row.web && isRuntimeWebModule(row.web)) clientLog('info', 'ui-hub', `${row.id} 的 web.js 已挂上`)
         if (SESSION_UI_FIRST.includes(row.id as (typeof SESSION_UI_FIRST)[number])) yieldForComposer = true
       }
 

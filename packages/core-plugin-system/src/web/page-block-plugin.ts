@@ -1,4 +1,5 @@
 import { buildAppPath } from '@biu/web-session-view'
+import { clientLog, clientLogErrorText } from '@biu/web-event-log/log'
 
 export const ENABLE_PAGE_BLOCK_PLUGIN = 'biu:enable-page-block-plugin'
 export const PAGE_BLOCK_PLUGIN_PHASE = 'biu:page-block-plugin-phase'
@@ -55,14 +56,27 @@ export function startStorePlugin(id: string) {
 }
 
 async function enableStorePlugin(id: string) {
-  const row = await readPluginFlags(id)
-  if (!row) throw new Error(`unknown plugin: ${id}`)
-  if (row.running) return
-  if (!row.installed) {
-    if (!row.sandbox) throw new Error(`plugin not installed: ${id}`)
-    await postPluginAction(id, 'pack')
+  try {
+    const row = await readPluginFlags(id)
+    if (!row) throw new Error(`unknown plugin: ${id}`)
+    clientLog('info', 'page-block', `${id} installed=${row.installed} running=${row.running} sandbox=${row.sandbox}`)
+    if (row.running) {
+      clientLog('info', 'page-block', `${id} 已在运行，跳过 start。页面要等 web.js 登记块之后才离开源码`)
+      return
+    }
+    if (!row.installed) {
+      if (!row.sandbox) throw new Error(`plugin not installed: ${id}`)
+      clientLog('info', 'page-block', `${id} 还是沙箱，先 pack 再 start`)
+      await postPluginAction(id, 'pack')
+    } else {
+      clientLog('info', 'page-block', `${id} 已安装但未运行，调用 start`)
+    }
+    await postPluginAction(id, 'start')
+    clientLog('info', 'page-block', `${id} start 已完成`)
+  } catch (error) {
+    clientLog('error', 'page-block', `${id} 启用失败: ${clientLogErrorText(error)}`)
+    throw error
   }
-  await postPluginAction(id, 'start')
 }
 
 export function pageBlockPluginFromEvent(event: Event) {
