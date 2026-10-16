@@ -8,7 +8,7 @@ import { Context } from 'cordis'
 import { runWithAccount, runWithRequestWorkspace } from '@biu/host-plugin-loader/data-dir'
 import type { CatalogEntry } from '@biu/host-hub'
 import { PluginStoreService, defaultPluginDir, defaultStatePath } from './index.ts'
-import { hashInstalledPluginCode } from './store.ts'
+import { hashInstalledPluginCode, storeFileCacheControl } from './store.ts'
 
 function stubHub(ctx: Context) {
   const adopted: string[] = []
@@ -337,6 +337,12 @@ test('destroy deletes both the installed plugin and its sandbox', async () => {
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
+})
+
+test('versioned store web.js is cacheable', () => {
+  assert.equal(storeFileCacheControl('abc123def456'), 'public, max-age=31536000, immutable')
+  assert.equal(storeFileCacheControl(''), 'no-store')
+  assert.equal(storeFileCacheControl(null), 'no-store')
 })
 
 test('web-only plugin opens without host.js', async () => {

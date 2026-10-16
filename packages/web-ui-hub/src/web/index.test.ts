@@ -7,7 +7,14 @@ import * as snapshot from '@biu/web-snapshot'
 import * as sessionView from '@biu/web-session-view'
 import * as projectView from '@biu/web-project-view'
 import * as uiHub from './index.ts'
-import { isRuntimeWebModule, orderUiPlugins, runtimeWebPlugin } from './index.ts'
+import {
+  isRuntimeWebModule,
+  isStoreWebPlugin,
+  orderUiPlugins,
+  pageRouteNeedsStoreWeb,
+  runtimeWebModuleHref,
+  runtimeWebPlugin,
+} from './index.ts'
 import { uiPackageLoaders } from 'virtual:cordis-ui-loaders'
 
 const Dummy = () => null
@@ -29,6 +36,30 @@ function plugin(id: string, enabled: boolean, web?: string) {
 test('store plugin web urls are runtime modules', () => {
   assert.equal(isRuntimeWebModule('/api/plugin-store/files/store-hello/web.js'), true)
   assert.equal(isRuntimeWebModule('@biu/core-task-system/web'), false)
+})
+
+test('runtime web href keeps snapshot code version instead of Date.now', () => {
+  const href = runtimeWebModuleHref(
+    '/api/plugin-store/files/page-toc/web.js?v=abc123&workspaceId=ws_1',
+    'http://127.0.0.1:5174',
+  )
+  assert.equal(href, 'http://127.0.0.1:5174/api/plugin-store/files/page-toc/web.js?v=abc123&workspaceId=ws_1')
+})
+
+test('runtime web href only busts when the url has no version', () => {
+  const href = runtimeWebModuleHref('/api/plugin-store/files/x/web.js', 'http://127.0.0.1:5174')
+  assert.match(href, /^http:\/\/127\.0\.0\.1:5174\/api\/plugin-store\/files\/x\/web\.js\?v=\d+$/)
+})
+
+test('store web plugins are the packed store packages, not core ui', () => {
+  assert.equal(
+    isStoreWebPlugin({ packageName: 'store:page-toc', web: '/api/plugin-store/files/page-toc/web.js?v=1' }),
+    true,
+  )
+  assert.equal(isStoreWebPlugin({ packageName: '@biu/core-chat', web: '@biu/core-chat/web' }), false)
+  assert.equal(pageRouteNeedsStoreWeb('/database/pages/record/p000'), true)
+  assert.equal(pageRouteNeedsStoreWeb('/database/tasks'), false)
+  assert.equal(pageRouteNeedsStoreWeb('/'), false)
 })
 
 test('runtimeWebPlugin keeps inject when default is apply', () => {
@@ -54,6 +85,10 @@ test('ui-hub unloads disabled plugins before importing new ones', async () => {
   assert.match(src, /g\.React = React/)
   assert.match(src, /g\.ReactJSXRuntime/)
   assert.match(src, /biu:enable-page-block-plugin/)
+  assert.match(src, /runtimeWebModuleHref/)
+  assert.match(src, /Promise\.all/)
+  assert.match(src, /storeWebRequested = true/)
+  assert.match(src, /isStoreWebPlugin/)
 })
 
 test('session composer plugins mount before the file library and editor', () => {
