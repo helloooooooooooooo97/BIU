@@ -337,6 +337,7 @@ export function DatabaseInspectorBrowse(props: SlotProps) {
         )
       }}
       onCrumbTarget={(target) => goInspector(id, target)}
+      inspectorPaneId={id}
     />
     </div>
   )

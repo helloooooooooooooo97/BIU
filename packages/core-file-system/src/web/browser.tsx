@@ -506,6 +506,7 @@ export function CollectionBrowser({
   scopeHome,
   onOpenScopeHome,
   embed = false,
+  inspectorPaneId,
   sheet = false,
   onOpenRow,
   resolveViews,
@@ -530,6 +531,7 @@ export function CollectionBrowser({
   onOpenScopeHome?: () => void
   /** 检查器内页：只有中间舞台，不写侧栏开关/视图存储。 */
   embed?: boolean
+  inspectorPaneId?: string
   /** 嵌在详情里的收集表：用同一套表组件，但不写视图、不出现视图切换。 */
   sheet?: boolean
   /** 返回 true 则自己处理这一行，不打开本表详情。 */
@@ -3737,6 +3739,7 @@ export function CollectionBrowser({
           canNext={viewIndex == null ? total > 1 : viewIndex < total - 1}
           collectionPath={collectionPath}
           recordKind={recordKind}
+          inspectorPaneId={inspectorPaneId}
         />
       ) : null}
         </div>

@@ -2998,12 +2998,39 @@ select.settings-account-input {
   color: var(--dsw-icon-active);
 }
 
+.inspector-head-tools {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+}
+
+.inspector-more,
 .inspector-add {
   position: relative;
   flex: none;
   z-index: 4;
   display: flex;
   align-items: center;
+}
+
+.inspector-more-menu.is-fixed {
+  position: fixed;
+  z-index: 140;
+}
+
+.inspector-more-menu {
+  min-width: 168px;
+  max-height: min(70vh, 480px);
+  overflow: auto;
+  border: 1px solid var(--dsw-border);
+  border-radius: 10px;
+  background: var(--dsw-sidebar);
+  padding: 4px;
+  box-shadow: var(--dsw-shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
 }
 
 .inspector-add-menu.is-fixed {
