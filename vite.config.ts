@@ -8,8 +8,23 @@ import { cordisPluginsVite, linkConfiguredPackages } from './packages/host-plugi
 const root = dirname(fileURLToPath(import.meta.url))
 linkConfiguredPackages(root)
 
+// Vite 自己的 SIGTERM 会等浏览器把连接关完。页面开着时 make restart 就会卡在这里。
+// 先拆掉现有连接，后面的关闭才能马上结束。
+function releaseDevServerOnStop() {
+  return {
+    name: 'release-dev-server-on-stop',
+    configureServer(server) {
+      const release = () => {
+        server.httpServer?.closeAllConnections()
+      }
+      process.prependListener('SIGTERM', release)
+      process.prependListener('SIGINT', release)
+    },
+  }
+}
+
 export default defineConfig({
-  plugins: [react(), tailwindcss(), cordisPluginsVite(root)],
+  plugins: [react(), tailwindcss(), releaseDevServerOnStop(), cordisPluginsVite(root)],
   appType: 'spa',
   server: {
     port: Number(process.env.BIU_WEB_PORT || 5173),

@@ -120,11 +120,41 @@ test('runStop returns immediately when nothing is listening', async () => {
   assert.deepEqual(logs, ['3141 3151 5173 5174 已空闲'])
 })
 
+test('a stuck shutdown is ended quickly and without a force-kill roster', async () => {
+  let gone = false
+  let clock = 0
+  const signals: string[] = []
+  const logs: string[] = []
+  await runStop({
+    listProcesses: async () => [{ pid: 93, ppid: 1, command: 'node node_modules/tsx/dist/cli.mjs host/index.ts' }],
+    listListeners: async () => (gone ? [] : [93]),
+    selfPid: 201,
+    signal: (_pid, name) => {
+      signals.push(name)
+      if (name === 'SIGKILL') gone = true
+    },
+    isGone: async () => gone,
+    sleep: async (ms) => {
+      clock += ms
+    },
+    now: () => clock,
+    log: (message) => logs.push(message),
+  })
+  assert.deepEqual(signals, ['SIGTERM', 'SIGKILL'])
+  assert.equal(clock, 400)
+  assert.deepEqual(logs, ['结束 dev 进程'])
+})
+
 test('make stop waits for the dev process, not only the port', async () => {
   const makefile = await readFile(resolve(import.meta.dirname, '../Makefile'), 'utf8')
   assert.match(makefile, /node scripts\/stop-dev\.mjs/)
   const source = await readFile(resolve(import.meta.dirname, 'stop-dev.mjs'), 'utf8')
   assert.match(source, /SIGTERM/)
   assert.match(source, /SIGKILL/)
-  assert.match(source, /termGraceMs = 8000/)
+  assert.match(source, /termGraceMs = 400/)
+  assert.doesNotMatch(source, /强制结束/)
+  const host = await readFile(resolve(import.meta.dirname, '../host/index.ts'), 'utf8')
+  assert.match(host, /process\.once\('SIGTERM', exitOnStop\)/)
+  const vite = await readFile(resolve(import.meta.dirname, '../vite.config.ts'), 'utf8')
+  assert.match(vite, /closeAllConnections/)
 })
