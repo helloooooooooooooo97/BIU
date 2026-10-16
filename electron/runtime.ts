@@ -2,6 +2,10 @@ import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'no
 import net from 'node:net'
 import { basename, join, resolve } from 'node:path'
 
+function isSqliteRuntimeFile(name: string) {
+  return name.endsWith('.sqlite-shm') || name.endsWith('.sqlite-wal')
+}
+
 /** 优先使用约定端口；被占用时让系统分配空闲端口。 */
 export function availablePort(preferred: number, host = '127.0.0.1') {
   const listen = (port: number) =>
@@ -27,16 +31,33 @@ export function availablePort(preferred: number, host = '127.0.0.1') {
 function copyMerge(src: string, dest: string) {
   if (!existsSync(src)) return
   mkdirSync(dest, { recursive: true })
-  for (const name of readdirSync(src)) {
+  let names: string[]
+  try {
+    names = readdirSync(src)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
+    throw error
+  }
+  for (const name of names) {
+    if (isSqliteRuntimeFile(name)) continue
     const from = join(src, name)
     const to = join(dest, name)
-    if (!existsSync(to)) {
-      cpSync(from, to, { recursive: true })
-      continue
+    try {
+      if (!existsSync(to)) {
+        cpSync(from, to, {
+          recursive: true,
+          filter: (path) => !isSqliteRuntimeFile(basename(path)),
+        })
+        continue
+      }
+      if (!existsSync(from)) continue
+      const fromStat = statSync(from)
+      const toStat = statSync(to)
+      if (fromStat.isDirectory() && toStat.isDirectory()) copyMerge(from, to)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue
+      throw error
     }
-    const fromStat = statSync(from)
-    const toStat = statSync(to)
-    if (fromStat.isDirectory() && toStat.isDirectory()) copyMerge(from, to)
   }
 }
 
