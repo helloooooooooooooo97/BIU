@@ -11,8 +11,10 @@ import {
   groupNodesIntoTurns,
   isChatStuckToLatest,
   isChatPinnedToBottom,
+  followChatOutput,
   nextStickToLatest,
   pinChatToLatest,
+  reserveLiveTurnRoom,
   recalledChatScroll,
   rememberChatScroll,
   resetChatScrollMemoryForTests,
@@ -221,31 +223,96 @@ describe('chat scroll memory per session', () => {
     ).toBe(false)
     expect(
       nextStickToLatest({ stuck: true, distanceFromBottom: 120, scrollTop: 1480, scrollingUp: false }),
+    ).toBe(true)
+    expect(
+      nextStickToLatest({ stuck: false, distanceFromBottom: 120, scrollTop: 1480, scrollingUp: false }),
     ).toBe(false)
     expect(
       nextStickToLatest({ stuck: false, distanceFromBottom: 20, scrollTop: 1580, scrollingUp: false }),
     ).toBe(true)
     expect(
       nextStickToLatest({ stuck: true, distanceFromBottom: 600, scrollTop: 1000, scrollingUp: false }),
-    ).toBe(false)
+    ).toBe(true)
+  })
+})
+
+describe('follow the sent message from the top', () => {
+  function scroller(opts: { scrollHeight: number; clientHeight: number; scrollTop: number }) {
+    const parent = document.createElement('div')
+    Object.defineProperty(parent, 'scrollHeight', { value: opts.scrollHeight, configurable: true })
+    Object.defineProperty(parent, 'clientHeight', { value: opts.clientHeight, configurable: true })
+    Object.defineProperty(parent, 'scrollTop', { value: opts.scrollTop, writable: true, configurable: true })
+    parent.getBoundingClientRect = () => box(0, opts.clientHeight)
+    return parent
+  }
+
+  function place(el: HTMLElement, top: number, height: number) {
+    el.getBoundingClientRect = () => box(top, height)
+    Object.defineProperty(el, 'offsetHeight', { value: height, configurable: true })
+  }
+
+  it('puts a short sent turn at the top of the viewport', () => {
+    const parent = scroller({ scrollHeight: 2400, clientHeight: 800, scrollTop: 100 })
+    const user = document.createElement('div')
+    user.dataset.nodeId = 'u-9'
+    user.dataset.chatKind = 'user'
+    place(user, 900, 48)
+    const reply = document.createElement('div')
+    reply.dataset.nodeId = 'r-9'
+    place(reply, 960, 80)
+    parent.append(user, reply)
+    followChatOutput(parent, 'u-9')
+    expect(parent.scrollTop).toBe(1000)
+  })
+
+  it('follows the bottom once the reply is taller than the viewport', () => {
+    const parent = scroller({ scrollHeight: 4200, clientHeight: 800, scrollTop: 1000 })
+    const user = document.createElement('div')
+    user.dataset.nodeId = 'u-9'
+    user.dataset.chatKind = 'user'
+    place(user, 200, 48)
+    const reply = document.createElement('div')
+    reply.dataset.nodeId = 'r-9'
+    place(reply, 260, 2000)
+    parent.append(user, reply)
+    followChatOutput(parent, 'u-9')
+    expect(parent.scrollTop).toBe(2460)
+  })
+
+  it('reserves one viewport of room on the live turn only', () => {
+    const parent = scroller({ scrollHeight: 2000, clientHeight: 800, scrollTop: 0 })
+    const older = document.createElement('div')
+    older.className = 'chat-turn'
+    older.dataset.turnAnchor = 'u-1'
+    older.style.minHeight = '800px'
+    const live = document.createElement('div')
+    live.className = 'chat-turn'
+    live.dataset.turnAnchor = 'u-9'
+    parent.append(older, live)
+    reserveLiveTurnRoom(parent, 'u-9')
+    expect(live.style.minHeight).toBe('800px')
+    expect(older.style.minHeight).toBe('')
   })
 })
 
 describe('thread follows the latest message', () => {
-  it('pins a sent message to the bottom and only follows while stuck to the bottom', () => {
+  it('anchors a sent message to the top, then follows until the user scrolls up', () => {
     const src = readFileSync(resolve(import.meta.dirname, './thread.tsx'), 'utf8')
-    const sendFollow = src.slice(src.indexOf('followedUserRef.current === latestUserId'), src.indexOf('maybePrefetchOlder'))
-    expect(sendFollow).toContain('pinChatToLatest(parent)')
+    const sendFollow = src.slice(src.indexOf('const applyFollow'), src.indexOf('maybePrefetchOlder'))
+    expect(sendFollow).toContain('followAnchorRef.current = latestUserId')
+    expect(sendFollow).toContain('followChatOutput')
+    expect(sendFollow).toContain('reserveLiveTurnRoom')
+    expect(sendFollow).toContain('applyFollow(parent)')
     expect(sendFollow).not.toContain("kind: 'pin'")
     expect(sendFollow).not.toContain('skipNextLayoutPin')
     expect(sendFollow).not.toContain('skipNextResizePin')
     expect(src).toContain('followedUserRef.current === latestUserId')
     expect(src).toContain('ResizeObserver')
     expect(src).toContain('pinChatToLatest')
-    expect(src).toContain('liveTurnId')
     expect(src).toContain('event.deltaY < 0')
     expect(src).toContain('nextY > lastTouchY + 0.5')
     expect(src).toContain('nextStickToLatest')
     expect(src).toContain('revealedOlder && prependHeightRef.current')
+    expect(src).toContain('followAnchorRef.current = null')
   })
 })

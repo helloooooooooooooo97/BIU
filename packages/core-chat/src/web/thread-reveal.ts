@@ -125,7 +125,10 @@ export function isChatPinnedToBottom(parent: HTMLElement): boolean {
   return true
 }
 
-/** 上滑立刻松钉；只有滚回真正底边才重新钉住。 */
+/**
+ * 跟随中：上滑立刻松开。没有上滑就保持，这样刚发出的消息可以停在视口顶，回复变长再往下走。
+ * 松开之后，只有滚回真正底边才重新跟随。
+ */
 export function nextStickToLatest(opts: {
   stuck: boolean
   distanceFromBottom: number
@@ -133,9 +136,47 @@ export function nextStickToLatest(opts: {
   scrollingUp: boolean
 }): boolean {
   if (opts.scrollingUp) return false
-  if (opts.scrollTop <= PIN_TOP_SLACK_PX) return false
-  if (opts.distanceFromBottom <= CHAT_PIN_BOTTOM_PX) return true
-  return false
+  if (opts.distanceFromBottom <= CHAT_PIN_BOTTOM_PX && opts.scrollTop > PIN_TOP_SLACK_PX) return true
+  return opts.stuck
+}
+
+/** 让最新一回合至少有一屏高，短回复也能把用户消息顶到视口上沿。 */
+export function reserveLiveTurnRoom(parent: HTMLElement, anchorId: string) {
+  const height = parent.clientHeight > 0 ? `${parent.clientHeight}px` : ''
+  for (const turn of parent.querySelectorAll<HTMLElement>('.chat-turn')) {
+    const next = turn.dataset.turnAnchor === anchorId ? height : ''
+    if (turn.style.minHeight !== next) turn.style.minHeight = next
+  }
+}
+
+/**
+ * 发出去的那条先对齐视口顶。回复还没超出一屏时停在那里；超出后改贴底，让新内容露出来。
+ * 找不到这一条时退回贴底。
+ */
+export function followChatOutput(parent: HTMLElement, anchorId: string) {
+  const maxScroll = Math.max(0, parent.scrollHeight - parent.clientHeight)
+  const escaped =
+    typeof CSS !== 'undefined' && typeof CSS.escape === 'function' ? CSS.escape(anchorId) : anchorId
+  const anchor =
+    parent.querySelector<HTMLElement>(`[data-chat-kind="user"][data-node-id="${escaped}"]`) ??
+    parent.querySelector<HTMLElement>(turnSelector(anchorId))
+  if (!(anchor instanceof HTMLElement)) {
+    parent.scrollTop = maxScroll
+    return
+  }
+  const anchorTop = Math.max(0, offsetInScroller(anchor, parent))
+  const nodes = parent.querySelectorAll<HTMLElement>('[data-node-id]')
+  const last = nodes[nodes.length - 1]
+  const contentEnd =
+    last instanceof HTMLElement ? offsetInScroller(last, parent) + last.offsetHeight : parent.scrollHeight
+  const span = contentEnd - anchorTop
+  const pad = Number.parseFloat(getComputedStyle(parent).paddingBottom) || 0
+  const room = Math.max(1, parent.clientHeight - pad)
+  if (span <= room) {
+    parent.scrollTop = Math.min(anchorTop, maxScroll)
+    return
+  }
+  parent.scrollTop = Math.min(Math.max(0, contentEnd - room), maxScroll)
 }
 
 export function pinChatToLatest(parent: HTMLElement) {
