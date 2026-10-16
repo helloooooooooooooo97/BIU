@@ -130,7 +130,7 @@ import { ViewPaneMenu } from './pane-more-menu.tsx'
 import { HttpError, listCollection, readJson } from './db-client.ts'
 import { savedViewRecordPath } from '../paths.ts'
 import { findViewNeighbor, indexOnPage } from './view-adjacent.ts'
-import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, TABLE_WINDOW_VIEWPORT_FALLBACK, tableWindowSlice, tableWindowUnchanged } from './table-window.ts'
+import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, TABLE_WINDOW_VIEWPORT_FALLBACK, TABLE_COL_VIEWPORT_FALLBACK, tableColumnSlice, tableColumnUnchanged, tableColumnWidth, tableWindowSlice, tableWindowUnchanged } from './table-window.ts'
 import {
   idleBoolInnerHtml,
   idleEmptyUsageInnerHtml,
@@ -1685,13 +1685,16 @@ export function CollectionBrowser({
     const handle = event.currentTarget
     const table = handle.closest('table')
     if (!table) return
-    const heads = Array.from(table.querySelectorAll('thead th'))
+    const heads = Array.from(table.querySelectorAll('thead th:not(.fsdb-col-pad)'))
     const startX = event.clientX
     const snapshot: Record<string, number> = {}
-    for (let i = 0; i < columns.length; i += 1) {
-      const key = columns[i]!.key
+    for (let i = 0; i < windowedColumns.length; i += 1) {
+      const key = windowedColumns[i]!.key
       const measured = heads[i]?.getBoundingClientRect().width ?? 120
       snapshot[key] = columnWidths[key] ?? Math.round(measured)
+    }
+    for (const col of columns) {
+      if (snapshot[col.key] == null) snapshot[col.key] = columnWidths[col.key] ?? tableColumnWidth(undefined, col.key === schema?.labelField)
     }
     const origin = snapshot[colKey] ?? COL_WIDTH_MIN
     handle.setPointerCapture(event.pointerId)
@@ -1846,16 +1849,40 @@ export function CollectionBrowser({
     }
     return nodes
   }, [collapsedGroups, flattenRows, groupPages, grouped, grouping, pageSize, visible])
-  const tableColSpan = Math.max(columns.length, 1)
   const tablePaintRef = useRef<TablePaintBag>({ colSpan: 1, error: '', renderNode: () => null })
   const tableRef = useRef<HTMLTableElement>(null)
   const tableWrapRef = useRef<HTMLDivElement>(null)
   const tableStageRef = useRef<HTMLDivElement>(null)
   const checkStackRef = useRef<HTMLDivElement>(null)
   const checkHoverRef = useRef<string | 'head' | null>(null)
-  const [tableScroll, setTableScroll] = useState({ top: 0, height: TABLE_WINDOW_VIEWPORT_FALLBACK })
+  const [tableScroll, setTableScroll] = useState({
+    top: 0,
+    height: TABLE_WINDOW_VIEWPORT_FALLBACK,
+    left: 0,
+    width: TABLE_COL_VIEWPORT_FALLBACK,
+  })
   const tablePaintCountRef = useRef(0)
   const wrapCellsRef = useRef(false)
+  const columnMetaRef = useRef({ count: 0, pin: 0, widths: [] as number[] })
+  const columnPinCount = columns[0]?.key === schema?.labelField ? 1 : 0
+  const columnPx = useMemo(
+    () => columns.map((col, index) => tableColumnWidth(columnWidths[col.key], index < columnPinCount)),
+    [columnPinCount, columnWidths, columns],
+  )
+  const colWindow = useMemo(
+    () => tableColumnSlice(columns.length, columnPinCount, tableScroll.left, tableScroll.width, columnPx),
+    [columnPinCount, columnPx, columns.length, tableScroll.left, tableScroll.width],
+  )
+  columnMetaRef.current = { count: columns.length, pin: columnPinCount, widths: columnPx }
+  const windowedColumns = useMemo(() => {
+    const next = columns.slice(0, colWindow.pin)
+    for (let i = colWindow.start; i < colWindow.end; i += 1) next.push(columns[i]!)
+    return next
+  }, [colWindow.end, colWindow.pin, colWindow.start, columns])
+  const tableColSpan = Math.max(
+    windowedColumns.length + (colWindow.padLeft > 0 ? 1 : 0) + (colWindow.padRight > 0 ? 1 : 0),
+    1,
+  )
   const tableWindow = useMemo(
     () =>
       tableWindowSlice(
@@ -1915,6 +1942,7 @@ export function CollectionBrowser({
 
   const checkLayoutKey = [
     tableWindow.start, tableWindow.end, tableWindow.padTop, tableWindow.padBottom,
+    colWindow.start, colWindow.end, colWindow.padLeft, colWindow.padRight,
     wrapCells ? 1 : 0,
     truncateCells ? 1 : 0,
     columns.length,
@@ -1935,11 +1963,21 @@ export function CollectionBrowser({
     const sync = () => {
       const top = wrap.scrollTop
       const height = wrap.clientHeight
+      const left = wrap.scrollLeft
+      const width = wrap.clientWidth
       const rowPx = wrapCellsRef.current ? TABLE_WRAP_ROW_PX : TABLE_ROW_PX
       const count = tablePaintCountRef.current
+      const cols = columnMetaRef.current
       setTableScroll((prev) => {
-        const next = { top, height: height || prev.height }
-        return tableWindowUnchanged(count, prev, next, rowPx) ? prev : next
+        const next = {
+          top,
+          height: height || prev.height,
+          left,
+          width: width || prev.width,
+        }
+        const rowSame = tableWindowUnchanged(count, prev, next, rowPx)
+        const colSame = tableColumnUnchanged(cols.count, cols.pin, prev, next, cols.widths)
+        return rowSame && colSame ? prev : next
       })
     }
     const onScroll = () => {
@@ -3143,6 +3181,66 @@ export function CollectionBrowser({
     setCellPop(cellUsesPop(kind, col.field.writable) ? { id: cell.id, key: cell.key } : null)
   }
 
+  function padColStyle(px: number) {
+    const v = `${Math.max(0, Math.round(px))}px`
+    return { width: v, minWidth: v, maxWidth: v }
+  }
+
+  function paintColPad(px: number, side: 'left' | 'right') {
+    if (px <= 0) return null
+    return <td key={`pad-${side}`} className="fsdb-col-pad" aria-hidden style={padColStyle(px)} />
+  }
+
+  function paintHeadTh(col: (typeof columns)[number]) {
+    const flat = parseFacetFlatColumnKey(col.key)
+    const tone = flat ? schemaTagTone(flat.packId) : undefined
+    const width = colWidthStyle(columnWidths[col.key])
+    return (
+      <th
+        key={col.key}
+        className={[col.key === schema?.labelField ? 'is-pin-col' : '', tone ? 'is-facet-col' : ''].filter(Boolean).join(' ') || undefined}
+        style={{
+          ...(width ?? {}),
+          ...(tone ? { ['--biu-tag' as string]: tone } : {}),
+        }}
+      >
+        <span className={`tasks-th${queryFields.has(col.key) ? ' is-on' : ''}`}>
+          <FieldGlyph kind={col.kind} />
+          {facetColumnTitle(col)}
+        </span>
+        <span
+          className={`fsdb-col-resizer${resizingCol === col.key ? ' is-active' : ''}`}
+          data-testid="fsdb-col-resizer"
+          onPointerDown={(event) => startColResize(event, col.key)}
+        />
+      </th>
+    )
+  }
+
+  function idlePaintedCells(row: DbRecord) {
+    const cells: IdleTableTd[] = []
+    const pushCol = (col: (typeof columns)[number]) => {
+      const pick = cellPickOf(row, col.key, col.field)
+      const attrs = Object.keys(pick).length ? (pick as Record<string, string | number | boolean | undefined>) : undefined
+      cells.push({
+        key: col.key,
+        inner: idleTableCellInner(row, col.key, col.field),
+        className: col.key === schema?.labelField ? 'is-pin-col' : undefined,
+        style: colWidthStyle(columnWidths[col.key]),
+        attrs,
+      })
+    }
+    const pushPad = (side: 'left' | 'right', px: number) => {
+      if (px <= 0) return
+      cells.push({ key: '', inner: '', className: 'fsdb-col-pad', style: padColStyle(px) })
+    }
+    for (let i = 0; i < colWindow.pin; i += 1) pushCol(columns[i]!)
+    pushPad('left', colWindow.padLeft)
+    for (let i = colWindow.start; i < colWindow.end; i += 1) pushCol(columns[i]!)
+    pushPad('right', colWindow.padRight)
+    return cells
+  }
+
   function paintTableCell(row: DbRecord, key: string, field: FieldSpec) {
     if (key === 'shareScope' || key === 'shareRole') {
       const text = cellValueText(row, key, field) || String(row[key] ?? '')
@@ -3193,6 +3291,50 @@ export function CollectionBrowser({
 
   function tableLiveRow(row: DbRecord, depth: number, hasKids: boolean, kidCount: number, rowKey: string, toolsArmed = false) {
     const cellPick = cellPickRef.current
+    const paintLiveTd = (col: (typeof columns)[number]) => (
+      <td
+        key={col.key}
+        data-col-key={col.key}
+        {...cellPickOf(row, col.key, col.field)}
+        style={colWidthStyle(columnWidths[col.key])}
+        className={[
+          col.key === schema?.labelField ? 'is-pin-col' : '',
+          cellPick?.id === row.id && cellPick.key === col.key
+            ? cellFieldWritable(col.field)
+              ? 'is-cell-on'
+              : 'is-cell-on is-cell-ro'
+            : '',
+        ].filter(Boolean).join(' ') || undefined}
+      >
+        {col.key === schema?.labelField ? (
+          <RecordTitle
+            row={row}
+            label={labelOf(row)}
+            Title={chrome?.Title}
+            depth={depth}
+            hasKids={hasKids}
+            kidCount={kidCount}
+            treeOn={treeOn}
+            collapsed={Boolean(collapsed[row.id])}
+            onToggleCollapsed={() => setCollapsed((prev) => ({ ...prev, [row.id]: !prev[row.id] }))}
+            tableIcon={currentTable?.view?.icon}
+            Icon={chrome?.Icon}
+            nested={nested}
+            pick={recordPick(row)}
+            onOpenSplit={() => showRecordInInspector(collectionPath, row.id)}
+            onOpenRow={() => openRow(row)}
+            onWriteEmoji={(next) => void writePatch(row, { emoji: next })}
+            toolsArmed={toolsArmed}
+          />
+        ) : col.key === 'actions' ? (
+          <HoverMount>
+            <RecordActions row={row} />
+          </HoverMount>
+        ) : (
+          <span className="fsdb-cell">{paintTableCell(row, col.key, col.field)}</span>
+        )}
+      </td>
+    )
     return (
       <tr
         key={rowKey}
@@ -3200,74 +3342,23 @@ export function CollectionBrowser({
         className={row.id === detailId ? 'is-active' : undefined}
         {...recordPick(row)}
       >
-        {columns.map((col) => (
-          <td
-            key={col.key}
-            data-col-key={col.key}
-            {...cellPickOf(row, col.key, col.field)}
-            style={colWidthStyle(columnWidths[col.key])}
-            className={[
-              col.key === schema?.labelField ? 'is-pin-col' : '',
-              cellPick?.id === row.id && cellPick.key === col.key
-                ? cellFieldWritable(col.field)
-                  ? 'is-cell-on'
-                  : 'is-cell-on is-cell-ro'
-                : '',
-            ].filter(Boolean).join(' ') || undefined}
-          >
-            {col.key === schema?.labelField ? (
-              <RecordTitle
-                row={row}
-                label={labelOf(row)}
-                Title={chrome?.Title}
-                depth={depth}
-                hasKids={hasKids}
-                kidCount={kidCount}
-                treeOn={treeOn}
-                collapsed={Boolean(collapsed[row.id])}
-                onToggleCollapsed={() => setCollapsed((prev) => ({ ...prev, [row.id]: !prev[row.id] }))}
-                tableIcon={currentTable?.view?.icon}
-                Icon={chrome?.Icon}
-                nested={nested}
-                pick={recordPick(row)}
-                onOpenSplit={() => showRecordInInspector(collectionPath, row.id)}
-                onOpenRow={() => openRow(row)}
-                onWriteEmoji={(next) => void writePatch(row, { emoji: next })}
-                toolsArmed={toolsArmed}
-              />
-            ) : col.key === 'actions' ? (
-              <HoverMount>
-                <RecordActions row={row} />
-              </HoverMount>
-            ) : (
-              <span className="fsdb-cell">{paintTableCell(row, col.key, col.field)}</span>
-            )}
-          </td>
-        ))}
+        {columns.slice(0, colWindow.pin).map(paintLiveTd)}
+        {paintColPad(colWindow.padLeft, 'left')}
+        {columns.slice(colWindow.start, colWindow.end).map(paintLiveTd)}
+        {paintColPad(colWindow.padRight, 'right')}
       </tr>
     )
   }
 
   function tableRecordRow(row: DbRecord, depth: number, hasKids: boolean, kidCount: number, rowKey: string) {
     if (treeOn) return tableLiveRow(row, depth, hasKids, kidCount, rowKey)
-    const cells: IdleTableTd[] = columns.map((col) => {
-      const pick = cellPickOf(row, col.key, col.field)
-      const attrs = Object.keys(pick).length ? (pick as Record<string, string | number | boolean | undefined>) : undefined
-      return {
-        key: col.key,
-        inner: idleTableCellInner(row, col.key, col.field),
-        className: col.key === schema?.labelField ? 'is-pin-col' : undefined,
-        style: colWidthStyle(columnWidths[col.key]),
-        attrs,
-      }
-    })
     return (
       <TableIdleRow
         key={rowKey}
         recordId={row.id}
         className={row.id === detailId ? 'is-active' : undefined}
         pick={recordPick(row)}
-        html={idleTableRowHtml(cells)}
+        html={idleTableRowHtml(idlePaintedCells(row))}
         renderLive={() => tableLiveRow(row, depth, hasKids, kidCount, rowKey, true)}
       />
     )
@@ -4268,37 +4359,21 @@ export function CollectionBrowser({
                   }}
                 >
             <colgroup>
-              {columns.map((col) => (
+              {columns.slice(0, colWindow.pin).map((col) => (
                 <col key={col.key} style={colWidthStyle(columnWidths[col.key])} />
               ))}
+              {colWindow.padLeft > 0 ? <col key="pad-left" style={padColStyle(colWindow.padLeft)} /> : null}
+              {columns.slice(colWindow.start, colWindow.end).map((col) => (
+                <col key={col.key} style={colWidthStyle(columnWidths[col.key])} />
+              ))}
+              {colWindow.padRight > 0 ? <col key="pad-right" style={padColStyle(colWindow.padRight)} /> : null}
             </colgroup>
             <thead>
               <tr>
-                {columns.map((col) => {
-                  const flat = parseFacetFlatColumnKey(col.key)
-                  const tone = flat ? schemaTagTone(flat.packId) : undefined
-                  const width = colWidthStyle(columnWidths[col.key])
-                  return (
-                  <th
-                    key={col.key}
-                    className={[col.key === schema?.labelField ? 'is-pin-col' : '', tone ? 'is-facet-col' : ''].filter(Boolean).join(' ') || undefined}
-                    style={{
-                      ...(width ?? {}),
-                      ...(tone ? { ['--biu-tag' as string]: tone } : {}),
-                    }}
-                  >
-                    <span className={`tasks-th${queryFields.has(col.key) ? ' is-on' : ''}`}>
-                      <FieldGlyph kind={col.kind} />
-                      {facetColumnTitle(col)}
-                    </span>
-                    <span
-                      className={`fsdb-col-resizer${resizingCol === col.key ? ' is-active' : ''}`}
-                      data-testid="fsdb-col-resizer"
-                      onPointerDown={(event) => startColResize(event, col.key)}
-                    />
-                  </th>
-                  )
-                })}
+                {columns.slice(0, colWindow.pin).map(paintHeadTh)}
+                {colWindow.padLeft > 0 ? <th key="pad-left" className="fsdb-col-pad" aria-hidden style={padColStyle(colWindow.padLeft)} /> : null}
+                {columns.slice(colWindow.start, colWindow.end).map(paintHeadTh)}
+                {colWindow.padRight > 0 ? <th key="pad-right" className="fsdb-col-pad" aria-hidden style={padColStyle(colWindow.padRight)} /> : null}
               </tr>
             </thead>
             <TablePaintCtx.Provider value={tablePaintRef}>
@@ -4309,7 +4384,7 @@ export function CollectionBrowser({
               padTop={tableWindow.padTop}
               padBottom={tableWindow.padBottom}
               colSpan={tableColSpan}
-              colKeys={columns.map((col) => col.key).join('\0')}
+              colKeys={`${windowedColumns.map((col) => col.key).join('\0')}\0${colWindow.padLeft}:${colWindow.padRight}`}
               error={error}
               pickMode={pickMode}
             />

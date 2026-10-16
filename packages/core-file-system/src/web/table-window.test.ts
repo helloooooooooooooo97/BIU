@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, TABLE_WINDOW_VIEWPORT_FALLBACK, groupedFullFetchCount, tableWindowSlice, tableWindowUnchanged } from './table-window.ts'
+import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, TABLE_WINDOW_VIEWPORT_FALLBACK, TABLE_COL_PX, TABLE_COL_PIN_PX, TABLE_COL_OVERSCAN, TABLE_COL_VIEWPORT_FALLBACK, groupedFullFetchCount, tableColumnSlice, tableWindowSlice, tableWindowUnchanged } from './table-window.ts'
 
 test('table window keeps overscan around the viewport', () => {
   const slice = tableWindowSlice(200, 0, TABLE_ROW_PX * 10)
@@ -67,4 +67,42 @@ test('grouped first paint fetches every group when a page still fits the window'
 test('grouped wrap pages larger than the window only fully fetch the first group', () => {
   assert.equal(groupedFullFetchCount(100, 4, true), 1)
   assert.equal(groupedFullFetchCount(100, 1, true), 1)
+})
+
+test('unmeasured first screen does not paint every table column', () => {
+  const widths = [TABLE_COL_PIN_PX, ...Array.from({ length: 12 }, () => TABLE_COL_PX)]
+  const slice = tableColumnSlice(13, 1, 0, 0, widths)
+  assert.equal(slice.pin, 1)
+  assert.equal(slice.start, 1)
+  assert.ok(slice.end < 13)
+  assert.ok(slice.pin + (slice.end - slice.start) < 13)
+  assert.ok(slice.padRight > 0)
+  assert.equal(slice.padLeft, 0)
+})
+
+test('narrow column sets still paint every column', () => {
+  const slice = tableColumnSlice(4, 1, 0, TABLE_COL_VIEWPORT_FALLBACK, [140, 72, 72, 72])
+  assert.equal(slice.start, 1)
+  assert.equal(slice.end, 4)
+  assert.equal(slice.padLeft, 0)
+  assert.equal(slice.padRight, 0)
+})
+
+test('typical 7-col first screen fills a 624px wrap without a pad', () => {
+  const widths = [TABLE_COL_PIN_PX, ...Array.from({ length: 6 }, () => TABLE_COL_PX)]
+  const slice = tableColumnSlice(7, 1, 0, 624, widths)
+  assert.equal(slice.pin, 1)
+  assert.equal(slice.start, 1)
+  assert.equal(slice.end, 7)
+  assert.equal(slice.padLeft, 0)
+  assert.equal(slice.padRight, 0)
+})
+
+test('column window shifts with horizontal scroll and pads both sides', () => {
+  const widths = Array.from({ length: 10 }, () => TABLE_COL_PX)
+  const slice = tableColumnSlice(10, 0, TABLE_COL_PX * 4, TABLE_COL_PX * 3, widths)
+  assert.ok(slice.start >= 4 - TABLE_COL_OVERSCAN)
+  assert.ok(slice.end <= 4 + 3 + TABLE_COL_OVERSCAN + 1)
+  assert.ok(slice.padLeft > 0)
+  assert.ok(slice.padRight > 0)
 })

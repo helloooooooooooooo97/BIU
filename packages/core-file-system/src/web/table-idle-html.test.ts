@@ -38,8 +38,8 @@ test('idle cells match the text / bool / usage / facet first paint', () => {
   assert.doesNotMatch(idleBoolInnerHtml(true), /<svg/)
   assert.match(idleEmptyUsageInnerHtml(), /traj-usage-empty/)
   assert.match(idleSelectInnerHtml('进行中、完成'), /fsdb-select-text/)
-  assert.equal(idleTextInnerHtml(''), '<span class="fsdb-cell"></span>')
-  assert.match(idleTextInnerHtml('私人'), />私人</)
+  assert.equal(idleTextInnerHtml(''), '')
+  assert.equal(idleTextInnerHtml('私人'), '私人')
 })
 
 test('idle row html is one td per column with data-col-key', () => {
@@ -54,4 +54,14 @@ test('idle row html is one td per column with data-col-key', () => {
   assert.match(html, /style="width:80px;min-width:80px;max-width:80px"/)
   assert.match(html, /data-col-key="actions"/)
   assert.equal([...html.matchAll(/<td/g)].length, 3)
+})
+
+test('idle pad cells omit data-col-key', () => {
+  const html = idleTableRowHtml([
+    { key: 'title', inner: '任务' },
+    { key: '', inner: '', className: 'fsdb-col-pad', style: { width: '240px', minWidth: '240px', maxWidth: '240px' } },
+  ])
+  assert.match(html, /class="fsdb-col-pad"/)
+  assert.doesNotMatch(html, /data-col-key=""/)
+  assert.equal([...html.matchAll(/data-col-key=/g)].length, 1)
 })

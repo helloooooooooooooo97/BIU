@@ -30,18 +30,17 @@ export function idleBoolInnerHtml(on: boolean) {
 }
 
 export function idleTextInnerHtml(text: string, extraClass?: string) {
-  if (!text) return '<span class="fsdb-cell"></span>'
-  const cls = extraClass ? ` class="${extraClass}"` : ''
-  return `<span class="fsdb-cell"><span${cls}>${escapeTableHtml(text)}</span></span>`
+  if (!text) return extraClass ? `<span class="${extraClass}"></span>` : ''
+  if (!extraClass) return escapeTableHtml(text)
+  return `<span class="${extraClass}">${escapeTableHtml(text)}</span>`
 }
 
 export function idleEmptyUsageInnerHtml() {
-  return '<span class="fsdb-cell"><span class="traj-usage-empty">—</span></span>'
+  return '<span class="traj-usage-empty">—</span>'
 }
 
 export function idleSelectInnerHtml(text: string) {
-  if (!text) return '<span class="fsdb-cell"></span>'
-  return `<span class="fsdb-cell"><span class="fsdb-select-text">${escapeTableHtml(text)}</span></span>`
+  return idleTextInnerHtml(text, 'fsdb-select-text')
 }
 
 export type IdleTableTd = {
@@ -59,7 +58,7 @@ export function idleTableRowHtml(cells: IdleTableTd[]) {
     if (cell.attrs) {
       for (const [name, value] of Object.entries(cell.attrs)) extra += tableHtmlAttr(name, value)
     }
-    html += `<td${tableHtmlAttr('data-col-key', cell.key)}${cell.className ? tableHtmlAttr('class', cell.className) : ''}${tableHtmlStyle(cell.style)}${extra}>${cell.inner}</td>`
+    html += `<td${cell.key ? tableHtmlAttr('data-col-key', cell.key) : ''}${cell.className ? tableHtmlAttr('class', cell.className) : ''}${tableHtmlStyle(cell.style)}${extra}>${cell.inner}</td>`
   }
   return html
 }
