@@ -1,0 +1,358 @@
+#!/usr/bin/env node
+/** 对本机空间各页做刷新压测：壳就绪、API 瀑布、商店 web.js、long task、堆。 */
+import { inspectLocalShellSource, inspectPageBlocksSource, openPageSession, readPerfEnv, resourceKind } from './cdp.mjs'
+
+const { token, workspaceId, chrome } = readPerfEnv()
+const origin = String(process.env.BIU_PERF_ORIGIN ?? 'http://127.0.0.1:5174').replace(/\/$/, '')
+const api = String(process.env.BIU_PERF_API ?? 'http://127.0.0.1:3151').replace(/\/$/, '')
+const runs = Math.max(1, Number(process.env.BIU_PERF_RUNS || 2))
+const only = String(process.env.BIU_PERF_ONLY ?? '')
+  .split(',')
+  .map((item) => item.trim())
+  .filter(Boolean)
+const settleMs = Math.max(0, Number(process.env.BIU_PERF_SETTLE_MS || 400))
+const deadlineMs = Math.max(3000, Number(process.env.BIU_PERF_DEADLINE_MS || 18_000))
+
+const headers = {
+  authorization: `Bearer ${token}`,
+  'x-biu-workspace-id': workspaceId,
+}
+
+async function apiJson(path) {
+  const res = await fetch(`${api}${path}`, { headers })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(`${res.status} ${path} ${body.error || ''}`.trim())
+  return body
+}
+
+async function listSome(path, limit = 8, columns = 'id,title') {
+  const params = new URLSearchParams({ path, limit: String(limit), columns, sort: 'id', dir: 'asc' })
+  const page = await apiJson(`/api/db/list?${params}`)
+  return Array.isArray(page.items) ? page.items : []
+}
+
+function appUrl(path) {
+  return `${origin}${path.startsWith('/') ? path : `/${path}`}`
+}
+
+async function discoverRoutes() {
+  const stat = await apiJson('/api/db/stat?path=/')
+  const collections = (stat.collections || []).map((row) => ({
+    id: row.id,
+    path: row.path,
+    label: row.view?.title || row.label || row.id,
+  }))
+  const sessions = await listSome('/sessions', 5)
+  const pages = await listSome('/pages', 20)
+  const tasks = await listSome('/tasks', 5)
+  const heavyPage = pages.find((row) => String(row.title || '').includes('十插件')) || pages[0]
+  const seedPage = pages.find((row) => String(row.title || '').startsWith('压测页 ')) || pages.find((row) => row.id !== heavyPage?.id)
+  const session = sessions[0]
+  const task = tasks[0]
+  const routes = [
+    { id: 'home', label: '工作台首页', path: '/' },
+    session ? { id: 'session', label: `会话 ${session.title || session.id}`, path: `/s/${session.id}` } : null,
+    { id: 'database', label: '数据库入口', path: '/database' },
+    ...collections.map((row) => ({
+      id: `collection:${row.id}`,
+      label: `表 ${row.label}`,
+      path: `/database/${encodeURIComponent(String(row.path).replace(/^\//, ''))}`,
+    })),
+    heavyPage
+      ? { id: 'page-plugins', label: `记录 ${heavyPage.title || heavyPage.id}`, path: `/database/pages/record/${encodeURIComponent(heavyPage.id)}` }
+      : null,
+    seedPage
+      ? { id: 'page-seed', label: `记录 ${seedPage.title || seedPage.id}`, path: `/database/pages/record/${encodeURIComponent(seedPage.id)}` }
+      : null,
+    task ? { id: 'task-record', label: `任务 ${task.title || task.id}`, path: `/database/tasks/record/${encodeURIComponent(task.id)}` } : null,
+  ].filter(Boolean)
+  const selected = only.length ? routes.filter((row) => only.includes(row.id) || only.includes(row.path)) : routes
+  return { collections, session, heavyPage, seedPage, task, routes: selected }
+}
+
+function summarizeNetwork(requests) {
+  const groups = {}
+  const sequentialPlugin = []
+  for (const req of requests) {
+    const kind = resourceKind(req.url)
+    const bucket = groups[kind] ?? { kind, count: 0, bytes: 0, waitMs: 0, urls: [] }
+    bucket.count += 1
+    bucket.bytes += req.bytes || 0
+    bucket.waitMs += req.duration || 0
+    if (bucket.urls.length < 8) bucket.urls.push(`${req.status || 0} ${Math.round(req.duration || 0)}ms ${req.url.slice(0, 160)}`)
+    groups[kind] = bucket
+    if (kind === 'plugin-web') sequentialPlugin.push(req)
+  }
+  sequentialPlugin.sort((a, b) => (a.start || 0) - (b.start || 0))
+  let pluginOverlap = 0
+  for (let i = 1; i < sequentialPlugin.length; i += 1) {
+    const prev = sequentialPlugin[i - 1]
+    const cur = sequentialPlugin[i]
+    if ((cur.start || 0) < (prev.end || prev.start || 0)) pluginOverlap += 1
+  }
+  const slowest = [...requests].sort((a, b) => (b.duration || 0) - (a.duration || 0)).slice(0, 8).map((req) => ({
+    duration: Math.round(req.duration || 0),
+    bytes: req.bytes || 0,
+    status: req.status || 0,
+    kind: resourceKind(req.url),
+    url: req.url.slice(0, 180),
+  }))
+  return {
+    total: requests.length,
+    groups: Object.values(groups).sort((a, b) => b.waitMs - a.waitMs),
+    pluginWeb: sequentialPlugin.length,
+    pluginWebOverlap: pluginOverlap,
+    pluginWebSerial:
+      sequentialPlugin.length > 1 &&
+      pluginOverlap === 0 &&
+      sequentialPlugin.filter((req) => (req.duration || 0) >= 20).length >= 3,
+    slowest,
+  }
+}
+
+function median(values) {
+  const nums = values.filter((value) => typeof value === 'number' && Number.isFinite(value)).sort((a, b) => a - b)
+  if (!nums.length) return null
+  const mid = Math.floor(nums.length / 2)
+  return nums.length % 2 ? nums[mid] : Math.round((nums[mid - 1] + nums[mid]) / 2)
+}
+
+function collectRequests(events, requests, t0) {
+  for (const ev of events) {
+    if (ev.method === 'Network.requestWillBeSent') {
+      const url = ev.params.request?.url || ''
+      if (!url || url.startsWith('data:') || url.startsWith('blob:')) continue
+      requests.set(ev.params.requestId, {
+        url,
+        start: Math.round((ev.params.wallTime ? ev.params.wallTime * 1000 : Date.now()) - t0),
+        startAbs: ev.params.timestamp,
+      })
+    }
+    if (ev.method === 'Network.responseReceived') {
+      const row = requests.get(ev.params.requestId)
+      if (row) {
+        row.status = ev.params.response?.status
+        row.mime = ev.params.response?.mimeType
+      }
+    }
+    if (ev.method === 'Network.loadingFinished') {
+      const row = requests.get(ev.params.requestId)
+      if (row) {
+        row.bytes = ev.params.encodedDataLength || 0
+        if (typeof row.startAbs === 'number' && typeof ev.params.timestamp === 'number') {
+          row.duration = Math.round((ev.params.timestamp - row.startAbs) * 1000)
+        }
+        row.end = (row.start || 0) + (row.duration || 0)
+      }
+    }
+  }
+}
+
+function collectLogs(events, logs, fails, hub) {
+  for (const ev of events) {
+    if (ev.method === 'Runtime.consoleAPICalled') {
+      const text = (ev.params.args || []).map((arg) => arg.value ?? arg.description ?? '').join(' ')
+      const line = text.slice(0, 280)
+      if (text.includes('[biu:ui-hub]')) hub.push({ t: Date.now(), line })
+      if (ev.params.type === 'error' || ev.params.type === 'warning' || text.includes('[biu:')) logs.push(`${ev.params.type || 'log'}: ${line}`)
+    }
+    if (ev.method === 'Runtime.exceptionThrown') {
+      logs.push(`exception: ${(ev.params.exceptionDetails.exception?.description || ev.params.exceptionDetails.text || '').slice(0, 400)}`)
+    }
+    if (ev.method === 'Network.responseReceived' && ev.params.response.status >= 400) {
+      fails.push(`${ev.params.response.status} ${ev.params.response.url.slice(0, 220)}`)
+    }
+  }
+}
+
+function hubSpans(hub, t0) {
+  const loads = []
+  for (const row of hub) {
+    const load = row.line.match(/加载 (\S+) 的 web\.js/)
+    if (load) loads.push({ id: load[1], start: row.t - t0 })
+    const done = row.line.match(/^info: \[biu:ui-hub\] (\S+) 的 web\.js 已挂上/) || row.line.match(/(\S+) 的 web\.js 已挂上/)
+    if (done) {
+      const id = done[1]
+      const hit = [...loads].reverse().find((item) => item.id === id && item.end == null)
+      if (hit) hit.end = row.t - t0
+    }
+  }
+  return loads.map((item) => ({ id: item.id, start: Math.round(item.start), end: item.end == null ? null : Math.round(item.end) }))
+}
+
+async function measureRoute(session, route) {
+  const url = appUrl(route.path)
+  const t0 = Date.now()
+  const logs = []
+  const fails = []
+  const hub = []
+  const requests = new Map()
+  session.take()
+  try {
+    await session.send('Performance.enable', {}, session.sessionId)
+  } catch {
+    /* headless 某些版本没有这个域 */
+  }
+  await session.send('Page.navigate', { url }, session.sessionId)
+  let contentAt = null
+  let readyAt = null
+  let shell = null
+  const deadline = Date.now() + deadlineMs
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 160))
+    const events = session.take()
+    collectRequests(events, requests, t0)
+    collectLogs(events, logs, fails, hub)
+    const snap = await session.send('Runtime.evaluate', { expression: inspectLocalShellSource(), returnByValue: true }, session.sessionId)
+    const value = snap.result?.value
+    if (!value) continue
+    shell = value
+    const visible = value.shell && value.workspace && !value.splash && !value.gate
+    if (contentAt == null && visible && value.textLen > 20) contentAt = Date.now() - t0
+    const inflightApi = [...requests.values()].filter((req) => /\/api\//.test(req.url) && req.end == null && Date.now() - t0 - (req.start || 0) < 8_000).length
+    if (contentAt != null && value.loadingBlocks === 0 && inflightApi === 0 && (value.composer || value.table || value.textLen > 80)) {
+      if (readyAt == null) readyAt = Date.now() - t0
+      if (Date.now() - t0 >= readyAt + settleMs) break
+    }
+  }
+  if (route.id.startsWith('page-') || route.path.includes('/pages/record/')) {
+    const blocks = await session.send('Runtime.evaluate', { expression: inspectPageBlocksSource(), returnByValue: true }, session.sessionId)
+    shell = { ...shell, blocks: blocks.result?.value }
+  }
+  let heap = null
+  try {
+    heap = await session.send('Runtime.getHeapUsage', {}, session.sessionId)
+  } catch {
+    heap = null
+  }
+  let metrics = []
+  try {
+    const got = await session.send('Performance.getMetrics', {}, session.sessionId)
+    metrics = (got.metrics || []).filter((row) =>
+      /JSHeap|ScriptDuration|TaskDuration|LayoutCount|RecalcStyle|Documents|Nodes|JSEventListeners/.test(row.name),
+    )
+  } catch {
+    metrics = []
+  }
+  const paints = await session.send(
+    'Runtime.evaluate',
+    {
+      expression: `(() => {
+        const nav = performance.getEntriesByType('navigation')[0]
+        const paint = Object.fromEntries(performance.getEntriesByType('paint').map((entry) => [entry.name, Math.round(entry.startTime)]))
+        const longTasks = Array.isArray(window.__biuPerf?.longTasks) ? window.__biuPerf.longTasks : []
+        return {
+          paint,
+          longTaskMs: longTasks.reduce((sum, row) => sum + (row.duration || 0), 0),
+          longTasks: longTasks.slice(0, 12),
+          transferSize: nav ? nav.transferSize : null,
+          domContentLoaded: nav ? Math.round(nav.domContentLoadedEventEnd) : null,
+        }
+      })()`,
+      returnByValue: true,
+    },
+    session.sessionId,
+  )
+  const perf = paints.result?.value || {}
+  const net = summarizeNetwork([...requests.values()].filter((row) => row.url))
+  return {
+    id: route.id,
+    label: route.label,
+    path: route.path,
+    contentAt,
+    readyAt,
+    shell,
+    heapUsed: heap?.usedSize ?? null,
+    metrics,
+    paint: perf.paint || {},
+    longTaskMs: perf.longTaskMs || 0,
+    longTasks: perf.longTasks || [],
+    hub: hubSpans(hub, t0),
+    network: net,
+    logs: [...new Set(logs)].slice(0, 12),
+    fails: [...new Set(fails)].slice(0, 12),
+  }
+}
+
+function bottleneckNotes(rows) {
+  const notes = []
+  const pluginSerial = rows.filter((row) => row.network?.pluginWebSerial && (row.network?.pluginWeb || 0) >= 3)
+  if (pluginSerial.length) {
+    notes.push({
+      id: 'plugin-web-serial',
+      title: '商店 web.js 在每次刷新里串行 import',
+      detail: `有 ${pluginSerial.length} 条路线的 ${pluginSerial[0].network.pluginWeb} 个 web.js 几乎不重叠。ui-hub 对 snapshot 里每个商店包 await import，和当前打开的是不是页面块无关。`,
+    })
+  }
+  const busted = rows.some((row) => (row.network?.groups || []).some((group) => group.kind === 'plugin-web' && group.bytes > 50_000))
+  if (busted) {
+    notes.push({
+      id: 'plugin-web-cache-bust',
+      title: 'web.js URL 被 Date.now() 二次打版本，刷新吃不到缓存',
+      detail: 'snapshot 已经带 ?v=codeVersion。ui-hub 再拼 &v=时间戳，每次刷新都重新拉商店包。',
+    })
+  }
+  const lists = rows.map((row) => (row.network?.groups || []).find((group) => group.kind === 'db-list')).filter(Boolean)
+  const maxList = lists.reduce((max, row) => Math.max(max, row.count), 0)
+  if (maxList >= 8) {
+    notes.push({
+      id: 'sidebar-list-fanout',
+      title: '侧栏/列表对多张表打 /api/db/list',
+      detail: `单次刷新最多 ${maxList} 次 list。展开的集合视图会各打一遍总数和预览。`,
+    })
+  }
+  const slow = rows
+    .filter((row) => typeof row.readyAt === 'number')
+    .sort((a, b) => b.readyAt - a.readyAt)
+    .slice(0, 5)
+    .map((row) => `${row.label} ${row.readyAt}ms`)
+  if (slow.length) notes.push({ id: 'slowest-routes', title: '就绪最慢的页面', detail: slow.join('；') })
+  const long = rows.filter((row) => (row.longTaskMs || 0) >= 120)
+  if (long.length) {
+    notes.push({
+      id: 'long-tasks',
+      title: '主线程 long task',
+      detail: long.map((row) => `${row.label} ${row.longTaskMs}ms`).join('；'),
+    })
+  }
+  return notes
+}
+
+const discovered = await discoverRoutes()
+const session = await openPageSession({ token, workspaceId, chrome })
+const results = []
+try {
+  for (const route of discovered.routes) {
+    const samples = []
+    for (let i = 1; i <= runs; i += 1) samples.push(await measureRoute(session, route))
+    const ready = samples.map((row) => row.readyAt)
+    const content = samples.map((row) => row.contentAt)
+    results.push({
+      id: route.id,
+      label: route.label,
+      path: route.path,
+      runs: samples,
+      contentAt: median(content),
+      readyAt: median(ready),
+      pluginWeb: samples[samples.length - 1]?.network?.pluginWeb ?? 0,
+      pluginWebSerial: samples.some((row) => row.network?.pluginWebSerial),
+      dbList: samples[samples.length - 1]?.network?.groups?.find((group) => group.kind === 'db-list')?.count ?? 0,
+      longTaskMs: median(samples.map((row) => row.longTaskMs)),
+      heapUsed: samples[samples.length - 1]?.heapUsed ?? null,
+      fails: [...new Set(samples.flatMap((row) => row.fails))],
+      last: samples[samples.length - 1],
+    })
+  }
+} finally {
+  session.close()
+}
+
+const report = {
+  workspaceId,
+  origin,
+  runs,
+  routes: discovered.routes.map((row) => row.path),
+  results,
+  bottlenecks: bottleneckNotes(results.map((row) => row.last).filter(Boolean)),
+}
+console.log(JSON.stringify(report, null, 2))

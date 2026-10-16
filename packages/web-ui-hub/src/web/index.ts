@@ -15,6 +15,27 @@ export function isRuntimeWebModule(web: string) {
   return web.startsWith('/') || /^https?:\/\//.test(web)
 }
 
+/** snapshot 已经带 ?v=codeVersion。没有版本号才补时间戳，避免每次刷新都重新拉 8MB 的 web.js。 */
+export function runtimeWebModuleHref(web: string, origin?: string) {
+  const base = origin ?? (typeof window !== 'undefined' ? window.location.origin : 'http://127.0.0.1')
+  const href = web.startsWith('/') ? new URL(web, base).href : web
+  try {
+    if (new URL(href).searchParams.has('v')) return href
+  } catch {
+    if (/[?&]v=/.test(href)) return href
+  }
+  return href.includes('?') ? `${href}&v=${Date.now()}` : `${href}?v=${Date.now()}`
+}
+
+export function isStoreWebPlugin(plugin: { packageName?: string; web?: string }) {
+  return Boolean(plugin.packageName?.startsWith('store:') && plugin.web && isRuntimeWebModule(plugin.web))
+}
+
+/** 页面记录才需要商店页块的 web.js。任务表、会话、MCP 刷新不必先拉 excalidraw。 */
+export function pageRouteNeedsStoreWeb(pathname: string) {
+  return /\/pages\/record\//.test(pathname)
+}
+
 /** 动态 import 得到的是模块命名空间；不要只用 default，否则会丢掉 inject / name。 */
 export function runtimeWebPlugin(loaded: unknown): Plugin | undefined {
   if (loaded == null) return undefined
@@ -70,22 +91,53 @@ export function apply(ctx: Context) {
   const forkWebs = new Map<string, string>()
   let pending = false
   let running = false
+  let storeWebRequested = false
+
+  function shouldLoadStoreWeb() {
+    return storeWebRequested
+  }
 
   async function resolvePlugin(_id: string, web?: string): Promise<Plugin | undefined> {
     if (!web) return undefined
     const loader = uiPackageLoaders[web]
     if (loader) return loader()
     if (isRuntimeWebModule(web)) {
-      const href = web.startsWith('/') ? new URL(web, window.location.origin).href : web
-      const bust = href.includes('?') ? `&v=${Date.now()}` : `?v=${Date.now()}`
       try {
-        return await import(/* @vite-ignore */ `${href}${bust}`)
+        return await import(/* @vite-ignore */ runtimeWebModuleHref(web))
       } catch (error) {
         clientLog('error', 'ui-hub', `${_id} web 加载失败: ${clientLogErrorText(error)}`, web)
         return undefined
       }
     }
     return undefined
+  }
+
+  async function mountLoaded(row: { id: string; web?: string }, loaded: Plugin | undefined) {
+    if (forks.has(row.id) || !loaded) return
+    const plugin = runtimeWebPlugin(loaded)
+    if (!plugin) {
+      clientLog('error', 'ui-hub', `${row.id} 的 web.js 没有 apply`)
+      return
+    }
+    const fiber = ctx.plugin(plugin)
+    forks.set(row.id, fiber)
+    forkWebs.set(row.id, row.web ?? '')
+    try {
+      await fiber
+    } catch (error) {
+      clientLog('error', 'ui-hub', `${row.id} 挂载失败: ${clientLogErrorText(error)}`)
+      forks.delete(row.id)
+      forkWebs.delete(row.id)
+      await fiber.dispose().catch(() => undefined)
+      return
+    }
+    if (row.web && isRuntimeWebModule(row.web)) clientLog('info', 'ui-hub', `${row.id} 的 web.js 已挂上`)
+  }
+
+  async function mountRow(row: { id: string; web?: string }) {
+    if (forks.has(row.id)) return
+    if (row.web && isRuntimeWebModule(row.web)) clientLog('info', 'ui-hub', `加载 ${row.id} 的 web.js`, row.web)
+    await mountLoaded(row, await resolvePlugin(row.id, row.web))
   }
 
   async function sync() {
@@ -117,35 +169,28 @@ export function apply(ctx: Context) {
         forkWebs.delete(id)
       }
 
+      const coreRows = orderedRows.filter((row) => !isStoreWebPlugin(row))
+      const storeRows = orderedRows.filter((row) => isStoreWebPlugin(row))
+
       let yieldForComposer = false
-      for (const row of orderedRows) {
+      for (const row of coreRows) {
         if (yieldForComposer && !SESSION_UI_FIRST.includes(row.id as (typeof SESSION_UI_FIRST)[number])) {
           yieldForComposer = false
           await new Promise((resolve) => setTimeout(resolve, 0))
         }
-        if (forks.has(row.id)) continue
-        if (row.web && isRuntimeWebModule(row.web)) clientLog('info', 'ui-hub', `加载 ${row.id} 的 web.js`, row.web)
-        const loaded = await resolvePlugin(row.id, row.web)
-        if (!loaded) continue
-        const plugin = runtimeWebPlugin(loaded)
-        if (!plugin) {
-          clientLog('error', 'ui-hub', `${row.id} 的 web.js 没有 apply`)
-          continue
-        }
-        const fiber = ctx.plugin(plugin)
-        forks.set(row.id, fiber)
-        forkWebs.set(row.id, row.web ?? '')
-        try {
-          await fiber
-        } catch (error) {
-          clientLog('error', 'ui-hub', `${row.id} 挂载失败: ${clientLogErrorText(error)}`)
-          forks.delete(row.id)
-          forkWebs.delete(row.id)
-          await fiber.dispose().catch(() => undefined)
-          continue
-        }
-        if (row.web && isRuntimeWebModule(row.web)) clientLog('info', 'ui-hub', `${row.id} 的 web.js 已挂上`)
+        await mountRow(row)
         if (SESSION_UI_FIRST.includes(row.id as (typeof SESSION_UI_FIRST)[number])) yieldForComposer = true
+      }
+
+      if (shouldLoadStoreWeb()) {
+        const pendingStore = storeRows.filter((row) => !forks.has(row.id))
+        const imported = await Promise.all(
+          pendingStore.map(async (row) => {
+            if (row.web && isRuntimeWebModule(row.web)) clientLog('info', 'ui-hub', `加载 ${row.id} 的 web.js`, row.web)
+            return { row, loaded: await resolvePlugin(row.id, row.web) }
+          }),
+        )
+        for (const item of imported) await mountLoaded(item.row, item.loaded)
       }
 
       const fsUi = rows.some(
@@ -184,6 +229,7 @@ export function apply(ctx: Context) {
   lastMountKey = mountKey()
   if (typeof window !== 'undefined') {
     window.addEventListener('biu:enable-page-block-plugin', () => {
+      storeWebRequested = true
       void sync()
     })
   }

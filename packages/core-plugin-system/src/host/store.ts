@@ -115,6 +115,11 @@ export function storeWebUrl(id: string, version?: string | number) {
   return version === undefined ? base : `${base}?v=${encodeURIComponent(String(version))}`
 }
 
+/** URL 已带 codeVersion 时可以长缓存；没版本号的请求仍 no-store。 */
+export function storeFileCacheControl(version?: string | null) {
+  return String(version ?? '').trim() ? 'public, max-age=31536000, immutable' : 'no-store'
+}
+
 export function defaultPluginDir() {
   return process.env.BIU_PLUGIN_DIR || join(process.cwd(), '.plugin')
 }
@@ -867,7 +872,7 @@ export async function openStore(ctx: Context) {
       route.res.writeHead(200, {
         'content-type': mime,
         'Access-Control-Allow-Origin': '*',
-        'Cache-Control': 'no-store',
+        'Cache-Control': storeFileCacheControl(route.query.get('v')),
       })
       route.res.end(body)
     } catch {

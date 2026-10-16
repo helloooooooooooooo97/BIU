@@ -50,7 +50,20 @@ export async function openPageSession({ token, workspaceId, chrome }) {
   await send(
     'Page.addScriptToEvaluateOnNewDocument',
     {
-      source: `localStorage.setItem('biu.account.token', ${JSON.stringify(token)}); localStorage.setItem('biu.workspaceId', ${JSON.stringify(workspaceId)}); sessionStorage.setItem('biu.workspaceId', ${JSON.stringify(workspaceId)});`,
+      source: `localStorage.setItem('biu.account.token', ${JSON.stringify(token)}); localStorage.setItem('biu.workspaceId', ${JSON.stringify(workspaceId)}); sessionStorage.setItem('biu.workspaceId', ${JSON.stringify(workspaceId)});
+window.__biuPerf = { longTasks: [] };
+try {
+  const po = new PerformanceObserver((list) => {
+    for (const entry of list.getEntries()) {
+      window.__biuPerf.longTasks.push({
+        name: entry.name,
+        duration: Math.round(entry.duration),
+        start: Math.round(entry.startTime),
+      })
+    }
+  })
+  po.observe({ type: 'longtask', buffered: true })
+} catch (error) {}`,
     },
     sessionId,
   )
@@ -77,4 +90,38 @@ export function inspectPageBlocksSource() {
     const title = document.querySelector('h1')?.textContent || ''
     return { title, blocks: blocks.length, views, other, loading }
   })()`
+}
+
+/** 本机空间各页共用：壳、输入框、表、记录是否已经画出来。 */
+export function inspectLocalShellSource() {
+  return `(() => {
+    const splash = Boolean(document.querySelector('[data-testid="auth-verifying"]'))
+    const gate = Boolean(document.querySelector('[data-testid="auth-gate"]'))
+    const shell = Boolean(document.querySelector('[data-testid="app-shell"]'))
+    const workspace = Boolean(document.querySelector('[data-testid="shell-workspace-switcher"]'))
+    const composer = Boolean(document.querySelector('.composer-pill, [data-testid="chat-empty"], [data-testid="chat-turn"]'))
+    const table = Boolean(document.querySelector('.fsdb-page, [data-collection-kind], [data-page-block]'))
+    const loadingBlocks = document.querySelectorAll('[data-plugin-phase="loading"]').length
+    const title =
+      document.querySelector('h1')?.textContent?.trim() ||
+      document.querySelector('.chat-view-project-name')?.textContent?.trim() ||
+      document.title
+    const textLen = (document.body?.innerText || '').length
+    const longTasks = Array.isArray(window.__biuPerf?.longTasks) ? window.__biuPerf.longTasks : []
+    return { splash, gate, shell, workspace, composer, table, loadingBlocks, title, textLen, longTasks }
+  })()`
+}
+
+export function resourceKind(url) {
+  const path = String(url || '')
+  if (path.includes('/api/snapshot')) return 'snapshot'
+  if (path.includes('/api/plugin-store/') && path.includes('/web.js')) return 'plugin-web'
+  if (path.includes('/api/db/list')) return 'db-list'
+  if (path.includes('/api/db/stat')) return 'db-stat'
+  if (path.includes('/api/db/content') || path.includes('/api/db/read')) return 'db-record'
+  if (path.includes('/api/db/')) return 'db'
+  if (path.includes('/api/account/')) return 'account'
+  if (path.includes('/api/')) return 'api'
+  if (/\.(tsx?|jsx?|mjs|css)(\?|$)/.test(path) || path.includes('/@fs/') || path.includes('/node_modules/')) return 'module'
+  return 'other'
 }
