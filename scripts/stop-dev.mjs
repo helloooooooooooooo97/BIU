@@ -140,6 +140,36 @@ function isGone(pid) {
   }
 }
 
+export function parseProcessStates(stdout) {
+  const states = new Map()
+  for (const line of stdout.split('\n')) {
+    const match = /^\s*(\d+)\s+(\S+)/.exec(line)
+    if (match) states.set(Number(match[1]), match[2])
+  }
+  return states
+}
+
+/** 僵尸进程已经放开端口和 sqlite，只是父进程还没回收。空状态表示 ps 已经看不到它。 */
+export function stillRunning(pids, states) {
+  if (!states) return pids
+  return pids.filter((pid) => {
+    const state = states.get(pid)
+    if (!state) return false
+    return !state.startsWith('Z')
+  })
+}
+
+async function readStates(pids) {
+  if (pids.length === 0) return new Map()
+  try {
+    const { stdout } = await execFileAsync('ps', ['-o', 'pid=,state=', '-p', pids.join(',')])
+    return parseProcessStates(stdout)
+  } catch (error) {
+    if (error?.code === 1 || error?.code === '1') return new Map()
+    return null
+  }
+}
+
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 
 export async function readCwd(pid) {
@@ -174,12 +204,13 @@ export async function runStop({
   selfPid,
   signal: send,
   isGone: exited,
+  readStates: statesOf = async () => null,
   sleep,
   now = () => Date.now(),
   // Vite 的 SIGTERM 会等浏览器连接断开，页面开着就一直不退。
   // 拖满几秒也还是要杀掉，所以只给一小段时间，没退就结束掉。
   termGraceMs = 400,
-  killGraceMs = 400,
+  killGraceMs = 1500,
   log = () => {},
 }) {
   const processes = await readProcesses()
@@ -196,10 +227,12 @@ export async function runStop({
   const waitGone = async (pids, graceMs) => {
     const start = now()
     for (;;) {
-      const alive = []
+      let alive = []
       for (const pid of pids) {
         if (!(await exited(pid))) alive.push(pid)
       }
+      if (alive.length === 0) return alive
+      alive = stillRunning(alive, await statesOf(alive))
       if (alive.length === 0) return alive
       if (now() - start >= graceMs) return alive
       await sleep(50)
@@ -240,6 +273,7 @@ async function main() {
     selfPid: process.pid,
     signal,
     isGone,
+    readStates,
     sleep: (ms) => new Promise((done) => setTimeout(done, ms)),
     log: (message) => console.log(message),
   })

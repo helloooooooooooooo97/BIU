@@ -2,7 +2,7 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
-import { inRepo, isDevAncestor, isStopSeed, parseListenerPids, parseProcessTable, runStop, selectStopPids } from './stop-dev.mjs'
+import { inRepo, isDevAncestor, isStopSeed, parseListenerPids, parseProcessStates, parseProcessTable, runStop, selectStopPids, stillRunning } from './stop-dev.mjs'
 
 const tree = [
   { pid: 50, ppid: 1, command: '-zsh' },
@@ -120,6 +120,27 @@ test('runStop returns immediately when nothing is listening', async () => {
   assert.deepEqual(logs, ['3141 3151 5173 5174 已空闲'])
 })
 
+test('a leftover zombie does not fail the stop', async () => {
+  const signals: string[] = []
+  const logs: string[] = []
+  await runStop({
+    listProcesses: async () => [{ pid: 62438, ppid: 1, command: 'node node_modules/tsx/dist/cli.mjs host/index.ts' }],
+    listListeners: async () => [],
+    selfPid: 201,
+    signal: (_pid, name) => signals.push(name),
+    isGone: async () => false,
+    readStates: async () => parseProcessStates('62438 Z'),
+    sleep: async () => {
+      throw new Error('zombie should not keep the stop waiting')
+    },
+    log: (message) => logs.push(message),
+  })
+  assert.deepEqual(signals, ['SIGTERM'])
+  assert.deepEqual(logs, ['结束 dev 进程'])
+  assert.deepEqual(stillRunning([62438, 7], new Map([[62438, 'Z']])), [])
+  assert.deepEqual(stillRunning([7], null), [7])
+})
+
 test('a stuck shutdown is ended quickly and without a force-kill roster', async () => {
   let gone = false
   let clock = 0
@@ -148,6 +169,7 @@ test('a stuck shutdown is ended quickly and without a force-kill roster', async 
 test('make stop waits for the dev process, not only the port', async () => {
   const makefile = await readFile(resolve(import.meta.dirname, '../Makefile'), 'utf8')
   assert.match(makefile, /node scripts\/stop-dev\.mjs/)
+  assert.match(makefile, /^deploy: restart$/m)
   const source = await readFile(resolve(import.meta.dirname, 'stop-dev.mjs'), 'utf8')
   assert.match(source, /SIGTERM/)
   assert.match(source, /SIGKILL/)
