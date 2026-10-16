@@ -62,6 +62,23 @@ test('a host that already dropped its port is still stopped', () => {
   assert.deepEqual(selectStopPids({ processes, listeners: [], selfPid: 1 }), [91, 92, 93])
 })
 
+test('stop selects the rebuilt cloud and local hosts', () => {
+  const processes = [
+    { pid: 60, ppid: 1, command: 'make rebuild' },
+    { pid: 70, ppid: 60, command: 'npm run start:both' },
+    { pid: 80, ppid: 70, command: 'node node_modules/concurrently/dist/bin/concurrently.js -k -n online,desktop npm:start npm:start:desktop' },
+    { pid: 91, ppid: 80, command: 'npm run start' },
+    { pid: 92, ppid: 91, command: 'sh -c PORT=3141 BIU_HOME=.cloud-data tsx host/index.ts' },
+    { pid: 93, ppid: 92, command: 'node node_modules/tsx/dist/cli.mjs host/index.ts' },
+    { pid: 94, ppid: 80, command: 'npm run start:desktop' },
+    { pid: 95, ppid: 94, command: 'sh -c BIU_ONLINE=0 PORT=3151 BIU_HOME=.local-data tsx host/index.ts' },
+    { pid: 96, ppid: 95, command: 'node node_modules/tsx/dist/cli.mjs host/index.ts' },
+  ]
+  assert.deepEqual(selectStopPids({ processes, listeners: [93, 96], selfPid: 1 }), [70, 80, 91, 92, 93, 94, 95, 96])
+  assert.equal(isDevAncestor('npm run start:desktop'), true)
+  assert.equal(isDevAncestor('npm install'), false)
+})
+
 test('stop does not kill its own make or shell', () => {
   const processes = [
     { pid: 50, ppid: 1, command: 'npm run dev' },
@@ -170,6 +187,11 @@ test('make stop waits for the dev process, not only the port', async () => {
   const makefile = await readFile(resolve(import.meta.dirname, '../Makefile'), 'utf8')
   assert.match(makefile, /node scripts\/stop-dev\.mjs/)
   assert.match(makefile, /^deploy: restart$/m)
+  assert.match(makefile, /^rebuild: stop build$/m)
+  assert.match(makefile, /npm run start:both/)
+  const pkg = await readFile(resolve(import.meta.dirname, '../package.json'), 'utf8')
+  assert.match(pkg, /"start:desktop": ".*BIU_ONLINE=0.*PORT=3151.*BIU_HOME=\.local-data/)
+  assert.match(pkg, /"start": ".*PORT=3141.*BIU_HOME=\.cloud-data/)
   const source = await readFile(resolve(import.meta.dirname, 'stop-dev.mjs'), 'utf8')
   assert.match(source, /SIGTERM/)
   assert.match(source, /SIGKILL/)

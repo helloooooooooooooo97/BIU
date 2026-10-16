@@ -12,14 +12,14 @@ const HOST_ENTRY = /(?:^|[\s'"])(?:tsx|node)\b.*(?:^|[\s'"])host\/index\.ts(?:\s
 const WAIT_PORT = /(?:^|[\s'"])node\b.*(?:^|[\s'"])scripts\/wait-port\.mjs(?:\s|$)/
 const VITE_BIN = /(?:^|[\s/])vite(?:\.js)?(?:\s|$)/
 const CONCURRENTLY = /\bconcurrently\b/
-const NPM_DEV = /\bnpm\b.*\bdev(?::[\w-]+)?\b/
+const NPM_APP = /\bnpm\b.*\b(?:dev|start)(?::[\w-]+)?\b/
 
 export function isStopSeed(command) {
   return HOST_ENTRY.test(command) || WAIT_PORT.test(command)
 }
 
 export function isDevAncestor(command) {
-  return isStopSeed(command) || VITE_BIN.test(command) || CONCURRENTLY.test(command) || NPM_DEV.test(command)
+  return isStopSeed(command) || VITE_BIN.test(command) || CONCURRENTLY.test(command) || NPM_APP.test(command)
 }
 
 export function inRepo(cwd, root) {
