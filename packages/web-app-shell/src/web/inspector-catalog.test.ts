@@ -7,6 +7,9 @@ const inspector = readFileSync(resolve(import.meta.dirname, './session-inspector
 const css = readFileSync(resolve(import.meta.dirname, '../../../../web/style.css'), 'utf8')
 
 test('inspector header keeps opened tabs on top and a plus menu on the right', () => {
+  assert.match(inspector, /data-testid="inspector-more"/)
+  assert.match(inspector, /data-testid="inspector-more"[\s\S]*data-testid="inspector-add"/)
+  assert.match(inspector, /关闭 \$\{name\}/)
   assert.match(inspector, /data-testid="inspector-add"/)
   assert.match(inspector, /data-testid="inspector-add-menu"/)
   assert.match(inspector, /className="app-side-bar-head" data-biu-ignore/)

@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState, type ReactNode, type Dispatch, type SetStateAction } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type Dispatch, type SetStateAction } from 'react'
 import type { CollectionChrome, FsDetailPane } from '@biu/type-file-system/ui'
 import type { CollectionSchema, DbRecord, FieldSpec } from '@biu/type-file-system'
-import { ChevronDownIcon, ChevronLeftIcon, ChevronUpIcon, EllipsisHorizontalIcon, HashtagIcon, ShareIcon } from '@heroicons/react/16/solid'
+import { ChevronDownIcon, ChevronLeftIcon, ChevronUpIcon, HashtagIcon, ShareIcon } from '@heroicons/react/16/solid'
 import { AnchorMenu, RecordEmojiBoard } from '@biu/public-ui'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { contentFieldKey, fieldHasValue, formatField, resolveFieldType } from './fields.ts'
@@ -16,6 +16,7 @@ import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, shouldLeaveContentForTitle, s
 import { HeadingOutline } from './heading-outline.tsx'
 import { PageBanner } from './page-banner.tsx'
 import { fieldPickAttrs, recordSourcePath } from './pick-dom.ts'
+import { dismissInspectorPaneMenu, reportInspectorPaneMenu } from './inspector-pane-menu.tsx'
 
 function renderDetailPanes(
   panes: FsDetailPane[] | undefined,
@@ -131,7 +132,7 @@ function DetailTitleIcon({
   )
 }
 
-function DetailMore({
+function RecordPaneMenu({
   record,
   Tools,
   onDelete,
@@ -146,73 +147,48 @@ function DetailMore({
   share?: ReactNode
   shareLabel?: string
 }) {
-  const [anchor, setAnchor] = useState<HTMLElement | null>(null)
   const [shareItem, setShareItem] = useState<HTMLElement | null>(null)
   const close = () => {
-    setAnchor(null)
     setShareItem(null)
+    dismissInspectorPaneMenu()
   }
   return (
     <>
-      <button
-        type="button"
-        className="fsdb-detail-float-btn"
-        title="操作"
-        aria-label="记录操作"
-        aria-haspopup="menu"
-        aria-expanded={Boolean(anchor)}
-        data-testid="fsdb-detail-more"
-        onClick={(event) => setAnchor((prev) => (prev ? null : event.currentTarget))}
-      >
-        <EllipsisHorizontalIcon aria-hidden />
-      </button>
-      {anchor ? (
-        <AnchorMenu
-          anchor={anchor}
-          onClose={close}
-          className="fsdb-detail-more-menu"
-          role="menu"
-          minWidth={168}
-          placement="left"
-          inside={(node) => node instanceof Element && Boolean(node.closest('.fsdb-detail-more-menu.has-share'))}
+      {Tools ? <Tools record={record} onDone={close} /> : null}
+      {share ? (
+        <button
+          type="button"
+          role="menuitem"
+          className="fsdb-detail-more-item"
+          aria-haspopup="dialog"
+          aria-expanded={Boolean(shareItem)}
+          data-testid="fsdb-detail-share"
+          onClick={(event) => {
+            const btn = event.currentTarget
+            setShareItem((prev) => (prev ? null : btn))
+          }}
         >
-          {Tools ? <Tools record={record} onDone={close} /> : null}
-          {share ? (
-            <button
-              type="button"
-              role="menuitem"
-              className="fsdb-detail-more-item"
-              aria-haspopup="dialog"
-              aria-expanded={Boolean(shareItem)}
-              data-testid="fsdb-detail-share"
-              onClick={(event) => {
-                const btn = event.currentTarget
-                setShareItem((prev) => (prev ? null : btn))
-              }}
-            >
-              <ShareIcon aria-hidden />
-              {shareLabel || '分享'}
-              <ChevronLeftIcon aria-hidden className="fsdb-detail-more-caret" />
-            </button>
-          ) : null}
-          {onDelete ? (
-            <button
-              type="button"
-              role="menuitem"
-              className="fsdb-detail-more-item is-danger"
-              data-testid="fsdb-detail-delete"
-              onClick={() => {
-                close()
-                onDelete()
-              }}
-            >
-              <TrashGlyph aria-hidden className="size-4" />
-              {deleteLabel}
-            </button>
-          ) : null}
-        </AnchorMenu>
+          <ShareIcon aria-hidden />
+          {shareLabel || '分享'}
+          <ChevronLeftIcon aria-hidden className="fsdb-detail-more-caret" />
+        </button>
       ) : null}
-      {anchor && share && shareItem ? (
+      {onDelete ? (
+        <button
+          type="button"
+          role="menuitem"
+          className="fsdb-detail-more-item is-danger"
+          data-testid="fsdb-detail-delete"
+          onClick={() => {
+            close()
+            onDelete()
+          }}
+        >
+          <TrashGlyph aria-hidden className="size-4" />
+          {deleteLabel}
+        </button>
+      ) : null}
+      {share && shareItem ? (
         <AnchorMenu
           anchor={shareItem}
           onClose={() => setShareItem(null)}
@@ -221,7 +197,7 @@ function DetailMore({
           minWidth={360}
           placement="left"
           zIndex={210}
-          inside={(node) => Boolean(anchor.contains(node))}
+          inside={(node) => Boolean(shareItem.contains(node))}
         >
           {share}
         </AnchorMenu>
@@ -254,6 +230,7 @@ export function RecordDetail({
   recordKind = 'record',
   onDelete,
   readOnly = false,
+  inspectorPaneId,
 }: {
   selected: DbRecord
   schema: CollectionSchema
@@ -278,6 +255,7 @@ export function RecordDetail({
   recordKind?: string
   onDelete?: () => void
   readOnly?: boolean
+  inspectorPaneId?: string
 }) {
   const title = labelOf(selected)
   const recordPath = recordSourcePath(collectionPath, selected.id)
@@ -298,6 +276,29 @@ export function RecordDetail({
     window.addEventListener(FOCUS_RECORD_TITLE, onTitle)
     return () => window.removeEventListener(FOCUS_RECORD_TITLE, onTitle)
   }, [])
+
+  const deleteRef = useRef(onDelete)
+  deleteRef.current = onDelete
+  const showPaneActions = Boolean(share) || (!readOnly && Boolean(chrome?.DetailTools || onDelete))
+  useLayoutEffect(() => {
+    if (!inspectorPaneId) return
+    if (!showPaneActions) {
+      reportInspectorPaneMenu(inspectorPaneId, null)
+      return
+    }
+    reportInspectorPaneMenu(
+      inspectorPaneId,
+      <RecordPaneMenu
+        record={selected}
+        Tools={chrome?.DetailTools}
+        onDelete={deleteRef.current ? () => deleteRef.current?.() : undefined}
+        deleteLabel={collectionPath === '/pages' ? '删除页面' : '删除记录'}
+        share={share}
+        shareLabel={collectionPath === '/pages' ? '分享页面' : '分享记录'}
+      />,
+    )
+    return () => reportInspectorPaneMenu(inspectorPaneId, null)
+  }, [chrome?.DetailTools, collectionPath, inspectorPaneId, readOnly, selected, showPaneActions])
 
   const [facetOpen, setFacetOpen] = useState(false)
   useEffect(() => {
@@ -504,48 +505,30 @@ export function RecordDetail({
             </div>
           </div>
           <HeadingOutline enabled={headingOutline} />
-          {(() => {
-            const showMore = Boolean(share) || (!readOnly && Boolean(chrome?.DetailTools || onDelete))
-            if (!onPrev && !onNext && !showMore) return null
-            return (
-            <nav className={`fsdb-detail-float-nav${share ? ' has-share' : ''}`} aria-label="按视图顺序切换记录">
-              {onPrev || onNext ? (
-                <button
-                  type="button"
-                  className="fsdb-detail-float-btn"
-                  title="上一条"
-                  aria-label="上一条"
-                  disabled={!canPrev}
-                  onClick={onPrev}
-                >
-                  <ChevronUpIcon aria-hidden />
-                </button>
-              ) : null}
-              {showMore ? (
-                <DetailMore
-                  record={selected}
-                  Tools={chrome?.DetailTools}
-                  onDelete={onDelete}
-                  deleteLabel={collectionPath === '/pages' ? '删除页面' : '删除记录'}
-                  share={share}
-                  shareLabel={collectionPath === '/pages' ? '分享页面' : '分享记录'}
-                />
-              ) : null}
-              {onPrev || onNext ? (
-                <button
-                  type="button"
-                  className="fsdb-detail-float-btn"
-                  title="下一条"
-                  aria-label="下一条"
-                  disabled={!canNext}
-                  onClick={onNext}
-                >
-                  <ChevronDownIcon aria-hidden />
-                </button>
-              ) : null}
+          {onPrev || onNext ? (
+            <nav className="fsdb-detail-float-nav" aria-label="按视图顺序切换记录">
+              <button
+                type="button"
+                className="fsdb-detail-float-btn"
+                title="上一条"
+                aria-label="上一条"
+                disabled={!canPrev}
+                onClick={onPrev}
+              >
+                <ChevronUpIcon aria-hidden />
+              </button>
+              <button
+                type="button"
+                className="fsdb-detail-float-btn"
+                title="下一条"
+                aria-label="下一条"
+                disabled={!canNext}
+                onClick={onNext}
+              >
+                <ChevronDownIcon aria-hidden />
+              </button>
             </nav>
-            )
-          })()}
+          ) : null}
         </div>
   )
 }
