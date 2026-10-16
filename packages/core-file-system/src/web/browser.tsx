@@ -150,7 +150,7 @@ import { ViewPaneMenu } from './pane-more-menu.tsx'
 import { HttpError, listCollection, readJson } from './db-client.ts'
 import { savedViewRecordPath } from '../paths.ts'
 import { findViewNeighbor, indexOnPage } from './view-adjacent.ts'
-import { tableWindowSlice } from './table-window.ts'
+import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, tableWindowSlice } from './table-window.ts'
 import { rememberPreviewTotal, viewTotalKey } from './sidebar-preview.ts'
 import { catalogLockFilters, isReadOnlyViewId, mergeTableViews, parseBuiltinScopeViewId, stubBuiltinBlockKindView, viewsForScope, type DataScope } from '../catalog-views.ts'
 import { SAVED_VIEW_EVENT, rememberInspectorWorkingView, showRecordInInspector } from './inspector-db-route.ts'
@@ -1019,7 +1019,7 @@ export function CollectionBrowser({
   }, [activeViewId, collectionPath, dataPath, fetchQuery, groupBy, listColumns, queryFilters, page, pageSize, sortDir, sortField, sorts])
   const reloadRef = useRef(reload)
   reloadRef.current = reload
-  const reloadKey = `${dataPath}\0${groupBy ? JSON.stringify(groupPages) : page}\0${pageSize}\0${fetchQuery}\0${sortField}\0${sortDir}\0${JSON.stringify(sorts)}\0${JSON.stringify(queryFilters)}\0${activeViewId ?? ''}\0${listColumnsKey}\0${groupBy}`
+  const reloadKey = `${dataPath}\0${groupBy ? JSON.stringify(groupPages) : page}\0${pageSize}\0${fetchQuery}\0${sortField}\0${sortDir}\0${sortsStateKey(sorts)}\0${JSON.stringify(queryFilters)}\0${activeViewId ?? ''}\0${listColumnsKey}\0${groupBy}`
   const detailIdRef = useRef<string | null>(null)
   detailIdRef.current = detailId
   const contentGen = useRef(0)
@@ -1140,16 +1140,22 @@ export function CollectionBrowser({
   useEffect(() => {
     let debounce = 0
     let pendingViews = false
+    let pendingData = false
     const onChange = (event: Event) => {
       if ((event as CustomEvent<{ views?: boolean }>).detail?.views) pendingViews = true
+      else pendingData = true
       window.clearTimeout(debounce)
       debounce = window.setTimeout(() => {
         const viewsTouched = pendingViews
+        const dataTouched = pendingData
         pendingViews = false
-        void reloadRef.current()
-        if (detailIdRef.current) {
-          pullDetailBody()
-          pullDetailRecord()
+        pendingData = false
+        if (dataTouched) {
+          void reloadRef.current()
+          if (detailIdRef.current) {
+            pullDetailBody()
+            pullDetailRecord()
+          }
         }
         if (viewsTouched) void syncViewsRef.current()
       }, 120)
@@ -1434,9 +1440,12 @@ export function CollectionBrowser({
   const [checkSlots, setCheckSlots] = useState<{ kind: 'head' | 'gap' | 'row'; id?: string; top: number; h: number }[]>([])
   const tableWindow = useMemo(
     () =>
-      wrapCells
-        ? { start: 0, end: tablePaintNodes.length, padTop: 0, padBottom: 0 }
-        : tableWindowSlice(tablePaintNodes.length, tableScroll.top, tableScroll.height),
+      tableWindowSlice(
+        tablePaintNodes.length,
+        tableScroll.top,
+        tableScroll.height,
+        wrapCells ? TABLE_WRAP_ROW_PX : TABLE_ROW_PX,
+      ),
     [tablePaintNodes.length, tableScroll.height, tableScroll.top, wrapCells],
   )
 
@@ -2431,11 +2440,13 @@ export function CollectionBrowser({
             field={field}
             value={value}
             collectionPath={collectionPath}
-            options={uniqueValues(
-              items.map((item) => ({ ...item, [key]: readFacetFlatValue(item, key, source) })),
-              key,
-              field,
-            )}
+            getOptions={() =>
+              uniqueValues(
+                items.map((item) => ({ ...item, [key]: readFacetFlatValue(item, key, source) })),
+                key,
+                field,
+              )
+            }
             records={items}
             labelField={schema?.labelField}
             onSubmit={(next) => writeCellValue(row, key, field, next)}
@@ -2489,7 +2500,7 @@ export function CollectionBrowser({
           field={field}
           value={row[key]}
           collectionPath={collectionPath}
-          options={uniqueValues(items, key, field)}
+          getOptions={() => uniqueValues(items, key, field)}
           records={items}
           labelField={schema?.labelField}
           onSubmit={field.writable ? (next) => writeCellValue(row, key, field, next) : () => {}}

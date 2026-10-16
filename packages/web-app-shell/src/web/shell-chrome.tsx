@@ -2140,10 +2140,22 @@ function NoticeBell({
 
   useEffect(() => {
     load()
-    const onChange = () => load()
+    let timer = 0
+    const onChange = (event: Event) => {
+      if ((event as CustomEvent<{ views?: boolean }>).detail?.views) return
+      window.clearTimeout(timer)
+      timer = window.setTimeout(load, 8000)
+    }
     window.addEventListener('fsdb:change', onChange)
-    return () => window.removeEventListener('fsdb:change', onChange)
+    return () => {
+      window.clearTimeout(timer)
+      window.removeEventListener('fsdb:change', onChange)
+    }
   }, [load])
+
+  useEffect(() => {
+    if (open) load()
+  }, [load, open])
 
   const unread = rows.filter((row) => row.read !== true && !noticeIsForSession(row, looking))
   const inbox = rows.filter((row) => row.read !== true)

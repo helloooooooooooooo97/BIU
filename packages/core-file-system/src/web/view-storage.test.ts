@@ -1,5 +1,7 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { builtinAllView, builtinAllViewId, builtinCatalogViewId } from '../catalog-views.ts'
 import { VIEWS_COLLECTION_PATH } from './database-path.ts'
 import {
@@ -162,6 +164,13 @@ test('rememberRecords scopes crumb rows to the current view', () => {
   )
   assert.equal(loadRecords('/pages', 'mine').some((row) => row.id === 't1'), false)
   assert.equal(loadRecords('/pages', 'all').some((row) => row.id === 't1'), false)
+})
+
+test('saved views pull shares one in-flight list and a short ttl', () => {
+  const src = readFileSync(resolve(import.meta.dirname, './view-storage.ts'), 'utf8')
+  assert.match(src, /let viewsPull: Promise<void> \| null = null/)
+  assert.match(src, /VIEWS_PULL_TTL_MS = 2500/)
+  assert.match(src, /if \(viewsPull\) return viewsPull/)
 })
 
 test('starred records toggle by collection path and id', () => {

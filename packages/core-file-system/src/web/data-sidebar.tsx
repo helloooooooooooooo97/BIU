@@ -27,6 +27,7 @@ import {
   nextPreviewLimit,
   orderViewTotalJobs,
   previewCacheKey,
+  shouldFetchViewTotal,
   recordPreviewEmoji,
   recordPreviewLabel,
   rememberPreviewTotal,
@@ -531,32 +532,44 @@ export const DataSidebar = memo(function DataSidebar({
 
   const countJobs = useMemo(() => {
     const jobs: Array<{ path: string; view: SavedView }> = []
+    const take = (path: string, view: SavedView) => {
+      if (
+        shouldFetchViewTotal({
+          path,
+          view,
+          collectionPath,
+          activeViewId,
+        })
+      ) {
+        jobs.push({ path, view })
+      }
+    }
     if (favOpen) {
-      for (const { table, view } of starredRows) jobs.push({ path: table.path, view })
+      for (const { table, view } of starredRows) take(table.path, view)
     }
     if (userOpen) {
       for (const table of userTables) {
         if (openTables[`user:${table.path}`]) {
-          for (const view of viewsFor(table.path)) jobs.push({ path: table.path, view })
+          for (const view of viewsFor(table.path)) take(table.path, view)
         }
       }
     }
     if (indexOpen) {
       for (const table of indexTables) {
         if (openTables[`index:${table.path}`]) {
-          for (const view of viewsFor(table.path)) jobs.push({ path: table.path, view })
+          for (const view of viewsFor(table.path)) take(table.path, view)
         }
       }
     }
     if (systemOpen) {
       for (const table of systemTables) {
         if (openTables[`system:${table.path}`]) {
-          for (const view of viewsFor(table.path)) jobs.push({ path: table.path, view })
+          for (const view of viewsFor(table.path)) take(table.path, view)
         }
       }
     }
     return jobs
-  }, [userOpen, indexOpen, systemOpen, favOpen, userTables, indexTables, systemTables, listedTables, openTables, starredRows, tables, views, collectionPath])
+  }, [userOpen, indexOpen, systemOpen, favOpen, userTables, indexTables, systemTables, listedTables, openTables, starredRows, tables, views, collectionPath, activeViewId])
 
   const countJobKey = countJobs.map((job) => viewTotalKey(job.path, job.view)).join('|')
   useEffect(() => {

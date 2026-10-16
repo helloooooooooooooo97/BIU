@@ -15,6 +15,7 @@ test('table list and previews pass view columns to /api/db/list', () => {
   assert.match(browser, /columnKeys.length \? columnKeys : schemaDefaultKeys/)
   assert.match(browser, /\/api\/db\/read\?path=/)
   assert.match(client, /if \(opts\.columns\?\.length\) params\.set\('columns'/)
+  assert.match(client, /opts.sorts.map\(\(item\) => \(\{ field: item.field, dir: item.dir \}\)\)/)
   assert.match(host, /columns: parseListColumnsParam\(route\.query\.get\('columns'\)\)/)
   assert.match(preview, /const columns = \['title', 'emoji', 'mascot', 'parentId'\]/)
   assert.match(preview, /columns: previewColumns\(view\)/)

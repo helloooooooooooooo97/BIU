@@ -232,7 +232,21 @@ export function savedViewFromRecord(row: { viewId?: unknown; title?: unknown; mo
   })
 }
 
+let viewsPull: Promise<void> | null = null
+let viewsPulledAt = 0
+const VIEWS_PULL_TTL_MS = 2500
+
 export async function pullSavedViews(collectionPaths: readonly string[] = []) {
+  if (viewsPull) return viewsPull
+  if (viewsPulledAt && Date.now() - viewsPulledAt < VIEWS_PULL_TTL_MS) return
+  viewsPull = pullSavedViewsNow(collectionPaths).finally(() => {
+    viewsPull = null
+    viewsPulledAt = Date.now()
+  })
+  return viewsPull
+}
+
+async function pullSavedViewsNow(collectionPaths: readonly string[] = []) {
   try {
     const page = await listCollection({
       path: '/views',

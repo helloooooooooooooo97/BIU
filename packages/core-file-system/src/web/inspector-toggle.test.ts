@@ -53,6 +53,7 @@ test('data sidebar keeps shares out of the navigation sections', () => {
 
 test('data sidebar loads view totals idle and current collection first', () => {
   const sidebar = readFileSync(resolve(import.meta.dirname, './data-sidebar.tsx'), 'utf8')
+  assert.match(sidebar, /shouldFetchViewTotal/)
   assert.match(sidebar, /orderViewTotalJobs\(countJobs, collectionPath\)/)
   assert.match(sidebar, /job.path === collectionPath/)
   assert.match(sidebar, /for \(const job of rest\)/)
@@ -417,6 +418,9 @@ test('deletable tables can pick rows and bulk-act over the table header', () => 
   assert.doesNotMatch(refs, /TagChip/)
   const valuePop = readFileSync(resolve(import.meta.dirname, './field-value-pop.tsx'), 'utf8')
   assert.match(valuePop, /function FieldValuePop/)
+  assert.match(valuePop, /getOptions\?: \(\) => string\[\]/)
+  assert.match(valuePop, /draftOptions/)
+  assert.match(valuePop, /\{open \? \(/)
   assert.match(valuePop, /<CellPop/)
   assert.match(valuePop, /<CellPopDraft/)
   assert.match(valuePop, /fsdb-pop-host/)
@@ -518,6 +522,9 @@ test('create record sits at the right of the toolbar with a blue label', () => {
   assert.match(browser, /tablePaintNodes/)
   assert.match(browser, /fsdb-table-pad/)
   assert.match(browser, /wrapCells/)
+  assert.match(browser, /TABLE_WRAP_ROW_PX/)
+  assert.doesNotMatch(browser, /start: 0, end: tablePaintNodes.length, padTop: 0/)
+  assert.match(browser, /getOptions=\{\(\) => uniqueValues/)
   assert.match(browser, /tableWindow\.start, tableWindow\.end/)
   assert.match(css, /\.fsdb-page \.tasks-table tr\.fsdb-table-pad td/)
   assert.match(browser, /markCellOn/)
@@ -791,6 +798,8 @@ test('open detail still reloads body when the collection changes', () => {
 
 test('agent view writes reload saved views without a full page refresh', () => {
   assert.match(browser, /pendingViews/)
+  assert.match(browser, /pendingData/)
+  assert.match(browser, /if \(dataTouched\)/)
   assert.match(browser, /SAVED_VIEW_EVENT/)
   assert.match(browser, /adoptViewRef/)
   assert.match(browser, /void syncViewsRef\.current\(\)/)
@@ -804,6 +813,8 @@ test('agent view writes reload saved views without a full page refresh', () => {
 
 test('collection reload does not follow callback identity', () => {
   assert.match(browser, /const reloadKey = /)
+  assert.match(browser, /sortsStateKey\(sorts\)/)
+  assert.doesNotMatch(browser, /JSON\.stringify\(sorts\)/)
   assert.match(browser, /void reloadRef\.current\(\)/)
   assert.doesNotMatch(browser, /void reload\(\)\s*\n\s*\}, \[reload\]/)
   assert.match(browser, /const EMPTY_FILTERS/)
