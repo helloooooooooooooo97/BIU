@@ -769,15 +769,26 @@ export class PluginStoreService extends Service {
     }
   }
 
+  /**
+   * 线上只给当前账号在当前空间加载过的插件。
+   * 本机打开插件写的是 plugin_loads，不一定写 store.json；
+   * 页面用动态 import 拉 web.js，不走带 Authorization 的 fetch。
+   */
+  private canReadInstalled(id: string) {
+    const account = this.accountStore()
+    const accountId = currentAccountId()
+    const workspaceId = currentRequestWorkspaceId()
+    if (isOnlineRuntime()) {
+      return Boolean(accountId && workspaceId && account?.canAccessPlugin?.(accountId, workspaceId, id))
+    }
+    if (this.isEnabled(id)) return true
+    if (accountId && workspaceId && account?.canAccessPlugin?.(accountId, workspaceId, id)) return true
+    return Boolean(account?.loadedPluginIds?.().includes(id))
+  }
+
   async readInstalledFile(id: string, file: string) {
     if (!isSafeId(id) || !ALLOWED_FILES.has(file)) throw new Error('not found')
-    if (isOnlineRuntime()) {
-      const accountId = currentAccountId()
-      const workspaceId = currentRequestWorkspaceId()
-      if (!accountId || !workspaceId || !this.accountStore()?.canAccessPlugin?.(accountId, workspaceId, id)) {
-        throw new Error('not found')
-      }
-    } else if (!this.isEnabled(id)) throw new Error('not found')
+    if (!this.canReadInstalled(id)) throw new Error('not found')
     const hit = await this.findPluginDir(id)
     if (!hit) throw new Error('not found')
     const path = join(hit, file)
