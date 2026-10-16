@@ -63,6 +63,43 @@ test('grouped collection fetches each group page instead of a mixed 200', async 
   )
 })
 
+test('wrap groups larger than the window only fully fetch the first group', async () => {
+  const limits: number[] = []
+  await listGroupedCollection({
+    path: '/tasks',
+    groupBy: 'status',
+    schema,
+    pageSize: 100,
+    wrap: true,
+    list: async (input) => {
+      limits.push(input.limit)
+      return { items: [{ id: String(limits.length), title: 'row' }], total: 80, schema }
+    },
+  })
+  assert.deepEqual(limits, [100, 1, 1])
+})
+
+test('scrolled wrap groups can fill later buckets at page size', async () => {
+  const limits: Array<{ status?: unknown; limit: number }> = []
+  await listGroupedCollection({
+    path: '/tasks',
+    groupBy: 'status',
+    schema,
+    pageSize: 100,
+    wrap: true,
+    fillKeys: ['doing'],
+    list: async (input) => {
+      limits.push({ status: input.filters?.status, limit: input.limit })
+      return { items: [{ id: String(limits.length), title: 'row' }], total: 80, schema }
+    },
+  })
+  assert.deepEqual(limits, [
+    { status: 'todo', limit: 100 },
+    { status: 'doing', limit: 100 },
+    { status: 'done', limit: 1 },
+  ])
+})
+
 test('shareScope groups query $scope, not shareScope equality', async () => {
   const scopes: unknown[] = []
   await listGroupedCollection({
@@ -83,6 +120,8 @@ test('grouped table fetch no longer uses a mixed 200-row page', () => {
   const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
   assert.doesNotMatch(browser, /groupBy \? 200/)
   assert.match(browser, /listGroupedCollection\(/)
+  assert.match(browser, /wrap: wrapCells/)
+  assert.match(browser, /fillKeys: groupFillKeys/)
   assert.match(browser, /JSON\.stringify\(groupPages\)/)
   assert.match(browser, /count = group\.total \?\? group\.rows\.length/)
   assert.match(browser, /group\.total != null \? group\.rows/)

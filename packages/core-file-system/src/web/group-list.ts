@@ -2,6 +2,7 @@ import type { CollectionSchema, DbRecord } from '@biu/type-file-system'
 import type { SortRule } from '../query-logic.ts'
 import type { ListPage } from './db-client.ts'
 import { groupListFilter, groupListKeys, mergeListFilters, type GroupBucket } from './fields.ts'
+import { groupedFullFetchCount } from './table-window.ts'
 
 export type GroupedCollectionPage = {
   buckets: GroupBucket[]
@@ -18,6 +19,8 @@ export async function listGroupedCollection(opts: {
   extraValues?: string[]
   pageSize: number
   groupPages?: Record<string, number>
+  wrap?: boolean
+  fillKeys?: string[]
   query?: string
   sortField?: string
   sortDir?: string
@@ -39,14 +42,17 @@ export async function listGroupedCollection(opts: {
   const keys = groupListKeys(opts.schema, opts.groupBy, opts.extraValues)
   if (!keys.length) return null
   const pageSize = Math.max(1, opts.pageSize)
+  const fullCount = groupedFullFetchCount(pageSize, keys.length, opts.wrap)
+  const filled = new Set(opts.fillKeys ?? [])
   const pages = await Promise.all(
-    keys.map(async (item) => {
+    keys.map(async (item, index) => {
       const filters = mergeListFilters(opts.filters ?? {}, groupListFilter(opts.groupBy, item.key))
       if (!filters) return { ...item, rows: [] as DbRecord[], total: 0, schema: undefined as CollectionSchema | undefined }
       const pageIndex = Math.max(0, opts.groupPages?.[item.key || 'unset'] ?? 0)
+      const full = index < fullCount || filled.has(item.key) || filled.has(item.key || 'unset')
       const listed = await opts.list({
         path: opts.path,
-        limit: pageSize,
+        limit: full ? pageSize : 1,
         offset: pageIndex * pageSize,
         query: opts.query,
         sortField: opts.sortField,

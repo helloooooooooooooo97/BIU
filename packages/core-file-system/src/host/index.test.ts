@@ -2679,11 +2679,14 @@ test('collection list preloads authorization scans and releases them', () => {
   assert.match(host, /private inflightMatches/)
   assert.match(host, /private inflightScans/)
   assert.match(host, /private inflightVisible/)
+  assert.match(host, /private visibleCache/)
+  assert.match(host, /auth\.onInvalidate\(\(\) => this\.bump\(\)\)/)
   assert.match(host, /visibleSortedCollectionRows/)
   assert.match(host, /partitionVisibleRows/)
   assert.match(host, /shareInflight/)
   assert.match(host, /setImmediate\(\(\) => \{\s*setImmediate/)
   assert.match(host, /inflightVisible\.clear\(\)/)
+  assert.match(host, /visibleCache\.clear\(\)/)
   assert.match(host, /specListQuery\(query\)/)
   assert.match(host, /listDecorateNeed/)
   assert.match(host, /decorateSlice\(spec, sorted.slice\(offset, offset \+ limit\), columnKeys\)/)
@@ -2691,4 +2694,50 @@ test('collection list preloads authorization scans and releases them', () => {
     host,
     /try \{\s*const overlay = listNeedsMatchOverlay\(liveFilter, q, sortField, page\?\.sorts\)[\s\S]*?\} finally \{\s*if \(auth && actor\) \{[\s\S]*?releaseCollection\(actor\.workspaceId, spec\.path, actor\.accountId\)/,
   )
+})
+
+test('sequential lists reuse the authorized collection pack until bump', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  const rows = new Map<string, DbRecord>([
+    ['n1', { id: 'n1', title: '草稿', status: 'open' }],
+    ['n2', { id: 'n2', title: '另一篇', status: 'open' }],
+  ])
+  let lists = 0
+  db.register({
+    id: 'notes',
+    path: '/notes',
+    schema: {
+      fields: {
+        ...REQUIRED_RECORD_FIELDS,
+        title: { type: 'string', writable: true },
+      },
+    },
+    records: { create: true },
+    list: () => {
+      lists += 1
+      return [...rows.values()]
+    },
+    get: (id) => rows.get(id) ?? null,
+    create: (records) =>
+      records.map((record, index) => {
+        const row = { id: `c${index}`, title: String(record.title ?? '新') }
+        rows.set(row.id, row)
+        return row
+      }),
+  })
+  const first = await db.list('/notes', undefined, { limit: 20 })
+  const again = await db.list('/notes', undefined, { limit: 20, offset: 0 })
+  assert.equal(lists, 1)
+  assert.equal(first.kind, 'collection')
+  assert.equal(again.kind, 'collection')
+  if (first.kind !== 'collection' || again.kind !== 'collection') return
+  assert.equal(first.items.length, 2)
+  assert.equal(again.items.length, 2)
+  await db.create('/notes', [{ title: '第三篇' }])
+  const after = await db.list('/notes', undefined, { limit: 20 })
+  assert.equal(lists, 2)
+  assert.equal(after.kind, 'collection')
+  if (after.kind !== 'collection') return
+  assert.equal(after.items.length, 3)
 })

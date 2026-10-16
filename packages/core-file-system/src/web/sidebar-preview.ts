@@ -6,6 +6,64 @@ import { listCollection, readJson } from './db-client.ts'
 export const SIDEBAR_PREVIEW_PAGE = 20
 export const SIDEBAR_PREVIEW_MAX = 100
 export const VIEW_TOTAL_IDLE_MS = 2800
+export const VIEW_PREVIEW_IDLE_MS = 800
+
+let paintedListReady = false
+
+export function resetPaintedListReady() {
+  paintedListReady = false
+}
+
+export function markPaintedListReady() {
+  paintedListReady = true
+}
+
+export function isPaintedListReady() {
+  return paintedListReady
+}
+
+/** 侧栏预览等首屏 list 画完再拉，避免和主表抢同一轮 /api/db/list。 */
+export function whenListIdle(fn: () => void, idleMs = VIEW_PREVIEW_IDLE_MS) {
+  let cancelled = false
+  let timer = 0
+  const run = () => {
+    if (!cancelled) fn()
+  }
+  if (typeof window === 'undefined') {
+    run()
+    return () => {
+      cancelled = true
+    }
+  }
+  if (paintedListReady) {
+    const ric = window.requestIdleCallback
+    if (typeof ric === 'function') {
+      const idleId = ric(run, { timeout: Math.min(400, idleMs) })
+      return () => {
+        cancelled = true
+        window.cancelIdleCallback(idleId)
+      }
+    }
+    timer = window.setTimeout(run, 0)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }
+  const onReady = () => {
+    window.clearTimeout(fallback)
+    window.removeEventListener('fsdb:list-ready', onReady)
+    timer = window.setTimeout(run, idleMs)
+  }
+  window.addEventListener('fsdb:list-ready', onReady)
+  const fallback = window.setTimeout(run, 8000)
+  return () => {
+    cancelled = true
+    window.clearTimeout(timer)
+    window.clearTimeout(fallback)
+    window.removeEventListener('fsdb:list-ready', onReady)
+  }
+}
 
 export type PreviewPage = {
   items: DbRecord[]
@@ -79,6 +137,15 @@ export function viewTotalKey(path: string, view: Pick<SavedView, 'id' | 'sortFie
   return previewCacheKey(path, view)
 }
 
+function isCurrentView(opts: {
+  path: string
+  view: Pick<SavedView, 'id'>
+  collectionPath: string
+  activeViewId?: string | null
+}) {
+  return opts.path === opts.collectionPath && opts.view.id === opts.activeViewId
+}
+
 /** 块类型/合集内置视图很多，只给当前正在看的那一条拉总数。当前表的活动视图由 list 自己写入。 */
 export function shouldFetchViewTotal(opts: {
   path: string
@@ -86,9 +153,19 @@ export function shouldFetchViewTotal(opts: {
   collectionPath: string
   activeViewId?: string | null
 }) {
-  const current = opts.path === opts.collectionPath && opts.view.id === opts.activeViewId
+  const current = isCurrentView(opts)
   if (isBuiltinBlockKindViewId(opts.view.id) || isBuiltinTagViewId(opts.view.id)) return current
   return !current
+}
+
+/** 当前表已经拉过这一页，侧栏展开不再另开一次 list。 */
+export function shouldFetchViewPreview(opts: {
+  path: string
+  view: Pick<SavedView, 'id'>
+  collectionPath: string
+  activeViewId?: string | null
+}) {
+  return !isCurrentView(opts)
 }
 
 export function orderViewTotalJobs<T extends { path: string }>(jobs: T[], collectionPath: string) {

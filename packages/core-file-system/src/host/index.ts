@@ -780,6 +780,10 @@ export class DatabaseService extends Service implements Database {
   private inflightMatches = new Map<string, Promise<DbRecord[]>>()
   private inflightScans = new Map<string, Promise<DbRecord[]>>()
   private inflightVisible = new Map<string, Promise<VisibleSortedPack>>()
+  private visibleCache = new Map<string, VisibleSortedPack>()
+  private visibleGen = 0
+  private boundAuth?: AuthorizationService
+  private unbindAuth?: () => void
   recycleAssets?: () => void
 
   private bumpQueued = false
@@ -895,7 +899,13 @@ export class DatabaseService extends Service implements Database {
 
   private authorization() {
     try {
-      return (this.ctx.get('account') as { authorization?: AuthorizationService } | undefined)?.authorization
+      const auth = (this.ctx.get('account') as { authorization?: AuthorizationService } | undefined)?.authorization
+      if (auth && auth !== this.boundAuth) {
+        this.unbindAuth?.()
+        this.boundAuth = auth
+        this.unbindAuth = auth.onInvalidate(() => this.bump())
+      }
+      return auth
     } catch {
       return undefined
     }
@@ -1320,9 +1330,14 @@ export class DatabaseService extends Service implements Database {
       : `${this.collabStore()?.activeWorkspaceId() ?? ''}\t${currentAccountId()}`
     const rules = normalizeSorts(sorts, sortField, sortDir)
     const key = `${spec.path}\t${load.trash ? 1 : 0}\t${load.q ?? ''}\t${overlay ? 1 : 0}\t${JSON.stringify(load.filter ?? {})}\t${(load.ids ?? []).join(',')}\t${JSON.stringify(rules)}\t${actorKey}`
-    return shareInflight(this.inflightVisible, key, () =>
-      this.visibleSortedCollectionRowsNow(spec, query, sortField, sortDir, sorts, overlay),
-    )
+    const cached = this.visibleCache.get(key)
+    if (cached) return cached
+    return shareInflight(this.inflightVisible, key, async () => {
+      const gen = this.visibleGen
+      const pack = await this.visibleSortedCollectionRowsNow(spec, query, sortField, sortDir, sorts, overlay)
+      if (gen === this.visibleGen) this.visibleCache.set(key, pack)
+      return pack
+    })
   }
 
   private async visibleSortedCollectionRowsNow(
@@ -1433,9 +1448,11 @@ export class DatabaseService extends Service implements Database {
   }
 
   private bump() {
+    this.visibleGen += 1
     this.inflightMatches.clear()
     this.inflightScans.clear()
     this.inflightVisible.clear()
+    this.visibleCache.clear()
     this.ctx.emit('database/change')
     if (this.bumpQueued) return
     this.bumpQueued = true

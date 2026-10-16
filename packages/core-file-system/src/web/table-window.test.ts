@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, TABLE_WINDOW_VIEWPORT_FALLBACK, tableWindowSlice } from './table-window.ts'
+import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, TABLE_WINDOW_VIEWPORT_FALLBACK, groupedFullFetchCount, tableWindowSlice } from './table-window.ts'
 
 test('table window keeps overscan around the viewport', () => {
   const slice = tableWindowSlice(200, 0, TABLE_ROW_PX * 10)
@@ -43,4 +43,14 @@ test('unmeasured viewport still paints a first screen', () => {
   assert.equal(slice.start, 0)
   assert.ok(slice.end >= Math.ceil(TABLE_WINDOW_VIEWPORT_FALLBACK / TABLE_ROW_PX))
   assert.ok(slice.end < 200)
+})
+
+test('grouped first paint fetches every group when a page still fits the window', () => {
+  assert.equal(groupedFullFetchCount(20, 4), 4)
+  assert.equal(groupedFullFetchCount(12, 3, true), 3)
+})
+
+test('grouped wrap pages larger than the window only fully fetch the first group', () => {
+  assert.equal(groupedFullFetchCount(100, 4, true), 1)
+  assert.equal(groupedFullFetchCount(100, 1, true), 1)
 })

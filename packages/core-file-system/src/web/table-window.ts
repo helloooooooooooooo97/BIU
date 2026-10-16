@@ -29,3 +29,18 @@ export function tableWindowSlice(
     padBottom: Math.max(0, count - end) * rowPx,
   }
 }
+
+/** 一页已经超过一屏时，首屏只拉进入视口的组；其余组先拿总数。 */
+export function groupedFullFetchCount(
+  pageSize: number,
+  groupCount: number,
+  wrap?: boolean,
+  viewportH = TABLE_WINDOW_VIEWPORT_FALLBACK,
+) {
+  if (groupCount <= 1) return Math.max(0, groupCount)
+  const rowPx = wrap ? TABLE_WRAP_ROW_PX : TABLE_ROW_PX
+  const view = viewportH > 0 ? viewportH : TABLE_WINDOW_VIEWPORT_FALLBACK
+  const paintRows = Math.ceil(view / rowPx) + TABLE_WINDOW_OVERSCAN * 2
+  if (pageSize <= paintRows) return groupCount
+  return 1
+}

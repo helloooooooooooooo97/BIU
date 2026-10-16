@@ -84,18 +84,16 @@ function CollectionPage(props: SlotProps) {
     () => (storedHome ? parseAppPath(storedHome, [DATA_MODULE]) : null),
     [storedHome],
   )
-  const collectionFromRoute =
+  const routeCollection =
     parsed.kind === 'collection-view' || parsed.kind === 'record'
-      ? parsed.collection
+      ? parsed
       : storedParsed && (storedParsed.kind === 'collection-view' || storedParsed.kind === 'record')
-        ? storedParsed.collection
-        : ''
-  const viewFromRoute =
-    parsed.kind === 'collection-view' || parsed.kind === 'record'
-      ? parsed.viewId
-      : storedParsed && (storedParsed.kind === 'collection-view' || storedParsed.kind === 'record')
-        ? storedParsed.viewId
-        : undefined
+        ? storedParsed
+        : null
+  const collectionFromRoute = routeCollection?.collection ?? ''
+  const viewFromRoute = routeCollection
+    ? routeCollection.viewId || builtinAllViewId(routeCollection.collection)
+    : undefined
   const recordFromRoute =
     parsed.kind === 'record'
       ? parsed.recordId

@@ -5,6 +5,7 @@ import {
   nextPreviewLimit,
   normalizeRecordEmoji,
   orderViewTotalJobs,
+  shouldFetchViewPreview,
   shouldFetchViewTotal,
   previewCacheKey,
   previewColumns,
@@ -12,7 +13,11 @@ import {
   crumbRecordLabel,
   rememberPreviewTotal,
   SIDEBAR_PREVIEW_PAGE,
+  VIEW_PREVIEW_IDLE_MS,
   VIEW_TOTAL_IDLE_MS,
+  isPaintedListReady,
+  markPaintedListReady,
+  resetPaintedListReady,
   viewTotalKey,
 } from './sidebar-preview.ts'
 
@@ -57,6 +62,23 @@ test('preview pages stay small and stop at max', () => {
   assert.equal(nextPreviewLimit(25, 25), 0)
 })
 
+test('sidebar preview does not refetch the currently painted view', () => {
+  const all = { id: 'builtin-all:/tasks' }
+  const mine = { id: 'mine' }
+  assert.equal(
+    shouldFetchViewPreview({ path: '/tasks', view: all, collectionPath: '/tasks', activeViewId: all.id }),
+    false,
+  )
+  assert.equal(
+    shouldFetchViewPreview({ path: '/tasks', view: mine, collectionPath: '/tasks', activeViewId: all.id }),
+    true,
+  )
+  assert.equal(
+    shouldFetchViewPreview({ path: '/tasks', view: all, collectionPath: '/pages', activeViewId: all.id }),
+    true,
+  )
+})
+
 test('block/tag stub views only fetch a total when they are the open view', () => {
   const block = { id: 'builtin-block:terminal' }
   const tag = { id: 'builtin-tag:work' }
@@ -78,6 +100,16 @@ test('block/tag stub views only fetch a total when they are the open view', () =
 
 test('view totals wait past first paint so ready is not blocked', () => {
   assert.equal(VIEW_TOTAL_IDLE_MS, 2800)
+  assert.equal(VIEW_PREVIEW_IDLE_MS, 800)
+})
+
+test('sidebar preview waits until the painted list is marked ready', () => {
+  resetPaintedListReady()
+  assert.equal(isPaintedListReady(), false)
+  markPaintedListReady()
+  assert.equal(isPaintedListReady(), true)
+  resetPaintedListReady()
+  assert.equal(isPaintedListReady(), false)
 })
 
 test('view total jobs put the open collection first and keep the rest stable', () => {

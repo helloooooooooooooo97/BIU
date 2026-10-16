@@ -16,6 +16,12 @@ test('shell matches the data module by extra.moduleId database', () => {
   assert.equal(String(extra.moduleId ?? slotKey), 'database')
 })
 
+test('collection URL without a view paints 全部 immediately, not the last dense view', () => {
+  const page = readFileSync(resolve(import.meta.dirname, './index.tsx'), 'utf8')
+  assert.match(page, /routeCollection\.viewId \|\| builtinAllViewId\(routeCollection\.collection\)/)
+  assert.match(page, /go\(\{ collection: parsed.collection, viewId: builtinAllViewId\(parsed.collection\) \}/)
+})
+
 test('saved views catalog waits until the first list is ready and only notifies when it changed', () => {
   const page = readFileSync(resolve(import.meta.dirname, './index.tsx'), 'utf8')
   const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')

@@ -150,8 +150,8 @@ import { ViewPaneMenu } from './pane-more-menu.tsx'
 import { HttpError, listCollection, readJson } from './db-client.ts'
 import { savedViewRecordPath } from '../paths.ts'
 import { findViewNeighbor, indexOnPage } from './view-adjacent.ts'
-import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, tableWindowSlice } from './table-window.ts'
-import { rememberPreviewTotal, viewTotalKey } from './sidebar-preview.ts'
+import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, tableWindowSlice } from './table-window.ts'
+import { markPaintedListReady, rememberPreviewTotal, resetPaintedListReady, viewTotalKey } from './sidebar-preview.ts'
 import { catalogLockFilters, isReadOnlyViewId, mergeTableViews, parseBuiltinScopeViewId, stubBuiltinBlockKindView, viewsForScope, type DataScope } from '../catalog-views.ts'
 import { SAVED_VIEW_EVENT, rememberInspectorWorkingView, showRecordInInspector } from './inspector-db-route.ts'
 import { SchemaFieldEditor, schemaTagTone } from './schema-field.tsx'
@@ -493,6 +493,17 @@ function recordsFingerprint(rows: Array<DbRecord & { path?: string }>) {
   return JSON.stringify(rows)
 }
 
+function schemaFingerprint(schema?: CollectionSchema) {
+  if (!schema) return ''
+  const fields = schema.fields ?? {}
+  let out = `${schema.labelField ?? ''}\0${(schema.columns ?? []).join(',')}`
+  for (const key of Object.keys(fields)) {
+    const field = fields[key]
+    out += `\0${key}:${field?.type ?? ''}:${field?.writable ? 1 : 0}`
+  }
+  return out
+}
+
 const LIST_CACHE_MAX = 8
 type ListCacheSnap = {
   items: Array<DbRecord & { path?: string }>
@@ -763,6 +774,7 @@ export function CollectionBrowser({
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
   const [groupPages, setGroupPages] = useState<Record<string, number>>({})
+  const [groupFillKeys, setGroupFillKeys] = useState<string[]>([])
   const [groupBuckets, setGroupBuckets] = useState<GroupBucket[]>([])
   const groupPagesRef = useRef(groupPages)
   groupPagesRef.current = groupPages
@@ -990,6 +1002,8 @@ export function CollectionBrowser({
           extraValues: extraGroupValues(schema),
           pageSize,
           groupPages: groupPagesRef.current,
+          wrap: wrapCells,
+          fillKeys: groupFillKeys,
           list: listCollection,
         })
       let nextStat: StatResult
@@ -1029,7 +1043,7 @@ export function CollectionBrowser({
       if (gen !== reloadGen.current) return true
       const nextSchema = listed.schema ?? nextStat.schema
       setStat((prev) =>
-        prev?.schema && JSON.stringify(prev.schema) === JSON.stringify(nextSchema) ? prev : { ...nextStat, schema: nextSchema },
+        prev?.schema && schemaFingerprint(prev.schema) === schemaFingerprint(nextSchema) ? prev : { ...nextStat, schema: nextSchema },
       )
       setGroupBuckets((prev) => (JSON.stringify(prev) === JSON.stringify(buckets) ? prev : buckets))
       setItems((prev) => {
@@ -1065,6 +1079,7 @@ export function CollectionBrowser({
       setError('')
       if (!listReadySent.current) {
         listReadySent.current = true
+        markPaintedListReady()
         window.dispatchEvent(new Event('fsdb:list-ready'))
       }
       return true
@@ -1073,10 +1088,10 @@ export function CollectionBrowser({
       setError(String(err))
       return false
     }
-  }, [activeViewId, collectionPath, dataPath, fetchQuery, groupBy, listColumns, queryFilters, page, pageSize, sortDir, sortField, sorts])
+  }, [activeViewId, collectionPath, dataPath, fetchQuery, groupBy, groupFillKeys, listColumns, queryFilters, page, pageSize, sortDir, sortField, sorts, wrapCells])
   const reloadRef = useRef(reload)
   reloadRef.current = reload
-  const reloadKey = `${dataPath}\0${groupBy ? JSON.stringify(groupPages) : page}\0${pageSize}\0${fetchQuery}\0${sortField}\0${sortDir}\0${sortsStateKey(sorts)}\0${JSON.stringify(queryFilters)}\0${activeViewId ?? ''}\0${groupBy}`
+  const reloadKey = `${dataPath}\0${groupBy ? JSON.stringify(groupPages) : page}\0${pageSize}\0${fetchQuery}\0${sortField}\0${sortDir}\0${sortsStateKey(sorts)}\0${JSON.stringify(queryFilters)}\0${activeViewId ?? ''}\0${groupBy}\0${groupFillKeys.join('\0')}\0${wrapCells ? 1 : 0}`
   const detailIdRef = useRef<string | null>(null)
   detailIdRef.current = detailId
   const contentGen = useRef(0)
@@ -1132,6 +1147,7 @@ export function CollectionBrowser({
   useEffect(() => {
     setPage((prev) => (prev === 0 ? prev : 0))
     setGroupPages((prev) => (Object.keys(prev).length ? {} : prev))
+    setGroupFillKeys((prev) => (prev.length ? [] : prev))
   }, [fetchQuery, queryFiltersKey, sortField, sortDir, pageSize, groupBy, collectionPath, dataPath])
 
   async function refreshNow() {
@@ -1152,6 +1168,7 @@ export function CollectionBrowser({
     setHydrated(false)
     hydratePath.current = ''
     listReadySent.current = false
+    resetPaintedListReady()
     skipColumnReload.current = false
     setCollapsed({})
     hydratedDetail.current = ''
@@ -1161,6 +1178,7 @@ export function CollectionBrowser({
     setTotal(cached?.total ?? 0)
     setGroupBuckets(cached?.groupBuckets ?? [])
     setGroupPages({})
+    setGroupFillKeys([])
     setCollapsedGroups({})
     setError('')
     setPage(0)
@@ -1523,6 +1541,38 @@ export function CollectionBrowser({
       ),
     [tablePaintNodes.length, tableScroll.height, tableScroll.top, wrapCells],
   )
+
+  useEffect(() => {
+    if (!grouping) return
+    const until = Math.min(tablePaintNodes.length, tableWindow.end + TABLE_WINDOW_OVERSCAN)
+    const needed = new Set<string>()
+    for (let i = tableWindow.start; i < until; i += 1) {
+      const node = tablePaintNodes[i]
+      if (!node) continue
+      if (node.kind === 'group-head' || node.kind === 'group-pager') needed.add(node.groupKey)
+      else if (node.kind === 'row' && node.keyPrefix) needed.add(node.keyPrefix.replace(/:$/, ''))
+    }
+    const extra: string[] = []
+    for (const key of needed) {
+      const group = grouped.find((item) => (item.key || 'unset') === key)
+      if (!group) continue
+      const total = group.total ?? group.rows.length
+      const pageIndex = Math.max(0, groupPages[key] ?? 0)
+      const expected = Math.min(pageSize, Math.max(0, total - pageIndex * pageSize))
+      if (expected > group.rows.length) extra.push(key)
+    }
+    if (!extra.length) return
+    setGroupFillKeys((prev) => {
+      let changed = false
+      const next = [...prev]
+      for (const key of extra) {
+        if (next.includes(key)) continue
+        next.push(key)
+        changed = true
+      }
+      return changed ? next : prev
+    })
+  }, [grouped, grouping, groupPages, pageSize, tablePaintNodes, tableWindow.end, tableWindow.start])
 
   const paintCheckHover = useCallback((next: string | 'head' | null, force = false) => {
     if (!force && checkHoverRef.current === next) return

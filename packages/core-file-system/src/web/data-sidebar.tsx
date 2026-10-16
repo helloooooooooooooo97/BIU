@@ -27,7 +27,9 @@ import {
   nextPreviewLimit,
   orderViewTotalJobs,
   previewCacheKey,
+  shouldFetchViewPreview,
   shouldFetchViewTotal,
+  whenListIdle,
   recordPreviewEmoji,
   recordPreviewLabel,
   rememberPreviewTotal,
@@ -45,6 +47,7 @@ import {
   getStarredViewsVersion,
   isRecordStarred,
   isViewStarred,
+  loadRecords,
   loadViews,
   peekRecord,
   persistStarredRecords,
@@ -77,6 +80,15 @@ type PreviewCache = { items: DbRecord[]; total: number; schema?: CollectionSchem
 
 const previewCache = new Map<string, PreviewCache>()
 
+function crumbsToPreviewItems(path: string, viewId: string): DbRecord[] {
+  return loadRecords(path, viewId).map((row) => ({
+    id: row.id,
+    title: row.label,
+    emoji: row.emoji ?? '',
+    ...(row.mascot != null ? { mascot: row.mascot } : {}),
+  }))
+}
+
 function cachedDirectKidCount(path: string, recordId: string) {
   for (const [key, cache] of previewCache) {
     if (!key.startsWith(`${path}\0`)) continue
@@ -93,6 +105,7 @@ function ViewRecordPreview({
   recordKind,
   tableIcon,
   rootId,
+  skipFetch,
   onOpenRecord,
 }: {
   path: string
@@ -101,17 +114,27 @@ function ViewRecordPreview({
   recordKind: string
   tableIcon?: string
   rootId?: string
+  skipFetch?: boolean
   onOpenRecord?: (recordId: string, row?: DbRecord) => void
 }) {
   const key = previewCacheKey(path, view)
   const cached = previewCache.get(key)
-  const [state, setState] = useState<PreviewState>(() => ({
-    items: cached?.items ?? [],
-    total: cached?.total ?? 0,
-    schema: cached?.schema,
-    loading: !cached,
-    error: '',
-  }))
+  const seedKey = skipFetch ? loadRecords(path, view.id).map((row) => row.id).join('\n') : ''
+  const [state, setState] = useState<PreviewState>(() => {
+    if (cached) {
+      return { items: cached.items, total: cached.total, schema: cached.schema, loading: false, error: '' }
+    }
+    if (skipFetch) {
+      const items = crumbsToPreviewItems(path, view.id)
+      return {
+        items,
+        total: getPreviewTotal(key) ?? items.length,
+        loading: false,
+        error: '',
+      }
+    }
+    return { items: [], total: 0, loading: true, error: '' }
+  })
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({})
   const [openKids, setOpenKids] = useState<Record<string, boolean>>({})
   const [pickerId, setPickerId] = useState<string | null>(null)
@@ -123,6 +146,17 @@ function ViewRecordPreview({
 
   useEffect(() => {
     if (!open) return
+    if (skipFetch) {
+      const items = crumbsToPreviewItems(path, view.id)
+      setState({
+        items,
+        total: getPreviewTotal(key) ?? items.length,
+        schema: previewCache.get(key)?.schema,
+        loading: false,
+        error: '',
+      })
+      return
+    }
     const hit = previewCache.get(key)
     if (hit) {
       setState({ items: hit.items, total: hit.total, schema: hit.schema, loading: false, error: '' })
@@ -130,22 +164,26 @@ function ViewRecordPreview({
     }
     let cancelled = false
     setState((prev) => ({ ...prev, loading: true, error: '' }))
-    void fetchViewPreview(path, view, 0).then(
-      (page) => {
-        if (cancelled) return
-        previewCache.set(key, { items: page.items, total: page.total, schema: page.schema })
-        rememberPreviewTotal(key, page.total)
-        setState({ items: page.items, total: page.total, schema: page.schema, loading: false, error: '' })
-      },
-      (err: unknown) => {
-        if (cancelled) return
-        setState((prev) => ({ ...prev, loading: false, error: String(err) }))
-      },
-    )
+    const stop = whenListIdle(() => {
+      if (cancelled) return
+      void fetchViewPreview(path, view, 0).then(
+        (page) => {
+          if (cancelled) return
+          previewCache.set(key, { items: page.items, total: page.total, schema: page.schema })
+          rememberPreviewTotal(key, page.total)
+          setState({ items: page.items, total: page.total, schema: page.schema, loading: false, error: '' })
+        },
+        (err: unknown) => {
+          if (cancelled) return
+          setState((prev) => ({ ...prev, loading: false, error: String(err) }))
+        },
+      )
+    })
     return () => {
       cancelled = true
+      stop()
     }
-  }, [key, open, path, view.query, view.sortField, view.sortDir, view.filters, view.groupBy])
+  }, [key, open, path, seedKey, skipFetch, view.id, view.query, view.sortField, view.sortDir, view.filters, view.groupBy])
 
   async function loadMore() {
     const more = nextPreviewLimit(state.items.length, state.total)
@@ -649,24 +687,28 @@ export const DataSidebar = memo(function DataSidebar({
     if (!favOpen || !starredTreePreviewKey) return
     let cancelled = false
     const paths = starredTreePreviewKey.split('|')
-    void Promise.all(
-      paths.map((path) => {
-        const view = viewsFor(path).find((row) => row.id === builtinAllViewId(path)) ?? viewsFor(path)[0]
-        if (!view) return Promise.resolve()
-        const key = previewCacheKey(path, view)
-        if (previewCache.get(key)?.items.length) return Promise.resolve()
-        return fetchViewPreview(path, view, 0).then(
-          (page) => {
-            if (cancelled) return
-            previewCache.set(key, { items: page.items, total: page.total, schema: page.schema })
-            rememberPreviewTotal(key, page.total)
-          },
-          () => undefined,
-        )
-      }),
-    )
+    const stop = whenListIdle(() => {
+      if (cancelled) return
+      void Promise.all(
+        paths.map((path) => {
+          const view = viewsFor(path).find((row) => row.id === builtinAllViewId(path)) ?? viewsFor(path)[0]
+          if (!view) return Promise.resolve()
+          const key = previewCacheKey(path, view)
+          if (previewCache.get(key)?.items.length) return Promise.resolve()
+          return fetchViewPreview(path, view, 0).then(
+            (page) => {
+              if (cancelled) return
+              previewCache.set(key, { items: page.items, total: page.total, schema: page.schema })
+              rememberPreviewTotal(key, page.total)
+            },
+            () => undefined,
+          )
+        }),
+      )
+    })
     return () => {
       cancelled = true
+      stop()
     }
   }, [favOpen, starredTreePreviewKey, tables, views, collectionPath])
 
@@ -837,6 +879,7 @@ export const DataSidebar = memo(function DataSidebar({
                     path={table.path}
                     view={view}
                     open={expanded}
+                    skipFetch={!shouldFetchViewPreview({ path: table.path, view, collectionPath, activeViewId })}
                     recordKind={recordPickKind(table.view?.moduleId || table.id)}
                     tableIcon={table.view?.icon}
                     onOpenRecord={(id, row) => openRecord(table.path, view, id, row)}
@@ -1072,6 +1115,7 @@ export const DataSidebar = memo(function DataSidebar({
                           path={table.path}
                           view={view}
                           open={expanded}
+                          skipFetch={!shouldFetchViewPreview({ path: table.path, view, collectionPath, activeViewId })}
                           recordKind={recordPickKind(table.view?.moduleId || table.id)}
                           tableIcon={table.view?.icon}
                           onOpenRecord={(id, row) => openRecord(table.path, view, id, row)}

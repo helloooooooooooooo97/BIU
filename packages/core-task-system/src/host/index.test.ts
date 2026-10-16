@@ -1,8 +1,9 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { Context } from 'cordis'
 import { buildDeliverText, coerceAssigneeArg, computeBlocked, computeBlockedBy, computeNextTriggerAt, computeTurnUsage, defaultTrigger, depsSatisfied, deriveExecution, deriveExecutionFromReports, MAX_REPORT_PROMPTS, normalizeTrigger, parseCron, reportBackToCreator, shouldPromptProgress, sumReportUsage, TasksService } from './index.ts'
 
@@ -756,4 +757,17 @@ test('trigger default state is idle and enabled=false (no auto-trigger for plain
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
+})
+
+test('task list scans lean columns and skips unused json blobs', () => {
+  const host = readFileSync(resolve(import.meta.dirname, './index.ts'), 'utf8')
+  const collection = readFileSync(resolve(import.meta.dirname, './collection.ts'), 'utf8')
+  assert.match(host, /const LIST_TASK_COLUMNS/)
+  assert.match(host, /SELECT \$\{LIST_TASK_COLUMNS\} FROM tasks/)
+  assert.doesNotMatch(host, /SELECT tasks\.\* FROM tasks/)
+  assert.match(host, /rows\.map\(\(row\) => mapRow\(row, true\)\)/)
+  assert.match(host, /function isBlankJson/)
+  assert.match(collection, /function missingLookup/)
+  assert.match(collection, /if \(!tree\)/)
+  assert.doesNotMatch(collection, /delete next\.reports/)
 })

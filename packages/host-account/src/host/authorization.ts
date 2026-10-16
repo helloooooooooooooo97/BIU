@@ -135,11 +135,29 @@ function requiredRole(action: Action): ResourceRole {
 export class AuthorizationService {
   private memberViewMatcher?: (workspaceId: string, viewId: string, accountId: string) => boolean
   private scans = new Map<string, CollectionScan>()
+  private invalidators = new Set<() => void>()
 
   constructor(
     private db: DatabaseSync,
     private activeWorkspaceFor: (accountId: string) => string | null,
   ) {}
+
+  /** 授权表变了之后通知列表清掉可见行缓存。grant / revoke 都走这里。 */
+  onInvalidate(fn: () => void) {
+    this.invalidators.add(fn)
+    return () => {
+      this.invalidators.delete(fn)
+    }
+  }
+
+  invalidate(workspaceId: string, collection: string) {
+    this.dropScans(workspaceId, collection)
+  }
+
+  invalidateAll() {
+    this.scans.clear()
+    this.notifyInvalidators()
+  }
 
   currentActor(): Actor | null {
     const accountId = currentAccountId()
@@ -650,6 +668,11 @@ export class AuthorizationService {
     for (const [key, scan] of this.scans) {
       if (scan.workspaceId === workspaceId && scan.collection === collection) this.scans.delete(key)
     }
+    this.notifyInvalidators()
+  }
+
+  private notifyInvalidators() {
+    for (const fn of this.invalidators) fn()
   }
 
   private policy(resource: Extract<ResourceRef, { type: 'record' }>) {

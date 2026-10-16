@@ -243,6 +243,20 @@ test('collection scan preload matches live sqlite authorization', () => {
   auth.releaseCollection(workspace.id, '/pages', ada.id)
 })
 
+test('grant notifies invalidators so list caches can drop', () => {
+  const { auth, ada, bob, actor, page } = setup()
+  let n = 0
+  const stop = auth.onInvalidate(() => {
+    n += 1
+  })
+  auth.attach(actor(ada.id), page('private'), { ownership: 'personal', accessMode: 'private' })
+  assert.ok(n >= 1)
+  const afterAttach = n
+  auth.grant(ada.id, page('private'), 'account', bob.id, 'viewer')
+  assert.ok(n > afterAttach)
+  stop()
+})
+
 test('an agent has exactly the delegating account permissions', () => {
   const { auth, ada, bob, actor, page, workspace } = setup()
   auth.attach(actor(ada.id), page('agent-page'), { accessMode: 'private' })
