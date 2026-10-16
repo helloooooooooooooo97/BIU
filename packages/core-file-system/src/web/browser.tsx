@@ -1,4 +1,4 @@
-import { Fragment, createContext, lazy, memo, Suspense, type ComponentProps, type PointerEvent as ReactPointerEvent, type RefObject, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { createContext, lazy, memo, Suspense, type ComponentProps, type PointerEvent as ReactPointerEvent, type RefObject, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import {
   ArrowPathIcon,
   ArrowsPointingOutIcon,
@@ -346,8 +346,8 @@ function RecordOpenControls({
 
 function RecordTitle({
   row,
-  body,
   label,
+  Title,
   openDetail = true,
   depth = 0,
   hasKids = false,
@@ -364,8 +364,8 @@ function RecordTitle({
   onWriteEmoji,
 }: {
   row: DbRecord
-  body: ReactNode
   label: string
+  Title?: CollectionChrome['Title']
   openDetail?: boolean
   depth?: number
   hasKids?: boolean
@@ -386,6 +386,14 @@ function RecordTitle({
     if (!toolsLive) setToolsLive(true)
   }
   const tree = openDetail && treeOn
+  if (!toolsLive && !tree) {
+    return (
+      <span className="fsdb-title-host" onMouseEnter={armTools}>
+        <RecordMark record={row} tableIcon={tableIcon} />
+        <span className="fsdb-title-text">{label}</span>
+      </span>
+    )
+  }
   return (
     <>
       <span className="fsdb-title-host" style={tree ? { paddingLeft: depth * 16 } : undefined} onMouseEnter={armTools}>
@@ -415,7 +423,7 @@ function RecordTitle({
         ) : (
           <RecordMark record={row} tableIcon={tableIcon} />
         )}
-        <span className="fsdb-title-text">{body}</span>
+        <span className="fsdb-title-text">{toolsLive && Title ? <Title record={row} label={label} /> : label}</span>
       </span>
       {toolsLive || (tree && kidCount > 0) ? (
         <span className="tasks-row-tools-slot">
@@ -723,9 +731,7 @@ const TableBody = memo(function TableBody({
   return (
     <tbody>
       {padRow(padTop, 'top')}
-      {nodes.slice(start, end).map((node) => (
-        <Fragment key={node.key}>{bag.renderNode(node)}</Fragment>
-      ))}
+      {nodes.slice(start, end).map((node) => bag.renderNode(node))}
       {padRow(padBottom, 'bottom')}
     </tbody>
   )
@@ -746,7 +752,7 @@ function ViewTabFit({
 }) {
   const viewMeasureRef = useRef<HTMLDivElement>(null)
   const [viewTabFit, setViewTabFit] = useState(99)
-  useLayoutEffect(() => {
+  useEffect(() => {
     function measure() {
       const toolbar = toolbarRef.current
       const right = toolbarRightRef.current
@@ -757,7 +763,6 @@ function ViewTabFit({
       const next = countFittingViewTabs(tabs.map((el) => el.offsetWidth), available, 2)
       setViewTabFit((prev) => (prev === next ? prev : next))
     }
-    measure()
     const ro = new ResizeObserver(measure)
     if (toolbarRef.current) ro.observe(toolbarRef.current)
     if (toolbarRightRef.current) ro.observe(toolbarRightRef.current)
@@ -1878,7 +1883,7 @@ export function CollectionBrowser({
     JSON.stringify(columnWidths),
   ].join('\0')
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     const wrap = tableWrapRef.current
     if (!wrap) return
     let raf = 0
@@ -1899,7 +1904,6 @@ export function CollectionBrowser({
         sync()
       })
     }
-    sync()
     wrap.addEventListener('scroll', onScroll, { passive: true })
     const ro = new ResizeObserver(onScroll)
     ro.observe(wrap)
@@ -1913,12 +1917,8 @@ export function CollectionBrowser({
   useLayoutEffect(() => {
     const wrap = tableWrapRef.current
     if (!wrap) return
-    wrap.scrollTop = 0
-    setTableScroll((prev) => {
-      const next = { top: 0, height: wrap.clientHeight || prev.height }
-      const rowPx = wrapCellsRef.current ? TABLE_WRAP_ROW_PX : TABLE_ROW_PX
-      return tableWindowUnchanged(tablePaintCountRef.current, prev, next, rowPx) ? prev : next
-    })
+    if (wrap.scrollTop) wrap.scrollTop = 0
+    setTableScroll((prev) => (prev.top === 0 ? prev : { ...prev, top: 0 }))
   }, [activeViewId, collectionPath, groupBy, page, pageSize, query])
 
   const listedSelected = detailId ? items.find((item) => item.id === detailId) : undefined
@@ -2943,15 +2943,6 @@ export function CollectionBrowser({
     )
   }
 
-  function titleBody(row: DbRecord) {
-    const key = schema?.labelField
-    const field = key && schema ? schema.fields[key] : undefined
-    if (key && field?.writable) return renderCell(row, key, field, 'table')
-    if (chrome?.Title) return <chrome.Title record={row} label={labelOf(row)} />
-    if (key && field) return renderCell(row, key, field, 'table')
-    return labelOf(row)
-  }
-
   function RecordActions({ row }: { row: DbRecord }) {
     const Actions = chrome?.Actions
     const Action = chrome?.Action
@@ -3155,8 +3146,8 @@ export function CollectionBrowser({
             {col.key === schema?.labelField ? (
               <RecordTitle
                 row={row}
-                body={titleBody(row)}
                 label={labelOf(row)}
+                Title={chrome?.Title}
                 depth={depth}
                 hasKids={hasKids}
                 kidCount={kidCount}
@@ -3188,7 +3179,7 @@ export function CollectionBrowser({
     const listed = flattenRows(rows)
     if (!listed.length) {
       return (
-        <tr>
+        <tr key="empty">
           <td colSpan={tableColSpan} className="fsdb-empty">
             {error ? '加载失败' : '暂无记录'}
           </td>
@@ -3203,7 +3194,7 @@ export function CollectionBrowser({
     if (node.kind === 'row') return tableRecordRow(node.row, node.depth, node.hasKids, node.kidCount, node.key)
     if (node.kind === 'group-head') {
       return (
-        <tr className="fsdb-group-row">
+        <tr key={node.key} className="fsdb-group-row">
           <td colSpan={tableColSpan}>
             <GroupHead groupKey={node.groupKey} label={node.label} count={node.count} />
           </td>
@@ -3213,7 +3204,7 @@ export function CollectionBrowser({
     const pages = Math.max(1, Math.ceil(node.count / pageSize))
     const pageIndex = Math.min(node.pageIndex, pages - 1)
     return (
-      <tr className="fsdb-group-pager">
+      <tr key={node.key} className="fsdb-group-pager">
         <td colSpan={tableColSpan}>
           <div className="fsdb-pager">
             <span className="fsdb-pager-meta">{node.count}</span>
