@@ -1,7 +1,7 @@
 /** 就绪之后再压一次：翻页、搜索、滚动、展开树、点会话输入。 */
 
 export function stressInteractSource() {
-  return `(() => {
+  return `(async () => {
     const out = { pager: false, search: false, scroll: false, tree: false, composer: false }
     const next = document.querySelector('.fsdb-pager-nav button[aria-label="下一页"]')
     if (next && !next.disabled) {
@@ -9,7 +9,10 @@ export function stressInteractSource() {
       out.pager = true
     }
     const searchBtn = document.querySelector('.tasks-search-wrap button[aria-label="搜索"]')
-    if (searchBtn) searchBtn.click()
+    if (searchBtn) {
+      searchBtn.click()
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    }
     const input = document.querySelector('input.tasks-search')
     if (input) {
       const desc = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')

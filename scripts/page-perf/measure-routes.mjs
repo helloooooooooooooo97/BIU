@@ -185,7 +185,12 @@ async function measureRoute(session, route) {
     shell = value
     const visible = value.shell && value.workspace && !value.splash && !value.gate
     if (contentAt == null && visible && value.textLen > 20) contentAt = Date.now() - t0
-    const inflightApi = [...requests.values()].filter((req) => /\/api\//.test(req.url) && req.end == null && Date.now() - t0 - (req.start || 0) < 8_000).length
+    const inflightApi = [...requests.values()].filter((req) => {
+      if (!/\/api\//.test(req.url) || req.end != null || req.canceled) return false
+      const age = Date.now() - t0 - (req.start || 0)
+      if (req.status == null && age >= 1_200) return false
+      return age < 8_000
+    }).length
     if (contentAt != null && value.loadingBlocks === 0 && inflightApi === 0 && (value.composer || value.table || value.textLen > 80)) {
       if (readyAt == null) {
         readyAt = Date.now() - t0
@@ -196,7 +201,7 @@ async function measureRoute(session, route) {
   }
   let interact = null
   if (route.interact) {
-    const clicked = await session.send('Runtime.evaluate', { expression: stressInteractSource(), returnByValue: true }, session.sessionId)
+    const clicked = await session.send('Runtime.evaluate', { expression: stressInteractSource(), returnByValue: true, awaitPromise: true }, session.sessionId)
     await new Promise((resolve) => setTimeout(resolve, 900))
     const events = session.take()
     collectRequests(events, requests, t0)

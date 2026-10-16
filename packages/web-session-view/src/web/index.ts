@@ -310,6 +310,7 @@ export class SessionViewService extends Service {
   private trajGen = 0
   private trajFetchSessionId: string | null = null
   private dispatchedPoll: ReturnType<typeof setInterval> | null = null
+  private dispatchedAbort: AbortController | null = null
   private busyHoldUntil = 0
   /** 切会话时画面还是上一段：ingest 不能往旧 events 上叠新 session */
   private holdPreviousThread = false
@@ -350,12 +351,15 @@ export class SessionViewService extends Service {
       clearInterval(this.dispatchedPoll)
       this.dispatchedPoll = null
     }
+    this.dispatchedAbort?.abort()
+    this.dispatchedAbort = null
   }
 
   private syncDispatchedPoll() {
     this.stopDispatchedPoll()
     const id = this.value.sessionId
     if (!id) return
+    if (!this.wantsTrajectory() && !turnInProgress(this.value.events)) return
     this.dispatchedPoll = setInterval(() => {
       void this.refreshDispatchedUsage()
     }, 2000)
@@ -364,8 +368,11 @@ export class SessionViewService extends Service {
   async refreshDispatchedUsage() {
     const sessionId = this.value.sessionId
     if (!sessionId) return
+    this.dispatchedAbort?.abort()
+    const ac = new AbortController()
+    this.dispatchedAbort = ac
     try {
-      const res = await fetch(`/api/sessions/${sessionId}/dispatched-usage`)
+      const res = await fetch(`/api/sessions/${sessionId}/dispatched-usage`, { signal: ac.signal })
       if (!res.ok || this.value.sessionId !== sessionId) return
       const body = (await res.json()) as {
         dispatchedUsage?: TrajectoryUsage | null
@@ -564,6 +571,7 @@ export class SessionViewService extends Service {
       error: undefined,
     })
     this.stashCurrent()
+    if (event.type === 'turn/end' || event.type === 'turn/start') this.syncDispatchedPoll()
     // 检查器打开后 trajectoryLive=true：即使 URL 仍是 chat 也要刷新右侧轨迹
     if (this.wantsTrajectory()) void this.refreshTrajectoryIndex()
     this.scheduleRefreshSessions()

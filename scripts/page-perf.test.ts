@@ -60,8 +60,11 @@ test('page plugin perf helpers stay as separate scripts in one folder', () => {
   assert.match(sources['interact.mjs'], /tasks-search/)
   assert.match(sources['interact.mjs'], /tasks-search-wrap/)
   assert.doesNotMatch(sources['interact.mjs'], /querySelector\('button\[aria-label="搜索"\]'\)/)
+  assert.match(sources['interact.mjs'], /requestAnimationFrame/)
   assert.match(sources['interact.mjs'], /tasks-tree-toggle/)
   assert.match(sources['measure-routes.mjs'], /loadingFailed/)
+  assert.match(sources['measure-routes.mjs'], /awaitPromise/)
+  assert.match(sources['measure-routes.mjs'], /req.status == null && age >= 1_200/)
 })
 
 test('resourceKind splits snapshot, list, and store web.js', () => {
