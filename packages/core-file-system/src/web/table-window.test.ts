@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, TABLE_WINDOW_VIEWPORT_FALLBACK, TABLE_COL_PX, TABLE_COL_PIN_PX, TABLE_COL_OVERSCAN, TABLE_COL_VIEWPORT_FALLBACK, groupedFullFetchCount, tableColumnSlice, tableWindowSlice, tableWindowUnchanged } from './table-window.ts'
+import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, TABLE_WINDOW_VIEWPORT_FALLBACK, TABLE_COL_PX, TABLE_COL_PIN_PX, TABLE_COL_OVERSCAN, TABLE_COL_VIEWPORT_FALLBACK, groupedFullFetchCount, tableColumnEstimate, tableColumnFit, tableColumnSlice, tableWindowSlice, tableWindowUnchanged } from './table-window.ts'
 
 test('table window keeps overscan around the viewport', () => {
   const slice = tableWindowSlice(200, 0, TABLE_ROW_PX * 10)
@@ -96,6 +96,41 @@ test('typical 7-col first screen fills a 624px wrap without a pad', () => {
   assert.equal(slice.end, 7)
   assert.equal(slice.padLeft, 0)
   assert.equal(slice.padRight, 0)
+})
+
+test('unmeasured person and date columns stay wide enough for the first screen', () => {
+  assert.equal(tableColumnEstimate('title', undefined, true), TABLE_COL_PIN_PX)
+  assert.equal(tableColumnEstimate('createdBy', undefined), 120)
+  assert.equal(tableColumnEstimate('updatedAt', undefined), 130)
+  assert.equal(tableColumnEstimate('shareScope', undefined), 64)
+  assert.equal(tableColumnEstimate('status', undefined), TABLE_COL_PX)
+  assert.equal(tableColumnEstimate('createdBy', 180), 180)
+  const widths = [
+    tableColumnEstimate('title', undefined, true),
+    tableColumnEstimate('actions', undefined),
+    tableColumnEstimate('status', undefined),
+    tableColumnEstimate('priority', undefined),
+    tableColumnEstimate('difficulty', undefined),
+    tableColumnEstimate('usage', undefined),
+    tableColumnEstimate('createdBy', undefined),
+  ]
+  const slice = tableColumnSlice(7, 1, 0, 624, widths)
+  assert.equal(slice.end, 7)
+  assert.equal(slice.padRight, 0)
+})
+
+test('narrow tables that barely overflow the wrap scale onto the first screen', () => {
+  const fitted = tableColumnFit([140, 72, 72, 72, 72, 130, 72, 64], 624)
+  const sum = fitted.reduce((a, b) => a + b, 0)
+  assert.ok(Math.abs(sum - 624) <= 8)
+  assert.ok(fitted[0]! >= 56)
+  assert.ok(fitted[fitted.length - 1]! >= 56)
+})
+
+test('wide tables keep estimates so the column window can pad', () => {
+  const widths = [TABLE_COL_PIN_PX, ...Array.from({ length: 12 }, () => TABLE_COL_PX)]
+  const fitted = tableColumnFit(widths, 624)
+  assert.equal(fitted, widths)
 })
 
 test('column window shifts with horizontal scroll and pads both sides', () => {

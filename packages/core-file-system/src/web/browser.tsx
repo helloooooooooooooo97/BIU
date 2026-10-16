@@ -75,7 +75,7 @@ import { CrumbTrail } from './crumb-trail.tsx'
 import { fieldPickAttrs, pickDomAttrs, recordPickKind, recordSourcePath } from './pick-dom.ts'
 import { normalizeRecordEmoji, recordPreviewEmoji, crumbRecordLabel } from './sidebar-preview.ts'
 import { recordPreviewMascot, RecordMark } from './record-mark.tsx'
-import { COL_WIDTH_MAX, COL_WIDTH_MIN, colWidthStyle, normalizeColumnWidths, normalizeSavedView, normalizePageSize, tableWidthStyle, viewStateKey, type SavedView } from './saved-view.ts'
+import { COL_WIDTH_MAX, COL_WIDTH_MIN, colWidthStyle, normalizeColumnWidths, normalizeSavedView, normalizePageSize, viewStateKey, type SavedView } from './saved-view.ts'
 import { PagerSizeControl } from './pager-size.tsx'
 import {
   actionIcon,
@@ -130,7 +130,7 @@ import { ViewPaneMenu } from './pane-more-menu.tsx'
 import { HttpError, listCollection, readJson } from './db-client.ts'
 import { savedViewRecordPath } from '../paths.ts'
 import { findViewNeighbor, indexOnPage } from './view-adjacent.ts'
-import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, TABLE_WINDOW_VIEWPORT_FALLBACK, TABLE_COL_VIEWPORT_FALLBACK, tableColumnSlice, tableColumnUnchanged, tableColumnWidth, tableWindowSlice, tableWindowUnchanged } from './table-window.ts'
+import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, TABLE_WINDOW_VIEWPORT_FALLBACK, TABLE_COL_VIEWPORT_FALLBACK, tableColumnEstimate, tableColumnFit, tableColumnSlice, tableColumnUnchanged, tableWindowSlice, tableWindowUnchanged } from './table-window.ts'
 import {
   idleBoolInnerHtml,
   idleEmptyUsageInnerHtml,
@@ -1676,7 +1676,6 @@ export function CollectionBrowser({
       .map((key) => allColumns.find((item) => item.key === key))
       .filter(Boolean) as typeof allColumns
   }, [allColumns, columnKeys, rowActionColumn, schema, schemaDefaultKeys])
-  const hasColWidths = Object.keys(columnWidths).length > 0
 
   function startColResize(event: ReactPointerEvent<HTMLSpanElement>, colKey: string) {
     if (event.button !== 0) return
@@ -1694,7 +1693,7 @@ export function CollectionBrowser({
       snapshot[key] = columnWidths[key] ?? Math.round(measured)
     }
     for (const col of columns) {
-      if (snapshot[col.key] == null) snapshot[col.key] = columnWidths[col.key] ?? tableColumnWidth(undefined, col.key === schema?.labelField)
+      if (snapshot[col.key] == null) snapshot[col.key] = tableColumnEstimate(col.key, columnWidths[col.key], col.key === schema?.labelField)
     }
     const origin = snapshot[colKey] ?? COL_WIDTH_MIN
     handle.setPointerCapture(event.pointerId)
@@ -1866,8 +1865,12 @@ export function CollectionBrowser({
   const columnMetaRef = useRef({ count: 0, pin: 0, widths: [] as number[] })
   const columnPinCount = columns[0]?.key === schema?.labelField ? 1 : 0
   const columnPx = useMemo(
-    () => columns.map((col, index) => tableColumnWidth(columnWidths[col.key], index < columnPinCount)),
-    [columnPinCount, columnWidths, columns],
+    () =>
+      tableColumnFit(
+        columns.map((col, index) => tableColumnEstimate(col.key, columnWidths[col.key], index < columnPinCount)),
+        tableScroll.width,
+      ),
+    [columnPinCount, columnWidths, columns, tableScroll.width],
   )
   const colWindow = useMemo(
     () => tableColumnSlice(columns.length, columnPinCount, tableScroll.left, tableScroll.width, columnPx),
@@ -1883,6 +1886,12 @@ export function CollectionBrowser({
     windowedColumns.length + (colWindow.padLeft > 0 ? 1 : 0) + (colWindow.padRight > 0 ? 1 : 0),
     1,
   )
+  const paintedTablePx = useMemo(() => {
+    let sum = Math.max(0, colWindow.padLeft) + Math.max(0, colWindow.padRight)
+    for (let i = 0; i < colWindow.pin; i += 1) sum += columnPx[i] || 0
+    for (let i = colWindow.start; i < colWindow.end; i += 1) sum += columnPx[i] || 0
+    return Math.max(sum, 1)
+  }, [colWindow.end, colWindow.padLeft, colWindow.padRight, colWindow.pin, colWindow.start, columnPx])
   const tableWindow = useMemo(
     () =>
       tableWindowSlice(
@@ -3186,6 +3195,10 @@ export function CollectionBrowser({
     return { width: v, minWidth: v, maxWidth: v }
   }
 
+  function paintedColStyle(index: number) {
+    return colWidthStyle(columnPx[index]) ?? padColStyle(columnPx[index] || 72)
+  }
+
   function paintColPad(px: number, side: 'left' | 'right') {
     if (px <= 0) return null
     return <td key={`pad-${side}`} className="fsdb-col-pad" aria-hidden style={padColStyle(px)} />
@@ -3194,15 +3207,11 @@ export function CollectionBrowser({
   function paintHeadTh(col: (typeof columns)[number]) {
     const flat = parseFacetFlatColumnKey(col.key)
     const tone = flat ? schemaTagTone(flat.packId) : undefined
-    const width = colWidthStyle(columnWidths[col.key])
     return (
       <th
         key={col.key}
         className={[col.key === schema?.labelField ? 'is-pin-col' : '', tone ? 'is-facet-col' : ''].filter(Boolean).join(' ') || undefined}
-        style={{
-          ...(width ?? {}),
-          ...(tone ? { ['--biu-tag' as string]: tone } : {}),
-        }}
+        style={tone ? { ['--biu-tag' as string]: tone } : undefined}
       >
         <span className={`tasks-th${queryFields.has(col.key) ? ' is-on' : ''}`}>
           <FieldGlyph kind={col.kind} />
@@ -3226,7 +3235,6 @@ export function CollectionBrowser({
         key: col.key,
         inner: idleTableCellInner(row, col.key, col.field),
         className: col.key === schema?.labelField ? 'is-pin-col' : undefined,
-        style: colWidthStyle(columnWidths[col.key]),
         attrs,
       })
     }
@@ -3296,7 +3304,6 @@ export function CollectionBrowser({
         key={col.key}
         data-col-key={col.key}
         {...cellPickOf(row, col.key, col.field)}
-        style={colWidthStyle(columnWidths[col.key])}
         className={[
           col.key === schema?.labelField ? 'is-pin-col' : '',
           cellPick?.id === row.id && cellPick.key === col.key
@@ -4345,8 +4352,8 @@ export function CollectionBrowser({
                   />
                 <table
                   ref={tableRef}
-                  className={`tasks-table${wrapCells ? ' is-wrap' : ''}${truncateCells ? ' is-truncate' : ''}${hasColWidths ? ' is-cols-fixed' : ''}${resizingCol ? ' is-col-resize' : ''}`}
-                  style={tableWidthStyle(columnWidths, columns.map((col) => col.key))}
+                  className={`tasks-table${wrapCells ? ' is-wrap' : ''} is-cols-fixed${truncateCells ? ' is-truncate' : ''}${resizingCol ? ' is-col-resize' : ''}`}
+                  style={{ width: `${paintedTablePx}px`, minWidth: `${paintedTablePx}px`, maxWidth: `${paintedTablePx}px` }}
                   onPointerDown={onTablePointerDown}
                   onPointerMove={onTablePointerMove}
                   onClick={onTableClick}
@@ -4359,12 +4366,12 @@ export function CollectionBrowser({
                   }}
                 >
             <colgroup>
-              {columns.slice(0, colWindow.pin).map((col) => (
-                <col key={col.key} style={colWidthStyle(columnWidths[col.key])} />
+              {columns.slice(0, colWindow.pin).map((col, index) => (
+                <col key={col.key} style={paintedColStyle(index)} />
               ))}
               {colWindow.padLeft > 0 ? <col key="pad-left" style={padColStyle(colWindow.padLeft)} /> : null}
-              {columns.slice(colWindow.start, colWindow.end).map((col) => (
-                <col key={col.key} style={colWidthStyle(columnWidths[col.key])} />
+              {columns.slice(colWindow.start, colWindow.end).map((col, index) => (
+                <col key={col.key} style={paintedColStyle(colWindow.start + index)} />
               ))}
               {colWindow.padRight > 0 ? <col key="pad-right" style={padColStyle(colWindow.padRight)} /> : null}
             </colgroup>
