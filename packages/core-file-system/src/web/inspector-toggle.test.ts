@@ -77,11 +77,17 @@ test('data sidebar brand sits left with a collapse control on the right', () => 
   assert.match(sidebar, /shell-module-sidebar/)
   assert.doesNotMatch(browser, /from '\.\/data-sidebar\.tsx'/)
   assert.match(browser, /import\('\.\/data-sidebar\.tsx'\)/)
-  assert.match(browser, /data-list-ready=\{listPainted \? '1' : undefined\}/)
+  assert.match(browser, /setAttribute\('data-list-ready', '1'\)/)
+  assert.match(browser, /isPaintedListReady/)
   assert.match(browser, /sidebarPaint/)
   assert.match(browser, /function IdleDataSidebar/)
   assert.match(browser, /<IdleDataSidebar/)
   assert.doesNotMatch(browser, /setSidebarPaint\(false\)/)
+  assert.doesNotMatch(browser, /setListPainted/)
+  assert.doesNotMatch(browser, /listPainted/)
+  assert.match(browser, /data-col-key=\{col.key\}/)
+  assert.match(browser, /onPointerDown=\{onTablePointerDown\}/)
+  assert.match(browser, /openDetail && toolsLive \? \(\s*\n\s*<TableRecordIcon/)
 })
 
 test('user and system collection sections fold independently', () => {

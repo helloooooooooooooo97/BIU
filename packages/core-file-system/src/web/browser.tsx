@@ -131,7 +131,7 @@ import { HttpError, listCollection, readJson } from './db-client.ts'
 import { savedViewRecordPath } from '../paths.ts'
 import { findViewNeighbor, indexOnPage } from './view-adjacent.ts'
 import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, TABLE_WINDOW_VIEWPORT_FALLBACK, tableWindowSlice, tableWindowUnchanged } from './table-window.ts'
-import { markPaintedListReady, rememberPreviewTotal, resetPaintedListReady, viewTotalKey, whenListIdle } from './sidebar-preview.ts'
+import { isPaintedListReady, markPaintedListReady, rememberPreviewTotal, resetPaintedListReady, viewTotalKey, whenListIdle } from './sidebar-preview.ts'
 import { catalogLockFilters, isReadOnlyViewId, mergeTableViews, parseBuiltinScopeViewId, stubBuiltinBlockKindView, viewsForScope, type DataScope } from '../catalog-views.ts'
 import { SAVED_VIEW_EVENT, rememberInspectorWorkingView, showRecordInInspector } from './inspector-db-route.ts'
 import { CellPop, cellUsesPop } from './cell-pop.tsx'
@@ -168,31 +168,30 @@ const DataSidebar = lazy(() => import('./data-sidebar.tsx').then((m) => ({ defau
 const LayoutPrefsMenu = lazy(() => import('./layout-prefs-menu.tsx').then((m) => ({ default: m.LayoutPrefsMenu })))
 const CollectionRowsShell = lazy(() => import('./rows-view.tsx').then((m) => ({ default: m.CollectionRowsShell })))
 
-function IdleDataSidebar({
-  listPainted,
-  ...props
-}: { listPainted: boolean } & ComponentProps<typeof DataSidebar>) {
+function IdleDataSidebar(props: ComponentProps<typeof DataSidebar>) {
   const [sidebarPaint, setSidebarPaint] = useState(false)
   useEffect(() => {
-    if (!listPainted || sidebarPaint) return
+    if (sidebarPaint) return
     let cancelled = false
+    let idleId = 0
+    let timer = 0
     const show = () => {
       if (!cancelled) setSidebarPaint(true)
     }
-    const ric = window.requestIdleCallback
-    if (typeof ric === 'function') {
-      const idleId = ric(show, { timeout: 240 })
-      return () => {
-        cancelled = true
-        window.cancelIdleCallback(idleId)
-      }
+    const arm = () => {
+      const ric = window.requestIdleCallback
+      if (typeof ric === 'function') idleId = ric(show, { timeout: 240 })
+      else timer = window.setTimeout(show, 240)
     }
-    const timer = window.setTimeout(show, 240)
+    if (isPaintedListReady()) arm()
+    else window.addEventListener('fsdb:list-ready', arm)
     return () => {
       cancelled = true
-      window.clearTimeout(timer)
+      window.removeEventListener('fsdb:list-ready', arm)
+      if (idleId) window.cancelIdleCallback(idleId)
+      if (timer) window.clearTimeout(timer)
     }
-  }, [listPainted, sidebarPaint])
+  }, [sidebarPaint])
   if (!sidebarPaint) return null
   return <DataSidebar {...props} />
 }
@@ -741,7 +740,7 @@ export function CollectionBrowser({
   const reloadGen = useRef(0)
   const reloadInflightRef = useRef<{ key: string; promise: Promise<boolean> } | null>(null)
   const listReadySent = useRef(false)
-  const [listPainted, setListPainted] = useState(false)
+  const pageRef = useRef<HTMLDivElement>(null)
   const [pickMode, setPickMode] = useState(false)
   const confirmedCreates = useRef(new Set<string>())
   const hydratePath = useRef('')
@@ -1018,22 +1017,12 @@ export function CollectionBrowser({
       setError('')
       loadedIdentityRef.current = listIdentityKey
       loadedPagesRef.current = { ...groupPagesRef.current }
-      if (!listReadySent.current) {
-        listReadySent.current = true
-        markPaintedListReady()
-        setListPainted(true)
-        window.dispatchEvent(new Event('fsdb:list-ready'))
-      }
+      if (!listReadySent.current) listReadySent.current = true
       return true
     } catch (err) {
       if (gen !== reloadGen.current) return false
       setError(String(err))
-      if (!listReadySent.current) {
-        listReadySent.current = true
-        markPaintedListReady()
-        setListPainted(true)
-        window.dispatchEvent(new Event('fsdb:list-ready'))
-      }
+      if (!listReadySent.current) listReadySent.current = true
       return false
     }
     })()
@@ -1122,7 +1111,7 @@ export function CollectionBrowser({
     setHydrated(false)
     hydratePath.current = ''
     listReadySent.current = false
-    setListPainted(false)
+    pageRef.current?.removeAttribute('data-list-ready')
     loadedIdentityRef.current = ''
     loadedPagesRef.current = {}
     resetPaintedListReady()
@@ -1178,6 +1167,15 @@ export function CollectionBrowser({
       setSorts(normalizeSorts(undefined, 'title', 'asc'))
     }
   }, [collectionPath, dataPath, routeViewId, tablePathsKey])
+
+  useLayoutEffect(() => {
+    if (!listReadySent.current) return
+    const page = pageRef.current
+    if (!page || page.getAttribute('data-list-ready') === '1') return
+    page.setAttribute('data-list-ready', '1')
+    markPaintedListReady()
+    window.dispatchEvent(new Event('fsdb:list-ready'))
+  })
 
   useEffect(() => {
     let debounce = 0
@@ -2708,7 +2706,7 @@ export function CollectionBrowser({
             <span className="tasks-tree-toggle is-empty" aria-hidden />
           )
         ) : null}
-        {openDetail ? (
+        {openDetail && toolsLive ? (
           <TableRecordIcon row={row} />
         ) : (
           <RecordMark
@@ -2950,6 +2948,49 @@ export function CollectionBrowser({
     )
   }
 
+  function tableCellFromEvent(event: { target: EventTarget | null; currentTarget: EventTarget }) {
+    const hit = event.target as HTMLElement | null
+    if (hit?.closest(CELL_POP_IGNORE)) return null
+    const table = event.currentTarget as HTMLElement
+    const td = hit?.closest('td')
+    if (!td || !table.contains(td)) return null
+    const id = td.closest('tr')?.dataset.recordId
+    const key = td.dataset.colKey
+    if (!id || !key) return null
+    return { td, id, key }
+  }
+
+  function onTablePointerDown(event: ReactPointerEvent<HTMLTableElement>) {
+    if (event.button !== 0) return
+    const cell = tableCellFromEvent(event)
+    if (!cell) return
+    const col = columns.find((item) => item.key === cell.key)
+    cellAnchorRef.current = cell.td
+    cellPickRef.current = { id: cell.id, key: cell.key }
+    markCellOn(cell.td, col ? cellFieldWritable(col.field) : false)
+    cellPopPtrRef.current = { x: event.clientX, y: event.clientY, dragged: false }
+  }
+
+  function onTablePointerMove(event: ReactPointerEvent<HTMLTableElement>) {
+    const start = cellPopPtrRef.current
+    if (!start || start.dragged) return
+    if (Math.hypot(event.clientX - start.x, event.clientY - start.y) < CELL_POP_DRAG_PX) return
+    start.dragged = true
+    setCellPop(null)
+  }
+
+  function onTableClick(event: { target: EventTarget | null; currentTarget: EventTarget; clientX: number; clientY: number }) {
+    const cell = tableCellFromEvent(event)
+    const start = cellPopPtrRef.current
+    cellPopPtrRef.current = null
+    if (!cell || start?.dragged) return
+    if (start && Math.hypot(event.clientX - start.x, event.clientY - start.y) >= CELL_POP_DRAG_PX) return
+    const col = columns.find((item) => item.key === cell.key)
+    if (!col) return
+    const kind = resolveFieldType(col.field)
+    setCellPop(cellUsesPop(kind, col.field.writable) ? { id: cell.id, key: cell.key } : null)
+  }
+
   function tableRecordRow(row: DbRecord, depth: number, hasKids: boolean, kidCount: number, rowKey: string) {
     const cellPick = cellPickRef.current
     return (
@@ -2962,6 +3003,7 @@ export function CollectionBrowser({
         {columns.map((col) => (
           <td
             key={col.key}
+            data-col-key={col.key}
             {...cellPickOf(row, col.key, col.field)}
             style={colWidthStyle(columnWidths[col.key])}
             className={[
@@ -2972,33 +3014,6 @@ export function CollectionBrowser({
                   : 'is-cell-on is-cell-ro'
                 : '',
             ].filter(Boolean).join(' ') || undefined}
-            onPointerDown={(event) => {
-              if (event.button !== 0) return
-              const hit = event.target as HTMLElement | null
-              if (hit?.closest(CELL_POP_IGNORE)) return
-              const td = event.currentTarget
-              cellAnchorRef.current = td
-              cellPickRef.current = { id: row.id, key: col.key }
-              markCellOn(td, cellFieldWritable(col.field))
-              cellPopPtrRef.current = { x: event.clientX, y: event.clientY, dragged: false }
-            }}
-            onPointerMove={(event) => {
-              const start = cellPopPtrRef.current
-              if (!start || start.dragged) return
-              if (Math.hypot(event.clientX - start.x, event.clientY - start.y) < CELL_POP_DRAG_PX) return
-              start.dragged = true
-              setCellPop(null)
-            }}
-            onClick={(event) => {
-              const hit = event.target as HTMLElement | null
-              if (hit?.closest(CELL_POP_IGNORE)) return
-              const start = cellPopPtrRef.current
-              cellPopPtrRef.current = null
-              if (start?.dragged) return
-              if (start && Math.hypot(event.clientX - start.x, event.clientY - start.y) >= CELL_POP_DRAG_PX) return
-              const kind = resolveFieldType(col.field)
-              setCellPop(cellUsesPop(kind, col.field.writable) ? { id: row.id, key: col.key } : null)
-            }}
           >
             {col.key === schema?.labelField ? (
               <RecordTitle row={row} depth={depth} hasKids={hasKids} kidCount={kidCount} />
@@ -3169,14 +3184,13 @@ export function CollectionBrowser({
 
   return (
     <div
+      ref={pageRef}
       className={`fsdb-page tasks-root${nested ? ' inspector-database-page' : ''}${sheet ? ' is-sheet' : ''}${!sheet && pageWidth === 'full' ? ' is-full-width' : ''}${collectionPath === '/plugins' ? ' is-plugins' : ''}`}
       data-testid={embed ? 'inspector-database' : sheet ? 'fsdb-collect-sheet' : undefined}
-      data-list-ready={listPainted ? '1' : undefined}
     >
       {!nested ? (
         <Suspense fallback={null}>
         <IdleDataSidebar
-          listPainted={listPainted}
           tables={tables}
           collectionPath={collectionPath}
           title={title}
@@ -4006,6 +4020,9 @@ export function CollectionBrowser({
                   ref={tableRef}
                   className={`tasks-table${wrapCells ? ' is-wrap' : ''}${truncateCells ? ' is-truncate' : ''}${hasColWidths ? ' is-cols-fixed' : ''}${resizingCol ? ' is-col-resize' : ''}`}
                   style={tableWidthStyle(columnWidths, columns.map((col) => col.key))}
+                  onPointerDown={onTablePointerDown}
+                  onPointerMove={onTablePointerMove}
+                  onClick={onTableClick}
                   onMouseOver={(event) => {
                     const hit = event.target as HTMLElement | null
                     const tr = hit?.closest('tr')
