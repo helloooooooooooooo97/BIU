@@ -379,13 +379,14 @@ export class HttpService extends Service {
     const cookieToken = encoded ? decodeURIComponent(encoded.slice(encoded.indexOf('=') + 1)) : ''
     const preview = url.searchParams.get('landingPreview') === '1'
     const token = preview ? '' : (url.searchParams.get('token') ?? cookieToken)
-    const workspaceId = preview ? '' : (url.searchParams.get('workspaceId') ?? '')
+    let workspaceId = preview ? '' : (url.searchParams.get('workspaceId') ?? '')
     let accountId = ''
     const store = (
       this.ctx.get('account') as {
         store?: {
           accountByToken?(token: string): { id: string } | null
           isMember?(accountId: string, workspaceId: string): boolean
+          activeWorkspaceId?(): string | null
         }
       } | undefined
     )?.store
@@ -393,6 +394,9 @@ export class HttpService extends Service {
       accountId = token ? store?.accountByToken?.(token)?.id ?? '' : ''
     } catch {
       accountId = ''
+    }
+    if (!workspaceId && accountId) {
+      workspaceId = runWithAccount(accountId, () => String(store?.activeWorkspaceId?.() ?? '').trim())
     }
     if (accountId && workspaceId && store?.isMember && !store.isMember(accountId, workspaceId)) {
       return { accountId, workspaceId, token, error: 4403 as const }
@@ -515,11 +519,10 @@ export class HttpService extends Service {
         )?.store
         const requestedWorkspace = await runWithAccount(accountId, async () => {
           if (headerWorkspace) return headerWorkspace
-          if (!isOnlineRuntime() || !accountId) return ''
+          if (!accountId) return ''
           return String(accountStore?.activeWorkspaceId?.() ?? '').trim()
         })
         if (
-          isOnlineRuntime() &&
           hasAccountSystem &&
           accountId &&
           url.pathname.startsWith('/api/') &&

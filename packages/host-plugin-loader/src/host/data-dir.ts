@@ -175,7 +175,7 @@ export function currentAccountId() {
   return accountScope.getStore() || ''
 }
 
-/** 浏览器这次请求显式选择的空间。没有请求头时为空。 */
+/** 这次请求绑定的空间。没有请求头时用当前账号的活动空间。 */
 export function currentRequestWorkspaceId() {
   return requestWorkspaceScope.getStore() || ''
 }

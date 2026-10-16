@@ -89,14 +89,26 @@ function reportPhase(plugin: string, phase: 'ready' | 'failed') {
   window.dispatchEvent(new CustomEvent(PAGE_BLOCK_PLUGIN_PHASE, { detail: { plugin, phase } }))
 }
 
+const PENDING_PAGE_BLOCK_ENABLES = '__biuPendingPageBlockEnables'
+
+function pendingEnableIds() {
+  const map = (globalThis as typeof globalThis & { [PENDING_PAGE_BLOCK_ENABLES]?: Map<string, string> })[PENDING_PAGE_BLOCK_ENABLES]
+  return map ? [...map.keys()] : []
+}
+
 export function listenEnablePageBlockPlugin() {
-  const onEnable = (event: Event) => {
-    const plugin = pageBlockPluginFromEvent(event)
-    if (!plugin) return
+  const run = (plugin: string) => {
     void startStorePlugin(plugin)
       .then(() => reportPhase(plugin, 'ready'))
       .catch(() => reportPhase(plugin, 'failed'))
   }
+  const onEnable = (event: Event) => {
+    const plugin = pageBlockPluginFromEvent(event)
+    if (!plugin) return
+    run(plugin)
+  }
   window.addEventListener(ENABLE_PAGE_BLOCK_PLUGIN, onEnable)
+  // 页面块的 layout effect 往往比插件系统的 effect 更早，事件已经丢了。
+  for (const plugin of pendingEnableIds()) run(plugin)
   return () => window.removeEventListener(ENABLE_PAGE_BLOCK_PLUGIN, onEnable)
 }

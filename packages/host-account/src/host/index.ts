@@ -1154,7 +1154,19 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
           `/api/account/access${route.query.toString() ? `?${route.query.toString()}` : ''}`,
         ))
       ) return
-      requireCollaborativeWorkspace(activeWorkspace ?? '')
+      if (!activeWorkspace || account.workspaceLocation(activeWorkspace) !== 'cloud') {
+        route.send(200, {
+          scope: 'personal',
+          ownerId: me.id,
+          people: [],
+          groups: [],
+          memberViews: [],
+          viewGrants: [],
+          roleChain: [],
+          local: true,
+        })
+        return
+      }
       const collection = String(route.query.get('collection') ?? '')
       const viewId = String(route.query.get('viewId') ?? '')
       route.send(

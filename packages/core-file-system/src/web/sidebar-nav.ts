@@ -91,6 +91,13 @@ export function pathForCrumbTarget(target: CrumbTarget) {
   return pathForCenter({ collection: target.collection, recordId: target.recordId })
 }
 
+/** 标题还没到时不要用记录 id 充页面名。id 本身也不当标题。 */
+export function recordCrumbLabel(label: string | undefined, id: string) {
+  const text = String(label ?? '').trim()
+  if (!text || text === id) return ''
+  return text
+}
+
 export function buildCrumbs(input: {
   collection: string
   collectionLabel: string
@@ -137,17 +144,18 @@ export function buildCrumbs(input: {
   if (input.recordId) {
     const tableIcon = input.tables.find((item) => item.path === input.collection)?.icon
     const current = (input.records ?? []).find((row) => row.id === input.recordId)
+    const label = recordCrumbLabel(input.recordLabel, input.recordId)
     crumbs.push({
       kind: 'record',
       id: input.recordId,
-      label: input.recordLabel || input.recordId,
+      label,
       icon: tableIcon,
       emoji: current?.emoji,
       mascot: current?.mascot,
       target: { kind: 'record', collection: input.collection, recordId: input.recordId, viewId: input.viewId },
-      choices: (input.records ?? [{ id: input.recordId, label: input.recordLabel || input.recordId }]).map((row) => ({
+      choices: (input.records ?? [{ id: input.recordId, label }]).map((row) => ({
         id: row.id,
-        label: row.label,
+        label: recordCrumbLabel(row.label, row.id),
         icon: tableIcon,
         emoji: row.emoji,
         mascot: row.mascot,

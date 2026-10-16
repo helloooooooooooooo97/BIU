@@ -53,6 +53,21 @@ function isLandingPreview() {
   return new URLSearchParams(window.location.search).get('landingPreview') === '1'
 }
 
+/** 快照比 shell 的 fetch 包装更早上；自己带上空间，避免本机第一次 /api/snapshot 没有 workspaceId。 */
+function snapshotRequestHeaders(): HeadersInit {
+  const headers: Record<string, string> = {}
+  if (typeof window === 'undefined' || isLandingPreview()) return headers
+  try {
+    const workspaceId = sessionStorage.getItem('biu.workspaceId') || localStorage.getItem('biu.workspaceId') || ''
+    if (workspaceId) headers['x-biu-workspace-id'] = workspaceId
+    const token = localStorage.getItem('biu.account.token') || ''
+    if (token) headers.authorization = `Bearer ${token}`
+  } catch {
+    /* ignore */
+  }
+  return headers
+}
+
 export class SnapshotService extends Service {
   private value: Snapshot = empty
   private listeners = new Set<() => void>()
@@ -138,7 +153,7 @@ export class SnapshotService extends Service {
   private async pull() {
     if (this.authStopped) return
     try {
-      const res = await fetch('/api/snapshot')
+      const res = await fetch('/api/snapshot', { headers: snapshotRequestHeaders() })
       if (res.status === 401 || res.status === 403) {
         this.stopForAuth()
         return
@@ -158,7 +173,7 @@ export class SnapshotService extends Service {
   private async boot() {
     for (let i = 0; i < 30; i++) {
       try {
-        const res = await fetch('/api/snapshot')
+        const res = await fetch('/api/snapshot', { headers: snapshotRequestHeaders() })
         if (res.status === 401 || res.status === 403) return
         if (res.ok) {
           this.replace(await res.json())

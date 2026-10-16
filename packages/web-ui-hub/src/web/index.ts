@@ -182,5 +182,10 @@ export function apply(ctx: Context) {
     void sync()
   })
   lastMountKey = mountKey()
+  if (typeof window !== 'undefined') {
+    window.addEventListener('biu:enable-page-block-plugin', () => {
+      void sync()
+    })
+  }
   return sync()
 }

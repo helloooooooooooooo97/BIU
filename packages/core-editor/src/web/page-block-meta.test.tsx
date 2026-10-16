@@ -125,4 +125,8 @@ test('enable button only dispatches the stored plugin id', () => {
   requestEnablePageBlockPlugin('page-excalidraw', 'excalidraw')
   window.removeEventListener(ENABLE_PAGE_BLOCK_PLUGIN, onEnable)
   assert.deepEqual(seen, ['page-excalidraw'])
+  const pending = (globalThis as typeof globalThis & { __biuPendingPageBlockEnables?: Map<string, string> }).__biuPendingPageBlockEnables
+  assert.equal(pending?.get('page-excalidraw'), 'excalidraw')
+  setPageBlockPluginPhase('page-excalidraw', 'idle')
+  pending?.delete('page-excalidraw')
 })

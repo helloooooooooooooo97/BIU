@@ -586,6 +586,7 @@ export function CollectionBrowser({
   const [query, setQuery] = useState(initialView?.query ?? '')
   const [page, setPage] = useState(0)
   const [localData, setLocalData] = useState(false)
+  const [localKnown, setLocalKnown] = useState(false)
   const [createScope, setCreateScope] = useState<'personal' | 'workspace' | 'shared' | 'local'>(
     routeScope === 'workspace' ? 'workspace' : routeScope === 'shared' ? 'shared' : 'personal',
   )
@@ -597,11 +598,14 @@ export function CollectionBrowser({
       .then((body: { localData?: boolean; dataLocation?: 'device' | 'cloud' } | null) => {
         if (!live) return
         const device = body?.dataLocation === 'device' || body?.localData === true
+        setLocalKnown(true)
         setLocalData(device)
         if (device) setCreateScope((current) => (current === 'shared' ? 'shared' : 'personal'))
         else setCreateScope((current) => (current === 'local' ? 'personal' : current))
       })
-      .catch(() => undefined)
+      .catch(() => {
+        if (live) setLocalKnown(true)
+      })
     return () => {
       live = false
     }
@@ -2143,7 +2147,7 @@ export function CollectionBrowser({
           recordId={row.id}
           label={String(row[key] ?? (localData ? '私人' : ''))}
           tableLabel={currentTable?.label}
-          localOnly={localData}
+          localOnly={localKnown ? localData : null}
         />
       )
     }

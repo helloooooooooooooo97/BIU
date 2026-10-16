@@ -649,7 +649,8 @@ export function ShareScopeDetail({
   recordId: string
   label: string
   tableLabel?: string
-  localOnly?: boolean
+  /** null：还不知道是不是本机空间，先不要打协作接口。 */
+  localOnly?: boolean | null
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -661,6 +662,7 @@ export function ShareScopeDetail({
   const [error, setError] = useState('')
 
   useEffect(() => {
+    if (localOnly == null) return
     if (localOnly) {
       setDirect([])
       if (!open) {

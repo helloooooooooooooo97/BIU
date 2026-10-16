@@ -53,6 +53,7 @@ test('ui-hub unloads disabled plugins before importing new ones', async () => {
   assert.ok(disposeAt > 0 && importAt > 0 && disposeAt < importAt)
   assert.match(src, /g\.React = React/)
   assert.match(src, /g\.ReactJSXRuntime/)
+  assert.match(src, /biu:enable-page-block-plugin/)
 })
 
 test('session composer plugins mount before the file library and editor', () => {

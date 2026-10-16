@@ -24,3 +24,13 @@ test('未登录不请求 snapshot，登录后再拉', async () => {
   assert.equal(calls.some((url) => url.includes('/api/snapshot')), true)
   localStorage.removeItem('biu.account.token')
 })
+
+test('snapshot fetch carries the workspace even before the shell wraps fetch', async () => {
+  const src = (await import('node:fs')).readFileSync(
+    (await import('node:path')).resolve(import.meta.dirname, './index.ts'),
+    'utf8',
+  )
+  assert.match(src, /function snapshotRequestHeaders/)
+  assert.match(src, /x-biu-workspace-id/)
+  assert.match(src, /fetch\('\/api\/snapshot', \{ headers: snapshotRequestHeaders\(\) \}\)/)
+})
