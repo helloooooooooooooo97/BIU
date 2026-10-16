@@ -251,6 +251,11 @@ function withoutContent(spec: CollectionSpec, row: DbRecord): DbRecord {
   return next
 }
 
+const LIST_FIELD_COMPANIONS: Record<string, string[]> = {
+  usage: ['usageParts'],
+  title: ['parentChain', 'blocked'],
+}
+
 function listedColumnKeys(requested: unknown, labelField: string): string[] | null {
   if (!Array.isArray(requested) || !requested.length) return null
   const keys: string[] = []
@@ -267,7 +272,30 @@ function listedColumnKeys(requested: unknown, labelField: string): string[] | nu
     if (!raw) continue
     add(raw === 'label' ? labelField : raw)
   }
+  for (const key of [...keys]) {
+    for (const extra of LIST_FIELD_COMPANIONS[key] ?? []) add(extra)
+  }
   return keys
+}
+
+type ListDecorateNeed = {
+  facet: boolean
+  people: boolean
+  meta: boolean
+  shareScope: boolean
+  shareRole: boolean
+}
+
+function listDecorateNeed(wanted: string[] | null | undefined): ListDecorateNeed | null {
+  if (!wanted?.length) return null
+  const set = new Set(wanted)
+  return {
+    facet: set.has('facet') || wanted.some((key) => key.startsWith('facet::')),
+    people: set.has('createdBy') || set.has('updatedBy'),
+    meta: set.has('emoji') || set.has('tags'),
+    shareScope: set.has('shareScope'),
+    shareRole: set.has('shareRole'),
+  }
 }
 
 function pickListedFields(row: DbRecord, keys: string[]): DbRecord {
@@ -616,7 +644,6 @@ export function listNeedsMatchOverlay(
   sortField: string,
   sorts?: Array<{ field: string; dir: string }>,
 ) {
-  if (String(q ?? '').trim()) return true
   if (OVERLAY_LIST_FIELDS.has(String(sortField ?? ''))) return true
   for (const rule of sorts ?? []) {
     if (OVERLAY_LIST_FIELDS.has(rule.field)) return true
@@ -842,13 +869,14 @@ export class DatabaseService extends Service implements Database {
       : listed.filter((row) => !hidden.has(row.id) || builtinPlugin(row))
   }
 
-  private decorateSlice(spec: CollectionSpec, rows: DbRecord[]) {
+  private decorateSlice(spec: CollectionSpec, rows: DbRecord[], wanted?: string[] | null) {
     this.ownershipCache = null
     this.ownerCache = null
     this.viewAudienceCache = null
     this.viewShareCache = null
     try {
-      return rows.map((row) => this.decorateRecord(spec, row))
+      const need = listDecorateNeed(wanted)
+      return rows.map((row) => this.decorateRecord(spec, row, need))
     } finally {
       this.ownershipCache = null
       this.ownerCache = null
@@ -1549,7 +1577,7 @@ export class DatabaseService extends Service implements Database {
       const packs = this.facets.list()
       const sorted = visible.filter((row) => matchListFilter(row, liveFilter, schema, packs) && matchQuery(row, q, packs))
       const total = sorted.length
-      const slice = this.decorateSlice(spec, sorted.slice(offset, offset + limit))
+      const slice = this.decorateSlice(spec, sorted.slice(offset, offset + limit), columnKeys)
       return {
         kind: 'collection' as const,
         path: spec.path,
@@ -1592,17 +1620,25 @@ export class DatabaseService extends Service implements Database {
     }
   }
 
-  private decorateRecord(spec: CollectionSpec, row: DbRecord): DbRecord {
-    const withFacet = this.applyFacetOverlay(spec, row)
-    const withPeople = this.applyPersonOverlay(spec, withFacet)
-    const withMeta = this.applyMetaOverlay(spec, withPeople)
+  private decorateRecord(spec: CollectionSpec, row: DbRecord, need: ListDecorateNeed | null = null): DbRecord {
+    const withFacet = !need || need.facet ? this.applyFacetOverlay(spec, row) : row
+    const withPeople = !need || need.people ? this.applyPersonOverlay(spec, withFacet) : withFacet
+    const withMeta = !need || need.meta ? this.applyMetaOverlay(spec, withPeople) : withPeople
     if (isSystemCollection(spec.path) || isIndexCollection(spec.path)) return withMeta
-    if (spec.path === '/plugins' && row.builtin === true) return { ...withMeta, shareScope: '共享', shareRole: '阅读' }
-    const stored = this.ownershipOf(spec.path, String(row.id ?? ''))
+    if (spec.path === '/plugins' && row.builtin === true) {
+      return {
+        ...withMeta,
+        ...(!need || need.shareScope ? { shareScope: '共享' } : {}),
+        ...(!need || need.shareRole ? { shareRole: '阅读' } : {}),
+      }
+    }
+    const wantScope = !need || need.shareScope
+    const wantRole = !need || need.shareRole
+    const stored = wantScope ? this.ownershipOf(spec.path, String(row.id ?? '')) : 'personal'
     return {
       ...withMeta,
-      shareScope: this.shareScopeLabel(spec.path, String(row.id ?? ''), withMeta, stored),
-      shareRole: this.shareRoleLabel(spec, withMeta),
+      ...(wantScope ? { shareScope: this.shareScopeLabel(spec.path, String(row.id ?? ''), withMeta, stored) } : {}),
+      ...(wantRole ? { shareRole: this.shareRoleLabel(spec, withMeta) } : {}),
     }
   }
 

@@ -2527,15 +2527,44 @@ test('a lan view share marks matching records shared without stamping ownership'
   assert.equal(scopeOf(all.items, '已完成'), '共享')
 })
 
-test('list match overlay is only loaded for overlay fields, search, or tree filters', () => {
+test('list match overlay is only loaded for overlay fields or tree filters', () => {
   assert.equal(listNeedsMatchOverlay(undefined, '', 'title'), false)
   assert.equal(listNeedsMatchOverlay({ status: 'open', $scope: 'personal' }, '', 'title'), false)
   assert.equal(listNeedsMatchOverlay({ shareScope: '私人' }, '', 'title'), false)
-  assert.equal(listNeedsMatchOverlay(undefined, '笔记', 'title'), true)
+  assert.equal(listNeedsMatchOverlay(undefined, '笔记', 'title'), false)
   assert.equal(listNeedsMatchOverlay({ tags: 'host-ui' }, '', 'title'), true)
   assert.equal(listNeedsMatchOverlay(undefined, '', 'emoji'), true)
   assert.equal(listNeedsMatchOverlay(undefined, '', 'title', [{ field: 'createdBy', dir: 'asc' }]), true)
   assert.equal(listNeedsMatchOverlay({ $tree: { root: 'n1' } }, '', 'title'), true)
+})
+
+test('list with columns skips shareRole decorate', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  const rows = [{ id: 'n1', title: '笔记', status: 'open' }]
+  db.register({
+    id: 'notes',
+    path: '/notes',
+    schema: {
+      fields: {
+        ...REQUIRED_RECORD_FIELDS,
+        title: { type: 'string', writable: true },
+        status: { type: 'string', writable: true },
+      },
+    },
+    list: () => rows,
+    get: (id) => rows.find((row) => row.id === id) ?? null,
+  })
+  const listed = await db.list('/notes', undefined, { limit: 20, columns: ['title', 'status'] })
+  assert.equal(listed.kind, 'collection')
+  if (listed.kind !== 'collection') return
+  assert.equal(listed.items[0]?.title, '笔记')
+  assert.equal(listed.items[0]?.shareRole, undefined)
+  assert.equal(listed.items[0]?.status, 'open')
+  const full = await db.list('/notes', undefined, { limit: 20 })
+  assert.equal(full.kind, 'collection')
+  if (full.kind !== 'collection') return
+  assert.equal(full.items[0]?.shareRole, '管理')
 })
 
 test('spec.list query keeps facet and session filters and drops group filters', () => {
@@ -2656,6 +2685,8 @@ test('collection list preloads authorization scans and releases them', () => {
   assert.match(host, /setImmediate\(\(\) => \{\s*setImmediate/)
   assert.match(host, /inflightVisible\.clear\(\)/)
   assert.match(host, /specListQuery\(query\)/)
+  assert.match(host, /listDecorateNeed/)
+  assert.match(host, /decorateSlice\(spec, sorted.slice\(offset, offset \+ limit\), columnKeys\)/)
   assert.match(
     host,
     /try \{\s*const overlay = listNeedsMatchOverlay\(liveFilter, q, sortField, page\?\.sorts\)[\s\S]*?\} finally \{\s*if \(auth && actor\) \{[\s\S]*?releaseCollection\(actor\.workspaceId, spec\.path, actor\.accountId\)/,

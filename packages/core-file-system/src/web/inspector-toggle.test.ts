@@ -820,9 +820,9 @@ test('agent view writes reload saved views without a full page refresh', () => {
 test('collection reload does not follow callback identity', () => {
   assert.match(browser, /const reloadKey = /)
   assert.match(browser, /sortsStateKey\(sorts\)/)
-  assert.match(browser, /columnKeys\.join\('\\0'\)/)
   assert.doesNotMatch(browser, /JSON\.stringify\(sorts\)/)
   assert.doesNotMatch(browser, /reloadKey = .*listColumnsKey/)
+  assert.doesNotMatch(browser, /reloadKey = .*columnKeys\.join/)
   assert.match(browser, /paintListedViews/)
   assert.match(browser, /sameSavedViews/)
   assert.match(browser, /allColumnKeys\.length/)
@@ -830,6 +830,7 @@ test('collection reload does not follow callback identity', () => {
   assert.match(browser, /setFetchQuery\(next\.query \?\? ''\)/)
   assert.match(browser, /setPageSize\(normalizePageSize\(next\.pageSize\)\)/)
   assert.match(browser, /void reloadRef\.current\(\)/)
+  assert.match(browser, /skipColumnReload/)
   assert.doesNotMatch(browser, /void reload\(\)\s*\n\s*\}, \[reload\]/)
   assert.match(browser, /const EMPTY_FILTERS/)
   assert.doesNotMatch(browser, /lockedFilters = \{\}/)

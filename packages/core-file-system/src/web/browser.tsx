@@ -154,7 +154,7 @@ import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, tableWindowSlice } from './table-windo
 import { rememberPreviewTotal, viewTotalKey } from './sidebar-preview.ts'
 import { catalogLockFilters, isReadOnlyViewId, mergeTableViews, parseBuiltinScopeViewId, stubBuiltinBlockKindView, viewsForScope, type DataScope } from '../catalog-views.ts'
 import { SAVED_VIEW_EVENT, rememberInspectorWorkingView, showRecordInInspector } from './inspector-db-route.ts'
-import { SchemaChips, SchemaFieldEditor, schemaTagTone } from './schema-field.tsx'
+import { SchemaFieldEditor, schemaTagTone } from './schema-field.tsx'
 import { CellPop, cellUsesPop } from './cell-pop.tsx'
 import { CellPopDraft } from './cell-pop-draft.tsx'
 import { FieldValuePop } from './field-value-pop.tsx'
@@ -224,6 +224,29 @@ function askNewPresentation(opts: { path: string; title?: string }) {
 }
 
 type StatResult = { schema?: CollectionSchema }
+
+let cachedLocalData: boolean | null = null
+
+const LIST_SEED_COLUMNS = [
+  'title',
+  'status',
+  'priority',
+  'difficulty',
+  'usage',
+  'createdBy',
+  'assignee',
+  'project',
+  'tags',
+  'dueAt',
+  'shareScope',
+  'shareRole',
+  'pinned',
+  'eventCount',
+  'updatedAt',
+  'name',
+  'label',
+  'fileList',
+]
 
 function isListColumn(key: string) {
   return key !== 'description' && key !== 'notes' && key !== 'content' && key !== 'emoji' && key !== 'banner'
@@ -613,19 +636,19 @@ export function CollectionBrowser({
   )
   const [query, setQuery] = useState(initialView?.query ?? '')
   const [page, setPage] = useState(0)
-  const [localData, setLocalData] = useState(false)
-  const [localKnown, setLocalKnown] = useState(false)
+  const [localData, setLocalData] = useState(() => cachedLocalData === true)
+  const [localKnown, setLocalKnown] = useState(() => cachedLocalData != null)
   const [createScope, setCreateScope] = useState<'personal' | 'workspace' | 'shared' | 'local'>(
     routeScope === 'workspace' ? 'workspace' : routeScope === 'shared' ? 'shared' : 'personal',
   )
   const [createScopeOpen, setCreateScopeOpen] = useState(false)
   useEffect(() => {
     let live = true
-    void fetch('/api/profile')
-      .then((res) => (res.ok ? res.json() : null))
-      .then((body: { localData?: boolean; dataLocation?: 'device' | 'cloud' } | null) => {
+    void readJson<{ localData?: boolean; dataLocation?: 'device' | 'cloud' }>('/api/profile')
+      .then((body) => {
         if (!live) return
         const device = body?.dataLocation === 'device' || body?.localData === true
+        cachedLocalData = device
         setLocalKnown(true)
         setLocalData(device)
         if (device) setCreateScope((current) => (current === 'shared' ? 'shared' : 'personal'))
@@ -745,19 +768,27 @@ export function CollectionBrowser({
   groupPagesRef.current = groupPages
   const listColumns = useMemo(() => {
     if (customView) return undefined
-    if (chrome?.cells) return undefined
     const currentSchema = stat?.schema
+    const cellKeys = chrome?.cells ? Object.keys(chrome.cells) : []
     const fieldKeys = currentSchema
       ? Object.keys(currentSchema.fields).filter(
           (key) => isListColumn(key) && resolveFieldType(currentSchema.fields[key]!) !== 'file',
         )
       : []
     const facetKeys = flattenFacetColumns(facetCatalog).map((item) => item.key)
-    const allowed = new Set([...fieldKeys, ...facetKeys])
-    const requested = columnKeys.length ? columnKeys : defaultColumnKeys(currentSchema, [...allowed])
-    const visible = requested.filter((key) => allowed.has(key) || Boolean(parseFacetFlatColumnKey(key)))
-    if (!visible.length) return undefined
-    return listProjectionKeys({ schema: currentSchema, columns: visible, groupBy })
+    const allowed = new Set([...fieldKeys, ...facetKeys, ...cellKeys])
+    const seedColumns =
+      cachedLocalData === true ? LIST_SEED_COLUMNS.filter((key) => key !== 'shareRole') : LIST_SEED_COLUMNS
+    const requested = [
+      ...(columnKeys.length ? columnKeys : currentSchema ? defaultColumnKeys(currentSchema, [...allowed]) : seedColumns),
+      ...cellKeys,
+    ]
+    const visible = currentSchema
+      ? requested.filter((key) => allowed.has(key) || Boolean(parseFacetFlatColumnKey(key)) || cellKeys.includes(key))
+      : requested
+    const columns = visible.length ? visible : [...(columnKeys.length ? columnKeys : ['title']), ...cellKeys]
+    if (!columns.length) return undefined
+    return listProjectionKeys({ schema: currentSchema, columns, groupBy })
   }, [chrome, columnKeys, customView, facetCatalog, groupBy, stat])
   const listColumnsKey = listColumns?.join('\0') ?? ''
   const [refreshing, setRefreshing] = useState(false)
@@ -924,6 +955,9 @@ export function CollectionBrowser({
 
   const schemaRef = useRef(stat?.schema)
   schemaRef.current = stat?.schema
+  const statHoldRef = useRef(stat)
+  statHoldRef.current = stat
+  const skipColumnReload = useRef(false)
   const itemsRef = useRef(items)
   itemsRef.current = items
   const reload = useCallback(async () => {
@@ -939,7 +973,10 @@ export function CollectionBrowser({
       columns: listColumns,
     }
     try {
-      const nextStatPromise = readJson<StatResult>(`/api/db/stat?path=${encodeURIComponent(dataPath)}`)
+      const heldStat = statHoldRef.current
+      const nextStatPromise = heldStat?.schema
+        ? Promise.resolve(heldStat)
+        : readJson<StatResult>(`/api/db/stat?path=${encodeURIComponent(dataPath)}`)
       const extraGroupValues = (schema?: CollectionSchema) => {
         const group = groupField(schema, groupBy)
         if (!group || group.field.enum?.length) return []
@@ -1039,7 +1076,7 @@ export function CollectionBrowser({
   }, [activeViewId, collectionPath, dataPath, fetchQuery, groupBy, listColumns, queryFilters, page, pageSize, sortDir, sortField, sorts])
   const reloadRef = useRef(reload)
   reloadRef.current = reload
-  const reloadKey = `${dataPath}\0${groupBy ? JSON.stringify(groupPages) : page}\0${pageSize}\0${fetchQuery}\0${sortField}\0${sortDir}\0${sortsStateKey(sorts)}\0${JSON.stringify(queryFilters)}\0${activeViewId ?? ''}\0${columnKeys.join('\0')}\0${groupBy}`
+  const reloadKey = `${dataPath}\0${groupBy ? JSON.stringify(groupPages) : page}\0${pageSize}\0${fetchQuery}\0${sortField}\0${sortDir}\0${sortsStateKey(sorts)}\0${JSON.stringify(queryFilters)}\0${activeViewId ?? ''}\0${groupBy}`
   const detailIdRef = useRef<string | null>(null)
   detailIdRef.current = detailId
   const contentGen = useRef(0)
@@ -1115,6 +1152,7 @@ export function CollectionBrowser({
     setHydrated(false)
     hydratePath.current = ''
     listReadySent.current = false
+    skipColumnReload.current = false
     setCollapsed({})
     hydratedDetail.current = ''
     const cached = listCache.get(dataPath)
@@ -1212,6 +1250,10 @@ export function CollectionBrowser({
   useEffect(() => subscribeFacets(undefined, () => setFacetCatalog(loadFacets())), [])
 
   useEffect(() => {
+    if (skipColumnReload.current) {
+      skipColumnReload.current = false
+      return
+    }
     void reloadRef.current()
   }, [reloadKey])
 
@@ -1360,8 +1402,12 @@ export function CollectionBrowser({
         [...prev.filter((key) => allowed.has(key)), ...grown.filter((key) => allowed.has(key) && !prev.includes(key))],
         rowActionColumn,
       )
-      if (!prev.length || !kept.length) return schemaDefaultKeys
+      if (!prev.length || !kept.length) {
+        skipColumnReload.current = true
+        return schemaDefaultKeys
+      }
       if (kept.length === prev.length && kept.every((key, index) => key === prev[index])) return prev
+      if (kept.every((key) => prev.includes(key))) skipColumnReload.current = true
       return kept
     })
   }, [allColumnKeys, rowActionColumn, schema, schemaDefaultKeys, schemaDefaultSig])
@@ -2425,7 +2471,13 @@ export function CollectionBrowser({
         const action = (schema?.actions ?? []).find((item) => item.id === actionId)
         return <ActionCell field={field} fieldKey={key} onRun={action ? () => void runAction(row, action) : undefined} />
       }
-      if (kind === 'facet') return <SchemaChips value={row[key]} tags={loadFacets()} />
+      if (kind === 'facet') {
+        const tags = loadFacets()
+        const parsed = normalizeSchemaValue(row[key])
+        if (!parsed.tags.length) return null
+        const labels = parsed.tags.map((id) => tags.find((tag) => tag.id === id)?.label ?? id)
+        return <span className="fsdb-select-text">{labels.join('、')}</span>
+      }
       if (flat) {
         return (
           <DefaultCell

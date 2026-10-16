@@ -183,6 +183,9 @@ export function listProjectionKeys(opts: {
   add('mascot')
   add(declaredParentField(opts.schema))
   add(opts.groupBy)
+  add('parentChain')
+  add('blocked')
+  add('usageParts')
   let needFacet = false
   for (const key of opts.columns) {
     add(key)

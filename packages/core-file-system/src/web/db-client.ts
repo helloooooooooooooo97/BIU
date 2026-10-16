@@ -11,11 +11,35 @@ export class HttpError extends Error {
   }
 }
 
-export async function readJson<T>(path: string, init?: RequestInit): Promise<T> {
+const getInflight = new Map<string, Promise<unknown>>()
+
+async function readJsonNow<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, init)
   const body = (await res.json()) as T & { error?: string; code?: string }
   if (!res.ok) throw new HttpError(body.error || res.statusText, res.status, body)
   return body
+}
+
+export async function readJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const method = String(init?.method ?? 'GET').toUpperCase()
+  if (method !== 'GET' || init?.body) return readJsonNow<T>(path, init)
+  const pending = getInflight.get(path)
+  if (pending) return pending as Promise<T>
+  let request: Promise<T>
+  request = readJsonNow<T>(path, init).then(
+    (body) => {
+      setTimeout(() => {
+        if (getInflight.get(path) === request) getInflight.delete(path)
+      }, 32)
+      return body
+    },
+    (error) => {
+      if (getInflight.get(path) === request) getInflight.delete(path)
+      throw error
+    },
+  )
+  getInflight.set(path, request)
+  return request
 }
 
 export type ListPage = {

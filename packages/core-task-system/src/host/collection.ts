@@ -141,6 +141,17 @@ function taskRecord(row: TaskRow, lookup: (id: string) => TaskRow | undefined, u
   }
 }
 
+function listedTaskRecord(row: TaskRow, lookup: (id: string) => TaskRow | undefined, usage: Usage, aggregate: boolean): DbRecord {
+  const next = taskRecord(row, lookup, usage, aggregate)
+  delete next.reports
+  delete next.trigger
+  delete next.description
+  delete next.notes
+  delete next.creatorActor
+  delete next.assigneeActor
+  return next
+}
+
 function recordsWithUsage(rows: TaskRow[]): DbRecord[] {
   const byId = new Map(rows.map((row) => [row.id, row]))
   const kids = new Map<string, string[]>()
@@ -161,7 +172,7 @@ function recordsWithUsage(rows: TaskRow[]): DbRecord[] {
     return next
   }
   return rows.map((row) =>
-    taskRecord(row, (id) => byId.get(id), roll(row.id), Boolean(kids.get(row.id)?.length)),
+    listedTaskRecord(row, (id) => byId.get(id), roll(row.id), Boolean(kids.get(row.id)?.length)),
   )
 }
 
