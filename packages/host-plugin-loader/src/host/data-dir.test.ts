@@ -152,6 +152,21 @@ test('adoptPackedUserData does not create .biu in a dev checkout that has none',
   assert.equal(existsSync(join(home, DATA_DIR_NAME, 'biu.sqlite')), true)
 })
 
+test('adoptPackedUserData skips sqlite shm and wal files that checkpoint removes', () => {
+  const pack = mkdtempSync(join(tmpdir(), 'biu-dev-shm-'))
+  const home = mkdtempSync(join(tmpdir(), 'biu-home-shm-'))
+  mkdirSync(join(pack, 'packages'), { recursive: true })
+  mkdirSync(join(pack, DATA_DIR_NAME), { recursive: true })
+  writeFileSync(join(pack, 'package.json'), '{}')
+  writeFileSync(join(pack, DATA_DIR_NAME, 'marker.txt'), 'keep')
+  writeFileSync(join(pack, DATA_DIR_NAME, 'custom.sqlite-shm'), 'shm')
+  writeFileSync(join(pack, DATA_DIR_NAME, 'custom.sqlite-wal'), 'wal')
+  adoptPackedUserData(pack, home, join(home, 'workspace'))
+  assert.equal(readFileSync(join(home, DATA_DIR_NAME, 'marker.txt'), 'utf8'), 'keep')
+  assert.equal(existsSync(join(home, DATA_DIR_NAME, 'custom.sqlite-shm')), false)
+  assert.equal(existsSync(join(home, DATA_DIR_NAME, 'custom.sqlite-wal')), false)
+})
+
 test('adoptPackedUserData keeps the dev checkout database when copying into a desktop home', () => {
   const pack = mkdtempSync(join(tmpdir(), 'biu-dev-'))
   const home = mkdtempSync(join(tmpdir(), 'biu-desktop-'))

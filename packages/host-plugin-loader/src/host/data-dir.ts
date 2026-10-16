@@ -1,6 +1,6 @@
 import { cpSync, existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs'
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { dirname, isAbsolute, join, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 export { BIU_SQLITE, EVENTS_SQLITE, adoptTwoSqlite } from './sqlite-two.ts'
 export {
   contentAddressHash,
@@ -237,19 +237,41 @@ export function assetsRootPath(parent = dataHome()): string {
   return dataPath(parent, 'assets')
 }
 
+/** WAL 的 -shm / -wal 会在检查点之后消失。两边同时迁移时，列目录和复制之间它可能已经没了。 */
+function isSqliteRuntimeFile(name: string) {
+  return name.endsWith('.sqlite-shm') || name.endsWith('.sqlite-wal')
+}
+
 function copyMerge(src: string, dest: string) {
   if (!existsSync(src)) return
   mkdirSync(dest, { recursive: true })
-  for (const name of readdirSync(src)) {
+  let names: string[]
+  try {
+    names = readdirSync(src)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
+    throw error
+  }
+  for (const name of names) {
+    if (isSqliteRuntimeFile(name)) continue
     const from = join(src, name)
     const to = join(dest, name)
-    if (!existsSync(to)) {
-      cpSync(from, to, { recursive: true })
-      continue
+    try {
+      if (!existsSync(to)) {
+        cpSync(from, to, {
+          recursive: true,
+          filter: (path) => !isSqliteRuntimeFile(basename(path)),
+        })
+        continue
+      }
+      if (!existsSync(from)) continue
+      const fromStat = statSync(from)
+      const toStat = statSync(to)
+      if (fromStat.isDirectory() && toStat.isDirectory()) copyMerge(from, to)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue
+      throw error
     }
-    const fromStat = statSync(from)
-    const toStat = statSync(to)
-    if (fromStat.isDirectory() && toStat.isDirectory()) copyMerge(from, to)
   }
 }
 
