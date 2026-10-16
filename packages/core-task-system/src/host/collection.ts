@@ -222,7 +222,10 @@ export function tasksCollection(tasks: TasksLike, recordActions?: TaskRecordActi
       }
       return recordsWithUsage(tasks.list(query?.q ? { q: query.q } : {}))
     },
-    get: (id) => recordsWithUsage(tasks.list()).find((row) => row.id === id) ?? null,
+    get: (id) => {
+      const row = tasks.get(id)
+      return row ? taskRecord(row, (pid) => tasks.get(pid), ownUsage(row), false) : null
+    },
     update: async (id, patch) => {
       const nextPatch = { ...patch }
       const assignee = await resolvedAssignee(people, patch)
@@ -239,8 +242,7 @@ export function tasksCollection(tasks: TasksLike, recordActions?: TaskRecordActi
         delete nextPatch.creatorSessionId
       }
       const next = tasks.update(id, nextPatch) as TaskRow
-      const rows = tasks.list().map((row) => (row.id === id ? { ...row, ...next, id } : row))
-      return recordsWithUsage(rows).find((row) => row.id === id) ?? taskRecord(next, (pid) => tasks.get(pid), ZERO_USAGE, false)
+      return taskRecord({ ...next, id }, (pid) => tasks.get(pid), ownUsage(next), false)
     },
     create: async (rows) =>
       Promise.all(
@@ -254,7 +256,7 @@ export function tasksCollection(tasks: TasksLike, recordActions?: TaskRecordActi
             creator,
             ...(assignee !== undefined ? { assignee } : {}),
           })
-          return recordsWithUsage(tasks.list()).find((item) => item.id === row.id) ?? taskRecord(row, (pid) => tasks.get(pid), ZERO_USAGE, false)
+          return taskRecord(row, (pid) => tasks.get(pid), ownUsage(row), false)
         }),
       ),
     remove: (query) => {

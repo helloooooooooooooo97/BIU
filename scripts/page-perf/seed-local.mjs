@@ -1,13 +1,21 @@
 #!/usr/bin/env node
-/** 给本机空间灌页面和任务，供各页刷新压测用。已有「压测页 / 压测任务」前缀的记录会跳过。 */
+/** 给本机空间灌足够多的页面、任务、会话，真正压列表 / 侧栏 / 分组视图。已有压测前缀的记录会跳过。 */
 import { readPerfEnv } from './cdp.mjs'
 
 const { token, workspaceId } = readPerfEnv()
 const api = String(process.env.BIU_PERF_API ?? 'http://127.0.0.1:3151').replace(/\/$/, '')
-const pageTarget = Math.max(0, Number(process.env.BIU_PERF_PAGES || 80))
-const taskTarget = Math.max(0, Number(process.env.BIU_PERF_TASKS || 80))
+const pageTarget = Math.max(0, Number(process.env.BIU_PERF_PAGES || 3000))
+const taskTarget = Math.max(0, Number(process.env.BIU_PERF_TASKS || 3000))
+const sessionTarget = Math.max(0, Number(process.env.BIU_PERF_SESSIONS || 200))
+const folderTarget = Math.max(0, Number(process.env.BIU_PERF_FOLDERS || 50))
+const contentTarget = Math.max(0, Number(process.env.BIU_PERF_CONTENT || 80))
 const pagePrefix = '压测页 '
+const folderPrefix = '压测夹 '
 const taskPrefix = '压测任务 '
+const sessionPrefix = '压测会话 '
+const viewTitle = '压测百行'
+const statuses = ['todo', 'doing', 'done', 'failed']
+const priorities = ['low', 'med', 'high']
 
 const headers = {
   authorization: `Bearer ${token}`,
@@ -22,99 +30,149 @@ async function apiJson(path, init) {
   return body
 }
 
-async function listAll(path, columns = 'id,title') {
+async function listPage(path, { q = '', limit = 100, offset = 0, columns = 'id,title' } = {}) {
+  const params = new URLSearchParams({
+    path,
+    limit: String(limit),
+    offset: String(offset),
+    columns,
+    sort: 'id',
+    dir: 'asc',
+    q,
+  })
+  const page = await apiJson(`/api/db/list?${params}`)
+  return {
+    items: Array.isArray(page.items) ? page.items : [],
+    total: typeof page.total === 'number' ? page.total : 0,
+  }
+}
+
+async function countPrefix(path, prefix) {
+  const page = await listPage(path, { q: prefix, limit: 1 })
+  return page.total
+}
+
+async function listPrefix(path, prefix, columns = 'id,title') {
   const items = []
   let offset = 0
   const limit = 100
   for (;;) {
-    const params = new URLSearchParams({ path, limit: String(limit), offset: String(offset), columns, sort: 'id', dir: 'asc' })
-    const page = await apiJson(`/api/db/list?${params}`)
-    const rows = Array.isArray(page.items) ? page.items : []
-    items.push(...rows)
-    const total = typeof page.total === 'number' ? page.total : items.length
-    offset += rows.length
-    if (!rows.length || offset >= total) return { items, total }
+    const page = await listPage(path, { q: prefix, limit, offset, columns })
+    items.push(...page.items)
+    offset += page.items.length
+    if (!page.items.length || offset >= page.total) return items
   }
 }
 
 function pageBody(index) {
-  const lines = [
-    `# ${pagePrefix}${index}`,
+  const block = [
+    `## 段 ${index}`,
     '',
-    '本机空间前端压测用正文。侧栏、列表、记录页都会读到这一页。',
+    `${'本机空间压测正文。'.repeat(24)}`,
     '',
-    '## 段落',
-    '',
-    `第 ${index} 页。`.repeat(12),
-    '',
-    '## 列表',
-    '',
-    '- 刷新时间',
-    '- 主线程 long task',
-    '- `/api/db/list` 瀑布',
-    '- 商店 `web.js` 串行加载',
-    '',
-    '## 表格',
-    '',
-    '| 项 | 值 |',
+    '| 列 | 值 |',
     '| --- | --- |',
     `| 编号 | ${index} |`,
     `| 空间 | ${workspaceId} |`,
-  ]
-  return lines.join('\n')
+    '',
+  ].join('\n')
+  return `# ${pagePrefix}${index}\n\n${block.repeat(8)}`
 }
 
-async function ensureCollection(path, prefix, target, makeRecord) {
-  const listed = await listAll(path)
-  const existing = listed.items.filter((row) => String(row.title || '').startsWith(prefix))
-  const missing = Math.max(0, target - existing.length)
+async function createBatch(path, records) {
+  if (!records.length) return []
+  const body = await apiJson('/api/db/create', {
+    method: 'POST',
+    body: JSON.stringify({ path, records, scope: 'private' }),
+  })
+  return Array.isArray(body.items) ? body.items.map((item) => item.value).filter(Boolean) : []
+}
+
+async function ensurePrefixed(path, prefix, target, makeRecord) {
+  const existing = await countPrefix(path, prefix)
+  const missing = Math.max(0, target - existing)
   const created = []
-  const batch = 20
-  let nextIndex = existing.length
+  const batch = 50
+  let nextIndex = existing
   while (created.length < missing) {
     const size = Math.min(batch, missing - created.length)
     const records = Array.from({ length: size }, () => {
       nextIndex += 1
       return makeRecord(nextIndex)
     })
-    const body = await apiJson('/api/db/create', {
-      method: 'POST',
-      body: JSON.stringify({ path, records, scope: 'private' }),
-    })
-    const rows = Array.isArray(body.items) ? body.items.map((item) => item.value).filter(Boolean) : []
-    created.push(...rows)
+    created.push(...(await createBatch(path, records)))
   }
-  return { path, total: listed.total + created.length, seeded: existing.length + created.length, created: created.length }
+  return { path, prefix, existing, created: created.length, seeded: existing + created.length, rows: created }
 }
 
-const pages = await ensureCollection('/pages', pagePrefix, pageTarget, (index) => ({ title: `${pagePrefix}${index}` }))
-const seededPages = (await listAll('/pages')).items.filter((row) => String(row.title || '').startsWith(pagePrefix))
+const folders = await ensurePrefixed('/pages', folderPrefix, folderTarget, (index) => ({ title: `${folderPrefix}${index}` }))
+const folderRows = await listPrefix('/pages', folderPrefix)
+let nested = 0
+const pages = await ensurePrefixed('/pages', pagePrefix, pageTarget, (index) => {
+  const parent = folderRows.length ? folderRows[(index - 1) % folderRows.length] : null
+  if (parent?.id) nested += 1
+  return { title: `${pagePrefix}${index}`, ...(parent?.id ? { parentId: parent.id } : {}) }
+})
+
 let contentWrote = 0
-for (const row of seededPages) {
+for (const row of [...folders.rows, ...pages.rows].slice(0, contentTarget)) {
   const id = String(row.id || '')
   if (!id) continue
+  const index = Number(String(row.title || '').replace(/[^\d]/g, '')) || contentWrote
   await apiJson('/api/db/content', {
     method: 'POST',
-    body: JSON.stringify({ path: `/pages/${id}`, value: pageBody(Number(String(row.title).slice(pagePrefix.length)) || 0) }),
+    body: JSON.stringify({ path: `/pages/${id}`, value: pageBody(index) }),
   })
   contentWrote += 1
 }
-const tasks = await ensureCollection('/tasks', taskPrefix, taskTarget, (index) => ({ title: `${taskPrefix}${index}` }))
-const sessions = await listAll('/sessions')
-const plugins = await listAll('/plugins', 'id,title,running,installed')
+
+const tasks = await ensurePrefixed('/tasks', taskPrefix, taskTarget, (index) => ({
+  title: `${taskPrefix}${index}`,
+  status: statuses[index % statuses.length],
+  priority: priorities[index % priorities.length],
+}))
+const sessions = await ensurePrefixed('/sessions', sessionPrefix, sessionTarget, (index) => ({
+  title: `${sessionPrefix}${index}`,
+}))
+
+async function ensureDenseView(tablePath) {
+  const listed = await listPage('/views', { q: viewTitle, limit: 20, columns: 'id,title,tablePath,viewId,pageSize,groupBy' })
+  const hit = listed.items.find((row) => row.tablePath === tablePath && String(row.title || '') === viewTitle)
+  if (hit) return { created: false, viewId: String(hit.viewId || ''), path: `/database/${tablePath.replace(/^\//, '')}/view/${encodeURIComponent(String(hit.viewId || ''))}` }
+  const created = await createBatch('/views', [
+    {
+      title: viewTitle,
+      tablePath,
+      pageSize: 100,
+      ...(tablePath === '/tasks' ? { groupBy: 'status' } : {}),
+    },
+  ])
+  const value = created[0] || {}
+  const viewId = String(value.viewId || '')
+  return {
+    created: true,
+    viewId,
+    path: `/database/${tablePath.replace(/^\//, '')}/view/${encodeURIComponent(viewId)}`,
+  }
+}
+
+const taskView = await ensureDenseView('/tasks')
+const pageView = await ensureDenseView('/pages')
+const pageCount = await listPage('/pages', { limit: 1 })
+const taskCount = await listPage('/tasks', { limit: 1 })
+const sessionCount = await listPage('/sessions', { limit: 1 })
 const stat = await apiJson('/api/db/stat?path=/')
-const collections = (stat.collections || []).map((row) => row.path)
 
 console.log(
   JSON.stringify(
     {
       workspaceId,
-      pages,
-      tasks,
+      pages: { ...pages, total: pageCount.total, folders: folders.seeded, nested },
+      tasks: { ...tasks, total: taskCount.total },
+      sessions: { ...sessions, total: sessionCount.total },
       contentWrote,
-      sessions: sessions.items.map((row) => ({ id: row.id, title: row.title })),
-      plugins: plugins.total,
-      collections,
+      views: { tasks: taskView, pages: pageView },
+      collections: (stat.collections || []).map((row) => row.path),
     },
     null,
     2,

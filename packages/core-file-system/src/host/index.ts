@@ -767,19 +767,22 @@ export class DatabaseService extends Service implements Database {
   }
 
   private async loadCollectionRows(spec: CollectionSpec, query: CollectionListQuery) {
-    this.ownershipCache = null
-    this.ownerCache = null
-    this.viewAudienceCache = null
-    this.viewShareCache = null
     const rows = await spec.list(query)
     const listed = !query.ids?.length ? rows : rows.filter((row) => query.ids!.includes(row.id))
     const hidden = this.facets.deletedIds(spec.path)
     const builtinPlugin = (row: { builtin?: unknown }) => spec.path === '/plugins' && row.builtin === true
-    const scoped = query.trash
+    return query.trash
       ? listed.filter((row) => hidden.has(row.id) && !builtinPlugin(row))
       : listed.filter((row) => !hidden.has(row.id) || builtinPlugin(row))
+  }
+
+  private decorateSlice(spec: CollectionSpec, rows: DbRecord[]) {
+    this.ownershipCache = null
+    this.ownerCache = null
+    this.viewAudienceCache = null
+    this.viewShareCache = null
     try {
-      return scoped.map((row) => this.decorateRecord(spec, row))
+      return rows.map((row) => this.decorateRecord(spec, row))
     } finally {
       this.ownershipCache = null
       this.ownerCache = null
@@ -1180,7 +1183,9 @@ export class DatabaseService extends Service implements Database {
       schema = schemaWithTagPack(schema, tagPack)
       await this.hydrateFacetStamps(rows, tagPack)
     }
-    return rows.filter((row) => matchListFilter(row, filter, schema, packs) && matchQuery(row, q, packs))
+    return rows
+      .map((row) => this.applyMetaOverlay(spec, this.applyFacetOverlay(spec, row)))
+      .filter((row) => matchListFilter(row, filter, schema, packs) && matchQuery(row, q, packs))
   }
 
   private async hydrateFacetStamps(rows: DbRecord[], pack: CollectionSchemaPack | null) {
@@ -1347,7 +1352,7 @@ export class DatabaseService extends Service implements Database {
     const visible = this.visibleRecords(spec.path, sortRecords(matched, sortField, sortDir, page?.sorts))
     const sorted = this.recordsInScope(spec.path, visible, scopeFilter)
     const total = sorted.length
-    const slice = sorted.slice(offset, offset + limit)
+    const slice = this.decorateSlice(spec, sorted.slice(offset, offset + limit))
     return {
       kind: 'collection' as const,
       path: spec.path,

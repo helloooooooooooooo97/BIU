@@ -11,7 +11,7 @@ const only = String(process.env.BIU_PERF_ONLY ?? '')
   .map((item) => item.trim())
   .filter(Boolean)
 const settleMs = Math.max(0, Number(process.env.BIU_PERF_SETTLE_MS || 400))
-const deadlineMs = Math.max(3000, Number(process.env.BIU_PERF_DEADLINE_MS || 18_000))
+const deadlineMs = Math.max(3000, Number(process.env.BIU_PERF_DEADLINE_MS || 30_000))
 
 const headers = {
   authorization: `Bearer ${token}`,
@@ -44,11 +44,26 @@ async function discoverRoutes() {
   }))
   const sessions = await listSome('/sessions', 5)
   const pages = await listSome('/pages', 20)
+  const seedListed = await apiJson(`/api/db/list?${new URLSearchParams({ path: '/pages', limit: '5', q: '压测页', columns: 'id,title' })}`)
   const tasks = await listSome('/tasks', 5)
-  const heavyPage = pages.find((row) => String(row.title || '').includes('十插件')) || pages[0]
-  const seedPage = pages.find((row) => String(row.title || '').startsWith('压测页 ')) || pages.find((row) => row.id !== heavyPage?.id)
+  const heavyListed = await apiJson(`/api/db/list?${new URLSearchParams({ path: '/pages', limit: '5', q: '十插件', columns: 'id,title' })}`)
+  const denseViews = await apiJson(`/api/db/list?${new URLSearchParams({ path: '/views', limit: '20', q: '压测百行', columns: 'id,title,tablePath,viewId,pageSize,groupBy' })}`)
+  const heavyPage =
+    (Array.isArray(heavyListed.items) ? heavyListed.items.find((row) => String(row.title || '').includes('十插件')) : null) ||
+    pages.find((row) => String(row.title || '').includes('十插件')) ||
+    pages[0]
+  const seedPage =
+    (Array.isArray(seedListed.items) ? seedListed.items.find((row) => String(row.title || '').startsWith('压测页 ')) : null) ||
+    pages.find((row) => row.id !== heavyPage?.id)
   const session = sessions[0]
   const task = tasks[0]
+  const denseRoutes = (Array.isArray(denseViews.items) ? denseViews.items : [])
+    .filter((row) => row.tablePath && row.viewId)
+    .map((row) => ({
+      id: `view:${row.tablePath}:${row.viewId}`,
+      label: `${row.title} ${row.tablePath} pageSize=${row.pageSize || ''} group=${row.groupBy || ''}`,
+      path: `/database/${encodeURIComponent(String(row.tablePath).replace(/^\//, ''))}/view/${encodeURIComponent(String(row.viewId))}`,
+    }))
   const routes = [
     { id: 'home', label: '工作台首页', path: '/' },
     session ? { id: 'session', label: `会话 ${session.title || session.id}`, path: `/s/${session.id}` } : null,
@@ -65,6 +80,7 @@ async function discoverRoutes() {
       ? { id: 'page-seed', label: `记录 ${seedPage.title || seedPage.id}`, path: `/database/pages/record/${encodeURIComponent(seedPage.id)}` }
       : null,
     task ? { id: 'task-record', label: `任务 ${task.title || task.id}`, path: `/database/tasks/record/${encodeURIComponent(task.id)}` } : null,
+    ...denseRoutes,
   ].filter(Boolean)
   const selected = only.length ? routes.filter((row) => only.includes(row.id) || only.includes(row.path)) : routes
   return { collections, session, heavyPage, seedPage, task, routes: selected }
@@ -79,6 +95,7 @@ function summarizeNetwork(requests) {
     bucket.count += 1
     bucket.bytes += req.bytes || 0
     bucket.waitMs += req.duration || 0
+    bucket.maxMs = Math.max(bucket.maxMs || 0, req.duration || 0)
     if (bucket.urls.length < 8) bucket.urls.push(`${req.status || 0} ${Math.round(req.duration || 0)}ms ${req.url.slice(0, 160)}`)
     groups[kind] = bucket
     if (kind === 'plugin-web') sequentialPlugin.push(req)
@@ -294,11 +311,19 @@ function bottleneckNotes(rows) {
   }
   const lists = rows.map((row) => (row.network?.groups || []).find((group) => group.kind === 'db-list')).filter(Boolean)
   const maxList = lists.reduce((max, row) => Math.max(max, row.count), 0)
+  const maxListWait = lists.reduce((max, row) => Math.max(max, row.maxMs || 0), 0)
   if (maxList >= 8) {
     notes.push({
       id: 'sidebar-list-fanout',
       title: '侧栏/列表对多张表打 /api/db/list',
       detail: `单次刷新最多 ${maxList} 次 list。展开的集合视图会各打一遍总数和预览。`,
+    })
+  }
+  if (maxListWait >= 800) {
+    notes.push({
+      id: 'list-full-scan',
+      title: '列表接口按整表扫描再切片',
+      detail: `最慢的 /api/db/list 等了 ${maxListWait}ms。limit=1 和 limit=200 一样慢，说明先读完全表再 decorate。`,
     })
   }
   const slow = rows
@@ -312,7 +337,15 @@ function bottleneckNotes(rows) {
     notes.push({
       id: 'long-tasks',
       title: '主线程 long task',
-      detail: long.map((row) => `${row.label} ${row.longTaskMs}ms`).join('；'),
+      detail: long.map((row) => `${row.label} ${row.longTaskMs}ms 行=${row.shell?.tableRows ?? '?'}`).join('；'),
+    })
+  }
+  const dense = rows.filter((row) => (row.shell?.tableRows || 0) >= 80 && (row.longTaskMs || 0) >= 800)
+  if (dense.length) {
+    notes.push({
+      id: 'unvirtualized-table',
+      title: '大表没有虚拟滚动，行数上去主线程就炸',
+      detail: dense.map((row) => `${row.label} ${row.shell.tableRows} 行 / longtask ${row.longTaskMs}ms`).join('；'),
     })
   }
   return notes
@@ -322,6 +355,7 @@ const discovered = await discoverRoutes()
 const session = await openPageSession({ token, workspaceId, chrome })
 const results = []
 try {
+  await measureRoute(session, { id: 'warmup', label: 'warmup', path: '/database' })
   for (const route of discovered.routes) {
     const samples = []
     for (let i = 1; i <= runs; i += 1) samples.push(await measureRoute(session, route))
@@ -338,6 +372,7 @@ try {
       pluginWebSerial: samples.some((row) => row.network?.pluginWebSerial),
       dbList: samples[samples.length - 1]?.network?.groups?.find((group) => group.kind === 'db-list')?.count ?? 0,
       longTaskMs: median(samples.map((row) => row.longTaskMs)),
+      tableRows: samples[samples.length - 1]?.shell?.tableRows ?? 0,
       heapUsed: samples[samples.length - 1]?.heapUsed ?? null,
       fails: [...new Set(samples.flatMap((row) => row.fails))],
       last: samples[samples.length - 1],
