@@ -43,7 +43,7 @@ test('collection browser stays off plugin apply until a data route paints', () =
   assert.match(page, /stopped \|\| Boolean\(collectionNavKey\(snapshotCollections\)\)/)
 })
 
-test('saved views catalog waits until the first list is ready and only pulls the open table', () => {
+test('saved views catalog waits until the view menu is open and only pulls the open table', () => {
   const page = readFileSync(resolve(import.meta.dirname, './index.tsx'), 'utf8')
   const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
   const views = readFileSync(resolve(import.meta.dirname, './view-storage.ts'), 'utf8')
@@ -52,6 +52,7 @@ test('saved views catalog waits until the first list is ready and only pulls the
   assert.match(browser, /fsdb:list-ready/)
   assert.match(browser, /void syncViewsRef\.current\(\)/)
   assert.match(browser, /if \(!viewMenuOpen\) return/)
+  assert.doesNotMatch(browser, /whenListIdle\(\(\) => \{\s*\n\s*void pullFacets\(\)\s*\n\s*void syncViewsRef\.current\(\)/)
   assert.match(views, /filters: \{ tablePath \}/)
   assert.match(views, /VIEWS_PULL_LIMIT = 80/)
 })

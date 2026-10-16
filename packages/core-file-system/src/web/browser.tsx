@@ -1,4 +1,4 @@
-import { Fragment, lazy, Suspense, type ComponentProps, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { Fragment, lazy, Suspense, type ComponentProps, type PointerEvent as ReactPointerEvent, type RefObject, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import {
   ArrowPathIcon,
   ArrowsPointingOutIcon,
@@ -99,9 +99,7 @@ import { PageBanner } from './page-banner.tsx'
 import { TableGlyph, ViewModeGlyph } from './nav-glyphs.tsx'
 import { isIndexCollection, isSystemCollection } from './database-path.ts'
 import { countFittingViewTabs, splitVisibleViews } from './view-tabs.ts'
-import { getPick } from '@biu/core-pick/web'
 import { getDatabaseUi } from './database-ui.ts'
-import { CollectionRowsShell } from './rows-view.tsx'
 import {
   activeViewStorageKey,
   getStarredViews,
@@ -127,14 +125,13 @@ import {
   getPageWidthVersion,
   subscribePageWidth,
 } from './page-width.ts'
-import { LayoutPrefsMenu } from './layout-prefs-menu.tsx'
 import { reportInspectorPaneMenu } from './inspector-pane-menu.tsx'
 import { ViewPaneMenu } from './pane-more-menu.tsx'
 import { HttpError, listCollection, readJson } from './db-client.ts'
 import { savedViewRecordPath } from '../paths.ts'
 import { findViewNeighbor, indexOnPage } from './view-adjacent.ts'
 import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, tableWindowSlice } from './table-window.ts'
-import { markPaintedListReady, rememberPreviewTotal, resetPaintedListReady, viewTotalKey, whenListIdle, VIEW_PREVIEW_IDLE_MS } from './sidebar-preview.ts'
+import { markPaintedListReady, rememberPreviewTotal, resetPaintedListReady, viewTotalKey, whenListIdle } from './sidebar-preview.ts'
 import { catalogLockFilters, isReadOnlyViewId, mergeTableViews, parseBuiltinScopeViewId, stubBuiltinBlockKindView, viewsForScope, type DataScope } from '../catalog-views.ts'
 import { SAVED_VIEW_EVENT, rememberInspectorWorkingView, showRecordInInspector } from './inspector-db-route.ts'
 import { CellPop, cellUsesPop } from './cell-pop.tsx'
@@ -168,6 +165,8 @@ const LazyShareRoleDetail = lazy(() => import('./share-popover.tsx').then((m) =>
 const LazyShareScopeDetail = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.ShareScopeDetail })))
 const ScopeOverview = lazy(() => import('./scope-overview.tsx').then((m) => ({ default: m.ScopeOverview })))
 const DataSidebar = lazy(() => import('./data-sidebar.tsx').then((m) => ({ default: m.DataSidebar })))
+const LayoutPrefsMenu = lazy(() => import('./layout-prefs-menu.tsx').then((m) => ({ default: m.LayoutPrefsMenu })))
+const CollectionRowsShell = lazy(() => import('./rows-view.tsx').then((m) => ({ default: m.CollectionRowsShell })))
 
 function ShareButton(props: ComponentProps<typeof LazyShareButton>) {
   return <Suspense fallback={null}><LazyShareButton {...props} /></Suspense>
@@ -212,21 +211,136 @@ function askNewPresentation(opts: { path: string; title?: string }) {
   const path = opts.path.trim()
   const name = opts.title?.trim() || path
   const draft = `请为「${name}」添加一种新的呈现方式。先听我描述要看板、日历还是别的样子，再写无头插件：databaseUi.registerRowView("${path}", { id, label, plugin: 本插件id, Row }) 只换每一行；或 databaseUi.registerView("${path}", { id, label, plugin: 本插件id, View }) 整页自己画。plugin 必须能被 pick 抓到。不要改 packages/。用 sandbox + pack 安装。装好后会出现在查看模式菜单里。`
-  getPick()?.attach(
-    path
-      ? [
-          {
-            kind: 'collection',
-            id: `view:${path}`,
-            action: 'view',
-            path,
-            label: '呈现方式',
-            title: name,
-            route: typeof window === 'undefined' ? '' : window.location.pathname,
-          },
-        ]
-      : [],
-    { text: draft },
+  void import('@biu/core-pick/web').then((mod) => {
+    mod.getPick()?.attach(
+      path
+        ? [
+            {
+              kind: 'collection',
+              id: `view:${path}`,
+              action: 'view',
+              path,
+              label: '呈现方式',
+              title: name,
+              route: typeof window === 'undefined' ? '' : window.location.pathname,
+            },
+          ]
+        : [],
+      { text: draft },
+    )
+  })
+}
+
+type CheckSlot = { kind: 'head' | 'gap' | 'row'; id?: string; top: number; h: number }
+
+function TableCheckRail({
+  tableRef,
+  stackRef,
+  stageRef,
+  hoverRef,
+  layoutKey,
+  forceLive,
+  paintCheckHover,
+  renderHead,
+  renderRow,
+}: {
+  tableRef: RefObject<HTMLTableElement | null>
+  stackRef: RefObject<HTMLDivElement | null>
+  stageRef: RefObject<HTMLDivElement | null>
+  hoverRef: RefObject<string | 'head' | null>
+  layoutKey: string
+  forceLive: boolean
+  paintCheckHover: (next: string | 'head' | null, force?: boolean) => void
+  renderHead: () => ReactNode
+  renderRow: (id: string) => ReactNode
+}) {
+  const [live, setLive] = useState(false)
+  const [checkSlots, setCheckSlots] = useState<CheckSlot[]>([])
+  const active = live || forceLive
+
+  useEffect(() => {
+    const stage = stageRef.current
+    if (!stage || live) return
+    const arm = () => setLive(true)
+    stage.addEventListener('mouseenter', arm)
+    return () => stage.removeEventListener('mouseenter', arm)
+  }, [live, stageRef])
+
+  useEffect(() => {
+    if (!active) {
+      setCheckSlots((prev) => (prev.length ? [] : prev))
+      return
+    }
+    const table = tableRef.current
+    if (!table) {
+      setCheckSlots((prev) => (prev.length ? [] : prev))
+      return
+    }
+    let raf = 0
+    const measure = () => {
+      if (!table.offsetHeight) {
+        raf = requestAnimationFrame(measure)
+        return
+      }
+      const next: CheckSlot[] = []
+      const head = table.tHead?.rows[0]
+      if (head) next.push({ kind: 'head', top: head.offsetTop, h: head.offsetHeight })
+      for (const tr of Array.from(table.tBodies[0]?.rows ?? [])) {
+        const top = tr.offsetTop
+        const h = tr.offsetHeight
+        if (tr.classList.contains('fsdb-group-row') || !tr.dataset.recordId) next.push({ kind: 'gap', top, h })
+        else next.push({ kind: 'row', id: tr.dataset.recordId, top, h })
+      }
+      setCheckSlots((prev) => {
+        if (
+          prev.length === next.length &&
+          prev.every(
+            (slot, i) =>
+              slot.kind === next[i]!.kind &&
+              slot.id === next[i]!.id &&
+              slot.top === next[i]!.top &&
+              slot.h === next[i]!.h,
+          )
+        ) {
+          return prev
+        }
+        return next
+      })
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(table)
+    for (const img of Array.from(table.querySelectorAll('img'))) ro.observe(img)
+    return () => {
+      cancelAnimationFrame(raf)
+      ro.disconnect()
+    }
+  }, [active, layoutKey, tableRef])
+
+  useLayoutEffect(() => {
+    paintCheckHover(hoverRef.current, true)
+  }, [checkSlots, hoverRef, paintCheckHover])
+
+  return (
+    <div className="fsdb-check-rail" data-testid="fsdb-check-rail">
+      <div className="fsdb-check-stack" ref={stackRef}>
+        {checkSlots.map((slot, index) => (
+          <div
+            key={slot.kind === 'row' ? `${slot.id}-${index}` : `${slot.kind}-${index}`}
+            className={`fsdb-check-slot${slot.kind === 'head' ? ' is-head' : ''}`}
+            data-check={slot.kind === 'head' ? 'head' : slot.id}
+            style={slot.kind === 'head' ? { height: slot.h } : { top: slot.top, height: slot.h }}
+            onMouseEnter={() => {
+              if (slot.kind === 'head') paintCheckHover('head')
+              else if (slot.id) paintCheckHover(slot.id)
+            }}
+          >
+            {slot.kind === 'head' ? renderHead() : null}
+            {slot.kind === 'row' && slot.id ? renderRow(slot.id) : null}
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -590,6 +704,7 @@ export function CollectionBrowser({
   const listReadySent = useRef(false)
   const [listPainted, setListPainted] = useState(false)
   const [sidebarPaint, setSidebarPaint] = useState(false)
+  const [pickMode, setPickMode] = useState(false)
   const confirmedCreates = useRef(new Set<string>())
   const hydratePath = useRef('')
   const viewsRef = useRef<SavedView[]>([])
@@ -1067,13 +1182,21 @@ export function CollectionBrowser({
   }, [collectionPath, dataPath, nested, pullDetailBody, pullDetailRecord])
 
   useEffect(() => {
+    if (routeRecordId) return
     return whenListIdle(() => {
       void pullFacets()
-      void syncViewsRef.current()
     })
-  }, [collectionPath])
+  }, [collectionPath, routeRecordId])
 
   useEffect(() => subscribeFacets(undefined, () => setFacetCatalog(loadFacets())), [])
+
+  useEffect(() => {
+    const onMode = (event: Event) => {
+      setPickMode(Boolean((event as CustomEvent<{ picking?: boolean }>).detail?.picking))
+    }
+    window.addEventListener('biu:pick-mode', onMode)
+    return () => window.removeEventListener('biu:pick-mode', onMode)
+  }, [])
 
   useEffect(() => {
     if (!routeRecordId || statHoldRef.current?.schema) return
@@ -1096,12 +1219,7 @@ export function CollectionBrowser({
       skipColumnReload.current = false
       return
     }
-    if (routeRecordId) {
-      const timer = window.setTimeout(() => {
-        void reloadRef.current()
-      }, VIEW_PREVIEW_IDLE_MS)
-      return () => window.clearTimeout(timer)
-    }
+    if (routeRecordId) return
     void reloadRef.current()
   }, [reloadKey, routeRecordId])
 
@@ -1385,10 +1503,10 @@ export function CollectionBrowser({
   const tableColSpan = Math.max(columns.length, 1)
   const tableRef = useRef<HTMLTableElement>(null)
   const tableWrapRef = useRef<HTMLDivElement>(null)
+  const tableStageRef = useRef<HTMLDivElement>(null)
   const checkStackRef = useRef<HTMLDivElement>(null)
   const checkHoverRef = useRef<string | 'head' | null>(null)
   const [tableScroll, setTableScroll] = useState({ top: 0, height: 0 })
-  const [checkSlots, setCheckSlots] = useState<{ kind: 'head' | 'gap' | 'row'; id?: string; top: number; h: number }[]>([])
   const tableWindow = useMemo(
     () =>
       tableWindowSlice(
@@ -1444,69 +1562,20 @@ export function CollectionBrowser({
     checkHoverRef.current = next
   }, [])
 
-  useEffect(() => {
-    const table = tableRef.current
-    if (!table) {
-      setCheckSlots([])
-      return
-    }
-    let raf = 0
-    const measure = () => {
-      if (!table.offsetHeight) {
-        raf = requestAnimationFrame(measure)
-        return
-      }
-      const next: { kind: 'head' | 'gap' | 'row'; id?: string; top: number; h: number }[] = []
-      const head = table.tHead?.rows[0]
-      if (head) next.push({ kind: 'head', top: head.offsetTop, h: head.offsetHeight })
-      for (const tr of Array.from(table.tBodies[0]?.rows ?? [])) {
-        const top = tr.offsetTop
-        const h = tr.offsetHeight
-        if (tr.classList.contains('fsdb-group-row') || !tr.dataset.recordId) next.push({ kind: 'gap', top, h })
-        else next.push({ kind: 'row', id: tr.dataset.recordId, top, h })
-      }
-      setCheckSlots((prev) => {
-        if (
-          prev.length === next.length &&
-          prev.every(
-            (slot, i) =>
-              slot.kind === next[i]!.kind &&
-              slot.id === next[i]!.id &&
-              slot.top === next[i]!.top &&
-              slot.h === next[i]!.h,
-          )
-        ) {
-          return prev
-        }
-        return next
-      })
-    }
-    measure()
-    const ro = new ResizeObserver(measure)
-    ro.observe(table)
-    for (const img of Array.from(table.querySelectorAll('img'))) ro.observe(img)
-    return () => {
-      cancelAnimationFrame(raf)
-      ro.disconnect()
-    }
-  }, [
-    collapsed,
-    collapsedGroups,
-    columns,
-    grouping,
-    grouped,
-    items,
+  const checkLayoutKey = [
+    tableWindow.start, tableWindow.end, tableWindow.padTop, tableWindow.padBottom,
+    wrapCells ? 1 : 0,
+    truncateCells ? 1 : 0,
+    columns.length,
+    grouping ? 1 : 0,
     page,
     pageSize,
-    tableWindow.start, tableWindow.end, tableWindow.padTop, tableWindow.padBottom,
-    wrapCells,
-    truncateCells,
-    columnWidths,
-  ])
-
-  useLayoutEffect(() => {
-    paintCheckHover(checkHoverRef.current, true)
-  }, [checkSlots, paintCheckHover])
+    items.map((row) => row.id).join(','),
+    grouped.map((group) => `${group.key}:${group.rows.length}`).join(','),
+    JSON.stringify(collapsed),
+    JSON.stringify(collapsedGroups),
+    JSON.stringify(columnWidths),
+  ].join('\0')
 
   useLayoutEffect(() => {
     const wrap = tableWrapRef.current
@@ -2340,7 +2409,7 @@ export function CollectionBrowser({
       label: field.label ?? key,
       title: labelOf(row),
       path: recordPathOf(row),
-      text: cellValueText(row, key, field),
+      ...(pickMode ? { text: cellValueText(row, key, field) } : {}),
     })
 
   function renderCell(row: DbRecord, key: string, field: FieldSpec, surface: 'table' | 'detail' = 'detail') {
@@ -3186,7 +3255,9 @@ export function CollectionBrowser({
               </button>
               {layoutOpen ? (
                 <HeadlessDismiss onDismiss={() => setLayoutOpen(false)} insideRef={layoutRef}>
-                  <LayoutPrefsMenu prefs={pagePrefs} />
+                  <Suspense fallback={null}>
+                    <LayoutPrefsMenu prefs={pagePrefs} />
+                  </Suspense>
                 </HeadlessDismiss>
               ) : null}
             </div>
@@ -3771,6 +3842,7 @@ export function CollectionBrowser({
             ) : null}
             {rowView ? (
               <PluginSurface plugin={rowView.plugin} label={rowView.label}>
+                <Suspense fallback={null}>
                 <CollectionRowsShell
                   rows={items}
                   schema={schema}
@@ -3778,6 +3850,7 @@ export function CollectionBrowser({
                   onOpen={openRow}
                   Row={rowView.Row}
                 />
+                </Suspense>
               </PluginSurface>
             ) : null}
             {!customView && !rowView ? (
@@ -3866,26 +3939,18 @@ export function CollectionBrowser({
                     </div>
                   </div>
                 ) : null}
-                <div className="tasks-table-stage" onMouseLeave={() => paintCheckHover(null)}>
-                  <div className="fsdb-check-rail" data-testid="fsdb-check-rail">
-                    <div className="fsdb-check-stack" ref={checkStackRef}>
-                      {checkSlots.map((slot, index) => (
-                        <div
-                          key={slot.kind === 'row' ? `${slot.id}-${index}` : `${slot.kind}-${index}`}
-                          className={`fsdb-check-slot${slot.kind === 'head' ? ' is-head' : ''}`}
-                          data-check={slot.kind === 'head' ? 'head' : slot.id}
-                          style={slot.kind === 'head' ? { height: slot.h } : { top: slot.top, height: slot.h }}
-                          onMouseEnter={() => {
-                            if (slot.kind === 'head') paintCheckHover('head')
-                            else if (slot.id) paintCheckHover(slot.id)
-                          }}
-                        >
-                          {slot.kind === 'head' ? <RowCheck ids={pickableIds} /> : null}
-                          {slot.kind === 'row' && slot.id ? <RowCheck id={slot.id} /> : null}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                <div className="tasks-table-stage" ref={tableStageRef} onMouseLeave={() => paintCheckHover(null)}>
+                  <TableCheckRail
+                    tableRef={tableRef}
+                    stackRef={checkStackRef}
+                    stageRef={tableStageRef}
+                    hoverRef={checkHoverRef}
+                    layoutKey={checkLayoutKey}
+                    forceLive={pickedIds.length > 0}
+                    paintCheckHover={paintCheckHover}
+                    renderHead={() => <RowCheck ids={pickableIds} />}
+                    renderRow={(id) => <RowCheck id={id} />}
+                  />
                 <table
                   ref={tableRef}
                   className={`tasks-table${wrapCells ? ' is-wrap' : ''}${truncateCells ? ' is-truncate' : ''}${hasColWidths ? ' is-cols-fixed' : ''}${resizingCol ? ' is-col-resize' : ''}`}
