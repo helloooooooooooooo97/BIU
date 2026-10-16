@@ -15,6 +15,7 @@ import type { CollectionInfo, CollectionSchema, DbRecord } from '@biu/type-file-
 import { groupField, groupRecords, parentFieldKey, treeChildren } from './fields.ts'
 import { builtinAllViewId, type DataScope } from '../catalog-views.ts'
 import { isIndexCollection, isRecordTreeCollection, isSystemCollection, sortDataCollections } from './database-path.ts'
+import { rememberInspectorWorkingView } from './inspector-db-route.ts'
 import { readJson } from './db-client.ts'
 import { viewsForRegisteredCollection } from './collection-nav.ts'
 import type { SavedView } from './saved-view.ts'
@@ -643,6 +644,7 @@ export const DataSidebar = memo(function DataSidebar({
     } catch {
       /* ignore */
     }
+    rememberInspectorWorkingView(path, viewId)
     onOpenTable?.(path, viewId)
   }
 

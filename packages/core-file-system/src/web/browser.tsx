@@ -147,7 +147,7 @@ import { savedViewRecordPath } from '../paths.ts'
 import { findViewNeighbor, indexOnPage } from './view-adjacent.ts'
 import { rememberPreviewTotal, viewTotalKey } from './sidebar-preview.ts'
 import { catalogLockFilters, isReadOnlyViewId, mergeTableViews, parseBuiltinScopeViewId, stubBuiltinBlockKindView, viewsForScope, type DataScope } from '../catalog-views.ts'
-import { SAVED_VIEW_EVENT, showRecordInInspector } from './inspector-db-route.ts'
+import { SAVED_VIEW_EVENT, rememberInspectorWorkingView, showRecordInInspector } from './inspector-db-route.ts'
 import { SchemaChips, SchemaFieldEditor, schemaTagTone } from './schema-field.tsx'
 import { CellPop, cellUsesPop } from './cell-pop.tsx'
 import { CellPopDraft } from './cell-pop-draft.tsx'
@@ -1600,6 +1600,7 @@ export function CollectionBrowser({
 
   function selectView(view: SavedView) {
     applyView(view)
+    rememberInspectorWorkingView(collectionPath, view.id)
     onOpenView?.(view.id)
   }
 
