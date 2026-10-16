@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, test } from 'vitest'
-import { openAndMigrateBiu } from '@biu/host-plugin-loader/data-dir'
+import { openAndMigrateBiu, runWithAccount } from '@biu/host-plugin-loader/data-dir'
 import { CollabStore } from './store.ts'
 import type { Actor, ResourceRef } from './authorization.ts'
 
@@ -171,6 +171,76 @@ test('a direct child grant overrides a stronger inherited grant', () => {
 
   assert.equal(auth.authorize(actor(bob.id), 'resource:read', page('child')).allowed, true)
   assert.equal(auth.authorize(actor(bob.id), 'resource:update', page('child')).allowed, false)
+})
+
+test('collection scan preload matches live sqlite authorization', () => {
+  const { store, auth, ada, bob, cara, actor, page, workspace } = setup()
+  auth.attach(actor(ada.id), page('private'), { ownership: 'personal', accessMode: 'private' })
+  auth.attach(actor(ada.id), page('members'), { ownership: 'workspace', accessMode: 'members' })
+  auth.attach(actor(ada.id), page('parent'), { ownership: 'personal', accessMode: 'private' })
+  auth.grant(ada.id, page('parent'), 'account', bob.id, 'editor')
+  auth.attach(actor(ada.id), page('child'), {
+    ownership: 'workspace',
+    accessMode: 'inherit',
+    parentCollection: '/pages',
+    parentRecordId: 'parent',
+  })
+  const product = store.createGroup(ada.id, workspace.id, '产品组')
+  store.addGroupMemberByEmail(ada.id, workspace.id, product.id, bob.email)
+  auth.attach(actor(ada.id), page('roadmap'), { ownership: 'workspace', accessMode: 'restricted' })
+  auth.grant(ada.id, page('roadmap'), 'group', product.id, 'editor')
+  const matching = new Set([cara.id])
+  auth.setMemberViewMatcher((_workspaceId, viewId, accountId) => viewId === 'product-view' && matching.has(accountId))
+  auth.attach(actor(ada.id), page('dynamic'), { ownership: 'personal', accessMode: 'private' })
+  auth.grant(ada.id, page('dynamic'), 'member_view', 'product-view', 'viewer')
+
+  const snapshot = () => {
+    const actions = ['resource:read', 'resource:update', 'resource:delete'] as const
+    const ids = ['private', 'members', 'parent', 'child', 'roadmap', 'dynamic']
+    const people = [ada, bob, cara]
+    return {
+      decisions: people.flatMap((who) =>
+        ids.flatMap((id) =>
+          actions.map((action) => {
+            const decision = auth.authorize(actor(who.id), action, page(id))
+            return {
+              who: who.email,
+              id,
+              action,
+              allowed: decision.allowed,
+              role: decision.allowed ? decision.effectiveRole : decision.reason,
+              source: decision.allowed ? decision.source : undefined,
+            }
+          }),
+        ),
+      ),
+      scopes: Object.fromEntries(
+        people.map((who) => [
+          who.email,
+          Object.fromEntries(
+            ids.map((id) => [id, runWithAccount(who.id, () => auth.scopeCurrent(page(id)))]),
+          ),
+        ]),
+      ),
+    }
+  }
+
+  const live = snapshot()
+  auth.preloadCollection(workspace.id, '/pages', ada.id)
+  auth.preloadCollection(workspace.id, '/pages', ada.id)
+  auth.preloadCollection(workspace.id, '/pages', bob.id)
+  assert.deepEqual(snapshot(), live)
+  auth.releaseCollection(workspace.id, '/pages', ada.id)
+  assert.deepEqual(snapshot(), live)
+  auth.releaseCollection(workspace.id, '/pages', ada.id)
+  auth.releaseCollection(workspace.id, '/pages', bob.id)
+  assert.deepEqual(snapshot(), live)
+
+  auth.preloadCollection(workspace.id, '/pages', ada.id)
+  auth.grant(ada.id, page('private'), 'account', bob.id, 'viewer')
+  assert.equal(auth.authorize(actor(bob.id), 'resource:read', page('private')).allowed, true)
+  assert.equal(auth.authorize(actor(bob.id), 'resource:update', page('private')).allowed, false)
+  auth.releaseCollection(workspace.id, '/pages', ada.id)
 })
 
 test('an agent has exactly the delegating account permissions', () => {

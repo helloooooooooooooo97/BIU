@@ -608,6 +608,28 @@ function matchListFilter(record: DbRecord, filter: Record<string, unknown> | und
   return matchListFilterRecord(record, filter, schema, packs)
 }
 
+const OVERLAY_LIST_FIELDS = new Set(['emoji', 'tags', 'facet', 'createdBy', 'updatedBy', 'shareScope', 'shareRole'])
+
+export function listNeedsMatchOverlay(
+  filter: Record<string, unknown> | undefined,
+  q: string,
+  sortField: string,
+  sorts?: Array<{ field: string; dir: string }>,
+) {
+  if (String(q ?? '').trim()) return true
+  if (OVERLAY_LIST_FIELDS.has(String(sortField ?? ''))) return true
+  for (const rule of sorts ?? []) {
+    if (OVERLAY_LIST_FIELDS.has(rule.field)) return true
+  }
+  if (!filter) return false
+  if (filter.$tree && typeof filter.$tree === 'object') return true
+  for (const [key, expected] of Object.entries(filter)) {
+    if (key === '$tree' || key === '$scope' || key === 'shareScope' || expected == null || expected === '') continue
+    if (OVERLAY_LIST_FIELDS.has(key)) return true
+  }
+  return false
+}
+
 function sortRecords(rows: DbRecord[], field: string, dir: 'asc' | 'desc', sorts?: Array<{ field: string; dir: 'asc' | 'desc' }>) {
   const rules = normalizeSorts(sorts, field, dir)
   return sortRecordsBy(rows, rules)
@@ -1173,6 +1195,7 @@ export class DatabaseService extends Service implements Database {
     query: CollectionListQuery,
     filter: Record<string, unknown> | undefined,
     q: string,
+    overlay = true,
   ) {
     let schema = schemaFor(spec)
     const packs = this.facets.list()
@@ -1183,9 +1206,10 @@ export class DatabaseService extends Service implements Database {
       schema = schemaWithTagPack(schema, tagPack)
       await this.hydrateFacetStamps(rows, tagPack)
     }
-    return rows
-      .map((row) => this.applyMetaOverlay(spec, this.applyFacetOverlay(spec, row)))
-      .filter((row) => matchListFilter(row, filter, schema, packs) && matchQuery(row, q, packs))
+    const stamped = tagFilter || overlay
+      ? rows.map((row) => this.applyMetaOverlay(spec, this.applyFacetOverlay(spec, row)))
+      : rows
+    return stamped.filter((row) => matchListFilter(row, filter, schema, packs) && matchQuery(row, q, packs))
   }
 
   private async hydrateFacetStamps(rows: DbRecord[], pack: CollectionSchemaPack | null) {
@@ -1346,32 +1370,56 @@ export class DatabaseService extends Service implements Database {
       }
       query.ids = [...stamped]
     }
-    const matched = await this.matchCollectionRows(spec, query, liveFilter, q)
-    const tagFilter = spec.path === '/facets' ? String(filter?.facetId ?? '').trim() : ''
-    if (tagFilter) schema = schemaWithTagPack(schema, this.facets.get(tagFilter))
-    const visible = this.visibleRecords(spec.path, sortRecords(matched, sortField, sortDir, page?.sorts))
-    const sorted = this.recordsInScope(spec.path, visible, scopeFilter)
-    const total = sorted.length
-    const slice = this.decorateSlice(spec, sorted.slice(offset, offset + limit))
-    return {
-      kind: 'collection' as const,
-      path: spec.path,
-      id: spec.id,
-      label: spec.label ?? spec.id,
-      view: spec.view ?? null,
-      schema: this.schemaForCurrent(spec, schema),
-      total,
-      offset,
-      limit,
-      items: slice.map((row): DbRecord & { path: string; kind: 'record' } => {
-        const value = withoutContent(spec, row)
-        const picked = columnKeys ? pickListedFields(value, columnKeys) : value
-        return {
-          ...picked,
-          path: `${spec.path}/${row.id}`,
-          kind: 'record',
+    const auth = this.authorization()
+    const actor = auth?.currentActor()
+    const extraScans: string[] = []
+    if (auth && actor) auth.preloadCollection(actor.workspaceId, spec.path, actor.accountId)
+    try {
+      const overlay = listNeedsMatchOverlay(liveFilter, q, sortField, page?.sorts)
+      const matched = await this.matchCollectionRows(spec, query, liveFilter, q, overlay)
+      if (auth && actor) {
+        const seen = new Set([spec.path])
+        for (const row of matched) {
+          const target = this.scopeTarget(spec.path, String(row.id ?? ''), row)
+          if (!target.collection || seen.has(target.collection)) continue
+          seen.add(target.collection)
+          extraScans.push(target.collection)
+          auth.preloadCollection(actor.workspaceId, target.collection, actor.accountId)
         }
-      }),
+      }
+      const tagFilter = spec.path === '/facets' ? String(filter?.facetId ?? '').trim() : ''
+      if (tagFilter) schema = schemaWithTagPack(schema, this.facets.get(tagFilter))
+      const visible = this.visibleRecords(spec.path, sortRecords(matched, sortField, sortDir, page?.sorts))
+      const sorted = this.recordsInScope(spec.path, visible, scopeFilter)
+      const total = sorted.length
+      const slice = this.decorateSlice(spec, sorted.slice(offset, offset + limit))
+      return {
+        kind: 'collection' as const,
+        path: spec.path,
+        id: spec.id,
+        label: spec.label ?? spec.id,
+        view: spec.view ?? null,
+        schema: this.schemaForCurrent(spec, schema),
+        total,
+        offset,
+        limit,
+        items: slice.map((row): DbRecord & { path: string; kind: 'record' } => {
+          const value = withoutContent(spec, row)
+          const picked = columnKeys ? pickListedFields(value, columnKeys) : value
+          return {
+            ...picked,
+            path: `${spec.path}/${row.id}`,
+            kind: 'record',
+          }
+        }),
+      }
+    } finally {
+      if (auth && actor) {
+        for (const collection of extraScans) {
+          auth.releaseCollection(actor.workspaceId, collection, actor.accountId)
+        }
+        auth.releaseCollection(actor.workspaceId, spec.path, actor.accountId)
+      }
     }
   }
 

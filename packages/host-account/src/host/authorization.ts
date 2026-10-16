@@ -69,7 +69,33 @@ type PolicyRow = {
   parent_record_id: string
 }
 
+type ScanGrant = {
+  subject_type: 'account' | 'group' | 'workspace_role' | 'member_view'
+  subject_id: string
+  role: ResourceRole
+}
+
+type CollectionScan = {
+  refs: number
+  workspaceId: string
+  collection: string
+  accountId: string
+  policies: Map<string, PolicyRow>
+  owners: Map<string, string>
+  grants: Map<string, ScanGrant[]>
+  groups: Set<string>
+  membership: WorkspaceRole | null
+  membershipKind: 'member' | 'external' | 'guest'
+}
+
+const POLICY_SELECT = `workspace_id, collection, record_id, ownership, owner_account_id, access_mode,
+                member_default_role, parent_collection, parent_record_id`
+
 const ROLE_RANK: Record<ResourceRole, number> = { viewer: 1, editor: 2, manager: 3, owner: 4 }
+
+function collectionScanKey(workspaceId: string, collection: string, accountId: string) {
+  return `${workspaceId}\t${collection}\t${accountId}`
+}
 
 function maxRole(roles: ResourceRole[]) {
   return roles.sort((a, b) => ROLE_RANK[b] - ROLE_RANK[a])[0] ?? null
@@ -108,6 +134,7 @@ function requiredRole(action: Action): ResourceRole {
 
 export class AuthorizationService {
   private memberViewMatcher?: (workspaceId: string, viewId: string, accountId: string) => boolean
+  private scans = new Map<string, CollectionScan>()
 
   constructor(
     private db: DatabaseSync,
@@ -123,6 +150,75 @@ export class AuthorizationService {
 
   setMemberViewMatcher(matcher: (workspaceId: string, viewId: string, accountId: string) => boolean) {
     this.memberViewMatcher = matcher
+  }
+
+  /** 列表扫描前把这一张表的策略/授权一次读进内存，避免每行一次 SQLite。 */
+  preloadCollection(workspaceId: string, collection: string, accountId = currentAccountId()) {
+    if (!workspaceId || !collection || !accountId) return
+    const key = collectionScanKey(workspaceId, collection, accountId)
+    const hit = this.scans.get(key)
+    if (hit) {
+      hit.refs += 1
+      return
+    }
+    const policies = new Map<string, PolicyRow>()
+    for (const row of this.db
+      .prepare(`SELECT ${POLICY_SELECT} FROM resource_policies WHERE workspace_id = ? AND collection = ?`)
+      .all(workspaceId, collection) as PolicyRow[]) {
+      policies.set(row.record_id, row)
+    }
+    const owners = new Map<string, string>()
+    for (const row of this.db
+      .prepare(
+        'SELECT record_id, owner_id FROM record_owners WHERE workspace_id = ? AND collection = ?',
+      )
+      .all(workspaceId, collection) as Array<{ record_id: string; owner_id: string }>) {
+      owners.set(row.record_id, row.owner_id)
+    }
+    const grants = new Map<string, ScanGrant[]>()
+    for (const row of this.db
+      .prepare(
+        `SELECT record_id, subject_type, subject_id, role
+         FROM record_grants
+         WHERE workspace_id = ? AND collection = ?`,
+      )
+      .all(workspaceId, collection) as Array<ScanGrant & { record_id: string }>) {
+      const list = grants.get(row.record_id) ?? []
+      list.push({ subject_type: row.subject_type, subject_id: row.subject_id, role: row.role })
+      grants.set(row.record_id, list)
+    }
+    const groups = new Set<string>()
+    for (const row of this.db
+      .prepare(
+        `SELECT gm.group_id AS group_id
+         FROM workspace_group_members gm
+         JOIN workspace_groups wg ON wg.id = gm.group_id
+         WHERE gm.account_id = ? AND wg.workspace_id = ?`,
+      )
+      .all(accountId, workspaceId) as Array<{ group_id: string }>) {
+      groups.add(row.group_id)
+    }
+    this.scans.set(key, {
+      refs: 1,
+      workspaceId,
+      collection,
+      accountId,
+      policies,
+      owners,
+      grants,
+      groups,
+      membership: this.readMembership(accountId, workspaceId),
+      membershipKind: this.readMembershipKind(accountId, workspaceId),
+    })
+  }
+
+  releaseCollection(workspaceId: string, collection: string, accountId = currentAccountId()) {
+    if (!workspaceId || !collection || !accountId) return
+    const key = collectionScanKey(workspaceId, collection, accountId)
+    const hit = this.scans.get(key)
+    if (!hit) return
+    hit.refs -= 1
+    if (hit.refs <= 0) this.scans.delete(key)
   }
 
   matchesMemberView(workspaceId: string, viewId: string, accountId: string) {
@@ -228,13 +324,7 @@ export class AuthorizationService {
     visited.add(key)
     const policy = this.policy(resource)
     if (!policy) {
-      const legacy = this.db
-        .prepare(
-          `SELECT 1 AS ok FROM record_owners
-           WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
-        )
-        .get(resource.workspaceId, resource.collection, resource.recordId)
-      return legacy ? 'workspace' : null
+      return this.legacyOwnerId(resource) ? 'workspace' : null
     }
     if (policy.access_mode === 'inherit' && policy.parent_record_id) {
       return this.resourceScope(
@@ -284,6 +374,7 @@ export class AuthorizationService {
         now,
       )
     this.grant(actor.accountId, resource, 'account', actor.accountId, 'owner', now)
+    this.dropScans(resource.workspaceId, resource.collection)
   }
 
   grant(
@@ -318,6 +409,7 @@ export class AuthorizationService {
         actorId,
         now,
       )
+    this.dropScans(resource.workspaceId, resource.collection)
   }
 
   move(
@@ -339,6 +431,8 @@ export class AuthorizationService {
         resource.collection,
         resource.recordId,
       )
+    this.dropScans(resource.workspaceId, resource.collection)
+    if (parent) this.dropScans(parent.workspaceId, parent.collection)
   }
 
   validateMove(
@@ -391,14 +485,9 @@ export class AuthorizationService {
     const title = top ? '这条内容' : '上一级内容'
     const policy = this.policy(resource)
     if (!policy) {
-      const legacy = this.db
-        .prepare(
-          `SELECT owner_id FROM record_owners
-           WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
-        )
-        .get(resource.workspaceId, resource.collection, resource.recordId) as { owner_id: string } | undefined
-      if (!legacy) return []
-      if (legacy.owner_id === accountId) return [{ id: key, title, detail: '你是创建者', role: 'owner' }]
+      const ownerId = this.legacyOwnerId(resource)
+      if (!ownerId) return []
+      if (ownerId === accountId) return [{ id: key, title, detail: '你是创建者', role: 'owner' }]
       const role: ResourceRole = this.membership(accountId, resource.workspaceId) === 'viewer' ? 'viewer' : 'editor'
       return [{ id: key, title, detail: '沿用空间里的旧记录', role }]
     }
@@ -452,14 +541,9 @@ export class AuthorizationService {
 
     const policy = this.policy(resource)
     if (!policy) {
-      const legacy = this.db
-        .prepare(
-          `SELECT owner_id FROM record_owners
-           WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
-        )
-        .get(resource.workspaceId, resource.collection, resource.recordId) as { owner_id: string } | undefined
-      if (!legacy) return null
-      if (legacy.owner_id === accountId) return { effectiveRole: 'owner', source: 'legacy' }
+      const ownerId = this.legacyOwnerId(resource)
+      if (!ownerId) return null
+      if (ownerId === accountId) return { effectiveRole: 'owner', source: 'legacy' }
       return {
         effectiveRole: this.membership(accountId, resource.workspaceId) === 'viewer' ? 'viewer' : 'editor',
         source: 'legacy',
@@ -497,7 +581,26 @@ export class AuthorizationService {
   }
 
   private directRole(accountId: string, resource: Extract<ResourceRef, { type: 'record' }>) {
-    const rows = this.db
+    const scan = this.scans.get(collectionScanKey(resource.workspaceId, resource.collection, accountId))
+    const rows = scan ? this.scanGrantsFor(scan, resource.recordId) : this.queryDirectGrants(accountId, resource)
+    const matched = rows.filter((row) =>
+      row.subject_type !== 'member_view'
+      || Boolean(this.memberViewMatcher?.(resource.workspaceId, row.subject_id, accountId)),
+    )
+    const role = maxRole(matched.map((row) => row.role))
+    if (!role) return null
+    const source = matched.some((row) => row.subject_type === 'account' && row.role === role)
+      ? 'direct-grant'
+      : matched.some((row) => row.subject_type === 'group' && row.role === role)
+        ? 'group-grant'
+        : matched.some((row) => row.subject_type === 'member_view' && row.role === role)
+          ? 'view-grant'
+          : 'workspace-default'
+    return { effectiveRole: role, source } as const
+  }
+
+  private queryDirectGrants(accountId: string, resource: Extract<ResourceRef, { type: 'record' }>) {
+    return this.db
       .prepare(
         `SELECT g.subject_type, g.subject_id, g.role
          FROM record_grants g
@@ -524,39 +627,69 @@ export class AuthorizationService {
         accountId,
         this.membership(accountId, resource.workspaceId) ?? '',
         accountId,
-      ) as Array<{
-        subject_type: 'account' | 'group' | 'workspace_role' | 'member_view'
-        subject_id: string
-        role: ResourceRole
-      }>
-    const matched = rows.filter((row) =>
-      row.subject_type !== 'member_view'
-      || Boolean(this.memberViewMatcher?.(resource.workspaceId, row.subject_id, accountId)),
-    )
-    const role = maxRole(matched.map((row) => row.role))
-    if (!role) return null
-    const source = matched.some((row) => row.subject_type === 'account' && row.role === role)
-      ? 'direct-grant'
-      : matched.some((row) => row.subject_type === 'group' && row.role === role)
-        ? 'group-grant'
-        : matched.some((row) => row.subject_type === 'member_view' && row.role === role)
-          ? 'view-grant'
-          : 'workspace-default'
-    return { effectiveRole: role, source } as const
+      ) as ScanGrant[]
+  }
+
+  private scanGrantsFor(scan: CollectionScan, recordId: string) {
+    return (scan.grants.get(recordId) ?? []).filter((row) => {
+      if (row.subject_type === 'account') return row.subject_id === scan.accountId
+      if (row.subject_type === 'workspace_role') return row.subject_id === (scan.membership ?? '')
+      if (row.subject_type === 'group') return scan.groups.has(row.subject_id)
+      return row.subject_type === 'member_view'
+    })
+  }
+
+  private collectionScan(workspaceId: string, collection: string) {
+    for (const scan of this.scans.values()) {
+      if (scan.workspaceId === workspaceId && scan.collection === collection) return scan
+    }
+    return undefined
+  }
+
+  private dropScans(workspaceId: string, collection: string) {
+    for (const [key, scan] of this.scans) {
+      if (scan.workspaceId === workspaceId && scan.collection === collection) this.scans.delete(key)
+    }
   }
 
   private policy(resource: Extract<ResourceRef, { type: 'record' }>) {
+    const scan = this.collectionScan(resource.workspaceId, resource.collection)
+    if (scan) return scan.policies.get(resource.recordId)
     return this.db
       .prepare(
-        `SELECT workspace_id, collection, record_id, ownership, owner_account_id, access_mode,
-                member_default_role, parent_collection, parent_record_id
-         FROM resource_policies
+        `SELECT ${POLICY_SELECT} FROM resource_policies
          WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
       )
       .get(resource.workspaceId, resource.collection, resource.recordId) as PolicyRow | undefined
   }
 
+  private legacyOwnerId(resource: Extract<ResourceRef, { type: 'record' }>) {
+    const scan = this.collectionScan(resource.workspaceId, resource.collection)
+    if (scan) return scan.owners.get(resource.recordId)
+    const row = this.db
+      .prepare(
+        `SELECT owner_id FROM record_owners
+         WHERE workspace_id = ? AND collection = ? AND record_id = ?`,
+      )
+      .get(resource.workspaceId, resource.collection, resource.recordId) as { owner_id: string } | undefined
+    return row?.owner_id
+  }
+
   private membership(accountId: string, workspaceId: string): WorkspaceRole | null {
+    for (const scan of this.scans.values()) {
+      if (scan.accountId === accountId && scan.workspaceId === workspaceId) return scan.membership
+    }
+    return this.readMembership(accountId, workspaceId)
+  }
+
+  private membershipKind(accountId: string, workspaceId: string): 'member' | 'external' | 'guest' {
+    for (const scan of this.scans.values()) {
+      if (scan.accountId === accountId && scan.workspaceId === workspaceId) return scan.membershipKind
+    }
+    return this.readMembershipKind(accountId, workspaceId)
+  }
+
+  private readMembership(accountId: string, workspaceId: string): WorkspaceRole | null {
     const row = this.db
       .prepare('SELECT role FROM workspace_members WHERE workspace_id = ? AND account_id = ?')
       .get(workspaceId, accountId) as { role: string } | undefined
@@ -565,7 +698,7 @@ export class AuthorizationService {
       : null
   }
 
-  private membershipKind(accountId: string, workspaceId: string): 'member' | 'external' | 'guest' {
+  private readMembershipKind(accountId: string, workspaceId: string): 'member' | 'external' | 'guest' {
     const row = this.db
       .prepare('SELECT member_kind FROM workspace_members WHERE workspace_id = ? AND account_id = ?')
       .get(workspaceId, accountId) as { member_kind?: string } | undefined

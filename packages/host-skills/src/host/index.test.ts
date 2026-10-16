@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { afterEach, beforeEach, test } from 'vitest'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { Context, Service } from 'cordis'
 import * as tools from '@biu/host-tools'
 import * as systemPrompt from '@biu/host-system-prompt'
@@ -183,7 +183,7 @@ test('fileList is a read-only field derived from disk', async () => {
   await spec.create!([{ title: 'ABC', description: '需要执行 ABC 流程时使用', files: fixture.files }])
 
   const rows = await spec.list()
-  assert.equal(rows[0]?.fileList, 'cap/cap1.md')
+  assert.equal(rows[0]?.fileList, '')
 
   const detail = await spec.get!('abc')
   assert.equal(detail?.fileList, 'cap/cap1.md')
@@ -258,6 +258,22 @@ test('/skills new button creates a disabled draft before description is filled',
   const again = await spec.create!([{}])
   assert.equal(again[0]?.id, 'new-skill')
   assert.equal(new SkillsStore().list().filter((item) => item.name === '新技能').length, 1)
+})
+
+test('skills list rereads after writes and does not open sqlite per row', () => {
+  const src = readFileSync(resolve(import.meta.dirname, './store.ts'), 'utf8')
+  const listFn = src.match(/list\(\): SkillRecord\[] \{[\s\S]*?\n  get\(/)?.[0] ?? ''
+  assert.match(listFn, /readFileRecord/)
+  assert.doesNotMatch(listFn, /openAndMigrateBiu/)
+  assert.doesNotMatch(listFn, /this\.get\(/)
+
+  const store = new SkillsStore()
+  store.create({ name: 'Alpha', description: 'one' })
+  assert.equal(store.list().length, 1)
+  store.create({ name: 'Beta', description: 'two' })
+  assert.deepEqual(store.list().map((item) => item.id).sort(), ['alpha', 'beta'])
+  store.remove('alpha')
+  assert.deepEqual(store.list().map((item) => item.id), ['beta'])
 })
 
 test('blank create reuses one draft instead of timestamp ids', () => {

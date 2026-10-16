@@ -3,10 +3,10 @@ import assert from 'node:assert/strict'
 import { Context, Service } from 'cordis'
 import * as tools from '@biu/host-tools'
 import { mkdtemp, writeFile } from 'node:fs/promises'
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { DatabaseService, apply as applyFileSystem, databaseHttpFailure } from './index.ts'
+import { join, resolve } from 'node:path'
+import { DatabaseService, apply as applyFileSystem, databaseHttpFailure, listNeedsMatchOverlay } from './index.ts'
 import { FileSystemAssets } from './assets-store.ts'
 import type { CollectionSpec, DbRecord } from '@biu/type-file-system'
 import { REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
@@ -2525,4 +2525,24 @@ test('a lan view share marks matching records shared without stamping ownership'
   const all = await db.list('/docs')
   assert.equal(scopeOf(all.items, '进行中'), '共享')
   assert.equal(scopeOf(all.items, '已完成'), '共享')
+})
+
+test('list match overlay is only loaded for overlay fields, search, or tree filters', () => {
+  assert.equal(listNeedsMatchOverlay(undefined, '', 'title'), false)
+  assert.equal(listNeedsMatchOverlay({ status: 'open', $scope: 'personal' }, '', 'title'), false)
+  assert.equal(listNeedsMatchOverlay({ shareScope: '私人' }, '', 'title'), false)
+  assert.equal(listNeedsMatchOverlay(undefined, '笔记', 'title'), true)
+  assert.equal(listNeedsMatchOverlay({ tags: 'host-ui' }, '', 'title'), true)
+  assert.equal(listNeedsMatchOverlay(undefined, '', 'emoji'), true)
+  assert.equal(listNeedsMatchOverlay(undefined, '', 'title', [{ field: 'createdBy', dir: 'asc' }]), true)
+  assert.equal(listNeedsMatchOverlay({ $tree: { root: 'n1' } }, '', 'title'), true)
+})
+
+test('collection list preloads authorization scans and releases them', () => {
+  const host = readFileSync(resolve(import.meta.dirname, './index.ts'), 'utf8')
+  assert.match(host, /auth\.preloadCollection\(actor\.workspaceId, spec\.path, actor\.accountId\)/)
+  assert.match(
+    host,
+    /try \{\s*const overlay = listNeedsMatchOverlay\(liveFilter, q, sortField, page\?\.sorts\)[\s\S]*?\} finally \{\s*if \(auth && actor\) \{[\s\S]*?releaseCollection\(actor\.workspaceId, spec\.path, actor\.accountId\)/,
+  )
 })
