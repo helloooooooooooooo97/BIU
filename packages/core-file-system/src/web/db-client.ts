@@ -53,20 +53,26 @@ export async function listCollection(opts: {
   const key = params.toString()
   const pending = listInflight.get(key)
   if (pending) return pending
-  const request = readJson<ListPage & { items?: DbRecord[]; total?: number; schema?: CollectionSchema }>(
+  let request: Promise<ListPage>
+  request = readJson<ListPage & { items?: DbRecord[]; total?: number; schema?: CollectionSchema }>(
     `/api/db/list?${params}`,
-  )
-    .then((body) => {
+  ).then(
+    (body) => {
       const items = Array.isArray(body.items) ? body.items : []
+      setTimeout(() => {
+        if (listInflight.get(key) === request) listInflight.delete(key)
+      }, 32)
       return {
         items,
         total: typeof body.total === 'number' ? body.total : items.length,
         schema: body.schema,
       } satisfies ListPage
-    })
-    .finally(() => {
-      listInflight.delete(key)
-    })
+    },
+    (error) => {
+      if (listInflight.get(key) === request) listInflight.delete(key)
+      throw error
+    },
+  )
   listInflight.set(key, request)
   return request
 }

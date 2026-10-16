@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { Image } from 'antd'
 import { BoolBox, TagChip, TagChips } from '@biu/public-ui'
 import {
   ArchiveBoxArrowDownIcon,
@@ -180,14 +179,7 @@ export function BoolCell({
 function ImageThumb({ src }: { src: string }) {
   return (
     <span className="fsdb-thumb-btn" onPointerDown={(event) => event.stopPropagation()}>
-      <Image
-        src={src}
-        alt=""
-        width={28}
-        height={18}
-        className="fsdb-thumb"
-        preview={{ mask: false }}
-      />
+      <img src={src} alt="" width={28} height={18} className="fsdb-thumb" />
     </span>
   )
 }
@@ -195,29 +187,22 @@ function ImageThumb({ src }: { src: string }) {
 function ImageThumbs({ srcs, compact }: { srcs: string[]; compact?: boolean }) {
   if (!srcs.length) return null
   const shown = compact ? srcs.slice(0, 4) : srcs
+  if (compact) {
+    return (
+      <span className="fsdb-thumbs">
+        {shown.map((src, index) => (
+          <ImageThumb key={`${src}-${index}`} src={src} />
+        ))}
+        {srcs.length > 4 ? <span className="fsdb-meta">+{srcs.length - 4}</span> : null}
+      </span>
+    )
+  }
   return (
-    <Image.PreviewGroup>
-      {compact ? (
-        <span className="fsdb-thumbs">
-          {shown.map((src, index) => (
-            <ImageThumb key={`${src}-${index}`} src={src} />
-          ))}
-          {srcs.length > 4 ? <span className="fsdb-meta">+{srcs.length - 4}</span> : null}
-        </span>
-      ) : (
-        <div className="fsdb-fileview-imgs">
-          {shown.map((src, index) => (
-            <Image
-              key={`${src}-${index}`}
-              className="fsdb-fileview-img"
-              src={src}
-              alt=""
-              preview={{ mask: false }}
-            />
-          ))}
-        </div>
-      )}
-    </Image.PreviewGroup>
+    <div className="fsdb-fileview-imgs">
+      {shown.map((src, index) => (
+        <img key={`${src}-${index}`} className="fsdb-fileview-img" src={src} alt="" />
+      ))}
+    </div>
   )
 }
 
@@ -285,7 +270,7 @@ export function FilePreview({
   const src = previewImageSrc(kind, value)
   if (src) {
     if (compact) return <ImageThumb src={src} />
-    return <Image className="fsdb-fileview-img" src={src} alt="" preview={{ mask: false }} />
+    return <img className="fsdb-fileview-img" src={src} alt="" />
   }
   const files = asAttachmentList(value)
   if (files.length) {

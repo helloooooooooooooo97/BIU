@@ -489,6 +489,15 @@ function rememberListCache(path: string, snap: ListCacheSnap) {
   }
 }
 
+function sameSavedViews(a: SavedView[], b: SavedView[]) {
+  if (a === b) return true
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i]!.id !== b[i]!.id || viewStateKey(a[i]!) !== viewStateKey(b[i]!)) return false
+  }
+  return true
+}
+
 const EMPTY_FILTERS: Record<string, string> = {}
 /** 与选区拖选同一阈值：位移超过这个距离只当拖，不当点击。 */
 const CELL_POP_DRAG_PX = 6
@@ -574,6 +583,8 @@ export function CollectionBrowser({
         )
     return listed
   }
+  const paintListedViews = (path: string) =>
+    listedViews(path, loadViews(path)).map((view) => withViewDisplay(path, view))
   const dataPath = collectionPath
   const [stat, setStat] = useState<StatResult | null>(null)
   const [items, setItems] = useState<Array<DbRecord & { path?: string }>>([])
@@ -586,7 +597,7 @@ export function CollectionBrowser({
   const actingRef = useRef(false)
   const initialView = (() => {
     const stored = viewForPath(collectionPath, routeViewId)
-    const listed = listedViews(collectionPath, loadViews(collectionPath))
+    const listed = paintListedViews(collectionPath)
     return pickViewForRoute(listed, collectionPath, routeViewId) || stored || listed[0] || null
   })()
   const dbUi = getDatabaseUi()
@@ -653,7 +664,7 @@ export function CollectionBrowser({
     .slice()
     .sort()
     .join('\n')
-  const [views, setViews] = useState<SavedView[]>(() => loadViews(collectionPath))
+  const [views, setViews] = useState<SavedView[]>(() => paintListedViews(collectionPath))
   const [activeViewId, setActiveViewId] = useState<string | null>(initialView?.id ?? null)
   const catalogLocks = useMemo(() => {
     if (sheet) return lockedFilters
@@ -1116,12 +1127,11 @@ export function CollectionBrowser({
     setError('')
     setPage(0)
     const stored = viewForPath(collectionPath, routeViewId)
-    const user = loadViews(collectionPath)
-    const listed = listedViews(collectionPath, user)
+    const listed = paintListedViews(collectionPath)
     rememberViews(collectionPath, listed)
     if (stored || listed[0]) {
       const next = pickViewForRoute(listed, collectionPath, routeViewId) || stored || listed[0]
-      setViews(listed)
+      setViews((prev) => (sameSavedViews(prev, listed) ? prev : listed))
       if (next) {
         setActiveViewId(next.id)
         setMode(next.mode)
@@ -1770,11 +1780,12 @@ export function CollectionBrowser({
       ...view,
       filters: { ...catalogLockFilters(view.id, [view]), ...view.filters },
     })
-    const nextColumns = pinActionColumn(
-      schema,
-      next.columns.length ? next.columns.filter((key) => allColumnKeys.includes(key)) : schemaDefaultKeys,
-      rowActionColumn,
-    )
+    const sourceColumns = next.columns.length
+      ? allColumnKeys.length
+        ? next.columns.filter((key) => allColumnKeys.includes(key))
+        : next.columns
+      : schemaDefaultKeys
+    const nextColumns = pinActionColumn(schema, sourceColumns, rowActionColumn)
     const nextQuery = next.query ?? ''
     const nextPageSize = normalizePageSize(next.pageSize)
     const nextGroup = next.groupBy ?? ''
@@ -2998,14 +3009,13 @@ export function CollectionBrowser({
     const hydrateKey = `${collectionPath}\0${dataPath}`
     if (hydratePath.current === hydrateKey) return
     hydratePath.current = hydrateKey
-    const listedViewsNow = listedViews(collectionPath, loadViews(collectionPath)).map((view) =>
-      withViewDisplay(collectionPath, view),
-    )
+    const listedViewsNow = paintListedViews(collectionPath)
     rememberViews(collectionPath, listedViewsNow)
-    viewsRef.current = listedViewsNow
-    setViews(listedViewsNow)
-    const listed = viewsRef.current
-    const view = pickViewForRoute(listed, collectionPath, routeViewId)
+    if (!sameSavedViews(viewsRef.current, listedViewsNow)) {
+      viewsRef.current = listedViewsNow
+      setViews(listedViewsNow)
+    }
+    const view = pickViewForRoute(viewsRef.current, collectionPath, routeViewId)
     if (view && view.id !== activeViewIdRef.current) applyView(view)
     setHydrated(true)
   }, [allColumnKeys, collectionPath, dataPath, routeViewId, schema, schemaDefaultKeys])
