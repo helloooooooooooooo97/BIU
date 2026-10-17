@@ -1,3 +1,6 @@
+import { asPersonList } from '@biu/type-file-system'
+import { ensureTagChipStyle, tagTone } from '@biu/public-ui/tag-chip'
+
 /** First-paint cells only need a screen of text; CSS overflow hides the rest. */
 export const IDLE_CELL_TEXT_MAX = 80
 
@@ -49,6 +52,39 @@ export function idleEmptyUsageInnerHtml() {
 
 export function idleSelectInnerHtml(text: string) {
   return idleTextInnerHtml(text, 'fsdb-select-text')
+}
+
+export function idleTagChipsInnerHtml(tags: { id: string; label: string }[]) {
+  if (!tags.length) return ''
+  ensureTagChipStyle()
+  return `<span class="biu-tags">${tags
+    .map((tag) => {
+      const label = escapeTableHtml(idleClipText(tag.label, 24))
+      const tone = escapeTableHtml(tagTone(tag.id))
+      return `<span class="biu-tag" style="--biu-tag:${tone}" title="${label}"><span class="biu-tag-label">${label}</span></span>`
+    })
+    .join('')}</span>`
+}
+
+export function idlePersonInnerHtml(value: unknown) {
+  const people = asPersonList(value).map((person) => person.name).filter(Boolean)
+  if (!people.length) return ''
+  return `<span class="fsdb-person-list">${people
+    .map((name) => {
+      const label = escapeTableHtml(idleClipText(name, 24))
+      return `<span class="fsdb-person" title="${label}"><span class="fsdb-person-avatar" aria-hidden="true"></span><span class="fsdb-person-name">${label}</span></span>`
+    })
+    .join('')}</span>`
+}
+
+export function idleActionsInnerHtml(actions: { label: string; danger?: boolean }[]) {
+  if (!actions.length) return ''
+  return `<div class="tasks-row-actions">${actions
+    .map((action) => {
+      const label = escapeTableHtml(action.label)
+      return `<span class="fsdb-action-tag${action.danger ? ' is-danger' : ''}">${label}</span>`
+    })
+    .join('')}</div>`
 }
 
 export type IdleTableTd = {

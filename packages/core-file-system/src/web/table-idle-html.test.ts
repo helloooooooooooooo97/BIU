@@ -4,8 +4,11 @@ import {
   escapeTableHtml,
   idleBoolInnerHtml,
   idleEmptyUsageInnerHtml,
+  idleActionsInnerHtml,
+  idlePersonInnerHtml,
   idleSelectInnerHtml,
   idleTableRowHtml,
+  idleTagChipsInnerHtml,
   IDLE_CELL_TEXT_MAX,
   idleClipText,
   idleTextInnerHtml,
@@ -34,6 +37,22 @@ test('idle title prefers a record emoji over the table glyph', () => {
   assert.doesNotMatch(html, /data-icon/)
 })
 
+test('idle chips, person, and actions paint without waiting for hover', () => {
+  const chips = idleTagChipsInnerHtml([{ id: 'open', label: '进行中' }, { id: 'done', label: '完成' }])
+  assert.match(chips, /class="biu-tags"/)
+  assert.match(chips, /class="biu-tag"/)
+  assert.match(chips, /进行中/)
+  const person = idlePersonInnerHtml({ kind: 'user', name: 'Ada' })
+  assert.match(person, /fsdb-person-list/)
+  assert.match(person, /fsdb-person-avatar/)
+  assert.match(person, />Ada</)
+  const actions = idleActionsInnerHtml([{ label: '打开' }, { label: '删除', danger: true }])
+  assert.match(actions, /tasks-row-actions/)
+  assert.match(actions, /fsdb-action-tag is-danger/)
+  assert.match(actions, />打开</)
+  assert.equal(idleActionsInnerHtml([]), '')
+})
+
 test('idle cells match the text / bool / usage / facet first paint', () => {
   assert.match(idleBoolInnerHtml(true), /fsdb-boolbox is-on/)
   assert.match(idleBoolInnerHtml(false), /title="否"/)
@@ -51,7 +70,7 @@ test('idle row html is one td per column with data-col-key', () => {
   const html = idleTableRowHtml([
     { key: 'title', inner: idleTitleInnerHtml('任务', 'check'), className: 'is-pin-col' },
     { key: 'shareScope', inner: idleTextInnerHtml('私人'), style: { width: '80px', minWidth: '80px', maxWidth: '80px' } },
-    { key: 'actions', inner: '' },
+    { key: 'actions', inner: idleActionsInnerHtml([{ label: '打开' }]) },
   ])
   assert.match(html, /data-col-key="title"/)
   assert.match(html, /class="is-pin-col"/)
