@@ -47,7 +47,6 @@ import {
   distanceFromChatBottom,
   followChatOutput,
   nextStickToLatest,
-  offsetInScroller,
   pinChatToLatest,
   reserveLiveTurnRoom,
   PIN_TOP_SLACK_PX,
@@ -927,24 +926,7 @@ export const ChatThread = memo(function ChatThread(props: SlotProps) {
         maybePrefetchOlder()
         return
       }
-      const scrollingUp = parent.scrollTop < lastTop - 0.5
-      const pinId = followAnchorRef.current
-      if (pinId && stickToBottomRef.current && !scrollingUp) {
-        const escaped = typeof CSS !== 'undefined' && typeof CSS.escape === 'function' ? CSS.escape(pinId) : pinId
-        const user = parent.querySelector<HTMLElement>(`[data-chat-kind="user"][data-node-id="${escaped}"]`)
-        if (user) {
-          const minTop = Math.max(0, offsetInScroller(user, parent))
-          if (parent.scrollTop > minTop + PIN_TOP_SLACK_PX) {
-            adjustingScrollRef.current = true
-            parent.scrollTop = minTop
-            adjustingScrollRef.current = false
-            lastTop = parent.scrollTop
-            maybePrefetchOlder()
-            return
-          }
-        }
-      }
-      applyStick(scrollingUp)
+      applyStick(parent.scrollTop < lastTop - 0.5)
       lastTop = parent.scrollTop
       maybePrefetchOlder()
     }

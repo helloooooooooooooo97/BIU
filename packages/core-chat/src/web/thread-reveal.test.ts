@@ -265,19 +265,21 @@ describe('follow the sent message from the top', () => {
     expect(parent.scrollTop).toBe(1000)
   })
 
-  it('does not scroll the pinned send up when the reply is taller than the viewport', () => {
+  it('follows the bottom once the reply is taller than the viewport', () => {
     const parent = scroller({ scrollHeight: 4200, clientHeight: 800, scrollTop: 1000 })
     const user = document.createElement('div')
     user.dataset.nodeId = 'u-9'
     user.dataset.chatKind = 'user'
     place(user, 200, 48)
-    Object.defineProperty(user, 'offsetHeight', { value: 48, configurable: true })
-    parent.append(user)
+    const reply = document.createElement('div')
+    reply.dataset.nodeId = 'r-9'
+    place(reply, 260, 2000)
+    parent.append(user, reply)
     followChatOutput(parent, 'u-9')
-    expect(parent.scrollTop).toBe(1200)
+    expect(parent.scrollTop).toBe(2460)
   })
 
-  it('keeps the sent message at the top and scrolls the reply pane instead of overlapping it', () => {
+  it('does not box the reply in a max-height pane', () => {
     const parent = scroller({ scrollHeight: 2000, clientHeight: 800, scrollTop: 0 })
     const turn = document.createElement('div')
     turn.className = 'chat-turn is-live'
@@ -289,14 +291,13 @@ describe('follow the sent message from the top', () => {
     const reply = document.createElement('div')
     reply.dataset.nodeId = 'r-9'
     reply.dataset.chatKind = 'reply'
-    Object.defineProperty(reply, 'scrollHeight', { value: 1200, configurable: true })
-    Object.defineProperty(reply, 'clientHeight', { value: 400, configurable: true })
-    reply.scrollTop = 0
+    reply.style.maxHeight = '400px'
+    place(reply, 504, 1200)
     turn.append(user, reply)
     parent.append(turn)
     followChatOutput(parent, 'u-9')
-    expect(parent.scrollTop).toBe(400)
-    expect(reply.scrollTop).toBe(800)
+    expect(reply.style.maxHeight).toBe('')
+    expect(parent.scrollTop).toBe(904)
   })
 
   it('reserves one viewport of room on the live turn only', () => {
@@ -323,7 +324,6 @@ describe('thread follows the latest message', () => {
     expect(sendFollow).toContain('followChatOutput')
     expect(sendFollow).toContain('reserveLiveTurnRoom')
     expect(sendFollow).toContain('applyFollow(parent)')
-    expect(src).toContain('parent.scrollTop > minTop + PIN_TOP_SLACK_PX')
     expect(sendFollow).not.toContain("kind: 'pin'")
     expect(sendFollow).not.toContain('skipNextLayoutPin')
     expect(sendFollow).not.toContain('skipNextResizePin')
