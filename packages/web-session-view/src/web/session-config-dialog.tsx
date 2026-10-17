@@ -126,7 +126,7 @@ export const SessionConfigDialog = memo(function SessionConfigDialog({
       })
       if (!res.ok) throw new Error(`保存失败 HTTP ${res.status}`)
       await refresh()
-      void sessionView.refreshSessions()
+      void sessionView.refreshSessions({ refresh: true })
     } catch (err) {
       setError(String(err))
     } finally {

@@ -1,8 +1,12 @@
-import { test } from 'vitest'
+import { test, afterEach } from 'vitest'
 import assert from 'node:assert/strict'
 import { Context } from 'cordis'
 import * as sessionView from './index.ts'
-import { SessionViewService } from './index.ts'
+import { SessionViewService, resetSessionsListGet } from './index.ts'
+
+afterEach(() => {
+  resetSessionsListGet()
+})
 
 function mockFetch(handlers: Record<string, (init?: RequestInit) => unknown>) {
   const calls: Array<{ url: string; init?: RequestInit }> = []
@@ -25,6 +29,132 @@ function mockFetch(handlers: Record<string, (init?: RequestInit) => unknown>) {
   }) as typeof fetch
   return calls
 }
+
+test('refreshSessions shares one in-flight GET /api/sessions', async () => {
+  resetSessionsListGet()
+  let listHits = 0
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = String(input)
+    if (/\/api\/sessions\/?$/.test(url) || url === '/api/sessions') {
+      listHits += 1
+      await gate
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ sessions: [{ id: 's1', title: 'a', eventCount: 1, updatedAt: 1 }] }),
+      } as Response
+    }
+    if (url.includes('/api/sessions/s1?turns=')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          id: 's1',
+          events: [{ type: 'session/open', version: 1, seq: 0, ts: 1 }],
+          hasMore: false,
+          totalTurns: 0,
+        }),
+      } as Response
+    }
+    if (url.includes('/api/approvals')) {
+      return { ok: true, status: 200, json: async () => ({ mode: 'auto', pending: [] }) } as Response
+    }
+    return { ok: false, status: 404, json: async () => ({}) } as Response
+  }) as typeof fetch
+  const ctx = new Context()
+  await ctx.plugin(sessionView)
+  const view = ctx.sessionView as SessionViewService
+  const pending = Promise.all([view.refreshSessions(), view.refreshSessions()])
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  assert.equal(listHits, 1)
+  release()
+  await pending
+  assert.equal(listHits, 1)
+  assert.equal(view.get().sessions[0]?.id, 's1')
+})
+
+test('home applyRoute waits on the constructor sessions GET', async () => {
+  resetSessionsListGet()
+  let listHits = 0
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = String(input)
+    if (/\/api\/sessions\/?$/.test(url) || url === '/api/sessions') {
+      listHits += 1
+      await gate
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ sessions: [{ id: 's1', title: 'a', eventCount: 1, updatedAt: 1 }] }),
+      } as Response
+    }
+    if (url.includes('/api/sessions/s1?turns=')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          id: 's1',
+          events: [{ type: 'session/open', version: 1, seq: 0, ts: 1 }],
+          hasMore: false,
+          totalTurns: 0,
+        }),
+      } as Response
+    }
+    if (url.includes('/api/approvals')) {
+      return { ok: true, status: 200, json: async () => ({ mode: 'auto', pending: [] }) } as Response
+    }
+    return { ok: false, status: 404, json: async () => ({}) } as Response
+  }) as typeof fetch
+  const ctx = new Context()
+  await ctx.plugin(sessionView)
+  const view = ctx.sessionView as SessionViewService
+  const pending = view.applyRoute({ kind: 'home' })
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  assert.equal(listHits, 1)
+  release()
+  await pending
+  assert.equal(listHits, 1)
+  assert.equal(view.get().sessionId, 's1')
+})
+
+test('leaveMissingSession does not deadlock on the list GET that discovered the gap', async () => {
+  resetSessionsListGet()
+  let listHits = 0
+  let sessions: Array<{ id: string; title: string; eventCount: number; updatedAt: number }> = [
+    { id: 's1', title: 'a', eventCount: 1, updatedAt: 1 },
+  ]
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = String(input)
+    if (/\/api\/sessions\/?$/.test(url) || url === '/api/sessions') {
+      listHits += 1
+      return { ok: true, status: 200, json: async () => ({ sessions }) } as Response
+    }
+    if (url.includes('/api/approvals')) {
+      return { ok: true, status: 200, json: async () => ({ mode: 'auto', pending: [] }) } as Response
+    }
+    return { ok: false, status: 404, json: async () => ({}) } as Response
+  }) as typeof fetch
+  const ctx = new Context()
+  await ctx.plugin(sessionView)
+  const view = ctx.sessionView as SessionViewService
+  await view.refreshSessions()
+  view.ingest('s1', { type: 'session/open', version: 1, seq: 0, ts: 1 })
+  sessions = []
+  const pending = view.refreshSessions({ refresh: true })
+  await Promise.race([
+    pending,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('leaveMissingSession deadlocked')), 1000)),
+  ])
+  assert.equal(view.get().sessionId, null)
+  assert.ok(listHits >= 2)
+})
 
 test('refreshApprovals rehydrates mode and pending', async () => {
   mockFetch({

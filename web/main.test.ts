@@ -4,6 +4,12 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { act } from 'react'
 
+test('web entry seeds session fetches before plugins load', () => {
+  const src = readFileSync(resolve(import.meta.dirname, './main.tsx'), 'utf8')
+  assert.match(src, /seedHomeSessionFetches/)
+  assert.match(src, /if \(!isShareHref\(\)\) seedHomeSessionFetches\(\)/)
+})
+
 test('web entry boots without top-level await', () => {
   const src = readFileSync(resolve(import.meta.dirname, './main.tsx'), 'utf8')
   const css = readFileSync(resolve(import.meta.dirname, './style.css'), 'utf8')

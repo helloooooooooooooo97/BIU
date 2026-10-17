@@ -15,6 +15,7 @@ import {
 import type { AppRoute } from './session-route.ts'
 import { mostRecentSessionId } from './session-groups.ts'
 import { markSidebarMascotFresh } from './session-mascot-fresh.ts'
+import { getSessionTurns, getSessionsList } from './sessions-list.ts'
 
 export type { AppRoute, RouteView, InspectorCenterKind } from './session-route.ts'
 export {
@@ -79,6 +80,7 @@ export {
   remainingSidebarMascotIntroMs,
   clearSidebarMascotFresh,
 } from './session-mascot-fresh.ts'
+export { SESSION_LOAD_TURNS, resetSessionsListGet } from './sessions-list.ts'
 
 export interface ApprovalItem {
   id: string
@@ -134,7 +136,6 @@ export type InboxQueueItem = {
 /** 打开会话与上翻分页都只拉最近 / 更早的 100 轮，不再一次全量。 */
 export const SESSION_TAIL_TURNS = 100
 export const TRAJECTORY_TAIL_TURNS = 48
-export const SESSION_LOAD_TURNS = SESSION_TAIL_TURNS
 
 export interface UsageTrendPoint {
   seq: number
@@ -532,7 +533,7 @@ export class SessionViewService extends Service {
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('biu:session-missing', { detail: { sessionId } }))
     }
-    await this.refreshSessions()
+    await this.refreshSessions({ refresh: true })
     await this.loadMostRecentSession(sessionId)
   }
 
@@ -751,12 +752,10 @@ export class SessionViewService extends Service {
     }, 200)
   }
 
-  async refreshSessions() {
+  async refreshSessions(opts?: { refresh?: boolean }) {
     try {
-      const res = await fetch('/api/sessions')
-      if (!res.ok) return
-      const body = (await res.json()) as { sessions?: SessionListItem[] }
-      const next = Array.isArray(body.sessions) ? body.sessions : []
+      const next = await getSessionsList<SessionListItem>(opts)
+      if (!next) return
       const busySessions = this.syncBusyFromSessions(next)
       const sessionsChanged = !sessionsEqual(this.value.sessions, next)
       if (!sessionsChanged && !busySessions) return
@@ -836,7 +835,7 @@ export class SessionViewService extends Service {
     }
     markSidebarMascotFresh(body.id)
     await this.load(body.id, { view: 'chat' })
-    await this.refreshSessions()
+    await this.refreshSessions({ refresh: true })
     return body.id
   }
 
@@ -983,13 +982,14 @@ export class SessionViewService extends Service {
   private async revalidate(sessionId: string, view: ConversationView) {
     const gen = this.loadGen
     try {
-      const res = await fetch(`/api/sessions/${sessionId}?turns=${SESSION_LOAD_TURNS}`)
+      const got = await getSessionTurns<SessionPayload>(sessionId)
       if (gen !== this.loadGen || this.value.sessionId !== sessionId) return
-      if (!res.ok) {
-        if (res.status === 404) await this.leaveMissingSession(sessionId)
+      if (!got) return
+      if (got.status !== 200) {
+        if (got.status === 404) await this.leaveMissingSession(sessionId)
         return
       }
-      const body = (await res.json()) as SessionPayload
+      const body = got.body
       if (gen !== this.loadGen || this.value.sessionId !== sessionId) return
       const events = compactSessionEvents(Array.isArray(body.events) ? body.events : [])
       const byTurn = body.dispatchedUsageByTurn ?? {}
@@ -1333,7 +1333,7 @@ export class SessionViewService extends Service {
       })
     }
     await this.load(body.id, { view: 'chat' })
-    await this.refreshSessions()
+    await this.refreshSessions({ refresh: true })
     return body.id
   }
 
@@ -1353,7 +1353,7 @@ export class SessionViewService extends Service {
       this.replace({ sessions: prev, error: String(error) })
       throw error
     }
-    void this.refreshSessions()
+    void this.refreshSessions({ refresh: true })
   }
 
   async setSessionTitle(id: string, title: string) {
@@ -1375,7 +1375,7 @@ export class SessionViewService extends Service {
       this.replace({ sessions: prev, error: String(error) })
       throw error
     }
-    void this.refreshSessions()
+    void this.refreshSessions({ refresh: true })
   }
 
   async patchInspector(id: string, inspector: SessionInspectorBind) {
@@ -1437,7 +1437,7 @@ export class SessionViewService extends Service {
       throw error
     }
 
-    await this.refreshSessions()
+    await this.refreshSessions({ refresh: true })
     if (!wasActive) return
     const next = this.value.sessions[0]?.id
     if (next) {

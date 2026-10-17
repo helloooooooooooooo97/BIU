@@ -56,22 +56,46 @@ function accountToken() {
   return localStorage.getItem('biu.account.token') ?? ''
 }
 
+const PROFILE_GET_HOLD_MS = 400
+let profileGetInflight: Promise<WorkspaceProfile> | null = null
+
+export function resetWorkspaceProfileHydrate() {
+  profileGetInflight = null
+}
+
 export async function hydrateWorkspaceProfile() {
+  if (profileGetInflight) return profileGetInflight
   const token = accountToken()
   if (!token) return writeWorkspaceProfile(EMPTY)
-  try {
-    const res = await fetch('/api/account/workspace-profile', {
-      headers: { authorization: `Bearer ${token}` },
-    })
-    if (!res.ok) return readWorkspaceProfile()
-    const data = (await res.json()) as Partial<WorkspaceProfile>
-    const next = parse(data)
-    const current = readWorkspaceProfile()
-    if (sameProfile(current, next)) return current
-    return writeWorkspaceProfile(next)
-  } catch {
-    return readWorkspaceProfile()
-  }
+  let request: Promise<WorkspaceProfile>
+  request = (async () => {
+    try {
+      const res = await fetch('/api/account/workspace-profile', {
+        headers: { authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) return readWorkspaceProfile()
+      const data = (await res.json()) as Partial<WorkspaceProfile>
+      const next = parse(data)
+      const current = readWorkspaceProfile()
+      if (sameProfile(current, next)) return current
+      return writeWorkspaceProfile(next)
+    } catch {
+      return readWorkspaceProfile()
+    }
+  })().then(
+    (body) => {
+      setTimeout(() => {
+        if (profileGetInflight === request) profileGetInflight = null
+      }, PROFILE_GET_HOLD_MS)
+      return body
+    },
+    (error) => {
+      if (profileGetInflight === request) profileGetInflight = null
+      throw error
+    },
+  )
+  profileGetInflight = request
+  return request
 }
 
 export async function persistWorkspaceProfile(next: WorkspaceProfile) {
