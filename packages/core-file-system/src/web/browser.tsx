@@ -1,31 +1,20 @@
 import { createContext, lazy, memo, Suspense, type ComponentProps, type PointerEvent as ReactPointerEvent, type RefObject, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import {
-  ArrowPathIcon,
   ArrowsPointingOutIcon,
-  ArrowsUpDownIcon,
-  AdjustmentsHorizontalIcon,
   Bars3BottomLeftIcon,
   BoltIcon,
   CheckCircleIcon,
   CheckIcon,
-  ChevronDoubleLeftIcon,
-  ChevronDoubleRightIcon,
   ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   EllipsisHorizontalIcon,
-  EyeIcon,
-  FunnelIcon,
   HashtagIcon,
-  MagnifyingGlassIcon,
   PencilSquareIcon,
   PlusIcon,
   RectangleStackIcon,
   ArrowDownTrayIcon,
   Square2StackIcon,
-  Squares2X2Icon,
-  StarIcon,
-  TableCellsIcon,
   GlobeAltIcon,
   UserIcon,
   UsersIcon,
@@ -96,7 +85,7 @@ import { ShareScopeLabel } from './share-scope-label.tsx'
 import { ensureFsdbStyle } from './fsdb-style.ts'
 import { workspaceColumnsForLocation } from './workspace-columns.ts'
 import { PageBanner } from './page-banner.tsx'
-import { ViewModeGlyph, idleTableIconKind } from './nav-glyphs.tsx'
+import { UiGlyph, ViewModeGlyph, idleTableIconKind } from './nav-glyphs.tsx'
 import { isIndexCollection, isSystemCollection } from './database-path.ts'
 import { countFittingViewTabs, splitVisibleViews } from './view-tabs.ts'
 import { getDatabaseUi } from './database-ui.ts'
@@ -132,6 +121,7 @@ import { savedViewRecordPath } from '../paths.ts'
 import { findViewNeighbor, indexOnPage } from './view-adjacent.ts'
 import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, TABLE_WINDOW_VIEWPORT_FALLBACK, TABLE_COL_VIEWPORT_FALLBACK, tableColumnEstimate, tableColumnFit, tableColumnSlice, tableColumnUnchanged, tableWindowSlice, tableWindowUnchanged, type TableColumnSlice } from './table-window.ts'
 import {
+  IDLE_CELL_TEXT_MAX,
   idleBoolInnerHtml,
   idleEmptyUsageInnerHtml,
   idleSelectInnerHtml,
@@ -1044,7 +1034,12 @@ function ViewTabFit({
 }) {
   const viewMeasureRef = useRef<HTMLDivElement>(null)
   const [viewTabFit, setViewTabFit] = useState(99)
+  const [measureOn, setMeasureOn] = useState(false)
   useEffect(() => {
+    setMeasureOn(true)
+  }, [])
+  useEffect(() => {
+    if (!measureOn) return
     function measure() {
       const toolbar = toolbarRef.current
       const right = toolbarRightRef.current
@@ -1059,21 +1054,24 @@ function ViewTabFit({
     if (toolbarRef.current) ro.observe(toolbarRef.current)
     if (toolbarRightRef.current) ro.observe(toolbarRightRef.current)
     window.addEventListener('resize', measure)
+    measure()
     return () => {
       ro.disconnect()
       window.removeEventListener('resize', measure)
     }
-  }, [searchExpanded, toolbarRef, toolbarRightRef, views])
+  }, [measureOn, searchExpanded, toolbarRef, toolbarRightRef, views])
   return (
     <>
+      {measureOn ? (
       <div className="tasks-viewtabs-measure" ref={viewMeasureRef} aria-hidden>
         {views.map((view) => (
           <button key={view.id} type="button" className="tasks-viewdd-btn tasks-viewtab" tabIndex={-1} data-view-measure={view.id}>
-            <ViewModeGlyph mode={view.mode} className="size-[14px]" />
+            <ViewModeGlyph mode={view.mode} />
             <span className="tasks-viewdd-name">{view.name}</span>
           </button>
         ))}
       </div>
+      ) : null}
       {children(viewTabFit)}
     </>
   )
@@ -2948,14 +2946,16 @@ export function CollectionBrowser({
         views: views.map((view) => ({ id: view.id, name: view.name, mode: view.mode })),
         recordId: selected?.id,
         recordLabel: selected ? crumbRecordLabel(selected, schema?.labelField) : undefined,
-        records: items.map((row) => ({
-          id: row.id,
-          label: crumbRecordLabel(row, schema?.labelField),
-          emoji: recordPreviewEmoji(row),
-          mascot: recordPreviewMascot(row),
-        })),
+        records: selected
+          ? items.map((row) => ({
+              id: row.id,
+              label: crumbRecordLabel(row, schema?.labelField),
+              emoji: recordPreviewEmoji(row),
+              mascot: recordPreviewMascot(row),
+            }))
+          : undefined,
       }),
-    [activeView?.name, activeViewId, collectionPath, items, routeViewId, schema?.labelField, selected, tables, title, views],
+    [activeView?.name, activeViewId, collectionPath, routeViewId, schema?.labelField, selected, selected ? items : null, tables, title, views],
   )
   const currentTable = tables.find((item) => item.path === collectionPath)
   const recordKind = recordPickKind(currentTable?.view?.moduleId || currentTable?.id)
@@ -3254,14 +3254,10 @@ export function CollectionBrowser({
         >
           <span className="sidebar-rail-icon sidebar-group-fold" aria-hidden>
             <span className="sidebar-group-fold-face">
-              <RectangleStackIcon aria-hidden className="size-[14px]" />
+              <UiGlyph icon="stack" />
             </span>
             <span className="sidebar-group-fold-chevron">
-              {folded ? (
-                <ChevronRightIcon className="size-[14px] shrink-0 opacity-80" />
-              ) : (
-                <ChevronDownIcon className="size-[14px] shrink-0 opacity-80" />
-              )}
+              <UiGlyph icon={folded ? 'chevron-right' : 'chevron-down'} />
             </span>
           </span>
         </button>
@@ -3446,6 +3442,10 @@ export function CollectionBrowser({
       return idleSelectInnerHtml(labels.join('、'))
     }
     if (key === 'usage' && !(Number(row[key]) > 0)) return idleEmptyUsageInnerHtml()
+    const raw = parseFacetFlatColumnKey(key) ? readFacetFlatValue(row, key, facetSourceKey(schema)) : row[key]
+    if (typeof raw === 'string' && raw.length > IDLE_CELL_TEXT_MAX && kind !== 'datetime' && kind !== 'select' && kind !== 'multi-select') {
+      return idleTextInnerHtml(raw)
+    }
     return idleTextInnerHtml(cellValueText(row, key, field))
   }
 
@@ -3566,7 +3566,7 @@ export function CollectionBrowser({
                 disabled={pageIndex <= 0}
                 onClick={() => setGroupPages((prev) => ({ ...prev, [node.groupKey]: Math.max(0, pageIndex - 1) }))}
               >
-                <ChevronLeftIcon aria-hidden className="size-[14px]" />
+                <UiGlyph icon="chevron-left" />
               </button>
               <button
                 type="button"
@@ -3575,7 +3575,7 @@ export function CollectionBrowser({
                 disabled={(pageIndex + 1) * pageSize >= node.count}
                 onClick={() => setGroupPages((prev) => ({ ...prev, [node.groupKey]: pageIndex + 1 }))}
               >
-                <ChevronRightIcon aria-hidden className="size-[14px]" />
+                <UiGlyph icon="chevron-right" />
               </button>
             </div>
           </div>
@@ -3707,9 +3707,49 @@ export function CollectionBrowser({
     schemaFingerprint(schema),
     facetCatalog.map((pack) => pack.id).join(','),
     filterOpen ? recordsFingerprint(items) : '',
+    viewBanner == null ? '' : JSON.stringify(viewBanner),
+    activeView?.name ?? title,
+    idleTableIconKind(currentTable?.view?.icon),
   ].join('\0')
   const listChrome = useMemo(
     () => (
+      <>
+        {sheet ? null : (
+        <>
+        <PageBanner
+          value={viewBanner}
+          writable={Boolean(activeViewId)}
+          path={activeViewId ? savedViewRecordPath(collectionPath, activeViewId) : undefined}
+          title={activeView?.name ?? title}
+          onChange={(next) => {
+            if (!activeViewId) return
+            const path = savedViewRecordPath(collectionPath, activeViewId)
+            if (!path) return
+            setViewBanner(next)
+            void readJson<{ value?: { banner?: unknown } }>('/api/db/update', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ path, content: { banner: next } }),
+            }).then((data) => {
+              setViewBanner(data.value?.banner ?? next)
+            }).catch(() => {
+              setViewBanner(next)
+            })
+          }}
+        />
+        <div className="fsdb-detail-icon-slot">
+          <span className="fsdb-detail-title-icon" aria-hidden>
+            <span className="fsdb-record-mark is-lg" data-icon={idleTableIconKind(currentTable?.view?.icon)} />
+          </span>
+        </div>
+        <div className="fsdb-detail-title-row">
+          <div className="fsdb-detail-title-block">
+          <h1 className="fsdb-detail-title">{activeView?.name ?? title}</h1>
+          </div>
+        </div>
+        </>
+        )}
+
         <div className="tasks-toolbar" ref={toolbarRef} data-biu-ignore>
           <div className="tasks-toolbar-left">
             {sheet ? null : (
@@ -3731,7 +3771,7 @@ export function CollectionBrowser({
                       else selectView(view)
                     }}
                   >
-                    <ViewModeGlyph mode={view.mode} className="size-[14px]" />
+                    <ViewModeGlyph mode={view.mode} />
                     <span className="tasks-viewdd-name">{view.name}</span>
                   </button>
                 ))}
@@ -3744,7 +3784,7 @@ export function CollectionBrowser({
                     data-testid="fsdb-view-tab"
                     onClick={() => toggleMenu('view')}
                   >
-                    <Squares2X2Icon aria-hidden className="size-[14px]" />
+                    <UiGlyph icon="squares" />
                     <span className="tasks-viewdd-name">未保存</span>
                   </button>
                 ) : null}
@@ -3831,7 +3871,7 @@ export function CollectionBrowser({
                   setSearchOpen((open) => !open)
                 }}
               >
-                <MagnifyingGlassIcon aria-hidden className="size-[14px]" />
+                <UiGlyph icon="search" />
               </button>
               {searchExpanded ? (
                 <input
@@ -3934,7 +3974,7 @@ export function CollectionBrowser({
                 title={sortCustom ? `${sorts.length} 个排序` : '排序'}
                 onClick={() => toggleMenu('sort')}
               >
-                <ArrowsUpDownIcon aria-hidden className="size-[14px]" />
+                <UiGlyph icon="sort" />
                 {sortCustom ? <span className="tasks-sort-dot" aria-hidden /> : null}
               </button>
               {sortMenuOpen ? (
@@ -3959,7 +3999,7 @@ export function CollectionBrowser({
                 title={filterActive ? `${countFilterRules(filterTree)} 条筛选` : '筛选'}
                 onClick={() => toggleMenu('filter')}
               >
-                <FunnelIcon aria-hidden className="size-[14px]" />
+                <UiGlyph icon="filter" />
                 {filterActive ? <span className="tasks-filter-dot" aria-hidden /> : null}
               </button>
               {filterOpen ? (
@@ -4001,7 +4041,7 @@ export function CollectionBrowser({
                 title={activeGroup ? `分组：${activeGroup.field.label ?? activeGroup.key}` : '分组'}
                 onClick={() => toggleMenu('group')}
               >
-                <RectangleStackIcon aria-hidden className="size-[14px]" />
+                <UiGlyph icon="stack" />
                 {grouping ? <span className="tasks-sort-dot" aria-hidden /> : null}
               </button>
               {groupOpen ? (
@@ -4045,7 +4085,7 @@ export function CollectionBrowser({
                 title="可见列"
                 onClick={() => toggleMenu('columns')}
               >
-                <EyeIcon aria-hidden className="size-[14px]" />
+                <UiGlyph icon="eye" />
               </button>
               {columnMenuOpen ? (
                 <HeadlessDismiss
@@ -4084,7 +4124,7 @@ export function CollectionBrowser({
                 title="表格配置"
                 onClick={() => toggleMenu('config')}
               >
-                <AdjustmentsHorizontalIcon aria-hidden className="size-[14px]" />
+                <UiGlyph icon="sliders" />
               </button>
               {configOpen ? (
                 <HeadlessDismiss onDismiss={() => setConfigOpen(false)} insideRef={configRef}>
@@ -4124,7 +4164,7 @@ export function CollectionBrowser({
                 disabled={refreshing}
                 onClick={() => void refreshNow()}
               >
-                <ArrowPathIcon aria-hidden className={`size-[14px]${refreshing ? ' fsdb-spin' : ''}`} />
+                <UiGlyph icon="refresh" className={refreshing ? 'fsdb-spin' : undefined} />
               </button>
               {notice ? (
                 <span className="fsdb-refresh-toast" role="status">
@@ -4164,14 +4204,8 @@ export function CollectionBrowser({
                     }
                     onClick={() => setCreateScopeOpen((open) => !open)}
                   >
-                    {createScope === 'workspace' ? (
-                      <UsersIcon aria-hidden className="size-[14px]" />
-                    ) : createScope === 'shared' ? (
-                      <GlobeAltIcon aria-hidden className="size-[14px]" />
-                    ) : (
-                      <UserIcon aria-hidden className="size-[14px]" />
-                    )}
-                    <ChevronDownIcon aria-hidden className="size-[12px]" />
+                    <UiGlyph icon={createScope === 'workspace' ? 'users' : createScope === 'shared' ? 'globe' : 'user'} />
+                    <UiGlyph icon="chevron-down" />
                   </button>
                   {createScopeOpen ? (
                     <div className="fsdb-create-scope-menu" role="menu">
@@ -4222,8 +4256,138 @@ export function CollectionBrowser({
           </div>
         </div>
 
+      </>
     ),
     [listChromeLock],
+  )
+
+  const listHeaderLock = [
+    Number(nested),
+    Number(viewsOpen),
+    Number(canCreate),
+    Number(viewStarred),
+    activeViewId ?? '',
+    selected?.id ?? '',
+    Number(localData),
+    detailId ?? '',
+    Number(Boolean(detailRow?.builtin)),
+    String(detailRow?.title ?? ''),
+    Number(layoutOpen),
+    Number(inspectorOpen),
+    collectionPath,
+    title,
+    activeView?.name ?? '',
+    crumbs.map((crumb) => `${crumb.kind}:${crumb.id}:${crumb.label}`).join('\n'),
+    views.map((view) => view.id).join(','),
+  ].join('\0')
+  const listHeader = useMemo(
+    () =>
+      nested ? null : (
+        <header className="chat-view-header" data-biu-ignore>
+          <div className="chat-view-header-left">
+            {!viewsOpen ? (
+              <button
+                type="button"
+                className="chat-view-header-expand"
+                title="展开左侧边栏"
+                aria-label="展开左侧边栏"
+                data-testid="header-sidebar-expand"
+                onClick={() => window.dispatchEvent(new Event('biu:expand-shell-sidebar'))}
+              >
+                <UiGlyph icon="chevron-double-right" />
+              </button>
+            ) : null}
+            <CrumbTrail
+              crumbs={crumbs}
+              canCreateView
+              canCreateRecord={canCreate}
+              onCreate={(kind) => {
+                if (kind === 'record') void createRecord()
+                else addEmptyView()
+              }}
+              onPick={(target) => {
+                if (target.kind === 'view' && target.collection === collectionPath) {
+                  const view = views.find((item) => item.id === target.viewId)
+                  if (view) selectView(view)
+                  return
+                }
+                onCrumbTarget?.(target)
+              }}
+              navRef={crumbRef}
+            />
+          </div>
+          <div className="chat-view-header-right">
+            {activeViewId && !selected ? (
+              <button
+                type="button"
+                className={`chat-view-header-expand${viewStarred ? ' is-active' : ''}`}
+                title={viewStarred ? '取消收藏视图' : '收藏视图'}
+                aria-label={viewStarred ? '取消收藏视图' : '收藏视图'}
+                aria-pressed={viewStarred}
+                onClick={() => persistStarredViews(toggleStarredView(getStarredViews(), collectionPath, activeViewId))}
+              >
+                <UiGlyph icon="star" className={viewStarred ? 'text-[#f5b700]' : undefined} />
+              </button>
+            ) : null}
+            {isSystemCollection(collectionPath) || isIndexCollection(collectionPath) || (collectionPath === '/plugins' && detailRow?.builtin === true) ? null : (
+            <ShareButton
+              localOnly={localData}
+              target={
+                detailId
+                  ? {
+                      kind: 'record' as const,
+                      collection: collectionPath,
+                      viewId: activeViewId ?? undefined,
+                      recordId: detailId,
+                      title: String(detailRow?.title ?? title),
+                    }
+                  : !nested && activeViewId
+                    ? {
+                        kind: 'view' as const,
+                        collection: collectionPath,
+                        viewId: activeViewId,
+                        title: activeView?.name ?? title,
+                      }
+                    : null
+              }
+            />
+            )}
+            <div className="fsdb-layout-wrap" ref={layoutRef}>
+              <button
+                type="button"
+                className={`chat-view-header-expand${layoutOpen ? ' is-active' : ''}`}
+                title="配置"
+                aria-label="配置"
+                aria-haspopup="menu"
+                aria-expanded={layoutOpen}
+                data-testid="fsdb-layout-toggle"
+                onClick={() => toggleMenu('layout')}
+              >
+                <UiGlyph icon="sliders" />
+              </button>
+              {layoutOpen ? (
+                <HeadlessDismiss onDismiss={() => setLayoutOpen(false)} insideRef={layoutRef}>
+                  <Suspense fallback={null}>
+                    <LayoutPrefsMenu prefs={pagePrefs} />
+                  </Suspense>
+                </HeadlessDismiss>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              className={`chat-view-header-expand${inspectorOpen ? ' is-active' : ''}`}
+              title={inspectorOpen ? '收起检查器' : '打开检查器'}
+              aria-label={inspectorOpen ? '收起检查器' : '打开检查器'}
+              aria-pressed={inspectorOpen}
+              data-testid="fsdb-inspector-toggle"
+              onClick={() => window.dispatchEvent(new Event('biu:inspector-toggle'))}
+            >
+              <UiGlyph icon={inspectorOpen ? 'chevron-double-right' : 'chevron-double-left'} />
+            </button>
+          </div>
+        </header>
+      ),
+    [listHeaderLock],
   )
 
   tablePaintRef.current = {
@@ -4292,115 +4456,7 @@ export function CollectionBrowser({
         </Suspense>
       ) : (
       <div className="fsdb-right">
-        {nested ? null : (
-        <header className="chat-view-header" data-biu-ignore>
-          <div className="chat-view-header-left">
-            {!viewsOpen ? (
-              <button
-                type="button"
-                className="chat-view-header-expand"
-                title="展开左侧边栏"
-                aria-label="展开左侧边栏"
-                data-testid="header-sidebar-expand"
-                onClick={() => window.dispatchEvent(new Event('biu:expand-shell-sidebar'))}
-              >
-                <ChevronDoubleRightIcon aria-hidden className="size-4" />
-              </button>
-            ) : null}
-            <CrumbTrail
-              crumbs={crumbs}
-              canCreateView
-              canCreateRecord={canCreate}
-              onCreate={(kind) => {
-                if (kind === 'record') void createRecord()
-                else addEmptyView()
-              }}
-              onPick={(target) => {
-                if (target.kind === 'view' && target.collection === collectionPath) {
-                  const view = views.find((item) => item.id === target.viewId)
-                  if (view) selectView(view)
-                  return
-                }
-                onCrumbTarget?.(target)
-              }}
-              navRef={crumbRef}
-            />
-          </div>
-          <div className="chat-view-header-right">
-            {activeViewId && !selected ? (
-              <button
-                type="button"
-                className={`chat-view-header-expand${viewStarred ? ' is-active' : ''}`}
-                title={viewStarred ? '取消收藏视图' : '收藏视图'}
-                aria-label={viewStarred ? '取消收藏视图' : '收藏视图'}
-                aria-pressed={viewStarred}
-                onClick={() => persistStarredViews(toggleStarredView(getStarredViews(), collectionPath, activeViewId))}
-              >
-                <StarIcon aria-hidden className={`size-4${viewStarred ? ' text-[#f5b700]' : ''}`} />
-              </button>
-            ) : null}
-            {isSystemCollection(collectionPath) || isIndexCollection(collectionPath) || (collectionPath === '/plugins' && detailRow?.builtin === true) ? null : (
-            <ShareButton
-              localOnly={localData}
-              target={
-                detailId
-                  ? {
-                      kind: 'record' as const,
-                      collection: collectionPath,
-                      viewId: activeViewId ?? undefined,
-                      recordId: detailId,
-                      title: String(detailRow?.title ?? title),
-                    }
-                  : !nested && activeViewId
-                    ? {
-                        kind: 'view' as const,
-                        collection: collectionPath,
-                        viewId: activeViewId,
-                        title: activeView?.name ?? title,
-                      }
-                    : null
-              }
-            />
-            )}
-            <div className="fsdb-layout-wrap" ref={layoutRef}>
-              <button
-                type="button"
-                className={`chat-view-header-expand${layoutOpen ? ' is-active' : ''}`}
-                title="配置"
-                aria-label="配置"
-                aria-haspopup="menu"
-                aria-expanded={layoutOpen}
-                data-testid="fsdb-layout-toggle"
-                onClick={() => toggleMenu('layout')}
-              >
-                <AdjustmentsHorizontalIcon aria-hidden className="size-4" />
-              </button>
-              {layoutOpen ? (
-                <HeadlessDismiss onDismiss={() => setLayoutOpen(false)} insideRef={layoutRef}>
-                  <Suspense fallback={null}>
-                    <LayoutPrefsMenu prefs={pagePrefs} />
-                  </Suspense>
-                </HeadlessDismiss>
-              ) : null}
-            </div>
-            <button
-              type="button"
-              className={`chat-view-header-expand${inspectorOpen ? ' is-active' : ''}`}
-              title={inspectorOpen ? '收起检查器' : '打开检查器'}
-              aria-label={inspectorOpen ? '收起检查器' : '打开检查器'}
-              aria-pressed={inspectorOpen}
-              data-testid="fsdb-inspector-toggle"
-              onClick={() => window.dispatchEvent(new Event('biu:inspector-toggle'))}
-            >
-              {inspectorOpen ? (
-                <ChevronDoubleRightIcon aria-hidden className="size-4" />
-              ) : (
-                <ChevronDoubleLeftIcon aria-hidden className="size-4" />
-              )}
-            </button>
-          </div>
-        </header>
-        )}
+        {listHeader}
         <div className="fsdb-right-body">
         <div
           key={nested ? 'embed' : `${collectionPath}:${detailId ?? ''}`}
@@ -4408,41 +4464,6 @@ export function CollectionBrowser({
         >
         {!detailId ? (
         <div className="tasks-main fsdb-main">
-        {sheet ? null : (
-        <>
-        <PageBanner
-          value={viewBanner}
-          writable={Boolean(activeViewId)}
-          path={activeViewId ? savedViewRecordPath(collectionPath, activeViewId) : undefined}
-          title={activeView?.name ?? title}
-          onChange={(next) => {
-            if (!activeViewId) return
-            const path = savedViewRecordPath(collectionPath, activeViewId)
-            if (!path) return
-            setViewBanner(next)
-            void readJson<{ value?: { banner?: unknown } }>('/api/db/update', {
-              method: 'POST',
-              headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({ path, content: { banner: next } }),
-            }).then((data) => {
-              setViewBanner(data.value?.banner ?? next)
-            }).catch(() => {
-              setViewBanner(next)
-            })
-          }}
-        />
-        <div className="fsdb-detail-icon-slot">
-          <span className="fsdb-detail-title-icon" aria-hidden>
-            <span className="fsdb-record-mark is-lg" data-icon={idleTableIconKind(currentTable?.view?.icon)} />
-          </span>
-        </div>
-        <div className="fsdb-detail-title-row">
-          <div className="fsdb-detail-title-block">
-          <h1 className="fsdb-detail-title">{activeView?.name ?? title}</h1>
-          </div>
-        </div>
-        </>
-        )}
         {listChrome}
         {error ? <p className="tasks-error">{error}</p> : null}
 
@@ -4597,7 +4618,7 @@ export function CollectionBrowser({
                 disabled={page <= 0}
                 onClick={() => setPage((prev) => Math.max(0, prev - 1))}
               >
-                <ChevronLeftIcon aria-hidden className="size-[14px]" />
+                <UiGlyph icon="chevron-left" />
               </button>
               <button
                 type="button"
@@ -4606,7 +4627,7 @@ export function CollectionBrowser({
                 disabled={total <= 0 || (page + 1) * pageSize >= total || (items.length > 0 && items.length < pageSize)}
                 onClick={() => setPage((prev) => prev + 1)}
               >
-                <ChevronRightIcon aria-hidden className="size-[14px]" />
+                <UiGlyph icon="chevron-right" />
               </button>
             </div>
           </div>

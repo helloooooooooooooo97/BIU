@@ -12,8 +12,6 @@ import {
   PencilSquareIcon,
   PlayIcon,
   StopIcon,
-  TableCellsIcon,
-  ShareIcon,
 } from '@heroicons/react/16/solid'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import type { CollectionSchema, DbRecord, FieldSpec, FieldType } from '@biu/type-file-system'
@@ -60,8 +58,8 @@ export function ModeGlyph({
   const cls = 'size-[14px]'
   const Custom = extra?.find((item) => item.id === id)?.Icon ?? rows?.find((item) => item.id === id)?.Icon
   if (Custom) return <Custom className={cls} />
-  if (id === 'table') return <TableCellsIcon aria-hidden className={cls} />
-  return <ShareIcon aria-hidden className={cls} />
+  if (id === 'table') return <span aria-hidden className="fsdb-ui-glyph" data-icon="table" />
+  return <span aria-hidden className="fsdb-ui-glyph" data-icon="share" />
 }
 
 export const VIEW_MODES: Array<{ id: ViewMode; label: string }> = [

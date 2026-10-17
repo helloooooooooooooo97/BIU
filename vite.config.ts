@@ -7,6 +7,7 @@ import { cordisPluginsVite, linkConfiguredPackages } from './packages/host-plugi
 
 const root = dirname(fileURLToPath(import.meta.url))
 linkConfiguredPackages(root)
+const isVitest = Boolean(process.env.VITEST)
 
 // Vite 自己的 SIGTERM 会等浏览器把连接关完。页面开着时 make restart 就会卡在这里。
 // 先拆掉现有连接，后面的关闭才能马上结束。
@@ -27,8 +28,13 @@ export default defineConfig({
   plugins: [react(), tailwindcss(), releaseDevServerOnStop(), cordisPluginsVite(root)],
   appType: 'spa',
   esbuild: { jsxDev: false },
+  define: isVitest ? {} : { 'process.env.NODE_ENV': JSON.stringify('production') },
   optimizeDeps: {
-    esbuildOptions: { jsx: 'automatic', jsxDev: false },
+    esbuildOptions: {
+      jsx: 'automatic',
+      jsxDev: false,
+      define: isVitest ? {} : { 'process.env.NODE_ENV': '"production"' },
+    },
   },
   resolve: {
     alias: {

@@ -1,3 +1,10 @@
+/** First-paint cells only need a screen of text; CSS overflow hides the rest. */
+export const IDLE_CELL_TEXT_MAX = 80
+
+export function idleClipText(value: string, max = IDLE_CELL_TEXT_MAX) {
+  return value.length > max ? value.slice(0, max) : value
+}
+
 /** Escape text for table idle HTML (td children and quoted attributes). */
 export function escapeTableHtml(value: string) {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -22,7 +29,7 @@ export function idleTitleInnerHtml(label: string, iconKind: string, emoji?: stri
   const mark = emoji
     ? `<span class="fsdb-record-emoji">${escapeTableHtml(emoji)}</span>`
     : `<span class="fsdb-record-mark is-sm" data-icon="${escapeTableHtml(iconKind)}" aria-hidden="true"></span>`
-  return `<span class="fsdb-title-host">${mark}<span class="fsdb-title-text">${escapeTableHtml(label)}</span></span>`
+  return `<span class="fsdb-title-host">${mark}<span class="fsdb-title-text">${escapeTableHtml(idleClipText(label))}</span></span>`
 }
 
 export function idleBoolInnerHtml(on: boolean) {
@@ -31,8 +38,9 @@ export function idleBoolInnerHtml(on: boolean) {
 
 export function idleTextInnerHtml(text: string, extraClass?: string) {
   if (!text) return extraClass ? `<span class="${extraClass}"></span>` : ''
-  if (!extraClass) return escapeTableHtml(text)
-  return `<span class="${extraClass}">${escapeTableHtml(text)}</span>`
+  const clipped = idleClipText(text)
+  if (!extraClass) return escapeTableHtml(clipped)
+  return `<span class="${extraClass}">${escapeTableHtml(clipped)}</span>`
 }
 
 export function idleEmptyUsageInnerHtml() {

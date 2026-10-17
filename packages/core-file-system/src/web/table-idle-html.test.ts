@@ -6,6 +6,8 @@ import {
   idleEmptyUsageInnerHtml,
   idleSelectInnerHtml,
   idleTableRowHtml,
+  IDLE_CELL_TEXT_MAX,
+  idleClipText,
   idleTextInnerHtml,
   idleTitleInnerHtml,
   tableHtmlAttr,
@@ -40,6 +42,9 @@ test('idle cells match the text / bool / usage / facet first paint', () => {
   assert.match(idleSelectInnerHtml('进行中、完成'), /fsdb-select-text/)
   assert.equal(idleTextInnerHtml(''), '')
   assert.equal(idleTextInnerHtml('私人'), '私人')
+  assert.equal(idleClipText('x'.repeat(IDLE_CELL_TEXT_MAX + 12)).length, IDLE_CELL_TEXT_MAX)
+  assert.equal(idleTextInnerHtml('y'.repeat(IDLE_CELL_TEXT_MAX + 12)).length, IDLE_CELL_TEXT_MAX)
+  assert.equal(idleTitleInnerHtml('z'.repeat(IDLE_CELL_TEXT_MAX + 12), 'check').includes('z'.repeat(IDLE_CELL_TEXT_MAX + 1)), false)
 })
 
 test('idle row html is one td per column with data-col-key', () => {
