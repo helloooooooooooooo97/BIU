@@ -22,6 +22,7 @@ import {
   toggleOverlayThread,
 } from '@biu/web-app-shell/chat-overlay'
 import { SessionProjectPanel } from './project-panel.tsx'
+import { getChatConfig } from './chat-config.ts'
 
 type AgentMode = 'minimal' | 'file' | 'standard'
 
@@ -169,9 +170,8 @@ export function ApprovalsRail(props: SlotProps) {
 
   const refreshAgentMode = useCallback(async () => {
     try {
-      const res = await fetch('/api/chat/config')
-      if (!res.ok) return
-      const data = (await res.json()) as { agentMode?: string }
+      const data = await getChatConfig<{ agentMode?: string }>()
+      if (!data) return
       setAgentMode(parseAgentMode(data.agentMode))
     } catch {
       /* host 未就绪 */

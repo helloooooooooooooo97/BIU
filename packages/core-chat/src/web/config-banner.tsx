@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { SlotProps } from '@biu/web-slots'
+import { getChatConfig } from './chat-config.ts'
 
 /** 未配置 API Key 时在对话区提示，避免用户以为模型「没响应」。 */
 export function ChatConfigBanner(_props: SlotProps) {
@@ -9,9 +10,8 @@ export function ChatConfigBanner(_props: SlotProps) {
     let cancelled = false
     async function load() {
       try {
-        const res = await fetch('/api/chat/config')
-        const data = (await res.json()) as { configured?: boolean }
-        if (!cancelled) setConfigured(Boolean(data.configured))
+        const data = await getChatConfig<{ configured?: boolean }>()
+        if (!cancelled) setConfigured(data == null ? null : Boolean(data.configured))
       } catch {
         if (!cancelled) setConfigured(null)
       }

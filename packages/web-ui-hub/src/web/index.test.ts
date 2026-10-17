@@ -14,6 +14,9 @@ import {
   pageRouteNeedsStoreWeb,
   runtimeWebModuleHref,
   runtimeWebPlugin,
+  STORE_WEB_AUTO_MAX_BYTES,
+  storeWebExceedsAutoLimit,
+  storeWebNeedsClick,
   storeWebPluginRequested,
 } from './index.ts'
 import { uiPackageLoaders } from 'virtual:cordis-ui-loaders'
@@ -65,6 +68,33 @@ test('store web plugins are the packed store packages, not core ui', () => {
   assert.equal(storeWebPluginRequested({ id: 'page-excalidraw', packageName: 'store:page-excalidraw' }, ['page-toc']), false)
 })
 
+test('store web auto-load stops before evaluating a large module', async () => {
+  assert.equal(STORE_WEB_AUTO_MAX_BYTES, 400_000)
+  assert.equal(storeWebNeedsClick('page-excalidraw'), true)
+  assert.equal(storeWebNeedsClick('page-toc'), false)
+  const original = globalThis.fetch
+  globalThis.fetch = (async () =>
+    new Response(new Uint8Array(STORE_WEB_AUTO_MAX_BYTES + 8), {
+      status: 200,
+      headers: { 'content-type': 'text/javascript' },
+    })) as typeof fetch
+  try {
+    assert.equal(await storeWebExceedsAutoLimit('http://127.0.0.1/big.js'), true)
+  } finally {
+    globalThis.fetch = original
+  }
+  globalThis.fetch = (async () =>
+    new Response(new Uint8Array(32), {
+      status: 200,
+      headers: { 'content-type': 'text/javascript' },
+    })) as typeof fetch
+  try {
+    assert.equal(await storeWebExceedsAutoLimit('http://127.0.0.1/small.js'), false)
+  } finally {
+    globalThis.fetch = original
+  }
+})
+
 test('runtimeWebPlugin keeps inject when default is apply', () => {
   function apply() {}
   const plugin = runtimeWebPlugin({
@@ -89,9 +119,16 @@ test('ui-hub unloads disabled plugins before importing new ones', async () => {
   assert.match(src, /g\.ReactJSXRuntime/)
   assert.match(src, /biu:enable-page-block-plugin/)
   assert.match(src, /runtimeWebModuleHref/)
-  assert.match(src, /Promise\.all/)
   assert.match(src, /setTimeout\(resolve, 0\)/)
-  assert.match(src, /for \(const \[index, item\] of imported\.entries\(\)\)/)
+  assert.match(src, /for \(const \[index, row\] of pendingStore\.entries\(\)\)/)
+  assert.doesNotMatch(src, /Promise\.all\(\s*pendingStore/)
+  assert.doesNotMatch(src, /imported\.entries/)
+  assert.doesNotMatch(src, /fetch\(runtimeWebModuleHref/)
+  assert.match(src, /STORE_WEB_AUTO_MAX_BYTES/)
+  assert.match(src, /storeWebExceedsAutoLimit/)
+  assert.match(src, /storeWebNeedsClick/)
+  assert.match(src, /phase: 'deferred'/)
+  assert.match(src, /detail\?\.force === true/)
   assert.match(src, /storeWebRequested\.add\(plugin\)/)
   assert.match(src, /storeWebPluginRequested\(row, storeWebRequested\)/)
   assert.match(src, /isStoreWebPlugin/)

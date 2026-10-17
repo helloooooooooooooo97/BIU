@@ -163,6 +163,8 @@ test('settings appearance toggles day and night themes', () => {
   const theme = readFileSync(resolve(import.meta.dirname, './theme.ts'), 'utf8')
   assert.match(theme, /getWorkspaceProfile/)
   assert.doesNotMatch(theme, /fetch\('\/api\/profile'\)/)
+  assert.match(chrome, /getAccountMe/)
+  assert.doesNotMatch(shell, /void sessionView.refreshSessions\(\)/)
   assert.match(css, /\.settings-account-avatar-veil\s*\{/)
   assert.match(chrome, /日间模式/)
   assert.match(chrome, /夜间模式/)

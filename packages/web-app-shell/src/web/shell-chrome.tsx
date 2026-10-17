@@ -212,7 +212,7 @@ export function ShellSettingsAccount() {
       .catch(() => setCloud({ available: false, connected: false, accounts: [] }))
   useEffect(() => {
     if (!token) return
-    void accountFetch(token, '/api/account/me')
+    void getAccountMe(token)
       .then((body) => setAccount({ name: String(body.name ?? body.email ?? ''), email: String(body.email ?? '') }))
       .catch(() => setAccount({ name: '', email: '' }))
     void loadSessions()
@@ -537,7 +537,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     let live = true
     let timer: ReturnType<typeof setTimeout> | undefined
     setVerified(false)
-    const confirm = () => accountFetch(token, '/api/account/me')
+    const confirm = () => getAccountMe(token)
 
     // 网络类失败（dev server 重启、断网、5xx）退避重试。
     // 凭证失效（401/403）不重试 —— 重试也没用，直接清 token。
@@ -826,6 +826,34 @@ async function accountFetch(token: string, path: string, init?: RequestInit) {
   return body as Record<string, unknown>
 }
 
+const ACCOUNT_ME_HOLD_MS = 400
+const accountMeInflight = new Map<string, Promise<Record<string, unknown>>>()
+
+/** One in-flight GET /api/account/me for AuthGate and the workspace switcher. */
+export async function getAccountMe(token: string): Promise<Record<string, unknown>> {
+  const pending = accountMeInflight.get(token)
+  if (pending) return pending
+  let request: Promise<Record<string, unknown>>
+  request = accountFetch(token, '/api/account/me').then(
+    (body) => {
+      setTimeout(() => {
+        if (accountMeInflight.get(token) === request) accountMeInflight.delete(token)
+      }, ACCOUNT_ME_HOLD_MS)
+      return body
+    },
+    (error) => {
+      if (accountMeInflight.get(token) === request) accountMeInflight.delete(token)
+      throw error
+    },
+  )
+  accountMeInflight.set(token, request)
+  return request
+}
+
+export function resetAccountMeGet() {
+  accountMeInflight.clear()
+}
+
 export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSettings?: () => void }) {
   const [workspaces, setWorkspaces] = useState<CollabWorkspace[]>([])
   const [active, setActive] = useState('')
@@ -849,7 +877,7 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
         const [listed, current, me, cloud] = await Promise.all([
           accountFetch(token, '/api/account/workspaces') as Promise<{ workspaces?: CollabWorkspace[] }>,
           accountFetch(token, '/api/account/active') as Promise<{ workspaceId?: string }>,
-          accountFetch(token, '/api/account/me') as Promise<{ email?: string; name?: string; online?: boolean }>,
+          getAccountMe(token) as Promise<{ email?: string; name?: string; online?: boolean }>,
           accountFetch(token, '/api/account/cloud').catch(() => ({})) as Promise<{
             accounts?: Array<{ id: string; email?: string; name?: string; origin?: string; active?: boolean }>
           }>,

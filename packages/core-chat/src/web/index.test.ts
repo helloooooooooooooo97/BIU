@@ -41,6 +41,20 @@ test('one plugin fills thread, trajectory, composer and approvals dock', async (
   assert.deepEqual(usage.props?.().centerKinds, ['session'])
 })
 
+test('composer banner and approvals share GET /api/chat/config', () => {
+  const composer = readFileSync(resolve(import.meta.dirname, './composer.tsx'), 'utf8')
+  const banner = readFileSync(resolve(import.meta.dirname, './config-banner.tsx'), 'utf8')
+  const approvals = readFileSync(resolve(import.meta.dirname, './approvals.tsx'), 'utf8')
+  const config = readFileSync(resolve(import.meta.dirname, './config.tsx'), 'utf8')
+  assert.match(composer, /getChatConfig/)
+  assert.doesNotMatch(composer, /fetch\('\/api\/chat\/config'\)/)
+  assert.match(banner, /getChatConfig/)
+  assert.doesNotMatch(banner, /fetch\('\/api\/chat\/config'\)/)
+  assert.match(approvals, /getChatConfig/)
+  assert.match(config, /seedChatConfig/)
+  assert.match(config, /getChatConfig<ChatPublicConfig>/)
+})
+
 test('chat-ui first paint does not statically import thread, composer, or antd', () => {
   const index = readFileSync(resolve(import.meta.dirname, './index.ts'), 'utf8')
   const chrome = readFileSync(resolve(import.meta.dirname, './sessions-chrome.tsx'), 'utf8')

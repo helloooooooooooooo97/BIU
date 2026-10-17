@@ -675,10 +675,6 @@ function Shell(props: SlotProps) {
   }, [location.pathname, navigate])
 
   useEffect(() => {
-    void sessionView.refreshSessions()
-  }, [sessionView])
-
-  useEffect(() => {
     void projectView.attachSession(sessionId, project)
   }, [sessionId, project, projectView])
 

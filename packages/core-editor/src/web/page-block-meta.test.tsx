@@ -115,6 +115,24 @@ test('loading plugin hides the fence and keeps the block shell', () => {
   assert.equal(container.querySelector('[data-testid="page-block-enable"]'), null)
 })
 
+test('deferred plugins wait for a forced enable click', () => {
+  setPageBlockPluginPhase('page-excalidraw', 'deferred')
+  const seen: Array<{ plugin: string; force: boolean }> = []
+  const onEnable = (event: Event) => {
+    const detail = (event as CustomEvent<{ plugin?: string; force?: boolean }>).detail
+    seen.push({ plugin: String(detail?.plugin ?? ''), force: detail?.force === true })
+  }
+  window.addEventListener(ENABLE_PAGE_BLOCK_PLUGIN, onEnable)
+  requestEnablePageBlockPlugin('page-excalidraw', 'excalidraw')
+  assert.deepEqual(seen, [])
+  requestEnablePageBlockPlugin('page-excalidraw', 'excalidraw', { force: true })
+  window.removeEventListener(ENABLE_PAGE_BLOCK_PLUGIN, onEnable)
+  assert.deepEqual(seen, [{ plugin: 'page-excalidraw', force: true }])
+  setPageBlockPluginPhase('page-excalidraw', 'idle')
+  const pending = (globalThis as typeof globalThis & { __biuPendingPageBlockEnables?: Map<string, string> }).__biuPendingPageBlockEnables
+  pending?.delete('page-excalidraw')
+})
+
 test('enable button only dispatches the stored plugin id', () => {
   setPageBlockPluginPhase('page-excalidraw', 'idle')
   const seen: string[] = []

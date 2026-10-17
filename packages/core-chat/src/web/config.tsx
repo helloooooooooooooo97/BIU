@@ -10,6 +10,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { CheckIcon, ChevronDownIcon, ArrowPathIcon, PlusIcon, MagnifyingGlassIcon, SignalSlashIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import { HeadlessDismiss } from '@biu/public-ui'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
+import { getChatConfig, seedChatConfig } from './chat-config.ts'
 
 type ChatProvider = 'deepseek' | 'openai' | 'anthropic'
 
@@ -255,6 +256,7 @@ export function ChatConfig(props?: { onClose?: () => void }) {
     const ep = eps.find((e) => e.id === eid)
     setUrlDraft(ep?.baseUrl ?? data.baseUrl ?? '')
     setKeyDraft('')
+    seedChatConfig(data as unknown as Record<string, unknown>)
     // 通知 Composer 等刷新模型目录
     window.dispatchEvent(new CustomEvent('biu:chat-config-changed'))
   }
@@ -272,9 +274,11 @@ export function ChatConfig(props?: { onClose?: () => void }) {
   }
 
   useEffect(() => {
-    void fetch('/api/chat/config')
-      .then((res) => res.json())
-      .then((data: ChatPublicConfig) => applyPublic(data))
+    void getChatConfig<ChatPublicConfig>()
+      .then((data) => {
+        if (data) applyPublic(data)
+        else setError('加载配置失败')
+      })
       .catch(() => setError('加载配置失败'))
   }, [])
 

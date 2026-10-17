@@ -13,7 +13,7 @@ function pendingPageBlockEnables() {
   return host[PENDING_PAGE_BLOCK_ENABLES]
 }
 
-export type PageBlockPluginPhase = 'idle' | 'loading' | 'failed' | 'ready'
+export type PageBlockPluginPhase = 'idle' | 'loading' | 'failed' | 'ready' | 'deferred'
 
 const phases = new Map<string, PageBlockPluginPhase>()
 let phaseVersion = 0
@@ -53,7 +53,10 @@ if (typeof window !== 'undefined') {
     const detail = (event as CustomEvent<{ plugin?: unknown; phase?: unknown }>).detail
     const plugin = typeof detail?.plugin === 'string' ? detail.plugin.trim() : ''
     const phase = detail?.phase
-    if (!plugin || (phase !== 'ready' && phase !== 'failed' && phase !== 'loading' && phase !== 'idle')) return
+    if (
+      !plugin ||
+      (phase !== 'ready' && phase !== 'failed' && phase !== 'loading' && phase !== 'idle' && phase !== 'deferred')
+    ) return
     if (phase === 'ready' || phase === 'failed') pendingPageBlockEnables().delete(plugin)
     setPageBlockPluginPhase(plugin, phase)
   })
@@ -174,12 +177,13 @@ export function blockDataUnchanged(current: Record<string, unknown>, next: Recor
   return true
 }
 
-export function requestEnablePageBlockPlugin(plugin: string, kind: string) {
+export function requestEnablePageBlockPlugin(plugin: string, kind: string, opts?: { force?: boolean }) {
   const id = plugin.trim()
   if (!id || typeof window === 'undefined') return
   if (pageBlockPluginPhase(id) === 'loading') return
+  if (!opts?.force && pageBlockPluginPhase(id) === 'deferred') return
   pendingPageBlockEnables().set(id, kind || '')
   clientLog('info', 'page-block', `${kind || 'unknown'}（${id}）还没有视图，请求启用`)
   setPageBlockPluginPhase(id, 'loading')
-  window.dispatchEvent(new CustomEvent(ENABLE_PAGE_BLOCK_PLUGIN, { detail: { plugin: id, kind } }))
+  window.dispatchEvent(new CustomEvent(ENABLE_PAGE_BLOCK_PLUGIN, { detail: { plugin: id, kind, force: Boolean(opts?.force) } }))
 }

@@ -25,6 +25,7 @@ import { ImageThumbs } from './image-thumbs.tsx'
 import { collectClipboardImages, collectImageFiles } from './clipboard-images.ts'
 import { revealOverlayThread, isComposerFocusPending } from '@biu/web-app-shell/chat-overlay'
 import { shouldNavigateToSession } from './composer-nav.ts'
+import { getChatConfig } from './chat-config.ts'
 
 /** 按键不驱动受控 value；仅防抖更新发送按钮可用态，避免每个字符打穿 React 渲染。 */
 const INPUT_DEBOUNCE_MS = 120
@@ -299,9 +300,10 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
     }
 
     function reload() {
-      void fetch('/api/chat/config')
-        .then((res) => res.json())
-        .then(applyConfig)
+      void getChatConfig<Parameters<typeof applyConfig>[0]>()
+        .then((data) => {
+          if (data) applyConfig(data)
+        })
         .catch(() => {
           /* ignore */
         })
@@ -319,51 +321,49 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
   useEffect(() => {
     if (!modelOpen) return
     // 打开下拉时强制刷新，保证 Settings 里新加的模型立刻可见
-    void fetch('/api/chat/config')
-      .then((res) => res.json())
-      .then(
-        (data: {
-          provider?: string
-          model?: string
-          providers?: Record<string, { configured?: boolean }>
-          endpoints?: Array<{ id: string; label?: string; configured?: boolean }>
-          modelCatalog?: Array<{
-            id: string
-            label: string
-            provider: string
-            endpointId?: string
-            model: string
-            note?: string
-          }>
-        }) => {
-          if (Array.isArray(data.modelCatalog) && data.modelCatalog.length) {
-            const catalog = data.modelCatalog.map((m) => ({
-              id: m.id,
-              label: m.label,
-              provider: m.provider as ChatProvider,
-              endpointId: m.endpointId || m.provider,
-              model: m.model,
-              ...(m.note ? { note: m.note } : {}),
-            }))
-            setAllModels(catalog)
-            if (data.provider && data.model)
-              setModelOption(matchModelOption(catalog, data.provider, data.model))
+    void getChatConfig({ refresh: true })
+      .then((data) => {
+        if (!data) return
+        const modelCatalog = data.modelCatalog as
+          | Array<{
+              id: string
+              label: string
+              provider: string
+              endpointId?: string
+              model: string
+              note?: string
+            }>
+          | undefined
+        if (Array.isArray(modelCatalog) && modelCatalog.length) {
+          const catalog = modelCatalog.map((m) => ({
+            id: m.id,
+            label: m.label,
+            provider: m.provider as ChatProvider,
+            endpointId: m.endpointId || m.provider,
+            model: m.model,
+            ...(m.note ? { note: m.note } : {}),
+          }))
+          setAllModels(catalog)
+          if (typeof data.provider === 'string' && typeof data.model === 'string') {
+            setModelOption(matchModelOption(catalog, data.provider, data.model))
           }
-          const cfg: Record<string, boolean> = {}
-          const labels: Record<string, string> = { ...endpointLabels }
-          if (Array.isArray(data.endpoints)) {
-            for (const ep of data.endpoints) {
-              cfg[ep.id] = Boolean(ep?.configured)
-              if (ep.label) labels[ep.id] = ep.label
-            }
+        }
+        const cfg: Record<string, boolean> = {}
+        const labels: Record<string, string> = { ...endpointLabels }
+        const endpoints = data.endpoints as Array<{ id: string; label?: string; configured?: boolean }> | undefined
+        if (Array.isArray(endpoints)) {
+          for (const ep of endpoints) {
+            cfg[ep.id] = Boolean(ep?.configured)
+            if (ep.label) labels[ep.id] = ep.label
           }
-          if (data.providers) {
-            for (const [k, v] of Object.entries(data.providers)) cfg[k] = Boolean(v?.configured)
-          }
-          if (Object.keys(cfg).length) setModelProviders(cfg)
-          setEndpointLabels(labels)
-        },
-      )
+        }
+        const providers = data.providers as Record<string, { configured?: boolean }> | undefined
+        if (providers) {
+          for (const [k, v] of Object.entries(providers)) cfg[k] = Boolean(v?.configured)
+        }
+        if (Object.keys(cfg).length) setModelProviders(cfg)
+        setEndpointLabels(labels)
+      })
       .catch(() => {
         /* ignore */
       })
@@ -665,10 +665,9 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
     const caret = editorCaretPlain(editor)
     setSlash(readSlashAtCursor(caret.value, caret.cursor))
     if (catalog.length === 0) {
-      void fetch('/api/chat/config')
-        .then((res) => res.json())
-        .then((data: { toolCatalog?: ToolCatalogItem[] }) => {
-          const items = Array.isArray(data.toolCatalog) ? data.toolCatalog : []
+      void getChatConfig<{ toolCatalog?: ToolCatalogItem[] }>()
+        .then((data) => {
+          const items = Array.isArray(data?.toolCatalog) ? data.toolCatalog : []
           setCatalog(items.filter((item) => item?.name))
         })
         .catch(() => {

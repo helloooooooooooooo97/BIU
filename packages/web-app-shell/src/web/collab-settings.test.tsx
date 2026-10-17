@@ -13,10 +13,12 @@ import {
   ShellWorkspaceSwitcher,
   defaultSessionPath,
   readAccountToken,
+  resetAccountMeGet,
 } from './shell-chrome.tsx'
 
 afterEach(() => {
   window.history.replaceState({}, '', '/')
+  resetAccountMeGet()
   cleanup()
 })
 
