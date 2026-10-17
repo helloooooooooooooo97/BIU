@@ -89,7 +89,7 @@ test('collection browser renders extra views registered for that path', () => {
   assert.doesNotMatch(page, /DEFAULT_ROW_VIEW/)
   assert.match(browser, /<CollectionRowsShell/)
   assert.match(browser, /data-testid="fsdb-mode-plus"/)
-  const modeMenu = browser.slice(browser.indexOf('查看模式'), browser.indexOf('data-testid="fsdb-mode-plus"') + 80)
+  const modeMenu = browser.slice(browser.indexOf('aria-label="查看模式"'), browser.indexOf('data-testid="fsdb-mode-plus"') + 80)
   assert.match(modeMenu, /VIEW_MODES\.map/)
   assert.match(modeMenu, /extraViews\.map/)
   assert.match(modeMenu, /extraRows\.map/)

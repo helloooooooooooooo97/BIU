@@ -96,7 +96,7 @@ import { ShareScopeLabel } from './share-scope-label.tsx'
 import { ensureFsdbStyle } from './fsdb-style.ts'
 import { workspaceColumnsForLocation } from './workspace-columns.ts'
 import { PageBanner } from './page-banner.tsx'
-import { TableGlyph, ViewModeGlyph, idleTableIconKind } from './nav-glyphs.tsx'
+import { ViewModeGlyph, idleTableIconKind } from './nav-glyphs.tsx'
 import { isIndexCollection, isSystemCollection } from './database-path.ts'
 import { countFittingViewTabs, splitVisibleViews } from './view-tabs.ts'
 import { getDatabaseUi } from './database-ui.ts'
@@ -1683,7 +1683,7 @@ export function CollectionBrowser({
     if (refreshing) return
     setRefreshing(true)
     const started = Date.now()
-    const ok = await reload()
+    const ok = await reloadRef.current()
     const wait = Math.max(0, 480 - (Date.now() - started))
     if (wait) await new Promise((resolve) => window.setTimeout(resolve, wait))
     setRefreshing(false)
@@ -2804,7 +2804,7 @@ export function CollectionBrowser({
       setItems((prev) => [value, ...prev.filter((item) => item.id !== id)])
       setTotal((count) => count + 1)
       quietUntil.current = 0
-      void reload()
+      void reloadRef.current()
       window.setTimeout(() => showRecordInInspector(collectionPath, id), 0)
     } catch (err) {
       setError(String(err))
@@ -3667,223 +3667,49 @@ export function CollectionBrowser({
     sheet,
   ])
 
-  tablePaintRef.current = {
-    colSpan: tablePaintRef.current.colSpan,
-    error,
-    renderNode: renderPaintNode,
-  }
-  tableChromeRef.current = {
-    paintHeadTh: (col) => paintHeadTh(col as (typeof columns)[number]),
-    onPointerDown: onTablePointerDown,
-    onPointerMove: onTablePointerMove,
-    onClick: onTableClick,
-    onMouseOver: (event) => {
-      const hit = event.target as HTMLElement | null
-      const tr = hit?.closest('tr')
-      if (!tr || !event.currentTarget.contains(tr)) return
-      if (tr.closest('thead')) paintCheckHover('head')
-      else paintCheckHover(tr.dataset.recordId ?? null)
-    },
-  }
-
-  return (
-    <div
-      ref={pageRef}
-      className={`fsdb-page tasks-root${nested ? ' inspector-database-page' : ''}${sheet ? ' is-sheet' : ''}${!sheet && pageWidth === 'full' ? ' is-full-width' : ''}${collectionPath === '/plugins' ? ' is-plugins' : ''}`}
-      data-testid={embed ? 'inspector-database' : sheet ? 'fsdb-collect-sheet' : undefined}
-    >
-      {!nested ? (
-        <Suspense fallback={null}>
-        <IdleDataSidebar
-          tables={tables}
-          collectionPath={collectionPath}
-          title={title}
-          views={views}
-          activeViewId={activeViewId}
-          onOpenTable={onOpenTable}
-          onApplyView={(view) => {
-            selectView(view)
-            setDetailId(null)
-          }}
-          onRenameView={renameView}
-          onDeleteView={deleteView}
-          onAddView={addEmptyView}
-          onOpenScopeHome={onOpenScopeHome}
-          onOpenRecord={(path, view, recordId, row) => {
-            if (path === collectionPath) {
-              applyView(view)
-              setOpenDetailId(recordId)
-              if (row) setDetailRow(row)
-            }
-            queueMicrotask(() => onOpenRecord?.(recordId, view.id, path))
-          }}
-          expandedViewKey={expandedViewKey}
-          onExpandedViewKeyChange={onExpandedViewKeyChange}
-          onCollapse={toggleViewsOpen}
-        />
-        </Suspense>
-      ) : null}
-      {scopeHome && !nested ? (
-        <Suspense fallback={null}>
-          <ScopeOverview
-            tables={tables}
-            onOpenTable={(path, viewId) => onOpenTable?.(path, viewId)}
-            onOpenRecord={(path, viewId, recordId) => onOpenRecord?.(recordId, viewId, path)}
-          />
-        </Suspense>
-      ) : (
-      <div className="fsdb-right">
-        {nested ? null : (
-        <header className="chat-view-header" data-biu-ignore>
-          <div className="chat-view-header-left">
-            {!viewsOpen ? (
-              <button
-                type="button"
-                className="chat-view-header-expand"
-                title="展开左侧边栏"
-                aria-label="展开左侧边栏"
-                data-testid="header-sidebar-expand"
-                onClick={() => window.dispatchEvent(new Event('biu:expand-shell-sidebar'))}
-              >
-                <ChevronDoubleRightIcon aria-hidden className="size-4" />
-              </button>
-            ) : null}
-            <CrumbTrail
-              crumbs={crumbs}
-              canCreateView
-              canCreateRecord={canCreate}
-              onCreate={(kind) => {
-                if (kind === 'record') void createRecord()
-                else addEmptyView()
-              }}
-              onPick={(target) => {
-                if (target.kind === 'view' && target.collection === collectionPath) {
-                  const view = views.find((item) => item.id === target.viewId)
-                  if (view) selectView(view)
-                  return
-                }
-                onCrumbTarget?.(target)
-              }}
-              navRef={crumbRef}
-            />
-          </div>
-          <div className="chat-view-header-right">
-            {activeViewId && !selected ? (
-              <button
-                type="button"
-                className={`chat-view-header-expand${viewStarred ? ' is-active' : ''}`}
-                title={viewStarred ? '取消收藏视图' : '收藏视图'}
-                aria-label={viewStarred ? '取消收藏视图' : '收藏视图'}
-                aria-pressed={viewStarred}
-                onClick={() => persistStarredViews(toggleStarredView(getStarredViews(), collectionPath, activeViewId))}
-              >
-                <StarIcon aria-hidden className={`size-4${viewStarred ? ' text-[#f5b700]' : ''}`} />
-              </button>
-            ) : null}
-            {isSystemCollection(collectionPath) || isIndexCollection(collectionPath) || (collectionPath === '/plugins' && detailRow?.builtin === true) ? null : (
-            <ShareButton
-              localOnly={localData}
-              target={
-                detailId
-                  ? {
-                      kind: 'record' as const,
-                      collection: collectionPath,
-                      viewId: activeViewId ?? undefined,
-                      recordId: detailId,
-                      title: String(detailRow?.title ?? title),
-                    }
-                  : !nested && activeViewId
-                    ? {
-                        kind: 'view' as const,
-                        collection: collectionPath,
-                        viewId: activeViewId,
-                        title: activeView?.name ?? title,
-                      }
-                    : null
-              }
-            />
-            )}
-            <div className="fsdb-layout-wrap" ref={layoutRef}>
-              <button
-                type="button"
-                className={`chat-view-header-expand${layoutOpen ? ' is-active' : ''}`}
-                title="配置"
-                aria-label="配置"
-                aria-haspopup="menu"
-                aria-expanded={layoutOpen}
-                data-testid="fsdb-layout-toggle"
-                onClick={() => toggleMenu('layout')}
-              >
-                <AdjustmentsHorizontalIcon aria-hidden className="size-4" />
-              </button>
-              {layoutOpen ? (
-                <HeadlessDismiss onDismiss={() => setLayoutOpen(false)} insideRef={layoutRef}>
-                  <Suspense fallback={null}>
-                    <LayoutPrefsMenu prefs={pagePrefs} />
-                  </Suspense>
-                </HeadlessDismiss>
-              ) : null}
-            </div>
-            <button
-              type="button"
-              className={`chat-view-header-expand${inspectorOpen ? ' is-active' : ''}`}
-              title={inspectorOpen ? '收起检查器' : '打开检查器'}
-              aria-label={inspectorOpen ? '收起检查器' : '打开检查器'}
-              aria-pressed={inspectorOpen}
-              data-testid="fsdb-inspector-toggle"
-              onClick={() => window.dispatchEvent(new Event('biu:inspector-toggle'))}
-            >
-              {inspectorOpen ? (
-                <ChevronDoubleRightIcon aria-hidden className="size-4" />
-              ) : (
-                <ChevronDoubleLeftIcon aria-hidden className="size-4" />
-              )}
-            </button>
-          </div>
-        </header>
-        )}
-        <div className="fsdb-right-body">
-        <div
-          key={nested ? 'embed' : `${collectionPath}:${detailId ?? ''}`}
-          className="app-pane-in"
-        >
-        {!detailId ? (
-        <div className="tasks-main fsdb-main">
-        {sheet ? null : (
-        <>
-        <PageBanner
-          value={viewBanner}
-          writable={Boolean(activeViewId)}
-          path={activeViewId ? savedViewRecordPath(collectionPath, activeViewId) : undefined}
-          title={activeView?.name ?? title}
-          onChange={(next) => {
-            if (!activeViewId) return
-            const path = savedViewRecordPath(collectionPath, activeViewId)
-            if (!path) return
-            setViewBanner(next)
-            void readJson<{ value?: { banner?: unknown } }>('/api/db/update', {
-              method: 'POST',
-              headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({ path, content: { banner: next } }),
-            }).then((data) => {
-              setViewBanner(data.value?.banner ?? next)
-            }).catch(() => {
-              setViewBanner(next)
-            })
-          }}
-        />
-        <div className="fsdb-detail-icon-slot">
-          <span className="fsdb-detail-title-icon" aria-hidden>
-            <TableGlyph icon={currentTable?.view?.icon} className="size-16" />
-          </span>
-        </div>
-        <div className="fsdb-detail-title-row">
-          <div className="fsdb-detail-title-block">
-          <h1 className="fsdb-detail-title">{activeView?.name ?? title}</h1>
-          </div>
-        </div>
-        </>
-        )}
+  const listChromeLock = [
+    Number(sheet),
+    Number(searchExpanded),
+    query,
+    Number(viewMenuOpen),
+    Number(modeMenuOpen),
+    Number(sortMenuOpen),
+    Number(filterOpen),
+    Number(groupOpen),
+    Number(columnMenuOpen),
+    Number(configOpen),
+    Number(createScopeOpen),
+    createScope,
+    Number(localData),
+    Number(canCreate),
+    Number(refreshing),
+    notice,
+    activeViewId ?? '',
+    views.map((view) => `${view.id}:${view.name}:${view.builtin ? 1 : 0}`).join('\n'),
+    lockedSource,
+    lockedKind,
+    lockedKindLabel,
+    mode,
+    extraViews.map((item) => item.id).join(','),
+    extraRows.map((item) => item.id).join(','),
+    Number(sortCustom),
+    sortsStateKey(sorts),
+    Number(filterActive),
+    filterTreeStateKey(filterTree),
+    Number(grouping),
+    groupBy,
+    Number(wrapCells),
+    Number(truncateCells),
+    Number(treeable),
+    Number(showTree),
+    columns.map((col) => col.key).join(','),
+    allColumnKeys.join(','),
+    schemaFingerprint(schema),
+    facetCatalog.map((pack) => pack.id).join(','),
+    filterOpen ? recordsFingerprint(items) : '',
+  ].join('\0')
+  const listChrome = useMemo(
+    () => (
         <div className="tasks-toolbar" ref={toolbarRef} data-biu-ignore>
           <div className="tasks-toolbar-left">
             {sheet ? null : (
@@ -4396,6 +4222,228 @@ export function CollectionBrowser({
           </div>
         </div>
 
+    ),
+    [listChromeLock],
+  )
+
+  tablePaintRef.current = {
+    colSpan: tablePaintRef.current.colSpan,
+    error,
+    renderNode: renderPaintNode,
+  }
+  tableChromeRef.current = {
+    paintHeadTh: (col) => paintHeadTh(col as (typeof columns)[number]),
+    onPointerDown: onTablePointerDown,
+    onPointerMove: onTablePointerMove,
+    onClick: onTableClick,
+    onMouseOver: (event) => {
+      const hit = event.target as HTMLElement | null
+      const tr = hit?.closest('tr')
+      if (!tr || !event.currentTarget.contains(tr)) return
+      if (tr.closest('thead')) paintCheckHover('head')
+      else paintCheckHover(tr.dataset.recordId ?? null)
+    },
+  }
+
+  return (
+    <div
+      ref={pageRef}
+      className={`fsdb-page tasks-root${nested ? ' inspector-database-page' : ''}${sheet ? ' is-sheet' : ''}${!sheet && pageWidth === 'full' ? ' is-full-width' : ''}${collectionPath === '/plugins' ? ' is-plugins' : ''}`}
+      data-testid={embed ? 'inspector-database' : sheet ? 'fsdb-collect-sheet' : undefined}
+    >
+      {!nested ? (
+        <Suspense fallback={null}>
+        <IdleDataSidebar
+          tables={tables}
+          collectionPath={collectionPath}
+          title={title}
+          views={views}
+          activeViewId={activeViewId}
+          onOpenTable={onOpenTable}
+          onApplyView={(view) => {
+            selectView(view)
+            setDetailId(null)
+          }}
+          onRenameView={renameView}
+          onDeleteView={deleteView}
+          onAddView={addEmptyView}
+          onOpenScopeHome={onOpenScopeHome}
+          onOpenRecord={(path, view, recordId, row) => {
+            if (path === collectionPath) {
+              applyView(view)
+              setOpenDetailId(recordId)
+              if (row) setDetailRow(row)
+            }
+            queueMicrotask(() => onOpenRecord?.(recordId, view.id, path))
+          }}
+          expandedViewKey={expandedViewKey}
+          onExpandedViewKeyChange={onExpandedViewKeyChange}
+          onCollapse={toggleViewsOpen}
+        />
+        </Suspense>
+      ) : null}
+      {scopeHome && !nested ? (
+        <Suspense fallback={null}>
+          <ScopeOverview
+            tables={tables}
+            onOpenTable={(path, viewId) => onOpenTable?.(path, viewId)}
+            onOpenRecord={(path, viewId, recordId) => onOpenRecord?.(recordId, viewId, path)}
+          />
+        </Suspense>
+      ) : (
+      <div className="fsdb-right">
+        {nested ? null : (
+        <header className="chat-view-header" data-biu-ignore>
+          <div className="chat-view-header-left">
+            {!viewsOpen ? (
+              <button
+                type="button"
+                className="chat-view-header-expand"
+                title="展开左侧边栏"
+                aria-label="展开左侧边栏"
+                data-testid="header-sidebar-expand"
+                onClick={() => window.dispatchEvent(new Event('biu:expand-shell-sidebar'))}
+              >
+                <ChevronDoubleRightIcon aria-hidden className="size-4" />
+              </button>
+            ) : null}
+            <CrumbTrail
+              crumbs={crumbs}
+              canCreateView
+              canCreateRecord={canCreate}
+              onCreate={(kind) => {
+                if (kind === 'record') void createRecord()
+                else addEmptyView()
+              }}
+              onPick={(target) => {
+                if (target.kind === 'view' && target.collection === collectionPath) {
+                  const view = views.find((item) => item.id === target.viewId)
+                  if (view) selectView(view)
+                  return
+                }
+                onCrumbTarget?.(target)
+              }}
+              navRef={crumbRef}
+            />
+          </div>
+          <div className="chat-view-header-right">
+            {activeViewId && !selected ? (
+              <button
+                type="button"
+                className={`chat-view-header-expand${viewStarred ? ' is-active' : ''}`}
+                title={viewStarred ? '取消收藏视图' : '收藏视图'}
+                aria-label={viewStarred ? '取消收藏视图' : '收藏视图'}
+                aria-pressed={viewStarred}
+                onClick={() => persistStarredViews(toggleStarredView(getStarredViews(), collectionPath, activeViewId))}
+              >
+                <StarIcon aria-hidden className={`size-4${viewStarred ? ' text-[#f5b700]' : ''}`} />
+              </button>
+            ) : null}
+            {isSystemCollection(collectionPath) || isIndexCollection(collectionPath) || (collectionPath === '/plugins' && detailRow?.builtin === true) ? null : (
+            <ShareButton
+              localOnly={localData}
+              target={
+                detailId
+                  ? {
+                      kind: 'record' as const,
+                      collection: collectionPath,
+                      viewId: activeViewId ?? undefined,
+                      recordId: detailId,
+                      title: String(detailRow?.title ?? title),
+                    }
+                  : !nested && activeViewId
+                    ? {
+                        kind: 'view' as const,
+                        collection: collectionPath,
+                        viewId: activeViewId,
+                        title: activeView?.name ?? title,
+                      }
+                    : null
+              }
+            />
+            )}
+            <div className="fsdb-layout-wrap" ref={layoutRef}>
+              <button
+                type="button"
+                className={`chat-view-header-expand${layoutOpen ? ' is-active' : ''}`}
+                title="配置"
+                aria-label="配置"
+                aria-haspopup="menu"
+                aria-expanded={layoutOpen}
+                data-testid="fsdb-layout-toggle"
+                onClick={() => toggleMenu('layout')}
+              >
+                <AdjustmentsHorizontalIcon aria-hidden className="size-4" />
+              </button>
+              {layoutOpen ? (
+                <HeadlessDismiss onDismiss={() => setLayoutOpen(false)} insideRef={layoutRef}>
+                  <Suspense fallback={null}>
+                    <LayoutPrefsMenu prefs={pagePrefs} />
+                  </Suspense>
+                </HeadlessDismiss>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              className={`chat-view-header-expand${inspectorOpen ? ' is-active' : ''}`}
+              title={inspectorOpen ? '收起检查器' : '打开检查器'}
+              aria-label={inspectorOpen ? '收起检查器' : '打开检查器'}
+              aria-pressed={inspectorOpen}
+              data-testid="fsdb-inspector-toggle"
+              onClick={() => window.dispatchEvent(new Event('biu:inspector-toggle'))}
+            >
+              {inspectorOpen ? (
+                <ChevronDoubleRightIcon aria-hidden className="size-4" />
+              ) : (
+                <ChevronDoubleLeftIcon aria-hidden className="size-4" />
+              )}
+            </button>
+          </div>
+        </header>
+        )}
+        <div className="fsdb-right-body">
+        <div
+          key={nested ? 'embed' : `${collectionPath}:${detailId ?? ''}`}
+          className="app-pane-in"
+        >
+        {!detailId ? (
+        <div className="tasks-main fsdb-main">
+        {sheet ? null : (
+        <>
+        <PageBanner
+          value={viewBanner}
+          writable={Boolean(activeViewId)}
+          path={activeViewId ? savedViewRecordPath(collectionPath, activeViewId) : undefined}
+          title={activeView?.name ?? title}
+          onChange={(next) => {
+            if (!activeViewId) return
+            const path = savedViewRecordPath(collectionPath, activeViewId)
+            if (!path) return
+            setViewBanner(next)
+            void readJson<{ value?: { banner?: unknown } }>('/api/db/update', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ path, content: { banner: next } }),
+            }).then((data) => {
+              setViewBanner(data.value?.banner ?? next)
+            }).catch(() => {
+              setViewBanner(next)
+            })
+          }}
+        />
+        <div className="fsdb-detail-icon-slot">
+          <span className="fsdb-detail-title-icon" aria-hidden>
+            <span className="fsdb-record-mark is-lg" data-icon={idleTableIconKind(currentTable?.view?.icon)} />
+          </span>
+        </div>
+        <div className="fsdb-detail-title-row">
+          <div className="fsdb-detail-title-block">
+          <h1 className="fsdb-detail-title">{activeView?.name ?? title}</h1>
+          </div>
+        </div>
+        </>
+        )}
+        {listChrome}
         {error ? <p className="tasks-error">{error}</p> : null}
 
         <div className="fsdb-workspace">

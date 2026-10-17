@@ -5,25 +5,15 @@ import {
   ArrowDownTrayIcon,
   ArrowPathIcon,
   ArrowUpTrayIcon,
-  Bars3BottomLeftIcon,
   BoltIcon,
-  CalendarDaysIcon,
   ChatBubbleLeftRightIcon,
   CheckIcon,
-  DocumentTextIcon,
-  HashtagIcon,
-  LinkIcon,
-  ListBulletIcon,
-  PaperClipIcon,
   PaperAirplaneIcon,
   PencilSquareIcon,
-  PhotoIcon,
   PlayIcon,
-  RectangleStackIcon,
   StopIcon,
   TableCellsIcon,
   ShareIcon,
-  UserIcon,
 } from '@heroicons/react/16/solid'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import type { CollectionSchema, DbRecord, FieldSpec, FieldType } from '@biu/type-file-system'
@@ -117,22 +107,20 @@ export function draftFromRecord(schema: CollectionSchema, row: DbRecord, bodyKey
   return next
 }
 
+export function fieldGlyphKind(kind: FieldType) {
+  if (kind === 'person') return 'person'
+  if (kind === 'datetime') return 'date'
+  if (kind === 'number') return 'num'
+  if (kind === 'action') return 'play'
+  if (kind === 'select' || kind === 'multi-select' || kind === 'facet') return 'stack'
+  if (kind === 'url' || kind === 'ref' || kind === 'multi-ref') return 'link'
+  if (kind === 'image' || kind === 'attachment' || kind === 'file') return 'file'
+  return 'text'
+}
+
 export function FieldGlyph({ kind }: { kind: FieldType }) {
-  const cls = 'size-[14px] shrink-0'
   if (kind === 'boolean') return <span aria-hidden className="fsdb-field-bool-glyph"><BoolBox on={false} /></span>
-  if (kind === 'select') return <ListBulletIcon aria-hidden className={cls} />
-  if (kind === 'multi-select') return <RectangleStackIcon aria-hidden className={cls} />
-  if (kind === 'datetime') return <CalendarDaysIcon aria-hidden className={cls} />
-  if (kind === 'number') return <HashtagIcon aria-hidden className={cls} />
-  if (kind === 'url') return <LinkIcon aria-hidden className={cls} />
-  if (kind === 'image') return <PhotoIcon aria-hidden className={cls} />
-  if (kind === 'attachment') return <PaperClipIcon aria-hidden className={cls} />
-  if (kind === 'file') return <DocumentTextIcon aria-hidden className={cls} />
-  if (kind === 'facet') return <RectangleStackIcon aria-hidden className={cls} />
-  if (kind === 'person') return <UserIcon aria-hidden className={cls} />
-  if (kind === 'ref' || kind === 'multi-ref') return <ShareIcon aria-hidden className={cls} />
-  if (kind === 'action') return <PlayIcon aria-hidden className={cls} />
-  return <Bars3BottomLeftIcon aria-hidden className={cls} />
+  return <span aria-hidden className="fsdb-field-glyph" data-kind={fieldGlyphKind(kind)} />
 }
 
 export function BoolCell({

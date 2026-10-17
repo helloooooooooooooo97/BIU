@@ -26,6 +26,15 @@ function releaseDevServerOnStop() {
 export default defineConfig({
   plugins: [react(), tailwindcss(), releaseDevServerOnStop(), cordisPluginsVite(root)],
   appType: 'spa',
+  esbuild: { jsxDev: false },
+  optimizeDeps: {
+    esbuildOptions: { jsx: 'automatic', jsxDev: false },
+  },
+  resolve: {
+    alias: {
+      'react/jsx-dev-runtime': join(root, 'jsx-prod-dev-runtime.ts'),
+    },
+  },
   server: {
     port: Number(process.env.BIU_WEB_PORT || 5173),
     strictPort: true,
