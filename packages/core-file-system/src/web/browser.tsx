@@ -27,8 +27,9 @@ import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { BoolBox } from '@biu/public-ui/bool-box'
 import { ChatCount } from '@biu/public-ui/chat-count'
 import { HeadlessDismiss, HEADLESS_DISMISS_IGNORE } from '@biu/public-ui/headless-dismiss'
-import { tagTextColor, tagTone as schemaTagTone } from '@biu/public-ui/tag-chip'
+import { TagChip, TagChips, tagTextColor, tagTone as schemaTagTone } from '@biu/public-ui/tag-chip'
 import {
+  asStringList,
   contentFieldKey,
   defaultColumnKeys,
   facetSourceKey,
@@ -36,6 +37,7 @@ import {
   facetColumnTitle,
   fieldEntries,
   flattenTree,
+  enumDisplayLabel,
   formatField,
   fieldValueOptions,
   groupField,
@@ -125,10 +127,12 @@ import { findViewNeighbor, indexOnPage } from './view-adjacent.ts'
 import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, TABLE_WINDOW_VIEWPORT_FALLBACK, TABLE_COL_VIEWPORT_FALLBACK, tableColumnEstimate, tableColumnFit, tableColumnSlice, tableColumnUnchanged, tableWindowSlice, tableWindowUnchanged, type TableColumnSlice } from './table-window.ts'
 import {
   IDLE_CELL_TEXT_MAX,
+  idleActionsInnerHtml,
   idleBoolInnerHtml,
   idleEmptyUsageInnerHtml,
-  idleSelectInnerHtml,
+  idlePersonInnerHtml,
   idleTableRowHtml,
+  idleTagChipsInnerHtml,
   idleTextInnerHtml,
   idleTitleInnerHtml,
   type IdleTableTd,
@@ -215,13 +219,15 @@ const EMPTY_VIEWS: CollectionViewType[] = []
 const EMPTY_ROW_VIEWS: CollectionRowViewType[] = []
 const EMPTY_PICK = {}
 
-function HoverMount({ children }: { children: ReactNode }) {
-  const [live, setLive] = useState(false)
-  return (
-    <span className="tasks-hover-mount" onMouseEnter={() => { if (!live) setLive(true) }}>
-      {live ? children : null}
-    </span>
-  )
+function scheduleIdle(show: () => void) {
+  const ric = typeof window !== 'undefined' ? window.requestIdleCallback : undefined
+  if (typeof ric === 'function') return { idleId: ric(show, { timeout: 160 }), timer: 0 }
+  return { idleId: 0, timer: window.setTimeout(show, 0) }
+}
+
+function clearIdle(idleId: number, timer: number) {
+  if (idleId && typeof window.cancelIdleCallback === 'function') window.cancelIdleCallback(idleId)
+  if (timer) window.clearTimeout(timer)
 }
 
 function TableIdleRow({
@@ -240,6 +246,12 @@ function TableIdleRow({
   const [live, setLive] = useState(false)
   const liveRef = useRef(renderLive)
   liveRef.current = renderLive
+  useEffect(() => {
+    if (live) return
+    const show = () => setLive(true)
+    const { idleId, timer } = scheduleIdle(show)
+    return () => clearIdle(idleId, timer)
+  }, [live])
   if (live) return liveRef.current()
   return (
     <tr
@@ -247,7 +259,6 @@ function TableIdleRow({
       data-table-idle=""
       className={className}
       {...pick}
-      onMouseEnter={() => setLive(true)}
       dangerouslySetInnerHTML={{ __html: html }}
     />
   )
@@ -3064,8 +3075,13 @@ export function CollectionBrowser({
         const tags = loadFacets()
         const parsed = normalizeSchemaValue(row[key])
         if (!parsed.tags.length) return null
-        const labels = parsed.tags.map((id) => tags.find((tag) => tag.id === id)?.label ?? id)
-        return <span className="fsdb-select-text">{labels.join('、')}</span>
+        return (
+          <TagChips>
+            {parsed.tags.map((id) => (
+              <TagChip key={id} id={id} label={tags.find((tag) => tag.id === id)?.label ?? id} />
+            ))}
+          </TagChips>
+        )
       }
       if (flat) {
         return (
@@ -3076,7 +3092,6 @@ export function CollectionBrowser({
             collectionPath={collectionPath}
             labelField={schema?.labelField}
             value={readFacetFlatValue(row, key, facetSourceKey(schema))}
-            plain
             onChange={
               field.writable && (kind === 'attachment' || kind === 'datetime')
                 ? (next) => writeCellValue(row, key, field, next)
@@ -3095,7 +3110,6 @@ export function CollectionBrowser({
           collectionPath={collectionPath}
           labelField={schema?.labelField}
           value={row[key]}
-          plain
           onChange={
             field.writable && (kind === 'attachment' || kind === 'datetime')
               ? (next) => writeCellValue(row, key, field, next)
@@ -3447,6 +3461,9 @@ export function CollectionBrowser({
       kind === 'boolean' ||
       kind === 'action' ||
       kind === 'facet' ||
+      kind === 'select' ||
+      kind === 'multi-select' ||
+      kind === 'person' ||
       kind === 'url' ||
       kind === 'image' ||
       kind === 'attachment' ||
@@ -3463,7 +3480,11 @@ export function CollectionBrowser({
   }
 
   function idleTableCellInner(row: DbRecord, key: string, field: FieldSpec) {
-    if (key === 'actions') return ''
+    if (key === 'actions') {
+      const nestedSkip = (action: CollectionActionInfo) => !nested || (action.id !== 'open-split' && action.id !== 'open-page')
+      const placed = (chrome?.Actions ? placedActions(schema, 'row') : visibleActions(schema, row, 'row')).filter(nestedSkip)
+      return idleActionsInnerHtml(placed.map((action) => ({ label: action.label, danger: action.tone === 'danger' })))
+    }
     if (key === schema?.labelField) {
       return idleTitleInnerHtml(labelOf(row), idleTableIconKind(currentTable?.view?.icon), recordPreviewEmoji(row))
     }
@@ -3478,9 +3499,13 @@ export function CollectionBrowser({
     if (kind === 'facet') {
       const tags = loadFacets()
       const parsed = normalizeSchemaValue(row[key])
-      const labels = parsed.tags.map((id) => tags.find((tag) => tag.id === id)?.label ?? id)
-      return idleSelectInnerHtml(labels.join('、'))
+      return idleTagChipsInnerHtml(parsed.tags.map((id) => ({ id, label: tags.find((tag) => tag.id === id)?.label ?? id })))
     }
+    if (kind === 'select' || kind === 'multi-select') {
+      const ids = kind === 'multi-select' ? asStringList(row[key]) : String(row[key] ?? '') ? [String(row[key])] : []
+      return idleTagChipsInnerHtml(ids.map((id) => ({ id, label: enumDisplayLabel(field, id) })))
+    }
+    if (kind === 'person') return idlePersonInnerHtml(row[key])
     if (key === 'usage' && !(Number(row[key]) > 0)) return idleEmptyUsageInnerHtml()
     const raw = parseFacetFlatColumnKey(key) ? readFacetFlatValue(row, key, facetSourceKey(schema)) : row[key]
     if (typeof raw === 'string' && raw.length > IDLE_CELL_TEXT_MAX && kind !== 'datetime' && kind !== 'select' && kind !== 'multi-select') {
@@ -3527,9 +3552,7 @@ export function CollectionBrowser({
             toolsArmed={toolsArmed}
           />
         ) : col.key === 'actions' ? (
-          <HoverMount>
-            <RecordActions row={row} />
-          </HoverMount>
+          <RecordActions row={row} />
         ) : (
           <span className="fsdb-cell">{paintTableCell(row, col.key, col.field)}</span>
         )}
