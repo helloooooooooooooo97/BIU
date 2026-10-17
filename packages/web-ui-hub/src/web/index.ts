@@ -202,7 +202,10 @@ export function apply(ctx: Context) {
             return { row, loaded: await resolvePlugin(row.id, row.web) }
           }),
         )
-        for (const item of imported) await mountLoaded(item.row, item.loaded)
+        for (const [index, item] of imported.entries()) {
+          await mountLoaded(item.row, item.loaded)
+          if (index < imported.length - 1) await new Promise((resolve) => setTimeout(resolve, 0))
+        }
       }
 
       const fsUi = rows.some(

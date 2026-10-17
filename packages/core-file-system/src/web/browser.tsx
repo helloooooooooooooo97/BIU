@@ -112,6 +112,7 @@ import {
   getPagePrefs,
   getPageWidth,
   getPageWidthVersion,
+  getWorkspaceProfile,
   subscribePageWidth,
 } from './page-width.ts'
 import { reportInspectorPaneMenu } from './inspector-pane-menu.tsx'
@@ -1188,7 +1189,7 @@ export function CollectionBrowser({
   const [createScopeOpen, setCreateScopeOpen] = useState(false)
   useEffect(() => {
     let live = true
-    void readJson<{ localData?: boolean; dataLocation?: 'device' | 'cloud' }>('/api/profile')
+    void getWorkspaceProfile()
       .then((body) => {
         if (!live) return
         const device = body?.dataLocation === 'device' || body?.localData === true

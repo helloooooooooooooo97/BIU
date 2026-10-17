@@ -1,3 +1,5 @@
+import { getWorkspaceProfile } from '@biu/core-file-system/page-width'
+
 export type ThemeMode = 'light' | 'dark'
 
 let current: ThemeMode | null = null
@@ -42,12 +44,11 @@ export function applyStoredTheme() {
 /** 从 workspace profile 读主题，不经过 localStorage。 */
 export async function hydrateTheme() {
   try {
-    const res = await fetch('/api/profile')
-    if (!res.ok) {
+    const data = await getWorkspaceProfile()
+    if (!data) {
       applyStoredTheme()
       return readTheme()
     }
-    const data = (await res.json()) as { theme?: unknown }
     if (data.theme !== 'dark' && data.theme !== 'light') {
       applyStoredTheme()
       return readTheme()

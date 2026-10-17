@@ -33,4 +33,7 @@ test('snapshot fetch carries the workspace even before the shell wraps fetch', a
   assert.match(src, /function snapshotRequestHeaders/)
   assert.match(src, /x-biu-workspace-id/)
   assert.match(src, /fetch\('\/api\/snapshot', \{ headers: snapshotRequestHeaders\(\) \}\)/)
+  assert.match(src, /bootGotSnapshot/)
+  assert.match(src, /if \(this\.bootGotSnapshot\)/)
+  assert.match(src, /ws\.onopen/)
 })

@@ -76,6 +76,8 @@ export class SnapshotService extends Service {
   private authStopped = false
   private socket: WebSocket | null = null
   private booted = false
+  /** boot() 刚拉过就不必在第一条 WS 上再 pull 一次。 */
+  private bootGotSnapshot = false
 
   constructor(ctx: Context) {
     super(ctx, 'snapshot')
@@ -177,6 +179,7 @@ export class SnapshotService extends Service {
         if (res.status === 401 || res.status === 403) return
         if (res.ok) {
           this.replace(await res.json())
+          this.bootGotSnapshot = true
           break
         }
       } catch {
@@ -196,6 +199,10 @@ export class SnapshotService extends Service {
       const ws = new WebSocket(`${proto}://${location.host}/ws${query}`)
       this.socket = ws
       ws.onopen = () => {
+        if (this.bootGotSnapshot) {
+          this.bootGotSnapshot = false
+          return
+        }
         void this.pull()
       }
       ws.onmessage = (message) => {

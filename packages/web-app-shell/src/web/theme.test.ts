@@ -1,5 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
+import { resetWorkspaceProfileGet } from '@biu/core-file-system/page-width'
 import { applyTheme, hydrateTheme, persistTheme, readTheme } from './theme.ts'
 
 test('readTheme follows the document class and persistTheme posts the profile', () => {
@@ -31,6 +32,7 @@ test('hydrateTheme applies the host profile without localStorage', async () => {
   document.documentElement.classList.remove('dark')
   document.documentElement.classList.add('light')
   applyTheme('light')
+  resetWorkspaceProfileGet()
   const originalFetch = globalThis.fetch
   globalThis.fetch = (async () =>
     new Response(JSON.stringify({ theme: 'dark' }), {
@@ -44,5 +46,6 @@ test('hydrateTheme applies the host profile without localStorage', async () => {
     assert.equal(localStorage.getItem('biu.theme'), null)
   } finally {
     globalThis.fetch = originalFetch
+    resetWorkspaceProfileGet()
   }
 })

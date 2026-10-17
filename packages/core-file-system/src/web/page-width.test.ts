@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { persistPageWidth, getPageWidth, persistPagePrefs, getPagePrefs, hydratePagePrefs, SHARE_PAGE_PREFS } from './page-width.ts'
+import { persistPageWidth, getPageWidth, persistPagePrefs, getPagePrefs, hydratePagePrefs, SHARE_PAGE_PREFS, getWorkspaceProfile, resetWorkspaceProfileGet } from './page-width.ts'
 
 test('page width persists full and max', () => {
   persistPageWidth('max')
@@ -62,6 +62,7 @@ test('hydratePagePrefs applies host profile and does not post when already store
   })
   const calls: string[] = []
   const originalFetch = globalThis.fetch
+  resetWorkspaceProfileGet()
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     calls.push(`${init?.method ?? 'GET'} ${String(input)}`)
     return new Response(
@@ -86,6 +87,40 @@ test('hydratePagePrefs applies host profile and does not post when already store
     assert.equal(calls.some((item) => item.startsWith('POST')), false)
   } finally {
     globalThis.fetch = originalFetch
+    resetWorkspaceProfileGet()
+    persistPagePrefs({
+      wide: false,
+      outlineExpand: true,
+      outlinePin: false,
+      navPin: false,
+      bodySize: 'md',
+      bodyGap: 'md',
+    })
+  }
+})
+
+test('getWorkspaceProfile shares one in-flight GET', async () => {
+  resetWorkspaceProfileGet()
+  let hits = 0
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = (async () => {
+    hits += 1
+    return new Response(JSON.stringify({ theme: 'dark', pagePrefs: { wide: true } }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })
+  }) as typeof fetch
+  try {
+    const [a, b] = await Promise.all([getWorkspaceProfile(), getWorkspaceProfile()])
+    assert.equal(hits, 1)
+    assert.equal(a?.theme, 'dark')
+    assert.equal(b?.theme, 'dark')
+    await hydratePagePrefs()
+    assert.equal(hits, 1)
+    assert.equal(getPagePrefs().wide, true)
+  } finally {
+    globalThis.fetch = originalFetch
+    resetWorkspaceProfileGet()
     persistPagePrefs({
       wide: false,
       outlineExpand: true,

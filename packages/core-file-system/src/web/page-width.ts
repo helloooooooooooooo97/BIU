@@ -69,6 +69,38 @@ function writeCachedPagePrefs(next: PagePrefs) {
   }
 }
 
+const PROFILE_GET_HOLD_MS = 400
+let profileInflight: Promise<Record<string, unknown> | null> | null = null
+
+/** One in-flight GET /api/profile for theme, page prefs, and the collection browser. */
+export async function getWorkspaceProfile(): Promise<Record<string, unknown> | null> {
+  if (profileInflight) return profileInflight
+  let request: Promise<Record<string, unknown> | null>
+  request = (async () => {
+    const res = await fetch('/api/profile')
+    if (!res.ok) return null
+    const data = (await res.json()) as unknown
+    return data && typeof data === 'object' && !Array.isArray(data) ? (data as Record<string, unknown>) : null
+  })().then(
+    (body) => {
+      setTimeout(() => {
+        if (profileInflight === request) profileInflight = null
+      }, PROFILE_GET_HOLD_MS)
+      return body
+    },
+    (error) => {
+      if (profileInflight === request) profileInflight = null
+      throw error
+    },
+  )
+  profileInflight = request
+  return request
+}
+
+export function resetWorkspaceProfileGet() {
+  profileInflight = null
+}
+
 function postPagePrefs(next: PagePrefs) {
   if (typeof fetch === 'undefined') return
   void fetch('/api/profile', {
@@ -137,9 +169,8 @@ export function persistPageWidth(next: PageWidth) {
 
 export async function hydratePagePrefs() {
   try {
-    const res = await fetch('/api/profile')
-    if (!res.ok) return getPagePrefs()
-    const data = (await res.json()) as { pagePrefs?: unknown }
+    const data = await getWorkspaceProfile()
+    if (!data) return getPagePrefs()
     if (data.pagePrefs && typeof data.pagePrefs === 'object') {
       commit(parsePagePrefs(data.pagePrefs, prefs), false)
       return prefs

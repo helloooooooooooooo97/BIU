@@ -90,6 +90,8 @@ test('ui-hub unloads disabled plugins before importing new ones', async () => {
   assert.match(src, /biu:enable-page-block-plugin/)
   assert.match(src, /runtimeWebModuleHref/)
   assert.match(src, /Promise\.all/)
+  assert.match(src, /setTimeout\(resolve, 0\)/)
+  assert.match(src, /for \(const \[index, item\] of imported\.entries\(\)\)/)
   assert.match(src, /storeWebRequested\.add\(plugin\)/)
   assert.match(src, /storeWebPluginRequested\(row, storeWebRequested\)/)
   assert.match(src, /isStoreWebPlugin/)
