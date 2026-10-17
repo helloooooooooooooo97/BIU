@@ -48,6 +48,7 @@ test('page plugin perf helpers stay as separate scripts in one folder', () => {
   assert.match(sources['seed-local.mjs'], /BIU_PERF_SKILLS/)
   assert.match(sources['seed-local.mjs'], /3000/)
   assert.match(sources['seed-local.mjs'], /压测百行/)
+  assert.match(sources['seed-local.mjs'], /wrap: true/)
   assert.match(sources['seed-local.mjs'], /压测块页/)
   assert.match(sources['discover-routes.mjs'], /builtin-all:/)
   assert.match(sources['discover-routes.mjs'], /session-debug/)

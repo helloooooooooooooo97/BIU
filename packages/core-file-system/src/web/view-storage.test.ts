@@ -6,12 +6,14 @@ import { builtinAllView, builtinAllViewId, builtinCatalogViewId } from '../catal
 import { VIEWS_COLLECTION_PATH } from './database-path.ts'
 import {
   defaultViewId,
+  fetchSavedView,
   loadViews,
   loadRecords,
   persistViewDisplay,
   pickViewForRoute,
   rememberViews,
   rememberRecords,
+  routeViewNeedsFetch,
   savedViewFromRecord,
   toggleStarredRecord,
   isRecordStarred,
@@ -175,6 +177,70 @@ test('saved views pull shares one in-flight list and a short ttl', () => {
   assert.match(src, /filters: \{ tablePath \}/)
   assert.match(src, /if \(pending\) return pending/)
   assert.match(src, /opts\?: \{ idle\?: boolean \}/)
+})
+
+test('route saved views need a fetch until they are remembered', () => {
+  const path = '/pages-route-view-need'
+  rememberViews(path, [])
+  assert.equal(routeViewNeedsFetch(path, '1792146752009'), true)
+  assert.equal(routeViewNeedsFetch(path, builtinAllViewId(path)), false)
+  assert.equal(routeViewNeedsFetch(path, 'builtin-block:terminal'), false)
+  rememberViews(path, [{ id: '1792146752009', name: '压测百行', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: [], wrap: true, pageSize: 100 }])
+  assert.equal(routeViewNeedsFetch(path, '1792146752009'), false)
+})
+
+test('fetchSavedView reads the URL view and remembers wrap and pageSize', async () => {
+  const path = '/pages-route-view-fetch'
+  const mem: Record<string, string> = {}
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => mem[key] ?? null,
+      setItem: (key: string, value: string) => {
+        mem[key] = value
+      },
+      removeItem: (key: string) => {
+        delete mem[key]
+      },
+    },
+  })
+  rememberViews(path, [])
+  const urls: string[] = []
+  const prev = globalThis.fetch
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = String(input)
+    urls.push(url)
+    assert.match(url, /\/api\/db\/read\?/)
+    assert.match(url, /pages-route-view-fetch/)
+    return new Response(
+      JSON.stringify({
+        value: {
+          viewId: '1792146752009',
+          title: '压测百行',
+          wrap: true,
+          pageSize: 100,
+          groupBy: '',
+          tablePath: path,
+        },
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    )
+  }) as typeof fetch
+  try {
+    const view = await fetchSavedView(path, '1792146752009')
+    assert.equal(view?.id, '1792146752009')
+    assert.equal(view?.wrap, true)
+    assert.equal(view?.pageSize, 100)
+    assert.equal(loadViews(path)[0]?.id, '1792146752009')
+    assert.equal(routeViewNeedsFetch(path, '1792146752009'), false)
+    assert.equal(urls.length, 1)
+    assert.equal(urls[0]?.includes('/api/db/list'), false)
+    const again = await fetchSavedView(path, '1792146752009')
+    assert.equal(again?.id, '1792146752009')
+    assert.equal(urls.length, 1)
+  } finally {
+    globalThis.fetch = prev
+  }
 })
 
 test('starred records toggle by collection path and id', () => {

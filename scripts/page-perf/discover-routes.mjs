@@ -58,7 +58,7 @@ export async function discoverLocalSpaceRoutes(apiJson) {
   const blockListed = await apiJson(`/api/db/list?${new URLSearchParams({ path: '/pages', limit: '5', q: '压测块页', columns: 'id,title' })}`)
   const heavyListed = await apiJson(`/api/db/list?${new URLSearchParams({ path: '/pages', limit: '5', q: '十插件', columns: 'id,title' })}`)
   const denseViews = await apiJson(
-    `/api/db/list?${new URLSearchParams({ path: '/views', limit: '20', q: '压测百行', columns: 'id,title,tablePath,viewId,pageSize,groupBy' })}`,
+    `/api/db/list?${new URLSearchParams({ path: '/views', limit: '20', q: '压测百行', columns: 'id,title,tablePath,viewId,pageSize,groupBy,wrap' })}`,
   )
   const heavyPage =
     (Array.isArray(heavyListed.items) ? heavyListed.items.find((row) => String(row.title || '').includes('十插件')) : null) ||
@@ -142,7 +142,7 @@ export async function discoverLocalSpaceRoutes(apiJson) {
     push(routes, seen, {
       id: `view:${row.tablePath}:${row.viewId}`,
       kind: 'dense-view',
-      label: `${row.title} ${row.tablePath} pageSize=${row.pageSize || ''} group=${row.groupBy || ''}`,
+      label: `${row.title} ${row.tablePath} pageSize=${row.pageSize || ''} group=${row.groupBy || ''} wrap=${row.wrap ? 1 : 0}`,
       path: databaseViewPath(row.tablePath, row.viewId),
       interact: 'table',
     })

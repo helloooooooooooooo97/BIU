@@ -141,15 +141,34 @@ const sessions = await ensurePrefixed('/sessions', sessionPrefix, sessionTarget,
 }))
 
 async function ensureDenseView(tablePath) {
-  const listed = await listPage('/views', { q: viewTitle, limit: 20, columns: 'id,title,tablePath,viewId,pageSize,groupBy' })
+  const wrap = tablePath === '/pages'
+  const groupBy = tablePath === '/tasks' ? 'status' : ''
+  const listed = await listPage('/views', { q: viewTitle, limit: 20, columns: 'id,title,tablePath,viewId,pageSize,groupBy,wrap' })
   const hit = listed.items.find((row) => row.tablePath === tablePath && String(row.title || '') === viewTitle)
-  if (hit) return { created: false, viewId: String(hit.viewId || ''), path: `/database/${tablePath.replace(/^\//, '')}/view/${encodeURIComponent(String(hit.viewId || ''))}` }
+  if (hit) {
+    const viewId = String(hit.viewId || '')
+    const rowId = String(hit.id || '')
+    const needsWrap = wrap && !hit.wrap
+    const needsGroup = Boolean(groupBy) && String(hit.groupBy || '') !== groupBy
+    const needsSize = Number(hit.pageSize) !== 100
+    if (viewId && rowId && (needsWrap || needsGroup || needsSize)) {
+      await apiJson('/api/db/update', {
+        method: 'POST',
+        body: JSON.stringify({
+          path: `/views/${rowId}`,
+          content: { pageSize: 100, ...(wrap ? { wrap: true } : {}), ...(groupBy ? { groupBy } : {}) },
+        }),
+      })
+    }
+    return { created: false, viewId, path: `/database/${tablePath.replace(/^\//, '')}/view/${encodeURIComponent(viewId)}` }
+  }
   const created = await createBatch('/views', [
     {
       title: viewTitle,
       tablePath,
       pageSize: 100,
-      ...(tablePath === '/tasks' ? { groupBy: 'status' } : {}),
+      ...(wrap ? { wrap: true } : {}),
+      ...(groupBy ? { groupBy } : {}),
     },
   ])
   const value = created[0] || {}

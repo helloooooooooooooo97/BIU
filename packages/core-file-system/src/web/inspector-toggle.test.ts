@@ -45,6 +45,13 @@ test('hydrating page-blocks prefers the route view over local 全部', () => {
   )
 })
 
+test('URL saved views are fetched before the first collection list', () => {
+  assert.match(browser, /routeViewNeedsFetch\(collectionPath, routeViewId\)/)
+  assert.match(browser, /fetchSavedView\(collectionPath, id\)/)
+  assert.match(browser, /if \(!routeViewReadyRef\.current\) return/)
+  assert.match(browser, /\[reloadKey, routeRecordId, routeViewReady\]/)
+})
+
 test('data sidebar keeps shares out of the navigation sections', () => {
   const sidebar = readFileSync(resolve(import.meta.dirname, './data-sidebar.tsx'), 'utf8')
   assert.doesNotMatch(sidebar, /分享数据/)

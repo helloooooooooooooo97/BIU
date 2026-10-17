@@ -1,6 +1,7 @@
 import { builtinAllViewId, stubBuiltinAllView, stubBuiltinBlockKindView, stubBuiltinCatalogView, stubBuiltinTagView, stubBuiltinScopeView, stubBuiltinMemberView, isReadOnlyViewId, isBuiltinAllViewForCollection, isBuiltinAllViewId } from '../catalog-views.ts'
 import { isIndexCollection } from './database-path.ts'
-import { listCollection } from './db-client.ts'
+import { listCollection, readJson } from './db-client.ts'
+import { savedViewRecordPath } from '../paths.ts'
 import { looksLikeFilterTree, normalizeFilterGroup, parseSortsInput } from '../query-logic.ts'
 import { normalizePageSize, normalizeSavedView, type SavedView } from './saved-view.ts'
 
@@ -116,6 +117,52 @@ export function pickViewForRoute(listed: SavedView[], collectionPath: string, ro
     return listed.find((item) => item.id === route) ?? viewForPath(collectionPath, route)
   }
   return listed.find((item) => item.id === loadActiveViewId(collectionPath, listed)) ?? listed[0] ?? null
+}
+
+/** 冷 origin 上 URL 里的已存视图不在 localStorage；内置 stub 不用拉。 */
+export function routeViewNeedsFetch(collectionPath: string, routeViewId?: string) {
+  const id = String(routeViewId ?? '').trim()
+  if (!id || isReadOnlyViewId(id)) return false
+  return !loadViews(collectionPath).some((view) => view.id === id)
+}
+
+const routeViewFetchByKey = new Map<string, Promise<SavedView | null>>()
+
+export async function fetchSavedView(collectionPath: string, viewId: string): Promise<SavedView | null> {
+  const id = String(viewId ?? '').trim()
+  if (!id) return null
+  if (isReadOnlyViewId(id)) return viewForPath(collectionPath, id)
+  const hit = loadViews(collectionPath).find((view) => view.id === id)
+  if (hit) return withViewDisplay(collectionPath, hit)
+  const key = `${collectionPath}\0${id}`
+  const pending = routeViewFetchByKey.get(key)
+  if (pending) return pending
+  const request = fetchSavedViewNow(collectionPath, id).finally(() => {
+    if (routeViewFetchByKey.get(key) === request) routeViewFetchByKey.delete(key)
+  })
+  routeViewFetchByKey.set(key, request)
+  return request
+}
+
+async function fetchSavedViewNow(collectionPath: string, viewId: string): Promise<SavedView | null> {
+  const path = savedViewRecordPath(collectionPath, viewId)
+  if (path) {
+    try {
+      const data = await readJson<{ value?: Parameters<typeof savedViewFromRecord>[0] }>(
+        `/api/db/read?path=${encodeURIComponent(path)}`,
+      )
+      const view = data.value ? savedViewFromRecord(data.value) : null
+      if (view && view.id === viewId) {
+        upsertSavedView(collectionPath, view)
+        return withViewDisplay(collectionPath, view)
+      }
+    } catch {
+      /* 再按表拉目录 */
+    }
+  }
+  await pullSavedViews([collectionPath])
+  const listed = loadViews(collectionPath).find((view) => view.id === viewId)
+  return listed ? withViewDisplay(collectionPath, listed) : null
 }
 
 export type StarredView = { path: string; viewId: string }

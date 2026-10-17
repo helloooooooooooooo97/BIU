@@ -91,6 +91,7 @@ import { countFittingViewTabs, splitVisibleViews } from './view-tabs.ts'
 import { getDatabaseUi } from './database-ui.ts'
 import {
   activeViewStorageKey,
+  fetchSavedView,
   getStarredViews,
   getStarredViewsVersion,
   isViewStarred,
@@ -102,6 +103,7 @@ import {
   persistViewDisplay,
   pickViewForRoute,
   pushSavedViews,
+  routeViewNeedsFetch,
   subscribeStarredViews,
   toggleStarredView,
   viewForPath,
@@ -1234,6 +1236,9 @@ export function CollectionBrowser({
     .join('\n')
   const [views, setViews] = useState<SavedView[]>(() => paintListedViews(collectionPath))
   const [activeViewId, setActiveViewId] = useState<string | null>(initialView?.id ?? null)
+  const [routeViewReady, setRouteViewReady] = useState(() => !routeViewNeedsFetch(collectionPath, routeViewId))
+  const routeViewReadyRef = useRef(routeViewReady)
+  routeViewReadyRef.current = routeViewReady
   const catalogLocks = useMemo(() => {
     if (sheet) return lockedFilters
     return { ...catalogLockFilters(activeViewId, views), ...lockedFilters }
@@ -1491,6 +1496,7 @@ export function CollectionBrowser({
   const listIdentityKey = `${dataPath}\0${pageSize}\0${fetchQuery}\0${sortField}\0${sortDir}\0${sortsStateKey(sorts)}\0${JSON.stringify(queryFilters)}\0${activeViewId ?? ''}\0${groupBy}\0${wrapCells ? 1 : 0}`
   const reloadKey = `${listIdentityKey}\0${groupBy ? JSON.stringify(groupPages) : page}\0${groupFillKeys.join('\0')}`
   const reload = useCallback(async () => {
+    if (!routeViewReadyRef.current) return true
     if (Date.now() < quietUntil.current) return true
     const hit = reloadInflightRef.current
     if (hit?.key === reloadKey) return hit.promise
@@ -1713,6 +1719,10 @@ export function CollectionBrowser({
     setCollapsedGroups({})
     setError('')
     setPage(0)
+    const pendingRouteView = routeViewNeedsFetch(collectionPath, routeViewId)
+    routeViewReadyRef.current = !pendingRouteView
+    if (pendingRouteView) reloadGen.current += 1
+    setRouteViewReady(!pendingRouteView)
     const stored = viewForPath(collectionPath, routeViewId)
     const listed = paintListedViews(collectionPath)
     rememberViews(collectionPath, listed)
@@ -1840,8 +1850,9 @@ export function CollectionBrowser({
       return
     }
     if (routeRecordId) return
+    if (!routeViewReadyRef.current) return
     void reloadRef.current()
-  }, [reloadKey, routeRecordId])
+  }, [reloadKey, routeRecordId, routeViewReady])
 
   useLayoutEffect(() => {
     setOpenDetailId(routeRecordId)
@@ -2464,10 +2475,38 @@ export function CollectionBrowser({
   }, [collectionPath])
 
   useEffect(() => {
-    if (!routeViewId) return
-    const view =
-      viewsRef.current.find((item) => item.id === routeViewId) ?? viewForPath(collectionPath, routeViewId)
-    if (view) applyView(view)
+    const id = String(routeViewId ?? '').trim()
+    if (!id || !routeViewNeedsFetch(collectionPath, id)) {
+      routeViewReadyRef.current = true
+      setRouteViewReady(true)
+      return
+    }
+    let live = true
+    routeViewReadyRef.current = false
+    setRouteViewReady(false)
+    void fetchSavedView(collectionPath, id)
+      .then((view) => {
+        if (!live) return
+        const listed = paintListedViews(collectionPath)
+        rememberViews(collectionPath, listed)
+        viewsRef.current = listed
+        setViews((prev) => (sameSavedViews(prev, listed) ? prev : listed))
+        const next = view ?? pickViewForRoute(listed, collectionPath, id)
+        if (next) {
+          skipPersistGen.current += 1
+          applyView(next)
+        }
+        routeViewReadyRef.current = true
+        setRouteViewReady(true)
+      })
+      .catch(() => {
+        if (!live) return
+        routeViewReadyRef.current = true
+        setRouteViewReady(true)
+      })
+    return () => {
+      live = false
+    }
   }, [collectionPath, routeViewId])
 
   useEffect(() => {
