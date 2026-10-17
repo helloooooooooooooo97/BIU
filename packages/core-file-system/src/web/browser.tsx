@@ -2854,7 +2854,8 @@ export function CollectionBrowser({
       setTotal((count) => count + 1)
       quietUntil.current = 0
       void reloadRef.current()
-      window.setTimeout(() => showRecordInInspector(collectionPath, id), 0)
+      if (activeViewId) rememberInspectorWorkingView(collectionPath, activeViewId)
+      window.setTimeout(() => showRecordInInspector(collectionPath, id, activeViewId), 0)
     } catch (err) {
       setError(String(err))
     }
@@ -3546,7 +3547,7 @@ export function CollectionBrowser({
             Icon={chrome?.Icon}
             nested={nested}
             pick={recordPick(row)}
-            onOpenSplit={() => showRecordInInspector(collectionPath, row.id)}
+            onOpenSplit={() => showRecordInInspector(collectionPath, row.id, activeViewId)}
             onOpenRow={() => openRow(row)}
             onWriteEmoji={(next) => void writePatch(row, { emoji: next })}
             toolsArmed={toolsArmed}

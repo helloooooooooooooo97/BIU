@@ -674,7 +674,7 @@ export const ChatNodeList = memo(function ChatNodeList({
         const anchor = turn[0]!
         const startIndex = nodes.indexOf(anchor)
         return (
-          <div key={anchor.id} className="chat-turn" data-testid="chat-turn" data-turn-anchor={anchor.id} {...pickDomAttrs('turn', anchor.id, pickPreview(anchor.kind === 'user' ? anchor.text : anchor.id) || 'turn')}>
+          <div key={anchor.id} className={`chat-turn${anchor.id === liveTurnId ? ' is-live' : ''}`} data-testid="chat-turn" data-turn-anchor={anchor.id} {...pickDomAttrs('turn', anchor.id, pickPreview(anchor.kind === 'user' ? anchor.text : anchor.id) || 'turn')}>
             {turn.map((node, offset) => {
               const index = startIndex + offset
               const replyForUser = node.kind === 'user' ? findReplyForUser(nodes, index) : undefined
@@ -684,9 +684,11 @@ export const ChatNodeList = memo(function ChatNodeList({
               const dispatchTasks =
                 replyNode?.turn != null ? dispatchedTasksByTurn[String(replyNode.turn)] : undefined
               const stickyUser =
-                node.kind === 'user'
+                node.kind === 'user' && anchor.id !== liveTurnId
                   ? 'sticky top-0 z-1 bg-transparent'
-                  : ''
+                  : node.kind === 'user'
+                    ? 'bg-transparent'
+                    : ''
               const skipPaint =
                 (node.kind === 'reply' || node.kind === 'turn') && anchor.id !== liveTurnId
                   ? '[content-visibility:auto] [contain-intrinsic-size:auto_160px]'

@@ -106,7 +106,12 @@ test('handleBlockFromDom maps a nested iframe back to the pageBlock atom', () =>
 `,
     contentType: 'markdown',
   })
-  const hole = host.querySelector('[draggable="true"]')
+  let hole: HTMLElement | null = null
+  editor.state.doc.descendants((node, pos) => {
+    if (node.type.name !== 'pageBlock' || hole) return
+    const raw = editor.view.nodeDOM(pos)
+    hole = visibleHandleEl(raw instanceof Node ? raw : null)
+  })
   assert.ok(hole instanceof HTMLElement)
   hole.classList.add('page-block')
   hole.setAttribute('data-page-block', 'html')
