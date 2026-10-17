@@ -376,8 +376,10 @@ export function showInInspector(collection: string, href: string, opts?: { uniqu
 }
 
 /** 右侧检查器打开这条记录。同一页已在检查器里则只聚焦。 */
-export function showRecordInInspector(collection: string, recordId: string) {
-  showInInspector(collection, databaseRecordPath(collection, recordId), { unique: true })
+export function showRecordInInspector(collection: string, recordId: string, viewId?: string | null) {
+  const view = String(viewId ?? '').trim() || openListView(collection) || inspectorWorkingView(collection)
+  if (view) rememberInspectorWorkingView(collection, view)
+  showInInspector(collection, databaseRecordPath(collection, recordId, view || undefined), { unique: true })
 }
 
 /** 工具查/改/删某张表后：打开右侧检查器并切到该表（中间主界面不动）。 */

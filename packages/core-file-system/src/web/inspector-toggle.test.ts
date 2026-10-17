@@ -254,7 +254,7 @@ test('starred pages and tasks also list in the sidebar favorites section', () =>
 test('table title opens record from the title-side button', () => {
   assert.match(browser, /data-testid="record-title-open"/)
   assert.match(browser, /data-testid="record-title-split"/)
-  assert.match(browser, /showRecordInInspector\(collectionPath, row.id\)/)
+  assert.match(browser, /showRecordInInspector\(collectionPath, row.id, activeViewId\)/)
   assert.match(browser, /className="tasks-icon-btn tasks-title-open"/)
   assert.match(browser, /tasks-title-aside/)
   assert.match(browser, /tasks-tree-count/)
@@ -503,7 +503,8 @@ test('deletable tables can pick rows and bulk-act over the table header', () => 
 
 test('creating a record opens a new inspector pane instead of covering the view', () => {
   const createFn = browser.slice(browser.indexOf('async function createRecord'), browser.indexOf('async function executeDeleteRecord'))
-  assert.match(createFn, /showRecordInInspector\(collectionPath, id\)/)
+  assert.match(createFn, /showRecordInInspector\(collectionPath, id, activeViewId\)/)
+  assert.match(createFn, /rememberInspectorWorkingView\(collectionPath, activeViewId\)/)
   assert.doesNotMatch(createFn, /setOpenDetailId/)
   assert.doesNotMatch(createFn, /onOpenRecord/)
 })

@@ -6567,6 +6567,16 @@ html:not(.dark) .chat-outline-item.is-active {
   padding-bottom: var(--dsw-chat-gap);
 }
 
+.chat-turn.is-live {
+  min-height: 0;
+}
+
+.chat-turn.is-live > [data-chat-kind='reply'] {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
 .chat-user-card {
   display: flex;
   width: 100%;

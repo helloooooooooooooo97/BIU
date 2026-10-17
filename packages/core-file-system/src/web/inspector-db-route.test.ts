@@ -105,7 +105,7 @@ test('showRecordInInspector focuses an already-open pane for the same page', () 
 test('showRecordInInspector reuses the collection pane instead of opening a second copy of the page', () => {
   setInspectorDbPath('database:/pages', databaseAllViewPath('/pages'))
   showRecordInInspector('/pages', 'p-new')
-  assert.equal(getInspectorDbPath('database:/pages'), '/database/pages/record/p-new')
+  assert.equal(getInspectorDbPath('database:/pages'), databaseRecordPath('/pages', 'p-new', builtinAllViewId('/pages')))
   const extra = Object.keys(snapshotInspectorDbPaths()).filter((id) => id.startsWith('database:/pages::'))
   assert.equal(extra.length, 0)
 })
@@ -386,6 +386,12 @@ test('applyDatabaseChannelPayload ignores other sessions and unsigned broadcasts
 test('applyDatabaseReveal opens a saved view when viewId is present', () => {
   applyDatabaseReveal({ collection: '/tasks', viewId: 'board-1' })
   assert.equal(getInspectorDbPath('database:/tasks'), '/database/tasks/view/board-1')
+})
+
+test('showRecordInInspector keeps the working view on the record path', () => {
+  rememberInspectorWorkingView('/pages', 'bug')
+  showRecordInInspector('/pages', 'p-new')
+  assert.equal(getInspectorDbPath('database:/pages'), databaseRecordPath('/pages', 'p-new', 'bug'))
 })
 
 test('applyDatabaseReveal keeps the working view when the tool reveal has no viewId', () => {

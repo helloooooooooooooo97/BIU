@@ -279,6 +279,28 @@ describe('follow the sent message from the top', () => {
     expect(parent.scrollTop).toBe(2460)
   })
 
+  it('keeps the sent message at the top and scrolls the reply pane instead of overlapping it', () => {
+    const parent = scroller({ scrollHeight: 2000, clientHeight: 800, scrollTop: 0 })
+    const turn = document.createElement('div')
+    turn.className = 'chat-turn is-live'
+    turn.dataset.turnAnchor = 'u-9'
+    const user = document.createElement('div')
+    user.dataset.nodeId = 'u-9'
+    user.dataset.chatKind = 'user'
+    place(user, 400, 80)
+    const reply = document.createElement('div')
+    reply.dataset.nodeId = 'r-9'
+    reply.dataset.chatKind = 'reply'
+    Object.defineProperty(reply, 'scrollHeight', { value: 1200, configurable: true })
+    Object.defineProperty(reply, 'clientHeight', { value: 400, configurable: true })
+    reply.scrollTop = 0
+    turn.append(user, reply)
+    parent.append(turn)
+    followChatOutput(parent, 'u-9')
+    expect(parent.scrollTop).toBe(400)
+    expect(reply.scrollTop).toBe(800)
+  })
+
   it('reserves one viewport of room on the live turn only', () => {
     const parent = scroller({ scrollHeight: 2000, clientHeight: 800, scrollTop: 0 })
     const older = document.createElement('div')

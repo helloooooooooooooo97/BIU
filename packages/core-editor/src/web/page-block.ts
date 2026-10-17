@@ -81,7 +81,7 @@ export const pageBlock = Node.create({
   group: 'block',
   atom: true,
   selectable: true,
-  draggable: true,
+  draggable: false,
 
   addAttributes() {
     return {
@@ -181,6 +181,8 @@ export const pageBlock = Node.create({
       },
       stopEvent: ({ event }) => {
         const target = event.target as HTMLElement | null
+        if (target?.closest('.page-block-handle, .page-block-handle-grip, [data-drag-handle]')) return false
+        if (event.type === 'dragstart' || event.type === 'drag' || event.type === 'dragend') return true
         return Boolean(target?.closest('.page-block, [data-page-block-capture], textarea, input, select, button, canvas, .excalidraw, .cm-editor'))
       },
     })

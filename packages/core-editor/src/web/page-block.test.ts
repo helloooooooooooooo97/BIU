@@ -447,3 +447,13 @@ test('registerBlock puts custom kinds in their own slash group', async () => {
   await fiber.dispose()
 })
 
+test('page blocks are not HTML-draggable; only the handle moves the atom', async () => {
+  const { readFile } = await import('node:fs/promises')
+  const { resolve } = await import('node:path')
+  const spec = await readFile(resolve(import.meta.dirname, './page-block.ts'), 'utf8')
+  const view = await readFile(resolve(import.meta.dirname, './page-block-view.tsx'), 'utf8')
+  assert.match(spec, /draggable: false/)
+  assert.match(spec, /event\.type === 'dragstart'/)
+  assert.match(view, /event\.target !== event\.currentTarget/)
+})
+

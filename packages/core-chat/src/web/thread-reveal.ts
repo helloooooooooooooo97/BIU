@@ -155,16 +155,23 @@ export function reserveLiveTurnRoom(parent: HTMLElement, anchorId: string) {
  */
 export function followChatOutput(parent: HTMLElement, anchorId: string) {
   const maxScroll = Math.max(0, parent.scrollHeight - parent.clientHeight)
+  const turn = parent.querySelector<HTMLElement>(turnSelector(anchorId))
   const escaped =
     typeof CSS !== 'undefined' && typeof CSS.escape === 'function' ? CSS.escape(anchorId) : anchorId
   const anchor =
     parent.querySelector<HTMLElement>(`[data-chat-kind="user"][data-node-id="${escaped}"]`) ??
-    parent.querySelector<HTMLElement>(turnSelector(anchorId))
+    (turn instanceof HTMLElement ? turn : null)
   if (!(anchor instanceof HTMLElement)) {
     parent.scrollTop = maxScroll
     return
   }
   const anchorTop = Math.max(0, offsetInScroller(anchor, parent))
+  const reply = turn?.querySelector<HTMLElement>(':scope > [data-chat-kind="reply"]')
+  if (reply && reply.scrollHeight > reply.clientHeight + 1) {
+    parent.scrollTop = Math.min(anchorTop, maxScroll)
+    reply.scrollTop = Math.max(0, reply.scrollHeight - reply.clientHeight)
+    return
+  }
   const nodes = parent.querySelectorAll<HTMLElement>('[data-node-id]')
   const last = nodes[nodes.length - 1]
   const contentEnd =
@@ -172,11 +179,7 @@ export function followChatOutput(parent: HTMLElement, anchorId: string) {
   const span = contentEnd - anchorTop
   const pad = Number.parseFloat(getComputedStyle(parent).paddingBottom) || 0
   const room = Math.max(1, parent.clientHeight - pad)
-  if (span <= room) {
-    parent.scrollTop = Math.min(anchorTop, maxScroll)
-    return
-  }
-  parent.scrollTop = Math.min(Math.max(0, contentEnd - room), maxScroll)
+  parent.scrollTop = span <= room ? Math.min(anchorTop, maxScroll) : Math.min(Math.max(0, contentEnd - room), maxScroll)
 }
 
 export function pinChatToLatest(parent: HTMLElement) {
