@@ -150,8 +150,8 @@ export function reserveLiveTurnRoom(parent: HTMLElement, anchorId: string) {
 }
 
 /**
- * 发出去的那条先对齐视口顶。回复还没超出一屏时停在那里；超出后改贴底，让新内容露出来。
- * 找不到这一条时退回贴底。
+ * 发出去的那条钉在视口顶，不能被往上滚走。
+ * 回复在它下面的剩余高度里长；超出后只滚回复区域贴底。
  */
 export function followChatOutput(parent: HTMLElement, anchorId: string) {
   const maxScroll = Math.max(0, parent.scrollHeight - parent.clientHeight)
@@ -166,20 +166,16 @@ export function followChatOutput(parent: HTMLElement, anchorId: string) {
     return
   }
   const anchorTop = Math.max(0, offsetInScroller(anchor, parent))
+  parent.scrollTop = Math.min(anchorTop, maxScroll)
   const reply = turn?.querySelector<HTMLElement>(':scope > [data-chat-kind="reply"]')
-  if (reply && reply.scrollHeight > reply.clientHeight + 1) {
-    parent.scrollTop = Math.min(anchorTop, maxScroll)
-    reply.scrollTop = Math.max(0, reply.scrollHeight - reply.clientHeight)
-    return
-  }
-  const nodes = parent.querySelectorAll<HTMLElement>('[data-node-id]')
-  const last = nodes[nodes.length - 1]
-  const contentEnd =
-    last instanceof HTMLElement ? offsetInScroller(last, parent) + last.offsetHeight : parent.scrollHeight
-  const span = contentEnd - anchorTop
+  if (!reply) return
   const pad = Number.parseFloat(getComputedStyle(parent).paddingBottom) || 0
-  const room = Math.max(1, parent.clientHeight - pad)
-  parent.scrollTop = span <= room ? Math.min(anchorTop, maxScroll) : Math.min(Math.max(0, contentEnd - room), maxScroll)
+  const gap = turn ? Number.parseFloat(getComputedStyle(turn).rowGap || getComputedStyle(turn).gap) || 0 : 0
+  const room = Math.max(0, parent.clientHeight - pad - anchor.offsetHeight - gap)
+  if (room > 0 && reply.style.maxHeight !== `${room}px`) reply.style.maxHeight = `${room}px`
+  if (reply.scrollHeight > reply.clientHeight + 1) {
+    reply.scrollTop = Math.max(0, reply.scrollHeight - reply.clientHeight)
+  }
 }
 
 export function pinChatToLatest(parent: HTMLElement) {

@@ -62,7 +62,7 @@ describe('sticky user message markers', () => {
     expect(userRows[0]?.getAttribute('data-node-id')).toBe('u-1')
     expect(userRows[1]?.getAttribute('data-node-id')).toBe('u-2')
     expect(userRows[0]?.className).toMatch(/sticky top-0 z-1 bg-transparent/)
-    expect(userRows[1]?.className).not.toMatch(/sticky/)
+    expect(userRows[1]?.className).toMatch(/sticky top-0 z-1 bg-transparent/)
     expect(turns[1]?.className).toMatch(/is-live/)
     expect(userRows[0]?.className).not.toMatch(/bg-\(--dsw-bg\)/)
     expect(userRows[0]?.getAttribute('data-biu-kind')).toBe('message')

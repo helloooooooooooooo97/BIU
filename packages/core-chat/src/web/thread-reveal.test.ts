@@ -265,18 +265,16 @@ describe('follow the sent message from the top', () => {
     expect(parent.scrollTop).toBe(1000)
   })
 
-  it('follows the bottom once the reply is taller than the viewport', () => {
+  it('does not scroll the pinned send up when the reply is taller than the viewport', () => {
     const parent = scroller({ scrollHeight: 4200, clientHeight: 800, scrollTop: 1000 })
     const user = document.createElement('div')
     user.dataset.nodeId = 'u-9'
     user.dataset.chatKind = 'user'
     place(user, 200, 48)
-    const reply = document.createElement('div')
-    reply.dataset.nodeId = 'r-9'
-    place(reply, 260, 2000)
-    parent.append(user, reply)
+    Object.defineProperty(user, 'offsetHeight', { value: 48, configurable: true })
+    parent.append(user)
     followChatOutput(parent, 'u-9')
-    expect(parent.scrollTop).toBe(2460)
+    expect(parent.scrollTop).toBe(1200)
   })
 
   it('keeps the sent message at the top and scrolls the reply pane instead of overlapping it', () => {
@@ -325,6 +323,7 @@ describe('thread follows the latest message', () => {
     expect(sendFollow).toContain('followChatOutput')
     expect(sendFollow).toContain('reserveLiveTurnRoom')
     expect(sendFollow).toContain('applyFollow(parent)')
+    expect(src).toContain('parent.scrollTop > minTop + PIN_TOP_SLACK_PX')
     expect(sendFollow).not.toContain("kind: 'pin'")
     expect(sendFollow).not.toContain('skipNextLayoutPin')
     expect(sendFollow).not.toContain('skipNextResizePin')

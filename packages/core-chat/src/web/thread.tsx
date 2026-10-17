@@ -47,6 +47,7 @@ import {
   distanceFromChatBottom,
   followChatOutput,
   nextStickToLatest,
+  offsetInScroller,
   pinChatToLatest,
   reserveLiveTurnRoom,
   PIN_TOP_SLACK_PX,
@@ -684,11 +685,9 @@ export const ChatNodeList = memo(function ChatNodeList({
               const dispatchTasks =
                 replyNode?.turn != null ? dispatchedTasksByTurn[String(replyNode.turn)] : undefined
               const stickyUser =
-                node.kind === 'user' && anchor.id !== liveTurnId
+                node.kind === 'user'
                   ? 'sticky top-0 z-1 bg-transparent'
-                  : node.kind === 'user'
-                    ? 'bg-transparent'
-                    : ''
+                  : ''
               const skipPaint =
                 (node.kind === 'reply' || node.kind === 'turn') && anchor.id !== liveTurnId
                   ? '[content-visibility:auto] [contain-intrinsic-size:auto_160px]'
@@ -928,7 +927,24 @@ export const ChatThread = memo(function ChatThread(props: SlotProps) {
         maybePrefetchOlder()
         return
       }
-      applyStick(parent.scrollTop < lastTop - 0.5)
+      const scrollingUp = parent.scrollTop < lastTop - 0.5
+      const pinId = followAnchorRef.current
+      if (pinId && stickToBottomRef.current && !scrollingUp) {
+        const escaped = typeof CSS !== 'undefined' && typeof CSS.escape === 'function' ? CSS.escape(pinId) : pinId
+        const user = parent.querySelector<HTMLElement>(`[data-chat-kind="user"][data-node-id="${escaped}"]`)
+        if (user) {
+          const minTop = Math.max(0, offsetInScroller(user, parent))
+          if (parent.scrollTop > minTop + PIN_TOP_SLACK_PX) {
+            adjustingScrollRef.current = true
+            parent.scrollTop = minTop
+            adjustingScrollRef.current = false
+            lastTop = parent.scrollTop
+            maybePrefetchOlder()
+            return
+          }
+        }
+      }
+      applyStick(scrollingUp)
       lastTop = parent.scrollTop
       maybePrefetchOlder()
     }
