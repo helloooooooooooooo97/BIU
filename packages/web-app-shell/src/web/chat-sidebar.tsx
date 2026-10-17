@@ -1,4 +1,4 @@
-import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { isMascotDancing, subscribeMascotDance } from '@biu/public-mascot'
 import { ChatCount } from '@biu/public-ui/chat-count'
@@ -34,6 +34,7 @@ import {
   BookmarkSlashIcon,
 } from '@heroicons/react/16/solid'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
+import { chatScrollRoot, sessionWindowFromHost, sessionWindowHidden, type SessionWindowSlice } from './session-window.ts'
 
 /** 项目/标签分组视图的持久化 key。 */
 const GROUP_BY_KEY = 'cordis.sidebar.groupBy'
@@ -164,6 +165,96 @@ const SessionRow = memo(function SessionRow({
       >
         <StarIcon {...chromeIcon} />
       </button>
+    </div>
+  )
+})
+
+const WindowedSessionList = memo(function WindowedSessionList({
+  sessions,
+  rowKey,
+  highlightId,
+  busySessions,
+  dancing,
+  onDelete,
+  onPin,
+  onOpen,
+}: {
+  sessions: SessionListItem[]
+  rowKey: string
+  highlightId: string | null
+  busySessions: Record<string, true>
+  dancing: boolean
+  onDelete: (item: SessionListItem) => void
+  onPin: (item: SessionListItem) => void
+  onOpen?: (item: SessionListItem) => void
+}) {
+  const hostRef = useRef<HTMLDivElement>(null)
+  const countRef = useRef(sessions.length)
+  countRef.current = sessions.length
+  const [slice, setSlice] = useState(() => sessionWindowHidden(sessions.length))
+
+  const applySlice = useCallback((next: SessionWindowSlice) => {
+    setSlice((prev) =>
+      prev.start === next.start && prev.end === next.end && prev.padTop === next.padTop && prev.padBottom === next.padBottom
+        ? prev
+        : next,
+    )
+  }, [])
+
+  useLayoutEffect(() => {
+    const host = hostRef.current
+    if (!host) return
+    const scroller = chatScrollRoot(host)
+    applySlice(scroller ? sessionWindowFromHost(countRef.current, host, scroller) : sessionWindowHidden(countRef.current))
+  }, [applySlice, sessions.length])
+
+  useEffect(() => {
+    const host = hostRef.current
+    if (!host) return
+    const scroller = chatScrollRoot(host)
+    if (!scroller) return
+    let raf = 0
+    const sync = () => applySlice(sessionWindowFromHost(countRef.current, host, scroller))
+    const onScroll = () => {
+      if (raf) return
+      raf = requestAnimationFrame(() => {
+        raf = 0
+        sync()
+      })
+    }
+    scroller.addEventListener('scroll', onScroll, { passive: true })
+    const ro = new ResizeObserver(onScroll)
+    ro.observe(scroller)
+    ro.observe(host)
+    return () => {
+      cancelAnimationFrame(raf)
+      scroller.removeEventListener('scroll', onScroll)
+      ro.disconnect()
+    }
+  }, [applySlice, sessions.length])
+
+  return (
+    <div
+      ref={hostRef}
+      className="sidebar-session-window"
+      data-session-window=""
+      data-session-window-start={slice.start}
+      data-session-window-end={slice.end}
+      data-session-window-count={sessions.length}
+      style={{ paddingTop: slice.padTop, paddingBottom: slice.padBottom }}
+    >
+      {sessions.slice(slice.start, slice.end).map((item) => (
+        <SessionRow
+          key={`${rowKey}:${item.id}`}
+          item={item}
+          active={item.id === highlightId}
+          busy={Boolean(busySessions[item.id])}
+          dancing={dancing}
+          onDelete={onDelete}
+          onPin={onPin}
+          onOpen={onOpen}
+        />
+      ))}
     </div>
   )
 })
@@ -308,7 +399,7 @@ export const ChatSidebar = memo(function ChatSidebar({
   )
 
   const body = (
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-3">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-3" data-chat-scroll="">
         <div className="mt-2 space-y-1.5">
           {sessions.length === 0 && groupBy !== 'project' ? null : (
             sections.map((section) => {
@@ -363,18 +454,18 @@ export const ChatSidebar = memo(function ChatSidebar({
                   <SidebarFold open={!sectionCollapsed}>
                     <div className="flex min-w-0 flex-col gap-px pt-0.5">
                       {section.sessions
-                        ? section.sessions.map((item) => (
-                          <SessionRow
-                            key={`pinned:${item.id}`}
-                            item={item}
-                            active={item.id === highlightId}
-                            busy={Boolean(busySessions[item.id])}
+                        ? (
+                          <WindowedSessionList
+                            sessions={section.sessions}
+                            rowKey="pinned"
+                            highlightId={highlightId}
+                            busySessions={busySessions}
                             dancing={dancing}
                             onDelete={deleteChat}
                             onPin={pinChat}
                             onOpen={variant === 'popover' ? openSession : undefined}
                           />
-                        ))
+                        )
                         : section.groups?.map((group) => {
                           const collapsed = Boolean(collapsedProjects[group.key])
                           const isUngrouped = group.key === UNGROUPED_PROJECT_KEY || group.key === UNGROUPED_TAG_KEY
@@ -439,18 +530,16 @@ export const ChatSidebar = memo(function ChatSidebar({
                                   ) : null}
                               </div>
                               <SidebarFold open={!collapsed} className="sidebar-session-list min-w-0">
-                                {group.sessions.map((item) => (
-                                  <SessionRow
-                                    key={`${group.key}:${item.id}`}
-                                    item={item}
-                                    active={item.id === highlightId}
-                                    busy={Boolean(busySessions[item.id])}
-                                    dancing={dancing}
-                                    onDelete={deleteChat}
-                                    onPin={pinChat}
-                                    onOpen={variant === 'popover' ? openSession : undefined}
-                                  />
-                                ))}
+                                <WindowedSessionList
+                                  sessions={group.sessions}
+                                  rowKey={group.key}
+                                  highlightId={highlightId}
+                                  busySessions={busySessions}
+                                  dancing={dancing}
+                                  onDelete={deleteChat}
+                                  onPin={pinChat}
+                                  onOpen={variant === 'popover' ? openSession : undefined}
+                                />
                               </SidebarFold>
                             </div>
                           )

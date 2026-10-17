@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, type MouseEvent } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type RefObject } from 'react'
 import type { NodeViewProps } from '@tiptap/react'
 import { NodeViewWrapper } from '@tiptap/react'
 import { PlayIcon } from '@heroicons/react/16/solid'
@@ -13,6 +13,7 @@ import {
   type PageBlockPluginPhase,
 } from './page-block-meta.ts'
 import { bindPageBlockPlugin } from './page-block-plugin-host.ts'
+import { PAGE_BLOCK_IDLE_MIN_PX, PAGE_BLOCK_IDLE_ROOT_MARGIN, schedulePageBlockMount } from './page-block-idle.ts'
 
 function assetName(file: string) {
   return file.replace(/^assets\//, '')
@@ -82,6 +83,60 @@ export function PageBlockMissing({
   )
 }
 
+function PageBlockIdle() {
+  return (
+    <div
+      className="page-block-idle"
+      data-page-block-idle=""
+      aria-hidden
+      style={{ minHeight: PAGE_BLOCK_IDLE_MIN_PX }}
+    />
+  )
+}
+
+function useIdlePageBlockMount(active: boolean, host: RefObject<HTMLElement | null>) {
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    if (!active || mounted) return
+    let gone = false
+    let io: IntersectionObserver | null = null
+    let tries = 0
+    const arm = () => {
+      if (gone) return
+      schedulePageBlockMount(() => {
+        if (!gone) setMounted(true)
+      })
+    }
+    const start = () => {
+      if (gone) return
+      const el = host.current
+      if (!el) {
+        if (tries++ < 8) requestAnimationFrame(start)
+        return
+      }
+      if (typeof IntersectionObserver === 'undefined') {
+        arm()
+        return
+      }
+      io = new IntersectionObserver(
+        (entries) => {
+          if (!entries.some((row) => row.isIntersecting)) return
+          io?.disconnect()
+          arm()
+        },
+        { rootMargin: PAGE_BLOCK_IDLE_ROOT_MARGIN, threshold: 0 },
+      )
+      io.observe(el)
+    }
+    start()
+    return () => {
+      gone = true
+      io?.disconnect()
+    }
+  }, [active, host, mounted])
+  return active && mounted
+}
+
 function samePageBlockProps(prev: NodeViewProps, next: NodeViewProps) {
   return (
     prev.node.attrs.kind === next.node.attrs.kind &&
@@ -119,6 +174,7 @@ export const PageBlockView = memo(function PageBlockView({ node, updateAttribute
     updateAttributesRef.current({ data: next })
   }, [])
   const hostRef = useRef<HTMLElement | null>(null)
+  const showView = useIdlePageBlockMount(Boolean(View), hostRef)
   useLayoutEffect(() => bindPageBlockPlugin(hostRef.current, plugin), [plugin])
   useLayoutEffect(() => {
     if (View || !plugin || phase !== 'idle') return
@@ -166,11 +222,13 @@ export const PageBlockView = memo(function PageBlockView({ node, updateAttribute
     >
       {cloneFrom ? (
         <div className="page-block-missing">正在复制附件…</div>
-      ) : View ? (
+      ) : View && showView ? (
         // 文档里的插件块崩了只烂这一块，不该让整个应用白屏。
         <RenderBoundary label={plugin || kind}>
           <View data={data} update={update} writable />
         </RenderBoundary>
+      ) : View ? (
+        <PageBlockIdle />
       ) : (
         <PageBlockMissing kind={kind} plugin={plugin} data={data} phase={phase} />
       )}
