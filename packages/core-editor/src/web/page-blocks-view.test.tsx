@@ -17,6 +17,30 @@ test('parsePageBlockRowData reads json string or object', () => {
   assert.deepEqual(parsePageBlockRowData(''), {})
 })
 
+test('parsePageBlockRowData unpacks slim index envelopes', () => {
+  assert.deepEqual(
+    parsePageBlockRowData({
+      blockId: 'a1',
+      kind: 'html',
+      plugin: 'page-html-blocks',
+      attrs: { deck: true },
+      assets: ['hero.png'],
+    }),
+    { deck: true },
+  )
+  assert.deepEqual(
+    parsePageBlockRowData(
+      '{"blockId":"a1","kind":"excalidraw","plugin":"page-excalidraw","attrs":{"file":"assets/board.json"},"assets":[]}',
+    ),
+    { file: 'assets/board.json' },
+  )
+  assert.deepEqual(parsePageBlockRowData({ html: '<p>keep</p>', attrs: { deck: true }, assets: [] }), {
+    html: '<p>keep</p>',
+    attrs: { deck: true },
+    assets: [],
+  })
+})
+
 test('live block data keeps the record title and does not persist a stale one', () => {
   const live = mergeLiveBlockData({ title: '旧名', sid: 's1' }, { history: [] }, { title: '新名' })
   assert.equal(live.title, '新名')

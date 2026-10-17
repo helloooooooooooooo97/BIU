@@ -1,5 +1,7 @@
 import {
   CircleStackIcon,
+  ShareIcon,
+  TableCellsIcon,
 } from '@heroicons/react/16/solid'
 import type { ViewMode } from './fields.ts'
 import type { CrumbKind } from './sidebar-nav.ts'
@@ -12,8 +14,9 @@ export function UiGlyph({ icon, className }: { icon: string; className?: string 
   return <span aria-hidden className={['fsdb-ui-glyph', className].filter(Boolean).join(' ')} data-icon={icon} />
 }
 
-export function ViewModeGlyph({ mode, className }: { mode?: ViewMode; className?: string }) {
-  return <UiGlyph icon={mode === 'table' || !mode ? 'table' : 'share'} className={className} />
+export function ViewModeGlyph({ mode, className = 'size-4' }: { mode?: ViewMode; className?: string }) {
+  if (mode === 'table' || !mode) return <TableCellsIcon aria-hidden className={className} />
+  return <ShareIcon aria-hidden className={className} />
 }
 
 export function CrumbItemGlyph({

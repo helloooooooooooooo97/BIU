@@ -61,8 +61,10 @@ export function sessionWindowFromHost(
   const hostRect = host.getBoundingClientRect()
   const scrollerRect = scroller.getBoundingClientRect()
   const slack = overscan * rowPx
+  // Folded/off-screen groups have no box. A one-row group can measure under
+  // `rowPx` after subpixel rounding; treating that as hidden flash-loops.
   if (
-    hostRect.height < rowPx ||
+    hostRect.height <= 0 ||
     hostRect.bottom < scrollerRect.top - slack ||
     hostRect.top > scrollerRect.bottom + slack
   ) {

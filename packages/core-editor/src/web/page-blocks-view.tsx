@@ -10,17 +10,32 @@ import { getPageEditor, usePageEditorVersion } from './service.ts'
 export const PAGE_BLOCKS_VIEW_ID = 'blocks'
 export const PAGE_REVEAL_EVENT = 'biu:inspector-reveal'
 
+const INDEX_BODY_KEYS = new Set(['html', 'script', 'code', 'source', 'body'])
+
+export function isSlimBlockIndexData(value: Record<string, unknown>) {
+  if (!value.attrs || typeof value.attrs !== 'object' || Array.isArray(value.attrs)) return false
+  if (!Array.isArray(value.assets)) return false
+  if (typeof value.blockId !== 'string' && typeof value.kind !== 'string') return false
+  for (const key of INDEX_BODY_KEYS) {
+    if (key in value) return false
+  }
+  return true
+}
+
 export function parsePageBlockRowData(raw: unknown): Record<string, unknown> {
-  if (raw && typeof raw === 'object' && !Array.isArray(raw)) return { ...(raw as Record<string, unknown>) }
-  if (typeof raw === 'string' && raw.trim()) {
+  let parsed: Record<string, unknown> | null = null
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) parsed = { ...(raw as Record<string, unknown>) }
+  else if (typeof raw === 'string' && raw.trim()) {
     try {
-      const parsed = JSON.parse(raw) as unknown
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed as Record<string, unknown>
+      const next = JSON.parse(raw) as unknown
+      if (next && typeof next === 'object' && !Array.isArray(next)) parsed = next as Record<string, unknown>
     } catch {
       /* ignore */
     }
   }
-  return {}
+  if (!parsed) return {}
+  if (isSlimBlockIndexData(parsed)) return { ...(parsed.attrs as Record<string, unknown>) }
+  return parsed
 }
 
 async function writeBlockData(id: string, data: Record<string, unknown>) {

@@ -58,6 +58,16 @@ test('data sidebar keeps shares out of the navigation sections', () => {
   assert.doesNotMatch(sidebar, /shareCount/)
 })
 
+test('data sidebar view rows paint SVG view icons', () => {
+  const sidebar = readFileSync(resolve(import.meta.dirname, './data-sidebar.tsx'), 'utf8')
+  const glyphs = readFileSync(resolve(import.meta.dirname, './nav-glyphs.tsx'), 'utf8')
+  assert.match(sidebar, /<ViewModeGlyph mode=\{view\.mode\} \/>/)
+  assert.doesNotMatch(sidebar, /fsdb-ui-glyph/)
+  const viewMode = glyphs.slice(glyphs.indexOf('export function ViewModeGlyph'), glyphs.indexOf('export function CrumbItemGlyph'))
+  assert.match(viewMode, /TableCellsIcon/)
+  assert.match(viewMode, /ShareIcon/)
+})
+
 test('data sidebar loads view totals idle and current collection first', () => {
   const sidebar = readFileSync(resolve(import.meta.dirname, './data-sidebar.tsx'), 'utf8')
   assert.match(sidebar, /shouldFetchViewTotal/)
@@ -576,6 +586,10 @@ test('create record sits at the right of the toolbar with a blue label', () => {
   assert.doesNotMatch(browser, /TableCellsIcon/)
   const glyphs = readFileSync(resolve(import.meta.dirname, './nav-glyphs.tsx'), 'utf8')
   assert.match(glyphs, /export function UiGlyph/)
+  const viewMode = glyphs.slice(glyphs.indexOf('export function ViewModeGlyph'), glyphs.indexOf('export function CrumbItemGlyph'))
+  assert.match(viewMode, /TableCellsIcon/)
+  assert.match(viewMode, /ShareIcon/)
+  assert.doesNotMatch(viewMode, /UiGlyph/)
   assert.match(style, /\.fsdb-page \.fsdb-ui-glyph/)
   assert.match(style, /--fsdb-ui-search:/)
   assert.match(style, /tasks-refresh \.fsdb-ui-glyph/)
@@ -740,6 +754,7 @@ test('filesystem list is table-only; extra modes come from registerView', () => 
   assert.doesNotMatch(browser, /<th>操作<\/th>/)
   assert.match(browser, /aria-label="查看模式"/)
   assert.match(browser, /if \(customView\) return undefined/)
+  assert.match(browser, /customView \? 'full' : 'proj'/)
   assert.match(browser, /data-testid="fsdb-mode-plus"/)
   assert.match(browser, /askNewPresentation/)
   assert.doesNotMatch(browser, /extraViews\.length \?/)

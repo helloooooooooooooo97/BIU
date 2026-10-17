@@ -184,6 +184,10 @@ test('page-blocks collection updates one fence by page::block id', async () => {
   assert.equal(html.blockKind, 'html')
   assert.equal(html.pageTitle, '海报')
   assert.equal(html.title, '海报 html')
+  assert.match(String(html.data), /<div>旧<\/div>/)
+  const draw = listed.find((item) => item.id === `/pages::${pageId}::edd9aaaa`)
+  assert.ok(draw)
+  assert.match(String(draw.data), /画板-edd9\.json/)
   const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as typeof import('node:sqlite')
   const sqlite = new DatabaseSync(join(root, PAGE_DB))
   const bref = sqlite.prepare('SELECT name, source FROM block_refs WHERE record_id = ? AND block_id = ?').get(pageId, 'edd9aaaa') as {
@@ -196,6 +200,9 @@ test('page-blocks collection updates one fence by page::block id', async () => {
     .prepare('SELECT name FROM block_refs WHERE record_id = ? AND block_id = ?')
     .get(pageId, 'ab12cd34') as { name: string }
   assert.equal(htmlRef.name, 'hero.png')
+  const stored = sqlite.prepare('SELECT data_json FROM page_block_index WHERE block_id = ?').get('ab12cd34') as { data_json: string }
+  assert.equal(stored.data_json.includes('<div>旧</div>'), false)
+  assert.ok(Array.isArray(JSON.parse(stored.data_json).assets))
   sqlite.close()
   const renamed = await blocks.update!(`/pages::${pageId}::ab12cd34`, { title: '刊头' })
   assert.equal(renamed.title, '刊头')
@@ -207,10 +214,13 @@ test('page-blocks collection updates one fence by page::block id', async () => {
     data: { html: '<div>新</div>', title: '旧名', deck: false },
   })
   assert.equal(clobbered.title, '刊头')
-  const indexed = JSON.parse(String(updated.data)) as { attrs?: { deck?: boolean }; assets?: string[] }
-  assert.equal(indexed.attrs?.deck, false)
-  assert.ok(Array.isArray(indexed.assets))
-  assert.equal(String(updated.data).includes('<div>新</div>'), false)
+  const payload = JSON.parse(String(updated.data)) as { html?: string; deck?: boolean }
+  assert.equal(payload.deck, false)
+  assert.match(String(payload.html), /<div>新<\/div>/)
+  const after = new DatabaseSync(join(root, PAGE_DB))
+  const slim = after.prepare('SELECT data_json FROM page_block_index WHERE block_id = ?').get('ab12cd34') as { data_json: string }
+  assert.equal(slim.data_json.includes('<div>新</div>'), false)
+  after.close()
   const row = await pages.get!(pageId)
   assert.match(String(row?.notes), /id=ab12cd34 title="刊头" deck=false/)
   assert.match(String(row?.notes), /<div>新<\/div>/)

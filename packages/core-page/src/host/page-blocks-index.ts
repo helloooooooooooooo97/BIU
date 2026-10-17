@@ -287,4 +287,29 @@ export class PageBlocksIndex {
       .get(parsed.collection, parsed.pageId, parsed.blockId) as IndexRow | undefined
     return row ? toRecord(row) : null
   }
+
+  /** Index `data_json` is slim (no html/script body). Gallery/get need the fence payload. */
+  async hydrateRecords(rows: DbRecord[]): Promise<DbRecord[]> {
+    if (!rows.length) return rows
+    const db = await this.db()
+    const pages = new Map<string, { collection: string; pageId: string }>()
+    for (const row of rows) {
+      const parsed = parsePageBlockRecordId(String(row.id ?? ''))
+      if (!parsed) continue
+      const key = coverKey(parsed.collection, parsed.pageId)
+      if (!pages.has(key)) pages.set(key, parsed)
+    }
+    const dataById = new Map<string, string>()
+    for (const page of pages.values()) {
+      const body = readEditorContent(db, page.collection, page.pageId)
+      for (const fence of listPageBlockFences(body)) {
+        if (!fence.id) continue
+        dataById.set(pageBlockRecordId(page.collection, page.pageId, fence.id), JSON.stringify(pageBlockData(fence)))
+      }
+    }
+    return rows.map((row) => {
+      const data = dataById.get(String(row.id ?? ''))
+      return data ? { ...row, data } : row
+    })
+  }
 }
