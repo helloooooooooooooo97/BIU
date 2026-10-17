@@ -3559,6 +3559,14 @@ html.dark .tool-call-status.is-fail {
   position: static;
 }
 
+.chat-overlay-panel .chat-stage .chat-turn.is-live > [data-chat-kind='user'],
+.chat-pane .chat-stage .chat-turn.is-live > [data-chat-kind='user'] {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--dsw-bg);
+}
+
 .chat-overlay-panel .chat-pane {
   position: relative;
   flex: 1;
@@ -6565,10 +6573,6 @@ html:not(.dark) .chat-outline-item.is-active {
 
 .chat-turn>[data-chat-kind='user'] {
   padding-bottom: var(--dsw-chat-gap);
-}
-
-.chat-turn.is-live {
-  min-height: 0;
 }
 
 .chat-turn.is-live > [data-chat-kind='reply'] {
