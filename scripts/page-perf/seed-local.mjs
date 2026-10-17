@@ -140,6 +140,29 @@ const sessions = await ensurePrefixed('/sessions', sessionPrefix, sessionTarget,
   title: `${sessionPrefix}${index}`,
 }))
 
+async function writeDenseView(tablePath, viewId, { wrap = false, groupBy = '' } = {}) {
+  await apiJson('/api/db/saved-views', {
+    method: 'POST',
+    body: JSON.stringify({
+      path: tablePath,
+      views: [
+        {
+          id: viewId,
+          name: viewTitle,
+          mode: 'table',
+          sortField: 'title',
+          sortDir: 'asc',
+          filters: {},
+          columns: [],
+          pageSize: 100,
+          wrap: Boolean(wrap),
+          groupBy: groupBy || '',
+        },
+      ],
+    }),
+  })
+}
+
 async function ensureDenseView(tablePath) {
   const wrap = tablePath === '/pages'
   const groupBy = tablePath === '/tasks' ? 'status' : ''
@@ -147,19 +170,10 @@ async function ensureDenseView(tablePath) {
   const hit = listed.items.find((row) => row.tablePath === tablePath && String(row.title || '') === viewTitle)
   if (hit) {
     const viewId = String(hit.viewId || '')
-    const rowId = String(hit.id || '')
     const needsWrap = wrap && !hit.wrap
     const needsGroup = Boolean(groupBy) && String(hit.groupBy || '') !== groupBy
     const needsSize = Number(hit.pageSize) !== 100
-    if (viewId && rowId && (needsWrap || needsGroup || needsSize)) {
-      await apiJson('/api/db/update', {
-        method: 'POST',
-        body: JSON.stringify({
-          path: `/views/${rowId}`,
-          content: { pageSize: 100, ...(wrap ? { wrap: true } : {}), ...(groupBy ? { groupBy } : {}) },
-        }),
-      })
-    }
+    if (viewId && (needsWrap || needsGroup || needsSize)) await writeDenseView(tablePath, viewId, { wrap, groupBy })
     return { created: false, viewId, path: `/database/${tablePath.replace(/^\//, '')}/view/${encodeURIComponent(viewId)}` }
   }
   const created = await createBatch('/views', [
@@ -167,12 +181,12 @@ async function ensureDenseView(tablePath) {
       title: viewTitle,
       tablePath,
       pageSize: 100,
-      ...(wrap ? { wrap: true } : {}),
       ...(groupBy ? { groupBy } : {}),
     },
   ])
   const value = created[0] || {}
   const viewId = String(value.viewId || '')
+  if (viewId && wrap) await writeDenseView(tablePath, viewId, { wrap, groupBy })
   return {
     created: true,
     viewId,
