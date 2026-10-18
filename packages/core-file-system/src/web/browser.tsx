@@ -99,6 +99,7 @@ import {
   isViewStarred,
   loadViews,
   pullSavedViews,
+  applyListedCrumbMutation,
   rememberRecords,
   rememberViews,
   persistStarredViews,
@@ -912,15 +913,31 @@ function applyPreviewTotalMutation(mutation: ListedMutation) {
   }
 }
 
+function listedCrumbRow(row: DbRecord) {
+  return {
+    id: String(row.id),
+    label: crumbRecordLabel(row),
+    emoji: recordPreviewEmoji(row),
+    mascot: recordPreviewMascot(row),
+  }
+}
+
 function publishListedMutation(mutation: ListedMutation) {
   if (mutation.op === 'patch') {
     patchListCacheRecords(mutation.path, (row) =>
       row.id === mutation.row.id ? overlayListedRow(row, mutation.row) : row,
     )
+    applyListedCrumbMutation(mutation.path, { op: 'patch', row: listedCrumbRow(mutation.row) })
   } else if (mutation.op === 'remove') {
     dropListCacheRecords(mutation.path, mutation.ids)
+    applyListedCrumbMutation(mutation.path, { op: 'remove', ids: mutation.ids })
   } else {
     upsertListCacheRecord(mutation.path, mutation.row, mutation.groupBy, mutation.viewId)
+    applyListedCrumbMutation(mutation.path, {
+      op: 'create',
+      row: listedCrumbRow(mutation.row),
+      viewId: mutation.viewId,
+    })
   }
   applyPreviewTotalMutation(mutation)
   if (typeof window === 'undefined') return
@@ -3324,26 +3341,25 @@ export function CollectionBrowser({
     const gone = new Set(ids.filter(Boolean).map(String))
     if (!gone.size) return
     for (const id of gone) confirmedCreates.current.delete(id)
-    setItems((prev) => {
-      const next = prev.filter((item) => !gone.has(String(item.id)))
-      const removed = prev.length - next.length
-      if (removed) {
-        itemsRef.current = next
-        totalRef.current = Math.max(0, totalRef.current - removed)
-        setTotal(totalRef.current)
-      }
-      return next
-    })
-    setGroupBuckets((prev) =>
-      prev
+    const prev = itemsRef.current
+    const next = prev.filter((item) => !gone.has(String(item.id)))
+    const removed = prev.length - next.length
+    if (removed) {
+      itemsRef.current = next
+      totalRef.current = Math.max(0, totalRef.current - removed)
+      setItems(next)
+      setTotal(totalRef.current)
+    }
+    setGroupBuckets((groups) =>
+      groups
         .map((group) => {
           const rows = group.rows.filter((row) => !gone.has(String(row.id)))
-          const removed = group.rows.length - rows.length
-          if (!removed) return group
+          const dropped = group.rows.length - rows.length
+          if (!dropped) return group
           return {
             ...group,
             rows,
-            total: group.total != null ? Math.max(0, group.total - removed) : undefined,
+            total: group.total != null ? Math.max(0, group.total - dropped) : undefined,
           }
         })
         .filter((group) => group.rows.length > 0 || (group.total ?? 0) > 0),

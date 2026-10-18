@@ -48,9 +48,11 @@ import {
   getStarredViewsVersion,
   isRecordStarred,
   isViewStarred,
+  getCrumbsVersion,
   loadRecords,
   loadViews,
   peekRecord,
+  subscribeCrumbs,
   persistStarredRecords,
   persistStarredViews,
   rememberRecords,
@@ -145,6 +147,8 @@ function ViewRecordPreview({
   const chromeIcon = getDatabaseUi()?.chrome(path).Icon
   const nested = isRecordTreeCollection(path)
   const totalsVersion = useSyncExternalStore(subscribePreviewTotals, getPreviewTotalsVersion, () => 0)
+  const crumbsVersion = useSyncExternalStore(subscribeCrumbs, getCrumbsVersion, () => 0)
+  const crumbTick = skipFetch ? crumbsVersion : 0
   useSyncExternalStore(subscribeStarredRecords, getStarredRecordsVersion, () => 0)
   const starredRecords = getStarredRecords()
 
@@ -187,7 +191,7 @@ function ViewRecordPreview({
       cancelled = true
       stop()
     }
-  }, [key, open, path, seedKey, skipFetch, totalsVersion, view.id, view.query, view.sortField, view.sortDir, view.filters, view.groupBy])
+  }, [crumbTick, key, open, path, seedKey, skipFetch, totalsVersion, view.id, view.query, view.sortField, view.sortDir, view.filters, view.groupBy])
 
   async function loadMore() {
     const more = nextPreviewLimit(state.items.length, state.total)

@@ -13,6 +13,7 @@ import {
   pickViewForRoute,
   rememberViews,
   rememberRecords,
+  applyListedCrumbMutation,
   routeViewNeedsFetch,
   savedViewFromRecord,
   toggleStarredRecord,
@@ -150,6 +151,22 @@ test('rememberRecords keeps titles when another inspector page overwrites the sa
   const listed = loadRecords('/pages', 'mine')
   assert.equal(listed.find((row) => row.id === 'home')?.label, '首页')
   assert.equal(listed.find((row) => row.id === 'draft')?.label, 'draft')
+})
+
+test('listed crumb mutations update the open view immediately', () => {
+  rememberRecords('/pages', [{ id: 'home', label: '首页' }], 'all')
+  applyListedCrumbMutation('/pages', { op: 'create', row: { id: 'p-new', label: '新页' }, viewId: 'all' })
+  assert.deepEqual(
+    loadRecords('/pages', 'all').map((row) => row.id),
+    ['p-new', 'home'],
+  )
+  applyListedCrumbMutation('/pages', { op: 'patch', row: { id: 'p-new', label: '改名' } })
+  assert.equal(loadRecords('/pages', 'all').find((row) => row.id === 'p-new')?.label, '改名')
+  applyListedCrumbMutation('/pages', { op: 'remove', ids: ['p-new'] })
+  assert.deepEqual(
+    loadRecords('/pages', 'all').map((row) => row.id),
+    ['home'],
+  )
 })
 
 test('rememberRecords scopes crumb rows to the current view', () => {
