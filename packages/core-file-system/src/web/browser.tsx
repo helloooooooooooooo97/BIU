@@ -29,7 +29,6 @@ import { ChatCount } from '@biu/public-ui/chat-count'
 import { HeadlessDismiss, HEADLESS_DISMISS_IGNORE } from '@biu/public-ui/headless-dismiss'
 import { TagChip, TagChips, tagTextColor, tagTone as schemaTagTone } from '@biu/public-ui/tag-chip'
 import {
-  asStringList,
   contentFieldKey,
   defaultColumnKeys,
   facetSourceKey,
@@ -124,19 +123,7 @@ import { ViewPaneMenu } from './pane-more-menu.tsx'
 import { HttpError, listCollection, readJson } from './db-client.ts'
 import { savedViewRecordPath } from '../paths.ts'
 import { findViewNeighbor, indexOnPage } from './view-adjacent.ts'
-import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, TABLE_WINDOW_VIEWPORT_FALLBACK, TABLE_COL_VIEWPORT_FALLBACK, tableColumnEstimate, tableColumnFit, tableColumnSlice, tableColumnUnchanged, tableWindowSlice, tableWindowUnchanged, type TableColumnSlice } from './table-window.ts'
-import {
-  IDLE_CELL_TEXT_MAX,
-  idleActionsInnerHtml,
-  idleBoolInnerHtml,
-  idleEmptyUsageInnerHtml,
-  idlePersonInnerHtml,
-  idleTableRowHtml,
-  idleTagChipsInnerHtml,
-  idleTextInnerHtml,
-  idleTitleInnerHtml,
-  type IdleTableTd,
-} from './table-idle-html.ts'
+import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, rememberedTableWrap, tableColumnEstimate, tableColumnFit, tableColumnSlice, tableColumnUnchanged, tableWindowSlice, tableWindowUnchanged, tableWrapScroll, type TableColumnSlice } from './table-window.ts'
 import { isPaintedListReady, markPaintedListReady, rememberPreviewTotal, resetPaintedListReady, viewTotalKey, whenListIdle } from './sidebar-preview.ts'
 import { catalogLockFilters, isReadOnlyViewId, mergeTableViews, parseBuiltinScopeViewId, stubBuiltinBlockKindView, viewsForScope, type DataScope } from '../catalog-views.ts'
 import { SAVED_VIEW_EVENT, rememberInspectorWorkingView, showRecordInInspector } from './inspector-db-route.ts'
@@ -219,51 +206,6 @@ function ShareScopeDetail(props: ComponentProps<typeof LazyShareScopeDetail>) {
 const EMPTY_VIEWS: CollectionViewType[] = []
 const EMPTY_ROW_VIEWS: CollectionRowViewType[] = []
 const EMPTY_PICK = {}
-
-function scheduleIdle(show: () => void) {
-  const ric = typeof window !== 'undefined' ? window.requestIdleCallback : undefined
-  if (typeof ric === 'function') return { idleId: ric(show, { timeout: 160 }), timer: 0 }
-  return { idleId: 0, timer: window.setTimeout(show, 0) }
-}
-
-function clearIdle(idleId: number, timer: number) {
-  if (idleId && typeof window.cancelIdleCallback === 'function') window.cancelIdleCallback(idleId)
-  if (timer) window.clearTimeout(timer)
-}
-
-function TableIdleRow({
-  recordId,
-  className,
-  pick,
-  html,
-  renderLive,
-}: {
-  recordId: string
-  className?: string
-  pick: object
-  html: string
-  renderLive: () => ReactNode
-}) {
-  const [live, setLive] = useState(false)
-  const liveRef = useRef(renderLive)
-  liveRef.current = renderLive
-  useEffect(() => {
-    if (live) return
-    const show = () => setLive(true)
-    const { idleId, timer } = scheduleIdle(show)
-    return () => clearIdle(idleId, timer)
-  }, [live])
-  if (live) return liveRef.current()
-  return (
-    <tr
-      data-record-id={recordId}
-      data-table-idle=""
-      className={className}
-      {...pick}
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
-  )
-}
 
 function TableRecordIcon({
   row,
@@ -864,12 +806,11 @@ const WindowedTable = memo(function WindowedTable({
   onVisibleRange,
   activeRowId,
 }: WindowedTableProps) {
-  const [tableScroll, setTableScroll] = useState({
+  const [tableScroll, setTableScroll] = useState(() => ({
     top: 0,
-    height: TABLE_WINDOW_VIEWPORT_FALLBACK,
     left: 0,
-    width: TABLE_COL_VIEWPORT_FALLBACK,
-  })
+    ...rememberedTableWrap(),
+  }))
   const paintCountRef = useRef(0)
   const wrapCellsRef = useRef(false)
   const columnMetaRef = useRef({ count: 0, pin: 0, widths: [] as number[] })
@@ -916,35 +857,34 @@ const WindowedTable = memo(function WindowedTable({
     onVisibleRange?.(tableWindow.start, tableWindow.end)
   }, [onVisibleRange, tableWindow.end, tableWindow.start])
 
+  const applyWrapScroll = (wrap: HTMLElement, top?: number) => {
+    const next = tableWrapScroll(wrap, top)
+    const rowPx = wrapCellsRef.current ? TABLE_WRAP_ROW_PX : TABLE_ROW_PX
+    const count = paintCountRef.current
+    const cols = columnMetaRef.current
+    setTableScroll((prev) => {
+      const rowSame = tableWindowUnchanged(count, prev, next, rowPx)
+      const colSame = tableColumnUnchanged(cols.count, cols.pin, prev, next, cols.widths)
+      return rowSame && colSame ? prev : next
+    })
+  }
+
+  useLayoutEffect(() => {
+    const wrap = wrapRef.current
+    if (!wrap) return
+    if (wrap.scrollTop) wrap.scrollTop = 0
+    applyWrapScroll(wrap, 0)
+  }, [resetKey, wrapRef])
+
   useEffect(() => {
     const wrap = wrapRef.current
     if (!wrap) return
     let raf = 0
-    const sync = () => {
-      const top = wrap.scrollTop
-      const height = wrap.clientHeight
-      const left = wrap.scrollLeft
-      const width = wrap.clientWidth
-      const rowPx = wrapCellsRef.current ? TABLE_WRAP_ROW_PX : TABLE_ROW_PX
-      const count = paintCountRef.current
-      const cols = columnMetaRef.current
-      setTableScroll((prev) => {
-        const next = {
-          top,
-          height: height || prev.height,
-          left,
-          width: width || prev.width,
-        }
-        const rowSame = tableWindowUnchanged(count, prev, next, rowPx)
-        const colSame = tableColumnUnchanged(cols.count, cols.pin, prev, next, cols.widths)
-        return rowSame && colSame ? prev : next
-      })
-    }
     const onScroll = () => {
       if (raf) return
       raf = requestAnimationFrame(() => {
         raf = 0
-        sync()
+        applyWrapScroll(wrap)
       })
     }
     wrap.addEventListener('scroll', onScroll, { passive: true })
@@ -956,13 +896,6 @@ const WindowedTable = memo(function WindowedTable({
       ro.disconnect()
     }
   }, [wrapRef])
-
-  useLayoutEffect(() => {
-    const wrap = wrapRef.current
-    if (!wrap) return
-    if (wrap.scrollTop) wrap.scrollTop = 0
-    setTableScroll((prev) => (prev.top === 0 ? prev : { ...prev, top: 0 }))
-  }, [resetKey, wrapRef])
 
   const checkLayoutKey = [
     tableWindow.start, tableWindow.end, tableWindow.padTop, tableWindow.padBottom,
@@ -1049,35 +982,31 @@ function ViewTabFit({
 }) {
   const viewMeasureRef = useRef<HTMLDivElement>(null)
   const [viewTabFit, setViewTabFit] = useState(99)
-  const [measureOn, setMeasureOn] = useState(false)
+  const measure = () => {
+    const toolbar = toolbarRef.current
+    const right = toolbarRightRef.current
+    const row = viewMeasureRef.current
+    if (!toolbar || !right || !row) return
+    const tabs = Array.from(row.querySelectorAll('[data-view-measure]')) as HTMLElement[]
+    const available = Math.max(0, toolbar.clientWidth - right.offsetWidth - 12)
+    const next = countFittingViewTabs(tabs.map((el) => el.offsetWidth), available, 2)
+    setViewTabFit((prev) => (prev === next ? prev : next))
+  }
+  useLayoutEffect(() => {
+    measure()
+  }, [searchExpanded, toolbarRef, toolbarRightRef, views])
   useEffect(() => {
-    setMeasureOn(true)
-  }, [])
-  useEffect(() => {
-    if (!measureOn) return
-    function measure() {
-      const toolbar = toolbarRef.current
-      const right = toolbarRightRef.current
-      const row = viewMeasureRef.current
-      if (!toolbar || !right || !row) return
-      const tabs = Array.from(row.querySelectorAll('[data-view-measure]')) as HTMLElement[]
-      const available = Math.max(0, toolbar.clientWidth - right.offsetWidth - 12)
-      const next = countFittingViewTabs(tabs.map((el) => el.offsetWidth), available, 2)
-      setViewTabFit((prev) => (prev === next ? prev : next))
-    }
     const ro = new ResizeObserver(measure)
     if (toolbarRef.current) ro.observe(toolbarRef.current)
     if (toolbarRightRef.current) ro.observe(toolbarRightRef.current)
     window.addEventListener('resize', measure)
-    measure()
     return () => {
       ro.disconnect()
       window.removeEventListener('resize', measure)
     }
-  }, [measureOn, searchExpanded, toolbarRef, toolbarRightRef, views])
+  }, [searchExpanded, toolbarRef, toolbarRightRef, views])
   return (
     <>
-      {measureOn ? (
       <div className="tasks-viewtabs-measure" ref={viewMeasureRef} aria-hidden>
         {views.map((view) => (
           <button key={view.id} type="button" className="tasks-viewdd-btn tasks-viewtab" tabIndex={-1} data-view-measure={view.id}>
@@ -1086,7 +1015,6 @@ function ViewTabFit({
           </button>
         ))}
       </div>
-      ) : null}
       {children(viewTabFit)}
     </>
   )
@@ -1168,8 +1096,8 @@ export function CollectionBrowser({
   const paintListedViews = (path: string) =>
     listedViews(path, loadViews(path)).map((view) => withViewDisplay(path, view))
   const dataPath = collectionPath
-  const [stat, setStat] = useState<StatResult | null>(null)
-  const [items, setItems] = useState<Array<DbRecord & { path?: string }>>([])
+  const [stat, setStat] = useState<StatResult | null>(() => listCache.get(dataPath)?.stat ?? null)
+  const [items, setItems] = useState<Array<DbRecord & { path?: string }>>(() => listCache.get(dataPath)?.items ?? [])
   const [error, setError] = useState('')
   const [openDetailId, setOpenDetailId] = useState<string | null>(routeRecordId)
   const [detailRow, setDetailRow] = useState<DbRecord | null>(null)
@@ -1221,7 +1149,7 @@ export function CollectionBrowser({
     }
   }, [])
   const [pageSize, setPageSize] = useState(() => normalizePageSize(initialView?.pageSize))
-  const [total, setTotal] = useState(0)
+  const [total, setTotal] = useState(() => listCache.get(dataPath)?.total ?? 0)
   const [fetchQuery, setFetchQuery] = useState(initialView?.query ?? '')
   const [mode, setMode] = useState<ViewMode>(initialView?.mode ?? 'table')
   const customView = extraViews.find((view) => view.id === mode)
@@ -1326,7 +1254,7 @@ export function CollectionBrowser({
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
   const [groupPages, setGroupPages] = useState<Record<string, number>>({})
   const [groupFillKeys, setGroupFillKeys] = useState<string[]>([])
-  const [groupBuckets, setGroupBuckets] = useState<GroupBucket[]>([])
+  const [groupBuckets, setGroupBuckets] = useState<GroupBucket[]>(() => listCache.get(dataPath)?.groupBuckets ?? [])
   const groupPagesRef = useRef(groupPages)
   groupPagesRef.current = groupPages
   const groupBucketsRef = useRef(groupBuckets)
@@ -3433,30 +3361,6 @@ export function CollectionBrowser({
     )
   }
 
-  function idlePaintedCells(row: DbRecord) {
-    const cells: IdleTableTd[] = []
-    const colWindow = colWindowRef.current
-    const pushCol = (col: (typeof columns)[number]) => {
-      const pick = cellPickOf(row, col.key, col.field)
-      const attrs = Object.keys(pick).length ? (pick as Record<string, string | number | boolean | undefined>) : undefined
-      cells.push({
-        key: col.key,
-        inner: idleTableCellInner(row, col.key, col.field),
-        className: col.key === schema?.labelField ? 'is-pin-col' : undefined,
-        attrs,
-      })
-    }
-    const pushPad = (side: 'left' | 'right', px: number) => {
-      if (px <= 0) return
-      cells.push({ key: '', inner: '', className: 'fsdb-col-pad', style: padColBox(px) })
-    }
-    for (let i = 0; i < colWindow.pin; i += 1) pushCol(columns[i]!)
-    pushPad('left', colWindow.padLeft)
-    for (let i = colWindow.start; i < colWindow.end; i += 1) pushCol(columns[i]!)
-    pushPad('right', colWindow.padRight)
-    return cells
-  }
-
   function paintTableCell(row: DbRecord, key: string, field: FieldSpec) {
     if (key === 'shareScope' || key === 'shareRole') {
       const text = cellValueText(row, key, field) || String(row[key] ?? '')
@@ -3485,42 +3389,7 @@ export function CollectionBrowser({
     return text ? <span>{text}</span> : null
   }
 
-  function idleTableCellInner(row: DbRecord, key: string, field: FieldSpec) {
-    if (key === 'actions') {
-      const nestedSkip = (action: CollectionActionInfo) => !nested || (action.id !== 'open-split' && action.id !== 'open-page')
-      const placed = (chrome?.Actions ? placedActions(schema, 'row') : visibleActions(schema, row, 'row')).filter(nestedSkip)
-      return idleActionsInnerHtml(placed.map((action) => ({ label: action.label, danger: action.tone === 'danger' })))
-    }
-    if (key === schema?.labelField) {
-      return idleTitleInnerHtml(labelOf(row), idleTableIconKind(currentTable?.view?.icon), recordPreviewEmoji(row))
-    }
-    if (key === 'shareScope' || key === 'shareRole') {
-      return idleTextInnerHtml(cellValueText(row, key, field) || String(row[key] ?? ''))
-    }
-    const kind = resolveFieldType(field)
-    if (kind === 'boolean') {
-      const raw = parseFacetFlatColumnKey(key) ? readFacetFlatValue(row, key, facetSourceKey(schema)) : row[key]
-      return idleBoolInnerHtml(raw === true || raw === 'true')
-    }
-    if (kind === 'facet') {
-      const tags = loadFacets()
-      const parsed = normalizeSchemaValue(row[key])
-      return idleTagChipsInnerHtml(parsed.tags.map((id) => ({ id, label: tags.find((tag) => tag.id === id)?.label ?? id })))
-    }
-    if (kind === 'select' || kind === 'multi-select') {
-      const ids = kind === 'multi-select' ? asStringList(row[key]) : String(row[key] ?? '') ? [String(row[key])] : []
-      return idleTagChipsInnerHtml(ids.map((id) => ({ id, label: enumDisplayLabel(field, id) })))
-    }
-    if (kind === 'person') return idlePersonInnerHtml(row[key])
-    if (key === 'usage' && !(Number(row[key]) > 0)) return idleEmptyUsageInnerHtml()
-    const raw = parseFacetFlatColumnKey(key) ? readFacetFlatValue(row, key, facetSourceKey(schema)) : row[key]
-    if (typeof raw === 'string' && raw.length > IDLE_CELL_TEXT_MAX && kind !== 'datetime' && kind !== 'select' && kind !== 'multi-select') {
-      return idleTextInnerHtml(raw)
-    }
-    return idleTextInnerHtml(cellValueText(row, key, field))
-  }
-
-  function tableLiveRow(row: DbRecord, depth: number, hasKids: boolean, kidCount: number, rowKey: string, toolsArmed = false) {
+  function tableLiveRow(row: DbRecord, depth: number, hasKids: boolean, kidCount: number, rowKey: string, toolsArmed = true) {
     const cellPick = cellPickRef.current
     const colWindow = colWindowRef.current
     const paintLiveTd = (col: (typeof columns)[number]) => (
@@ -3580,17 +3449,7 @@ export function CollectionBrowser({
   }
 
   function tableRecordRow(row: DbRecord, depth: number, hasKids: boolean, kidCount: number, rowKey: string) {
-    if (treeOn) return tableLiveRow(row, depth, hasKids, kidCount, rowKey)
-    return (
-      <TableIdleRow
-        key={rowKey}
-        recordId={row.id}
-        className={row.id === detailId ? 'is-active' : undefined}
-        pick={recordPick(row)}
-        html={idleTableRowHtml(idlePaintedCells(row))}
-        renderLive={() => tableLiveRow(row, depth, hasKids, kidCount, rowKey, true)}
-      />
-    )
+    return tableLiveRow(row, depth, hasKids, kidCount, rowKey, true)
   }
 
   function tableBodyRows(rows: DbRecord[], keyPrefix = '') {

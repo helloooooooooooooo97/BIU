@@ -7,6 +7,40 @@ export const TABLE_COL_PIN_PX = 140
 export const TABLE_COL_OVERSCAN = 1
 export const TABLE_COL_VIEWPORT_FALLBACK = 624
 
+const lastTableWrap = {
+  width: TABLE_COL_VIEWPORT_FALLBACK,
+  height: TABLE_WINDOW_VIEWPORT_FALLBACK,
+}
+
+/** Last measured table wrap. Collection switches remount the wrap, so reuse this instead of 624×560. */
+export function rememberedTableWrap() {
+  return { width: lastTableWrap.width, height: lastTableWrap.height }
+}
+
+export function resetRememberedTableWrap() {
+  lastTableWrap.width = TABLE_COL_VIEWPORT_FALLBACK
+  lastTableWrap.height = TABLE_WINDOW_VIEWPORT_FALLBACK
+}
+
+export function rememberTableWrap(width: number, height: number) {
+  if (width > 0) lastTableWrap.width = width
+  if (height > 0) lastTableWrap.height = height
+  return rememberedTableWrap()
+}
+
+export function tableWrapScroll(
+  wrap: { clientWidth: number; clientHeight: number; scrollTop: number; scrollLeft: number },
+  top?: number,
+) {
+  const size = rememberTableWrap(wrap.clientWidth, wrap.clientHeight)
+  return {
+    top: top ?? wrap.scrollTop,
+    height: size.height,
+    left: wrap.scrollLeft,
+    width: size.width,
+  }
+}
+
 export type TableWindowSlice = {
   start: number
   end: number
