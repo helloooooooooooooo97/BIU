@@ -2,6 +2,7 @@ import type { CollectionSchema, DbRecord } from '@biu/type-file-system'
 import { isBuiltinBlockKindViewId, isBuiltinTagViewId } from '../catalog-views.ts'
 import type { SavedView } from './saved-view.ts'
 import { listCollection, readJson } from './db-client.ts'
+import { viewForPath } from './view-storage.ts'
 
 export const SIDEBAR_PREVIEW_PAGE = 20
 export const SIDEBAR_PREVIEW_MAX = 100
@@ -111,6 +112,38 @@ export function invalidatePreviewTotals() {
   totalCache.clear()
   totalsVersion += 1
   for (const fn of totalListeners) fn()
+}
+
+/** Drop sibling-view counts for this table so they refetch; keep the open view’s bumped total. */
+export function forgetPreviewTotalsForPath(path: string, keepPrefix?: string) {
+  const prefix = `${path}\0`
+  let dropped = false
+  for (const key of [...totalCache.keys()]) {
+    if (key !== path && !key.startsWith(prefix)) continue
+    if (keepPrefix && (key === keepPrefix || key.startsWith(keepPrefix))) continue
+    totalCache.delete(key)
+    dropped = true
+  }
+  if (!dropped) return
+  totalsVersion += 1
+  for (const fn of totalListeners) fn()
+}
+
+export function rememberPreviewTotalForView(path: string, viewId: string | null | undefined, total: number) {
+  const id = String(viewId ?? '')
+  const keepPrefix = id ? `${path}\0${id}\0` : ''
+  let hit = false
+  if (keepPrefix) {
+    for (const key of [...totalCache.keys()]) {
+      if (!key.startsWith(keepPrefix)) continue
+      rememberPreviewTotal(key, total)
+      hit = true
+    }
+  }
+  if (!hit && id) {
+    const view = viewForPath(path, id)
+    if (view) rememberPreviewTotal(viewTotalKey(path, view), total)
+  }
 }
 
 export function getPreviewTotalsVersion() {

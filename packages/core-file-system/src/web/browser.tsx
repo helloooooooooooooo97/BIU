@@ -125,7 +125,7 @@ import { HttpError, invalidateListReads, listCollection, readJson } from './db-c
 import { savedViewRecordPath } from '../paths.ts'
 import { findViewNeighbor, indexOnPage } from './view-adjacent.ts'
 import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, rememberedTableWrap, tableColumnEstimate, tableColumnFit, tableColumnSlice, tableColumnUnchanged, tableWindowSlice, tableWindowUnchanged, tableWrapScroll, type TableColumnSlice } from './table-window.ts'
-import { invalidatePreviewTotals, isPaintedListReady, markPaintedListReady, rememberPreviewTotal, resetPaintedListReady, viewTotalKey, whenListIdle } from './sidebar-preview.ts'
+import { forgetPreviewTotalsForPath, isPaintedListReady, markPaintedListReady, rememberPreviewTotalForView, resetPaintedListReady, whenListIdle } from './sidebar-preview.ts'
 import { builtinAllViewId, catalogLockFilters, isReadOnlyViewId, mergeTableViews, parseBuiltinScopeViewId, stubBuiltinBlockKindView, viewsForScope, type DataScope } from '../catalog-views.ts'
 import { SAVED_VIEW_EVENT, rememberInspectorWorkingView, showRecordInInspector } from './inspector-db-route.ts'
 import { CellPop, cellUsesPop } from './cell-pop.tsx'
@@ -832,8 +832,8 @@ const LISTED_MUTATION_EVENT = 'fsdb:list-mutation'
 
 type ListedMutation =
   | { path: string; op: 'patch'; row: DbRecord }
-  | { path: string; op: 'create'; row: DbRecord; groupBy?: string; viewId?: string | null }
-  | { path: string; op: 'remove'; ids: string[] }
+  | { path: string; op: 'create'; row: DbRecord; groupBy?: string; viewId?: string | null; total?: number }
+  | { path: string; op: 'remove'; ids: string[]; viewId?: string | null; total?: number }
 
 function overlayListedRow(row: DbRecord, next: DbRecord): DbRecord {
   return { ...row, ...next, banner: next.banner ?? row.banner ?? null }
@@ -903,6 +903,15 @@ function upsertListCacheRecord(path: string, row: DbRecord, groupBy?: string, vi
   )
 }
 
+function applyPreviewTotalMutation(mutation: ListedMutation) {
+  if (mutation.op === 'patch') return
+  if (mutation.total != null) {
+    rememberPreviewTotalForView(mutation.path, mutation.viewId, mutation.total)
+    const keepPrefix = mutation.viewId ? `${mutation.path}\0${mutation.viewId}\0` : undefined
+    forgetPreviewTotalsForPath(mutation.path, keepPrefix)
+  }
+}
+
 function publishListedMutation(mutation: ListedMutation) {
   if (mutation.op === 'patch') {
     patchListCacheRecords(mutation.path, (row) =>
@@ -913,6 +922,7 @@ function publishListedMutation(mutation: ListedMutation) {
   } else {
     upsertListCacheRecord(mutation.path, mutation.row, mutation.groupBy, mutation.viewId)
   }
+  applyPreviewTotalMutation(mutation)
   if (typeof window === 'undefined') return
   window.dispatchEvent(new CustomEvent(LISTED_MUTATION_EVENT, { detail: mutation }))
 }
@@ -1921,6 +1931,8 @@ export function CollectionBrowser({
   const skipColumnReload = useRef(false)
   const itemsRef = useRef(items)
   itemsRef.current = items
+  const totalRef = useRef(total)
+  totalRef.current = total
   const listIdentityKey = `${dataPath}\0${pageSize}\0${fetchQuery}\0${sortField}\0${sortDir}\0${sortsStateKey(sorts)}\0${JSON.stringify(queryFilters)}\0${activeViewId ?? ''}\0${customView ? 'full' : 'proj'}\0${groupBy}\0${wrapCells ? 1 : 0}`
   const reloadKey = `${listIdentityKey}\0${groupBy ? JSON.stringify(groupPages) : page}\0${groupFillKeys.join('\0')}`
   if (releaseHoldOnPaintRef.current && paintedPath === dataPath && tableHoldRef.current?.nodes !== EMPTY_HOLD_NODES) {
@@ -2082,18 +2094,7 @@ export function CollectionBrowser({
         },
         reqViewId,
       )
-      if (reqViewId) {
-        rememberPreviewTotal(
-          viewTotalKey(collectionPath, {
-            id: reqViewId,
-            sortField: reqSortField,
-            sortDir: reqSortDir,
-            filters: reqFilters as SavedView['filters'],
-            query: reqQuery,
-          }),
-          listed.total,
-        )
-      }
+      if (reqViewId) rememberPreviewTotalForView(collectionPath, reqViewId, listed.total)
       setError('')
       loadedIdentityRef.current = pendingView
         ? `${dataPath}\0${pendingView.pageSize}\0${pendingView.fetchQuery}\0${pendingView.sortField}\0${pendingView.sortDir}\0${sortsStateKey(pendingView.sorts)}\0${JSON.stringify(pendingView.queryFilters)}\0${pendingView.activeViewId}\0${customView ? 'full' : 'proj'}\0${pendingView.groupBy}\0${pendingView.wrapCells ? 1 : 0}`
@@ -3328,7 +3329,8 @@ export function CollectionBrowser({
       const removed = prev.length - next.length
       if (removed) {
         itemsRef.current = next
-        setTotal((count) => Math.max(0, count - removed))
+        totalRef.current = Math.max(0, totalRef.current - removed)
+        setTotal(totalRef.current)
       }
       return next
     })
@@ -3353,7 +3355,6 @@ export function CollectionBrowser({
     pendingPathQueryRef.current = null
     if (!keepCache) forgetListCache(dataPath)
     invalidateListReads()
-    invalidatePreviewTotals()
     window.dispatchEvent(new Event('fsdb:change'))
     if (keepCache) return
     const listed = paintListedViews(collectionPath)
@@ -3521,9 +3522,17 @@ export function CollectionBrowser({
         itemsRef.current = next
         return next
       })
-      setTotal((count) => count + 1)
+      totalRef.current += 1
+      setTotal(totalRef.current)
       setGroupBuckets((prev) => placeCreatedRow(prev, value, groupBy))
-      publishListedMutation({ path: dataPath, op: 'create', row: value, groupBy, viewId: activeViewIdRef.current })
+      publishListedMutation({
+        path: dataPath,
+        op: 'create',
+        row: value,
+        groupBy,
+        viewId: activeViewIdRef.current,
+        total: totalRef.current,
+      })
       announceListChange()
       quietUntil.current = 0
       void reloadRef.current({ force: true })
@@ -3543,7 +3552,13 @@ export function CollectionBrowser({
       })
       onCloseRecord?.()
       dropListedRecords([String(row.id)])
-      publishListedMutation({ path: dataPath, op: 'remove', ids: [String(row.id)] })
+      publishListedMutation({
+        path: dataPath,
+        op: 'remove',
+        ids: [String(row.id)],
+        viewId: activeViewIdRef.current,
+        total: totalRef.current,
+      })
       announceListChange()
       quietUntil.current = 0
       await reload({ force: true })
@@ -3562,7 +3577,13 @@ export function CollectionBrowser({
       if (detailId && ids.includes(detailId)) onCloseRecord?.()
       setPickedIds([])
       dropListedRecords(ids)
-      publishListedMutation({ path: dataPath, op: 'remove', ids: ids.map(String) })
+      publishListedMutation({
+        path: dataPath,
+        op: 'remove',
+        ids: ids.map(String),
+        viewId: activeViewIdRef.current,
+        total: totalRef.current,
+      })
       announceListChange()
       quietUntil.current = 0
       await reload({ force: true })

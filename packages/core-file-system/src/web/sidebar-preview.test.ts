@@ -14,6 +14,8 @@ import {
   recordPreviewLabel,
   crumbRecordLabel,
   rememberPreviewTotal,
+  rememberPreviewTotalForView,
+  forgetPreviewTotalsForPath,
   invalidatePreviewTotals,
   SIDEBAR_PREVIEW_PAGE,
   VIEW_PREVIEW_IDLE_MS,
@@ -58,6 +60,18 @@ test('invalidatePreviewTotals drops cached counts so a write can refetch', () =>
   rememberPreviewTotal(viewTotalKey('/tasks', view), 12)
   invalidatePreviewTotals()
   assert.equal(getPreviewTotal(viewTotalKey('/tasks', view)), undefined)
+})
+
+test('create/delete bump the open view total and drop sibling view counts', () => {
+  invalidatePreviewTotals()
+  const all = { id: 'builtin-all:/pages', sortField: 'title', sortDir: 'asc' as const, filters: {}, query: '', groupBy: 'shareScope' }
+  const other = { id: 'stress', sortField: 'title', sortDir: 'asc' as const, filters: {}, query: '' }
+  rememberPreviewTotal(viewTotalKey('/pages', all), 144)
+  rememberPreviewTotal(viewTotalKey('/pages', other), 15)
+  rememberPreviewTotalForView('/pages', all.id, 145)
+  forgetPreviewTotalsForPath('/pages', `/pages\0${all.id}\0`)
+  assert.equal(getPreviewTotal(viewTotalKey('/pages', all)), 145)
+  assert.equal(getPreviewTotal(viewTotalKey('/pages', other)), undefined)
 })
 
 test('sidebar preview asks for the view group field so 全部 does not collapse into 未填', () => {

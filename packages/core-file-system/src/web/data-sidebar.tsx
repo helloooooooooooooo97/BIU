@@ -25,7 +25,6 @@ import {
   fetchViewTotal,
   getPreviewTotal,
   getPreviewTotalsVersion,
-  invalidatePreviewTotals,
   nextPreviewLimit,
   orderViewTotalJobs,
   previewCacheKey,
@@ -561,7 +560,6 @@ export const DataSidebar = memo(function DataSidebar({
     const onChange = (event: Event) => {
       if ((event as CustomEvent<{ views?: boolean }>).detail?.views) return
       previewCache.clear()
-      invalidatePreviewTotals()
     }
     window.addEventListener('fsdb:change', onChange)
     return () => window.removeEventListener('fsdb:change', onChange)
