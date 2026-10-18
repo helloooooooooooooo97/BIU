@@ -9,6 +9,7 @@ import {
   resetInspectorDbPathMemory,
   focusInspectorIfOpen,
   showRecordInInspector,
+  moveInspectorRecordsToTrash,
   showInInspector,
   applyDatabaseReveal,
   rememberInspectorWorkingView,
@@ -507,6 +508,34 @@ test('view db_update writes the source table view, not /views', () => {
   assert.equal(seen[0]?.collection, '/pages')
   assert.equal(seen[0]?.view?.id, 'mine')
   assert.equal(getInspectorDbPath('database:/pages'), '')
+})
+
+test('moving an open inspector record lands on the matching 回收站 row', () => {
+  showRecordInInspector('/pages', 'p1')
+  moveInspectorRecordsToTrash('/pages', ['p1'])
+  assert.equal(
+    getInspectorDbPath('database:/pages'),
+    databaseRecordPath('/trash', 'pages::p1', builtinAllViewId('/trash')),
+  )
+})
+
+test('moving inspector records to 回收站 keeps other panes and skips missing ones', () => {
+  const pane = 'database:/pages::doc'
+  setInspectorDbPath(pane, '/database/pages/record/p1?view=all')
+  setInspectorDbPath('database:/notes', '/database/notes/record/n1')
+  moveInspectorRecordsToTrash('/pages', ['p1', 'p-missing'])
+  assert.equal(
+    getInspectorDbPath(pane),
+    databaseRecordPath('/trash', 'pages::p1', builtinAllViewId('/trash')),
+  )
+  assert.equal(getInspectorDbPath('database:/notes'), '/database/notes/record/n1')
+  moveInspectorRecordsToTrash('/trash', ['pages::p1'])
+  assert.equal(
+    getInspectorDbPath(pane),
+    databaseRecordPath('/trash', 'pages::p1', builtinAllViewId('/trash')),
+  )
+  moveInspectorRecordsToTrash('/pages', [])
+  assert.equal(getInspectorDbPath('database:/notes'), '/database/notes/record/n1')
 })
 
 test('inspector db paths restore replaces the global pane map', () => {

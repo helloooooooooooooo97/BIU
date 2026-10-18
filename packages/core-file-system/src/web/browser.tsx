@@ -128,7 +128,7 @@ import { findViewNeighbor, indexOnPage } from './view-adjacent.ts'
 import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, rememberedTableWrap, tableColumnEstimate, tableColumnFit, tableColumnSlice, tableColumnUnchanged, tableWindowSlice, tableWindowUnchanged, tableWrapScroll, type TableColumnSlice } from './table-window.ts'
 import { forgetPreviewTotalsForPath, isPaintedListReady, markPaintedListReady, rememberPreviewTotalForView, resetPaintedListReady, whenListIdle } from './sidebar-preview.ts'
 import { builtinAllViewId, catalogLockFilters, isReadOnlyViewId, mergeTableViews, parseBuiltinScopeViewId, stubBuiltinBlockKindView, viewsForScope, type DataScope } from '../catalog-views.ts'
-import { SAVED_VIEW_EVENT, rememberInspectorWorkingView, showRecordInInspector } from './inspector-db-route.ts'
+import { SAVED_VIEW_EVENT, moveInspectorRecordsToTrash, rememberInspectorWorkingView, showRecordInInspector } from './inspector-db-route.ts'
 import { CellPop, cellUsesPop } from './cell-pop.tsx'
 import { loadFacets, pullFacets, subscribeFacets } from './facet-catalog.ts'
 import {
@@ -950,6 +950,10 @@ function publishDeletedRowsToTrash(collectionPath: string, rows: DbRecord[], tab
       groupBy: 'shareScope',
     })
   }
+  moveInspectorRecordsToTrash(
+    collectionPath,
+    rows.map((row) => String(row?.id ?? '')).filter(Boolean),
+  )
 }
 
 function applyPreviewTotalMutation(mutation: ListedMutation) {
@@ -3614,7 +3618,7 @@ export function CollectionBrowser({
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ path: dataPath, ids: [row.id] }),
       })
-      onCloseRecord?.()
+      if (!embed) onCloseRecord?.()
       dropListedRecords([String(row.id)])
       publishListedMutation({
         path: dataPath,
@@ -3639,7 +3643,7 @@ export function CollectionBrowser({
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ path: dataPath, ids }),
       })
-      if (detailId && ids.includes(detailId)) onCloseRecord?.()
+      if (!embed && detailId && ids.includes(detailId)) onCloseRecord?.()
       const gone = new Set(ids.map(String))
       const deletedRows = itemsRef.current.filter((row) => gone.has(String(row.id)))
       setPickedIds([])

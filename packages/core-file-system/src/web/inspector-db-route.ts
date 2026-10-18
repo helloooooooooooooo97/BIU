@@ -3,6 +3,7 @@
 import { CONTENT_JUMP_EVENT, parseContentJump } from '@biu/type-file-system'
 import { parseAppPath } from '@biu/web-session-view'
 import { normalizeCollectionPath } from '../paths.ts'
+import { builtinAllViewId } from '../catalog-views.ts'
 import { DATA_MODULE, DATA_MODULE_PATH, databaseAllViewPath, databaseRecordPath, databaseViewPath } from './database-path.ts'
 import { activeViewStorageKey, upsertSavedView, savedViewFromRecord } from './view-storage.ts'
 import { type SavedView } from './saved-view.ts'
@@ -373,6 +374,21 @@ export function showInInspector(collection: string, href: string, opts?: { uniqu
     return
   }
   revealInspectorPane(tabId, href)
+}
+
+/** 已打开这条记录的检查器栏切到回收站里的同一行，主界面不动。 */
+export function moveInspectorRecordsToTrash(collection: string, recordIds: string[]) {
+  const table = normalizeCollectionPath(collection)
+  if (!table || table === '/' || table === '/trash') return
+  const viewId = builtinAllViewId('/trash')
+  for (const raw of recordIds) {
+    const recordId = String(raw ?? '').trim()
+    if (!recordId) continue
+    const pane = paneWithPageKey(databaseRecordPath(table, recordId))
+    if (!pane) continue
+    const trashId = `${table.replace(/^\//, '')}::${recordId}`
+    setInspectorDbPath(pane, databaseRecordPath('/trash', trashId, viewId))
+  }
 }
 
 /** 右侧检查器打开这条记录。同一页已在检查器里则只聚焦。 */
