@@ -3,7 +3,6 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import {
-  PAGE_BLOCK_IDLE_MIN_PX,
   pageBlockIdleQueueSize,
   resetPageBlockIdleQueue,
   schedulePageBlockMount,
@@ -40,22 +39,16 @@ test('page block idle mounts at most one view per macrotask', () => {
   assert.equal(pageBlockIdleQueueSize(), 0)
 })
 
-test('idle placeholder is a min-height shell, never a loading plugin phase', () => {
+test('page plugin views mount without an idle or near-viewport gate', () => {
   const view = readFileSync(resolve(import.meta.dirname, './page-block-view.tsx'), 'utf8')
-  const idle = readFileSync(resolve(import.meta.dirname, './page-block-idle.ts'), 'utf8')
-  const css = readFileSync(resolve(import.meta.dirname, './style.ts'), 'utf8')
-  assert.match(idle, /export const PAGE_BLOCK_IDLE_MIN_PX = 200/)
-  assert.match(idle, /setTimeout\(flush, 0\)/)
-  assert.match(view, /data-page-block-idle/)
-  assert.match(view, /schedulePageBlockMount/)
-  assert.match(view, /PAGE_BLOCK_IDLE_MIN_PX/)
   assert.doesNotMatch(view, /useNearPageBlock/)
   assert.doesNotMatch(view, /IntersectionObserver/)
+  assert.doesNotMatch(view, /schedulePageBlockMount/)
+  assert.doesNotMatch(view, /PageBlockIdle/)
+  assert.doesNotMatch(view, /data-page-block-idle/)
   assert.match(view, /if \(View \|\| !plugin \|\| phase !== 'idle'\) return/)
   assert.match(view, /requestEnablePageBlockPlugin\(plugin, kind\)/)
   assert.match(view, /requestEnablePageBlockPlugin\(plugin, kind, \{ force: true \}\)/)
-  assert.doesNotMatch(view, /data-page-block-idle[\s\S]{0,400}data-plugin-phase/)
-  assert.doesNotMatch(view, /data-plugin-phase="loading"[\s\S]{0,200}page-block-idle/)
-  assert.match(css, /\.page-editor \.page-block-idle\{[^}]*min-height:200px/)
-  assert.ok(PAGE_BLOCK_IDLE_MIN_PX === 200)
+  assert.match(view, /View \? \(/)
+  assert.match(view, /<View data=\{data\} update=\{update\} writable \/>/)
 })

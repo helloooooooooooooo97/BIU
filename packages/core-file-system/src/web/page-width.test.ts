@@ -140,3 +140,59 @@ test('getWorkspaceProfile shares one in-flight GET', async () => {
     })
   }
 })
+
+test('hydratePagePrefs does not overwrite a newer local write', async () => {
+  persistPagePrefs({
+    wide: false,
+    outlineExpand: true,
+    outlinePin: false,
+    navPin: false,
+    bodySize: 'md',
+    bodyGap: 'md',
+  })
+  resetWorkspaceProfileGet()
+  let release!: () => void
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    if ((init?.method ?? 'GET') !== 'GET') {
+      return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } })
+    }
+    await new Promise<void>((resolve) => {
+      release = resolve
+    })
+    return new Response(
+      JSON.stringify({
+        pagePrefs: {
+          wide: false,
+          outlineExpand: true,
+          outlinePin: false,
+          navPin: false,
+          bodySize: 'md',
+          bodyGap: 'md',
+        },
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    )
+  }) as typeof fetch
+  try {
+    const pending = hydratePagePrefs()
+    persistPagePrefs({ outlinePin: true, navPin: true })
+    release()
+    await pending
+    assert.equal(getPagePrefs().outlinePin, true)
+    assert.equal(getPagePrefs().navPin, true)
+    assert.equal(document.documentElement.dataset.outlinePin, '1')
+    assert.equal(document.documentElement.dataset.navPin, '1')
+  } finally {
+    globalThis.fetch = originalFetch
+    resetWorkspaceProfileGet()
+    persistPagePrefs({
+      wide: false,
+      outlineExpand: true,
+      outlinePin: false,
+      navPin: false,
+      bodySize: 'md',
+      bodyGap: 'md',
+    })
+  }
+})

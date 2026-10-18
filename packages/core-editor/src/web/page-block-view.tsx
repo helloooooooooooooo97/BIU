@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, type MouseEvent } from 'react'
 import type { NodeViewProps } from '@tiptap/react'
 import { NodeViewWrapper } from '@tiptap/react'
 import { PlayIcon } from '@heroicons/react/16/solid'
@@ -13,7 +13,6 @@ import {
   type PageBlockPluginPhase,
 } from './page-block-meta.ts'
 import { bindPageBlockPlugin } from './page-block-plugin-host.ts'
-import { PAGE_BLOCK_IDLE_MIN_PX, schedulePageBlockMount } from './page-block-idle.ts'
 
 function assetName(file: string) {
   return file.replace(/^assets\//, '')
@@ -83,17 +82,6 @@ export function PageBlockMissing({
   )
 }
 
-function PageBlockIdle() {
-  return (
-    <div
-      className="page-block-idle"
-      data-page-block-idle=""
-      aria-hidden
-      style={{ minHeight: PAGE_BLOCK_IDLE_MIN_PX }}
-    />
-  )
-}
-
 function samePageBlockProps(prev: NodeViewProps, next: NodeViewProps) {
   return (
     prev.node.attrs.kind === next.node.attrs.kind &&
@@ -131,17 +119,6 @@ export const PageBlockView = memo(function PageBlockView({ node, updateAttribute
     updateAttributesRef.current({ data: next })
   }, [])
   const hostRef = useRef<HTMLElement | null>(null)
-  const [showView, setShowView] = useState(false)
-  useEffect(() => {
-    if (!View || showView) return
-    let gone = false
-    schedulePageBlockMount(() => {
-      if (!gone) setShowView(true)
-    })
-    return () => {
-      gone = true
-    }
-  }, [View, showView])
   useLayoutEffect(() => bindPageBlockPlugin(hostRef.current, plugin), [plugin])
   useEffect(() => {
     if (View || !plugin || phase !== 'idle') return
@@ -190,13 +167,11 @@ export const PageBlockView = memo(function PageBlockView({ node, updateAttribute
     >
       {cloneFrom ? (
         <div className="page-block-missing">正在复制附件…</div>
-      ) : View && showView ? (
+      ) : View ? (
         // 文档里的插件块崩了只烂这一块，不该让整个应用白屏。
         <RenderBoundary label={plugin || kind}>
           <View data={data} update={update} writable />
         </RenderBoundary>
-      ) : View ? (
-        <PageBlockIdle />
       ) : (
         <PageBlockMissing kind={kind} plugin={plugin} data={data} phase={phase} />
       )}

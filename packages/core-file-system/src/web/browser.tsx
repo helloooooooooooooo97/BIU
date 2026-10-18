@@ -792,6 +792,42 @@ function collectionFromAppUrl(url: string): { collection: string; viewId: string
   }
 }
 
+const SHARE_SCOPE_ORDER = ['私人', '空间', '共享']
+
+function createdRowGroupKey(row: DbRecord, groupBy: string) {
+  if (groupBy === 'shareScope') return String(row.shareScope ?? '')
+  if (!groupBy) return ''
+  const raw = row[groupBy]
+  return raw == null || raw === '' ? '' : String(raw)
+}
+
+function placeCreatedRow(groups: GroupBucket[], row: DbRecord, groupBy: string) {
+  if (!groups.length) return groups
+  if (groups.some((group) => group.rows.some((item) => item.id === row.id))) return groups
+  const key = createdRowGroupKey(row, groupBy)
+  const index = groups.findIndex((group) => group.key === key || group.label === key)
+  if (index >= 0) {
+    return groups.map((group, i) =>
+      i !== index
+        ? group
+        : {
+            ...group,
+            rows: [row, ...group.rows],
+            total: group.total != null ? group.total + 1 : group.rows.length + 1,
+          },
+    )
+  }
+  if (!groupBy) return groups
+  const bucket: GroupBucket = { key, label: key || '未填', rows: [row], total: 1 }
+  if (groupBy === 'shareScope') {
+    const order = SHARE_SCOPE_ORDER.indexOf(key)
+    const insertAt = order < 0 ? groups.length : groups.findIndex((group) => SHARE_SCOPE_ORDER.indexOf(group.key) > order)
+    const at = insertAt < 0 ? groups.length : insertAt
+    return [...groups.slice(0, at), bucket, ...groups.slice(at)]
+  }
+  return [bucket, ...groups]
+}
+
 function listHoldResetKey(view: SavedView | null, path: string) {
   return `${view?.id ?? ''}\0${path}\0${view?.groupBy ?? ''}\0${0}\0${normalizePageSize(view?.pageSize)}\0${view?.query ?? ''}`
 }
@@ -3306,19 +3342,7 @@ export function CollectionBrowser({
       confirmedCreates.current.add(id)
       setItems((prev) => [value, ...prev.filter((item) => item.id !== id)])
       setTotal((count) => count + 1)
-      setGroupBuckets((prev) => {
-        if (!prev.length) return prev
-        let placed = false
-        return prev.map((group) => {
-          if (placed || group.rows.some((row) => row.id === id)) return group
-          placed = true
-          return {
-            ...group,
-            rows: [value, ...group.rows],
-            total: group.total != null ? group.total + 1 : group.rows.length + 1,
-          }
-        })
-      })
+      setGroupBuckets((prev) => placeCreatedRow(prev, value, groupBy))
       announceListChange()
       quietUntil.current = 0
       void reloadRef.current({ force: true })

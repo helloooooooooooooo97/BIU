@@ -112,6 +112,7 @@ function postPagePrefs(next: PagePrefs) {
 
 let prefs: PagePrefs = typeof localStorage === 'undefined' ? { ...DEFAULT_PREFS } : readCachedPagePrefs()
 let pageWidthVersion = 0
+let prefsWriteGen = 0
 const listeners = new Set<() => void>()
 
 function emit() {
@@ -122,6 +123,7 @@ function emit() {
 
 function commit(next: PagePrefs, persistRemote: boolean) {
   if (JSON.stringify(next) === JSON.stringify(prefs)) return
+  prefsWriteGen += 1
   prefs = next
   writeCachedPagePrefs(next)
   applyPagePrefs(next)
@@ -169,8 +171,10 @@ export function persistPageWidth(next: PageWidth) {
 }
 
 export async function hydratePagePrefs() {
+  const gen = prefsWriteGen
   try {
     const data = await getWorkspaceProfile()
+    if (gen !== prefsWriteGen) return getPagePrefs()
     if (!data) return getPagePrefs()
     if (data.pagePrefs && typeof data.pagePrefs === 'object') {
       commit(parsePagePrefs(data.pagePrefs, prefs), false)
