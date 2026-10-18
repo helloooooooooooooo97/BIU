@@ -149,6 +149,12 @@ test('title cell hover icons take the primary label color', () => {
   assert.doesNotMatch(css, /\.fsdb-page \.tasks-title-open\{[^}]*width:24px/)
   assert.doesNotMatch(css, /\.fsdb-page \.tasks-title-zoom\{[^}]*width:24px/)
   assert.match(css, /\.fsdb-page \.tasks-row-tools \.tasks-icon-btn,\.fsdb-page \.tasks-row-actions \.tasks-icon-btn\{[^}]*color:var\(--dsw-icon\)/)
+  assert.match(css, /\.fsdb-action-tag svg,\.fsdb-action-tag \.fsdb-ui-glyph\{[^}]*color:var\(--dsw-icon\)/)
+  assert.match(css, /\.fsdb-action-tag:hover svg,\.fsdb-action-tag:hover \.fsdb-ui-glyph\{[^}]*color:var\(--dsw-icon-active\)/)
+  assert.match(css, /\.fsdb-action-tag:hover\{[^}]*background:var\(--dsw-hover\)/)
+  assert.match(css, /\.fsdb-action-tag:disabled\{[^}]*opacity:\.4/)
+  assert.doesNotMatch(css, /\.fsdb-action-tag svg[^{]*\{[^}]*color:var\(--dsw-label\)/)
+  assert.doesNotMatch(css, /\.fsdb-action-tag:hover\{[^}]*background:var\(--dsw-muted-fill\)/)
   assert.match(css, /\.fsdb-page \.fsdb-record-mark,\.fsdb-page \.fsdb-record-mark svg,\.fsdb-page \.fsdb-title-host>svg,\.fsdb-page \.fsdb-table-record-icon svg\{[^}]*color:var\(--dsw-icon\)/)
   assert.match(css, /\.fsdb-page \.fsdb-table-emoji-btn\{[^}]*color:var\(--dsw-icon\)/)
   assert.match(

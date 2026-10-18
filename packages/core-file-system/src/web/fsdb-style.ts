@@ -756,8 +756,10 @@ a.fsdb-person.is-link:hover .fsdb-person-name{text-decoration:underline}
 .fsdb-page .tasks-table th.fsdb-action-col,.fsdb-page .tasks-table td.fsdb-action-col{width:1%;white-space:nowrap}
 .fsdb-page .tasks-row-actions{display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px}
 .fsdb-action-tag{display:inline-flex;align-items:center;gap:4px;border:0;border-radius:999px;background:var(--dsw-hover);padding:2px 8px;color:var(--dsw-label);font:inherit;font-size:12px;font-weight:650;cursor:pointer;white-space:nowrap}
-.fsdb-action-tag:hover{background:var(--dsw-muted-fill);color:var(--dsw-label)}
-.fsdb-action-tag.is-danger{color:var(--dsw-danger)}
+.fsdb-action-tag svg,.fsdb-action-tag .fsdb-ui-glyph{color:var(--dsw-icon)}
+.fsdb-action-tag:hover{background:var(--dsw-hover);color:var(--dsw-label)}
+.fsdb-action-tag:hover svg,.fsdb-action-tag:hover .fsdb-ui-glyph{color:var(--dsw-icon-active)}
+.fsdb-action-tag.is-danger,.fsdb-action-tag.is-danger svg,.fsdb-action-tag.is-danger .fsdb-ui-glyph{color:var(--dsw-danger)}
 .fsdb-action-tag:disabled{opacity:.4;cursor:default}
 .fsdb-scope-tag.is-shared{background:color-mix(in srgb,var(--dsw-pick) 12%,transparent);color:var(--dsw-pick)}
 .fsdb-page .tasks-table td:has(.fsdb-scope-detail) .fsdb-cell{overflow:visible}

@@ -1,7 +1,7 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { pickSurfaceAtPoint, resolvePickFromNode, resolvePickAtPoint, resolvePicksInRect, visiblePickBox, editorBlockElFromNode } from './resolve.ts'
-import { formatPicks, parsePicks, splitPickStream, chipLabel, chipCaption, dedupePicks, textPickFromSelection, textPickFromPlain } from './types.ts'
+import { formatPicks, parsePicks, splitPickStream, chipLabel, chipCaption, dedupePicks, textPickFromSelection, textPickFromPlain, filePickFromPath } from './types.ts'
 import { bindEditorTextHost } from './editor-host.ts'
 
 test('splitPickStream keeps text and chips in order', () => {
@@ -124,6 +124,24 @@ test('html pick chip uses the inner node label, not the page title', () => {
     }),
     '从民歌运动到流媒体时代 · 半世纪的声音地图',
   )
+})
+
+test('file pick chips show the filename and send the absolute path', () => {
+  const ref = filePickFromPath('/Users/ada/reports/Q3.pdf')
+  assert.ok(ref)
+  assert.equal(ref.kind, 'file')
+  assert.equal(ref.path, '/Users/ada/reports/Q3.pdf')
+  assert.equal(chipLabel(ref), 'Q3.pdf')
+  const win = filePickFromPath('C:\\Users\\ada\\notes.txt')
+  assert.ok(win)
+  assert.equal(win.path, 'C:\\Users\\ada\\notes.txt')
+  assert.equal(chipLabel(win), 'notes.txt')
+  const packed = formatPicks([ref])
+  assert.match(packed, /"kind":"file"/)
+  assert.match(packed, /"path":"\/Users\/ada\/reports\/Q3\.pdf"/)
+  const parsed = parsePicks(packed)
+  assert.equal(parsed.refs[0]?.kind, 'file')
+  assert.equal(parsed.refs[0]?.path, '/Users/ada/reports/Q3.pdf')
 })
 
 test('chip label puts line span in parentheses after the name', () => {

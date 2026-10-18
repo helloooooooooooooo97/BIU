@@ -13,6 +13,8 @@ test('registers pick instructions on the system prompt', async () => {
   const text = ctx.systemPrompt.assemble()
   assert.match(text, /<pick>/)
   assert.match(text, /kind\/id/)
+  assert.match(text, /kind=file/)
+  assert.match(text, /绝对路径/)
   assert.match(text, /path/)
   assert.match(text, /db_content/)
   assert.match(text, /selection/)

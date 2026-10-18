@@ -39,9 +39,11 @@ describe('composer dock stacking above sticky user', () => {
     expect(css).toMatch(/html\.dark \.composer-send,\s*\nhtml\.dark \.composer-send:disabled\s*\{[^}]*border:\s*1px solid var\(--dsw-label\)/s)
   })
 
-  it('compose-only overlay hides the reply thread until send', () => {
+  it('compose-only overlay hides the reply thread until the expand control', () => {
     const css = readFileSync(resolve(root, 'web/style.css'), 'utf8')
     const composer = readFileSync(resolve(root, 'packages/core-chat/src/web/composer.tsx'), 'utf8')
+    const overlay = readFileSync(resolve(root, 'packages/web-app-shell/src/web/chat-overlay.ts'), 'utf8')
+    const approvals = readFileSync(resolve(root, 'packages/core-chat/src/web/approvals.tsx'), 'utf8')
     expect(css).toMatch(/\.chat-overlay-panel \{/)
     expect(css).toMatch(/\.chat-overlay-panel\.is-compose-only \.chat-overlay-thread\s*\{[^}]*display:\s*none/s)
     expect(css).toMatch(/\.chat-overlay-panel\.is-compose-only \.chat-overlay-head\s*\{[^}]*display:\s*none/s)
@@ -51,12 +53,24 @@ describe('composer dock stacking above sticky user', () => {
     expect(overlayWin).toMatch(/threadOpen \? \(/)
     expect(overlayWin).toContain('chat-overlay-head')
     expect(css).not.toMatch(/chat-overlay-peek/)
-    expect(composer).toContain('revealOverlayThread')
+    expect(composer).not.toContain('revealOverlayThread')
+    expect(overlay).toContain('toggleOverlayThread')
+    expect(approvals).toContain('chat-overlay-thread-toggle')
+    expect(approvals).toContain('toggleOverlayThread()')
     expect(composer).toContain('composer-goal')
     expect(composer).toContain("controlGoal('pause')")
     expect(composer).toContain("controlGoal('clear')")
     expect(composer).toContain('isComposerFocusPending')
     expect(composer).toContain('biu:composer-focus')
+  })
+
+  it('drops local files as path picks instead of file bytes', () => {
+    const composer = readFileSync(resolve(root, 'packages/core-chat/src/web/composer.tsx'), 'utf8')
+    expect(composer).toContain('collectDroppedFilePaths')
+    expect(composer).toContain('filePickFromPath')
+    expect(composer).toContain('fileAbsolutePath')
+    expect(composer).toMatch(/addMany\(refs\)/)
+    expect(composer).toMatch(/handleDrop/)
   })
 
   it('shows an interruptible Goal bar above the composer', () => {

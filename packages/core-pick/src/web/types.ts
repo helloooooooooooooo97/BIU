@@ -224,10 +224,19 @@ export function chipSpanLabel(ref: PickRef) {
   return n > 0 ? String(n) : ''
 }
 
+export function pathLeaf(path: string) {
+  const parts = String(path ?? '')
+    .replace(/\\/g, '/')
+    .split('/')
+    .filter(Boolean)
+  return parts.at(-1) ?? ''
+}
+
 function pickChipName(ref: PickRef) {
   if (ref.kind === 'html' && ref.label?.trim()) return ref.label.trim()
+  if (ref.kind === 'file') return pathLeaf(ref.path || '') || ref.label || '文件'
   if (ref.title?.trim()) return ref.title.trim()
-  const file = ref.path?.split('/').filter(Boolean).pop() ?? ''
+  const file = pathLeaf(ref.path || '')
   if (file.includes('.')) return file
   if (ref.kind === 'text') {
     return pickPreview(ref.selection || ref.text || ref.label, 24) || file || '选区'
@@ -238,6 +247,7 @@ function pickChipName(ref: PickRef) {
 export function chipCaption(ref: PickRef) {
   if (ref.action === 'banner') return { name: ref.label || '背景', span: '' }
   if (ref.action === 'view') return { name: ref.label || '呈现方式', span: '' }
+  if (ref.kind === 'file') return { name: pickChipName(ref), span: '' }
   if (ref.field) {
     const field = ref.label?.trim() || ref.field
     const host = ref.title?.trim()
@@ -290,6 +300,21 @@ export function textPickFromPlain(route: string, raw: string): PickRef | null {
   const label = pickPreview(selection, 80)
   if (!label) return null
   return { kind: 'text', id: pickIdFromText(raw), label, route, selection }
+}
+
+/** 本机文件路径引用：芯片只显示文件名，发给智能体的是绝对路径。 */
+export function filePickFromPath(absPath: string, route = ''): PickRef | null {
+  const path = absPath.trim()
+  if (!path) return null
+  const name = pathLeaf(path) || path
+  return {
+    kind: 'file',
+    id: `file:${pickIdFromText(path)}`,
+    label: name,
+    title: name,
+    route,
+    path,
+  }
 }
 
 /** 选取态下划到的一段正文；空选区返回 null。编辑器选区附带 Markdown 源码行号。 */
