@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, TABLE_WINDOW_VIEWPORT_FALLBACK, TABLE_COL_PX, TABLE_COL_PIN_PX, TABLE_COL_OVERSCAN, TABLE_COL_VIEWPORT_FALLBACK, groupedFullFetchCount, tableColumnEstimate, tableColumnFit, tableColumnSlice, tableWindowSlice, tableWindowUnchanged } from './table-window.ts'
+import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, TABLE_WINDOW_VIEWPORT_FALLBACK, TABLE_COL_PX, TABLE_COL_PIN_PX, TABLE_COL_OVERSCAN, TABLE_COL_VIEWPORT_FALLBACK, groupedFullFetchCount, rememberedTableWrap, rememberTableWrap, resetRememberedTableWrap, tableColumnEstimate, tableColumnFit, tableColumnSlice, tableWindowSlice, tableWindowUnchanged, tableWrapScroll } from './table-window.ts'
 
 test('table window keeps overscan around the viewport', () => {
   const slice = tableWindowSlice(200, 0, TABLE_ROW_PX * 10)
@@ -131,6 +131,37 @@ test('wide tables keep estimates so the column window can pad', () => {
   const widths = [TABLE_COL_PIN_PX, ...Array.from({ length: 12 }, () => TABLE_COL_PX)]
   const fitted = tableColumnFit(widths, 624)
   assert.equal(fitted, widths)
+})
+
+test('remembered wrap size replaces the 624 fallback after the first measure', () => {
+  resetRememberedTableWrap()
+  assert.deepEqual(rememberedTableWrap(), { width: TABLE_COL_VIEWPORT_FALLBACK, height: TABLE_WINDOW_VIEWPORT_FALLBACK })
+  const next = tableWrapScroll({ clientWidth: 1280, clientHeight: 720, scrollTop: 40, scrollLeft: 16 }, 0)
+  assert.deepEqual(next, { top: 0, height: 720, left: 16, width: 1280 })
+  assert.deepEqual(rememberedTableWrap(), { width: 1280, height: 720 })
+  const reuse = tableWrapScroll({ clientWidth: 0, clientHeight: 0, scrollTop: 0, scrollLeft: 0 })
+  assert.equal(reuse.width, 1280)
+  assert.equal(reuse.height, 720)
+  rememberTableWrap(1440, 800)
+  assert.deepEqual(rememberedTableWrap(), { width: 1440, height: 800 })
+  resetRememberedTableWrap()
+  assert.deepEqual(rememberedTableWrap(), { width: TABLE_COL_VIEWPORT_FALLBACK, height: TABLE_WINDOW_VIEWPORT_FALLBACK })
+})
+
+test('wide plugin tables keep later columns off-screen until the wrap is measured', () => {
+  resetRememberedTableWrap()
+  const widths = [TABLE_COL_PIN_PX, ...Array.from({ length: 16 }, () => TABLE_COL_PX)]
+  const unmeasured = tableColumnSlice(17, 1, 0, rememberedTableWrap().width, widths)
+  assert.ok(unmeasured.end < 17)
+  assert.ok(unmeasured.padRight > 0)
+  const measured = tableColumnSlice(17, 1, 0, tableWrapScroll({
+    clientWidth: 1440,
+    clientHeight: 800,
+    scrollTop: 0,
+    scrollLeft: 0,
+  }).width, widths)
+  assert.ok(measured.end > unmeasured.end)
+  resetRememberedTableWrap()
 })
 
 test('column window shifts with horizontal scroll and pads both sides', () => {
