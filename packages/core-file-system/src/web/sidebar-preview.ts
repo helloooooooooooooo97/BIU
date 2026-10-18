@@ -107,6 +107,12 @@ export function rememberPreviewTotal(key: string, total: number) {
   for (const fn of totalListeners) fn()
 }
 
+export function invalidatePreviewTotals() {
+  totalCache.clear()
+  totalsVersion += 1
+  for (const fn of totalListeners) fn()
+}
+
 export function getPreviewTotalsVersion() {
   return totalsVersion
 }

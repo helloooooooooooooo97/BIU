@@ -25,6 +25,7 @@ import {
   fetchViewTotal,
   getPreviewTotal,
   getPreviewTotalsVersion,
+  invalidatePreviewTotals,
   nextPreviewLimit,
   orderViewTotalJobs,
   previewCacheKey,
@@ -144,6 +145,7 @@ function ViewRecordPreview({
   const [pickerAnchor, setPickerAnchor] = useState<HTMLElement | null>(null)
   const chromeIcon = getDatabaseUi()?.chrome(path).Icon
   const nested = isRecordTreeCollection(path)
+  const totalsVersion = useSyncExternalStore(subscribePreviewTotals, getPreviewTotalsVersion, () => 0)
   useSyncExternalStore(subscribeStarredRecords, getStarredRecordsVersion, () => 0)
   const starredRecords = getStarredRecords()
 
@@ -186,7 +188,7 @@ function ViewRecordPreview({
       cancelled = true
       stop()
     }
-  }, [key, open, path, seedKey, skipFetch, view.id, view.query, view.sortField, view.sortDir, view.filters, view.groupBy])
+  }, [key, open, path, seedKey, skipFetch, totalsVersion, view.id, view.query, view.sortField, view.sortDir, view.filters, view.groupBy])
 
   async function loadMore() {
     const more = nextPreviewLimit(state.items.length, state.total)
@@ -554,7 +556,16 @@ export const DataSidebar = memo(function DataSidebar({
   const [expandedViewKeyLocal, setExpandedViewKeyLocal] = useState<string | null>(null)
   const expandedViewKey = expandedViewKeyProp !== undefined ? expandedViewKeyProp : expandedViewKeyLocal
   const setExpandedViewKey = onExpandedViewKeyChange ?? setExpandedViewKeyLocal
-  usePreviewTotalsVersion()
+  const totalsVersion = usePreviewTotalsVersion()
+  useEffect(() => {
+    const onChange = (event: Event) => {
+      if ((event as CustomEvent<{ views?: boolean }>).detail?.views) return
+      previewCache.clear()
+      invalidatePreviewTotals()
+    }
+    window.addEventListener('fsdb:change', onChange)
+    return () => window.removeEventListener('fsdb:change', onChange)
+  }, [])
 
   function viewsFor(path: string) {
     const listed = loadViews(path)
@@ -618,6 +629,7 @@ export const DataSidebar = memo(function DataSidebar({
   const countJobKey = countJobs.map((job) => viewTotalKey(job.path, job.view)).join('|')
   useEffect(() => {
     let cancelled = false
+    const missing = countJobs.some((job) => getPreviewTotal(viewTotalKey(job.path, job.view)) == null)
     const stop = whenListIdle(() => {
       if (cancelled) return
       const jobs = orderViewTotalJobs(countJobs, collectionPath)
@@ -646,12 +658,12 @@ export const DataSidebar = memo(function DataSidebar({
           })
         }
       })()
-    }, VIEW_TOTAL_IDLE_MS)
+    }, missing ? 0 : VIEW_TOTAL_IDLE_MS)
     return () => {
       cancelled = true
       stop()
     }
-  }, [collectionPath, countJobKey, countJobs])
+  }, [collectionPath, countJobKey, countJobs, totalsVersion])
 
   useEffect(() => {
     let cancelled = false

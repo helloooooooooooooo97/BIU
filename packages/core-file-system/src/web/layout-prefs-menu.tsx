@@ -1,6 +1,7 @@
+import { useSyncExternalStore } from 'react'
 import { CheckIcon } from '@heroicons/react/16/solid'
 import { BoolBox } from '@biu/public-ui/bool-box'
-import { persistPagePrefs, type BodyScale, type PagePrefs } from './page-width.ts'
+import { getPagePrefs, getPageWidthVersion, persistPagePrefs, subscribePageWidth, type BodyScale, type PagePrefs } from './page-width.ts'
 
 const BOOLS: { key: keyof Pick<PagePrefs, 'wide' | 'outlineExpand' | 'outlinePin' | 'navPin'>; label: string; testId: string }[] = [
   { key: 'wide', label: '宽屏', testId: 'fsdb-layout-wide' },
@@ -27,10 +28,12 @@ export function LayoutPrefsMenu({
   onChange?: (patch: Partial<PagePrefs>) => void
 }) {
   const apply = onChange ?? persistPagePrefs
+  useSyncExternalStore(subscribePageWidth, getPageWidthVersion, () => 0)
+  const live = onChange ? prefs : getPagePrefs()
   return (
     <div className={className ? `fsdb-layout-menu ${className}` : 'fsdb-layout-menu'} role="menu" data-testid={`${testPrefix}-menu`}>
       {BOOLS.map((item) => {
-        const on = prefs[item.key]
+        const on = live[item.key]
         return (
           <button
             key={item.key}
@@ -54,8 +57,8 @@ export function LayoutPrefsMenu({
               key={item.value}
               type="button"
               role="menuitemradio"
-              className={`fsdb-layout-opt${prefs.bodySize === item.value ? ' is-active' : ''}`}
-              aria-checked={prefs.bodySize === item.value}
+              className={`fsdb-layout-opt${live.bodySize === item.value ? ' is-active' : ''}`}
+              aria-checked={live.bodySize === item.value}
               data-testid={`${testPrefix}-size-${item.value}`}
               onClick={() => apply({ bodySize: item.value })}
             >
@@ -72,8 +75,8 @@ export function LayoutPrefsMenu({
               key={item.value}
               type="button"
               role="menuitemradio"
-              className={`fsdb-layout-opt${prefs.bodyGap === item.value ? ' is-active' : ''}`}
-              aria-checked={prefs.bodyGap === item.value}
+              className={`fsdb-layout-opt${live.bodyGap === item.value ? ' is-active' : ''}`}
+              aria-checked={live.bodyGap === item.value}
               data-testid={`${testPrefix}-gap-${item.value}`}
               onClick={() => apply({ bodyGap: item.value })}
             >

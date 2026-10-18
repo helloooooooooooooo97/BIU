@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type RefObject } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from 'react'
 import type { NodeViewProps } from '@tiptap/react'
 import { NodeViewWrapper } from '@tiptap/react'
 import { PlayIcon } from '@heroicons/react/16/solid'
@@ -13,7 +13,7 @@ import {
   type PageBlockPluginPhase,
 } from './page-block-meta.ts'
 import { bindPageBlockPlugin } from './page-block-plugin-host.ts'
-import { PAGE_BLOCK_IDLE_MIN_PX, PAGE_BLOCK_IDLE_ROOT_MARGIN, schedulePageBlockMount } from './page-block-idle.ts'
+import { PAGE_BLOCK_IDLE_MIN_PX, schedulePageBlockMount } from './page-block-idle.ts'
 
 function assetName(file: string) {
   return file.replace(/^assets\//, '')
@@ -94,47 +94,6 @@ function PageBlockIdle() {
   )
 }
 
-function useNearPageBlock(active: boolean, host: RefObject<HTMLElement | null>) {
-  const [near, setNear] = useState(!active)
-  useEffect(() => {
-    if (!active) {
-      setNear(true)
-      return
-    }
-    if (near) return
-    let gone = false
-    let io: IntersectionObserver | null = null
-    let tries = 0
-    const start = () => {
-      if (gone) return
-      const el = host.current
-      if (!el) {
-        if (tries++ < 8) requestAnimationFrame(start)
-        return
-      }
-      if (typeof IntersectionObserver === 'undefined') {
-        setNear(true)
-        return
-      }
-      io = new IntersectionObserver(
-        (entries) => {
-          if (!entries.some((row) => row.isIntersecting)) return
-          io?.disconnect()
-          setNear(true)
-        },
-        { rootMargin: PAGE_BLOCK_IDLE_ROOT_MARGIN, threshold: 0 },
-      )
-      io.observe(el)
-    }
-    start()
-    return () => {
-      gone = true
-      io?.disconnect()
-    }
-  }, [active, host, near])
-  return near
-}
-
 function samePageBlockProps(prev: NodeViewProps, next: NodeViewProps) {
   return (
     prev.node.attrs.kind === next.node.attrs.kind &&
@@ -172,10 +131,9 @@ export const PageBlockView = memo(function PageBlockView({ node, updateAttribute
     updateAttributesRef.current({ data: next })
   }, [])
   const hostRef = useRef<HTMLElement | null>(null)
-  const near = useNearPageBlock(Boolean(plugin), hostRef)
   const [showView, setShowView] = useState(false)
   useEffect(() => {
-    if (!near || !View || showView) return
+    if (!View || showView) return
     let gone = false
     schedulePageBlockMount(() => {
       if (!gone) setShowView(true)
@@ -183,12 +141,12 @@ export const PageBlockView = memo(function PageBlockView({ node, updateAttribute
     return () => {
       gone = true
     }
-  }, [View, near, showView])
+  }, [View, showView])
   useLayoutEffect(() => bindPageBlockPlugin(hostRef.current, plugin), [plugin])
   useEffect(() => {
-    if (!near || View || !plugin || phase !== 'idle') return
+    if (View || !plugin || phase !== 'idle') return
     requestEnablePageBlockPlugin(plugin, kind)
-  }, [View, kind, near, phase, plugin])
+  }, [View, kind, phase, plugin])
 
   useEffect(() => {
     if (!cloneFrom || !file) return
@@ -232,8 +190,6 @@ export const PageBlockView = memo(function PageBlockView({ node, updateAttribute
     >
       {cloneFrom ? (
         <div className="page-block-missing">正在复制附件…</div>
-      ) : !near ? (
-        <PageBlockIdle />
       ) : View && showView ? (
         // 文档里的插件块崩了只烂这一块，不该让整个应用白屏。
         <RenderBoundary label={plugin || kind}>

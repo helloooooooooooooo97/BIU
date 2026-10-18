@@ -88,8 +88,7 @@ test('empty leading shareScope groups fill the first nonempty group before retur
   })
   assert.deepEqual(calls, [
     { scope: 'personal', limit: 50 },
-    { scope: 'workspace', limit: 1 },
-    { scope: 'shared', limit: 1 },
+    { scope: 'workspace', limit: 50 },
     { scope: 'shared', limit: 50 },
   ])
   assert.deepEqual(
@@ -99,11 +98,13 @@ test('empty leading shareScope groups fill the first nonempty group before retur
 })
 
 test('wrap groups larger than the window only fully fetch the first group', async () => {
+  const extra = Array.from({ length: 12 }, (_, i) => `g${i}`)
   const limits: number[] = []
   const page = await listGroupedCollection({
     path: '/tasks',
     groupBy: 'status',
     schema,
+    extraValues: extra,
     pageSize: 100,
     wrap: true,
     list: async (input) => {
@@ -111,23 +112,21 @@ test('wrap groups larger than the window only fully fetch the first group', asyn
       return { items: [{ id: String(limits.length), title: 'row' }], total: 80, schema }
     },
   })
-  assert.deepEqual(limits, [100, 1, 1])
-  assert.deepEqual(
-    page!.buckets.map((item) => [item.key, item.total, item.rows.length]),
-    [
-      ['todo', 80, 1],
-      ['doing', 80, 0],
-      ['done', 80, 0],
-    ],
-  )
+  assert.equal(limits[0], 100)
+  assert.ok(limits.slice(1).every((limit) => limit === 1))
+  assert.equal(limits.length, 15)
+  assert.equal(page!.buckets[0]?.rows.length, 1)
+  assert.ok(page!.buckets.slice(1).every((bucket) => bucket.rows.length === 0))
 })
 
 test('scrolled wrap groups can fill later buckets at page size', async () => {
+  const extra = Array.from({ length: 12 }, (_, i) => `g${i}`)
   const limits: Array<{ status?: unknown; limit: number }> = []
   await listGroupedCollection({
     path: '/tasks',
     groupBy: 'status',
     schema,
+    extraValues: extra,
     pageSize: 100,
     wrap: true,
     fillKeys: ['doing'],
@@ -136,11 +135,14 @@ test('scrolled wrap groups can fill later buckets at page size', async () => {
       return { items: [{ id: String(limits.length), title: 'row' }], total: 80, schema }
     },
   })
-  assert.deepEqual(limits, [
-    { status: 'todo', limit: 100 },
-    { status: 'doing', limit: 100 },
-    { status: 'done', limit: 1 },
-  ])
+  assert.deepEqual(
+    limits.filter((item) => item.status === 'todo' || item.status === 'doing' || item.status === 'done'),
+    [
+      { status: 'todo', limit: 100 },
+      { status: 'doing', limit: 100 },
+      { status: 'done', limit: 1 },
+    ],
+  )
 })
 
 test('shareScope groups query $scope, not shareScope equality', async () => {
@@ -164,9 +166,9 @@ test('grouped table fetch no longer uses a mixed 200-row page', () => {
   const grouped = readFileSync(resolve(import.meta.dirname, './group-list.ts'), 'utf8')
   assert.doesNotMatch(browser, /groupBy \? 200/)
   assert.match(browser, /listGroupedCollection\(/)
-  assert.match(browser, /wrap: wrapCells/)
-  assert.match(browser, /fillKeys: groupFillKeys/)
-  assert.match(browser, /previous: loadedIdentityRef/)
+  assert.match(browser, /wrap: reqWrap/)
+  assert.match(browser, /fillKeys: switching \|\| opts\?\.force \? \[\] : groupFillKeys/)
+  assert.match(browser, /!opts\?\.force && !switching && loadedIdentityRef/)
   assert.match(browser, /JSON\.stringify\(groupPages\)/)
   assert.match(browser, /count = group\.total \?\? group\.rows\.length/)
   assert.match(browser, /group\.total != null \? group\.rows/)

@@ -247,6 +247,7 @@ function placeHost(host: Host, slot: HTMLElement | null) {
   if (el.parentElement !== slot) slot.appendChild(el)
   el.style.cssText =
     'position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none;visibility:visible;overflow:hidden;isolation:isolate;background:var(--dsw-bg)'
+  requestAnimationFrame(() => fitView(host.api))
 }
 
 function paintHost(host: Host) {
