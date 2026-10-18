@@ -219,14 +219,14 @@ test('openOverlayComposer on the chat page does not open a window', () => {
   assert.equal(getChatOverlay(), false)
 })
 
-test('pick opens a compose-only overlay; send reveals the thread', () => {
+test('pick opens a compose-only overlay; only the expand control reveals the thread', () => {
   setChatOverlay(false)
   history.replaceState(null, '', '/database')
   openOverlayComposer({ revealThread: false })
   assert.equal(getChatOverlay(), true)
   assert.equal(getOverlayThread(), false)
   assert.equal(getOverlayAutohide(), false)
-  revealOverlayThread()
+  toggleOverlayThread()
   assert.equal(getOverlayThread(), true)
   setChatOverlay(false)
   assert.equal(getOverlayThread(), false)

@@ -230,7 +230,7 @@ export function isChatPagePath(pathname: string) {
   return path === '/' || path.startsWith('/s/')
 }
 
-/** 选取对象后弹出输入条：工具栏 + 统计 + 输入框，回复区等发出去再展开。聊天页本身已有输入框，不要再弹窗。 */
+/** 选取对象后弹出输入条：工具栏 + 统计 + 输入框。回复区只在用户点右上角展开时打开，发送不自动展开。聊天页本身已有输入框，不要再弹窗。 */
 export function openOverlayComposer(opts?: { revealThread?: boolean }) {
   if (typeof window !== 'undefined' && isChatPagePath(window.location.pathname)) {
     requestComposerFocus()

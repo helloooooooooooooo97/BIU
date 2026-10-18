@@ -5,7 +5,7 @@ import { EditorContent, useEditor } from '@tiptap/react'
 import Placeholder from '@tiptap/extension-placeholder'
 import type { SlotProps } from '@biu/web-slots'
 import { bindSessionView, type SessionViewService } from '@biu/web-session-view'
-import { pickKey, textPickFromPlain, usePickState, type PickService } from '@biu/core-pick/web'
+import { filePickFromPath, pickKey, textPickFromPlain, usePickState, type PickService } from '@biu/core-pick/web'
 import { HeadlessDismiss } from '@biu/public-ui'
 import { composerDocExtensions } from './composer-kit.ts'
 import {
@@ -23,7 +23,8 @@ import type { ContextWindow, ModelCapabilities, ModelModeValues, ReasoningEffort
 import { EFFORT_KNOB, THINKING_KNOB } from '../host/model-catalog.ts'
 import { ImageThumbs } from './image-thumbs.tsx'
 import { collectClipboardImages, collectImageFiles } from './clipboard-images.ts'
-import { revealOverlayThread, isComposerFocusPending } from '@biu/web-app-shell/chat-overlay'
+import { collectDroppedFilePaths, fileAbsolutePath } from './drop-file-paths.ts'
+import { isComposerFocusPending } from '@biu/web-app-shell/chat-overlay'
 import { shouldNavigateToSession } from './composer-nav.ts'
 import { getChatConfig } from './chat-config.ts'
 
@@ -483,6 +484,13 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
         live.current.pick?.add(ref)
         return true
       },
+      handleDrop(_view, event) {
+        if ([...(event.dataTransfer?.types ?? [])].includes('Files')) {
+          event.preventDefault()
+          return true
+        }
+        return false
+      },
       handleKeyDown(_view, event) {
         const mentionOpen =
           typeof document !== 'undefined' && document.querySelector('[data-testid="page-mention"]')
@@ -651,10 +659,28 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
   }
 
   function onDrop(event: DragEvent<HTMLFormElement>) {
-    const images = collectImageFiles(event.dataTransfer?.files)
-    if (!images.length) return
+    const dt = event.dataTransfer
+    const files = dt?.files
+    let uriList = ''
+    try {
+      uriList = dt?.getData('text/uri-list') || dt?.getData('text/plain') || ''
+    } catch {
+      uriList = ''
+    }
+    const paths = collectDroppedFilePaths(files, { uriList })
+    const images = collectImageFiles(files).filter((file) => !fileAbsolutePath(file))
+    if (!paths.length && !images.length) return
     event.preventDefault()
-    addImageFiles(images)
+    if (paths.length) {
+      const refs = paths
+        .map((path) => filePickFromPath(path, live.current.route))
+        .filter((ref): ref is NonNullable<typeof ref> => Boolean(ref))
+      if (refs.length) {
+        if (live.current.pick) live.current.pick.addMany(refs)
+        else if (editor) insertPickChips(editor, refs)
+      }
+    }
+    if (images.length) addImageFiles(images)
   }
 
   const openSlashMenu = useCallback(() => {
@@ -797,7 +823,6 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
     const packed = await Promise.all(pendingImages.map((item) => readFileDataUrl(item.file)))
     clearInput()
     pick?.clear()
-    revealOverlayThread()
     try {
       await sessionView.send(
         text,
@@ -805,7 +830,6 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
         tools,
         packed.filter((item) => item.url.startsWith('data:image/')),
       )
-      revealOverlayThread()
       const id = sessionView.get().sessionId
       if (id) {
         clearDraft(id)

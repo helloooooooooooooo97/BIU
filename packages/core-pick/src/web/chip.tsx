@@ -66,6 +66,7 @@ const KIND_ICONS: Record<string, Glyph> = {
   record: ClipboardDocumentCheckIcon,
   html: DocumentIcon,
   block: DocumentTextIcon,
+  file: DocumentIcon,
 }
 
 export function pickKindIcon(kind: string): Glyph {
@@ -108,7 +109,7 @@ export function PickChip({ pick, onRemove }: { pick: PickRef; onRemove?: () => v
       className="biu-tag composer-tool-chip is-pick"
       data-testid="user-pick-chip"
       data-pick-kind={pick.kind}
-      title={`${pick.kind} · ${label}`}
+      title={pick.kind === 'file' && pick.path ? pick.path : `${pick.kind} · ${label}`}
       style={{ ['--biu-tag' as string]: pickKindTone(pick.kind) }}
     >
       <PickChipLabel pick={pick} />

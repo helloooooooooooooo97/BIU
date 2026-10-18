@@ -2,7 +2,7 @@
  * 预加载：只给网页暴露一个很小的「侧栏浏览器」桥。
  * 网页仍然拿不到 node、拿不到 electron，只有下面这几个方法。
  */
-const { contextBridge, ipcRenderer } = require('electron')
+const { contextBridge, ipcRenderer, webUtils } = require('electron')
 
 const cmd = (payload) => ipcRenderer.send('biu:browser:cmd', payload)
 
@@ -19,6 +19,13 @@ contextBridge.exposeInMainWorld('biuBrowser', {
   openExternal: (url) => cmd({ type: 'openExternal', url }),
   inspect: (x, y) => cmd({ type: 'inspect', x, y }),
   cancelInspect: () => cmd({ type: 'cancelInspect' }),
+  pathForFile: (file) => {
+    try {
+      return webUtils.getPathForFile(file) || ''
+    } catch {
+      return ''
+    }
+  },
   close: () => cmd({ type: 'close' }),
   onState: (fn) => {
     const h = (_e, payload) => fn(payload)
