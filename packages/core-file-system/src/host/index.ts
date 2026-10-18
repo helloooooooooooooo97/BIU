@@ -779,6 +779,7 @@ export class DatabaseService extends Service implements Database {
     rows: Array<{ view_id: string; subject_type: 'account' | 'member_view'; subject_id: string; granted_by?: string; member_kind: string }>
   } | null = null
   private viewShareCache: { key: string; views: SharedViewDef[] } | null = null
+  private recordShareCache: { key: string; ids: Set<string> } | null = null
   private inflightMatches = new Map<string, Promise<DbRecord[]>>()
   private inflightScans = new Map<string, Promise<DbRecord[]>>()
   private inflightVisible = new Map<string, Promise<VisibleSortedPack>>()
@@ -880,6 +881,7 @@ export class DatabaseService extends Service implements Database {
     this.ownerCache = null
     this.viewAudienceCache = null
     this.viewShareCache = null
+    this.recordShareCache = null
     try {
       const need = listDecorateNeed(wanted)
       return rows.map((row) => this.decorateRecord(spec, row, need))
@@ -888,6 +890,7 @@ export class DatabaseService extends Service implements Database {
       this.ownerCache = null
       this.viewAudienceCache = null
       this.viewShareCache = null
+      this.recordShareCache = null
     }
   }
 
@@ -1382,16 +1385,12 @@ export class DatabaseService extends Service implements Database {
         shared.push(row)
         continue
       }
-      const target = this.scopeTarget(collection, String(row.id ?? ''), row)
-      const scope = authorization.scopeCurrent({
-        type: 'record',
-        workspaceId: actor.workspaceId ?? '',
-        collection: target.collection,
-        recordId: target.id,
-      })
-      if (scope === 'personal') personal.push(row)
-      else if (scope === 'workspace') workspace.push(row)
-      else if (scope === 'shared') shared.push(row)
+      const id = String(row.id ?? '')
+      const stored = this.ownershipOf(collection, id)
+      const label = this.shareScopeLabel(collection, id, row, stored)
+      if (label === '共享') shared.push(row)
+      else if (label === '空间') workspace.push(row)
+      else personal.push(row)
     }
     return { rows, personal, workspace, shared }
   }
@@ -1449,8 +1448,16 @@ export class DatabaseService extends Service implements Database {
     }
   }
 
+  notifyShareChange() {
+    this.viewShareCache = null
+    this.recordShareCache = null
+    this.bump()
+  }
+
   private bump() {
     this.visibleGen += 1
+    this.viewShareCache = null
+    this.recordShareCache = null
     this.inflightMatches.clear()
     this.inflightScans.clear()
     this.inflightVisible.clear()
@@ -1669,12 +1676,23 @@ export class DatabaseService extends Service implements Database {
     return SHARE_SCOPE_LABEL[scope]
   }
 
-  private hasPublicShare(collection: string, id: string, record?: DbRecord, stored?: DataScopeName) {
+  private recordShareIds(collection: string) {
+    if (this.recordShareCache?.key === collection) return this.recordShareCache.ids
+    const ids = new Set<string>()
     try {
-      if (this.shares.findRecord(collection, id)) return true
+      for (const share of this.shares.listRecords(collection)) {
+        const recordId = String(share.recordId ?? '').trim()
+        if (recordId) ids.add(recordId)
+      }
     } catch {
       /* 分享库还没打开时，仍按视图链接现算 */
     }
+    this.recordShareCache = { key: collection, ids }
+    return ids
+  }
+
+  private hasPublicShare(collection: string, id: string, record?: DbRecord, stored?: DataScopeName) {
+    if (this.recordShareIds(collection).has(id)) return true
     if (!record || !stored) return false
     return this.sharedViewsFor(collection).some((view) => recordMatchesSharedView(record, view, stored))
   }
@@ -3711,6 +3729,7 @@ export function apply(ctx: Context) {
       if (body.enabled === false) {
         if (kind === 'record') shares.revokeRecord(collection, recordId)
         else shares.revokeTarget(kind, collection, body.viewId ?? '', body.recordId ?? '')
+        db.notifyShareChange()
         route.send(200, { share: null })
         return
       }
@@ -3723,6 +3742,7 @@ export function apply(ctx: Context) {
         sharePlugins: body.sharePlugins,
         allowCopy: body.allowCopy,
       })
+      db.notifyShareChange()
       route.send(200, { share: { ...share, url: publicShareUrl(route.req, share.token) } })
     } catch (error) {
       route.send(400, { error: String(error) })

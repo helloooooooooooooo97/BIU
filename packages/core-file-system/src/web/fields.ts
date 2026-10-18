@@ -534,7 +534,7 @@ export function groupListKeys(
   return listed
 }
 
-/** 每一组自己的列表过滤。分享列是计算属性，必须走 $scope，不能 eq shareScope。 */
+/** 每一组自己的列表过滤。分享列是计算属性，分组请求走 $scope；host 按展示用的 shareScope 切包（公开/局域网链接算共享）。 */
 export function groupListFilter(groupBy: string, groupKey: string): Record<string, unknown> {
   if (groupBy === 'shareScope') {
     const scope = SHARE_SCOPE_FILTER[groupKey]

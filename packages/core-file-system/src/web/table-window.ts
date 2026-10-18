@@ -12,7 +12,7 @@ const lastTableWrap = {
   height: TABLE_WINDOW_VIEWPORT_FALLBACK,
 }
 
-/** Last measured table wrap. Collection switches remount the wrap, so reuse this instead of 624×560. */
+/** Last measured table wrap. Reuse this when the wrap remounts instead of flashing 624×560. */
 export function rememberedTableWrap() {
   return { width: lastTableWrap.width, height: lastTableWrap.height }
 }

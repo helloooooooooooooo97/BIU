@@ -2211,6 +2211,8 @@ export function CollectionBrowser({
   const grouped = useMemo(() => {
     if (!grouping) return groupRecords(visible, schema, groupBy)
     if (groupBuckets.length) return groupBuckets.filter((item) => (item.total ?? item.rows.length) > 0)
+    // 分享列是计算属性。用行上的 shareScope 再分组，会把「分享出去的私人记录」先画进共享，等 $scope 组桶到了再跳。
+    if (groupBy === 'shareScope') return []
     return groupRecords(visible, schema, groupBy).filter((item) => item.rows.length)
   }, [groupBuckets, groupBy, grouping, schema, visible])
   const parentKey = useMemo(() => parentFieldKey(schema, items), [items, schema])
@@ -3811,6 +3813,7 @@ export function CollectionBrowser({
       hydratePath.current = ''
       return
     }
+    if (tableHoldRef.current || pendingPathQueryRef.current) return
     const hydrateKey = `${collectionPath}\0${dataPath}`
     if (hydratePath.current === hydrateKey) return
     hydratePath.current = hydrateKey
@@ -4686,7 +4689,7 @@ export function CollectionBrowser({
         {listHeader}
         <div className="fsdb-right-body">
         <div
-          key={nested ? 'embed' : `${collectionPath}:${detailId ?? ''}`}
+          key={nested ? 'embed' : detailId ?? 'list'}
           className="app-pane-in"
         >
         {!detailId ? (

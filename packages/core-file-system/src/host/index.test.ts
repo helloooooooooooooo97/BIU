@@ -2569,6 +2569,69 @@ test('a lan view share marks matching records shared without stamping ownership'
   assert.equal(scopeOf(all.items, '已完成'), '共享')
 })
 
+test('$scope packs follow shareScope labels for public and lan shares', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  db.shares.open(':memory:')
+  const rows = new Map<string, DbRecord>()
+  db.register({
+    id: 'docs',
+    path: '/docs',
+    schema: {
+      fields: {
+        ...REQUIRED_RECORD_FIELDS,
+        title: { type: 'string', writable: true },
+        status: { type: 'string', writable: true },
+      },
+    },
+    records: { create: true },
+    list: () => [...rows.values()],
+    get: (id) => rows.get(id) ?? null,
+    create: (records) => records.map((record) => {
+      const row = {
+        id: `d${rows.size + 1}`,
+        title: String(record.title ?? 'Doc'),
+        status: String(record.status ?? 'open'),
+      }
+      rows.set(row.id, row)
+      return row
+    }),
+  })
+  const dir = mkdtempSync(join(tmpdir(), 'biu-db-scope-share-'))
+  const collab = new CollabStore(openAndMigrateBiu(join(dir, 'biu.sqlite')))
+  class AccountBridge extends Service {
+    store = collab
+    authorization = collab.authorization
+    constructor(inner: Context) {
+      super(inner, 'account')
+    }
+  }
+  await ctx.plugin(AccountBridge)
+  const ada = collab.register('', Date.now(), 'secret1', 'scope-share-ada@example.com')
+  const workspace = collab.createWorkspace(ada.id, 'Share pack')
+  collab.setActive(ada.id, workspace.id)
+
+  await runWithAccount(ada.id, () => db.create('/docs', [{ title: '只私人' }], { scope: 'personal' }))
+  await runWithAccount(ada.id, () => db.create('/docs', [{ title: '公开链接' }], { scope: 'personal' }))
+  db.shares.upsert({ kind: 'record', collection: '/docs', recordId: 'd2' })
+  db.notifyShareChange()
+
+  const titles = (listed: { items: DbRecord[] }) => listed.items.map((row) => row.title).sort()
+  const personal = await runWithAccount(ada.id, () => db.list('/docs', { $scope: 'personal' }))
+  const shared = await runWithAccount(ada.id, () => db.list('/docs', { $scope: 'shared' }))
+  assert.deepEqual(titles(personal), ['只私人'])
+  assert.deepEqual(titles(shared), ['公开链接'])
+  assert.equal(personal.items[0]?.shareScope, '私人')
+  assert.equal(shared.items[0]?.shareScope, '共享')
+
+  db.shares.upsert({ kind: 'view', collection: '/docs', viewId: builtinAllViewId('/docs') })
+  db.notifyShareChange()
+  const afterView = await runWithAccount(ada.id, () => db.list('/docs', { $scope: 'shared' }))
+  const personalAfter = await runWithAccount(ada.id, () => db.list('/docs', { $scope: 'personal' }))
+  assert.deepEqual(titles(afterView), ['公开链接', '只私人'])
+  assert.deepEqual(titles(personalAfter), [])
+})
+
 test('list match overlay is only loaded for overlay fields or tree filters', () => {
   assert.equal(listNeedsMatchOverlay(undefined, '', 'title'), false)
   assert.equal(listNeedsMatchOverlay({ status: 'open', $scope: 'personal' }, '', 'title'), false)
@@ -2725,6 +2788,9 @@ test('collection list preloads authorization scans and releases them', () => {
   assert.match(host, /auth\.onInvalidate\(\(\) => this\.bump\(\)\)/)
   assert.match(host, /visibleSortedCollectionRows/)
   assert.match(host, /partitionVisibleRows/)
+  assert.match(host, /this\.shareScopeLabel\(collection, id, row, stored\)/)
+  assert.match(host, /notifyShareChange\(\)/)
+  assert.match(host, /listRecords\(collection\)/)
   assert.match(host, /shareInflight/)
   assert.match(host, /setImmediate\(\(\) => \{\s*setImmediate/)
   assert.match(host, /inflightVisible\.clear\(\)/)
