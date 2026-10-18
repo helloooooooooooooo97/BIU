@@ -140,9 +140,15 @@ export function nextStickToLatest(opts: {
   return opts.stuck
 }
 
-/** 让最新一回合至少有一屏高，短回复也能把用户消息顶到视口上沿。 */
+/** 输入栏垫了 pb-72 / 18rem，可见一屏是 clientHeight 减去这块垫。 */
+export function chatVisibleRoom(parent: HTMLElement): number {
+  const pad = Number.parseFloat(getComputedStyle(parent).paddingBottom) || 0
+  return Math.max(1, parent.clientHeight - pad)
+}
+
+/** 让最新一回合至少有一屏可见高度，短回复才能沉在发出消息下面、而不是贴着顶。 */
 export function reserveLiveTurnRoom(parent: HTMLElement, anchorId: string) {
-  const height = parent.clientHeight > 0 ? `${parent.clientHeight}px` : ''
+  const height = parent.clientHeight > 0 ? `${chatVisibleRoom(parent)}px` : ''
   for (const turn of parent.querySelectorAll<HTMLElement>('.chat-turn')) {
     const next = turn.dataset.turnAnchor === anchorId ? height : ''
     if (turn.style.minHeight !== next) turn.style.minHeight = next
@@ -150,8 +156,8 @@ export function reserveLiveTurnRoom(parent: HTMLElement, anchorId: string) {
 }
 
 /**
- * 发出去的那条 sticky 钉在视口顶。回复可以高出剩余高度，多出来的往上挤、被挡住。
- * 短回复停在发出消息顶；超出一屏后外层贴底，好跟着字往下走。
+ * 发出去的那条 sticky 钉在视口顶。短回复落在预留高度的底部，离顶部有一段距离；
+ * 内容变高后往上挤、被 sticky 挡住。超出可见一屏后外层贴底，好跟着字往下走。
  */
 export function followChatOutput(parent: HTMLElement, anchorId: string) {
   const maxScroll = Math.max(0, parent.scrollHeight - parent.clientHeight)
@@ -173,8 +179,7 @@ export function followChatOutput(parent: HTMLElement, anchorId: string) {
   const contentEnd =
     last instanceof HTMLElement ? offsetInScroller(last, parent) + last.offsetHeight : parent.scrollHeight
   const span = contentEnd - anchorTop
-  const pad = Number.parseFloat(getComputedStyle(parent).paddingBottom) || 0
-  const room = Math.max(1, parent.clientHeight - pad)
+  const room = chatVisibleRoom(parent)
   if (span <= room) {
     parent.scrollTop = Math.min(anchorTop, maxScroll)
     return
