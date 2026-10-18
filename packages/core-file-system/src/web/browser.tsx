@@ -828,6 +828,95 @@ function placeCreatedRow(groups: GroupBucket[], row: DbRecord, groupBy: string) 
   return [bucket, ...groups]
 }
 
+const LISTED_MUTATION_EVENT = 'fsdb:list-mutation'
+
+type ListedMutation =
+  | { path: string; op: 'patch'; row: DbRecord }
+  | { path: string; op: 'create'; row: DbRecord; groupBy?: string; viewId?: string | null }
+  | { path: string; op: 'remove'; ids: string[] }
+
+function overlayListedRow(row: DbRecord, next: DbRecord): DbRecord {
+  return { ...row, ...next, banner: next.banner ?? row.banner ?? null }
+}
+
+function patchListCacheRecords(path: string, map: (row: DbRecord) => DbRecord) {
+  for (const key of [...listCache.keys()]) {
+    if (key !== path && !key.startsWith(`${path}\0`)) continue
+    const snap = listCache.get(key)
+    if (!snap) continue
+    listCache.set(key, {
+      ...snap,
+      items: snap.items.map((row) => map(row) as (typeof snap.items)[number]),
+      groupBuckets: snap.groupBuckets?.map((group) => ({
+        ...group,
+        rows: group.rows.map(map),
+      })),
+    })
+  }
+}
+
+function dropListCacheRecords(path: string, ids: string[]) {
+  const gone = new Set(ids.filter(Boolean).map(String))
+  if (!gone.size) return
+  for (const key of [...listCache.keys()]) {
+    if (key !== path && !key.startsWith(`${path}\0`)) continue
+    const snap = listCache.get(key)
+    if (!snap) continue
+    const items = snap.items.filter((row) => !gone.has(String(row.id)))
+    const removed = snap.items.length - items.length
+    const groupBuckets = snap.groupBuckets
+      ?.map((group) => {
+        const rows = group.rows.filter((row) => !gone.has(String(row.id)))
+        const dropped = group.rows.length - rows.length
+        if (!dropped) return group
+        return {
+          ...group,
+          rows,
+          total: group.total != null ? Math.max(0, group.total - dropped) : undefined,
+        }
+      })
+      .filter((group) => group.rows.length > 0 || (group.total ?? 0) > 0)
+    listCache.set(key, {
+      ...snap,
+      items,
+      total: Math.max(0, snap.total - removed),
+      groupBuckets,
+    })
+  }
+}
+
+function upsertListCacheRecord(path: string, row: DbRecord, groupBy?: string, viewId?: string | null) {
+  const snap = peekListCache(path, viewId)
+  if (!snap || snap.items.some((item) => item.id === row.id)) {
+    if (snap) patchListCacheRecords(path, (item) => (item.id === row.id ? overlayListedRow(item, row) : item))
+    return
+  }
+  rememberListCache(
+    path,
+    {
+      ...snap,
+      items: [row, ...snap.items],
+      total: snap.total + 1,
+      groupBuckets: placeCreatedRow(snap.groupBuckets ?? [], row, groupBy ?? ''),
+    },
+    viewId,
+  )
+}
+
+function publishListedMutation(mutation: ListedMutation) {
+  if (mutation.op === 'patch') {
+    patchListCacheRecords(mutation.path, (row) =>
+      row.id === mutation.row.id ? overlayListedRow(row, mutation.row) : row,
+    )
+  } else if (mutation.op === 'remove') {
+    dropListCacheRecords(mutation.path, mutation.ids)
+  } else {
+    upsertListCacheRecord(mutation.path, mutation.row, mutation.groupBy, mutation.viewId)
+  }
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent(LISTED_MUTATION_EVENT, { detail: mutation }))
+}
+
 function listHoldResetKey(view: SavedView | null, path: string) {
   return `${view?.id ?? ''}\0${path}\0${view?.groupBy ?? ''}\0${0}\0${normalizePageSize(view?.pageSize)}\0${view?.query ?? ''}`
 }
@@ -1524,11 +1613,39 @@ export function CollectionBrowser({
   const [, setHoldNav] = useState(0)
   const collectionPathRef = useRef(collectionPath)
   collectionPathRef.current = collectionPath
+  const pendingPathQueryRef = useRef<PendingPathQuery | null>(null)
+  const adoptListCacheForViewRef = useRef<(path: string, view: SavedView | null | undefined) => void>(() => undefined)
+  adoptListCacheForViewRef.current = (path, view) => {
+    const cached = view ? peekListCache(path, view.id) : undefined
+    if (cached) {
+      const snap = listHoldFromCache(cached, view, path)
+      tableHoldRef.current = snap
+      releaseHoldOnPaintRef.current = snap.nodes !== EMPTY_HOLD_NODES
+      pendingPathQueryRef.current = null
+      setItems(cached.items)
+      setStat(cached.stat)
+      setTotal(cached.total)
+      setGroupBuckets(cached.groupBuckets ?? [])
+      setGroupPages({})
+      setGroupFillKeys([])
+      setCollapsedGroups({})
+      setPage(0)
+      return
+    }
+    tableHoldRef.current = tablePaintSnapshotRef.current ?? emptyListHold(tablePaintSnapshotRef.current, view, path)
+    releaseHoldOnPaintRef.current = false
+  }
   const holdNavRef = useRef<(path: string, viewId?: string) => void>(() => undefined)
   holdNavRef.current = (path, viewId) => {
-    if (!path || path === collectionPathRef.current) return
+    if (!path) return
+    const sameCollection = path === collectionPathRef.current
+    if (sameCollection && (!viewId || viewId === activeViewIdRef.current)) return
     const listed = paintListedViews(path)
     const view = pickViewForRoute(listed, path, viewId) || viewForPath(path, viewId)
+    if (sameCollection) {
+      adoptListCacheForViewRef.current(path, view)
+      return
+    }
     const cached = peekListCache(path, view?.id)
     if (cached) {
       tableHoldRef.current = listHoldFromCache(cached, view, path)
@@ -1536,7 +1653,6 @@ export function CollectionBrowser({
     }
     tableHoldRef.current = emptyListHold(tablePaintSnapshotRef.current, view, path)
   }
-  const pendingPathQueryRef = useRef<PendingPathQuery | null>(null)
   const pathSwitchHandledRef = useRef(false)
   const layoutPathRef = useRef<string | null>(null)
   const prevSchemaDefaultSig = useRef('')
@@ -1629,6 +1745,8 @@ export function CollectionBrowser({
   groupPagesRef.current = groupPages
   const groupBucketsRef = useRef(groupBuckets)
   groupBucketsRef.current = groupBuckets
+  const groupByRef = useRef(groupBy)
+  groupByRef.current = groupBy
   const loadedIdentityRef = useRef('')
   const loadedPagesRef = useRef<Record<string, number>>({})
   const listColumns = useMemo(() => {
@@ -2241,6 +2359,11 @@ export function CollectionBrowser({
   useEffect(() => {
     if (nested || routeRecordId) return
     return whenListIdle(() => {
+      const currentListed = paintListedViews(collectionPath)
+      for (const view of currentListed) {
+        if (view.id === activeViewIdRef.current) continue
+        void warmListCacheForView(collectionPath, view, currentListed)
+      }
       const paths = tables
         .filter((table) => table.path !== collectionPath && !isIndexCollection(table.path) && !isSystemCollection(table.path))
         .map((table) => table.path)
@@ -2922,6 +3045,16 @@ export function CollectionBrowser({
   }
 
   function selectView(view: SavedView) {
+    if (view.id !== activeViewIdRef.current) {
+      adoptListCacheForViewRef.current(dataPath, view)
+      const listed = paintListedViews(collectionPath)
+      void warmListCacheForView(collectionPath, view, listed).then(() => {
+        if (activeViewIdRef.current !== view.id) return
+        if (!peekListCache(dataPath, view.id)) return
+        adoptListCacheForViewRef.current(dataPath, view)
+        setHoldNav((n) => n + 1)
+      })
+    }
     applyView(view)
     rememberInspectorWorkingView(collectionPath, view.id)
     onOpenView?.(view.id)
@@ -3174,7 +3307,9 @@ export function CollectionBrowser({
   function mapListedRecords(map: (row: DbRecord) => DbRecord) {
     setItems((prev) => {
       const next = prev.map((item) => map(item) as typeof item)
-      return recordsFingerprint(prev) === recordsFingerprint(next) ? prev : next
+      const same = recordsFingerprint(prev) === recordsFingerprint(next)
+      if (!same) itemsRef.current = next
+      return same ? prev : next
     })
     setGroupBuckets((prev) =>
       prev.map((group) => ({
@@ -3188,8 +3323,15 @@ export function CollectionBrowser({
     const gone = new Set(ids.filter(Boolean).map(String))
     if (!gone.size) return
     for (const id of gone) confirmedCreates.current.delete(id)
-    setItems((prev) => prev.filter((item) => !gone.has(String(item.id))))
-    setTotal((count) => Math.max(0, count - gone.size))
+    setItems((prev) => {
+      const next = prev.filter((item) => !gone.has(String(item.id)))
+      const removed = prev.length - next.length
+      if (removed) {
+        itemsRef.current = next
+        setTotal((count) => Math.max(0, count - removed))
+      }
+      return next
+    })
     setGroupBuckets((prev) =>
       prev
         .map((group) => {
@@ -3206,14 +3348,47 @@ export function CollectionBrowser({
     )
   }
 
-  function announceListChange() {
+  function announceListChange(keepCache = false) {
     tableHoldRef.current = null
     pendingPathQueryRef.current = null
-    forgetListCache(dataPath)
+    if (!keepCache) forgetListCache(dataPath)
     invalidateListReads()
     invalidatePreviewTotals()
     window.dispatchEvent(new Event('fsdb:change'))
+    if (keepCache) return
+    const listed = paintListedViews(collectionPath)
+    for (const view of listed) {
+      if (view.id === activeViewIdRef.current) continue
+      void warmListCacheForView(collectionPath, view, listed)
+    }
   }
+
+  useEffect(() => {
+    const onMut = (event: Event) => {
+      const detail = (event as CustomEvent<ListedMutation>).detail
+      if (!detail || detail.path !== collectionPathRef.current) return
+      if (detail.op === 'patch') {
+        mapListedRecords((item) => (item.id === detail.row.id ? overlayListedRow(item, detail.row) : item))
+        setDetailRow((prev) => (prev?.id === detail.row.id ? overlayListedRow(prev, detail.row) : prev))
+        return
+      }
+      if (detail.op === 'remove') {
+        dropListedRecords(detail.ids)
+        return
+      }
+      const row = detail.row
+      if (itemsRef.current.some((item) => item.id === row.id)) {
+        mapListedRecords((item) => (item.id === row.id ? overlayListedRow(item, row) : item))
+        return
+      }
+      confirmedCreates.current.add(String(row.id))
+      setItems((prev) => [row, ...prev.filter((item) => item.id !== row.id)])
+      setTotal((count) => count + 1)
+      setGroupBuckets((prev) => placeCreatedRow(prev, row, detail.groupBy || groupByRef.current))
+    }
+    window.addEventListener(LISTED_MUTATION_EVENT, onMut)
+    return () => window.removeEventListener(LISTED_MUTATION_EVENT, onMut)
+  }, [])
 
   async function executeAction(row: DbRecord, action: CollectionActionInfo) {
     if (actingRef.current) return
@@ -3305,10 +3480,11 @@ export function CollectionBrowser({
       })
       const next = data.value
       if (next) {
-        const merge = (item: DbRecord) => (item.id === next.id ? { ...item, ...next, banner: next.banner ?? null } : item)
+        const merge = (item: DbRecord) => (item.id === next.id ? overlayListedRow(item, next) : item)
         mapListedRecords(merge)
-        setDetailRow((prev) => (prev?.id === next.id ? { ...prev, ...next, banner: next.banner ?? null } : prev))
-        announceListChange()
+        setDetailRow((prev) => (prev?.id === next.id ? overlayListedRow(prev, next) : prev))
+        publishListedMutation({ path: dataPath, op: 'patch', row: next })
+        announceListChange(true)
         quietUntil.current = 0
         void reloadRef.current({ force: true })
         return
@@ -3340,9 +3516,14 @@ export function CollectionBrowser({
         return
       }
       confirmedCreates.current.add(id)
-      setItems((prev) => [value, ...prev.filter((item) => item.id !== id)])
+      setItems((prev) => {
+        const next = [value, ...prev.filter((item) => item.id !== id)]
+        itemsRef.current = next
+        return next
+      })
       setTotal((count) => count + 1)
       setGroupBuckets((prev) => placeCreatedRow(prev, value, groupBy))
+      publishListedMutation({ path: dataPath, op: 'create', row: value, groupBy, viewId: activeViewIdRef.current })
       announceListChange()
       quietUntil.current = 0
       void reloadRef.current({ force: true })
@@ -3362,6 +3543,7 @@ export function CollectionBrowser({
       })
       onCloseRecord?.()
       dropListedRecords([String(row.id)])
+      publishListedMutation({ path: dataPath, op: 'remove', ids: [String(row.id)] })
       announceListChange()
       quietUntil.current = 0
       await reload({ force: true })
@@ -3380,6 +3562,7 @@ export function CollectionBrowser({
       if (detailId && ids.includes(detailId)) onCloseRecord?.()
       setPickedIds([])
       dropListedRecords(ids)
+      publishListedMutation({ path: dataPath, op: 'remove', ids: ids.map(String) })
       announceListChange()
       quietUntil.current = 0
       await reload({ force: true })
@@ -4264,6 +4447,10 @@ export function CollectionBrowser({
                     aria-pressed={view.id === activeViewId}
                     aria-haspopup={view.id === activeViewId ? 'menu' : undefined}
                     aria-expanded={view.id === activeViewId ? viewMenuOpen : undefined}
+                    onPointerEnter={() => {
+                      if (view.id === activeViewIdRef.current) return
+                      void warmListCacheForView(collectionPath, view, paintListedViews(collectionPath))
+                    }}
                     onClick={() => {
                       if (view.id === activeViewId) toggleMenu('view')
                       else selectView(view)
@@ -4296,7 +4483,15 @@ export function CollectionBrowser({
                   {views.length === 0 ? <div className="tasks-viewdd-empty">还没有已保存的视图</div> : null}
                   {views.map((view) => (
                     <div key={view.id} className={`tasks-viewdd-item${view.id === activeViewId ? ' is-active' : ''}`}>
-                      <button type="button" className="tasks-viewdd-item-main" onClick={() => selectView(view)}>
+                      <button
+                        type="button"
+                        className="tasks-viewdd-item-main"
+                        onPointerEnter={() => {
+                          if (view.id === activeViewIdRef.current) return
+                          void warmListCacheForView(collectionPath, view, paintListedViews(collectionPath))
+                        }}
+                        onClick={() => selectView(view)}
+                      >
                         <span className="tasks-viewdd-item-name">{view.name}</span>
                       </button>
                       <span className="tasks-viewdd-item-actions">

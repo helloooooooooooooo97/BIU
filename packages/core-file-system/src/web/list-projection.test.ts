@@ -27,7 +27,7 @@ test('table list and previews pass view columns to /api/db/list', () => {
   assert.match(browser, /listReadySent\.current \? '暂无记录' : ''/)
   assert.match(browser, /if \(paintedPath !== dataPath\)/)
   assert.match(browser, /nodes: EMPTY_HOLD_NODES/)
-  assert.doesNotMatch(browser, /tableHoldRef\.current = tablePaintSnapshotRef\.current/)
+  assert.match(browser, /tableHoldRef.current = tablePaintSnapshotRef.current \?\? emptyListHold/)
   assert.match(browser, /held\?\.nodes \?\? tablePaintNodes/)
   assert.doesNotMatch(browser, /reloadKey = .*listColumnsKey/)
   assert.match(preview, /const columns = \['title', 'emoji', 'mascot', 'parentId'\]/)
