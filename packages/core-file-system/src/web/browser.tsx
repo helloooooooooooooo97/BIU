@@ -120,11 +120,11 @@ import {
 } from './page-width.ts'
 import { reportInspectorPaneMenu } from './inspector-pane-menu.tsx'
 import { ViewPaneMenu } from './pane-more-menu.tsx'
-import { HttpError, listCollection, readJson } from './db-client.ts'
+import { HttpError, invalidateListReads, listCollection, readJson } from './db-client.ts'
 import { savedViewRecordPath } from '../paths.ts'
 import { findViewNeighbor, indexOnPage } from './view-adjacent.ts'
 import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, rememberedTableWrap, tableColumnEstimate, tableColumnFit, tableColumnSlice, tableColumnUnchanged, tableWindowSlice, tableWindowUnchanged, tableWrapScroll, type TableColumnSlice } from './table-window.ts'
-import { isPaintedListReady, markPaintedListReady, rememberPreviewTotal, resetPaintedListReady, viewTotalKey, whenListIdle } from './sidebar-preview.ts'
+import { invalidatePreviewTotals, isPaintedListReady, markPaintedListReady, rememberPreviewTotal, resetPaintedListReady, viewTotalKey, whenListIdle } from './sidebar-preview.ts'
 import { catalogLockFilters, isReadOnlyViewId, mergeTableViews, parseBuiltinScopeViewId, stubBuiltinBlockKindView, viewsForScope, type DataScope } from '../catalog-views.ts'
 import { SAVED_VIEW_EVENT, rememberInspectorWorkingView, showRecordInInspector } from './inspector-db-route.ts'
 import { CellPop, cellUsesPop } from './cell-pop.tsx'
@@ -649,13 +649,34 @@ type ListCacheSnap = {
 }
 const listCache = new Map<string, ListCacheSnap>()
 
-function rememberListCache(path: string, snap: ListCacheSnap) {
-  if (listCache.has(path)) listCache.delete(path)
-  listCache.set(path, snap)
+function listCacheKey(path: string, viewId?: string | null) {
+  return `${path}\0${viewId ?? ''}`
+}
+
+function peekListCache(path: string, viewId?: string | null) {
+  return listCache.get(listCacheKey(path, viewId))
+}
+
+function bucketsReadyToCache(buckets?: GroupBucket[]) {
+  if (!buckets?.length) return true
+  return buckets.every((bucket) => (bucket.total ?? 0) <= 0 || bucket.rows.length > 0)
+}
+
+function rememberListCache(path: string, snap: ListCacheSnap, viewId?: string | null) {
+  if (!bucketsReadyToCache(snap.groupBuckets)) return
+  const key = listCacheKey(path, viewId)
+  if (listCache.has(key)) listCache.delete(key)
+  listCache.set(key, snap)
   while (listCache.size > LIST_CACHE_MAX) {
     const first = listCache.keys().next().value
     if (first === undefined) break
     listCache.delete(first)
+  }
+}
+
+function forgetListCache(path: string) {
+  for (const key of [...listCache.keys()]) {
+    if (key === path || key.startsWith(`${path}\0`)) listCache.delete(key)
   }
 }
 
@@ -1127,8 +1148,8 @@ export function CollectionBrowser({
   const paintListedViews = (path: string) =>
     listedViews(path, loadViews(path)).map((view) => withViewDisplay(path, view))
   const dataPath = collectionPath
-  const [stat, setStat] = useState<StatResult | null>(() => listCache.get(dataPath)?.stat ?? null)
-  const [items, setItems] = useState<Array<DbRecord & { path?: string }>>(() => listCache.get(dataPath)?.items ?? [])
+  const [stat, setStat] = useState<StatResult | null>(() => peekListCache(dataPath, routeViewId)?.stat ?? null)
+  const [items, setItems] = useState<Array<DbRecord & { path?: string }>>(() => peekListCache(dataPath, routeViewId)?.items ?? [])
   const [error, setError] = useState('')
   const [openDetailId, setOpenDetailId] = useState<string | null>(routeRecordId)
   const [detailRow, setDetailRow] = useState<DbRecord | null>(null)
@@ -1180,7 +1201,7 @@ export function CollectionBrowser({
     }
   }, [])
   const [pageSize, setPageSize] = useState(() => normalizePageSize(initialView?.pageSize))
-  const [total, setTotal] = useState(() => listCache.get(dataPath)?.total ?? 0)
+  const [total, setTotal] = useState(() => peekListCache(dataPath, routeViewId)?.total ?? 0)
   const [fetchQuery, setFetchQuery] = useState(initialView?.query ?? '')
   const [mode, setMode] = useState<ViewMode>(initialView?.mode ?? 'table')
   const customView = extraViews.find((view) => view.id === mode)
@@ -1285,22 +1306,23 @@ export function CollectionBrowser({
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
   const [groupPages, setGroupPages] = useState<Record<string, number>>({})
   const [groupFillKeys, setGroupFillKeys] = useState<string[]>([])
-  const [groupBuckets, setGroupBuckets] = useState<GroupBucket[]>(() => listCache.get(dataPath)?.groupBuckets ?? [])
+  const [groupBuckets, setGroupBuckets] = useState<GroupBucket[]>(() => peekListCache(dataPath, routeViewId)?.groupBuckets ?? [])
   const [paintedPath, setPaintedPath] = useState(dataPath)
   const tablePaintSnapshotRef = useRef<TableHoldSnap | null>(null)
   const tableHoldRef = useRef<TableHoldSnap | null>(null)
   const pendingPathQueryRef = useRef<PendingPathQuery | null>(null)
   const pathSwitchHandledRef = useRef(false)
+  const layoutPathRef = useRef<string | null>(null)
   const prevSchemaDefaultSig = useRef('')
   if (paintedPath !== dataPath) {
     setPaintedPath(dataPath)
     pathSwitchHandledRef.current = true
     prevSchemaDefaultSig.current = ''
-    const cached = listCache.get(dataPath)
     const stored = viewForPath(collectionPath, routeViewId)
     const listed = paintListedViews(collectionPath)
     rememberViews(collectionPath, listed)
     const next = stored || listed[0] ? pickViewForRoute(listed, collectionPath, routeViewId) || stored || listed[0] : null
+    const cached = peekListCache(dataPath, next?.id)
     const adoptView = (view: SavedView | null | undefined, schema?: CollectionSchema) => {
       if (!view) {
         setViews([])
@@ -1553,11 +1575,11 @@ export function CollectionBrowser({
   itemsRef.current = items
   const listIdentityKey = `${dataPath}\0${pageSize}\0${fetchQuery}\0${sortField}\0${sortDir}\0${sortsStateKey(sorts)}\0${JSON.stringify(queryFilters)}\0${activeViewId ?? ''}\0${customView ? 'full' : 'proj'}\0${groupBy}\0${wrapCells ? 1 : 0}`
   const reloadKey = `${listIdentityKey}\0${groupBy ? JSON.stringify(groupPages) : page}\0${groupFillKeys.join('\0')}`
-  const reload = useCallback(async () => {
-    if (!routeViewReadyRef.current) return true
-    if (Date.now() < quietUntil.current) return true
+  const reload = useCallback(async (opts?: { force?: boolean }) => {
+    if (!opts?.force && !routeViewReadyRef.current) return true
+    if (!opts?.force && Date.now() < quietUntil.current) return true
     const hit = reloadInflightRef.current
-    if (hit?.key === reloadKey) return hit.promise
+    if (!opts?.force && hit?.key === reloadKey) return hit.promise
     const gen = ++reloadGen.current
     const promise = (async () => {
     const pending = pendingPathQueryRef.current
@@ -1580,12 +1602,13 @@ export function CollectionBrowser({
       sorts: reqSorts,
       filters: reqFilters,
       columns: reqColumns,
+      fresh: Boolean(opts?.force),
     }
     try {
       const heldStat = switching ? null : statHoldRef.current
       const nextStatPromise = heldStat?.schema
         ? Promise.resolve(heldStat)
-        : readJson<StatResult>(`/api/db/stat?path=${encodeURIComponent(dataPath)}`)
+        : readJson<StatResult>(`/api/db/stat?path=${encodeURIComponent(dataPath)}`, undefined, { fresh: Boolean(opts?.force) })
       const extraGroupValues = (schema?: CollectionSchema) => {
         if (switching) return []
         const group = groupField(schema, reqGroupBy)
@@ -1599,12 +1622,15 @@ export function CollectionBrowser({
           schema,
           extraValues: extraGroupValues(schema),
           pageSize: reqPageSize,
-          groupPages: switching ? {} : groupPagesRef.current,
+          groupPages: switching || opts?.force ? {} : groupPagesRef.current,
           wrap: reqWrap,
-          fillKeys: switching ? [] : groupFillKeys,
-          previous: !switching && loadedIdentityRef.current === listIdentityKey ? groupBucketsRef.current : undefined,
-          previousPages: switching ? {} : loadedPagesRef.current,
-          list: listCollection,
+          fillKeys: switching || opts?.force ? [] : groupFillKeys,
+          previous:
+            !opts?.force && !switching && loadedIdentityRef.current === listIdentityKey
+              ? groupBucketsRef.current
+              : undefined,
+          previousPages: switching || opts?.force ? {} : loadedPagesRef.current,
+          list: (input) => listCollection({ ...input, fresh: Boolean(opts?.force) }),
         })
       let nextStat: StatResult
       let listed: { items: Array<DbRecord & { path?: string }>; total: number; schema?: CollectionSchema }
@@ -1679,6 +1705,7 @@ export function CollectionBrowser({
       setGroupBuckets((prev) => (JSON.stringify(prev) === JSON.stringify(buckets) ? prev : buckets))
       setItems((prev) => {
         if (pendingView) {
+          confirmedCreates.current = new Set()
           setTotal(listed.total)
           return listed.items
         }
@@ -1693,12 +1720,16 @@ export function CollectionBrowser({
         const hit = listed.items.find((item) => item.id === openId)
         if (hit) setDetailRow((prev) => (prev?.id === openId ? overlayListed(prev, hit, listColumns) : prev))
       }
-      rememberListCache(dataPath, {
-        items: listed.items,
-        total: listed.total,
-        stat: { ...nextStat, schema: nextSchema },
-        groupBuckets: buckets,
-      })
+      rememberListCache(
+        dataPath,
+        {
+          items: listed.items,
+          total: listed.total,
+          stat: { ...nextStat, schema: nextSchema },
+          groupBuckets: buckets,
+        },
+        reqViewId,
+      )
       if (reqViewId) {
         rememberPreviewTotal(
           viewTotalKey(collectionPath, {
@@ -1798,7 +1829,7 @@ export function CollectionBrowser({
     if (refreshing) return
     setRefreshing(true)
     const started = Date.now()
-    const ok = await reloadRef.current()
+    const ok = await reloadRef.current({ force: true })
     const wait = Math.max(0, 480 - (Date.now() - started))
     if (wait) await new Promise((resolve) => window.setTimeout(resolve, wait))
     setRefreshing(false)
@@ -1809,18 +1840,41 @@ export function CollectionBrowser({
   }
 
   useLayoutEffect(() => {
+    const pathChanged = layoutPathRef.current !== dataPath
+    layoutPathRef.current = dataPath
+    const pathHandled = pathSwitchHandledRef.current
+    pathSwitchHandledRef.current = false
+    skipColumnReload.current = false
+    const adoptRoutedView = () => {
+      const stored = viewForPath(collectionPath, routeViewId)
+      const listed = paintListedViews(collectionPath)
+      rememberViews(collectionPath, listed)
+      if (stored || listed[0]) {
+        const next = pickViewForRoute(listed, collectionPath, routeViewId) || stored || listed[0]
+        setViews((prev) => (sameSavedViews(prev, listed) ? prev : listed))
+        if (next) applyView(next)
+        return
+      }
+      setViews([])
+      setActiveViewId(null)
+      setQuery('')
+      setFilters({})
+      setFilterTree(emptyFilterGroup())
+      setSorts(normalizeSorts(undefined, 'title', 'asc'))
+    }
+    if (!pathChanged && !pathHandled) {
+      adoptRoutedView()
+      return
+    }
     hydratePath.current = ''
     loadedIdentityRef.current = ''
     loadedPagesRef.current = {}
-    skipColumnReload.current = false
     hydratedDetail.current = ''
     confirmedCreates.current = new Set()
     const pendingRouteView = routeViewNeedsFetch(collectionPath, routeViewId)
     routeViewReadyRef.current = !pendingRouteView
     reloadGen.current += 1
     setRouteViewReady((prev) => (prev === !pendingRouteView ? prev : !pendingRouteView))
-    const pathHandled = pathSwitchHandledRef.current
-    pathSwitchHandledRef.current = false
     const holding = Boolean(tableHoldRef.current)
     if (!holding) {
       listReadySent.current = false
@@ -1830,7 +1884,7 @@ export function CollectionBrowser({
     }
     if (pathHandled) return
     setCollapsed((prev) => (Object.keys(prev).length ? {} : prev))
-    const cached = listCache.get(dataPath)
+    const cached = peekListCache(dataPath, routeViewId)
     setItems(cached?.items ?? [])
     setStat(cached?.stat ?? null)
     setTotal(cached?.total ?? 0)
@@ -1903,7 +1957,7 @@ export function CollectionBrowser({
         pendingViews = false
         pendingData = false
         if (dataTouched) {
-          void reloadRef.current()
+          void reloadRef.current({ force: true })
           if (detailIdRef.current) {
             pullDetailBody()
             pullDetailRecord()
@@ -1962,14 +2016,19 @@ export function CollectionBrowser({
   }, [routeRecordId])
 
   useEffect(() => {
+    const needsLoad =
+      loadedIdentityRef.current !== listIdentityKey ||
+      Boolean(tableHoldRef.current) ||
+      Boolean(pendingPathQueryRef.current) ||
+      !listReadySent.current
     if (skipColumnReload.current) {
       skipColumnReload.current = false
-      return
+      if (!needsLoad) return
     }
     if (routeRecordId) return
-    if (!routeViewReadyRef.current) return
-    void reloadRef.current()
-  }, [reloadKey, routeRecordId, routeViewReady])
+    if (!routeViewReadyRef.current && !needsLoad) return
+    void reloadRef.current({ force: needsLoad })
+  }, [listIdentityKey, reloadKey, routeRecordId, routeViewReady])
 
   useLayoutEffect(() => {
     setOpenDetailId(routeRecordId)
@@ -2128,11 +2187,9 @@ export function CollectionBrowser({
         rowActionColumn,
       )
       if (!prev.length || !kept.length) {
-        skipColumnReload.current = true
         return schemaDefaultKeys
       }
       if (kept.length === prev.length && kept.every((key, index) => key === prev[index])) return prev
-      if (kept.every((key) => prev.includes(key))) skipColumnReload.current = true
       return kept
     })
   }, [allColumnKeys, rowActionColumn, schema, schemaDefaultKeys, schemaDefaultSig])
@@ -2838,6 +2895,37 @@ export function CollectionBrowser({
     )
   }
 
+  function dropListedRecords(ids: string[]) {
+    const gone = new Set(ids.filter(Boolean).map(String))
+    if (!gone.size) return
+    for (const id of gone) confirmedCreates.current.delete(id)
+    setItems((prev) => prev.filter((item) => !gone.has(String(item.id))))
+    setTotal((count) => Math.max(0, count - gone.size))
+    setGroupBuckets((prev) =>
+      prev
+        .map((group) => {
+          const rows = group.rows.filter((row) => !gone.has(String(row.id)))
+          const removed = group.rows.length - rows.length
+          if (!removed) return group
+          return {
+            ...group,
+            rows,
+            total: group.total != null ? Math.max(0, group.total - removed) : undefined,
+          }
+        })
+        .filter((group) => group.rows.length > 0 || (group.total ?? 0) > 0),
+    )
+  }
+
+  function announceListChange() {
+    tableHoldRef.current = null
+    pendingPathQueryRef.current = null
+    forgetListCache(dataPath)
+    invalidateListReads()
+    invalidatePreviewTotals()
+    window.dispatchEvent(new Event('fsdb:change'))
+  }
+
   async function executeAction(row: DbRecord, action: CollectionActionInfo) {
     if (actingRef.current) return
     const preview = previewActionRecord(row, action)
@@ -2853,17 +2941,18 @@ export function CollectionBrowser({
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ path: `${dataPath}/${row.id}`, action: action.id }),
       })
+      announceListChange()
       quietUntil.current = Date.now() + 800
       window.setTimeout(() => {
         quietUntil.current = 0
-        void reloadRef.current()
+        void reloadRef.current({ force: true })
       }, 800)
     } catch (err) {
       mapListedRecords((item) => (item.id === row.id ? row : item))
       setDetailRow((prev) => (prev?.id === row.id ? row : prev))
       setDlg({ kind: 'alert', title: `${action.label}失败`, body: String(err) })
       quietUntil.current = 0
-      await reload()
+      await reload({ force: true })
     } finally {
       actingRef.current = false
       setActing(false)
@@ -2897,7 +2986,7 @@ export function CollectionBrowser({
           if (detailIdRef.current === row.id && gen === contentWriteGens.current.get(path)) {
             setDetailBody(data.value ?? value)
           }
-          window.dispatchEvent(new Event('fsdb:change'))
+          announceListChange()
         }).catch(async (error) => {
           if (!(error instanceof HttpError) || error.status !== 409) throw error
           const latest = await readJson<{ value?: unknown; version?: number }>(`/api/db/content?path=${encodeURIComponent(path)}`)
@@ -2930,11 +3019,13 @@ export function CollectionBrowser({
         const merge = (item: DbRecord) => (item.id === next.id ? { ...item, ...next, banner: next.banner ?? null } : item)
         mapListedRecords(merge)
         setDetailRow((prev) => (prev?.id === next.id ? { ...prev, ...next, banner: next.banner ?? null } : prev))
-        window.dispatchEvent(new Event('fsdb:change'))
+        announceListChange()
+        quietUntil.current = 0
+        void reloadRef.current({ force: true })
         return
       }
       quietUntil.current = 0
-      await reload()
+      await reload({ force: true })
     } catch (err) {
       quietUntil.current = 0
       setError(String(err))
@@ -2962,8 +3053,22 @@ export function CollectionBrowser({
       confirmedCreates.current.add(id)
       setItems((prev) => [value, ...prev.filter((item) => item.id !== id)])
       setTotal((count) => count + 1)
+      setGroupBuckets((prev) => {
+        if (!prev.length) return prev
+        let placed = false
+        return prev.map((group) => {
+          if (placed || group.rows.some((row) => row.id === id)) return group
+          placed = true
+          return {
+            ...group,
+            rows: [value, ...group.rows],
+            total: group.total != null ? group.total + 1 : group.rows.length + 1,
+          }
+        })
+      })
+      announceListChange()
       quietUntil.current = 0
-      void reloadRef.current()
+      void reloadRef.current({ force: true })
       if (activeViewId) rememberInspectorWorkingView(collectionPath, activeViewId)
       window.setTimeout(() => showRecordInInspector(collectionPath, id, activeViewId), 0)
     } catch (err) {
@@ -2979,8 +3084,10 @@ export function CollectionBrowser({
         body: JSON.stringify({ path: dataPath, ids: [row.id] }),
       })
       onCloseRecord?.()
+      dropListedRecords([String(row.id)])
+      announceListChange()
       quietUntil.current = 0
-      await reload()
+      await reload({ force: true })
     } catch (err) {
       setError(String(err))
     }
@@ -2995,12 +3102,14 @@ export function CollectionBrowser({
       })
       if (detailId && ids.includes(detailId)) onCloseRecord?.()
       setPickedIds([])
+      dropListedRecords(ids)
+      announceListChange()
       quietUntil.current = 0
-      await reload()
+      await reload({ force: true })
     } catch (err) {
       setError(String(err))
       quietUntil.current = 0
-      await reload()
+      await reload({ force: true })
     }
   }
 

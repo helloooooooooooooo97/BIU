@@ -455,6 +455,8 @@ export class SessionViewService extends Service {
           })
           throw error
         }
+      } else if (!(this.value.events.length || this.value.nodes.length)) {
+        await this.ensureSessionThread()
       } else if (this.value.view !== route.view) {
         this.replace({
           view: route.view,
@@ -466,6 +468,7 @@ export class SessionViewService extends Service {
     }
     if (route.kind === 'home') {
       if (!this.value.sessionId) await this.loadMostRecentSession()
+      else await this.ensureSessionThread()
       return
     }
     if (!this.value.sessionId) await this.bindMostRecentSession()

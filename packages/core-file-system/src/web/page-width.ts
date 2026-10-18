@@ -124,6 +124,7 @@ function commit(next: PagePrefs, persistRemote: boolean) {
   if (JSON.stringify(next) === JSON.stringify(prefs)) return
   prefs = next
   writeCachedPagePrefs(next)
+  applyPagePrefs(next)
   if (typeof window !== 'undefined') window.dispatchEvent(new Event('biu:page-prefs'))
   emit()
   if (persistRemote) postPagePrefs(next)

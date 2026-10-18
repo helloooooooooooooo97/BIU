@@ -343,7 +343,7 @@ test('pageBlock capture includes every registered block shell', async () => {
   assert.match(view, /setNodeSelection\(pos\)/)
   assert.match(view, /classList\.contains\('pick-mode'\)/)
   assert.match(view, /data-page-block-idle/)
-  assert.match(view, /IntersectionObserver/)
+  assert.doesNotMatch(view, /IntersectionObserver/)
   assert.match(view, /schedulePageBlockMount/)
   assert.match(view, /PageBlockIdle/)
   assert.doesNotMatch(view, /data-plugin-phase="loading"/)

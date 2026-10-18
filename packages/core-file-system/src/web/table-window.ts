@@ -177,6 +177,9 @@ export function tableColumnUnchanged(
   return a.start === b.start && a.end === b.end && a.padLeft === b.padLeft && a.padRight === b.padRight && a.pin === b.pin
 }
 
+/** shareScope 这类少量枚举组必须首屏一次拉齐，否则「共享」先画出计数再补行会闪。 */
+export const GROUPED_FULL_FETCH_ALL_MAX = 8
+
 /** 一页已经超过一屏时，首屏只拉进入视口的组；其余组先拿总数。 */
 export function groupedFullFetchCount(
   pageSize: number,
@@ -185,6 +188,7 @@ export function groupedFullFetchCount(
   viewportH = TABLE_WINDOW_VIEWPORT_FALLBACK,
 ) {
   if (groupCount <= 1) return Math.max(0, groupCount)
+  if (groupCount <= GROUPED_FULL_FETCH_ALL_MAX) return groupCount
   const rowPx = wrap ? TABLE_WRAP_ROW_PX : TABLE_ROW_PX
   const view = viewportH > 0 ? viewportH : TABLE_WINDOW_VIEWPORT_FALLBACK
   const paintRows = Math.ceil(view / rowPx) + TABLE_WINDOW_OVERSCAN * 2

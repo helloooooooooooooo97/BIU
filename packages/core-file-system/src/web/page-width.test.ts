@@ -41,6 +41,15 @@ test('page prefs store reading chrome and body scale', () => {
   })
   assert.equal(document.documentElement.dataset.outlinePin, '1')
   assert.equal(document.documentElement.dataset.bodySize, 'lg')
+  const seen: string[] = []
+  const onPrefs = () => {
+    seen.push(document.documentElement.dataset.outlinePin ?? '')
+  }
+  window.addEventListener('biu:page-prefs', onPrefs)
+  persistPagePrefs({ outlinePin: false })
+  window.removeEventListener('biu:page-prefs', onPrefs)
+  assert.deepEqual(seen, ['0'])
+  persistPagePrefs({ outlinePin: true })
   persistPagePrefs({
     wide: false,
     outlineExpand: true,

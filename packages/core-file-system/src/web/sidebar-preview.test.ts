@@ -14,6 +14,7 @@ import {
   recordPreviewLabel,
   crumbRecordLabel,
   rememberPreviewTotal,
+  invalidatePreviewTotals,
   SIDEBAR_PREVIEW_PAGE,
   VIEW_PREVIEW_IDLE_MS,
   VIEW_TOTAL_IDLE_MS,
@@ -50,6 +51,13 @@ test('preview total key is cached per view', () => {
   const view = { id: 'v1', sortField: 'id', sortDir: 'asc' as const, filters: {}, query: '' }
   rememberPreviewTotal(viewTotalKey('/tasks', view), 12)
   assert.equal(getPreviewTotal(viewTotalKey('/tasks', view)), 12)
+})
+
+test('invalidatePreviewTotals drops cached counts so a write can refetch', () => {
+  const view = { id: 'v1', sortField: 'id', sortDir: 'asc' as const, filters: {}, query: '' }
+  rememberPreviewTotal(viewTotalKey('/tasks', view), 12)
+  invalidatePreviewTotals()
+  assert.equal(getPreviewTotal(viewTotalKey('/tasks', view)), undefined)
 })
 
 test('sidebar preview asks for the view group field so 全部 does not collapse into 未填', () => {

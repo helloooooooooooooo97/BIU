@@ -36,33 +36,6 @@ export function pageRouteNeedsStoreWeb(pathname: string) {
   return /\/pages\/record\//.test(pathname)
 }
 
-/** 超过这个体积的商店 web.js 等点击再 import，避免把 8MB 的 excalidraw 求值叠进刷新 long task。 */
-export const STORE_WEB_AUTO_MAX_BYTES = 400_000
-
-export function storeWebNeedsClick(id: string) {
-  return /excalidraw/i.test(id)
-}
-
-export async function storeWebExceedsAutoLimit(href: string): Promise<boolean> {
-  const res = await fetch(href)
-  if (!res.ok) return false
-  const len = Number(res.headers.get('content-length') || 0)
-  if (len > STORE_WEB_AUTO_MAX_BYTES) {
-    await res.body?.cancel().catch(() => undefined)
-    return true
-  }
-  if (len > 0 || !res.body) return false
-  const reader = res.body.getReader()
-  let n = 0
-  while (n <= STORE_WEB_AUTO_MAX_BYTES) {
-    const { done, value } = await reader.read()
-    if (done) return false
-    n += value.byteLength
-  }
-  await reader.cancel().catch(() => undefined)
-  return true
-}
-
 /** 只挂当前页面请求启用的商店包，不把 snapshot 里其余 web.js 一起拉下来。 */
 export function storeWebPluginRequested(
   row: { id: string; packageName?: string },
@@ -131,7 +104,6 @@ export function apply(ctx: Context) {
   let pending = false
   let running = false
   const storeWebRequested = new Set<string>()
-  const storeWebForced = new Set<string>()
 
   function shouldLoadStoreWeb() {
     return storeWebRequested.size > 0
@@ -226,18 +198,6 @@ export function apply(ctx: Context) {
         const pendingStore = storeRows.filter((row) => !forks.has(row.id) && storeWebPluginRequested(row, storeWebRequested))
         // import() 必须逐个来：缓存命中时 Promise.all 会把多份 web.js 的求值叠进同一个 long task。
         for (const [index, row] of pendingStore.entries()) {
-          if (
-            !storeWebForced.has(row.id) &&
-            (storeWebNeedsClick(row.id) ||
-              (Boolean(row.web && isRuntimeWebModule(row.web)) &&
-                (await storeWebExceedsAutoLimit(runtimeWebModuleHref(row.web!)))))
-          ) {
-            clientLog('info', 'ui-hub', `${row.id} 的 web.js 较大，等点击再挂`)
-            window.dispatchEvent(
-              new CustomEvent('biu:page-block-plugin-phase', { detail: { plugin: row.id, phase: 'deferred' } }),
-            )
-            continue
-          }
           await mountRow(row)
           if (index < pendingStore.length - 1) await new Promise((resolve) => setTimeout(resolve, 0))
         }
@@ -282,7 +242,6 @@ export function apply(ctx: Context) {
       const detail = (event as CustomEvent<{ plugin?: unknown; force?: unknown }>).detail
       const plugin = String(detail?.plugin ?? '').trim()
       if (plugin) storeWebRequested.add(plugin)
-      if (plugin && detail?.force === true) storeWebForced.add(plugin)
       void sync()
     })
   }

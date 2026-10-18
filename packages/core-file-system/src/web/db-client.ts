@@ -13,6 +13,7 @@ export class HttpError extends Error {
 
 const GET_INFLIGHT_HOLD_MS = 400
 const getInflight = new Map<string, Promise<unknown>>()
+let readEpoch = 0
 
 async function readJsonNow<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, init)
@@ -21,9 +22,9 @@ async function readJsonNow<T>(path: string, init?: RequestInit): Promise<T> {
   return body
 }
 
-export async function readJson<T>(path: string, init?: RequestInit): Promise<T> {
+export async function readJson<T>(path: string, init?: RequestInit, opts?: { fresh?: boolean }): Promise<T> {
   const method = String(init?.method ?? 'GET').toUpperCase()
-  if (method !== 'GET' || init?.body) return readJsonNow<T>(path, init)
+  if (method !== 'GET' || init?.body || opts?.fresh) return readJsonNow<T>(path, init)
   const pending = getInflight.get(path)
   if (pending) return pending as Promise<T>
   let request: Promise<T>
@@ -51,6 +52,13 @@ export type ListPage = {
 
 const listInflight = new Map<string, Promise<ListPage>>()
 
+/** Drop briefly-held GETs so a write/view switch cannot reuse a stale list page. */
+export function invalidateListReads() {
+  readEpoch += 1
+  getInflight.clear()
+  listInflight.clear()
+}
+
 export async function listCollection(opts: {
   path: string
   limit: number
@@ -61,6 +69,7 @@ export async function listCollection(opts: {
   sorts?: Array<{ field: string; dir: 'asc' | 'desc' }>
   filters?: Record<string, unknown>
   columns?: string[]
+  fresh?: boolean
 }): Promise<ListPage> {
   const params = new URLSearchParams({
     path: opts.path,
@@ -76,17 +85,24 @@ export async function listCollection(opts: {
   }
   if (opts.columns?.length) params.set('columns', opts.columns.join(','))
   const key = params.toString()
-  const pending = listInflight.get(key)
+  const epoch = readEpoch
+  const pending = opts.fresh ? undefined : listInflight.get(key)
   if (pending) return pending
   let request: Promise<ListPage>
   request = readJson<ListPage & { items?: DbRecord[]; total?: number; schema?: CollectionSchema }>(
     `/api/db/list?${params}`,
+    undefined,
+    { fresh: opts.fresh },
   ).then(
     (body) => {
       const items = Array.isArray(body.items) ? body.items : []
-      setTimeout(() => {
-        if (listInflight.get(key) === request) listInflight.delete(key)
-      }, GET_INFLIGHT_HOLD_MS)
+      if (epoch === readEpoch) {
+        setTimeout(() => {
+          if (listInflight.get(key) === request) listInflight.delete(key)
+        }, GET_INFLIGHT_HOLD_MS)
+      } else if (listInflight.get(key) === request) {
+        listInflight.delete(key)
+      }
       return {
         items,
         total: typeof body.total === 'number' ? body.total : items.length,
@@ -98,6 +114,6 @@ export async function listCollection(opts: {
       throw error
     },
   )
-  listInflight.set(key, request)
+  if (!opts.fresh) listInflight.set(key, request)
   return request
 }

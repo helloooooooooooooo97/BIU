@@ -831,9 +831,13 @@ function Stage({ project, time, playing, chrome = 'embed' }: { project: Project;
       setScale(Number.isFinite(next) && next > 0 ? next : 1)
     }
     apply()
+    const raf = requestAnimationFrame(apply)
     const observer = new ResizeObserver(apply)
     observer.observe(el)
-    return () => observer.disconnect()
+    return () => {
+      cancelAnimationFrame(raf)
+      observer.disconnect()
+    }
   }, [project.width])
   const active = clipsAt(project, time)
   const bases = active.filter((clip) => clip.kind === 'title' || clip.kind === 'scene' || clip.kind === 'media' || clip.kind === 'solid')

@@ -205,6 +205,7 @@ test('page-excalidraw sandbox stores scenes as page assets', async () => {
   assert.doesNotMatch(src, /forceDarkCanvas/)
   assert.doesNotMatch(src, /viewBackgroundColor: DARK_BG/)
   assert.match(src, /requestAnimationFrame\(\(\) => fitView\(apiRef\.current\)\)/)
+  assert.match(src, /requestAnimationFrame\(\(\) => fitView\(host\.api\)\)/)
   assert.doesNotMatch(src, /requestAnimationFrame\(\(\) => fitView\(api\)\)/)
   assert.match(src, /z-index:9992/)
   assert.doesNotMatch(src, /inset-0 flex flex-col bg-\[var\(--dsw-bg/)
