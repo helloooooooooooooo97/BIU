@@ -86,6 +86,7 @@ import {
 import { currentSessionId } from '@biu/host-sessions/scope'
 import { databaseRevealForTool, normalizeCollectionPath } from '../paths.ts'
 import { matchListFilterRecord, normalizeSorts, sortRecordsBy } from '../query-logic.ts'
+import { actionWhenKeys } from '../web/fields.ts'
 import { AgentDbCompact } from './agent-payload.ts'
 
 const agentDbCompact = new AgentDbCompact()
@@ -256,7 +257,7 @@ const LIST_FIELD_COMPANIONS: Record<string, string[]> = {
   title: ['parentChain', 'blocked'],
 }
 
-function listedColumnKeys(requested: unknown, labelField: string): string[] | null {
+function listedColumnKeys(requested: unknown, labelField: string, schema?: CollectionSchema): string[] | null {
   if (!Array.isArray(requested) || !requested.length) return null
   const keys: string[] = []
   const seen = new Set<string>()
@@ -275,6 +276,7 @@ function listedColumnKeys(requested: unknown, labelField: string): string[] | nu
   for (const key of [...keys]) {
     for (const extra of LIST_FIELD_COMPANIONS[key] ?? []) add(extra)
   }
+  for (const key of actionWhenKeys(schema)) add(key)
   return keys
 }
 
@@ -1555,7 +1557,7 @@ export class DatabaseService extends Service implements Database {
     const sortDir = page?.sortDir === 'desc' ? 'desc' : 'asc'
     const schemaFilter = filter?.facet != null && filter.facet !== '' ? String(filter.facet) : ''
     const scopeFilter = filter?.$scope === 'workspace' || filter?.$scope === 'personal' || filter?.$scope === 'shared' ? filter.$scope : ''
-    const columnKeys = listedColumnKeys(page?.columns, schema.labelField ?? 'title')
+    const columnKeys = listedColumnKeys(page?.columns, schema.labelField ?? 'title', schema)
     const trash = filter?.deleted === true || filter?.trash === true
     const liveFilter = filter ? { ...filter } : undefined
     if (liveFilter) {

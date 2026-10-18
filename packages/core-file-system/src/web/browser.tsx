@@ -1255,6 +1255,18 @@ export function CollectionBrowser({
   const [groupPages, setGroupPages] = useState<Record<string, number>>({})
   const [groupFillKeys, setGroupFillKeys] = useState<string[]>([])
   const [groupBuckets, setGroupBuckets] = useState<GroupBucket[]>(() => listCache.get(dataPath)?.groupBuckets ?? [])
+  const [paintedPath, setPaintedPath] = useState(dataPath)
+  if (paintedPath !== dataPath) {
+    setPaintedPath(dataPath)
+    const cached = listCache.get(dataPath)
+    setItems(cached?.items ?? [])
+    setStat(cached?.stat ?? null)
+    setTotal(cached?.total ?? 0)
+    setGroupBuckets(cached?.groupBuckets ?? [])
+    setGroupPages({})
+    setGroupFillKeys([])
+    setError('')
+  }
   const groupPagesRef = useRef(groupPages)
   groupPagesRef.current = groupPages
   const groupBucketsRef = useRef(groupBuckets)
@@ -1649,6 +1661,7 @@ export function CollectionBrowser({
     skipColumnReload.current = false
     setCollapsed({})
     hydratedDetail.current = ''
+    confirmedCreates.current = new Set()
     const cached = listCache.get(dataPath)
     setItems(cached?.items ?? [])
     setStat(cached?.stat ?? null)
@@ -1661,7 +1674,7 @@ export function CollectionBrowser({
     setPage(0)
     const pendingRouteView = routeViewNeedsFetch(collectionPath, routeViewId)
     routeViewReadyRef.current = !pendingRouteView
-    if (pendingRouteView) reloadGen.current += 1
+    reloadGen.current += 1
     setRouteViewReady(!pendingRouteView)
     const stored = viewForPath(collectionPath, routeViewId)
     const listed = paintListedViews(collectionPath)
@@ -3458,7 +3471,7 @@ export function CollectionBrowser({
       return (
         <tr key="empty">
           <td colSpan={tablePaintRef.current.colSpan} className="fsdb-empty">
-            {error ? '加载失败' : '暂无记录'}
+            {error ? '加载失败' : listReadySent.current ? '暂无记录' : ''}
           </td>
         </tr>
       )
