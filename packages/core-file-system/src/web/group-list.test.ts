@@ -63,6 +63,41 @@ test('grouped collection fetches each group page instead of a mixed 200', async 
   )
 })
 
+test('empty leading shareScope groups fill the first nonempty group before return', async () => {
+  const calls: Array<{ scope?: unknown; limit: number }> = []
+  const page = await listGroupedCollection({
+    path: '/plugins',
+    groupBy: 'shareScope',
+    schema,
+    pageSize: 50,
+    list: async (input) => {
+      const scope = input.filters?.$scope
+      calls.push({ scope, limit: input.limit })
+      if (scope === 'shared') {
+        const rows =
+          input.limit > 1
+            ? [
+                { id: 'p1', title: 'API 调试块', tags: ['page'] },
+                { id: 'p2', title: 'HTML', tags: ['editor'] },
+              ]
+            : [{ id: 'p1', title: 'API 调试块', tags: ['page'] }]
+        return { items: rows, total: 13, schema }
+      }
+      return { items: [], total: 0, schema }
+    },
+  })
+  assert.deepEqual(calls, [
+    { scope: 'personal', limit: 50 },
+    { scope: 'workspace', limit: 1 },
+    { scope: 'shared', limit: 1 },
+    { scope: 'shared', limit: 50 },
+  ])
+  assert.deepEqual(
+    page!.buckets.map((item) => [item.key, item.total, item.rows.map((row) => row.id)]),
+    [['共享', 13, ['p1', 'p2']]],
+  )
+})
+
 test('wrap groups larger than the window only fully fetch the first group', async () => {
   const limits: number[] = []
   const page = await listGroupedCollection({
@@ -126,6 +161,7 @@ test('shareScope groups query $scope, not shareScope equality', async () => {
 
 test('grouped table fetch no longer uses a mixed 200-row page', () => {
   const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
+  const grouped = readFileSync(resolve(import.meta.dirname, './group-list.ts'), 'utf8')
   assert.doesNotMatch(browser, /groupBy \? 200/)
   assert.match(browser, /listGroupedCollection\(/)
   assert.match(browser, /wrap: wrapCells/)
@@ -134,6 +170,8 @@ test('grouped table fetch no longer uses a mixed 200-row page', () => {
   assert.match(browser, /JSON\.stringify\(groupPages\)/)
   assert.match(browser, /count = group\.total \?\? group\.rows\.length/)
   assert.match(browser, /group\.total != null \? group\.rows/)
+  assert.match(grouped, /haveRows < fullCount/)
+  assert.match(grouped, /item\.total <= 0 \|\| item\.rows\.length/)
 })
 
 test('grouped pager reuses buckets whose page did not change', async () => {

@@ -163,7 +163,24 @@ export function defaultColumnKeys(schema: CollectionSchema | undefined, allKeys:
   return pinLabelColumn(schema, keys)
 }
 
-/** 列表投影：可见列 + 标题/图标/树/分组/合集源字段。不传则服务端仍返回除正文外全字段。 */
+/** 动作 when 用到的字段。列表投影漏了会先画出运行/安装再跳到卸载。 */
+export function actionWhenKeys(schema?: Pick<CollectionSchema, 'actions'> | null): string[] {
+  const keys: string[] = []
+  const seen = new Set<string>()
+  for (const action of schema?.actions ?? []) {
+    const when = action.when
+    if (!when) continue
+    for (const key of Object.keys(when)) {
+      const next = key.trim()
+      if (!next || seen.has(next)) continue
+      seen.add(next)
+      keys.push(next)
+    }
+  }
+  return keys
+}
+
+/** 列表投影：可见列 + 标题/图标/树/分组/合集源字段 + 动作 when。不传则服务端仍返回除正文外全字段。 */
 export function listProjectionKeys(opts: {
   schema?: CollectionSchema
   columns: string[]
@@ -192,6 +209,7 @@ export function listProjectionKeys(opts: {
     if (parseFacetFlatColumnKey(key)) needFacet = true
   }
   if (needFacet) add(facetSourceKey(opts.schema))
+  for (const key of actionWhenKeys(opts.schema)) add(key)
   return keys
 }
 

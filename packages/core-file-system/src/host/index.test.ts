@@ -106,12 +106,13 @@ test('root lists registered collections; record read/update follows schema', asy
   assert.equal(row?.path, '/notes/n1')
   assert.equal(row?.kind, 'record')
   assert.equal('status' in (row ?? {}), false)
-  assert.equal('pinned' in (row ?? {}), false)
+  assert.equal(row?.pinned, false)
   const labeled = await db.list('/notes', undefined, { columns: ['label'] })
   assert.equal(labeled.kind, 'collection')
   if (labeled.kind !== 'collection') return
   assert.equal(labeled.items[0]?.title, '草稿')
   assert.equal('status' in (labeled.items[0] ?? {}), false)
+  assert.equal(labeled.items[0]?.pinned, false)
 
   const read = await db.read('/notes/n1')
   assert.equal(read.kind, 'record')
@@ -997,6 +998,47 @@ test('db_create tool ignores empty companion records instead of creating blank r
   assert.deepEqual(received, [{}])
 })
 
+test('title-only plugin list still returns action when flags', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  const rows = [
+    { id: 'run', title: '运行中', installed: true, running: true, sandbox: true },
+    { id: 'idle', title: '已装', installed: true, sandbox: true },
+    { id: 'dev', title: '沙箱', sandbox: true },
+  ]
+  db.register({
+    id: 'plugins',
+    path: '/plugins',
+    label: '插件',
+    schema: {
+      labelField: 'title',
+      fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string' } },
+    },
+    list: () => rows,
+    get: (id) => rows.find((row) => row.id === id) ?? null,
+    actions: [
+      { id: 'start', label: '运行', when: { installed: true, running: false }, run: async () => ({}) },
+      { id: 'stop', label: '停止', when: { installed: true, running: true }, run: async () => ({}) },
+      { id: 'pack', label: '安装', when: { sandbox: true, installed: false }, run: async () => ({}) },
+      { id: 'uninstall', label: '卸载', when: { installed: true }, run: async () => ({}) },
+    ],
+  })
+  const listed = await db.list('/plugins', undefined, { columns: ['title'] })
+  assert.equal(listed.kind, 'collection')
+  if (listed.kind !== 'collection') return
+  const run = listed.items.find((row) => row.id === 'run')
+  const idle = listed.items.find((row) => row.id === 'idle')
+  const dev = listed.items.find((row) => row.id === 'dev')
+  assert.equal(run?.title, '运行中')
+  assert.equal(run?.installed, true)
+  assert.equal(run?.running, true)
+  assert.equal(run?.sandbox, true)
+  assert.equal(idle?.installed, true)
+  assert.equal(idle?.sandbox, true)
+  assert.equal(dev?.sandbox, true)
+  assert.equal('status' in (run ?? {}), false)
+})
+
 test('db_list columns returns only those fields plus id', async () => {
   const ctx = new Context()
   await ctx.plugin(tools)
@@ -1014,8 +1056,8 @@ test('db_list columns returns only those fields plus id', async () => {
     columns: string[]
     rows: unknown[][]
   }
-  assert.deepEqual(listed.columns, ['id', 'title'])
-  assert.deepEqual(listed.rows[0], ['n1', '草稿'])
+  assert.deepEqual(listed.columns, ['id', 'title', 'pinned'])
+  assert.deepEqual(listed.rows[0], ['n1', '草稿', false])
 })
 
 test('agent db_stat omits builtin fields; service stat and list still include them', async () => {

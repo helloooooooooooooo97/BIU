@@ -2,7 +2,7 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import type { CollectionSchema } from '@biu/type-file-system'
 import { REQUIRED_RECORD_FIELDS, normalizeSchemaValue } from '@biu/type-file-system'
-import { defaultColumnKeys, facetFlatColumnKey, flattenFacetColumns, facetColumnTitle, inferPackFieldType, listProjectionKeys, parseFacetFlatColumnKey, patchFacetFlatValue, pinActionColumn, pinLabelColumn, contentFieldKey, flattenTree, formatField, fieldHasValue, fieldValueOptions, groupField, groupListFilter, groupListKeys, groupRecords, hasTreeLinks, treeChildren, isViewModeId, matchActionWhen, mergeListFilters, overlayListed, previewActionRecord, parentFieldKey, readFacetFlatValue, recordLinkIds, resolveFieldType, uniqueValues } from './fields'
+import { actionWhenKeys, defaultColumnKeys, facetFlatColumnKey, flattenFacetColumns, facetColumnTitle, inferPackFieldType, listProjectionKeys, parseFacetFlatColumnKey, patchFacetFlatValue, pinActionColumn, pinLabelColumn, contentFieldKey, flattenTree, formatField, fieldHasValue, fieldValueOptions, groupField, groupListFilter, groupListKeys, groupRecords, hasTreeLinks, treeChildren, isViewModeId, matchActionWhen, mergeListFilters, overlayListed, previewActionRecord, parentFieldKey, readFacetFlatValue, recordLinkIds, resolveFieldType, uniqueValues } from './fields'
 import { placedActions, visibleActions } from './fsdb-cells.tsx'
 
 test('isViewModeId accepts builtin and custom slugs', () => {
@@ -211,6 +211,45 @@ test('list projection keeps visible columns plus title, emoji, and parent', () =
   assert.equal(keys.includes('dueAt'), false)
   const withFacet = listProjectionKeys({ schema: { ...schema, fields: { ...schema.fields, facet: { type: 'facet' } } }, columns: [nested] })
   assert.equal(withFacet.includes('facet'), true)
+})
+
+const pluginActions: CollectionSchema = {
+  labelField: 'title',
+  fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string' } },
+  actions: [
+    { id: 'start', label: '运行', when: { installed: true, running: false } },
+    { id: 'stop', label: '停止', when: { installed: true, running: true } },
+    { id: 'pack', label: '安装', when: { sandbox: true, installed: false } },
+    { id: 'uninstall', label: '卸载', when: { installed: true } },
+  ],
+}
+
+test('list projection keeps action when keys so plugin actions do not flash', () => {
+  assert.deepEqual(actionWhenKeys(pluginActions), ['installed', 'running', 'sandbox'])
+  const keys = listProjectionKeys({ schema: pluginActions, columns: ['title', 'tags'] })
+  assert.equal(keys.includes('installed'), true)
+  assert.equal(keys.includes('running'), true)
+  assert.equal(keys.includes('sandbox'), true)
+  assert.equal(keys.includes('tags'), true)
+})
+
+test('sparse plugin rows without when flags flash 安装; projected flags keep 运行/停止 and 卸载', () => {
+  const sparse = { id: 'page-toc', title: '目录' }
+  assert.deepEqual(visibleActions(pluginActions, sparse, 'row').map((item) => item.id), [])
+  const missingFlags = { id: 'page-html-blocks', title: 'HTML', sandbox: true }
+  assert.deepEqual(visibleActions(pluginActions, missingFlags, 'row').map((item) => item.id), ['pack'])
+  assert.deepEqual(
+    visibleActions(pluginActions, { id: 'page-toc', title: '目录', installed: true, running: true, sandbox: true }, 'row').map(
+      (item) => item.id,
+    ),
+    ['stop', 'uninstall'],
+  )
+  assert.deepEqual(
+    visibleActions(pluginActions, { id: 'page-html-blocks', title: 'HTML', installed: true, sandbox: true }, 'row').map(
+      (item) => item.id,
+    ),
+    ['start', 'uninstall'],
+  )
 })
 
 test('contentFieldKey prefers content then contentField then notes', () => {
