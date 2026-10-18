@@ -90,5 +90,6 @@ test('inspector header tabs sit on the same vertical center as the main header',
   assert.doesNotMatch(css, /\.inspector-stage-pane,\s*\.app-stage-pane\s*\{[^}]*transition:\s*[\s\S]*opacity 220ms/s)
   assert.doesNotMatch(css, /\.inspector-stage-pane\s*\{[^}]*content-visibility:\s*hidden/s)
   assert.match(css, /\.app-stage-pane[\s\S]*?content-visibility:\s*hidden/)
+  assert.match(css, /\.app-stage-pane\[data-stage="agent"\][\s\S]*?content-visibility:\s*visible/)
   assert.match(css, /\.app-stage-pane\.is-active[\s\S]*?opacity:\s*1/)
 })

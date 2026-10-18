@@ -55,6 +55,7 @@ test('refresh does not send unfinished plugin routes home', () => {
 test('overlay open loads session thread that database routes skipped', () => {
   const shell = readFileSync(resolve(import.meta.dirname, './index.tsx'), 'utf8')
   assert.match(shell, /if \(!overlayOpen\) return\n\s*void sessionView.ensureSessionThread\(\)/)
+  assert.match(shell, /if \(activeModule !== 'agent'\) return\n\s*void sessionView.ensureSessionThread\(\)/)
 })
 
 test('center stage keeps modules mounted without a page fade', () => {
@@ -79,6 +80,9 @@ test('center stage keeps modules mounted without a page fade', () => {
   assert.match(shell, /!visited.current.has\(moduleId\)/)
   assert.match(css, /\.app-stage-pane\.is-active[\s\S]*?opacity:\s*1/)
   assert.match(css, /\.app-stage-pane[\s\S]*?content-visibility:\s*hidden/)
+  assert.match(shell, /data-stage="agent"/)
+  assert.match(css, /\.app-stage-pane\[data-stage="agent"\][\s\S]*?content-visibility:\s*visible/)
+  assert.doesNotMatch(shell, /showCenter \? 'flex' : 'hidden'/)
   assert.doesNotMatch(css, /\.app-stage-pane\s*\{[^}]*transition:\s*[\s\S]*opacity 220ms/s)
   assert.doesNotMatch(css, /@keyframes app-pane-in/)
   assert.doesNotMatch(css, /\.app-pane-in\s*\{[^}]*animation:\s*app-pane-in/s)

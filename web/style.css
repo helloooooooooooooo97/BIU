@@ -2959,6 +2959,11 @@ select.settings-account-input {
   content-visibility: visible;
 }
 
+/* 会话主区不能丢掉绘制：content-visibility:hidden 再点回来画面是空的，要点刷新才出现。 */
+.app-stage-pane[data-stage="agent"] {
+  content-visibility: visible;
+}
+
 .app-pane-in {
   display: flex;
   min-height: 0;

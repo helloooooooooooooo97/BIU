@@ -1129,9 +1129,12 @@ test('returning to chat home loads the bound session thread without a refresh', 
     }),
     '/api/sessions/new?turns=': () => ({
       id: 'new',
-      events: [{ type: 'session/open', version: 1, seq: 0, ts: 1 }],
+      events: [
+        { type: 'session/open', version: 1, seq: 0, ts: 1 },
+        { type: 'user/message', text: 'hello', seq: 1, ts: 2 },
+      ],
       hasMore: false,
-      totalTurns: 0,
+      totalTurns: 1,
     }),
     '/api/approvals': () => ({ mode: 'auto', pending: [] }),
   })
@@ -1146,6 +1149,37 @@ test('returning to chat home loads the bound session thread without a refresh', 
   await view.applyRoute({ kind: 'home' })
   assert.equal(calls.some((row) => row.url.includes('/api/sessions/new?turns=')), true)
   assert.ok(view.get().events.length)
+  assert.ok(view.get().nodes.some((node) => node.kind === 'user'))
+})
+
+test('same session route still loads turns after a session/open with no chat nodes', async () => {
+  const calls = mockFetch({
+    '/api/sessions': () => ({
+      sessions: [{ id: 'new', title: 'new', eventCount: 1, updatedAt: 9 }],
+    }),
+    '/api/sessions/new?turns=': () => ({
+      id: 'new',
+      events: [
+        { type: 'session/open', version: 1, seq: 0, ts: 1 },
+        { type: 'user/message', text: 'hello', seq: 1, ts: 2 },
+      ],
+      hasMore: false,
+      totalTurns: 1,
+    }),
+    '/api/approvals': () => ({ mode: 'auto', pending: [] }),
+  })
+  const ctx = new Context()
+  await ctx.plugin(sessionView)
+  const view = ctx.sessionView as SessionViewService
+  await view.refreshSessions()
+  await view.applyRoute({ kind: 'module', moduleId: 'database', path: '/database' })
+  view.ingest('new', { type: 'session/open', version: 1, seq: 0, ts: 1 })
+  assert.equal(view.get().sessionId, 'new')
+  assert.ok(view.get().events.length)
+  assert.equal(view.get().nodes.length, 0)
+  await view.applyRoute({ kind: 'session', sessionId: 'new', view: 'chat' })
+  assert.equal(calls.some((row) => row.url.includes('/api/sessions/new?turns=')), true)
+  assert.ok(view.get().nodes.some((node) => node.kind === 'user'))
 })
 
 test('missing session route does not surface 404 and opens the latest chat', async () => {

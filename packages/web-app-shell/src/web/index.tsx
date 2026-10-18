@@ -185,7 +185,7 @@ const AgentMainPanels = memo(function AgentMainPanels({
   return (
     <>
       <div
-        className={`relative min-h-0 w-full flex-1 flex-col overflow-hidden ${showCenter ? 'flex' : 'hidden'}`}
+        className="relative flex min-h-0 w-full flex-1 flex-col overflow-hidden"
         aria-hidden={!showCenter}
         inert={showCenter ? undefined : true}
         data-testid="agent-center"
@@ -652,6 +652,11 @@ function Shell(props: SlotProps) {
   }, [overlayOpen, sessionView])
 
   useEffect(() => {
+    if (activeModule !== 'agent') return
+    void sessionView.ensureSessionThread()
+  }, [activeModule, sessionView])
+
+  useEffect(() => {
     const onMissing = (event: Event) => {
       const id = String((event as CustomEvent<{ sessionId?: string }>).detail?.sessionId ?? '')
       if (!id) return
@@ -844,6 +849,7 @@ function Shell(props: SlotProps) {
       <main className="app-stage">
         <div
           className={`app-stage-pane${activeModule === 'agent' ? ' is-active' : ''}`}
+          data-stage="agent"
           aria-hidden={activeModule !== 'agent'}
           inert={activeModule !== 'agent' || undefined}
         >
