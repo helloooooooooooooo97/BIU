@@ -394,6 +394,12 @@ test('showRecordInInspector keeps the working view on the record path', () => {
   assert.equal(getInspectorDbPath('database:/pages'), databaseRecordPath('/pages', 'p-new', 'bug'))
 })
 
+test('creating in a saved view does not fall back to 全部页面 when that list is already open', () => {
+  setInspectorDbPath('database:/pages', databaseAllViewPath('/pages'))
+  showRecordInInspector('/pages', 'p-new', 'bug')
+  assert.equal(getInspectorDbPath('database:/pages'), databaseRecordPath('/pages', 'p-new', 'bug'))
+})
+
 test('applyDatabaseReveal keeps the working view when the tool reveal has no viewId', () => {
   rememberInspectorWorkingView('/pages', 'bug')
   applyDatabaseReveal({ collection: '/pages' })

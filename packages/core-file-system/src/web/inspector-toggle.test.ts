@@ -505,6 +505,8 @@ test('creating a record opens a new inspector pane instead of covering the view'
   const createFn = browser.slice(browser.indexOf('async function createRecord'), browser.indexOf('async function executeDeleteRecord'))
   assert.match(createFn, /showRecordInInspector\(collectionPath, id, activeViewId\)/)
   assert.match(createFn, /rememberInspectorWorkingView\(collectionPath, activeViewId\)/)
+  assert.match(createFn, /seedRecordFromViewFilters\(catalogLocks, filterTree, schema\)/)
+  assert.doesNotMatch(createFn, /records: \[\{\}\]/)
   assert.doesNotMatch(createFn, /setOpenDetailId/)
   assert.doesNotMatch(createFn, /onOpenRecord/)
 })

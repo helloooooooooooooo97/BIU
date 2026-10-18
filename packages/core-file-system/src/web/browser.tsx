@@ -149,6 +149,7 @@ import {
   emptyFilterGroup,
   encodeListFilter,
   filterTreeStateKey,
+  seedRecordFromViewFilters,
   moveList,
   normalizeSorts,
   resolveViewFilterTree,
@@ -2841,7 +2842,11 @@ export function CollectionBrowser({
       const data = await readJson<{ items?: Array<{ value?: DbRecord }> }>('/api/db/create', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ path: dataPath, records: [{}], scope: createScope }),
+        body: JSON.stringify({
+          path: dataPath,
+          records: [seedRecordFromViewFilters(catalogLocks, filterTree, schema)],
+          scope: createScope,
+        }),
       })
       const value = data.items?.[0]?.value
       const id = value?.id

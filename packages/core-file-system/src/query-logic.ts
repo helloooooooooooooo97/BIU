@@ -411,3 +411,95 @@ export function encodeListFilter(locks: Record<string, string>, tree: FilterGrou
   if (tree && countFilterRules(tree)) out.$tree = tree
   return out
 }
+
+const SKIP_SEED_FIELDS = new Set(['$scope', '$tree', 'shareScope', 'shareRole'])
+
+function seedableFieldKey(schema: CollectionSchema | undefined, key: string) {
+  const field = String(key ?? '').trim()
+  if (!field || field.startsWith('$') || SKIP_SEED_FIELDS.has(field)) return ''
+  if (!schema) return field
+  if (schema.fields[field]) return field
+  if (field === 'tag' && schema.fields.tags) return 'tags'
+  return ''
+}
+
+function canSeedField(schema: CollectionSchema | undefined, key: string) {
+  if (!schema) return true
+  const field = schema.fields[key]
+  return Boolean(field && field.writable && !field.computed)
+}
+
+function collectEqValues(node: FilterNode, into: Map<string, string[]>, schema?: CollectionSchema) {
+  if (node.kind === 'rule') {
+    if (node.op !== 'eq' && node.op !== 'contains') return
+    const value = String(node.value ?? '').trim()
+    const field = seedableFieldKey(schema, node.field)
+    if (!field || !value || !canSeedField(schema, field)) return
+    const list = into.get(field) ?? []
+    if (!list.includes(value)) list.push(value)
+    into.set(field, list)
+    return
+  }
+  const kids = node.children.filter((child) => {
+    if (child.kind === 'group') return child.children.length > 0
+    return child.op === 'is_empty' || child.op === 'not_empty' || String(child.value).trim() !== ''
+  })
+  if (!kids.length) return
+  if (node.combinator === 'or') {
+    const first = new Map<string, string[]>()
+    for (const child of kids) {
+      collectEqValues(child, first, schema)
+      if (first.size) {
+        for (const [field, values] of first) {
+          const list = into.get(field) ?? []
+          for (const value of values) if (!list.includes(value)) list.push(value)
+          into.set(field, list)
+        }
+        return
+      }
+    }
+    return
+  }
+  for (const child of kids) collectEqValues(child, into, schema)
+}
+
+/** 当前视图的筛选写成新建记录的初始字段，让它加完还在这张视图里。 */
+export function seedRecordFromViewFilters(
+  locks: Record<string, string> | undefined,
+  tree: FilterGroup | undefined,
+  schema?: CollectionSchema,
+): Record<string, unknown> {
+  const collected = new Map<string, string[]>()
+  for (const [key, raw] of Object.entries(locks ?? {})) {
+    const field = seedableFieldKey(schema, key)
+    const value = String(raw ?? '').trim()
+    if (!field || !value || !canSeedField(schema, field)) continue
+    collected.set(field, [value])
+  }
+  if (tree && countFilterRules(tree)) collectEqValues(tree, collected, schema)
+  const out: Record<string, unknown> = {}
+  for (const [field, values] of collected) {
+    if (!values.length) continue
+    const spec = schema?.fields[field]
+    const kind = spec ? (isFacetFieldType(spec.type) ? 'facet' : spec.type) : undefined
+    if (kind === 'boolean') {
+      out[field] = values[0] === 'true' || values[0] === '1'
+      continue
+    }
+    if (kind === 'facet') {
+      out[field] = { tags: values }
+      continue
+    }
+    if (kind === 'number') {
+      const n = Number(values[0])
+      if (Number.isFinite(n)) out[field] = n
+      continue
+    }
+    if (kind === 'string[]' || field === 'tags') {
+      out[field] = values
+      continue
+    }
+    out[field] = values.length === 1 ? values[0] : values
+  }
+  return out
+}
