@@ -23,6 +23,7 @@ import {
 import type { CollectionActionInfo, CollectionInfo, CollectionSchema, CollectionSchemaPack, DbRecord, FieldSpec, FieldType } from '@biu/type-file-system'
 import { normalizeSchemaValue } from '@biu/type-file-system'
 import type { CollectionChrome, CollectionRowViewType, CollectionViewType, DatabaseUi } from '@biu/type-file-system/ui'
+import { parseAppPath } from '@biu/web-session-view'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { BoolBox } from '@biu/public-ui/bool-box'
 import { ChatCount } from '@biu/public-ui/chat-count'
@@ -87,7 +88,7 @@ import { ensureFsdbStyle } from './fsdb-style.ts'
 import { workspaceColumnsForLocation } from './workspace-columns.ts'
 import { PageBanner } from './page-banner.tsx'
 import { UiGlyph, ViewModeGlyph, idleTableIconKind } from './nav-glyphs.tsx'
-import { isIndexCollection, isSystemCollection } from './database-path.ts'
+import { DATA_MODULE, isIndexCollection, isSystemCollection } from './database-path.ts'
 import { countFittingViewTabs, splitVisibleViews } from './view-tabs.ts'
 import { getDatabaseUi } from './database-ui.ts'
 import {
@@ -125,7 +126,7 @@ import { savedViewRecordPath } from '../paths.ts'
 import { findViewNeighbor, indexOnPage } from './view-adjacent.ts'
 import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, rememberedTableWrap, tableColumnEstimate, tableColumnFit, tableColumnSlice, tableColumnUnchanged, tableWindowSlice, tableWindowUnchanged, tableWrapScroll, type TableColumnSlice } from './table-window.ts'
 import { invalidatePreviewTotals, isPaintedListReady, markPaintedListReady, rememberPreviewTotal, resetPaintedListReady, viewTotalKey, whenListIdle } from './sidebar-preview.ts'
-import { catalogLockFilters, isReadOnlyViewId, mergeTableViews, parseBuiltinScopeViewId, stubBuiltinBlockKindView, viewsForScope, type DataScope } from '../catalog-views.ts'
+import { builtinAllViewId, catalogLockFilters, isReadOnlyViewId, mergeTableViews, parseBuiltinScopeViewId, stubBuiltinBlockKindView, viewsForScope, type DataScope } from '../catalog-views.ts'
 import { SAVED_VIEW_EVENT, rememberInspectorWorkingView, showRecordInInspector } from './inspector-db-route.ts'
 import { CellPop, cellUsesPop } from './cell-pop.tsx'
 import { loadFacets, pullFacets, subscribeFacets } from './facet-catalog.ts'
@@ -680,6 +681,79 @@ function forgetListCache(path: string) {
   }
 }
 
+const warmingLists = new Set<string>()
+
+/** 把别的表的「全部」预热进 listCache。切表时就能一次画出正确的 shareScope 组，不用先拿上一张表的私人/空间顶着。 */
+async function warmListCacheForView(
+  path: string,
+  view: SavedView,
+  listed: SavedView[],
+) {
+  if (peekListCache(path, view.id)) return
+  const key = listCacheKey(path, view.id)
+  if (warmingLists.has(key)) return
+  warmingLists.add(key)
+  try {
+    if (peekListCache(path, view.id)) return
+    const groupBy = view.groupBy ?? ''
+    const pageSize = normalizePageSize(view.pageSize)
+    const sorts = normalizeSorts(view.sorts, view.sortField, view.sortDir)
+    const filters = encodeListFilter(catalogLockFilters(view.id, listed), resolveViewFilterTree(view))
+    const columns = listProjectionKeys({
+      schema: undefined,
+      columns: view.columns.length ? view.columns : LIST_SEED_COLUMNS,
+      groupBy,
+    })
+    const listOpts = {
+      path,
+      query: view.query ?? '',
+      sortField: view.sortField,
+      sortDir: view.sortDir,
+      sorts,
+      filters,
+      columns,
+    }
+    const stat = await readJson<StatResult>(`/api/db/stat?path=${encodeURIComponent(path)}`)
+    let items: Array<DbRecord & { path?: string }> = []
+    let total = 0
+    let schema = stat.schema
+    let buckets: GroupBucket[] = []
+    if (groupBy) {
+      const grouped = await listGroupedCollection({
+        ...listOpts,
+        groupBy,
+        schema,
+        extraValues: [],
+        pageSize,
+        groupPages: {},
+        wrap: !!view.wrap,
+        fillKeys: [],
+        list: (input) => listCollection(input),
+      })
+      if (grouped) {
+        items = grouped.items
+        total = grouped.total
+        buckets = grouped.buckets
+        schema = grouped.schema ?? schema
+      }
+    } else {
+      const page = await listCollection({ ...listOpts, limit: pageSize, offset: 0 })
+      items = page.items
+      total = page.total
+      schema = page.schema ?? schema
+    }
+    rememberListCache(
+      path,
+      { items, total, stat: { ...stat, schema }, groupBuckets: buckets },
+      view.id,
+    )
+  } catch {
+    /* 预热失败就等点进去再拉 */
+  } finally {
+    warmingLists.delete(key)
+  }
+}
+
 function sameSavedViews(a: SavedView[], b: SavedView[]) {
   if (a === b) return true
   if (a.length !== b.length) return false
@@ -700,6 +774,105 @@ type TablePaintNode =
   | { kind: 'group-head'; key: string; groupKey: string; label: string; count: number }
   | { kind: 'row'; key: string; keyPrefix: string; row: DbRecord; depth: number; hasKids: boolean; kidCount: number }
   | { kind: 'group-pager'; key: string; groupKey: string; count: number; pageIndex: number }
+
+const EMPTY_HOLD_NODES: TablePaintNode[] = [{ kind: 'empty', key: 'empty' }]
+
+function collectionFromAppUrl(url: string): { collection: string; viewId: string } | null {
+  let pathname = url
+  try {
+    pathname = url.startsWith('http') ? new URL(url).pathname : url
+  } catch {
+    return null
+  }
+  const parsed = parseAppPath(pathname, [DATA_MODULE])
+  if (parsed.kind !== 'collection-view' && parsed.kind !== 'record') return null
+  return {
+    collection: parsed.collection,
+    viewId: parsed.viewId || builtinAllViewId(parsed.collection),
+  }
+}
+
+function listHoldResetKey(view: SavedView | null, path: string) {
+  return `${view?.id ?? ''}\0${path}\0${view?.groupBy ?? ''}\0${0}\0${normalizePageSize(view?.pageSize)}\0${view?.query ?? ''}`
+}
+
+function emptyListHold(prev: TableHoldSnap | null, view: SavedView | null, path: string): TableHoldSnap {
+  return {
+    columns: prev?.columns ?? [{ key: 'title' }],
+    columnWidths: prev?.columnWidths ?? {},
+    columnPinCount: prev?.columnPinCount ?? 1,
+    wrapCells: !!view?.wrap,
+    truncateCells: view ? view.truncate !== false : true,
+    nodes: EMPTY_HOLD_NODES,
+    resetKey: listHoldResetKey(view, path),
+    checkLayoutExtra: '',
+  }
+}
+
+function listHoldFromCache(cached: ListCacheSnap, view: SavedView | null, path: string): TableHoldSnap {
+  const schema = cached.stat?.schema
+  const keys = pinActionColumn(schema, view?.columns ?? [], placedActions(schema, 'row').length > 0)
+  const pageSize = normalizePageSize(view?.pageSize)
+  const groupBy = view?.groupBy ?? ''
+  const buckets = (cached.groupBuckets ?? []).filter((item) => (item.total ?? item.rows.length) > 0)
+  let nodes: TablePaintNode[]
+  if (groupBy && buckets.length) {
+    nodes = []
+    for (const group of buckets) {
+      const groupKey = group.key || 'unset'
+      const count = group.total ?? group.rows.length
+      nodes.push({ kind: 'group-head', key: `gh:${groupKey}`, groupKey, label: group.label, count })
+      const rows = group.total != null ? group.rows : group.rows.slice(0, pageSize)
+      for (const row of rows) {
+        nodes.push({
+          kind: 'row',
+          key: `${groupKey}:${row.id}`,
+          keyPrefix: `${group.key}:`,
+          row,
+          depth: 0,
+          hasKids: false,
+          kidCount: 0,
+        })
+      }
+      nodes.push({ kind: 'group-pager', key: `gp:${groupKey}`, groupKey, count, pageIndex: 0 })
+    }
+  } else if (groupBy) {
+    // 有 groupBy 但缓存还没有组桶时，不能先画成平铺行，否则 shareScope 会先平铺再收成「共享」。
+    nodes = EMPTY_HOLD_NODES
+  } else if (cached.items.length) {
+    nodes = cached.items.map((row) => ({
+      kind: 'row' as const,
+      key: String(row.id),
+      keyPrefix: '',
+      row,
+      depth: 0,
+      hasKids: false,
+      kidCount: 0,
+    }))
+  } else {
+    nodes = EMPTY_HOLD_NODES
+  }
+  const label = schema?.labelField ?? 'title'
+  return {
+    columns: keys.map((key) => {
+      if (key === 'actions') return { key, kind: 'action' as const, field: { type: 'action' as const, label: '动作' } }
+      const field = schema?.fields?.[key]
+      return {
+        key,
+        kind: field ? resolveFieldType(field) : 'text',
+        field: field ?? { type: 'text' as const, label: key === label ? '标题' : key },
+      }
+    }),
+    columnWidths: normalizeColumnWidths(view?.columnWidths),
+    columnPinCount: keys[0] === label ? 1 : 0,
+    wrapCells: !!view?.wrap,
+    truncateCells: view ? view.truncate !== false : true,
+    nodes,
+    resetKey: listHoldResetKey(view, path),
+    checkLayoutExtra: '',
+    schema,
+  }
+}
 
 type TablePaintBag = {
   colSpan: number
@@ -773,7 +946,7 @@ type TableChromeBag = {
 }
 
 type TableHoldSnap = {
-  columns: { key: string }[]
+  columns: { key: string; kind?: string; field?: FieldSpec }[]
   columnWidths: Record<string, number>
   columnPinCount: number
   wrapCells: boolean
@@ -781,6 +954,7 @@ type TableHoldSnap = {
   nodes: TablePaintNode[]
   resetKey: string
   checkLayoutExtra: string
+  schema?: CollectionSchema
 }
 
 type PendingPathQuery = {
@@ -1310,6 +1484,22 @@ export function CollectionBrowser({
   const [paintedPath, setPaintedPath] = useState(dataPath)
   const tablePaintSnapshotRef = useRef<TableHoldSnap | null>(null)
   const tableHoldRef = useRef<TableHoldSnap | null>(null)
+  const releaseHoldOnPaintRef = useRef(false)
+  const [, setHoldNav] = useState(0)
+  const collectionPathRef = useRef(collectionPath)
+  collectionPathRef.current = collectionPath
+  const holdNavRef = useRef<(path: string, viewId?: string) => void>(() => undefined)
+  holdNavRef.current = (path, viewId) => {
+    if (!path || path === collectionPathRef.current) return
+    const listed = paintListedViews(path)
+    const view = pickViewForRoute(listed, path, viewId) || viewForPath(path, viewId)
+    const cached = peekListCache(path, view?.id)
+    if (cached) {
+      tableHoldRef.current = listHoldFromCache(cached, view, path)
+      return
+    }
+    tableHoldRef.current = emptyListHold(tablePaintSnapshotRef.current, view, path)
+  }
   const pendingPathQueryRef = useRef<PendingPathQuery | null>(null)
   const pathSwitchHandledRef = useRef(false)
   const layoutPathRef = useRef<string | null>(null)
@@ -1355,7 +1545,9 @@ export function CollectionBrowser({
       setPageSize(normalizePageSize(view.pageSize))
     }
     if (cached) {
-      tableHoldRef.current = null
+      const snap = listHoldFromCache(cached, next, dataPath)
+      tableHoldRef.current = snap
+      releaseHoldOnPaintRef.current = snap.nodes !== EMPTY_HOLD_NODES
       pendingPathQueryRef.current = null
       setItems(cached.items)
       setStat(cached.stat)
@@ -1369,7 +1561,9 @@ export function CollectionBrowser({
       setPage(0)
       adoptView(next, cached.stat?.schema)
     } else {
-      tableHoldRef.current = tablePaintSnapshotRef.current
+      // 上一张表的 shareScope 组（私人/空间）不能顶到新表 URL 上，否则看起来像同一张表在重分组。
+      releaseHoldOnPaintRef.current = false
+      tableHoldRef.current = emptyListHold(tablePaintSnapshotRef.current, next, dataPath)
       pendingPathQueryRef.current = next
         ? {
             listed,
@@ -1575,6 +1769,10 @@ export function CollectionBrowser({
   itemsRef.current = items
   const listIdentityKey = `${dataPath}\0${pageSize}\0${fetchQuery}\0${sortField}\0${sortDir}\0${sortsStateKey(sorts)}\0${JSON.stringify(queryFilters)}\0${activeViewId ?? ''}\0${customView ? 'full' : 'proj'}\0${groupBy}\0${wrapCells ? 1 : 0}`
   const reloadKey = `${listIdentityKey}\0${groupBy ? JSON.stringify(groupPages) : page}\0${groupFillKeys.join('\0')}`
+  if (releaseHoldOnPaintRef.current && paintedPath === dataPath && tableHoldRef.current?.nodes !== EMPTY_HOLD_NODES) {
+    releaseHoldOnPaintRef.current = false
+    tableHoldRef.current = null
+  }
   const reload = useCallback(async (opts?: { force?: boolean }) => {
     if (!opts?.force && !routeViewReadyRef.current) return true
     if (!opts?.force && Date.now() < quietUntil.current) return true
@@ -1876,7 +2074,9 @@ export function CollectionBrowser({
     reloadGen.current += 1
     setRouteViewReady((prev) => (prev === !pendingRouteView ? prev : !pendingRouteView))
     const holding = Boolean(tableHoldRef.current)
-    if (!holding) {
+    const holdingRows = holding && tableHoldRef.current?.nodes !== EMPTY_HOLD_NODES
+    const destCached = peekListCache(dataPath, routeViewId)
+    if (!holdingRows && !destCached) {
       listReadySent.current = false
       pageRef.current?.removeAttribute('data-list-ready')
       resetPaintedListReady()
@@ -1988,6 +2188,57 @@ export function CollectionBrowser({
       void pullFacets()
     })
   }, [collectionPath, routeRecordId])
+
+  useEffect(() => {
+    if (nested) return
+    const onWarm = (event: Event) => {
+      const path = String((event as CustomEvent<{ path?: string }>).detail?.path ?? '')
+      if (!path || path === collectionPath) return
+      const listed = paintListedViews(path)
+      const view = listed.find((item) => item.id === builtinAllViewId(path)) ?? listed[0]
+      if (view) void warmListCacheForView(path, view, listed)
+    }
+    window.addEventListener('fsdb:warm-list', onWarm)
+    return () => window.removeEventListener('fsdb:warm-list', onWarm)
+  }, [collectionPath, nested, tables])
+
+  useEffect(() => {
+    if (nested || routeRecordId) return
+    return whenListIdle(() => {
+      const paths = tables
+        .filter((table) => table.path !== collectionPath && !isIndexCollection(table.path) && !isSystemCollection(table.path))
+        .map((table) => table.path)
+        .sort((a, b) => Number(b === '/plugins') - Number(a === '/plugins'))
+      void (async () => {
+        for (const path of paths) {
+          const listed = paintListedViews(path)
+          const view = listed.find((item) => item.id === builtinAllViewId(path)) ?? listed[0]
+          if (view) await warmListCacheForView(path, view, listed)
+        }
+      })()
+    }, 0)
+  }, [collectionPath, nested, routeRecordId, tables])
+
+  useEffect(() => {
+    if (nested) return
+    const origPush = history.pushState
+    const origReplace = history.replaceState
+    const intercept = (orig: typeof history.pushState): History['pushState'] =>
+      (data, unused, url) => {
+        orig.call(history, data, unused, url)
+        const next = collectionFromAppUrl(url != null ? String(url) : window.location.pathname)
+        if (!next) return
+        const before = tableHoldRef.current
+        holdNavRef.current(next.collection, next.viewId)
+        if (tableHoldRef.current !== before) setHoldNav((n) => n + 1)
+      }
+    history.pushState = intercept(origPush)
+    history.replaceState = intercept(origReplace)
+    return () => {
+      history.pushState = origPush
+      history.replaceState = origReplace
+    }
+  }, [nested])
 
   useEffect(() => subscribeFacets(undefined, () => setFacetCatalog(loadFacets())), [])
 
@@ -3472,10 +3723,11 @@ export function CollectionBrowser({
   }
 
   function RecordActions({ row }: { row: DbRecord }) {
-    const Actions = chrome?.Actions
-    const Action = chrome?.Action
+    const paintSchema = tableHoldRef.current?.schema ?? schema
+    const Actions = paintSchema === schema ? chrome?.Actions : undefined
+    const Action = paintSchema === schema ? chrome?.Action : undefined
     const busy = acting
-    const placed = placedActions(schema, 'row').filter(
+    const placed = placedActions(paintSchema, 'row').filter(
       (action) => !nested || (action.id !== 'open-split' && action.id !== 'open-page'),
     )
     const finish = (action: CollectionActionInfo) => {
@@ -3490,7 +3742,7 @@ export function CollectionBrowser({
       if (!placed.length) return null
       return wrap(<Actions actions={placed} record={row} busy={busy} place="row" run={finish} />)
     }
-    const rowShown = visibleActions(schema, row, 'row')
+    const rowShown = visibleActions(paintSchema, row, 'row')
       .filter((action) => !nested || (action.id !== 'open-split' && action.id !== 'open-page'))
       .filter((action) => Action || actionIcon(action.id) || action.id === 'open-split' || action.id === 'open-page')
     if (!rowShown.length) return null
@@ -3680,21 +3932,26 @@ export function CollectionBrowser({
   function tableLiveRow(row: DbRecord, depth: number, hasKids: boolean, kidCount: number, rowKey: string, toolsArmed = true) {
     const cellPick = cellPickRef.current
     const colWindow = colWindowRef.current
+    const held = tableHoldRef.current
+    const paintSchema = held?.schema ?? schema
+    const paintColumns = (
+      held && held.nodes !== EMPTY_HOLD_NODES && held.columns.length ? held.columns : columns
+    ) as typeof columns
     const paintLiveTd = (col: (typeof columns)[number]) => (
       <td
         key={col.key}
         data-col-key={col.key}
         {...cellPickOf(row, col.key, col.field)}
         className={[
-          col.key === schema?.labelField ? 'is-pin-col' : '',
+          col.key === paintSchema?.labelField ? 'is-pin-col' : '',
           cellPick?.id === row.id && cellPick.key === col.key
-            ? cellFieldWritable(col.field)
+            ? col.field && cellFieldWritable(col.field)
               ? 'is-cell-on'
               : 'is-cell-on is-cell-ro'
             : '',
         ].filter(Boolean).join(' ') || undefined}
       >
-        {col.key === schema?.labelField ? (
+        {col.key === paintSchema?.labelField ? (
           <RecordTitle
             row={row}
             label={labelOf(row)}
@@ -3728,9 +3985,9 @@ export function CollectionBrowser({
         className={row.id === detailId ? 'is-active' : undefined}
         {...recordPick(row)}
       >
-        {columns.slice(0, colWindow.pin).map(paintLiveTd)}
+        {paintColumns.slice(0, colWindow.pin).map(paintLiveTd)}
         {paintColPad(colWindow.padLeft, 'left')}
-        {columns.slice(colWindow.start, colWindow.end).map(paintLiveTd)}
+        {paintColumns.slice(colWindow.start, colWindow.end).map(paintLiveTd)}
         {paintColPad(colWindow.padRight, 'right')}
       </tr>
     )
@@ -3746,7 +4003,7 @@ export function CollectionBrowser({
       return (
         <tr key="empty">
           <td colSpan={tablePaintRef.current.colSpan} className="fsdb-empty">
-            {error ? '加载失败' : listReadySent.current ? '暂无记录' : ''}
+            {error ? '加载失败' : tableHoldRef.current?.nodes === EMPTY_HOLD_NODES ? '' : listReadySent.current ? '暂无记录' : ''}
           </td>
         </tr>
       )
@@ -4607,12 +4864,15 @@ export function CollectionBrowser({
     [listHeaderLock],
   )
 
-  if (!tableHoldRef.current) {
+  const holdingRows = Boolean(tableHoldRef.current) && tableHoldRef.current?.nodes !== EMPTY_HOLD_NODES
+  if (!holdingRows) {
     tablePaintRef.current = {
       colSpan: tablePaintRef.current.colSpan,
-      error,
+      error: tableHoldRef.current ? '' : error,
       renderNode: renderPaintNode,
     }
+  }
+  if (!tableHoldRef.current) {
     tableChromeRef.current = {
       paintHeadTh: (col) => paintHeadTh(col as (typeof columns)[number]),
       onPointerDown: onTablePointerDown,
