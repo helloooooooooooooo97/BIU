@@ -751,6 +751,32 @@ type TableChromeBag = {
   onMouseOver: ComponentProps<'table'>['onMouseOver']
 }
 
+type TableHoldSnap = {
+  columns: { key: string }[]
+  columnWidths: Record<string, number>
+  columnPinCount: number
+  wrapCells: boolean
+  truncateCells: boolean
+  nodes: TablePaintNode[]
+  resetKey: string
+  checkLayoutExtra: string
+}
+
+type PendingPathQuery = {
+  listed: SavedView[]
+  view: SavedView
+  fetchQuery: string
+  sortField: string
+  sortDir: 'asc' | 'desc'
+  sorts: SortRule[]
+  queryFilters: Record<string, unknown>
+  groupBy: string
+  pageSize: number
+  wrapCells: boolean
+  listColumns: string[] | undefined
+  activeViewId: string
+}
+
 type WindowedTableProps = {
   columns: { key: string }[]
   columnWidths: Record<string, number>
@@ -777,6 +803,7 @@ type WindowedTableProps = {
   renderCheckRow: (id: string) => ReactNode
   onVisibleRange?: (start: number, end: number) => void
   activeRowId: string | null
+  frozen?: boolean
 }
 
 const WindowedTable = memo(function WindowedTable({
@@ -805,6 +832,7 @@ const WindowedTable = memo(function WindowedTable({
   renderCheckRow,
   onVisibleRange,
   activeRowId,
+  frozen = false,
 }: WindowedTableProps) {
   const [tableScroll, setTableScroll] = useState(() => ({
     top: 0,
@@ -813,6 +841,8 @@ const WindowedTable = memo(function WindowedTable({
   }))
   const paintCountRef = useRef(0)
   const wrapCellsRef = useRef(false)
+  const frozenRef = useRef(frozen)
+  frozenRef.current = frozen
   const columnMetaRef = useRef({ count: 0, pin: 0, widths: [] as number[] })
   const columnPx = useMemo(
     () =>
@@ -858,6 +888,7 @@ const WindowedTable = memo(function WindowedTable({
   }, [onVisibleRange, tableWindow.end, tableWindow.start])
 
   const applyWrapScroll = (wrap: HTMLElement, top?: number) => {
+    if (frozenRef.current && top == null) return
     const next = tableWrapScroll(wrap, top)
     const rowPx = wrapCellsRef.current ? TABLE_WRAP_ROW_PX : TABLE_ROW_PX
     const count = paintCountRef.current
@@ -1256,16 +1287,91 @@ export function CollectionBrowser({
   const [groupFillKeys, setGroupFillKeys] = useState<string[]>([])
   const [groupBuckets, setGroupBuckets] = useState<GroupBucket[]>(() => listCache.get(dataPath)?.groupBuckets ?? [])
   const [paintedPath, setPaintedPath] = useState(dataPath)
+  const tablePaintSnapshotRef = useRef<TableHoldSnap | null>(null)
+  const tableHoldRef = useRef<TableHoldSnap | null>(null)
+  const pendingPathQueryRef = useRef<PendingPathQuery | null>(null)
+  const pathSwitchHandledRef = useRef(false)
+  const prevSchemaDefaultSig = useRef('')
   if (paintedPath !== dataPath) {
     setPaintedPath(dataPath)
+    pathSwitchHandledRef.current = true
+    prevSchemaDefaultSig.current = ''
     const cached = listCache.get(dataPath)
-    setItems(cached?.items ?? [])
-    setStat(cached?.stat ?? null)
-    setTotal(cached?.total ?? 0)
-    setGroupBuckets(cached?.groupBuckets ?? [])
-    setGroupPages({})
-    setGroupFillKeys([])
-    setError('')
+    const stored = viewForPath(collectionPath, routeViewId)
+    const listed = paintListedViews(collectionPath)
+    rememberViews(collectionPath, listed)
+    const next = stored || listed[0] ? pickViewForRoute(listed, collectionPath, routeViewId) || stored || listed[0] : null
+    const adoptView = (view: SavedView | null | undefined, schema?: CollectionSchema) => {
+      if (!view) {
+        setViews([])
+        setActiveViewId(null)
+        setQuery('')
+        setFetchQuery('')
+        setFilters({})
+        setFilterTree(emptyFilterGroup())
+        setSorts(normalizeSorts(undefined, 'title', 'asc'))
+        return
+      }
+      setViews((prev) => (sameSavedViews(prev, listed) ? prev : listed))
+      setActiveViewId(view.id)
+      setMode(view.mode)
+      setSortField(view.sortField)
+      setSortDir(view.sortDir)
+      setSorts(normalizeSorts(view.sorts, view.sortField, view.sortDir))
+      setFilters(view.filters)
+      setFilterTree(resolveViewFilterTree(view))
+      setColumnKeys(
+        pinActionColumn(schema, view.columns, placedActions(schema, 'row').length > 0),
+      )
+      setColumnWidths(normalizeColumnWidths(view.columnWidths))
+      setGroupBy(view.groupBy ?? '')
+      setShowTree(view.tree !== false)
+      setWrapCells(!!view.wrap)
+      setTruncateCells(view.truncate !== false)
+      setQuery(view.query ?? '')
+      setFetchQuery(view.query ?? '')
+      setPageSize(normalizePageSize(view.pageSize))
+    }
+    if (cached) {
+      tableHoldRef.current = null
+      pendingPathQueryRef.current = null
+      setItems(cached.items)
+      setStat(cached.stat)
+      setTotal(cached.total)
+      setGroupBuckets(cached.groupBuckets ?? [])
+      setGroupPages({})
+      setGroupFillKeys([])
+      setCollapsedGroups({})
+      setCollapsed({})
+      setError('')
+      setPage(0)
+      adoptView(next, cached.stat?.schema)
+    } else {
+      tableHoldRef.current = tablePaintSnapshotRef.current
+      pendingPathQueryRef.current = next
+        ? {
+            listed,
+            view: next,
+            fetchQuery: next.query ?? '',
+            sortField: next.sortField,
+            sortDir: next.sortDir,
+            sorts: normalizeSorts(next.sorts, next.sortField, next.sortDir),
+            queryFilters: encodeListFilter(
+              { ...catalogLockFilters(next.id, listed), ...lockedFilters },
+              resolveViewFilterTree(next),
+            ),
+            groupBy: next.groupBy ?? '',
+            pageSize: normalizePageSize(next.pageSize),
+            wrapCells: !!next.wrap,
+            listColumns: listProjectionKeys({
+              schema: undefined,
+              columns: next.columns.length ? next.columns : LIST_SEED_COLUMNS,
+              groupBy: next.groupBy ?? '',
+            }),
+            activeViewId: next.id,
+          }
+        : null
+    }
   }
   const groupPagesRef = useRef(groupPages)
   groupPagesRef.current = groupPages
@@ -1454,46 +1560,59 @@ export function CollectionBrowser({
     if (hit?.key === reloadKey) return hit.promise
     const gen = ++reloadGen.current
     const promise = (async () => {
+    const pending = pendingPathQueryRef.current
+    const switching = Boolean(pending || tableHoldRef.current)
+    const reqQuery = pending?.fetchQuery ?? fetchQuery
+    const reqSortField = pending?.sortField ?? sortField
+    const reqSortDir = pending?.sortDir ?? sortDir
+    const reqSorts = pending?.sorts ?? sorts
+    const reqFilters = pending?.queryFilters ?? queryFilters
+    const reqGroupBy = pending?.groupBy ?? groupBy
+    const reqPageSize = pending?.pageSize ?? pageSize
+    const reqWrap = pending?.wrapCells ?? wrapCells
+    const reqColumns = pending?.listColumns ?? listColumns
+    const reqViewId = pending?.activeViewId ?? activeViewId
     const listOpts = {
       path: dataPath,
-      query: fetchQuery,
-      sortField,
-      sortDir,
-      sorts,
-      filters: queryFilters,
-      columns: listColumns,
+      query: reqQuery,
+      sortField: reqSortField,
+      sortDir: reqSortDir,
+      sorts: reqSorts,
+      filters: reqFilters,
+      columns: reqColumns,
     }
     try {
-      const heldStat = statHoldRef.current
+      const heldStat = switching ? null : statHoldRef.current
       const nextStatPromise = heldStat?.schema
         ? Promise.resolve(heldStat)
         : readJson<StatResult>(`/api/db/stat?path=${encodeURIComponent(dataPath)}`)
       const extraGroupValues = (schema?: CollectionSchema) => {
-        const group = groupField(schema, groupBy)
+        if (switching) return []
+        const group = groupField(schema, reqGroupBy)
         if (!group || group.field.enum?.length) return []
         return uniqueValues(itemsRef.current, group.key, group.field)
       }
       const loadGroups = (schema?: CollectionSchema) =>
         listGroupedCollection({
           ...listOpts,
-          groupBy,
+          groupBy: reqGroupBy,
           schema,
           extraValues: extraGroupValues(schema),
-          pageSize,
-          groupPages: groupPagesRef.current,
-          wrap: wrapCells,
-          fillKeys: groupFillKeys,
-          previous: loadedIdentityRef.current === listIdentityKey ? groupBucketsRef.current : undefined,
-          previousPages: loadedPagesRef.current,
+          pageSize: reqPageSize,
+          groupPages: switching ? {} : groupPagesRef.current,
+          wrap: reqWrap,
+          fillKeys: switching ? [] : groupFillKeys,
+          previous: !switching && loadedIdentityRef.current === listIdentityKey ? groupBucketsRef.current : undefined,
+          previousPages: switching ? {} : loadedPagesRef.current,
           list: listCollection,
         })
       let nextStat: StatResult
       let listed: { items: Array<DbRecord & { path?: string }>; total: number; schema?: CollectionSchema }
       let buckets: GroupBucket[] = []
-      const loadUngrouped = () => listCollection({ ...listOpts, limit: pageSize, offset: page * pageSize })
-      if (groupBy) {
-        const cachedSchema = schemaRef.current
-        const cachedKeys = cachedSchema ? groupListKeys(cachedSchema, groupBy, extraGroupValues(cachedSchema)) : []
+      const loadUngrouped = () => listCollection({ ...listOpts, limit: reqPageSize, offset: switching ? 0 : page * reqPageSize })
+      if (reqGroupBy) {
+        const cachedSchema = switching ? undefined : schemaRef.current
+        const cachedKeys = cachedSchema ? groupListKeys(cachedSchema, reqGroupBy, extraGroupValues(cachedSchema)) : []
         if (cachedKeys.length) {
           const [statResult, grouped] = await Promise.all([nextStatPromise, loadGroups(cachedSchema)])
           nextStat = statResult
@@ -1523,11 +1642,46 @@ export function CollectionBrowser({
       }
       if (gen !== reloadGen.current) return true
       const nextSchema = listed.schema ?? nextStat.schema
+      const pendingView = pendingPathQueryRef.current
+      pendingPathQueryRef.current = null
+      tableHoldRef.current = null
+      if (pendingView) {
+        skipColumnReload.current = true
+        const view = pendingView.view
+        setViews((prev) => (sameSavedViews(prev, pendingView.listed) ? prev : pendingView.listed))
+        setActiveViewId(view.id)
+        setMode(view.mode)
+        setSortField(view.sortField)
+        setSortDir(view.sortDir)
+        setSorts(pendingView.sorts)
+        setFilters(view.filters)
+        setFilterTree(resolveViewFilterTree(view))
+        setColumnKeys(
+          pinActionColumn(nextSchema, view.columns, placedActions(nextSchema, 'row').length > 0),
+        )
+        setColumnWidths(normalizeColumnWidths(view.columnWidths))
+        setGroupBy(pendingView.groupBy)
+        setShowTree(view.tree !== false)
+        setWrapCells(pendingView.wrapCells)
+        setTruncateCells(view.truncate !== false)
+        setQuery(pendingView.fetchQuery)
+        setFetchQuery(pendingView.fetchQuery)
+        setPageSize(pendingView.pageSize)
+        setPage(0)
+        setGroupPages({})
+        setGroupFillKeys([])
+        setCollapsed({})
+        setCollapsedGroups({})
+      }
       setStat((prev) =>
         prev?.schema && schemaFingerprint(prev.schema) === schemaFingerprint(nextSchema) ? prev : { ...nextStat, schema: nextSchema },
       )
       setGroupBuckets((prev) => (JSON.stringify(prev) === JSON.stringify(buckets) ? prev : buckets))
       setItems((prev) => {
+        if (pendingView) {
+          setTotal(listed.total)
+          return listed.items
+        }
         const kept = prev.filter((item) => confirmedCreates.current.has(String(item.id)) && !listed.items.some((row) => row.id === item.id))
         for (const row of listed.items) confirmedCreates.current.delete(String(row.id))
         const next = kept.length ? [...kept, ...listed.items] : listed.items
@@ -1545,25 +1699,29 @@ export function CollectionBrowser({
         stat: { ...nextStat, schema: nextSchema },
         groupBuckets: buckets,
       })
-      if (activeViewId) {
+      if (reqViewId) {
         rememberPreviewTotal(
           viewTotalKey(collectionPath, {
-            id: activeViewId,
-            sortField,
-            sortDir,
-            filters: queryFilters as SavedView['filters'],
-            query: fetchQuery,
+            id: reqViewId,
+            sortField: reqSortField,
+            sortDir: reqSortDir,
+            filters: reqFilters as SavedView['filters'],
+            query: reqQuery,
           }),
           listed.total,
         )
       }
       setError('')
-      loadedIdentityRef.current = listIdentityKey
+      loadedIdentityRef.current = pendingView
+        ? `${dataPath}\0${pendingView.pageSize}\0${pendingView.fetchQuery}\0${pendingView.sortField}\0${pendingView.sortDir}\0${sortsStateKey(pendingView.sorts)}\0${JSON.stringify(pendingView.queryFilters)}\0${pendingView.activeViewId}\0${customView ? 'full' : 'proj'}\0${pendingView.groupBy}\0${pendingView.wrapCells ? 1 : 0}`
+        : listIdentityKey
       loadedPagesRef.current = { ...groupPagesRef.current }
       if (!listReadySent.current) listReadySent.current = true
       return true
     } catch (err) {
       if (gen !== reloadGen.current) return false
+      pendingPathQueryRef.current = null
+      tableHoldRef.current = null
       setError(String(err))
       if (!listReadySent.current) listReadySent.current = true
       return false
@@ -1651,31 +1809,37 @@ export function CollectionBrowser({
   }
 
   useLayoutEffect(() => {
-    setHydrated(false)
     hydratePath.current = ''
-    listReadySent.current = false
-    pageRef.current?.removeAttribute('data-list-ready')
     loadedIdentityRef.current = ''
     loadedPagesRef.current = {}
-    resetPaintedListReady()
     skipColumnReload.current = false
-    setCollapsed({})
     hydratedDetail.current = ''
     confirmedCreates.current = new Set()
+    const pendingRouteView = routeViewNeedsFetch(collectionPath, routeViewId)
+    routeViewReadyRef.current = !pendingRouteView
+    reloadGen.current += 1
+    setRouteViewReady((prev) => (prev === !pendingRouteView ? prev : !pendingRouteView))
+    const pathHandled = pathSwitchHandledRef.current
+    pathSwitchHandledRef.current = false
+    const holding = Boolean(tableHoldRef.current)
+    if (!holding) {
+      listReadySent.current = false
+      pageRef.current?.removeAttribute('data-list-ready')
+      resetPaintedListReady()
+      setHydrated((prev) => (prev ? false : prev))
+    }
+    if (pathHandled) return
+    setCollapsed((prev) => (Object.keys(prev).length ? {} : prev))
     const cached = listCache.get(dataPath)
     setItems(cached?.items ?? [])
     setStat(cached?.stat ?? null)
     setTotal(cached?.total ?? 0)
     setGroupBuckets(cached?.groupBuckets ?? [])
-    setGroupPages({})
-    setGroupFillKeys([])
-    setCollapsedGroups({})
+    setGroupPages((prev) => (Object.keys(prev).length ? {} : prev))
+    setGroupFillKeys((prev) => (prev.length ? [] : prev))
+    setCollapsedGroups((prev) => (Object.keys(prev).length ? {} : prev))
     setError('')
-    setPage(0)
-    const pendingRouteView = routeViewNeedsFetch(collectionPath, routeViewId)
-    routeViewReadyRef.current = !pendingRouteView
-    reloadGen.current += 1
-    setRouteViewReady(!pendingRouteView)
+    setPage((prev) => (prev === 0 ? prev : 0))
     const stored = viewForPath(collectionPath, routeViewId)
     const listed = paintListedViews(collectionPath)
     rememberViews(collectionPath, listed)
@@ -1874,7 +2038,6 @@ export function CollectionBrowser({
     [allColumnKeys, rowActionColumn, schema],
   )
   const schemaDefaultSig = schemaDefaultKeys.join('\0')
-  const prevSchemaDefaultSig = useRef('')
   const columns = useMemo(() => {
     const requested = columnKeys.length ? columnKeys : schemaDefaultKeys
     const order = pinActionColumn(
@@ -2090,6 +2253,7 @@ export function CollectionBrowser({
   ].join('\0')
 
   const onVisibleRange = useCallback((start: number, end: number) => {
+    if (tableHoldRef.current) return
     if (!grouping) return
     const until = Math.min(tablePaintNodes.length, end + TABLE_WINDOW_OVERSCAN)
     const needed = new Set<string>()
@@ -4331,24 +4495,37 @@ export function CollectionBrowser({
     [listHeaderLock],
   )
 
-  tablePaintRef.current = {
-    colSpan: tablePaintRef.current.colSpan,
-    error,
-    renderNode: renderPaintNode,
+  if (!tableHoldRef.current) {
+    tablePaintRef.current = {
+      colSpan: tablePaintRef.current.colSpan,
+      error,
+      renderNode: renderPaintNode,
+    }
+    tableChromeRef.current = {
+      paintHeadTh: (col) => paintHeadTh(col as (typeof columns)[number]),
+      onPointerDown: onTablePointerDown,
+      onPointerMove: onTablePointerMove,
+      onClick: onTableClick,
+      onMouseOver: (event) => {
+        const hit = event.target as HTMLElement | null
+        const tr = hit?.closest('tr')
+        if (!tr || !event.currentTarget.contains(tr)) return
+        if (tr.closest('thead')) paintCheckHover('head')
+        else paintCheckHover(tr.dataset.recordId ?? null)
+      },
+    }
+    tablePaintSnapshotRef.current = {
+      columns,
+      columnWidths,
+      columnPinCount,
+      wrapCells,
+      truncateCells,
+      nodes: tablePaintNodes,
+      resetKey: tableResetKey,
+      checkLayoutExtra,
+    }
   }
-  tableChromeRef.current = {
-    paintHeadTh: (col) => paintHeadTh(col as (typeof columns)[number]),
-    onPointerDown: onTablePointerDown,
-    onPointerMove: onTablePointerMove,
-    onClick: onTableClick,
-    onMouseOver: (event) => {
-      const hit = event.target as HTMLElement | null
-      const tr = hit?.closest('tr')
-      if (!tr || !event.currentTarget.contains(tr)) return
-      if (tr.closest('thead')) paintCheckHover('head')
-      else paintCheckHover(tr.dataset.recordId ?? null)
-    },
-  }
+  const held = tableHoldRef.current
 
   return (
     <div
@@ -4515,18 +4692,18 @@ export function CollectionBrowser({
                   </div>
                 ) : null}
                 <WindowedTable
-                  columns={columns}
-                  columnWidths={columnWidths}
-                  columnPinCount={columnPinCount}
-                  wrapCells={wrapCells}
-                  truncateCells={truncateCells}
-                  resizingCol={resizingCol}
-                  nodes={tablePaintNodes}
-                  error={error}
+                  columns={held?.columns ?? columns}
+                  columnWidths={held?.columnWidths ?? columnWidths}
+                  columnPinCount={held?.columnPinCount ?? columnPinCount}
+                  wrapCells={held?.wrapCells ?? wrapCells}
+                  truncateCells={held?.truncateCells ?? truncateCells}
+                  resizingCol={held ? null : resizingCol}
+                  nodes={held?.nodes ?? tablePaintNodes}
+                  error={held ? '' : error}
                   pickMode={pickMode}
-                  resetKey={tableResetKey}
-                  forceLiveChecks={pickedIds.length > 0}
-                  checkLayoutExtra={checkLayoutExtra}
+                  resetKey={held?.resetKey ?? tableResetKey}
+                  forceLiveChecks={!held && pickedIds.length > 0}
+                  checkLayoutExtra={held?.checkLayoutExtra ?? checkLayoutExtra}
                   paintRef={tablePaintRef}
                   chromeRef={tableChromeRef}
                   colWindowRef={colWindowRef}
@@ -4539,6 +4716,7 @@ export function CollectionBrowser({
                   renderCheckHead={renderCheckHead}
                   renderCheckRow={renderCheckRow}
                   onVisibleRange={onVisibleRange}
+                  frozen={Boolean(held)}
                   activeRowId={detailId}
                 />
         </div>
