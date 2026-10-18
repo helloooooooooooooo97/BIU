@@ -1389,5 +1389,7 @@ test('vite serve maps jsxDEV to production jsx', () => {
   assert.match(vite, /jsxDev: false/)
   assert.match(vite, /'react\/jsx-dev-runtime': join\(root, 'jsx-prod-dev-runtime.ts'\)/)
   assert.match(vite, /process\.env\.NODE_ENV': JSON\.stringify\('production'\)/)
+  assert.match(vite, /process\.env\.NODE_ENV': '"production"'/)
+  assert.match(vite, /minify: true/)
   assert.match(shim, /export \{ jsx as jsxDEV, jsxs as jsxsDEV \} from 'react\/jsx-runtime'/)
 })
