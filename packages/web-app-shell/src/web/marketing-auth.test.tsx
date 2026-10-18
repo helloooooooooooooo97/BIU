@@ -1,5 +1,7 @@
 import { afterEach, test } from 'vitest'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { MarketingSite } from './marketing-site/index.tsx'
@@ -22,6 +24,17 @@ function renderSite(path: string, onSubmit: (c: Creds) => Promise<void>) {
   )
   return view
 }
+
+test('login submit label sits on the vertical center of the pill', () => {
+  const css = readFileSync(resolve(import.meta.dirname, '../../../../web/style.css'), 'utf8')
+  const go = css.slice(css.indexOf('.site-auth .auth-go {'), css.indexOf('.site-auth .auth-go:disabled'))
+  assert.match(go, /display: inline-flex/)
+  assert.match(go, /align-items: center/)
+  assert.match(go, /justify-content: center/)
+  assert.match(go, /line-height: 1/)
+  assert.match(go, /padding: 0 18px/)
+  assert.doesNotMatch(go, /padding: 13px 18px/)
+})
 
 test('/login 与 /signup 是独立路由，表单之外不放品牌区和返回入口', () => {
   renderSite('/login', async () => {})

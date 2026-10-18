@@ -10044,8 +10044,12 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
 }
 .site-auth .auth-field::placeholder { color: rgba(255, 255, 255, .88); }
 .site-auth .auth-go {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
   margin-top: 6px;
-  padding: 13px 18px;
+  padding: 0 18px;
   border: 0;
   border-radius: 999px;
   background: #fff;
@@ -10053,6 +10057,7 @@ html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
   font-size: 16px;
   font-weight: 500;
   font-family: inherit;
+  line-height: 1;
   cursor: pointer;
 }
 .site-auth .auth-go:disabled { opacity: .38; cursor: default; }
