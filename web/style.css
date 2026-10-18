@@ -6577,6 +6577,10 @@ html:not(.dark) .chat-outline-item.is-active {
   gap: var(--dsw-chat-gap-turn);
 }
 
+.chat-turn.is-live {
+  justify-content: space-between;
+}
+
 .chat-turn>[data-chat-kind='user'] {
   padding-bottom: var(--dsw-chat-gap);
 }
