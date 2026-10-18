@@ -45,6 +45,30 @@ test('listCollection keeps the last page briefly so a remount does not refetch',
   }
 })
 
+test('listCollection shares in-flight fresh requests so grouped reloads do not fan out', async () => {
+  let calls = 0
+  const original = globalThis.fetch
+  globalThis.fetch = (async () => {
+    calls += 1
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    return new Response(JSON.stringify({ items: [{ id: 'n1' }], total: 1 }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })
+  }) as typeof fetch
+  try {
+    const [a, b] = await Promise.all([
+      listCollection({ path: '/pages', limit: 50, filters: { $scope: 'personal' }, fresh: true }),
+      listCollection({ path: '/pages', limit: 50, filters: { $scope: 'personal' }, fresh: true }),
+    ])
+    assert.equal(calls, 1)
+    assert.equal(a.items[0]?.id, 'n1')
+    assert.equal(b.total, 1)
+  } finally {
+    globalThis.fetch = original
+  }
+})
+
 test('listCollection fresh skips the brief hold so a write can refetch', async () => {
   let calls = 0
   const original = globalThis.fetch

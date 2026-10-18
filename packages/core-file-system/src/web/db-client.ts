@@ -51,12 +51,14 @@ export type ListPage = {
 }
 
 const listInflight = new Map<string, Promise<ListPage>>()
+const listFetching = new Set<Promise<ListPage>>()
 
 /** Drop briefly-held GETs so a write/view switch cannot reuse a stale list page. */
 export function invalidateListReads() {
   readEpoch += 1
   getInflight.clear()
   listInflight.clear()
+  listFetching.clear()
 }
 
 export async function listCollection(opts: {
@@ -86,8 +88,8 @@ export async function listCollection(opts: {
   if (opts.columns?.length) params.set('columns', opts.columns.join(','))
   const key = params.toString()
   const epoch = readEpoch
-  const pending = opts.fresh ? undefined : listInflight.get(key)
-  if (pending) return pending
+  const pending = listInflight.get(key)
+  if (pending && (listFetching.has(pending) || !opts.fresh)) return pending
   let request: Promise<ListPage>
   request = readJson<ListPage & { items?: DbRecord[]; total?: number; schema?: CollectionSchema }>(
     `/api/db/list?${params}`,
@@ -96,7 +98,9 @@ export async function listCollection(opts: {
   ).then(
     (body) => {
       const items = Array.isArray(body.items) ? body.items : []
-      if (epoch === readEpoch) {
+      if (opts.fresh) {
+        if (listInflight.get(key) === request) listInflight.delete(key)
+      } else if (epoch === readEpoch) {
         setTimeout(() => {
           if (listInflight.get(key) === request) listInflight.delete(key)
         }, GET_INFLIGHT_HOLD_MS)
@@ -114,6 +118,8 @@ export async function listCollection(opts: {
       throw error
     },
   )
-  if (!opts.fresh) listInflight.set(key, request)
+  listFetching.add(request)
+  void request.finally(() => listFetching.delete(request))
+  listInflight.set(key, request)
   return request
 }

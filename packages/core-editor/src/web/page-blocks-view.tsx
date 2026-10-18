@@ -3,7 +3,7 @@ import { ArrowsPointingOutIcon, RectangleGroupIcon, ViewColumnsIcon } from '@her
 import type { DbRecord } from '@biu/type-file-system'
 import type { CollectionViewType, FsContentProps, FsViewProps } from '@biu/type-file-system/ui'
 import { PageBlockMissing } from './page-block-view.tsx'
-import { blockDataUnchanged, requestEnablePageBlockPlugin, usePageBlockPluginPhase } from './page-block-meta.ts'
+import { ENABLE_PAGE_BLOCK_PLUGIN, blockDataUnchanged, requestEnablePageBlockPlugin, usePageBlockPluginPhase } from './page-block-meta.ts'
 import { bindPageBlockPlugin } from './page-block-plugin-host.ts'
 import { getPageEditor, usePageEditorVersion } from './service.ts'
 
@@ -199,9 +199,20 @@ export function PageBlockStage({
     else void writeBlockData(rowId, toWrite)
   }, [recordTitle, rowId])
   const hostRef = useRef<HTMLDivElement | null>(null)
+  const retriedReady = useRef(false)
   useLayoutEffect(() => bindPageBlockPlugin(hostRef.current, plugin), [plugin])
   useLayoutEffect(() => {
-    if (View || !plugin || phase !== 'idle') return
+    if (View) {
+      retriedReady.current = false
+      return
+    }
+    if (!plugin || phase === 'loading' || phase === 'failed') return
+    if (phase === 'ready') {
+      if (retriedReady.current) return
+      retriedReady.current = true
+      window.dispatchEvent(new CustomEvent(ENABLE_PAGE_BLOCK_PLUGIN, { detail: { plugin, kind } }))
+      return
+    }
     requestEnablePageBlockPlugin(plugin, kind)
   }, [View, kind, phase, plugin])
   return (
