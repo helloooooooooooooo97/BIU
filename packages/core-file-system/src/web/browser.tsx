@@ -642,7 +642,7 @@ function schemaFingerprint(schema?: CollectionSchema) {
   return out
 }
 
-const LIST_CACHE_MAX = 8
+const LIST_CACHE_MAX = 32
 type ListCacheSnap = {
   items: Array<DbRecord & { path?: string }>
   total: number
@@ -886,22 +886,70 @@ function dropListCacheRecords(path: string, ids: string[]) {
   }
 }
 
+function seedListCacheSnap(row: DbRecord, groupBy?: string): ListCacheSnap {
+  const key = createdRowGroupKey(row, groupBy ?? '')
+  return {
+    items: [row],
+    total: 1,
+    stat: null,
+    groupBuckets: groupBy ? [{ key, label: key || '未填', rows: [row], total: 1 }] : [],
+  }
+}
+
 function upsertListCacheRecord(path: string, row: DbRecord, groupBy?: string, viewId?: string | null) {
   const snap = peekListCache(path, viewId)
-  if (!snap || snap.items.some((item) => item.id === row.id)) {
-    if (snap) patchListCacheRecords(path, (item) => (item.id === row.id ? overlayListedRow(item, row) : item))
+  if (!snap) {
+    rememberListCache(path, seedListCacheSnap(row, groupBy), viewId)
     return
   }
+  if (snap.items.some((item) => item.id === row.id)) {
+    patchListCacheRecords(path, (item) => (item.id === row.id ? overlayListedRow(item, row) : item))
+    return
+  }
+  const groupBuckets = placeCreatedRow(snap.groupBuckets ?? [], row, groupBy ?? '')
   rememberListCache(
     path,
     {
       ...snap,
       items: [row, ...snap.items],
       total: snap.total + 1,
-      groupBuckets: placeCreatedRow(snap.groupBuckets ?? [], row, groupBy ?? ''),
+      groupBuckets: groupBuckets.length ? groupBuckets : seedListCacheSnap(row, groupBy).groupBuckets,
     },
     viewId,
   )
+}
+
+function trashRecordId(collectionPath: string, recordId: string) {
+  return `${String(collectionPath).replace(/^\//, '')}::${recordId}`
+}
+
+function toTrashListRow(collectionPath: string, row: DbRecord, tableLabel: string): DbRecord {
+  const id = String(row.id)
+  return {
+    id: trashRecordId(collectionPath, id),
+    title: crumbRecordLabel(row),
+    table: tableLabel,
+    tablePath: collectionPath,
+    sourceId: id,
+    sourcePath: `${collectionPath}/${id}`,
+    deletedAt: Date.now(),
+    shareScope: row.shareScope,
+  }
+}
+
+function publishDeletedRowsToTrash(collectionPath: string, rows: DbRecord[], tableLabel: string) {
+  if (collectionPath === '/trash') return
+  const viewId = builtinAllViewId('/trash')
+  for (const row of rows) {
+    if (!row?.id) continue
+    publishListedMutation({
+      path: '/trash',
+      op: 'create',
+      row: toTrashListRow(collectionPath, row, tableLabel),
+      viewId,
+      groupBy: 'shareScope',
+    })
+  }
 }
 
 function applyPreviewTotalMutation(mutation: ListedMutation) {
@@ -3575,6 +3623,7 @@ export function CollectionBrowser({
         viewId: activeViewIdRef.current,
         total: totalRef.current,
       })
+      publishDeletedRowsToTrash(dataPath, [row], title)
       announceListChange()
       quietUntil.current = 0
       await reload({ force: true })
@@ -3591,6 +3640,8 @@ export function CollectionBrowser({
         body: JSON.stringify({ path: dataPath, ids }),
       })
       if (detailId && ids.includes(detailId)) onCloseRecord?.()
+      const gone = new Set(ids.map(String))
+      const deletedRows = itemsRef.current.filter((row) => gone.has(String(row.id)))
       setPickedIds([])
       dropListedRecords(ids)
       publishListedMutation({
@@ -3600,6 +3651,7 @@ export function CollectionBrowser({
         viewId: activeViewIdRef.current,
         total: totalRef.current,
       })
+      publishDeletedRowsToTrash(dataPath, deletedRows, title)
       announceListChange()
       quietUntil.current = 0
       await reload({ force: true })
