@@ -268,14 +268,20 @@ describe('follow the sent message from the top', () => {
 
   it('follows the bottom once the reply is taller than the viewport', () => {
     const parent = scroller({ scrollHeight: 4200, clientHeight: 800, scrollTop: 1000 })
+    const turn = document.createElement('div')
+    turn.className = 'chat-turn is-live'
+    turn.dataset.turnAnchor = 'u-9'
+    place(turn, 200, 2048)
     const user = document.createElement('div')
     user.dataset.nodeId = 'u-9'
     user.dataset.chatKind = 'user'
     place(user, 200, 48)
     const reply = document.createElement('div')
     reply.dataset.nodeId = 'r-9'
+    reply.dataset.chatKind = 'reply'
     place(reply, 260, 2000)
-    parent.append(user, reply)
+    turn.append(user, reply)
+    parent.append(turn)
     followChatOutput(parent, 'u-9')
     expect(parent.scrollTop).toBe(2460)
   })
@@ -330,13 +336,14 @@ describe('follow the sent message from the top', () => {
     parent.remove()
   })
 
-  it('keeps a short first reply at the bottom of the reserved room instead of covering it', () => {
+  it('keeps the first reply line at the document-flow gap under the sent bubble', () => {
     const parent = scroller({ scrollHeight: 2400, clientHeight: 800, scrollTop: 100 })
     parent.style.paddingBottom = '288px'
     document.body.append(parent)
     const turn = document.createElement('div')
     turn.className = 'chat-turn is-live'
     turn.dataset.turnAnchor = 'u-9'
+    place(turn, 900, 512)
     const user = document.createElement('div')
     user.dataset.nodeId = 'u-9'
     user.dataset.chatKind = 'user'
@@ -344,8 +351,7 @@ describe('follow the sent message from the top', () => {
     const reply = document.createElement('div')
     reply.dataset.nodeId = 'r-9'
     reply.dataset.chatKind = 'reply'
-    // 可见一屏 512px；space-between 把 96px 的首帧回复沉在底部。
-    place(reply, 900 + 512 - 96, 96)
+    place(reply, 1004, 48)
     turn.append(user, reply)
     parent.append(turn)
     followChatOutput(parent, 'u-9')
@@ -353,13 +359,34 @@ describe('follow the sent message from the top', () => {
     parent.remove()
   })
 
-  it('does not pin to the bottom while the first tokens still fit under the send', () => {
+  it('snaps back to the sent turn when sticky has already covered the first reply line', () => {
+    const parent = scroller({ scrollHeight: 2400, clientHeight: 800, scrollTop: 1288 })
+    const turn = document.createElement('div')
+    turn.className = 'chat-turn is-live'
+    turn.dataset.turnAnchor = 'u-9'
+    place(turn, -288, 800)
+    const user = document.createElement('div')
+    user.dataset.nodeId = 'u-9'
+    user.dataset.chatKind = 'user'
+    place(user, 0, 80)
+    const reply = document.createElement('div')
+    reply.dataset.nodeId = 'r-9'
+    reply.dataset.chatKind = 'reply'
+    place(reply, -176, 48)
+    turn.append(user, reply)
+    parent.append(turn)
+    followChatOutput(parent, 'u-9')
+    expect(parent.scrollTop).toBe(1000)
+  })
+
+  it('does not cover the first reply line when composer padding shrinks the remaining room', () => {
     const parent = scroller({ scrollHeight: 1200, clientHeight: 400, scrollTop: 0 })
     parent.style.paddingBottom = '288px'
     document.body.append(parent)
     const turn = document.createElement('div')
     turn.className = 'chat-turn is-live'
     turn.dataset.turnAnchor = 'u-9'
+    place(turn, 200, 112)
     const user = document.createElement('div')
     user.dataset.nodeId = 'u-9'
     user.dataset.chatKind = 'user'
@@ -367,8 +394,7 @@ describe('follow the sent message from the top', () => {
     const reply = document.createElement('div')
     reply.dataset.nodeId = 'r-9'
     reply.dataset.chatKind = 'reply'
-    // 可见一屏只剩 112px。贴顶排的话 80+48 已经超出，会立刻走贴底把首字遮住。
-    place(reply, 200 + 112 - 48, 48)
+    place(reply, 304, 48)
     turn.append(user, reply)
     parent.append(turn)
     followChatOutput(parent, 'u-9')

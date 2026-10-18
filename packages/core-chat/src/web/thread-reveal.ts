@@ -146,7 +146,7 @@ export function chatVisibleRoom(parent: HTMLElement): number {
   return Math.max(1, parent.clientHeight - pad)
 }
 
-/** 让最新一回合至少有一屏可见高度，短回复才能沉在发出消息下面、而不是贴着顶。 */
+/** 让最新一回合至少有一屏可见高度，短回复也能把用户消息顶到视口上沿。 */
 export function reserveLiveTurnRoom(parent: HTMLElement, anchorId: string) {
   const height = parent.clientHeight > 0 ? `${chatVisibleRoom(parent)}px` : ''
   for (const turn of parent.querySelectorAll<HTMLElement>('.chat-turn')) {
@@ -156,32 +156,35 @@ export function reserveLiveTurnRoom(parent: HTMLElement, anchorId: string) {
 }
 
 /**
- * 发出去的那条 sticky 钉在视口顶。短回复落在预留高度的底部，离顶部有一段距离；
- * 内容变高后往上挤、被 sticky 挡住。超出可见一屏后外层贴底，好跟着字往下走。
+ * 发出去的那条钉在视口顶。回复仍按文档流排在气泡下面（默认 gap），不要用 sticky
+ * 视觉坐标去跟，否则预留高度把回合撑高后会已经滚过气泡，第一行字被挡住。
+ * 回复高出剩余可见高度后外层贴底，多出来的往上挤。
  */
 export function followChatOutput(parent: HTMLElement, anchorId: string) {
   const maxScroll = Math.max(0, parent.scrollHeight - parent.clientHeight)
   const turn = parent.querySelector<HTMLElement>(turnSelector(anchorId))
   const escaped =
     typeof CSS !== 'undefined' && typeof CSS.escape === 'function' ? CSS.escape(anchorId) : anchorId
-  const anchor =
-    parent.querySelector<HTMLElement>(`[data-chat-kind="user"][data-node-id="${escaped}"]`) ??
-    (turn instanceof HTMLElement ? turn : null)
-  if (!(anchor instanceof HTMLElement)) {
+  const user = parent.querySelector<HTMLElement>(`[data-chat-kind="user"][data-node-id="${escaped}"]`)
+  // 回合盒子本身不 sticky；用它的文档坐标钉顶，避免 sticky 用户消息的视觉 top 把滚动钉死在遮挡位置。
+  const pin = turn instanceof HTMLElement ? turn : user
+  if (!(pin instanceof HTMLElement)) {
     parent.scrollTop = maxScroll
     return
   }
-  const reply = turn?.querySelector<HTMLElement>(':scope > [data-chat-kind="reply"]')
+  const reply = turn
+    ? turn.querySelector<HTMLElement>(':scope > [data-chat-kind="reply"]')
+    : parent.querySelector<HTMLElement>('[data-chat-kind="reply"]')
   if (reply) reply.style.maxHeight = ''
-  const anchorTop = Math.max(0, offsetInScroller(anchor, parent))
-  const nodes = parent.querySelectorAll<HTMLElement>('[data-node-id]')
-  const last = nodes[nodes.length - 1]
-  const contentEnd =
-    last instanceof HTMLElement ? offsetInScroller(last, parent) + last.offsetHeight : parent.scrollHeight
-  const span = contentEnd - anchorTop
+  const pinTop = Math.max(0, offsetInScroller(pin, parent))
+  const endEl = reply ?? user ?? pin
+  const contentEnd = offsetInScroller(endEl, parent) + endEl.offsetHeight
   const room = chatVisibleRoom(parent)
-  if (span <= room) {
-    parent.scrollTop = Math.min(anchorTop, maxScroll)
+  const replyHeight = reply?.offsetHeight ?? 0
+  // 第一行按文档流排在气泡下面。只要回复本身还没高过可见一屏，就钉在回合顶，
+  // 不要用「用户气泡+回复 > 可见剩余」去贴底，否则第一行会被 sticky 挡住。
+  if (replyHeight <= room) {
+    parent.scrollTop = Math.min(pinTop, maxScroll)
     return
   }
   parent.scrollTop = Math.min(Math.max(0, contentEnd - room), maxScroll)
