@@ -103,10 +103,10 @@ test('inspector header tabs sit on the same vertical center as the main header',
 })
 
 test('inspector add menu close button uses the icon gray', () => {
-  assert.match(
-    css,
-    /html:not\(\.dark\) \.inspector-add-close,\s*\nhtml:not\(\.dark\) \.inspector-add-close svg,[\s\S]*?color:\s*#bab9b5/,
-  )
+  // 亮色和夜间都要是图标灰：夜间行文本是 #f0efed，靠 inherit 会变白
+  assert.match(css, /^\.inspector-add-close,\s*\n\.inspector-add-close svg,[\s\S]*?color:\s*#bab9b5/m)
+  assert.match(css, /html\.dark \.inspector-add-close,\s*\nhtml\.dark \.inspector-add-close svg,[\s\S]*?color:\s*#bab9b5/)
+  assert.doesNotMatch(css, /html\.dark[^{]*inspector-add-close[^{]*\{[^}]*f0efed/)
   // 不能再被 #91918e 那组覆盖规则吃掉
   const muted = css.slice(css.indexOf('.inspector-add-row-main svg,'), css.indexOf('color: #91918e;'))
   assert.doesNotMatch(muted, /inspector-add-close/)

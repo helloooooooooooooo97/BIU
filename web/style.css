@@ -8557,11 +8557,18 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   color: #91918e;
 }
 
-/* 右上角加号面板：关闭叉号跟图标色一致 */
-html:not(.dark) .inspector-add-close,
-html:not(.dark) .inspector-add-close svg,
+/* 右上角加号面板：关闭叉号跟图标色一致（夜间行文本是 --dsw-label=#f0efed，
+   关闭按钮 color:inherit 会跟着变白，这里两种主题都钉成图标灰） */
+.inspector-add-close,
+.inspector-add-close svg,
 .inspector-add-close:hover,
-.inspector-add-close:hover svg {
+.inspector-add-close:hover svg,
+html.dark .inspector-add-close,
+html.dark .inspector-add-close svg,
+html.dark .inspector-add-close:hover,
+html.dark .inspector-add-close:hover svg,
+html:not(.dark) .inspector-add-close,
+html:not(.dark) .inspector-add-close svg {
   color: #bab9b5;
 }
 
