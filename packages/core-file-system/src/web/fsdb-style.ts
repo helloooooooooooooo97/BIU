@@ -762,7 +762,7 @@ a.fsdb-person.is-link:hover .fsdb-person-name{text-decoration:underline}
 .fsdb-action-tag.is-danger,.fsdb-action-tag.is-danger svg,.fsdb-action-tag.is-danger .fsdb-ui-glyph{color:var(--dsw-danger)}
 .fsdb-action-tag:disabled{opacity:.4;cursor:default}
 .fsdb-scope-tag.is-workspace{background:color-mix(in srgb,var(--dsw-business,#0f7b6c) 14%,transparent);color:var(--dsw-business,#0f7b6c)}
-.fsdb-scope-tag.is-shared{background:color-mix(in srgb,var(--dsw-pick) 12%,transparent);color:var(--dsw-pick)}
+.fsdb-scope-tag.is-shared,.fsdb-scope-pill.is-shared,.fsdb-scope-tag.is-edit,.fsdb-scope-pill.is-edit{background:color-mix(in srgb,var(--dsw-pick) 12%,transparent);color:var(--dsw-pick)}
 .fsdb-page .tasks-table td:has(.fsdb-scope-detail) .fsdb-cell{overflow:visible}
 .fsdb-scope-tag{position:relative;z-index:2;pointer-events:auto}
 .fsdb-scope-panel{position:fixed;z-index:220;width:min(300px,78vw);padding:0;background:var(--dsw-sidebar);border:1px solid var(--dsw-border);border-radius:14px;box-shadow:var(--dsw-shadow);color:var(--dsw-sidebar-fg);overflow:hidden}
@@ -772,10 +772,7 @@ a.fsdb-person.is-link:hover .fsdb-person-name{text-decoration:underline}
 .fsdb-scope-head em{color:var(--dsw-label-3);font-size:12px;font-style:normal;line-height:1.35}
 .fsdb-scope-pill{display:inline-flex;flex:none;align-items:center;gap:4px;height:22px;border-radius:999px;background:var(--dsw-hover);padding:0 8px;color:var(--dsw-label-2);font-size:12px;font-weight:680;line-height:1}
 .fsdb-scope-pill.is-workspace{background:color-mix(in srgb,var(--dsw-business,#0f7b6c) 14%,transparent);color:var(--dsw-business,#0f7b6c)}
-.fsdb-scope-pill.is-shared{background:color-mix(in srgb,var(--dsw-pick,#2383e2) 14%,transparent);color:var(--dsw-pick,#2383e2)}
-.fsdb-scope-pill.is-edit,.fsdb-scope-tag.is-edit{background:color-mix(in srgb,var(--dsw-pick,#2383e2) 14%,transparent);color:var(--dsw-pick,#2383e2)}
-.fsdb-scope-pill.is-manage,.fsdb-scope-tag.is-manage{background:color-mix(in srgb,var(--dsw-business,#0f7b6c) 14%,transparent);color:var(--dsw-business,#0f7b6c)}
-.fsdb-scope-pill.is-read,.fsdb-scope-tag.is-read{background:var(--dsw-hover);color:var(--dsw-label-2)}
+.fsdb-scope-pill.is-manage,.fsdb-scope-tag.is-manage,.fsdb-scope-pill.is-read,.fsdb-scope-tag.is-read{background:var(--dsw-hover);color:var(--dsw-label-2)}
 .fsdb-scope-chain{display:flex;flex-direction:column;gap:0;margin:0;padding:6px;list-style:none}
 .fsdb-scope-chain li{display:flex;align-items:center;justify-content:space-between;gap:10px;border-radius:8px;padding:7px 8px}
 .fsdb-scope-chain li+li{margin-top:2px}

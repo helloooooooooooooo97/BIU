@@ -9,11 +9,8 @@ const columns = [
   { key: 'updatedAt' },
 ]
 
-test('local workspaces keep sharing but omit the permission column', () => {
-  assert.deepEqual(
-    workspaceColumnsForLocation(columns, true).map((column) => column.key),
-    ['title', 'shareScope', 'updatedAt'],
-  )
+test('local workspaces keep sharing and permission columns', () => {
+  assert.equal(workspaceColumnsForLocation(columns, true), columns)
 })
 
 test('cloud workspaces keep sharing and permission columns', () => {
