@@ -4686,9 +4686,9 @@ export function CollectionBrowser({
                         <span className="tasks-viewdd-item-name">{view.name}</span>
                       </button>
                       <span className="tasks-viewdd-item-actions">
-                        <span className="tasks-viewdd-check" aria-hidden>
-                          {view.id === activeViewId ? <CheckCircleIcon aria-hidden className="size-[14px]" /> : null}
-                        </span>
+                        <button type="button" className="tasks-viewdd-act" title="拷贝视图" onClick={() => copyView(view)}>
+                          <Square2StackIcon aria-hidden className="size-[14px]" />
+                        </button>
                         {view.builtin ? null : (
                           <>
                             <button type="button" className="tasks-viewdd-act" title="重命名" onClick={() => renameView(view)}>
@@ -4706,10 +4706,6 @@ export function CollectionBrowser({
                     <button type="button" className="tasks-viewdd-saveas" onClick={() => addEmptyView()}>
                       <PlusIcon aria-hidden className="size-[14px]" />
                       添加视图
-                    </button>
-                    <button type="button" className="tasks-viewdd-saveas" onClick={() => copyView()}>
-                      <Square2StackIcon aria-hidden className="size-[14px]" />
-                      拷贝视图
                     </button>
                   </div>
                 </div>

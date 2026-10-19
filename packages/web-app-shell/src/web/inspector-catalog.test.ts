@@ -74,6 +74,10 @@ test('plus menu can add another database tab', () => {
   assert.match(css, /\.inspector-add-close/)
   assert.match(css, /html:not\(\.dark\) \.inspector-add-menu[\s\S]*color:\s*#5f5e5a/)
   assert.match(css, /html:not\(\.dark\) \.inspector-add-row-main svg[\s\S]*color:\s*#91918e/)
+  assert.doesNotMatch(inspector, /inspector-add-check/)
+  assert.match(css, /\.inspector-add-row\.is-active::before\s*\{[^}]*background:\s*var\(--dsw-hover\)/s)
+  assert.match(css, /\.session-inspector \.inspector-tab svg[\s\S]*color:\s*var\(--dsw-icon\)/)
+  assert.match(css, /html\.dark \{[^}]*--dsw-icon: #bab9b5/)
 })
 
 test('inspector header tabs sit on the same vertical center as the main header', () => {
