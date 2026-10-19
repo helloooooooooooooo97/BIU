@@ -413,10 +413,10 @@ export function looksLikeFilterTree(raw: unknown): boolean {
 }
 
 export const VIEW_FILTERS_DESCRIPTION =
-  '扁平 JSON 字符串，各 key 等于该列。例 {"project":"biu","tags":"test"}。tags/多选是「包含该值」。AND 多个 key；OR 或 contains/neq 用 filterTree。'
+  '扁平 JSON 字符串，各 key 等于该列。例 {"project":"biu","status":"open"}。多选是「包含该值」。AND 多个 key；OR 或 contains/neq 用 filterTree。合集用 facet 字段。'
 
 export const VIEW_FILTER_TREE_DESCRIPTION =
-  '筛选树 JSON。group: {kind:"group",combinator:"and"|"or",children}；rule: {kind:"rule",field,op,value}，value 为字符串，id 可省。op: eq|neq|contains|not_contains|is_empty|not_empty|gt|lt|within。标签含 test：{"kind":"group","combinator":"and","children":[{"kind":"rule","field":"tags","op":"eq","value":"test"}]}。两个标签任一：combinator or，两条 eq。'
+  '筛选树 JSON。group: {kind:"group",combinator:"and"|"or",children}；rule: {kind:"rule",field,op,value}，value 为字符串，id 可省。op: eq|neq|contains|not_contains|is_empty|not_empty|gt|lt|within。合集含 dp：{"kind":"group","combinator":"and","children":[{"kind":"rule","field":"facet","op":"eq","value":"dp"}]}。两个合集任一：combinator or，两条 eq。'
 
 export const VIEW_SORTS_DESCRIPTION =
   'JSON 数组，按顺序多 key 排序。例 [{"field":"project","dir":"asc"},{"field":"title","dir":"desc"}]。dir 仅 asc|desc。'
@@ -456,7 +456,6 @@ function seedableFieldKey(schema: CollectionSchema | undefined, key: string) {
   if (!field || field.startsWith('$') || SKIP_SEED_FIELDS.has(field)) return ''
   if (!schema) return field
   if (schema.fields[field]) return field
-  if (field === 'tag' && schema.fields.tags) return 'tags'
   return ''
 }
 
@@ -532,7 +531,7 @@ export function seedRecordFromViewFilters(
       if (Number.isFinite(n)) out[field] = n
       continue
     }
-    if (kind === 'string[]' || field === 'tags') {
+    if (kind === 'string[]' || kind === 'multi-select') {
       out[field] = values
       continue
     }

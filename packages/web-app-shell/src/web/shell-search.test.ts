@@ -56,10 +56,10 @@ test('searchHref opens the left main pane by changing the route', () => {
   assert.equal(searchHref({ kind: 'facet', id: 'f1' }), '/database/facets/record/f1')
 })
 
-test('search hits collect tags from tags, facet.tags, and config.tags', () => {
-  assert.deepEqual(tagsFromRecord({ tags: ['a', 'b'] }), ['a', 'b'])
+test('search hits collect 合集 from facet.tags and config.facet.tags', () => {
+  assert.deepEqual(tagsFromRecord({ tags: ['a', 'b'] }), [])
   assert.deepEqual(tagsFromRecord({ facet: { tags: ['dp'] } }), ['dp'])
-  assert.deepEqual(tagsFromRecord({ config: { tags: ['host-ui'] } }), ['host-ui'])
+  assert.deepEqual(tagsFromRecord({ config: { facet: { tags: ['host-ui'] } } }), ['host-ui'])
   assert.deepEqual(tagsFromRecord({ tags: ['a'], facet: { tags: ['a', 'b'] } }), ['a', 'b'])
 })
 

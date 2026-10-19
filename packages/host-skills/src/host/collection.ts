@@ -11,11 +11,11 @@ function asRecord(skill: SkillRecord, withNotes = true, files: string[] = []): D
     source: skill.source,
     notes: withNotes ? skill.notes : '',
     fileList: files.join('\n'),
+    tags: skill.tags,
     ...recordBuiltinValues({
       createdAt: skill.createdAt,
       updatedAt: skill.updatedAt,
       parentId: '',
-      tags: skill.tags,
       emoji: skill.emoji,
     }),
   }

@@ -177,7 +177,7 @@ function schemaFor(spec: CollectionSpec): CollectionSchema {
   for (const [key, field] of Object.entries(raw)) {
     fields[key] = field.computed ? { ...field, writable: false } : field
   }
-  let columns = ensureColumn(ensureColumn(spec.schema.columns, 'facet'), 'tags')
+  let columns = ensureColumn(spec.schema.columns, 'facet')
   if (!isSystemCollection(spec.path) && !isIndexCollection(spec.path)) {
     fields.shareScope = {
       type: 'select',
@@ -294,7 +294,7 @@ function listDecorateNeed(wanted: string[] | null | undefined): ListDecorateNeed
   return {
     facet: set.has('facet') || wanted.some((key) => key.startsWith('facet::')),
     people: set.has('createdBy') || set.has('updatedBy'),
-    meta: set.has('emoji') || set.has('tags'),
+    meta: set.has('emoji'),
     shareScope: set.has('shareScope'),
     shareRole: set.has('shareRole'),
   }
@@ -638,7 +638,7 @@ function matchListFilter(record: DbRecord, filter: Record<string, unknown> | und
   return matchListFilterRecord(record, filter, schema, packs)
 }
 
-const OVERLAY_LIST_FIELDS = new Set(['emoji', 'tags', 'facet', 'createdBy', 'updatedBy', 'shareScope', 'shareRole'])
+const OVERLAY_LIST_FIELDS = new Set(['emoji', 'facet', 'createdBy', 'updatedBy', 'shareScope', 'shareRole'])
 
 function overlayListField(field: string) {
   return OVERLAY_LIST_FIELDS.has(String(field ?? '')) || String(field ?? '').startsWith('facet::')
@@ -1978,14 +1978,10 @@ export class DatabaseService extends Service implements Database {
 
   private applyMetaOverlay(spec: CollectionSpec, row: DbRecord): DbRecord {
     let meta = this.facets.recordMeta(spec.path, row.id)
-    if ((!meta || meta.tags == null) && Array.isArray(row.tags) && row.tags.length) {
-      meta = this.facets.writeRecordMeta(spec.path, row.id, { tags: row.tags.map((item) => String(item)) })
-    }
     if (!meta) return row
     return {
       ...row,
       ...(meta.emoji !== null ? { emoji: meta.emoji } : {}),
-      ...(meta.tags !== null ? { tags: meta.tags } : {}),
     }
   }
 
@@ -2043,7 +2039,7 @@ export class DatabaseService extends Service implements Database {
     }
     if (!this.collectionCanUpdate(spec)) {
       const keys = Object.keys(raw)
-      const overlayKeys = new Set(['facet', 'emoji', 'tags'])
+      const overlayKeys = new Set(['facet', 'emoji'])
       if ((keys.length && keys.some((key) => !overlayKeys.has(key))) || (!keys.length && !bannerPatch.present)) {
         throw new Error(`collection cannot update: ${spec.path}`)
       }
@@ -2052,21 +2048,16 @@ export class DatabaseService extends Service implements Database {
         const nextSchema = coerce(schema.fields.facet, raw.facet)
         next = { ...next, facet: this.persistRecordFacet(spec, current.id, nextSchema, next) }
       }
-      if ('emoji' in raw || 'tags' in raw) {
-        if ('emoji' in raw && (!schema.fields.emoji?.writable || schema.fields.emoji.computed)) {
+      if ('emoji' in raw) {
+        if (!schema.fields.emoji?.writable || schema.fields.emoji.computed) {
           throw new Error(`field not writable: emoji`)
         }
-        if ('tags' in raw && (!schema.fields.tags?.writable || schema.fields.tags.computed)) {
-          throw new Error(`field not writable: tags`)
-        }
         const meta = this.facets.writeRecordMeta(spec.path, current.id, {
-          ...('emoji' in raw ? { emoji: String(coerce(schema.fields.emoji!, raw.emoji) ?? '') } : {}),
-          ...('tags' in raw ? { tags: coerce(schema.fields.tags!, raw.tags) as string[] } : {}),
+          emoji: String(coerce(schema.fields.emoji!, raw.emoji) ?? ''),
         })
         next = {
           ...next,
           ...(meta.emoji !== null ? { emoji: meta.emoji } : {}),
-          ...(meta.tags !== null ? { tags: meta.tags } : {}),
         }
       }
       if (bannerPatch.present) {
@@ -2110,15 +2101,13 @@ export class DatabaseService extends Service implements Database {
     let record = Object.keys(patch).length ? await spec.update(parts[1]!, patch) : current
     if (moving && resource) authorization!.move(actor!, resource, parent)
     await this.stampActor(spec.path, record.id)
-    if ('emoji' in patch || 'tags' in patch) {
+    if ('emoji' in patch) {
       const meta = this.facets.writeRecordMeta(spec.path, record.id, {
-        ...('emoji' in patch ? { emoji: String(patch.emoji ?? '') } : {}),
-        ...('tags' in patch ? { tags: Array.isArray(patch.tags) ? patch.tags.map((item) => String(item)) : [] } : {}),
+        emoji: String(patch.emoji ?? ''),
       })
       record = {
         ...record,
         ...(meta.emoji !== null ? { emoji: meta.emoji } : {}),
-        ...(meta.tags !== null ? { tags: meta.tags } : {}),
       }
     }
     if (schema.fields.facet && 'facet' in patch) {
@@ -2179,10 +2168,9 @@ export class DatabaseService extends Service implements Database {
       const banner = banners[index]
       if (banner !== undefined) this.facets.writeRecordBanner(spec.path, record.id, banner)
       const input = records[index] ?? record
-      if ('emoji' in input || 'tags' in input) {
+      if ('emoji' in input) {
         this.facets.writeRecordMeta(spec.path, record.id, {
-          ...('emoji' in input ? { emoji: String(input.emoji ?? '') } : {}),
-          ...('tags' in input ? { tags: Array.isArray(input.tags) ? input.tags.map((item) => String(item)) : [] } : {}),
+          emoji: String(input.emoji ?? ''),
         })
       }
       if (schema.fields.facet) {

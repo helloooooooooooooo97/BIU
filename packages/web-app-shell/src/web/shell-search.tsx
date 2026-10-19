@@ -103,17 +103,19 @@ function pushTags(into: string[], value: unknown) {
   }
 }
 
-/** 列表行上的标签：tags、facet.tags、config.tags。 */
+/** 列表行上的合集：facet.tags、config.facet.tags；旧 tags 只当遗留合集名。 */
 export function tagsFromRecord(row: Record<string, unknown>) {
   const tags: string[] = []
-  pushTags(tags, row.tags)
   const facet = row.facet
   if (facet && typeof facet === 'object' && !Array.isArray(facet)) {
     pushTags(tags, (facet as { tags?: unknown }).tags)
   }
   const config = row.config
   if (config && typeof config === 'object' && !Array.isArray(config)) {
-    pushTags(tags, (config as { tags?: unknown }).tags)
+    const nested = (config as { facet?: unknown }).facet
+    if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
+      pushTags(tags, (nested as { tags?: unknown }).tags)
+    }
   }
   return [...new Set(tags)]
 }

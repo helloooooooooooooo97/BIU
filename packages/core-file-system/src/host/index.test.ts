@@ -242,8 +242,7 @@ test('every collection schema includes id, title, createdAt and updatedAt', asyn
   assert.equal(stat.schema.fields.updatedAt?.label, '更新时间')
   assert.equal(stat.schema.fields.content?.type, 'file')
   assert.equal(stat.schema.fields.emoji?.writable, true)
-  assert.equal(stat.schema.fields.tags?.type, 'multi-select')
-  assert.equal(stat.schema.fields.tags?.writable, true)
+  assert.equal(stat.schema.fields.tags, undefined)
   assert.equal(stat.schema.fields.facet?.type, 'facet')
   assert.equal(stat.schema.fields.facet?.label, '合集')
   assert.equal(stat.schema.fields.facet?.writable, true)
@@ -1537,11 +1536,6 @@ test('facet schema can be written on tables that cannot update other fields', as
   if (withEmoji.kind !== 'record') return
   assert.equal(withEmoji.value.emoji, '🔌')
   assert.deepEqual((withEmoji.value.facet as { tags?: string[] })?.tags, ['dp'])
-  await db.update('/plugins/p1', { tags: ['host-ui', 'lab'] })
-  const withTags = await db.read('/plugins/p1')
-  if (withTags.kind !== 'record') return
-  assert.deepEqual(withTags.value.tags, ['host-ui', 'lab'])
-  assert.equal(withTags.value.emoji, '🔌')
   await db.update('/plugins/p1', { banner: { kind: 'htmlframe', html: '<script></script>' } })
   const withBanner = await db.read('/plugins/p1')
   if (withBanner.kind !== 'record') return
@@ -2252,10 +2246,10 @@ test('sharing one person all-tasks view does not reclassify the other person pri
   assert.equal(bobList.items.some((row) => row.title === 'A私人'), false)
 })
 
-test('workspace member tags use file-system metadata instead of role updates', async () => {
+test('workspace member emoji overlay does not change role', async () => {
   const ctx = new Context()
   const db = new DatabaseService(ctx)
-  const dir = mkdtempSync(join(tmpdir(), 'biu-member-tags-'))
+  const dir = mkdtempSync(join(tmpdir(), 'biu-member-emoji-'))
   const collab = new CollabStore(openAndMigrateBiu(join(dir, 'biu.sqlite')))
   class AccountBridge extends Service {
     store = collab
@@ -2274,9 +2268,10 @@ test('workspace member tags use file-system metadata instead of role updates', a
   collab.setActive(ada.id, workspace.id)
 
   const updated = await runWithAccount(ada.id, () =>
-    db.update(`/workspace-members/${bob.id}`, { tags: ['213'] }),
+    db.update(`/workspace-members/${bob.id}`, { emoji: '👋' }),
   )
-  assert.deepEqual(updated.value.tags, ['213'])
+  assert.equal(updated.value.emoji, '👋')
+  assert.equal('tags' in updated.value && updated.value.tags != null, false)
   assert.equal(collab.members(ada.id, workspace.id).find((row) => row.id === bob.id)?.role, 'member')
 })
 
@@ -2652,7 +2647,7 @@ test('list match overlay is only loaded for overlay fields or tree filters', () 
   assert.equal(listNeedsMatchOverlay({ status: 'open', $scope: 'personal' }, '', 'title'), false)
   assert.equal(listNeedsMatchOverlay({ shareScope: '私人' }, '', 'title'), false)
   assert.equal(listNeedsMatchOverlay(undefined, '笔记', 'title'), false)
-  assert.equal(listNeedsMatchOverlay({ tags: 'host-ui' }, '', 'title'), true)
+  assert.equal(listNeedsMatchOverlay({ tags: 'host-ui' }, '', 'title'), false)
   assert.equal(listNeedsMatchOverlay(undefined, '', 'emoji'), true)
   assert.equal(listNeedsMatchOverlay(undefined, '', 'title', [{ field: 'createdBy', dir: 'asc' }]), true)
   assert.equal(listNeedsMatchOverlay({ $tree: { root: 'n1' } }, '', 'title'), true)

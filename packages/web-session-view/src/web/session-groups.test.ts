@@ -8,7 +8,7 @@ import {
   buildSidebarSections,
   folderNameFromPath,
   groupSessionsByProject,
-  groupSessionsByTag,
+  groupSessionsByFacet,
   mostRecentSessionId,
 } from './session-groups.ts'
 import type { SessionListItem } from './index.ts'
@@ -100,10 +100,10 @@ test('pinned rows sort first inside a project group', () => {
   )
 })
 
-test('groupSessionsByTag splits multi-tag chats and isolates untagged', () => {
-  const groups = groupSessionsByTag([
-    item({ id: 'a', updatedAt: 3, tags: ['host-ui', 'bug'] }),
-    item({ id: 'b', updatedAt: 2, tags: ['host-ui'] }),
+test('groupSessionsByFacet splits multi-facet chats and isolates untagged', () => {
+  const groups = groupSessionsByFacet([
+    item({ id: 'a', updatedAt: 3, facet: { tags: ['host-ui', 'bug'] } }),
+    item({ id: 'b', updatedAt: 2, facet: { tags: ['host-ui'] } }),
     item({ id: 'c', updatedAt: 9 }),
   ])
   const host = groups.find((g) => g.label === 'host-ui')
@@ -162,38 +162,38 @@ test('buildSidebarSections groups by project by default', () => {
   )
 })
 
-test('buildSidebarSections groups by tag when groupBy=tag', () => {
+test('buildSidebarSections groups by facet when groupBy=facet', () => {
   const sections = buildSidebarSections(
     [
-      item({ id: 'a', updatedAt: 2, tags: ['ui', 'bug'] }),
+      item({ id: 'a', updatedAt: 2, facet: { tags: ['ui', 'bug'] } }),
       item({ id: 'b', updatedAt: 1 }),
     ],
-    'tag',
+    'facet',
   )
   assert.deepEqual(
     sections.map((s) => s.kind),
-    ['tag'],
+    ['facet'],
   )
   const tagSection = sections[0]!
-  assert.equal(tagSection.label, '标签')
+  assert.equal(tagSection.label, '合集')
   assert.deepEqual(
     tagSection.groups?.map((g) => g.kind),
-    ['tag', 'tag', 'ungrouped'],
+    ['facet', 'facet', 'ungrouped'],
   )
   assert.deepEqual(
     tagSection.groups?.map((g) => g.label),
-    ['bug', 'ui', '未标签'],
+    ['bug', 'ui', '未合集'],
   )
 })
 
 test('buildSidebarSections keeps a pinned section that holds pinned rows', () => {
   const sections = buildSidebarSections(
     [item({ id: 'a', updatedAt: 2, pinned: true }), item({ id: 'b', updatedAt: 1 })],
-    'tag',
+    'facet',
   )
   assert.deepEqual(
     sections.map((s) => s.kind),
-    ['pinned', 'tag'],
+    ['pinned', 'facet'],
   )
   assert.deepEqual(
     sections[0]?.sessions?.map((r) => r.id),

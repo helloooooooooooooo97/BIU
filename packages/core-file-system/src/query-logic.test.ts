@@ -168,7 +168,7 @@ test('seedRecordFromViewFilters prefills AND status and tags so the row stays in
   assert.equal(matchListFilterRecord({ id: '2' }, encodeListFilter({}, tree), pagesSchema), false)
 })
 
-test('seedRecordFromViewFilters maps tag locks onto tags and skips scope / neq', () => {
+test('seedRecordFromViewFilters skips scope / neq and unknown tag locks', () => {
   const tree = emptyFilterGroup()
   tree.children = [
     { kind: 'rule', id: 'a', field: 'status', op: 'neq', value: 'done' },

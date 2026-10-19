@@ -624,7 +624,7 @@ const LIST_SEED_COLUMNS = [
   'createdBy',
   'assignee',
   'project',
-  'tags',
+  'facet',
   'dueAt',
   'shareScope',
   'shareRole',
@@ -637,7 +637,7 @@ const LIST_SEED_COLUMNS = [
 ]
 
 function isListColumn(key: string) {
-  return key !== 'description' && key !== 'notes' && key !== 'content' && key !== 'emoji' && key !== 'banner'
+  return key !== 'description' && key !== 'notes' && key !== 'content' && key !== 'emoji' && key !== 'banner' && key !== 'tags'
 }
 
 const QUERY_NEST_IGNORE = `${HEADLESS_DISMISS_IGNORE}, .db-search-menu, .fsdb-cellselect-menu, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]`
