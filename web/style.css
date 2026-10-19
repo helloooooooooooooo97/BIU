@@ -8533,8 +8533,6 @@ html:not(.dark) .page-bubble button:not(.is-on) svg,
 html:not(.dark) .page-bubble-chat-icon,
 html:not(.dark) .chat-select-bubble-icon,
 html:not(.dark) .inspector-add-row-main svg,
-html:not(.dark) .inspector-add-close,
-html:not(.dark) .inspector-add-close svg,
 html:not(.dark) .inspector-add-menu .inspector-catalog-item svg,
 html:not(.dark) .inspector-add-menu .inspector-catalog-item:hover svg,
 html:not(.dark) .tasks-viewdd-act,
@@ -8557,6 +8555,14 @@ html:not(.dark) .fsdb-checkrow > svg,
 html:not(.dark) .fsdb-checkrow.is-on > svg,
 html:not(.dark) .fsdb-checkrow:hover > svg {
   color: #91918e;
+}
+
+/* 右上角加号面板：关闭叉号跟图标色一致 */
+html:not(.dark) .inspector-add-close,
+html:not(.dark) .inspector-add-close svg,
+.inspector-add-close:hover,
+.inspector-add-close:hover svg {
+  color: #bab9b5;
 }
 
 .site {

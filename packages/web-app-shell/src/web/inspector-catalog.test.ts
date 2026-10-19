@@ -101,3 +101,13 @@ test('inspector header tabs sit on the same vertical center as the main header',
   assert.match(css, /\.app-stage-pane\[data-stage="agent"\][\s\S]*?content-visibility:\s*visible/)
   assert.match(css, /\.app-stage-pane\.is-active[\s\S]*?opacity:\s*1/)
 })
+
+test('inspector add menu close button uses the icon gray', () => {
+  assert.match(
+    css,
+    /html:not\(\.dark\) \.inspector-add-close,\s*\nhtml:not\(\.dark\) \.inspector-add-close svg,[\s\S]*?color:\s*#bab9b5/,
+  )
+  // 不能再被 #91918e 那组覆盖规则吃掉
+  const muted = css.slice(css.indexOf('.inspector-add-row-main svg,'), css.indexOf('color: #91918e;'))
+  assert.doesNotMatch(muted, /inspector-add-close/)
+})
