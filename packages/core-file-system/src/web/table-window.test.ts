@@ -19,10 +19,22 @@ test('table window shifts with scroll and pads both sides', () => {
 })
 
 test('table window clamps at the end', () => {
-  const slice = tableWindowSlice(20, TABLE_ROW_PX * 18, TABLE_ROW_PX * 10)
+  const view = TABLE_ROW_PX * 10
+  const slice = tableWindowSlice(20, TABLE_ROW_PX * 18, view)
   assert.equal(slice.end, 20)
   assert.equal(slice.padBottom, 0)
-  assert.ok(slice.start >= 0)
+  assert.equal(slice.start, Math.max(0, 20 - (10 + TABLE_WINDOW_OVERSCAN * 2)))
+})
+
+test('scrollTop bounce at the bottom keeps the same window', () => {
+  const view = TABLE_ROW_PX * 10
+  const a = tableWindowSlice(50, TABLE_ROW_PX * 48, view)
+  const b = tableWindowSlice(50, TABLE_ROW_PX * 40, view)
+  assert.equal(a.end, 50)
+  assert.equal(b.end, 50)
+  assert.equal(a.start, b.start)
+  assert.equal(a.padTop, b.padTop)
+  assert.equal(a.padBottom, 0)
 })
 
 test('wrap mode still windows, with a taller row estimate', () => {
