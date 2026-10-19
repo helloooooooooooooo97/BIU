@@ -38,12 +38,26 @@ test('share panel uses a compact settings section and custom toggles', () => {
 
 test('permission column opens the same kind of chain as data scope', () => {
   const src = readFileSync(resolve(import.meta.dirname, './share-popover.tsx'), 'utf8')
+  const labelSrc = readFileSync(resolve(import.meta.dirname, './share-scope-label.tsx'), 'utf8')
   const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
+  const role = src.slice(src.indexOf('export function ShareRoleDetail'))
+  const openAt = role.indexOf('if (!open)')
+  const localAt = role.indexOf('if (localOnly) {')
+  const accessAt = role.indexOf('/api/account/access')
   assert.match(src, /aria-label="权限链路"/)
   assert.match(src, /权限继承自上一级|记录上的权限、继承层级和匹配到的视图/)
   assert.match(src, /roleChain/)
+  assert.match(src, /data-testid="fsdb-role-tag"/)
+  assert.match(labelSrc, /export function ShareRoleLabel/)
   assert.match(browser, /key === 'shareRole'/)
   assert.match(browser, /<ShareRoleDetail/)
+  assert.match(browser, /fallback=\{<ShareRoleLabel label=\{props\.label\} \/>\}/)
+  assert.doesNotMatch(browser, /if \(localData\) return <span>\{String\(row\[key\]/)
+  assert.ok(openAt >= 0)
+  assert.ok(openAt < localAt)
+  assert.ok(localAt >= 0 && localAt < accessAt)
+  assert.match(role, /你是创建者/)
+  assert.doesNotMatch(role.slice(localAt, accessAt), /\/api\/account\/access/)
 })
 
 test('private records can grant access to a dynamic member view', () => {
@@ -112,6 +126,19 @@ test('device workspace keeps LAN links but hides collaboration and cloud publish
   assert.doesNotMatch(sharesPost, /localIds/)
   assert.doesNotMatch(sharesPost, /body.enabled !== false/)
   assert.match(databaseHost, /\/api\/db\/shares\?\$\{search\}/)
+})
+
+test('list permission column uses the same capsule and loads the chain on click', () => {
+  const src = readFileSync(resolve(import.meta.dirname, './share-popover.tsx'), 'utf8')
+  const labelSrc = readFileSync(resolve(import.meta.dirname, './share-scope-label.tsx'), 'utf8')
+  const css = readFileSync(resolve(import.meta.dirname, './fsdb-style.ts'), 'utf8')
+  const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
+  assert.match(src, /data-testid="fsdb-role-tag"/)
+  assert.match(labelSrc, /className=\{`fsdb-scope-tag is-\$\{accessTone\(label\)\}`\}/)
+  assert.match(css, /\.fsdb-scope-tag\.is-manage/)
+  assert.match(browser, /fallback=\{<ShareRoleLabel label=\{props\.label\} \/>\}/)
+  assert.match(browser, /if \(key === 'shareScope' \|\| key === 'shareRole'\) \{\s*return renderCell\(row, key, field, 'table'\)/)
+  assert.match(browser, /localOnly=\{localKnown \? localData : null\}/)
 })
 
 test('list share column uses the same capsule and loads the chain on click', () => {

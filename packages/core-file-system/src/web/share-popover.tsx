@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowPathIcon, CheckIcon, EyeIcon, LinkIcon, PencilSquareIcon, ShareIcon, ShieldCheckIcon, XMarkIcon } from '@heroicons/react/16/solid'
+import { ArrowPathIcon, CheckIcon, LinkIcon, ShareIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import { HeadlessDismiss } from '@biu/public-ui/headless-dismiss'
 import { listCollection, readJson } from './db-client.ts'
-import { ScopeMark, ShareScopeLabel, scopeText, scopeTone } from './share-scope-label.tsx'
+import { AccessMark, accessText, accessTone, ScopeMark, scopeText, scopeTone } from './share-scope-label.tsx'
 
 export { ShareScopeLabel } from './share-scope-label.tsx'
+export { ShareRoleLabel } from './share-scope-label.tsx'
 import { mintSharePin, shareClipboardText, type ShareResourceStats } from '../share-resources.ts'
 import { builtinAllView, builtinMemberViews, isBuiltinAllViewId, parseBuiltinScopeViewId, scopedCollectionName } from '../catalog-views.ts'
 import { recordMatchesSharedView, resolveSharedView } from '../share-view-match.ts'
@@ -601,29 +602,6 @@ function viewRows(items: DbRecord[]) {
   })
 }
 
-function accessText(role: string) {
-  if (role === '管理' || role === '编辑' || role === '阅读') return role
-  if (role === 'owner' || role === 'manager') return '管理'
-  if (role === 'editor') return '编辑'
-  return '阅读'
-}
-
-function accessTone(text: string) {
-  if (text === '管理') return 'manage'
-  if (text === '编辑') return 'edit'
-  return 'read'
-}
-
-function AccessMark({ role }: { role: string }) {
-  const text = accessText(role)
-  const icon = text === '管理'
-    ? <ShieldCheckIcon aria-hidden className="size-[14px]" />
-    : text === '编辑'
-      ? <PencilSquareIcon aria-hidden className="size-[14px]" />
-      : <EyeIcon aria-hidden className="size-[14px]" />
-  return <>{icon}{text}</>
-}
-
 /** 分享属性标签。归属看条目自己的协作者；点开后看直接授权和从视图继承来的权限。 */
 export function ShareScopeDetail({
   collection,
@@ -887,12 +865,15 @@ export function ShareRoleDetail({
   label,
   tableLabel = '',
   builtin = false,
+  localOnly = false,
 }: {
   collection: string
   recordId: string
   label: string
   tableLabel?: string
   builtin?: boolean
+  /** null：还不知道是不是本机空间，先不要打协作接口。 */
+  localOnly?: boolean | null
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -902,11 +883,54 @@ export function ShareRoleDetail({
   const [error, setError] = useState('')
 
   useEffect(() => {
-    if (!open) return
+    if (localOnly == null) return
+    if (!open) {
+      setError('')
+      return
+    }
     if (builtin) {
       setChain([{ id: 'builtin', title: '内置插件', detail: '所有成员只能查看', result: '阅读' }])
       setError('')
       return
+    }
+    if (localOnly) {
+      let cancelled = false
+      void (async () => {
+        const recordPage = await listCollection({
+          path: collection,
+          limit: 1,
+          filters: { id: recordId },
+          columns: ['parentId', 'title'],
+        })
+        if (cancelled) return
+        const role = accessText(label)
+        const parentId = String(recordPage.items[0]?.parentId ?? '')
+        setChain([
+          role === '阅读'
+            ? { id: 'lan', title: '局域网链接', detail: '已开启局域网链接，同一局域网可查看', result: '阅读' }
+            : { id: 'local', title: '这条内容', detail: '你是创建者', result: role || '管理' },
+          ...(parentId ? [{
+            id: `parent:${parentId}`,
+            title: '上一级内容',
+            detail: '权限继承自上一级',
+            result: role || '管理',
+          }] : []),
+        ])
+        setError('')
+      })().catch((err) => {
+        if (cancelled) return
+        const role = accessText(label)
+        setChain([{
+          id: 'local',
+          title: role === '阅读' ? '局域网链接' : '这条内容',
+          detail: role === '阅读' ? '已开启局域网链接，同一局域网可查看' : '你是创建者',
+          result: role || '管理',
+        }])
+        setError(err instanceof Error ? err.message : '无法读取权限')
+      })
+      return () => {
+        cancelled = true
+      }
     }
     let cancelled = false
     void (async () => {
@@ -971,7 +995,7 @@ export function ShareRoleDetail({
     return () => {
       cancelled = true
     }
-  }, [open, builtin, collection, recordId, tableLabel])
+  }, [open, builtin, collection, recordId, tableLabel, localOnly, label])
 
   const shown = chain.reduce((best, step) => {
     const rank = { 阅读: 1, 编辑: 2, 管理: 3 } as Record<string, number>
@@ -983,6 +1007,7 @@ export function ShareRoleDetail({
       <button
         type="button"
         className={`fsdb-scope-tag is-${accessTone(label)}`}
+        data-testid="fsdb-role-tag"
         aria-label={`${accessText(label)}的权限链路`}
         aria-expanded={open}
         onPointerDown={(event) => event.stopPropagation()}

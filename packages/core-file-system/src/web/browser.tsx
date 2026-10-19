@@ -83,7 +83,7 @@ import {
   visibleActions,
   placedActions,
 } from './fsdb-cells.tsx'
-import { ShareScopeLabel } from './share-scope-label.tsx'
+import { ShareRoleLabel, ShareScopeLabel } from './share-scope-label.tsx'
 import { ensureFsdbStyle } from './fsdb-style.ts'
 import { workspaceColumnsForLocation } from './workspace-columns.ts'
 import { PageBanner } from './page-banner.tsx'
@@ -199,7 +199,11 @@ function SharePanel(props: ComponentProps<typeof LazySharePanel>) {
   return <Suspense fallback={null}><LazySharePanel {...props} /></Suspense>
 }
 function ShareRoleDetail(props: ComponentProps<typeof LazyShareRoleDetail>) {
-  return <Suspense fallback={null}><LazyShareRoleDetail {...props} /></Suspense>
+  return (
+    <Suspense fallback={<ShareRoleLabel label={props.label} />}>
+      <LazyShareRoleDetail {...props} />
+    </Suspense>
+  )
 }
 function ShareScopeDetail(props: ComponentProps<typeof LazyShareScopeDetail>) {
   return (
@@ -1843,8 +1847,7 @@ export function CollectionBrowser({
       : []
     const facetKeys = flattenFacetColumns(facetCatalog).map((item) => item.key)
     const allowed = new Set([...fieldKeys, ...facetKeys, ...cellKeys])
-    const seedColumns =
-      cachedLocalData === true ? LIST_SEED_COLUMNS.filter((key) => key !== 'shareRole') : LIST_SEED_COLUMNS
+    const seedColumns = LIST_SEED_COLUMNS
     const requested = [
       ...(columnKeys.length ? columnKeys : currentSchema ? defaultColumnKeys(currentSchema, [...allowed]) : seedColumns),
       ...cellKeys,
@@ -3820,7 +3823,6 @@ export function CollectionBrowser({
       )
     }
     if (key === 'shareRole') {
-      if (localData) return <span>{String(row[key] ?? '')}</span>
       return (
         <ShareRoleDetail
           collection={collectionPath}
@@ -3828,6 +3830,7 @@ export function CollectionBrowser({
           label={String(row[key] ?? '')}
           tableLabel={currentTable?.label}
           builtin={collectionPath === '/plugins' && row.builtin === true}
+          localOnly={localKnown ? localData : null}
         />
       )
     }
