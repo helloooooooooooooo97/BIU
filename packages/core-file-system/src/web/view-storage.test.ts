@@ -114,6 +114,19 @@ test('builtin view columns overlay survives withViewDisplay', () => {
   ])
 })
 
+test('savedViewFromRecord restores columns from a JSON string', () => {
+  const view = savedViewFromRecord({
+    viewId: 'v-cols',
+    title: '列',
+    columns: '["title","status","dueAt"]',
+    wrap: true,
+    pageSize: 50,
+  })
+  assert.deepEqual(view?.columns, ['title', 'status', 'dueAt'])
+  assert.equal(view?.wrap, true)
+  assert.equal(view?.pageSize, 50)
+})
+
 test('savedViewFromRecord skips builtin rows and keeps filters', () => {
   assert.equal(savedViewFromRecord({ viewId: builtinAllViewId('/tasks'), title: '全部' }), null)
   const view = savedViewFromRecord({
@@ -192,6 +205,7 @@ test('saved views pull shares one in-flight list and a short ttl', () => {
   assert.match(src, /VIEWS_PULL_IDLE_MS = 2800/)
   assert.match(src, /VIEWS_PULL_LIMIT = 80/)
   assert.match(src, /filters: \{ tablePath \}/)
+  assert.doesNotMatch(src, /columns: \[\.\.\.VIEWS_PULL/)
   assert.match(src, /if \(pending\) return pending/)
   assert.match(src, /opts\?: \{ idle\?: boolean \}/)
 })

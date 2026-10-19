@@ -4,7 +4,7 @@ import { openAndMigrateBiu } from '@biu/host-plugin-loader/data-dir'
 import type { CollectionInfo, CollectionSpec, DbRecord } from '@biu/type-file-system'
 import { normalizeSchemaValue, recordBuiltinValues, REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
 import { builtinAllView, isReadOnlyViewId } from '../catalog-views.ts'
-import { normalizeColumnWidths, normalizePageSize, type SavedView } from '../web/saved-view.ts'
+import { normalizeColumnWidths, normalizePageSize, parseViewColumns, type SavedView } from '../web/saved-view.ts'
 import { isViewModeId } from '../web/fields.ts'
 import { normalizeCollectionPath } from '../paths.ts'
 import { isIndexCollection } from '../web/database-path.ts'
@@ -168,7 +168,7 @@ export class SavedViewsStore {
       sortDir: fields.sortDir === 'desc' ? 'desc' : 'asc',
       query: typeof fields.query === 'string' ? fields.query : '',
       groupBy: typeof fields.groupBy === 'string' ? fields.groupBy : '',
-      columns: Array.isArray(fields.columns) ? fields.columns.map((item) => String(item)) : [],
+      columns: parseViewColumns(fields.columns),
       ...filtersFromPatch(fields.filters),
       ...sortsFromPatch(fields.sorts, fields.sortField, fields.sortDir),
       tree: fields.tree !== false,
@@ -219,7 +219,7 @@ export class SavedViewsStore {
         ...('filters' in patch ? filtersFromPatch(patch.filters) : {}),
         ...('filterTree' in patch ? { filterTree: normalizeFilterGroup(parseJsonValue(patch.filterTree)) } : {}),
         ...('sorts' in patch ? sortsFromPatch(patch.sorts, patch.sortField ?? cur.sortField, patch.sortDir ?? cur.sortDir) : {}),
-        ...(Array.isArray(patch.columns) ? { columns: patch.columns.map((item) => String(item)) } : {}),
+        ...('columns' in patch ? { columns: parseViewColumns(patch.columns) } : {}),
         ...(typeof patch.pageSize === 'number' ? { pageSize: patch.pageSize } : {}),
         ...(typeof patch.tree === 'boolean' ? { tree: patch.tree } : {}),
         ...(typeof patch.wrap === 'boolean' ? { wrap: patch.wrap } : {}),
@@ -320,7 +320,7 @@ function asRecord(path: string, tableName: string, view: StoredView): DbRecord {
     wrap: Boolean(view.wrap),
     truncate: view.truncate !== false,
     pageSize: normalizePageSize(view.pageSize),
-    columns: Array.isArray(view.columns) ? view.columns.map(String) : [],
+    columns: parseViewColumns(view.columns),
     columnWidths: view.columnWidths ?? {},
     filters: JSON.stringify(filters),
     sorts: JSON.stringify(sorts.map((item) => ({ field: item.field, dir: item.dir }))),
@@ -348,7 +348,7 @@ export function clientViewFromDbRow(row: Record<string, unknown> | undefined) {
     sorts: sortsPatch.sorts,
     query: String(row.query ?? ''),
     groupBy: String(row.groupBy ?? ''),
-    columns: Array.isArray(row.columns) ? row.columns.map((item) => String(item)) : [],
+    columns: parseViewColumns(row.columns),
     filters: parsedFilters.filters,
     filterTree: countFilterRules(tree) ? tree : undefined,
     tree: row.tree !== false,

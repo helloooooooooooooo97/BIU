@@ -2720,19 +2720,23 @@ export function CollectionBrowser({
     if (!schemaDefaultKeys.length) return
     const prevDefaults = prevSchemaDefaultSig.current ? prevSchemaDefaultSig.current.split('\0').filter(Boolean) : []
     prevSchemaDefaultSig.current = schemaDefaultSig
+    const saved = viewsRef.current.find((view) => view.id === activeViewIdRef.current)?.columns ?? []
     setColumnKeys((prev) => {
       const allowed = new Set(allColumnKeys)
-      const grown = prevDefaults.length ? schemaDefaultKeys.filter((key) => !prevDefaults.includes(key)) : []
+      const source = prev.length ? prev : saved
+      const grown = prev.length && prevDefaults.length ? schemaDefaultKeys.filter((key) => !prevDefaults.includes(key)) : []
       const kept = pinActionColumn(
         schema,
-        [...prev.filter((key) => allowed.has(key)), ...grown.filter((key) => allowed.has(key) && !prev.includes(key))],
+        [...source.filter((key) => allowed.has(key)), ...grown.filter((key) => allowed.has(key) && !source.includes(key))],
         rowActionColumn,
       )
-      if (!prev.length || !kept.length) {
-        return schemaDefaultKeys
+      if (source.length) {
+        if (!kept.length) return prev.length ? prev : pinActionColumn(schema, source, rowActionColumn)
+        if (kept.length === prev.length && kept.every((key, index) => key === prev[index])) return prev
+        return kept
       }
-      if (kept.length === prev.length && kept.every((key, index) => key === prev[index])) return prev
-      return kept
+      skipPersistGen.current += 1
+      return schemaDefaultKeys
     })
   }, [allColumnKeys, rowActionColumn, schema, schemaDefaultKeys, schemaDefaultSig])
 
@@ -4447,7 +4451,7 @@ export function CollectionBrowser({
       sorts,
       filters: liveFilters,
       filterTree: liveTree,
-      columns: pinActionColumn(schema, columnKeys, rowActionColumn),
+      columns: columnKeys.length ? pinActionColumn(schema, columnKeys, rowActionColumn) : current.columns,
       groupBy,
       tree: showTree,
       wrap: wrapCells,
@@ -4484,7 +4488,7 @@ export function CollectionBrowser({
       setViews(listedViewsNow)
     }
     const view = pickViewForRoute(viewsRef.current, collectionPath, routeViewId)
-    if (view && view.id !== activeViewIdRef.current) applyView(view)
+    if (view) applyView(view)
     setHydrated(true)
   }, [allColumnKeys, collectionPath, dataPath, routeViewId, schema, schemaDefaultKeys])
 
