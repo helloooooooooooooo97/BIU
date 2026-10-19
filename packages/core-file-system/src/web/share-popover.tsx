@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { ArrowPathIcon, CheckIcon, EyeIcon, LinkIcon, PencilSquareIcon, ShareIcon, ShieldCheckIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import { HeadlessDismiss } from '@biu/public-ui/headless-dismiss'
 import { listCollection, readJson } from './db-client.ts'
-import { ScopeMark, ShareScopeLabel, scopeText } from './share-scope-label.tsx'
+import { ScopeMark, ShareScopeLabel, scopeText, scopeTone } from './share-scope-label.tsx'
 
 export { ShareScopeLabel } from './share-scope-label.tsx'
 import { mintSharePin, shareClipboardText, type ShareResourceStats } from '../share-resources.ts'
@@ -643,20 +643,20 @@ export function ShareScopeDetail({
   const panelRef = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState(false)
   const [box, setBox] = useState<{ top: number; left: number } | null>(null)
-  const [scope, setScope] = useState(label === '共享' ? 'shared' : label === '空间' ? 'workspace' : 'personal')
+  const [scope, setScope] = useState(scopeTone(label))
   const [direct, setDirect] = useState<Array<{ id: string; name: string; role: string; note: string }>>([])
   const [chain, setChain] = useState<Array<{ id: string; title: string; detail: string; result: string }>>([])
   const [error, setError] = useState('')
 
   useEffect(() => {
     if (localOnly == null) return
+    if (!open) {
+      setScope(scopeTone(label))
+      setError('')
+      return
+    }
     if (localOnly) {
       setDirect([])
-      if (!open) {
-        setScope(label === '共享' ? 'shared' : label === '空间' ? 'workspace' : 'personal')
-        setError('')
-        return
-      }
       let cancelled = false
       void (async () => {
         const [sharesPage, recordPage, viewPage] = await Promise.all([
@@ -825,6 +825,7 @@ export function ShareScopeDetail({
       <button
         type="button"
         className={`fsdb-scope-tag is-${scope}`}
+        data-testid="fsdb-scope-tag"
         aria-label={`${label || scopeText(scope)}的权限详情`}
         aria-expanded={open}
         onPointerDown={(event) => event.stopPropagation()}

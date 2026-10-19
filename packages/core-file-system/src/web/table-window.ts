@@ -101,7 +101,7 @@ export function tableColumnEstimate(key: string, saved: unknown, pin = false) {
   if (pin) return TABLE_COL_PIN_PX
   if (key === 'createdBy' || key === 'updatedBy' || key === 'assignee') return 120
   if (key === 'updatedAt' || key === 'createdAt' || key === 'dueAt') return 130
-  if (key === 'shareScope' || key === 'shareRole') return 64
+  if (key === 'shareScope' || key === 'shareRole') return 88
   if (key === 'actions') return 62
   return TABLE_COL_PX
 }
