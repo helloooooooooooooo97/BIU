@@ -244,7 +244,7 @@ test('every collection schema includes id, title, createdAt and updatedAt', asyn
   assert.equal(stat.schema.fields.emoji?.writable, true)
   assert.equal(stat.schema.fields.tags, undefined)
   assert.equal(stat.schema.fields.facet?.type, 'facet')
-  assert.equal(stat.schema.fields.facet?.label, '合集')
+  assert.equal(stat.schema.fields.facet?.label, '标签')
   assert.equal(stat.schema.fields.facet?.writable, true)
   assert.equal(stat.schema.fields.parentId?.type, 'ref')
   assert.equal(stat.schema.fields.parentId?.writable, true)
@@ -1590,14 +1590,14 @@ test('db_update /facets writes facet field packs', async () => {
   })
   assert.equal(updated.value.fieldCount, 1)
   assert.equal(db.facets.get(id)?.fields[0]?.key, 'complexity')
-  const body = await db.writeContent(`/facets/${id}`, '# 合集说明')
+  const body = await db.writeContent(`/facets/${id}`, '# 标签说明')
   assert.equal(body.field, 'notes')
-  assert.equal(body.value, '# 合集说明')
+  assert.equal(body.value, '# 标签说明')
   const listed = await db.list('/facets')
   if (listed.kind !== 'collection') return
   assert.equal('notes' in listed.items[0]!, false)
   const read = await db.content(`/facets/${id}`)
-  assert.equal(read.value, '# 合集说明')
+  assert.equal(read.value, '# 标签说明')
 })
 
 test('db_update page facet stores flat property values on the stamp', async () => {

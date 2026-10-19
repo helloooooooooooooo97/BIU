@@ -36,7 +36,7 @@ import {
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { chatScrollRoot, sessionWindowFromHost, sessionWindowHidden, type SessionWindowSlice } from './session-window.ts'
 
-/** 项目/合集分组视图的持久化 key。旧值 tag 仍按合集读。 */
+/** 项目/标签分组视图的持久化 key。旧值 tag 仍按标签读。 */
 const GROUP_BY_KEY = 'cordis.sidebar.groupBy'
 
 function readGroupBy(): SidebarGroupBy {
@@ -48,7 +48,7 @@ function readGroupBy(): SidebarGroupBy {
   }
 }
 
-/** 每行合集徽标：最多显示 2 个，其余以 +N（剩余数量）展示。 */
+/** 每行标签徽标：最多显示 2 个，其余以 +N（剩余数量）展示。 */
 function SessionTagBadges({ tags }: { tags?: string[] }) {
   const list = (tags ?? []).map((tag) => tag.trim()).filter(Boolean)
   if (!list.length) return null
@@ -312,7 +312,7 @@ export const ChatSidebar = memo(function ChatSidebar({
   const collapsedProjects = useSidebarCollapseStore((state) => state.collapsed)
   const toggleProjectGroup = useSidebarCollapseStore((state) => state.toggle)
   const expandProjectGroup = useSidebarCollapseStore((state) => state.expand)
-  // 数据分组视图：项目树 / 合集树（持久化记忆用户选择）
+  // 数据分组视图：项目树 / 标签树（持久化记忆用户选择）
   const [groupBy, setGroupBy] = useState<SidebarGroupBy>(readGroupBy)
   const changeGroupBy = useCallback((next: SidebarGroupBy) => {
     setGroupBy(next)
@@ -323,7 +323,7 @@ export const ChatSidebar = memo(function ChatSidebar({
       /* ignore */
     }
   }, [])
-  // 板块并存：收藏 + (项目|合集)，由上而下
+  // 板块并存：收藏 + (项目|标签)，由上而下
   const sections = useMemo(() => buildSidebarSections(sessions, groupBy), [sessions, groupBy])
   // 板块级收缩（点击标题可展开/收缩，不显示收缩按钮，层级靠 kind 图标表达）
   const [collapsedSections, setCollapsedSections] = useState<Partial<Record<SidebarSectionKind, boolean>>>({})
@@ -407,7 +407,7 @@ export const ChatSidebar = memo(function ChatSidebar({
               const sectionCollapsed = Boolean(collapsedSections[section.kind])
               return (
                 <section key={section.kind} className="min-w-0">
-                  {/* 板块标题：收藏 / (项目|合集)，可点击整行展开/收缩；层级靠 kind 图标表达；悬浮时右侧露出分组切换 tab */}
+                  {/* 板块标题：收藏 / (项目|标签)，可点击整行展开/收缩；层级靠 kind 图标表达；悬浮时右侧露出分组切换 tab */}
                   <div className="sidebar-section-head min-w-0">
                       <button
                         type="button"
@@ -441,7 +441,7 @@ export const ChatSidebar = memo(function ChatSidebar({
                           </button>
                           <button
                             type="button"
-                            title="按合集分组"
+                            title="按标签分组"
                             aria-pressed={groupBy === 'facet'}
                             className={`sidebar-view-switch-btn${groupBy === 'facet' ? ' is-on' : ''}`}
                             onClick={() => changeGroupBy('facet')}

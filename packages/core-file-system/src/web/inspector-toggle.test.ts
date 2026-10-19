@@ -322,8 +322,8 @@ test('deletable tables can pick rows and bulk-act over the table header', () => 
   assert.doesNotMatch(browser, /编辑属性/)
   assert.match(browser, /data-testid="fsdb-bulk-export"/)
   assert.match(browser, /data-testid="fsdb-bulk-facet"/)
-  assert.match(browser, /data-testid="fsdb-bulk-facet"[\s\S]*合集/)
-  assert.doesNotMatch(browser, /打合集/)
+  assert.match(browser, /data-testid="fsdb-bulk-facet"[\s\S]*标签/)
+  assert.doesNotMatch(browser, /打标签/)
   assert.match(browser, /togglePicked\(list, header \? !some : !on\)/)
   assert.match(browser, /setPickedIds\(\[\]\)/)
   assert.match(browser, /data-testid="fsdb-bulk-more"/)
@@ -1137,19 +1137,19 @@ test('parent and depends field glyphs use the share nodes, not the skinny link c
   assert.match(style, /--fsdb-field:var\(--fsdb-ui-share\)/)
 })
 
-test('facet field glyph matches the collection stack icon', () => {
+test('facet field glyph matches the tag icon', () => {
   const glyphs = readFileSync(resolve(import.meta.dirname, './table-glyph.tsx'), 'utf8')
   const cells = readFileSync(resolve(import.meta.dirname, './fsdb-cells.tsx'), 'utf8')
   const spec = readFileSync(resolve(import.meta.dirname, '../host/facets-collection.ts'), 'utf8')
-  assert.match(spec, /icon: 'rectangle-stack'/)
-  assert.match(glyphs, /name === 'rectangle-stack'/)
-  assert.match(glyphs, /<RectangleStackIcon/)
-  assert.match(cells, /kind === 'select' \|\| kind === 'multi-select' \|\| kind === 'facet'\) return 'stack'/)
+  assert.match(spec, /icon: 'tag'/)
+  assert.match(glyphs, /name === 'tag' \|\| name === 'rectangle-stack' \|\| name === 'collection'/)
+  assert.match(glyphs, /<TagIcon/)
+  assert.match(cells, /kind === 'facet'\) return 'tag'/)
   assert.match(cells, /className="fsdb-field-glyph" data-kind=\{fieldGlyphKind\(kind\)\}/)
   assert.doesNotMatch(cells, /kind === 'facet'\) return <RectangleStackIcon/)
   assert.doesNotMatch(cells, /kind === 'facet'\) return <TagIcon/)
-  assert.match(style, /--fsdb-field-stack:/)
-  assert.match(style, /fsdb-field-glyph\[data-kind="stack"\]/)
+  assert.match(style, /--fsdb-field-tag:/)
+  assert.match(style, /fsdb-field-glyph\[data-kind="tag"\]/)
 })
 
 test('row actions reload even when updatedAt is unchanged', () => {

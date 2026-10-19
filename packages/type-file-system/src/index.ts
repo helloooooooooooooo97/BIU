@@ -269,10 +269,10 @@ export const BUILTIN_FIELDS = {
   emoji: { type: 'string', label: '图标', writable: true },
   facet: {
     type: 'facet',
-    label: '合集',
+    label: '标签',
     writable: true,
     description:
-      '贴合集并填属性。一个合集：{tags:["facet-2"],values:{导演:"查泽雷"}}。多个合集 values 必须按 id 分组：{tags:["facet-2","awards"],values:{"facet-2":{导演:"查泽雷"},awards:{oscar:true}}}。省略 tags 只合并属性，不撕掉其它合集。',
+      '贴标签并填属性。一个标签：{tags:["facet-2"],values:{导演:"查泽雷"}}。多个标签 values 必须按 id 分组：{tags:["facet-2","awards"],values:{"facet-2":{导演:"查泽雷"},awards:{oscar:true}}}。省略 tags 只合并属性，不撕掉其它标签。',
   },
   parentId: { type: 'ref', label: '父级', writable: true },
   dependsOn: { type: 'multi-ref', label: '依赖', writable: true },
@@ -314,7 +314,7 @@ export const BUILTIN_FIELD_KEYS = ['id', 'createdAt', 'updatedAt', 'content', 'e
 
 export const RESERVED_SCHEMA_FIELD_KEYS = Object.keys(BUILTIN_FIELDS)
 
-/** 已去掉的记录列：合集承担贴标签，禁止再登记同名列。 */
+/** 已去掉的 tags 记录列，禁止再登记同名列。 */
 const DROPPED_SCHEMA_FIELDS: Record<string, string> = { tags: '标签' }
 
 export function isReservedSchemaFieldKey(key: string) {
@@ -330,7 +330,7 @@ export function isReservedSchemaFieldLabel(label: string) {
   return Object.values(BUILTIN_FIELDS).some((field) => String(field.label ?? '').trim().toLowerCase() === want)
 }
 
-/** 分面包内允许的字段类型，含合集（可再贴合集）。 */
+/** 分面包内允许的字段类型，含标签（可再贴标签）。 */
 export const ATOMIC_FIELD_TYPES = [
   'string',
   'number',
@@ -430,7 +430,7 @@ export function isEmptySchemaValue(value: SchemaFieldValue): boolean {
   return true
 }
 
-/** 只保留仍贴着的合集下的值；从页面拿掉合集时元数据一起丢掉。 */
+/** 只保留仍贴着的标签下的值；从页面拿掉标签时元数据一起丢掉。 */
 export function bindSchemaValue(
   tags: string[],
   values: SchemaFieldValue['values'] = {},
@@ -445,7 +445,7 @@ export function bindSchemaValue(
   return { tags: nextTags, values: next }
 }
 
-/** 仍贴着的合集保留原值；新贴上的合集从空开始。 */
+/** 仍贴着的标签保留原值；新贴上的标签从空开始。 */
 export function retagSchemaValue(prev: SchemaFieldValue, nextTags: string[]): SchemaFieldValue {
   const attached = new Set(prev.tags)
   const carried: SchemaFieldValue['values'] = {}

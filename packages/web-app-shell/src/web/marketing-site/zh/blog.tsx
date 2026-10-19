@@ -35,11 +35,11 @@ function PageEnvDiagram() {
 }
 
 const ATOMS = ['路径', '表', '记录', 'schema', '操作', 'blurb'] as const
-const ENTITIES = ['任务', '页面', '插件', '会话', '技能', '合集'] as const
+const ENTITIES = ['任务', '页面', '插件', '会话', '技能', '标签'] as const
 
 function AtomsDiagram() {
   return (
-    <svg viewBox="0 0 640 220" role="img" aria-label="六种原子组合出任务、页面、插件、会话、技能、合集">
+    <svg viewBox="0 0 640 220" role="img" aria-label="六种原子组合出任务、页面、插件、会话、技能、标签">
       {ATOMS.map((atom, i) => (
         <g key={atom}>
           <rect x={20 + i * 102} y="20" width="88" height="44" {...DIAGRAM_BOX} />

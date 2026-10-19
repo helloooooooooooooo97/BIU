@@ -175,14 +175,14 @@ test('buildSidebarSections groups by facet when groupBy=facet', () => {
     ['facet'],
   )
   const tagSection = sections[0]!
-  assert.equal(tagSection.label, '合集')
+  assert.equal(tagSection.label, '标签')
   assert.deepEqual(
     tagSection.groups?.map((g) => g.kind),
     ['facet', 'facet', 'ungrouped'],
   )
   assert.deepEqual(
     tagSection.groups?.map((g) => g.label),
-    ['bug', 'ui', '未合集'],
+    ['bug', 'ui', '无标签'],
   )
 })
 

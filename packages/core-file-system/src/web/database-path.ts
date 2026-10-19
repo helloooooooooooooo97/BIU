@@ -54,7 +54,7 @@ const SYSTEM_COLLECTION_ORDER = [
   TRASH_COLLECTION_PATH,
 ] as const
 
-/** 用户表侧栏顺序。组件和合集是反查索引，不排在这里。 */
+/** 用户表侧栏顺序。组件和标签是反查索引，不排在这里。 */
 const USER_COLLECTION_ORDER = ['/sessions', '/tasks', '/pages', '/plugins'] as const
 
 /** 从当前用户能看到的用户数据反查出来，每人一份，没有分享。 */

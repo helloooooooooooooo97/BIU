@@ -30,7 +30,7 @@ const TYPE_LABEL: Partial<Record<FieldType, string>> = {
   attachment: '附件',
   file: '正文',
   action: '动作',
-  facet: '合集',
+  facet: '标签',
   person: '人物',
   ref: '引用',
   'multi-ref': '多引用',
@@ -183,7 +183,7 @@ export function FacetPackEditor({ facetId }: { facetId: string }) {
     setCatalog(next)
   }
 
-  if (!tag) return <p className="fsdb-muted">这条合集已不在目录里。</p>
+  if (!tag) return <p className="fsdb-muted">这条标签已不在目录里。</p>
   const pack = tag
 
   function addField(name: string, type: AtomicFieldType) {
@@ -349,7 +349,7 @@ export function SchemaFieldEditor({
         onChange={applyTags}
         multiple
         autoOpen={autoOpen}
-        placeholder="添加合集"
+        placeholder="添加标签"
       />
       {compact
         ? null

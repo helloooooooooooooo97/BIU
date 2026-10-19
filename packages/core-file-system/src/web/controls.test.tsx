@@ -43,10 +43,10 @@ test('AppDialog keeps cancel enabled when confirm is disabled', () => {
   let canceled = false
   render(
     <AppDialog
-      title="合集"
+      title="标签"
       confirm="贴上"
       disabled
-      body={<p>还没有合集</p>}
+      body={<p>还没有标签</p>}
       onCancel={() => {
         canceled = true
       }}

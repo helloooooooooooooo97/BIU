@@ -73,7 +73,7 @@ test('empty schema values are tags=[] and values={}', () => {
   assert.equal(isEmptySchemaValue({ tags: [], values: { dp: { complexity: 'O(n)' } } }), false)
 })
 
-test('reserved schema fields include 合集 / facet by key or label', () => {
+test('reserved schema fields include 标签 / facet by key or label', () => {
   assert.equal(isReservedSchemaFieldKey('facet'), true)
   assert.equal(isReservedSchemaFieldKey('title'), true)
   assert.equal(isReservedSchemaFieldKey('tags'), true)
@@ -112,7 +112,7 @@ test('normalizeSchemaPack drops fields that reuse file-system keys or labels', (
     label: '动态规划',
     fields: [
       { key: 'facet', type: 'string', label: '别的名字' },
-      { key: 'extra', type: 'string', label: '合集' },
+      { key: 'extra', type: 'string', label: '标签' },
       { key: 'title', type: 'string', label: '题目' },
       { key: 'complexity', type: 'string', label: '复杂度' },
       { key: 'dup', type: 'string', label: '复杂度' },
@@ -129,7 +129,7 @@ test('withBuiltinFields always includes writable facet and strips tags', () => {
   })
   assert.equal(fields.facet?.type, 'facet')
   assert.equal(fields.facet?.writable, true)
-  assert.equal(fields.facet?.label, '合集')
+  assert.equal(fields.facet?.label, '标签')
   assert.equal(fields.tags, undefined)
   assert.equal(fields.emoji?.writable, true)
   assert.equal(fields.parentId?.writable, true)

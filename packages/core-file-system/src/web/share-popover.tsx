@@ -63,7 +63,7 @@ function shareStatsLine(resources: ShareResourceStats) {
   const parts = [
     resources.pages ? `${resources.pages} 个页面` : '',
     resources.plugins ? `${resources.plugins} 个插件` : '',
-    resources.collections ? `${resources.collections} 个合集` : '',
+    resources.collections ? `${resources.collections} 个标签` : '',
   ].filter(Boolean)
   return parts.length ? `包含：${parts.join(' · ')}` : ''
 }

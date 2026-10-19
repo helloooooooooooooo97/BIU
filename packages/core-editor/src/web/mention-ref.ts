@@ -3,7 +3,7 @@ import type { MentionKind } from './mention-kind.tsx'
 export const MENTION_SCOPES: Array<{ kind: MentionKind; label: string; path: string }> = [
   { kind: 'page', label: '页面', path: '/pages' },
   { kind: 'task', label: '任务', path: '/tasks' },
-  { kind: 'facet', label: '合集', path: '/facets' },
+  { kind: 'facet', label: '标签', path: '/facets' },
   { kind: 'session', label: '会话', path: '/sessions' },
 ]
 

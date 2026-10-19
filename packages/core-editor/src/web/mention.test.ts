@@ -46,7 +46,7 @@ test('fetchMentionItems lists pages tasks facets and sessions', async () => {
     seen.push(url)
     const path = new URL(url, 'http://local.test').searchParams.get('path')
     const id = path === '/pages' ? 'p1' : path === '/tasks' ? 't1' : path === '/facets' ? 'f1' : 's1'
-    const title = path === '/pages' ? '首页' : path === '/tasks' ? '任务甲' : path === '/facets' ? '合集' : '会话'
+    const title = path === '/pages' ? '首页' : path === '/tasks' ? '任务甲' : path === '/facets' ? '标签' : '会话'
     return {
       ok: true,
       json: async () => ({ items: [{ id, title }] }),
@@ -115,7 +115,7 @@ test('mention list shows a kind icon on each hit', () => {
       items: [
         { id: 'page/p1', label: '首页', kind: 'page', kindLabel: '页面' },
         { id: 'task/t1', label: '任务甲', kind: 'task', kindLabel: '任务' },
-        { id: 'facet/f1', label: '合集', kind: 'facet', kindLabel: '合集' },
+        { id: 'facet/f1', label: '标签', kind: 'facet', kindLabel: '标签' },
         { id: 'session/s1', label: '会话', kind: 'session', kindLabel: '会话' },
       ],
       command: () => undefined,

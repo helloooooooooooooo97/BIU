@@ -12,7 +12,7 @@ import {
   HashtagIcon,
   PencilSquareIcon,
   PlusIcon,
-  RectangleStackIcon,
+  TagIcon,
   ArrowDownTrayIcon,
   Square2StackIcon,
   GlobeAltIcon,
@@ -5415,8 +5415,8 @@ export function CollectionBrowser({
                                 }}
                               >
                                 <span className="tasks-sort-item-label">
-                                  <RectangleStackIcon aria-hidden className="size-[14px]" />
-                                  合集
+                                  <TagIcon aria-hidden className="size-[14px]" />
+                                  标签
                                 </span>
                               </button>
                             ) : null}
@@ -5640,7 +5640,7 @@ export function CollectionBrowser({
       ) : null}
       {dlg?.kind === 'bulk-facet' ? (
         <AppDialog
-          title={`合集 · ${dlg.ids.length} 条`}
+          title={`标签 · ${dlg.ids.length} 条`}
           confirm="贴上"
           disabled={!bulkFacetIds.length}
           onCancel={() => setDlg(null)}
@@ -5659,7 +5659,7 @@ export function CollectionBrowser({
                     <CheckRow
                       key={pack.id}
                       label={pack.label || pack.id}
-                      icon={<RectangleStackIcon aria-hidden className="size-[14px]" />}
+                      icon={<TagIcon aria-hidden className="size-[14px]" />}
                       on={on}
                       onToggle={() =>
                         setBulkFacetIds((prev) => (on ? prev.filter((id) => id !== pack.id) : [...prev, pack.id]))
@@ -5669,7 +5669,7 @@ export function CollectionBrowser({
                 })}
               </div>
             ) : (
-              <p>还没有合集。先到合集库里建一个，再回来贴。</p>
+              <p>还没有标签。先到标签库里建一个，再回来贴。</p>
             )
           }
         />

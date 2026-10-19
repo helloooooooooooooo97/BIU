@@ -174,7 +174,7 @@ function isCurrentView(opts: {
   return opts.path === opts.collectionPath && opts.view.id === opts.activeViewId
 }
 
-/** 块类型/合集内置视图很多，只给当前正在看的那一条拉总数。当前表的活动视图由 list 自己写入。 */
+/** 块类型/标签内置视图很多，只给当前正在看的那一条拉总数。当前表的活动视图由 list 自己写入。 */
 export function shouldFetchViewTotal(opts: {
   path: string
   view: Pick<SavedView, 'id'>

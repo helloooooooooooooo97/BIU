@@ -196,7 +196,7 @@ function asSessionFacet(raw: unknown): SessionConfig['facet'] | undefined {
   return { tags, values }
 }
 
-/** 旧会话 tags 并进合集：每个标签名就是贴上的合集 id/显示名。 */
+/** 旧会话 tags 并进标签：每个标签名就是贴上的标签 id/显示名。 */
 function absorbLegacySessionTags(
   facet: SessionConfig['facet'] | undefined,
   tags: unknown,

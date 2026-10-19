@@ -193,7 +193,7 @@ test('seedRecordFromViewFilters takes the first OR branch and writes facet tags'
   assert.equal('status' in seed, false)
 })
 
-test('filter and sort read flattened 合集 pack properties', () => {
+test('filter and sort read flattened 标签 pack properties', () => {
   const field = 'facet::movie::导演'
   const rows = [
     { id: '2', facet: { tags: ['movie'], values: { movie: { 导演: '乙' } } } },

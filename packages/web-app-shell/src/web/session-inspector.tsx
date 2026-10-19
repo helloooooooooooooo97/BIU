@@ -12,7 +12,6 @@ import {
   ChatBubbleLeftRightIcon,
   DocumentIcon,
   PuzzlePieceIcon,
-  RectangleStackIcon,
   RectangleGroupIcon,
   TagIcon,
   BoltIcon,
@@ -49,8 +48,7 @@ import { mergeInspectorBind, type SessionInspectorBind } from '@biu/type-session
 function captionTableIcon(icon?: string) {
   const name = (icon ?? '').trim().toLowerCase()
   if (name === 'puzzle-piece' || name === 'puzzle') return PuzzlePieceIcon
-  if (name === 'tag') return TagIcon
-  if (name === 'rectangle-stack' || name === 'collection') return RectangleStackIcon
+  if (name === 'tag' || name === 'rectangle-stack' || name === 'collection') return TagIcon
   if (name === 'rectangle-group' || name === 'squares-2x2' || name === 'widgets') return RectangleGroupIcon
   if (name === 'check-circle' || name === 'check' || name === 'clipboard-document-list' || name === 'clipboard') return CheckCircleIcon
   if (name === 'chat-bubble' || name === 'chat-bubble-left-right') return ChatBubbleLeftRightIcon

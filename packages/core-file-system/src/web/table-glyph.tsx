@@ -9,7 +9,6 @@ import {
   LinkIcon,
   TagIcon,
   PuzzlePieceIcon,
-  RectangleStackIcon,
   RectangleGroupIcon,
   TableCellsIcon,
   TrashIcon,
@@ -38,8 +37,7 @@ export function TableGlyph({ icon, className = 'size-4' }: { icon?: string; clas
   if (name === 'link' || name === 'mcp') return <LinkIcon aria-hidden className={className} />
   if (name === 'bell') return <BellIcon aria-hidden className={className} />
   if (name === 'eye') return <EyeIcon aria-hidden className={className} />
-  if (name === 'tag') return <TagIcon aria-hidden className={className} />
-  if (name === 'rectangle-stack' || name === 'collection') return <RectangleStackIcon aria-hidden className={className} />
+  if (name === 'tag' || name === 'rectangle-stack' || name === 'collection') return <TagIcon aria-hidden className={className} />
   if (name === 'rectangle-group' || name === 'squares-2x2' || name === 'widgets') return <RectangleGroupIcon aria-hidden className={className} />
   return <TableCellsIcon aria-hidden className={className} />
 }
