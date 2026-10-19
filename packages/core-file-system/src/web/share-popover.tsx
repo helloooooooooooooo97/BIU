@@ -650,7 +650,7 @@ export function ShareScopeDetail({
         if (cancelled) return
         const record = recordPage.items[0] ?? { id: recordId }
         const saved = collectionDataViews(collection, viewPage.items)
-        const stored = label === '空间' ? 'workspace' as const : 'personal' as const
+        const stored = 'personal' as const
         const listed = sharesPage.shares ?? []
         const recordShare = listed.some((share) => (
           share.kind === 'record' && share.collection === collection && share.recordId === recordId
@@ -671,7 +671,7 @@ export function ShareScopeDetail({
             id: 'stored',
             title: '这条内容自己的归属',
             detail: '只有创建者，数据留在本机',
-            result: stored === 'workspace' ? '空间' : '私人',
+            result: '私人',
           },
           ...(recordShare ? [{
             id: 'record-link',
@@ -690,7 +690,7 @@ export function ShareScopeDetail({
       })().catch((err) => {
         if (cancelled) return
         const shared = label === '共享'
-        setScope(shared ? 'shared' : label === '空间' ? 'workspace' : 'personal')
+        setScope(shared ? 'shared' : 'personal')
         setChain([{
           id: 'stored',
           title: '这条内容自己的归属',
