@@ -89,7 +89,13 @@ import { workspaceColumnsForLocation } from './workspace-columns.ts'
 import { PageBanner } from './page-banner.tsx'
 import { UiGlyph, ViewModeGlyph, idleTableIconKind } from './nav-glyphs.tsx'
 import { DATA_MODULE, isIndexCollection, isSystemCollection } from './database-path.ts'
-import { countFittingViewTabs, splitVisibleViews } from './view-tabs.ts'
+import {
+  availableViewTabSpace,
+  countFittingViewTabs,
+  leftClusterSiblingWidth,
+  splitVisibleViews,
+  viewTabsOverlapRight,
+} from './view-tabs.ts'
 import { getDatabaseUi } from './database-ui.ts'
 import {
   activeViewStorageKey,
@@ -1424,10 +1430,26 @@ function ViewTabFit({
     const toolbar = toolbarRef.current
     const right = toolbarRightRef.current
     const row = viewMeasureRef.current
-    if (!toolbar || !right || !row) return
+    const host = row?.parentElement
+    if (!toolbar || !right || !row || !host) return
     const tabs = Array.from(row.querySelectorAll('[data-view-measure]')) as HTMLElement[]
-    const available = Math.max(0, toolbar.clientWidth - right.offsetWidth - 12)
-    const next = countFittingViewTabs(tabs.map((el) => el.offsetWidth), available, 2)
+    const left = toolbar.querySelector('.tasks-toolbar-left')
+    const siblings = left ? leftClusterSiblingWidth(left, host) : 0
+    const rightBox = right.getBoundingClientRect()
+    const available = availableViewTabSpace(host.getBoundingClientRect().left, rightBox.left, siblings)
+    let next = countFittingViewTabs(tabs.map((el) => el.offsetWidth), available, 2)
+    if (left && viewTabsOverlapRight(left.getBoundingClientRect(), rightBox)) {
+      next = Math.min(next, 1)
+    }
+    if (next > 1) {
+      const visible = host.querySelectorAll('[data-testid="fsdb-view-tab"]')
+      for (const tab of visible) {
+        if (viewTabsOverlapRight(tab.getBoundingClientRect(), rightBox)) {
+          next = 1
+          break
+        }
+      }
+    }
     setViewTabFit((prev) => (prev === next ? prev : next))
   }
   useLayoutEffect(() => {
@@ -1435,12 +1457,16 @@ function ViewTabFit({
   }, [searchExpanded, toolbarRef, toolbarRightRef, views])
   useEffect(() => {
     const ro = new ResizeObserver(measure)
+    const host = viewMeasureRef.current?.parentElement
+    if (host) ro.observe(host)
     if (toolbarRef.current) ro.observe(toolbarRef.current)
     if (toolbarRightRef.current) ro.observe(toolbarRightRef.current)
     window.addEventListener('resize', measure)
+    window.visualViewport?.addEventListener('resize', measure)
     return () => {
       ro.disconnect()
       window.removeEventListener('resize', measure)
+      window.visualViewport?.removeEventListener('resize', measure)
     }
   }, [searchExpanded, toolbarRef, toolbarRightRef, views])
   return (
@@ -4538,7 +4564,7 @@ export function CollectionBrowser({
             <div className="tasks-viewdd-wrap" ref={viewRef}>
               <ViewTabFit views={views} toolbarRef={toolbarRef} toolbarRightRef={toolbarRightRef} searchExpanded={searchExpanded}>
                 {(viewTabFit) => (
-              <div className="tasks-viewtabs">
+              <div className={`tasks-viewtabs${views.length && viewTabFit < views.length ? ' is-collapsed' : ''}`}>
                 {(views.length ? splitVisibleViews(views, viewTabFit, activeViewId ?? undefined).shown : []).map((view) => (
                   <button
                     key={view.id}
@@ -5300,6 +5326,7 @@ export function CollectionBrowser({
             {!customView && !rowView ? (
               <div className="tasks-table-wrap" ref={tableWrapRef}>
                 {pickedIds.length ? (
+                  <div className="fsdb-bulk-slot">
                   <div className="fsdb-bulk" data-testid="fsdb-bulk-bar">
                     <span
                       className="fsdb-bulk-count"
@@ -5381,6 +5408,7 @@ export function CollectionBrowser({
                         </HeadlessDismiss>
                       ) : null}
                     </div>
+                  </div>
                   </div>
                 ) : null}
                 <WindowedTable
