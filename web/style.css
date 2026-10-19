@@ -3783,10 +3783,28 @@ html.dark .tool-call-status.is-fail {
 .app-shell-agent > main {
   grid-column: 2;
   min-width: 0;
+  position: relative;
+  z-index: 0;
 }
 
 .app-shell-agent > .session-inspector {
   grid-column: 3;
+}
+
+.session-inspector:has(.fsdb-query-menu),
+.session-inspector:has(.tasks-sort-menu),
+.session-inspector:has(.tasks-filter-menu) {
+  z-index: 20;
+  overflow: visible;
+}
+
+.session-inspector:has(.fsdb-query-menu) .inspector-stage,
+.session-inspector:has(.fsdb-query-menu) .inspector-stage-pane.is-active,
+.session-inspector:has(.tasks-sort-menu) .inspector-stage,
+.session-inspector:has(.tasks-sort-menu) .inspector-stage-pane.is-active,
+.session-inspector:has(.tasks-filter-menu) .inspector-stage,
+.session-inspector:has(.tasks-filter-menu) .inspector-stage-pane.is-active {
+  overflow: visible;
 }
 
 /* 侧栏独立合成层：右侧 Markdown 重绘时少拖累左侧 :hover */
