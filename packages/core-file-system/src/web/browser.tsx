@@ -104,6 +104,7 @@ import {
   getStarredViewsVersion,
   isViewStarred,
   loadViews,
+  noteLocalSavedViewsWrite,
   pullSavedViews,
   applyListedCrumbMutation,
   rememberRecords,
@@ -3073,6 +3074,7 @@ export function CollectionBrowser({
     const listed = listedViews(path, next).map((view) => withViewDisplay(path, view))
     const stored = listed.filter((view) => !view.builtin)
     rememberViews(path, listed)
+    noteLocalSavedViewsWrite(path)
     pushSavedViews(path, stored)
     if (!nested) {
       localStorage.setItem(viewsKey(path), JSON.stringify(stored))

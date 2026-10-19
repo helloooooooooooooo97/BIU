@@ -9,8 +9,10 @@ import {
   fetchSavedView,
   loadViews,
   loadRecords,
+  noteLocalSavedViewsWrite,
   persistViewDisplay,
   pickViewForRoute,
+  pullSavedViews,
   rememberViews,
   rememberRecords,
   applyListedCrumbMutation,
@@ -208,6 +210,68 @@ test('saved views pull shares one in-flight list and a short ttl', () => {
   assert.doesNotMatch(src, /columns: \[\.\.\.VIEWS_PULL/)
   assert.match(src, /if \(pending\) return pending/)
   assert.match(src, /opts\?: \{ idle\?: boolean \}/)
+  assert.match(src, /export function noteLocalSavedViewsWrite/)
+  const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
+  assert.match(browser, /noteLocalSavedViewsWrite\(path\)/)
+  assert.match(browser, /function applyDeleteView/)
+})
+
+test('local view delete is not restored by a stale /views pull', async () => {
+  const path = '/pages-delete-view-stay'
+  const mem: Record<string, string> = {}
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => mem[key] ?? null,
+      setItem: (key: string, value: string) => {
+        mem[key] = value
+      },
+      removeItem: (key: string) => {
+        delete mem[key]
+      },
+    },
+  })
+  rememberViews(path, [
+    { id: 'keep', name: '留下', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: [] },
+    { id: 'gone', name: '删掉', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: [] },
+  ])
+  const prev = globalThis.fetch
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = String(input)
+    if (url.includes('/api/db/list')) {
+      await new Promise((resolve) => setTimeout(resolve, 40))
+      return new Response(
+        JSON.stringify({
+          items: [
+            { viewId: 'keep', title: '留下', tablePath: path },
+            { viewId: 'gone', title: '删掉', tablePath: path },
+          ],
+          total: 2,
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )
+    }
+    return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } })
+  }) as typeof fetch
+  try {
+    const pulling = pullSavedViews([path])
+    rememberViews(path, [
+      { id: 'keep', name: '留下', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: [] },
+    ])
+    noteLocalSavedViewsWrite(path)
+    await pulling
+    assert.deepEqual(
+      loadViews(path).map((view) => view.id),
+      ['keep'],
+    )
+    await pullSavedViews([path])
+    assert.deepEqual(
+      loadViews(path).map((view) => view.id),
+      ['keep'],
+    )
+  } finally {
+    globalThis.fetch = prev
+  }
 })
 
 test('route saved views need a fetch until they are remembered', () => {
