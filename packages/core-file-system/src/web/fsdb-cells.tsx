@@ -111,7 +111,8 @@ export function fieldGlyphKind(kind: FieldType) {
   if (kind === 'number') return 'num'
   if (kind === 'action') return 'play'
   if (kind === 'select' || kind === 'multi-select' || kind === 'facet') return 'stack'
-  if (kind === 'url' || kind === 'ref' || kind === 'multi-ref') return 'link'
+  if (kind === 'url') return 'link'
+  if (kind === 'ref' || kind === 'multi-ref') return 'ref'
   if (kind === 'image' || kind === 'attachment' || kind === 'file') return 'file'
   return 'text'
 }

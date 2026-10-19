@@ -1117,6 +1117,15 @@ test('boolean field glyph is a checkbox, not the document list icon', () => {
   assert.doesNotMatch(cells, /kind === 'boolean'\) return <ClipboardDocumentListIcon/)
 })
 
+test('parent and depends field glyphs use the share nodes, not the skinny link chain', () => {
+  const cells = readFileSync(resolve(import.meta.dirname, './fsdb-cells.tsx'), 'utf8')
+  assert.match(cells, /kind === 'url'\) return 'link'/)
+  assert.match(cells, /kind === 'ref' \|\| kind === 'multi-ref'\) return 'ref'/)
+  assert.doesNotMatch(cells, /kind === 'url' \|\| kind === 'ref' \|\| kind === 'multi-ref'\) return 'link'/)
+  assert.match(style, /fsdb-field-glyph\[data-kind="ref"\]/)
+  assert.match(style, /--fsdb-field:var\(--fsdb-ui-share\)/)
+})
+
 test('facet field glyph matches the collection stack icon', () => {
   const glyphs = readFileSync(resolve(import.meta.dirname, './table-glyph.tsx'), 'utf8')
   const cells = readFileSync(resolve(import.meta.dirname, './fsdb-cells.tsx'), 'utf8')
