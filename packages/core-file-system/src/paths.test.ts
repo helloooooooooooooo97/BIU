@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { databaseRevealForTool, databaseRevealFromPath, normalizeCollectionPath, savedViewRecordPath } from './paths.ts'
+import { databaseRevealForTool, databaseRevealFromPath, normalizeCollectionPath, savedViewRecordPath, splitResourcePath } from './paths.ts'
 
 test('normalizeCollectionPath strips trailing slash and adds a leading one', () => {
   assert.equal(normalizeCollectionPath('/plugins/'), '/plugins')
@@ -13,6 +13,15 @@ test('databaseRevealFromPath ignores root and splits table vs record', () => {
   assert.deepEqual(databaseRevealFromPath('/tasks'), { collection: '/tasks' })
   assert.deepEqual(databaseRevealFromPath('/tasks/abc'), { collection: '/tasks', recordId: 'abc' })
   assert.deepEqual(databaseRevealFromPath('pages/p1'), { collection: '/pages', recordId: 'p1' })
+})
+
+test('page-block ids keep the leading slash after /page-blocks/', () => {
+  const id = '/pages::p001::ab12cd34'
+  const path = `/page-blocks/${id}`
+  assert.equal(path, '/page-blocks//pages::p001::ab12cd34')
+  assert.deepEqual(splitResourcePath(path), { collection: '/page-blocks', recordId: id })
+  assert.deepEqual(databaseRevealFromPath(path), { collection: '/page-blocks', recordId: id })
+  assert.deepEqual(splitResourcePath('/views/pages::mine'), { collection: '/views', recordId: 'pages::mine' })
 })
 
 test('databaseRevealForTool follows result path and drops deleted records', () => {

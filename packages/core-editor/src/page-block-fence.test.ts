@@ -105,6 +105,11 @@ test('pageBlock record id is collection::page::block', () => {
     pageId: 'p001',
     blockId: 'ab12cd34',
   })
+  assert.deepEqual(parsePageBlockRecordId('pages::p001::ab12cd34'), {
+    collection: '/pages',
+    pageId: 'p001',
+    blockId: 'ab12cd34',
+  })
   assert.equal(parsePageBlockRecordId('p001'), null)
 })
 

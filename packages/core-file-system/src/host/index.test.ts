@@ -571,6 +571,23 @@ test('writeContent string fields keep JSON objects instead of [object Object]', 
   assert.equal(updated.value.data, '{"html":"<b>via update</b>"}')
 })
 
+test('page-block records whose id starts with / still read from /page-blocks/', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  const id = '/pages::p001::ab12cd34'
+  const row = { id, title: '刊头', collection: '/pages', pageId: 'p001', blockId: 'ab12cd34' }
+  db.register({
+    id: 'page-blocks',
+    path: '/page-blocks',
+    schema: { fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string' } } },
+    list: () => [row],
+    get: (next) => (next === id ? row : undefined),
+  })
+  const got = await db.read(`/page-blocks/${id}`)
+  assert.equal(got.kind, 'record')
+  assert.equal((got as { value?: { id?: string } }).value?.id, id)
+})
+
 test('editContent view/str_replace/replace_lines/insert/write', async () => {
   const ctx = new Context()
   const db = new DatabaseService(ctx)

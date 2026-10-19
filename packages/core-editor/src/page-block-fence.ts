@@ -47,7 +47,11 @@ export function parsePageBlockRecordId(id: string) {
   if (parts.length === 3) {
     const [collection, pageId, blockId] = parts.map((part) => part.trim())
     if (!collection || !pageId || !blockId) return null
-    return { collection, pageId, blockId }
+    return {
+      collection: collection.startsWith('/') ? collection : `/${collection}`,
+      pageId,
+      blockId,
+    }
   }
   if (parts.length === 2) {
     const [pageId, blockId] = parts.map((part) => part.trim())
