@@ -3791,10 +3791,13 @@ html.dark .tool-call-status.is-fail {
   grid-column: 3;
 }
 
+.app-shell-agent > main:has(.fsdb-query-menu),
+.app-shell-agent > main:has(.tasks-sort-menu),
+.app-shell-agent > main:has(.tasks-filter-menu),
 .session-inspector:has(.fsdb-query-menu),
 .session-inspector:has(.tasks-sort-menu),
 .session-inspector:has(.tasks-filter-menu) {
-  z-index: 20;
+  z-index: 120;
   overflow: visible;
 }
 
