@@ -102,12 +102,14 @@ test('inspector header tabs sit on the same vertical center as the main header',
   assert.match(css, /\.app-stage-pane\.is-active[\s\S]*?opacity:\s*1/)
 })
 
-test('inspector add menu close button uses the icon gray', () => {
-  // 亮色和夜间都要是图标灰：夜间行文本是 #f0efed，靠 inherit 会变白
-  assert.match(css, /^\.inspector-add-close,\s*\n\.inspector-add-close svg,[\s\S]*?color:\s*#bab9b5/m)
-  assert.match(css, /html\.dark \.inspector-add-close,\s*\nhtml\.dark \.inspector-add-close svg,[\s\S]*?color:\s*#bab9b5/)
-  assert.doesNotMatch(css, /html\.dark[^{]*inspector-add-close[^{]*\{[^}]*f0efed/)
-  // 不能再被 #91918e 那组覆盖规则吃掉
-  const muted = css.slice(css.indexOf('.inspector-add-row-main svg,'), css.indexOf('color: #91918e;'))
-  assert.doesNotMatch(muted, /inspector-add-close/)
+test('opened rows in the inspector add menu use the icon gray for every glyph', () => {
+  // 上方已打开的项目行：左侧图标 + 右侧关闭叉号，两种主题都要是 #bab9b5
+  assert.match(css, /^\.inspector-add-row > svg,\s*\n\.inspector-add-row \.size-4,[\s\S]*?color:\s*#bab9b5/m, )
+  const block = css.slice(css.indexOf('.inspector-add-row > svg,'))
+  const rule = block.slice(0, block.indexOf('}'))
+  for (const selector of ['.inspector-add-close', '.inspector-add-close svg', '.inspector-add-row-main > svg']) {
+    assert.equal(rule.includes(selector), true, selector)
+  }
+  // 行本身仍然可以继承文本色（那是给文字的），但图标有独立规则覆盖
+  assert.match(css, /^\.inspector-add-row \{[^}]*color: var\(--dsw-label\)/m)
 })
