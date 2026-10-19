@@ -13,6 +13,7 @@ import {
   persistViewDisplay,
   pickViewForRoute,
   pullSavedViews,
+  pushSavedViews,
   rememberViews,
   rememberRecords,
   applyListedCrumbMutation,
@@ -213,7 +214,34 @@ test('saved views pull shares one in-flight list and a short ttl', () => {
   assert.match(src, /export function noteLocalSavedViewsWrite/)
   const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
   assert.match(browser, /noteLocalSavedViewsWrite\(path\)/)
+  assert.match(browser, /return pushSavedViews\(path, stored\)/)
   assert.match(browser, /function applyDeleteView/)
+  assert.doesNotMatch(src, /saved-views[\s\S]{0,240}\.catch\(\(\) => undefined\)/)
+})
+
+test('pushSavedViews waits for the saved-views POST to finish', async () => {
+  let released = false
+  const prev = globalThis.fetch
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    assert.equal(String(input), '/api/db/saved-views')
+    assert.equal(init?.method, 'POST')
+    await new Promise((resolve) => setTimeout(resolve, 30))
+    released = true
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })
+  }) as typeof fetch
+  try {
+    const done = pushSavedViews('/pages', [
+      { id: 'keep', name: '留下', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: [] },
+    ])
+    assert.equal(released, false)
+    await done
+    assert.equal(released, true)
+  } finally {
+    globalThis.fetch = prev
+  }
 })
 
 test('local view delete is not restored by a stale /views pull', async () => {

@@ -284,12 +284,13 @@ export function persistStarredViews(items: StarredView[]) {
   for (const fn of starredListeners) fn()
 }
 
-export function pushSavedViews(collectionPath: string, views: SavedView[]) {
-  return fetch('/api/db/saved-views', {
+export async function pushSavedViews(collectionPath: string, views: SavedView[]) {
+  const res = await fetch('/api/db/saved-views', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ path: collectionPath, views }),
-  }).catch(() => undefined)
+  })
+  if (!res.ok) throw new Error(`saved-views ${res.status}`)
 }
 
 function parseMaybeJson(value: unknown): unknown {

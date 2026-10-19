@@ -3070,12 +3070,11 @@ export function CollectionBrowser({
   }, [dlg])
 
   function persistViewsFor(path: string, next: SavedView[]) {
-    if (sheet) return
+    if (sheet) return Promise.resolve()
     const listed = listedViews(path, next).map((view) => withViewDisplay(path, view))
     const stored = listed.filter((view) => !view.builtin)
     rememberViews(path, listed)
     noteLocalSavedViewsWrite(path)
-    pushSavedViews(path, stored)
     if (!nested) {
       localStorage.setItem(viewsKey(path), JSON.stringify(stored))
     }
@@ -3083,8 +3082,10 @@ export function CollectionBrowser({
       viewsRef.current = listed
       setViews(listed)
     }
-    window.dispatchEvent(new Event('fsdb:change'))
     window.dispatchEvent(new Event('fsdb:crumb-labels'))
+    return pushSavedViews(path, stored).finally(() => {
+      window.dispatchEvent(new CustomEvent('fsdb:change', { detail: { views: true } }))
+    })
   }
 
   function persistViews(next: SavedView[]) {
