@@ -166,6 +166,11 @@ test('list share column uses the same capsule and loads the chain on click', () 
   assert.doesNotMatch(browser, /groupBy === 'shareScope' \? <ShareScopeLabel/)
   assert.match(css, /\.fsdb-scope-tag\{[^}]*border-radius:999px/)
   assert.match(css, /\.fsdb-scope-tag\{[^}]*height:22px/)
+  assert.match(
+    css,
+    /\.fsdb-scope-tag\.is-workspace,\.fsdb-scope-pill\.is-workspace,\.fsdb-scope-tag\.is-personal,\.fsdb-scope-pill\.is-personal\{background:var\(--dsw-hover\);color:var\(--dsw-label-2\)\}/,
+  )
+  assert.doesNotMatch(css, /\.fsdb-scope-tag\.is-workspace\{[^}]*--dsw-business/)
   assert.match(browser, /fallback=\{<ShareScopeLabel label=\{props\.label\} \/>\}/)
   assert.match(browser, /if \(key === 'shareScope' \|\| key === 'shareRole'\) \{\s*return renderCell\(row, key, field, 'table'\)/)
 })

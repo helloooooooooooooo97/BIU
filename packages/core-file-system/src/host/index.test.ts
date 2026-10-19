@@ -2641,6 +2641,7 @@ test('list match overlay is only loaded for overlay fields or tree filters', () 
   assert.equal(listNeedsMatchOverlay(undefined, '', 'emoji'), true)
   assert.equal(listNeedsMatchOverlay(undefined, '', 'title', [{ field: 'createdBy', dir: 'asc' }]), true)
   assert.equal(listNeedsMatchOverlay({ $tree: { root: 'n1' } }, '', 'title'), true)
+  assert.equal(listNeedsMatchOverlay(undefined, '', 'title', [{ field: 'facet::movie::导演', dir: 'asc' }]), true)
 })
 
 test('list with columns skips shareRole decorate', async () => {
