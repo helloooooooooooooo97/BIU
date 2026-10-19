@@ -2054,7 +2054,7 @@ export function CollectionBrowser({
   }, [])
   const totalRef = useRef(total)
   totalRef.current = total
-  const listIdentityKey = `${dataPath}\0${pageSize}\0${fetchQuery}\0${sortField}\0${sortDir}\0${sortsStateKey(sorts)}\0${JSON.stringify(queryFilters)}\0${activeViewId ?? ''}\0${customView ? 'full' : 'proj'}\0${groupBy}\0${wrapCells ? 1 : 0}`
+  const listIdentityKey = `${dataPath}\0${pageSize}\0${fetchQuery}\0${sortField}\0${sortDir}\0${sortsStateKey(sorts)}\0${JSON.stringify(queryFilters)}\0${activeViewId ?? ''}\0${customView ? 'full' : 'proj'}\0${groupBy}`
   const reloadKey = `${listIdentityKey}\0${groupBy ? JSON.stringify(groupPages) : page}\0${groupFillKeys.join('\0')}`
   if (releaseHoldOnPaintRef.current && paintedPath === dataPath && tableHoldRef.current?.nodes !== EMPTY_HOLD_NODES) {
     releaseHoldOnPaintRef.current = false
@@ -2218,7 +2218,7 @@ export function CollectionBrowser({
       if (reqViewId) rememberPreviewTotalForView(collectionPath, reqViewId, listed.total)
       setError('')
       loadedIdentityRef.current = pendingView
-        ? `${dataPath}\0${pendingView.pageSize}\0${pendingView.fetchQuery}\0${pendingView.sortField}\0${pendingView.sortDir}\0${sortsStateKey(pendingView.sorts)}\0${JSON.stringify(pendingView.queryFilters)}\0${pendingView.activeViewId}\0${customView ? 'full' : 'proj'}\0${pendingView.groupBy}\0${pendingView.wrapCells ? 1 : 0}`
+        ? `${dataPath}\0${pendingView.pageSize}\0${pendingView.fetchQuery}\0${pendingView.sortField}\0${pendingView.sortDir}\0${sortsStateKey(pendingView.sorts)}\0${JSON.stringify(pendingView.queryFilters)}\0${pendingView.activeViewId}\0${customView ? 'full' : 'proj'}\0${pendingView.groupBy}`
         : listIdentityKey
       loadedPagesRef.current = { ...groupPagesRef.current }
       if (!listReadySent.current) listReadySent.current = true
@@ -4996,7 +4996,7 @@ export function CollectionBrowser({
                     on={truncateCells}
                     onToggle={() => setTruncate(!truncateCells)}
                   />
-                  {treeable ? (
+                  {parentKey ? (
                     <CheckRow
                       icon={<ChevronRightIcon aria-hidden className="size-[14px]" />}
                       label="树形展示"
