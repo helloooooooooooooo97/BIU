@@ -455,7 +455,7 @@ export class SessionViewService extends Service {
           })
           throw error
         }
-      } else if (!(this.value.events.length || this.value.nodes.length)) {
+      } else if (!this.value.nodes.length) {
         await this.ensureSessionThread()
       } else if (this.value.view !== route.view) {
         this.replace({
@@ -500,7 +500,7 @@ export class SessionViewService extends Service {
     if (!this.value.sessions.length) await this.refreshSessions()
     const latest = mostRecentSessionId(this.value.sessions.filter((item) => item.id !== skipId))
     if (!latest) return
-    if (this.value.sessionId === latest) return
+    if (this.value.sessionId === latest && this.value.nodes.length) return
     await this.load(latest, { view: 'chat' })
   }
 
@@ -510,7 +510,7 @@ export class SessionViewService extends Service {
       await this.loadMostRecentSession()
       return
     }
-    if (this.value.events.length || this.value.nodes.length) return
+    if (this.value.nodes.length) return
     await this.load(this.value.sessionId, { view: this.value.view || 'chat' })
   }
 
@@ -871,12 +871,13 @@ export class SessionViewService extends Service {
     if (switching) this.stashCurrent()
 
     const cached = this.cache.get(sessionId)
+    const cacheReady = Boolean(cached && cached.nodes.length)
     const needSwap = this.value.sessionId !== sessionId
     const listedProject = this.value.sessions.find((item) => item.id === sessionId)?.project
 
     // 路由切换（含空会话 / 冷启动）：立刻换壳，网络只后台校对，绝不 await
     if (!wait) {
-      if (cached) {
+      if (cacheReady && cached) {
         this.touchCache(sessionId)
         this.loadGen += 1
         if (needSwap) this.trajGen += 1
@@ -936,7 +937,7 @@ export class SessionViewService extends Service {
     this.loadGen += 1
     if (needSwap) this.trajGen += 1
     if (needSwap) {
-      if (cached) {
+      if (cacheReady && cached) {
         this.touchCache(sessionId)
         this.applyCached(sessionId, cached, view)
       } else if (this.value.sessionId && (this.value.nodes.length > 0 || this.value.events.length > 0)) {
@@ -1019,6 +1020,7 @@ export class SessionViewService extends Service {
       // 切会话 hold 期间即使 tail「碰巧相同」也必须落地，否则会一直停在上一段画面
       if (
         !this.value.switchingSession &&
+        this.value.nodes.length > 0 &&
         sameTail &&
         body.project?.path === this.value.project?.path &&
         this.value.totalTurns === totalTurns
@@ -1088,6 +1090,7 @@ export class SessionViewService extends Service {
   private stashCurrent() {
     const id = this.value.sessionId
     if (!id) return
+    if (!this.value.nodes.length) return
     this.putCache(id, {
       events: this.value.events,
       nodes: this.value.nodes,
