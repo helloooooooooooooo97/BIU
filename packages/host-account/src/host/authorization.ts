@@ -370,7 +370,7 @@ export class AuthorizationService {
     const parentCollection = parentRecordId ? (input.parentCollection?.trim() || resource.collection) : ''
     const accessMode = input.accessMode ?? (parentRecordId ? 'inherit' : 'private')
     const ownership = input.ownership ?? 'personal'
-    this.db
+    const inserted = this.db
       .prepare(
         `INSERT INTO resource_policies
           (workspace_id, collection, record_id, ownership, owner_account_id, access_mode,
@@ -392,7 +392,7 @@ export class AuthorizationService {
         now,
       )
     this.grant(actor.accountId, resource, 'account', actor.accountId, 'owner', now)
-    this.dropScans(resource.workspaceId, resource.collection)
+    if (Number(inserted.changes) > 0) this.dropScans(resource.workspaceId, resource.collection)
   }
 
   grant(
@@ -409,13 +409,14 @@ export class AuthorizationService {
     if (policy && policy.owner_account_id !== actorId && !decision.allowed) {
       throw new Error('permission denied: INSUFFICIENT_PERMISSION')
     }
-    this.db
+    const written = this.db
       .prepare(
         `INSERT INTO record_grants
           (workspace_id, collection, record_id, subject_type, subject_id, role, granted_by, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(workspace_id, collection, record_id, subject_type, subject_id)
-         DO UPDATE SET role = excluded.role, granted_by = excluded.granted_by, created_at = excluded.created_at`,
+         DO UPDATE SET role = excluded.role, granted_by = excluded.granted_by, created_at = excluded.created_at
+         WHERE record_grants.role != excluded.role OR record_grants.granted_by != excluded.granted_by`,
       )
       .run(
         resource.workspaceId,
@@ -427,7 +428,7 @@ export class AuthorizationService {
         actorId,
         now,
       )
-    this.dropScans(resource.workspaceId, resource.collection)
+    if (Number(written.changes) > 0) this.dropScans(resource.workspaceId, resource.collection)
   }
 
   move(

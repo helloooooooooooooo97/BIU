@@ -252,8 +252,13 @@ test('grant notifies invalidators so list caches can drop', () => {
   auth.attach(actor(ada.id), page('private'), { ownership: 'personal', accessMode: 'private' })
   assert.ok(n >= 1)
   const afterAttach = n
+  auth.attach(actor(ada.id), page('private'), { ownership: 'personal', accessMode: 'private' })
+  assert.equal(n, afterAttach)
   auth.grant(ada.id, page('private'), 'account', bob.id, 'viewer')
   assert.ok(n > afterAttach)
+  const afterGrant = n
+  auth.grant(ada.id, page('private'), 'account', bob.id, 'viewer')
+  assert.equal(n, afterGrant)
   stop()
 })
 
