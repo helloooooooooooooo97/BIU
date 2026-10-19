@@ -1,6 +1,6 @@
 import { builtinAllViewId, stubBuiltinAllView, stubBuiltinBlockKindView, stubBuiltinCatalogView, stubBuiltinTagView, stubBuiltinScopeView, stubBuiltinMemberView, isReadOnlyViewId, isBuiltinAllViewForCollection, isBuiltinAllViewId } from '../catalog-views.ts'
 import { isIndexCollection } from './database-path.ts'
-import { listCollection, readJson } from './db-client.ts'
+import { invalidateListReads, listCollection, readJson } from './db-client.ts'
 import { savedViewRecordPath } from '../paths.ts'
 import { looksLikeFilterTree, normalizeFilterGroup, parseSortsInput } from '../query-logic.ts'
 import { normalizePageSize, normalizeSavedView, parseViewColumns, type SavedView } from './saved-view.ts'
@@ -353,6 +353,7 @@ export function savedViewFromRecord(row: { viewId?: unknown; title?: unknown; mo
 
 const viewsPullByKey = new Map<string, Promise<boolean>>()
 const viewsPulledAtByKey = new Map<string, number>()
+const viewsWriteEpoch = new Map<string, number>()
 let viewsIdle = 0
 let viewsIdleResolve: ((changed: boolean) => void) | null = null
 let viewsIdlePaths: readonly string[] = []
@@ -363,6 +364,40 @@ const VIEWS_PULL_LIMIT = 80
 
 function viewsPullKey(collectionPaths: readonly string[]) {
   return collectionPaths.map((path) => String(path ?? '').trim()).filter(Boolean).sort().join('\0') || '*'
+}
+
+function viewsPullTouches(key: string, path: string) {
+  if (key === '*') return true
+  return key.split('\0').includes(path)
+}
+
+function snapshotViewWriteEpochs(paths: readonly string[]) {
+  const out = new Map<string, number>()
+  if (!paths.length) {
+    for (const [path, epoch] of viewsWriteEpoch) out.set(path, epoch)
+    return out
+  }
+  for (const path of paths) out.set(path, viewsWriteEpoch.get(path) ?? 0)
+  return out
+}
+
+function viewWriteStale(path: string, started: Map<string, number>) {
+  return (viewsWriteEpoch.get(path) ?? 0) !== (started.get(path) ?? 0)
+}
+
+/** 本地刚写过视图（含删除）时，丢掉进行中的 /views 拉取，避免旧快照把删掉的视图写回来。 */
+export function noteLocalSavedViewsWrite(collectionPath: string) {
+  const path = String(collectionPath ?? '').trim()
+  if (!path) return
+  viewsWriteEpoch.set(path, (viewsWriteEpoch.get(path) ?? 0) + 1)
+  for (const key of [...viewsPullByKey.keys()]) {
+    if (viewsPullTouches(key, path)) viewsPullByKey.delete(key)
+  }
+  for (const key of [...viewsPulledAtByKey.keys()]) {
+    if (viewsPullTouches(key, path)) viewsPulledAtByKey.delete(key)
+  }
+  viewsPulledAtByKey.set(viewsPullKey([path]), Date.now())
+  invalidateListReads()
 }
 
 export async function pullSavedViews(
@@ -409,8 +444,15 @@ export async function pullSavedViews(
     idleDone?.(false)
     return false
   }
-  const request = pullSavedViewsNow(collectionPaths).finally(() => {
+  const started = snapshotViewWriteEpochs(
+    collectionPaths.map((path) => String(path ?? '').trim()).filter(Boolean),
+  )
+  const request = pullSavedViewsNow(collectionPaths, started).finally(() => {
     if (viewsPullByKey.get(key) === request) viewsPullByKey.delete(key)
+    const paths = [...started.keys()]
+    if (paths.length ? paths.some((path) => viewWriteStale(path, started)) : [...viewsWriteEpoch.keys()].some((path) => viewWriteStale(path, started))) {
+      return
+    }
     viewsPulledAtByKey.set(key, Date.now())
   })
   viewsPullByKey.set(key, request)
@@ -418,7 +460,12 @@ export async function pullSavedViews(
   return request
 }
 
-async function pullSavedViewsNow(collectionPaths: readonly string[] = []) {
+async function pullSavedViewsNow(
+  collectionPaths: readonly string[] = [],
+  started = snapshotViewWriteEpochs(
+    collectionPaths.map((path) => String(path ?? '').trim()).filter(Boolean),
+  ),
+) {
   try {
     const fetchPaths = [...new Set(collectionPaths.map((path) => String(path ?? '').trim()).filter(Boolean))]
     const pages = fetchPaths.length
@@ -451,6 +498,7 @@ async function pullSavedViewsNow(collectionPaths: readonly string[] = []) {
     const paths = new Set([...fetchPaths, ...byPath.keys()])
     let changed = false
     for (const path of paths) {
+      if (viewWriteStale(path, started)) continue
       const views = byPath.get(path) ?? []
       const prev = JSON.stringify(memoryViews.get(path) ?? [])
       const next = JSON.stringify(views)
@@ -474,6 +522,7 @@ export function upsertSavedView(collectionPath: string, view: SavedView) {
   const stored = loadViews(collectionPath).filter((item) => item.id !== next.id && !item.builtin)
   stored.push(next)
   rememberViews(collectionPath, stored)
+  noteLocalSavedViewsWrite(collectionPath)
   try {
     localStorage.setItem(viewsKey(collectionPath), JSON.stringify(stored))
   } catch {
