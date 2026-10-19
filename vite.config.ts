@@ -34,6 +34,9 @@ export default defineConfig({
       jsx: 'automatic',
       jsxDev: false,
       define: isVitest ? {} : { 'process.env.NODE_ENV': '"production"' },
+      // Production React without minify leaves `throw new Error("^_^")` in checkDCE.
+      // React DevTools then reports that dead code elimination was not applied.
+      minify: true,
     },
   },
   resolve: {

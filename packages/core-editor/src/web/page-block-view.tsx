@@ -5,6 +5,7 @@ import { PlayIcon } from '@heroicons/react/16/solid'
 import { RenderBoundary } from '@biu/public-ui'
 import { getPageEditor, usePageEditorVersion } from './service.ts'
 import {
+  ENABLE_PAGE_BLOCK_PLUGIN,
   blockDataUnchanged,
   formatPageBlockFence,
   requestEnablePageBlockPlugin,
@@ -119,9 +120,21 @@ export const PageBlockView = memo(function PageBlockView({ node, updateAttribute
     updateAttributesRef.current({ data: next })
   }, [])
   const hostRef = useRef<HTMLElement | null>(null)
+  const retriedReady = useRef(false)
   useLayoutEffect(() => bindPageBlockPlugin(hostRef.current, plugin), [plugin])
   useEffect(() => {
-    if (View || !plugin || phase !== 'idle') return
+    if (View) {
+      retriedReady.current = false
+      return
+    }
+    if (!plugin || phase === 'loading' || phase === 'failed') return
+    // start 先结束、web.js 后挂上时 phase 已是 ready，再请 ui-hub 拉一次入口。
+    if (phase === 'ready') {
+      if (retriedReady.current) return
+      retriedReady.current = true
+      window.dispatchEvent(new CustomEvent(ENABLE_PAGE_BLOCK_PLUGIN, { detail: { plugin, kind } }))
+      return
+    }
     requestEnablePageBlockPlugin(plugin, kind)
   }, [View, kind, phase, plugin])
 

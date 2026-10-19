@@ -962,9 +962,12 @@ test('list polling pauses while a record is open', () => {
 })
 
 test('open detail still reloads body when the collection changes', () => {
-  assert.match(browser, /if \(detailIdRef\.current\) \{/)
-  assert.match(browser, /pullDetailBody\(\)/)
-  assert.match(browser, /pullDetailRecord\(\)/)
+  const onChange = browser.slice(browser.indexOf('const onChange = (event: Event)'), browser.indexOf("window.addEventListener('fsdb:change', onChange)"))
+  assert.match(onChange, /if \(detailIdRef\.current\) \{/)
+  assert.match(onChange, /pullDetailBody\(\)/)
+  assert.match(onChange, /pullDetailRecord\(\)/)
+  assert.match(onChange, /else \{\s*void reloadRef\.current\(\{ force: true \}\)/)
+  assert.doesNotMatch(onChange, /void reloadRef\.current\(\{ force: true \}\)\s*\n\s*if \(detailIdRef\.current\)/)
   assert.match(browser, /banner: row\.banner \?\? null/)
   assert.match(browser, /window.dispatchEvent\(new Event\('fsdb:change'\)\)/)
 })
@@ -1386,5 +1389,7 @@ test('vite serve maps jsxDEV to production jsx', () => {
   assert.match(vite, /jsxDev: false/)
   assert.match(vite, /'react\/jsx-dev-runtime': join\(root, 'jsx-prod-dev-runtime.ts'\)/)
   assert.match(vite, /process\.env\.NODE_ENV': JSON\.stringify\('production'\)/)
+  assert.match(vite, /process\.env\.NODE_ENV': '"production"'/)
+  assert.match(vite, /minify: true/)
   assert.match(shim, /export \{ jsx as jsxDEV, jsxs as jsxsDEV \} from 'react\/jsx-runtime'/)
 })
