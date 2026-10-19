@@ -640,21 +640,25 @@ function matchListFilter(record: DbRecord, filter: Record<string, unknown> | und
 
 const OVERLAY_LIST_FIELDS = new Set(['emoji', 'tags', 'facet', 'createdBy', 'updatedBy', 'shareScope', 'shareRole'])
 
+function overlayListField(field: string) {
+  return OVERLAY_LIST_FIELDS.has(String(field ?? '')) || String(field ?? '').startsWith('facet::')
+}
+
 export function listNeedsMatchOverlay(
   filter: Record<string, unknown> | undefined,
   q: string,
   sortField: string,
   sorts?: Array<{ field: string; dir: string }>,
 ) {
-  if (OVERLAY_LIST_FIELDS.has(String(sortField ?? ''))) return true
+  if (overlayListField(sortField)) return true
   for (const rule of sorts ?? []) {
-    if (OVERLAY_LIST_FIELDS.has(rule.field)) return true
+    if (overlayListField(rule.field)) return true
   }
   if (!filter) return false
   if (filter.$tree && typeof filter.$tree === 'object') return true
   for (const [key, expected] of Object.entries(filter)) {
     if (key === '$tree' || key === '$scope' || key === 'shareScope' || expected == null || expected === '') continue
-    if (OVERLAY_LIST_FIELDS.has(key)) return true
+    if (overlayListField(key)) return true
   }
   return false
 }

@@ -1884,8 +1884,9 @@ export function CollectionBrowser({
       : requested
     const columns = visible.length ? visible : [...(columnKeys.length ? columnKeys : ['title']), ...cellKeys]
     if (!columns.length) return undefined
-    return listProjectionKeys({ schema: currentSchema, columns, groupBy })
-  }, [chrome, columnKeys, customView, facetCatalog, groupBy, stat])
+    const queryKeys = [...collectQueryFields(sorts, filterTree, currentSchema?.labelField ?? 'title')]
+    return listProjectionKeys({ schema: currentSchema, columns: [...columns, ...queryKeys], groupBy })
+  }, [chrome, columnKeys, customView, facetCatalog, filterTree, groupBy, sorts, stat])
   const listColumnsKey = listColumns?.join('\0') ?? ''
   const [refreshing, setRefreshing] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
@@ -2694,14 +2695,21 @@ export function CollectionBrowser({
   const grouping = Boolean(activeGroup)
   const filterFields = useMemo(
     () =>
-      entries.filter(
+      [
+        ...entries,
+        ...flattenFacetColumns(facetCatalog).map((item) => ({
+          key: item.key,
+          kind: item.kind,
+          field: { ...item.field, label: facetColumnTitle(item) },
+        })),
+      ].filter(
         (item) =>
           item.key !== bodyKey &&
           resolveFieldType(item.field) !== 'file' &&
           item.key !== 'shareScope' &&
           !lockedFilterKeys.includes(item.key),
       ),
-    [bodyKey, entries, lockedFilterKeys],
+    [bodyKey, entries, facetCatalog, lockedFilterKeys],
   )
   const sortFields = useMemo(
     () => filterFields.filter((item) => item.field.sortable !== false),

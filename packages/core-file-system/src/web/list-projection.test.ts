@@ -30,6 +30,8 @@ test('table list and previews pass view columns to /api/db/list', () => {
   assert.match(browser, /tableHoldRef.current = tablePaintSnapshotRef.current \?\? emptyListHold/)
   assert.match(browser, /held\?\.nodes \?\? tablePaintNodes/)
   assert.doesNotMatch(browser, /reloadKey = .*listColumnsKey/)
+  assert.match(browser, /collectQueryFields\(sorts, filterTree/)
+  assert.match(browser, /flattenFacetColumns\(facetCatalog\)\.map\(\(item\) => \(\{/)
   assert.match(preview, /const columns = \['title', 'emoji', 'mascot', 'parentId'\]/)
   assert.match(preview, /columns: previewColumns\(view\)/)
   assert.match(people, /columns: \['title', 'mascot'\]/)

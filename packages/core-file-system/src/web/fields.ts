@@ -1,5 +1,8 @@
 import type { AtomicFieldType, CollectionSchema, CollectionSchemaPack, DbRecord, FieldSpec, FieldType, SchemaFieldValue } from '@biu/type-file-system'
 import { asAttachment, asAttachmentList, asHttpHref, asImageSrc, asImageSrcList, asPerson, asPersonList, BUILTIN_FIELD_KEYS, isFacetFieldType, isRefFieldType, isReservedSchemaFieldKey, normalizeSchemaValue } from '@biu/type-file-system'
+import { FACET_FLAT_PREFIX, parseFacetFlatColumnKey, readFacetFieldValue } from '../query-logic.ts'
+
+export { FACET_FLAT_PREFIX, parseFacetFlatColumnKey }
 
 export const BUILTIN_VIEW_MODES = ['table'] as const
 export type BuiltinViewMode = (typeof BUILTIN_VIEW_MODES)[number]
@@ -213,25 +216,12 @@ export function listProjectionKeys(opts: {
   return keys
 }
 
-export const FACET_FLAT_PREFIX = 'facet::'
-
 export function facetFlatColumnKey(packId: string, fieldKey: string) {
   return `${FACET_FLAT_PREFIX}${packId}::${fieldKey}`
 }
 
 export function isFacetFlatColumnKey(key: string) {
   return key.startsWith(FACET_FLAT_PREFIX)
-}
-
-export function parseFacetFlatColumnKey(key: string): { packId: string; fieldKey: string } | null {
-  if (!isFacetFlatColumnKey(key)) return null
-  const rest = key.slice(FACET_FLAT_PREFIX.length)
-  const split = rest.indexOf('::')
-  if (split <= 0) return null
-  const packId = rest.slice(0, split)
-  const fieldKey = rest.slice(split + 2)
-  if (!packId || !fieldKey) return null
-  return { packId, fieldKey }
 }
 
 export function facetSourceKey(schema: CollectionSchema | undefined) {
@@ -263,9 +253,8 @@ export function facetColumnTitle(col: {
 }
 
 export function readFacetFlatValue(row: DbRecord, columnKey: string, sourceKey = 'facet') {
-  const parsed = parseFacetFlatColumnKey(columnKey)
-  if (!parsed) return undefined
-  return normalizeSchemaValue(row[sourceKey]).values[parsed.packId]?.[parsed.fieldKey]
+  if (!parseFacetFlatColumnKey(columnKey)) return undefined
+  return readFacetFieldValue(row, columnKey, sourceKey)
 }
 
 export function patchFacetFlatValue(row: DbRecord, columnKey: string, next: unknown, sourceKey = 'facet'): SchemaFieldValue {
@@ -459,13 +448,15 @@ export function recordLinkIds(field: FieldSpec | string | undefined, value: unkn
 export function uniqueValues(rows: DbRecord[], key: string, field: FieldSpec): string[] {
   const set = new Set<string>()
   const kind = resolveFieldType(field)
+  const cell = (row: DbRecord) => (parseFacetFlatColumnKey(key) ? readFacetFieldValue(row, key) : row[key])
   for (const row of rows) {
+    const raw = cell(row)
     if (kind === 'multi-select' || kind === 'multi-ref') {
-      for (const item of asStringList(row[key])) set.add(item)
+      for (const item of asStringList(raw)) set.add(item)
     } else if (kind === 'facet') {
-      for (const item of normalizeSchemaValue(row[key]).tags) set.add(item)
-    } else if (row[key] != null && row[key] !== '') {
-      set.add(String(row[key]))
+      for (const item of normalizeSchemaValue(raw).tags) set.add(item)
+    } else if (raw != null && raw !== '') {
+      set.add(String(raw))
     }
   }
   return [...set].sort((a, b) => a.localeCompare(b, 'zh'))

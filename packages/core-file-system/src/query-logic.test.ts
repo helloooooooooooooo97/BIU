@@ -193,6 +193,24 @@ test('seedRecordFromViewFilters takes the first OR branch and writes facet tags'
   assert.equal('status' in seed, false)
 })
 
+test('filter and sort read flattened 合集 pack properties', () => {
+  const field = 'facet::movie::导演'
+  const rows = [
+    { id: '2', facet: { tags: ['movie'], values: { movie: { 导演: '乙' } } } },
+    { id: '1', facet: { tags: ['movie'], values: { movie: { 导演: '甲' } } } },
+    { id: '3', facet: { tags: ['movie'], values: { movie: { 导演: '甲' } } } },
+  ]
+  const packs = [{ id: 'movie', label: '电影', fields: [{ key: '导演', type: 'string' as const, label: '导演' }] }]
+  const tree = emptyFilterGroup()
+  tree.children = [{ kind: 'rule', id: 'r', field, op: 'eq', value: '甲' }]
+  assert.equal(matchFilterNode(rows[0]!, tree, undefined, packs), false)
+  assert.equal(matchFilterNode(rows[1]!, tree, undefined, packs), true)
+  assert.deepEqual(
+    sortRecordsBy(rows, [{ id: 's', field, dir: 'asc' }]).map((item) => item.id),
+    ['1', '3', '2'],
+  )
+})
+
 test('seedRecordFromViewFilters skips unknown and non-writable fields when schema is present', () => {
   const tree = emptyFilterGroup()
   tree.children = [

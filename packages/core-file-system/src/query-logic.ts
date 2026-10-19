@@ -1,5 +1,36 @@
-import type { CollectionSchema, CollectionSchemaPack, DbRecord, FieldType } from '@biu/type-file-system'
+import type { CollectionSchema, CollectionSchemaPack, DbRecord, FieldSpec, FieldType } from '@biu/type-file-system'
 import { isFacetFieldType, normalizeSchemaValue } from '@biu/type-file-system'
+
+export const FACET_FLAT_PREFIX = 'facet::'
+
+export function parseFacetFlatColumnKey(key: string): { packId: string; fieldKey: string } | null {
+  if (!key.startsWith(FACET_FLAT_PREFIX)) return null
+  const rest = key.slice(FACET_FLAT_PREFIX.length)
+  const split = rest.indexOf('::')
+  if (split <= 0) return null
+  const packId = rest.slice(0, split)
+  const fieldKey = rest.slice(split + 2)
+  if (!packId || !fieldKey) return null
+  return { packId, fieldKey }
+}
+
+export function readFacetFieldValue(record: DbRecord, field: string, sourceKey = 'facet') {
+  const parsed = parseFacetFlatColumnKey(field)
+  if (!parsed) return record[field]
+  return normalizeSchemaValue(record[sourceKey]).values[parsed.packId]?.[parsed.fieldKey]
+}
+
+function specForFilterField(
+  fieldKey: string,
+  schema?: CollectionSchema,
+  packs: CollectionSchemaPack[] = [],
+): FieldSpec | undefined {
+  const parsed = parseFacetFlatColumnKey(fieldKey)
+  if (parsed) {
+    return packs.find((pack) => pack.id === parsed.packId)?.fields.find((item) => item.key === parsed.fieldKey)
+  }
+  return schema?.fields[fieldKey]
+}
 
 export type SortRule = { id: string; field: string; dir: 'asc' | 'desc' }
 
@@ -267,8 +298,8 @@ export function matchFilterRule(
   schema?: CollectionSchema,
   packs: CollectionSchemaPack[] = [],
 ) {
-  const actual = record[rule.field]
-  const field = schema?.fields[rule.field]
+  const actual = readFacetFieldValue(record, rule.field)
+  const field = specForFilterField(rule.field, schema, packs)
   const want = rule.value
   if (rule.op === 'is_empty') return isEmptyValue(actual)
   if (rule.op === 'not_empty') return !isEmptyValue(actual)
@@ -353,8 +384,8 @@ export function matchListFilterRecord(
 }
 
 export function compareRecords(a: DbRecord, b: DbRecord, field: string, dir: 'asc' | 'desc') {
-  const av = a[field]
-  const bv = b[field]
+  const av = readFacetFieldValue(a, field)
+  const bv = readFacetFieldValue(b, field)
   const an = Number(av)
   const bn = Number(bv)
   const numeric = Number.isFinite(an) && Number.isFinite(bn) && String(av).trim() !== '' && String(bv).trim() !== ''

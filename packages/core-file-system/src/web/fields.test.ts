@@ -190,6 +190,7 @@ test('default columns omit flattened type properties', () => {
   assert.equal(facetColumnTitle({ key: 'title', field: { label: '标题' } }), '标题')
   const row = { id: '1', facet: { tags: ['haohao'], values: { haohao: { dede: 'v' } } } }
   assert.equal(readFacetFlatValue(row, nested), 'v')
+  assert.deepEqual(uniqueValues([row], nested, { type: 'string', label: '的的' }), ['v'])
   assert.deepEqual(patchFacetFlatValue(row, nested, 'next').values.haohao?.dede, 'next')
   const untagged = { id: '2', facet: { tags: [], values: {} } }
   const stamped = patchFacetFlatValue(untagged, nested, 'next')
