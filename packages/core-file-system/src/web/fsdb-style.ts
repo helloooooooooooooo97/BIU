@@ -571,6 +571,8 @@ button.fsdb-detail-title-icon:hover{background:color-mix(in srgb,var(--dsw-hover
 .fsdb-page .fsdb-field-glyph[data-kind="num"]{--fsdb-field:var(--fsdb-field-num)}
 .fsdb-page .fsdb-field-glyph[data-kind="play"]{--fsdb-field:var(--fsdb-field-play)}
 .fsdb-page .fsdb-field-glyph[data-kind="stack"]{--fsdb-field:var(--fsdb-field-stack)}
+.fsdb-page{--fsdb-field-tag:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2016%2016%22%3E%3Cpath%20fill%3D%22black%22%20d%3D%22M4.5%202A2.5%202.5%200%200%200%202%204.5v2.879a2.5%202.5%200%200%200%20.732%201.767l4.5%204.5a2.5%202.5%200%200%200%203.536%200l2.878-2.878a2.5%202.5%200%200%200%200-3.536l-4.5-4.5A2.5%202.5%200%200%200%207.38%202H4.5ZM5%206a1%201%200%201%200%200-2%201%201%200%200%200%200%202Z%22%2F%3E%3C%2Fsvg%3E")}
+.fsdb-page .fsdb-field-glyph[data-kind="tag"]{--fsdb-field:var(--fsdb-field-tag)}
 .fsdb-page .fsdb-field-glyph[data-kind="link"]{--fsdb-field:var(--fsdb-field-link)}
 .fsdb-page .fsdb-field-glyph[data-kind="ref"]{--fsdb-field:var(--fsdb-ui-share)}
 .fsdb-page .fsdb-field-glyph[data-kind="file"]{--fsdb-field:var(--fsdb-field-file)}

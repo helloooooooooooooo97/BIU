@@ -1291,7 +1291,7 @@ export function ShellSettingsCollab({ panel = 'members' }: { panel?: 'workspace'
         <p className="settings-muted settings-account-lead">
           {panel === 'workspace'
             ? '设置当前选中的空间。空间切换和新建空间请使用左上角菜单。'
-            : '管理当前空间的个人资料、成员和邀请。需要分类时，可贴合集并保存视图。'}
+            : '管理当前空间的个人资料、成员和邀请。需要分类时，可贴标签并保存视图。'}
         </p>
       </header>
       {error ? <p className="settings-account-error" data-testid="settings-collab-error">{error}</p> : null}

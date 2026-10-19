@@ -89,7 +89,7 @@ export function groupSessionsByProject(sessions: SessionListItem[]): SessionSide
   return groups
 }
 
-/** 按合集分组；一条会话可出现在多个合集下，无合集归入未合集。 */
+/** 按标签分组；一条会话可出现在多个标签下，无标签归入无标签。 */
 export function groupSessionsByFacet(sessions: SessionListItem[]): SessionSidebarGroup[] {
   const map = new Map<string, SessionSidebarGroup>()
   const untagged: SessionListItem[] = []
@@ -115,7 +115,7 @@ export function groupSessionsByFacet(sessions: SessionListItem[]): SessionSideba
   if (untagged.length) {
     const group: SessionSidebarGroup = {
       key: UNGROUPED_TAG_KEY,
-      label: '未合集',
+      label: '无标签',
       sessions: untagged,
       updatedAt: 0,
       kind: 'ungrouped',
@@ -126,7 +126,7 @@ export function groupSessionsByFacet(sessions: SessionListItem[]): SessionSideba
   return groups
 }
 
-/** @deprecated 合集分组 */
+/** @deprecated 标签分组 */
 export function groupSessionsByTag(sessions: SessionListItem[]) {
   return groupSessionsByFacet(sessions)
 }
@@ -149,21 +149,21 @@ export function buildSidebarGroups(sessions: SessionListItem[], groupBy: Sidebar
 
 export type SidebarSectionKind = 'pinned' | 'project' | 'facet'
 
-/** 置顶区直接携带会话行；项目/合集区按分组。 */
+/** 置顶区直接携带会话行；项目/标签区按分组。 */
 export interface SidebarSection {
   kind: SidebarSectionKind
   label: string
   /** 置顶区专属：直接持有的 pinned 会话（不嵌套重复的分组头）。 */
   sessions?: SessionListItem[]
-  /** 项目/合集区：各自的分组列表。 */
+  /** 项目/标签区：各自的分组列表。 */
   groups?: SessionSidebarGroup[]
 }
 
 /**
- * 两板块并存：收藏 / (项目|合集)，自上而下。
+ * 两板块并存：收藏 / (项目|标签)，自上而下。
  * - 收藏区：所有 pinned 会话（直接携带，不嵌套分组）；无则省去该 section。
  * - 数据分组区：按 groupBy 决定——'project' 按绑定 folder path 分组（未绑定归「未分组」，没有会话也保留这一组）；
- *   'facet' 按合集分组（一条会话可出现在多个合集下，无合集归「未合集」）。
+ *   'facet' 按标签分组（一条会话可出现在多个标签下，无标签归「无标签」）。
  */
 export function buildSidebarSections(
   sessions: SessionListItem[],
@@ -181,7 +181,7 @@ export function buildSidebarSections(
   }
 
   if (groupBy === 'facet') {
-    sections.push({ kind: 'facet', label: '合集', groups: groupSessionsByFacet(sessions) })
+    sections.push({ kind: 'facet', label: '标签', groups: groupSessionsByFacet(sessions) })
   } else {
     sections.push({ kind: 'project', label: '项目', groups: groupSessionsByProject(sessions) })
   }

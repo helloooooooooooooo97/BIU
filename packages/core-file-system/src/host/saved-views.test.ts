@@ -139,13 +139,13 @@ test('clientViewFromDbRow keeps flat filters and sorts for the live table', () =
 test('index collection views stay with the account that saved them', async () => {
   const store = new SavedViewsStore()
   store.open(':memory:')
-  store.replaceOwned('/facets', [{ id: 'ada-view', name: 'Ada 的合集' }], 'ada')
-  store.replaceOwned('/facets', [{ id: 'bob-view', name: 'Bob 的合集' }], 'bob')
+  store.replaceOwned('/facets', [{ id: 'ada-view', name: 'Ada 的标签' }], 'ada')
+  store.replaceOwned('/facets', [{ id: 'bob-view', name: 'Bob 的标签' }], 'bob')
   store.replaceOwned('/facets', [{ id: 'ada-view', name: 'Ada 改过' }], 'ada')
   let who = 'ada'
   const spec = viewsCollection(
     store,
-    () => [{ path: '/facets', id: 'facets', kind: 'collection', label: '合集', view: { moduleId: 'facets', route: '/facets', title: '合集' } }],
+    () => [{ path: '/facets', id: 'facets', kind: 'collection', label: '标签', view: { moduleId: 'facets', route: '/facets', title: '标签' } }],
     () => who,
   )
   const adaRows = await spec.list()

@@ -183,7 +183,7 @@ export function actionWhenKeys(schema?: Pick<CollectionSchema, 'actions'> | null
   return keys
 }
 
-/** 列表投影：可见列 + 标题/图标/树/分组/合集源字段 + 动作 when。不传则服务端仍返回除正文外全字段。 */
+/** 列表投影：可见列 + 标题/图标/树/分组/标签源字段 + 动作 when。不传则服务端仍返回除正文外全字段。 */
 export function listProjectionKeys(opts: {
   schema?: CollectionSchema
   columns: string[]

@@ -11,7 +11,7 @@ import {
   PencilSquareIcon,
   PlayIcon,
   PuzzlePieceIcon,
-  RectangleStackIcon,
+  TagIcon,
   Squares2X2Icon,
   StopIcon,
   TableCellsIcon,
@@ -36,7 +36,7 @@ export const SEARCH_SCOPES: Array<{
   { id: 'task', label: '任务', path: '/tasks' },
   { id: 'page', label: '页面', path: '/pages' },
   { id: 'plugin', label: '插件', path: '/plugins' },
-  { id: 'facet', label: '合集', path: '/facets' },
+  { id: 'facet', label: '标签', path: '/facets' },
 ]
 
 const PER_KIND = 8
@@ -103,7 +103,7 @@ function pushTags(into: string[], value: unknown) {
   }
 }
 
-/** 列表行上的合集：facet.tags、config.facet.tags；旧 tags 只当遗留合集名。 */
+/** 列表行上的标签：facet.tags、config.facet.tags；旧 tags 只当遗留标签名。 */
 export function tagsFromRecord(row: Record<string, unknown>) {
   const tags: string[] = []
   const facet = row.facet
@@ -414,7 +414,7 @@ function KindGlyph({ kind, compact }: { kind: SearchKind | 'all'; compact?: bool
   if (kind === 'task') return <CheckCircleIcon className={className} />
   if (kind === 'page') return <DocumentIcon className={className} />
   if (kind === 'plugin') return <PuzzlePieceIcon className={className} />
-  return <RectangleStackIcon className={className} />
+  return <TagIcon className={className} />
 }
 
 function HitMark({ hit }: { hit: SearchHit }) {
@@ -607,7 +607,7 @@ export function ShellSearchPanel({
             ref={inputRef}
             className="shell-search-input"
             autoFocus
-            placeholder="搜索视图、会话、任务、页面、插件、合集"
+            placeholder="搜索视图、会话、任务、页面、插件、标签"
             value={query}
             data-testid="shell-search-input"
             onChange={(event) => {
@@ -661,7 +661,7 @@ export function ShellSearchPanel({
         <div ref={bodyRef} className="shell-search-body" aria-busy={busy}>
           {!needle && scope === 'all' && !flat.length && !busy ? (
             <p className="shell-search-hint">
-              空着时视图、会话、任务、页面、插件、合集各按更新时间列最近 {PER_KIND} 条。
+              空着时视图、会话、任务、页面、插件、标签各按更新时间列最近 {PER_KIND} 条。
             </p>
           ) : null}
           {grouped.map((group) => (

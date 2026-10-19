@@ -241,7 +241,7 @@ export class FacetStore {
 
   upsert(raw: unknown, notes?: string): CollectionSchemaPack {
     const pack = normalizeSchemaPack(raw)
-    if (!pack) throw new Error('invalid 合集')
+    if (!pack) throw new Error('invalid 标签')
     const nextNotes = notes !== undefined ? String(notes) : this.notes(pack.id)
     this.savePack(pack, nextNotes)
     return pack

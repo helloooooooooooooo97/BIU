@@ -12,7 +12,6 @@ test('kind maps to distinct heroicons', () => {
     'StopCircleIcon',
     'HashtagIcon',
     'Square3Stack3DIcon',
-    'RectangleStackIcon',
     'ClipboardDocumentCheckIcon',
     'CheckCircleIcon',
     'DocumentTextIcon',
@@ -38,8 +37,9 @@ test('kind maps to distinct heroicons', () => {
   assert.notEqual(pickKindIcon('collection'), pickKindIcon('usage'))
   assert.equal(pickKindIcon('plugin'), lu.PuzzlePieceIcon)
   assert.equal(pickKindIcon('plugins'), lu.PuzzlePieceIcon)
-  assert.equal(pickKindIcon('facet'), lu.RectangleStackIcon)
-  assert.equal(pickKindIcon('facets'), lu.RectangleStackIcon)
+  assert.equal(pickKindIcon('facet'), lu.TagIcon)
+  assert.equal(pickKindIcon('facets'), lu.TagIcon)
+  assert.equal(pickKindIcon('collection'), lu.TagIcon)
   assert.equal(pickKindIcon('unknown'), lu.TagIcon)
 })
 

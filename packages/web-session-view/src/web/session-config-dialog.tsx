@@ -142,7 +142,7 @@ function SessionFacetPicker({
         options={catalog.map((tag) => ({ value: tag.id, label: tag.label }))}
         onChange={applyTags}
         multiple
-        placeholder="添加合集"
+        placeholder="添加标签"
       />
     </div>
   )
@@ -312,7 +312,7 @@ export const SessionConfigDialog = memo(function SessionConfigDialog({
               </label>
 
               <label className="flex flex-col gap-1 text-[11px] text-(--dsw-label-3)">
-                <span>合集 · 侧栏可按合集分组</span>
+                <span>标签 · 侧栏可按标签分组</span>
                 <SessionFacetPicker
                   value={data?.config?.facet}
                   disabled={busy}

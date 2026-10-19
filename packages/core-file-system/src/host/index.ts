@@ -473,7 +473,7 @@ function remapFacetBag(pack: CollectionSchemaPack | null | undefined, bag: Recor
   return out
 }
 
-/** Agent 常写成扁平 values（中文属性名），权威形状是 values[合集id][字段key]。 */
+/** Agent 常写成扁平 values（中文属性名），权威形状是 values[标签id][字段key]。 */
 function coerceFacetPatch(
   raw: unknown,
   current: SchemaFieldValue,
@@ -1053,7 +1053,7 @@ export class DatabaseService extends Service implements Database {
     })
   }
 
-  /** 合集目录只留下当前用户能读到的源记录上贴过的合集；还没贴到公开数据上的，只留给创建人。 */
+  /** 标签目录只留下当前用户能读到的源记录上贴过的标签；还没贴到公开数据上的，只留给创建人。 */
   private indexFacetVisible(id: string, accountId: string) {
     const found = this.facets.collect(id)
     for (const item of found.items) {
@@ -3055,14 +3055,14 @@ export function apply(ctx: Context) {
   })
   ctx.tools.register({
     name: 'db_update',
-    description: '按表结构 schema 的可写字段更新一条已有记录，路径为 /<表>/<id>。成功只返回 {ok, path}，不回整行。合集 facet：可同时贴多个。一个合集用扁平 values，如 {tags:["facet-2"],values:{导演:"查泽雷"}}；多个合集必须按合集分子对象，如 {tags:["facet-2","awards"],values:{"facet-2":{导演:"查泽雷"},awards:{oscar:true}}}。省略 tags 则改当前已贴合集的属性（合并，不撕掉别的合集）。改合集定义用 db_update /facets/<id> content.fields。新建用 db_create，正文用 db_content。',
+    description: '按表结构 schema 的可写字段更新一条已有记录，路径为 /<表>/<id>。成功只返回 {ok, path}，不回整行。标签 facet：可同时贴多个。一个标签用扁平 values，如 {tags:["facet-2"],values:{导演:"查泽雷"}}；多个标签必须按标签分子对象，如 {tags:["facet-2","awards"],values:{"facet-2":{导演:"查泽雷"},awards:{oscar:true}}}。省略 tags 则改当前已贴标签的属性（合并，不撕掉别的标签）。改标签定义用 db_update /facets/<id> content.fields。新建用 db_create，正文用 db_content。',
     parameters: {
       type: 'object',
       properties: {
         path: { type: 'string' },
         content: {
           description:
-            '要更新的字段（对象或 JSON 字符串）。合集写 facet：一个合集 values 扁平，如 {facet:{tags:["facet-2"],values:{导演:"查泽雷"}}}；多个合集 values 按合集 id 分子对象。省略 tags 只改属性，不撕掉其它合集。',
+            '要更新的字段（对象或 JSON 字符串）。标签写 facet：一个标签 values 扁平，如 {facet:{tags:["facet-2"],values:{导演:"查泽雷"}}}；多个标签 values 按标签 id 分子对象。省略 tags 只改属性，不撕掉其它标签。',
         },
       },
       required: ['path', 'content'],
@@ -3074,7 +3074,7 @@ export function apply(ctx: Context) {
   })
   ctx.tools.register({
     name: 'db_create',
-    description: '在已登记且允许新建的表中批量新增记录。路径为 /<表>，records 为对象数组。成功返回 {ok, path, ids}，不回整行。能否新建看 db_stat 的 caps。新建合集用 db_create path=/facets records=[{title}]。',
+    description: '在已登记且允许新建的表中批量新增记录。路径为 /<表>，records 为对象数组。成功返回 {ok, path, ids}，不回整行。能否新建看 db_stat 的 caps。新建标签用 db_create path=/facets records=[{title}]。',
     parameters: {
       type: 'object',
       properties: {
