@@ -2,7 +2,7 @@ import { test, afterEach } from 'vitest'
 import assert from 'node:assert/strict'
 import { Context } from 'cordis'
 import * as sessionView from './index.ts'
-import { SessionViewService, resetSessionsListGet } from './index.ts'
+import { SessionViewService, hasActiveDispatchedTasks, resetSessionsListGet } from './index.ts'
 
 afterEach(() => {
   resetSessionsListGet()
@@ -378,6 +378,113 @@ test('worker session busy cleared once list reports not busy', async () => {
   // worker 非当前会话，无 pending 保护，列表不 busy 即可兜底清掉
   await view.refreshSessions()
   assert.equal(view.get().busySessions['worker-9'], undefined)
+})
+
+test('stale list busy:true after turn/end does not restore breathing', async () => {
+  mockFetch({
+    '/api/sessions': () => ({ sessions: [{ id: 's1', title: 'a', busy: true, eventCount: 2, updatedAt: 1 }] }),
+    '/api/approvals': () => ({ mode: 'auto', pending: [] }),
+  })
+  const ctx = new Context()
+  await ctx.plugin(sessionView)
+  const view = ctx.sessionView as SessionViewService
+  view.ingest('s1', { type: 'session/open', version: 1, seq: 0, ts: 1 })
+  view.setAgentStatus('running', 1)
+  view.ingest('s1', { type: 'turn/end', turn: 1, reason: 'complete', seq: 2, ts: 2 })
+  assert.equal(view.get().busySessions.s1, undefined)
+  await view.refreshSessions()
+  assert.equal(view.get().busySessions.s1, undefined)
+  assert.equal(view.get().pending, false)
+  assert.equal(view.get().agentStatus, 'idle')
+})
+
+test('stale list busy:true after worker turn/end does not restore breathing', async () => {
+  mockFetch({
+    '/api/sessions': () => ({
+      sessions: [
+        { id: 'live-1', title: 'live', busy: false, eventCount: 1, updatedAt: 1 },
+        { id: 'worker-9', title: 'w', busy: true, eventCount: 2, updatedAt: 2 },
+      ],
+    }),
+    '/api/approvals': () => ({ mode: 'auto', pending: [] }),
+  })
+  const ctx = new Context()
+  await ctx.plugin(sessionView)
+  const view = ctx.sessionView as SessionViewService
+  view.ingest('live-1', { type: 'session/open', version: 1, seq: 0, ts: 1 })
+  view.setAgentStatus('running', 0, 'worker-9')
+  assert.equal(view.get().busySessions['worker-9'], true)
+  view.ingest('worker-9', { type: 'turn/end', turn: 1, reason: 'complete', seq: 2, ts: 2 })
+  assert.equal(view.get().busySessions['worker-9'], undefined)
+  await view.refreshSessions()
+  assert.equal(view.get().busySessions['worker-9'], undefined)
+})
+
+test('stale agent/status running after worker turn/end does not restore breathing', async () => {
+  mockFetch({
+    '/api/sessions': () => ({ sessions: [{ id: 'live-1', title: 'live', busy: false, eventCount: 1, updatedAt: 1 }] }),
+    '/api/approvals': () => ({ mode: 'auto', pending: [] }),
+  })
+  const ctx = new Context()
+  await ctx.plugin(sessionView)
+  const view = ctx.sessionView as SessionViewService
+  view.ingest('live-1', { type: 'session/open', version: 1, seq: 0, ts: 1 })
+  view.setAgentStatus('running', 0, 'worker-9')
+  view.ingest('worker-9', { type: 'turn/end', turn: 1, reason: 'complete', seq: 2, ts: 2 })
+  view.setAgentStatus('running', 1, 'worker-9')
+  assert.equal(view.get().busySessions['worker-9'], undefined)
+})
+
+test('hasActiveDispatchedTasks is true while a worker is still pending or running', () => {
+  assert.equal(hasActiveDispatchedTasks({}), false)
+  assert.equal(
+    hasActiveDispatchedTasks({
+      '1': [{ sessionId: 'w1', tool: 'task_deliver', status: 'complete' }],
+    }),
+    false,
+  )
+  assert.equal(
+    hasActiveDispatchedTasks({
+      '1': [{ sessionId: 'w1', tool: 'task_deliver', status: 'running' }],
+    }),
+    true,
+  )
+  assert.equal(
+    hasActiveDispatchedTasks({
+      '2': [{ sessionId: 'w2', tool: 'task_deliver', status: 'pending' }],
+    }),
+    true,
+  )
+})
+
+test('dispatch poll keeps running after live turn/end while a worker is still active', async () => {
+  mockFetch({
+    '/api/sessions': () => ({ sessions: [{ id: 's1', title: 'a', busy: false, eventCount: 2, updatedAt: 1 }] }),
+    '/api/approvals': () => ({ mode: 'auto', pending: [] }),
+    '/api/sessions/s1/dispatched-usage': () => ({
+      dispatchedTasksByTurn: {
+        '1': [{ sessionId: 'w1', tool: 'task_deliver', status: 'running' }],
+      },
+    }),
+  })
+  const ctx = new Context()
+  await ctx.plugin(sessionView)
+  const view = ctx.sessionView as SessionViewService
+  view.ingest('s1', { type: 'session/open', version: 1, seq: 0, ts: 1 })
+  ;(
+    view as unknown as {
+      replace: (patch: { dispatchedTasksByTurn: Record<string, Array<{ sessionId: string; tool: 'task_deliver'; status: 'running' }>> }) => void
+    }
+  ).replace({
+    dispatchedTasksByTurn: {
+      '1': [{ sessionId: 'w1', tool: 'task_deliver', status: 'running' }],
+    },
+  })
+  view.ingest('s1', { type: 'turn/start', turn: 1, seq: 1, ts: 2 })
+  view.ingest('s1', { type: 'turn/end', turn: 1, reason: 'complete', seq: 2, ts: 3 })
+  const poll = (view as unknown as { dispatchedPoll: ReturnType<typeof setInterval> | null }).dispatchedPoll
+  assert.ok(poll)
+  clearInterval(poll)
 })
 
 test('setAgentStatus with other sessionId only updates busySessions', async () => {

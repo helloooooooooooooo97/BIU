@@ -299,6 +299,20 @@ export function turnInProgress(events: { type: string }[]) {
   return false
 }
 
+/** 派工表里还有未结束的 worker 时，Live 回合结束后也要继续拉状态。 */
+export function hasActiveDispatchedTasks(
+  byTurn: Record<string, DispatchedTaskRow[] | undefined> | undefined,
+) {
+  if (!byTurn) return false
+  for (const rows of Object.values(byTurn)) {
+    if (!rows) continue
+    for (const row of rows) {
+      if (row.status === 'running' || row.status === 'pending') return true
+    }
+  }
+  return false
+}
+
 export class SessionViewService extends Service {
   private value: SessionViewState = empty
   private listeners = new Set<() => void>()
@@ -313,6 +327,8 @@ export class SessionViewService extends Service {
   private dispatchedPoll: ReturnType<typeof setInterval> | null = null
   private dispatchedAbort: AbortController | null = null
   private busyHoldUntil = 0
+  /** 本机已观察到该 session 结束；在再次看到 start/running 前，列表 busy:true 视为过期快照。 */
+  private locallyIdle = new Set<string>()
   /** 切会话时画面还是上一段：ingest 不能往旧 events 上叠新 session */
   private holdPreviousThread = false
   private sessionsRefreshTimer: ReturnType<typeof setTimeout> | null = null
@@ -360,7 +376,13 @@ export class SessionViewService extends Service {
     this.stopDispatchedPoll()
     const id = this.value.sessionId
     if (!id) return
-    if (!this.wantsTrajectory() && !turnInProgress(this.value.events)) return
+    if (
+      !this.wantsTrajectory() &&
+      !turnInProgress(this.value.events) &&
+      !hasActiveDispatchedTasks(this.value.dispatchedTasksByTurn)
+    ) {
+      return
+    }
     this.dispatchedPoll = setInterval(() => {
       void this.refreshDispatchedUsage()
     }, 2000)
@@ -397,6 +419,13 @@ export class SessionViewService extends Service {
         nodes: this.buildNodes(this.value.events, byTurn),
       })
       this.stashCurrent()
+      if (
+        !this.wantsTrajectory() &&
+        !turnInProgress(this.value.events) &&
+        !hasActiveDispatchedTasks(tasksByTurn)
+      ) {
+        this.stopDispatchedPoll()
+      }
     } catch {
       /* 静默 */
     }
@@ -576,6 +605,7 @@ export class SessionViewService extends Service {
     })
     this.stashCurrent()
     if (event.type === 'turn/end' || event.type === 'turn/start') this.syncDispatchedPoll()
+    if (event.type === 'turn/end') void this.refreshDispatchedUsage()
     // 检查器打开后 trajectoryLive=true：即使 URL 仍是 chat 也要刷新右侧轨迹
     if (this.wantsTrajectory()) void this.refreshTrajectoryIndex()
     this.scheduleRefreshSessions()
@@ -625,15 +655,14 @@ export class SessionViewService extends Service {
     const isOther = Boolean(sessionId && this.value.sessionId && sessionId !== this.value.sessionId)
 
     if (status === 'running') {
-      const holdOpen = Date.now() < this.busyHoldUntil
-      if (
+      const holdOpen = Date.now() < this.busyHoldUntil && (!id || id === this.value.sessionId)
+      const locallyIdle = Boolean(id && this.locallyIdle.has(id))
+      const currentEnded =
         !isOther &&
-        !holdOpen &&
         !turnInProgress(this.value.events) &&
         this.value.events.some((item) => item.type === 'turn/end')
-      ) {
-        return
-      }
+      if (!holdOpen && (locallyIdle || currentEnded)) return
+      this.markLocalRun(id)
       if (!holdOpen) this.markBusyHold()
       const alreadyBusy = Boolean(id && this.value.busySessions[id])
       if (isOther) {
@@ -664,6 +693,8 @@ export class SessionViewService extends Service {
     }
 
     // idle
+    this.markLocalIdle(id)
+    if (!isOther) this.busyHoldUntil = 0
     const nextBusy = { ...this.value.busySessions }
     if (id && nextBusy[id]) delete nextBusy[id]
     const busyChanged = Boolean(id && this.value.busySessions[id])
@@ -701,12 +732,22 @@ export class SessionViewService extends Service {
     this.busyHoldUntil = Date.now() + BUSY_HOLD_MS
   }
 
+  private markLocalRun(sessionId?: string | null) {
+    if (sessionId) this.locallyIdle.delete(sessionId)
+  }
+
+  private markLocalIdle(sessionId?: string | null) {
+    if (sessionId) this.locallyIdle.add(sessionId)
+  }
+
   private applyTurnBusy(sessionId: string, type: 'turn/start' | 'turn/end') {
     const busySessions = { ...this.value.busySessions }
     if (type === 'turn/start') {
+      this.markLocalRun(sessionId)
       busySessions[sessionId] = true
       this.markBusyHold()
     } else {
+      this.markLocalIdle(sessionId)
       delete busySessions[sessionId]
       if (sessionId === this.value.sessionId) this.busyHoldUntil = 0
     }
@@ -725,6 +766,13 @@ export class SessionViewService extends Service {
     const holdOpen = Date.now() < this.busyHoldUntil
     for (const item of sessions) {
       if (item.busy) {
+        if (this.locallyIdle.has(item.id)) {
+          if (busySessions[item.id]) {
+            delete busySessions[item.id]
+            changed = true
+          }
+          continue
+        }
         if (!busySessions[item.id]) {
           busySessions[item.id] = true
           changed = true

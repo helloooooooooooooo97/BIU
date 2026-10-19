@@ -73,6 +73,28 @@ test('sessionsCollection maps summaries and writes title/pinned/tags', async () 
   assert.equal(spec.actions?.find((item) => item.id === 'inspect')?.for, 'agent')
 })
 
+test('progress is idle when the agent is not busy even if turn/end is missing', async () => {
+  const spec = sessionsCollection({
+    listSummaries: async () => [],
+    rename: async () => undefined,
+    patchConfig: async () => undefined,
+    delete: async () => true,
+    isBusy: () => false,
+    require: async (id) => ({
+      id,
+      events: [
+        { type: 'turn/start', turn: 1, seq: 1, ts: 1 },
+        { type: 'assistant/message', text: 'done talking', seq: 2, ts: 2 },
+      ],
+    }),
+  })
+  const progress = spec.actions?.find((item) => item.id === 'progress')
+  const got = await progress?.run('s1', { id: 's1' }, {})
+  assert.equal(got.status, 'idle')
+  assert.equal(got.turn, 1)
+  assert.equal(got.assistantText, 'done talking')
+})
+
 test('query reads one session timeline', async () => {
   const spec = sessionsCollection({
     listSummaries: async () => [],
