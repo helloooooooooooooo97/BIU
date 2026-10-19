@@ -1753,6 +1753,7 @@ test('file-system CRUD uses the unified account authorization decision', async (
   class AccountBridge extends Service {
     store = collab
     authorization = collab.authorization
+    workspaceLocation = () => 'cloud' as const
     constructor(inner: Context) {
       super(inner, 'account')
     }
@@ -1832,6 +1833,7 @@ test('create scope separates personal and workspace records and viewers stay rea
   class AccountBridge extends Service {
     store = collab
     authorization = collab.authorization
+    workspaceLocation = () => 'cloud' as const
     constructor(inner: Context) {
       super(inner, 'account')
     }
@@ -1905,6 +1907,7 @@ test('shared create is a public view link', async () => {
   class AccountBridge extends Service {
     store = collab
     authorization = collab.authorization
+    workspaceLocation = () => 'cloud' as const
     constructor(inner: Context) {
       super(inner, 'account')
     }
@@ -1925,7 +1928,7 @@ test('shared create is a public view link', async () => {
   assert.deepEqual(listed.items.map((row) => row.title), ['公开'])
 })
 
-test('desktop records keep personal and workspace ownership', async () => {
+test('device workspace share column is only personal or shared', async () => {
   const previous = process.env.BIU_ONLINE
   process.env.BIU_ONLINE = '0'
   try {
@@ -1952,6 +1955,7 @@ test('desktop records keep personal and workspace ownership', async () => {
     class AccountBridge extends Service {
       store = collab
       authorization = collab.authorization
+      workspaceLocation = () => 'device' as const
       constructor(inner: Context) {
         super(inner, 'account')
       }
@@ -1970,8 +1974,11 @@ test('desktop records keep personal and workspace ownership', async () => {
     const space = await runWithAccount(ada.id, () => db.create('/docs', [{ title: '空间' }], { scope: 'workspace' }))
     const local = await runWithAccount(ada.id, () => db.create('/docs', [{ title: '本机' }], { scope: 'local' }))
     assert.equal(personal.kind === 'created' && personal.items[0]?.value.shareScope, '私人')
-    assert.equal(space.kind === 'created' && space.items[0]?.value.shareScope, '空间')
+    assert.equal(space.kind === 'created' && space.items[0]?.value.shareScope, '私人')
     assert.equal(local.kind === 'created' && local.items[0]?.value.shareScope, '私人')
+    const listed = await runWithAccount(ada.id, () => db.list('/docs'))
+    assert.equal(listed.schema.fields.shareScope?.enum?.join(','), '私人,共享')
+    assert.equal(listed.items.some((row) => row.shareScope === '空间'), false)
     const shared = await runWithAccount(ada.id, () => db.create('/docs', [{ title: '局域网' }], { scope: 'shared' }))
     assert.equal(shared.kind === 'created' && shared.items[0]?.value.shareScope, '共享')
     if (shared.kind === 'created') {
@@ -2022,6 +2029,7 @@ test('a builtin member view grant lets the other workspace member read personal 
   class AccountBridge extends Service {
     store = collab
     authorization = collab.authorization
+    workspaceLocation = () => 'cloud' as const
     constructor(inner: Context) {
       super(inner, 'account')
     }
@@ -2091,6 +2099,7 @@ test('granting the all-members view lets the other member read the owner private
   class AccountBridge extends Service {
     store = collab
     authorization = collab.authorization
+    workspaceLocation = () => 'cloud' as const
     constructor(inner: Context) {
       super(inner, 'account')
     }
@@ -2185,6 +2194,7 @@ test('sharing one person all-tasks view does not reclassify the other person pri
   class AccountBridge extends Service {
     store = collab
     authorization = collab.authorization
+    workspaceLocation = () => 'cloud' as const
     constructor(inner: Context) {
       super(inner, 'account')
     }
@@ -2250,6 +2260,7 @@ test('workspace member tags use file-system metadata instead of role updates', a
   class AccountBridge extends Service {
     store = collab
     authorization = collab.authorization
+    workspaceLocation = () => 'cloud' as const
     constructor(inner: Context) {
       super(inner, 'account')
     }
@@ -2306,6 +2317,7 @@ test('index rows follow the user records each person can read and omit share', a
   class AccountBridge extends Service {
     store = collab
     authorization = collab.authorization
+    workspaceLocation = () => 'cloud' as const
     constructor(inner: Context) {
       super(inner, 'account')
     }
@@ -2381,6 +2393,7 @@ test('builtin plugins stay visible in the workspace plugin list', async () => {
   class AccountBridge extends Service {
     store = collab
     authorization = collab.authorization
+    workspaceLocation = () => 'cloud' as const
     constructor(inner: Context) {
       super(inner, 'account')
     }
@@ -2459,6 +2472,7 @@ test('a member sandbox is private until the owner shares it', async () => {
   class AccountBridge extends Service {
     store = collab
     authorization = collab.authorization
+    workspaceLocation = () => 'cloud' as const
     constructor(inner: Context) {
       super(inner, 'account')
     }
@@ -2602,6 +2616,7 @@ test('$scope packs follow shareScope labels for public and lan shares', async ()
   class AccountBridge extends Service {
     store = collab
     authorization = collab.authorization
+    workspaceLocation = () => 'cloud' as const
     constructor(inner: Context) {
       super(inner, 'account')
     }

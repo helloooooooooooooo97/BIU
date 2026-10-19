@@ -186,7 +186,7 @@ function schemaFor(spec: CollectionSpec): CollectionSchema {
       writable: false,
       sortable: true,
       enum: ['私人', '空间', '共享'],
-      description: '计算属性。私人表示只有创建者能看到；空间表示空间成员能看到且没有外部协作者；共享是公开链接或局域网链接，所有人可查看。本机空间的私人和共享都存在这台设备上。',
+      description: '计算属性。云端空间：私人仅创建者、空间给成员、共享为公开链接。本机空间只有私人和共享，数据都在这台设备上。',
     }
     fields.shareRole = {
       type: 'select',
@@ -916,7 +916,23 @@ export class DatabaseService extends Service implements Database {
     }
   }
 
+  private withLocationShareScope(schema: CollectionSchema) {
+    if (!schema.fields.shareScope || !this.deviceWorkspace()) return schema
+    return {
+      ...schema,
+      fields: {
+        ...schema.fields,
+        shareScope: {
+          ...schema.fields.shareScope,
+          enum: ['私人', '共享'],
+          description: '计算属性。本机空间只有私人（仅自己）和共享（局域网链接）。数据都在这台设备上。',
+        },
+      },
+    }
+  }
+
   private schemaForCurrent(spec: CollectionSpec, schema = schemaFor(spec)) {
+    schema = this.withLocationShareScope(schema)
     const authorization = this.authorization()
     const actor = authorization?.currentActor()
     if (!authorization || !actor) return schema
@@ -1670,6 +1686,7 @@ export class DatabaseService extends Service implements Database {
 
   private shareScopeLabel(collection: string, id: string, record: DbRecord, stored: 'personal' | 'workspace' | 'shared') {
     if (this.hasPublicShare(collection, id, record, stored) || stored === 'shared') return '共享'
+    if (this.deviceWorkspace()) return '私人'
     const scope = this.effectiveScope(collection, record, stored)
     if (scope === 'workspace') return '空间'
     if (scope === 'personal') return '私人'
@@ -2172,11 +2189,22 @@ export class DatabaseService extends Service implements Database {
       const parentField = spec.schema.parentField
       const parentRecordId = parentField ? String(record[parentField] ?? '').trim() : ''
       if (spec.path !== '/workspace-members') {
-        const workspaceOwned = options.scope === 'workspace'
+        const device = this.deviceWorkspace()
+        const workspaceOwned = options.scope === 'workspace' && !device
         const shared = options.scope === 'shared' && !parentRecordId
         const local = options.scope === 'local' && !parentRecordId
+        const parentOwn = parentRecordId ? this.ownershipOf(spec.path, parentRecordId) : null
+        const ownership = device
+          ? shared || parentOwn === 'shared'
+            ? 'shared'
+            : 'personal'
+          : parentRecordId || workspaceOwned
+            ? 'workspace'
+            : shared
+              ? 'shared'
+              : 'personal'
         this.attachWorkspaceRecord(spec.path, record.id, {
-          ownership: parentRecordId || workspaceOwned ? 'workspace' : shared ? 'shared' : 'personal',
+          ownership,
           accessMode: parentRecordId ? 'inherit' : workspaceOwned || shared ? 'members' : 'private',
           ...(workspaceOwned ? { memberDefaultRole: 'editor' as const } : {}),
           ...(shared ? { memberDefaultRole: 'viewer' as const } : {}),
@@ -2184,7 +2212,7 @@ export class DatabaseService extends Service implements Database {
         })
         if (shared) this.markPublicView(spec.path, record.id)
         if (workspaceOwned && !parentRecordId) this.grantAllMembersEditable(spec.path, record.id)
-        if (local || this.deviceWorkspace()) this.markDeviceRecord(spec.path, record.id)
+        if (local || device) this.markDeviceRecord(spec.path, record.id)
       }
     }
     this.bump()

@@ -184,6 +184,10 @@ test('device share scope detail lists matching lan view links instead of echoing
   assert.match(detail, /这条记录命中的局域网链接/)
   assert.match(host, /sharedViewsFor/)
   assert.match(host, /recordMatchesSharedView/)
+  assert.match(host, /if \(this.deviceWorkspace\(\)\) return '私人'/)
+  assert.match(host, /enum: \['私人', '共享'\]/)
+  assert.match(localBlock, /const stored = 'personal' as const/)
+  assert.doesNotMatch(localBlock, /label === '空间' \? 'workspace'/)
   assert.doesNotMatch(sharesPostOf(host), /markPublicView/)
 })
 

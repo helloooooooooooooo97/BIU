@@ -3861,7 +3861,8 @@ export function CollectionBrowser({
 
   function renderCell(row: DbRecord, key: string, field: FieldSpec, surface: 'table' | 'detail' = 'detail') {
     if (key === 'shareScope') {
-      const label = String(row[key] ?? (localData ? '私人' : ''))
+      const raw = String(row[key] ?? (localData ? '私人' : ''))
+      const label = localData && raw === '空间' ? '私人' : raw
       return (
         <ShareScopeDetail
           collection={collectionPath}
