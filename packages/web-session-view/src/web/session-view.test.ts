@@ -390,10 +390,15 @@ test('stale list busy:true after turn/end does not restore breathing', async () 
   const view = ctx.sessionView as SessionViewService
   view.ingest('s1', { type: 'session/open', version: 1, seq: 0, ts: 1 })
   view.setAgentStatus('running', 1)
+  await view.refreshSessions()
+  assert.equal(view.get().busySessions.s1, true)
+  assert.equal(view.get().sessions.find((item) => item.id === 's1')?.busy, true)
   view.ingest('s1', { type: 'turn/end', turn: 1, reason: 'complete', seq: 2, ts: 2 })
   assert.equal(view.get().busySessions.s1, undefined)
+  assert.equal(view.get().sessions.find((item) => item.id === 's1')?.busy, false)
   await view.refreshSessions()
   assert.equal(view.get().busySessions.s1, undefined)
+  assert.equal(view.get().sessions.find((item) => item.id === 's1')?.busy, false)
   assert.equal(view.get().pending, false)
   assert.equal(view.get().agentStatus, 'idle')
 })
@@ -413,11 +418,37 @@ test('stale list busy:true after worker turn/end does not restore breathing', as
   const view = ctx.sessionView as SessionViewService
   view.ingest('live-1', { type: 'session/open', version: 1, seq: 0, ts: 1 })
   view.setAgentStatus('running', 0, 'worker-9')
+  await view.refreshSessions()
   assert.equal(view.get().busySessions['worker-9'], true)
+  assert.equal(view.get().sessions.find((item) => item.id === 'worker-9')?.busy, true)
   view.ingest('worker-9', { type: 'turn/end', turn: 1, reason: 'complete', seq: 2, ts: 2 })
   assert.equal(view.get().busySessions['worker-9'], undefined)
+  assert.equal(view.get().sessions.find((item) => item.id === 'worker-9')?.busy, false)
   await view.refreshSessions()
   assert.equal(view.get().busySessions['worker-9'], undefined)
+  assert.equal(view.get().sessions.find((item) => item.id === 'worker-9')?.busy, false)
+})
+
+test('controlGoal pause clears busy so the session is not left running', async () => {
+  mockFetch({
+    '/api/sessions': () => ({ sessions: [{ id: 's1', title: 'a', busy: true, eventCount: 1, updatedAt: 1 }] }),
+    '/api/approvals': () => ({ mode: 'auto', pending: [] }),
+    '/api/sessions/s1/goal': () => ({
+      goal: { id: 'g1', objective: 'ship', status: 'paused', turns: 1 },
+    }),
+  })
+  const ctx = new Context()
+  await ctx.plugin(sessionView)
+  const view = ctx.sessionView as SessionViewService
+  view.ingest('s1', { type: 'session/open', version: 1, seq: 0, ts: 1 })
+  view.setAgentStatus('running', 1)
+  await view.refreshSessions()
+  assert.equal(view.get().busySessions.s1, true)
+  await view.controlGoal('pause')
+  assert.equal(view.get().busySessions.s1, undefined)
+  assert.equal(view.get().pending, false)
+  assert.equal(view.get().agentStatus, 'idle')
+  assert.equal(view.get().sessions.find((item) => item.id === 's1')?.busy, false)
 })
 
 test('stale agent/status running after worker turn/end does not restore breathing', async () => {

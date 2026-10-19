@@ -665,10 +665,14 @@ export class SessionViewService extends Service {
       this.markLocalRun(id)
       if (!holdOpen) this.markBusyHold()
       const alreadyBusy = Boolean(id && this.value.busySessions[id])
+      const sessions = this.patchSessionBusy(id, true)
       if (isOther) {
         // worker 步进会连发 running：busy 集合没变就别 notify，避免侧栏跟着抖
-        if (alreadyBusy || !id) return
-        this.replace({ busySessions: { ...this.value.busySessions, [id]: true } })
+        if ((alreadyBusy || !id) && !sessions) return
+        this.replace({
+          ...(alreadyBusy || !id ? {} : { busySessions: { ...this.value.busySessions, [id]: true } }),
+          ...(sessions ? { sessions } : {}),
+        })
         return
       }
       const busySessions =
@@ -679,12 +683,14 @@ export class SessionViewService extends Service {
         this.value.agentStatus === 'running' &&
         this.value.pending &&
         this.value.agentStep === step &&
-        busySessions === this.value.busySessions
+        busySessions === this.value.busySessions &&
+        !sessions
       ) {
         return
       }
       this.replace({
         ...(busySessions === this.value.busySessions ? {} : { busySessions }),
+        ...(sessions ? { sessions } : {}),
         agentStatus: 'running',
         agentStep: step,
         pending: true,
@@ -698,21 +704,27 @@ export class SessionViewService extends Service {
     const nextBusy = { ...this.value.busySessions }
     if (id && nextBusy[id]) delete nextBusy[id]
     const busyChanged = Boolean(id && this.value.busySessions[id])
+    const sessions = this.patchSessionBusy(id, false)
     if (isOther) {
-      if (!busyChanged) return
-      this.replace({ busySessions: nextBusy })
+      if (!busyChanged && !sessions) return
+      this.replace({
+        ...(busyChanged ? { busySessions: nextBusy } : {}),
+        ...(sessions ? { sessions } : {}),
+      })
       return
     }
     if (
       this.value.agentStatus === 'idle' &&
       !this.value.pending &&
       this.value.agentStep === step &&
-      !busyChanged
+      !busyChanged &&
+      !sessions
     ) {
       return
     }
     this.replace({
       ...(busyChanged ? { busySessions: nextBusy } : {}),
+      ...(sessions ? { sessions } : {}),
       agentStatus: 'idle',
       agentStep: step,
       pending: false,
@@ -740,6 +752,29 @@ export class SessionViewService extends Service {
     if (sessionId) this.locallyIdle.add(sessionId)
   }
 
+  /** 侧栏呼吸看 busySessions；检查器/列表项仍读 session.busy，两边必须一起改。 */
+  private patchSessionBusy(sessionId: string | null | undefined, busy: boolean) {
+    if (!sessionId) return undefined
+    let changed = false
+    const sessions = this.value.sessions.map((item) => {
+      if (item.id !== sessionId || Boolean(item.busy) === busy) return item
+      changed = true
+      return { ...item, busy }
+    })
+    return changed ? sessions : undefined
+  }
+
+  private forgetStaleListBusy(sessions: SessionListItem[]) {
+    if (!this.locallyIdle.size) return sessions
+    let changed = false
+    const next = sessions.map((item) => {
+      if (!item.busy || !this.locallyIdle.has(item.id)) return item
+      changed = true
+      return { ...item, busy: false }
+    })
+    return changed ? next : sessions
+  }
+
   private applyTurnBusy(sessionId: string, type: 'turn/start' | 'turn/end') {
     const busySessions = { ...this.value.busySessions }
     if (type === 'turn/start') {
@@ -753,8 +788,10 @@ export class SessionViewService extends Service {
     }
     const current = sessionId === this.value.sessionId
     const running = Boolean(busySessions[sessionId])
+    const sessions = this.patchSessionBusy(sessionId, type === 'turn/start')
     this.replace({
       busySessions,
+      ...(sessions ? { sessions } : {}),
       ...(current ? { pending: running, agentStatus: running ? 'running' : 'idle' } : {}),
     })
   }
@@ -805,8 +842,9 @@ export class SessionViewService extends Service {
 
   async refreshSessions(opts?: { refresh?: boolean }) {
     try {
-      const next = await getSessionsList<SessionListItem>(opts)
-      if (!next) return
+      const fetched = await getSessionsList<SessionListItem>(opts)
+      if (!fetched) return
+      const next = this.forgetStaleListBusy(fetched)
       const busySessions = this.syncBusyFromSessions(next)
       const sessionsChanged = !sessionsEqual(this.value.sessions, next)
       if (!sessionsChanged && !busySessions) return
@@ -1734,14 +1772,25 @@ export class SessionViewService extends Service {
       return
     }
     const goal = data.goal ?? undefined
-    const sessions = this.value.sessions.map((item) => (item.id === sessionId ? { ...item, goal } : item))
+    const busySessions = { ...this.value.busySessions }
+    if (action === 'resume') {
+      this.markLocalRun(sessionId)
+      busySessions[sessionId] = true
+      this.markBusyHold()
+    } else {
+      this.markLocalIdle(sessionId)
+      delete busySessions[sessionId]
+    }
+    const sessions = this.value.sessions.map((item) =>
+      item.id === sessionId ? { ...item, goal, busy: action === 'resume' } : item,
+    )
     this.replace({
       sessions,
+      busySessions,
       ...(action === 'pause' || action === 'clear' ? { pending: false, agentStatus: 'idle' as const } : {}),
       ...(action === 'resume' ? { pending: true, agentStatus: 'running' as const } : {}),
       error: undefined,
     })
-    if (action === 'resume') this.markBusyHold()
   }
 
   /** 空回车：abort 当前回合并立刻 claim 队列（需队列里有 wake） */
