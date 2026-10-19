@@ -751,7 +751,7 @@ a.fsdb-person.is-link:hover .fsdb-person-name{text-decoration:underline}
 .fsdb-share-scope{display:inline-flex;align-items:center;gap:4px;flex:none;border-radius:999px;background:var(--dsw-hover);padding:4px 8px;color:var(--dsw-label-2);font-size:12px;font-weight:700}
 .fsdb-share-scope.is-shared{background:color-mix(in srgb,var(--dsw-pick) 12%,transparent);color:var(--dsw-pick)}
 .fsdb-scope-detail{position:relative;display:inline-flex}
-.fsdb-scope-tag{display:inline-flex;align-items:center;gap:4px;border:0;border-radius:999px;background:var(--dsw-hover);padding:1px 8px;color:var(--dsw-label-2);font:inherit;font-size:12px;font-weight:650;cursor:pointer}
+.fsdb-scope-tag{display:inline-flex;align-items:center;gap:4px;height:22px;border:0;border-radius:999px;background:var(--dsw-hover);padding:0 8px;color:var(--dsw-label-2);font:inherit;font-size:12px;font-weight:650;line-height:1;white-space:nowrap;cursor:pointer}
 .fsdb-page .tasks-table th.fsdb-action-col,.fsdb-page .tasks-table td.fsdb-action-col{width:1%;white-space:nowrap}
 .fsdb-page .tasks-row-actions{display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px}
 .fsdb-action-tag{display:inline-flex;align-items:center;gap:4px;border:0;border-radius:999px;background:var(--dsw-hover);padding:2px 8px;color:var(--dsw-label);font:inherit;font-size:12px;font-weight:650;cursor:pointer;white-space:nowrap}
@@ -760,6 +760,7 @@ a.fsdb-person.is-link:hover .fsdb-person-name{text-decoration:underline}
 .fsdb-action-tag:hover svg,.fsdb-action-tag:hover .fsdb-ui-glyph{color:var(--dsw-icon-active)}
 .fsdb-action-tag.is-danger,.fsdb-action-tag.is-danger svg,.fsdb-action-tag.is-danger .fsdb-ui-glyph{color:var(--dsw-danger)}
 .fsdb-action-tag:disabled{opacity:.4;cursor:default}
+.fsdb-scope-tag.is-workspace{background:color-mix(in srgb,var(--dsw-business,#0f7b6c) 14%,transparent);color:var(--dsw-business,#0f7b6c)}
 .fsdb-scope-tag.is-shared{background:color-mix(in srgb,var(--dsw-pick) 12%,transparent);color:var(--dsw-pick)}
 .fsdb-page .tasks-table td:has(.fsdb-scope-detail) .fsdb-cell{overflow:visible}
 .fsdb-scope-tag{position:relative;z-index:2;pointer-events:auto}

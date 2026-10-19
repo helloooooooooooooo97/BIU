@@ -202,7 +202,11 @@ function ShareRoleDetail(props: ComponentProps<typeof LazyShareRoleDetail>) {
   return <Suspense fallback={null}><LazyShareRoleDetail {...props} /></Suspense>
 }
 function ShareScopeDetail(props: ComponentProps<typeof LazyShareScopeDetail>) {
-  return <Suspense fallback={null}><LazyShareScopeDetail {...props} /></Suspense>
+  return (
+    <Suspense fallback={<ShareScopeLabel label={props.label} />}>
+      <LazyShareScopeDetail {...props} />
+    </Suspense>
+  )
 }
 
 const EMPTY_VIEWS: CollectionViewType[] = []
@@ -3805,7 +3809,6 @@ export function CollectionBrowser({
   function renderCell(row: DbRecord, key: string, field: FieldSpec, surface: 'table' | 'detail' = 'detail') {
     if (key === 'shareScope') {
       const label = String(row[key] ?? (localData ? '私人' : ''))
-      if (surface === 'table') return <ShareScopeLabel label={label} />
       return (
         <ShareScopeDetail
           collection={collectionPath}
@@ -4203,8 +4206,7 @@ export function CollectionBrowser({
 
   function paintTableCell(row: DbRecord, key: string, field: FieldSpec) {
     if (key === 'shareScope' || key === 'shareRole') {
-      const text = cellValueText(row, key, field) || String(row[key] ?? '')
-      return text ? <span>{text}</span> : null
+      return renderCell(row, key, field, 'table')
     }
     const kind = resolveFieldType(field)
     if (

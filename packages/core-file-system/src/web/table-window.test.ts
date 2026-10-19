@@ -104,7 +104,7 @@ test('unmeasured person and date columns stay wide enough for the first screen',
   assert.equal(tableColumnEstimate('title', undefined, true), TABLE_COL_PIN_PX)
   assert.equal(tableColumnEstimate('createdBy', undefined), 120)
   assert.equal(tableColumnEstimate('updatedAt', undefined), 130)
-  assert.equal(tableColumnEstimate('shareScope', undefined), 64)
+  assert.equal(tableColumnEstimate('shareScope', undefined), 88)
   assert.equal(tableColumnEstimate('status', undefined), TABLE_COL_PX)
   assert.equal(tableColumnEstimate('createdBy', 180), 180)
   const widths = [
