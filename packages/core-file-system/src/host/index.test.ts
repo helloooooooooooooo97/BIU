@@ -2860,3 +2860,40 @@ test('sequential lists reuse the authorized collection pack until bump', async (
   if (after.kind !== 'collection') return
   assert.equal(after.items.length, 3)
 })
+
+test('deleting a /views row is a hard delete and drops the stored view', async () => {
+  const ctx = new Context()
+  await ctx.plugin(tools)
+  class HttpStub extends Service {
+    constructor(c: Context) {
+      super(c, 'http')
+    }
+    route() {}
+    broadcast() {}
+  }
+  new HttpStub(ctx)
+  await ctx.plugin({ inject: ['tools', 'http'], apply: applyFileSystem })
+  const db = ctx.get('database') as DatabaseService
+  db.register(notesCollection())
+  const created = await db.create('/views', [{ title: '会被删掉', tablePath: '/notes', mode: 'table' }])
+  const row = created.items[0]?.value as { id?: unknown; viewId?: unknown }
+  const viewId = String(row.viewId ?? '')
+  const listed = await db.list('/views')
+  if (listed.kind !== 'collection') return
+  assert.equal(listed.items.some((item) => item.viewId === viewId), true)
+
+  const gone = await db.remove('/views', { ids: [String(row.id)] })
+  assert.equal((gone as { trash?: boolean }).trash, undefined)
+  // 硬删：不进回收站，行也不在列表里
+  const after = await db.list('/views')
+  if (after.kind !== 'collection') return
+  assert.equal(after.items.some((item) => item.viewId === viewId), false)
+  const bin = await db.listTrash()
+  assert.equal(bin.items.some((item) => item.collection === '/views'), false)
+  // 视图本体没了：再读应当未知，下次拉取也不会把它吐回来
+  await assert.rejects(() => db.read(`/views/${String(row.id)}`), /unknown/)
+  assert.deepEqual(
+    db.viewCatalog!.viewsFor('/notes').map((view) => view.id).filter((id) => id === viewId),
+    [],
+  )
+})

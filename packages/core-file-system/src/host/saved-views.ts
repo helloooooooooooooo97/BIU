@@ -185,28 +185,41 @@ export class SavedViewsStore {
     return asRecord(tablePath, label, view)
   }
 
-  remove(id: string, accountId = ''): boolean {
+  remove(id: string, accountId = '', tables: CollectionInfo[] = []): boolean {
     if (isReadOnlyViewId(viewIdOfRow(id))) throw new Error('builtin view is read-only')
-    for (const [path, views] of this.byPath) {
-      const hit = views.find((view) => rowId(path, view.id) === id)
-      if (hit && isIndexCollection(path) && hit.createdBy !== accountId) throw new Error('unknown view: ' + id)
-      const next = views.filter((view) => rowId(path, view.id) !== id)
-      if (next.length === views.length) continue
-      this.byPath.set(path, next)
-      this.persistPath(path)
-      return true
+    const cut = id.indexOf('::')
+    const tablePath = cut >= 0 ? normalizeCollectionPath(id.slice(0, cut)) : ''
+    const viewId = tablePath ? id.slice(cut + 2) : id
+    const candidates = tablePath ? [tablePath] : [...this.byPath.keys()]
+    for (const path of candidates) {
+      const views = this.byPath.get(path) ?? []
+      const hit = findView(views, path, viewId, accountId)
+      if (hit) {
+        if (hit.builtin || isReadOnlyViewId(String(hit.id))) throw new Error('builtin view is read-only')
+        this.byPath.set(path, views.filter((view) => view !== hit))
+        this.persistPath(path)
+        return true
+      }
+      // 视图记录在案但不在当前账号名下：与「不存在」同样处理，不泄露他人视图
+      if (views.some((view) => String(view.id) === viewId)) throw new Error(`unknown view: ${id}`)
     }
+    void tables
     throw new Error(`unknown view: ${id}`)
   }
 
-  write(id: string, patch: Record<string, unknown>, accountId = ''): DbRecord {
+  write(id: string, patch: Record<string, unknown>, accountId = '', tables: CollectionInfo[] = []): DbRecord {
     if (isReadOnlyViewId(viewIdOfRow(id))) throw new Error('builtin view is read-only')
-    for (const [path, views] of this.byPath) {
-      const idx = views.findIndex((view) => rowId(path, view.id) === id)
-      if (idx < 0) continue
+    const cut = id.indexOf('::')
+    const tablePath = cut >= 0 ? normalizeCollectionPath(id.slice(0, cut)) : ''
+    const viewId = tablePath ? id.slice(cut + 2) : id
+    const candidates = tablePath ? [tablePath] : [...this.byPath.keys()]
+    for (const path of candidates) {
+      const views = this.byPath.get(path) ?? []
+      const hit = findView(views, path, viewId, accountId)
+      if (!hit) continue
+      const idx = views.indexOf(hit)
       const cur = views[idx]!
       if (cur.builtin || isReadOnlyViewId(cur.id)) throw new Error('builtin view is read-only')
-      if (isIndexCollection(path) && cur.createdBy !== accountId) throw new Error('unknown view: ' + id)
       const next: StoredView = {
         ...cur,
         ...(typeof patch.title === 'string' ? { name: patch.title } : {}),
@@ -232,10 +245,26 @@ export class SavedViewsStore {
       }
       views[idx] = next
       this.persistPath(path)
-      return asRecord(path, path, next)
+      const table = tables.find((item) => normalizeCollectionPath(item.path) === path)
+      return asRecord(path, tableLabelOf(table, path), next)
     }
     throw new Error(`unknown view: ${id}`)
   }
+}
+
+/**
+ * 标签表（/facets 这类索引表）的视图按创建人分开存，同一个 viewId 可能属于多个账号。
+ * 只在当前账号名下的视图里找，避免把别人的视图当成「未知视图」或误改误删。
+ */
+function findView(views: StoredView[], path: string, viewId: string, accountId: string) {
+  const owned = isIndexCollection(path)
+    ? views.filter((item) => !item.createdBy || item.createdBy === accountId)
+    : views
+  return owned.find((item) => String(item.id) === viewId)
+}
+
+function tableLabelOf(table: CollectionInfo | undefined, tablePath: string) {
+  return table?.view?.title ?? table?.label ?? tablePath
 }
 
 function rowId(path: string, viewId: string) {
@@ -406,7 +435,7 @@ export function viewsCollection(
     },
     list,
     get: (id) => list().find((row) => row.id === id) ?? null,
-    update: (id, patch) => store.write(id, patch, accountId()),
+    update: (id, patch) => store.write(id, patch, accountId(), tables()),
     create: (rows) => rows.map((fields) => store.create(fields, tables(), accountId())),
     remove: async (query) => {
       const ids = query.ids ?? []

@@ -704,7 +704,7 @@ function sortRecords(rows: DbRecord[], field: string, dir: 'asc' | 'desc', sorts
 
 export const DEFAULT_PAGE_SIZE = 20
 export const MAX_PAGE_SIZE = 200
-const HARD_DELETE_PATHS = new Set(['/events', '/trash', '/workspace-members'])
+const HARD_DELETE_PATHS = new Set(['/events', '/trash', '/workspace-members', '/views'])
 
 type VisibleSortedPack = {
   rows: DbRecord[]
@@ -767,6 +767,23 @@ export function clampPage(limit?: number, offset?: number) {
   const size = Math.min(MAX_PAGE_SIZE, Math.max(1, Number.isFinite(Number(limit)) ? Number(limit) : DEFAULT_PAGE_SIZE))
   const start = Math.max(0, Number.isFinite(Number(offset)) ? Math.floor(Number(offset)) : 0)
   return { limit: size, offset: start }
+}
+
+/** /views 行的 id 是 `表::视图`（表名不带前导斜杠），删视图本体时按它定位。 */
+function rowIdOfView(collection: string, viewId: string) {
+  return `${normalizeCollectionPath(collection).replace(/^\//, '')}::${viewId}`
+}
+
+/** /views 行里能定位视图本体的 (表, 视图 id) 对。 */
+function viewRowKeys(rows: DbRecord[]) {
+  const out: Array<{ collection: string; viewId: string }> = []
+  for (const row of rows) {
+    const collection = normalizeCollectionPath(String(row.tablePath ?? ''))
+    const viewId = String(row.viewId ?? '').trim()
+    if (!collection || collection === '/' || !viewId) continue
+    out.push({ collection, viewId })
+  }
+  return out
 }
 
 export class DatabaseService extends Service implements Database {
@@ -2274,15 +2291,24 @@ export class DatabaseService extends Service implements Database {
       return { kind: 'deleted' as const, path: spec.path, ids, trash: true }
     }
     await spec.remove({ ids })
+    // 视图是硬删除：/views 只是 savedViews 现生成的一层行，删行必须连视图本体一起删，
+    // 否则下一次列表/侧边栏拉取会把它原样吐回来（表现为「删掉的视图自己弹出来」）。
+    if (spec.path === '/views') {
+      for (const key of viewRowKeys(matched)) {
+        try {
+          savedViews.remove(rowIdOfView(key.collection, key.viewId), currentAccountId())
+        } catch {
+          /* 视图本体已不在（前端删视图时先走 /api/db/saved-views 整份覆盖） */
+        }
+      }
+    }
     for (const id of ids) {
       this.facets.removeRecord(spec.path, id)
       this.shares.revokeRecord(spec.path, id)
     }
     if (spec.path === '/views') {
-      for (const row of matched) {
-        const collection = normalizeCollectionPath(String(row.tablePath ?? ''))
-        const viewId = String(row.viewId ?? '').trim()
-        if (collection && collection !== '/' && viewId) this.shares.revokeView(collection, viewId)
+      for (const key of viewRowKeys(matched)) {
+        this.shares.revokeView(key.collection, key.viewId)
       }
     }
     this.bump()

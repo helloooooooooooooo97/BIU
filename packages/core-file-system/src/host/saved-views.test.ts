@@ -156,3 +156,53 @@ test('index collection views stay with the account that saved them', async () =>
   assert.deepEqual(bobRows.map((row) => row.viewId).filter((id) => id !== builtinAllViewId('/facets')), ['bob-view'])
   await assert.rejects(() => spec.remove!({ ids: ['facets::ada-view'] }), /unknown view/)
 })
+
+test('update and delete accept row ids (table::viewId) and keep the source table label', async () => {
+  const store = new SavedViewsStore()
+  const spec = viewsCollection(store, () => [
+    { path: '/tasks', id: 'tasks', kind: 'collection', label: 'Task', view: { moduleId: 'tasks', route: '/tasks', title: 'Task' } },
+  ])
+  const [row] = await spec.create!([{ tablePath: '/tasks', title: '看板', mode: 'table' }])
+  const rowId = String(row?.id)
+  const written = await spec.update!(rowId, { title: '看板 v2' })
+  assert.equal(written.id, rowId)
+  assert.equal(written.tablePath, '/tasks')
+  assert.equal(written.title, '看板 v2')
+  assert.equal(written.table, 'Task')
+  assert.equal((await spec.list()).find((item) => item.id === rowId)?.title, '看板 v2')
+  assert.deepEqual(await spec.remove!({ ids: [rowId] }), [rowId])
+  assert.equal((await spec.list()).some((item) => item.id === rowId), false)
+})
+
+test('update of another account view on an index collection stays unknown', async () => {
+  const store = new SavedViewsStore()
+  const spec = (account: string) =>
+    viewsCollection(
+      store,
+      () => [{ path: '/facets', id: 'facets', kind: 'collection', label: '标签', view: { moduleId: 'facets', route: '/facets', title: '标签' } }],
+      () => account,
+    )
+  spec('ada').create!([{ tablePath: '/facets', viewId: 'ada-view', title: 'Ada 的标签' }])
+  assert.equal(store.viewsFor('/facets', 'bob').length, 0)
+  assert.throws(() => store.write('facets::ada-view', { title: '抢改' }, 'bob'), /unknown view/)
+  assert.throws(() => spec('bob').update!('facets::ada-view', { title: '抢改' }), /unknown view/)
+  await assert.rejects(() => spec('bob').remove!({ ids: ['facets::ada-view'] }), /unknown view/)
+  assert.equal(spec('ada').update!('facets::ada-view', { title: 'Ada 改' }).title, 'Ada 改')
+  assert.equal(store.viewsFor('/facets', 'ada')[0]?.name, 'Ada 改')
+})
+
+test('deleting a /views row also removes the stored view so it cannot come back', async () => {
+  const store = new SavedViewsStore()
+  const spec = viewsCollection(store, () => [
+    { path: '/tasks', id: 'tasks', kind: 'collection', label: 'Task', view: { moduleId: 'tasks', route: '/tasks', title: 'Task' } },
+  ])
+  const [row] = await spec.create!([{ tablePath: '/tasks', viewId: 'gone', title: '会被删掉' }])
+  assert.equal(store.viewsFor('/tasks').length, 1)
+  // 宿主删 /views 行时按 `表::视图` 定位视图本体
+  assert.equal(store.remove(String(row?.id)), true)
+  assert.deepEqual(store.viewsFor('/tasks'), [])
+  assert.equal((await spec.list()).some((item) => item.id === row?.id), false)
+  // 再删一次要报未知，不能静默成功
+  assert.throws(() => store.remove(String(row?.id)), /unknown view/)
+})
+
