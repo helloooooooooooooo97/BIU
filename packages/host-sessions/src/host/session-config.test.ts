@@ -25,21 +25,22 @@ test('session config title overrides derived title', async () => {
   assert.equal(again.config?.title, '指挥台-A')
 })
 
-test('session config stores tags and pin', async () => {
+test('session config stores facet and pin; legacy tags become facet', async () => {
   const ctx = new Context()
   await ctx.plugin(sessionStore, { driver: 'memory' })
   await ctx.plugin(sessions)
   const record = await ctx.sessions.create()
-  await ctx.sessions.patchConfig(record.id, { tags: ['host-ui', 'bug'], pinned: true })
+  await ctx.sessions.patchConfig(record.id, { tags: ['host-ui', 'bug'], pinned: true } as never)
   const again = await ctx.sessions.require(record.id)
-  assert.deepEqual(again.config?.tags, ['host-ui', 'bug'])
+  assert.equal(again.config && 'tags' in again.config, false)
+  assert.deepEqual(again.config?.facet, { tags: ['host-ui', 'bug'], values: {} })
   assert.equal(again.config?.pinned, true)
   const listed = await ctx.sessions.listSummaries()
-  assert.deepEqual(listed.find((item) => item.id === record.id)?.config?.tags, ['host-ui', 'bug'])
-  await ctx.sessions.patchConfig(record.id, { pinned: false, tags: [] })
+  assert.deepEqual(listed.find((item) => item.id === record.id)?.config?.facet, { tags: ['host-ui', 'bug'], values: {} })
+  await ctx.sessions.patchConfig(record.id, { pinned: false, facet: { tags: [], values: {} } })
   const cleared = await ctx.sessions.require(record.id)
   assert.equal(cleared.config?.pinned, undefined)
-  assert.equal(cleared.config?.tags, undefined)
+  assert.deepEqual(cleared.config?.facet, { tags: [], values: {} })
 })
 
 test('session config stores inspector bind', async () => {

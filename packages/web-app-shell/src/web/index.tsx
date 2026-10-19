@@ -975,7 +975,7 @@ function Shell(props: SlotProps) {
               sessions={danceSessions.map((item) => ({
                 id: item.id,
                 title: item.title,
-                tags: item.tags,
+                tags: item.facet?.tags,
                 updatedAt: item.updatedAt,
                 mascot: item.mascot,
               }))}

@@ -72,7 +72,7 @@ export function workspaceMembersCollection(
       title: '成员',
       inspector: false,
       blurb:
-        '当前工作区成员目录。db_list 查看成员；Owner 可用 db_update 将 role 限定为 owner|admin|member|viewer；Owner/Admin 可用 db_create 邀请、db_delete 移除其有权管理的成员。viewer 只能查看获准的数据，不能创建或编辑。修改 tags 等元数据不会改变角色。',
+        '当前工作区成员目录。db_list 查看成员；Owner 可用 db_update 将 role 限定为 owner|admin|member|viewer；Owner/Admin 可用 db_create 邀请、db_delete 移除其有权管理的成员。viewer 只能查看获准的数据，不能创建或编辑。修改合集等元数据不会改变角色。',
       order: 18,
       icon: 'users',
     } } : {}),

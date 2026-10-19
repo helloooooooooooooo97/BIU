@@ -88,7 +88,7 @@ test('plugin actions use the shared file-system capsules', async () => {
   assert.doesNotMatch(chrome, /tasks-icon-btn/)
 })
 
-test('plugin title is the name only; tags stay the file-system writable column', async () => {
+test('plugin title is the name only; tags are not a custom cell', async () => {
   const { readFileSync } = await import('node:fs')
   const { resolve } = await import('node:path')
   const chrome = readFileSync(resolve(import.meta.dirname, './chrome.tsx'), 'utf8')

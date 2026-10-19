@@ -128,8 +128,6 @@ export interface SessionConfig {
   goal?: SessionGoal
   /** 极简模式下常驻额外工具 */
   extraTools?: string[]
-  /** 侧栏标签；一条会话可属于多个标签组 */
-  tags?: string[]
   /** 侧栏置顶 */
   pinned?: boolean
   /** 记录图标 */
@@ -182,6 +180,39 @@ export function normalizeInspectorBind(value: unknown): SessionInspectorBind | u
   return Object.keys(next).length ? next : undefined
 }
 
+function asSessionFacet(raw: unknown): SessionConfig['facet'] | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const rec = raw as Record<string, unknown>
+  const tags = Array.isArray(rec.tags)
+    ? [...new Set(rec.tags.map((item) => String(item).trim()).filter(Boolean))].slice(0, 24)
+    : []
+  const values: Record<string, Record<string, unknown>> = {}
+  if (rec.values && typeof rec.values === 'object' && !Array.isArray(rec.values)) {
+    for (const [key, bag] of Object.entries(rec.values as Record<string, unknown>)) {
+      if (bag && typeof bag === 'object' && !Array.isArray(bag)) values[key] = { ...bag }
+    }
+  }
+  if (!tags.length && !Object.keys(values).length) return undefined
+  return { tags, values }
+}
+
+/** 旧会话 tags 并进合集：每个标签名就是贴上的合集 id/显示名。 */
+function absorbLegacySessionTags(
+  facet: SessionConfig['facet'] | undefined,
+  tags: unknown,
+): SessionConfig['facet'] | undefined {
+  const extra = Array.isArray(tags)
+    ? [...new Set(tags.map((item) => String(item).trim()).filter(Boolean))].slice(0, 24)
+    : []
+  if (!extra.length) return facet
+  const tagsNext = [...(facet?.tags ?? [])]
+  const values = { ...(facet?.values ?? {}) }
+  for (const tag of extra) {
+    if (!tagsNext.includes(tag)) tagsNext.push(tag)
+  }
+  return { tags: tagsNext.slice(0, 24), values }
+}
+
 function normalizeAutoCompactInputTokens(value: unknown): number | undefined {
   const n = typeof value === 'number' ? value : typeof value === 'string' && value.trim() ? Number(value) : NaN
   if (!Number.isFinite(n) || n <= 0) return undefined
@@ -223,27 +254,16 @@ export function normalizeSessionConfig(value: unknown): SessionConfig | undefine
   if (Array.isArray(raw.extraTools)) {
     next.extraTools = [...new Set(raw.extraTools.map((name) => String(name).trim()).filter(Boolean))]
   }
-  if (Array.isArray(raw.tags)) {
-    next.tags = [...new Set(raw.tags.map((name) => String(name).trim()).filter(Boolean))].slice(0, 24)
-  }
+  const facet = absorbLegacySessionTags(asSessionFacet(raw.facet), raw.tags)
+  if (facet) next.facet = facet
   if (typeof raw.pinned === 'boolean') next.pinned = raw.pinned
   if (typeof raw.emoji === 'string') next.emoji = raw.emoji
   if (typeof raw.createdAt === 'number' && Number.isFinite(raw.createdAt) && raw.createdAt > 0) next.createdAt = raw.createdAt
-  if (raw.facet && typeof raw.facet === 'object' && !Array.isArray(raw.facet)) {
-    const rec = raw.facet as Record<string, unknown>
-    const tags = Array.isArray(rec.tags) ? [...new Set(rec.tags.map((item) => String(item).trim()).filter(Boolean))] : []
-    const values: Record<string, Record<string, unknown>> = {}
-    if (rec.values && typeof rec.values === 'object' && !Array.isArray(rec.values)) {
-      for (const [key, bag] of Object.entries(rec.values as Record<string, unknown>)) {
-        if (bag && typeof bag === 'object' && !Array.isArray(bag)) values[key] = { ...bag }
-      }
-    }
-    next.facet = { tags, values }
-  }
   const inspector = normalizeInspectorBind(raw.inspector)
   if (inspector) next.inspector = inspector
   const autoCompact = normalizeAutoCompactInputTokens(raw.autoCompactInputTokens)
   if (autoCompact) next.autoCompactInputTokens = autoCompact
+  delete (next as { tags?: unknown }).tags
   return Object.keys(next).length ? next : undefined
 }
 
@@ -283,10 +303,10 @@ export function mergeSessionConfig(
   if (Array.isArray(patch.extraTools)) {
     next.extraTools = [...new Set(patch.extraTools.map((name) => String(name).trim()).filter(Boolean))]
   }
-  if (Array.isArray(patch.tags)) {
-    const tags = [...new Set(patch.tags.map((name) => String(name).trim()).filter(Boolean))].slice(0, 24)
-    if (tags.length) next.tags = tags
-    else delete next.tags
+  if (Array.isArray((patch as { tags?: unknown }).tags) && !('facet' in patch)) {
+    const facet = absorbLegacySessionTags(next.facet, (patch as { tags?: unknown }).tags)
+    if (facet) next.facet = facet
+    else delete next.facet
   }
   if (typeof patch.pinned === 'boolean') {
     if (patch.pinned) next.pinned = true
@@ -317,6 +337,7 @@ export function mergeSessionConfig(
     if (autoCompact) next.autoCompactInputTokens = autoCompact
     else delete next.autoCompactInputTokens
   }
+  delete (next as { tags?: unknown }).tags
   return Object.keys(next).length ? next : undefined
 }
 

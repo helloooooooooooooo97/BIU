@@ -1437,6 +1437,7 @@ export function apply(ctx: Context) {
         systemPrompt?: string | null
         agentMode?: AgentToolMode
         extraTools?: string[]
+        facet?: SessionConfig['facet']
         tags?: string[]
         pinned?: boolean
         autoCompactInputTokens?: number | null
@@ -1452,6 +1453,9 @@ export function apply(ctx: Context) {
       }
       if (isAgentToolMode(payload.agentMode)) patch.agentMode = payload.agentMode
       if (Array.isArray(payload.extraTools)) patch.extraTools = payload.extraTools.map((name) => String(name))
+      if (payload.facet && typeof payload.facet === 'object' && !Array.isArray(payload.facet)) {
+        patch.facet = payload.facet as SessionConfig['facet']
+      }
       if (Array.isArray(payload.tags)) patch.tags = payload.tags.map((name) => String(name))
       if (typeof payload.pinned === 'boolean') patch.pinned = payload.pinned
       if (typeof payload.autoCompactInputTokens === 'number') {
@@ -1495,7 +1499,7 @@ export function apply(ctx: Context) {
         busy: ctx.agents.isBusy(item.id),
         ...(item.project ? { project: item.project } : {}),
         ...(item.mascot ? { mascot: item.mascot } : {}),
-        tags: item.config?.tags ?? [],
+        ...(item.config?.facet ? { facet: item.config.facet } : {}),
         pinned: Boolean(item.config?.pinned),
         ...(item.config?.inspector ? { inspector: item.config.inspector } : {}),
         ...(item.config?.goal ? { goal: item.config.goal } : {}),
