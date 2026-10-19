@@ -19,6 +19,27 @@ export function viewTabsOverlapRight(left: Pick<DOMRect, 'right'>, right: Pick<D
   return left.right > right.left + 1
 }
 
+/** Space from the view wrap's left edge to the right controls, minus sibling chips. */
+export function availableViewTabSpace(
+  wrapLeft: number,
+  rightLeft: number,
+  siblingWidth = 0,
+  gap = 8,
+): number {
+  return Math.max(0, rightLeft - wrapLeft - siblingWidth - gap)
+}
+
+export function leftClusterSiblingWidth(left: Element, wrap: Element, gap = 6): number {
+  let width = 0
+  let others = 0
+  for (const child of Array.from(left.children)) {
+    if (child === wrap) continue
+    width += (child as HTMLElement).offsetWidth
+    others += 1
+  }
+  return width + others * gap
+}
+
 export function splitVisibleViews<T extends { id: string }>(
   views: T[],
   visibleCount: number,
