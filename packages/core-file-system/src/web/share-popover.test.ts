@@ -135,8 +135,15 @@ test('list permission column uses the same capsule and loads the chain on click'
   const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
   assert.match(src, /data-testid="fsdb-role-tag"/)
   assert.match(labelSrc, /className=\{`fsdb-scope-tag is-\$\{accessTone\(label\)\}`\}/)
+  assert.match(css, /\.fsdb-scope-tag\.is-manage[^{]*\{[^}]*background:var\(--dsw-hover\)/)
   assert.match(css, /\.fsdb-scope-tag\.is-manage[^{]*\{[^}]*color:var\(--dsw-label-2\)/)
   assert.doesNotMatch(css, /\.fsdb-scope-tag\.is-manage[^{]*\{[^}]*--dsw-business/)
+  assert.doesNotMatch(css, /\.fsdb-scope-tag\.is-manage[^{]*\{[^}]*#2c2c2b/)
+  assert.match(
+    css,
+    /\.fsdb-scope-tag\.is-shared,\.fsdb-scope-pill\.is-shared,\.fsdb-scope-tag\.is-edit,\.fsdb-scope-pill\.is-edit\{background:color-mix\(in srgb,var\(--dsw-pick\) 12%/,
+  )
+  assert.doesNotMatch(css, /\.fsdb-scope-tag\.is-edit[^{]*\{[^}]*#2383e2/)
   assert.match(browser, /fallback=\{<ShareRoleLabel label=\{props\.label\} \/>\}/)
   assert.match(browser, /if \(key === 'shareScope' \|\| key === 'shareRole'\) \{\s*return renderCell\(row, key, field, 'table'\)/)
   assert.match(browser, /localOnly=\{localKnown \? localData : null\}/)
