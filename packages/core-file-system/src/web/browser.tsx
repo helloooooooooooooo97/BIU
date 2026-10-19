@@ -663,6 +663,7 @@ type ListCacheSnap = {
   total: number
   stat: StatResult | null
   groupBuckets?: GroupBucket[]
+  listLimit?: number
 }
 const listCache = new Map<string, ListCacheSnap>()
 
@@ -670,8 +671,12 @@ function listCacheKey(path: string, viewId?: string | null) {
   return `${path}\0${viewId ?? ''}`
 }
 
-function peekListCache(path: string, viewId?: string | null) {
-  return listCache.get(listCacheKey(path, viewId))
+function peekListCache(path: string, viewId?: string | null, minLimit?: number) {
+  const snap = listCache.get(listCacheKey(path, viewId))
+  if (!snap) return
+  const loaded = snap.listLimit ?? snap.items.length
+  if (minLimit != null && loaded < minLimit && snap.total > loaded) return undefined
+  return snap
 }
 
 function bucketsReadyToCache(buckets?: GroupBucket[]) {
@@ -705,14 +710,14 @@ async function warmListCacheForView(
   view: SavedView,
   listed: SavedView[],
 ) {
-  if (peekListCache(path, view.id)) return
+  const pageSize = normalizePageSize(view.pageSize)
+  if (peekListCache(path, view.id, pageSize)) return
   const key = listCacheKey(path, view.id)
   if (warmingLists.has(key)) return
   warmingLists.add(key)
   try {
-    if (peekListCache(path, view.id)) return
+    if (peekListCache(path, view.id, pageSize)) return
     const groupBy = view.groupBy ?? ''
-    const pageSize = normalizePageSize(view.pageSize)
     const sorts = normalizeSorts(view.sorts, view.sortField, view.sortDir)
     const filters = encodeListFilter(catalogLockFilters(view.id, listed), resolveViewFilterTree(view))
     const columns = listProjectionKeys({
@@ -760,7 +765,7 @@ async function warmListCacheForView(
     }
     rememberListCache(
       path,
-      { items, total, stat: { ...stat, schema }, groupBuckets: buckets },
+      { items, total, stat: { ...stat, schema }, groupBuckets: buckets, listLimit: pageSize },
       view.id,
     )
   } catch {
@@ -1059,7 +1064,7 @@ function listHoldFromCache(cached: ListCacheSnap, view: SavedView | null, path: 
     // 有 groupBy 但缓存还没有组桶时，不能先画成平铺行，否则 shareScope 会先平铺再收成「共享」。
     nodes = EMPTY_HOLD_NODES
   } else if (cached.items.length) {
-    nodes = cached.items.map((row) => ({
+    nodes = cached.items.slice(0, pageSize).map((row) => ({
       kind: 'row' as const,
       key: String(row.id),
       keyPrefix: '',
@@ -1730,7 +1735,7 @@ export function CollectionBrowser({
   const pendingPathQueryRef = useRef<PendingPathQuery | null>(null)
   const adoptListCacheForViewRef = useRef<(path: string, view: SavedView | null | undefined) => void>(() => undefined)
   adoptListCacheForViewRef.current = (path, view) => {
-    const cached = view ? peekListCache(path, view.id) : undefined
+    const cached = view ? peekListCache(path, view.id, normalizePageSize(view.pageSize)) : undefined
     if (cached) {
       const snap = listHoldFromCache(cached, view, path)
       tableHoldRef.current = snap
@@ -1760,7 +1765,7 @@ export function CollectionBrowser({
       adoptListCacheForViewRef.current(path, view)
       return
     }
-    const cached = peekListCache(path, view?.id)
+    const cached = peekListCache(path, view?.id, normalizePageSize(view?.pageSize))
     if (cached) {
       tableHoldRef.current = listHoldFromCache(cached, view, path)
       return
@@ -1778,7 +1783,7 @@ export function CollectionBrowser({
     const listed = paintListedViews(collectionPath)
     rememberViews(collectionPath, listed)
     const next = stored || listed[0] ? pickViewForRoute(listed, collectionPath, routeViewId) || stored || listed[0] : null
-    const cached = peekListCache(dataPath, next?.id)
+    const cached = peekListCache(dataPath, next?.id, normalizePageSize(next?.pageSize))
     const adoptView = (view: SavedView | null | undefined, schema?: CollectionSchema) => {
       if (!view) {
         setViews([])
@@ -2054,7 +2059,7 @@ export function CollectionBrowser({
   }, [])
   const totalRef = useRef(total)
   totalRef.current = total
-  const listIdentityKey = `${dataPath}\0${pageSize}\0${fetchQuery}\0${sortField}\0${sortDir}\0${sortsStateKey(sorts)}\0${JSON.stringify(queryFilters)}\0${activeViewId ?? ''}\0${customView ? 'full' : 'proj'}\0${groupBy}\0${wrapCells ? 1 : 0}`
+  const listIdentityKey = `${dataPath}\0${pageSize}\0${fetchQuery}\0${sortField}\0${sortDir}\0${sortsStateKey(sorts)}\0${JSON.stringify(queryFilters)}\0${activeViewId ?? ''}\0${customView ? 'full' : 'proj'}\0${groupBy}`
   const reloadKey = `${listIdentityKey}\0${groupBy ? JSON.stringify(groupPages) : page}\0${groupFillKeys.join('\0')}`
   if (releaseHoldOnPaintRef.current && paintedPath === dataPath && tableHoldRef.current?.nodes !== EMPTY_HOLD_NODES) {
     releaseHoldOnPaintRef.current = false
@@ -2075,7 +2080,8 @@ export function CollectionBrowser({
     const reqSorts = pending?.sorts ?? sorts
     const reqFilters = pending?.queryFilters ?? queryFilters
     const reqGroupBy = pending?.groupBy ?? groupBy
-    const reqPageSize = pending?.pageSize ?? pageSize
+    const reqPageSize = pageSize
+    if (pending) pending.pageSize = reqPageSize
     const reqWrap = pending?.wrapCells ?? wrapCells
     const reqColumns = pending?.listColumns ?? listColumns
     const reqViewId = pending?.activeViewId ?? activeViewId
@@ -2212,13 +2218,14 @@ export function CollectionBrowser({
           total: listed.total,
           stat: { ...nextStat, schema: nextSchema },
           groupBuckets: buckets,
+          listLimit: reqPageSize,
         },
         reqViewId,
       )
       if (reqViewId) rememberPreviewTotalForView(collectionPath, reqViewId, listed.total)
       setError('')
       loadedIdentityRef.current = pendingView
-        ? `${dataPath}\0${pendingView.pageSize}\0${pendingView.fetchQuery}\0${pendingView.sortField}\0${pendingView.sortDir}\0${sortsStateKey(pendingView.sorts)}\0${JSON.stringify(pendingView.queryFilters)}\0${pendingView.activeViewId}\0${customView ? 'full' : 'proj'}\0${pendingView.groupBy}\0${pendingView.wrapCells ? 1 : 0}`
+        ? `${dataPath}\0${reqPageSize}\0${pendingView.fetchQuery}\0${pendingView.sortField}\0${pendingView.sortDir}\0${sortsStateKey(pendingView.sorts)}\0${JSON.stringify(pendingView.queryFilters)}\0${pendingView.activeViewId}\0${customView ? 'full' : 'proj'}\0${pendingView.groupBy}`
         : listIdentityKey
       loadedPagesRef.current = { ...groupPagesRef.current }
       if (!listReadySent.current) listReadySent.current = true
@@ -2351,7 +2358,7 @@ export function CollectionBrowser({
     setRouteViewReady((prev) => (prev === !pendingRouteView ? prev : !pendingRouteView))
     const holding = Boolean(tableHoldRef.current)
     const holdingRows = holding && tableHoldRef.current?.nodes !== EMPTY_HOLD_NODES
-    const destCached = peekListCache(dataPath, routeViewId)
+    const destCached = peekListCache(dataPath, routeViewId, pageSize)
     if (!holdingRows && !destCached) {
       listReadySent.current = false
       pageRef.current?.removeAttribute('data-list-ready')
@@ -2360,7 +2367,7 @@ export function CollectionBrowser({
     }
     if (pathHandled) return
     setCollapsed((prev) => (Object.keys(prev).length ? {} : prev))
-    const cached = peekListCache(dataPath, routeViewId)
+    const cached = peekListCache(dataPath, routeViewId, pageSize)
     setItems(cached?.items ?? [])
     setStat(cached?.stat ?? null)
     setTotal(cached?.total ?? 0)
@@ -2560,7 +2567,7 @@ export function CollectionBrowser({
       skipColumnReload.current = false
       if (!needsLoad) return
     }
-    if (routeRecordId) return
+    if (routeRecordId && !needsLoad) return
     if (!routeViewReadyRef.current && !needsLoad) return
     void reloadRef.current({ force: needsLoad })
   }, [listIdentityKey, reloadKey, routeRecordId, routeViewReady])
@@ -3187,7 +3194,7 @@ export function CollectionBrowser({
       const listed = paintListedViews(collectionPath)
       void warmListCacheForView(collectionPath, view, listed).then(() => {
         if (activeViewIdRef.current !== view.id) return
-        if (!peekListCache(dataPath, view.id)) return
+        if (!peekListCache(dataPath, view.id, normalizePageSize(view.pageSize))) return
         adoptListCacheForViewRef.current(dataPath, view)
         setHoldNav((n) => n + 1)
       })
@@ -3401,6 +3408,15 @@ export function CollectionBrowser({
     const next = current.includes(key) ? current.filter((item) => item !== key) : [...current, key]
     if (!next.length) return
     setVisibleColumns(next)
+  }
+
+  function changePageSize(next: number) {
+    const size = normalizePageSize(next)
+    if (size === pageSize) return
+    if (pendingPathQueryRef.current) pendingPathQueryRef.current = { ...pendingPathQueryRef.current, pageSize: size }
+    setPageSize(size)
+    setPage(0)
+    patchActiveView({ pageSize: size })
   }
 
   function setWrap(next: boolean) {
@@ -4399,7 +4415,7 @@ export function CollectionBrowser({
           <div className="fsdb-pager">
             <span className="fsdb-pager-meta">{node.count}</span>
             <div className="fsdb-pager-nav">
-              <PagerSizeControl pageSize={pageSize} onChange={setPageSize} />
+              <PagerSizeControl pageSize={pageSize} onChange={changePageSize} />
               <button
                 type="button"
                 className="tasks-icon-btn"
@@ -4996,7 +5012,7 @@ export function CollectionBrowser({
                     on={truncateCells}
                     onToggle={() => setTruncate(!truncateCells)}
                   />
-                  {treeable ? (
+                  {parentKey ? (
                     <CheckRow
                       icon={<ChevronRightIcon aria-hidden className="size-[14px]" />}
                       label="树形展示"
@@ -5483,7 +5499,7 @@ export function CollectionBrowser({
               <span>{total}</span>
             </span>
             <div className="fsdb-pager-nav">
-              <PagerSizeControl pageSize={pageSize} onChange={setPageSize} />
+              <PagerSizeControl pageSize={pageSize} onChange={changePageSize} />
               <button
                 type="button"
                 className="tasks-icon-btn"
@@ -5497,7 +5513,7 @@ export function CollectionBrowser({
                 type="button"
                 className="tasks-icon-btn"
                 aria-label="下一页"
-                disabled={total <= 0 || (page + 1) * pageSize >= total || (items.length > 0 && items.length < pageSize)}
+                disabled={total <= 0 || (page + 1) * pageSize >= total}
                 onClick={() => setPage((prev) => prev + 1)}
               >
                 <UiGlyph icon="chevron-right" />
