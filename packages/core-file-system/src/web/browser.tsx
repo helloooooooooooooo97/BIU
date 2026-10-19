@@ -160,6 +160,7 @@ import {
 const SchemaFieldEditor = lazy(() => import('./schema-field.tsx').then((m) => ({ default: m.SchemaFieldEditor })))
 const SortQueryMenu = lazy(() => import('./query-menus.tsx').then((m) => ({ default: m.SortQueryMenu })))
 const FilterQueryMenu = lazy(() => import('./query-menus.tsx').then((m) => ({ default: m.FilterQueryMenu })))
+const QueryFlyout = lazy(() => import('./query-menus.tsx').then((m) => ({ default: m.QueryFlyout })))
 const FieldValuePop = lazy(() => import('./field-value-pop.tsx').then((m) => ({ default: m.FieldValuePop })))
 const CellPopDraft = lazy(() => import('./cell-pop-draft.tsx').then((m) => ({ default: m.CellPopDraft })))
 const RecordDetail = lazy(() => import('./record-detail.tsx').then((m) => ({ default: m.RecordDetail })))
@@ -4877,16 +4878,16 @@ export function CollectionBrowser({
                 {sortCustom ? <span className="tasks-sort-dot" aria-hidden /> : null}
               </button>
               {sortMenuOpen ? (
-                <HeadlessDismiss
-                  onDismiss={() => setSortMenuOpen(false)}
-                  insideRef={sortRef}
+                <Suspense fallback={null}>
+                <QueryFlyout
+                  anchorRef={sortRef}
+                  onClose={() => setSortMenuOpen(false)}
                   ignoreSelector={QUERY_NEST_IGNORE}
                   inside={(node) => node instanceof Element && Boolean(node.closest('.db-search-menu, .fsdb-cellselect-menu, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]'))}
                 >
-                <Suspense fallback={null}>
                 <SortQueryMenu sorts={sorts} fields={sortFields} onChange={applySorts} />
+                </QueryFlyout>
                 </Suspense>
-                </HeadlessDismiss>
               ) : null}
             </div>
             {activeView?.builtin ? null : (
@@ -4902,21 +4903,21 @@ export function CollectionBrowser({
                 {filterActive ? <span className="tasks-filter-dot" aria-hidden /> : null}
               </button>
               {filterOpen ? (
-                <HeadlessDismiss
-                  onDismiss={() => setFilterOpen(false)}
-                  insideRef={filterRef}
+                <Suspense fallback={null}>
+                <QueryFlyout
+                  anchorRef={filterRef}
+                  onClose={() => setFilterOpen(false)}
                   ignoreSelector={QUERY_NEST_IGNORE}
                   inside={(node) => node instanceof Element && Boolean(node.closest('.db-search-menu, .fsdb-cellselect-menu, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]'))}
                 >
-                <Suspense fallback={null}>
                 <FilterQueryMenu
                   tree={filterTree}
                   fields={filterFields}
                   valueOptions={filterValueOptions}
                   onChange={applyFilterTree}
                 />
+                </QueryFlyout>
                 </Suspense>
-                </HeadlessDismiss>
               ) : null}
             </div>
             )}

@@ -1,4 +1,5 @@
-import { useState, type ReactNode } from 'react'
+import { useLayoutEffect, useState, type ReactNode, type RefObject } from 'react'
+import { createPortal } from 'react-dom'
 import {
   DndContext,
   DragOverlay,
@@ -16,7 +17,8 @@ import { PlusIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import type { FieldSpec, FieldType } from '@biu/type-file-system'
 import { CellSelect } from '@biu/database-ui'
-import { overlayZ } from '@biu/public-ui/overlay-portal'
+import { HeadlessDismiss } from '@biu/public-ui/headless-dismiss'
+import { overlayPortalRoot, overlayZ } from '@biu/public-ui/overlay-portal'
 import { FieldGlyph } from './fsdb-cells.tsx'
 import { DndGrip } from './dnd-grip.tsx'
 import {
@@ -115,6 +117,67 @@ function SortableSortRow({
       </button>
       <SortRuleFields rule={rule} kind={kind} options={options} sorts={sorts} onChange={onChange} />
     </div>
+  )
+}
+
+/** 挂到 overlay 根：主栏 overflow 和左侧合成层都裁不到。 */
+export function QueryFlyout({
+  anchorRef,
+  onClose,
+  ignoreSelector,
+  inside,
+  children,
+}: {
+  anchorRef: RefObject<HTMLElement | null>
+  onClose: () => void
+  ignoreSelector?: string
+  inside?: (node: Node) => boolean
+  children: ReactNode
+}) {
+  const [box, setBox] = useState({ top: 0, right: 8 })
+  useLayoutEffect(() => {
+    const el = anchorRef.current
+    if (!el) return
+    const place = () => {
+      const rect = el.getBoundingClientRect()
+      setBox({
+        top: rect.bottom + 6,
+        right: Math.max(8, Math.round(window.innerWidth - rect.right)),
+      })
+    }
+    place()
+    window.addEventListener('resize', place)
+    window.addEventListener('scroll', place, true)
+    return () => {
+      window.removeEventListener('resize', place)
+      window.removeEventListener('scroll', place, true)
+    }
+  }, [anchorRef])
+  if (typeof document === 'undefined') return null
+  return createPortal(
+    <div
+      className="fsdb-page fsdb-query-flyout"
+      data-testid="fsdb-query-flyout"
+      style={{
+        top: box.top,
+        right: box.right,
+        zIndex: overlayZ(240),
+      }}
+    >
+      <HeadlessDismiss
+        onDismiss={onClose}
+        ignoreSelector={ignoreSelector}
+        inside={(node) =>
+          Boolean(
+            (node instanceof Node && anchorRef.current?.contains(node)) ||
+              inside?.(node),
+          )
+        }
+      >
+        {children}
+      </HeadlessDismiss>
+    </div>,
+    overlayPortalRoot() ?? document.body,
   )
 }
 
