@@ -110,4 +110,8 @@ test('buildSessionProgress derives turn/step/status and afterSeq delta text', ()
   assert.equal(done.reason, 'complete')
   assert.equal(done.assistantText, 'almost done')
   assert.equal(done.newestSeq, 8)
+
+  const stuckOpen = liveSessions.buildSessionProgress(events, { busy: false })
+  assert.equal(stuckOpen.status, 'idle')
+  assert.equal(stuckOpen.turn, 1)
 })

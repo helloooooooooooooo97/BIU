@@ -116,7 +116,7 @@ function sessionProgress(record: SessionRecordLike, opts: { afterSeq?: number; t
   }
   if (assistantText.length > textLimit) assistantText = `${assistantText.slice(0, textLimit)}…`
   const newest = record.events.at(-1)
-  const busy = Boolean(opts.busy) || openTurn
+  const busy = opts.busy == null ? openTurn : Boolean(opts.busy)
   return {
     status: busy ? 'running' : 'idle',
     turn,

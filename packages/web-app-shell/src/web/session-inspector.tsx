@@ -124,6 +124,7 @@ export const SessionInspector = memo(function SessionInspector({
 }: SessionInspectorProps) {
   const sessionId = useSessionView((state) => state.sessionId)
   const sessions = useSessionView((state) => state.sessions)
+  const sessionBusy = useSessionView((state) => Boolean(state.sessionId && state.busySessions[state.sessionId]))
   const currentSession = sessions.find((item) => item.id === sessionId)
   const sessionIdentity = sessionId ? resolveSessionMascot(sessionId, currentSession?.mascot) : null
   const sessionLabel = (currentSession?.title || '').trim() || (sessionIdentity ? `${sessionIdentity.shape}` : '')
@@ -580,7 +581,7 @@ export const SessionInspector = memo(function SessionInspector({
                     size={22}
                     sessionId={sessionId}
                     identity={sessionIdentity}
-                    busy={Boolean(currentSession?.busy)}
+                    busy={sessionBusy}
                     animate={false}
                     title={sessionLabel}
                   />

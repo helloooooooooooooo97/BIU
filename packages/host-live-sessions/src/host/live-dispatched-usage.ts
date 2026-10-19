@@ -125,6 +125,21 @@ type WorkerTurnHit = {
   usage: TokenUsageSum
 }
 
+function lastWorkerTurnClosed(events: SessionEvent[]) {
+  let sawTurn = false
+  let closed = false
+  for (const event of events) {
+    if (event.type === 'turn/start') {
+      sawTurn = true
+      closed = false
+    } else if (event.type === 'turn/end') {
+      sawTurn = true
+      closed = true
+    }
+  }
+  return sawTurn && closed
+}
+
 /** 在 worker 日志里找出由 liveId 发起、且尚未匹配的 turn（按 user/message 时间）。 */
 function findWorkerTurnsForLive(
   liveId: string,
@@ -234,12 +249,17 @@ export function collectLiveDispatchedTasks(
     }
 
     if (best < 0) {
+      const worker = workers.find((item) => item.id === wake.targetId)
+      let status = wake.status
+      if (status === 'running' && worker && lastWorkerTurnClosed(worker.events)) {
+        status = 'ended'
+      }
       return {
         sessionId: wake.targetId,
         tool: 'task_deliver' as const,
         liveTurn: wake.liveTurn,
         wakeTs: wake.ts,
-        status: wake.status,
+        status,
         ...(wake.preview ? { preview: wake.preview } : {}),
       }
     }
