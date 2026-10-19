@@ -3596,15 +3596,36 @@ export function apply(ctx: Context) {
   ctx.http.route('GET', '/api/db/trash', (route) => send(route, () => db.listTrash()))
   ctx.http.route('POST', '/api/db/saved-views', async (route) => {
     try {
-      const body = (await route.json()) as { path?: string; views?: StoredView[] }
+      /**
+       * 默认是差异写：upsert 只新增/更新这几条，remove 只删这几个 id。
+       * 两个窗口各存一份快照时，后写的不会把另一个窗口刚建的视图冲掉。
+       * 需要整份同步的老调用方显式传 replace: true。
+       */
+      const body = (await route.json()) as {
+        path?: string
+        views?: StoredView[]
+        upsert?: StoredView[]
+        remove?: string[]
+        replace?: boolean
+      }
       const path = String(body?.path ?? '')
-      const next = Array.isArray(body.views) ? body.views : []
+      const accountId = currentAccountId()
       await db.requirePath(path, 'resource:update')
-      if (isIndexCollection(path)) {
-        savedViews.replaceOwned(path, next, currentAccountId())
+      const removals = (body.remove ?? []).map(String).filter(Boolean)
+      if (body.replace === true || (body.upsert === undefined && body.remove === undefined)) {
+        const next = Array.isArray(body.views) ? body.views : []
+        if (isIndexCollection(path)) {
+          savedViews.replaceOwned(path, next, accountId)
+        } else {
+          dropSharesForRemovedViews(shares, path, savedViews.viewsFor(path), next)
+          savedViews.replace(path, next)
+        }
       } else {
-        dropSharesForRemovedViews(shares, path, savedViews.viewsFor(path), next)
-        savedViews.replace(path, next)
+        savedViews.applyPatch(path, { upsert: body.upsert ?? [], remove: removals }, accountId)
+        for (const viewId of removals) {
+          const view = savedViews.viewsFor(path, accountId).find((item) => String(item.id) === viewId)
+          if (!view) shares.revokeView(path, viewId)
+        }
       }
       ctx.emit('database/change')
       route.send(200, { ok: true })

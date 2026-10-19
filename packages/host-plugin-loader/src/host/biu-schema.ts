@@ -102,6 +102,10 @@ export const BIU_TABLES: Record<string, TableSpec> = {
     columns: ['collection', 'view_id', 'payload_json', 'updated_at'],
     indexes: [],
   },
+  saved_view_tombstones: {
+    columns: ['collection', 'view_id', 'deleted_at'],
+    indexes: [],
+  },
   sessions: {
     columns: ['id', 'version', 'project_json', 'event_count', 'title', 'updated_at', 'mascot_json', 'config_json'],
     indexes: [],
@@ -434,6 +438,13 @@ CREATE TABLE IF NOT EXISTS saved_views (
   view_id TEXT NOT NULL,
   payload_json TEXT NOT NULL,
   updated_at INTEGER NOT NULL,
+  PRIMARY KEY (collection, view_id)
+);
+-- 已删视图的墓碑：别的窗口拿着旧快照推 upsert 时不能把删掉的视图复活
+CREATE TABLE IF NOT EXISTS saved_view_tombstones (
+  collection TEXT NOT NULL,
+  view_id TEXT NOT NULL,
+  deleted_at INTEGER NOT NULL,
   PRIMARY KEY (collection, view_id)
 );
 CREATE TABLE IF NOT EXISTS sessions (

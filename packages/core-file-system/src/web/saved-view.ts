@@ -21,6 +21,8 @@ export type SavedView = {
   columnWidths?: Record<string, number>
   /** 系统内置视图（全部 xx / 目录），不能改筛选、不能删改名。 */
   builtin?: boolean
+  /** 本地最后修改时间（ms）。多窗口下用来丢弃比库里更旧的快照。 */
+  updatedAt?: number
 }
 
 export const COL_WIDTH_MIN = 56
@@ -90,6 +92,7 @@ export function normalizeSavedView(view: SavedView): SavedView {
     pageSize: normalizePageSize(view.pageSize),
     columnWidths: normalizeColumnWidths(view.columnWidths),
     builtin: Boolean(view.builtin),
+    updatedAt: Number(view.updatedAt) || 0,
   }
 }
 

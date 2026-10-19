@@ -284,12 +284,56 @@ export function persistStarredViews(items: StarredView[]) {
   for (const fn of starredListeners) fn()
 }
 
+export type SavedViewsPatch = { upsert?: SavedView[]; remove?: string[] }
+
+export function viewPatchKey(view: SavedView) {
+  return JSON.stringify(normalizeSavedView(view))
+}
+
+/** 推给后端的载荷：带上本地修改时间，后端据此丢掉比库更旧的快照。 */
+function viewWirePayload(view: SavedView) {
+  return { ...view, updatedAt: Number(view.updatedAt) || 0 }
+}
+
+/** 本地改了哪些视图就打个时间戳，切窗口/切会话时旧快照不会盖掉刚做的修改。 */
+export function stampSavedView(view: SavedView): SavedView {
+  return { ...view, updatedAt: Date.now() }
+}
+
+/** 按差异推视图：只发这一个窗口真正改动的条目，避免把别的窗口新建的视图整份冲掉。 */
+export function pushSavedViewsPatch(collectionPath: string, patch: SavedViewsPatch) {
+  const upsert = patch.upsert ?? []
+  const remove = patch.remove ?? []
+  if (!upsert.length && !remove.length) return Promise.resolve(undefined)
+  return fetch('/api/db/saved-views', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ path: collectionPath, upsert: upsert.map(viewWirePayload), remove }),
+  }).catch(() => undefined)
+}
+
+/** 整份覆盖。只有确知「本地就是权威」时才用，普通增删改请走 pushSavedViewsPatch。 */
 export function pushSavedViews(collectionPath: string, views: SavedView[]) {
   return fetch('/api/db/saved-views', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ path: collectionPath, views }),
+    body: JSON.stringify({ path: collectionPath, views, replace: true }),
   }).catch(() => undefined)
+}
+
+/** 两份视图列表的差异：新增/改了什么、删了哪些 id。 */
+export function diffSavedViews(prev: SavedView[], next: SavedView[]): SavedViewsPatch {
+  const before = new Map(prev.filter((view) => !view.builtin).map((view) => [view.id, view]))
+  const upsert: SavedView[] = []
+  const seen = new Set<string>()
+  for (const view of next) {
+    if (view.builtin || isReadOnlyViewId(view.id)) continue
+    seen.add(view.id)
+    const old = before.get(view.id)
+    if (!old || viewPatchKey(old) !== viewPatchKey(view)) upsert.push(view)
+  }
+  const remove = [...before.keys()].filter((id) => !seen.has(id))
+  return { upsert, remove }
 }
 
 function parseMaybeJson(value: unknown): unknown {

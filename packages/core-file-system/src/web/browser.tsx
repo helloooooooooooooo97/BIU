@@ -113,6 +113,8 @@ import {
   persistViewDisplay,
   pickViewForRoute,
   pushSavedViews,
+  pushSavedViewsPatch,
+  diffSavedViews,
   routeViewNeedsFetch,
   subscribeStarredViews,
   toggleStarredView,
@@ -3069,13 +3071,24 @@ export function CollectionBrowser({
     setDlgError('')
   }, [dlg])
 
-  function persistViewsFor(path: string, next: SavedView[]) {
+  function persistViewsFor(
+    path: string,
+    next: SavedView[],
+    extra?: { baseline?: SavedView[]; remove?: string[] },
+  ) {
     if (sheet) return
     const listed = listedViews(path, next).map((view) => withViewDisplay(path, view))
     const stored = listed.filter((view) => !view.builtin)
+    const previous = extra?.baseline ?? loadViews(path)
     rememberViews(path, listed)
     noteLocalSavedViewsWrite(path)
-    pushSavedViews(path, stored)
+    // 只推差异：别的窗口（会话 / 右检查器）新建的视图不会被这份快照整份冲掉。
+    const diff = diffSavedViews(previous, stored)
+    const patch = {
+      upsert: diff.upsert,
+      remove: [...new Set([...diff.remove, ...(extra?.remove ?? [])])],
+    }
+    void pushSavedViewsPatch(path, patch)
     if (!nested) {
       localStorage.setItem(viewsKey(path), JSON.stringify(stored))
     }
@@ -3089,6 +3102,10 @@ export function CollectionBrowser({
 
   function persistViews(next: SavedView[]) {
     persistViewsFor(collectionPath, next)
+  }
+
+  function persistViewsWith(path: string, next: SavedView[], extra?: { baseline?: SavedView[]; remove?: string[] }) {
+    persistViewsFor(path, next, extra)
   }
 
   function rememberActiveView(id: string) {
@@ -3380,9 +3397,11 @@ export function CollectionBrowser({
       return
     }
     const removedId = dlg.view.id
+    // 删除要立刻发出去：这条可能刚建、本地列表里还没有，
+    // 只靠 diffSavedViews 会漏掉它，删除就丢了。
     const remaining = views.filter((item) => item.id !== removedId)
     setDlg(null)
-    persistViews(remaining)
+    persistViewsWith(collectionPath, remaining, { remove: [removedId] })
     if (activeViewId === removedId) {
       const next = viewsRef.current[0]
       if (next) selectView(next)

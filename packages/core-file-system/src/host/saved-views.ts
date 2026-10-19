@@ -29,13 +29,42 @@ type ViewRow = { collection: string; payload_json: string }
 
 export class SavedViewsStore {
   private byPath = new Map<string, StoredView[]>()
+  /** 已删视图的墓碑：别的窗口还拿着旧快照时，不能靠 upsert 把它们复活。 */
+  private tombstones = new Map<string, Set<string>>()
   private db: DatabaseSync | null = null
 
   open(path = ':memory:') {
     if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true })
     this.db = openAndMigrateBiu(path, { foreignKeys: false })
     this.hydrate()
+    this.hydrateTombstones()
     return this
+  }
+
+  /** 墓碑表可能还不存在（老库），读不到就当没有。 */
+  private hydrateTombstones() {
+    const db = this.db
+    if (!db) return
+    try {
+      const rows = db.prepare('SELECT collection, view_id FROM saved_view_tombstones').all() as Array<{
+        collection: string
+        view_id: string
+      }>
+      for (const row of rows) this.markTombstone(row.collection, row.view_id)
+    } catch {
+      /* 老库没有墓碑表 */
+    }
+  }
+
+  private markTombstone(collectionPath: string, viewId: string) {
+    const path = normalizeCollectionPath(collectionPath)
+    const set = this.tombstones.get(path) ?? new Set<string>()
+    set.add(String(viewId))
+    this.tombstones.set(path, set)
+  }
+
+  isTombstoned(collectionPath: string, viewId: string) {
+    return this.tombstones.get(normalizeCollectionPath(collectionPath))?.has(String(viewId)) ?? false
   }
 
   private hydrate() {
@@ -72,11 +101,36 @@ export class SavedViewsStore {
     )
     this.db.exec('BEGIN IMMEDIATE')
     try {
+      const before = this.db.prepare('SELECT view_id FROM saved_views WHERE collection = ?').all(path) as Array<{
+        view_id: string
+      }>
       this.db.prepare('DELETE FROM saved_views WHERE collection = ?').run(path)
+      const alive = new Set<string>()
       for (const view of views) {
         if (view.builtin || isReadOnlyViewId(String(view.id))) continue
-        upsert.run(path, String(view.id), JSON.stringify(view), Date.now())
+        const id = String(view.id)
+        alive.add(id)
+        upsert.run(path, id, JSON.stringify(view), Date.now())
       }
+      // 这一批里消失的视图记墓碑：别的窗口拿旧快照推 upsert 也不能把它们复活。
+      // 重新出现的视图撤掉墓碑。
+      const tomb = this.db.prepare(
+        `INSERT INTO saved_view_tombstones (collection, view_id, deleted_at)
+         VALUES (?, ?, ?)
+         ON CONFLICT(collection, view_id) DO UPDATE SET deleted_at = excluded.deleted_at`,
+      )
+      const untomb = this.db.prepare('DELETE FROM saved_view_tombstones WHERE collection = ? AND view_id = ?')
+      const marked = this.tombstones.get(path) ?? new Set<string>()
+      for (const row of before) {
+        if (alive.has(row.view_id)) continue
+        marked.add(row.view_id)
+        tomb.run(path, row.view_id, Date.now())
+      }
+      for (const viewId of alive) {
+        marked.delete(viewId)
+        untomb.run(path, viewId)
+      }
+      this.tombstones.set(path, marked)
       this.db.exec('COMMIT')
     } catch (error) {
       this.db.exec('ROLLBACK')
@@ -85,7 +139,9 @@ export class SavedViewsStore {
   }
 
   viewsFor(collectionPath: string, accountId = ''): StoredView[] {
-    const views = this.byPath.get(normalizeCollectionPath(collectionPath)) ?? []
+    const path = normalizeCollectionPath(collectionPath)
+    const gone = this.tombstones.get(path)
+    const views = (this.byPath.get(path) ?? []).filter((view) => !gone?.has(String(view.id)))
     if (!isIndexCollection(collectionPath)) return views
     return views.filter((view) => view.createdBy === accountId)
   }
@@ -114,6 +170,60 @@ export class SavedViewsStore {
     this.persistPath(path)
   }
 
+  /**
+   * 按差异写视图：只动当前账号那几条，别的窗口/会话新加的视图不会被整份覆盖冲掉。
+   * 这是 /api/db/saved-views 的默认语义，整份 replace 只留给全量同步。
+   */
+  applyPatch(
+    collectionPath: string,
+    patch: { upsert?: StoredView[]; remove?: string[] },
+    accountId = '',
+  ) {
+    const path = normalizeCollectionPath(collectionPath)
+    const indexScoped = isIndexCollection(path)
+    const prev = this.byPath.get(path) ?? []
+    const mine = (view: StoredView) => !indexScoped || !view.createdBy || view.createdBy === accountId
+    const removed = new Set((patch.remove ?? []).map(String).filter(Boolean))
+    const kept = prev.filter((view) => {
+      if (!removed.has(String(view.id))) return true
+      // 别人的视图删不动，留给他自己
+      return !mine(view)
+    })
+    const foreign = new Set(kept.map((view) => String(view.id)))
+    const next = kept.slice()
+    for (const incoming of patch.upsert ?? []) {
+      const id = String(incoming.id ?? '').trim()
+      if (!id || incoming.builtin || isReadOnlyViewId(id)) continue
+      const prevView = prev.find((view) => String(view.id) === id)
+      if (prevView && !mine(prevView)) continue
+      if (!prevView && foreign.has(id)) continue
+      // 已被别处删掉的视图：旧窗口再推回来也不复活（除非它本来就是新建）
+      if (!prevView && this.isTombstoned(path, id)) continue
+      // 别的窗口拿着旧快照推回来时不能覆盖更新的内容：库里较新就跳过。
+      const incomingAt = Number((incoming as { updatedAt?: unknown }).updatedAt) || 0
+      const storedAt = Number((prevView as { updatedAt?: unknown } | undefined)?.updatedAt) || 0
+      if (prevView && incomingAt && storedAt && incomingAt < storedAt) continue
+      const view: StoredView = {
+        ...prevView,
+        ...incoming,
+        id,
+        name: String(incoming.name || prevView?.name || id),
+        ...(incomingAt ? {} : { updatedAt: Date.now() }),
+        ...(indexScoped ? { createdBy: accountId } : {}),
+      }
+      const at = next.findIndex((item) => String(item.id) === id)
+      if (at >= 0) next[at] = view
+      else next.push(view)
+    }
+    // 显式删除立刻记墓碑（哪怕这条本来就不在这份列表里），
+    // 别的窗口拿旧快照推 upsert 也不会把它带回来。
+    const marked = this.tombstones.get(path) ?? new Set<string>()
+    for (const viewId of removed) marked.add(viewId)
+    this.tombstones.set(path, marked)
+    this.byPath.set(path, next)
+    this.persistPath(path)
+  }
+
   rows(tables: CollectionInfo[], accountId = ''): DbRecord[] {
     const labels = new Map(tables.map((item) => [normalizeCollectionPath(item.path), item.view?.title ?? item.label]))
     const out: DbRecord[] = []
@@ -130,16 +240,20 @@ export class SavedViewsStore {
       const label = String(labels.get(path) ?? table.label ?? path)
       const all = builtinAllView({ path, label, view: table.view })
       emit(path, label, all)
+      const gone = this.tombstones.get(path)
       for (const view of this.byPath.get(path) ?? []) {
         if (view.builtin || isReadOnlyViewId(view.id)) continue
+        if (gone?.has(String(view.id))) continue
         if (isIndexCollection(path) && view.createdBy !== accountId) continue
         emit(path, label, view)
       }
     }
     for (const [path, views] of this.byPath) {
       if (tables.some((table) => normalizeCollectionPath(table.path) === path)) continue
+      const gone = this.tombstones.get(path)
       for (const view of views) {
         if (view.builtin || isReadOnlyViewId(view.id)) continue
+        if (gone?.has(String(view.id))) continue
         if (isIndexCollection(path) && view.createdBy !== accountId) continue
         emit(path, labels.get(path) ?? path, view)
       }
