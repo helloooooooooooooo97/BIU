@@ -8,6 +8,7 @@ import {
   emptyFilterRule,
   encodeListFilter,
   filterTreeStateKey,
+  filterEditorStateKey,
   flatFiltersToTree,
   matchFilterNode,
   matchListFilterRecord,
@@ -128,6 +129,14 @@ test('filterTreeStateKey ignores node ids and treats empty as absent', () => {
   a.children.push({ kind: 'rule', id: 'r1', field: 'tags', op: 'eq', value: 'test' })
   b.children.push({ kind: 'rule', id: 'r2', field: 'tags', op: 'eq', value: 'test' })
   assert.equal(filterTreeStateKey(a), filterTreeStateKey(b))
+})
+
+test('filterEditorStateKey keeps empty rules so the frozen toolbar can add filters', () => {
+  const empty = emptyFilterGroup()
+  const drafting = emptyFilterGroup()
+  drafting.children.push(emptyFilterRule('tags'))
+  assert.equal(filterTreeStateKey(empty), filterTreeStateKey(drafting))
+  assert.notEqual(filterEditorStateKey(empty), filterEditorStateKey(drafting))
 })
 
 test('parseSortsInput accepts JSON strings', () => {

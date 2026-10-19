@@ -175,6 +175,12 @@ export function filterTreeStateKey(tree: FilterGroup | null | undefined): string
   return JSON.stringify(filterNodeState(normalizeFilterGroup(tree)))
 }
 
+/** 编辑器要用完整树：空规则也要进 lock，否则冻结工具栏后「添加筛选」不重绘。 */
+export function filterEditorStateKey(tree: FilterGroup | null | undefined): string {
+  if (!tree) return ''
+  return JSON.stringify(filterNodeState(tree))
+}
+
 export function sortsStateKey(sorts: Array<Pick<SortRule, 'field' | 'dir'>> | undefined): string {
   return JSON.stringify((sorts ?? []).map((item) => ({ field: item.field, dir: item.dir })))
 }

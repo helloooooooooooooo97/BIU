@@ -143,6 +143,7 @@ import {
   countFilterRules,
   emptyFilterGroup,
   encodeListFilter,
+  filterEditorStateKey,
   filterTreeStateKey,
   seedRecordFromViewFilters,
   moveList,
@@ -1901,6 +1902,7 @@ export function CollectionBrowser({
   const hydratePath = useRef('')
   const viewsRef = useRef<SavedView[]>([])
   const skipPersistGen = useRef(0)
+  const persistActiveViewRef = useRef<() => void>(() => {})
   const activeViewIdRef = useRef<string | null>(null)
   const syncViewsRef = useRef<() => Promise<void>>(async () => {})
   const adoptViewRef = useRef<(view: SavedView) => void>(() => undefined)
@@ -2033,6 +2035,22 @@ export function CollectionBrowser({
   const skipColumnReload = useRef(false)
   const itemsRef = useRef(items)
   itemsRef.current = items
+  const filterValueOptions = useCallback((item: { kind: FieldType; key: string; field: FieldSpec }) => {
+    const rows = itemsRef.current
+    if (item.kind === 'boolean') {
+      return [
+        { value: 'true', label: '是' },
+        { value: 'false', label: '否' },
+      ]
+    }
+    if (item.kind === 'facet') {
+      return uniqueValues(rows, item.key, item.field).map((option) => ({
+        value: option,
+        label: loadFacets().find((tag) => tag.id === option)?.label ?? option,
+      }))
+    }
+    return fieldValueOptions(rows, item.key, item.field)
+  }, [])
   const totalRef = useRef(total)
   totalRef.current = total
   const listIdentityKey = `${dataPath}\0${pageSize}\0${fetchQuery}\0${sortField}\0${sortDir}\0${sortsStateKey(sorts)}\0${JSON.stringify(queryFilters)}\0${activeViewId ?? ''}\0${customView ? 'full' : 'proj'}\0${groupBy}\0${wrapCells ? 1 : 0}`
@@ -3151,6 +3169,7 @@ export function CollectionBrowser({
   }
 
   function selectView(view: SavedView) {
+    persistActiveViewRef.current()
     if (view.id !== activeViewIdRef.current) {
       adoptListCacheForViewRef.current(dataPath, view)
       const listed = paintListedViews(collectionPath)
@@ -3160,8 +3179,10 @@ export function CollectionBrowser({
         adoptListCacheForViewRef.current(dataPath, view)
         setHoldNav((n) => n + 1)
       })
+      applyView(view)
+    } else {
+      setViewMenuOpen(false)
     }
-    applyView(view)
     rememberInspectorWorkingView(collectionPath, view.id)
     onOpenView?.(view.id)
   }
@@ -4397,6 +4418,45 @@ export function CollectionBrowser({
     setSortDir(next[0]?.dir ?? 'asc')
   }
 
+  function applyFilterTree(next: FilterGroup) {
+    setFilterTree(next)
+    if (!countFilterRules(next)) setFilters({})
+  }
+
+  function persistActiveViewNow() {
+    if (sheet || !hydrated || !activeViewId) return
+    if (hydratePath.current !== `${collectionPath}\0${dataPath}`) return
+    const current = viewsRef.current.find((view) => view.id === activeViewId)
+    if (!current) return
+    const liveTree = current.builtin || !countFilterRules(filterTree) ? undefined : filterTree
+    const liveFilters = current.builtin ? current.filters : liveTree ? filters : {}
+    const next = normalizeSavedView({
+      ...current,
+      mode,
+      sortField,
+      sortDir,
+      sorts,
+      filters: liveFilters,
+      filterTree: liveTree,
+      columns: pinActionColumn(schema, columnKeys, rowActionColumn),
+      groupBy,
+      tree: showTree,
+      wrap: wrapCells,
+      truncate: truncateCells,
+      query,
+      pageSize,
+      columnWidths,
+    })
+    if (viewStateKey(current) === viewStateKey(next)) return
+    if (current.builtin) {
+      persistViewDisplay(collectionPath, current.id, next)
+      persistViews(viewsRef.current)
+      return
+    }
+    persistViews(viewsRef.current.map((view) => (view.id === activeViewId ? next : view)))
+  }
+  persistActiveViewRef.current = persistActiveViewNow
+
   viewsRef.current = views
 
   useEffect(() => {
@@ -4424,33 +4484,7 @@ export function CollectionBrowser({
     const persistGen = skipPersistGen.current
     const id = window.setTimeout(() => {
       if (persistGen !== skipPersistGen.current) return
-      if (hydratePath.current !== `${collectionPath}\0${dataPath}`) return
-      const current = viewsRef.current.find((view) => view.id === activeViewId)
-      if (!current) return
-      const next = normalizeSavedView({
-        ...current,
-        mode,
-        sortField,
-        sortDir,
-        sorts,
-        filters: current.builtin ? current.filters : filters,
-        filterTree: current.builtin ? undefined : filterTree,
-        columns: pinActionColumn(schema, columnKeys, rowActionColumn),
-        groupBy,
-        tree: showTree,
-        wrap: wrapCells,
-        truncate: truncateCells,
-        query,
-        pageSize,
-        columnWidths,
-      })
-      if (viewStateKey(current) === viewStateKey(next)) return
-      if (current.builtin) {
-        persistViewDisplay(collectionPath, current.id, next)
-        persistViews(viewsRef.current)
-        return
-      }
-      persistViews(viewsRef.current.map((view) => (view.id === activeViewId ? next : view)))
+      persistActiveViewRef.current()
     }, 400)
     return () => window.clearTimeout(id)
   }, [
@@ -4503,7 +4537,7 @@ export function CollectionBrowser({
     Number(sortCustom),
     sortsStateKey(sorts),
     Number(filterActive),
-    filterTreeStateKey(filterTree),
+    filterEditorStateKey(filterTree),
     Number(grouping),
     groupBy,
     Number(wrapCells),
@@ -4514,7 +4548,6 @@ export function CollectionBrowser({
     allColumnKeys.join(','),
     schemaFingerprint(schema),
     facetCatalog.map((pack) => pack.id).join(','),
-    filterOpen ? recordsFingerprint(items) : '',
     viewBanner == null ? '' : JSON.stringify(viewBanner),
     activeView?.name ?? title,
     idleTableIconKind(currentTable?.view?.icon),
@@ -4833,20 +4866,8 @@ export function CollectionBrowser({
                 <FilterQueryMenu
                   tree={filterTree}
                   fields={filterFields}
-                  valueOptions={(item) =>
-                    item.kind === 'boolean'
-                      ? [
-                          { value: 'true', label: '是' },
-                          { value: 'false', label: '否' },
-                        ]
-                      : item.kind === 'facet'
-                        ? uniqueValues(items, item.key, item.field).map((option) => ({
-                            value: option,
-                            label: loadFacets().find((tag) => tag.id === option)?.label ?? option,
-                          }))
-                        : fieldValueOptions(items, item.key, item.field)
-                  }
-                  onChange={setFilterTree}
+                  valueOptions={filterValueOptions}
+                  onChange={applyFilterTree}
                 />
                 </Suspense>
                 </HeadlessDismiss>
