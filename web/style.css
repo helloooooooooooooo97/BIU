@@ -92,8 +92,8 @@ html.dark {
   --dsw-hover-strong: #2c2c2c;
   --dsw-sidebar-fg: #bcbab6;
   --dsw-sidebar-fg-active: #f0efed;
-  --dsw-icon: #bcbab6;
-  --dsw-icon-active: #bcbab6;
+  --dsw-icon: #bab9b5;
+  --dsw-icon-active: #bab9b5;
   --dsw-sidebar-icon: var(--dsw-icon);
   --dsw-ok: #1fac60;
   --dsw-danger: #ff5949;
@@ -2694,6 +2694,22 @@ select.settings-account-input {
   color: var(--dsw-sidebar-fg-active);
 }
 
+.session-inspector .inspector-tab svg,
+.session-inspector .inspector-tab .chat-view-project-icon,
+.session-inspector .inspector-tab .fsdb-record-mark,
+.session-inspector .inspector-crumb-close,
+.session-inspector .inspector-crumb-close svg,
+.session-inspector .inspector-head-tools .chat-view-header-expand,
+.session-inspector .inspector-head-tools .chat-view-header-expand svg {
+  color: var(--dsw-icon);
+}
+
+.session-inspector .inspector-tab.is-active svg,
+.session-inspector .inspector-tab.is-active .chat-view-project-icon,
+.session-inspector .inspector-tab.is-active .fsdb-record-mark {
+  color: var(--dsw-icon);
+}
+
 .inspector-tab.is-agent-working {
   background: color-mix(in srgb, #5b9fd6 22%, transparent);
 }
@@ -2782,14 +2798,14 @@ select.settings-account-input {
   border-radius: 4px;
   background: transparent;
   box-shadow: none;
-  color: var(--dsw-label);
+  color: var(--dsw-icon);
   cursor: pointer;
 }
 
 .inspector-crumb-close:hover {
   background: var(--dsw-hover);
   box-shadow: none;
-  color: var(--dsw-label);
+  color: var(--dsw-icon);
 }
 
 .inspector-crumb-leaf,
@@ -3100,6 +3116,7 @@ select.settings-account-input {
 }
 
 .inspector-add-row {
+  position: relative;
   display: flex;
   align-items: stretch;
   gap: 0;
@@ -3107,8 +3124,23 @@ select.settings-account-input {
   color: var(--dsw-label);
 }
 
-.inspector-add-row:hover,
-.inspector-add-row.is-active {
+.inspector-add-row::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: transparent;
+}
+
+.inspector-add-row > * {
+  position: relative;
+  z-index: 1;
+}
+
+.inspector-add-row:hover:not(.is-active)::before,
+.inspector-add-row.is-active::before {
   background: var(--dsw-hover);
 }
 
@@ -3130,11 +3162,8 @@ select.settings-account-input {
 }
 
 .inspector-add-row.is-active .inspector-add-row-main {
-  font-weight: 650;
-}
-
-.inspector-add-check {
-  color: inherit;
+  font-weight: 500;
+  color: var(--dsw-sidebar-fg-active);
 }
 
 .inspector-add-close {
@@ -9357,12 +9386,6 @@ html:not(.has-js) .site [data-reveal] {
   }
 }
 
-html:not(.dark) .inspector-add-menu .inspector-add-check,
-html:not(.dark) .inspector-add-menu .inspector-add-check svg,
-html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check,
-html:not(.dark) .tasks-viewdd-menu .tasks-viewdd-check svg {
-  color: var(--dsw-business);
-}
 
 /* ==========================================================================
    官网多页（P0）—— 站内页共用骨架与新页面板块

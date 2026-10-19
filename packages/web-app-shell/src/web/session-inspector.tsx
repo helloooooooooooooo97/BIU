@@ -599,7 +599,6 @@ export const SessionInspector = memo(function SessionInspector({
                     >
                       <PaneLeafIcon kind={caption?.kind} mode={caption?.mode} icon={caption?.icon} emoji={caption?.emoji} Fallback={item.Icon} />
                       <span className="min-w-0 flex-1 truncate">{caption?.label || item.label}</span>
-                      <CheckCircleIcon aria-hidden className="size-4 shrink-0 inspector-add-check" />
                     </button>
                     <button
                       type="button"

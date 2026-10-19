@@ -45,6 +45,9 @@ test('active view tab opens the view menu; the more button is gone', () => {
   assert.match(src, /if \(view\.id === activeViewId\) toggleMenu\('view'\)/)
   assert.doesNotMatch(src, /data-testid="fsdb-view-more"/)
   assert.doesNotMatch(src, /tasks-viewdd-more/)
+  assert.match(src, /title="拷贝视图" onClick=\{\(\) => copyView\(view\)\}/)
+  assert.doesNotMatch(src, />拷贝视图</)
+  assert.doesNotMatch(src, /tasks-viewdd-check/)
 })
 
 test('pins the active view into the last visible slot when it would overflow', () => {
