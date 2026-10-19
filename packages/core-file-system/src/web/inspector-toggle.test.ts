@@ -1091,6 +1091,7 @@ test('missing sort field falls back to updatedAt, then title', () => {
   const menus = readFileSync(resolve(import.meta.dirname, './query-menus.tsx'), 'utf8')
   assert.match(menus, /export function QueryFlyout/)
   assert.match(menus, /overlayPortalRoot/)
+  assert.match(menus, /overlayZ\(280\)/)
   assert.match(menus, /createPortal/)
   assert.match(menus, /fsdb-query-grip/)
   assert.match(menus, /@dnd-kit\/core/)

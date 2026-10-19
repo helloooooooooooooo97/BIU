@@ -161,7 +161,7 @@ export function QueryFlyout({
       style={{
         top: box.top,
         right: box.right,
-        zIndex: overlayZ(240),
+        zIndex: overlayZ(280),
       }}
     >
       <HeadlessDismiss

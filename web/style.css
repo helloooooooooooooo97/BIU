@@ -3818,6 +3818,9 @@ html.dark .tool-call-status.is-fail {
 
 .app-shell-agent > .session-inspector {
   grid-column: 3;
+  position: relative;
+  /* 主栏写死 z-index:0，检查器默认 auto 会被会话区盖住溢出的筛选/排序 */
+  z-index: 1;
 }
 
 .app-shell-agent > main:has(.fsdb-query-menu),
