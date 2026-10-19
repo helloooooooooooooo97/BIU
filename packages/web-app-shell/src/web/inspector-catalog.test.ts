@@ -73,7 +73,8 @@ test('plus menu can add another database tab', () => {
   assert.doesNotMatch(css, /inspector-crumb-toggle/)
   assert.match(css, /\.inspector-add-close/)
   assert.match(css, /html:not\(\.dark\) \.inspector-add-menu[\s\S]*color:\s*#5f5e5a/)
-  assert.match(css, /html:not\(\.dark\) \.inspector-add-row-main svg[\s\S]*color:\s*#91918e/)
+  // 已打开项目行的图标改成和下方选项一样的 #bab9b5（日夜一致），不再吃 #91918e
+  assert.match(css, /html:not\(\.dark\) \.inspector-add-row-main svg[\s\S]*color:\s*#bab9b5/)
   assert.doesNotMatch(inspector, /inspector-add-check/)
   assert.match(css, /\.inspector-add-row\.is-active::before\s*\{[^}]*background:\s*var\(--dsw-hover\)/s)
   assert.match(css, /\.session-inspector \.inspector-tab svg[\s\S]*color:\s*var\(--dsw-icon\)/)
@@ -112,4 +113,6 @@ test('opened rows in the inspector add menu use the icon gray for every glyph', 
   }
   // 行本身仍然可以继承文本色（那是给文字的），但图标有独立规则覆盖
   assert.match(css, /^\.inspector-add-row \{[^}]*color: var\(--dsw-label\)/m)
+  // 亮色主题同样钉成图标灰
+  assert.match(css, /html:not\(\.dark\) \.inspector-add-close svg,[\s\S]*?color:\s*#bab9b5/)
 })

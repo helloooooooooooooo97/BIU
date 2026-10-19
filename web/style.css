@@ -8532,7 +8532,6 @@ html:not(.dark) .page-slash .pick-kind-icon,
 html:not(.dark) .page-bubble button:not(.is-on) svg,
 html:not(.dark) .page-bubble-chat-icon,
 html:not(.dark) .chat-select-bubble-icon,
-html:not(.dark) .inspector-add-row-main svg,
 html:not(.dark) .inspector-add-menu .inspector-catalog-item svg,
 html:not(.dark) .inspector-add-menu .inspector-catalog-item:hover svg,
 html:not(.dark) .tasks-viewdd-act,
@@ -8557,8 +8556,15 @@ html:not(.dark) .fsdb-checkrow:hover > svg {
   color: #91918e;
 }
 
-/* 右上角加号面板：上方已打开的项目行（左侧图标 + 右侧关闭叉号）跟下方选项一样用图标灰。
-   行的文字是 --dsw-label（夜间 #f0efed），图标 color:inherit 会跟着变白，这里单独钉住。 */
+/* 右上角加号面板：上方已打开的项目行（左侧图标 + 右侧关闭叉号）跟下方选项一样用图标灰，
+   日夜两套主题都钉成 #bab9b5。行的文字仍用 --dsw-label。 */
+html:not(.dark) .inspector-add-row-main svg,
+html:not(.dark) .inspector-add-row > svg,
+html:not(.dark) .inspector-add-row .size-4,
+html:not(.dark) .inspector-add-row-main > svg,
+html:not(.dark) .inspector-add-close,
+html:not(.dark) .inspector-add-close svg,
+html:not(.dark) .inspector-add-row .fsdb-record-emoji,
 .inspector-add-row > svg,
 .inspector-add-row .size-4,
 .inspector-add-row-main > svg,
