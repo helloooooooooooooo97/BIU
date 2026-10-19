@@ -61,7 +61,8 @@ const CSS = `
 .fsdb-page .tasks-toolbar-left{display:flex;align-items:center;gap:6px;flex:1 1 auto;min-width:0}
 .fsdb-locked-filter{display:inline-flex;align-items:center;height:26px;padding:0 8px;border-radius:8px;background:color-mix(in srgb,var(--dsw-business) 12%,transparent);color:var(--dsw-business);font-size:13px;font-weight:650;cursor:default}
 .fsdb-page .tasks-toolbar-right{display:flex;align-items:center;gap:2px;flex:none;margin-left:auto}
-.fsdb-bulk{position:absolute;top:4px;left:var(--fsdb-check-gutter);z-index:22;display:inline-flex;align-items:center;gap:2px;height:26px;margin:0;padding:0 4px 0 8px;border-radius:8px;background:var(--dsw-sidebar);box-shadow:var(--dsw-shadow);color:var(--dsw-label)}
+.fsdb-bulk-slot{position:sticky;top:0;z-index:22;height:0;overflow:visible;pointer-events:none}
+.fsdb-bulk{position:relative;top:4px;left:var(--fsdb-check-gutter);z-index:22;display:inline-flex;align-items:center;gap:2px;height:26px;margin:0;padding:0 4px 0 8px;border-radius:8px;background:var(--dsw-sidebar);box-shadow:var(--dsw-shadow);color:var(--dsw-label);pointer-events:auto}
 .fsdb-bulk-count{min-width:1.25em;padding:0 6px 0 0;color:var(--dsw-pick,#2383e2);font-size:13px;font-weight:650;white-space:nowrap;cursor:pointer}
 .fsdb-bulk .tasks-icon-btn{color:var(--dsw-icon)}
 .fsdb-bulk-more{position:relative;display:inline-flex}

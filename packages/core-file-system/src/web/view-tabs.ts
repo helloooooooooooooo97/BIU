@@ -11,9 +11,12 @@ export function countFittingViewTabs(
     return w
   }
   if (widthOf(n) <= available) return n
-  let count = 0
-  while (count < n && widthOf(count + 1) <= available) count += 1
-  return Math.max(1, count)
+  // 和右侧操控栏抢宽时只留当前选中那一个，其余进下拉，避免选中项落在遮挡里。
+  return 1
+}
+
+export function viewTabsOverlapRight(left: Pick<DOMRect, 'right'>, right: Pick<DOMRect, 'left'>) {
+  return left.right > right.left + 1
 }
 
 export function splitVisibleViews<T extends { id: string }>(

@@ -89,7 +89,7 @@ import { workspaceColumnsForLocation } from './workspace-columns.ts'
 import { PageBanner } from './page-banner.tsx'
 import { UiGlyph, ViewModeGlyph, idleTableIconKind } from './nav-glyphs.tsx'
 import { DATA_MODULE, isIndexCollection, isSystemCollection } from './database-path.ts'
-import { countFittingViewTabs, splitVisibleViews } from './view-tabs.ts'
+import { countFittingViewTabs, splitVisibleViews, viewTabsOverlapRight } from './view-tabs.ts'
 import { getDatabaseUi } from './database-ui.ts'
 import {
   activeViewStorageKey,
@@ -1419,7 +1419,11 @@ function ViewTabFit({
     if (!toolbar || !right || !row) return
     const tabs = Array.from(row.querySelectorAll('[data-view-measure]')) as HTMLElement[]
     const available = Math.max(0, toolbar.clientWidth - right.offsetWidth - 12)
-    const next = countFittingViewTabs(tabs.map((el) => el.offsetWidth), available, 2)
+    let next = countFittingViewTabs(tabs.map((el) => el.offsetWidth), available, 2)
+    const left = toolbar.querySelector('.tasks-toolbar-left')
+    if (left && viewTabsOverlapRight(left.getBoundingClientRect(), right.getBoundingClientRect())) {
+      next = Math.min(next, 1)
+    }
     setViewTabFit((prev) => (prev === next ? prev : next))
   }
   useLayoutEffect(() => {
@@ -5292,6 +5296,7 @@ export function CollectionBrowser({
             {!customView && !rowView ? (
               <div className="tasks-table-wrap" ref={tableWrapRef}>
                 {pickedIds.length ? (
+                  <div className="fsdb-bulk-slot">
                   <div className="fsdb-bulk" data-testid="fsdb-bulk-bar">
                     <span
                       className="fsdb-bulk-count"
@@ -5373,6 +5378,7 @@ export function CollectionBrowser({
                         </HeadlessDismiss>
                       ) : null}
                     </div>
+                  </div>
                   </div>
                 ) : null}
                 <WindowedTable
