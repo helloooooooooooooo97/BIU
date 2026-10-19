@@ -560,6 +560,7 @@ test('create record sits at the right of the toolbar with a blue label', () => {
   assert.match(css, /\.fsdb-page \.fsdb-check-slot\.is-head\{[^}]*position:sticky/)
   assert.match(css, /\.fsdb-page \.fsdb-check-slot\{[^}]*position:absolute/)
   assert.match(css, /\.fsdb-page \.tasks-table-wrap\{[^}]*overflow:auto/)
+  assert.match(css, /\.fsdb-page \.tasks-table-wrap\{[^}]*scrollbar-gutter:stable/)
   assert.doesNotMatch(css, /overflow-clip-margin/)
   assert.doesNotMatch(css, /\.fsdb-page \.tasks-table-wrap\{[^}]*padding-left:var\(--fsdb-check-gutter\)/)
   assert.doesNotMatch(css, /translate\(calc\(-100% - 4px\),-50%\)/)

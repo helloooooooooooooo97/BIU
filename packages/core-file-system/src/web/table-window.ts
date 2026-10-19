@@ -57,9 +57,10 @@ export function tableWindowSlice(
 ): TableWindowSlice {
   if (count <= 0) return { start: 0, end: 0, padTop: 0, padBottom: 0 }
   const view = viewportH > 0 ? viewportH : TABLE_WINDOW_VIEWPORT_FALLBACK
-  const start = Math.max(0, Math.floor(Math.max(0, scrollTop) / rowPx) - overscan)
-  const visible = Math.ceil(view / rowPx) + overscan * 2
-  const end = Math.min(count, start + Math.max(visible, 1))
+  const span = Math.max(Math.ceil(view / rowPx) + overscan * 2, 1)
+  const maxStart = Math.max(0, count - span)
+  const start = Math.min(maxStart, Math.max(0, Math.floor(Math.max(0, scrollTop) / rowPx) - overscan))
+  const end = Math.min(count, start + span)
   return {
     start,
     end,
