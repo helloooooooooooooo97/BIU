@@ -43,6 +43,9 @@ export default defineConfig({
     alias: {
       'react/jsx-dev-runtime': join(root, 'jsx-prod-dev-runtime.ts'),
     },
+    // packages/** 下的 tsc 旁路 .js 是 gitignore 的产物，可能比 .ts 旧。
+    // 无扩展名 import 先试 .ts/.tsx，避免测试/开发读到过期的编译结果。
+    extensions: ['.ts', '.tsx', '.mts', '.mjs', '.js', '.jsx', '.json'],
   },
   server: {
     port: Number(process.env.BIU_WEB_PORT || 5173),
@@ -60,6 +63,8 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     exclude: [...configDefaults.exclude, 'pack-host/**', 'release/**'],
+    // 单测里显式写 './fields' 时也走 .ts，不受旧 .js 副产物影响
+    resolve: { extensions: ['.ts', '.tsx', '.mts', '.mjs', '.js', '.jsx', '.json'] },
     environmentMatchGlobs: [
       ['host/**', 'node'],
       ['packages/host-*/**', 'node'],
