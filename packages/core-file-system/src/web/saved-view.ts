@@ -26,6 +26,18 @@ export type SavedView = {
 export const COL_WIDTH_MIN = 56
 export const COL_WIDTH_MAX = 720
 
+export function parseViewColumns(value: unknown): string[] {
+  if (Array.isArray(value)) return [...new Set(value.map((item) => String(item).trim()).filter(Boolean))]
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      return parseViewColumns(JSON.parse(value) as unknown)
+    } catch {
+      return [...new Set(value.split(',').map((item) => item.trim()).filter(Boolean))]
+    }
+  }
+  return []
+}
+
 export function normalizeColumnWidths(value: unknown): Record<string, number> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
   const out: Record<string, number> = {}
@@ -69,7 +81,7 @@ export function normalizeSavedView(view: SavedView): SavedView {
       const tree = resolveViewFilterTree(view)
       return countFilterRules(tree) ? tree : undefined
     })(),
-    columns: Array.isArray(view.columns) ? view.columns : [],
+    columns: parseViewColumns(view.columns),
     groupBy: view.groupBy ?? '',
     tree: view.tree !== false,
     wrap: !!view.wrap,

@@ -3,7 +3,7 @@ import { isIndexCollection } from './database-path.ts'
 import { listCollection, readJson } from './db-client.ts'
 import { savedViewRecordPath } from '../paths.ts'
 import { looksLikeFilterTree, normalizeFilterGroup, parseSortsInput } from '../query-logic.ts'
-import { normalizePageSize, normalizeSavedView, type SavedView } from './saved-view.ts'
+import { normalizePageSize, normalizeSavedView, parseViewColumns, type SavedView } from './saved-view.ts'
 
 export function viewsKey(collectionPath: string) {
   return `fsdb.views:${collectionPath}`
@@ -339,7 +339,7 @@ export function savedViewFromRecord(row: { viewId?: unknown; title?: unknown; mo
     sorts: parseSortsInput(row.sorts, sortField, sortDir),
     query: String(row.query ?? ''),
     groupBy: String(row.groupBy ?? ''),
-    columns: Array.isArray(row.columns) ? row.columns.map((item) => String(item)) : [],
+    columns: parseViewColumns(row.columns),
     filters,
     filterTree,
     tree: row.tree !== false,
@@ -359,25 +359,7 @@ let viewsIdlePaths: readonly string[] = []
 const VIEWS_PULL_TTL_MS = 2500
 const VIEWS_PULL_IDLE_MS = 2800
 const VIEWS_PULL_LIMIT = 80
-const VIEWS_PULL_COLUMNS = [
-  'title',
-  'tablePath',
-  'viewId',
-  'mode',
-  'sortField',
-  'sortDir',
-  'sorts',
-  'query',
-  'groupBy',
-  'columns',
-  'filters',
-  'filterTree',
-  'tree',
-  'wrap',
-  'truncate',
-  'pageSize',
-  'columnWidths',
-] as const
+/** 视图行要整份拿：可见列/列宽/筛选不能跟表数据一样做 list 投影，否则 `columns` 字段会被投影参数吃掉。 */
 
 function viewsPullKey(collectionPaths: readonly string[]) {
   return collectionPaths.map((path) => String(path ?? '').trim()).filter(Boolean).sort().join('\0') || '*'
@@ -447,7 +429,6 @@ async function pullSavedViewsNow(collectionPaths: readonly string[] = []) {
               limit: VIEWS_PULL_LIMIT,
               offset: 0,
               filters: { tablePath },
-              columns: [...VIEWS_PULL_COLUMNS],
             }),
           ),
         )
@@ -456,7 +437,6 @@ async function pullSavedViewsNow(collectionPaths: readonly string[] = []) {
             path: '/views',
             limit: 200,
             offset: 0,
-            columns: [...VIEWS_PULL_COLUMNS],
           }),
         ]
     const byPath = new Map<string, SavedView[]>()

@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { colWidthStyle, DEFAULT_VIEW_PAGE_SIZE, normalizePageSize, normalizeSavedView, tableWidthStyle, viewStateKey, type SavedView } from './saved-view.ts'
+import { colWidthStyle, DEFAULT_VIEW_PAGE_SIZE, normalizePageSize, normalizeSavedView, parseViewColumns, tableWidthStyle, viewStateKey, type SavedView } from './saved-view.ts'
 
 const base: SavedView = {
   id: '1',
@@ -35,6 +35,16 @@ test('normalizeSavedView keeps custom mode slugs and rejects junk', () => {
     filterTree: { kind: 'group', id: 'g', combinator: 'and', children: [] },
   })
   assert.equal(fromFlat.filterTree?.children[0] && fromFlat.filterTree.children[0].kind === 'rule' && fromFlat.filterTree.children[0].value, 'biu')
+})
+
+test('parseViewColumns keeps list projection JSON strings', () => {
+  assert.deepEqual(parseViewColumns(['title', 'status', 'title']), ['title', 'status'])
+  assert.deepEqual(parseViewColumns('["title","dueAt"]'), ['title', 'dueAt'])
+  assert.deepEqual(parseViewColumns('title,status'), ['title', 'status'])
+  assert.deepEqual(
+    normalizeSavedView({ ...base, columns: '["title","facet"]' as unknown as string[] }).columns,
+    ['title', 'facet'],
+  )
 })
 
 test('normalizeColumnWidths clamps and viewStateKey includes widths', () => {
