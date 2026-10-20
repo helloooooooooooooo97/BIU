@@ -16,6 +16,12 @@ function shouldIgnore(target: EventTarget | null, ignoreSelector: string, inside
   return Boolean(ignoreSelector && node instanceof Element && node.closest(ignoreSelector))
 }
 
+function eventTargets(event: { target: EventTarget | null; detail?: { originalEvent?: Event } }): EventTarget[] {
+  const orig = event.detail?.originalEvent
+  const path = orig && typeof orig.composedPath === 'function' ? orig.composedPath() : []
+  return [...path, event.target].filter((item): item is EventTarget => item != null)
+}
+
 /** 无样式：点外面 / Esc 关闭。底层是 Radix DismissableLayer。 */
 export function HeadlessDismiss({
   onDismiss,
@@ -40,10 +46,14 @@ export function HeadlessDismiss({
       asChild
       onEscapeKeyDown={onEscapeKeyDown}
       onPointerDownOutside={(event) => {
-        if (shouldIgnore(event.target, ignoreSelector, insideRef, inside)) event.preventDefault()
+        if (eventTargets(event).some((target) => shouldIgnore(target, ignoreSelector, insideRef, inside))) {
+          event.preventDefault()
+        }
       }}
       onFocusOutside={(event) => {
-        if (shouldIgnore(event.target, ignoreSelector, insideRef, inside)) event.preventDefault()
+        if (eventTargets(event).some((target) => shouldIgnore(target, ignoreSelector, insideRef, inside))) {
+          event.preventDefault()
+        }
       }}
       onDismiss={onDismiss}
     >
