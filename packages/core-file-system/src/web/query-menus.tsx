@@ -17,8 +17,11 @@ import { PlusIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import type { FieldSpec, FieldType } from '@biu/type-file-system'
 import { CellSelect } from '@biu/database-ui'
-import { HeadlessDismiss } from '@biu/public-ui/headless-dismiss'
+import { HEADLESS_DISMISS_IGNORE, HeadlessDismiss } from '@biu/public-ui/headless-dismiss'
 import { overlayPortalRoot, overlayZ } from '@biu/public-ui/overlay-portal'
+
+const QUERY_FLYOUT_IGNORE = `${HEADLESS_DISMISS_IGNORE}, .db-search-menu, .fsdb-cellselect-menu, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]`
+const QUERY_FLYOUT_NEST = '.db-search-menu, .fsdb-cellselect-menu, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]'
 import { FieldGlyph } from './fsdb-cells.tsx'
 import { DndGrip } from './dnd-grip.tsx'
 import {
@@ -154,6 +157,7 @@ export function QueryFlyout({
     }
   }, [anchorRef])
   if (typeof document === 'undefined') return null
+  const ignore = ignoreSelector ? `${QUERY_FLYOUT_IGNORE}, ${ignoreSelector}` : QUERY_FLYOUT_IGNORE
   return createPortal(
     <div
       className="fsdb-page fsdb-query-flyout"
@@ -161,15 +165,16 @@ export function QueryFlyout({
       style={{
         top: box.top,
         right: box.right,
-        zIndex: overlayZ(280),
+        zIndex: overlayZ(200),
       }}
     >
       <HeadlessDismiss
         onDismiss={onClose}
-        ignoreSelector={ignoreSelector}
+        ignoreSelector={ignore}
         inside={(node) =>
           Boolean(
-            (node instanceof Node && anchorRef.current?.contains(node)) ||
+            (node instanceof Element && node.closest(QUERY_FLYOUT_NEST)) ||
+              (node instanceof Node && anchorRef.current?.contains(node)) ||
               inside?.(node),
           )
         }
