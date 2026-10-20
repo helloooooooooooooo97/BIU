@@ -112,6 +112,7 @@ test('list and detail share the chat column max width with side padding', () => 
   assert.match(css, /\.fsdb-col-facet-dot\{/)
   assert.match(css, /\.fsdb-page \.tasks-toolbar-right:has\(\.fsdb-query-menu\)/)
   assert.match(css, /\.fsdb-page \.fsdb-query-menu\{/)
+  assert.match(css, /\.fsdb-query-flyout\.fsdb-page\{[^}]*position:fixed/)
   assert.match(css, /\.fsdb-page \.fsdb-query-menu\{[^}]*overflow-x:hidden/)
   assert.match(css, /\.fsdb-page \.fsdb-query-menu\{[^}]*width:min\(92vw,560px\)/)
   assert.match(css, /\.fsdb-page \.fsdb-query-rule > \.fsdb-cellselect:nth-last-child\(2\)/)

@@ -93,6 +93,7 @@ test('inspector header tabs sit on the same vertical center as the main header',
   assert.doesNotMatch(css, /\.inspector-crumb-tab\s*\{[^}]*padding-right:\s*4px/s)
   assert.match(css, /\.inspector-stage-pane\.is-active[\s\S]*?opacity:\s*1/)
   assert.match(css, /\.app-shell-agent > main\s*\{[^}]*z-index:\s*0/s)
+  assert.match(css, /\.app-shell-agent > \.session-inspector\s*\{[^}]*z-index:\s*1/s)
   assert.match(css, /\.session-inspector:has\(\.fsdb-query-menu\)[\s\S]*?z-index:\s*120/)
   assert.match(css, /\.app-shell-agent > main:has\(\.fsdb-query-menu\)/)
   assert.match(css, /\.session-inspector:has\(\.fsdb-query-menu\) \.inspector-stage/)

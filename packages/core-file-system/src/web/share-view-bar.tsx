@@ -15,7 +15,7 @@ import { countFilterRules, isCustomSorts } from '../query-logic.ts'
 import { defaultColumnKeys, resolveFieldType } from './fields.ts'
 import { FieldGlyph, ModeGlyph, VIEW_MODES } from './fsdb-cells.tsx'
 import { CheckRow } from './controls.tsx'
-import { FilterQueryMenu, SortQueryMenu, type QueryField } from './query-menus.tsx'
+import { FilterQueryMenu, QueryFlyout, SortQueryMenu, type QueryField } from './query-menus.tsx'
 import { shareTableColumns } from './share-table.tsx'
 import type { ShareQueryState } from './share-query.ts'
 
@@ -165,14 +165,14 @@ export function ShareViewQueryBar({
             {sortCustom ? <span className="tasks-sort-dot" aria-hidden /> : null}
           </button>
           {sortOpen ? (
-            <HeadlessDismiss
-              onDismiss={() => setSortOpen(false)}
-              insideRef={sortRef}
+            <QueryFlyout
+              anchorRef={sortRef}
+              onClose={() => setSortOpen(false)}
               ignoreSelector={QUERY_NEST_IGNORE}
               inside={(node) => node instanceof Element && Boolean(node.closest('.db-search-menu, .fsdb-cellselect-menu, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]'))}
             >
               <SortQueryMenu sorts={state.sorts} fields={sortFields} onChange={(sorts) => onChange({ ...state, sorts })} />
-            </HeadlessDismiss>
+            </QueryFlyout>
           ) : null}
         </div>
         <div className="tasks-filter-btn-wrap" ref={filterRef}>
@@ -187,9 +187,9 @@ export function ShareViewQueryBar({
             {filterActive ? <span className="tasks-filter-dot" aria-hidden /> : null}
           </button>
           {filterOpen ? (
-            <HeadlessDismiss
-              onDismiss={() => setFilterOpen(false)}
-              insideRef={filterRef}
+            <QueryFlyout
+              anchorRef={filterRef}
+              onClose={() => setFilterOpen(false)}
               ignoreSelector={QUERY_NEST_IGNORE}
               inside={(node) => node instanceof Element && Boolean(node.closest('.db-search-menu, .fsdb-cellselect-menu, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]'))}
             >
@@ -199,7 +199,7 @@ export function ShareViewQueryBar({
                 valueOptions={valueOptions}
                 onChange={(filterTree) => onChange({ ...state, filterTree })}
               />
-            </HeadlessDismiss>
+            </QueryFlyout>
           ) : null}
         </div>
         <div className="tasks-sort-wrap" ref={columnRef}>

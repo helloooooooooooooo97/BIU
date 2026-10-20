@@ -85,6 +85,7 @@ test('ViewTabFit collapses on overlap and the selected-row bar sticks to the hea
   assert.match(css, /\.fsdb-page \.tasks-toolbar:has\(\.fsdb-query-menu\) \.tasks-toolbar-left/)
   assert.match(css, /\.fsdb-page \.tasks-toolbar:has\(\.fsdb-query-menu\),\.fsdb-page \.tasks-toolbar:has\(\.tasks-sort-menu\),\.fsdb-page \.tasks-toolbar:has\(\.tasks-filter-menu\)\{[^}]*z-index:90/)
   assert.match(css, /\.fsdb-page \.fsdb-query-menu,\.fsdb-page \.tasks-sort-menu,\.fsdb-page \.tasks-filter-menu\{[^}]*z-index:120/)
+  assert.match(css, /\.fsdb-query-flyout\.fsdb-page\{[^}]*position:fixed/)
   assert.match(css, /\.fsdb-page:has\(\.fsdb-query-menu\)/)
   assert.match(css, /\.fsdb-page \.tasks-filter-btn-wrap:has\(\.fsdb-query-menu\)/)
   assert.match(css, /\.fsdb-page \.tasks-table-wrap\{[^}]*z-index:0/)
