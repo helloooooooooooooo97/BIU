@@ -159,29 +159,29 @@ export function QueryFlyout({
   if (typeof document === 'undefined') return null
   const ignore = ignoreSelector ? `${QUERY_FLYOUT_IGNORE}, ${ignoreSelector}` : QUERY_FLYOUT_IGNORE
   return createPortal(
-    <div
-      className="fsdb-page fsdb-query-flyout"
-      data-testid="fsdb-query-flyout"
-      style={{
-        top: box.top,
-        right: box.right,
-        zIndex: overlayZ(200),
-      }}
+    <HeadlessDismiss
+      onDismiss={onClose}
+      ignoreSelector={ignore}
+      inside={(node) =>
+        Boolean(
+          (node instanceof Element && node.closest(QUERY_FLYOUT_NEST)) ||
+            (node instanceof Node && anchorRef.current?.contains(node)) ||
+            inside?.(node),
+        )
+      }
     >
-      <HeadlessDismiss
-        onDismiss={onClose}
-        ignoreSelector={ignore}
-        inside={(node) =>
-          Boolean(
-            (node instanceof Element && node.closest(QUERY_FLYOUT_NEST)) ||
-              (node instanceof Node && anchorRef.current?.contains(node)) ||
-              inside?.(node),
-          )
-        }
+      <div
+        className="fsdb-page fsdb-query-flyout"
+        data-testid="fsdb-query-flyout"
+        style={{
+          top: box.top,
+          right: box.right,
+          zIndex: overlayZ(200),
+        }}
       >
         {children}
-      </HeadlessDismiss>
-    </div>,
+      </div>
+    </HeadlessDismiss>,
     overlayPortalRoot() ?? document.body,
   )
 }

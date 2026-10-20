@@ -1094,6 +1094,7 @@ test('missing sort field falls back to updatedAt, then title', () => {
   assert.match(menus, /overlayZ\(200\)/)
   assert.match(menus, /QUERY_FLYOUT_IGNORE/)
   assert.match(menus, /QUERY_FLYOUT_NEST/)
+  assert.match(menus, /<HeadlessDismiss[\s\S]*<div[\s\S]*fsdb-query-flyout[\s\S]*\{children\}/)
   assert.match(menus, /createPortal/)
   assert.match(menus, /fsdb-query-grip/)
   assert.match(menus, /@dnd-kit\/core/)
