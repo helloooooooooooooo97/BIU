@@ -9,6 +9,8 @@ test('database-ui ships one search menu for select and multi-select', () => {
   const multi = readFileSync(resolve(import.meta.dirname, './cell-multi.tsx'), 'utf8')
   assert.match(menu, /function DbSearchMenu/)
   assert.match(menu, /db-search-menu/)
+  assert.match(menu, /db-search-menu fsdb-page/)
+  assert.match(menu, /\.db-search-option \.fsdb-field-glyph,\.db-cell-select-trigger \.fsdb-field-glyph\{[^}]*color:var\(--dsw-icon\)/)
   assert.match(menu, /className="db-search-field"/)
   assert.match(menu, /\.db-search-field\{[^}]*background:transparent/)
   assert.match(menu, /\.db-search-field\{[^}]*border:0/)

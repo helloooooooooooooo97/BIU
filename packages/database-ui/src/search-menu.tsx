@@ -11,6 +11,7 @@ const CSS = `
 .db-search-option{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;border:0;border-radius:6px;padding:5px 6px;background:transparent;color:var(--dsw-label);font-family:inherit;font-size:14px;cursor:pointer;text-align:left}
 .db-search-option:hover,.db-search-option.is-selected,.db-search-option.is-active{background:color-mix(in srgb,var(--dsw-business) 12%,transparent)}
 .db-search-option-main{display:inline-flex;align-items:center;gap:6px;min-width:0}
+.db-search-option .fsdb-field-glyph,.db-cell-select-trigger .fsdb-field-glyph{color:var(--dsw-icon);flex:none}
 .db-search-empty{padding:8px;color:var(--dsw-label-3);font-size:14px}
 .db-search-foot{border-top:1px solid var(--dsw-border);margin-top:4px;padding-top:4px}
 .db-cell-select{display:inline-flex;position:relative;min-width:0;max-width:100%;box-sizing:border-box;vertical-align:middle}
@@ -82,7 +83,7 @@ export function DbMenu({
     <AnchorMenu
       anchor={anchor}
       onClose={onClose}
-      className={className ? `db-search-menu ${className}` : 'db-search-menu'}
+      className={className ? `db-search-menu fsdb-page ${className}` : 'db-search-menu fsdb-page'}
       {...rest}
     >
       {children}
