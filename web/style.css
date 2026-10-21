@@ -3406,6 +3406,7 @@ select.settings-account-input {
   flex-direction: column;
   min-width: 320px;
   min-height: 280px;
+  overflow: hidden;
   padding: 0;
   border: 1px solid var(--dsw-border);
   border-radius: 14px;
@@ -3420,6 +3421,7 @@ select.settings-account-input {
   height: auto !important;
   min-width: 0;
   min-height: 0;
+  overflow: visible;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -3584,6 +3586,11 @@ html.dark .tool-call-status.is-fail {
 }
 
 .chat-overlay-panel .chat-stage {
+  flex: 1 1 0;
+  min-height: 0;
+  height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding-top: 0;
   padding-bottom: 8px;
 }
@@ -3611,7 +3618,9 @@ html.dark .tool-call-status.is-fail {
 }
 
 .chat-overlay-panel .chat-overlay-thread {
-  flex: 1;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
   min-height: 0;
   overflow: hidden;
   padding-block: 0;
@@ -3621,12 +3630,13 @@ html.dark .tool-call-status.is-fail {
   position: relative;
   inset: auto;
   z-index: 20;
-  flex: none;
+  flex: 0 0 auto;
   height: auto;
   overflow: visible;
+  isolation: isolate;
   box-sizing: border-box;
   padding: 0 16px 12px;
-  background: transparent;
+  background: var(--dsw-sidebar);
   pointer-events: none;
 }
 
