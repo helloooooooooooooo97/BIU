@@ -300,16 +300,23 @@ export function stampSavedView(view: SavedView): SavedView {
   return { ...view, updatedAt: Date.now() }
 }
 
+export type SavedViewsWriteResult = 'skipped' | 'ok' | 'failed'
+
 /** 按差异推视图：只发这一个窗口真正改动的条目，避免把别的窗口新建的视图整份冲掉。 */
-export function pushSavedViewsPatch(collectionPath: string, patch: SavedViewsPatch) {
+export async function pushSavedViewsPatch(collectionPath: string, patch: SavedViewsPatch): Promise<SavedViewsWriteResult> {
   const upsert = patch.upsert ?? []
   const remove = patch.remove ?? []
-  if (!upsert.length && !remove.length) return Promise.resolve(undefined)
-  return fetch('/api/db/saved-views', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ path: collectionPath, upsert: upsert.map(viewWirePayload), remove }),
-  }).catch(() => undefined)
+  if (!upsert.length && !remove.length) return 'skipped'
+  try {
+    const res = await fetch('/api/db/saved-views', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ path: collectionPath, upsert: upsert.map(viewWirePayload), remove }),
+    })
+    return res.ok ? 'ok' : 'failed'
+  } catch {
+    return 'failed'
+  }
 }
 
 /** 整份覆盖。只有确知「本地就是权威」时才用，普通增删改请走 pushSavedViewsPatch。 */
