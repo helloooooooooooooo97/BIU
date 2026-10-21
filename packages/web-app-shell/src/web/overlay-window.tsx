@@ -3,8 +3,12 @@ import { ChatPane } from '@biu/public-ui/chat-pane'
 import {
   closeChatOverlay,
   getOverlayThread,
+  isComposerFocusPending,
   overlayLayoutGeom,
+  overlayStillHoldsPointer,
+  OVERLAY_OUTSIDE_KEEP,
   readOverlayWinState,
+  setOverlayResizing,
   shouldCloseOverlayOnOutside,
   subscribeOverlayThread,
   writeOverlayWinState,
@@ -14,6 +18,12 @@ import {
 type ResizeEdge = { north?: boolean; south?: boolean; east?: boolean; west?: boolean }
 
 let overlayZ = 80
+
+function overlayHoldsFocus(root: HTMLElement | null, target: EventTarget | null) {
+  if (!(target instanceof Element)) return false
+  if (root?.contains(target)) return true
+  return Boolean(target.closest(OVERLAY_OUTSIDE_KEEP))
+}
 
 export function OverlayChatWindow({
   header,
@@ -28,11 +38,16 @@ export function OverlayChatWindow({
   const initial = readOverlayWinState()
   const [geom, setGeom] = useState<OverlayWinGeom>(initial)
   const [z, setZ] = useState(overlayZ)
+  const [pointerInside, setPointerInside] = useState(false)
+  const [composerFocused, setComposerFocused] = useState(true)
+  const [resizing, setResizing] = useState(false)
   const boxRef = useRef<HTMLDivElement>(null)
   const cardRef = useRef<HTMLDivElement>(null)
+  const leaveTimer = useRef<number>(0)
   const resizeRef = useRef<(OverlayWinGeom & ResizeEdge & { px: number; py: number }) | null>(null)
   const geomRef = useRef(geom)
   geomRef.current = geom
+  const dimmed = !pointerInside && !composerFocused && !resizing
 
   const bringFront = useCallback(() => {
     overlayZ += 1
@@ -53,6 +68,29 @@ export function OverlayChatWindow({
     window.addEventListener('biu:overlay-focus', onFocus)
     return () => window.removeEventListener('biu:overlay-focus', onFocus)
   }, [bringFront])
+
+  useEffect(() => {
+    const wake = () => setComposerFocused(true)
+    const syncFocus = () => {
+      setComposerFocused(overlayHoldsFocus(boxRef.current, document.activeElement) || isComposerFocusPending())
+    }
+    const onFocusIn = (event: FocusEvent) => {
+      if (overlayHoldsFocus(boxRef.current, event.target)) setComposerFocused(true)
+    }
+    const onFocusOut = () => {
+      window.requestAnimationFrame(syncFocus)
+    }
+    window.addEventListener('biu:composer-focus', wake)
+    document.addEventListener('focusin', onFocusIn)
+    document.addEventListener('focusout', onFocusOut)
+    const boot = window.setTimeout(syncFocus, 200)
+    return () => {
+      window.removeEventListener('biu:composer-focus', wake)
+      document.removeEventListener('focusin', onFocusIn)
+      document.removeEventListener('focusout', onFocusOut)
+      window.clearTimeout(boot)
+    }
+  }, [])
 
   useEffect(() => {
     const onOutside = (event: PointerEvent) => {
@@ -101,6 +139,8 @@ export function OverlayChatWindow({
         writeOverlayWinState({ ...geomRef.current, layout: 'right' })
       }
       resizeRef.current = null
+      setResizing(false)
+      setOverlayResizing(false)
     }
     const onResize = () => {
       apply(geomRef.current)
@@ -121,6 +161,8 @@ export function OverlayChatWindow({
     event.preventDefault()
     event.stopPropagation()
     bringFront()
+    setResizing(true)
+    setOverlayResizing(true)
     const el = cardRef.current
     const r = el?.getBoundingClientRect()
     resizeRef.current = {
@@ -143,7 +185,7 @@ export function OverlayChatWindow({
   return (
     <div
       ref={boxRef}
-      className={`chat-overlay-panel${threadOpen ? '' : ' is-compose-only'}`}
+      className={`chat-overlay-panel${threadOpen ? '' : ' is-compose-only'}${dimmed ? ' is-dimmed' : ''}`}
       data-testid="chat-overlay-panel"
       data-overlay-layout="right"
       data-biu-ignore
@@ -154,6 +196,15 @@ export function OverlayChatWindow({
         zIndex: z,
       }}
       onPointerDown={bringFront}
+      onPointerEnter={() => {
+        window.clearTimeout(leaveTimer.current)
+        setPointerInside(true)
+      }}
+      onPointerLeave={(event) => {
+        if (overlayStillHoldsPointer(boxRef.current, event.relatedTarget, event.clientX, event.clientY)) return
+        window.clearTimeout(leaveTimer.current)
+        leaveTimer.current = window.setTimeout(() => setPointerInside(false), 120)
+      }}
     >
       {threadOpen ? (
         <ChatPane
