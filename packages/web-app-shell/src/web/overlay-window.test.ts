@@ -57,7 +57,7 @@ test('clicking the overlay close button actually closes the overlay', () => {
   closeChatOverlay()
 })
 
-test('overlay opens docked to the right and vertically centered', () => {
+test('overlay opens docked to the right and anchored to the bottom', () => {
   host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
@@ -78,10 +78,8 @@ test('overlay opens docked to the right and vertically centered', () => {
   assert.equal(panel.getAttribute('data-overlay-layout'), 'right')
   assert.equal(document.querySelector('[data-testid="chat-overlay-drag"]'), null)
   assert.ok(Number.parseFloat(panel.style.left) > 700)
-  const top = Number.parseFloat(panel.style.top)
-  const height = Number.parseFloat(panel.style.height)
-  assert.ok(top > 40)
-  assert.ok(top + height < 800)
+  assert.equal(panel.style.bottom, '12px')
+  assert.equal(panel.style.height, '')
   assert.equal(document.querySelector('[data-testid="chat-overlay-layout-toggle"]'), null)
   assert.equal(document.querySelector('[data-testid="chat-overlay-layout"]'), null)
 })
@@ -141,6 +139,8 @@ test('compose-only overlay shows the thread after send', () => {
   assert.equal(getOverlayThread(), true)
   assert.equal(panel.classList.contains('is-compose-only'), false)
   assert.ok(document.querySelector('[data-testid="chat-overlay-head"]'))
+  assert.equal(panel.style.bottom, '12px')
+  assert.ok(Number.parseFloat(panel.style.height) >= 280)
 })
 
 test('compose-only overlay closes when clicking outside; expanded does not', () => {
