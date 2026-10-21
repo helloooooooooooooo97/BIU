@@ -43,6 +43,7 @@ import {
   groupField,
   groupListKeys,
   groupRecords,
+  groupRowBucketKeys,
   groupableFields,
   hasTreeLinks,
   isRecordLinkField,
@@ -820,11 +821,9 @@ function collectionFromAppUrl(url: string): { collection: string; viewId: string
 
 const SHARE_SCOPE_ORDER = ['私人', '空间', '共享']
 
-function createdRowGroupKey(row: DbRecord, groupBy: string) {
-  if (groupBy === 'shareScope') return String(row.shareScope ?? '')
+function createdRowGroupKey(row: DbRecord, groupBy: string, schema?: CollectionSchema) {
   if (!groupBy) return ''
-  const raw = row[groupBy]
-  return raw == null || raw === '' ? '' : String(raw)
+  return groupRowBucketKeys(row, groupBy, schema)[0] ?? ''
 }
 
 function placeCreatedRow(groups: GroupBucket[], row: DbRecord, groupBy: string) {
@@ -2109,8 +2108,10 @@ export function CollectionBrowser({
         : readJson<StatResult>(`/api/db/stat?path=${encodeURIComponent(dataPath)}`, undefined, { fresh: Boolean(opts?.force) })
       const extraGroupValues = (schema?: CollectionSchema) => {
         if (switching) return []
-        const group = groupField(schema, reqGroupBy)
+        const group = groupField(schema, reqGroupBy, facetCatalog)
         if (!group || group.field.enum?.length) return []
+        const kind = resolveFieldType(group.field)
+        if (kind === 'datetime' || kind === 'number' || kind === 'boolean') return []
         return uniqueValues(itemsRef.current, group.key, group.field)
       }
       const loadGroups = (schema?: CollectionSchema) =>
@@ -2118,6 +2119,7 @@ export function CollectionBrowser({
           ...listOpts,
           groupBy: reqGroupBy,
           schema,
+          packs: facetCatalog,
           extraValues: extraGroupValues(schema),
           pageSize: reqPageSize,
           groupPages: switching || opts?.force ? {} : groupPagesRef.current,
@@ -2136,7 +2138,7 @@ export function CollectionBrowser({
       const loadUngrouped = () => listCollection({ ...listOpts, limit: reqPageSize, offset: switching ? 0 : page * reqPageSize })
       if (reqGroupBy) {
         const cachedSchema = switching ? undefined : schemaRef.current
-        const cachedKeys = cachedSchema ? groupListKeys(cachedSchema, reqGroupBy, extraGroupValues(cachedSchema)) : []
+        const cachedKeys = cachedSchema ? groupListKeys(cachedSchema, reqGroupBy, extraGroupValues(cachedSchema), facetCatalog) : []
         if (cachedKeys.length) {
           const [statResult, grouped] = await Promise.all([nextStatPromise, loadGroups(cachedSchema)])
           nextStat = statResult
@@ -2252,7 +2254,7 @@ export function CollectionBrowser({
     } finally {
       if (reloadInflightRef.current?.promise === promise) reloadInflightRef.current = null
     }
-  }, [activeViewId, collectionPath, customView, dataPath, fetchQuery, groupBy, groupFillKeys, listColumns, listIdentityKey, queryFilters, page, pageSize, reloadKey, sortDir, sortField, sorts, wrapCells])
+  }, [activeViewId, collectionPath, customView, dataPath, facetCatalog, fetchQuery, groupBy, groupFillKeys, listColumns, listIdentityKey, queryFilters, page, pageSize, reloadKey, sortDir, sortField, sorts, wrapCells])
   const reloadRef = useRef(reload)
   reloadRef.current = reload
   const detailIdRef = useRef<string | null>(null)
@@ -2704,8 +2706,8 @@ export function CollectionBrowser({
     handle.addEventListener('pointerup', onUp)
     handle.addEventListener('pointercancel', onUp)
   }
-  const groupFields = useMemo(() => groupableFields(schema), [schema])
-  const activeGroup = groupField(schema, groupBy)
+  const groupFields = useMemo(() => groupableFields(schema, facetCatalog), [facetCatalog, schema])
+  const activeGroup = groupField(schema, groupBy, facetCatalog)
   const grouping = Boolean(activeGroup)
   const filterFields = useMemo(
     () =>
@@ -2769,12 +2771,12 @@ export function CollectionBrowser({
   const visible = items
 
   const grouped = useMemo(() => {
-    if (!grouping) return groupRecords(visible, schema, groupBy)
+    if (!grouping) return groupRecords(visible, schema, groupBy, facetCatalog)
     if (groupBuckets.length) return groupBuckets.filter((item) => (item.total ?? item.rows.length) > 0)
     // 分享列是计算属性。用行上的 shareScope 再分组，会把「分享出去的私人记录」先画进共享，等 $scope 组桶到了再跳。
     if (groupBy === 'shareScope') return []
-    return groupRecords(visible, schema, groupBy).filter((item) => item.rows.length)
-  }, [groupBuckets, groupBy, grouping, schema, visible])
+    return groupRecords(visible, schema, groupBy, facetCatalog).filter((item) => item.rows.length)
+  }, [facetCatalog, groupBuckets, groupBy, grouping, schema, visible])
   const parentKey = useMemo(() => parentFieldKey(schema, items), [items, schema])
   const treeable = useMemo(() => hasTreeLinks(items, parentKey), [items, parentKey])
   const treeOn = treeable && showTree
@@ -5002,7 +5004,7 @@ export function CollectionBrowser({
                       />
                     ))
                   ) : (
-                    <div className="tasks-viewdd-empty">没有单选或多选字段</div>
+                    <div className="tasks-viewdd-empty">没有可分组字段</div>
                   )}
                 </div>
                 </HeadlessDismiss>

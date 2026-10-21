@@ -1,6 +1,17 @@
 import type { AtomicFieldType, CollectionSchema, CollectionSchemaPack, DbRecord, FieldSpec, FieldType, SchemaFieldValue } from '@biu/type-file-system'
-import { asAttachment, asAttachmentList, asHttpHref, asImageSrc, asImageSrcList, asPerson, asPersonList, BUILTIN_FIELD_KEYS, isFacetFieldType, isRefFieldType, isReservedSchemaFieldKey, normalizeSchemaValue } from '@biu/type-file-system'
+import { asAttachment, asAttachmentList, asHttpHref, asImageSrc, asImageSrcList, asPerson, asPersonList, BUILTIN_FIELD_KEYS, isFacetFieldType, isRefFieldType, isReservedSchemaFieldKey, normalizeSchemaValue, personKey } from '@biu/type-file-system'
 import { FACET_FLAT_PREFIX, parseFacetFlatColumnKey, readFacetFieldValue } from '../query-logic.ts'
+import {
+  cellGroupValue,
+  GROUP_STRATEGIES,
+  isGroupableKind,
+  parseGroupByKey,
+  resolveGroupField,
+  strategyForField,
+  type GroupStrategyContext,
+} from './group-strategies.ts'
+
+export { GROUP_STRATEGIES, isGroupableKind, parseGroupByKey }
 
 export { FACET_FLAT_PREFIX, parseFacetFlatColumnKey }
 
@@ -202,7 +213,7 @@ export function listProjectionKeys(opts: {
   add('emoji')
   add('mascot')
   add(declaredParentField(opts.schema))
-  add(opts.groupBy)
+  add(parseGroupByKey(opts.groupBy).fieldKey)
   add('parentChain')
   add('blocked')
   add('usageParts')
@@ -455,6 +466,11 @@ export function uniqueValues(rows: DbRecord[], key: string, field: FieldSpec): s
       for (const item of asStringList(raw)) set.add(item)
     } else if (kind === 'facet') {
       for (const item of normalizeSchemaValue(raw).tags) set.add(item)
+    } else if (kind === 'person') {
+      for (const item of asPersonList(raw)) {
+        const key = personKey(item)
+        if (key) set.add(key)
+      }
     } else if (raw != null && raw !== '') {
       set.add(String(raw))
     }
@@ -462,24 +478,37 @@ export function uniqueValues(rows: DbRecord[], key: string, field: FieldSpec): s
   return [...set].sort((a, b) => a.localeCompare(b, 'zh'))
 }
 
-export function isGroupableKind(kind: FieldType) {
-  return kind === 'select' || kind === 'multi-select' || kind === 'facet'
+export function groupableFields(schema: CollectionSchema | undefined, packs: CollectionSchemaPack[] = []) {
+  const fromSchema = fieldEntries(schema).filter((item) => isGroupableKind(item.kind) && item.key !== schema?.labelField)
+  const fromPacks = flattenFacetColumns(packs)
+    .filter((item) => isGroupableKind(item.kind))
+    .map((item) => ({ key: item.key, field: item.field, kind: item.kind }))
+  return [...fromSchema, ...fromPacks]
 }
 
-export function groupableFields(schema: CollectionSchema | undefined) {
-  return fieldEntries(schema).filter((item) => isGroupableKind(item.kind) && item.key !== schema?.labelField)
-}
-
-export function groupField(schema: CollectionSchema | undefined, preferred?: string): { key: string; field: FieldSpec } | null {
-  if (!preferred) return null
-  const match = groupableFields(schema).find((item) => item.key === preferred)
+export function groupField(
+  schema: CollectionSchema | undefined,
+  preferred?: string,
+  packs: CollectionSchemaPack[] = [],
+): { key: string; field: FieldSpec } | null {
+  const match = resolveGroupField(schema, preferred, packs)
   return match ? { key: match.key, field: match.field } : null
 }
 
-function groupBucketLabel(kind: FieldType, key: string, field?: FieldSpec) {
-  if (kind === 'boolean') return key === 'true' ? '是' : '否'
-  if (kind === 'select' || kind === 'multi-select') return enumDisplayLabel(field, key)
-  return key
+function groupContext(
+  schema: CollectionSchema | undefined,
+  preferred: string | undefined,
+  extraValues: string[] = [],
+  packs: CollectionSchemaPack[] = [],
+): GroupStrategyContext | null {
+  const group = resolveGroupField(schema, preferred, packs)
+  if (!group) return null
+  return {
+    fieldKey: group.key,
+    groupBy: preferred ?? group.key,
+    field: group.field,
+    extraValues,
+  }
 }
 
 export type GroupBucket = {
@@ -489,59 +518,48 @@ export type GroupBucket = {
   total?: number
 }
 
-const SHARE_SCOPE_FILTER: Record<string, 'personal' | 'workspace' | 'shared'> = {
-  私人: 'personal',
-  空间: 'workspace',
-  共享: 'shared',
-}
-
-/** 分组表头的稳定 key：schema enum / 布尔，而不是当前这一页里碰巧出现的值。 */
+/** 分组表头的稳定 key：策略生成，而不是当前这一页里碰巧出现的值。 */
 export function groupListKeys(
   schema: CollectionSchema | undefined,
   preferred?: string,
   extraValues: string[] = [],
+  packs: CollectionSchemaPack[] = [],
 ): { key: string; label: string }[] {
-  const group = groupField(schema, preferred)
-  if (!group) return []
-  const kind = resolveFieldType(group.field)
-  if (kind === 'boolean') {
-    return [
-      { key: 'true', label: groupBucketLabel(kind, 'true', group.field) },
-      { key: 'false', label: groupBucketLabel(kind, 'false', group.field) },
-    ]
-  }
-  const declared = group.field.enum?.length ? group.field.enum.map(String) : []
-  const values: string[] = []
-  const seen = new Set<string>()
-  for (const value of [...declared, ...extraValues]) {
-    const key = String(value ?? '')
-    if (!key || seen.has(key)) continue
-    seen.add(key)
-    values.push(key)
-  }
-  if (!values.length) return []
-  const listed = values.map((key) => ({ key, label: groupBucketLabel(kind, key, group.field) }))
-  if (group.key !== 'shareScope' && !group.field.enum?.length) listed.push({ key: '', label: '未填' })
+  const ctx = groupContext(schema, preferred, extraValues, packs)
+  const strategy = ctx ? strategyForField(ctx.field) : null
+  if (!ctx || !strategy) return []
+  const listed = strategy.keys(ctx)
+  if (!listed.length) return []
+  if (!strategy.skipEmpty?.(ctx)) listed.push({ key: '', label: strategy.emptyLabel ?? '未填' })
   return listed
 }
 
 /** 每一组自己的列表过滤。分享列是计算属性，分组请求走 $scope；host 按展示用的 shareScope 切包（公开/局域网链接算共享）。 */
-export function groupListFilter(groupBy: string, groupKey: string): Record<string, unknown> {
+export function groupListFilter(
+  groupBy: string,
+  groupKey: string,
+  schema?: CollectionSchema,
+  packs: CollectionSchemaPack[] = [],
+): Record<string, unknown> {
+  const ctx = groupContext(schema, groupBy, [], packs)
+  const strategy = ctx ? strategyForField(ctx.field) : null
+  if (strategy && ctx) return strategy.filter(groupKey, ctx)
   if (groupBy === 'shareScope') {
-    const scope = SHARE_SCOPE_FILTER[groupKey]
+    const scope = { 私人: 'personal', 空间: 'workspace', 共享: 'shared' }[groupKey]
     return scope ? { $scope: scope } : {}
   }
   if (!groupKey) {
+    const fieldKey = parseGroupByKey(groupBy).fieldKey || groupBy
     return {
       $tree: {
         kind: 'group',
         id: 'group-empty',
         combinator: 'and',
-        children: [{ kind: 'rule', id: 'group-empty-rule', field: groupBy, op: 'is_empty', value: '' }],
+        children: [{ kind: 'rule', id: 'group-empty-rule', field: fieldKey, op: 'is_empty', value: '' }],
       },
     }
   }
-  return { [groupBy]: groupKey }
+  return { [parseGroupByKey(groupBy).fieldKey || groupBy]: groupKey }
 }
 
 /** 视图筛选和组筛选叠在一起。$scope 冲突表示这组在当前视图里不可能有行。 */
@@ -566,44 +584,54 @@ export function mergeListFilters(
   return out
 }
 
-export function groupRecords(rows: DbRecord[], schema: CollectionSchema | undefined, preferred?: string): GroupBucket[] {
-  const group = groupField(schema, preferred)
-  if (!group) return [{ key: '', label: '全部', rows }]
-  const kind = resolveFieldType(group.field)
-  const known =
-    kind === 'boolean'
-      ? ['true', 'false']
-      : uniqueValues(rows, group.key, group.field)
-  const buckets = new Map<string, DbRecord[]>(known.map((key) => [key, []]))
+export function groupRecords(
+  rows: DbRecord[],
+  schema: CollectionSchema | undefined,
+  preferred?: string,
+  packs: CollectionSchemaPack[] = [],
+): GroupBucket[] {
+  const group = resolveGroupField(schema, preferred, packs)
+  const extra = group ? uniqueValues(rows, group.key, group.field) : []
+  const ctx = groupContext(schema, preferred, extra, packs)
+  const strategy = ctx ? strategyForField(ctx.field) : null
+  if (!ctx || !strategy) return [{ key: '', label: '全部', rows }]
+  const labels = new Map(strategy.keys(ctx).map((item) => [item.key, item.label]))
+  const buckets = new Map<string, DbRecord[]>()
   const unset: DbRecord[] = []
   for (const row of rows) {
-    if (kind === 'boolean') {
-      const flag = row[group.key] === true || row[group.key] === 'true'
-      buckets.set(flag ? 'true' : 'false', [...(buckets.get(flag ? 'true' : 'false') ?? []), row])
+    const keys = strategy.bucketOf(row, ctx)
+    if (!keys.length) {
+      unset.push(row)
       continue
     }
-    if (kind === 'multi-select' || kind === 'facet') {
-      const tags = kind === 'facet' ? normalizeSchemaValue(row[group.key]).tags : asStringList(row[group.key])
-      if (!tags.length) {
-        unset.push(row)
-        continue
-      }
-      for (const tag of tags) {
-        buckets.set(tag, [...(buckets.get(tag) ?? []), row])
-      }
-      continue
+    for (const key of keys) {
+      buckets.set(key, [...(buckets.get(key) ?? []), row])
     }
-    const key = String(row[group.key] ?? '')
-    if (!key) unset.push(row)
-    else buckets.set(key, [...(buckets.get(key) ?? []), row])
   }
   const listed = [...buckets.entries()].map(([key, grouped]) => ({
     key,
-      label: groupBucketLabel(kind, key, group.field),
+    label: labels.get(key) ?? strategy.label?.(key, ctx) ?? key,
     rows: grouped,
   }))
-  if (unset.length) listed.push({ key: '', label: '未填', rows: unset })
+  if (unset.length) listed.push({ key: '', label: strategy.emptyLabel ?? '未填', rows: unset })
   return listed
+}
+
+export function groupRowBucketKeys(
+  row: DbRecord,
+  groupBy: string,
+  schema?: CollectionSchema,
+  packs: CollectionSchemaPack[] = [],
+): string[] {
+  if (!groupBy) return ['']
+  const ctx = groupContext(schema, groupBy, [], packs)
+  const strategy = ctx ? strategyForField(ctx.field) : null
+  if (!strategy || !ctx) {
+    const raw = cellGroupValue(row, parseGroupByKey(groupBy).fieldKey || groupBy)
+    return raw == null || raw === '' ? [''] : [String(raw)]
+  }
+  const keys = strategy.bucketOf(row, ctx)
+  return keys.length ? keys : ['']
 }
 
 export function previewActionRecord(row: DbRecord, action: { id?: string; when?: Record<string, unknown> }): DbRecord {
