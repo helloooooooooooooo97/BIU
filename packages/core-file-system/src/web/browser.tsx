@@ -5024,10 +5024,14 @@ export function CollectionBrowser({
                 <HeadlessDismiss
                   onDismiss={() => setColumnMenuOpen(false)}
                   insideRef={columnRef}
-                  ignoreSelector={`${HEADLESS_DISMISS_IGNORE}, [data-fsdb-col-flyout], .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]`}
+                  ignoreSelector={`${HEADLESS_DISMISS_IGNORE}, [data-fsdb-col-flyout], [data-fsdb-col-facet-trigger], .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]`}
                   inside={(node) =>
                     node instanceof Element &&
-                    Boolean(node.closest('[data-fsdb-col-flyout], .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]'))
+                    Boolean(
+                      node.closest(
+                        '[data-fsdb-col-flyout], [data-fsdb-col-facet-trigger], .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]',
+                      ),
+                    )
                   }
                 >
                 <div className="tasks-sort-menu fsdb-col-menu" role="menu">

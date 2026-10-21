@@ -1,6 +1,13 @@
 import * as Popover from '@radix-ui/react-popover'
 import type { ReactElement } from 'react'
 import { HEADLESS_DISMISS_IGNORE } from './headless-dismiss.tsx'
+import { overlayPortalRoot } from './overlay-portal.ts'
+
+function shouldIgnoreOutside(event: { target: EventTarget | null; detail?: { originalEvent?: Event } }, ignoreSelector: string) {
+  const orig = event.detail?.originalEvent
+  const path = orig && typeof orig.composedPath === 'function' ? orig.composedPath() : []
+  return [...path, event.target].some((target) => target instanceof Element && target.closest(ignoreSelector))
+}
 
 /** 无头 Popover：自带定位、Portal、点外关闭、Esc。不带视觉样式。 */
 export function HeadlessPopover({
@@ -15,6 +22,7 @@ export function HeadlessPopover({
   modal = false,
   autoFocus = false,
   ignoreSelector = HEADLESS_DISMISS_IGNORE,
+  container,
 }: {
   open?: boolean
   defaultOpen?: boolean
@@ -27,11 +35,12 @@ export function HeadlessPopover({
   modal?: boolean
   autoFocus?: boolean
   ignoreSelector?: string
+  container?: HTMLElement | null
 }) {
   return (
     <Popover.Root open={open} defaultOpen={defaultOpen} onOpenChange={onOpenChange} modal={modal}>
       <Popover.Trigger asChild>{trigger}</Popover.Trigger>
-      <Popover.Portal>
+      <Popover.Portal container={container ?? overlayPortalRoot() ?? undefined}>
         <Popover.Content
           asChild
           side={side}
@@ -43,12 +52,10 @@ export function HeadlessPopover({
           }}
           onCloseAutoFocus={(event) => event.preventDefault()}
           onPointerDownOutside={(event) => {
-            const target = event.target
-            if (target instanceof Element && ignoreSelector && target.closest(ignoreSelector)) event.preventDefault()
+            if (ignoreSelector && shouldIgnoreOutside(event, ignoreSelector)) event.preventDefault()
           }}
           onFocusOutside={(event) => {
-            const target = event.target
-            if (target instanceof Element && ignoreSelector && target.closest(ignoreSelector)) event.preventDefault()
+            if (ignoreSelector && shouldIgnoreOutside(event, ignoreSelector)) event.preventDefault()
           }}
         >
           {children}
