@@ -123,6 +123,8 @@ export type ChatNode =
       steps?: ChatStepStat[]
       usage?: TrajectoryUsage
       durationMs?: number
+      /** turn/start 的事件时间，直播耗时用 now - startTs。 */
+      startTs?: number
       streaming?: boolean
       finished?: boolean
       /** turn/end reason，如 complete / cancelled */
@@ -331,6 +333,7 @@ export function projectNodes(events: SessionEvent[]): ChatNode[] {
       ...(steps.length ? { stepCount: steps.length, steps } : {}),
       ...(usage ? { usage } : {}),
       ...(durationMs != null ? { durationMs } : {}),
+      ...(turnStartTs != null ? { startTs: turnStartTs } : {}),
       streaming: reply.streaming && !finished,
       finished,
       ...(reason ? { endReason: reason } : {}),
