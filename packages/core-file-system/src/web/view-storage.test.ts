@@ -6,9 +6,11 @@ import { builtinAllView, builtinAllViewId, builtinCatalogViewId } from '../catal
 import { VIEWS_COLLECTION_PATH } from './database-path.ts'
 import {
   defaultViewId,
+  diffSavedViews,
   fetchSavedView,
   loadViews,
   loadRecords,
+  mergeSavedViewsPatch,
   noteLocalSavedViewsWrite,
   persistViewDisplay,
   pickViewForRoute,
@@ -336,6 +338,40 @@ test('fetchSavedView reads the URL view and remembers wrap and pageSize', async 
   } finally {
     globalThis.fetch = prev
   }
+})
+
+test('diffSavedViews upserts ids that were never in baseline', () => {
+  const blank = {
+    id: 'old',
+    name: '旧',
+    mode: 'table' as const,
+    sortField: 'title',
+    sortDir: 'asc' as const,
+    filters: {},
+    columns: [] as string[],
+  }
+  const copy = { ...blank, id: 'copy', name: '旧 副本' }
+  const diff = diffSavedViews([blank], [blank, copy])
+  assert.deepEqual(diff.upsert?.map((view) => view.id), ['copy'])
+  assert.deepEqual(diff.remove, [])
+})
+
+test('mergeSavedViewsPatch keeps explicit upsert when diff is empty', () => {
+  const view = {
+    id: 'copy',
+    name: '看板 副本',
+    mode: 'table' as const,
+    sortField: 'title',
+    sortDir: 'asc' as const,
+    filters: {},
+    columns: [] as string[],
+  }
+  const merged = mergeSavedViewsPatch({ upsert: [], remove: [] }, { upsert: [view] })
+  assert.deepEqual(merged.upsert?.map((item) => item.id), ['copy'])
+  assert.deepEqual(merged.remove, [])
+  const dropped = mergeSavedViewsPatch({ upsert: [view] }, { remove: ['copy'] })
+  assert.deepEqual(dropped.upsert, [])
+  assert.deepEqual(dropped.remove, ['copy'])
 })
 
 test('starred records toggle by collection path and id', () => {

@@ -343,6 +343,22 @@ export function diffSavedViews(prev: SavedView[], next: SavedView[]): SavedViews
   return { upsert, remove }
 }
 
+function writableSavedView(view: SavedView) {
+  return !view.builtin && !isReadOnlyViewId(view.id)
+}
+
+/** 把调用方点名的 upsert/remove 并进 diff，避免新 id 不在 baseline 时整次写入被 skipped。 */
+export function mergeSavedViewsPatch(diff: SavedViewsPatch, extra?: SavedViewsPatch): SavedViewsPatch {
+  const byId = new Map<string, SavedView>()
+  for (const view of [...(diff.upsert ?? []), ...(extra?.upsert ?? [])]) {
+    if (!writableSavedView(view)) continue
+    byId.set(view.id, view)
+  }
+  const remove = [...new Set([...(diff.remove ?? []), ...(extra?.remove ?? [])].map((id) => String(id ?? '').trim()).filter(Boolean))]
+  for (const id of remove) byId.delete(id)
+  return { upsert: [...byId.values()], remove }
+}
+
 function parseMaybeJson(value: unknown): unknown {
   if (typeof value === 'string' && value.trim()) {
     try {
