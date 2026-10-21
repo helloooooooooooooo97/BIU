@@ -118,7 +118,7 @@ export function listenEnablePageBlockPlugin() {
   return () => window.removeEventListener(ENABLE_PAGE_BLOCK_PLUGIN, onEnable)
 }
 
-const PAGE_BLOCK_LIST_COLUMNS = 'id,title,blurb,installed,hasWeb,headless'
+const PAGE_BLOCK_LIST_COLUMNS = 'id,title,blurb,tags,installed,hasWeb,headless'
 
 /** 只刷新斜杠安装态，不 start / 不预热窗口插件。 */
 export async function refreshInstalledPageBlocks() {

@@ -27,12 +27,13 @@ test('empty install catalog keeps built-in slash items only', () => {
   assert.equal(filterSlashItems('').length, SLASH_ITEMS.length)
 })
 
-test('installedPageBlocksFromRows keeps headless web installs and drops windows', () => {
+test('installedPageBlocksFromRows keeps tagged page plugins and drops the rest', () => {
   const rows = installedPageBlocksFromRows([
-    { id: 'page-toc', title: '目录', installed: true, hasWeb: true, headless: true, enabled: false, running: false },
-    { id: 'arena-rogue', title: 'Arena', installed: true, hasWeb: true },
-    { id: 'sandbox-only', name: '沙箱', sandbox: true, hasWeb: true, headless: true },
-    { id: 'no-web', title: '无页面', installed: true, headless: true },
+    { id: 'page-toc', title: '目录', installed: true, hasWeb: true, headless: true, tags: ['page', 'editor'], enabled: false, running: false },
+    { id: 'headless-tool', title: '体检壳', installed: true, hasWeb: true, headless: true, tags: ['dev'] },
+    { id: 'arena-rogue', title: 'Arena', installed: true, hasWeb: true, tags: ['game'] },
+    { id: 'sandbox-only', name: '沙箱', sandbox: true, hasWeb: true, headless: true, tags: ['page'] },
+    { id: 'no-web', title: '无页面', installed: true, headless: true, tags: ['page'] },
   ])
   assert.deepEqual(rows, [{ id: 'page-toc', label: '目录', hint: '' }])
 })

@@ -160,12 +160,25 @@ export function resetSlashCatalog() {
   bumpSlashCatalog()
 }
 
+function rowTags(row: Record<string, unknown>) {
+  const raw = row.tags
+  if (Array.isArray(raw)) return raw.map((item) => String(item).trim().toLowerCase()).filter(Boolean)
+  if (typeof raw === 'string') {
+    return raw
+      .split(/[,\s]+/)
+      .map((item) => item.trim().toLowerCase())
+      .filter(Boolean)
+  }
+  return []
+}
+
 export function installedPageBlocksFromRows(rows: unknown[]): InstalledPageBlockPlugin[] {
   const out: InstalledPageBlockPlugin[] = []
   for (const raw of rows) {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue
     const row = raw as Record<string, unknown>
     if (!flag(row.installed) || !flag(row.hasWeb) || !flag(row.headless)) continue
+    if (!rowTags(row).includes('page')) continue
     const id = String(row.id ?? '').trim()
     if (!id) continue
     const label = String(row.title ?? row.name ?? '').trim() || id

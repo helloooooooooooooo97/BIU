@@ -123,11 +123,12 @@ test('refreshing installed page blocks lists headless web plugins and does not s
         status: 200,
         body: {
           items: [
-            { id: 'page-toc', title: '目录', installed: true, hasWeb: true, headless: true },
-            { id: 'arena-rogue', title: 'Arena', installed: true, hasWeb: true },
-            { id: 'sandbox-only', sandbox: true, hasWeb: true, headless: true },
+            { id: 'page-toc', title: '目录', installed: true, hasWeb: true, headless: true, tags: ['page'] },
+            { id: 'headless-tool', title: '工具', installed: true, hasWeb: true, headless: true, tags: ['dev'] },
+            { id: 'arena-rogue', title: 'Arena', installed: true, hasWeb: true, tags: ['game'] },
+            { id: 'sandbox-only', sandbox: true, hasWeb: true, headless: true, tags: ['page'] },
           ],
-          total: 3,
+          total: 4,
         },
       }
     }
@@ -142,6 +143,7 @@ test('refreshing installed page blocks lists headless web plugins and does not s
   assert.equal(fetchMock.calls.every((call) => call.url.includes('/api/db/list')), true)
   assert.equal(filterSlashItems('').some((item) => item.id === 'page-toc'), true)
   assert.equal(filterSlashItems('').some((item) => item.id === 'arena-rogue'), false)
+  assert.equal(filterSlashItems('').some((item) => item.id === 'headless-tool'), false)
   resetSlashCatalog()
 })
 
