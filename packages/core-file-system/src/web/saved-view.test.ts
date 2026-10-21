@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { colWidthStyle, DEFAULT_VIEW_PAGE_SIZE, normalizePageSize, normalizeSavedView, parseViewColumns, tableWidthStyle, viewStateKey, type SavedView } from './saved-view.ts'
+import { colWidthStyle, DEFAULT_VIEW_PAGE_SIZE, normalizePageSize, normalizeSavedView, parseViewColumns, sortViewsByRank, tableWidthStyle, viewStateKey, type SavedView } from './saved-view.ts'
 
 const base: SavedView = {
   id: '1',
@@ -66,6 +66,14 @@ test('colWidthStyle and tableWidthStyle declare explicit px boxes', () => {
     maxWidth: '200px',
   })
   assert.equal(tableWidthStyle({ title: 120 }, ['title', 'status']), undefined)
+})
+
+test('sortViewsByRank follows rank then original index', () => {
+  const a = normalizeSavedView({ ...base, id: 'a', name: 'A', rank: 2 })
+  const b = normalizeSavedView({ ...base, id: 'b', name: 'B', rank: 0 })
+  const c = normalizeSavedView({ ...base, id: 'c', name: 'C' })
+  assert.deepEqual(sortViewsByRank([a, b]).map((view) => view.id), ['b', 'a'])
+  assert.deepEqual(sortViewsByRank([c, a]).map((view) => view.id), ['c', 'a'])
 })
 
 test('viewStateKey ignores name and treats missing query as empty', () => {

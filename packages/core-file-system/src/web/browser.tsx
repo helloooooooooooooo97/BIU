@@ -10,11 +10,9 @@ import {
   ChevronRightIcon,
   EllipsisHorizontalIcon,
   HashtagIcon,
-  PencilSquareIcon,
   PlusIcon,
   TagIcon,
   ArrowDownTrayIcon,
-  Square2StackIcon,
   GlobeAltIcon,
   UserIcon,
   UsersIcon,
@@ -67,7 +65,7 @@ import { CrumbTrail } from './crumb-trail.tsx'
 import { fieldPickAttrs, pickDomAttrs, recordPickKind, recordSourcePath } from './pick-dom.ts'
 import { normalizeRecordEmoji, recordPreviewEmoji, crumbRecordLabel } from './sidebar-preview.ts'
 import { recordPreviewMascot, RecordMark } from './record-mark.tsx'
-import { COL_WIDTH_MAX, COL_WIDTH_MIN, colWidthStyle, normalizeColumnWidths, normalizeSavedView, normalizePageSize, viewIsFresher, viewStateKey, type SavedView } from './saved-view.ts'
+import { COL_WIDTH_MAX, COL_WIDTH_MIN, colWidthStyle, normalizeColumnWidths, normalizeSavedView, normalizePageSize, sortViewsByRank, viewIsFresher, viewStateKey, type SavedView } from './saved-view.ts'
 import { PagerSizeControl } from './pager-size.tsx'
 import {
   actionIcon,
@@ -97,6 +95,7 @@ import {
   splitVisibleViews,
   viewTabsOverlapRight,
 } from './view-tabs.ts'
+import { ViewOrderMenu } from './view-order-menu.tsx'
 import { getDatabaseUi } from './database-ui.ts'
 import {
   activeViewStorageKey,
@@ -1565,7 +1564,7 @@ export function CollectionBrowser({
     return listed
   }
   const paintListedViews = (path: string) =>
-    listedViews(path, loadViews(path)).map((view) => withViewDisplay(path, view))
+    sortViewsByRank(listedViews(path, loadViews(path)).map((view) => withViewDisplay(path, view)))
   const dataPath = collectionPath
   const [stat, setStat] = useState<StatResult | null>(() => peekListCache(dataPath, routeViewId)?.stat ?? null)
   const [items, setItems] = useState<Array<DbRecord & { path?: string }>>(() => peekListCache(dataPath, routeViewId)?.items ?? [])
@@ -3109,10 +3108,12 @@ export function CollectionBrowser({
   ) {
     if (sheet) return true
     const forced = extra?.upsert ?? []
-    const listed = listedViews(path, [
-      ...next.filter((view) => !forced.some((item) => item.id === view.id)),
-      ...forced,
-    ]).map((view) => withViewDisplay(path, view))
+    const listed = sortViewsByRank(
+      listedViews(path, [
+        ...next.filter((view) => !forced.some((item) => item.id === view.id)),
+        ...forced,
+      ]).map((view) => withViewDisplay(path, view)),
+    )
     const stored = listed.filter((view) => !view.builtin)
     const previous = extra?.baseline ?? loadViews(path)
     // 只推差异：别的窗口（会话 / 右检查器）新建的视图不会被这份快照整份冲掉。
@@ -3140,6 +3141,24 @@ export function CollectionBrowser({
 
   function persistViews(next: SavedView[]) {
     return persistViewsFor(collectionPath, next)
+  }
+
+  function persistViewOrder(ids: string[]) {
+    const byId = new Map(views.map((view) => [view.id, view]))
+    const ranked: SavedView[] = []
+    ids.forEach((id, rank) => {
+      const view = byId.get(id)
+      if (!view) return
+      ranked.push({ ...view, rank })
+      byId.delete(id)
+    })
+    for (const view of views) {
+      if (byId.has(view.id)) ranked.push(view)
+    }
+    for (const view of ranked) {
+      if (view.builtin) persistViewDisplay(collectionPath, view.id, { rank: view.rank })
+    }
+    void persistViews(ranked)
   }
 
   function persistViewsWith(
@@ -4762,47 +4781,25 @@ export function CollectionBrowser({
                 )}
               </ViewTabFit>
               {viewMenuOpen ? (
-                <HeadlessDismiss onDismiss={() => setViewMenuOpen(false)} insideRef={viewRef}>
-                <div className="tasks-viewdd-menu" role="menu">
-                  <div className="tasks-viewdd-head">视图</div>
-                  {views.length === 0 ? <div className="tasks-viewdd-empty">还没有已保存的视图</div> : null}
-                  {views.map((view) => (
-                    <div key={view.id} className={`tasks-viewdd-item${view.id === activeViewId ? ' is-active' : ''}`}>
-                      <button
-                        type="button"
-                        className="tasks-viewdd-item-main"
-                        onPointerEnter={() => {
-                          if (view.id === activeViewIdRef.current) return
-                          void warmListCacheForView(collectionPath, view, paintListedViews(collectionPath))
-                        }}
-                        onClick={() => selectView(view)}
-                      >
-                        <span className="tasks-viewdd-item-name">{view.name}</span>
-                      </button>
-                      <span className="tasks-viewdd-item-actions">
-                        <button type="button" className="tasks-viewdd-act" title="拷贝视图" onClick={() => copyView(view)}>
-                          <Square2StackIcon aria-hidden className="size-[14px]" />
-                        </button>
-                        {view.builtin ? null : (
-                          <>
-                            <button type="button" className="tasks-viewdd-act" title="重命名" onClick={() => renameView(view)}>
-                              <PencilSquareIcon aria-hidden className="size-[14px]" />
-                            </button>
-                            <button type="button" className="tasks-viewdd-act is-danger" title="删除" onClick={() => deleteView(view)}>
-                              <TrashGlyph aria-hidden className="size-[14px]" />
-                            </button>
-                          </>
-                        )}
-                      </span>
-                    </div>
-                  ))}
-                  <div className="tasks-viewdd-foot">
-                    <button type="button" className="tasks-viewdd-saveas" onClick={() => addEmptyView()}>
-                      <PlusIcon aria-hidden className="size-[14px]" />
-                      添加视图
-                    </button>
-                  </div>
-                </div>
+                <HeadlessDismiss
+                  onDismiss={() => setViewMenuOpen(false)}
+                  insideRef={viewRef}
+                  ignoreSelector={`${HEADLESS_DISMISS_IGNORE}, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]`}
+                >
+                <ViewOrderMenu
+                  views={views}
+                  activeViewId={activeViewId}
+                  onSelect={selectView}
+                  onCopy={copyView}
+                  onRename={renameView}
+                  onDelete={deleteView}
+                  onReorder={persistViewOrder}
+                  onAdd={() => addEmptyView()}
+                  onWarm={(view) => {
+                    if (view.id === activeViewIdRef.current) return
+                    void warmListCacheForView(collectionPath, view, paintListedViews(collectionPath))
+                  }}
+                />
                 </HeadlessDismiss>
               ) : null}
             </div>

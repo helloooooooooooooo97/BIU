@@ -291,6 +291,7 @@ export class SavedViewsStore {
       truncate: fields.truncate !== false,
       pageSize: normalizePageSize(fields.pageSize),
       columnWidths: normalizeColumnWidths(fields.columnWidths),
+      rank: Number.isFinite(Number(fields.rank)) ? Math.round(Number(fields.rank)) : views.length,
       createdAt: Date.now(),
       updatedAt: Date.now(),
       ...(isIndexCollection(tablePath) ? { createdBy: accountId } : {}),
@@ -353,6 +354,7 @@ export class SavedViewsStore {
         ...(typeof patch.wrap === 'boolean' ? { wrap: patch.wrap } : {}),
         ...(typeof patch.truncate === 'boolean' ? { truncate: patch.truncate } : {}),
         ...('columnWidths' in patch ? { columnWidths: normalizeColumnWidths(patch.columnWidths) } : {}),
+        ...(Number.isFinite(Number(patch.rank)) ? { rank: Math.round(Number(patch.rank)) } : {}),
         ...('emoji' in patch ? { emoji: String(patch.emoji ?? '') } : {}),
         ...('facet' in patch ? { facet: normalizeSchemaValue(patch.facet) } : {}),
         updatedAt: Date.now(),
@@ -466,6 +468,7 @@ function asRecord(path: string, tableName: string, view: StoredView): DbRecord {
     pageSize: normalizePageSize(view.pageSize),
     columns: parseViewColumns(view.columns),
     columnWidths: view.columnWidths ?? {},
+    rank: Number.isFinite(Number(view.rank)) ? Math.round(Number(view.rank)) : 0,
     filters: JSON.stringify(filters),
     sorts: JSON.stringify(sorts.map((item) => ({ field: item.field, dir: item.dir }))),
     filterTree: filterTree ? JSON.stringify(filterTree) : '',
@@ -501,6 +504,7 @@ export function clientViewFromDbRow(row: Record<string, unknown> | undefined) {
     pageSize: normalizePageSize(row.pageSize),
     columnWidths: row.columnWidths,
     builtin: false,
+    rank: Number.isFinite(Number(row.rank)) ? Math.round(Number(row.rank)) : undefined,
   }
 }
 
@@ -543,6 +547,7 @@ export function viewsCollection(
         wrap: { type: 'boolean', label: '换行' },
         truncate: { type: 'boolean', label: '截断' },
         pageSize: { type: 'number', label: '每页', writable: true },
+        rank: { type: 'number', label: '顺序', writable: true },
         columns: {
           type: 'multi-select',
           label: '列',

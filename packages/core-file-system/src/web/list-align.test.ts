@@ -101,6 +101,7 @@ test('list and detail share the chat column max width with side padding', () => 
   assert.match(css, /\.tasks-viewdd-item-actions\{[^}]*margin-left:auto/)
   assert.match(css, /\.tasks-viewdd-item-actions\{[^}]*gap:0/)
   assert.match(css, /\.tasks-viewdd-item\.is-active::before\{[^}]*background:var\(--dsw-hover\)/)
+  assert.match(css, /\.tasks-viewdd-item\.is-drag\{[^}]*opacity:0/)
   assert.doesNotMatch(css, /\.tasks-viewdd-check\{/)
   assert.doesNotMatch(css, /\.tasks-viewdd-item-actions\{[^}]*visibility:hidden/)
   assert.match(css, /\.tasks-viewdd-act\{[^}]*width:22px/)
