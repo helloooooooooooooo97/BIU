@@ -24,7 +24,7 @@ import { EFFORT_KNOB, THINKING_KNOB } from '../host/model-catalog.ts'
 import { ImageThumbs } from './image-thumbs.tsx'
 import { collectClipboardImages, collectImageFiles } from './clipboard-images.ts'
 import { collectDroppedFilePaths, fileAbsolutePath } from './drop-file-paths.ts'
-import { isComposerFocusPending } from '@biu/web-app-shell/chat-overlay'
+import { focusComposerEditor, isComposerFocusPending } from '@biu/web-app-shell/chat-overlay'
 import { shouldNavigateToSession } from './composer-nav.ts'
 import { getChatConfig } from './chat-config.ts'
 
@@ -583,13 +583,16 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
     },
   })
 
+  const editorRef = useRef(editor)
+  editorRef.current = editor
+
   useEffect(() => {
     const onFocus = () => {
-      editor?.commands.focus('end')
+      focusComposerEditor(editorRef.current)
     }
     window.addEventListener('biu:composer-focus', onFocus)
     return () => window.removeEventListener('biu:composer-focus', onFocus)
-  }, [editor])
+  }, [])
 
   useEffect(
     () => () => {
@@ -614,7 +617,7 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
     }
     if (keep.length && !pick?.picking) pick?.addMany(keep)
     pickKeysRef.current = collectPickKeys(editor)
-    if (isComposerFocusPending()) editor.commands.focus('end')
+    if (isComposerFocusPending()) focusComposerEditor(editor)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, editor])
 
@@ -1020,7 +1023,7 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
         </button>
 
         <div className="composer-editor">
-          <EditorContent editor={editor} />
+          {editor ? <EditorContent editor={editor} /> : <div className="composer-tiptap" data-testid="composer-pending" />}
         </div>
 
         <div className="composer-pill-right">

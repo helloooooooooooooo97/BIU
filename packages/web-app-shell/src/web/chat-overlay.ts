@@ -208,20 +208,42 @@ export function shouldCloseOverlayOnOutside(target: EventTarget | null) {
 
 let composerFocusPending = false
 
+/** 已挂载的输入框听事件；尚未建好的实例靠 pending，等 editor 就绪后再 focus。不要同步派发——点小人时旧实例正在卸、新实例还是 null。 */
 export function requestComposerFocus() {
   composerFocusPending = true
+  if (typeof window === 'undefined') return
   const fire = () => window.dispatchEvent(new Event('biu:composer-focus'))
-  fire()
   requestAnimationFrame(fire)
   window.setTimeout(fire, 40)
-  window.setTimeout(() => {
-    fire()
-    composerFocusPending = false
-  }, 160)
 }
 
 export function isComposerFocusPending() {
   return composerFocusPending
+}
+
+export function consumeComposerFocusPending() {
+  const pending = composerFocusPending
+  composerFocusPending = false
+  return pending
+}
+
+type ComposerFocusTarget = {
+  isDestroyed?: boolean
+  commands?: { focus?: (where?: string) => unknown }
+} | null | undefined
+
+/** editor 未就绪或已 destroy（commandManager 已空）时不要读 .commands。 */
+export function focusComposerEditor(editor: ComposerFocusTarget) {
+  if (!editor || editor.isDestroyed) return false
+  try {
+    const focus = editor.commands?.focus
+    if (typeof focus !== 'function') return false
+    focus.call(editor.commands, 'end')
+  } catch {
+    return false
+  }
+  consumeComposerFocusPending()
+  return true
 }
 
 /** 聊天页中间已有输入框，选取不要再弹悬浮窗。 */
