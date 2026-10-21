@@ -378,7 +378,7 @@ function UserTurnBar({
 
   return (
     <div
-      className="user-turn-bar box-border flex h-[30px] min-h-[30px] w-full items-center justify-between gap-3 border-0 border-t border-(--dsw-bubble) bg-transparent px-(--dsw-chat-pad-x) text-(length:--dsw-chat-ui-font-size) leading-none text-(--dsw-sidebar-fg)"
+      className="user-turn-bar box-border flex min-h-[30px] w-full items-center justify-between gap-3 overflow-hidden border-0 border-t border-(--dsw-bubble) bg-(--dsw-sidebar) px-(--dsw-chat-pad-x) text-(length:--dsw-chat-ui-font-size) leading-none text-(--dsw-sidebar-fg)"
       aria-label="回合摘要"
       data-testid="user-turn-bar"
     >
