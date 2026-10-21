@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from
 import { HeadlessPopover } from '@biu/public-ui'
 import { SourceEditor, type SourceEditorHandle } from './source-editor.tsx'
 import { usePageSourceMode } from './source-mode.ts'
-import { ChatBubbleLeftRightIcon } from '@heroicons/react/16/solid'
+import { ArrowPathIcon, ChatBubbleLeftRightIcon } from '@heroicons/react/16/solid'
 import { EditorContent, useEditor } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
 import type { Editor } from '@tiptap/core'
@@ -288,7 +288,29 @@ function TableBar({ editor }: { editor: Editor }) {
   )
 }
 
-export function PageEditor({ record, value, writable, onChange, path }: FsContentProps) {
+function PageEditorLoading() {
+  return (
+    <div className="page-editor page-editor-loading" data-testid="page-editor-loading" aria-busy="true" aria-live="polite">
+      <ArrowPathIcon className="page-editor-loading-icon" aria-hidden />
+      <span className="sr-only">正在加载正文</span>
+    </div>
+  )
+}
+
+function PageEditorFailed({ onRetry }: { onRetry?: () => void }) {
+  return (
+    <div className="page-editor page-editor-failed" data-testid="page-editor-failed" role="alert">
+      <p>正文加载失败</p>
+      {onRetry ? (
+        <button type="button" className="page-editor-retry" onClick={onRetry}>
+          重试
+        </button>
+      ) : null}
+    </div>
+  )
+}
+
+export function PageEditor({ record, value, writable, onChange, path, status = 'ready', onRetry }: FsContentProps) {
   const source = usePageSourceMode(record.id)
   const saved = useRef(asMarkdown(value))
   const sourceMode = useRef(source)
@@ -313,7 +335,7 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
     {
       immediatelyRender: false,
       shouldRerenderOnTransaction: false,
-      editable: writable !== false,
+      editable: writable !== false && status !== 'loading' && status !== 'failed',
       extensions: pageEditorExtensions(),
       content: asMarkdown(value),
       contentType: 'markdown',
@@ -392,7 +414,7 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
     if (!editor || editor.isDestroyed) return
     const md = asMarkdown(value)
     if (hydratedId.current !== record.id) {
-      if (value == null) return
+      if (status === 'loading' || status === 'failed') return
       saved.current = md
       hydratedId.current = record.id
       editor.commands.setContent(md, { contentType: 'markdown', emitUpdate: false })
@@ -431,7 +453,7 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
       return
     }
     paint(md)
-  }, [editor, record.id, value])
+  }, [editor, record.id, value, status])
 
   useEffect(() => () => {
     if (remoteTimer.current) clearTimeout(remoteTimer.current)
@@ -473,8 +495,8 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
 
   useEffect(() => {
     if (!editor || editor.isDestroyed) return
-    editor.setEditable(writable !== false)
-  }, [editor, writable])
+    editor.setEditable(writable !== false && status !== 'loading' && status !== 'failed')
+  }, [editor, writable, status])
 
   useEffect(
     () => () => {
@@ -487,11 +509,12 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
     if (!editor || editor.isDestroyed) return
     const onFocus = () => {
       if (editor.isDestroyed || !editorHostIsLive(editor)) return
+      if (status === 'loading' || status === 'failed') return
       editor.commands.focus('start')
     }
     window.addEventListener(FOCUS_RECORD_CONTENT, onFocus)
     return () => window.removeEventListener(FOCUS_RECORD_CONTENT, onFocus)
-  }, [editor])
+  }, [editor, status])
 
   useEffect(() => {
     if (!editor || editor.isDestroyed) return
@@ -590,6 +613,7 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
   const onEditorBlankMouseDown = (event: MouseEvent<HTMLDivElement>) => {
     if (event.target !== event.currentTarget) return
     event.preventDefault()
+    if (status === 'loading' || status === 'failed') return
     if (!source && writable !== false && editor && !editor.isDestroyed) {
       editor.commands.focus('end')
       return
@@ -612,6 +636,8 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
     />
   ) : null
 
+  if (status === 'loading') return <PageEditorLoading />
+  if (status === 'failed') return <PageEditorFailed onRetry={onRetry} />
   if (!editor) return <div className="page-editor" data-testid="page-editor-pending" />
 
   if (source) {
@@ -621,7 +647,7 @@ export function PageEditor({ record, value, writable, onChange, path }: FsConten
         <SourceEditor
           ref={sourceFind}
           value={asMarkdown(value)}
-          writable={writable !== false}
+          writable={writable !== false && status === 'ready'}
           onChange={(next) => {
             if (next === saved.current) return
             saved.current = next

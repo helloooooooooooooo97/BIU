@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type Dispatch, type SetStateAction } from 'react'
 import type { CollectionChrome, FsDetailPane } from '@biu/type-file-system/ui'
 import type { CollectionSchema, DbRecord, FieldSpec } from '@biu/type-file-system'
-import { ChevronDownIcon, ChevronLeftIcon, ChevronUpIcon, HashtagIcon, ShareIcon } from '@heroicons/react/16/solid'
+import { ArrowPathIcon, ChevronDownIcon, ChevronLeftIcon, ChevronUpIcon, HashtagIcon, ShareIcon } from '@heroicons/react/16/solid'
 import { AnchorMenu, RecordEmojiBoard } from '@biu/public-ui'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { contentFieldKey, fieldHasValue, formatField, resolveFieldType } from './fields.ts'
@@ -18,6 +18,34 @@ import { PageBanner } from './page-banner.tsx'
 import { fieldPickAttrs, recordSourcePath } from './pick-dom.ts'
 import { dismissInspectorPaneMenu, reportInspectorPaneMenu } from './inspector-pane-menu.tsx'
 import { PaneConfigMenuItem } from './pane-more-menu.tsx'
+
+export function PageContentLoading() {
+  return (
+    <div className="fsdb-content-loading" data-testid="page-content-loading" aria-busy="true" aria-live="polite">
+      <ArrowPathIcon className="fsdb-content-loading-icon" aria-hidden />
+      <span className="sr-only">正在加载正文</span>
+    </div>
+  )
+}
+
+export function PageContentFailed({
+  error,
+  onRetry,
+}: {
+  error?: string
+  onRetry?: () => void
+}) {
+  return (
+    <div className="fsdb-content-failed" data-testid="page-content-failed" role="alert">
+      <p>{error?.trim() || '正文加载失败'}</p>
+      {onRetry ? (
+        <button type="button" className="fsdb-content-retry" onClick={onRetry}>
+          重试
+        </button>
+      ) : null}
+    </div>
+  )
+}
 
 function renderDetailPanes(
   panes: FsDetailPane[] | undefined,
@@ -214,6 +242,9 @@ export function RecordDetail({
   chrome,
   draft,
   detailBody,
+  detailBodyStatus = 'ready',
+  detailBodyError,
+  onRetryBody,
   labelOf,
   renderCell,
   setDraft,
@@ -239,6 +270,9 @@ export function RecordDetail({
   chrome?: CollectionChrome
   draft: Record<string, string>
   detailBody: unknown
+  detailBodyStatus?: 'loading' | 'ready' | 'failed'
+  detailBodyError?: string
+  onRetryBody?: () => void
   labelOf: (row: DbRecord) => string
   renderCell: (row: DbRecord, key: string, field: FieldSpec) => ReactNode
   setDraft: Dispatch<SetStateAction<Record<string, string>>>
@@ -445,12 +479,18 @@ export function RecordDetail({
                           field={key}
                           spec={spec}
                           value={detailBody}
-                          writable={Boolean(spec.writable) && !readOnly}
+                          writable={Boolean(spec.writable) && !readOnly && detailBodyStatus === 'ready'}
                           path={collectionPath ? `${collectionPath}/${selected.id}` : undefined}
+                          status={detailBodyStatus}
+                          onRetry={onRetryBody}
                           onChange={(next) => void writePatch(selected, { [key]: next })}
                         />
                       </div>
                     )
+                  }
+                  if (detailBodyStatus === 'loading') return <PageContentLoading />
+                  if (detailBodyStatus === 'failed') {
+                    return <PageContentFailed error={detailBodyError} onRetry={onRetryBody} />
                   }
                   if (spec.writable) {
                     const saved =
