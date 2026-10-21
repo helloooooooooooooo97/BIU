@@ -3,8 +3,10 @@ import { createPortal } from 'react-dom'
 import { MagnifyingGlassIcon, PlusIcon } from '@heroicons/react/16/solid'
 import { HeadlessDismiss } from '@biu/public-ui/headless-dismiss'
 import { overlayPortalRoot } from '@biu/public-ui/overlay-portal'
+import { delayCrumbQuery, pullCrumbRecords, recordChoicesFromRows } from './crumb-records.ts'
 import { CrumbItemGlyph, TableGlyph } from './nav-glyphs.tsx'
-import { crumbButtonAction, type Crumb, type CrumbTarget } from './sidebar-nav.ts'
+import { crumbButtonAction, type Crumb, type CrumbChoice, type CrumbTarget } from './sidebar-nav.ts'
+import { pullSavedViews } from './view-storage.ts'
 
 function canOpenCrumbMenu(crumb: Crumb) {
   return crumb.kind === 'collection' || crumb.kind === 'view' || crumb.kind === 'record'
@@ -36,11 +38,69 @@ function CrumbMenu({
   trailRef: RefObject<HTMLElement | null>
 }) {
   const [query, setQuery] = useState('')
+  const [remote, setRemote] = useState<CrumbChoice[] | null>(null)
+  const [loading, setLoading] = useState(crumb.kind === 'record' || crumb.kind === 'view')
+  const crumbRef = useRef(crumb)
+  crumbRef.current = crumb
   const q = query.trim().toLowerCase()
+  const source = remote ?? crumb.choices
   const filtered = useMemo(
-    () => crumb.choices.filter((item) => !q || item.label.toLowerCase().includes(q) || item.id.toLowerCase().includes(q)),
-    [crumb.choices, q],
+    () =>
+      crumb.kind === 'record'
+        ? source
+        : source.filter((item) => !q || item.label.toLowerCase().includes(q) || item.id.toLowerCase().includes(q)),
+    [crumb.kind, q, source],
   )
+  const shown = filtered
+  const recordCollection = crumb.target.kind === 'record' ? crumb.target.collection : ''
+  const recordViewId = crumb.target.kind === 'record' ? crumb.target.viewId : undefined
+  const viewCollection = crumb.target.kind === 'view' ? crumb.target.collection : ''
+  useEffect(() => {
+    let live = true
+    if (crumb.kind === 'view' && viewCollection) {
+      setLoading(true)
+      void pullSavedViews([viewCollection])
+        .then(() => {
+          if (!live) return
+          window.dispatchEvent(new CustomEvent('fsdb:change', { detail: { views: true } }))
+          window.dispatchEvent(new Event('fsdb:crumb-labels'))
+        })
+        .finally(() => {
+          if (live) setLoading(false)
+        })
+      return () => {
+        live = false
+      }
+    }
+    if (crumb.kind !== 'record' || !recordCollection) {
+      setLoading(false)
+      return
+    }
+    const qtext = query.trim()
+    setLoading(true)
+    const run = () => {
+      void pullCrumbRecords({ collection: recordCollection, viewId: recordViewId, query: qtext })
+        .then((rows) => {
+          if (!live) return
+          setRemote(recordChoicesFromRows(crumbRef.current, rows))
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          if (live) setLoading(false)
+        })
+    }
+    if (!qtext) {
+      run()
+      return () => {
+        live = false
+      }
+    }
+    const cancel = delayCrumbQuery(run)
+    return () => {
+      live = false
+      cancel()
+    }
+  }, [crumb.kind, query, recordCollection, recordViewId, viewCollection])
   const createKind = createKindOf(crumb)
   const showCreate =
     (createKind === 'view' && canCreateView && onCreate) || (createKind === 'record' && canCreateRecord && onCreate)
@@ -74,8 +134,9 @@ function CrumbMenu({
         />
       </label>
       <div className="fsdb-crumb-menu-list">
-        {filtered.length === 0 ? <div className="fsdb-crumb-empty">没有匹配项</div> : null}
-        {filtered.map((choice) => {
+        {loading && shown.length === 0 ? <div className="fsdb-crumb-empty">加载中…</div> : null}
+        {!loading && shown.length === 0 ? <div className="fsdb-crumb-empty">没有匹配项</div> : null}
+        {shown.map((choice) => {
           const viewId = crumbs.find((item) => item.kind === 'view')?.id
           const active =
             choice.target.kind === 'view'
