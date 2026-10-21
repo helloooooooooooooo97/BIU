@@ -45,6 +45,10 @@ import {
   inspectorActionFromEvent,
   requestInspectorTab,
   requestInspectorAction,
+  requestComposerFocus,
+  isComposerFocusPending,
+  consumeComposerFocusPending,
+  focusComposerEditor,
 } from './chat-overlay.ts'
 
 test('collapsed chat sidebar disappears instead of leaving a thin rail', () => {
@@ -198,7 +202,7 @@ test('pick-attached only opens; closing stays closed even if chips remain', () =
   assert.equal(getChatOverlay(), false)
 })
 
-test('pick-attached on the chat page focuses composer instead of overlay', () => {
+test('pick-attached on the chat page focuses composer instead of overlay', async () => {
   setChatOverlay(false)
   history.replaceState(null, '', '/s/session-1')
   let focused = 0
@@ -207,9 +211,56 @@ test('pick-attached on the chat page focuses composer instead of overlay', () =>
   }
   window.addEventListener('biu:composer-focus', onFocus)
   window.dispatchEvent(new Event('biu:pick-attached'))
+  assert.equal(focused, 0)
+  assert.equal(isComposerFocusPending(), true)
+  await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)))
   window.removeEventListener('biu:composer-focus', onFocus)
   assert.equal(getChatOverlay(), false)
   assert.ok(focused > 0)
+})
+
+test('requestComposerFocus does not dispatch in the same tick', () => {
+  consumeComposerFocusPending()
+  let focused = 0
+  const onFocus = () => {
+    focused += 1
+  }
+  window.addEventListener('biu:composer-focus', onFocus)
+  requestComposerFocus()
+  window.removeEventListener('biu:composer-focus', onFocus)
+  assert.equal(focused, 0)
+  assert.equal(isComposerFocusPending(), true)
+  consumeComposerFocusPending()
+})
+
+test('focusComposerEditor ignores a null or destroyed editor', () => {
+  consumeComposerFocusPending()
+  requestComposerFocus()
+  assert.equal(focusComposerEditor(null), false)
+  assert.equal(isComposerFocusPending(), true)
+  assert.equal(focusComposerEditor({ isDestroyed: true, commands: { focus() {} } }), false)
+  const exploded = {
+    isDestroyed: false,
+    get commands() {
+      return (null as unknown as { commands: { focus: () => void } }).commands
+    },
+  }
+  assert.equal(focusComposerEditor(exploded), false)
+  assert.equal(isComposerFocusPending(), true)
+  let focused = 0
+  assert.equal(
+    focusComposerEditor({
+      isDestroyed: false,
+      commands: {
+        focus() {
+          focused += 1
+        },
+      },
+    }),
+    true,
+  )
+  assert.equal(focused, 1)
+  assert.equal(isComposerFocusPending(), false)
 })
 
 test('openOverlayComposer on the chat page does not open a window', () => {
