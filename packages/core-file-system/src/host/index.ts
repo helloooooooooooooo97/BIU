@@ -84,7 +84,7 @@ import {
   type ContentCommand,
 } from './content-edit.ts'
 import { currentSessionId } from '@biu/host-sessions/scope'
-import { databaseRevealForTool, normalizeCollectionPath } from '../paths.ts'
+import { databaseRevealForTool, normalizeCollectionPath, splitResourcePath } from '../paths.ts'
 import { matchListFilterRecord, normalizeSorts, parseFacetFlatColumnKey, readFacetFieldValue, sortRecordsBy } from '../query-logic.ts'
 import { actionWhenKeys } from '../web/fields.ts'
 import { AgentDbCompact } from './agent-payload.ts'
@@ -338,13 +338,10 @@ function publicCollection(item: CollectionSpec): CollectionInfo {
 }
 
 function splitPath(path: string): string[] {
-  const normalized = normalizeCollectionPath(path)
-  if (normalized === '/') return []
-  const parts = normalized.slice(1).split('/').filter(Boolean)
-  if (parts[0] === 'views' && parts.length > 2) {
-    return ['views', parts.slice(1).join('/')]
-  }
-  return parts
+  const hit = splitResourcePath(path)
+  if (!hit) return []
+  const name = hit.collection.replace(/^\//, '')
+  return hit.recordId ? [name, hit.recordId] : [name]
 }
 
 function coerceList(value: unknown) {
