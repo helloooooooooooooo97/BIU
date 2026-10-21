@@ -29,6 +29,7 @@ export function OverlayChatWindow({
   const [geom, setGeom] = useState<OverlayWinGeom>(initial)
   const [z, setZ] = useState(overlayZ)
   const boxRef = useRef<HTMLDivElement>(null)
+  const cardRef = useRef<HTMLDivElement>(null)
   const resizeRef = useRef<(OverlayWinGeom & ResizeEdge & { px: number; py: number }) | null>(null)
   const geomRef = useRef(geom)
   geomRef.current = geom
@@ -88,7 +89,11 @@ export function OverlayChatWindow({
         w = resize.w - dx
         x = resize.x + dx
       }
-      if (resize.north) h = resize.h - dy
+      if (resize.north) {
+        h = resize.h - dy
+        y = resize.y + dy
+      }
+      if (resize.south) h = resize.h + dy
       apply({ x, y, w, h }, false)
     }
     const onUp = () => {
@@ -116,7 +121,7 @@ export function OverlayChatWindow({
     event.preventDefault()
     event.stopPropagation()
     bringFront()
-    const el = boxRef.current
+    const el = cardRef.current
     const r = el?.getBoundingClientRect()
     resizeRef.current = {
       ...edge,
@@ -131,10 +136,13 @@ export function OverlayChatWindow({
 
   const handles: Array<{ key: string; className: string; edge: ResizeEdge }> = [
     { key: 'n', className: 'absolute inset-x-8 top-0 h-1.5 cursor-n-resize', edge: { north: true } },
+    { key: 's', className: 'absolute inset-x-8 bottom-0 h-1.5 cursor-s-resize', edge: { south: true } },
     { key: 'e', className: 'absolute inset-y-8 right-0 w-1.5 cursor-e-resize', edge: { east: true } },
     { key: 'w', className: 'absolute inset-y-2 left-0 w-1.5 cursor-w-resize', edge: { west: true } },
     { key: 'ne', className: 'absolute top-0 right-0 size-3 cursor-nesw-resize', edge: { north: true, east: true } },
     { key: 'nw', className: 'absolute top-0 left-0 size-3 cursor-nwse-resize', edge: { north: true, west: true } },
+    { key: 'se', className: 'absolute bottom-0 right-0 size-3 cursor-nwse-resize', edge: { south: true, east: true } },
+    { key: 'sw', className: 'absolute bottom-0 left-0 size-3 cursor-nesw-resize', edge: { south: true, west: true } },
   ]
 
   return (
@@ -148,25 +156,33 @@ export function OverlayChatWindow({
         left: geom.x,
         width: geom.w,
         bottom: 12,
-        height: threadOpen ? geom.h : undefined,
         zIndex: z,
       }}
       onPointerDown={bringFront}
     >
       {threadOpen ? (
-        <div className="chat-overlay-head" data-testid="chat-overlay-head">
-          {header}
-        </div>
-      ) : null}
-      <ChatPane thread={thread} dock={dock} />
-      {handles.map((item) => (
-        <div
-          key={item.key}
-          className={`${item.className} z-10`}
-          data-testid={`chat-overlay-resize-${item.key}`}
-          onPointerDown={startResize(item.edge)}
+        <ChatPane
+          paneRef={cardRef}
+          style={{ height: geom.h }}
+          aside={
+            <>
+              <div className="chat-overlay-head" data-testid="chat-overlay-head">
+                {header}
+              </div>
+              {handles.map((item) => (
+                <div
+                  key={item.key}
+                  className={`${item.className} z-10`}
+                  data-testid={`chat-overlay-resize-${item.key}`}
+                  onPointerDown={startResize(item.edge)}
+                />
+              ))}
+            </>
+          }
+          thread={thread}
         />
-      ))}
+      ) : null}
+      <div className="chat-composer-dock">{dock}</div>
     </div>
   )
 }

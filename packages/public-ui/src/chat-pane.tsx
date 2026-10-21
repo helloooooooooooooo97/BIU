@@ -1,4 +1,4 @@
-import { type ReactNode, type Ref } from 'react'
+import { type CSSProperties, type ReactNode, type Ref } from 'react'
 
 export const CHAT_STAGE_CENTER =
   'chat-stage flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-contain px-[64px] py-3 pb-72'
@@ -31,23 +31,26 @@ export function ChatDockStack({ children }: { children?: ReactNode }) {
 
 export function ChatPane({
   thread,
-  dock,
   aside,
   embed,
+  paneRef,
+  style,
 }: {
   thread: ReactNode
-  dock?: ReactNode
   aside?: ReactNode
   embed?: boolean
+  paneRef?: Ref<HTMLDivElement>
+  style?: CSSProperties
 }) {
   return (
     <div
+      ref={paneRef}
       className={`chat-pane${embed ? ' chat-pane-embed' : ''}`}
       data-testid={embed ? 'session-record-chat' : 'chat-pane'}
+      style={style}
     >
       {aside}
       <div className="chat-overlay-thread">{thread}</div>
-      {dock ? <div className="chat-composer-dock">{dock}</div> : null}
     </div>
   )
 }
