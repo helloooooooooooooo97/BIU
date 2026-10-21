@@ -61,6 +61,44 @@ test('enter runs the visually active item after groups reorder results', () => {
   assert.deepEqual(picked, ['websql'])
 })
 
+test('failed slash item shows a plugin log link that does not insert', () => {
+  const ref = createRef<{ onKeyDown: (props: { event: KeyboardEvent }) => boolean }>()
+  const base = SLASH_ITEMS[0]!
+  const picked: string[] = []
+  const paths: string[] = []
+  const original = window.history.pushState.bind(window.history)
+  window.history.pushState = ((...args: Parameters<History['pushState']>) => {
+    paths.push(String(args[2] ?? ''))
+    return original(...args)
+  }) as History['pushState']
+  try {
+    const { container } = render(
+      <SlashList
+        ref={ref}
+        items={[
+          {
+            ...base,
+            id: 'page-toc',
+            label: '目录',
+            status: 'failed',
+            pluginHref: '/database/plugins/record/page-toc',
+            command: () => undefined,
+          },
+        ]}
+        command={(item) => picked.push(item.id)}
+      />,
+    )
+    assert.match(container.textContent ?? '', /启动失败/)
+    const link = container.querySelector('[data-testid="page-slash-plugin-link"]') as HTMLElement
+    assert.equal(link.textContent, '去插件页看日志')
+    link.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
+    assert.deepEqual(picked, [])
+    assert.equal(paths.at(-1), '/database/plugins/record/page-toc')
+  } finally {
+    window.history.pushState = original
+  }
+})
+
 test('slash list uses svg icons for toc and playground blocks', () => {
   const src = readFileSync(resolve(import.meta.dirname, './slash-list.tsx'), 'utf8')
   for (const id of ['toc', 'option-matrix', 'run', 'api-play', 'plugin-doctor']) {

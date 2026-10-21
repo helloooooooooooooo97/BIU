@@ -5,11 +5,14 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { clientLogSnapshot, resetClientLogs } from '@biu/web-event-log/log'
 import { requestEnablePageBlockPlugin, setPageBlockPluginPhase } from '../../../core-editor/src/web/page-block-meta.ts'
+import { filterSlashItems } from '../../../core-editor/src/web/slash.ts'
+import { resetSlashCatalog } from '../../../core-editor/src/web/slash-memory.ts'
 import {
   ENABLE_PAGE_BLOCK_PLUGIN,
   listenEnablePageBlockPlugin,
   pageBlockPluginFromEvent,
   pluginRecordHref,
+  refreshInstalledPageBlocks,
   startStorePlugin,
 } from './page-block-plugin.ts'
 
@@ -110,6 +113,46 @@ test('missing plugin does not post an action', async () => {
     fetchMock.restore()
   }
   assert.equal(fetchMock.calls.some((call) => call.method === 'POST'), false)
+})
+
+test('refreshing installed page blocks lists headless web plugins and does not start them', async () => {
+  resetSlashCatalog()
+  const fetchMock = stubFetch((url) => {
+    if (url.includes('/api/db/list')) {
+      return {
+        status: 200,
+        body: {
+          items: [
+            { id: 'page-toc', title: '目录', installed: true, hasWeb: true, headless: true, tags: ['page'] },
+            { id: 'headless-tool', title: '工具', installed: true, hasWeb: true, headless: true, tags: ['dev'] },
+            { id: 'arena-rogue', title: 'Arena', installed: true, hasWeb: true, tags: ['game'] },
+            { id: 'sandbox-only', sandbox: true, hasWeb: true, headless: true, tags: ['page'] },
+          ],
+          total: 4,
+        },
+      }
+    }
+    return { status: 500, body: { error: 'unexpected' } }
+  })
+  try {
+    await refreshInstalledPageBlocks()
+  } finally {
+    fetchMock.restore()
+  }
+  assert.equal(fetchMock.calls.some((call) => call.method === 'POST'), false)
+  assert.equal(fetchMock.calls.every((call) => call.url.includes('/api/db/list')), true)
+  assert.equal(filterSlashItems('').some((item) => item.id === 'page-toc'), true)
+  assert.equal(filterSlashItems('').some((item) => item.id === 'arena-rogue'), false)
+  assert.equal(filterSlashItems('').some((item) => item.id === 'headless-tool'), false)
+  resetSlashCatalog()
+})
+
+test('installed page-block watcher never starts plugins', () => {
+  const src = readFileSync(resolve(import.meta.dirname, './page-block-plugin.ts'), 'utf8')
+  const watch = src.slice(src.indexOf('export function watchInstalledPageBlocks'))
+  assert.match(watch, /refreshInstalledPageBlocks/)
+  assert.match(watch, /fsdb:change/)
+  assert.doesNotMatch(watch, /startStorePlugin/)
 })
 
 test('listener catches page blocks that asked to start before it mounted', async () => {

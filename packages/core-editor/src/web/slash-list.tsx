@@ -1,6 +1,8 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import type { SlashItem } from './slash.ts'
-import { slashGroups } from './slash.ts'
+import { filterSlashItems, slashGroups } from './slash.ts'
+import { usePageEditorVersion } from './service.ts'
+import { openAppPath, useSlashCatalogVersion } from './slash-memory.ts'
 
 function iconPath(d: string) {
   return (
@@ -80,24 +82,32 @@ export function scrollMenuChild(list: HTMLElement, item: HTMLElement) {
 export const SlashList = forwardRef(function SlashList(
   {
     items,
+    query,
     command,
   }: {
-    items: SlashItem[]
+    items?: SlashItem[]
+    query?: string
     command: (item: SlashItem) => void
   },
   ref,
 ) {
+  const catalogVersion = useSlashCatalogVersion()
+  const editorVersion = usePageEditorVersion()
+  const resolved = useMemo(() => {
+    if (typeof query === 'string') return filterSlashItems(query)
+    return items ?? []
+  }, [query, items, catalogVersion, editorVersion])
   const [active, setActive] = useState(0)
   const activeRef = useRef(0)
   const listRef = useRef<HTMLDivElement>(null)
   const keyNav = useRef(false)
-  const groups = useMemo(() => slashGroups(items), [items])
+  const groups = useMemo(() => slashGroups(resolved), [resolved])
   const flat = useMemo(() => groups.flatMap((group) => group.items.map((item) => ({ group: group.id, item }))), [groups])
   activeRef.current = active
 
   useEffect(() => {
     setActive(0)
-  }, [items])
+  }, [resolved])
 
   useEffect(() => {
     if (!keyNav.current) return
@@ -105,7 +115,7 @@ export const SlashList = forwardRef(function SlashList(
     const list = listRef.current
     const item = list?.querySelector<HTMLElement>('.page-slash-item.is-active')
     if (list && item) scrollMenuChild(list, item)
-  }, [active, items])
+  }, [active, resolved])
 
   useImperativeHandle(ref, () => ({
     onKeyDown({ event }: { event: KeyboardEvent }) {
@@ -132,19 +142,20 @@ export const SlashList = forwardRef(function SlashList(
   return (
     <div className="page-slash" id="slash-command" role="listbox" aria-label="插入模块" data-testid="page-slash">
       <div ref={listRef} className="page-slash-list" onWheel={(event) => event.stopPropagation()}>
-        {items.length ? (
+        {resolved.length ? (
           groups.map((group) => (
             <div key={group.id} className="page-slash-group">
               <div className="page-slash-head">{group.label}</div>
               {group.items.map((item) => {
                 const index = flat.findIndex((entry) => entry.item.id === item.id)
+                const statusClass = item.status === 'failed' ? ' is-failed' : item.status === 'loading' ? ' is-loading' : ''
                 return (
                   <button
                     key={item.id}
                     type="button"
                     role="option"
                     aria-selected={index === active}
-                    className={`page-slash-item${index === active ? ' is-active' : ''}`}
+                    className={`page-slash-item${index === active ? ' is-active' : ''}${statusClass}`}
                     onMouseEnter={() => setActive(index)}
                     onMouseDown={(event) => {
                       event.preventDefault()
@@ -153,7 +164,23 @@ export const SlashList = forwardRef(function SlashList(
                   >
                     <span className="page-slash-icon">{slashIcon(item.id)}</span>
                     <span className="page-slash-label">{item.label}</span>
-                    {slashKeys(item.id) ? <span className="page-slash-keys">{slashKeys(item.id)}</span> : null}
+                    {item.status === 'loading' ? <span className="page-slash-status">启动中</span> : null}
+                    {item.status === 'failed' ? <span className="page-slash-status">启动失败</span> : null}
+                    {item.status === 'failed' && item.pluginHref ? (
+                      <span
+                        role="link"
+                        className="page-slash-plugin-link"
+                        data-testid="page-slash-plugin-link"
+                        onMouseDown={(event) => {
+                          event.preventDefault()
+                          event.stopPropagation()
+                          openAppPath(item.pluginHref!)
+                        }}
+                      >
+                        去插件页看日志
+                      </span>
+                    ) : null}
+                    {!item.status && slashKeys(item.id) ? <span className="page-slash-keys">{slashKeys(item.id)}</span> : null}
                   </button>
                 )
               })}

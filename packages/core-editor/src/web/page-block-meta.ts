@@ -31,9 +31,15 @@ export function pageBlockPluginPhase(plugin: string): PageBlockPluginPhase {
 export function setPageBlockPluginPhase(plugin: string, phase: PageBlockPluginPhase) {
   const id = plugin.trim()
   if (!id) return
+  if (phase === 'ready' || phase === 'failed') pendingPageBlockEnables().delete(id)
   if (phase === 'idle') phases.delete(id)
   else phases.set(id, phase)
   emitPhase()
+}
+
+export function subscribePageBlockPluginPhase(fn: () => void) {
+  phaseListeners.add(fn)
+  return () => phaseListeners.delete(fn)
 }
 
 export function usePageBlockPluginPhase(plugin: string) {
