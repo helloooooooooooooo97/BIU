@@ -3,6 +3,7 @@ import { ChatPane } from '@biu/public-ui/chat-pane'
 import {
   closeChatOverlay,
   getOverlayThread,
+  overlayDockY,
   overlayLayoutGeom,
   readOverlayWinState,
   shouldCloseOverlayOnOutside,
@@ -54,6 +55,12 @@ export function OverlayChatWindow({
   }, [bringFront])
 
   useEffect(() => {
+    if (!threadOpen) return
+    const next = geomRef.current
+    apply({ ...next, y: overlayDockY(next.h, window.innerHeight) }, false)
+  }, [threadOpen, apply])
+
+  useEffect(() => {
     const onOutside = (event: PointerEvent) => {
       if (!shouldCloseOverlayOnOutside(event.target)) return
       closeChatOverlay()
@@ -88,7 +95,11 @@ export function OverlayChatWindow({
         w = resize.w - dx
         x = resize.x + dx
       }
-      if (resize.north) h = resize.h - dy
+      if (resize.north) {
+        h = resize.h - dy
+        y = resize.y + dy
+      }
+      if (resize.south) h = resize.h + dy
       apply({ x, y, w, h }, false)
     }
     const onUp = () => {
@@ -131,10 +142,13 @@ export function OverlayChatWindow({
 
   const handles: Array<{ key: string; className: string; edge: ResizeEdge }> = [
     { key: 'n', className: 'absolute inset-x-8 top-0 h-1.5 cursor-n-resize', edge: { north: true } },
+    { key: 's', className: 'absolute inset-x-8 bottom-0 h-1.5 cursor-s-resize', edge: { south: true } },
     { key: 'e', className: 'absolute inset-y-8 right-0 w-1.5 cursor-e-resize', edge: { east: true } },
     { key: 'w', className: 'absolute inset-y-2 left-0 w-1.5 cursor-w-resize', edge: { west: true } },
     { key: 'ne', className: 'absolute top-0 right-0 size-3 cursor-nesw-resize', edge: { north: true, east: true } },
     { key: 'nw', className: 'absolute top-0 left-0 size-3 cursor-nwse-resize', edge: { north: true, west: true } },
+    { key: 'se', className: 'absolute bottom-0 right-0 size-3 cursor-nwse-resize', edge: { south: true, east: true } },
+    { key: 'sw', className: 'absolute bottom-0 left-0 size-3 cursor-nesw-resize', edge: { south: true, west: true } },
   ]
 
   return (
@@ -144,13 +158,22 @@ export function OverlayChatWindow({
       data-testid="chat-overlay-panel"
       data-overlay-layout="right"
       data-biu-ignore
-      style={{
-        left: geom.x,
-        width: geom.w,
-        bottom: 12,
-        height: threadOpen ? geom.h : undefined,
-        zIndex: z,
-      }}
+      style={
+        threadOpen
+          ? {
+              top: geom.y,
+              left: geom.x,
+              width: geom.w,
+              height: geom.h,
+              zIndex: z,
+            }
+          : {
+              left: geom.x,
+              width: geom.w,
+              bottom: 12,
+              zIndex: z,
+            }
+      }
       onPointerDown={bringFront}
     >
       {threadOpen ? (

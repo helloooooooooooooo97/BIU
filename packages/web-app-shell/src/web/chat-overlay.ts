@@ -422,17 +422,21 @@ export function parseOverlayLayout(_value: unknown): OverlayLayout {
   return 'right'
 }
 
+export function overlayDockY(h: number, vh = 800) {
+  return Math.max(OVERLAY_MARGIN, vh - h - OVERLAY_MARGIN)
+}
+
 export function defaultOverlayWinGeom(vw = 1280, vh = 800): OverlayWinGeom {
   const w = Math.min(OVERLAY_WIN_DEFAULT_W, Math.max(OVERLAY_WIN_MIN_W, vw - 40))
   const h = Math.min(OVERLAY_WIN_DEFAULT_H, Math.max(OVERLAY_WIN_MIN_H, vh - OVERLAY_MARGIN * 2))
-  return overlayLayoutGeom('right', { x: 0, y: 0, w, h }, vw, vh)
+  return overlayLayoutGeom('right', { x: 0, y: overlayDockY(h, vh), w, h }, vw, vh)
 }
 
 export function clampOverlayWinGeom(geom: OverlayWinGeom, vw = 1280, vh = 800): OverlayWinGeom {
   const w = Math.min(vw - 24, Math.max(OVERLAY_WIN_MIN_W, Math.round(geom.w)))
   const h = Math.min(vh - 24, Math.max(OVERLAY_WIN_MIN_H, Math.round(geom.h)))
   const x = Math.min(vw - 48, Math.max(12 - (w - 48), Math.round(geom.x)))
-  const y = Math.min(vh - 48, Math.max(OVERLAY_MARGIN, Math.round(geom.y)))
+  const y = Math.min(overlayDockY(h, vh), Math.max(OVERLAY_MARGIN, Math.round(geom.y)))
   return { x, y, w, h }
 }
 
@@ -446,12 +450,14 @@ export function overlayLayoutGeom(
   const maxH = Math.max(OVERLAY_WIN_MIN_H, vh - OVERLAY_MARGIN * 2)
   const w = Math.min(Math.max(prev.w, OVERLAY_WIN_MIN_W), maxW)
   const h = Math.min(Math.max(prev.h, OVERLAY_WIN_MIN_H), maxH)
+  const dockY = overlayDockY(h, vh)
+  const y = Number.isFinite(prev.y) ? prev.y : dockY
   return clampOverlayWinGeom(
     {
       w,
       h,
       x: vw - w - OVERLAY_MARGIN,
-      y: Math.round(Math.max(OVERLAY_MARGIN, (vh - h) / 2)),
+      y,
     },
     vw,
     vh,

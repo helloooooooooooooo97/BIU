@@ -139,8 +139,11 @@ test('compose-only overlay shows the thread after send', () => {
   assert.equal(getOverlayThread(), true)
   assert.equal(panel.classList.contains('is-compose-only'), false)
   assert.ok(document.querySelector('[data-testid="chat-overlay-head"]'))
-  assert.equal(panel.style.bottom, '12px')
+  assert.equal(panel.style.bottom, '')
   assert.ok(Number.parseFloat(panel.style.height) >= 280)
+  assert.ok(Number.isFinite(Number.parseFloat(panel.style.top)))
+  assert.ok(document.querySelector('[data-testid="chat-overlay-resize-se"]'))
+  assert.ok(document.querySelector('[data-testid="chat-overlay-resize-s"]'))
 })
 
 test('compose-only overlay closes when clicking outside; expanded does not', () => {
