@@ -183,7 +183,7 @@ describe('composer dock stacking above sticky user', () => {
     expect(css).toMatch(/\.chat-pane \.chat-composer-dock\s*\{[^}]*z-index:\s*10/s)
     expect(css).toMatch(/\.chat-pane-embed\s*\{[^}]*background:\s*var\(--dsw-bg\)/s)
     expect(css).not.toMatch(/\.chat-overlay-panel\.is-autohide/)
-    expect(css).toMatch(/\.chat-overlay-panel\.is-dimmed\s*\{[^}]*opacity:\s*0\.35/)
+    expect(css).toMatch(/\.chat-overlay-panel\.is-dimmed\s*\{[^}]*opacity:\s*0\.1/)
     expect(css).toMatch(/\.chat-overlay-panel\s*\{[^}]*transition:\s*opacity 160ms ease/s)
     expect(overlayWin).toContain('is-dimmed')
     expect(overlayWin).toContain('onPointerLeave')
