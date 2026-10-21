@@ -32,6 +32,8 @@ export type FieldSpec = {
   enumLabels?: Record<string, string>
   /** 给 Agent / db_stat：这个字段怎么写。不进单元格 UI。 */
   description?: string
+  /** 给 Agent / db_stat：写入时该传的形状示例（数组、JSON 字符串等）。 */
+  example?: unknown
   /** action 字段绑定的动作 id，缺省为字段 key */
   action?: string
   /** 由 list/get 计算写入记录，不能 PATCH。例如任务消耗。 */
@@ -272,7 +274,7 @@ export const BUILTIN_FIELDS = {
     label: '标签',
     writable: true,
     description:
-      '贴标签并填属性。一个标签：{tags:["facet-2"],values:{导演:"查泽雷"}}。多个标签 values 必须按 id 分组：{tags:["facet-2","awards"],values:{"facet-2":{导演:"查泽雷"},awards:{oscar:true}}}。省略 tags 只合并属性，不撕掉其它标签。',
+      '贴标签并填属性。一个标签：{tags:["facet-2"],values:{导演:"查泽雷"}}。多个标签 values 必须按 id 分组：{tags:["facet-2","awards"],values:{"facet-2":{导演:"查泽雷"},awards:{oscar:true}}}。省略 tags 只合并属性，不撕掉其它标签。读属性列：db_list columns=["facet::<标签id>::<字段key>"]，例如 facet::facet::category。',
   },
   parentId: { type: 'ref', label: '父级', writable: true },
   dependsOn: { type: 'multi-ref', label: '依赖', writable: true },
@@ -361,6 +363,57 @@ export type AtomicFieldType = (typeof ATOMIC_FIELD_TYPES)[number]
 
 export function isAtomicFieldType(type: unknown): type is AtomicFieldType {
   return typeof type === 'string' && (ATOMIC_FIELD_TYPES as readonly string[]).includes(type)
+}
+
+/** 写入标签属性定义：数组或 JSON 字符串均可；类型不在白名单时直接报错。 */
+export function parseAtomicFields(raw: unknown): SchemaPackField[] {
+  if (raw == null || raw === '') return []
+  let listed: unknown = raw
+  if (typeof raw === 'string') {
+    try {
+      listed = JSON.parse(raw)
+    } catch {
+      throw new Error('fields 应为 JSON 数组，例如 [{"key":"category","type":"string"}]')
+    }
+  }
+  if (!Array.isArray(listed)) throw new Error('fields 应为数组或 JSON 字符串，例如 [{"key":"category","type":"string"}]')
+  const fields: SchemaPackField[] = []
+  const seen = new Set<string>()
+  const seenLabels = new Set<string>()
+  for (const item of listed) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      throw new Error('fields 每一项应为 {key,type,label?} 对象')
+    }
+    const row = item as Record<string, unknown>
+    const key = String(row.key ?? '').trim()
+    if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(key)) throw new Error(`invalid field key: ${key || '(empty)'}`)
+    if (seen.has(key)) throw new Error(`duplicate field key: ${key}`)
+    if (isReservedSchemaFieldKey(key)) throw new Error(`reserved field key: ${key}`)
+    if (!isAtomicFieldType(row.type)) {
+      throw new Error(`unknown field type: ${String(row.type ?? '')}. allowed: ${ATOMIC_FIELD_TYPES.join(', ')}`)
+    }
+    const fieldLabel = String(row.label ?? key).trim() || key
+    if (isReservedSchemaFieldLabel(fieldLabel)) throw new Error(`reserved field label: ${fieldLabel}`)
+    if (seenLabels.has(fieldLabel.toLowerCase())) throw new Error(`duplicate field label: ${fieldLabel}`)
+    seen.add(key)
+    seenLabels.add(fieldLabel.toLowerCase())
+    const field: SchemaPackField = {
+      key,
+      type: row.type,
+      label: fieldLabel,
+      writable: row.writable !== false,
+    }
+    if (Array.isArray(row.enum)) field.enum = row.enum.map((option) => String(option)).filter(Boolean)
+    if (row.enumLabels && typeof row.enumLabels === 'object' && !Array.isArray(row.enumLabels)) {
+      field.enumLabels = Object.fromEntries(
+        Object.entries(row.enumLabels as Record<string, unknown>)
+          .map(([value, text]) => [value, String(text ?? '').trim()])
+          .filter(([value, text]) => Boolean(value && text && field.enum?.includes(value))),
+      )
+    }
+    fields.push(field)
+  }
+  return fields
 }
 
 export type SchemaPackField = FieldSpec & {

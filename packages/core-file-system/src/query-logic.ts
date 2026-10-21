@@ -421,6 +421,9 @@ export const VIEW_FILTER_TREE_DESCRIPTION =
 export const VIEW_SORTS_DESCRIPTION =
   'JSON 数组，按顺序多 key 排序。例 [{"field":"project","dir":"asc"},{"field":"title","dir":"desc"}]。dir 仅 asc|desc。'
 
+export const VIEW_COLUMNS_DESCRIPTION =
+  '列 key 数组，或 JSON 数组字符串。例 ["title","facet","facet::facet::category"]。标签属性列必须写成 facet::<标签id>::<字段key>。半截 JSON 会报错，不会按逗号拆开写坏。'
+
 /** 有规则的 filterTree 优先；空树则回退扁平 filters（agent db_update 仍写 {project:"biu"}）。 */
 export function resolveViewFilterTree(view: {
   builtin?: boolean

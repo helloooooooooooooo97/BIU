@@ -31,10 +31,21 @@ export const COL_WIDTH_MAX = 720
 export function parseViewColumns(value: unknown): string[] {
   if (Array.isArray(value)) return [...new Set(value.map((item) => String(item).trim()).filter(Boolean))]
   if (typeof value === 'string' && value.trim()) {
+    const text = value.trim()
+    if (text.startsWith('[')) {
+      try {
+        return parseViewColumns(JSON.parse(text) as unknown)
+      } catch {
+        throw new Error('columns 应为字符串数组，例如 ["title","facet"]')
+      }
+    }
+    if (text.includes('"') || text.includes(']')) {
+      throw new Error('columns 应为字符串数组，例如 ["title","facet"]，不能按逗号拆 JSON 碎片')
+    }
     try {
-      return parseViewColumns(JSON.parse(value) as unknown)
+      return parseViewColumns(JSON.parse(text) as unknown)
     } catch {
-      return [...new Set(value.split(',').map((item) => item.trim()).filter(Boolean))]
+      return [...new Set(text.split(',').map((item) => item.trim()).filter(Boolean))]
     }
   }
   return []

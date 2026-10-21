@@ -10,7 +10,7 @@ const LIST_META_KEYS = new Set(['createdAt', 'updatedAt', 'createdBy', 'updatedB
 /** 把 File System 工具回包压成 Agent 用的短 JSON；网页 API 不走这里。 */
 export class AgentDbCompact {
   readonly statBlurb =
-    '查看路径元数据。根目录列出表。表路径返回相对默认的 schema：每张表都有 id、title（标题）、createdAt、updatedAt、emoji、tags、facet、parentId（父级）、dependsOn、createdBy（唯一创建人，系统自记不可写）、updatedBy（编辑人列表，系统自记不可写，多人先后编辑会追加）；正文默认字段 content（file，用 db_content）。fields 只含本表多出来的列，或覆盖了这些默认的列。caps 表示能否 list/read/update/create/delete/action/content。'
+    '查看路径元数据。根目录列出表。表路径返回相对默认的 schema：每张表都有 id、title（标题）、createdAt、updatedAt、emoji、tags、facet、parentId（父级）、dependsOn、createdBy（唯一创建人，系统自记不可写）、updatedBy（编辑人列表，系统自记不可写，多人先后编辑会追加）；正文默认字段 content（file，用 db_content）。fields 只含本表多出来的列，或覆盖了这些默认的列；可写列可能带 example，按 example 的形状写（数组不要先 stringify，除非 example 本身是 JSON 字符串）。标签属性列 key 为 facet::<标签id>::<字段key>。caps 表示能否 list/read/update/create/delete/action/content。'
 
   schema(schema: CollectionSchema) {
     const defaults = this.defaultFields(schema)
@@ -126,7 +126,9 @@ export class AgentDbCompact {
         order.push(key)
       }
     }
-    const columns = order.filter((key) => key === 'id' || rowsIn.some((row) => !this.empty(row[key])))
+    const columns = order.filter(
+      (key) => key === 'id' || key.startsWith('facet::') || rowsIn.some((row) => !this.empty(row[key])),
+    )
     const rows = rowsIn.map((row) => columns.map((key) => (this.empty(row[key]) ? null : row[key])))
     return { columns, rows }
   }
@@ -190,6 +192,7 @@ export class AgentDbCompact {
     if (field.format) out.format = field.format
     if (field.enum?.length) out.enum = field.enum
     if (field.description) out.description = field.description
+    if (field.example !== undefined) out.example = field.example
     if (field.action) out.action = field.action
     if (field.computed) out.computed = true
     if (field.collection) out.collection = field.collection
