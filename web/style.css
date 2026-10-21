@@ -32,6 +32,8 @@
   --dsw-usage-track-cache: color-mix(in srgb, #448361 22%, #ffffff);
   --dsw-usage-track-hist: color-mix(in srgb, #d9730d 22%, #ffffff);
   --dsw-tag-ink: #2c2c2b;
+  --dsw-cell-ink: #2c2c2b;
+  --dsw-cell-weight: 500;
   --dsw-muted-fill: rgba(0, 0, 0, 0.03);
   --dsw-overlay: rgba(255, 255, 255, 0.72);
   /* 居中浮层（搜索 / 设置 / 会话配置 / 模型配置）对齐侧栏菜单 */
@@ -101,6 +103,7 @@ html.dark {
   --dsw-usage-track-cache: color-mix(in srgb, #1fac60 28%, #191919);
   --dsw-usage-track-hist: color-mix(in srgb, #ff8000 28%, #191919);
   --dsw-tag-ink: #ffffff;
+  --dsw-cell-ink: #f0efed;
   --dsw-muted-fill: rgba(242, 241, 237, 0.04);
   --dsw-overlay: rgba(25, 25, 25, 0.72);
   --dsw-float: #202020;
