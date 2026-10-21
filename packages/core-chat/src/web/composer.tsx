@@ -442,6 +442,8 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
     })
   }, [])
 
+  const takeDroppedRef = useRef<(dt: DataTransfer | null | undefined) => boolean>(() => false)
+
   const live = useRef({
     slash,
     filtered,
@@ -487,6 +489,10 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
         return true
       },
       handleDrop(_view, event) {
+        if (takeDroppedRef.current(event.dataTransfer)) {
+          event.preventDefault()
+          return true
+        }
         if ([...(event.dataTransfer?.types ?? [])].includes('Files')) {
           event.preventDefault()
           return true
@@ -644,6 +650,35 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
     })
   }, [pickRefs, editor, picked.length, pendingImages.length])
 
+  const takeDroppedFiles = useCallback(
+    (dt: DataTransfer | null | undefined) => {
+      if (!dt) return false
+      let uriList = ''
+      try {
+        uriList = dt.getData('text/uri-list') || dt.getData('text/plain') || ''
+      } catch {
+        uriList = ''
+      }
+      const files = dt.files
+      const paths = collectDroppedFilePaths(files, { uriList })
+      const images = collectImageFiles(files).filter((file) => !fileAbsolutePath(file))
+      if (!paths.length && !images.length) return false
+      if (paths.length) {
+        const refs = paths
+          .map((path) => filePickFromPath(path, live.current.route))
+          .filter((ref): ref is NonNullable<typeof ref> => Boolean(ref))
+        if (refs.length) {
+          if (live.current.pick) live.current.pick.addMany(refs)
+          else if (editor) insertPickChips(editor, refs)
+        }
+      }
+      if (images.length) addImageFiles(images)
+      return true
+    },
+    [addImageFiles, editor],
+  )
+  takeDroppedRef.current = takeDroppedFiles
+
   function clearInput() {
     if (debounceRef.current != null) {
       clearTimeout(debounceRef.current)
@@ -664,28 +699,8 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
   }
 
   function onDrop(event: DragEvent<HTMLFormElement>) {
-    const dt = event.dataTransfer
-    const files = dt?.files
-    let uriList = ''
-    try {
-      uriList = dt?.getData('text/uri-list') || dt?.getData('text/plain') || ''
-    } catch {
-      uriList = ''
-    }
-    const paths = collectDroppedFilePaths(files, { uriList })
-    const images = collectImageFiles(files).filter((file) => !fileAbsolutePath(file))
-    if (!paths.length && !images.length) return
+    if (!takeDroppedFiles(event.dataTransfer)) return
     event.preventDefault()
-    if (paths.length) {
-      const refs = paths
-        .map((path) => filePickFromPath(path, live.current.route))
-        .filter((ref): ref is NonNullable<typeof ref> => Boolean(ref))
-      if (refs.length) {
-        if (live.current.pick) live.current.pick.addMany(refs)
-        else if (editor) insertPickChips(editor, refs)
-      }
-    }
-    if (images.length) addImageFiles(images)
   }
 
   const openSlashMenu = useCallback(() => {
@@ -825,9 +840,12 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
     const tools = [...picked]
     const fallback = tools.length ? `请使用工具：${tools.join(', ')}` : pendingImages.length ? '（图片）' : ''
     const text = packedEditor.text || fallback
-    const packed = await Promise.all(pendingImages.map((item) => readFileDataUrl(item.file)))
-    clearInput()
-    pick?.clear()
+    let packed: Array<{ name: string; mime: string; url: string }>
+    try {
+      packed = await Promise.all(pendingImages.map((item) => readFileDataUrl(item.file)))
+    } catch {
+      return
+    }
     try {
       await sessionView.send(
         text,
@@ -835,6 +853,8 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
         tools,
         packed.filter((item) => item.url.startsWith('data:image/')),
       )
+      clearInput()
+      pick?.clear()
       const id = sessionView.get().sessionId
       if (id) {
         clearDraft(id)
@@ -842,7 +862,7 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
       }
       if (id && shouldNavigateToSession(location.pathname, id)) navigate(`/s/${id}`)
     } catch {
-      /* error 已写入 sessionView */
+      /* error 已写入 sessionView；输入与待发图片保留 */
     }
   }
 

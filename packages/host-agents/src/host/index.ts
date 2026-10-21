@@ -20,7 +20,7 @@ export interface AgentSendOptions {
   wait?: boolean
   /** 消息来源：Live 派工时传入 { type: 'session', sessionId } */
   sender?: MessageSender
-  images?: Array<{ name: string; mime: string; url: string }>
+  images?: Array<{ name: string; mime: string; url: string; path?: string }>
   liveContext?: LiveUiContext
 }
 
@@ -389,7 +389,8 @@ function sanitizeImages(raw: AgentSendOptions['images']): ClaimedInput['images']
     const name = String(item.name ?? 'image.png').slice(0, 80)
     if (!/^image\/(png|jpe?g|gif|webp)$/i.test(mime)) continue
     if (!url.startsWith('data:image/') || url.length > 8 * 1024 * 1024) continue
-    out.push({ name: name || 'image.png', mime, url })
+    const path = typeof (item as { path?: unknown }).path === 'string' ? String((item as { path: string }).path).trim() : ''
+    out.push({ name: name || 'image.png', mime, url, ...(path && !path.includes('..') ? { path } : {}) })
     if (out.length >= 6) break
   }
   return out.length ? out : undefined

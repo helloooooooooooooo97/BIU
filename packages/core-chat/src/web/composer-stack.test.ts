@@ -72,6 +72,10 @@ describe('composer dock stacking above sticky user', () => {
     expect(composer).toContain('fileAbsolutePath')
     expect(composer).toMatch(/addMany\(refs\)/)
     expect(composer).toMatch(/handleDrop/)
+    expect(composer).toContain('takeDroppedFiles')
+    expect(composer).toContain('takeDroppedRef.current')
+    expect(composer).toMatch(/clearInput\(\)/)
+    expect(composer).toMatch(/\/\* error 已写入 sessionView；输入与待发图片保留 \*\//)
   })
 
   it('shows an interruptible Goal bar above the composer', () => {

@@ -7,8 +7,11 @@ import {
   extractImagePathCandidates,
   findRecentImageFiles,
   ingestSessionImages,
+  persistPastedImages,
+  pastedImagePickText,
   readArtifactFile,
   resolveArtifactFile,
+  withPastedImagePicks,
 } from './artifacts.ts'
 
 const TINY_PNG = Buffer.from(
@@ -69,6 +72,37 @@ test('findRecentImageFiles picks up newly written workspace images', async () =>
   await writeFile(join(workspace, 'fresh.png'), TINY_PNG)
   const found = await findRecentImageFiles(workspace, since)
   assert.ok(found.some((path) => path.endsWith('fresh.png')))
+})
+
+test('persistPastedImages writes data URLs into session artifacts and names picks', async () => {
+  const baseDir = await mkdtemp(join(tmpdir(), 'biu-paste-'))
+  const png = TINY_PNG.toString('base64')
+  const saved = await persistPastedImages(
+    'sess-paste',
+    [
+      { name: 'shot.png', mime: 'image/png', url: `data:image/png;base64,${png}` },
+      { name: 'shot.png', mime: 'image/png', url: `data:image/png;base64,${png}` },
+    ],
+    baseDir,
+  )
+  assert.equal(saved.length, 2)
+  assert.equal(saved[0]?.name, 'shot.png')
+  assert.equal(saved[1]?.name, 'shot-1.png')
+  assert.ok(saved[0]?.path?.includes(`${join('artifacts', 'sess-paste')}`))
+  const file = await readArtifactFile('sess-paste', 'shot.png', baseDir)
+  assert.deepEqual(file?.data, TINY_PNG)
+  const picks = pastedImagePickText(saved)
+  assert.match(picks, /"kind":"file"/)
+  assert.match(picks, /shot\.png/)
+  assert.equal(withPastedImagePicks('看看', saved).startsWith('看看\n<pick>'), true)
+})
+
+test('persistPastedImages rejects non data URLs', async () => {
+  const baseDir = await mkdtemp(join(tmpdir(), 'biu-paste-bad-'))
+  await assert.rejects(
+    () => persistPastedImages('sess-bad', [{ name: 'a.png', mime: 'image/png', url: '/tmp/a.png' }], baseDir),
+    /data URL/,
+  )
 })
 
 test('resolveArtifactFile rejects path traversal', () => {
