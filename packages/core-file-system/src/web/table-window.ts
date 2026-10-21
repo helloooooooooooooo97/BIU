@@ -2,8 +2,9 @@ export const TABLE_ROW_PX = 37
 export const TABLE_WRAP_ROW_PX = 96
 export const TABLE_WINDOW_OVERSCAN = 4
 export const TABLE_WINDOW_VIEWPORT_FALLBACK = 560
-export const TABLE_COL_PX = 72
-export const TABLE_COL_PIN_PX = 140
+export const TABLE_COL_PX = 120
+export const TABLE_COL_PIN_PX = 240
+export const TABLE_COL_ACTIONS_PX = 72
 export const TABLE_COL_OVERSCAN = 1
 export const TABLE_COL_VIEWPORT_FALLBACK = 624
 
@@ -89,32 +90,13 @@ export type TableColumnSlice = {
   padRight: number
 }
 
-export function tableColumnWidth(px: unknown, pin = false) {
-  const n = typeof px === 'number' ? px : Number(px)
-  if (Number.isFinite(n) && n > 0) return Math.round(n)
-  return pin ? TABLE_COL_PIN_PX : TABLE_COL_PX
-}
-
-/** Saved width if present; otherwise a kind-ish first-paint estimate so table-layout:fixed does not clip 创建人. */
-export function tableColumnEstimate(key: string, saved: unknown, pin = false) {
+/** 有手动值用手动值；否则钉住列 / 操作列 / 其余列各一个固定默认宽，不随视口缩放。 */
+export function tableColumnWidth(key: string, saved: unknown, pin = false) {
   const n = typeof saved === 'number' ? saved : Number(saved)
   if (Number.isFinite(n) && n > 0) return Math.round(n)
   if (pin) return TABLE_COL_PIN_PX
-  if (key === 'createdBy' || key === 'updatedBy' || key === 'assignee') return 120
-  if (key === 'updatedAt' || key === 'createdAt' || key === 'dueAt') return 130
-  if (key === 'shareScope' || key === 'shareRole') return 88
-  if (key === 'actions') return 62
+  if (key === 'actions') return TABLE_COL_ACTIONS_PX
   return TABLE_COL_PX
-}
-
-/** If every column almost fits, shrink them onto the wrap so the last col is not a 70px scroll away. */
-export function tableColumnFit(widths: number[], viewportW: number) {
-  const view = viewportW > 0 ? viewportW : TABLE_COL_VIEWPORT_FALLBACK
-  let sum = 0
-  for (const w of widths) sum += w
-  if (sum <= 0 || sum <= view || sum > view + 120) return widths
-  const scale = view / sum
-  return widths.map((w) => Math.max(56, Math.round(w * scale)))
 }
 
 /** 首屏只画钉住列 + 视口里的列；左右用空 td 垫宽度，横滑再补。 */

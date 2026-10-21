@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, TABLE_WINDOW_VIEWPORT_FALLBACK, TABLE_COL_PX, TABLE_COL_PIN_PX, TABLE_COL_OVERSCAN, TABLE_COL_VIEWPORT_FALLBACK, GROUPED_FULL_FETCH_ALL_MAX, groupedFullFetchCount, rememberedTableWrap, rememberTableWrap, resetRememberedTableWrap, tableColumnEstimate, tableColumnFit, tableColumnSlice, tableWindowSlice, tableWindowUnchanged, tableWrapScroll } from './table-window.ts'
+import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, TABLE_WINDOW_VIEWPORT_FALLBACK, TABLE_COL_PX, TABLE_COL_PIN_PX, TABLE_COL_ACTIONS_PX, TABLE_COL_OVERSCAN, TABLE_COL_VIEWPORT_FALLBACK, GROUPED_FULL_FETCH_ALL_MAX, groupedFullFetchCount, rememberedTableWrap, rememberTableWrap, resetRememberedTableWrap, tableColumnSlice, tableColumnWidth, tableWindowSlice, tableWindowUnchanged, tableWrapScroll } from './table-window.ts'
 
 test('table window keeps overscan around the viewport', () => {
   const slice = tableWindowSlice(200, 0, TABLE_ROW_PX * 10)
@@ -102,49 +102,33 @@ test('narrow column sets still paint every column', () => {
   assert.equal(slice.padRight, 0)
 })
 
-test('typical 7-col first screen fills a 624px wrap without a pad', () => {
-  const widths = [TABLE_COL_PIN_PX, ...Array.from({ length: 6 }, () => TABLE_COL_PX)]
+test('typical 7-col first screen overflows the wrap and pads the rest', () => {
+  const widths = [TABLE_COL_PIN_PX, TABLE_COL_ACTIONS_PX, ...Array.from({ length: 5 }, () => TABLE_COL_PX)]
   const slice = tableColumnSlice(7, 1, 0, 624, widths)
   assert.equal(slice.pin, 1)
   assert.equal(slice.start, 1)
-  assert.equal(slice.end, 7)
+  assert.ok(slice.end < 7)
   assert.equal(slice.padLeft, 0)
-  assert.equal(slice.padRight, 0)
+  assert.ok(slice.padRight > 0)
 })
 
-test('unmeasured person and date columns stay wide enough for the first screen', () => {
-  assert.equal(tableColumnEstimate('title', undefined, true), TABLE_COL_PIN_PX)
-  assert.equal(tableColumnEstimate('createdBy', undefined), 120)
-  assert.equal(tableColumnEstimate('updatedAt', undefined), 130)
-  assert.equal(tableColumnEstimate('shareScope', undefined), 88)
-  assert.equal(tableColumnEstimate('status', undefined), TABLE_COL_PX)
-  assert.equal(tableColumnEstimate('createdBy', 180), 180)
-  const widths = [
-    tableColumnEstimate('title', undefined, true),
-    tableColumnEstimate('actions', undefined),
-    tableColumnEstimate('status', undefined),
-    tableColumnEstimate('priority', undefined),
-    tableColumnEstimate('difficulty', undefined),
-    tableColumnEstimate('usage', undefined),
-    tableColumnEstimate('createdBy', undefined),
-  ]
-  const slice = tableColumnSlice(7, 1, 0, 624, widths)
-  assert.equal(slice.end, 7)
-  assert.equal(slice.padRight, 0)
-})
-
-test('narrow tables that barely overflow the wrap scale onto the first screen', () => {
-  const fitted = tableColumnFit([140, 72, 72, 72, 72, 130, 72, 64], 624)
-  const sum = fitted.reduce((a, b) => a + b, 0)
-  assert.ok(Math.abs(sum - 624) <= 8)
-  assert.ok(fitted[0]! >= 56)
-  assert.ok(fitted[fitted.length - 1]! >= 56)
-})
-
-test('wide tables keep estimates so the column window can pad', () => {
-  const widths = [TABLE_COL_PIN_PX, ...Array.from({ length: 12 }, () => TABLE_COL_PX)]
-  const fitted = tableColumnFit(widths, 624)
-  assert.equal(fitted, widths)
+test('unsaved columns use fixed defaults; saved widths stay as-is', () => {
+  assert.equal(tableColumnWidth('title', undefined, true), TABLE_COL_PIN_PX)
+  assert.equal(tableColumnWidth('actions', undefined), TABLE_COL_ACTIONS_PX)
+  assert.equal(tableColumnWidth('updatedBy', undefined), TABLE_COL_PX)
+  assert.equal(tableColumnWidth('status', undefined), TABLE_COL_PX)
+  assert.equal(tableColumnWidth('createdBy', 180), 180)
+  const before = ['title', 'actions', 'status', 'updatedBy'].map((key, index) =>
+    tableColumnWidth(key, undefined, index === 0),
+  )
+  const afterNeed = tableColumnWidth('status', 280)
+  const after = ['title', 'actions', 'status', 'updatedBy'].map((key, index) =>
+    tableColumnWidth(key, key === 'status' ? afterNeed : undefined, index === 0),
+  )
+  assert.equal(after[0], before[0])
+  assert.equal(after[1], before[1])
+  assert.equal(after[3], before[3])
+  assert.equal(after[2], 280)
 })
 
 test('remembered wrap size replaces the 624 fallback after the first measure', () => {
