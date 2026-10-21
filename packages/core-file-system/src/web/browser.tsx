@@ -117,6 +117,7 @@ import {
   pushSavedViewsPatch,
   stampSavedView,
   diffSavedViews,
+  mergeSavedViewsPatch,
   routeViewNeedsFetch,
   subscribeStarredViews,
   toggleStarredView,
@@ -3095,28 +3096,34 @@ export function CollectionBrowser({
   async function persistViewsFor(
     path: string,
     next: SavedView[],
-    extra?: { baseline?: SavedView[]; remove?: string[] },
+    extra?: { baseline?: SavedView[]; upsert?: SavedView[]; remove?: string[] },
   ) {
     if (sheet) return true
-    const listed = listedViews(path, next).map((view) => withViewDisplay(path, view))
+    const forced = extra?.upsert ?? []
+    const listed = listedViews(path, [
+      ...next.filter((view) => !forced.some((item) => item.id === view.id)),
+      ...forced,
+    ]).map((view) => withViewDisplay(path, view))
     const stored = listed.filter((view) => !view.builtin)
     const previous = extra?.baseline ?? loadViews(path)
     // 只推差异：别的窗口（会话 / 右检查器）新建的视图不会被这份快照整份冲掉。
-    const diff = diffSavedViews(previous, stored)
-    const stamped = (diff.upsert ?? []).map((view) => stampSavedView(view))
+    // extra.upsert/remove 是调用方点名的条目，不依赖 baseline 里有没有这个 id。
+    const patch = mergeSavedViewsPatch(diffSavedViews(previous, stored), {
+      upsert: forced.map((view) => stampSavedView(view)),
+      remove: extra?.remove,
+    })
+    const stamped = (patch.upsert ?? []).map((view) => stampSavedView(view))
     const stampById = new Map(stamped.map((view) => [view.id, view]))
     const adopted = listed.map((view) => stampById.get(view.id) ?? view)
-    const patch = {
-      upsert: stamped,
-      remove: [...new Set([...diff.remove, ...(extra?.remove ?? [])])],
-    }
     const gen = ++viewsWriteGenRef.current
-    const result = await pushSavedViewsPatch(path, patch)
-    if (result === 'failed') {
+    const result = await pushSavedViewsPatch(path, { ...patch, upsert: stamped })
+    const intended = Boolean(forced.length || extra?.remove?.length)
+    if (result === 'failed' || (result === 'skipped' && intended)) {
       if (gen === viewsWriteGenRef.current) setViewsSaveError(true)
       return false
     }
     if (gen !== viewsWriteGenRef.current) return false
+    if (result === 'skipped') return true
     adoptPersistedViews(path, adopted)
     setViewsSaveError(false)
     return true
@@ -3126,7 +3133,11 @@ export function CollectionBrowser({
     return persistViewsFor(collectionPath, next)
   }
 
-  function persistViewsWith(path: string, next: SavedView[], extra?: { baseline?: SavedView[]; remove?: string[] }) {
+  function persistViewsWith(
+    path: string,
+    next: SavedView[],
+    extra?: { baseline?: SavedView[]; upsert?: SavedView[]; remove?: string[] },
+  ) {
     return persistViewsFor(path, next, extra)
   }
 
@@ -3305,13 +3316,20 @@ export function CollectionBrowser({
     void syncViewsRef.current()
   }, [viewMenuOpen])
 
+  function newSavedViewId() {
+    return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+  }
+
   async function commitView(view: SavedView) {
-    const ok = await persistViews([...views, view])
+    const stored = loadViews(collectionPath).filter((item) => !item.builtin && item.id !== view.id)
+    const ok = await persistViewsWith(collectionPath, [...stored, view], { upsert: [view] })
     if (!ok) return
     selectView(view)
   }
 
-  function uniqueViewName(base: string, listed: SavedView[] = views) {
+  function uniqueViewName(base: string, listed: SavedView[] = paintListedViews(collectionPath)) {
     const names = new Set(listed.map((item) => item.name))
     if (!names.has(base)) return base
     let n = 2
@@ -3325,12 +3343,12 @@ export function CollectionBrowser({
     const stored = loadViews(target)
     const allListed = listedViews(target, stored)
     const listed = target === collectionPath
-      ? views
+      ? paintListedViews(target)
       : effectiveScope
         ? viewsForScope(allListed, effectiveScope)
         : allListed
     const view: SavedView = {
-      id: `${Date.now()}`,
+      id: newSavedViewId(),
       name: uniqueViewName('新视图', listed),
       mode: 'table',
       sortField: 'title',
@@ -3343,7 +3361,9 @@ export function CollectionBrowser({
       truncate: true,
       query: '',
     }
-    void persistViewsFor(target, [...stored.filter((item) => !item.builtin), view]).then((ok) => {
+    void persistViewsFor(target, [...stored.filter((item) => !item.builtin && item.id !== view.id), view], {
+      upsert: [view],
+    }).then((ok) => {
       if (!ok) return
       if (target === collectionPath) {
         selectView(view)
@@ -3361,9 +3381,9 @@ export function CollectionBrowser({
   function copyView(source?: SavedView) {
     commitView(
       source
-        ? { ...source, id: `${Date.now()}`, name: uniqueViewName(`${source.name} 副本`), builtin: false }
+        ? { ...source, id: newSavedViewId(), name: uniqueViewName(`${source.name} 副本`), builtin: false }
         : {
-            id: `${Date.now()}`,
+            id: newSavedViewId(),
             name: uniqueViewName(`${activeView?.name ?? title} 副本`),
             mode,
             sortField,
