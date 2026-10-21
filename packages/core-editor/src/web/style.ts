@@ -93,7 +93,11 @@ html:not(.dark) .page-bubble{box-shadow:none}
 .page-slash-item:hover,.page-slash-item.is-active{background:var(--dsw-hover);border-color:var(--dsw-border)}
 .page-slash-icon{flex:none;display:grid;place-items:center;width:18px;height:18px;border:0;border-radius:0;background:transparent;color:var(--dsw-icon);font-size:11px;font-weight:700;line-height:1}
 .page-slash-label{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:600;line-height:1.2}
-.page-slash-keys{flex:none;color:var(--dsw-label-3);font-size:12px;font-weight:500}
+.page-slash-keys,.page-slash-status{flex:none;color:var(--dsw-label-3);font-size:12px;font-weight:500}
+.page-slash-item.is-failed{color:var(--dsw-danger)}
+.page-slash-item.is-failed .page-slash-icon,.page-slash-item.is-failed .page-slash-status{color:var(--dsw-danger)}
+.page-slash-item.is-loading{opacity:.72}
+.page-slash-plugin-link{flex:none;color:var(--dsw-danger);font-size:11px;font-weight:600;text-decoration:underline}
 .page-slash-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;flex:none;margin-top:2px;padding:6px 8px 4px;border-top:1px solid var(--dsw-border);color:var(--dsw-label-3);font-size:12px;font-weight:500}
 .fsdb-right:has(.page-find-slot){position:relative}
 .page-find-slot{position:absolute;right:12px;z-index:40;display:flex;justify-content:flex-end;pointer-events:none}

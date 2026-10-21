@@ -1,5 +1,10 @@
 import { buildAppPath } from '@biu/web-session-view'
 import { clientLog, clientLogErrorText } from '@biu/web-event-log/log'
+import {
+  installedPageBlocksFromRows,
+  onSlashCatalogOpen,
+  setInstalledPageBlocks,
+} from '../../../core-editor/src/web/slash-memory.ts'
 
 export const ENABLE_PAGE_BLOCK_PLUGIN = 'biu:enable-page-block-plugin'
 export const PAGE_BLOCK_PLUGIN_PHASE = 'biu:page-block-plugin-phase'
@@ -111,4 +116,53 @@ export function listenEnablePageBlockPlugin() {
   // 页面块的 layout effect 往往比插件系统的 effect 更早，事件已经丢了。
   for (const plugin of pendingEnableIds()) run(plugin)
   return () => window.removeEventListener(ENABLE_PAGE_BLOCK_PLUGIN, onEnable)
+}
+
+const PAGE_BLOCK_LIST_COLUMNS = 'id,title,blurb,installed,hasWeb,headless'
+
+/** 只刷新斜杠安装态，不 start / 不预热窗口插件。 */
+export async function refreshInstalledPageBlocks() {
+  try {
+    const rows: Record<string, unknown>[] = []
+    let offset = 0
+    const limit = 200
+    for (;;) {
+      const params = new URLSearchParams({
+        path: '/plugins',
+        limit: String(limit),
+        offset: String(offset),
+        columns: PAGE_BLOCK_LIST_COLUMNS,
+      })
+      const res = await fetch(`/api/db/list?${params}`)
+      const body = (await res.json().catch(() => ({}))) as {
+        items?: Record<string, unknown>[]
+        total?: number
+        error?: string
+      }
+      if (!res.ok) throw new Error(body.error || res.statusText)
+      const items = Array.isArray(body.items) ? body.items : []
+      rows.push(...items)
+      const total = typeof body.total === 'number' ? body.total : rows.length
+      offset += items.length
+      if (!items.length || offset >= total) break
+    }
+    setInstalledPageBlocks(installedPageBlocksFromRows(rows))
+  } catch (error) {
+    clientLog('error', 'page-block', `斜杠安装态刷新失败: ${clientLogErrorText(error)}`)
+  }
+}
+
+export function watchInstalledPageBlocks() {
+  void refreshInstalledPageBlocks()
+  const onChange = () => {
+    void refreshInstalledPageBlocks()
+  }
+  window.addEventListener('fsdb:change', onChange)
+  const offOpen = onSlashCatalogOpen(() => {
+    void refreshInstalledPageBlocks()
+  })
+  return () => {
+    window.removeEventListener('fsdb:change', onChange)
+    offOpen()
+  }
 }

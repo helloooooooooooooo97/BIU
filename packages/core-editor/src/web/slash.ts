@@ -7,8 +7,22 @@ import { placeSlashInWindow } from './slash-place.ts'
 import { slashMayOpen } from './editor-live.ts'
 import { createPageBlockId } from './page-block.ts'
 import { defaultPageBlockTitle } from '../page-block-fence.ts'
-import { BASIC_BLOCK_TYPE, getPageEditor, type SlashInsert } from './service.ts'
+import { BASIC_BLOCK_TYPE, getPageEditor, type PageBlockSpec, type SlashInsert } from './service.ts'
 import { uploadPageImage } from './page-image.ts'
+import { clientLog, clientLogErrorText } from '@biu/web-event-log/log'
+import {
+  pageBlockPluginPhase,
+  requestEnablePageBlockPlugin,
+  setPageBlockPluginPhase,
+  subscribePageBlockPluginPhase,
+} from './page-block-meta.ts'
+import {
+  INSTALLED_PAGE_BLOCK_TYPE,
+  installedPageBlocks,
+  notifySlashCatalogOpen,
+  pluginRecordPath,
+  rememberedPageBlocks,
+} from './slash-memory.ts'
 
 export type SlashItem = {
   id: string
@@ -17,6 +31,9 @@ export type SlashItem = {
   aliases: string[]
   blockType: string
   blockTypeLabel: string
+  pluginId?: string
+  status?: 'loading' | 'failed'
+  pluginHref?: string
   command: (props: { editor: Editor; range: Range }) => void
 }
 
@@ -201,10 +218,107 @@ function runInsert(editor: Editor, range: Range, insert: SlashInsert) {
   return chain.setHorizontalRule().run()
 }
 
+function insertPageBlock(editor: Editor, range: Range, block: PageBlockSpec) {
+  const id = createPageBlockId()
+  const defaults = typeof block.defaults === 'function' ? block.defaults() : { ...(block.defaults ?? {}) }
+  const pageName = editorPageTitle(editor)
+  const title = String(defaults.title ?? '').trim() || defaultPageBlockTitle(pageName, block.label || block.kind)
+  editor
+    .chain()
+    .focus()
+    .deleteRange(range)
+    .insertContent({
+      type: 'pageBlock',
+      attrs: {
+        kind: block.kind,
+        plugin: block.plugin,
+        id,
+        data: { ...defaults, title },
+      },
+    })
+    .run()
+}
+
+function livePageBlock(plugin: string, kind?: string) {
+  const blocks = getPageEditor()?.blocks() ?? []
+  if (kind) return blocks.find((block) => block.kind === kind && block.plugin === plugin)
+  return blocks.find((block) => block.plugin === plugin)
+}
+
+export function waitForPageBlock(plugin: string, kind?: string, timeoutMs = 20000) {
+  const hit = livePageBlock(plugin, kind)
+  if (hit) return Promise.resolve(hit)
+  return new Promise<PageBlockSpec>((resolve, reject) => {
+    const editor = getPageEditor()
+    const timer = setTimeout(() => {
+      off()
+      reject(new Error(`${plugin} 启动超时`))
+    }, timeoutMs)
+    const check = () => {
+      if (pageBlockPluginPhase(plugin) === 'failed') {
+        off()
+        reject(new Error(`${plugin} 启动失败`))
+        return
+      }
+      const next = livePageBlock(plugin, kind)
+      if (next) {
+        off()
+        resolve(next)
+      }
+    }
+    const offPhase = subscribePageBlockPluginPhase(check)
+    const offEditor = editor?.subscribe(check) ?? (() => undefined)
+    const off = () => {
+      clearTimeout(timer)
+      offPhase()
+      offEditor()
+    }
+    check()
+  })
+}
+
+export async function activateSlashBlock(editor: Editor, range: Range, plugin: string, kind?: string) {
+  const id = plugin.trim()
+  if (!id || editor.isDestroyed) return
+  if (pageBlockPluginPhase(id) === 'loading') return
+  const ready = livePageBlock(id, kind)
+  if (ready) {
+    insertPageBlock(editor, range, ready)
+    return
+  }
+  const phase = pageBlockPluginPhase(id)
+  requestEnablePageBlockPlugin(id, kind || '', { force: phase === 'failed' })
+  try {
+    const spec = await waitForPageBlock(id, kind, 20000)
+    if (editor.isDestroyed) return
+    insertPageBlock(editor, range, spec)
+  } catch (error) {
+    const leftover = (getPageEditor()?.blocks() ?? []).some((block) => block.plugin === id)
+    if (!leftover) setPageBlockPluginPhase(id, 'failed')
+    clientLog('error', 'page-block', `${kind || id}（${id}）斜杠启动失败: ${clientLogErrorText(error)}`)
+  }
+}
+
+function decorateSlashStatus(item: SlashItem): SlashItem {
+  const plugin = item.pluginId?.trim()
+  if (!plugin) return item
+  const live = getPageEditor()?.blocks() ?? []
+  const hasLive = live.some((block) => block.kind === item.id || (item.id === plugin && block.plugin === plugin))
+  if (hasLive) return { ...item, status: undefined, pluginHref: undefined }
+  const phase = pageBlockPluginPhase(plugin)
+  if (phase === 'loading') return { ...item, status: 'loading', hint: '正在启动' }
+  if (phase === 'failed') {
+    return { ...item, status: 'failed', hint: '启动失败', pluginHref: pluginRecordPath(plugin) }
+  }
+  return item
+}
+
 export function slashCatalog(): SlashItem[] {
   const extras = getPageEditor()?.slashCommands() ?? []
   const blocks = getPageEditor()?.blocks() ?? []
-  if (!extras.length && !blocks.length) return SLASH_ITEMS
+  const remembered = rememberedPageBlocks()
+  const installed = installedPageBlocks()
+  if (!extras.length && !blocks.length && !remembered.length && !installed.length) return SLASH_ITEMS
   const map = new Map(SLASH_ITEMS.map((item) => [item.id, item]))
   for (const extra of extras) {
     const prev = map.get(extra.id)
@@ -220,8 +334,10 @@ export function slashCatalog(): SlashItem[] {
         : (prev?.command ?? (({ editor, range }) => editor.chain().focus().deleteRange(range).run())),
     })
   }
+  const covered = new Set<string>()
   for (const block of blocks) {
     const blockType = block.blockType ?? block.kind
+    covered.add(block.plugin)
     map.set(block.kind, {
       id: block.kind,
       label: block.label,
@@ -229,29 +345,45 @@ export function slashCatalog(): SlashItem[] {
       aliases: block.aliases ?? [],
       blockType,
       blockTypeLabel: block.blockTypeLabel ?? (blockType === BASIC_BLOCK_TYPE ? '基础模块' : block.label),
+      pluginId: block.plugin,
       command: ({ editor, range }) => {
-        const id = createPageBlockId()
-        const defaults = typeof block.defaults === 'function' ? block.defaults() : { ...(block.defaults ?? {}) }
-        const pageName = editorPageTitle(editor)
-        const title = String(defaults.title ?? '').trim() || defaultPageBlockTitle(pageName, block.label || block.kind)
-        editor
-          .chain()
-          .focus()
-          .deleteRange(range)
-          .insertContent({
-            type: 'pageBlock',
-            attrs: {
-              kind: block.kind,
-              plugin: block.plugin,
-              id,
-              data: { ...defaults, title },
-            },
-          })
-          .run()
+        insertPageBlock(editor, range, block)
       },
     })
   }
-  return [...map.values()]
+  for (const block of remembered) {
+    covered.add(block.plugin)
+    if (map.has(block.kind)) continue
+    map.set(block.kind, {
+      id: block.kind,
+      label: block.label,
+      hint: block.hint || '自定义块',
+      aliases: block.aliases,
+      blockType: block.blockType,
+      blockTypeLabel: block.blockTypeLabel,
+      pluginId: block.plugin,
+      command: ({ editor, range }) => {
+        void activateSlashBlock(editor, range, block.plugin, block.kind)
+      },
+    })
+  }
+  for (const plugin of installed) {
+    if (covered.has(plugin.id)) continue
+    covered.add(plugin.id)
+    map.set(plugin.id, {
+      id: plugin.id,
+      label: plugin.label,
+      hint: plugin.hint || '页面块',
+      aliases: [],
+      blockType: INSTALLED_PAGE_BLOCK_TYPE,
+      blockTypeLabel: '页面块',
+      pluginId: plugin.id,
+      command: ({ editor, range }) => {
+        void activateSlashBlock(editor, range, plugin.id)
+      },
+    })
+  }
+  return [...map.values()].map(decorateSlashStatus)
 }
 
 export type SlashGroup = { id: string; label: string; items: SlashItem[] }
@@ -294,6 +426,7 @@ function renderSlash() {
     onStart(props: { editor: Editor; mount: (el: HTMLElement) => () => void } & Record<string, unknown>) {
       cancelled = false
       pending = props
+      notifySlashCatalogOpen()
       if (!slashMayOpen(props.editor)) return
       // TipTap 文档：事务是同步的，ReactRenderer 的 flushSync 不能落在 React effect 里。
       queueMicrotask(() => {

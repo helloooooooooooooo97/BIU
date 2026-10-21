@@ -2,6 +2,8 @@ import { useSyncExternalStore, type ComponentType } from 'react'
 import { Service, type Context } from 'cordis'
 import { registerBlockAssets } from '@biu/type-file-system'
 import { clientLog } from '@biu/web-event-log/log'
+import { setPageBlockPluginPhase } from './page-block-meta.ts'
+import { rememberSlashBlock } from './slash-memory.ts'
 
 export type HeadingLevel = 1 | 2 | 3
 
@@ -138,6 +140,16 @@ export class PageEditorService extends Service {
     clientLog('info', 'page-block', `登记块 ${spec.kind}（${plugin}）`)
     return this.ctx.effect(() => {
       this.customBlocks.set(spec.kind, next)
+      rememberSlashBlock({
+        kind: spec.kind,
+        plugin,
+        label: spec.label,
+        hint: spec.hint ?? '自定义块',
+        aliases: spec.aliases ?? [],
+        blockType,
+        blockTypeLabel,
+      })
+      setPageBlockPluginPhase(plugin, 'ready')
       this.bump()
       return () => {
         if (this.customBlocks.get(spec.kind) === next) this.customBlocks.delete(spec.kind)
