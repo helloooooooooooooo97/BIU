@@ -45,6 +45,8 @@ test('parseViewColumns keeps list projection JSON strings', () => {
     normalizeSavedView({ ...base, columns: '["title","facet"]' as unknown as string[] }).columns,
     ['title', 'facet'],
   )
+  assert.throws(() => parseViewColumns('["title"'), /columns 应为字符串数组/)
+  assert.throws(() => parseViewColumns('"[\\"title\\""'), /不能按逗号拆/)
 })
 
 test('normalizeColumnWidths clamps and viewStateKey includes widths', () => {

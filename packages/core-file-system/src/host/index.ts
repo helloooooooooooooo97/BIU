@@ -85,7 +85,7 @@ import {
 } from './content-edit.ts'
 import { currentSessionId } from '@biu/host-sessions/scope'
 import { databaseRevealForTool, normalizeCollectionPath } from '../paths.ts'
-import { matchListFilterRecord, normalizeSorts, sortRecordsBy } from '../query-logic.ts'
+import { matchListFilterRecord, normalizeSorts, parseFacetFlatColumnKey, readFacetFieldValue, sortRecordsBy } from '../query-logic.ts'
 import { actionWhenKeys } from '../web/fields.ts'
 import { AgentDbCompact } from './agent-payload.ts'
 
@@ -304,6 +304,10 @@ function pickListedFields(row: DbRecord, keys: string[]): DbRecord {
   const next: DbRecord = { id: row.id }
   for (const key of keys) {
     if (key === 'path' || key === 'kind') continue
+    if (parseFacetFlatColumnKey(key)) {
+      next[key] = readFacetFieldValue(row, key)
+      continue
+    }
     if (Object.prototype.hasOwnProperty.call(row, key)) next[key] = row[key]
   }
   return next
@@ -346,7 +350,22 @@ function splitPath(path: string): string[] {
 function coerceList(value: unknown) {
   if (Array.isArray(value)) return value.map(String)
   if (typeof value === 'string') {
-    return value
+    const text = value.trim()
+    if (!text) return []
+    if (text.startsWith('[')) {
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(text)
+      } catch {
+        throw new Error('expected string list as JSON array, e.g. ["title","facet"]')
+      }
+      if (!Array.isArray(parsed)) throw new Error('expected string list as JSON array, e.g. ["title","facet"]')
+      return parsed.map(String)
+    }
+    if (text.includes('"') || text.includes('[') || text.includes(']')) {
+      throw new Error('expected string list as JSON array or array, not a comma-split JSON fragment')
+    }
+    return text
       .split(',')
       .map((item) => item.trim())
       .filter(Boolean)
@@ -438,7 +457,8 @@ function coerce(field: FieldSpec, value: unknown) {
   }
   if (kind === 'action') return value == null ? '' : value
   if (isFacetFieldType(kind)) return normalizeSchemaValue(value)
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
+  if (Array.isArray(value)) return JSON.stringify(value)
+  if (value && typeof value === 'object') {
     const rec = value as Record<string, unknown>
     if (typeof rec.sessionId === 'string' || rec.kind === 'agent' || rec.kind === 'user') return value
     return JSON.stringify(value)
@@ -539,12 +559,21 @@ function coerceFacetPatch(
   return bindSchemaValue(tags, bags)
 }
 
+function writableFieldKeys(schema: CollectionSchema) {
+  return Object.entries(schema.fields)
+    .filter(([, field]) => field.writable && !field.computed)
+    .map(([key]) => key)
+}
+
 function pickWritablePatch(schema: CollectionSchema, patch: Record<string, unknown>) {
   const next: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(patch)) {
     if (key === 'id') throw new Error('field not writable: id')
     const field = schema.fields[key]
-    if (!field) throw new Error(`unknown field: ${key}`)
+    if (!field) {
+      const keys = writableFieldKeys(schema)
+      throw new Error(`unknown field: ${key}. writable: ${keys.length ? keys.join(', ') : '(none)'}`)
+    }
     if (!field.writable || field.computed) throw new Error(`field not writable: ${key}`)
     next[key] = coerce(field, value)
   }
@@ -2775,6 +2804,17 @@ function parseRecords(content: unknown): Record<string, unknown>[] {
 const PATH_PARAM = { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] } as const
 
 function asColumnKeys(value: unknown): string[] | undefined {
+  if (typeof value === 'string' && value.trim()) {
+    const text = value.trim()
+    if (text.startsWith('[')) {
+      try {
+        return asColumnKeys(JSON.parse(text) as unknown)
+      } catch {
+        return undefined
+      }
+    }
+    return asColumnKeys(text.split(','))
+  }
   if (!Array.isArray(value)) return undefined
   const keys = value.map((item) => String(item).trim()).filter(Boolean)
   return keys.length ? keys : undefined
@@ -3049,7 +3089,7 @@ export function apply(ctx: Context) {
         columns: {
           type: 'array',
           items: { type: 'string' },
-          description: '可选，只返回这些列。始终带 id。label 等于标题列（默认 title）。不传则除 content 外全返回。',
+          description: '可选，只返回这些列。始终带 id。label 等于标题列（默认 title）。不传则除 content 外全返回。标签属性列写成 facet::<标签id>::<字段key>，例如 facet::facet::category。',
         },
       },
       required: ['path'],
@@ -3081,7 +3121,7 @@ export function apply(ctx: Context) {
   })
   ctx.tools.register({
     name: 'db_update',
-    description: '按表结构 schema 的可写字段更新一条已有记录，路径为 /<表>/<id>。成功只返回 {ok, path}，不回整行。标签 facet：可同时贴多个。一个标签用扁平 values，如 {tags:["facet-2"],values:{导演:"查泽雷"}}；多个标签必须按标签分子对象，如 {tags:["facet-2","awards"],values:{"facet-2":{导演:"查泽雷"},awards:{oscar:true}}}。省略 tags 则改当前已贴标签的属性（合并，不撕掉别的标签）。改标签定义用 db_update /facets/<id> content.fields。新建用 db_create，正文用 db_content。',
+    description: '按表结构 schema 的可写字段更新一条已有记录，路径为 /<表>/<id>。成功只返回 {ok, path}，不回整行。未知字段会列出该表可写字段。标签 facet：可同时贴多个。一个标签用扁平 values，如 {tags:["facet-2"],values:{导演:"查泽雷"}}；多个标签必须按标签分子对象，如 {tags:["facet-2","awards"],values:{"facet-2":{导演:"查泽雷"},awards:{oscar:true}}}。省略 tags 则改当前已贴标签的属性（合并，不撕掉别的标签）。改标签定义用 db_update /facets/<id> fields（数组或 JSON 字符串均可）。新建用 db_create，正文用 db_content。',
     parameters: {
       type: 'object',
       properties: {

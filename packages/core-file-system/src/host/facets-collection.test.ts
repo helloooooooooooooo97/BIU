@@ -25,6 +25,10 @@ test('facetsCollection lists facets with stamp counts and supports create/update
   assert.ok(Number(created[0]?.updatedAt) >= Number(created[0]?.createdAt))
   const createdAt = Number(created[0]?.createdAt)
 
+  assert.throws(
+    () => spec.update!(created[0]!.id, { fields: [{ key: 'format', type: 'text' }] }),
+    /unknown field type: text/,
+  )
   const updated = await spec.update!(created[0]!.id, { title: 'I/O', fields: [{ key: 'format', type: 'string', label: '格式' }] })
   assert.equal(updated.title, 'I/O')
   assert.equal(Number(updated.createdAt), createdAt)

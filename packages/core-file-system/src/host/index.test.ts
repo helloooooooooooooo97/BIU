@@ -11,6 +11,7 @@ import { FileSystemAssets } from './assets-store.ts'
 import type { CollectionSpec, DbRecord } from '@biu/type-file-system'
 import { REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
 import { facetsCollection } from './facets-collection.ts'
+import { SavedViewsStore, viewsCollection } from './saved-views.ts'
 import { trashCollection } from './trash-collection.ts'
 import { runWithSession } from '@biu/host-sessions/scope'
 import { openAndMigrateBiu, runWithAccount } from '@biu/host-plugin-loader/data-dir'
@@ -123,7 +124,7 @@ test('root lists registered collections; record read/update follows schema', asy
   assert.equal(written.value.status, 'done')
   await assert.rejects(() => db.update('/notes/n1', { status: 'invalid' }), /value not in enum/)
   await assert.rejects(() => db.update('/notes/n1', { pinned: true }), /not writable/)
-  await assert.rejects(() => db.update('/notes/n1', { nope: 1 }), /unknown field/)
+  await assert.rejects(() => db.update('/notes/n1', { nope: 1 }), /unknown field: nope\. writable: /)
 })
 
 test('html banner is stored by file system and never written as a table field', async () => {
@@ -1585,11 +1586,25 @@ test('db_update /facets writes facet field packs', async () => {
   db.register(facetsCollection(db.facets))
   const created = await db.create('/facets', [{ title: '动态规划' }])
   const id = String(created.items[0]?.value.id)
+  const asArray = await db.update(`/facets/${id}`, {
+    fields: [{ key: 'complexity', type: 'string', label: '复杂度' }],
+  })
+  assert.equal(asArray.value.fieldCount, 1)
+  assert.equal(db.facets.get(id)?.fields[0]?.key, 'complexity')
   const updated = await db.update(`/facets/${id}`, {
     fields: JSON.stringify([{ key: 'complexity', type: 'string', label: '复杂度' }]),
   })
   assert.equal(updated.value.fieldCount, 1)
   assert.equal(db.facets.get(id)?.fields[0]?.key, 'complexity')
+  await assert.rejects(
+    () => db.update(`/facets/${id}`, { fields: [{ key: 'oops', type: 'text' }] }),
+    /unknown field type: text\. allowed: /,
+  )
+  const stat = await db.stat('/facets')
+  if (stat.kind === 'collection') {
+    assert.equal(stat.schema.fields.fields?.example, '[{"key":"category","type":"string","label":"类别"}]')
+    assert.match(String(stat.schema.fields.fields?.description), /facet::<本标签id>::<字段key>/)
+  }
   const body = await db.writeContent(`/facets/${id}`, '# 标签说明')
   assert.equal(body.field, 'notes')
   assert.equal(body.value, '# 标签说明')
@@ -1660,6 +1675,44 @@ test('db_update page facet stores flat property values on the stamp', async () =
   const onlyAward = await db.update('/pages/p1', { facet: { values: { [awardId]: { oscar: false } } } })
   assert.equal(onlyAward.value.facet.values[awardId].oscar, false)
   assert.equal(onlyAward.value.facet.values[id].director, '查泽雷')
+  const col = `facet::${id}::director`
+  const listed = await db.list('/pages', undefined, { columns: [col] })
+  if (listed.kind !== 'collection') return
+  assert.equal(listed.items[0]?.[col], '查泽雷')
+})
+
+test('db_update /views columns accepts array or JSON array and rejects fragments', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  const store = new SavedViewsStore()
+  db.register({
+    id: 'pages',
+    path: '/pages',
+    schema: { fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string', writable: true } } },
+    list: () => [],
+    get: () => null,
+  })
+  db.register(
+    viewsCollection(store, () => [
+      { path: '/pages', id: 'pages', kind: 'collection', label: '页面', view: { title: '页面' } },
+    ]),
+  )
+  const created = await db.create('/views', [{ title: '需求', tablePath: '/pages', columns: ['title'] }])
+  const id = String(created.items[0]?.value.id)
+  const asArray = await db.update(`/views/${id}`, { columns: ['title', 'facet'] })
+  assert.deepEqual(asArray.value.columns, ['title', 'facet'])
+  const asJson = await db.update(`/views/${id}`, { columns: '["title","facet","facet::facet::category"]' })
+  assert.deepEqual(asJson.value.columns, ['title', 'facet', 'facet::facet::category'])
+  await assert.rejects(
+    () => db.update(`/views/${id}`, { columns: '["title","facet"' }),
+    /expected string list as JSON array/,
+  )
+  const read = await db.read(`/views/${id}`)
+  if (read.kind !== 'record') return
+  assert.deepEqual(read.value.columns, ['title', 'facet', 'facet::facet::category'])
+  const stat = await db.stat('/views')
+  if (stat.kind !== 'collection') return
+  assert.deepEqual(stat.schema.fields.columns?.example, ['title', 'facet', 'facet::facet::category'])
 })
 
 test('tables without records.create/delete reject create and delete', async () => {
