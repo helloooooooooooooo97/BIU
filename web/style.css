@@ -3585,7 +3585,7 @@ html.dark .tool-call-status.is-fail {
 
 .chat-overlay-panel .chat-stage {
   padding-top: 0;
-  padding-bottom: 18rem;
+  padding-bottom: 8px;
 }
 
 .chat-overlay-panel .chat-stage .sticky,
@@ -3603,24 +3603,29 @@ html.dark .tool-call-status.is-fail {
 
 .chat-overlay-panel .chat-pane {
   position: relative;
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 
 .chat-overlay-panel .chat-overlay-thread {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
   padding-block: 0;
 }
 
 .chat-overlay-panel .chat-pane .chat-composer-dock {
-  position: absolute;
-  inset-inline: 0;
-  bottom: 20px;
+  position: relative;
+  inset: auto;
   z-index: 20;
   flex: none;
   height: auto;
   overflow: visible;
   box-sizing: border-box;
-  padding: 0 16px;
+  padding: 0 16px 12px;
   background: transparent;
   pointer-events: none;
 }
