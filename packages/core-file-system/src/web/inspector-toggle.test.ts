@@ -982,6 +982,21 @@ test('list polling pauses while a record is open', () => {
   assert.match(browser, /}, 20000\)/)
 })
 
+test('detail body uses an explicit loading phase instead of a blank editor', () => {
+  assert.match(browser, /const \[detailBodyStatus, setDetailBodyStatus\]/)
+  assert.match(browser, /setDetailBodyStatus\('loading'\)/)
+  assert.match(browser, /setDetailBodyStatus\('failed'\)/)
+  assert.match(browser, /setDetailBodyStatus\('ready'\)/)
+  assert.match(browser, /detailBodyStatus=\{detailBodyStatus\}/)
+  assert.match(browser, /onRetryBody=\{pullDetailBody\}/)
+  assert.match(detail, /status=\{detailBodyStatus\}/)
+  assert.match(detail, /PageContentLoading/)
+  assert.match(detail, /PageContentFailed/)
+  assert.match(style, /\.fsdb-content-loading\{/)
+  assert.match(style, /min-height:120px/)
+  assert.doesNotMatch(browser, /setDetailBody\(null\)\s*\n\s*\}\s*\n\s*\}, \[dataPath\]\)/)
+})
+
 test('open detail still reloads body when the collection changes', () => {
   const onChange = browser.slice(browser.indexOf('const onChange = (event: Event)'), browser.indexOf("window.addEventListener('fsdb:change', onChange)"))
   assert.match(onChange, /if \(detailIdRef\.current\) \{/)

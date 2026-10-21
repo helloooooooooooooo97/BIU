@@ -1,4 +1,4 @@
-import { render, waitFor } from '@testing-library/react'
+import { fireEvent, render, waitFor } from '@testing-library/react'
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { Context } from 'cordis'
@@ -140,5 +140,57 @@ test('page editor applies later value when it is not focused', async () => {
   assert.match(src, /md === saved\.current/)
   assert.match(src, /leavingSource/)
   assert.match(src, /sourceMode\.current/)
+})
+
+test('page editor shows a spinner and is not editable while content loads', async () => {
+  const { container, rerender } = render(
+    <PageEditor
+      record={{ id: 'home' }}
+      field="notes"
+      spec={{ type: 'file', label: '正文', writable: true }}
+      value={null}
+      writable
+      status="loading"
+    />,
+  )
+  assert.ok(container.querySelector('[data-testid="page-editor-loading"]'))
+  assert.equal(container.querySelector('[data-testid="page-editor"]'), null)
+  assert.equal(container.querySelector('[contenteditable]'), null)
+  rerender(
+    <PageEditor
+      record={{ id: 'home' }}
+      field="notes"
+      spec={{ type: 'file', label: '正文', writable: true }}
+      value={''}
+      writable
+      status="ready"
+    />,
+  )
+  await waitFor(() => {
+    assert.ok(container.querySelector('[data-testid="page-editor"]'))
+  })
+  assert.equal(container.querySelector('[data-testid="page-editor-loading"]'), null)
+  assert.equal(container.querySelector('[contenteditable="true"]')?.getAttribute('contenteditable'), 'true')
+})
+
+test('page editor shows retry when content failed to load', () => {
+  let retries = 0
+  const { container } = render(
+    <PageEditor
+      record={{ id: 'home' }}
+      field="notes"
+      spec={{ type: 'file', label: '正文', writable: true }}
+      value={null}
+      writable
+      status="failed"
+      onRetry={() => {
+        retries += 1
+      }}
+    />,
+  )
+  assert.ok(container.querySelector('[data-testid="page-editor-failed"]'))
+  assert.equal(container.querySelector('[data-testid="page-editor"]'), null)
+  fireEvent.click(container.querySelector('.page-editor-retry')!)
+  assert.equal(retries, 1)
 })
 

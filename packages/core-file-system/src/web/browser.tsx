@@ -1573,6 +1573,8 @@ export function CollectionBrowser({
   const [openDetailId, setOpenDetailId] = useState<string | null>(routeRecordId)
   const [detailRow, setDetailRow] = useState<DbRecord | null>(null)
   const [detailBody, setDetailBody] = useState<unknown>(null)
+  const [detailBodyStatus, setDetailBodyStatus] = useState<'loading' | 'ready' | 'failed'>('loading')
+  const [detailBodyError, setDetailBodyError] = useState('')
   const [draft, setDraft] = useState<Record<string, string>>({})
   const [acting, setActing] = useState(false)
   const actingRef = useRef(false)
@@ -2266,6 +2268,8 @@ export function CollectionBrowser({
     const id = detailIdRef.current
     if (!id) {
       setDetailBody(null)
+      setDetailBodyStatus('ready')
+      setDetailBodyError('')
       return
     }
     const path = `${dataPath}/${id}`
@@ -2276,10 +2280,14 @@ export function CollectionBrowser({
         if (Number.isInteger(data.version)) contentVersions.current.set(path, data.version!)
         else contentVersions.current.delete(path)
         setDetailBody(data.value ?? null)
+        setDetailBodyStatus('ready')
+        setDetailBodyError('')
       })
-      .catch(() => {
+      .catch((error) => {
         if (gen !== contentGen.current) return
         setDetailBody(null)
+        setDetailBodyStatus('failed')
+        setDetailBodyError(error instanceof Error ? error.message : '正文加载失败')
       })
   }, [dataPath])
   const pullDetailRecord = useCallback(() => {
@@ -3064,8 +3072,13 @@ export function CollectionBrowser({
     if (!detailId || detailRow?.id !== detailId) {
       contentGen.current += 1
       setDetailBody(null)
+      setDetailBodyStatus(detailId ? 'loading' : 'ready')
+      setDetailBodyError('')
       return
     }
+    setDetailBody(null)
+    setDetailBodyStatus('loading')
+    setDetailBodyError('')
     pullDetailBody()
   }, [collectionPath, dataPath, detailId, detailRow, pullDetailBody])
 
@@ -3663,6 +3676,8 @@ export function CollectionBrowser({
         contentGen.current += 1
         contentWritePending.current.set(path, (contentWritePending.current.get(path) ?? 0) + 1)
         setDetailBody(value)
+        setDetailBodyStatus('ready')
+        setDetailBodyError('')
         const previous = contentWriteQueues.current.get(path) ?? Promise.resolve()
         const run = previous.catch(() => undefined).then(async () => {
           const data = await readJson<{ value?: unknown; version?: number }>('/api/db/content', {
@@ -3677,13 +3692,19 @@ export function CollectionBrowser({
           if (Number.isInteger(data.version)) contentVersions.current.set(path, data.version!)
           if (detailIdRef.current === row.id && gen === contentWriteGens.current.get(path)) {
             setDetailBody(data.value ?? value)
+            setDetailBodyStatus('ready')
+            setDetailBodyError('')
           }
           announceListChange()
         }).catch(async (error) => {
           if (!(error instanceof HttpError) || error.status !== 409) throw error
           const latest = await readJson<{ value?: unknown; version?: number }>(`/api/db/content?path=${encodeURIComponent(path)}`)
           if (Number.isInteger(latest.version)) contentVersions.current.set(path, latest.version!)
-          if (detailIdRef.current === row.id) setDetailBody(latest.value ?? null)
+          if (detailIdRef.current === row.id) {
+            setDetailBody(latest.value ?? null)
+            setDetailBodyStatus('ready')
+            setDetailBodyError('')
+          }
         }).finally(() => {
           const pending = Math.max(0, (contentWritePending.current.get(path) ?? 1) - 1)
           if (pending) contentWritePending.current.set(path, pending)
@@ -5614,6 +5635,9 @@ export function CollectionBrowser({
           chrome={chrome}
           draft={draft}
           detailBody={detailBody}
+          detailBodyStatus={detailBodyStatus}
+          detailBodyError={detailBodyError}
+          onRetryBody={pullDetailBody}
           labelOf={labelOf}
           renderCell={renderCell}
           setDraft={setDraft}

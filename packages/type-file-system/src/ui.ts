@@ -69,6 +69,8 @@ export type FsOpenRow =
   | { kind: 'table'; path: string; viewId?: string }
   | { kind: 'record'; recordId: string; collection?: string }
 
+export type FsContentStatus = 'loading' | 'ready' | 'failed'
+
 export type FsContentProps = {
   record: DbRecord
   field: string
@@ -78,6 +80,9 @@ export type FsContentProps = {
   onChange?: (next: unknown) => void
   /** 记录路径，如 /pages/p002，给选区 pick 注入 db_content 句柄。 */
   path?: string
+  /** 缺省视为 ready，避免旧调用把未加载当成空正文。 */
+  status?: FsContentStatus
+  onRetry?: () => void
 }
 
 /** 集合自定义呈现：谁 registerView(path)，谁才能在该 path 用这个 mode。整页自己画。 */
