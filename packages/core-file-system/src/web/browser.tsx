@@ -137,7 +137,7 @@ import { ViewPaneMenu } from './pane-more-menu.tsx'
 import { HttpError, invalidateListReads, listCollection, readJson } from './db-client.ts'
 import { savedViewRecordPath } from '../paths.ts'
 import { findViewNeighbor, indexOnPage } from './view-adjacent.ts'
-import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, rememberedTableWrap, tableColumnEstimate, tableColumnFit, tableColumnSlice, tableColumnUnchanged, tableWindowSlice, tableWindowUnchanged, tableWrapScroll, type TableColumnSlice } from './table-window.ts'
+import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, rememberedTableWrap, tableColumnSlice, tableColumnUnchanged, tableColumnWidth, tableWindowSlice, tableWindowUnchanged, tableWrapScroll, type TableColumnSlice } from './table-window.ts'
 import { forgetPreviewTotalsForPath, isPaintedListReady, markPaintedListReady, rememberPreviewTotalForView, resetPaintedListReady, whenListIdle } from './sidebar-preview.ts'
 import { builtinAllViewId, catalogLockFilters, isReadOnlyViewId, mergeTableViews, parseBuiltinScopeViewId, stubBuiltinBlockKindView, viewsForScope, type DataScope } from '../catalog-views.ts'
 import { SAVED_VIEW_EVENT, moveInspectorRecordsToTrash, rememberInspectorWorkingView, showRecordInInspector } from './inspector-db-route.ts'
@@ -1269,12 +1269,8 @@ const WindowedTable = memo(function WindowedTable({
   frozenRef.current = frozen
   const columnMetaRef = useRef({ count: 0, pin: 0, widths: [] as number[] })
   const columnPx = useMemo(
-    () =>
-      tableColumnFit(
-        columns.map((col, index) => tableColumnEstimate(col.key, columnWidths[col.key], index < columnPinCount)),
-        tableScroll.width,
-      ),
-    [columnPinCount, columnWidths, columns, tableScroll.width],
+    () => columns.map((col, index) => tableColumnWidth(col.key, columnWidths[col.key], index < columnPinCount)),
+    [columnPinCount, columnWidths, columns],
   )
   const colWindow = useMemo(
     () => tableColumnSlice(columns.length, columnPinCount, tableScroll.left, tableScroll.width, columnPx),
@@ -2687,7 +2683,7 @@ export function CollectionBrowser({
       snapshot[key] = columnWidths[key] ?? Math.round(measured)
     }
     for (const col of columns) {
-      if (snapshot[col.key] == null) snapshot[col.key] = tableColumnEstimate(col.key, columnWidths[col.key], col.key === schema?.labelField)
+      if (snapshot[col.key] == null) snapshot[col.key] = tableColumnWidth(col.key, columnWidths[col.key], col.key === schema?.labelField)
     }
     const origin = snapshot[colKey] ?? COL_WIDTH_MIN
     handle.setPointerCapture(event.pointerId)
