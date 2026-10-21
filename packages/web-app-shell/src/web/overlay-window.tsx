@@ -3,7 +3,6 @@ import { ChatPane } from '@biu/public-ui/chat-pane'
 import {
   closeChatOverlay,
   getOverlayThread,
-  overlayDockY,
   overlayLayoutGeom,
   readOverlayWinState,
   shouldCloseOverlayOnOutside,
@@ -30,6 +29,7 @@ export function OverlayChatWindow({
   const [geom, setGeom] = useState<OverlayWinGeom>(initial)
   const [z, setZ] = useState(overlayZ)
   const boxRef = useRef<HTMLDivElement>(null)
+  const cardRef = useRef<HTMLDivElement>(null)
   const resizeRef = useRef<(OverlayWinGeom & ResizeEdge & { px: number; py: number }) | null>(null)
   const geomRef = useRef(geom)
   geomRef.current = geom
@@ -53,12 +53,6 @@ export function OverlayChatWindow({
     window.addEventListener('biu:overlay-focus', onFocus)
     return () => window.removeEventListener('biu:overlay-focus', onFocus)
   }, [bringFront])
-
-  useEffect(() => {
-    if (!threadOpen) return
-    const next = geomRef.current
-    apply({ ...next, y: overlayDockY(next.h, window.innerHeight) }, false)
-  }, [threadOpen, apply])
 
   useEffect(() => {
     const onOutside = (event: PointerEvent) => {
@@ -127,7 +121,7 @@ export function OverlayChatWindow({
     event.preventDefault()
     event.stopPropagation()
     bringFront()
-    const el = boxRef.current
+    const el = cardRef.current
     const r = el?.getBoundingClientRect()
     resizeRef.current = {
       ...edge,
@@ -158,38 +152,37 @@ export function OverlayChatWindow({
       data-testid="chat-overlay-panel"
       data-overlay-layout="right"
       data-biu-ignore
-      style={
-        threadOpen
-          ? {
-              top: geom.y,
-              left: geom.x,
-              width: geom.w,
-              height: geom.h,
-              zIndex: z,
-            }
-          : {
-              left: geom.x,
-              width: geom.w,
-              bottom: 12,
-              zIndex: z,
-            }
-      }
+      style={{
+        left: geom.x,
+        width: geom.w,
+        bottom: 12,
+        zIndex: z,
+      }}
       onPointerDown={bringFront}
     >
       {threadOpen ? (
-        <div className="chat-overlay-head" data-testid="chat-overlay-head">
-          {header}
-        </div>
-      ) : null}
-      <ChatPane thread={thread} dock={dock} />
-      {handles.map((item) => (
-        <div
-          key={item.key}
-          className={`${item.className} z-10`}
-          data-testid={`chat-overlay-resize-${item.key}`}
-          onPointerDown={startResize(item.edge)}
+        <ChatPane
+          paneRef={cardRef}
+          style={{ height: geom.h }}
+          aside={
+            <>
+              <div className="chat-overlay-head" data-testid="chat-overlay-head">
+                {header}
+              </div>
+              {handles.map((item) => (
+                <div
+                  key={item.key}
+                  className={`${item.className} z-10`}
+                  data-testid={`chat-overlay-resize-${item.key}`}
+                  onPointerDown={startResize(item.edge)}
+                />
+              ))}
+            </>
+          }
+          thread={thread}
         />
-      ))}
+      ) : null}
+      <div className="chat-composer-dock">{dock}</div>
     </div>
   )
 }
