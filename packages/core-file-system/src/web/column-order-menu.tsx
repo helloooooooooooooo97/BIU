@@ -13,7 +13,9 @@ import { restrictToVerticalAxis } from '@dnd-kit/modifiers'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS as DndCSS } from '@dnd-kit/utilities'
 import type { CollectionSchemaPack, FieldSpec, FieldType } from '@biu/type-file-system'
+import { HEADLESS_DISMISS_IGNORE } from '@biu/public-ui/headless-dismiss'
 import { HeadlessPopover } from '@biu/public-ui/headless-popover'
+import { overlayZ } from '@biu/public-ui/overlay-portal'
 import { tagTextColor, tagTone as schemaTagTone } from '@biu/public-ui/tag-chip'
 import { moveList } from '../query-logic.ts'
 import { CheckRow } from './controls.tsx'
@@ -41,10 +43,12 @@ function FacetColumnPackRow({
       side="left"
       align="start"
       sideOffset={6}
+      ignoreSelector={`${HEADLESS_DISMISS_IGNORE}, [data-fsdb-col-facet-trigger]`}
       trigger={
         <button
           type="button"
           className={`fsdb-checkrow${anyOn || open ? ' is-on' : ''}`}
+          data-fsdb-col-facet-trigger
           aria-haspopup="menu"
           aria-expanded={open}
           aria-label={`${pack.label}属性`}
@@ -61,7 +65,12 @@ function FacetColumnPackRow({
         </button>
       }
     >
-      <div className="fsdb-col-facet-flyout" data-fsdb-col-flyout role="menu">
+      <div
+        className="fsdb-page fsdb-col-facet-flyout"
+        data-fsdb-col-flyout
+        role="menu"
+        style={{ zIndex: overlayZ(280) }}
+      >
         {pack.fields.length ? (
           pack.fields.map((field) => {
             const key = facetFlatColumnKey(pack.id, field.key)
