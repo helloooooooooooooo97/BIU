@@ -3645,7 +3645,7 @@ html.dark .tool-call-status.is-fail {
   position: sticky;
   top: 0;
   z-index: 1;
-  background: var(--dsw-bg);
+  background: transparent;
 }
 
 .chat-overlay-panel .chat-overlay-thread,
@@ -6691,10 +6691,6 @@ html:not(.dark) .chat-outline-item.is-active {
   display: flex;
   flex-direction: column;
   gap: var(--dsw-chat-gap-turn);
-}
-
-.chat-turn>[data-chat-kind='user'] {
-  padding-bottom: var(--dsw-chat-gap);
 }
 
 .chat-user-card {
