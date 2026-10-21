@@ -204,6 +204,10 @@ export function BrandCornerMascot({
           aria-expanded={tapToDance ? undefined : expanded}
           data-dock-tip={tip}
           data-testid="brand-corner-mascot-toggle"
+          onPointerDown={(event) => {
+            if (tapToDance) return
+            if (onToggle) event.preventDefault()
+          }}
           onClick={() => {
             if (tapToDance) {
               playTapDance()

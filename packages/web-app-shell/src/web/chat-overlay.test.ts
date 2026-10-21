@@ -263,6 +263,18 @@ test('focusComposerEditor ignores a null or destroyed editor', () => {
   assert.equal(isComposerFocusPending(), false)
 })
 
+test('openOverlayComposer on a database page requests composer focus', () => {
+  consumeComposerFocusPending()
+  setChatOverlay(false)
+  history.replaceState(null, '', '/database/pages/p1')
+  openOverlayComposer({ revealThread: true })
+  assert.equal(getChatOverlay(), true)
+  assert.equal(getOverlayThread(), true)
+  assert.equal(isComposerFocusPending(), true)
+  consumeComposerFocusPending()
+  setChatOverlay(false)
+})
+
 test('openOverlayComposer on the chat page does not open a window', () => {
   setChatOverlay(false)
   history.replaceState(null, '', '/s/session-1')
