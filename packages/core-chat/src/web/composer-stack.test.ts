@@ -315,6 +315,8 @@ describe('composer dock stacking above sticky user', () => {
     const kit = readFileSync(resolve(root, 'packages/core-chat/src/web/composer-kit.ts'), 'utf8')
     const node = readFileSync(resolve(root, 'packages/core-chat/src/web/composer-pick-node.tsx'), 'utf8')
     expect(composer).toMatch(/useEditor/)
+    expect(composer).toMatch(/immediatelyRender:\s*false/)
+    expect(composer).toMatch(/composerEditorReady\(editor\)/)
     expect(composer).toMatch(/composerDocExtensions/)
     expect(composer).toMatch(/page-mention/)
     expect(kit).toMatch(/pageMention/)
