@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom'
 import {
   getChatOverlay,
   subscribeChatOverlay,
-  setChatOverlay,
   closeChatOverlay,
   requestOverlayFocus,
   requestInspectorClose,
@@ -12,6 +11,7 @@ import {
   publishShellLayout,
   clampSidebarWidth,
   isChatPagePath,
+  openOverlayComposer,
   SIDEBAR_DEFAULT,
   SIDEBAR_LABEL_AT,
   SIDEBAR_TAG_AT,
@@ -103,7 +103,7 @@ function DockSessionMascot({
           return
         }
         if (isChatPagePath(location.pathname)) return
-        setChatOverlay(true)
+        openOverlayComposer({ revealThread: true })
         requestOverlayFocus()
       }}
     />

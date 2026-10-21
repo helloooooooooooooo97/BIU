@@ -68,6 +68,7 @@ describe('composer dock stacking above sticky user', () => {
     expect(composer).toContain("controlGoal('clear')")
     expect(composer).toContain('isComposerFocusPending')
     expect(composer).toContain('biu:composer-focus')
+    expect(composer).toMatch(/onCreate: \(\{ editor: created \}\) => \{/)
   })
 
   it('drops local files as path picks instead of file bytes', () => {

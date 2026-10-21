@@ -566,6 +566,9 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
         return false
       },
     },
+    onCreate: ({ editor: created }) => {
+      if (isComposerFocusPending()) focusComposerEditor(created)
+    },
     onUpdate: ({ editor: ed }) => {
       const packed = serializeComposer(ed)
       scheduleCanSubmit(packed.plain, live.current.picked, packed.refs.length, live.current.pendingImages.length)
@@ -601,6 +604,11 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
     window.addEventListener('biu:composer-focus', onFocus)
     return () => window.removeEventListener('biu:composer-focus', onFocus)
   }, [])
+
+  useEffect(() => {
+    if (!composerEditorReady(editor)) return
+    if (isComposerFocusPending()) focusComposerEditor(editor)
+  }, [editor])
 
   useEffect(
     () => () => {

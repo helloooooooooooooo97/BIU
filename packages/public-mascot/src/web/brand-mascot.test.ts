@@ -18,4 +18,6 @@ test('brand mascot is the grok blob on a white rounded square', () => {
   assert.match(mascot, /tapToDance/)
   assert.match(mascot, /dancing=\{tapDance\}/)
   assert.match(mascot, /playNonce/)
+  assert.match(mascot, /onPointerDown/)
+  assert.match(mascot, /if \(onToggle\) event\.preventDefault\(\)/)
 })

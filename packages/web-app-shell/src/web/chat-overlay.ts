@@ -215,6 +215,7 @@ export function requestComposerFocus() {
   const fire = () => window.dispatchEvent(new Event('biu:composer-focus'))
   requestAnimationFrame(fire)
   window.setTimeout(fire, 40)
+  window.setTimeout(fire, 200)
 }
 
 export function isComposerFocusPending() {

@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react'
 import { act, render } from '@testing-library/react'
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { focusComposerEditor } from '@biu/web-app-shell/chat-overlay'
+import { focusComposerEditor, isComposerFocusPending, requestComposerFocus, consumeComposerFocusPending } from '@biu/web-app-shell/chat-overlay'
 import { composerEditorReady, runComposerCommands, serializeComposer } from './composer-tiptap.ts'
 
 function ComposerFocusProbe({ editor }: { editor: { isDestroyed?: boolean; commands?: { focus?: (where?: string) => unknown } } | null }) {
@@ -18,6 +18,23 @@ function ComposerFocusProbe({ editor }: { editor: { isDestroyed?: boolean; comma
   }, [])
   return <div data-testid="composer-focus-probe" />
 }
+
+test('pending composer focus is consumed when the editor becomes ready', () => {
+  consumeComposerFocusPending()
+  requestComposerFocus()
+  assert.equal(isComposerFocusPending(), true)
+  let focused = 0
+  focusComposerEditor({
+    isDestroyed: false,
+    commands: {
+      focus() {
+        focused += 1
+      },
+    },
+  })
+  assert.equal(focused, 1)
+  assert.equal(isComposerFocusPending(), false)
+})
 
 test('composer first frame with a null editor does not throw on biu:composer-focus', () => {
   render(<ComposerFocusProbe editor={null} />)
