@@ -160,6 +160,8 @@ describe('composer dock stacking above sticky user', () => {
     expect(css).not.toMatch(/\.chat-overlay-panel \.chat-pane\s*\{[^}]*background:\s*var\(--dsw-bg\)/s)
     expect(css).not.toMatch(/\.chat-overlay-panel \.chat-pane\s*\{[^}]*background:\s*rgba\(255,\s*255,\s*255,\s*0\.1\)/s)
     expect(css).toMatch(/\.chat-overlay-head\s*\{[^}]*z-index:\s*30/s)
+    expect(css).toMatch(/\.chat-overlay-panel \[data-testid\^="chat-overlay-resize-"\]\s*\{[^}]*z-index:\s*40/s)
+    expect(overlayWin).toContain('z-40')
     expect(css).toMatch(/\.chat-overlay-panel \.chat-overlay-thread,\s*\n\.chat-overlay-panel \.chat-pane \.chat-overlay-thread\s*\{[^}]*padding-block:\s*0/s)
     expect(css).toMatch(/\.chat-overlay-panel \.chat-overlay-thread,\s*\n\.chat-overlay-panel \.chat-pane \.chat-overlay-thread\s*\{[^}]*overflow:\s*hidden/s)
     expect(css).toMatch(/\.chat-overlay-panel \.chat-overlay-thread,\s*\n\.chat-overlay-panel \.chat-pane \.chat-overlay-thread\s*\{[^}]*flex:\s*1 1 0/s)
