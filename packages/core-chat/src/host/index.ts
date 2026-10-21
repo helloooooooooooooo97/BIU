@@ -21,7 +21,7 @@ import {
   findEvent,
 } from '@biu/host-sessions/trajectory'
 import { estimateTokens, liftToolImages } from '@biu/host-sessions'
-import { readArtifactFile } from '@biu/host-sessions/artifacts'
+import { persistPastedImages, readArtifactFile, withPastedImagePicks } from '@biu/host-sessions/artifacts'
 import { collectLiveDispatchedTasks } from '@biu/host-live-sessions/usage'
 import { loadLiveDispatchTasks, registerChatInspectorRoutes } from './inspector.ts'
 import { forwardCloud } from '@biu/host-account/mirror'
@@ -1801,7 +1801,7 @@ export function apply(ctx: Context) {
     const extraTools = Array.isArray(payload.extraTools)
       ? [...new Set(payload.extraTools.map((name) => String(name).trim()).filter(Boolean))]
       : []
-    const images = Array.isArray(payload.images)
+    const incomingImages = Array.isArray(payload.images)
       ? payload.images
           .map((img) => ({
             name: String(img.name ?? '').trim(),
@@ -1810,6 +1810,16 @@ export function apply(ctx: Context) {
           }))
           .filter((img) => img.name && img.mime && img.url)
       : []
+    let images = incomingImages
+    let text = payload.text ?? ''
+    if (incomingImages.length) {
+      try {
+        images = await persistPastedImages(route.params.id, incomingImages)
+        text = withPastedImagePicks(text, images)
+      } catch {
+        return route.send(400, { error: '粘贴的图片未能保存到本地，请重试' })
+      }
+    }
     const liveContext = sanitizeLiveUiContext(payload.liveContext)
     const sendOpts = {
       ...(extraTools.length ? { extraTools } : {}),
@@ -1819,7 +1829,7 @@ export function apply(ctx: Context) {
       ...(liveContext ? { liveContext } : {}),
     }
     if (payload.kind === 'inject') {
-      agent.inject(payload.text ?? '', sendOpts)
+      agent.inject(text, sendOpts)
       return route.send(200, {
         sessionId: agent.sessionId,
         queued: true,
@@ -1827,7 +1837,7 @@ export function apply(ctx: Context) {
       })
     }
     try {
-      const turn = await agent.send(payload.text ?? '', sendOpts)
+        const turn = await agent.send(text, sendOpts)
       route.send(200, {
         sessionId: agent.sessionId,
         text: turn.text,

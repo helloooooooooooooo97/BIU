@@ -1,4 +1,6 @@
 import { mkdir, mkdtemp, writeFile, rm } from 'node:fs/promises'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -85,4 +87,11 @@ test('GET /api/sessions/:id/artifacts/:name returns image bytes', async () => {
     process.chdir(prev)
     await rm(base, { recursive: true, force: true })
   }
+})
+
+test('POST /api/sessions/:id/messages persists pasted images before enqueue', () => {
+  const src = readFileSync(resolve(import.meta.dirname, './index.ts'), 'utf8')
+  assert.match(src, /persistPastedImages/)
+  assert.match(src, /withPastedImagePicks/)
+  assert.match(src, /粘贴的图片未能保存到本地/)
 })

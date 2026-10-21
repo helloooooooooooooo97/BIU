@@ -15,6 +15,8 @@ export type UserMessageImage = {
   name: string
   mime: string
   url: string
+  /** 粘贴图落盘后的本机路径，给 agent 工具用；url 仍是 data URL 给模型看。 */
+  path?: string
 }
 
 /** 写入 append 的正文（不含 seq/ts）；与 SessionEvent 判别联合一一对应。 */

@@ -11,7 +11,7 @@ export interface ClaimedInput {
   id?: string
   extraTools?: string[]
   sender?: MessageSender
-  images?: Array<{ name: string; mime: string; url: string }>
+  images?: Array<{ name: string; mime: string; url: string; path?: string }>
   /** 发送时的界面快照，写入本回合 system/prompt。 */
   liveContext?: LiveUiContext
 }
