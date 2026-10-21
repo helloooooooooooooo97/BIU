@@ -6,7 +6,7 @@ import type { CollectionChrome } from '@biu/type-file-system/ui'
 import { parseAppPath } from '@biu/web-session-view'
 import { buildCrumbs, pathForCrumbTarget, type Crumb, type CrumbTarget } from './sidebar-nav.ts'
 import { CrumbTrail } from './crumb-trail.tsx'
-import { defaultViewId, loadRecords, loadViews, peekRecord, viewForPath } from './view-storage.ts'
+import { defaultViewId, loadRecords, loadViews, peekRecord, subscribeCrumbs, viewForPath } from './view-storage.ts'
 import { builtinAllViewId } from '../catalog-views.ts'
 import { DATA_MODULE, DATA_MODULE_ID, databaseAllViewPath, databaseRecordPath, databaseViewPath } from './database-path.ts'
 import {
@@ -79,10 +79,12 @@ function useViewTick() {
       window.addEventListener('fsdb:change', bump)
       window.addEventListener('fsdb:crumb-labels', bump)
       window.addEventListener('storage', bump)
+      const stopCrumbs = subscribeCrumbs(bump)
       return () => {
         window.removeEventListener('fsdb:change', bump)
         window.removeEventListener('fsdb:crumb-labels', bump)
         window.removeEventListener('storage', bump)
+        stopCrumbs()
       }
     },
     () => viewTick,
