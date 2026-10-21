@@ -156,6 +156,8 @@ test('compose-only overlay shows the thread after send', () => {
   assert.equal(document.querySelector('[data-testid="chat-overlay-resize-se"]'), null)
   assert.equal(document.querySelector('[data-testid="chat-overlay-resize-sw"]'), null)
   assert.equal(document.querySelector('[data-testid="chat-overlay-resize-ne"]'), null)
+  const north = document.querySelector('[data-testid="chat-overlay-resize-n"]') as HTMLElement
+  assert.match(north.className, /\bz-40\b/)
 })
 
 test('compose-only overlay closes when clicking outside; expanded does not', () => {
