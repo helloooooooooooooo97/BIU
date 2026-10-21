@@ -3430,8 +3430,9 @@ select.settings-account-input {
   max-height: calc(100vh - 120px);
   margin-bottom: 10px;
   overflow: hidden;
+  padding-inline: 10px;
   border: 1px solid var(--dsw-border);
-  border-radius: 14px;
+  border-radius: 8px;
   background: var(--dsw-sidebar);
   box-shadow: var(--dsw-shadow-lv2);
 }
