@@ -6,8 +6,21 @@ function attrsToRef(attrs: Record<string, unknown>): PickRef | null {
   return pickRefFromAttrs(attrs)
 }
 
+export function composerEditorReady(editor: Editor | null | undefined): editor is Editor {
+  return Boolean(editor && !editor.isDestroyed)
+}
+
+export function runComposerCommands(editor: Editor | null | undefined, run: (editor: Editor) => void) {
+  if (!composerEditorReady(editor)) return
+  try {
+    run(editor)
+  } catch {
+    /* commandManager 已空时 TipTap 读 .commands 会抛 */
+  }
+}
+
 export function serializeComposer(editor: Editor | null): { text: string; refs: PickRef[]; plain: string } {
-  if (!editor) return { text: '', refs: [], plain: '' }
+  if (!composerEditorReady(editor)) return { text: '', refs: [], plain: '' }
   let text = ''
   let plain = ''
   const refs: PickRef[] = []

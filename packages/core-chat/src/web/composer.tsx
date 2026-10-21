@@ -14,6 +14,8 @@ import {
   editorCaretPlain,
   insertPickChips,
   jsonFromDraft,
+  composerEditorReady,
+  runComposerCommands,
   serializeComposer,
 } from './composer-tiptap.ts'
 import { ModelConfigDialog } from './model-config-dialog.tsx'
@@ -456,7 +458,7 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
   activeIndexRef.current = activeIndex
 
   const editor = useEditor({
-    immediatelyRender: true,
+    immediatelyRender: false,
     extensions: [
       ...composerDocExtensions(),
       Placeholder.configure({
@@ -603,17 +605,17 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
   )
 
   useEffect(() => {
-    if (!editor || !sessionId) return
+    if (!composerEditorReady(editor) || !sessionId) return
     const draft = readDraftMap()[sessionId]
     const keep = pick?.refs.slice() ?? []
     if (!pick?.picking) pick?.clear()
     pickKeysRef.current = new Set()
     if (typeof draft === 'string' && draft) {
-      editor.commands.setContent(jsonFromDraft(draft))
+      runComposerCommands(editor, (ed) => ed.commands.setContent(jsonFromDraft(draft)))
       const { refs } = serializeComposer(editor)
       if (refs.length) pick?.addMany(refs)
     } else {
-      editor.commands.clearContent()
+      runComposerCommands(editor, (ed) => ed.commands.clearContent())
     }
     if (keep.length && !pick?.picking) pick?.addMany(keep)
     pickKeysRef.current = collectPickKeys(editor)
@@ -622,12 +624,12 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
   }, [sessionId, editor])
 
   useEffect(() => {
-    if (!editor) return
+    if (!composerEditorReady(editor)) return
     const missing = pickRefs.filter((ref) => !pickKeysRef.current.has(pickKey(ref)))
     const nextKeys = new Set(pickRefs.map((item) => pickKey(item)))
     pickKeysRef.current = nextKeys
     queueMicrotask(() => {
-      if (editor.isDestroyed) return
+      if (!composerEditorReady(editor)) return
       const stillMissing = missing.filter((ref) => !collectPickKeys(editor).has(pickKey(ref)))
       insertPickChips(editor, stillMissing)
       pickKeysRef.current = collectPickKeys(editor)
@@ -648,7 +650,7 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
       debounceRef.current = null
     }
     flushDraftTimer()
-    editor?.commands.clearContent(true)
+    runComposerCommands(editor, (ed) => ed.commands.clearContent(true))
     canSubmitRef.current = false
     setCanSubmit(false)
     setSlash(null)
@@ -912,9 +914,11 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
                     onClick={() => {
                       void (async () => {
                         const ok = await sessionView.dropInboxItem(item.id)
-                        if (!ok || !editor) return
-                        editor.commands.setContent(jsonFromDraft(item.text))
-                        editor.commands.focus('end')
+                        if (!ok || !composerEditorReady(editor)) return
+                        runComposerCommands(editor, (ed) => {
+                          ed.commands.setContent(jsonFromDraft(item.text))
+                          ed.commands.focus('end')
+                        })
                         scheduleCanSubmit(item.text, picked, pickRefs.length, pendingImages.length)
                       })()
                     }}
@@ -1023,7 +1027,11 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
         </button>
 
         <div className="composer-editor">
-          {editor ? <EditorContent editor={editor} /> : <div className="composer-tiptap" data-testid="composer-pending" />}
+          {composerEditorReady(editor) ? (
+            <EditorContent editor={editor} />
+          ) : (
+            <div className="composer-tiptap" data-testid="composer-pending" />
+          )}
         </div>
 
         <div className="composer-pill-right">
