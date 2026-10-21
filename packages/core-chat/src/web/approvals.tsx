@@ -23,6 +23,7 @@ import {
 } from '@biu/web-app-shell/chat-overlay'
 import { SessionProjectPanel } from './project-panel.tsx'
 import { getChatConfig } from './chat-config.ts'
+import { ChatLiveMetrics } from './live-hud.tsx'
 
 type AgentMode = 'minimal' | 'file' | 'standard'
 
@@ -304,6 +305,7 @@ export function ApprovalsRail(props: SlotProps) {
             </span>
           ) : null}
         </div>
+        <ChatLiveMetrics useSessionView={useSessionView} />
         <div className="chat-dock-toolbar-end flex shrink-0 items-center justify-end gap-1">
           {overlayOpen ? (
             <button

@@ -3661,25 +3661,23 @@ html.dark .tool-call-status.is-fail {
   margin-left: auto;
 }
 
-.chat-live-hud-metrics {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  display: none;
-  max-width: min(100%, 28rem);
-  transform: translate(-50%, -50%);
-  pointer-events: none;
+.chat-dock-toolbar-mid {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
 }
 
-.chat-overlay-panel .chat-live-hud-metrics,
-.chat-pane .chat-live-hud-metrics {
+.chat-live-hud-metrics {
   display: flex;
-  max-width: min(100%, 28rem);
+  max-width: 100%;
+  min-width: 0;
   align-items: center;
-  gap: 4px;
   font-size: 11px;
   color: var(--dsw-sidebar-fg);
-  pointer-events: auto;
+  pointer-events: none;
 }
 
 .chat-overlay-panel .chat-live-hud-metrics .chat-reply-meta-icon,
@@ -3690,10 +3688,23 @@ html.dark .tool-call-status.is-fail {
 .chat-live-hud-metrics-body {
   display: inline-flex;
   min-width: 0;
+  max-width: 100%;
   flex-wrap: nowrap;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  overflow: hidden;
+}
+
+.chat-dock-toolbar-mid .chat-reply-meta {
+  min-width: 0;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+@media (max-width: 720px) {
+  .chat-dock-toolbar-mid [data-stat='step'] {
+    display: none;
+  }
 }
 
 .chat-overlay-panel .chat-live-hud-metrics .chat-reply-meta-icon svg,

@@ -14,10 +14,52 @@ export type LiveHudState = {
   replyCount: number
 }
 
-export function replyToolCount(reply: Extract<ChatNode, { kind: 'reply' }>) {
+export type ChatReplyNode = Extract<ChatNode, { kind: 'reply' }>
+
+export type TurnBarStats = {
+  turn?: number
+  stepCount?: number
+  toolCount: number
+  durationMs?: number
+  usage?: TrajectoryUsage
+}
+
+export function replyToolCount(reply: ChatReplyNode) {
   const fromParts = reply.parts.reduce((count, part) => count + (part.kind === 'tool' ? 1 : 0), 0)
   if (fromParts > 0) return fromParts
   return (reply.steps ?? []).reduce((count, step) => count + step.toolCount, 0)
+}
+
+/** 与 user-turn-bar 同一口径。直播中 durationMs 尚未结算时用 startTs 推算。 */
+export function turnBarStats(reply: ChatReplyNode, now = Date.now()): TurnBarStats {
+  const durationMs =
+    reply.durationMs != null
+      ? reply.durationMs
+      : reply.streaming && reply.startTs != null
+        ? Math.max(0, now - reply.startTs)
+        : undefined
+  return {
+    turn: reply.turn,
+    stepCount: reply.stepCount,
+    toolCount: replyToolCount(reply),
+    durationMs,
+    usage: reply.usage,
+  }
+}
+
+export function turnBarHasMeta(stats: TurnBarStats) {
+  return (
+    stats.turn != null ||
+    stats.stepCount != null ||
+    stats.durationMs != null ||
+    Boolean(stats.usage) ||
+    stats.toolCount > 0
+  )
+}
+
+export function liveStreamingReply(nodes: ChatNode[]) {
+  const last = listReplyNodes(nodes).at(-1)
+  return last?.streaming ? last : undefined
 }
 
 export function formatDuration(ms: number) {
@@ -47,13 +89,14 @@ export function extractLiveHud(nodes: ChatNode[], agentStep?: number, replyId?: 
   const lastAssistant = [...(selected?.parts ?? [])]
     .reverse()
     .find((part) => part.kind === 'assistant' && part.text.trim())
-  const fromParts = selected ? replyToolCount(selected) : 0
+  const stats = selected ? turnBarStats(selected) : undefined
+  const fromParts = stats?.toolCount ?? 0
   const replyIndex = selected ? replies.findIndex((row) => row.id === selected.id) : -1
   return {
-    turn: selected?.turn ?? users,
-    step: selected?.stepCount ?? selected?.steps?.length ?? agentStep ?? 0,
+    turn: stats?.turn ?? users,
+    step: stats?.stepCount ?? selected?.steps?.length ?? agentStep ?? 0,
     toolIndex: fromParts || tools.length,
-    durationMs: selected?.durationMs,
+    durationMs: stats?.durationMs,
     usage: selected?.usage,
     lastTool: tools.at(-1),
     lastOutput: lastAssistant?.kind === 'assistant' ? lastAssistant.text.trim() : '',

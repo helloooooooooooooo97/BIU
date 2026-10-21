@@ -9,7 +9,6 @@ import {
   ClockIcon,
   CircleStackIcon,
   Square2StackIcon,
-  HashtagIcon,
   Square3Stack3DIcon,
   LanguageIcon,
   UserIcon,
@@ -38,6 +37,8 @@ import { ToolCard } from './tool-card.tsx'
 import { LiveDispatchTable } from './live-dispatch-table.tsx'
 import { ContentEditsTable } from './content-edits-table.tsx'
 import { UsageInline } from './usage-inline.tsx'
+import { formatDuration, turnBarHasMeta, turnBarStats } from './live-hud.ts'
+import { TurnStatsMeta } from './live-hud.tsx'
 import {
   bumpRevealStart,
   captureChatScroll,
@@ -74,17 +75,6 @@ function findScrollParent(el: HTMLElement | null): HTMLElement | null {
     node = node.parentElement
   }
   return null
-}
-
-function formatDuration(ms: number) {
-  if (ms < 1000) return `${Math.max(0, Math.round(ms))}ms`
-  if (ms < 60_000) {
-    const sec = ms / 1000
-    return `${sec < 10 ? sec.toFixed(1) : Math.round(sec)}s`
-  }
-  const minutes = Math.floor(ms / 60_000)
-  const seconds = Math.round((ms % 60_000) / 1000)
-  return `${minutes}m ${seconds}s`
 }
 
 function formatTok(n: number) {
@@ -361,12 +351,6 @@ function formatSentAt(ts: number) {
 }
 
 /** 挂在发起本回合的用户消息下：Details + 统计；右侧为发送时间 */
-function replyToolCount(reply: Extract<ChatNode, { kind: 'reply' }>) {
-  const fromParts = reply.parts.reduce((count, part) => count + (part.kind === 'tool' ? 1 : 0), 0)
-  if (fromParts > 0) return fromParts
-  return (reply.steps ?? []).reduce((count, step) => count + step.toolCount, 0)
-}
-
 function UserTurnBar({
   user,
   reply,
@@ -388,14 +372,8 @@ function UserTurnBar({
 }) {
   const streaming = Boolean(reply?.streaming)
   const { hasDetails } = reply && !streaming ? splitReplyForDisplay(reply) : { hasDetails: false }
-  const toolCount = reply ? replyToolCount(reply) : 0
-  const hasMeta =
-    reply != null &&
-    (reply.turn != null ||
-      reply.stepCount != null ||
-      (!streaming && reply.durationMs != null) ||
-      Boolean(reply.usage) ||
-      toolCount > 0)
+  const stats = reply ? turnBarStats(reply) : null
+  const hasMeta = Boolean(stats && turnBarHasMeta(stats))
   const sentLabel = user.ts != null ? formatSentAt(user.ts) : ''
 
   return (
@@ -418,35 +396,7 @@ function UserTurnBar({
             <span>Details</span>
           </button>
         ) : null}
-        {hasMeta && reply ? (
-          <div className="chat-reply-meta">
-            {reply.turn != null ? (
-              <MetaItem icon={<HashtagIcon className="size-3" />} value={reply.turn} title={`第 ${reply.turn} 轮`} />
-            ) : null}
-            {reply.stepCount != null ? (
-              <MetaItem
-                icon={<Square3Stack3DIcon className="size-3" />}
-                value={reply.stepCount}
-                title={`本回合 ${reply.stepCount} 个 step`}
-              />
-            ) : null}
-            <MetaItem
-              icon={<WrenchScrewdriverIcon className="size-3" />}
-              value={<span data-testid="user-tool-count">{toolCount}</span>}
-              title={`本回合 ${toolCount} 次工具调用`}
-            />
-            {reply.durationMs != null ? (
-              <MetaItem
-                icon={<ClockIcon className="size-3" />}
-                value={formatDuration(reply.durationMs)}
-                title="本回合耗时"
-              />
-            ) : null}
-            {reply.usage ? (
-              <MetaItem icon={<CircleStackIcon className="size-3" />} value={<UsageInline usage={reply.usage} />} title="Token 用量" />
-            ) : null}
-          </div>
-        ) : null}
+        {hasMeta && stats ? <TurnStatsMeta stats={stats} toolTestId="user-tool-count" /> : null}
       </div>
       <div className="inline-flex shrink-0 items-center gap-1.5" data-testid="user-turn-bar-end">
         {canExpand && onToggleExpand ? (

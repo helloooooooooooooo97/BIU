@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { clipHudText, extractLiveHud } from './live-hud.ts'
+import { clipHudText, extractLiveHud, liveStreamingReply, turnBarStats } from './live-hud.ts'
 import type { ChatNode } from '@biu/web-session-view'
 
 test('extractLiveHud reads turn, tools and last assistant text', () => {
@@ -53,6 +53,43 @@ test('extractLiveHud can read a selected older reply', () => {
   assert.equal(older.lastOutput, 'first')
   assert.equal(older.replyIndex, 0)
   assert.equal(older.replyCount, 2)
+})
+
+test('turnBarStats matches user-turn-bar fields and live duration', () => {
+  const reply = {
+    id: 'r1',
+    kind: 'reply' as const,
+    copyText: '',
+    turn: 3,
+    streaming: true,
+    startTs: 1000,
+    stepCount: 12,
+    parts: [
+      { id: 't1', kind: 'tool' as const, callId: 'c1', name: 'bash', arguments: '{}' },
+      { id: 't2', kind: 'tool' as const, callId: 'c2', name: 'read', arguments: '{}' },
+    ],
+    usage: { inputTokens: 10, outputTokens: 2, totalTokens: 12 },
+  }
+  const stats = turnBarStats(reply, 9200)
+  assert.equal(stats.turn, 3)
+  assert.equal(stats.stepCount, 12)
+  assert.equal(stats.toolCount, 2)
+  assert.equal(stats.durationMs, 8200)
+  assert.equal(stats.usage?.totalTokens, 12)
+})
+
+test('liveStreamingReply only returns the in-flight last reply', () => {
+  const idle: ChatNode[] = [
+    { id: 'u1', kind: 'user', text: 'hi' },
+    { id: 'r1', kind: 'reply', copyText: 'done', streaming: false, parts: [] },
+  ]
+  assert.equal(liveStreamingReply(idle), undefined)
+  const live: ChatNode[] = [
+    ...idle,
+    { id: 'u2', kind: 'user', text: 'go' },
+    { id: 'r2', kind: 'reply', copyText: '', streaming: true, turn: 2, parts: [] },
+  ]
+  assert.equal(liveStreamingReply(live)?.id, 'r2')
 })
 
 test('clipHudText collapses whitespace and ellipsizes', () => {

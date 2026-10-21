@@ -280,7 +280,7 @@ describe('composer dock stacking above sticky user', () => {
     expect(approvals).not.toMatch(/清空上下文 · 历史/)
     expect(approvals).not.toMatch(/aria-label="清空上下文"/)
     expect(approvals).not.toMatch(/backgroundColor/)
-    expect(approvals).not.toMatch(/<ChatLiveMetrics/)
+    expect(approvals).toMatch(/<ChatLiveMetrics/)
     expect(approvals).toMatch(/typeof props.renderSlot === 'function'/)
     expect(approvals).toMatch(/SessionProjectPanel[\s\S]*renderSlot\('header-tools'\)/)
   })
