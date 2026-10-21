@@ -340,6 +340,24 @@ test('fetchSavedView reads the URL view and remembers wrap and pageSize', async 
   }
 })
 
+test('diffSavedViews upserts rank changes without removing other views', () => {
+  const a = {
+    id: 'a',
+    name: 'A',
+    mode: 'table' as const,
+    sortField: 'title',
+    sortDir: 'asc' as const,
+    filters: {},
+    columns: [] as string[],
+    rank: 0,
+  }
+  const b = { ...a, id: 'b', name: 'B', rank: 1 }
+  const moved = [{ ...b, rank: 0 }, { ...a, rank: 1 }]
+  const diff = diffSavedViews([a, b], moved)
+  assert.deepEqual(diff.upsert?.map((view) => view.id).sort(), ['a', 'b'])
+  assert.deepEqual(diff.remove, [])
+})
+
 test('diffSavedViews upserts ids that were never in baseline', () => {
   const blank = {
     id: 'old',

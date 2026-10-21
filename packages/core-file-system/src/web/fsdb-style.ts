@@ -166,6 +166,7 @@ const CSS = `
 .fsdb-page .fsdb-col-menu-list{min-height:0;overflow:auto;display:flex;flex-direction:column;gap:4px}
 .fsdb-page .tasks-viewdd-head,.fsdb-page .tasks-sort-head{font-size:14px;font-weight:500;color:var(--dsw-sidebar-fg)}
 .fsdb-page .tasks-viewdd-item{position:relative;display:flex;align-items:center;gap:2px;min-width:0;width:100%;border-radius:7px}
+.fsdb-page .tasks-viewdd-item.is-drag{opacity:0}
 .fsdb-page .tasks-viewdd-item::before{content:"";position:absolute;inset:0;z-index:0;border-radius:inherit;pointer-events:none;background:transparent}
 .fsdb-page .tasks-viewdd-item>*{position:relative;z-index:1}
 .fsdb-page .tasks-viewdd-item:hover:not(.is-active)::before{background:var(--dsw-hover)}

@@ -23,6 +23,8 @@ export type SavedView = {
   builtin?: boolean
   /** 本地最后修改时间（ms）。多窗口下用来丢弃比库里更旧的快照。 */
   updatedAt?: number
+  /** 视图浮窗/Tab 的排列顺序，越小越靠前。 */
+  rank?: number
 }
 
 export const COL_WIDTH_MIN = 56
@@ -104,7 +106,19 @@ export function normalizeSavedView(view: SavedView): SavedView {
     columnWidths: normalizeColumnWidths(view.columnWidths),
     builtin: Boolean(view.builtin),
     updatedAt: Number(view.updatedAt) || 0,
+    rank: Number.isFinite(Number(view.rank)) ? Math.round(Number(view.rank)) : undefined,
   }
+}
+
+export function sortViewsByRank(views: SavedView[]): SavedView[] {
+  return views
+    .map((view, index) => ({
+      view,
+      index,
+      rank: Number.isFinite(Number(view.rank)) ? Number(view.rank) : index,
+    }))
+    .sort((a, b) => a.rank - b.rank || a.index - b.index)
+    .map((item) => item.view)
 }
 
 export const PAGE_SIZES = [20, 50, 100] as const
