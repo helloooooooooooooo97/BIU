@@ -148,8 +148,14 @@ test('compose-only overlay shows the thread after send', () => {
   assert.ok(dock)
   assert.equal(pane.contains(dock), false)
   assert.ok(pane.querySelector('.chat-overlay-thread'))
-  assert.ok(document.querySelector('[data-testid="chat-overlay-resize-se"]'))
-  assert.ok(document.querySelector('[data-testid="chat-overlay-resize-s"]'))
+  assert.ok(document.querySelector('[data-testid="chat-overlay-resize-n"]'))
+  assert.ok(document.querySelector('[data-testid="chat-overlay-resize-w"]'))
+  assert.ok(document.querySelector('[data-testid="chat-overlay-resize-nw"]'))
+  assert.equal(document.querySelector('[data-testid="chat-overlay-resize-s"]'), null)
+  assert.equal(document.querySelector('[data-testid="chat-overlay-resize-e"]'), null)
+  assert.equal(document.querySelector('[data-testid="chat-overlay-resize-se"]'), null)
+  assert.equal(document.querySelector('[data-testid="chat-overlay-resize-sw"]'), null)
+  assert.equal(document.querySelector('[data-testid="chat-overlay-resize-ne"]'), null)
 })
 
 test('compose-only overlay closes when clicking outside; expanded does not', () => {
