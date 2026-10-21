@@ -3425,10 +3425,8 @@ select.settings-account-input {
   transition: opacity 160ms ease;
 }
 
-@media (hover: hover) and (pointer: fine) {
-  .chat-overlay-panel.is-dimmed {
-    opacity: 0;
-  }
+.chat-overlay-panel.is-dimmed {
+  opacity: 0;
 }
 
 .chat-overlay-panel .chat-pane {
