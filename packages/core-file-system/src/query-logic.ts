@@ -1,5 +1,5 @@
 import type { CollectionSchema, CollectionSchemaPack, DbRecord, FieldSpec, FieldType } from '@biu/type-file-system'
-import { isFacetFieldType, normalizeSchemaValue } from '@biu/type-file-system'
+import { asPersonList, isFacetFieldType, normalizeSchemaValue, personKey } from '@biu/type-file-system'
 
 export const FACET_FLAT_PREFIX = 'facet::'
 
@@ -319,6 +319,14 @@ export function matchFilterRule(
     if (rule.op === 'eq') return hit
     if (rule.op === 'neq') return !hit
   }
+  if (field?.type === 'person') {
+    const people = asPersonList(actual)
+    const hit = people.some((item) => personKey(item) === want || item.name === want)
+    if (rule.op === 'eq') return hit
+    if (rule.op === 'neq') return !hit
+    if (rule.op === 'contains') return people.some((item) => item.name.toLowerCase().includes(want.toLowerCase()))
+    if (rule.op === 'not_contains') return !people.some((item) => item.name.toLowerCase().includes(want.toLowerCase()))
+  }
   if (Array.isArray(actual)) {
     const has = actual.map(String).includes(want)
     if (rule.op === 'eq') return has
@@ -327,9 +335,11 @@ export function matchFilterRule(
     if (rule.op === 'not_contains') return !actual.some((item) => String(item).toLowerCase().includes(want.toLowerCase()))
   }
   if (field?.type === 'boolean') {
-    const on = actual === true || actual === 'true' ? 'true' : 'false'
-    if (rule.op === 'eq') return on === want
-    if (rule.op === 'neq') return on !== want
+    const unset = actual == null || actual === ''
+    if (unset) return false
+    const on = actual === true || actual === 'true'
+    if (rule.op === 'eq') return want === 'true' ? on : !on
+    if (rule.op === 'neq') return want === 'true' ? !on : on
   }
   const text = asText(actual)
   const left = text.toLowerCase()

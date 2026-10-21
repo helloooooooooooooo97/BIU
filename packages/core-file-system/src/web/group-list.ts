@@ -1,4 +1,4 @@
-import type { CollectionSchema, DbRecord } from '@biu/type-file-system'
+import type { CollectionSchema, CollectionSchemaPack, DbRecord } from '@biu/type-file-system'
 import type { SortRule } from '../query-logic.ts'
 import type { ListPage } from './db-client.ts'
 import { groupListFilter, groupListKeys, mergeListFilters, type GroupBucket } from './fields.ts'
@@ -17,6 +17,7 @@ export async function listGroupedCollection(opts: {
   groupBy: string
   schema?: CollectionSchema
   extraValues?: string[]
+  packs?: CollectionSchemaPack[]
   pageSize: number
   groupPages?: Record<string, number>
   wrap?: boolean
@@ -41,7 +42,7 @@ export async function listGroupedCollection(opts: {
     columns?: string[]
   }) => Promise<ListPage>
 }): Promise<GroupedCollectionPage | null> {
-  const keys = groupListKeys(opts.schema, opts.groupBy, opts.extraValues)
+  const keys = groupListKeys(opts.schema, opts.groupBy, opts.extraValues, opts.packs)
   if (!keys.length) return null
   const pageSize = Math.max(1, opts.pageSize)
   const fullCount = groupedFullFetchCount(pageSize, keys.length, opts.wrap)
@@ -63,7 +64,7 @@ export async function listGroupedCollection(opts: {
     })
   const pages = await Promise.all(
     keys.map(async (item, index) => {
-      const filters = mergeListFilters(opts.filters ?? {}, groupListFilter(opts.groupBy, item.key))
+      const filters = mergeListFilters(opts.filters ?? {}, groupListFilter(opts.groupBy, item.key, opts.schema, opts.packs))
       const groupKey = item.key || 'unset'
       const pageIndex = Math.max(0, opts.groupPages?.[groupKey] ?? 0)
       if (!filters) {
