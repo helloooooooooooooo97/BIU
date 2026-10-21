@@ -66,7 +66,7 @@ import { CrumbTrail } from './crumb-trail.tsx'
 import { fieldPickAttrs, pickDomAttrs, recordPickKind, recordSourcePath } from './pick-dom.ts'
 import { normalizeRecordEmoji, recordPreviewEmoji, crumbRecordLabel } from './sidebar-preview.ts'
 import { recordPreviewMascot, RecordMark } from './record-mark.tsx'
-import { COL_WIDTH_MAX, COL_WIDTH_MIN, colWidthStyle, normalizeColumnWidths, normalizeSavedView, normalizePageSize, viewStateKey, type SavedView } from './saved-view.ts'
+import { COL_WIDTH_MAX, COL_WIDTH_MIN, colWidthStyle, normalizeColumnWidths, normalizeSavedView, normalizePageSize, viewIsFresher, viewStateKey, type SavedView } from './saved-view.ts'
 import { PagerSizeControl } from './pager-size.tsx'
 import {
   actionIcon,
@@ -114,6 +114,7 @@ import {
   pickViewForRoute,
   pushSavedViews,
   pushSavedViewsPatch,
+  stampSavedView,
   diffSavedViews,
   routeViewNeedsFetch,
   subscribeStarredViews,
@@ -1649,6 +1650,7 @@ export function CollectionBrowser({
     .sort()
     .join('\n')
   const [views, setViews] = useState<SavedView[]>(() => paintListedViews(collectionPath))
+  const [viewsSaveError, setViewsSaveError] = useState(false)
   const [activeViewId, setActiveViewId] = useState<string | null>(initialView?.id ?? null)
   const [routeViewReady, setRouteViewReady] = useState(() => !routeViewNeedsFetch(collectionPath, routeViewId))
   const routeViewReadyRef = useRef(routeViewReady)
@@ -1912,6 +1914,7 @@ export function CollectionBrowser({
   const hydratePath = useRef('')
   const viewsRef = useRef<SavedView[]>([])
   const skipPersistGen = useRef(0)
+  const viewsWriteGenRef = useRef(0)
   const persistActiveViewRef = useRef<() => void>(() => {})
   const activeViewIdRef = useRef<string | null>(null)
   const syncViewsRef = useRef<() => Promise<void>>(async () => {})
@@ -3072,24 +3075,10 @@ export function CollectionBrowser({
     setDlgError('')
   }, [dlg])
 
-  function persistViewsFor(
-    path: string,
-    next: SavedView[],
-    extra?: { baseline?: SavedView[]; remove?: string[] },
-  ) {
-    if (sheet) return
-    const listed = listedViews(path, next).map((view) => withViewDisplay(path, view))
+  function adoptPersistedViews(path: string, listed: SavedView[]) {
     const stored = listed.filter((view) => !view.builtin)
-    const previous = extra?.baseline ?? loadViews(path)
     rememberViews(path, listed)
     noteLocalSavedViewsWrite(path)
-    // 只推差异：别的窗口（会话 / 右检查器）新建的视图不会被这份快照整份冲掉。
-    const diff = diffSavedViews(previous, stored)
-    const patch = {
-      upsert: diff.upsert,
-      remove: [...new Set([...diff.remove, ...(extra?.remove ?? [])])],
-    }
-    void pushSavedViewsPatch(path, patch)
     if (!nested) {
       localStorage.setItem(viewsKey(path), JSON.stringify(stored))
     }
@@ -3101,12 +3090,42 @@ export function CollectionBrowser({
     window.dispatchEvent(new Event('fsdb:crumb-labels'))
   }
 
+  async function persistViewsFor(
+    path: string,
+    next: SavedView[],
+    extra?: { baseline?: SavedView[]; remove?: string[] },
+  ) {
+    if (sheet) return true
+    const listed = listedViews(path, next).map((view) => withViewDisplay(path, view))
+    const stored = listed.filter((view) => !view.builtin)
+    const previous = extra?.baseline ?? loadViews(path)
+    // 只推差异：别的窗口（会话 / 右检查器）新建的视图不会被这份快照整份冲掉。
+    const diff = diffSavedViews(previous, stored)
+    const stamped = (diff.upsert ?? []).map((view) => stampSavedView(view))
+    const stampById = new Map(stamped.map((view) => [view.id, view]))
+    const adopted = listed.map((view) => stampById.get(view.id) ?? view)
+    const patch = {
+      upsert: stamped,
+      remove: [...new Set([...diff.remove, ...(extra?.remove ?? [])])],
+    }
+    const gen = ++viewsWriteGenRef.current
+    const result = await pushSavedViewsPatch(path, patch)
+    if (result === 'failed') {
+      if (gen === viewsWriteGenRef.current) setViewsSaveError(true)
+      return false
+    }
+    if (gen !== viewsWriteGenRef.current) return false
+    adoptPersistedViews(path, adopted)
+    setViewsSaveError(false)
+    return true
+  }
+
   function persistViews(next: SavedView[]) {
-    persistViewsFor(collectionPath, next)
+    return persistViewsFor(collectionPath, next)
   }
 
   function persistViewsWith(path: string, next: SavedView[], extra?: { baseline?: SavedView[]; remove?: string[] }) {
-    persistViewsFor(path, next, extra)
+    return persistViewsFor(path, next, extra)
   }
 
   function rememberActiveView(id: string) {
@@ -3120,6 +3139,8 @@ export function CollectionBrowser({
   }
 
   function applyView(view: SavedView) {
+    const current = viewsRef.current.find((item) => item.id === view.id)
+    if (current && view.id === activeViewIdRef.current && !viewIsFresher(view, current)) return
     const next = normalizeSavedView({
       ...view,
       filters: { ...catalogLockFilters(view.id, [view]), ...view.filters },
@@ -3176,9 +3197,15 @@ export function CollectionBrowser({
   activeViewIdRef.current = activeViewId
   adoptViewRef.current = (view: SavedView) => {
     if (sheet) return
-    const listed = listedViews(collectionPath, loadViews(collectionPath)).map((item) =>
+    const painted = listedViews(collectionPath, loadViews(collectionPath)).map((item) =>
       withViewDisplay(collectionPath, item),
     )
+    const current = painted.find((item) => item.id === view.id) ?? viewsRef.current.find((item) => item.id === view.id)
+    if (current && !viewIsFresher(view, current)) return
+    const incoming = withViewDisplay(collectionPath, view)
+    const listed = painted.some((item) => item.id === view.id)
+      ? painted.map((item) => (item.id === view.id ? incoming : item))
+      : [...painted, incoming]
     rememberViews(collectionPath, listed)
     viewsRef.current = listed
     setViews(listed)
@@ -3276,8 +3303,9 @@ export function CollectionBrowser({
     void syncViewsRef.current()
   }, [viewMenuOpen])
 
-  function commitView(view: SavedView) {
-    persistViews([...views, view])
+  async function commitView(view: SavedView) {
+    const ok = await persistViews([...views, view])
+    if (!ok) return
     selectView(view)
   }
 
@@ -3313,17 +3341,19 @@ export function CollectionBrowser({
       truncate: true,
       query: '',
     }
-    persistViewsFor(target, [...stored.filter((item) => !item.builtin), view])
-    if (target === collectionPath) {
-      selectView(view)
-      return
-    }
-    try {
-      localStorage.setItem(activeViewStorageKey(target), view.id)
-    } catch {
-      /* ignore */
-    }
-    onOpenTable?.(target, view.id)
+    void persistViewsFor(target, [...stored.filter((item) => !item.builtin), view]).then((ok) => {
+      if (!ok) return
+      if (target === collectionPath) {
+        selectView(view)
+        return
+      }
+      try {
+        localStorage.setItem(activeViewStorageKey(target), view.id)
+      } catch {
+        /* ignore */
+      }
+      onOpenTable?.(target, view.id)
+    })
   }
 
   function copyView(source?: SavedView) {
@@ -3387,8 +3417,10 @@ export function CollectionBrowser({
       setDlgError('已有同名视图')
       return
     }
-    persistViews(views.map((item) => (item.id === dlg.view.id ? { ...item, name: next } : item)))
-    setDlg(null)
+    void persistViews(views.map((item) => (item.id === dlg.view.id ? { ...item, name: next } : item))).then((ok) => {
+      if (!ok) return
+      setDlg(null)
+    })
   }
 
   function applyDeleteView() {
@@ -3402,11 +3434,13 @@ export function CollectionBrowser({
     // 只靠 diffSavedViews 会漏掉它，删除就丢了。
     const remaining = views.filter((item) => item.id !== removedId)
     setDlg(null)
-    persistViewsWith(collectionPath, remaining, { remove: [removedId] })
-    if (activeViewId === removedId) {
-      const next = viewsRef.current[0]
-      if (next) selectView(next)
-    }
+    void persistViewsWith(collectionPath, remaining, { remove: [removedId] }).then((ok) => {
+      if (!ok) return
+      if (activeViewId === removedId) {
+        const next = viewsRef.current[0]
+        if (next) selectView(next)
+      }
+    })
   }
 
   function setVisibleColumns(next: string[]) {
@@ -4584,6 +4618,7 @@ export function CollectionBrowser({
     lockedKindLabel,
     mode,
     extraViews.map((item) => item.id).join(','),
+    Number(viewsSaveError),
     extraRows.map((item) => item.id).join(','),
     Number(sortCustom),
     sortsStateKey(sorts),
@@ -4747,6 +4782,14 @@ export function CollectionBrowser({
             ) : null}
           </div>
           <div className="tasks-toolbar-right" ref={toolbarRightRef}>
+            {viewsSaveError ? (
+              <div className="fsdb-views-error" role="alert">
+                <span>视图没有保存到数据库，本地仍是上一次成功保存的状态。请重试。</span>
+                <button type="button" onClick={() => setViewsSaveError(false)}>
+                  知道了
+                </button>
+              </div>
+            ) : null}
             <HeadlessDismiss
               enabled={searchExpanded}
               onDismiss={() => {

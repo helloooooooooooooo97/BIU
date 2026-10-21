@@ -125,3 +125,12 @@ export function viewStateKey(
     columnWidths: normalizeColumnWidths(view.columnWidths),
   })
 }
+
+/** incoming 的 updatedAt 不低于 current 时才算更新；缺时间戳视为可采纳。 */
+export function viewIsFresher(incoming: SavedView, current?: SavedView | null) {
+  if (!current) return true
+  const incomingAt = Number(incoming.updatedAt) || 0
+  const currentAt = Number(current.updatedAt) || 0
+  if (!incomingAt || !currentAt) return true
+  return incomingAt >= currentAt
+}
