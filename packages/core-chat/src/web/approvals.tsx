@@ -247,7 +247,7 @@ export function ApprovalsRail(props: SlotProps) {
         role="toolbar"
         aria-label="Session controls"
       >
-        <div className="chat-dock-toolbar-start flex min-w-0 items-center gap-1">
+        <div className="chat-dock-toolbar-start flex min-w-0 flex-1 items-center gap-1">
           <SessionProjectPanel {...props} />
           {typeof props.renderSlot === 'function' ? props.renderSlot('header-tools') : null}
           {sessionId ? (
@@ -306,7 +306,7 @@ export function ApprovalsRail(props: SlotProps) {
           ) : null}
         </div>
         <ChatLiveMetrics useSessionView={useSessionView} />
-        <div className="chat-dock-toolbar-end flex shrink-0 items-center justify-end gap-1">
+        <div className="chat-dock-toolbar-end flex min-w-0 flex-1 items-center justify-end gap-1">
           {overlayOpen ? (
             <button
               type="button"

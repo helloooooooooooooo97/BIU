@@ -3680,6 +3680,7 @@ html.dark .tool-call-status.is-fail {
 }
 
 .chat-overlay-panel .composer-pill {
+  min-width: 0;
   border: 1px solid var(--dsw-border);
 }
 
@@ -3700,21 +3701,36 @@ html.dark .tool-call-status.is-fail {
   display: flex;
   align-items: center;
   width: 100%;
+  min-height: 32px;
   gap: 8px;
   color: var(--dsw-icon-active);
 }
 
+.chat-dock-toolbar-start,
 .chat-dock-toolbar-end {
-  margin-left: auto;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.chat-dock-toolbar-end {
+  margin-left: 0;
+  justify-content: flex-end;
 }
 
 .chat-dock-toolbar-mid {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 1;
   display: flex;
   min-width: 0;
-  flex: 1 1 0;
+  max-width: min(60%, 28rem);
+  flex: 0 0 auto;
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
 }
 
 .chat-live-hud-metrics {
@@ -4792,8 +4808,10 @@ html.dark .app-side-bar .chat-session-row-star:not(.is-on) svg {
 .dock-agent-stack {
   position: relative;
   display: inline-flex;
-  overflow: visible;
+  overflow: hidden;
   flex: none;
+  min-width: 0;
+  max-width: 100%;
   align-items: center;
   gap: 4px;
 }
@@ -7363,6 +7381,7 @@ html:not(.dark) .hljs-meta .hljs-string {
 .composer-pill {
   position: relative;
   width: 100%;
+  min-width: 420px;
   border: 1px solid var(--dsw-border);
   border-radius: 999px;
   background: var(--dsw-sidebar);
@@ -7390,6 +7409,7 @@ html:not(.dark) .composer-plus {
   grid-template-areas: "plus editor right";
   align-items: center;
   gap: 8px;
+  min-width: 0;
   min-height: 44px;
   padding: 6px 10px;
 }
