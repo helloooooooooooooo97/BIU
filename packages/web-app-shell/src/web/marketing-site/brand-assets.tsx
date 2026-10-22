@@ -3,7 +3,7 @@ import { BRAND_DEFAULT, BrandMark } from './brand-mark.tsx'
 
 const FONT = `ui-sans-serif, system-ui, -apple-system, 'PingFang SC', 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif`
 
-/** 官网导航同款圆形标记（无白底方块）。 */
+/** 白色圆角底 + 默认配色的标记。深海里最深的一块接近纯黑，必须垫白底才看得见轮廓。 */
 function markSvg(displayWidth: number) {
   return renderToStaticMarkup(
     <BrandMark
@@ -12,7 +12,7 @@ function markSvg(displayWidth: number) {
       strokeWidth={BRAND_DEFAULT.strokeWidth}
       lineWidth={BRAND_DEFAULT.lineWidth}
       background={BRAND_DEFAULT.background}
-      showBackground={false}
+      showBackground={BRAND_DEFAULT.showBackground}
       circleRatio={BRAND_DEFAULT.circleRatio}
       displayWidth={displayWidth}
       title="BIU"

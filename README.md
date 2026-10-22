@@ -22,7 +22,7 @@
 </div>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v0.1.0-blue" />
+  <img alt="version" src="https://img.shields.io/badge/version-v0.1.1-blue" />
   <img alt="license" src="https://img.shields.io/github/license/helloooooooooooooo97/biu" />
   <img alt="stars" src="https://img.shields.io/github/stars/helloooooooooooooo97/biu" />
   <img alt="node" src="https://img.shields.io/node/v/cordis" />
@@ -724,8 +724,8 @@ biu
 ├── scripts/
 │   └── link-cordis-plugins.mjs
 ├── public/
-│   ├── favicon.svg            # circular brand mark (same as site nav)
-│   ├── brand-lockup.svg       # README: circular mark + BIU
+│   ├── favicon.svg            # brand mark (white rounded square)
+│   ├── brand-lockup.svg       # README: mark + BIU
 │   ├── og-image.png           # share card (og:image), from scripts/build-brand-assets.tsx
 │   ├── mascot-blue.svg        # README mascots (BMW M palette)
 │   ├── mascot-violet.svg
