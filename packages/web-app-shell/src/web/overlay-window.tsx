@@ -6,10 +6,12 @@ import {
   overlayLayoutGeom,
   overlayMascotTarget,
   overlayStillHoldsPointer,
+  OVERLAY_MASCOT_CLICK_MS,
   OVERLAY_OUTSIDE_KEEP,
   readOverlayWinState,
   setOverlayResizing,
   requestComposerFocus,
+  setOverlayThread,
   shouldCloseOverlayOnOutside,
   subscribeOverlayThread,
   writeOverlayWinState,
@@ -45,6 +47,7 @@ export function OverlayChatWindow({
   const boxRef = useRef<HTMLDivElement>(null)
   const cardRef = useRef<HTMLDivElement>(null)
   const leaveTimer = useRef<number>(0)
+  const mascotClick = useRef<number>(0)
   const dimmedRef = useRef(false)
   const resizeRef = useRef<(OverlayWinGeom & ResizeEdge & { px: number; py: number }) | null>(null)
   const geomRef = useRef(geom)
@@ -121,16 +124,32 @@ export function OverlayChatWindow({
   useEffect(() => {
     const el = boxRef.current
     if (!el) return
-    const onMascotClick = (event: MouseEvent) => {
-      if (!dimmedRef.current || !overlayMascotTarget(event.target)) return
-      event.preventDefault()
-      event.stopPropagation()
+    const wakeMascot = (thread: boolean) => {
+      setOverlayThread(thread)
       setPointerInside(true)
       requestComposerFocus()
     }
+    const onMascotClick = (event: MouseEvent) => {
+      if (!overlayMascotTarget(event.target)) return
+      event.preventDefault()
+      event.stopPropagation()
+      window.clearTimeout(mascotClick.current)
+      if (event.detail >= 2) return
+      mascotClick.current = window.setTimeout(() => wakeMascot(false), OVERLAY_MASCOT_CLICK_MS)
+    }
+    const onMascotDblClick = (event: MouseEvent) => {
+      if (!overlayMascotTarget(event.target)) return
+      event.preventDefault()
+      event.stopPropagation()
+      window.clearTimeout(mascotClick.current)
+      wakeMascot(true)
+    }
     el.addEventListener('click', onMascotClick, true)
+    el.addEventListener('dblclick', onMascotDblClick, true)
     return () => {
       el.removeEventListener('click', onMascotClick, true)
+      el.removeEventListener('dblclick', onMascotDblClick, true)
+      window.clearTimeout(mascotClick.current)
     }
   }, [])
 
