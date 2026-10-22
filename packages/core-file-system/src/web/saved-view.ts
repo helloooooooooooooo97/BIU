@@ -121,6 +121,21 @@ export function sortViewsByRank(views: SavedView[]): SavedView[] {
     .map((item) => item.view)
 }
 
+/** 每条视图都有 0..n-1 的 rank，缺省时跟 previous 里的位置走，不跟 merge 出来的默认顺序走。 */
+export function rankListedViews(listed: SavedView[], previous: SavedView[] = listed): SavedView[] {
+  const prevRank = new Map<string, number>()
+  previous.forEach((view, index) => {
+    prevRank.set(view.id, Number.isFinite(Number(view.rank)) ? Number(view.rank) : index)
+  })
+  const prepared = listed.map((view, index) => ({
+    ...view,
+    rank: Number.isFinite(Number(view.rank))
+      ? Math.round(Number(view.rank))
+      : (prevRank.get(view.id) ?? index),
+  }))
+  return sortViewsByRank(prepared).map((view, rank) => (view.rank === rank ? view : { ...view, rank }))
+}
+
 export const PAGE_SIZES = [20, 50, 100] as const
 export const DEFAULT_VIEW_PAGE_SIZE = PAGE_SIZES[0]
 

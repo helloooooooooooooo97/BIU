@@ -65,7 +65,7 @@ import { CrumbTrail } from './crumb-trail.tsx'
 import { fieldPickAttrs, pickDomAttrs, recordPickKind, recordSourcePath } from './pick-dom.ts'
 import { normalizeRecordEmoji, recordPreviewEmoji, crumbRecordLabel } from './sidebar-preview.ts'
 import { recordPreviewMascot, RecordMark } from './record-mark.tsx'
-import { COL_WIDTH_MAX, COL_WIDTH_MIN, colWidthStyle, normalizeColumnWidths, normalizeSavedView, normalizePageSize, sortViewsByRank, viewIsFresher, viewStateKey, type SavedView } from './saved-view.ts'
+import { COL_WIDTH_MAX, COL_WIDTH_MIN, colWidthStyle, normalizeColumnWidths, normalizeSavedView, normalizePageSize, rankListedViews, viewIsFresher, viewStateKey, type SavedView } from './saved-view.ts'
 import { PagerSizeControl } from './pager-size.tsx'
 import {
   actionIcon,
@@ -1583,8 +1583,13 @@ export function CollectionBrowser({
         )
     return listed
   }
-  const paintListedViews = (path: string) =>
-    sortViewsByRank(listedViews(path, loadViews(path)).map((view) => withViewDisplay(path, view)))
+  const paintListedViews = (path: string) => {
+    const remembered = loadViews(path)
+    return rankListedViews(
+      listedViews(path, remembered).map((view) => withViewDisplay(path, view)),
+      remembered,
+    )
+  }
   const dataPath = collectionPath
   const [stat, setStat] = useState<StatResult | null>(() => peekListCache(dataPath, routeViewId)?.stat ?? null)
   const [items, setItems] = useState<Array<DbRecord & { path?: string }>>(() => peekListCache(dataPath, routeViewId)?.items ?? [])
@@ -3122,12 +3127,17 @@ export function CollectionBrowser({
   ) {
     if (sheet) return true
     const forced = extra?.upsert ?? []
-    const listed = sortViewsByRank(
-      listedViews(path, [
-        ...next.filter((view) => !forced.some((item) => item.id === view.id)),
-        ...forced,
-      ]).map((view) => withViewDisplay(path, view)),
+    const incoming = [
+      ...next.filter((view) => !forced.some((item) => item.id === view.id)),
+      ...forced,
+    ]
+    const listed = rankListedViews(
+      listedViews(path, incoming).map((view) => withViewDisplay(path, view)),
+      incoming,
     )
+    for (const view of listed) {
+      if (view.builtin) persistViewDisplay(path, view.id, { rank: view.rank })
+    }
     const stored = listed.filter((view) => !view.builtin)
     const previous = extra?.baseline ?? loadViews(path)
     // 只推差异：别的窗口（会话 / 右检查器）新建的视图不会被这份快照整份冲掉。
@@ -3252,15 +3262,16 @@ export function CollectionBrowser({
   activeViewIdRef.current = activeViewId
   adoptViewRef.current = (view: SavedView) => {
     if (sheet) return
-    const painted = listedViews(collectionPath, loadViews(collectionPath)).map((item) =>
-      withViewDisplay(collectionPath, item),
-    )
+    const painted = paintListedViews(collectionPath)
     const current = painted.find((item) => item.id === view.id) ?? viewsRef.current.find((item) => item.id === view.id)
     if (current && !viewIsFresher(view, current)) return
     const incoming = withViewDisplay(collectionPath, view)
-    const listed = painted.some((item) => item.id === view.id)
-      ? painted.map((item) => (item.id === view.id ? incoming : item))
-      : [...painted, incoming]
+    const listed = rankListedViews(
+      painted.some((item) => item.id === view.id)
+        ? painted.map((item) => (item.id === view.id ? incoming : item))
+        : [...painted, incoming],
+      viewsRef.current,
+    )
     rememberViews(collectionPath, listed)
     viewsRef.current = listed
     setViews(listed)
@@ -3272,9 +3283,7 @@ export function CollectionBrowser({
   syncViewsRef.current = async () => {
     if (sheet) return
     await pullSavedViews([collectionPath])
-    const listed = listedViews(collectionPath, loadViews(collectionPath)).map((view) =>
-      withViewDisplay(collectionPath, view),
-    )
+    const listed = rankListedViews(paintListedViews(collectionPath), viewsRef.current)
     const prev = viewsRef.current
     const activeId = activeViewIdRef.current
     rememberViews(collectionPath, listed)
@@ -3365,10 +3374,15 @@ export function CollectionBrowser({
   }
 
   async function commitView(view: SavedView) {
-    const stored = loadViews(collectionPath).filter((item) => !item.builtin && item.id !== view.id)
-    const ok = await persistViewsWith(collectionPath, [...stored, view], { upsert: [view] })
+    const painted = paintListedViews(collectionPath)
+    const next = { ...view, rank: Number.isFinite(Number(view.rank)) ? view.rank : painted.length }
+    const ok = await persistViewsWith(
+      collectionPath,
+      [...painted.filter((item) => item.id !== next.id), next],
+      { upsert: [next] },
+    )
     if (!ok) return
-    selectView(view)
+    selectView(next)
   }
 
   function uniqueViewName(base: string, listed: SavedView[] = paintListedViews(collectionPath)) {
@@ -3402,8 +3416,9 @@ export function CollectionBrowser({
       wrap: false,
       truncate: true,
       query: '',
+      rank: listed.length,
     }
-    void persistViewsFor(target, [...stored.filter((item) => !item.builtin && item.id !== view.id), view], {
+    void persistViewsFor(target, [...listed.filter((item) => item.id !== view.id), view], {
       upsert: [view],
     }).then((ok) => {
       if (!ok) return

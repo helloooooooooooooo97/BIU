@@ -56,11 +56,15 @@ test('active view tab opens the view menu; the more button is gone', () => {
   assert.doesNotMatch(src, /tasks-viewdd-check/)
 })
 
-test('pins the active view into the last visible slot when it would overflow', () => {
+test('keeps stored tab order when the active view is overflowed', () => {
   const views = [{ id: 'a' }, { id: 'b' }, { id: 'c' }]
   assert.deepEqual(splitVisibleViews(views, 2, 'c'), {
-    shown: [{ id: 'a' }, { id: 'c' }],
-    hidden: [{ id: 'b' }],
+    shown: [{ id: 'a' }, { id: 'b' }],
+    hidden: [{ id: 'c' }],
+  })
+  assert.deepEqual(splitVisibleViews(views, 2, 'a'), {
+    shown: [{ id: 'a' }, { id: 'b' }],
+    hidden: [{ id: 'c' }],
   })
 })
 
