@@ -3698,6 +3698,48 @@ html.dark .tool-call-status.is-fail {
   max-width: none;
 }
 
+.chat-config-banner {
+  width: 100%;
+  padding: 8px 16px;
+  border: 1px solid var(--dsw-float-border);
+  border-radius: var(--dsw-radius-bubble);
+  background: var(--dsw-sidebar);
+  color: var(--dsw-sidebar-fg);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.chat-config-banner-action {
+  margin: 0;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--dsw-sidebar-fg-active);
+  font: inherit;
+  font-weight: 500;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.chat-config-banner-action:hover {
+  text-decoration: underline;
+}
+
+html.dark .chat-config-banner {
+  background: #202020;
+  color: #bcbab7;
+}
+
+html.dark .chat-config-banner-action {
+  color: #f0efed;
+}
+
+html.dark .composer-model-panel,
+html.dark .composer-model-flyout {
+  background: #202020;
+  color: #bcbab7;
+}
+
 .chat-dock-toolbar {
   position: relative;
   display: flex;
@@ -7586,9 +7628,10 @@ html:not(.dark) .composer-plus {
 
 .composer-model-panel,
 .composer-model-flyout {
-  border: 1px solid var(--dsw-border);
+  border: 1px solid var(--dsw-float-border);
   border-radius: 12px;
-  background: var(--dsw-bubble);
+  background: var(--dsw-sidebar);
+  color: var(--dsw-sidebar-fg);
   box-shadow: var(--dsw-shadow);
 }
 
@@ -7608,7 +7651,7 @@ html:not(.dark) .composer-plus {
   border-radius: 8px;
   background: transparent;
   padding: 8px 10px;
-  color: var(--dsw-label);
+  color: var(--dsw-sidebar-fg);
   font-size: 13px;
   text-align: left;
   cursor: pointer;
@@ -7627,7 +7670,7 @@ html:not(.dark) .composer-plus {
 .composer-model-row-val {
   min-width: 0;
   overflow: hidden;
-  color: var(--dsw-label-3);
+  color: var(--dsw-sidebar-fg);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -7690,7 +7733,7 @@ html:not(.dark) .composer-plus {
   flex: 1;
   border: 0;
   background: transparent;
-  color: var(--dsw-label);
+  color: var(--dsw-sidebar-fg-active);
   font-size: 13px;
   outline: none;
 }
@@ -7722,7 +7765,7 @@ html:not(.dark) .composer-plus {
   border: 0;
   background: transparent;
   padding: 8px 12px;
-  color: var(--dsw-label);
+  color: var(--dsw-sidebar-fg);
   font-size: 13px;
   text-align: left;
   cursor: pointer;
@@ -7772,7 +7815,7 @@ html:not(.dark) .composer-plus {
   border-radius: 8px;
   background: var(--dsw-hover);
   padding: 8px 10px;
-  color: var(--dsw-label);
+  color: var(--dsw-sidebar-fg-active);
   font-size: 13px;
   cursor: pointer;
 }
