@@ -1,4 +1,4 @@
-import { test, vi } from 'vitest'
+import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import {
   chatColumnWidth,
@@ -28,7 +28,6 @@ import {
   getOverlayAutohide,
   setOverlayAutohide,
   requestOverlayAutohide,
-  overlayMascotTarget,
   overlayStillHoldsPointer,
   setOverlayResizing,
   setOverlayPinned,
@@ -293,7 +292,7 @@ test('pick opens a compose-only overlay; only the expand control reveals the thr
   toggleOverlayThread()
   assert.equal(getOverlayThread(), true)
   setChatOverlay(false)
-  assert.equal(getOverlayThread(), true)
+  assert.equal(getOverlayThread(), false)
 })
 
 test('toggleOverlayThread expands and collapses the overlay transcript', () => {
@@ -455,31 +454,6 @@ test('autohide requires leaving and not resizing', () => {
   assert.equal(getOverlayAutohide(), true)
 })
 
-test('overlay mascot target', () => {
-  const btn = document.createElement('button')
-  btn.setAttribute('data-testid', 'brand-corner-mascot-toggle')
-  const inner = document.createElement('span')
-  btn.append(inner)
-  assert.equal(overlayMascotTarget(inner), true)
-  assert.equal(overlayMascotTarget(document.body), false)
-})
-
-test('closing the overlay keeps the last thread expand state', () => {
-  history.replaceState(null, '', '/database')
-  setChatOverlay(true)
-  setOverlayThread(true)
-  setChatOverlay(false)
-  assert.equal(getOverlayThread(), true)
-  openOverlayComposer()
-  assert.equal(getChatOverlay(), true)
-  assert.equal(getOverlayThread(), true)
-  setOverlayThread(false)
-  setChatOverlay(false)
-  openOverlayComposer()
-  assert.equal(getOverlayThread(), false)
-  setChatOverlay(false)
-})
-
 test('pointer still inside overlay when relatedTarget or hit is in the panel', () => {
   const panel = document.createElement('div')
   panel.setAttribute('data-testid', 'chat-overlay-panel')
@@ -487,23 +461,7 @@ test('pointer still inside overlay when relatedTarget or hit is in the panel', (
   panel.append(child)
   document.body.append(panel)
   assert.equal(overlayStillHoldsPointer(panel, child, 0, 0), true)
-  const outside = document.createElement('div')
-  document.body.append(outside)
-  assert.equal(overlayStillHoldsPointer(panel, null, 0, 0), false)
   panel.remove()
-  outside.remove()
-})
-
-test('composer focus pending expires if the editor never focuses', () => {
-  consumeComposerFocusPending()
-  vi.useFakeTimers()
-  requestComposerFocus()
-  assert.equal(isComposerFocusPending(), true)
-  vi.advanceTimersByTime(599)
-  assert.equal(isComposerFocusPending(), true)
-  vi.advanceTimersByTime(1)
-  assert.equal(isComposerFocusPending(), false)
-  vi.useRealTimers()
 })
 
 test('autohide does not fire when overlay is pinned', () => {

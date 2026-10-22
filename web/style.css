@@ -3421,39 +3421,6 @@ select.settings-account-input {
   background: transparent;
   box-shadow: none;
   pointer-events: auto;
-  opacity: 1;
-  transition: opacity 160ms ease;
-}
-
-.chat-overlay-panel.is-dimmed {
-  pointer-events: none;
-}
-
-.chat-overlay-panel.is-dimmed .chat-pane,
-.chat-overlay-panel.is-dimmed .composer-pill,
-.chat-overlay-panel.is-dimmed .chat-dock-toolbar-end,
-.chat-overlay-panel.is-dimmed .chat-dock-toolbar-mid,
-.chat-overlay-panel.is-dimmed .chat-dock-toolbar-start > :not(.brand-corner-cluster) {
-  display: none;
-}
-
-.chat-overlay-panel.is-dimmed .brand-corner-cluster {
-  position: fixed;
-  right: 16px;
-  bottom: 16px;
-  z-index: 201;
-  pointer-events: auto;
-}
-
-.chat-overlay-panel.is-dimmed .brand-corner-mascot-btn,
-.chat-overlay-panel.is-dimmed .brand-corner-mascot-btn .sidebar-mascot,
-.chat-overlay-panel.is-dimmed .brand-corner-mascot-btn svg {
-  width: 44px !important;
-  height: 44px !important;
-}
-
-.chat-overlay-panel.is-dimmed .brand-corner-mascot-btn {
-  border-radius: 12px;
 }
 
 .chat-overlay-panel .chat-pane {

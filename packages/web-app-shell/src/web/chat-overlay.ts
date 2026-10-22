@@ -156,6 +156,7 @@ export function setChatOverlay(next: boolean) {
   overlay = next
   if (!next) {
     setOverlayAutohide(false)
+    setOverlayThread(false)
     notifyOverlayClosed()
   }
   emit()
@@ -206,7 +207,6 @@ export function shouldCloseOverlayOnOutside(target: EventTarget | null) {
 }
 
 let composerFocusPending = false
-let composerFocusExpire = 0
 
 /** 已挂载的输入框听事件；尚未建好的实例靠 pending，等 editor 就绪后再 focus。不要同步派发——点小人时旧实例正在卸、新实例还是 null。 */
 export function requestComposerFocus() {
@@ -216,10 +216,6 @@ export function requestComposerFocus() {
   requestAnimationFrame(fire)
   window.setTimeout(fire, 40)
   window.setTimeout(fire, 200)
-  window.clearTimeout(composerFocusExpire)
-  composerFocusExpire = window.setTimeout(() => {
-    composerFocusPending = false
-  }, 600)
 }
 
 export function isComposerFocusPending() {
@@ -229,7 +225,6 @@ export function isComposerFocusPending() {
 export function consumeComposerFocusPending() {
   const pending = composerFocusPending
   composerFocusPending = false
-  if (typeof window !== 'undefined') window.clearTimeout(composerFocusExpire)
   return pending
 }
 
@@ -267,18 +262,14 @@ export function openOverlayComposer(opts?: { revealThread?: boolean }) {
   const wasOpen = overlay
   setChatOverlay(true)
   setOverlayAutohide(false)
-  if (opts?.revealThread === true) setOverlayThread(true)
-  else if (opts?.revealThread === false && !wasOpen) setOverlayThread(false)
+  if (opts?.revealThread) setOverlayThread(true)
+  else if (!wasOpen) setOverlayThread(false)
   requestComposerFocus()
 }
 
 export function revealOverlayThread() {
   if (!overlay) return
   setOverlayThread(true)
-}
-
-export function overlayMascotTarget(target: EventTarget | null) {
-  return target instanceof Element && Boolean(target.closest('[data-testid="brand-corner-mascot-toggle"]'))
 }
 
 export function getOverlayAutohide() {
@@ -335,11 +326,7 @@ export function overlayStillHoldsPointer(
   const root = panel instanceof Element ? panel : null
   if (!root) return false
   if (related instanceof Node && root.contains(related)) return true
-  if (related instanceof Element && related.closest('[data-testid="chat-overlay-panel"]')) return true
-  // related 为空：离开窗口或节点被卸掉。不要用最后一次坐标的 elementFromPoint 卡住——
-  // 指针其实已出窗，coords 仍落在面板上时会永远不透明。子节点重绘会再 pointerenter。
-  if (related == null) return false
-  if (typeof clientX === 'number' && typeof clientY === 'number' && typeof document.elementFromPoint === 'function') {
+  if (typeof clientX === 'number' && typeof clientY === 'number') {
     const hit = document.elementFromPoint(clientX, clientY)
     if (hit && (root.contains(hit) || hit.closest('[data-testid="chat-overlay-panel"]'))) return true
   }

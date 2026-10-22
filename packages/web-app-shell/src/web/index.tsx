@@ -98,8 +98,12 @@ function DockSessionMascot({
       open={onChatPage ? false : overlayOpen}
       tapToDance={onChatPage}
       onToggle={() => {
+        if (getChatOverlay()) {
+          closeChatOverlay()
+          return
+        }
         if (isChatPagePath(location.pathname)) return
-        openOverlayComposer()
+        openOverlayComposer({ revealThread: true })
         requestOverlayFocus()
       }}
     />

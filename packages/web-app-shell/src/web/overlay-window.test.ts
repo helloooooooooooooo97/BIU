@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { test, afterEach, vi } from 'vitest'
+import { test, afterEach } from 'vitest'
 import assert from 'node:assert/strict'
 import { createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -25,7 +25,6 @@ afterEach(() => {
   } catch {
     /* ignore */
   }
-  vi.useRealTimers()
 })
 
 test('clicking the overlay close button actually closes the overlay', () => {
@@ -83,125 +82,6 @@ test('overlay opens docked to the right and anchored to the bottom', () => {
   assert.equal(panel.style.height, '')
   assert.equal(document.querySelector('[data-testid="chat-overlay-layout-toggle"]'), null)
   assert.equal(document.querySelector('[data-testid="chat-overlay-layout"]'), null)
-})
-
-test('idle overlay dims when composer is not focused', () => {
-  vi.useFakeTimers()
-  host = document.createElement('div')
-  document.body.append(host)
-  root = createRoot(host)
-  setChatOverlay(true)
-  act(() => {
-    root!.render(
-      createElement(OverlayChatWindow, {
-        header: createElement('div'),
-        thread: createElement('div'),
-        dock: createElement('div'),
-      }),
-    )
-  })
-  const panel = document.querySelector('[data-testid="chat-overlay-panel"]') as HTMLElement
-  assert.ok(panel)
-  assert.equal(panel.classList.contains('is-dimmed'), false)
-  act(() => {
-    vi.advanceTimersByTime(200)
-  })
-  assert.equal(panel.classList.contains('is-dimmed'), true)
-  vi.useRealTimers()
-})
-
-test('composer-focus wake does not keep overlay opaque if editor never focuses', () => {
-  vi.useFakeTimers()
-  host = document.createElement('div')
-  document.body.append(host)
-  root = createRoot(host)
-  setChatOverlay(true)
-  act(() => {
-    root!.render(
-      createElement(OverlayChatWindow, {
-        header: createElement('div'),
-        thread: createElement('div'),
-        dock: createElement('div'),
-      }),
-    )
-  })
-  const panel = document.querySelector('[data-testid="chat-overlay-panel"]') as HTMLElement
-  act(() => {
-    vi.advanceTimersByTime(200)
-  })
-  assert.equal(panel.classList.contains('is-dimmed'), true)
-  act(() => {
-    window.dispatchEvent(new Event('biu:composer-focus'))
-  })
-  assert.equal(panel.classList.contains('is-dimmed'), false)
-  act(() => {
-    vi.advanceTimersByTime(400)
-  })
-  assert.equal(panel.classList.contains('is-dimmed'), true)
-  vi.useRealTimers()
-})
-
-test('pointer leaving the window lets the overlay dim', () => {
-  vi.useFakeTimers()
-  host = document.createElement('div')
-  document.body.append(host)
-  root = createRoot(host)
-  setChatOverlay(true)
-  act(() => {
-    root!.render(
-      createElement(OverlayChatWindow, {
-        header: createElement('div'),
-        thread: createElement('div'),
-        dock: createElement('div'),
-      }),
-    )
-  })
-  const panel = document.querySelector('[data-testid="chat-overlay-panel"]') as HTMLElement
-  act(() => {
-    vi.advanceTimersByTime(200)
-    panel.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }))
-  })
-  assert.equal(panel.classList.contains('is-dimmed'), false)
-  act(() => {
-    panel.dispatchEvent(new PointerEvent('pointerout', { bubbles: true, relatedTarget: null, clientX: 10, clientY: 10 }))
-    vi.advanceTimersByTime(120)
-  })
-  assert.equal(panel.classList.contains('is-dimmed'), true)
-  vi.useRealTimers()
-})
-
-test('parked mascot click shows last thread state', () => {
-  vi.useFakeTimers()
-  host = document.createElement('div')
-  document.body.append(host)
-  root = createRoot(host)
-  setChatOverlay(true)
-  setOverlayThread(true)
-  act(() => {
-    root!.render(
-      createElement(OverlayChatWindow, {
-        header: createElement('div'),
-        thread: createElement('div'),
-        dock: createElement('button', { type: 'button', 'data-testid': 'brand-corner-mascot-toggle' }, 'm'),
-      }),
-    )
-  })
-  const panel = document.querySelector('[data-testid="chat-overlay-panel"]') as HTMLElement
-  const mascot = document.querySelector('[data-testid="brand-corner-mascot-toggle"]') as HTMLElement
-  act(() => {
-    vi.advanceTimersByTime(200)
-  })
-  assert.equal(panel.classList.contains('is-dimmed'), true)
-  act(() => {
-    mascot.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }))
-  })
-  assert.equal(panel.classList.contains('is-dimmed'), true)
-  act(() => {
-    mascot.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
-  })
-  assert.equal(panel.classList.contains('is-dimmed'), false)
-  assert.equal(getOverlayThread(), true)
-  vi.useRealTimers()
 })
 
 test('overlay header close button has no layout control beside it', () => {
