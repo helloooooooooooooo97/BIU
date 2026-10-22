@@ -27,6 +27,17 @@ function releaseDevServerOnStop() {
 export default defineConfig({
   plugins: [react(), tailwindcss(), releaseDevServerOnStop(), cordisPluginsVite(root)],
   appType: 'spa',
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules/@tiptap') || id.includes('node_modules/prosemirror')) return 'tiptap'
+          if (id.includes('node_modules/katex')) return 'katex'
+          if (id.includes('node_modules/lowlight') || id.includes('node_modules/highlight.js')) return 'highlight'
+        },
+      },
+    },
+  },
   esbuild: { jsxDev: false },
   define: isVitest ? {} : { 'process.env.NODE_ENV': JSON.stringify('production') },
   optimizeDeps: {

@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type Dispatch, type SetStateAction } from 'react'
 import type { CollectionChrome, FsDetailPane } from '@biu/type-file-system/ui'
 import type { CollectionSchema, DbRecord, FieldSpec } from '@biu/type-file-system'
-import { ArrowPathIcon, ChevronDownIcon, ChevronLeftIcon, ChevronUpIcon, HashtagIcon, ShareIcon } from '@heroicons/react/16/solid'
+import { ChevronDownIcon, ChevronLeftIcon, ChevronUpIcon, HashtagIcon, ShareIcon } from '@heroicons/react/16/solid'
 import { AnchorMenu, RecordEmojiBoard } from '@biu/public-ui'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { contentFieldKey, fieldHasValue, formatField, resolveFieldType } from './fields.ts'
@@ -18,34 +18,9 @@ import { PageBanner } from './page-banner.tsx'
 import { fieldPickAttrs, recordSourcePath } from './pick-dom.ts'
 import { dismissInspectorPaneMenu, reportInspectorPaneMenu } from './inspector-pane-menu.tsx'
 import { PaneConfigMenuItem } from './pane-more-menu.tsx'
+import { PageContentFailed, PageContentLoading } from './page-content-status.tsx'
 
-export function PageContentLoading() {
-  return (
-    <div className="fsdb-content-loading" data-testid="page-content-loading" aria-busy="true" aria-live="polite">
-      <ArrowPathIcon className="fsdb-content-loading-icon" aria-hidden />
-      <span className="sr-only">正在加载正文</span>
-    </div>
-  )
-}
-
-export function PageContentFailed({
-  error,
-  onRetry,
-}: {
-  error?: string
-  onRetry?: () => void
-}) {
-  return (
-    <div className="fsdb-content-failed" data-testid="page-content-failed" role="alert">
-      <p>{error?.trim() || '正文加载失败'}</p>
-      {onRetry ? (
-        <button type="button" className="fsdb-content-retry" onClick={onRetry}>
-          重试
-        </button>
-      ) : null}
-    </div>
-  )
-}
+export { PageContentFailed, PageContentLoading } from './page-content-status.tsx'
 
 function renderDetailPanes(
   panes: FsDetailPane[] | undefined,

@@ -997,6 +997,20 @@ test('detail body uses an explicit loading phase instead of a blank editor', () 
   assert.doesNotMatch(browser, /setDetailBody\(null\)\s*\n\s*\}\s*\n\s*\}, \[dataPath\]\)/)
 })
 
+test('opening a record fetches content without waiting for detailRow', () => {
+  const effect = browser.slice(
+    browser.indexOf('useEffect(() => {\n    if (!detailId) {\n      contentGen.current += 1'),
+    browser.indexOf("useEffect(() => {\n    if (dlg?.kind !== 'rename') return"),
+  )
+  assert.match(effect, /pullDetailBody\(\)/)
+  assert.doesNotMatch(effect, /detailRow/)
+  assert.match(browser, /\[collectionPath, dataPath, detailId, pullDetailBody\]/)
+  assert.match(browser, /<Suspense fallback=\{<PageContentLoading \/>\}>/)
+  assert.match(browser, /warmSiblingListCaches\(paths\)/)
+  assert.match(browser, /const WARM_LIST_CONCURRENCY = 2/)
+  assert.doesNotMatch(browser, /for \(const path of paths\) \{\s*\n\s*const listed = paintListedViews\(path\)/)
+})
+
 test('open detail still reloads body when the collection changes', () => {
   const onChange = browser.slice(browser.indexOf('const onChange = (event: Event)'), browser.indexOf("window.addEventListener('fsdb:change', onChange)"))
   assert.match(onChange, /if \(detailIdRef\.current\) \{/)
@@ -1451,6 +1465,9 @@ test('switching tables holds an empty body until the next list arrives', () => {
 test('vite serve maps jsxDEV to production jsx', () => {
   const vite = readFileSync(resolve(import.meta.dirname, '../../../../vite.config.ts'), 'utf8')
   const shim = readFileSync(resolve(import.meta.dirname, '../../../../jsx-prod-dev-runtime.ts'), 'utf8')
+  assert.match(vite, /manualChunks\(id\)/)
+  assert.match(vite, /return 'tiptap'/)
+  assert.match(vite, /return 'katex'/)
   assert.match(vite, /esbuild: \{ jsxDev: false \}/)
   assert.match(vite, /jsxDev: false/)
   assert.match(vite, /'react\/jsx-dev-runtime': join\(root, 'jsx-prod-dev-runtime.ts'\)/)
