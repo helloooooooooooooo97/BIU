@@ -1,6 +1,6 @@
 import type { CollectionSchema, DbRecord, FieldSpec } from '@biu/type-file-system'
 import type { CollectionChrome } from '@biu/type-file-system/ui'
-import { ensureTagChipStyle } from '@biu/public-ui'
+import { ensureTagChipStyle } from '@biu/public-ui/tag-chip'
 import { formatField, pinLabelColumn, contentFieldKey, resolveFieldType, defaultColumnKeys } from './fields.ts'
 import { DefaultCell, FieldGlyph } from './fsdb-cells.tsx'
 import { SchemaChips } from './schema-field.tsx'

@@ -73,9 +73,10 @@ test('empty schema values are tags=[] and values={}', () => {
   assert.equal(isEmptySchemaValue({ tags: [], values: { dp: { complexity: 'O(n)' } } }), false)
 })
 
-test('reserved schema fields include 合集 / facet by key or label', () => {
+test('reserved schema fields include 标签 / facet by key or label', () => {
   assert.equal(isReservedSchemaFieldKey('facet'), true)
   assert.equal(isReservedSchemaFieldKey('title'), true)
+  assert.equal(isReservedSchemaFieldKey('tags'), true)
   assert.equal(isReservedSchemaFieldLabel('标签'), true)
   assert.equal(isReservedSchemaFieldLabel('类型'), false)
   assert.equal(isReservedSchemaFieldLabel('标题'), true)
@@ -111,7 +112,7 @@ test('normalizeSchemaPack drops fields that reuse file-system keys or labels', (
     label: '动态规划',
     fields: [
       { key: 'facet', type: 'string', label: '别的名字' },
-      { key: 'extra', type: 'string', label: '合集' },
+      { key: 'extra', type: 'string', label: '标签' },
       { key: 'title', type: 'string', label: '题目' },
       { key: 'complexity', type: 'string', label: '复杂度' },
       { key: 'dup', type: 'string', label: '复杂度' },
@@ -120,13 +121,16 @@ test('normalizeSchemaPack drops fields that reuse file-system keys or labels', (
   assert.deepEqual(pack?.fields.map((field) => field.key), ['complexity'])
 })
 
-test('withBuiltinFields always includes writable facet and tags', () => {
-  const fields = withBuiltinFields({ title: { type: 'string', writable: true }, parentId: { type: 'string', label: '父级', writable: true } })
+test('withBuiltinFields always includes writable facet and strips tags', () => {
+  const fields = withBuiltinFields({
+    title: { type: 'string', writable: true },
+    parentId: { type: 'string', label: '父级', writable: true },
+    tags: { type: 'multi-select', label: '标签', writable: true },
+  })
   assert.equal(fields.facet?.type, 'facet')
   assert.equal(fields.facet?.writable, true)
-  assert.equal(fields.facet?.label, '合集')
-  assert.equal(fields.tags?.type, 'multi-select')
-  assert.equal(fields.tags?.writable, true)
+  assert.equal(fields.facet?.label, '标签')
+  assert.equal(fields.tags, undefined)
   assert.equal(fields.emoji?.writable, true)
   assert.equal(fields.parentId?.writable, true)
   assert.equal(fields.parentId?.label, '父级')
@@ -146,7 +150,6 @@ test('recordBuiltinValues fills required record columns', () => {
     createdAt: 0,
     updatedAt: 0,
     emoji: '',
-    tags: [],
     facet: { tags: [], values: {} },
     parentId: '',
     dependsOn: [],
@@ -154,12 +157,12 @@ test('recordBuiltinValues fills required record columns', () => {
     updatedBy: null,
   })
   assert.equal(recordBuiltinValues({ createdAt: 10, emoji: '📄' }).emoji, '📄')
-  assert.deepEqual(recordBuiltinValues({ tags: ['a', 'a', ''] }).tags, ['a'])
+  assert.equal('tags' in recordBuiltinValues({ tags: ['a'] }), false)
   assert.equal(recordBuiltinValues({ parentId: 'p1' }).parentId, 'p1')
   assert.deepEqual(recordBuiltinValues({ dependsOn: ['a', 'a', ''] }).dependsOn, ['a'])
 })
 
-test('required record fields are icon, tags, timestamps, facet, parent, and dependency', () => {
+test('required record fields are icon, timestamps, facet, parent, and dependency', () => {
   assert.deepEqual([...REQUIRED_RECORD_FIELD_KEYS].sort(), [
     'createdAt',
     'createdBy',
@@ -167,7 +170,6 @@ test('required record fields are icon, tags, timestamps, facet, parent, and depe
     'emoji',
     'facet',
     'parentId',
-    'tags',
     'updatedAt',
     'updatedBy',
   ])
@@ -175,7 +177,6 @@ test('required record fields are icon, tags, timestamps, facet, parent, and depe
   assert.equal(REQUIRED_RECORD_FIELDS.updatedBy.type, 'person')
   assert.equal(REQUIRED_RECORD_FIELDS.updatedBy.multiple, true)
   assert.equal(REQUIRED_RECORD_FIELDS.emoji.type, 'string')
-  assert.equal(REQUIRED_RECORD_FIELDS.tags.type, 'multi-select')
   assert.equal(REQUIRED_RECORD_FIELDS.facet.type, 'facet')
   assert.equal(REQUIRED_RECORD_FIELDS.createdAt.type, 'datetime')
   assert.equal(REQUIRED_RECORD_FIELDS.updatedAt.type, 'datetime')
@@ -197,6 +198,10 @@ test('updatedBy is a person list that appends unique editors', () => {
   assert.deepEqual(asPersonList(user), [user])
   assert.deepEqual(appendPerson(user, agent), [user, agent])
   assert.equal(appendPerson([user, agent], agent).length, 2)
+  const ada = { kind: 'user' as const, name: 'Ada', accountId: 'acc-ada' }
+  const bob = { kind: 'user' as const, name: 'Bob', accountId: 'acc-bob' }
+  assert.deepEqual(appendPerson(ada, bob), [ada, bob])
+  assert.equal(personKey(asPerson(ada)), 'user:acc-ada')
 })
 
 test('hasCollectionDeleteQuery requires ids, q, or a non-empty filter', () => {

@@ -1,6 +1,9 @@
 import { useSyncExternalStore, type ComponentType } from 'react'
 import { Service, type Context } from 'cordis'
 import { registerBlockAssets } from '@biu/type-file-system'
+import { clientLog } from '@biu/web-event-log/log'
+import { setPageBlockPluginPhase } from './page-block-meta.ts'
+import { rememberSlashBlock } from './slash-memory.ts'
 
 export type HeadingLevel = 1 | 2 | 3
 
@@ -67,6 +70,13 @@ export type SlashCommandSpec = {
 }
 
 let bound: PageEditorService | undefined
+let generation = 0
+const waiters = new Set<() => void>()
+
+function noteEditorBinding() {
+  generation += 1
+  for (const fn of waiters) fn()
+}
 
 export function getPageEditor() {
   return bound
@@ -82,8 +92,12 @@ export class PageEditorService extends Service {
   constructor(ctx: Context) {
     super(ctx, 'pageEditor')
     bound = this
+    noteEditorBinding()
     ctx.effect(() => () => {
-      if (bound === this) bound = undefined
+      if (bound === this) {
+        bound = undefined
+        noteEditorBinding()
+      }
     })
   }
 
@@ -110,7 +124,7 @@ export class PageEditorService extends Service {
     return [...this.extras]
   }
 
-  /** 登记一种新块（atom）。斜杠菜单可插入；View 画卡片。plugin 必须是插件自己的 id。 */
+  /** 往页面里插一块：只用这个。表的整页/行呈现走 databaseUi.registerView / registerRowView。 */
   registerBlock(spec: PageBlockSpec) {
     const plugin = String(spec.plugin ?? '').trim()
     if (!plugin) throw new Error('page block needs plugin id')
@@ -123,8 +137,19 @@ export class PageEditorService extends Service {
     const blockTypeLabel =
       String(spec.blockTypeLabel ?? '').trim() || (blockType === BASIC_BLOCK_TYPE ? '基础模块' : spec.label)
     const next = { ...spec, plugin, blockType, blockTypeLabel }
+    clientLog('info', 'page-block', `登记块 ${spec.kind}（${plugin}）`)
     return this.ctx.effect(() => {
       this.customBlocks.set(spec.kind, next)
+      rememberSlashBlock({
+        kind: spec.kind,
+        plugin,
+        label: spec.label,
+        hint: spec.hint ?? '自定义块',
+        aliases: spec.aliases ?? [],
+        blockType,
+        blockTypeLabel,
+      })
+      setPageBlockPluginPhase(plugin, 'ready')
       this.bump()
       return () => {
         if (this.customBlocks.get(spec.kind) === next) this.customBlocks.delete(spec.kind)
@@ -163,10 +188,17 @@ export class PageEditorService extends Service {
 }
 
 export function usePageEditorVersion(editor?: PageEditorService) {
-  const svc = editor ?? bound
   return useSyncExternalStore(
-    (fn) => (svc ? svc.subscribe(fn) : () => undefined),
-    () => svc?.version() ?? 0,
+    (fn) => {
+      const svc = editor ?? getPageEditor()
+      const off = svc ? svc.subscribe(fn) : () => undefined
+      if (!editor) waiters.add(fn)
+      return () => {
+        off()
+        waiters.delete(fn)
+      }
+    },
+    () => generation + ((editor ?? getPageEditor())?.version() ?? 0),
     () => 0,
   )
 }

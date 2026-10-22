@@ -105,7 +105,7 @@ export function buildSessionProgress(
   if (reportText.length > textLimit) reportText = `${reportText.slice(0, textLimit)}…`
 
   const newest = events.at(-1)
-  const busy = Boolean(opts.busy) || openTurn
+  const busy = opts.busy == null ? openTurn : Boolean(opts.busy)
   return {
     status: busy ? 'running' : 'idle',
     turn,

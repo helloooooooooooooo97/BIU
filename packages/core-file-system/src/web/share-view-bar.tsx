@@ -9,13 +9,14 @@ import {
   FunnelIcon,
   MagnifyingGlassIcon,
 } from '@heroicons/react/16/solid'
-import { HeadlessDismiss, HEADLESS_DISMISS_IGNORE } from '@biu/public-ui'
+import { HeadlessDismiss, HEADLESS_DISMISS_IGNORE } from '@biu/public-ui/headless-dismiss'
 import type { CollectionSchema, DbRecord, FieldType } from '@biu/type-file-system'
 import { countFilterRules, isCustomSorts } from '../query-logic.ts'
 import { defaultColumnKeys, resolveFieldType } from './fields.ts'
 import { FieldGlyph, ModeGlyph, VIEW_MODES } from './fsdb-cells.tsx'
 import { CheckRow } from './controls.tsx'
-import { FilterQueryMenu, SortQueryMenu, type QueryField } from './query-menus.tsx'
+import { FlyoutEmpty, SearchableFlyout, flyoutQueryMatch } from './flyout-search.tsx'
+import { FilterQueryMenu, QueryFlyout, SortQueryMenu, type QueryField } from './query-menus.tsx'
 import { shareTableColumns } from './share-table.tsx'
 import type { ShareQueryState } from './share-query.ts'
 
@@ -137,9 +138,12 @@ export function ShareViewQueryBar({
           </button>
           {modeOpen ? (
             <HeadlessDismiss onDismiss={() => setModeOpen(false)} insideRef={modeRef}>
-              <div className="tasks-sort-menu" role="menu">
-                <div className="tasks-sort-head">查看模式</div>
-                {VIEW_MODES.map((opt) => (
+              <SearchableFlyout className="tasks-sort-menu">
+                {(q) => {
+                  const modes = VIEW_MODES.filter((opt) => flyoutQueryMatch(opt.label, q))
+                  return (
+                    <>
+                {modes.map((opt) => (
                   <CheckRow
                     key={opt.id}
                     icon={<ModeGlyph id={opt.id} />}
@@ -149,7 +153,11 @@ export function ShareViewQueryBar({
                     onToggle={() => setModeOpen(false)}
                   />
                 ))}
-              </div>
+                {q.trim() && !modes.length ? <FlyoutEmpty /> : null}
+                    </>
+                  )
+                }}
+              </SearchableFlyout>
             </HeadlessDismiss>
           ) : null}
         </div>
@@ -165,14 +173,14 @@ export function ShareViewQueryBar({
             {sortCustom ? <span className="tasks-sort-dot" aria-hidden /> : null}
           </button>
           {sortOpen ? (
-            <HeadlessDismiss
-              onDismiss={() => setSortOpen(false)}
-              insideRef={sortRef}
+            <QueryFlyout
+              anchorRef={sortRef}
+              onClose={() => setSortOpen(false)}
               ignoreSelector={QUERY_NEST_IGNORE}
               inside={(node) => node instanceof Element && Boolean(node.closest('.db-search-menu, .fsdb-cellselect-menu, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]'))}
             >
               <SortQueryMenu sorts={state.sorts} fields={sortFields} onChange={(sorts) => onChange({ ...state, sorts })} />
-            </HeadlessDismiss>
+            </QueryFlyout>
           ) : null}
         </div>
         <div className="tasks-filter-btn-wrap" ref={filterRef}>
@@ -187,9 +195,9 @@ export function ShareViewQueryBar({
             {filterActive ? <span className="tasks-filter-dot" aria-hidden /> : null}
           </button>
           {filterOpen ? (
-            <HeadlessDismiss
-              onDismiss={() => setFilterOpen(false)}
-              insideRef={filterRef}
+            <QueryFlyout
+              anchorRef={filterRef}
+              onClose={() => setFilterOpen(false)}
               ignoreSelector={QUERY_NEST_IGNORE}
               inside={(node) => node instanceof Element && Boolean(node.closest('.db-search-menu, .fsdb-cellselect-menu, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]'))}
             >
@@ -199,7 +207,7 @@ export function ShareViewQueryBar({
                 valueOptions={valueOptions}
                 onChange={(filterTree) => onChange({ ...state, filterTree })}
               />
-            </HeadlessDismiss>
+            </QueryFlyout>
           ) : null}
         </div>
         <div className="tasks-sort-wrap" ref={columnRef}>
@@ -214,10 +222,12 @@ export function ShareViewQueryBar({
           </button>
           {columnOpen ? (
             <HeadlessDismiss onDismiss={() => setColumnOpen(false)} insideRef={columnRef}>
-              <div className="tasks-sort-menu fsdb-col-menu" role="menu">
-                <div className="tasks-sort-head">可见列</div>
+              <SearchableFlyout className="tasks-sort-menu fsdb-col-menu">
+                {(q) => {
+                  const hits = fields.filter((item) => flyoutQueryMatch(item.field.label ?? item.key, q))
+                  return (
                 <div className="fsdb-col-menu-list">
-                  {fields.map((item) => (
+                  {hits.map((item) => (
                     <CheckRow
                       key={item.key}
                       icon={<FieldGlyph kind={item.kind} />}
@@ -227,8 +237,11 @@ export function ShareViewQueryBar({
                       onToggle={() => toggleColumn(item.key)}
                     />
                   ))}
+                  {q.trim() && !hits.length ? <FlyoutEmpty /> : null}
                 </div>
-              </div>
+                  )
+                }}
+              </SearchableFlyout>
             </HeadlessDismiss>
           ) : null}
         </div>
@@ -244,21 +257,33 @@ export function ShareViewQueryBar({
           </button>
           {configOpen ? (
             <HeadlessDismiss onDismiss={() => setConfigOpen(false)} insideRef={configRef}>
-              <div className="tasks-filter-menu" role="menu">
-                <div className="tasks-sort-head">表格显示</div>
+              <SearchableFlyout className="tasks-filter-menu">
+                {(q) => {
+                  const wrap = flyoutQueryMatch('单元格换行', q)
+                  const trunc = flyoutQueryMatch('文本缩略', q)
+                  return (
+                    <>
+                {wrap ? (
                 <CheckRow
                   icon={<Bars3BottomLeftIcon aria-hidden className="size-[14px]" />}
                   label="单元格换行"
                   on={state.wrap}
                   onToggle={() => onChange({ ...state, wrap: !state.wrap })}
                 />
+                ) : null}
+                {trunc ? (
                 <CheckRow
                   icon={<EllipsisHorizontalIcon aria-hidden className="size-[14px]" />}
                   label="文本缩略"
                   on={state.truncate}
                   onToggle={() => onChange({ ...state, truncate: !state.truncate })}
                 />
-              </div>
+                ) : null}
+                {q.trim() && !wrap && !trunc ? <FlyoutEmpty /> : null}
+                    </>
+                  )
+                }}
+              </SearchableFlyout>
             </HeadlessDismiss>
           ) : null}
         </div>

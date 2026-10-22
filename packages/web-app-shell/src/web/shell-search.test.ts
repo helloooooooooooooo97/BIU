@@ -25,7 +25,7 @@ test('search opens inspector collections, not chat or database routes', () => {
   assert.equal(searchCollection('facet'), '/facets')
   assert.deepEqual(
     SEARCH_SCOPES.map((item) => item.label),
-    ['视图', '会话', '任务', '页面', '插件', '合集'],
+    ['视图', '会话', '任务', '页面', '插件', '标签'],
   )
 })
 
@@ -56,10 +56,10 @@ test('searchHref opens the left main pane by changing the route', () => {
   assert.equal(searchHref({ kind: 'facet', id: 'f1' }), '/database/facets/record/f1')
 })
 
-test('search hits collect tags from tags, facet.tags, and config.tags', () => {
-  assert.deepEqual(tagsFromRecord({ tags: ['a', 'b'] }), ['a', 'b'])
+test('search hits collect 标签 from facet.tags and config.facet.tags', () => {
+  assert.deepEqual(tagsFromRecord({ tags: ['a', 'b'] }), [])
   assert.deepEqual(tagsFromRecord({ facet: { tags: ['dp'] } }), ['dp'])
-  assert.deepEqual(tagsFromRecord({ config: { tags: ['host-ui'] } }), ['host-ui'])
+  assert.deepEqual(tagsFromRecord({ config: { facet: { tags: ['host-ui'] } } }), ['host-ui'])
   assert.deepEqual(tagsFromRecord({ tags: ['a'], facet: { tags: ['a', 'b'] } }), ['a', 'b'])
 })
 
@@ -88,7 +88,9 @@ test('empty search lists every kind by updatedAt instead of skipping remotes', (
   assert.doesNotMatch(src, /if \(!needle && scope === 'all'\) \{\s*setHits\(\[\]\)/)
   assert.match(src, /sort: 'updatedAt'/)
   assert.match(src, /item.id === 'session' \? '\/sessions'/)
-  assert.match(src, /空着时视图、会话、任务、页面、插件、合集各按更新时间列最近/)
+  assert.match(src, /空着时视图、会话、任务、页面、插件、标签各按更新时间列最近/)
+  assert.doesNotMatch(src, /window\.confirm/)
+  assert.match(src, /<ConfirmDialog/)
 })
 
 test('plugin search hits show an enabled dot next to the title', () => {
@@ -139,12 +141,13 @@ test('search hit icons follow record mark: emoji, else session mascot', () => {
   assert.match(src, /scrollIntoView\(\{ block: 'nearest' \}\)/)
 })
 
-test('facet search scope is named 合集 with stack icon', () => {
+test('facet search scope is named 标签 with tag icon', () => {
   const src = readFileSync(resolve(import.meta.dirname, './shell-search.tsx'), 'utf8')
   assert.match(src, /label: '视图'/)
   assert.match(src, /kind === 'view'[\s\S]*return <TableCellsIcon/)
-  assert.match(src, /label: '合集'/)
-  assert.match(src, /kind === 'plugin'[\s\S]*return <RectangleStackIcon/)
+  assert.match(src, /label: '标签'/)
+  assert.match(src, /kind === 'plugin'[\s\S]*return <PuzzlePieceIcon/)
+  assert.match(src, /return <TagIcon className=\{className\} \/>/)
   assert.doesNotMatch(src, /label: '类型'/)
 })
 
@@ -187,7 +190,7 @@ test('search hit actions use collection chrome.Actions when registered', () => {
   assert.match(src, /getDatabaseUi\(\)\?\.chrome\(searchCollection\(hit\.kind\)\)\.Actions/)
   assert.match(src, /placedRowActions\(hit\.actions\)/)
   assert.match(src, /<Actions/)
-  assert.match(src, /previewHitRecord\(record, action\)/)
+  assert.doesNotMatch(src, /if \(next !== record\) setRecord\(next\)/)
   assert.match(src, /addEventListener\('fsdb:change'/)
 })
 

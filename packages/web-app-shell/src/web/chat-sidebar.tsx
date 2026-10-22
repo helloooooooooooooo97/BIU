@@ -1,8 +1,8 @@
-import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { createPortal } from 'react-dom'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { isMascotDancing, subscribeMascotDance } from '@biu/public-mascot'
-import { ChatCount, SidebarFold } from '@biu/public-ui'
+import { ChatCount } from '@biu/public-ui/chat-count'
+import { SidebarFold } from '@biu/public-ui/sidebar-fold'
 import {
   bindSessionView,
   type SessionListItem,
@@ -34,19 +34,21 @@ import {
   BookmarkSlashIcon,
 } from '@heroicons/react/16/solid'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
+import { chatScrollRoot, sessionWindowFromHost, sessionWindowHidden, type SessionWindowSlice } from './session-window.ts'
 
-/** 项目/标签分组视图的持久化 key。 */
+/** 项目/标签分组视图的持久化 key。旧值 tag 仍按标签读。 */
 const GROUP_BY_KEY = 'cordis.sidebar.groupBy'
 
 function readGroupBy(): SidebarGroupBy {
   try {
-    return localStorage.getItem(GROUP_BY_KEY) === 'tag' ? 'tag' : 'project'
+    const stored = localStorage.getItem(GROUP_BY_KEY)
+    return stored === 'tag' || stored === 'facet' ? 'facet' : 'project'
   } catch {
     return 'project'
   }
 }
 
-/** 每行 tag 徽标：最多显示 2 个，其余以 +N（剩余数量）展示。 */
+/** 每行标签徽标：最多显示 2 个，其余以 +N（剩余数量）展示。 */
 function SessionTagBadges({ tags }: { tags?: string[] }) {
   const list = (tags ?? []).map((tag) => tag.trim()).filter(Boolean)
   if (!list.length) return null
@@ -107,7 +109,7 @@ const SessionRow = memo(function SessionRow({
       <span className="sidebar-label min-w-0 flex-1 truncate font-medium">
         {item.title}
       </span>
-      <SessionTagBadges tags={item.tags} />
+      <SessionTagBadges tags={item.facet?.tags} />
     </>
   )
   return (
@@ -164,6 +166,96 @@ const SessionRow = memo(function SessionRow({
       >
         <StarIcon {...chromeIcon} />
       </button>
+    </div>
+  )
+})
+
+const WindowedSessionList = memo(function WindowedSessionList({
+  sessions,
+  rowKey,
+  highlightId,
+  busySessions,
+  dancing,
+  onDelete,
+  onPin,
+  onOpen,
+}: {
+  sessions: SessionListItem[]
+  rowKey: string
+  highlightId: string | null
+  busySessions: Record<string, true>
+  dancing: boolean
+  onDelete: (item: SessionListItem) => void
+  onPin: (item: SessionListItem) => void
+  onOpen?: (item: SessionListItem) => void
+}) {
+  const hostRef = useRef<HTMLDivElement>(null)
+  const countRef = useRef(sessions.length)
+  countRef.current = sessions.length
+  const [slice, setSlice] = useState(() => sessionWindowHidden(sessions.length))
+
+  const applySlice = useCallback((next: SessionWindowSlice) => {
+    setSlice((prev) =>
+      prev.start === next.start && prev.end === next.end && prev.padTop === next.padTop && prev.padBottom === next.padBottom
+        ? prev
+        : next,
+    )
+  }, [])
+
+  useLayoutEffect(() => {
+    const host = hostRef.current
+    if (!host) return
+    const scroller = chatScrollRoot(host)
+    applySlice(scroller ? sessionWindowFromHost(countRef.current, host, scroller) : sessionWindowHidden(countRef.current))
+  }, [applySlice, sessions.length])
+
+  useEffect(() => {
+    const host = hostRef.current
+    if (!host) return
+    const scroller = chatScrollRoot(host)
+    if (!scroller) return
+    let raf = 0
+    const sync = () => applySlice(sessionWindowFromHost(countRef.current, host, scroller))
+    const onScroll = () => {
+      if (raf) return
+      raf = requestAnimationFrame(() => {
+        raf = 0
+        sync()
+      })
+    }
+    scroller.addEventListener('scroll', onScroll, { passive: true })
+    const ro = new ResizeObserver(onScroll)
+    ro.observe(scroller)
+    ro.observe(host)
+    return () => {
+      cancelAnimationFrame(raf)
+      scroller.removeEventListener('scroll', onScroll)
+      ro.disconnect()
+    }
+  }, [applySlice, sessions.length])
+
+  return (
+    <div
+      ref={hostRef}
+      className="sidebar-session-window"
+      data-session-window=""
+      data-session-window-start={slice.start}
+      data-session-window-end={slice.end}
+      data-session-window-count={sessions.length}
+      style={{ paddingTop: slice.padTop, paddingBottom: slice.padBottom }}
+    >
+      {sessions.slice(slice.start, slice.end).map((item) => (
+        <SessionRow
+          key={`${rowKey}:${item.id}`}
+          item={item}
+          active={item.id === highlightId}
+          busy={Boolean(busySessions[item.id])}
+          dancing={dancing}
+          onDelete={onDelete}
+          onPin={onPin}
+          onOpen={onOpen}
+        />
+      ))}
     </div>
   )
 })
@@ -235,7 +327,6 @@ export const ChatSidebar = memo(function ChatSidebar({
   const sections = useMemo(() => buildSidebarSections(sessions, groupBy), [sessions, groupBy])
   // 板块级收缩（点击标题可展开/收缩，不显示收缩按钮，层级靠 kind 图标表达）
   const [collapsedSections, setCollapsedSections] = useState<Partial<Record<SidebarSectionKind, boolean>>>({})
-  const [pendingDelete, setPendingDelete] = useState<SessionListItem | null>(null)
   const toggleSection = useCallback((kind: SidebarSectionKind) => {
     setCollapsedSections((prev) => ({ ...prev, [kind]: !prev[kind] }))
   }, [])
@@ -269,7 +360,7 @@ export const ChatSidebar = memo(function ChatSidebar({
           return
         }
         if (variant === 'popover') {
-          openOverlayComposer({ revealThread: true })
+          openOverlayComposer()
           return
         }
         navigate(`/s/${id}`)
@@ -284,21 +375,14 @@ export const ChatSidebar = memo(function ChatSidebar({
       if (isChatPagePath(window.location.pathname)) {
         navigate(`/s/${item.id}`)
       } else {
-        openOverlayComposer({ revealThread: true })
+        openOverlayComposer()
       }
       onActivate?.()
     },
     [navigate, onActivate, sessionView],
   )
 
-  const requestDeleteChat = useCallback((item: SessionListItem) => {
-    setPendingDelete(item)
-  }, [])
-
-  const confirmDeleteChat = useCallback(() => {
-    if (!pendingDelete) return
-    const item = pendingDelete
-    setPendingDelete(null)
+  const deleteChat = useCallback((item: SessionListItem) => {
     const wasActive = item.id === sessionId
     void sessionView.deleteSession(item.id).then(() => {
       if (variant === 'popover') return
@@ -306,7 +390,7 @@ export const ChatSidebar = memo(function ChatSidebar({
       const next = sessionView.get().sessionId
       navigate(next ? `/s/${next}` : '/')
     })
-  }, [navigate, pendingDelete, sessionId, sessionView, variant])
+  }, [navigate, sessionId, sessionView, variant])
 
   const pinChat = useCallback(
     (item: SessionListItem) => {
@@ -316,9 +400,9 @@ export const ChatSidebar = memo(function ChatSidebar({
   )
 
   const body = (
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-3">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-3" data-chat-scroll="">
         <div className="mt-2 space-y-1.5">
-          {sessions.length === 0 ? null : (
+          {sessions.length === 0 && groupBy !== 'project' ? null : (
             sections.map((section) => {
               const sectionCollapsed = Boolean(collapsedSections[section.kind])
               return (
@@ -358,9 +442,9 @@ export const ChatSidebar = memo(function ChatSidebar({
                           <button
                             type="button"
                             title="按标签分组"
-                            aria-pressed={groupBy === 'tag'}
-                            className={`sidebar-view-switch-btn${groupBy === 'tag' ? ' is-on' : ''}`}
-                            onClick={() => changeGroupBy('tag')}
+                            aria-pressed={groupBy === 'facet'}
+                            className={`sidebar-view-switch-btn${groupBy === 'facet' ? ' is-on' : ''}`}
+                            onClick={() => changeGroupBy('facet')}
                           >
                             <TagIcon {...chromeIcon} />
                           </button>
@@ -371,18 +455,18 @@ export const ChatSidebar = memo(function ChatSidebar({
                   <SidebarFold open={!sectionCollapsed}>
                     <div className="flex min-w-0 flex-col gap-px pt-0.5">
                       {section.sessions
-                        ? section.sessions.map((item) => (
-                          <SessionRow
-                            key={`pinned:${item.id}`}
-                            item={item}
-                            active={item.id === highlightId}
-                            busy={Boolean(busySessions[item.id])}
+                        ? (
+                          <WindowedSessionList
+                            sessions={section.sessions}
+                            rowKey="pinned"
+                            highlightId={highlightId}
+                            busySessions={busySessions}
                             dancing={dancing}
-                            onDelete={requestDeleteChat}
+                            onDelete={deleteChat}
                             onPin={pinChat}
                             onOpen={variant === 'popover' ? openSession : undefined}
                           />
-                        ))
+                        )
                         : section.groups?.map((group) => {
                           const collapsed = Boolean(collapsedProjects[group.key])
                           const isUngrouped = group.key === UNGROUPED_PROJECT_KEY || group.key === UNGROUPED_TAG_KEY
@@ -412,7 +496,7 @@ export const ChatSidebar = memo(function ChatSidebar({
                                         <FolderMinusIcon className={chromeIconClass('opacity-80')} />
                                       ) : group.key === UNGROUPED_TAG_KEY ? (
                                         <BookmarkSlashIcon className={chromeIconClass('opacity-80')} />
-                                      ) : group.kind === 'tag' ? (
+                                      ) : group.kind === 'facet' ? (
                                         <TagIcon className={chromeIconClass('opacity-80')} />
                                       ) : (
                                         <FolderGlyph className="opacity-80" />
@@ -447,18 +531,16 @@ export const ChatSidebar = memo(function ChatSidebar({
                                   ) : null}
                               </div>
                               <SidebarFold open={!collapsed} className="sidebar-session-list min-w-0">
-                                {group.sessions.map((item) => (
-                                  <SessionRow
-                                    key={`${group.key}:${item.id}`}
-                                    item={item}
-                                    active={item.id === highlightId}
-                                    busy={Boolean(busySessions[item.id])}
-                                    dancing={dancing}
-                                    onDelete={requestDeleteChat}
-                                    onPin={pinChat}
-                                    onOpen={variant === 'popover' ? openSession : undefined}
-                                  />
-                                ))}
+                                <WindowedSessionList
+                                  sessions={group.sessions}
+                                  rowKey={group.key}
+                                  highlightId={highlightId}
+                                  busySessions={busySessions}
+                                  dancing={dancing}
+                                  onDelete={deleteChat}
+                                  onPin={pinChat}
+                                  onOpen={variant === 'popover' ? openSession : undefined}
+                                />
                               </SidebarFold>
                             </div>
                           )
@@ -474,50 +556,6 @@ export const ChatSidebar = memo(function ChatSidebar({
       </div>
   )
 
-  const deleteDialog = pendingDelete && typeof document !== 'undefined'
-    ? createPortal(
-      <div
-        className="fixed inset-0 z-80 flex items-center justify-center bg-black/55 p-4"
-        data-testid="chat-session-delete-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="chat-session-delete-title"
-        onClick={() => setPendingDelete(null)}
-      >
-        <div
-          className="w-[min(100%,320px)] rounded-[10px] border border-(--dsw-border) bg-(--dsw-sidebar) p-4 text-(--dsw-label)"
-          onClick={(event) => event.stopPropagation()}
-        >
-          <h2 id="chat-session-delete-title" className="m-0 text-[13px] font-semibold">
-            删除「{pendingDelete.title}」？
-          </h2>
-          <p className="mt-1.5 mb-0 text-[11px] leading-[1.45] text-(--dsw-label-3)">
-            删除后无法恢复这份会话。
-          </p>
-          <div className="mt-3 flex justify-end gap-1.5">
-            <button
-              type="button"
-              className="rounded-md border-0 bg-(--dsw-hover) px-2.5 py-1 text-[11px] text-(--dsw-label) hover:bg-[#353535]"
-              data-testid="chat-session-delete-cancel"
-              onClick={() => setPendingDelete(null)}
-            >
-              取消
-            </button>
-            <button
-              type="button"
-              className="rounded-md border-0 bg-(--dsw-hover) px-2.5 py-1 text-[11px] font-medium text-(--dsw-label) hover:bg-[#353535]"
-              data-testid="chat-session-delete-confirm"
-              onClick={confirmDeleteChat}
-            >
-              确认删除
-            </button>
-          </div>
-        </div>
-      </div>,
-      document.body,
-    )
-    : null
-
   if (variant === 'popover') {
     return (
       <div
@@ -527,18 +565,12 @@ export const ChatSidebar = memo(function ChatSidebar({
         aria-label="聊天"
       >
         {body}
-        {deleteDialog}
       </div>
     )
   }
 
   if (embedded) {
-    return (
-      <>
-        {body}
-        {deleteDialog}
-      </>
-    )
+    return body
   }
 
   return (
@@ -552,7 +584,6 @@ export const ChatSidebar = memo(function ChatSidebar({
       testId="chat-sidebar"
     >
       {body}
-      {deleteDialog}
     </ShellSidebarFrame>
   )
 })

@@ -8,12 +8,13 @@ import {
   type SchemaFieldValue,
 } from '@biu/type-file-system'
 import { TagChip, TagChips } from '@biu/public-ui'
-import { DbSearchOption, ensureDbSearchStyle } from '@biu/database-ui'
-import { FieldEditor, fieldDraftValue, parseFieldValue } from './fsdb-cells.tsx'
+import { DbSearchOption, ensureDbSearchStyle } from '@biu/database-ui/search'
+import { fieldDraftValue, parseFieldValue } from './fsdb-cells.tsx'
+import { FieldEditor } from './field-editor.tsx'
 import { loadFacets, persistFacets, slugFacetId, subscribeFacets } from './facet-catalog.ts'
 import { PersonPickPanel } from './person-cell.tsx'
 import { RecordPickPanel } from './record-link-cell.tsx'
-import { asStringList, isRecordLinkField, isSingleRefField, parseFacetFlatColumnKey, resolveFieldType } from './fields.ts'
+import { asStringList, enumDisplayLabel, isRecordLinkField, isSingleRefField, parseFacetFlatColumnKey, resolveFieldType } from './fields.ts'
 
 type TagOption = { value: string; label: string }
 
@@ -21,12 +22,14 @@ function TagPickPanel({
   values,
   options,
   multiple,
+  allowCreate = true,
   onChange,
   onPicked,
 }: {
   values: string[]
   options: TagOption[]
   multiple: boolean
+  allowCreate?: boolean
   onChange: (next: string[]) => void
   onPicked?: () => void
 }) {
@@ -42,6 +45,7 @@ function TagPickPanel({
   )
   const draft = query.trim()
   const canCreate =
+    allowCreate &&
     Boolean(draft) &&
     !values.includes(draft) &&
     !options.some((item) => item.value === draft || item.label === draft)
@@ -102,7 +106,7 @@ function TagPickPanel({
   )
 }
 
-function applyFacetTags(parsed: SchemaFieldValue, catalog: CollectionSchemaPack[], nextIds: string[]) {
+async function applyFacetTags(parsed: SchemaFieldValue, catalog: CollectionSchemaPack[], nextIds: string[]) {
   let packs = catalog
   const used = new Set(packs.map((tag) => tag.id))
   const resolved: string[] = []
@@ -121,7 +125,7 @@ function applyFacetTags(parsed: SchemaFieldValue, catalog: CollectionSchemaPack[
     used.add(id)
     resolved.push(id)
   }
-  if (packs !== catalog) persistFacets(packs)
+  if (packs !== catalog) await persistFacets(packs)
   return retagSchemaValue(parsed, resolved)
 }
 
@@ -136,9 +140,10 @@ function FacetPickPanel({ value, onChange }: { value: unknown; onChange: (next: 
       options={catalog.map((tag) => ({ value: tag.id, label: tag.label }))}
       multiple
       onChange={(next) => {
-        const updated = applyFacetTags(liveRef.current, catalog, next)
-        liveRef.current = updated
-        onChange(updated)
+        void applyFacetTags(liveRef.current, catalog, next).then((updated) => {
+          liveRef.current = updated
+          onChange(updated)
+        })
       }}
     />
   )
@@ -228,12 +233,13 @@ export function CellPopDraft({
 
   if (kind === 'select' || kind === 'multi-select') {
     const selected = kind === 'multi-select' ? asStringList(raw) : text ? [text] : asStringList(raw)
-    const list = [...new Set([...options, ...selected])].filter(Boolean)
+    const list = field.enum?.length ? field.enum : [...new Set([...options, ...selected])].filter(Boolean)
     return (
       <TagPickPanel
         values={selected}
-        options={list.map((item) => ({ value: item, label: item }))}
+        options={list.map((item) => ({ value: item, label: enumDisplayLabel(field, item) }))}
         multiple={kind === 'multi-select'}
+        allowCreate={!field.enum?.length}
         onChange={(next) => {
           const value = kind === 'multi-select' ? next : next[0] ?? ''
           setText(kind === 'multi-select' ? next.join(', ') : value)

@@ -23,6 +23,16 @@ const DEFAULT_PREFS: PagePrefs = {
   bodyGap: 'md',
 }
 
+/** 局域网和外部分享页的默认版式，不写入访问者自己的配置。 */
+export const SHARE_PAGE_PREFS: PagePrefs = {
+  wide: true,
+  outlineExpand: true,
+  outlinePin: true,
+  navPin: true,
+  bodySize: 'md',
+  bodyGap: 'md',
+}
+
 function asScale(value: unknown, fallback: BodyScale): BodyScale {
   return typeof value === 'string' && SCALES.has(value as BodyScale) ? (value as BodyScale) : fallback
 }
@@ -59,17 +69,51 @@ function writeCachedPagePrefs(next: PagePrefs) {
   }
 }
 
-function postPagePrefs(next: PagePrefs) {
+const PROFILE_GET_HOLD_MS = 400
+let profileInflight: Promise<Record<string, unknown> | null> | null = null
+
+/** One in-flight GET /api/profile for theme, page prefs, and the collection browser. */
+export async function getWorkspaceProfile(): Promise<Record<string, unknown> | null> {
+  if (profileInflight) return profileInflight
+  let request: Promise<Record<string, unknown> | null>
+  request = (async () => {
+    const res = await fetch('/api/profile')
+    if (!res.ok) return null
+    const data = (await res.json()) as unknown
+    return data && typeof data === 'object' && !Array.isArray(data) ? (data as Record<string, unknown>) : null
+  })().then(
+    (body) => {
+      setTimeout(() => {
+        if (profileInflight === request) profileInflight = null
+      }, PROFILE_GET_HOLD_MS)
+      return body
+    },
+    (error) => {
+      if (profileInflight === request) profileInflight = null
+      throw error
+    },
+  )
+  profileInflight = request
+  return request
+}
+
+export function resetWorkspaceProfileGet() {
+  profileInflight = null
+}
+
+async function postPagePrefs(next: PagePrefs) {
   if (typeof fetch === 'undefined') return
-  void fetch('/api/profile', {
+  const res = await fetch('/api/profile', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ pagePrefs: next }),
-  }).catch(() => undefined)
+  })
+  if (!res.ok) throw new Error(`pagePrefs persist failed: ${res.status}`)
 }
 
 let prefs: PagePrefs = typeof localStorage === 'undefined' ? { ...DEFAULT_PREFS } : readCachedPagePrefs()
 let pageWidthVersion = 0
+let prefsWriteGen = 0
 const listeners = new Set<() => void>()
 
 function emit() {
@@ -78,13 +122,13 @@ function emit() {
   for (const fn of listeners) fn()
 }
 
-function commit(next: PagePrefs, persistRemote: boolean) {
+function commit(next: PagePrefs) {
   if (JSON.stringify(next) === JSON.stringify(prefs)) return
   prefs = next
   writeCachedPagePrefs(next)
+  applyPagePrefs(next)
   if (typeof window !== 'undefined') window.dispatchEvent(new Event('biu:page-prefs'))
   emit()
-  if (persistRemote) postPagePrefs(next)
 }
 
 export function getPagePrefs() {
@@ -117,24 +161,32 @@ export function applyPagePrefs(next = prefs) {
   root.dataset.bodyGap = next.bodyGap
 }
 
-export function persistPagePrefs(patch: Partial<PagePrefs>) {
-  commit(parsePagePrefs({ ...prefs, ...patch }, prefs), true)
+export async function persistPagePrefs(patch: Partial<PagePrefs>) {
+  const next = parsePagePrefs({ ...prefs, ...patch }, prefs)
+  if (JSON.stringify(next) === JSON.stringify(prefs)) return prefs
+  prefsWriteGen += 1
+  const gen = prefsWriteGen
+  await postPagePrefs(next)
+  if (gen !== prefsWriteGen) return getPagePrefs()
+  commit(next)
+  return prefs
 }
 
 export function persistPageWidth(next: PageWidth) {
-  persistPagePrefs({ wide: next === 'full' })
+  return persistPagePrefs({ wide: next === 'full' })
 }
 
 export async function hydratePagePrefs() {
+  const gen = prefsWriteGen
   try {
-    const res = await fetch('/api/profile')
-    if (!res.ok) return getPagePrefs()
-    const data = (await res.json()) as { pagePrefs?: unknown }
+    const data = await getWorkspaceProfile()
+    if (gen !== prefsWriteGen) return getPagePrefs()
+    if (!data) return getPagePrefs()
     if (data.pagePrefs && typeof data.pagePrefs === 'object') {
-      commit(parsePagePrefs(data.pagePrefs, prefs), false)
+      commit(parsePagePrefs(data.pagePrefs, prefs))
       return prefs
     }
-    postPagePrefs(prefs)
+    void postPagePrefs(prefs).catch(() => undefined)
     return prefs
   } catch {
     return getPagePrefs()

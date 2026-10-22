@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+<rect width="1200" height="630" fill="#000000"/>
+<svg x="120" y="175" width="280" height="280" viewBox="160 325 580 580" xmlns="http://www.w3.org/2000/svg"><title>BIU</title><rect x="160" y="325" width="580" height="580" rx="96" fill="#ffffff"></rect><path d="M 450 615 L 333.8 462.4 A 191.79999999999998 191.79999999999998 0 0 1 598.2 493.3 Z" fill="#1e3a8a"></path><path d="M 450 615 L 598.2 493.3 A 191.79999999999998 191.79999999999998 0 0 1 566.8 767.2 Z" fill="#0ea5e9"></path><path d="M 450 615 L 566.8 767.2 A 191.79999999999998 191.79999999999998 0 1 1 333.8 462.4 Z" fill="#0f172a"></path><circle cx="450" cy="615" r="191.79999999999998" fill="none" stroke="#ffffff" stroke-width="0"></circle><path d="M 333.8 462.4 L 566.8 767.2" stroke="#ffffff" stroke-width="0" stroke-linecap="round"></path><path d="M 598.2 493.3 L 450 615" stroke="#ffffff" stroke-width="0" stroke-linecap="round"></path></svg>
+<g font-family="ui-sans-serif, system-ui, -apple-system, 'PingFang SC', 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif" fill="#ffffff">
+<text x="470" y="282" font-size="96" font-weight="700" letter-spacing="-2">BIU</text>
+<text x="470" y="368" font-size="48" font-weight="600">One page, every piece of software</text>
+<text x="470" y="430" font-size="26" fill-opacity=".6">Open source · Free · All in One</text>
+</g>
+</svg>

@@ -2,7 +2,7 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import type { CollectionSchema } from '@biu/type-file-system'
 import { REQUIRED_RECORD_FIELDS, normalizeSchemaValue } from '@biu/type-file-system'
-import { defaultColumnKeys, facetFlatColumnKey, flattenFacetColumns, facetColumnTitle, inferPackFieldType, listProjectionKeys, parseFacetFlatColumnKey, patchFacetFlatValue, pinLabelColumn, contentFieldKey, flattenTree, formatField, fieldHasValue, groupField, groupRecords, hasTreeLinks, treeChildren, isViewModeId, matchActionWhen, overlayListed, previewActionRecord, parentFieldKey, readFacetFlatValue, recordLinkIds, resolveFieldType, uniqueValues } from './fields'
+import { actionWhenKeys, defaultColumnKeys, facetFlatColumnKey, flattenFacetColumns, facetColumnTitle, inferPackFieldType, listProjectionKeys, parseFacetFlatColumnKey, patchFacetFlatValue, pinActionColumn, pinLabelColumn, contentFieldKey, flattenTree, formatField, fieldHasValue, fieldValueOptions, GROUP_STRATEGIES, groupField, groupListFilter, groupListKeys, groupRecords, groupableFields, hasTreeLinks, treeChildren, isGroupableKind, isViewModeId, matchActionWhen, mergeListFilters, overlayListed, previewActionRecord, parentFieldKey, readFacetFlatValue, recordLinkIds, resolveFieldType, uniqueValues } from './fields'
 import { placedActions, visibleActions } from './fsdb-cells.tsx'
 
 test('isViewModeId accepts builtin and custom slugs', () => {
@@ -37,6 +37,19 @@ test('resolveFieldType maps legacy aliases', () => {
   assert.equal(resolveFieldType({ type: 'action' }), 'action')
   assert.equal(resolveFieldType({ type: 'ref' }), 'ref')
   assert.equal(resolveFieldType({ type: 'multi-ref' }), 'multi-ref')
+})
+
+test('closed enums keep stable values and expose translated labels', () => {
+  const role = {
+    type: 'select' as const,
+    enum: ['owner', 'viewer'],
+    enumLabels: { owner: '所有者', viewer: '查看者' },
+  }
+  assert.equal(formatField(role, 'owner'), '所有者')
+  assert.deepEqual(fieldValueOptions([{ id: 'a', role: 'other' }], 'role', role), [
+    { value: 'owner', label: '所有者' },
+    { value: 'viewer', label: '查看者' },
+  ])
 })
 
 test('fieldHasValue hides missing list/card/board chips', () => {
@@ -99,6 +112,30 @@ test('previewActionRecord flips running from action when', () => {
   assert.equal(previewActionRecord({ id: 'draft', sandbox: true }, { id: 'pack', when: { sandbox: true } }).installed, true)
 })
 
+test('installed plugin actions show run or stop with uninstall, and install only after uninstall', () => {
+  const schema: CollectionSchema = {
+    fields: { ...REQUIRED_RECORD_FIELDS },
+    actions: [
+      { id: 'start', label: '运行', when: { installed: true, running: false } },
+      { id: 'stop', label: '停止', when: { installed: true, running: true } },
+      { id: 'pack', label: '安装', when: { sandbox: true, installed: false } },
+      { id: 'uninstall', label: '卸载', when: { installed: true } },
+    ],
+  }
+  const installed = { id: 'page-toc', installed: true, running: true, sandbox: true, builtin: true }
+  assert.deepEqual(visibleActions(schema, installed, 'row').map((item) => item.id), ['stop', 'uninstall'])
+  assert.deepEqual(
+    visibleActions(schema, { ...installed, running: false }, 'row').map((item) => item.id),
+    ['start', 'uninstall'],
+  )
+  const removed = previewActionRecord(installed, { id: 'uninstall', when: { installed: true } })
+  assert.deepEqual(visibleActions(schema, removed, 'row').map((item) => item.id), ['pack'])
+  assert.deepEqual(
+    visibleActions(schema, { id: 'draft', sandbox: true }, 'row').map((item) => item.id),
+    ['pack'],
+  )
+})
+
 test('placedActions keeps start and stop so chrome.Actions can own the pair', () => {
   const schema: CollectionSchema = {
     fields: { ...REQUIRED_RECORD_FIELDS },
@@ -137,6 +174,9 @@ test('default columns skip id and timestamps unless schema.columns lists them; t
   assert.deepEqual(defaultColumnKeys(schema, keys), ['title', 'status'])
   assert.deepEqual(defaultColumnKeys({ ...schema, columns: ['status', 'createdAt'] }, keys), ['title', 'status', 'createdAt'])
   assert.deepEqual(pinLabelColumn(schema, ['status', 'title']), ['title', 'status'])
+  assert.deepEqual(pinActionColumn(schema, ['status', 'title', 'actions'], true), ['title', 'actions', 'status'])
+  assert.deepEqual(pinActionColumn(schema, ['status', 'title'], true), ['title', 'actions', 'status'])
+  assert.deepEqual(pinActionColumn(schema, ['title', 'actions', 'status'], false), ['title', 'status'])
 })
 
 test('default columns omit flattened type properties', () => {
@@ -150,6 +190,7 @@ test('default columns omit flattened type properties', () => {
   assert.equal(facetColumnTitle({ key: 'title', field: { label: '标题' } }), '标题')
   const row = { id: '1', facet: { tags: ['haohao'], values: { haohao: { dede: 'v' } } } }
   assert.equal(readFacetFlatValue(row, nested), 'v')
+  assert.deepEqual(uniqueValues([row], nested, { type: 'string', label: '的的' }), ['v'])
   assert.deepEqual(patchFacetFlatValue(row, nested, 'next').values.haohao?.dede, 'next')
   const untagged = { id: '2', facet: { tags: [], values: {} } }
   const stamped = patchFacetFlatValue(untagged, nested, 'next')
@@ -166,9 +207,50 @@ test('list projection keeps visible columns plus title, emoji, and parent', () =
   assert.equal(keys.includes('status'), true)
   assert.equal(keys.includes('emoji'), true)
   assert.equal(keys.includes('tags'), true)
+  assert.equal(keys.includes('parentChain'), true)
+  assert.equal(keys.includes('usageParts'), true)
   assert.equal(keys.includes('dueAt'), false)
   const withFacet = listProjectionKeys({ schema: { ...schema, fields: { ...schema.fields, facet: { type: 'facet' } } }, columns: [nested] })
   assert.equal(withFacet.includes('facet'), true)
+})
+
+const pluginActions: CollectionSchema = {
+  labelField: 'title',
+  fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string' } },
+  actions: [
+    { id: 'start', label: '运行', when: { installed: true, running: false } },
+    { id: 'stop', label: '停止', when: { installed: true, running: true } },
+    { id: 'pack', label: '安装', when: { sandbox: true, installed: false } },
+    { id: 'uninstall', label: '卸载', when: { installed: true } },
+  ],
+}
+
+test('list projection keeps action when keys so plugin actions do not flash', () => {
+  assert.deepEqual(actionWhenKeys(pluginActions), ['installed', 'running', 'sandbox'])
+  const keys = listProjectionKeys({ schema: pluginActions, columns: ['title', 'tags'] })
+  assert.equal(keys.includes('installed'), true)
+  assert.equal(keys.includes('running'), true)
+  assert.equal(keys.includes('sandbox'), true)
+  assert.equal(keys.includes('tags'), true)
+})
+
+test('sparse plugin rows without when flags flash 安装; projected flags keep 运行/停止 and 卸载', () => {
+  const sparse = { id: 'page-toc', title: '目录' }
+  assert.deepEqual(visibleActions(pluginActions, sparse, 'row').map((item) => item.id), [])
+  const missingFlags = { id: 'page-html-blocks', title: 'HTML', sandbox: true }
+  assert.deepEqual(visibleActions(pluginActions, missingFlags, 'row').map((item) => item.id), ['pack'])
+  assert.deepEqual(
+    visibleActions(pluginActions, { id: 'page-toc', title: '目录', installed: true, running: true, sandbox: true }, 'row').map(
+      (item) => item.id,
+    ),
+    ['stop', 'uninstall'],
+  )
+  assert.deepEqual(
+    visibleActions(pluginActions, { id: 'page-html-blocks', title: 'HTML', installed: true, sandbox: true }, 'row').map(
+      (item) => item.id,
+    ),
+    ['start', 'uninstall'],
+  )
 })
 
 test('contentFieldKey prefers content then contentField then notes', () => {
@@ -190,11 +272,70 @@ test('contentFieldKey prefers content then contentField then notes', () => {
   )
 })
 
-test('groupField only groups when a select/multi-select key is chosen', () => {
+test('groupField follows the strategy registry and skips free text', () => {
   assert.equal(groupField(schema), null)
   assert.equal(groupField(schema, 'status')?.key, 'status')
   assert.equal(groupField(schema, 'tags')?.key, 'tags')
+  assert.equal(groupField(schema, 'dueAt')?.key, 'dueAt')
+  assert.equal(groupField(schema, 'size')?.key, 'size')
   assert.equal(groupField(schema, 'title'), null)
+  assert.equal(isGroupableKind('boolean'), true)
+  assert.equal(isGroupableKind('string'), false)
+  assert.equal(isGroupableKind('url'), false)
+  assert.deepEqual(
+    Object.keys(GROUP_STRATEGIES).sort(),
+    ['boolean', 'datetime', 'facet', 'multi-ref', 'multi-select', 'number', 'person', 'ref', 'select'].sort(),
+  )
+})
+
+test('groupListKeys uses schema enum and skips 未填 when enum is declared', () => {
+  assert.deepEqual(
+    groupListKeys(schema, 'status').map((item) => item.key),
+    ['todo', 'doing', 'done'],
+  )
+  const scoped = groupListKeys(
+    {
+      labelField: 'title',
+      fields: {
+        ...REQUIRED_RECORD_FIELDS,
+        title: { type: 'string' },
+        shareScope: { type: 'select', enum: ['私人', '空间', '共享'] },
+      },
+    },
+    'shareScope',
+  )
+  assert.deepEqual(
+    scoped.map((item) => item.key),
+    ['私人', '空间', '共享'],
+  )
+  assert.deepEqual(groupListKeys(schema, 'tags'), [])
+  assert.deepEqual(
+    groupListKeys(schema, 'tags', ['game']).map((item) => item.key),
+    ['game', ''],
+  )
+})
+
+test('groupListFilter maps shareScope labels to $scope and empty to is_empty', () => {
+  assert.deepEqual(groupListFilter('shareScope', '私人'), { $scope: 'personal' })
+  assert.deepEqual(groupListFilter('shareScope', '空间'), { $scope: 'workspace' })
+  assert.deepEqual(groupListFilter('shareScope', '共享'), { $scope: 'shared' })
+  assert.deepEqual(groupListFilter('status', 'doing'), { status: 'doing' })
+  const empty = groupListFilter('status', '')
+  const tree = empty.$tree as { children?: Array<{ op?: string; field?: string }> }
+  assert.equal(tree.children?.[0]?.op, 'is_empty')
+  assert.equal(tree.children?.[0]?.field, 'status')
+})
+
+test('mergeListFilters ANDs trees and rejects conflicting $scope', () => {
+  assert.equal(mergeListFilters({ $scope: 'personal' }, { $scope: 'workspace' }), null)
+  assert.deepEqual(mergeListFilters({ $scope: 'personal' }, { status: 'todo' }), { $scope: 'personal', status: 'todo' })
+  const merged = mergeListFilters(
+    { $tree: { kind: 'group', id: 'a', combinator: 'and', children: [] } },
+    groupListFilter('status', ''),
+  )
+  const tree = merged?.$tree as { combinator?: string; children?: unknown[] }
+  assert.equal(tree.combinator, 'and')
+  assert.equal(tree.children?.length, 2)
 })
 
 test('groupRecords without a field keeps a single bucket', () => {
@@ -225,6 +366,139 @@ test('groupRecords puts multi-select rows in every matching column', () => {
       ['web', ['1']],
       ['未填', ['2']],
     ],
+  )
+})
+
+test('boolean grouping keeps unset out of 否 and filters with real booleans', () => {
+  const boolSchema: CollectionSchema = {
+    labelField: 'title',
+    fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string' }, done: { type: 'boolean' } },
+  }
+  const grouped = groupRecords(
+    [
+      { id: '1', title: 'a', done: true },
+      { id: '2', title: 'b', done: false },
+      { id: '3', title: 'c' },
+    ],
+    boolSchema,
+    'done',
+  )
+  assert.deepEqual(
+    grouped.map((item) => [item.key, item.label, item.rows.map((row) => row.id)]),
+    [
+      ['true', '是', ['1']],
+      ['false', '否', ['2']],
+      ['', '未填', ['3']],
+    ],
+  )
+  assert.deepEqual(groupListFilter('done', 'true', boolSchema), { done: true })
+  assert.deepEqual(groupListFilter('done', 'false', boolSchema), { done: false })
+  const empty = groupListFilter('done', '', boolSchema)
+  const tree = empty.$tree as { children?: Array<{ op?: string; field?: string }> }
+  assert.equal(tree.children?.[0]?.op, 'is_empty')
+})
+
+test('datetime grouping uses month buckets instead of distinct timestamps', () => {
+  const oct = new Date(2026, 9, 8).getTime()
+  const oct2 = new Date(2026, 9, 21).getTime()
+  const sep = new Date(2026, 8, 1).getTime()
+  const grouped = groupRecords(
+    [
+      { id: '1', title: 'a', dueAt: oct },
+      { id: '2', title: 'b', dueAt: oct2 },
+      { id: '3', title: 'c', dueAt: sep },
+      { id: '4', title: 'd' },
+    ],
+    schema,
+    'dueAt',
+  )
+  const keys = grouped.map((item) => item.key)
+  assert.equal(keys.includes(String(oct)), false)
+  assert.equal(grouped.find((item) => item.label === '2026/10')?.rows.map((row) => row.id).join(), '1,2')
+  assert.equal(grouped.find((item) => item.label === '2026/09')?.rows.map((row) => row.id).join(), '3')
+  assert.equal(grouped.find((item) => item.label === '未填')?.rows[0]?.id, '4')
+  const headers = groupListKeys(schema, 'dueAt').map((item) => item.key)
+  assert.ok(headers.includes('m:earlier'))
+  assert.ok(headers.some((key) => key.startsWith('m:20')))
+  assert.ok(headers.includes(''))
+  const month = groupListFilter('dueAt', 'm:2026-10', schema)
+  const kids = (month.$tree as { children: Array<{ op: string; field: string }> }).children
+  assert.equal(kids[0]?.op, 'gt')
+  assert.equal(kids[1]?.op, 'lt')
+  assert.equal(kids[0]?.field, 'dueAt')
+})
+
+test('person and ref grouping reuse multi-value buckets', () => {
+  const people: CollectionSchema = {
+    labelField: 'title',
+    fields: {
+      ...REQUIRED_RECORD_FIELDS,
+      title: { type: 'string' },
+      owner: { type: 'person' },
+      project: { type: 'ref' },
+    },
+  }
+  const grouped = groupRecords(
+    [
+      { id: '1', title: 'a', owner: { kind: 'user', name: '用户' }, project: 'p1' },
+      { id: '2', title: 'b', owner: { kind: 'system', name: '系统' } },
+      { id: '3', title: 'c' },
+    ],
+    people,
+    'owner',
+  )
+  assert.deepEqual(
+    grouped.map((item) => [item.key, item.label, item.rows.map((row) => row.id)]),
+    [
+      ['user', '用户', ['1']],
+      ['system', '系统', ['2']],
+      ['', '未指派', ['3']],
+    ],
+  )
+  const refs = groupRecords(
+    [
+      { id: '1', title: 'a', project: 'p1' },
+      { id: '2', title: 'b' },
+    ],
+    people,
+    'project',
+  )
+  assert.deepEqual(
+    refs.map((item) => [item.key, item.label, item.rows.map((row) => row.id)]),
+    [
+      ['p1', 'p1', ['1']],
+      ['', '未关联', ['2']],
+    ],
+  )
+})
+
+test('number grouping uses interval buckets instead of distinct values', () => {
+  const grouped = groupRecords(
+    [
+      { id: '1', title: 'a', size: 3 },
+      { id: '2', title: 'b', size: 8 },
+      { id: '3', title: 'c', size: 40 },
+      { id: '4', title: 'd', size: 2000 },
+    ],
+    schema,
+    'size',
+  )
+  assert.deepEqual(
+    grouped.map((item) => [item.label, item.rows.map((row) => row.id)]),
+    [
+      ['1–9', ['1', '2']],
+      ['10–99', ['3']],
+      ['1000+', ['4']],
+    ],
+  )
+  assert.equal(groupListKeys(schema, 'size').some((item) => item.key === '3'), false)
+})
+
+test('unsupported saved groupBy falls back to a single 全部 bucket', () => {
+  const grouped = groupRecords([{ id: '1', title: 'a', url: 'https://x' }], schema, 'url')
+  assert.deepEqual(
+    grouped.map((item) => item.label),
+    ['全部'],
   )
 })
 

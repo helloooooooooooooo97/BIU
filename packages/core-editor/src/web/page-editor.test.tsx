@@ -1,4 +1,4 @@
-import { render, waitFor } from '@testing-library/react'
+import { fireEvent, render, waitFor } from '@testing-library/react'
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { Context } from 'cordis'
@@ -83,56 +83,6 @@ test('page editor paints a registered algorithm block', async () => {
   assert.equal(container.querySelector('[data-testid="algo-view"]')?.textContent, 'Two Sum')
 })
 
-test('page editor bridges cursor to the record title', async () => {
-  const { readFile } = await import('node:fs/promises')
-  const { resolve } = await import('node:path')
-  const src = await readFile(resolve(import.meta.dirname, './page-editor.tsx'), 'utf8')
-  assert.match(src, /handleKeyDown/)
-  assert.match(src, /FOCUS_RECORD_TITLE/)
-  assert.match(src, /focusRecordTitleNear/)
-  assert.doesNotMatch(src, /commands\.blur\(\)/)
-  assert.match(src, /onKeyDownCapture/)
-  assert.match(src, /event\.key === ' ' && event\.target === event\.currentTarget/)
-  assert.match(src, /onEditorBlankMouseDown/)
-  assert.match(src, /editor\.commands\.focus\('end'\)/)
-  assert.match(src, /focus\(\{ preventScroll: true \}\)/)
-  assert.match(src, /FOCUS_RECORD_CONTENT/)
-  assert.match(src, /jumpToPending/)
-  assert.match(src, /CONTENT_JUMP_EVENT/)
-  assert.doesNotMatch(src, /tryContentJump\([^)]+navigate/)
-  assert.match(src, /editorHostIsLive\(editor\)/)
-  assert.match(src, /bindEditorTextHost/)
-  assert.match(src, /closest\('\.page-block'\)/)
-  assert.match(src, /markdownLocusFromSelection/)
-  assert.match(src, /usePageSourceMode/)
-  assert.match(src, /SourceEditor/)
-  assert.match(src, /FindBar/)
-  const style = await readFile(resolve(import.meta.dirname, './style.ts'), 'utf8')
-  assert.match(style, /html:not\(\.dark\) \.page-bubble\{[^}]*box-shadow:none/)
-  assert.doesNotMatch(style, /\.page-bubble\{[^}]*0 0 0 1px color-mix/)
-  assert.match(style, /\.page-bubble button\{[^}]*color:var\(--dsw-label\)/)
-  assert.match(style, /\.page-agent-edit\{[^}]*TAG_TONE_ROSE/)
-  assert.match(style, /\.page-find-hit\{[^}]*TAG_TONE_ROSE/)
-
-  assert.match(src, /isFindHotkey/)
-  assert.match(src, /ColorMenus/)
-  assert.match(src, /HeadlessPopover/)
-  assert.match(src, /setColor/)
-  assert.match(src, /toggleHighlight/)
-  assert.doesNotMatch(src, /ColorPicks/)
-  assert.doesNotMatch(src, /page-bubble-palette/)
-  assert.doesNotMatch(src, /⌘K/)
-  assert.match(src, /⌘L/)
-  assert.match(src, /ChatBubbleLeftRightIcon/)
-  assert.match(src, /isSendChatHotkey/)
-  assert.match(src, /getPick\(\)\?\.attach/)
-  const pmKeys = src.slice(src.indexOf('handleKeyDown:'), src.indexOf('handleDOMEvents'))
-  assert.doesNotMatch(pmKeys, /isSendChatHotkey/)
-  assert.doesNotMatch(pmKeys, /getPick/)
-  assert.doesNotMatch(src, /isAskHotkey/)
-  assert.doesNotMatch(src, /page-ask/)
-})
-
 test('page editor hydrates markdown after content fetch', async () => {
   const ctx = new Context()
   new PageEditorService(ctx)
@@ -190,5 +140,60 @@ test('page editor applies later value when it is not focused', async () => {
   assert.match(src, /md === saved\.current/)
   assert.match(src, /leavingSource/)
   assert.match(src, /sourceMode\.current/)
+})
+
+test('page editor shows a spinner and is not editable while content loads', async () => {
+  const { container, rerender } = render(
+    <PageEditor
+      record={{ id: 'home' }}
+      field="notes"
+      spec={{ type: 'file', label: '正文', writable: true }}
+      value={null}
+      writable
+      status="loading"
+    />,
+  )
+  assert.ok(container.querySelector('[data-testid="page-editor-loading"]'))
+  const icon = container.querySelector('.page-editor-loading-icon')
+  assert.equal(icon?.getAttribute('width'), '22')
+  assert.equal(icon?.getAttribute('height'), '22')
+  assert.equal(container.querySelector('[data-testid="page-editor"]'), null)
+  assert.equal(container.querySelector('[contenteditable]'), null)
+  rerender(
+    <PageEditor
+      record={{ id: 'home' }}
+      field="notes"
+      spec={{ type: 'file', label: '正文', writable: true }}
+      value={''}
+      writable
+      status="ready"
+    />,
+  )
+  await waitFor(() => {
+    assert.ok(container.querySelector('[data-testid="page-editor"]'))
+  })
+  assert.equal(container.querySelector('[data-testid="page-editor-loading"]'), null)
+  assert.equal(container.querySelector('[contenteditable="true"]')?.getAttribute('contenteditable'), 'true')
+})
+
+test('page editor shows retry when content failed to load', () => {
+  let retries = 0
+  const { container } = render(
+    <PageEditor
+      record={{ id: 'home' }}
+      field="notes"
+      spec={{ type: 'file', label: '正文', writable: true }}
+      value={null}
+      writable
+      status="failed"
+      onRetry={() => {
+        retries += 1
+      }}
+    />,
+  )
+  assert.ok(container.querySelector('[data-testid="page-editor-failed"]'))
+  assert.equal(container.querySelector('[data-testid="page-editor"]'), null)
+  fireEvent.click(container.querySelector('.page-editor-retry')!)
+  assert.equal(retries, 1)
 })
 

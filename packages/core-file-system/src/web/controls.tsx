@@ -1,37 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { CheckCircleIcon } from '@heroicons/react/16/solid'
-import { CellMulti } from '@biu/database-ui'
-import { overlayPortalRoot } from '@biu/public-ui'
-
-export { CellSelect } from '@biu/database-ui'
-
-export function TokenMultiSelect({
-  values,
-  options,
-  onChange,
-  allowCreate = true,
-  multiple = true,
-  autoOpen = false,
-}: {
-  values: string[]
-  options: string[]
-  onChange: (next: string[]) => void
-  allowCreate?: boolean
-  multiple?: boolean
-  autoOpen?: boolean
-}) {
-  return (
-    <CellMulti
-      values={values}
-      options={options.map((item) => ({ value: item, label: item }))}
-      onChange={onChange}
-      allowCreate={allowCreate}
-      multiple={multiple}
-      autoOpen={autoOpen}
-    />
-  )
-}
+import { overlayPortalRoot } from '@biu/public-ui/overlay-portal'
 
 export function CheckRow({
   label,
@@ -49,7 +19,7 @@ export function CheckRow({
   return (
     <button
       type="button"
-      className={`fsdb-checkrow${on ? ' is-on' : ''}${locked ? ' is-locked' : ''}`}
+      className={`fsdb-checkrow fsdb-tool-row${on ? ' is-on' : ''}${locked ? ' is-locked' : ''}`}
       role="menuitemcheckbox"
       aria-checked={on}
       disabled={locked}

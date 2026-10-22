@@ -96,6 +96,28 @@ test('collectLiveDispatchedTasks marks unmatched task as pending with task statu
   assert.equal(result.tasks[0]?.status, 'running')
 })
 
+test('collectLiveDispatchedTasks marks unmatched doing as ended when worker turn already closed', () => {
+  const result = collectLiveDispatchedTasks(
+    'live-1',
+    [
+      ev({ type: 'turn/start', turn: 1, ts: 1 }),
+      ev({ type: 'turn/end', turn: 1, reason: 'complete', ts: 3 }),
+    ],
+    [
+      {
+        id: 'worker-a',
+        events: [
+          ev({ type: 'turn/start', turn: 4, ts: 10 }),
+          ev({ type: 'user/message', text: 'other work', kind: 'wake', ts: 11 }),
+          ev({ type: 'turn/end', turn: 4, reason: 'complete', ts: 12 }),
+        ],
+      },
+    ],
+    [task({ id: 't1', title: 'x', sessionId: 'worker-a', createdAt: 2, status: 'doing' })],
+  )
+  assert.equal(result.tasks[0]?.status, 'ended')
+})
+
 test('collectLiveDispatchedUsage still aggregates by live turn', () => {
   const liveId = 'live-1'
   const result = collectLiveDispatchedUsage(

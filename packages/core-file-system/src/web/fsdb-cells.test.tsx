@@ -14,6 +14,19 @@ test('Skill sync actions use distinct directional icons', () => {
   assert.notEqual(push.container.innerHTML, fallback.container.innerHTML)
 })
 
+test('enable and disable actions use play and stop glyphs', () => {
+  const on = render(actionIcon('enable'))
+  const off = render(actionIcon('disable'))
+  const play = render(actionIcon('play'))
+  const stop = render(actionIcon('stop'))
+  const bolt = render(actionIcon('unknown-action'))
+  assert.equal(on.container.innerHTML, play.container.innerHTML)
+  assert.equal(off.container.innerHTML, stop.container.innerHTML)
+  assert.notEqual(on.container.innerHTML, off.container.innerHTML)
+  assert.notEqual(on.container.innerHTML, bolt.container.innerHTML)
+  assert.notEqual(off.container.innerHTML, bolt.container.innerHTML)
+})
+
 test('attachment cells render a file link, not a broken image', () => {
   const { container } = render(
     <DefaultCell field={{ type: 'attachment' }} value={{ name: 'notes.pdf', href: 'https://cdn.example/notes.pdf' }} />,
@@ -84,6 +97,15 @@ test('url cells open in a new tab instead of downloading', () => {
   assert.equal(container.querySelector('.fsdb-file-name')?.textContent, 'https://example.com/page')
 })
 
+test('plain table cells skip tag chips and person faces', () => {
+  const select = render(<DefaultCell field={{ type: 'select', enum: ['open', 'done'] }} value="open" plain />)
+  assert.equal(select.container.querySelector('.biu-tag'), null)
+  assert.equal(select.container.querySelector('.fsdb-select-text')?.textContent, 'open')
+  const person = render(<DefaultCell field={{ type: 'person' }} value={{ kind: 'user', name: 'Ada' }} plain />)
+  assert.equal(person.container.querySelector('.fsdb-person-list'), null)
+  assert.equal(person.container.querySelector('.fsdb-person-text')?.textContent, 'Ada')
+})
+
 test('empty cells render no placeholder copy', () => {
   const text = render(<DefaultCell field={{ type: 'string' }} value="" />)
   assert.equal(text.container.textContent, '')
@@ -99,18 +121,22 @@ test('empty cells render no placeholder copy', () => {
   assert.equal(emptyFile.container.textContent, '')
 })
 
-test('image zoom uses antd Image preview', () => {
+test('table image cells skip antd; editors still use Image preview', () => {
   const cells = readFileSync(resolve(import.meta.dirname, './fsdb-cells.tsx'), 'utf8')
   const media = readFileSync(resolve(import.meta.dirname, './cell-media.tsx'), 'utf8')
+  const mediaField = readFileSync(resolve(import.meta.dirname, './cell-media-field.tsx'), 'utf8')
   const thumbs = readFileSync(resolve(import.meta.dirname, '../../../core-chat/src/web/image-thumbs.tsx'), 'utf8')
   const tools = readFileSync(resolve(import.meta.dirname, '../../../core-chat/src/web/tool-card.tsx'), 'utf8')
-  assert.match(cells, /from 'antd'/)
-  assert.match(cells, /Image\.PreviewGroup/)
+  assert.match(cells, /deferMissing=\{plain\}/)
+  assert.doesNotMatch(cells, /from 'antd'/)
+  assert.doesNotMatch(cells, /Image\.PreviewGroup/)
   assert.doesNotMatch(cells, /fsdb-lightbox/)
-  assert.match(media, /from 'antd'/)
-  assert.match(media, /Image\.PreviewGroup/)
-  assert.match(thumbs, /from 'antd'/)
-  assert.match(thumbs, /Image\.PreviewGroup/)
-  assert.doesNotMatch(thumbs, /composer-image-lightbox/)
-  assert.match(tools, /Image\.PreviewGroup/)
+  assert.doesNotMatch(media, /from 'antd'/)
+  assert.match(mediaField, /from 'antd'/)
+  assert.match(mediaField, /Image\.PreviewGroup/)
+  assert.doesNotMatch(thumbs, /from 'antd'/)
+  assert.doesNotMatch(thumbs, /Image\.PreviewGroup/)
+  assert.match(thumbs, /chat-image-preview/)
+  assert.doesNotMatch(tools, /from 'antd'/)
+  assert.doesNotMatch(tools, /Image\.PreviewGroup/)
 })

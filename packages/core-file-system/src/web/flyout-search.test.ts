@@ -1,0 +1,32 @@
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { test } from 'vitest'
+
+test('toolbar flyouts replace the title row with a search field', () => {
+  const search = readFileSync(resolve(import.meta.dirname, './flyout-search.tsx'), 'utf8')
+  const menus = readFileSync(resolve(import.meta.dirname, './query-menus.tsx'), 'utf8')
+  const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
+  const share = readFileSync(resolve(import.meta.dirname, './share-view-bar.tsx'), 'utf8')
+  const columns = readFileSync(resolve(import.meta.dirname, './column-order-menu.tsx'), 'utf8')
+  assert.match(search, /placeholder="搜索…"/)
+  assert.match(search, /className="tasks-sort-search"/)
+  assert.match(search, /requestAnimationFrame\(\(\) => ref\.current\?\.focus\(\)\)/)
+  assert.match(search, /没有匹配项/)
+  assert.match(search, /text\.toLowerCase\(\)\.includes\(needle\)/)
+  assert.doesNotMatch(menus, /<FlyoutSearch/)
+  assert.doesNotMatch(menus, /tasks-sort-head/)
+  assert.doesNotMatch(menus, />排序</)
+  assert.doesNotMatch(menus, />筛选</)
+  assert.match(menus, /fsdb-query-menu is-sort/)
+  assert.match(menus, /添加排序/)
+  assert.match(menus, /添加筛选条件/)
+  assert.match(menus, /添加筛选分组/)
+  assert.doesNotMatch(browser, /tasks-sort-head/)
+  assert.match(browser, /<SearchableFlyout/)
+  assert.match(search, /fsdb-tool-flyout \$\{className\}/)
+  assert.doesNotMatch(share, /tasks-sort-head/)
+  assert.match(share, /<SearchableFlyout/)
+  assert.match(columns, /query\?: string/)
+  assert.match(columns, /FlyoutEmpty/)
+})

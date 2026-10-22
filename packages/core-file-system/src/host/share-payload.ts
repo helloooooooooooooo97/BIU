@@ -7,13 +7,9 @@ import { savedViewRecordPath } from '../paths.ts'
 import { displayNameForView, isReadOnlyViewId } from '../catalog-views.ts'
 import type { ShareRecord } from './shares-store.ts'
 import { asPublicProfile } from '@biu/host-workspace'
-import { encodeListFilter, resolveViewFilterTree } from '../query-logic.ts'
+import { viewShareListFilter } from '../share-view-match.ts'
 
 const SHARE_LIMIT = 200
-
-function asFilter(view: { filters?: Record<string, string>; filterTree?: unknown }) {
-  return encodeListFilter(view.filters ?? {}, resolveViewFilterTree(view as { filters?: Record<string, string>; filterTree?: import('../query-logic.ts').FilterGroup | null }))
-}
 
 function asStat(raw: unknown) {
   return raw as { kind?: string; schema?: CollectionSchema; label?: string; view?: { title?: string } | null }
@@ -25,6 +21,11 @@ function asRecordRead(raw: unknown) {
 
 function asContentRead(raw: unknown) {
   return raw as { value?: unknown }
+}
+
+/** 分享页上的人只能看。不要把创建者自己的「管理」带出去。 */
+function audienceRecord(record: DbRecord): DbRecord {
+  return { ...record, shareRole: '阅读' }
 }
 
 function withResources(
@@ -77,7 +78,7 @@ export async function buildShareSnapshot(
       title: String(record.title ?? record.name ?? collectionLabel),
       collectionLabel,
       schema,
-      records: [{ ...record, [schema.contentField ?? 'notes']: undefined }],
+      records: [audienceRecord({ ...record, [schema.contentField ?? 'notes']: undefined })],
       contents,
       assets: [...collectAssetNames(record, content, record.banner)],
       banner: record.banner ?? null,
@@ -99,14 +100,14 @@ export async function buildShareSnapshot(
     truncate: stored?.truncate,
     pageSize: stored?.pageSize,
   }
-  const listed = (await db.list(share.collection, asFilter(view), {
+  const listed = (await db.list(share.collection, viewShareListFilter(view), {
     q: String(view.query ?? ''),
     sortField: view.sortField,
     sortDir: view.sortDir,
     sorts: view.sorts,
     limit: SHARE_LIMIT,
   })) as { items?: DbRecord[] }
-  const records = listed.items ?? []
+  const records = (listed.items ?? []).map(audienceRecord)
   const contents: Record<string, unknown> = {}
   for (const row of records) {
     try {

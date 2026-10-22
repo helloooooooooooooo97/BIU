@@ -1,8 +1,8 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { render } from '@testing-library/react'
-import { ENABLE_PAGE_BLOCK_PLUGIN, formatPageBlockFence, parsePageBlockData, parsePageBlockMeta, requestEnablePageBlockPlugin } from './page-block-meta.ts'
-import { PageBlockMissing } from './page-block-view.tsx'
+import { render, waitFor } from '@testing-library/react'
+import { blockDataUnchanged, ENABLE_PAGE_BLOCK_PLUGIN, formatPageBlockFence, parsePageBlockData, parsePageBlockMeta, readPageBlockFence, requestEnablePageBlockPlugin, setPageBlockPluginPhase } from './page-block-meta.ts'
+import { PageBlockMissing } from './page-plugin-host.tsx'
 
 test('page block fence keeps plugin id in the document', () => {
   assert.deepEqual(parsePageBlockMeta('kind=excalidraw plugin=page-excalidraw'), {
@@ -17,20 +17,21 @@ test('page block fence keeps plugin id in the document', () => {
   )
 })
 
-test('missing block shows stored source and asks to enable the stored plugin', () => {
+test('missing block shows stored source and asks to enable the stored plugin', async () => {
   const { container } = render(
     <PageBlockMissing kind="excalidraw" plugin="page-excalidraw" data={{ file: 'assets/a.json' }} />,
   )
+  await waitFor(() => assert.match(container.textContent ?? '', /assets\/a\.json/))
   const text = container.textContent ?? ''
   assert.doesNotMatch(text, /未启用「/)
   assert.doesNotMatch(text, /文档里已经存/)
   assert.match(text, /page-excalidraw/)
   assert.doesNotMatch(text, /未运行/)
   assert.doesNotMatch(text, /源码/)
-  assert.match(text, /assets\/a\.json/)
   const enable = container.querySelector('[data-testid="page-block-enable"]')
   assert.equal(enable?.getAttribute('aria-label'), '启用')
   assert.ok(enable?.querySelector('svg'))
+  assert.ok(container.querySelector('[data-testid="page-source-editor"]'))
 })
 
 test('html pageBlock fence stores raw html and deck on the header', () => {
@@ -90,6 +91,26 @@ test('video pageBlock fence stores the tag script, not JSON', () => {
   assert.match(String(parsePageBlockData('video', '{"script":"<timeline></timeline>"}').script), /<timeline><\/timeline>/)
 })
 
+test('page block fence format then parse roundtrips kind plugin id and data', () => {
+  const json = readPageBlockFence(formatPageBlockFence('excalidraw', 'page-excalidraw', { file: 'assets/a.json' }, 'ab12cd34'))
+  assert.equal(json.kind, 'excalidraw')
+  assert.equal(json.plugin, 'page-excalidraw')
+  assert.equal(json.id, 'ab12cd34')
+  assert.equal(json.data.file, 'assets/a.json')
+  const html = readPageBlockFence(formatPageBlockFence('html', 'page-html-blocks', { html: '<div>卡</div>', deck: true, title: '海报' }, 'htmlid01'))
+  assert.equal(html.kind, 'html')
+  assert.equal(html.plugin, 'page-html-blocks')
+  assert.equal(html.id, 'htmlid01')
+  assert.equal(html.data.html, '<div>卡</div>')
+  assert.equal(html.data.deck, true)
+  assert.equal(html.data.title, '海报')
+  const video = readPageBlockFence(formatPageBlockFence('video', 'page-video', { script: '<timeline></timeline>' }, 'viddemo1'))
+  assert.equal(video.kind, 'video')
+  assert.equal(video.plugin, 'page-video')
+  assert.equal(video.id, 'viddemo1')
+  assert.equal(video.data.script, '<timeline></timeline>')
+})
+
 test('html pageBlock fence keeps title on the header', () => {
   const src = formatPageBlockFence('html', 'page-html-blocks', {
     html: '<div>旧</div>',
@@ -99,7 +120,42 @@ test('html pageBlock fence keeps title on the header', () => {
   assert.equal(parsePageBlockMeta(src.match(/\{([^}]*)\}/)?.[1] ?? '').extras.title, '海报 HTML')
 })
 
+test('unchanged block data does not count as an edit', () => {
+  assert.equal(blockDataUnchanged({ sid: 'a', n: 1 }, { sid: 'a', n: 1 }), true)
+  assert.equal(blockDataUnchanged({ sid: 'a' }, { sid: 'b' }), false)
+  assert.equal(blockDataUnchanged({ nested: { on: true } }, { nested: { on: true } }), true)
+})
+
+test('loading plugin hides the fence and keeps the block shell', () => {
+  const { container } = render(
+    <PageBlockMissing kind="excalidraw" plugin="page-excalidraw" data={{ file: 'assets/a.json' }} phase="loading" />,
+  )
+  assert.equal(container.querySelector('[data-testid="page-block-missing"]')?.getAttribute('data-plugin-phase'), 'loading')
+  assert.match(container.textContent ?? '', /正在加载/)
+  assert.equal(container.querySelector('.page-block-missing-source'), null)
+  assert.equal(container.querySelector('[data-testid="page-block-enable"]'), null)
+})
+
+test('deferred plugins wait for a forced enable click', () => {
+  setPageBlockPluginPhase('page-excalidraw', 'deferred')
+  const seen: Array<{ plugin: string; force: boolean }> = []
+  const onEnable = (event: Event) => {
+    const detail = (event as CustomEvent<{ plugin?: string; force?: boolean }>).detail
+    seen.push({ plugin: String(detail?.plugin ?? ''), force: detail?.force === true })
+  }
+  window.addEventListener(ENABLE_PAGE_BLOCK_PLUGIN, onEnable)
+  requestEnablePageBlockPlugin('page-excalidraw', 'excalidraw')
+  assert.deepEqual(seen, [])
+  requestEnablePageBlockPlugin('page-excalidraw', 'excalidraw', { force: true })
+  window.removeEventListener(ENABLE_PAGE_BLOCK_PLUGIN, onEnable)
+  assert.deepEqual(seen, [{ plugin: 'page-excalidraw', force: true }])
+  setPageBlockPluginPhase('page-excalidraw', 'idle')
+  const pending = (globalThis as typeof globalThis & { __biuPendingPageBlockEnables?: Map<string, string> }).__biuPendingPageBlockEnables
+  pending?.delete('page-excalidraw')
+})
+
 test('enable button only dispatches the stored plugin id', () => {
+  setPageBlockPluginPhase('page-excalidraw', 'idle')
   const seen: string[] = []
   const onEnable = (event: Event) => {
     seen.push(String((event as CustomEvent<{ plugin?: string }>).detail?.plugin ?? ''))
@@ -108,4 +164,8 @@ test('enable button only dispatches the stored plugin id', () => {
   requestEnablePageBlockPlugin('page-excalidraw', 'excalidraw')
   window.removeEventListener(ENABLE_PAGE_BLOCK_PLUGIN, onEnable)
   assert.deepEqual(seen, ['page-excalidraw'])
+  const pending = (globalThis as typeof globalThis & { __biuPendingPageBlockEnables?: Map<string, string> }).__biuPendingPageBlockEnables
+  assert.equal(pending?.get('page-excalidraw'), 'excalidraw')
+  setPageBlockPluginPhase('page-excalidraw', 'idle')
+  pending?.delete('page-excalidraw')
 })

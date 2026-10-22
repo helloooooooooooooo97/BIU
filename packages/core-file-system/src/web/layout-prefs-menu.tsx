@@ -1,6 +1,7 @@
+import { useSyncExternalStore } from 'react'
 import { CheckIcon } from '@heroicons/react/16/solid'
-import { BoolBox } from '@biu/public-ui'
-import { persistPagePrefs, type BodyScale, type PagePrefs } from './page-width.ts'
+import { BoolBox } from '@biu/public-ui/bool-box'
+import { getPagePrefs, getPageWidthVersion, persistPagePrefs, subscribePageWidth, type BodyScale, type PagePrefs } from './page-width.ts'
 
 const BOOLS: { key: keyof Pick<PagePrefs, 'wide' | 'outlineExpand' | 'outlinePin' | 'navPin'>; label: string; testId: string }[] = [
   { key: 'wide', label: '宽屏', testId: 'fsdb-layout-wide' },
@@ -19,24 +20,29 @@ export function LayoutPrefsMenu({
   prefs,
   testPrefix = 'fsdb-layout',
   className,
+  onChange,
 }: {
   prefs: PagePrefs
   testPrefix?: string
   className?: string
+  onChange?: (patch: Partial<PagePrefs>) => void
 }) {
+  const apply = onChange ?? persistPagePrefs
+  useSyncExternalStore(subscribePageWidth, getPageWidthVersion, () => 0)
+  const live = onChange ? prefs : getPagePrefs()
   return (
-    <div className={className ? `fsdb-layout-menu ${className}` : 'fsdb-layout-menu'} role="menu" data-testid={`${testPrefix}-menu`}>
+    <div className={className ? `fsdb-tool-flyout fsdb-layout-menu ${className}` : 'fsdb-tool-flyout fsdb-layout-menu'} role="menu" data-testid={`${testPrefix}-menu`}>
       {BOOLS.map((item) => {
-        const on = prefs[item.key]
+        const on = live[item.key]
         return (
           <button
             key={item.key}
             type="button"
             role="menuitemcheckbox"
-            className="fsdb-layout-row"
+            className="fsdb-layout-row fsdb-tool-row"
             aria-checked={on}
             data-testid={item.testId}
-            onClick={() => persistPagePrefs({ [item.key]: !on })}
+            onClick={() => apply({ [item.key]: !on })}
           >
             <span>{item.label}</span>
             <BoolBox on={on}>{on ? <CheckIcon aria-hidden className="size-3" /> : null}</BoolBox>
@@ -51,10 +57,10 @@ export function LayoutPrefsMenu({
               key={item.value}
               type="button"
               role="menuitemradio"
-              className={`fsdb-layout-opt${prefs.bodySize === item.value ? ' is-active' : ''}`}
-              aria-checked={prefs.bodySize === item.value}
+              className={`fsdb-layout-opt${live.bodySize === item.value ? ' is-active' : ''}`}
+              aria-checked={live.bodySize === item.value}
               data-testid={`${testPrefix}-size-${item.value}`}
-              onClick={() => persistPagePrefs({ bodySize: item.value })}
+              onClick={() => apply({ bodySize: item.value })}
             >
               {item.label}
             </button>
@@ -69,10 +75,10 @@ export function LayoutPrefsMenu({
               key={item.value}
               type="button"
               role="menuitemradio"
-              className={`fsdb-layout-opt${prefs.bodyGap === item.value ? ' is-active' : ''}`}
-              aria-checked={prefs.bodyGap === item.value}
+              className={`fsdb-layout-opt${live.bodyGap === item.value ? ' is-active' : ''}`}
+              aria-checked={live.bodyGap === item.value}
               data-testid={`${testPrefix}-gap-${item.value}`}
-              onClick={() => persistPagePrefs({ bodyGap: item.value })}
+              onClick={() => apply({ bodyGap: item.value })}
             >
               {item.label}
             </button>

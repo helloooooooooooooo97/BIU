@@ -17,6 +17,8 @@ export function isSharePublicPath(pathname: string) {
   if (pathname.startsWith('/.plugin')) return true
   return [
     '/favicon.ico',
+    '/favicon.svg',
+    '/og-image.png',
     '/icon.png',
     '/icon.svg',
     '/manifest.webmanifest',

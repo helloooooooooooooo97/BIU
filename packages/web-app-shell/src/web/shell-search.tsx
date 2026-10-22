@@ -11,12 +11,12 @@ import {
   PencilSquareIcon,
   PlayIcon,
   PuzzlePieceIcon,
-  RectangleStackIcon,
+  TagIcon,
   Squares2X2Icon,
   StopIcon,
   TableCellsIcon,
 } from '@heroicons/react/16/solid'
-import { TagChip, TagChips } from '@biu/public-ui'
+import { ConfirmDialog, TagChip, TagChips } from '@biu/public-ui'
 import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { actionVisibleToUser } from '@biu/type-file-system'
@@ -36,7 +36,7 @@ export const SEARCH_SCOPES: Array<{
   { id: 'task', label: '任务', path: '/tasks' },
   { id: 'page', label: '页面', path: '/pages' },
   { id: 'plugin', label: '插件', path: '/plugins' },
-  { id: 'facet', label: '合集', path: '/facets' },
+  { id: 'facet', label: '标签', path: '/facets' },
 ]
 
 const PER_KIND = 8
@@ -78,16 +78,7 @@ export type SearchHit = {
 }
 
 /** ⌘⇧F always opens global search. ⌘F does too, except inside the page editor. */
-export function isGlobalSearchHotkey(
-  event: { key: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean; isComposing?: boolean },
-  opts?: { inPageEditor?: boolean },
-) {
-  if (event.isComposing) return false
-  if (!(event.metaKey || event.ctrlKey) || event.altKey) return false
-  if (event.key !== 'f' && event.key !== 'F') return false
-  if (event.shiftKey) return true
-  return !opts?.inPageEditor
-}
+export { isGlobalSearchHotkey } from './search-hotkey.ts'
 
 export type SessionHint = {
   id: string
@@ -112,17 +103,19 @@ function pushTags(into: string[], value: unknown) {
   }
 }
 
-/** 列表行上的标签：tags、facet.tags、config.tags。 */
+/** 列表行上的标签：facet.tags、config.facet.tags；旧 tags 只当遗留标签名。 */
 export function tagsFromRecord(row: Record<string, unknown>) {
   const tags: string[] = []
-  pushTags(tags, row.tags)
   const facet = row.facet
   if (facet && typeof facet === 'object' && !Array.isArray(facet)) {
     pushTags(tags, (facet as { tags?: unknown }).tags)
   }
   const config = row.config
   if (config && typeof config === 'object' && !Array.isArray(config)) {
-    pushTags(tags, (config as { tags?: unknown }).tags)
+    const nested = (config as { facet?: unknown }).facet
+    if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
+      pushTags(tags, (nested as { tags?: unknown }).tags)
+    }
   }
   return [...new Set(tags)]
 }
@@ -294,8 +287,8 @@ async function listKind(path: string, query: string, signal: AbortSignal) {
 
 function actionGlyph(id: string) {
   const cls = 'size-4'
-  if (id === 'start' || id === 'play' || id === 'run' || id === 'open') return <PlayIcon aria-hidden className={cls} />
-  if (id === 'stop' || id === 'close' || id === 'pause') return <StopIcon aria-hidden className={cls} />
+  if (id === 'start' || id === 'play' || id === 'run' || id === 'open' || id === 'enable') return <PlayIcon aria-hidden className={cls} />
+  if (id === 'stop' || id === 'close' || id === 'pause' || id === 'disable') return <StopIcon aria-hidden className={cls} />
   if (id === 'pack') return <ArchiveBoxArrowDownIcon aria-hidden className={cls} />
   if (id === 'uninstall' || id === 'delete' || id === 'remove') return <TrashGlyph aria-hidden className={cls} />
   if (id === 'edit' || id === 'rename') return <PencilSquareIcon aria-hidden className={cls} />
@@ -321,6 +314,7 @@ function HitRecordTags({ tags }: { tags?: string[] }) {
 
 function HitActions({ hit }: { hit: SearchHit }) {
   const [record, setRecord] = useState(hit.record ?? { id: hit.id })
+  const [pendingAction, setPendingAction] = useState<SearchAction | null>(null)
   const acting = useRef(false)
   const Actions = getDatabaseUi()?.chrome(searchCollection(hit.kind)).Actions
   const placed = placedRowActions(hit.actions)
@@ -328,14 +322,11 @@ function HitActions({ hit }: { hit: SearchHit }) {
   useEffect(() => {
     setRecord(hit.record ?? { id: hit.id })
   }, [hit.id, hit.record])
-  const run = async (action: SearchAction) => {
+  const execute = async (action: SearchAction) => {
     if (acting.current) return
-    if (action.confirm && !window.confirm(action.confirm)) return
     acting.current = true
-    const next = previewHitRecord(record, action)
-    if (next !== record) setRecord(next)
     try {
-      await fetch('/api/db/action', {
+      const res = await fetch('/api/db/action', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -343,46 +334,74 @@ function HitActions({ hit }: { hit: SearchHit }) {
           action: action.id,
         }),
       })
+      if (!res.ok) return
       window.dispatchEvent(new Event('fsdb:change'))
     } finally {
       acting.current = false
     }
   }
+  const run = (action: SearchAction) => {
+    if (action.confirm) {
+      setPendingAction(action)
+      return
+    }
+    void execute(action)
+  }
+  let controls = null
   if (Actions) {
-    if (!placed.length) return null
-    return (
+    if (placed.length) controls = (
       <span className="shell-search-hit-actions" data-biu-ignore onClick={(event) => event.stopPropagation()}>
         <Actions
           actions={placed as CollectionActionInfo[]}
           record={record as DbRecord}
           busy={false}
           place="row"
-          run={(action) => void run(action)}
+          run={(action) => run(action)}
         />
       </span>
     )
+  } else if (actions.length) {
+    controls = (
+      <span className="shell-search-hit-actions" data-biu-ignore>
+        {actions.map((action) => (
+          <button
+            key={action.id}
+            type="button"
+            className={`shell-search-hit-action${action.tone === 'danger' ? ' is-danger' : ''}`}
+            title={action.label}
+            data-dock-tip={action.label}
+            aria-label={action.label}
+            onClick={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              run(action)
+            }}
+          >
+            {actionGlyph(action.id)}
+          </button>
+        ))}
+      </span>
+    )
   }
-  if (!actions.length) return null
   return (
-    <span className="shell-search-hit-actions" data-biu-ignore>
-      {actions.map((action) => (
-        <button
-          key={action.id}
-          type="button"
-          className={`shell-search-hit-action${action.tone === 'danger' ? ' is-danger' : ''}`}
-          title={action.label}
-          data-dock-tip={action.label}
-          aria-label={action.label}
-          onClick={(event) => {
-            event.preventDefault()
-            event.stopPropagation()
-            void run(action)
+    <>
+      {controls}
+      {pendingAction ? (
+        <ConfirmDialog
+          title={pendingAction.label}
+          message={pendingAction.confirm}
+          confirmLabel={pendingAction.label}
+          danger={pendingAction.tone === 'danger'}
+          testId="shell-search-action-dialog"
+          onCancel={() => setPendingAction(null)}
+          onConfirm={() => {
+            const action = pendingAction
+            setPendingAction(null)
+            void execute(action)
           }}
-        >
-          {actionGlyph(action.id)}
-        </button>
-      ))}
-    </span>
+        />
+      ) : null}
+    </>
   )
 }
 
@@ -394,7 +413,7 @@ function KindGlyph({ kind, compact }: { kind: SearchKind | 'all'; compact?: bool
   if (kind === 'task') return <CheckCircleIcon className={className} />
   if (kind === 'page') return <DocumentIcon className={className} />
   if (kind === 'plugin') return <PuzzlePieceIcon className={className} />
-  return <RectangleStackIcon className={className} />
+  return <TagIcon className={className} />
 }
 
 function HitMark({ hit }: { hit: SearchHit }) {
@@ -587,7 +606,7 @@ export function ShellSearchPanel({
             ref={inputRef}
             className="shell-search-input"
             autoFocus
-            placeholder="搜索视图、会话、任务、页面、插件、合集"
+            placeholder="搜索视图、会话、任务、页面、插件、标签"
             value={query}
             data-testid="shell-search-input"
             onChange={(event) => {
@@ -641,7 +660,7 @@ export function ShellSearchPanel({
         <div ref={bodyRef} className="shell-search-body" aria-busy={busy}>
           {!needle && scope === 'all' && !flat.length && !busy ? (
             <p className="shell-search-hint">
-              空着时视图、会话、任务、页面、插件、合集各按更新时间列最近 {PER_KIND} 条。
+              空着时视图、会话、任务、页面、插件、标签各按更新时间列最近 {PER_KIND} 条。
             </p>
           ) : null}
           {grouped.map((group) => (

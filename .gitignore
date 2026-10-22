@@ -1,6 +1,9 @@
 node_modules/
 dist/
 .biu/
+.cloud-data/
+.local-data/
+.desktop-data/
 .cordis/
 # 已安装插件是本地产物，整目录不入库
 .plugin/
@@ -30,3 +33,4 @@ web/**/*.js.map
 
 # 页面数据已迁入 .biu；保留 .page/ 以免旧工作区误提交
 .page/
+dist-site/

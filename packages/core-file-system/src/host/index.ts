@@ -1,8 +1,24 @@
 import { readFile } from 'node:fs/promises'
 import type { IncomingMessage } from 'node:http'
 import { isAbsolute, resolve } from 'node:path'
-import { dataHome, dataPath, readEditorContent, writeEditorContent, ASSET_GC_INTERVAL_MS } from '@biu/host-plugin-loader/data-dir'
+import {
+  biuSqlitePath,
+  dataHome,
+  dataPath,
+  EditorContentConflictError,
+  currentAccountId,
+  currentRequestWorkspaceId,
+  readEditorContent,
+  readEditorContentRecord,
+  writeEditorContent,
+  ASSET_GC_INTERVAL_MS,
+  isDesktopRuntime,
+  isOnlineRuntime,
+} from '@biu/host-plugin-loader/data-dir'
 import { asPublicProfile, readWorkspaceProfile, writeWorkspaceProfile } from '@biu/host-workspace'
+import { roleCoversAction, type Action as PermissionAction, type AuthorizationService } from '@biu/host-account/authorization'
+import { isRegisteredBuiltinPlugin } from '@biu/host-account/store'
+import { forwardCloud } from '@biu/host-account/mirror'
 import { Service, type Context } from 'cordis'
 import {
   DATABASE_CHANNEL,
@@ -45,10 +61,13 @@ import { readSharePluginWebJs, zipSharePluginSource } from './share-plugin-pack.
 import { collectShareResources } from '../share-resources.ts'
 import { FacetStore } from './facets-store.ts'
 import { SharesStore, dropSharesForRemovedViews } from './shares-store.ts'
-import { displayNameForView, isReadOnlyViewId } from '../catalog-views.ts'
+import { builtinAllView, builtinAllViewId, builtinMemberViews, displayNameForView, isReadOnlyViewId, stubBuiltinAllView, stubBuiltinMemberView } from '../catalog-views.ts'
+import { isIndexCollection, isSystemCollection } from '../web/database-path.ts'
+import { effectiveDataScope, highestViewRole, recordMatchesGrantedView, type DataScopeName, type ViewGrantRole } from '../view-access.ts'
+import { recordMatchesSharedView, resolveSharedView, type SharedViewDef } from '../share-view-match.ts'
 import { buildShareSnapshot } from './share-payload.ts'
 import { FileSystemAssets, collectAssetNames, assetNamesFromMarkdown, assetNamesFromHtml, isAssetFileName, isHashedAssetName, mimeOfAsset, AssetConflictError, parseIfMatch } from './assets-store.ts'
-import { facetsCollection } from './facets-collection.ts'
+import { facetsCollection, parseStampRecordId } from './facets-collection.ts'
 import { trashCollection } from './trash-collection.ts'
 import { runWorkspaceAssetGc } from './asset-gc-run.ts'
 import { ContentTurnService } from './content-turn-service.ts'
@@ -65,8 +84,9 @@ import {
   type ContentCommand,
 } from './content-edit.ts'
 import { currentSessionId } from '@biu/host-sessions/scope'
-import { databaseRevealForTool, normalizeCollectionPath } from '../paths.ts'
-import { matchListFilterRecord, normalizeSorts, sortRecordsBy } from '../query-logic.ts'
+import { databaseRevealForTool, normalizeCollectionPath, splitResourcePath } from '../paths.ts'
+import { matchListFilterRecord, normalizeSorts, parseFacetFlatColumnKey, readFacetFieldValue, sortRecordsBy } from '../query-logic.ts'
+import { actionWhenKeys } from '../web/fields.ts'
 import { AgentDbCompact } from './agent-payload.ts'
 
 const agentDbCompact = new AgentDbCompact()
@@ -122,6 +142,34 @@ function ensureColumn(columns: string[] | undefined, key: string) {
   return columns.includes(key) ? columns : [...columns, key]
 }
 
+function columnAfter(columns: string[] | undefined, key: string, after: string) {
+  if (!columns || columns.includes(key)) return columns
+  const index = columns.indexOf(after)
+  if (index < 0) return [...columns, key]
+  return [...columns.slice(0, index + 1), key, ...columns.slice(index + 1)]
+}
+
+const SHARE_SCOPE_LABEL = {
+  personal: '私人',
+  workspace: '空间',
+  shared: '共享',
+} as const
+
+const ACCESS_RANK = { viewer: 1, editor: 2, manager: 3, owner: 4 } as const
+
+function accessLabel(role: keyof typeof ACCESS_RANK | null | undefined) {
+  if (role === 'editor') return '编辑'
+  if (role === 'viewer') return '阅读'
+  if (role === 'manager' || role === 'owner') return '管理'
+  return '阅读'
+}
+
+function higherAccess(left: keyof typeof ACCESS_RANK | null, right: keyof typeof ACCESS_RANK | null) {
+  if (!left) return right
+  if (!right) return left
+  return ACCESS_RANK[left] >= ACCESS_RANK[right] ? left : right
+}
+
 function schemaFor(spec: CollectionSpec): CollectionSchema {
   const contentField = spec.schema.contentField ?? 'content'
   const raw = withBuiltinFields(spec.schema.fields, contentField, 'title')
@@ -129,13 +177,34 @@ function schemaFor(spec: CollectionSpec): CollectionSchema {
   for (const [key, field] of Object.entries(raw)) {
     fields[key] = field.computed ? { ...field, writable: false } : field
   }
+  let columns = ensureColumn(spec.schema.columns, 'facet')
+  if (!isSystemCollection(spec.path) && !isIndexCollection(spec.path)) {
+    fields.shareScope = {
+      type: 'select',
+      label: '分享',
+      computed: true,
+      writable: false,
+      sortable: true,
+      enum: ['私人', '空间', '共享'],
+      description: '计算属性。云端空间：私人仅创建者、空间给成员、共享为公开链接。本机空间只有私人和共享，数据都在这台设备上。',
+    }
+    fields.shareRole = {
+      type: 'select',
+      label: '权限',
+      computed: true,
+      writable: false,
+      sortable: true,
+      enum: ['管理', '编辑', '阅读'],
+      description: '计算属性。当前用户对这一条的权限：管理、编辑或阅读。记录授权和视图授权里取较高的一级。',
+    }
+    columns = columnAfter(ensureColumn(columns, 'shareScope'), 'shareRole', 'shareScope')
+  }
   return {
     ...spec.schema,
     labelField: 'title',
     contentField,
     fields,
-    columns:
-      ensureColumn(ensureColumn(spec.schema.columns, 'facet'), 'tags'),
+    columns,
     actions: (spec.actions ?? []).map(publicAction),
     records: {
       update: Boolean(spec.records?.update),
@@ -183,7 +252,12 @@ function withoutContent(spec: CollectionSpec, row: DbRecord): DbRecord {
   return next
 }
 
-function listedColumnKeys(requested: unknown, labelField: string): string[] | null {
+const LIST_FIELD_COMPANIONS: Record<string, string[]> = {
+  usage: ['usageParts'],
+  title: ['parentChain', 'blocked'],
+}
+
+function listedColumnKeys(requested: unknown, labelField: string, schema?: CollectionSchema): string[] | null {
   if (!Array.isArray(requested) || !requested.length) return null
   const keys: string[] = []
   const seen = new Set<string>()
@@ -199,13 +273,41 @@ function listedColumnKeys(requested: unknown, labelField: string): string[] | nu
     if (!raw) continue
     add(raw === 'label' ? labelField : raw)
   }
+  for (const key of [...keys]) {
+    for (const extra of LIST_FIELD_COMPANIONS[key] ?? []) add(extra)
+  }
+  for (const key of actionWhenKeys(schema)) add(key)
   return keys
+}
+
+type ListDecorateNeed = {
+  facet: boolean
+  people: boolean
+  meta: boolean
+  shareScope: boolean
+  shareRole: boolean
+}
+
+function listDecorateNeed(wanted: string[] | null | undefined): ListDecorateNeed | null {
+  if (!wanted?.length) return null
+  const set = new Set(wanted)
+  return {
+    facet: set.has('facet') || wanted.some((key) => key.startsWith('facet::')),
+    people: set.has('createdBy') || set.has('updatedBy'),
+    meta: set.has('emoji'),
+    shareScope: set.has('shareScope'),
+    shareRole: set.has('shareRole'),
+  }
 }
 
 function pickListedFields(row: DbRecord, keys: string[]): DbRecord {
   const next: DbRecord = { id: row.id }
   for (const key of keys) {
     if (key === 'path' || key === 'kind') continue
+    if (parseFacetFlatColumnKey(key)) {
+      next[key] = readFacetFieldValue(row, key)
+      continue
+    }
     if (Object.prototype.hasOwnProperty.call(row, key)) next[key] = row[key]
   }
   return next
@@ -236,19 +338,31 @@ function publicCollection(item: CollectionSpec): CollectionInfo {
 }
 
 function splitPath(path: string): string[] {
-  const normalized = normalizeCollectionPath(path)
-  if (normalized === '/') return []
-  const parts = normalized.slice(1).split('/').filter(Boolean)
-  if (parts[0] === 'views' && parts.length > 2) {
-    return ['views', parts.slice(1).join('/')]
-  }
-  return parts
+  const hit = splitResourcePath(path)
+  if (!hit) return []
+  const name = hit.collection.replace(/^\//, '')
+  return hit.recordId ? [name, hit.recordId] : [name]
 }
 
 function coerceList(value: unknown) {
   if (Array.isArray(value)) return value.map(String)
   if (typeof value === 'string') {
-    return value
+    const text = value.trim()
+    if (!text) return []
+    if (text.startsWith('[')) {
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(text)
+      } catch {
+        throw new Error('expected string list as JSON array, e.g. ["title","facet"]')
+      }
+      if (!Array.isArray(parsed)) throw new Error('expected string list as JSON array, e.g. ["title","facet"]')
+      return parsed.map(String)
+    }
+    if (text.includes('"') || text.includes('[') || text.includes(']')) {
+      throw new Error('expected string list as JSON array or array, not a comma-split JSON fragment')
+    }
+    return text
       .split(',')
       .map((item) => item.trim())
       .filter(Boolean)
@@ -280,9 +394,24 @@ function coerceUrl(value: unknown) {
 }
 
 function coerce(field: FieldSpec, value: unknown) {
-  const kind = field.type === 'string[]' ? 'multi-select' : field.format && field.type === 'string' ? field.format : field.type
+  const kind = field.type === 'string[]'
+    ? 'multi-select'
+    : field.type === 'string' && field.enum?.length
+      ? 'select'
+      : field.format && field.type === 'string'
+        ? field.format
+        : field.type
   if (kind === 'boolean') return value === true || value === 'true'
-  if (kind === 'multi-select') return coerceList(value)
+  if (kind === 'multi-select') {
+    const list = coerceList(value)
+    if (field.enum?.length && list.some((item) => !field.enum!.includes(item))) throw new Error('value not in enum')
+    return list
+  }
+  if (kind === 'select') {
+    const selected = String(value ?? '')
+    if (selected && field.enum?.length && !field.enum.includes(selected)) throw new Error('value not in enum')
+    return selected
+  }
   if (kind === 'number' || kind === 'datetime') {
     if (value == null || value === '') return null
     const n = Number(value)
@@ -325,7 +454,8 @@ function coerce(field: FieldSpec, value: unknown) {
   }
   if (kind === 'action') return value == null ? '' : value
   if (isFacetFieldType(kind)) return normalizeSchemaValue(value)
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
+  if (Array.isArray(value)) return JSON.stringify(value)
+  if (value && typeof value === 'object') {
     const rec = value as Record<string, unknown>
     if (typeof rec.sessionId === 'string' || rec.kind === 'agent' || rec.kind === 'user') return value
     return JSON.stringify(value)
@@ -360,7 +490,7 @@ function remapFacetBag(pack: CollectionSchemaPack | null | undefined, bag: Recor
   return out
 }
 
-/** Agent 常写成扁平 values（中文属性名），权威形状是 values[合集id][字段key]。 */
+/** Agent 常写成扁平 values（中文属性名），权威形状是 values[标签id][字段key]。 */
 function coerceFacetPatch(
   raw: unknown,
   current: SchemaFieldValue,
@@ -426,12 +556,21 @@ function coerceFacetPatch(
   return bindSchemaValue(tags, bags)
 }
 
+function writableFieldKeys(schema: CollectionSchema) {
+  return Object.entries(schema.fields)
+    .filter(([, field]) => field.writable && !field.computed)
+    .map(([key]) => key)
+}
+
 function pickWritablePatch(schema: CollectionSchema, patch: Record<string, unknown>) {
   const next: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(patch)) {
     if (key === 'id') throw new Error('field not writable: id')
     const field = schema.fields[key]
-    if (!field) throw new Error(`unknown field: ${key}`)
+    if (!field) {
+      const keys = writableFieldKeys(schema)
+      throw new Error(`unknown field: ${key}. writable: ${keys.length ? keys.join(', ') : '(none)'}`)
+    }
     if (!field.writable || field.computed) throw new Error(`field not writable: ${key}`)
     next[key] = coerce(field, value)
   }
@@ -525,14 +664,130 @@ function matchListFilter(record: DbRecord, filter: Record<string, unknown> | und
   return matchListFilterRecord(record, filter, schema, packs)
 }
 
+const OVERLAY_LIST_FIELDS = new Set(['emoji', 'facet', 'createdBy', 'updatedBy', 'shareScope', 'shareRole'])
+
+function overlayListField(field: string) {
+  return OVERLAY_LIST_FIELDS.has(String(field ?? '')) || String(field ?? '').startsWith('facet::')
+}
+
+export function listNeedsMatchOverlay(
+  filter: Record<string, unknown> | undefined,
+  q: string,
+  sortField: string,
+  sorts?: Array<{ field: string; dir: string }>,
+) {
+  if (overlayListField(sortField)) return true
+  for (const rule of sorts ?? []) {
+    if (overlayListField(rule.field)) return true
+  }
+  if (!filter) return false
+  if (filter.$tree && typeof filter.$tree === 'object') return true
+  for (const [key, expected] of Object.entries(filter)) {
+    if (key === '$tree' || key === '$scope' || key === 'shareScope' || expected == null || expected === '') continue
+    if (overlayListField(key)) return true
+  }
+  return false
+}
+
+/** spec.list 真正用到的查询。分组筛选在内存里做，好让并发的组页共用一次整表扫描。 */
+export function specListQuery(query: CollectionListQuery): CollectionListQuery {
+  const facetId = String(query.filter?.facetId ?? '').trim()
+  const sessionId = String(query.filter?.sessionId ?? '').trim()
+  const filter = {
+    ...(facetId ? { facetId } : {}),
+    ...(sessionId ? { sessionId } : {}),
+  }
+  return {
+    ...(query.q != null ? { q: query.q } : {}),
+    ...(query.trash != null ? { trash: query.trash } : {}),
+    ...(query.ids != null ? { ids: query.ids } : {}),
+    ...(Object.keys(filter).length ? { filter } : {}),
+  }
+}
+
+/** SQLite 扫描是同步的。套两层 setImmediate，中间那次 poll 才能读到一起进来的分组请求。 */
+function shareInflight<T>(map: Map<string, Promise<T>>, key: string, run: () => Promise<T>): Promise<T> {
+  const hit = map.get(key)
+  if (hit) return hit
+  const pending = new Promise<T>((resolve, reject) => {
+    setImmediate(() => {
+      setImmediate(() => {
+        run().then(resolve, reject)
+      })
+    })
+  })
+  map.set(key, pending)
+  pending.finally(() => {
+    if (map.get(key) === pending) map.delete(key)
+  })
+  return pending
+}
+
 function sortRecords(rows: DbRecord[], field: string, dir: 'asc' | 'desc', sorts?: Array<{ field: string; dir: 'asc' | 'desc' }>) {
   const rules = normalizeSorts(sorts, field, dir)
   return sortRecordsBy(rows, rules)
 }
 
-export const DEFAULT_PAGE_SIZE = 50
+export const DEFAULT_PAGE_SIZE = 20
 export const MAX_PAGE_SIZE = 200
-const HARD_DELETE_PATHS = new Set(['/events', '/trash'])
+const HARD_DELETE_PATHS = new Set(['/events', '/trash', '/workspace-members', '/views'])
+
+type VisibleSortedPack = {
+  rows: DbRecord[]
+  personal: DbRecord[]
+  workspace: DbRecord[]
+  shared: DbRecord[]
+}
+
+type WorkspaceMembership = {
+  active: string | null
+  home: string | null
+  mine: Set<string>
+  any: Set<string>
+  strict?: boolean
+}
+
+type WorkspaceFiles = {
+  activeWorkspaceId(): string | null
+  workspacePerson?(accountId: string): { accountId: string; workspaceId: string; name: string } | null
+  membership(): WorkspaceMembership
+  attach(
+    workspaceId: string,
+    collection: string,
+    recordId: string,
+    now?: number,
+    policy?: {
+      ownership?: 'personal' | 'workspace' | 'shared'
+      accessMode?: 'inherit' | 'private' | 'members' | 'restricted'
+      memberDefaultRole?: 'viewer' | 'editor'
+      parentCollection?: string
+      parentRecordId?: string
+    },
+  ): void
+  grantMap?(workspaceId: string, collection: string): Map<string, Set<string>>
+  collectionOwnership?(workspaceId: string, collection: string): Map<string, 'personal' | 'workspace' | 'shared'>
+  viewGrantAudiences?(
+    workspaceId: string,
+    collection: string,
+  ): Array<{
+    view_id: string
+    subject_type: 'account' | 'member_view'
+    subject_id: string
+    granted_by?: string
+    member_kind: string
+  }>
+  viewGrantsFor?(
+    workspaceId: string,
+    collection: string,
+  ): Array<{
+    view_id: string
+    subject_type: 'account' | 'member_view'
+    subject_id: string
+    role: ViewGrantRole
+    granted_by?: string
+  }>
+  collectionRecordOwners?(workspaceId: string, collection: string): Map<string, string>
+}
 
 export function clampPage(limit?: number, offset?: number) {
   const size = Math.min(MAX_PAGE_SIZE, Math.max(1, Number.isFinite(Number(limit)) ? Number(limit) : DEFAULT_PAGE_SIZE))
@@ -540,17 +795,68 @@ export function clampPage(limit?: number, offset?: number) {
   return { limit: size, offset: start }
 }
 
+/** /views 行的 id 是 `表::视图`（表名不带前导斜杠），删视图本体时按它定位。 */
+function rowIdOfView(collection: string, viewId: string) {
+  return `${normalizeCollectionPath(collection).replace(/^\//, '')}::${viewId}`
+}
+
+/** /views 行里能定位视图本体的 (表, 视图 id) 对。 */
+function viewRowKeys(rows: DbRecord[]) {
+  const out: Array<{ collection: string; viewId: string }> = []
+  for (const row of rows) {
+    const collection = normalizeCollectionPath(String(row.tablePath ?? ''))
+    const viewId = String(row.viewId ?? '').trim()
+    if (!collection || collection === '/' || !viewId) continue
+    out.push({ collection, viewId })
+  }
+  return out
+}
+
 export class DatabaseService extends Service implements Database {
   private collections = new Map<string, CollectionSpec>()
+  private contentWrites = new Map<string, Promise<void>>()
   facets = new FacetStore()
   shares = new SharesStore()
   assets = new FileSystemAssets()
+  viewCatalog?: { viewsFor(collectionPath: string): SharedViewDef[] }
+  private ownershipCache: { key: string; map: Map<string, 'personal' | 'workspace' | 'shared'> } | null = null
+  private ownerCache: { key: string; map: Map<string, string> } | null = null
+  private viewAudienceCache: {
+    key: string
+    rows: Array<{ view_id: string; subject_type: 'account' | 'member_view'; subject_id: string; granted_by?: string; member_kind: string }>
+  } | null = null
+  private viewShareCache: { key: string; views: SharedViewDef[] } | null = null
+  private recordShareCache: { key: string; ids: Set<string> } | null = null
+  private inflightMatches = new Map<string, Promise<DbRecord[]>>()
+  private inflightScans = new Map<string, Promise<DbRecord[]>>()
+  private inflightVisible = new Map<string, Promise<VisibleSortedPack>>()
+  private visibleCache = new Map<string, VisibleSortedPack>()
+  private visibleGen = 0
+  private boundAuth?: AuthorizationService
+  private unbindAuth?: () => void
   recycleAssets?: () => void
 
   private bumpQueued = false
 
   constructor(ctx: Context) {
     super(ctx, 'database')
+  }
+
+  private async serializeContentWrite<T>(path: string, run: () => Promise<T>): Promise<T> {
+    const previous = this.contentWrites.get(path) ?? Promise.resolve()
+    let release = () => {}
+    const current = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const queued = previous.then(() => current)
+    this.contentWrites.set(path, queued)
+    await previous
+    try {
+      return await run()
+    } finally {
+      release()
+      if (this.contentWrites.get(path) === queued) this.contentWrites.delete(path)
+    }
   }
 
   register(spec: CollectionSpec) {
@@ -588,16 +894,450 @@ export class DatabaseService extends Service implements Database {
     return [...this.collections.values()].sort((a, b) => a.path.localeCompare(b.path))
   }
 
+  /** 成员只出现在云端空间的系统数据里。本地空间不提供这张表。 */
+  membersInSystemData() {
+    if (isOnlineRuntime()) return true
+    const workspaceId = this.collabStore()?.activeWorkspaceId?.() ?? ''
+    if (!workspaceId) return false
+    try {
+      const account = this.ctx.get('account') as { workspaceLocation?: (id: string) => string } | undefined
+      return account?.workspaceLocation?.(workspaceId) === 'cloud'
+    } catch {
+      return false
+    }
+  }
+
+  publishCollection(item: CollectionSpec): CollectionInfo {
+    const info = publicCollection(item)
+    if (item.path === '/workspace-members' && !this.membersInSystemData()) return { ...info, view: null }
+    return info
+  }
+
   private async loadCollectionRows(spec: CollectionSpec, query: CollectionListQuery) {
     const rows = await spec.list(query)
     const listed = !query.ids?.length ? rows : rows.filter((row) => query.ids!.includes(row.id))
     const hidden = this.facets.deletedIds(spec.path)
-    const scoped = query.trash ? listed.filter((row) => hidden.has(row.id)) : listed.filter((row) => !hidden.has(row.id))
-    return scoped.map((row) => this.decorateRecord(spec, row))
+    const builtinPlugin = (row: { builtin?: unknown }) => spec.path === '/plugins' && row.builtin === true
+    return query.trash
+      ? listed.filter((row) => hidden.has(row.id) && !builtinPlugin(row))
+      : listed.filter((row) => !hidden.has(row.id) || builtinPlugin(row))
   }
 
-  private assertLiveRecord(spec: CollectionSpec, id: string) {
+  private decorateSlice(spec: CollectionSpec, rows: DbRecord[], wanted?: string[] | null) {
+    this.ownershipCache = null
+    this.ownerCache = null
+    this.viewAudienceCache = null
+    this.viewShareCache = null
+    this.recordShareCache = null
+    try {
+      const need = listDecorateNeed(wanted)
+      return rows.map((row) => this.decorateRecord(spec, row, need))
+    } finally {
+      this.ownershipCache = null
+      this.ownerCache = null
+      this.viewAudienceCache = null
+      this.viewShareCache = null
+      this.recordShareCache = null
+    }
+  }
+
+  private collabStore() {
+    try {
+      return (this.ctx.get('account') as { store?: WorkspaceFiles } | undefined)?.store
+    } catch {
+      return undefined
+    }
+  }
+
+  private authorization() {
+    try {
+      const auth = (this.ctx.get('account') as { authorization?: AuthorizationService } | undefined)?.authorization
+      if (auth && auth !== this.boundAuth) {
+        this.unbindAuth?.()
+        this.boundAuth = auth
+        this.unbindAuth = auth.onInvalidate(() => this.bump())
+      }
+      return auth
+    } catch {
+      return undefined
+    }
+  }
+
+  private withLocationShareScope(schema: CollectionSchema) {
+    if (!schema.fields.shareScope || !this.deviceWorkspace()) return schema
+    return {
+      ...schema,
+      fields: {
+        ...schema.fields,
+        shareScope: {
+          ...schema.fields.shareScope,
+          enum: ['私人', '共享'],
+          description: '计算属性。本机空间只有私人（仅自己）和共享（局域网链接）。数据都在这台设备上。',
+        },
+      },
+    }
+  }
+
+  private schemaForCurrent(spec: CollectionSpec, schema = schemaFor(spec)) {
+    schema = this.withLocationShareScope(schema)
+    const authorization = this.authorization()
+    const actor = authorization?.currentActor()
+    if (!authorization || !actor) return schema
+    const resource = { type: 'collection' as const, workspaceId: actor.workspaceId, collection: spec.path }
+    const canUpdate = authorization.authorize(actor, 'resource:update', resource).allowed
+    const canCreate = authorization.authorize(actor, 'resource:create', resource).allowed
+    const canDelete = authorization.authorize(actor, 'resource:delete', resource).allowed
+    if (canUpdate && canCreate && canDelete) return schema
+    return {
+      ...schema,
+      fields: canUpdate
+        ? schema.fields
+        : Object.fromEntries(Object.entries(schema.fields).map(([key, field]) => [key, { ...field, writable: false }])),
+      records: {
+        ...schema.records,
+        update: Boolean(schema.records?.update && canUpdate),
+        create: Boolean(schema.records?.create && canCreate),
+        delete: Boolean(schema.records?.delete && canDelete),
+      },
+    }
+  }
+
+  private workspaceMembership() {
+    const store = this.collabStore()
+    if (!store?.activeWorkspaceId()) return null
+    return store.membership()
+  }
+
+  private scopeTarget(collection: string, id: string, row?: { pageId?: unknown; collection?: unknown; sessionId?: unknown; sourceId?: unknown; tablePath?: unknown }) {
+    if (collection === '/trash') {
+      const tablePath = String(row?.tablePath ?? '')
+      const sourceId = String(row?.sourceId ?? '')
+      if (tablePath && sourceId) return { collection: tablePath, id: sourceId }
+      const parsed = parseStampRecordId(id)
+      if (parsed) return { collection: parsed.collection, id: parsed.recordId }
+    }
+    if (collection === '/events') {
+      const sessionId = String(row?.sessionId ?? (id.lastIndexOf(':') > 0 ? id.slice(0, id.lastIndexOf(':')) : ''))
+      if (sessionId) return { collection: '/sessions', id: sessionId }
+    }
+    if (collection === '/facets') {
+      const tablePath = String(row?.tablePath ?? '')
+      const sourceId = String(row?.sourceId ?? '')
+      if (tablePath && sourceId) return { collection: tablePath, id: sourceId }
+    }
+    if (collection === '/page-blocks') {
+      const pageId = String(row?.pageId ?? '')
+      const parent = String(row?.collection ?? '')
+      if (pageId && parent) return { collection: parent, id: pageId }
+      const parts = id.split('::')
+      if (parts.length >= 3) {
+        const parent = parts[0]!.startsWith('/') ? parts[0]! : `/${parts[0]}`
+        return { collection: parent, id: parts[1]! }
+      }
+    }
+    return { collection, id }
+  }
+
+  private inWorkspace(membership: WorkspaceMembership, collection: string, id: string) {
+    const key = `${collection}\t${id}`
+    if (membership.mine.has(key)) return true
+    if (membership.any.has(key)) return false
+    if (membership.strict) return false
+    return membership.active === membership.home
+  }
+
+  private visibleRecords<T extends { id?: unknown; pageId?: unknown; collection?: unknown; sessionId?: unknown; sourceId?: unknown; tablePath?: unknown }>(
+    collection: string,
+    rows: T[],
+    action: PermissionAction = 'resource:read',
+  ) {
+    const authorization = this.authorization()
+    const actor = authorization?.currentActor()
+    if (authorization && actor) {
+      return rows.filter((row) => {
+        if (collection === '/plugins' && (row as { builtin?: unknown }).builtin === true) {
+          return action === 'resource:read' || action === 'resource:list'
+        }
+        const target = this.scopeTarget(collection, String(row.id ?? ''), row)
+        const resource = {
+          type: 'record' as const,
+          workspaceId: actor.workspaceId,
+          collection: target.collection,
+          recordId: target.id,
+        }
+        if (collection === '/facets' && !String(row.sourceId ?? '') && !String(row.tablePath ?? '')) {
+          return this.indexFacetVisible(String(row.id ?? ''), actor.accountId)
+        }
+        if (authorization.authorize(actor, action, resource).allowed) return true
+        const viaView = this.viewGrantRole(actor.workspaceId, collection, row, actor.accountId)
+        return Boolean(viaView && roleCoversAction(viaView, action))
+      })
+    }
+    const membership = this.workspaceMembership()
+    if (!membership) return rows
+    const store = this.collabStore()
+    const workspaceId = store?.activeWorkspaceId() ?? ''
+    const grants = new Map<string, Map<string, Set<string>>>()
+    return rows.filter((row) => {
+      if (collection === '/plugins' && (row as { builtin?: unknown }).builtin === true) {
+        return action === 'resource:read' || action === 'resource:list'
+      }
+      const target = this.scopeTarget(collection, String(row.id ?? ''), row)
+      if (!this.inWorkspace(membership, target.collection, target.id)) return false
+      if (!membership.strict || !store?.grantMap || !workspaceId) return true
+      let map = grants.get(target.collection)
+      if (!map) {
+        map = store.grantMap(workspaceId, target.collection)
+        grants.set(target.collection, map)
+      }
+      const people = map.get(target.id)
+      if (!people || people.size === 0) return true
+      return people.has(currentAccountId())
+    })
+  }
+
+  /** 标签目录只留下当前用户能读到的源记录上贴过的标签；还没贴到公开数据上的，只留给创建人。 */
+  private indexFacetVisible(id: string, accountId: string) {
+    const found = this.facets.collect(id)
+    for (const item of found.items) {
+      if (this.facets.isDeleted(item.collection, item.id)) continue
+      if (item.collection === '/facets') continue
+      if (this.visibleRecords(item.collection, [{ id: item.id }]).length > 0) return true
+    }
+    return this.facets.recordMeta('/facets', id)?.createdBy?.accountId === accountId
+  }
+
+  private recordsInScope<T extends { id?: unknown; pageId?: unknown; collection?: unknown; sessionId?: unknown; sourceId?: unknown; tablePath?: unknown }>(
+    collection: string,
+    rows: T[],
+    scope: 'personal' | 'workspace' | 'shared' | '',
+  ) {
+    if (!scope) return rows
+    const authorization = this.authorization()
+    const actor = authorization?.currentActor()
+    if (!authorization || !actor) return rows
+    return rows.filter((row) => {
+      if (collection === '/plugins' && (row as { builtin?: unknown }).builtin === true) return scope === 'shared'
+      const target = this.scopeTarget(collection, String(row.id ?? ''), row)
+      return authorization.scopeCurrent({
+        type: 'record',
+        workspaceId: actor.workspaceId,
+        collection: target.collection,
+        recordId: target.id,
+      }) === scope
+    })
+  }
+
+  allowsViaView(collection: string, record: { id?: unknown }, action: PermissionAction = 'resource:read') {
+    const authorization = this.authorization()
+    const actor = authorization?.currentActor()
+    if (!authorization || !actor) return false
+    const role = this.viewGrantRole(actor.workspaceId, collection, record, actor.accountId)
+    return Boolean(role && roleCoversAction(role, action))
+  }
+
+  private viewGrantRole(
+    workspaceId: string,
+    collection: string,
+    record: { id?: unknown },
+    accountId: string,
+  ): ViewGrantRole | null {
+    const store = this.collabStore()
+    const authorization = this.authorization()
+    if (!store?.viewGrantsFor || !authorization) return null
+    const saved = [builtinAllView({ path: collection }), ...(this.viewCatalog?.viewsFor(collection) ?? [])]
+    const roles: ViewGrantRole[] = []
+    for (const grant of store.viewGrantsFor(workspaceId, collection)) {
+      const subjectMatches = grant.subject_type === 'account'
+        ? grant.subject_id === accountId
+        : authorization.matchesMemberView(workspaceId, grant.subject_id, accountId)
+      if (!subjectMatches) continue
+      const target = this.scopeTarget(collection, String(record.id ?? ''), record)
+      const scope = authorization.scopeCurrent({
+        type: 'record',
+        workspaceId,
+        collection: target.collection,
+        recordId: target.id,
+      })
+      const ownerId = this.recordOwner(target.collection, target.id)
+      if (recordMatchesGrantedView(record as never, grant.view_id, saved, scope, { grantedBy: grant.granted_by, recordOwnerId: ownerId })) roles.push(grant.role)
+    }
+    return highestViewRole(roles)
+  }
+
+  private grantAllows(collection: string, id: string) {
+    const membership = this.workspaceMembership()
+    const store = this.collabStore()
+    const workspaceId = store?.activeWorkspaceId()
+    if (!membership?.strict || !store?.grantMap || !workspaceId) return true
+    const people = store.grantMap(workspaceId, collection).get(id)
+    if (!people || people.size === 0) return true
+    return people.has(currentAccountId())
+  }
+
+  private attachWorkspaceRecord(
+    collection: string,
+    recordId: string,
+    policy?: {
+      ownership?: 'personal' | 'workspace' | 'shared'
+      accessMode?: 'inherit' | 'private' | 'members' | 'restricted'
+      memberDefaultRole?: 'viewer' | 'editor'
+      parentCollection?: string
+      parentRecordId?: string
+    },
+  ) {
+    const store = this.collabStore()
+    const workspaceId = store?.activeWorkspaceId()
+    if (!store || !workspaceId) return
+    store.attach(workspaceId, collection, recordId, Date.now(), policy)
+    this.ownerCache = null
+    this.ownershipCache = null
+  }
+
+  /** 分享里的「按成员视图批量授权」：全部成员可编辑。 */
+  private grantAllMembersEditable(collection: string, recordId: string) {
+    const store = this.collabStore() as {
+      grantMemberView?: (
+        actorId: string,
+        collection: string,
+        recordId: string,
+        viewId: string,
+        role: 'editor',
+      ) => void
+    } | undefined
+    const actorId = currentAccountId()
+    if (!store?.grantMemberView || !actorId) return
+    try {
+      store.grantMemberView(actorId, collection, recordId, builtinAllViewId('/workspace-members'), 'editor')
+      this.ownerCache = null
+      this.ownershipCache = null
+    } catch {
+      /* 还没挂上工作区时，记录仍按空间归属保留 */
+    }
+  }
+
+  rememberScope(collection: string, recordId: string, scope: 'personal' | 'workspace' | 'shared') {
+    if (scope === 'shared') {
+      this.markPublicView(collection, recordId)
+      return
+    }
+    this.attachWorkspaceRecord(collection, recordId, {
+      ownership: scope === 'workspace' ? 'workspace' : 'personal',
+      accessMode: scope === 'workspace' ? 'members' : 'private',
+      ...(scope === 'workspace' ? { memberDefaultRole: 'editor' as const } : {}),
+    })
+    if (scope === 'workspace') this.grantAllMembersEditable(collection, recordId)
+  }
+
+  /** 公开链接：无密码，所有人只读查看。 */
+  markPublicView(collection: string, recordId: string) {
+    this.attachWorkspaceRecord(collection, recordId, {
+      ownership: 'shared',
+      accessMode: 'members',
+      memberDefaultRole: 'viewer',
+    })
+    try {
+      this.shares.upsert({ kind: 'record', collection, recordId, password: null, allowCopy: false })
+    } catch {
+      /* 分享库还没打开时，记录仍然按共享归属 */
+    }
+  }
+
+  private builtinPlugin(spec: CollectionSpec, id: string, record?: { builtin?: unknown }) {
+    if (spec.path !== '/plugins') return false
+    return record?.builtin === true || isRegisteredBuiltinPlugin(id)
+  }
+
+  private assertLiveRecord(
+    spec: CollectionSpec,
+    id: string,
+    action: PermissionAction = 'resource:read',
+    record?: { id?: unknown },
+  ) {
+    if (this.builtinPlugin(spec, id, record)) {
+      if (action === 'resource:read' || action === 'resource:list') return
+      throw new Error('permission denied: INSUFFICIENT_PERMISSION')
+    }
     if (this.facets.isDeleted(spec.path, id)) throw new Error(`unknown record: ${spec.path}/${id}`)
+    const authorization = this.authorization()
+    const actor = authorization?.currentActor()
+    if (authorization && actor) {
+      const target = this.scopeTarget(spec.path, id, record)
+      const decision = authorization.authorize(actor, action, {
+        type: 'record',
+        workspaceId: actor.workspaceId,
+        collection: target.collection,
+        recordId: target.id,
+      })
+      if (!decision.allowed) {
+        const viaView = record
+          ? this.viewGrantRole(actor.workspaceId, spec.path, record, actor.accountId)
+          : null
+        if (!viaView || !roleCoversAction(viaView, action)) {
+          throw new Error(`unknown record: ${spec.path}/${id}`)
+        }
+      }
+      return
+    }
+    const membership = this.workspaceMembership()
+    if (!membership) return
+    const target = this.scopeTarget(spec.path, id)
+    if (!this.inWorkspace(membership, target.collection, target.id) || !this.grantAllows(target.collection, target.id)) {
+      throw new Error(`unknown record: ${spec.path}/${id}`)
+    }
+  }
+
+  async requirePath(path: string, action: PermissionAction) {
+    const parts = splitPath(path)
+    if (parts.length === 1) {
+      const spec = this.collection(`/${parts[0]}`)
+      if (!spec) throw new Error(`unknown collection: /${parts[0]}`)
+      const authorization = this.authorization()
+      const actor = authorization?.currentActor()
+      if (authorization && !actor) throw new Error('permission denied: UNAUTHENTICATED')
+      if (authorization) {
+        authorization.requireCurrent(action, {
+          type: 'collection',
+          workspaceId: actor!.workspaceId,
+          collection: spec.path,
+        })
+      }
+      return
+    }
+    if (parts.length !== 2) throw new Error(`invalid resource path: ${normalizeCollectionPath(path)}`)
+    const spec = this.collection(`/${parts[0]}`)
+    if (!spec) throw new Error(`unknown collection: /${parts[0]}`)
+    const record = await spec.get(parts[1]!)
+    if (!record) throw new Error(`unknown record: ${spec.path}/${parts[1]}`)
+    this.assertLiveRecord(spec, record.id, action, record)
+  }
+
+  requireAsset(name: string, action: 'resource:read' | 'resource:update') {
+    const authorization = this.authorization()
+    if (!authorization) return
+    const actor = authorization.currentActor()
+    if (!actor) throw new Error('permission denied: UNAUTHENTICATED')
+    const refs = this.facets.recordsReferencingAsset(name)
+    const allowed = refs.some((ref) => {
+      const resource = {
+        type: 'record' as const,
+        workspaceId: actor.workspaceId,
+        collection: ref.collection,
+        recordId: ref.record_id,
+      }
+      if (authorization.authorize(actor, action, resource).allowed) return true
+      return this.allowsViaView(ref.collection, { id: ref.record_id }, action)
+    })
+    if (allowed) return
+    if (action === 'resource:update' && refs.length === 0) {
+      authorization.requireCurrent('resource:create', {
+        type: 'collection',
+        workspaceId: actor.workspaceId,
+        collection: '/pages',
+      })
+      return
+    }
+    throw new Error('permission denied: INSUFFICIENT_PERMISSION')
   }
 
   private async matchCollectionRows(
@@ -605,12 +1345,137 @@ export class DatabaseService extends Service implements Database {
     query: CollectionListQuery,
     filter: Record<string, unknown> | undefined,
     q: string,
+    overlay = true,
+  ) {
+    const key = `${spec.path}\t${query.trash ? 1 : 0}\t${q}\t${overlay ? 1 : 0}\t${JSON.stringify(query.filter ?? {})}\t${(query.ids ?? []).join(',')}`
+    return shareInflight(this.inflightMatches, key, () => this.matchCollectionRowsNow(spec, query, filter, q, overlay))
+  }
+
+  private scanCollectionRows(spec: CollectionSpec, query: CollectionListQuery, overlay: boolean) {
+    const load = specListQuery(query)
+    const key = `${spec.path}\t${load.trash ? 1 : 0}\t${load.q ?? ''}\t${overlay ? 1 : 0}\t${JSON.stringify(load.filter ?? {})}\t${(load.ids ?? []).join(',')}`
+    return shareInflight(this.inflightScans, key, () => this.scanCollectionRowsNow(spec, load, overlay))
+  }
+
+  private listRemapsRecords(path: string) {
+    return path === '/trash' || path === '/events' || path === '/facets' || path === '/page-blocks'
+  }
+
+  private preloadRelatedCollections(
+    specPath: string,
+    rows: DbRecord[],
+    auth: AuthorizationService,
+    actor: { workspaceId?: string; accountId?: string },
+  ) {
+    const extraScans: string[] = []
+    const workspaceId = String(actor.workspaceId ?? '')
+    const accountId = String(actor.accountId ?? '')
+    if (!workspaceId || !this.listRemapsRecords(specPath)) return extraScans
+    const seen = new Set([specPath])
+    for (const row of rows) {
+      const target = this.scopeTarget(specPath, String(row.id ?? ''), row)
+      if (!target.collection || seen.has(target.collection)) continue
+      seen.add(target.collection)
+      extraScans.push(target.collection)
+      auth.preloadCollection(workspaceId, target.collection, accountId)
+    }
+    return extraScans
+  }
+
+  /** 并发的分组页共用一次授权和排序。组筛选、$scope 在内存里切。 */
+  private visibleSortedCollectionRows(
+    spec: CollectionSpec,
+    query: CollectionListQuery,
+    sortField: string,
+    sortDir: 'asc' | 'desc',
+    sorts: Array<{ field: string; dir: 'asc' | 'desc' }> | undefined,
+    overlay: boolean,
+  ) {
+    const load = specListQuery(query)
+    const actor = this.authorization()?.currentActor()
+    const actorKey = actor
+      ? `${actor.workspaceId}\t${actor.accountId}`
+      : `${this.collabStore()?.activeWorkspaceId() ?? ''}\t${currentAccountId()}`
+    const rules = normalizeSorts(sorts, sortField, sortDir)
+    const key = `${spec.path}\t${load.trash ? 1 : 0}\t${load.q ?? ''}\t${overlay ? 1 : 0}\t${JSON.stringify(load.filter ?? {})}\t${(load.ids ?? []).join(',')}\t${JSON.stringify(rules)}\t${actorKey}`
+    const cached = this.visibleCache.get(key)
+    if (cached) return cached
+    return shareInflight(this.inflightVisible, key, async () => {
+      const gen = this.visibleGen
+      const pack = await this.visibleSortedCollectionRowsNow(spec, query, sortField, sortDir, sorts, overlay)
+      if (gen === this.visibleGen) this.visibleCache.set(key, pack)
+      return pack
+    })
+  }
+
+  private async visibleSortedCollectionRowsNow(
+    spec: CollectionSpec,
+    query: CollectionListQuery,
+    sortField: string,
+    sortDir: 'asc' | 'desc',
+    sorts: Array<{ field: string; dir: 'asc' | 'desc' }> | undefined,
+    overlay: boolean,
+  ) {
+    const tagFilter = spec.path === '/facets' ? String(query.filter?.facetId ?? '').trim() : ''
+    const rows = await this.scanCollectionRows(spec, query, Boolean(tagFilter || overlay))
+    if (tagFilter) await this.hydrateFacetStamps(rows, this.facets.get(tagFilter))
+    const auth = this.authorization()
+    const actor = auth?.currentActor()
+    const extraScans = auth && actor ? this.preloadRelatedCollections(spec.path, rows, auth, actor) : []
+    try {
+      const visible = sortRecords(this.visibleRecords(spec.path, rows), sortField, sortDir, sorts)
+      return this.partitionVisibleRows(spec.path, visible)
+    } finally {
+      if (auth && actor) {
+        for (const collection of extraScans) {
+          auth.releaseCollection(actor.workspaceId, collection, actor.accountId)
+        }
+      }
+    }
+  }
+
+  private partitionVisibleRows(collection: string, rows: DbRecord[]): VisibleSortedPack {
+    const authorization = this.authorization()
+    const actor = authorization?.currentActor()
+    if (!authorization || !actor) {
+      return { rows, personal: rows, workspace: rows, shared: rows }
+    }
+    const personal: DbRecord[] = []
+    const workspace: DbRecord[] = []
+    const shared: DbRecord[] = []
+    for (const row of rows) {
+      if (collection === '/plugins' && (row as { builtin?: unknown }).builtin === true) {
+        shared.push(row)
+        continue
+      }
+      const id = String(row.id ?? '')
+      const stored = this.ownershipOf(collection, id)
+      const label = this.shareScopeLabel(collection, id, row, stored)
+      if (label === '共享') shared.push(row)
+      else if (label === '空间') workspace.push(row)
+      else personal.push(row)
+    }
+    return { rows, personal, workspace, shared }
+  }
+
+  private async scanCollectionRowsNow(spec: CollectionSpec, query: CollectionListQuery, overlay: boolean) {
+    const rows = await this.loadCollectionRows(spec, query)
+    if (!overlay) return rows
+    return rows.map((row) => this.applyMetaOverlay(spec, this.applyFacetOverlay(spec, row)))
+  }
+
+  private async matchCollectionRowsNow(
+    spec: CollectionSpec,
+    query: CollectionListQuery,
+    filter: Record<string, unknown> | undefined,
+    q: string,
+    overlay = true,
   ) {
     let schema = schemaFor(spec)
     const packs = this.facets.list()
-    const rows = await this.loadCollectionRows(spec, query)
     const tagFilter = spec.path === '/facets' ? String(filter?.facetId ?? '').trim() : ''
     const tagPack = tagFilter ? this.facets.get(tagFilter) : null
+    const rows = await this.scanCollectionRows(spec, query, Boolean(tagFilter || overlay))
     if (tagFilter) {
       schema = schemaWithTagPack(schema, tagPack)
       await this.hydrateFacetStamps(rows, tagPack)
@@ -646,7 +1511,20 @@ export class DatabaseService extends Service implements Database {
     }
   }
 
+  notifyShareChange() {
+    this.viewShareCache = null
+    this.recordShareCache = null
+    this.bump()
+  }
+
   private bump() {
+    this.visibleGen += 1
+    this.viewShareCache = null
+    this.recordShareCache = null
+    this.inflightMatches.clear()
+    this.inflightScans.clear()
+    this.inflightVisible.clear()
+    this.visibleCache.clear()
     this.ctx.emit('database/change')
     if (this.bumpQueued) return
     this.bumpQueued = true
@@ -663,30 +1541,71 @@ export class DatabaseService extends Service implements Database {
       return {
         kind: 'root' as const,
         path: '/',
-        collections: this.collectionsList().map(publicCollection),
+        collections: this.collectionsList().map((item) => this.publishCollection(item)),
       }
     }
     const spec = this.collection(`/${parts[0]}`)
     if (!spec) throw new Error(`unknown collection: /${parts[0]}`)
     const caps = collectionCaps(spec)
     if (parts.length === 1) {
-      return { kind: 'collection' as const, path: spec.path, id: spec.id, label: spec.label ?? spec.id, view: spec.view ?? null, schema: schemaFor(spec), caps }
+      return { kind: 'collection' as const, path: spec.path, id: spec.id, label: spec.label ?? spec.id, view: spec.view ?? null, schema: this.schemaForCurrent(spec), caps }
     }
     if (parts.length === 2) {
       const record = await spec.get(parts[1]!)
       if (!record) throw new Error(`unknown record: ${spec.path}/${parts[1]}`)
-      this.assertLiveRecord(spec, record.id)
+      this.assertLiveRecord(spec, record.id, 'resource:read', record)
       return {
         kind: 'record' as const,
         path: `${spec.path}/${record.id}`,
         id: spec.id,
         label: spec.label ?? spec.id,
-        schema: schemaFor(spec),
+        schema: this.schemaForCurrent(spec),
         caps,
         value: withoutContent(spec, this.withBanner(spec, this.decorateRecord(spec, record))),
       }
     }
     throw new Error(`path too deep: ${normalizeCollectionPath(path)}`)
+  }
+
+  /** 当前账号能读到的记录，带上正文，给本机和集中部署对拷。 */
+  async syncedRecords() {
+    const out: Array<{ path: string; records: DbRecord[] }> = []
+    for (const spec of this.collections.values()) {
+      if (!spec.list || !spec.get) continue
+      try {
+        const listed = await this.list(spec.path)
+        if (listed.kind !== 'collection') continue
+        const records: DbRecord[] = []
+        for (const item of listed.items) {
+          const full = await spec.get(String(item.id))
+          records.push((full as DbRecord | null) ?? item)
+        }
+        out.push({ path: spec.path, records })
+      } catch {
+        /* 这张表读不了就跳过，不挡住别的表 */
+      }
+    }
+    return out
+  }
+
+  /** 按 id 写入。对方更新时间不比本地新就跳过。 */
+  async applySynced(path: string, records: DbRecord[]) {
+    const spec = this.collection(path)
+    if (!spec?.get || !spec.create || !spec.update) return
+    for (const record of records) {
+      const id = String(record?.id ?? '')
+      if (!id) continue
+      try {
+        const existing = await spec.get(id)
+        const incomingAt = Number(record.updatedAt) || 0
+        const existingAt = Number((existing as DbRecord | null)?.updatedAt) || 0
+        if (existing && existingAt >= incomingAt) continue
+        if (!existing) await spec.create([{ ...record, id }])
+        else await spec.update(id, record)
+      } catch (error) {
+        console.warn('[replica] skip', path, id, error)
+      }
+    }
   }
 
   async list(path: string, filter?: Record<string, unknown>, page?: ListPage) {
@@ -695,7 +1614,7 @@ export class DatabaseService extends Service implements Database {
       return {
         kind: 'root' as const,
         path: '/',
-        items: this.collectionsList().map(publicCollection),
+        items: this.collectionsList().map((item) => this.publishCollection(item)),
       }
     }
     if (parts.length !== 1) throw new Error(`cannot list: ${normalizeCollectionPath(path)}`)
@@ -707,12 +1626,14 @@ export class DatabaseService extends Service implements Database {
     const sortField = page?.sortField?.trim() || 'title'
     const sortDir = page?.sortDir === 'desc' ? 'desc' : 'asc'
     const schemaFilter = filter?.facet != null && filter.facet !== '' ? String(filter.facet) : ''
-    const columnKeys = listedColumnKeys(page?.columns, schema.labelField ?? 'title')
+    const scopeFilter = filter?.$scope === 'workspace' || filter?.$scope === 'personal' || filter?.$scope === 'shared' ? filter.$scope : ''
+    const columnKeys = listedColumnKeys(page?.columns, schema.labelField ?? 'title', schema)
     const trash = filter?.deleted === true || filter?.trash === true
     const liveFilter = filter ? { ...filter } : undefined
     if (liveFilter) {
       delete liveFilter.deleted
       delete liveFilter.trash
+      delete liveFilter.$scope
     }
     const query: CollectionListQuery = { q, filter: liveFilter, trash }
     if (schemaFilter && schema.fields.facet && spec.path !== '/facets') {
@@ -724,7 +1645,7 @@ export class DatabaseService extends Service implements Database {
           id: spec.id,
           label: spec.label ?? spec.id,
           view: spec.view ?? null,
-          schema,
+          schema: this.schemaForCurrent(spec, schema),
           total: 0,
           offset,
           limit,
@@ -733,31 +1654,43 @@ export class DatabaseService extends Service implements Database {
       }
       query.ids = [...stamped]
     }
-    const matched = await this.matchCollectionRows(spec, query, liveFilter, q)
-    const tagFilter = spec.path === '/facets' ? String(filter?.facetId ?? '').trim() : ''
-    if (tagFilter) schema = schemaWithTagPack(schema, this.facets.get(tagFilter))
-    const sorted = sortRecords(matched, sortField, sortDir, page?.sorts)
-    const total = sorted.length
-    const slice = sorted.slice(offset, offset + limit)
-    return {
-      kind: 'collection' as const,
-      path: spec.path,
-      id: spec.id,
-      label: spec.label ?? spec.id,
-      view: spec.view ?? null,
-      schema,
-      total,
-      offset,
-      limit,
-      items: slice.map((row): DbRecord & { path: string; kind: 'record' } => {
-        const value = withoutContent(spec, row)
-        const picked = columnKeys ? pickListedFields(value, columnKeys) : value
-        return {
-          ...picked,
-          path: `${spec.path}/${row.id}`,
-          kind: 'record',
-        }
-      }),
+    const auth = this.authorization()
+    const actor = auth?.currentActor()
+    if (auth && actor) auth.preloadCollection(actor.workspaceId, spec.path, actor.accountId)
+    try {
+      const overlay = listNeedsMatchOverlay(liveFilter, q, sortField, page?.sorts)
+      const pack = await this.visibleSortedCollectionRows(spec, query, sortField, sortDir, page?.sorts, overlay)
+      const visible = scopeFilter ? pack[scopeFilter] : pack.rows
+      const tagFilter = spec.path === '/facets' ? String(filter?.facetId ?? '').trim() : ''
+      if (tagFilter) schema = schemaWithTagPack(schema, this.facets.get(tagFilter))
+      const packs = this.facets.list()
+      const sorted = visible.filter((row) => matchListFilter(row, liveFilter, schema, packs) && matchQuery(row, q, packs))
+      const total = sorted.length
+      const slice = this.decorateSlice(spec, sorted.slice(offset, offset + limit), columnKeys)
+      return {
+        kind: 'collection' as const,
+        path: spec.path,
+        id: spec.id,
+        label: spec.label ?? spec.id,
+        view: spec.view ?? null,
+        schema: this.schemaForCurrent(spec, schema),
+        total,
+        offset,
+        limit,
+        items: slice.map((row): DbRecord & { path: string; kind: 'record' } => {
+          const value = withoutContent(spec, row)
+          const picked = columnKeys ? pickListedFields(value, columnKeys) : value
+          return {
+            ...picked,
+            path: `${spec.path}/${row.id}`,
+            kind: 'record',
+          }
+        }),
+      }
+    } finally {
+      if (auth && actor) {
+        auth.releaseCollection(actor.workspaceId, spec.path, actor.accountId)
+      }
     }
   }
 
@@ -768,6 +1701,7 @@ export class DatabaseService extends Service implements Database {
       facet: found.facet,
       items: found.items
         .filter((item) => !this.facets.isDeleted(item.collection, item.id))
+        .filter((item) => this.visibleRecords(item.collection, [{ id: item.id }]).length > 0)
         .map((item) => ({
         ...item,
         collectionLabel: labels.get(item.collection) ?? item.collection,
@@ -775,10 +1709,163 @@ export class DatabaseService extends Service implements Database {
     }
   }
 
-  private decorateRecord(spec: CollectionSpec, row: DbRecord): DbRecord {
-    const withFacet = this.applyFacetOverlay(spec, row)
-    const withPeople = this.applyPersonOverlay(spec, withFacet)
-    return this.applyMetaOverlay(spec, withPeople)
+  private decorateRecord(spec: CollectionSpec, row: DbRecord, need: ListDecorateNeed | null = null): DbRecord {
+    const withFacet = !need || need.facet ? this.applyFacetOverlay(spec, row) : row
+    const withPeople = !need || need.people ? this.applyPersonOverlay(spec, withFacet) : withFacet
+    const withMeta = !need || need.meta ? this.applyMetaOverlay(spec, withPeople) : withPeople
+    if (isSystemCollection(spec.path) || isIndexCollection(spec.path)) return withMeta
+    if (spec.path === '/plugins' && row.builtin === true) {
+      return {
+        ...withMeta,
+        ...(!need || need.shareScope ? { shareScope: '共享' } : {}),
+        ...(!need || need.shareRole ? { shareRole: '阅读' } : {}),
+      }
+    }
+    const wantScope = !need || need.shareScope
+    const wantRole = !need || need.shareRole
+    const stored = wantScope ? this.ownershipOf(spec.path, String(row.id ?? '')) : 'personal'
+    return {
+      ...withMeta,
+      ...(wantScope ? { shareScope: this.shareScopeLabel(spec.path, String(row.id ?? ''), withMeta, stored) } : {}),
+      ...(wantRole ? { shareRole: this.shareRoleLabel(spec, withMeta) } : {}),
+    }
+  }
+
+  private shareScopeLabel(collection: string, id: string, record: DbRecord, stored: 'personal' | 'workspace' | 'shared') {
+    if (this.hasPublicShare(collection, id, record, stored) || stored === 'shared') return '共享'
+    if (this.deviceWorkspace()) return '私人'
+    const scope = this.effectiveScope(collection, record, stored)
+    if (scope === 'workspace') return '空间'
+    if (scope === 'personal') return '私人'
+    return SHARE_SCOPE_LABEL[scope]
+  }
+
+  private recordShareIds(collection: string) {
+    if (this.recordShareCache?.key === collection) return this.recordShareCache.ids
+    const ids = new Set<string>()
+    try {
+      for (const share of this.shares.listRecords(collection)) {
+        const recordId = String(share.recordId ?? '').trim()
+        if (recordId) ids.add(recordId)
+      }
+    } catch {
+      /* 分享库还没打开时，仍按视图链接现算 */
+    }
+    this.recordShareCache = { key: collection, ids }
+    return ids
+  }
+
+  private hasPublicShare(collection: string, id: string, record?: DbRecord, stored?: DataScopeName) {
+    if (this.recordShareIds(collection).has(id)) return true
+    if (!record || !stored) return false
+    return this.sharedViewsFor(collection).some((view) => recordMatchesSharedView(record, view, stored))
+  }
+
+  private sharedViewsFor(collection: string): SharedViewDef[] {
+    if (this.viewShareCache?.key === collection) return this.viewShareCache.views
+    let shares: Array<{ viewId: string }> = []
+    try {
+      shares = this.shares.listViews(collection)
+    } catch {
+      shares = []
+    }
+    const saved = [
+      builtinAllView({ path: collection }),
+      ...(this.viewCatalog?.viewsFor(collection) ?? []),
+    ]
+    const views: SharedViewDef[] = []
+    for (const share of shares) {
+      const view = resolveSharedView(share.viewId, saved)
+      if (view) views.push(view)
+    }
+    this.viewShareCache = { key: collection, views }
+    return views
+  }
+
+  /** 当前用户对这一条的权限。记录上的角色和视图授权取较高的一级。 */
+  private shareRoleLabel(spec: CollectionSpec, record: DbRecord) {
+    const id = String(record.id ?? '')
+    // 本机局域网链接没有协作者角色。分享出去的人只能看，不要显示成管理。
+    if (this.deviceWorkspace() && this.hasPublicShare(spec.path, id, record, this.ownershipOf(spec.path, id))) {
+      return '阅读'
+    }
+    const authorization = this.authorization()
+    const actor = authorization?.currentActor()
+    if (!authorization || !actor) return '管理'
+    const target = this.scopeTarget(spec.path, String(record.id ?? ''), record)
+    const decision = authorization.authorize(actor, 'resource:read', {
+      type: 'record',
+      workspaceId: actor.workspaceId,
+      collection: target.collection,
+      recordId: target.id,
+    })
+    const direct = decision.allowed ? decision.effectiveRole : null
+    const via = this.viewGrantRole(actor.workspaceId, spec.path, record, actor.accountId)
+    return accessLabel(higherAccess(direct, via))
+  }
+
+  private effectiveScope(collection: string, record: DbRecord, stored: DataScopeName): DataScopeName {
+    const store = this.collabStore()
+    const workspaceId = store?.activeWorkspaceId?.() || currentRequestWorkspaceId() || ''
+    if (!workspaceId) return stored
+    const key = `${workspaceId}\t${collection}`
+    const grantRows = store.viewGrantAudiences?.(workspaceId, collection)
+      ?? store.viewGrantsFor?.(workspaceId, collection)?.map((row) => ({
+        view_id: row.view_id,
+        subject_type: row.subject_type,
+        subject_id: row.subject_id,
+        granted_by: row.granted_by,
+        member_kind: '',
+      }))
+      ?? []
+    if (!this.viewAudienceCache || this.viewAudienceCache.key !== key) {
+      this.viewAudienceCache = { key, rows: grantRows }
+    }
+    const memberViews = [
+      builtinAllView({ path: '/workspace-members' }),
+      ...builtinMemberViews(),
+      ...(this.viewCatalog?.viewsFor('/workspace-members') ?? []),
+    ]
+    const dataViews = [
+      builtinAllView({ path: collection }),
+      ...(this.viewCatalog?.viewsFor(collection) ?? []),
+    ]
+    return effectiveDataScope(
+      stored,
+      record,
+      this.viewAudienceCache.rows.map((row) => ({
+        viewId: row.view_id,
+        subjectType: row.subject_type,
+        subjectId: row.subject_id,
+        memberKind: row.member_kind,
+        grantedBy: row.granted_by,
+      })),
+      dataViews,
+      memberViews,
+      this.recordOwner(collection, String(record.id ?? '')),
+    )
+  }
+
+  private ownershipOf(collection: string, id: string): 'personal' | 'workspace' | 'shared' {
+    const store = this.collabStore()
+    const workspaceId = store?.activeWorkspaceId?.() ?? ''
+    if (!store?.collectionOwnership || !workspaceId) return 'personal'
+    const key = `${workspaceId}\t${collection}`
+    if (!this.ownershipCache || this.ownershipCache.key !== key) {
+      this.ownershipCache = { key, map: store.collectionOwnership(workspaceId, collection) }
+    }
+    return this.ownershipCache.map.get(id) ?? 'personal'
+  }
+
+  private recordOwner(collection: string, id: string) {
+    const store = this.collabStore()
+    const workspaceId = store?.activeWorkspaceId?.() ?? ''
+    if (!store?.collectionRecordOwners || !workspaceId) return ''
+    const key = `${workspaceId}\t${collection}`
+    if (!this.ownerCache || this.ownerCache.key !== key) {
+      this.ownerCache = { key, map: store.collectionRecordOwners(workspaceId, collection) }
+    }
+    return this.ownerCache.map.get(id) ?? ''
   }
 
   private withBanner(spec: CollectionSpec, row: DbRecord): DbRecord {
@@ -801,6 +1888,10 @@ export class DatabaseService extends Service implements Database {
   }
 
   private applyPersonOverlay(spec: CollectionSpec, row: DbRecord): DbRecord {
+    if (spec.path === '/plugins' && row.builtin === true) {
+      const official = { kind: 'user' as const, name: 'BIU官方', url: 'https://github.com/helloooooooooooooo97/biu' }
+      return { ...row, createdBy: official, updatedBy: [official] }
+    }
     const meta = this.facets.recordMeta(spec.path, row.id)
     if (!meta) return row
     const editors = asPersonList(meta.updatedBy).map((item) => this.namedPerson(item))
@@ -808,6 +1899,50 @@ export class DatabaseService extends Service implements Database {
       ...row,
       ...(meta.createdBy ? { createdBy: this.namedPerson(meta.createdBy) } : {}),
       ...(editors.length ? { updatedBy: editors } : {}),
+    }
+  }
+
+  /** 本机空间：私人与共享都留在这台设备。 */
+  private deviceWorkspace() {
+    if (isOnlineRuntime()) return false
+    try {
+      const account = this.ctx.get('account') as {
+        workspaceLocation?: (workspaceId: string) => 'device' | 'cloud'
+        store?: { activeWorkspaceId?: () => string | null }
+      } | undefined
+      const workspaceId = account?.store?.activeWorkspaceId?.() ?? ''
+      if (workspaceId && account?.workspaceLocation) return account.workspaceLocation(workspaceId) === 'device'
+    } catch {
+      /* 没有账号服务时按桌面运行时处理 */
+    }
+    return true
+  }
+
+  private markDeviceRecord(collection: string, id: string) {
+    try {
+      const account = this.ctx.get('account') as { markLocal?: (collection: string, id: string) => void } | undefined
+      account?.markLocal?.(collection, id)
+    } catch {
+      /* 没有账号库时仍按当前归属挂到空间 */
+    }
+  }
+
+  /** 侧栏「添加聊天」走 sessions.create，不经过表格的 create，这里补创建人和本地归属。 */
+  async touchActor(collection: string, recordId: string) {
+    await this.stampActor(collection, recordId)
+    if (isOnlineRuntime()) return
+    try {
+      const account = this.ctx.get('account') as {
+        markLocal?: (collection: string, id: string) => void
+        workspaceLocation?: (workspaceId: string) => 'device' | 'cloud'
+        store?: { activeWorkspaceId?: () => string | null }
+      } | undefined
+      const workspaceId = account?.store?.activeWorkspaceId?.() ?? ''
+      if (!workspaceId || account?.workspaceLocation?.(workspaceId) !== 'cloud') {
+        account?.markLocal?.(collection, recordId)
+      }
+    } catch {
+      /* 没有账号服务时只记录创建人 */
     }
   }
 
@@ -823,6 +1958,9 @@ export class DatabaseService extends Service implements Database {
   private async currentPerson(): Promise<PersonValue> {
     const sid = currentSessionId()?.trim()
     if (!sid) {
+      const accountId = currentAccountId()
+      const member = accountId ? this.collabStore()?.workspacePerson?.(accountId) : null
+      if (member?.name) return { kind: 'user', name: member.name, accountId }
       const name = readWorkspaceProfile().name.trim() || '用户'
       return { kind: 'user', name }
     }
@@ -831,6 +1969,10 @@ export class DatabaseService extends Service implements Database {
   }
 
   private namedPerson(person: PersonValue): PersonValue {
+    if (person.kind === 'user' && person.accountId) {
+      const member = this.collabStore()?.workspacePerson?.(person.accountId)
+      return member?.name ? { ...person, name: member.name } : person
+    }
     if (person.kind !== 'agent' || !person.sessionId) return person
     const peeked = this.peekSessionName(person.sessionId)
     return peeked ? { ...person, name: peeked } : person
@@ -879,14 +2021,10 @@ export class DatabaseService extends Service implements Database {
 
   private applyMetaOverlay(spec: CollectionSpec, row: DbRecord): DbRecord {
     let meta = this.facets.recordMeta(spec.path, row.id)
-    if ((!meta || meta.tags == null) && Array.isArray(row.tags) && row.tags.length) {
-      meta = this.facets.writeRecordMeta(spec.path, row.id, { tags: row.tags.map((item) => String(item)) })
-    }
     if (!meta) return row
     return {
       ...row,
       ...(meta.emoji !== null ? { emoji: meta.emoji } : {}),
-      ...(meta.tags !== null ? { tags: meta.tags } : {}),
     }
   }
 
@@ -921,8 +2059,8 @@ export class DatabaseService extends Service implements Database {
     if (!spec) throw new Error(`unknown collection: /${parts[0]}`)
     const record = await spec.get(parts[1]!)
     if (!record) throw new Error(`unknown record: ${spec.path}/${parts[1]}`)
-    this.assertLiveRecord(spec, record.id)
-    return { kind: 'record' as const, path: `${spec.path}/${record.id}`, schema: schemaFor(spec), value: withoutContent(spec, this.withBanner(spec, this.decorateRecord(spec, record))) }
+    this.assertLiveRecord(spec, record.id, 'resource:read', record)
+    return { kind: 'record' as const, path: `${spec.path}/${record.id}`, schema: this.schemaForCurrent(spec), value: withoutContent(spec, this.withBanner(spec, this.decorateRecord(spec, record))) }
   }
 
   async update(path: string, content: unknown) {
@@ -934,7 +2072,7 @@ export class DatabaseService extends Service implements Database {
     const raw = parseContent(content)
     const current = await spec.get(parts[1]!)
     if (!current) throw new Error(`unknown record: ${spec.path}/${parts[1]}`)
-    this.assertLiveRecord(spec, current.id)
+    this.assertLiveRecord(spec, current.id, 'resource:update', current)
     const bannerPatch = takeBannerPatch(raw)
     if ('facet' in raw && schema.fields.facet) {
       if (!schema.fields.facet.writable || schema.fields.facet.computed) throw new Error(`field not writable: facet`)
@@ -944,7 +2082,7 @@ export class DatabaseService extends Service implements Database {
     }
     if (!this.collectionCanUpdate(spec)) {
       const keys = Object.keys(raw)
-      const overlayKeys = new Set(['facet', 'emoji', 'tags'])
+      const overlayKeys = new Set(['facet', 'emoji'])
       if ((keys.length && keys.some((key) => !overlayKeys.has(key))) || (!keys.length && !bannerPatch.present)) {
         throw new Error(`collection cannot update: ${spec.path}`)
       }
@@ -953,21 +2091,16 @@ export class DatabaseService extends Service implements Database {
         const nextSchema = coerce(schema.fields.facet, raw.facet)
         next = { ...next, facet: this.persistRecordFacet(spec, current.id, nextSchema, next) }
       }
-      if ('emoji' in raw || 'tags' in raw) {
-        if ('emoji' in raw && (!schema.fields.emoji?.writable || schema.fields.emoji.computed)) {
+      if ('emoji' in raw) {
+        if (!schema.fields.emoji?.writable || schema.fields.emoji.computed) {
           throw new Error(`field not writable: emoji`)
         }
-        if ('tags' in raw && (!schema.fields.tags?.writable || schema.fields.tags.computed)) {
-          throw new Error(`field not writable: tags`)
-        }
         const meta = this.facets.writeRecordMeta(spec.path, current.id, {
-          ...('emoji' in raw ? { emoji: String(coerce(schema.fields.emoji!, raw.emoji) ?? '') } : {}),
-          ...('tags' in raw ? { tags: coerce(schema.fields.tags!, raw.tags) as string[] } : {}),
+          emoji: String(coerce(schema.fields.emoji!, raw.emoji) ?? ''),
         })
         next = {
           ...next,
           ...(meta.emoji !== null ? { emoji: meta.emoji } : {}),
-          ...(meta.tags !== null ? { tags: meta.tags } : {}),
         }
       }
       if (bannerPatch.present) {
@@ -996,17 +2129,28 @@ export class DatabaseService extends Service implements Database {
     }
     const patch = pickWritablePatch(schema, raw)
     await assertSameTableLinks(spec, patch, parts[1])
+    const authorization = this.authorization()
+    const actor = authorization?.currentActor()
+    const parentField = spec.schema.parentField
+    const moving = Boolean(parentField && parentField in patch && authorization && actor)
+    const parentRecordId = moving ? String(patch[parentField!] ?? '').trim() : ''
+    const resource = actor
+      ? { type: 'record' as const, workspaceId: actor.workspaceId, collection: spec.path, recordId: current.id }
+      : null
+    const parent = actor && parentRecordId
+      ? { type: 'record' as const, workspaceId: actor.workspaceId, collection: spec.path, recordId: parentRecordId }
+      : null
+    if (moving && resource) authorization!.validateMove(actor!, resource, parent)
     let record = Object.keys(patch).length ? await spec.update(parts[1]!, patch) : current
+    if (moving && resource) authorization!.move(actor!, resource, parent)
     await this.stampActor(spec.path, record.id)
-    if ('emoji' in patch || 'tags' in patch) {
+    if ('emoji' in patch) {
       const meta = this.facets.writeRecordMeta(spec.path, record.id, {
-        ...('emoji' in patch ? { emoji: String(patch.emoji ?? '') } : {}),
-        ...('tags' in patch ? { tags: Array.isArray(patch.tags) ? patch.tags.map((item) => String(item)) : [] } : {}),
+        emoji: String(patch.emoji ?? ''),
       })
       record = {
         ...record,
         ...(meta.emoji !== null ? { emoji: meta.emoji } : {}),
-        ...(meta.tags !== null ? { tags: meta.tags } : {}),
       }
     }
     if (schema.fields.facet && 'facet' in patch) {
@@ -1031,12 +2175,21 @@ export class DatabaseService extends Service implements Database {
     return { kind: 'record' as const, path: `${spec.path}/${record.id}`, value: withoutContent(spec, this.withBanner(spec, this.decorateRecord(spec, record))) }
   }
 
-  async create(path: string, content?: unknown) {
+  async create(path: string, content?: unknown, options: { scope?: 'personal' | 'workspace' | 'shared' | 'local' } = {}) {
     const parts = splitPath(path)
     if (parts.length !== 1) throw new Error(`cannot create: ${normalizeCollectionPath(path)}`)
     const spec = this.collection(`/${parts[0]}`)
     if (!spec) throw new Error(`unknown collection: /${parts[0]}`)
     if (!spec.records?.create || !spec.create) throw new Error(`collection cannot create: ${spec.path}`)
+    const authorization = this.authorization()
+    const actor = authorization?.currentActor()
+    if (authorization && actor) {
+      authorization.requireCurrent('resource:create', {
+        type: 'collection',
+        workspaceId: actor.workspaceId,
+        collection: spec.path,
+      })
+    }
     const schema = schemaFor(spec)
     const rows = parseRecords(content)
     const records: Record<string, unknown>[] = []
@@ -1058,10 +2211,9 @@ export class DatabaseService extends Service implements Database {
       const banner = banners[index]
       if (banner !== undefined) this.facets.writeRecordBanner(spec.path, record.id, banner)
       const input = records[index] ?? record
-      if ('emoji' in input || 'tags' in input) {
+      if ('emoji' in input) {
         this.facets.writeRecordMeta(spec.path, record.id, {
-          ...('emoji' in input ? { emoji: String(input.emoji ?? '') } : {}),
-          ...('tags' in input ? { tags: Array.isArray(input.tags) ? input.tags.map((item) => String(item)) : [] } : {}),
+          emoji: String(input.emoji ?? ''),
         })
       }
       if (schema.fields.facet) {
@@ -1069,6 +2221,34 @@ export class DatabaseService extends Service implements Database {
       }
       this.indexFacetRecord(spec, this.decorateRecord(spec, record))
       this.refreshContentRefs(spec, this.withBanner(spec, record))
+      const parentField = spec.schema.parentField
+      const parentRecordId = parentField ? String(record[parentField] ?? '').trim() : ''
+      if (spec.path !== '/workspace-members') {
+        const device = this.deviceWorkspace()
+        const workspaceOwned = options.scope === 'workspace' && !device
+        const shared = options.scope === 'shared' && !parentRecordId
+        const local = options.scope === 'local' && !parentRecordId
+        const parentOwn = parentRecordId ? this.ownershipOf(spec.path, parentRecordId) : null
+        const ownership = device
+          ? shared || parentOwn === 'shared'
+            ? 'shared'
+            : 'personal'
+          : parentRecordId || workspaceOwned
+            ? 'workspace'
+            : shared
+              ? 'shared'
+              : 'personal'
+        this.attachWorkspaceRecord(spec.path, record.id, {
+          ownership,
+          accessMode: parentRecordId ? 'inherit' : workspaceOwned || shared ? 'members' : 'private',
+          ...(workspaceOwned ? { memberDefaultRole: 'editor' as const } : {}),
+          ...(shared ? { memberDefaultRole: 'viewer' as const } : {}),
+          ...(parentRecordId ? { parentCollection: spec.path, parentRecordId } : {}),
+        })
+        if (shared) this.markPublicView(spec.path, record.id)
+        if (workspaceOwned && !parentRecordId) this.grantAllMembersEditable(spec.path, record.id)
+        if (local || device) this.markDeviceRecord(spec.path, record.id)
+      }
     }
     this.bump()
     const items = created.map((record) => ({
@@ -1106,7 +2286,11 @@ export class DatabaseService extends Service implements Database {
     }
     const matchedTrash = await this.matchCollectionRows(spec, { ...listQuery, trash: true }, filter, q)
     const matchedLive = await this.matchCollectionRows(spec, { ...listQuery, trash: false }, filter, q)
-    const matched = query.purge ? (matchedTrash.length ? matchedTrash : matchedLive) : matchedLive
+    const matched = this.visibleRecords(
+      spec.path,
+      query.purge ? (matchedTrash.length ? matchedTrash : matchedLive) : matchedLive,
+      'resource:delete',
+    )
     const ids = [...new Set(matched.map((row) => row.id))]
     if (!ids.length) return { kind: 'deleted' as const, path: spec.path, ids }
     const hard = Boolean(query.purge) || HARD_DELETE_PATHS.has(spec.path)
@@ -1133,15 +2317,24 @@ export class DatabaseService extends Service implements Database {
       return { kind: 'deleted' as const, path: spec.path, ids, trash: true }
     }
     await spec.remove({ ids })
+    // 视图是硬删除：/views 只是 savedViews 现生成的一层行，删行必须连视图本体一起删，
+    // 否则下一次列表/侧边栏拉取会把它原样吐回来（表现为「删掉的视图自己弹出来」）。
+    if (spec.path === '/views') {
+      for (const key of viewRowKeys(matched)) {
+        try {
+          savedViews.remove(rowIdOfView(key.collection, key.viewId), currentAccountId())
+        } catch {
+          /* 视图本体已不在（前端删视图时先走 /api/db/saved-views 整份覆盖） */
+        }
+      }
+    }
     for (const id of ids) {
       this.facets.removeRecord(spec.path, id)
       this.shares.revokeRecord(spec.path, id)
     }
     if (spec.path === '/views') {
-      for (const row of matched) {
-        const collection = normalizeCollectionPath(String(row.tablePath ?? ''))
-        const viewId = String(row.viewId ?? '').trim()
-        if (collection && collection !== '/' && viewId) this.shares.revokeView(collection, viewId)
+      for (const key of viewRowKeys(matched)) {
+        this.shares.revokeView(key.collection, key.viewId)
       }
     }
     this.bump()
@@ -1155,11 +2348,15 @@ export class DatabaseService extends Service implements Database {
     const spec = this.collection(`/${parts[0]}`)
     if (!spec) throw new Error(`unknown collection: /${parts[0]}`)
     if (!hasCollectionDeleteQuery(query)) throw new Error('restore requires ids, q, or filter')
-    const matched = await this.matchCollectionRows(
-      spec,
-      { q: query.q ?? '', filter: query.filter, ids: query.ids, trash: true },
-      query.filter,
-      query.q ?? '',
+    const matched = this.visibleRecords(
+      spec.path,
+      await this.matchCollectionRows(
+        spec,
+        { q: query.q ?? '', filter: query.filter, ids: query.ids, trash: true },
+        query.filter,
+        query.q ?? '',
+      ),
+      'resource:restore',
     )
     const ids = [...new Set(matched.map((row) => row.id))]
     for (const id of ids) this.facets.restoreDeleted(spec.path, id)
@@ -1174,6 +2371,22 @@ export class DatabaseService extends Service implements Database {
       if (!spec) continue
       const record = await spec.get(row.record_id)
       if (!record) continue
+      if (row.collection === '/plugins' && (record as { builtin?: unknown }).builtin === true) continue
+      const authorization = this.authorization()
+      const actor = authorization?.currentActor()
+      if (authorization && actor) {
+        const pluginTrash = row.collection === '/plugins'
+          && Boolean(this.collabStore()?.isMember?.(actor.accountId, actor.workspaceId))
+        if (!pluginTrash && !authorization.authorize(actor, 'resource:read', {
+          type: 'record',
+          workspaceId: actor.workspaceId,
+          collection: row.collection,
+          recordId: row.record_id,
+        }).allowed) continue
+      } else {
+        const membership = this.workspaceMembership()
+        if (membership && !this.inWorkspace(membership, row.collection, row.record_id)) continue
+      }
       const decorated = this.decorateRecord(spec, record)
       const title = String(decorated.title ?? decorated.name ?? record.id).trim() || record.id
       items.push({
@@ -1195,11 +2408,31 @@ export class DatabaseService extends Service implements Database {
     if (!spec) throw new Error(`unknown collection: /${parts[0]}`)
     const action = spec.actions?.find((item) => item.id === actionId)
     if (!action) throw new Error(`unknown action: ${actionId}`)
-    const record = (await spec.get(parts[1]!)) ?? (action.allowMissing ? { id: parts[1]! } : null)
+    const loaded = await spec.get(parts[1]!)
+    const record = loaded ?? (action.allowMissing ? { id: parts[1]! } : null)
     if (!record) throw new Error(`unknown record: ${spec.path}/${parts[1]}`)
-    if (!action.allowMissing) this.assertLiveRecord(spec, record.id)
+    const personalLoad = spec.path === '/plugins' && (actionId === 'start' || actionId === 'stop')
+    const pluginAuthor = spec.path === '/plugins' && (actionId === 'sandbox' || actionId === 'pack')
+    if (pluginAuthor) {
+      await this.requirePath(spec.path, 'resource:read')
+      if (loaded) {
+        const owner = this.recordOwner(spec.path, record.id)
+        if (!owner) this.attachWorkspaceRecord(spec.path, record.id, { ownership: 'personal', accessMode: 'private' })
+        else this.assertLiveRecord(spec, record.id, 'resource:read', record)
+      }
+    } else if (!personalLoad && (loaded || !action.allowMissing)) {
+      this.assertLiveRecord(spec, record.id, (action.requiredAction ?? 'resource:update') as PermissionAction, record)
+    } else {
+      await this.requirePath(spec.path, (action.requiredAction ?? 'resource:update') as PermissionAction)
+    }
     if (!matchActionWhen(record, action.when)) throw new Error(`action not available: ${actionId}`)
     const result = await action.run(parts[1]!, record, args)
+    if (spec.path === '/plugins' && actionId === 'sandbox' && !this.recordOwner(spec.path, parts[1]!)) {
+      this.attachWorkspaceRecord(spec.path, parts[1]!, { ownership: 'personal', accessMode: 'private' })
+    }
+    if (spec.path === '/plugins' && (actionId === 'sandbox' || actionId === 'pack')) {
+      await this.stampActor(spec.path, parts[1]!)
+    }
     const next = (await spec.get(parts[1]!)) ?? record
     this.indexFacetRecord(spec, next)
     this.bump()
@@ -1218,22 +2451,29 @@ export class DatabaseService extends Service implements Database {
     if (!spec) throw new Error(`unknown collection: /${parts[0]}`)
     const schema = schemaFor(spec)
     const field = schema.contentField ?? 'content'
-    if (!schema.fields[field]) throw new Error(`no content field: ${field}`)
     const record = await spec.get(parts[1]!)
     if (!record) throw new Error(`unknown record: ${spec.path}/${parts[1]}`)
-    this.assertLiveRecord(spec, record.id)
-    const value = isEditorContentSpec(spec)
-      ? readEditorContent(this.facets.ensure(), spec.path, record.id)
-      : (record[field] ?? null)
+    this.assertLiveRecord(spec, record.id, 'resource:read', record)
+    if (!schema.fields[field]) throw new Error(`no content field: ${field}`)
+    const editorContent = isEditorContentSpec(spec)
+      ? readEditorContentRecord(this.facets.ensure(), spec.path, record.id)
+      : null
+    const value = editorContent ? editorContent.body : (record[field] ?? null)
     return {
       kind: 'content' as const,
       path: `${spec.path}/${record.id}`,
       field,
       value,
+      ...(editorContent ? { version: editorContent.version } : {}),
     }
   }
 
-  async writeContent(path: string, value: unknown) {
+  async writeContent(path: string, value: unknown, expectedVersion?: number) {
+    const normalized = normalizeCollectionPath(path)
+    return this.serializeContentWrite(normalized, () => this.writeContentNow(path, value, expectedVersion))
+  }
+
+  private async writeContentNow(path: string, value: unknown, expectedVersion?: number) {
     const parts = splitPath(path)
     if (parts.length !== 2) throw new Error(`cannot write content: ${normalizeCollectionPath(path)}`)
     const spec = this.collection(`/${parts[0]}`)
@@ -1241,12 +2481,12 @@ export class DatabaseService extends Service implements Database {
     if (!spec.update) throw new Error(`collection cannot update: ${spec.path}`)
     const schema = schemaFor(spec)
     const field = schema.contentField ?? 'content'
-    if (!schema.fields[field]) throw new Error(`no content field: ${field}`)
     const existing = await spec.get(parts[1]!)
     if (!existing) throw new Error(`unknown record: ${spec.path}/${parts[1]}`)
-    this.assertLiveRecord(spec, existing.id)
+    this.assertLiveRecord(spec, existing.id, 'resource:update', existing)
+    if (!schema.fields[field]) throw new Error(`no content field: ${field}`)
     if (isEditorContentSpec(spec)) {
-      writeEditorContent(this.facets.ensure(), spec.path, parts[1]!, String(value ?? ''))
+      writeEditorContent(this.facets.ensure(), spec.path, parts[1]!, String(value ?? ''), { expectedVersion })
     }
     const patch = this.collectionCanUpdate(spec)
       ? pickWritablePatch(schema, { [field]: value })
@@ -1255,11 +2495,15 @@ export class DatabaseService extends Service implements Database {
     await this.stampActor(spec.path, record.id)
     this.refreshContentRefs(spec, this.withBanner(spec, record))
     this.bump()
+    const editorContent = isEditorContentSpec(spec)
+      ? readEditorContentRecord(this.facets.ensure(), spec.path, record.id)
+      : null
     return {
       kind: 'content' as const,
       path: `${spec.path}/${record.id}`,
       field,
-      value: record[field] ?? null,
+      value: editorContent ? editorContent.body : (record[field] ?? null),
+      ...(editorContent ? { version: editorContent.version } : {}),
     }
   }
 
@@ -1307,7 +2551,7 @@ export class DatabaseService extends Service implements Database {
       replaced = next.replaced
     }
     const nextText = typeof next === 'object' ? next.text : next
-    await this.writeContent(path, nextText)
+    await this.writeContent(path, nextText, current.version)
     const locus = mutationLocus(command === 'find_replace' ? 'str_replace' : command, text, nextText, patch)
     const written = await this.content(current.path)
     const after = asContentText(written.value)
@@ -1331,6 +2575,9 @@ export class DatabaseService extends Service implements Database {
     if (!spec) throw new Error(`unknown collection: /${parts[0]}`)
     const record = await spec.get(parts[1]!)
     if (!record) throw new Error(`unknown record: ${spec.path}/${parts[1]}`)
+    const from = String(args.from ?? '').trim()
+    const command = String(args.command ?? (args.value != null || from ? 'write' : 'view'))
+    this.assertLiveRecord(spec, record.id, command === 'view' ? 'resource:read' : 'resource:update', record)
     const names = new Set([
       ...collectAssetNames(record, this.facets.recordBanner(spec.path, record.id)?.html),
       ...this.facets.listedAttachmentNames(spec.path, record.id),
@@ -1339,8 +2586,6 @@ export class DatabaseService extends Service implements Database {
       .trim()
       .replace(/^assets\//, '')
       .replace(/^.*[/\\]/, '')
-    const from = String(args.from ?? '').trim()
-    const command = String(args.command ?? (args.value != null || from ? 'write' : 'view'))
     const recPath = `${spec.path}/${record.id}`
     if (command === 'view' && !file) {
       const assets = []
@@ -1419,6 +2664,9 @@ export class DatabaseService extends Service implements Database {
     if (!spec) throw new Error(`unknown collection: /${parts[0]}`)
     const record = await spec.get(parts[1]!)
     if (!record) throw new Error(`unknown record: ${spec.path}/${parts[1]}`)
+    const from = String(args.from ?? '').trim()
+    const command = String(args.command ?? (args.value != null || from ? 'write' : 'view'))
+    this.assertLiveRecord(spec, record.id, command === 'view' ? 'resource:read' : 'resource:update', record)
     const names = new Set([
       ...collectAssetNames(record, this.facets.recordBanner(spec.path, record.id)?.html),
       ...this.facets.listedAttachmentNames(spec.path, record.id),
@@ -1427,8 +2675,6 @@ export class DatabaseService extends Service implements Database {
       .trim()
       .replace(/^assets\//, '')
       .replace(/^.*[/\\]/, '')
-    const from = String(args.from ?? '').trim()
-    const command = String(args.command ?? (args.value != null || from ? 'write' : 'view'))
     const recPath = `${spec.path}/${record.id}`
     if (command === 'view' && !file) {
       const assets = []
@@ -1555,6 +2801,17 @@ function parseRecords(content: unknown): Record<string, unknown>[] {
 const PATH_PARAM = { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] } as const
 
 function asColumnKeys(value: unknown): string[] | undefined {
+  if (typeof value === 'string' && value.trim()) {
+    const text = value.trim()
+    if (text.startsWith('[')) {
+      try {
+        return asColumnKeys(JSON.parse(text) as unknown)
+      } catch {
+        return undefined
+      }
+    }
+    return asColumnKeys(text.split(','))
+  }
   if (!Array.isArray(value)) return undefined
   const keys = value.map((item) => String(item).trim()).filter(Boolean)
   return keys.length ? keys : undefined
@@ -1684,28 +2941,93 @@ async function withInspectorReveal<T>(
 export const name = 'core-file-system'
 export const inject = ['tools', 'http']
 
+export function databaseHttpFailure(error: unknown) {
+  const message = String(error)
+  if (/\bunknown (?:record|collection)\b/.test(message)) {
+    return { status: 404, body: { error: 'not found', code: 'NOT_FOUND' } } as const
+  }
+  if (/\bpermission denied\b/.test(message)) {
+    return { status: 403, body: { error: 'permission denied', code: 'FORBIDDEN' } } as const
+  }
+  return { status: 400, body: { error: message, code: 'BAD_REQUEST' } } as const
+}
+
 export function apply(ctx: Context) {
   const db = new DatabaseService(ctx)
-  db.facets.open(dataPath(dataHome(), 'biu.sqlite'))
+  db.facets.open(biuSqlitePath())
   const assets = db.assets
   const savedViews = new SavedViewsStore()
-  savedViews.open(process.env.VITEST ? ':memory:' : dataPath(dataHome(), 'biu.sqlite'))
+  savedViews.open(process.env.VITEST ? ':memory:' : biuSqlitePath())
+  const account = ctx.get('account') as {
+    authorization?: AuthorizationService
+    workspaceLocation?: (workspaceId: string) => 'device' | 'cloud'
+    store?: {
+      activeWorkspaceId?: () => string | null
+      members: (accountId: string, workspaceId: string) => Array<{
+        id: string
+        name: string
+        email: string
+        role: string
+        member_kind: 'member' | 'external'
+        created_at: number
+      }>
+      externallySharedRecords?: (
+        accountId: string,
+        workspaceId: string,
+      ) => Array<{ collection: string; record_id: string }>
+      viewGrantsFor?: (
+        workspaceId: string,
+        collection: string,
+      ) => Array<{
+        view_id: string
+        subject_type: 'account' | 'member_view'
+        subject_id: string
+        role: 'viewer' | 'editor' | 'manager' | 'owner'
+      }>
+    }
+  } | undefined
+  const activeDataLocation = (): 'device' | 'cloud' => {
+    if (isOnlineRuntime()) return 'cloud'
+    const workspaceId = account?.store?.activeWorkspaceId?.()
+    return workspaceId && account?.workspaceLocation?.(workspaceId) === 'cloud' ? 'cloud' : 'device'
+  }
+  db.viewCatalog = savedViews
+  ctx.inject(['sessions'], (inner) => {
+    inner.sessions.viewAccess = (id, record) => db.allowsViaView('/sessions', { ...record, id })
+  })
+  account?.authorization?.setMemberViewMatcher((workspaceId, viewId, accountId) => {
+    const view = savedViews.viewsFor('/workspace-members').find((item) => item.id === viewId)
+      ?? stubBuiltinMemberView(viewId)
+      ?? stubBuiltinAllView(viewId)
+    if (!view || !account.store) return false
+    const member = account.store.members(accountId, workspaceId).find((item) => item.id === accountId)
+    if (!member) return false
+    return matchListFilterRecord(
+      {
+        id: member.id,
+        title: member.name || member.email,
+        name: member.name,
+        email: member.email,
+        role: member.role,
+        membershipKind: member.member_kind,
+        joinedAt: member.created_at,
+      },
+      {
+        ...(view.filters ?? {}),
+        ...(view.filterTree ? { $tree: view.filterTree } : {}),
+      },
+    )
+  })
   const shares = db.shares
-  shares.open(process.env.VITEST ? ':memory:' : dataPath(dataHome(), 'biu.sqlite'))
+  shares.open(process.env.VITEST ? ':memory:' : biuSqlitePath())
   const facets = db.facets
-  db.register(viewsCollection(savedViews, () => db.collectionsList().map((item) => ({
-    id: item.id,
-    path: item.path,
-    kind: 'collection' as const,
-    label: item.label ?? item.id,
-    view: item.view ?? null,
-  }))))
+  db.register(viewsCollection(savedViews, () => db.collectionsList().map((item) => db.publishCollection(item)), () => currentAccountId()))
   db.register(facetsCollection(facets, () => db.collectionsList().map((item) => ({
     id: item.id,
     path: item.path,
     label: item.label ?? item.id,
   }))))
-  const sqlitePath = dataPath(dataHome(), 'biu.sqlite')
+  const sqlitePath = biuSqlitePath()
   const gcHooks = () => {
     let notices: { push: (input: { kind: 'session'; title: string; body: string; sourceKey: string }) => unknown } | undefined
     try {
@@ -1750,7 +3072,7 @@ export function apply(ctx: Context) {
   })
   ctx.tools.register({
     name: 'db_list',
-    description: '列出 File System 路径：/ 为已登记表（path、中文名、view.blurb 说明书），/<表> 为列式记录（不含 content、默认不含 createdAt/updatedAt/createdBy/updatedBy）。默认每页 50，最多 200。columns 参数只取需要的列。表结构用 db_stat。',
+    description: '列出 File System 路径：/ 为已登记表（path、中文名、view.blurb 说明书），/<表> 为列式记录（不含 content、默认不含 createdAt/updatedAt/createdBy/updatedBy）。默认每页 20，最多 200。columns 参数只取需要的列。表结构用 db_stat。',
     parameters: {
       type: 'object',
       properties: {
@@ -1759,12 +3081,12 @@ export function apply(ctx: Context) {
         q: { type: 'string', description: '可选，全文搜索' },
         sortField: { type: 'string' },
         sortDir: { type: 'string', enum: ['asc', 'desc'] },
-        limit: { type: 'number', description: '每页条数，默认 50，最大 200' },
+        limit: { type: 'number', description: '每页条数，默认 20，最大 200' },
         offset: { type: 'number' },
         columns: {
           type: 'array',
           items: { type: 'string' },
-          description: '可选，只返回这些列。始终带 id。label 等于标题列（默认 title）。不传则除 content 外全返回。',
+          description: '可选，只返回这些列。始终带 id。label 等于标题列（默认 title）。不传则除 content 外全返回。标签属性列写成 facet::<标签id>::<字段key>，例如 facet::facet::category。',
         },
       },
       required: ['path'],
@@ -1796,14 +3118,14 @@ export function apply(ctx: Context) {
   })
   ctx.tools.register({
     name: 'db_update',
-    description: '按表结构 schema 的可写字段更新一条已有记录，路径为 /<表>/<id>。成功只返回 {ok, path}，不回整行。合集 facet：可同时贴多个。一个合集用扁平 values，如 {tags:["facet-2"],values:{导演:"查泽雷"}}；多个合集必须按合集分子对象，如 {tags:["facet-2","awards"],values:{"facet-2":{导演:"查泽雷"},awards:{oscar:true}}}。省略 tags 则改当前已贴合集的属性（合并，不撕掉别的合集）。改合集定义用 db_update /facets/<id> content.fields。新建用 db_create，正文用 db_content。',
+    description: '按表结构 schema 的可写字段更新一条已有记录，路径为 /<表>/<id>。成功只返回 {ok, path}，不回整行。未知字段会列出该表可写字段。标签 facet：可同时贴多个。一个标签用扁平 values，如 {tags:["facet-2"],values:{导演:"查泽雷"}}；多个标签必须按标签分子对象，如 {tags:["facet-2","awards"],values:{"facet-2":{导演:"查泽雷"},awards:{oscar:true}}}。省略 tags 则改当前已贴标签的属性（合并，不撕掉别的标签）。改标签定义用 db_update /facets/<id> fields（数组或 JSON 字符串均可）。新建用 db_create，正文用 db_content。',
     parameters: {
       type: 'object',
       properties: {
         path: { type: 'string' },
         content: {
           description:
-            '要更新的字段（对象或 JSON 字符串）。合集写 facet：一个合集 values 扁平，如 {facet:{tags:["facet-2"],values:{导演:"查泽雷"}}}；多个合集 values 按合集 id 分子对象。省略 tags 只改属性，不撕掉其它合集。',
+            '要更新的字段（对象或 JSON 字符串）。标签写 facet：一个标签 values 扁平，如 {facet:{tags:["facet-2"],values:{导演:"查泽雷"}}}；多个标签 values 按标签 id 分子对象。省略 tags 只改属性，不撕掉其它标签。',
         },
       },
       required: ['path', 'content'],
@@ -1815,7 +3137,7 @@ export function apply(ctx: Context) {
   })
   ctx.tools.register({
     name: 'db_create',
-    description: '在已登记且允许新建的表中批量新增记录。路径为 /<表>，records 为对象数组。成功返回 {ok, path, ids}，不回整行。能否新建看 db_stat 的 caps。新建合集用 db_create path=/facets records=[{title}]。',
+    description: '在已登记且允许新建的表中批量新增记录。路径为 /<表>，records 为对象数组。成功返回 {ok, path, ids}，不回整行。能否新建看 db_stat 的 caps。新建标签用 db_create path=/facets records=[{title}]。',
     parameters: {
       type: 'object',
       properties: {
@@ -1825,11 +3147,21 @@ export function apply(ctx: Context) {
           items: { type: 'object' },
           description: '要创建的记录（非空对象数组），按 schema 可写字段给初值；不要附加空对象',
         },
+        scope: {
+          type: 'string',
+          enum: ['personal', 'workspace', 'shared', 'local'],
+          description: '根记录归属：personal 私人（默认，仅自己可见）；workspace 空间（成员可编辑）；shared 公开链接，所有人可查看；local 存在本机，仍属于当前账号和空间。子记录始终继承父记录。',
+        },
       },
       required: ['path', 'records'],
     },
     execute: (args) =>
-      withInspectorReveal(ctx, String(args.path), () => db.create(String(args.path), asCreateRecords(args))).then(
+      withInspectorReveal(ctx, String(args.path), () =>
+        db.create(String(args.path), asCreateRecords(args), {
+          scope:
+            args.scope === 'workspace' ? 'workspace' : args.scope === 'shared' ? 'shared' : args.scope === 'local' ? 'local' : 'personal',
+        }),
+      ).then(
         (body) => agentDbCompact.write(body),
       ),
   })
@@ -2037,11 +3369,23 @@ export function apply(ctx: Context) {
     try {
       route.send(200, await op())
     } catch (error) {
-      route.send(400, { error: String(error) })
+      const failure = databaseHttpFailure(error)
+      route.send(failure.status, failure.body)
     }
   }
   ctx.http.route('GET', '/api/profile', (route) => {
-    route.send(200, asPublicProfile())
+    let dataLocation: 'device' | 'cloud' = isOnlineRuntime() ? 'cloud' : 'device'
+    try {
+      const account = ctx.get('account') as {
+        store?: { activeWorkspaceId(): string | null }
+        workspaceLocation?: (workspaceId: string) => 'device' | 'cloud'
+      }
+      const workspaceId = account.store?.activeWorkspaceId()
+      if (workspaceId && account.workspaceLocation) dataLocation = account.workspaceLocation(workspaceId)
+    } catch {
+      /* 没有账号服务时沿用宿主位置 */
+    }
+    route.send(200, { ...asPublicProfile(), localData: dataLocation === 'device', dataLocation })
   })
   ctx.http.route('POST', '/api/profile', async (route) => {
     try {
@@ -2081,10 +3425,14 @@ export function apply(ctx: Context) {
   )
   ctx.http.route('GET', '/api/db/read', (route) => send(route, () => db.read(route.query.get('path') || '/')))
   ctx.http.route('GET', '/api/db/banner-gallery', (route) =>
-    send(route, () => ({ items: db.facets.listBannerGallery() })),
+    send(route, async () => {
+      await db.requirePath('/pages', 'resource:read')
+      return { items: db.facets.listBannerGallery() }
+    }),
   )
   ctx.http.route('POST', '/api/db/banner-gallery', async (route) => {
     try {
+      await db.requirePath('/pages', 'resource:update')
       const body = (await route.json()) as { id?: string }
       const id = String(body?.id ?? '').trim()
       if (!id) {
@@ -2097,27 +3445,143 @@ export function apply(ctx: Context) {
     }
   })
   ctx.http.route('GET', '/api/db/stat', (route) => send(route, () => db.stat(route.query.get('path') || '/')))
-  ctx.http.route('GET', '/api/db/content', (route) => send(route, () => db.content(route.query.get('path') || '/')))
+  ctx.http.route('GET', '/api/db/content', async (route) => {
+    const path = route.query.get('path') || '/'
+    const parts = path.split('/').filter(Boolean)
+    if (parts.length === 2) {
+      const search = route.query.toString()
+      const forwarded = await forwardCloud(
+        ctx,
+        `/${parts[0]}`,
+        parts[1]!,
+        search ? `/api/db/content?${search}` : '/api/db/content',
+        { method: 'GET' },
+      )
+      if (forwarded) {
+        route.send(forwarded.status, forwarded.body)
+        return
+      }
+    }
+    await send(route, () => db.content(path))
+  })
   ctx.http.route('POST', '/api/db/content', async (route) => {
     try {
-      const body = (await route.json()) as { path?: string; value?: unknown }
-      route.send(200, await db.writeContent(String(body?.path ?? ''), body?.value))
+      const body = (await route.json()) as { path?: string; value?: unknown; version?: unknown }
+      const path = String(body?.path ?? '')
+      const parts = path.split('/').filter(Boolean)
+      if (parts.length === 2) {
+        const forwarded = await forwardCloud(ctx, `/${parts[0]}`, parts[1]!, '/api/db/content', { body })
+        if (forwarded) {
+          if (forwarded.status < 300) {
+            try {
+              await db.writeContent(path, body?.value)
+            } catch {
+              /* 云端已写入，本地缓存由 replica 补齐 */
+            }
+          }
+          route.send(forwarded.status, forwarded.body)
+          return
+        }
+      }
+      const version = typeof body?.version === 'number' && Number.isInteger(body.version) ? body.version : undefined
+      route.send(200, await db.writeContent(path, body?.value, version))
     } catch (error) {
+      if (error instanceof EditorContentConflictError) {
+        route.send(409, {
+          error: error.message,
+          code: error.code,
+          expectedVersion: error.expectedVersion,
+          actualVersion: error.actualVersion,
+        })
+        return
+      }
       route.send(400, { error: String(error) })
     }
   })
   ctx.http.route('POST', '/api/db/update', async (route) => {
     try {
       const body = (await route.json()) as { path?: string; content?: unknown }
-      route.send(200, await db.update(String(body?.path ?? ''), body?.content))
+      const path = String(body?.path ?? '')
+      const parts = path.split('/').filter(Boolean)
+      if (parts.length === 2) {
+        const forwarded = await forwardCloud(ctx, `/${parts[0]}`, parts[1]!, '/api/db/update', { body })
+        if (forwarded) {
+          const value = (forwarded.body as { value?: { id?: string } } | null)?.value
+          if (forwarded.status < 300 && value?.id) await db.applySynced(`/${parts[0]}`, [value as { id: string }])
+          route.send(forwarded.status, forwarded.body)
+          return
+        }
+      }
+      route.send(200, await db.update(path, body?.content))
     } catch (error) {
       route.send(400, { error: String(error) })
     }
   })
   ctx.http.route('POST', '/api/db/create', async (route) => {
     try {
-      const body = (await route.json()) as { path?: string; records?: unknown; content?: unknown }
-      route.send(200, await db.create(String(body?.path ?? ''), body?.records ?? body?.content))
+      const body = (await route.json()) as {
+        path?: string
+        records?: unknown
+        content?: unknown
+        scope?: 'personal' | 'workspace' | 'shared' | 'local'
+      }
+      const scope =
+        body?.scope === 'workspace' ? 'workspace' : body?.scope === 'shared' ? 'shared' : body?.scope === 'local' ? 'local' : 'personal'
+      let activeLocation: 'device' | 'cloud' = isOnlineRuntime() ? 'cloud' : 'device'
+      if (!isOnlineRuntime()) {
+        try {
+          const account = ctx.get('account') as {
+            store?: { activeWorkspaceId(): string | null }
+            workspaceLocation?: (workspaceId: string) => 'device' | 'cloud'
+          }
+          const workspaceId = account.store?.activeWorkspaceId()
+          if (workspaceId && account.workspaceLocation) activeLocation = account.workspaceLocation(workspaceId)
+        } catch {
+          /* 本机无账号服务时只允许本地创建 */
+        }
+      }
+      if (isDesktopRuntime() && activeLocation === 'cloud') {
+        const collection = String(body?.path ?? '')
+        const forwarded = await forwardCloud(ctx, collection, '', '/api/db/create', {
+          body: {
+            path: body?.path,
+            records: body?.records ?? body?.content,
+            scope: scope === 'local' ? 'personal' : scope,
+          },
+        })
+        if (!forwarded) {
+          route.send(401, { error: '请先登录云端账号' })
+          return
+        }
+        const payload = forwarded.body as {
+          items?: Array<{ value?: { id?: string } }>
+          error?: string
+        }
+        if (forwarded.status < 300) {
+          const values = (payload.items ?? []).map((item) => item.value).filter((value): value is { id: string } => Boolean(value?.id))
+          try {
+            await db.applySynced(collection, values as DbRecord[])
+            for (const value of values) {
+              try {
+                const account = ctx.get('account') as { markRemote?: (collection: string, id: string) => void }
+                account.markRemote?.(collection, value.id)
+              } catch {
+                /* 没有账号库时仍返回云端结果 */
+              }
+              if (scope === 'shared') db.markPublicView(collection, value.id)
+              else db.rememberScope(collection, value.id, scope === 'workspace' ? 'workspace' : 'personal')
+            }
+          } catch {
+            /* 云端已创建，本地缓存稍后对齐 */
+          }
+        }
+        route.send(forwarded.status, payload)
+        return
+      }
+      const created = await db.create(String(body?.path ?? ''), body?.records ?? body?.content, {
+        scope: activeLocation === 'device' && scope !== 'shared' ? 'local' : scope,
+      })
+      route.send(200, created)
     } catch (error) {
       route.send(400, { error: String(error) })
     }
@@ -2125,7 +3589,22 @@ export function apply(ctx: Context) {
   ctx.http.route('POST', '/api/db/delete', async (route) => {
     try {
       const body = (await route.json()) as { path?: string; ids?: unknown; q?: unknown; filter?: unknown; purge?: unknown }
-      route.send(200, await db.remove(String(body?.path ?? ''), asDeleteQuery((body ?? {}) as Record<string, unknown>)))
+      const path = String(body?.path ?? '')
+      const ids = Array.isArray(body.ids) ? body.ids.map((id) => String(id)) : []
+      const collection = path.startsWith('/') ? path : `/${path}`
+      const forwarded = await forwardCloud(ctx, collection, ids[0] || '', '/api/db/delete', { body })
+      if (forwarded) {
+        if (forwarded.status < 300) {
+          try {
+            await db.remove(path, asDeleteQuery((body ?? {}) as Record<string, unknown>))
+          } catch {
+            /* 云端已删除，本地缓存稍后对齐 */
+          }
+        }
+        route.send(forwarded.status, forwarded.body)
+        return
+      }
+      route.send(200, await db.remove(path, asDeleteQuery((body ?? {}) as Record<string, unknown>)))
     } catch (error) {
       route.send(400, { error: String(error) })
     }
@@ -2133,7 +3612,20 @@ export function apply(ctx: Context) {
   ctx.http.route('POST', '/api/db/restore', async (route) => {
     try {
       const body = (await route.json()) as { path?: string; ids?: unknown; q?: unknown; filter?: unknown }
-      route.send(200, await db.restore(String(body?.path ?? ''), asDeleteQuery((body ?? {}) as Record<string, unknown>)))
+      const path = String(body?.path ?? '')
+      const forwarded = await forwardCloud(ctx, path.startsWith('/') ? path : `/${path}`, '', '/api/db/restore', { body })
+      if (forwarded) {
+        if (forwarded.status < 300) {
+          try {
+            await db.restore(path, asDeleteQuery((body ?? {}) as Record<string, unknown>))
+          } catch {
+            /* 云端已恢复，本地缓存稍后对齐 */
+          }
+        }
+        route.send(forwarded.status, forwarded.body)
+        return
+      }
+      route.send(200, await db.restore(path, asDeleteQuery((body ?? {}) as Record<string, unknown>)))
     } catch (error) {
       route.send(400, { error: String(error) })
     }
@@ -2141,11 +3633,37 @@ export function apply(ctx: Context) {
   ctx.http.route('GET', '/api/db/trash', (route) => send(route, () => db.listTrash()))
   ctx.http.route('POST', '/api/db/saved-views', async (route) => {
     try {
-      const body = (await route.json()) as { path?: string; views?: StoredView[] }
+      /**
+       * 默认是差异写：upsert 只新增/更新这几条，remove 只删这几个 id。
+       * 两个窗口各存一份快照时，后写的不会把另一个窗口刚建的视图冲掉。
+       * 需要整份同步的老调用方显式传 replace: true。
+       */
+      const body = (await route.json()) as {
+        path?: string
+        views?: StoredView[]
+        upsert?: StoredView[]
+        remove?: string[]
+        replace?: boolean
+      }
       const path = String(body?.path ?? '')
-      const next = Array.isArray(body.views) ? body.views : []
-      dropSharesForRemovedViews(shares, path, savedViews.viewsFor(path), next)
-      savedViews.replace(path, next)
+      const accountId = currentAccountId()
+      await db.requirePath(path, 'resource:update')
+      const removals = (body.remove ?? []).map(String).filter(Boolean)
+      if (body.replace === true || (body.upsert === undefined && body.remove === undefined)) {
+        const next = Array.isArray(body.views) ? body.views : []
+        if (isIndexCollection(path)) {
+          savedViews.replaceOwned(path, next, accountId)
+        } else {
+          dropSharesForRemovedViews(shares, path, savedViews.viewsFor(path), next)
+          savedViews.replace(path, next)
+        }
+      } else {
+        savedViews.applyPatch(path, { upsert: body.upsert ?? [], remove: removals }, accountId)
+        for (const viewId of removals) {
+          const view = savedViews.viewsFor(path, accountId).find((item) => String(item.id) === viewId)
+          if (!view) shares.revokeView(path, viewId)
+        }
+      }
       ctx.emit('database/change')
       route.send(200, { ok: true })
     } catch (error) {
@@ -2179,10 +3697,37 @@ export function apply(ctx: Context) {
     }
   }
   ctx.http.route('GET', '/api/db/shares', async (route) => {
+    if (activeDataLocation() === 'cloud' && !isOnlineRuntime()) {
+      const search = route.query.toString()
+      const forwarded = await forwardCloud(
+        ctx,
+        route.query.get('collection') || '',
+        route.query.get('recordId') || '',
+        search ? `/api/db/shares?${search}` : '/api/db/shares',
+        { method: 'GET' },
+      )
+      if (forwarded) {
+        route.send(forwarded.status, forwarded.body)
+        return
+      }
+      if (process.env.BIU_REMOTE_ORIGIN) {
+        route.send(401, { error: '请先登录云端账号' })
+        return
+      }
+    }
     const collection = route.query.get('collection') || ''
     if (!collection) {
       const items = []
+      const listedRecords = new Set<string>()
       for (const share of shares.list()) {
+        try {
+          await db.requirePath(
+            share.kind === 'record' ? `${share.collection}/${share.recordId}` : share.collection,
+            'resource:share',
+          )
+        } catch {
+          continue
+        }
         let title = share.collection.replace(/^\//, '')
         if (share.kind === 'record' && share.recordId) {
           try {
@@ -2212,6 +3757,34 @@ export function apply(ctx: Context) {
           )
         }
         items.push({ ...share, title, url: publicShareUrl(route.req, share.token) })
+        if (share.kind === 'record' && share.recordId) {
+          listedRecords.add(`${share.collection}\t${share.recordId}`)
+        }
+      }
+      const accountId = currentAccountId()
+      const workspaceId = currentRequestWorkspaceId()
+      if (activeDataLocation() === 'cloud' && accountId && workspaceId && account?.store?.externallySharedRecords) {
+        for (const record of account.store.externallySharedRecords(accountId, workspaceId)) {
+          const key = `${record.collection}\t${record.record_id}`
+          if (listedRecords.has(key)) continue
+          try {
+            const got = (await db.read(`${record.collection}/${record.record_id}`)) as {
+              value?: { title?: unknown; name?: unknown }
+            }
+            items.push({
+              token: `collab:${encodeURIComponent(record.collection)}:${encodeURIComponent(record.record_id)}`,
+              kind: 'record',
+              collection: record.collection,
+              viewId: '',
+              recordId: record.record_id,
+              title: String(got.value?.title ?? got.value?.name ?? record.record_id),
+              url: '',
+            })
+            listedRecords.add(key)
+          } catch {
+            /* The record was removed or this account no longer has access. */
+          }
+        }
       }
       route.send(200, { shares: items })
       return
@@ -2219,7 +3792,13 @@ export function apply(ctx: Context) {
     const kind = route.query.get('kind') === 'record' ? 'record' as const : 'view' as const
     const viewId = route.query.get('viewId') || ''
     const recordId = route.query.get('recordId') || ''
-    const share = shares.find(kind, collection, viewId, recordId)
+    try {
+      await db.requirePath(kind === 'record' ? `${collection}/${recordId}` : collection, 'resource:read')
+    } catch {
+      route.send(404, { error: 'not found' })
+      return
+    }
+    const share = kind === 'record' ? shares.findRecord(collection, recordId) : shares.find(kind, collection, viewId, recordId)
     const resources = await sharePreviewOf(kind, collection, viewId, recordId)
     route.send(200, {
       share: share ? { ...share, url: publicShareUrl(route.req, share.token) } : null,
@@ -2239,20 +3818,35 @@ export function apply(ctx: Context) {
         allowCopy?: boolean
       }
       const kind = body.kind === 'record' ? 'record' as const : 'view' as const
+      const collection = String(body.collection ?? '')
+      const recordId = String(body.recordId ?? '')
+      if (activeDataLocation() === 'cloud' && !isOnlineRuntime() && process.env.BIU_REMOTE_ORIGIN) {
+        const forwarded = await forwardCloud(ctx, collection, recordId, '/api/db/shares', { body })
+        if (forwarded) {
+          route.send(forwarded.status, forwarded.body)
+          return
+        }
+        route.send(401, { error: '请先登录云端账号' })
+        return
+      }
+      await db.requirePath(kind === 'record' ? `${collection}/${recordId}` : collection, 'resource:share')
       if (body.enabled === false) {
-        shares.revokeTarget(kind, String(body.collection ?? ''), body.viewId ?? '', body.recordId ?? '')
+        if (kind === 'record') shares.revokeRecord(collection, recordId)
+        else shares.revokeTarget(kind, collection, body.viewId ?? '', body.recordId ?? '')
+        db.notifyShareChange()
         route.send(200, { share: null })
         return
       }
       const share = shares.upsert({
         kind,
-        collection: String(body.collection ?? ''),
+        collection,
         viewId: body.viewId,
         recordId: body.recordId,
         password: body.password,
         sharePlugins: body.sharePlugins,
         allowCopy: body.allowCopy,
       })
+      db.notifyShareChange()
       route.send(200, { share: { ...share, url: publicShareUrl(route.req, share.token) } })
     } catch (error) {
       route.send(400, { error: String(error) })
@@ -2408,6 +4002,7 @@ export function apply(ctx: Context) {
   })
   ctx.http.route('GET', '/api/db/facets', async (route) => {
     try {
+      await db.requirePath('/facets', 'resource:read')
       const collect = route.query.get('collect') || ''
       if (collect) {
         route.send(200, await db.collectFacet(collect))
@@ -2421,6 +4016,7 @@ export function apply(ctx: Context) {
   })
   ctx.http.route('POST', '/api/db/facets', async (route) => {
     try {
+      await db.requirePath('/facets', 'resource:update')
       const body = (await route.json()) as { facets?: unknown[] }
       facets.replace(Array.isArray(body.facets) ? body.facets : [])
       ctx.emit('database/change')
@@ -2432,6 +4028,7 @@ export function apply(ctx: Context) {
   const serveDbFile: Parameters<typeof ctx.http.route>[2] = async (route) => {
     try {
       const name = route.params.name ?? ''
+      db.requireAsset(name, 'resource:read')
       const { bytes, type, etag } = await assets.readAny(name)
       route.res.writeHead(200, {
         'content-type': type,
@@ -2446,6 +4043,12 @@ export function apply(ctx: Context) {
   const putDbFile: Parameters<typeof ctx.http.route>[2] = async (route) => {
     try {
       const name = route.params.name ?? ''
+      const path = route.query.get('path') || String(route.req.headers['x-biu-resource-path'] ?? '')
+      if (!path) {
+        route.send(400, { error: 'resource path required' })
+        return
+      }
+      await db.requirePath(path, 'resource:update')
       const bytes = await route.bytes()
       const written = isHashedAssetName(name)
         ? await assets.write(name, bytes)
@@ -2471,6 +4074,12 @@ export function apply(ctx: Context) {
   const putHashFile: Parameters<typeof ctx.http.route>[2] = async (route) => {
     try {
       const name = route.params.name ?? ''
+      const path = route.query.get('path') || String(route.req.headers['x-biu-resource-path'] ?? '')
+      if (!path) {
+        route.send(400, { error: 'resource path required' })
+        return
+      }
+      await db.requirePath(path, 'resource:update')
       const bytes = await route.bytes()
       const written = await assets.write(name, bytes)
       db.facets.putAttachment({
@@ -2493,14 +4102,20 @@ export function apply(ctx: Context) {
   ctx.http.route('GET', '/api/doc/file/:name', serveDbFile)
   ctx.http.route('PUT', '/api/doc/file/:name', putDbFile)
   ctx.http.route('POST', '/api/db/action', async (route) => {
+    let path = ''
+    let action = ''
     try {
       const body = (await route.json()) as { path?: string; action?: string; args?: unknown }
+      path = String(body?.path ?? '')
+      action = String(body?.action ?? '')
       const extra =
         body?.args && typeof body.args === 'object' && !Array.isArray(body.args)
           ? (body.args as Record<string, unknown>)
           : undefined
-      route.send(200, await db.action(String(body?.path ?? ''), String(body?.action ?? ''), extra))
+      route.send(200, await db.action(path, action, extra))
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      ctx.logger('database').warn(`action ${action || '(none)'} ${path || '(none)'}: ${message}`)
       route.send(400, { error: String(error) })
     }
   })

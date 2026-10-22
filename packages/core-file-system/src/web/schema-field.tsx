@@ -30,7 +30,7 @@ const TYPE_LABEL: Partial<Record<FieldType, string>> = {
   attachment: '附件',
   file: '正文',
   action: '动作',
-  facet: '合集',
+  facet: '标签',
   person: '人物',
   ref: '引用',
   'multi-ref': '多引用',
@@ -179,11 +179,10 @@ export function FacetPackEditor({ facetId }: { facetId: string }) {
   const tag = catalog.find((item) => item.id === facetId)
 
   function saveCatalog(next: CollectionSchemaPack[]) {
-    persistFacets(next)
-    setCatalog(next)
+    void persistFacets(next)
   }
 
-  if (!tag) return <p className="fsdb-muted">这条合集已不在目录里。</p>
+  if (!tag) return <p className="fsdb-muted">这条标签已不在目录里。</p>
   const pack = tag
 
   function addField(name: string, type: AtomicFieldType) {
@@ -267,8 +266,7 @@ export function SchemaFieldEditor({
   )
 
   function saveCatalog(next: CollectionSchemaPack[]) {
-    persistFacets(next)
-    setCatalog(next)
+    void persistFacets(next)
   }
 
   function patchValue(next: SchemaFieldValue) {
@@ -294,10 +292,16 @@ export function SchemaFieldEditor({
       used.add(id)
       resolved.push(id)
     }
-    if (packs !== catalog) saveCatalog(packs)
-    const next = retagSchemaValue(liveRef.current, resolved)
-    liveRef.current = next
-    patchValue(next)
+    const finish = () => {
+      const next = retagSchemaValue(liveRef.current, resolved)
+      liveRef.current = next
+      patchValue(next)
+    }
+    if (packs !== catalog) {
+      void persistFacets(packs).then(finish)
+      return
+    }
+    finish()
   }
 
   function addField(tag: CollectionSchemaPack, name: string, type: AtomicFieldType) {
@@ -349,7 +353,7 @@ export function SchemaFieldEditor({
         onChange={applyTags}
         multiple
         autoOpen={autoOpen}
-        placeholder="添加合集"
+        placeholder="添加标签"
       />
       {compact
         ? null

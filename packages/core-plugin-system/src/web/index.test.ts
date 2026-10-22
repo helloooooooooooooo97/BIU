@@ -49,6 +49,7 @@ test('plugin system web declares extras so store plugins can mount windows', asy
   const { readFileSync } = await import('node:fs')
   const { resolve } = await import('node:path')
   assert.match(readFileSync(resolve(import.meta.dirname, './index.tsx'), 'utf8'), /listenEnablePageBlockPlugin/)
+  assert.match(readFileSync(resolve(import.meta.dirname, './index.tsx'), 'utf8'), /watchInstalledPageBlocks/)
 })
 
 test('plugin extras keep windows mounted when minimized', async () => {
@@ -73,26 +74,22 @@ test('plugin system web passes name/tags/action chrome into databaseUi', async (
   await ctx.plugin(plugins2Ui)
   assert.equal(ui.last?.path, '/plugins')
   assert.equal(typeof ui.last?.chrome.Title, 'function')
-  assert.equal(typeof ui.last?.chrome.cells?.author, 'function')
+  assert.equal(ui.last?.chrome.cells?.author, undefined)
   assert.equal(ui.last?.chrome.cells?.tags, undefined)
-  assert.equal(typeof ui.last?.chrome.Actions, 'function')
+  assert.equal(ui.last?.chrome.Actions, undefined)
   assert.equal(ui.last?.chrome.Action, undefined)
 })
 
-test('plugin chrome owns the whole action menu including the run toggle', async () => {
+test('plugin actions use the shared file-system capsules', async () => {
   const { readFileSync } = await import('node:fs')
   const { resolve } = await import('node:path')
   const chrome = readFileSync(resolve(import.meta.dirname, './chrome.tsx'), 'utf8')
-  assert.match(chrome, /function PluginActions/)
-  assert.match(chrome, /Actions: PluginActions/)
-  assert.match(chrome, /function PluginRunButton/)
-  assert.match(chrome, /place === 'detail' \? 'menuitem'/)
-  assert.match(chrome, /fsdb-detail-more-item/)
-  assert.doesNotMatch(chrome, /dock-icon-btn/)
-  assert.doesNotMatch(chrome, /Action: PluginAction/)
+  assert.doesNotMatch(chrome, /function PluginActions/)
+  assert.doesNotMatch(chrome, /Actions:/)
+  assert.doesNotMatch(chrome, /tasks-icon-btn/)
 })
 
-test('plugin title is the name only; tags stay the file-system writable column', async () => {
+test('plugin title is the name only; tags are not a custom cell', async () => {
   const { readFileSync } = await import('node:fs')
   const { resolve } = await import('node:path')
   const chrome = readFileSync(resolve(import.meta.dirname, './chrome.tsx'), 'utf8')
@@ -159,7 +156,7 @@ test('plugin window hover controls sit on the right without a title bar', async 
 test('page-excalidraw sandbox stores scenes as page assets', async () => {
   const { readFile } = await import('node:fs/promises')
   const { resolve } = await import('node:path')
-  const src = await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/page-excalidraw/web.tsx'), 'utf8')
+  const src = await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/page-excalidraw/web/index.tsx'), 'utf8')
   const manifest = JSON.parse(
     await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/page-excalidraw/manifest.json'), 'utf8'),
   ) as { headless?: boolean }
@@ -167,6 +164,8 @@ test('page-excalidraw sandbox stores scenes as page assets', async () => {
   assert.match(src, /\/api\/page\/file\//)
   assert.match(src, /method: 'PUT'/)
   assert.match(src, /showWelcomeScreen: false/)
+  assert.match(src, /theme=\{theme\}/, '画板跟随应用的日间 / 夜间主题')
+  assert.doesNotMatch(src, /theme="dark"/)
   assert.match(src, /viewModeEnabled=\{false\}/)
   assert.match(src, /createPortal/)
   assert.match(src, /document\.body/)
@@ -201,13 +200,13 @@ test('page-excalidraw sandbox stores scenes as page assets', async () => {
   assert.ok(onChange)
   assert.doesNotMatch(onChange, /setScene/)
   assert.match(onChange, /saveScene/)
-  assert.match(src, /theme="dark"/)
   assert.match(src, /function withoutCollab/)
   assert.match(src, /appState: withoutCollab\(o\.appState\)/)
   assert.match(src, /appState: withoutCollab\(appState\)/)
   assert.doesNotMatch(src, /forceDarkCanvas/)
   assert.doesNotMatch(src, /viewBackgroundColor: DARK_BG/)
   assert.match(src, /requestAnimationFrame\(\(\) => fitView\(apiRef\.current\)\)/)
+  assert.match(src, /requestAnimationFrame\(\(\) => fitView\(host\.api\)\)/)
   assert.doesNotMatch(src, /requestAnimationFrame\(\(\) => fitView\(api\)\)/)
   assert.match(src, /z-index:9992/)
   assert.doesNotMatch(src, /inset-0 flex flex-col bg-\[var\(--dsw-bg/)
@@ -224,7 +223,7 @@ test('page-excalidraw sandbox stores scenes as page assets', async () => {
 test('html page blocks register plugin id for slash', async () => {
   const { readFile } = await import('node:fs/promises')
   const { resolve } = await import('node:path')
-  const html = await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/page-html-blocks/web.tsx'), 'utf8')
+  const html = await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/page-html-blocks/web/index.tsx'), 'utf8')
   assert.match(html, /plugin: name/)
   assert.match(html, /kind: 'html'/)
   assert.match(html, /kind: 'htmlframe'/)
@@ -273,7 +272,7 @@ test('html page blocks register plugin id for slash', async () => {
 test('algorithm card drafts locally and saves on blur like html source', async () => {
   const { readFile } = await import('node:fs/promises')
   const { resolve } = await import('node:path')
-  const src = await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/page-algorithm/web.tsx'), 'utf8')
+  const src = await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/page-algorithm/web/index.tsx'), 'utf8')
   assert.match(src, /function DraftField/)
   assert.match(src, /onChange=\{\(event\) => setDraft\(event\.currentTarget\.value\)\}/)
   assert.match(src, /onBlur=\{\(\) => \{[\s\S]*flush\(\)/)
@@ -294,7 +293,7 @@ test('algorithm card drafts locally and saves on blur like html source', async (
 test('code runner and terminals share a trash icon for clear', async () => {
   const { readFile } = await import('node:fs/promises')
   const { resolve } = await import('node:path')
-  const runner = await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/page-code-runner/web.tsx'), 'utf8')
+  const runner = await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/page-code-runner/web/index.tsx'), 'utf8')
   assert.match(runner, /aria-label="清空"/)
   assert.match(runner, /aria-label=\{running \? '运行中' : '运行'\}/)
   assert.match(runner, /justifyContent: 'space-between'/)
@@ -307,9 +306,9 @@ test('code runner and terminals share a trash icon for clear', async () => {
 test('page-browser is both a page block and the inspector browser', async () => {
   const { readFile } = await import('node:fs/promises')
   const { resolve } = await import('node:path')
-  const web = await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/page-browser/web.tsx'), 'utf8')
-  const panel = await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/page-browser/panel.tsx'), 'utf8')
-  const open = await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/page-browser/open.ts'), 'utf8')
+  const web = await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/page-browser/web/index.tsx'), 'utf8')
+  const panel = await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/page-browser/web/panel.tsx'), 'utf8')
+  const open = await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/page-browser/web/open.ts'), 'utf8')
   assert.match(web, /export const inject = \['pageEditor', 'slots', 'pick'\]/)
   assert.match(web, /placeInspectorBrowser/)
   assert.match(web, /openSidebarBrowser/)

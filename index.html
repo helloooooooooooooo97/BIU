@@ -1,12 +1,39 @@
 <!doctype html>
-<html lang="zh-CN" class="light">
+<html lang="zh-CN" class="light" data-theme-source="static">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="apple-touch-icon" href="/favicon.svg" />
+    <script>
+      ;(() => {
+        document.documentElement.classList.add('has-js')
+        try {
+          if (document.documentElement.dataset.themeSource !== 'static') return
+          const theme = sessionStorage.getItem('biu.theme.bootstrap')
+          if (theme !== 'dark' && theme !== 'light') return
+          document.documentElement.classList.remove('dark', 'light')
+          document.documentElement.classList.add(theme)
+          document.querySelector('meta[name="color-scheme"]')?.setAttribute('content', theme)
+        } catch {}
+      })()
+    </script>
+    <style>
+      html, body { margin: 0; min-height: 100%; background: #ffffff; }
+      html.dark, html.dark body { background: #191919; }
+    </style>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=3" />
+    <link rel="apple-touch-icon" href="/favicon.svg?v=3" />
     <title>Biu Agent OS</title>
+    <meta name="description" content="人和智能体共享同一个空间：页面、数据、会话、任务都在一处，数据留在你的设备上。" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="BIU" />
+    <meta property="og:title" content="BIU · 智能工作空间" />
+    <meta property="og:description" content="人和智能体共享同一个空间：页面、数据、会话、任务都在一处，数据留在你的设备上。" />
+    <meta property="og:image" content="/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="/og-image.png" />
   </head>
   <body>
     <div id="app"></div>

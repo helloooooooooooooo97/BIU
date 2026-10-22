@@ -2,31 +2,49 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { countFittingViewTabs, splitVisibleViews } from './view-tabs.ts'
-
-test('fits every tab when the strip is wide enough', () => {
-  assert.equal(countFittingViewTabs([80, 80, 80], 400, 2), 3)
-})
-
-test('stops before overflowing the toolbar', () => {
-  assert.equal(countFittingViewTabs([80, 80, 80, 80], 220, 2), 2)
-})
-
-test('keeps at least one tab even when space is tight', () => {
-  assert.equal(countFittingViewTabs([120, 120], 80, 2), 1)
-})
 
 test('active view tab opens the view menu; the more button is gone', () => {
   const src = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
-  assert.match(src, /if \(view\.id === activeViewId\) toggleMenu\('view'\)/)
+  assert.match(src, /onClick=\{\(\) => toggleMenu\('view'\)\}/)
+  assert.doesNotMatch(src, /else selectView\(view\)/)
   assert.doesNotMatch(src, /data-testid="fsdb-view-more"/)
   assert.doesNotMatch(src, /tasks-viewdd-more/)
+  const orderMenu = readFileSync(resolve(import.meta.dirname, './view-order-menu.tsx'), 'utf8')
+  assert.match(orderMenu, /title="拷贝视图"/)
+  assert.match(orderMenu, /onCopy\(view\)/)
+  assert.match(orderMenu, /DndGrip/)
+  assert.match(orderMenu, /activationConstraint: \{ distance: 4 \}/)
+  assert.match(src, /persistViewOrder/)
+  assert.match(src, /ViewOrderMenu/)
+  assert.doesNotMatch(src, />拷贝视图</)
+  assert.doesNotMatch(src, /tasks-viewdd-check/)
 })
 
-test('pins the active view into the last visible slot when it would overflow', () => {
-  const views = [{ id: 'a' }, { id: 'b' }, { id: 'c' }]
-  assert.deepEqual(splitVisibleViews(views, 2, 'c'), {
-    shown: [{ id: 'a' }, { id: 'c' }],
-    hidden: [{ id: 'b' }],
-  })
+test('toolbar shows only the current view, not a switcher strip', () => {
+  const src = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
+  const css = readFileSync(resolve(import.meta.dirname, './fsdb-style.ts'), 'utf8')
+  assert.doesNotMatch(src, /function ViewTabFit/)
+  assert.doesNotMatch(src, /splitVisibleViews/)
+  assert.doesNotMatch(src, /tasks-viewtabs-measure/)
+  assert.match(src, /activeView\?\.name \?\? '未保存'/)
+  assert.match(src, /data-testid="fsdb-view-tab"/)
+  assert.match(css, /\.tasks-viewtabs\{[^}]*overflow:visible/)
+  assert.doesNotMatch(css, /tasks-viewtabs-measure/)
+  assert.doesNotMatch(css, /\.tasks-viewtabs\.is-collapsed/)
+  assert.match(css, /\.tasks-viewdd-wrap:has\(\.tasks-viewdd-menu\)\{[^}]*z-index:80/)
+  assert.match(css, /\.fsdb-page \.tasks-toolbar\{[^}]*z-index:50/)
+  assert.match(css, /\.fsdb-page \.tasks-toolbar-right:has\(\.fsdb-query-menu\)/)
+  assert.match(css, /\.fsdb-page \.tasks-toolbar-right:has\(\.fsdb-query-menu\),\.fsdb-page \.tasks-toolbar-right:has\(\.tasks-sort-menu\),\.fsdb-page \.tasks-toolbar-right:has\(\.tasks-filter-menu\)\{[^}]*z-index:80/)
+  assert.match(css, /\.fsdb-page \.tasks-toolbar:has\(\.fsdb-query-menu\) \.tasks-toolbar-left/)
+  assert.match(css, /\.fsdb-page \.tasks-toolbar:has\(\.fsdb-query-menu\),\.fsdb-page \.tasks-toolbar:has\(\.tasks-sort-menu\),\.fsdb-page \.tasks-toolbar:has\(\.tasks-filter-menu\)\{[^}]*z-index:90/)
+  assert.match(css, /\.fsdb-page \.fsdb-query-menu,\.fsdb-page \.tasks-sort-menu,\.fsdb-page \.tasks-filter-menu\{[^}]*z-index:120/)
+  assert.match(css, /\.fsdb-query-flyout\.fsdb-page\{[^}]*position:fixed/)
+  assert.doesNotMatch(css, /\.fsdb-query-flyout\.fsdb-page\{[^}]*pointer-events:none/)
+  assert.match(css, /\.fsdb-page:has\(\.fsdb-query-menu\)/)
+  assert.match(css, /\.fsdb-page \.tasks-filter-btn-wrap:has\(\.fsdb-query-menu\)/)
+  assert.match(css, /\.fsdb-page \.tasks-table-wrap\{[^}]*z-index:0/)
+  assert.match(src, /className="fsdb-bulk-slot"/)
+  assert.match(css, /\.fsdb-bulk-slot\{[^}]*position:sticky/)
+  assert.match(css, /\.fsdb-bulk-slot\{[^}]*left:0/)
+  assert.match(css, /\.fsdb-bulk-slot\{[^}]*width:0/)
 })

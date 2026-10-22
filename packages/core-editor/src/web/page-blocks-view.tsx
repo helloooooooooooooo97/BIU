@@ -1,25 +1,40 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowsPointingOutIcon, RectangleGroupIcon, ViewColumnsIcon } from '@heroicons/react/16/solid'
 import type { DbRecord } from '@biu/type-file-system'
 import type { CollectionViewType, FsContentProps, FsViewProps } from '@biu/type-file-system/ui'
-import { PageBlockMissing } from './page-block-view.tsx'
-import { bindPageBlockPlugin } from './page-block-plugin-host.ts'
+import { blockDataUnchanged } from './page-block-meta.ts'
+import { PagePluginSurface, pagePluginHostAttrs, useBindPagePlugin, usePagePluginResolve } from './page-plugin-host.tsx'
 import { getPageEditor, usePageEditorVersion } from './service.ts'
 
 export const PAGE_BLOCKS_VIEW_ID = 'blocks'
 export const PAGE_REVEAL_EVENT = 'biu:inspector-reveal'
 
+const INDEX_BODY_KEYS = new Set(['html', 'script', 'code', 'source', 'body'])
+
+export function isSlimBlockIndexData(value: Record<string, unknown>) {
+  if (!value.attrs || typeof value.attrs !== 'object' || Array.isArray(value.attrs)) return false
+  if (!Array.isArray(value.assets)) return false
+  if (typeof value.blockId !== 'string' && typeof value.kind !== 'string') return false
+  for (const key of INDEX_BODY_KEYS) {
+    if (key in value) return false
+  }
+  return true
+}
+
 export function parsePageBlockRowData(raw: unknown): Record<string, unknown> {
-  if (raw && typeof raw === 'object' && !Array.isArray(raw)) return { ...(raw as Record<string, unknown>) }
-  if (typeof raw === 'string' && raw.trim()) {
+  let parsed: Record<string, unknown> | null = null
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) parsed = { ...(raw as Record<string, unknown>) }
+  else if (typeof raw === 'string' && raw.trim()) {
     try {
-      const parsed = JSON.parse(raw) as unknown
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed as Record<string, unknown>
+      const next = JSON.parse(raw) as unknown
+      if (next && typeof next === 'object' && !Array.isArray(next)) parsed = next as Record<string, unknown>
     } catch {
       /* ignore */
     }
   }
-  return {}
+  if (!parsed) return {}
+  if (isSlimBlockIndexData(parsed)) return { ...(parsed.attrs as Record<string, unknown>) }
+  return parsed
 }
 
 async function writeBlockData(id: string, data: Record<string, unknown>) {
@@ -148,11 +163,10 @@ export function PageBlockStage({
   writable?: boolean
   onChange?: (next: Record<string, unknown>) => void
 }) {
-  usePageEditorVersion()
   const kind = String(row.blockKind ?? row.kind ?? '').trim()
   const plugin = String(row.plugin ?? '').trim()
-  const spec = getPageEditor()?.block(kind)
-  const View = spec?.View
+  const { spec, View, phase } = usePagePluginResolve(kind, plugin)
+  const hostRef = useBindPagePlugin<HTMLDivElement>(plugin)
   const source = raw ?? row.data
   const packed = typeof source === 'string' ? source : JSON.stringify(source ?? {})
   const recordTitle = String(row.title ?? '').trim()
@@ -161,38 +175,55 @@ export function PageBlockStage({
     if (recordTitle) parsed.title = recordTitle
     return parsed
   })
+  const dataRef = useRef(data)
+  dataRef.current = data
   useEffect(() => {
     const parsed = parsePageBlockRowData(source)
     if (recordTitle) parsed.title = recordTitle
-    setData(parsed)
+    setData((prev) => (blockDataUnchanged(prev, parsed) ? prev : parsed))
   }, [packed, recordTitle])
-  const update = (patch: Record<string, unknown>, opts?: { replace?: boolean }) => {
-    const next = mergeLiveBlockData(data, patch, { replace: opts?.replace, title: recordTitle })
-    setData(next)
-    const toWrite = persistBlockDataPatch(next, patch)
-    if (onChange) onChange(toWrite)
-    else void writeBlockData(String(row.id), toWrite)
-  }
-  const hostRef = useRef<HTMLDivElement | null>(null)
-  useLayoutEffect(() => bindPageBlockPlugin(hostRef.current, plugin), [plugin, kind, View, packed])
+  const onChangeRef = useRef(onChange)
+  onChangeRef.current = onChange
+  const rowId = String(row.id)
+  const writeQ = useRef(Promise.resolve())
+  const update = useCallback((patch: Record<string, unknown>, opts?: { replace?: boolean }) => {
+    const report = onChangeRef.current
+    if (report) {
+      const next = mergeLiveBlockData(dataRef.current, patch, { replace: opts?.replace, title: recordTitle })
+      if (blockDataUnchanged(dataRef.current, next)) return
+      dataRef.current = next
+      setData(next)
+      report(persistBlockDataPatch(next, patch))
+      return
+    }
+    writeQ.current = writeQ.current.then(async () => {
+      const next = mergeLiveBlockData(dataRef.current, patch, { replace: opts?.replace, title: recordTitle })
+      if (blockDataUnchanged(dataRef.current, next)) return
+      await writeBlockData(rowId, persistBlockDataPatch(next, patch))
+      dataRef.current = next
+      setData(next)
+    }).catch(() => undefined)
+  }, [recordTitle, rowId])
   return (
     <div
       ref={hostRef}
-      className="page-block"
-      data-page-block={kind || undefined}
-      data-page-block-plugin={plugin || undefined}
-      data-page-block-id={String(row.blockId ?? '') || undefined}
-      data-biu-plugin={plugin || undefined}
-      data-biu-kind={plugin ? 'plugin' : undefined}
-      data-biu-id={plugin || undefined}
-      data-biu-label={spec?.label || kind || undefined}
-      data-testid="page-block-stage"
+      {...pagePluginHostAttrs({
+        kind,
+        plugin,
+        blockId: String(row.blockId ?? ''),
+        label: spec?.label || kind,
+        testId: 'page-block-stage',
+      })}
     >
-      {View ? (
-        <View data={data} update={update} writable={writable} />
-      ) : (
-        <PageBlockMissing kind={kind || 'unknown'} plugin={plugin} data={data} />
-      )}
+      <PagePluginSurface
+        kind={kind}
+        plugin={plugin}
+        data={data}
+        update={update}
+        writable={writable}
+        View={View}
+        phase={phase}
+      />
     </div>
   )
 }
@@ -235,7 +266,9 @@ function BlockCard({
     const next = draft.trim()
     if (next === title) return
     setDraft(next || title)
-    if (next && next !== title) void writeBlockTitle(String(row.id), next)
+    if (next && next !== title) {
+      void writeBlockTitle(String(row.id), next).catch(() => setDraft(title))
+    }
   }
 
   return (

@@ -5,7 +5,7 @@ import { EditorContent, useEditor } from '@tiptap/react'
 import Placeholder from '@tiptap/extension-placeholder'
 import type { SlotProps } from '@biu/web-slots'
 import { bindSessionView, type SessionViewService } from '@biu/web-session-view'
-import { pickKey, textPickFromPlain, usePickState, type PickService } from '@biu/core-pick/web'
+import { filePickFromPath, pickKey, textPickFromPlain, usePickState, type PickService } from '@biu/core-pick/web'
 import { HeadlessDismiss } from '@biu/public-ui'
 import { composerDocExtensions } from './composer-kit.ts'
 import {
@@ -14,6 +14,8 @@ import {
   editorCaretPlain,
   insertPickChips,
   jsonFromDraft,
+  composerEditorReady,
+  runComposerCommands,
   serializeComposer,
 } from './composer-tiptap.ts'
 import { ModelConfigDialog } from './model-config-dialog.tsx'
@@ -23,8 +25,10 @@ import type { ContextWindow, ModelCapabilities, ModelModeValues, ReasoningEffort
 import { EFFORT_KNOB, THINKING_KNOB } from '../host/model-catalog.ts'
 import { ImageThumbs } from './image-thumbs.tsx'
 import { collectClipboardImages, collectImageFiles } from './clipboard-images.ts'
-import { revealOverlayThread, isComposerFocusPending } from '@biu/web-app-shell/chat-overlay'
+import { collectDroppedFilePaths, fileAbsolutePath } from './drop-file-paths.ts'
+import { focusComposerEditor, isComposerFocusPending } from '@biu/web-app-shell/chat-overlay'
 import { shouldNavigateToSession } from './composer-nav.ts'
+import { getChatConfig } from './chat-config.ts'
 
 /** 按键不驱动受控 value；仅防抖更新发送按钮可用态，避免每个字符打穿 React 渲染。 */
 const INPUT_DEBOUNCE_MS = 120
@@ -299,9 +303,10 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
     }
 
     function reload() {
-      void fetch('/api/chat/config')
-        .then((res) => res.json())
-        .then(applyConfig)
+      void getChatConfig<Parameters<typeof applyConfig>[0]>()
+        .then((data) => {
+          if (data) applyConfig(data)
+        })
         .catch(() => {
           /* ignore */
         })
@@ -319,51 +324,49 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
   useEffect(() => {
     if (!modelOpen) return
     // 打开下拉时强制刷新，保证 Settings 里新加的模型立刻可见
-    void fetch('/api/chat/config')
-      .then((res) => res.json())
-      .then(
-        (data: {
-          provider?: string
-          model?: string
-          providers?: Record<string, { configured?: boolean }>
-          endpoints?: Array<{ id: string; label?: string; configured?: boolean }>
-          modelCatalog?: Array<{
-            id: string
-            label: string
-            provider: string
-            endpointId?: string
-            model: string
-            note?: string
-          }>
-        }) => {
-          if (Array.isArray(data.modelCatalog) && data.modelCatalog.length) {
-            const catalog = data.modelCatalog.map((m) => ({
-              id: m.id,
-              label: m.label,
-              provider: m.provider as ChatProvider,
-              endpointId: m.endpointId || m.provider,
-              model: m.model,
-              ...(m.note ? { note: m.note } : {}),
-            }))
-            setAllModels(catalog)
-            if (data.provider && data.model)
-              setModelOption(matchModelOption(catalog, data.provider, data.model))
+    void getChatConfig({ refresh: true })
+      .then((data) => {
+        if (!data) return
+        const modelCatalog = data.modelCatalog as
+          | Array<{
+              id: string
+              label: string
+              provider: string
+              endpointId?: string
+              model: string
+              note?: string
+            }>
+          | undefined
+        if (Array.isArray(modelCatalog) && modelCatalog.length) {
+          const catalog = modelCatalog.map((m) => ({
+            id: m.id,
+            label: m.label,
+            provider: m.provider as ChatProvider,
+            endpointId: m.endpointId || m.provider,
+            model: m.model,
+            ...(m.note ? { note: m.note } : {}),
+          }))
+          setAllModels(catalog)
+          if (typeof data.provider === 'string' && typeof data.model === 'string') {
+            setModelOption(matchModelOption(catalog, data.provider, data.model))
           }
-          const cfg: Record<string, boolean> = {}
-          const labels: Record<string, string> = { ...endpointLabels }
-          if (Array.isArray(data.endpoints)) {
-            for (const ep of data.endpoints) {
-              cfg[ep.id] = Boolean(ep?.configured)
-              if (ep.label) labels[ep.id] = ep.label
-            }
+        }
+        const cfg: Record<string, boolean> = {}
+        const labels: Record<string, string> = { ...endpointLabels }
+        const endpoints = data.endpoints as Array<{ id: string; label?: string; configured?: boolean }> | undefined
+        if (Array.isArray(endpoints)) {
+          for (const ep of endpoints) {
+            cfg[ep.id] = Boolean(ep?.configured)
+            if (ep.label) labels[ep.id] = ep.label
           }
-          if (data.providers) {
-            for (const [k, v] of Object.entries(data.providers)) cfg[k] = Boolean(v?.configured)
-          }
-          if (Object.keys(cfg).length) setModelProviders(cfg)
-          setEndpointLabels(labels)
-        },
-      )
+        }
+        const providers = data.providers as Record<string, { configured?: boolean }> | undefined
+        if (providers) {
+          for (const [k, v] of Object.entries(providers)) cfg[k] = Boolean(v?.configured)
+        }
+        if (Object.keys(cfg).length) setModelProviders(cfg)
+        setEndpointLabels(labels)
+      })
       .catch(() => {
         /* ignore */
       })
@@ -439,6 +442,8 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
     })
   }, [])
 
+  const takeDroppedRef = useRef<(dt: DataTransfer | null | undefined) => boolean>(() => false)
+
   const live = useRef({
     slash,
     filtered,
@@ -455,7 +460,7 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
   activeIndexRef.current = activeIndex
 
   const editor = useEditor({
-    immediatelyRender: true,
+    immediatelyRender: false,
     extensions: [
       ...composerDocExtensions(),
       Placeholder.configure({
@@ -482,6 +487,17 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
         event.preventDefault()
         live.current.pick?.add(ref)
         return true
+      },
+      handleDrop(_view, event) {
+        if (takeDroppedRef.current(event.dataTransfer)) {
+          event.preventDefault()
+          return true
+        }
+        if ([...(event.dataTransfer?.types ?? [])].includes('Files')) {
+          event.preventDefault()
+          return true
+        }
+        return false
       },
       handleKeyDown(_view, event) {
         const mentionOpen =
@@ -550,6 +566,9 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
         return false
       },
     },
+    onCreate: ({ editor: created }) => {
+      if (isComposerFocusPending()) focusComposerEditor(created)
+    },
     onUpdate: ({ editor: ed }) => {
       const packed = serializeComposer(ed)
       scheduleCanSubmit(packed.plain, live.current.picked, packed.refs.length, live.current.pendingImages.length)
@@ -575,12 +594,20 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
     },
   })
 
+  const editorRef = useRef(editor)
+  editorRef.current = editor
+
   useEffect(() => {
     const onFocus = () => {
-      editor?.commands.focus('end')
+      focusComposerEditor(editorRef.current)
     }
     window.addEventListener('biu:composer-focus', onFocus)
     return () => window.removeEventListener('biu:composer-focus', onFocus)
+  }, [])
+
+  useEffect(() => {
+    if (!composerEditorReady(editor)) return
+    if (isComposerFocusPending()) focusComposerEditor(editor)
   }, [editor])
 
   useEffect(
@@ -592,31 +619,31 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
   )
 
   useEffect(() => {
-    if (!editor || !sessionId) return
+    if (!composerEditorReady(editor) || !sessionId) return
     const draft = readDraftMap()[sessionId]
     const keep = pick?.refs.slice() ?? []
     if (!pick?.picking) pick?.clear()
     pickKeysRef.current = new Set()
     if (typeof draft === 'string' && draft) {
-      editor.commands.setContent(jsonFromDraft(draft))
+      runComposerCommands(editor, (ed) => ed.commands.setContent(jsonFromDraft(draft)))
       const { refs } = serializeComposer(editor)
       if (refs.length) pick?.addMany(refs)
     } else {
-      editor.commands.clearContent()
+      runComposerCommands(editor, (ed) => ed.commands.clearContent())
     }
     if (keep.length && !pick?.picking) pick?.addMany(keep)
     pickKeysRef.current = collectPickKeys(editor)
-    if (isComposerFocusPending()) editor.commands.focus('end')
+    if (isComposerFocusPending()) focusComposerEditor(editor)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, editor])
 
   useEffect(() => {
-    if (!editor) return
+    if (!composerEditorReady(editor)) return
     const missing = pickRefs.filter((ref) => !pickKeysRef.current.has(pickKey(ref)))
     const nextKeys = new Set(pickRefs.map((item) => pickKey(item)))
     pickKeysRef.current = nextKeys
     queueMicrotask(() => {
-      if (editor.isDestroyed) return
+      if (!composerEditorReady(editor)) return
       const stillMissing = missing.filter((ref) => !collectPickKeys(editor).has(pickKey(ref)))
       insertPickChips(editor, stillMissing)
       pickKeysRef.current = collectPickKeys(editor)
@@ -631,13 +658,42 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
     })
   }, [pickRefs, editor, picked.length, pendingImages.length])
 
+  const takeDroppedFiles = useCallback(
+    (dt: DataTransfer | null | undefined) => {
+      if (!dt) return false
+      let uriList = ''
+      try {
+        uriList = dt.getData('text/uri-list') || dt.getData('text/plain') || ''
+      } catch {
+        uriList = ''
+      }
+      const files = dt.files
+      const paths = collectDroppedFilePaths(files, { uriList })
+      const images = collectImageFiles(files).filter((file) => !fileAbsolutePath(file))
+      if (!paths.length && !images.length) return false
+      if (paths.length) {
+        const refs = paths
+          .map((path) => filePickFromPath(path, live.current.route))
+          .filter((ref): ref is NonNullable<typeof ref> => Boolean(ref))
+        if (refs.length) {
+          if (live.current.pick) live.current.pick.addMany(refs)
+          else if (editor) insertPickChips(editor, refs)
+        }
+      }
+      if (images.length) addImageFiles(images)
+      return true
+    },
+    [addImageFiles, editor],
+  )
+  takeDroppedRef.current = takeDroppedFiles
+
   function clearInput() {
     if (debounceRef.current != null) {
       clearTimeout(debounceRef.current)
       debounceRef.current = null
     }
     flushDraftTimer()
-    editor?.commands.clearContent(true)
+    runComposerCommands(editor, (ed) => ed.commands.clearContent(true))
     canSubmitRef.current = false
     setCanSubmit(false)
     setSlash(null)
@@ -651,10 +707,8 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
   }
 
   function onDrop(event: DragEvent<HTMLFormElement>) {
-    const images = collectImageFiles(event.dataTransfer?.files)
-    if (!images.length) return
+    if (!takeDroppedFiles(event.dataTransfer)) return
     event.preventDefault()
-    addImageFiles(images)
   }
 
   const openSlashMenu = useCallback(() => {
@@ -665,10 +719,9 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
     const caret = editorCaretPlain(editor)
     setSlash(readSlashAtCursor(caret.value, caret.cursor))
     if (catalog.length === 0) {
-      void fetch('/api/chat/config')
-        .then((res) => res.json())
-        .then((data: { toolCatalog?: ToolCatalogItem[] }) => {
-          const items = Array.isArray(data.toolCatalog) ? data.toolCatalog : []
+      void getChatConfig<{ toolCatalog?: ToolCatalogItem[] }>()
+        .then((data) => {
+          const items = Array.isArray(data?.toolCatalog) ? data.toolCatalog : []
           setCatalog(items.filter((item) => item?.name))
         })
         .catch(() => {
@@ -795,10 +848,12 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
     const tools = [...picked]
     const fallback = tools.length ? `请使用工具：${tools.join(', ')}` : pendingImages.length ? '（图片）' : ''
     const text = packedEditor.text || fallback
-    const packed = await Promise.all(pendingImages.map((item) => readFileDataUrl(item.file)))
-    clearInput()
-    pick?.clear()
-    revealOverlayThread()
+    let packed: Array<{ name: string; mime: string; url: string }>
+    try {
+      packed = await Promise.all(pendingImages.map((item) => readFileDataUrl(item.file)))
+    } catch {
+      return
+    }
     try {
       await sessionView.send(
         text,
@@ -806,7 +861,8 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
         tools,
         packed.filter((item) => item.url.startsWith('data:image/')),
       )
-      revealOverlayThread()
+      clearInput()
+      pick?.clear()
       const id = sessionView.get().sessionId
       if (id) {
         clearDraft(id)
@@ -814,7 +870,7 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
       }
       if (id && shouldNavigateToSession(location.pathname, id)) navigate(`/s/${id}`)
     } catch {
-      /* error 已写入 sessionView */
+      /* error 已写入 sessionView；输入与待发图片保留 */
     }
   }
 
@@ -836,6 +892,7 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
                 title="暂停"
                 aria-label="暂停 Goal"
                 onClick={() => void sessionView.controlGoal('pause')}
+                onMouseDown={(event) => event.preventDefault()}
               >
                 <PauseIcon className="size-4" aria-hidden />
               </button>
@@ -846,6 +903,7 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
                 title="继续"
                 aria-label="继续 Goal"
                 onClick={() => void sessionView.controlGoal('resume')}
+                onMouseDown={(event) => event.preventDefault()}
               >
                 <PlayIcon className="size-4" aria-hidden />
               </button>
@@ -856,6 +914,7 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
               title="清除"
               aria-label="清除 Goal"
               onClick={() => void sessionView.controlGoal('clear')}
+              onMouseDown={(event) => event.preventDefault()}
             >
               <XMarkIcon className="size-4" aria-hidden />
             </button>
@@ -883,9 +942,11 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
                     onClick={() => {
                       void (async () => {
                         const ok = await sessionView.dropInboxItem(item.id)
-                        if (!ok || !editor) return
-                        editor.commands.setContent(jsonFromDraft(item.text))
-                        editor.commands.focus('end')
+                        if (!ok || !composerEditorReady(editor)) return
+                        runComposerCommands(editor, (ed) => {
+                          ed.commands.setContent(jsonFromDraft(item.text))
+                          ed.commands.focus('end')
+                        })
                         scheduleCanSubmit(item.text, picked, pickRefs.length, pendingImages.length)
                       })()
                     }}
@@ -994,7 +1055,11 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
         </button>
 
         <div className="composer-editor">
-          <EditorContent editor={editor} />
+          {composerEditorReady(editor) ? (
+            <EditorContent editor={editor} />
+          ) : (
+            <div className="composer-tiptap" data-testid="composer-pending" />
+          )}
         </div>
 
         <div className="composer-pill-right">
@@ -1043,6 +1108,7 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
               title="停止"
               aria-label="停止生成"
               onClick={() => void sessionView.cancel()}
+              onMouseDown={(event) => event.preventDefault()}
             >
               <span className="composer-stop-square" aria-hidden />
             </button>

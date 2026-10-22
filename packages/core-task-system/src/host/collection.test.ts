@@ -41,7 +41,7 @@ test('tasksCollection maps /tasks rows with rolled-up usage', async () => {
   assert.equal(spec.view?.title, '任务')
   assert.equal(spec.view?.inspector, true)
   assert.equal(spec.view?.icon, 'check-circle')
-  assert.deepEqual(spec.schema.columns, ['title', 'status', 'priority', 'difficulty', 'usage', 'createdBy', 'assignee', 'project', 'tags', 'dueAt'])
+  assert.deepEqual(spec.schema.columns, ['title', 'status', 'priority', 'difficulty', 'usage', 'createdBy', 'assignee', 'project', 'facet', 'dueAt'])
   assert.deepEqual(spec.schema.fields.status?.enum, ['todo', 'doing', 'done', 'failed'])
   assert.equal(spec.schema.fields.assignee?.label, '执行人')
   assert.equal(spec.schema.fields.assignee?.writable, true)
@@ -57,12 +57,48 @@ test('tasksCollection maps /tasks rows with rolled-up usage', async () => {
   assert.equal(child?.usage, 15)
   assert.equal(parent?.usage, 15)
   assert.equal((parent?.usageParts as { aggregate?: boolean } | undefined)?.aggregate, true)
+  assert.equal(child?.reports, undefined)
+  assert.equal(child?.trigger, undefined)
+  assert.equal(child?.description, undefined)
+  assert.equal(child?.creatorActor, undefined)
+  assert.equal(child?.assigneeActor, undefined)
+  assert.equal(child?.notes, undefined)
   const written = await spec.update!('t1', { status: 'doing' })
   assert.equal(written.status, 'doing')
   assert.deepEqual(spec.records, { update: true, create: true, delete: true })
   assert.equal(spec.actions?.find((item) => item.id === 'report')?.for, 'agent')
   assert.equal(spec.actions?.find((item) => item.id === 'deliver')?.for, 'both')
   assert.deepEqual(spec.actions?.find((item) => item.id === 'deliver')?.placement, ['row', 'detail'])
+})
+
+test('tasksCollection get reads one row instead of listing the table', async () => {
+  let listed = 0
+  const tasks: TasksLike = {
+    list() {
+      listed += 1
+      return [
+        { id: 't1', title: '写方案', status: 'todo' },
+        { id: 't2', title: '其他', status: 'todo' },
+      ]
+    },
+    get(id) {
+      return id === 't1' ? { id: 't1', title: '写方案', status: 'todo', parentId: 'p' } : undefined
+    },
+    update(id, patch) {
+      return { id, title: '写方案', status: patch.status ?? 'todo' }
+    },
+    create(input) {
+      return { id: 'new', title: input.title, status: 'todo' }
+    },
+    delete() {
+      return true
+    },
+  }
+  const spec = tasksCollection(tasks)
+  const row = await spec.get!('t1')
+  assert.equal(row?.title, '写方案')
+  assert.equal(row?.parentId, 'p')
+  assert.equal(listed, 0)
 })
 
 test('tasksCollection lets agents write assignee and stamps the creating session', async () => {

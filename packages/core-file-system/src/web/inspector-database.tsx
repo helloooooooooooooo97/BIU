@@ -1,13 +1,12 @@
-import { useEffect, useMemo, useRef, useSyncExternalStore, type ComponentType } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useSyncExternalStore, type ComponentType } from 'react'
 import { CircleStackIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import type { SlotProps } from '@biu/type-slots'
 import type { CollectionInfo } from '@biu/type-file-system'
 import type { CollectionChrome } from '@biu/type-file-system/ui'
 import { parseAppPath } from '@biu/web-session-view'
 import { buildCrumbs, pathForCrumbTarget, type Crumb, type CrumbTarget } from './sidebar-nav.ts'
-import { CollectionBrowser } from './browser.tsx'
 import { CrumbTrail } from './crumb-trail.tsx'
-import { defaultViewId, loadRecords, loadViews, peekRecord, viewForPath } from './view-storage.ts'
+import { defaultViewId, loadRecords, loadViews, peekRecord, subscribeCrumbs, viewForPath } from './view-storage.ts'
 import { builtinAllViewId } from '../catalog-views.ts'
 import { DATA_MODULE, DATA_MODULE_ID, databaseAllViewPath, databaseRecordPath, databaseViewPath } from './database-path.ts'
 import {
@@ -21,6 +20,9 @@ import {
 import { getDatabaseUi } from './database-ui.ts'
 import { TableGlyph } from './nav-glyphs.tsx'
 import { viewsForRegisteredCollection } from './collection-nav.ts'
+import { PageContentLoading } from './page-content-status.tsx'
+
+const CollectionBrowser = lazy(() => import('./browser.tsx').then((m) => ({ default: m.CollectionBrowser })))
 
 const tabIcons = new Map<string, ComponentType<{ className?: string }>>()
 
@@ -78,10 +80,12 @@ function useViewTick() {
       window.addEventListener('fsdb:change', bump)
       window.addEventListener('fsdb:crumb-labels', bump)
       window.addEventListener('storage', bump)
+      const stopCrumbs = subscribeCrumbs(bump)
       return () => {
         window.removeEventListener('fsdb:change', bump)
         window.removeEventListener('fsdb:crumb-labels', bump)
         window.removeEventListener('storage', bump)
+        stopCrumbs()
       }
     },
     () => viewTick,
@@ -166,7 +170,7 @@ function crumbsForRoute(
     viewName: resolvedView?.name,
     views: views.map((item) => ({ id: item.id, name: item.name, mode: item.mode })),
     recordId,
-    recordLabel: recordHit?.label ?? recordId,
+    recordLabel: recordHit?.label,
     records,
   })
   return { crumbs, collection, viewId: activeViewId, recordId }
@@ -303,11 +307,12 @@ export function DatabaseInspectorBrowse(props: SlotProps) {
 
   return (
     <div
-      key={inspectorPath}
+      key={id}
       className={`fsdb-agent-follow${liveWorking || agentWorking ? ' is-working' : ''}`}
       data-testid="fsdb-agent-follow"
       aria-busy={liveWorking || agentWorking}
     >
+    <Suspense fallback={<PageContentLoading />}>
     <CollectionBrowser
       embed
       moduleId={DATA_MODULE_ID}
@@ -337,7 +342,9 @@ export function DatabaseInspectorBrowse(props: SlotProps) {
         )
       }}
       onCrumbTarget={(target) => goInspector(id, target)}
+      inspectorPaneId={id}
     />
+    </Suspense>
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import { beforeEach, test } from 'vitest'
 import assert from 'node:assert/strict'
-import { databaseAllViewPath, databaseRecordPath } from './database-path.ts'
+import { builtinAllViewId } from '../catalog-views.ts'
+import { databaseAllViewPath, databaseRecordPath, databaseViewPath } from './database-path.ts'
 import {
   getInspectorDbPath,
   isInspectorDatabasePath,
@@ -8,8 +9,10 @@ import {
   resetInspectorDbPathMemory,
   focusInspectorIfOpen,
   showRecordInInspector,
+  moveInspectorRecordsToTrash,
   showInInspector,
   applyDatabaseReveal,
+  rememberInspectorWorkingView,
   applyDatabaseChannelPayload,
   isInspectorAgentWorking,
   setInspectorAgentWorking,
@@ -103,7 +106,7 @@ test('showRecordInInspector focuses an already-open pane for the same page', () 
 test('showRecordInInspector reuses the collection pane instead of opening a second copy of the page', () => {
   setInspectorDbPath('database:/pages', databaseAllViewPath('/pages'))
   showRecordInInspector('/pages', 'p-new')
-  assert.equal(getInspectorDbPath('database:/pages'), '/database/pages/record/p-new')
+  assert.equal(getInspectorDbPath('database:/pages'), databaseRecordPath('/pages', 'p-new', builtinAllViewId('/pages')))
   const extra = Object.keys(snapshotInspectorDbPaths()).filter((id) => id.startsWith('database:/pages::'))
   assert.equal(extra.length, 0)
 })
@@ -283,9 +286,9 @@ test('applyDatabaseReveal opens the table, or the record when an id is present',
   applyDatabaseReveal({ collection: '/tasks' })
   assert.equal(getInspectorDbPath('database:/tasks'), databaseAllViewPath('/tasks'))
   applyDatabaseReveal({ collection: '/tasks', recordId: 't9' })
-  assert.equal(getInspectorDbPath('database:/tasks'), '/database/tasks/record/t9')
+  assert.equal(getInspectorDbPath('database:/tasks'), databaseRecordPath('/tasks', 't9', builtinAllViewId('/tasks')))
   applyDatabaseReveal({ collection: '/' })
-  assert.equal(getInspectorDbPath('database:/tasks'), '/database/tasks/record/t9')
+  assert.equal(getInspectorDbPath('database:/tasks'), databaseRecordPath('/tasks', 't9', builtinAllViewId('/tasks')))
 })
 
 test('applyDatabaseChannelPayload marks the table as agent-working until done', () => {
@@ -386,6 +389,38 @@ test('applyDatabaseReveal opens a saved view when viewId is present', () => {
   assert.equal(getInspectorDbPath('database:/tasks'), '/database/tasks/view/board-1')
 })
 
+test('showRecordInInspector keeps the working view on the record path', () => {
+  rememberInspectorWorkingView('/pages', 'bug')
+  showRecordInInspector('/pages', 'p-new')
+  assert.equal(getInspectorDbPath('database:/pages'), databaseRecordPath('/pages', 'p-new', 'bug'))
+})
+
+test('creating in a saved view does not fall back to 全部页面 when that list is already open', () => {
+  setInspectorDbPath('database:/pages', databaseAllViewPath('/pages'))
+  showRecordInInspector('/pages', 'p-new', 'bug')
+  assert.equal(getInspectorDbPath('database:/pages'), databaseRecordPath('/pages', 'p-new', 'bug'))
+})
+
+test('applyDatabaseReveal keeps the working view when the tool reveal has no viewId', () => {
+  rememberInspectorWorkingView('/pages', 'bug')
+  applyDatabaseReveal({ collection: '/pages' })
+  assert.equal(getInspectorDbPath('database:/pages'), databaseViewPath('/pages', 'bug'))
+  applyDatabaseReveal({ collection: '/pages', recordId: 'p9' })
+  assert.equal(getInspectorDbPath('database:/pages'), databaseRecordPath('/pages', 'p9', 'bug'))
+})
+
+test('applyDatabaseReveal keeps the list already open instead of the all view', () => {
+  setInspectorDbPath('database:/pages', databaseViewPath('/pages', 'bug'))
+  applyDatabaseReveal({ collection: '/pages' })
+  assert.equal(getInspectorDbPath('database:/pages'), databaseViewPath('/pages', 'bug'))
+})
+
+test('a revealed view becomes the working view for later table operations', () => {
+  applyDatabaseReveal({ collection: '/pages', viewId: 'bug' })
+  applyDatabaseReveal({ collection: '/pages' })
+  assert.equal(getInspectorDbPath('database:/pages'), databaseViewPath('/pages', 'bug'))
+})
+
 test('applyDatabaseChannelPayload upserts a created view then opens it', () => {
   const mem: Record<string, string> = {}
   Object.defineProperty(globalThis, 'localStorage', {
@@ -473,6 +508,34 @@ test('view db_update writes the source table view, not /views', () => {
   assert.equal(seen[0]?.collection, '/pages')
   assert.equal(seen[0]?.view?.id, 'mine')
   assert.equal(getInspectorDbPath('database:/pages'), '')
+})
+
+test('moving an open inspector record lands on the matching 回收站 row', () => {
+  showRecordInInspector('/pages', 'p1')
+  moveInspectorRecordsToTrash('/pages', ['p1'])
+  assert.equal(
+    getInspectorDbPath('database:/pages'),
+    databaseRecordPath('/trash', 'pages::p1', builtinAllViewId('/trash')),
+  )
+})
+
+test('moving inspector records to 回收站 keeps other panes and skips missing ones', () => {
+  const pane = 'database:/pages::doc'
+  setInspectorDbPath(pane, '/database/pages/record/p1?view=all')
+  setInspectorDbPath('database:/notes', '/database/notes/record/n1')
+  moveInspectorRecordsToTrash('/pages', ['p1', 'p-missing'])
+  assert.equal(
+    getInspectorDbPath(pane),
+    databaseRecordPath('/trash', 'pages::p1', builtinAllViewId('/trash')),
+  )
+  assert.equal(getInspectorDbPath('database:/notes'), '/database/notes/record/n1')
+  moveInspectorRecordsToTrash('/trash', ['pages::p1'])
+  assert.equal(
+    getInspectorDbPath(pane),
+    databaseRecordPath('/trash', 'pages::p1', builtinAllViewId('/trash')),
+  )
+  moveInspectorRecordsToTrash('/pages', [])
+  assert.equal(getInspectorDbPath('database:/notes'), '/database/notes/record/n1')
 })
 
 test('inspector db paths restore replaces the global pane map', () => {

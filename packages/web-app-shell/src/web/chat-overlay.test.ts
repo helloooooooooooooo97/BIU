@@ -45,6 +45,10 @@ import {
   inspectorActionFromEvent,
   requestInspectorTab,
   requestInspectorAction,
+  requestComposerFocus,
+  isComposerFocusPending,
+  consumeComposerFocusPending,
+  focusComposerEditor,
 } from './chat-overlay.ts'
 
 test('collapsed chat sidebar disappears instead of leaving a thin rail', () => {
@@ -198,7 +202,7 @@ test('pick-attached only opens; closing stays closed even if chips remain', () =
   assert.equal(getChatOverlay(), false)
 })
 
-test('pick-attached on the chat page focuses composer instead of overlay', () => {
+test('pick-attached on the chat page focuses composer instead of overlay', async () => {
   setChatOverlay(false)
   history.replaceState(null, '', '/s/session-1')
   let focused = 0
@@ -207,9 +211,68 @@ test('pick-attached on the chat page focuses composer instead of overlay', () =>
   }
   window.addEventListener('biu:composer-focus', onFocus)
   window.dispatchEvent(new Event('biu:pick-attached'))
+  assert.equal(focused, 0)
+  assert.equal(isComposerFocusPending(), true)
+  await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)))
   window.removeEventListener('biu:composer-focus', onFocus)
   assert.equal(getChatOverlay(), false)
   assert.ok(focused > 0)
+})
+
+test('requestComposerFocus does not dispatch in the same tick', () => {
+  consumeComposerFocusPending()
+  let focused = 0
+  const onFocus = () => {
+    focused += 1
+  }
+  window.addEventListener('biu:composer-focus', onFocus)
+  requestComposerFocus()
+  window.removeEventListener('biu:composer-focus', onFocus)
+  assert.equal(focused, 0)
+  assert.equal(isComposerFocusPending(), true)
+  consumeComposerFocusPending()
+})
+
+test('focusComposerEditor ignores a null or destroyed editor', () => {
+  consumeComposerFocusPending()
+  requestComposerFocus()
+  assert.equal(focusComposerEditor(null), false)
+  assert.equal(isComposerFocusPending(), true)
+  assert.equal(focusComposerEditor({ isDestroyed: true, commands: { focus() {} } }), false)
+  const exploded = {
+    isDestroyed: false,
+    get commands() {
+      return (null as unknown as { commands: { focus: () => void } }).commands
+    },
+  }
+  assert.equal(focusComposerEditor(exploded), false)
+  assert.equal(isComposerFocusPending(), true)
+  let focused = 0
+  assert.equal(
+    focusComposerEditor({
+      isDestroyed: false,
+      commands: {
+        focus() {
+          focused += 1
+        },
+      },
+    }),
+    true,
+  )
+  assert.equal(focused, 1)
+  assert.equal(isComposerFocusPending(), false)
+})
+
+test('openOverlayComposer on a database page requests composer focus', () => {
+  consumeComposerFocusPending()
+  setChatOverlay(false)
+  history.replaceState(null, '', '/database/pages/p1')
+  openOverlayComposer({ revealThread: true })
+  assert.equal(getChatOverlay(), true)
+  assert.equal(getOverlayThread(), true)
+  assert.equal(isComposerFocusPending(), true)
+  consumeComposerFocusPending()
+  setChatOverlay(false)
 })
 
 test('openOverlayComposer on the chat page does not open a window', () => {
@@ -219,17 +282,33 @@ test('openOverlayComposer on the chat page does not open a window', () => {
   assert.equal(getChatOverlay(), false)
 })
 
-test('pick opens a compose-only overlay; send reveals the thread', () => {
+test('pick opens a compose-only overlay; only the expand control reveals the thread', () => {
+  setOverlayThread(false)
   setChatOverlay(false)
   history.replaceState(null, '', '/database')
-  openOverlayComposer({ revealThread: false })
+  openOverlayComposer()
   assert.equal(getChatOverlay(), true)
   assert.equal(getOverlayThread(), false)
   assert.equal(getOverlayAutohide(), false)
-  revealOverlayThread()
+  toggleOverlayThread()
   assert.equal(getOverlayThread(), true)
   setChatOverlay(false)
+  assert.equal(getOverlayThread(), true)
+})
+
+test('reopening the overlay restores the last thread expand state', () => {
+  setOverlayThread(true)
+  setChatOverlay(true)
+  setChatOverlay(false)
+  history.replaceState(null, '', '/database')
+  openOverlayComposer()
+  assert.equal(getChatOverlay(), true)
+  assert.equal(getOverlayThread(), true)
+  setOverlayThread(false)
+  setChatOverlay(false)
+  openOverlayComposer()
   assert.equal(getOverlayThread(), false)
+  setChatOverlay(false)
 })
 
 test('toggleOverlayThread expands and collapses the overlay transcript', () => {
@@ -262,6 +341,7 @@ test('collapsed overlay closes on outside click; expanded overlay stays', () => 
 })
 
 test('pick mode opens the overlay and blocks outside dismiss', () => {
+  setOverlayThread(false)
   setChatOverlay(false)
   history.replaceState(null, '', '/database')
   window.dispatchEvent(new CustomEvent('biu:pick-mode', { detail: { picking: true } }))
@@ -276,10 +356,10 @@ test('pick mode opens the overlay and blocks outside dismiss', () => {
 test('pick on an already-open overlay keeps the revealed thread', () => {
   setChatOverlay(false)
   history.replaceState(null, '', '/database')
-  openOverlayComposer({ revealThread: false })
+  openOverlayComposer()
   revealOverlayThread()
   assert.equal(getOverlayThread(), true)
-  openOverlayComposer({ revealThread: false })
+  openOverlayComposer()
   assert.equal(getOverlayThread(), true)
   setChatOverlay(false)
 })
@@ -317,12 +397,13 @@ test('autohide resets when overlay closes', () => {
   assert.equal(getOverlayAutohide(), false)
 })
 
-test('overlay window geom clamps and docks to the right, vertically centered', () => {
+test('overlay window geom clamps and docks to the right, bottom-aligned by default', () => {
   const def = defaultOverlayWinGeom(1280, 800)
+  assert.equal(OVERLAY_WIN_MIN_W, 420)
   assert.ok(def.w >= OVERLAY_WIN_MIN_W)
   assert.ok(def.h >= OVERLAY_WIN_MIN_H)
   assert.equal(def.x, 1280 - def.w - 12)
-  assert.equal(def.y, Math.round((800 - def.h) / 2))
+  assert.equal(def.y, 800 - def.h - 12)
   assert.ok(def.y + def.h <= 800)
   const tiny = clampOverlayWinGeom({ x: -400, y: -20, w: 10, h: 10 }, 1280, 800)
   assert.equal(tiny.w, OVERLAY_WIN_MIN_W)
@@ -334,17 +415,17 @@ test('layout always pins the overlay to the right of the viewport', () => {
   const bottom = overlayLayoutGeom('bottom', prev, 1280, 800)
   assert.equal(bottom.x, 1280 - 420 - 12)
   assert.equal(bottom.w, 420)
-  assert.equal(bottom.y, Math.round((800 - 400) / 2))
+  assert.equal(bottom.y, 80)
   const wide = overlayLayoutGeom('bottom', { ...prev, w: 640 }, 1600, 900)
   assert.equal(wide.x, 1600 - 640 - 12)
   assert.equal(wide.w, 640)
   const right = overlayLayoutGeom('right', prev, 1280, 800)
   assert.equal(right.x, 1280 - 420 - 12)
   assert.equal(right.h, 400)
-  assert.equal(right.y, Math.round((800 - 400) / 2))
+  assert.equal(right.y, 80)
   const tall = overlayLayoutGeom('right', { ...prev, h: 560 }, 1280, 900)
   assert.equal(tall.h, 560)
-  assert.equal(tall.y, Math.round((900 - 560) / 2))
+  assert.equal(tall.y, 80)
 })
 
 test('saved layout recomputes when the viewport changes', () => {
@@ -358,7 +439,7 @@ test('saved layout recomputes when the viewport changes', () => {
   assert.equal(state.layout, 'right')
   assert.equal(state.x, 1600 - state.w - 12)
   assert.equal(state.h, 400)
-  assert.equal(state.y, Math.round((900 - 400) / 2))
+  assert.equal(state.y, 12)
   writeOverlayWinState({ x: 0, y: 0, w: 500, h: 360, layout: 'bottom' })
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1400 })
   Object.defineProperty(window, 'innerHeight', { configurable: true, value: 820 })

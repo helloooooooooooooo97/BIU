@@ -7,6 +7,11 @@ const inspector = readFileSync(resolve(import.meta.dirname, './session-inspector
 const css = readFileSync(resolve(import.meta.dirname, '../../../../web/style.css'), 'utf8')
 
 test('inspector header keeps opened tabs on top and a plus menu on the right', () => {
+  assert.match(inspector, /data-testid="inspector-more"/)
+  assert.match(inspector, /data-testid="inspector-more"[\s\S]*data-testid="inspector-add"/)
+  assert.match(inspector, /closePaneLabel/)
+  assert.match(inspector, /关闭页面/)
+  assert.doesNotMatch(inspector, /关闭 \$\{name\}/)
   assert.match(inspector, /data-testid="inspector-add"/)
   assert.match(inspector, /data-testid="inspector-add-menu"/)
   assert.match(inspector, /className="app-side-bar-head" data-biu-ignore/)
@@ -68,7 +73,12 @@ test('plus menu can add another database tab', () => {
   assert.doesNotMatch(css, /inspector-crumb-toggle/)
   assert.match(css, /\.inspector-add-close/)
   assert.match(css, /html:not\(\.dark\) \.inspector-add-menu[\s\S]*color:\s*#5f5e5a/)
-  assert.match(css, /html:not\(\.dark\) \.inspector-add-row-main svg[\s\S]*color:\s*#91918e/)
+  // 已打开项目行的图标改成和下方选项一样的 #bab9b5（日夜一致），不再吃 #91918e
+  assert.match(css, /html:not\(\.dark\) \.inspector-add-row-main svg[\s\S]*color:\s*#bab9b5/)
+  assert.doesNotMatch(inspector, /inspector-add-check/)
+  assert.match(css, /\.inspector-add-row\.is-active::before\s*\{[^}]*background:\s*var\(--dsw-hover\)/s)
+  assert.match(css, /\.session-inspector \.inspector-tab svg[\s\S]*color:\s*var\(--dsw-icon\)/)
+  assert.match(css, /html\.dark \{[^}]*--dsw-icon: #bab9b5/)
 })
 
 test('inspector header tabs sit on the same vertical center as the main header', () => {
@@ -82,8 +92,28 @@ test('inspector header tabs sit on the same vertical center as the main header',
   assert.match(css, /\.inspector-tab\s*\{[^}]*padding:\s*0 8px/s)
   assert.doesNotMatch(css, /\.inspector-crumb-tab\s*\{[^}]*padding-right:\s*4px/s)
   assert.match(css, /\.inspector-stage-pane\.is-active[\s\S]*?opacity:\s*1/)
+  assert.match(css, /\.app-shell-agent > main\s*\{[^}]*z-index:\s*0/s)
+  assert.match(css, /\.app-shell-agent > \.session-inspector\s*\{[^}]*z-index:\s*1/s)
+  assert.match(css, /\.session-inspector:has\(\.fsdb-query-menu\)[\s\S]*?z-index:\s*120/)
+  assert.match(css, /\.app-shell-agent > main:has\(\.fsdb-query-menu\)/)
+  assert.match(css, /\.session-inspector:has\(\.fsdb-query-menu\) \.inspector-stage/)
   assert.doesNotMatch(css, /\.inspector-stage-pane,\s*\.app-stage-pane\s*\{[^}]*transition:\s*[\s\S]*opacity 220ms/s)
   assert.doesNotMatch(css, /\.inspector-stage-pane\s*\{[^}]*content-visibility:\s*hidden/s)
   assert.match(css, /\.app-stage-pane[\s\S]*?content-visibility:\s*hidden/)
+  assert.match(css, /\.app-stage-pane\[data-stage="agent"\][\s\S]*?content-visibility:\s*visible/)
   assert.match(css, /\.app-stage-pane\.is-active[\s\S]*?opacity:\s*1/)
+})
+
+test('opened rows in the inspector add menu use the icon gray for every glyph', () => {
+  // 上方已打开的项目行：左侧图标 + 右侧关闭叉号，两种主题都要是 #bab9b5
+  assert.match(css, /^\.inspector-add-row > svg,\s*\n\.inspector-add-row \.size-4,[\s\S]*?color:\s*#bab9b5/m, )
+  const block = css.slice(css.indexOf('.inspector-add-row > svg,'))
+  const rule = block.slice(0, block.indexOf('}'))
+  for (const selector of ['.inspector-add-close', '.inspector-add-close svg', '.inspector-add-row-main > svg']) {
+    assert.equal(rule.includes(selector), true, selector)
+  }
+  // 行本身仍然可以继承文本色（那是给文字的），但图标有独立规则覆盖
+  assert.match(css, /^\.inspector-add-row \{[^}]*color: var\(--dsw-label\)/m)
+  // 亮色主题同样钉成图标灰
+  assert.match(css, /html:not\(\.dark\) \.inspector-add-close svg,[\s\S]*?color:\s*#bab9b5/)
 })

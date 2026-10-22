@@ -20,7 +20,7 @@ export function pagesCollection(store: PagesStore, index: PageBlocksIndex): Coll
       route: '/pages',
       title: '页面',
       inspector: true,
-      blurb: '每页正文在 .biu/biu.sqlite 的 editor_content。正文用 db_content；改标题/标签等用 db_update。合集用 db_update 写 facet：{tags:["facet-2"],values:{导演:"查泽雷"}}。图片不要写 data URL：先 db_asset write name=xxx.png from=本地文件，再 db_content 插入 ![说明](/api/db/file/xxx.png)。附件在 .biu/assets。树用 parentId。新建 db_create，删除 db_delete。本表没有 db_action。',
+      blurb: '每页正文在 .biu/biu.sqlite 的 editor_content。正文用 db_content；改标题等用 db_update。标签用 db_update 写 facet：{tags:["facet-2"],values:{导演:"查泽雷"}}。图片不要写 data URL：先 db_asset write name=xxx.png from=本地文件，再 db_content 插入 ![说明](/api/db/file/xxx.png)。附件在 .biu/assets。树用 parentId。新建 db_create，删除 db_delete。本表没有 db_action。',
       order: 25,
       icon: 'document',
     },
@@ -29,11 +29,10 @@ export function pagesCollection(store: PagesStore, index: PageBlocksIndex): Coll
       contentField: 'notes',
       contentBackend: 'editorContent',
       parentField: 'parentId',
-        columns: ['title', 'tags', 'createdBy', 'updatedBy'],
+        columns: ['title', 'facet', 'createdBy', 'updatedBy'],
       fields: {
         ...REQUIRED_RECORD_FIELDS,
         title: { type: 'string', label: '标题', writable: true },
-        tags: { type: 'multi-select', label: '标签', writable: true },
         notes: { type: 'file', label: '正文', writable: true },
         parentId: { type: 'ref', label: '父级', writable: true },
         dependsOn: { type: 'multi-ref', label: '依赖', writable: true },
@@ -71,7 +70,9 @@ function servePageFile(ctx: Context, store: PagesStore) {
   ctx.inject(['http'], (inner) => {
     inner.http.route('GET', '/api/page/file/:name', async (route) => {
       try {
-        const { bytes, type, etag } = await store.readAsset(route.params.name ?? '')
+        const name = route.params.name ?? ''
+        inner.database.requireAsset(name, 'resource:read')
+        const { bytes, type, etag } = await store.readAsset(name)
         route.res.writeHead(200, {
           'content-type': type,
           'cache-control': 'no-store',
@@ -84,8 +85,12 @@ function servePageFile(ctx: Context, store: PagesStore) {
     })
     inner.http.route('PUT', '/api/page/file/:name', async (route) => {
       try {
+        const name = route.params.name ?? ''
+        const path = route.query.get('path') || String(route.req.headers['x-biu-resource-path'] ?? '')
+        if (path) await inner.database.requirePath(path, 'resource:update')
+        else inner.database.requireAsset(name, 'resource:update')
         const ifMatch = String(route.req.headers['if-match'] ?? '').trim().replace(/^W\//, '').replaceAll('"', '')
-        const written = await store.writeAsset(route.params.name ?? '', await route.bytes(), {
+        const written = await store.writeAsset(name, await route.bytes(), {
           etag: ifMatch && ifMatch !== '*' ? ifMatch : '',
         })
         inner.http.broadcast?.(DATABASE_CHANNEL, { ts: Date.now(), asset: { name: written.name, etag: written.etag } })

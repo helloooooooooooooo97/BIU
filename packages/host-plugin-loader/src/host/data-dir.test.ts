@@ -4,9 +4,24 @@ import { createRequire } from 'node:module'
 import { mkdirSync, writeFileSync, readFileSync, existsSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { DATA_DIR_NAME, LEGACY_DATA_DIR_NAME, LEGACY_PAGE_ROOT, PAGE_DB, PAGE_ROOT, adoptPackedUserData, dataDir, dataHome, dataPath, migrateDataDir, migrateLegacyPageDir } from './data-dir.ts'
+import { DATA_DIR_NAME, LEGACY_DATA_DIR_NAME, LEGACY_PAGE_ROOT, PAGE_DB, PAGE_ROOT, adoptPackedUserData, biuSqlitePath, dataDir, dataHome, dataPath, isDesktopRuntime, isOnlineRuntime, migrateDataDir, migrateLegacyPageDir, profilePath, runWithWorkspace } from './data-dir.ts'
 import { adoptCasAssets } from './adopt-cas-assets.ts'
 import { hashedAssetName, hashedAssetRel } from './asset-cas.ts'
+
+test('runtime mode helpers read BIU_ONLINE lazily', () => {
+  const previous = process.env.BIU_ONLINE
+  try {
+    process.env.BIU_ONLINE = '1'
+    assert.equal(isOnlineRuntime(), true)
+    assert.equal(isDesktopRuntime(), false)
+    process.env.BIU_ONLINE = '0'
+    assert.equal(isOnlineRuntime(), false)
+    assert.equal(isDesktopRuntime(), true)
+  } finally {
+    if (previous === undefined) delete process.env.BIU_ONLINE
+    else process.env.BIU_ONLINE = previous
+  }
+})
 
 test('migrateDataDir renames .cordis to .biu', () => {
   const root = mkdtempSync(join(tmpdir(), 'biu-dir-'))
@@ -67,6 +82,32 @@ test('migrateLegacyPageDir can move between workspace roots', () => {
   assert.equal(existsSync(join(from, LEGACY_PAGE_ROOT)), false)
 })
 
+test('dataPath(file) stays inside the active workspace', () => {
+  const prevHome = process.env.BIU_HOME
+  const prevProfile = process.env.BIU_PROFILE
+  delete process.env.BIU_HOME
+  delete process.env.BIU_PROFILE
+  const home = mkdtempSync(join(tmpdir(), 'biu-scope-'))
+  const other = mkdtempSync(join(tmpdir(), 'biu-other-'))
+  try {
+    assert.equal(dataPath('biu.sqlite'), biuSqlitePath())
+    const scoped = runWithWorkspace({ id: 'ws', root: other }, () => ({
+      home: dataHome(),
+      sqlite: dataPath('biu.sqlite'),
+      profile: profilePath(),
+    }))
+    assert.equal(scoped.home, other)
+    assert.equal(scoped.sqlite, join(other, DATA_DIR_NAME, 'biu.sqlite'))
+    assert.equal(scoped.profile, join(other, DATA_DIR_NAME, 'profile.json'))
+    assert.equal(dataPath(home, 'biu.sqlite'), join(home, DATA_DIR_NAME, 'biu.sqlite'))
+  } finally {
+    if (prevHome === undefined) delete process.env.BIU_HOME
+    else process.env.BIU_HOME = prevHome
+    if (prevProfile === undefined) delete process.env.BIU_PROFILE
+    else process.env.BIU_PROFILE = prevProfile
+  }
+})
+
 test('dataHome prefers BIU_HOME over cwd', () => {
   const prev = process.env.BIU_HOME
   const home = mkdtempSync(join(tmpdir(), 'biu-home-'))
@@ -97,6 +138,45 @@ test('adoptPackedUserData moves pack-host leftovers into userData and keeps dest
   assert.equal(readFileSync(join(workspace, '.plugin-dev', 'demo', 'manifest.json'), 'utf8'), '{}')
   assert.equal(existsSync(join(pack, '.plugin-dev', 'demo', 'manifest.json')), true)
   assert.equal(existsSync(join(pack, DATA_DIR_NAME)), false)
+})
+
+test('adoptPackedUserData does not create .biu in a dev checkout that has none', () => {
+  const pack = mkdtempSync(join(tmpdir(), 'biu-dev-empty-'))
+  const home = mkdtempSync(join(tmpdir(), 'biu-home-empty-'))
+  mkdirSync(join(pack, 'packages'), { recursive: true })
+  writeFileSync(join(pack, 'package.json'), '{}')
+  adoptPackedUserData(pack, home, join(home, 'workspace'))
+  assert.equal(existsSync(join(pack, DATA_DIR_NAME)), false)
+  assert.equal(existsSync(join(pack, LEGACY_DATA_DIR_NAME)), false)
+  assert.equal(existsSync(join(pack, LEGACY_PAGE_ROOT)), false)
+  assert.equal(existsSync(join(home, DATA_DIR_NAME, 'biu.sqlite')), true)
+})
+
+test('adoptPackedUserData skips sqlite shm and wal files that checkpoint removes', () => {
+  const pack = mkdtempSync(join(tmpdir(), 'biu-dev-shm-'))
+  const home = mkdtempSync(join(tmpdir(), 'biu-home-shm-'))
+  mkdirSync(join(pack, 'packages'), { recursive: true })
+  mkdirSync(join(pack, DATA_DIR_NAME), { recursive: true })
+  writeFileSync(join(pack, 'package.json'), '{}')
+  writeFileSync(join(pack, DATA_DIR_NAME, 'marker.txt'), 'keep')
+  writeFileSync(join(pack, DATA_DIR_NAME, 'custom.sqlite-shm'), 'shm')
+  writeFileSync(join(pack, DATA_DIR_NAME, 'custom.sqlite-wal'), 'wal')
+  adoptPackedUserData(pack, home, join(home, 'workspace'))
+  assert.equal(readFileSync(join(home, DATA_DIR_NAME, 'marker.txt'), 'utf8'), 'keep')
+  assert.equal(existsSync(join(home, DATA_DIR_NAME, 'custom.sqlite-shm')), false)
+  assert.equal(existsSync(join(home, DATA_DIR_NAME, 'custom.sqlite-wal')), false)
+})
+
+test('adoptPackedUserData keeps the dev checkout database when copying into a desktop home', () => {
+  const pack = mkdtempSync(join(tmpdir(), 'biu-dev-'))
+  const home = mkdtempSync(join(tmpdir(), 'biu-desktop-'))
+  mkdirSync(join(pack, 'packages'), { recursive: true })
+  mkdirSync(join(pack, DATA_DIR_NAME), { recursive: true })
+  writeFileSync(join(pack, 'package.json'), '{}')
+  writeFileSync(join(pack, DATA_DIR_NAME, 'online-marker.txt'), 'keep')
+  adoptPackedUserData(pack, home, join(home, 'workspace'))
+  assert.equal(readFileSync(join(home, DATA_DIR_NAME, 'online-marker.txt'), 'utf8'), 'keep')
+  assert.equal(readFileSync(join(pack, DATA_DIR_NAME, 'online-marker.txt'), 'utf8'), 'keep')
 })
 
 test('migrateDataDir folds leftover asset layers into CAS and rewrites refs', () => {

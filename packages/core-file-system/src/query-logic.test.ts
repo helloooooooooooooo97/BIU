@@ -8,12 +8,14 @@ import {
   emptyFilterRule,
   encodeListFilter,
   filterTreeStateKey,
+  filterEditorStateKey,
   flatFiltersToTree,
   matchFilterNode,
   matchListFilterRecord,
   normalizeSorts,
   parseSortsInput,
   resolveViewFilterTree,
+  seedRecordFromViewFilters,
   moveList,
   sortRecordsBy,
 } from './query-logic.ts'
@@ -107,6 +109,8 @@ test('normalizeSorts falls back to a single field', () => {
   assert.equal(sorts.length, 1)
   assert.equal(sorts[0]?.field, 'dueAt')
   assert.equal(sorts[0]?.dir, 'desc')
+  assert.equal(sorts[0]?.id, 's:dueAt')
+  assert.equal(normalizeSorts(undefined, 'dueAt', 'desc')[0]?.id, sorts[0]?.id)
 })
 
 test('empty filterTree falls back to flat filters from the agent', () => {
@@ -127,9 +131,94 @@ test('filterTreeStateKey ignores node ids and treats empty as absent', () => {
   assert.equal(filterTreeStateKey(a), filterTreeStateKey(b))
 })
 
+test('filterEditorStateKey keeps empty rules so the frozen toolbar can add filters', () => {
+  const empty = emptyFilterGroup()
+  const drafting = emptyFilterGroup()
+  drafting.children.push(emptyFilterRule('tags'))
+  assert.equal(filterTreeStateKey(empty), filterTreeStateKey(drafting))
+  assert.notEqual(filterEditorStateKey(empty), filterEditorStateKey(drafting))
+})
+
 test('parseSortsInput accepts JSON strings', () => {
   const sorts = parseSortsInput('[{"field":"project","dir":"desc"}]')
   assert.equal(sorts[0]?.field, 'project')
   assert.equal(sorts[0]?.dir, 'desc')
+})
+
+const pagesSchema = {
+  fields: {
+    title: { type: 'string' as const, writable: true },
+    status: { type: 'select' as const, writable: true },
+    tags: { type: 'multi-select' as const, writable: true },
+    facet: { type: 'facet' as const, writable: true },
+    createdBy: { type: 'person' as const, writable: false },
+  },
+}
+
+test('seedRecordFromViewFilters prefills AND status and tags so the row stays in the view', () => {
+  const tree = emptyFilterGroup()
+  tree.children = [
+    { kind: 'rule', id: 'a', field: 'status', op: 'eq', value: 'open' },
+    { kind: 'rule', id: 'b', field: 'tags', op: 'eq', value: 'bug' },
+  ]
+  const seed = seedRecordFromViewFilters({}, tree, pagesSchema)
+  assert.equal(seed.status, 'open')
+  assert.deepEqual(seed.tags, ['bug'])
+  assert.equal(matchListFilterRecord({ id: '1', ...seed }, encodeListFilter({}, tree), pagesSchema), true)
+  assert.equal(matchListFilterRecord({ id: '2' }, encodeListFilter({}, tree), pagesSchema), false)
+})
+
+test('seedRecordFromViewFilters skips scope / neq and unknown tag locks', () => {
+  const tree = emptyFilterGroup()
+  tree.children = [
+    { kind: 'rule', id: 'a', field: 'status', op: 'neq', value: 'done' },
+    { kind: 'rule', id: 'b', field: 'tags', op: 'eq', value: 'bug' },
+  ]
+  const seed = seedRecordFromViewFilters({ $scope: 'workspace', tag: 'bug' }, tree, pagesSchema)
+  assert.equal('$scope' in seed, false)
+  assert.equal('tag' in seed, false)
+  assert.equal('status' in seed, false)
+  assert.deepEqual(seed.tags, ['bug'])
+})
+
+test('seedRecordFromViewFilters takes the first OR branch and writes facet tags', () => {
+  const tree = emptyFilterGroup()
+  tree.combinator = 'or'
+  tree.children = [
+    { kind: 'rule', id: 'a', field: 'facet', op: 'eq', value: 'dp' },
+    { kind: 'rule', id: 'b', field: 'status', op: 'eq', value: 'open' },
+  ]
+  const seed = seedRecordFromViewFilters({}, tree, pagesSchema)
+  assert.deepEqual(seed.facet, { tags: ['dp'] })
+  assert.equal('status' in seed, false)
+})
+
+test('filter and sort read flattened 标签 pack properties', () => {
+  const field = 'facet::movie::导演'
+  const rows = [
+    { id: '2', facet: { tags: ['movie'], values: { movie: { 导演: '乙' } } } },
+    { id: '1', facet: { tags: ['movie'], values: { movie: { 导演: '甲' } } } },
+    { id: '3', facet: { tags: ['movie'], values: { movie: { 导演: '甲' } } } },
+  ]
+  const packs = [{ id: 'movie', label: '电影', fields: [{ key: '导演', type: 'string' as const, label: '导演' }] }]
+  const tree = emptyFilterGroup()
+  tree.children = [{ kind: 'rule', id: 'r', field, op: 'eq', value: '甲' }]
+  assert.equal(matchFilterNode(rows[0]!, tree, undefined, packs), false)
+  assert.equal(matchFilterNode(rows[1]!, tree, undefined, packs), true)
+  assert.deepEqual(
+    sortRecordsBy(rows, [{ id: 's', field, dir: 'asc' }]).map((item) => item.id),
+    ['1', '3', '2'],
+  )
+})
+
+test('seedRecordFromViewFilters skips unknown and non-writable fields when schema is present', () => {
+  const tree = emptyFilterGroup()
+  tree.children = [
+    { kind: 'rule', id: 'a', field: 'createdBy', op: 'eq', value: 'ada' },
+    { kind: 'rule', id: 'b', field: 'nope', op: 'eq', value: 'x' },
+    { kind: 'rule', id: 'c', field: 'title', op: 'contains', value: '草稿' },
+  ]
+  const seed = seedRecordFromViewFilters({}, tree, pagesSchema)
+  assert.deepEqual(seed, { title: '草稿' })
 })
 

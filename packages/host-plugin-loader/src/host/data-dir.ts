@@ -1,5 +1,6 @@
 import { cpSync, existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { AsyncLocalStorage } from 'node:async_hooks'
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 export { BIU_SQLITE, EVENTS_SQLITE, adoptTwoSqlite } from './sqlite-two.ts'
 export {
   contentAddressHash,
@@ -18,7 +19,14 @@ export { openSqlite, configureSqlite, quoteSqlitePath, SQLITE_BUSY_TIMEOUT_MS, S
 export { ensureBiuAssetSchema, LATEST_BIU_SCHEMA, createLatestSchema } from './biu-schema.ts'
 export { migrateBiu, openAndMigrateBiu } from './biu-migrate.ts'
 export { migrateEvents, openAndMigrateEvents, LATEST_EVENTS_SCHEMA } from './events-migrate.ts'
-export { writeEditorContent, readEditorContent, rebuildContentRefs, replaceContentRefs } from './editor-content.ts'
+export {
+  EditorContentConflictError,
+  writeEditorContent,
+  readEditorContent,
+  readEditorContentRecord,
+  rebuildContentRefs,
+  replaceContentRefs,
+} from './editor-content.ts'
 export {
   liveAssetNames,
   gcCasAssets,
@@ -39,6 +47,11 @@ export const LEGACY_DATA_DIR_NAME = '.cordis'
 export const LEGACY_PAGE_ROOT = '.page'
 export const PAGE_ROOT = `${DATA_DIR_NAME}/page`
 export const PAGE_DB = `${DATA_DIR_NAME}/biu.sqlite`
+
+/** Runtime mode is read lazily so tests and embedded hosts can set it before boot. */
+export const isOnlineRuntime = () => process.env.BIU_ONLINE === '1'
+export const isDesktopRuntime = () => !isOnlineRuntime()
+
 /** Leftover page-only folder; new files go under `.biu/assets`. */
 export const PAGE_ASSETS = `${DATA_DIR_NAME}/page/assets`
 export const ASSETS_ROOT = `${DATA_DIR_NAME}/assets`
@@ -110,46 +123,155 @@ export function migrateDataDir(parent: string): string {
   migrateLegacyPageDir(parent)
   adoptTwoSqlite(dest)
   adoptCasAssets(dest)
+  mkdirSync(dest, { recursive: true })
+  let db: ReturnType<typeof openAndMigrateBiu> | undefined
   try {
-    const db = openAndMigrateBiu(join(dest, 'biu.sqlite'), { dataDir: dest, workspace: parent })
+    db = openAndMigrateBiu(join(dest, 'biu.sqlite'), { dataDir: dest, workspace: parent })
     db.exec('PRAGMA wal_checkpoint(TRUNCATE)')
-    db.close()
   } catch {
     /* dummy sqlite from tests */
+  } finally {
+    db?.close()
   }
   return dest
 }
 
+export type WorkspaceScope = { id: string; root: string }
+
+const workspaceScope = new AsyncLocalStorage<WorkspaceScope>()
+
+export function currentWorkspace() {
+  return workspaceScope.getStore()
+}
+
+/** 当前请求或任务里的工区。调用方不用把 workspaceId 逐层传下去。 */
+export function runWithWorkspace<T>(scope: WorkspaceScope, fn: () => T): T {
+  return workspaceScope.run(scope, fn)
+}
+
+const accountScope = new AsyncLocalStorage<string>()
+const requestWorkspaceScope = new AsyncLocalStorage<string>()
+const pluginScope = new AsyncLocalStorage<string>()
+
+export type McpTenant = {
+  credentialId: string
+  accountId: string
+  workspaceId: string
+  role: string
+  allowedTools: string[]
+}
+
+const mcpTenantScope = new AsyncLocalStorage<McpTenant>()
+
+export function currentMcpTenant() {
+  return mcpTenantScope.getStore() ?? null
+}
+
+export function runWithMcpTenant<T>(tenant: McpTenant, fn: () => T): T {
+  return mcpTenantScope.run(tenant, fn)
+}
+
+export function currentAccountId() {
+  return accountScope.getStore() || ''
+}
+
+/** 这次请求绑定的空间。没有请求头时用当前账号的活动空间。 */
+export function currentRequestWorkspaceId() {
+  return requestWorkspaceScope.getStore() || ''
+}
+
+/** Store 插件 apply/执行期间的包 ID，供 HTTP、WS 和工具注册边界捕获。 */
+export function currentPluginId() {
+  return pluginScope.getStore() || ''
+}
+
+export function runWithPlugin<T>(pluginId: string, fn: () => T): T {
+  if (!pluginId) return fn()
+  return pluginScope.run(pluginId, fn)
+}
+
+/** 这次 HTTP 请求是哪个登录账号。没有 token 时是空字符串。 */
+export function runWithAccount<T>(accountId: string, fn: () => T): T {
+  if (!accountId) return fn()
+  return accountScope.run(accountId, fn)
+}
+
+export function runWithRequestWorkspace<T>(workspaceId: string, fn: () => T): T {
+  if (!workspaceId) return fn()
+  return requestWorkspaceScope.run(workspaceId, fn)
+}
+
 /** Packaged Electron sets BIU_HOME to userData so replacing the .app does not wipe notes. */
 export function dataHome(): string {
-  return process.env.BIU_HOME || process.cwd()
+  return currentWorkspace()?.root || process.env.BIU_HOME || process.cwd()
 }
 
 export function dataDir(parent = dataHome()): string {
   return migrateDataDir(parent)
 }
 
+/**
+ * `dataPath(home, 'biu.sqlite')` 仍表示某个根下的文件。
+ * `dataPath('biu.sqlite')` 表示当前工区里的文件，避免把文件名当成根目录。
+ */
 export function dataPath(parent = dataHome(), ...parts: string[]): string {
+  if (parts.length === 0 && !isAbsolute(parent) && parent !== dataHome()) {
+    return join(dataDir(), parent)
+  }
   return join(dataDir(parent), ...parts)
+}
+
+export function biuSqlitePath(parent = dataHome()) {
+  return dataPath(parent, 'biu.sqlite')
+}
+
+export function eventsSqlitePath(parent = dataHome()) {
+  return dataPath(parent, 'events.sqlite')
+}
+
+export function profilePath(parent = dataHome()) {
+  return process.env.BIU_PROFILE || dataPath(parent, 'profile.json')
 }
 
 export function assetsRootPath(parent = dataHome()): string {
   return dataPath(parent, 'assets')
 }
 
+/** WAL 的 -shm / -wal 会在检查点之后消失。两边同时迁移时，列目录和复制之间它可能已经没了。 */
+function isSqliteRuntimeFile(name: string) {
+  return name.endsWith('.sqlite-shm') || name.endsWith('.sqlite-wal')
+}
+
 function copyMerge(src: string, dest: string) {
   if (!existsSync(src)) return
   mkdirSync(dest, { recursive: true })
-  for (const name of readdirSync(src)) {
+  let names: string[]
+  try {
+    names = readdirSync(src)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
+    throw error
+  }
+  for (const name of names) {
+    if (isSqliteRuntimeFile(name)) continue
     const from = join(src, name)
     const to = join(dest, name)
-    if (!existsSync(to)) {
-      cpSync(from, to, { recursive: true })
-      continue
+    try {
+      if (!existsSync(to)) {
+        cpSync(from, to, {
+          recursive: true,
+          filter: (path) => !isSqliteRuntimeFile(basename(path)),
+        })
+        continue
+      }
+      if (!existsSync(from)) continue
+      const fromStat = statSync(from)
+      const toStat = statSync(to)
+      if (fromStat.isDirectory() && toStat.isDirectory()) copyMerge(from, to)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue
+      throw error
     }
-    const fromStat = statSync(from)
-    const toStat = statSync(to)
-    if (fromStat.isDirectory() && toStat.isDirectory()) copyMerge(from, to)
   }
 }
 
@@ -157,12 +279,19 @@ function copyMerge(src: string, dest: string) {
  * Copy leftover pack-host / cwd data into the durable home.
  * Destination already-present files win. Plugin trees are copied, never renamed out of the app bundle.
  */
+function hasPackedData(parent: string) {
+  return [DATA_DIR_NAME, LEGACY_DATA_DIR_NAME, LEGACY_PAGE_ROOT].some((name) => existsSync(join(parent, name)))
+}
+
 export function adoptPackedUserData(fromRoot: string, dataRoot = dataHome(), workspace = join(dataRoot, 'workspace')) {
   const from = resolve(fromRoot)
   const dest = resolve(dataRoot)
-  migrateDataDir(from)
-  migrateDataDir(dest)
-  if (from === dest) {
+  const same = from === dest
+  // 数据根已经分开时，不要在仓库根目录凭空造一个 .biu。
+  // 只有旧目录真的还在，才就地迁移再复制过去。
+  if (same || hasPackedData(from)) migrateDataDir(from)
+  if (!same) migrateDataDir(dest)
+  if (same) {
     migrateLegacyPageDir(from, dest)
     return dest
   }
@@ -171,11 +300,15 @@ export function adoptPackedUserData(fromRoot: string, dataRoot = dataHome(), wor
   for (const name of ['.plugin', '.plugin-dev', '.workspace']) {
     copyMerge(join(from, name), join(workspace, name))
   }
-  for (const name of [DATA_DIR_NAME, LEGACY_DATA_DIR_NAME, LEGACY_PAGE_ROOT]) {
-    try {
-      rmSync(join(from, name), { recursive: true, force: true })
-    } catch {
-      /* signed / read-only pack-host */
+  // 开发仓库根目录如果还有旧的 .biu，本机 BIU_HOME 只能复制，不能删掉。
+  const liveCheckout = existsSync(join(from, 'package.json')) && existsSync(join(from, 'packages'))
+  if (!liveCheckout) {
+    for (const name of [DATA_DIR_NAME, LEGACY_DATA_DIR_NAME, LEGACY_PAGE_ROOT]) {
+      try {
+        rmSync(join(from, name), { recursive: true, force: true })
+      } catch {
+        /* signed / read-only pack-host */
+      }
     }
   }
   return dest

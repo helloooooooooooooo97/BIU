@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import {
   CheckCircleIcon,
   ListBulletIcon,
+  EllipsisHorizontalIcon,
   PlusIcon,
   Squares2X2Icon,
   XMarkIcon,
@@ -11,7 +12,6 @@ import {
   ChatBubbleLeftRightIcon,
   DocumentIcon,
   PuzzlePieceIcon,
-  RectangleStackIcon,
   RectangleGroupIcon,
   TagIcon,
   BoltIcon,
@@ -27,7 +27,7 @@ import type { SlotsService } from '@biu/web-slots'
 import { inspectorTabFromEvent, requestInspectorAction } from './chat-overlay.ts'
 import { getInspectorCaption, getInspectorCaptionVersion, subscribeInspectorCaptions } from './inspector-captions.ts'
 import { inspectorPanelMatches, inspectorViewProps, nextRepeatableTabId, pruneOpenedForCollections, resolveInspectorTab, slotTabId } from './inspector-panels.ts'
-import { HeadlessDismiss } from '@biu/public-ui'
+import { HeadlessDismiss } from '@biu/public-ui/headless-dismiss'
 import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import {
   getInspectorDbPath,
@@ -37,13 +37,18 @@ import {
   snapshotInspectorDbPaths,
   subscribeInspectorDbPath,
 } from '@biu/core-file-system/inspector-db-route'
+import {
+  bindInspectorPaneMenuDismiss,
+  getInspectorPaneMenu,
+  getInspectorPaneMenuVersion,
+  subscribeInspectorPaneMenu,
+} from '@biu/core-file-system/inspector-pane-menu'
 import { mergeInspectorBind, type SessionInspectorBind } from '@biu/type-session'
 
 function captionTableIcon(icon?: string) {
   const name = (icon ?? '').trim().toLowerCase()
   if (name === 'puzzle-piece' || name === 'puzzle') return PuzzlePieceIcon
-  if (name === 'tag') return TagIcon
-  if (name === 'rectangle-stack' || name === 'collection') return RectangleStackIcon
+  if (name === 'tag' || name === 'rectangle-stack' || name === 'collection') return TagIcon
   if (name === 'rectangle-group' || name === 'squares-2x2' || name === 'widgets') return RectangleGroupIcon
   if (name === 'check-circle' || name === 'check' || name === 'clipboard-document-list' || name === 'clipboard') return CheckCircleIcon
   if (name === 'chat-bubble' || name === 'chat-bubble-left-right') return ChatBubbleLeftRightIcon
@@ -83,6 +88,15 @@ function PaneLeafIcon({
   return <Squares2X2Icon {...chromeIcon} />
 }
 
+function closePaneLabel(paneId: string, kind?: string) {
+  const path = getInspectorDbPath(paneId).split('?')[0]
+  if (kind === 'record' && /\/pages(?:\/|$)/.test(path)) return '关闭页面'
+  if (kind === 'record') return '关闭记录'
+  if (kind === 'view') return '关闭视图'
+  if (kind === 'collection' || path.startsWith('/database/')) return '关闭表格'
+  return '关闭此栏'
+}
+
 export type SessionInspectorProps = {
   open: boolean
   width: number
@@ -108,12 +122,14 @@ export const SessionInspector = memo(function SessionInspector({
 }: SessionInspectorProps) {
   const sessionId = useSessionView((state) => state.sessionId)
   const sessions = useSessionView((state) => state.sessions)
+  const sessionBusy = useSessionView((state) => Boolean(state.sessionId && state.busySessions[state.sessionId]))
   const currentSession = sessions.find((item) => item.id === sessionId)
   const sessionIdentity = sessionId ? resolveSessionMascot(sessionId, currentSession?.mascot) : null
   const sessionLabel = (currentSession?.title || '').trim() || (sessionIdentity ? `${sessionIdentity.shape}` : '')
   const focusCallId = useSessionView((state) => state.focusCallId)
   const extras = useSlotEntries(slots, 'inspector-panels')
   const captionRev = useSyncExternalStore(subscribeInspectorCaptions, getInspectorCaptionVersion, () => 0)
+  const paneMenuRev = useSyncExternalStore(subscribeInspectorPaneMenu, getInspectorPaneMenuVersion, () => 0)
   const extraTabs = useMemo(() => {
     return [...extras]
       .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
@@ -143,7 +159,11 @@ export const SessionInspector = memo(function SessionInspector({
   const inspectorReady = useSessionView((state) => state.inspectorReady)
   const sessionInspector = useSessionView((state) => state.sessionInspector)
   const [plusOpen, setPlusOpen] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
   const plusRef = useRef<HTMLDivElement>(null)
+  const moreRef = useRef<HTMLDivElement>(null)
+  const moreMenuRef = useRef<HTMLDivElement>(null)
+  const [morePos, setMorePos] = useState<{ right: number; top: number } | null>(null)
   const plusMenuRef = useRef<HTMLDivElement>(null)
   const [plusPos, setPlusPos] = useState<{ right: number; top: number } | null>(null)
   const tabsRef = useRef<HTMLDivElement>(null)
@@ -303,6 +323,24 @@ export const SessionInspector = memo(function SessionInspector({
     })
   }, [plusOpen])
 
+  useLayoutEffect(() => {
+    if (!moreOpen) {
+      setMorePos(null)
+      return
+    }
+    const box = moreRef.current?.getBoundingClientRect()
+    if (!box) return
+    setMorePos({
+      right: Math.max(8, window.innerWidth - box.right),
+      top: box.bottom + 4,
+    })
+  }, [moreOpen])
+
+  useEffect(() => {
+    if (!moreOpen) return
+    return bindInspectorPaneMenuDismiss(() => setMoreOpen(false))
+  }, [moreOpen])
+
   useEffect(() => {
     const onMove = (event: PointerEvent) => {
       const drag = dragRef.current
@@ -447,6 +485,67 @@ export const SessionInspector = memo(function SessionInspector({
             )
           })}
         </div>
+        <div className="inspector-head-tools">
+        <div className="inspector-more" ref={moreRef}>
+          <button
+            type="button"
+            className={`chat-view-header-expand${moreOpen ? ' is-active' : ''}`}
+            title="更多"
+            aria-label="更多"
+            aria-expanded={moreOpen}
+            aria-haspopup="menu"
+            data-testid="inspector-more"
+            onClick={() => {
+              setPlusOpen(false)
+              setMoreOpen((prev) => !prev)
+            }}
+          >
+            <EllipsisHorizontalIcon {...chromeIcon} />
+          </button>
+          {moreOpen && morePos
+            ? createPortal(
+              <HeadlessDismiss
+                onDismiss={() => setMoreOpen(false)}
+                insideRef={moreRef}
+                inside={(node) => node instanceof Element && Boolean(node.closest('.fsdb-detail-more-menu, .inspector-more-menu'))}
+              >
+                <div
+                  ref={moreMenuRef}
+                  className="inspector-more-menu is-fixed"
+                  role="menu"
+                  data-biu-ignore
+                  data-testid="inspector-more-menu"
+                  data-caption-rev={captionRev}
+                  data-pane-menu-rev={paneMenuRev}
+                  style={{ right: morePos.right, top: morePos.top }}
+                >
+                  {tab ? getInspectorPaneMenu(tab) : null}
+                  {(() => {
+                    if (!tab) return null
+                    const kind = getInspectorCaption(tab)?.kind
+                    const label = closePaneLabel(tab, kind)
+                    return (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="fsdb-detail-more-item"
+                        data-testid="inspector-more-close"
+                        onClick={() => {
+                          setMoreOpen(false)
+                          closeOpenedTab(tab)
+                        }}
+                      >
+                        <XMarkIcon {...chromeIcon} />
+                        {label}
+                      </button>
+                    )
+                  })()}
+                </div>
+              </HeadlessDismiss>,
+              document.body,
+            )
+            : null}
+        </div>
         <div className="inspector-add" ref={plusRef}>
           <button
             type="button"
@@ -455,7 +554,10 @@ export const SessionInspector = memo(function SessionInspector({
             aria-label="添加可展示的内容"
             aria-expanded={plusOpen}
             data-testid="inspector-add"
-            onClick={() => setPlusOpen((prev) => !prev)}
+            onClick={() => {
+              setMoreOpen(false)
+              setPlusOpen((prev) => !prev)
+            }}
           >
             <PlusIcon {...chromeIcon} />
           </button>
@@ -477,7 +579,7 @@ export const SessionInspector = memo(function SessionInspector({
                     size={22}
                     sessionId={sessionId}
                     identity={sessionIdentity}
-                    busy={Boolean(currentSession?.busy)}
+                    busy={sessionBusy}
                     animate={false}
                     title={sessionLabel}
                   />
@@ -497,7 +599,6 @@ export const SessionInspector = memo(function SessionInspector({
                     >
                       <PaneLeafIcon kind={caption?.kind} mode={caption?.mode} icon={caption?.icon} emoji={caption?.emoji} Fallback={item.Icon} />
                       <span className="min-w-0 flex-1 truncate">{caption?.label || item.label}</span>
-                      <CheckCircleIcon aria-hidden className="size-4 shrink-0 inspector-add-check" />
                     </button>
                     <button
                       type="button"
@@ -551,6 +652,7 @@ export const SessionInspector = memo(function SessionInspector({
             document.body,
           )
           : null}
+        </div>
         </div>
       </div>
 

@@ -1,5 +1,6 @@
 import { isValidElement, useCallback, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react'
-import { HeadlessDismiss, useWorkspaceProfile } from '@biu/public-ui'
+import { HeadlessDismiss } from '@biu/public-ui/headless-dismiss'
+import { useWorkspaceProfile } from '@biu/public-ui/use-workspace-profile'
 import { SidebarMascot } from './sidebar-mascot.tsx'
 import { resolveSessionMascot } from './session-mascot.ts'
 
@@ -203,6 +204,10 @@ export function BrandCornerMascot({
           aria-expanded={tapToDance ? undefined : expanded}
           data-dock-tip={tip}
           data-testid="brand-corner-mascot-toggle"
+          onPointerDown={(event) => {
+            if (tapToDance) return
+            if (onToggle) event.preventDefault()
+          }}
           onClick={() => {
             if (tapToDance) {
               playTapDance()

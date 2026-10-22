@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { ChatPane, ChatStage } from '@biu/public-ui'
+import { lazy, Suspense, useEffect, useState } from 'react'
+import { ChatPane, ChatStage } from '@biu/public-ui/chat-pane'
 import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import { MASCOT_COLOR_NAME, MASCOT_EYE_NAME, MASCOT_SHAPE_NAME } from '@biu/type-session'
 import type { CollectionChrome, FsCellProps, FsContentProps } from '@biu/type-file-system/ui'
@@ -7,12 +7,12 @@ import type { DbRecord } from '@biu/type-file-system'
 import {
   mergeDispatchedUsageIntoNodes,
   projectNodes,
-  SESSION_LOAD_TURNS,
+  TRAJECTORY_TAIL_TURNS,
   type ChatNode,
   type SessionEvent,
   type TrajectoryUsage,
 } from '@biu/web-session-view'
-import { ChatNodeList } from './thread.tsx'
+const ChatNodeList = lazy(() => import('./thread.tsx').then((m) => ({ default: m.ChatNodeList })))
 
 function sessionMascot(record: DbRecord) {
   const raw = record.mascot
@@ -78,9 +78,12 @@ function SessionRecordChat({ record, value }: FsContentProps) {
   const [nodes, setNodes] = useState<ChatNode[]>(() => nodesFromContent(value) ?? [])
   useEffect(() => {
     const seeded = nodesFromContent(value)
-    if (seeded) setNodes(seeded)
+    if (seeded?.length) {
+      setNodes(seeded)
+      return
+    }
     const ac = new AbortController()
-    void fetch(`/api/sessions/${sessionId}?turns=${SESSION_LOAD_TURNS}`, { signal: ac.signal })
+    void fetch(`/api/sessions/${sessionId}?turns=${TRAJECTORY_TAIL_TURNS}`, { signal: ac.signal })
       .then((res) => (res.ok ? res.json() : null))
       .then((body) => {
         if (!body || !Array.isArray(body.events)) return
@@ -99,12 +102,14 @@ function SessionRecordChat({ record, value }: FsContentProps) {
       embed
       thread={
         <ChatStage variant="pane">
-          <ChatNodeList
-            nodes={nodes}
-            sessionId={sessionId}
-            onInspect={() => undefined}
-            onFork={() => undefined}
-          />
+          <Suspense fallback={null}>
+            <ChatNodeList
+              nodes={nodes}
+              sessionId={sessionId}
+              onInspect={() => undefined}
+              onFork={() => undefined}
+            />
+          </Suspense>
         </ChatStage>
       }
     />

@@ -11,11 +11,11 @@ function asRecord(skill: SkillRecord, withNotes = true, files: string[] = []): D
     source: skill.source,
     notes: withNotes ? skill.notes : '',
     fileList: files.join('\n'),
+    tags: skill.tags,
     ...recordBuiltinValues({
       createdAt: skill.createdAt,
       updatedAt: skill.updatedAt,
       parentId: '',
-      tags: skill.tags,
       emoji: skill.emoji,
     }),
   }
@@ -79,7 +79,7 @@ export function skillsCollection(skills: SkillsService): CollectionSpec {
         },
       },
     },
-    list: () => skills.list().map((item) => asRecord(item, false, skills.filesOf(item.id))),
+    list: () => skills.list().map((item) => asRecord(item, false)),
     get: (id) => {
       const skill = skills.recordOrNull(id)
       return skill ? asRecord(skill, true, skills.filesOf(skill.id)) : null

@@ -1,4 +1,5 @@
-import { useState, type ReactNode } from 'react'
+import { useLayoutEffect, useState, type ReactNode, type RefObject } from 'react'
+import { createPortal } from 'react-dom'
 import {
   DndContext,
   DragOverlay,
@@ -16,9 +17,11 @@ import { PlusIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import type { FieldSpec, FieldType } from '@biu/type-file-system'
 import { CellSelect } from '@biu/database-ui'
-import { overlayZ } from '@biu/public-ui'
-import { FieldGlyph } from './fsdb-cells.tsx'
+import { HEADLESS_DISMISS_IGNORE, HeadlessDismiss } from '@biu/public-ui/headless-dismiss'
+import { overlayPortalRoot, overlayZ } from '@biu/public-ui/overlay-portal'
 import { DndGrip } from './dnd-grip.tsx'
+import { FieldGlyph } from './fsdb-cells.tsx'
+
 import {
   countFilterRules,
   defaultOpForKind,
@@ -34,6 +37,9 @@ import {
   type FilterRule,
   type SortRule,
 } from '../query-logic.ts'
+
+const QUERY_FLYOUT_IGNORE = `${HEADLESS_DISMISS_IGNORE}, .db-search-menu, .fsdb-cellselect-menu, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]`
+const QUERY_FLYOUT_NEST = '.db-search-menu, .fsdb-cellselect-menu, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]'
 
 export type QueryField = { key: string; kind: FieldType; field: FieldSpec }
 
@@ -118,6 +124,69 @@ function SortableSortRow({
   )
 }
 
+/** 挂到 overlay 根：主栏 overflow 和左侧合成层都裁不到。 */
+export function QueryFlyout({
+  anchorRef,
+  onClose,
+  ignoreSelector,
+  inside,
+  children,
+}: {
+  anchorRef: RefObject<HTMLElement | null>
+  onClose: () => void
+  ignoreSelector?: string
+  inside?: (node: Node) => boolean
+  children: ReactNode
+}) {
+  const [box, setBox] = useState({ top: 0, right: 8 })
+  useLayoutEffect(() => {
+    const el = anchorRef.current
+    if (!el) return
+    const place = () => {
+      const rect = el.getBoundingClientRect()
+      setBox({
+        top: rect.bottom + 6,
+        right: Math.max(8, Math.round(window.innerWidth - rect.right)),
+      })
+    }
+    place()
+    window.addEventListener('resize', place)
+    window.addEventListener('scroll', place, true)
+    return () => {
+      window.removeEventListener('resize', place)
+      window.removeEventListener('scroll', place, true)
+    }
+  }, [anchorRef])
+  if (typeof document === 'undefined') return null
+  const ignore = ignoreSelector ? `${QUERY_FLYOUT_IGNORE}, ${ignoreSelector}` : QUERY_FLYOUT_IGNORE
+  return createPortal(
+    <HeadlessDismiss
+      onDismiss={onClose}
+      ignoreSelector={ignore}
+      inside={(node) =>
+        Boolean(
+          (node instanceof Element && node.closest(QUERY_FLYOUT_NEST)) ||
+            (node instanceof Node && anchorRef.current?.contains(node)) ||
+            inside?.(node),
+        )
+      }
+    >
+      <div
+        className="fsdb-page fsdb-query-flyout"
+        data-testid="fsdb-query-flyout"
+        style={{
+          top: box.top,
+          right: box.right,
+          zIndex: overlayZ(200),
+        }}
+      >
+        {children}
+      </div>
+    </HeadlessDismiss>,
+    overlayPortalRoot() ?? document.body,
+  )
+}
+
 export function SortQueryMenu({
   sorts,
   fields,
@@ -140,8 +209,7 @@ export function SortQueryMenu({
   const activeKind = fields.find((item) => item.key === active?.field)?.kind ?? 'string'
 
   return (
-    <div className="fsdb-query-menu" role="menu">
-      <div className="tasks-sort-head">排序</div>
+    <div className="fsdb-tool-flyout fsdb-query-menu is-sort" role="menu">
       {sorts.length ? (
         <DndContext
           sensors={sensors}
@@ -218,8 +286,7 @@ export function FilterQueryMenu({
   onChange: (next: FilterGroup) => void
 }) {
   return (
-    <div className="fsdb-query-menu is-filter" role="menu">
-      <div className="tasks-sort-head">筛选</div>
+    <div className="fsdb-tool-flyout fsdb-query-menu is-filter" role="menu">
       <FilterGroupEditor
         group={tree}
         fields={fields}
@@ -365,7 +432,7 @@ function FilterRuleRow({
             value={rule.value}
             options={options}
             variant="field"
-            allowCreate
+            allowCreate={!field?.field.enum?.length}
             placeholder="值"
             chips={kind === 'select' || kind === 'multi-select' || kind === 'facet'}
             onSelect={(next) => onChange({ ...rule, value: next })}

@@ -5,6 +5,15 @@ import { adoptPackedUserData } from '@biu/host-plugin-loader/data-dir'
 import { lanIPv4, printReadyBanner } from './banner.ts'
 import './types.ts'
 
+process.env.BIU_ONLINE = process.env.BIU_ONLINE || '1'
+
+// tsx 发现这里监听了信号就不会再代为退出。直接退出，端口和 sqlite 马上让出来。
+function exitOnStop() {
+  process.exit(0)
+}
+process.once('SIGTERM', exitOnStop)
+process.once('SIGINT', exitOnStop)
+
 const rootDir = findRepoRoot()
 const dataRoot = process.env.BIU_HOME || rootDir
 adoptPackedUserData(rootDir, dataRoot, process.env.CORDIS_WORKSPACE || join(dataRoot, 'workspace'))
@@ -18,30 +27,25 @@ ctx.logger.exporter({
   },
 })
 
-let sharePort = 0
 let resolveHostReady!: (port: number) => void
 const hostReady = new Promise<number>((resolve) => {
   resolveHostReady = resolve
 })
-ctx.on('http/share-ready', ({ port }) => {
-  sharePort = port
-})
 ctx.on('http/ready', ({ port: ready }) => {
   resolveHostReady(ready)
-  const ui = process.env.SHARE_PROXY_UI ? 'http://127.0.0.1:5173/' : `http://127.0.0.1:${ready}/`
+  const ui = process.env.SHARE_PROXY_UI || `http://127.0.0.1:${ready}/`
   const api = `http://127.0.0.1:${ready}/`
+  const share = `${ui.replace(/\/$/, '')}/share`
   if (process.env.SHARE_PROXY_UI) {
-    ctx.logger('boot').info(`api ${api}  ·  ui ${ui}`)
+    ctx.logger('boot').info(`api ${api}  ·  ui ${ui}  ·  share ${share}`)
     return
   }
-  const paint = () => {
-    const lan = lanIPv4()
-    const share =
-      sharePort > 0 ? `http://${lan ?? '127.0.0.1'}:${sharePort}/share` : undefined
-    printReadyBanner({ ui, api, share })
-  }
-  if (sharePort > 0) paint()
-  else setTimeout(paint, 80)
+  const lan = lanIPv4()
+  printReadyBanner({
+    ui,
+    api,
+    share: lan ? `http://${lan}:${ready}/share` : share,
+  })
 })
 
 async function boot() {

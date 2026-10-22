@@ -1,5 +1,7 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { WrenchScrewdriverIcon, XMarkIcon } from '@heroicons/react/16/solid'
+import { CellMulti } from '@biu/database-ui'
+import { normalizeSchemaValue, type CollectionSchemaPack, type SchemaFieldValue } from '@biu/type-file-system'
 import {
   bindSessionView,
   type SessionViewService,
@@ -31,8 +33,9 @@ interface SessionConfigFields {
   systemPrompt?: string
   agentMode?: AgentMode
   extraTools?: string[]
-  tags?: string[]
+  facet?: SchemaFieldValue
   pinned?: boolean
+  autoCompactInputTokens?: number
 }
 
 interface InspectorPayload {
@@ -45,10 +48,114 @@ interface InspectorPayload {
   effective?: SessionConfigFields & { agentMode: AgentMode; extraTools: string[]; provider: ChatProvider; model: string; systemPrompt: string }
   sources: InspectorSource[]
   tools: InspectorTool[]
+  contextWindow?: '200k' | '1m'
+  contextWindowTokens?: number
 }
 
 const fieldClass =
   'rounded-lg border border-(--dsw-border) bg-(--dsw-surface) px-2 py-1.5 text-[12px] text-(--dsw-label) outline-none'
+
+function slugFacetId(label: string, used: Set<string>) {
+  const base =
+    label
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 24) || 'facet'
+  let id = /^[a-z]/.test(base) ? base : `f-${base}`
+  let n = 2
+  while (used.has(id) || !/^[a-z][a-z0-9-]{0,31}$/.test(id)) {
+    id = `${base.slice(0, 20)}-${n}`
+    if (!/^[a-z]/.test(id)) id = `f-${id}`
+    n += 1
+  }
+  return id
+}
+
+function SessionFacetPicker({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: unknown
+  disabled?: boolean
+  onChange: (next: SchemaFieldValue) => void
+}) {
+  const parsed = normalizeSchemaValue(value)
+  const [catalog, setCatalog] = useState<CollectionSchemaPack[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    void fetch('/api/db/facets')
+      .then((res) => res.json())
+      .then((body: { facets?: CollectionSchemaPack[] }) => {
+        if (cancelled || !Array.isArray(body.facets)) return
+        setCatalog(body.facets)
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  function applyTags(nextIds: string[]) {
+    let packs = catalog
+    const used = new Set(packs.map((tag) => tag.id))
+    const resolved: string[] = []
+    for (const item of nextIds) {
+      if (used.has(item)) {
+        resolved.push(item)
+        continue
+      }
+      const hit = packs.find((tag) => tag.label === item)
+      if (hit) {
+        resolved.push(hit.id)
+        continue
+      }
+      const id = slugFacetId(item, used)
+      packs = [...packs, { id, label: item, fields: [] }]
+      used.add(id)
+      resolved.push(id)
+    }
+    const apply = () => {
+      const keep = new Set(resolved)
+      const values: SchemaFieldValue['values'] = {}
+      for (const id of resolved) values[id] = parsed.values[id] ?? {}
+      for (const [id, bag] of Object.entries(parsed.values)) {
+        if (keep.has(id)) values[id] = bag
+      }
+      onChange({ tags: resolved, values })
+    }
+    if (packs !== catalog) {
+      void fetch('/api/db/facets', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ facets: packs }),
+      })
+        .then((res) => {
+          if (!res.ok) return
+          setCatalog(packs)
+          apply()
+        })
+        .catch(() => undefined)
+      return
+    }
+    apply()
+  }
+
+  return (
+    <div className={disabled ? 'pointer-events-none opacity-50' : undefined}>
+      <CellMulti
+        values={parsed.tags}
+        options={catalog.map((tag) => ({ value: tag.id, label: tag.label }))}
+        onChange={applyTags}
+        multiple
+        placeholder="添加标签"
+      />
+    </div>
+  )
+}
 
 export type SessionConfigDialogProps = {
   open: boolean
@@ -69,9 +176,10 @@ export const SessionConfigDialog = memo(function SessionConfigDialog({
   const [busy, setBusy] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
   const [promptDraft, setPromptDraft] = useState('')
-  const [tagInput, setTagInput] = useState('')
+  const [compactDraft, setCompactDraft] = useState('')
   const titleFocusedRef = useRef(false)
   const promptFocusedRef = useRef(false)
+  const compactFocusedRef = useRef(false)
 
   const refresh = useCallback(async () => {
     if (!sessionId || !open) return
@@ -87,6 +195,11 @@ export const SessionConfigDialog = memo(function SessionConfigDialog({
             ? body.config.systemPrompt
             : (body.defaults?.systemPrompt ?? ''),
         )
+      }
+      if (!compactFocusedRef.current) {
+        const cap = body.contextWindowTokens && body.contextWindowTokens > 0 ? body.contextWindowTokens : 200_000
+        const tokens = body.config?.autoCompactInputTokens
+        setCompactDraft(String(tokens && tokens > 0 ? Math.min(tokens, cap) : cap))
       }
       setError('')
     } catch (err) {
@@ -116,7 +229,7 @@ export const SessionConfigDialog = memo(function SessionConfigDialog({
       })
       if (!res.ok) throw new Error(`保存失败 HTTP ${res.status}`)
       await refresh()
-      void sessionView.refreshSessions()
+      void sessionView.refreshSessions({ refresh: true })
     } catch (err) {
       setError(String(err))
     } finally {
@@ -209,38 +322,10 @@ export const SessionConfigDialog = memo(function SessionConfigDialog({
 
               <label className="flex flex-col gap-1 text-[11px] text-(--dsw-label-3)">
                 <span>标签 · 侧栏可按标签分组</span>
-                <div className="flex flex-wrap gap-1">
-                  {(data?.config?.tags ?? []).map((tag) => (
-                    <button
-                      key={tag}
-                      type="button"
-                      className="rounded-full border border-(--dsw-border) px-2 py-0.5 text-[11px] text-(--dsw-label-2) hover:border-(--dsw-danger) hover:text-(--dsw-danger)"
-                      title="移除标签"
-                      disabled={busy}
-                      onClick={() => {
-                        const next = (data?.config?.tags ?? []).filter((item) => item !== tag)
-                        void patchSessionConfig({ tags: next })
-                      }}
-                    >
-                      {tag} ×
-                    </button>
-                  ))}
-                </div>
-                <input
-                  className={fieldClass}
-                  value={tagInput}
-                  placeholder="输入后回车添加"
+                <SessionFacetPicker
+                  value={data?.config?.facet}
                   disabled={busy}
-                  onChange={(event) => setTagInput(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key !== 'Enter' && event.key !== ',') return
-                    event.preventDefault()
-                    const parts = tagInput.split(',').map((s) => s.trim()).filter(Boolean)
-                    if (!parts.length) return
-                    const next = [...new Set([...(data?.config?.tags ?? []), ...parts])]
-                    setTagInput('')
-                    void patchSessionConfig({ tags: next })
-                  }}
+                  onChange={(facet) => void patchSessionConfig({ facet })}
                 />
               </label>
 
@@ -265,6 +350,34 @@ export const SessionConfigDialog = memo(function SessionConfigDialog({
                     void patchSessionConfig({ systemPrompt: promptDraft })
                   }}
                 />
+              </label>
+
+              <label className="flex flex-col gap-1 text-[11px] text-(--dsw-label-3)">
+                <span>自动压缩上限（输入 token）</span>
+                <input
+                  className={fieldClass}
+                  inputMode="numeric"
+                  value={compactDraft}
+                  disabled={busy}
+                  data-testid="config-auto-compact"
+                  onChange={(event) => setCompactDraft(event.target.value.replace(/[^\d]/g, ''))}
+                  onFocus={() => {
+                    compactFocusedRef.current = true
+                  }}
+                  onBlur={() => {
+                    compactFocusedRef.current = false
+                    const cap = data?.contextWindowTokens && data.contextWindowTokens > 0 ? data.contextWindowTokens : 200_000
+                    const raw = compactDraft.trim() ? Number(compactDraft) : cap
+                    const next = Number.isFinite(raw) ? Math.min(Math.max(1, Math.floor(raw)), cap) : cap
+                    setCompactDraft(String(next))
+                    const prev = data?.config?.autoCompactInputTokens
+                    if (prev === next) return
+                    void patchSessionConfig({ autoCompactInputTokens: next })
+                  }}
+                />
+                <span>
+                  关不掉，只能改上限。当前模型上下文 {data?.contextWindowTokens ?? 200000} token，上限不能超过它。
+                </span>
               </label>
 
               <div className="flex flex-col gap-px">

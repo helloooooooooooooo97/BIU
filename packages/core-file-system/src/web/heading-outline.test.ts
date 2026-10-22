@@ -113,3 +113,13 @@ test('share phone outline is a tap button, not a side rail', () => {
   assert.doesNotMatch(src, /fsdb-share-outline-item/)
   assert.doesNotMatch(css, /html\.share \.fsdb-detail-float-nav,html\.share \.heading-outline-host/)
 })
+
+test('page outline hot zone is a 12px edge strip, not a 64px gutter', () => {
+  const css = readFileSync(resolve(import.meta.dirname, './fsdb-style.ts'), 'utf8')
+  const global = readFileSync(resolve(import.meta.dirname, '../../../../web/style.css'), 'utf8')
+  assert.match(css, /\.heading-outline-host\{[^}]*width:12px/)
+  assert.match(css, /\.heading-outline-host \.chat-outline::before\{[^}]*width:12px/)
+  assert.match(global, /\.chat-outline::before\s*\{[^}]*width:\s*12px/s)
+  assert.match(global, /\.chat-outline-rail\s*\{[^}]*pointer-events:\s*none/s)
+  assert.doesNotMatch(css, /\.heading-outline-host \.chat-outline::before\{[^}]*width:64px/)
+})

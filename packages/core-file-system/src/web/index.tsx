@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useState, useSyncExternalStore, type ComponentType } from 'react'
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useState, useSyncExternalStore, type ComponentType } from 'react'
 import type { Context } from 'cordis'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { CircleStackIcon } from '@heroicons/react/16/solid'
@@ -7,8 +7,7 @@ import { DATABASE_CHANNEL, type CollectionInfo } from '@biu/type-file-system'
 import type { CollectionChrome } from '@biu/type-file-system/ui'
 import { isLegacyDatabasePath, parseAppPath } from '@biu/web-session-view'
 import { pathForCenter, pathForCrumbTarget, type CrumbTarget } from './sidebar-nav.ts'
-import { CollectionBrowser } from './browser.tsx'
-import { ShareRoot } from './share-page.tsx'
+import { parseSharePath } from '../share-snapshot.ts'
 import { DatabaseInspectorBrowse, DatabaseInspectorTab, bindInspectorSnapshot, collectionTabIcon } from './inspector-database.tsx'
 import { applyDatabaseChannelPayload } from './inspector-db-route.ts'
 import { InspectorFollowToggle } from './inspector-follow.tsx'
@@ -17,7 +16,7 @@ import {
   bootLoadCollections,
   collectionNavKey,
 } from './nav-boot.ts'
-import { defaultViewId, pullSavedViews, pushAllSavedViews } from './view-storage.ts'
+import { defaultViewId } from './view-storage.ts'
 import { DATA_MODULE, DATA_MODULE_ID, DATA_MODULE_PATH, FACETS_COLLECTION_PATH, PAGE_BLOCKS_COLLECTION_PATH, VIEWS_COLLECTION_PATH, sortDataCollections } from './database-path.ts'
 import { pickMainDataRoute, readMainDataRoute, writeMainDataRoute } from './main-data-route.ts'
 import { facetsChrome } from './facet-chrome.tsx'
@@ -26,6 +25,27 @@ import { pageBlocksChrome } from './page-blocks-chrome.ts'
 import { viewsForRegisteredCollection } from './collection-nav.ts'
 import { builtinAllViewId } from '../catalog-views.ts'
 import { normalizeCollectionPath } from '../paths.ts'
+
+const ShareRoot = lazy(() => import('./share-page.tsx').then((m) => ({ default: m.ShareRoot })))
+const CollectionBrowser = lazy(() => import('./browser.tsx').then((m) => ({ default: m.CollectionBrowser })))
+
+if (typeof window !== 'undefined' && /(?:^|\/)database(?:\/|$)/.test(window.location.pathname)) {
+  void import('./browser.tsx')
+}
+
+function ShareRootSlot(props: {
+  chrome?: CollectionChrome
+  chromeFor?: (collection: string) => CollectionChrome | undefined
+  loadPlugins?: (token: string, pluginIds: string[], password: string) => Promise<void>
+}) {
+  const location = useLocation()
+  if (!parseSharePath(location.pathname)) return null
+  return (
+    <Suspense fallback={null}>
+      <ShareRoot {...props} />
+    </Suspense>
+  )
+}
 
 type SlotsService = {
   place: (slot: string, view: unknown, opts: { key: string; order?: number; props?: () => Record<string, unknown> }) => { dispose?: () => unknown }
@@ -62,8 +82,8 @@ const EMPTY_FILTERS: Record<string, string> = {}
 function CollectionPage(props: SlotProps) {
   const tables = (props.tables as CollectionInfo[] | undefined) ?? []
   const orderedTables = useMemo(() => {
-    const { user, system } = sortDataCollections(tables)
-    return [...user, ...system]
+    const { user, index, system } = sortDataCollections(tables)
+    return [...user, ...index, ...system]
   }, [tables])
   const ui = getDatabaseUi()
   const location = useLocation()
@@ -71,6 +91,10 @@ function CollectionPage(props: SlotProps) {
   const [expandedViewKey, setExpandedViewKey] = useState<string | null>(null)
   const parsed = useMemo(() => parseAppPath(location.pathname, [DATA_MODULE]), [location.pathname])
   const dataHome = parsed.kind === 'module' && parsed.moduleId === DATA_MODULE_ID
+  const scopeHome = useMemo(() => {
+    if (!dataHome) return false
+    return new URLSearchParams(location.search).get('home') === 'user'
+  }, [dataHome, location.search])
   const storedHome = useMemo(
     () => (dataHome ? pickMainDataRoute(readMainDataRoute(), orderedTables) : ''),
     [dataHome, orderedTables],
@@ -79,18 +103,16 @@ function CollectionPage(props: SlotProps) {
     () => (storedHome ? parseAppPath(storedHome, [DATA_MODULE]) : null),
     [storedHome],
   )
-  const collectionFromRoute =
+  const routeCollection =
     parsed.kind === 'collection-view' || parsed.kind === 'record'
-      ? parsed.collection
+      ? parsed
       : storedParsed && (storedParsed.kind === 'collection-view' || storedParsed.kind === 'record')
-        ? storedParsed.collection
-        : ''
-  const viewFromRoute =
-    parsed.kind === 'collection-view' || parsed.kind === 'record'
-      ? parsed.viewId
-      : storedParsed && (storedParsed.kind === 'collection-view' || storedParsed.kind === 'record')
-        ? storedParsed.viewId
-        : undefined
+        ? storedParsed
+        : null
+  const collectionFromRoute = routeCollection?.collection ?? ''
+  const viewFromRoute = routeCollection
+    ? routeCollection.viewId || builtinAllViewId(routeCollection.collection)
+    : undefined
   const recordFromRoute =
     parsed.kind === 'record'
       ? parsed.recordId
@@ -120,10 +142,6 @@ function CollectionPage(props: SlotProps) {
   }
 
   useEffect(() => {
-    void pullSavedViews().then(() => pushAllSavedViews())
-  }, [])
-
-  useEffect(() => {
     if (isLegacyDatabasePath(location.pathname) && (parsed.kind === 'collection-view' || parsed.kind === 'record')) {
       go(
         {
@@ -143,6 +161,7 @@ function CollectionPage(props: SlotProps) {
   useLayoutEffect(() => {
     if (!orderedTables.length) return
     if (!dataHome) return
+    if (scopeHome) return
     const stored = pickMainDataRoute(readMainDataRoute(), orderedTables)
     if (stored) {
       navigate(stored, { replace: true })
@@ -150,7 +169,7 @@ function CollectionPage(props: SlotProps) {
     }
     const first = orderedTables[0]!
     go({ collection: first.path, viewId: builtinAllViewId(first.path) }, { replace: true })
-  }, [dataHome, orderedTables])
+  }, [dataHome, orderedTables, scopeHome])
 
   useEffect(() => {
     if (parsed.kind !== 'collection-view' || parsed.viewId || recordFromRoute) return
@@ -169,6 +188,7 @@ function CollectionPage(props: SlotProps) {
   if (!currentPath) return null
   const title = row?.view?.title ?? row?.label ?? currentPath.replace(/^\//, '')
   return (
+    <Suspense fallback={null}>
     <CollectionBrowser
       moduleId={DATA_MODULE_ID}
       collectionPath={currentPath}
@@ -181,6 +201,8 @@ function CollectionPage(props: SlotProps) {
       routeViewId={viewFromRoute}
       expandedViewKey={expandedViewKey}
       onExpandedViewKeyChange={setExpandedViewKey}
+      scopeHome={scopeHome}
+      onOpenScopeHome={() => navigate(`${DATA_MODULE_PATH}?home=user`)}
       onOpenTable={(path, viewId) =>
           go({
             collection: path,
@@ -197,14 +219,25 @@ function CollectionPage(props: SlotProps) {
       }
       onCrumbTarget={(target: CrumbTarget) => navigate(pathForCrumbTarget(target))}
     />
+    </Suspense>
   )
 }
 
+let collectionsInflight: Promise<CollectionInfo[]> | null = null
+
 async function loadCollections(): Promise<CollectionInfo[]> {
-  const res = await fetch('/api/db/stat?path=/')
-  const body = (await res.json()) as { collections?: CollectionInfo[]; error?: string }
-  if (!res.ok) throw new Error(body.error || res.statusText)
-  return body.collections ?? []
+  if (collectionsInflight) return collectionsInflight
+  collectionsInflight = (async () => {
+    const res = await fetch('/api/db/stat?path=/')
+    const body = (await res.json()) as { collections?: CollectionInfo[]; error?: string }
+    if (!res.ok) throw new Error(body.error || res.statusText)
+    return body.collections ?? []
+  })()
+  try {
+    return await collectionsInflight
+  } finally {
+    collectionsInflight = null
+  }
 }
 
 let navErrors: string[] = []
@@ -283,6 +316,7 @@ export function apply(ctx: Context) {
   const mounted = new Map<string, () => void>()
   const inspectorOffers = new Map<string, () => void>()
   let liveTables: CollectionInfo[] = []
+  let snapshotCollections: CollectionInfo[] = []
 
   function syncInspectorOffers(tables: CollectionInfo[]) {
     const wanted = tables.filter((row) => row.view?.inspector)
@@ -319,7 +353,7 @@ export function apply(ctx: Context) {
   }
 
   slots.place('root-overlays', RegisterErrorBanner, { key: 'fsdb-nav-errors', order: 80 })
-  slots.place('root-overlays', ShareRoot, {
+  slots.place('root-overlays', ShareRootSlot, {
     key: 'fsdb-share-root',
     order: 90,
     props: () => ({
@@ -396,11 +430,16 @@ export function apply(ctx: Context) {
   const sync = async (rows?: CollectionInfo[]) => {
     let next = rows
     if (!next) {
-      try {
-        next = await loadCollections()
-      } catch {
-        return
+      if (collectionNavKey(snapshotCollections)) next = snapshotCollections
+      else {
+        try {
+          next = await loadCollections()
+        } catch {
+          return
+        }
       }
+    } else {
+      snapshotCollections = next
     }
     await runSync(next)
     if (!collectionNavKey(next)) return
@@ -425,7 +464,8 @@ export function apply(ctx: Context) {
     })
     let lastKey = ''
     const fromSnap = () => {
-      const rows = snapshot.get?.().collections ?? []
+      const rows = (snapshot.get?.().collections ?? []) as CollectionInfo[]
+      snapshotCollections = rows
       const key = collectionNavKey(rows)
       if (!key || key === lastKey) return
       lastKey = key
@@ -458,13 +498,13 @@ export function apply(ctx: Context) {
     }
   })
   void bootLoadCollections(loadCollections, {
-    stopped: () => stopped,
+    stopped: () => stopped || Boolean(collectionNavKey(snapshotCollections)),
     onUpdate: (rows) => {
-      if (stopped || !collectionNavKey(rows)) return
+      if (stopped || collectionNavKey(snapshotCollections) || !collectionNavKey(rows)) return
       void sync(rows)
     },
   }).then((rows) => {
-    if (stopped) return
+    if (stopped || collectionNavKey(snapshotCollections)) return
     return sync(rows)
   })
 }

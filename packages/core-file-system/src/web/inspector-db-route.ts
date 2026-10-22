@@ -3,13 +3,15 @@
 import { CONTENT_JUMP_EVENT, parseContentJump } from '@biu/type-file-system'
 import { parseAppPath } from '@biu/web-session-view'
 import { normalizeCollectionPath } from '../paths.ts'
+import { builtinAllViewId } from '../catalog-views.ts'
 import { DATA_MODULE, DATA_MODULE_PATH, databaseAllViewPath, databaseRecordPath, databaseViewPath } from './database-path.ts'
-import { upsertSavedView, savedViewFromRecord } from './view-storage.ts'
+import { activeViewStorageKey, upsertSavedView, savedViewFromRecord } from './view-storage.ts'
 import { type SavedView } from './saved-view.ts'
 
 const DEFAULT_PANE = 'database'
 const listeners = new Set<() => void>()
 const paths = new Map<string, string>()
+const workingViews = new Map<string, string>()
 const abandonedPanes = new Set<string>()
 const working = new Set<string>()
 const workingListeners = new Set<() => void>()
@@ -136,7 +138,48 @@ export function getInspectorDbPath(paneId = DEFAULT_PANE) {
 /** 测试用：清空内存路径。 */
 export function resetInspectorDbPathMemory() {
   paths.clear()
+  workingViews.clear()
   abandonedPanes.clear()
+}
+
+/** 用户或 Agent 切到的视图。之后的库操作停在这张视图上。 */
+export function rememberInspectorWorkingView(collection: string, viewId: string) {
+  const path = normalizeCollectionPath(collection)
+  const id = String(viewId ?? '').trim()
+  if (!path || path === '/' || !id) return
+  workingViews.set(path, id)
+}
+
+function storedActiveView(collection: string) {
+  try {
+    return String(localStorage.getItem(activeViewStorageKey(collection)) ?? '').trim()
+  } catch {
+    return ''
+  }
+}
+
+function inspectorWorkingView(collection: string) {
+  return workingViews.get(collection) || storedActiveView(collection)
+}
+
+function viewOnInspectorPath(href: string) {
+  const parsed = parseAppPath(String(href || '').split('?')[0], [DATA_MODULE])
+  if (parsed.kind !== 'collection-view' && parsed.kind !== 'record') return null
+  const viewId = String(parsed.viewId ?? '').trim()
+  if (!parsed.collection || !viewId) return null
+  return { collection: normalizeCollectionPath(parsed.collection), viewId }
+}
+
+/** 这张表已经打开的列表栏。记录栏不算，避免把列表视图盖掉。 */
+function openListView(collection: string) {
+  const tabId = inspectorCollectionTabId(collection)
+  for (const id of paneIdsForTab(tabId)) {
+    const href = getInspectorDbPath(id)
+    if (!href || inspectorPathIsRecord(href)) continue
+    const parsed = viewOnInspectorPath(href)
+    if (parsed?.collection === collection) return parsed.viewId
+  }
+  return ''
 }
 
 export function setInspectorDbPath(paneId: string, next?: string) {
@@ -333,9 +376,26 @@ export function showInInspector(collection: string, href: string, opts?: { uniqu
   revealInspectorPane(tabId, href)
 }
 
+/** 已打开这条记录的检查器栏切到回收站里的同一行，主界面不动。 */
+export function moveInspectorRecordsToTrash(collection: string, recordIds: string[]) {
+  const table = normalizeCollectionPath(collection)
+  if (!table || table === '/' || table === '/trash') return
+  const viewId = builtinAllViewId('/trash')
+  for (const raw of recordIds) {
+    const recordId = String(raw ?? '').trim()
+    if (!recordId) continue
+    const pane = paneWithPageKey(databaseRecordPath(table, recordId))
+    if (!pane) continue
+    const trashId = `${table.replace(/^\//, '')}::${recordId}`
+    setInspectorDbPath(pane, databaseRecordPath('/trash', trashId, viewId))
+  }
+}
+
 /** 右侧检查器打开这条记录。同一页已在检查器里则只聚焦。 */
-export function showRecordInInspector(collection: string, recordId: string) {
-  showInInspector(collection, databaseRecordPath(collection, recordId), { unique: true })
+export function showRecordInInspector(collection: string, recordId: string, viewId?: string | null) {
+  const view = String(viewId ?? '').trim() || openListView(collection) || inspectorWorkingView(collection)
+  if (view) rememberInspectorWorkingView(collection, view)
+  showInInspector(collection, databaseRecordPath(collection, recordId, view || undefined), { unique: true })
 }
 
 /** 工具查/改/删某张表后：打开右侧检查器并切到该表（中间主界面不动）。 */
@@ -345,12 +405,14 @@ export function applyDatabaseReveal(reveal: unknown) {
   const collection = normalizeCollectionPath(String(rec.collection ?? ''))
   if (!collection || collection === '/') return
   const unique = rec.unique === true
+  const explicitView = String(rec.viewId ?? '').trim()
+  if (explicitView) rememberInspectorWorkingView(collection, explicitView)
   const recordId = String(rec.recordId ?? '').trim()
+  const viewId = explicitView || openListView(collection) || inspectorWorkingView(collection)
   if (recordId) {
-    showInInspector(collection, databaseRecordPath(collection, recordId), { unique })
+    showInInspector(collection, databaseRecordPath(collection, recordId, viewId || undefined), { unique })
     return
   }
-  const viewId = String(rec.viewId ?? '').trim()
   if (viewId) {
     showInInspector(collection, databaseViewPath(collection, viewId), { unique })
     return

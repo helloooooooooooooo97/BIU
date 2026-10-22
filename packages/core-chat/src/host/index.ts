@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dataDir, dataHome, dataPath } from '@biu/host-plugin-loader/data-dir'
+import { dirname } from 'node:path'
+import { currentAccountId, currentRequestWorkspaceId, dataDir, dataHome, dataPath, isOnlineRuntime } from '@biu/host-plugin-loader/data-dir'
 import { Service, type Context } from 'cordis'
 import type { ChatMessage } from './chat-types.ts'
 import { isAgentToolMode, normalizeAgentMode, type AgentToolMode } from '@biu/host-tools'
@@ -10,7 +11,7 @@ import type { ChatProvider, LlmModelDef, LlmEndpointDef, ReasoningEffort, Thinki
 export type { ChatProvider, LlmModelDef, LlmEndpointDef, ReasoningEffort, ThinkingMode, ContextWindow, SpeedMode, ModelCapabilities } from './model-catalog.ts'
 export { LLM_ENDPOINT_PRESETS, LLM_MODEL_CATALOG } from './model-catalog.ts'
 import { currentSessionId } from '@biu/host-sessions/scope'
-import { isSessionCompactPoint, sanitizeLiveUiContext, type SessionConfig, type SessionEvent } from '@biu/type-session'
+import { isSessionCompactPoint, sanitizeLiveUiContext, type SessionConfig, type SessionEvent, type SessionRecord } from '@biu/type-session'
 import { DEFAULT_TAIL_TURNS, sliceBeforeTurns, sliceTailTurns } from '@biu/host-sessions/window'
 import {
   DEFAULT_TRAJECTORY_TURNS,
@@ -20,9 +21,72 @@ import {
   findEvent,
 } from '@biu/host-sessions/trajectory'
 import { estimateTokens, liftToolImages } from '@biu/host-sessions'
-import { readArtifactFile } from '@biu/host-sessions/artifacts'
+import { persistPastedImages, readArtifactFile, withPastedImagePicks } from '@biu/host-sessions/artifacts'
 import { collectLiveDispatchedTasks } from '@biu/host-live-sessions/usage'
 import { loadLiveDispatchTasks, registerChatInspectorRoutes } from './inspector.ts'
+import { forwardCloud } from '@biu/host-account/mirror'
+
+function workspaceIsCloud(ctx: Context) {
+  if (isOnlineRuntime()) return true
+  try {
+    const account = ctx.get('account') as {
+      workspaceLocation?: (id: string) => string
+      store?: { activeWorkspaceId?: () => string | null }
+    } | undefined
+    const workspaceId = currentRequestWorkspaceId() || account?.store?.activeWorkspaceId?.() || ''
+    return Boolean(workspaceId && account?.workspaceLocation?.(workspaceId) === 'cloud')
+  } catch {
+    return false
+  }
+}
+
+type CloudExecution = {
+  sessionId: string
+  leaseId: string
+  workspaceId: string
+  origin: string
+  token: string
+  heartbeat: ReturnType<typeof setInterval>
+  finishing?: Promise<void>
+}
+
+const CLOUD_SESSION_SECRET_KEYS = new Set(['apikey', 'apikeys', 'authorization', 'xapikey'])
+
+export function redactCloudSessionSecrets(record: SessionRecord): SessionRecord {
+  const scrub = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(scrub)
+    if (!value || typeof value !== 'object') return value
+    const out: Record<string, unknown> = {}
+    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+      const normalized = key.toLowerCase().replace(/[-_]/g, '')
+      if (CLOUD_SESSION_SECRET_KEYS.has(normalized)) continue
+      out[key] = scrub(child)
+    }
+    return out
+  }
+  return scrub(record) as SessionRecord
+}
+
+function accountRuntime(ctx: Context) {
+  try {
+    return ctx.get('account') as {
+      cloudConnection?: (localAccountId: string) => { origin: string; token: string } | null
+      linkedCloud?: (localAccountId?: string) => { origin: string; token: string } | null
+      markRemote?: (collection: string, id: string) => void
+      workspaceLocation?: (workspaceId: string) => 'device' | 'cloud'
+      store?: {
+        activeWorkspaceId(): string | null
+        acquireExecutionLease(accountId: string, sessionId: string, executorId: string): { leaseId: string; expiresAt: number }
+        renewExecutionLease(accountId: string, sessionId: string, leaseId: string): unknown
+        requireExecutionLease(accountId: string, sessionId: string, leaseId: string): void
+        releaseExecutionLease(accountId: string, sessionId: string, leaseId: string): unknown
+        hasExecutionLease(sessionId: string): boolean
+      }
+    }
+  } catch {
+    return null
+  }
+}
 
 export type { ChatMessage }
 
@@ -70,8 +134,11 @@ interface ChatConfig {
   >
 }
 
-function configPath() {
-  return dataPath(dataHome(), 'chat-config.json')
+function configPath(accountId = '') {
+  const localAccount = !isOnlineRuntime() ? accountId.trim().replace(/[^a-zA-Z0-9_-]/g, '') : ''
+  return localAccount
+    ? dataPath(dataHome(), 'chat-config', `${localAccount}.json`)
+    : dataPath(dataHome(), 'chat-config.json')
 }
 
 function emptyKeys(): Record<string, string> {
@@ -115,43 +182,53 @@ function hint(key: string) {
   return `${key.slice(0, 3)}…${key.slice(-4)}`
 }
 
-function readPersisted(): Partial<ChatConfig> | null {
+function readPersisted(accountId = ''): Partial<ChatConfig> | null {
   try {
-    return JSON.parse(readFileSync(configPath(), 'utf8')) as Partial<ChatConfig>
+    return cloudSafePersistedConfig(
+      JSON.parse(readFileSync(configPath(accountId), 'utf8')) as Partial<ChatConfig>,
+    )
   } catch {
     return null
   }
 }
 
-function writePersisted(config: ChatConfig) {
+export function cloudSafePersistedConfig(
+  saved: Partial<ChatConfig> | null,
+  online = isOnlineRuntime(),
+): Partial<ChatConfig> | null {
+  if (!saved || !online) return saved
+  const safe = { ...saved, apiKeys: emptyKeys() } as Partial<ChatConfig> & { apiKey?: unknown }
+  delete safe.apiKey
+  return safe
+}
+
+export function persistedChatConfig(config: ChatConfig, online = isOnlineRuntime()) {
+  return {
+    endpointId: config.endpointId,
+    provider: config.provider,
+    model: config.model,
+    systemPrompt: config.systemPrompt,
+    agentMode: config.agentMode,
+    extraTools: config.extraTools,
+    thinking: config.thinking,
+    reasoningEffort: config.reasoningEffort,
+    contextWindow: config.contextWindow,
+    speed: config.speed,
+    modelPrefs: config.modelPrefs,
+    ...(!online ? { apiKeys: config.apiKeys } : {}),
+    baseUrls: config.baseUrls,
+    customEndpoints: config.customEndpoints,
+    customModels: config.customModels,
+    blockedEndpoints: config.blockedEndpoints,
+  }
+}
+
+function writePersisted(config: ChatConfig, accountId = '') {
+  const path = configPath(accountId)
   const dir = dataDir(dataHome())
   mkdirSync(dir, { recursive: true })
-  writeFileSync(
-    configPath(),
-    `${JSON.stringify(
-      {
-        endpointId: config.endpointId,
-        provider: config.provider,
-        model: config.model,
-        systemPrompt: config.systemPrompt,
-        agentMode: config.agentMode,
-        extraTools: config.extraTools,
-        thinking: config.thinking,
-        reasoningEffort: config.reasoningEffort,
-        contextWindow: config.contextWindow,
-        speed: config.speed,
-        modelPrefs: config.modelPrefs,
-        apiKeys: config.apiKeys,
-        baseUrls: config.baseUrls,
-        customEndpoints: config.customEndpoints,
-        customModels: config.customModels,
-        blockedEndpoints: config.blockedEndpoints,
-      },
-      null,
-      2,
-    )}\n`,
-    'utf8',
-  )
+  mkdirSync(dirname(path), { recursive: true })
+  writeFileSync(path, `${JSON.stringify(persistedChatConfig(config), null, 2)}\n`, 'utf8')
 }
 
 function parseAgentMode(value: unknown, fallback: AgentToolMode): AgentToolMode {
@@ -408,6 +485,7 @@ function blockEndpoint(config: ChatConfig, id: string) {
 }
 
 export class ChatService extends Service {
+  private activeAccountId = ''
   private config = mergePersisted(defaults(), readPersisted())
 
   constructor(ctx: Context) {
@@ -434,6 +512,15 @@ export class ChatService extends Service {
         '这与极简 / 标准 / 数据工具模式无关：Goal 是会话上的目标合同，工具集仍由当前 Agent 模式决定。',
       ].join('\n')
     })
+    this.syncLlm()
+    this.syncToolsMode()
+  }
+
+  activateAccount(accountId = currentAccountId()) {
+    const next = isOnlineRuntime() ? '' : accountId
+    if (next === this.activeAccountId) return
+    this.activeAccountId = next
+    this.config = mergePersisted(defaults(), readPersisted(next))
     this.syncLlm()
     this.syncToolsMode()
   }
@@ -479,6 +566,8 @@ export class ChatService extends Service {
       capabilities: inferModelCapabilities(this.config.model, this.config.provider),
       /** 当前默认入口是否已配置（兼容旧语义，供 banner 等使用）。 */
       configured: current ? endpointConfigured(this.config, current) : Boolean((this.config.apiKeys[this.config.provider] ?? '').trim()),
+      acceptsApiKeys: !isOnlineRuntime(),
+      secretsLocalOnly: true,
       hint: hint(this.config.apiKeys[this.config.endpointId] ?? this.config.apiKeys[this.config.provider] ?? ''),
       baseUrl: current ? effectiveBaseUrl(this.config, current) : '',
       /** 各入口是否已配置 key + baseUrl。 */
@@ -551,6 +640,17 @@ export class ChatService extends Service {
       ...(config?.title ? { title: config.title } : {}),
     }
     return { defaults: defaultsView, config, effective }
+  }
+
+  /** 这条会话当前模型实际用的上下文窗口。 */
+  contextWindowFor(sessionId?: string | null): ContextWindow {
+    const { effective } = this.resolveEffective(sessionId)
+    const provider = effective.provider as ChatProvider
+    const caps = inferModelCapabilities(effective.model, provider)
+    const endpointId = (effective as { endpointId?: string }).endpointId ?? this.config.endpointId
+    const prefs = this.config.modelPrefs[prefKey(endpointId, effective.model)]
+    if (hasKnob(caps, 'context')) return prefs?.contextWindow ?? this.config.contextWindow
+    return '200k'
   }
 
   resolverKey(provider: ChatProvider): string {
@@ -643,7 +743,7 @@ export class ChatService extends Service {
     this.syncLlm()
     if (opts?.persist !== false) {
       try {
-        writePersisted(this.config)
+        writePersisted(this.config, this.activeAccountId)
       } catch (error) {
         console.warn('[chat] failed to persist config', error)
       }
@@ -665,7 +765,7 @@ export class ChatService extends Service {
     this.syncLlm()
     if (opts?.persist !== false) {
       try {
-        writePersisted(this.config)
+        writePersisted(this.config, this.activeAccountId)
       } catch (error) {
         console.warn('[chat] failed to persist config', error)
       }
@@ -886,7 +986,7 @@ export class ChatService extends Service {
     this.syncToolsMode()
     if (opts?.persist !== false) {
       try {
-        writePersisted(this.config)
+        writePersisted(this.config, this.activeAccountId)
       } catch (error) {
         console.warn('[chat] failed to persist config', error)
       }
@@ -1009,8 +1109,198 @@ declare module 'cordis' {
   }
 }
 
+export async function openSessionHttpPayload(ctx: Context, id: string, limitTurns: number) {
+  const record = await ctx.sessions.get(id)
+  if (!record || !ctx.sessions.inWorkspace(id)) return { status: 404 as const, body: { error: 'unknown session' } }
+  if (databaseOf(ctx)?.facets.isDeleted('/sessions', record.id)) {
+    return { status: 404 as const, body: { error: 'unknown session' } }
+  }
+  const window = sliceTailTurns(record.events, limitTurns)
+  const payload: Record<string, unknown> = {
+    id: record.id,
+    version: record.version,
+    events: window.events,
+    hasMore: window.hasMore,
+    totalTurns: window.totalTurns,
+    totalEvents: window.totalEvents,
+    oldestSeq: window.oldestSeq,
+    newestSeq: window.newestSeq,
+    ...(record.project ? { project: record.project } : {}),
+    ...(record.mascot ? { mascot: record.mascot } : {}),
+    ...(record.config ? { config: record.config } : {}),
+  }
+  let liveTasks: Awaited<ReturnType<typeof loadLiveDispatchTasks>> = []
+  try {
+    liveTasks = await loadLiveDispatchTasks(ctx, record.id)
+  } catch {
+    liveTasks = []
+  }
+  const workerIds = new Set(
+    liveTasks.map((task) => task.sessionId).filter((id) => id && id !== record.id),
+  )
+  let summaries: Awaited<ReturnType<typeof ctx.sessions.listSummaries>> = []
+  if (workerIds.size) {
+    try {
+      summaries = liveSessionItems(ctx, await ctx.sessions.listSummaries())
+    } catch {
+      summaries = []
+    }
+  }
+  const workers = []
+  const titles = new Map<string, string>()
+  const mascots = new Map<string, NonNullable<(typeof summaries)[number]['mascot']>>()
+  const projects = new Map<string, { name: string; path?: string }>()
+  for (const item of summaries) {
+    if (!workerIds.has(item.id)) continue
+    titles.set(item.id, item.title)
+    if (item.mascot) mascots.set(item.id, item.mascot)
+    if (item.project?.name) {
+      projects.set(item.id, {
+        name: item.project.name,
+        ...(item.project.path ? { path: item.project.path } : {}),
+      })
+    }
+  }
+  for (const id of workerIds) {
+    try {
+      const worker = await ctx.sessions.require(id)
+      workers.push({ id, events: worker.events })
+    } catch {
+      // 执行会话读失败不能挡住当前这条。
+    }
+  }
+  const dispatched = collectLiveDispatchedTasks(record.id, record.events, workers, liveTasks)
+  payload.dispatchedUsage = dispatched.total
+  payload.dispatchedUsageByTurn = Object.fromEntries(
+    Object.entries(dispatched.byLiveTurn).map(([key, value]) => [key, value.usage]),
+  )
+  payload.dispatchedTasksByTurn = Object.fromEntries(
+    Object.entries(dispatched.byLiveTurn).map(([key, value]) => [
+      key,
+      value.tasks.map((task) => ({
+        ...task,
+        title: titles.get(task.sessionId) ?? task.sessionId.slice(0, 8),
+        ...(mascots.get(task.sessionId) ? { mascot: mascots.get(task.sessionId) } : {}),
+        ...(projects.get(task.sessionId) ? { project: projects.get(task.sessionId) } : {}),
+      })),
+    ]),
+  )
+  return { status: 200 as const, body: payload }
+}
+
 export function apply(ctx: Context) {
   const chat = new ChatService(ctx)
+  const cloudExecutions = new Map<string, CloudExecution>()
+
+  const beginCloudExecution = async (sessionId: string) => {
+    if (isOnlineRuntime() || !workspaceIsCloud(ctx)) return null
+    const previous = cloudExecutions.get(sessionId)
+    if (previous) {
+      if (!previous.finishing) return previous
+      await previous.finishing
+    }
+    const localAccountId = currentAccountId()
+    const runtime = accountRuntime(ctx)
+    const connection = runtime?.linkedCloud?.(localAccountId) ?? (localAccountId ? runtime?.cloudConnection?.(localAccountId) : null)
+    if (!connection) throw new Error('请先登录云端账号')
+    const workspaceId = runtime?.store?.activeWorkspaceId() ?? ''
+    const response = await fetch(`${connection.origin}/api/sessions/${encodeURIComponent(sessionId)}/execution-lease`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${connection.token}`,
+        'content-type': 'application/json',
+        ...(workspaceId ? { 'x-biu-workspace-id': workspaceId } : {}),
+      },
+      body: JSON.stringify({ executorId: `desktop:${localAccountId}` }),
+    })
+    const payload = (await response.json().catch(() => ({}))) as { leaseId?: string; error?: string }
+    if (!response.ok || !payload.leaseId) throw new Error(payload.error || '无法取得云端会话执行权')
+    const heartbeat = setInterval(() => {
+      void fetch(`${connection.origin}/api/sessions/${encodeURIComponent(sessionId)}/execution-lease`, {
+        method: 'PATCH',
+        headers: {
+          authorization: `Bearer ${connection.token}`,
+          'content-type': 'application/json',
+          ...(workspaceId ? { 'x-biu-workspace-id': workspaceId } : {}),
+        },
+        body: JSON.stringify({ leaseId: payload.leaseId }),
+      }).catch(() => undefined)
+    }, 30_000)
+    const execution = {
+      sessionId,
+      leaseId: payload.leaseId,
+      workspaceId,
+      origin: connection.origin,
+      token: connection.token,
+      heartbeat,
+    }
+    cloudExecutions.set(sessionId, execution)
+    return execution
+  }
+
+  const finishCloudExecution = async (sessionId: string) => {
+    const execution = cloudExecutions.get(sessionId)
+    if (!execution) return
+    if (execution.finishing) return execution.finishing
+    execution.finishing = (async () => {
+      clearInterval(execution.heartbeat)
+      try {
+        const record = await ctx.sessions.get(sessionId)
+        if (record) {
+          const cloudRecord = redactCloudSessionSecrets(record)
+          delete cloudRecord.project
+          const response = await fetch(
+            `${execution.origin}/api/sessions/${encodeURIComponent(sessionId)}/execution-sync`,
+            {
+              method: 'POST',
+              headers: {
+                authorization: `Bearer ${execution.token}`,
+                'content-type': 'application/json',
+                ...(execution.workspaceId ? { 'x-biu-workspace-id': execution.workspaceId } : {}),
+              },
+              body: JSON.stringify({ leaseId: execution.leaseId, record: cloudRecord }),
+            },
+          )
+          if (!response.ok) {
+            const body = (await response.json().catch(() => ({}))) as { error?: string }
+            console.warn('[chat] cloud session sync failed', sessionId, body.error || response.status)
+          }
+        }
+      } catch (error) {
+        console.warn('[chat] cloud session sync failed', sessionId, error)
+      } finally {
+        await fetch(`${execution.origin}/api/sessions/${encodeURIComponent(sessionId)}/execution-lease`, {
+          method: 'DELETE',
+          headers: {
+            authorization: `Bearer ${execution.token}`,
+            'content-type': 'application/json',
+            ...(execution.workspaceId ? { 'x-biu-workspace-id': execution.workspaceId } : {}),
+          },
+          body: JSON.stringify({ leaseId: execution.leaseId }),
+        }).catch(() => undefined)
+        if (cloudExecutions.get(sessionId) === execution) cloudExecutions.delete(sessionId)
+      }
+    })()
+    return execution.finishing
+  }
+
+  ctx.on('agent/status', (event) => {
+    const payload = event as { sessionId?: string; status?: string }
+    const sessionId = String(payload.sessionId ?? '')
+    if (
+      sessionId &&
+      payload.status === 'idle' &&
+      !ctx.agents.isBusy(sessionId) &&
+      ctx.agents.inboxPending(sessionId) === 0
+    ) {
+      void finishCloudExecution(sessionId)
+    }
+  })
+  ctx.on('dispose', () => {
+    for (const execution of cloudExecutions.values()) clearInterval(execution.heartbeat)
+    cloudExecutions.clear()
+  })
+
   ctx.hub.register({
     id: 'chat',
     title: '对话',
@@ -1020,9 +1310,11 @@ export function apply(ctx: Context) {
   })
 
   ctx.http.route('GET', '/api/chat/config', (route) => {
+    chat.activateAccount()
     route.send(200, chat.publicView())
   })
   ctx.http.route('POST', '/api/chat/config', async (route) => {
+    chat.activateAccount()
     const payload = (await route.json()) as Partial<{
       endpointId: string
       provider: ChatProvider
@@ -1039,9 +1331,17 @@ export function apply(ctx: Context) {
       removeCustomEndpoint: string
       removeCustomModel: string
     }>
+    const includesSecret =
+      typeof payload.apiKey === 'string' ||
+      Boolean(payload.setApiKey && Object.values(payload.setApiKey).some((value) => typeof value === 'string' && value.length > 0))
+    if (isOnlineRuntime() && includesSecret) {
+      route.send(403, { error: 'AI API Token 只能保存在运行 Agent 的设备上' })
+      return
+    }
     route.send(200, chat.patch(payload ?? {}))
   })
   ctx.http.route('POST', '/api/chat/config/test', async (route) => {
+    chat.activateAccount()
     const payload = ((await route.json().catch(() => null)) ?? {}) as {
       endpointId?: string
       apiKey?: string
@@ -1049,6 +1349,10 @@ export function apply(ctx: Context) {
       model?: string
     }
     try {
+      if (isOnlineRuntime() && typeof payload.apiKey === 'string' && payload.apiKey.trim()) {
+        route.send(403, { ok: false, detail: 'AI API Token 只能在本机测试，不能发送到云端' })
+        return
+      }
       const result = await chat.testConnection(payload)
       if (result.ok) {
         const config = chat.markEndpointReachable(result.endpointId, {
@@ -1071,10 +1375,50 @@ export function apply(ctx: Context) {
   ctx.http.route('POST', '/api/sessions', async (route) => {
     const payload = ((await route.json().catch(() => null)) ?? {}) as {
       title?: string
+      id?: string
     }
-    const record = await ctx.sessions.create(undefined, {
+    let sessionId =
+      typeof payload.id === 'string' && /^[0-9a-f-]{36}$/i.test(payload.id)
+        ? payload.id
+        : globalThis.crypto.randomUUID()
+    if (!isOnlineRuntime()) {
+      const runtime = accountRuntime(ctx)
+      const workspaceId = runtime?.store?.activeWorkspaceId() ?? ''
+      if (workspaceId && runtime?.workspaceLocation?.(workspaceId) === 'cloud') {
+        const localAccountId = currentAccountId()
+        const connection = runtime.linkedCloud?.(localAccountId) ?? (localAccountId ? runtime.cloudConnection?.(localAccountId) : null)
+        if (!connection) return route.send(401, { error: '请先登录云端账号' })
+        let remote: Response
+        try {
+          remote = await fetch(`${connection.origin}/api/sessions`, {
+            method: 'POST',
+            headers: {
+              authorization: `Bearer ${connection.token}`,
+              'content-type': 'application/json',
+              'x-biu-workspace-id': workspaceId,
+            },
+            body: JSON.stringify({ id: sessionId, title: payload.title }),
+          })
+        } catch {
+          return route.send(503, { error: '云端暂时连不上' })
+        }
+        const remoteBody = (await remote.json().catch(() => ({}))) as { id?: string; error?: string }
+        if (!remote.ok || !remoteBody.id) {
+          return route.send(remote.status, { error: remoteBody.error || '创建云端会话失败' })
+        }
+        sessionId = remoteBody.id
+      }
+    }
+    const record = await ctx.sessions.create(sessionId, {
       ...(typeof payload.title === 'string' ? { title: payload.title } : {}),
     })
+    if (!isOnlineRuntime()) {
+      const runtime = accountRuntime(ctx)
+      const workspaceId = runtime?.store?.activeWorkspaceId() ?? ''
+      if (workspaceId && runtime?.workspaceLocation?.(workspaceId) === 'cloud') {
+        runtime.markRemote?.('/sessions', record.id)
+      }
+    }
     route.send(201, {
       id: record.id,
       version: record.version,
@@ -1093,8 +1437,10 @@ export function apply(ctx: Context) {
         systemPrompt?: string | null
         agentMode?: AgentToolMode
         extraTools?: string[]
+        facet?: SessionConfig['facet']
         tags?: string[]
         pinned?: boolean
+        autoCompactInputTokens?: number | null
         inspector?: SessionConfig['inspector'] | null
       } = {}
       if (typeof payload.title === 'string' || payload.title === null) patch.title = payload.title as string | null
@@ -1107,8 +1453,15 @@ export function apply(ctx: Context) {
       }
       if (isAgentToolMode(payload.agentMode)) patch.agentMode = payload.agentMode
       if (Array.isArray(payload.extraTools)) patch.extraTools = payload.extraTools.map((name) => String(name))
+      if (payload.facet && typeof payload.facet === 'object' && !Array.isArray(payload.facet)) {
+        patch.facet = payload.facet as SessionConfig['facet']
+      }
       if (Array.isArray(payload.tags)) patch.tags = payload.tags.map((name) => String(name))
       if (typeof payload.pinned === 'boolean') patch.pinned = payload.pinned
+      if (typeof payload.autoCompactInputTokens === 'number') {
+        const cap = chat.contextWindowFor(route.params.id) === '1m' ? 1_000_000 : 200_000
+        patch.autoCompactInputTokens = Math.min(Math.max(1, Math.floor(payload.autoCompactInputTokens)), cap)
+      }
       if (payload.inspector === null) patch.inspector = null
       else if (payload.inspector && typeof payload.inspector === 'object' && !Array.isArray(payload.inspector)) {
         patch.inspector = payload.inspector as SessionConfig['inspector']
@@ -1142,22 +1495,79 @@ export function apply(ctx: Context) {
         eventCount: item.eventCount,
         title: item.title,
         updatedAt: item.updatedAt,
+        ...(item.lastMessageAt ? { lastMessageAt: item.lastMessageAt } : {}),
         busy: ctx.agents.isBusy(item.id),
         ...(item.project ? { project: item.project } : {}),
         ...(item.mascot ? { mascot: item.mascot } : {}),
-        tags: item.config?.tags ?? [],
+        ...(item.config?.facet ? { facet: item.config.facet } : {}),
         pinned: Boolean(item.config?.pinned),
         ...(item.config?.inspector ? { inspector: item.config.inspector } : {}),
         ...(item.config?.goal ? { goal: item.config.goal } : {}),
       })),
     })
   })
-  ctx.http.route('GET', '/api/sessions/:id', async (route) => {
-    const record = await ctx.sessions.get(route.params.id)
-    if (!record) return route.send(404, { error: 'unknown session' })
-    if (databaseOf(ctx)?.facets.isDeleted('/sessions', record.id)) {
-      return route.send(404, { error: 'unknown session' })
+  const visibleSession = async (id: string) => {
+    const record = await ctx.sessions.get(id)
+    return record && ctx.sessions.inWorkspace(id) ? record : null
+  }
+  ctx.http.route('POST', '/api/sessions/:id/execution-lease', async (route) => {
+    try {
+      if (!(await visibleSession(route.params.id))) return route.send(404, { error: 'unknown session' })
+      const accountId = currentAccountId()
+      const store = accountRuntime(ctx)?.store
+      if (!accountId || !store) return route.send(401, { error: '需要登录' })
+      const body = (await route.json().catch(() => ({}))) as { executorId?: string }
+      route.send(201, store.acquireExecutionLease(accountId, route.params.id, String(body.executorId ?? 'device')))
+    } catch (error) {
+      const status = Number((error as { status?: number }).status) || 400
+      route.send(status, { error: error instanceof Error ? error.message : String(error) })
     }
+  })
+  ctx.http.route('PATCH', '/api/sessions/:id/execution-lease', async (route) => {
+    try {
+      const accountId = currentAccountId()
+      const store = accountRuntime(ctx)?.store
+      if (!accountId || !store) return route.send(401, { error: '需要登录' })
+      const body = (await route.json().catch(() => ({}))) as { leaseId?: string }
+      route.send(200, store.renewExecutionLease(accountId, route.params.id, String(body.leaseId ?? '')))
+    } catch (error) {
+      const status = Number((error as { status?: number }).status) || 400
+      route.send(status, { error: error instanceof Error ? error.message : String(error) })
+    }
+  })
+  ctx.http.route('DELETE', '/api/sessions/:id/execution-lease', async (route) => {
+    try {
+      const accountId = currentAccountId()
+      const store = accountRuntime(ctx)?.store
+      if (!accountId || !store) return route.send(401, { error: '需要登录' })
+      const body = (await route.json().catch(() => ({}))) as { leaseId?: string }
+      route.send(200, store.releaseExecutionLease(accountId, route.params.id, String(body.leaseId ?? '')))
+    } catch (error) {
+      route.send(400, { error: error instanceof Error ? error.message : String(error) })
+    }
+  })
+  ctx.http.route('POST', '/api/sessions/:id/execution-sync', async (route) => {
+    try {
+      if (!(await visibleSession(route.params.id))) return route.send(404, { error: 'unknown session' })
+      const accountId = currentAccountId()
+      const store = accountRuntime(ctx)?.store
+      if (!accountId || !store) return route.send(401, { error: '需要登录' })
+      const body = (await route.json().catch(() => ({}))) as { leaseId?: string; record?: SessionRecord }
+      store.requireExecutionLease(accountId, route.params.id, String(body.leaseId ?? ''))
+      if (!body.record || body.record.id !== route.params.id || !Array.isArray(body.record.events)) {
+        return route.send(400, { error: '无效的会话记录' })
+      }
+      const record = { ...body.record }
+      delete record.project
+      await ctx.sessions.replace(record)
+      store.releaseExecutionLease(accountId, route.params.id, String(body.leaseId ?? ''))
+      route.send(200, { ok: true, eventCount: record.events.length })
+    } catch (error) {
+      const status = Number((error as { status?: number }).status) || 400
+      route.send(status, { error: error instanceof Error ? error.message : String(error) })
+    }
+  })
+  ctx.http.route('GET', '/api/sessions/:id', async (route) => {
     const turnsRaw = route.query.get('turns')
     const limitTurns =
       turnsRaw == null || turnsRaw === ''
@@ -1165,59 +1575,11 @@ export function apply(ctx: Context) {
         : turnsRaw === 'all'
           ? 0
           : Math.max(0, Number(turnsRaw) || DEFAULT_TAIL_TURNS)
-    const window = sliceTailTurns(record.events, limitTurns)
-    const payload: Record<string, unknown> = {
-      id: record.id,
-      version: record.version,
-      events: window.events,
-      hasMore: window.hasMore,
-      totalTurns: window.totalTurns,
-      totalEvents: window.totalEvents,
-      oldestSeq: window.oldestSeq,
-      newestSeq: window.newestSeq,
-      ...(record.project ? { project: record.project } : {}),
-      ...(record.mascot ? { mascot: record.mascot } : {}),
-      ...(record.config ? { config: record.config } : {}),
-    }
-    const summaries = liveSessionItems(ctx, await ctx.sessions.listSummaries())
-    const workers = []
-    const titles = new Map<string, string>()
-    const mascots = new Map<string, NonNullable<(typeof summaries)[number]['mascot']>>()
-    const projects = new Map<string, { name: string; path?: string }>()
-    for (const item of summaries) {
-      titles.set(item.id, item.title)
-      if (item.mascot) mascots.set(item.id, item.mascot)
-      if (item.project?.name) {
-        projects.set(item.id, {
-          name: item.project.name,
-          ...(item.project.path ? { path: item.project.path } : {}),
-        })
-      }
-      if (item.id === record.id) continue
-      const worker = await ctx.sessions.require(item.id)
-      workers.push({ id: item.id, events: worker.events })
-    }
-    const liveTasks = await loadLiveDispatchTasks(ctx, record.id)
-    const dispatched = collectLiveDispatchedTasks(record.id, record.events, workers, liveTasks)
-    payload.dispatchedUsage = dispatched.total
-    payload.dispatchedUsageByTurn = Object.fromEntries(
-      Object.entries(dispatched.byLiveTurn).map(([key, value]) => [key, value.usage]),
-    )
-    payload.dispatchedTasksByTurn = Object.fromEntries(
-      Object.entries(dispatched.byLiveTurn).map(([key, value]) => [
-        key,
-        value.tasks.map((task) => ({
-          ...task,
-          title: titles.get(task.sessionId) ?? task.sessionId.slice(0, 8),
-          ...(mascots.get(task.sessionId) ? { mascot: mascots.get(task.sessionId) } : {}),
-          ...(projects.get(task.sessionId) ? { project: projects.get(task.sessionId) } : {}),
-        })),
-      ]),
-    )
-    route.send(200, payload)
+    const result = await openSessionHttpPayload(ctx, route.params.id, limitTurns)
+    route.send(result.status, result.body)
   })
   ctx.http.route('GET', '/api/sessions/:id/events', async (route) => {
-    const record = await ctx.sessions.get(route.params.id)
+    const record = await visibleSession(route.params.id)
     if (!record) return route.send(404, { error: 'unknown session' })
     const beforeSeq = Number(route.query.get('beforeSeq'))
     if (!Number.isFinite(beforeSeq)) return route.send(400, { error: 'beforeSeq required' })
@@ -1238,7 +1600,7 @@ export function apply(ctx: Context) {
     })
   })
   ctx.http.route('GET', '/api/sessions/:id/trajectory', async (route) => {
-    const record = await ctx.sessions.get(route.params.id)
+    const record = await visibleSession(route.params.id)
     if (!record) return route.send(404, { error: 'unknown session' })
     const beforeSeqRaw = route.query.get('beforeSeq')
     const turnsRaw = route.query.get('turns')
@@ -1264,7 +1626,7 @@ export function apply(ctx: Context) {
   })
   // 全量 usage 趋势：提取本会话所有 step（assistant/message 带 usage）的 input/output/cacheRead，供前端折线图。
   ctx.http.route('GET', '/api/sessions/:id/usage-trend', async (route) => {
-    const record = await ctx.sessions.get(route.params.id)
+    const record = await visibleSession(route.params.id)
     if (!record) return route.send(404, { error: 'unknown session' })
     const points: Array<{ seq: number; turn: number; input: number; output: number; cache: number }> = []
     const compactions: number[] = []
@@ -1289,7 +1651,7 @@ export function apply(ctx: Context) {
   // 按 turn 取跨 session 统计：给定某 turn，返回 step 数 / 起止 / 耗时 / token 与额度消耗。
   // 供任务面板在展示 task_report 回传条时定位到 report.sessionId 所属 session 的该 turn 运行统计。
   ctx.http.route('GET', '/api/sessions/:id/turn-stats', async (route) => {
-    const record = await ctx.sessions.get(route.params.id)
+    const record = await visibleSession(route.params.id)
     if (!record) return route.send(404, { error: 'unknown session' })
     const turnsRaw = route.query.get('turn')
     const targetTurn =
@@ -1302,7 +1664,7 @@ export function apply(ctx: Context) {
     route.send(200, { turns: result as Record<string, TurnStat> })
   })
   ctx.http.route('GET', '/api/sessions/:id/artifacts/:name', async (route) => {
-    const record = await ctx.sessions.get(route.params.id)
+    const record = await visibleSession(route.params.id)
     if (!record) return route.send(404, { error: 'unknown session' })
     const file = await readArtifactFile(route.params.id, route.params.name)
     if (!file) return route.send(404, { error: 'unknown artifact' })
@@ -1315,7 +1677,7 @@ export function apply(ctx: Context) {
     route.res.end(file.data)
   })
   ctx.http.route('GET', '/api/sessions/:id/events/:seq', async (route) => {
-    const record = await ctx.sessions.get(route.params.id)
+    const record = await visibleSession(route.params.id)
     if (!record) return route.send(404, { error: 'unknown session' })
     const seq = Number(route.params.seq)
     if (!Number.isFinite(seq)) return route.send(400, { error: 'invalid seq' })
@@ -1324,7 +1686,7 @@ export function apply(ctx: Context) {
     route.send(200, { id: record.id, event })
   })
   ctx.http.route('GET', '/api/sessions/:id/events/:seq/request', async (route) => {
-    const record = await ctx.sessions.get(route.params.id)
+    const record = await visibleSession(route.params.id)
     if (!record) return route.send(404, { error: 'unknown session' })
     const seq = Number(route.params.seq)
     if (!Number.isFinite(seq)) return route.send(400, { error: 'invalid seq' })
@@ -1344,6 +1706,7 @@ export function apply(ctx: Context) {
     })
   })
   ctx.http.route('PUT', '/api/sessions/:id/project', async (route) => {
+    if (!(await visibleSession(route.params.id))) return route.send(404, { error: 'unknown session' })
     const payload = (await route.json()) as { path?: string | null; name?: string | null }
     try {
       // path 优先；兼容旧客户端误传 name=null 解绑
@@ -1360,9 +1723,10 @@ export function apply(ctx: Context) {
   })
   ctx.http.route('POST', '/api/sessions/:id/project/pick', async (route) => {
     try {
-      await ctx.sessions.require(route.params.id)
+      const record = await visibleSession(route.params.id)
+      if (!record) return route.send(404, { error: 'unknown session' })
       const { pickHostDirectory } = await import('@biu/host-fs/workspace-pick')
-      const current = (await ctx.sessions.get(route.params.id))?.project?.path
+      const current = record.project?.path
       const path = await pickHostDirectory(current)
       const project = await ctx.sessions.setProject(route.params.id, { path })
       route.send(200, { ok: true, project })
@@ -1375,6 +1739,7 @@ export function apply(ctx: Context) {
   })
   ctx.http.route('POST', '/api/sessions/:id/fork', async (route) => {
     try {
+      if (!(await visibleSession(route.params.id))) return route.send(404, { error: 'unknown session' })
       const child = await ctx.sessions.fork(route.params.id)
       route.send(201, {
         id: child.id,
@@ -1388,7 +1753,13 @@ export function apply(ctx: Context) {
   })
   ctx.http.route('DELETE', '/api/sessions/:id', async (route) => {
     const id = route.params.id
-    const record = await ctx.sessions.get(id)
+    const forwarded = await forwardCloud(ctx, '/sessions', id, `/api/sessions/${id}`, { method: 'DELETE' })
+    if (forwarded) {
+      if (forwarded.status < 300) await ctx.sessions.delete(id)
+      route.send(forwarded.status, forwarded.body)
+      return
+    }
+    const record = await visibleSession(id)
     if (!record) return route.send(404, { error: 'unknown session' })
     const db = databaseOf(ctx)
     if (db?.facets.isDeleted('/sessions', id)) return route.send(404, { error: 'unknown session' })
@@ -1403,6 +1774,7 @@ export function apply(ctx: Context) {
     route.send(200, { ok: true, id })
   })
   ctx.http.route('POST', '/api/sessions/:id/messages', async (route) => {
+    chat.activateAccount()
     const payload = (await route.json()) as {
       text?: string
       kind?: 'wake' | 'inject'
@@ -1411,13 +1783,25 @@ export function apply(ctx: Context) {
       images?: Array<{ name?: string; mime?: string; url?: string }>
       liveContext?: unknown
     }
+    if (!(await visibleSession(route.params.id))) return route.send(404, { error: 'unknown session' })
+    if (isOnlineRuntime() && accountRuntime(ctx)?.store?.hasExecutionLease(route.params.id)) {
+      return route.send(409, { error: '这个会话正在桌面设备上运行' })
+    }
+    const shouldExecute = payload.kind !== 'inject' || ctx.agents.isBusy(route.params.id)
+    if (shouldExecute) {
+      try {
+        await beginCloudExecution(route.params.id)
+      } catch (error) {
+        return route.send(409, { error: error instanceof Error ? error.message : String(error) })
+      }
+    }
     const agent = await ctx.agents.create(route.params.id)
     // re-sync in-memory LLM without rewriting disk
     chat.patch({}, { persist: false })
     const extraTools = Array.isArray(payload.extraTools)
       ? [...new Set(payload.extraTools.map((name) => String(name).trim()).filter(Boolean))]
       : []
-    const images = Array.isArray(payload.images)
+    const incomingImages = Array.isArray(payload.images)
       ? payload.images
           .map((img) => ({
             name: String(img.name ?? '').trim(),
@@ -1426,6 +1810,16 @@ export function apply(ctx: Context) {
           }))
           .filter((img) => img.name && img.mime && img.url)
       : []
+    let images = incomingImages
+    let text = payload.text ?? ''
+    if (incomingImages.length) {
+      try {
+        images = await persistPastedImages(route.params.id, incomingImages)
+        text = withPastedImagePicks(text, images)
+      } catch {
+        return route.send(400, { error: '粘贴的图片未能保存到本地，请重试' })
+      }
+    }
     const liveContext = sanitizeLiveUiContext(payload.liveContext)
     const sendOpts = {
       ...(extraTools.length ? { extraTools } : {}),
@@ -1435,7 +1829,7 @@ export function apply(ctx: Context) {
       ...(liveContext ? { liveContext } : {}),
     }
     if (payload.kind === 'inject') {
-      agent.inject(payload.text ?? '', sendOpts)
+      agent.inject(text, sendOpts)
       return route.send(200, {
         sessionId: agent.sessionId,
         queued: true,
@@ -1443,7 +1837,7 @@ export function apply(ctx: Context) {
       })
     }
     try {
-      const turn = await agent.send(payload.text ?? '', sendOpts)
+        const turn = await agent.send(text, sendOpts)
       route.send(200, {
         sessionId: agent.sessionId,
         text: turn.text,
@@ -1452,18 +1846,19 @@ export function apply(ctx: Context) {
         inbox: ctx.agents.listInbox(agent.sessionId),
       })
     } catch (error) {
+      void finishCloudExecution(route.params.id)
       route.send(500, { error: String(error) })
     }
   })
   ctx.http.route('GET', '/api/sessions/:id/inbox', async (route) => {
     const id = route.params.id
-    if (!(await ctx.sessions.get(id))) return route.send(404, { error: 'unknown session' })
+    if (!(await visibleSession(id))) return route.send(404, { error: 'unknown session' })
     await ctx.agents.create(id)
     route.send(200, { sessionId: id, inbox: ctx.agents.listInbox(id) })
   })
   ctx.http.route('POST', '/api/sessions/:id/inbox/drop', async (route) => {
     const id = route.params.id
-    if (!(await ctx.sessions.get(id))) return route.send(404, { error: 'unknown session' })
+    if (!(await visibleSession(id))) return route.send(404, { error: 'unknown session' })
     await ctx.agents.create(id)
     const payload = ((await route.json().catch(() => null)) ?? {}) as { id?: string }
     const itemId = typeof payload.id === 'string' ? payload.id : ''
@@ -1474,7 +1869,7 @@ export function apply(ctx: Context) {
   })
   ctx.http.route('POST', '/api/sessions/:id/inbox/patch', async (route) => {
     const id = route.params.id
-    if (!(await ctx.sessions.get(id))) return route.send(404, { error: 'unknown session' })
+    if (!(await visibleSession(id))) return route.send(404, { error: 'unknown session' })
     await ctx.agents.create(id)
     const payload = ((await route.json().catch(() => null)) ?? {}) as { id?: string; text?: string }
     const itemId = typeof payload.id === 'string' ? payload.id : ''
@@ -1486,7 +1881,7 @@ export function apply(ctx: Context) {
   })
   ctx.http.route('POST', '/api/sessions/:id/goal', async (route) => {
     const id = route.params.id
-    if (!(await ctx.sessions.get(id))) return route.send(404, { error: 'unknown session' })
+    if (!(await visibleSession(id))) return route.send(404, { error: 'unknown session' })
     const payload = ((await route.json().catch(() => null)) ?? {}) as { action?: string }
     const action = payload.action
     if (action !== 'pause' && action !== 'resume' && action !== 'clear') {
@@ -1501,26 +1896,14 @@ export function apply(ctx: Context) {
   })
   ctx.http.route('POST', '/api/sessions/:id/cancel', async (route) => {
     const id = route.params.id
-    if (!(await ctx.sessions.get(id))) return route.send(404, { error: 'unknown session' })
+    if (!(await visibleSession(id))) return route.send(404, { error: 'unknown session' })
     const agent = await ctx.agents.create(id)
     agent.cancel()
     route.send(200, { ok: true })
   })
-  // 清空上下文：不经过大模型，仅向会话事件日志插入一条 context_clear tool/call 记录（作为压缩点）。
-  ctx.http.route('POST', '/api/sessions/:id/clear-context', async (route) => {
-    const id = route.params.id
-    if (!(await ctx.sessions.get(id))) return route.send(404, { error: 'unknown session' })
-    const event = await ctx.sessions.append(id, {
-      type: 'tool/call',
-      id: crypto.randomUUID(),
-      name: 'context_clear',
-      arguments: '{}',
-    })
-    route.send(200, { ok: true, sessionId: id, seq: event.seq, ts: event.ts })
-  })
   ctx.http.route('POST', '/api/sessions/:id/inbox/flush', async (route) => {
     const id = route.params.id
-    if (!(await ctx.sessions.get(id))) return route.send(404, { error: 'unknown session' })
+    if (!(await visibleSession(id))) return route.send(404, { error: 'unknown session' })
     const agent = await ctx.agents.create(id)
     chat.patch({}, { persist: false })
     try {

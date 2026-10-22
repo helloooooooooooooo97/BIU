@@ -43,13 +43,11 @@ export function tagTone(id: string) {
 
 export function ensureTagChipStyle() {
   if (typeof document === 'undefined') return
-  let style = document.getElementById(STYLE_ID) as HTMLStyleElement | null
-  if (!style) {
-    style = document.createElement('style')
-    style.id = STYLE_ID
-    document.head.appendChild(style)
-  }
-  if (style.textContent !== CSS) style.textContent = CSS
+  if (document.getElementById(STYLE_ID)) return
+  const style = document.createElement('style')
+  style.id = STYLE_ID
+  style.textContent = CSS
+  document.head.appendChild(style)
 }
 
 export function TagChipCloseMark() {

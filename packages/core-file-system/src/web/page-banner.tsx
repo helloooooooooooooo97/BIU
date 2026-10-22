@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { PhotoIcon, Square2StackIcon, XMarkIcon } from '@heroicons/react/16/solid'
-import { HeadlessPopover } from '@biu/public-ui'
-import { getPick } from '@biu/core-pick/web'
+import { HeadlessPopover } from '@biu/public-ui/headless-popover'
 import {
   BANNER_STYLE_IDS,
   BANNER_STYLE_LABEL,
@@ -38,22 +37,24 @@ function askNewBanner(opts: {
   const draft = path
     ? `请为「${opts.title || path}」创建一个新的${styleName}${kindName}顶部背景。用 db_update path=${path}，content 只含 banner:{kind:"${opts.kind}",html}。html 用纯 CSS${opts.kind === 'htmlframe' ? '和脚本' : ''}，不要图片，不要改 content 正文。`
     : `请创建一个新的${styleName}${kindName}顶部 HTML 背景，不要图片。`
-  getPick()?.attach(
-    path
-      ? [
-          {
-            kind: 'html',
-            id: `banner:${path}`,
-            action: 'banner',
-            path,
-            label: `${styleName}${kindName}背景`.trim() || '背景',
-            title: opts.title,
-            route: typeof window === 'undefined' ? '' : window.location.pathname,
-          },
-        ]
-      : [],
-    { text: draft },
-  )
+  void import('@biu/core-pick/web').then((mod) => {
+    mod.getPick()?.attach(
+      path
+        ? [
+            {
+              kind: 'html',
+              id: `banner:${path}`,
+              action: 'banner',
+              path,
+              label: `${styleName}${kindName}背景`.trim() || '背景',
+              title: opts.title,
+              route: typeof window === 'undefined' ? '' : window.location.pathname,
+            },
+          ]
+        : [],
+      { text: draft },
+    )
+  })
 }
 
 function askRemixBanner(opts: {
@@ -70,21 +71,23 @@ function askRemixBanner(opts: {
   const draft = path
     ? `请以「${opts.name}」这个${styleName}${kindName}背景做二创，给「${opts.title || path}」设计自己的内容。保留构图、色彩关系和层次，替换文案与主题。用 db_update path=${path}，content 只含 banner:{kind:"${opts.kind}",html}。html 用纯 CSS${opts.kind === 'htmlframe' ? '和脚本' : ''}，不要图片，不要改 content 正文。参考版式已附在选取里。`
     : `请以「${opts.name}」这个${styleName}${kindName}背景做二创：用同一版式设计自己的内容，保留构图与层次，替换文案与主题，不要图片。参考版式已附在选取里。`
-  getPick()?.attach(
-    [
-      {
-        kind: 'html',
-        id: `banner-remix:${opts.name}`,
-        action: 'banner',
-        ...(path ? { path } : {}),
-        label: `${opts.name} · 二创`,
-        title: opts.title || opts.name,
-        text: opts.html,
-        route: typeof window === 'undefined' ? '' : window.location.pathname,
-      },
-    ],
-    { text: draft },
-  )
+  void import('@biu/core-pick/web').then((mod) => {
+    mod.getPick()?.attach(
+      [
+        {
+          kind: 'html',
+          id: `banner-remix:${opts.name}`,
+          action: 'banner',
+          ...(path ? { path } : {}),
+          label: `${opts.name} · 二创`,
+          title: opts.title || opts.name,
+          text: opts.html,
+          route: typeof window === 'undefined' ? '' : window.location.pathname,
+        },
+      ],
+      { text: draft },
+    )
+  })
 }
 
 function BannerRemixBtn({

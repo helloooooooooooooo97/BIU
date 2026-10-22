@@ -1,20 +1,11 @@
 import type { CollectionInfo, CollectionListQuery, CollectionSpec, DbRecord } from '@biu/type-file-system'
-import { recordBuiltinValues, REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
+import { parseAtomicFields, recordBuiltinValues, REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
 import { FacetStore, slugFacetId } from './facets-store.ts'
 import { normalizeCollectionPath } from '../paths.ts'
 
-function parseFields(raw: unknown) {
-  if (Array.isArray(raw)) return raw
-  if (typeof raw === 'string' && raw.trim()) {
-    try {
-      const parsed = JSON.parse(raw) as unknown
-      return Array.isArray(parsed) ? parsed : []
-    } catch {
-      return []
-    }
-  }
-  return []
-}
+const FACET_FIELDS_EXAMPLE = '[{"key":"category","type":"string","label":"类别"}]'
+const FACET_FIELDS_DESCRIPTION =
+  '属性定义。db_update / db_create 可传数组或 JSON 字符串，两种形状等价。例 [{"key":"category","type":"string","label":"类别"}]。type 必须是 string|number|boolean|select|multi-select|datetime|url|image|attachment|file|action|facet|person|ref|multi-ref（没有 text）。其它表读该属性的列 key 为 facet::<本标签id>::<字段key>，例如 facet::facet::category。'
 
 export function stampRecordId(collection: string, recordId: string) {
   const table = normalizeCollectionPath(collection).replace(/^\//, '')
@@ -104,15 +95,15 @@ export function facetsCollection(
   return {
     id: 'facets',
     path: '/facets',
-    label: '合集',
+    label: '标签',
     view: {
       moduleId: 'facets-db',
       route: '/db-facets',
-      title: '合集',
+      title: '标签',
       inspector: true,
-      blurb: '工作区全局合集定义，可贴到任意表的记录。列表 db_list /facets；某合集已贴过哪些记录用 filter.facetId。新建 db_create /facets records=[{title}]（id 由标题 slug）。改名或属性 db_update /facets/<id>，fields 为 JSON 数组 [{key,type,label}]。正文 notes 用 db_content。把合集贴到记录并填属性：db_update 那条记录的 facet。一个合集 values 可扁平；多个合集 values 必须按合集 id 分子对象。省略 tags 只改属性，不会撕掉其它合集。本表没有 db_action。',
+      blurb: '工作区全局标签定义，可贴到任意表的记录。列表 db_list /facets；某标签已贴过哪些记录用 filter.facetId。新建 db_create /facets records=[{title}]（id 由标题 slug）。改名或属性 db_update /facets/<id>，fields 传数组或 JSON 字符串均可，例 [{"key":"category","type":"string","label":"类别"}]；type 必须是白名单（string 不是 text）。其它表 db_list 读属性列用 facet::<标签id>::<字段key>，例如 facet::facet::category。正文 notes 用 db_content。把标签贴到记录并填属性：db_update 那条记录的 facet。一个标签 values 可扁平；多个标签 values 必须按标签 id 分子对象。省略 tags 只改属性，不会撕掉其它标签。本表没有 db_action。',
       order: 31,
-      icon: 'rectangle-stack',
+      icon: 'tag',
     },
     records: { update: true, create: true, delete: true },
     schema: {
@@ -122,15 +113,21 @@ export function facetsCollection(
       columns: ['title', 'fieldCount', 'stampCount'],
       fields: {
         ...REQUIRED_RECORD_FIELDS,
-        title: { type: 'string', label: '合集', writable: true },
+        title: { type: 'string', label: '标签', writable: true },
         fieldCount: { type: 'number', label: '字段', computed: true },
         stampCount: { type: 'number', label: '收集', computed: true, sortable: true },
-        fields: { type: 'string', label: '属性', writable: true },
+        fields: {
+          type: 'string',
+          label: '属性',
+          writable: true,
+          description: FACET_FIELDS_DESCRIPTION,
+          example: FACET_FIELDS_EXAMPLE,
+        },
         notes: { type: 'file', label: '正文', writable: true },
         table: { type: 'string', label: '来源表', computed: true },
         tablePath: { type: 'string', label: '表路径', computed: true },
         sourceId: { type: 'string', label: '记录', computed: true },
-        facetId: { type: 'string', label: '合集', computed: true },
+        facetId: { type: 'string', label: '标签', computed: true },
       },
     },
     list: (query?: CollectionListQuery) => {
@@ -159,17 +156,17 @@ export function facetsCollection(
     },
     create: (rows) =>
       rows.map((fields = {}) => {
-        const title = String(fields.title ?? '').trim() || '未命名合集'
+        const title = String(fields.title ?? '').trim() || '未命名标签'
         const id = slugFacetId(title, new Set(store.list().map((facet) => facet.id)))
-        const pack = store.upsert({ id, label: title, fields: parseFields(fields.fields) }, fields.notes != null ? String(fields.notes) : '')
+        const pack = store.upsert({ id, label: title, fields: parseAtomicFields(fields.fields) }, fields.notes != null ? String(fields.notes) : '')
         return fromEntry(pack.id, 0)
       }),
     update: (id, patch) => {
       if (parseStampRecordId(id)) throw new Error(`cannot update collected row: ${id}`)
       const current = store.get(id)
-      if (!current) throw new Error(`unknown 合集: ${id}`)
+      if (!current) throw new Error(`unknown 标签: ${id}`)
       const label = patch.title != null ? String(patch.title).trim() || current.label : current.label
-      const fields = patch.fields != null ? parseFields(patch.fields) : current.fields
+      const fields = patch.fields != null ? parseAtomicFields(patch.fields) : current.fields
       const notes = patch.notes != null ? String(patch.notes) : store.notes(current.id)
       const pack = store.upsert({ id: current.id, label, fields }, notes)
       return fromEntry(pack.id, store.stampCounts()[pack.id] ?? 0)
@@ -178,7 +175,7 @@ export function facetsCollection(
       const ids = query.ids ?? []
       for (const id of ids) {
         if (parseStampRecordId(id)) throw new Error(`cannot delete collected row: ${id}`)
-        if (!store.removeFacet(id)) throw new Error(`unknown 合集: ${id}`)
+        if (!store.removeFacet(id)) throw new Error(`unknown 标签: ${id}`)
       }
       return ids
     },

@@ -15,6 +15,8 @@ export type UserMessageImage = {
   name: string
   mime: string
   url: string
+  /** 粘贴图落盘后的本机路径，给 agent 工具用；url 仍是 data URL 给模型看。 */
+  path?: string
 }
 
 /** 写入 append 的正文（不含 seq/ts）；与 SessionEvent 判别联合一一对应。 */
@@ -128,8 +130,6 @@ export interface SessionConfig {
   goal?: SessionGoal
   /** 极简模式下常驻额外工具 */
   extraTools?: string[]
-  /** 侧栏标签；一条会话可属于多个标签组 */
-  tags?: string[]
   /** 侧栏置顶 */
   pinned?: boolean
   /** 记录图标 */
@@ -139,6 +139,11 @@ export interface SessionConfig {
   createdAt?: number
   /** 右侧检查器页签与各栏库路径，跟这条 session 走。 */
   inspector?: SessionInspectorBind
+  /**
+   * 自动压缩的输入 token 上限。未设则用当前模型上下文窗口。
+   * 关不掉；写入时会夹到 1..模型上下文。
+   */
+  autoCompactInputTokens?: number
 }
 
 /** 检查器打开的页签和各栏库路径，跟这条 session 走。开合/宽度/跟随只记本机。 */
@@ -177,6 +182,45 @@ export function normalizeInspectorBind(value: unknown): SessionInspectorBind | u
   return Object.keys(next).length ? next : undefined
 }
 
+function asSessionFacet(raw: unknown): SessionConfig['facet'] | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const rec = raw as Record<string, unknown>
+  const tags = Array.isArray(rec.tags)
+    ? [...new Set(rec.tags.map((item) => String(item).trim()).filter(Boolean))].slice(0, 24)
+    : []
+  const values: Record<string, Record<string, unknown>> = {}
+  if (rec.values && typeof rec.values === 'object' && !Array.isArray(rec.values)) {
+    for (const [key, bag] of Object.entries(rec.values as Record<string, unknown>)) {
+      if (bag && typeof bag === 'object' && !Array.isArray(bag)) values[key] = { ...bag }
+    }
+  }
+  if (!tags.length && !Object.keys(values).length) return undefined
+  return { tags, values }
+}
+
+/** 旧会话 tags 并进标签：每个标签名就是贴上的标签 id/显示名。 */
+function absorbLegacySessionTags(
+  facet: SessionConfig['facet'] | undefined,
+  tags: unknown,
+): SessionConfig['facet'] | undefined {
+  const extra = Array.isArray(tags)
+    ? [...new Set(tags.map((item) => String(item).trim()).filter(Boolean))].slice(0, 24)
+    : []
+  if (!extra.length) return facet
+  const tagsNext = [...(facet?.tags ?? [])]
+  const values = { ...(facet?.values ?? {}) }
+  for (const tag of extra) {
+    if (!tagsNext.includes(tag)) tagsNext.push(tag)
+  }
+  return { tags: tagsNext.slice(0, 24), values }
+}
+
+function normalizeAutoCompactInputTokens(value: unknown): number | undefined {
+  const n = typeof value === 'number' ? value : typeof value === 'string' && value.trim() ? Number(value) : NaN
+  if (!Number.isFinite(n) || n <= 0) return undefined
+  return Math.min(10_000_000, Math.floor(n))
+}
+
 export function mergeInspectorBind(
   base: SessionInspectorBind | undefined,
   patch: SessionInspectorBind,
@@ -212,25 +256,16 @@ export function normalizeSessionConfig(value: unknown): SessionConfig | undefine
   if (Array.isArray(raw.extraTools)) {
     next.extraTools = [...new Set(raw.extraTools.map((name) => String(name).trim()).filter(Boolean))]
   }
-  if (Array.isArray(raw.tags)) {
-    next.tags = [...new Set(raw.tags.map((name) => String(name).trim()).filter(Boolean))].slice(0, 24)
-  }
+  const facet = absorbLegacySessionTags(asSessionFacet(raw.facet), raw.tags)
+  if (facet) next.facet = facet
   if (typeof raw.pinned === 'boolean') next.pinned = raw.pinned
   if (typeof raw.emoji === 'string') next.emoji = raw.emoji
   if (typeof raw.createdAt === 'number' && Number.isFinite(raw.createdAt) && raw.createdAt > 0) next.createdAt = raw.createdAt
-  if (raw.facet && typeof raw.facet === 'object' && !Array.isArray(raw.facet)) {
-    const rec = raw.facet as Record<string, unknown>
-    const tags = Array.isArray(rec.tags) ? [...new Set(rec.tags.map((item) => String(item).trim()).filter(Boolean))] : []
-    const values: Record<string, Record<string, unknown>> = {}
-    if (rec.values && typeof rec.values === 'object' && !Array.isArray(rec.values)) {
-      for (const [key, bag] of Object.entries(rec.values as Record<string, unknown>)) {
-        if (bag && typeof bag === 'object' && !Array.isArray(bag)) values[key] = { ...bag }
-      }
-    }
-    next.facet = { tags, values }
-  }
   const inspector = normalizeInspectorBind(raw.inspector)
   if (inspector) next.inspector = inspector
+  const autoCompact = normalizeAutoCompactInputTokens(raw.autoCompactInputTokens)
+  if (autoCompact) next.autoCompactInputTokens = autoCompact
+  delete (next as { tags?: unknown }).tags
   return Object.keys(next).length ? next : undefined
 }
 
@@ -270,10 +305,10 @@ export function mergeSessionConfig(
   if (Array.isArray(patch.extraTools)) {
     next.extraTools = [...new Set(patch.extraTools.map((name) => String(name).trim()).filter(Boolean))]
   }
-  if (Array.isArray(patch.tags)) {
-    const tags = [...new Set(patch.tags.map((name) => String(name).trim()).filter(Boolean))].slice(0, 24)
-    if (tags.length) next.tags = tags
-    else delete next.tags
+  if (Array.isArray((patch as { tags?: unknown }).tags) && !('facet' in patch)) {
+    const facet = absorbLegacySessionTags(next.facet, (patch as { tags?: unknown }).tags)
+    if (facet) next.facet = facet
+    else delete next.facet
   }
   if (typeof patch.pinned === 'boolean') {
     if (patch.pinned) next.pinned = true
@@ -299,6 +334,12 @@ export function mergeSessionConfig(
       else delete next.inspector
     }
   }
+  if ('autoCompactInputTokens' in patch) {
+    const autoCompact = normalizeAutoCompactInputTokens(patch.autoCompactInputTokens)
+    if (autoCompact) next.autoCompactInputTokens = autoCompact
+    else delete next.autoCompactInputTokens
+  }
+  delete (next as { tags?: unknown }).tags
   return Object.keys(next).length ? next : undefined
 }
 
@@ -318,9 +359,20 @@ export interface SessionSummary {
   eventCount: number
   title: string
   updatedAt: number
+  /** 最近一条 user/message 的时间。助手回复、工具和流式片段不算。 */
+  lastMessageAt?: number
   project?: SessionProject
   mascot?: SessionMascot
   config?: SessionConfig
+}
+
+/** 侧栏排序用：只认用户发出的消息。助手回复和工具调用不会改这个时间。 */
+export function lastSpokenAt(events: SessionEvent[]): number {
+  for (let i = events.length - 1; i >= 0; i -= 1) {
+    const event = events[i]
+    if (event?.type === 'user/message') return event.ts
+  }
+  return 0
 }
 
 export function deriveEventTitle(events: SessionEvent[], fallbackId: string): string {

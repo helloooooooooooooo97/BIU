@@ -3,7 +3,8 @@ import { ArrowPathIcon, CpuChipIcon, UserIcon } from '@heroicons/react/16/solid'
 import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import { asPerson, asPersonList, personKey, type PersonValue } from '@biu/type-file-system'
 import { listCollection } from './db-client.ts'
-import { profileDisplayName, useWorkspaceProfile } from '@biu/public-ui'
+import { useWorkspaceProfile } from '@biu/public-ui/use-workspace-profile'
+import { profileDisplayName } from '@biu/public-ui/workspace-profile'
 
 type ChatPerson = {
   id: string
@@ -15,6 +16,9 @@ const USER: PersonValue = { kind: 'user', name: '用户' }
 const SYSTEM: PersonValue = { kind: 'system', name: '系统' }
 
 let agentsInflight: Promise<ChatPerson[]> | null = null
+let agentsListed: ChatPerson[] | null = null
+let agentsListedAt = 0
+const AGENTS_TTL_MS = 8000
 
 export function agentNameLooksLikeId(name: string, sessionId: string) {
   const text = name.trim()
@@ -31,6 +35,7 @@ export function resolveAgentName(person: PersonValue, sessions: ReadonlyMap<stri
 }
 
 export async function loadAgents(): Promise<ChatPerson[]> {
+  if (agentsListed && Date.now() - agentsListedAt < AGENTS_TTL_MS) return agentsListed
   if (agentsInflight) return agentsInflight
   const request = listCollection({
     path: '/sessions',
@@ -39,8 +44,8 @@ export async function loadAgents(): Promise<ChatPerson[]> {
     sortDir: 'desc',
     columns: ['title', 'mascot'],
   })
-    .then((page) =>
-      page.items
+    .then((page) => {
+      const rows = page.items
         .filter((item) => typeof item?.id === 'string' && item.id)
         .map((item) => {
           const id = String(item.id)
@@ -53,8 +58,11 @@ export async function loadAgents(): Promise<ChatPerson[]> {
             name: String(item.title ?? '').trim() || id.slice(0, 8),
             ...(mascot ? { mascot } : {}),
           }
-        }),
-    )
+        })
+      agentsListed = rows
+      agentsListedAt = Date.now()
+      return rows
+    })
     .finally(() => {
       agentsInflight = null
     })
@@ -102,8 +110,8 @@ export function PersonFace({ value, empty = '' }: { value: unknown; empty?: stri
           ? profileDisplayName(profile)
           : resolveAgentName(person, sessionNames) || (person.kind === 'agent' ? person.name : person.name)
         const label = displayName || empty
-        return (
-          <span key={personKey(person) || person.name} className="fsdb-person" title={label || undefined}>
+        const body = (
+          <>
             {person.kind === 'agent' && (person.sessionId || person.mascot) ? (
               <span className="fsdb-person-face" aria-hidden>
                 <SidebarMascot
@@ -122,6 +130,26 @@ export function PersonFace({ value, empty = '' }: { value: unknown; empty?: stri
               </span>
             )}
             {label ? <span className="fsdb-person-name">{label}</span> : null}
+          </>
+        )
+        if (person.url) {
+          return (
+            <a
+              key={personKey(person) || person.name}
+              className="fsdb-person is-link"
+              href={person.url}
+              title={label || undefined}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(event) => event.stopPropagation()}
+            >
+              {body}
+            </a>
+          )
+        }
+        return (
+          <span key={personKey(person) || person.name} className="fsdb-person" title={label || undefined}>
+            {body}
           </span>
         )
       })}

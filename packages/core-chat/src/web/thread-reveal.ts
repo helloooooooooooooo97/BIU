@@ -125,7 +125,10 @@ export function isChatPinnedToBottom(parent: HTMLElement): boolean {
   return true
 }
 
-/** 上滑立刻松钉；只有滚回真正底边才重新钉住。 */
+/**
+ * 跟随中：上滑立刻松开。没有上滑就保持，这样刚发出的消息可以停在视口顶，回复变长再往下走。
+ * 松开之后，只有滚回真正底边才重新跟随。
+ */
 export function nextStickToLatest(opts: {
   stuck: boolean
   distanceFromBottom: number
@@ -133,13 +136,67 @@ export function nextStickToLatest(opts: {
   scrollingUp: boolean
 }): boolean {
   if (opts.scrollingUp) return false
-  if (opts.scrollTop <= PIN_TOP_SLACK_PX) return false
-  if (opts.distanceFromBottom <= CHAT_PIN_BOTTOM_PX) return true
+  if (opts.distanceFromBottom <= CHAT_PIN_BOTTOM_PX && opts.scrollTop > PIN_TOP_SLACK_PX) return true
   return opts.stuck
+}
+
+/** 输入栏垫了 pb-72 / 18rem，可见一屏是 clientHeight 减去这块垫。 */
+export function chatVisibleRoom(parent: HTMLElement): number {
+  const pad = Number.parseFloat(getComputedStyle(parent).paddingBottom) || 0
+  return Math.max(1, parent.clientHeight - pad)
+}
+
+/** 让最新一回合至少有一屏可见高度，短回复也能把用户消息顶到视口上沿。 */
+export function reserveLiveTurnRoom(parent: HTMLElement, anchorId: string) {
+  const height = parent.clientHeight > 0 ? `${chatVisibleRoom(parent)}px` : ''
+  for (const turn of parent.querySelectorAll<HTMLElement>('.chat-turn')) {
+    const next = turn.dataset.turnAnchor === anchorId ? height : ''
+    if (turn.style.minHeight !== next) turn.style.minHeight = next
+  }
+}
+
+/**
+ * 发出去的那条钉在视口顶。回复仍按文档流排在气泡下面（默认 gap），不要用 sticky
+ * 视觉坐标去跟，否则预留高度把回合撑高后会已经滚过气泡，第一行字被挡住。
+ * 回复高出剩余可见高度后外层贴底，多出来的往上挤。
+ */
+export function followChatOutput(parent: HTMLElement, anchorId: string) {
+  const maxScroll = Math.max(0, parent.scrollHeight - parent.clientHeight)
+  const turn = parent.querySelector<HTMLElement>(turnSelector(anchorId))
+  const escaped =
+    typeof CSS !== 'undefined' && typeof CSS.escape === 'function' ? CSS.escape(anchorId) : anchorId
+  const user = parent.querySelector<HTMLElement>(`[data-chat-kind="user"][data-node-id="${escaped}"]`)
+  // 回合盒子本身不 sticky；用它的文档坐标钉顶，避免 sticky 用户消息的视觉 top 把滚动钉死在遮挡位置。
+  const pin = turn instanceof HTMLElement ? turn : user
+  if (!(pin instanceof HTMLElement)) {
+    parent.scrollTop = maxScroll
+    return
+  }
+  const reply = turn
+    ? turn.querySelector<HTMLElement>(':scope > [data-chat-kind="reply"]')
+    : parent.querySelector<HTMLElement>('[data-chat-kind="reply"]')
+  if (reply) reply.style.maxHeight = ''
+  const pinTop = Math.max(0, offsetInScroller(pin, parent))
+  const endEl = reply ?? user ?? pin
+  const contentEnd = offsetInScroller(endEl, parent) + endEl.offsetHeight
+  const room = chatVisibleRoom(parent)
+  const replyHeight = reply?.offsetHeight ?? 0
+  // 第一行按文档流排在气泡下面。只要回复本身还没高过可见一屏，就钉在回合顶，
+  // 不要用「用户气泡+回复 > 可见剩余」去贴底，否则第一行会被 sticky 挡住。
+  if (replyHeight <= room) {
+    parent.scrollTop = Math.min(pinTop, maxScroll)
+    return
+  }
+  parent.scrollTop = Math.min(Math.max(0, contentEnd - room), maxScroll)
 }
 
 export function pinChatToLatest(parent: HTMLElement) {
   parent.scrollTop = parent.scrollHeight
+}
+
+/** 只有向上揭示了更早回合时才补偿高度；尾部流式增长绝不能推动阅读位置。 */
+export function didRevealOlderTurns(previousStart: number, nextStart: number): boolean {
+  return nextStart < previousStart
 }
 
 export function restoreChatScroll(parent: HTMLElement, memory: ChatScrollMemory): boolean {
@@ -167,7 +224,8 @@ export function shouldRevealFast(opts: {
 
 export function sliceTurnsFrom(nodes: ChatNode[], startTurnIndex: number): ChatNode[] {
   const turns = groupNodesIntoTurns(nodes)
-  if (startTurnIndex <= 0) return nodes
-  if (startTurnIndex >= turns.length) return []
-  return turns.slice(startTurnIndex).flat()
+  if (turns.length === 0) return []
+  const start = startTurnIndex >= turns.length ? firstPaintStartIndex(turns.length) : startTurnIndex
+  if (start <= 0) return nodes
+  return turns.slice(start).flat()
 }

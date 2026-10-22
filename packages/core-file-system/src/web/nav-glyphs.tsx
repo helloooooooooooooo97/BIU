@@ -8,7 +8,11 @@ import type { CrumbKind } from './sidebar-nav.ts'
 import { RecordMark, recordMarkStub } from './record-mark.tsx'
 import { getDatabaseUi } from './database-ui.ts'
 import { TableGlyph } from './table-glyph.tsx'
-export { TableGlyph } from './table-glyph.tsx'
+export { TableGlyph, idleTableIconKind } from './table-glyph.tsx'
+
+export function UiGlyph({ icon, className }: { icon: string; className?: string }) {
+  return <span aria-hidden className={['fsdb-ui-glyph', className].filter(Boolean).join(' ')} data-icon={icon} />
+}
 
 export function ViewModeGlyph({ mode, className = 'size-4' }: { mode?: ViewMode; className?: string }) {
   if (mode === 'table' || !mode) return <TableCellsIcon aria-hidden className={className} />

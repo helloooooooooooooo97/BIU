@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import type { CollectionChrome } from '@biu/type-file-system/ui'
 import {
@@ -17,6 +17,7 @@ export { registerShareOwnerExtra } from './share-owner-corner.tsx'
 import { parseSharePath, sharePublicPath, type ShareSnapshot } from '../share-snapshot.ts'
 import { parsePageBanner } from '../page-banner.ts'
 import { RecordDetail } from './record-detail.tsx'
+import { recordPickKind } from './pick-dom.ts'
 import { contentToMarkdown, markdownFileName, recordToMarkdown, zipMarkdownPack } from './export-markdown.ts'
 import { ensureFsdbStyle } from './fsdb-style.ts'
 import { CrumbTrail } from './crumb-trail.tsx'
@@ -28,7 +29,7 @@ import { applyShareQuery, loadShareQuery, saveShareQuery, shareQueryFromView, ty
 import { collectQueryFields } from '../query-logic.ts'
 import { ShareViewQueryBar } from './share-view-bar.tsx'
 import { ShareCell, ShareListTable } from './share-table.tsx'
-import { getPagePrefs, subscribePageWidth } from './page-width.ts'
+import { applyPagePrefs, getPagePrefs, SHARE_PAGE_PREFS, subscribePageWidth, type PagePrefs } from './page-width.ts'
 import { LayoutPrefsMenu } from './layout-prefs-menu.tsx'
 import { PagerSizeControl } from './pager-size.tsx'
 import { normalizePageSize } from './saved-view.ts'
@@ -154,12 +155,19 @@ function SharePage({
   const [layoutOpen, setLayoutOpen] = useState(false)
   const [ownerOpen, setOwnerOpen] = useState(false)
   const [pluginsReady, setPluginsReady] = useState(false)
-  const [pagePrefs, setPagePrefs] = useState(getPagePrefs)
+  const [pagePrefs, setPagePrefs] = useState<PagePrefs>(SHARE_PAGE_PREFS)
   const pageWidth = pagePrefs.wide ? 'full' : 'max'
   const [theme, setTheme] = useState(readShareTheme)
   const [reload, setReload] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
-  useEffect(() => subscribePageWidth(() => setPagePrefs(getPagePrefs())), [])
+  useLayoutEffect(() => {
+    applyPagePrefs(pagePrefs)
+  }, [pagePrefs])
+  useEffect(() => () => applyPagePrefs(getPagePrefs()), [])
+  useEffect(() => subscribePageWidth(() => applyPagePrefs(pagePrefs)), [pagePrefs])
+  function changeSharePrefs(patch: Partial<PagePrefs>) {
+    setPagePrefs((current) => ({ ...current, ...patch }))
+  }
   const layoutRef = useRef<HTMLDivElement>(null)
   const downloadRef = useRef<HTMLDivElement>(null)
 
@@ -433,7 +441,7 @@ function SharePage({
             </button>
             {layoutOpen ? (
               <HeadlessDismiss onDismiss={() => setLayoutOpen(false)} insideRef={layoutRef}>
-                <LayoutPrefsMenu prefs={pagePrefs} testPrefix="fsdb-share-layout" />
+                <LayoutPrefsMenu prefs={pagePrefs} testPrefix="fsdb-share-layout" onChange={changeSharePrefs} />
               </HeadlessDismiss>
             ) : null}
           </div>
@@ -517,6 +525,7 @@ function SharePage({
           schema={schema}
           chrome={detailChrome}
           collectionPath={snapshot.collection}
+          recordKind={recordPickKind(String(snapshot.collection || '').replace(/^\//, ''))}
           draft={{}}
           detailBody={rewriteAssetUrls(snapshot.contents[shown.id], token, password)}
           labelOf={(row) => crumbRecordLabel(row, schema.labelField)}

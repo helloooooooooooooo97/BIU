@@ -64,13 +64,28 @@ export function injectPageBlockPlugin(host: HTMLElement, plugin: string) {
 }
 
 export function bindPageBlockPlugin(host: HTMLElement | null, plugin: string) {
-  if (!host || typeof MutationObserver === 'undefined') {
-    if (host) injectPageBlockPlugin(host, plugin)
-    return () => {}
+  if (!host) return () => {}
+  let running = false
+  const run = () => {
+    if (running) return
+    running = true
+    try {
+      injectPageBlockPlugin(host, plugin)
+    } finally {
+      running = false
+    }
   }
-  const run = () => injectPageBlockPlugin(host, plugin)
   run()
-  const mo = new MutationObserver(run)
+  if (typeof MutationObserver === 'undefined') return () => {}
+  let scheduled = false
+  const mo = new MutationObserver(() => {
+    if (scheduled || running) return
+    scheduled = true
+    queueMicrotask(() => {
+      scheduled = false
+      run()
+    })
+  })
   mo.observe(host, { subtree: true, childList: true })
   return () => mo.disconnect()
 }

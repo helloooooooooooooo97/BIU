@@ -51,26 +51,64 @@ export function profileDisplayName(profile = readWorkspaceProfile()) {
   return profile.name.trim() || '用户'
 }
 
+function accountToken() {
+  if (typeof localStorage === 'undefined') return ''
+  return localStorage.getItem('biu.account.token') ?? ''
+}
+
+const PROFILE_GET_HOLD_MS = 400
+let profileGetInflight: Promise<WorkspaceProfile> | null = null
+
+export function resetWorkspaceProfileHydrate() {
+  profileGetInflight = null
+}
+
 export async function hydrateWorkspaceProfile() {
-  try {
-    const res = await fetch('/api/profile')
-    if (!res.ok) return readWorkspaceProfile()
-    const data = (await res.json()) as Partial<WorkspaceProfile>
-    const next = parse(data)
-    const current = readWorkspaceProfile()
-    if (sameProfile(current, next)) return current
-    return writeWorkspaceProfile(next)
-  } catch {
-    return readWorkspaceProfile()
-  }
+  if (profileGetInflight) return profileGetInflight
+  const token = accountToken()
+  if (!token) return writeWorkspaceProfile(EMPTY)
+  let request: Promise<WorkspaceProfile>
+  request = (async () => {
+    try {
+      const res = await fetch('/api/account/workspace-profile', {
+        headers: { authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) return readWorkspaceProfile()
+      const data = (await res.json()) as Partial<WorkspaceProfile>
+      const next = parse(data)
+      const current = readWorkspaceProfile()
+      if (sameProfile(current, next)) return current
+      return writeWorkspaceProfile(next)
+    } catch {
+      return readWorkspaceProfile()
+    }
+  })().then(
+    (body) => {
+      setTimeout(() => {
+        if (profileGetInflight === request) profileGetInflight = null
+      }, PROFILE_GET_HOLD_MS)
+      return body
+    },
+    (error) => {
+      if (profileGetInflight === request) profileGetInflight = null
+      throw error
+    },
+  )
+  profileGetInflight = request
+  return request
 }
 
 export async function persistWorkspaceProfile(next: WorkspaceProfile) {
   const saved = writeWorkspaceProfile(next)
+  const token = accountToken()
+  if (!token) return saved
   try {
-    await fetch('/api/profile', {
+    await fetch('/api/account/workspace-profile', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${token}`,
+      },
       body: JSON.stringify(saved),
     })
   } catch {

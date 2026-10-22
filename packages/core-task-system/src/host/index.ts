@@ -1,6 +1,6 @@
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { dataHome, dataPath, openAndMigrateBiu, readEditorContent, writeEditorContent } from '@biu/host-plugin-loader/data-dir'
+import { biuSqlitePath, openAndMigrateBiu, readEditorContent, writeEditorContent } from '@biu/host-plugin-loader/data-dir'
 import { Service, type Context } from 'cordis'
 import { currentSessionId } from '@biu/host-sessions/scope'
 import { emptySchemaValue, normalizeSchemaValue, type SchemaFieldValue } from '@biu/type-file-system'
@@ -148,6 +148,8 @@ export type TaskRow = {
 }
 
 export type TaskCreateInput = {
+  id?: string
+  updatedAt?: number
   title: string
   status?: TaskStatus
   priority?: TaskPriority
@@ -170,6 +172,7 @@ export type TaskCreateInput = {
 }
 
 export type TaskUpdateInput = Partial<{
+  updatedAt: number
   title: string
   status: TaskStatus
   priority: TaskPriority
@@ -720,7 +723,15 @@ export async function reportBackToCreator(
   }
 }
 
-function mapRow(row: Record<string, unknown>): TaskRow {
+function isBlankJson(raw: unknown) {
+  return raw == null || raw === '' || raw === '[]' || raw === '{}'
+}
+
+const LIST_TASK_COLUMNS = `tasks.id, tasks.title, tasks.status, tasks.priority, tasks.difficulty, tasks.due_at,
+         tasks.sort, tasks.created_at, tasks.updated_at, tasks.creator_json, tasks.assignee_json, tasks.assigned_at,
+         tasks.project, tasks.tags_json, tasks.parent_id, tasks.depends_on, tasks.depth, tasks.emoji, tasks.reports_json`
+
+function mapRow(row: Record<string, unknown>, listed = false): TaskRow {
   let creator: TaskActor = { kind: 'user', name: '用户' }
   if (typeof row.creator_json === 'string' && row.creator_json) {
     try {
@@ -749,7 +760,7 @@ function mapRow(row: Record<string, unknown>): TaskRow {
       : Number(row.assigned_at)
 
   const reports: TaskReport[] = []
-  if (typeof row.reports_json === 'string' && row.reports_json) {
+  if (!isBlankJson(row.reports_json) && typeof row.reports_json === 'string') {
     try {
       const parsed = JSON.parse(row.reports_json)
       if (Array.isArray(parsed)) {
@@ -787,7 +798,7 @@ function mapRow(row: Record<string, unknown>): TaskRow {
   }
 
   const tags: string[] = []
-  if (typeof row.tags_json === 'string' && row.tags_json) {
+  if (!isBlankJson(row.tags_json) && typeof row.tags_json === 'string') {
     try {
       const parsed = JSON.parse(row.tags_json)
       if (Array.isArray(parsed)) {
@@ -804,7 +815,7 @@ function mapRow(row: Record<string, unknown>): TaskRow {
   }
 
   const dependsOn: string[] = []
-  if (typeof row.depends_on === 'string' && row.depends_on) {
+  if (!isBlankJson(row.depends_on) && typeof row.depends_on === 'string') {
     try {
       const parsed = JSON.parse(row.depends_on)
       if (Array.isArray(parsed)) {
@@ -818,7 +829,7 @@ function mapRow(row: Record<string, unknown>): TaskRow {
   }
 
   let facet = emptySchemaValue()
-  if (typeof row.facet_json === 'string' && row.facet_json) {
+  if (!listed && !isBlankJson(row.facet_json) && typeof row.facet_json === 'string') {
     try {
       facet = normalizeSchemaValue(JSON.parse(row.facet_json))
     } catch {
@@ -834,7 +845,7 @@ function mapRow(row: Record<string, unknown>): TaskRow {
     difficulty: asDifficulty(row.difficulty),
     dueAt: row.due_at == null ? null : Number(row.due_at),
     description: '',
-    notes: String(row.notes ?? ''),
+    notes: listed ? '' : String(row.notes ?? ''),
     project: typeof row.project === 'string' && row.project.trim() ? row.project.trim() : null,
     tags,
     parentId: typeof row.parent_id === 'string' && row.parent_id ? row.parent_id : null,
@@ -849,22 +860,25 @@ function mapRow(row: Record<string, unknown>): TaskRow {
     assignee,
     assignedAt: assignee ? assignedAt : null,
     reports,
-    trigger: (() => {
-      if (typeof row.trigger_json === 'string' && row.trigger_json) {
-        try {
-          return normalizeTrigger(JSON.parse(row.trigger_json))
-        } catch {
-          /* ignore */
-        }
-      }
-      return undefined
-    })(),
-    reportIntervalSec: normalizeReportIntervalSec(row.report_interval_sec),
-    lastReportPromptAt:
-      row.last_report_prompt_at == null || row.last_report_prompt_at === ''
+    trigger: listed
+      ? undefined
+      : (() => {
+          if (typeof row.trigger_json === 'string' && row.trigger_json) {
+            try {
+              return normalizeTrigger(JSON.parse(row.trigger_json))
+            } catch {
+              /* ignore */
+            }
+          }
+          return undefined
+        })(),
+    reportIntervalSec: listed ? 60 : normalizeReportIntervalSec(row.report_interval_sec),
+    lastReportPromptAt: listed
+      ? null
+      : row.last_report_prompt_at == null || row.last_report_prompt_at === ''
         ? null
         : Number(row.last_report_prompt_at),
-    reportPromptCount: Math.max(0, Math.round(Number(row.report_prompt_count) || 0)),
+    reportPromptCount: listed ? 0 : Math.max(0, Math.round(Number(row.report_prompt_count) || 0)),
   }
 }
 
@@ -1068,31 +1082,36 @@ export class TasksService extends Service {
     const clauses: string[] = []
     const params: SQLInputValue[] = []
     if (filter.status) {
-      clauses.push('status = ?')
+      clauses.push('tasks.status = ?')
       params.push(filter.status)
     }
     if (filter.q?.trim()) {
       clauses.push(
-        '(title LIKE ? OR IFNULL(c.body, \'\') LIKE ? OR notes LIKE ? OR assignee LIKE ? OR creator_json LIKE ? OR assignee_json LIKE ?)',
+        '(tasks.title LIKE ? OR IFNULL(c.body, \'\') LIKE ? OR tasks.notes LIKE ? OR tasks.assignee LIKE ? OR tasks.creator_json LIKE ? OR tasks.assignee_json LIKE ?)',
       )
       const like = `%${filter.q.trim()}%`
       params.push(like, like, like, like, like, like)
     }
     if (filter.creatorSessionId?.trim()) {
-      clauses.push('creator_json LIKE ?')
+      clauses.push('tasks.creator_json LIKE ?')
       params.push(`%${filter.creatorSessionId.trim()}%`)
     }
     const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : ''
+    const join = filter.q?.trim()
+      ? `LEFT JOIN editor_content c ON c.collection = '/tasks' AND c.record_id = tasks.id`
+      : ''
     const rows = this.db
       .prepare(
-        `SELECT tasks.* FROM tasks
-         LEFT JOIN editor_content c ON c.collection = '/tasks' AND c.record_id = tasks.id
+        `SELECT ${LIST_TASK_COLUMNS} FROM tasks
+         ${join}
          ${where} ORDER BY
-          CASE status WHEN 'doing' THEN 0 WHEN 'todo' THEN 1 ELSE 2 END,
-          sort DESC, updated_at DESC`,
+          CASE tasks.status WHEN 'doing' THEN 0 WHEN 'todo' THEN 1 ELSE 2 END,
+          tasks.sort DESC, tasks.updated_at DESC`,
       )
       .all(...params) as Array<Record<string, unknown>>
-    return rows.map((row) => this.withEditorDescription(mapRow(row)))
+    const mapped = rows.map((row) => mapRow(row, true))
+    if (!filter.q?.trim()) return mapped
+    return mapped.map((row) => this.withEditorDescription(row))
   }
 
   get(id: string): TaskRow | undefined {
@@ -1110,8 +1129,9 @@ export class TasksService extends Service {
   create(input: TaskCreateInput & { creator: TaskActor; assignee?: TaskActor | null; assignedAt?: number | null }): TaskRow {
     const title = String(input.title ?? '').trim()
     if (!title) throw new Error('title required')
-    const id = nextId()
-    const ts = now()
+    const requested = typeof input.id === 'string' ? input.id.trim() : ''
+    const id = /^task_[A-Za-z0-9_-]+$/.test(requested) ? requested : nextId()
+    const ts = typeof input.updatedAt === 'number' && input.updatedAt > 0 ? input.updatedAt : now()
     const status = asStatus(input.status)
     const priority = asPriority(input.priority)
     const difficulty = asDifficulty(input.difficulty)
@@ -1285,7 +1305,7 @@ export class TasksService extends Service {
     const emoji = patch.emoji !== undefined ? String(patch.emoji ?? '') : current.emoji
     const facet = patch.facet !== undefined ? normalizeSchemaValue(patch.facet) : current.facet
 
-    const ts = now()
+    const ts = typeof patch.updatedAt === 'number' && patch.updatedAt > 0 ? patch.updatedAt : now()
     this.db
       .prepare(
         `UPDATE tasks SET
@@ -1369,7 +1389,7 @@ export { tasksCollection } from './collection.ts'
 export function apply(ctx: Context) {
   startTaskClock(ctx)
   const host = ctx as HostCtx
-  const dbPath = dataPath(dataHome(), 'biu.sqlite')
+  const dbPath = biuSqlitePath()
   const tasks = new TasksService(ctx, dbPath).open()
 
   async function present(row: TaskRow): Promise<TaskRow> {

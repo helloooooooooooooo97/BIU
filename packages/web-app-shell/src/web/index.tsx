@@ -1,9 +1,8 @@
-import { memo, useCallback, useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
+import { lazy, memo, Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import {
   getChatOverlay,
   subscribeChatOverlay,
-  setChatOverlay,
   closeChatOverlay,
   requestOverlayFocus,
   requestInspectorClose,
@@ -12,6 +11,7 @@ import {
   publishShellLayout,
   clampSidebarWidth,
   isChatPagePath,
+  openOverlayComposer,
   SIDEBAR_DEFAULT,
   SIDEBAR_LABEL_AT,
   SIDEBAR_TAG_AT,
@@ -36,36 +36,39 @@ import {
   moduleIdFromPath,
   type AppModulesService,
 } from '@biu/web-app-modules'
-import { ChatSidebar } from './chat-sidebar.tsx'
+const ChatSidebar = lazy(() => import('./chat-sidebar.tsx').then((m) => ({ default: m.ChatSidebar })))
 import { ShellSidebarFrame } from './shell-sidebar-frame.tsx'
 import { ChatSessionTitle } from './chat-session-title.tsx'
 import { BrandCornerMascot, DanceStage } from '@biu/public-mascot'
 import { SessionInspector } from './session-inspector.tsx'
 import { SessionConfigDialog } from '@biu/web-session-view/dialog'
 import { FolderGlyph } from '@biu/web-session-view/folder-glyph'
-import { OverlayChatWindow } from './overlay-window.tsx'
-import { ShellSettingsAbout, ShellSettingsAccount, ShellSettingsAppearance, ShellSettingsMcp, ShellSettingsShortcuts, ShellSettingsUpdate } from './shell-chrome.tsx'
-import { hydrateWorkspaceProfile } from '@biu/public-ui'
+import { AuthGate, ShellSettingsAbout, ShellSettingsAccount, ShellSettingsAppearance, ShellSettingsMembers, ShellSettingsMcp, ShellSettingsShortcuts, ShellSettingsUpdate, ShellSettingsWorkspace } from './shell-chrome.tsx'
+import { hydrateWorkspaceProfile } from '@biu/public-ui/workspace-profile'
 import { hydrateTheme } from './theme.ts'
 import { hydratePagePrefs } from '@biu/core-file-system/page-width'
-import { ShellSearchPanel, isGlobalSearchHotkey } from './shell-search.tsx'
+import { isGlobalSearchHotkey } from './search-hotkey.ts'
 import { useSlotEntries } from '@biu/web-slots'
 import type { SlotsService } from '@biu/web-slots'
 import { chromeIcon } from './chrome-icon.ts'
-import { ChatDockStack, ChatStage } from '@biu/public-ui'
+import { ChatDockStack, ChatStage } from '@biu/public-ui/chat-pane'
+
+const OverlayChatWindow = lazy(() => import('./overlay-window.tsx').then((m) => ({ default: m.OverlayChatWindow })))
+const ShellSearchPanel = lazy(() => import('./shell-search.tsx').then((m) => ({ default: m.ShellSearchPanel })))
 import {
   ChevronDoubleLeftIcon,
   ChevronDoubleRightIcon,
   AdjustmentsHorizontalIcon,
   ArrowDownTrayIcon,
   CommandLineIcon,
+  CircleStackIcon,
   InformationCircleIcon,
   LinkIcon,
   MapIcon,
-  PuzzlePieceIcon,
   QueueListIcon,
   SwatchIcon,
   UserCircleIcon,
+  UserGroupIcon,
   XMarkIcon,
 } from '@heroicons/react/16/solid'
 
@@ -100,7 +103,7 @@ function DockSessionMascot({
           return
         }
         if (isChatPagePath(location.pathname)) return
-        setChatOverlay(true)
+        openOverlayComposer()
         requestOverlayFocus()
       }}
     />
@@ -165,11 +168,13 @@ const AgentMainPanels = memo(function AgentMainPanels({
   const overlayNode =
     overlayMounted && overlayOpen && !showCenter
       ? createPortal(
-        <OverlayChatWindow
-          header={header}
-          thread={overlayStage}
-          dock={overlayDock}
-        />,
+        <Suspense fallback={null}>
+          <OverlayChatWindow
+            header={header}
+            thread={overlayStage}
+            dock={overlayDock}
+          />
+        </Suspense>,
         document.body,
       )
       : null
@@ -180,7 +185,7 @@ const AgentMainPanels = memo(function AgentMainPanels({
   return (
     <>
       <div
-        className={`relative min-h-0 w-full flex-1 flex-col overflow-hidden ${showCenter ? 'flex' : 'hidden'}`}
+        className="relative flex min-h-0 w-full flex-1 flex-col overflow-hidden"
         aria-hidden={!showCenter}
         inert={showCenter ? undefined : true}
         data-testid="agent-center"
@@ -209,6 +214,8 @@ const PluginModuleStage = memo(function PluginModuleStage({
   activeId: string
   renderSlot: SlotProps['renderSlot']
 }) {
+  const visited = useRef(new Set<string>())
+  if (activeId) visited.current.add(activeId)
   const entries = useSlotEntries(slots, 'app-modules')
   const sorted = [...entries].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
   return (
@@ -217,6 +224,7 @@ const PluginModuleStage = memo(function PluginModuleStage({
         const extra = entry.props?.() ?? {}
         const moduleId = String(extra.moduleId ?? extra.id ?? entry.id)
         const active = moduleId === activeId
+        if (!active && !visited.current.has(moduleId)) return null
         const Component = entry.Component
         return (
           <div
@@ -249,6 +257,7 @@ function Shell(props: SlotProps) {
   const navReady = useAppModulesNavReady ? useAppModulesNavReady() : true
   const pluginModules = modules.filter((item) => item.id !== 'agent')
   const sessionId = useSessionView((state) => state.sessionId)
+  const overlayOpen = useSyncExternalStore(subscribeChatOverlay, getChatOverlay, () => false)
   const collections = useSnapshot((state) => state.collections)
   const danceSessions = useSessionView((state) => state.sessions)
   const dancing = useSyncExternalStore(
@@ -272,7 +281,26 @@ function Shell(props: SlotProps) {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [settingsTab, setSettingsTab] = useState<string>('account')
+  const [workspaceLocation, setWorkspaceLocation] = useState<'device' | 'cloud'>('device')
   const [configOpen, setConfigOpen] = useState(false)
+  useEffect(() => {
+    if (!settingsOpen) return
+    let live = true
+    void fetch('/api/profile')
+      .then((response) => (response.ok ? response.json() : null))
+      .then((profile: { dataLocation?: 'device' | 'cloud' } | null) => {
+        if (!live) return
+        const next = profile?.dataLocation === 'cloud' ? 'cloud' : 'device'
+        setWorkspaceLocation(next)
+        if (next === 'device') setSettingsTab((current) => (current === 'members' ? 'workspace' : current))
+      })
+      .catch(() => {
+        if (live) setWorkspaceLocation('device')
+      })
+    return () => {
+      live = false
+    }
+  }, [settingsOpen])
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try {
       return localStorage.getItem('cordis.sidebar.collapsed') === '1'
@@ -347,11 +375,19 @@ function Shell(props: SlotProps) {
     },
     [persistSidebar, sidebarWidth],
   )
-  const openSettings = useCallback(() => setSettingsOpen(true), [])
+  const openSettings = useCallback((tab?: string) => {
+    if (tab) setSettingsTab(tab)
+    setSettingsOpen(true)
+  }, [])
   useEffect(() => {
     void hydrateWorkspaceProfile()
+    const onLibrary = () => {
+      void hydrateWorkspaceProfile()
+    }
+    window.addEventListener('fsdb:change', onLibrary)
     void hydrateTheme()
     void hydratePagePrefs()
+    return () => window.removeEventListener('fsdb:change', onLibrary)
   }, [])
   useEffect(() => {
     if (!settingsOpen) return
@@ -475,6 +511,8 @@ function Shell(props: SlotProps) {
   const routeSessionId = appRoute.kind === 'session' ? appRoute.sessionId : null
   const agentHref = sessionId ? `/s/${sessionId}` : '/'
   const showChatSidebar = activeModule === 'agent'
+  const visitedChatSidebar = useRef(false)
+  if (showChatSidebar) visitedChatSidebar.current = true
   const sidebarCol = sidebarCollapsed ? 0 : sidebarWidth
   const sidebarNarrow = sidebarWidth < SIDEBAR_LABEL_AT
   const sidebarShowTags = sidebarWidth >= SIDEBAR_TAG_AT
@@ -604,8 +642,19 @@ function Shell(props: SlotProps) {
       !navReady && location.pathname !== '/' && !location.pathname.startsWith('/s/')
     if (waitingOnNav) return
     const route = parseAppPath(location.pathname, pluginModules)
+    if (route.kind === 'auth') return
     void sessionView.applyRoute(route).catch(() => undefined)
   }, [location.pathname, navReady, sessionView, appModules.version()])
+
+  useEffect(() => {
+    if (!overlayOpen) return
+    void sessionView.ensureSessionThread()
+  }, [overlayOpen, sessionView])
+
+  useEffect(() => {
+    if (activeModule !== 'agent') return
+    void sessionView.ensureSessionThread()
+  }, [activeModule, sessionView])
 
   useEffect(() => {
     const onMissing = (event: Event) => {
@@ -629,10 +678,6 @@ function Shell(props: SlotProps) {
     if (route.kind !== 'session' || route.view !== 'debug') return
     navigate(`/s/${encodeURIComponent(route.sessionId)}`, { replace: true })
   }, [location.pathname, navigate])
-
-  useEffect(() => {
-    void sessionView.refreshSessions()
-  }, [sessionView])
 
   useEffect(() => {
     void projectView.attachSession(sessionId, project)
@@ -773,15 +818,19 @@ function Shell(props: SlotProps) {
               aria-hidden={!showChatSidebar}
               inert={!showChatSidebar || undefined}
             >
-              <ChatSidebar
-                embedded
-                visible
-                narrow={sidebarNarrow}
-                showTags={sidebarShowTags}
-                routeSessionId={routeSessionId}
-                useSessionView={useSessionView}
-                sessionView={sessionView}
-              />
+              {showChatSidebar || visitedChatSidebar.current ? (
+                <Suspense fallback={null}>
+                  <ChatSidebar
+                    embedded
+                    visible
+                    narrow={sidebarNarrow}
+                    showTags={sidebarShowTags}
+                    routeSessionId={routeSessionId}
+                    useSessionView={useSessionView}
+                    sessionView={sessionView}
+                  />
+                </Suspense>
+              ) : null}
             </div>
             <div
               id="shell-module-sidebar"
@@ -800,6 +849,7 @@ function Shell(props: SlotProps) {
       <main className="app-stage">
         <div
           className={`app-stage-pane${activeModule === 'agent' ? ' is-active' : ''}`}
+          data-stage="agent"
           aria-hidden={activeModule !== 'agent'}
           inert={activeModule !== 'agent' || undefined}
         >
@@ -855,15 +905,16 @@ function Shell(props: SlotProps) {
                 <ul className="settings-rail-list">
                   {[
                     { key: 'account', label: '账户', Icon: UserCircleIcon },
+                    { key: 'workspace', label: '空间', Icon: CircleStackIcon },
+                    { key: 'members', label: '成员', Icon: UserGroupIcon },
                     { key: 'appearance', label: '外观', Icon: SwatchIcon },
-                    { key: 'plugins', label: '插件', Icon: PuzzlePieceIcon },
                     { key: 'mcp', label: 'MCP', Icon: LinkIcon },
                     { key: 'shortcuts', label: '快捷键', Icon: CommandLineIcon },
                     { key: 'routes', label: '路由', Icon: MapIcon },
                     { key: 'events', label: '事件', Icon: QueueListIcon },
                     { key: 'update', label: '更新', Icon: ArrowDownTrayIcon },
                     { key: 'about', label: '关于', Icon: InformationCircleIcon },
-                  ].map((item) => (
+                  ].filter((item) => item.key !== 'members' || workspaceLocation === 'cloud').map((item) => (
                     <li key={item.key}>
                       <button
                         type="button"
@@ -889,14 +940,9 @@ function Shell(props: SlotProps) {
                 </button>
                 <div className="settings-pane">
                   {settingsTab === 'account' ? <ShellSettingsAccount /> : null}
+                  {settingsTab === 'workspace' ? <ShellSettingsWorkspace /> : null}
+                  {settingsTab === 'members' && workspaceLocation === 'cloud' ? <ShellSettingsMembers /> : null}
                   {settingsTab === 'appearance' ? <ShellSettingsAppearance /> : null}
-                  {settingsTab === 'plugins' ? (
-                    <section>
-                      <h3 className="settings-pane-title">插件</h3>
-                      <p className="settings-muted settings-pane-lead">安装、开关和管理页面块。</p>
-                      {props.renderSlot('sidebar')}
-                    </section>
-                  ) : null}
                   {settingsTab === 'mcp' ? <ShellSettingsMcp onLeave={() => setSettingsOpen(false)} /> : null}
                   {settingsTab === 'shortcuts' ? <ShellSettingsShortcuts /> : null}
                   {settingsTab === 'routes' ? (
@@ -924,17 +970,19 @@ function Shell(props: SlotProps) {
         : null}
       {searchOpen
         ? createPortal(
-          <ShellSearchPanel
-            sessions={danceSessions.map((item) => ({
-              id: item.id,
-              title: item.title,
-              tags: item.tags,
-              updatedAt: item.updatedAt,
-              mascot: item.mascot,
-            }))}
-            onClose={() => setSearchOpen(false)}
-            focusSeq={searchFocusSeq}
-          />,
+          <Suspense fallback={null}>
+            <ShellSearchPanel
+              sessions={danceSessions.map((item) => ({
+                id: item.id,
+                title: item.title,
+                tags: item.facet?.tags,
+                updatedAt: item.updatedAt,
+                mascot: item.mascot,
+              }))}
+              onClose={() => setSearchOpen(false)}
+              focusSeq={searchFocusSeq}
+            />
+          </Suspense>,
           document.body,
         )
         : null}
@@ -955,7 +1003,13 @@ export function apply(ctx: Context) {
     slots: ctx.slots as SlotsService,
     appModules: ctx.appModules as AppModulesService,
   }
-  ctx.slots.fill('root', Shell, {
+  ctx.slots.fill('root', function ShellEntry(props: SlotProps) {
+    return (
+      <AuthGate>
+        <Shell {...props} />
+      </AuthGate>
+    )
+  }, {
     children: {
       sidebar: { kind: 'single' },
       demos: { kind: 'list' },

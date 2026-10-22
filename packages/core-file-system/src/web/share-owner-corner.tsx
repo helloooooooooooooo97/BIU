@@ -1,6 +1,6 @@
 import { useCallback, useSyncExternalStore, type ReactNode } from 'react'
 import { BrandMascot } from '@biu/public-mascot'
-import { HeadlessDismiss } from '@biu/public-ui'
+import { HeadlessDismiss } from '@biu/public-ui/headless-dismiss'
 import type { ShareSnapshot } from '../share-snapshot.ts'
 
 const extras = new Map<string, () => ReactNode>()

@@ -116,6 +116,8 @@ export function registerChatInspectorRoutes(ctx: Context) {
       effective: resolved.effective,
       sources: SOURCE_INFO,
       tools,
+      contextWindow: ctx.chat.contextWindowFor(id),
+      contextWindowTokens: ctx.chat.contextWindowFor(id) === '1m' ? 1_000_000 : 200_000,
     }
     const dispatched = await loadDispatchedUsage(ctx, id, record.events)
     const { titles, mascots, projects } = await sessionDecorations(ctx)
@@ -157,7 +159,13 @@ async function sessionDecorations(ctx: Context) {
   const titles = new Map<string, string>()
   const mascots = new Map<string, { shape: string; color: string; eye?: number }>()
   const projects = new Map<string, { name: string; path?: string }>()
-  for (const item of await ctx.sessions.listSummaries()) {
+  let summaries: Awaited<ReturnType<Context['sessions']['listSummaries']>> = []
+  try {
+    summaries = await ctx.sessions.listSummaries()
+  } catch {
+    summaries = []
+  }
+  for (const item of summaries) {
     titles.set(item.id, item.title)
     if (item.mascot) mascots.set(item.id, item.mascot)
     if (item.project?.name) {
@@ -202,18 +210,38 @@ export async function loadLiveDispatchTasks(
     .filter((item) => Boolean(item.sessionId))
 }
 
+async function workerEventsForTasks(
+  ctx: Context,
+  liveId: string,
+  tasks: TaskDispatchSource[],
+) {
+  const workers: Array<{ id: string; events: SessionEvent[] }> = []
+  const wanted = new Set<string>()
+  for (const task of tasks) {
+    if (task.sessionId && task.sessionId !== liveId) wanted.add(task.sessionId)
+  }
+  for (const id of wanted) {
+    try {
+      const worker = await ctx.sessions.require(id)
+      workers.push({ id, events: worker.events })
+    } catch {
+      // 执行会话读不出来时，派工行仍按任务状态显示。
+    }
+  }
+  return workers
+}
+
 async function loadDispatchedUsage(
   ctx: Context,
   liveId: string,
   liveEvents: SessionEvent[],
 ) {
-  const summaries = await ctx.sessions.listSummaries()
-  const workers: Array<{ id: string; events: SessionEvent[] }> = []
-  for (const item of summaries) {
-    if (item.id === liveId) continue
-    const worker = await ctx.sessions.require(item.id)
-    workers.push({ id: item.id, events: worker.events })
+  let liveTasks: TaskDispatchSource[] = []
+  try {
+    liveTasks = await loadLiveDispatchTasks(ctx, liveId)
+  } catch {
+    liveTasks = []
   }
-  const liveTasks = await loadLiveDispatchTasks(ctx, liveId)
+  const workers = await workerEventsForTasks(ctx, liveId, liveTasks)
   return collectLiveDispatchedTasks(liveId, liveEvents, workers, liveTasks)
 }

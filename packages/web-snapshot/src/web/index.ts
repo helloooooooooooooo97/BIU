@@ -39,13 +39,65 @@ export interface Snapshot {
 
 const empty: Snapshot = { seq: 0, plugins: [], pages: [], routes: [], events: [], services: [] }
 
+function hasAccountToken() {
+  if (typeof localStorage === 'undefined') return true
+  try {
+    return Boolean(localStorage.getItem('biu.account.token'))
+  } catch {
+    return true
+  }
+}
+
+function isLandingPreview() {
+  if (typeof window === 'undefined') return false
+  return new URLSearchParams(window.location.search).get('landingPreview') === '1'
+}
+
+/** 快照比 shell 的 fetch 包装更早上；自己带上空间，避免本机第一次 /api/snapshot 没有 workspaceId。 */
+function snapshotRequestHeaders(): HeadersInit {
+  const headers: Record<string, string> = {}
+  if (typeof window === 'undefined' || isLandingPreview()) return headers
+  try {
+    const workspaceId = sessionStorage.getItem('biu.workspaceId') || localStorage.getItem('biu.workspaceId') || ''
+    if (workspaceId) headers['x-biu-workspace-id'] = workspaceId
+    const token = localStorage.getItem('biu.account.token') || ''
+    if (token) headers.authorization = `Bearer ${token}`
+  } catch {
+    /* ignore */
+  }
+  return headers
+}
+
 export class SnapshotService extends Service {
   private value: Snapshot = empty
   private listeners = new Set<() => void>()
   private messageHandlers = new Map<string, Set<(payload: unknown) => void>>()
+  /** 401/403 或租户握手被拒后不再重连，避免官网未登录时轮询 /api/snapshot。 */
+  private authStopped = false
+  private socket: WebSocket | null = null
+  private booted = false
+  /** boot() 刚拉过就不必在第一条 WS 上再 pull 一次。 */
+  private bootGotSnapshot = false
 
   constructor(ctx: Context) {
     super(ctx, 'snapshot')
+    // 官网未登录时拉快照会 401。等账号 token 出现再连。
+    if (typeof window === 'undefined' || hasAccountToken() || isLandingPreview()) {
+      this.start()
+      return
+    }
+    const onToken = () => {
+      if (!hasAccountToken()) return
+      window.removeEventListener('biu:account-token', onToken)
+      this.start()
+    }
+    window.addEventListener('biu:account-token', onToken)
+    this.ctx.effect(() => () => window.removeEventListener('biu:account-token', onToken))
+  }
+
+  private start() {
+    if (this.booted) return
+    this.booted = true
     void this.boot()
   }
 
@@ -101,20 +153,33 @@ export class SnapshotService extends Service {
   }
 
   private async pull() {
+    if (this.authStopped) return
     try {
-      const res = await fetch('/api/snapshot')
+      const res = await fetch('/api/snapshot', { headers: snapshotRequestHeaders() })
+      if (res.status === 401 || res.status === 403) {
+        this.stopForAuth()
+        return
+      }
       if (res.ok) this.replace(await res.json())
     } catch {
       /* 无 host 时控制台为空 */
     }
   }
 
+  private stopForAuth() {
+    this.authStopped = true
+    this.socket?.close()
+    this.socket = null
+  }
+
   private async boot() {
     for (let i = 0; i < 30; i++) {
       try {
-        const res = await fetch('/api/snapshot')
+        const res = await fetch('/api/snapshot', { headers: snapshotRequestHeaders() })
+        if (res.status === 401 || res.status === 403) return
         if (res.ok) {
           this.replace(await res.json())
+          this.bootGotSnapshot = true
           break
         }
       } catch {
@@ -122,19 +187,28 @@ export class SnapshotService extends Service {
       }
       await new Promise((resolve) => setTimeout(resolve, 100))
     }
-    this.connect()
+    if (!this.authStopped) this.connect()
   }
 
   private connect() {
     try {
       const proto = location.protocol === 'https:' ? 'wss' : 'ws'
-      const ws = new WebSocket(`${proto}://${location.host}/ws`)
+      const preview = new URLSearchParams(location.search).get('landingPreview') === '1'
+      const workspaceId = preview ? '' : (sessionStorage.getItem('biu.workspaceId') || localStorage.getItem('biu.workspaceId') || '')
+      const query = preview ? '?landingPreview=1' : workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : ''
+      const ws = new WebSocket(`${proto}://${location.host}/ws${query}`)
+      this.socket = ws
       ws.onopen = () => {
+        if (this.bootGotSnapshot) {
+          this.bootGotSnapshot = false
+          return
+        }
         void this.pull()
       }
       ws.onmessage = (message) => {
         const parsed = JSON.parse(message.data) as { type: string; payload: unknown }
         if (parsed.type === 'snapshot') this.replace(parsed.payload as Snapshot)
+        if (parsed.type === 'plugins/changed') void this.pull()
         if (parsed.type === 'event') {
           this.replace({
             events: [parsed.payload as Snapshot['events'][number], ...this.value.events].slice(0, 80),
@@ -206,8 +280,15 @@ export class SnapshotService extends Service {
         // 通用总线：把消息转发给外部通过 onMessage 注册的处理器（如 core-task-system 的 tasks/view-switch）
         this.dispatch(parsed.type, parsed.payload)
       }
-      ws.onclose = () => {
+      ws.onclose = (event) => {
+        if (this.socket === ws) this.socket = null
         if (import.meta.env.MODE === 'test') return
+        if (this.authStopped) return
+        // 4401 未登录、4403 不在这个空间：重连只会再打一遍 /api/snapshot。
+        if (event.code === 4401 || event.code === 4403) {
+          this.authStopped = true
+          return
+        }
         setTimeout(() => this.connect(), 1200)
       }
     } catch {

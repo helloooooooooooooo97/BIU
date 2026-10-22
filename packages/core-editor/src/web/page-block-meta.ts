@@ -1,5 +1,72 @@
+import { useSyncExternalStore } from 'react'
+import { clientLog } from '@biu/web-event-log/log'
+
 /** 文档里的块只认自己写下的插件 id，编辑器不猜、不查插件表。 */
 export const ENABLE_PAGE_BLOCK_PLUGIN = 'biu:enable-page-block-plugin'
+export const PAGE_BLOCK_PLUGIN_PHASE = 'biu:page-block-plugin-phase'
+/** 启用请求先记在这里。监听还没挂上时事件会丢，后挂上的监听靠这份名单补上。 */
+export const PENDING_PAGE_BLOCK_ENABLES = '__biuPendingPageBlockEnables'
+
+function pendingPageBlockEnables() {
+  const host = globalThis as typeof globalThis & { [PENDING_PAGE_BLOCK_ENABLES]?: Map<string, string> }
+  if (!host[PENDING_PAGE_BLOCK_ENABLES]) host[PENDING_PAGE_BLOCK_ENABLES] = new Map()
+  return host[PENDING_PAGE_BLOCK_ENABLES]
+}
+
+export type PageBlockPluginPhase = 'idle' | 'loading' | 'failed' | 'ready' | 'deferred'
+
+const phases = new Map<string, PageBlockPluginPhase>()
+let phaseVersion = 0
+const phaseListeners = new Set<() => void>()
+
+function emitPhase() {
+  phaseVersion += 1
+  for (const fn of phaseListeners) fn()
+}
+
+export function pageBlockPluginPhase(plugin: string): PageBlockPluginPhase {
+  return phases.get(plugin.trim()) ?? 'idle'
+}
+
+export function setPageBlockPluginPhase(plugin: string, phase: PageBlockPluginPhase) {
+  const id = plugin.trim()
+  if (!id) return
+  if (phase === 'ready' || phase === 'failed') pendingPageBlockEnables().delete(id)
+  if (phase === 'idle') phases.delete(id)
+  else phases.set(id, phase)
+  emitPhase()
+}
+
+export function subscribePageBlockPluginPhase(fn: () => void) {
+  phaseListeners.add(fn)
+  return () => phaseListeners.delete(fn)
+}
+
+export function usePageBlockPluginPhase(plugin: string) {
+  useSyncExternalStore(
+    (fn) => {
+      phaseListeners.add(fn)
+      return () => phaseListeners.delete(fn)
+    },
+    () => phaseVersion,
+    () => 0,
+  )
+  return pageBlockPluginPhase(plugin)
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener(PAGE_BLOCK_PLUGIN_PHASE, (event) => {
+    const detail = (event as CustomEvent<{ plugin?: unknown; phase?: unknown }>).detail
+    const plugin = typeof detail?.plugin === 'string' ? detail.plugin.trim() : ''
+    const phase = detail?.phase
+    if (
+      !plugin ||
+      (phase !== 'ready' && phase !== 'failed' && phase !== 'loading' && phase !== 'idle' && phase !== 'deferred')
+    ) return
+    if (phase === 'ready' || phase === 'failed') pendingPageBlockEnables().delete(plugin)
+    setPageBlockPluginPhase(plugin, phase)
+  })
+}
 
 const HTML_KINDS = new Set(['html', 'htmlframe'])
 const VIDEO_KINDS = new Set(['video'])
@@ -104,8 +171,41 @@ export function formatPageBlockFence(kind: string, plugin: string, data: Record<
   return `:::pageBlock ${meta}\n${JSON.stringify(body, null, 2)}\n:::`
 }
 
-export function requestEnablePageBlockPlugin(plugin: string, kind: string) {
+/** 块 ↔ 源码的唯一读出口。id 在围栏头上，体再走 parsePageBlockData。 */
+export function readPageBlockFence(raw: string) {
+  const match = raw.trim().match(/^:::pageBlock(?:\s+\{([^}]*)\})?\s*\n([\s\S]*?)\n:::\s*$/)
+  const header = match?.[1] ?? ''
+  const body = match?.[2] ?? raw
+  const meta = parsePageBlockMeta(header || raw)
+  return {
+    kind: meta.kind,
+    plugin: meta.plugin,
+    id: meta.id,
+    extras: meta.extras,
+    body,
+    data: parsePageBlockData(meta.kind, body, meta.extras),
+  }
+}
+
+export function blockDataUnchanged(current: Record<string, unknown>, next: Record<string, unknown>) {
+  if (current === next) return true
+  const left = Object.keys(current)
+  const right = Object.keys(next)
+  if (left.length !== right.length) return false
+  for (const key of right) {
+    if (Object.is(current[key], next[key])) continue
+    if (JSON.stringify(current[key]) !== JSON.stringify(next[key])) return false
+  }
+  return true
+}
+
+export function requestEnablePageBlockPlugin(plugin: string, kind: string, opts?: { force?: boolean }) {
   const id = plugin.trim()
   if (!id || typeof window === 'undefined') return
-  window.dispatchEvent(new CustomEvent(ENABLE_PAGE_BLOCK_PLUGIN, { detail: { plugin: id, kind } }))
+  if (pageBlockPluginPhase(id) === 'loading') return
+  if (!opts?.force && pageBlockPluginPhase(id) === 'deferred') return
+  pendingPageBlockEnables().set(id, kind || '')
+  clientLog('info', 'page-block', `${kind || 'unknown'}（${id}）还没有视图，请求启用`)
+  setPageBlockPluginPhase(id, 'loading')
+  window.dispatchEvent(new CustomEvent(ENABLE_PAGE_BLOCK_PLUGIN, { detail: { plugin: id, kind, force: Boolean(opts?.force) } }))
 }

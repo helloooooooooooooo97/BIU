@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Image } from 'antd'
+import { ImageLightbox } from './image-thumbs.tsx'
 import {
   ArrowsPointingOutIcon,
   ChevronDownIcon,
@@ -62,24 +62,34 @@ function DiffBlock({ lines, path }: { lines: DiffLine[]; path?: string }) {
 }
 
 function ArtifactGallery({ artifacts }: { artifacts: NonNullable<Extract<FormattedDetail, { kind: 'bash' }>['artifacts']> }) {
+  const [preview, setPreview] = useState<number | null>(null)
   if (!artifacts.length) return null
   return (
-    <Image.PreviewGroup>
+    <>
       <div className="tool-artifacts" aria-label="Artifacts">
-        {artifacts.map((item) => (
+        {artifacts.map((item, index) => (
           <div key={item.url} className="tool-artifact">
-            <Image
-              className="tool-artifact-img"
-              src={item.url}
-              alt={item.name}
-              loading="lazy"
-              style={{ width: '100%', maxHeight: 220, objectFit: 'contain' }}
-            />
+            <button
+              type="button"
+              className="tool-artifact-open"
+              aria-label={item.name}
+              onClick={() => setPreview(index)}
+            >
+              <img className="tool-artifact-img" src={item.url} alt="" loading="lazy" />
+            </button>
             <span className="tool-artifact-caption">{item.source || item.name}</span>
           </div>
         ))}
       </div>
-    </Image.PreviewGroup>
+      {preview != null ? (
+        <ImageLightbox
+          images={artifacts}
+          index={preview}
+          onClose={() => setPreview(null)}
+          onIndex={setPreview}
+        />
+      ) : null}
+    </>
   )
 }
 
@@ -446,11 +456,22 @@ export function ToolCard({
           <span className="tool-call-title">{title}</span>
           {open ? null : <span className="tool-call-summary">{summary}</span>}
         </button>
-        {parsed.kind === 'bash' || node.result?.streaming ? (
+        {parsed.kind === 'bash' ||
+        parsed.kind === 'create' ||
+        parsed.kind === 'insert' ||
+        parsed.kind === 'str_replace' ||
+        node.result?.streaming ? (
           <span className="tool-call-chars" title="输出字数" data-testid="tool-call-chars">
-            {toolOutputChars(node.result?.detail, parsed.kind)}
+            {parsed.kind === 'create'
+              ? parsed.fileText.length
+              : parsed.kind === 'insert'
+                ? parsed.newStr.length
+                : parsed.kind === 'str_replace'
+                  ? parsed.newStr.length
+                  : toolOutputChars(node.result?.detail, parsed.kind)}
           </span>
         ) : null}
+        <div className="tool-call-tools">
         <button
           type="button"
           className="tool-call-inspect"
@@ -473,6 +494,7 @@ export function ToolCard({
         {copyTextValue ? (
           <CopyIconButton className="tool-call-copy" text={copyTextValue} label="复制工具输出" />
         ) : null}
+        </div>
       </div>
       {!open && previewLines && previewLines.length > 0 ? (
         <div className="tool-call-body">

@@ -135,3 +135,124 @@ test('clientViewFromDbRow keeps flat filters and sorts for the live table', () =
   assert.equal(view?.sorts[0]?.field, 'title')
   assert.equal(view?.sorts[0]?.dir, 'desc')
 })
+
+test('index collection views stay with the account that saved them', async () => {
+  const store = new SavedViewsStore()
+  store.open(':memory:')
+  store.replaceOwned('/facets', [{ id: 'ada-view', name: 'Ada 的标签' }], 'ada')
+  store.replaceOwned('/facets', [{ id: 'bob-view', name: 'Bob 的标签' }], 'bob')
+  store.replaceOwned('/facets', [{ id: 'ada-view', name: 'Ada 改过' }], 'ada')
+  let who = 'ada'
+  const spec = viewsCollection(
+    store,
+    () => [{ path: '/facets', id: 'facets', kind: 'collection', label: '标签', view: { moduleId: 'facets', route: '/facets', title: '标签' } }],
+    () => who,
+  )
+  const adaRows = await spec.list()
+  assert.deepEqual(adaRows.map((row) => row.viewId).filter((id) => id !== builtinAllViewId('/facets')), ['ada-view'])
+  assert.equal(adaRows.find((row) => row.viewId === 'ada-view')?.title, 'Ada 改过')
+  who = 'bob'
+  const bobRows = await spec.list()
+  assert.deepEqual(bobRows.map((row) => row.viewId).filter((id) => id !== builtinAllViewId('/facets')), ['bob-view'])
+  await assert.rejects(() => spec.remove!({ ids: ['facets::ada-view'] }), /unknown view/)
+})
+
+test('update and delete accept row ids (table::viewId) and keep the source table label', async () => {
+  const store = new SavedViewsStore()
+  const spec = viewsCollection(store, () => [
+    { path: '/tasks', id: 'tasks', kind: 'collection', label: 'Task', view: { moduleId: 'tasks', route: '/tasks', title: 'Task' } },
+  ])
+  const [row] = await spec.create!([{ tablePath: '/tasks', title: '看板', mode: 'table' }])
+  const rowId = String(row?.id)
+  const written = await spec.update!(rowId, { title: '看板 v2' })
+  assert.equal(written.id, rowId)
+  assert.equal(written.tablePath, '/tasks')
+  assert.equal(written.title, '看板 v2')
+  assert.equal(written.table, 'Task')
+  assert.equal((await spec.list()).find((item) => item.id === rowId)?.title, '看板 v2')
+  assert.deepEqual(await spec.remove!({ ids: [rowId] }), [rowId])
+  assert.equal((await spec.list()).some((item) => item.id === rowId), false)
+})
+
+test('update of another account view on an index collection stays unknown', async () => {
+  const store = new SavedViewsStore()
+  const spec = (account: string) =>
+    viewsCollection(
+      store,
+      () => [{ path: '/facets', id: 'facets', kind: 'collection', label: '标签', view: { moduleId: 'facets', route: '/facets', title: '标签' } }],
+      () => account,
+    )
+  spec('ada').create!([{ tablePath: '/facets', viewId: 'ada-view', title: 'Ada 的标签' }])
+  assert.equal(store.viewsFor('/facets', 'bob').length, 0)
+  assert.throws(() => store.write('facets::ada-view', { title: '抢改' }, 'bob'), /unknown view/)
+  assert.throws(() => spec('bob').update!('facets::ada-view', { title: '抢改' }), /unknown view/)
+  await assert.rejects(() => spec('bob').remove!({ ids: ['facets::ada-view'] }), /unknown view/)
+  assert.equal(spec('ada').update!('facets::ada-view', { title: 'Ada 改' }).title, 'Ada 改')
+  assert.equal(store.viewsFor('/facets', 'ada')[0]?.name, 'Ada 改')
+})
+
+test('deleting a /views row also removes the stored view so it cannot come back', async () => {
+  const store = new SavedViewsStore()
+  const spec = viewsCollection(store, () => [
+    { path: '/tasks', id: 'tasks', kind: 'collection', label: 'Task', view: { moduleId: 'tasks', route: '/tasks', title: 'Task' } },
+  ])
+  const [row] = await spec.create!([{ tablePath: '/tasks', viewId: 'gone', title: '会被删掉' }])
+  assert.equal(store.viewsFor('/tasks').length, 1)
+  // 宿主删 /views 行时按 `表::视图` 定位视图本体
+  assert.equal(store.remove(String(row?.id)), true)
+  assert.deepEqual(store.viewsFor('/tasks'), [])
+  assert.equal((await spec.list()).some((item) => item.id === row?.id), false)
+  // 再删一次要报未知，不能静默成功
+  assert.throws(() => store.remove(String(row?.id)), /unknown view/)
+})
+
+
+test('a stale window pushing its snapshot cannot resurrect A or drop newly created B', async () => {
+  const store = new SavedViewsStore()
+  const spec = viewsCollection(store, () => [
+    { path: '/tasks', id: 'tasks', kind: 'collection', label: 'Task', view: { moduleId: 'tasks', route: '/tasks', title: 'Task' } },
+  ])
+  // 两个窗口各自持有一份快照：都从「A 存在」开始
+  const windowA = ['/tasks', [{ id: 'A', name: '视图 A' }]] as const
+  store.replace(windowA[0], windowA[1] as never)
+  // 窗口 1：新建 B，删掉 A（差异写）
+  store.applyPatch('/tasks', { upsert: [{ id: 'B', name: '视图 B' }], remove: ['A'] })
+  assert.deepEqual(store.viewsFor('/tasks').map((view) => view.id), ['B'])
+  // 窗口 2 还拿着旧快照（含 A）去保存自己的显示状态：只推 A 一条，不应把 A 复活、也不应丢 B
+  store.applyPatch('/tasks', { upsert: [{ id: 'A', name: '视图 A' }] })
+  assert.deepEqual(store.viewsFor('/tasks').map((view) => view.id), ['B'])
+  // 窗口 2 显式删 A（它以为还在）也伤不到 B
+  store.applyPatch('/tasks', { remove: ['A'] })
+  assert.deepEqual(store.viewsFor('/tasks').map((view) => view.id), ['B'])
+  // 窗口 2 的新增仍然能落地
+  store.applyPatch('/tasks', { upsert: [{ id: 'C', name: '视图 C' }] })
+  assert.deepEqual(store.viewsFor('/tasks').map((view) => view.id), ['B', 'C'])
+})
+
+test('an older snapshot loses to newer content when timestamps disagree', async () => {
+  const store = new SavedViewsStore()
+  store.replace('/tasks', [{ id: 'A', name: '新名字', updatedAt: 2000 }] as never)
+  store.applyPatch('/tasks', { upsert: [{ id: 'A', name: '旧名字', updatedAt: 1000 }] })
+  assert.equal(store.viewsFor('/tasks')[0]?.name, '新名字')
+  store.applyPatch('/tasks', { upsert: [{ id: 'A', name: '更新的名字', updatedAt: 3000 }] })
+  assert.equal(store.viewsFor('/tasks')[0]?.name, '更新的名字')
+})
+
+test('tombstones survive a reopen and can be cleared by recreating the view', async () => {
+  const file = join(mkdtempSync(join(tmpdir(), 'biu-views-')), 'biu.sqlite')
+  const first = new SavedViewsStore()
+  first.open(file)
+  first.applyPatch('/tasks', { upsert: [{ id: 'A', name: '视图 A' }] })
+  first.applyPatch('/tasks', { remove: ['A'] })
+  assert.equal(first.isTombstoned('/tasks', 'A'), true)
+  const second = new SavedViewsStore()
+  second.open(file)
+  assert.equal(second.isTombstoned('/tasks', 'A'), true)
+  // 老窗口再推 A 不复活
+  second.applyPatch('/tasks', { upsert: [{ id: 'A', name: '视图 A' }] })
+  assert.deepEqual(second.viewsFor('/tasks'), [])
+  // 真新建（同 id）会撤掉墓碑
+  second.applyPatch('/tasks', { upsert: [{ id: 'C', name: '视图 C' }] })
+  assert.deepEqual(second.viewsFor('/tasks').map((view) => view.id), ['C'])
+  assert.equal(second.isTombstoned('/tasks', 'C'), false)
+})

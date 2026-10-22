@@ -1,0 +1,15 @@
+{
+  "id": "fitness-tracker",
+  "name": "健身记录块",
+  "blurb": "页面块：今日打卡（饮水累加、8+16 进食窗口倒计时、餐次/训练/体重）与训练日志（动作表勾选、自动算容量）。数据跟文档走，可导出 markdown。",
+  "tags": [
+    "page",
+    "editor",
+    "fitness"
+  ],
+  "author": "BIU官方",
+  "authorUrl": "https://github.com/helloooooooooooooo97/biu",
+  "createdAt": 1791615872263,
+  "headless": true,
+  "builtin": true
+}

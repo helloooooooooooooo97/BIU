@@ -1,4 +1,4 @@
-import { copyFile, mkdir, readFile, access, readdir, stat } from 'node:fs/promises'
+import { copyFile, mkdir, readFile, writeFile, access, readdir, stat } from 'node:fs/promises'
 import { basename, extname, isAbsolute, join, resolve, relative } from 'node:path'
 import { constants } from 'node:fs'
 import { DATA_DIR_NAME, LEGACY_DATA_DIR_NAME, dataDir, dataHome } from '@biu/host-plugin-loader/data-dir'
@@ -10,6 +10,13 @@ export type ArtifactMeta = {
   mime: string
   url: string
   source?: string
+}
+
+export type PastedImage = {
+  name: string
+  mime: string
+  url: string
+  path?: string
 }
 
 const PATH_CANDIDATE =
@@ -164,6 +171,85 @@ export function resolveArtifactFile(sessionId: string, name: string, baseDir = p
   const full = join(dir, name)
   if (relative(dir, full).startsWith('..')) return null
   return full
+}
+
+const PASTE_DATA_URL = /^data:(image\/(?:png|jpe?g|gif|webp));base64,([A-Za-z0-9+/]+={0,2})$/i
+
+function extForMime(mime: string) {
+  const kind = mime.toLowerCase()
+  if (kind === 'image/jpeg' || kind === 'image/jpg') return '.jpg'
+  if (kind === 'image/gif') return '.gif'
+  if (kind === 'image/webp') return '.webp'
+  return '.png'
+}
+
+function decodePastedDataUrl(url: string): { mime: string; data: Buffer } | null {
+  const match = PASTE_DATA_URL.exec(String(url ?? '').trim())
+  if (!match) return null
+  try {
+    const mime = match[1]!.toLowerCase() === 'image/jpg' ? 'image/jpeg' : match[1]!.toLowerCase()
+    const data = Buffer.from(match[2]!, 'base64')
+    if (!data.length) return null
+    return { mime, data }
+  } catch {
+    return null
+  }
+}
+
+/** 把对话里粘贴的 data URL 写到 `.biu/artifacts/<sessionId>/`，返回带本机 path 的条目。 */
+export async function persistPastedImages(
+  sessionId: string,
+  images: Array<{ name?: string; mime?: string; url?: string }>,
+  baseDir = dataHome(),
+): Promise<PastedImage[]> {
+  if (!sessionId || !images.length) return []
+  const dir = artifactsDir(sessionId, baseDir)
+  await mkdir(dir, { recursive: true })
+  const used = new Set<string>()
+  try {
+    for (const entry of await readdir(dir)) used.add(entry)
+  } catch {
+    /* empty dir */
+  }
+  const out: PastedImage[] = []
+  for (const item of images.slice(0, 6)) {
+    const decoded = decodePastedDataUrl(String(item.url ?? ''))
+    if (!decoded) throw new Error('pasted image is not a data URL')
+    const hint = String(item.name ?? '').trim() || `paste${extForMime(decoded.mime)}`
+    const name = safeArtifactName(hint.endsWith(extForMime(decoded.mime)) ? hint : `${hint}${extForMime(decoded.mime)}`, used)
+    const dest = join(dir, name)
+    await writeFile(dest, decoded.data)
+    out.push({
+      name,
+      mime: decoded.mime,
+      url: String(item.url),
+      path: dest,
+    })
+  }
+  return out
+}
+
+export function pastedImagePickText(images: Array<{ name: string; path?: string }>) {
+  return images
+    .filter((item) => item.path)
+    .map((item) => {
+      const payload = {
+        kind: 'file',
+        id: `file:paste:${item.name}`,
+        label: item.name,
+        title: item.name,
+        path: item.path,
+      }
+      return `<pick>${JSON.stringify(payload).replace(/</g, '\\u003c')}</pick>`
+    })
+    .join('\n')
+}
+
+export function withPastedImagePicks(text: string, images: Array<{ name: string; path?: string }>) {
+  const picks = pastedImagePickText(images)
+  if (!picks) return text
+  const body = String(text ?? '').trim()
+  return body ? `${body}\n${picks}` : picks
 }
 
 export async function readArtifactFile(sessionId: string, name: string, baseDir = process.cwd()) {

@@ -86,6 +86,16 @@ export class SharesStore {
     return row ? publicShare(row) : null
   }
 
+  /** 记录分享会带上当时的视图 id，归属判断不能只查空 view_id。 */
+  findRecord(collection: string, recordId: string): ShareRecord | null {
+    const id = String(recordId ?? '').trim()
+    if (!id) return null
+    const row = this.conn().prepare(
+      'SELECT * FROM shares WHERE kind = ? AND collection = ? AND record_id = ? ORDER BY updated_at DESC LIMIT 1',
+    ).get('record', normalizeCollectionPath(collection), id) as ShareRow | undefined
+    return row ? publicShare(row) : null
+  }
+
   verifyPassword(token: string, password: string) {
     const row = this.conn().prepare('SELECT password_salt, password_hash FROM shares WHERE token = ?').get(token) as
       | { password_salt: string; password_hash: string }
@@ -111,11 +121,14 @@ export class SharesStore {
     if (!kind) throw new Error('invalid share kind')
     const collection = normalizeCollectionPath(input.collection)
     if (!collection || collection === '/') throw new Error('invalid collection')
-    const viewId = String(input.viewId ?? '').trim()
+    const requestedViewId = String(input.viewId ?? '').trim()
     const recordId = String(input.recordId ?? '').trim()
     if (kind === 'record' && !recordId) throw new Error('record share needs recordId')
     const now = Date.now()
-    const existing = this.find(kind, collection, viewId, recordId)
+    const existing = kind === 'record'
+      ? this.findRecord(collection, recordId)
+      : this.find(kind, collection, requestedViewId, recordId)
+    const viewId = existing?.kind === 'record' ? existing.viewId : requestedViewId
     let salt = ''
     let hash = ''
     if (input.password === undefined) {
@@ -189,6 +202,20 @@ export class SharesStore {
 
   list(): ShareRecord[] {
     const rows = this.conn().prepare('SELECT * FROM shares ORDER BY updated_at DESC, token DESC').all() as ShareRow[]
+    return rows.map(publicShare)
+  }
+
+  listViews(collection: string): ShareRecord[] {
+    const rows = this.conn().prepare(
+      'SELECT * FROM shares WHERE kind = ? AND collection = ? ORDER BY updated_at DESC, token DESC',
+    ).all('view', normalizeCollectionPath(collection)) as ShareRow[]
+    return rows.map(publicShare)
+  }
+
+  listRecords(collection: string): ShareRecord[] {
+    const rows = this.conn().prepare(
+      'SELECT * FROM shares WHERE kind = ? AND collection = ? ORDER BY updated_at DESC, token DESC',
+    ).all('record', normalizeCollectionPath(collection)) as ShareRow[]
     return rows.map(publicShare)
   }
 }

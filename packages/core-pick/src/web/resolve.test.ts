@@ -1,7 +1,7 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { pickSurfaceAtPoint, resolvePickFromNode, resolvePickAtPoint, resolvePicksInRect, visiblePickBox, editorBlockElFromNode } from './resolve.ts'
-import { formatPicks, parsePicks, splitPickStream, chipLabel, chipCaption, dedupePicks, textPickFromSelection, textPickFromPlain } from './types.ts'
+import { formatPicks, parsePicks, splitPickStream, chipLabel, chipCaption, dedupePicks, textPickFromSelection, textPickFromPlain, filePickFromPath } from './types.ts'
 import { bindEditorTextHost } from './editor-host.ts'
 
 test('splitPickStream keeps text and chips in order', () => {
@@ -124,6 +124,24 @@ test('html pick chip uses the inner node label, not the page title', () => {
     }),
     '从民歌运动到流媒体时代 · 半世纪的声音地图',
   )
+})
+
+test('file pick chips show the filename and send the absolute path', () => {
+  const ref = filePickFromPath('/Users/ada/reports/Q3.pdf')
+  assert.ok(ref)
+  assert.equal(ref.kind, 'file')
+  assert.equal(ref.path, '/Users/ada/reports/Q3.pdf')
+  assert.equal(chipLabel(ref), 'Q3.pdf')
+  const win = filePickFromPath('C:\\Users\\ada\\notes.txt')
+  assert.ok(win)
+  assert.equal(win.path, 'C:\\Users\\ada\\notes.txt')
+  assert.equal(chipLabel(win), 'notes.txt')
+  const packed = formatPicks([ref])
+  assert.match(packed, /"kind":"file"/)
+  assert.match(packed, /"path":"\/Users\/ada\/reports\/Q3\.pdf"/)
+  const parsed = parsePicks(packed)
+  assert.equal(parsed.refs[0]?.kind, 'file')
+  assert.equal(parsed.refs[0]?.path, '/Users/ada/reports/Q3.pdf')
 })
 
 test('chip label puts line span in parentheses after the name', () => {
@@ -488,6 +506,76 @@ test('marquee scoped to inspector skips center chat', () => {
   )
   inspector.remove()
   chat.remove()
+})
+
+test('marquee on table cells keeps the cells not the parent row', () => {
+  const table = document.createElement('table')
+  const row = document.createElement('tr')
+  row.setAttribute('data-biu-kind', 'task')
+  row.setAttribute('data-biu-id', 't1')
+  row.setAttribute('data-biu-label', '写需求')
+  row.setAttribute('data-biu-path', '/tasks/t1')
+  const status = document.createElement('td')
+  status.setAttribute('data-biu-kind', 'task')
+  status.setAttribute('data-biu-id', 't1:status')
+  status.setAttribute('data-biu-label', '状态')
+  status.setAttribute('data-biu-path', '/tasks/t1')
+  status.setAttribute('data-biu-title', '写需求')
+  status.setAttribute('data-biu-field', 'status')
+  status.setAttribute('data-biu-text', '进行中')
+  const title = document.createElement('td')
+  title.setAttribute('data-biu-kind', 'task')
+  title.setAttribute('data-biu-id', 't1:title')
+  title.setAttribute('data-biu-label', '标题')
+  title.setAttribute('data-biu-path', '/tasks/t1')
+  title.setAttribute('data-biu-field', 'title')
+  title.setAttribute('data-biu-text', '写需求')
+  const other = document.createElement('td')
+  other.setAttribute('data-biu-kind', 'task')
+  other.setAttribute('data-biu-id', 't1:assignee')
+  other.setAttribute('data-biu-field', 'assignee')
+  row.append(title, status, other)
+  table.append(row)
+  document.body.append(table)
+  stubBox(row, 0, 0, 300, 24)
+  stubBox(title, 0, 0, 100, 24)
+  stubBox(status, 100, 0, 100, 24)
+  stubBox(other, 200, 0, 100, 24)
+  const hits = resolvePicksInRect({ left: 120, top: 2, width: 40, height: 16 }, '/tasks')
+  assert.equal(hits.length, 1)
+  assert.equal(hits[0]?.ref.id, 't1:status')
+  assert.equal(hits[0]?.ref.field, 'status')
+  assert.equal(hits[0]?.ref.path, '/tasks/t1')
+  assert.equal(hits[0]?.ref.text, '进行中')
+  assert.equal(chipCaption(hits[0]!.ref).name, '写需求 · 状态')
+  const packed = formatPicks([hits[0]!.ref])
+  assert.match(packed, /"field":"status"/)
+  assert.match(packed, /"path":"\/tasks\/t1"/)
+  table.remove()
+})
+
+test('clicking a cell reads field path and value from the td', () => {
+  const row = document.createElement('tr')
+  row.setAttribute('data-biu-kind', 'task')
+  row.setAttribute('data-biu-id', 't1')
+  const cell = document.createElement('td')
+  cell.setAttribute('data-biu-kind', 'task')
+  cell.setAttribute('data-biu-id', 't1:dueAt')
+  cell.setAttribute('data-biu-field', 'dueAt')
+  cell.setAttribute('data-biu-path', '/tasks/t1')
+  cell.setAttribute('data-biu-text', '2026/09/21 00:00')
+  cell.setAttribute('data-biu-label', '截止')
+  const inner = document.createElement('span')
+  inner.textContent = '2026/09/21 00:00'
+  cell.append(inner)
+  row.append(cell)
+  document.body.append(row)
+  const hit = resolvePickFromNode(inner, '/tasks')
+  assert.ok(hit)
+  assert.equal(hit.ref.field, 'dueAt')
+  assert.equal(hit.ref.path, '/tasks/t1')
+  assert.equal(hit.ref.id, 't1:dueAt')
+  row.remove()
 })
 
 test('dedupePicks keeps one chip per kind+id', () => {

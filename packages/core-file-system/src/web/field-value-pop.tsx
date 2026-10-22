@@ -15,6 +15,7 @@ export function FieldValuePop({
   value,
   collectionPath,
   options = [],
+  getOptions,
   records,
   labelField,
   onSubmit,
@@ -25,12 +26,14 @@ export function FieldValuePop({
   value: unknown
   collectionPath: string
   options?: string[]
+  getOptions?: () => string[]
   records?: DbRecord[]
   labelField?: string
   onSubmit: (raw: unknown) => void
 }) {
   const hostRef = useRef<HTMLSpanElement>(null)
   const [open, setOpen] = useState(false)
+  const draftOptions = open ? (options.length ? options : getOptions?.() ?? []) : options
   const kind = resolveFieldType(field)
   if (kind === 'action') {
     return <ActionCell field={field} fieldKey={fieldKey} />
@@ -78,25 +81,27 @@ export function FieldValuePop({
       >
         {display}
       </span>
-      <CellPop
-        open={open}
-        anchor={hostRef.current}
-        className={`is-${kind}${isRecordLinkField(field, fieldKey) ? ' is-record-link' : ''}`}
-        onClose={() => setOpen(false)}
-      >
-        <CellPopDraft
-          record={record}
-          fieldKey={fieldKey}
-          field={field}
-          initial={value}
-          options={options}
-          collectionPath={collectionPath}
-          seed={records}
-          labelField={labelField}
+      {open ? (
+        <CellPop
+          open
+          anchor={hostRef.current}
+          className={`is-${kind}${isRecordLinkField(field, fieldKey) ? ' is-record-link' : ''}`}
           onClose={() => setOpen(false)}
-          onSubmit={onSubmit}
-        />
-      </CellPop>
+        >
+          <CellPopDraft
+            record={record}
+            fieldKey={fieldKey}
+            field={field}
+            initial={value}
+            options={draftOptions}
+            collectionPath={collectionPath}
+            seed={records}
+            labelField={labelField}
+            onClose={() => setOpen(false)}
+            onSubmit={onSubmit}
+          />
+        </CellPop>
+      ) : null}
     </>
   )
 }

@@ -25,6 +25,12 @@ async function recordOf(_store: PagesStore, index: PageBlocksIndex, id: string) 
   return index.get(id)
 }
 
+async function hydratedRecord(index: PageBlocksIndex, row: DbRecord | null) {
+  if (!row) return null
+  const [next] = await index.hydrateRecords([row])
+  return next ?? row
+}
+
 export function pageBlocksCollection(store: PagesStore, index: PageBlocksIndex): CollectionSpec {
   return {
     id: 'page-blocks',
@@ -69,13 +75,13 @@ export function pageBlocksCollection(store: PagesStore, index: PageBlocksIndex):
           const row = await recordOf(store, index, id)
           if (row) rows.push(row)
         }
-        return rows
+        return index.hydrateRecords(rows)
       }
-      return index.list()
+      return index.hydrateRecords(await index.list())
     },
     get: async (id) => {
       await index.sync()
-      return recordOf(store, index, id)
+      return hydratedRecord(index, await recordOf(store, index, id))
     },
     update: async (id, patch) => {
       const parsed = parsePageBlockRecordId(id)
@@ -108,7 +114,9 @@ export function pageBlocksCollection(store: PagesStore, index: PageBlocksIndex):
       }
       const row = await index.get(id)
       if (!row) throw new Error(`unknown pageBlock: ${id}`)
-      return row
+      const hydrated = await hydratedRecord(index, row)
+      if (!hydrated) throw new Error(`unknown pageBlock: ${id}`)
+      return hydrated
     },
   }
 }

@@ -141,7 +141,42 @@ function taskRecord(row: TaskRow, lookup: (id: string) => TaskRow | undefined, u
   }
 }
 
+function listedTaskRecord(row: TaskRow, lookup: (id: string) => TaskRow | undefined, usage: Usage, aggregate: boolean): DbRecord {
+  return {
+    id: row.id,
+    title: row.title ?? '',
+    status: row.status ?? 'todo',
+    priority: row.priority ?? 'med',
+    difficulty: row.difficulty ?? 'med',
+    project: row.project ?? '',
+    dueAt: row.dueAt ?? null,
+    creator: row.creator?.name ?? '用户',
+    creatorSessionId: row.creator?.sessionId ?? '',
+    assignee: row.assignee?.name ?? '',
+    assigneeSessionId: row.assignee?.sessionId ?? '',
+    blocked: Boolean(row.blocked),
+    parentChain: parentChain(row, lookup),
+    usage: usage.totalTokens,
+    usageParts: { ...usage, aggregate },
+    ...recordBuiltinValues(row),
+  }
+}
+
+function missingLookup(): TaskRow | undefined {
+  return undefined
+}
+
 function recordsWithUsage(rows: TaskRow[]): DbRecord[] {
+  let tree = false
+  for (const row of rows) {
+    if (row.parentId) {
+      tree = true
+      break
+    }
+  }
+  if (!tree) {
+    return rows.map((row) => listedTaskRecord(row, missingLookup, ownUsage(row), false))
+  }
   const byId = new Map(rows.map((row) => [row.id, row]))
   const kids = new Map<string, string[]>()
   for (const row of rows) {
@@ -161,7 +196,7 @@ function recordsWithUsage(rows: TaskRow[]): DbRecord[] {
     return next
   }
   return rows.map((row) =>
-    taskRecord(row, (id) => byId.get(id), roll(row.id), Boolean(kids.get(row.id)?.length)),
+    listedTaskRecord(row, (id) => byId.get(id), roll(row.id), Boolean(kids.get(row.id)?.length)),
   )
 }
 
@@ -196,7 +231,7 @@ export function tasksCollection(tasks: TasksLike, recordActions?: TaskRecordActi
       contentField: 'description',
       contentBackend: 'editorContent',
       parentField: 'parentId',
-      columns: ['title', 'status', 'priority', 'difficulty', 'usage', 'createdBy', 'assignee', 'project', 'tags', 'dueAt'],
+      columns: ['title', 'status', 'priority', 'difficulty', 'usage', 'createdBy', 'assignee', 'project', 'facet', 'dueAt'],
       fields: {
         ...REQUIRED_RECORD_FIELDS,
         title: { type: 'string', label: '标题', writable: true },
@@ -205,7 +240,6 @@ export function tasksCollection(tasks: TasksLike, recordActions?: TaskRecordActi
         difficulty: { type: 'select', label: '难度', writable: true, enum: ['low', 'med', 'high'] },
         usage: { type: 'number', label: '消耗', computed: true, sortable: true },
         project: { type: 'string', label: '项目', writable: true },
-        tags: { type: 'multi-select', label: '标签', writable: true },
         dueAt: { type: 'datetime', label: '截止', writable: true },
         description: { type: 'file', label: '描述', writable: true },
         notes: { type: 'string', label: '备忘', writable: true },
@@ -222,7 +256,10 @@ export function tasksCollection(tasks: TasksLike, recordActions?: TaskRecordActi
       }
       return recordsWithUsage(tasks.list(query?.q ? { q: query.q } : {}))
     },
-    get: (id) => recordsWithUsage(tasks.list()).find((row) => row.id === id) ?? null,
+    get: (id) => {
+      const row = tasks.get(id)
+      return row ? taskRecord(row, (pid) => tasks.get(pid), ownUsage(row), false) : null
+    },
     update: async (id, patch) => {
       const nextPatch = { ...patch }
       const assignee = await resolvedAssignee(people, patch)
@@ -239,8 +276,7 @@ export function tasksCollection(tasks: TasksLike, recordActions?: TaskRecordActi
         delete nextPatch.creatorSessionId
       }
       const next = tasks.update(id, nextPatch) as TaskRow
-      const rows = tasks.list().map((row) => (row.id === id ? { ...row, ...next, id } : row))
-      return recordsWithUsage(rows).find((row) => row.id === id) ?? taskRecord(next, (pid) => tasks.get(pid), ZERO_USAGE, false)
+      return taskRecord({ ...next, id }, (pid) => tasks.get(pid), ownUsage(next), false)
     },
     create: async (rows) =>
       Promise.all(
@@ -254,7 +290,7 @@ export function tasksCollection(tasks: TasksLike, recordActions?: TaskRecordActi
             creator,
             ...(assignee !== undefined ? { assignee } : {}),
           })
-          return recordsWithUsage(tasks.list()).find((item) => item.id === row.id) ?? taskRecord(row, (pid) => tasks.get(pid), ZERO_USAGE, false)
+          return taskRecord(row, (pid) => tasks.get(pid), ownUsage(row), false)
         }),
       ),
     remove: (query) => {

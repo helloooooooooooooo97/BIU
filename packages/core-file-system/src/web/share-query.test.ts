@@ -18,8 +18,8 @@ test('share query key is per token', () => {
 })
 
 test('share query keeps the view page size', () => {
-  assert.equal(shareQueryFromView({}).pageSize, 50)
-  assert.equal(shareQueryFromView({ pageSize: 20 }).pageSize, 20)
+  assert.equal(shareQueryFromView({}).pageSize, 20)
+  assert.equal(shareQueryFromView({ pageSize: 50 }).pageSize, 50)
 })
 
 test('applyShareQuery searches filters and sorts locally', () => {

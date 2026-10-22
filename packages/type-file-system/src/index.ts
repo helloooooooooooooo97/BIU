@@ -28,8 +28,12 @@ export type FieldSpec = {
   format?: 'datetime' | 'url' | 'image' | 'attachment' | 'file'
   /** select / multi-select 的选项 */
   enum?: string[]
+  /** enum 存储值对应的展示文案；未配置时直接显示存储值。 */
+  enumLabels?: Record<string, string>
   /** 给 Agent / db_stat：这个字段怎么写。不进单元格 UI。 */
   description?: string
+  /** 给 Agent / db_stat：写入时该传的形状示例（数组、JSON 字符串等）。 */
+  example?: unknown
   /** action 字段绑定的动作 id，缺省为字段 key */
   action?: string
   /** 由 list/get 计算写入记录，不能 PATCH。例如任务消耗。 */
@@ -47,7 +51,9 @@ export type PersonKind = 'user' | 'agent' | 'system'
 export type PersonValue = {
   kind: PersonKind
   name: string
+  accountId?: string
   sessionId?: string
+  url?: string
   mascot?: { shape: string; color: string; eye?: number }
 }
 
@@ -73,6 +79,7 @@ export function asPerson(value: unknown): PersonValue | null {
   }
   if (typeof value !== 'object' || Array.isArray(value)) return null
   const rec = value as Record<string, unknown>
+  const accountId = String(rec.accountId ?? '').trim()
   const sessionId = String(rec.sessionId ?? rec.id ?? '').trim()
   const kind: PersonKind =
     rec.kind === 'system' || rec.kind === 'agent' || rec.kind === 'user'
@@ -85,12 +92,20 @@ export function asPerson(value: unknown): PersonValue | null {
     (kind === 'system' ? '系统' : kind === 'user' ? '用户' : sessionId.slice(0, 8) || '')
   if (!name && !sessionId) return null
   const mascot = personMascot(rec.mascot)
-  return { kind, name: name || 'Agent', ...(sessionId ? { sessionId } : {}), ...(mascot ? { mascot } : {}) }
+  const url = typeof rec.url === 'string' && /^https?:\/\//.test(rec.url.trim()) ? rec.url.trim() : ''
+  return {
+    kind,
+    name: name || 'Agent',
+    ...(accountId ? { accountId } : {}),
+    ...(sessionId ? { sessionId } : {}),
+    ...(url ? { url } : {}),
+    ...(mascot ? { mascot } : {}),
+  }
 }
 
 export function personKey(person: PersonValue | null | undefined): string {
   if (!person) return ''
-  if (person.kind === 'user') return 'user'
+  if (person.kind === 'user') return person.accountId ? `user:${person.accountId}` : 'user'
   if (person.kind === 'system') return 'system'
   return person.sessionId || person.name
 }
@@ -254,13 +269,12 @@ export const BUILTIN_FIELDS = {
   updatedAt: { type: 'datetime', label: '更新时间' },
   content: { type: 'file', label: '内容' },
   emoji: { type: 'string', label: '图标', writable: true },
-  tags: { type: 'multi-select', label: '标签', writable: true },
   facet: {
     type: 'facet',
-    label: '合集',
+    label: '标签',
     writable: true,
     description:
-      '贴合集并填属性。一个合集：{tags:["facet-2"],values:{导演:"查泽雷"}}。多个合集 values 必须按 id 分组：{tags:["facet-2","awards"],values:{"facet-2":{导演:"查泽雷"},awards:{oscar:true}}}。省略 tags 只合并属性，不撕掉其它合集。',
+      '贴标签并填属性。一个标签：{tags:["facet-2"],values:{导演:"查泽雷"}}。多个标签 values 必须按 id 分组：{tags:["facet-2","awards"],values:{"facet-2":{导演:"查泽雷"},awards:{oscar:true}}}。省略 tags 只合并属性，不撕掉其它标签。读属性列：db_list columns=["facet::<标签id>::<字段key>"]，例如 facet::facet::category。',
   },
   parentId: { type: 'ref', label: '父级', writable: true },
   dependsOn: { type: 'multi-ref', label: '依赖', writable: true },
@@ -273,7 +287,6 @@ export const REQUIRED_RECORD_FIELD_KEYS = [
   'createdAt',
   'updatedAt',
   'emoji',
-  'tags',
   'facet',
   'parentId',
   'dependsOn',
@@ -291,7 +304,6 @@ export const REQUIRED_RECORD_FIELDS: RequiredRecordFields = {
   createdAt: BUILTIN_FIELDS.createdAt,
   updatedAt: BUILTIN_FIELDS.updatedAt,
   emoji: BUILTIN_FIELDS.emoji,
-  tags: BUILTIN_FIELDS.tags,
   facet: BUILTIN_FIELDS.facet,
   parentId: BUILTIN_FIELDS.parentId,
   dependsOn: BUILTIN_FIELDS.dependsOn,
@@ -304,18 +316,23 @@ export const BUILTIN_FIELD_KEYS = ['id', 'createdAt', 'updatedAt', 'content', 'e
 
 export const RESERVED_SCHEMA_FIELD_KEYS = Object.keys(BUILTIN_FIELDS)
 
+/** 已去掉的 tags 记录列，禁止再登记同名列。 */
+const DROPPED_SCHEMA_FIELDS: Record<string, string> = { tags: '标签' }
+
 export function isReservedSchemaFieldKey(key: string) {
-  return Object.prototype.hasOwnProperty.call(BUILTIN_FIELDS, String(key ?? '').trim())
+  const next = String(key ?? '').trim()
+  return Object.prototype.hasOwnProperty.call(BUILTIN_FIELDS, next) || Object.prototype.hasOwnProperty.call(DROPPED_SCHEMA_FIELDS, next)
 }
 
 export function isReservedSchemaFieldLabel(label: string) {
   const want = String(label ?? '').trim().toLowerCase()
   if (!want) return false
   if (isReservedSchemaFieldKey(want)) return true
+  if (Object.values(DROPPED_SCHEMA_FIELDS).some((text) => text.toLowerCase() === want)) return true
   return Object.values(BUILTIN_FIELDS).some((field) => String(field.label ?? '').trim().toLowerCase() === want)
 }
 
-/** 分面包内允许的字段类型，含合集（可再贴合集）。 */
+/** 分面包内允许的字段类型，含标签（可再贴标签）。 */
 export const ATOMIC_FIELD_TYPES = [
   'string',
   'number',
@@ -346,6 +363,57 @@ export type AtomicFieldType = (typeof ATOMIC_FIELD_TYPES)[number]
 
 export function isAtomicFieldType(type: unknown): type is AtomicFieldType {
   return typeof type === 'string' && (ATOMIC_FIELD_TYPES as readonly string[]).includes(type)
+}
+
+/** 写入标签属性定义：数组或 JSON 字符串均可；类型不在白名单时直接报错。 */
+export function parseAtomicFields(raw: unknown): SchemaPackField[] {
+  if (raw == null || raw === '') return []
+  let listed: unknown = raw
+  if (typeof raw === 'string') {
+    try {
+      listed = JSON.parse(raw)
+    } catch {
+      throw new Error('fields 应为 JSON 数组，例如 [{"key":"category","type":"string"}]')
+    }
+  }
+  if (!Array.isArray(listed)) throw new Error('fields 应为数组或 JSON 字符串，例如 [{"key":"category","type":"string"}]')
+  const fields: SchemaPackField[] = []
+  const seen = new Set<string>()
+  const seenLabels = new Set<string>()
+  for (const item of listed) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      throw new Error('fields 每一项应为 {key,type,label?} 对象')
+    }
+    const row = item as Record<string, unknown>
+    const key = String(row.key ?? '').trim()
+    if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(key)) throw new Error(`invalid field key: ${key || '(empty)'}`)
+    if (seen.has(key)) throw new Error(`duplicate field key: ${key}`)
+    if (isReservedSchemaFieldKey(key)) throw new Error(`reserved field key: ${key}`)
+    if (!isAtomicFieldType(row.type)) {
+      throw new Error(`unknown field type: ${String(row.type ?? '')}. allowed: ${ATOMIC_FIELD_TYPES.join(', ')}`)
+    }
+    const fieldLabel = String(row.label ?? key).trim() || key
+    if (isReservedSchemaFieldLabel(fieldLabel)) throw new Error(`reserved field label: ${fieldLabel}`)
+    if (seenLabels.has(fieldLabel.toLowerCase())) throw new Error(`duplicate field label: ${fieldLabel}`)
+    seen.add(key)
+    seenLabels.add(fieldLabel.toLowerCase())
+    const field: SchemaPackField = {
+      key,
+      type: row.type,
+      label: fieldLabel,
+      writable: row.writable !== false,
+    }
+    if (Array.isArray(row.enum)) field.enum = row.enum.map((option) => String(option)).filter(Boolean)
+    if (row.enumLabels && typeof row.enumLabels === 'object' && !Array.isArray(row.enumLabels)) {
+      field.enumLabels = Object.fromEntries(
+        Object.entries(row.enumLabels as Record<string, unknown>)
+          .map(([value, text]) => [value, String(text ?? '').trim()])
+          .filter(([value, text]) => Boolean(value && text && field.enum?.includes(value))),
+      )
+    }
+    fields.push(field)
+  }
+  return fields
 }
 
 export type SchemaPackField = FieldSpec & {
@@ -386,6 +454,13 @@ export function normalizeSchemaPack(raw: unknown): CollectionSchemaPack | null {
       writable: row.writable !== false,
     }
     if (Array.isArray(row.enum)) field.enum = row.enum.map((option) => String(option)).filter(Boolean)
+    if (row.enumLabels && typeof row.enumLabels === 'object' && !Array.isArray(row.enumLabels)) {
+      field.enumLabels = Object.fromEntries(
+        Object.entries(row.enumLabels as Record<string, unknown>)
+          .map(([value, text]) => [value, String(text ?? '').trim()])
+          .filter(([value, text]) => Boolean(value && text && field.enum?.includes(value))),
+      )
+    }
     fields.push(field)
   }
   return { id, label, fields }
@@ -408,7 +483,7 @@ export function isEmptySchemaValue(value: SchemaFieldValue): boolean {
   return true
 }
 
-/** 只保留仍贴着的合集下的值；从页面拿掉合集时元数据一起丢掉。 */
+/** 只保留仍贴着的标签下的值；从页面拿掉标签时元数据一起丢掉。 */
 export function bindSchemaValue(
   tags: string[],
   values: SchemaFieldValue['values'] = {},
@@ -423,7 +498,7 @@ export function bindSchemaValue(
   return { tags: nextTags, values: next }
 }
 
-/** 仍贴着的合集保留原值；新贴上的合集从空开始。 */
+/** 仍贴着的标签保留原值；新贴上的标签从空开始。 */
 export function retagSchemaValue(prev: SchemaFieldValue, nextTags: string[]): SchemaFieldValue {
   const attached = new Set(prev.tags)
   const carried: SchemaFieldValue['values'] = {}
@@ -469,9 +544,6 @@ export function recordBuiltinValues(row: Record<string, unknown> = {}) {
   const updatedAt = Number(row.updatedAt)
   const created = Number.isFinite(createdAt) && createdAt > 0 ? createdAt : 0
   const updated = Number.isFinite(updatedAt) && updatedAt > 0 ? updatedAt : created
-  const tags = Array.isArray(row.tags)
-    ? [...new Set(row.tags.map((item) => String(item).trim()).filter(Boolean))]
-    : []
   const dependsOn = Array.isArray(row.dependsOn)
     ? [...new Set(row.dependsOn.map((item) => String(item).trim()).filter(Boolean))]
     : []
@@ -480,7 +552,6 @@ export function recordBuiltinValues(row: Record<string, unknown> = {}) {
     createdAt: created,
     updatedAt: updated,
     emoji: String(row.emoji ?? ''),
-    tags,
     facet: normalizeSchemaValue(row.facet),
     parentId,
     dependsOn,
@@ -522,8 +593,7 @@ export function withBuiltinFields(
   if (!next.updatedAt) next.updatedAt = BUILTIN_FIELDS.updatedAt
   if (!next.emoji) next.emoji = BUILTIN_FIELDS.emoji
   else if (!next.emoji.computed) next.emoji = { ...BUILTIN_FIELDS.emoji, ...next.emoji, writable: true }
-  if (!next.tags) next.tags = BUILTIN_FIELDS.tags
-  else if (!next.tags.computed) next.tags = { ...BUILTIN_FIELDS.tags, ...next.tags, type: 'multi-select', writable: true }
+  delete next.tags
   if (!next.facet) next.facet = BUILTIN_FIELDS.facet
   if (!next.parentId) next.parentId = BUILTIN_FIELDS.parentId
   else if (!next.parentId.computed) next.parentId = { ...BUILTIN_FIELDS.parentId, ...next.parentId, type: 'ref', writable: true }
@@ -547,6 +617,13 @@ export function withBuiltinFields(
 
 /** 登记方可序列化的动作声明。图标与按钮长什么样由前端 decorate，不进这份契约。 */
 export type CollectionActionAudience = 'both' | 'agent' | 'user'
+export type CollectionPermissionAction =
+  | 'resource:read'
+  | 'resource:create'
+  | 'resource:update'
+  | 'resource:delete'
+  | 'resource:share'
+  | 'resource:manage-permissions'
 
 export type CollectionActionInfo = {
   id: string
@@ -564,6 +641,8 @@ export type CollectionActionInfo = {
   parameters?: Record<string, unknown>
   /** 记录还不存在时也能跑（例如新建插件）。 */
   allowMissing?: boolean
+  /** 此动作要求的统一授权能力。缺省按修改记录处理。 */
+  requiredAction?: CollectionPermissionAction
 }
 
 export function actionVisibleToUser(action: { for?: CollectionActionAudience }) {

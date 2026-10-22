@@ -3,7 +3,6 @@ import {
   StopCircleIcon,
   HashtagIcon,
   Square3Stack3DIcon,
-  RectangleStackIcon,
   DocumentIcon,
   DocumentTextIcon,
   ClipboardDocumentCheckIcon,
@@ -51,7 +50,7 @@ const KIND_ICONS: Record<string, Glyph> = {
   text: DocumentTextIcon,
   task: CheckCircleIcon,
   page: DocumentIcon,
-  collection: RectangleStackIcon,
+  collection: TagIcon,
   view: Square3Stack3DIcon,
   plugin: PuzzlePieceIcon,
   message: ChatBubbleLeftIcon,
@@ -62,10 +61,11 @@ const KIND_ICONS: Record<string, Glyph> = {
   turn: HashtagIcon,
   usage: CircleStackIcon,
   tag: TagIcon,
-  facet: RectangleStackIcon,
+  facet: TagIcon,
   record: ClipboardDocumentCheckIcon,
   html: DocumentIcon,
   block: DocumentTextIcon,
+  file: DocumentIcon,
 }
 
 export function pickKindIcon(kind: string): Glyph {
@@ -79,10 +79,22 @@ export function PickKindGlyph({ kind }: { kind: string }) {
 
 export function PickChipLabel({ pick }: { pick: PickRef }) {
   const { name, span } = chipCaption(pick)
+  const field = pick.field ? pick.label?.trim() || pick.field : ''
+  const host = pick.field ? pick.title?.trim() ?? '' : ''
+  const split = Boolean(field && host && host !== field)
   return (
     <>
       <PickKindGlyph kind={pick.kind} />
-      <span className="pick-chip-name">{name}</span>
+      <span className="pick-chip-name">
+        {split ? (
+          <>
+            <span className="pick-chip-host">{host}</span>
+            <span className="pick-chip-field">{` · ${field}`}</span>
+          </>
+        ) : (
+          <span className="pick-chip-host">{name}</span>
+        )}
+      </span>
       {span ? <span className="pick-chip-lines">({span})</span> : null}
     </>
   )
@@ -96,7 +108,7 @@ export function PickChip({ pick, onRemove }: { pick: PickRef; onRemove?: () => v
       className="biu-tag composer-tool-chip is-pick"
       data-testid="user-pick-chip"
       data-pick-kind={pick.kind}
-      title={`${pick.kind} · ${label}`}
+      title={pick.kind === 'file' && pick.path ? pick.path : `${pick.kind} · ${label}`}
       style={{ ['--biu-tag' as string]: pickKindTone(pick.kind) }}
     >
       <PickChipLabel pick={pick} />

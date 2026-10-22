@@ -23,6 +23,8 @@ export type PickRef = {
   plugin?: string
   /** HTML 块内被点中的节点 outerHTML（已去掉 pick 戳），text 仍是整块围栏。 */
   element?: string
+  /** 表格单元格 / 详情属性：db_update 的字段名。 */
+  field?: string
 }
 
 export function pickKey(ref: PickRef) {
@@ -51,6 +53,7 @@ export function dedupePicks(refs: PickRef[]): PickRef[] {
       route: ref.route || prev.route,
       ...(ref.action || prev.action ? { action: ref.action || prev.action } : {}),
       ...(ref.plugin || prev.plugin ? { plugin: ref.plugin || prev.plugin } : {}),
+      ...(ref.field || prev.field ? { field: ref.field || prev.field } : {}),
       ...locusFields(ref.start_line != null ? ref : prev),
       ...sourceFields(ref.path ? ref : prev),
       ...(ref.element || prev.element ? { element: ref.element || prev.element } : {}),
@@ -79,6 +82,7 @@ function pickPayload(ref: PickRef) {
   if (ref.selection) data.selection = ref.selection
   else if (ref.insert != null) data.insert = ref.insert
   if (ref.element) data.element = ref.element
+  if (ref.field) data.field = ref.field
   return data
 }
 
@@ -121,6 +125,7 @@ function parsePickAttrs(raw: string): PickRef | null {
     route: attrs.route?.trim() || '',
     ...(attrs.title?.trim() ? { title: attrs.title.trim() } : {}),
     ...(attrs.plugin?.trim() ? { plugin: attrs.plugin.trim() } : {}),
+    ...(attrs.field?.trim() ? { field: attrs.field.trim() } : {}),
     ...sourceFields({ path: attrs.path?.trim() }),
     ...locusFields({
       start_line: Number.isInteger(start) && start >= 1 ? start : undefined,
@@ -219,10 +224,19 @@ export function chipSpanLabel(ref: PickRef) {
   return n > 0 ? String(n) : ''
 }
 
+export function pathLeaf(path: string) {
+  const parts = String(path ?? '')
+    .replace(/\\/g, '/')
+    .split('/')
+    .filter(Boolean)
+  return parts.at(-1) ?? ''
+}
+
 function pickChipName(ref: PickRef) {
   if (ref.kind === 'html' && ref.label?.trim()) return ref.label.trim()
+  if (ref.kind === 'file') return pathLeaf(ref.path || '') || ref.label || '文件'
   if (ref.title?.trim()) return ref.title.trim()
-  const file = ref.path?.split('/').filter(Boolean).pop() ?? ''
+  const file = pathLeaf(ref.path || '')
   if (file.includes('.')) return file
   if (ref.kind === 'text') {
     return pickPreview(ref.selection || ref.text || ref.label, 24) || file || '选区'
@@ -233,6 +247,12 @@ function pickChipName(ref: PickRef) {
 export function chipCaption(ref: PickRef) {
   if (ref.action === 'banner') return { name: ref.label || '背景', span: '' }
   if (ref.action === 'view') return { name: ref.label || '呈现方式', span: '' }
+  if (ref.kind === 'file') return { name: pickChipName(ref), span: '' }
+  if (ref.field) {
+    const field = ref.label?.trim() || ref.field
+    const host = ref.title?.trim()
+    return { name: host && host !== field ? `${host} · ${field}` : field, span: '' }
+  }
   return { name: ref.action ? `${ref.label} · ${ref.action}` : pickChipName(ref), span: chipSpanLabel(ref) }
 }
 
@@ -282,6 +302,21 @@ export function textPickFromPlain(route: string, raw: string): PickRef | null {
   return { kind: 'text', id: pickIdFromText(raw), label, route, selection }
 }
 
+/** 本机文件路径引用：芯片只显示文件名，发给智能体的是绝对路径。 */
+export function filePickFromPath(absPath: string, route = ''): PickRef | null {
+  const path = absPath.trim()
+  if (!path) return null
+  const name = pathLeaf(path) || path
+  return {
+    kind: 'file',
+    id: `file:${pickIdFromText(path)}`,
+    label: name,
+    title: name,
+    route,
+    path,
+  }
+}
+
 /** 选取态下划到的一段正文；空选区返回 null。编辑器选区附带 Markdown 源码行号。 */
 export function textPickFromSelection(
   route: string,
@@ -313,6 +348,7 @@ export function pickChipAttrs(ref: PickRef) {
     selection: ref.selection ?? null,
     insert: ref.insert ?? null,
     element: ref.element ?? null,
+    field: ref.field ?? null,
   }
 }
 
@@ -335,6 +371,7 @@ export function pickRefFromAttrs(attrs: Record<string, unknown>): PickRef | null
     ...(action ? { action } : {}),
     ...sourceFields({ path, title: String(attrs.title ?? '').trim() }),
     ...(String(attrs.plugin ?? '').trim() ? { plugin: String(attrs.plugin).trim() } : {}),
+    ...(String(attrs.field ?? '').trim() ? { field: String(attrs.field).trim() } : {}),
     ...locusFields({
       start_line: Number.isInteger(start) && start >= 1 ? start : undefined,
       end_line: Number.isInteger(end) && end >= 1 ? end : undefined,

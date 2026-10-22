@@ -219,6 +219,16 @@ test('表视图记录点标题一律出选择菜单', () => {
   assert.equal(withEmoji[2]!.emoji, '🔥')
   assert.equal(withEmoji[2]!.choices[0]!.emoji, '🔥')
   assert.equal(crumbButtonAction(crumbs[2]!, crumbs[1]!), 'menu')
+  const unnamed = buildCrumbs({
+    collection: '/pages',
+    collectionLabel: '页面',
+    tables: [{ path: '/pages', label: '页面' }],
+    recordId: 'p007',
+    records: [{ id: 'p007', label: 'p007' }],
+  })
+  assert.equal(unnamed.at(-1)?.label, '')
+  assert.equal(unnamed.at(-1)?.choices[0]?.label, '')
+  assert.notEqual(unnamed.at(-1)?.label, 'p007')
   assert.equal(crumbButtonAction(crumbs[1]!, crumbs[0]!), 'menu')
   assert.equal(crumbButtonAction(crumbs[0]!), 'menu')
   assert.equal(crumbLabelAction(crumbs[1]!, crumbs[0]!), crumbs[0]!.target)

@@ -1,0 +1,371 @@
+const React = globalThis.React
+const { useState, useMemo, useEffect, useRef } = React
+
+export const name = 'option-matrix'
+export const inject = ['pageEditor']
+
+type Criterion = { name: string; weight: number; higherIsBetter: boolean }
+type Scores = Record<string, Record<string, number>>
+type Data = {
+  title?: string
+  scale?: number
+  options?: string[]
+  criteria?: Criterion[]
+  scores?: Scores
+}
+
+type Cell = { name: string; raw: number; norm: number; weighted: number }
+
+const SCALE = 5
+
+const DEFAULTS: Data = {
+  title: '登录方案选型',
+  scale: SCALE,
+  options: ['手机号+验证码', '微信一键登录', '账号密码'],
+  criteria: [
+    { name: '开发成本', weight: 3, higherIsBetter: false },
+    { name: '安全性', weight: 5, higherIsBetter: true },
+    { name: '转化率', weight: 5, higherIsBetter: true },
+  ],
+  scores: {
+    '手机号+验证码': { 开发成本: 4, 安全性: 4, 转化率: 4 },
+    '微信一键登录': { 开发成本: 3, 安全性: 4, 转化率: 5 },
+    '账号密码': { 开发成本: 5, 安全性: 2, 转化率: 2 },
+  },
+}
+
+function num(v: unknown, fallback: number): number {
+  const n = typeof v === 'number' ? v : Number(v)
+  return Number.isFinite(n) ? n : fallback
+}
+
+function normScore(raw: number, higherIsBetter: boolean, scale: number): number {
+  const v = Math.max(0, Math.min(scale, raw))
+  // 关键：越低越好的维度反向计入 —— 高分代表成本高，这里换成 (scale+1-v)
+  return higherIsBetter ? v : scale + 1 - v
+}
+
+type Row = { option: string; cells: (Cell & { best: boolean })[]; total: number; percent: number; rank: number }
+
+function compute(data: Data) {
+  const scale = Math.max(1, num(data.scale, SCALE))
+  const options = data.options ?? []
+  const criteria = data.criteria ?? []
+  const scores = data.scores ?? {}
+  const maxTotal = criteria.reduce((a, c) => a + Math.max(0, num(c.weight, 0)) * scale, 0)
+
+  const rawRows: Row[] = options.map((option) => {
+    const cells = criteria.map((c) => {
+      const raw = Math.max(0, Math.min(scale, num(scores[option]?.[c.name], 0)))
+      const higherIsBetter = c.higherIsBetter !== false
+      const norm = normScore(raw, higherIsBetter, scale)
+      const weighted = num(c.weight, 0) * norm
+      return { name: c.name, raw, norm, weighted, best: false }
+    })
+    const total = cells.reduce((a, x) => a + x.weighted, 0)
+    return { option, cells, total, percent: maxTotal ? total / maxTotal : 0, rank: 0 }
+  })
+
+  // 每个维度的最优格高亮（越高越好取最大，越低越好取最小 → 归一化后都是最大）
+  criteria.forEach((_, ci) => {
+    const bestNorm = Math.max(...rawRows.map((r) => (r.cells[ci] ? r.cells[ci].norm : -Infinity)), -Infinity)
+    rawRows.forEach((r) => {
+      if (r.cells[ci] && bestNorm > -Infinity && r.cells[ci].norm === bestNorm) r.cells[ci].best = true
+    })
+  })
+
+  const ranked = [...rawRows].sort((a, b) => b.total - a.total || a.option.localeCompare(b.option))
+  ranked.forEach((r, i) => {
+    r.rank = i + 1
+  })
+
+  // 「为什么推荐它」：把各维度最优项拼起来
+  const reasons = criteria.map((c) => {
+    const higherIsBetter = c.higherIsBetter !== false
+    const bestNorm = Math.max(...rawRows.map((r) => (r.cells.find((x) => x.name === c.name)?.norm ?? -Infinity)), -Infinity)
+    const winners = rawRows.filter((r) => (r.cells.find((x) => x.name === c.name)?.norm ?? -Infinity) === bestNorm).map((r) => r.option)
+    return { name: c.name, winners, higherIsBetter }
+  })
+
+  const winner = ranked[0] ?? null
+  let rationale = ''
+  if (winner) {
+    const parts = reasons.map((r) => `「${r.name}」→ ${r.winners.join(' / ')}${r.higherIsBetter ? '' : '（越低越好）'}`)
+    rationale = `推荐「${winner.option}」：加权总分 ${winner.total.toFixed(1)} / 满分 ${maxTotal.toFixed(1)}（${(winner.percent * 100).toFixed(1)}%）。各维度最优：${parts.join('；')}。`
+  }
+
+  return { scale, options, criteria, rows: rawRows, ranked, maxTotal, winner, rationale }
+}
+
+function toMarkdown(data: Data): string {
+  const { scale, criteria, ranked } = compute(data)
+  const arrow = (c: Criterion) => (c.higherIsBetter === false ? '↓越低越好' : '↑越高越好')
+  const head = ['方案', ...criteria.map((c) => `${c.name} (权重${c.weight}, ${arrow(c)})`), '加权总分', '推荐']
+  const sep = head.map(() => '---')
+  const lines = [
+    `### ${data.title || '方案对比'}（满分 ${criteria.reduce((a, c) => a + num(c.weight, 0) * scale, 0).toFixed(1)}）`,
+    '',
+    `| ${head.join(' | ')} |`,
+    `| ${sep.join(' | ')} |`,
+  ]
+  ranked.forEach((r) => {
+    const cells = criteria.map((c) => {
+      const cell = r.cells.find((x) => x.name === c.name)
+      return cell ? (c.higherIsBetter === false ? `${cell.raw}（反向${cell.norm}）` : String(cell.raw)) : ''
+    })
+    lines.push(`| ${r.option} | ${cells.join(' | ')} | ${r.total.toFixed(1)} | ${r.rank === 1 ? '推荐' : `#${r.rank}`} |`)
+  })
+  lines.push('')
+  lines.push('> 算法：总分 = Σ(权重 × 归一化分)；越低越好的维度归一化分 = scale+1 − 原分。')
+  return lines.join('\n')
+}
+
+const STYLE_ID = 'option-matrix-style-v2'
+const STYLE_CSS = `
+.om-root{border:1px solid var(--dsw-border);border-radius:8px;padding:10px 12px;margin:0;background:var(--dsw-bg);color:var(--dsw-label);font-family:var(--font-sans);font-size:14px;line-height:1.5}
+.om-head{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+.om-title{font-weight:650;font-size:14px}
+.om-meta{color:var(--dsw-label-3);font-size:12px;font-weight:500}
+.om-grow{flex:1}
+.om-btn{height:26px;font:inherit;font-size:13px;font-weight:650;padding:0 8px;border-radius:6px;border:1px solid var(--dsw-border);background:transparent;color:var(--dsw-label);cursor:pointer}
+.om-btn:hover{background:var(--dsw-hover)}
+.om-field{height:26px;font:inherit;font-size:13px;padding:0 6px;border:1px solid var(--dsw-border);border-radius:6px;background:var(--dsw-input);color:var(--dsw-label)}
+.om-table-wrap{overflow-x:auto}
+.om-table{border-collapse:collapse;width:100%;font-size:13px}
+.om-cell{border:1px solid var(--dsw-border);padding:6px 8px;text-align:center;white-space:nowrap;vertical-align:middle}
+.om-score{width:46px;height:26px;padding:0 4px;text-align:center;font:inherit;font-variant-numeric:tabular-nums;border:1px solid var(--dsw-border);border-radius:6px;background:var(--dsw-input);color:var(--dsw-label)}
+.om-winner{background:color-mix(in srgb,var(--dsw-ok,#3fb950) 12%,transparent)}
+.om-best{background:color-mix(in srgb,var(--dsw-pick) 14%,transparent);font-weight:650}
+.om-muted{background:var(--dsw-hover)}
+.om-tools{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.om-rationale{margin-top:8px;padding:8px 10px;border-radius:6px;background:var(--dsw-hover);font-size:13px;line-height:1.55;color:var(--dsw-label-2)}
+.om-md{margin-top:8px}
+.om-md textarea{width:100%;min-height:130px;font-family:var(--font-mono);font-size:12px;padding:8px;border-radius:6px;border:1px solid var(--dsw-border);background:var(--dsw-input);color:var(--dsw-label)}
+.om-ghost{border:0;background:transparent;color:var(--dsw-label-3);cursor:pointer;font:inherit}
+.om-ghost:hover{color:var(--dsw-label)}
+`
+
+function useOmStyle() {
+  useEffect(() => {
+    const existing = document.getElementById(STYLE_ID)
+    const el = existing instanceof HTMLStyleElement ? existing : document.createElement('style')
+    el.id = STYLE_ID
+    el.textContent = STYLE_CSS
+    if (el.parentNode !== document.head) document.head.appendChild(el)
+  }, [])
+}
+
+function ScoreInput({ value, max, onChange, readOnly }: { value: number; max: number; onChange: (v: number) => void; readOnly: boolean }) {
+  if (readOnly) return React.createElement('span', { style: { fontVariantNumeric: 'tabular-nums' } }, value)
+  return React.createElement('input', {
+    type: 'number',
+    min: 0,
+    max,
+    value,
+    className: 'om-score',
+    onChange: (e: { target: { value: string } }) => onChange(Math.max(0, Math.min(max, num(e.target.value, 0)))),
+  })
+}
+
+function OptionMatrix({ data, update, writable }: { data: Data; update: (patch: Record<string, unknown>) => void; writable: boolean }) {
+  useOmStyle()
+  const [showMd, setShowMd] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const [draftTitle, setDraftTitle] = useState(data.title ?? '')
+  const titleTouched = useRef(false)
+
+  useEffect(() => {
+    if (!titleTouched.current) setDraftTitle(data.title ?? '')
+  }, [data.title])
+
+  const key = JSON.stringify(data)
+  const m = useMemo(() => compute(data), [key])
+  const scale = m.scale
+  const options = m.options
+  const criteria = m.criteria
+  const scores = data.scores ?? {}
+  const readOnly = !writable
+
+  const setCriteria = (next: Criterion[]) => update({ criteria: next })
+  const setScores = (next: Scores) => update({ scores: next })
+  const setCell = (opt: string, crit: string, v: number) => {
+    setScores({ ...scores, [opt]: { ...(scores[opt] ?? {}), [crit]: v } })
+  }
+  const renameCriterion = (ci: number, name: string) => {
+    const old = criteria[ci]?.name
+    const next = criteria.map((c, i) => (i === ci ? { ...c, name } : c))
+    const ns: Scores = {}
+    options.forEach((o) => {
+      const row = { ...(scores[o] ?? {}) }
+      if (old && old !== name) {
+        row[name] = row[old] ?? 0
+        delete row[old]
+      }
+      ns[o] = row
+    })
+    update({ criteria: next, scores: ns })
+  }
+  const renameOption = (oi: number, option: string) => {
+    const old = options[oi]
+    const next = options.map((o, i) => (i === oi ? option : o))
+    const ns: Scores = { ...scores }
+    if (old && old !== option) {
+      ns[option] = ns[old] ?? {}
+      delete ns[old]
+    }
+    update({ options: next, scores: ns })
+  }
+
+  const md = useMemo(() => toMarkdown(data), [key])
+  const h = React.createElement
+
+  const headCells = [
+    h('th', { key: 'corner', className: 'om-cell', style: { textAlign: 'left', color: 'var(--dsw-label-3)' } }, '方案 \\ 维度'),
+    ...criteria.map((c, ci) =>
+      h(
+        'th',
+        { key: `c${ci}`, className: 'om-cell', style: { verticalAlign: 'top' } },
+        readOnly
+          ? h('div', null, h('div', { style: { fontWeight: 650 } }, c.name), h('div', { className: 'om-meta' }, `权重 ${c.weight} · ${c.higherIsBetter === false ? '越低越好' : '越高越好'}`))
+          : h(
+              'div',
+              { style: { display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' } },
+              h('input', { value: c.name, onChange: (e: { target: { value: string } }) => renameCriterion(ci, e.target.value), className: 'om-field', style: { fontWeight: 650, textAlign: 'center', width: 96 } }),
+              h('div', { style: { display: 'flex', gap: 4, alignItems: 'center' } },
+                h('span', { className: 'om-meta' }, '权重'),
+                h('input', { type: 'number', min: 0, max: 9, value: c.weight, onChange: (e: { target: { value: string } }) => setCriteria(criteria.map((x, i) => (i === ci ? { ...x, weight: num(e.target.value, 0) } : x))), className: 'om-field', style: { width: 44, textAlign: 'center' } }),
+              ),
+              h('button', { type: 'button', className: 'om-btn', title: '点击切换维度方向', onClick: () => setCriteria(criteria.map((x, i) => (i === ci ? { ...x, higherIsBetter: x.higherIsBetter === false } : x))) }, c.higherIsBetter === false ? '越低越好' : '越高越好'),
+              h('button', { type: 'button', className: 'om-ghost', onClick: () => {
+                const ns: Scores = { ...scores }
+                options.forEach((o) => {
+                  if (ns[o]) {
+                    const row = { ...ns[o] }
+                    delete row[c.name]
+                    ns[o] = row
+                  }
+                })
+                update({ criteria: criteria.filter((_, i) => i !== ci), scores: ns })
+              } }, '删除'),
+            ),
+      ),
+    ),
+    h('th', { key: 'total', className: 'om-cell om-muted' }, '加权总分'),
+  ]
+
+  const bodyRows = m.rows.map((row, ri) => {
+    const isWinner = !!m.winner && m.winner.option === row.option
+    return h(
+      'tr',
+      { key: `r${ri}`, className: isWinner ? 'om-winner' : undefined },
+      h(
+        'th',
+        { className: 'om-cell', style: { textAlign: 'left' } },
+        readOnly
+          ? h('span', { style: { fontWeight: isWinner ? 650 : 500 } }, `${isWinner ? '推荐 · ' : ''}${row.option}`)
+          : h('div', { style: { display: 'flex', gap: 4, alignItems: 'center' } },
+              h('input', { value: row.option, onChange: (e: { target: { value: string } }) => renameOption(ri, e.target.value), className: 'om-field', style: { width: 130 } }),
+              h('button', { type: 'button', className: 'om-ghost', onClick: () => {
+                const ns: Scores = { ...scores }
+                delete ns[row.option]
+                update({ options: options.filter((_, i) => i !== ri), scores: ns })
+              } }, '×'),
+            ),
+      ),
+      ...criteria.map((c, ci) => {
+        const cell = row.cells[ci]
+        return h(
+          'td',
+          { key: `d${ci}`, className: cell && cell.best ? 'om-cell om-best' : 'om-cell' },
+          h(ScoreInput, { value: (cell && cell.raw) || 0, max: scale, readOnly, onChange: (v: number) => setCell(row.option, c.name, v) }),
+          c.higherIsBetter === false ? h('span', { className: 'om-meta' }, ` →${(cell && cell.norm) || 0}`) : null,
+        )
+      }),
+      h('td', { key: 't', className: 'om-cell om-muted', style: { fontWeight: 650, fontVariantNumeric: 'tabular-nums' } },
+        row.total.toFixed(1),
+        h('div', { className: 'om-meta', style: { fontWeight: 500 } }, `${(row.percent * 100).toFixed(1)}%`),
+      ),
+    )
+  })
+
+  const toolbar = !readOnly
+    ? h('div', { className: 'om-tools' },
+        h('button', { type: 'button', className: 'om-btn', onClick: () => {
+          const nm = `方案 ${String.fromCharCode(65 + options.length)}`
+          const ns: Scores = { ...scores, [nm]: {} }
+          criteria.forEach((c) => { ns[nm][c.name] = 3 })
+          update({ options: [...options, nm], scores: ns })
+        } }, '加方案'),
+        h('button', { type: 'button', className: 'om-btn', onClick: () => {
+          const nm = `维度 ${criteria.length + 1}`
+          const ns: Scores = { ...scores }
+          options.forEach((o) => { ns[o] = { ...(ns[o] ?? {}), [nm]: 3 } })
+          update({ criteria: [...criteria, { name: nm, weight: 1, higherIsBetter: true }], scores: ns })
+        } }, '加维度'),
+        h('button', { type: 'button', className: 'om-btn', onClick: () => update({ scale: scale >= 10 ? 5 : scale + 1 }) }, `满分制 ${scale} → ${scale >= 10 ? 5 : scale + 1}`),
+      )
+    : null
+
+  const mdPanel = showMd
+    ? h('div', { className: 'om-md' },
+        h('div', { className: 'om-head' },
+          h('span', { className: 'om-meta' }, 'Markdown（agent 可直接读）'),
+          h('button', { type: 'button', className: 'om-btn', onClick: () => {
+            const nav = globalThis.navigator
+            if (nav && nav.clipboard && nav.clipboard.writeText) void nav.clipboard.writeText(md)
+            setCopied(true)
+          } }, copied ? '已复制' : '复制'),
+        ),
+        h('textarea', { readOnly: true, value: md }),
+      )
+    : null
+
+  return h(
+    'div',
+    { 'data-testid': 'option-matrix', className: 'om-root' },
+    h('div', { className: 'om-head' },
+      readOnly
+        ? h('strong', { className: 'om-title' }, data.title || '方案对比')
+        : h('input', {
+            value: draftTitle,
+            placeholder: '对比标题',
+            className: 'om-field om-title',
+            style: { minWidth: 180 },
+            onChange: (e: { target: { value: string } }) => { titleTouched.current = true; setDraftTitle(e.target.value) },
+            onBlur: () => { titleTouched.current = false; update({ title: draftTitle }) },
+          }),
+      h('span', { className: 'om-meta' }, `${options.length} 方案 × ${criteria.length} 维度 · 满分 ${m.maxTotal.toFixed(1)}`),
+      h('span', { className: 'om-grow' }),
+      h('button', { type: 'button', className: 'om-btn', onClick: () => setShowMd((v) => !v) }, showMd ? '隐藏 Markdown' : '导出 Markdown'),
+    ),
+    h('div', { className: 'om-table-wrap' },
+      h('table', { 'data-testid': 'option-matrix-table', className: 'om-table' },
+        h('thead', null, h('tr', null, ...headCells)),
+        h('tbody', null, ...bodyRows),
+      ),
+    ),
+    toolbar,
+    m.rationale
+      ? h('div', { 'data-testid': 'option-matrix-rationale', className: 'om-rationale' }, m.rationale)
+      : null,
+    mdPanel,
+  )
+}
+
+export function apply(ctx: {
+  pageEditor: { registerBlock: (spec: Record<string, unknown>) => void }
+}) {
+  ctx.pageEditor.registerBlock({
+    kind: 'option-matrix',
+    plugin: name,
+    label: '方案对比块',
+    blockType: 'test',
+    blockTypeLabel: '测试',
+    hint: '多方案 × 多维度加权对比矩阵：改权重/打分，总分与推荐实时变；越低越好的维度自动反向计入',
+    aliases: ['matrix', 'option', 'compare', '对比', '矩阵', '选型', '方案对比'],
+    assets: [],
+    defaults: () => DEFAULTS,
+    View: ({ data, update, writable }: { data: Record<string, unknown>; update: (patch: Record<string, unknown>) => void; writable: boolean }) =>
+      React.createElement(OptionMatrix, { data: data as Data, update, writable }),
+  })
+}

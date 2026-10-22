@@ -345,7 +345,7 @@ Page bodies live in SQLite; attachments share one tree with two layers:
 .biu/assets/          ← attachments
 ```
 
-Back up those sqlite files with `VACUUM INTO '/path/to/backup.sqlite'` (a single file, no WAL). Do not `cp` a live `.sqlite` while WAL exists. Facet stamp tables (`facet_stamps`, `facet_record_values`) are reserved for the 合集 overlay and may be empty until that overlay is used.
+Back up those sqlite files with `VACUUM INTO '/path/to/backup.sqlite'` (a single file, no WAL). Do not `cp` a live `.sqlite` while WAL exists. Facet stamp tables (`facet_stamps`, `facet_record_values`) are reserved for the 标签 overlay and may be empty until that overlay is used.
 
 Markdown can carry **blocks** — a fenced section that renders as a live component:
 
@@ -624,8 +624,8 @@ make          # install dependencies, start both host and Vite
 | | Address |
 |--|------|
 | UI | http://127.0.0.1:5173 |
-| API / WS | http://127.0.0.1:3141 |
-| LAN read-only share | `http://<LAN-IP>:3142/share/...` (the workbench itself stays on localhost) |
+| API / WS | `http://<LAN-IP>:3141` (account authentication required) |
+| LAN read-only share | `http://<LAN-IP>:3141/share/...` (reuses the API port) |
 
 Without a key configured, sending a message only returns a local echo. Click **+ Configure model** next to the composer, or:
 
@@ -648,7 +648,7 @@ On the first run:
 |------|--|
 | `make` / `make restart` | install and start both sides / stop first, then start |
 | `make host` / `make web` | start one side only |
-| `make stop` | release `3141` / `3142` / `5173` |
+| `make stop` | release `3141` / `5173` |
 | `npm test` | Vitest |
 | `npx tsc --noEmit` | type check |
 
@@ -656,9 +656,9 @@ Also: `npm run dev:host` and `npm run dev:web`.
 
 | Variable | Default | |
 |------|------|--|
-| `PORT` / `HTTP_HOST` | `3141` / `127.0.0.1` | local workbench (do not set `0.0.0.0`, or the entire workbench becomes accessible on the LAN) |
-| `SHARE_PORT` / `SHARE_HOST` | `3142` / `0.0.0.0` | opened by default by `make` / `npm run dev`; serves share pages only. `SHARE_PORT=0` disables |
-| `SHARE_PUBLIC_URL` | auto-detected LAN IPv4 | origin used for copied links, e.g. `http://192.168.1.8:3142` |
+| `PORT` / `HTTP_HOST` | `3141` / `0.0.0.0` | shared listener for the workbench, API, and LAN shares; account APIs require authentication |
+| `SHARE_PORT` | same as `PORT` | share links use the main server port and no extra listener is started |
+| `SHARE_PUBLIC_URL` | auto-detected LAN IPv4 | origin used for copied links, e.g. `http://192.168.1.8:3141` |
 | `SHARE_PROXY_UI` | `dev:host` points at Vite | share pages use `5173` in dev; `npm start` uses the build output |
 | `CORDIS_WORKSPACE` | `.workspace` | default workspace |
 | `DEEPSEEK_API_KEY` etc. | | can also be stored in the UI only |
@@ -725,7 +725,8 @@ biu
 │   └── link-cordis-plugins.mjs
 ├── public/
 │   ├── favicon.svg            # brand mark (white square)
-│   ├── brand-lockup.svg       # README: mark + Biu Agent OS tag
+│   ├── brand-lockup.svg       # README: BIU mark + Biu Agent OS tag
+│   ├── og-image.png           # share card (og:image), from scripts/build-brand-assets.tsx
 │   ├── mascot-blue.svg        # README mascots (BMW M palette)
 │   ├── mascot-violet.svg
 │   ├── mascot-red.svg

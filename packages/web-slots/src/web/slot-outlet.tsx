@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import type { SlotEntry, SlotKind } from '@biu/type-slots'
-import { RenderBoundary } from '@biu/public-ui'
+import { RenderBoundary } from '@biu/public-ui/render-boundary'
 import type { SlotsService } from './service.ts'
 import { useSlotEntries } from './use-slots.ts'
 

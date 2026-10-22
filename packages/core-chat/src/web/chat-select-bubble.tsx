@@ -46,9 +46,10 @@ export function ChatSelectBubble() {
         setBox(null)
         return
       }
+      const center = rect.left + rect.width / 2
       setBox({
         top: Math.max(8, rect.top - 40),
-        left: Math.min(window.innerWidth - 44, Math.max(8, rect.left + rect.width / 2 - 16)),
+        left: Math.min(window.innerWidth - 36, Math.max(36, center)),
       })
     }
     const onKey = (event: KeyboardEvent) => {
@@ -88,6 +89,7 @@ export function ChatSelectBubble() {
       }}
     >
       <ChatBubbleLeftRightIcon className="chat-select-bubble-icon" aria-hidden />
+      <span className="chat-select-bubble-key">⌘L</span>
     </button>,
     document.body,
   )

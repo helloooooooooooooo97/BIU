@@ -118,7 +118,35 @@ let overlay = false
 let autohide = false
 let resizing = false
 let pinned = false
+const OVERLAY_THREAD_KEY = 'cordis.overlay.thread'
 let overlayThread = false
+let overlayThreadReady = false
+
+function readStoredOverlayThread() {
+  try {
+    const raw = localStorage.getItem(OVERLAY_THREAD_KEY)
+    if (raw === '1') return true
+    if (raw === '0') return false
+  } catch {
+    /* ignore */
+  }
+  return false
+}
+
+function rememberOverlayThread(next: boolean) {
+  try {
+    localStorage.setItem(OVERLAY_THREAD_KEY, next ? '1' : '0')
+  } catch {
+    /* ignore */
+  }
+}
+
+function hydrateOverlayThread() {
+  if (overlayThreadReady) return
+  overlayThreadReady = true
+  if (typeof window === 'undefined') return
+  overlayThread = readStoredOverlayThread()
+}
 const listeners = new Set<() => void>()
 const autohideListeners = new Set<() => void>()
 const pinListeners = new Set<() => void>()
@@ -156,7 +184,6 @@ export function setChatOverlay(next: boolean) {
   overlay = next
   if (!next) {
     setOverlayAutohide(false)
-    setOverlayThread(false)
     notifyOverlayClosed()
   }
   emit()
@@ -172,6 +199,7 @@ export function closeChatOverlay() {
 }
 
 export function getOverlayThread() {
+  hydrateOverlayThread()
   return overlayThread
 }
 
@@ -183,8 +211,10 @@ export function subscribeOverlayThread(fn: () => void) {
 }
 
 export function setOverlayThread(next: boolean) {
+  hydrateOverlayThread()
   if (overlayThread === next) return
   overlayThread = next
+  rememberOverlayThread(next)
   emitThread()
 }
 
@@ -208,20 +238,43 @@ export function shouldCloseOverlayOnOutside(target: EventTarget | null) {
 
 let composerFocusPending = false
 
+/** 已挂载的输入框听事件；尚未建好的实例靠 pending，等 editor 就绪后再 focus。不要同步派发——点小人时旧实例正在卸、新实例还是 null。 */
 export function requestComposerFocus() {
   composerFocusPending = true
+  if (typeof window === 'undefined') return
   const fire = () => window.dispatchEvent(new Event('biu:composer-focus'))
-  fire()
   requestAnimationFrame(fire)
   window.setTimeout(fire, 40)
-  window.setTimeout(() => {
-    fire()
-    composerFocusPending = false
-  }, 160)
+  window.setTimeout(fire, 200)
 }
 
 export function isComposerFocusPending() {
   return composerFocusPending
+}
+
+export function consumeComposerFocusPending() {
+  const pending = composerFocusPending
+  composerFocusPending = false
+  return pending
+}
+
+type ComposerFocusTarget = {
+  isDestroyed?: boolean
+  commands?: { focus?: (where?: string) => unknown }
+} | null | undefined
+
+/** editor 未就绪或已 destroy（commandManager 已空）时不要读 .commands。 */
+export function focusComposerEditor(editor: ComposerFocusTarget) {
+  if (!editor || editor.isDestroyed) return false
+  try {
+    const focus = editor.commands?.focus
+    if (typeof focus !== 'function') return false
+    focus.call(editor.commands, 'end')
+  } catch {
+    return false
+  }
+  consumeComposerFocusPending()
+  return true
 }
 
 /** 聊天页中间已有输入框，选取不要再弹悬浮窗。 */
@@ -230,17 +283,15 @@ export function isChatPagePath(pathname: string) {
   return path === '/' || path.startsWith('/s/')
 }
 
-/** 选取对象后弹出输入条：工具栏 + 统计 + 输入框，回复区等发出去再展开。聊天页本身已有输入框，不要再弹窗。 */
+/** 选取或点小人弹出输入条。回复区沿用上次展开/收缩，首次默认收缩；revealThread 才强制展开。聊天页本身已有输入框，不要再弹窗。 */
 export function openOverlayComposer(opts?: { revealThread?: boolean }) {
   if (typeof window !== 'undefined' && isChatPagePath(window.location.pathname)) {
     requestComposerFocus()
     return
   }
-  const wasOpen = overlay
   setChatOverlay(true)
   setOverlayAutohide(false)
   if (opts?.revealThread) setOverlayThread(true)
-  else if (!wasOpen) setOverlayThread(false)
   requestComposerFocus()
 }
 
@@ -389,7 +440,7 @@ export type OverlayWinGeom = { x: number; y: number; w: number; h: number }
 export type OverlayLayout = 'right' | 'bottom'
 export type OverlayWinState = OverlayWinGeom & { layout: OverlayLayout }
 
-export const OVERLAY_WIN_MIN_W = 320
+export const OVERLAY_WIN_MIN_W = 420
 export const OVERLAY_WIN_MIN_H = 280
 export const OVERLAY_WIN_DEFAULT_W = 420
 export const OVERLAY_WIN_DEFAULT_H = 520
@@ -400,17 +451,21 @@ export function parseOverlayLayout(_value: unknown): OverlayLayout {
   return 'right'
 }
 
+export function overlayDockY(h: number, vh = 800) {
+  return Math.max(OVERLAY_MARGIN, vh - h - OVERLAY_MARGIN)
+}
+
 export function defaultOverlayWinGeom(vw = 1280, vh = 800): OverlayWinGeom {
   const w = Math.min(OVERLAY_WIN_DEFAULT_W, Math.max(OVERLAY_WIN_MIN_W, vw - 40))
   const h = Math.min(OVERLAY_WIN_DEFAULT_H, Math.max(OVERLAY_WIN_MIN_H, vh - OVERLAY_MARGIN * 2))
-  return overlayLayoutGeom('right', { x: 0, y: 0, w, h }, vw, vh)
+  return overlayLayoutGeom('right', { x: 0, y: overlayDockY(h, vh), w, h }, vw, vh)
 }
 
 export function clampOverlayWinGeom(geom: OverlayWinGeom, vw = 1280, vh = 800): OverlayWinGeom {
   const w = Math.min(vw - 24, Math.max(OVERLAY_WIN_MIN_W, Math.round(geom.w)))
   const h = Math.min(vh - 24, Math.max(OVERLAY_WIN_MIN_H, Math.round(geom.h)))
   const x = Math.min(vw - 48, Math.max(12 - (w - 48), Math.round(geom.x)))
-  const y = Math.min(vh - 48, Math.max(OVERLAY_MARGIN, Math.round(geom.y)))
+  const y = Math.min(overlayDockY(h, vh), Math.max(OVERLAY_MARGIN, Math.round(geom.y)))
   return { x, y, w, h }
 }
 
@@ -424,12 +479,14 @@ export function overlayLayoutGeom(
   const maxH = Math.max(OVERLAY_WIN_MIN_H, vh - OVERLAY_MARGIN * 2)
   const w = Math.min(Math.max(prev.w, OVERLAY_WIN_MIN_W), maxW)
   const h = Math.min(Math.max(prev.h, OVERLAY_WIN_MIN_H), maxH)
+  const dockY = overlayDockY(h, vh)
+  const y = Number.isFinite(prev.y) ? prev.y : dockY
   return clampOverlayWinGeom(
     {
       w,
       h,
       x: vw - w - OVERLAY_MARGIN,
-      y: Math.round(Math.max(OVERLAY_MARGIN, (vh - h) / 2)),
+      y,
     },
     vw,
     vh,
@@ -491,7 +548,7 @@ function openPickOverlay() {
     requestComposerFocus()
     return
   }
-  openOverlayComposer({ revealThread: false })
+  openOverlayComposer()
 }
 
 if (typeof window !== 'undefined') {

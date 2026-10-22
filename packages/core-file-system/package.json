@@ -11,12 +11,14 @@
     "./database-ui": "./src/web/database-ui.ts",
     "./main-data-route": "./src/web/main-data-route.ts",
     "./inspector-db-route": "./src/web/inspector-db-route.ts",
+    "./inspector-pane-menu": "./src/web/inspector-pane-menu.tsx",
     "./page-width": "./src/web/page-width.ts",
     "./layout-prefs-menu": "./src/web/layout-prefs-menu.tsx"
   },
   "dependencies": {
     "@biu/core-pick": "0.1.0",
     "@biu/database-ui": "0.1.0",
+    "@biu/host-account": "0.1.0",
     "@biu/host-plugin-loader": "0.1.0",
     "@biu/host-sessions": "0.1.0",
     "@biu/host-workspace": "0.1.0",

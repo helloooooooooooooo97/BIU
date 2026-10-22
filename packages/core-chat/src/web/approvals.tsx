@@ -6,12 +6,11 @@ import {
   ExclamationCircleIcon,
   CircleStackIcon,
   ChatBubbleLeftRightIcon,
-  PaintBrushIcon,
   PauseIcon,
   Squares2X2Icon,
 } from '@heroicons/react/16/solid'
 import type { SlotProps } from '@biu/web-slots'
-import { bindSessionView, type ChatNode, type DispatchedTaskRow, type SessionViewService } from '@biu/web-session-view'
+import { bindSessionView, type DispatchedTaskRow, type SessionViewService } from '@biu/web-session-view'
 import { BrandCornerMascot, SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import { HeadlessDismiss } from '@biu/public-ui'
 import { ChatSidebar } from '@biu/web-app-shell/chat-sidebar'
@@ -23,6 +22,8 @@ import {
   toggleOverlayThread,
 } from '@biu/web-app-shell/chat-overlay'
 import { SessionProjectPanel } from './project-panel.tsx'
+import { getChatConfig } from './chat-config.ts'
+import { ChatLiveMetrics } from './live-hud.tsx'
 
 type AgentMode = 'minimal' | 'file' | 'standard'
 
@@ -32,14 +33,6 @@ function parseAgentMode(value: unknown): AgentMode {
 }
 
 /** 最新一条回复里，上下文（更早 turn）占发给模型的输入文字的比例（0..1）。 */
-function latestHistRatio(nodes: ChatNode[]): number | null {
-  const last = nodes.at(-1)
-  if (!last || last.kind !== 'reply') return null
-  const hist = last.usage?.histPct
-  if (typeof hist !== 'number' || !Number.isFinite(hist)) return null
-  return Math.min(1, Math.max(0, hist))
-}
-
 function DockIconMenu<T extends string>({
   label,
   value,
@@ -167,13 +160,10 @@ export function ApprovalsRail(props: SlotProps) {
   const hiddenWorkerCount = Math.max(0, workerAgents.length - visibleWorkers.length)
   const approvals = useSessionView((state) => state.approvals)
   const approvalMode = useSessionView((state) => state.approvalMode)
-  const nodes = useSessionView((state) => state.nodes)
-  const histRatio = useMemo(() => latestHistRatio(nodes), [nodes])
   const overlayOpen = useSyncExternalStore(subscribeChatOverlay, getChatOverlay, () => false)
   const overlayThread = useSyncExternalStore(subscribeOverlayThread, getOverlayThread, () => false)
   const [agentMode, setAgentMode] = useState<AgentMode>('standard')
   const [modeBusy, setModeBusy] = useState(false)
-  const [clearBusy, setClearBusy] = useState(false)
   const [agentMenuOpen, setAgentMenuOpen] = useState(false)
   const [approvalMenuOpen, setApprovalMenuOpen] = useState(false)
   const agentMenuRef = useRef<HTMLDivElement>(null)
@@ -181,9 +171,8 @@ export function ApprovalsRail(props: SlotProps) {
 
   const refreshAgentMode = useCallback(async () => {
     try {
-      const res = await fetch('/api/chat/config')
-      if (!res.ok) return
-      const data = (await res.json()) as { agentMode?: string }
+      const data = await getChatConfig<{ agentMode?: string }>()
+      if (!data) return
       setAgentMode(parseAgentMode(data.agentMode))
     } catch {
       /* host 未就绪 */
@@ -193,28 +182,6 @@ export function ApprovalsRail(props: SlotProps) {
   useEffect(() => {
     void refreshAgentMode()
   }, [refreshAgentMode])
-
-  // 快捷键：command+e / ctrl+e 触发清空上下文（在输入框中同样生效）
-  const clearContextRef = useRef<() => void>(() => {})
-  useEffect(() => {
-    clearContextRef.current = clearContext
-  })
-
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      const isE = event.key === 'e' || event.key === 'E'
-      const isMod = event.metaKey || event.ctrlKey
-      if (!isE || !isMod || event.shiftKey || event.altKey) return
-      event.preventDefault()
-      clearContextRef.current()
-    }
-    window.addEventListener('keydown', onKeyDown)
-    console.log('[approvals] Command+E shortcut registered')
-    return () => {
-      window.removeEventListener('keydown', onKeyDown)
-      console.log('[approvals] Command+E shortcut unregistered')
-    }
-  }, [])
 
   async function setMode(next: AgentMode) {
     if (next === agentMode || modeBusy) return
@@ -230,22 +197,6 @@ export function ApprovalsRail(props: SlotProps) {
       setAgentMode(parseAgentMode(data.agentMode))
     } finally {
       setModeBusy(false)
-    }
-  }
-
-  // 清空上下文：不经过大模型，仅向后端写入一条 context_clear 日志（压缩点）。
-  async function clearContext() {
-    console.log('[approvals] clearContext triggered, sessionId =', sessionId, ', clearBusy =', clearBusy)
-    
-    if (!sessionId || clearBusy) return
-    setClearBusy(true)
-    try {
-      const res = await fetch(`/api/sessions/${sessionId}/clear-context`, { method: 'POST' })
-      if (!res.ok) return
-      // 后台校对拉取最新事件，使新插入的日志记录立即出现在会话视图中。
-      await sessionView.load(sessionId, { view: 'chat', wait: false })
-    } finally {
-      setClearBusy(false)
     }
   }
 
@@ -296,27 +247,8 @@ export function ApprovalsRail(props: SlotProps) {
         role="toolbar"
         aria-label="Session controls"
       >
-        <div className="chat-dock-toolbar-start flex min-w-0 items-center gap-1">
-          <button
-            type="button"
-            disabled={!sessionId || clearBusy}
-            aria-label="清空上下文"
-            className="project-chip project-chip-icon-only project-chip-clear-ctx relative"
-            data-dock-tip-at="ne"
-            data-dock-tip={
-              histRatio != null
-                ? `清空上下文 · 上下文占输入文字 ${Math.round(histRatio * 100)}%`
-                : '清空上下文'
-            }
-            onClick={() => void clearContext()}
-          >
-            {histRatio != null && histRatio > 0 ? (
-              <span className="project-chip-hist" aria-hidden>
-                <span className="project-chip-hist-bar" style={{ height: `${Math.round(histRatio * 100)}%` }} />
-              </span>
-            ) : null}
-            <PaintBrushIcon className="size-4 relative z-1" aria-hidden />
-          </button>
+        <div className="chat-dock-toolbar-start flex min-w-0 flex-1 items-center gap-1">
+          <SessionProjectPanel {...props} />
           {typeof props.renderSlot === 'function' ? props.renderSlot('header-tools') : null}
           {sessionId ? (
             <BrandCornerMascot
@@ -373,7 +305,8 @@ export function ApprovalsRail(props: SlotProps) {
             </span>
           ) : null}
         </div>
-        <div className="chat-dock-toolbar-end flex shrink-0 items-center justify-end gap-1">
+        <ChatLiveMetrics useSessionView={useSessionView} />
+        <div className="chat-dock-toolbar-end flex min-w-0 flex-1 items-center justify-end gap-1">
           {overlayOpen ? (
             <button
               type="button"
@@ -387,7 +320,6 @@ export function ApprovalsRail(props: SlotProps) {
               <ChatBubbleLeftRightIcon className="size-4" aria-hidden />
             </button>
           ) : null}
-          <SessionProjectPanel {...props} />
           <DockIconMenu
             label="Agent 模式"
             value={agentMode}

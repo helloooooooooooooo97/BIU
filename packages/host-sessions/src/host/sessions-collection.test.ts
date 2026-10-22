@@ -2,7 +2,7 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { sessionsCollection } from './sessions-collection.ts'
 
-test('sessionsCollection maps summaries and writes title/pinned/tags', async () => {
+test('sessionsCollection maps summaries and writes title/pinned/facet', async () => {
   const calls: unknown[] = []
   const spec = sessionsCollection({
     listSummaries: async () => [
@@ -13,7 +13,7 @@ test('sessionsCollection maps summaries and writes title/pinned/tags', async () 
         title: 'hello',
         updatedAt: 100,
         mascot: { shape: 'pebble', color: 'orange', eye: 1 },
-        config: { pinned: false, tags: ['a'] },
+        config: { pinned: false, facet: { tags: ['a'], values: {} } },
       },
     ],
     rename: async (id, title) => {
@@ -46,7 +46,7 @@ test('sessionsCollection maps summaries and writes title/pinned/tags', async () 
   assert.equal(rows[0]?.mascotColor, 'orange')
   assert.equal(rows[0]?.mascotEye, 1)
   assert.equal(rows[0]?.mascotName, '橙石美')
-  assert.deepEqual(rows[0]?.tags, ['a'])
+  assert.deepEqual((rows[0]?.facet as { tags?: string[] })?.tags, ['a'])
   assert.equal(rows[0]?.createdAt, 100)
   assert.equal(rows[0]?.events, undefined)
   const got = await spec.get?.('s1')
@@ -54,22 +54,68 @@ test('sessionsCollection maps summaries and writes title/pinned/tags', async () 
   await spec.update?.('s1', {
     title: 'renamed',
     pinned: true,
-    tags: ['b', 'c'],
+    facet: { tags: ['b', 'c'], values: {} },
     model: 'deepseek-reasoner',
     projectPath: '/tmp/app',
   })
   await spec.remove?.({ ids: ['s1'] })
   assert.deepEqual(calls, [
     ['rename', 's1', 'renamed'],
-    ['patch', 's1', { pinned: true, tags: ['b', 'c'], model: 'deepseek-reasoner' }],
+    ['patch', 's1', { pinned: true, facet: { tags: ['b', 'c'], values: {} }, model: 'deepseek-reasoner' }],
     ['project', 's1', { path: '/tmp/app' }],
     ['delete', 's1'],
   ])
   const actionIds = (spec.actions ?? []).map((item) => item.id)
-  assert.deepEqual(actionIds, ['inspect', 'progress', 'compact', 'clear', 'retrieve', 'status'])
+  assert.deepEqual(actionIds, ['inspect', 'query', 'progress', 'compact', 'clear', 'retrieve', 'status'])
   assert.equal(spec.actions?.find((item) => item.id === 'progress')?.for, 'agent')
   assert.deepEqual(spec.actions?.find((item) => item.id === 'progress')?.placement, [])
   assert.equal(spec.actions?.find((item) => item.id === 'compact')?.for, 'agent')
   assert.equal(spec.actions?.find((item) => item.id === 'inspect')?.for, 'agent')
+})
+
+test('progress is idle when the agent is not busy even if turn/end is missing', async () => {
+  const spec = sessionsCollection({
+    listSummaries: async () => [],
+    rename: async () => undefined,
+    patchConfig: async () => undefined,
+    delete: async () => true,
+    isBusy: () => false,
+    require: async (id) => ({
+      id,
+      events: [
+        { type: 'turn/start', turn: 1, seq: 1, ts: 1 },
+        { type: 'assistant/message', text: 'done talking', seq: 2, ts: 2 },
+      ],
+    }),
+  })
+  const progress = spec.actions?.find((item) => item.id === 'progress')
+  const got = await progress?.run('s1', { id: 's1' }, {})
+  assert.equal(got.status, 'idle')
+  assert.equal(got.turn, 1)
+  assert.equal(got.assistantText, 'done talking')
+})
+
+test('query reads one session timeline', async () => {
+  const spec = sessionsCollection({
+    listSummaries: async () => [],
+    rename: async () => undefined,
+    patchConfig: async () => undefined,
+    delete: async () => true,
+    require: async (id) => ({
+      id,
+      events: [
+        { type: 'user/message', text: '查一下页面', seq: 1, ts: 1, kind: 'user' },
+        { type: 'tool/call', id: 't1', name: 'db_list', arguments: '{"path":"/pages"}', seq: 2, ts: 2 },
+        { type: 'tool/result', id: 't1', name: 'db_list', ok: true, detail: 'pages ok', seq: 3, ts: 3 },
+      ],
+    }),
+  })
+  const query = spec.actions?.find((item) => item.id === 'query')
+  const found = await query?.run('s1', { id: 's1' }, { query: 'db_list' })
+  assert.equal(found.hits, 2)
+  assert.equal(found.results[0]?.type, 'tool/call')
+  const typed = await query?.run('s1', { id: 's1' }, { type: 'user/message' })
+  assert.equal(typed.hits, 1)
+  assert.match(String(typed.results[0]?.summary), /查一下页面/)
 })
 

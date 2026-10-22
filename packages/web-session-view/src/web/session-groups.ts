@@ -4,8 +4,8 @@ export const UNGROUPED_PROJECT_KEY = '__ungrouped__'
 export const UNGROUPED_TAG_KEY = '__untagged__'
 export const PINNED_GROUP_KEY = '__pinned__'
 
-export type SidebarGroupKind = 'pinned' | 'project' | 'tag' | 'ungrouped'
-export type SidebarGroupBy = 'project' | 'tag'
+export type SidebarGroupKind = 'pinned' | 'project' | 'facet' | 'ungrouped'
+export type SidebarGroupBy = 'project' | 'facet'
 
 export interface SessionSidebarGroup {
   key: string
@@ -16,10 +16,15 @@ export interface SessionSidebarGroup {
   kind: SidebarGroupKind
 }
 
+/** 有用户消息用那条消息的时间；还没发过消息的会话用 updatedAt。 */
+export function sessionActivityAt(item: SessionListItem) {
+  return item.lastMessageAt && item.lastMessageAt > 0 ? item.lastMessageAt : item.updatedAt
+}
+
 export function compareSessionRows(a: SessionListItem, b: SessionListItem) {
   const pin = Number(Boolean(b.pinned)) - Number(Boolean(a.pinned))
   if (pin) return pin
-  return b.updatedAt - a.updatedAt || a.id.localeCompare(b.id)
+  return sessionActivityAt(b) - sessionActivityAt(a) || a.id.localeCompare(b.id)
 }
 
 /** 悬浮聊天用：按更新时间取最近一条对话（忽略置顶；优先普通 chat）。 */
@@ -39,10 +44,10 @@ export function mostRecentSessionId(sessions: SessionListItem[]): string | undef
 
 function sortGroupSessions(group: SessionSidebarGroup) {
   group.sessions.sort(compareSessionRows)
-  group.updatedAt = group.sessions.reduce((max, item) => Math.max(max, item.updatedAt), 0)
+  group.updatedAt = group.sessions.reduce((max, item) => Math.max(max, sessionActivityAt(item)), 0)
 }
 
-/** 按绑定文件夹 path 分组；无 path 归入 Ungrouped。组内置顶优先，其余按 updatedAt 降序。 */
+/** 按绑定文件夹 path 分组；无 path 归入 Ungrouped。组内置顶优先，其余按最近一次用户发消息的时间降序。 */
 export function groupSessionsByProject(sessions: SessionListItem[]): SessionSidebarGroup[] {
   const map = new Map<string, SessionSidebarGroup>()
   for (const item of sessions) {
@@ -64,6 +69,16 @@ export function groupSessionsByProject(sessions: SessionListItem[]): SessionSide
     group.sessions.push(item)
   }
 
+  if (!map.has(UNGROUPED_PROJECT_KEY)) {
+    map.set(UNGROUPED_PROJECT_KEY, {
+      key: UNGROUPED_PROJECT_KEY,
+      label: '未分组',
+      sessions: [],
+      updatedAt: 0,
+      kind: 'ungrouped',
+    })
+  }
+
   const groups = [...map.values()]
   for (const group of groups) sortGroupSessions(group)
   groups.sort((a, b) => {
@@ -74,21 +89,21 @@ export function groupSessionsByProject(sessions: SessionListItem[]): SessionSide
   return groups
 }
 
-/** 按标签分组；一条会话可出现在多个标签下，无标签归入未标签。 */
-export function groupSessionsByTag(sessions: SessionListItem[]): SessionSidebarGroup[] {
+/** 按标签分组；一条会话可出现在多个标签下，无标签归入无标签。 */
+export function groupSessionsByFacet(sessions: SessionListItem[]): SessionSidebarGroup[] {
   const map = new Map<string, SessionSidebarGroup>()
   const untagged: SessionListItem[] = []
   for (const item of sessions) {
-    const tags = (item.tags ?? []).map((tag) => tag.trim()).filter(Boolean)
+    const tags = (item.facet?.tags ?? []).map((tag) => tag.trim()).filter(Boolean)
     if (!tags.length) {
       untagged.push(item)
       continue
     }
     for (const tag of tags) {
-      const key = `tag:${tag}`
+      const key = `facet:${tag}`
       let group = map.get(key)
       if (!group) {
-        group = { key, label: tag, sessions: [], updatedAt: 0, kind: 'tag' }
+        group = { key, label: tag, sessions: [], updatedAt: 0, kind: 'facet' }
         map.set(key, group)
       }
       group.sessions.push(item)
@@ -100,7 +115,7 @@ export function groupSessionsByTag(sessions: SessionListItem[]): SessionSidebarG
   if (untagged.length) {
     const group: SessionSidebarGroup = {
       key: UNGROUPED_TAG_KEY,
-      label: '未标签',
+      label: '无标签',
       sessions: untagged,
       updatedAt: 0,
       kind: 'ungrouped',
@@ -111,8 +126,13 @@ export function groupSessionsByTag(sessions: SessionListItem[]): SessionSidebarG
   return groups
 }
 
+/** @deprecated 标签分组 */
+export function groupSessionsByTag(sessions: SessionListItem[]) {
+  return groupSessionsByFacet(sessions)
+}
+
 export function buildSidebarGroups(sessions: SessionListItem[], groupBy: SidebarGroupBy): SessionSidebarGroup[] {
-  const rest = groupBy === 'tag' ? groupSessionsByTag(sessions) : groupSessionsByProject(sessions)
+  const rest = groupBy === 'facet' ? groupSessionsByFacet(sessions) : groupSessionsByProject(sessions)
   const pinned = sessions.filter((item) => item.pinned).sort(compareSessionRows)
   if (!pinned.length) return rest
   return [
@@ -127,7 +147,7 @@ export function buildSidebarGroups(sessions: SessionListItem[], groupBy: Sidebar
   ]
 }
 
-export type SidebarSectionKind = 'pinned' | 'project' | 'tag'
+export type SidebarSectionKind = 'pinned' | 'project' | 'facet'
 
 /** 置顶区直接携带会话行；项目/标签区按分组。 */
 export interface SidebarSection {
@@ -142,8 +162,8 @@ export interface SidebarSection {
 /**
  * 两板块并存：收藏 / (项目|标签)，自上而下。
  * - 收藏区：所有 pinned 会话（直接携带，不嵌套分组）；无则省去该 section。
- * - 数据分组区：按 groupBy 决定——'project' 按绑定 folder path 分组（未绑定归「未分组」）；
- *   'tag' 按 tag 分组（一条会话可出现在多个标签下，无标签归「未标签」）。
+ * - 数据分组区：按 groupBy 决定——'project' 按绑定 folder path 分组（未绑定归「未分组」，没有会话也保留这一组）；
+ *   'facet' 按标签分组（一条会话可出现在多个标签下，无标签归「无标签」）。
  */
 export function buildSidebarSections(
   sessions: SessionListItem[],
@@ -160,8 +180,8 @@ export function buildSidebarSections(
     })
   }
 
-  if (groupBy === 'tag') {
-    sections.push({ kind: 'tag', label: '标签', groups: groupSessionsByTag(sessions) })
+  if (groupBy === 'facet') {
+    sections.push({ kind: 'facet', label: '标签', groups: groupSessionsByFacet(sessions) })
   } else {
     sections.push({ kind: 'project', label: '项目', groups: groupSessionsByProject(sessions) })
   }
@@ -174,6 +194,3 @@ export function folderNameFromPath(path: string) {
   const parts = cleaned.split(/[\\/]/).filter(Boolean)
   return parts.at(-1) || path
 }
-
-/** @deprecated 使用 SessionSidebarGroup */
-export type SessionProjectGroup = SessionSidebarGroup

@@ -1,53 +1,39 @@
-import { useState } from 'react'
-import { Image } from 'antd'
-import { BoolBox, TagChip, TagChips } from '@biu/public-ui'
+import { BoolBox } from '@biu/public-ui/bool-box'
+import { TagChip, TagChips } from '@biu/public-ui/tag-chip'
 import {
   ArchiveBoxArrowDownIcon,
   ArrowDownTrayIcon,
   ArrowPathIcon,
   ArrowUpTrayIcon,
-  Bars3BottomLeftIcon,
   BoltIcon,
-  CalendarDaysIcon,
   ChatBubbleLeftRightIcon,
   CheckIcon,
-  DocumentTextIcon,
-  HashtagIcon,
-  LinkIcon,
-  ListBulletIcon,
-  PaperClipIcon,
   PaperAirplaneIcon,
   PencilSquareIcon,
-  PhotoIcon,
   PlayIcon,
-  RectangleStackIcon,
   StopIcon,
-  TableCellsIcon,
-  ShareIcon,
-  UserIcon,
 } from '@heroicons/react/16/solid'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import type { CollectionSchema, DbRecord, FieldSpec, FieldType } from '@biu/type-file-system'
-import { actionVisibleToUser, asAttachmentList, asHttpHref, asImageSrc, asImageSrcList, asPerson, commitAttachments } from '@biu/type-file-system'
+import { actionVisibleToUser, asAttachmentList, asHttpHref, asImageSrc, asImageSrcList, asPerson, asPersonList, commitAttachments } from '@biu/type-file-system'
 import type { CollectionRowViewType, CollectionViewType } from '@biu/type-file-system/ui'
 import {
   asStringList,
+  enumDisplayLabel,
   formatField,
   isRecordLinkField,
   matchActionWhen,
   resolveFieldType,
   type ViewMode,
 } from './fields.ts'
-import { LocalText, TokenMultiSelect } from './controls.tsx'
-import { CellDateTime } from '@biu/database-ui'
-import { AttachmentFile, MediaField, UrlHref } from './cell-media.tsx'
-import { PersonFace, PersonPickPanel } from './person-cell.tsx'
+import { AttachmentFile, UrlHref } from './cell-media.tsx'
+import { PersonFace } from './person-cell.tsx'
 import { RecordLinkChips } from './record-link-cell.tsx'
 
 export function actionIcon(id: string, opts?: { fallback?: boolean; className?: string }) {
   const cls = opts?.className ?? 'size-[14px]'
-  if (id === 'start' || id === 'play' || id === 'run' || id === 'open') return <PlayIcon aria-hidden className={cls} />
-  if (id === 'stop' || id === 'close' || id === 'pause') return <StopIcon aria-hidden className={cls} />
+  if (id === 'start' || id === 'play' || id === 'run' || id === 'open' || id === 'enable') return <PlayIcon aria-hidden className={cls} />
+  if (id === 'stop' || id === 'close' || id === 'pause' || id === 'disable') return <StopIcon aria-hidden className={cls} />
   if (id === 'pack') return <ArchiveBoxArrowDownIcon aria-hidden className={cls} />
   if (id === 'uninstall' || id === 'delete' || id === 'remove') return <TrashGlyph aria-hidden className={cls} />
   if (id === 'edit' || id === 'rename') return <PencilSquareIcon aria-hidden className={cls} />
@@ -72,8 +58,8 @@ export function ModeGlyph({
   const cls = 'size-[14px]'
   const Custom = extra?.find((item) => item.id === id)?.Icon ?? rows?.find((item) => item.id === id)?.Icon
   if (Custom) return <Custom className={cls} />
-  if (id === 'table') return <TableCellsIcon aria-hidden className={cls} />
-  return <ShareIcon aria-hidden className={cls} />
+  if (id === 'table') return <span aria-hidden className="fsdb-ui-glyph" data-icon="table" />
+  return <span aria-hidden className="fsdb-ui-glyph" data-icon="share" />
 }
 
 export const VIEW_MODES: Array<{ id: ViewMode; label: string }> = [
@@ -119,22 +105,22 @@ export function draftFromRecord(schema: CollectionSchema, row: DbRecord, bodyKey
   return next
 }
 
+export function fieldGlyphKind(kind: FieldType) {
+  if (kind === 'person') return 'person'
+  if (kind === 'datetime') return 'date'
+  if (kind === 'number') return 'num'
+  if (kind === 'action') return 'play'
+  if (kind === 'select' || kind === 'multi-select') return 'stack'
+  if (kind === 'facet') return 'tag'
+  if (kind === 'url') return 'link'
+  if (kind === 'ref' || kind === 'multi-ref') return 'ref'
+  if (kind === 'image' || kind === 'attachment' || kind === 'file') return 'file'
+  return 'text'
+}
+
 export function FieldGlyph({ kind }: { kind: FieldType }) {
-  const cls = 'size-[14px] shrink-0'
   if (kind === 'boolean') return <span aria-hidden className="fsdb-field-bool-glyph"><BoolBox on={false} /></span>
-  if (kind === 'select') return <ListBulletIcon aria-hidden className={cls} />
-  if (kind === 'multi-select') return <RectangleStackIcon aria-hidden className={cls} />
-  if (kind === 'datetime') return <CalendarDaysIcon aria-hidden className={cls} />
-  if (kind === 'number') return <HashtagIcon aria-hidden className={cls} />
-  if (kind === 'url') return <LinkIcon aria-hidden className={cls} />
-  if (kind === 'image') return <PhotoIcon aria-hidden className={cls} />
-  if (kind === 'attachment') return <PaperClipIcon aria-hidden className={cls} />
-  if (kind === 'file') return <DocumentTextIcon aria-hidden className={cls} />
-  if (kind === 'facet') return <RectangleStackIcon aria-hidden className={cls} />
-  if (kind === 'person') return <UserIcon aria-hidden className={cls} />
-  if (kind === 'ref' || kind === 'multi-ref') return <ShareIcon aria-hidden className={cls} />
-  if (kind === 'action') return <PlayIcon aria-hidden className={cls} />
-  return <Bars3BottomLeftIcon aria-hidden className={cls} />
+  return <span aria-hidden className="fsdb-field-glyph" data-kind={fieldGlyphKind(kind)} />
 }
 
 export function BoolCell({
@@ -179,14 +165,7 @@ export function BoolCell({
 function ImageThumb({ src }: { src: string }) {
   return (
     <span className="fsdb-thumb-btn" onPointerDown={(event) => event.stopPropagation()}>
-      <Image
-        src={src}
-        alt=""
-        width={28}
-        height={18}
-        className="fsdb-thumb"
-        preview={{ mask: false }}
-      />
+      <img src={src} alt="" width={28} height={18} className="fsdb-thumb" />
     </span>
   )
 }
@@ -194,29 +173,22 @@ function ImageThumb({ src }: { src: string }) {
 function ImageThumbs({ srcs, compact }: { srcs: string[]; compact?: boolean }) {
   if (!srcs.length) return null
   const shown = compact ? srcs.slice(0, 4) : srcs
+  if (compact) {
+    return (
+      <span className="fsdb-thumbs">
+        {shown.map((src, index) => (
+          <ImageThumb key={`${src}-${index}`} src={src} />
+        ))}
+        {srcs.length > 4 ? <span className="fsdb-meta">+{srcs.length - 4}</span> : null}
+      </span>
+    )
+  }
   return (
-    <Image.PreviewGroup>
-      {compact ? (
-        <span className="fsdb-thumbs">
-          {shown.map((src, index) => (
-            <ImageThumb key={`${src}-${index}`} src={src} />
-          ))}
-          {srcs.length > 4 ? <span className="fsdb-meta">+{srcs.length - 4}</span> : null}
-        </span>
-      ) : (
-        <div className="fsdb-fileview-imgs">
-          {shown.map((src, index) => (
-            <Image
-              key={`${src}-${index}`}
-              className="fsdb-fileview-img"
-              src={src}
-              alt=""
-              preview={{ mask: false }}
-            />
-          ))}
-        </div>
-      )}
-    </Image.PreviewGroup>
+    <div className="fsdb-fileview-imgs">
+      {shown.map((src, index) => (
+        <img key={`${src}-${index}`} className="fsdb-fileview-img" src={src} alt="" />
+      ))}
+    </div>
   )
 }
 
@@ -284,7 +256,7 @@ export function FilePreview({
   const src = previewImageSrc(kind, value)
   if (src) {
     if (compact) return <ImageThumb src={src} />
-    return <Image className="fsdb-fileview-img" src={src} alt="" preview={{ mask: false }} />
+    return <img className="fsdb-fileview-img" src={src} alt="" />
   }
   const files = asAttachmentList(value)
   if (files.length) {
@@ -327,6 +299,7 @@ export function DefaultCell({
   labelField,
   onRun,
   onChange,
+  plain,
 }: {
   field: FieldSpec
   value: unknown
@@ -336,6 +309,7 @@ export function DefaultCell({
   labelField?: string
   onRun?: () => void
   onChange?: (next: unknown) => void
+  plain?: boolean
 }) {
   const kind = resolveFieldType(field)
   if (kind === 'action') {
@@ -350,16 +324,20 @@ export function DefaultCell({
         collectionPath={collectionPath}
         records={records}
         labelField={labelField}
+        deferMissing={plain}
       />
     )
   }
   if (kind === 'select' || kind === 'multi-select') {
     const tags = kind === 'multi-select' ? asStringList(value) : String(value ?? '') ? [String(value)] : []
     if (!tags.length) return null
+    if (plain) {
+      return <span className="fsdb-select-text">{tags.map((tag) => enumDisplayLabel(field, tag)).join('、')}</span>
+    }
     return (
       <TagChips>
         {tags.map((tag) => (
-          <TagChip key={tag} id={tag} label={tag} />
+          <TagChip key={tag} id={tag} label={enumDisplayLabel(field, tag)} />
         ))}
       </TagChips>
     )
@@ -368,17 +346,20 @@ export function DefaultCell({
     return <BoolCell on={value === true || value === 'true'} />
   }
   if (kind === 'person') {
+    if (plain) {
+      const text = asPersonList(value)
+        .map((item) => item.name)
+        .filter(Boolean)
+        .join('、')
+      if (!text) return null
+      return <span className="fsdb-person-text">{text}</span>
+    }
     return <PersonFace value={value} />
   }
   if (kind === 'datetime') {
-    return (
-      <CellDateTime
-        value={value}
-        empty="空"
-        writable={Boolean(onChange)}
-        onChange={(next) => onChange?.(next)}
-      />
-    )
+    const text = formatField(field, value)
+    if (!text) return null
+    return <span className="fsdb-datetime-text">{text}</span>
   }
   if (kind === 'url' || kind === 'image' || kind === 'attachment' || kind === 'file') {
     return <FilePreview value={value} compact kind={kind} onChange={kind === 'attachment' ? onChange : undefined} />
@@ -406,8 +387,7 @@ export function ActionCell({
     <button
       type="button"
       className="fsdb-action-btn"
-      title={label}
-      data-dock-tip={label}
+      aria-label={label}
       onClick={(event) => {
         event.stopPropagation()
         onRun?.()
@@ -416,89 +396,6 @@ export function ActionCell({
       {label}
     </button>
   )
-}
-
-export function FieldEditor({
-  fieldKey,
-  field,
-  value,
-  onChange,
-  options,
-  onAction,
-  autoOpen = false,
-  collectionPath,
-  source,
-  onCommit,
-  compact = false,
-  excludeId,
-}: {
-  fieldKey: string
-  field: FieldSpec
-  value: string
-  onChange: (next: string) => void
-  options?: string[]
-  onAction?: () => void
-  autoOpen?: boolean
-  collectionPath?: string
-  source?: unknown
-  onCommit?: (next: unknown) => void
-  compact?: boolean
-  excludeId?: string
-}) {
-  const kind = resolveFieldType(field)
-  if (kind === 'action') {
-    return <ActionCell field={field} fieldKey={fieldKey} onRun={onAction} />
-  }
-  if (kind === 'select' || kind === 'multi-select') {
-    const selected = kind === 'multi-select' ? asStringList(value) : value ? [value] : []
-    const list = [...new Set([...(options ?? []), ...selected])].filter(Boolean)
-    return (
-      <TokenMultiSelect
-        values={selected}
-        options={list}
-        multiple={kind === 'multi-select'}
-        autoOpen={autoOpen}
-        onChange={(next) => onChange(kind === 'multi-select' ? next.join(', ') : (next[0] ?? ''))}
-      />
-    )
-  }
-  if (kind === 'boolean') {
-    return <BoolCell on={value === 'true'} writable onToggle={() => onChange(value === 'true' ? 'false' : 'true')} />
-  }
-  if (kind === 'datetime') {
-    return (
-      <CellDateTime
-        value={value}
-        onChange={(next) => onChange(next == null ? '' : String(next))}
-      />
-    )
-  }
-  if (kind === 'person') {
-    return (
-      <PersonPickPanel
-        value={source ?? value}
-        onChange={(next) => {
-          if (onCommit) onCommit(next)
-          else onChange(JSON.stringify(next))
-        }}
-      />
-    )
-  }
-  if (kind === 'url' || kind === 'image' || kind === 'attachment') {
-    return (
-      <MediaField
-        kind={kind}
-        value={source ?? value}
-        collectionPath={collectionPath}
-        compact={compact}
-        onCommit={(next) => {
-          if (onCommit) onCommit(next)
-          else onChange(typeof next === 'string' ? next : JSON.stringify(next))
-        }}
-      />
-    )
-  }
-  return <LocalText className="fsdb-plain-input" value={value} title={value} placeholder="" onCommit={onChange} />
 }
 
 export function placedActions(schema: CollectionSchema | undefined, place: 'row' | 'detail') {
