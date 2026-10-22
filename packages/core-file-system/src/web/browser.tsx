@@ -131,7 +131,8 @@ import { HttpError, invalidateListReads, listCollection, readJson } from './db-c
 import { savedViewRecordPath } from '../paths.ts'
 import { findViewNeighbor, indexOnPage } from './view-adjacent.ts'
 import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, rememberedTableWrap, tableColumnSlice, tableColumnUnchanged, tableColumnWidth, tableWindowSlice, tableWindowUnchanged, tableWrapScroll, type TableColumnSlice } from './table-window.ts'
-import { forgetPreviewTotalsForPath, isPaintedListReady, markPaintedListReady, rememberPreviewTotalForView, resetPaintedListReady, whenListIdle } from './sidebar-preview.ts'
+import { forgetPreviewTotalsForPath, markPaintedListReady, rememberPreviewTotalForView, resetPaintedListReady, whenListIdle } from './sidebar-preview.ts'
+import { DataSidebarShell } from './data-sidebar-shell.tsx'
 import { builtinAllViewId, catalogLockFilters, isReadOnlyViewId, mergeTableViews, parseBuiltinScopeViewId, stubBuiltinBlockKindView, viewsForScope, type DataScope } from '../catalog-views.ts'
 import { SAVED_VIEW_EVENT, moveInspectorRecordsToTrash, rememberInspectorWorkingView, showRecordInInspector } from './inspector-db-route.ts'
 import { CellPop, cellUsesPop } from './cell-pop.tsx'
@@ -172,30 +173,6 @@ const LayoutPrefsMenu = lazy(() => import('./layout-prefs-menu.tsx').then((m) =>
 const CollectionRowsShell = lazy(() => import('./rows-view.tsx').then((m) => ({ default: m.CollectionRowsShell })))
 
 function IdleDataSidebar(props: ComponentProps<typeof DataSidebar>) {
-  const [sidebarPaint, setSidebarPaint] = useState(false)
-  useEffect(() => {
-    if (sidebarPaint) return
-    let cancelled = false
-    let idleId = 0
-    let timer = 0
-    const show = () => {
-      if (!cancelled) setSidebarPaint(true)
-    }
-    const arm = () => {
-      const ric = window.requestIdleCallback
-      if (typeof ric === 'function') idleId = ric(show, { timeout: 240 })
-      else timer = window.setTimeout(show, 240)
-    }
-    if (isPaintedListReady()) arm()
-    else window.addEventListener('fsdb:list-ready', arm)
-    return () => {
-      cancelled = true
-      window.removeEventListener('fsdb:list-ready', arm)
-      if (idleId) window.cancelIdleCallback(idleId)
-      if (timer) window.clearTimeout(timer)
-    }
-  }, [sidebarPaint])
-  if (!sidebarPaint) return null
   return <DataSidebar {...props} />
 }
 
@@ -5343,7 +5320,7 @@ export function CollectionBrowser({
       data-testid={embed ? 'inspector-database' : sheet ? 'fsdb-collect-sheet' : undefined}
     >
       {!nested ? (
-        <Suspense fallback={null}>
+        <Suspense fallback={<DataSidebarShell tables={tables} collectionPath={collectionPath} title={title} />}>
         <IdleDataSidebar
           tables={tables}
           collectionPath={collectionPath}
