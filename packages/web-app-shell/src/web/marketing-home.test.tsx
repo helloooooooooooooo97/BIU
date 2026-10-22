@@ -193,6 +193,8 @@ test('home 收窄后：深度内容下沉，导航指向独立页', () => {
   const fills = [...base.querySelectorAll('path[fill]')].map((path) => path.getAttribute('fill') ?? '')
   assert.ok(fills.length > 0 && fills.every((fill) => /^#([0-9a-f]{2})\1\1$/i.test(fill) || fill === 'none'), '底层印花是同色系的灰')
   const nav = screen.getByRole('navigation', { name: 'Main navigation' })
+  const brandMark = document.querySelector('.site-brand-mark')
+  assert.match(brandMark?.querySelector('rect')?.getAttribute('fill') ?? '', /#ffffff/i, '左上角标记保留白色圆角底')
   assert.match(nav.textContent ?? '', /Product/)
   assert.match(nav.textContent ?? '', /Pricing/)
   assert.match(nav.textContent ?? '', /Compare/)
@@ -905,7 +907,7 @@ test('标签页图标、README 横条、分享卡片都是当前品牌标记（�
 
   const html = readFileSync(resolve(process.cwd(), 'index.html'), 'utf8')
   assert.match(html, /<title>BIU<\/title>/, '浏览器标签页标题是 BIU')
-  assert.doesNotMatch(read('favicon.svg'), /<rect /, '标签页图标用官网同款圆形，不垫白底方块')
+  assert.match(read('favicon.svg'), /<rect [^>]*fill="#ffffff"/, 'README / 左上角图标保留白色圆角底')
   assert.match(html, /<link rel="icon" type="image\/svg\+xml" href="\/favicon\.svg/)
   assert.match(html, /<meta property="og:image" content="\/og-image\.png" \/>/, '爬虫不执行脚本，og:image 要写在静态 HTML 里')
   const meta = readFileSync(resolve(process.cwd(), 'packages/web-app-shell/src/web/marketing-site/use-page-meta.ts'), 'utf8')

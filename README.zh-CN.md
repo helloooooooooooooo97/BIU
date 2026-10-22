@@ -722,8 +722,8 @@ biu
 ├── scripts/
 │   └── link-cordis-plugins.mjs
 ├── public/
-│   ├── favicon.svg            # 圆形品牌标记（与官网导航相同）
-│   ├── brand-lockup.svg       # README：圆形标记 + BIU
+│   ├── favicon.svg            # 品牌标记（白色圆角底）
+│   ├── brand-lockup.svg       # README：标记 + BIU
 │   ├── og-image.png           # 分享卡片（og:image），由 scripts/build-brand-assets.tsx 生成
 │   ├── mascot-blue.svg        # README 吉祥物（BMW M 三色）
 │   ├── mascot-violet.svg

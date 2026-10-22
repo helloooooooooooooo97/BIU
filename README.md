@@ -724,8 +724,8 @@ biu
 ├── scripts/
 │   └── link-cordis-plugins.mjs
 ├── public/
-│   ├── favicon.svg            # circular brand mark (same as site nav)
-│   ├── brand-lockup.svg       # README: circular mark + BIU
+│   ├── favicon.svg            # brand mark (white rounded square)
+│   ├── brand-lockup.svg       # README: mark + BIU
 │   ├── og-image.png           # share card (og:image), from scripts/build-brand-assets.tsx
 │   ├── mascot-blue.svg        # README mascots (BMW M palette)
 │   ├── mascot-violet.svg
