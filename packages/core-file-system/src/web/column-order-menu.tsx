@@ -20,6 +20,7 @@ import { tagTextColor, tagTone as schemaTagTone } from '@biu/public-ui/tag-chip'
 import { moveList } from '../query-logic.ts'
 import { CheckRow } from './controls.tsx'
 import { DndGrip } from './dnd-grip.tsx'
+import { FlyoutEmpty, flyoutQueryMatch } from './flyout-search.tsx'
 import { facetFlatColumnKey, parseFacetFlatColumnKey, resolveFieldType } from './fields.ts'
 import { FieldGlyph } from './fsdb-cells.tsx'
 
@@ -166,6 +167,7 @@ export function ColumnOrderMenu({
   allColumns,
   labelField,
   facetCatalog,
+  query = '',
   onToggle,
   onReorder,
 }: {
@@ -173,6 +175,7 @@ export function ColumnOrderMenu({
   allColumns: Array<{ key: string; kind: FieldType; field: FieldSpec }>
   labelField?: string
   facetCatalog: CollectionSchemaPack[]
+  query?: string
   onToggle: (key: string) => void
   onReorder: (next: string[]) => void
 }) {
@@ -184,10 +187,36 @@ export function ColumnOrderMenu({
     ...columns.filter((item) => item.key === labelField),
     ...columns.filter((item) => item.key !== labelField),
     ...hidden,
-  ]
+  ].filter((item) => flyoutQueryMatch(item.field.label ?? item.key, query))
+  const packs = facetCatalog.filter(
+    (pack) =>
+      flyoutQueryMatch(pack.label, query) ||
+      pack.fields.some((field) => flyoutQueryMatch(field.label ?? field.key, query)),
+  )
   const locked = new Set([labelField, 'actions'].filter(Boolean))
   const sortableIds = menuCols.filter((item) => !locked.has(item.key)).map((item) => item.key)
   const active = menuCols.find((item) => item.key === activeId)
+  const searching = Boolean(query.trim())
+
+  if (searching) {
+    if (!menuCols.length && !packs.length) return <FlyoutEmpty />
+    return (
+      <>
+        {menuCols.map((item) => (
+          <ColumnMenuCheck
+            key={item.key}
+            col={item}
+            on={visibleKeys.has(item.key) || locked.has(item.key)}
+            locked={locked.has(item.key)}
+            onToggle={() => onToggle(item.key)}
+          />
+        ))}
+        {packs.map((pack) => (
+          <FacetColumnPackRow key={pack.id} pack={pack} visibleKeys={visibleKeys} onToggle={onToggle} />
+        ))}
+      </>
+    )
+  }
 
   return (
     <>
@@ -249,7 +278,7 @@ export function ColumnOrderMenu({
           ) : null}
         </DragOverlay>
       </DndContext>
-      {facetCatalog.map((pack) => (
+      {packs.map((pack) => (
         <ColumnRowShell
           key={pack.id}
           grip={

@@ -165,6 +165,8 @@ const CSS = `
 .fsdb-page .fsdb-col-menu{max-height:min(60vh,360px);overflow:hidden}
 .fsdb-page .fsdb-col-menu-list{min-height:0;overflow:auto;display:flex;flex-direction:column;gap:4px}
 .fsdb-page .tasks-viewdd-head,.fsdb-page .tasks-sort-head{font-size:14px;font-weight:500;color:var(--dsw-sidebar-fg)}
+.fsdb-page .tasks-sort-search{box-sizing:border-box;width:100%;min-width:0;height:28px;border:0;border-radius:7px;padding:0 8px;background:var(--dsw-input);color:var(--dsw-label);font:inherit;font-size:14px;font-weight:500;outline:none}
+.fsdb-page .tasks-sort-list{display:flex;flex-direction:column;gap:4px;min-height:0;overflow:auto}
 .fsdb-page .tasks-viewdd-item{position:relative;display:flex;align-items:center;gap:2px;min-width:0;width:100%;border-radius:7px}
 .fsdb-page .tasks-viewdd-item.is-drag{opacity:0}
 .fsdb-page .tasks-viewdd-item::before{content:"";position:absolute;inset:0;z-index:0;border-radius:inherit;pointer-events:none;background:transparent}
@@ -981,6 +983,7 @@ html:not(.dark) .tasks-viewdd-saveas,
 html:not(.dark) .tasks-viewdd-empty,
 html:not(.dark) .tasks-sort-menu,
 html:not(.dark) .tasks-sort-head,
+html:not(.dark) .tasks-sort-search,
 html:not(.dark) .tasks-sort-item,
 html:not(.dark) .tasks-sort-item.is-active,
 html:not(.dark) .tasks-filter-menu,
