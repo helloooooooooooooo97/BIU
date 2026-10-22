@@ -28,15 +28,15 @@ export function ChatConfigBanner(_props: SlotProps) {
 
   return (
     <div className="chat-config-banner" role="status">
-      尚未配置 API Key：消息会本地回声，不会调用模型。点击输入框旁的{' '}
+      尚未配置 API Key：消息会本地回声，不会调用模型。点击输入框里的{' '}
       <button
         type="button"
         className="chat-config-banner-action"
-        onClick={() => window.dispatchEvent(new CustomEvent('biu:open-model-config'))}
+        onClick={() => window.dispatchEvent(new CustomEvent('biu:open-model-menu'))}
       >
-        ＋ 配置模型
+        模型
       </button>
-      。
+      {' '}即可配置对应的 token。
     </div>
   )
 }
