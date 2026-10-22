@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { colWidthStyle, DEFAULT_VIEW_PAGE_SIZE, normalizePageSize, normalizeSavedView, parseViewColumns, sortViewsByRank, tableWidthStyle, viewStateKey, type SavedView } from './saved-view.ts'
+import { colWidthStyle, DEFAULT_VIEW_PAGE_SIZE, normalizePageSize, normalizeSavedView, parseViewColumns, rankListedViews, sortViewsByRank, tableWidthStyle, viewStateKey, type SavedView } from './saved-view.ts'
 
 const base: SavedView = {
   id: '1',
@@ -74,6 +74,16 @@ test('sortViewsByRank follows rank then original index', () => {
   const c = normalizeSavedView({ ...base, id: 'c', name: 'C' })
   assert.deepEqual(sortViewsByRank([a, b]).map((view) => view.id), ['b', 'a'])
   assert.deepEqual(sortViewsByRank([c, a]).map((view) => view.id), ['c', 'a'])
+})
+
+test('rankListedViews assigns 0..n-1 and keeps previous order when merge prepends builtin', () => {
+  const all = normalizeSavedView({ ...base, id: 'all', name: '全部', builtin: true })
+  const a = normalizeSavedView({ ...base, id: 'a', name: 'A' })
+  const b = normalizeSavedView({ ...base, id: 'b', name: 'B' })
+  const ranked = rankListedViews([all, a, b], [a, b, all])
+  assert.deepEqual(ranked.map((view) => view.id), ['a', 'b', 'all'])
+  assert.deepEqual(ranked.map((view) => view.rank), [0, 1, 2])
+  assert.deepEqual(rankListedViews([all, b, a], ranked).map((view) => view.id), ['a', 'b', 'all'])
 })
 
 test('viewStateKey ignores name and treats missing query as empty', () => {

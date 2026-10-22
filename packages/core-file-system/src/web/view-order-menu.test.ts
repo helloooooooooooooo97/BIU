@@ -19,5 +19,7 @@ test('view dropdown reuses the sort-menu grip and persists rank via patch', () =
   assert.match(browser, /pushSavedViewsPatch/)
   assert.match(saved, /rank\?: number/)
   assert.match(saved, /export function sortViewsByRank/)
+  assert.match(saved, /export function rankListedViews/)
+  assert.match(browser, /rankListedViews/)
   assert.match(storage, /'rank'/)
 })

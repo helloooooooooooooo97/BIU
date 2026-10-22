@@ -83,7 +83,7 @@ test('list and detail share the chat column max width with side padding', () => 
   assert.match(css, /\.fsdb-page \.fsdb-proplist \.fsdb-proprow\{[^}]*display:inline-flex/)
   assert.doesNotMatch(css, /\.fsdb-proplist \.fsdb-proprow\{[^}]*grid-template-columns:max-content minmax\(0,1fr\)/)
   assert.match(css, /\.tasks-viewdd-menu\{[^}]*min-width:320px/)
-  assert.match(css, /\.tasks-viewtabs\{[^}]*overflow:hidden/)
+  assert.match(css, /\.tasks-viewtabs\{[^}]*overflow:visible/)
   assert.match(css, /\.fsdb-page \.tasks-viewdd-btn svg,\.fsdb-page \.tasks-viewdd-btn \.fsdb-ui-glyph\{[^}]*color:var\(--dsw-icon\)/)
   assert.match(css, /\.fsdb-page \.tasks-viewtab\.is-active svg,\.fsdb-page \.tasks-viewdd-btn\.is-active svg\{[^}]*color:var\(--dsw-icon-active\)/)
   assert.match(css, /\.fsdb-page \.tasks-viewdd-btn\{[^}]*height:26px/)

@@ -65,7 +65,7 @@ import { CrumbTrail } from './crumb-trail.tsx'
 import { fieldPickAttrs, pickDomAttrs, recordPickKind, recordSourcePath } from './pick-dom.ts'
 import { normalizeRecordEmoji, recordPreviewEmoji, crumbRecordLabel } from './sidebar-preview.ts'
 import { recordPreviewMascot, RecordMark } from './record-mark.tsx'
-import { COL_WIDTH_MAX, COL_WIDTH_MIN, colWidthStyle, normalizeColumnWidths, normalizeSavedView, normalizePageSize, sortViewsByRank, viewIsFresher, viewStateKey, type SavedView } from './saved-view.ts'
+import { COL_WIDTH_MAX, COL_WIDTH_MIN, colWidthStyle, normalizeColumnWidths, normalizeSavedView, normalizePageSize, rankListedViews, viewIsFresher, viewStateKey, type SavedView } from './saved-view.ts'
 import { PagerSizeControl } from './pager-size.tsx'
 import {
   actionIcon,
@@ -88,13 +88,6 @@ import { workspaceColumnsForLocation } from './workspace-columns.ts'
 import { PageBanner } from './page-banner.tsx'
 import { UiGlyph, ViewModeGlyph, idleTableIconKind } from './nav-glyphs.tsx'
 import { DATA_MODULE, isIndexCollection, isSystemCollection } from './database-path.ts'
-import {
-  availableViewTabSpace,
-  countFittingViewTabs,
-  leftClusterSiblingWidth,
-  splitVisibleViews,
-  viewTabsOverlapRight,
-} from './view-tabs.ts'
 import { ViewOrderMenu } from './view-order-menu.tsx'
 import { getDatabaseUi } from './database-ui.ts'
 import {
@@ -1437,79 +1430,6 @@ const WindowedTable = memo(function WindowedTable({
   )
 })
 
-function ViewTabFit({
-  views,
-  toolbarRef,
-  toolbarRightRef,
-  searchExpanded,
-  children,
-}: {
-  views: SavedView[]
-  toolbarRef: RefObject<HTMLDivElement | null>
-  toolbarRightRef: RefObject<HTMLDivElement | null>
-  searchExpanded: boolean
-  children: (fit: number) => ReactNode
-}) {
-  const viewMeasureRef = useRef<HTMLDivElement>(null)
-  const [viewTabFit, setViewTabFit] = useState(99)
-  const measure = () => {
-    const toolbar = toolbarRef.current
-    const right = toolbarRightRef.current
-    const row = viewMeasureRef.current
-    const host = row?.parentElement
-    if (!toolbar || !right || !row || !host) return
-    const tabs = Array.from(row.querySelectorAll('[data-view-measure]')) as HTMLElement[]
-    const left = toolbar.querySelector('.tasks-toolbar-left')
-    const siblings = left ? leftClusterSiblingWidth(left, host) : 0
-    const rightBox = right.getBoundingClientRect()
-    const available = availableViewTabSpace(host.getBoundingClientRect().left, rightBox.left, siblings)
-    let next = countFittingViewTabs(tabs.map((el) => el.offsetWidth), available, 2)
-    if (left && viewTabsOverlapRight(left.getBoundingClientRect(), rightBox)) {
-      next = Math.min(next, 1)
-    }
-    if (next > 1) {
-      const visible = host.querySelectorAll('[data-testid="fsdb-view-tab"]')
-      for (const tab of visible) {
-        if (viewTabsOverlapRight(tab.getBoundingClientRect(), rightBox)) {
-          next = 1
-          break
-        }
-      }
-    }
-    setViewTabFit((prev) => (prev === next ? prev : next))
-  }
-  useLayoutEffect(() => {
-    measure()
-  }, [searchExpanded, toolbarRef, toolbarRightRef, views])
-  useEffect(() => {
-    const ro = new ResizeObserver(measure)
-    const host = viewMeasureRef.current?.parentElement
-    if (host) ro.observe(host)
-    if (toolbarRef.current) ro.observe(toolbarRef.current)
-    if (toolbarRightRef.current) ro.observe(toolbarRightRef.current)
-    window.addEventListener('resize', measure)
-    window.visualViewport?.addEventListener('resize', measure)
-    return () => {
-      ro.disconnect()
-      window.removeEventListener('resize', measure)
-      window.visualViewport?.removeEventListener('resize', measure)
-    }
-  }, [searchExpanded, toolbarRef, toolbarRightRef, views])
-  return (
-    <>
-      <div className="tasks-viewtabs-measure" ref={viewMeasureRef} aria-hidden>
-        {views.map((view) => (
-          <button key={view.id} type="button" className="tasks-viewdd-btn tasks-viewtab" tabIndex={-1} data-view-measure={view.id}>
-            <ViewModeGlyph mode={view.mode} />
-            <span className="tasks-viewdd-name">{view.name}</span>
-          </button>
-        ))}
-      </div>
-      {children(viewTabFit)}
-    </>
-  )
-}
-
 export function CollectionBrowser({
   moduleId,
   collectionPath,
@@ -1583,8 +1503,13 @@ export function CollectionBrowser({
         )
     return listed
   }
-  const paintListedViews = (path: string) =>
-    sortViewsByRank(listedViews(path, loadViews(path)).map((view) => withViewDisplay(path, view)))
+  const paintListedViews = (path: string) => {
+    const remembered = loadViews(path)
+    return rankListedViews(
+      listedViews(path, remembered).map((view) => withViewDisplay(path, view)),
+      remembered,
+    )
+  }
   const dataPath = collectionPath
   const [stat, setStat] = useState<StatResult | null>(() => peekListCache(dataPath, routeViewId)?.stat ?? null)
   const [items, setItems] = useState<Array<DbRecord & { path?: string }>>(() => peekListCache(dataPath, routeViewId)?.items ?? [])
@@ -3122,12 +3047,17 @@ export function CollectionBrowser({
   ) {
     if (sheet) return true
     const forced = extra?.upsert ?? []
-    const listed = sortViewsByRank(
-      listedViews(path, [
-        ...next.filter((view) => !forced.some((item) => item.id === view.id)),
-        ...forced,
-      ]).map((view) => withViewDisplay(path, view)),
+    const incoming = [
+      ...next.filter((view) => !forced.some((item) => item.id === view.id)),
+      ...forced,
+    ]
+    const listed = rankListedViews(
+      listedViews(path, incoming).map((view) => withViewDisplay(path, view)),
+      incoming,
     )
+    for (const view of listed) {
+      if (view.builtin) persistViewDisplay(path, view.id, { rank: view.rank })
+    }
     const stored = listed.filter((view) => !view.builtin)
     const previous = extra?.baseline ?? loadViews(path)
     // 只推差异：别的窗口（会话 / 右检查器）新建的视图不会被这份快照整份冲掉。
@@ -3252,15 +3182,16 @@ export function CollectionBrowser({
   activeViewIdRef.current = activeViewId
   adoptViewRef.current = (view: SavedView) => {
     if (sheet) return
-    const painted = listedViews(collectionPath, loadViews(collectionPath)).map((item) =>
-      withViewDisplay(collectionPath, item),
-    )
+    const painted = paintListedViews(collectionPath)
     const current = painted.find((item) => item.id === view.id) ?? viewsRef.current.find((item) => item.id === view.id)
     if (current && !viewIsFresher(view, current)) return
     const incoming = withViewDisplay(collectionPath, view)
-    const listed = painted.some((item) => item.id === view.id)
-      ? painted.map((item) => (item.id === view.id ? incoming : item))
-      : [...painted, incoming]
+    const listed = rankListedViews(
+      painted.some((item) => item.id === view.id)
+        ? painted.map((item) => (item.id === view.id ? incoming : item))
+        : [...painted, incoming],
+      viewsRef.current,
+    )
     rememberViews(collectionPath, listed)
     viewsRef.current = listed
     setViews(listed)
@@ -3272,9 +3203,7 @@ export function CollectionBrowser({
   syncViewsRef.current = async () => {
     if (sheet) return
     await pullSavedViews([collectionPath])
-    const listed = listedViews(collectionPath, loadViews(collectionPath)).map((view) =>
-      withViewDisplay(collectionPath, view),
-    )
+    const listed = rankListedViews(paintListedViews(collectionPath), viewsRef.current)
     const prev = viewsRef.current
     const activeId = activeViewIdRef.current
     rememberViews(collectionPath, listed)
@@ -3365,10 +3294,15 @@ export function CollectionBrowser({
   }
 
   async function commitView(view: SavedView) {
-    const stored = loadViews(collectionPath).filter((item) => !item.builtin && item.id !== view.id)
-    const ok = await persistViewsWith(collectionPath, [...stored, view], { upsert: [view] })
+    const painted = paintListedViews(collectionPath)
+    const next = { ...view, rank: Number.isFinite(Number(view.rank)) ? view.rank : painted.length }
+    const ok = await persistViewsWith(
+      collectionPath,
+      [...painted.filter((item) => item.id !== next.id), next],
+      { upsert: [next] },
+    )
     if (!ok) return
-    selectView(view)
+    selectView(next)
   }
 
   function uniqueViewName(base: string, listed: SavedView[] = paintListedViews(collectionPath)) {
@@ -3402,8 +3336,9 @@ export function CollectionBrowser({
       wrap: false,
       truncate: true,
       query: '',
+      rank: listed.length,
     }
-    void persistViewsFor(target, [...stored.filter((item) => !item.builtin && item.id !== view.id), view], {
+    void persistViewsFor(target, [...listed.filter((item) => item.id !== view.id), view], {
       upsert: [view],
     }).then((ok) => {
       if (!ok) return
@@ -4739,47 +4674,19 @@ export function CollectionBrowser({
           <div className="tasks-toolbar-left">
             {sheet ? null : (
             <div className="tasks-viewdd-wrap" ref={viewRef}>
-              <ViewTabFit views={views} toolbarRef={toolbarRef} toolbarRightRef={toolbarRightRef} searchExpanded={searchExpanded}>
-                {(viewTabFit) => (
-              <div className={`tasks-viewtabs${views.length && viewTabFit < views.length ? ' is-collapsed' : ''}`}>
-                {(views.length ? splitVisibleViews(views, viewTabFit, activeViewId ?? undefined).shown : []).map((view) => (
-                  <button
-                    key={view.id}
-                    type="button"
-                    className={`tasks-viewdd-btn tasks-viewtab${view.id === activeViewId ? ' is-active' : ''}${view.id === activeViewId && viewMenuOpen ? ' is-menu' : ''}`}
-                    data-testid="fsdb-view-tab"
-                    aria-pressed={view.id === activeViewId}
-                    aria-haspopup={view.id === activeViewId ? 'menu' : undefined}
-                    aria-expanded={view.id === activeViewId ? viewMenuOpen : undefined}
-                    onPointerEnter={() => {
-                      if (view.id === activeViewIdRef.current) return
-                      void warmListCacheForView(collectionPath, view, paintListedViews(collectionPath))
-                    }}
-                    onClick={() => {
-                      if (view.id === activeViewId) toggleMenu('view')
-                      else selectView(view)
-                    }}
-                  >
-                    <ViewModeGlyph mode={view.mode} />
-                    <span className="tasks-viewdd-name">{view.name}</span>
-                  </button>
-                ))}
-                {!views.length ? (
-                  <button
-                    type="button"
-                    className={`tasks-viewdd-btn tasks-viewtab is-active${viewMenuOpen ? ' is-menu' : ''}`}
-                    aria-haspopup="menu"
-                    aria-expanded={viewMenuOpen}
-                    data-testid="fsdb-view-tab"
-                    onClick={() => toggleMenu('view')}
-                  >
-                    <UiGlyph icon="squares" />
-                    <span className="tasks-viewdd-name">未保存</span>
-                  </button>
-                ) : null}
+              <div className="tasks-viewtabs">
+                <button
+                  type="button"
+                  className={`tasks-viewdd-btn tasks-viewtab is-active${viewMenuOpen ? ' is-menu' : ''}`}
+                  data-testid="fsdb-view-tab"
+                  aria-haspopup="menu"
+                  aria-expanded={viewMenuOpen}
+                  onClick={() => toggleMenu('view')}
+                >
+                  {activeView ? <ViewModeGlyph mode={activeView.mode} /> : <UiGlyph icon="squares" />}
+                  <span className="tasks-viewdd-name">{activeView?.name ?? '未保存'}</span>
+                </button>
               </div>
-                )}
-              </ViewTabFit>
               {viewMenuOpen ? (
                 <HeadlessDismiss
                   onDismiss={() => setViewMenuOpen(false)}
