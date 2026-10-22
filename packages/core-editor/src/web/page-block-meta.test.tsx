@@ -1,8 +1,8 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { render } from '@testing-library/react'
-import { blockDataUnchanged, ENABLE_PAGE_BLOCK_PLUGIN, formatPageBlockFence, pageBlockPluginPhase, parsePageBlockData, parsePageBlockMeta, requestEnablePageBlockPlugin, setPageBlockPluginPhase } from './page-block-meta.ts'
-import { PageBlockMissing } from './page-block-view.tsx'
+import { render, waitFor } from '@testing-library/react'
+import { blockDataUnchanged, ENABLE_PAGE_BLOCK_PLUGIN, formatPageBlockFence, parsePageBlockData, parsePageBlockMeta, readPageBlockFence, requestEnablePageBlockPlugin, setPageBlockPluginPhase } from './page-block-meta.ts'
+import { PageBlockMissing } from './page-plugin-host.tsx'
 
 test('page block fence keeps plugin id in the document', () => {
   assert.deepEqual(parsePageBlockMeta('kind=excalidraw plugin=page-excalidraw'), {
@@ -17,20 +17,21 @@ test('page block fence keeps plugin id in the document', () => {
   )
 })
 
-test('missing block shows stored source and asks to enable the stored plugin', () => {
+test('missing block shows stored source and asks to enable the stored plugin', async () => {
   const { container } = render(
     <PageBlockMissing kind="excalidraw" plugin="page-excalidraw" data={{ file: 'assets/a.json' }} />,
   )
+  await waitFor(() => assert.match(container.textContent ?? '', /assets\/a\.json/))
   const text = container.textContent ?? ''
   assert.doesNotMatch(text, /未启用「/)
   assert.doesNotMatch(text, /文档里已经存/)
   assert.match(text, /page-excalidraw/)
   assert.doesNotMatch(text, /未运行/)
   assert.doesNotMatch(text, /源码/)
-  assert.match(text, /assets\/a\.json/)
   const enable = container.querySelector('[data-testid="page-block-enable"]')
   assert.equal(enable?.getAttribute('aria-label'), '启用')
   assert.ok(enable?.querySelector('svg'))
+  assert.ok(container.querySelector('[data-testid="page-source-editor"]'))
 })
 
 test('html pageBlock fence stores raw html and deck on the header', () => {
@@ -88,6 +89,26 @@ test('video pageBlock fence stores the tag script, not JSON', () => {
     script: '<timeline fps=24>\n  <track><scene dur=1s>A</scene></track>\n</timeline>',
   })
   assert.match(String(parsePageBlockData('video', '{"script":"<timeline></timeline>"}').script), /<timeline><\/timeline>/)
+})
+
+test('page block fence format then parse roundtrips kind plugin id and data', () => {
+  const json = readPageBlockFence(formatPageBlockFence('excalidraw', 'page-excalidraw', { file: 'assets/a.json' }, 'ab12cd34'))
+  assert.equal(json.kind, 'excalidraw')
+  assert.equal(json.plugin, 'page-excalidraw')
+  assert.equal(json.id, 'ab12cd34')
+  assert.equal(json.data.file, 'assets/a.json')
+  const html = readPageBlockFence(formatPageBlockFence('html', 'page-html-blocks', { html: '<div>卡</div>', deck: true, title: '海报' }, 'htmlid01'))
+  assert.equal(html.kind, 'html')
+  assert.equal(html.plugin, 'page-html-blocks')
+  assert.equal(html.id, 'htmlid01')
+  assert.equal(html.data.html, '<div>卡</div>')
+  assert.equal(html.data.deck, true)
+  assert.equal(html.data.title, '海报')
+  const video = readPageBlockFence(formatPageBlockFence('video', 'page-video', { script: '<timeline></timeline>' }, 'viddemo1'))
+  assert.equal(video.kind, 'video')
+  assert.equal(video.plugin, 'page-video')
+  assert.equal(video.id, 'viddemo1')
+  assert.equal(video.data.script, '<timeline></timeline>')
 })
 
 test('html pageBlock fence keeps title on the header', () => {

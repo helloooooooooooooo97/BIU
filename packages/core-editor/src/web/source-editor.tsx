@@ -87,6 +87,11 @@ const mdHighlight = HighlightStyle.define([
   { tag: tags.number, color: '#c2410c' },
 ])
 
+const compactTheme = EditorView.theme({
+  '.cm-content': { minHeight: '0' },
+  '.cm-scroller': { overflow: 'auto', maxHeight: '220px' },
+})
+
 const theme = EditorView.theme({
   '&': {
     background: 'transparent',
@@ -115,7 +120,8 @@ export const SourceEditor = forwardRef<SourceEditorHandle, {
   value: string
   writable: boolean
   onChange?: (next: string) => void
-}>(function SourceEditor({ value, writable, onChange }, ref) {
+  compact?: boolean
+}>(function SourceEditor({ value, writable, onChange, compact }, ref) {
   const host = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
   const onChangeRef = useRef(onChange)
@@ -142,6 +148,7 @@ export const SourceEditor = forwardRef<SourceEditorHandle, {
           syntaxHighlighting(mdHighlight),
           EditorView.lineWrapping,
           theme,
+          ...(compact ? [compactTheme] : []),
           EditorView.updateListener.of((update) => {
             if (!update.docChanged) return
             if (timer.current) clearTimeout(timer.current)
@@ -160,7 +167,7 @@ export const SourceEditor = forwardRef<SourceEditorHandle, {
       view.destroy()
       viewRef.current = null
     }
-  }, [writable])
+  }, [writable, compact])
 
   useImperativeHandle(ref, () => ({
     applyFind(query, index) {
@@ -236,6 +243,6 @@ export const SourceEditor = forwardRef<SourceEditorHandle, {
     [],
   )
 
-  return <div className="page-source" data-testid="page-source-editor" ref={host} />
+  return <div className={compact ? 'page-source is-compact' : 'page-source'} data-testid="page-source-editor" ref={host} />
 })
 

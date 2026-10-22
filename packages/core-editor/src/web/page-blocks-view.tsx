@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowsPointingOutIcon, RectangleGroupIcon, ViewColumnsIcon } from '@heroicons/react/16/solid'
 import type { DbRecord } from '@biu/type-file-system'
 import type { CollectionViewType, FsContentProps, FsViewProps } from '@biu/type-file-system/ui'
-import { PageBlockMissing } from './page-block-view.tsx'
-import { ENABLE_PAGE_BLOCK_PLUGIN, blockDataUnchanged, requestEnablePageBlockPlugin, usePageBlockPluginPhase } from './page-block-meta.ts'
-import { bindPageBlockPlugin } from './page-block-plugin-host.ts'
+import { blockDataUnchanged } from './page-block-meta.ts'
+import { PagePluginSurface, pagePluginHostAttrs, useBindPagePlugin, usePagePluginResolve } from './page-plugin-host.tsx'
 import { getPageEditor, usePageEditorVersion } from './service.ts'
 
 export const PAGE_BLOCKS_VIEW_ID = 'blocks'
@@ -164,12 +163,10 @@ export function PageBlockStage({
   writable?: boolean
   onChange?: (next: Record<string, unknown>) => void
 }) {
-  usePageEditorVersion()
   const kind = String(row.blockKind ?? row.kind ?? '').trim()
   const plugin = String(row.plugin ?? '').trim()
-  const spec = getPageEditor()?.block(kind)
-  const View = spec?.View
-  const phase = usePageBlockPluginPhase(plugin)
+  const { spec, View, phase } = usePagePluginResolve(kind, plugin)
+  const hostRef = useBindPagePlugin<HTMLDivElement>(plugin)
   const source = raw ?? row.data
   const packed = typeof source === 'string' ? source : JSON.stringify(source ?? {})
   const recordTitle = String(row.title ?? '').trim()
@@ -207,41 +204,26 @@ export function PageBlockStage({
       setData(next)
     }).catch(() => undefined)
   }, [recordTitle, rowId])
-  const hostRef = useRef<HTMLDivElement | null>(null)
-  const retriedReady = useRef(false)
-  useLayoutEffect(() => bindPageBlockPlugin(hostRef.current, plugin), [plugin])
-  useLayoutEffect(() => {
-    if (View) {
-      retriedReady.current = false
-      return
-    }
-    if (!plugin || phase === 'loading' || phase === 'failed') return
-    if (phase === 'ready') {
-      if (retriedReady.current) return
-      retriedReady.current = true
-      window.dispatchEvent(new CustomEvent(ENABLE_PAGE_BLOCK_PLUGIN, { detail: { plugin, kind } }))
-      return
-    }
-    requestEnablePageBlockPlugin(plugin, kind)
-  }, [View, kind, phase, plugin])
   return (
     <div
       ref={hostRef}
-      className="page-block"
-      data-page-block={kind || undefined}
-      data-page-block-plugin={plugin || undefined}
-      data-page-block-id={String(row.blockId ?? '') || undefined}
-      data-biu-plugin={plugin || undefined}
-      data-biu-kind={plugin ? 'plugin' : undefined}
-      data-biu-id={plugin || undefined}
-      data-biu-label={spec?.label || kind || undefined}
-      data-testid="page-block-stage"
+      {...pagePluginHostAttrs({
+        kind,
+        plugin,
+        blockId: String(row.blockId ?? ''),
+        label: spec?.label || kind,
+        testId: 'page-block-stage',
+      })}
     >
-      {View ? (
-        <View data={data} update={update} writable={writable} />
-      ) : (
-        <PageBlockMissing kind={kind || 'unknown'} plugin={plugin} data={data} phase={phase} />
-      )}
+      <PagePluginSurface
+        kind={kind}
+        plugin={plugin}
+        data={data}
+        update={update}
+        writable={writable}
+        View={View}
+        phase={phase}
+      />
     </div>
   )
 }

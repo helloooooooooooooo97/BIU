@@ -136,7 +136,8 @@ test('component gallery can scroll inside the collection stage', () => {
 test('gallery block writes notify other surfaces', () => {
   const src = readFileSync(resolve(import.meta.dirname, './page-blocks-view.tsx'), 'utf8')
   assert.match(src, /window.dispatchEvent\(new Event\('fsdb:change'\)\)/)
-  assert.match(src, /bindPageBlockPlugin/)
+  assert.match(src, /useBindPagePlugin/)
+  assert.match(src, /PagePluginSurface/)
 })
 
 test('page-block detail content paints the registered View', () => {
