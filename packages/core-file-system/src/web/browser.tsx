@@ -3170,6 +3170,7 @@ export function CollectionBrowser({
     viewsRef.current = next
     setViews(next)
     rememberViews(collectionPath, next)
+    noteLocalSavedViewsWrite(collectionPath)
     void persistViewsFor(collectionPath, next, { baseline }).then((ok) => {
       if (ok || viewsRef.current !== next) return
       for (const view of current) persistViewDisplay(collectionPath, view.id, { rank: view.rank })

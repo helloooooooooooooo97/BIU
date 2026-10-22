@@ -92,6 +92,7 @@ test('reorder paints the new order then rolls back if persist fails', () => {
   assert.match(body, /const baseline = loadViews\(collectionPath\)/)
   assert.ok(body.indexOf('const baseline = loadViews(collectionPath)') < body.indexOf('rememberViews(collectionPath, next)'))
   assert.ok(body.indexOf('setViews(next)') < body.indexOf('void persistViewsFor(collectionPath, next, { baseline })'))
+  assert.match(body, /noteLocalSavedViewsWrite\(collectionPath\)/)
   assert.match(body, /if \(ok \|\| viewsRef\.current !== next\) return/)
   assert.ok(body.indexOf('void persistViewsFor(collectionPath, next, { baseline })') < body.indexOf('setViews(current)'))
 })

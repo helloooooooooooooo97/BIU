@@ -20,6 +20,8 @@ test('view dropdown reuses the sort-menu grip and persists rank via patch', () =
   assert.match(order, /const baseline = loadViews\(collectionPath\)/)
   assert.match(order, /setViews\(next\)/)
   assert.match(order, /rememberViews\(collectionPath, next\)/)
+  assert.match(order, /noteLocalSavedViewsWrite\(collectionPath\)/)
+  assert.ok(order.indexOf('noteLocalSavedViewsWrite(collectionPath)') < order.indexOf('void persistViewsFor(collectionPath, next, { baseline })'))
   assert.match(order, /persistViewsFor\(collectionPath, next, \{ baseline \}\)\.then\(\(ok\) => \{/)
   assert.match(order, /if \(ok \|\| viewsRef\.current !== next\) return/)
   assert.match(order, /setViews\(current\)/)
