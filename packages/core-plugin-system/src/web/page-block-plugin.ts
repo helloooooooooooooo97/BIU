@@ -152,6 +152,62 @@ export async function refreshInstalledPageBlocks() {
   }
 }
 
+function pluginTags(row: Record<string, unknown>) {
+  return Array.isArray(row.tags) ? row.tags.map(String) : []
+}
+
+/** 有窗口的商店插件：运行中才拉 web.js。带 page 标签的仍走页面块按需加载。 */
+export function runningWindowPluginNeedsWeb(row: Record<string, unknown>) {
+  if (!flag(row.running) || !flag(row.hasWeb) || flag(row.headless)) return false
+  return !pluginTags(row).includes('page')
+}
+
+const WINDOW_PLUGIN_LIST_COLUMNS = 'id,running,hasWeb,headless,tags'
+
+/** 运行中的窗口插件要让 ui-hub 加载 web.js，否则「运行」后没有 extras 窗口。 */
+export function watchRunningWindowPlugins() {
+  const requested = new Set<string>()
+  let cancelled = false
+  const tick = async () => {
+    try {
+      const params = new URLSearchParams({
+        path: '/plugins',
+        limit: '200',
+        columns: WINDOW_PLUGIN_LIST_COLUMNS,
+      })
+      const res = await fetch(`/api/db/list?${params}`)
+      const body = (await res.json().catch(() => ({}))) as { items?: Record<string, unknown>[] }
+      if (cancelled) return
+      const live = new Set<string>()
+      for (const item of Array.isArray(body.items) ? body.items : []) {
+        if (!runningWindowPluginNeedsWeb(item)) continue
+        const id = String(item.id ?? '').trim()
+        if (!id) continue
+        live.add(id)
+        if (requested.has(id)) continue
+        requested.add(id)
+        window.dispatchEvent(new CustomEvent(ENABLE_PAGE_BLOCK_PLUGIN, { detail: { plugin: id } }))
+      }
+      for (const id of [...requested]) {
+        if (!live.has(id)) requested.delete(id)
+      }
+    } catch (error) {
+      clientLog('error', 'page-block', `窗口插件加载态刷新失败: ${clientLogErrorText(error)}`)
+    }
+  }
+  void tick()
+  const onChange = () => {
+    void tick()
+  }
+  window.addEventListener('fsdb:change', onChange)
+  const timer = window.setInterval(tick, 3000)
+  return () => {
+    cancelled = true
+    window.clearInterval(timer)
+    window.removeEventListener('fsdb:change', onChange)
+  }
+}
+
 export function watchInstalledPageBlocks() {
   void refreshInstalledPageBlocks()
   const onChange = () => {
