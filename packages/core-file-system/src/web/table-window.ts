@@ -49,6 +49,17 @@ export type TableWindowSlice = {
   padBottom: number
 }
 
+export function tableRowFallbackPx(wrap = false) {
+  return wrap ? TABLE_WRAP_ROW_PX : TABLE_ROW_PX
+}
+
+/** Median of painted data-row heights. Virtual lists (TanStack / react-window) keep pad math on measured size, not a CSS guess. */
+export function medianPaintedRowPx(heights: number[], fallback = TABLE_ROW_PX) {
+  const xs = heights.filter((h) => Number.isFinite(h) && h > 0).sort((a, b) => a - b)
+  if (!xs.length) return fallback
+  return xs[Math.floor(xs.length / 2)]!
+}
+
 export function tableWindowSlice(
   count: number,
   scrollTop: number,
