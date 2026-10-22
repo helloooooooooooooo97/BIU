@@ -3,19 +3,25 @@ import assert from 'node:assert/strict'
 import { resetWorkspaceProfileGet } from '@biu/core-file-system/page-width'
 import { applyTheme, hydrateTheme, persistTheme, readTheme } from './theme.ts'
 
-test('readTheme follows the document class and persistTheme posts the profile', () => {
+test('readTheme follows the document class and persistTheme posts the profile', async () => {
   document.documentElement.classList.remove('dark', 'light')
   document.documentElement.classList.add('light')
   applyTheme('light')
   assert.equal(readTheme(), 'light')
   const calls: string[] = []
+  let release!: (value: Response) => void
   const originalFetch = globalThis.fetch
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     calls.push(`${init?.method ?? 'GET'} ${String(input)} ${String(init?.body ?? '')}`)
-    return new Response('{}', { status: 200 })
+    return new Promise<Response>((resolve) => {
+      release = resolve
+    })
   }) as typeof fetch
   try {
-    persistTheme('dark')
+    const pending = persistTheme('dark')
+    assert.equal(readTheme(), 'light')
+    release(new Response('{}', { status: 200 }))
+    await pending
     assert.equal(readTheme(), 'dark')
     assert.equal(document.documentElement.classList.contains('dark'), true)
     assert.equal(document.documentElement.classList.contains('light'), false)

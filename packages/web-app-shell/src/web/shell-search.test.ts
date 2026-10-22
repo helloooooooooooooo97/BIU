@@ -190,7 +190,7 @@ test('search hit actions use collection chrome.Actions when registered', () => {
   assert.match(src, /getDatabaseUi\(\)\?\.chrome\(searchCollection\(hit\.kind\)\)\.Actions/)
   assert.match(src, /placedRowActions\(hit\.actions\)/)
   assert.match(src, /<Actions/)
-  assert.match(src, /previewHitRecord\(record, action\)/)
+  assert.doesNotMatch(src, /if \(next !== record\) setRecord\(next\)/)
   assert.match(src, /addEventListener\('fsdb:change'/)
 })
 

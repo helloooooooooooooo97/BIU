@@ -47,7 +47,6 @@ import {
   isRecordLinkField,
   listProjectionKeys,
   overlayListed,
-  previewActionRecord,
   parentFieldKey,
   parseFacetFlatColumnKey,
   patchFacetFlatValue,
@@ -3667,13 +3666,8 @@ export function CollectionBrowser({
 
   async function executeAction(row: DbRecord, action: CollectionActionInfo) {
     if (actingRef.current) return
-    const preview = previewActionRecord(row, action)
     actingRef.current = true
     setActing(true)
-    if (preview !== row) {
-      mapListedRecords((item) => (item.id === row.id ? overlayListed(item, preview, listColumns) : item))
-      setDetailRow((prev) => (prev?.id === row.id ? overlayListed(prev, preview, listColumns) : prev))
-    }
     try {
       await readJson('/api/db/action', {
         method: 'POST',
@@ -3681,14 +3675,9 @@ export function CollectionBrowser({
         body: JSON.stringify({ path: `${dataPath}/${row.id}`, action: action.id }),
       })
       announceListChange()
-      quietUntil.current = Date.now() + 800
-      window.setTimeout(() => {
-        quietUntil.current = 0
-        void reloadRef.current({ force: true })
-      }, 800)
+      quietUntil.current = 0
+      await reload({ force: true })
     } catch (err) {
-      mapListedRecords((item) => (item.id === row.id ? row : item))
-      setDetailRow((prev) => (prev?.id === row.id ? row : prev))
       setDlg({ kind: 'alert', title: `${action.label}失败`, body: String(err) })
       quietUntil.current = 0
       await reload({ force: true })
@@ -3709,9 +3698,6 @@ export function CollectionBrowser({
         contentWriteGens.current.set(path, gen)
         contentGen.current += 1
         contentWritePending.current.set(path, (contentWritePending.current.get(path) ?? 0) + 1)
-        setDetailBody(value)
-        setDetailBodyStatus('ready')
-        setDetailBodyError('')
         const previous = contentWriteQueues.current.get(path) ?? Promise.resolve()
         const run = previous.catch(() => undefined).then(async () => {
           const data = await readJson<{ value?: unknown; version?: number }>('/api/db/content', {
@@ -4724,7 +4710,7 @@ export function CollectionBrowser({
             if (!activeViewId) return
             const path = savedViewRecordPath(collectionPath, activeViewId)
             if (!path) return
-            setViewBanner(next)
+            const prev = viewBanner
             void readJson<{ value?: { banner?: unknown } }>('/api/db/update', {
               method: 'POST',
               headers: { 'content-type': 'application/json' },
@@ -4732,7 +4718,7 @@ export function CollectionBrowser({
             }).then((data) => {
               setViewBanner(data.value?.banner ?? next)
             }).catch(() => {
-              setViewBanner(next)
+              setViewBanner(prev)
             })
           }}
         />

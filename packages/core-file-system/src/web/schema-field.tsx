@@ -179,8 +179,7 @@ export function FacetPackEditor({ facetId }: { facetId: string }) {
   const tag = catalog.find((item) => item.id === facetId)
 
   function saveCatalog(next: CollectionSchemaPack[]) {
-    persistFacets(next)
-    setCatalog(next)
+    void persistFacets(next)
   }
 
   if (!tag) return <p className="fsdb-muted">这条标签已不在目录里。</p>
@@ -267,8 +266,7 @@ export function SchemaFieldEditor({
   )
 
   function saveCatalog(next: CollectionSchemaPack[]) {
-    persistFacets(next)
-    setCatalog(next)
+    void persistFacets(next)
   }
 
   function patchValue(next: SchemaFieldValue) {
@@ -294,10 +292,16 @@ export function SchemaFieldEditor({
       used.add(id)
       resolved.push(id)
     }
-    if (packs !== catalog) saveCatalog(packs)
-    const next = retagSchemaValue(liveRef.current, resolved)
-    liveRef.current = next
-    patchValue(next)
+    const finish = () => {
+      const next = retagSchemaValue(liveRef.current, resolved)
+      liveRef.current = next
+      patchValue(next)
+    }
+    if (packs !== catalog) {
+      void persistFacets(packs).then(finish)
+      return
+    }
+    finish()
   }
 
   function addField(tag: CollectionSchemaPack, name: string, type: AtomicFieldType) {

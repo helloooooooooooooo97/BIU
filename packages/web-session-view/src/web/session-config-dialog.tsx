@@ -118,21 +118,30 @@ function SessionFacetPicker({
       used.add(id)
       resolved.push(id)
     }
+    const apply = () => {
+      const keep = new Set(resolved)
+      const values: SchemaFieldValue['values'] = {}
+      for (const id of resolved) values[id] = parsed.values[id] ?? {}
+      for (const [id, bag] of Object.entries(parsed.values)) {
+        if (keep.has(id)) values[id] = bag
+      }
+      onChange({ tags: resolved, values })
+    }
     if (packs !== catalog) {
-      setCatalog(packs)
       void fetch('/api/db/facets', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ facets: packs }),
-      }).catch(() => undefined)
+      })
+        .then((res) => {
+          if (!res.ok) return
+          setCatalog(packs)
+          apply()
+        })
+        .catch(() => undefined)
+      return
     }
-    const keep = new Set(resolved)
-    const values: SchemaFieldValue['values'] = {}
-    for (const id of resolved) values[id] = parsed.values[id] ?? {}
-    for (const [id, bag] of Object.entries(parsed.values)) {
-      if (keep.has(id)) values[id] = bag
-    }
-    onChange({ tags: resolved, values })
+    apply()
   }
 
   return (
