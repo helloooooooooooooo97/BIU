@@ -2595,7 +2595,7 @@ export function CollectionBrowser({
       skipColumnReload.current = false
       if (!needsLoad) return
     }
-    if (routeRecordId && !needsLoad) return
+    if (routeRecordId) return
     if (!routeViewReadyRef.current && !needsLoad) return
     void reloadRef.current({ force: needsLoad })
   }, [listIdentityKey, reloadKey, routeRecordId, routeViewReady])
@@ -2944,7 +2944,7 @@ export function CollectionBrowser({
   const selected = useMemo(() => {
     if (!detailId) return null
     if (detailRow?.id === detailId) return listedSelected ? overlayListed(detailRow, listedSelected, listColumns) : detailRow
-    return listedSelected ?? null
+    return listedSelected ?? { id: detailId }
   }, [detailId, detailRow, listColumns, listedSelected])
   const viewIndex = selected ? indexOnPage(selected.id, items, page, pageSize) : null
   const stepViewRecord = async (delta: -1 | 1) => {
@@ -3817,7 +3817,6 @@ export function CollectionBrowser({
       })
       announceListChange()
       quietUntil.current = 0
-      void reloadRef.current({ force: true })
       if (activeViewId) rememberInspectorWorkingView(collectionPath, activeViewId)
       window.setTimeout(() => showRecordInInspector(collectionPath, id, activeViewId), 0)
     } catch (err) {

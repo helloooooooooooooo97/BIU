@@ -337,7 +337,7 @@ export function RecordDetail({
 <div className="fsdb-detail-stage">
           <div className="fsdb-detail-screen" role="main" aria-label="记录详情">
             <div className="fsdb-detail-split">
-              <div className="fsdb-detail-main" ref={mainRef}>
+              <div className="fsdb-detail-main" ref={mainRef} data-testid="fsdb-detail-main">
                 <PageBanner
                   value={selected.banner}
                   writable={!readOnly}

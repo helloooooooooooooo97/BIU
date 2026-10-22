@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { inspectLocalShellSource, resourceKind } from './page-perf/cdp.mjs'
 import { builtinAllViewId, databaseRecordPath, databaseViewPath } from './page-perf/discover-routes.mjs'
+import { inspectInspectorPage } from './page-perf/inspector-open-ready.mjs'
 import { stressInteractSource } from './page-perf/interact.mjs'
 
 const dir = join(dirname(fileURLToPath(import.meta.url)), 'page-perf')
@@ -12,7 +13,9 @@ const names = [
   'cdp.mjs',
   'console-errors.mjs',
   'discover-routes.mjs',
+  'inspector-open-ready.mjs',
   'interact.mjs',
+  'measure-inspector-page.mjs',
   'measure-page.mjs',
   'measure-routes.mjs',
   'seed-local.mjs',
@@ -69,6 +72,32 @@ test('page plugin perf helpers stay as separate scripts in one folder', () => {
   assert.match(sources['measure-routes.mjs'], /req.status == null && age >= 1_200/)
   assert.match(sources['measure-routes.mjs'], /value.listReady/)
   assert.match(sources['cdp.mjs'], /data-list-ready="1"/)
+  assert.match(sources['inspector-open-ready.mjs'], /data-testid="inspector-database"/)
+  assert.match(sources['inspector-open-ready.mjs'], /page-content-loading/)
+  assert.match(sources['inspector-open-ready.mjs'], /painted: inspector && title && editor && !loading/)
+  assert.match(sources['inspector-open-ready.mjs'], /stub-page-editor/)
+  assert.doesNotMatch(sources['inspector-open-ready.mjs'], /fsdb-fileview/)
+  assert.match(sources['measure-inspector-page.mjs'], /from '\.\/inspector-open-ready\.mjs'/)
+  assert.match(sources['measure-inspector-page.mjs'], /clickCreateRecordSource/)
+  assert.match(sources['measure-inspector-page.mjs'], /paintedAt/)
+  assert.match(sources['measure-inspector-page.mjs'], /medianPaintedAt/)
+})
+
+test('inspectInspectorPage is painted only when inspector title and editor are up', () => {
+  const root = document.implementation.createHTMLDocument('')
+  root.body.innerHTML = `
+    <div data-testid="inspector-database" class="inspector-database-page">
+      <div data-testid="fsdb-detail-main">
+        <textarea class="fsdb-detail-title-input"></textarea>
+        <div class="page-editor"></div>
+      </div>
+    </div>`
+  assert.equal(inspectInspectorPage(root).painted, true)
+  root.body.innerHTML = `
+    <div data-testid="inspector-database">
+      <div data-testid="page-content-loading"></div>
+    </div>`
+  assert.equal(inspectInspectorPage(root).painted, false)
 })
 
 test('resourceKind splits snapshot, list, and store web.js', () => {
