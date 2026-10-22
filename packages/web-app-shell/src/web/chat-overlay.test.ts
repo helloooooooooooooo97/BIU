@@ -384,6 +384,7 @@ test('autohide resets when overlay closes', () => {
 
 test('overlay window geom clamps and docks to the right, bottom-aligned by default', () => {
   const def = defaultOverlayWinGeom(1280, 800)
+  assert.equal(OVERLAY_WIN_MIN_W, 420)
   assert.ok(def.w >= OVERLAY_WIN_MIN_W)
   assert.ok(def.h >= OVERLAY_WIN_MIN_H)
   assert.equal(def.x, 1280 - def.w - 12)
