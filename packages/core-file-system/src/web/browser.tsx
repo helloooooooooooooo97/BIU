@@ -133,6 +133,7 @@ import {
   subscribePageWidth,
 } from './page-width.ts'
 import { reportInspectorPaneMenu } from './inspector-pane-menu.tsx'
+import { PageContentLoading } from './page-content-status.tsx'
 import { ViewPaneMenu } from './pane-more-menu.tsx'
 import { HttpError, invalidateListReads, listCollection, readJson } from './db-client.ts'
 import { savedViewRecordPath } from '../paths.ts'
@@ -780,6 +781,25 @@ async function warmListCacheForView(
   } finally {
     warmingLists.delete(key)
   }
+}
+
+const WARM_LIST_CONCURRENCY = 2
+
+async function warmSiblingListCaches(paths: string[]) {
+  let next = 0
+  const workers = Math.min(WARM_LIST_CONCURRENCY, paths.length)
+  await Promise.all(
+    Array.from({ length: workers }, async () => {
+      while (next < paths.length) {
+        const path = paths[next]
+        next += 1
+        if (!path) break
+        const listed = paintListedViews(path)
+        const view = listed.find((item) => item.id === builtinAllViewId(path)) ?? listed[0]
+        if (view) await warmListCacheForView(path, view, listed)
+      }
+    }),
+  )
 }
 
 function sameSavedViews(a: SavedView[], b: SavedView[]) {
@@ -2514,13 +2534,7 @@ export function CollectionBrowser({
         .filter((table) => table.path !== collectionPath && !isIndexCollection(table.path) && !isSystemCollection(table.path))
         .map((table) => table.path)
         .sort((a, b) => Number(b === '/plugins') - Number(a === '/plugins'))
-      void (async () => {
-        for (const path of paths) {
-          const listed = paintListedViews(path)
-          const view = listed.find((item) => item.id === builtinAllViewId(path)) ?? listed[0]
-          if (view) await warmListCacheForView(path, view, listed)
-        }
-      })()
+      void warmSiblingListCaches(paths)
     }, 0)
   }, [collectionPath, nested, routeRecordId, tables])
 
@@ -3069,10 +3083,10 @@ export function CollectionBrowser({
   }, [bodyKey, detailBody, detailId, schema])
 
   useEffect(() => {
-    if (!detailId || detailRow?.id !== detailId) {
+    if (!detailId) {
       contentGen.current += 1
       setDetailBody(null)
-      setDetailBodyStatus(detailId ? 'loading' : 'ready')
+      setDetailBodyStatus('ready')
       setDetailBodyError('')
       return
     }
@@ -3080,7 +3094,7 @@ export function CollectionBrowser({
     setDetailBodyStatus('loading')
     setDetailBodyError('')
     pullDetailBody()
-  }, [collectionPath, dataPath, detailId, detailRow, pullDetailBody])
+  }, [collectionPath, dataPath, detailId, pullDetailBody])
 
   useEffect(() => {
     if (dlg?.kind !== 'rename') return
@@ -5659,7 +5673,7 @@ export function CollectionBrowser({
         </div>
       </div>
         ) : selected && schema ? (
-        <Suspense fallback={null}>
+        <Suspense fallback={<PageContentLoading />}>
         <RecordDetail
           selected={selected}
           schema={schema}
