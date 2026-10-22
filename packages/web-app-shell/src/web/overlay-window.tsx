@@ -46,7 +46,6 @@ export function OverlayChatWindow({
   const resizeRef = useRef<(OverlayWinGeom & ResizeEdge & { px: number; py: number }) | null>(null)
   const geomRef = useRef(geom)
   geomRef.current = geom
-  // 闲置：对话/输入条收起，只留右下角小人周围热区；回复框聚焦时保持展开。
   const dimmed = !pointerInside && !composerFocused && !resizing
 
   const bringFront = useCallback(() => {
