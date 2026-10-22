@@ -31,7 +31,7 @@ export function LayoutPrefsMenu({
   useSyncExternalStore(subscribePageWidth, getPageWidthVersion, () => 0)
   const live = onChange ? prefs : getPagePrefs()
   return (
-    <div className={className ? `fsdb-layout-menu ${className}` : 'fsdb-layout-menu'} role="menu" data-testid={`${testPrefix}-menu`}>
+    <div className={className ? `fsdb-tool-flyout fsdb-layout-menu ${className}` : 'fsdb-tool-flyout fsdb-layout-menu'} role="menu" data-testid={`${testPrefix}-menu`}>
       {BOOLS.map((item) => {
         const on = live[item.key]
         return (
@@ -39,7 +39,7 @@ export function LayoutPrefsMenu({
             key={item.key}
             type="button"
             role="menuitemcheckbox"
-            className="fsdb-layout-row"
+            className="fsdb-layout-row fsdb-tool-row"
             aria-checked={on}
             data-testid={item.testId}
             onClick={() => apply({ [item.key]: !on })}

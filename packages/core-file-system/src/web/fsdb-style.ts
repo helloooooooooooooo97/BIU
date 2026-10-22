@@ -202,6 +202,38 @@ const CSS = `
 .fsdb-page .fsdb-col-facet-dot{width:6px;height:6px;border-radius:50%;background:var(--dsw-label-3);flex:none}
 .fsdb-page .fsdb-col-facet-dot.is-on{background:var(--dsw-business)}
 .fsdb-col-facet-flyout{position:relative;z-index:280;min-width:200px;max-height:min(60vh,360px);overflow:auto;padding:8px;background:var(--dsw-sidebar);border:1px solid var(--dsw-border);border-radius:10px;box-shadow:var(--dsw-shadow);display:flex;flex-direction:column;gap:4px;color:var(--dsw-sidebar-fg);font-weight:500}
+/* 工具浮窗外壳 */
+.fsdb-tool-flyout,.fsdb-page .tasks-viewdd-menu,.fsdb-page .tasks-sort-menu,.fsdb-page .tasks-filter-menu,.fsdb-page .fsdb-col-menu,.fsdb-bulk-menu,.fsdb-col-facet-flyout,.fsdb-layout-menu{
+  box-sizing:border-box;
+  padding:8px;
+  border-radius:10px;
+  border:1px solid var(--dsw-border);
+  background:var(--dsw-sidebar);
+  box-shadow:var(--dsw-shadow);
+  min-width:200px;
+  max-width:min(92vw,560px);
+  max-height:min(70vh,520px);
+  overflow:hidden;
+  font-weight:500;
+  animation:fsdb-tool-flyout-in 120ms ease;
+}
+.fsdb-page .tasks-viewdd-menu{left:0;right:auto;min-width:320px;overflow:auto}
+.fsdb-page .fsdb-col-menu,.fsdb-tool-flyout.fsdb-col-menu{min-width:260px;max-height:min(70vh,520px);overflow:hidden}
+.fsdb-page .tasks-sort-menu,.fsdb-page .tasks-filter-menu,.fsdb-page .fsdb-query-menu,.fsdb-bulk-menu,.fsdb-layout-menu{right:0;left:auto}
+.fsdb-tool-flyout .tasks-sort-list,.fsdb-tool-flyout .fsdb-col-menu-list,.fsdb-page .fsdb-col-menu-list{min-height:0;overflow:auto}
+.fsdb-tool-flyout.fsdb-query-menu,.fsdb-page .fsdb-query-menu.fsdb-tool-flyout{overflow:auto}
+.fsdb-tool-flyout .fsdb-query-menu:not(.fsdb-tool-flyout){padding:0;border:0;background:transparent;box-shadow:none;min-width:0;max-width:none;width:auto;max-height:none;overflow:visible;animation:none}
+.fsdb-tool-flyout .db-search-menu,.fsdb-query-menu .db-search-menu{box-shadow:none;border:1px solid var(--dsw-border)}
+.fsdb-tool-flyout .fsdb-tool-head,.fsdb-tool-flyout .tasks-viewdd-head,.fsdb-tool-flyout .tasks-sort-head{padding:4px 8px 6px;margin:0 0 2px;font-size:12px;font-weight:650;color:var(--dsw-label-3);line-height:1.4}
+.fsdb-tool-flyout .fsdb-tool-row,.fsdb-tool-flyout .fsdb-checkrow,.fsdb-tool-flyout .tasks-sort-item,.fsdb-tool-flyout .fsdb-layout-row,.fsdb-tool-flyout .tasks-viewdd-item-main,.fsdb-tool-flyout .tasks-viewdd-saveas,.fsdb-tool-flyout .fsdb-query-add,.fsdb-tool-flyout .fsdb-query-clear,.fsdb-tool-flyout .fsdb-mode-plus{
+  box-sizing:border-box;height:28px;padding:0 8px;border-radius:7px;font-size:14px;font-weight:500;line-height:1.4
+}
+.fsdb-tool-flyout .fsdb-tool-row:hover,.fsdb-tool-flyout .fsdb-checkrow:hover,.fsdb-tool-flyout .tasks-sort-item:hover,.fsdb-tool-flyout .fsdb-layout-row:hover,.fsdb-tool-flyout .tasks-viewdd-saveas:hover,.fsdb-tool-flyout .fsdb-query-add:hover,.fsdb-tool-flyout .fsdb-mode-plus:hover{background:var(--dsw-hover)}
+.fsdb-tool-flyout .fsdb-checkrow.is-on,.fsdb-tool-flyout .tasks-sort-item.is-active,.fsdb-tool-flyout .tasks-viewdd-item.is-active .tasks-viewdd-item-main{color:var(--dsw-sidebar-fg-active)}
+.fsdb-tool-flyout .fsdb-query-clear,.fsdb-tool-flyout .tasks-viewdd-act.is-danger{color:var(--dsw-danger)}
+.fsdb-tool-flyout .fsdb-query-clear:hover,.fsdb-tool-flyout .tasks-viewdd-act.is-danger:hover{background:color-mix(in srgb,var(--dsw-danger) 11%,transparent)}
+@keyframes fsdb-tool-flyout-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.fsdb-tool-flyout,.fsdb-page .tasks-viewdd-menu,.fsdb-page .tasks-sort-menu,.fsdb-page .tasks-filter-menu,.fsdb-page .fsdb-col-menu,.fsdb-bulk-menu,.fsdb-col-facet-flyout,.fsdb-layout-menu{animation:none}}
 .fsdb-page .tasks-filter-dot{position:absolute;top:4px;right:4px;width:5px;height:5px;border-radius:50%;background:var(--dsw-business)}
 .fsdb-page .tasks-error{margin:0;color:var(--dsw-danger);font-size:14px}
 .fsdb-page .tasks-table-wrap{box-sizing:border-box;position:relative;z-index:0;min-width:0;min-height:0;flex:1;overflow:auto;scrollbar-gutter:stable;width:100%;margin-left:0;padding-left:0;border:0;border-radius:0;background:transparent}
@@ -981,6 +1013,7 @@ html:not(.dark) .tasks-viewdd-item-main,
 html:not(.dark) .tasks-viewdd-item.is-active .tasks-viewdd-item-main,
 html:not(.dark) .tasks-viewdd-saveas,
 html:not(.dark) .tasks-viewdd-empty,
+html:not(.dark) .fsdb-tool-flyout,
 html:not(.dark) .tasks-sort-menu,
 html:not(.dark) .tasks-sort-head,
 html:not(.dark) .tasks-sort-search,

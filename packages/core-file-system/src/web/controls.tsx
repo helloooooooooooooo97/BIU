@@ -19,7 +19,7 @@ export function CheckRow({
   return (
     <button
       type="button"
-      className={`fsdb-checkrow${on ? ' is-on' : ''}${locked ? ' is-locked' : ''}`}
+      className={`fsdb-checkrow fsdb-tool-row${on ? ' is-on' : ''}${locked ? ' is-locked' : ''}`}
       role="menuitemcheckbox"
       aria-checked={on}
       disabled={locked}
