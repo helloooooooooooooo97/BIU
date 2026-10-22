@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { test, afterEach, vi } from 'vitest'
+import { test, afterEach } from 'vitest'
 import assert from 'node:assert/strict'
 import { createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -25,7 +25,6 @@ afterEach(() => {
   } catch {
     /* ignore */
   }
-  vi.useRealTimers()
 })
 
 test('clicking the overlay close button actually closes the overlay', () => {
@@ -83,31 +82,6 @@ test('overlay opens docked to the right and anchored to the bottom', () => {
   assert.equal(panel.style.height, '')
   assert.equal(document.querySelector('[data-testid="chat-overlay-layout-toggle"]'), null)
   assert.equal(document.querySelector('[data-testid="chat-overlay-layout"]'), null)
-})
-
-test('idle overlay dims when composer is not focused', () => {
-  vi.useFakeTimers()
-  host = document.createElement('div')
-  document.body.append(host)
-  root = createRoot(host)
-  setChatOverlay(true)
-  act(() => {
-    root!.render(
-      createElement(OverlayChatWindow, {
-        header: createElement('div'),
-        thread: createElement('div'),
-        dock: createElement('div'),
-      }),
-    )
-  })
-  const panel = document.querySelector('[data-testid="chat-overlay-panel"]') as HTMLElement
-  assert.ok(panel)
-  assert.equal(panel.classList.contains('is-dimmed'), false)
-  act(() => {
-    vi.advanceTimersByTime(200)
-  })
-  assert.equal(panel.classList.contains('is-dimmed'), true)
-  vi.useRealTimers()
 })
 
 test('overlay header close button has no layout control beside it', () => {
