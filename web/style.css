@@ -3410,7 +3410,7 @@ select.settings-account-input {
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  min-width: 320px;
+  min-width: 420px;
   min-height: 0;
   max-height: calc(100vh - 24px);
   height: auto;
@@ -3492,7 +3492,7 @@ select.settings-account-input {
 
 .chat-overlay-panel.is-compose-only {
   height: auto !important;
-  min-width: 0;
+  min-width: 420px;
   min-height: 0;
   overflow: visible;
   border: 0;
@@ -3722,7 +3722,7 @@ html.dark .tool-call-status.is-fail {
 }
 
 .chat-overlay-panel .composer-pill {
-  min-width: 0;
+  min-width: 420px;
   border: 1px solid var(--dsw-border);
 }
 

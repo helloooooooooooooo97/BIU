@@ -429,7 +429,7 @@ export type OverlayWinGeom = { x: number; y: number; w: number; h: number }
 export type OverlayLayout = 'right' | 'bottom'
 export type OverlayWinState = OverlayWinGeom & { layout: OverlayLayout }
 
-export const OVERLAY_WIN_MIN_W = 320
+export const OVERLAY_WIN_MIN_W = 420
 export const OVERLAY_WIN_MIN_H = 280
 export const OVERLAY_WIN_DEFAULT_W = 420
 export const OVERLAY_WIN_DEFAULT_H = 520
