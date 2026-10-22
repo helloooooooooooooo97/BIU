@@ -283,16 +283,32 @@ test('openOverlayComposer on the chat page does not open a window', () => {
 })
 
 test('pick opens a compose-only overlay; only the expand control reveals the thread', () => {
+  setOverlayThread(false)
   setChatOverlay(false)
   history.replaceState(null, '', '/database')
-  openOverlayComposer({ revealThread: false })
+  openOverlayComposer()
   assert.equal(getChatOverlay(), true)
   assert.equal(getOverlayThread(), false)
   assert.equal(getOverlayAutohide(), false)
   toggleOverlayThread()
   assert.equal(getOverlayThread(), true)
   setChatOverlay(false)
+  assert.equal(getOverlayThread(), true)
+})
+
+test('reopening the overlay restores the last thread expand state', () => {
+  setOverlayThread(true)
+  setChatOverlay(true)
+  setChatOverlay(false)
+  history.replaceState(null, '', '/database')
+  openOverlayComposer()
+  assert.equal(getChatOverlay(), true)
+  assert.equal(getOverlayThread(), true)
+  setOverlayThread(false)
+  setChatOverlay(false)
+  openOverlayComposer()
   assert.equal(getOverlayThread(), false)
+  setChatOverlay(false)
 })
 
 test('toggleOverlayThread expands and collapses the overlay transcript', () => {
@@ -325,6 +341,7 @@ test('collapsed overlay closes on outside click; expanded overlay stays', () => 
 })
 
 test('pick mode opens the overlay and blocks outside dismiss', () => {
+  setOverlayThread(false)
   setChatOverlay(false)
   history.replaceState(null, '', '/database')
   window.dispatchEvent(new CustomEvent('biu:pick-mode', { detail: { picking: true } }))
@@ -339,10 +356,10 @@ test('pick mode opens the overlay and blocks outside dismiss', () => {
 test('pick on an already-open overlay keeps the revealed thread', () => {
   setChatOverlay(false)
   history.replaceState(null, '', '/database')
-  openOverlayComposer({ revealThread: false })
+  openOverlayComposer()
   revealOverlayThread()
   assert.equal(getOverlayThread(), true)
-  openOverlayComposer({ revealThread: false })
+  openOverlayComposer()
   assert.equal(getOverlayThread(), true)
   setChatOverlay(false)
 })

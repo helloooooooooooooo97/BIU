@@ -360,7 +360,7 @@ export const ChatSidebar = memo(function ChatSidebar({
           return
         }
         if (variant === 'popover') {
-          openOverlayComposer({ revealThread: true })
+          openOverlayComposer()
           return
         }
         navigate(`/s/${id}`)
@@ -375,7 +375,7 @@ export const ChatSidebar = memo(function ChatSidebar({
       if (isChatPagePath(window.location.pathname)) {
         navigate(`/s/${item.id}`)
       } else {
-        openOverlayComposer({ revealThread: true })
+        openOverlayComposer()
       }
       onActivate?.()
     },

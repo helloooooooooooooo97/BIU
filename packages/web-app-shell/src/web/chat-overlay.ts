@@ -118,7 +118,35 @@ let overlay = false
 let autohide = false
 let resizing = false
 let pinned = false
+const OVERLAY_THREAD_KEY = 'cordis.overlay.thread'
 let overlayThread = false
+let overlayThreadReady = false
+
+function readStoredOverlayThread() {
+  try {
+    const raw = localStorage.getItem(OVERLAY_THREAD_KEY)
+    if (raw === '1') return true
+    if (raw === '0') return false
+  } catch {
+    /* ignore */
+  }
+  return false
+}
+
+function rememberOverlayThread(next: boolean) {
+  try {
+    localStorage.setItem(OVERLAY_THREAD_KEY, next ? '1' : '0')
+  } catch {
+    /* ignore */
+  }
+}
+
+function hydrateOverlayThread() {
+  if (overlayThreadReady) return
+  overlayThreadReady = true
+  if (typeof window === 'undefined') return
+  overlayThread = readStoredOverlayThread()
+}
 const listeners = new Set<() => void>()
 const autohideListeners = new Set<() => void>()
 const pinListeners = new Set<() => void>()
@@ -156,7 +184,6 @@ export function setChatOverlay(next: boolean) {
   overlay = next
   if (!next) {
     setOverlayAutohide(false)
-    setOverlayThread(false)
     notifyOverlayClosed()
   }
   emit()
@@ -172,6 +199,7 @@ export function closeChatOverlay() {
 }
 
 export function getOverlayThread() {
+  hydrateOverlayThread()
   return overlayThread
 }
 
@@ -183,8 +211,10 @@ export function subscribeOverlayThread(fn: () => void) {
 }
 
 export function setOverlayThread(next: boolean) {
+  hydrateOverlayThread()
   if (overlayThread === next) return
   overlayThread = next
+  rememberOverlayThread(next)
   emitThread()
 }
 
@@ -253,17 +283,15 @@ export function isChatPagePath(pathname: string) {
   return path === '/' || path.startsWith('/s/')
 }
 
-/** 选取对象后弹出输入条：工具栏 + 统计 + 输入框。回复区只在用户点右上角展开时打开，发送不自动展开。聊天页本身已有输入框，不要再弹窗。 */
+/** 选取或点小人弹出输入条。回复区沿用上次展开/收缩，首次默认收缩；revealThread 才强制展开。聊天页本身已有输入框，不要再弹窗。 */
 export function openOverlayComposer(opts?: { revealThread?: boolean }) {
   if (typeof window !== 'undefined' && isChatPagePath(window.location.pathname)) {
     requestComposerFocus()
     return
   }
-  const wasOpen = overlay
   setChatOverlay(true)
   setOverlayAutohide(false)
   if (opts?.revealThread) setOverlayThread(true)
-  else if (!wasOpen) setOverlayThread(false)
   requestComposerFocus()
 }
 
@@ -520,7 +548,7 @@ function openPickOverlay() {
     requestComposerFocus()
     return
   }
-  openOverlayComposer({ revealThread: false })
+  openOverlayComposer()
 }
 
 if (typeof window !== 'undefined') {

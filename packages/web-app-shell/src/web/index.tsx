@@ -103,7 +103,7 @@ function DockSessionMascot({
           return
         }
         if (isChatPagePath(location.pathname)) return
-        openOverlayComposer({ revealThread: true })
+        openOverlayComposer()
         requestOverlayFocus()
       }}
     />
