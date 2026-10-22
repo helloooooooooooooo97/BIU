@@ -19,6 +19,8 @@ test('view dropdown reuses the sort-menu grip and persists rank via patch', () =
   const order = browser.slice(orderStart, browser.indexOf('function persistViewsWith', orderStart))
   assert.match(order, /setViews\(next\)/)
   assert.match(order, /rememberViews\(collectionPath, next\)/)
+  assert.match(order, /noteLocalSavedViewsWrite\(collectionPath\)/)
+  assert.ok(order.indexOf('noteLocalSavedViewsWrite(collectionPath)') < order.indexOf('void persistViews(next)'))
   assert.match(order, /persistViews\(next\)\.then\(\(ok\) => \{/)
   assert.match(order, /if \(ok \|\| viewsRef\.current !== next\) return/)
   assert.match(order, /setViews\(current\)/)

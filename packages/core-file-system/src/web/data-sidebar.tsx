@@ -18,7 +18,7 @@ import { builtinAllViewId, type DataScope } from '../catalog-views.ts'
 import { isIndexCollection, isRecordTreeCollection, isSystemCollection, sortDataCollections } from './database-path.ts'
 import { rememberInspectorWorkingView } from './inspector-db-route.ts'
 import { readJson } from './db-client.ts'
-import { viewsForRegisteredCollection } from './collection-nav.ts'
+import { paintCollectionViews } from './collection-nav.ts'
 import type { SavedView } from './saved-view.ts'
 import {
   fetchViewPreview,
@@ -50,7 +50,6 @@ import {
   isViewStarred,
   getCrumbsVersion,
   loadRecords,
-  loadViews,
   peekRecord,
   subscribeCrumbs,
   persistStarredRecords,
@@ -62,7 +61,6 @@ import {
   subscribeStarredViews,
   toggleStarredRecord,
   toggleStarredView,
-  withViewDisplay,
 } from './view-storage.ts'
 import { pickDomAttrs, recordPickKind, viewPickId } from './pick-dom.ts'
 import { toggleExpandedViewKey } from './sidebar-nav.ts'
@@ -570,8 +568,7 @@ export const DataSidebar = memo(function DataSidebar({
   }, [])
 
   function viewsFor(path: string) {
-    const listed = loadViews(path)
-    return viewsForRegisteredCollection(path, tables, listed).map((view) => withViewDisplay(path, view))
+    return paintCollectionViews(path, tables)
   }
 
   const starredRows = starredViews.flatMap((item) => {

@@ -747,7 +747,7 @@ export function withViewDisplay(collectionPath: string, view: SavedView): SavedV
         builtin: view.builtin,
         filters: view.filters,
         filterTree: view.builtin ? overlay.filterTree ?? view.filterTree : view.filterTree,
-        rank: Number.isFinite(Number(view.rank)) ? view.rank : overlay.rank,
+        rank: Number.isFinite(Number(overlay.rank)) ? overlay.rank : view.rank,
       }
     : view
   return normalizeSavedView({
