@@ -20,6 +20,7 @@ import {
 import { getDatabaseUi } from './database-ui.ts'
 import { TableGlyph } from './nav-glyphs.tsx'
 import { viewsForRegisteredCollection } from './collection-nav.ts'
+import { PageContentLoading } from './page-content-status.tsx'
 
 const CollectionBrowser = lazy(() => import('./browser.tsx').then((m) => ({ default: m.CollectionBrowser })))
 
@@ -306,12 +307,12 @@ export function DatabaseInspectorBrowse(props: SlotProps) {
 
   return (
     <div
-      key={inspectorPath}
+      key={id}
       className={`fsdb-agent-follow${liveWorking || agentWorking ? ' is-working' : ''}`}
       data-testid="fsdb-agent-follow"
       aria-busy={liveWorking || agentWorking}
     >
-    <Suspense fallback={null}>
+    <Suspense fallback={<PageContentLoading />}>
     <CollectionBrowser
       embed
       moduleId={DATA_MODULE_ID}

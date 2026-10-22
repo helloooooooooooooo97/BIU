@@ -14,7 +14,7 @@ test('page-size menu is a local control, not CollectionBrowser state', () => {
   assert.match(browser, /patchActiveView\(\{ pageSize: size \}\)/)
   assert.match(browser, /const reqPageSize = pageSize/)
   assert.match(browser, /if \(pending\) pending\.pageSize = reqPageSize/)
-  assert.match(browser, /if \(routeRecordId && !needsLoad\) return/)
+  assert.match(browser, /if \(routeRecordId\) return/)
   assert.doesNotMatch(browser, /pending\?\.pageSize \?\? pageSize/)
   assert.doesNotMatch(browser, /pageSizeOpen/)
   assert.doesNotMatch(browser, /toggleMenu\('pageSize'\)/)

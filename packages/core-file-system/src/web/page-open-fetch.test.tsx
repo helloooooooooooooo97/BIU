@@ -41,7 +41,16 @@ test('opening a record requests content before /api/db/read returns', async () =
       hits.push('read-done')
       return json({ value: { id: 'p1', title: '一页', content: '正文' } })
     }
-    if (url.includes('/api/db/stat?') || url.includes('/api/db/list?')) {
+    if (url.includes('/api/db/list?')) {
+      hits.push('list')
+      return json({
+        schema,
+        items: [{ id: 'p1', title: '一页' }],
+        total: 1,
+      })
+    }
+    if (url.includes('/api/db/stat?')) {
+      hits.push('stat')
       return json({
         schema,
         items: [{ id: 'p1', title: '一页' }],
@@ -65,6 +74,7 @@ test('opening a record requests content before /api/db/read returns', async () =
     })
     assert.equal(hits.includes('read-done'), false)
     assert.ok(hits.includes('read-start'))
+    assert.equal(hits.includes('list'), false)
   } finally {
     releaseRead()
     globalThis.fetch = original
