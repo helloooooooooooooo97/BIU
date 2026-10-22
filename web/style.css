@@ -7896,8 +7896,8 @@ html.dark .composer-send:disabled {
   border: 1px solid var(--dsw-border);
   border-radius: 12px;
   padding: 8px 10px;
-  background: color-mix(in srgb, var(--dsw-surface) 88%, transparent);
-  backdrop-filter: blur(8px);
+  background: var(--dsw-sidebar);
+  color: var(--dsw-sidebar-fg);
 }
 
 .composer-goal {
@@ -7957,7 +7957,7 @@ html.dark .composer-send:disabled {
 
 .composer-inbox-head {
   margin-bottom: 6px;
-  color: var(--dsw-label-3);
+  color: var(--dsw-sidebar-fg-active);
   font-size: var(--dsw-chat-ui-font-size);
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -7997,7 +7997,7 @@ html.dark .composer-send:disabled {
 }
 
 .composer-inbox-kind-inject {
-  color: var(--dsw-label);
+  color: var(--dsw-sidebar-fg-active);
   background: var(--dsw-hover-strong);
 }
 
@@ -8005,7 +8005,7 @@ html.dark .composer-send:disabled {
   min-width: 0;
   flex: 1;
   overflow: hidden;
-  color: var(--dsw-label-2);
+  color: var(--dsw-sidebar-fg);
   font-size: var(--dsw-chat-ui-font-size);
   line-height: 1.35;
   text-overflow: ellipsis;
@@ -8028,13 +8028,13 @@ html.dark .composer-send:disabled {
   border-radius: 6px;
   padding: 0;
   background: transparent;
-  color: var(--dsw-icon);
+  color: var(--dsw-sidebar-fg);
   cursor: pointer;
 }
 
 .composer-inbox-btn:hover {
   background: var(--dsw-hover);
-  color: var(--dsw-icon-active);
+  color: var(--dsw-sidebar-fg-active);
 }
 
 .composer-slash {
