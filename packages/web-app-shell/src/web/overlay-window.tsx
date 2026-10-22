@@ -10,6 +10,7 @@ import {
   OVERLAY_OUTSIDE_KEEP,
   readOverlayWinState,
   setOverlayResizing,
+  requestComposerFocus,
   setOverlayThread,
   shouldCloseOverlayOnOutside,
   subscribeOverlayThread,
@@ -47,7 +48,6 @@ export function OverlayChatWindow({
   const cardRef = useRef<HTMLDivElement>(null)
   const leaveTimer = useRef<number>(0)
   const mascotClick = useRef<number>(0)
-  const fromParked = useRef(false)
   const dimmedRef = useRef(false)
   const resizeRef = useRef<(OverlayWinGeom & ResizeEdge & { px: number; py: number }) | null>(null)
   const geomRef = useRef(geom)
@@ -124,32 +124,29 @@ export function OverlayChatWindow({
   useEffect(() => {
     const el = boxRef.current
     if (!el) return
-    const onMascotDown = (event: PointerEvent) => {
-      if (!overlayMascotTarget(event.target)) return
-      fromParked.current = dimmedRef.current
+    const wakeMascot = (thread: boolean) => {
+      setOverlayThread(thread)
+      setPointerInside(true)
+      requestComposerFocus()
     }
     const onMascotClick = (event: MouseEvent) => {
       if (!overlayMascotTarget(event.target)) return
       event.preventDefault()
       event.stopPropagation()
       window.clearTimeout(mascotClick.current)
-      if (fromParked.current || dimmedRef.current) return
       if (event.detail >= 2) return
-      mascotClick.current = window.setTimeout(() => setOverlayThread(false), OVERLAY_MASCOT_CLICK_MS)
+      mascotClick.current = window.setTimeout(() => wakeMascot(false), OVERLAY_MASCOT_CLICK_MS)
     }
     const onMascotDblClick = (event: MouseEvent) => {
       if (!overlayMascotTarget(event.target)) return
       event.preventDefault()
       event.stopPropagation()
       window.clearTimeout(mascotClick.current)
-      if (fromParked.current || dimmedRef.current) return
-      setOverlayThread(true)
+      wakeMascot(true)
     }
-    el.addEventListener('pointerdown', onMascotDown, true)
     el.addEventListener('click', onMascotClick, true)
     el.addEventListener('dblclick', onMascotDblClick, true)
     return () => {
-      el.removeEventListener('pointerdown', onMascotDown, true)
       el.removeEventListener('click', onMascotClick, true)
       el.removeEventListener('dblclick', onMascotDblClick, true)
       window.clearTimeout(mascotClick.current)
@@ -253,6 +250,7 @@ export function OverlayChatWindow({
       onPointerDown={bringFront}
       onPointerEnter={() => {
         window.clearTimeout(leaveTimer.current)
+        if (dimmedRef.current) return
         setPointerInside(true)
       }}
       onPointerLeave={(event) => {

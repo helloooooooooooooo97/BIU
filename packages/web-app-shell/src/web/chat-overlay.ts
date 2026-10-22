@@ -278,7 +278,7 @@ export function revealOverlayThread() {
   setOverlayThread(true)
 }
 
-/** 已展开时单击小人收起对话，等这一下确认不是双击。 */
+/** 单击小人只开输入框和操纵栏，等这一下确认不是双击。 */
 export const OVERLAY_MASCOT_CLICK_MS = 280
 
 export function overlayMascotTarget(target: EventTarget | null) {

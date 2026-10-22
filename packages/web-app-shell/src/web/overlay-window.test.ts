@@ -170,7 +170,7 @@ test('pointer leaving the window lets the overlay dim', () => {
   vi.useRealTimers()
 })
 
-test('shown overlay mascot click collapses thread; double-click reveals it', () => {
+test('parked mascot hover does not wake; click opens composer only; double-click opens thread', () => {
   vi.useFakeTimers()
   host = document.createElement('div')
   document.body.append(host)
@@ -191,31 +191,33 @@ test('shown overlay mascot click collapses thread; double-click reveals it', () 
   act(() => {
     vi.advanceTimersByTime(200)
   })
+  assert.equal(panel.classList.contains('is-dimmed'), true)
   act(() => {
     mascot.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }))
   })
-  assert.equal(panel.classList.contains('is-dimmed'), false)
+  assert.equal(panel.classList.contains('is-dimmed'), true)
   assert.equal(getOverlayThread(), true)
   act(() => {
-    mascot.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }))
     mascot.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }))
     vi.advanceTimersByTime(OVERLAY_MASCOT_CLICK_MS - 1)
   })
-  assert.equal(getOverlayThread(), true)
+  assert.equal(panel.classList.contains('is-dimmed'), true)
   act(() => {
     vi.advanceTimersByTime(1)
   })
+  assert.equal(panel.classList.contains('is-dimmed'), false)
   assert.equal(getOverlayThread(), false)
   act(() => {
-    mascot.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }))
+    panel.dispatchEvent(new PointerEvent('pointerout', { bubbles: true, relatedTarget: null }))
+    vi.advanceTimersByTime(2000)
+  })
+  assert.equal(panel.classList.contains('is-dimmed'), true)
+  act(() => {
     mascot.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }))
     mascot.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 2 }))
     mascot.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, detail: 2 }))
   })
-  assert.equal(getOverlayThread(), true)
-  act(() => {
-    vi.advanceTimersByTime(OVERLAY_MASCOT_CLICK_MS)
-  })
+  assert.equal(panel.classList.contains('is-dimmed'), false)
   assert.equal(getOverlayThread(), true)
   vi.useRealTimers()
 })
