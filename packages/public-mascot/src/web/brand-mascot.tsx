@@ -115,12 +115,14 @@ export function BrandAgentMenu({
 }
 
 export const CORNER_TAP_DANCE_MS = 3200
+export const CORNER_TOGGLE_CLICK_MS = 280
 
 export function BrandCornerMascot({
   agents = [],
   activeId,
   onSelect,
   onToggle,
+  onDoubleToggle,
   open,
   leading,
   menu,
@@ -133,6 +135,7 @@ export function BrandCornerMascot({
   activeId?: string | null
   onSelect?: (id: string) => void
   onToggle?: () => void
+  onDoubleToggle?: () => void
   open?: boolean
   leading?: ReactNode
   menu?: ReactNode | ((close: () => void) => ReactNode)
@@ -146,6 +149,7 @@ export function BrandCornerMascot({
   const [tapDance, setTapDance] = useState(false)
   const [playNonce, setPlayNonce] = useState(0)
   const danceTimer = useRef(0)
+  const toggleTimer = useRef(0)
   const ranked = useMemo(() => rankCornerAgents(agents), [agents])
   const current = ranked.find((item) => item.id === activeId) ?? ranked[0]
   const identity = current ? resolveSessionMascot(current.id, current.mascot) : undefined
@@ -170,7 +174,10 @@ export function BrandCornerMascot({
         />
       )
 
-  useEffect(() => () => window.clearTimeout(danceTimer.current), [])
+  useEffect(() => () => {
+    window.clearTimeout(danceTimer.current)
+    window.clearTimeout(toggleTimer.current)
+  }, [])
 
   function playTapDance() {
     setTapDance(true)
@@ -208,9 +215,15 @@ export function BrandCornerMascot({
             if (tapToDance) return
             if (onToggle) event.preventDefault()
           }}
-          onClick={() => {
+          onClick={(event) => {
             if (tapToDance) {
               playTapDance()
+              return
+            }
+            if (onToggle && onDoubleToggle) {
+              window.clearTimeout(toggleTimer.current)
+              if (event.detail >= 2) return
+              toggleTimer.current = window.setTimeout(() => onToggle(), CORNER_TOGGLE_CLICK_MS)
               return
             }
             if (onToggle) {
@@ -218,6 +231,11 @@ export function BrandCornerMascot({
               return
             }
             setAgentsOpen((prev) => !prev)
+          }}
+          onDoubleClick={() => {
+            if (tapToDance || !onDoubleToggle) return
+            window.clearTimeout(toggleTimer.current)
+            onDoubleToggle()
           }}
         >
           {identity && current ? (
