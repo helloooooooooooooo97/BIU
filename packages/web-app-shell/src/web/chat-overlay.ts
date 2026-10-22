@@ -278,6 +278,13 @@ export function revealOverlayThread() {
   setOverlayThread(true)
 }
 
+/** 已展开时单击小人收起对话，等这一下确认不是双击。 */
+export const OVERLAY_MASCOT_CLICK_MS = 280
+
+export function overlayMascotTarget(target: EventTarget | null) {
+  return target instanceof Element && Boolean(target.closest('[data-testid="brand-corner-mascot-toggle"]'))
+}
+
 export function getOverlayAutohide() {
   return autohide
 }

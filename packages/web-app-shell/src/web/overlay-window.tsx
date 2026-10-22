@@ -4,10 +4,13 @@ import {
   closeChatOverlay,
   getOverlayThread,
   overlayLayoutGeom,
+  overlayMascotTarget,
   overlayStillHoldsPointer,
+  OVERLAY_MASCOT_CLICK_MS,
   OVERLAY_OUTSIDE_KEEP,
   readOverlayWinState,
   setOverlayResizing,
+  setOverlayThread,
   shouldCloseOverlayOnOutside,
   subscribeOverlayThread,
   writeOverlayWinState,
@@ -43,10 +46,14 @@ export function OverlayChatWindow({
   const boxRef = useRef<HTMLDivElement>(null)
   const cardRef = useRef<HTMLDivElement>(null)
   const leaveTimer = useRef<number>(0)
+  const mascotClick = useRef<number>(0)
+  const fromParked = useRef(false)
+  const dimmedRef = useRef(false)
   const resizeRef = useRef<(OverlayWinGeom & ResizeEdge & { px: number; py: number }) | null>(null)
   const geomRef = useRef(geom)
   geomRef.current = geom
   const dimmed = !pointerInside && !composerFocused && !resizing
+  dimmedRef.current = dimmed
 
   const bringFront = useCallback(() => {
     overlayZ += 1
@@ -112,6 +119,41 @@ export function OverlayChatWindow({
     }
     document.addEventListener('pointerdown', onOutside)
     return () => document.removeEventListener('pointerdown', onOutside)
+  }, [])
+
+  useEffect(() => {
+    const el = boxRef.current
+    if (!el) return
+    const onMascotDown = (event: PointerEvent) => {
+      if (!overlayMascotTarget(event.target)) return
+      fromParked.current = dimmedRef.current
+    }
+    const onMascotClick = (event: MouseEvent) => {
+      if (!overlayMascotTarget(event.target)) return
+      event.preventDefault()
+      event.stopPropagation()
+      window.clearTimeout(mascotClick.current)
+      if (fromParked.current || dimmedRef.current) return
+      if (event.detail >= 2) return
+      mascotClick.current = window.setTimeout(() => setOverlayThread(false), OVERLAY_MASCOT_CLICK_MS)
+    }
+    const onMascotDblClick = (event: MouseEvent) => {
+      if (!overlayMascotTarget(event.target)) return
+      event.preventDefault()
+      event.stopPropagation()
+      window.clearTimeout(mascotClick.current)
+      if (fromParked.current || dimmedRef.current) return
+      setOverlayThread(true)
+    }
+    el.addEventListener('pointerdown', onMascotDown, true)
+    el.addEventListener('click', onMascotClick, true)
+    el.addEventListener('dblclick', onMascotDblClick, true)
+    return () => {
+      el.removeEventListener('pointerdown', onMascotDown, true)
+      el.removeEventListener('click', onMascotClick, true)
+      el.removeEventListener('dblclick', onMascotDblClick, true)
+      window.clearTimeout(mascotClick.current)
+    }
   }, [])
 
   useEffect(() => {
