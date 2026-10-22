@@ -28,7 +28,9 @@ import {
   getOverlayAutohide,
   setOverlayAutohide,
   requestOverlayAutohide,
+  overlayMascotTarget,
   overlayStillHoldsPointer,
+  OVERLAY_PARKED_CLICK_MS,
   setOverlayResizing,
   setOverlayPinned,
   clampOverlayChatHeight,
@@ -451,6 +453,16 @@ test('autohide requires leaving and not resizing', () => {
   setOverlayResizing(false)
   requestOverlayAutohide()
   assert.equal(getOverlayAutohide(), true)
+})
+
+test('overlay mascot target and parked click delay', () => {
+  const btn = document.createElement('button')
+  btn.setAttribute('data-testid', 'brand-corner-mascot-toggle')
+  const inner = document.createElement('span')
+  btn.append(inner)
+  assert.equal(overlayMascotTarget(inner), true)
+  assert.equal(overlayMascotTarget(document.body), false)
+  assert.equal(OVERLAY_PARKED_CLICK_MS, 280)
 })
 
 test('pointer still inside overlay when relatedTarget or hit is in the panel', () => {

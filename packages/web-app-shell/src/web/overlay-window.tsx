@@ -4,10 +4,14 @@ import {
   closeChatOverlay,
   getOverlayThread,
   overlayLayoutGeom,
+  overlayMascotTarget,
   overlayStillHoldsPointer,
   OVERLAY_OUTSIDE_KEEP,
+  OVERLAY_PARKED_CLICK_MS,
   readOverlayWinState,
+  requestComposerFocus,
   setOverlayResizing,
+  setOverlayThread,
   shouldCloseOverlayOnOutside,
   subscribeOverlayThread,
   writeOverlayWinState,
@@ -43,11 +47,14 @@ export function OverlayChatWindow({
   const boxRef = useRef<HTMLDivElement>(null)
   const cardRef = useRef<HTMLDivElement>(null)
   const leaveTimer = useRef<number>(0)
+  const parkedClick = useRef<number>(0)
+  const dimmedRef = useRef(false)
   const resizeRef = useRef<(OverlayWinGeom & ResizeEdge & { px: number; py: number }) | null>(null)
   const geomRef = useRef(geom)
   geomRef.current = geom
   // 闲置：对话/输入条收起，只留右下角小人周围热区；回复框聚焦时保持展开。
   const dimmed = !pointerInside && !composerFocused && !resizing
+  dimmedRef.current = dimmed
 
   const bringFront = useCallback(() => {
     overlayZ += 1
@@ -113,6 +120,38 @@ export function OverlayChatWindow({
     }
     document.addEventListener('pointerdown', onOutside)
     return () => document.removeEventListener('pointerdown', onOutside)
+  }, [])
+
+  useEffect(() => {
+    const el = boxRef.current
+    if (!el) return
+    const wakeParked = (thread: boolean) => {
+      setOverlayThread(thread)
+      setPointerInside(true)
+      requestComposerFocus()
+    }
+    const onMascotClick = (event: MouseEvent) => {
+      if (!dimmedRef.current || !overlayMascotTarget(event.target)) return
+      event.preventDefault()
+      event.stopPropagation()
+      window.clearTimeout(parkedClick.current)
+      if (event.detail >= 2) return
+      parkedClick.current = window.setTimeout(() => wakeParked(false), OVERLAY_PARKED_CLICK_MS)
+    }
+    const onMascotDblClick = (event: MouseEvent) => {
+      if (!dimmedRef.current || !overlayMascotTarget(event.target)) return
+      event.preventDefault()
+      event.stopPropagation()
+      window.clearTimeout(parkedClick.current)
+      wakeParked(true)
+    }
+    el.addEventListener('click', onMascotClick, true)
+    el.addEventListener('dblclick', onMascotDblClick, true)
+    return () => {
+      el.removeEventListener('click', onMascotClick, true)
+      el.removeEventListener('dblclick', onMascotDblClick, true)
+      window.clearTimeout(parkedClick.current)
+    }
   }, [])
 
   useEffect(() => {
@@ -212,6 +251,7 @@ export function OverlayChatWindow({
       onPointerDown={bringFront}
       onPointerEnter={() => {
         window.clearTimeout(leaveTimer.current)
+        if (dimmedRef.current) return
         setPointerInside(true)
       }}
       onPointerLeave={(event) => {
