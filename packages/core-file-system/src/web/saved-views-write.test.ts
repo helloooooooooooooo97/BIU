@@ -85,6 +85,17 @@ test('persistViewsFor adopts cache only after pushSavedViewsPatch', () => {
   assert.match(adopt, /setViews\(/)
 })
 
+test('reorder waits for persist ok before adopting view list', () => {
+  const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
+  const start = browser.indexOf('function persistViewOrder')
+  const body = browser.slice(start, browser.indexOf('function persistViewsWith', start))
+  assert.match(body, /persistViews\(next\)\.then\(\(ok\) => \{/)
+  assert.match(body, /if \(!ok\) return/)
+  assert.ok(body.indexOf('persistViews(next)') < body.indexOf('adoptPersistedViews'))
+  assert.ok(body.indexOf('if (!ok) return') < body.indexOf('adoptPersistedViews'))
+  assert.doesNotMatch(body, /setViews\(/)
+})
+
 test('delete waits for persist ok before switching view', () => {
   const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
   const start = browser.indexOf('function applyDeleteView')

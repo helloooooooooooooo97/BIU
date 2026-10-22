@@ -3100,11 +3100,11 @@ export function CollectionBrowser({
       if (byId.has(view.id)) ranked.push(view)
     }
     const next = rankListedViews(ranked, ranked)
-    for (const view of next) persistViewDisplay(collectionPath, view.id, { rank: view.rank })
-    viewsRef.current = next
-    setViews(next)
-    rememberViews(collectionPath, next)
-    void persistViews(next)
+    void persistViews(next).then((ok) => {
+      if (!ok) return
+      for (const view of next) persistViewDisplay(collectionPath, view.id, { rank: view.rank })
+      adoptPersistedViews(collectionPath, next)
+    })
   }
 
   function persistViewsWith(
