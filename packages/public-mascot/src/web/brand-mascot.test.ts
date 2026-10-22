@@ -20,6 +20,4 @@ test('brand mascot is the grok blob on a white rounded square', () => {
   assert.match(mascot, /playNonce/)
   assert.match(mascot, /onPointerDown/)
   assert.match(mascot, /if \(onToggle\) event\.preventDefault\(\)/)
-  assert.match(mascot, /onDoubleToggle/)
-  assert.match(mascot, /CORNER_TOGGLE_CLICK_MS/)
 })

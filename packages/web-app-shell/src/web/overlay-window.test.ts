@@ -5,7 +5,7 @@ import { createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { act } from 'react'
 import { OverlayChatWindow } from './overlay-window.tsx'
-import { closeChatOverlay, getChatOverlay, getOverlayThread, OVERLAY_MASCOT_CLICK_MS, revealOverlayThread, setChatOverlay, setOverlayThread } from './chat-overlay.ts'
+import { closeChatOverlay, getChatOverlay, getOverlayThread, revealOverlayThread, setChatOverlay, setOverlayThread } from './chat-overlay.ts'
 
 let root: Root | null = null
 let host: HTMLDivElement | null = null
@@ -167,58 +167,6 @@ test('pointer leaving the window lets the overlay dim', () => {
     vi.advanceTimersByTime(120)
   })
   assert.equal(panel.classList.contains('is-dimmed'), true)
-  vi.useRealTimers()
-})
-
-test('parked mascot hover does not wake; click opens composer only; double-click opens thread', () => {
-  vi.useFakeTimers()
-  host = document.createElement('div')
-  document.body.append(host)
-  root = createRoot(host)
-  setChatOverlay(true)
-  setOverlayThread(true)
-  act(() => {
-    root!.render(
-      createElement(OverlayChatWindow, {
-        header: createElement('div'),
-        thread: createElement('div'),
-        dock: createElement('button', { type: 'button', 'data-testid': 'brand-corner-mascot-toggle' }, 'm'),
-      }),
-    )
-  })
-  const panel = document.querySelector('[data-testid="chat-overlay-panel"]') as HTMLElement
-  const mascot = document.querySelector('[data-testid="brand-corner-mascot-toggle"]') as HTMLElement
-  act(() => {
-    vi.advanceTimersByTime(200)
-  })
-  assert.equal(panel.classList.contains('is-dimmed'), true)
-  act(() => {
-    mascot.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }))
-  })
-  assert.equal(panel.classList.contains('is-dimmed'), true)
-  assert.equal(getOverlayThread(), true)
-  act(() => {
-    mascot.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }))
-    vi.advanceTimersByTime(OVERLAY_MASCOT_CLICK_MS - 1)
-  })
-  assert.equal(panel.classList.contains('is-dimmed'), true)
-  act(() => {
-    vi.advanceTimersByTime(1)
-  })
-  assert.equal(panel.classList.contains('is-dimmed'), false)
-  assert.equal(getOverlayThread(), false)
-  act(() => {
-    panel.dispatchEvent(new PointerEvent('pointerout', { bubbles: true, relatedTarget: null }))
-    vi.advanceTimersByTime(2000)
-  })
-  assert.equal(panel.classList.contains('is-dimmed'), true)
-  act(() => {
-    mascot.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }))
-    mascot.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 2 }))
-    mascot.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, detail: 2 }))
-  })
-  assert.equal(panel.classList.contains('is-dimmed'), false)
-  assert.equal(getOverlayThread(), true)
   vi.useRealTimers()
 })
 
