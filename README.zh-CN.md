@@ -22,7 +22,7 @@
 </div>
 
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v0.1.0-blue" />
+  <img alt="version" src="https://img.shields.io/badge/version-v0.1.1-blue" />
   <img alt="license" src="https://img.shields.io/github/license/helloooooooooooooo97/biu" />
   <img alt="stars" src="https://img.shields.io/github/stars/helloooooooooooooo97/biu" />
   <img alt="node" src="https://img.shields.io/node/v/cordis" />
