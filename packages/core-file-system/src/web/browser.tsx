@@ -130,7 +130,7 @@ import { ViewPaneMenu } from './pane-more-menu.tsx'
 import { HttpError, invalidateListReads, listCollection, readJson } from './db-client.ts'
 import { savedViewRecordPath } from '../paths.ts'
 import { findViewNeighbor, indexOnPage } from './view-adjacent.ts'
-import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, rememberedTableWrap, tableColumnSlice, tableColumnUnchanged, tableColumnWidth, tableWindowSlice, tableWindowUnchanged, tableWrapScroll, type TableColumnSlice } from './table-window.ts'
+import { TABLE_WINDOW_OVERSCAN, medianPaintedRowPx, rememberedTableWrap, tableColumnSlice, tableColumnUnchanged, tableColumnWidth, tableRowFallbackPx, tableWindowSlice, tableWindowUnchanged, tableWrapScroll, type TableColumnSlice } from './table-window.ts'
 import { forgetPreviewTotalsForPath, markPaintedListReady, rememberPreviewTotalForView, resetPaintedListReady, whenListIdle } from './sidebar-preview.ts'
 import { DataSidebarShell } from './data-sidebar-shell.tsx'
 import { builtinAllViewId, catalogLockFilters, isReadOnlyViewId, mergeTableViews, parseBuiltinScopeViewId, stubBuiltinBlockKindView, viewsForScope, type DataScope } from '../catalog-views.ts'
@@ -1129,8 +1129,10 @@ const TableBody = memo(function TableBody({
   const span = colSpan || bag.colSpan
   const padRow = (px: number, side: 'top' | 'bottom') =>
     px <= 0 ? null : (
-      <tr key={`pad-${side}`} className="fsdb-table-pad" aria-hidden style={{ height: px }}>
-        <td colSpan={span} />
+      <tr key={`pad-${side}`} className="fsdb-table-pad" aria-hidden>
+        <td colSpan={span} style={{ height: px }}>
+          <div style={{ height: px }} />
+        </td>
       </tr>
     )
   return (
@@ -1253,9 +1255,11 @@ const WindowedTable = memo(function WindowedTable({
     ...rememberedTableWrap(),
   }))
   const paintCountRef = useRef(0)
-  const wrapCellsRef = useRef(false)
   const frozenRef = useRef(frozen)
   frozenRef.current = frozen
+  const [rowPx, setRowPx] = useState(() => tableRowFallbackPx(wrapCells))
+  const rowPxRef = useRef(rowPx)
+  rowPxRef.current = rowPx
   const columnMetaRef = useRef({ count: 0, pin: 0, widths: [] as number[] })
   const columnPx = useMemo(
     () => columns.map((col, index) => tableColumnWidth(col.key, columnWidths[col.key], index < columnPinCount)),
@@ -1279,18 +1283,33 @@ const WindowedTable = memo(function WindowedTable({
     return Math.max(sum, 1)
   }, [colWindow.end, colWindow.padLeft, colWindow.padRight, colWindow.pin, colWindow.start, columnPx])
   const tableWindow = useMemo(
-    () =>
-      tableWindowSlice(
-        nodes.length,
-        tableScroll.top,
-        tableScroll.height,
-        wrapCells ? TABLE_WRAP_ROW_PX : TABLE_ROW_PX,
-      ),
-    [nodes.length, tableScroll.height, tableScroll.top, wrapCells],
+    () => tableWindowSlice(nodes.length, tableScroll.top, tableScroll.height, rowPx),
+    [nodes.length, rowPx, tableScroll.height, tableScroll.top],
   )
   paintCountRef.current = nodes.length
-  wrapCellsRef.current = wrapCells
   paintRef.current.colSpan = tableColSpan
+
+  useLayoutEffect(() => {
+    const next = tableRowFallbackPx(wrapCells)
+    rowPxRef.current = next
+    setRowPx(next)
+  }, [wrapCells])
+
+  useLayoutEffect(() => {
+    const table = tableRef.current
+    if (!table) return
+    const heights: number[] = []
+    for (const tr of Array.from(table.tBodies[0]?.rows ?? [])) {
+      if (tr.classList.contains('fsdb-table-pad')) continue
+      if (tr.classList.contains('fsdb-group-row') || tr.classList.contains('fsdb-group-pager')) continue
+      const h = tr.offsetHeight
+      if (h > 0) heights.push(h)
+    }
+    const next = medianPaintedRowPx(heights, rowPxRef.current)
+    if (Math.abs(next - rowPxRef.current) < 1) return
+    rowPxRef.current = next
+    setRowPx(next)
+  }, [nodes.length, tableRef, tableWindow.end, tableWindow.start, wrapCells])
 
   useEffect(() => {
     onVisibleRange?.(tableWindow.start, tableWindow.end)
@@ -1299,7 +1318,7 @@ const WindowedTable = memo(function WindowedTable({
   const applyWrapScroll = (wrap: HTMLElement, top?: number) => {
     if (frozenRef.current && top == null) return
     const next = tableWrapScroll(wrap, top)
-    const rowPx = wrapCellsRef.current ? TABLE_WRAP_ROW_PX : TABLE_ROW_PX
+    const rowPx = rowPxRef.current
     const count = paintCountRef.current
     const cols = columnMetaRef.current
     setTableScroll((prev) => {

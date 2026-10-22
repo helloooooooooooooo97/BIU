@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, TABLE_WINDOW_VIEWPORT_FALLBACK, TABLE_COL_PX, TABLE_COL_PIN_PX, TABLE_COL_ACTIONS_PX, TABLE_COL_OVERSCAN, TABLE_COL_VIEWPORT_FALLBACK, GROUPED_FULL_FETCH_ALL_MAX, groupedFullFetchCount, rememberedTableWrap, rememberTableWrap, resetRememberedTableWrap, tableColumnSlice, tableColumnWidth, tableWindowSlice, tableWindowUnchanged, tableWrapScroll } from './table-window.ts'
+import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, TABLE_WINDOW_VIEWPORT_FALLBACK, TABLE_COL_PX, TABLE_COL_PIN_PX, TABLE_COL_ACTIONS_PX, TABLE_COL_OVERSCAN, TABLE_COL_VIEWPORT_FALLBACK, GROUPED_FULL_FETCH_ALL_MAX, groupedFullFetchCount, medianPaintedRowPx, rememberedTableWrap, rememberTableWrap, resetRememberedTableWrap, tableColumnSlice, tableColumnWidth, tableRowFallbackPx, tableWindowSlice, tableWindowUnchanged, tableWrapScroll } from './table-window.ts'
 
 test('table window keeps overscan around the viewport', () => {
   const slice = tableWindowSlice(200, 0, TABLE_ROW_PX * 10)
@@ -44,6 +44,17 @@ test('wrap mode still windows, with a taller row estimate', () => {
   assert.ok(slice.end < 200)
   assert.equal(slice.padBottom, (200 - slice.end) * TABLE_WRAP_ROW_PX)
   assert.ok(TABLE_WRAP_ROW_PX > TABLE_ROW_PX)
+})
+
+test('painted row median drives pad math instead of the CSS guess', () => {
+  assert.equal(tableRowFallbackPx(), TABLE_ROW_PX)
+  assert.equal(tableRowFallbackPx(true), TABLE_WRAP_ROW_PX)
+  assert.equal(medianPaintedRowPx([], TABLE_ROW_PX), TABLE_ROW_PX)
+  assert.equal(medianPaintedRowPx([40, 41, 40, 80, 40]), 40)
+  const guessed = tableWindowSlice(200, 40 * 50, 400, TABLE_ROW_PX)
+  const measured = tableWindowSlice(200, 40 * 50, 400, 40)
+  assert.ok(measured.start !== guessed.start || measured.padTop !== guessed.padTop)
+  assert.equal(measured.padTop, measured.start * 40)
 })
 
 test('empty table has no pad', () => {
