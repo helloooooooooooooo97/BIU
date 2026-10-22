@@ -3446,6 +3446,13 @@ select.settings-account-input {
   pointer-events: auto;
 }
 
+.chat-overlay-panel.is-dimmed .brand-corner-cluster::before {
+  content: '';
+  position: absolute;
+  inset: -18px;
+  border-radius: 28px;
+}
+
 .chat-overlay-panel.is-dimmed .brand-corner-mascot-btn {
   position: relative;
   width: 40px;
