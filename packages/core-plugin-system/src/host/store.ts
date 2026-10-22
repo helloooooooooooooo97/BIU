@@ -143,6 +143,20 @@ export function isPathInside(root: string, dir: string) {
   return target === base || target.startsWith(`${base}${sep}`)
 }
 
+function isNotFound(error: unknown) {
+  return Boolean(error && typeof error === 'object' && 'code' in error && (error as { code?: string }).code === 'ENOENT')
+}
+
+/** 目录在 readdir 之后可能被卸载删掉，ENOENT 当不存在，不要把 host 打崩。 */
+async function isDirectory(path: string) {
+  try {
+    return (await stat(path)).isDirectory()
+  } catch (error) {
+    if (isNotFound(error)) return false
+    throw error
+  }
+}
+
 function importHostModule(code: string) {
   return import(`data:text/javascript;charset=utf-8,${encodeURIComponent(code)}`)
 }
@@ -161,12 +175,24 @@ async function importHostFile(hostFile: string) {
 export { listingCreatedAt } from './plugin-create.ts'
 
 async function pluginDirStats(dir: string): Promise<Pick<StoreListing, 'bytes' | 'updatedAt' | 'hasHost' | 'hasWeb'>> {
-  const names = await readdir(dir)
+  let names: string[]
+  try {
+    names = await readdir(dir)
+  } catch (error) {
+    if (isNotFound(error)) return { bytes: 0, updatedAt: 0, hasHost: false, hasWeb: false }
+    throw error
+  }
   let bytes = 0
   let updatedAt = 0
   for (const name of names) {
     const file = join(dir, name)
-    const st = await stat(file)
+    let st
+    try {
+      st = await stat(file)
+    } catch (error) {
+      if (isNotFound(error)) continue
+      throw error
+    }
     if (!st.isFile()) continue
     bytes += st.size
     const modified = Math.floor(st.mtimeMs)
@@ -183,7 +209,8 @@ async function pluginDirStats(dir: string): Promise<Pick<StoreListing, 'bytes' |
 async function readManifest(dir: string): Promise<StoreManifest> {
   try {
     return await persistStoreManifestCreatedAt(dir)
-  } catch {
+  } catch (error) {
+    if (isNotFound(error)) throw error
     throw new Error(`invalid plugin manifest in ${dir}`)
   }
 }
@@ -490,25 +517,30 @@ export class PluginStoreService extends Service {
     }> = []
     for (const name of names.sort()) {
       const dir = join(this.sandboxDir, name)
-      if (!(await stat(dir)).isDirectory()) continue
-      if (!existsSync(join(dir, 'manifest.json'))) continue
-      const manifest = await readManifest(dir)
-      if (!manifest.builtin && !canReadDrafts) continue
-      const stats = await pluginDirStats(dir)
-      items.push({
-        id: manifest.id,
-        name: manifest.name,
-        blurb: manifest.blurb,
-        tags: manifest.tags,
-        author: manifest.author,
-        authorUrl: manifest.authorUrl,
-        ...(manifest.builtin ? { builtin: true } : {}),
-        hasHost: Boolean(findEntry(dir, HOST_ENTRIES)),
-        hasWeb: Boolean(findEntry(dir, WEB_ENTRIES)),
-        ...(manifest.headless ? { headless: true } : {}),
-        createdAt: listingCreatedAt(manifest.createdAt),
-        updatedAt: stats.updatedAt,
-      })
+      try {
+        if (!(await isDirectory(dir))) continue
+        if (!existsSync(join(dir, 'manifest.json'))) continue
+        const manifest = await readManifest(dir)
+        if (!manifest.builtin && !canReadDrafts) continue
+        const stats = await pluginDirStats(dir)
+        items.push({
+          id: manifest.id,
+          name: manifest.name,
+          blurb: manifest.blurb,
+          tags: manifest.tags,
+          author: manifest.author,
+          authorUrl: manifest.authorUrl,
+          ...(manifest.builtin ? { builtin: true } : {}),
+          hasHost: Boolean(findEntry(dir, HOST_ENTRIES)),
+          hasWeb: Boolean(findEntry(dir, WEB_ENTRIES)),
+          ...(manifest.headless ? { headless: true } : {}),
+          createdAt: listingCreatedAt(manifest.createdAt),
+          updatedAt: stats.updatedAt,
+        })
+      } catch (error) {
+        if (isNotFound(error)) continue
+        throw error
+      }
     }
     return items
   }
@@ -525,26 +557,31 @@ export class PluginStoreService extends Service {
     const items: StoreListing[] = []
     for (const name of names.sort()) {
       const dir = join(this.pluginDir, name)
-      if (!(await stat(dir)).isDirectory()) continue
-      if (!existsSync(join(dir, 'manifest.json'))) continue
-      const manifest = await readManifest(dir)
-      const enabled = this.isEnabled(manifest.id)
-      const stats = await pluginDirStats(dir)
-      const codeVersion = await hashInstalledPluginCode(dir)
-      items.push({
-        ...manifest,
-        ...(manifest.builtin || this.isBuiltin(manifest.id) ? { builtin: true } : {}),
-        enabled,
-        running: running.has(manifest.id),
-        bytes: stats.bytes,
-        createdAt: listingCreatedAt(manifest.createdAt),
-        updatedAt: stats.updatedAt,
-        lastRunAt: this.state.lastRunAt[manifest.id] ?? null,
-        hasHost: stats.hasHost,
-        hasWeb: stats.hasWeb,
-        ...(codeVersion ? { codeVersion } : {}),
-        ...(manifest.headless ? { headless: true } : { shell: parseStoreShell(manifest.shell) }),
-      })
+      try {
+        if (!(await isDirectory(dir))) continue
+        if (!existsSync(join(dir, 'manifest.json'))) continue
+        const manifest = await readManifest(dir)
+        const enabled = this.isEnabled(manifest.id)
+        const stats = await pluginDirStats(dir)
+        const codeVersion = await hashInstalledPluginCode(dir)
+        items.push({
+          ...manifest,
+          ...(manifest.builtin || this.isBuiltin(manifest.id) ? { builtin: true } : {}),
+          enabled,
+          running: running.has(manifest.id),
+          bytes: stats.bytes,
+          createdAt: listingCreatedAt(manifest.createdAt),
+          updatedAt: stats.updatedAt,
+          lastRunAt: this.state.lastRunAt[manifest.id] ?? null,
+          hasHost: stats.hasHost,
+          hasWeb: stats.hasWeb,
+          ...(codeVersion ? { codeVersion } : {}),
+          ...(manifest.headless ? { headless: true } : { shell: parseStoreShell(manifest.shell) }),
+        })
+      } catch (error) {
+        if (isNotFound(error)) continue
+        throw error
+      }
     }
     this.listCache = items
     return this.withViewerLoads(items)
@@ -809,7 +846,7 @@ export class PluginStoreService extends Service {
     if (existsSync(join(guess, 'manifest.json'))) return guess
     for (const name of await readdir(this.pluginDir)) {
       const dir = join(this.pluginDir, name)
-      if (!(await stat(dir)).isDirectory()) continue
+      if (!(await isDirectory(dir))) continue
       if (!existsSync(join(dir, 'manifest.json'))) continue
       const manifest = await readManifest(dir)
       if (manifest.id === id) return dir

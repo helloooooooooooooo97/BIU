@@ -236,6 +236,33 @@ test('open rebuilds an install that is missing host.js and web.js', async () => 
   }
 })
 
+test('list skips an installed plugin whose directory was deleted', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'plugin-gone-'))
+  const pluginDir = join(dir, '.plugin')
+  try {
+    const ctx = new Context()
+    stubHub(ctx)
+    const store = new PluginStoreService(ctx, pluginDir, join(dir, 'store.json'), join(dir, '.plugin-dev')).open()
+    await store.initSandbox({
+      id: 'keep-plug',
+      name: 'Keep',
+      hostJs: `export const name = 'keep-plug'\nexport function apply() {}\n`,
+    })
+    await store.pack('keep-plug')
+    await store.initSandbox({
+      id: 'page-terminal',
+      name: 'Gone',
+      hostJs: `export const name = 'page-terminal'\nexport function apply() {}\n`,
+    })
+    await store.pack('page-terminal')
+    await rm(join(pluginDir, 'page-terminal'), { recursive: true, force: true })
+    const rows = await store.list()
+    assert.deepEqual(rows.map((row) => row.id), ['keep-plug'])
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('missing .plugin lists no plugins', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'plugin-root-'))
   try {
