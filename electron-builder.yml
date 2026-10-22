@@ -65,4 +65,12 @@ nsis:
   shortcutName: Biu
   uninstallDisplayName: Biu
 linux:
-  target: []
+  category: Development
+  icon: public/favicon.svg
+  target:
+    - target: AppImage
+      arch:
+        - x64
+    - target: zip
+      arch:
+        - x64

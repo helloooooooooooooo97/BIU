@@ -5,6 +5,7 @@ import { usePageMeta } from './use-page-meta.ts'
 
 const RELEASES_PAGE = `${GITHUB_URL}/releases/latest`
 const QUARANTINE_FIX = 'xattr -dr com.apple.quarantine /Applications/Biu.app'
+const LINUX_RUN = 'chmod +x Biu-*-linux-x64.AppImage && ./Biu-*-linux-x64.AppImage'
 
 type Platform = 'mac' | 'windows' | 'linux'
 
@@ -12,12 +13,13 @@ const PACKAGES = {
   'mac-arm64': { label: 'Apple silicon', file: /-mac-arm64\.dmg$/ },
   'mac-intel': { label: 'Intel processor', file: /-mac-x64\.dmg$/ },
   windows: { label: 'Windows x64', file: /-win-x64\.exe$/ },
+  linux: { label: 'Linux x64', file: /-linux-x64\.AppImage$/ },
 } as const
 
 type PackageId = keyof typeof PACKAGES
 
 const REQUIREMENTS = [
-  ['System', 'macOS (Apple silicon / Intel) or Windows 10 and later'],
+  ['System', 'macOS (Apple silicon / Intel), Windows 10 and later, or Linux x64'],
   ['Memory', '8 GB or more recommended'],
   ['Model', 'Bring your own key for any model'],
   ['Network', 'Works offline; model calls require an internet connection'],
@@ -33,7 +35,7 @@ const DOWNLOAD_FAQ = [
   ['Which macOS installer should I choose?', 'Open About This Mac from the Apple menu. Choose Apple silicon for an Apple M-series chip, or Intel for an Intel processor.'],
   ['What if Windows SmartScreen blocks the installer?', 'Select More info, then Run anyway. The complete source code is available for review on GitHub.'],
   ['Can I use BIU without a model API key?', 'Pages, tables, and plugins work normally. Agents require a model API key; any model works.'],
-  ['Is there a mobile app?', 'BIU is currently available for desktop. Installers are provided for macOS and Windows, while Linux runs from source.'],
+  ['Is there a mobile app?', 'BIU is currently available for desktop. Installers are provided for macOS, Windows, and Linux.'],
 ] as const
 
 /** 只用来决定先给哪个按钮；猜错了，下面三个平台都还在。 */
@@ -80,14 +82,14 @@ export function MarketingDownload({ onLogin, onStart }: { onLogin: SiteAction; o
 
   usePageMeta({
     title: 'Download',
-    description: 'Download BIU for macOS or Windows, or run it from source on Linux.',
+    description: 'Download BIU for macOS, Windows, or Linux.',
     path: '/download',
   })
 
   const primary = platform === 'windows'
     ? { href: urlOf('windows'), label: 'Download for Windows' }
     : platform === 'linux'
-      ? { href: '#source', label: 'Run from source on Linux' }
+      ? { href: urlOf('linux'), label: 'Download for Linux' }
       : { href: urlOf('mac-arm64'), label: 'Download for macOS (Apple silicon)' }
 
   return (
@@ -137,13 +139,14 @@ export function MarketingDownload({ onLogin, onStart }: { onLogin: SiteAction; o
             </article>
             <article data-reveal className={platform === 'linux' ? 'is-current' : ''}>
               <h2>Linux</h2>
-              <p className="site-platform-detail">Run from source{platform === 'linux' ? ' · Your system' : ''}</p>
+              <p className="site-platform-detail">x64 AppImage{platform === 'linux' ? ' · Your system' : ''}</p>
               <ol>
-                <li>Requires Node.js 20 or later and npm</li>
-                <li>Run three commands, then open http://127.0.0.1:5173 in your browser</li>
+                <li>Download the AppImage</li>
+                <li>Make it executable and run:</li>
               </ol>
+              <CopyCommand command={LINUX_RUN} />
               <div className="site-platform-actions">
-                <a href="#source">View commands</a>
+                <a href={urlOf('linux')}>Download for Linux</a>
               </div>
             </article>
           </div>
@@ -162,7 +165,7 @@ export function MarketingDownload({ onLogin, onStart }: { onLogin: SiteAction; o
 
         <section className="site-local-note" id="source" data-reveal>
           <p className="site-section-label">Run from source</p>
-          <h2>For Linux or custom development</h2>
+          <h2>Build from source</h2>
           <p>These commands start both the service and the interface. Open http://127.0.0.1:5173 in your browser.</p>
           <CopyCommand command={SOURCE_STEPS.join('\n')} />
           <p>

@@ -1039,7 +1039,9 @@ test('下载页：按系统给主按钮，命令一键复制', async () => {
   assert.deepEqual(Array.from(grid.querySelectorAll('h2')).map((h) => h.textContent), ['macOS', 'Windows', 'Linux'], 'Mac 只有一张卡')
   const commands = Array.from(document.querySelectorAll('.site-copy-cmd code')).map((c) => c.textContent ?? '')
   assert.ok(commands.some((c) => c.startsWith('xattr -dr com.apple.quarantine')), 'xattr 命令要能直接复制')
+  assert.ok(commands.some((c) => c.includes('linux-x64.AppImage')), 'Linux 卡给出 AppImage 运行命令')
   assert.ok(screen.getAllByRole('button', { name: 'Copy command' }).length >= 2)
+  assert.ok(screen.getAllByRole('link', { name: 'Download for Linux' }).length >= 1)
   cleanup()
 
   const { GITHUB_CACHE_KEY } = await import('./marketing-site/github.ts')

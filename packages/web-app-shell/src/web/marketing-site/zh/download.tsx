@@ -5,6 +5,7 @@ import { usePageMeta } from './use-page-meta.ts'
 
 const RELEASES_PAGE = `${GITHUB_URL}/releases/latest`
 const QUARANTINE_FIX = 'xattr -dr com.apple.quarantine /Applications/Biu.app'
+const LINUX_RUN = 'chmod +x Biu-*-linux-x64.AppImage && ./Biu-*-linux-x64.AppImage'
 
 type Platform = 'mac' | 'windows' | 'linux'
 
@@ -12,12 +13,13 @@ const PACKAGES = {
   'mac-arm64': { label: 'Apple 芯片', file: /-mac-arm64\.dmg$/ },
   'mac-intel': { label: 'Intel 芯片', file: /-mac-x64\.dmg$/ },
   windows: { label: 'Windows x64', file: /-win-x64\.exe$/ },
+  linux: { label: 'Linux x64', file: /-linux-x64\.AppImage$/ },
 } as const
 
 type PackageId = keyof typeof PACKAGES
 
 const REQUIREMENTS = [
-  ['系统', 'macOS（Apple 芯片 / Intel）、Windows 10 及以上'],
+  ['系统', 'macOS（Apple 芯片 / Intel）、Windows 10 及以上、Linux x64'],
   ['内存', '建议 8 GB 以上'],
   ['模型', '自带密钥，任意模型'],
   ['网络', '平时可离线；调用模型时需要联网'],
@@ -33,7 +35,7 @@ const DOWNLOAD_FAQ = [
   ['如何选择 macOS 安装包', '打开苹果菜单中的「关于本机」。芯片一栏为 Apple M 系列时选择 Apple 芯片，为 Intel 时选择 Intel 芯片。'],
   ['Windows SmartScreen 拦截', '选择「更多信息」，再选择「仍要运行」。代码全部开源，可在 GitHub 核对。'],
   ['未配置模型密钥', '页面、表格和插件可以正常使用。智能体需要配置模型密钥，任意模型均可。'],
-  ['移动端', '目前提供桌面版。macOS 与 Windows 提供安装包，Linux 从源码运行。'],
+  ['移动端', '目前提供桌面版。macOS、Windows 与 Linux 均提供安装包。'],
 ] as const
 
 /** 只用来决定先给哪个按钮；猜错了，下面三个平台都还在。 */
@@ -80,14 +82,14 @@ export function MarketingDownload({ onLogin, onStart }: { onLogin: SiteAction; o
 
   usePageMeta({
     title: '下载',
-    description: '下载 BIU 桌面版：macOS 与 Windows 安装包，或在 Linux 上从源码运行。',
+    description: '下载 BIU 桌面版：macOS、Windows 与 Linux 安装包。',
     path: '/download',
   })
 
   const primary = platform === 'windows'
     ? { href: urlOf('windows'), label: '下载 Windows 版' }
     : platform === 'linux'
-      ? { href: '#source', label: '在 Linux 上从源码运行' }
+      ? { href: urlOf('linux'), label: '下载 Linux 版' }
       : { href: urlOf('mac-arm64'), label: '下载 macOS 版（Apple 芯片）' }
 
   return (
@@ -137,13 +139,14 @@ export function MarketingDownload({ onLogin, onStart }: { onLogin: SiteAction; o
             </article>
             <article data-reveal className={platform === 'linux' ? 'is-current' : ''}>
               <h2>Linux</h2>
-              <p className="site-platform-detail">从源码运行{platform === 'linux' ? ' · 你的系统' : ''}</p>
+              <p className="site-platform-detail">x64 AppImage{platform === 'linux' ? ' · 你的系统' : ''}</p>
               <ol>
-                <li>需要 Node.js 20 或更高版本和 npm</li>
-                <li>三行命令，浏览器打开 http://127.0.0.1:5173</li>
+                <li>下载 AppImage</li>
+                <li>加上可执行权限后运行：</li>
               </ol>
+              <CopyCommand command={LINUX_RUN} />
               <div className="site-platform-actions">
-                <a href="#source">查看命令</a>
+                <a href={urlOf('linux')}>下载 Linux 版</a>
               </div>
             </article>
           </div>
@@ -162,7 +165,7 @@ export function MarketingDownload({ onLogin, onStart }: { onLogin: SiteAction; o
 
         <section className="site-local-note" id="source" data-reveal>
           <p className="site-section-label">从源码运行</p>
-          <h2>Linux 或想自己改代码</h2>
+          <h2>想自己改代码</h2>
           <p>执行完会同时启动服务和界面，浏览器打开 http://127.0.0.1:5173 即可。</p>
           <CopyCommand command={SOURCE_STEPS.join('\n')} />
           <p>
