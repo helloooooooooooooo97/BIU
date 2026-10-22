@@ -3434,37 +3434,29 @@ select.settings-account-input {
 .chat-overlay-panel.is-dimmed .chat-dock-toolbar-end,
 .chat-overlay-panel.is-dimmed .chat-dock-toolbar-mid,
 .chat-overlay-panel.is-dimmed .chat-dock-toolbar-start > :not(.brand-corner-cluster) {
-  opacity: 0;
+  visibility: hidden;
   pointer-events: none;
 }
 
 .chat-overlay-panel.is-dimmed .brand-corner-cluster {
   position: fixed;
-  right: 16px;
-  bottom: 16px;
+  right: 8px;
+  bottom: 8px;
   z-index: 201;
   pointer-events: auto;
 }
 
+.chat-overlay-panel.is-dimmed .brand-corner-cluster::before {
+  content: '';
+  position: absolute;
+  inset: -18px;
+  border-radius: 28px;
+}
+
 .chat-overlay-panel.is-dimmed .brand-corner-mascot-btn {
-  position: relative;
   width: 40px;
   height: 40px;
   border-radius: 12px;
-  background: #fff;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
-}
-
-.chat-overlay-panel.is-dimmed .brand-corner-mascot-btn::after {
-  content: '';
-  position: absolute;
-  top: 5px;
-  right: 5px;
-  width: 5px;
-  height: 5px;
-  border-radius: 999px;
-  background: #000;
-  box-shadow: 0 0 0 2px #fff;
 }
 
 .chat-overlay-panel .chat-pane {
