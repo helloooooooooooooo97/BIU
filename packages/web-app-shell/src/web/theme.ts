@@ -28,13 +28,14 @@ export function applyTheme(mode: ThemeMode) {
   if (meta) meta.setAttribute('content', mode)
 }
 
-export function persistTheme(mode: ThemeMode) {
-  applyTheme(mode)
-  void fetch('/api/profile', {
+export async function persistTheme(mode: ThemeMode) {
+  const res = await fetch('/api/profile', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ theme: mode }),
-  }).catch(() => undefined)
+  })
+  if (!res.ok) throw new Error(`theme persist failed: ${res.status}`)
+  applyTheme(mode)
 }
 
 export function applyStoredTheme() {

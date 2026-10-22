@@ -106,7 +106,7 @@ function TagPickPanel({
   )
 }
 
-function applyFacetTags(parsed: SchemaFieldValue, catalog: CollectionSchemaPack[], nextIds: string[]) {
+async function applyFacetTags(parsed: SchemaFieldValue, catalog: CollectionSchemaPack[], nextIds: string[]) {
   let packs = catalog
   const used = new Set(packs.map((tag) => tag.id))
   const resolved: string[] = []
@@ -125,7 +125,7 @@ function applyFacetTags(parsed: SchemaFieldValue, catalog: CollectionSchemaPack[
     used.add(id)
     resolved.push(id)
   }
-  if (packs !== catalog) persistFacets(packs)
+  if (packs !== catalog) await persistFacets(packs)
   return retagSchemaValue(parsed, resolved)
 }
 
@@ -140,9 +140,10 @@ function FacetPickPanel({ value, onChange }: { value: unknown; onChange: (next: 
       options={catalog.map((tag) => ({ value: tag.id, label: tag.label }))}
       multiple
       onChange={(next) => {
-        const updated = applyFacetTags(liveRef.current, catalog, next)
-        liveRef.current = updated
-        onChange(updated)
+        void applyFacetTags(liveRef.current, catalog, next).then((updated) => {
+          liveRef.current = updated
+          onChange(updated)
+        })
       }}
     />
   )

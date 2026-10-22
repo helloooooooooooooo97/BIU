@@ -2,13 +2,29 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { persistPageWidth, getPageWidth, persistPagePrefs, getPagePrefs, hydratePagePrefs, SHARE_PAGE_PREFS, getWorkspaceProfile, resetWorkspaceProfileGet } from './page-width.ts'
 
-test('page width persists full and max', () => {
-  persistPageWidth('max')
-  assert.equal(getPageWidth(), 'max')
-  persistPageWidth('full')
-  assert.equal(getPageWidth(), 'full')
-  persistPageWidth('max')
-  assert.equal(getPageWidth(), 'max')
+function okFetch(handler?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> | Response) {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (handler) return handler(input, init)
+    return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } })
+  }) as typeof fetch
+  return () => {
+    globalThis.fetch = originalFetch
+  }
+}
+
+test('page width persists full and max', async () => {
+  const restore = okFetch()
+  try {
+    await persistPageWidth('max')
+    assert.equal(getPageWidth(), 'max')
+    await persistPageWidth('full')
+    assert.equal(getPageWidth(), 'full')
+    await persistPageWidth('max')
+    assert.equal(getPageWidth(), 'max')
+  } finally {
+    restore()
+  }
 })
 
 test('share pages default to wide layout with pinned outline and pager', () => {
@@ -22,53 +38,108 @@ test('share pages default to wide layout with pinned outline and pager', () => {
   })
 })
 
-test('page prefs store reading chrome and body scale', () => {
-  persistPagePrefs({
-    wide: true,
-    outlineExpand: false,
-    outlinePin: true,
-    navPin: true,
-    bodySize: 'lg',
-    bodyGap: 'sm',
-  })
-  assert.deepEqual(getPagePrefs(), {
-    wide: true,
-    outlineExpand: false,
-    outlinePin: true,
-    navPin: true,
-    bodySize: 'lg',
-    bodyGap: 'sm',
-  })
-  assert.equal(document.documentElement.dataset.outlinePin, '1')
-  assert.equal(document.documentElement.dataset.bodySize, 'lg')
-  const seen: string[] = []
-  const onPrefs = () => {
-    seen.push(document.documentElement.dataset.outlinePin ?? '')
+test('page prefs store reading chrome and body scale', async () => {
+  const restore = okFetch()
+  try {
+    await persistPagePrefs({
+      wide: true,
+      outlineExpand: false,
+      outlinePin: true,
+      navPin: true,
+      bodySize: 'lg',
+      bodyGap: 'sm',
+    })
+    assert.deepEqual(getPagePrefs(), {
+      wide: true,
+      outlineExpand: false,
+      outlinePin: true,
+      navPin: true,
+      bodySize: 'lg',
+      bodyGap: 'sm',
+    })
+    assert.equal(document.documentElement.dataset.outlinePin, '1')
+    assert.equal(document.documentElement.dataset.bodySize, 'lg')
+    const seen: string[] = []
+    const onPrefs = () => {
+      seen.push(document.documentElement.dataset.outlinePin ?? '')
+    }
+    window.addEventListener('biu:page-prefs', onPrefs)
+    await persistPagePrefs({ outlinePin: false })
+    window.removeEventListener('biu:page-prefs', onPrefs)
+    assert.deepEqual(seen, ['0'])
+    await persistPagePrefs({ outlinePin: true })
+    await persistPagePrefs({
+      wide: false,
+      outlineExpand: true,
+      outlinePin: false,
+      navPin: false,
+      bodySize: 'md',
+      bodyGap: 'md',
+    })
+  } finally {
+    restore()
   }
-  window.addEventListener('biu:page-prefs', onPrefs)
-  persistPagePrefs({ outlinePin: false })
-  window.removeEventListener('biu:page-prefs', onPrefs)
-  assert.deepEqual(seen, ['0'])
-  persistPagePrefs({ outlinePin: true })
-  persistPagePrefs({
-    wide: false,
-    outlineExpand: true,
-    outlinePin: false,
-    navPin: false,
-    bodySize: 'md',
-    bodyGap: 'md',
-  })
+})
+
+test('persistPagePrefs does not apply until the profile POST succeeds', async () => {
+  const restoreOk = okFetch()
+  try {
+    await persistPagePrefs({
+      wide: false,
+      outlineExpand: true,
+      outlinePin: false,
+      navPin: false,
+      bodySize: 'md',
+      bodyGap: 'md',
+    })
+  } finally {
+    restoreOk()
+  }
+  let release!: (value: Response) => void
+  const restore = okFetch(
+    () =>
+      new Promise<Response>((resolve) => {
+        release = resolve
+      }),
+  )
+  try {
+    const pending = persistPagePrefs({ outlinePin: true })
+    assert.equal(getPagePrefs().outlinePin, false)
+    release(new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } }))
+    await pending
+    assert.equal(getPagePrefs().outlinePin, true)
+  } finally {
+    restore()
+    const restoreReset = okFetch()
+    try {
+      await persistPagePrefs({
+        wide: false,
+        outlineExpand: true,
+        outlinePin: false,
+        navPin: false,
+        bodySize: 'md',
+        bodyGap: 'md',
+      })
+    } finally {
+      restoreReset()
+    }
+  }
 })
 
 test('hydratePagePrefs applies host profile and does not post when already stored', async () => {
-  persistPagePrefs({
-    wide: false,
-    outlineExpand: true,
-    outlinePin: false,
-    navPin: false,
-    bodySize: 'md',
-    bodyGap: 'md',
-  })
+  const restoreOk = okFetch()
+  try {
+    await persistPagePrefs({
+      wide: false,
+      outlineExpand: true,
+      outlinePin: false,
+      navPin: false,
+      bodySize: 'md',
+      bodyGap: 'md',
+    })
+  } finally {
+    restoreOk()
+  }
   const calls: string[] = []
   const originalFetch = globalThis.fetch
   resetWorkspaceProfileGet()
@@ -97,14 +168,19 @@ test('hydratePagePrefs applies host profile and does not post when already store
   } finally {
     globalThis.fetch = originalFetch
     resetWorkspaceProfileGet()
-    persistPagePrefs({
-      wide: false,
-      outlineExpand: true,
-      outlinePin: false,
-      navPin: false,
-      bodySize: 'md',
-      bodyGap: 'md',
-    })
+    const restore = okFetch()
+    try {
+      await persistPagePrefs({
+        wide: false,
+        outlineExpand: true,
+        outlinePin: false,
+        navPin: false,
+        bodySize: 'md',
+        bodyGap: 'md',
+      })
+    } finally {
+      restore()
+    }
   }
 })
 
@@ -130,7 +206,26 @@ test('getWorkspaceProfile shares one in-flight GET', async () => {
   } finally {
     globalThis.fetch = originalFetch
     resetWorkspaceProfileGet()
-    persistPagePrefs({
+    const restore = okFetch()
+    try {
+      await persistPagePrefs({
+        wide: false,
+        outlineExpand: true,
+        outlinePin: false,
+        navPin: false,
+        bodySize: 'md',
+        bodyGap: 'md',
+      })
+    } finally {
+      restore()
+    }
+  }
+})
+
+test('hydratePagePrefs does not overwrite a newer local write', async () => {
+  const restoreOk = okFetch()
+  try {
+    await persistPagePrefs({
       wide: false,
       outlineExpand: true,
       outlinePin: false,
@@ -138,18 +233,9 @@ test('getWorkspaceProfile shares one in-flight GET', async () => {
       bodySize: 'md',
       bodyGap: 'md',
     })
+  } finally {
+    restoreOk()
   }
-})
-
-test('hydratePagePrefs does not overwrite a newer local write', async () => {
-  persistPagePrefs({
-    wide: false,
-    outlineExpand: true,
-    outlinePin: false,
-    navPin: false,
-    bodySize: 'md',
-    bodyGap: 'md',
-  })
   resetWorkspaceProfileGet()
   let release!: () => void
   const originalFetch = globalThis.fetch
@@ -176,7 +262,7 @@ test('hydratePagePrefs does not overwrite a newer local write', async () => {
   }) as typeof fetch
   try {
     const pending = hydratePagePrefs()
-    persistPagePrefs({ outlinePin: true, navPin: true })
+    await persistPagePrefs({ outlinePin: true, navPin: true })
     release()
     await pending
     assert.equal(getPagePrefs().outlinePin, true)
@@ -186,13 +272,18 @@ test('hydratePagePrefs does not overwrite a newer local write', async () => {
   } finally {
     globalThis.fetch = originalFetch
     resetWorkspaceProfileGet()
-    persistPagePrefs({
-      wide: false,
-      outlineExpand: true,
-      outlinePin: false,
-      navPin: false,
-      bodySize: 'md',
-      bodyGap: 'md',
-    })
+    const restore = okFetch()
+    try {
+      await persistPagePrefs({
+        wide: false,
+        outlineExpand: true,
+        outlinePin: false,
+        navPin: false,
+        bodySize: 'md',
+        bodyGap: 'md',
+      })
+    } finally {
+      restore()
+    }
   }
 })

@@ -188,15 +188,24 @@ export function PageBlockStage({
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
   const rowId = String(row.id)
+  const writeQ = useRef(Promise.resolve())
   const update = useCallback((patch: Record<string, unknown>, opts?: { replace?: boolean }) => {
-    const next = mergeLiveBlockData(dataRef.current, patch, { replace: opts?.replace, title: recordTitle })
-    if (blockDataUnchanged(dataRef.current, next)) return
-    dataRef.current = next
-    setData(next)
-    const toWrite = persistBlockDataPatch(next, patch)
     const report = onChangeRef.current
-    if (report) report(toWrite)
-    else void writeBlockData(rowId, toWrite)
+    if (report) {
+      const next = mergeLiveBlockData(dataRef.current, patch, { replace: opts?.replace, title: recordTitle })
+      if (blockDataUnchanged(dataRef.current, next)) return
+      dataRef.current = next
+      setData(next)
+      report(persistBlockDataPatch(next, patch))
+      return
+    }
+    writeQ.current = writeQ.current.then(async () => {
+      const next = mergeLiveBlockData(dataRef.current, patch, { replace: opts?.replace, title: recordTitle })
+      if (blockDataUnchanged(dataRef.current, next)) return
+      await writeBlockData(rowId, persistBlockDataPatch(next, patch))
+      dataRef.current = next
+      setData(next)
+    }).catch(() => undefined)
   }, [recordTitle, rowId])
   const hostRef = useRef<HTMLDivElement | null>(null)
   const retriedReady = useRef(false)
@@ -275,7 +284,9 @@ function BlockCard({
     const next = draft.trim()
     if (next === title) return
     setDraft(next || title)
-    if (next && next !== title) void writeBlockTitle(String(row.id), next)
+    if (next && next !== title) {
+      void writeBlockTitle(String(row.id), next).catch(() => setDraft(title))
+    }
   }
 
   return (

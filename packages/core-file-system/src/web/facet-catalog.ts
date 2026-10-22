@@ -38,25 +38,30 @@ export function loadFacets(_collectionPath?: string): CollectionSchemaPack[] {
   }
 }
 
-export function persistFacets(facets: CollectionSchemaPack[], _collectionPath?: string) {
-  const next = parseFacets(facets)
+function adoptFacets(next: CollectionSchemaPack[]) {
   memory = next
   try {
     localStorage.setItem(FACETS_KEY, JSON.stringify(next))
   } catch {
     /* ignore */
   }
-  void fetch('/api/db/facets', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ facets: next }),
-  }).catch(() => undefined)
   emit()
   try {
     window.dispatchEvent(new Event('fsdb:change'))
   } catch {
     /* ignore */
   }
+}
+
+export async function persistFacets(facets: CollectionSchemaPack[], _collectionPath?: string) {
+  const next = parseFacets(facets)
+  const res = await fetch('/api/db/facets', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ facets: next }),
+  })
+  if (!res.ok) throw new Error(`facets persist failed: ${res.status}`)
+  adoptFacets(next)
 }
 
 export async function pullFacets(_collectionPath?: string) {
@@ -67,13 +72,8 @@ export async function pullFacets(_collectionPath?: string) {
     const facets = parseFacets(body.facets)
     const prev = JSON.stringify(memory ?? [])
     const next = JSON.stringify(facets)
-    memory = facets
-    try {
-      localStorage.setItem(FACETS_KEY, JSON.stringify(facets))
-    } catch {
-      /* ignore */
-    }
-    if (prev !== next) emit()
+    if (prev !== next) adoptFacets(facets)
+    else memory = facets
     return facets
   } catch {
     /* ignore */

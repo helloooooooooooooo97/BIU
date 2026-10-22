@@ -325,10 +325,8 @@ function HitActions({ hit }: { hit: SearchHit }) {
   const execute = async (action: SearchAction) => {
     if (acting.current) return
     acting.current = true
-    const next = previewHitRecord(record, action)
-    if (next !== record) setRecord(next)
     try {
-      await fetch('/api/db/action', {
+      const res = await fetch('/api/db/action', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -336,6 +334,7 @@ function HitActions({ hit }: { hit: SearchHit }) {
           action: action.id,
         }),
       })
+      if (!res.ok) return
       window.dispatchEvent(new Event('fsdb:change'))
     } finally {
       acting.current = false
