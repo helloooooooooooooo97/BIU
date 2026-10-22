@@ -1,4 +1,4 @@
-# 桌面版安装（macOS / Windows）
+# 桌面版安装（macOS / Windows / Linux）
 
 GitHub Release 提供打包产物：
 
@@ -7,6 +7,7 @@ GitHub Release 提供打包产物：
 | macOS Apple Silicon | `Biu-<version>-mac-arm64.dmg`（另有 `.zip`） |
 | macOS Intel | `Biu-<version>-mac-x64.dmg` |
 | Windows x64 | `Biu-<version>-win-x64.exe`（NSIS），以及 `.zip` |
+| Linux x64 | `Biu-<version>-linux-x64.AppImage`（另有 `.zip`） |
 
 打 tag `v0.1.1` 并 push，或在 Actions 里手动跑 **desktop-release**。本地：
 
@@ -14,6 +15,7 @@ GitHub Release 提供打包产物：
 npm run electron:pack          # 当前系统
 npx electron-builder --mac     # 仅在 macOS 上出 dmg
 npx electron-builder --win     # 仅在 Windows 上出 exe
+npx electron-builder --linux   # 仅在 Linux 上出 AppImage
 ```
 
 产物在 `release/`。
@@ -39,6 +41,17 @@ xattr -dr com.apple.quarantine /Applications/Biu.app
 **更多信息 → 仍要运行**。
 
 把 Biu 加入信任的发布者需要购买代码签名证书。
+
+## Linux
+
+下载 `*-linux-x64.AppImage`，加上可执行权限后直接跑：
+
+```bash
+chmod +x Biu-*-linux-x64.AppImage
+./Biu-*-linux-x64.AppImage
+```
+
+无用户命名空间的容器里 Chromium 沙箱起不来，桌面壳会带 `no-sandbox`。
 
 ## 数据目录
 
