@@ -48,7 +48,8 @@ test('list and detail share the chat column max width with side padding', () => 
   assert.match(css, /\.fsdb-page \.tasks-table td\{[^}]*overflow:visible/)
   assert.match(css, /\.fsdb-page \.tasks-table:not\(\.is-wrap\) \.fsdb-cell > span:not\(\.fsdb-ref-chips\):not\(\.biu-tags\):not\(\.fsdb-person-list\)\{[^}]*text-overflow:ellipsis/)
   assert.doesNotMatch(css, /\.fsdb-page \.tasks-table th,\.fsdb-page \.tasks-table td\{[^}]*overflow:visible/)
-  assert.match(css, /\.fsdb-page \.fsdb-proprow-v \.biu-tag,\.fsdb-page \.fsdb-proprow-v \.fsdb-token\{[^}]*font-weight:400/)
+  assert.match(css, /\.fsdb-page \.fsdb-proprow-v \.biu-tag,[\s\S]*?font-weight:var\(--dsw-cell-weight/)
+  assert.doesNotMatch(css, /\.fsdb-page \.fsdb-proprow-v \.biu-tag,\.fsdb-page \.fsdb-proprow-v \.fsdb-token\{[^}]*font-weight:400/)
   assert.match(css, /\.fsdb-page \.tasks-table td\{[^}]*--dsw-tag-ink:var\(--dsw-cell-ink/)
   assert.match(css, /\.fsdb-page \.tasks-table td \.fsdb-plain-input,[\s\S]*?\.fsdb-page \.tasks-table td \.biu-tag,[\s\S]*?font-weight:var\(--dsw-cell-weight/)
   assert.match(css, /\.fsdb-page \.tasks-table td \.fsdb-scope-tag,[\s\S]*?\.fsdb-page \.tasks-table td \.fsdb-scope-tag\.is-shared,[\s\S]*?color:var\(--dsw-cell-ink/)
@@ -199,8 +200,18 @@ test('list properties stay on the weakest label tier; detail aside lifts keys on
   assert.match(css, /\.fsdb-detail-aside \.fsdb-proprow-k svg,\.fsdb-detail-aside \.fsdb-prop>span:first-child svg\{[^}]*color:var\(--dsw-icon\)/)
   assert.match(
     css,
-    /\.fsdb-detail-aside \.fsdb-proprow-v,\.fsdb-detail-aside \.fsdb-prop-val,\.fsdb-detail-aside \.fsdb-detail-id,\.fsdb-detail-aside \.fsdb-plain-input\{[^}]*color:var\(--dsw-label\)/,
+    /\.fsdb-detail-aside \.fsdb-proprow-v,\.fsdb-detail-aside \.fsdb-prop-val,\.fsdb-detail-aside \.fsdb-detail-id,\.fsdb-detail-aside \.fsdb-plain-input\{[^}]*color:var\(--dsw-cell-ink,var\(--dsw-label\)\)/,
   )
+})
+
+test('detail share role and facet chips use table cell ink; leftover 13px/400 is public-ui .biu-tag', () => {
+  const tag = readFileSync(resolve(import.meta.dirname, '../../../public-ui/src/tag-chip.tsx'), 'utf8')
+  assert.match(tag, /\.biu-tag\{[^}]*font-size:13px/)
+  assert.match(tag, /\.biu-tag\{[^}]*font-weight:400/)
+  assert.match(css, /\.fsdb-page \.fsdb-proprow-v,[\s\S]*?--dsw-tag-ink:var\(--dsw-cell-ink/)
+  assert.match(css, /\.fsdb-page \.fsdb-proprow-v \.fsdb-scope-tag,[\s\S]*?\.fsdb-page \.fsdb-proprow-v \.fsdb-scope-tag\.is-shared,[\s\S]*?color:var\(--dsw-cell-ink/)
+  assert.match(css, /\.fsdb-page \.fsdb-proprow-v \.fsdb-scope-tag svg,[\s\S]*?color:inherit/)
+  assert.match(css, /\.fsdb-page \.tasks-table td\{[^}]*--dsw-tag-ink:var\(--dsw-cell-ink/)
 })
 
 test('usage figures in collection cells match the table font size', () => {
