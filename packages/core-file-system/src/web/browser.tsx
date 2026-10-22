@@ -1152,8 +1152,8 @@ const TableBody = memo(function TableBody({
   const span = colSpan || bag.colSpan
   const padRow = (px: number, side: 'top' | 'bottom') =>
     px <= 0 ? null : (
-      <tr key={`pad-${side}`} className="fsdb-table-pad" aria-hidden>
-        <td colSpan={span} style={{ height: px, padding: 0, border: 0 }} />
+      <tr key={`pad-${side}`} className="fsdb-table-pad" aria-hidden style={{ height: px }}>
+        <td colSpan={span} />
       </tr>
     )
   return (

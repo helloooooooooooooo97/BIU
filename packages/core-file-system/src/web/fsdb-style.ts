@@ -353,7 +353,8 @@ const CSS = `
 .fsdb-page .tasks-table tr.fsdb-group-pager td{padding:2px 6px 8px;background:transparent;border-right:0}
 .fsdb-page .tasks-table tr.fsdb-group-pager:hover td{background:transparent}
 .fsdb-page .tasks-table tr.fsdb-group-pager .fsdb-pager{margin-top:0;padding-left:0}
-.fsdb-page .tasks-table tr.fsdb-table-pad td,.fsdb-page .tasks-table tr.fsdb-table-pad:hover td{padding:0;border:0;background:transparent;line-height:0}
+.fsdb-page .tasks-table tr.fsdb-table-pad{box-sizing:border-box;font-size:0;line-height:0;overflow:hidden}
+.fsdb-page .tasks-table tr.fsdb-table-pad td,.fsdb-page .tasks-table tr.fsdb-table-pad:hover td{padding:0;border:0;background:transparent;line-height:0;font-size:0;height:inherit;box-sizing:border-box;overflow:hidden;vertical-align:top}
 .fsdb-page .tasks-minicard{display:flex;flex-direction:column;gap:8px;position:relative;width:100%;min-width:0;height:auto;min-height:min-content;margin:0;overflow:visible;text-align:left;border:0;border-radius:8px;padding:10px 11px;background:var(--dsw-sidebar);color:var(--dsw-label);font:inherit;box-shadow:none;transition:background .12s ease}
 .fsdb-page .tasks-minicard-open{display:flex;min-width:0;flex:1;overflow:hidden;border:0;padding:0;background:transparent;color:inherit;font:inherit;text-align:left;cursor:default}
 .fsdb-page .tasks-minicard:hover{background:var(--dsw-hover)}
