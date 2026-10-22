@@ -19,10 +19,8 @@ import type { FieldSpec, FieldType } from '@biu/type-file-system'
 import { CellSelect } from '@biu/database-ui'
 import { HEADLESS_DISMISS_IGNORE, HeadlessDismiss } from '@biu/public-ui/headless-dismiss'
 import { overlayPortalRoot, overlayZ } from '@biu/public-ui/overlay-portal'
-import { CheckRow } from './controls.tsx'
 import { DndGrip } from './dnd-grip.tsx'
 import { FieldGlyph } from './fsdb-cells.tsx'
-import { FlyoutEmpty, FlyoutSearch, flyoutQueryMatch } from './flyout-search.tsx'
 
 import {
   countFilterRules,
@@ -204,9 +202,7 @@ export function SortQueryMenu({
     icon: <FieldGlyph kind={item.kind} />,
   }))
   const used = new Set(sorts.map((item) => item.field))
-  const leftover = fields.filter((item) => !used.has(item.key))
-  const [q, setQ] = useState('')
-  const leftoverHits = leftover.filter((item) => flyoutQueryMatch(item.field.label ?? item.key, q))
+  const leftover = fields.find((item) => !used.has(item.key))
   const [activeId, setActiveId] = useState<string | null>(null)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
   const active = sorts.find((item) => item.id === activeId)
@@ -214,8 +210,6 @@ export function SortQueryMenu({
 
   return (
     <div className="fsdb-tool-flyout fsdb-query-menu" role="menu">
-      <FlyoutSearch value={q} onChange={setQ} />
-      <div className="tasks-sort-list">
       {sorts.length ? (
         <DndContext
           sensors={sensors}
@@ -261,26 +255,21 @@ export function SortQueryMenu({
             ) : null}
           </DragOverlay>
         </DndContext>
-      ) : leftoverHits.length ? null : (
+      ) : (
         <div className="tasks-viewdd-empty">还没有排序</div>
       )}
-      {leftoverHits.map((item) => (
-        <CheckRow
-          key={item.key}
-          icon={<FieldGlyph kind={item.kind} />}
-          label={item.field.label ?? item.key}
-          on={false}
-          onToggle={() => onChange([...sorts, emptySortRule(item.key)])}
-        />
-      ))}
-      {q.trim() && leftoverHits.length === 0 ? <FlyoutEmpty /> : null}
+      {leftover ? (
+        <button type="button" className="fsdb-query-add" onClick={() => onChange([...sorts, emptySortRule(leftover.key)])}>
+          <PlusIcon aria-hidden className="size-[14px]" />
+          添加排序
+        </button>
+      ) : null}
       {sorts.length ? (
         <button type="button" className="fsdb-query-clear" onClick={() => onChange([])}>
           <TrashGlyph aria-hidden className="size-[14px]" />
           删除排序
         </button>
       ) : null}
-      </div>
     </div>
   )
 }
@@ -296,47 +285,21 @@ export function FilterQueryMenu({
   valueOptions: (field: QueryField) => Array<{ value: string; label: string }>
   onChange: (next: FilterGroup) => void
 }) {
-  const [q, setQ] = useState('')
-  const hits = fields.filter((item) => flyoutQueryMatch(item.field.label ?? item.key, q))
   return (
     <div className="fsdb-tool-flyout fsdb-query-menu is-filter" role="menu">
-      <FlyoutSearch value={q} onChange={setQ} />
-      <div className="tasks-sort-list">
       <FilterGroupEditor
         group={tree}
         fields={fields}
         valueOptions={valueOptions}
         root
-        hideAdds
         onChange={onChange}
       />
-      {hits.map((item) => (
-        <CheckRow
-          key={item.key}
-          icon={<FieldGlyph kind={item.kind} />}
-          label={item.field.label ?? item.key}
-          on={false}
-          onToggle={() => onChange({ ...tree, children: [...tree.children, emptyFilterRule(item.key)] })}
-        />
-      ))}
-      {q.trim() && hits.length === 0 ? <FlyoutEmpty /> : null}
-      {q.trim() ? null : (
-        <button
-          type="button"
-          className="fsdb-query-add"
-          onClick={() => onChange({ ...tree, children: [...tree.children, emptyFilterGroup()] })}
-        >
-          <PlusIcon aria-hidden className="size-[14px]" />
-          添加筛选分组
-        </button>
-      )}
       {countFilterRules(tree) ? (
         <button type="button" className="fsdb-query-clear" onClick={() => onChange(emptyFilterGroup())}>
           <TrashGlyph aria-hidden className="size-[14px]" />
           删除筛选
         </button>
       ) : null}
-      </div>
     </div>
   )
 }
@@ -346,14 +309,12 @@ function FilterGroupEditor({
   fields,
   valueOptions,
   root,
-  hideAdds,
   onChange,
 }: {
   group: FilterGroup
   fields: QueryField[]
   valueOptions: (field: QueryField) => Array<{ value: string; label: string }>
   root?: boolean
-  hideAdds?: boolean
   onChange: (next: FilterGroup) => void
 }) {
   function patchChild(id: string, next: FilterNode) {
@@ -400,26 +361,22 @@ function FilterGroupEditor({
           )}
         </div>
       ))}
-      {root && hideAdds ? null : (
-        <>
-          <button
-            type="button"
-            className="fsdb-query-add"
-            onClick={() => onChange({ ...group, children: [...group.children, emptyFilterRule(fields[0]?.key ?? 'title')] })}
-          >
-            <PlusIcon aria-hidden className="size-[14px]" />
-            添加筛选条件
-          </button>
-          <button
-            type="button"
-            className="fsdb-query-add"
-            onClick={() => onChange({ ...group, children: [...group.children, emptyFilterGroup()] })}
-          >
-            <PlusIcon aria-hidden className="size-[14px]" />
-            添加筛选分组
-          </button>
-        </>
-      )}
+      <button
+        type="button"
+        className="fsdb-query-add"
+        onClick={() => onChange({ ...group, children: [...group.children, emptyFilterRule(fields[0]?.key ?? 'title')] })}
+      >
+        <PlusIcon aria-hidden className="size-[14px]" />
+        添加筛选条件
+      </button>
+      <button
+        type="button"
+        className="fsdb-query-add"
+        onClick={() => onChange({ ...group, children: [...group.children, emptyFilterGroup()] })}
+      >
+        <PlusIcon aria-hidden className="size-[14px]" />
+        添加筛选分组
+      </button>
     </div>
   )
 }
