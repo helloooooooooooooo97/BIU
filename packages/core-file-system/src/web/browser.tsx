@@ -3048,7 +3048,10 @@ export function CollectionBrowser({
       ...forced,
     ]
     const listed = rankListedViews(
-      listedViews(path, incoming).map((view) => withViewDisplay(path, view)),
+      listedViews(path, incoming).map((view) => {
+        const painted = withViewDisplay(path, view)
+        return Number.isFinite(Number(view.rank)) ? { ...painted, rank: Math.round(Number(view.rank)) } : painted
+      }),
       incoming,
     )
     for (const view of listed) {
@@ -3084,7 +3087,8 @@ export function CollectionBrowser({
   }
 
   function persistViewOrder(ids: string[]) {
-    const byId = new Map(views.map((view) => [view.id, view]))
+    const current = viewsRef.current
+    const byId = new Map(current.map((view) => [view.id, view]))
     const ranked: SavedView[] = []
     ids.forEach((id, rank) => {
       const view = byId.get(id)
@@ -3092,13 +3096,21 @@ export function CollectionBrowser({
       ranked.push({ ...view, rank })
       byId.delete(id)
     })
-    for (const view of views) {
+    for (const view of current) {
       if (byId.has(view.id)) ranked.push(view)
     }
-    for (const view of ranked) {
-      if (view.builtin) persistViewDisplay(collectionPath, view.id, { rank: view.rank })
-    }
-    void persistViews(ranked)
+    const next = rankListedViews(ranked, ranked)
+    for (const view of next) persistViewDisplay(collectionPath, view.id, { rank: view.rank })
+    viewsRef.current = next
+    setViews(next)
+    rememberViews(collectionPath, next)
+    void persistViews(next).then((ok) => {
+      if (ok || viewsRef.current !== next) return
+      for (const view of current) persistViewDisplay(collectionPath, view.id, { rank: view.rank })
+      viewsRef.current = current
+      setViews(current)
+      rememberViews(collectionPath, current)
+    })
   }
 
   function persistViewsWith(

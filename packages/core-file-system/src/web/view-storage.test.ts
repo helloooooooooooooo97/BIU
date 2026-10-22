@@ -95,6 +95,36 @@ test('builtin view wrap is stored as display prefs and restored', () => {
   assert.equal(viewForPath(path)?.wrap, true)
 })
 
+test('withViewDisplay keeps an explicit rank over a stale overlay', () => {
+  const mem: Record<string, string> = {}
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => mem[key] ?? null,
+      setItem: (key: string, value: string) => {
+        mem[key] = value
+      },
+      removeItem: (key: string) => {
+        delete mem[key]
+      },
+    },
+  })
+  const path = '/sessions'
+  persistViewDisplay(path, 'mine', { rank: 0, wrap: true })
+  const painted = withViewDisplay(path, {
+    id: 'mine',
+    name: '我的',
+    mode: 'table',
+    sortField: 'title',
+    sortDir: 'asc',
+    filters: {},
+    columns: [],
+    rank: 2,
+  })
+  assert.equal(painted.rank, 2)
+  assert.equal(painted.wrap, true)
+})
+
 test('builtin view columns overlay survives withViewDisplay', () => {
   const mem: Record<string, string> = {}
   Object.defineProperty(globalThis, 'localStorage', {
