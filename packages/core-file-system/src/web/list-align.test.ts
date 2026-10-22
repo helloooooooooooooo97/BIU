@@ -113,6 +113,8 @@ test('list and detail share the chat column max width with side padding', () => 
   assert.match(css, /\.fsdb-checkrow\.is-on \.fsdb-checkrow-icon[\s\S]*?color:var\(--dsw-icon-active\)/)
   assert.match(css, /\.tasks-sort-head\{[^}]*font-weight:500/)
   assert.match(css, /\.tasks-sort-head\{[^}]*color:var\(--dsw-sidebar-fg\)/)
+  assert.match(css, /\.tasks-sort-search\{[^}]*background:var\(--dsw-input\)/)
+  assert.match(css, /\.tasks-sort-list\{[^}]*flex-direction:column/)
   assert.match(css, /html:not\(\.dark\) \.tasks-viewdd-menu[\s\S]*color:\s*#5f5e5a/)
   assert.match(css, /html:not\(\.dark\) \.fsdb-query-menu svg[\s\S]*color:\s*#91918e/)
   assert.doesNotMatch(css, /\.fsdb-checkrow\.is-on\{[^}]*font-weight:650/)

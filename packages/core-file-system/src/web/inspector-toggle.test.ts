@@ -264,7 +264,7 @@ test('table title opens record from the title-side button', () => {
   assert.match(browser, /tasks-tree-toggle is-empty/)
   assert.match(browser, /hasTreeLinks\(items, parentKey\)/)
   assert.match(browser, /const treeOn = treeable && showTree/)
-  assert.match(browser, /\{parentKey \?/)
+  assert.match(browser, /parentKey && flyoutQueryMatch/)
   assert.doesNotMatch(browser, /\{treeable \?/)
   assert.match(browser, /const tree = openDetail && treeOn/)
   assert.match(browser, /openRow\(row\)/)
@@ -1129,6 +1129,8 @@ test('missing sort field falls back to updatedAt, then title', () => {
   assert.match(editor, /添加筛选条件/)
   assert.match(editor, /添加筛选分组/)
   assert.match(editor, /emptyFilterGroup\(\)/)
+  assert.match(menus, /<FlyoutSearch/)
+  assert.doesNotMatch(menus, /tasks-sort-head/)
 })
 
 test('widget collection uses the grouped-rectangles glyph, not the plugin puzzle', () => {

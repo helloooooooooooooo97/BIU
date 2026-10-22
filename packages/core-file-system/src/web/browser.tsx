@@ -60,6 +60,7 @@ import {
 } from './fields.ts'
 import { listGroupedCollection } from './group-list.ts'
 import { AppDialog, CheckRow } from './controls.tsx'
+import { FlyoutEmpty, SearchableFlyout, flyoutQueryMatch } from './flyout-search.tsx'
 import { buildCrumbs, type CrumbTarget } from './sidebar-nav.ts'
 import { CrumbTrail } from './crumb-trail.tsx'
 import { fieldPickAttrs, pickDomAttrs, recordPickKind, recordSourcePath } from './pick-dom.ts'
@@ -4886,9 +4887,14 @@ export function CollectionBrowser({
               </button>
               {modeMenuOpen ? (
                 <HeadlessDismiss onDismiss={() => setModeMenuOpen(false)} insideRef={modeRef}>
-                <div className="tasks-sort-menu" role="menu">
-                  <div className="tasks-sort-head">查看模式</div>
-                  {VIEW_MODES.map((opt) => (
+                <SearchableFlyout className="tasks-sort-menu">
+                  {(q) => {
+                    const modes = VIEW_MODES.filter((opt) => flyoutQueryMatch(opt.label, q))
+                    const views = extraViews.filter((opt) => flyoutQueryMatch(opt.label, q))
+                    const rows = extraRows.filter((opt) => flyoutQueryMatch(opt.label, q))
+                    return (
+                      <>
+                  {modes.map((opt) => (
                     <CheckRow
                       key={opt.id}
                       icon={<ModeGlyph id={opt.id} extra={extraViews} rows={extraRows} />}
@@ -4901,7 +4907,7 @@ export function CollectionBrowser({
                       }}
                     />
                   ))}
-                  {extraViews.map((opt) => (
+                  {views.map((opt) => (
                     <CheckRow
                       key={opt.id}
                       icon={<ModeGlyph id={opt.id} extra={extraViews} rows={extraRows} />}
@@ -4914,7 +4920,7 @@ export function CollectionBrowser({
                       }}
                     />
                   ))}
-                  {extraRows.map((opt) => (
+                  {rows.map((opt) => (
                     <CheckRow
                       key={opt.id}
                       icon={<ModeGlyph id={opt.id} extra={extraViews} rows={extraRows} />}
@@ -4927,6 +4933,7 @@ export function CollectionBrowser({
                       }}
                     />
                   ))}
+                  {q.trim() && !modes.length && !views.length && !rows.length ? <FlyoutEmpty /> : null}
                   <button
                     type="button"
                     className="fsdb-mode-plus"
@@ -4941,7 +4948,10 @@ export function CollectionBrowser({
                     <PlusIcon aria-hidden className="size-[14px]" />
                     添加呈现方式
                   </button>
-                </div>
+                      </>
+                    )
+                  }}
+                </SearchableFlyout>
                 </HeadlessDismiss>
               ) : null}
             </div>
@@ -5013,8 +5023,13 @@ export function CollectionBrowser({
               </button>
               {groupOpen ? (
                 <HeadlessDismiss onDismiss={() => setGroupOpen(false)} insideRef={groupRef}>
-                <div className="tasks-sort-menu" role="menu">
-                  <div className="tasks-sort-head">分组依据</div>
+                <SearchableFlyout className="tasks-sort-menu">
+                  {(q) => {
+                    const none = flyoutQueryMatch('不分组', q)
+                    const hits = groupFields.filter((item) => flyoutQueryMatch(item.field.label ?? item.key, q))
+                    return (
+                      <>
+                  {none ? (
                   <CheckRow
                     icon={<Bars3BottomLeftIcon aria-hidden className="size-[14px]" />}
                     label="不分组"
@@ -5024,8 +5039,8 @@ export function CollectionBrowser({
                       setGroupOpen(false)
                     }}
                   />
-                  {groupFields.length ? (
-                    groupFields.map((item) => (
+                  ) : null}
+                  {hits.map((item) => (
                       <CheckRow
                         key={item.key}
                         icon={<FieldGlyph kind={item.kind} />}
@@ -5036,11 +5051,15 @@ export function CollectionBrowser({
                           setGroupOpen(false)
                         }}
                       />
-                    ))
-                  ) : (
+                    ))}
+                  {!q.trim() && !groupFields.length ? (
                     <div className="tasks-viewdd-empty">没有可分组字段</div>
-                  )}
-                </div>
+                  ) : null}
+                  {q.trim() && !none && !hits.length ? <FlyoutEmpty /> : null}
+                      </>
+                    )
+                  }}
+                </SearchableFlyout>
                 </HeadlessDismiss>
               ) : null}
             </div>
@@ -5068,8 +5087,8 @@ export function CollectionBrowser({
                     )
                   }
                 >
-                <div className="tasks-sort-menu fsdb-col-menu" role="menu">
-                  <div className="tasks-sort-head">可见列</div>
+                <SearchableFlyout className="tasks-sort-menu fsdb-col-menu">
+                  {(q) => (
                   <div className="fsdb-col-menu-list">
                   <Suspense fallback={null}>
                     <ColumnOrderMenu
@@ -5077,12 +5096,14 @@ export function CollectionBrowser({
                       allColumns={allColumns}
                       labelField={schema?.labelField}
                       facetCatalog={facetCatalog}
+                      query={q}
                       onToggle={toggleColumn}
                       onReorder={setVisibleColumns}
                     />
                   </Suspense>
                   </div>
-                </div>
+                  )}
+                </SearchableFlyout>
                 </HeadlessDismiss>
               ) : null}
             </div>
@@ -5099,21 +5120,30 @@ export function CollectionBrowser({
               </button>
               {configOpen ? (
                 <HeadlessDismiss onDismiss={() => setConfigOpen(false)} insideRef={configRef}>
-                <div className="tasks-filter-menu" role="menu">
-                  <div className="tasks-sort-head">表格显示</div>
+                <SearchableFlyout className="tasks-filter-menu">
+                  {(q) => {
+                    const wrap = flyoutQueryMatch('单元格换行', q)
+                    const trunc = flyoutQueryMatch('文本缩略', q)
+                    const tree = parentKey && flyoutQueryMatch('树形展示', q)
+                    return (
+                      <>
+                  {wrap ? (
                   <CheckRow
                     icon={<Bars3BottomLeftIcon aria-hidden className="size-[14px]" />}
                     label="单元格换行"
                     on={wrapCells}
                     onToggle={() => setWrap(!wrapCells)}
                   />
+                  ) : null}
+                  {trunc ? (
                   <CheckRow
                     icon={<EllipsisHorizontalIcon aria-hidden className="size-[14px]" />}
                     label="文本缩略"
                     on={truncateCells}
                     onToggle={() => setTruncate(!truncateCells)}
                   />
-                  {parentKey ? (
+                  ) : null}
+                  {tree ? (
                     <CheckRow
                       icon={<ChevronRightIcon aria-hidden className="size-[14px]" />}
                       label="树形展示"
@@ -5121,7 +5151,11 @@ export function CollectionBrowser({
                       onToggle={() => setTree(!showTree)}
                     />
                   ) : null}
-                </div>
+                  {q.trim() && !wrap && !trunc && !tree ? <FlyoutEmpty /> : null}
+                      </>
+                    )
+                  }}
+                </SearchableFlyout>
                 </HeadlessDismiss>
               ) : null}
             </div>
