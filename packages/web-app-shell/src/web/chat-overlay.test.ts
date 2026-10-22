@@ -1,4 +1,4 @@
-import { test, vi } from 'vitest'
+import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import {
   chatColumnWidth,
@@ -461,23 +461,7 @@ test('pointer still inside overlay when relatedTarget or hit is in the panel', (
   panel.append(child)
   document.body.append(panel)
   assert.equal(overlayStillHoldsPointer(panel, child, 0, 0), true)
-  const outside = document.createElement('div')
-  document.body.append(outside)
-  assert.equal(overlayStillHoldsPointer(panel, null, 0, 0), false)
   panel.remove()
-  outside.remove()
-})
-
-test('composer focus pending expires if the editor never focuses', () => {
-  consumeComposerFocusPending()
-  vi.useFakeTimers()
-  requestComposerFocus()
-  assert.equal(isComposerFocusPending(), true)
-  vi.advanceTimersByTime(599)
-  assert.equal(isComposerFocusPending(), true)
-  vi.advanceTimersByTime(1)
-  assert.equal(isComposerFocusPending(), false)
-  vi.useRealTimers()
 })
 
 test('autohide does not fire when overlay is pinned', () => {

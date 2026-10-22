@@ -3,6 +3,7 @@ import { ChatPane } from '@biu/public-ui/chat-pane'
 import {
   closeChatOverlay,
   getOverlayThread,
+  isComposerFocusPending,
   overlayLayoutGeom,
   overlayStillHoldsPointer,
   OVERLAY_OUTSIDE_KEEP,
@@ -69,14 +70,9 @@ export function OverlayChatWindow({
   }, [bringFront])
 
   useEffect(() => {
-    let verify = 0
+    const wake = () => setComposerFocused(true)
     const syncFocus = () => {
-      setComposerFocused(overlayHoldsFocus(boxRef.current, document.activeElement))
-    }
-    const wake = () => {
-      setComposerFocused(true)
-      window.clearTimeout(verify)
-      verify = window.setTimeout(syncFocus, 400)
+      setComposerFocused(overlayHoldsFocus(boxRef.current, document.activeElement) || isComposerFocusPending())
     }
     const onFocusIn = (event: FocusEvent) => {
       if (overlayHoldsFocus(boxRef.current, event.target)) setComposerFocused(true)
@@ -84,30 +80,21 @@ export function OverlayChatWindow({
     const onFocusOut = () => {
       window.requestAnimationFrame(syncFocus)
     }
-    const onWinBlur = () => {
-      setComposerFocused(false)
-    }
     window.addEventListener('biu:composer-focus', wake)
-    window.addEventListener('blur', onWinBlur)
     document.addEventListener('focusin', onFocusIn)
     document.addEventListener('focusout', onFocusOut)
     const boot = window.setTimeout(syncFocus, 200)
     return () => {
       window.removeEventListener('biu:composer-focus', wake)
-      window.removeEventListener('blur', onWinBlur)
       document.removeEventListener('focusin', onFocusIn)
       document.removeEventListener('focusout', onFocusOut)
       window.clearTimeout(boot)
-      window.clearTimeout(verify)
     }
   }, [])
 
   useEffect(() => {
     const onOutside = (event: PointerEvent) => {
-      const target = event.target
-      if (target instanceof Node && boxRef.current?.contains(target)) return
-      setPointerInside(false)
-      if (!shouldCloseOverlayOnOutside(target)) return
+      if (!shouldCloseOverlayOnOutside(event.target)) return
       closeChatOverlay()
     }
     document.addEventListener('pointerdown', onOutside)

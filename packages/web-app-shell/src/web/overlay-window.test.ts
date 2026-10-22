@@ -110,66 +110,6 @@ test('idle overlay dims when composer is not focused', () => {
   vi.useRealTimers()
 })
 
-test('composer-focus wake does not keep overlay opaque if editor never focuses', () => {
-  vi.useFakeTimers()
-  host = document.createElement('div')
-  document.body.append(host)
-  root = createRoot(host)
-  setChatOverlay(true)
-  act(() => {
-    root!.render(
-      createElement(OverlayChatWindow, {
-        header: createElement('div'),
-        thread: createElement('div'),
-        dock: createElement('div'),
-      }),
-    )
-  })
-  const panel = document.querySelector('[data-testid="chat-overlay-panel"]') as HTMLElement
-  act(() => {
-    vi.advanceTimersByTime(200)
-  })
-  assert.equal(panel.classList.contains('is-dimmed'), true)
-  act(() => {
-    window.dispatchEvent(new Event('biu:composer-focus'))
-  })
-  assert.equal(panel.classList.contains('is-dimmed'), false)
-  act(() => {
-    vi.advanceTimersByTime(400)
-  })
-  assert.equal(panel.classList.contains('is-dimmed'), true)
-  vi.useRealTimers()
-})
-
-test('pointer leaving the window lets the overlay dim', () => {
-  vi.useFakeTimers()
-  host = document.createElement('div')
-  document.body.append(host)
-  root = createRoot(host)
-  setChatOverlay(true)
-  act(() => {
-    root!.render(
-      createElement(OverlayChatWindow, {
-        header: createElement('div'),
-        thread: createElement('div'),
-        dock: createElement('div'),
-      }),
-    )
-  })
-  const panel = document.querySelector('[data-testid="chat-overlay-panel"]') as HTMLElement
-  act(() => {
-    vi.advanceTimersByTime(200)
-    panel.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }))
-  })
-  assert.equal(panel.classList.contains('is-dimmed'), false)
-  act(() => {
-    panel.dispatchEvent(new PointerEvent('pointerout', { bubbles: true, relatedTarget: null, clientX: 10, clientY: 10 }))
-    vi.advanceTimersByTime(120)
-  })
-  assert.equal(panel.classList.contains('is-dimmed'), true)
-  vi.useRealTimers()
-})
-
 test('overlay header close button has no layout control beside it', () => {
   host = document.createElement('div')
   document.body.append(host)
