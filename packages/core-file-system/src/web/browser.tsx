@@ -811,15 +811,26 @@ function collectionFromAppUrl(url: string): { collection: string; viewId: string
 
 const SHARE_SCOPE_ORDER = ['私人', '空间', '共享']
 
-function createdRowGroupKey(row: DbRecord, groupBy: string, schema?: CollectionSchema) {
+function createdRowGroupKey(
+  row: DbRecord,
+  groupBy: string,
+  schema?: CollectionSchema,
+  packs: CollectionSchemaPack[] = [],
+) {
   if (!groupBy) return ''
-  return groupRowBucketKeys(row, groupBy, schema)[0] ?? ''
+  return groupRowBucketKeys(row, groupBy, schema, packs)[0] ?? ''
 }
 
-function placeCreatedRow(groups: GroupBucket[], row: DbRecord, groupBy: string) {
+function placeCreatedRow(
+  groups: GroupBucket[],
+  row: DbRecord,
+  groupBy: string,
+  schema?: CollectionSchema,
+  packs: CollectionSchemaPack[] = [],
+) {
   if (!groups.length) return groups
   if (groups.some((group) => group.rows.some((item) => item.id === row.id))) return groups
-  const key = createdRowGroupKey(row, groupBy)
+  const key = createdRowGroupKey(row, groupBy, schema, packs)
   const index = groups.findIndex((group) => group.key === key || group.label === key)
   if (index >= 0) {
     return groups.map((group, i) =>
@@ -843,10 +854,56 @@ function placeCreatedRow(groups: GroupBucket[], row: DbRecord, groupBy: string) 
   return [bucket, ...groups]
 }
 
+/** 分组字段改了就把行挪到新桶，不要等整表 reload。 */
+function remapGroupedRecords(
+  groups: GroupBucket[],
+  map: (row: DbRecord) => DbRecord,
+  groupBy: string,
+  schema?: CollectionSchema,
+  packs: CollectionSchemaPack[] = [],
+) {
+  if (!groups.length) return groups
+  if (!groupBy) {
+    return groups.map((group) => ({ ...group, rows: group.rows.map(map) }))
+  }
+  const relocated: DbRecord[] = []
+  const seen = new Set<string>()
+  const next = groups.map((group) => {
+    let dropped = 0
+    const rows: DbRecord[] = []
+    for (const row of group.rows) {
+      const mapped = map(row)
+      const keys = groupRowBucketKeys(mapped, groupBy, schema, packs)
+      const stays = keys.includes(group.key) || keys.includes(group.label)
+      if (stays) {
+        rows.push(mapped)
+        continue
+      }
+      dropped += 1
+      const id = String(mapped.id)
+      if (!seen.has(id)) {
+        seen.add(id)
+        relocated.push(mapped)
+      }
+    }
+    if (!dropped) {
+      return rows.every((row, index) => row === group.rows[index]) ? group : { ...group, rows }
+    }
+    return {
+      ...group,
+      rows,
+      total: group.total != null ? Math.max(0, group.total - dropped) : undefined,
+    }
+  })
+  let buckets = next.filter((group) => group.rows.length > 0 || (group.total ?? 0) > 0)
+  for (const row of relocated) buckets = placeCreatedRow(buckets, row, groupBy, schema, packs)
+  return buckets
+}
+
 const LISTED_MUTATION_EVENT = 'fsdb:list-mutation'
 
 type ListedMutation =
-  | { path: string; op: 'patch'; row: DbRecord }
+  | { path: string; op: 'patch'; row: DbRecord; groupBy?: string }
   | { path: string; op: 'create'; row: DbRecord; groupBy?: string; viewId?: string | null; total?: number }
   | { path: string; op: 'remove'; ids: string[]; viewId?: string | null; total?: number }
 
@@ -854,7 +911,7 @@ function overlayListedRow(row: DbRecord, next: DbRecord): DbRecord {
   return { ...row, ...next, banner: next.banner ?? row.banner ?? null }
 }
 
-function patchListCacheRecords(path: string, map: (row: DbRecord) => DbRecord) {
+function patchListCacheRecords(path: string, map: (row: DbRecord) => DbRecord, groupBy?: string) {
   for (const key of [...listCache.keys()]) {
     if (key !== path && !key.startsWith(`${path}\0`)) continue
     const snap = listCache.get(key)
@@ -862,10 +919,14 @@ function patchListCacheRecords(path: string, map: (row: DbRecord) => DbRecord) {
     listCache.set(key, {
       ...snap,
       items: snap.items.map((row) => map(row) as (typeof snap.items)[number]),
-      groupBuckets: snap.groupBuckets?.map((group) => ({
-        ...group,
-        rows: group.rows.map(map),
-      })),
+      groupBuckets: snap.groupBuckets
+        ? groupBy
+          ? remapGroupedRecords(snap.groupBuckets, map, groupBy)
+          : snap.groupBuckets.map((group) => ({
+              ...group,
+              rows: group.rows.map(map),
+            }))
+        : snap.groupBuckets,
     })
   }
 }
@@ -990,8 +1051,10 @@ function listedCrumbRow(row: DbRecord) {
 
 function publishListedMutation(mutation: ListedMutation) {
   if (mutation.op === 'patch') {
-    patchListCacheRecords(mutation.path, (row) =>
-      row.id === mutation.row.id ? overlayListedRow(row, mutation.row) : row,
+    patchListCacheRecords(
+      mutation.path,
+      (row) => (row.id === mutation.row.id ? overlayListedRow(row, mutation.row) : row),
+      mutation.groupBy,
     )
     applyListedCrumbMutation(mutation.path, { op: 'patch', row: listedCrumbRow(mutation.row) })
   } else if (mutation.op === 'remove') {
@@ -3529,12 +3592,11 @@ export function CollectionBrowser({
       if (!same) itemsRef.current = next
       return same ? prev : next
     })
-    setGroupBuckets((prev) =>
-      prev.map((group) => ({
-        ...group,
-        rows: group.rows.map((row) => map(row)),
-      })),
-    )
+    setGroupBuckets((prev) => {
+      const next = remapGroupedRecords(prev, map, groupByRef.current, schemaRef.current, facetCatalog)
+      groupBucketsRef.current = next
+      return next
+    })
   }
 
   function dropListedRecords(ids: string[]) {
@@ -3695,10 +3757,9 @@ export function CollectionBrowser({
         const merge = (item: DbRecord) => (item.id === next.id ? overlayListedRow(item, next) : item)
         mapListedRecords(merge)
         setDetailRow((prev) => (prev?.id === next.id ? overlayListedRow(prev, next) : prev))
-        publishListedMutation({ path: dataPath, op: 'patch', row: next })
+        publishListedMutation({ path: dataPath, op: 'patch', row: next, groupBy })
         announceListChange(true)
-        quietUntil.current = 0
-        void reloadRef.current({ force: true })
+        quietUntil.current = Date.now() + 800
         return
       }
       quietUntil.current = 0
