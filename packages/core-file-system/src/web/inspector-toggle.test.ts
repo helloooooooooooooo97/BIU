@@ -659,6 +659,8 @@ test('create record sits at the right of the toolbar with a blue label', () => {
   assert.match(browser, /getOptions=\{\(\) => uniqueValues/)
   assert.match(browser, /tableWindow\.start, tableWindow\.end/)
   assert.match(css, /\.fsdb-page \.tasks-table tr\.fsdb-table-pad td/)
+  assert.match(css, /tr\.fsdb-table-pad td[^}]*font-size:0/)
+  assert.match(browser, /className="fsdb-table-pad"[\s\S]*style=\{\{ height: px \}\}/)
   assert.match(browser, /markCellOn/)
   assert.match(browser, /<TableBody/)
   assert.match(browser, /nodes=\{held\?\.nodes \?\? tablePaintNodes\}/)
