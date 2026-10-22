@@ -30,6 +30,8 @@ test('share panel uses a compact settings section and custom toggles', () => {
   assert.match(src, /公开链接设置/)
   assert.match(src, /fsdb-share-toggle/)
   assert.match(css, /\.fsdb-share-panel\{[^}]*width:min\(380px/)
+  assert.match(css, /\.fsdb-share-panel\{[^}]*background:var\(--dsw-sidebar\)/)
+  assert.doesNotMatch(css, /\.fsdb-share-panel\{[^}]*background:var\(--dsw-surface/)
   assert.match(css, /\.fsdb-share-panel\.is-embedded\{position:static\}/)
   assert.match(css, /\.fsdb-share-toggle\.is-on/)
   assert.match(css, /\.fsdb-share-link-row/)
@@ -147,6 +149,18 @@ test('list permission column uses the same capsule and loads the chain on click'
   assert.match(browser, /fallback=\{<ShareRoleLabel label=\{props\.label\} \/>\}/)
   assert.match(browser, /if \(key === 'shareScope' \|\| key === 'shareRole'\) \{\s*return renderCell\(row, key, field, 'table'\)/)
   assert.match(browser, /localOnly=\{localKnown \? localData : null\}/)
+})
+
+test('builtin plugins keep shared ownership in the scope chain', () => {
+  const src = readFileSync(resolve(import.meta.dirname, './share-popover.tsx'), 'utf8')
+  const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
+  const detail = src.slice(src.indexOf('export function ShareScopeDetail'), src.indexOf('export function ShareRoleDetail'))
+  assert.match(detail, /builtin = false/)
+  assert.match(detail, /if \(builtin\) \{/)
+  assert.match(detail, /setScope\('shared'\)/)
+  assert.match(detail, /title: '内置插件'/)
+  assert.match(detail, /result: '共享'/)
+  assert.match(browser, /builtin=\{collectionPath === '\/plugins' && row\.builtin === true\}/)
 })
 
 test('list share column uses the same capsule and loads the chain on click', () => {

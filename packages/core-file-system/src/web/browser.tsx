@@ -3683,6 +3683,9 @@ export function CollectionBrowser({
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ path: `${dataPath}/${row.id}`, action: action.id }),
       })
+      if (action.id === 'start') {
+        window.dispatchEvent(new CustomEvent('biu:enable-page-block-plugin', { detail: { plugin: String(row.id) } }))
+      }
       announceListChange()
       quietUntil.current = 0
       await reload({ force: true })
@@ -4019,6 +4022,7 @@ export function CollectionBrowser({
           recordId={row.id}
           label={label}
           tableLabel={currentTable?.label}
+          builtin={collectionPath === '/plugins' && row.builtin === true}
           localOnly={localKnown ? localData : null}
         />
       )
