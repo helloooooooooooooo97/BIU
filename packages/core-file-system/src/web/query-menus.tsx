@@ -209,7 +209,7 @@ export function SortQueryMenu({
   const activeKind = fields.find((item) => item.key === active?.field)?.kind ?? 'string'
 
   return (
-    <div className="fsdb-tool-flyout fsdb-query-menu" role="menu">
+    <div className="fsdb-tool-flyout fsdb-query-menu is-sort" role="menu">
       {sorts.length ? (
         <DndContext
           sensors={sensors}

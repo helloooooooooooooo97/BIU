@@ -18,6 +18,7 @@ test('toolbar flyouts replace the title row with a search field', () => {
   assert.doesNotMatch(menus, /tasks-sort-head/)
   assert.doesNotMatch(menus, />排序</)
   assert.doesNotMatch(menus, />筛选</)
+  assert.match(menus, /fsdb-query-menu is-sort/)
   assert.match(menus, /添加排序/)
   assert.match(menus, /添加筛选条件/)
   assert.match(menus, /添加筛选分组/)
