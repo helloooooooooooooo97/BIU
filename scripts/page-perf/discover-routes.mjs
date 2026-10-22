@@ -57,6 +57,7 @@ export async function discoverLocalSpaceRoutes(apiJson) {
   const seedListed = await apiJson(`/api/db/list?${new URLSearchParams({ path: '/pages', limit: '5', q: '压测页', columns: 'id,title' })}`)
   const blockListed = await apiJson(`/api/db/list?${new URLSearchParams({ path: '/pages', limit: '5', q: '压测块页', columns: 'id,title' })}`)
   const heavyListed = await apiJson(`/api/db/list?${new URLSearchParams({ path: '/pages', limit: '5', q: '十插件', columns: 'id,title' })}`)
+  const allPluginsListed = await apiJson(`/api/db/list?${new URLSearchParams({ path: '/pages', limit: '5', q: '全插件页', columns: 'id,title' })}`)
   const denseViews = await apiJson(
     `/api/db/list?${new URLSearchParams({ path: '/views', limit: '20', q: '压测百行', columns: 'id,title,tablePath,viewId,pageSize,groupBy,wrap' })}`,
   )
@@ -173,6 +174,18 @@ export async function discoverLocalSpaceRoutes(apiJson) {
       kind: 'record',
       label: `记录 ${blockPage.title || blockPage.id}`,
       path: databaseRecordPath('/pages', blockPage.id),
+      interact: 'page',
+    })
+  }
+  const allPluginsPage = Array.isArray(allPluginsListed.items)
+    ? allPluginsListed.items.find((row) => String(row.title || '') === '全插件页')
+    : null
+  if (allPluginsPage?.id) {
+    retarget(routes, seen, {
+      id: 'page-all-plugins',
+      kind: 'record',
+      label: `记录 ${allPluginsPage.title || allPluginsPage.id}`,
+      path: databaseRecordPath('/pages', allPluginsPage.id),
       interact: 'page',
     })
   }
