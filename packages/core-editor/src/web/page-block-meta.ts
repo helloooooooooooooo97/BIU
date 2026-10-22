@@ -171,6 +171,22 @@ export function formatPageBlockFence(kind: string, plugin: string, data: Record<
   return `:::pageBlock ${meta}\n${JSON.stringify(body, null, 2)}\n:::`
 }
 
+/** 块 ↔ 源码的唯一读出口。id 在围栏头上，体再走 parsePageBlockData。 */
+export function readPageBlockFence(raw: string) {
+  const match = raw.trim().match(/^:::pageBlock(?:\s+\{([^}]*)\})?\s*\n([\s\S]*?)\n:::\s*$/)
+  const header = match?.[1] ?? ''
+  const body = match?.[2] ?? raw
+  const meta = parsePageBlockMeta(header || raw)
+  return {
+    kind: meta.kind,
+    plugin: meta.plugin,
+    id: meta.id,
+    extras: meta.extras,
+    body,
+    data: parsePageBlockData(meta.kind, body, meta.extras),
+  }
+}
+
 export function blockDataUnchanged(current: Record<string, unknown>, next: Record<string, unknown>) {
   if (current === next) return true
   const left = Object.keys(current)

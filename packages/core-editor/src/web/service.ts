@@ -124,7 +124,7 @@ export class PageEditorService extends Service {
     return [...this.extras]
   }
 
-  /** 登记一种新块（atom）。斜杠菜单可插入；View 画卡片。plugin 必须是插件自己的 id。 */
+  /** 往页面里插一块：只用这个。表的整页/行呈现走 databaseUi.registerView / registerRowView。 */
   registerBlock(spec: PageBlockSpec) {
     const plugin = String(spec.plugin ?? '').trim()
     if (!plugin) throw new Error('page block needs plugin id')

@@ -1,19 +1,10 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, type MouseEvent } from 'react'
+import { memo, useCallback, useEffect, useRef, type MouseEvent } from 'react'
 import type { NodeViewProps } from '@tiptap/react'
 import { NodeViewWrapper } from '@tiptap/react'
-import { PlayIcon } from '@heroicons/react/16/solid'
-import { RenderBoundary } from '@biu/public-ui'
-import { getPageEditor, usePageEditorVersion } from './service.ts'
-import {
-  ENABLE_PAGE_BLOCK_PLUGIN,
-  blockDataUnchanged,
-  formatPageBlockFence,
-  requestEnablePageBlockPlugin,
-  setPageBlockPluginPhase,
-  usePageBlockPluginPhase,
-  type PageBlockPluginPhase,
-} from './page-block-meta.ts'
-import { bindPageBlockPlugin } from './page-block-plugin-host.ts'
+import { blockDataUnchanged } from './page-block-meta.ts'
+import { PagePluginSurface, pagePluginHostAttrs, useBindPagePlugin, usePagePluginResolve } from './page-plugin-host.tsx'
+
+export { PageBlockMissing } from './page-plugin-host.tsx'
 
 function assetName(file: string) {
   return file.replace(/^assets\//, '')
@@ -38,51 +29,6 @@ async function copyPageAsset(from: string, to: string) {
   })
 }
 
-export function PageBlockMissing({
-  kind,
-  plugin,
-  data,
-  phase = 'idle',
-}: {
-  kind: string
-  plugin: string
-  data: Record<string, unknown>
-  phase?: PageBlockPluginPhase
-}) {
-  const source = formatPageBlockFence(kind, plugin, data)
-  const loading = phase === 'loading'
-  return (
-    <div className="page-block-missing" data-testid="page-block-missing" data-plugin-phase={phase}>
-      <div className="page-block-missing-head">
-        {plugin ? (
-          <code className="page-block-missing-id">{plugin}</code>
-        ) : (
-          <span className="page-block-missing-state">没有插件 id</span>
-        )}
-        {loading ? <span className="page-block-missing-state">正在加载</span> : null}
-        {plugin && !loading ? (
-          <button
-            type="button"
-            className="page-block-missing-enable"
-            data-testid="page-block-enable"
-            title="启用"
-            aria-label="启用"
-            onClick={(event) => {
-              event.preventDefault()
-              event.stopPropagation()
-              setPageBlockPluginPhase(plugin, 'idle')
-              requestEnablePageBlockPlugin(plugin, kind, { force: true })
-            }}
-          >
-            <PlayIcon aria-hidden className="page-block-missing-enable-icon" />
-          </button>
-        ) : null}
-      </div>
-      {loading ? null : <pre className="page-block-missing-source">{source}</pre>}
-    </div>
-  )
-}
-
 function samePageBlockProps(prev: NodeViewProps, next: NodeViewProps) {
   return (
     prev.node.attrs.kind === next.node.attrs.kind &&
@@ -94,18 +40,14 @@ function samePageBlockProps(prev: NodeViewProps, next: NodeViewProps) {
 }
 
 export const PageBlockView = memo(function PageBlockView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
-  usePageEditorVersion()
   const kind = String(node.attrs.kind ?? 'card')
   const plugin = String(node.attrs.plugin ?? '').trim()
   const data = (node.attrs.data && typeof node.attrs.data === 'object' ? node.attrs.data : {}) as Record<string, unknown>
-  const spec = getPageEditor()?.block(kind)
   const cloneFrom = typeof data.cloneFrom === 'string' ? data.cloneFrom : ''
   const file = typeof data.file === 'string' ? data.file : ''
   const blockId = String(node.attrs.id ?? '').trim()
-  const pickId = blockId || `${plugin || 'page-block'}:${kind}`
-  const pickLabel = spec?.label || kind
-  const View = spec?.View
-  const phase = usePageBlockPluginPhase(plugin)
+  const { spec, View, phase } = usePagePluginResolve(kind, plugin)
+  const hostRef = useBindPagePlugin(plugin)
   const dataRef = useRef(data)
   dataRef.current = data
   const updateAttributesRef = useRef(updateAttributes)
@@ -119,24 +61,6 @@ export const PageBlockView = memo(function PageBlockView({ node, updateAttribute
     if (blockDataUnchanged(current, next)) return
     updateAttributesRef.current({ data: next })
   }, [])
-  const hostRef = useRef<HTMLElement | null>(null)
-  const retriedReady = useRef(false)
-  useLayoutEffect(() => bindPageBlockPlugin(hostRef.current, plugin), [plugin])
-  useEffect(() => {
-    if (View) {
-      retriedReady.current = false
-      return
-    }
-    if (!plugin || phase === 'loading' || phase === 'failed') return
-    // start 先结束、web.js 后挂上时 phase 已是 ready，再请 ui-hub 拉一次入口。
-    if (phase === 'ready') {
-      if (retriedReady.current) return
-      retriedReady.current = true
-      window.dispatchEvent(new CustomEvent(ENABLE_PAGE_BLOCK_PLUGIN, { detail: { plugin, kind } }))
-      return
-    }
-    requestEnablePageBlockPlugin(plugin, kind)
-  }, [View, kind, phase, plugin])
 
   useEffect(() => {
     if (!cloneFrom || !file) return
@@ -148,7 +72,7 @@ export const PageBlockView = memo(function PageBlockView({ node, updateAttribute
     return () => {
       gone = true
     }
-  }, [cloneFrom, file])
+  }, [cloneFrom, file, update])
 
   const onMouseDown = (event: MouseEvent) => {
     if (!editor.isEditable || editor.isDestroyed) return
@@ -165,29 +89,26 @@ export const PageBlockView = memo(function PageBlockView({ node, updateAttribute
   return (
     <NodeViewWrapper
       ref={hostRef}
-      className="page-block"
-      data-page-block={kind}
-      data-page-block-plugin={plugin}
-      data-page-block-id={blockId || undefined}
-      data-page-block-capture=""
-      data-biu-plugin={plugin || undefined}
-      data-biu-kind="plugin"
-      data-biu-id={pickId}
-      data-biu-label={pickLabel}
+      {...pagePluginHostAttrs({
+        kind,
+        plugin,
+        blockId,
+        label: spec?.label || kind,
+        testId: `page-block-${kind}`,
+      })}
       contentEditable={false}
-      data-testid={`page-block-${kind}`}
       onMouseDown={onMouseDown}
     >
-      {cloneFrom ? (
-        <div className="page-block-missing">正在复制附件…</div>
-      ) : View ? (
-        // 文档里的插件块崩了只烂这一块，不该让整个应用白屏。
-        <RenderBoundary label={plugin || kind}>
-          <View data={data} update={update} writable />
-        </RenderBoundary>
-      ) : (
-        <PageBlockMissing kind={kind} plugin={plugin} data={data} phase={phase} />
-      )}
+      <PagePluginSurface
+        kind={kind}
+        plugin={plugin}
+        data={data}
+        update={update}
+        writable
+        View={View}
+        phase={phase}
+        pending={cloneFrom ? <div className="page-block-missing">正在复制附件…</div> : null}
+      />
     </NodeViewWrapper>
   )
 }, samePageBlockProps)
