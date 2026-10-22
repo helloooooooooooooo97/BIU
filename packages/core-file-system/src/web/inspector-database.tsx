@@ -232,7 +232,7 @@ export function DatabaseInspectorTab({
       data-testid="inspector-tab-database"
       data-pane={id}
       onClick={() => onActivate?.()}
-      title={crumbs.map((item) => item.label).join(' / ') || '数据'}
+      data-dock-tip={crumbs.map((item) => item.label).join(' / ') || '数据'}
     >
       {crumbs.length ? (
         <CrumbTrail

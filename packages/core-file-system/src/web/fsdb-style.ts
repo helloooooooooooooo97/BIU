@@ -11,6 +11,10 @@ const CSS = `
 .fsdb-crumb{display:inline-flex;min-width:0;align-items:center;gap:0}
 .fsdb-crumb-sep{flex:none;padding:0 8px;color:var(--dsw-sidebar-fg);opacity:.5;font-size:14px;font-weight:500}
 .fsdb-crumb-btn{display:inline-flex;min-width:0;max-width:180px;align-items:center;gap:6px;height:26px;border:0;border-radius:6px;background:transparent;padding:0 4px;color:var(--dsw-sidebar-fg-active);font-size:14px;font-weight:500;cursor:pointer}
+.fsdb-crumb-btn *,.fsdb-crumb-option *,.fsdb-crumb-create *{cursor:inherit}
+.fsdb-crumb-btn svg,.fsdb-crumb-option svg,.fsdb-crumb-create svg,.fsdb-record-mark svg{pointer-events:none}
+.fsdb-page .tasks-table .fsdb-cellselect-trigger *,.fsdb-page .tasks-table .db-cell-select-trigger *,.fsdb-page .tasks-table .db-cell-multi-box *,.fsdb-page .tasks-table .fsdb-boolbtn *,.fsdb-page .tasks-table .fsdb-scope-tag *,.fsdb-page .tasks-table .fsdb-action-tag *,.fsdb-page .tasks-table .biu-tag *,.fsdb-page .tasks-table .tasks-icon-btn *,.fsdb-page .tasks-table .tasks-title-open *,.fsdb-page .tasks-table .tasks-tree-toggle *{cursor:inherit}
+.fsdb-page .tasks-table svg{pointer-events:none}
 .fsdb-crumb-btn:hover,.fsdb-crumb-btn.is-open{background:var(--dsw-hover);color:var(--dsw-sidebar-fg-active)}
 .fsdb-crumb .fsdb-crumb-btn,.fsdb-crumb:last-child .fsdb-crumb-btn,.fsdb-crumb:last-child .fsdb-crumb-btn:hover,.fsdb-crumb:last-child .fsdb-crumb-btn.is-open{color:var(--dsw-sidebar-fg-active)}
 .fsdb-crumb-btn.is-open{anchor-name:--fsdb-crumb}
