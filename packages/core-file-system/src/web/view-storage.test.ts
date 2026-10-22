@@ -388,6 +388,27 @@ test('diffSavedViews upserts rank changes without removing other views', () => {
   assert.deepEqual(diff.remove, [])
 })
 
+test('remembering the new order first makes a rank-only patch look empty', () => {
+  const path = '/pages'
+  const a = {
+    id: 'a',
+    name: 'A',
+    mode: 'table' as const,
+    sortField: 'title',
+    sortDir: 'asc' as const,
+    filters: {},
+    columns: [] as string[],
+    rank: 0,
+  }
+  const b = { ...a, id: 'b', name: 'B', rank: 1 }
+  const moved = [{ ...b, rank: 0 }, { ...a, rank: 1 }]
+  rememberViews(path, [a, b])
+  const baseline = loadViews(path)
+  rememberViews(path, moved)
+  assert.deepEqual(diffSavedViews(loadViews(path), moved).upsert, [])
+  assert.deepEqual(diffSavedViews(baseline, moved).upsert?.map((view) => view.id).sort(), ['a', 'b'])
+})
+
 test('diffSavedViews upserts ids that were never in baseline', () => {
   const blank = {
     id: 'old',
