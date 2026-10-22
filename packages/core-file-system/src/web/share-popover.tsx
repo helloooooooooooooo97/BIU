@@ -608,12 +608,14 @@ export function ShareScopeDetail({
   recordId,
   label,
   tableLabel = '',
+  builtin = false,
   localOnly = false,
 }: {
   collection: string
   recordId: string
   label: string
   tableLabel?: string
+  builtin?: boolean
   /** null：还不知道是不是本机空间，先不要打协作接口。 */
   localOnly?: boolean | null
 }) {
@@ -630,6 +632,18 @@ export function ShareScopeDetail({
     if (localOnly == null) return
     if (!open) {
       setScope(scopeTone(label))
+      setError('')
+      return
+    }
+    if (builtin) {
+      setScope('shared')
+      setDirect([])
+      setChain([{
+        id: 'builtin',
+        title: '内置插件',
+        detail: '随产品提供，全员可见',
+        result: '共享',
+      }])
       setError('')
       return
     }
@@ -796,7 +810,7 @@ export function ShareScopeDetail({
     return () => {
       cancelled = true
     }
-  }, [open, collection, recordId, tableLabel, localOnly, label])
+  }, [open, collection, recordId, tableLabel, localOnly, label, builtin])
 
   return (
     <div className="fsdb-scope-detail" ref={wrapRef}>

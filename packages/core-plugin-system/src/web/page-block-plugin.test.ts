@@ -13,6 +13,7 @@ import {
   pageBlockPluginFromEvent,
   pluginRecordHref,
   refreshInstalledPageBlocks,
+  runningWindowPluginNeedsWeb,
   startStorePlugin,
 } from './page-block-plugin.ts'
 
@@ -145,6 +146,42 @@ test('refreshing installed page blocks lists headless web plugins and does not s
   assert.equal(filterSlashItems('').some((item) => item.id === 'arena-rogue'), false)
   assert.equal(filterSlashItems('').some((item) => item.id === 'headless-tool'), false)
   resetSlashCatalog()
+})
+
+test('running window plugins ask ui-hub for web.js, page blocks do not', () => {
+  assert.equal(runningWindowPluginNeedsWeb({
+    id: 'arena-rogue',
+    running: true,
+    hasWeb: true,
+    tags: ['game'],
+  }), true)
+  assert.equal(runningWindowPluginNeedsWeb({
+    id: 'page-excalidraw',
+    running: true,
+    hasWeb: true,
+    tags: ['page', 'excalidraw'],
+  }), false)
+  assert.equal(runningWindowPluginNeedsWeb({
+    id: 'page-toc',
+    running: true,
+    hasWeb: true,
+    headless: true,
+    tags: ['page'],
+  }), false)
+  assert.equal(runningWindowPluginNeedsWeb({
+    id: 'arena-rogue',
+    running: false,
+    hasWeb: true,
+    tags: ['game'],
+  }), false)
+  const src = readFileSync(resolve(import.meta.dirname, './page-block-plugin.ts'), 'utf8')
+  const web = readFileSync(resolve(import.meta.dirname, './index.tsx'), 'utf8')
+  const browser = readFileSync(resolve(process.cwd(), 'packages/core-file-system/src/web/browser.tsx'), 'utf8')
+  assert.match(src, /export function watchRunningWindowPlugins/)
+  assert.match(src, /ENABLE_PAGE_BLOCK_PLUGIN/)
+  assert.match(web, /watchRunningWindowPlugins\(\)/)
+  assert.match(browser, /action\.id === 'start'/)
+  assert.match(browser, /biu:enable-page-block-plugin/)
 })
 
 test('installed page-block watcher never starts plugins', () => {

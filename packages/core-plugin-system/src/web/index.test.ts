@@ -50,6 +50,7 @@ test('plugin system web declares extras so store plugins can mount windows', asy
   const { resolve } = await import('node:path')
   assert.match(readFileSync(resolve(import.meta.dirname, './index.tsx'), 'utf8'), /listenEnablePageBlockPlugin/)
   assert.match(readFileSync(resolve(import.meta.dirname, './index.tsx'), 'utf8'), /watchInstalledPageBlocks/)
+  assert.match(readFileSync(resolve(import.meta.dirname, './index.tsx'), 'utf8'), /watchRunningWindowPlugins/)
 })
 
 test('plugin extras keep windows mounted when minimized', async () => {

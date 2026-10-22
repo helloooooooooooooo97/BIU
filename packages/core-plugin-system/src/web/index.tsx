@@ -6,7 +6,7 @@ import type { SlotProps } from '@biu/type-slots'
 import { XMarkIcon, MinusIcon, ArrowsPointingOutIcon, ArrowsPointingInIcon, Bars2Icon } from '@heroicons/react/16/solid'
 import type { DatabaseUi } from '@biu/type-file-system/ui'
 import { pluginsChrome } from './chrome.tsx'
-import { listenEnablePageBlockPlugin, watchInstalledPageBlocks } from './page-block-plugin.ts'
+import { listenEnablePageBlockPlugin, watchInstalledPageBlocks, watchRunningWindowPlugins } from './page-block-plugin.ts'
 import { PluginTrayPortal, type PluginTrayItem } from './plugin-tray.tsx'
 import {
   WIN_CHROME_H,
@@ -441,6 +441,7 @@ export function apply(ctx: Context) {
   ctx.effect(() => ui.decorate('/plugins', pluginsChrome).dispose)
   ctx.effect(() => listenEnablePageBlockPlugin())
   ctx.effect(() => watchInstalledPageBlocks())
+  ctx.effect(() => watchRunningWindowPlugins())
   slots.place('root-overlays', PluginExtrasLayer, {
     key: 'plugin-store-extras-layer',
     order: 20,
