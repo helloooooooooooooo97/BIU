@@ -196,6 +196,8 @@ describe('composer dock stacking above sticky user', () => {
     expect(css).toMatch(/\.chat-overlay-panel\.is-dimmed \.brand-corner-cluster\s*\{[^}]*position:\s*fixed/s)
     expect(css).toMatch(/\.chat-overlay-panel\.is-dimmed \.brand-corner-cluster\s*\{[^}]*right:\s*16px/s)
     expect(css).toMatch(/\.chat-overlay-panel\.is-dimmed \.brand-corner-cluster\s*\{[^}]*bottom:\s*16px/s)
+    expect(css).toMatch(/\.chat-overlay-panel\.is-dimmed \.brand-corner-mascot-btn\s*\{[^}]*width:\s*44px/s)
+    expect(css).toMatch(/\.chat-overlay-panel\.is-dimmed \.brand-corner-mascot-btn svg\s*\{[^}]*width:\s*36px/s)
     expect(css).not.toMatch(/\.chat-overlay-panel\.is-dimmed \.brand-corner-cluster::before/)
     expect(css).not.toMatch(/\.chat-overlay-panel\.is-dimmed \.brand-corner-mascot-btn::after/)
     expect(css).toMatch(/\.chat-overlay-panel\s*\{[^}]*transition:\s*opacity 160ms ease/s)
