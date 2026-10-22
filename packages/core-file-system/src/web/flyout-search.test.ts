@@ -23,6 +23,7 @@ test('toolbar flyouts replace the title row with a search field', () => {
   assert.match(menus, /emptyFilterRule\(item\.key\)/)
   assert.doesNotMatch(browser, /tasks-sort-head/)
   assert.match(browser, /<SearchableFlyout/)
+  assert.match(search, /fsdb-tool-flyout \$\{className\}/)
   assert.doesNotMatch(share, /tasks-sort-head/)
   assert.match(share, /<SearchableFlyout/)
   assert.match(columns, /query\?: string/)

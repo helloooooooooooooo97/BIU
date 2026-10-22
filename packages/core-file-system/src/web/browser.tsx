@@ -5557,11 +5557,11 @@ export function CollectionBrowser({
                       </button>
                       {bulkMenuOpen ? (
                         <HeadlessDismiss onDismiss={() => setBulkMenuOpen(false)} insideRef={bulkRef}>
-                          <div className="fsdb-bulk-menu" role="menu">
+                          <div className="fsdb-tool-flyout fsdb-bulk-menu" role="menu">
                             {canFacet ? (
                               <button
                                 type="button"
-                                className="tasks-sort-item"
+                                className="tasks-sort-item fsdb-tool-row"
                                 data-testid="fsdb-bulk-facet"
                                 onClick={() => {
                                   setBulkFacetIds([])
@@ -5577,7 +5577,7 @@ export function CollectionBrowser({
                             ) : null}
                             <button
                               type="button"
-                              className="tasks-sort-item"
+                              className="tasks-sort-item fsdb-tool-row"
                               data-testid="fsdb-bulk-export"
                               onClick={() => {
                                 void exportPicked()

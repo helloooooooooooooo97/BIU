@@ -213,7 +213,7 @@ export function SortQueryMenu({
   const activeKind = fields.find((item) => item.key === active?.field)?.kind ?? 'string'
 
   return (
-    <div className="fsdb-query-menu" role="menu">
+    <div className="fsdb-tool-flyout fsdb-query-menu" role="menu">
       <FlyoutSearch value={q} onChange={setQ} />
       <div className="tasks-sort-list">
       {sorts.length ? (
@@ -299,7 +299,7 @@ export function FilterQueryMenu({
   const [q, setQ] = useState('')
   const hits = fields.filter((item) => flyoutQueryMatch(item.field.label ?? item.key, q))
   return (
-    <div className="fsdb-query-menu is-filter" role="menu">
+    <div className="fsdb-tool-flyout fsdb-query-menu is-filter" role="menu">
       <FlyoutSearch value={q} onChange={setQ} />
       <div className="tasks-sort-list">
       <FilterGroupEditor

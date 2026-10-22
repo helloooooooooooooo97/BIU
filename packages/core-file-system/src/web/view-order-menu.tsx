@@ -53,7 +53,7 @@ function ViewRowShell({
       {grip}
       <button
         type="button"
-        className="tasks-viewdd-item-main"
+        className="tasks-viewdd-item-main fsdb-tool-row"
         onPointerEnter={() => onWarm?.(view)}
         onClick={() => onSelect(view)}
       >
@@ -144,8 +144,8 @@ export function ViewOrderMenu({
   const active = views.find((view) => view.id === activeId)
 
   return (
-    <div className="tasks-viewdd-menu" role="menu">
-      <div className="tasks-viewdd-head">视图</div>
+    <div className="fsdb-tool-flyout tasks-viewdd-menu" role="menu">
+      <div className="tasks-viewdd-head fsdb-tool-head">视图</div>
       {views.length === 0 ? <div className="tasks-viewdd-empty">还没有已保存的视图</div> : null}
       {views.length ? (
         <DndContext
@@ -200,7 +200,7 @@ export function ViewOrderMenu({
         </DndContext>
       ) : null}
       <div className="tasks-viewdd-foot">
-        <button type="button" className="tasks-viewdd-saveas" onClick={onAdd}>
+        <button type="button" className="tasks-viewdd-saveas fsdb-tool-row" onClick={onAdd}>
           <PlusIcon aria-hidden className="size-[14px]" />
           添加视图
         </button>

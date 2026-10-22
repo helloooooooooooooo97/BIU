@@ -55,7 +55,7 @@ export function SearchableFlyout({
 }) {
   const [q, setQ] = useState('')
   return (
-    <div className={className} role="menu">
+    <div className={`fsdb-tool-flyout ${className}`} role="menu">
       <FlyoutSearch value={q} onChange={setQ} />
       <div className="tasks-sort-list">{children(q)}</div>
     </div>

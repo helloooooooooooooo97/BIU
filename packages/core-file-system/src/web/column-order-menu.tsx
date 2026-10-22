@@ -48,7 +48,7 @@ function FacetColumnPackRow({
       trigger={
         <button
           type="button"
-          className={`fsdb-checkrow${anyOn || open ? ' is-on' : ''}`}
+          className={`fsdb-checkrow fsdb-tool-row${anyOn || open ? ' is-on' : ''}`}
           data-fsdb-col-facet-trigger
           aria-haspopup="menu"
           aria-expanded={open}
@@ -67,7 +67,7 @@ function FacetColumnPackRow({
       }
     >
       <div
-        className="fsdb-page fsdb-col-facet-flyout"
+        className="fsdb-page fsdb-col-facet-flyout fsdb-tool-flyout"
         data-fsdb-col-flyout
         role="menu"
         style={{ zIndex: overlayZ(280) }}
