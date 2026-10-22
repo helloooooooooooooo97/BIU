@@ -88,13 +88,6 @@ import { workspaceColumnsForLocation } from './workspace-columns.ts'
 import { PageBanner } from './page-banner.tsx'
 import { UiGlyph, ViewModeGlyph, idleTableIconKind } from './nav-glyphs.tsx'
 import { DATA_MODULE, isIndexCollection, isSystemCollection } from './database-path.ts'
-import {
-  availableViewTabSpace,
-  countFittingViewTabs,
-  leftClusterSiblingWidth,
-  splitVisibleViews,
-  viewTabsOverlapRight,
-} from './view-tabs.ts'
 import { ViewOrderMenu } from './view-order-menu.tsx'
 import { getDatabaseUi } from './database-ui.ts'
 import {
@@ -1436,79 +1429,6 @@ const WindowedTable = memo(function WindowedTable({
     </div>
   )
 })
-
-function ViewTabFit({
-  views,
-  toolbarRef,
-  toolbarRightRef,
-  searchExpanded,
-  children,
-}: {
-  views: SavedView[]
-  toolbarRef: RefObject<HTMLDivElement | null>
-  toolbarRightRef: RefObject<HTMLDivElement | null>
-  searchExpanded: boolean
-  children: (fit: number) => ReactNode
-}) {
-  const viewMeasureRef = useRef<HTMLDivElement>(null)
-  const [viewTabFit, setViewTabFit] = useState(99)
-  const measure = () => {
-    const toolbar = toolbarRef.current
-    const right = toolbarRightRef.current
-    const row = viewMeasureRef.current
-    const host = row?.parentElement
-    if (!toolbar || !right || !row || !host) return
-    const tabs = Array.from(row.querySelectorAll('[data-view-measure]')) as HTMLElement[]
-    const left = toolbar.querySelector('.tasks-toolbar-left')
-    const siblings = left ? leftClusterSiblingWidth(left, host) : 0
-    const rightBox = right.getBoundingClientRect()
-    const available = availableViewTabSpace(host.getBoundingClientRect().left, rightBox.left, siblings)
-    let next = countFittingViewTabs(tabs.map((el) => el.offsetWidth), available, 2)
-    if (left && viewTabsOverlapRight(left.getBoundingClientRect(), rightBox)) {
-      next = Math.min(next, 1)
-    }
-    if (next > 1) {
-      const visible = host.querySelectorAll('[data-testid="fsdb-view-tab"]')
-      for (const tab of visible) {
-        if (viewTabsOverlapRight(tab.getBoundingClientRect(), rightBox)) {
-          next = 1
-          break
-        }
-      }
-    }
-    setViewTabFit((prev) => (prev === next ? prev : next))
-  }
-  useLayoutEffect(() => {
-    measure()
-  }, [searchExpanded, toolbarRef, toolbarRightRef, views])
-  useEffect(() => {
-    const ro = new ResizeObserver(measure)
-    const host = viewMeasureRef.current?.parentElement
-    if (host) ro.observe(host)
-    if (toolbarRef.current) ro.observe(toolbarRef.current)
-    if (toolbarRightRef.current) ro.observe(toolbarRightRef.current)
-    window.addEventListener('resize', measure)
-    window.visualViewport?.addEventListener('resize', measure)
-    return () => {
-      ro.disconnect()
-      window.removeEventListener('resize', measure)
-      window.visualViewport?.removeEventListener('resize', measure)
-    }
-  }, [searchExpanded, toolbarRef, toolbarRightRef, views])
-  return (
-    <>
-      <div className="tasks-viewtabs-measure" ref={viewMeasureRef} aria-hidden>
-        {views.map((view) => (
-          <button key={view.id} type="button" className="tasks-viewdd-btn tasks-viewtab" tabIndex={-1} data-view-measure={view.id}>
-            <ViewModeGlyph mode={view.mode} />
-            <span className="tasks-viewdd-name">{view.name}</span>
-          </button>
-        ))}
-      </div>
-      {children(viewTabFit)}
-    </>
-  )
-}
 
 export function CollectionBrowser({
   moduleId,
@@ -4754,47 +4674,19 @@ export function CollectionBrowser({
           <div className="tasks-toolbar-left">
             {sheet ? null : (
             <div className="tasks-viewdd-wrap" ref={viewRef}>
-              <ViewTabFit views={views} toolbarRef={toolbarRef} toolbarRightRef={toolbarRightRef} searchExpanded={searchExpanded}>
-                {(viewTabFit) => (
-              <div className={`tasks-viewtabs${views.length && viewTabFit < views.length ? ' is-collapsed' : ''}`}>
-                {(views.length ? splitVisibleViews(views, viewTabFit, activeViewId ?? undefined).shown : []).map((view) => (
-                  <button
-                    key={view.id}
-                    type="button"
-                    className={`tasks-viewdd-btn tasks-viewtab${view.id === activeViewId ? ' is-active' : ''}${view.id === activeViewId && viewMenuOpen ? ' is-menu' : ''}`}
-                    data-testid="fsdb-view-tab"
-                    aria-pressed={view.id === activeViewId}
-                    aria-haspopup={view.id === activeViewId ? 'menu' : undefined}
-                    aria-expanded={view.id === activeViewId ? viewMenuOpen : undefined}
-                    onPointerEnter={() => {
-                      if (view.id === activeViewIdRef.current) return
-                      void warmListCacheForView(collectionPath, view, paintListedViews(collectionPath))
-                    }}
-                    onClick={() => {
-                      if (view.id === activeViewId) toggleMenu('view')
-                      else selectView(view)
-                    }}
-                  >
-                    <ViewModeGlyph mode={view.mode} />
-                    <span className="tasks-viewdd-name">{view.name}</span>
-                  </button>
-                ))}
-                {!views.length ? (
-                  <button
-                    type="button"
-                    className={`tasks-viewdd-btn tasks-viewtab is-active${viewMenuOpen ? ' is-menu' : ''}`}
-                    aria-haspopup="menu"
-                    aria-expanded={viewMenuOpen}
-                    data-testid="fsdb-view-tab"
-                    onClick={() => toggleMenu('view')}
-                  >
-                    <UiGlyph icon="squares" />
-                    <span className="tasks-viewdd-name">未保存</span>
-                  </button>
-                ) : null}
+              <div className="tasks-viewtabs">
+                <button
+                  type="button"
+                  className={`tasks-viewdd-btn tasks-viewtab is-active${viewMenuOpen ? ' is-menu' : ''}`}
+                  data-testid="fsdb-view-tab"
+                  aria-haspopup="menu"
+                  aria-expanded={viewMenuOpen}
+                  onClick={() => toggleMenu('view')}
+                >
+                  {activeView ? <ViewModeGlyph mode={activeView.mode} /> : <UiGlyph icon="squares" />}
+                  <span className="tasks-viewdd-name">{activeView?.name ?? '未保存'}</span>
+                </button>
               </div>
-                )}
-              </ViewTabFit>
               {viewMenuOpen ? (
                 <HeadlessDismiss
                   onDismiss={() => setViewMenuOpen(false)}
