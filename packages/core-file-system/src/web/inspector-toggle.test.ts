@@ -1129,7 +1129,7 @@ test('missing sort field falls back to updatedAt, then title', () => {
   assert.match(editor, /添加筛选条件/)
   assert.match(editor, /添加筛选分组/)
   assert.match(editor, /emptyFilterGroup\(\)/)
-  assert.match(menus, /<FlyoutSearch/)
+  assert.doesNotMatch(menus, /<FlyoutSearch/)
   assert.doesNotMatch(menus, /tasks-sort-head/)
 })
 
