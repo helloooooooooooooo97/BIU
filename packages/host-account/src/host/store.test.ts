@@ -78,10 +78,10 @@ test('an online instance seeds root as super admin with the default password', (
     assert.equal(collab.requiresPasswordChange(root.id), false)
     collab.changePassword(root.id, '123456', 'new-secret', root.token)
     assert.equal(collab.requiresPasswordChange(root.id), false)
-    assert.throws(() => collab.login('root', '123456'), /邮箱或密码不对/)
+    assert.throws(() => collab.login('root', '123456'), /密码不正确/)
     const db = (collab as unknown as { db: import('node:sqlite').DatabaseSync }).db
     const restarted = new CollabStore(db)
-    assert.throws(() => restarted.login('root', '123456'), /邮箱或密码不对/)
+    assert.throws(() => restarted.login('root', '123456'), /密码不正确/)
     assert.equal(restarted.login('root', 'new-secret').id, root.id)
   } finally {
     if (previous === undefined) delete process.env.BIU_ONLINE
@@ -382,7 +382,8 @@ test('login accepts the password set at register and rejects the rest', () => {
   assert.equal(collab.workspaceProfile(ada.id).name, '')
   collab.setActive(ada.id, workspaceId)
   assert.equal(collab.workspaceProfile(ada.id).name, '蓝团')
-  assert.throws(() => collab.login('ada@example.com', 'wrong'), CollabError)
+  assert.throws(() => collab.login('ada@example.com', 'wrong'), /密码不正确/)
+  assert.throws(() => collab.login('nobody@example.com', 'secret1'), /账号不存在/)
   assert.throws(() => collab.register('', Date.now(), 'secret2', 'ada@example.com'), CollabError)
   assert.throws(() => collab.register('', Date.now(), '123', 'short@example.com'), CollabError)
 })
