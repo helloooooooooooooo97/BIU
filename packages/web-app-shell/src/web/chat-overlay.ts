@@ -156,7 +156,6 @@ export function setChatOverlay(next: boolean) {
   overlay = next
   if (!next) {
     setOverlayAutohide(false)
-    setOverlayThread(false)
     notifyOverlayClosed()
   }
   emit()
@@ -268,8 +267,8 @@ export function openOverlayComposer(opts?: { revealThread?: boolean }) {
   const wasOpen = overlay
   setChatOverlay(true)
   setOverlayAutohide(false)
-  if (opts?.revealThread) setOverlayThread(true)
-  else if (!wasOpen) setOverlayThread(false)
+  if (opts?.revealThread === true) setOverlayThread(true)
+  else if (opts?.revealThread === false && !wasOpen) setOverlayThread(false)
   requestComposerFocus()
 }
 
@@ -277,9 +276,6 @@ export function revealOverlayThread() {
   if (!overlay) return
   setOverlayThread(true)
 }
-
-/** 单击小人只开输入框和操纵栏，等这一下确认不是双击。 */
-export const OVERLAY_MASCOT_CLICK_MS = 280
 
 export function overlayMascotTarget(target: EventTarget | null) {
   return target instanceof Element && Boolean(target.closest('[data-testid="brand-corner-mascot-toggle"]'))
