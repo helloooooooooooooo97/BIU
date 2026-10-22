@@ -3434,8 +3434,7 @@ select.settings-account-input {
 .chat-overlay-panel.is-dimmed .chat-dock-toolbar-end,
 .chat-overlay-panel.is-dimmed .chat-dock-toolbar-mid,
 .chat-overlay-panel.is-dimmed .chat-dock-toolbar-start > :not(.brand-corner-cluster) {
-  opacity: 0;
-  pointer-events: none;
+  display: none;
 }
 
 .chat-overlay-panel.is-dimmed .brand-corner-cluster {
