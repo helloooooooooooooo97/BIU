@@ -149,8 +149,7 @@ export function BoolCell({
       type="button"
       className="fsdb-boolbtn"
       aria-pressed={on}
-      aria-label={on ? '是' : '否'}
-      title={on ? '是，点击改为否' : '否，点击改为是'}
+      aria-label={on ? '是，点击改为否' : '否，点击改为是'}
       onClick={(event) => {
         event.stopPropagation()
         onToggle()

@@ -292,14 +292,14 @@ export function CrumbTrail({
             {index && !(lockRootCrumb && index === 1) ? <span className="fsdb-crumb-sep" aria-hidden>/</span> : null}
             <span className="fsdb-crumb-pick">
               {rootLocked ? (
-                <span className="fsdb-crumb-btn is-static" title={crumb.label} aria-label={crumb.label}>
+                <span className="fsdb-crumb-btn is-static" aria-label={crumb.label}>
                   {glyph}
                 </span>
               ) : (
               <button
                 type="button"
                 className={`fsdb-crumb-btn${open ? ' is-open' : ''}`}
-                title={crumb.label}
+                aria-label={crumb.label}
                 aria-haspopup={canPick ? 'menu' : undefined}
                 aria-expanded={canPick ? open : undefined}
                 onPointerDown={(event: PointerEvent<HTMLButtonElement>) => {
