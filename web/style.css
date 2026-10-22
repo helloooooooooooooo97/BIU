@@ -3445,15 +3445,15 @@ select.settings-account-input {
   pointer-events: auto;
 }
 
-.chat-overlay-panel.is-dimmed .brand-corner-mascot-btn,
-.chat-overlay-panel.is-dimmed .brand-corner-mascot-btn .sidebar-mascot,
-.chat-overlay-panel.is-dimmed .brand-corner-mascot-btn svg {
-  width: 44px !important;
-  height: 44px !important;
+.chat-overlay-panel.is-dimmed .brand-corner-mascot-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
 }
 
-.chat-overlay-panel.is-dimmed .brand-corner-mascot-btn {
-  border-radius: 12px;
+.chat-overlay-panel.is-dimmed .brand-corner-mascot-btn svg {
+  width: 36px;
+  height: 36px;
 }
 
 .chat-overlay-panel .chat-pane {
