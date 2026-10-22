@@ -2687,6 +2687,16 @@ select.settings-account-input {
   white-space: nowrap;
 }
 
+.inspector-tab *,
+.inspector-tab-main * {
+  cursor: inherit;
+}
+
+.inspector-tab svg,
+.inspector-crumb-close svg {
+  pointer-events: none;
+}
+
 .inspector-tab:hover {
   background: var(--dsw-hover);
   color: var(--dsw-sidebar-fg);

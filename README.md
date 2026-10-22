@@ -4,7 +4,7 @@
   <img src="public/favicon.svg" width="96" height="96" alt="Biu" />
 </p>
 
-# Biu Agent OS
+# BIU
 
 **English** · [简体中文](README.zh-CN.md)
 
@@ -724,8 +724,8 @@ biu
 ├── scripts/
 │   └── link-cordis-plugins.mjs
 ├── public/
-│   ├── favicon.svg            # brand mark (white square)
-│   ├── brand-lockup.svg       # README: BIU mark + Biu Agent OS tag
+│   ├── favicon.svg            # circular brand mark (same as site nav)
+│   ├── brand-lockup.svg       # README: circular mark + BIU
 │   ├── og-image.png           # share card (og:image), from scripts/build-brand-assets.tsx
 │   ├── mascot-blue.svg        # README mascots (BMW M palette)
 │   ├── mascot-violet.svg
@@ -795,7 +795,7 @@ Every `host-*` / `web-*` / `core-*` / `cap-*` package keeps its source under `sr
 
 ## License
 
-As of this version, **code and documentation original to the Biu Agent OS project** are licensed under the [Apache License 2.0](LICENSE):
+As of this version, **code and documentation original to the BIU project** are licensed under the [Apache License 2.0](LICENSE):
 
 - **Free to use, modify, distribute, and commercialize**, with no copyleft — it can be embedded in closed-source products, with no separate commercial license required.
 - **Patent grant:** contributors grant the patent licenses necessary to use their contributions; if you bring a patent suit over this work, that patent license terminates (Apache-2.0 §3).

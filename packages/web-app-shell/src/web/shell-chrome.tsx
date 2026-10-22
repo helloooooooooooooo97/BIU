@@ -1628,7 +1628,7 @@ export function ShellSettingsAbout() {
   return (
     <section data-testid="settings-about">
       <h3 className="settings-pane-title">关于</h3>
-      <p className="settings-pane-title" style={{ fontSize: 14, fontWeight: 600, margin: '18px 0 8px' }}>Biu Agent OS</p>
+      <p className="settings-pane-title" style={{ fontSize: 14, fontWeight: 600, margin: '18px 0 8px' }}>BIU</p>
       <p className="settings-muted m-0">Apache License 2.0。</p>
       <p className="settings-muted m-0" style={{ marginTop: 12 }}>
         public/grok-bot/ 角色素材归 xAI，不随 Apache-2.0 授权。详见 NOTICE.md。
