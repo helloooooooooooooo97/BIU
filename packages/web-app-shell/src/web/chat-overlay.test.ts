@@ -30,7 +30,6 @@ import {
   requestOverlayAutohide,
   overlayMascotTarget,
   overlayStillHoldsPointer,
-  OVERLAY_MASCOT_CLICK_MS,
   setOverlayResizing,
   setOverlayPinned,
   clampOverlayChatHeight,
@@ -294,7 +293,7 @@ test('pick opens a compose-only overlay; only the expand control reveals the thr
   toggleOverlayThread()
   assert.equal(getOverlayThread(), true)
   setChatOverlay(false)
-  assert.equal(getOverlayThread(), false)
+  assert.equal(getOverlayThread(), true)
 })
 
 test('toggleOverlayThread expands and collapses the overlay transcript', () => {
@@ -456,14 +455,29 @@ test('autohide requires leaving and not resizing', () => {
   assert.equal(getOverlayAutohide(), true)
 })
 
-test('overlay mascot target and click delay', () => {
+test('overlay mascot target', () => {
   const btn = document.createElement('button')
   btn.setAttribute('data-testid', 'brand-corner-mascot-toggle')
   const inner = document.createElement('span')
   btn.append(inner)
   assert.equal(overlayMascotTarget(inner), true)
   assert.equal(overlayMascotTarget(document.body), false)
-  assert.equal(OVERLAY_MASCOT_CLICK_MS, 280)
+})
+
+test('closing the overlay keeps the last thread expand state', () => {
+  history.replaceState(null, '', '/database')
+  setChatOverlay(true)
+  setOverlayThread(true)
+  setChatOverlay(false)
+  assert.equal(getOverlayThread(), true)
+  openOverlayComposer()
+  assert.equal(getChatOverlay(), true)
+  assert.equal(getOverlayThread(), true)
+  setOverlayThread(false)
+  setChatOverlay(false)
+  openOverlayComposer()
+  assert.equal(getOverlayThread(), false)
+  setChatOverlay(false)
 })
 
 test('pointer still inside overlay when relatedTarget or hit is in the panel', () => {
