@@ -291,7 +291,7 @@ function TableBar({ editor }: { editor: Editor }) {
 function PageEditorLoading() {
   return (
     <div className="page-editor page-editor-loading" data-testid="page-editor-loading" aria-busy="true" aria-live="polite">
-      <ArrowPathIcon className="page-editor-loading-icon" aria-hidden />
+      <ArrowPathIcon className="page-editor-loading-icon" width={22} height={22} aria-hidden />
       <span className="sr-only">正在加载正文</span>
     </div>
   )

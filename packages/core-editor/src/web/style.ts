@@ -3,7 +3,7 @@ import { TAG_TONE_ROSE } from '@biu/public-ui'
 export const PAGE_EDITOR_STYLE = `
 .page-editor{position:relative;overflow:visible;min-width:0;width:100%;padding:6px 0 48px;padding-left:0;color:var(--dsw-label);font-family:var(--font-sans);font-size:var(--fsdb-body-size,15px);line-height:var(--fsdb-body-leading,1.7);letter-spacing:-.003em}
 .page-editor-loading{display:flex;align-items:center;justify-content:center;min-height:120px;user-select:none;pointer-events:none}
-.page-editor-loading-icon{display:block;width:22px;height:22px;color:var(--dsw-icon);opacity:0;animation:page-editor-spin .7s linear infinite,page-editor-load-in 0s 150ms forwards}
+.page-editor-loading-icon,.page-editor-loading svg{display:block;flex:none;box-sizing:border-box;width:22px;height:22px;max-width:22px;max-height:22px;overflow:hidden;color:var(--dsw-icon);opacity:0;animation:page-editor-spin .7s linear infinite,page-editor-load-in 0s 150ms forwards}
 @keyframes page-editor-spin{to{transform:rotate(360deg)}}
 @keyframes page-editor-load-in{to{opacity:1}}
 .page-editor-failed{display:flex;flex-direction:column;align-items:flex-start;gap:10px;min-height:120px;padding:16px 0;color:var(--dsw-label-2);font-size:13px;user-select:none}
