@@ -3427,7 +3427,7 @@ select.settings-account-input {
 
 @media (hover: hover) and (pointer: fine) {
   .chat-overlay-panel.is-dimmed {
-    opacity: 0.1;
+    opacity: 0.35;
   }
 }
 
