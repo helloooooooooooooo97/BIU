@@ -86,6 +86,12 @@ test('rankListedViews assigns 0..n-1 and keeps previous order when merge prepend
   assert.deepEqual(rankListedViews([all, b, a], ranked).map((view) => view.id), ['a', 'b', 'all'])
 })
 
+test('rankListedViews can put a custom view before builtin', () => {
+  const all = normalizeSavedView({ ...base, id: 'all', name: '全部', builtin: true, rank: 1 })
+  const mine = normalizeSavedView({ ...base, id: 'mine', name: '我的', rank: 0 })
+  assert.deepEqual(rankListedViews([all, mine]).map((view) => view.id), ['mine', 'all'])
+})
+
 test('viewStateKey ignores name and treats missing query as empty', () => {
   const a = normalizeSavedView({ ...base, name: 'A', query: '' })
   const b = normalizeSavedView({ ...base, name: 'B' })

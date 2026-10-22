@@ -220,12 +220,20 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
   const location = useLocation()
 
   useEffect(() => {
-    const open = () => {
+    const openConfig = () => {
       setModelOpen(false)
       setConfigOpen(true)
     }
-    window.addEventListener('biu:open-model-config', open)
-    return () => window.removeEventListener('biu:open-model-config', open)
+    const openMenu = () => {
+      setConfigOpen(false)
+      setModelOpen(true)
+    }
+    window.addEventListener('biu:open-model-config', openConfig)
+    window.addEventListener('biu:open-model-menu', openMenu)
+    return () => {
+      window.removeEventListener('biu:open-model-config', openConfig)
+      window.removeEventListener('biu:open-model-menu', openMenu)
+    }
   }, [])
 
   function openModelConfig() {

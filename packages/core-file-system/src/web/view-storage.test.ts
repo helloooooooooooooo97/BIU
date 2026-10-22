@@ -95,7 +95,7 @@ test('builtin view wrap is stored as display prefs and restored', () => {
   assert.equal(viewForPath(path)?.wrap, true)
 })
 
-test('withViewDisplay keeps an explicit rank over a stale overlay', () => {
+test('withViewDisplay keeps overlay rank over a stale record rank', () => {
   const mem: Record<string, string> = {}
   Object.defineProperty(globalThis, 'localStorage', {
     configurable: true,
@@ -121,7 +121,7 @@ test('withViewDisplay keeps an explicit rank over a stale overlay', () => {
     columns: [],
     rank: 2,
   })
-  assert.equal(painted.rank, 2)
+  assert.equal(painted.rank, 0)
   assert.equal(painted.wrap, true)
 })
 
@@ -386,6 +386,27 @@ test('diffSavedViews upserts rank changes without removing other views', () => {
   const diff = diffSavedViews([a, b], moved)
   assert.deepEqual(diff.upsert?.map((view) => view.id).sort(), ['a', 'b'])
   assert.deepEqual(diff.remove, [])
+})
+
+test('remembering the new order first makes a rank-only patch look empty', () => {
+  const path = '/pages'
+  const a = {
+    id: 'a',
+    name: 'A',
+    mode: 'table' as const,
+    sortField: 'title',
+    sortDir: 'asc' as const,
+    filters: {},
+    columns: [] as string[],
+    rank: 0,
+  }
+  const b = { ...a, id: 'b', name: 'B', rank: 1 }
+  const moved = [{ ...b, rank: 0 }, { ...a, rank: 1 }]
+  rememberViews(path, [a, b])
+  const baseline = loadViews(path)
+  rememberViews(path, moved)
+  assert.deepEqual(diffSavedViews(loadViews(path), moved).upsert, [])
+  assert.deepEqual(diffSavedViews(baseline, moved).upsert?.map((view) => view.id).sort(), ['a', 'b'])
 })
 
 test('diffSavedViews upserts ids that were never in baseline', () => {

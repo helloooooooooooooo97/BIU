@@ -27,20 +27,16 @@ export function ChatConfigBanner(_props: SlotProps) {
   if (configured !== false) return null
 
   return (
-    <div
-      className="w-full border border-(--dsw-border) bg-(--dsw-input) px-4 py-2 text-xs text-(--dsw-label-2)"
-      style={{ borderRadius: 'var(--dsw-radius-bubble)' }}
-      role="status"
-    >
-      尚未配置 API Key：消息会本地回声，不会调用模型。点击输入框旁的{' '}
+    <div className="chat-config-banner" role="status">
+      尚未配置 API Key：消息会本地回声，不会调用模型。点击输入框里的{' '}
       <button
         type="button"
-        className="font-medium text-(--dsw-business) underline-offset-2 hover:underline"
-        onClick={() => window.dispatchEvent(new CustomEvent('biu:open-model-config'))}
+        className="chat-config-banner-action"
+        onClick={() => window.dispatchEvent(new CustomEvent('biu:open-model-menu'))}
       >
-        ＋ 配置模型
+        模型
       </button>
-      。
+      {' '}即可配置对应的 token。
     </div>
   )
 }

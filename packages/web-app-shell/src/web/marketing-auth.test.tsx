@@ -122,6 +122,13 @@ test('网络错误与后端错误区分提示（P0-14 #9）', async () => {
   fireEvent.click(screen.getByTestId('auth-submit'))
   await waitFor(() => assert.match(screen.getByTestId('auth-error').textContent ?? '', /密码不正确/))
   cleanup()
+
+  renderSite('/login', async () => { throw new Error('账号不存在') })
+  fireEvent.change(screen.getByTestId('auth-name'), { target: { value: 'missing@b.com' } })
+  fireEvent.change(screen.getByTestId('auth-password'), { target: { value: 'secret123' } })
+  fireEvent.click(screen.getByTestId('auth-submit'))
+  await waitFor(() => assert.match(screen.getByTestId('auth-error').textContent ?? '', /账号不存在/))
+  cleanup()
 })
 
 test('移动端有汉堡菜单按钮且可展开（P0-12）', () => {

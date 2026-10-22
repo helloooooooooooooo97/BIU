@@ -3151,6 +3151,9 @@ export function CollectionBrowser({
 
   function persistViewOrder(ids: string[]) {
     const current = viewsRef.current
+    // persistViewsFor 用 loadViews 当 baseline 算差异。先 rememberViews 的话
+    // baseline 已经是新顺序，patch 会 skipped，库里的 rank 永远不更新。
+    const baseline = loadViews(collectionPath)
     const byId = new Map(current.map((view) => [view.id, view]))
     const ranked: SavedView[] = []
     ids.forEach((id, rank) => {
@@ -3167,7 +3170,8 @@ export function CollectionBrowser({
     viewsRef.current = next
     setViews(next)
     rememberViews(collectionPath, next)
-    void persistViews(next).then((ok) => {
+    noteLocalSavedViewsWrite(collectionPath)
+    void persistViewsFor(collectionPath, next, { baseline }).then((ok) => {
       if (ok || viewsRef.current !== next) return
       for (const view of current) persistViewDisplay(collectionPath, view.id, { rank: view.rank })
       viewsRef.current = current

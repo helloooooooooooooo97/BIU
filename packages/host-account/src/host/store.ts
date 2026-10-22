@@ -217,8 +217,9 @@ export class CollabStore {
           must_change_password: number
         }
       | undefined
-    if (!row?.password_hash || !verifyPassword(password, row.password_hash)) {
-      throw new CollabError('邮箱或密码不对', 401)
+    if (!row) throw new CollabError('账号不存在', 401)
+    if (!row.password_hash || !verifyPassword(password, row.password_hash)) {
+      throw new CollabError('密码不正确', 401)
     }
     const session = this.openSession(row.id, deviceName.slice(0, 120))
     this.rememberPassword(row.id, password)

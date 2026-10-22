@@ -89,9 +89,12 @@ test('reorder paints the new order then rolls back if persist fails', () => {
   const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
   const start = browser.indexOf('function persistViewOrder')
   const body = browser.slice(start, browser.indexOf('function persistViewsWith', start))
-  assert.ok(body.indexOf('setViews(next)') < body.indexOf('void persistViews(next)'))
+  assert.match(body, /const baseline = loadViews\(collectionPath\)/)
+  assert.ok(body.indexOf('const baseline = loadViews(collectionPath)') < body.indexOf('rememberViews(collectionPath, next)'))
+  assert.ok(body.indexOf('setViews(next)') < body.indexOf('void persistViewsFor(collectionPath, next, { baseline })'))
+  assert.match(body, /noteLocalSavedViewsWrite\(collectionPath\)/)
   assert.match(body, /if \(ok \|\| viewsRef\.current !== next\) return/)
-  assert.ok(body.indexOf('void persistViews(next)') < body.indexOf('setViews(current)'))
+  assert.ok(body.indexOf('void persistViewsFor(collectionPath, next, { baseline })') < body.indexOf('setViews(current)'))
 })
 
 test('delete waits for persist ok before switching view', () => {
