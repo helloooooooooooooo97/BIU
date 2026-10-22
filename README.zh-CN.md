@@ -4,7 +4,7 @@
   <img src="public/favicon.svg" width="96" height="96" alt="Biu" />
 </p>
 
-# Biu Agent OS
+# BIU
 
 [English](README.md) · **简体中文**
 
@@ -722,8 +722,8 @@ biu
 ├── scripts/
 │   └── link-cordis-plugins.mjs
 ├── public/
-│   ├── favicon.svg            # 品牌小人（白底方标）
-│   ├── brand-lockup.svg       # README：BIU 标记 + Biu Agent OS tag
+│   ├── favicon.svg            # 圆形品牌标记（与官网导航相同）
+│   ├── brand-lockup.svg       # README：圆形标记 + BIU
 │   ├── og-image.png           # 分享卡片（og:image），由 scripts/build-brand-assets.tsx 生成
 │   ├── mascot-blue.svg        # README 吉祥物（BMW M 三色）
 │   ├── mascot-violet.svg
@@ -793,7 +793,7 @@ biu
 
 ## 许可
 
-从本版本开始，**Biu Agent OS 项目原创的代码和文档**采用 [Apache License 2.0](LICENSE)：
+从本版本开始，**BIU 项目原创的代码和文档**采用 [Apache License 2.0](LICENSE)：
 
 - **免费使用、修改、分发、商用**，无传染性，可嵌进闭源产品，不必再申请单独商用授权。
 - **专利授权：** 贡献者授予实施其贡献所必需的相关专利许可；若你就本作品提起专利诉讼，该专利许可将终止（Apache-2.0 第 3 条）。

@@ -904,6 +904,8 @@ test('标签页图标、README 横条、分享卡片都是当前品牌标记（�
   assert.equal(png.readUInt32BE(20), 630, '分享卡片高 630')
 
   const html = readFileSync(resolve(process.cwd(), 'index.html'), 'utf8')
+  assert.match(html, /<title>BIU<\/title>/, '浏览器标签页标题是 BIU')
+  assert.doesNotMatch(read('favicon.svg'), /<rect /, '标签页图标用官网同款圆形，不垫白底方块')
   assert.match(html, /<link rel="icon" type="image\/svg\+xml" href="\/favicon\.svg/)
   assert.match(html, /<meta property="og:image" content="\/og-image\.png" \/>/, '爬虫不执行脚本，og:image 要写在静态 HTML 里')
   const meta = readFileSync(resolve(process.cwd(), 'packages/web-app-shell/src/web/marketing-site/use-page-meta.ts'), 'utf8')

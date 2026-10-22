@@ -3,7 +3,7 @@ import { BRAND_DEFAULT, BrandMark } from './brand-mark.tsx'
 
 const FONT = `ui-sans-serif, system-ui, -apple-system, 'PingFang SC', 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif`
 
-/** 白色圆角底 + 默认配色的标记。深海里最深的一块接近纯黑，必须垫白底才看得见轮廓。 */
+/** 官网导航同款圆形标记（无白底方块）。 */
 function markSvg(displayWidth: number) {
   return renderToStaticMarkup(
     <BrandMark
@@ -12,7 +12,7 @@ function markSvg(displayWidth: number) {
       strokeWidth={BRAND_DEFAULT.strokeWidth}
       lineWidth={BRAND_DEFAULT.lineWidth}
       background={BRAND_DEFAULT.background}
-      showBackground
+      showBackground={false}
       circleRatio={BRAND_DEFAULT.circleRatio}
       displayWidth={displayWidth}
       title="BIU"
@@ -35,7 +35,7 @@ export function buildLockupSvg() {
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 54" width="300" height="54" fill="none">',
     '<rect width="300" height="54" rx="16" fill="#0a0a0a"/>',
     placed(markSvg(38), 8, 8, 38),
-    `<text x="168" y="33" text-anchor="middle" fill="#ffffff" font-family="${FONT}" font-size="14" font-weight="600">Biu Agent OS</text>`,
+    `<text x="58" y="35" text-anchor="start" fill="#ffffff" font-family="${FONT}" font-size="22" font-weight="700" letter-spacing="2">BIU</text>`,
     '</svg>',
     '',
   ].join('\n')
