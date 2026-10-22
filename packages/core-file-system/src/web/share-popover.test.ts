@@ -141,7 +141,7 @@ test('list permission column uses the same capsule and loads the chain on click'
   assert.doesNotMatch(css, /\.fsdb-scope-tag\.is-manage[^{]*\{[^}]*#2c2c2b/)
   assert.match(
     css,
-    /\.fsdb-scope-tag\.is-shared,\.fsdb-scope-pill\.is-shared,\.fsdb-scope-tag\.is-edit,\.fsdb-scope-pill\.is-edit\{background:color-mix\(in srgb,var\(--dsw-pick\) 12%/,
+    /\.fsdb-scope-tag\.is-shared,\.fsdb-scope-pill\.is-shared,\.fsdb-scope-tag\.is-edit,\.fsdb-scope-pill\.is-edit,[\s\S]*?background:var\(--dsw-pick-fill\);color:var\(--dsw-pick\)/,
   )
   assert.doesNotMatch(css, /\.fsdb-scope-tag\.is-edit[^{]*\{[^}]*#2383e2/)
   assert.match(browser, /fallback=\{<ShareRoleLabel label=\{props\.label\} \/>\}/)
