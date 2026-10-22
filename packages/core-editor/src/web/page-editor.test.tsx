@@ -154,6 +154,9 @@ test('page editor shows a spinner and is not editable while content loads', asyn
     />,
   )
   assert.ok(container.querySelector('[data-testid="page-editor-loading"]'))
+  const icon = container.querySelector('.page-editor-loading-icon')
+  assert.equal(icon?.getAttribute('width'), '22')
+  assert.equal(icon?.getAttribute('height'), '22')
   assert.equal(container.querySelector('[data-testid="page-editor"]'), null)
   assert.equal(container.querySelector('[contenteditable]'), null)
   rerender(
