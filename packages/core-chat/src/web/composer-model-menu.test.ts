@@ -2,8 +2,21 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
+import { placeComposerModelFlyout } from './composer-model-menu.tsx'
 
 const root = resolve(import.meta.dirname, '../../../..')
+
+test('model flyout opens left when the panel sits on the right edge', () => {
+  const box = placeComposerModelFlyout({ left: 1100, right: 1328, bottom: 700 }, 200, 1440, 800)
+  assert.equal(box.left, 1100 - 6 - 200)
+  assert.equal(box.bottom, 100)
+})
+
+test('model flyout opens right when there is room', () => {
+  const box = placeComposerModelFlyout({ left: 40, right: 268, bottom: 700 }, 200, 1440, 800)
+  assert.equal(box.left, 268 + 6)
+})
+
 
 test('composer model menu renders knobs from catalog, not hardcoded vendor rows', () => {
   const menu = readFileSync(resolve(import.meta.dirname, './composer-model-menu.tsx'), 'utf8')
@@ -23,6 +36,7 @@ test('composer model menu renders knobs from catalog, not hardcoded vendor rows'
   assert.match(catalog, /label: '力度'/)
   assert.match(catalog, /label: '上下文'/)
   assert.match(menu, /createPortal/)
+  assert.match(menu, /placeComposerModelFlyout/)
   assert.match(composer, /composer-model-flyout/)
   assert.match(css, /\.composer-model-pop\s*\{/)
   assert.match(css, /\.composer-model-flyout\s*\{[^}]*position:\s*fixed/)
