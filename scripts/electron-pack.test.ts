@@ -101,6 +101,8 @@ test('desktop pack publishes dmg/exe via GitHub Release and ad-hoc macOS signing
   assert.match(main, /await win\.loadURL\(hostUrl\)/)
   assert.match(main, /title: 'BIU'/)
   assert.match(main, /app\.setName\('BIU'\)/)
+  assert.match(main, /moveToApplicationsFolder/)
+  assert.match(main, /isInApplicationsFolder/)
   assert.match(main, /seedPluginSandboxes/)
   assert.match(main, /adoptPackedUserData/)
   assert.match(main, /BIU_PLUGIN_DEV_DIR: pluginDevDir/)

@@ -670,9 +670,20 @@ if (process.platform === 'linux') {
 
 app.setName('BIU')
 
+/** 从 dmg 直接打开时，macOS 每次启动都会把那个卷重新挂到桌面。挪进应用程序后下次就不会再挂。 */
+function adoptMacApplicationsFolder() {
+  if (process.platform !== 'darwin' || !app.isPackaged) return false
+  if (typeof app.isInApplicationsFolder === 'function' && app.isInApplicationsFolder()) return false
+  if (typeof app.moveToApplicationsFolder !== 'function') return false
+  return app.moveToApplicationsFolder({
+    conflictHandler: (conflict) => conflict !== 'existsAndRunning',
+  })
+}
+
 app.whenReady().then(async () => {
   // 允许被嵌的话就允许；这里只是让一些站少弹无谓的告警
   session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(true))
+  if (adoptMacApplicationsFolder()) return
   await startHost()
   await createWindow()
 })
