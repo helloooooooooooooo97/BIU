@@ -58,7 +58,6 @@ import { parsePageBanner, type PageBanner } from '../page-banner.ts'
 import { SavedViewsStore, clientViewFromDbRow, viewsCollection, type StoredView } from './saved-views.ts'
 import { publicShareUrl } from './share-origin.ts'
 import { readSharePluginWebJs, zipSharePluginSource } from './share-plugin-pack.ts'
-import { collectShareResources } from '../share-resources.ts'
 import { FacetStore } from './facets-store.ts'
 import { SharesStore, dropSharesForRemovedViews } from './shares-store.ts'
 import { builtinAllView, builtinAllViewId, builtinMemberViews, displayNameForView, isReadOnlyViewId, stubBuiltinAllView, stubBuiltinMemberView } from '../catalog-views.ts'
@@ -3677,25 +3676,6 @@ export function apply(ctx: Context) {
     if (query) return query
     return String(body?.password ?? '')
   }
-  const sharePreviewOf = async (kind: 'view' | 'record', collection: string, viewId: string, recordId: string) => {
-    try {
-      const snap = await buildShareSnapshot(db, savedViews, {
-        token: '',
-        kind,
-        collection,
-        viewId,
-        recordId,
-        hasPassword: false,
-        sharePlugins: true,
-        allowCopy: true,
-        createdAt: 0,
-        updatedAt: 0,
-      })
-      return collectShareResources(snap.records, snap.contents, snap.records.map((row) => String(row.id)))
-    } catch {
-      return { pages: 0, plugins: 0, collections: 0, pluginIds: [] as string[] }
-    }
-  }
   ctx.http.route('GET', '/api/db/shares', async (route) => {
     if (activeDataLocation() === 'cloud' && !isOnlineRuntime()) {
       const search = route.query.toString()
@@ -3799,10 +3779,8 @@ export function apply(ctx: Context) {
       return
     }
     const share = kind === 'record' ? shares.findRecord(collection, recordId) : shares.find(kind, collection, viewId, recordId)
-    const resources = await sharePreviewOf(kind, collection, viewId, recordId)
     route.send(200, {
       share: share ? { ...share, url: publicShareUrl(route.req, share.token) } : null,
-      resources,
     })
   })
   ctx.http.route('POST', '/api/db/shares', async (route) => {

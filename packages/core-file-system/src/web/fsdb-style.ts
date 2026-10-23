@@ -906,7 +906,7 @@ a.fsdb-person.is-link:hover .fsdb-person-name{text-decoration:underline}
 .fsdb-share-link-field svg{flex:none;color:var(--dsw-icon)}
 .fsdb-share-link-field input{min-width:0;flex:1;border:0;outline:0;background:transparent;color:var(--dsw-label);font:inherit;font-size:12px;text-overflow:ellipsis}
 .fsdb-share-panel .fsdb-share-copy{min-width:82px}
-.fsdb-share-copy-note,.fsdb-share-stats{margin:8px 0 0;color:var(--dsw-label-3);font-size:12px;line-height:1.4;font-weight:500}
+.fsdb-share-copy-note{margin:8px 0 0;color:var(--dsw-label-3);font-size:12px;line-height:1.4;font-weight:500}
 .fsdb-share-public-state{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;font-size:12px}
 .fsdb-share-public-state span{display:flex;align-items:center;gap:6px;color:var(--dsw-label-2);font-weight:600}
 .fsdb-share-public-state i{width:6px;height:6px;border-radius:50%;background:#36a269}

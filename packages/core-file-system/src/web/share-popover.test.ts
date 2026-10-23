@@ -3,6 +3,14 @@ import { resolve } from 'node:path'
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 
+test('share panel does not load or show resource counts', () => {
+  const src = readFileSync(resolve(import.meta.dirname, './share-popover.tsx'), 'utf8')
+  const host = readFileSync(resolve(import.meta.dirname, '../host/index.ts'), 'utf8')
+  const getShares = host.slice(host.indexOf("GET', '/api/db/shares'"), host.indexOf("POST', '/api/db/shares'"))
+  assert.doesNotMatch(src, /shareStatsLine|fsdb-share-resources|ShareResourceStats/)
+  assert.doesNotMatch(getShares, /sharePreviewOf|buildShareSnapshot|resources/)
+})
+
 test('share panel copies link and password together, without a separate pin copy', () => {
   const src = readFileSync(resolve(import.meta.dirname, './share-popover.tsx'), 'utf8')
   assert.match(src, /shareClipboardText/)
