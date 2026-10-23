@@ -164,7 +164,7 @@ export function runningWindowPluginNeedsWeb(row: Record<string, unknown>) {
 
 const WINDOW_PLUGIN_LIST_COLUMNS = 'id,running,hasWeb,headless,tags'
 
-/** 运行中的窗口插件要让 ui-hub 加载 web.js，否则「运行」后没有 extras 窗口。 */
+/** 运行中的窗口插件要让 ui-hub 加载 web.js，否则「运行」后没有 extras 窗口。启动时拉一次，之后跟 fsdb:change（插件 start 会 broadcast）。 */
 export function watchRunningWindowPlugins() {
   const requested = new Set<string>()
   let cancelled = false
@@ -200,10 +200,8 @@ export function watchRunningWindowPlugins() {
     void tick()
   }
   window.addEventListener('fsdb:change', onChange)
-  const timer = window.setInterval(tick, 3000)
   return () => {
     cancelled = true
-    window.clearInterval(timer)
     window.removeEventListener('fsdb:change', onChange)
   }
 }

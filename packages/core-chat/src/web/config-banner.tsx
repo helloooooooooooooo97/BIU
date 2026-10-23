@@ -19,10 +19,10 @@ export function ChatConfigBanner(_props: SlotProps) {
       }
     }
     void load()
-    const timer = window.setInterval(() => void load(), 5000)
+    window.addEventListener('biu:chat-config-changed', load)
     return () => {
       cancelled = true
-      window.clearInterval(timer)
+      window.removeEventListener('biu:chat-config-changed', load)
     }
   }, [])
 
