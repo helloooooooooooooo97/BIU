@@ -121,7 +121,7 @@ export function OverlayChatWindow({
     event.preventDefault()
     event.stopPropagation()
     bringFront()
-    const el = cardRef.current
+    const el = boxRef.current
     const r = el?.getBoundingClientRect()
     resizeRef.current = {
       ...edge,
@@ -152,13 +152,13 @@ export function OverlayChatWindow({
         width: geom.w,
         bottom: 12,
         zIndex: z,
+        ...(threadOpen ? { height: geom.h, maxHeight: 'calc(100dvh - 24px)' } : {}),
       }}
       onPointerDown={bringFront}
     >
       {threadOpen ? (
         <ChatPane
           paneRef={cardRef}
-          style={{ height: geom.h }}
           aside={
             <>
               <div className="chat-overlay-head" data-testid="chat-overlay-head">

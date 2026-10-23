@@ -3419,12 +3419,13 @@ select.settings-account-input {
   z-index: 80;
   display: flex;
   flex-direction: column;
+  justify-content: flex-end;
   box-sizing: border-box;
   min-width: 420px;
   min-height: 0;
-  max-height: calc(100vh - 24px);
+  max-height: calc(100dvh - 24px);
   height: auto;
-  overflow: visible;
+  overflow: hidden;
   padding: 0;
   border: 0;
   border-radius: 0;
@@ -3437,10 +3438,10 @@ select.settings-account-input {
   position: relative;
   display: flex;
   flex-direction: column;
-  flex: none;
+  flex: 1 1 0;
   box-sizing: border-box;
-  min-height: 280px;
-  max-height: calc(100vh - 120px);
+  min-height: 0;
+  max-height: none;
   margin-bottom: 10px;
   overflow: hidden;
   padding-inline: 10px;
@@ -3664,7 +3665,8 @@ html.dark .tool-call-status.is-fail {
   position: relative;
   inset: auto;
   z-index: 20;
-  flex: 0 0 auto;
+  flex: none;
+  margin-top: auto;
   height: auto;
   overflow: visible;
   isolation: isolate;
@@ -7501,6 +7503,10 @@ html:not(.dark) .composer-plus {
   max-height: calc(8 * 28px);
   overflow-x: hidden;
   overflow-y: auto;
+}
+
+.chat-overlay-panel .composer-editor {
+  max-height: min(calc(8 * 28px), 35dvh);
 }
 
 .chat-dock-toolbar .brand-corner-cluster {
