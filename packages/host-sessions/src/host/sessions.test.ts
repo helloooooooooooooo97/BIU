@@ -526,6 +526,22 @@ test('deriveMessages projects pasted images as multimodal content', () => {
   assert.equal(parts[1]?.image_url?.url, 'data:image/png;base64,abc')
 })
 
+test('dropUserImages removes stored pictures so deriveMessages is text-only', async () => {
+  const ctx = new Context()
+  await ctx.plugin(sessionStore, { driver: 'memory' })
+  await ctx.plugin(sessions)
+  const record = await ctx.sessions.create()
+  await ctx.sessions.append(record.id, {
+    type: 'user/message',
+    text: '看看',
+    kind: 'wake',
+    images: [{ name: 'shot.png', mime: 'image/png', url: 'data:image/png;base64,abc' }],
+  })
+  assert.equal(await ctx.sessions.dropUserImages(record.id), 1)
+  const user = ctx.sessions.deriveMessages(record.id).find((item) => item.role === 'user')
+  assert.equal(user?.content, '看看')
+})
+
 test('deriveMessages does not project svg data URLs as image_url', () => {
   const events: SessionEvent[] = [
     { type: 'session/open', version: 1, seq: 0, ts: 0 },

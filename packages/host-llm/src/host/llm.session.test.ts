@@ -3,6 +3,8 @@ import { test } from 'vitest'
 import {
   hasImageContent,
   isVisionImageUrl,
+  classifyLlmError,
+  stripImageContent,
   DEEPSEEK_VISION_MODEL,
   flattenToolImagesForChatCompletions,
   toAnthropicContent,
@@ -108,6 +110,34 @@ test('flattenToolImagesForChatCompletions drops svg image_url blocks', () => {
   assert.equal(out[1]?.role, 'tool')
   assert.equal(out[1]?.content, '{"ok":true}')
   assert.equal(out.some((item) => item.role === 'user' && hasImageContent(item.content) && item !== out[0]), false)
+})
+
+test('classifyLlmError splits cancel / image reject / orphan tools / fatal', () => {
+  assert.equal(classifyLlmError(new DOMException('aborted', 'AbortError')), 'cancel')
+  assert.equal(
+    classifyLlmError(new Error('.messages[2].image[0]: You have uploaded an unsupported image')),
+    'images',
+  )
+  assert.equal(
+    classifyLlmError(new Error("An assistant message with 'tool_calls' must be followed by tool messages")),
+    'orphan-tools',
+  )
+  assert.equal(classifyLlmError(new Error('llm http 401')), 'fatal')
+})
+
+test('stripImageContent keeps text and drops image_url blocks', () => {
+  const out = stripImageContent([
+    {
+      role: 'user',
+      content: [
+        { type: 'text', text: '看看' },
+        { type: 'image_url', image_url: { url: 'data:image/png;base64,xx' } },
+      ],
+    },
+    { role: 'assistant', content: 'ok' },
+  ])
+  assert.equal(out[0]?.content, '看看')
+  assert.equal(out[1]?.content, 'ok')
 })
 
 test('toAnthropicContent wraps tool images as tool_result image source', () => {

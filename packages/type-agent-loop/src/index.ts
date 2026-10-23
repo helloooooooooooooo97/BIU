@@ -3,6 +3,8 @@ import type { InboxKind, MessageSender, LiveUiContext, SessionConfig } from '@bi
 export interface AgentTurn {
   text: string
   steps: Array<{ name: string; ok: boolean; detail: string }>
+  /** 本回合因模型拒绝结束：inbox kick 不要再自动续 Goal，否则同一份坏上下文会空转。 */
+  halt?: boolean
 }
 
 export interface ClaimedInput {
