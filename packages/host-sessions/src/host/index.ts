@@ -583,6 +583,30 @@ export class SessionsService extends Service {
     return deriveMessages(record.events)
   }
 
+  /** 供应商拒图后：从日志拿掉已贴图，下一轮 derive 不再带上，会话能继续打字。 */
+  async dropUserImages(id: string) {
+    const record = await this.require(id)
+    let dropped = 0
+    for (const event of record.events) {
+      if (event.type === 'user/message' && event.images?.length) {
+        delete event.images
+        dropped += 1
+      }
+    }
+    if (dropped) await this.persist(record)
+    return dropped
+  }
+
+  /** 进程内也修一次崩溃残留（缺 tool/result），不只等下次从磁盘 load。 */
+  async healOpenLog(id: string) {
+    const record = await this.require(id)
+    const rebuilt = rebuildHealedEvents(record.events)
+    if (!rebuilt) return false
+    record.events = rebuilt
+    await this.persist(record)
+    return true
+  }
+
   /** 统计当前事件日志的输入构成（历史/本次 turn 占比），与 deriveMessages 一致从压缩点后算。 */
   statInputComposition(id: string) {
     const record = this.cache.get(id)

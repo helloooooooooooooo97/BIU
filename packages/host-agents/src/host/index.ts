@@ -148,7 +148,7 @@ export class AgentsService extends Service {
           if (/cancelled|AbortError|aborted/i.test(String(error))) break
           throw error
         }
-        if (live.abort.signal.aborted) break
+        if (last.halt || live.abort.signal.aborted) break
       }
       return last
     }

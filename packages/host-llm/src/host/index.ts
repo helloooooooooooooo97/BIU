@@ -238,6 +238,35 @@ function dropUnsupportedImages(content: LlmMessageContent | undefined): LlmMessa
   return content.filter((part) => part.type !== 'image_url' || isVisionImageUrl(part.image_url.url))
 }
 
+export function messagesHaveImages(messages: LlmMessage[]): boolean {
+  return messages.some((message) => hasImageContent(message.content) || (Array.isArray(message.content) && message.content.some((part) => part.type === 'image_url')))
+}
+
+/** 去掉所有 image_url，只留文本。供应商拒图后用来再打一轮，避免会话卡死。 */
+export function stripImageContent(messages: LlmMessage[]): LlmMessage[] {
+  return messages.map((message) => {
+    if (!Array.isArray(message.content)) return message
+    return { ...message, content: textFromContent(message.content) }
+  })
+}
+
+export type LlmErrorKind = 'cancel' | 'images' | 'orphan-tools' | 'fatal'
+
+/** 区分可恢复拒图 / 缺 tool result / 取消 / 其它致命错误。 */
+export function classifyLlmError(error: unknown): LlmErrorKind {
+  const detail = String(error)
+  if (/cancelled|AbortError|aborted/i.test(detail)) return 'cancel'
+  if (
+    /unsupported image|invalid image|image format|uploaded an unsupported|messages\[\d+\](?:\.image|\[.image)/i.test(
+      detail,
+    )
+  ) {
+    return 'images'
+  }
+  if (/tool_calls[\s\S]*followed by tool|tool message|tool_call_id/i.test(detail)) return 'orphan-tools'
+  return 'fatal'
+}
+
 /**
  * Chat Completions 的 tool 角色只接受字符串。成熟做法：工具文本留在 tool，
  * 图像跟在该批 tool 消息之后的一条 user 多模态消息里（DeepSeek / GPT-4o 同款）。

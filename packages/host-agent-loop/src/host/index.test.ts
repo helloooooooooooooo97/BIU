@@ -316,6 +316,59 @@ test('cancelled signal stops the turn', async () => {
   await assert.rejects(() => loop.run([{ kind: 'wake', text: 'x' }]), /cancelled|AbortError|aborted/i)
 })
 
+test('unsupported image is retried without pictures and the turn completes', async () => {
+  const { ctx, sessionId } = await spine()
+  const seen: Array<boolean> = []
+  const llm: LlmClient = {
+    async chat(messages) {
+      const hasImage = messages.some(
+        (item) => Array.isArray(item.content) && item.content.some((part) => part.type === 'image_url'),
+      )
+      seen.push(hasImage)
+      if (hasImage) throw new Error('.messages[1].image[0]: You have uploaded an unsupported image')
+      return { content: '没图也能说', toolCalls: [] }
+    },
+  }
+  const loop = new AgentLoop(ctx, llm, sessionId, new AbortController().signal)
+  const turn = await loop.run([
+    {
+      kind: 'wake',
+      text: '看看',
+      images: [{ name: 'shot.png', mime: 'image/png', url: 'data:image/png;base64,abc' }],
+    },
+  ])
+  assert.equal(turn.text, '没图也能说')
+  assert.equal(turn.halt, undefined)
+  assert.deepEqual(seen, [true, false])
+  const user = (await ctx.sessions.require(sessionId)).events.find((event) => event.type === 'user/message')
+  assert.equal(user?.type === 'user/message' && user.images, undefined)
+  const end = (await ctx.sessions.require(sessionId)).events.find((event) => event.type === 'turn/end')
+  assert.equal(end?.type === 'turn/end' && end.reason, 'complete')
+})
+
+test('fatal llm error ends the turn idle with halt so the session can take a new message', async () => {
+  const { ctx, sessionId } = await spine()
+  const llm: LlmClient = {
+    async chat() {
+      throw new Error('llm http 401')
+    },
+  }
+  const loop = new AgentLoop(ctx, llm, sessionId, new AbortController().signal)
+  const turn = await loop.run([{ kind: 'wake', text: 'hi' }])
+  assert.equal(turn.halt, true)
+  assert.match(turn.text, /401/)
+  const events = (await ctx.sessions.require(sessionId)).events
+  assert.equal(events.find((event) => event.type === 'turn/end')?.type === 'turn/end' && events.find((event) => event.type === 'turn/end')?.reason, 'llm-error')
+  const again = new AgentLoop(
+    ctx,
+    new ScriptedLlm([{ content: '还能聊', toolCalls: [] }]),
+    sessionId,
+    new AbortController().signal,
+  )
+  const next = await again.run([{ kind: 'wake', text: '再问' }])
+  assert.equal(next.text, '还能聊')
+})
+
 test('pre-step reject writes a turn with no step', async () => {
   const { ctx, sessionId } = await spine()
   ctx.on('agent/pre-step', (req, next) => ({ ...next(), reject: 'blocked' }))
