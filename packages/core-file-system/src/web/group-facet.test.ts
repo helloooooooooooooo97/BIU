@@ -23,6 +23,13 @@ const packs = [
   },
 ]
 
+test('groupListKeys uses facet packs without waiting for collection schema', () => {
+  const key = facetFlatColumnKey('haohao', 'mood')
+  const listed = groupListKeys(undefined, key, [], packs)
+  assert.ok(listed.some((item) => item.key === 'ok'))
+  assert.ok(listed.some((item) => item.key === 'meh'))
+})
+
 test('facet pack menus only list groupable kinds, including number intervals', () => {
   const keys = groupableFields(schema, packs).map((item) => item.key)
   assert.equal(keys.includes('facet'), true)

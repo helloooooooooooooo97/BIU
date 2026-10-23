@@ -620,10 +620,16 @@ function isListColumn(key: string) {
   return key !== 'description' && key !== 'notes' && key !== 'content' && key !== 'emoji' && key !== 'banner' && key !== 'tags'
 }
 
-/** Schema fields are in the allowlist — not just localStorage facet columns after a hard refresh. */
-function schemaColumnAllowlistReady(schema: CollectionSchema | undefined, allColumnKeys: string[]) {
-  if (!schema) return false
-  return allColumnKeys.some((key) => key !== 'actions' && !isFacetFlatColumnKey(key))
+/** Saved view columns stay until we know the field is gone. Facet / share overlay keys are not schema fields. */
+function retainSavedColumn(key: string, schema: CollectionSchema | undefined, allColumnKeys: string[]) {
+  if (key === 'actions' || key === 'shareScope' || key === 'shareRole') return true
+  if (key === 'createdBy' || key === 'updatedBy' || key === 'createdAt' || key === 'updatedAt') return true
+  if (parseFacetFlatColumnKey(key) || isFacetFlatColumnKey(key)) return true
+  if (!schema) return true
+  if (allColumnKeys.includes(key)) return true
+  const field = schema.fields[key]
+  if (!field) return true
+  return isListColumn(key) && resolveFieldType(field) !== 'file'
 }
 
 const QUERY_NEST_IGNORE = `${HEADLESS_DISMISS_IGNORE}, .db-search-menu, .fsdb-cellselect-menu, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]`
@@ -1908,9 +1914,15 @@ export function CollectionBrowser({
       ...(columnKeys.length ? columnKeys : currentSchema ? defaultColumnKeys(currentSchema, [...allowed]) : seedColumns),
       ...cellKeys,
     ]
-    const visible = currentSchema
-      ? requested.filter((key) => allowed.has(key) || Boolean(parseFacetFlatColumnKey(key)) || cellKeys.includes(key))
-      : requested
+    const visible = requested.filter(
+      (key) =>
+        !currentSchema ||
+        allowed.has(key) ||
+        Boolean(parseFacetFlatColumnKey(key)) ||
+        key === 'shareScope' ||
+        key === 'shareRole' ||
+        cellKeys.includes(key),
+    )
     const columns = visible.length ? visible : [...(columnKeys.length ? columnKeys : ['title']), ...cellKeys]
     if (!columns.length) return undefined
     const queryKeys = [...collectQueryFields(sorts, filterTree, currentSchema?.labelField ?? 'title')]
@@ -2157,7 +2169,7 @@ export function CollectionBrowser({
       const loadUngrouped = () => listCollection({ ...listOpts, limit: reqPageSize, offset: switching ? 0 : page * reqPageSize })
       if (reqGroupBy) {
         const cachedSchema = switching ? undefined : schemaRef.current
-        const cachedKeys = cachedSchema ? groupListKeys(cachedSchema, reqGroupBy, extraGroupValues(cachedSchema), facetCatalog) : []
+        const cachedKeys = groupListKeys(cachedSchema, reqGroupBy, extraGroupValues(cachedSchema), facetCatalog)
         if (cachedKeys.length) {
           const [statResult, grouped] = await Promise.all([nextStatPromise, loadGroups(cachedSchema)])
           nextStat = statResult
@@ -2504,9 +2516,7 @@ export function CollectionBrowser({
 
   useEffect(() => {
     if (routeRecordId) return
-    return whenListIdle(() => {
-      void pullFacets()
-    })
+    void pullFacets()
   }, [collectionPath, routeRecordId])
 
   useEffect(() => {
@@ -2596,7 +2606,7 @@ export function CollectionBrowser({
       if (!needsLoad) return
     }
     if (routeRecordId) return
-    if (!routeViewReadyRef.current && !needsLoad) return
+    if (!routeViewReadyRef.current) return
     void reloadRef.current({ force: needsLoad })
   }, [listIdentityKey, reloadKey, routeRecordId, routeViewReady])
 
@@ -2670,15 +2680,24 @@ export function CollectionBrowser({
   )
   const schemaDefaultSig = schemaDefaultKeys.join('\0')
   const columns = useMemo(() => {
-    if (!schemaColumnAllowlistReady(schema, allColumnKeys)) return []
     const requested = columnKeys.length ? columnKeys : schemaDefaultKeys
     const order = pinActionColumn(
       schema,
-      requested.filter((key) => key === 'actions' || allColumns.some((item) => item.key === key)),
+      requested.filter((key) => retainSavedColumn(key, schema, allColumnKeys)),
       rowActionColumn,
     )
     return order
-      .map((key) => allColumns.find((item) => item.key === key))
+      .map((key) => {
+        const hit = allColumns.find((item) => item.key === key)
+        if (hit) return hit
+        if (key === 'shareScope') return { key, kind: 'select' as const, field: { type: 'select' as const, label: '分享' } }
+        if (key === 'shareRole') return { key, kind: 'select' as const, field: { type: 'select' as const, label: '权限' } }
+        const facet = parseFacetFlatColumnKey(key)
+        if (facet) {
+          return { key, kind: 'select' as const, field: { type: 'select' as const, label: facet.fieldKey }, packId: facet.packId }
+        }
+        return null
+      })
       .filter(Boolean) as typeof allColumns
   }, [allColumnKeys, allColumns, columnKeys, rowActionColumn, schema, schemaDefaultKeys])
 
@@ -2756,17 +2775,18 @@ export function CollectionBrowser({
 
   useEffect(() => {
     if (!schemaDefaultKeys.length) return
-    if (!schemaColumnAllowlistReady(schema, allColumnKeys)) return
     const prevDefaults = prevSchemaDefaultSig.current ? prevSchemaDefaultSig.current.split('\0').filter(Boolean) : []
     prevSchemaDefaultSig.current = schemaDefaultSig
     const saved = viewsRef.current.find((view) => view.id === activeViewIdRef.current)?.columns ?? []
     setColumnKeys((prev) => {
-      const allowed = new Set(allColumnKeys)
       const source = prev.length ? prev : saved
       const grown = prev.length && prevDefaults.length ? schemaDefaultKeys.filter((key) => !prevDefaults.includes(key)) : []
       const kept = pinActionColumn(
         schema,
-        [...source.filter((key) => allowed.has(key)), ...grown.filter((key) => allowed.has(key) && !source.includes(key))],
+        [
+          ...source.filter((key) => retainSavedColumn(key, schema, allColumnKeys)),
+          ...grown.filter((key) => retainSavedColumn(key, schema, allColumnKeys) && !source.includes(key)),
+        ],
         rowActionColumn,
       )
       if (source.length) {
@@ -3227,9 +3247,7 @@ export function CollectionBrowser({
       filters: { ...catalogLockFilters(view.id, [view]), ...view.filters },
     })
     const sourceColumns = next.columns.length
-      ? schemaColumnAllowlistReady(schema, allColumnKeys)
-        ? next.columns.filter((key) => allColumnKeys.includes(key))
-        : next.columns
+      ? next.columns.filter((key) => retainSavedColumn(key, schema, allColumnKeys))
       : schemaDefaultKeys
     const nextColumns = pinActionColumn(schema, sourceColumns, rowActionColumn)
     const nextQuery = next.query ?? ''
@@ -4617,6 +4635,7 @@ export function CollectionBrowser({
 
   function persistActiveViewNow() {
     if (sheet || !hydrated || !activeViewId) return
+    if (!routeViewReadyRef.current) return
     if (hydratePath.current !== `${collectionPath}\0${dataPath}`) return
     const current = viewsRef.current.find((view) => view.id === activeViewId)
     if (!current) return
