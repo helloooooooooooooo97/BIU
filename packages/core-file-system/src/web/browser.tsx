@@ -4134,7 +4134,6 @@ export function CollectionBrowser({
             collectionPath={collectionPath}
             labelField={schema?.labelField}
             value={readFacetFlatValue(row, key, facetSourceKey(schema))}
-            deferPerson
             onChange={
               field.writable && (kind === 'attachment' || kind === 'datetime')
                 ? (next) => writeCellValue(row, key, field, next)
@@ -4153,7 +4152,6 @@ export function CollectionBrowser({
           collectionPath={collectionPath}
           labelField={schema?.labelField}
           value={row[key]}
-          deferPerson
           onChange={
             field.writable && (kind === 'attachment' || kind === 'datetime')
               ? (next) => writeCellValue(row, key, field, next)
