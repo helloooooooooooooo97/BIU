@@ -1374,9 +1374,12 @@ const WindowedTable = memo(function WindowedTable({
     setRowPx(next)
   }, [wrapCells])
 
+  const rowTune = useRef({ top: -1, n: 0 })
   useLayoutEffect(() => {
     const table = tableRef.current
     if (!table) return
+    // 滚动换了一批行就重新量。同一次 scrollTop 里最多跟两次，避免行高和窗口互相追出 React #185。
+    if (rowTune.current.top !== tableScroll.top) rowTune.current = { top: tableScroll.top, n: 0 }
     const heights: number[] = []
     for (const tr of Array.from(table.tBodies[0]?.rows ?? [])) {
       if (tr.classList.contains('fsdb-table-pad')) continue
@@ -1386,11 +1389,11 @@ const WindowedTable = memo(function WindowedTable({
     }
     const next = medianPaintedRowPx(heights, rowPxRef.current)
     if (Math.abs(next - rowPxRef.current) < 1) return
+    if (rowTune.current.n >= 2) return
+    rowTune.current.n += 1
     rowPxRef.current = next
     setRowPx(next)
-    // Measure from wrap / row count only. tableWindow start/end follow rowPx; putting
-    // them here re-measures a new slice, median shifts, rowPx shifts, React #185.
-  }, [nodes.length, tableRef, wrapCells])
+  }, [nodes.length, tableRef, tableScroll.top, tableWindow.end, tableWindow.start, wrapCells])
 
   useEffect(() => {
     onVisibleRange?.(tableWindow.start, tableWindow.end)
