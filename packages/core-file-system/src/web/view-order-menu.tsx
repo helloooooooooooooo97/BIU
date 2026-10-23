@@ -26,7 +26,6 @@ function ViewRowShell({
   onCopy,
   onRename,
   onDelete,
-  onWarm,
   grip,
   rowRef,
   className,
@@ -38,7 +37,6 @@ function ViewRowShell({
   onCopy: (view: SavedView) => void
   onRename: (view: SavedView) => void
   onDelete: (view: SavedView) => void
-  onWarm?: (view: SavedView) => void
   grip: ReactNode
   rowRef?: (node: HTMLElement | null) => void
   className?: string
@@ -54,7 +52,6 @@ function ViewRowShell({
       <button
         type="button"
         className="tasks-viewdd-item-main fsdb-tool-row"
-        onPointerEnter={() => onWarm?.(view)}
         onClick={() => onSelect(view)}
       >
         <span className="tasks-viewdd-item-name">{view.name}</span>
@@ -85,7 +82,6 @@ function SortableViewRow({
   onCopy,
   onRename,
   onDelete,
-  onWarm,
 }: {
   view: SavedView
   active: boolean
@@ -93,7 +89,6 @@ function SortableViewRow({
   onCopy: (view: SavedView) => void
   onRename: (view: SavedView) => void
   onDelete: (view: SavedView) => void
-  onWarm?: (view: SavedView) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: view.id })
   return (
@@ -104,7 +99,6 @@ function SortableViewRow({
       onCopy={onCopy}
       onRename={onRename}
       onDelete={onDelete}
-      onWarm={onWarm}
       rowRef={setNodeRef}
       className={isDragging ? 'is-drag' : undefined}
       style={{ transform: DndCSS.Transform.toString(transform), transition }}
@@ -126,7 +120,6 @@ export function ViewOrderMenu({
   onDelete,
   onReorder,
   onAdd,
-  onWarm,
 }: {
   views: SavedView[]
   activeViewId: string | null
@@ -136,7 +129,6 @@ export function ViewOrderMenu({
   onDelete: (view: SavedView) => void
   onReorder: (ids: string[]) => void
   onAdd: () => void
-  onWarm?: (view: SavedView) => void
 }) {
   const [activeId, setActiveId] = useState<string | null>(null)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
@@ -174,7 +166,6 @@ export function ViewOrderMenu({
                 onCopy={onCopy}
                 onRename={onRename}
                 onDelete={onDelete}
-                onWarm={onWarm}
               />
             ))}
           </SortableContext>

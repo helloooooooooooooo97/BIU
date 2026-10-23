@@ -134,7 +134,7 @@ import { HttpError, invalidateListReads, listCollection, readJson } from './db-c
 import { savedViewRecordPath } from '../paths.ts'
 import { findViewNeighbor, indexOnPage } from './view-adjacent.ts'
 import { TABLE_WINDOW_OVERSCAN, medianPaintedRowPx, rememberedTableWrap, tableColumnSlice, tableColumnUnchanged, tableColumnWidth, tableRowFallbackPx, tableWindowSlice, tableWindowUnchanged, tableWrapScroll, type TableColumnSlice } from './table-window.ts'
-import { forgetPreviewTotalsForPath, markPaintedListReady, rememberPreviewTotalForView, resetPaintedListReady, whenListIdle } from './sidebar-preview.ts'
+import { forgetPreviewTotalsForPath, markPaintedListReady, rememberPreviewTotalForView, resetPaintedListReady } from './sidebar-preview.ts'
 import { DataSidebarShell } from './data-sidebar-shell.tsx'
 import { builtinAllViewId, catalogLockFilters, isReadOnlyViewId, mergeTableViews, parseBuiltinScopeViewId, stubBuiltinBlockKindView, viewsForScope, type DataScope } from '../catalog-views.ts'
 import { SAVED_VIEW_EVENT, moveInspectorRecordsToTrash, rememberInspectorWorkingView, showRecordInInspector } from './inspector-db-route.ts'
@@ -692,98 +692,6 @@ function forgetListCache(path: string) {
   for (const key of [...listCache.keys()]) {
     if (key === path || key.startsWith(`${path}\0`)) listCache.delete(key)
   }
-}
-
-const warmingLists = new Set<string>()
-
-/** 把别的表的「全部」预热进 listCache。切表时就能一次画出正确的 shareScope 组，不用先拿上一张表的私人/空间顶着。 */
-async function warmListCacheForView(
-  path: string,
-  view: SavedView,
-  listed: SavedView[],
-) {
-  const pageSize = normalizePageSize(view.pageSize)
-  if (peekListCache(path, view.id, pageSize)) return
-  const key = listCacheKey(path, view.id)
-  if (warmingLists.has(key)) return
-  warmingLists.add(key)
-  try {
-    if (peekListCache(path, view.id, pageSize)) return
-    const groupBy = view.groupBy ?? ''
-    const sorts = normalizeSorts(view.sorts, view.sortField, view.sortDir)
-    const filters = encodeListFilter(catalogLockFilters(view.id, listed), resolveViewFilterTree(view))
-    const columns = listProjectionKeys({
-      schema: undefined,
-      columns: view.columns.length ? view.columns : LIST_SEED_COLUMNS,
-      groupBy,
-    })
-    const listOpts = {
-      path,
-      query: view.query ?? '',
-      sortField: view.sortField,
-      sortDir: view.sortDir,
-      sorts,
-      filters,
-      columns,
-    }
-    const stat = await readJson<StatResult>(`/api/db/stat?path=${encodeURIComponent(path)}`)
-    let items: Array<DbRecord & { path?: string }> = []
-    let total = 0
-    let schema = stat.schema
-    let buckets: GroupBucket[] = []
-    if (groupBy) {
-      const grouped = await listGroupedCollection({
-        ...listOpts,
-        groupBy,
-        schema,
-        extraValues: [],
-        pageSize,
-        groupPages: {},
-        wrap: !!view.wrap,
-        fillKeys: [],
-        list: (input) => listCollection(input),
-      })
-      if (grouped) {
-        items = grouped.items
-        total = grouped.total
-        buckets = grouped.buckets
-        schema = grouped.schema ?? schema
-      }
-    } else {
-      const page = await listCollection({ ...listOpts, limit: pageSize, offset: 0 })
-      items = page.items
-      total = page.total
-      schema = page.schema ?? schema
-    }
-    rememberListCache(
-      path,
-      { items, total, stat: { ...stat, schema }, groupBuckets: buckets, listLimit: pageSize },
-      view.id,
-    )
-  } catch {
-    /* 预热失败就等点进去再拉 */
-  } finally {
-    warmingLists.delete(key)
-  }
-}
-
-const WARM_LIST_CONCURRENCY = 2
-
-async function warmSiblingListCaches(paths: string[], listViews: (path: string) => SavedView[]) {
-  let next = 0
-  const workers = Math.min(WARM_LIST_CONCURRENCY, paths.length)
-  await Promise.all(
-    Array.from({ length: workers }, async () => {
-      while (next < paths.length) {
-        const path = paths[next]
-        next += 1
-        if (!path) break
-        const listed = listViews(path)
-        const view = listed.find((item) => item.id === builtinAllViewId(path)) ?? listed[0]
-        if (view) await warmListCacheForView(path, view, listed)
-      }
-    }),
-  )
 }
 
 function sameSavedViews(a: SavedView[], b: SavedView[]) {
@@ -2520,35 +2428,6 @@ export function CollectionBrowser({
 
   useEffect(() => {
     if (nested) return
-    const onWarm = (event: Event) => {
-      const path = String((event as CustomEvent<{ path?: string }>).detail?.path ?? '')
-      if (!path || path === collectionPath) return
-      const listed = paintListedViews(path)
-      const view = listed.find((item) => item.id === builtinAllViewId(path)) ?? listed[0]
-      if (view) void warmListCacheForView(path, view, listed)
-    }
-    window.addEventListener('fsdb:warm-list', onWarm)
-    return () => window.removeEventListener('fsdb:warm-list', onWarm)
-  }, [collectionPath, nested, tables])
-
-  useEffect(() => {
-    if (nested || routeRecordId) return
-    return whenListIdle(() => {
-      const currentListed = paintListedViews(collectionPath)
-      for (const view of currentListed) {
-        if (view.id === activeViewIdRef.current) continue
-        void warmListCacheForView(collectionPath, view, currentListed)
-      }
-      const paths = tables
-        .filter((table) => table.path !== collectionPath && !isIndexCollection(table.path) && !isSystemCollection(table.path))
-        .map((table) => table.path)
-        .sort((a, b) => Number(b === '/plugins') - Number(a === '/plugins'))
-      void warmSiblingListCaches(paths, paintListedViews)
-    }, 0)
-  }, [collectionPath, nested, routeRecordId, tables])
-
-  useEffect(() => {
-    if (nested) return
     const origPush = history.pushState
     const origReplace = history.replaceState
     const intercept = (orig: typeof history.pushState): History['pushState'] =>
@@ -3335,13 +3214,6 @@ export function CollectionBrowser({
     persistActiveViewRef.current()
     if (view.id !== activeViewIdRef.current) {
       adoptListCacheForViewRef.current(dataPath, view)
-      const listed = paintListedViews(collectionPath)
-      void warmListCacheForView(collectionPath, view, listed).then(() => {
-        if (activeViewIdRef.current !== view.id) return
-        if (!peekListCache(dataPath, view.id, normalizePageSize(view.pageSize))) return
-        adoptListCacheForViewRef.current(dataPath, view)
-        setHoldNav((n) => n + 1)
-      })
       applyView(view)
     } else {
       setViewMenuOpen(false)
@@ -3676,12 +3548,6 @@ export function CollectionBrowser({
     if (!keepCache) forgetListCache(dataPath)
     invalidateListReads()
     window.dispatchEvent(new Event('fsdb:change'))
-    if (keepCache) return
-    const listed = paintListedViews(collectionPath)
-    for (const view of listed) {
-      if (view.id === activeViewIdRef.current) continue
-      void warmListCacheForView(collectionPath, view, listed)
-    }
   }
 
   useEffect(() => {
@@ -4834,10 +4700,6 @@ export function CollectionBrowser({
                   onDelete={deleteView}
                   onReorder={persistViewOrder}
                   onAdd={() => addEmptyView()}
-                  onWarm={(view) => {
-                    if (view.id === activeViewIdRef.current) return
-                    void warmListCacheForView(collectionPath, view, paintListedViews(collectionPath))
-                  }}
                 />
                 </HeadlessDismiss>
               ) : null}
