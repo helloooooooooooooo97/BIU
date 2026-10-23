@@ -756,7 +756,7 @@ async function warmListCacheForView(
 
 const WARM_LIST_CONCURRENCY = 2
 
-async function warmSiblingListCaches(paths: string[]) {
+async function warmSiblingListCaches(paths: string[], listViews: (path: string) => SavedView[]) {
   let next = 0
   const workers = Math.min(WARM_LIST_CONCURRENCY, paths.length)
   await Promise.all(
@@ -765,7 +765,7 @@ async function warmSiblingListCaches(paths: string[]) {
         const path = paths[next]
         next += 1
         if (!path) break
-        const listed = paintListedViews(path)
+        const listed = listViews(path)
         const view = listed.find((item) => item.id === builtinAllViewId(path)) ?? listed[0]
         if (view) await warmListCacheForView(path, view, listed)
       }
@@ -2524,7 +2524,7 @@ export function CollectionBrowser({
         .filter((table) => table.path !== collectionPath && !isIndexCollection(table.path) && !isSystemCollection(table.path))
         .map((table) => table.path)
         .sort((a, b) => Number(b === '/plugins') - Number(a === '/plugins'))
-      void warmSiblingListCaches(paths)
+      void warmSiblingListCaches(paths, paintListedViews)
     }, 0)
   }, [collectionPath, nested, routeRecordId, tables])
 
