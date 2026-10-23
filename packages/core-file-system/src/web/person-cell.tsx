@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ArrowPathIcon, CpuChipIcon, UserIcon } from '@heroicons/react/16/solid'
-import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
+import { resolveSessionMascot, TableMascotMark } from '@biu/public-mascot'
 import { asPerson, asPersonList, personKey, type PersonValue } from '@biu/type-file-system'
 import { listCollection } from './db-client.ts'
 import { useWorkspaceProfile } from '@biu/public-ui/use-workspace-profile'
@@ -114,11 +114,9 @@ export function PersonFace({ value, empty = '' }: { value: unknown; empty?: stri
           <>
             {person.kind === 'agent' && (person.sessionId || person.mascot) ? (
               <span className="fsdb-person-face" aria-hidden>
-                <SidebarMascot
+                <TableMascotMark
                   size={18}
-                  sessionId={person.sessionId || person.name}
                   identity={resolveSessionMascot(person.sessionId || person.name, person.mascot)}
-                  animate={false}
                   title={label || person.sessionId}
                 />
               </span>
@@ -224,11 +222,9 @@ export function PersonPickPanel({
           onClick={() => pick({ kind: 'agent', name: person.name, sessionId: person.id })}
         >
           <span className="fsdb-person-face" aria-hidden>
-            <SidebarMascot
+            <TableMascotMark
               size={18}
-              sessionId={person.id}
               identity={resolveSessionMascot(person.id, person.mascot)}
-              animate={false}
               title={person.name}
             />
           </span>
