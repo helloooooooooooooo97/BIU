@@ -426,5 +426,7 @@ export interface SessionStore {
   save(record: SessionRecord): Promise<void>
   list(): Promise<string[]>
   listSummaries(): Promise<SessionSummary[]>
+  /** 可选：按 id 只读摘要，不碰事件日志。取创建人名/形象时优先走它。 */
+  peekSummary?(id: string): SessionSummary | undefined
   delete(id: string): Promise<boolean>
 }

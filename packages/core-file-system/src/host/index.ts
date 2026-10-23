@@ -2006,10 +2006,17 @@ export class DatabaseService extends Service implements Database {
     }
   }
 
+  /**
+   * 同步读会话行，给创建人/编辑人列用。
+   * 只走内存缓存，绝不调用集合 get()：那是 async，会 await list() 全表重列，
+   * 再 require() 把整条 events 读出来，表格每渲染一格就被卡一次。
+   */
   private peekSessionRow(sessionId: string): unknown {
-    const sessions = this.collection('/sessions')
-    const row = sessions?.get?.(sessionId)
-    if (row && typeof (row as Promise<unknown>).then !== 'function') return row
+    const sessions = this.collection('/sessions') as
+      | { peek?: (id: string) => unknown; get?: (id: string) => unknown }
+      | undefined
+    const peeked = sessions?.peek?.(sessionId)
+    if (peeked) return peeked
     return this.sessionsService()?.peek?.(sessionId)
   }
 
@@ -2028,6 +2035,8 @@ export class DatabaseService extends Service implements Database {
   private async querySessionPerson(sessionId: string): Promise<{ name: string; mascot?: PersonValue['mascot'] }> {
     const peeked = this.peekSessionPerson(sessionId)
     if (peeked.name || peeked.mascot) return peeked
+    // 只有 peek 完全落空才回落到真正的读取；正常热路径不会走到这里，
+    // 也就不会为了写一个 createdBy 把整条会话的 events 拉进内存。
     const sessions = this.collection('/sessions')
     if (sessions?.get) {
       const fromCollection = sessionPersonFromRow(await sessions.get(sessionId))

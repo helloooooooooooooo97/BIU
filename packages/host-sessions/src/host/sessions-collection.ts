@@ -28,6 +28,20 @@ type SessionsLike = {
   setProject?: (id: string, project: { path: string } | null) => Promise<unknown>
   isBusy?: (id: string) => boolean
   inboxPending?: (id: string) => number
+  /**
+   * 同步读一条会话的轻量摘要（不碰 events）。
+   * 创建人/编辑人列只要 title + mascot，走这个就不会把整条会话日志读进内存。
+   */
+  peekSummary?: (id: string) => SessionSummary | null | undefined
+}
+
+/** 摘要里只留人员列需要的字段，避免把 config 等大对象带进列表投影。 */
+function summaryPersonFields(row: SessionSummary) {
+  const mascot =
+    row.mascot && isSessionMascot(row.mascot) ? ensureSessionMascot(row.id, row.mascot) : mascotFromSessionId(row.id)
+  const rawTitle = String(row.title ?? '').trim()
+  const title = rawTitle && rawTitle !== row.id.slice(0, 8) ? rawTitle : nameFromSessionMascot(mascot)
+  return { title, mascot }
 }
 
 function sessionCreatedAt(row: SessionSummary) {
@@ -174,6 +188,10 @@ export function sessionsCollection(sessions: SessionsLike): CollectionSpec {
     },
     list,
     get: async (id) => {
+      // 只有真正要读正文（events）时才 require；列表投影只需要摘要字段。
+      // 不要在这里 await list()：那是全表重列 + 逐条 mascot 迁移，会把表格卡住。
+      const peeked = sessions.peekSummary?.(id)
+      if (peeked) return asRecord(peeked)
       const row = (await list()).find((item) => item.id === id) ?? null
       if (!row) return null
       if (!sessions.require) return row
@@ -183,6 +201,16 @@ export function sessionsCollection(sessions: SessionsLike): CollectionSpec {
       } catch {
         return row
       }
+    },
+    /** 同步 peek：只读摘要，不碰 events。页面表格的创建人列靠它，避免渲染时读会话日志。 */
+    peek: (id) => {
+      const peeked = sessions.peekSummary?.(id)
+      return peeked ? asRecord(peeked) : undefined
+    },
+    /** 同步 peek：读不到就走 get，绝不在渲染链路里 load 事件。 */
+    peek: (id) => {
+      const peeked = sessions.peekSummary?.(id)
+      return peeked ? asRecord(peeked) : undefined
     },
     update: async (id, patch) => {
       if (typeof patch.title === 'string') await sessions.rename(id, patch.title)

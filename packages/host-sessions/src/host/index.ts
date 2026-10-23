@@ -11,6 +11,7 @@ import {
   type SessionMascot,
   type SessionProject,
   type SessionRecord,
+  type SessionSummary,
   type SessionConfig,
   type MessageSender,
   nameFromSessionMascot,
@@ -329,6 +330,14 @@ export function applyContextBudget(messages: LlmMessage[], budgetTokens: number,
   return [...start, ...tail]
 }
 
+/** 摘要用的标题：优先用户起的名字，否则用形象名，最后退回 id 前缀。 */
+function sessionTitleOf(record: SessionRecord): string {
+  const named = record.config?.title?.trim()
+  if (named) return named.slice(0, 80)
+  if (record.mascot) return nameFromSessionMascot(record.mascot)
+  return record.id.slice(0, 8)
+}
+
 export class SessionsService extends Service {
   private cache = new Map<string, SessionRecord>()
   private defaultSessionPromise: Promise<string> | null = null
@@ -341,6 +350,7 @@ export class SessionsService extends Service {
       inner.database.register(
         sessionsCollection({
           listSummaries: () => this.listSummaries(),
+          peekSummary: (id) => this.peekSummary(id),
           rename: (id, title) => this.rename(id, title),
           patchConfig: (id, patch) => this.patchConfig(id, patch),
           delete: (id) => this.delete(id),
@@ -729,6 +739,28 @@ export class SessionsService extends Service {
     const store = this.collabStore()
     if (!store || typeof store.canReadRecord !== 'function') return true
     return store.canReadRecord('/sessions', id)
+  }
+
+  /**
+   * 同步读一条会话的轻量摘要：只碰内存缓存，没有就按 id 单行查。
+   * 页面表格的创建人/编辑人列靠它拿 title + mascot，
+   * 绝不能走 require()/get() —— 那会把这条会话的整个 events 读出来。
+   */
+  peekSummary(id: string): SessionSummary | null {
+    const cached = this.cache.get(id)
+    if (cached) {
+      return {
+        id: cached.id,
+        version: cached.version,
+        eventCount: cached.events.length,
+        title: sessionTitleOf(cached),
+        updatedAt: cached.events.at(-1)?.ts ?? 0,
+        ...(cached.project ? { project: cached.project } : {}),
+        ...(cached.mascot ? { mascot: cached.mascot } : {}),
+        ...(cached.config ? { config: cached.config } : {}),
+      }
+    }
+    return this.ctx.sessionStore.peekSummary?.(id) ?? null
   }
 
   async listSummaries() {
