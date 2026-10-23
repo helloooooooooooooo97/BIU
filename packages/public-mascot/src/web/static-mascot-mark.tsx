@@ -1,5 +1,5 @@
-import { memo, useEffect, useMemo, useSyncExternalStore } from 'react'
-import { grokGeoEpoch, scheduleGrokGeo, subscribeGrokGeo } from './grok-bot-loader.ts'
+import { memo, useEffect, useState } from 'react'
+import { loadGrokGeo } from './grok-bot-loader.ts'
 import type { GrokColor, GrokShape, SessionMascotIdentity } from './grok-bot-types.ts'
 
 export type StaticMascotMarkProps = {
@@ -34,17 +34,24 @@ export const StaticMascotMark = memo(function StaticMascotMark({
   className,
   title = 'Session mascot',
 }: StaticMascotMarkProps) {
-  const geoEpoch = useSyncExternalStore(subscribeGrokGeo, grokGeoEpoch, grokGeoEpoch)
-  const geo = useMemo(
-    () => readGeo(identity),
-    [geoEpoch, identity.color, identity.eye, identity.shape],
-  )
+  const [geo, setGeo] = useState<GeoSnapshot | null>(() => readGeo(identity))
 
   useEffect(() => {
     // LAN share listener intentionally does not expose workstation assets.
     // Render the bundled fallback below instead of requesting /grok-bot.
     if (typeof document !== 'undefined' && document.documentElement.classList.contains('share')) return
-    scheduleGrokGeo()
+    let cancelled = false
+    void loadGrokGeo()
+      .then(() => {
+        if (cancelled) return
+        setGeo(readGeo(identity))
+      })
+      .catch(() => {
+        // The inline mark remains visible if optional geometry cannot load.
+      })
+    return () => {
+      cancelled = true
+    }
   }, [identity.shape, identity.color, identity.eye])
 
   const vb = geo?.viewBox ?? DEFAULT_VB

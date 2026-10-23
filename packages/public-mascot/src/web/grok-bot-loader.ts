@@ -12,37 +12,6 @@ const CHARACTER_SCRIPTS = [
 
 let geoPromise: Promise<void> | null = null
 let characterPromise: Promise<void> | null = null
-let geoEpoch = 0
-let geoScheduled = false
-const geoListeners = new Set<() => void>()
-
-export function subscribeGrokGeo(onStoreChange: () => void) {
-  geoListeners.add(onStoreChange)
-  return () => {
-    geoListeners.delete(onStoreChange)
-  }
-}
-
-export function grokGeoEpoch() {
-  return geoEpoch
-}
-
-function bumpGrokGeo() {
-  geoEpoch += 1
-  geoListeners.forEach((fn) => fn())
-}
-
-/** One geometry fetch for every static mark. First paint can use the bundled fallback path. */
-export function scheduleGrokGeo() {
-  if (typeof document !== 'undefined' && document.documentElement.classList.contains('share')) return
-  if (geoScheduled) return
-  geoScheduled = true
-  void loadGrokGeo()
-    .then(() => bumpGrokGeo())
-    .catch(() => {
-      geoScheduled = false
-    })
-}
 
 function injectScript(src: string): Promise<void> {
   return new Promise((resolve, reject) => {
