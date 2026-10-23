@@ -242,12 +242,26 @@ export function messagesHaveImages(messages: LlmMessage[]): boolean {
   return messages.some((message) => hasImageContent(message.content) || (Array.isArray(message.content) && message.content.some((part) => part.type === 'image_url')))
 }
 
-/** 去掉所有 image_url，只留文本。供应商拒图后用来再打一轮，避免会话卡死。 */
-export function stripImageContent(messages: LlmMessage[]): LlmMessage[] {
+const OMITTED_USER_IMAGE = '（图片已省略：模型拒收该格式）'
+const OMITTED_TOOL_IMAGE = '（工具图像已省略：模型拒收该格式）'
+
+/**
+ * Pi 同款：发给模型的投影里把图换成说明文字，原始会话日志不动。
+ * 拒图后用这个再打一轮 / 后续回合，而不是把会话封死。
+ */
+export function omitImageContent(messages: LlmMessage[]): LlmMessage[] {
   return messages.map((message) => {
     if (!Array.isArray(message.content)) return message
-    return { ...message, content: textFromContent(message.content) }
+    if (!message.content.some((part) => part.type === 'image_url')) return message
+    const text = textFromContent(message.content)
+    const note = message.role === 'tool' ? OMITTED_TOOL_IMAGE : OMITTED_USER_IMAGE
+    return { ...message, content: text ? `${text}\n${note}` : note }
   })
+}
+
+/** @deprecated 用 omitImageContent；保留别名以免旧测试/调用处断裂。 */
+export function stripImageContent(messages: LlmMessage[]): LlmMessage[] {
+  return omitImageContent(messages)
 }
 
 export type LlmErrorKind = 'cancel' | 'images' | 'orphan-tools' | 'fatal'

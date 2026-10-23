@@ -145,8 +145,8 @@ export interface SessionConfig {
    */
   autoCompactInputTokens?: number
   /**
-   * 供应商因图拒过一次之后：发给模型时不再附图（历史工具产物仍会再 lift）。
-   * 用户再贴新图时清掉，允许重新试视觉。
+   * 发给模型的投影跳过历史图（Pi 的 context 投影，不是改原始日志）。
+   * 用户再贴新图时清掉。
    */
   skipLlmImages?: boolean
 }
