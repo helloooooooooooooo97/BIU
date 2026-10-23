@@ -66,6 +66,58 @@ test('liftToolImages leaves plain tool text alone', async () => {
   assert.equal(lifted[0]?.content, 'pong')
 })
 
+test('liftToolImages does not lift SVG bytes even if named like a png', async () => {
+  const baseDir = await mkdtemp(join(tmpdir(), 'biu-lift-svg-'))
+  const dir = artifactsDir('sess-svg', baseDir)
+  await mkdir(dir, { recursive: true })
+  await writeFile(join(dir, 'shot.png'), Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"></svg>'))
+
+  const messages: LlmMessage[] = [
+    {
+      role: 'tool',
+      tool_call_id: 'svg',
+      content: JSON.stringify({
+        artifacts: [{ name: 'shot.png', mime: 'image/png', url: '/api/sessions/sess-svg/artifacts/shot.png' }],
+      }),
+    },
+  ]
+  const lifted = await liftToolImages(messages, 'sess-svg', { baseDir })
+  assert.equal(lifted[0]?.content, messages[0]?.content)
+})
+
+test('liftToolImages skips svg refs and still lifts a later png', async () => {
+  const baseDir = await mkdtemp(join(tmpdir(), 'biu-lift-mix-'))
+  const dir = artifactsDir('sess-mix', baseDir)
+  await mkdir(dir, { recursive: true })
+  const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"></svg>')
+  for (const name of ['a.svg', 'b.svg', 'c.svg', 'd.svg', 'e.svg', 'f.svg']) {
+    await writeFile(join(dir, name), svg)
+  }
+  await writeFile(join(dir, 'shot.png'), TINY_PNG)
+
+  const messages: LlmMessage[] = [
+    {
+      role: 'tool',
+      tool_call_id: 'mix',
+      content: JSON.stringify({
+        artifacts: [
+          ...['a.svg', 'b.svg', 'c.svg', 'd.svg', 'e.svg', 'f.svg'].map((name) => ({
+            name,
+            mime: 'image/svg+xml',
+            url: `/api/sessions/sess-mix/artifacts/${name}`,
+          })),
+          { name: 'shot.png', mime: 'image/png', url: '/api/sessions/sess-mix/artifacts/shot.png' },
+        ],
+      }),
+    },
+  ]
+  const lifted = await liftToolImages(messages, 'sess-mix', { baseDir })
+  const parts = lifted[0]?.content as Array<{ type: string; image_url?: { url: string } }>
+  assert.equal(parts[0]?.type, 'text')
+  assert.equal(parts.filter((part) => part.type === 'image_url').length, 1)
+  assert.equal(parts[1]?.image_url?.url, DATA_URL)
+})
+
 test('liftToolImages ignores image paths that are only mentioned in text', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'biu-lift-skip-'))
   const path = join(dir, 'hero.png')

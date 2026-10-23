@@ -203,10 +203,17 @@ export interface LlmMessage {
   tool_call_id?: string
 }
 
+/** 视觉模型认 png/jpeg/gif/webp。svg+xml、bmp、裸 http 相对路径都会被 DeepSeek 打回 unsupported image。 */
+const VISION_DATA_URL = /^data:image\/(?:png|jpeg|jpg|gif|webp);base64,/i
+
+export function isVisionImageUrl(url: string): boolean {
+  return VISION_DATA_URL.test(String(url ?? '').trim())
+}
+
 /** 若消息 content 含图片块则返回 true（用于触发视觉模型路由）。 */
 export function hasImageContent(content: LlmMessageContent | undefined): boolean {
   if (typeof content !== 'object' || !Array.isArray(content)) return false
-  return content.some((part) => part.type === 'image_url')
+  return content.some((part) => part.type === 'image_url' && isVisionImageUrl(part.image_url.url))
 }
 
 function textFromContent(content: LlmMessageContent | undefined): string {
@@ -220,7 +227,15 @@ function textFromContent(content: LlmMessageContent | undefined): string {
 
 function imagePartsFromContent(content: LlmMessageContent | undefined): LlmContentPart[] {
   if (!Array.isArray(content)) return []
-  return content.filter((part): part is { type: 'image_url'; image_url: { url: string } } => part.type === 'image_url')
+  return content.filter(
+    (part): part is { type: 'image_url'; image_url: { url: string } } =>
+      part.type === 'image_url' && isVisionImageUrl(part.image_url.url),
+  )
+}
+
+function dropUnsupportedImages(content: LlmMessageContent | undefined): LlmMessageContent | undefined {
+  if (!Array.isArray(content)) return content
+  return content.filter((part) => part.type !== 'image_url' || isVisionImageUrl(part.image_url.url))
 }
 
 /**
@@ -241,7 +256,7 @@ export function flattenToolImagesForChatCompletions(messages: LlmMessage[]): Llm
   for (const message of messages) {
     if (message.role === 'tool') {
       const images = imagePartsFromContent(message.content)
-      if (images.length) {
+      if (images.length || Array.isArray(message.content)) {
         out.push({ ...message, content: textFromContent(message.content) })
         pending.push(...images)
         continue
@@ -251,7 +266,7 @@ export function flattenToolImagesForChatCompletions(messages: LlmMessage[]): Llm
       continue
     }
     flush()
-    out.push(message)
+    out.push({ ...message, content: dropUnsupportedImages(message.content) })
   }
   flush()
   return out

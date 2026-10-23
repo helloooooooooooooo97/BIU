@@ -2,6 +2,7 @@ import { Service, type Context } from 'cordis'
 import type { SpawnResult } from '@biu/host-subprocess'
 import { posixShellArgv, describeHostRuntime, hostShellKind } from '@biu/host-subprocess'
 import { currentSessionId } from '@biu/host-sessions/scope'
+import { dataHome } from '@biu/host-plugin-loader/data-dir'
 import {
   extractImagePathCandidates,
   findRecentImageFiles,
@@ -83,6 +84,7 @@ export function apply(ctx: Context) {
           sessionId,
           candidates,
           workspaceRoot,
+          baseDir: dataHome(),
         })
         if (artifacts.length === 0) return base
         return { ...base, artifacts }

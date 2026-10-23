@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'vitest'
 import {
   hasImageContent,
+  isVisionImageUrl,
   DEEPSEEK_VISION_MODEL,
   flattenToolImagesForChatCompletions,
   toAnthropicContent,
@@ -74,6 +75,39 @@ test('flattenToolImagesForChatCompletions does not insert user between sibling t
   assert.equal(out[3]?.role, 'user')
   assert.equal(hasImageContent(out[3]?.content), true)
   assert.equal(out[4]?.content, '????')
+})
+
+test('isVisionImageUrl rejects svg and accepts raster data URLs', () => {
+  assert.equal(isVisionImageUrl('data:image/png;base64,xx'), true)
+  assert.equal(isVisionImageUrl('data:image/svg+xml;base64,PHN2Zz4='), false)
+  assert.equal(isVisionImageUrl('/api/sessions/s/artifacts/favicon.svg'), false)
+})
+
+test('flattenToolImagesForChatCompletions drops svg image_url blocks', () => {
+  const out = flattenToolImagesForChatCompletions([
+    {
+      role: 'user',
+      content: [
+        { type: 'text', text: 'logo' },
+        { type: 'image_url', image_url: { url: 'data:image/svg+xml;base64,PHN2Zz4=' } },
+        { type: 'image_url', image_url: { url: 'data:image/png;base64,xx' } },
+      ],
+    },
+    {
+      role: 'tool',
+      tool_call_id: '1',
+      content: [
+        { type: 'text', text: '{"ok":true}' },
+        { type: 'image_url', image_url: { url: 'data:image/svg+xml;utf8,<svg/>' } },
+      ],
+    },
+  ])
+  const user = out[0]?.content as Array<{ type: string; image_url?: { url: string } }>
+  assert.equal(user.filter((part) => part.type === 'image_url').length, 1)
+  assert.equal(user[1]?.image_url?.url, 'data:image/png;base64,xx')
+  assert.equal(out[1]?.role, 'tool')
+  assert.equal(out[1]?.content, '{"ok":true}')
+  assert.equal(out.some((item) => item.role === 'user' && hasImageContent(item.content) && item !== out[0]), false)
 })
 
 test('toAnthropicContent wraps tool images as tool_result image source', () => {
