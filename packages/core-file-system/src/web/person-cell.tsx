@@ -19,6 +19,29 @@ let agentsInflight: Promise<ChatPerson[]> | null = null
 let agentsListed: ChatPerson[] | null = null
 let agentsListedAt = 0
 const AGENTS_TTL_MS = 8000
+const PERSON_FACE_PER_FRAME = 2
+const personFaceWait = new Set<() => void>()
+let personFaceRaf = 0
+
+function flushPersonFaces() {
+  personFaceRaf = 0
+  let n = 0
+  for (const arm of personFaceWait) {
+    personFaceWait.delete(arm)
+    arm()
+    n += 1
+    if (n >= PERSON_FACE_PER_FRAME) break
+  }
+  if (personFaceWait.size) personFaceRaf = requestAnimationFrame(flushPersonFaces)
+}
+
+function schedulePersonFace(arm: () => void) {
+  personFaceWait.add(arm)
+  if (!personFaceRaf) personFaceRaf = requestAnimationFrame(flushPersonFaces)
+  return () => {
+    personFaceWait.delete(arm)
+  }
+}
 
 export function agentNameLooksLikeId(name: string, sessionId: string) {
   const text = name.trim()
@@ -116,7 +139,12 @@ function PersonFaceIdle({ value, empty = '' }: { value: unknown; empty?: string 
 }
 
 export function PersonFace({ value, empty = '', defer = false }: { value: unknown; empty?: string; defer?: boolean }) {
-  if (defer) return <PersonFaceIdle value={value} empty={empty} />
+  const [live, setLive] = useState(!defer)
+  useEffect(() => {
+    if (!defer || live) return
+    return schedulePersonFace(() => setLive(true))
+  }, [defer, live])
+  if (!live) return <PersonFaceIdle value={value} empty={empty} />
   return <PersonFaceLive value={value} empty={empty} />
 }
 

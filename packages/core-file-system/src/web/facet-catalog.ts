@@ -46,11 +46,6 @@ function adoptFacets(next: CollectionSchemaPack[]) {
     /* ignore */
   }
   emit()
-  try {
-    window.dispatchEvent(new Event('fsdb:change'))
-  } catch {
-    /* ignore */
-  }
 }
 
 export async function persistFacets(facets: CollectionSchemaPack[], _collectionPath?: string) {

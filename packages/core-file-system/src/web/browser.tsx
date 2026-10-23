@@ -1,4 +1,4 @@
-import { createContext, lazy, memo, startTransition, Suspense, type ComponentProps, type PointerEvent as ReactPointerEvent, type RefObject, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { createContext, lazy, memo, Suspense, type ComponentProps, type PointerEvent as ReactPointerEvent, type RefObject, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import {
   ArrowsPointingOutIcon,
   Bars3BottomLeftIcon,
@@ -86,6 +86,7 @@ import {
 import { ShareRoleLabel, ShareScopeLabel } from './share-scope-label.tsx'
 import { ensureFsdbStyle } from './fsdb-style.ts'
 import { workspaceColumnsForLocation } from './workspace-columns.ts'
+import { ColumnOrderMenu } from './column-order-menu.tsx'
 import { PageBanner } from './page-banner.tsx'
 import { UiGlyph, ViewModeGlyph, idleTableIconKind } from './nav-glyphs.tsx'
 import { DATA_MODULE, isIndexCollection, isSystemCollection } from './database-path.ts'
@@ -164,7 +165,6 @@ const QueryFlyout = lazy(() => import('./query-menus.tsx').then((m) => ({ defaul
 const FieldValuePop = lazy(() => import('./field-value-pop.tsx').then((m) => ({ default: m.FieldValuePop })))
 const CellPopDraft = lazy(() => import('./cell-pop-draft.tsx').then((m) => ({ default: m.CellPopDraft })))
 const RecordDetail = lazy(() => import('./record-detail.tsx').then((m) => ({ default: m.RecordDetail })))
-const ColumnOrderMenu = lazy(() => import('./column-order-menu.tsx').then((m) => ({ default: m.ColumnOrderMenu })))
 const RecordEmojiBoard = lazy(() => import('@biu/public-ui/emoji-board').then((m) => ({ default: m.RecordEmojiBoard })))
 const LazyShareButton = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.ShareButton })))
 const LazySharePanel = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.SharePanel })))
@@ -1397,8 +1397,13 @@ const WindowedTable = memo(function WindowedTable({
   }, [onVisibleRange, tableWindow.end, tableWindow.start])
 
   const applyWrapScroll = (wrap: HTMLElement, top?: number) => {
-    if (frozenRef.current && top == null) return
     const next = tableWrapScroll(wrap, top)
+    if (frozenRef.current && top == null) {
+      setTableScroll((prev) =>
+        prev.width === next.width && prev.height === next.height ? prev : { ...prev, width: next.width, height: next.height },
+      )
+      return
+    }
     const rowPx = rowPxRef.current
     const count = paintCountRef.current
     const cols = columnMetaRef.current
@@ -1412,11 +1417,11 @@ const WindowedTable = memo(function WindowedTable({
   useLayoutEffect(() => {
     const wrap = wrapRef.current
     if (!wrap) return
-    if (wrap.scrollTop) wrap.scrollTop = 0
-    applyWrapScroll(wrap, 0)
-  }, [resetKey, wrapRef])
+    if (!frozen && wrap.scrollTop) wrap.scrollTop = 0
+    applyWrapScroll(wrap, frozen ? undefined : 0)
+  }, [frozen, resetKey, wrapRef])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const wrap = wrapRef.current
     if (!wrap) return
     let raf = 0
@@ -2098,7 +2103,6 @@ export function CollectionBrowser({
   totalRef.current = total
   const listIdentityKey = `${dataPath}\0${pageSize}\0${fetchQuery}\0${sortField}\0${sortDir}\0${sortsStateKey(sorts)}\0${JSON.stringify(queryFilters)}\0${activeViewId ?? ''}\0${customView ? 'full' : 'proj'}\0${groupBy}`
   const reloadKey = `${listIdentityKey}\0${groupBy ? JSON.stringify(groupPages) : page}\0${groupFillKeys.join('\0')}`
-  const [personFacesLive, setPersonFacesLive] = useState(false)
   if (releaseHoldOnPaintRef.current && paintedPath === dataPath && tableHoldRef.current?.nodes !== EMPTY_HOLD_NODES) {
     releaseHoldOnPaintRef.current = false
     tableHoldRef.current = null
@@ -2478,7 +2482,9 @@ export function CollectionBrowser({
     let pendingViews = false
     let pendingData = false
     const onChange = (event: Event) => {
-      if ((event as CustomEvent<{ views?: boolean }>).detail?.views) pendingViews = true
+      const detail = (event as CustomEvent<{ views?: boolean; facets?: boolean }>).detail
+      if (detail?.views) pendingViews = true
+      else if (detail?.facets) return
       else pendingData = true
       window.clearTimeout(debounce)
       debounce = window.setTimeout(() => {
@@ -2610,22 +2616,6 @@ export function CollectionBrowser({
     if (!routeViewReadyRef.current) return
     void reloadRef.current({ force: needsLoad })
   }, [listIdentityKey, reloadKey, routeRecordId, routeViewReady])
-
-  useEffect(() => {
-    setPersonFacesLive(false)
-    if (!items.length) return
-    let cancelled = false
-    const arm = () => {
-      if (!cancelled) startTransition(() => setPersonFacesLive(true))
-    }
-    const idle = window.requestIdleCallback
-    const id = idle ? idle(arm, { timeout: 160 }) : window.setTimeout(arm, 0)
-    return () => {
-      cancelled = true
-      if (idle) window.cancelIdleCallback(id)
-      else window.clearTimeout(id)
-    }
-  }, [listIdentityKey, items.length])
 
   useLayoutEffect(() => {
     setOpenDetailId(routeRecordId)
@@ -4144,7 +4134,7 @@ export function CollectionBrowser({
             collectionPath={collectionPath}
             labelField={schema?.labelField}
             value={readFacetFlatValue(row, key, facetSourceKey(schema))}
-            deferPerson={!personFacesLive}
+            deferPerson
             onChange={
               field.writable && (kind === 'attachment' || kind === 'datetime')
                 ? (next) => writeCellValue(row, key, field, next)
@@ -4163,7 +4153,7 @@ export function CollectionBrowser({
           collectionPath={collectionPath}
           labelField={schema?.labelField}
           value={row[key]}
-          deferPerson={!personFacesLive}
+          deferPerson
           onChange={
             field.writable && (kind === 'attachment' || kind === 'datetime')
               ? (next) => writeCellValue(row, key, field, next)
