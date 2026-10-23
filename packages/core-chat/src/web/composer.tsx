@@ -867,7 +867,7 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
         text,
         'wake',
         tools,
-        packed.filter((item) => item.url.startsWith('data:image/')),
+        packed.filter((item) => /^data:image\/(?:png|jpeg|jpg|gif|webp);base64,/i.test(item.url)),
       )
       clearInput()
       pick?.clear()

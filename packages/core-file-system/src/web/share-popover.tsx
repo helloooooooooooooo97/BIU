@@ -7,7 +7,7 @@ import { AccessMark, accessText, accessTone, ScopeMark, scopeText, scopeTone } f
 
 export { ShareScopeLabel } from './share-scope-label.tsx'
 export { ShareRoleLabel } from './share-scope-label.tsx'
-import { mintSharePin, shareClipboardText, type ShareResourceStats } from '../share-resources.ts'
+import { mintSharePin, shareClipboardText } from '../share-resources.ts'
 import { builtinAllView, builtinMemberViews, isBuiltinAllViewId, parseBuiltinScopeViewId, scopedCollectionName } from '../catalog-views.ts'
 import { recordMatchesSharedView, resolveSharedView } from '../share-view-match.ts'
 import { effectiveDataScope, grantAudienceKind, recordMatchesGrantedView } from '../view-access.ts'
@@ -34,7 +34,6 @@ type ShareInfo = {
 
 type SharePayload = {
   share: ShareInfo | null
-  resources?: ShareResourceStats
 }
 
 function pinStorageKey(token: string) {
@@ -57,15 +56,6 @@ function rememberPin(token: string, pin: string) {
   } catch {
     /* ignore */
   }
-}
-
-function shareStatsLine(resources: ShareResourceStats) {
-  const parts = [
-    resources.pages ? `${resources.pages} 个页面` : '',
-    resources.plugins ? `${resources.plugins} 个插件` : '',
-    resources.collections ? `${resources.collections} 个标签` : '',
-  ].filter(Boolean)
-  return parts.length ? `包含：${parts.join(' · ')}` : ''
 }
 
 function ShareToggle({
@@ -1077,7 +1067,6 @@ export function SharePanel({
 }) {
   const [tab, setTab] = useState<'public' | 'collaboration'>('public')
   const [share, setShare] = useState<ShareInfo | null>(null)
-  const [resources, setResources] = useState<ShareResourceStats>({ pages: 0, plugins: 0, collections: 0, pluginIds: [] })
   const [pin, setPin] = useState('')
   const [usePassword, setUsePassword] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -1116,7 +1105,6 @@ export function SharePanel({
       return
     }
     setShare(data.share)
-    if (data.resources) setResources(data.resources)
     if (flagsOnly) return
     const locked = Boolean(data.share.hasPassword)
     setUsePassword(locked)
@@ -1210,7 +1198,6 @@ export function SharePanel({
   }
 
   const copyReady = !usePassword || Boolean(pin)
-  const stats = shareStatsLine(resources)
 
   return (
     <div className={`fsdb-share-panel${embedded ? ' is-embedded' : ''}`} role="dialog" aria-label="分享" data-testid="fsdb-share-panel">
@@ -1298,13 +1285,6 @@ export function SharePanel({
             </div>
             {usePassword ? <p className="fsdb-share-copy-note">复制时会同时包含链接和密码。</p> : null}
           </>
-        )}
-        {stats ? (
-          <p className="fsdb-share-stats" data-testid="fsdb-share-resources">
-            {stats}
-          </p>
-        ) : (
-          <p className="fsdb-share-stats" data-testid="fsdb-share-resources" hidden />
         )}
       </section>
       {share ? (

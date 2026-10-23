@@ -325,8 +325,9 @@ test('stamps agent createdBy with the session title from /sessions', async () =>
   const ctx = new Context()
   const db = new DatabaseService(ctx)
   db.register(notesCollection())
-  const sessions = new Map<string, { id: string; title: string }>([
-    ['sess-agent-1', { id: 'sess-agent-1', title: '蓝团爱' }],
+  const mascot = { shape: 'pebble', color: 'orange', eye: 1 }
+  const sessions = new Map<string, { id: string; title: string; mascot: typeof mascot }>([
+    ['sess-agent-1', { id: 'sess-agent-1', title: '蓝团爱', mascot }],
   ])
   db.register({
     id: 'sessions',
@@ -340,10 +341,20 @@ test('stamps agent createdBy with the session title from /sessions', async () =>
     },
     list: () => [...sessions.values()],
     get: (id) => sessions.get(id) ?? null,
-  })
+    peek: (id: string) => sessions.get(id),
+  } as CollectionSpec)
   const written = await runWithSession('sess-agent-1', () => db.update('/notes/n1', { status: 'done' }))
-  assert.deepEqual(written.value.createdBy, { kind: 'agent', name: '蓝团爱', sessionId: 'sess-agent-1' })
-  assert.deepEqual(written.value.updatedBy, [{ kind: 'agent', name: '蓝团爱', sessionId: 'sess-agent-1' }])
+  const actor = { kind: 'agent', name: '蓝团爱', sessionId: 'sess-agent-1', mascot }
+  assert.deepEqual(written.value.createdBy, actor)
+  assert.deepEqual(written.value.updatedBy, [actor])
+  sessions.set('sess-agent-1', { id: 'sess-agent-1', title: '蓝团爱改名', mascot: { shape: 'cube', color: 'blue', eye: 2 } })
+  const listed = await db.list('/notes', undefined, { columns: ['title', 'createdBy', 'updatedBy'] })
+  assert.deepEqual(listed.items[0]?.createdBy, {
+    kind: 'agent',
+    name: '蓝团爱改名',
+    sessionId: 'sess-agent-1',
+    mascot: { shape: 'cube', color: 'blue', eye: 2 },
+  })
 })
 
 test('updates stamp createdBy and updatedBy from the current actor', async () => {
@@ -375,7 +386,8 @@ test('later editors append to updatedBy and leave createdBy alone', async () => 
     },
     list: () => [{ id: 'sess-a', title: '甲' }],
     get: (id) => (id === 'sess-a' ? { id: 'sess-a', title: '甲' } : null),
-  })
+    peek: (id: string) => (id === 'sess-a' ? { id: 'sess-a', title: '甲' } : undefined),
+  } as CollectionSpec)
   await db.update('/notes/n1', { status: 'done' })
   const second = await runWithSession('sess-a', () => db.update('/notes/n1', { status: 'open' }))
   assert.deepEqual(second.value.createdBy, { kind: 'user', name: '用户' })

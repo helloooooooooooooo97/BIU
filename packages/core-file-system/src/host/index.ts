@@ -58,7 +58,7 @@ import { parsePageBanner, type PageBanner } from '../page-banner.ts'
 import { SavedViewsStore, clientViewFromDbRow, viewsCollection, type StoredView } from './saved-views.ts'
 import { publicShareUrl } from './share-origin.ts'
 import { readSharePluginWebJs, zipSharePluginSource } from './share-plugin-pack.ts'
-import { collectShareResources } from '../share-resources.ts'
+import { isSharePluginId } from '../share-resources.ts'
 import { FacetStore } from './facets-store.ts'
 import { SharesStore, dropSharesForRemovedViews } from './shares-store.ts'
 import { builtinAllView, builtinAllViewId, builtinMemberViews, displayNameForView, isReadOnlyViewId, stubBuiltinAllView, stubBuiltinMemberView } from '../catalog-views.ts'
@@ -380,6 +380,25 @@ function sessionTitleFromRow(row: unknown): string {
     return String((config as { title?: unknown }).title ?? '').trim()
   }
   return ''
+}
+
+function sessionMascotFromRow(row: unknown): PersonValue['mascot'] {
+  if (!row || typeof row !== 'object' || Array.isArray(row)) return undefined
+  const raw = (row as { mascot?: unknown }).mascot
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const rec = raw as { shape?: unknown; color?: unknown; eye?: unknown }
+  if (typeof rec.shape !== 'string' || typeof rec.color !== 'string') return undefined
+  return {
+    shape: rec.shape,
+    color: rec.color,
+    ...(typeof rec.eye === 'number' ? { eye: rec.eye } : {}),
+  }
+}
+
+function sessionPersonFromRow(row: unknown): { name: string; mascot?: PersonValue['mascot'] } {
+  const name = sessionTitleFromRow(row)
+  const mascot = sessionMascotFromRow(row)
+  return mascot ? { name, mascot } : { name }
 }
 
 function coerceUrl(value: unknown) {
@@ -1964,8 +1983,13 @@ export class DatabaseService extends Service implements Database {
       const name = readWorkspaceProfile().name.trim() || '用户'
       return { kind: 'user', name }
     }
-    const name = (await this.querySessionName(sid)) || sid.slice(0, 8)
-    return { kind: 'agent', name, sessionId: sid }
+    const peeked = await this.querySessionPerson(sid)
+    return {
+      kind: 'agent',
+      name: peeked.name || sid.slice(0, 8),
+      sessionId: sid,
+      ...(peeked.mascot ? { mascot: peeked.mascot } : {}),
+    }
   }
 
   private namedPerson(person: PersonValue): PersonValue {
@@ -1974,17 +1998,30 @@ export class DatabaseService extends Service implements Database {
       return member?.name ? { ...person, name: member.name } : person
     }
     if (person.kind !== 'agent' || !person.sessionId) return person
-    const peeked = this.peekSessionName(person.sessionId)
-    return peeked ? { ...person, name: peeked } : person
+    const peeked = this.peekSessionPerson(person.sessionId)
+    return {
+      ...person,
+      ...(peeked.name ? { name: peeked.name } : {}),
+      ...(peeked.mascot ? { mascot: peeked.mascot } : {}),
+    }
   }
 
-  private peekSessionName(sessionId: string): string {
-    const sessions = this.collection('/sessions')
-    const row = sessions?.get?.(sessionId)
-    if (row && typeof (row as Promise<unknown>).then !== 'function') {
-      return sessionTitleFromRow(row)
-    }
-    return sessionTitleFromRow(this.sessionsService()?.peek?.(sessionId))
+  /**
+   * 同步读会话行，给创建人/编辑人列用。
+   * 只走内存缓存，绝不调用集合 get()：那是 async，会 await list() 全表重列，
+   * 再 require() 把整条 events 读出来，表格每渲染一格就被卡一次。
+   */
+  private peekSessionRow(sessionId: string): unknown {
+    const sessions = this.collection('/sessions') as
+      | { peek?: (id: string) => unknown; get?: (id: string) => unknown }
+      | undefined
+    const peeked = sessions?.peek?.(sessionId)
+    if (peeked) return peeked
+    return this.sessionsService()?.peek?.(sessionId)
+  }
+
+  private peekSessionPerson(sessionId: string) {
+    return sessionPersonFromRow(this.peekSessionRow(sessionId))
   }
 
   private sessionsService(): { peek?: (id: string) => unknown; get?: (id: string) => Promise<unknown> } | undefined {
@@ -1995,17 +2032,17 @@ export class DatabaseService extends Service implements Database {
     }
   }
 
-  private async querySessionName(sessionId: string): Promise<string> {
-    const peeked = this.peekSessionName(sessionId)
-    if (peeked) return peeked
+  private async querySessionPerson(sessionId: string): Promise<{ name: string; mascot?: PersonValue['mascot'] }> {
+    const peeked = this.peekSessionPerson(sessionId)
+    if (peeked.name || peeked.mascot) return peeked
+    // 只有 peek 完全落空才回落到真正的读取；正常热路径不会走到这里，
+    // 也就不会为了写一个 createdBy 把整条会话的 events 拉进内存。
     const sessions = this.collection('/sessions')
     if (sessions?.get) {
-      const row = await sessions.get(sessionId)
-      const title = sessionTitleFromRow(row)
-      if (title) return title
+      const fromCollection = sessionPersonFromRow(await sessions.get(sessionId))
+      if (fromCollection.name || fromCollection.mascot) return fromCollection
     }
-    const row = await this.sessionsService()?.get?.(sessionId)
-    return sessionTitleFromRow(row)
+    return sessionPersonFromRow(await this.sessionsService()?.get?.(sessionId))
   }
 
   private applyFacetOverlay(spec: CollectionSpec, row: DbRecord): DbRecord {
@@ -3670,31 +3707,17 @@ export function apply(ctx: Context) {
       route.send(400, { error: String(error) })
     }
   })
+  const shareSnapshotOpts = (query: URLSearchParams) => {
+    if (query.get('contents') === 'all') return { contentIds: 'all' as const }
+    const record = query.get('record') || ''
+    return { contentIds: record ? [record] : [] }
+  }
   const sharePasswordOf = (route: { req: { headers: IncomingMessage['headers'] }; query: URLSearchParams }, body?: { password?: unknown }) => {
     const header = String(route.req.headers['x-share-password'] ?? '')
     if (header) return header
     const query = route.query.get('password')
     if (query) return query
     return String(body?.password ?? '')
-  }
-  const sharePreviewOf = async (kind: 'view' | 'record', collection: string, viewId: string, recordId: string) => {
-    try {
-      const snap = await buildShareSnapshot(db, savedViews, {
-        token: '',
-        kind,
-        collection,
-        viewId,
-        recordId,
-        hasPassword: false,
-        sharePlugins: true,
-        allowCopy: true,
-        createdAt: 0,
-        updatedAt: 0,
-      })
-      return collectShareResources(snap.records, snap.contents, snap.records.map((row) => String(row.id)))
-    } catch {
-      return { pages: 0, plugins: 0, collections: 0, pluginIds: [] as string[] }
-    }
   }
   ctx.http.route('GET', '/api/db/shares', async (route) => {
     if (activeDataLocation() === 'cloud' && !isOnlineRuntime()) {
@@ -3799,10 +3822,8 @@ export function apply(ctx: Context) {
       return
     }
     const share = kind === 'record' ? shares.findRecord(collection, recordId) : shares.find(kind, collection, viewId, recordId)
-    const resources = await sharePreviewOf(kind, collection, viewId, recordId)
     route.send(200, {
       share: share ? { ...share, url: publicShareUrl(route.req, share.token) } : null,
-      resources,
     })
   })
   ctx.http.route('POST', '/api/db/shares', async (route) => {
@@ -3864,7 +3885,7 @@ export function apply(ctx: Context) {
       return
     }
     try {
-      const snapshot = await buildShareSnapshot(db, savedViews, share)
+      const snapshot = await buildShareSnapshot(db, savedViews, share, shareSnapshotOpts(route.query))
       route.send(200, snapshot)
     } catch (error) {
       const msg = String(error)
@@ -3889,7 +3910,7 @@ export function apply(ctx: Context) {
       return
     }
     try {
-      const snapshot = await buildShareSnapshot(db, savedViews, share)
+      const snapshot = await buildShareSnapshot(db, savedViews, share, shareSnapshotOpts(route.query))
       route.send(200, snapshot)
     } catch (error) {
       const msg = String(error)
@@ -3899,6 +3920,34 @@ export function apply(ctx: Context) {
         return
       }
       route.send(400, { error: msg })
+    }
+  })
+  ctx.http.route('GET', '/api/share/:token/content/:recordId', async (route) => {
+    const token = route.params.token ?? ''
+    const share = shares.get(token)
+    if (!share) {
+      route.send(404, { error: 'not found' })
+      return
+    }
+    if (share.hasPassword && !shares.verifyPassword(token, sharePasswordOf(route))) {
+      route.send(401, { needsPassword: true })
+      return
+    }
+    const recordId = route.params.recordId ?? ''
+    try {
+      const snapshot = await buildShareSnapshot(db, savedViews, share, { contentIds: [recordId] })
+      if (!snapshot.records.some((row) => String(row.id) === recordId)) {
+        route.send(404, { error: 'not found' })
+        return
+      }
+      route.send(200, {
+        id: recordId,
+        content: snapshot.contents[recordId] ?? null,
+        pluginIds: snapshot.pluginIds,
+        assets: snapshot.assets,
+      })
+    } catch {
+      route.send(404, { error: 'not found' })
     }
   })
   ctx.http.route('GET', '/api/share/:token/file/:name', async (route) => {
@@ -3913,7 +3962,8 @@ export function apply(ctx: Context) {
       return
     }
     try {
-      const snapshot = await buildShareSnapshot(db, savedViews, share)
+      const record = route.query.get('record') || ''
+      const snapshot = await buildShareSnapshot(db, savedViews, share, record ? { contentIds: [record] } : { contentIds: [] })
       const name = route.params.name ?? ''
       if (!snapshot.assets.includes(name)) {
         route.send(404, { error: 'not found' })
@@ -3943,8 +3993,7 @@ export function apply(ctx: Context) {
     }
     const id = String(route.params.id ?? '')
     try {
-      const snapshot = await buildShareSnapshot(db, savedViews, share)
-      if (!snapshot.pluginIds.includes(id)) {
+      if (!share.sharePlugins || !isSharePluginId(id)) {
         route.send(404, { error: 'not found' })
         return
       }
@@ -3980,8 +4029,7 @@ export function apply(ctx: Context) {
     }
     const id = String(route.params.id ?? '').replace(/\.zip$/i, '')
     try {
-      const snapshot = await buildShareSnapshot(db, savedViews, share)
-      if (!snapshot.pluginIds.includes(id)) {
+      if (!isSharePluginId(id)) {
         route.send(404, { error: 'not found' })
         return
       }

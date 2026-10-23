@@ -242,3 +242,68 @@ test('builtin view snapshot titles use 全部 plus the collection label', async 
   assert.equal(snap.view?.name, '全部页面')
   assert.equal(snap.records[0]?.shareRole, '阅读')
 })
+
+test('view snapshot omits bodies until a row is requested', async () => {
+  let contentReads = 0
+  const db = {
+    stat: async () => ({
+      kind: 'collection',
+      label: '页面',
+      view: { title: '页面' },
+      schema: {
+        labelField: 'title',
+        contentField: 'notes',
+        fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string', writable: true }, notes: { type: 'file', writable: true } },
+      },
+    }),
+    list: async () => ({ items: [{ id: 'p1', title: 'P1' }, { id: 'p2', title: 'P2' }] }),
+    read: async () => ({ value: null }),
+    content: async () => {
+      contentReads++
+      return { value: 'body' }
+    },
+  }
+  const views = new SavedViewsStore().open(':memory:')
+  const shares = new SharesStore().open(':memory:')
+  const share = shares.upsert({ kind: 'view', collection: '/pages', viewId: builtinAllViewId('/pages') })
+  const listed = await buildShareSnapshot(db, views, share)
+  assert.deepEqual(listed.contents, {})
+  assert.equal(contentReads, 0)
+  const one = await buildShareSnapshot(db, views, share, { contentIds: ['p2'] })
+  assert.equal(one.contents.p2, 'body')
+  assert.equal('p1' in one.contents, false)
+  assert.equal(contentReads, 1)
+})
+
+test('view snapshot reads requested bodies concurrently', async () => {
+  const rows = Array.from({ length: 12 }, (_, i) => ({ id: `p${i}`, title: `P${i}` }))
+  let inflight = 0
+  let peak = 0
+  const db = {
+    stat: async () => ({
+      kind: 'collection',
+      label: '页面',
+      view: { title: '页面' },
+      schema: {
+        labelField: 'title',
+        contentField: 'notes',
+        fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string', writable: true }, notes: { type: 'file', writable: true } },
+      },
+    }),
+    list: async () => ({ items: rows }),
+    read: async () => ({ value: null }),
+    content: async () => {
+      inflight++
+      peak = Math.max(peak, inflight)
+      await new Promise((resolve) => setTimeout(resolve, 30))
+      inflight--
+      return { value: 'ok' }
+    },
+  }
+  const views = new SavedViewsStore().open(':memory:')
+  const shares = new SharesStore().open(':memory:')
+  const share = shares.upsert({ kind: 'view', collection: '/pages', viewId: builtinAllViewId('/pages') })
+  const snap = await buildShareSnapshot(db, views, share, { contentIds: 'all' })
+  assert.equal(Object.keys(snap.contents).length, 12)
+  assert.ok(peak > 1, `expected concurrent content reads, peak=${peak}`)
+})

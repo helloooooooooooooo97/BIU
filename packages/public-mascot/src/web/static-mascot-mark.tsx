@@ -80,7 +80,7 @@ export const StaticMascotMark = memo(function StaticMascotMark({
           <path d={geo.path} fill={geo.fill} />
         ) : (
           <>
-            <path d={fallbackBody(identity.shape)} fill={fallbackColor(identity.color)} />
+            <path d={mascotShapePath(identity.shape)} fill={mascotFill(identity.color)} />
             <ellipse cx="91" cy="119" rx="13" ry="18" fill="#fff" />
             <ellipse cx="151" cy="119" rx="13" ry="18" fill="#fff" />
           </>
@@ -97,7 +97,7 @@ export const StaticMascotMark = memo(function StaticMascotMark({
   )
 })
 
-const FALLBACK_COLORS: Record<GrokColor, string> = {
+export const MASCOT_FILL: Record<GrokColor, string> = {
   black: '#444',
   brown: '#a86f45',
   red: '#e25555',
@@ -111,11 +111,11 @@ const FALLBACK_COLORS: Record<GrokColor, string> = {
   gray: '#8b8b8b',
 }
 
-function fallbackColor(color: GrokColor) {
-  return FALLBACK_COLORS[color] ?? FALLBACK_COLORS.cyan
+export function mascotFill(color: GrokColor) {
+  return MASCOT_FILL[color] ?? MASCOT_FILL.cyan
 }
 
-function fallbackBody(shape: GrokShape) {
+export function mascotShapePath(shape: GrokShape) {
   if (shape === 'tablet' || shape === 'capsule' || shape === 'cylinder') {
     return 'M47 42C47 18 66 0 90 0H151C175 0 194 18 194 42V187C194 211 175 229 151 229H90C66 229 47 211 47 187Z'
   }

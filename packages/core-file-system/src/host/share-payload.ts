@@ -10,6 +10,21 @@ import { asPublicProfile } from '@biu/host-workspace'
 import { viewShareListFilter } from '../share-view-match.ts'
 
 const SHARE_LIMIT = 200
+const CONTENT_CONCURRENCY = 8
+
+async function mapConcurrent<T, R>(items: readonly T[], limit: number, run: (item: T) => Promise<R>): Promise<R[]> {
+  if (!items.length) return []
+  const results = new Array<R>(items.length)
+  let cursor = 0
+  const worker = async () => {
+    while (cursor < items.length) {
+      const index = cursor++
+      results[index] = await run(items[index]!)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()))
+  return results
+}
 
 function asStat(raw: unknown) {
   return raw as { kind?: string; schema?: CollectionSchema; label?: string; view?: { title?: string } | null }
@@ -49,10 +64,44 @@ function withResources(
   }
 }
 
+export type ShareSnapshotOpts = {
+  /** View shares skip bodies until the visitor opens a row (or downloads). */
+  contentIds?: readonly string[] | 'all'
+}
+
+async function loadContents(
+  db: Pick<Database, 'content'>,
+  collection: string,
+  records: DbRecord[],
+  ids: readonly string[],
+) {
+  const allow = new Set(ids.map(String))
+  const wanted = records.filter((row) => allow.has(String(row.id)))
+  const bodies = await mapConcurrent(wanted, CONTENT_CONCURRENCY, async (row) => {
+    try {
+      return asContentRead(await db.content(`${collection}/${row.id}`)).value ?? null
+    } catch {
+      return null
+    }
+  })
+  const contents: Record<string, unknown> = {}
+  wanted.forEach((row, index) => {
+    contents[row.id] = bodies[index] ?? null
+  })
+  return contents
+}
+
+function contentIdsFor(share: ShareRecord, records: DbRecord[], opts?: ShareSnapshotOpts) {
+  if (share.kind === 'record' || opts?.contentIds === 'all') return records.map((row) => String(row.id))
+  const allow = new Set(records.map((row) => String(row.id)))
+  return [...new Set((opts?.contentIds ?? []).map(String))].filter((id) => allow.has(id))
+}
+
 export async function buildShareSnapshot(
   db: Pick<Database, 'stat' | 'list' | 'read' | 'content'>,
   savedViews: SavedViewsStore,
   share: ShareRecord,
+  opts?: ShareSnapshotOpts,
 ): Promise<ShareSnapshot> {
   const stat = asStat(await db.stat(share.collection))
   if (stat.kind !== 'collection' || !stat.schema) throw new Error('unknown collection')
@@ -108,14 +157,7 @@ export async function buildShareSnapshot(
     limit: SHARE_LIMIT,
   })) as { items?: DbRecord[] }
   const records = (listed.items ?? []).map(audienceRecord)
-  const contents: Record<string, unknown> = {}
-  for (const row of records) {
-    try {
-      contents[row.id] = asContentRead(await db.content(`${share.collection}/${row.id}`)).value ?? null
-    } catch {
-      contents[row.id] = null
-    }
-  }
+  const contents = await loadContents(db, share.collection, records, contentIdsFor(share, records, opts))
   const banner = await readShareBanner(db, share.collection, share.viewId)
   return withResources({
     kind: 'view',

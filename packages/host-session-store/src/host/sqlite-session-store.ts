@@ -302,6 +302,39 @@ export class SqliteSessionStore implements SessionStore {
     })
   }
 
+  /**
+   * 按 id 同步读一条摘要：只查 sessions 表，不扫 events。
+   * 页面表格的创建人列只需要 title + mascot，别为它把整个会话日志读进内存。
+   */
+  peekSummary(id: string): SessionSummary | undefined {
+    const row = this.sessions
+      .prepare(
+        'SELECT id, version, project_json, mascot_json, config_json, event_count, title, updated_at FROM sessions WHERE id = ?',
+      )
+      .get(id) as SessionRow | undefined
+    if (!row) return undefined
+    const project = parseProject(row.project_json)
+    const mascot = parseMascot(row.mascot_json)
+    const config = parseConfig(row.config_json)
+    const createdAt = Number(config?.createdAt)
+    const stamp = Number.isFinite(createdAt) && createdAt > 0 ? createdAt : row.updated_at
+    return {
+      id: row.id,
+      version: row.version,
+      eventCount: row.event_count,
+      title:
+        row.title && row.title !== row.id.slice(0, 8)
+          ? row.title
+          : mascot
+            ? nameFromSessionMascot(mascot)
+            : row.title || row.id.slice(0, 8),
+      updatedAt: row.updated_at,
+      ...(project ? { project } : {}),
+      ...(mascot ? { mascot } : {}),
+      ...(config || stamp ? { config: { ...(config ?? {}), createdAt: stamp } } : {}),
+    }
+  }
+
   async delete(id: string): Promise<boolean> {
     this.sessions.exec('BEGIN IMMEDIATE')
     try {

@@ -20,7 +20,7 @@ const TINY_PNG = Buffer.from(
 )
 
 test('extractImagePathCandidates finds relative and absolute image paths', () => {
-  const text = 'saved shot.png\nalso ./shots/a.jpg and /tmp/out.webp done'
+  const text = 'saved shot.png\nalso ./shots/a.jpg and /tmp/out.webp done public/favicon.svg'
   assert.deepEqual(extractImagePathCandidates(text), ['shot.png', './shots/a.jpg', '/tmp/out.webp'])
 })
 
@@ -45,6 +45,21 @@ test('ingestSessionImages copies workspace images into .biu/artifacts', async ()
   assert.ok(file)
   assert.equal(file.mime, 'image/png')
   assert.deepEqual(file.data, TINY_PNG)
+})
+
+test('ingestSessionImages skips svg bytes even when the file is named png', async () => {
+  const baseDir = await mkdtemp(join(tmpdir(), 'biu-art-svg-'))
+  const workspace = join(baseDir, 'ws')
+  await mkdir(workspace, { recursive: true })
+  await writeFile(join(workspace, 'logo.png'), Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"></svg>'))
+
+  const artifacts = await ingestSessionImages({
+    sessionId: 'sess-svg',
+    candidates: ['logo.png'],
+    workspaceRoot: workspace,
+    baseDir,
+  })
+  assert.equal(artifacts.length, 0)
 })
 
 test('ingestSessionImages accepts absolute paths outside workspace', async () => {

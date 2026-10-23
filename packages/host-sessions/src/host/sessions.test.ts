@@ -5,7 +5,7 @@ import { mkdtempSync } from 'node:fs'
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { Context, Service } from 'cordis'
-import { openAndMigrateBiu, runWithAccount } from '@biu/host-plugin-loader/data-dir'
+import { LATEST_BIU_SCHEMA, openAndMigrateBiu, runWithAccount } from '@biu/host-plugin-loader/data-dir'
 import { CollabStore } from '@biu/host-account/store'
 import * as sessionStore from '@biu/host-session-store'
 import * as sessions from './index.ts'
@@ -128,7 +128,15 @@ test('sqlite session store round-trips and listSummaries skips full reload', asy
 
   const ctx2 = new Context()
   await ctx2.plugin(sessionStore, { driver: 'sqlite', path })
+  const throughStore = ctx2.sessionStore.peekSummary('sql1')
+  assert.equal(throughStore?.id, 'sql1')
+  assert.equal(throughStore?.title, summaries[0]?.title)
+  assert.deepEqual(throughStore?.mascot, summaries[0]?.mascot)
+  assert.equal(ctx2.sessionStore.peekSummary('missing'), undefined)
   await ctx2.plugin(sessions)
+  const throughSessions = ctx2.sessions.peekSummary('sql1')
+  assert.equal(throughSessions?.id, 'sql1')
+  assert.equal(throughSessions?.title, throughStore?.title)
   const loaded = await ctx2.sessions.get('sql1')
   assert.equal(loaded?.id, record.id)
   assert.equal(loaded?.events.length, 4)
@@ -438,6 +446,7 @@ test('sqlite drops leftover sessions.type column', async () => {
   db.prepare(
     'INSERT INTO sessions (id, version, title, type, event_count, updated_at) VALUES (?, 1, ?, ?, 0, 1)',
   ).run('legacy', 'old', 'live')
+  db.exec(`PRAGMA user_version = ${LATEST_BIU_SCHEMA}`)
   db.close()
 
   const ctx = new Context()
@@ -524,6 +533,86 @@ test('deriveMessages projects pasted images as multimodal content', () => {
   assert.equal(parts[0]?.text, '看看这张图')
   assert.equal(parts[1]?.type, 'image_url')
   assert.equal(parts[1]?.image_url?.url, 'data:image/png;base64,abc')
+})
+
+test('quarantineLlmImages only flags the model projection and keeps pictures in the log', async () => {
+  const ctx = new Context()
+  await ctx.plugin(sessionStore, { driver: 'memory' })
+  await ctx.plugin(sessions)
+  const record = await ctx.sessions.create()
+  await ctx.sessions.append(record.id, {
+    type: 'user/message',
+    text: '看看',
+    kind: 'wake',
+    images: [{ name: 'shot.png', mime: 'image/png', url: 'data:image/png;base64,abc' }],
+  })
+  await ctx.sessions.quarantineLlmImages(record.id)
+  assert.equal(ctx.sessions.llmImagesBlocked(record.id), true)
+  const stored = (await ctx.sessions.require(record.id)).events.find((item) => item.type === 'user/message')
+  assert.equal(stored?.type === 'user/message' && stored.images?.length, 1)
+})
+
+test('quarantineLlmImages with seqs only omits those pictures from the projection', async () => {
+  const ctx = new Context()
+  await ctx.plugin(sessionStore, { driver: 'memory' })
+  await ctx.plugin(sessions)
+  const record = await ctx.sessions.create()
+  const first = await ctx.sessions.append(record.id, {
+    type: 'user/message',
+    text: '旧图',
+    kind: 'wake',
+    images: [{ name: 'old.png', mime: 'image/png', url: 'data:image/png;base64,old' }],
+  })
+  await ctx.sessions.append(record.id, { type: 'assistant/message', text: '上次已经回过了' })
+  const second = await ctx.sessions.append(record.id, {
+    type: 'user/message',
+    text: '新图',
+    kind: 'wake',
+    images: [{ name: 'new.png', mime: 'image/png', url: 'data:image/png;base64,new' }],
+  })
+  await ctx.sessions.quarantineLlmImages(record.id, [second.seq])
+  assert.equal(ctx.sessions.llmImagesBlocked(record.id), true)
+  const derived = ctx.sessions.deriveMessages(record.id)
+  const users = derived.filter((item) => item.role === 'user')
+  assert.equal(Array.isArray(users[0]?.content), true)
+  assert.equal(users[1]?.content, '新图')
+  assert.equal((await ctx.sessions.require(record.id)).config?.skipLlmImages, undefined)
+  await ctx.sessions.allowLlmImages(record.id)
+  assert.equal((await ctx.sessions.require(record.id)).config?.omitImageSeqs?.includes(second.seq), true)
+  assert.equal(first.seq !== second.seq, true)
+})
+
+test('dropUserImages removes stored pictures so deriveMessages is text-only', async () => {
+  const ctx = new Context()
+  await ctx.plugin(sessionStore, { driver: 'memory' })
+  await ctx.plugin(sessions)
+  const record = await ctx.sessions.create()
+  await ctx.sessions.append(record.id, {
+    type: 'user/message',
+    text: '看看',
+    kind: 'wake',
+    images: [{ name: 'shot.png', mime: 'image/png', url: 'data:image/png;base64,abc' }],
+  })
+  assert.equal(await ctx.sessions.dropUserImages(record.id), 1)
+  const user = ctx.sessions.deriveMessages(record.id).find((item) => item.role === 'user')
+  assert.equal(user?.content, '看看')
+})
+
+test('deriveMessages does not project svg data URLs as image_url', () => {
+  const events: SessionEvent[] = [
+    { type: 'session/open', version: 1, seq: 0, ts: 0 },
+    {
+      type: 'user/message',
+      text: 'logo',
+      kind: 'wake',
+      seq: 1,
+      ts: 1,
+      images: [{ name: 'logo.svg', mime: 'image/png', url: 'data:image/svg+xml;base64,PHN2Zz4=' }],
+    },
+  ]
+  const out = deriveMessages(events)
+  const user = out.find((item) => item.role === 'user')
+  assert.equal(user?.content, 'logo')
 })
 
 test('deriveMessages honors db_action compact as new prefix', () => {

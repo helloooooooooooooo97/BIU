@@ -43,10 +43,27 @@ async function saveImageFile(url: string, mime: string, bytes: Buffer) {
   return dest
 }
 
-function sniffOrFallback(bytes: Buffer, url: string) {
+function sniffImageMime(bytes: Buffer): string | null {
   if (bytes[0] === 0x89 && bytes[1] === 0x50) return 'image/png'
   if (bytes[0] === 0xff && bytes[1] === 0xd8) return 'image/jpeg'
   if (bytes[0] === 0x47 && bytes[1] === 0x49) return 'image/gif'
+  if (bytes.length >= 12 && bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP') {
+    return 'image/webp'
+  }
+  const head = bytes.toString('utf8', 0, Math.min(256, bytes.length)).trimStart()
+  if (head.startsWith('<svg') || (head.startsWith('<?xml') && head.includes('<svg'))) return 'image/svg+xml'
+  return null
+}
+
+function sniffOrFallback(bytes: Buffer, url: string) {
+  const sniffed = sniffImageMime(bytes)
+  if (sniffed) return sniffed
+  try {
+    const path = new URL(url).pathname.toLowerCase()
+    if (path.endsWith('.svg')) return 'image/svg+xml'
+  } catch {
+    if (/\.svg(\?|#|$)/i.test(url)) return 'image/svg+xml'
+  }
   return looksLikeImageUrl(url) ? 'image/jpeg' : 'application/octet-stream'
 }
 
@@ -71,7 +88,7 @@ export function httpFetchProvider(): WebFetchProvider {
       const type = raw.type.toLowerCase()
       const asImage = isImageContentType(type) || (looksLikeImageUrl(target.href) && !type.includes('html'))
       if (asImage) {
-        const mime = isImageContentType(type) ? type.split(';')[0]!.trim() : sniffOrFallback(raw.bytes, target.href)
+        const mime = sniffImageMime(raw.bytes) ?? (isImageContentType(type) ? type.split(';')[0]!.trim() : sniffOrFallback(raw.bytes, target.href))
         const path = await saveImageFile(raw.url || target.href, mime, raw.bytes)
         return {
           url: raw.url || target.href,

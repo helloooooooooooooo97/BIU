@@ -408,6 +408,9 @@ test('overlay window geom clamps and docks to the right, bottom-aligned by defau
   const tiny = clampOverlayWinGeom({ x: -400, y: -20, w: 10, h: 10 }, 1280, 800)
   assert.equal(tiny.w, OVERLAY_WIN_MIN_W)
   assert.equal(tiny.h, OVERLAY_WIN_MIN_H)
+  const short = clampOverlayWinGeom({ x: 12, y: 12, w: 420, h: 520 }, 1280, 400)
+  assert.ok(short.h <= 400 - 24)
+  assert.ok(short.h >= OVERLAY_CHAT_HEIGHT_MIN)
 })
 
 test('layout always pins the overlay to the right of the viewport', () => {

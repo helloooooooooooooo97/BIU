@@ -50,6 +50,8 @@ test('composer banner and approvals share GET /api/chat/config', () => {
   assert.doesNotMatch(composer, /fetch\('\/api\/chat\/config'\)/)
   assert.match(banner, /getChatConfig/)
   assert.doesNotMatch(banner, /fetch\('\/api\/chat\/config'\)/)
+  assert.match(banner, /biu:chat-config-changed/)
+  assert.doesNotMatch(banner, /setInterval/)
   assert.match(banner, /chat-config-banner/)
   assert.match(banner, /chat-config-banner-action/)
   assert.match(banner, /尚未配置 API KEY：消息会本地回声，不会调用模型。/)

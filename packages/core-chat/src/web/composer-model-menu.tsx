@@ -20,6 +20,26 @@ export type ComposerModelOption = {
 
 type Pane = 'root' | 'model' | string
 
+const FLYOUT_GAP = 6
+const FLYOUT_PAD = 8
+const FLYOUT_WIDTH = 200
+const FLYOUT_COMPACT_WIDTH = 140
+
+export function placeComposerModelFlyout(
+  anchor: Pick<DOMRect, 'left' | 'right' | 'bottom'>,
+  menuWidth: number,
+  viewportWidth: number,
+  viewportHeight: number,
+) {
+  const fitsRight = anchor.right + FLYOUT_GAP + menuWidth <= viewportWidth - FLYOUT_PAD
+  const rawLeft = fitsRight ? anchor.right + FLYOUT_GAP : anchor.left - FLYOUT_GAP - menuWidth
+  const maxLeft = Math.max(FLYOUT_PAD, viewportWidth - menuWidth - FLYOUT_PAD)
+  return {
+    left: Math.min(Math.max(FLYOUT_PAD, Math.round(rawLeft)), maxLeft),
+    bottom: Math.round(viewportHeight - anchor.bottom),
+  }
+}
+
 function groupTitle(key: string, labels: Record<string, string>) {
   return (
     labels[key] ||
@@ -85,7 +105,8 @@ export function ComposerModelMenu(props: {
       const el = panelRef.current
       if (!el) return
       const rect = el.getBoundingClientRect()
-      setFlyBox({ left: Math.round(rect.right + 6), bottom: Math.round(window.innerHeight - rect.bottom) })
+      const menuWidth = pane === 'model' ? FLYOUT_WIDTH : FLYOUT_COMPACT_WIDTH
+      setFlyBox(placeComposerModelFlyout(rect, menuWidth, window.innerWidth, window.innerHeight))
     }
     place()
     window.addEventListener('resize', place)

@@ -49,6 +49,7 @@ import {
   overlayListed,
   parentFieldKey,
   parseFacetFlatColumnKey,
+  isFacetFlatColumnKey,
   patchFacetFlatValue,
   pinActionColumn,
   readFacetFlatValue,
@@ -133,7 +134,7 @@ import { HttpError, invalidateListReads, listCollection, readJson } from './db-c
 import { savedViewRecordPath } from '../paths.ts'
 import { findViewNeighbor, indexOnPage } from './view-adjacent.ts'
 import { TABLE_WINDOW_OVERSCAN, medianPaintedRowPx, rememberedTableWrap, tableColumnSlice, tableColumnUnchanged, tableColumnWidth, tableRowFallbackPx, tableWindowSlice, tableWindowUnchanged, tableWrapScroll, type TableColumnSlice } from './table-window.ts'
-import { forgetPreviewTotalsForPath, markPaintedListReady, rememberPreviewTotalForView, resetPaintedListReady, whenListIdle } from './sidebar-preview.ts'
+import { forgetPreviewTotalsForPath, markPaintedListReady, rememberPreviewTotalForView, resetPaintedListReady } from './sidebar-preview.ts'
 import { DataSidebarShell } from './data-sidebar-shell.tsx'
 import { builtinAllViewId, catalogLockFilters, isReadOnlyViewId, mergeTableViews, parseBuiltinScopeViewId, stubBuiltinBlockKindView, viewsForScope, type DataScope } from '../catalog-views.ts'
 import { SAVED_VIEW_EVENT, moveInspectorRecordsToTrash, rememberInspectorWorkingView, showRecordInInspector } from './inspector-db-route.ts'
@@ -619,6 +620,18 @@ function isListColumn(key: string) {
   return key !== 'description' && key !== 'notes' && key !== 'content' && key !== 'emoji' && key !== 'banner' && key !== 'tags'
 }
 
+/** Saved view columns stay until we know the field is gone. Facet / share overlay keys are not schema fields. */
+function retainSavedColumn(key: string, schema: CollectionSchema | undefined, allColumnKeys: string[]) {
+  if (key === 'actions' || key === 'shareScope' || key === 'shareRole') return true
+  if (key === 'createdBy' || key === 'updatedBy' || key === 'createdAt' || key === 'updatedAt') return true
+  if (parseFacetFlatColumnKey(key) || isFacetFlatColumnKey(key)) return true
+  if (!schema) return true
+  if (allColumnKeys.includes(key)) return true
+  const field = schema.fields[key]
+  if (!field) return true
+  return isListColumn(key) && resolveFieldType(field) !== 'file'
+}
+
 const QUERY_NEST_IGNORE = `${HEADLESS_DISMISS_IGNORE}, .db-search-menu, .fsdb-cellselect-menu, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]`
 
 function recordsFingerprint(rows: Array<DbRecord & { path?: string }>) {
@@ -679,98 +692,6 @@ function forgetListCache(path: string) {
   for (const key of [...listCache.keys()]) {
     if (key === path || key.startsWith(`${path}\0`)) listCache.delete(key)
   }
-}
-
-const warmingLists = new Set<string>()
-
-/** 把别的表的「全部」预热进 listCache。切表时就能一次画出正确的 shareScope 组，不用先拿上一张表的私人/空间顶着。 */
-async function warmListCacheForView(
-  path: string,
-  view: SavedView,
-  listed: SavedView[],
-) {
-  const pageSize = normalizePageSize(view.pageSize)
-  if (peekListCache(path, view.id, pageSize)) return
-  const key = listCacheKey(path, view.id)
-  if (warmingLists.has(key)) return
-  warmingLists.add(key)
-  try {
-    if (peekListCache(path, view.id, pageSize)) return
-    const groupBy = view.groupBy ?? ''
-    const sorts = normalizeSorts(view.sorts, view.sortField, view.sortDir)
-    const filters = encodeListFilter(catalogLockFilters(view.id, listed), resolveViewFilterTree(view))
-    const columns = listProjectionKeys({
-      schema: undefined,
-      columns: view.columns.length ? view.columns : LIST_SEED_COLUMNS,
-      groupBy,
-    })
-    const listOpts = {
-      path,
-      query: view.query ?? '',
-      sortField: view.sortField,
-      sortDir: view.sortDir,
-      sorts,
-      filters,
-      columns,
-    }
-    const stat = await readJson<StatResult>(`/api/db/stat?path=${encodeURIComponent(path)}`)
-    let items: Array<DbRecord & { path?: string }> = []
-    let total = 0
-    let schema = stat.schema
-    let buckets: GroupBucket[] = []
-    if (groupBy) {
-      const grouped = await listGroupedCollection({
-        ...listOpts,
-        groupBy,
-        schema,
-        extraValues: [],
-        pageSize,
-        groupPages: {},
-        wrap: !!view.wrap,
-        fillKeys: [],
-        list: (input) => listCollection(input),
-      })
-      if (grouped) {
-        items = grouped.items
-        total = grouped.total
-        buckets = grouped.buckets
-        schema = grouped.schema ?? schema
-      }
-    } else {
-      const page = await listCollection({ ...listOpts, limit: pageSize, offset: 0 })
-      items = page.items
-      total = page.total
-      schema = page.schema ?? schema
-    }
-    rememberListCache(
-      path,
-      { items, total, stat: { ...stat, schema }, groupBuckets: buckets, listLimit: pageSize },
-      view.id,
-    )
-  } catch {
-    /* 预热失败就等点进去再拉 */
-  } finally {
-    warmingLists.delete(key)
-  }
-}
-
-const WARM_LIST_CONCURRENCY = 2
-
-async function warmSiblingListCaches(paths: string[]) {
-  let next = 0
-  const workers = Math.min(WARM_LIST_CONCURRENCY, paths.length)
-  await Promise.all(
-    Array.from({ length: workers }, async () => {
-      while (next < paths.length) {
-        const path = paths[next]
-        next += 1
-        if (!path) break
-        const listed = paintListedViews(path)
-        const view = listed.find((item) => item.id === builtinAllViewId(path)) ?? listed[0]
-        if (view) await warmListCacheForView(path, view, listed)
-      }
-    }),
-  )
 }
 
 function sameSavedViews(a: SavedView[], b: SavedView[]) {
@@ -1898,9 +1819,15 @@ export function CollectionBrowser({
       ...(columnKeys.length ? columnKeys : currentSchema ? defaultColumnKeys(currentSchema, [...allowed]) : seedColumns),
       ...cellKeys,
     ]
-    const visible = currentSchema
-      ? requested.filter((key) => allowed.has(key) || Boolean(parseFacetFlatColumnKey(key)) || cellKeys.includes(key))
-      : requested
+    const visible = requested.filter(
+      (key) =>
+        !currentSchema ||
+        allowed.has(key) ||
+        Boolean(parseFacetFlatColumnKey(key)) ||
+        key === 'shareScope' ||
+        key === 'shareRole' ||
+        cellKeys.includes(key),
+    )
     const columns = visible.length ? visible : [...(columnKeys.length ? columnKeys : ['title']), ...cellKeys]
     if (!columns.length) return undefined
     const queryKeys = [...collectQueryFields(sorts, filterTree, currentSchema?.labelField ?? 'title')]
@@ -2147,7 +2074,7 @@ export function CollectionBrowser({
       const loadUngrouped = () => listCollection({ ...listOpts, limit: reqPageSize, offset: switching ? 0 : page * reqPageSize })
       if (reqGroupBy) {
         const cachedSchema = switching ? undefined : schemaRef.current
-        const cachedKeys = cachedSchema ? groupListKeys(cachedSchema, reqGroupBy, extraGroupValues(cachedSchema), facetCatalog) : []
+        const cachedKeys = groupListKeys(cachedSchema, reqGroupBy, extraGroupValues(cachedSchema), facetCatalog)
         if (cachedKeys.length) {
           const [statResult, grouped] = await Promise.all([nextStatPromise, loadGroups(cachedSchema)])
           nextStat = statResult
@@ -2455,7 +2382,9 @@ export function CollectionBrowser({
     let pendingViews = false
     let pendingData = false
     const onChange = (event: Event) => {
-      if ((event as CustomEvent<{ views?: boolean }>).detail?.views) pendingViews = true
+      const detail = (event as CustomEvent<{ views?: boolean; facets?: boolean }>).detail
+      if (detail?.views) pendingViews = true
+      else if (detail?.facets) return
       else pendingData = true
       window.clearTimeout(debounce)
       debounce = window.setTimeout(() => {
@@ -2494,39 +2423,8 @@ export function CollectionBrowser({
 
   useEffect(() => {
     if (routeRecordId) return
-    return whenListIdle(() => {
-      void pullFacets()
-    })
+    void pullFacets()
   }, [collectionPath, routeRecordId])
-
-  useEffect(() => {
-    if (nested) return
-    const onWarm = (event: Event) => {
-      const path = String((event as CustomEvent<{ path?: string }>).detail?.path ?? '')
-      if (!path || path === collectionPath) return
-      const listed = paintListedViews(path)
-      const view = listed.find((item) => item.id === builtinAllViewId(path)) ?? listed[0]
-      if (view) void warmListCacheForView(path, view, listed)
-    }
-    window.addEventListener('fsdb:warm-list', onWarm)
-    return () => window.removeEventListener('fsdb:warm-list', onWarm)
-  }, [collectionPath, nested, tables])
-
-  useEffect(() => {
-    if (nested || routeRecordId) return
-    return whenListIdle(() => {
-      const currentListed = paintListedViews(collectionPath)
-      for (const view of currentListed) {
-        if (view.id === activeViewIdRef.current) continue
-        void warmListCacheForView(collectionPath, view, currentListed)
-      }
-      const paths = tables
-        .filter((table) => table.path !== collectionPath && !isIndexCollection(table.path) && !isSystemCollection(table.path))
-        .map((table) => table.path)
-        .sort((a, b) => Number(b === '/plugins') - Number(a === '/plugins'))
-      void warmSiblingListCaches(paths)
-    }, 0)
-  }, [collectionPath, nested, routeRecordId, tables])
 
   useEffect(() => {
     if (nested) return
@@ -2586,7 +2484,7 @@ export function CollectionBrowser({
       if (!needsLoad) return
     }
     if (routeRecordId) return
-    if (!routeViewReadyRef.current && !needsLoad) return
+    if (!routeViewReadyRef.current) return
     void reloadRef.current({ force: needsLoad })
   }, [listIdentityKey, reloadKey, routeRecordId, routeViewReady])
 
@@ -2624,6 +2522,8 @@ export function CollectionBrowser({
   const subsetLocked = lockedFilterKeys.length > 0
   const canCreate = Boolean(schema?.records?.create) && !subsetLocked
   const canDelete = Boolean(schema?.records?.delete) && !subsetLocked
+  const inTrash = collectionPath === '/trash'
+  const canBulkDelete = (canDelete || inTrash) && !subsetLocked
   const canFacet = Boolean(schema?.fields.facet?.writable) && !subsetLocked
   const bulkFields = useMemo(
     () =>
@@ -2661,13 +2561,23 @@ export function CollectionBrowser({
     const requested = columnKeys.length ? columnKeys : schemaDefaultKeys
     const order = pinActionColumn(
       schema,
-      requested.filter((key) => key === 'actions' || allColumns.some((item) => item.key === key)),
+      requested.filter((key) => retainSavedColumn(key, schema, allColumnKeys)),
       rowActionColumn,
     )
     return order
-      .map((key) => allColumns.find((item) => item.key === key))
+      .map((key) => {
+        const hit = allColumns.find((item) => item.key === key)
+        if (hit) return hit
+        if (key === 'shareScope') return { key, kind: 'select' as const, field: { type: 'select' as const, label: '分享' } }
+        if (key === 'shareRole') return { key, kind: 'select' as const, field: { type: 'select' as const, label: '权限' } }
+        const facet = parseFacetFlatColumnKey(key)
+        if (facet) {
+          return { key, kind: 'select' as const, field: { type: 'select' as const, label: facet.fieldKey }, packId: facet.packId }
+        }
+        return null
+      })
       .filter(Boolean) as typeof allColumns
-  }, [allColumns, columnKeys, rowActionColumn, schema, schemaDefaultKeys])
+  }, [allColumnKeys, allColumns, columnKeys, rowActionColumn, schema, schemaDefaultKeys])
 
   const colWindowRef = useRef<TableColumnSlice>(EMPTY_COL_WINDOW)
   const tableChromeRef = useRef<TableChromeBag>({
@@ -2747,12 +2657,14 @@ export function CollectionBrowser({
     prevSchemaDefaultSig.current = schemaDefaultSig
     const saved = viewsRef.current.find((view) => view.id === activeViewIdRef.current)?.columns ?? []
     setColumnKeys((prev) => {
-      const allowed = new Set(allColumnKeys)
       const source = prev.length ? prev : saved
       const grown = prev.length && prevDefaults.length ? schemaDefaultKeys.filter((key) => !prevDefaults.includes(key)) : []
       const kept = pinActionColumn(
         schema,
-        [...source.filter((key) => allowed.has(key)), ...grown.filter((key) => allowed.has(key) && !source.includes(key))],
+        [
+          ...source.filter((key) => retainSavedColumn(key, schema, allColumnKeys)),
+          ...grown.filter((key) => retainSavedColumn(key, schema, allColumnKeys) && !source.includes(key)),
+        ],
         rowActionColumn,
       )
       if (source.length) {
@@ -3213,9 +3125,7 @@ export function CollectionBrowser({
       filters: { ...catalogLockFilters(view.id, [view]), ...view.filters },
     })
     const sourceColumns = next.columns.length
-      ? allColumnKeys.length
-        ? next.columns.filter((key) => allColumnKeys.includes(key))
-        : next.columns
+      ? next.columns.filter((key) => retainSavedColumn(key, schema, allColumnKeys))
       : schemaDefaultKeys
     const nextColumns = pinActionColumn(schema, sourceColumns, rowActionColumn)
     const nextQuery = next.query ?? ''
@@ -3304,13 +3214,6 @@ export function CollectionBrowser({
     persistActiveViewRef.current()
     if (view.id !== activeViewIdRef.current) {
       adoptListCacheForViewRef.current(dataPath, view)
-      const listed = paintListedViews(collectionPath)
-      void warmListCacheForView(collectionPath, view, listed).then(() => {
-        if (activeViewIdRef.current !== view.id) return
-        if (!peekListCache(dataPath, view.id, normalizePageSize(view.pageSize))) return
-        adoptListCacheForViewRef.current(dataPath, view)
-        setHoldNav((n) => n + 1)
-      })
       applyView(view)
     } else {
       setViewMenuOpen(false)
@@ -3645,12 +3548,6 @@ export function CollectionBrowser({
     if (!keepCache) forgetListCache(dataPath)
     invalidateListReads()
     window.dispatchEvent(new Event('fsdb:change'))
-    if (keepCache) return
-    const listed = paintListedViews(collectionPath)
-    for (const view of listed) {
-      if (view.id === activeViewIdRef.current) continue
-      void warmListCacheForView(collectionPath, view, listed)
-    }
   }
 
   useEffect(() => {
@@ -3855,11 +3752,23 @@ export function CollectionBrowser({
 
   async function executeDeleteRecords(ids: string[]) {
     try {
-      await readJson('/api/db/delete', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ path: dataPath, ids }),
-      })
+      if (dataPath === '/trash') {
+        await Promise.all(
+          ids.map((id) =>
+            readJson('/api/db/action', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ path: `${dataPath}/${id}`, action: 'delete' }),
+            }),
+          ),
+        )
+      } else {
+        await readJson('/api/db/delete', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ path: dataPath, ids }),
+        })
+      }
       if (!embed && detailId && ids.includes(detailId)) onCloseRecord?.()
       const gone = new Set(ids.map(String))
       const deletedRows = itemsRef.current.filter((row) => gone.has(String(row.id)))
@@ -3872,7 +3781,7 @@ export function CollectionBrowser({
         viewId: activeViewIdRef.current,
         total: totalRef.current,
       })
-      publishDeletedRowsToTrash(dataPath, deletedRows, title)
+      if (dataPath !== '/trash') publishDeletedRowsToTrash(dataPath, deletedRows, title)
       announceListChange()
       quietUntil.current = 0
       await reload({ force: true })
@@ -4591,6 +4500,7 @@ export function CollectionBrowser({
 
   function persistActiveViewNow() {
     if (sheet || !hydrated || !activeViewId) return
+    if (!routeViewReadyRef.current) return
     if (hydratePath.current !== `${collectionPath}\0${dataPath}`) return
     const current = viewsRef.current.find((view) => view.id === activeViewId)
     if (!current) return
@@ -4790,10 +4700,6 @@ export function CollectionBrowser({
                   onDelete={deleteView}
                   onReorder={persistViewOrder}
                   onAdd={() => addEmptyView()}
-                  onWarm={(view) => {
-                    if (view.id === activeViewIdRef.current) return
-                    void warmListCacheForView(collectionPath, view, paintListedViews(collectionPath))
-                  }}
                 />
                 </HeadlessDismiss>
               ) : null}
@@ -5522,13 +5428,13 @@ export function CollectionBrowser({
                     >
                       {pickedIds.length} 已选
                     </span>
-                    {canDelete && pickedIds.some((id) => !(collectionPath === '/plugins' && items.find((row) => row.id === id)?.builtin === true)) ? (
+                    {canBulkDelete && pickedIds.some((id) => !(collectionPath === '/plugins' && items.find((row) => row.id === id)?.builtin === true)) ? (
                       <button
                         type="button"
                         className="tasks-icon-btn is-danger"
                         data-testid="fsdb-bulk-delete"
-                        aria-label="删除选中"
-                        title={`删除选中的 ${pickedIds.length} 条`}
+                        aria-label={inTrash ? '彻底删除选中' : '删除选中'}
+                        title={`${inTrash ? '彻底删除' : '删除'}选中的 ${pickedIds.length} 条`}
                         onClick={() => setDlg({
                           kind: 'delete-records',
                           ids: pickedIds.filter((id) => !(collectionPath === '/plugins' && items.find((row) => row.id === id)?.builtin === true)),
@@ -5749,7 +5655,13 @@ export function CollectionBrowser({
             setDlg(null)
             void executeDeleteRecords(ids)
           }}
-          body={<p>确定删除选中的 {dlg.ids.length} 条记录？会放进回收站，可随时恢复。</p>}
+          body={
+            <p>
+              {collectionPath === '/trash'
+                ? `确定彻底删除选中的 ${dlg.ids.length} 条？不可恢复。`
+                : `确定删除选中的 ${dlg.ids.length} 条记录？会放进回收站，可随时恢复。`}
+            </p>
+          }
         />
       ) : null}
       {dlg?.kind === 'bulk-edit' ? (

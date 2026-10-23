@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, TABLE_WINDOW_VIEWPORT_FALLBACK, TABLE_COL_PX, TABLE_COL_PIN_PX, TABLE_COL_ACTIONS_PX, TABLE_COL_OVERSCAN, TABLE_COL_VIEWPORT_FALLBACK, GROUPED_FULL_FETCH_ALL_MAX, groupedFullFetchCount, medianPaintedRowPx, rememberedTableWrap, rememberTableWrap, resetRememberedTableWrap, tableColumnSlice, tableColumnWidth, tableRowFallbackPx, tableWindowSlice, tableWindowUnchanged, tableWrapScroll } from './table-window.ts'
+import { TABLE_ROW_PX, TABLE_WRAP_ROW_PX, TABLE_WINDOW_OVERSCAN, TABLE_WINDOW_VIEWPORT_FALLBACK, TABLE_COL_PX, TABLE_COL_PIN_PX, TABLE_COL_ACTIONS_PX, TABLE_COL_VIEWPORT_FALLBACK, GROUPED_FULL_FETCH_ALL_MAX, groupedFullFetchCount, medianPaintedRowPx, rememberedTableWrap, rememberTableWrap, resetRememberedTableWrap, tableColumnSlice, tableColumnWidth, tableRowFallbackPx, tableWindowSlice, tableWindowUnchanged, tableWrapScroll } from './table-window.ts'
 
 test('table window keeps overscan around the viewport', () => {
   const slice = tableWindowSlice(200, 0, TABLE_ROW_PX * 10)
@@ -94,33 +94,13 @@ test('grouped wrap pages larger than the window only fully fetch the first group
   assert.equal(groupedFullFetchCount(100, 1, true), 1)
 })
 
-test('unmeasured first screen does not paint every table column', () => {
-  const widths = [TABLE_COL_PIN_PX, ...Array.from({ length: 12 }, () => TABLE_COL_PX)]
-  const slice = tableColumnSlice(13, 1, 0, 0, widths)
-  assert.equal(slice.pin, 1)
-  assert.equal(slice.start, 1)
-  assert.ok(slice.end < 13)
-  assert.ok(slice.pin + (slice.end - slice.start) < 13)
-  assert.ok(slice.padRight > 0)
-  assert.equal(slice.padLeft, 0)
-})
-
-test('narrow column sets still paint every column', () => {
-  const slice = tableColumnSlice(4, 1, 0, TABLE_COL_VIEWPORT_FALLBACK, [140, 72, 72, 72])
-  assert.equal(slice.start, 1)
-  assert.equal(slice.end, 4)
-  assert.equal(slice.padLeft, 0)
-  assert.equal(slice.padRight, 0)
-})
-
-test('typical 7-col first screen overflows the wrap and pads the rest', () => {
-  const widths = [TABLE_COL_PIN_PX, TABLE_COL_ACTIONS_PX, ...Array.from({ length: 5 }, () => TABLE_COL_PX)]
-  const slice = tableColumnSlice(7, 1, 0, 624, widths)
-  assert.equal(slice.pin, 1)
-  assert.equal(slice.start, 1)
-  assert.ok(slice.end < 7)
-  assert.equal(slice.padLeft, 0)
-  assert.ok(slice.padRight > 0)
+test('tables paint every column without a horizontal window', () => {
+  const wide = tableColumnSlice(13, 1, 0, 0, [TABLE_COL_PIN_PX, ...Array.from({ length: 12 }, () => TABLE_COL_PX)])
+  assert.deepEqual(wide, { start: 1, end: 13, pin: 1, padLeft: 0, padRight: 0 })
+  const seven = tableColumnSlice(7, 1, 400, 624, [TABLE_COL_PIN_PX, TABLE_COL_ACTIONS_PX, ...Array.from({ length: 5 }, () => TABLE_COL_PX)])
+  assert.deepEqual(seven, { start: 1, end: 7, pin: 1, padLeft: 0, padRight: 0 })
+  const scrolled = tableColumnSlice(10, 0, TABLE_COL_PX * 4, TABLE_COL_PX * 3, Array.from({ length: 10 }, () => TABLE_COL_PX))
+  assert.deepEqual(scrolled, { start: 0, end: 10, pin: 0, padLeft: 0, padRight: 0 })
 })
 
 test('unsaved columns use fixed defaults; saved widths stay as-is', () => {
@@ -157,27 +137,10 @@ test('remembered wrap size replaces the 624 fallback after the first measure', (
   assert.deepEqual(rememberedTableWrap(), { width: TABLE_COL_VIEWPORT_FALLBACK, height: TABLE_WINDOW_VIEWPORT_FALLBACK })
 })
 
-test('wide plugin tables keep later columns off-screen until the wrap is measured', () => {
+test('wide plugin tables still paint every column before the wrap is measured', () => {
   resetRememberedTableWrap()
   const widths = [TABLE_COL_PIN_PX, ...Array.from({ length: 16 }, () => TABLE_COL_PX)]
   const unmeasured = tableColumnSlice(17, 1, 0, rememberedTableWrap().width, widths)
-  assert.ok(unmeasured.end < 17)
-  assert.ok(unmeasured.padRight > 0)
-  const measured = tableColumnSlice(17, 1, 0, tableWrapScroll({
-    clientWidth: 1440,
-    clientHeight: 800,
-    scrollTop: 0,
-    scrollLeft: 0,
-  }).width, widths)
-  assert.ok(measured.end > unmeasured.end)
+  assert.deepEqual(unmeasured, { start: 1, end: 17, pin: 1, padLeft: 0, padRight: 0 })
   resetRememberedTableWrap()
-})
-
-test('column window shifts with horizontal scroll and pads both sides', () => {
-  const widths = Array.from({ length: 10 }, () => TABLE_COL_PX)
-  const slice = tableColumnSlice(10, 0, TABLE_COL_PX * 4, TABLE_COL_PX * 3, widths)
-  assert.ok(slice.start >= 4 - TABLE_COL_OVERSCAN)
-  assert.ok(slice.end <= 4 + 3 + TABLE_COL_OVERSCAN + 1)
-  assert.ok(slice.padLeft > 0)
-  assert.ok(slice.padRight > 0)
 })

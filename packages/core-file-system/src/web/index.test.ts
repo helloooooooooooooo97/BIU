@@ -58,7 +58,7 @@ test('saved views catalog waits until the view menu is open and only pulls the o
   assert.match(views, /export async function fetchSavedView/)
   assert.match(browser, /fetchSavedView\(collectionPath/)
   assert.match(browser, /routeViewNeedsFetch/)
-  assert.match(browser, /if \(!routeViewReadyRef\.current && !needsLoad\) return/)
+  assert.match(browser, /if \(!routeViewReadyRef\.current\) return/)
 })
 
 test('database page no longer registers collection shortcuts on the dock', () => {

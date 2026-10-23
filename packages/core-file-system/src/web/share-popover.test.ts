@@ -3,6 +3,14 @@ import { resolve } from 'node:path'
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 
+test('share panel does not load or show resource counts', () => {
+  const src = readFileSync(resolve(import.meta.dirname, './share-popover.tsx'), 'utf8')
+  const host = readFileSync(resolve(import.meta.dirname, '../host/index.ts'), 'utf8')
+  const getShares = host.slice(host.indexOf("GET', '/api/db/shares'"), host.indexOf("POST', '/api/db/shares'"))
+  assert.doesNotMatch(src, /shareStatsLine|fsdb-share-resources|ShareResourceStats/)
+  assert.doesNotMatch(getShares, /sharePreviewOf|buildShareSnapshot|resources/)
+})
+
 test('share panel copies link and password together, without a separate pin copy', () => {
   const src = readFileSync(resolve(import.meta.dirname, './share-popover.tsx'), 'utf8')
   assert.match(src, /shareClipboardText/)
@@ -36,6 +44,12 @@ test('share panel uses a compact settings section and custom toggles', () => {
   assert.match(css, /\.fsdb-share-toggle\.is-on/)
   assert.match(css, /\.fsdb-share-link-row/)
   assert.match(css, /\.fsdb-share-invite-row\{[^}]*grid-template-columns:minmax\(0,1fr\) 78px 52px/)
+})
+
+test('open share panel sits above the table toolbar', () => {
+  const css = readFileSync(resolve(import.meta.dirname, './fsdb-style.ts'), 'utf8')
+  assert.match(css, /\.fsdb-page \.tasks-toolbar\{[^}]*z-index:50/)
+  assert.match(css, /\.fsdb-right \.chat-view-header:has\(\.fsdb-share-panel\)\{[^}]*z-index:90/)
 })
 
 test('permission column opens the same kind of chain as data scope', () => {

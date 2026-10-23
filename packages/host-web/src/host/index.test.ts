@@ -70,6 +70,12 @@ test('web_search / web_fetch match Claude/DSH: query in, sources + fetch text ou
         headers: { 'content-type': 'image/png' },
       })
     }
+    if (url.includes('cdn.example.com/favicon.svg')) {
+      return new Response('<svg xmlns="http://www.w3.org/2000/svg"></svg>', {
+        status: 200,
+        headers: { 'content-type': 'image/png' },
+      })
+    }
     if (url.includes('example.com/missing')) {
       return new Response('not found', { status: 404, headers: { 'content-type': 'text/plain' } })
     }
@@ -108,6 +114,11 @@ test('web_search / web_fetch match Claude/DSH: query in, sources + fetch text ou
     assert.ok((image.file?.bytes ?? 0) >= 4)
     assert.match(image.file?.path ?? '', /biu-web/)
     assert.match(image.text, /saved image/)
+
+    const svg = (await ctx.tools.invoke('web_fetch', { url: 'https://cdn.example.com/favicon.svg' })) as {
+      file?: { mime: string }
+    }
+    assert.equal(svg.file?.mime, 'image/svg+xml')
 
     const missing = (await ctx.tools.invoke('web_fetch', { url: 'https://example.com/missing' })) as { status: number }
     assert.equal(missing.status, 404)

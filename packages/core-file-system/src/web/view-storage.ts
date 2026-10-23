@@ -229,10 +229,9 @@ async function fetchSavedViewNow(collectionPath: string, viewId: string): Promis
         return withViewDisplay(collectionPath, view)
       }
     } catch {
-      /* 再按表拉目录 */
+      /* 单条读失败就停，不拉整表 80 条视图挡首屏 */
     }
   }
-  await pullSavedViews([collectionPath])
   const listed = loadViews(collectionPath).find((view) => view.id === viewId)
   return listed ? withViewDisplay(collectionPath, listed) : null
 }

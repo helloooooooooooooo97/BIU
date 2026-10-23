@@ -148,7 +148,7 @@ export class AgentsService extends Service {
           if (/cancelled|AbortError|aborted/i.test(String(error))) break
           throw error
         }
-        if (live.abort.signal.aborted) break
+        if (last.halt || live.abort.signal.aborted) break
       }
       return last
     }
@@ -388,7 +388,7 @@ function sanitizeImages(raw: AgentSendOptions['images']): ClaimedInput['images']
     const url = String(item.url ?? '')
     const name = String(item.name ?? 'image.png').slice(0, 80)
     if (!/^image\/(png|jpe?g|gif|webp)$/i.test(mime)) continue
-    if (!url.startsWith('data:image/') || url.length > 8 * 1024 * 1024) continue
+    if (!/^data:image\/(?:png|jpeg|jpg|gif|webp);base64,/i.test(url) || url.length > 8 * 1024 * 1024) continue
     const path = typeof (item as { path?: unknown }).path === 'string' ? String((item as { path: string }).path).trim() : ''
     out.push({ name: name || 'image.png', mime, url, ...(path && !path.includes('..') ? { path } : {}) })
     if (out.length >= 6) break

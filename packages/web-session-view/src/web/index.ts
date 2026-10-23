@@ -1566,7 +1566,9 @@ export class SessionViewService extends Service {
     images: Array<{ name: string; mime: string; url: string }> = [],
   ) {
     const content = text.trim()
-    const pics = images.filter((item) => item?.url?.startsWith('data:image/')).slice(0, 6)
+    const pics = images
+      .filter((item) => item?.url && /^data:image\/(?:png|jpeg|jpg|gif|webp);base64,/i.test(item.url))
+      .slice(0, 6)
     if (!content && !pics.length) return
     const sessionId = await this.ensureSession()
     const tools = [...new Set(extraTools.map((name) => name.trim()).filter(Boolean))]

@@ -144,6 +144,13 @@ export interface SessionConfig {
    * 关不掉；写入时会夹到 1..模型上下文。
    */
   autoCompactInputTokens?: number
+  /**
+   * 发给模型的投影整段跳过图（Pi 的 context 投影，不是改原始日志）。
+   * 用户再贴新图时清掉。已经点名的 omitImageSeqs 仍保留。
+   */
+  skipLlmImages?: boolean
+  /** 上一轮还能聊之后新加、又被供应商拒掉的事件 seq：只省略这些条目上的图。 */
+  omitImageSeqs?: number[]
 }
 
 /** 检查器打开的页签和各栏库路径，跟这条 session 走。开合/宽度/跟随只记本机。 */
@@ -265,6 +272,11 @@ export function normalizeSessionConfig(value: unknown): SessionConfig | undefine
   if (inspector) next.inspector = inspector
   const autoCompact = normalizeAutoCompactInputTokens(raw.autoCompactInputTokens)
   if (autoCompact) next.autoCompactInputTokens = autoCompact
+  if (raw.skipLlmImages === true) next.skipLlmImages = true
+  if (Array.isArray(raw.omitImageSeqs)) {
+    const seqs = [...new Set(raw.omitImageSeqs.filter((seq): seq is number => Number.isInteger(seq) && seq >= 0))]
+    if (seqs.length) next.omitImageSeqs = seqs.slice(0, 256)
+  }
   delete (next as { tags?: unknown }).tags
   return Object.keys(next).length ? next : undefined
 }
@@ -276,6 +288,7 @@ export function mergeSessionConfig(
     systemPrompt?: string | null
     inspector?: SessionInspectorBind | null
     goal?: SessionGoal | null
+    skipLlmImages?: boolean | null
   },
 ): SessionConfig | undefined {
   const next: SessionConfig = { ...(base ?? {}) }
@@ -338,6 +351,17 @@ export function mergeSessionConfig(
     const autoCompact = normalizeAutoCompactInputTokens(patch.autoCompactInputTokens)
     if (autoCompact) next.autoCompactInputTokens = autoCompact
     else delete next.autoCompactInputTokens
+  }
+  if ('skipLlmImages' in patch) {
+    if (patch.skipLlmImages) next.skipLlmImages = true
+    else delete next.skipLlmImages
+  }
+  if ('omitImageSeqs' in patch) {
+    const seqs = Array.isArray(patch.omitImageSeqs)
+      ? [...new Set(patch.omitImageSeqs.filter((seq) => Number.isInteger(seq) && seq >= 0))]
+      : []
+    if (seqs.length) next.omitImageSeqs = seqs.slice(0, 256)
+    else delete next.omitImageSeqs
   }
   delete (next as { tags?: unknown }).tags
   return Object.keys(next).length ? next : undefined
@@ -402,5 +426,7 @@ export interface SessionStore {
   save(record: SessionRecord): Promise<void>
   list(): Promise<string[]>
   listSummaries(): Promise<SessionSummary[]>
+  /** 可选：按 id 只读摘要，不碰事件日志。取创建人名/形象时优先走它。 */
+  peekSummary?(id: string): SessionSummary | undefined
   delete(id: string): Promise<boolean>
 }

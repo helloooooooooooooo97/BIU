@@ -142,7 +142,9 @@ test('compose-only overlay shows the thread after send', () => {
   assert.equal(panel.style.bottom, '12px')
   const pane = document.querySelector('[data-testid="chat-pane"]') as HTMLElement
   assert.ok(pane)
-  assert.ok(Number.parseFloat(pane.style.height) >= 280)
+  assert.equal(pane.style.height, '')
+  assert.ok(Number.parseFloat(panel.style.height) >= 280)
+  assert.equal(panel.style.maxHeight, 'calc(100dvh - 24px)')
   assert.equal(panel.contains(pane), true)
   const dock = panel.querySelector('.chat-composer-dock')
   assert.ok(dock)

@@ -1,5 +1,6 @@
 import { Service, type Context } from 'cordis'
 import type { AssistantReply, ChatOptions, LlmClient, LlmConfig, LlmMessage, LlmUsage } from '@biu/host-llm'
+import { classifyLlmError, messagesHaveImages, omitImageContent, omitRejectedImages } from '@biu/host-llm'
 import { runWithSession } from '@biu/host-sessions/scope'
 import { applyContextBudget, liftToolImages } from '@biu/host-sessions'
 import { autoCompactPostStep, contextWindowTokens, mechanicalCompactText, shouldAutoCompact } from './auto-compact.ts'
@@ -79,6 +80,38 @@ export class AgentLoop implements AgentRunner {
     if (this.signal.aborted) throw new Error('cancelled')
   }
 
+  private async recoverLlmChat(
+    session: AgentLoop['ctx']['sessions'],
+    messages: LlmMessage[],
+    error: unknown,
+    chatOptions: ChatOptions,
+  ): Promise<{ kind: 'cancel' } | { kind: 'fail'; detail: string } | { kind: 'ok'; reply: AssistantReply }> {
+    const kind = classifyLlmError(error)
+    if (this.signal.aborted || kind === 'cancel') return { kind: 'cancel' }
+    let next = messages
+    if (kind === 'images') {
+      const omitted = omitRejectedImages(messages, error)
+      await session.quarantineLlmImages(this.sessionId, omitted.seqs)
+      if (!messagesHaveImages(messages)) return { kind: 'fail', detail: String(error) }
+      next = omitted.next
+    } else if (kind === 'orphan-tools') {
+      const healed = await session.healOpenLog(this.sessionId)
+      if (!healed) return { kind: 'fail', detail: String(error) }
+      const lifted = await liftToolImages(session.deriveMessages(this.sessionId), this.sessionId)
+      const budget = Number(process.env.CTX_BUDGET ?? 1000000)
+      next = budget > 0 ? applyContextBudget(lifted, budget) : lifted
+    } else {
+      return { kind: 'fail', detail: String(error) }
+    }
+    try {
+      const reply = await this.llm.chat(next, this.ctx.tools.schemas(), this.signal, chatOptions)
+      return { kind: 'ok', reply }
+    } catch (retry) {
+      if (this.signal.aborted || classifyLlmError(retry) === 'cancel') return { kind: 'cancel' }
+      return { kind: 'fail', detail: String(retry) }
+    }
+  }
+
   /** 落 assistant/message 前走 agent/post-step。钩子只能往 text 上追加。 */
   private async applyPostStep(
     turn: number,
@@ -154,6 +187,9 @@ export class AgentLoop implements AgentRunner {
       this.ctx.emit('agent/status', { sessionId: this.sessionId, status: 'idle' })
       return { text: '（空回合）', steps: [] }
     }
+
+    const hasNewImages = req.messages.some((item) => Boolean(item.images?.length))
+    if (hasNewImages) await session.allowLlmImages(this.sessionId)
 
     for (const item of req.messages) {
       if (this.signal.aborted) {
@@ -233,7 +269,12 @@ export class AgentLoop implements AgentRunner {
         throw new Error('cancelled')
       }
 
-      const rawMessages = await liftToolImages(session.deriveMessages(this.sessionId), this.sessionId)
+      const skipImages = session.llmImagesBlocked(this.sessionId)
+      const derived = session.deriveMessages(this.sessionId)
+      const omitSeqs = (await session.get(this.sessionId))?.config?.omitImageSeqs
+      const rawMessages = skipImages && !omitSeqs?.length
+        ? omitImageContent(derived)
+        : await liftToolImages(derived, this.sessionId, { skipSeqs: omitSeqs })
       if (this.signal.aborted) {
         await session.append(this.sessionId, { type: 'turn/end', turn, reason: 'cancelled' })
         throw new Error('cancelled')
@@ -248,30 +289,35 @@ export class AgentLoop implements AgentRunner {
       const budget = Number(process.env.CTX_BUDGET ?? 1000000)
       const messages = budget > 0 ? applyContextBudget(rawMessages, budget) : rawMessages
       let reply: AssistantReply
+      const chatOptions: ChatOptions = {
+        onDelta: async (text) => {
+          queueChunk(text)
+        },
+        onReasoningDelta: (text) => {
+          queueChunk(text, 'reasoning')
+        },
+      }
       try {
-        reply = await this.llm.chat(messages, this.ctx.tools.schemas(), this.signal, {
-          onDelta: async (text) => {
-            queueChunk(text)
-          },
-          onReasoningDelta: (text) => {
-            queueChunk(text, 'reasoning')
-          },
-        })
+        reply = await this.llm.chat(messages, this.ctx.tools.schemas(), this.signal, chatOptions)
         await flushChunks()
       } catch (error) {
         await flushChunks()
-        if (this.signal.aborted) {
+        const recovered = await this.recoverLlmChat(session, messages, error, chatOptions)
+        if (recovered.kind === 'cancel') {
           await session.append(this.sessionId, { type: 'turn/end', turn, reason: 'cancelled' })
           this.ctx.emit('agent/status', { sessionId: this.sessionId, status: 'idle' })
           throw new Error('cancelled')
         }
-        const detail = String(error)
-        const text = `模型调用失败：${detail}`
-        await session.append(this.sessionId, { type: 'assistant/message', text })
-        await session.append(this.sessionId, { type: 'step/end', turn, step })
-        await session.append(this.sessionId, { type: 'turn/end', turn, reason: 'llm-error' })
-        this.ctx.emit('agent/status', { sessionId: this.sessionId, status: 'idle' })
-        return { text, steps }
+        if (recovered.kind === 'fail') {
+          const text = `模型调用失败：${recovered.detail}`
+          await session.append(this.sessionId, { type: 'assistant/message', text })
+          await session.append(this.sessionId, { type: 'step/end', turn, step })
+          await session.append(this.sessionId, { type: 'turn/end', turn, reason: 'llm-error' })
+          this.ctx.emit('agent/status', { sessionId: this.sessionId, status: 'idle' })
+          return { text, steps, halt: true }
+        }
+        reply = recovered.reply
+        await flushChunks()
       }
 
       if (!reply.toolCalls.length) {
