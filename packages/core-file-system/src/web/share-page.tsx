@@ -50,13 +50,27 @@ function persistShareTheme(mode: 'light' | 'dark') {
   if (meta) meta.setAttribute('content', mode)
 }
 
-async function loadSnapshot(token: string, password = ''): Promise<ShareSnapshot | { needsPassword: true } | { error: string }> {
+function shareHeaders(password = '') {
   const headers: Record<string, string> = { 'content-type': 'application/json' }
   if (password) headers['x-share-password'] = password
+  return headers
+}
+
+async function loadSnapshot(
+  token: string,
+  password = '',
+  extra: { recordId?: string; contents?: 'all' } = {},
+): Promise<ShareSnapshot | { needsPassword: true } | { error: string }> {
+  const query =
+    extra.contents === 'all'
+      ? '?contents=all'
+      : extra.recordId
+        ? `?record=${encodeURIComponent(extra.recordId)}`
+        : ''
   try {
-    const res = await fetch(`/api/share/${encodeURIComponent(token)}`, {
+    const res = await fetch(`/api/share/${encodeURIComponent(token)}${query}`, {
       method: password ? 'POST' : 'GET',
-      headers,
+      headers: shareHeaders(password),
       body: password ? JSON.stringify({ password }) : undefined,
     })
     const text = await res.text()
@@ -74,21 +88,40 @@ async function loadSnapshot(token: string, password = ''): Promise<ShareSnapshot
   }
 }
 
-function rewriteAssetUrls(value: unknown, token: string, password: string): unknown {
-  if (typeof value === 'string') {
-    return value.replace(/\/api\/(?:db|page|doc)\/file\//g, `/api/share/${encodeURIComponent(token)}/file/`)
+async function loadShareContent(token: string, recordId: string, password = '') {
+  const headers = shareHeaders(password)
+  const query = password ? `?password=${encodeURIComponent(password)}` : ''
+  try {
+    const res = await fetch(`/api/share/${encodeURIComponent(token)}/content/${encodeURIComponent(recordId)}${query}`, { headers })
+    if (!res.ok) return { id: recordId, content: null as unknown, pluginIds: [] as string[], assets: [] as string[] }
+    return (await res.json()) as { id: string; content: unknown; pluginIds?: string[]; assets?: string[] }
+  } catch {
+    return { id: recordId, content: null as unknown, pluginIds: [] as string[], assets: [] as string[] }
   }
-  if (Array.isArray(value)) return value.map((item) => rewriteAssetUrls(item, token, password))
+}
+
+function rewriteAssetUrls(value: unknown, token: string, password: string, recordId = ''): unknown {
+  if (typeof value === 'string') {
+    const q = new URLSearchParams()
+    if (password) q.set('password', password)
+    if (recordId) q.set('record', recordId)
+    const suffix = q.toString() ? `?${q}` : ''
+    return value.replace(/\/api\/(?:db|page|doc)\/file\//g, `/api/share/${encodeURIComponent(token)}/file/`).replace(
+      /(\/api\/share\/[^/]+\/file\/[^\s"'?]+)/g,
+      (_, url: string) => (suffix && !url.includes('?') ? `${url}${suffix}` : url),
+    )
+  }
+  if (Array.isArray(value)) return value.map((item) => rewriteAssetUrls(item, token, password, recordId))
   if (value && typeof value === 'object') {
     const out: Record<string, unknown> = {}
-    for (const [key, item] of Object.entries(value as Record<string, unknown>)) out[key] = rewriteAssetUrls(item, token, password)
+    for (const [key, item] of Object.entries(value as Record<string, unknown>)) out[key] = rewriteAssetUrls(item, token, password, recordId)
     return out
   }
   return value
 }
 
-function rewriteBanner(value: unknown, token: string, password: string) {
-  return parsePageBanner(rewriteAssetUrls(value, token, password))
+function rewriteBanner(value: unknown, token: string, password: string, recordId = '') {
+  return parsePageBanner(rewriteAssetUrls(value, token, password, recordId))
 }
 
 export function ShareRoot({
@@ -221,6 +254,27 @@ function SharePage({
     }
   }, [loadPlugins, password, snapshot, token])
 
+  useEffect(() => {
+    if (!snapshot || !recordId) return
+    if (Object.prototype.hasOwnProperty.call(snapshot.contents, recordId)) return
+    let alive = true
+    void loadShareContent(token, recordId, password).then((got) => {
+      if (!alive) return
+      setSnapshot((prev) => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          contents: { ...prev.contents, [got.id]: got.content },
+          pluginIds: [...new Set([...(prev.pluginIds ?? []), ...(got.pluginIds ?? [])])],
+          assets: [...new Set([...(prev.assets ?? []), ...(got.assets ?? [])])],
+        }
+      })
+    })
+    return () => {
+      alive = false
+    }
+  }, [snapshot, recordId, token, password])
+
   const [queryState, setQueryState] = useState<ShareQueryState | null>(null)
   useEffect(() => {
     if (!snapshot || snapshot.kind !== 'view') {
@@ -320,10 +374,15 @@ function SharePage({
     )
   }
 
-  function downloadShare() {
-    const files = live.records.map((row) => ({
+  async function downloadShare() {
+    const packed =
+      live.kind === 'view' && live.records.some((row) => !Object.prototype.hasOwnProperty.call(live.contents, row.id))
+        ? await loadSnapshot(token, password, { contents: 'all' })
+        : live
+    if (!packed || 'error' in packed || 'needsPassword' in packed) return
+    const files = packed.records.map((row) => ({
       name: markdownFileName(row),
-      text: recordToMarkdown(row, contentToMarkdown(live.contents[row.id])),
+      text: recordToMarkdown(row, contentToMarkdown(packed.contents[row.id])),
     }))
     if (files.length === 1) {
       downloadShareFile(new Blob([files[0]!.text], { type: 'text/markdown;charset=utf-8' }), files[0]!.name)
@@ -469,7 +528,7 @@ function SharePage({
                         className="fsdb-share-dl-item"
                         data-testid="fsdb-share-download-pages"
                         onClick={() => {
-                          downloadShare()
+                          void downloadShare()
                           setDownloadOpen(false)
                         }}
                       >
@@ -521,13 +580,13 @@ function SharePage({
       <div className="app-pane-in">
       {shown ? (
         <RecordDetail
-          selected={{ ...shown, banner: rewriteBanner(shown.banner, token, password) ?? shown.banner }}
+          selected={{ ...shown, banner: rewriteBanner(shown.banner, token, password, shown.id) ?? shown.banner }}
           schema={schema}
           chrome={detailChrome}
           collectionPath={snapshot.collection}
           recordKind={recordPickKind(String(snapshot.collection || '').replace(/^\//, ''))}
           draft={{}}
-          detailBody={rewriteAssetUrls(snapshot.contents[shown.id], token, password)}
+          detailBody={rewriteAssetUrls(snapshot.contents[shown.id], token, password, shown.id)}
           labelOf={(row) => crumbRecordLabel(row, schema.labelField)}
           renderCell={(row, key, field) => (
             <ShareCell
