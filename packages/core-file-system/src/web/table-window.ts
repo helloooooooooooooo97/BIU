@@ -6,14 +6,14 @@ export const TABLE_COL_PX = 120
 export const TABLE_COL_PIN_PX = 240
 export const TABLE_COL_ACTIONS_PX = 72
 export const TABLE_COL_OVERSCAN = 1
-export const TABLE_COL_VIEWPORT_FALLBACK = 624
+export const TABLE_COL_VIEWPORT_FALLBACK = 1600
 
 const lastTableWrap = {
   width: TABLE_COL_VIEWPORT_FALLBACK,
   height: TABLE_WINDOW_VIEWPORT_FALLBACK,
 }
 
-/** Last measured table wrap. Reuse this when the wrap remounts instead of flashing 624×560. */
+/** Last measured table wrap. Reuse this when the wrap remounts instead of flashing the fallback. */
 export function rememberedTableWrap() {
   return { width: lastTableWrap.width, height: lastTableWrap.height }
 }

@@ -94,15 +94,22 @@ test('grouped wrap pages larger than the window only fully fetch the first group
   assert.equal(groupedFullFetchCount(100, 1, true), 1)
 })
 
-test('unmeasured first screen does not paint every table column', () => {
-  const widths = [TABLE_COL_PIN_PX, ...Array.from({ length: 12 }, () => TABLE_COL_PX)]
-  const slice = tableColumnSlice(13, 1, 0, 0, widths)
+test('unmeasured first screen still windows a very wide table', () => {
+  const widths = [TABLE_COL_PIN_PX, ...Array.from({ length: 20 }, () => TABLE_COL_PX)]
+  const slice = tableColumnSlice(21, 1, 0, 0, widths)
   assert.equal(slice.pin, 1)
   assert.equal(slice.start, 1)
-  assert.ok(slice.end < 13)
-  assert.ok(slice.pin + (slice.end - slice.start) < 13)
+  assert.ok(slice.end < 21)
   assert.ok(slice.padRight > 0)
   assert.equal(slice.padLeft, 0)
+})
+
+test('unmeasured fallback covers a typical custom view column set', () => {
+  const widths = [TABLE_COL_PIN_PX, TABLE_COL_ACTIONS_PX, ...Array.from({ length: 8 }, () => TABLE_COL_PX)]
+  const slice = tableColumnSlice(10, 1, 0, 0, widths)
+  assert.equal(slice.start, 1)
+  assert.equal(slice.end, 10)
+  assert.equal(slice.padRight, 0)
 })
 
 test('narrow column sets still paint every column', () => {
@@ -113,7 +120,7 @@ test('narrow column sets still paint every column', () => {
   assert.equal(slice.padRight, 0)
 })
 
-test('typical 7-col first screen overflows the wrap and pads the rest', () => {
+test('typical 7-col first screen overflows a 624 wrap and pads the rest', () => {
   const widths = [TABLE_COL_PIN_PX, TABLE_COL_ACTIONS_PX, ...Array.from({ length: 5 }, () => TABLE_COL_PX)]
   const slice = tableColumnSlice(7, 1, 0, 624, widths)
   assert.equal(slice.pin, 1)
@@ -164,7 +171,7 @@ test('wide plugin tables keep later columns off-screen until the wrap is measure
   assert.ok(unmeasured.end < 17)
   assert.ok(unmeasured.padRight > 0)
   const measured = tableColumnSlice(17, 1, 0, tableWrapScroll({
-    clientWidth: 1440,
+    clientWidth: 2400,
     clientHeight: 800,
     scrollTop: 0,
     scrollLeft: 0,
