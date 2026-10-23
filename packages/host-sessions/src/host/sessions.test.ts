@@ -526,6 +526,23 @@ test('deriveMessages projects pasted images as multimodal content', () => {
   assert.equal(parts[1]?.image_url?.url, 'data:image/png;base64,abc')
 })
 
+test('deriveMessages does not project svg data URLs as image_url', () => {
+  const events: SessionEvent[] = [
+    { type: 'session/open', version: 1, seq: 0, ts: 0 },
+    {
+      type: 'user/message',
+      text: 'logo',
+      kind: 'wake',
+      seq: 1,
+      ts: 1,
+      images: [{ name: 'logo.svg', mime: 'image/png', url: 'data:image/svg+xml;base64,PHN2Zz4=' }],
+    },
+  ]
+  const out = deriveMessages(events)
+  const user = out.find((item) => item.role === 'user')
+  assert.equal(user?.content, 'logo')
+})
+
 test('deriveMessages honors db_action compact as new prefix', () => {
   const events: SessionEvent[] = [
     { type: 'session/open', version: 1, seq: 0, ts: 0 },

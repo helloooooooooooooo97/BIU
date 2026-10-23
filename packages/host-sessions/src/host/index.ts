@@ -2,7 +2,7 @@ import { Service, type Context } from 'cordis'
 import { basename, isAbsolute, resolve } from 'node:path'
 import { realpath, stat } from 'node:fs/promises'
 import { platform } from 'node:os'
-import { assistantContentForApi, type LlmMessage } from '@biu/host-llm'
+import { assistantContentForApi, isVisionImageUrl, type LlmMessage } from '@biu/host-llm'
 import type { AgentSendOptions, AgentHandle, AgentTurn } from '@biu/host-agents'
 import {
   SESSION_FORMAT_VERSION,
@@ -91,7 +91,7 @@ export function deriveMessages(events: SessionEvent[]): LlmMessage[] {
       system = event.text
     } else if (event.type === 'user/message') {
       flushOrphanTools()
-      const images = event.images?.filter((item) => item?.url && item.url.startsWith('data:image/')) ?? []
+      const images = event.images?.filter((item) => item?.url && isVisionImageUrl(item.url)) ?? []
       if (images.length) {
         messages.push({
           role: 'user',

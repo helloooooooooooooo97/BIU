@@ -3,7 +3,9 @@ import { basename, extname, isAbsolute, join, resolve, relative } from 'node:pat
 import { constants } from 'node:fs'
 import { DATA_DIR_NAME, LEGACY_DATA_DIR_NAME, dataDir, dataHome } from '@biu/host-plugin-loader/data-dir'
 
+/** 会话 artifacts 可收录的图片扩展名。视觉模型只认其中的光栅格式。 */
 export const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'])
+export const VISION_IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp'])
 
 export type ArtifactMeta = {
   name: string
@@ -20,7 +22,7 @@ export type PastedImage = {
 }
 
 const PATH_CANDIDATE =
-  /(?:^|[\s"'=`(,\[{])((?:\/|\.\/|\.\.\/)?[^\s"'`)\]},;]+?\.(?:png|jpe?g|gif|webp|svg))\b/gi
+  /(?:^|[\s"'=`(,\[{])((?:\/|\.\/|\.\.\/)?[^\s"'`)\]},;]+?\.(?:png|jpe?g|gif|webp))\b/gi
 
 export function artifactsDir(sessionId: string, baseDir = dataHome()) {
   return join(dataDir(baseDir), 'artifacts', sessionId)
@@ -46,6 +48,19 @@ export function artifactMime(name: string) {
 
 export function isImagePath(path: string) {
   return IMAGE_EXTENSIONS.has(extname(path).toLowerCase())
+}
+
+export function isVisionImagePath(path: string) {
+  return VISION_IMAGE_EXTENSIONS.has(extname(path).toLowerCase())
+}
+
+function sniffVisionBytes(data: Buffer) {
+  if (data.length < 12) return false
+  if (data[0] === 0x89 && data[1] === 0x50 && data[2] === 0x4e && data[3] === 0x47) return true
+  if (data[0] === 0xff && data[1] === 0xd8) return true
+  if (data[0] === 0x47 && data[1] === 0x49 && data[2] === 0x46) return true
+  if (data.toString('ascii', 0, 4) === 'RIFF' && data.toString('ascii', 8, 12) === 'WEBP') return true
+  return false
 }
 
 /** 从 bash stdout/stderr/命令行里抠出看起来像图片路径的片段。 */
@@ -105,7 +120,7 @@ export async function findRecentImageFiles(root: string, sinceMs: number, maxDep
         await walk(full, depth + 1)
         continue
       }
-      if (!entry.isFile() || !isImagePath(entry.name)) continue
+      if (!entry.isFile() || !isVisionImagePath(entry.name)) continue
       try {
         const info = await stat(full)
         if (info.mtimeMs >= sinceMs) out.push(full)
@@ -127,7 +142,7 @@ export async function ingestSessionImages(options: {
   baseDir?: string
 }): Promise<ArtifactMeta[]> {
   const { sessionId, candidates, workspaceRoot } = options
-  const baseDir = options.baseDir ?? process.cwd()
+  const baseDir = options.baseDir ?? dataHome()
   if (!sessionId || candidates.length === 0) return []
 
   const root = resolve(workspaceRoot)
@@ -140,12 +155,18 @@ export async function ingestSessionImages(options: {
 
   for (const candidate of candidates) {
     const full = isAbsolute(candidate) ? resolve(candidate) : resolve(root, candidate)
-    if (!isImagePath(full) || seenSource.has(full)) continue
+    if (!isVisionImagePath(full) || seenSource.has(full)) continue
     const rel = relative(root, full)
     const insideWorkspace = !rel.startsWith('..') && !isAbsolute(rel)
     // 相对路径必须在工作区内；绝对路径只要文件存在可读即可（bash 截图常落 /tmp）
     if (!isAbsolute(candidate) && !insideWorkspace) continue
     if (!(await fileExists(full))) continue
+    try {
+      const head = await readFile(full)
+      if (!sniffVisionBytes(head)) continue
+    } catch {
+      continue
+    }
     seenSource.add(full)
 
     const name = safeArtifactName(full, used)
@@ -163,7 +184,7 @@ export async function ingestSessionImages(options: {
 }
 
 /** 解析并校验 artifact 文件路径；非法或穿越返回 null。 */
-export function resolveArtifactFile(sessionId: string, name: string, baseDir = process.cwd()) {
+export function resolveArtifactFile(sessionId: string, name: string, baseDir = dataHome()) {
   if (!sessionId || !name) return null
   if (name.includes('/') || name.includes('\\') || name.includes('..')) return null
   if (!/^[\w.\-]+$/.test(name)) return null
@@ -252,7 +273,7 @@ export function withPastedImagePicks(text: string, images: Array<{ name: string;
   return body ? `${body}\n${picks}` : picks
 }
 
-export async function readArtifactFile(sessionId: string, name: string, baseDir = process.cwd()) {
+export async function readArtifactFile(sessionId: string, name: string, baseDir = dataHome()) {
   const full = resolveArtifactFile(sessionId, name, baseDir)
   if (!full) return null
   try {

@@ -1,8 +1,8 @@
 import { readFile, stat } from 'node:fs/promises'
 import { basename, isAbsolute, resolve } from 'node:path'
-import { assetsRootPath, hashedAssetRel, isHashedAssetName } from '@biu/host-plugin-loader/data-dir'
+import { assetsRootPath, dataHome, hashedAssetRel, isHashedAssetName } from '@biu/host-plugin-loader/data-dir'
 import type { LlmContentPart, LlmMessage } from '@biu/host-llm'
-import { artifactMime, isImagePath, readArtifactFile } from './artifacts.ts'
+import { artifactMime, isVisionImagePath, readArtifactFile } from './artifacts.ts'
 
 /** 与用户贴图同一档：单次最多 6 张、单张 8MB。svg 视觉模型普遍不认。 */
 export const MAX_TOOL_IMAGES = 6
@@ -21,21 +21,31 @@ function isVisionMime(mime: string) {
   return VISION_MIME.has(base)
 }
 
-function dataUrl(mime: string, data: Buffer) {
-  const base = mime === 'image/jpg' ? 'image/jpeg' : mime.split(';')[0]!.trim()
-  if (!isVisionMime(base) || data.length === 0 || data.length > MAX_TOOL_IMAGE_BYTES) return null
+/** 以魔数为准。扩展名/Content-Type 把 SVG 标成 png/jpeg 时，按声明 mime 编码会把不支持的图送进视觉模型。 */
+function sniffVisionMime(data: Buffer): string | null {
+  if (data.length < 12) return null
+  if (data[0] === 0x89 && data[1] === 0x50 && data[2] === 0x4e && data[3] === 0x47) return 'image/png'
+  if (data[0] === 0xff && data[1] === 0xd8) return 'image/jpeg'
+  if (data[0] === 0x47 && data[1] === 0x49 && data[2] === 0x46) return 'image/gif'
+  if (data.toString('ascii', 0, 4) === 'RIFF' && data.toString('ascii', 8, 12) === 'WEBP') return 'image/webp'
+  return null
+}
+
+function dataUrl(_mime: string, data: Buffer) {
+  const base = sniffVisionMime(data)
+  if (!base || data.length === 0 || data.length > MAX_TOOL_IMAGE_BYTES) return null
   return `data:${base};base64,${data.toString('base64')}`
 }
 
 function addRef(out: ImageRef[], seen: Set<string>, ref: ImageRef) {
-  if (seen.has(ref.key) || out.length >= MAX_TOOL_IMAGES) return
+  if (seen.has(ref.key)) return
   seen.add(ref.key)
   out.push(ref)
 }
 
 function isImagePayload(mime: string, nameOrPath: string) {
-  if (mime.startsWith('image/') && isVisionMime(mime)) return isImagePath(nameOrPath) || Boolean(nameOrPath)
-  return !mime && isImagePath(nameOrPath)
+  if (mime.startsWith('image/') && isVisionMime(mime)) return isVisionImagePath(nameOrPath) || Boolean(nameOrPath)
+  return !mime && isVisionImagePath(nameOrPath)
 }
 
 /**
@@ -112,14 +122,14 @@ async function readDbAsset(name: string, baseDir?: string): Promise<Buffer | nul
 }
 
 async function readPathImage(path: string): Promise<{ mime: string; data: Buffer } | null> {
-  if (!isImagePath(path) || path.includes('\0')) return null
+  if (!isVisionImagePath(path) || path.includes('\0')) return null
   const full = isAbsolute(path) ? resolve(path) : resolve(process.cwd(), path)
   try {
     const info = await stat(full)
     if (!info.isFile() || info.size > MAX_TOOL_IMAGE_BYTES) return null
     const data = await readFile(full)
-    const mime = artifactMime(full)
-    if (!isVisionMime(mime)) return null
+    const mime = sniffVisionMime(data)
+    if (!mime) return null
     return { mime, data }
   } catch {
     return null
@@ -149,6 +159,7 @@ export async function liftToolImages(
   options?: { baseDir?: string },
 ): Promise<LlmMessage[]> {
   if (!sessionId) return messages
+  const baseDir = options?.baseDir ?? dataHome()
   const out: LlmMessage[] = []
   for (const message of messages) {
     if (message.role !== 'tool' || typeof message.content !== 'string' || !message.content) {
@@ -163,7 +174,7 @@ export async function liftToolImages(
     const images: LlmContentPart[] = []
     for (const ref of refs) {
       if (images.length >= MAX_TOOL_IMAGES) break
-      const url = await resolveRef(ref, sessionId, options?.baseDir)
+      const url = await resolveRef(ref, sessionId, baseDir)
       if (url) images.push({ type: 'image_url', image_url: { url } })
     }
     if (!images.length) {
