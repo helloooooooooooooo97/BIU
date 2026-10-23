@@ -3,6 +3,15 @@ import { resolve } from 'node:path'
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 
+test('share page loads a record body only after that row is opened', () => {
+  const src = readFileSync(resolve(import.meta.dirname, './share-page.tsx'), 'utf8')
+  const host = readFileSync(resolve(import.meta.dirname, '../host/index.ts'), 'utf8')
+  assert.match(src, /\/content\/\$\{encodeURIComponent\(recordId\)\}/)
+  assert.match(src, /contents: 'all'/)
+  assert.match(host, /GET', '\/api\/share\/:token\/content\/:recordId'/)
+  assert.match(host, /shareSnapshotOpts/)
+})
+
 test('share page uses matching side padding on small screens', () => {
   const css = readFileSync(resolve(import.meta.dirname, './fsdb-style.ts'), 'utf8')
   const src = readFileSync(resolve(import.meta.dirname, './share-page.tsx'), 'utf8')

@@ -58,6 +58,7 @@ import { parsePageBanner, type PageBanner } from '../page-banner.ts'
 import { SavedViewsStore, clientViewFromDbRow, viewsCollection, type StoredView } from './saved-views.ts'
 import { publicShareUrl } from './share-origin.ts'
 import { readSharePluginWebJs, zipSharePluginSource } from './share-plugin-pack.ts'
+import { isSharePluginId } from '../share-resources.ts'
 import { FacetStore } from './facets-store.ts'
 import { SharesStore, dropSharesForRemovedViews } from './shares-store.ts'
 import { builtinAllView, builtinAllViewId, builtinMemberViews, displayNameForView, isReadOnlyViewId, stubBuiltinAllView, stubBuiltinMemberView } from '../catalog-views.ts'
@@ -3669,6 +3670,11 @@ export function apply(ctx: Context) {
       route.send(400, { error: String(error) })
     }
   })
+  const shareSnapshotOpts = (query: URLSearchParams) => {
+    if (query.get('contents') === 'all') return { contentIds: 'all' as const }
+    const record = query.get('record') || ''
+    return { contentIds: record ? [record] : [] }
+  }
   const sharePasswordOf = (route: { req: { headers: IncomingMessage['headers'] }; query: URLSearchParams }, body?: { password?: unknown }) => {
     const header = String(route.req.headers['x-share-password'] ?? '')
     if (header) return header
@@ -3842,7 +3848,7 @@ export function apply(ctx: Context) {
       return
     }
     try {
-      const snapshot = await buildShareSnapshot(db, savedViews, share)
+      const snapshot = await buildShareSnapshot(db, savedViews, share, shareSnapshotOpts(route.query))
       route.send(200, snapshot)
     } catch (error) {
       const msg = String(error)
@@ -3867,7 +3873,7 @@ export function apply(ctx: Context) {
       return
     }
     try {
-      const snapshot = await buildShareSnapshot(db, savedViews, share)
+      const snapshot = await buildShareSnapshot(db, savedViews, share, shareSnapshotOpts(route.query))
       route.send(200, snapshot)
     } catch (error) {
       const msg = String(error)
@@ -3877,6 +3883,34 @@ export function apply(ctx: Context) {
         return
       }
       route.send(400, { error: msg })
+    }
+  })
+  ctx.http.route('GET', '/api/share/:token/content/:recordId', async (route) => {
+    const token = route.params.token ?? ''
+    const share = shares.get(token)
+    if (!share) {
+      route.send(404, { error: 'not found' })
+      return
+    }
+    if (share.hasPassword && !shares.verifyPassword(token, sharePasswordOf(route))) {
+      route.send(401, { needsPassword: true })
+      return
+    }
+    const recordId = route.params.recordId ?? ''
+    try {
+      const snapshot = await buildShareSnapshot(db, savedViews, share, { contentIds: [recordId] })
+      if (!snapshot.records.some((row) => String(row.id) === recordId)) {
+        route.send(404, { error: 'not found' })
+        return
+      }
+      route.send(200, {
+        id: recordId,
+        content: snapshot.contents[recordId] ?? null,
+        pluginIds: snapshot.pluginIds,
+        assets: snapshot.assets,
+      })
+    } catch {
+      route.send(404, { error: 'not found' })
     }
   })
   ctx.http.route('GET', '/api/share/:token/file/:name', async (route) => {
@@ -3891,7 +3925,8 @@ export function apply(ctx: Context) {
       return
     }
     try {
-      const snapshot = await buildShareSnapshot(db, savedViews, share)
+      const record = route.query.get('record') || ''
+      const snapshot = await buildShareSnapshot(db, savedViews, share, record ? { contentIds: [record] } : { contentIds: [] })
       const name = route.params.name ?? ''
       if (!snapshot.assets.includes(name)) {
         route.send(404, { error: 'not found' })
@@ -3921,8 +3956,7 @@ export function apply(ctx: Context) {
     }
     const id = String(route.params.id ?? '')
     try {
-      const snapshot = await buildShareSnapshot(db, savedViews, share)
-      if (!snapshot.pluginIds.includes(id)) {
+      if (!share.sharePlugins || !isSharePluginId(id)) {
         route.send(404, { error: 'not found' })
         return
       }
@@ -3958,8 +3992,7 @@ export function apply(ctx: Context) {
     }
     const id = String(route.params.id ?? '').replace(/\.zip$/i, '')
     try {
-      const snapshot = await buildShareSnapshot(db, savedViews, share)
-      if (!snapshot.pluginIds.includes(id)) {
+      if (!isSharePluginId(id)) {
         route.send(404, { error: 'not found' })
         return
       }
