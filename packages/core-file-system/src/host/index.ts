@@ -382,6 +382,25 @@ function sessionTitleFromRow(row: unknown): string {
   return ''
 }
 
+function sessionMascotFromRow(row: unknown): PersonValue['mascot'] {
+  if (!row || typeof row !== 'object' || Array.isArray(row)) return undefined
+  const raw = (row as { mascot?: unknown }).mascot
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const rec = raw as { shape?: unknown; color?: unknown; eye?: unknown }
+  if (typeof rec.shape !== 'string' || typeof rec.color !== 'string') return undefined
+  return {
+    shape: rec.shape,
+    color: rec.color,
+    ...(typeof rec.eye === 'number' ? { eye: rec.eye } : {}),
+  }
+}
+
+function sessionPersonFromRow(row: unknown): { name: string; mascot?: PersonValue['mascot'] } {
+  const name = sessionTitleFromRow(row)
+  const mascot = sessionMascotFromRow(row)
+  return mascot ? { name, mascot } : { name }
+}
+
 function coerceUrl(value: unknown) {
   const text = String(value ?? '').trim()
   if (!text) return ''
@@ -1964,8 +1983,13 @@ export class DatabaseService extends Service implements Database {
       const name = readWorkspaceProfile().name.trim() || '用户'
       return { kind: 'user', name }
     }
-    const name = (await this.querySessionName(sid)) || sid.slice(0, 8)
-    return { kind: 'agent', name, sessionId: sid }
+    const peeked = await this.querySessionPerson(sid)
+    return {
+      kind: 'agent',
+      name: peeked.name || sid.slice(0, 8),
+      sessionId: sid,
+      ...(peeked.mascot ? { mascot: peeked.mascot } : {}),
+    }
   }
 
   private namedPerson(person: PersonValue): PersonValue {
@@ -1974,17 +1998,23 @@ export class DatabaseService extends Service implements Database {
       return member?.name ? { ...person, name: member.name } : person
     }
     if (person.kind !== 'agent' || !person.sessionId) return person
-    const peeked = this.peekSessionName(person.sessionId)
-    return peeked ? { ...person, name: peeked } : person
+    const peeked = this.peekSessionPerson(person.sessionId)
+    return {
+      ...person,
+      ...(peeked.name ? { name: peeked.name } : {}),
+      ...(peeked.mascot ? { mascot: peeked.mascot } : {}),
+    }
   }
 
-  private peekSessionName(sessionId: string): string {
+  private peekSessionRow(sessionId: string): unknown {
     const sessions = this.collection('/sessions')
     const row = sessions?.get?.(sessionId)
-    if (row && typeof (row as Promise<unknown>).then !== 'function') {
-      return sessionTitleFromRow(row)
-    }
-    return sessionTitleFromRow(this.sessionsService()?.peek?.(sessionId))
+    if (row && typeof (row as Promise<unknown>).then !== 'function') return row
+    return this.sessionsService()?.peek?.(sessionId)
+  }
+
+  private peekSessionPerson(sessionId: string) {
+    return sessionPersonFromRow(this.peekSessionRow(sessionId))
   }
 
   private sessionsService(): { peek?: (id: string) => unknown; get?: (id: string) => Promise<unknown> } | undefined {
@@ -1995,17 +2025,15 @@ export class DatabaseService extends Service implements Database {
     }
   }
 
-  private async querySessionName(sessionId: string): Promise<string> {
-    const peeked = this.peekSessionName(sessionId)
-    if (peeked) return peeked
+  private async querySessionPerson(sessionId: string): Promise<{ name: string; mascot?: PersonValue['mascot'] }> {
+    const peeked = this.peekSessionPerson(sessionId)
+    if (peeked.name || peeked.mascot) return peeked
     const sessions = this.collection('/sessions')
     if (sessions?.get) {
-      const row = await sessions.get(sessionId)
-      const title = sessionTitleFromRow(row)
-      if (title) return title
+      const fromCollection = sessionPersonFromRow(await sessions.get(sessionId))
+      if (fromCollection.name || fromCollection.mascot) return fromCollection
     }
-    const row = await this.sessionsService()?.get?.(sessionId)
-    return sessionTitleFromRow(row)
+    return sessionPersonFromRow(await this.sessionsService()?.get?.(sessionId))
   }
 
   private applyFacetOverlay(spec: CollectionSpec, row: DbRecord): DbRecord {
