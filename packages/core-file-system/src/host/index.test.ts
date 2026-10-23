@@ -341,7 +341,8 @@ test('stamps agent createdBy with the session title from /sessions', async () =>
     },
     list: () => [...sessions.values()],
     get: (id) => sessions.get(id) ?? null,
-  })
+    peek: (id: string) => sessions.get(id),
+  } as CollectionSpec)
   const written = await runWithSession('sess-agent-1', () => db.update('/notes/n1', { status: 'done' }))
   const actor = { kind: 'agent', name: '蓝团爱', sessionId: 'sess-agent-1', mascot }
   assert.deepEqual(written.value.createdBy, actor)
@@ -385,7 +386,8 @@ test('later editors append to updatedBy and leave createdBy alone', async () => 
     },
     list: () => [{ id: 'sess-a', title: '甲' }],
     get: (id) => (id === 'sess-a' ? { id: 'sess-a', title: '甲' } : null),
-  })
+    peek: (id: string) => (id === 'sess-a' ? { id: 'sess-a', title: '甲' } : undefined),
+  } as CollectionSpec)
   await db.update('/notes/n1', { status: 'done' })
   const second = await runWithSession('sess-a', () => db.update('/notes/n1', { status: 'open' }))
   assert.deepEqual(second.value.createdBy, { kind: 'user', name: '用户' })

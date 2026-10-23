@@ -5,7 +5,7 @@ import { mkdtempSync } from 'node:fs'
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { Context, Service } from 'cordis'
-import { openAndMigrateBiu, runWithAccount } from '@biu/host-plugin-loader/data-dir'
+import { LATEST_BIU_SCHEMA, openAndMigrateBiu, runWithAccount } from '@biu/host-plugin-loader/data-dir'
 import { CollabStore } from '@biu/host-account/store'
 import * as sessionStore from '@biu/host-session-store'
 import * as sessions from './index.ts'
@@ -128,7 +128,15 @@ test('sqlite session store round-trips and listSummaries skips full reload', asy
 
   const ctx2 = new Context()
   await ctx2.plugin(sessionStore, { driver: 'sqlite', path })
+  const throughStore = ctx2.sessionStore.peekSummary('sql1')
+  assert.equal(throughStore?.id, 'sql1')
+  assert.equal(throughStore?.title, summaries[0]?.title)
+  assert.deepEqual(throughStore?.mascot, summaries[0]?.mascot)
+  assert.equal(ctx2.sessionStore.peekSummary('missing'), undefined)
   await ctx2.plugin(sessions)
+  const throughSessions = ctx2.sessions.peekSummary('sql1')
+  assert.equal(throughSessions?.id, 'sql1')
+  assert.equal(throughSessions?.title, throughStore?.title)
   const loaded = await ctx2.sessions.get('sql1')
   assert.equal(loaded?.id, record.id)
   assert.equal(loaded?.events.length, 4)
@@ -438,6 +446,7 @@ test('sqlite drops leftover sessions.type column', async () => {
   db.prepare(
     'INSERT INTO sessions (id, version, title, type, event_count, updated_at) VALUES (?, 1, ?, ?, 0, 1)',
   ).run('legacy', 'old', 'live')
+  db.exec(`PRAGMA user_version = ${LATEST_BIU_SCHEMA}`)
   db.close()
 
   const ctx = new Context()

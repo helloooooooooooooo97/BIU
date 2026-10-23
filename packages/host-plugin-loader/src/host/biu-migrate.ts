@@ -552,7 +552,7 @@ export const BIU_MIGRATIONS: Migration[] = [
     `)
   } },
   { version: 39, module: 'host-account', name: 'account.password-recall', up: (db) => {
-    db.exec(`ALTER TABLE accounts ADD COLUMN password_recall TEXT NOT NULL DEFAULT ''`)
+    addColumn(db, 'accounts', 'password_recall', `password_recall TEXT NOT NULL DEFAULT ''`)
   } },
   { version: 40, module: 'host-account', name: 'cloud.many-accounts', up: (db) => {
     db.exec(`

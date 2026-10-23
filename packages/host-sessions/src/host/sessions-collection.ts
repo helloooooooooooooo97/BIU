@@ -35,15 +35,6 @@ type SessionsLike = {
   peekSummary?: (id: string) => SessionSummary | null | undefined
 }
 
-/** 摘要里只留人员列需要的字段，避免把 config 等大对象带进列表投影。 */
-function summaryPersonFields(row: SessionSummary) {
-  const mascot =
-    row.mascot && isSessionMascot(row.mascot) ? ensureSessionMascot(row.id, row.mascot) : mascotFromSessionId(row.id)
-  const rawTitle = String(row.title ?? '').trim()
-  const title = rawTitle && rawTitle !== row.id.slice(0, 8) ? rawTitle : nameFromSessionMascot(mascot)
-  return { title, mascot }
-}
-
 function sessionCreatedAt(row: SessionSummary) {
   const fromConfig = Number(row.config?.createdAt)
   if (Number.isFinite(fromConfig) && fromConfig > 0) return fromConfig
@@ -203,11 +194,6 @@ export function sessionsCollection(sessions: SessionsLike): CollectionSpec {
       }
     },
     /** 同步 peek：只读摘要，不碰 events。页面表格的创建人列靠它，避免渲染时读会话日志。 */
-    peek: (id) => {
-      const peeked = sessions.peekSummary?.(id)
-      return peeked ? asRecord(peeked) : undefined
-    },
-    /** 同步 peek：读不到就走 get，绝不在渲染链路里 load 事件。 */
     peek: (id) => {
       const peeked = sessions.peekSummary?.(id)
       return peeked ? asRecord(peeked) : undefined
