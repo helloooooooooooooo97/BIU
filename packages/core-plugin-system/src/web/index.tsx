@@ -321,10 +321,10 @@ function PluginExtrasLayer(props: SlotProps) {
         })
     }
     load()
-    const timer = window.setInterval(load, 3000)
+    window.addEventListener('fsdb:change', load)
     return () => {
       cancelled = true
-      window.clearInterval(timer)
+      window.removeEventListener('fsdb:change', load)
     }
   }, [extras.map((item) => item.id).join('|')])
 

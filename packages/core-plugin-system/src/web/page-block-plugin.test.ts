@@ -179,6 +179,8 @@ test('running window plugins ask ui-hub for web.js, page blocks do not', () => {
   const browser = readFileSync(resolve(process.cwd(), 'packages/core-file-system/src/web/browser.tsx'), 'utf8')
   assert.match(src, /export function watchRunningWindowPlugins/)
   assert.match(src, /ENABLE_PAGE_BLOCK_PLUGIN/)
+  assert.match(src, /fsdb:change/)
+  assert.doesNotMatch(src, /setInterval\(tick/)
   assert.match(web, /watchRunningWindowPlugins\(\)/)
   assert.match(browser, /action\.id === 'start'/)
   assert.match(browser, /biu:enable-page-block-plugin/)
