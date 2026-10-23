@@ -4,8 +4,8 @@ import { formatDate, formatStars, useGitHubStats } from './github.ts'
 import { usePageMeta } from './use-page-meta.ts'
 
 const RELEASES_PAGE = `${GITHUB_URL}/releases/latest`
-const QUARANTINE_FIX = 'xattr -dr com.apple.quarantine /Applications/Biu.app'
-const LINUX_RUN = 'chmod +x Biu-*-linux-x64.AppImage && ./Biu-*-linux-x64.AppImage'
+const QUARANTINE_FIX = 'xattr -dr com.apple.quarantine /Applications/BIU.app'
+const LINUX_RUN = 'chmod +x BIU-*-linux-x64.AppImage && ./BIU-*-linux-x64.AppImage'
 
 type Platform = 'mac' | 'windows' | 'linux'
 

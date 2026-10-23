@@ -103,7 +103,9 @@ import {
   rememberRecords,
   rememberViews,
   persistStarredViews,
+  persistCollapsedGroups,
   persistViewDisplay,
+  loadCollapsedGroups,
   pickViewForRoute,
   pushSavedViews,
   pushSavedViewsPatch,
@@ -1728,7 +1730,12 @@ export function CollectionBrowser({
   const [groupBy, setGroupBy] = useState(initialView?.groupBy ?? '')
   const [showTree, setShowTree] = useState(initialView?.tree !== false)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
-  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(() =>
+    loadCollapsedGroups(collectionPath, initialView?.id ?? routeViewId ?? '', initialView?.groupBy ?? ''),
+  )
+  useEffect(() => {
+    setCollapsedGroups(loadCollapsedGroups(collectionPath, activeViewId ?? routeViewId ?? '', groupBy))
+  }, [activeViewId, collectionPath, groupBy, routeViewId])
   const [groupPages, setGroupPages] = useState<Record<string, number>>({})
   const [groupFillKeys, setGroupFillKeys] = useState<string[]>([])
   const [groupBuckets, setGroupBuckets] = useState<GroupBucket[]>(() => peekListCache(dataPath, routeViewId)?.groupBuckets ?? [])
@@ -1754,7 +1761,7 @@ export function CollectionBrowser({
       setGroupBuckets(cached.groupBuckets ?? [])
       setGroupPages({})
       setGroupFillKeys([])
-      setCollapsedGroups({})
+      setCollapsedGroups(loadCollapsedGroups(path, view?.id ?? '', view?.groupBy ?? ''))
       setPage(0)
       return
     }
@@ -1833,7 +1840,7 @@ export function CollectionBrowser({
       setGroupBuckets(cached.groupBuckets ?? [])
       setGroupPages({})
       setGroupFillKeys([])
-      setCollapsedGroups({})
+      setCollapsedGroups(loadCollapsedGroups(dataPath, next.id, next.groupBy ?? ''))
       setCollapsed({})
       setError('')
       setPage(0)
@@ -2199,7 +2206,7 @@ export function CollectionBrowser({
         setGroupPages({})
         setGroupFillKeys([])
         setCollapsed({})
-        setCollapsedGroups({})
+        setCollapsedGroups(loadCollapsedGroups(dataPath, pendingView.activeViewId, pendingView.groupBy))
       }
       setStat((prev) =>
         prev?.schema && schemaFingerprint(prev.schema) === schemaFingerprint(nextSchema) ? prev : { ...nextStat, schema: nextSchema },
@@ -2391,7 +2398,7 @@ export function CollectionBrowser({
     setGroupBuckets(cached?.groupBuckets ?? [])
     setGroupPages((prev) => (Object.keys(prev).length ? {} : prev))
     setGroupFillKeys((prev) => (prev.length ? [] : prev))
-    setCollapsedGroups((prev) => (Object.keys(prev).length ? {} : prev))
+    setCollapsedGroups(loadCollapsedGroups(collectionPath, routeViewId ?? activeViewId ?? '', groupBy))
     setError('')
     setPage((prev) => (prev === 0 ? prev : 0))
     const stored = viewForPath(collectionPath, routeViewId)
@@ -4289,7 +4296,11 @@ export function CollectionBrowser({
           aria-expanded={!folded}
           aria-label={folded ? '展开分组' : '收起分组'}
           title={folded ? '展开分组' : '收起分组'}
-          onClick={() => setCollapsedGroups((prev) => ({ ...prev, [groupKey]: !prev[groupKey] }))}
+          onClick={() => setCollapsedGroups((prev) => {
+            const next = { ...prev, [groupKey]: !prev[groupKey] }
+            persistCollapsedGroups(collectionPath, activeViewId ?? routeViewId ?? '', groupBy, next)
+            return next
+          })}
         >
           <span className="sidebar-rail-icon sidebar-group-fold" aria-hidden>
             <span className="sidebar-group-fold-face">
