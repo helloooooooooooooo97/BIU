@@ -20,20 +20,6 @@ let agentsListed: ChatPerson[] | null = null
 let agentsListedAt = 0
 const AGENTS_TTL_MS = 8000
 
-export function agentNameLooksLikeId(name: string, sessionId: string) {
-  const text = name.trim()
-  if (!text || !sessionId) return false
-  return text === sessionId || text === sessionId.slice(0, 8)
-}
-
-export function resolveAgentName(person: PersonValue, sessions: ReadonlyMap<string, string>): string {
-  if (person.kind !== 'agent' || !person.sessionId) return person.name
-  const queried = sessions.get(person.sessionId)?.trim()
-  if (queried) return queried
-  if (agentNameLooksLikeId(person.name, person.sessionId)) return ''
-  return person.name
-}
-
 export async function loadAgents(): Promise<ChatPerson[]> {
   if (agentsListed && Date.now() - agentsListedAt < AGENTS_TTL_MS) return agentsListed
   if (agentsInflight) return agentsInflight
@@ -73,25 +59,6 @@ export async function loadAgents(): Promise<ChatPerson[]> {
 export function PersonFace({ value, empty = '' }: { value: unknown; empty?: string }) {
   const profile = useWorkspaceProfile()
   const people = asPersonList(value)
-  const [sessionNames, setSessionNames] = useState<Map<string, string>>(() => new Map())
-  const needAgents = people.some((item) => item.kind === 'agent' && item.sessionId)
-  const shareRuntime = typeof document !== 'undefined' && document.documentElement.classList.contains('share')
-
-  useEffect(() => {
-    if (!needAgents || shareRuntime) return
-    let cancelled = false
-    void loadAgents()
-      .then((rows) => {
-        if (cancelled) return
-        setSessionNames(new Map(rows.map((row) => [row.id, row.name])))
-      })
-      .catch(() => {
-        if (!cancelled) setSessionNames(new Map())
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [needAgents, shareRuntime])
 
   if (!people.length) {
     return empty ? (
@@ -106,10 +73,7 @@ export function PersonFace({ value, empty = '' }: { value: unknown; empty?: stri
     <span className="fsdb-person-list">
       {people.map((person) => {
         const liveUser = person.kind === 'user' && (person.name === '用户' || person.name === profile.name)
-        const displayName = liveUser
-          ? profileDisplayName(profile)
-          : resolveAgentName(person, sessionNames) || (person.kind === 'agent' ? person.name : person.name)
-        const label = displayName || empty
+        const label = (liveUser ? profileDisplayName(profile) : person.name) || empty
         const body = (
           <>
             {person.kind === 'agent' && (person.sessionId || person.mascot) ? (
@@ -219,7 +183,14 @@ export function PersonPickPanel({
           type="button"
           key={person.id}
           className={`fsdb-person-option${selected === person.id ? ' is-selected' : ''}`}
-          onClick={() => pick({ kind: 'agent', name: person.name, sessionId: person.id })}
+          onClick={() =>
+            pick({
+              kind: 'agent',
+              name: person.name,
+              sessionId: person.id,
+              ...(person.mascot ? { mascot: person.mascot } : {}),
+            })
+          }
         >
           <span className="fsdb-person-face" aria-hidden>
             <TableMascotMark
