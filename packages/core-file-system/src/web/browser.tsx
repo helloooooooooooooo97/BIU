@@ -2624,6 +2624,8 @@ export function CollectionBrowser({
   const subsetLocked = lockedFilterKeys.length > 0
   const canCreate = Boolean(schema?.records?.create) && !subsetLocked
   const canDelete = Boolean(schema?.records?.delete) && !subsetLocked
+  const inTrash = collectionPath === '/trash'
+  const canBulkDelete = (canDelete || inTrash) && !subsetLocked
   const canFacet = Boolean(schema?.fields.facet?.writable) && !subsetLocked
   const bulkFields = useMemo(
     () =>
@@ -3855,11 +3857,23 @@ export function CollectionBrowser({
 
   async function executeDeleteRecords(ids: string[]) {
     try {
-      await readJson('/api/db/delete', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ path: dataPath, ids }),
-      })
+      if (dataPath === '/trash') {
+        await Promise.all(
+          ids.map((id) =>
+            readJson('/api/db/action', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ path: `${dataPath}/${id}`, action: 'delete' }),
+            }),
+          ),
+        )
+      } else {
+        await readJson('/api/db/delete', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ path: dataPath, ids }),
+        })
+      }
       if (!embed && detailId && ids.includes(detailId)) onCloseRecord?.()
       const gone = new Set(ids.map(String))
       const deletedRows = itemsRef.current.filter((row) => gone.has(String(row.id)))
@@ -3872,7 +3886,7 @@ export function CollectionBrowser({
         viewId: activeViewIdRef.current,
         total: totalRef.current,
       })
-      publishDeletedRowsToTrash(dataPath, deletedRows, title)
+      if (dataPath !== '/trash') publishDeletedRowsToTrash(dataPath, deletedRows, title)
       announceListChange()
       quietUntil.current = 0
       await reload({ force: true })
@@ -5522,13 +5536,13 @@ export function CollectionBrowser({
                     >
                       {pickedIds.length} 已选
                     </span>
-                    {canDelete && pickedIds.some((id) => !(collectionPath === '/plugins' && items.find((row) => row.id === id)?.builtin === true)) ? (
+                    {canBulkDelete && pickedIds.some((id) => !(collectionPath === '/plugins' && items.find((row) => row.id === id)?.builtin === true)) ? (
                       <button
                         type="button"
                         className="tasks-icon-btn is-danger"
                         data-testid="fsdb-bulk-delete"
-                        aria-label="删除选中"
-                        title={`删除选中的 ${pickedIds.length} 条`}
+                        aria-label={inTrash ? '彻底删除选中' : '删除选中'}
+                        title={`${inTrash ? '彻底删除' : '删除'}选中的 ${pickedIds.length} 条`}
                         onClick={() => setDlg({
                           kind: 'delete-records',
                           ids: pickedIds.filter((id) => !(collectionPath === '/plugins' && items.find((row) => row.id === id)?.builtin === true)),
@@ -5749,7 +5763,13 @@ export function CollectionBrowser({
             setDlg(null)
             void executeDeleteRecords(ids)
           }}
-          body={<p>确定删除选中的 {dlg.ids.length} 条记录？会放进回收站，可随时恢复。</p>}
+          body={
+            <p>
+              {collectionPath === '/trash'
+                ? `确定彻底删除选中的 ${dlg.ids.length} 条？不可恢复。`
+                : `确定删除选中的 ${dlg.ids.length} 条记录？会放进回收站，可随时恢复。`}
+            </p>
+          }
         />
       ) : null}
       {dlg?.kind === 'bulk-edit' ? (
