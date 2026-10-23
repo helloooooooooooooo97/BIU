@@ -1,4 +1,4 @@
-import { memo, useEffect, useState, useSyncExternalStore } from 'react'
+import { useEffect, useState } from 'react'
 import { ArrowPathIcon, CpuChipIcon, UserIcon } from '@heroicons/react/16/solid'
 import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import { asPerson, asPersonList, personKey, type PersonValue } from '@biu/type-file-system'
@@ -19,58 +19,6 @@ let agentsInflight: Promise<ChatPerson[]> | null = null
 let agentsListed: ChatPerson[] | null = null
 let agentsListedAt = 0
 const AGENTS_TTL_MS = 8000
-let agentNames = new Map<string, string>()
-let agentNamesScheduled = false
-const agentNameListeners = new Set<() => void>()
-
-export function subscribeAgentNames(onStoreChange: () => void) {
-  agentNameListeners.add(onStoreChange)
-  return () => {
-    agentNameListeners.delete(onStoreChange)
-  }
-}
-
-export function readAgentNames() {
-  return agentNames
-}
-
-function publishAgentNames(rows: ChatPerson[]) {
-  let same = agentNames.size === rows.length
-  if (same) {
-    for (const row of rows) {
-      if (agentNames.get(row.id) !== row.name) {
-        same = false
-        break
-      }
-    }
-  }
-  if (same) return
-  agentNames = new Map(rows.map((row) => [row.id, row.name]))
-  agentNameListeners.forEach((fn) => fn())
-}
-
-function shareRuntime() {
-  return typeof document !== 'undefined' && document.documentElement.classList.contains('share')
-}
-
-/** One /sessions list for every person cell. Table first paint keeps the mascot and stored name. */
-export function scheduleAgentNames() {
-  if (shareRuntime()) return
-  if (agentsListed && Date.now() - agentsListedAt < AGENTS_TTL_MS) {
-    publishAgentNames(agentsListed)
-    return
-  }
-  if (agentNamesScheduled) return
-  agentNamesScheduled = true
-  void loadAgents()
-    .then((rows) => {
-      agentNamesScheduled = false
-      publishAgentNames(rows)
-    })
-    .catch(() => {
-      agentNamesScheduled = false
-    })
-}
 
 export function agentNameLooksLikeId(name: string, sessionId: string) {
   const text = name.trim()
@@ -122,17 +70,28 @@ export async function loadAgents(): Promise<ChatPerson[]> {
   return request
 }
 
-export const PersonFace = memo(function PersonFace({ value, empty = '' }: { value: unknown; empty?: string }) {
+export function PersonFace({ value, empty = '' }: { value: unknown; empty?: string }) {
   const profile = useWorkspaceProfile()
   const people = asPersonList(value)
-  const sessionNames = useSyncExternalStore(subscribeAgentNames, readAgentNames, readAgentNames)
-  const needNames = people.some(
-    (item) => item.kind === 'agent' && item.sessionId && agentNameLooksLikeId(item.name, item.sessionId),
-  )
+  const [sessionNames, setSessionNames] = useState<Map<string, string>>(() => new Map())
+  const needAgents = people.some((item) => item.kind === 'agent' && item.sessionId)
+  const shareRuntime = typeof document !== 'undefined' && document.documentElement.classList.contains('share')
 
   useEffect(() => {
-    if (needNames) scheduleAgentNames()
-  }, [needNames])
+    if (!needAgents || shareRuntime) return
+    let cancelled = false
+    void loadAgents()
+      .then((rows) => {
+        if (cancelled) return
+        setSessionNames(new Map(rows.map((row) => [row.id, row.name])))
+      })
+      .catch(() => {
+        if (!cancelled) setSessionNames(new Map())
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [needAgents, shareRuntime])
 
   if (!people.length) {
     return empty ? (
@@ -196,7 +155,7 @@ export const PersonFace = memo(function PersonFace({ value, empty = '' }: { valu
       })}
     </span>
   )
-})
+}
 
 export function PersonPickPanel({
   value,
