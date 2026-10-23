@@ -12,6 +12,14 @@ test('normalizeSessionConfig folds legacy tags into facet and drops tags', () =>
   assert.deepEqual(next?.facet, { tags: ['host-ui', 'bug'], values: { 'host-ui': { n: 1 } } })
 })
 
+test('normalizeSessionConfig keeps skipLlmImages', () => {
+  assert.equal(normalizeSessionConfig({ skipLlmImages: true })?.skipLlmImages, true)
+  assert.equal(normalizeSessionConfig({ skipLlmImages: false })?.skipLlmImages, undefined)
+  const cleared = mergeSessionConfig({ skipLlmImages: true, pinned: true }, { skipLlmImages: false })
+  assert.equal(cleared?.skipLlmImages, undefined)
+  assert.equal(cleared?.pinned, true)
+})
+
 test('mergeSessionConfig still accepts tags patches as 标签 ids', () => {
   const next = mergeSessionConfig({ pinned: true }, { tags: ['lab'] } as never)
   assert.equal(next && 'tags' in next, false)

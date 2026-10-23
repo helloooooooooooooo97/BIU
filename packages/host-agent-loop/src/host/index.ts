@@ -90,7 +90,7 @@ export class AgentLoop implements AgentRunner {
     if (this.signal.aborted || kind === 'cancel') return { kind: 'cancel' }
     let next = messages
     if (kind === 'images') {
-      await session.dropUserImages(this.sessionId)
+      await session.quarantineLlmImages(this.sessionId)
       if (!messagesHaveImages(messages)) return { kind: 'fail', detail: String(error) }
       next = stripImageContent(messages)
     } else if (kind === 'orphan-tools') {
@@ -187,6 +187,9 @@ export class AgentLoop implements AgentRunner {
       return { text: '（空回合）', steps: [] }
     }
 
+    const hasNewImages = req.messages.some((item) => Boolean(item.images?.length))
+    if (hasNewImages) await session.allowLlmImages(this.sessionId)
+
     for (const item of req.messages) {
       if (this.signal.aborted) {
         await session.append(this.sessionId, { type: 'turn/end', turn, reason: 'cancelled' })
@@ -265,7 +268,11 @@ export class AgentLoop implements AgentRunner {
         throw new Error('cancelled')
       }
 
-      const rawMessages = await liftToolImages(session.deriveMessages(this.sessionId), this.sessionId)
+      const skipImages = session.llmImagesBlocked(this.sessionId)
+      const derived = session.deriveMessages(this.sessionId)
+      const rawMessages = skipImages
+        ? stripImageContent(derived)
+        : await liftToolImages(derived, this.sessionId)
       if (this.signal.aborted) {
         await session.append(this.sessionId, { type: 'turn/end', turn, reason: 'cancelled' })
         throw new Error('cancelled')

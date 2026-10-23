@@ -28,6 +28,7 @@ import {
   type SessionMascot as AssignedMascot,
 } from './session-mascot.ts'
 import { rebuildHealedEvents } from './session-heal.ts'
+import { stripDeclaredImagesFromToolDetail } from './tool-images.ts'
 import { sessionsCollection } from './sessions-collection.ts'
 import type { AuthorizationService } from '@biu/host-account/authorization'
 
@@ -595,6 +596,39 @@ export class SessionsService extends Service {
     }
     if (dropped) await this.persist(record)
     return dropped
+  }
+
+  llmImagesBlocked(id: string) {
+    return this.cache.get(id)?.config?.skipLlmImages === true
+  }
+
+  /**
+   * 拒图后隔离：日志里的用户贴图不再进 derive；工具图靠 skipLlmImages 不再 lift。
+   * 界面仍可展示原来的图，只是下一轮不再发给模型。
+   */
+  async quarantineLlmImages(id: string) {
+    const record = await this.require(id)
+    let changed = false
+    for (const event of record.events) {
+      if (event.type === 'user/message' && event.images?.length) {
+        delete event.images
+        changed = true
+      } else if (event.type === 'tool/result' && !event.partial && event.detail) {
+        const next = stripDeclaredImagesFromToolDetail(event.detail)
+        if (next !== event.detail) {
+          event.detail = next
+          changed = true
+        }
+      }
+    }
+    const nextConfig = mergeSessionConfig(record.config, { skipLlmImages: true })
+    if (nextConfig) record.config = nextConfig
+    if (changed || nextConfig?.skipLlmImages) await this.persist(record)
+  }
+
+  async allowLlmImages(id: string) {
+    if (!this.llmImagesBlocked(id)) return
+    await this.patchConfig(id, { skipLlmImages: false })
   }
 
   /** 进程内也修一次崩溃残留（缺 tool/result），不只等下次从磁盘 load。 */

@@ -144,6 +144,11 @@ export interface SessionConfig {
    * 关不掉；写入时会夹到 1..模型上下文。
    */
   autoCompactInputTokens?: number
+  /**
+   * 供应商因图拒过一次之后：发给模型时不再附图（历史工具产物仍会再 lift）。
+   * 用户再贴新图时清掉，允许重新试视觉。
+   */
+  skipLlmImages?: boolean
 }
 
 /** 检查器打开的页签和各栏库路径，跟这条 session 走。开合/宽度/跟随只记本机。 */
@@ -265,6 +270,7 @@ export function normalizeSessionConfig(value: unknown): SessionConfig | undefine
   if (inspector) next.inspector = inspector
   const autoCompact = normalizeAutoCompactInputTokens(raw.autoCompactInputTokens)
   if (autoCompact) next.autoCompactInputTokens = autoCompact
+  if (raw.skipLlmImages === true) next.skipLlmImages = true
   delete (next as { tags?: unknown }).tags
   return Object.keys(next).length ? next : undefined
 }
@@ -276,6 +282,7 @@ export function mergeSessionConfig(
     systemPrompt?: string | null
     inspector?: SessionInspectorBind | null
     goal?: SessionGoal | null
+    skipLlmImages?: boolean | null
   },
 ): SessionConfig | undefined {
   const next: SessionConfig = { ...(base ?? {}) }
@@ -338,6 +345,10 @@ export function mergeSessionConfig(
     const autoCompact = normalizeAutoCompactInputTokens(patch.autoCompactInputTokens)
     if (autoCompact) next.autoCompactInputTokens = autoCompact
     else delete next.autoCompactInputTokens
+  }
+  if ('skipLlmImages' in patch) {
+    if (patch.skipLlmImages) next.skipLlmImages = true
+    else delete next.skipLlmImages
   }
   delete (next as { tags?: unknown }).tags
   return Object.keys(next).length ? next : undefined
