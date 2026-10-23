@@ -1,7 +1,7 @@
 appId: os.biu.app
-productName: Biu
+productName: BIU
 copyright: Apache-2.0
-artifactName: Biu-${version}-${os}-${arch}.${ext}
+artifactName: BIU-${version}-${os}-${arch}.${ext}
 directories:
   output: release
   app: pack-app
@@ -39,6 +39,9 @@ mac:
   gatekeeperAssess: false
   hardenedRuntime: false
   notarize: false
+  extendInfo:
+    CFBundleName: BIU
+    CFBundleDisplayName: BIU
   target:
     - target: dmg
       arch:
@@ -48,6 +51,8 @@ mac:
       arch:
         - arm64
         - x64
+dmg:
+  title: BIU
 win:
   icon: public/favicon.svg
   signAndEditExecutable: false
@@ -62,8 +67,8 @@ nsis:
   oneClick: true
   perMachine: false
   allowToChangeInstallationDirectory: false
-  shortcutName: Biu
-  uninstallDisplayName: Biu
+  shortcutName: BIU
+  uninstallDisplayName: BIU
 linux:
   category: Development
   icon: public/favicon.svg

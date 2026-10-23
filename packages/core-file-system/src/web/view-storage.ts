@@ -706,6 +706,45 @@ export function viewDisplayKey(collectionPath: string, viewId: string) {
   return `fsdb.viewDisplay:${collectionPath}:${viewId}`
 }
 
+export function collapsedGroupsKey(collectionPath: string, viewId: string, groupBy = '') {
+  return `fsdb.collapsedGroups:${collectionPath}:${viewId}:${groupBy}`
+}
+
+export function loadCollapsedGroups(collectionPath: string, viewId: string, groupBy = ''): Record<string, boolean> {
+  try {
+    const raw = localStorage.getItem(collapsedGroupsKey(collectionPath, viewId, groupBy))
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+    const next: Record<string, boolean> = {}
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (value === true) next[key] = true
+    }
+    return next
+  } catch {
+    return {}
+  }
+}
+
+export function persistCollapsedGroups(
+  collectionPath: string,
+  viewId: string,
+  groupBy: string,
+  next: Record<string, boolean>,
+) {
+  try {
+    const key = collapsedGroupsKey(collectionPath, viewId, groupBy)
+    const compact: Record<string, boolean> = {}
+    for (const [id, folded] of Object.entries(next)) {
+      if (folded) compact[id] = true
+    }
+    if (Object.keys(compact).length) localStorage.setItem(key, JSON.stringify(compact))
+    else localStorage.removeItem(key)
+  } catch {
+    /* ignore */
+  }
+}
+
 function pickDisplay(patch: Partial<SavedView>): ViewDisplayPatch {
   const next: ViewDisplayPatch = {}
   for (const key of DISPLAY_KEYS) {
