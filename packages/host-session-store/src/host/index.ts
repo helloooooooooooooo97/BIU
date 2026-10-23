@@ -51,6 +51,11 @@ export class MemorySessionStore implements SessionStore {
       .sort((a, b) => b.updatedAt - a.updatedAt)
   }
 
+  async getSummary(id: string) {
+    const record = this.records.get(id)
+    return record ? toSummary(record, this.touched.get(id)) : undefined
+  }
+
   async delete(id: string) {
     this.touched.delete(id)
     return this.records.delete(id)
@@ -79,6 +84,10 @@ export class SessionStoreService extends Service implements SessionStore {
 
   listSummaries() {
     return this.inner.listSummaries()
+  }
+
+  getSummary(id: string) {
+    return this.inner.getSummary(id)
   }
 
   delete(id: string) {

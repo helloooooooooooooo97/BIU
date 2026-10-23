@@ -846,6 +846,7 @@ export class DatabaseService extends Service implements Database {
   } | null = null
   private viewShareCache: { key: string; views: SharedViewDef[] } | null = null
   private recordShareCache: { key: string; ids: Set<string> } | null = null
+  private sessionPersonRows: Map<string, unknown> | null = null
   private inflightMatches = new Map<string, Promise<DbRecord[]>>()
   private inflightScans = new Map<string, Promise<DbRecord[]>>()
   private inflightVisible = new Map<string, Promise<VisibleSortedPack>>()
@@ -942,14 +943,16 @@ export class DatabaseService extends Service implements Database {
       : listed.filter((row) => !hidden.has(row.id) || builtinPlugin(row))
   }
 
-  private decorateSlice(spec: CollectionSpec, rows: DbRecord[], wanted?: string[] | null) {
+  private async decorateSlice(spec: CollectionSpec, rows: DbRecord[], wanted?: string[] | null) {
     this.ownershipCache = null
     this.ownerCache = null
     this.viewAudienceCache = null
     this.viewShareCache = null
     this.recordShareCache = null
+    this.sessionPersonRows = null
     try {
       const need = listDecorateNeed(wanted)
+      if (!need || need.people) await this.preloadSessionPeople(spec, rows)
       return rows.map((row) => this.decorateRecord(spec, row, need))
     } finally {
       this.ownershipCache = null
@@ -957,7 +960,31 @@ export class DatabaseService extends Service implements Database {
       this.viewAudienceCache = null
       this.viewShareCache = null
       this.recordShareCache = null
+      this.sessionPersonRows = null
     }
+  }
+
+  private async preloadSessionPeople(spec: CollectionSpec, rows: DbRecord[]) {
+    const ids = new Set<string>()
+    for (const row of rows) {
+      if (spec.path === '/plugins' && row.builtin === true) continue
+      const meta = this.facets.recordMeta(spec.path, row.id)
+      if (!meta) continue
+      const people = [...(meta.createdBy ? [meta.createdBy] : []), ...asPersonList(meta.updatedBy)]
+      for (const person of people) {
+        if (person.kind === 'agent' && person.sessionId) ids.add(person.sessionId)
+      }
+    }
+    if (!ids.size) return
+    const service = this.sessionsService()
+    const map = new Map<string, unknown>()
+    await Promise.all(
+      [...ids].map(async (id) => {
+        const peeked = service?.peek?.(id)
+        map.set(id, peeked ?? (await service?.summary?.(id)) ?? null)
+      }),
+    )
+    this.sessionPersonRows = map
   }
 
   private collabStore() {
@@ -1685,7 +1712,7 @@ export class DatabaseService extends Service implements Database {
       const packs = this.facets.list()
       const sorted = visible.filter((row) => matchListFilter(row, liveFilter, schema, packs) && matchQuery(row, q, packs))
       const total = sorted.length
-      const slice = this.decorateSlice(spec, sorted.slice(offset, offset + limit), columnKeys)
+      const slice = await this.decorateSlice(spec, sorted.slice(offset, offset + limit), columnKeys)
       return {
         kind: 'collection' as const,
         path: spec.path,
@@ -2007,9 +2034,7 @@ export class DatabaseService extends Service implements Database {
   }
 
   private peekSessionRow(sessionId: string): unknown {
-    const sessions = this.collection('/sessions')
-    const row = sessions?.get?.(sessionId)
-    if (row && typeof (row as Promise<unknown>).then !== 'function') return row
+    if (this.sessionPersonRows?.has(sessionId)) return this.sessionPersonRows.get(sessionId)
     return this.sessionsService()?.peek?.(sessionId)
   }
 
@@ -2017,9 +2042,15 @@ export class DatabaseService extends Service implements Database {
     return sessionPersonFromRow(this.peekSessionRow(sessionId))
   }
 
-  private sessionsService(): { peek?: (id: string) => unknown; get?: (id: string) => Promise<unknown> } | undefined {
+  private sessionsService(): {
+    peek?: (id: string) => unknown
+    summary?: (id: string) => Promise<unknown>
+  } | undefined {
     try {
-      return this.ctx.get('sessions') as { peek?: (id: string) => unknown; get?: (id: string) => Promise<unknown> }
+      return this.ctx.get('sessions') as {
+        peek?: (id: string) => unknown
+        summary?: (id: string) => Promise<unknown>
+      }
     } catch {
       return undefined
     }
@@ -2028,12 +2059,7 @@ export class DatabaseService extends Service implements Database {
   private async querySessionPerson(sessionId: string): Promise<{ name: string; mascot?: PersonValue['mascot'] }> {
     const peeked = this.peekSessionPerson(sessionId)
     if (peeked.name || peeked.mascot) return peeked
-    const sessions = this.collection('/sessions')
-    if (sessions?.get) {
-      const fromCollection = sessionPersonFromRow(await sessions.get(sessionId))
-      if (fromCollection.name || fromCollection.mascot) return fromCollection
-    }
-    return sessionPersonFromRow(await this.sessionsService()?.get?.(sessionId))
+    return sessionPersonFromRow(await this.sessionsService()?.summary?.(sessionId))
   }
 
   private applyFacetOverlay(spec: CollectionSpec, row: DbRecord): DbRecord {

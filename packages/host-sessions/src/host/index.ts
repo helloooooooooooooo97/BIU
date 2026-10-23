@@ -19,6 +19,8 @@ import {
   isSessionCompactPoint,
   sessionCompactSummaryText,
   mergeContentEditFiles,
+  sessionDisplayTitle,
+  type SessionSummary,
 } from '@biu/type-session'
 import {
   ensureSessionMascot,
@@ -341,6 +343,7 @@ export class SessionsService extends Service {
       inner.database.register(
         sessionsCollection({
           listSummaries: () => this.listSummaries(),
+          getSummary: (id) => this.summary(id),
           rename: (id, title) => this.rename(id, title),
           patchConfig: (id, patch) => this.patchConfig(id, patch),
           delete: (id) => this.delete(id),
@@ -413,6 +416,30 @@ export class SessionsService extends Service {
   /** 同步读缓存（Agent 工具解析会话项目根时用）。 */
   peek(id: string) {
     return this.cache.get(id)
+  }
+
+  /** One sessions-table row: title / mascot / config. Does not load the event log. */
+  async summary(id: string): Promise<SessionSummary | undefined> {
+    const hit = this.peek(id)
+    if (hit) {
+      if (!this.inWorkspace(id, hit)) return undefined
+      const updatedAt = hit.events.at(-1)?.ts ?? 0
+      const createdAt = Number(hit.config?.createdAt)
+      return {
+        id: hit.id,
+        version: hit.version,
+        eventCount: hit.events.length,
+        title: sessionDisplayTitle(hit),
+        updatedAt,
+        ...(hit.project ? { project: hit.project } : {}),
+        ...(hit.mascot ? { mascot: hit.mascot } : {}),
+        ...(hit.config || createdAt
+          ? { config: { ...(hit.config ?? {}), ...(Number.isFinite(createdAt) && createdAt > 0 ? { createdAt } : {}) } }
+          : {}),
+      }
+    }
+    if (!this.inWorkspace(id)) return undefined
+    return this.ctx.sessionStore.getSummary(id)
   }
 
   async get(id: string) {

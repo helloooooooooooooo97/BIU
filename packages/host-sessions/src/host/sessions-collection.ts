@@ -20,6 +20,7 @@ type SessionRecordLike = {
 
 type SessionsLike = {
   listSummaries: () => Promise<SessionSummary[]>
+  getSummary?: (id: string) => Promise<SessionSummary | undefined>
   rename: (id: string, title: string) => Promise<unknown>
   patchConfig: (id: string, patch: SessionConfig) => Promise<unknown>
   delete: (id: string) => Promise<boolean>
@@ -174,7 +175,10 @@ export function sessionsCollection(sessions: SessionsLike): CollectionSpec {
     },
     list,
     get: async (id) => {
-      const row = (await list()).find((item) => item.id === id) ?? null
+      const summary = sessions.getSummary
+        ? await sessions.getSummary(id)
+        : (await sessions.listSummaries()).find((item) => item.id === id)
+      const row = summary ? asRecord(summary) : null
       if (!row) return null
       if (!sessions.require) return row
       try {

@@ -426,5 +426,7 @@ export interface SessionStore {
   save(record: SessionRecord): Promise<void>
   list(): Promise<string[]>
   listSummaries(): Promise<SessionSummary[]>
+  /** One row from the sessions table. No event log. */
+  getSummary(id: string): Promise<SessionSummary | undefined>
   delete(id: string): Promise<boolean>
 }

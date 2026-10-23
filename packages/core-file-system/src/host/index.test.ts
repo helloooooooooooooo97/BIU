@@ -329,19 +329,18 @@ test('stamps agent createdBy with the session title from /sessions', async () =>
   const sessions = new Map<string, { id: string; title: string; mascot: typeof mascot }>([
     ['sess-agent-1', { id: 'sess-agent-1', title: '蓝团爱', mascot }],
   ])
-  db.register({
-    id: 'sessions',
-    path: '/sessions',
-    schema: {
-      labelField: 'title',
-      fields: {
-        ...REQUIRED_RECORD_FIELDS,
-        title: { type: 'string', writable: true },
-      },
-    },
-    list: () => [...sessions.values()],
-    get: (id) => sessions.get(id) ?? null,
-  })
+  class SessionsBridge extends Service {
+    constructor(inner: Context) {
+      super(inner, 'sessions')
+    }
+    peek(id: string) {
+      return sessions.get(id)
+    }
+    summary(id: string) {
+      return Promise.resolve(sessions.get(id))
+    }
+  }
+  await ctx.plugin(SessionsBridge)
   const written = await runWithSession('sess-agent-1', () => db.update('/notes/n1', { status: 'done' }))
   const actor = { kind: 'agent', name: '蓝团爱', sessionId: 'sess-agent-1', mascot }
   assert.deepEqual(written.value.createdBy, actor)
@@ -354,6 +353,113 @@ test('stamps agent createdBy with the session title from /sessions', async () =>
     sessionId: 'sess-agent-1',
     mascot: { shape: 'cube', color: 'blue', eye: 2 },
   })
+})
+
+test('listing 100 createdBy rows looks up sessions by id, not collection get', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  const mascot = { shape: 'pebble', color: 'orange', eye: 1 }
+  const actorRow = { id: 'sess-agent-1', title: '蓝团爱', mascot }
+  const notes = new Map<string, { id: string; title: string; status: string }>()
+  for (let i = 1; i <= 100; i += 1) {
+    notes.set(`n${i}`, { id: `n${i}`, title: `记录 ${String(i).padStart(3, '0')}`, status: 'open' })
+  }
+  let sessionGets = 0
+  let summaryGets = 0
+  let listSummaries = 0
+  db.register({
+    id: 'notes',
+    path: '/notes',
+    schema: {
+      labelField: 'title',
+      fields: {
+        ...REQUIRED_RECORD_FIELDS,
+        title: { type: 'string', writable: true },
+        status: { type: 'string', writable: true },
+      },
+    },
+    records: { update: true },
+    list: () => [...notes.values()],
+    get: (id) => notes.get(id) ?? null,
+    update: (id, patch) => {
+      const current = notes.get(id)
+      if (!current) throw new Error('unknown note')
+      const next = { ...current, ...patch, id }
+      notes.set(id, next)
+      return next
+    },
+  })
+  db.register({
+    id: 'sessions',
+    path: '/sessions',
+    schema: {
+      labelField: 'title',
+      fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string', writable: true } },
+    },
+    list: async () => {
+      listSummaries += 1
+      return [actorRow]
+    },
+    get: async (id) => {
+      sessionGets += 1
+      const started = Date.now()
+      while (Date.now() - started < 40) {
+        /* old collection get: list all summaries + event log */
+      }
+      return id === actorRow.id ? actorRow : null
+    },
+  })
+  class SessionsBridge extends Service {
+    constructor(inner: Context) {
+      super(inner, 'sessions')
+    }
+    peek() {
+      return undefined
+    }
+    summary(id: string) {
+      summaryGets += 1
+      return Promise.resolve(id === actorRow.id ? actorRow : undefined)
+    }
+  }
+  await ctx.plugin(SessionsBridge)
+  await runWithSession('sess-agent-1', async () => {
+    for (const id of notes.keys()) await db.update(`/notes/${id}`, { status: 'open' })
+  })
+  sessionGets = 0
+  summaryGets = 0
+  listSummaries = 0
+  const t0 = Date.now()
+  const withCreatedBy = await db.list('/notes', undefined, { columns: ['title', 'status', 'createdBy'], limit: 100 })
+  const withMs = Date.now() - t0
+  const getsWithCreatedBy = sessionGets
+  const summariesWithCreatedBy = summaryGets
+  const listedWithCreatedBy = listSummaries
+  sessionGets = 0
+  summaryGets = 0
+  listSummaries = 0
+  const t1 = Date.now()
+  const withoutPerson = await db.list('/notes', undefined, { columns: ['title', 'status'], limit: 100 })
+  const withoutMs = Date.now() - t1
+  assert.equal(withCreatedBy.kind, 'collection')
+  assert.equal(withoutPerson.kind, 'collection')
+  if (withCreatedBy.kind !== 'collection' || withoutPerson.kind !== 'collection') return
+  assert.equal(withCreatedBy.items.length, 100)
+  assert.equal(withoutPerson.items.length, 100)
+  assert.equal('updatedBy' in (withCreatedBy.items[0] ?? {}), false)
+  assert.equal('createdBy' in (withoutPerson.items[0] ?? {}), false)
+  assert.deepEqual(withCreatedBy.items[0]?.createdBy, {
+    kind: 'agent',
+    name: '蓝团爱',
+    sessionId: 'sess-agent-1',
+    mascot,
+  })
+  assert.equal(getsWithCreatedBy, 0, `createdBy list started ${getsWithCreatedBy} session gets in ${withMs}ms`)
+  assert.equal(listedWithCreatedBy, 0)
+  assert.equal(summariesWithCreatedBy, 1)
+  assert.equal(sessionGets, 0)
+  assert.equal(summaryGets, 0)
+  assert.equal(listSummaries, 0)
+  assert.ok(withMs < 200, `createdBy view ${withMs}ms, no-person view ${withoutMs}ms`)
 })
 
 test('updates stamp createdBy and updatedBy from the current actor', async () => {
@@ -373,19 +479,18 @@ test('later editors append to updatedBy and leave createdBy alone', async () => 
   const ctx = new Context()
   const db = new DatabaseService(ctx)
   db.register(notesCollection())
-  db.register({
-    id: 'sessions',
-    path: '/sessions',
-    schema: {
-      labelField: 'title',
-      fields: {
-        ...REQUIRED_RECORD_FIELDS,
-        title: { type: 'string', writable: true },
-      },
-    },
-    list: () => [{ id: 'sess-a', title: '甲' }],
-    get: (id) => (id === 'sess-a' ? { id: 'sess-a', title: '甲' } : null),
-  })
+  class SessionsBridge extends Service {
+    constructor(inner: Context) {
+      super(inner, 'sessions')
+    }
+    peek(id: string) {
+      return id === 'sess-a' ? { id: 'sess-a', title: '甲' } : undefined
+    }
+    summary(id: string) {
+      return Promise.resolve(this.peek(id))
+    }
+  }
+  await ctx.plugin(SessionsBridge)
   await db.update('/notes/n1', { status: 'done' })
   const second = await runWithSession('sess-a', () => db.update('/notes/n1', { status: 'open' }))
   assert.deepEqual(second.value.createdBy, { kind: 'user', name: '用户' })
@@ -2888,6 +2993,9 @@ test('collection list preloads authorization scans and releases them', () => {
   assert.match(host, /visibleCache\.clear\(\)/)
   assert.match(host, /specListQuery\(query\)/)
   assert.match(host, /listDecorateNeed/)
+  assert.match(host, /preloadSessionPeople/)
+  assert.match(host, /sessionsService\(\)\?\.summary/)
+  assert.doesNotMatch(host, /collection\('\/sessions'\)/)
   assert.match(host, /decorateSlice\(spec, sorted.slice\(offset, offset \+ limit\), columnKeys\)/)
   assert.match(
     host,

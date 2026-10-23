@@ -253,6 +253,39 @@ export class SqliteSessionStore implements SessionStore {
     return rows.map((row) => row.id)
   }
 
+  private asSummary(row: SessionRow, extra?: { lastMessageAt?: number; createdAt?: number }): SessionSummary {
+    const project = parseProject(row.project_json)
+    const mascot = parseMascot(row.mascot_json)
+    const config = parseConfig(row.config_json)
+    const createdAt = extra?.createdAt ?? Number(config?.createdAt)
+    const stamp = Number.isFinite(createdAt) && createdAt > 0 ? createdAt : row.updated_at
+    return {
+      id: row.id,
+      version: row.version,
+      eventCount: row.event_count,
+      title:
+        row.title && row.title !== row.id.slice(0, 8)
+          ? row.title
+          : mascot
+            ? nameFromSessionMascot(mascot)
+            : row.title || row.id.slice(0, 8),
+      updatedAt: row.updated_at,
+      ...((extra?.lastMessageAt ?? 0) > 0 ? { lastMessageAt: extra?.lastMessageAt } : {}),
+      ...(project ? { project } : {}),
+      ...(mascot ? { mascot } : {}),
+      ...(config || stamp ? { config: { ...(config ?? {}), createdAt: stamp } } : {}),
+    }
+  }
+
+  async getSummary(id: string): Promise<SessionSummary | undefined> {
+    const row = this.sessions
+      .prepare(
+        'SELECT id, version, project_json, mascot_json, config_json, event_count, title, updated_at FROM sessions WHERE id = ?',
+      )
+      .get(id) as SessionRow | undefined
+    return row ? this.asSummary(row) : undefined
+  }
+
   async listSummaries(): Promise<SessionSummary[]> {
     const rows = this.sessions
       .prepare(
@@ -272,33 +305,18 @@ export class SqliteSessionStore implements SessionStore {
       .all() as Array<{ session_id: string; first_event_at: number }>
     for (const row of mins) firstBySession.set(row.session_id, Number(row.first_event_at) || 0)
     return rows.map((row) => {
-      const project = parseProject(row.project_json)
-      const mascot = parseMascot(row.mascot_json)
-      const config = parseConfig(row.config_json)
-      const createdAt = Number(config?.createdAt)
+      const createdAt = Number(parseConfig(row.config_json)?.createdAt)
       const firstEventAt = firstBySession.get(row.id) ?? 0
       const stamp =
         Number.isFinite(createdAt) && createdAt > 0
           ? createdAt
           : firstEventAt > 0
             ? firstEventAt
-            : row.updated_at
-      return {
-        id: row.id,
-        version: row.version,
-        eventCount: row.event_count,
-        title:
-          row.title && row.title !== row.id.slice(0, 8)
-            ? row.title
-            : mascot
-              ? nameFromSessionMascot(mascot)
-              : row.title || row.id.slice(0, 8),
-        updatedAt: row.updated_at,
-        ...((spokenBySession.get(row.id) ?? 0) > 0 ? { lastMessageAt: spokenBySession.get(row.id) } : {}),
-        ...(project ? { project } : {}),
-        ...(mascot ? { mascot } : {}),
-        ...(config || stamp ? { config: { ...(config ?? {}), createdAt: stamp } } : {}),
-      }
+            : undefined
+      return this.asSummary(row, {
+        lastMessageAt: spokenBySession.get(row.id) ?? 0,
+        ...(stamp ? { createdAt: stamp } : {}),
+      })
     })
   }
 
