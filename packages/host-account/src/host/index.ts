@@ -50,9 +50,11 @@ export class AccountService extends Service {
     if (!isOnlineRuntime() && origin) {
       this.replica = new RecordReplica(db, httpRemote(origin))
       const timer = setInterval(() => {
+        const active = this.store.activeWorkspaceId()
+        if (!active || this.workspaceLocation(active) !== 'cloud') return
         const device = this.replica?.active()
-        if (!device?.token || !device.workspaceId) return
-        void exchangeSnapshot(ctx, origin, device.token, device.accountId, device.workspaceId).catch((error) => {
+        if (!device?.token) return
+        void exchangeSnapshot(ctx, origin, device.token, device.accountId, active).catch((error) => {
           console.warn('[replica] sync failed', error)
         })
       }, 3000)
@@ -226,10 +228,9 @@ export class AccountService extends Service {
     if (!connection) return
     const active = this.store.activeWorkspaceId()
     const currentCloud = active && this.workspaceLocation(active) === 'cloud' ? active : ''
-    const previous = this.replica.devices().find((item) => item.accountId === localAccountId)
     this.replica.remember({
       accountId: localAccountId,
-      workspaceId: currentCloud || previous?.workspaceId || '',
+      workspaceId: currentCloud,
       token: connection.token,
     })
   }
@@ -579,10 +580,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
       const me = actor(route)
       const body = (await route.json()) as { workspaceId?: string }
       const workspaceId = account.store.setActive(me.id, String(body.workspaceId ?? ''))
-      if (account.workspaceLocation(workspaceId) === 'cloud') {
-        const connection = account.cloudConnection(me.id)
-        if (connection) account.replica?.remember({ accountId: me.id, workspaceId, token: connection.token })
-      }
+      account.syncReplicaCredential(me.id)
       ctx.http.broadcast('database', { ts: Date.now() })
       route.send(200, { workspaceId, location: account.workspaceLocation(workspaceId) })
     } catch (error) {

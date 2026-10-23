@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -222,6 +223,13 @@ test('secrets and plugin directories are not queued', async () => {
   assert.equal(replica.read(workspace.id, '/pages', 'p1', 'secret'), null)
 })
 
+test('desktop replica snapshot only polls while the active workspace is cloud', () => {
+  const src = readFileSync(resolve(import.meta.dirname, './index.ts'), 'utf8')
+  assert.match(src, /this\.workspaceLocation\(active\) !== 'cloud'/)
+  assert.match(src, /exchangeSnapshot\(ctx, origin, device\.token, device\.accountId, active\)/)
+  assert.doesNotMatch(src, /previous\?\.workspaceId/)
+})
+
 test('local account requests keep the linked cloud credential', async () => {
   const previousOnline = process.env.BIU_ONLINE
   const previousOrigin = process.env.BIU_REMOTE_ORIGIN
@@ -244,6 +252,22 @@ test('local account requests keep the linked cloud credential', async () => {
     service.replica?.remember({ accountId: ada.id, workspaceId: 'cloud-ws', token: 'cloud-token' })
     ctx.emit('account/request', { accountId: ada.id, token: 'local-session-token' })
     assert.equal(service.replica?.active()?.token, 'cloud-token')
+    assert.equal(service.replica?.active()?.workspaceId, '')
+    const local = service.store.createWorkspace(ada.id, '本机')
+    service.store.setActive(ada.id, local.id)
+    service.syncReplicaCredential(ada.id)
+    assert.equal(service.replica?.active()?.workspaceId, '')
+    service.store.upsertPulledWorkspace({
+      accountId: ada.id,
+      id: 'cloud-ws',
+      name: '云端',
+      ownerId: ada.id,
+      role: 'owner',
+      createdAt: Date.now(),
+    })
+    service.markCloudWorkspace('cloud-ws')
+    service.store.setActive(ada.id, 'cloud-ws')
+    service.syncReplicaCredential(ada.id)
     assert.equal(service.replica?.active()?.workspaceId, 'cloud-ws')
   } finally {
     ctx.emit('dispose')
@@ -281,7 +305,7 @@ test('restart resumes a saved cloud link without asking for the password again',
   try {
     assert.equal(resumed.cloudConnection(ada.id)?.token, 'cloud-token')
     assert.equal(resumed.replica?.active()?.token, 'cloud-token')
-    assert.equal(resumed.replica?.active()?.workspaceId, 'cloud-ws')
+    assert.equal(resumed.replica?.active()?.workspaceId, '')
   } finally {
     second.emit('dispose')
     if (previousOnline === undefined) delete process.env.BIU_ONLINE
