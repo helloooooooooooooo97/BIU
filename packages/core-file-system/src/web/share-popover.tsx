@@ -1083,6 +1083,7 @@ export function SharePanel({
   const [copied, setCopied] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const loadGen = useRef(0)
   useEffect(() => {
     if (localOnly && tab !== 'public') setTab('public')
   }, [localOnly, tab])
@@ -1095,12 +1096,13 @@ export function SharePanel({
   })
 
   useEffect(() => {
+    const gen = ++loadGen.current
     let gone = false
-    void readJson<SharePayload>(`/api/db/shares?${params}`).then((data) => {
-      if (gone) return
+    void readJson<SharePayload>(`/api/db/shares?${params}`, undefined, { fresh: true }).then((data) => {
+      if (gone || gen !== loadGen.current) return
       applyPayload(data)
     }).catch(() => {
-      if (!gone) setShare(null)
+      if (!gone && gen === loadGen.current) setShare(null)
     })
     return () => {
       gone = true
@@ -1139,6 +1141,9 @@ export function SharePanel({
     },
     opts: { quiet?: boolean; pin?: string; flagsOnly?: boolean } = {},
   ) {
+    const gen = ++loadGen.current
+    const previous = share
+    if (patch.enabled === false) setShare(null)
     if (!opts.quiet) {
       setBusy(true)
       setError('')
@@ -1155,11 +1160,13 @@ export function SharePanel({
           ...patch,
         }),
       })
+      if (gen !== loadGen.current) return data.share ?? null
       applyPayload(data, opts.pin, opts.flagsOnly)
-      if (patch.enabled === false && data.share == null && share) rememberPin(share.token, '')
+      if (patch.enabled === false && data.share == null && previous) rememberPin(previous.token, '')
       window.dispatchEvent(new Event('fsdb:shares-change'))
       return data.share
     } catch (err) {
+      if (gen === loadGen.current && patch.enabled === false) setShare(previous)
       setError(String(err instanceof Error ? err.message : err))
       return null
     } finally {
@@ -1172,7 +1179,7 @@ export function SharePanel({
     let live = share
     let livePin = pin
     if (!live) {
-      live = await publish({})
+      live = await publish({ enabled: true })
     } else if ((usePassword || live.hasPassword) && pin.length === 6 && pin !== rememberedPin(live.token)) {
       live = (await publish({ password: pin }, { quiet: true, pin })) ?? live
       livePin = pin

@@ -1,6 +1,6 @@
 import { memo, useEffect, useState, useSyncExternalStore } from 'react'
 import { ArrowPathIcon, CpuChipIcon, UserIcon } from '@heroicons/react/16/solid'
-import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
+import { FallbackMascotMark, SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import { asPerson, asPersonList, personKey, type PersonValue } from '@biu/type-file-system'
 import { listCollection } from './db-client.ts'
 import { useWorkspaceProfile } from '@biu/public-ui/use-workspace-profile'
@@ -22,6 +22,30 @@ const AGENTS_TTL_MS = 8000
 let agentNames = new Map<string, string>()
 let agentNamesScheduled = false
 const agentNameListeners = new Set<() => void>()
+let tableMascotsLive = false
+const tableMascotListeners = new Set<() => void>()
+
+export function subscribeTableMascots(onStoreChange: () => void) {
+  tableMascotListeners.add(onStoreChange)
+  return () => {
+    tableMascotListeners.delete(onStoreChange)
+  }
+}
+
+export function readTableMascotsLive() {
+  return tableMascotsLive
+}
+
+export function resetTableMascots() {
+  tableMascotsLive = false
+}
+
+/** After the table's first paint, every person cell upgrades together. No per-cell rAF queue. */
+export function scheduleTableMascots() {
+  if (tableMascotsLive) return
+  tableMascotsLive = true
+  tableMascotListeners.forEach((fn) => fn())
+}
 
 export function subscribeAgentNames(onStoreChange: () => void) {
   agentNameListeners.add(onStoreChange)
@@ -126,13 +150,18 @@ export const PersonFace = memo(function PersonFace({ value, empty = '' }: { valu
   const profile = useWorkspaceProfile()
   const people = asPersonList(value)
   const sessionNames = useSyncExternalStore(subscribeAgentNames, readAgentNames, readAgentNames)
+  const mascotsLive = useSyncExternalStore(subscribeTableMascots, readTableMascotsLive, readTableMascotsLive)
   const needNames = people.some(
     (item) => item.kind === 'agent' && item.sessionId && agentNameLooksLikeId(item.name, item.sessionId),
   )
 
   useEffect(() => {
-    if (needNames) scheduleAgentNames()
-  }, [needNames])
+    scheduleTableMascots()
+  }, [])
+
+  useEffect(() => {
+    if (mascotsLive && needNames) scheduleAgentNames()
+  }, [mascotsLive, needNames])
 
   if (!people.length) {
     return empty ? (
@@ -155,13 +184,21 @@ export const PersonFace = memo(function PersonFace({ value, empty = '' }: { valu
           <>
             {person.kind === 'agent' && (person.sessionId || person.mascot) ? (
               <span className="fsdb-person-face" aria-hidden>
-                <SidebarMascot
-                  size={18}
-                  sessionId={person.sessionId || person.name}
-                  identity={resolveSessionMascot(person.sessionId || person.name, person.mascot)}
-                  animate={false}
-                  title={label || person.sessionId}
-                />
+                {mascotsLive ? (
+                  <SidebarMascot
+                    size={18}
+                    sessionId={person.sessionId || person.name}
+                    identity={resolveSessionMascot(person.sessionId || person.name, person.mascot)}
+                    animate={false}
+                    title={label || person.sessionId}
+                  />
+                ) : (
+                  <FallbackMascotMark
+                    size={18}
+                    identity={resolveSessionMascot(person.sessionId || person.name, person.mascot)}
+                    title={label || person.sessionId}
+                  />
+                )}
               </span>
             ) : liveUser && profile.avatar ? (
               <img className="fsdb-person-photo" src={profile.avatar} alt="" />

@@ -117,6 +117,15 @@ test('table titles do not show a cloud mark', () => {
   assert.doesNotMatch(databaseHost, /remote: true/)
 })
 
+test('share panel does not let a stale GET overwrite enable or close', () => {
+  const src = readFileSync(resolve(import.meta.dirname, './share-popover.tsx'), 'utf8')
+  assert.match(src, /fresh: true/)
+  assert.match(src, /loadGen/)
+  assert.match(src, /gen !== loadGen\.current/)
+  assert.match(src, /if \(patch\.enabled === false\) setShare\(null\)/)
+  assert.match(src, /publish\(\{ enabled: true \}\)/)
+})
+
 test('device workspace keeps LAN links but hides collaboration and cloud publishing', () => {
   const src = readFileSync(resolve(import.meta.dirname, './share-popover.tsx'), 'utf8')
   const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')

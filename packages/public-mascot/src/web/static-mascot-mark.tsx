@@ -47,7 +47,11 @@ export const StaticMascotMark = memo(function StaticMascotMark({
     scheduleGrokGeo()
   }, [identity.shape, identity.color, identity.eye])
 
-  const vb = geo?.viewBox ?? DEFAULT_VB
+  if (!geo?.path) {
+    return <FallbackMascotMark identity={identity} size={size} busy={busy} className={className} title={title} />
+  }
+
+  const vb = geo.viewBox ?? DEFAULT_VB
 
   return (
     <span
@@ -69,16 +73,8 @@ export const StaticMascotMark = memo(function StaticMascotMark({
           opacity: 1,
         }}
       >
-        {geo?.path ? (
-          <path d={geo.path} fill={geo.fill} />
-        ) : (
-          <>
-            <path d={fallbackBody(identity.shape)} fill={fallbackColor(identity.color)} />
-            <ellipse cx="91" cy="119" rx="13" ry="18" fill="#fff" />
-            <ellipse cx="151" cy="119" rx="13" ry="18" fill="#fff" />
-          </>
-        )}
-        {geo?.eyePaths ? (
+        <path d={geo.path} fill={geo.fill} />
+        {geo.eyePaths ? (
           <g transform={faceTransform(geo.Re, geo.face)}>
             <path d={geo.eyePaths[0]} fill="#fff" />
             <path d={geo.eyePaths[1]} fill="#fff" />
@@ -119,6 +115,44 @@ function fallbackBody(shape: GrokShape) {
     return 'M205 32C239 77 222 162 174 205C126 248 43 224 16 163C-11 102 24 32 84 9C127-8 178-4 205 32Z'
   }
   return 'M121 0C185 0 229 45 229 112C229 180 187 229 115 229C43 229 0 181 0 114C0 48 51 0 121 0Z'
+}
+
+/** Same colored blob as the static mark, without geometry/script/effects. Table first paint uses this. */
+export function FallbackMascotMark({
+  identity,
+  size = 28,
+  busy = false,
+  className,
+  title = 'Session mascot',
+}: StaticMascotMarkProps) {
+  const vb = DEFAULT_VB
+  return (
+    <span
+      className={`sidebar-mascot session-mascot-mark${busy ? ' is-busy' : ''}${className ? ` ${className}` : ''}`}
+      style={{ width: size, height: size, display: 'inline-grid', placeItems: 'center' }}
+      title={title}
+      data-busy={busy ? 'true' : undefined}
+    >
+      <svg
+        role="img"
+        aria-label={title}
+        width={size}
+        height={size}
+        viewBox={`${vb.minX} ${vb.minY} ${vb.width} ${vb.height}`}
+        style={{
+          width: size,
+          height: size,
+          overflow: 'visible',
+          opacity: 1,
+        }}
+      >
+        <path d={fallbackBody(identity.shape)} fill={fallbackColor(identity.color)} />
+        <ellipse cx="91" cy="119" rx="13" ry="18" fill="#fff" />
+        <ellipse cx="151" cy="119" rx="13" ry="18" fill="#fff" />
+      </svg>
+      {busy ? <span className="sidebar-mascot-status" aria-hidden /> : null}
+    </span>
+  )
 }
 
 function readGeo(identity: SessionMascotIdentity): GeoSnapshot | null {

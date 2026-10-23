@@ -84,6 +84,7 @@ import {
   placedActions,
 } from './fsdb-cells.tsx'
 import { ShareRoleLabel, ShareScopeLabel } from './share-scope-label.tsx'
+import { resetTableMascots } from './person-cell.tsx'
 import { ensureFsdbStyle } from './fsdb-style.ts'
 import { workspaceColumnsForLocation } from './workspace-columns.ts'
 import { PageBanner } from './page-banner.tsx'
@@ -1593,6 +1594,12 @@ export function CollectionBrowser({
     )
   }
   const dataPath = collectionPath
+  const mascotPaintPath = useRef('')
+  const mascotPaintKey = `${collectionPath}\0${dataPath}`
+  if (mascotPaintPath.current !== mascotPaintKey) {
+    mascotPaintPath.current = mascotPaintKey
+    resetTableMascots()
+  }
   const [stat, setStat] = useState<StatResult | null>(() => peekListCache(dataPath, routeViewId)?.stat ?? null)
   const [items, setItems] = useState<Array<DbRecord & { path?: string }>>(() => peekListCache(dataPath, routeViewId)?.items ?? [])
   const [error, setError] = useState('')
