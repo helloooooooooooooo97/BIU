@@ -94,17 +94,17 @@ test('grouped wrap pages larger than the window only fully fetch the first group
   assert.equal(groupedFullFetchCount(100, 1, true), 1)
 })
 
-test('unmeasured first screen still windows a very wide table', () => {
+test('column slice keeps every column, including before the wrap is measured', () => {
   const widths = [TABLE_COL_PIN_PX, ...Array.from({ length: 20 }, () => TABLE_COL_PX)]
   const slice = tableColumnSlice(21, 1, 0, 0, widths)
   assert.equal(slice.pin, 1)
   assert.equal(slice.start, 1)
-  assert.ok(slice.end < 21)
-  assert.ok(slice.padRight > 0)
+  assert.equal(slice.end, 21)
   assert.equal(slice.padLeft, 0)
+  assert.equal(slice.padRight, 0)
 })
 
-test('unmeasured fallback covers a typical custom view column set', () => {
+test('typical custom view columns all stay in the row', () => {
   const widths = [TABLE_COL_PIN_PX, TABLE_COL_ACTIONS_PX, ...Array.from({ length: 8 }, () => TABLE_COL_PX)]
   const slice = tableColumnSlice(10, 1, 0, 0, widths)
   assert.equal(slice.start, 1)
@@ -120,14 +120,14 @@ test('narrow column sets still paint every column', () => {
   assert.equal(slice.padRight, 0)
 })
 
-test('typical 7-col first screen overflows a 624 wrap and pads the rest', () => {
+test('a 7-col row still paints every column inside a 624 wrap', () => {
   const widths = [TABLE_COL_PIN_PX, TABLE_COL_ACTIONS_PX, ...Array.from({ length: 5 }, () => TABLE_COL_PX)]
   const slice = tableColumnSlice(7, 1, 0, 624, widths)
   assert.equal(slice.pin, 1)
   assert.equal(slice.start, 1)
-  assert.ok(slice.end < 7)
+  assert.equal(slice.end, 7)
   assert.equal(slice.padLeft, 0)
-  assert.ok(slice.padRight > 0)
+  assert.equal(slice.padRight, 0)
 })
 
 test('unsaved columns use fixed defaults; saved widths stay as-is', () => {
@@ -164,27 +164,20 @@ test('remembered wrap size replaces the 624 fallback after the first measure', (
   assert.deepEqual(rememberedTableWrap(), { width: TABLE_COL_VIEWPORT_FALLBACK, height: TABLE_WINDOW_VIEWPORT_FALLBACK })
 })
 
-test('wide plugin tables keep later columns off-screen until the wrap is measured', () => {
-  resetRememberedTableWrap()
+test('wide tables still keep every column in the row', () => {
   const widths = [TABLE_COL_PIN_PX, ...Array.from({ length: 16 }, () => TABLE_COL_PX)]
-  const unmeasured = tableColumnSlice(17, 1, 0, rememberedTableWrap().width, widths)
-  assert.ok(unmeasured.end < 17)
-  assert.ok(unmeasured.padRight > 0)
-  const measured = tableColumnSlice(17, 1, 0, tableWrapScroll({
-    clientWidth: 2400,
-    clientHeight: 800,
-    scrollTop: 0,
-    scrollLeft: 0,
-  }).width, widths)
-  assert.ok(measured.end > unmeasured.end)
-  resetRememberedTableWrap()
+  const slice = tableColumnSlice(17, 1, 0, 624, widths)
+  assert.equal(slice.start, 1)
+  assert.equal(slice.end, 17)
+  assert.equal(slice.padLeft, 0)
+  assert.equal(slice.padRight, 0)
 })
 
-test('column window shifts with horizontal scroll and pads both sides', () => {
+test('horizontal scroll does not drop columns from the slice', () => {
   const widths = Array.from({ length: 10 }, () => TABLE_COL_PX)
   const slice = tableColumnSlice(10, 0, TABLE_COL_PX * 4, TABLE_COL_PX * 3, widths)
-  assert.ok(slice.start >= 4 - TABLE_COL_OVERSCAN)
-  assert.ok(slice.end <= 4 + 3 + TABLE_COL_OVERSCAN + 1)
-  assert.ok(slice.padLeft > 0)
-  assert.ok(slice.padRight > 0)
+  assert.equal(slice.start, 0)
+  assert.equal(slice.end, 10)
+  assert.equal(slice.padLeft, 0)
+  assert.equal(slice.padRight, 0)
 })
