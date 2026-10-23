@@ -30,8 +30,6 @@ xattr -dr com.apple.quarantine /Applications/BIU.app
 
 然后照常打开 BIU。Apple 芯片用 `*-mac-arm64.dmg`，Intel 用 `*-mac-x64.dmg`。
 
-不要从还挂着的 dmg 里点应用：每次开都会把那个卷重新挂到桌面。从「应用程序」里打开。若 Dock 图标还是开 dmg 的那份，从 Dock 去掉，再从「应用程序」拖进去。第一次从 dmg 启动时，BIU 会询问是否移到「应用程序」。
-
 也可以不敲命令：在「应用程序」里 **Control+点按 / 右键 → 打开 → 打开**。成功一次之后即可双击。系统设置 → 隐私与安全性 → **仍要打开** 同样有效。
 
 本仓库打包使用 ad-hoc 签名（`electron-builder.yml` 里 `identity: '-'`），不申请 Developer ID。
