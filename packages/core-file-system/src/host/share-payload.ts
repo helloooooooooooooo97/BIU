@@ -10,6 +10,21 @@ import { asPublicProfile } from '@biu/host-workspace'
 import { viewShareListFilter } from '../share-view-match.ts'
 
 const SHARE_LIMIT = 200
+const CONTENT_CONCURRENCY = 8
+
+async function mapConcurrent<T, R>(items: readonly T[], limit: number, run: (item: T) => Promise<R>): Promise<R[]> {
+  if (!items.length) return []
+  const results = new Array<R>(items.length)
+  let cursor = 0
+  const worker = async () => {
+    while (cursor < items.length) {
+      const index = cursor++
+      results[index] = await run(items[index]!)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()))
+  return results
+}
 
 function asStat(raw: unknown) {
   return raw as { kind?: string; schema?: CollectionSchema; label?: string; view?: { title?: string } | null }
@@ -108,14 +123,17 @@ export async function buildShareSnapshot(
     limit: SHARE_LIMIT,
   })) as { items?: DbRecord[] }
   const records = (listed.items ?? []).map(audienceRecord)
-  const contents: Record<string, unknown> = {}
-  for (const row of records) {
+  const bodies = await mapConcurrent(records, CONTENT_CONCURRENCY, async (row) => {
     try {
-      contents[row.id] = asContentRead(await db.content(`${share.collection}/${row.id}`)).value ?? null
+      return asContentRead(await db.content(`${share.collection}/${row.id}`)).value ?? null
     } catch {
-      contents[row.id] = null
+      return null
     }
-  }
+  })
+  const contents: Record<string, unknown> = {}
+  records.forEach((row, index) => {
+    contents[row.id] = bodies[index] ?? null
+  })
   const banner = await readShareBanner(db, share.collection, share.viewId)
   return withResources({
     kind: 'view',
