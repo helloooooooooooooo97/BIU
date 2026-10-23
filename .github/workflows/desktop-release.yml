@@ -69,7 +69,7 @@ jobs:
             拖进「应用程序」后若提示已损坏，终端执行一行：
 
             ```bash
-            xattr -dr com.apple.quarantine /Applications/Biu.app
+            xattr -dr com.apple.quarantine /Applications/BIU.app
             ```
 
             Apple 芯片：`*-mac-arm64.dmg`。Intel：`*-mac-x64.dmg`。也可右键 → 打开。

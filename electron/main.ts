@@ -413,6 +413,7 @@ ipcMain.on('biu:browser:cmd', async (_event, cmd: Cmd) => {
 
 async function createWindow() {
   win = new BrowserWindow({
+    title: 'BIU',
     width: 1440,
     height: 900,
     minWidth: 960,
@@ -666,6 +667,8 @@ if (process.platform === 'linux') {
   app.commandLine.appendSwitch('no-sandbox')
   app.commandLine.appendSwitch('disable-gpu-sandbox')
 }
+
+app.setName('BIU')
 
 app.whenReady().then(async () => {
   // 允许被嵌的话就允许；这里只是让一些站少弹无谓的告警

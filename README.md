@@ -610,7 +610,7 @@ Requires Node.js 20+ and npm. `main` and the development branch `hmr-dev` are cu
 macOS / Windows installers are on [GitHub Releases](https://github.com/helloooooooooooooo97/biu/releases). macOS is ad-hoc signed: if Gatekeeper says the app is damaged, run:
 
 ```bash
-xattr -dr com.apple.quarantine /Applications/Biu.app
+xattr -dr com.apple.quarantine /Applications/BIU.app
 ```
 
 See [docs/desktop-install.md](docs/desktop-install.md).

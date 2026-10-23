@@ -13,6 +13,9 @@ import {
   mergeSavedViewsPatch,
   noteLocalSavedViewsWrite,
   persistViewDisplay,
+  persistCollapsedGroups,
+  loadCollapsedGroups,
+  collapsedGroupsKey,
   pickViewForRoute,
   pullSavedViews,
   rememberViews,
@@ -441,6 +444,27 @@ test('mergeSavedViewsPatch keeps explicit upsert when diff is empty', () => {
   const dropped = mergeSavedViewsPatch({ upsert: [view] }, { remove: ['copy'] })
   assert.deepEqual(dropped.upsert, [])
   assert.deepEqual(dropped.remove, ['copy'])
+})
+
+test('group fold state is stored per collection, view, and groupBy', () => {
+  const store = new Map<string, string>()
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => { store.set(key, value) },
+      removeItem: (key: string) => { store.delete(key) },
+    },
+  })
+  persistCollapsedGroups('/plugins', 'builtin-all:/plugins', 'shareScope', { 共享: true, 私人: false })
+  assert.equal(collapsedGroupsKey('/plugins', 'builtin-all:/plugins', 'shareScope'), 'fsdb.collapsedGroups:/plugins:builtin-all:/plugins:shareScope')
+  assert.deepEqual(loadCollapsedGroups('/plugins', 'builtin-all:/plugins', 'shareScope'), { 共享: true })
+  assert.deepEqual(loadCollapsedGroups('/plugins', 'builtin-all:/plugins', 'status'), {})
+  persistCollapsedGroups('/plugins', 'builtin-all:/plugins', 'shareScope', {})
+  assert.equal(store.has('fsdb.collapsedGroups:/plugins:builtin-all:/plugins:shareScope'), false)
+  const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
+  assert.match(browser, /persistCollapsedGroups\(collectionPath/)
+  assert.match(browser, /loadCollapsedGroups\(collectionPath/)
 })
 
 test('starred records toggle by collection path and id', () => {
