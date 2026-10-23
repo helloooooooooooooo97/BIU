@@ -1356,6 +1356,7 @@ const WindowedTable = memo(function WindowedTable({
 
   useLayoutEffect(() => {
     const next = tableRowFallbackPx(wrapCells)
+    if (next === rowPxRef.current) return
     rowPxRef.current = next
     setRowPx(next)
   }, [wrapCells])
@@ -1374,7 +1375,9 @@ const WindowedTable = memo(function WindowedTable({
     if (Math.abs(next - rowPxRef.current) < 1) return
     rowPxRef.current = next
     setRowPx(next)
-  }, [nodes.length, tableRef, tableWindow.end, tableWindow.start, wrapCells])
+    // Measure from wrap / row count only. tableWindow start/end follow rowPx; putting
+    // them here re-measures a new slice, median shifts, rowPx shifts, React #185.
+  }, [nodes.length, tableRef, wrapCells])
 
   useEffect(() => {
     onVisibleRange?.(tableWindow.start, tableWindow.end)
