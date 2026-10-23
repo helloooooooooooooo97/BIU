@@ -543,6 +543,36 @@ test('quarantineLlmImages only flags the model projection and keeps pictures in 
   assert.equal(stored?.type === 'user/message' && stored.images?.length, 1)
 })
 
+test('quarantineLlmImages with seqs only omits those pictures from the projection', async () => {
+  const ctx = new Context()
+  await ctx.plugin(sessionStore, { driver: 'memory' })
+  await ctx.plugin(sessions)
+  const record = await ctx.sessions.create()
+  const first = await ctx.sessions.append(record.id, {
+    type: 'user/message',
+    text: '旧图',
+    kind: 'wake',
+    images: [{ name: 'old.png', mime: 'image/png', url: 'data:image/png;base64,old' }],
+  })
+  await ctx.sessions.append(record.id, { type: 'assistant/message', text: '上次已经回过了' })
+  const second = await ctx.sessions.append(record.id, {
+    type: 'user/message',
+    text: '新图',
+    kind: 'wake',
+    images: [{ name: 'new.png', mime: 'image/png', url: 'data:image/png;base64,new' }],
+  })
+  await ctx.sessions.quarantineLlmImages(record.id, [second.seq])
+  assert.equal(ctx.sessions.llmImagesBlocked(record.id), true)
+  const derived = ctx.sessions.deriveMessages(record.id)
+  const users = derived.filter((item) => item.role === 'user')
+  assert.equal(Array.isArray(users[0]?.content), true)
+  assert.equal(users[1]?.content, '新图')
+  assert.equal((await ctx.sessions.require(record.id)).config?.skipLlmImages, undefined)
+  await ctx.sessions.allowLlmImages(record.id)
+  assert.equal((await ctx.sessions.require(record.id)).config?.omitImageSeqs?.includes(second.seq), true)
+  assert.equal(first.seq !== second.seq, true)
+})
+
 test('dropUserImages removes stored pictures so deriveMessages is text-only', async () => {
   const ctx = new Context()
   await ctx.plugin(sessionStore, { driver: 'memory' })

@@ -1,7 +1,7 @@
 import { readFile, stat } from 'node:fs/promises'
 import { basename, isAbsolute, resolve } from 'node:path'
 import { assetsRootPath, dataHome, hashedAssetRel, isHashedAssetName } from '@biu/host-plugin-loader/data-dir'
-import type { LlmContentPart, LlmMessage } from '@biu/host-llm'
+import { messageEventSeqs, stampMessageSeqs, type LlmContentPart, type LlmMessage } from '@biu/host-llm'
 import { artifactMime, isVisionImagePath, readArtifactFile } from './artifacts.ts'
 
 /** 与用户贴图同一档：单次最多 6 张、单张 8MB。svg 视觉模型普遍不认。 */
@@ -201,12 +201,17 @@ async function resolveRef(ref: ImageRef, sessionId: string, baseDir?: string): P
 export async function liftToolImages(
   messages: LlmMessage[],
   sessionId: string,
-  options?: { baseDir?: string; skip?: boolean },
+  options?: { baseDir?: string; skip?: boolean; skipSeqs?: Iterable<number> },
 ): Promise<LlmMessage[]> {
   if (!sessionId || options?.skip) return messages
+  const skipSeqs = new Set(options?.skipSeqs)
   const baseDir = options?.baseDir ?? dataHome()
   const out: LlmMessage[] = []
   for (const message of messages) {
+    if (skipSeqs.size && messageEventSeqs(message).some((seq) => skipSeqs.has(seq))) {
+      out.push(message)
+      continue
+    }
     if (message.role !== 'tool' || typeof message.content !== 'string' || !message.content) {
       out.push(message)
       continue
@@ -226,10 +231,15 @@ export async function liftToolImages(
       out.push(message)
       continue
     }
-    out.push({
-      ...message,
-      content: [{ type: 'text', text: message.content }, ...images],
-    })
+    out.push(
+      stampMessageSeqs(
+        {
+          ...message,
+          content: [{ type: 'text', text: message.content }, ...images],
+        },
+        messageEventSeqs(message),
+      ),
+    )
   }
   return out
 }

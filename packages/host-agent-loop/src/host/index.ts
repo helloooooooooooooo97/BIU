@@ -1,6 +1,6 @@
 import { Service, type Context } from 'cordis'
 import type { AssistantReply, ChatOptions, LlmClient, LlmConfig, LlmMessage, LlmUsage } from '@biu/host-llm'
-import { classifyLlmError, messagesHaveImages, omitImageContent } from '@biu/host-llm'
+import { classifyLlmError, messagesHaveImages, omitImageContent, omitRejectedImages } from '@biu/host-llm'
 import { runWithSession } from '@biu/host-sessions/scope'
 import { applyContextBudget, liftToolImages } from '@biu/host-sessions'
 import { autoCompactPostStep, contextWindowTokens, mechanicalCompactText, shouldAutoCompact } from './auto-compact.ts'
@@ -90,9 +90,10 @@ export class AgentLoop implements AgentRunner {
     if (this.signal.aborted || kind === 'cancel') return { kind: 'cancel' }
     let next = messages
     if (kind === 'images') {
-      await session.quarantineLlmImages(this.sessionId)
+      const omitted = omitRejectedImages(messages, error)
+      await session.quarantineLlmImages(this.sessionId, omitted.seqs)
       if (!messagesHaveImages(messages)) return { kind: 'fail', detail: String(error) }
-      next = omitImageContent(messages)
+      next = omitted.next
     } else if (kind === 'orphan-tools') {
       const healed = await session.healOpenLog(this.sessionId)
       if (!healed) return { kind: 'fail', detail: String(error) }
@@ -270,9 +271,10 @@ export class AgentLoop implements AgentRunner {
 
       const skipImages = session.llmImagesBlocked(this.sessionId)
       const derived = session.deriveMessages(this.sessionId)
-      const rawMessages = skipImages
+      const omitSeqs = (await session.get(this.sessionId))?.config?.omitImageSeqs
+      const rawMessages = skipImages && !omitSeqs?.length
         ? omitImageContent(derived)
-        : await liftToolImages(derived, this.sessionId)
+        : await liftToolImages(derived, this.sessionId, { skipSeqs: omitSeqs })
       if (this.signal.aborted) {
         await session.append(this.sessionId, { type: 'turn/end', turn, reason: 'cancelled' })
         throw new Error('cancelled')

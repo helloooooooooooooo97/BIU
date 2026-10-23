@@ -281,38 +281,129 @@ export function classifyLlmError(error: unknown): LlmErrorKind {
   return 'fatal'
 }
 
+/** DeepSeek：`.messages[N].image[K]` 指向 flatten 之后那条请求，不是事件 seq。 */
+export function parseRejectedImageSlot(error: unknown): { messageIndex: number; imageIndex: number } | null {
+  const match = String(error).match(/messages\[(\d+)\](?:\.image\[(\d+)\])?/i)
+  if (!match) return null
+  const messageIndex = Number(match[1])
+  if (!Number.isInteger(messageIndex) || messageIndex < 0) return null
+  const imageIndex = match[2] != null ? Number(match[2]) : 0
+  return { messageIndex, imageIndex: Number.isInteger(imageIndex) ? imageIndex : 0 }
+}
+
+export function messageEventSeqs(message: LlmMessage): number[] {
+  const seqs = (message as { biuSeqs?: number[] }).biuSeqs
+  return Array.isArray(seqs) ? seqs.filter((seq) => Number.isInteger(seq) && seq >= 0) : []
+}
+
+export function stampMessageSeqs(message: LlmMessage, seqs: number[]): LlmMessage {
+  const unique = [...new Set(seqs.filter((seq) => Number.isInteger(seq) && seq >= 0))]
+  if (!unique.length) return message
+  Object.defineProperty(message, 'biuSeqs', { value: unique, enumerable: false, configurable: true })
+  return message
+}
+
+function copySeqs(from: LlmMessage, to: LlmMessage) {
+  return stampMessageSeqs(to, messageEventSeqs(from))
+}
+
+function omitOneMessage(message: LlmMessage): LlmMessage {
+  return copySeqs(message, omitImageContent([message])[0]!)
+}
+
+function messageHasImageUrl(message: LlmMessage | undefined) {
+  return Array.isArray(message?.content) && message.content.some((part) => part.type === 'image_url')
+}
+
+function assistantText(message: LlmMessage) {
+  return typeof message.content === 'string' ? message.content : textFromContent(message.content)
+}
+
+/**
+ * Pi `_omitRecoveryAttempt`：只拿掉这次失败的 attempt，不翻旧历史。
+ * 上一轮已经成功出过 assistant，那之前的请求都被接受过；这次被拒只可能是那之后新加的。
+ */
+function indicesAfterLastSuccessfulAssistant(messages: LlmMessage[]): number[] {
+  let lastOk = -1
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index]?.role !== 'assistant') continue
+    if (assistantText(messages[index]!).startsWith('模型调用失败')) continue
+    lastOk = index
+    break
+  }
+  const out: number[] = []
+  for (let index = lastOk + 1; index < messages.length; index += 1) {
+    if (messageHasImageUrl(messages[index])) out.push(index)
+  }
+  return out
+}
+
+/**
+ * 对齐 Pi：投影里省略这次失败 attempt，原始日志不动。
+ * 图只从「上一轮成功 assistant 之后」拿掉；messages[N] 若落在这段增量里再收窄。
+ */
+export function omitRejectedImages(messages: LlmMessage[], error: unknown): { next: LlmMessage[]; seqs: number[] } {
+  const delta = indicesAfterLastSuccessfulAssistant(messages)
+  const slot = parseRejectedImageSlot(error)
+  const { sources } = flattenToolImages(messages)
+  const fromError = slot ? sources[slot.messageIndex] ?? [] : []
+  const inDelta = new Set(delta)
+  const narrowed = fromError.filter((index) => inDelta.has(index))
+  const indices = narrowed.length ? narrowed : delta
+  if (!indices.length) return { next: messages, seqs: [] }
+  const hit = new Set(indices)
+  const seqs = [...new Set(indices.flatMap((index) => messageEventSeqs(messages[index]!)))]
+  const next = messages.map((message, index) => (hit.has(index) ? omitOneMessage(message) : message))
+  return { next, seqs }
+}
+
 /**
  * Chat Completions 的 tool 角色只接受字符串。成熟做法：工具文本留在 tool，
  * 图像跟在该批 tool 消息之后的一条 user 多模态消息里（DeepSeek / GPT-4o 同款）。
  */
-export function flattenToolImagesForChatCompletions(messages: LlmMessage[]): LlmMessage[] {
+function flattenToolImages(messages: LlmMessage[]): { messages: LlmMessage[]; sources: number[][] } {
   const out: LlmMessage[] = []
+  const sources: number[][] = []
   let pending: LlmContentPart[] = []
+  let pendingFrom: number[] = []
   const flush = () => {
     if (!pending.length) return
-    out.push({
+    const imageUser: LlmMessage = {
       role: 'user',
       content: [{ type: 'text', text: '（工具返回的图像）' }, ...pending],
-    })
+    }
+    stampMessageSeqs(imageUser, pendingFrom.flatMap((index) => messageEventSeqs(messages[index]!)))
+    out.push(imageUser)
+    sources.push([...pendingFrom])
     pending = []
+    pendingFrom = []
   }
-  for (const message of messages) {
+  messages.forEach((message, index) => {
     if (message.role === 'tool') {
       const images = imagePartsFromContent(message.content)
       if (images.length || Array.isArray(message.content)) {
-        out.push({ ...message, content: textFromContent(message.content) })
+        const tool = copySeqs(message, { ...message, content: textFromContent(message.content) })
+        out.push(tool)
+        sources.push([index])
+        if (images.length) pendingFrom.push(index)
         pending.push(...images)
-        continue
+        return
       }
-      // 同一批 tool_calls 的后续 tool 即使没图也不能先 flush 图像 user，否则会拆对。
-      out.push(message)
-      continue
+      out.push(copySeqs(message, message))
+      sources.push([index])
+      return
     }
     flush()
-    out.push({ ...message, content: dropUnsupportedImages(message.content) })
-  }
+    const next = copySeqs(message, { ...message, content: dropUnsupportedImages(message.content) })
+    out.push(next)
+    sources.push([index])
+  })
   flush()
-  return out
+  return { messages: out, sources }
+}
+
+export function flattenToolImagesForChatCompletions(messages: LlmMessage[]): LlmMessage[] {
+  return flattenToolImages(messages).messages
 }
 
 function anthropicImageBlock(url: string): Record<string, unknown> | null {

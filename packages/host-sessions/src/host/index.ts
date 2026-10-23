@@ -2,7 +2,7 @@ import { Service, type Context } from 'cordis'
 import { basename, isAbsolute, resolve } from 'node:path'
 import { realpath, stat } from 'node:fs/promises'
 import { platform } from 'node:os'
-import { assistantContentForApi, isVisionImageUrl, type LlmMessage } from '@biu/host-llm'
+import { assistantContentForApi, isVisionImageUrl, stampMessageSeqs, type LlmMessage } from '@biu/host-llm'
 import type { AgentSendOptions, AgentHandle, AgentTurn } from '@biu/host-agents'
 import {
   SESSION_FORMAT_VERSION,
@@ -39,20 +39,26 @@ export {
   rebuildHealedEvents,
 } from './session-heal.ts'
 
-export function deriveMessages(events: SessionEvent[]): LlmMessage[] {
+function pushDerived(messages: LlmMessage[], message: LlmMessage, seq: number) {
+  messages.push(stampMessageSeqs(message, [seq]))
+}
+
+export function deriveMessages(events: SessionEvent[], omitImageSeqs?: Iterable<number>): LlmMessage[] {
+  const omit = new Set(omitImageSeqs)
   let system = ''
   const messages: LlmMessage[] = []
   /** 当前 assistant.tool_calls 的声明顺序（接口要求 role:tool 必须按此顺序紧跟） */
   let pendingOrder: string[] = []
   const pendingNames = new Map<string, string>()
-  const readyDetail = new Map<string, string>()
+  const readyDetail = new Map<string, { detail: string; seq: number }>()
   /** 只有 partial、没有最终 result 时，用最后一片 detail 配平 */
   const partialToolDetail = new Map<string, string>()
 
   const emitReadyTools = () => {
     while (pendingOrder.length && readyDetail.has(pendingOrder[0]!)) {
       const id = pendingOrder.shift()!
-      messages.push({ role: 'tool', tool_call_id: id, content: readyDetail.get(id)! })
+      const ready = readyDetail.get(id)!
+      pushDerived(messages, { role: 'tool', tool_call_id: id, content: ready.detail }, ready.seq)
       readyDetail.delete(id)
       pendingNames.delete(id)
       partialToolDetail.delete(id)
@@ -64,10 +70,10 @@ export function deriveMessages(events: SessionEvent[]): LlmMessage[] {
     for (const id of pendingOrder) {
       const name = pendingNames.get(id) || id
       const content =
-        readyDetail.get(id) ||
+        readyDetail.get(id)?.detail ||
         partialToolDetail.get(id) ||
         `interrupted: missing tool result for ${name}`
-      messages.push({ role: 'tool', tool_call_id: id, content })
+      pushDerived(messages, { role: 'tool', tool_call_id: id, content }, readyDetail.get(id)?.seq ?? 0)
     }
     pendingOrder = []
     pendingNames.clear()
@@ -85,40 +91,50 @@ export function deriveMessages(events: SessionEvent[]): LlmMessage[] {
       partialToolDetail.clear()
       const text = sessionCompactSummaryText(event)
       if (text) {
-        messages.push({ role: 'system', content: `[已压缩的历史摘要] ${text}` })
+        pushDerived(messages, { role: 'system', content: `[已压缩的历史摘要] ${text}` }, event.seq)
       }
     } else if (event.type === 'system/prompt') {
       system = event.text
     } else if (event.type === 'user/message') {
       flushOrphanTools()
-      const images = event.images?.filter((item) => item?.url && isVisionImageUrl(item.url)) ?? []
+      const images = omit.has(event.seq)
+        ? []
+        : event.images?.filter((item) => item?.url && isVisionImageUrl(item.url)) ?? []
       if (images.length) {
-        messages.push({
-          role: 'user',
-          content: [
-            ...(event.text.trim() ? [{ type: 'text' as const, text: event.text }] : []),
-            ...images.map((item) => ({ type: 'image_url' as const, image_url: { url: item.url } })),
-          ],
-        })
+        pushDerived(
+          messages,
+          {
+            role: 'user',
+            content: [
+              ...(event.text.trim() ? [{ type: 'text' as const, text: event.text }] : []),
+              ...images.map((item) => ({ type: 'image_url' as const, image_url: { url: item.url } })),
+            ],
+          },
+          event.seq,
+        )
       } else {
-        messages.push({ role: 'user', content: event.text })
+        pushDerived(messages, { role: 'user', content: event.text }, event.seq)
       }
     } else if (event.type === 'assistant/message') {
       flushOrphanTools()
       const hasToolCalls = Boolean(event.tool_calls?.length)
-      messages.push({
-        role: 'assistant',
-        content: assistantContentForApi(event.text, hasToolCalls),
-        ...(hasToolCalls
-          ? {
-              tool_calls: event.tool_calls!.map((call) => ({
-                id: call.id,
-                type: 'function',
-                function: { name: call.name, arguments: call.arguments },
-              })),
-            }
-          : {}),
-      })
+      pushDerived(
+        messages,
+        {
+          role: 'assistant',
+          content: assistantContentForApi(event.text, hasToolCalls),
+          ...(hasToolCalls
+            ? {
+                tool_calls: event.tool_calls!.map((call) => ({
+                  id: call.id,
+                  type: 'function',
+                  function: { name: call.name, arguments: call.arguments },
+                })),
+              }
+            : {}),
+        },
+        event.seq,
+      )
       if (hasToolCalls) {
         pendingOrder = event.tool_calls!.map((call) => call.id)
         for (const call of event.tool_calls!) pendingNames.set(call.id, call.name)
@@ -130,12 +146,13 @@ export function deriveMessages(events: SessionEvent[]): LlmMessage[] {
         partialToolDetail.set(event.id, event.detail)
         continue
       }
-      readyDetail.set(event.id, event.detail)
+      readyDetail.set(event.id, { detail: event.detail, seq: event.seq })
       emitReadyTools()
     }
   }
   flushOrphanTools()
-  return system ? [{ role: 'system', content: system }, ...messages] : messages
+  if (!system) return messages
+  return [stampMessageSeqs({ role: 'system', content: system }, [0]), ...messages]
 }
 
 export interface InputComposition {
@@ -580,7 +597,12 @@ export class SessionsService extends Service {
   deriveMessages(id: string) {
     const record = this.cache.get(id)
     if (!record) throw new Error(`unknown session: ${id}`)
-    return deriveMessages(record.events)
+    const omit = record.config?.omitImageSeqs
+    if (record.config?.skipLlmImages) {
+      const all = record.events.map((event) => event.seq)
+      return deriveMessages(record.events, all)
+    }
+    return deriveMessages(record.events, omit)
   }
 
   /** 供应商拒图后：从日志拿掉已贴图，下一轮 derive 不再带上，会话能继续打字。 */
@@ -598,19 +620,26 @@ export class SessionsService extends Service {
   }
 
   llmImagesBlocked(id: string) {
-    return this.cache.get(id)?.config?.skipLlmImages === true
+    const config = this.cache.get(id)?.config
+    return config?.skipLlmImages === true || Boolean(config?.omitImageSeqs?.length)
   }
 
   /**
-   * Pi：原始日志保留图，只给「发给模型的投影」打上 skip。
-   * 下一轮不再 lift / 不再带 image_url，界面贴图还在。
+   * 只把被点名的事件 seq 从模型投影里拿掉图。没有 seq 才整段 skip。
    */
-  async quarantineLlmImages(id: string) {
+  async quarantineLlmImages(id: string, seqs: number[] = []) {
+    const unique = [...new Set(seqs.filter((seq) => Number.isInteger(seq) && seq >= 0))]
+    if (unique.length) {
+      const prev = this.cache.get(id)?.config?.omitImageSeqs ?? []
+      await this.patchConfig(id, { omitImageSeqs: [...new Set([...prev, ...unique])] })
+      return
+    }
     await this.patchConfig(id, { skipLlmImages: true })
   }
 
   async allowLlmImages(id: string) {
-    if (!this.llmImagesBlocked(id)) return
+    const config = this.cache.get(id)?.config
+    if (config?.skipLlmImages !== true) return
     await this.patchConfig(id, { skipLlmImages: false })
   }
 

@@ -369,17 +369,50 @@ test('after image reject later text turns stay text-only even if history still h
     },
   ])
   assert.equal(ctx.sessions.llmImagesBlocked(sessionId), true)
-  await ctx.sessions.append(sessionId, {
-    type: 'user/message',
-    text: '历史里还挂着图',
-    kind: 'wake',
-    images: [{ name: 'old.png', mime: 'image/png', url: 'data:image/png;base64,abc' }],
-  })
   const second = new AgentLoop(ctx, llm, sessionId, new AbortController().signal)
   const turn = await second.run([{ kind: 'wake', text: '再问一句' }])
   assert.equal(turn.text, '纯文本')
   assert.equal(turn.halt, undefined)
   assert.equal(seen.at(-1), false)
+})
+
+test('image reject after a successful turn only omits pictures added after that reply', async () => {
+  const { ctx, sessionId } = await spine()
+  const seen: Array<string[]> = []
+  const llm: LlmClient = {
+    async chat(messages) {
+      const urls = messages.flatMap((item) =>
+        Array.isArray(item.content)
+          ? item.content.filter((part) => part.type === 'image_url').map((part) => part.image_url.url)
+          : [],
+      )
+      seen.push(urls)
+      if (urls.includes('data:image/png;base64,bad')) {
+        throw new Error('.messages[3].image[0]: You have uploaded an unsupported image')
+      }
+      return { content: urls.length ? '图还在' : '纯文本', toolCalls: [] }
+    },
+  }
+  const first = new AgentLoop(ctx, llm, sessionId, new AbortController().signal)
+  await first.run([
+    {
+      kind: 'wake',
+      text: '好图',
+      images: [{ name: 'ok.png', mime: 'image/png', url: 'data:image/png;base64,ok' }],
+    },
+  ])
+  const second = new AgentLoop(ctx, llm, sessionId, new AbortController().signal)
+  const turn = await second.run([
+    {
+      kind: 'wake',
+      text: '坏图',
+      images: [{ name: 'bad.png', mime: 'image/png', url: 'data:image/png;base64,bad' }],
+    },
+  ])
+  assert.equal(turn.text, '图还在')
+  assert.equal(turn.halt, undefined)
+  assert.equal(seen.at(-1)?.includes('data:image/png;base64,ok'), true)
+  assert.equal(seen.at(-1)?.includes('data:image/png;base64,bad'), false)
 })
 
 test('fatal llm error ends the turn idle with halt so the session can take a new message', async () => {

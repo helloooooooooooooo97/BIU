@@ -5,6 +5,8 @@ import {
   isVisionImageUrl,
   classifyLlmError,
   omitImageContent,
+  omitRejectedImages,
+  stampMessageSeqs,
   DEEPSEEK_VISION_MODEL,
   flattenToolImagesForChatCompletions,
   toAnthropicContent,
@@ -139,6 +141,54 @@ test('omitImageContent keeps text and replaces image_url with a placeholder', ()
   assert.match(String(out[0]?.content), /看看/)
   assert.match(String(out[0]?.content), /已省略/)
   assert.equal(out[1]?.content, 'ok')
+})
+
+test('omitRejectedImages only drops images after the last successful assistant', () => {
+  const oldUser = stampMessageSeqs(
+    {
+      role: 'user',
+      content: [
+        { type: 'text', text: '旧图' },
+        { type: 'image_url', image_url: { url: 'data:image/png;base64,old' } },
+      ],
+    },
+    [1],
+  )
+  const ok = stampMessageSeqs({ role: 'assistant', content: '上次已经回过了' }, [2])
+  const newUser = stampMessageSeqs(
+    {
+      role: 'user',
+      content: [
+        { type: 'text', text: '新图' },
+        { type: 'image_url', image_url: { url: 'data:image/png;base64,new' } },
+      ],
+    },
+    [3],
+  )
+  const omitted = omitRejectedImages(
+    [oldUser, ok, newUser],
+    new Error('.messages[2].image[0]: You have uploaded an unsupported image'),
+  )
+  assert.deepEqual(omitted.seqs, [3])
+  assert.equal(hasImageContent(omitted.next[0]?.content), true)
+  assert.match(String(omitted.next[2]?.content), /新图/)
+  assert.match(String(omitted.next[2]?.content), /已省略/)
+})
+
+test('omitRejectedImages ignores a failed assistant placeholder as last success', () => {
+  const user = stampMessageSeqs(
+    {
+      role: 'user',
+      content: [
+        { type: 'text', text: '图' },
+        { type: 'image_url', image_url: { url: 'data:image/png;base64,xx' } },
+      ],
+    },
+    [4],
+  )
+  const fail = { role: 'assistant' as const, content: '模型调用失败：unsupported image' }
+  const omitted = omitRejectedImages([user, fail], new Error('unsupported image'))
+  assert.deepEqual(omitted.seqs, [4])
 })
 
 test('toAnthropicContent wraps tool images as tool_result image source', () => {

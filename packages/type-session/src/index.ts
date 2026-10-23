@@ -145,10 +145,12 @@ export interface SessionConfig {
    */
   autoCompactInputTokens?: number
   /**
-   * 发给模型的投影跳过历史图（Pi 的 context 投影，不是改原始日志）。
-   * 用户再贴新图时清掉。
+   * 发给模型的投影整段跳过图（Pi 的 context 投影，不是改原始日志）。
+   * 用户再贴新图时清掉。已经点名的 omitImageSeqs 仍保留。
    */
   skipLlmImages?: boolean
+  /** 上一轮还能聊之后新加、又被供应商拒掉的事件 seq：只省略这些条目上的图。 */
+  omitImageSeqs?: number[]
 }
 
 /** 检查器打开的页签和各栏库路径，跟这条 session 走。开合/宽度/跟随只记本机。 */
@@ -271,6 +273,10 @@ export function normalizeSessionConfig(value: unknown): SessionConfig | undefine
   const autoCompact = normalizeAutoCompactInputTokens(raw.autoCompactInputTokens)
   if (autoCompact) next.autoCompactInputTokens = autoCompact
   if (raw.skipLlmImages === true) next.skipLlmImages = true
+  if (Array.isArray(raw.omitImageSeqs)) {
+    const seqs = [...new Set(raw.omitImageSeqs.filter((seq): seq is number => Number.isInteger(seq) && seq >= 0))]
+    if (seqs.length) next.omitImageSeqs = seqs.slice(0, 256)
+  }
   delete (next as { tags?: unknown }).tags
   return Object.keys(next).length ? next : undefined
 }
@@ -349,6 +355,13 @@ export function mergeSessionConfig(
   if ('skipLlmImages' in patch) {
     if (patch.skipLlmImages) next.skipLlmImages = true
     else delete next.skipLlmImages
+  }
+  if ('omitImageSeqs' in patch) {
+    const seqs = Array.isArray(patch.omitImageSeqs)
+      ? [...new Set(patch.omitImageSeqs.filter((seq) => Number.isInteger(seq) && seq >= 0))]
+      : []
+    if (seqs.length) next.omitImageSeqs = seqs.slice(0, 256)
+    else delete next.omitImageSeqs
   }
   delete (next as { tags?: unknown }).tags
   return Object.keys(next).length ? next : undefined
