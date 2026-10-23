@@ -97,6 +97,19 @@ test('url cells open in a new tab instead of downloading', () => {
   assert.equal(container.querySelector('.fsdb-file-name')?.textContent, 'https://example.com/page')
 })
 
+test('person cells still paint the session mascot, not an icon placeholder', () => {
+  const { container } = render(
+    <DefaultCell
+      field={{ type: 'person' }}
+      value={{ kind: 'agent', name: '蓝团爱', sessionId: 'sess-agent-1' }}
+    />,
+  )
+  assert.ok(container.querySelector('.fsdb-person-face'))
+  assert.ok(container.querySelector('.session-mascot-mark'))
+  assert.equal(container.querySelector('.fsdb-person-name')?.textContent, '蓝团爱')
+  assert.equal(container.querySelector('.fsdb-person-avatar'), null)
+})
+
 test('plain table cells skip tag chips and person faces', () => {
   const select = render(<DefaultCell field={{ type: 'select', enum: ['open', 'done'] }} value="open" plain />)
   assert.equal(select.container.querySelector('.biu-tag'), null)

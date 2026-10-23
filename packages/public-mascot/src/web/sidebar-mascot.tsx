@@ -49,9 +49,11 @@ export const SidebarMascot = memo(function SidebarMascot({
   paused = false,
   followPointer = false,
 }: SidebarMascotProps) {
-  const [introMs, setIntroMs] = useState(() => remainingSidebarMascotIntroMs(sessionId))
+  const staticOnly = animate === false && !dancing
+  const [introMs, setIntroMs] = useState(() => (staticOnly ? 0 : remainingSidebarMascotIntroMs(sessionId)))
 
   useEffect(() => {
+    if (staticOnly) return
     const left = remainingSidebarMascotIntroMs(sessionId)
     setIntroMs(left)
     if (left <= 0) return
@@ -60,7 +62,7 @@ export const SidebarMascot = memo(function SidebarMascot({
       setIntroMs(0)
     }, left)
     return () => window.clearTimeout(timer)
-  }, [sessionId])
+  }, [sessionId, staticOnly])
 
   const allowMotion = animate !== false || dancing
   const animated = allowMotion && (busy || introMs > 0 || dancing)

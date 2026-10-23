@@ -404,6 +404,8 @@ test('deletable tables can pick rows and bulk-act over the table header', () => 
   assert.match(people, /kind: 'system', name: '系统'/)
   assert.match(people, /listCollection/)
   assert.match(people, /path: '\/sessions'/)
+  assert.match(people, /scheduleAgentNames/)
+  assert.match(people, /SidebarMascot/)
   assert.match(people, /resolveAgentName/)
   assert.doesNotMatch(people, /\/api\/sessions/)
   assert.match(editor, /<MediaField/)
