@@ -322,6 +322,9 @@ test('title cell row tools skip the overflow action menu', () => {
 
 test('deletable tables can pick rows and bulk-act over the table header', () => {
   assert.match(browser, /data-testid="fsdb-bulk-delete"/)
+  assert.match(browser, /const canBulkDelete = \(canDelete \|\| inTrash\)/)
+  assert.match(browser, /action: 'delete'/)
+  assert.match(browser, /确定彻底删除选中的/)
   assert.doesNotMatch(browser, /data-testid="fsdb-bulk-edit"/)
   assert.doesNotMatch(browser, /编辑属性/)
   assert.match(browser, /data-testid="fsdb-bulk-export"/)
@@ -339,6 +342,11 @@ test('deletable tables can pick rows and bulk-act over the table header', () => 
   assert.match(bulkCss, /\.fsdb-bulk-slot\{[^}]*position:sticky/)
   assert.match(bulkCss, /\.fsdb-bulk-slot\{[^}]*top:0/)
   assert.match(bulkCss, /\.fsdb-bulk-slot\{[^}]*left:0/)
+  assert.match(bulkCss, /\.fsdb-bulk-slot\{[^}]*z-index:40/)
+  assert.match(bulkCss, /\.fsdb-bulk\{[^}]*z-index:40/)
+  assert.match(bulkCss, /\.fsdb-bulk\{[^}]*isolation:isolate/)
+  assert.match(bulkCss, /\.fsdb-page \.tasks-table-wrap:has\(\.fsdb-bulk\) \.fsdb-check-rail\{[^}]*z-index:4/)
+  assert.match(bulkCss, /\.fsdb-page \.tasks-table-wrap:has\(\.fsdb-bulk\) \.tasks-table th\.is-pin-col,\.fsdb-page \.tasks-table-wrap:has\(\.fsdb-bulk\) \.tasks-table td\.is-pin-col\{[^}]*z-index:2/)
   assert.match(bulkCss, /\.fsdb-bulk\{[^}]*left:var\(--fsdb-check-gutter\)/)
   assert.match(bulkCss, /\.fsdb-bulk-count\{[^}]*color:var\(--dsw-pick/)
   assert.match(browser, /kind: 'delete-records'/)
