@@ -1019,8 +1019,9 @@ test('opening a record fetches content without waiting for detailRow', () => {
   assert.doesNotMatch(effect, /detailRow/)
   assert.match(browser, /\[collectionPath, dataPath, detailId, pullDetailBody\]/)
   assert.match(browser, /<Suspense fallback=\{<PageContentLoading \/>\}>/)
-  assert.match(browser, /warmSiblingListCaches\(paths\)/)
+  assert.match(browser, /warmSiblingListCaches\(paths, paintListedViews\)/)
   assert.match(browser, /const WARM_LIST_CONCURRENCY = 2/)
+  assert.doesNotMatch(browser, /async function warmSiblingListCaches\(paths: string\[\]\) \{/)
   assert.doesNotMatch(browser, /for \(const path of paths\) \{\s*\n\s*const listed = paintListedViews\(path\)/)
 })
 
