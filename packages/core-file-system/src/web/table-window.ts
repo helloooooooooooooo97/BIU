@@ -110,52 +110,17 @@ export function tableColumnWidth(key: string, saved: unknown, pin = false) {
   return TABLE_COL_PX
 }
 
-/** 首屏只画钉住列 + 视口里的列；左右用空 td 垫宽度，横滑再补。 */
+/** 列不按视口裁。AG Grid 在列不多时 `suppressColumnVirtualisation`：表头和格子都在，横滑看整列。重内容只在 cell 里懒画。 */
 export function tableColumnSlice(
   count: number,
   pinCount: number,
-  scrollLeft: number,
-  viewportW: number,
-  widths: number[],
+  _scrollLeft?: number,
+  _viewportW?: number,
+  _widths?: number[],
 ): TableColumnSlice {
   const pin = Math.min(Math.max(0, pinCount), Math.max(0, count))
   if (count <= 0) return { start: 0, end: 0, pin: 0, padLeft: 0, padRight: 0 }
-  const view = viewportW > 0 ? viewportW : TABLE_COL_VIEWPORT_FALLBACK
-  const left = Math.max(0, scrollLeft)
-  const right = left + view
-  const widthAt = (i: number) => {
-    const n = widths[i]
-    if (Number.isFinite(n) && n > 0) return n
-    return i < pin ? TABLE_COL_PIN_PX : TABLE_COL_PX
-  }
-  const starts = new Array<number>(count)
-  let x = 0
-  for (let i = 0; i < count; i += 1) {
-    starts[i] = x
-    x += widthAt(i)
-  }
-  let start = pin
-  for (let i = pin; i < count; i += 1) {
-    if (starts[i]! + widthAt(i) > left) {
-      start = i
-      break
-    }
-    start = i + 1
-  }
-  start = Math.max(pin, start - TABLE_COL_OVERSCAN)
-  let end = count
-  for (let i = start; i < count; i += 1) {
-    if (starts[i]! >= right) {
-      end = i
-      break
-    }
-  }
-  end = Math.min(count, Math.max(start, end) + TABLE_COL_OVERSCAN)
-  let padLeft = 0
-  for (let i = pin; i < start; i += 1) padLeft += widthAt(i)
-  let padRight = 0
-  for (let i = end; i < count; i += 1) padRight += widthAt(i)
-  return { start, end, pin, padLeft, padRight }
+  return { start: pin, end: count, pin, padLeft: 0, padRight: 0 }
 }
 
 export function tableColumnUnchanged(
