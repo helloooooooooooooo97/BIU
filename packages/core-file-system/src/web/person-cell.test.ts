@@ -17,3 +17,18 @@ test('person cells reuse the sessions list for a short ttl', () => {
   assert.match(src, /AGENTS_TTL_MS = 8000/)
   assert.match(src, /if \(agentsListed && Date\.now\(\) - agentsListedAt < AGENTS_TTL_MS\) return agentsListed/)
 })
+
+test('deferred table person faces skip mascots and session list until live', () => {
+  const src = readFileSync(resolve(import.meta.dirname, './person-cell.tsx'), 'utf8')
+  const idle = src.slice(src.indexOf('function PersonFaceIdle'), src.indexOf('export function PersonFace'))
+  const live = src.slice(src.indexOf('function PersonFaceLive'))
+  assert.match(src, /defer = false/)
+  assert.match(src, /if \(defer\) return <PersonFaceIdle/)
+  assert.doesNotMatch(idle, /SidebarMascot/)
+  assert.doesNotMatch(idle, /loadAgents/)
+  assert.doesNotMatch(idle, /useWorkspaceProfile/)
+  assert.match(idle, /fsdb-person-list/)
+  assert.match(idle, /fsdb-person-avatar/)
+  assert.match(live, /SidebarMascot/)
+  assert.match(live, /loadAgents/)
+})

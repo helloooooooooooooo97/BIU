@@ -1,4 +1,4 @@
-import { createContext, lazy, memo, Suspense, type ComponentProps, type PointerEvent as ReactPointerEvent, type RefObject, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { createContext, lazy, memo, startTransition, Suspense, type ComponentProps, type PointerEvent as ReactPointerEvent, type RefObject, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import {
   ArrowsPointingOutIcon,
   Bars3BottomLeftIcon,
@@ -2098,6 +2098,7 @@ export function CollectionBrowser({
   totalRef.current = total
   const listIdentityKey = `${dataPath}\0${pageSize}\0${fetchQuery}\0${sortField}\0${sortDir}\0${sortsStateKey(sorts)}\0${JSON.stringify(queryFilters)}\0${activeViewId ?? ''}\0${customView ? 'full' : 'proj'}\0${groupBy}`
   const reloadKey = `${listIdentityKey}\0${groupBy ? JSON.stringify(groupPages) : page}\0${groupFillKeys.join('\0')}`
+  const [personFacesLive, setPersonFacesLive] = useState(false)
   if (releaseHoldOnPaintRef.current && paintedPath === dataPath && tableHoldRef.current?.nodes !== EMPTY_HOLD_NODES) {
     releaseHoldOnPaintRef.current = false
     tableHoldRef.current = null
@@ -2609,6 +2610,22 @@ export function CollectionBrowser({
     if (!routeViewReadyRef.current) return
     void reloadRef.current({ force: needsLoad })
   }, [listIdentityKey, reloadKey, routeRecordId, routeViewReady])
+
+  useEffect(() => {
+    setPersonFacesLive(false)
+    if (!items.length) return
+    let cancelled = false
+    const arm = () => {
+      if (!cancelled) startTransition(() => setPersonFacesLive(true))
+    }
+    const idle = window.requestIdleCallback
+    const id = idle ? idle(arm, { timeout: 160 }) : window.setTimeout(arm, 0)
+    return () => {
+      cancelled = true
+      if (idle) window.cancelIdleCallback(id)
+      else window.clearTimeout(id)
+    }
+  }, [listIdentityKey, items.length])
 
   useLayoutEffect(() => {
     setOpenDetailId(routeRecordId)
@@ -4127,6 +4144,7 @@ export function CollectionBrowser({
             collectionPath={collectionPath}
             labelField={schema?.labelField}
             value={readFacetFlatValue(row, key, facetSourceKey(schema))}
+            deferPerson={!personFacesLive}
             onChange={
               field.writable && (kind === 'attachment' || kind === 'datetime')
                 ? (next) => writeCellValue(row, key, field, next)
@@ -4145,6 +4163,7 @@ export function CollectionBrowser({
           collectionPath={collectionPath}
           labelField={schema?.labelField}
           value={row[key]}
+          deferPerson={!personFacesLive}
           onChange={
             field.writable && (kind === 'attachment' || kind === 'datetime')
               ? (next) => writeCellValue(row, key, field, next)
