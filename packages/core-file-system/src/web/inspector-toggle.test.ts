@@ -672,11 +672,8 @@ test('create record sits at the right of the toolbar with a blue label', () => {
   assert.match(css, /tr\.fsdb-table-pad td[^}]*font-size:0/)
   assert.match(css, /tr\.fsdb-table-pad td > div/)
   assert.match(browser, /medianPaintedRowPx/)
-  assert.match(browser, /}, \[nodes\.length, tableRef, wrapCells\]\)/)
-  assert.doesNotMatch(
-    browser.slice(browser.indexOf('const next = medianPaintedRowPx'), browser.indexOf('onVisibleRange?.')),
-    /tableWindow\.end, tableWindow\.start/,
-  )
+  assert.match(browser, /tableScroll\.top, tableWindow\.end, tableWindow\.start, wrapCells\]\)/)
+  assert.match(browser, /rowTune\.current\.n >= 2/)
   assert.match(browser, /className="fsdb-table-pad"[\s\S]*style=\{\{ height: px \}\}/)
   assert.match(browser, /<div style=\{\{ height: px \}\} \/>/)
   assert.match(browser, /markCellOn/)
