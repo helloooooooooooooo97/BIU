@@ -28,7 +28,6 @@ import {
   type SessionMascot as AssignedMascot,
 } from './session-mascot.ts'
 import { rebuildHealedEvents } from './session-heal.ts'
-import { stripDeclaredImagesFromToolDetail } from './tool-images.ts'
 import { sessionsCollection } from './sessions-collection.ts'
 import type { AuthorizationService } from '@biu/host-account/authorization'
 
@@ -603,27 +602,11 @@ export class SessionsService extends Service {
   }
 
   /**
-   * 拒图后隔离：日志里的用户贴图不再进 derive；工具图靠 skipLlmImages 不再 lift。
-   * 界面仍可展示原来的图，只是下一轮不再发给模型。
+   * Pi：原始日志保留图，只给「发给模型的投影」打上 skip。
+   * 下一轮不再 lift / 不再带 image_url，界面贴图还在。
    */
   async quarantineLlmImages(id: string) {
-    const record = await this.require(id)
-    let changed = false
-    for (const event of record.events) {
-      if (event.type === 'user/message' && event.images?.length) {
-        delete event.images
-        changed = true
-      } else if (event.type === 'tool/result' && !event.partial && event.detail) {
-        const next = stripDeclaredImagesFromToolDetail(event.detail)
-        if (next !== event.detail) {
-          event.detail = next
-          changed = true
-        }
-      }
-    }
-    const nextConfig = mergeSessionConfig(record.config, { skipLlmImages: true })
-    if (nextConfig) record.config = nextConfig
-    if (changed || nextConfig?.skipLlmImages) await this.persist(record)
+    await this.patchConfig(id, { skipLlmImages: true })
   }
 
   async allowLlmImages(id: string) {

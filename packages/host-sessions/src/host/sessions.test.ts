@@ -526,7 +526,7 @@ test('deriveMessages projects pasted images as multimodal content', () => {
   assert.equal(parts[1]?.image_url?.url, 'data:image/png;base64,abc')
 })
 
-test('quarantineLlmImages drops pictures, strips tool artifacts, and blocks later lifts', async () => {
+test('quarantineLlmImages only flags the model projection and keeps pictures in the log', async () => {
   const ctx = new Context()
   await ctx.plugin(sessionStore, { driver: 'memory' })
   await ctx.plugin(sessions)
@@ -537,27 +537,10 @@ test('quarantineLlmImages drops pictures, strips tool artifacts, and blocks late
     kind: 'wake',
     images: [{ name: 'shot.png', mime: 'image/png', url: 'data:image/png;base64,abc' }],
   })
-  await ctx.sessions.append(record.id, {
-    type: 'assistant/message',
-    text: '',
-    tool_calls: [{ id: '1', name: 'bash', arguments: '{}' }],
-  })
-  await ctx.sessions.append(record.id, {
-    type: 'tool/result',
-    id: '1',
-    name: 'bash',
-    ok: true,
-    detail: JSON.stringify({
-      stdout: 'ok',
-      artifacts: [{ name: 'shot.png', mime: 'image/png', url: '/api/sessions/x/artifacts/shot.png' }],
-    }),
-  })
   await ctx.sessions.quarantineLlmImages(record.id)
   assert.equal(ctx.sessions.llmImagesBlocked(record.id), true)
-  const user = ctx.sessions.deriveMessages(record.id).find((item) => item.role === 'user')
-  assert.equal(user?.content, '看看')
-  const tool = ctx.sessions.deriveMessages(record.id).find((item) => item.role === 'tool')
-  assert.equal(tool?.content, JSON.stringify({ stdout: 'ok' }))
+  const stored = (await ctx.sessions.require(record.id)).events.find((item) => item.type === 'user/message')
+  assert.equal(stored?.type === 'user/message' && stored.images?.length, 1)
 })
 
 test('dropUserImages removes stored pictures so deriveMessages is text-only', async () => {

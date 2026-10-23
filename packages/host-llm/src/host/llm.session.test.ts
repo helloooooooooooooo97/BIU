@@ -4,7 +4,7 @@ import {
   hasImageContent,
   isVisionImageUrl,
   classifyLlmError,
-  stripImageContent,
+  omitImageContent,
   DEEPSEEK_VISION_MODEL,
   flattenToolImagesForChatCompletions,
   toAnthropicContent,
@@ -125,8 +125,8 @@ test('classifyLlmError splits cancel / image reject / orphan tools / fatal', () 
   assert.equal(classifyLlmError(new Error('llm http 401')), 'fatal')
 })
 
-test('stripImageContent keeps text and drops image_url blocks', () => {
-  const out = stripImageContent([
+test('omitImageContent keeps text and replaces image_url with a placeholder', () => {
+  const out = omitImageContent([
     {
       role: 'user',
       content: [
@@ -136,7 +136,8 @@ test('stripImageContent keeps text and drops image_url blocks', () => {
     },
     { role: 'assistant', content: 'ok' },
   ])
-  assert.equal(out[0]?.content, '看看')
+  assert.match(String(out[0]?.content), /看看/)
+  assert.match(String(out[0]?.content), /已省略/)
   assert.equal(out[1]?.content, 'ok')
 })
 
