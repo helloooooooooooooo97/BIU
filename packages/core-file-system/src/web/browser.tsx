@@ -1369,7 +1369,6 @@ const WindowedTable = memo(function WindowedTable({
 
   useLayoutEffect(() => {
     const next = tableRowFallbackPx(wrapCells)
-    if (next === rowPxRef.current) return
     rowPxRef.current = next
     setRowPx(next)
   }, [wrapCells])
@@ -1388,22 +1387,15 @@ const WindowedTable = memo(function WindowedTable({
     if (Math.abs(next - rowPxRef.current) < 1) return
     rowPxRef.current = next
     setRowPx(next)
-    // Measure from wrap / row count only. tableWindow start/end follow rowPx; putting
-    // them here re-measures a new slice, median shifts, rowPx shifts, React #185.
-  }, [nodes.length, tableRef, wrapCells])
+  }, [nodes.length, tableRef, tableWindow.end, tableWindow.start, wrapCells])
 
   useEffect(() => {
     onVisibleRange?.(tableWindow.start, tableWindow.end)
   }, [onVisibleRange, tableWindow.end, tableWindow.start])
 
   const applyWrapScroll = (wrap: HTMLElement, top?: number) => {
+    if (frozenRef.current && top == null) return
     const next = tableWrapScroll(wrap, top)
-    if (frozenRef.current && top == null) {
-      setTableScroll((prev) =>
-        prev.width === next.width && prev.height === next.height ? prev : { ...prev, width: next.width, height: next.height },
-      )
-      return
-    }
     const rowPx = rowPxRef.current
     const count = paintCountRef.current
     const cols = columnMetaRef.current
@@ -1417,11 +1409,11 @@ const WindowedTable = memo(function WindowedTable({
   useLayoutEffect(() => {
     const wrap = wrapRef.current
     if (!wrap) return
-    if (!frozen && wrap.scrollTop) wrap.scrollTop = 0
-    applyWrapScroll(wrap, frozen ? undefined : 0)
-  }, [frozen, resetKey, wrapRef])
+    if (wrap.scrollTop) wrap.scrollTop = 0
+    applyWrapScroll(wrap, 0)
+  }, [resetKey, wrapRef])
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     const wrap = wrapRef.current
     if (!wrap) return
     let raf = 0
