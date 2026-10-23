@@ -70,7 +70,57 @@ export async function loadAgents(): Promise<ChatPerson[]> {
   return request
 }
 
-export function PersonFace({ value, empty = '' }: { value: unknown; empty?: string }) {
+function PersonFaceIdle({ value, empty = '' }: { value: unknown; empty?: string }) {
+  const people = asPersonList(value)
+  if (!people.length) {
+    return empty ? (
+      <span className="fsdb-person is-empty">
+        <UserIcon aria-hidden className="size-[14px]" />
+        {empty}
+      </span>
+    ) : null
+  }
+  return (
+    <span className="fsdb-person-list">
+      {people.map((person) => {
+        const label = person.name
+        const body = (
+          <>
+            <span className="fsdb-person-avatar" aria-hidden />
+            {label ? <span className="fsdb-person-name">{label}</span> : null}
+          </>
+        )
+        if (person.url) {
+          return (
+            <a
+              key={personKey(person) || person.name}
+              className="fsdb-person is-link"
+              href={person.url}
+              title={label || undefined}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(event) => event.stopPropagation()}
+            >
+              {body}
+            </a>
+          )
+        }
+        return (
+          <span key={personKey(person) || person.name} className="fsdb-person" title={label || undefined}>
+            {body}
+          </span>
+        )
+      })}
+    </span>
+  )
+}
+
+export function PersonFace({ value, empty = '', defer = false }: { value: unknown; empty?: string; defer?: boolean }) {
+  if (defer) return <PersonFaceIdle value={value} empty={empty} />
+  return <PersonFaceLive value={value} empty={empty} />
+}
+
+function PersonFaceLive({ value, empty = '' }: { value: unknown; empty?: string }) {
   const profile = useWorkspaceProfile()
   const people = asPersonList(value)
   const [sessionNames, setSessionNames] = useState<Map<string, string>>(() => new Map())

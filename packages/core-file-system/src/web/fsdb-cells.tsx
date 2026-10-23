@@ -299,6 +299,7 @@ export function DefaultCell({
   onRun,
   onChange,
   plain,
+  deferPerson,
 }: {
   field: FieldSpec
   value: unknown
@@ -309,6 +310,7 @@ export function DefaultCell({
   onRun?: () => void
   onChange?: (next: unknown) => void
   plain?: boolean
+  deferPerson?: boolean
 }) {
   const kind = resolveFieldType(field)
   if (kind === 'action') {
@@ -353,7 +355,7 @@ export function DefaultCell({
       if (!text) return null
       return <span className="fsdb-person-text">{text}</span>
     }
-    return <PersonFace value={value} />
+    return <PersonFace value={value} defer={deferPerson} />
   }
   if (kind === 'datetime') {
     const text = formatField(field, value)
