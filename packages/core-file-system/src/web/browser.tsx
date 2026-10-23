@@ -49,6 +49,7 @@ import {
   overlayListed,
   parentFieldKey,
   parseFacetFlatColumnKey,
+  isFacetFlatColumnKey,
   patchFacetFlatValue,
   pinActionColumn,
   readFacetFlatValue,
@@ -617,6 +618,12 @@ const LIST_SEED_COLUMNS = [
 
 function isListColumn(key: string) {
   return key !== 'description' && key !== 'notes' && key !== 'content' && key !== 'emoji' && key !== 'banner' && key !== 'tags'
+}
+
+/** Schema fields are in the allowlist — not just localStorage facet columns after a hard refresh. */
+function schemaColumnAllowlistReady(schema: CollectionSchema | undefined, allColumnKeys: string[]) {
+  if (!schema) return false
+  return allColumnKeys.some((key) => key !== 'actions' && !isFacetFlatColumnKey(key))
 }
 
 const QUERY_NEST_IGNORE = `${HEADLESS_DISMISS_IGNORE}, .db-search-menu, .fsdb-cellselect-menu, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]`
@@ -2663,6 +2670,7 @@ export function CollectionBrowser({
   )
   const schemaDefaultSig = schemaDefaultKeys.join('\0')
   const columns = useMemo(() => {
+    if (!schemaColumnAllowlistReady(schema, allColumnKeys)) return []
     const requested = columnKeys.length ? columnKeys : schemaDefaultKeys
     const order = pinActionColumn(
       schema,
@@ -2672,7 +2680,7 @@ export function CollectionBrowser({
     return order
       .map((key) => allColumns.find((item) => item.key === key))
       .filter(Boolean) as typeof allColumns
-  }, [allColumns, columnKeys, rowActionColumn, schema, schemaDefaultKeys])
+  }, [allColumnKeys, allColumns, columnKeys, rowActionColumn, schema, schemaDefaultKeys])
 
   const colWindowRef = useRef<TableColumnSlice>(EMPTY_COL_WINDOW)
   const tableChromeRef = useRef<TableChromeBag>({
@@ -2748,6 +2756,7 @@ export function CollectionBrowser({
 
   useEffect(() => {
     if (!schemaDefaultKeys.length) return
+    if (!schemaColumnAllowlistReady(schema, allColumnKeys)) return
     const prevDefaults = prevSchemaDefaultSig.current ? prevSchemaDefaultSig.current.split('\0').filter(Boolean) : []
     prevSchemaDefaultSig.current = schemaDefaultSig
     const saved = viewsRef.current.find((view) => view.id === activeViewIdRef.current)?.columns ?? []
@@ -3218,7 +3227,7 @@ export function CollectionBrowser({
       filters: { ...catalogLockFilters(view.id, [view]), ...view.filters },
     })
     const sourceColumns = next.columns.length
-      ? allColumnKeys.length
+      ? schemaColumnAllowlistReady(schema, allColumnKeys)
         ? next.columns.filter((key) => allColumnKeys.includes(key))
         : next.columns
       : schemaDefaultKeys
