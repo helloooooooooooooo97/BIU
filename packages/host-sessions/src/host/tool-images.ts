@@ -99,6 +99,51 @@ function collectImageRefs(detail: string): ImageRef[] {
   return out
 }
 
+/** 从工具 JSON 里拿掉会再被 lift 的图声明。 */
+export function stripDeclaredImagesFromToolDetail(detail: string): string {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(detail)
+  } catch {
+    return detail
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return detail
+  const rec = parsed as Record<string, unknown>
+  let changed = false
+  if (Array.isArray(rec.artifacts)) {
+    const kept = rec.artifacts.filter((item) => {
+      if (!item || typeof item !== 'object') return true
+      const art = item as Record<string, unknown>
+      const name = typeof art.name === 'string' ? art.name : ''
+      const mime = String(art.mime ?? art.type ?? '')
+      return !(name && isImagePayload(mime, name))
+    })
+    if (kept.length !== rec.artifacts.length) {
+      if (kept.length) rec.artifacts = kept
+      else delete rec.artifacts
+      changed = true
+    }
+  }
+  if (rec.file && typeof rec.file === 'object') {
+    const file = rec.file as Record<string, unknown>
+    const path = typeof file.path === 'string' ? file.path : ''
+    const mime = String(file.mime ?? file.type ?? '')
+    if (path && isImagePayload(mime, path)) {
+      delete rec.file
+      changed = true
+    }
+  }
+  const mime = String(rec.mime ?? rec.type ?? '')
+  if (!rec.artifacts && !rec.file && mime.startsWith('image/') && isVisionMime(mime)) {
+    delete rec.mime
+    delete rec.type
+    delete rec.name
+    delete rec.path
+    changed = true
+  }
+  return changed ? JSON.stringify(rec) : detail
+}
+
 async function readDbAsset(name: string, baseDir?: string): Promise<Buffer | null> {
   const file = basename(name)
   if (!file || file.includes('..')) return null
@@ -156,9 +201,9 @@ async function resolveRef(ref: ImageRef, sessionId: string, baseDir?: string): P
 export async function liftToolImages(
   messages: LlmMessage[],
   sessionId: string,
-  options?: { baseDir?: string },
+  options?: { baseDir?: string; skip?: boolean },
 ): Promise<LlmMessage[]> {
-  if (!sessionId) return messages
+  if (!sessionId || options?.skip) return messages
   const baseDir = options?.baseDir ?? dataHome()
   const out: LlmMessage[] = []
   for (const message of messages) {

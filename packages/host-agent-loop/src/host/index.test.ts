@@ -346,6 +346,41 @@ test('unsupported image is retried without pictures and the turn completes', asy
   assert.equal(end?.type === 'turn/end' && end.reason, 'complete')
 })
 
+test('after image reject later text turns stay text-only even if history still has pictures', async () => {
+  const { ctx, sessionId } = await spine()
+  const seen: Array<boolean> = []
+  const llm: LlmClient = {
+    async chat(messages) {
+      const hasImage = messages.some(
+        (item) => Array.isArray(item.content) && item.content.some((part) => part.type === 'image_url'),
+      )
+      seen.push(hasImage)
+      if (hasImage) throw new Error('.messages[1].image[0]: You have uploaded an unsupported image')
+      return { content: hasImage ? '图' : '纯文本', toolCalls: [] }
+    },
+  }
+  const first = new AgentLoop(ctx, llm, sessionId, new AbortController().signal)
+  await first.run([
+    {
+      kind: 'wake',
+      text: '看看',
+      images: [{ name: 'shot.png', mime: 'image/png', url: 'data:image/png;base64,abc' }],
+    },
+  ])
+  assert.equal(ctx.sessions.llmImagesBlocked(sessionId), true)
+  await ctx.sessions.append(sessionId, {
+    type: 'user/message',
+    text: '历史里还挂着图',
+    kind: 'wake',
+    images: [{ name: 'old.png', mime: 'image/png', url: 'data:image/png;base64,abc' }],
+  })
+  const second = new AgentLoop(ctx, llm, sessionId, new AbortController().signal)
+  const turn = await second.run([{ kind: 'wake', text: '再问一句' }])
+  assert.equal(turn.text, '纯文本')
+  assert.equal(turn.halt, undefined)
+  assert.equal(seen.at(-1), false)
+})
+
 test('fatal llm error ends the turn idle with halt so the session can take a new message', async () => {
   const { ctx, sessionId } = await spine()
   const llm: LlmClient = {
