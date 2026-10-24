@@ -1,44 +1,47 @@
-import type { ButtonHTMLAttributes, ReactNode } from 'react'
+import { cva, type VariantProps } from 'class-variance-authority'
+import type { ButtonHTMLAttributes, ReactNode, Ref } from 'react'
+import { cn } from './cn.ts'
 
-const STYLE_ID = 'biu-public-ui-button'
-const CSS = `
-.biu-btn{
-  display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;
-  height:26px;padding:0 10px;border:1px solid var(--dsw-border);border-radius:6px;
-  background:var(--dsw-hover);color:var(--dsw-label);font:inherit;font-size:13px;font-weight:650;
-  cursor:pointer;line-height:24px
-}
-.biu-btn:hover{background:var(--dsw-input)}
-.biu-btn:focus-visible{outline:none;border-color:var(--dsw-pick)}
-.biu-btn:disabled{opacity:.5;cursor:default}
-.biu-btn.is-danger{color:var(--dsw-danger);background:var(--dsw-danger-soft);border-color:var(--dsw-border)}
-.biu-btn.is-danger:hover{background:color-mix(in srgb,var(--dsw-danger) 16%,transparent)}
-`
+const buttonVariants = cva(
+  'biu-btn inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-[6px] border border-transparent h-[26px] px-2.5 text-[13px] font-semibold leading-[24px] transition-colors focus-visible:outline-none focus-visible:border-dsw-pick disabled:pointer-events-none disabled:opacity-50 disabled:cursor-default',
+  {
+    variants: {
+      variant: {
+        default: 'bg-dsw-hover text-dsw-label border-dsw-border hover:bg-dsw-input',
+        secondary: 'bg-transparent text-dsw-label border-dsw-border hover:bg-dsw-hover',
+        outline: 'bg-transparent text-dsw-label border-dsw-border hover:bg-dsw-hover',
+        ghost: 'bg-transparent text-dsw-label-3 hover:bg-dsw-hover hover:text-dsw-label',
+        destructive:
+          'is-danger bg-dsw-danger-soft text-dsw-danger border-dsw-border hover:bg-dsw-danger-soft',
+      },
+    },
+    defaultVariants: { variant: 'default' },
+  },
+)
 
-export function ensureButtonStyle() {
-  if (typeof document === 'undefined') return
-  if (document.getElementById(STYLE_ID)) return
-  const style = document.createElement('style')
-  style.id = STYLE_ID
-  style.textContent = CSS
-  document.head.appendChild(style)
-}
+export { buttonVariants }
+
+export function ensureButtonStyle() {}
 
 export function Button({
-  danger = false,
-  children,
-  type = 'button',
   className,
+  variant,
+  danger = false,
+  type = 'button',
+  children,
+  ref,
   ...rest
-}: ButtonHTMLAttributes<HTMLButtonElement> & {
-  danger?: boolean
-  children?: ReactNode
-}) {
-  ensureButtonStyle()
+}: ButtonHTMLAttributes<HTMLButtonElement> &
+  VariantProps<typeof buttonVariants> & {
+    danger?: boolean
+    children?: ReactNode
+    ref?: Ref<HTMLButtonElement>
+  }) {
   return (
     <button
+      ref={ref}
       type={type}
-      className={`biu-btn${danger ? ' is-danger' : ''}${className ? ` ${className}` : ''}`}
+      className={cn(buttonVariants({ variant: danger ? 'destructive' : variant }), className)}
       {...rest}
     >
       {children}

@@ -474,6 +474,33 @@ test('pack installs sandbox package.json deps without host node_modules', async 
   }
 })
 
+test('pack maps @biu/public-ui to globalThis.BiuPublicUi', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'plugin-public-ui-'))
+  try {
+    const ctx = new Context()
+    stubHub(ctx)
+    const store = new PluginStoreService(
+      ctx,
+      join(dir, '.plugin'),
+      join(dir, 'store.json'),
+      join(dir, '.plugin-dev'),
+    ).open()
+    await store.initSandbox({ id: 'store-ui', name: 'Ui', headless: true })
+    const sandbox = join(dir, '.plugin-dev', 'store-ui')
+    await mkdir(join(sandbox, 'web'), { recursive: true })
+    await writeFile(
+      join(sandbox, 'web/index.tsx'),
+      `import { ConfirmDialog, TagChip } from '@biu/public-ui'\nexport const name = 'store-ui'\nexport function apply() { return { ConfirmDialog, TagChip } }\n`,
+    )
+    await store.pack('store-ui')
+    const webJs = await readFile(join(dir, '.plugin', 'store-ui', 'web.js'), 'utf8')
+    assert.match(webJs, /globalThis\.BiuPublicUi/)
+    assert.doesNotMatch(webJs, /from"@biu\/public-ui"/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('pack rejects @biu imports', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'plugin-biu-'))
   try {

@@ -7,16 +7,14 @@ import { Input } from './input.tsx'
 
 afterEach(() => cleanup())
 
-test('Input ships token chrome', () => {
+test('Input uses Tailwind token classes', () => {
   const src = readFileSync(resolve(import.meta.dirname, './input.tsx'), 'utf8')
   assert.match(src, /function Input/)
-  assert.match(src, /className=\{\`biu-input/)
-  assert.match(src, /var\(--dsw-border\)/)
-  assert.match(src, /var\(--dsw-input\)/)
-  assert.match(src, /var\(--dsw-pick\)/)
-  assert.match(src, /height:26px/)
-  assert.match(src, /border-radius:6px/)
-  assert.doesNotMatch(src, /background:\s*'?#fff/)
+  assert.match(src, /bg-dsw-input/)
+  assert.match(src, /border-dsw-border/)
+  assert.match(src, /focus:border-dsw-pick/)
+  assert.match(src, /h-\[26px\]/)
+  assert.doesNotMatch(src, /createElement\('style'\)/)
 })
 
 test('Input types and can be disabled', () => {

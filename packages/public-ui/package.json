@@ -10,6 +10,11 @@
     "./bool-box": "./src/bool-box.tsx",
     "./button": "./src/button.tsx",
     "./input": "./src/input.tsx",
+    "./textarea": "./src/textarea.tsx",
+    "./select": "./src/select.tsx",
+    "./label": "./src/label.tsx",
+    "./badge": "./src/badge.tsx",
+    "./cn": "./src/cn.ts",
     "./chat-count": "./src/chat-count.tsx",
     "./chat-pane": "./src/chat-pane.tsx",
     "./emoji-board": "./src/emoji-board.tsx",
@@ -30,6 +35,9 @@
   },
   "dependencies": {
     "@radix-ui/react-dismissable-layer": "^1.1.19",
-    "@radix-ui/react-popover": "^1.1.6"
+    "@radix-ui/react-popover": "^1.1.6",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.3.1"
   }
 }

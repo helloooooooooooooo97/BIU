@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@source "../packages/public-ui/src/**/*.{ts,tsx}";
 
 /* Light chrome — canvas #ffffff, sidebar #f9f8f7, hairline #f0efed */
 :root {
@@ -115,6 +116,19 @@ html.dark {
 @theme {
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
+  --color-dsw-bg: var(--dsw-bg);
+  --color-dsw-input: var(--dsw-input);
+  --color-dsw-label: var(--dsw-label);
+  --color-dsw-label-2: var(--dsw-label-2);
+  --color-dsw-label-3: var(--dsw-label-3);
+  --color-dsw-placeholder: var(--dsw-placeholder);
+  --color-dsw-border: var(--dsw-border);
+  --color-dsw-hover: var(--dsw-hover);
+  --color-dsw-pick: var(--dsw-pick);
+  --color-dsw-danger: var(--dsw-danger);
+  --color-dsw-danger-soft: var(--dsw-danger-soft);
+  --color-dsw-ok: var(--dsw-ok);
+  --color-dsw-surface: var(--dsw-surface);
 }
 
 html,

@@ -9,6 +9,7 @@
     ".": "./src/web/index.ts"
   },
   "dependencies": {
+    "@biu/public-ui": "0.1.0",
     "@biu/web-event-log": "0.1.0"
   },
   "peerDependencies": {

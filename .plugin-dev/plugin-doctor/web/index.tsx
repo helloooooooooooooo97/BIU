@@ -1,3 +1,5 @@
+import { Badge, Button } from '@biu/public-ui'
+
 const React = globalThis.React
 const { useState, useEffect } = React
 
@@ -39,9 +41,6 @@ const STYLE_CSS = `
 .pd-root{border:1px solid var(--dsw-border);border-radius:8px;padding:10px 12px;font-family:var(--font-sans);font-size:14px;line-height:1.5;background:var(--dsw-bg);color:var(--dsw-label)}
 .pd-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .pd-title{font-size:13px;font-weight:650}
-.pd-btn{height:26px;padding:0 8px;border-radius:6px;border:1px solid var(--dsw-border);background:transparent;color:var(--dsw-label);font-size:13px;font-weight:650;cursor:pointer}
-.pd-btn:hover{background:var(--dsw-hover)}
-.pd-btn:disabled{opacity:.5;cursor:default}
 .pd-meta{font-size:12px;color:var(--dsw-label-3)}
 .pd-err{margin-top:8px;color:var(--dsw-danger);font-size:13px}
 .pd-empty{margin-top:8px;color:var(--dsw-label-3);font-size:13px}
@@ -51,11 +50,7 @@ const STYLE_CSS = `
 .pd-table td{padding:6px 10px 6px 0;vertical-align:top;border-top:1px solid var(--dsw-border)}
 .pd-id{font-family:var(--font-mono);font-size:12px}
 .pd-name{color:var(--dsw-label-3)}
-.pd-chip{display:inline-block;margin-right:4px;padding:1px 6px;border-radius:6px;font-size:11px;line-height:16px;border:1px solid var(--dsw-border);background:var(--dsw-hover);color:var(--dsw-label-3);white-space:nowrap}
-.pd-chip.is-on{color:var(--dsw-label);background:var(--dsw-input)}
-.pd-tone{padding:1px 8px;border-radius:6px;white-space:nowrap;border:1px solid var(--dsw-border);background:var(--dsw-hover);color:var(--dsw-label)}
-.pd-tone.warn{color:var(--dsw-label)}
-.pd-tone.bad{color:var(--dsw-danger)}
+.pd-chip{margin-right:4px}
 `
 
 function usePdStyle() {
@@ -93,9 +88,9 @@ function clock(ts: number) {
 
 function Chip(props: { label: string; on?: boolean; title?: string }) {
   return (
-    <span title={props.title} className={props.on ? 'pd-chip is-on' : 'pd-chip'}>
+    <Badge title={props.title} variant={props.on ? 'on' : 'default'} className="pd-chip">
       {props.label}
-    </span>
+    </Badge>
   )
 }
 
@@ -126,9 +121,9 @@ function DoctorBlock(props: BlockProps) {
       <div className="pd-head">
         <strong className="pd-title">插件体检</strong>
         {props.writable ? (
-          <button data-testid="plugin-doctor-run" onClick={run} disabled={busy} className="pd-btn">
+          <Button data-testid="plugin-doctor-run" onClick={run} disabled={busy}>
             {busy ? '扫描中…' : '体检'}
-          </button>
+          </Button>
         ) : (
           <span className="pd-meta">只读态 · 展示上次结果</span>
         )}
@@ -161,7 +156,8 @@ function DoctorBlock(props: BlockProps) {
             </thead>
             <tbody>
               {report.plugins.map((item) => {
-                const tone = item.conclusion === '合规' ? 'pd-tone' : item.conclusion === '缺引擎' || item.conclusion === '空插件' ? 'pd-tone bad' : 'pd-tone warn'
+                const tone =
+                  item.conclusion === '缺引擎' || item.conclusion === '空插件' ? 'destructive' : item.conclusion === '合规' ? 'on' : 'default'
                 return (
                   <tr key={item.id}>
                     <td>
@@ -183,9 +179,9 @@ function DoctorBlock(props: BlockProps) {
                       {item.readmeExample ? <Chip label="有" on /> : <Chip label={item.readme ? '缺' : '无 README'} />}
                     </td>
                     <td>
-                      <span title={(item.problems || []).join('；')} className={tone}>
+                      <Badge title={(item.problems || []).join('；')} variant={tone}>
                         {item.conclusion}
-                      </span>
+                      </Badge>
                     </td>
                   </tr>
                 )

@@ -7,23 +7,24 @@ import { Button } from './button.tsx'
 
 afterEach(() => cleanup())
 
-test('Button ships token chrome', () => {
+test('Button uses Tailwind token classes', () => {
   const src = readFileSync(resolve(import.meta.dirname, './button.tsx'), 'utf8')
   assert.match(src, /function Button/)
-  assert.match(src, /className=\{\`biu-btn/)
-  assert.match(src, /var\(--dsw-border\)/)
-  assert.match(src, /var\(--dsw-label\)/)
-  assert.match(src, /height:26px/)
-  assert.match(src, /border-radius:6px/)
-  assert.doesNotMatch(src, /background:\s*'?#fff/)
+  assert.match(src, /from 'class-variance-authority'/)
+  assert.match(src, /bg-dsw-hover/)
+  assert.match(src, /h-\[26px\]/)
+  assert.match(src, /rounded-\[6px\]/)
+  assert.doesNotMatch(src, /createElement\('style'\)/)
 })
 
 test('Button clicks and can be danger or disabled', () => {
   let n = 0
   const { rerender } = render(
-    <Button onClick={() => {
-      n += 1
-    }}>
+    <Button
+      onClick={() => {
+        n += 1
+      }}
+    >
       发送
     </Button>,
   )
@@ -33,15 +34,27 @@ test('Button clicks and can be danger or disabled', () => {
   assert.equal(n, 1)
 
   rerender(
-    <Button danger onClick={() => {
-      n += 1
-    }}>
+    <Button
+      danger
+      onClick={() => {
+        n += 1
+      }}
+    >
       清空
     </Button>,
   )
   assert.equal(screen.getByRole('button', { name: '清空' }).classList.contains('is-danger'), true)
 
-  rerender(<Button disabled onClick={() => { n += 1 }}>停</Button>)
+  rerender(
+    <Button
+      disabled
+      onClick={() => {
+        n += 1
+      }}
+    >
+      停
+    </Button>,
+  )
   fireEvent.click(screen.getByRole('button', { name: '停' }))
   assert.equal(n, 1)
 })

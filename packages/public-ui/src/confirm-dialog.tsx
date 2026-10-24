@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { Button } from './button.tsx'
 import { overlayPortalRoot, overlayZ } from './overlay-portal.ts'
 
 export function ConfirmDialog({
@@ -63,16 +64,16 @@ export function ConfirmDialog({
           <div id={`${testId}-message`}>{message}</div>
         </div>
         <div className="biu-confirm-actions">
-          <button ref={cancelRef} type="button" className="biu-confirm-cancel" onClick={onCancel}>
+          <Button ref={cancelRef} variant="secondary" className="biu-confirm-cancel" onClick={onCancel}>
             {cancelLabel}
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            danger={danger}
             className={`biu-confirm-submit${danger ? ' is-danger' : ''}`}
             onClick={onConfirm}
           >
             {confirmLabel}
-          </button>
+          </Button>
         </div>
       </section>
     </div>,

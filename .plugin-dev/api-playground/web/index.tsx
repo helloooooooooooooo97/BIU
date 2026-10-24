@@ -7,6 +7,8 @@
  *
  * 请求历史写进块 data.history（最近 20 条）——跟着文档走，不是跟着浏览器走。
  */
+import { Button, ConfirmDialog, Input, Label, Select, TagChip, Textarea } from '@biu/public-ui'
+
 const React = globalThis.React
 const { useEffect, useMemo, useRef, useState } = React
 
@@ -73,82 +75,16 @@ const STYLE_CSS = `
 }
 .ap-root *, .ap-root *::before, .ap-root *::after { box-sizing: border-box; }
 .ap-bar { display: flex; gap: 6px; align-items: center; }
-.ap-method, .ap-url {
-  height: 26px;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  color: var(--dsw-label);
-  background: var(--dsw-input);
-  border: 1px solid var(--dsw-border);
-  border-radius: 6px;
-  padding: 0 8px;
-  outline: none;
-}
-.ap-method { flex: 0 0 92px; cursor: pointer; }
-.ap-url { flex: 1 1 auto; min-width: 0; }
-.ap-method:focus, .ap-url:focus, .ap-area:focus { border-color: var(--dsw-pick); }
-.ap-send {
-  flex: none;
-  height: 26px;
-  font-size: 13px;
-  font-weight: 650;
-  color: var(--dsw-label);
-  background: var(--dsw-hover);
-  border: 1px solid var(--dsw-border);
-  border-radius: 6px;
-  padding: 0 10px;
-  cursor: pointer;
-}
-.ap-send:hover { background: var(--dsw-input); }
-.ap-send:disabled { opacity: 0.5; cursor: default; }
+.ap-method { flex: 0 0 92px; font-family: var(--font-mono); cursor: pointer; }
+.ap-url { flex: 1 1 auto; min-width: 0; font-family: var(--font-mono); }
 .ap-tabs { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
-.ap-tab {
-  height: 26px;
-  font-size: 13px;
-  font-weight: 650;
-  color: var(--dsw-label-3);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  padding: 0 8px;
-  cursor: pointer;
-}
-.ap-tab-on {
-  color: var(--dsw-label);
-  border-color: var(--dsw-border);
-  background: var(--dsw-hover);
-}
 .ap-spacer { flex: 1 1 auto; }
 .ap-hint { font-size: 12px; color: var(--dsw-label-3); }
-.ap-chip {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 650;
-  border-radius: 6px;
-  padding: 2px 7px;
-  border: 1px solid var(--dsw-border);
-}
-.ap-chip-2 { color: var(--dsw-label); background: color-mix(in srgb, var(--dsw-ok, #3fb950) 16%, transparent); }
-.ap-chip-4, .ap-chip-5 { color: var(--dsw-label); background: color-mix(in srgb, var(--dsw-warn, #d29922) 18%, transparent); }
-.ap-chip-err { color: var(--dsw-danger); background: color-mix(in srgb, var(--dsw-danger) 14%, transparent); }
 .ap-note { font-size: 12px; color: var(--dsw-label-2); }
 .ap-pane { display: flex; flex-direction: column; gap: 8px; }
 .ap-field { display: flex; flex-direction: column; gap: 4px; }
-.ap-label { font-size: 12px; font-weight: 650; color: var(--dsw-label-3); }
-.ap-area {
-  font-family: var(--font-mono);
-  font-size: 13px;
-  line-height: 1.55;
-  color: var(--dsw-label);
-  background: var(--dsw-input);
-  border: 1px solid var(--dsw-border);
-  border-radius: 6px;
-  padding: 8px;
-  outline: none;
-  resize: vertical;
-}
-.ap-head-area { min-height: 62px; }
-.ap-body-area { min-height: 84px; }
+.ap-head-area { min-height: 62px; font-family: var(--font-mono); }
+.ap-body-area { min-height: 84px; font-family: var(--font-mono); }
 .ap-pre {
   margin: 0;
   font-family: var(--font-mono);
@@ -176,18 +112,6 @@ const STYLE_CSS = `
 .ap-err { color: var(--dsw-danger); }
 .ap-history { border-top: 1px solid var(--dsw-border); padding-top: 8px; }
 .ap-hist-head { display: flex; gap: 6px; align-items: center; }
-.ap-ghost {
-  height: 26px;
-  font-size: 13px;
-  font-weight: 650;
-  color: var(--dsw-label);
-  background: transparent;
-  border: 1px solid var(--dsw-border);
-  border-radius: 6px;
-  padding: 0 8px;
-  cursor: pointer;
-}
-.ap-ghost:hover { background: var(--dsw-hover); }
 .ap-hist-list { display: flex; flex-direction: column; gap: 1px; margin-top: 6px; max-height: 180px; overflow: auto; }
 .ap-hist-row {
   display: flex;
@@ -256,11 +180,11 @@ function formatClock(at: number) {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 
-function statusClass(status: number | undefined, ok: boolean) {
-  if (!ok || !status) return 'ap-chip ap-chip-err'
-  if (status < 300) return 'ap-chip ap-chip-2'
-  if (status < 500) return 'ap-chip ap-chip-4'
-  return 'ap-chip ap-chip-5'
+function statusChip(status: number | undefined, ok: boolean) {
+  if (!ok || !status) return { id: 'err', label: '请求失败' }
+  if (status < 300) return { id: 'ok', label: `${status}`.trim() }
+  if (status < 500) return { id: 'warn', label: `${status}` }
+  return { id: 'fail', label: `${status}` }
 }
 
 function readHistory(data: Record<string, unknown>): HistoryEntry[] {
@@ -291,6 +215,7 @@ function ApiPlaygroundBlock({ data, update, writable }: BlockProps) {
   const [result, setResult] = useState<Result | null>(() => stored)
   const [tab, setTab] = useState<'request' | 'response'>(stored ? 'response' : 'request')
   const [histOpen, setHistOpen] = useState(false)
+  const [confirmClear, setConfirmClear] = useState(false)
 
   // 外部改了文档（别的 agent / 撤销 / 重开页面）时同步字段，但别抢正在输入的用户。
   useEffect(() => {
@@ -398,7 +323,7 @@ function ApiPlaygroundBlock({ data, update, writable }: BlockProps) {
   return (
     <div className="ap-root" ref={hostRef} data-testid="api-playground-block" data-plugin={name}>
       <div className="ap-bar">
-        <select
+        <Select
           className="ap-method"
           data-testid="api-playground-method"
           value={form.method}
@@ -412,8 +337,8 @@ function ApiPlaygroundBlock({ data, update, writable }: BlockProps) {
               {m}
             </option>
           ))}
-        </select>
-        <input
+        </Select>
+        <Input
           className="ap-url"
           data-testid="api-playground-url"
           value={form.url}
@@ -424,38 +349,37 @@ function ApiPlaygroundBlock({ data, update, writable }: BlockProps) {
           onBlur={() => commit({ url: form.url })}
           onKeyDown={onKeyDown}
         />
-        <button
-          type="button"
-          className="ap-send"
+        <Button
           data-testid="api-playground-send"
           disabled={!editable || sending}
           onClick={() => void send()}
           title="发送请求（⌘/Ctrl + ↵）"
         >
           {sending ? '发送中…' : '发送'}
-        </button>
+        </Button>
       </div>
 
       <div className="ap-tabs">
-        <button
-          type="button"
-          className={tab === 'request' ? 'ap-tab ap-tab-on' : 'ap-tab'}
+        <Button
+          variant={tab === 'request' ? 'secondary' : 'ghost'}
           data-testid="api-playground-tab-request"
           onClick={() => setTab('request')}
         >
           请求
-        </button>
-        <button
-          type="button"
-          className={tab === 'response' ? 'ap-tab ap-tab-on' : 'ap-tab'}
+        </Button>
+        <Button
+          variant={tab === 'response' ? 'secondary' : 'ghost'}
           data-testid="api-playground-tab-response"
           onClick={() => setTab('response')}
         >
           响应
-        </button>
+        </Button>
         {active && !sending ? (
-          <span className={statusClass(active.status, active.ok)} data-testid="api-playground-status">
-            {active.ok ? `${active.status} ${active.statusText || ''}`.trim() : '请求失败'}
+          <span data-testid="api-playground-status">
+            <TagChip
+              id={statusChip(active.status, active.ok).id}
+              label={active.ok ? `${active.status} ${active.statusText || ''}`.trim() : '请求失败'}
+            />
           </span>
         ) : null}
         {sending ? <span className="ap-note">请求中…</span> : null}
@@ -465,10 +389,10 @@ function ApiPlaygroundBlock({ data, update, writable }: BlockProps) {
 
       {tab === 'request' ? (
         <div className="ap-pane" data-testid="api-playground-request-pane">
-          <label className="ap-field">
-            <span className="ap-label">请求头 headers</span>
-            <textarea
-              className="ap-area ap-head-area"
+          <div className="ap-field">
+            <Label>请求头 headers</Label>
+            <Textarea
+              className="ap-head-area"
               data-testid="api-playground-headers"
               spellCheck={false}
               value={form.headers}
@@ -478,11 +402,11 @@ function ApiPlaygroundBlock({ data, update, writable }: BlockProps) {
               onBlur={() => commit({ headers: form.headers })}
               onKeyDown={onKeyDown}
             />
-          </label>
-          <label className="ap-field">
-            <span className="ap-label">请求体 body</span>
-            <textarea
-              className="ap-area ap-body-area"
+          </div>
+          <div className="ap-field">
+            <Label>请求体 body</Label>
+            <Textarea
+              className="ap-body-area"
               data-testid="api-playground-body"
               spellCheck={false}
               value={form.body}
@@ -492,7 +416,7 @@ function ApiPlaygroundBlock({ data, update, writable }: BlockProps) {
               onBlur={() => commit({ body: form.body })}
               onKeyDown={onKeyDown}
             />
-          </label>
+          </div>
         </div>
       ) : (
         <div className="ap-pane" data-testid="api-playground-response-pane">
@@ -518,7 +442,7 @@ function ApiPlaygroundBlock({ data, update, writable }: BlockProps) {
               </div>
               {Object.keys(activeHeaders).length ? (
                 <details className="ap-details" data-testid="api-playground-res-headers-wrap">
-                  <summary className="ap-label">
+                  <summary className="biu-label">
                     响应头 · {Object.keys(activeHeaders).length} 条
                   </summary>
                   <div className="ap-hlist" data-testid="api-playground-res-headers">
@@ -532,9 +456,9 @@ function ApiPlaygroundBlock({ data, update, writable }: BlockProps) {
                 </details>
               ) : null}
               <div className="ap-field">
-                <span className="ap-label">
+                <Label>
                   响应体{bodyView.json ? ' · 已自动美化 JSON' : ''}
-                </span>
+                </Label>
                 <pre className="ap-pre" data-testid="api-playground-res-body">
                   {bodyView.text || '（空响应体）'}
                 </pre>
@@ -546,18 +470,17 @@ function ApiPlaygroundBlock({ data, update, writable }: BlockProps) {
 
       <div className="ap-history" data-testid="api-playground-history">
         <div className="ap-hist-head">
-          <button
-            type="button"
-            className="ap-ghost"
+          <Button
+            variant="secondary"
             data-testid="api-playground-history-toggle"
             onClick={() => setHistOpen((v: boolean) => !v)}
           >
             {histOpen ? '收起历史' : `历史（${history.length}）`}
-          </button>
+          </Button>
           {history.length ? (
-            <button type="button" className="ap-ghost" disabled={!editable} onClick={clearHistory}>
+            <Button variant="secondary" disabled={!editable} onClick={() => setConfirmClear(true)}>
               清空
-            </button>
+            </Button>
           ) : null}
           <span className="ap-spacer" />
           <span className="ap-hint">历史存在块数据里，跟文档一起版本化</span>
@@ -574,13 +497,30 @@ function ApiPlaygroundBlock({ data, update, writable }: BlockProps) {
               >
                 <span className="ap-hist-m">{entry.method}</span>
                 <span className="ap-hist-u">{entry.url}</span>
-                <span className={statusClass(entry.status, !entry.error)}>{entry.error ? 'ERR' : entry.status}</span>
+                <TagChip
+                  id={statusChip(entry.status, !entry.error).id}
+                  label={entry.error ? 'ERR' : String(entry.status)}
+                />
                 <span className="ap-hist-t">{entry.ms}ms · {formatClock(entry.at)}</span>
               </button>
             ))}
           </div>
         ) : null}
       </div>
+      {confirmClear ? (
+        <ConfirmDialog
+          title="清空历史"
+          message="历史写在文档里。清空后只能靠撤销找回。"
+          confirmLabel="清空"
+          danger
+          testId="api-playground-clear-confirm"
+          onConfirm={() => {
+            clearHistory()
+            setConfirmClear(false)
+          }}
+          onCancel={() => setConfirmClear(false)}
+        />
+      ) : null}
     </div>
   )
 }

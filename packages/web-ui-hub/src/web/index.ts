@@ -3,6 +3,7 @@ import { clientLog, clientLogErrorText } from '@biu/web-event-log/log'
 import * as React from 'react'
 import * as ReactDOM from 'react-dom'
 import * as ReactJSXRuntime from 'react/jsx-runtime'
+import * as BiuPublicUi from '@biu/public-ui'
 import { createRoot, hydrateRoot } from 'react-dom/client'
 import { flushSync } from 'react-dom'
 import { uiPackageLoaders } from 'virtual:cordis-ui-loaders'
@@ -90,10 +91,12 @@ export function apply(ctx: Context) {
       React?: typeof React
       ReactDOM?: typeof ReactDOM & { createRoot: typeof createRoot; hydrateRoot: typeof hydrateRoot }
       ReactJSXRuntime?: typeof ReactJSXRuntime
+      BiuPublicUi?: typeof BiuPublicUi
     }
     g.React = React
     g.ReactDOM = { ...ReactDOM, createRoot, hydrateRoot, flushSync }
     g.ReactJSXRuntime = ReactJSXRuntime
+    g.BiuPublicUi = BiuPublicUi
   }
 
   const forks = new Map<string, Fiber>()
