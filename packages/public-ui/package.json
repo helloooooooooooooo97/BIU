@@ -8,6 +8,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./bool-box": "./src/bool-box.tsx",
+    "./button": "./src/button.tsx",
+    "./input": "./src/input.tsx",
     "./chat-count": "./src/chat-count.tsx",
     "./chat-pane": "./src/chat-pane.tsx",
     "./emoji-board": "./src/emoji-board.tsx",

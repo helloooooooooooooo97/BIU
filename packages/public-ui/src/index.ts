@@ -12,6 +12,8 @@ export {
 } from './workspace-profile.ts'
 export { useWorkspaceProfile } from './use-workspace-profile.ts'
 export { BoolBox } from './bool-box.tsx'
+export { Button, ensureButtonStyle } from './button.tsx'
+export { Input, ensureInputStyle } from './input.tsx'
 export { listenOutsideDismiss } from './outside-dismiss.ts'
 export { HeadlessDismiss, HEADLESS_DISMISS_IGNORE } from './headless-dismiss.tsx'
 export { HeadlessPopover } from './headless-popover.tsx'

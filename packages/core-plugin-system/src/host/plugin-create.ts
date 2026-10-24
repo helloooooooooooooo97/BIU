@@ -220,15 +220,86 @@ export const jsxDEV = J && (J.jsxDEV || J.jsx) ? (J.jsxDEV || J.jsx) : jsx
   ])
 }
 
+const PUBLIC_UI_SPEC = /^@biu\/public-ui(\/.*)?$/
+const PUBLIC_UI_EXPORTS = [
+  'AnchorMenu',
+  'AttachmentList',
+  'AttachmentMark',
+  'BoolBox',
+  'Button',
+  'CHAT_DOCK_STACK',
+  'CHAT_STAGE_CENTER',
+  'CHAT_STAGE_PANE',
+  'ChatCount',
+  'ChatDockStack',
+  'ChatPane',
+  'ChatStage',
+  'ConfirmDialog',
+  'DownloadMark',
+  'HEADLESS_DISMISS_IGNORE',
+  'HeadlessDismiss',
+  'HeadlessPopover',
+  'Input',
+  'OutlineNav',
+  'PaperClipMark',
+  'RecordEmojiBoard',
+  'RenderBoundary',
+  'SHARE_OVERLAY_Z',
+  'SidebarFold',
+  'TAG_INK_BASE',
+  'TAG_TONES',
+  'TAG_TONE_BLUE',
+  'TAG_TONE_GREEN',
+  'TAG_TONE_ORANGE',
+  'TAG_TONE_RED',
+  'TAG_TONE_ROSE',
+  'TagChip',
+  'TagChipCloseMark',
+  'TagChips',
+  'ensureAttachmentListStyle',
+  'ensureButtonStyle',
+  'ensureInputStyle',
+  'ensureTagChipStyle',
+  'hydrateWorkspaceProfile',
+  'listenOutsideDismiss',
+  'overlayPortalRoot',
+  'overlayZ',
+  'persistWorkspaceProfile',
+  'profileDisplayName',
+  'readWorkspaceProfile',
+  'scrollOutlineTarget',
+  'subscribeWorkspaceProfile',
+  'tagTextColor',
+  'tagTone',
+  'tagWashColor',
+  'useWorkspaceProfile',
+  'writeWorkspaceProfile',
+]
+
+function publicUiShim() {
+  return namedFrom('globalThis.BiuPublicUi', PUBLIC_UI_EXPORTS)
+}
+
 function storeBundlePlugins(kind: 'host' | 'web'): EsbuildPlugin[] {
   const plugins: EsbuildPlugin[] = [
     {
       name: 'store-no-biu',
       setup(build) {
-        build.onResolve({ filter: /^@biu\// }, (args) => ({
-          errors: [{ text: `store plugins cannot import ${args.path}; inject the host service instead` }],
-          path: args.path,
-        }))
+        build.onResolve({ filter: /^@biu\// }, (args) => {
+          if (kind === 'web' && PUBLIC_UI_SPEC.test(args.path)) {
+            return { path: args.path, namespace: 'host-public-ui' }
+          }
+          return {
+            errors: [{ text: `store plugins cannot import ${args.path}; inject the host service instead` }],
+            path: args.path,
+          }
+        })
+        if (kind === 'web') {
+          build.onLoad({ filter: /.*/, namespace: 'host-public-ui' }, () => ({
+            contents: publicUiShim(),
+            loader: 'js',
+          }))
+        }
       },
     },
   ]
@@ -427,7 +498,7 @@ export function copyPluginRuntimeDependencies(sandbox: string, dest: string) {
   return external
 }
 
-/** 沙箱入口打包：相对 import + 沙箱 npm（react / @biu/* 除外）。 */
+/** 沙箱入口打包：相对 import + 沙箱 npm（react / @biu/* 除外；web 的 @biu/public-ui 映射到宿主）。 */
 export async function bundleStoreEntry(entryFile: string, kind: 'host' | 'web') {
   return withPluginPackLock(() => bundleStoreEntryUnlocked(entryFile, kind))
 }
@@ -474,7 +545,7 @@ function finishBundle(code: string, kind: 'host' | 'web') {
 }
 
 const CONTRACT = [
-  '契约：id 与 export const name 相同。每个沙箱都有自己的 package.json（没有第三方依赖也写一份，dependencies 可以为空）。可以 import npm；依赖写在这份 package.json，pack 会在沙箱 npm install 再打进 host.js/web.js，不要写进宿主 package.json。不要 import react / react-dom / @biu/*：Web 用宿主 globalThis.React、ReactDOM 与 ReactJSXRuntime；宿主服务用 inject。安装路径只有 sandbox + pack：db_action /plugins/<id> action=sandbox 建 .plugin-dev/<id>/，写完再用 action=pack。不要直写 .plugin。不要改 packages/ 或 cordis.plugins.json。',
+  '契约：id 与 export const name 相同。每个沙箱都有自己的 package.json（没有第三方依赖也写一份，dependencies 可以为空）。可以 import npm；依赖写在这份 package.json，pack 会在沙箱 npm install 再打进 host.js/web.js，不要写进宿主 package.json。不要 import react / react-dom：Web 用宿主 globalThis.React、ReactDOM 与 ReactJSXRuntime。不要 import @biu/*，@biu/public-ui 除外（映射到 globalThis.BiuPublicUi）。宿主服务用 inject。安装路径只有 sandbox + pack：db_action /plugins/<id> action=sandbox 建 .plugin-dev/<id>/，写完再用 action=pack。不要直写 .plugin。不要改 packages/ 或 cordis.plugins.json。',
   '有窗口的 Web：ctx.slots.place("plugin-store-extras", Comp, { key, props: () => ({ Icon }) })。Icon 可选。运行窗口会给 extras 套操纵栏（关/缩；resizable 才有全屏），key 尽量用插件 id。',
   '无头插件：manifest 写 headless: true。有 web 也不要 shell，不要 place plugin-store-extras，不要操纵栏。只在 apply 里登记服务（如 pageEditor、databaseUi）。pageEditor.registerBlock 必须带 plugin（与本插件 id / export const name 相同），并用 blockType 声明块类型：basic 进斜杠「基础模块」，其它值（如 excalidraw、algorithm）各自成组，不要混进基础。写入文档后编辑器按这个 id 引导启用，不要让编辑器猜插件。页面块插件的 README（介绍）必须含「示例写法」和完整 :::pageBlock 围栏（含 kind、plugin、体），让 agent 读 /plugins/<id> 介绍就知道语法。集合自定义整页模式用 databaseUi.registerView(path, { id, label, plugin, View })。只换每一行的样子用 databaseUi.registerRowView(path 或 "*", { id, label, plugin, Row })，plugin 填本插件 id，宿主会打 data-biu-plugin，选取内部元素也能改这个插件。外壳和可见列由 File System 绑；Row 收到 record、fields、onOpen。',
   '有窗口的 web 必须在 manifest / 本动作 shell 参数里写 width 与 height。无头插件不要写 shell。',
