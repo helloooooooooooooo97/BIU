@@ -237,6 +237,34 @@ const CSS = `
 .cmp-win{background:rgba(255,196,0,.22)}
 .cmp-why{margin:0;padding:14px 18px 16px;font-size:13.5px;line-height:1.55;color:#3a3a3c;border-top:1px solid #ececec}
 .cmp-edit{padding:12px 18px 16px;border-top:1px solid #ececec;background:#fafafa}
+.en-shell{background:#fff;border:1px solid var(--rui-border);border-radius:12px;overflow:hidden}
+.en-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:14px 16px 8px}
+.en-head h2{margin:0;font-size:16px;font-weight:650;letter-spacing:-.02em}
+.en-head p{margin:4px 0 0;font-size:12.5px;color:#6d6d72}
+.en-split{display:grid;grid-template-columns:minmax(240px,1.1fr) minmax(240px,1fr);min-height:320px}
+.en-pane{padding:14px 16px;overflow:auto;min-width:0}
+.en-pane+.en-pane{border-left:1px solid var(--rui-border)}
+.en-passage{font-size:15px;line-height:1.75;color:#262626;white-space:pre-wrap}
+.en-q{padding:12px 0;border-bottom:1px solid #f0f0f0}
+.en-q:last-child{border-bottom:0}
+.en-opt{display:flex;align-items:flex-start;gap:8px;padding:6px 0;cursor:pointer;font-size:14px}
+.en-opt[data-on=true]{font-weight:650}
+.en-opt[data-ok=true]{color:#0f7a4a}
+.en-opt[data-bad=true]{color:#b42318}
+.en-blank{display:inline-block;min-width:72px;margin:0 4px;border:0;border-bottom:1.5px solid #1d1d1f;background:transparent;text-align:center;font:650 14px/1.4 ui-sans-serif,system-ui,sans-serif}
+.en-blank[data-ok=true]{border-color:#0f7a4a;color:#0f7a4a}
+.en-blank[data-bad=true]{border-color:#b42318;color:#b42318}
+.en-bank{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 12px}
+.en-chip{height:28px;padding:0 10px;border-radius:99px;border:1px solid var(--rui-border);background:#fafafa;font:600 12px/28px ui-sans-serif,system-ui,sans-serif}
+.en-card{margin:12px 16px;padding:16px;border-radius:10px;background:#f7f7f4;border:1px solid #ecece0;min-height:140px}
+.en-card h3{margin:0 0 8px;font-size:15px}
+.en-timer{font-variant-numeric:tabular-nums;font-weight:650;font-size:20px;letter-spacing:-.03em}
+.en-count{font-size:12px;color:#6d6d72}
+.en-row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;border-top:1px solid var(--rui-border)}
+.en-col{padding:12px;min-width:0}
+.en-col+.en-col{border-left:1px solid var(--rui-border)}
+.en-col h4{margin:0 0 8px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#8e8e93}
+@media (max-width:820px){.en-split,.en-row3{grid-template-columns:1fr}}
 `
 
 function cx(...parts: Array<string | false | null | undefined>) {

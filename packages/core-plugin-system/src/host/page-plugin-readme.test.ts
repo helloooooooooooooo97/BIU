@@ -46,6 +46,7 @@ test('reui page blocks vendor ./reui rather than injecting STYLE_CSS or using Bi
     'plugin-doctor/web/index.tsx',
     'fitness-tracker/web/index.tsx',
     'page-algorithm/web/index.tsx',
+    'english-lab/web/index.tsx',
   ]
   for (const file of files) {
     const src = readFileSync(join(sandbox, file), 'utf8')
