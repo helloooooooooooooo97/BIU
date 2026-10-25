@@ -1,16 +1,67 @@
-import { Button, Card, CardTitle, ReUI } from './reui'
-import { headingElById, headingsFromPage, pageRootFrom, sameTocItems, type TocHeading } from './outline.ts'
+import { Card, CardTitle, ReUI, Tree, TreeItem, TreeItemLabel, type TreeNodeItem } from './reui'
+import { headingElById, headingsFromPage, nestHeadings, pageRootFrom, sameTocItems, type TocHeading, type TocNode } from './outline.ts'
 
 const React = globalThis.React
-const { useEffect, useRef, useState } = React
+const { useEffect, useMemo, useRef, useState } = React
 
 export const name = 'page-toc'
 export const inject = ['pageEditor']
 
+function folderIds(nodes: TocNode[], out: string[] = []) {
+  for (const node of nodes) {
+    if (node.children.length) {
+      out.push(node.id)
+      folderIds(node.children, out)
+    }
+  }
+  return out
+}
+
+function TocBranch({
+  nodes,
+  expanded,
+  onToggle,
+  onJump,
+}: {
+  nodes: TocNode[]
+  expanded: Set<string>
+  onToggle: (id: string) => void
+  onJump: (id: string) => void
+}) {
+  return (
+    <>
+      {nodes.map((node) => {
+        const folder = node.children.length > 0
+        const open = !folder || expanded.has(node.id)
+        const item: TreeNodeItem = {
+          getItemMeta: () => ({ level: node.depth }),
+          isFolder: () => folder,
+          isExpanded: () => open,
+          getItemName: () => node.text,
+        }
+        return (
+          <React.Fragment key={node.id}>
+            <TreeItem item={item} onClick={() => onJump(node.id)}>
+              <TreeItemLabel item={item} onToggle={() => onToggle(node.id)}>
+                {node.text}
+              </TreeItemLabel>
+            </TreeItem>
+            {folder && open ? (
+              <TocBranch nodes={node.children} expanded={expanded} onToggle={onToggle} onJump={onJump} />
+            ) : null}
+          </React.Fragment>
+        )
+      })}
+    </>
+  )
+}
+
 function TocCard(props: { data: Record<string, unknown>; update: (patch: Record<string, unknown>) => void; writable: boolean }) {
   const hostRef = useRef<HTMLDivElement | null>(null)
   const [items, setItems] = useState<TocHeading[]>([])
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
   const title = typeof props.data.title === 'string' && props.data.title.trim() ? props.data.title.trim() : '目录'
+  const tree = useMemo(() => nestHeadings(items), [items])
 
   useEffect(() => {
     const host = hostRef.current
@@ -27,6 +78,10 @@ function TocCard(props: { data: Record<string, unknown>; update: (patch: Record<
     return () => mo.disconnect()
   }, [])
 
+  useEffect(() => {
+    setExpanded(new Set(folderIds(tree)))
+  }, [tree])
+
   const jump = (id: string) => {
     const host = hostRef.current
     const root = pageRootFrom(host)
@@ -34,31 +89,29 @@ function TocCard(props: { data: Record<string, unknown>; update: (patch: Record<
     el?.scrollIntoView({ block: 'start', behavior: 'smooth' })
   }
 
+  const onToggle = (id: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
   return (
     <ReUI>
-    <Card data-testid="page-toc">
-      <div ref={hostRef}>
-      <CardTitle>{title}</CardTitle>
-      {items.length === 0 ? (
-        <p className="rui-muted">暂无标题</p>
-      ) : (
-        <ul style={{ margin: '8px 0 0', listStyle: 'none', padding: 0 }}>
-          {items.map((item) => (
-            <li key={item.id}>
-              <Button
-                type="button"
-                variant="ghost"
-                style={{ width: '100%', justifyContent: 'flex-start', height: 32, paddingLeft: item.level >= 3 ? 28 : item.level === 2 ? 16 : 8 }}
-                onClick={() => jump(item.id)}
-              >
-                {item.text}
-              </Button>
-            </li>
-          ))}
-        </ul>
-      )}
-      </div>
-    </Card>
+      <Card data-testid="page-toc">
+        <div ref={hostRef}>
+          <CardTitle>{title}</CardTitle>
+          {items.length === 0 ? (
+            <p className="rui-muted">暂无标题</p>
+          ) : (
+            <Tree indent={16} data-testid="page-toc-tree">
+              <TocBranch nodes={tree} expanded={expanded} onToggle={onToggle} onJump={jump} />
+            </Tree>
+          )}
+        </div>
+      </Card>
     </ReUI>
   )
 }
@@ -84,7 +137,7 @@ export function apply(ctx: {
     plugin: name,
     label: '目录',
     blockType: 'basic',
-    hint: '当前页标题列表，点击跳转；建议放在文首',
+    hint: '当前页标题树，点击跳转；建议放在文首',
     aliases: ['目录', '大纲', 'toc', 'outline'],
     assets: [],
     defaults: { title: '目录' },

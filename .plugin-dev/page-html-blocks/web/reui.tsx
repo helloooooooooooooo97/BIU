@@ -56,6 +56,16 @@ const CSS = `
 .rui-dialog{width:min(400px,calc(100vw - 32px));background:#fff;border-radius:12px;padding:20px;border:1px solid #ececec}
 .rui-dialog h2{margin:0 0 8px;font-size:14px;font-weight:600}
 .rui-dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+.rui-tree{display:flex;flex-direction:column;--tree-indent:16px;margin-top:10px;position:relative}
+.rui-tree-item{position:relative;z-index:1;display:block;width:100%;box-sizing:border-box;border:0;background:transparent;padding:0 0 1px calc(var(--tree-padding,0px));color:inherit;font:inherit;text-align:left;cursor:pointer;outline:none}
+.rui-tree-item::before{content:"";position:absolute;left:calc(var(--tree-padding) - 9px);top:0;bottom:0;width:1px;background:#ececec}
+.rui-tree-item[data-level="0"]::before{display:none}
+.rui-tree-label{display:flex;align-items:center;gap:6px;min-height:28px;padding:3px 8px;border-radius:6px;font-size:12.5px;line-height:1.35;color:#171717}
+.rui-tree-item:hover .rui-tree-label,.rui-tree-item[data-selected=true] .rui-tree-label{background:#f5f5f5}
+.rui-tree-item:focus-visible .rui-tree-label{box-shadow:inset 0 0 0 1px #171717}
+.rui-tree-chevron{width:14px;height:14px;flex:0 0 auto;color:#a3a3a3;transition:transform .15s ease}
+.rui-tree-item[aria-expanded=false] .rui-tree-chevron{transform:rotate(-90deg)}
+.rui-tree-dot{width:5px;height:5px;border-radius:99px;background:#d4d4d4;flex:0 0 auto;margin-left:4.5px;margin-right:4.5px}
 @media (max-width:720px){.rui-stats{grid-template-columns:1fr 1fr}.rui-stat:nth-child(2){border-right:0}.rui-stat:nth-child(n+3){border-top:1px solid var(--rui-border)}}
 `
 
@@ -229,5 +239,105 @@ export function ConfirmDialog({
         </div>
       </section>
     </div>
+  )
+}
+
+/** ReUI Tree (reui.io/components/tree)：缩进参考线 + chevron 文件夹。 */
+export type TreeNodeItem = {
+  getItemMeta: () => { level: number }
+  isFolder: () => boolean
+  isExpanded: () => boolean
+  getItemName: () => string
+  getProps?: () => Record<string, unknown>
+}
+
+const TreeCtx = React.createContext({
+  indent: 16,
+  currentItem: null as TreeNodeItem | null,
+  onToggle: undefined as undefined | ((item: TreeNodeItem) => void),
+})
+
+export function Tree({
+  indent = 16,
+  className,
+  children,
+  ...rest
+}: Record<string, unknown> & { indent?: number }) {
+  return (
+    <TreeCtx.Provider value={{ indent, currentItem: null, onToggle: undefined }}>
+      <div
+        data-slot="tree"
+        role="tree"
+        className={cx('rui-tree', className as string)}
+        style={{ ['--tree-indent' as string]: `${indent}px` }}
+        {...rest}
+      >
+        {children as never}
+      </div>
+    </TreeCtx.Provider>
+  )
+}
+
+export function TreeItem({
+  item,
+  className,
+  children,
+  ...rest
+}: Record<string, unknown> & { item: TreeNodeItem }) {
+  const parent = React.useContext(TreeCtx)
+  const level = item.getItemMeta().level
+  const folder = item.isFolder()
+  const extra = item.getProps?.() ?? {}
+  return (
+    <TreeCtx.Provider value={{ ...parent, currentItem: item }}>
+      <button
+        type="button"
+        role="treeitem"
+        data-slot="tree-item"
+        data-folder={folder}
+        data-level={level}
+        aria-expanded={folder ? item.isExpanded() : undefined}
+        className={cx('rui-tree-item', className as string)}
+        style={{ ['--tree-padding' as string]: `${level * parent.indent}px` }}
+        {...extra}
+        {...rest}
+      >
+        {children as never}
+      </button>
+    </TreeCtx.Provider>
+  )
+}
+
+export function TreeItemLabel({
+  item: propItem,
+  children,
+  className,
+  onToggle,
+  ...rest
+}: Record<string, unknown> & { item?: TreeNodeItem; onToggle?: () => void }) {
+  const { currentItem } = React.useContext(TreeCtx)
+  const item = propItem || currentItem
+  if (!item) return null
+  const folder = item.isFolder()
+  return (
+    <span data-slot="tree-item-label" className={cx('rui-tree-label', className as string)} {...rest}>
+      {folder ? (
+        <svg
+          className="rui-tree-chevron"
+          viewBox="0 0 16 16"
+          fill="none"
+          aria-hidden
+          onClick={(event: { stopPropagation: () => void }) => {
+            event.stopPropagation()
+            onToggle?.()
+          }}
+        >
+          <path d="M4.5 6.5 8 10l3.5-3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      ) : (
+        <i className="rui-tree-dot" />
+      )}
+      {children ?? item.getItemName()}
+    </span>
   )
 }
