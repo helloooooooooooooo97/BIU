@@ -1,4 +1,4 @@
-import { Button, Cell, Group, ReUI } from './reui'
+import { Button, ReUI } from './reui'
 
 const React = globalThis.React
 const { useState } = React
@@ -121,8 +121,8 @@ function DoctorBlock(props: BlockProps) {
   const total = Math.max(0, report?.total ?? 0)
   const issueCount = report?.issues?.length ?? plugins.reduce((n, item) => n + (item.problems?.length || 0), 0)
   const visible = filter === 'all' ? plugins : plugins.filter((item) => levelOf(item) === filter)
-  const grouped: Record<Level, PluginReport[]> = { error: [], warn: [], ok: [] }
-  for (const item of visible) grouped[levelOf(item)].push(item)
+  const rank: Record<Level, number> = { error: 0, warn: 1, ok: 2 }
+  const rows = [...visible].sort((a, b) => rank[levelOf(a)] - rank[levelOf(b)] || a.id.localeCompare(b.id))
 
   const setFilter = (next: 'all' | Level) => {
     if (props.writable) props.update({ filter: next })
@@ -194,30 +194,39 @@ function DoctorBlock(props: BlockProps) {
               ))}
             </div>
             <div className="doc-list" data-testid="plugin-doctor-table">
-              {(['error', 'warn', 'ok'] as Level[]).map((level) =>
-                grouped[level].length ? (
-                  <div key={level}>
-                    <div className="rui-section">{LEVEL_LABEL[level]} · {grouped[level].length}</div>
-                    <Group>
-                      {grouped[level].map((item) => {
-                        const open = focus === item.id
-                        return (
-                          <div key={item.id}>
-                            <Cell className="doc-issue" data-open={open} onClick={() => toggle(item.id)}>
-                              <i className="doc-dot" style={{ background: LEVEL_COLOR[level] }} />
-                              <span className="rui-cell-main">
-                                <b style={{ fontWeight: 600 }}>{item.name}</b>
-                                <div className="rui-muted">{item.id}</div>
-                              </span>
-                              <span className="rui-cell-meta">{item.conclusion}</span>
-                            </Cell>
-                            {open ? (
-                              <div style={{ padding: '8px 16px 14px 38px', fontSize: 13, color: '#6d6d72' }}>
-                                <div>
-                                  {item.hasHost ? 'host' : '无 host'} · {item.hasWeb ? 'web' : '无 web'}
-                                  {item.headless ? ' · 无头' : ''} · {kb(item.bytes)} · {item.files} 文件
-                                </div>
-                                <div>最近运行 {when(item.lastRunAt)}</div>
+              <table className="doc-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: 92 }}>Level</th>
+                    <th>Issue</th>
+                    <th style={{ width: 88 }}>Events</th>
+                    <th style={{ width: 120 }}>Last seen</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((item) => {
+                    const level = levelOf(item)
+                    const open = focus === item.id
+                    const events = Math.max(item.problems?.length || 0, level === 'ok' ? 0 : 1)
+                    return (
+                      <React.Fragment key={item.id}>
+                        <tr className="doc-row" data-open={open} onClick={() => toggle(item.id)}>
+                          <td>
+                            <span className="doc-lvl" style={{ color: LEVEL_COLOR[level] }}>{LEVEL_LABEL[level]}</span>
+                          </td>
+                          <td>
+                            <div className="doc-title">{item.problems?.[0] || item.conclusion}</div>
+                            <div className="doc-culprit">{item.name} · {item.id}</div>
+                          </td>
+                          <td>{events}</td>
+                          <td>{when(item.lastRunAt)}</td>
+                        </tr>
+                        {open ? (
+                          <tr>
+                            <td colSpan={4}>
+                              <div className="doc-detail">
+                                {item.hasHost ? 'host' : '无 host'} · {item.hasWeb ? 'web' : '无 web'}
+                                {item.headless ? ' · 无头' : ''} · {kb(item.bytes)} · {item.files} 文件
                                 {(item.problems || []).length ? (
                                   <ul style={{ margin: '8px 0 0', paddingLeft: 18 }}>
                                     {item.problems.map((p) => (
@@ -228,14 +237,14 @@ function DoctorBlock(props: BlockProps) {
                                   <div style={{ marginTop: 6 }}>没有未解决问题。</div>
                                 )}
                               </div>
-                            ) : null}
-                          </div>
-                        )
-                      })}
-                    </Group>
-                  </div>
-                ) : null,
-              )}
+                            </td>
+                          </tr>
+                        ) : null}
+                      </React.Fragment>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
           </>
         )}

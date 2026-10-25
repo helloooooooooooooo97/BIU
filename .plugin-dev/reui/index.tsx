@@ -135,10 +135,17 @@ const CSS = `
 .doc-filters{display:flex;gap:0;padding:0 10px;border-bottom:1px solid var(--rui-border);background:#fff}
 .doc-filter{height:36px;padding:0 12px;border:0;border-radius:0;background:transparent;color:#6d6d72;font:600 12.5px/1 ui-sans-serif,system-ui,sans-serif;cursor:pointer}
 .doc-filter[data-on=true]{color:#1c1c1e;box-shadow:inset 0 -2px 0 #1c1c1e}
-.doc-issue{cursor:pointer}
-.doc-issue[data-open=true]{background:#f7f7f7}
-.doc-dot{width:8px;height:8px;border-radius:99px;flex:0 0 auto}
-.doc-list{padding:10px 10px 14px}
+.doc-list{background:#fff}
+.doc-table{width:100%;border-collapse:collapse}
+.doc-table th{text-align:left;font:600 11px/1 ui-sans-serif,system-ui,sans-serif;letter-spacing:.04em;text-transform:uppercase;color:#8e8e93;padding:10px 14px;border-bottom:1px solid var(--rui-border);background:#fff}
+.doc-table td{padding:12px 14px;border-bottom:1px solid #f0f0f0;font-size:13.5px;vertical-align:top}
+.doc-table tr[data-open=true]{background:#fafafa}
+.doc-table tr.doc-row{cursor:pointer}
+.doc-table tr.doc-row:hover{background:#f7f8fa}
+.doc-lvl{display:inline-block;font:700 11px/1 ui-sans-serif,system-ui,sans-serif;letter-spacing:.04em;text-transform:uppercase}
+.doc-title{font-weight:650;color:#1c1c1e}
+.doc-culprit{color:#6d6d72;font-family:ui-monospace,monospace;font-size:12px;margin-top:3px}
+.doc-detail{padding:0 14px 14px 14px;color:#6d6d72;font-size:13px;background:#fafafa;border-bottom:1px solid #f0f0f0}
 .ins-shell{display:grid;grid-template-columns:220px minmax(0,1fr);min-height:460px;background:#fff}
 .ins-side{border-right:1px solid var(--rui-border);background:#f7f7f7;display:flex;flex-direction:column;min-width:0}
 .ins-side h4{margin:12px 12px 6px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#8e8e93}
