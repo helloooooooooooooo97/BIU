@@ -34,8 +34,14 @@ const DEFAULTS = {
             if target - n in seen:
                 return [seen[target - n], i]
             seen[n] = i
-        return []`,
+        return []
+
+if __name__ == '__main__':
+    print(Solution().twoSum([2, 7, 11, 15], 9))
+    print(Solution().twoSum([3, 2, 4], 6))`,
 }
+
+type OutputLine = { type: 'stdout' | 'stderr' | 'error' | 'success'; text: string }
 
 const DIFF_COLOR: Record<string, string> = {
   Easy: '#00b8a3',
@@ -51,6 +57,7 @@ function DraftField({
   testId,
   className,
   style,
+  onLive,
 }: {
   as: 'input' | 'textarea'
   value: string
@@ -59,6 +66,7 @@ function DraftField({
   testId: string
   className: string
   style?: Record<string, unknown>
+  onLive?: (next: string) => void
 }) {
   const Tag = kind === 'textarea' ? Textarea : Input
   const [draft, setDraft] = useState(value)
@@ -98,7 +106,11 @@ function DraftField({
       onKeyDown={(event) => {
         event.stopPropagation()
       }}
-      onChange={(event) => setDraft(event.currentTarget.value)}
+      onChange={(event) => {
+        const next = event.currentTarget.value
+        setDraft(next)
+        onLive?.(next)
+      }}
       className={className}
       style={style}
     />
@@ -144,7 +156,51 @@ function AlgorithmCard({
   const examples = readExamples(data.examples)
   const accent = DIFF_COLOR[difficulty] ?? '#00b8a3'
   const ro = !writable
-  const lines = code.split('\n').length
+  const codeLive = useRef(code)
+  useEffect(() => {
+    codeLive.current = code
+  }, [code])
+  const [running, setRunning] = useState(false)
+  const [consoleTab, setConsoleTab] = useState<'case' | 'out'>('case')
+  const [output, setOutput] = useState<OutputLine[]>([])
+  const lines = (codeLive.current || code).split('\n').length
+
+  const run = async () => {
+    const source = codeLive.current || code
+    if (!source.trim() || running) return
+    setRunning(true)
+    setConsoleTab('out')
+    setOutput([])
+    try {
+      const res = await fetch('/api/page-algorithm/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: source, lang }),
+      })
+      const result = await res.json()
+      const linesOut: OutputLine[] = []
+      if (!res.ok) {
+        linesOut.push({ type: 'error', text: String(result?.error || `HTTP ${res.status}`) })
+      } else if (result.compileError) {
+        String(result.compileError).split('\n').forEach((l: string) => { if (l.trim()) linesOut.push({ type: 'stderr', text: l }) })
+        linesOut.push({ type: 'error', text: '✗ 编译失败' })
+      } else {
+        if (result.stdout) String(result.stdout).split('\n').forEach((l: string) => { if (l.length) linesOut.push({ type: 'stdout', text: l }) })
+        if (result.stderr) String(result.stderr).split('\n').forEach((l: string) => { if (l.trim()) linesOut.push({ type: 'stderr', text: l }) })
+        if (result.ok) {
+          if (!result.stdout) linesOut.push({ type: 'success', text: '✓ 执行完成（无输出。可在代码里 print，或加 if __name__ == "__main__"）' })
+          else linesOut.push({ type: 'success', text: '✓ 执行完成' })
+        } else {
+          linesOut.push({ type: 'error', text: `✗ 运行出错 (exit ${result.exitCode})` })
+        }
+      }
+      setOutput(linesOut)
+    } catch (e) {
+      setOutput([{ type: 'error', text: '✗ 请求失败: ' + String(e) }])
+    } finally {
+      setRunning(false)
+    }
+  }
 
   return (
     <ReUI>
@@ -240,6 +296,15 @@ function AlgorithmCard({
             <span className="rui-muted" style={{ marginLeft: 'auto' }}>
               {lines} 行
             </span>
+            <button
+              type="button"
+              className="lc-run"
+              data-testid="page-algorithm-run"
+              disabled={running || !writable}
+              onClick={() => void run()}
+            >
+              {running ? '运行中…' : '运行'}
+            </button>
           </div>
           <DraftField
             as="textarea"
@@ -247,6 +312,9 @@ function AlgorithmCard({
             readOnly={ro}
             value={code}
             onCommit={(next) => update({ code: next })}
+            onLive={(next) => {
+              codeLive.current = next
+            }}
             className="rui-textarea"
             style={{
               flex: 1,
@@ -262,11 +330,29 @@ function AlgorithmCard({
           />
           <div className="lc-console">
             <div className="lc-console-tabs">
-              <span data-on="true">Testcase</span>
-              <span>Output</span>
+              <button type="button" data-on={consoleTab === 'case'} onClick={() => setConsoleTab('case')} style={{ border: 0, background: 'transparent', cursor: 'pointer', color: 'inherit', font: 'inherit' }}>
+                Testcase
+              </button>
+              <button type="button" data-on={consoleTab === 'out'} onClick={() => setConsoleTab('out')} style={{ border: 0, background: 'transparent', cursor: 'pointer', color: 'inherit', font: 'inherit' }}>
+                Output
+              </button>
             </div>
-            <div className="lc-console-body lc-empty">
-              {examples[0] ? `Case 1\n${examples[0].input}` : 'You must run your code first.'}
+            <div className="lc-console-body" data-testid="page-algorithm-output">
+              {consoleTab === 'case' ? (
+                examples[0] ? (
+                  `Case 1\n${examples[0].input}`
+                ) : (
+                  <span className="lc-empty">还没有用例</span>
+                )
+              ) : output.length ? (
+                output.map((line, i) => (
+                  <div key={i} style={{ color: line.type === 'error' ? 'var(--rui-danger)' : line.type === 'success' ? 'var(--rui-ok)' : undefined }}>
+                    {line.text}
+                  </div>
+                ))
+              ) : (
+                <span className="lc-empty">You must run your code first.</span>
+              )}
             </div>
           </div>
         </section>
@@ -296,7 +382,7 @@ export function apply(ctx: {
     label: '算法题',
     blockType: 'algorithm',
     blockTypeLabel: '算法题',
-    hint: 'LeetCode 结构：题面 / 示例 / 约束 + 代码，跟随页面主题',
+    hint: 'LeetCode 结构：题面 / 示例 / 约束 + 代码，点运行在本机执行',
     aliases: ['leetcode', 'algo', '算法', 'lc'],
     assets: [],
     defaults: DEFAULTS,

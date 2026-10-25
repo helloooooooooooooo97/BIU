@@ -1,6 +1,6 @@
 # 算法题卡片
 
-在页面里用 `/` 插入 LeetCode 风算法块：左边题名 / 难度 / 标签 / Description / Example / Constraints，右边 Code + Testcase。可改题名、难度、题面、语言和代码。无头插件，不占运行窗口。
+在页面里用 `/` 插入 LeetCode 风算法块：左边题名 / 难度 / 标签 / Description / Example / Constraints，右边 Code + 运行 + Testcase / Output。点「运行」走 `/api/page-algorithm/run`，和代码运行块同一套本机执行。无头插件，不占运行窗口。
 
 改页面或代写块之前，先照下面「示例写法」写 `:::pageBlock` 围栏。
 
