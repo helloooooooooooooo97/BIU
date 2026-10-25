@@ -8135,8 +8135,7 @@ html.dark .composer-send:disabled {
   height: 56px;
 }
 
-.composer-image-thumb,
-.composer-image-thumb.ant-image {
+.composer-image-thumb {
   display: block;
   width: 56px;
   height: 56px;
@@ -8155,8 +8154,7 @@ html.dark .composer-send:disabled {
   border-radius: 8px;
 }
 
-.composer-image-thumb img,
-.composer-image-thumb .ant-image-img {
+.composer-image-thumb img {
   display: block;
   width: 100%;
   height: 100%;
@@ -8307,7 +8305,6 @@ html.dark .composer-send:disabled {
   color: inherit;
 }
 
-.tool-artifact .ant-image,
 .tool-artifact-open {
   display: block;
   width: 100%;
@@ -8317,7 +8314,6 @@ html.dark .composer-send:disabled {
   cursor: zoom-in;
 }
 
-.tool-artifact .ant-image-img,
 .tool-artifact-img {
   display: block;
   width: 100%;
@@ -8443,7 +8439,6 @@ html.dark .composer-send:disabled {
   max-height: none;
 }
 
-.tool-zoom-body .tool-artifact .ant-image-img,
 .tool-zoom-body .tool-artifact-img {
   max-height: none;
 }

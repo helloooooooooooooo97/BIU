@@ -1,5 +1,7 @@
+import { Badge, Button, Card, CardHeader, CardTitle, Input, Select } from '@biu/biu-ui'
+
 const React = globalThis.React
-const { useState, useCallback, useEffect } = React
+const { useState, useCallback } = React
 
 export const name = 'page-regression'
 export const inject = ['pageEditor']
@@ -48,39 +50,6 @@ const TYPES = [
 
 const MAX_RUNS = 10
 const MAX_ACTUAL = 72
-const STYLE_ID = 'page-regression-style-v2'
-const STYLE_CSS = `
-.rg-root{border:1px solid var(--dsw-border);border-radius:8px;padding:10px 12px;font-family:var(--font-sans);font-size:14px;color:var(--dsw-label);background:var(--dsw-bg);user-select:text}
-.rg-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.rg-title{font-size:13px;font-weight:650}
-.rg-meta{color:var(--dsw-label-3);font-family:var(--font-mono);font-size:12px}
-.rg-grow{flex:1}
-.rg-btn{flex:none;height:26px;padding:0 8px;border:1px solid var(--dsw-border);border-radius:6px;background:transparent;color:var(--dsw-label);font-size:13px;font-weight:650;cursor:pointer}
-.rg-btn:hover{background:var(--dsw-hover)}
-.rg-btn:disabled{opacity:.5;cursor:default}
-.rg-rows{margin-top:8px;display:flex;flex-direction:column;gap:6px}
-.rg-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.rg-idx{flex:none;width:18px;color:var(--dsw-label-3);font-family:var(--font-mono);font-size:12px}
-.rg-input{min-width:0;flex:1 1 140px;box-sizing:border-box;height:26px;padding:0 8px;border:1px solid var(--dsw-border);border-radius:6px;background:var(--dsw-input);color:var(--dsw-label);font-family:var(--font-mono);font-size:12px}
-.rg-chip{flex:none;min-width:96px;padding:2px 6px;border:1px solid var(--dsw-border);border-radius:6px;font-family:var(--font-mono);font-size:11px;white-space:nowrap;color:var(--dsw-label)}
-.rg-chip.is-pass{color:var(--dsw-label);background:color-mix(in srgb,var(--dsw-ok,#3fb950) 14%,transparent)}
-.rg-chip.is-fail{color:var(--dsw-danger);background:color-mix(in srgb,var(--dsw-danger) 12%,transparent)}
-.rg-actual{flex:1 1 100%;padding-left:24px;color:var(--dsw-label-3);font-family:var(--font-mono);font-size:11px}
-.rg-actual.is-fail{color:var(--dsw-danger)}
-.rg-empty{color:var(--dsw-label-3);font-size:13px}
-.rg-hist{margin-top:8px;border-top:1px solid var(--dsw-border);padding-top:6px}
-.rg-hist-row{display:flex;gap:8px;font-family:var(--font-mono);font-size:12px;color:var(--dsw-label-2)}
-`
-
-function useRgStyle() {
-  useEffect(() => {
-    const existing = document.getElementById(STYLE_ID)
-    const el = existing instanceof HTMLStyleElement ? existing : document.createElement('style')
-    el.id = STYLE_ID
-    el.textContent = STYLE_CSS
-    if (el.parentNode !== document.head) document.head.appendChild(el)
-  }, [])
-}
 
 function newId() {
   return 'a' + Math.random().toString(36).slice(2, 7)
@@ -165,18 +134,17 @@ function fmtTime(at: number) {
 }
 
 function Chip({ item }: { item?: ItemResult }) {
-  if (!item) return <span className="rg-chip">—</span>
+  if (!item) return <Badge>—</Badge>
   const pass = item.status === 'pass'
   return (
-    <span className={pass ? 'rg-chip is-pass' : 'rg-chip is-fail'}>
+    <Badge variant={pass ? 'on' : 'destructive'} className="min-w-24 font-mono">
       {pass ? '通过' : '失败'} {item.ms}ms
-      {item.delta ? <b style={{ marginLeft: 6 }}>{item.delta}</b> : null}
-    </span>
+      {item.delta ? <b className="ml-1.5">{item.delta}</b> : null}
+    </Badge>
   )
 }
 
 export function RegressionBlock({ data, update, writable }: BlockProps) {
-  useRgStyle()
   const asserts = Array.isArray(data.asserts) ? (data.asserts as Assert[]) : []
   const runs = Array.isArray(data.runs) ? (data.runs as Run[]) : []
   const [busy, setBusy] = useState(false)
@@ -218,132 +186,125 @@ export function RegressionBlock({ data, update, writable }: BlockProps) {
   const broken = last ? last.items.filter((item) => item.delta === 'broken').length : 0
 
   return (
-    <div data-testid="regression-block" className="rg-root">
-      <div className="rg-head">
-        <b className="rg-title">页面回归检查</b>
-        <span data-testid="regression-summary" className="rg-meta">
+    <Card data-testid="regression-block" className="select-text border-dsw-border text-dsw-label">
+      <CardHeader>
+        <CardTitle>页面回归检查</CardTitle>
+        <span data-testid="regression-summary" className="font-mono text-[12px] text-dsw-label-3">
           {last
             ? `${last.passed}/${last.total} 通过 · ${last.failed} 失败 · ${last.ms}ms · ${fmtTime(last.at)}${
                 fixed ? ` · fixed ${fixed}` : ''
               }${broken ? ` · broken ${broken}` : ''}`
             : `${asserts.length} 条断言 · 还没跑过`}
         </span>
-        <span className="rg-grow" />
+        <span className="flex-1" />
         {writable ? (
-          <button type="button" data-testid="regression-add" onClick={() => update({ asserts: [...asserts, { id: newId(), type: 'exists', selector: '' }] })} className="rg-btn">
+          <Button type="button" data-testid="regression-add" onClick={() => update({ asserts: [...asserts, { id: newId(), type: 'exists', selector: '' }] })}>
             加断言
-          </button>
+          </Button>
         ) : null}
-        <button type="button" data-testid="regression-run" disabled={busy} onClick={() => void runAll()} className="rg-btn">
+        <Button type="button" data-testid="regression-run" disabled={busy} onClick={() => void runAll()}>
           {busy ? '跑…' : '跑一遍'}
-        </button>
+        </Button>
         {runs.length ? (
-          <button type="button" data-testid="regression-history" onClick={() => setShowHistory(!showHistory)} className="rg-btn">
+          <Button type="button" data-testid="regression-history" onClick={() => setShowHistory(!showHistory)}>
             历史 {runs.length}
-          </button>
+          </Button>
         ) : null}
-      </div>
+      </CardHeader>
 
-      <div className="rg-rows">
+      <div className="mt-2 flex flex-col gap-1.5">
         {asserts.map((item, i) => {
           const result = resultOf(item.id)
           return (
-            <div key={item.id} data-testid="regression-row" className="rg-row">
-              <span className="rg-idx">{i + 1}</span>
-              <select
+            <div key={item.id} data-testid="regression-row" className="flex flex-wrap items-center gap-1.5">
+              <span className="w-[18px] font-mono text-[12px] text-dsw-label-3">{i + 1}</span>
+              <Select
                 value={item.type}
                 disabled={!writable}
                 onChange={(event) => patchAssert(item.id, { type: event.target.value })}
-                className="rg-input"
-                style={{ flex: '0 0 88px' }}
+                className="w-[88px] font-mono"
               >
                 {TYPES.map((type) => (
                   <option key={type.id} value={type.id}>
                     {type.label}
                   </option>
                 ))}
-              </select>
+              </Select>
               {item.type === 'http' ? (
                 <>
-                  <select
+                  <Select
                     value={String(item.method || 'GET')}
                     disabled={!writable}
                     onChange={(event) => patchAssert(item.id, { method: event.target.value })}
-                    className="rg-input"
-                    style={{ flex: '0 0 74px' }}
+                    className="w-[74px] font-mono"
                   >
                     {['GET', 'POST', 'PUT', 'DELETE'].map((method) => (
                       <option key={method} value={method}>
                         {method}
                       </option>
                     ))}
-                  </select>
-                  <input
+                  </Select>
+                  <Input
                     value={String(item.url ?? '')}
                     disabled={!writable}
                     placeholder="/api/… 或 http://…"
                     onChange={(event) => patchAssert(item.id, { url: event.target.value })}
-                    className="rg-input"
-                    style={{ flex: '1 1 200px' }}
+                    className="min-w-0 flex-[1_1_200px] font-mono"
                   />
-                  <input
+                  <Input
                     value={String(item.status ?? 200)}
                     disabled={!writable}
                     onChange={(event) => patchAssert(item.id, { status: event.target.value })}
-                    className="rg-input"
-                    style={{ flex: '0 0 54px' }}
+                    className="w-[54px] font-mono"
                   />
                 </>
               ) : (
                 <>
-                  <input
+                  <Input
                     value={String(item.selector ?? '')}
                     disabled={!writable}
                     placeholder="选择器，如 h1 / [data-testid=xxx]"
                     onChange={(event) => patchAssert(item.id, { selector: event.target.value })}
-                    className="rg-input"
-                    style={{ flex: '1 1 180px' }}
+                    className="min-w-0 flex-[1_1_180px] font-mono"
                   />
                   {item.type === 'exists' ? null : (
-                    <input
+                    <Input
                       value={String(item.expect ?? '')}
                       disabled={!writable}
                       placeholder={item.type === 'count' ? '期望个数' : '期望文案（子串）'}
                       onChange={(event) => patchAssert(item.id, { expect: event.target.value })}
-                      className="rg-input"
-                      style={{ flex: '0 0 130px' }}
+                      className="w-[130px] font-mono"
                     />
                   )}
                 </>
               )}
-              <input
+              <Input
                 value={String(item.note ?? '')}
                 disabled={!writable}
                 placeholder="说明"
                 onChange={(event) => patchAssert(item.id, { note: event.target.value })}
-                className="rg-input"
-                style={{ flex: '0 0 96px', fontFamily: 'inherit' }}
+                className="w-24"
               />
               <Chip item={result} />
               {writable ? (
-                <button type="button" title="删掉这条断言" onClick={() => update({ asserts: asserts.filter((a) => a.id !== item.id) })} className="rg-btn">
+                <Button type="button" title="删掉这条断言" onClick={() => update({ asserts: asserts.filter((a) => a.id !== item.id) })}>
                   删除
-                </button>
+                </Button>
               ) : null}
-              {result ? <span className={result.status === 'pass' ? 'rg-actual' : 'rg-actual is-fail'}>{result.actual}</span> : null}
+              {result ? <span className={`w-full pl-6 font-mono text-[11px] ${result.status === 'pass' ? 'text-dsw-label-3' : 'text-dsw-danger'}`}>{result.actual}</span> : null}
             </div>
           )
         })}
-        {asserts.length ? null : <span className="rg-empty">还没有断言，点右上「加断言」加一条。</span>}
+        {asserts.length ? null : <span className="text-[13px] text-dsw-label-3">还没有断言，点右上「加断言」加一条。</span>}
       </div>
 
       {showHistory && runs.length ? (
-        <div data-testid="regression-history-list" className="rg-hist">
+        <div data-testid="regression-history-list" className="mt-2 border-t border-dsw-border pt-1.5">
           {runs
             .slice()
             .reverse()
             .map((run) => (
-              <div key={run.at} className="rg-hist-row">
+              <div key={run.at} className="flex gap-2 font-mono text-[12px] text-dsw-label-3">
                 <span>{fmtTime(run.at)}</span>
                 <span>
                   {run.passed}/{run.total}
@@ -357,7 +318,7 @@ export function RegressionBlock({ data, update, writable }: BlockProps) {
             ))}
         </div>
       ) : null}
-    </div>
+    </Card>
   )
 }
 

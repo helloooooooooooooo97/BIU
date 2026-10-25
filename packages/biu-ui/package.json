@@ -14,6 +14,8 @@
     "./select": "./src/select.tsx",
     "./label": "./src/label.tsx",
     "./badge": "./src/badge.tsx",
+    "./calendar": "./src/calendar.tsx",
+    "./image": "./src/image.tsx",
     "./cn": "./src/cn.ts",
     "./chat-count": "./src/chat-count.tsx",
     "./chat-pane": "./src/chat-pane.tsx",

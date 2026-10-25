@@ -1,3 +1,4 @@
+import { Button } from '@biu/biu-ui'
 import { FitAddon } from '@xterm/addon-fit'
 import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
@@ -929,29 +930,17 @@ function IconButton({
   children: unknown
 }) {
   return (
-    <button
+    <Button
       type="button"
+      variant={active ? 'secondary' : 'ghost'}
       data-zoom-exit={dataZoomExit ? '' : undefined}
       onClick={onClick}
       aria-label={label}
       title={label}
-      style={{
-        flex: '0 0 auto',
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: 22,
-        height: 22,
-        border: 0,
-        padding: 0,
-        borderRadius: 5,
-        background: active ? 'color-mix(in srgb, var(--dsw-label, #f0efed) 12%, transparent)' : 'transparent',
-        color: 'inherit',
-        cursor: 'pointer',
-      }}
+      className="h-[22px] w-[22px] px-0"
     >
       {children as never}
-    </button>
+    </Button>
   )
 }
 

@@ -1,3 +1,4 @@
+import { Button, Card, CardTitle } from '@biu/biu-ui'
 import { headingElById, headingsFromPage, pageRootFrom, sameTocItems, type TocHeading } from './outline.ts'
 
 const React = globalThis.React
@@ -6,60 +7,7 @@ const { useEffect, useRef, useState } = React
 export const name = 'page-toc'
 export const inject = ['pageEditor']
 
-const STYLE_ID = 'page-toc-style-v2'
-const STYLE_CSS = `
-.page-toc{
-  border:1px solid var(--dsw-border);
-  border-radius:8px;
-  background:var(--dsw-bg);
-  color:var(--dsw-label);
-  font-family:var(--font-sans);
-  font-size:14px;
-  line-height:1.5;
-  padding:8px 10px;
-}
-.page-toc-kicker{
-  margin:0 0 4px;
-  padding:2px 8px;
-  font-size:12px;
-  font-weight:650;
-  color:var(--dsw-label-3);
-}
-.page-toc-list{margin:0;padding:0;list-style:none}
-.page-toc-empty{margin:0;padding:4px 8px;color:var(--dsw-label-3);font-size:13px}
-.page-toc-item{margin:0}
-.page-toc-link{
-  display:block;
-  width:100%;
-  box-sizing:border-box;
-  border:0;
-  border-radius:6px;
-  padding:4px 8px;
-  background:transparent;
-  color:var(--dsw-label);
-  font:inherit;
-  font-size:14px;
-  font-weight:500;
-  text-align:left;
-  cursor:pointer;
-}
-.page-toc-link:hover{background:var(--dsw-hover);color:var(--dsw-sidebar-fg-active)}
-.page-toc-l2{padding-left:22px}
-.page-toc-l3{padding-left:36px}
-`
-
-function useTocStyle() {
-  useEffect(() => {
-    if (document.getElementById(STYLE_ID)) return
-    const el = document.createElement('style')
-    el.id = STYLE_ID
-    el.textContent = STYLE_CSS
-    document.head.appendChild(el)
-  }, [])
-}
-
 function TocCard(props: { data: Record<string, unknown>; update: (patch: Record<string, unknown>) => void; writable: boolean }) {
-  useTocStyle()
   const hostRef = useRef<HTMLDivElement | null>(null)
   const [items, setItems] = useState<TocHeading[]>([])
   const title = typeof props.data.title === 'string' && props.data.title.trim() ? props.data.title.trim() : '目录'
@@ -87,26 +35,29 @@ function TocCard(props: { data: Record<string, unknown>; update: (patch: Record<
   }
 
   return (
-    <div ref={hostRef} className="page-toc" data-testid="page-toc">
-      <p className="page-toc-kicker">{title}</p>
+    <Card className="border-dsw-border text-dsw-label" data-testid="page-toc">
+      <div ref={hostRef}>
+      <CardTitle className="mb-1 text-[12px] text-dsw-label-3">{title}</CardTitle>
       {items.length === 0 ? (
-        <p className="page-toc-empty">暂无标题</p>
+        <p className="m-0 px-2 py-1 text-[13px] text-dsw-label-3">暂无标题</p>
       ) : (
-        <ul className="page-toc-list">
+        <ul className="m-0 list-none p-0">
           {items.map((item) => (
-            <li key={item.id} className="page-toc-item">
-              <button
+            <li key={item.id}>
+              <Button
                 type="button"
-                className={`page-toc-link page-toc-l${item.level}`}
+                variant="ghost"
+                className={`h-auto w-full justify-start font-medium ${item.level === 2 ? 'pl-5' : item.level >= 3 ? 'pl-9' : ''}`}
                 onClick={() => jump(item.id)}
               >
                 {item.text}
-              </button>
+              </Button>
             </li>
           ))}
         </ul>
       )}
-    </div>
+      </div>
+    </Card>
   )
 }
 

@@ -1,7 +1,7 @@
-import { Badge, Button } from '@biu/biu-ui'
+import { Badge, Button, Card, CardHeader, CardTitle, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@biu/biu-ui'
 
 const React = globalThis.React
-const { useState, useEffect } = React
+const { useState } = React
 
 export const name = 'plugin-doctor'
 export const inject = ['pageEditor']
@@ -36,33 +36,6 @@ type BlockProps = {
   writable: boolean
 }
 
-const STYLE_ID = 'plugin-doctor-style-v2'
-const STYLE_CSS = `
-.pd-root{border:1px solid var(--dsw-border);border-radius:8px;padding:10px 12px;font-family:var(--font-sans);font-size:14px;line-height:1.5;background:var(--dsw-bg);color:var(--dsw-label)}
-.pd-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.pd-title{font-size:13px;font-weight:650}
-.pd-meta{font-size:12px;color:var(--dsw-label-3)}
-.pd-err{margin-top:8px;color:var(--dsw-danger);font-size:13px}
-.pd-empty{margin-top:8px;color:var(--dsw-label-3);font-size:13px}
-.pd-table-wrap{margin-top:8px;overflow-x:auto}
-.pd-table{border-collapse:collapse;width:100%;font-size:13px}
-.pd-table th{padding:4px 10px 4px 0;font-weight:650;color:var(--dsw-label-3);text-align:left}
-.pd-table td{padding:6px 10px 6px 0;vertical-align:top;border-top:1px solid var(--dsw-border)}
-.pd-id{font-family:var(--font-mono);font-size:12px}
-.pd-name{color:var(--dsw-label-3)}
-.pd-chip{margin-right:4px}
-`
-
-function usePdStyle() {
-  useEffect(() => {
-    const existing = document.getElementById(STYLE_ID)
-    const el = existing instanceof HTMLStyleElement ? existing : document.createElement('style')
-    el.id = STYLE_ID
-    el.textContent = STYLE_CSS
-    if (el.parentNode !== document.head) document.head.appendChild(el)
-  }, [])
-}
-
 function kb(bytes: number) {
   if (!bytes) return '0 B'
   if (bytes < 1024) return bytes + ' B'
@@ -88,14 +61,13 @@ function clock(ts: number) {
 
 function Chip(props: { label: string; on?: boolean; title?: string }) {
   return (
-    <Badge title={props.title} variant={props.on ? 'on' : 'default'} className="pd-chip">
+    <Badge title={props.title} variant={props.on ? 'on' : 'default'} className="mr-1">
       {props.label}
     </Badge>
   )
 }
 
 function DoctorBlock(props: BlockProps) {
-  usePdStyle()
   const report = (props.data && props.data.report ? props.data.report : null) as ScanResult | null
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -117,87 +89,81 @@ function DoctorBlock(props: BlockProps) {
   }
 
   return (
-    <div data-testid="plugin-doctor-block" className="pd-root">
-      <div className="pd-head">
-        <strong className="pd-title">插件体检</strong>
+    <Card data-testid="plugin-doctor-block" className="border-dsw-border text-dsw-label">
+      <CardHeader>
+        <CardTitle>插件体检</CardTitle>
         {props.writable ? (
           <Button data-testid="plugin-doctor-run" onClick={run} disabled={busy}>
             {busy ? '扫描中…' : '体检'}
           </Button>
         ) : (
-          <span className="pd-meta">只读态 · 展示上次结果</span>
+          <span className="text-[12px] text-dsw-label-3">只读态 · 展示上次结果</span>
         )}
         {report ? (
-          <span className="pd-meta">
+          <span className="text-[12px] text-dsw-label-3">
             共 {report.total} 个插件 · 合规 {report.summary.ok} · 待修 {report.summary.warn} · 坏 {report.summary.broken} · 合计 {kb(report.summary.bytes)} · 扫描于 {clock(report.scannedAt)}
           </span>
         ) : null}
-      </div>
-
-      {error ? <div className="pd-err">{error}</div> : null}
-
+      </CardHeader>
+      {error ? <div className="text-[13px] text-dsw-danger">{error}</div> : null}
       {!report ? (
-        <div className="pd-empty">
+        <div className="text-[13px] text-dsw-label-3">
           还没有体检结果{props.writable ? '，点「体检」扫一遍 .plugin。' : '。'}
         </div>
       ) : (
-        <div className="pd-table-wrap">
-          <table data-testid="plugin-doctor-table" className="pd-table">
-            <thead>
-              <tr>
-                <th>插件</th>
-                <th>headless</th>
-                <th>host / web</th>
-                <th>大小</th>
-                <th>最近运行</th>
-                <th>README 示例</th>
-                <th>体检结论</th>
-              </tr>
-            </thead>
-            <tbody>
+        <>
+          <Table data-testid="plugin-doctor-table">
+            <TableHeader>
+              <TableRow className="border-0">
+                <TableHead>插件</TableHead>
+                <TableHead>headless</TableHead>
+                <TableHead>host / web</TableHead>
+                <TableHead>大小</TableHead>
+                <TableHead>最近运行</TableHead>
+                <TableHead>README 示例</TableHead>
+                <TableHead>体检结论</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {report.plugins.map((item) => {
                 const tone =
                   item.conclusion === '缺引擎' || item.conclusion === '空插件' ? 'destructive' : item.conclusion === '合规' ? 'on' : 'default'
                 return (
-                  <tr key={item.id}>
-                    <td>
-                      <code className="pd-id">{item.id}</code>
-                      <div className="pd-name">{item.name}</div>
-                    </td>
-                    <td>
+                  <TableRow key={item.id}>
+                    <TableCell>
+                      <code className="font-mono text-[12px]">{item.id}</code>
+                      <div className="text-dsw-label-3">{item.name}</div>
+                    </TableCell>
+                    <TableCell>
                       <Chip label={item.headless ? '是' : '否'} on={item.headless} />
-                    </td>
-                    <td>
+                    </TableCell>
+                    <TableCell>
                       <Chip label="host" on={item.hasHost} />
                       <Chip label="web" on={item.hasWeb} />
-                    </td>
-                    <td>{kb(item.bytes)}</td>
-                    <td title={item.lastRunAt ? clock(item.lastRunAt) : '没有运行记录'}>
-                      {when(item.lastRunAt)}
-                    </td>
-                    <td>
+                    </TableCell>
+                    <TableCell>{kb(item.bytes)}</TableCell>
+                    <TableCell title={item.lastRunAt ? clock(item.lastRunAt) : '没有运行记录'}>{when(item.lastRunAt)}</TableCell>
+                    <TableCell>
                       {item.readmeExample ? <Chip label="有" on /> : <Chip label={item.readme ? '缺' : '无 README'} />}
-                    </td>
-                    <td>
+                    </TableCell>
+                    <TableCell>
                       <Badge title={(item.problems || []).join('；')} variant={tone}>
                         {item.conclusion}
                       </Badge>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 )
               })}
-            </tbody>
-          </table>
-          <div className="pd-meta" style={{ marginTop: 6 }}>扫描根目录：{report.root}</div>
-        </div>
+            </TableBody>
+          </Table>
+          <div className="mt-1.5 text-[12px] text-dsw-label-3">扫描根目录：{report.root}</div>
+        </>
       )}
-    </div>
+    </Card>
   )
 }
 
-export function apply(ctx: {
-  pageEditor: { registerBlock: (spec: Record<string, unknown>) => void }
-}) {
+export function apply(ctx: { pageEditor: { registerBlock: (spec: Record<string, unknown>) => void } }) {
   ctx.pageEditor.registerBlock({
     kind: 'plugin-doctor',
     plugin: name,

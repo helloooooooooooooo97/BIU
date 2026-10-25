@@ -31,23 +31,26 @@ test('page block playground UIs use design tokens instead of hardcoded light-the
   ]
   for (const file of files) {
     const src = readFileSync(join(sandbox, file), 'utf8')
-    assert.match(src, /var\(--dsw-border\)/, `${file} should use --dsw-border`)
-    assert.match(src, /var\(--dsw-label\)/, `${file} should use --dsw-label`)
+    assert.match(src, /(--dsw-border|border-dsw-border)/, `${file} should use dsw-border`)
+    assert.match(src, /(--dsw-label|text-dsw-label)/, `${file} should use dsw-label`)
     assert.doesNotMatch(src, /background:\s*'?#fff/, `${file} should not hardcode white`)
     assert.doesNotMatch(src, /#9ec1ff/, `${file} should not hardcode send-button blue`)
   }
 })
 
-test('page block STYLE_CSS template strings are closed', () => {
+test('reui page blocks import @biu/biu-ui rather than injecting STYLE_CSS', () => {
   const files = [
     'page-toc/web/index.tsx',
     'api-playground/web/index.tsx',
     'option-matrix/web/index.tsx',
     'page-regression/web/index.tsx',
     'plugin-doctor/web/index.tsx',
+    'fitness-tracker/web/index.tsx',
+    'page-algorithm/web/index.tsx',
   ]
   for (const file of files) {
     const src = readFileSync(join(sandbox, file), 'utf8')
-    assert.match(src, /const STYLE_CSS = `[\s\S]+?`\s*\nfunction /, `${file} STYLE_CSS must close before the next function`)
+    assert.match(src, /from '@biu\/biu-ui'/, `${file} should import ReUI host components`)
+    assert.doesNotMatch(src, /const STYLE_CSS = `/, `${file} should not inject STYLE_CSS`)
   }
 })

@@ -490,7 +490,7 @@ test('pack maps @biu/biu-ui to globalThis.BiuUi', async () => {
     await mkdir(join(sandbox, 'web'), { recursive: true })
     await writeFile(
       join(sandbox, 'web/index.tsx'),
-      `import { ConfirmDialog, TagChip } from '@biu/biu-ui'\nexport const name = 'store-ui'\nexport function apply() { return { ConfirmDialog, TagChip } }\n`,
+      `import { Calendar, ConfirmDialog, Image, TagChip } from '@biu/biu-ui'\nexport const name = 'store-ui'\nexport function apply() { return { Calendar, ConfirmDialog, Image, TagChip } }\n`,
     )
     await store.pack('store-ui')
     const webJs = await readFile(join(dir, '.plugin', 'store-ui', 'web.js'), 'utf8')

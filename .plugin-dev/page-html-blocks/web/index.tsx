@@ -1,3 +1,4 @@
+import { Textarea } from '@biu/biu-ui'
 import { createPortal } from 'react-dom'
 import { bindHtmlSlide, collectHtmlSlides, cssBoxSize, htmlDeckEnabled, htmlDeckIndex, htmlDeckKeyAction, htmlLooksFillLayout, HTML_FILL_HOST_PX, stepHtmlDeck } from './html-deck.ts'
 import { htmlBlockKey, stampHtmlPickSurfaces, stampHtmlSource } from './stamp-picks.ts'
@@ -49,7 +50,7 @@ function SourceEditor({ html, onChange }: { html: string; onChange: (v: string) 
     if (draftRef.current !== htmlRef.current) onChangeRef.current(draftRef.current)
   }
   return (
-    <textarea
+    <Textarea
       data-testid="html-source"
       data-page-block-capture=""
       data-biu-ignore

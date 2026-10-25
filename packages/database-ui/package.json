@@ -10,8 +10,6 @@
     "./search": "./src/search-menu.tsx"
   },
   "dependencies": {
-    "antd": "^6.6.1",
-    "dayjs": "^1.11.13",
     "@biu/biu-ui": "0.1.0"
   },
   "peerDependencies": {

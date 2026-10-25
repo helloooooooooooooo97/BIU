@@ -32,13 +32,10 @@ const CSS = `
 .db-cell-multi-box.is-empty{display:flex;width:100%;min-height:22px;min-width:0;align-self:stretch}
 .db-cell-multi-box:hover,.db-cell-multi-box[aria-expanded="true"]{background:transparent}
 .db-datetime{display:inline-flex;align-items:center;gap:4px;position:relative;min-width:0;width:100%;max-width:100%;vertical-align:middle;color:inherit}
-.db-datetime .ant-picker,.db-datetime .ant-picker-focused,.db-datetime .ant-picker:hover,.db-datetime .ant-picker-borderless{width:auto;max-width:100%;padding:0;background:transparent;border:0;box-shadow:none;outline:none}
-.db-datetime .ant-picker-borderless:focus-visible,.db-datetime .ant-picker-borderless:has(input:focus-visible){outline:none}
-.db-datetime .ant-picker-input > input{font-size:14px;font-weight:500;color:var(--dsw-label);outline:none}
-.db-datetime .ant-picker-input > input::placeholder{font-size:14px;font-weight:500;color:var(--dsw-label-3)}
-.db-datetime.is-overdue .ant-picker-input > input,.db-datetime.is-overdue{color:var(--dsw-danger)}
-.db-datetime .ant-picker-suffix{display:none}
-.db-datetime .ant-picker-clear{color:var(--dsw-label-3)}
+.db-datetime-trigger,.db-datetime-label{display:inline-flex;min-width:0;max-width:100%;border:0;padding:0;background:transparent;font-size:14px;font-weight:500;color:var(--dsw-label);outline:none;text-align:left}
+.db-datetime-trigger:focus-visible{outline:none}
+.db-datetime-trigger:not(:empty)::placeholder,.db-datetime .db-datetime-trigger:empty{font-size:14px;font-weight:500;color:var(--dsw-label-3)}
+.db-datetime.is-overdue .db-datetime-trigger,.db-datetime.is-overdue .db-datetime-label,.db-datetime.is-overdue{color:var(--dsw-danger)}
 `
 
 export function ensureDbSearchStyle() {

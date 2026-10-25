@@ -1,3 +1,4 @@
+import { Button, Card, Select } from '@biu/biu-ui'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { indentUnit } from '@codemirror/language'
 import { EditorSelection, EditorState, Prec } from '@codemirror/state'
@@ -637,24 +638,14 @@ function CodeRunnerBlock({ data, update, writable }: BlockProps) {
   const canCollapse = localCode.trim().length > 0
 
   return (
-    <div
+    <Card
       data-testid="page-code-runner"
       onMouseDown={onRootMouseDown}
       onBlur={(e) => {
         if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
         persist()
       }}
-      style={{
-        margin: '8px 0',
-        border: '1px solid var(--dsw-border)',
-        borderRadius: 12,
-        background: 'var(--dsw-chat-code-bg, var(--dsw-sidebar))',
-        overflow: 'hidden',
-        fontFamily: 'var(--font-mono)',
-        fontSize: '13px',
-        width: '100%',
-        boxShadow: '0 1px 2px rgba(15,15,15,.04)',
-      }}
+      className="my-2 w-full overflow-hidden p-0 font-mono text-[13px]"
     >
       {/* toolbar：左语言 / 右运行+清空 */}
       <div
@@ -848,7 +839,7 @@ function CodeRunnerBlock({ data, update, writable }: BlockProps) {
           )}
         </>
       )}
-    </div>
+    </Card>
   )
 }
 

@@ -7,7 +7,7 @@
  *
  * 请求历史写进块 data.history（最近 20 条）——跟着文档走，不是跟着浏览器走。
  */
-import { Button, ConfirmDialog, Input, Label, Select, TagChip, Textarea } from '@biu/biu-ui'
+import { Button, Card, ConfirmDialog, Input, Label, Select, Tabs, TabsTrigger, TagChip, Textarea } from '@biu/biu-ui'
 
 const React = globalThis.React
 const { useEffect, useMemo, useRef, useState } = React
@@ -58,93 +58,6 @@ const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']
 const STORE_LIMIT = 20000
 const HISTORY_LIMIT = 20
 const PREVIEW_LIMIT = 4000
-
-const STYLE_ID = 'api-playground-style-v2'
-const STYLE_CSS = `
-.ap-root {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px 12px;
-  border: 1px solid var(--dsw-border);
-  border-radius: 8px;
-  background: var(--dsw-bg);
-  font-family: var(--font-sans);
-  font-size: 14px;
-  color: var(--dsw-label);
-}
-.ap-root *, .ap-root *::before, .ap-root *::after { box-sizing: border-box; }
-.ap-bar { display: flex; gap: 6px; align-items: center; }
-.ap-method { flex: 0 0 92px; font-family: var(--font-mono); cursor: pointer; }
-.ap-url { flex: 1 1 auto; min-width: 0; font-family: var(--font-mono); }
-.ap-tabs { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
-.ap-spacer { flex: 1 1 auto; }
-.ap-hint { font-size: 12px; color: var(--dsw-label-3); }
-.ap-note { font-size: 12px; color: var(--dsw-label-2); }
-.ap-pane { display: flex; flex-direction: column; gap: 8px; }
-.ap-field { display: flex; flex-direction: column; gap: 4px; }
-.ap-head-area { min-height: 62px; font-family: var(--font-mono); }
-.ap-body-area { min-height: 84px; font-family: var(--font-mono); }
-.ap-pre {
-  margin: 0;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 1.55;
-  white-space: pre-wrap;
-  word-break: break-word;
-  background: var(--dsw-input);
-  border: 1px solid var(--dsw-border);
-  border-radius: 6px;
-  padding: 8px 10px;
-  max-height: 280px;
-  overflow: auto;
-}
-.ap-hlist { display: flex; flex-direction: column; gap: 2px; max-height: 200px; overflow: auto; }
-.ap-details { border: 1px solid var(--dsw-border); border-radius: 6px; padding: 6px 8px; }
-.ap-details > summary { cursor: pointer; list-style: none; user-select: none; }
-.ap-details > summary::-webkit-details-marker { display: none; }
-.ap-details > summary::before { content: '▸ '; color: var(--dsw-label-3); }
-.ap-details[open] > summary::before { content: '▾ '; }
-.ap-details .ap-hlist { margin-top: 8px; }
-.ap-hrow { display: flex; gap: 10px; font-family: var(--font-mono); font-size: 12px; line-height: 1.5; }
-.ap-hkey { flex: 0 0 34%; color: var(--dsw-label-3); word-break: break-all; }
-.ap-hval { flex: 1 1 auto; word-break: break-all; }
-.ap-err { color: var(--dsw-danger); }
-.ap-history { border-top: 1px solid var(--dsw-border); padding-top: 8px; }
-.ap-hist-head { display: flex; gap: 6px; align-items: center; }
-.ap-hist-list { display: flex; flex-direction: column; gap: 1px; margin-top: 6px; max-height: 180px; overflow: auto; }
-.ap-hist-row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  width: 100%;
-  text-align: left;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--dsw-label);
-  background: transparent;
-  border: 0;
-  border-radius: 6px;
-  padding: 4px 6px;
-  cursor: pointer;
-}
-.ap-hist-row:hover { background: var(--dsw-hover); }
-.ap-hist-m { flex: 0 0 52px; font-weight: 650; color: var(--dsw-label-2); }
-.ap-hist-u { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ap-hist-t { flex: 0 0 auto; color: var(--dsw-label-3); }
-`
-
-function useStyle() {
-  useEffect(() => {
-    const stale = document.querySelectorAll('style[id^="api-playground-style"]')
-    for (const node of stale) if (node.id !== STYLE_ID) node.remove()
-    const existing = document.getElementById(STYLE_ID)
-    const el = existing instanceof HTMLStyleElement ? existing : document.createElement('style')
-    el.id = STYLE_ID
-    el.textContent = STYLE_CSS
-    if (el.parentNode !== document.head) document.head.appendChild(el)
-  }, [])
-}
 
 function asText(value: unknown) {
   return typeof value === 'string' ? value : ''
@@ -200,7 +113,6 @@ function readResult(data: Record<string, unknown>): Result | null {
 }
 
 function ApiPlaygroundBlock({ data, update, writable }: BlockProps) {
-  useStyle()
   const hostRef = useRef<HTMLDivElement | null>(null)
   const stored = useMemo(() => readResult(data), [data.last])
   const history = useMemo(() => readHistory(data), [data.history])
@@ -321,10 +233,11 @@ function ApiPlaygroundBlock({ data, update, writable }: BlockProps) {
   const editable = writable
 
   return (
-    <div className="ap-root" ref={hostRef} data-testid="api-playground-block" data-plugin={name}>
-      <div className="ap-bar">
+    <Card className="flex flex-col gap-2 border-dsw-border text-dsw-label" data-testid="api-playground-block" data-plugin={name}>
+      <div ref={hostRef} className="contents">
+      <div className="flex items-center gap-1.5">
         <Select
-          className="ap-method"
+          className="w-[92px] font-mono"
           data-testid="api-playground-method"
           value={form.method}
           disabled={!editable}
@@ -339,7 +252,7 @@ function ApiPlaygroundBlock({ data, update, writable }: BlockProps) {
           ))}
         </Select>
         <Input
-          className="ap-url"
+          className="min-w-0 flex-1 font-mono"
           data-testid="api-playground-url"
           value={form.url}
           spellCheck={false}
@@ -359,21 +272,21 @@ function ApiPlaygroundBlock({ data, update, writable }: BlockProps) {
         </Button>
       </div>
 
-      <div className="ap-tabs">
-        <Button
-          variant={tab === 'request' ? 'secondary' : 'ghost'}
+      <Tabs>
+        <TabsTrigger
+          active={tab === 'request'}
           data-testid="api-playground-tab-request"
           onClick={() => setTab('request')}
         >
           请求
-        </Button>
-        <Button
-          variant={tab === 'response' ? 'secondary' : 'ghost'}
+        </TabsTrigger>
+        <TabsTrigger
+          active={tab === 'response'}
           data-testid="api-playground-tab-response"
           onClick={() => setTab('response')}
         >
           响应
-        </Button>
+        </TabsTrigger>
         {active && !sending ? (
           <span data-testid="api-playground-status">
             <TagChip
@@ -382,17 +295,17 @@ function ApiPlaygroundBlock({ data, update, writable }: BlockProps) {
             />
           </span>
         ) : null}
-        {sending ? <span className="ap-note">请求中…</span> : null}
-        <span className="ap-spacer" />
-        <span className="ap-hint">⌘/Ctrl + ↵ 发送</span>
-      </div>
+        {sending ? <span className="text-[12px] text-dsw-label-3">请求中…</span> : null}
+        <span className="flex-1" />
+        <span className="text-[12px] text-dsw-label-3">⌘/Ctrl + ↵ 发送</span>
+      </Tabs>
 
       {tab === 'request' ? (
-        <div className="ap-pane" data-testid="api-playground-request-pane">
-          <div className="ap-field">
+        <div className="flex flex-col gap-2" data-testid="api-playground-request-pane">
+          <div className="flex flex-col gap-1">
             <Label>请求头 headers</Label>
             <Textarea
-              className="ap-head-area"
+              className="min-h-[62px] font-mono"
               data-testid="api-playground-headers"
               spellCheck={false}
               value={form.headers}
@@ -403,10 +316,10 @@ function ApiPlaygroundBlock({ data, update, writable }: BlockProps) {
               onKeyDown={onKeyDown}
             />
           </div>
-          <div className="ap-field">
+          <div className="flex flex-col gap-1">
             <Label>请求体 body</Label>
             <Textarea
-              className="ap-body-area"
+              className="min-h-[84px] font-mono"
               data-testid="api-playground-body"
               spellCheck={false}
               value={form.body}
@@ -419,47 +332,47 @@ function ApiPlaygroundBlock({ data, update, writable }: BlockProps) {
           </div>
         </div>
       ) : (
-        <div className="ap-pane" data-testid="api-playground-response-pane">
+        <div className="flex flex-col gap-2" data-testid="api-playground-response-pane">
           {!active ? (
-            <div className="ap-note">还没发过请求。填好上面的 url，点「发送」。</div>
+            <div className="text-[12px] text-dsw-label-3">还没发过请求。填好上面的 url，点「发送」。</div>
           ) : active.error ? (
-            <div className="ap-err" data-testid="api-playground-error">
+            <div className="text-dsw-danger" data-testid="api-playground-error">
               {active.error}
             </div>
           ) : (
             <React.Fragment>
-              <div className="ap-tabs">
-                <span className="ap-note">{active.ms ?? 0} ms</span>
-                <span className="ap-note">{formatBytes(active.bytes ?? 0)}</span>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[12px] text-dsw-label-3">{active.ms ?? 0} ms</span>
+                <span className="text-[12px] text-dsw-label-3">{formatBytes(active.bytes ?? 0)}</span>
                 {active.truncated ? (
-                  <span className="ap-note" data-testid="api-playground-truncated">
+                  <span className="text-[12px] text-dsw-label-3" data-testid="api-playground-truncated">
                     已截断：只回传前 200 KB
                   </span>
                 ) : null}
                 {active.finalUrl && active.finalUrl !== active.url ? (
-                  <span className="ap-note">重定向到 {active.finalUrl}</span>
+                  <span className="text-[12px] text-dsw-label-3">重定向到 {active.finalUrl}</span>
                 ) : null}
               </div>
               {Object.keys(activeHeaders).length ? (
-                <details className="ap-details" data-testid="api-playground-res-headers-wrap">
-                  <summary className="biu-label">
+                <details className="rounded-[6px] border border-dsw-border p-1.5" data-testid="api-playground-res-headers-wrap">
+                  <summary className="cursor-pointer text-[12px] text-dsw-label-3">
                     响应头 · {Object.keys(activeHeaders).length} 条
                   </summary>
-                  <div className="ap-hlist" data-testid="api-playground-res-headers">
+                  <div className="mt-2 flex max-h-[200px] flex-col gap-0.5 overflow-auto" data-testid="api-playground-res-headers">
                     {Object.entries(activeHeaders).map(([key, value]) => (
-                      <div className="ap-hrow" key={key}>
-                        <span className="ap-hkey">{key}</span>
-                        <span className="ap-hval">{String(value)}</span>
+                      <div className="flex gap-2 font-mono text-[12px]" key={key}>
+                        <span className="w-[34%] break-all text-dsw-label-3">{key}</span>
+                        <span className="min-w-0 flex-1 break-all">{String(value)}</span>
                       </div>
                     ))}
                   </div>
                 </details>
               ) : null}
-              <div className="ap-field">
+              <div className="flex flex-col gap-1">
                 <Label>
                   响应体{bodyView.json ? ' · 已自动美化 JSON' : ''}
                 </Label>
-                <pre className="ap-pre" data-testid="api-playground-res-body">
+                <pre className="m-0 max-h-[280px] overflow-auto whitespace-pre-wrap break-words rounded-[6px] border border-dsw-border bg-dsw-input p-2 font-mono text-[12px]" data-testid="api-playground-res-body">
                   {bodyView.text || '（空响应体）'}
                 </pre>
               </div>
@@ -468,8 +381,8 @@ function ApiPlaygroundBlock({ data, update, writable }: BlockProps) {
         </div>
       )}
 
-      <div className="ap-history" data-testid="api-playground-history">
-        <div className="ap-hist-head">
+      <div className="border-t border-dsw-border pt-2" data-testid="api-playground-history">
+        <div className="flex items-center gap-1.5">
           <Button
             variant="secondary"
             data-testid="api-playground-history-toggle"
@@ -482,26 +395,26 @@ function ApiPlaygroundBlock({ data, update, writable }: BlockProps) {
               清空
             </Button>
           ) : null}
-          <span className="ap-spacer" />
-          <span className="ap-hint">历史存在块数据里，跟文档一起版本化</span>
+          <span className="flex-1" />
+          <span className="text-[12px] text-dsw-label-3">历史存在块数据里，跟文档一起版本化</span>
         </div>
         {histOpen && history.length ? (
-          <div className="ap-hist-list">
+          <div className="mt-1.5 flex max-h-[180px] flex-col gap-px overflow-auto">
             {history.map((entry: HistoryEntry, index: number) => (
               <button
                 type="button"
-                className="ap-hist-row"
+                className="flex w-full items-center gap-2 rounded-[6px] px-1.5 py-1 text-left font-mono text-[12px] text-dsw-label hover:bg-dsw-hover"
                 key={`${entry.at}-${index}`}
                 onClick={() => loadHistory(entry)}
                 title="载回这次请求"
               >
-                <span className="ap-hist-m">{entry.method}</span>
-                <span className="ap-hist-u">{entry.url}</span>
+                <span className="w-[52px] font-semibold text-dsw-label-3">{entry.method}</span>
+                <span className="min-w-0 flex-1 truncate">{entry.url}</span>
                 <TagChip
                   id={statusChip(entry.status, !entry.error).id}
                   label={entry.error ? 'ERR' : String(entry.status)}
                 />
-                <span className="ap-hist-t">{entry.ms}ms · {formatClock(entry.at)}</span>
+                <span className="text-dsw-label-3">{entry.ms}ms · {formatClock(entry.at)}</span>
               </button>
             ))}
           </div>
@@ -521,7 +434,8 @@ function ApiPlaygroundBlock({ data, update, writable }: BlockProps) {
           onCancel={() => setConfirmClear(false)}
         />
       ) : null}
-    </div>
+      </div>
+    </Card>
   )
 }
 
