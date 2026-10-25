@@ -15,6 +15,7 @@ type Data = {
   criteria?: Criterion[]
   scores?: Scores
   highlight?: string
+  editing?: boolean
 }
 
 type Cell = { name: string; raw: number; norm: number; weighted: number }
@@ -135,11 +136,19 @@ function ScoreDots({ value, max }: { value: number; max: number }) {
   )
 }
 
+
+function badgeOf(rank: number) {
+  if (rank === 1) return '首选'
+  if (rank === 2) return '也值得考虑'
+  return '备选'
+}
+
 function OptionMatrix({ data, update, writable }: { data: Data; update: (patch: Record<string, unknown>) => void; writable: boolean }) {
   const [showMd, setShowMd] = useState(false)
   const [copied, setCopied] = useState(false)
   const [draftTitle, setDraftTitle] = useState(data.title ?? '')
   const titleTouched = useRef(false)
+  const editing = data.editing === true
 
   useEffect(() => {
     if (!titleTouched.current) setDraftTitle(data.title ?? '')
@@ -151,11 +160,7 @@ function OptionMatrix({ data, update, writable }: { data: Data; update: (patch: 
   const options = m.options
   const criteria = m.criteria
   const scores = data.scores ?? {}
-  const readOnly = !writable
-  const highlight = typeof (data as Data & { highlight?: string }).highlight === 'string' && (data as Data & { highlight?: string }).highlight
-    ? (data as Data & { highlight?: string }).highlight
-    : m.winner?.option
-
+  const highlight = typeof data.highlight === 'string' && data.highlight ? data.highlight : m.winner?.option
   const setCriteria = (next: Criterion[]) => update({ criteria: next })
   const setCell = (opt: string, crit: string, v: number) => {
     update({ scores: { ...scores, [opt]: { ...(scores[opt] ?? {}), [crit]: v } } })
@@ -187,106 +192,60 @@ function OptionMatrix({ data, update, writable }: { data: Data; update: (patch: 
 
   const md = useMemo(() => toMarkdown(data), [key])
   const byOption = new Map(m.rows.map((row) => [row.option, row]))
+  const picks = m.ranked
 
   return (
     <ReUI>
       <div className="cmp-shell" data-testid="option-matrix">
         <div className="cmp-head">
           <div>
-            {readOnly ? (
-              <h2>{data.title || '方案对比'}</h2>
-            ) : (
-              <Input
-                value={draftTitle}
-                placeholder="对比标题"
-                style={{ fontWeight: 650, fontSize: 16, width: 260, height: 34 }}
-                onChange={(e: { target: { value: string } }) => {
-                  titleTouched.current = true
-                  setDraftTitle(e.target.value)
-                }}
-                onBlur={() => {
-                  titleTouched.current = false
-                  update({ title: draftTitle })
-                }}
-              />
-            )}
-            <p>
-              Compare · {options.length} 方案 × {criteria.length} 维度 · 满分 {m.maxTotal.toFixed(1)}
-            </p>
+            <h2>{data.title || '方案对比'}</h2>
+            <p>{options.length} 个方案，按加权总分排序 · 满分 {m.maxTotal.toFixed(1)}</p>
           </div>
-          <Button type="button" variant="outline" onClick={() => setShowMd((v) => !v)}>
-            {showMd ? '隐藏 Markdown' : '导出 Markdown'}
-          </Button>
+          <div className="rui-row">
+            {writable ? (
+              <Button type="button" variant={editing ? 'outline' : undefined} onClick={() => update({ editing: !editing })}>
+                {editing ? '完成' : '编辑打分'}
+              </Button>
+            ) : null}
+            <Button type="button" variant="outline" onClick={() => setShowMd((v) => !v)}>
+              {showMd ? '隐藏 Markdown' : '导出 Markdown'}
+            </Button>
+          </div>
+        </div>
+        <div className="cmp-picks">
+          {picks.map((row) => (
+            <div key={row.option} className="cmp-pick" data-rank={row.rank <= 3 ? String(row.rank) : 'n'}>
+              <span className="cmp-badge">{badgeOf(row.rank)}</span>
+              <h3>{row.option}</h3>
+              <div className="cmp-score">{row.total.toFixed(1)}</div>
+              <div className="rui-muted">{(row.percent * 100).toFixed(1)}%</div>
+            </div>
+          ))}
         </div>
         <table className="cmp-table" data-testid="option-matrix-table">
           <thead>
             <tr>
-              <th>规格</th>
-              {options.map((option, oi) => {
-                const row = byOption.get(option)
-                const isWin = highlight === option
-                return (
-                  <th key={option} style={isWin ? { background: 'rgba(255,196,0,.22)' } : undefined}>
-                    {readOnly ? (
-                      <div className="cmp-opt">{isWin ? `推荐 · ${option}` : option}</div>
-                    ) : (
-                      <div className="rui-row" style={{ justifyContent: 'center' }}>
-                        <Input value={option} onChange={(e: { target: { value: string } }) => renameOption(oi, e.target.value)} style={{ width: 120, fontWeight: 650 }} />
-                        <Button type="button" size="icon" variant="ghost" onClick={() => {
-                          const ns: Scores = { ...scores }
-                          delete ns[option]
-                          update({ options: options.filter((_, i) => i !== oi), scores: ns })
-                        }}>×</Button>
-                      </div>
-                    )}
-                    <div className="cmp-score">{row ? row.total.toFixed(1) : '0.0'}</div>
-                    <div className="rui-muted">{row ? `${(row.percent * 100).toFixed(1)}%` : ''}</div>
-                    {isWin ? <div className="cmp-rank">Recommended</div> : row ? <div className="rui-muted">#{row.rank}</div> : null}
-                  </th>
-                )
-              })}
+              <th>对比项</th>
+              {options.map((option) => (
+                <th key={option} style={highlight === option ? { background: 'rgba(255,196,0,.22)' } : undefined}>
+                  {highlight === option ? `推荐 · ${option}` : option}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {criteria.map((c, ci) => (
               <tr key={c.name + String(ci)}>
                 <td>
-                  {readOnly ? (
-                    <>
-                      <div style={{ fontWeight: 650 }}>{c.name}</div>
-                      <div className="rui-muted">权重 {c.weight} · {c.higherIsBetter === false ? '越低越好' : '越高越好'}</div>
-                    </>
-                  ) : (
-                    <div className="rui-stack" style={{ gap: 4 }}>
-                      <Input value={c.name} onChange={(e: { target: { value: string } }) => renameCriterion(ci, e.target.value)} style={{ fontWeight: 650 }} />
-                      <div className="rui-row">
-                        <span className="rui-muted">权重</span>
-                        <Input type="number" min={0} max={9} value={c.weight} onChange={(e: { target: { value: string } }) => setCriteria(criteria.map((x, i) => (i === ci ? { ...x, weight: num(e.target.value, 0) } : x)))} style={{ width: 44 }} />
-                        <Button type="button" size="sm" variant="outline" onClick={() => setCriteria(criteria.map((x, i) => (i === ci ? { ...x, higherIsBetter: x.higherIsBetter === false } : x)))}>
-                          {c.higherIsBetter === false ? '越低越好' : '越高越好'}
-                        </Button>
-                        <Button type="button" size="sm" variant="ghost" onClick={() => {
-                          const ns: Scores = { ...scores }
-                          options.forEach((o) => {
-                            if (ns[o]) {
-                              const row = { ...ns[o] }
-                              delete row[c.name]
-                              ns[o] = row
-                            }
-                          })
-                          update({ criteria: criteria.filter((_, i) => i !== ci), scores: ns })
-                        }}>删除</Button>
-                      </div>
-                    </div>
-                  )}
+                  {c.name}
+                  <div className="rui-muted">{c.higherIsBetter === false ? '越低越好' : '越高越好'} · 权重 {c.weight}</div>
                 </td>
                 {options.map((option) => {
                   const cell = byOption.get(option)?.cells[ci]
                   return (
                     <td key={option} style={cell?.best ? { background: 'rgba(255,196,0,.22)', fontWeight: 650 } : undefined}>
-                      {readOnly ? <span className="tabular-nums">{cell?.raw ?? 0}</span> : (
-                        <Input type="number" min={0} max={scale} value={cell?.raw ?? 0} className="w-12 text-center tabular-nums" onChange={(e: { target: { value: string } }) => setCell(option, c.name, Math.max(0, Math.min(scale, num(e.target.value, 0))))} />
-                      )}
+                      <span className="tabular-nums">{cell?.raw ?? 0}</span>
                       <ScoreDots value={cell?.raw ?? 0} max={scale} />
                       {c.higherIsBetter === false ? <div className="rui-muted">→{cell?.norm ?? 0}</div> : null}
                     </td>
@@ -294,30 +253,94 @@ function OptionMatrix({ data, update, writable }: { data: Data; update: (patch: 
                 })}
               </tr>
             ))}
+            <tr>
+              <td>加权总分</td>
+              {options.map((option) => {
+                const row = byOption.get(option)
+                return (
+                  <td key={option} style={{ fontWeight: 650 }}>
+                    {row ? row.total.toFixed(1) : '0.0'}
+                    <div className="rui-muted">{row ? `${(row.percent * 100).toFixed(1)}%` : ''}</div>
+                  </td>
+                )
+              })}
+            </tr>
           </tbody>
         </table>
-        {readOnly ? null : (
-          <div className="rui-row" style={{ padding: '10px 16px', flexWrap: 'wrap' }}>
-            <Button type="button" variant="outline" onClick={() => {
-              const nm = `方案 ${String.fromCharCode(65 + options.length)}`
-              const ns: Scores = { ...scores, [nm]: {} }
-              criteria.forEach((c) => { ns[nm][c.name] = 3 })
-              update({ options: [...options, nm], scores: ns })
-            }}>加方案</Button>
-            <Button type="button" variant="outline" onClick={() => {
-              const nm = `维度 ${criteria.length + 1}`
-              const ns: Scores = { ...scores }
-              options.forEach((o) => { ns[o] = { ...(ns[o] ?? {}), [nm]: 3 } })
-              update({ criteria: [...criteria, { name: nm, weight: 1, higherIsBetter: true }], scores: ns })
-            }}>加维度</Button>
-            <Button type="button" variant="outline" onClick={() => update({ scale: scale >= 10 ? 5 : scale + 1 })}>满分制 {scale} → {scale >= 10 ? 5 : scale + 1}</Button>
-          </div>
-        )}
         {m.rationale ? <div data-testid="option-matrix-rationale" className="cmp-why">{m.rationale}</div> : null}
+        {writable && editing ? (
+          <div className="cmp-edit">
+            <Input
+              value={draftTitle}
+              placeholder="对比标题"
+              style={{ fontWeight: 650, width: 260, marginBottom: 10 }}
+              onChange={(e: { target: { value: string } }) => {
+                titleTouched.current = true
+                setDraftTitle(e.target.value)
+              }}
+              onBlur={() => {
+                titleTouched.current = false
+                update({ title: draftTitle })
+              }}
+            />
+            {options.map((option, oi) => (
+              <div key={option} className="rui-row" style={{ marginBottom: 8, flexWrap: 'wrap' }}>
+                <Input value={option} onChange={(e: { target: { value: string } }) => renameOption(oi, e.target.value)} style={{ width: 140 }} />
+                {criteria.map((c) => (
+                  <span key={c.name} className="rui-row">
+                    <span className="rui-muted">{c.name}</span>
+                    <Input type="number" min={0} max={scale} value={byOption.get(option)?.cells.find((x) => x.name === c.name)?.raw ?? 0} style={{ width: 52 }} onChange={(e: { target: { value: string } }) => setCell(option, c.name, Math.max(0, Math.min(scale, num(e.target.value, 0))))} />
+                  </span>
+                ))}
+                <Button type="button" size="sm" variant="ghost" onClick={() => {
+                  const ns: Scores = { ...scores }
+                  delete ns[option]
+                  update({ options: options.filter((_, i) => i !== oi), scores: ns })
+                }}>删除方案</Button>
+              </div>
+            ))}
+            {criteria.map((c, ci) => (
+              <div key={c.name + 'e'} className="rui-row" style={{ marginBottom: 6, flexWrap: 'wrap' }}>
+                <Input value={c.name} onChange={(e: { target: { value: string } }) => renameCriterion(ci, e.target.value)} style={{ width: 120 }} />
+                <span className="rui-muted">权重</span>
+                <Input type="number" min={0} max={9} value={c.weight} style={{ width: 44 }} onChange={(e: { target: { value: string } }) => setCriteria(criteria.map((x, i) => (i === ci ? { ...x, weight: num(e.target.value, 0) } : x)))} />
+                <Button type="button" size="sm" variant="outline" onClick={() => setCriteria(criteria.map((x, i) => (i === ci ? { ...x, higherIsBetter: x.higherIsBetter === false } : x)))}>
+                  {c.higherIsBetter === false ? '越低越好' : '越高越好'}
+                </Button>
+                <Button type="button" size="sm" variant="ghost" onClick={() => {
+                  const ns: Scores = { ...scores }
+                  options.forEach((o) => {
+                    if (ns[o]) {
+                      const row = { ...ns[o] }
+                      delete row[c.name]
+                      ns[o] = row
+                    }
+                  })
+                  update({ criteria: criteria.filter((_, i) => i !== ci), scores: ns })
+                }}>删除维度</Button>
+              </div>
+            ))}
+            <div className="rui-row" style={{ marginTop: 8 }}>
+              <Button type="button" variant="outline" onClick={() => {
+                const nm = `方案 ${String.fromCharCode(65 + options.length)}`
+                const ns: Scores = { ...scores, [nm]: {} }
+                criteria.forEach((c) => { ns[nm][c.name] = 3 })
+                update({ options: [...options, nm], scores: ns })
+              }}>加方案</Button>
+              <Button type="button" variant="outline" onClick={() => {
+                const nm = `维度 ${criteria.length + 1}`
+                const ns: Scores = { ...scores }
+                options.forEach((o) => { ns[o] = { ...(ns[o] ?? {}), [nm]: 3 } })
+                update({ criteria: [...criteria, { name: nm, weight: 1, higherIsBetter: true }], scores: ns })
+              }}>加维度</Button>
+              <Button type="button" variant="outline" onClick={() => update({ scale: scale >= 10 ? 5 : scale + 1 })}>满分制 {scale} → {scale >= 10 ? 5 : scale + 1}</Button>
+            </div>
+          </div>
+        ) : null}
         {showMd ? (
-          <div style={{ padding: '0 16px 16px' }}>
+          <div style={{ padding: '0 18px 16px' }}>
             <div className="rui-row" style={{ marginBottom: 8 }}>
-              <span className="rui-muted">Markdown（agent 可直接读）</span>
+              <span className="rui-muted">Markdown</span>
               <Button type="button" onClick={() => {
                 const nav = globalThis.navigator
                 if (nav && nav.clipboard && nav.clipboard.writeText) void nav.clipboard.writeText(md)
@@ -341,7 +364,7 @@ export function apply(ctx: {
     label: '方案对比块',
     blockType: 'test',
     blockTypeLabel: '测试',
-    hint: 'Apple Compare / Wirecutter：方案作列、规格作行，加权推荐',
+    hint: 'Wirecutter 首选卡片 + Apple/RTINGS 规格表；编辑打分与对比视图分开',
     aliases: ['matrix', 'option', 'compare', '对比', '矩阵', '选型', '方案对比'],
     assets: [],
     defaults: () => DEFAULTS,
