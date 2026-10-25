@@ -1,4 +1,8 @@
-import { Badge, Button, Card, CardActions, CardDescription, CardHeader, CardTitle, Input, ReUI, Select } from './reui'
+/**
+ * 回归检查：Playwright HTML report / Vitest UI / Cypress / GitHub Checks
+ * 断言是测试用例，runs 是 CI 记录，filter / selected 写进块数据。
+ */
+import { Button, Input, ReUI, Select } from './reui'
 
 const React = globalThis.React
 const { useState, useCallback } = React
@@ -64,7 +68,6 @@ function nowMs() {
   return typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()
 }
 
-/** 一条断言：真去读 DOM / 真去发请求，返回 通过|失败 + 实际值 + 耗时。 */
 async function runAssert(item: Assert): Promise<{ status: 'pass' | 'fail'; actual: string; ms: number }> {
   const started = nowMs()
   const done = (status: 'pass' | 'fail', actual: string) => ({
@@ -115,7 +118,6 @@ async function runAssert(item: Assert): Promise<{ status: 'pass' | 'fail'; actua
   }
 }
 
-/** 和上一次跑的结果逐条对齐：上次失败这次通过 = fixed，反过来 = broken。 */
 function markDeltas(prev: Run | null, items: ItemResult[]): ItemResult[] {
   if (!prev) return items
   const before = new Map(prev.items.map((item) => [item.id, item.status]))
@@ -133,24 +135,19 @@ function fmtTime(at: number) {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 
-function Chip({ item }: { item?: ItemResult }) {
-  if (!item) return <Badge>—</Badge>
-  const pass = item.status === 'pass'
-  return (
-    <Badge variant={pass ? 'on' : 'destructive'} className="min-w-24 font-mono">
-      {pass ? '通过' : '失败'} {item.ms}ms
-      {item.delta ? <b className="ml-1.5">{item.delta}</b> : null}
-    </Badge>
-  )
+function specName(item: Assert) {
+  if (item.type === 'http') return `${item.method || 'GET'} ${item.url || ''}`.trim()
+  return [item.selector, item.expect].filter(Boolean).join(' · ') || item.type
 }
 
 export function RegressionBlock({ data, update, writable }: BlockProps) {
   const asserts = Array.isArray(data.asserts) ? (data.asserts as Assert[]) : []
   const runs = Array.isArray(data.runs) ? (data.runs as Run[]) : []
+  const filter = data.filter === 'failed' || data.filter === 'passed' ? data.filter : 'all'
+  const selected = typeof data.selected === 'string' ? data.selected : ''
   const [busy, setBusy] = useState(false)
-  const [showHistory, setShowHistory] = useState(false)
-
-  const last = runs.length ? runs[runs.length - 1] : null
+  const runAt = typeof data.runAt === 'number' ? data.runAt : (runs.length ? runs[runs.length - 1].at : 0)
+  const last = runs.find((run) => run.at === runAt) ?? (runs.length ? runs[runs.length - 1] : null)
   const prev = runs.length > 1 ? runs[runs.length - 2] : null
   const resultOf = (id: string) => last?.items.find((item) => item.id === id)
 
@@ -176,167 +173,152 @@ export function RegressionBlock({ data, update, writable }: BlockProps) {
         failed: marked.filter((item) => item.status === 'fail').length,
         items: marked,
       }
-      update({ runs: [...runs, run].slice(-MAX_RUNS) })
+      update({ runs: [...runs, run].slice(-MAX_RUNS), runAt: run.at })
     } finally {
       setBusy(false)
     }
   }, [busy, asserts, prev, runs, update])
 
-  const fixed = last ? last.items.filter((item) => item.delta === 'fixed').length : 0
-  const broken = last ? last.items.filter((item) => item.delta === 'broken').length : 0
+  const passed = last?.passed ?? 0
+  const failed = last?.failed ?? 0
+  const total = last?.total ?? asserts.length
+  const visible = asserts.filter((item) => {
+    const result = resultOf(item.id)
+    if (filter === 'failed') return result?.status === 'fail'
+    if (filter === 'passed') return result?.status === 'pass'
+    return true
+  })
 
   return (
-    <ReUI className="rui-ios">
-    <Card data-testid="regression-block" style={{ background: 'transparent', border: 0, padding: 0 }}>
-      <CardHeader>
-        <div>
-          <CardTitle>页面回归检查</CardTitle>
-          <CardDescription data-testid="regression-summary">
-            {last
-              ? `${last.passed}/${last.total} 通过 · ${last.failed} 失败 · ${last.ms}ms · ${fmtTime(last.at)}${
-                  fixed ? ` · fixed ${fixed}` : ''
-                }${broken ? ` · broken ${broken}` : ''}`
-              : `${asserts.length} 条断言 · 还没跑过`}
-          </CardDescription>
+    <ReUI>
+      <div className="rg-shell" data-testid="regression-block">
+        <div className="rg-head">
+          <div>
+            <h2>Test report</h2>
+            <p data-testid="regression-summary">
+              {last
+                ? `${last.passed}/${last.total} passed · ${last.failed} failed · ${last.ms}ms · ${fmtTime(last.at)}`
+                : `${asserts.length} tests · 还没跑过`}
+            </p>
+          </div>
+          <div className="rui-row">
+            {writable ? (
+              <Button type="button" variant="outline" data-testid="regression-add" onClick={() => update({ asserts: [...asserts, { id: newId(), type: 'exists', selector: '' }] })}>
+                加用例
+              </Button>
+            ) : null}
+            <Button type="button" data-testid="regression-run" disabled={busy} onClick={() => void runAll()}>
+              {busy ? '跑…' : 'Run'}
+            </Button>
+          </div>
         </div>
-        <CardActions>
-          {writable ? (
-            <Button type="button" variant="outline" data-testid="regression-add" onClick={() => update({ asserts: [...asserts, { id: newId(), type: 'exists', selector: '' }] })}>
-              加断言
-            </Button>
-          ) : null}
-          {runs.length ? (
-            <Button type="button" variant="ghost" data-testid="regression-history" onClick={() => setShowHistory(!showHistory)}>
-              历史 {runs.length}
-            </Button>
-          ) : null}
-          <Button type="button" data-testid="regression-run" disabled={busy} onClick={() => void runAll()}>
-            {busy ? '跑…' : '跑一遍'}
-          </Button>
-        </CardActions>
-      </CardHeader>
-
-      <div className="rui-stack">
-        {asserts.map((item, i) => {
+        <div className="rg-stats">
+          <div>
+            <b style={{ color: '#0f7a4a' }}>{passed}</b>
+            <em>Passed</em>
+          </div>
+          <div>
+            <b style={{ color: '#b42318' }}>{failed}</b>
+            <em>Failed</em>
+          </div>
+          <div>
+            <b>{total}</b>
+            <em>Tests</em>
+          </div>
+          <div>
+            <b>{last?.ms ?? 0}</b>
+            <em>ms</em>
+          </div>
+        </div>
+        {runs.length ? (
+          <div className="rg-runs" data-testid="regression-history">
+            <div data-testid="regression-history-list" className="rui-row" style={{ flexWrap: 'wrap', gap: 6 }}>
+            {runs.slice().reverse().map((run) => (
+              <button
+                key={run.at}
+                type="button"
+                className="rg-run"
+                data-on={last?.at === run.at}
+                onClick={() => update({ runAt: run.at })}
+              >
+                {fmtTime(run.at)} · {run.passed}/{run.total}
+              </button>
+            ))}
+            </div>
+          </div>
+        ) : null}
+        <div className="rg-filters">
+          {([['all', `All ${asserts.length}`], ['failed', `Failed ${failed}`], ['passed', `Passed ${passed}`]] as const).map(([id, label]) => (
+            <button key={id} type="button" data-on={filter === id} onClick={() => update({ filter: id })}>
+              {label}
+            </button>
+          ))}
+        </div>
+        {visible.map((item) => {
           const result = resultOf(item.id)
+          const open = selected === item.id
+          const color = !result ? '#c7c7cc' : result.status === 'pass' ? '#0f7a4a' : '#b42318'
           return (
-            <div key={item.id} data-testid="regression-row" className="rui-assert">
-              <div className="rui-assert-top">
-                <span className={`rui-chip ${result ? (result.status === 'pass' ? 'rui-chip-ok' : 'rui-chip-bad') : 'rui-chip-wait'}`}>{i + 1}</span>
-                <Select
-                  value={item.type}
-                  disabled={!writable}
-                  onChange={(event) => patchAssert(item.id, { type: event.target.value })}
-                  style={{ width: 108 }}
-                >
-                  {TYPES.map((type) => (
-                    <option key={type.id} value={type.id}>
-                      {type.label}
-                    </option>
-                  ))}
-                </Select>
-                {item.type === 'http' ? (
-                  <>
-                    <Select
-                      value={String(item.method || 'GET')}
-                      disabled={!writable}
-                      onChange={(event) => patchAssert(item.id, { method: event.target.value })}
-                      style={{ width: 78 }}
-                    >
-                      {['GET', 'POST', 'PUT', 'DELETE'].map((method) => (
-                        <option key={method} value={method}>
-                          {method}
-                        </option>
-                      ))}
-                    </Select>
-                    <Input
-                      value={String(item.url ?? '')}
-                      disabled={!writable}
-                      placeholder="/api/… 或 http://…"
-                      onChange={(event) => patchAssert(item.id, { url: event.target.value })}
-                      className="rui-grow"
-                    />
-                    <Input
-                      value={String(item.status ?? 200)}
-                      disabled={!writable}
-                      onChange={(event) => patchAssert(item.id, { status: event.target.value })}
-                      style={{ width: 56 }}
-                    />
-                  </>
-                ) : (
-                  <>
-                    <Input
-                      value={String(item.selector ?? '')}
-                      disabled={!writable}
-                      placeholder="选择器，如 h1 / [data-testid=xxx]"
-                      onChange={(event) => patchAssert(item.id, { selector: event.target.value })}
-                      className="rui-grow"
-                    />
-                    {item.type === 'exists' ? null : (
-                      <Input
-                        value={String(item.expect ?? '')}
-                        disabled={!writable}
-                        placeholder={item.type === 'count' ? '期望个数' : '期望文案（子串）'}
-                        onChange={(event) => patchAssert(item.id, { expect: event.target.value })}
-                        style={{ width: 130 }}
-                      />
-                    )}
-                  </>
-                )}
-                <Chip item={result} />
-                {writable ? (
-                  <Button type="button" size="sm" variant="ghost" title="删掉这条断言" onClick={() => update({ asserts: asserts.filter((a) => a.id !== item.id) })}>
-                    删除
-                  </Button>
-                ) : null}
+            <div key={item.id}>
+              <div
+                className="rg-test"
+                data-testid="regression-row"
+                data-open={open}
+                onClick={() => update({ selected: open ? '' : item.id })}
+              >
+                <i className="rg-dot" style={{ background: color }} />
+                <div className="min-w-0">
+                  <div className="rg-name">{item.note || TYPES.find((type) => type.id === item.type)?.label || item.type}</div>
+                  <div className="rg-file">{specName(item)}</div>
+                </div>
+                <span className="rg-ms">{result ? `${result.ms}ms` : '—'}</span>
+                <span className="rg-ms">{result ? (result.delta || result.status) : 'queued'}</span>
               </div>
-              <div className="rui-assert-out">
-                {result ? <span className={result.status === 'pass' ? 'rui-ok' : 'rui-bad'}>{result.actual}</span> : <span>{item.note || '还没跑'}</span>}
-              </div>
+              {open ? (
+                <div className="rg-out">
+                  {writable ? (
+                    <div className="rui-row" style={{ flexWrap: 'wrap', marginBottom: 8 }} onClick={(event: { stopPropagation: () => void }) => event.stopPropagation()}>
+                      <Select value={item.type} disabled={!writable} onChange={(event: { target: { value: string } }) => patchAssert(item.id, { type: event.target.value })} style={{ width: 108 }}>
+                        {TYPES.map((type) => (
+                          <option key={type.id} value={type.id}>{type.label}</option>
+                        ))}
+                      </Select>
+                      {item.type === 'http' ? (
+                        <>
+                          <Select value={String(item.method || 'GET')} onChange={(event: { target: { value: string } }) => patchAssert(item.id, { method: event.target.value })} style={{ width: 78 }}>
+                            {['GET', 'POST', 'PUT', 'DELETE'].map((method) => (
+                              <option key={method} value={method}>{method}</option>
+                            ))}
+                          </Select>
+                          <Input value={String(item.url ?? '')} placeholder="/api/…" onChange={(event: { target: { value: string } }) => patchAssert(item.id, { url: event.target.value })} className="rui-grow" />
+                          <Input value={String(item.status ?? 200)} onChange={(event: { target: { value: string } }) => patchAssert(item.id, { status: event.target.value })} style={{ width: 56 }} />
+                        </>
+                      ) : (
+                        <>
+                          <Input value={String(item.selector ?? '')} placeholder="选择器" onChange={(event: { target: { value: string } }) => patchAssert(item.id, { selector: event.target.value })} className="rui-grow" />
+                          {item.type === 'exists' ? null : (
+                            <Input value={String(item.expect ?? '')} placeholder={item.type === 'count' ? '期望个数' : '期望文案'} onChange={(event: { target: { value: string } }) => patchAssert(item.id, { expect: event.target.value })} style={{ width: 130 }} />
+                          )}
+                        </>
+                      )}
+                      <Button type="button" size="sm" variant="ghost" onClick={() => update({ asserts: asserts.filter((row) => row.id !== item.id) })}>删除</Button>
+                    </div>
+                  ) : null}
+                  <span className={result?.status === 'fail' ? 'rui-bad' : 'rui-ok'}>{result?.actual || item.note || '还没跑'}</span>
+                </div>
+              ) : null}
             </div>
           )
         })}
-        {asserts.length ? null : <span className="rui-muted">还没有断言，点右上「加断言」加一条。</span>}
+        {asserts.length ? null : <div className="rui-muted" style={{ padding: 16 }}>还没有用例，点「加用例」。</div>}
       </div>
-
-      {showHistory && runs.length ? (
-        <div data-testid="regression-history-list" style={{ marginTop: 12, borderTop: '1px solid var(--rui-border)', paddingTop: 8 }}>
-          {runs
-            .slice()
-            .reverse()
-            .map((run) => (
-              <div key={run.at} className="rui-muted" style={{ display: 'flex', gap: 8, fontFamily: 'ui-monospace,monospace' }}>
-                <span>{fmtTime(run.at)}</span>
-                <span>
-                  {run.passed}/{run.total}
-                </span>
-                <span>{run.ms}ms</span>
-                <span>
-                  {run.items.filter((item) => item.delta === 'fixed').length ? 'fixed ' + run.items.filter((item) => item.delta === 'fixed').length : ''}
-                  {run.items.filter((item) => item.delta === 'broken').length ? ' broken ' + run.items.filter((item) => item.delta === 'broken').length : ''}
-                </span>
-              </div>
-            ))}
-        </div>
-      ) : null}
-    </Card>
     </ReUI>
   )
 }
 
 export function apply(ctx: {
   pageEditor: {
-    registerBlock: (spec: {
-      kind: string
-      plugin: string
-      label: string
-      blockType?: string
-      blockTypeLabel?: string
-      hint?: string
-      aliases?: string[]
-      defaults?: Record<string, unknown> | (() => Record<string, unknown>)
-      View: (props: BlockProps) => unknown
-    }) => void
+    registerBlock: (spec: Record<string, unknown>) => void
   }
 }) {
   ctx.pageEditor.registerBlock({
@@ -345,9 +327,12 @@ export function apply(ctx: {
     label: '页面回归检查块',
     blockType: 'test',
     blockTypeLabel: '测试',
-    hint: '写一组断言（元素存在 / 文案匹配 / 数量相等 / 接口状态码），点「跑一遍」逐条出通过失败，结果存进块 data.runs 并能和上一次对比（fixed / broken）',
-    aliases: ['run', 'regression', 'test', 'assert', '回归', '断言', '检查'],
+    hint: 'Playwright 式测试报告：断言是用例，runs 是 CI 记录，可筛选 failed/passed',
+    aliases: ['run', 'regression', 'test', 'assert', '回归', '断言', '检查', 'playwright'],
     defaults: {
+      filter: 'all',
+      selected: '',
+      runAt: 0,
       asserts: [
         { id: 'a1', type: 'exists', selector: 'h1', note: '标题在' },
         { id: 'a2', type: 'text', selector: 'h1', expect: '举例说明', note: '标题文案' },
