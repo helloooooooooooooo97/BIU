@@ -22,7 +22,6 @@ host 用 Node `fetch` 真发请求。只放行 `http:` / `https:`；15s 超时�
 
 ## 示例写法
 
-```md
 :::pageBlock {kind=api-play plugin=api-playground}
 {
   "method": "GET",
@@ -32,7 +31,6 @@ host 用 Node `fetch` 真发请求。只放行 `http:` / `https:`；15s 超时�
   "body": ""
 }
 :::
-```
 
 ## HTTP
 

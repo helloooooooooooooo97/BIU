@@ -4,7 +4,8 @@
 
 围栏头：`kind=toc plugin=page-toc`。
 
-```md
+## 示例写法
+
 :::pageBlock {kind=toc plugin=page-toc}
 {
   "title": "目录",
@@ -13,7 +14,6 @@
   "maxLevel": 3
 }
 :::
-```
 
 | 字段 | 说明 |
 |---|---|

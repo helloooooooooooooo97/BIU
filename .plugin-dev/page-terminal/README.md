@@ -8,14 +8,12 @@
 
 围栏头：`kind=terminal plugin=page-terminal`。围栏体是 JSON：`title`（标题，可省）、`height`（终端高度像素，默认 240）。
 
-```md
 :::pageBlock {kind=terminal plugin=page-terminal}
 {
   "title": "终端",
   "height": 260
 }
 :::
-```
 
 写入页面用 `db_content` 对应 page 的 markdown，按上面围栏粘贴或替换。斜杠插入时编辑器会补 `id=`；手写围栏可省略 `id`。
 

@@ -30,18 +30,15 @@
 
 静态 HTML：围栏头写 `kind` / `plugin` / 可选 `deck`、`width`、`height`；**围栏体就是 HTML**。
 
-```md
 :::pageBlock {kind=html plugin=page-html-blocks deck=true}
 <div style="width:100%;height:100vh;display:flex;flex-direction:column;justify-content:center;box-sizing:border-box;padding:6% 10%;color:#f6f2ea;background:linear-gradient(150deg,#3b277c,#642665 55%,#cf5a55)">
   <div style="font-size:13px;letter-spacing:.4em;font-weight:700">02 · 导演</div>
   <div style="font-size:clamp(32px,6vw,72px);font-weight:900;margin-top:14px">达米恩·查泽雷</div>
 </div>
 :::
-```
 
 动态 HTML：`kind=htmlframe`，体里写完整文档（可含 script）。高度用围栏头 `height=`。
 
-```md
 :::pageBlock {kind=htmlframe plugin=page-html-blocks deck=true height=300}
 <!DOCTYPE html>
 <html>
@@ -51,7 +48,6 @@
   </body>
 </html>
 :::
-```
 
 写入页面用 `db_content` 对应 page 的 markdown，按上面围栏粘贴或替换；不要改成 JSON 体（旧 JSON 仍能读，新写不要用）。
 

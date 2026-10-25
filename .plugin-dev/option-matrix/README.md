@@ -18,7 +18,6 @@
 
 ## 示例写法
 
-```md
 :::pageBlock {kind=option-matrix plugin=option-matrix}
 {
   "title": "登录方案选型",
@@ -36,7 +35,6 @@
   }
 }
 :::
-```
 
 可写字段：`title`（标题）、`scale`（满分制，默认 5）、`options`（方案名数组）、`criteria`（`{name, weight, higherIsBetter}`）、`scores`（`方案 → 维度 → 分`）。
 

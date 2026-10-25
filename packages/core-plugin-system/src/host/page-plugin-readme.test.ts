@@ -37,6 +37,40 @@ test('page block playground UIs use ReUI tokens instead of hardcoded light-theme
   }
 })
 
+test('page plugin READMEs use live :::pageBlock fences, not wrapped in markdown code fences', () => {
+  const ids = [
+    'api-playground',
+    'english-lab',
+    'fitness-tracker',
+    'option-matrix',
+    'page-algorithm',
+    'page-browser',
+    'page-code-runner',
+    'page-excalidraw',
+    'page-html-blocks',
+    'page-regression',
+    'page-terminal',
+    'page-toc',
+    'page-video',
+    'plugin-doctor',
+  ]
+  for (const id of ids) {
+    const src = readFileSync(join(sandbox, id, 'README.md'), 'utf8')
+    assert.match(src, /示例写法/, `${id} README should include 示例写法`)
+    const live = src.replace(/```[\s\S]*?```/g, '')
+    assert.match(
+      live,
+      new RegExp(`:::pageBlock \\{kind=\\S+ plugin=${id}(?:[\\s}])`),
+      `${id} README must use :::pageBlock {plugin=${id}} as live markdown, not inside a code fence`,
+    )
+    assert.doesNotMatch(
+      src,
+      /```[^\n]*\n:::pageBlock/,
+      `${id} README must not wrap :::pageBlock in an outer code fence`,
+    )
+  }
+})
+
 test('reui page blocks vendor ./reui rather than injecting STYLE_CSS or using BiuUi', () => {
   const files = [
     'page-toc/web/index.tsx',

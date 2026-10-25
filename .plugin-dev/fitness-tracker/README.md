@@ -11,7 +11,6 @@
 
 今日打卡：
 
-```md
 :::pageBlock {kind=fitness-day plugin=fitness-tracker}
 {
   "fastStart": "20:00",
@@ -20,11 +19,9 @@
   "water": { "07:00": 500, "09:00": 400 }
 }
 :::
-```
 
 训练日志：
 
-```md
 :::pageBlock {kind=fitness-log plugin=fitness-tracker}
 {
   "day": "周一",
@@ -35,7 +32,6 @@
   ]
 }
 :::
-```
 
 ## 可写字段
 

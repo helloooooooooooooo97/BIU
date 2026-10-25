@@ -2,7 +2,8 @@
 
 参考 **Playwright HTML report / Vitest UI / Cypress / GitHub Checks**：断言是测试用例，`runs` 是 CI 记录，顶栏 Passed/Failed，历史是一次次 run chip。
 
-```md
+## 示例写法
+
 :::pageBlock {kind=run plugin=page-regression}
 {
   "filter": "all",
@@ -14,7 +15,6 @@
   "runs": []
 }
 :::
-```
 
 | 字段 | 说明 |
 |---|---|
