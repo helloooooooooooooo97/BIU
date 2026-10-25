@@ -262,7 +262,7 @@ type CodeViewHandle = {
 const editorTheme = EditorView.theme({
   '&': {
     background: 'transparent',
-    color: 'var(--dsw-label)',
+    color: 'var(--rui-fg)',
     fontSize: '13px',
     height: '100%',
   },
@@ -273,18 +273,18 @@ const editorTheme = EditorView.theme({
     overflowX: 'auto',
   },
   '.cm-content': {
-    caretColor: 'var(--dsw-label)',
+    caretColor: 'var(--rui-fg)',
     padding: '10px 12px',
     minHeight: '100%',
     fontFamily: 'inherit',
   },
-  '.cm-cursor': { borderLeftColor: 'var(--dsw-label)' },
+  '.cm-cursor': { borderLeftColor: 'var(--rui-fg)' },
   '.cm-content ::selection': {
-    background: 'color-mix(in srgb, var(--dsw-pick) 40%, transparent)',
+    background: 'color-mix(in srgb, var(--rui-primary) 40%, transparent)',
     color: 'inherit',
   },
   '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionLayer .cm-selectionBackground': {
-    background: 'color-mix(in srgb, var(--dsw-pick) 40%, transparent)',
+    background: 'color-mix(in srgb, var(--rui-primary) 40%, transparent)',
   },
 })
 
@@ -622,15 +622,15 @@ function CodeRunnerBlock({ data, update, writable }: BlockProps) {
         background: 'transparent',
       }}
     >
-      <span style={{ width: 28, height: 3, borderRadius: 99, background: 'var(--dsw-label-3)', opacity: 0.35 }} />
+      <span style={{ width: 28, height: 3, borderRadius: 99, background: 'var(--rui-muted)', opacity: 0.35 }} />
     </div>
   )
 
   const colorMap: Record<string, string> = {
-    stdout: 'var(--dsw-label)',
-    stderr: 'var(--dsw-label-3)',
-    error: '#f38ba8',
-    success: 'var(--dsw-label-2)',
+    stdout: 'var(--rui-fg)',
+    stderr: 'var(--rui-muted)',
+    error: 'var(--rui-danger)',
+    success: 'var(--rui-ok)',
   }
 
   const preview = (localCode.split('\n').find((l) => l.trim()) ?? '').trim().slice(0, 60)
@@ -655,9 +655,9 @@ function CodeRunnerBlock({ data, update, writable }: BlockProps) {
           justifyContent: 'space-between',
           gap: 8,
           padding: '7px 10px',
-          borderBottom: collapsed ? 'none' : '1px solid var(--dsw-border)',
+          borderBottom: collapsed ? 'none' : '1px solid var(--rui-border)',
           alignItems: 'center',
-          background: 'color-mix(in srgb, var(--dsw-hover) 55%, transparent)',
+          background: 'var(--rui-accent)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
@@ -679,7 +679,7 @@ function CodeRunnerBlock({ data, update, writable }: BlockProps) {
                 borderRadius: 6,
                 border: 0,
                 background: 'transparent',
-                color: 'var(--dsw-icon)',
+                color: 'var(--rui-muted)',
                 fontSize: 11,
                 cursor: 'pointer',
                 flexShrink: 0,
@@ -689,7 +689,7 @@ function CodeRunnerBlock({ data, update, writable }: BlockProps) {
             </button>
           )}
           {ro ? (
-            <span style={{ fontSize: 12, fontWeight: 650, color: 'var(--dsw-label)' }}>
+            <span style={{ fontSize: 12, fontWeight: 650, color: 'var(--rui-fg)' }}>
               {langInfo.label}
             </span>
           ) : (
@@ -702,7 +702,7 @@ function CodeRunnerBlock({ data, update, writable }: BlockProps) {
                 borderRadius: 6,
                 border: 0,
                 background: 'transparent',
-                color: 'var(--dsw-label)',
+                color: 'var(--rui-fg)',
                 fontSize: 12,
                 fontWeight: 650,
                 cursor: 'pointer',
@@ -714,7 +714,7 @@ function CodeRunnerBlock({ data, update, writable }: BlockProps) {
             </select>
           )}
           {collapsed && (
-            <span style={{ color: 'var(--dsw-label-3)', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <span style={{ color: 'var(--rui-muted)', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {`${lineCount} \u884c · ${preview}`}
             </span>
           )}
@@ -737,7 +737,7 @@ function CodeRunnerBlock({ data, update, writable }: BlockProps) {
                 borderRadius: 5,
                 border: 0,
                 background: 'transparent',
-                color: 'var(--dsw-icon)',
+                color: 'var(--rui-muted)',
                 cursor: running ? 'not-allowed' : 'pointer',
                 opacity: running ? 0.5 : 1,
                 display: 'inline-flex',
@@ -765,7 +765,7 @@ function CodeRunnerBlock({ data, update, writable }: BlockProps) {
                 borderRadius: 5,
                 border: 0,
                 background: 'transparent',
-                color: 'var(--dsw-icon)',
+                color: 'var(--rui-muted)',
                 cursor: output.length === 0 ? 'default' : 'pointer',
                 opacity: output.length === 0 ? 0.35 : 1,
                 display: 'inline-flex',
@@ -810,9 +810,9 @@ function CodeRunnerBlock({ data, update, writable }: BlockProps) {
               <div
                 ref={outRef}
                 style={{
-                  borderTop: '1px solid var(--dsw-border)',
+                  borderTop: '1px solid var(--rui-border)',
                   padding: '10px 14px',
-                  background: 'color-mix(in srgb, var(--dsw-hover) 35%, transparent)',
+                  background: 'color-mix(in srgb, var(--rui-accent) 35%, transparent)',
                   height: outH,
                   maxHeight: MAX_DRAG_OUT_H,
                   boxSizing: 'border-box',
@@ -825,7 +825,7 @@ function CodeRunnerBlock({ data, update, writable }: BlockProps) {
                   <div
                     key={i}
                     style={{
-                      color: colorMap[line.type] || 'var(--dsw-label)',
+                      color: colorMap[line.type] || 'var(--rui-fg)',
                       whiteSpace: 'pre-wrap',
                       lineHeight: 1.6,
                       wordBreak: 'break-word',

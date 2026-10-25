@@ -72,14 +72,14 @@ function SourceEditor({ html, onChange }: { html: string; onChange: (v: string) 
         ...field,
         width: '100%',
         minHeight: 160,
-        padding: '26px 10px 10px',
+        padding: 10,
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: 12,
         lineHeight: 1.55,
-        color: '#111',
+        color: 'var(--rui-fg)',
         background: '#fff',
-        border: '2px solid #111',
-        borderRadius: 0,
+        border: '1px solid var(--rui-border)',
+        borderRadius: 10,
         resize: 'vertical',
       }}
     />

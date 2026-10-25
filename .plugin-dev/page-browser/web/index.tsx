@@ -136,17 +136,8 @@ function BrowserSurface({
         border: zoomed ? 'none' : undefined,
       }}
     >
-      <div
-        data-biu-ignore
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          padding: '8px 10px',
-          background: 'var(--rui-accent)',
-          borderBottom: '1px solid var(--rui-border)',
-        }}
-      >
+      <div data-biu-ignore className="rui-chrome">
+        <span className="rui-traffic" aria-hidden><i className="r" /><i className="y" /><i className="g" /></span>
         {zoomed ? null : (
           <button
             type="button"
@@ -190,13 +181,7 @@ function BrowserSurface({
             aria-label="地址"
             onKeyDown={(event) => event.stopPropagation()}
             onChange={(event) => setAddr(event.currentTarget.value)}
-            style={{
-              flex: 1,
-              minWidth: 0,
-              borderRadius: 999,
-              padding: '5px 12px',
-              outline: 'none',
-            }}
+            className="rui-addr"
           />
         </form>
         <button
@@ -205,7 +190,7 @@ function BrowserSurface({
           data-testid="page-browser-go"
           title="访问"
           aria-label="访问"
-          style={{ ...iconBtn, color: '#1d4ed8' }}
+          style={iconBtn}
           onClick={() => go(addr)}
         >
           前往

@@ -410,9 +410,9 @@ const BAR: CSSProperties = {
   gap: 8,
   height: 36,
   padding: '0 8px',
-  background: 'var(--dsw-sidebar)',
-  borderBottom: '1px solid var(--dsw-border)',
-  color: 'var(--dsw-label-2)',
+  background: 'var(--rui-accent)',
+  borderBottom: '1px solid var(--rui-border)',
+  color: 'var(--rui-muted)',
   fontSize: 12,
 }
 

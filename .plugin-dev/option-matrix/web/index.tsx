@@ -291,11 +291,12 @@ function OptionMatrix({ data, update, writable }: { data: Data; update: (patch: 
     null,
     h(
     Card,
-    { 'data-testid': 'option-matrix' },
+    { 'data-testid': 'option-matrix', className: 'rui-ios', style: { background: '#f2f2f7', border: 0 } },
+    h('div', { className: 'rui-large' }, data.title || '方案对比'),
     h('div', { className: 'rui-card-head' },
       h('div', null,
         readOnly
-          ? h('strong', { className: 'rui-card-title' }, data.title || '方案对比')
+          ? h('div', { className: 'rui-sub' }, `${options.length} 方案 × ${criteria.length} 维度`)
           : h(Input, {
               value: draftTitle,
               placeholder: '对比标题',
@@ -309,8 +310,8 @@ function OptionMatrix({ data, update, writable }: { data: Data; update: (patch: 
         h(Button, { type: 'button', variant: 'outline', onClick: () => setShowMd((v) => !v) }, showMd ? '隐藏 Markdown' : '导出 Markdown'),
       ),
     ),
-    h('div', { className: 'overflow-x-auto' },
-      h('table', { 'data-testid': 'option-matrix-table', className: 'w-full border-collapse text-[13px]' },
+    h('div', { className: 'rui-group', style: { overflowX: 'auto' } },
+      h('table', { 'data-testid': 'option-matrix-table', className: 'rui-table' },
         h('thead', null, h('tr', null, ...headCells)),
         h('tbody', null, ...bodyRows),
       ),

@@ -186,8 +186,8 @@ export function RegressionBlock({ data, update, writable }: BlockProps) {
   const broken = last ? last.items.filter((item) => item.delta === 'broken').length : 0
 
   return (
-    <ReUI>
-    <Card data-testid="regression-block">
+    <ReUI className="rui-ios">
+    <Card data-testid="regression-block" style={{ background: 'transparent', border: 0, padding: 0 }}>
       <CardHeader>
         <div>
           <CardTitle>页面回归检查</CardTitle>
@@ -220,82 +220,79 @@ export function RegressionBlock({ data, update, writable }: BlockProps) {
         {asserts.map((item, i) => {
           const result = resultOf(item.id)
           return (
-            <div key={item.id} data-testid="regression-row" className="rui-row">
-              <span className="rui-muted" style={{ width: 18, fontFamily: 'ui-monospace,monospace' }}>{i + 1}</span>
-              <Select
-                value={item.type}
-                disabled={!writable}
-                onChange={(event) => patchAssert(item.id, { type: event.target.value })}
-                style={{ width: 108, fontFamily: 'ui-monospace,monospace' }}
-              >
-                {TYPES.map((type) => (
-                  <option key={type.id} value={type.id}>
-                    {type.label}
-                  </option>
-                ))}
-              </Select>
-              {item.type === 'http' ? (
-                <>
-                  <Select
-                    value={String(item.method || 'GET')}
-                    disabled={!writable}
-                    onChange={(event) => patchAssert(item.id, { method: event.target.value })}
-                    style={{ width: 78, fontFamily: 'ui-monospace,monospace' }}
-                  >
-                    {['GET', 'POST', 'PUT', 'DELETE'].map((method) => (
-                      <option key={method} value={method}>
-                        {method}
-                      </option>
-                    ))}
-                  </Select>
-                  <Input
-                    value={String(item.url ?? '')}
-                    disabled={!writable}
-                    placeholder="/api/… 或 http://…"
-                    onChange={(event) => patchAssert(item.id, { url: event.target.value })}
-                    className="rui-grow font-mono"
-                  />
-                  <Input
-                    value={String(item.status ?? 200)}
-                    disabled={!writable}
-                    onChange={(event) => patchAssert(item.id, { status: event.target.value })}
-                    style={{ width: 56, fontFamily: 'ui-monospace,monospace' }}
-                  />
-                </>
-              ) : (
-                <>
-                  <Input
-                    value={String(item.selector ?? '')}
-                    disabled={!writable}
-                    placeholder="选择器，如 h1 / [data-testid=xxx]"
-                    onChange={(event) => patchAssert(item.id, { selector: event.target.value })}
-                    className="rui-grow font-mono"
-                  />
-                  {item.type === 'exists' ? null : (
-                    <Input
-                      value={String(item.expect ?? '')}
+            <div key={item.id} data-testid="regression-row" className="rui-assert">
+              <div className="rui-assert-top">
+                <span className={`rui-chip ${result ? (result.status === 'pass' ? 'rui-chip-ok' : 'rui-chip-bad') : 'rui-chip-wait'}`}>{i + 1}</span>
+                <Select
+                  value={item.type}
+                  disabled={!writable}
+                  onChange={(event) => patchAssert(item.id, { type: event.target.value })}
+                  style={{ width: 108 }}
+                >
+                  {TYPES.map((type) => (
+                    <option key={type.id} value={type.id}>
+                      {type.label}
+                    </option>
+                  ))}
+                </Select>
+                {item.type === 'http' ? (
+                  <>
+                    <Select
+                      value={String(item.method || 'GET')}
                       disabled={!writable}
-                      placeholder={item.type === 'count' ? '期望个数' : '期望文案（子串）'}
-                      onChange={(event) => patchAssert(item.id, { expect: event.target.value })}
-                      style={{ width: 130, fontFamily: 'ui-monospace,monospace' }}
+                      onChange={(event) => patchAssert(item.id, { method: event.target.value })}
+                      style={{ width: 78 }}
+                    >
+                      {['GET', 'POST', 'PUT', 'DELETE'].map((method) => (
+                        <option key={method} value={method}>
+                          {method}
+                        </option>
+                      ))}
+                    </Select>
+                    <Input
+                      value={String(item.url ?? '')}
+                      disabled={!writable}
+                      placeholder="/api/… 或 http://…"
+                      onChange={(event) => patchAssert(item.id, { url: event.target.value })}
+                      className="rui-grow"
                     />
-                  )}
-                </>
-              )}
-              <Input
-                value={String(item.note ?? '')}
-                disabled={!writable}
-                placeholder="说明"
-                onChange={(event) => patchAssert(item.id, { note: event.target.value })}
-                style={{ width: 96 }}
-              />
-              <Chip item={result} />
-              {writable ? (
-                <Button type="button" size="sm" variant="ghost" title="删掉这条断言" onClick={() => update({ asserts: asserts.filter((a) => a.id !== item.id) })}>
-                  删除
-                </Button>
-              ) : null}
-              {result ? <span className="rui-muted" style={{ fontFamily: 'ui-monospace,monospace', color: result.status === 'pass' ? undefined : 'var(--rui-danger)' }}>{result.actual}</span> : null}
+                    <Input
+                      value={String(item.status ?? 200)}
+                      disabled={!writable}
+                      onChange={(event) => patchAssert(item.id, { status: event.target.value })}
+                      style={{ width: 56 }}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <Input
+                      value={String(item.selector ?? '')}
+                      disabled={!writable}
+                      placeholder="选择器，如 h1 / [data-testid=xxx]"
+                      onChange={(event) => patchAssert(item.id, { selector: event.target.value })}
+                      className="rui-grow"
+                    />
+                    {item.type === 'exists' ? null : (
+                      <Input
+                        value={String(item.expect ?? '')}
+                        disabled={!writable}
+                        placeholder={item.type === 'count' ? '期望个数' : '期望文案（子串）'}
+                        onChange={(event) => patchAssert(item.id, { expect: event.target.value })}
+                        style={{ width: 130 }}
+                      />
+                    )}
+                  </>
+                )}
+                <Chip item={result} />
+                {writable ? (
+                  <Button type="button" size="sm" variant="ghost" title="删掉这条断言" onClick={() => update({ asserts: asserts.filter((a) => a.id !== item.id) })}>
+                    删除
+                  </Button>
+                ) : null}
+              </div>
+              <div className="rui-assert-out">
+                {result ? <span className={result.status === 'pass' ? 'rui-ok' : 'rui-bad'}>{result.actual}</span> : <span>{item.note || '还没跑'}</span>}
+              </div>
             </div>
           )
         })}

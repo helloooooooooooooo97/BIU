@@ -1,4 +1,4 @@
-import { Card, CardTitle, ReUI, Tree, TreeItem, TreeItemLabel, type TreeNodeItem } from './reui'
+import { Card, ReUI, Tree, TreeItem, TreeItemLabel, type TreeNodeItem } from './reui'
 import { headingElById, headingsFromPage, nestHeadings, pageRootFrom, sameTocItems, type TocHeading, type TocNode } from './outline.ts'
 
 const React = globalThis.React
@@ -99,16 +99,18 @@ function TocCard(props: { data: Record<string, unknown>; update: (patch: Record<
   }
 
   return (
-    <ReUI>
-      <Card data-testid="page-toc">
+    <ReUI className="rui-ios">
+      <Card data-testid="page-toc" style={{ background: 'transparent', border: 0, padding: 0 }}>
         <div ref={hostRef}>
-          <CardTitle>{title}</CardTitle>
+          <div className="rui-large">{title}</div>
           {items.length === 0 ? (
-            <p className="rui-muted">暂无标题</p>
+            <p className="rui-sub">暂无标题</p>
           ) : (
+            <div className="rui-group" style={{ padding: '6px 0' }}>
             <Tree indent={16} data-testid="page-toc-tree">
               <TocBranch nodes={tree} expanded={expanded} onToggle={onToggle} onJump={jump} />
             </Tree>
+            </div>
           )}
         </div>
       </Card>

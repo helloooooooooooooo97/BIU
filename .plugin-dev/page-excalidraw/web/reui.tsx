@@ -67,6 +67,38 @@ const CSS = `
 .rui-tree-item[aria-expanded=false] .rui-tree-chevron{transform:rotate(-90deg)}
 .rui-tree-dot{width:5px;height:5px;border-radius:99px;background:#d4d4d4;flex:0 0 auto;margin-left:4.5px;margin-right:4.5px}
 @media (max-width:720px){.rui-stats{grid-template-columns:1fr 1fr}.rui-stat:nth-child(2){border-right:0}.rui-stat:nth-child(n+3){border-top:1px solid var(--rui-border)}}
+.rui-ios{background:#f2f2f7;border-radius:16px;padding:8px 0 16px}
+.rui-large{margin:8px 20px 12px;font-size:28px;font-weight:700;letter-spacing:-.04em;line-height:1.1}
+.rui-sub{margin:-8px 20px 14px;color:#6d6d72;font-size:13px}
+.rui-group{margin:0 16px 18px;background:#fff;border-radius:12px;overflow:hidden}
+.rui-section{margin:0 20px 6px;font-size:12px;color:#6d6d72;letter-spacing:.02em}
+.rui-cell{display:flex;align-items:center;gap:10px;min-height:44px;padding:6px 14px;background:#fff;border-bottom:.5px solid rgba(60,60,67,.12);font-size:15px}
+.rui-cell:last-child{border-bottom:0}
+.rui-cell-main{flex:1 1 auto;min-width:0}
+.rui-cell-meta{color:#8e8e93;font-size:15px;font-variant-numeric:tabular-nums;flex:0 0 auto}
+.rui-activity{margin:0 16px 18px;background:#000;color:#fff;border-radius:18px;padding:22px 20px;display:flex;align-items:center;gap:22px}
+.rui-legend{display:flex;flex-direction:column;gap:12px;min-width:0}
+.rui-legend i{display:inline-block;width:8px;height:8px;border-radius:99px;margin-right:6px}
+.rui-legend b{display:block;font-size:22px;font-weight:600;letter-spacing:-.03em;font-variant-numeric:tabular-nums;line-height:1.15}
+.rui-legend em{display:block;font-style:normal;font-size:12px;color:rgba(255,255,255,.5);margin-top:2px}
+.rui-chrome{display:flex;align-items:center;gap:8px;height:44px;padding:0 10px;background:#f6f6f6;border-bottom:.5px solid rgba(0,0,0,.1)}
+.rui-traffic{display:flex;gap:6px;padding:0 6px}
+.rui-traffic i{width:10px;height:10px;border-radius:99px}
+.rui-traffic .r{background:#ff5f57}
+.rui-traffic .y{background:#febc2e}
+.rui-traffic .g{background:#28c840}
+.rui-addr{flex:1 1 auto;min-width:0;height:28px;border:0;border-radius:8px;background:#e8e8ed;padding:0 12px;text-align:center;font-size:13px}
+.rui-split{display:grid;grid-template-columns:1fr 1fr;min-height:280px}
+.rui-assert{padding:12px 14px;border-bottom:.5px solid rgba(60,60,67,.12)}
+.rui-assert:last-child{border-bottom:0}
+.rui-assert-top{display:flex;align-items:center;gap:8px}
+.rui-assert-out{margin-top:6px;font-size:12px;color:#8e8e93;font-family:ui-monospace,monospace}
+.rui-ok{color:#34c759}
+.rui-bad{color:#ff3b30}
+.rui-chip{width:22px;height:22px;border-radius:99px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex:0 0 auto}
+.rui-chip-ok{background:#e8f8ee;color:#248a3d}
+.rui-chip-bad{background:#ffece9;color:#d70015}
+.rui-chip-wait{background:#f2f2f7;color:#8e8e93}
 `
 
 function cx(...parts: Array<string | false | null | undefined>) {
@@ -338,6 +370,63 @@ export function TreeItemLabel({
         <i className="rui-tree-dot" />
       )}
       {children ?? item.getItemName()}
+    </span>
+  )
+}
+
+/** Apple Activity 同心环。value 0–1。 */
+export function ActivityRings({
+  rings,
+  size = 148,
+}: {
+  rings: Array<{ value: number; color: string }>
+  size?: number
+}) {
+  const stroke = 12
+  const gap = 4
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden>
+      {rings.map((ring, i) => {
+        const r = size / 2 - stroke / 2 - i * (stroke + gap)
+        const c = 2 * Math.PI * r
+        const pct = Math.min(1, Math.max(0, ring.value))
+        return (
+          <g key={i}>
+            <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={ring.color} strokeOpacity={0.2} strokeWidth={stroke} />
+            <circle
+              cx={size / 2}
+              cy={size / 2}
+              r={r}
+              fill="none"
+              stroke={ring.color}
+              strokeWidth={stroke}
+              strokeLinecap="round"
+              strokeDasharray={c}
+              strokeDashoffset={c * (1 - pct)}
+              transform={`rotate(-90 ${size / 2} ${size / 2})`}
+            />
+          </g>
+        )
+      })}
+    </svg>
+  )
+}
+
+export function Group({ className, ...rest }: Record<string, unknown>) {
+  return <div className={cx('rui-group', className as string)} {...rest} />
+}
+export function Cell({ className, ...rest }: Record<string, unknown>) {
+  return <div className={cx('rui-cell', className as string)} {...rest} />
+}
+export function Chrome({ className, ...rest }: Record<string, unknown>) {
+  return <div className={cx('rui-chrome', className as string)} {...rest} />
+}
+export function Traffic() {
+  return (
+    <span className="rui-traffic" aria-hidden>
+      <i className="r" />
+      <i className="y" />
+      <i className="g" />
     </span>
   )
 }

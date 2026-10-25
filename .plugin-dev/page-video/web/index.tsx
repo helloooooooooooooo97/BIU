@@ -86,17 +86,17 @@ export const inject = ['pageEditor']
 const STYLE_ID = 'pv-style-v21'
 const STYLE_CSS = `
 .pv{
-  --pv-ink:var(--dsw-label,#37352f);
-  --pv-mute:var(--dsw-label-3,#787774);
-  --pv-line:var(--dsw-border,#e9e9e7);
-  --pv-hover: var(--dsw-hover, rgba(55,53,47,.06));
-  --pv-bg:var(--dsw-bg,#fff);
-  --pv-panel:var(--dsw-sidebar,#f7f7f5);
-  --pv-surface:var(--dsw-surface,#fff);
-  --pv-blue:var(--dsw-pick,#2b7de6);
-  --pv-ok:var(--dsw-ok,#1f8a65);
-  --pv-danger:var(--dsw-danger,#cf2d56);
-  --pv-danger-soft:var(--dsw-danger-soft,rgba(207,45,86,.1));
+  --pv-ink:var(--rui-fg,#171717);
+  --pv-mute:var(--rui-muted,#737373);
+  --pv-line:var(--rui-border,#ececec);
+  --pv-hover:#f5f5f5;
+  --pv-bg:var(--rui-bg,#fff);
+  --pv-panel:#f2f2f7;
+  --pv-surface:#fff;
+  --pv-blue:#007aff;
+  --pv-ok:var(--rui-ok,#0f7a4a);
+  --pv-danger:var(--rui-danger,#b42318);
+  --pv-danger-soft:rgba(255,59,48,.1);
   position:relative;
   color:var(--pv-ink);
   font-family:var(--font-sans);

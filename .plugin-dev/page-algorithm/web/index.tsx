@@ -111,8 +111,13 @@ function AlgorithmCard({
 
   return (
     <ReUI>
-    <Card data-testid="page-algorithm-card" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', minHeight: 280, overflow: 'hidden', padding: 0, ['--pa-diff' as string]: accent }}>
-      <section style={{ minWidth: 0, background: 'var(--rui-accent)', padding: 16 }}>
+    <Card data-testid="page-algorithm-card" className="rui-split" style={{ overflow: 'hidden', padding: 0, ['--pa-diff' as string]: accent }}>
+      <div className="rui-chrome" style={{ gridColumn: '1 / -1' }}>
+        <span className="rui-traffic" aria-hidden><i className="r" /><i className="y" /><i className="g" /></span>
+        <span className="rui-muted">Playground</span>
+        <span style={{ marginLeft: 'auto', width: 8, height: 8, borderRadius: 99, background: accent }} />
+      </div>
+      <section style={{ minWidth: 0, background: '#fbfbfd', padding: 16, borderRight: '1px solid var(--rui-border)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
           <span className="rui-muted">题目</span>
           <Select

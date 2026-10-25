@@ -1,4 +1,4 @@
-import { Badge, Button, Card, CardActions, CardDescription, CardHeader, CardTitle, ReUI, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './reui'
+import { ActivityRings, Badge, Button, ReUI, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './reui'
 
 const React = globalThis.React
 const { useState } = React
@@ -88,37 +88,44 @@ function DoctorBlock(props: BlockProps) {
     }
   }
 
+  const ok = report?.summary.ok ?? 0
+  const warn = report?.summary.warn ?? 0
+  const broken = report?.summary.broken ?? 0
+  const total = Math.max(1, report?.total ?? 1)
+
   return (
-    <ReUI>
-    <Card data-testid="plugin-doctor-block">
-      <CardHeader>
-        <div>
-          <CardTitle>插件体检</CardTitle>
-          {report ? (
-            <CardDescription>
-              共 {report.total} 个 · 合规 {report.summary.ok} · 待修 {report.summary.warn} · 坏 {report.summary.broken} · {kb(report.summary.bytes)} · {clock(report.scannedAt)}
-            </CardDescription>
-          ) : (
-            <CardDescription>扫描 .plugin，给出合规结论</CardDescription>
-          )}
-        </div>
-        <CardActions>
-          {props.writable ? (
-            <Button data-testid="plugin-doctor-run" onClick={run} disabled={busy}>
-              {busy ? '扫描中…' : '体检'}
-            </Button>
-          ) : (
-            <span className="rui-muted">只读</span>
-          )}
-        </CardActions>
-      </CardHeader>
-      {error ? <div className="rui-muted" style={{ color: 'var(--rui-danger)' }}>{error}</div> : null}
+    <ReUI className="rui-ios">
+    <div data-testid="plugin-doctor-block">
+      <div className="rui-large">插件体检</div>
+      <div className="rui-sub">{report ? `${clock(report.scannedAt)} · ${kb(report.summary.bytes)}` : '扫描 .plugin，给出合规结论'}</div>
+      <div style={{ margin: '0 16px 12px' }}>
+        {props.writable ? (
+          <Button data-testid="plugin-doctor-run" onClick={run} disabled={busy}>
+            {busy ? '扫描中…' : '体检'}
+          </Button>
+        ) : (
+          <span className="rui-muted">只读</span>
+        )}
+      </div>
+      {error ? <div className="rui-sub" style={{ color: '#ff3b30' }}>{error}</div> : null}
       {!report ? (
-        <div className="rui-muted">
-          还没有体检结果{props.writable ? '，点「体检」扫一遍 .plugin。' : '。'}
-        </div>
+        <div className="rui-sub">还没有体检结果{props.writable ? '，点「体检」扫一遍 .plugin。' : '。'}</div>
       ) : (
         <>
+          <div className="rui-activity">
+            <ActivityRings
+              rings={[
+                { value: ok / total, color: '#30d158' },
+                { value: warn / total, color: '#ffd60a' },
+                { value: broken / total, color: '#ff453a' },
+              ]}
+            />
+            <div className="rui-legend">
+              <div><b><i style={{ background: '#30d158' }} />{ok}</b><em>合规</em></div>
+              <div><b><i style={{ background: '#ffd60a' }} />{warn}</b><em>待修</em></div>
+              <div><b><i style={{ background: '#ff453a' }} />{broken}</b><em>坏</em></div>
+            </div>
+          </div>
           <Table data-testid="plugin-doctor-table">
             <TableHeader>
               <TableRow className="border-0">
@@ -163,10 +170,10 @@ function DoctorBlock(props: BlockProps) {
               })}
             </TableBody>
           </Table>
-          <div className="rui-muted" style={{ marginTop: 12 }}>扫描根目录：{report.root}</div>
+          <div className="rui-sub">扫描根目录：{report.root}</div>
         </>
       )}
-    </Card>
+    </div>
     </ReUI>
   )
 }

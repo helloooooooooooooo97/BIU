@@ -234,8 +234,12 @@ function ApiPlaygroundBlock({ data, update, writable }: BlockProps) {
 
   return (
     <ReUI>
-    <Card data-testid="api-playground-block" data-plugin={name} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div ref={hostRef} className="contents">
+    <Card data-testid="api-playground-block" data-plugin={name} className="rui-stack" style={{ gap: 12, padding: 0, overflow: 'hidden' }}>
+      <div className="rui-chrome">
+        <span className="rui-traffic" aria-hidden><i className="r" /><i className="y" /><i className="g" /></span>
+        <span className="rui-muted">HTTP</span>
+      </div>
+      <div ref={hostRef} className="rui-stack" style={{ padding: '0 16px 12px', gap: 12 }}>
       <div className="rui-row">
         <Select
           style={{ width: 92, fontFamily: 'ui-monospace,monospace' }}
@@ -302,11 +306,11 @@ function ApiPlaygroundBlock({ data, update, writable }: BlockProps) {
       </Tabs>
 
       {tab === 'request' ? (
-        <div className="flex flex-col gap-2" data-testid="api-playground-request-pane">
-          <div className="flex flex-col gap-1">
+        <div className="rui-stack" data-testid="api-playground-request-pane" style={{ padding: '0 16px' }}>
+          <div>
             <Label>请求头 headers</Label>
             <Textarea
-              className="min-h-[62px] font-mono"
+              style={{ minHeight: 62, fontFamily: 'ui-monospace,monospace' }}
               data-testid="api-playground-headers"
               spellCheck={false}
               value={form.headers}
@@ -317,10 +321,10 @@ function ApiPlaygroundBlock({ data, update, writable }: BlockProps) {
               onKeyDown={onKeyDown}
             />
           </div>
-          <div className="flex flex-col gap-1">
+          <div>
             <Label>请求体 body</Label>
             <Textarea
-              className="min-h-[84px] font-mono"
+              style={{ minHeight: 84, fontFamily: 'ui-monospace,monospace' }}
               data-testid="api-playground-body"
               spellCheck={false}
               value={form.body}
@@ -333,7 +337,7 @@ function ApiPlaygroundBlock({ data, update, writable }: BlockProps) {
           </div>
         </div>
       ) : (
-        <div className="flex flex-col gap-2" data-testid="api-playground-response-pane">
+        <div className="rui-stack" data-testid="api-playground-response-pane" style={{ padding: '0 16px' }}>
           {!active ? (
             <div className="rui-muted">还没发过请求。填好上面的 url，点「发送」。</div>
           ) : active.error ? (
@@ -342,7 +346,7 @@ function ApiPlaygroundBlock({ data, update, writable }: BlockProps) {
             </div>
           ) : (
             <React.Fragment>
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="rui-row" style={{ flexWrap: 'wrap' }}>
                 <span className="rui-muted">{active.ms ?? 0} ms</span>
                 <span className="rui-muted">{formatBytes(active.bytes ?? 0)}</span>
                 {active.truncated ? (
@@ -359,9 +363,9 @@ function ApiPlaygroundBlock({ data, update, writable }: BlockProps) {
                   <summary className="rui-muted" style={{ cursor: 'pointer' }}>
                     响应头 · {Object.keys(activeHeaders).length} 条
                   </summary>
-                  <div className="mt-2 flex max-h-[200px] flex-col gap-0.5 overflow-auto" data-testid="api-playground-res-headers">
+                  <div className="rui-stack" style={{ marginTop: 8, maxHeight: 200, overflow: 'auto' }} data-testid="api-playground-res-headers">
                     {Object.entries(activeHeaders).map(([key, value]) => (
-                      <div className="flex gap-2 font-mono text-[12px]" key={key}>
+                      <div className="rui-row" key={key} style={{ fontFamily: 'ui-monospace,monospace', fontSize: 12 }}>
                         <span className="rui-muted" style={{ width: '34%', wordBreak: 'break-all' }}>{key}</span>
                         <span className="min-w-0 flex-1 break-all">{String(value)}</span>
                       </div>
@@ -369,7 +373,7 @@ function ApiPlaygroundBlock({ data, update, writable }: BlockProps) {
                   </div>
                 </details>
               ) : null}
-              <div className="flex flex-col gap-1">
+              <div>
                 <Label>
                   响应体{bodyView.json ? ' · 已自动美化 JSON' : ''}
                 </Label>
@@ -382,8 +386,8 @@ function ApiPlaygroundBlock({ data, update, writable }: BlockProps) {
         </div>
       )}
 
-      <div className="rui-sep" style={{ height: 'auto', background: 'transparent', borderTop: '1px solid var(--rui-border)', paddingTop: 12 }} data-testid="api-playground-history">
-        <div className="flex items-center gap-1.5">
+      <div style={{ borderTop: '1px solid var(--rui-border)', padding: 12 }} data-testid="api-playground-history">
+        <div className="rui-row">
           <Button
             variant="outline"
             data-testid="api-playground-history-toggle"
@@ -396,11 +400,11 @@ function ApiPlaygroundBlock({ data, update, writable }: BlockProps) {
               清空
             </Button>
           ) : null}
-          <span className="flex-1" />
+          <span className="rui-grow" />
           <span className="rui-muted">历史存在块数据里，跟文档一起版本化</span>
         </div>
         {histOpen && history.length ? (
-          <div className="mt-1.5 flex max-h-[180px] flex-col gap-px overflow-auto">
+          <div className="rui-stack" style={{ marginTop: 8, maxHeight: 180, overflow: 'auto', gap: 2 }}>
             {history.map((entry: HistoryEntry, index: number) => (
               <button
                 type="button"
