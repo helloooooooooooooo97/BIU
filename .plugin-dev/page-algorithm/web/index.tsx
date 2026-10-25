@@ -117,7 +117,7 @@ function AlgorithmCard({
           <span className="rui-muted">题目</span>
           <Select
             data-testid="page-algorithm-diff"
-            className="ml-auto w-auto rounded-full border-0"
+            style={{ marginLeft: 'auto', width: 108 }}
             disabled={ro}
             value={difficulty}
             onChange={(event) => update({ difficulty: event.target.value })}
@@ -149,7 +149,7 @@ function AlgorithmCard({
           <span className="rui-muted">代码</span>
           <Select
             data-testid="page-algorithm-lang"
-            className="ml-auto w-auto"
+            style={{ marginLeft: 'auto', width: 140 }}
             disabled={ro}
             value={lang}
             onChange={(event) => update({ lang: event.target.value })}

@@ -1,4 +1,4 @@
-import { Badge, Button, Card, CardHeader, CardTitle, Input, ReUI, Select } from './reui'
+import { Badge, Button, Card, CardActions, CardDescription, CardHeader, CardTitle, Input, ReUI, Select } from './reui'
 
 const React = globalThis.React
 const { useState, useCallback } = React
@@ -189,41 +189,44 @@ export function RegressionBlock({ data, update, writable }: BlockProps) {
     <ReUI>
     <Card data-testid="regression-block">
       <CardHeader>
-        <CardTitle>页面回归检查</CardTitle>
-        <span data-testid="regression-summary" className="rui-muted" style={{ fontFamily: 'ui-monospace,monospace' }}>
-          {last
-            ? `${last.passed}/${last.total} 通过 · ${last.failed} 失败 · ${last.ms}ms · ${fmtTime(last.at)}${
-                fixed ? ` · fixed ${fixed}` : ''
-              }${broken ? ` · broken ${broken}` : ''}`
-            : `${asserts.length} 条断言 · 还没跑过`}
-        </span>
-        <span className="flex-1" />
-        {writable ? (
-          <Button type="button" data-testid="regression-add" onClick={() => update({ asserts: [...asserts, { id: newId(), type: 'exists', selector: '' }] })}>
-            加断言
+        <div>
+          <CardTitle>页面回归检查</CardTitle>
+          <CardDescription data-testid="regression-summary">
+            {last
+              ? `${last.passed}/${last.total} 通过 · ${last.failed} 失败 · ${last.ms}ms · ${fmtTime(last.at)}${
+                  fixed ? ` · fixed ${fixed}` : ''
+                }${broken ? ` · broken ${broken}` : ''}`
+              : `${asserts.length} 条断言 · 还没跑过`}
+          </CardDescription>
+        </div>
+        <CardActions>
+          {writable ? (
+            <Button type="button" variant="outline" data-testid="regression-add" onClick={() => update({ asserts: [...asserts, { id: newId(), type: 'exists', selector: '' }] })}>
+              加断言
+            </Button>
+          ) : null}
+          {runs.length ? (
+            <Button type="button" variant="ghost" data-testid="regression-history" onClick={() => setShowHistory(!showHistory)}>
+              历史 {runs.length}
+            </Button>
+          ) : null}
+          <Button type="button" data-testid="regression-run" disabled={busy} onClick={() => void runAll()}>
+            {busy ? '跑…' : '跑一遍'}
           </Button>
-        ) : null}
-        <Button type="button" data-testid="regression-run" disabled={busy} onClick={() => void runAll()}>
-          {busy ? '跑…' : '跑一遍'}
-        </Button>
-        {runs.length ? (
-          <Button type="button" data-testid="regression-history" onClick={() => setShowHistory(!showHistory)}>
-            历史 {runs.length}
-          </Button>
-        ) : null}
+        </CardActions>
       </CardHeader>
 
-      <div className="mt-2 flex flex-col gap-1.5">
+      <div className="rui-stack">
         {asserts.map((item, i) => {
           const result = resultOf(item.id)
           return (
-            <div key={item.id} data-testid="regression-row" className="flex flex-wrap items-center gap-1.5">
+            <div key={item.id} data-testid="regression-row" className="rui-row">
               <span className="rui-muted" style={{ width: 18, fontFamily: 'ui-monospace,monospace' }}>{i + 1}</span>
               <Select
                 value={item.type}
                 disabled={!writable}
                 onChange={(event) => patchAssert(item.id, { type: event.target.value })}
-                className="w-[88px] font-mono"
+                style={{ width: 108, fontFamily: 'ui-monospace,monospace' }}
               >
                 {TYPES.map((type) => (
                   <option key={type.id} value={type.id}>
@@ -237,7 +240,7 @@ export function RegressionBlock({ data, update, writable }: BlockProps) {
                     value={String(item.method || 'GET')}
                     disabled={!writable}
                     onChange={(event) => patchAssert(item.id, { method: event.target.value })}
-                    className="w-[74px] font-mono"
+                    style={{ width: 78, fontFamily: 'ui-monospace,monospace' }}
                   >
                     {['GET', 'POST', 'PUT', 'DELETE'].map((method) => (
                       <option key={method} value={method}>
@@ -250,13 +253,13 @@ export function RegressionBlock({ data, update, writable }: BlockProps) {
                     disabled={!writable}
                     placeholder="/api/… 或 http://…"
                     onChange={(event) => patchAssert(item.id, { url: event.target.value })}
-                    className="min-w-0 flex-[1_1_200px] font-mono"
+                    className="rui-grow font-mono"
                   />
                   <Input
                     value={String(item.status ?? 200)}
                     disabled={!writable}
                     onChange={(event) => patchAssert(item.id, { status: event.target.value })}
-                    className="w-[54px] font-mono"
+                    style={{ width: 56, fontFamily: 'ui-monospace,monospace' }}
                   />
                 </>
               ) : (
@@ -266,7 +269,7 @@ export function RegressionBlock({ data, update, writable }: BlockProps) {
                     disabled={!writable}
                     placeholder="选择器，如 h1 / [data-testid=xxx]"
                     onChange={(event) => patchAssert(item.id, { selector: event.target.value })}
-                    className="min-w-0 flex-[1_1_180px] font-mono"
+                    className="rui-grow font-mono"
                   />
                   {item.type === 'exists' ? null : (
                     <Input
@@ -274,7 +277,7 @@ export function RegressionBlock({ data, update, writable }: BlockProps) {
                       disabled={!writable}
                       placeholder={item.type === 'count' ? '期望个数' : '期望文案（子串）'}
                       onChange={(event) => patchAssert(item.id, { expect: event.target.value })}
-                      className="w-[130px] font-mono"
+                      style={{ width: 130, fontFamily: 'ui-monospace,monospace' }}
                     />
                   )}
                 </>
@@ -284,15 +287,15 @@ export function RegressionBlock({ data, update, writable }: BlockProps) {
                 disabled={!writable}
                 placeholder="说明"
                 onChange={(event) => patchAssert(item.id, { note: event.target.value })}
-                className="w-24"
+                style={{ width: 96 }}
               />
               <Chip item={result} />
               {writable ? (
-                <Button type="button" title="删掉这条断言" onClick={() => update({ asserts: asserts.filter((a) => a.id !== item.id) })}>
+                <Button type="button" size="sm" variant="ghost" title="删掉这条断言" onClick={() => update({ asserts: asserts.filter((a) => a.id !== item.id) })}>
                   删除
                 </Button>
               ) : null}
-              {result ? <span className="rui-muted" style={{ width: '100%', paddingLeft: 24, fontFamily: 'ui-monospace,monospace', color: result.status === 'pass' ? undefined : 'var(--rui-danger)' }}>{result.actual}</span> : null}
+              {result ? <span className="rui-muted" style={{ fontFamily: 'ui-monospace,monospace', color: result.status === 'pass' ? undefined : 'var(--rui-danger)' }}>{result.actual}</span> : null}
             </div>
           )
         })}

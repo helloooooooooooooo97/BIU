@@ -236,9 +236,9 @@ function ApiPlaygroundBlock({ data, update, writable }: BlockProps) {
     <ReUI>
     <Card data-testid="api-playground-block" data-plugin={name} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div ref={hostRef} className="contents">
-      <div className="flex items-center gap-1.5">
+      <div className="rui-row">
         <Select
-          className="w-[92px] font-mono"
+          style={{ width: 92, fontFamily: 'ui-monospace,monospace' }}
           data-testid="api-playground-method"
           value={form.method}
           disabled={!editable}
@@ -253,7 +253,7 @@ function ApiPlaygroundBlock({ data, update, writable }: BlockProps) {
           ))}
         </Select>
         <Input
-          className="min-w-0 flex-1 font-mono"
+          className="rui-grow font-mono"
           data-testid="api-playground-url"
           value={form.url}
           spellCheck={false}
@@ -385,14 +385,14 @@ function ApiPlaygroundBlock({ data, update, writable }: BlockProps) {
       <div className="rui-sep" style={{ height: 'auto', background: 'transparent', borderTop: '1px solid var(--rui-border)', paddingTop: 12 }} data-testid="api-playground-history">
         <div className="flex items-center gap-1.5">
           <Button
-            variant="secondary"
+            variant="outline"
             data-testid="api-playground-history-toggle"
             onClick={() => setHistOpen((v: boolean) => !v)}
           >
             {histOpen ? '收起历史' : `历史（${history.length}）`}
           </Button>
           {history.length ? (
-            <Button variant="secondary" disabled={!editable} onClick={() => setConfirmClear(true)}>
+            <Button variant="ghost" disabled={!editable} onClick={() => setConfirmClear(true)}>
               清空
             </Button>
           ) : null}

@@ -1,4 +1,4 @@
-import { Badge, Button, Card, CardHeader, CardTitle, ReUI, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './reui'
+import { Badge, Button, Card, CardActions, CardDescription, CardHeader, CardTitle, ReUI, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './reui'
 
 const React = globalThis.React
 const { useState } = React
@@ -92,19 +92,25 @@ function DoctorBlock(props: BlockProps) {
     <ReUI>
     <Card data-testid="plugin-doctor-block">
       <CardHeader>
-        <CardTitle>插件体检</CardTitle>
-        {props.writable ? (
-          <Button data-testid="plugin-doctor-run" onClick={run} disabled={busy}>
-            {busy ? '扫描中…' : '体检'}
-          </Button>
-        ) : (
-          <span className="rui-muted">只读态 · 展示上次结果</span>
-        )}
-        {report ? (
-          <span className="rui-muted">
-            共 {report.total} 个插件 · 合规 {report.summary.ok} · 待修 {report.summary.warn} · 坏 {report.summary.broken} · 合计 {kb(report.summary.bytes)} · 扫描于 {clock(report.scannedAt)}
-          </span>
-        ) : null}
+        <div>
+          <CardTitle>插件体检</CardTitle>
+          {report ? (
+            <CardDescription>
+              共 {report.total} 个 · 合规 {report.summary.ok} · 待修 {report.summary.warn} · 坏 {report.summary.broken} · {kb(report.summary.bytes)} · {clock(report.scannedAt)}
+            </CardDescription>
+          ) : (
+            <CardDescription>扫描 .plugin，给出合规结论</CardDescription>
+          )}
+        </div>
+        <CardActions>
+          {props.writable ? (
+            <Button data-testid="plugin-doctor-run" onClick={run} disabled={busy}>
+              {busy ? '扫描中…' : '体检'}
+            </Button>
+          ) : (
+            <span className="rui-muted">只读</span>
+          )}
+        </CardActions>
       </CardHeader>
       {error ? <div className="rui-muted" style={{ color: 'var(--rui-danger)' }}>{error}</div> : null}
       {!report ? (
