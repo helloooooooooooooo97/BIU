@@ -99,6 +99,29 @@ const CSS = `
 .rui-chip-ok{background:#e8f8ee;color:#248a3d}
 .rui-chip-bad{background:#ffece9;color:#d70015}
 .rui-chip-wait{background:#f2f2f7;color:#8e8e93}
+.lc-shell{display:grid;grid-template-columns:minmax(260px,1fr) minmax(280px,1.1fr);min-height:420px;background:#fff}
+.lc-desc{padding:20px 22px 28px;overflow:auto;border-right:1px solid var(--rui-border);background:#fff;min-width:0}
+.lc-title{display:block;width:100%;border:0;background:transparent;font-size:22px;font-weight:600;letter-spacing:-.03em;line-height:1.25;padding:0;margin:0 0 10px;color:#262626}
+.lc-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.lc-diff{font-size:13px;font-weight:600}
+.lc-topics{display:flex;flex-wrap:wrap;gap:6px}
+.lc-topic{background:#f3f3f3;border-radius:99px;padding:3px 10px;font-size:12px;color:#5c5c5c}
+.lc-h{font-size:15px;font-weight:600;margin:18px 0 8px;color:#262626}
+.lc-p{font-size:14px;line-height:1.75;color:#373737;white-space:pre-wrap}
+.lc-ex{background:#f5f5f5;border-radius:8px;padding:12px 14px;margin:8px 0 12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;line-height:1.55;color:#262626}
+.lc-ex strong{display:block;font-family:ui-sans-serif,system-ui,sans-serif;font-size:13px;margin:0 0 8px}
+.lc-code{display:flex;flex-direction:column;min-width:0;min-height:0;background:#fff}
+.lc-codebar{display:flex;align-items:center;gap:8px;height:42px;padding:0 12px;border-bottom:1px solid var(--rui-border);background:#fafafa}
+.lc-codebar .rui-select{border:0;background:transparent;height:28px;font-weight:600}
+.lc-run{height:28px;padding:0 14px;border:0;border-radius:6px;background:#2cbb5d;color:#fff;font:600 13px/1 ui-sans-serif,system-ui,sans-serif;cursor:pointer}
+.lc-run:disabled{opacity:.45;cursor:default}
+.lc-run-ghost{background:#fff;color:#262626;border:1px solid #e5e5e5}
+.lc-console{border-top:1px solid var(--rui-border);background:#fff}
+.lc-console-tabs{display:flex;align-items:center;gap:14px;padding:8px 14px;border-bottom:1px solid var(--rui-border);font-size:13px;color:#8c8c8c}
+.lc-console-tabs [data-on=true]{color:#262626;font-weight:600;border-bottom:2px solid #262626;padding-bottom:6px;margin-bottom:-9px}
+.lc-console-body{padding:12px 14px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;line-height:1.65;min-height:72px;color:#262626;white-space:pre-wrap}
+.lc-empty{color:#8c8c8c}
+@media (max-width:820px){.lc-shell{grid-template-columns:1fr}}
 `
 
 function cx(...parts: Array<string | false | null | undefined>) {

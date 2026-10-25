@@ -1,12 +1,12 @@
 # 算法题卡片
 
-在页面里用 `/` 插入 LeetCode 风算法块：左边题目描述，右边代码。可改题名、难度、题面、语言和代码。无头插件，不占运行窗口。
+在页面里用 `/` 插入 LeetCode 风算法块：左边题名 / 难度 / 标签 / Description / Example / Constraints，右边 Code + Testcase。可改题名、难度、题面、语言和代码。无头插件，不占运行窗口。
 
 改页面或代写块之前，先照下面「示例写法」写 `:::pageBlock` 围栏。
 
 ## 示例写法
 
-围栏头：`kind=algorithm plugin=page-algorithm`。围栏体是 JSON：`title`、`difficulty`（Easy / Medium / Hard）、`prompt`、`lang`、`code`。
+围栏头：`kind=algorithm plugin=page-algorithm`。围栏体是 JSON：`title`、`difficulty`（Easy / Medium / Hard）、`topics`、`prompt`、`examples`、`constraints`、`lang`、`code`。缺 examples 时只显示题面。
 
 ```md
 :::pageBlock {kind=algorithm plugin=page-algorithm}

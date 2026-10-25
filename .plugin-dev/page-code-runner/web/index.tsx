@@ -1,8 +1,8 @@
-import { Button, Card, ReUI, Select } from './reui'
+import { Card, ReUI } from './reui'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { indentUnit } from '@codemirror/language'
 import { EditorSelection, EditorState, Prec } from '@codemirror/state'
-import { EditorView, drawSelection, keymap, placeholder as cmPlaceholder } from '@codemirror/view'
+import { EditorView, drawSelection, keymap, lineNumbers, placeholder as cmPlaceholder } from '@codemirror/view'
 
 const React = globalThis.React
 const { useState, useCallback, useRef, useEffect } = React
@@ -278,6 +278,8 @@ const editorTheme = EditorView.theme({
     minHeight: '100%',
     fontFamily: 'inherit',
   },
+  '.cm-gutters': { background: 'transparent', border: 'none', color: '#c4c4c4' },
+  '.cm-lineNumbers .cm-gutterElement': { minWidth: '2.2em', padding: '0 8px 0 6px' },
   '.cm-cursor': { borderLeftColor: 'var(--rui-fg)' },
   '.cm-content ::selection': {
     background: 'color-mix(in srgb, var(--rui-primary) 40%, transparent)',
@@ -331,6 +333,7 @@ function RunnerEditor({
         extensions: [
           history(),
           drawSelection(),
+          lineNumbers(),
           EditorView.lineWrapping,
           editorTheme,
           EditorState.tabSize.of(indent.length),
@@ -646,21 +649,10 @@ function CodeRunnerBlock({ data, update, writable }: BlockProps) {
         if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
         persist()
       }}
-      style={{ overflow: 'hidden', padding: 0, fontFamily: 'ui-monospace,monospace' }}
+      style={{ overflow: 'hidden', padding: 0 }}
     >
-      {/* toolbar：左语言 / 右运行+清空 */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          gap: 8,
-          padding: '7px 10px',
-          borderBottom: collapsed ? 'none' : '1px solid var(--rui-border)',
-          alignItems: 'center',
-          background: 'var(--rui-accent)',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+      <div className="lc-codebar">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
           {canCollapse && (
             <button
               onMouseDown={(e) => e.preventDefault()}
@@ -670,43 +662,22 @@ function CodeRunnerBlock({ data, update, writable }: BlockProps) {
                 if (!next) wantFocus.current = true
                 update({ collapsed: next })
               }}
-              title={collapsed ? '\u5c55\u5f00' : '\u6536\u8d77'}
-              style={{
-                width: 22,
-                height: 22,
-                lineHeight: 1,
-                padding: 0,
-                borderRadius: 6,
-                border: 0,
-                background: 'transparent',
-                color: 'var(--rui-muted)',
-                fontSize: 11,
-                cursor: 'pointer',
-                flexShrink: 0,
-              }}
+              title={collapsed ? '展开' : '收起'}
+              className="rui-btn rui-btn-ghost rui-btn-icon"
             >
-              {collapsed ? '\u25b8' : '\u25be'}
+              {collapsed ? '▸' : '▾'}
             </button>
           )}
+          <span style={{ fontWeight: 650, fontSize: 13 }}>Code</span>
           {ro ? (
-            <span style={{ fontSize: 12, fontWeight: 650, color: 'var(--rui-fg)' }}>
-              {langInfo.label}
-            </span>
+            <span style={{ fontSize: 13, fontWeight: 650 }}>{langInfo.label}</span>
           ) : (
             <select
               value={lang}
               onChange={(e) => onLangChange(e.target.value)}
               aria-label="语言"
-              style={{
-                padding: '2px 4px',
-                borderRadius: 6,
-                border: 0,
-                background: 'transparent',
-                color: 'var(--rui-fg)',
-                fontSize: 12,
-                fontWeight: 650,
-                cursor: 'pointer',
-              }}
+              className="rui-select"
+              style={{ border: 0, background: 'transparent', fontWeight: 600 }}
             >
               {LANGS.map((l) => (
                 <option key={l.id} value={l.id}>{l.label}</option>
@@ -714,72 +685,36 @@ function CodeRunnerBlock({ data, update, writable }: BlockProps) {
             </select>
           )}
           {collapsed && (
-            <span style={{ color: 'var(--rui-muted)', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {`${lineCount} \u884c · ${preview}`}
+            <span className="rui-muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {`${lineCount} 行 · ${preview}`}
             </span>
           )}
         </div>
         {!ro && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
             <button
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => {
-                void run()
-                focusCode()
-              }}
-              disabled={running || !localCode.trim()}
-              aria-label={running ? '运行中' : '运行'}
-              title={running ? '运行中' : '运行'}
-              style={{
-                width: 22,
-                height: 22,
-                padding: 0,
-                borderRadius: 5,
-                border: 0,
-                background: 'transparent',
-                color: 'var(--rui-muted)',
-                cursor: running ? 'not-allowed' : 'pointer',
-                opacity: running ? 0.5 : 1,
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden>
-                <path d="M4.25 2.55a.75.75 0 0 1 .78.06l8.5 5.45a.75.75 0 0 1 0 1.24l-8.5 5.45A.75.75 0 0 1 3.25 14V2.75a.75.75 0 0 1 1-.2Z" />
-              </svg>
-            </button>
-            <button
+              type="button"
+              className="lc-run lc-run-ghost"
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => {
                 clear()
                 focusCode()
               }}
               disabled={output.length === 0}
-              aria-label="清空"
-              title="清空"
-              style={{
-                width: 22,
-                height: 22,
-                padding: 0,
-                borderRadius: 5,
-                border: 0,
-                background: 'transparent',
-                color: 'var(--rui-muted)',
-                cursor: output.length === 0 ? 'default' : 'pointer',
-                opacity: output.length === 0 ? 0.35 : 1,
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
             >
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden>
-                <path
-                  fillRule="evenodd"
-                  clipRule="evenodd"
-                  d="M5 3.25V4H2.75a.75.75 0 0 0 0 1.5h.3l.815 8.15A1.5 1.5 0 0 0 5.357 14.5h5.285a1.5 1.5 0 0 0 1.493-1.35l.815-8.15h.3a.75.75 0 0 0 0-1.5H11v-.75A2.25 2.25 0 0 0 8.75 1h-1.5A2.25 2.25 0 0 0 5 3.25Zm2.25-.75a.75.75 0 0 0-.75.75V4h3v-.75a.75.75 0 0 0-.75-.75h-1.5ZM6.05 6a.75.75 0 0 1 .787.71l.275 5.5a.75.75 0 0 1-1.494.075l-.275-5.5A.75.75 0 0 1 6.05 6Zm3.9 0a.75.75 0 0 1 .712.787l-.275 5.5a.75.75 0 0 1-1.494-.075l.275-5.5a.75.75 0 0 1 .787-.71Z"
-                />
-              </svg>
+              清空
+            </button>
+            <button
+              type="button"
+              className="lc-run"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                void run()
+                focusCode()
+              }}
+              disabled={running || !localCode.trim()}
+            >
+              {running ? '运行中…' : '运行'}
             </button>
           </div>
         )}
@@ -803,41 +738,32 @@ function CodeRunnerBlock({ data, update, writable }: BlockProps) {
             editorRef={editorRef}
           />
           {dragBar('code')}
-
-          {/* output */}
-          {output.length > 0 && (
-            <>
-              <div
-                ref={outRef}
-                style={{
-                  borderTop: '1px solid var(--rui-border)',
-                  padding: '10px 14px',
-                  background: 'color-mix(in srgb, var(--rui-accent) 35%, transparent)',
-                  height: outH,
-                  maxHeight: MAX_DRAG_OUT_H,
-                  boxSizing: 'border-box',
-                  overflowY: outOverflow ? 'auto' : 'hidden',
-                  userSelect: 'text',
-                  cursor: 'text',
-                }}
-              >
-                {output.map((line, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      color: colorMap[line.type] || 'var(--rui-fg)',
-                      whiteSpace: 'pre-wrap',
-                      lineHeight: 1.6,
-                      wordBreak: 'break-word',
-                    }}
-                  >
+          <div className="lc-console">
+            <div className="lc-console-tabs">
+              <span data-on="true">Output</span>
+            </div>
+            <div
+              ref={outRef}
+              className="lc-console-body"
+              style={{
+                height: output.length ? outH : 72,
+                maxHeight: MAX_DRAG_OUT_H,
+                overflowY: outOverflow ? 'auto' : 'hidden',
+                userSelect: 'text',
+              }}
+            >
+              {output.length ? (
+                output.map((line, i) => (
+                  <div key={i} style={{ color: colorMap[line.type] || 'var(--rui-fg)', wordBreak: 'break-word' }}>
                     {line.text}
                   </div>
-                ))}
-              </div>
-              {dragBar('out')}
-            </>
-          )}
+                ))
+              ) : (
+                <span className="lc-empty">You must run your code first.</span>
+              )}
+            </div>
+          </div>
+          {output.length ? dragBar('out') : null}
         </>
       )}
     </Card>
