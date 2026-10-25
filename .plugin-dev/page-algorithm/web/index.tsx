@@ -1,4 +1,13 @@
 import { Card, Input, ReUI, Select, Textarea } from './reui'
+import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
+import { cpp } from '@codemirror/lang-cpp'
+import { java } from '@codemirror/lang-java'
+import { javascript } from '@codemirror/lang-javascript'
+import { python } from '@codemirror/lang-python'
+import { HighlightStyle, indentUnit, syntaxHighlighting } from '@codemirror/language'
+import { EditorState, Prec } from '@codemirror/state'
+import { EditorView, drawSelection, keymap, lineNumbers, placeholder as cmPlaceholder } from '@codemirror/view'
+import { tags as t } from '@lezer/highlight'
 
 const React = globalThis.React
 const { useEffect, useRef, useState } = React
@@ -113,6 +122,150 @@ function DraftField({
       }}
       className={className}
       style={style}
+    />
+  )
+}
+
+const lcHighlight = HighlightStyle.define([
+  { tag: t.keyword, color: '#0000ff' },
+  { tag: t.controlKeyword, color: '#af00db' },
+  { tag: t.operatorKeyword, color: '#0000ff' },
+  { tag: t.moduleKeyword, color: '#0000ff' },
+  { tag: t.definitionKeyword, color: '#0000ff' },
+  { tag: t.comment, color: '#008000' },
+  { tag: t.lineComment, color: '#008000' },
+  { tag: t.blockComment, color: '#008000' },
+  { tag: t.string, color: '#a31515' },
+  { tag: t.number, color: '#098658' },
+  { tag: t.bool, color: '#0000ff' },
+  { tag: t.null, color: '#0000ff' },
+  { tag: t.self, color: '#0000ff' },
+  { tag: t.className, color: '#267f99' },
+  { tag: t.typeName, color: '#267f99' },
+  { tag: t.function(t.definition(t.variableName)), color: '#795e26' },
+  { tag: t.function(t.variableName), color: '#795e26' },
+  { tag: t.definition(t.variableName), color: '#001080' },
+  { tag: t.propertyName, color: '#001080' },
+  { tag: t.operator, color: '#000000' },
+  { tag: t.punctuation, color: '#000000' },
+])
+
+const lcTheme = EditorView.theme({
+  '&': { background: 'transparent', color: '#1e1e1e', fontSize: '13px', height: '100%' },
+  '&.cm-editor': { outline: 'none', height: '100%' },
+  '.cm-scroller': { fontFamily: 'ui-monospace,SFMono-Regular,Menlo,Consolas,monospace', lineHeight: '1.6', overflow: 'auto' },
+  '.cm-content': { caretColor: '#1e1e1e', padding: '10px 8px 16px', minHeight: '100%' },
+  '.cm-gutters': { background: '#fff', border: 'none', color: '#c4c4c4' },
+  '.cm-lineNumbers .cm-gutterElement': { minWidth: '2.4em', padding: '0 10px 0 8px' },
+  '.cm-activeLine': { background: 'transparent' },
+  '.cm-cursor': { borderLeftColor: '#1e1e1e' },
+})
+
+function langExtension(lang: string) {
+  if (lang === 'python') return python()
+  if (lang === 'javascript') return javascript()
+  if (lang === 'typescript') return javascript({ typescript: true })
+  if (lang === 'java') return java()
+  if (lang === 'cpp') return cpp()
+  return python()
+}
+
+function CodePane({
+  value,
+  lang,
+  readOnly,
+  onLive,
+  onCommit,
+  onRun,
+}: {
+  value: string
+  lang: string
+  readOnly: boolean
+  onLive: (next: string) => void
+  onCommit: (next: string) => void
+  onRun: () => void
+}) {
+  const host = useRef<HTMLDivElement>(null)
+  const viewRef = useRef<EditorView | null>(null)
+  const liveRef = useRef(onLive)
+  const commitRef = useRef(onCommit)
+  const runRef = useRef(onRun)
+  const valueRef = useRef(value)
+  liveRef.current = onLive
+  commitRef.current = onCommit
+  runRef.current = onRun
+  valueRef.current = value
+
+  useEffect(() => {
+    const el = host.current
+    if (!el) return
+    const indent = lang === 'java' || lang === 'cpp' ? '    ' : '  '
+    const view = new EditorView({
+      parent: el,
+      state: EditorState.create({
+        doc: value,
+        extensions: [
+          history(),
+          drawSelection(),
+          lineNumbers(),
+          EditorView.lineWrapping,
+          lcTheme,
+          syntaxHighlighting(lcHighlight),
+          langExtension(lang),
+          EditorState.tabSize.of(indent.length),
+          indentUnit.of(indent),
+          cmPlaceholder('在此写解法…'),
+          Prec.highest(
+            keymap.of([
+              {
+                key: 'Mod-Enter',
+                run: () => {
+                  runRef.current()
+                  return true
+                },
+              },
+            ]),
+          ),
+          keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
+          EditorState.readOnly.of(readOnly),
+          EditorView.editable.of(!readOnly),
+          EditorView.domEventHandlers({
+            keydown: (event) => {
+              event.stopPropagation()
+              return false
+            },
+          }),
+          EditorView.updateListener.of((update) => {
+            if (!update.docChanged) return
+            liveRef.current(update.state.doc.toString())
+          }),
+        ],
+      }),
+    })
+    viewRef.current = view
+    return () => {
+      const next = view.state.doc.toString()
+      if (next !== valueRef.current) commitRef.current(next)
+      view.destroy()
+      viewRef.current = null
+    }
+  }, [lang, readOnly])
+
+  useEffect(() => {
+    const view = viewRef.current
+    if (!view) return
+    if (view.state.doc.toString() === value) return
+    if (view.hasFocus) return
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: value } })
+  }, [value])
+
+  return (
+    <div
+      ref={host}
+      data-testid="page-algorithm-code"
+      data-page-block-capture=""
+      onMouseDown={(event) => event.stopPropagation()}
+      style={{ flex: 1, minHeight: 280 }}
     />
   )
 }
@@ -306,27 +459,15 @@ function AlgorithmCard({
               {running ? '运行中…' : '运行'}
             </button>
           </div>
-          <DraftField
-            as="textarea"
-            testId="page-algorithm-code"
-            readOnly={ro}
+          <CodePane
             value={code}
-            onCommit={(next) => update({ code: next })}
+            lang={lang}
+            readOnly={ro}
             onLive={(next) => {
               codeLive.current = next
             }}
-            className="rui-textarea"
-            style={{
-              flex: 1,
-              minHeight: 280,
-              resize: 'none',
-              border: 0,
-              borderRadius: 0,
-              fontFamily: 'ui-monospace,SFMono-Regular,Menlo,monospace',
-              fontSize: 13,
-              lineHeight: 1.6,
-              padding: '12px 14px',
-            }}
+            onCommit={(next) => update({ code: next })}
+            onRun={() => void run()}
           />
           <div className="lc-console">
             <div className="lc-console-tabs">
