@@ -1,3 +1,4 @@
+import { Button, Input, ReUI } from './reui'
 import { createPortal } from 'react-dom'
 import { BLOCKED_HINT, BOOKMARKS, normalizeUrl } from './url.ts'
 import { openSidebarBrowser } from './open.ts'
@@ -118,19 +119,21 @@ function BrowserSurface({
   }
 
   return (
+    <ReUI>
     <div
       data-testid="page-browser-surface"
+      className="rui-card"
       style={{
         flex: 1,
         minHeight: 0,
         width: '100%',
         display: 'flex',
         flexDirection: 'column',
-        background: '#fff',
-        border: zoomed ? 'none' : `1px solid ${BORDER}`,
-        borderRadius: zoomed ? 0 : 10,
+        padding: 0,
         overflow: 'hidden',
         boxSizing: 'border-box',
+        borderRadius: zoomed ? 0 : undefined,
+        border: zoomed ? 'none' : undefined,
       }}
     >
       <div
@@ -139,10 +142,9 @@ function BrowserSurface({
           display: 'flex',
           alignItems: 'center',
           gap: 6,
-          padding: '6px 8px',
-          background: BAR,
-          borderBottom: `1px solid ${BORDER}`,
-          fontFamily: UI,
+          padding: '8px 10px',
+          background: 'var(--rui-accent)',
+          borderBottom: '1px solid var(--rui-border)',
         }}
       >
         {zoomed ? null : (
@@ -179,7 +181,7 @@ function BrowserSurface({
           }}
           style={{ flex: 1, minWidth: 0, display: 'flex' }}
         >
-          <input
+          <Input
             data-testid="page-browser-addr"
             data-page-block-capture=""
             spellCheck={false}
@@ -191,11 +193,6 @@ function BrowserSurface({
             style={{
               flex: 1,
               minWidth: 0,
-              fontFamily: UI,
-              fontSize: 12.5,
-              color: INK,
-              background: '#fff',
-              border: `1px solid ${BORDER}`,
               borderRadius: 999,
               padding: '5px 12px',
               outline: 'none',
@@ -350,6 +347,7 @@ function BrowserSurface({
         ) : null}
       </div>
     </div>
+    </ReUI>
   )
 }
 

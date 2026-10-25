@@ -1,4 +1,4 @@
-import { Textarea } from '@biu/biu-ui'
+import { ReUI, Textarea } from './reui'
 import { createPortal } from 'react-dom'
 import { bindHtmlSlide, collectHtmlSlides, cssBoxSize, htmlDeckEnabled, htmlDeckIndex, htmlDeckKeyAction, htmlLooksFillLayout, HTML_FILL_HOST_PX, stepHtmlDeck } from './html-deck.ts'
 import { htmlBlockKey, stampHtmlPickSurfaces, stampHtmlSource } from './stamp-picks.ts'
@@ -581,6 +581,7 @@ function HtmlDirectCard({ data, update, writable }: BlockProps) {
   )
 
   return (
+    <ReUI>
     <div
       ref={hostRef}
       data-testid="page-html-direct"
@@ -621,6 +622,7 @@ function HtmlDirectCard({ data, update, writable }: BlockProps) {
       {ro || editing ? null : <SizeGrip reveal={hover} boxRef={hostRef} onSize={(next) => update(next)} />}
       {deck.overlay}
     </div>
+    </ReUI>
   )
 }
 
@@ -719,6 +721,7 @@ function HtmlFrameCard({ data, update, writable }: BlockProps) {
   }, [editing, html, height])
 
   return (
+    <ReUI>
     <div
       ref={hostRef}
       data-testid="page-html-frame"
@@ -757,6 +760,7 @@ function HtmlFrameCard({ data, update, writable }: BlockProps) {
       )}
       {deck.overlay}
     </div>
+    </ReUI>
   )
 }
 

@@ -1,4 +1,4 @@
-import { Card, Input, Select, Textarea } from '@biu/biu-ui'
+import { Card, Input, ReUI, Select, Textarea } from './reui'
 
 const React = globalThis.React
 const { useEffect, useRef, useState } = React
@@ -37,6 +37,7 @@ function DraftField({
   readOnly,
   testId,
   className,
+  style,
 }: {
   as: 'input' | 'textarea'
   value: string
@@ -44,6 +45,7 @@ function DraftField({
   readOnly?: boolean
   testId: string
   className: string
+  style?: Record<string, unknown>
 }) {
   const Tag = kind === 'textarea' ? Textarea : Input
   const [draft, setDraft] = useState(value)
@@ -85,6 +87,7 @@ function DraftField({
       }}
       onChange={(event) => setDraft(event.currentTarget.value)}
       className={className}
+      style={style}
     />
   )
 }
@@ -107,10 +110,11 @@ function AlgorithmCard({
   const ro = !writable
 
   return (
-    <Card data-testid="page-algorithm-card" className="grid min-h-[280px] grid-cols-1 overflow-hidden p-0 md:grid-cols-2" style={{ ['--pa-diff' as string]: accent }}>
-      <section className="min-w-0 bg-dsw-hover p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <span className="text-[11px] font-semibold tracking-wide text-dsw-label-3">题目</span>
+    <ReUI>
+    <Card data-testid="page-algorithm-card" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', minHeight: 280, overflow: 'hidden', padding: 0, ['--pa-diff' as string]: accent }}>
+      <section style={{ minWidth: 0, background: 'var(--rui-accent)', padding: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+          <span className="rui-muted">题目</span>
           <Select
             data-testid="page-algorithm-diff"
             className="ml-auto w-auto rounded-full border-0"
@@ -129,7 +133,7 @@ function AlgorithmCard({
           readOnly={ro}
           value={title}
           onCommit={(next) => update({ title: next })}
-          className="mb-2 h-auto border-0 bg-transparent text-[20px] font-bold"
+          className="rui-input" style={{ height: 'auto', border: 0, background: 'transparent', fontSize: 20, fontWeight: 700 }}
         />
         <DraftField
           as="textarea"
@@ -137,12 +141,12 @@ function AlgorithmCard({
           readOnly={ro}
           value={prompt}
           onCommit={(next) => update({ prompt: next })}
-          className="min-h-[160px] border-0 bg-transparent text-dsw-label-3"
+          className="rui-textarea" style={{ minHeight: 160, border: 0, background: 'transparent' }}
         />
       </section>
       <section className="flex min-w-0 flex-col">
-        <div className="flex items-center gap-2 border-b border-dsw-border px-3 py-2 text-[12px]">
-          <span className="text-[11px] font-semibold tracking-wide text-dsw-label-3">代码</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid var(--rui-border)', padding: '8px 12px' }}>
+          <span className="rui-muted">代码</span>
           <Select
             data-testid="page-algorithm-lang"
             className="ml-auto w-auto"
@@ -163,10 +167,11 @@ function AlgorithmCard({
           readOnly={ro}
           value={code}
           onCommit={(next) => update({ code: next })}
-          className="min-h-[200px] flex-1 resize-none border-0 font-mono text-[12.5px]"
+          className="rui-textarea" style={{ minHeight: 200, flex: 1, resize: 'none', border: 0, fontFamily: 'ui-monospace,monospace' }}
         />
       </section>
     </Card>
+    </ReUI>
   )
 }
 

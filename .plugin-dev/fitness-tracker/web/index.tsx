@@ -1,4 +1,4 @@
-import { Button, Card, CardHeader, CardTitle, Checkbox, Input, Progress, Textarea } from '@biu/biu-ui'
+import { Button, Card, Checkbox, Input, Progress, ReUI, Textarea } from './reui'
 
 const React = globalThis.React
 const { useState, useMemo, useEffect } = React
@@ -95,51 +95,51 @@ function DayBlock({ data, update, writable }: { data: DayData; update: (p: Parti
   }, [JSON.stringify(d)])
 
   const cards = [
-    h('div', { className: 'rounded-[6px] border border-dsw-border p-2', key: 'w' },
-      h('div', { className: 'text-[11px] font-semibold uppercase tracking-wide text-dsw-label-3' }, '饮水'),
+    h('div', { className: '', key: 'w' },
+      h('div', { className: 'rui-muted' }, '饮水'),
       h('div', { className: 'mt-0.5 text-lg font-bold tabular-nums' }, `${p.water}`, h('span', { className: 'mt-0.5 text-[11px] font-medium text-dsw-label-3' }, ` / ${p.target} ml`)),
       h(Progress, { value: p.waterPct }),
-      h('div', { className: 'mt-1.5 text-[12px] text-dsw-label-3' }, p.waterPct >= 1 ? '达标 ✅' : `还差 ${p.target - p.water} ml`),
+      h('div', { className: 'mt-1.5 rui-muted' }, p.waterPct >= 1 ? '达标 ✅' : `还差 ${p.target - p.water} ml`),
     ),
-    h('div', { className: 'rounded-[6px] border border-dsw-border p-2', key: 'f' },
-      h('div', { className: 'text-[11px] font-semibold uppercase tracking-wide text-dsw-label-3' }, '进食窗口'),
+    h('div', { className: '', key: 'f' },
+      h('div', { className: 'rui-muted' }, '进食窗口'),
       h('div', { className: 'mt-0.5 text-lg font-bold tabular-nums' }, `${fastEnd}–${fastStart}`),
-      h('div', { className: 'mt-1.5 text-[12px] text-dsw-label-3', style: { color: inWindow ? 'var(--dsw-ok,#3fb950)' : undefined } },
+      h('div', { className: 'mt-1.5 rui-muted', style: { color: inWindow ? 'var(--dsw-ok,#3fb950)' : undefined } },
         inWindow ? '窗口内，可以吃' : `空腹中，还剩 ${Math.floor(fastingLeft / 60)}h ${pad(fastingLeft % 60)}m`),
     ),
-    h('div', { className: 'rounded-[6px] border border-dsw-border p-2', key: 'm' },
-      h('div', { className: 'text-[11px] font-semibold uppercase tracking-wide text-dsw-label-3' }, '餐次'),
+    h('div', { className: '', key: 'm' },
+      h('div', { className: 'rui-muted' }, '餐次'),
       h('div', { className: 'mt-0.5 text-lg font-bold tabular-nums' }, `${p.mealsDone} / ${MEALS.length}`),
-      h('div', { className: 'mt-1.5 text-[12px] text-dsw-label-3' }, '每餐 35–45g 蛋白'),
+      h('div', { className: 'mt-1.5 rui-muted' }, '每餐 35–45g 蛋白'),
     ),
-    h('div', { className: 'rounded-[6px] border border-dsw-border p-2', key: 'c' },
-      h('div', { className: 'text-[11px] font-semibold uppercase tracking-wide text-dsw-label-3' }, '咖啡因'),
+    h('div', { className: '', key: 'c' },
+      h('div', { className: 'rui-muted' }, '咖啡因'),
       h('div', { className: 'mt-0.5 text-lg font-bold tabular-nums' }, now),
-      h('div', { className: 'mt-1.5 text-[12px] text-dsw-label-3', style: { color: lastCoffee ? 'var(--dsw-warn,#d29922)' : undefined } },
+      h('div', { className: 'mt-1.5 rui-muted', style: { color: lastCoffee ? 'var(--dsw-warn,#d29922)' : undefined } },
         lastCoffee ? '已过 15:00，别再喝' : '最后一杯不晚于 15:00'),
     ),
   ]
 
-  return h(Card, { 'data-testid': 'fitness-day', className: 'border-dsw-border text-dsw-label' },
+  return h(ReUI, null, h(Card, { 'data-testid': 'fitness-day', className: undefined },
     h('div', { className: 'mb-2 flex flex-wrap items-center gap-2' },
       h('strong', { className: 'text-[13px] font-semibold' }, '今日打卡'),
       writable
         ? h(Input, { className: 'h-[26px]', type: 'date', value: d.date ?? today(), onChange: (e: any) => update({ date: e.target.value }) })
-        : h('span', { className: 'text-[12px] font-medium text-dsw-label-3' }, d.date ?? today()),
-      h('span', { className: 'text-[12px] font-medium text-dsw-label-3' }, p.target === WATER_TARGET.train ? '训练日' : '休息日'),
+        : h('span', { className: 'rui-muted' }, d.date ?? today()),
+      h('span', { className: 'rui-muted' }, p.target === WATER_TARGET.train ? '训练日' : '休息日'),
       h(Button, { variant: d.workoutDone ? 'secondary' : 'default', type: 'button', onClick: () => writable && update({ workoutDone: !d.workoutDone }) }, d.workoutDone ? '训练已完成' : '标记训练完成'),
       h('span', { className: 'flex-1' }),
       h(Button, { className: undefined, type: 'button', onClick: () => setShowMd((v) => !v) }, showMd ? '隐藏' : '导出 markdown'),
     ),
     h('div', { className: 'my-2 grid grid-cols-[repeat(auto-fill,minmax(112px,1fr))] gap-2' }, ...cards),
     h('div', { className: 'my-1.5 flex flex-wrap items-center gap-2' },
-      h('span', { className: 'text-[12px] font-medium text-dsw-label-3' }, '快捷加水'),
+      h('span', { className: 'rui-muted' }, '快捷加水'),
       ...[250, 300, 400, 500].map((ml) => h(Button, { key: ml, className: undefined, type: 'button', onClick: () => writable && addWater(ml) }, `+${ml}`)),
       h(Button, { className: undefined, type: 'button', onClick: () => writable && update({ water: {} }) }, '清零'),
       h(Button, { variant: d.sodium ? 'secondary' : 'ghost', type: 'button', onClick: () => writable && update({ sodium: !d.sodium }) }, '电解质 ✓'),
     ),
     h('div', null,
-      h('div', { className: 'text-[12px] font-medium text-dsw-label-3', style: { marginTop: 4 } }, '按时间表打点（ml）'),
+      h('div', { className: 'rui-muted', style: { marginTop: 4 } }, '按时间表打点（ml）'),
       h('div', { className: 'my-1.5 flex flex-wrap items-center gap-2' },
         ...WATER_SLOTS.map(([slot, ml]) =>
           h('label', { key: slot, className: 'h-[26px] rounded-full', style: { display: 'inline-flex', alignItems: 'center', gap: 4, cursor: writable ? 'pointer' : 'default' } },
@@ -152,7 +152,7 @@ function DayBlock({ data, update, writable }: { data: DayData; update: (p: Parti
       ),
     ),
     h('div', null,
-      h('div', { className: 'text-[12px] font-medium text-dsw-label-3', style: { marginTop: 4 } }, '餐次'),
+      h('div', { className: 'rui-muted', style: { marginTop: 4 } }, '餐次'),
       ...MEALS.map((m) =>
         h('label', { key: m, className: 'my-1.5 flex flex-wrap items-center gap-2', style: { cursor: writable ? 'pointer' : 'default', margin: '2px 0' } },
           h(Checkbox, { checked: !!meals[m], onChange: () => writable && update({ meals: { ...meals, [m]: !meals[m] } }) }),
@@ -161,31 +161,31 @@ function DayBlock({ data, update, writable }: { data: DayData; update: (p: Parti
       ),
     ),
     h('div', { className: 'my-1.5 flex flex-wrap items-center gap-2' },
-      h('label', null, h('span', { className: 'text-[12px] font-medium text-dsw-label-3' }, '体重 kg '), writable
+      h('label', null, h('span', { className: 'rui-muted' }, '体重 kg '), writable
         ? h(Input, { className: 'w-[58px] text-center tabular-nums', type: 'number', step: '0.1', value: d.weight ?? '', onChange: (e: any) => update({ weight: e.target.value === '' ? undefined : num(e.target.value) }) })
         : h('strong', null, d.weight ?? '—')),
-      h('label', null, h('span', { className: 'text-[12px] font-medium text-dsw-label-3' }, '步数 '), writable
+      h('label', null, h('span', { className: 'rui-muted' }, '步数 '), writable
         ? h(Input, { className: 'w-[58px] text-center tabular-nums', type: 'number', value: d.steps ?? '', onChange: (e: any) => update({ steps: e.target.value === '' ? undefined : num(e.target.value) }) })
         : h('strong', null, d.steps ?? '—')),
-      h('label', null, h('span', { className: 'text-[12px] font-medium text-dsw-label-3' }, '睡眠 h '), writable
+      h('label', null, h('span', { className: 'rui-muted' }, '睡眠 h '), writable
         ? h(Input, { className: 'w-[58px] text-center tabular-nums', type: 'number', step: '0.1', value: d.sleep ?? '', onChange: (e: any) => update({ sleep: e.target.value === '' ? undefined : num(e.target.value) }) })
         : h('strong', null, d.sleep ?? '—')),
-      h('label', null, h('span', { className: 'text-[12px] font-medium text-dsw-label-3' }, '关窗 '), writable
+      h('label', null, h('span', { className: 'rui-muted' }, '关窗 '), writable
         ? h(Input, { className: 'h-[26px]', style: { width: 70 }, value: fastStart, onChange: (e: any) => update({ fastStart: e.target.value }) })
         : h('span', null, fastStart)),
-      h('label', null, h('span', { className: 'text-[12px] font-medium text-dsw-label-3' }, '开窗 '), writable
+      h('label', null, h('span', { className: 'rui-muted' }, '开窗 '), writable
         ? h(Input, { className: 'h-[26px]', style: { width: 70 }, value: fastEnd, onChange: (e: any) => update({ fastEnd: e.target.value }) })
         : h('span', null, fastEnd)),
     ),
     writable
       ? h(Input, { className: 'h-[26px]', style: { width: '100%', marginTop: 4 }, placeholder: '备注（饿感 / 状态 / 训练感受）', value: d.note ?? '', onChange: (e: any) => update({ note: e.target.value }) })
-      : (d.note ? h('div', { className: 'mt-1.5 text-[12px] text-dsw-label-3' }, `备注：${d.note}`) : null),
-    h('div', { className: 'mt-1.5 text-[12px] text-dsw-label-3' }, '判定：尿色淡黄为准；一次别灌超 500ml；训练日必补钠 1–2g。'),
+      : (d.note ? h('div', { className: 'mt-1.5 rui-muted' }, `备注：${d.note}`) : null),
+    h('div', { className: 'mt-1.5 rui-muted' }, '判定：尿色淡黄为准；一次别灌超 500ml；训练日必补钠 1–2g。'),
     showMd ? h('div', null,
       h(Textarea, { className: 'mt-1.5 min-h-[120px] font-mono text-[12px]', readOnly: true, value: md }),
       h(Button, { className: undefined, style: { marginTop: 4 }, type: 'button', onClick: () => { const nav = globalThis.navigator; if (nav && nav.clipboard) void nav.clipboard.writeText(md); setCopied(true) } }, copied ? '已复制' : '复制'),
     ) : null,
-  )
+  ))
 }
 
 // ---------------- 训练日志 ----------------
@@ -224,35 +224,35 @@ function LogBlock({ data, update, writable }: { data: LogData; update: (p: Parti
     return lines.join('\n')
   }, [JSON.stringify(data)])
 
-  return h(Card, { 'data-testid': 'fitness-log', className: 'border-dsw-border text-dsw-label' },
+  return h(ReUI, null, h(Card, { 'data-testid': 'fitness-log', className: undefined },
     h('div', { className: 'mb-2 flex flex-wrap items-center gap-2' },
       h('strong', { className: 'text-[13px] font-semibold' }, '训练日志'),
       writable ? h(Input, { className: 'h-[26px]', placeholder: '周一', value: data.day ?? '', onChange: (e: any) => update({ day: e.target.value }) })
-        : h('span', { className: 'text-[12px] font-medium text-dsw-label-3' }, data.day ?? ''),
+        : h('span', { className: 'rui-muted' }, data.day ?? ''),
       writable ? h(Input, { className: 'h-[26px]', placeholder: '上肢A（推为主）', value: data.focus ?? '', onChange: (e: any) => update({ focus: e.target.value }) })
-        : h('span', { className: 'text-[12px] font-medium text-dsw-label-3' }, data.focus ?? ''),
-      h('span', { className: 'text-[12px] font-medium text-dsw-label-3' }, `${doneSets}/${totalSets} 组 · 容量 ${volume} kg`),
+        : h('span', { className: 'rui-muted' }, data.focus ?? ''),
+      h('span', { className: 'rui-muted' }, `${doneSets}/${totalSets} 组 · 容量 ${volume} kg`),
       h('span', { className: 'flex-1' }),
       writable ? h(Button, { className: undefined, type: 'button', onClick: addEx }, '加动作') : null,
       h(Button, { className: undefined, type: 'button', onClick: () => setShowMd((v) => !v) }, showMd ? '隐藏' : '导出 markdown'),
     ),
     h('table', { className: 'w-full border-collapse text-[13px]' },
       h('thead', null, h('tr', null,
-        h('th', { className: 'border border-dsw-border px-1.5 py-1 align-middle', style: { textAlign: 'left' } }, '动作'),
-        h('th', { className: 'border border-dsw-border px-1.5 py-1 align-middle' }, '计划'),
-        h('th', { className: 'border border-dsw-border px-1.5 py-1 align-middle', style: { textAlign: 'left' } }, '组（重量×次数，勾选=完成）'),
-        h('th', { className: 'border border-dsw-border px-1.5 py-1 align-middle' }, '容量'),
-        writable ? h('th', { className: 'border border-dsw-border px-1.5 py-1 align-middle' }, '') : null,
+        h('th', { className: '', style: { textAlign: 'left' } }, '动作'),
+        h('th', { className: '' }, '计划'),
+        h('th', { className: '', style: { textAlign: 'left' } }, '组（重量×次数，勾选=完成）'),
+        h('th', { className: '' }, '容量'),
+        writable ? h('th', { className: '' }, '') : null,
       )),
       h('tbody', null, ...ex.map((r, ei) =>
         h('tr', { key: ei },
-          h('td', { className: 'border border-dsw-border px-1.5 py-1 align-middle' }, writable
+          h('td', { className: '' }, writable
             ? h(Input, { className: 'h-6 w-full border-transparent bg-transparent', value: r.name, onChange: (e: any) => update({ exercises: ex.map((x, i) => i === ei ? { ...x, name: e.target.value } : x) }) })
             : h('span', { style: { fontWeight: 600 } }, r.name)),
-          h('td', { className: 'border border-dsw-border px-1.5 py-1 align-middle', style: { textAlign: 'center' } }, writable
+          h('td', { className: '', style: { textAlign: 'center' } }, writable
             ? h(Input, { className: 'w-[58px] text-center tabular-nums', style: { width: 66 }, value: r.scheme, onChange: (e: any) => update({ exercises: ex.map((x, i) => i === ei ? { ...x, scheme: e.target.value } : x) }) })
             : r.scheme),
-          h('td', { className: 'border border-dsw-border px-1.5 py-1 align-middle' },
+          h('td', { className: '' },
             h('div', { className: 'my-1.5 flex flex-wrap items-center gap-2', style: { margin: 0 } },
               ...r.sets.map((s, si) =>
                 h('span', { key: si, style: { display: 'inline-flex', alignItems: 'center', gap: 2, opacity: s.done ? 1 : .75 } },
@@ -262,7 +262,7 @@ function LogBlock({ data, update, writable }: { data: LogData; update: (p: Parti
                   writable
                     ? h(React.Fragment, null,
                         h(Input, { className: 'w-[58px] text-center tabular-nums', style: { width: 46 }, type: 'number', placeholder: 'kg', value: s.weight ?? '', onChange: (e: any) => setSet(ei, si, { weight: e.target.value === '' ? undefined : num(e.target.value) }) }),
-                        h('span', { className: 'text-[12px] font-medium text-dsw-label-3' }, '×'),
+                        h('span', { className: 'rui-muted' }, '×'),
                         h(Input, { className: 'w-[58px] text-center tabular-nums', style: { width: 40 }, type: 'number', placeholder: '次', value: s.reps ?? '', onChange: (e: any) => setSet(ei, si, { reps: e.target.value === '' ? undefined : num(e.target.value) }) }),
                       )
                     : h('span', { className: s.done ? undefined : 'line-through opacity-55' }, `${s.weight ?? '-'}×${s.reps ?? '-'}`),
@@ -272,17 +272,17 @@ function LogBlock({ data, update, writable }: { data: LogData; update: (p: Parti
               writable ? h(Button, { className: undefined, type: 'button', onClick: () => delSet(ei) }, '−组') : null,
             ),
           ),
-          h('td', { className: 'border border-dsw-border px-1.5 py-1 align-middle', style: { textAlign: 'center', fontVariantNumeric: 'tabular-nums' } }, String(volOf(r))),
-          writable ? h('td', { className: 'border border-dsw-border px-1.5 py-1 align-middle' }, h(Button, { className: undefined, type: 'button', onClick: () => update({ exercises: ex.filter((_, i) => i !== ei) }) }, '×')) : null,
+          h('td', { className: '', style: { textAlign: 'center', fontVariantNumeric: 'tabular-nums' } }, String(volOf(r))),
+          writable ? h('td', { className: '' }, h(Button, { className: undefined, type: 'button', onClick: () => update({ exercises: ex.filter((_, i) => i !== ei) }) }, '×')) : null,
         ),
       )),
     ),
-    h('div', { className: 'mt-1.5 text-[12px] text-dsw-label-3' }, 'RIR 2–3；每 8 周 deload 一周（组数砍 40%，重量不变）。'),
+    h('div', { className: 'mt-1.5 rui-muted' }, 'RIR 2–3；每 8 周 deload 一周（组数砍 40%，重量不变）。'),
     showMd ? h('div', null,
       h(Textarea, { className: 'mt-1.5 min-h-[120px] font-mono text-[12px]', readOnly: true, value: md }),
       h(Button, { className: undefined, style: { marginTop: 4 }, type: 'button', onClick: () => { const nav = globalThis.navigator; if (nav && nav.clipboard) void nav.clipboard.writeText(md); setCopied(true) } }, copied ? '已复制' : '复制'),
     ) : null,
-  )
+  ))
 }
 
 const DAY_DEFAULTS: DayData = { fastStart: '20:00', fastEnd: '12:00', water: {}, meals: {}, sodium: false, note: '' }

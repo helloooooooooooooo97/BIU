@@ -1,4 +1,4 @@
-import { Button, Card, Input, Textarea } from '@biu/biu-ui'
+import { Button, Card, Input, ReUI, Textarea } from './reui'
 
 const React = globalThis.React
 const { useState, useMemo, useEffect, useRef } = React
@@ -186,20 +186,20 @@ function OptionMatrix({ data, update, writable }: { data: Data; update: (patch: 
   const h = React.createElement
 
   const headCells = [
-    h('th', { key: 'corner', className: 'border border-dsw-border px-2 py-1.5 text-center align-middle whitespace-nowrap', style: { textAlign: 'left', color: 'var(--dsw-label-3)' } }, '方案 \\ 维度'),
+    h('th', { key: 'corner', style: { textAlign: 'left', color: 'var(--rui-muted)', padding: 10, borderBottom: '1px solid var(--rui-border)' } }, '方案 \\ 维度'),
     ...criteria.map((c, ci) =>
       h(
         'th',
-        { key: `c${ci}`, className: 'border border-dsw-border px-2 py-1.5 text-center align-middle whitespace-nowrap', style: { verticalAlign: 'top' } },
+        { key: `c${ci}`, style: { verticalAlign: 'top', padding: 10, borderBottom: '1px solid var(--rui-border)' } },
         readOnly
-          ? h('div', null, h('div', { style: { fontWeight: 650 } }, c.name), h('div', { className: 'text-[12px] font-medium text-dsw-label-3' }, `权重 ${c.weight} · ${c.higherIsBetter === false ? '越低越好' : '越高越好'}`))
+          ? h('div', null, h('div', { style: { fontWeight: 650 } }, c.name), h('div', { className: 'rui-muted' }, `权重 ${c.weight} · ${c.higherIsBetter === false ? '越低越好' : '越高越好'}`))
           : h(
               'div',
               { style: { display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' } },
-              h(Input, { value: c.name, onChange: (e: { target: { value: string } }) => renameCriterion(ci, e.target.value), className: 'h-[26px] rounded-[6px] border border-dsw-border bg-dsw-input px-1.5 text-[13px] text-dsw-label', style: { fontWeight: 650, textAlign: 'center', width: 96 } }),
+              h(Input, { value: c.name, onChange: (e: { target: { value: string } }) => renameCriterion(ci, e.target.value), style: { fontWeight: 650, textAlign: 'center', width: 96 } }),
               h('div', { style: { display: 'flex', gap: 4, alignItems: 'center' } },
-                h('span', { className: 'text-[12px] font-medium text-dsw-label-3' }, '权重'),
-                h(Input, { type: 'number', min: 0, max: 9, value: c.weight, onChange: (e: { target: { value: string } }) => setCriteria(criteria.map((x, i) => (i === ci ? { ...x, weight: num(e.target.value, 0) } : x))), className: 'h-[26px] rounded-[6px] border border-dsw-border bg-dsw-input px-1.5 text-[13px] text-dsw-label', style: { width: 44, textAlign: 'center' } }),
+                h('span', { className: 'rui-muted' }, '权重'),
+                h(Input, { type: 'number', min: 0, max: 9, value: c.weight, onChange: (e: { target: { value: string } }) => setCriteria(criteria.map((x, i) => (i === ci ? { ...x, weight: num(e.target.value, 0) } : x))), style: { width: 44, textAlign: 'center' } }),
               ),
               h(Button, { type: 'button', title: '点击切换维度方向', onClick: () => setCriteria(criteria.map((x, i) => (i === ci ? { ...x, higherIsBetter: x.higherIsBetter === false } : x))) }, c.higherIsBetter === false ? '越低越好' : '越高越好'),
               h(Button, { type: 'button', onClick: () => {
@@ -216,21 +216,21 @@ function OptionMatrix({ data, update, writable }: { data: Data; update: (patch: 
             ),
       ),
     ),
-    h('th', { key: 'total', className: 'border border-dsw-border bg-dsw-hover px-2 py-1.5 text-center' }, '加权总分'),
+    h('th', { key: 'total', style: { textAlign: 'center', background: 'var(--rui-accent)', padding: 10, borderBottom: '1px solid var(--rui-border)' } }, '加权总分'),
   ]
 
   const bodyRows = m.rows.map((row, ri) => {
     const isWinner = !!m.winner && m.winner.option === row.option
     return h(
       'tr',
-      { key: `r${ri}`, className: isWinner ? 'bg-dsw-hover' : undefined },
+      { key: `r${ri}`, style: isWinner ? { background: 'var(--rui-accent)' } : undefined },
       h(
         'th',
-        { className: 'border border-dsw-border px-2 py-1.5 text-center align-middle whitespace-nowrap', style: { textAlign: 'left' } },
+        { style: { textAlign: 'left', padding: 10, borderBottom: '1px solid var(--rui-border)' } },
         readOnly
           ? h('span', { style: { fontWeight: isWinner ? 650 : 500 } }, `${isWinner ? '推荐 · ' : ''}${row.option}`)
           : h('div', { style: { display: 'flex', gap: 4, alignItems: 'center' } },
-              h(Input, { value: row.option, onChange: (e: { target: { value: string } }) => renameOption(ri, e.target.value), className: 'h-[26px] rounded-[6px] border border-dsw-border bg-dsw-input px-1.5 text-[13px] text-dsw-label', style: { width: 130 } }),
+              h(Input, { value: row.option, onChange: (e: { target: { value: string } }) => renameOption(ri, e.target.value), style: { width: 130 } }),
               h(Button, { type: 'button', onClick: () => {
                 const ns: Scores = { ...scores }
                 delete ns[row.option]
@@ -242,14 +242,14 @@ function OptionMatrix({ data, update, writable }: { data: Data; update: (patch: 
         const cell = row.cells[ci]
         return h(
           'td',
-          { key: `d${ci}`, className: cell && cell.best ? 'border border-dsw-border bg-dsw-pick-fill px-2 py-1.5 text-center font-semibold' : 'border border-dsw-border px-2 py-1.5 text-center' },
+          { key: `d${ci}`, style: { textAlign: 'center', padding: 10, borderBottom: '1px solid var(--rui-border)', background: cell && cell.best ? 'color-mix(in srgb, var(--rui-primary) 12%, #fff)' : undefined, fontWeight: cell && cell.best ? 650 : 400 } },
           h(ScoreInput, { value: (cell && cell.raw) || 0, max: scale, readOnly, onChange: (v: number) => setCell(row.option, c.name, v) }),
-          c.higherIsBetter === false ? h('span', { className: 'text-[12px] font-medium text-dsw-label-3' }, ` →${(cell && cell.norm) || 0}`) : null,
+          c.higherIsBetter === false ? h('span', { className: 'rui-muted' }, ` →${(cell && cell.norm) || 0}`) : null,
         )
       }),
-      h('td', { key: 't', className: 'border border-dsw-border bg-dsw-hover px-2 py-1.5 text-center', style: { fontWeight: 650, fontVariantNumeric: 'tabular-nums' } },
+      h('td', { key: 't', style: { textAlign: 'center', background: 'var(--rui-accent)', padding: 10, borderBottom: '1px solid var(--rui-border)', fontWeight: 650, fontVariantNumeric: 'tabular-nums' } },
         row.total.toFixed(1),
-        h('div', { className: 'text-[12px] font-medium text-dsw-label-3', style: { fontWeight: 500 } }, `${(row.percent * 100).toFixed(1)}%`),
+        h('div', { className: 'rui-muted', style: { fontWeight: 500 } }, `${(row.percent * 100).toFixed(1)}%`),
       ),
     )
   })
@@ -275,7 +275,7 @@ function OptionMatrix({ data, update, writable }: { data: Data; update: (patch: 
   const mdPanel = showMd
     ? h('div', { className: 'mt-2' },
         h('div', { className: 'mb-2 flex flex-wrap items-center gap-2' },
-          h('span', { className: 'text-[12px] font-medium text-dsw-label-3' }, 'Markdown（agent 可直接读）'),
+          h('span', { className: 'rui-muted' }, 'Markdown（agent 可直接读）'),
           h(Button, { type: 'button', onClick: () => {
             const nav = globalThis.navigator
             if (nav && nav.clipboard && nav.clipboard.writeText) void nav.clipboard.writeText(md)
@@ -287,11 +287,14 @@ function OptionMatrix({ data, update, writable }: { data: Data; update: (patch: 
     : null
 
   return h(
+    ReUI,
+    null,
+    h(
     Card,
-    { 'data-testid': 'option-matrix', className: 'border-dsw-border text-dsw-label' },
-    h('div', { className: 'mb-2 flex flex-wrap items-center gap-2' },
+    { 'data-testid': 'option-matrix' },
+    h('div', { className: 'rui-card-head' },
       readOnly
-        ? h('strong', { className: 'text-[13px] font-semibold' }, data.title || '方案对比')
+        ? h('strong', { className: 'rui-card-title' }, data.title || '方案对比')
         : h(Input, {
             value: draftTitle,
             placeholder: '对比标题',
@@ -300,7 +303,7 @@ function OptionMatrix({ data, update, writable }: { data: Data; update: (patch: 
             onChange: (e: { target: { value: string } }) => { titleTouched.current = true; setDraftTitle(e.target.value) },
             onBlur: () => { titleTouched.current = false; update({ title: draftTitle }) },
           }),
-      h('span', { className: 'text-[12px] font-medium text-dsw-label-3' }, `${options.length} 方案 × ${criteria.length} 维度 · 满分 ${m.maxTotal.toFixed(1)}`),
+      h('span', { className: 'rui-muted' }, `${options.length} 方案 × ${criteria.length} 维度 · 满分 ${m.maxTotal.toFixed(1)}`),
       h('span', { className: 'flex-1' }),
       h(Button, { type: 'button', onClick: () => setShowMd((v) => !v) }, showMd ? '隐藏 Markdown' : '导出 Markdown'),
     ),
@@ -312,10 +315,10 @@ function OptionMatrix({ data, update, writable }: { data: Data; update: (patch: 
     ),
     toolbar,
     m.rationale
-      ? h('div', { 'data-testid': 'option-matrix-rationale', className: 'mt-2 rounded-[6px] bg-dsw-hover p-2 text-[13px] text-dsw-label-3' }, m.rationale)
+      ? h('div', { 'data-testid': 'option-matrix-rationale', className: 'rui-muted', style: { marginTop: 12, padding: 10, background: 'var(--rui-accent)', borderRadius: 8 } }, m.rationale)
       : null,
     mdPanel,
-  )
+  ))
 }
 
 export function apply(ctx: {

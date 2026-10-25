@@ -7,7 +7,7 @@
  *
  * 请求历史写进块 data.history（最近 20 条）——跟着文档走，不是跟着浏览器走。
  */
-import { Button, Card, ConfirmDialog, Input, Label, Select, Tabs, TabsTrigger, TagChip, Textarea } from '@biu/biu-ui'
+import { Button, Card, ConfirmDialog, Input, Label, ReUI, Select, Tabs, TabsTrigger, TagChip, Textarea } from './reui'
 
 const React = globalThis.React
 const { useEffect, useMemo, useRef, useState } = React
@@ -233,7 +233,8 @@ function ApiPlaygroundBlock({ data, update, writable }: BlockProps) {
   const editable = writable
 
   return (
-    <Card className="flex flex-col gap-2 border-dsw-border text-dsw-label" data-testid="api-playground-block" data-plugin={name}>
+    <ReUI>
+    <Card data-testid="api-playground-block" data-plugin={name} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div ref={hostRef} className="contents">
       <div className="flex items-center gap-1.5">
         <Select
@@ -295,9 +296,9 @@ function ApiPlaygroundBlock({ data, update, writable }: BlockProps) {
             />
           </span>
         ) : null}
-        {sending ? <span className="text-[12px] text-dsw-label-3">请求中…</span> : null}
-        <span className="flex-1" />
-        <span className="text-[12px] text-dsw-label-3">⌘/Ctrl + ↵ 发送</span>
+        {sending ? <span className="rui-muted">请求中…</span> : null}
+        <span style={{ flex: 1 }} />
+        <span className="rui-muted">⌘/Ctrl + ↵ 发送</span>
       </Tabs>
 
       {tab === 'request' ? (
@@ -334,34 +335,34 @@ function ApiPlaygroundBlock({ data, update, writable }: BlockProps) {
       ) : (
         <div className="flex flex-col gap-2" data-testid="api-playground-response-pane">
           {!active ? (
-            <div className="text-[12px] text-dsw-label-3">还没发过请求。填好上面的 url，点「发送」。</div>
+            <div className="rui-muted">还没发过请求。填好上面的 url，点「发送」。</div>
           ) : active.error ? (
-            <div className="text-dsw-danger" data-testid="api-playground-error">
+            <div data-testid="api-playground-error" style={{ color: 'var(--rui-danger)' }}>
               {active.error}
             </div>
           ) : (
             <React.Fragment>
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[12px] text-dsw-label-3">{active.ms ?? 0} ms</span>
-                <span className="text-[12px] text-dsw-label-3">{formatBytes(active.bytes ?? 0)}</span>
+                <span className="rui-muted">{active.ms ?? 0} ms</span>
+                <span className="rui-muted">{formatBytes(active.bytes ?? 0)}</span>
                 {active.truncated ? (
-                  <span className="text-[12px] text-dsw-label-3" data-testid="api-playground-truncated">
+                  <span className="rui-muted" data-testid="api-playground-truncated">
                     已截断：只回传前 200 KB
                   </span>
                 ) : null}
                 {active.finalUrl && active.finalUrl !== active.url ? (
-                  <span className="text-[12px] text-dsw-label-3">重定向到 {active.finalUrl}</span>
+                  <span className="rui-muted">重定向到 {active.finalUrl}</span>
                 ) : null}
               </div>
               {Object.keys(activeHeaders).length ? (
-                <details className="rounded-[6px] border border-dsw-border p-1.5" data-testid="api-playground-res-headers-wrap">
-                  <summary className="cursor-pointer text-[12px] text-dsw-label-3">
+                <details className="rui-card" style={{ padding: 10 }} data-testid="api-playground-res-headers-wrap">
+                  <summary className="rui-muted" style={{ cursor: 'pointer' }}>
                     响应头 · {Object.keys(activeHeaders).length} 条
                   </summary>
                   <div className="mt-2 flex max-h-[200px] flex-col gap-0.5 overflow-auto" data-testid="api-playground-res-headers">
                     {Object.entries(activeHeaders).map(([key, value]) => (
                       <div className="flex gap-2 font-mono text-[12px]" key={key}>
-                        <span className="w-[34%] break-all text-dsw-label-3">{key}</span>
+                        <span className="rui-muted" style={{ width: '34%', wordBreak: 'break-all' }}>{key}</span>
                         <span className="min-w-0 flex-1 break-all">{String(value)}</span>
                       </div>
                     ))}
@@ -372,7 +373,7 @@ function ApiPlaygroundBlock({ data, update, writable }: BlockProps) {
                 <Label>
                   响应体{bodyView.json ? ' · 已自动美化 JSON' : ''}
                 </Label>
-                <pre className="m-0 max-h-[280px] overflow-auto whitespace-pre-wrap break-words rounded-[6px] border border-dsw-border bg-dsw-input p-2 font-mono text-[12px]" data-testid="api-playground-res-body">
+                <pre className="rui-textarea" style={{ margin: 0, maxHeight: 280, overflow: 'auto', fontFamily: 'ui-monospace,monospace' }} data-testid="api-playground-res-body">
                   {bodyView.text || '（空响应体）'}
                 </pre>
               </div>
@@ -381,7 +382,7 @@ function ApiPlaygroundBlock({ data, update, writable }: BlockProps) {
         </div>
       )}
 
-      <div className="border-t border-dsw-border pt-2" data-testid="api-playground-history">
+      <div className="rui-sep" style={{ height: 'auto', background: 'transparent', borderTop: '1px solid var(--rui-border)', paddingTop: 12 }} data-testid="api-playground-history">
         <div className="flex items-center gap-1.5">
           <Button
             variant="secondary"
@@ -396,25 +397,25 @@ function ApiPlaygroundBlock({ data, update, writable }: BlockProps) {
             </Button>
           ) : null}
           <span className="flex-1" />
-          <span className="text-[12px] text-dsw-label-3">历史存在块数据里，跟文档一起版本化</span>
+          <span className="rui-muted">历史存在块数据里，跟文档一起版本化</span>
         </div>
         {histOpen && history.length ? (
           <div className="mt-1.5 flex max-h-[180px] flex-col gap-px overflow-auto">
             {history.map((entry: HistoryEntry, index: number) => (
               <button
                 type="button"
-                className="flex w-full items-center gap-2 rounded-[6px] px-1.5 py-1 text-left font-mono text-[12px] text-dsw-label hover:bg-dsw-hover"
+                className="rui-btn rui-btn-ghost" style={{ width: '100%', justifyContent: 'flex-start', height: 32, fontFamily: 'ui-monospace,monospace' }}
                 key={`${entry.at}-${index}`}
                 onClick={() => loadHistory(entry)}
                 title="载回这次请求"
               >
-                <span className="w-[52px] font-semibold text-dsw-label-3">{entry.method}</span>
+                <span className="rui-muted" style={{ width: 52, fontWeight: 650 }}>{entry.method}</span>
                 <span className="min-w-0 flex-1 truncate">{entry.url}</span>
                 <TagChip
                   id={statusChip(entry.status, !entry.error).id}
                   label={entry.error ? 'ERR' : String(entry.status)}
                 />
-                <span className="text-dsw-label-3">{entry.ms}ms · {formatClock(entry.at)}</span>
+                <span className="rui-muted">{entry.ms}ms · {formatClock(entry.at)}</span>
               </button>
             ))}
           </div>
@@ -436,6 +437,7 @@ function ApiPlaygroundBlock({ data, update, writable }: BlockProps) {
       ) : null}
       </div>
     </Card>
+    </ReUI>
   )
 }
 

@@ -1,4 +1,4 @@
-import { Button } from '@biu/biu-ui'
+import { Button, ReUI } from './reui'
 import { FitAddon } from '@xterm/addon-fit'
 import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
@@ -1285,7 +1285,7 @@ function PageTerminal({
     </section>
   )
 
-  return body
+  return <ReUI>{body}</ReUI>
 }
 
 export function apply(ctx: {

@@ -1,4 +1,4 @@
-import { Button, Card, CardTitle } from '@biu/biu-ui'
+import { Button, Card, CardTitle, ReUI } from './reui'
 import { headingElById, headingsFromPage, pageRootFrom, sameTocItems, type TocHeading } from './outline.ts'
 
 const React = globalThis.React
@@ -35,19 +35,20 @@ function TocCard(props: { data: Record<string, unknown>; update: (patch: Record<
   }
 
   return (
-    <Card className="border-dsw-border text-dsw-label" data-testid="page-toc">
+    <ReUI>
+    <Card data-testid="page-toc">
       <div ref={hostRef}>
-      <CardTitle className="mb-1 text-[12px] text-dsw-label-3">{title}</CardTitle>
+      <CardTitle>{title}</CardTitle>
       {items.length === 0 ? (
-        <p className="m-0 px-2 py-1 text-[13px] text-dsw-label-3">暂无标题</p>
+        <p className="rui-muted">暂无标题</p>
       ) : (
-        <ul className="m-0 list-none p-0">
+        <ul style={{ margin: '8px 0 0', listStyle: 'none', padding: 0 }}>
           {items.map((item) => (
             <li key={item.id}>
               <Button
                 type="button"
                 variant="ghost"
-                className={`h-auto w-full justify-start font-medium ${item.level === 2 ? 'pl-5' : item.level >= 3 ? 'pl-9' : ''}`}
+                style={{ width: '100%', justifyContent: 'flex-start', height: 32, paddingLeft: item.level >= 3 ? 28 : item.level === 2 ? 16 : 8 }}
                 onClick={() => jump(item.id)}
               >
                 {item.text}
@@ -58,6 +59,7 @@ function TocCard(props: { data: Record<string, unknown>; update: (patch: Record<
       )}
       </div>
     </Card>
+    </ReUI>
   )
 }
 

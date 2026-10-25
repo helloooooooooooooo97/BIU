@@ -1,4 +1,4 @@
-import { Badge, Button, Card, CardHeader, CardTitle, Input, Select } from '@biu/biu-ui'
+import { Badge, Button, Card, CardHeader, CardTitle, Input, ReUI, Select } from './reui'
 
 const React = globalThis.React
 const { useState, useCallback } = React
@@ -186,10 +186,11 @@ export function RegressionBlock({ data, update, writable }: BlockProps) {
   const broken = last ? last.items.filter((item) => item.delta === 'broken').length : 0
 
   return (
-    <Card data-testid="regression-block" className="select-text border-dsw-border text-dsw-label">
+    <ReUI>
+    <Card data-testid="regression-block">
       <CardHeader>
         <CardTitle>页面回归检查</CardTitle>
-        <span data-testid="regression-summary" className="font-mono text-[12px] text-dsw-label-3">
+        <span data-testid="regression-summary" className="rui-muted" style={{ fontFamily: 'ui-monospace,monospace' }}>
           {last
             ? `${last.passed}/${last.total} 通过 · ${last.failed} 失败 · ${last.ms}ms · ${fmtTime(last.at)}${
                 fixed ? ` · fixed ${fixed}` : ''
@@ -217,7 +218,7 @@ export function RegressionBlock({ data, update, writable }: BlockProps) {
           const result = resultOf(item.id)
           return (
             <div key={item.id} data-testid="regression-row" className="flex flex-wrap items-center gap-1.5">
-              <span className="w-[18px] font-mono text-[12px] text-dsw-label-3">{i + 1}</span>
+              <span className="rui-muted" style={{ width: 18, fontFamily: 'ui-monospace,monospace' }}>{i + 1}</span>
               <Select
                 value={item.type}
                 disabled={!writable}
@@ -291,20 +292,20 @@ export function RegressionBlock({ data, update, writable }: BlockProps) {
                   删除
                 </Button>
               ) : null}
-              {result ? <span className={`w-full pl-6 font-mono text-[11px] ${result.status === 'pass' ? 'text-dsw-label-3' : 'text-dsw-danger'}`}>{result.actual}</span> : null}
+              {result ? <span className="rui-muted" style={{ width: '100%', paddingLeft: 24, fontFamily: 'ui-monospace,monospace', color: result.status === 'pass' ? undefined : 'var(--rui-danger)' }}>{result.actual}</span> : null}
             </div>
           )
         })}
-        {asserts.length ? null : <span className="text-[13px] text-dsw-label-3">还没有断言，点右上「加断言」加一条。</span>}
+        {asserts.length ? null : <span className="rui-muted">还没有断言，点右上「加断言」加一条。</span>}
       </div>
 
       {showHistory && runs.length ? (
-        <div data-testid="regression-history-list" className="mt-2 border-t border-dsw-border pt-1.5">
+        <div data-testid="regression-history-list" style={{ marginTop: 12, borderTop: '1px solid var(--rui-border)', paddingTop: 8 }}>
           {runs
             .slice()
             .reverse()
             .map((run) => (
-              <div key={run.at} className="flex gap-2 font-mono text-[12px] text-dsw-label-3">
+              <div key={run.at} className="rui-muted" style={{ display: 'flex', gap: 8, fontFamily: 'ui-monospace,monospace' }}>
                 <span>{fmtTime(run.at)}</span>
                 <span>
                   {run.passed}/{run.total}
@@ -319,6 +320,7 @@ export function RegressionBlock({ data, update, writable }: BlockProps) {
         </div>
       ) : null}
     </Card>
+    </ReUI>
   )
 }
 

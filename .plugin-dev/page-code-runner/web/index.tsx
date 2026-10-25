@@ -1,4 +1,4 @@
-import { Button, Card, Select } from '@biu/biu-ui'
+import { Button, Card, ReUI, Select } from './reui'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { indentUnit } from '@codemirror/language'
 import { EditorSelection, EditorState, Prec } from '@codemirror/state'
@@ -638,6 +638,7 @@ function CodeRunnerBlock({ data, update, writable }: BlockProps) {
   const canCollapse = localCode.trim().length > 0
 
   return (
+    <ReUI>
     <Card
       data-testid="page-code-runner"
       onMouseDown={onRootMouseDown}
@@ -645,7 +646,7 @@ function CodeRunnerBlock({ data, update, writable }: BlockProps) {
         if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
         persist()
       }}
-      className="my-2 w-full overflow-hidden p-0 font-mono text-[13px]"
+      style={{ overflow: 'hidden', padding: 0, fontFamily: 'ui-monospace,monospace' }}
     >
       {/* toolbar：左语言 / 右运行+清空 */}
       <div
@@ -840,6 +841,7 @@ function CodeRunnerBlock({ data, update, writable }: BlockProps) {
         </>
       )}
     </Card>
+    </ReUI>
   )
 }
 

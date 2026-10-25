@@ -1,4 +1,4 @@
-import { Badge, Button, Card, CardHeader, CardTitle, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@biu/biu-ui'
+import { Badge, Button, Card, CardHeader, CardTitle, ReUI, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './reui'
 
 const React = globalThis.React
 const { useState } = React
@@ -89,7 +89,8 @@ function DoctorBlock(props: BlockProps) {
   }
 
   return (
-    <Card data-testid="plugin-doctor-block" className="border-dsw-border text-dsw-label">
+    <ReUI>
+    <Card data-testid="plugin-doctor-block">
       <CardHeader>
         <CardTitle>插件体检</CardTitle>
         {props.writable ? (
@@ -97,17 +98,17 @@ function DoctorBlock(props: BlockProps) {
             {busy ? '扫描中…' : '体检'}
           </Button>
         ) : (
-          <span className="text-[12px] text-dsw-label-3">只读态 · 展示上次结果</span>
+          <span className="rui-muted">只读态 · 展示上次结果</span>
         )}
         {report ? (
-          <span className="text-[12px] text-dsw-label-3">
+          <span className="rui-muted">
             共 {report.total} 个插件 · 合规 {report.summary.ok} · 待修 {report.summary.warn} · 坏 {report.summary.broken} · 合计 {kb(report.summary.bytes)} · 扫描于 {clock(report.scannedAt)}
           </span>
         ) : null}
       </CardHeader>
-      {error ? <div className="text-[13px] text-dsw-danger">{error}</div> : null}
+      {error ? <div className="rui-muted" style={{ color: 'var(--rui-danger)' }}>{error}</div> : null}
       {!report ? (
-        <div className="text-[13px] text-dsw-label-3">
+        <div className="rui-muted">
           还没有体检结果{props.writable ? '，点「体检」扫一遍 .plugin。' : '。'}
         </div>
       ) : (
@@ -132,7 +133,7 @@ function DoctorBlock(props: BlockProps) {
                   <TableRow key={item.id}>
                     <TableCell>
                       <code className="font-mono text-[12px]">{item.id}</code>
-                      <div className="text-dsw-label-3">{item.name}</div>
+                      <div className="rui-muted">{item.name}</div>
                     </TableCell>
                     <TableCell>
                       <Chip label={item.headless ? '是' : '否'} on={item.headless} />
@@ -156,10 +157,11 @@ function DoctorBlock(props: BlockProps) {
               })}
             </TableBody>
           </Table>
-          <div className="mt-1.5 text-[12px] text-dsw-label-3">扫描根目录：{report.root}</div>
+          <div className="rui-muted" style={{ marginTop: 12 }}>扫描根目录：{report.root}</div>
         </>
       )}
     </Card>
+    </ReUI>
   )
 }
 

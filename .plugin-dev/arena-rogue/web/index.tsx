@@ -1,3 +1,4 @@
+import { ReUI } from './reui'
 import { useEffect, useRef } from 'react'
 import { ArenaGame } from './game.ts'
 import { WEAPONS } from './weapons.ts'
@@ -108,8 +109,10 @@ function ArenaApp() {
   }, [])
 
   return (
+    <ReUI>
     <div
       data-testid="arena-rogue-root"
+      className="rui-card"
       style={{
         position: 'absolute',
         inset: 0,
@@ -118,6 +121,7 @@ function ArenaApp() {
         minHeight: 0,
         background: '#07080c',
         overflow: 'hidden',
+        padding: 0,
       }}
     >
       <canvas
@@ -135,6 +139,7 @@ function ArenaApp() {
         }}
       />
     </div>
+    </ReUI>
   )
 }
 

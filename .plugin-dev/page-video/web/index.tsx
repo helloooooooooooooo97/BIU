@@ -1,3 +1,4 @@
+import { ReUI } from './reui'
 import {
   DndContext,
   PointerSensor,
@@ -1743,7 +1744,8 @@ function Editor({
   }
 
   return (
-    <div className="pv" data-testid="page-video-editor">
+    <ReUI>
+    <div className="pv rui-card" data-testid="page-video-editor" style={{ padding: 0, overflow: 'hidden' }}>
       <div className={`pv-embed${audioOnly ? ' pv-audio-only' : ''}`}>
         {audioOnly
           ? project.clips.map((clip) => <AudioEffect key={clip.id} clip={clip} time={time} playing={playing} />)
@@ -1811,6 +1813,7 @@ function Editor({
         />
       ) : null}
     </div>
+    </ReUI>
   )
 }
 
