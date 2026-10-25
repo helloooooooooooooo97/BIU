@@ -61,7 +61,7 @@ function clock(ts: number) {
 
 function Chip(props: { label: string; on?: boolean; title?: string }) {
   return (
-    <Badge title={props.title} variant={props.on ? 'on' : 'default'} className="mr-1">
+    <Badge title={props.title} variant="default" className="mr-1" style={props.on ? undefined : { opacity: 0.45 }}>
       {props.label}
     </Badge>
   )

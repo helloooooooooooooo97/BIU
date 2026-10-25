@@ -5,65 +5,73 @@
 const React = globalThis.React as typeof import('react')
 
 const CSS = `
-.rui-root{--rui-bg:#fff;--rui-fg:#0f172a;--rui-muted:#64748b;--rui-border:#e2e8f0;--rui-primary:#2563eb;--rui-primary-fg:#fff;--rui-accent:#f8fafc;--rui-danger:#dc2626;--rui-ok:#16a34a;--rui-radius:0.75rem;--rui-shadow:0 1px 2px rgba(15,23,42,.05);color:var(--rui-fg);font:13px/1.45 ui-sans-serif,system-ui,sans-serif}
-.rui-card{background:var(--rui-bg);border:1px solid var(--rui-border);border-radius:var(--rui-radius);box-shadow:var(--rui-shadow);padding:16px 18px}
-.rui-card-head{display:flex;align-items:flex-start;gap:12px;margin-bottom:14px}
-.rui-card-title{margin:0;font-size:15px;font-weight:650;letter-spacing:-.02em;line-height:1.3}
-.rui-card-desc{margin:4px 0 0;color:var(--rui-muted);font-size:12px;line-height:1.45}
-.rui-actions{margin-left:auto;display:flex;gap:8px;flex-shrink:0;align-items:center}
+.rui-root{--rui-bg:#fff;--rui-fg:#171717;--rui-muted:#737373;--rui-border:#ececec;--rui-primary:#171717;--rui-primary-fg:#fff;--rui-accent:#f7f7f7;--rui-danger:#b42318;--rui-ok:#0f7a4a;--rui-radius:10px;color:var(--rui-fg);font:12.5px/1.45 ui-sans-serif,system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+.rui-card{background:var(--rui-bg);border:1px solid var(--rui-border);border-radius:var(--rui-radius);padding:18px 20px}
+.rui-card-head{display:flex;align-items:flex-start;gap:12px;margin:0 0 16px}
+.rui-card-title{margin:0;font-size:13px;font-weight:600;letter-spacing:-.01em;line-height:1.3}
+.rui-card-desc{margin:3px 0 0;color:var(--rui-muted);font-size:12px;line-height:1.4;font-weight:400}
+.rui-actions{margin-left:auto;display:flex;gap:6px;flex-shrink:0;align-items:center}
 .rui-row{display:flex;align-items:center;gap:8px;min-width:0}
-.rui-stack{display:flex;flex-direction:column;gap:10px}
+.rui-stack{display:flex;flex-direction:column;gap:8px}
 .rui-grow{flex:1 1 auto;min-width:0}
-.rui-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:4px 0 14px}
-.rui-stat{border:1px solid var(--rui-border);border-radius:10px;padding:12px;background:var(--rui-accent)}
-.rui-stat-val{display:block;margin:6px 0 4px;font-size:20px;font-weight:700;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
-.rui-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:32px;padding:0 12px;border-radius:8px;border:1px solid transparent;font:600 12.5px/1 ui-sans-serif,system-ui,sans-serif;cursor:pointer;background:var(--rui-primary);color:var(--rui-primary-fg);white-space:nowrap;flex:0 0 auto}
-.rui-btn:hover{filter:brightness(.97)}
-.rui-btn:disabled{opacity:.5;cursor:default;pointer-events:none}
-.rui-btn-secondary,.rui-btn-outline{background:var(--rui-bg);color:var(--rui-fg);border-color:var(--rui-border)}
-.rui-btn-ghost{background:transparent;color:var(--rui-muted);border-color:transparent}
-.rui-btn-ghost:hover{background:var(--rui-accent);color:var(--rui-fg)}
-.rui-btn-destructive{background:var(--rui-bg);color:var(--rui-danger);border-color:var(--rui-border)}
-.rui-btn-sm{height:28px;padding:0 8px;font-size:12px}
-.rui-btn-icon{width:28px;height:28px;padding:0}
-.rui-input,.rui-select{display:inline-block;width:auto;max-width:100%;min-width:0;box-sizing:border-box;height:32px;border:1px solid var(--rui-border);border-radius:8px;background:var(--rui-bg);color:var(--rui-fg);padding:0 10px;font:13px/32px ui-sans-serif,system-ui,sans-serif;outline:none;flex:0 0 auto}
-.rui-textarea{display:block;width:100%;min-height:88px;box-sizing:border-box;border:1px solid var(--rui-border);border-radius:8px;background:var(--rui-bg);color:var(--rui-fg);padding:8px 10px;font:13px/1.45 ui-sans-serif,system-ui,sans-serif;outline:none;resize:vertical}
+.rui-kicker{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:#a3a3a3;font-weight:600}
+.rui-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin:0 0 16px;border:1px solid var(--rui-border);border-radius:10px;overflow:hidden;background:#fafafa}
+.rui-stat{padding:14px 16px;border-right:1px solid var(--rui-border);background:transparent}
+.rui-stat:last-child{border-right:0}
+.rui-stat-val{display:block;margin:8px 0 4px;font-size:22px;font-weight:560;letter-spacing:-.04em;font-variant-numeric:tabular-nums;color:#171717}
+.rui-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:28px;padding:0 11px;border-radius:6px;border:1px solid transparent;font:500 12px/1 ui-sans-serif,system-ui,sans-serif;cursor:pointer;background:var(--rui-primary);color:var(--rui-primary-fg);white-space:nowrap;flex:0 0 auto}
+.rui-btn:hover{background:#0a0a0a}
+.rui-btn:disabled{opacity:.4;cursor:default;pointer-events:none}
+.rui-btn-secondary,.rui-btn-outline{background:#fff;color:#171717;border-color:#e5e5e5}
+.rui-btn-secondary:hover,.rui-btn-outline:hover{background:#f7f7f7}
+.rui-btn-ghost{background:transparent;color:#737373;border-color:transparent}
+.rui-btn-ghost:hover{background:#f5f5f5;color:#171717}
+.rui-btn-destructive{background:#fff;color:#b42318;border-color:#e5e5e5}
+.rui-btn-sm{height:24px;padding:0 8px;font-size:11.5px}
+.rui-btn-icon{width:24px;height:24px;padding:0}
+.rui-input,.rui-select{display:inline-block;width:auto;max-width:100%;min-width:0;box-sizing:border-box;height:28px;border:1px solid #e5e5e5;border-radius:6px;background:#fff;color:#171717;padding:0 9px;font:12.5px/28px ui-sans-serif,system-ui,sans-serif;outline:none;flex:0 0 auto}
+.rui-textarea{display:block;width:100%;min-height:80px;box-sizing:border-box;border:1px solid #e5e5e5;border-radius:6px;background:#fff;color:#171717;padding:8px 9px;font:12.5px/1.5 ui-sans-serif,system-ui,sans-serif;outline:none;resize:vertical}
 .rui-grow.rui-input,.rui-grow.rui-select,.rui-fill{width:100%;flex:1 1 auto}
-.rui-input:focus,.rui-select:focus,.rui-textarea:focus{border-color:var(--rui-primary);box-shadow:0 0 0 3px color-mix(in srgb,var(--rui-primary) 16%,transparent)}
-.rui-input:disabled,.rui-select:disabled,.rui-textarea:disabled{opacity:.55}
-.rui-label{display:block;margin:0 0 4px;font-size:12px;font-weight:600;color:var(--rui-muted)}
-.rui-badge{display:inline-flex;align-items:center;border-radius:999px;border:1px solid var(--rui-border);padding:1px 8px;font-size:11px;font-weight:650;background:#fff;color:var(--rui-muted);white-space:nowrap}
-.rui-badge-on{background:color-mix(in srgb,var(--rui-ok) 12%,#fff);color:var(--rui-ok);border-color:transparent}
-.rui-badge-destructive{background:color-mix(in srgb,var(--rui-danger) 10%,#fff);color:var(--rui-danger);border-color:transparent}
+.rui-input:focus,.rui-select:focus,.rui-textarea:focus{border-color:#171717}
+.rui-input:disabled,.rui-select:disabled,.rui-textarea:disabled{opacity:.5;background:#fafafa}
+.rui-label{display:block;margin:0 0 6px;font-size:11px;font-weight:500;color:#737373}
+.rui-badge{display:inline-flex;align-items:center;border-radius:4px;border:0;padding:1px 6px;font-size:11px;font-weight:500;background:#f5f5f5;color:#525252;white-space:nowrap}
+.rui-badge-on{background:#171717;color:#fff}
+.rui-badge-destructive{background:#fef2f2;color:#b42318}
 .rui-table-wrap{width:100%;overflow:auto}
-.rui-table{width:100%;border-collapse:collapse;font-size:13px}
-.rui-table th{text-align:left;font-weight:650;color:var(--rui-muted);padding:8px 10px;border-bottom:1px solid var(--rui-border);white-space:nowrap}
-.rui-table td{padding:9px 10px;border-bottom:1px solid var(--rui-border);vertical-align:middle}
-.rui-tabs{display:inline-flex;flex-wrap:nowrap;align-items:center;gap:2px;padding:3px;background:var(--rui-accent);border-radius:10px;width:fit-content}
-.rui-progress{height:6px;border-radius:999px;background:#e2e8f0;overflow:hidden}
-.rui-progress>i{display:block;height:100%;background:var(--rui-primary)}
-.rui-check{width:15px;height:15px;accent-color:var(--rui-primary);flex:0 0 auto}
-.rui-muted{color:var(--rui-muted);font-size:12px}
-.rui-sep{height:1px;background:var(--rui-border);border:0;margin:12px 0}
-.rui-dialog-mask{position:fixed;inset:0;background:rgba(15,23,42,.45);display:grid;place-items:center;z-index:80}
-.rui-dialog{width:min(420px,calc(100vw - 32px));background:var(--rui-bg);border-radius:var(--rui-radius);padding:20px;box-shadow:0 16px 40px rgba(15,23,42,.18)}
-.rui-dialog h2{margin:0 0 8px;font-size:16px}
+.rui-table{width:100%;border-collapse:collapse;font-size:12.5px}
+.rui-table th{text-align:left;font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#a3a3a3;padding:0 10px 8px;border-bottom:1px solid var(--rui-border);white-space:nowrap}
+.rui-table td{padding:10px;border-bottom:1px solid #f3f3f3;vertical-align:middle}
+.rui-table tr:last-child td{border-bottom:0}
+.rui-tabs{display:inline-flex;align-items:center;gap:0;padding:3px;background:#f5f5f5;border-radius:8px;width:fit-content}
+.rui-tabs .rui-btn{height:22px;padding:0 10px;box-shadow:none}
+.rui-tabs .rui-btn-secondary{background:#fff;border-color:transparent;color:#171717}
+.rui-tabs .rui-btn-ghost{background:transparent}
+.rui-progress{height:3px;border-radius:99px;background:#ececec;overflow:hidden;margin-top:8px}
+.rui-progress>i{display:block;height:100%;background:#171717}
+.rui-check{width:14px;height:14px;accent-color:#171717;flex:0 0 auto}
+.rui-muted{color:#737373;font-size:12px}
+.rui-sep{height:1px;background:var(--rui-border);border:0;margin:14px 0}
+.rui-dialog-mask{position:fixed;inset:0;background:rgba(0,0,0,.4);display:grid;place-items:center;z-index:80}
+.rui-dialog{width:min(400px,calc(100vw - 32px));background:#fff;border-radius:12px;padding:20px;border:1px solid #ececec}
+.rui-dialog h2{margin:0 0 8px;font-size:14px;font-weight:600}
 .rui-dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
-@media (max-width:720px){.rui-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:720px){.rui-stats{grid-template-columns:1fr 1fr}.rui-stat:nth-child(2){border-right:0}.rui-stat:nth-child(n+3){border-top:1px solid var(--rui-border)}}
 `
 
 function cx(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(' ')
 }
 
-let injected = false
 export function ReUI({ children, className }: { children?: unknown; className?: string }) {
-  if (!injected && typeof document !== 'undefined') {
-    const el = document.createElement('style')
-    el.setAttribute('data-reui', '')
-    el.textContent = CSS
-    document.head.appendChild(el)
-    injected = true
+  if (typeof document !== 'undefined') {
+    let el = document.querySelector('style[data-reui]') as HTMLStyleElement | null
+    if (!el) {
+      el = document.createElement('style')
+      el.setAttribute('data-reui', '')
+      document.head.appendChild(el)
+    }
+    if (el.textContent !== CSS) el.textContent = CSS
   }
   return <div className={cx('rui-root', className)}>{children as never}</div>
 }
