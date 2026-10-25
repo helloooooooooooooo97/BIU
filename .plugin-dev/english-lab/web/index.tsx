@@ -372,7 +372,6 @@ function ReadBlock({ data, update }: BlockProps) {
                         className="en-word"
                         data-saved={vocab.some((v) => v.word === w)}
                         data-on={hiWord.toLowerCase() === w.toLowerCase()}
-                        style={hiWord.toLowerCase() === w.toLowerCase() ? { background: '#fff6c2' } : undefined}
                         onClick={() => saveWord(w.replace(/[^\w'-]/g, ''))}
                       >
                         {w}{' '}
@@ -614,7 +613,7 @@ function WriteBlock({ data, update, writable }: BlockProps) {
               )}
             </div>
           )}
-          {showSample ? <div className="en-passage" style={{ marginTop: 10, color: '#6d6d72' }}>{sample}</div> : null}
+          {showSample ? <div className="en-passage rui-muted" style={{ marginTop: 10 }}>{sample}</div> : null}
           {compare && prev ? (
             <div className="en-passage" style={{ marginTop: 10 }}>
               {wordDiff(prev, essay).right.map((t, i) => (
