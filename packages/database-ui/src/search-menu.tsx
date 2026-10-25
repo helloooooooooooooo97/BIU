@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ReactNode, type RefObject } from 'react'
-import { AnchorMenu } from '@biu/public-ui'
+import { AnchorMenu } from '@biu/biu-ui'
 
 const STYLE_ID = 'biu-database-ui-search'
 const CSS = `

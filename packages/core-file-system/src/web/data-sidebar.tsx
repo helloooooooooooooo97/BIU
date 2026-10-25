@@ -1,7 +1,7 @@
 import { lazy, memo, Suspense, useEffect, useLayoutEffect, useMemo, useState, useSyncExternalStore, type MouseEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { ChatCount } from '@biu/public-ui/chat-count'
-import { SidebarFold } from '@biu/public-ui/sidebar-fold'
+import { ChatCount } from '@biu/biu-ui/chat-count'
+import { SidebarFold } from '@biu/biu-ui/sidebar-fold'
 import {
   ChevronDoubleLeftIcon,
   ChevronDownIcon,
@@ -69,7 +69,7 @@ import { getDatabaseUi } from './database-ui.ts'
 import { RecordMark, recordMarkStub } from './record-mark.tsx'
 import { SidebarBrandLockup } from '@biu/public-mascot'
 
-const RecordEmojiBoard = lazy(() => import('@biu/public-ui/emoji-board').then((m) => ({ default: m.RecordEmojiBoard })))
+const RecordEmojiBoard = lazy(() => import('@biu/biu-ui/emoji-board').then((m) => ({ default: m.RecordEmojiBoard })))
 
 type PreviewState = {
   items: DbRecord[]

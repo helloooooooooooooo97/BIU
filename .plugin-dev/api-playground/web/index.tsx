@@ -7,7 +7,7 @@
  *
  * 请求历史写进块 data.history（最近 20 条）——跟着文档走，不是跟着浏览器走。
  */
-import { Button, ConfirmDialog, Input, Label, Select, TagChip, Textarea } from '@biu/public-ui'
+import { Button, ConfirmDialog, Input, Label, Select, TagChip, Textarea } from '@biu/biu-ui'
 
 const React = globalThis.React
 const { useEffect, useMemo, useRef, useState } = React

@@ -20,14 +20,14 @@ import {
   PlusIcon,
   XMarkIcon,
 } from '@heroicons/react/16/solid'
-import { AnchorMenu } from '@biu/public-ui/anchor-menu'
-import { ConfirmDialog } from '@biu/public-ui/confirm-dialog'
+import { AnchorMenu } from '@biu/biu-ui/anchor-menu'
+import { ConfirmDialog } from '@biu/biu-ui/confirm-dialog'
 import { chromeIcon } from './chrome-icon.ts'
 import { applyNoticeClick, noticeIdOf } from './notice-open.ts'
 import { readMainDataRoute } from '@biu/core-file-system/main-data-route'
 import { persistTheme, readTheme, type ThemeMode } from './theme.ts'
-import { persistWorkspaceProfile } from '@biu/public-ui/workspace-profile'
-import { useWorkspaceProfile } from '@biu/public-ui/use-workspace-profile'
+import { persistWorkspaceProfile } from '@biu/biu-ui/workspace-profile'
+import { useWorkspaceProfile } from '@biu/biu-ui/use-workspace-profile'
 import { LayoutPrefsMenu } from '@biu/core-file-system/layout-prefs-menu'
 import { getPagePrefs, hydratePagePrefs, subscribePageWidth } from '@biu/core-file-system/page-width'
 

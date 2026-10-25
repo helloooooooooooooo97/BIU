@@ -207,8 +207,8 @@ test('list properties stay on the weakest label tier; detail aside lifts keys on
   )
 })
 
-test('detail share role and facet chips use table cell ink; leftover 13px/400 is public-ui .biu-tag', () => {
-  const tag = readFileSync(resolve(import.meta.dirname, '../../../public-ui/src/tag-chip.tsx'), 'utf8')
+test('detail share role and facet chips use table cell ink; leftover 13px/400 is biu-ui .biu-tag', () => {
+  const tag = readFileSync(resolve(import.meta.dirname, '../../../biu-ui/src/tag-chip.tsx'), 'utf8')
   assert.match(tag, /\.biu-tag\{[^}]*font-size:13px/)
   assert.match(tag, /\.biu-tag\{[^}]*font-weight:400/)
   assert.match(css, /\.fsdb-page \.fsdb-proprow-v,[\s\S]*?--dsw-tag-ink:var\(--dsw-cell-ink/)

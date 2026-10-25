@@ -1,4 +1,4 @@
-import { TAG_TONE_ROSE } from '@biu/public-ui'
+import { TAG_TONE_ROSE } from '@biu/biu-ui'
 
 export const PAGE_EDITOR_STYLE = `
 .page-editor{position:relative;overflow:visible;min-width:0;width:100%;padding:6px 0 48px;padding-left:0;color:var(--dsw-label);font-family:var(--font-sans);font-size:var(--fsdb-body-size,15px);line-height:var(--fsdb-body-leading,1.7);letter-spacing:-.003em}

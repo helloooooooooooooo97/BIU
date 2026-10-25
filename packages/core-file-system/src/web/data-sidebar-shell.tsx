@@ -1,6 +1,6 @@
 import { useLayoutEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ChatCount } from '@biu/public-ui/chat-count'
+import { ChatCount } from '@biu/biu-ui/chat-count'
 import type { CollectionInfo } from '@biu/type-file-system'
 import { sortDataCollections } from './database-path.ts'
 import { getStarredRecords, getStarredViews } from './view-storage.ts'

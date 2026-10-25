@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import * as lu from '@heroicons/react/16/solid'
-import { tagTone } from '@biu/public-ui'
+import { tagTone } from '@biu/biu-ui'
 import { pickKindIcon, pickKindTone } from './chip.tsx'
 
 test('kind maps to distinct heroicons', () => {

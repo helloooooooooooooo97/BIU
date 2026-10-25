@@ -23,10 +23,10 @@ import { normalizeSchemaValue } from '@biu/type-file-system'
 import type { CollectionChrome, CollectionRowViewType, CollectionViewType, DatabaseUi } from '@biu/type-file-system/ui'
 import { parseAppPath } from '@biu/web-session-view'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
-import { BoolBox } from '@biu/public-ui/bool-box'
-import { ChatCount } from '@biu/public-ui/chat-count'
-import { HeadlessDismiss, HEADLESS_DISMISS_IGNORE } from '@biu/public-ui/headless-dismiss'
-import { TagChip, TagChips, tagTextColor, tagTone as schemaTagTone } from '@biu/public-ui/tag-chip'
+import { BoolBox } from '@biu/biu-ui/bool-box'
+import { ChatCount } from '@biu/biu-ui/chat-count'
+import { HeadlessDismiss, HEADLESS_DISMISS_IGNORE } from '@biu/biu-ui/headless-dismiss'
+import { TagChip, TagChips, tagTextColor, tagTone as schemaTagTone } from '@biu/biu-ui/tag-chip'
 import {
   contentFieldKey,
   defaultColumnKeys,
@@ -165,7 +165,7 @@ const FieldValuePop = lazy(() => import('./field-value-pop.tsx').then((m) => ({ 
 const CellPopDraft = lazy(() => import('./cell-pop-draft.tsx').then((m) => ({ default: m.CellPopDraft })))
 const RecordDetail = lazy(() => import('./record-detail.tsx').then((m) => ({ default: m.RecordDetail })))
 const ColumnOrderMenu = lazy(() => import('./column-order-menu.tsx').then((m) => ({ default: m.ColumnOrderMenu })))
-const RecordEmojiBoard = lazy(() => import('@biu/public-ui/emoji-board').then((m) => ({ default: m.RecordEmojiBoard })))
+const RecordEmojiBoard = lazy(() => import('@biu/biu-ui/emoji-board').then((m) => ({ default: m.RecordEmojiBoard })))
 const LazyShareButton = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.ShareButton })))
 const LazySharePanel = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.SharePanel })))
 const LazyShareRoleDetail = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.ShareRoleDetail })))

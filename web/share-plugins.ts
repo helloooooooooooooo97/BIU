@@ -5,7 +5,7 @@ import * as ReactDOM from 'react-dom'
 import { createRoot, hydrateRoot } from 'react-dom/client'
 import { flushSync } from 'react-dom'
 import * as ReactJSXRuntime from 'react/jsx-runtime'
-import * as BiuPublicUi from '@biu/public-ui'
+import * as BiuUi from '@biu/biu-ui'
 import { PageEditorService } from '@biu/core-editor/web'
 import { installShareCollectionChrome } from './share-chrome.ts'
 
@@ -51,12 +51,12 @@ function installShareReactGlobals() {
     React?: typeof React
     ReactDOM?: typeof ReactDOM & { createRoot: typeof createRoot; hydrateRoot: typeof hydrateRoot }
     ReactJSXRuntime?: typeof ReactJSXRuntime
-    BiuPublicUi?: typeof BiuPublicUi
+    BiuUi?: typeof BiuUi
   }
   g.React = React
   g.ReactDOM = { ...ReactDOM, createRoot, hydrateRoot, flushSync }
   g.ReactJSXRuntime = ReactJSXRuntime
-  g.BiuPublicUi = BiuPublicUi
+  g.BiuUi = BiuUi
 }
 
 export function bootShareRuntime() {

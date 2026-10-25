@@ -1,5 +1,5 @@
 import { memo, useMemo, useSyncExternalStore } from 'react'
-import { OutlineNav } from '@biu/public-ui'
+import { OutlineNav } from '@biu/biu-ui'
 import {
   bindSessionView,
   deriveChatOutline,

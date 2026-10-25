@@ -7,7 +7,7 @@ import {
   type FieldSpec,
   type SchemaFieldValue,
 } from '@biu/type-file-system'
-import { TagChip, TagChips } from '@biu/public-ui'
+import { TagChip, TagChips } from '@biu/biu-ui'
 import { DbSearchOption, ensureDbSearchStyle } from '@biu/database-ui/search'
 import { fieldDraftValue, parseFieldValue } from './fsdb-cells.tsx'
 import { FieldEditor } from './field-editor.tsx'

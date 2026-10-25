@@ -1,7 +1,7 @@
 import { useRef, useState, type ChangeEvent } from 'react'
 import type { Context } from 'cordis'
 import type { DatabaseUi, FsCellProps, FsContentProps, FsViewProps } from '@biu/type-file-system/ui'
-import { AttachmentList } from '@biu/public-ui'
+import { AttachmentList } from '@biu/biu-ui'
 
 export const name = 'host-skills-ui'
 export const inject = ['databaseUi']

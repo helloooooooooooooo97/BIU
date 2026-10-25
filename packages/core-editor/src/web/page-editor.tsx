@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
-import { HeadlessPopover } from '@biu/public-ui'
+import { HeadlessPopover } from '@biu/biu-ui'
 import { SourceEditor, type SourceEditorHandle } from './source-editor.tsx'
 import { usePageSourceMode } from './source-mode.ts'
 import { ArrowPathIcon, ChatBubbleLeftRightIcon } from '@heroicons/react/16/solid'

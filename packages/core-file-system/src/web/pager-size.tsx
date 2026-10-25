@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Bars3BottomLeftIcon, CheckIcon } from '@heroicons/react/16/solid'
-import { HeadlessPopover } from '@biu/public-ui/headless-popover'
+import { HeadlessPopover } from '@biu/biu-ui/headless-popover'
 import { normalizePageSize, PAGE_SIZES } from './saved-view.ts'
 
 /** 每页条数菜单自己管开合，避免点开时把整张表跟着 setState。 */

@@ -773,7 +773,7 @@ biu
     ├── web-routes-panel/      # Settings → Routes
     ├── web-ui-hub/
     ├── public-mascot/         # 共享吉祥物 UI，不进 json
-    ├── public-ui/             # 共享零件（折叠/计数/菜单/附件），不进 json
+    ├── biu-ui/                # Biu UI 共享零件（折叠/计数/菜单/附件），不进 json
     │
     ├── core-file-system/      # File System：登记表 + db_* 工具 + UI
     ├── core-editor/           # 记录正文编辑器；块、引用、斜杠菜单

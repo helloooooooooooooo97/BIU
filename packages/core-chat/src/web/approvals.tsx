@@ -12,7 +12,7 @@ import {
 import type { SlotProps } from '@biu/web-slots'
 import { bindSessionView, type DispatchedTaskRow, type SessionViewService } from '@biu/web-session-view'
 import { BrandCornerMascot, SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
-import { HeadlessDismiss } from '@biu/public-ui'
+import { HeadlessDismiss } from '@biu/biu-ui'
 import { ChatSidebar } from '@biu/web-app-shell/chat-sidebar'
 import {
   getChatOverlay,

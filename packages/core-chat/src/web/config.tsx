@@ -8,7 +8,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { CheckIcon, ChevronDownIcon, ArrowPathIcon, PlusIcon, MagnifyingGlassIcon, SignalSlashIcon, XMarkIcon } from '@heroicons/react/16/solid'
-import { HeadlessDismiss } from '@biu/public-ui'
+import { HeadlessDismiss } from '@biu/biu-ui'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { getChatConfig, seedChatConfig } from './chat-config.ts'
 

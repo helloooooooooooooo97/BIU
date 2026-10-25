@@ -474,8 +474,8 @@ test('pack installs sandbox package.json deps without host node_modules', async 
   }
 })
 
-test('pack maps @biu/public-ui to globalThis.BiuPublicUi', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'plugin-public-ui-'))
+test('pack maps @biu/biu-ui to globalThis.BiuUi', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'plugin-biu-ui-'))
   try {
     const ctx = new Context()
     stubHub(ctx)
@@ -490,12 +490,12 @@ test('pack maps @biu/public-ui to globalThis.BiuPublicUi', async () => {
     await mkdir(join(sandbox, 'web'), { recursive: true })
     await writeFile(
       join(sandbox, 'web/index.tsx'),
-      `import { ConfirmDialog, TagChip } from '@biu/public-ui'\nexport const name = 'store-ui'\nexport function apply() { return { ConfirmDialog, TagChip } }\n`,
+      `import { ConfirmDialog, TagChip } from '@biu/biu-ui'\nexport const name = 'store-ui'\nexport function apply() { return { ConfirmDialog, TagChip } }\n`,
     )
     await store.pack('store-ui')
     const webJs = await readFile(join(dir, '.plugin', 'store-ui', 'web.js'), 'utf8')
-    assert.match(webJs, /globalThis\.BiuPublicUi/)
-    assert.doesNotMatch(webJs, /from"@biu\/public-ui"/)
+    assert.match(webJs, /globalThis\.BiuUi/)
+    assert.doesNotMatch(webJs, /from"@biu\/biu-ui"/)
   } finally {
     await rm(dir, { recursive: true, force: true })
   }

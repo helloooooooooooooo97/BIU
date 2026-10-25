@@ -13,7 +13,7 @@ import {
   WrenchScrewdriverIcon,
 } from '@heroicons/react/16/solid'
 import type { ComponentType } from 'react'
-import { ensureTagChipStyle, TagChipCloseMark, tagTone } from '@biu/public-ui'
+import { ensureTagChipStyle, TagChipCloseMark, tagTone } from '@biu/biu-ui'
 import type { PickRef } from './types.ts'
 import { chipCaption, chipLabel } from './types.ts'
 

@@ -1,4 +1,4 @@
-import { Badge, Button } from '@biu/public-ui'
+import { Badge, Button } from '@biu/biu-ui'
 
 const React = globalThis.React
 const { useState, useEffect } = React

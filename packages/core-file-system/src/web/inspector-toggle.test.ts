@@ -114,7 +114,7 @@ test('data sidebar brand sits left with a collapse control on the right', () => 
 
 test('user and system collection sections fold independently', () => {
   const sidebar = readFileSync(resolve(import.meta.dirname, './data-sidebar.tsx'), 'utf8')
-  const fold = readFileSync(resolve(import.meta.dirname, '../../../public-ui/src/sidebar-fold.tsx'), 'utf8')
+  const fold = readFileSync(resolve(import.meta.dirname, '../../../biu-ui/src/sidebar-fold.tsx'), 'utf8')
   assert.match(sidebar, /const \[userOpen, setUserOpen\] = useState\(true\)/)
   assert.match(sidebar, /const \[systemOpen, setSystemOpen\] = useState\(false\)/)
   assert.match(sidebar, /setUserOpen\(\(prev\) => !prev\)\s*onOpenScopeHome\?\.\(\)/)
@@ -204,7 +204,7 @@ test('sidebar records paint detail immediately without reloading the view', () =
   assert.match(browser, /!detailId \?/)
   assert.match(sidebar, /onOpenRecord\?\.\(row\.id, row\)/)
   assert.match(sidebar, /event.stopPropagation\(\)/)
-  const emoji = readFileSync(resolve(import.meta.dirname, '../../../public-ui/src/emoji-board.tsx'), 'utf8')
+  const emoji = readFileSync(resolve(import.meta.dirname, '../../../biu-ui/src/emoji-board.tsx'), 'utf8')
   assert.match(emoji, /function RecordEmojiBoard/)
   assert.match(emoji, /className="fsdb-emoji-picker is-fixed"/)
   assert.doesNotMatch(emoji, /fsdb-emoji-picker-input/)
@@ -360,7 +360,7 @@ test('deletable tables can pick rows and bulk-act over the table header', () => 
   assert.match(browser, /data-testid="fsdb-row-check"/)
   assert.match(browser, /className=\{\`fsdb-boolbtn fsdb-row-check\$\{marked \? ' is-on' : ''\}\`\}/)
   assert.match(browser, /<BoolBox/)
-  const boolBox = readFileSync(resolve(import.meta.dirname, '../../../public-ui/src/bool-box.tsx'), 'utf8')
+  const boolBox = readFileSync(resolve(import.meta.dirname, '../../../biu-ui/src/bool-box.tsx'), 'utf8')
   assert.match(boolBox, /fsdb-boolbox/)
   assert.doesNotMatch(browser, /type="checkbox"/)
   assert.match(browser, /const canDelete = Boolean\(schema\?\.records\?\.delete\) && !subsetLocked/)

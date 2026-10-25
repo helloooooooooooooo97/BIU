@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { TagChip, TagChips } from '@biu/public-ui'
+import { TagChip, TagChips } from '@biu/biu-ui'
 import { DbSearchMenu, DbSearchOption, ensureDbSearchStyle } from './search-menu.tsx'
 
 export function CellMulti({

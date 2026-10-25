@@ -1,10 +1,10 @@
 {
-  "name": "@biu/public-ui",
+  "name": "@biu/biu-ui",
   "license": "Apache-2.0",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "跨插件共享 UI 零件（public：不是 Cordis 插件）",
+  "description": "跨插件共享 UI 零件（Biu UI：不是 Cordis 插件）",
   "exports": {
     ".": "./src/index.ts",
     "./bool-box": "./src/bool-box.tsx",

@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@source "../packages/public-ui/src/**/*.{ts,tsx}";
+@source "../packages/biu-ui/src/**/*.{ts,tsx}";
 
 /* Light chrome — canvas #ffffff, sidebar #f9f8f7, hairline #f0efed */
 :root {
