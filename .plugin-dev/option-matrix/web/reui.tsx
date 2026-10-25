@@ -81,6 +81,22 @@ const CSS = `
 .rui-legend i{display:inline-block;width:8px;height:8px;border-radius:99px;margin-right:6px}
 .rui-legend b{display:block;font-size:22px;font-weight:600;letter-spacing:-.03em;font-variant-numeric:tabular-nums;line-height:1.15}
 .rui-legend em{display:block;font-style:normal;font-size:12px;color:rgba(255,255,255,.5);margin-top:2px}
+.fit-tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0 16px 16px}
+.fit-tile{background:#fff;border-radius:12px;padding:12px 12px 10px}
+.fit-tile b{display:block;font-size:20px;font-weight:650;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.fit-tile em{display:block;margin-top:3px;font-style:normal;font-size:11px;color:#6d6d72}
+.fit-meter{height:4px;border-radius:99px;background:#ececef;margin-top:8px;overflow:hidden}
+.fit-meter i{display:block;height:100%;border-radius:99px}
+.hv-stats{display:flex;gap:18px;margin:0 16px 14px;font-variant-numeric:tabular-nums}
+.hv-stats b{display:block;font-size:22px;font-weight:650;letter-spacing:-.03em}
+.hv-stats em{display:block;font-style:normal;font-size:11px;color:#6d6d72;margin-top:2px}
+.hv-ex{margin:0 16px 12px;background:#fff;border-radius:12px;overflow:hidden}
+.hv-ex h3{margin:0;padding:12px 14px 4px;font-size:16px;font-weight:650}
+.hv-ex p{margin:0;padding:0 14px 8px;font-size:12px;color:#6d6d72}
+.hv-table{width:100%;border-collapse:collapse}
+.hv-table th{text-align:left;font-size:11px;color:#8e8e93;font-weight:600;letter-spacing:.04em;text-transform:uppercase;padding:6px 10px;border-bottom:1px solid #f0f0f0}
+.hv-table td{padding:6px 10px;border-bottom:1px solid #f6f6f6;font-size:14px}
+.hv-table input{width:56px;border:0;background:transparent;text-align:center;font:650 14px/28px ui-sans-serif,system-ui,sans-serif}
 .rui-chrome{display:flex;align-items:center;gap:8px;height:44px;padding:0 10px;background:#f6f6f6;border-bottom:.5px solid rgba(0,0,0,.1)}
 .rui-traffic{display:flex;gap:6px;padding:0 6px}
 .rui-traffic i{width:10px;height:10px;border-radius:99px}

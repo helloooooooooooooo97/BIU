@@ -19,10 +19,11 @@ type DayData = {
   sleep?: number
   workoutDone?: boolean
   note?: string
+  goals?: { steps?: number; sleep?: number }
 }
-type SetRow = { weight?: number; reps?: number; done?: boolean }
+type SetRow = { weight?: number; reps?: number; done?: boolean; rpe?: number }
 type ExRow = { name: string; scheme: string; sets: SetRow[] }
-type LogData = { day?: string; focus?: string; exercises?: ExRow[] }
+type LogData = { day?: string; focus?: string; exercises?: ExRow[]; restSec?: number; startedAt?: number }
 
 function num(v: unknown, fallback = 0): number {
   const n = typeof v === 'number' ? v : Number(v)
@@ -128,7 +129,7 @@ function DayBlock({ data, update, writable }: { data: DayData; update: (p: Parti
       <div data-testid="fitness-day">
         <div className="rui-large">活动</div>
         <div className="rui-sub">
-          {d.date ?? today()} · {p.target === WATER_TARGET.train ? '训练日' : '休息日'}
+          {d.date ?? today()} · {p.target === WATER_TARGET.train ? '训练日' : '休息日'} · 进食窗口 {fastEnd}–{fastStart}
         </div>
         <div className="rui-activity">
           <ActivityRings
@@ -164,6 +165,26 @@ function DayBlock({ data, update, writable }: { data: DayData; update: (p: Parti
               </b>
               <em>{inWindow ? '进食窗口内' : `空腹还剩 ${Math.floor(fastingLeft / 60)}h ${pad(fastingLeft % 60)}m`}</em>
             </div>
+          </div>
+        </div>
+        <div className="fit-tiles">
+          <div className="fit-tile">
+            <b>{d.steps ?? '—'}</b>
+            <em>步数 / {d.goals?.steps ?? 8000}</em>
+            <div className="fit-meter">
+              <i style={{ width: `${Math.min(100, (num(d.steps) / (d.goals?.steps ?? 8000)) * 100)}%`, background: MOVE }} />
+            </div>
+          </div>
+          <div className="fit-tile">
+            <b>{d.sleep ?? '—'}</b>
+            <em>睡眠 h / {d.goals?.sleep ?? 7.5}</em>
+            <div className="fit-meter">
+              <i style={{ width: `${Math.min(100, (num(d.sleep) / (d.goals?.sleep ?? 7.5)) * 100)}%`, background: EXERCISE }} />
+            </div>
+          </div>
+          <div className="fit-tile">
+            <b>{d.weight ?? '—'}</b>
+            <em>体重 kg</em>
           </div>
         </div>
 
@@ -255,7 +276,7 @@ function DayBlock({ data, update, writable }: { data: DayData; update: (p: Parti
 
         <div style={{ margin: '0 16px' }}>
           <Button variant="ghost" type="button" onClick={() => setShowMd((v) => !v)}>
-            {showMd ? '收起摘要' : '导出'}
+            {showMd ? '收起摘要' : '导出 markdown'}
           </Button>
         </div>
         {showMd ? (
@@ -306,30 +327,33 @@ function LogBlock({ data, update, writable }: { data: LogData; update: (p: Parti
     return lines.join('\n')
   }, [JSON.stringify(data)])
 
+  const prevOf = (r: ExRow, si: number) => {
+    const prev = r.sets[si - 1]
+    if (!prev) return '—'
+    return `${prev.weight ?? '—'}×${prev.reps ?? '—'}`
+  }
+
   return (
     <ReUI className="rui-ios">
       <div data-testid="fitness-log">
-        <div className="rui-large">体能训练</div>
+        <div className="rui-large">训练</div>
         <div className="rui-sub">
-          {data.day || '训练'} · {data.focus || ''} · {doneSets}/{totalSets} 组 · {volume} kg
+          {data.day || '训练'} · {data.focus || ''} · 完成组数 {doneSets}/{totalSets}
         </div>
-        <div className="rui-activity" style={{ justifyContent: 'space-between' }}>
-          <ActivityRings rings={[{ value: totalSets ? doneSets / totalSets : 0, color: MOVE }, { value: 1, color: EXERCISE }, { value: volume ? 1 : 0, color: STAND }]} />
-          <div className="rui-legend">
-            <div>
-              <b>
-                <i style={{ background: MOVE }} />
-                {doneSets}/{totalSets}
-              </b>
-              <em>完成组</em>
-            </div>
-            <div>
-              <b>
-                <i style={{ background: EXERCISE }} />
-                {volume}
-              </b>
-              <em>容量 kg</em>
-            </div>
+        <div className="hv-stats">
+          <div>
+            <b>{volume}</b>
+            <em>容量 kg</em>
+          </div>
+          <div>
+            <b>
+              {doneSets}/{totalSets}
+            </b>
+            <em>完成组</em>
+          </div>
+          <div>
+            <b>{ex.length}</b>
+            <em>动作</em>
           </div>
         </div>
         {writable ? (
@@ -344,53 +368,72 @@ function LogBlock({ data, update, writable }: { data: LogData; update: (p: Parti
           </Group>
         ) : null}
         {ex.map((r, ei) => (
-          <div key={ei}>
-            <div className="rui-section">
+          <div className="hv-ex" key={ei}>
+            <h3>
               {writable ? (
-                <Input style={{ border: 0, background: 'transparent', fontWeight: 650, width: 'auto' }} value={r.name} onChange={(e: { target: { value: string } }) => update({ exercises: ex.map((x, i) => (i === ei ? { ...x, name: e.target.value } : x)) })} />
+                <Input style={{ border: 0, background: 'transparent', fontWeight: 650, width: '100%' }} value={r.name} onChange={(e: { target: { value: string } }) => update({ exercises: ex.map((x, i) => (i === ei ? { ...x, name: e.target.value } : x)) })} />
               ) : (
                 r.name
               )}
-              <span style={{ float: 'right' }}>{volOf(r)} kg</span>
-            </div>
-            <Group>
-              {r.sets.map((s, si) => (
-                <Cell key={si}>
-                  <Checkbox checked={!!s.done} onChange={() => writable && setSet(ei, si, { done: !s.done })} />
-                  <span className="rui-cell-main">第 {si + 1} 组</span>
-                  {writable ? (
-                    <>
-                      <Input style={{ width: 52, textAlign: 'center', border: 0, background: 'transparent' }} type="number" placeholder="kg" value={s.weight ?? ''} onChange={(e: { target: { value: string } }) => setSet(ei, si, { weight: e.target.value === '' ? undefined : num(e.target.value) })} />
-                      <span className="rui-cell-meta">×</span>
-                      <Input style={{ width: 44, textAlign: 'center', border: 0, background: 'transparent' }} type="number" placeholder="次" value={s.reps ?? ''} onChange={(e: { target: { value: string } }) => setSet(ei, si, { reps: e.target.value === '' ? undefined : num(e.target.value) })} />
-                    </>
-                  ) : (
-                    <span className="rui-cell-meta">
-                      {s.weight ?? '—'} × {s.reps ?? '—'}
-                    </span>
-                  )}
-                </Cell>
-              ))}
-              {writable ? (
-                <Cell>
-                  <Button size="sm" variant="ghost" type="button" onClick={() => addSet(ei)}>
-                    加一组
-                  </Button>
-                  <Button size="sm" variant="ghost" type="button" onClick={() => delSet(ei)}>
-                    少一组
-                  </Button>
-                  <span className="rui-cell-main" />
-                  <Button size="sm" variant="ghost" type="button" onClick={() => update({ exercises: ex.filter((_, i) => i !== ei) })}>
-                    删除动作
-                  </Button>
-                </Cell>
-              ) : null}
-            </Group>
+            </h3>
+            <p>
+              {r.scheme} · 容量 {volOf(r)} kg
+            </p>
+            <table className="hv-table">
+              <thead>
+                <tr>
+                  <th>组</th>
+                  <th>上次</th>
+                  <th>kg</th>
+                  <th>次</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {r.sets.map((s, si) => (
+                  <tr key={si} style={s.done ? { background: '#f3fff4' } : undefined}>
+                    <td>{si + 1}</td>
+                    <td className="rui-muted">{prevOf(r, si)}</td>
+                    <td>
+                      {writable ? (
+                        <input type="number" placeholder="kg" value={s.weight ?? ''} onChange={(e: { target: { value: string } }) => setSet(ei, si, { weight: e.target.value === '' ? undefined : num(e.target.value) })} />
+                      ) : (
+                        s.weight ?? '—'
+                      )}
+                    </td>
+                    <td>
+                      {writable ? (
+                        <input type="number" placeholder="次" value={s.reps ?? ''} onChange={(e: { target: { value: string } }) => setSet(ei, si, { reps: e.target.value === '' ? undefined : num(e.target.value) })} />
+                      ) : (
+                        s.reps ?? '—'
+                      )}
+                    </td>
+                    <td>
+                      <Checkbox checked={!!s.done} onChange={() => writable && setSet(ei, si, { done: !s.done })} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {writable ? (
+              <div className="rui-row" style={{ padding: '8px 10px 10px' }}>
+                <Button size="sm" variant="ghost" type="button" onClick={() => addSet(ei)}>
+                  加一组
+                </Button>
+                <Button size="sm" variant="ghost" type="button" onClick={() => delSet(ei)}>
+                  少一组
+                </Button>
+                <span className="rui-grow" />
+                <Button size="sm" variant="ghost" type="button" onClick={() => update({ exercises: ex.filter((_, i) => i !== ei) })}>
+                  删除动作
+                </Button>
+              </div>
+            ) : null}
           </div>
         ))}
         <div style={{ margin: '0 16px' }}>
           <Button variant="ghost" type="button" onClick={() => setShowMd((v) => !v)}>
-            {showMd ? '收起' : '导出'}
+            {showMd ? '收起' : '导出 markdown'}
           </Button>
         </div>
         {showMd ? (
@@ -408,7 +451,7 @@ function LogBlock({ data, update, writable }: { data: LogData; update: (p: Parti
   )
 }
 
-const DAY_DEFAULTS: DayData = { fastStart: '20:00', fastEnd: '12:00', water: {}, meals: {}, sodium: false, note: '' }
+const DAY_DEFAULTS: DayData = { fastStart: '20:00', fastEnd: '12:00', water: {}, meals: {}, sodium: false, note: '', goals: { steps: 8000, sleep: 7.5 } }
 
 const UPPER_A: ExRow[] = [
   { name: '杠铃卧推', scheme: '4×6–8', sets: Array.from({ length: 4 }, () => ({ done: false })) },
@@ -428,7 +471,7 @@ export function apply(ctx: { pageEditor: { registerBlock: (spec: Record<string, 
     label: '今日打卡',
     blockType: 'fitness',
     blockTypeLabel: '健身',
-    hint: '饮水累加 + 8+16 进食窗口倒计时 + 餐次/训练/体重打卡，可导出 markdown',
+    hint: 'Apple 健身环：饮水 / 餐次 / 训练 + 步数睡眠体重磁贴，可导出 markdown',
     aliases: ['fitness', 'day', 'water', '打卡', '饮水', '健身打卡', 'fitness-day'],
     defaults: () => DAY_DEFAULTS,
     View: ({ data, update, writable }: any) => React.createElement(DayBlock, { data, update, writable }),
@@ -439,7 +482,7 @@ export function apply(ctx: { pageEditor: { registerBlock: (spec: Record<string, 
     label: '训练日志',
     blockType: 'fitness',
     blockTypeLabel: '健身',
-    hint: '周分化动作表：勾选组、填重量次数，自动算容量，可导出 markdown',
+    hint: 'Hevy / Strong：组表 kg×次数、容量和完成组，可导出 markdown',
     aliases: ['fitness-log', 'workout', 'training', '训练', '训练日志', '举铁'],
     defaults: () => LOG_DEFAULTS,
     View: ({ data, update, writable }: any) => React.createElement(LogBlock, { data, update, writable }),
