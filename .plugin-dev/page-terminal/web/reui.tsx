@@ -122,14 +122,23 @@ const CSS = `
 .lc-console-body{padding:12px 14px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;line-height:1.65;min-height:72px;color:#262626;white-space:pre-wrap}
 .lc-empty{color:#8c8c8c}
 @media (max-width:820px){.lc-shell{grid-template-columns:1fr}}
-.doc-rings{margin:0 16px 18px;background:#fff;border:1px solid var(--rui-border);color:#1c1c1e;border-radius:18px;padding:18px 20px;display:flex;align-items:center;gap:22px}
-.doc-rings .rui-legend em{color:#8e8e93}
-.doc-filters{display:flex;gap:6px;flex-wrap:wrap;margin:0 16px 14px}
-.doc-filter{height:28px;padding:0 12px;border:0;border-radius:99px;background:#e8e8ed;color:#3a3a3c;font:600 12px/1 ui-sans-serif,system-ui,sans-serif;cursor:pointer}
-.doc-filter[data-on=true]{background:#1c1c1e;color:#fff}
+.doc-shell{background:#fafafa;border:1px solid var(--rui-border);border-radius:12px;overflow:hidden}
+.doc-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:16px 18px 8px}
+.doc-head h2{margin:0;font-size:18px;font-weight:650;letter-spacing:-.02em}
+.doc-head p{margin:4px 0 0;font-size:12.5px;color:#6d6d72}
+.doc-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:8px 18px 14px}
+.doc-stat{background:#fff;border:1px solid var(--rui-border);border-radius:10px;padding:12px 14px}
+.doc-stat b{display:block;font-size:26px;font-weight:650;letter-spacing:-.03em;font-variant-numeric:tabular-nums;line-height:1.1}
+.doc-stat em{display:block;margin-top:4px;font-style:normal;font-size:12px;color:#6d6d72}
+.doc-bar{display:flex;height:8px;margin:0 18px 14px;border-radius:99px;overflow:hidden;background:#ececef}
+.doc-bar i{display:block;height:100%}
+.doc-filters{display:flex;gap:0;padding:0 10px;border-bottom:1px solid var(--rui-border);background:#fff}
+.doc-filter{height:36px;padding:0 12px;border:0;border-radius:0;background:transparent;color:#6d6d72;font:600 12.5px/1 ui-sans-serif,system-ui,sans-serif;cursor:pointer}
+.doc-filter[data-on=true]{color:#1c1c1e;box-shadow:inset 0 -2px 0 #1c1c1e}
 .doc-issue{cursor:pointer}
 .doc-issue[data-open=true]{background:#f7f7f7}
 .doc-dot{width:8px;height:8px;border-radius:99px;flex:0 0 auto}
+.doc-list{padding:10px 10px 14px}
 .ins-shell{display:grid;grid-template-columns:220px minmax(0,1fr);min-height:460px;background:#fff}
 .ins-side{border-right:1px solid var(--rui-border);background:#f7f7f7;display:flex;flex-direction:column;min-width:0}
 .ins-side h4{margin:12px 12px 6px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#8e8e93}

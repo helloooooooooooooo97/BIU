@@ -1,6 +1,6 @@
 # 插件体检（plugin-doctor）
 
-参考 **iOS 屏幕使用时间 / Linear Issues / Sentry Issues / Xcode Organizer**：顶部三环摘要，下面按严重度分组的 issue 列表，点开一条看证据。
+参考 **Sentry Issues / Linear / Xcode Organizer**：顶部是 Unresolved / Warnings / Resolved 计数和一条严重度分布条，下面按严重度分组的 issue 列表，点开一条看证据。没有健身圆环。
 
 扫描仓库 `.plugin/` 下已安装插件。每条插件带 `level`（`ok` / `warn` / `error`）和 `problems[]`；报告另有扁平 `issues[]`（Sentry 式：一条问题一行）。
 

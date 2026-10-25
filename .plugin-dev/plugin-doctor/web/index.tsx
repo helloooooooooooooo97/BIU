@@ -1,4 +1,4 @@
-import { ActivityRings, Button, Cell, Group, ReUI } from './reui'
+import { Button, Cell, Group, ReUI } from './reui'
 
 const React = globalThis.React
 const { useState } = React
@@ -80,9 +80,9 @@ function levelOf(item: PluginReport): Level {
 }
 
 const LEVEL_COLOR: Record<Level, string> = {
-  ok: '#30d158',
-  warn: '#ffd60a',
-  error: '#ff453a',
+  ok: '#2ecd72',
+  warn: '#f5b000',
+  error: '#f55459',
 }
 
 const LEVEL_LABEL: Record<Level, string> = {
@@ -118,7 +118,8 @@ function DoctorBlock(props: BlockProps) {
   const ok = report?.summary.ok ?? 0
   const warn = report?.summary.warn ?? 0
   const broken = report?.summary.broken ?? 0
-  const total = Math.max(1, report?.total ?? 1)
+  const total = Math.max(0, report?.total ?? 0)
+  const issueCount = report?.issues?.length ?? plugins.reduce((n, item) => n + (item.problems?.length || 0), 0)
   const visible = filter === 'all' ? plugins : plugins.filter((item) => levelOf(item) === filter)
   const grouped: Record<Level, PluginReport[]> = { error: [], warn: [], ok: [] }
   for (const item of visible) grouped[levelOf(item)].push(item)
@@ -130,14 +131,20 @@ function DoctorBlock(props: BlockProps) {
     if (props.writable) props.update({ focus: focus === id ? '' : id })
   }
 
+  const barTotal = Math.max(1, ok + warn + broken)
+
   return (
-    <ReUI className="rui-ios">
-      <div data-testid="plugin-doctor-block">
-        <div className="rui-large">插件</div>
-        <div className="rui-sub">
-          {report ? `${clock(report.scannedAt)} · ${kb(report.summary.bytes)} · ${(report.issues ?? []).length} 条 issue · ${report.root}` : '扫描已安装插件，按问题分组'}
-        </div>
-        <div style={{ margin: '0 16px 12px' }}>
+    <ReUI>
+      <div data-testid="plugin-doctor-block" className="doc-shell">
+        <div className="doc-head">
+          <div>
+            <h2>Issues</h2>
+            <p>
+              {report
+                ? `${clock(report.scannedAt)} · ${total} 个插件 · ${kb(report.summary.bytes)} · ${report.root}`
+                : '扫描已安装插件，按 Sentry / Linear 的 issue 流呈现'}
+            </p>
+          </div>
           {props.writable ? (
             <Button data-testid="plugin-doctor-run" onClick={run} disabled={busy}>
               {busy ? '扫描中…' : '重新扫描'}
@@ -147,7 +154,7 @@ function DoctorBlock(props: BlockProps) {
           )}
         </div>
         {error ? (
-          <div className="rui-sub" style={{ color: '#ff3b30' }}>
+          <div className="rui-sub" style={{ color: '#f55459' }}>
             {error}
           </div>
         ) : null}
@@ -155,51 +162,38 @@ function DoctorBlock(props: BlockProps) {
           <div className="rui-sub">还没有体检结果{props.writable ? '，点「重新扫描」。' : '。'}</div>
         ) : (
           <>
-            <div className="doc-rings">
-              <ActivityRings
-                rings={[
-                  { value: ok / total, color: LEVEL_COLOR.ok },
-                  { value: warn / total, color: LEVEL_COLOR.warn },
-                  { value: broken / total, color: LEVEL_COLOR.error },
-                ]}
-              />
-              <div className="rui-legend">
-                <div>
-                  <b>
-                    <i style={{ background: LEVEL_COLOR.ok }} />
-                    {ok}
-                  </b>
-                  <em>合规</em>
-                </div>
-                <div>
-                  <b>
-                    <i style={{ background: LEVEL_COLOR.warn }} />
-                    {warn}
-                  </b>
-                  <em>待修</em>
-                </div>
-                <div>
-                  <b>
-                    <i style={{ background: LEVEL_COLOR.error }} />
-                    {broken}
-                  </b>
-                  <em>问题</em>
-                </div>
+            <div className="doc-stats">
+              <div className="doc-stat">
+                <b style={{ color: LEVEL_COLOR.error }}>{broken}</b>
+                <em>Unresolved</em>
               </div>
+              <div className="doc-stat">
+                <b style={{ color: LEVEL_COLOR.warn }}>{warn}</b>
+                <em>Warnings</em>
+              </div>
+              <div className="doc-stat">
+                <b style={{ color: LEVEL_COLOR.ok }}>{ok}</b>
+                <em>Resolved</em>
+              </div>
+            </div>
+            <div className="doc-bar" aria-label={`${issueCount} issues`}>
+              <i style={{ width: `${(broken / barTotal) * 100}%`, background: LEVEL_COLOR.error }} />
+              <i style={{ width: `${(warn / barTotal) * 100}%`, background: LEVEL_COLOR.warn }} />
+              <i style={{ width: `${(ok / barTotal) * 100}%`, background: LEVEL_COLOR.ok }} />
             </div>
             <div className="doc-filters">
               {([
-                ['all', `全部 ${plugins.length}`],
-                ['error', `问题 ${broken}`],
-                ['warn', `待修 ${warn}`],
-                ['ok', `合规 ${ok}`],
+                ['all', `All ${plugins.length}`],
+                ['error', `Unresolved ${broken}`],
+                ['warn', `Warnings ${warn}`],
+                ['ok', `Resolved ${ok}`],
               ] as const).map(([id, label]) => (
                 <button key={id} type="button" className="doc-filter" data-on={filter === id} onClick={() => setFilter(id)}>
                   {label}
                 </button>
               ))}
             </div>
-            <div data-testid="plugin-doctor-table">
+            <div className="doc-list" data-testid="plugin-doctor-table">
               {(['error', 'warn', 'ok'] as Level[]).map((level) =>
                 grouped[level].length ? (
                   <div key={level}>
@@ -257,7 +251,7 @@ export function apply(ctx: { pageEditor: { registerBlock: (spec: Record<string, 
     label: '插件体检',
     blockType: 'test',
     blockTypeLabel: '测试',
-    hint: '扫描已安装插件：环摘要 + 按问题分组，点开看详情',
+    hint: '扫描已安装插件：issue 计数、严重度条、按问题分组',
     aliases: ['doctor', '体检', '插件体检', 'scan'],
     defaults: () => ({ report: null, filter: 'all', focus: '' }),
     View: DoctorBlock,
