@@ -474,6 +474,34 @@ test('pack installs sandbox package.json deps without host node_modules', async 
   }
 })
 
+test('pack maps @biu/reui to globalThis.ReUI', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'plugin-reui-'))
+  try {
+    const ctx = new Context()
+    stubHub(ctx)
+    const store = new PluginStoreService(
+      ctx,
+      join(dir, '.plugin'),
+      join(dir, 'store.json'),
+      join(dir, '.plugin-dev'),
+    ).open()
+    await store.initSandbox({ id: 'store-reui', name: 'Reui', headless: true })
+    const sandbox = join(dir, '.plugin-dev', 'store-reui')
+    await mkdir(join(sandbox, 'web'), { recursive: true })
+    await writeFile(
+      join(sandbox, 'web/index.tsx'),
+      `import { Button, ReUI } from '@biu/reui'\nexport const name = 'store-reui'\nexport function apply() { return { Button, ReUI } }\n`,
+    )
+    await store.pack('store-reui')
+    const webJs = await readFile(join(dir, '.plugin', 'store-reui', 'web.js'), 'utf8')
+    assert.match(webJs, /globalThis\.ReUI/)
+    assert.doesNotMatch(webJs, /from"@biu\/reui"/)
+    assert.doesNotMatch(webJs, /\.rui-root\{/)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('pack maps @biu/biu-ui to globalThis.BiuUi', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'plugin-biu-ui-'))
   try {

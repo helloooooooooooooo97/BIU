@@ -2,7 +2,7 @@
  * 回归检查：Playwright HTML report / Vitest UI / Cypress / GitHub Checks
  * 断言是测试用例，runs 是 CI 记录，filter / selected 写进块数据。
  */
-import { Button, Input, ReUI, Select } from './reui'
+import { Button, Input, ReUI, Select } from '@biu/reui'
 
 const React = globalThis.React
 const { useState, useCallback } = React

@@ -1,4 +1,4 @@
-import { Button, Input, ReUI } from './reui'
+import { Button, Input, ReUI } from '@biu/reui'
 import { Excalidraw } from '@excalidraw/excalidraw'
 import '@excalidraw/excalidraw/index.css'
 import { createPortal } from 'react-dom'

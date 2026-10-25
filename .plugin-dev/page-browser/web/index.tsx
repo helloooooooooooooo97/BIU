@@ -1,4 +1,4 @@
-import { Button, Input, ReUI } from './reui'
+import { Button, Input, ReUI } from '@biu/reui'
 import { createPortal } from 'react-dom'
 import { BLOCKED_HINT, BOOKMARKS, normalizeUrl } from './url.ts'
 import { openSidebarBrowser } from './open.ts'

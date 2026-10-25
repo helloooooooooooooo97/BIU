@@ -1,4 +1,4 @@
-import { Button, Input, ReUI, Textarea } from './reui'
+import { Button, Input, ReUI, Textarea } from '@biu/reui'
 
 const React = globalThis.React
 const { useState, useMemo, useEffect, useRef } = React

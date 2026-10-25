@@ -1,4 +1,4 @@
-import { ActivityRings, Button, Cell, Checkbox, Group, Input, ReUI, Textarea } from './reui'
+import { ActivityRings, Button, Cell, Checkbox, Group, Input, ReUI, Textarea } from '@biu/reui'
 
 const React = globalThis.React
 const { useState, useMemo, useEffect } = React

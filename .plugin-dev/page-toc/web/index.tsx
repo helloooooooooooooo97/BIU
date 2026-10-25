@@ -2,7 +2,7 @@
  * 目录：Notion / Obsidian / VS Code Outline / GitHub docs
  * 左侧 On this page，树形大纲，当前标题高亮，折叠写进块数据。
  */
-import { ReUI, Tree, TreeItem, TreeItemLabel, type TreeNodeItem } from './reui'
+import { ReUI, Tree, TreeItem, TreeItemLabel, type TreeNodeItem } from '@biu/reui'
 import { headingElById, headingsFromPage, nestHeadings, pageRootFrom, sameTocItems, type TocHeading, type TocNode } from './outline.ts'
 
 const React = globalThis.React

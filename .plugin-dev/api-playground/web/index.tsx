@@ -5,7 +5,7 @@
  * 请求 Params / Headers / Body 用键值表，响应 Body / Headers 分栏。
  * 发送走 host /api/api-playground/send。
  */
-import { Button, ConfirmDialog, Input, ReUI, Select, Textarea } from './reui'
+import { Button, ConfirmDialog, Input, ReUI, Select, Textarea } from '@biu/reui'
 
 const React = globalThis.React
 const { useEffect, useMemo, useRef, useState } = React

@@ -11,6 +11,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@biu/biu-ui': join(repo, 'packages/biu-ui/src/index.ts'),
+      '@biu/reui': join(repo, 'packages/reui/src/index.tsx'),
       react: join(repo, 'node_modules/react'),
       'react-dom': join(repo, 'node_modules/react-dom'),
       'react/jsx-runtime': join(repo, 'node_modules/react/jsx-runtime.js'),

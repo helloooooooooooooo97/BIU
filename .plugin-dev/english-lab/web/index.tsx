@@ -2,7 +2,7 @@
  * 英语练习块。版式跟竞品：Duolingo / TOEFL / Newsela / LingQ / DeepL / Write & Improve / 试译宝。
  * AI 走宿主 /api/english-lab/ai（内置 chat 模型），不要自配 key，不要 import @biu/*。
  */
-import { Button, Input, ReUI, Textarea } from './reui'
+import { Button, Input, ReUI, Textarea } from '@biu/reui'
 
 const React = globalThis.React
 const { useEffect, useMemo, useRef, useState } = React

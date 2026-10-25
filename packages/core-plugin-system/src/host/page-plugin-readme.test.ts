@@ -31,7 +31,7 @@ test('page block playground UIs use ReUI tokens instead of hardcoded light-theme
   ]
   for (const file of files) {
     const src = readFileSync(join(sandbox, file), 'utf8')
-    assert.match(src, /from '\.\/reui'/, `${file} should import local ReUI kit`)
+    assert.match(src, /from '@biu\/reui'/, `${file} should import host ReUI`)
     assert.doesNotMatch(src, /from '@biu\/biu-ui'/, `${file} should not import @biu/biu-ui`)
     assert.doesNotMatch(src, /#9ec1ff/, `${file} should not hardcode send-button blue`)
   }
@@ -71,7 +71,7 @@ test('page plugin READMEs use live :::pageBlock fences, not wrapped in markdown 
   }
 })
 
-test('reui page blocks vendor ./reui rather than injecting STYLE_CSS or using BiuUi', () => {
+test('reui page blocks import @biu/reui rather than injecting STYLE_CSS or using BiuUi', () => {
   const files = [
     'page-toc/web/index.tsx',
     'api-playground/web/index.tsx',
@@ -84,8 +84,9 @@ test('reui page blocks vendor ./reui rather than injecting STYLE_CSS or using Bi
   ]
   for (const file of files) {
     const src = readFileSync(join(sandbox, file), 'utf8')
-    assert.match(src, /from '\.\/reui'/, `${file} should import local ReUI kit`)
+    assert.match(src, /from '@biu\/reui'/, `${file} should import host ReUI`)
     assert.doesNotMatch(src, /from '@biu\/biu-ui'/, `${file} should not import host BiuUi`)
+    assert.doesNotMatch(src, /from '\.\/reui'/, `${file} should not vendor a local reui copy`)
     assert.doesNotMatch(src, /const STYLE_CSS = `/, `${file} should not inject STYLE_CSS`)
   }
 })

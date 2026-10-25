@@ -1,4 +1,4 @@
-import { Card, Input, ReUI, Select, Textarea } from './reui'
+import { Card, Input, ReUI, Select, Textarea } from '@biu/reui'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { cpp } from '@codemirror/lang-cpp'
 import { java } from '@codemirror/lang-java'

@@ -1,4 +1,4 @@
-import { Card, ReUI } from './reui'
+import { Card, ReUI } from '@biu/reui'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { indentUnit } from '@codemirror/language'
 import { EditorSelection, EditorState, Prec } from '@codemirror/state'

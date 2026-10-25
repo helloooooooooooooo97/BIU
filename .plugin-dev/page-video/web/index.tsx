@@ -1,4 +1,4 @@
-import { ReUI } from './reui'
+import { ReUI } from '@biu/reui'
 import {
   DndContext,
   PointerSensor,

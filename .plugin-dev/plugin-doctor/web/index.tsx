@@ -1,4 +1,4 @@
-import { Button, ReUI } from './reui'
+import { Button, ReUI } from '@biu/reui'
 
 const React = globalThis.React
 const { useState } = React

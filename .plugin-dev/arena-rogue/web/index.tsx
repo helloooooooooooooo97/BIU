@@ -1,4 +1,4 @@
-import { ReUI } from './reui'
+import { ReUI } from '@biu/reui'
 import { useEffect, useRef } from 'react'
 import { ArenaGame } from './game.ts'
 import { WEAPONS } from './weapons.ts'

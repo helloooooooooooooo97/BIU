@@ -1,8 +1,8 @@
 /**
- * ReUI / shadcn copy-source kit for page plugins.
- * Vendored into each plugin as web/reui.tsx — do not import @biu/biu-ui.
+ * ReUI kit for store page plugins. Host hangs this module on globalThis.ReUI;
+ * pack maps `import from '@biu/reui'` onto that singleton (same as React).
  */
-const React = globalThis.React as typeof import('react')
+import * as React from 'react'
 
 const CSS = `
 .rui-root{--rui-bg:#fff;--rui-fg:#171717;--rui-muted:#737373;--rui-border:#ececec;--rui-primary:#171717;--rui-primary-hover:#0a0a0a;--rui-primary-fg:#fff;--rui-accent:#f7f7f7;--rui-soft:#fafafa;--rui-hover:#f5f5f5;--rui-line:#f0f0f0;--rui-danger:#b42318;--rui-ok:#0f7a4a;--rui-radius:10px;color:var(--rui-fg);color-scheme:light;font:12.5px/1.45 ui-sans-serif,system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
@@ -310,16 +310,19 @@ function cx(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(' ')
 }
 
-export function ReUI({ children, className }: { children?: unknown; className?: string }) {
-  if (typeof document !== 'undefined') {
-    let el = document.querySelector('style[data-reui]') as HTMLStyleElement | null
-    if (!el) {
-      el = document.createElement('style')
-      el.setAttribute('data-reui', '')
-      document.head.appendChild(el)
-    }
-    if (el.textContent !== CSS) el.textContent = CSS
+export function installReUIStyles() {
+  if (typeof document === 'undefined') return
+  let el = document.querySelector('style[data-reui]') as HTMLStyleElement | null
+  if (!el) {
+    el = document.createElement('style')
+    el.setAttribute('data-reui', '')
+    document.head.appendChild(el)
   }
+  if (el.textContent !== CSS) el.textContent = CSS
+}
+
+export function ReUI({ children, className }: { children?: unknown; className?: string }) {
+  installReUIStyles()
   return <div className={cx('rui-root', className)}>{children as never}</div>
 }
 

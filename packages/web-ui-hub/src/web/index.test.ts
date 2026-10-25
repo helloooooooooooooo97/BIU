@@ -101,6 +101,7 @@ test('ui-hub unloads disabled plugins before importing new ones', async () => {
   assert.match(src, /g\.React = React/)
   assert.match(src, /g\.ReactJSXRuntime/)
   assert.match(src, /g\.BiuUi = BiuUi/)
+  assert.match(src, /g\.ReUI = ReUI/)
   assert.match(src, /biu:enable-page-block-plugin/)
   assert.match(src, /runtimeWebModuleHref/)
   assert.match(src, /setTimeout\(resolve, 0\)/)
