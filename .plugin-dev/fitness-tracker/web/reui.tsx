@@ -122,6 +122,39 @@ const CSS = `
 .lc-console-body{padding:12px 14px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;line-height:1.65;min-height:72px;color:#262626;white-space:pre-wrap}
 .lc-empty{color:#8c8c8c}
 @media (max-width:820px){.lc-shell{grid-template-columns:1fr}}
+.doc-rings{margin:0 16px 18px;background:#fff;border:1px solid var(--rui-border);color:#1c1c1e;border-radius:18px;padding:18px 20px;display:flex;align-items:center;gap:22px}
+.doc-rings .rui-legend em{color:#8e8e93}
+.doc-filters{display:flex;gap:6px;flex-wrap:wrap;margin:0 16px 14px}
+.doc-filter{height:28px;padding:0 12px;border:0;border-radius:99px;background:#e8e8ed;color:#3a3a3c;font:600 12px/1 ui-sans-serif,system-ui,sans-serif;cursor:pointer}
+.doc-filter[data-on=true]{background:#1c1c1e;color:#fff}
+.doc-issue{cursor:pointer}
+.doc-issue[data-open=true]{background:#f7f7f7}
+.doc-dot{width:8px;height:8px;border-radius:99px;flex:0 0 auto}
+.ins-shell{display:grid;grid-template-columns:220px minmax(0,1fr);min-height:460px;background:#fff}
+.ins-side{border-right:1px solid var(--rui-border);background:#f7f7f7;display:flex;flex-direction:column;min-width:0}
+.ins-side h4{margin:12px 12px 6px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#8e8e93}
+.ins-hit{display:flex;align-items:center;gap:8px;width:100%;border:0;background:transparent;text-align:left;padding:8px 12px;cursor:pointer;font:12.5px/1.3 ui-sans-serif,system-ui,sans-serif;color:#1c1c1e}
+.ins-hit[data-on=true]{background:#fff}
+.ins-main{display:flex;flex-direction:column;min-width:0}
+.ins-urlbar{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--rui-border)}
+.ins-panes{display:flex;gap:0;padding:0 12px;border-bottom:1px solid var(--rui-border)}
+.ins-panes button{height:34px;border:0;background:transparent;color:#8e8e93;font:600 12.5px/1 ui-sans-serif,system-ui,sans-serif;padding:0 12px;cursor:pointer}
+.ins-panes button[data-on=true]{color:#1c1c1e;box-shadow:inset 0 -2px 0 #1c1c1e}
+.kv{width:100%;border-collapse:collapse;font-size:12.5px}
+.kv th{text-align:left;font-size:11px;color:#8e8e93;font-weight:600;padding:8px 8px 6px;border-bottom:1px solid var(--rui-border)}
+.kv td{padding:4px 6px;border-bottom:1px solid #f3f3f3;vertical-align:middle}
+.kv input[type=text]{width:100%;border:0;background:transparent;height:28px;font:12.5px/28px ui-sans-serif,system-ui,sans-serif;outline:none}
+.kv input[type=checkbox]{width:14px;height:14px;accent-color:#1c1c1e}
+.ins-body{padding:10px 12px;min-height:180px;flex:1;overflow:auto}
+.ins-empty{padding:28px 16px;color:#8e8e93;font-size:13px}
+.m-GET{color:#2d8a4e;font-weight:700;font-size:11px}
+.m-POST{color:#c47b17;font-weight:700;font-size:11px}
+.m-PUT{color:#2b6cb0;font-weight:700;font-size:11px}
+.m-PATCH{color:#6b4ea1;font-weight:700;font-size:11px}
+.m-DELETE{color:#c53030;font-weight:700;font-size:11px}
+.m-HEAD,.m-OPTIONS{color:#6b7280;font-weight:700;font-size:11px}
+.ins-status{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--rui-border);font-size:12.5px}
+@media (max-width:860px){.ins-shell{grid-template-columns:1fr}}
 `
 
 function cx(...parts: Array<string | false | null | undefined>) {

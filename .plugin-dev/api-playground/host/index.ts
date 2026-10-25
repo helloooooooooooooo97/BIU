@@ -12,6 +12,7 @@ type SendRequest = {
   method?: string
   url?: string
   headers?: unknown
+  query?: unknown
   body?: string | null
 }
 
@@ -90,6 +91,11 @@ export function apply(ctx: Context) {
     }
 
     const headers = normalizeHeaders(payload.headers)
+    const query = normalizeHeaders(payload.query)
+    for (const [key, value] of Object.entries(query)) {
+      if (!key) continue
+      target.searchParams.set(key, value)
+    }
     const bodyText = typeof payload.body === 'string' ? payload.body : ''
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)

@@ -1,10 +1,12 @@
-import { ActivityRings, Badge, Button, ReUI, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './reui'
+import { ActivityRings, Button, Cell, Group, ReUI } from './reui'
 
 const React = globalThis.React
 const { useState } = React
 
 export const name = 'plugin-doctor'
 export const inject = ['pageEditor']
+
+type Level = 'ok' | 'warn' | 'error'
 
 type PluginReport = {
   id: string
@@ -19,7 +21,17 @@ type PluginReport = {
   readme: boolean
   readmeExample: boolean
   conclusion: string
+  level?: Level
   problems: string[]
+}
+
+type Issue = {
+  id: string
+  pluginId: string
+  name: string
+  level: Level
+  title: string
+  detail: string
 }
 
 type ScanResult = {
@@ -28,6 +40,7 @@ type ScanResult = {
   total: number
   summary: { ok: number; warn: number; broken: number; bytes: number }
   plugins: PluginReport[]
+  issues?: Issue[]
 }
 
 type BlockProps = {
@@ -56,19 +69,32 @@ function when(ts: number | null) {
 function clock(ts: number) {
   const d = new Date(ts)
   const pad = (n: number) => String(n).padStart(2, '0')
-  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds())
+  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes())
 }
 
-function Chip(props: { label: string; on?: boolean; title?: string }) {
-  return (
-    <Badge title={props.title} variant="default" className="mr-1" style={props.on ? undefined : { opacity: 0.45 }}>
-      {props.label}
-    </Badge>
-  )
+function levelOf(item: PluginReport): Level {
+  if (item.level === 'ok' || item.level === 'warn' || item.level === 'error') return item.level
+  if (item.conclusion === '合规') return 'ok'
+  if (item.conclusion === '空插件' || item.conclusion === '缺引擎') return 'error'
+  return 'warn'
+}
+
+const LEVEL_COLOR: Record<Level, string> = {
+  ok: '#30d158',
+  warn: '#ffd60a',
+  error: '#ff453a',
+}
+
+const LEVEL_LABEL: Record<Level, string> = {
+  ok: '合规',
+  warn: '待修',
+  error: '问题',
 }
 
 function DoctorBlock(props: BlockProps) {
   const report = (props.data && props.data.report ? props.data.report : null) as ScanResult | null
+  const filter = (props.data.filter === 'ok' || props.data.filter === 'warn' || props.data.filter === 'error' ? props.data.filter : 'all') as 'all' | Level
+  const focus = typeof props.data.focus === 'string' ? props.data.focus : ''
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -88,92 +114,138 @@ function DoctorBlock(props: BlockProps) {
     }
   }
 
+  const plugins = report?.plugins ?? []
   const ok = report?.summary.ok ?? 0
   const warn = report?.summary.warn ?? 0
   const broken = report?.summary.broken ?? 0
   const total = Math.max(1, report?.total ?? 1)
+  const visible = filter === 'all' ? plugins : plugins.filter((item) => levelOf(item) === filter)
+  const grouped: Record<Level, PluginReport[]> = { error: [], warn: [], ok: [] }
+  for (const item of visible) grouped[levelOf(item)].push(item)
+
+  const setFilter = (next: 'all' | Level) => {
+    if (props.writable) props.update({ filter: next })
+  }
+  const toggle = (id: string) => {
+    if (props.writable) props.update({ focus: focus === id ? '' : id })
+  }
 
   return (
     <ReUI className="rui-ios">
-    <div data-testid="plugin-doctor-block">
-      <div className="rui-large">插件体检</div>
-      <div className="rui-sub">{report ? `${clock(report.scannedAt)} · ${kb(report.summary.bytes)}` : '扫描 .plugin，给出合规结论'}</div>
-      <div style={{ margin: '0 16px 12px' }}>
-        {props.writable ? (
-          <Button data-testid="plugin-doctor-run" onClick={run} disabled={busy}>
-            {busy ? '扫描中…' : '体检'}
-          </Button>
+      <div data-testid="plugin-doctor-block">
+        <div className="rui-large">插件</div>
+        <div className="rui-sub">
+          {report ? `${clock(report.scannedAt)} · ${kb(report.summary.bytes)} · ${(report.issues ?? []).length} 条 issue · ${report.root}` : '扫描已安装插件，按问题分组'}
+        </div>
+        <div style={{ margin: '0 16px 12px' }}>
+          {props.writable ? (
+            <Button data-testid="plugin-doctor-run" onClick={run} disabled={busy}>
+              {busy ? '扫描中…' : '重新扫描'}
+            </Button>
+          ) : (
+            <span className="rui-muted">只读</span>
+          )}
+        </div>
+        {error ? (
+          <div className="rui-sub" style={{ color: '#ff3b30' }}>
+            {error}
+          </div>
+        ) : null}
+        {!report ? (
+          <div className="rui-sub">还没有体检结果{props.writable ? '，点「重新扫描」。' : '。'}</div>
         ) : (
-          <span className="rui-muted">只读</span>
+          <>
+            <div className="doc-rings">
+              <ActivityRings
+                rings={[
+                  { value: ok / total, color: LEVEL_COLOR.ok },
+                  { value: warn / total, color: LEVEL_COLOR.warn },
+                  { value: broken / total, color: LEVEL_COLOR.error },
+                ]}
+              />
+              <div className="rui-legend">
+                <div>
+                  <b>
+                    <i style={{ background: LEVEL_COLOR.ok }} />
+                    {ok}
+                  </b>
+                  <em>合规</em>
+                </div>
+                <div>
+                  <b>
+                    <i style={{ background: LEVEL_COLOR.warn }} />
+                    {warn}
+                  </b>
+                  <em>待修</em>
+                </div>
+                <div>
+                  <b>
+                    <i style={{ background: LEVEL_COLOR.error }} />
+                    {broken}
+                  </b>
+                  <em>问题</em>
+                </div>
+              </div>
+            </div>
+            <div className="doc-filters">
+              {([
+                ['all', `全部 ${plugins.length}`],
+                ['error', `问题 ${broken}`],
+                ['warn', `待修 ${warn}`],
+                ['ok', `合规 ${ok}`],
+              ] as const).map(([id, label]) => (
+                <button key={id} type="button" className="doc-filter" data-on={filter === id} onClick={() => setFilter(id)}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div data-testid="plugin-doctor-table">
+              {(['error', 'warn', 'ok'] as Level[]).map((level) =>
+                grouped[level].length ? (
+                  <div key={level}>
+                    <div className="rui-section">{LEVEL_LABEL[level]} · {grouped[level].length}</div>
+                    <Group>
+                      {grouped[level].map((item) => {
+                        const open = focus === item.id
+                        return (
+                          <div key={item.id}>
+                            <Cell className="doc-issue" data-open={open} onClick={() => toggle(item.id)}>
+                              <i className="doc-dot" style={{ background: LEVEL_COLOR[level] }} />
+                              <span className="rui-cell-main">
+                                <b style={{ fontWeight: 600 }}>{item.name}</b>
+                                <div className="rui-muted">{item.id}</div>
+                              </span>
+                              <span className="rui-cell-meta">{item.conclusion}</span>
+                            </Cell>
+                            {open ? (
+                              <div style={{ padding: '8px 16px 14px 38px', fontSize: 13, color: '#6d6d72' }}>
+                                <div>
+                                  {item.hasHost ? 'host' : '无 host'} · {item.hasWeb ? 'web' : '无 web'}
+                                  {item.headless ? ' · 无头' : ''} · {kb(item.bytes)} · {item.files} 文件
+                                </div>
+                                <div>最近运行 {when(item.lastRunAt)}</div>
+                                {(item.problems || []).length ? (
+                                  <ul style={{ margin: '8px 0 0', paddingLeft: 18 }}>
+                                    {item.problems.map((p) => (
+                                      <li key={p}>{p}</li>
+                                    ))}
+                                  </ul>
+                                ) : (
+                                  <div style={{ marginTop: 6 }}>没有未解决问题。</div>
+                                )}
+                              </div>
+                            ) : null}
+                          </div>
+                        )
+                      })}
+                    </Group>
+                  </div>
+                ) : null,
+              )}
+            </div>
+          </>
         )}
       </div>
-      {error ? <div className="rui-sub" style={{ color: '#ff3b30' }}>{error}</div> : null}
-      {!report ? (
-        <div className="rui-sub">还没有体检结果{props.writable ? '，点「体检」扫一遍 .plugin。' : '。'}</div>
-      ) : (
-        <>
-          <div className="rui-activity">
-            <ActivityRings
-              rings={[
-                { value: ok / total, color: '#30d158' },
-                { value: warn / total, color: '#ffd60a' },
-                { value: broken / total, color: '#ff453a' },
-              ]}
-            />
-            <div className="rui-legend">
-              <div><b><i style={{ background: '#30d158' }} />{ok}</b><em>合规</em></div>
-              <div><b><i style={{ background: '#ffd60a' }} />{warn}</b><em>待修</em></div>
-              <div><b><i style={{ background: '#ff453a' }} />{broken}</b><em>坏</em></div>
-            </div>
-          </div>
-          <Table data-testid="plugin-doctor-table">
-            <TableHeader>
-              <TableRow className="border-0">
-                <TableHead>插件</TableHead>
-                <TableHead>headless</TableHead>
-                <TableHead>host / web</TableHead>
-                <TableHead>大小</TableHead>
-                <TableHead>最近运行</TableHead>
-                <TableHead>README 示例</TableHead>
-                <TableHead>体检结论</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {report.plugins.map((item) => {
-                const tone =
-                  item.conclusion === '缺引擎' || item.conclusion === '空插件' ? 'destructive' : item.conclusion === '合规' ? 'on' : 'default'
-                return (
-                  <TableRow key={item.id}>
-                    <TableCell>
-                      <code className="font-mono text-[12px]">{item.id}</code>
-                      <div className="rui-muted">{item.name}</div>
-                    </TableCell>
-                    <TableCell>
-                      <Chip label={item.headless ? '是' : '否'} on={item.headless} />
-                    </TableCell>
-                    <TableCell>
-                      <Chip label="host" on={item.hasHost} />
-                      <Chip label="web" on={item.hasWeb} />
-                    </TableCell>
-                    <TableCell>{kb(item.bytes)}</TableCell>
-                    <TableCell title={item.lastRunAt ? clock(item.lastRunAt) : '没有运行记录'}>{when(item.lastRunAt)}</TableCell>
-                    <TableCell>
-                      {item.readmeExample ? <Chip label="有" on /> : <Chip label={item.readme ? '缺' : '无 README'} />}
-                    </TableCell>
-                    <TableCell>
-                      <Badge title={(item.problems || []).join('；')} variant={tone}>
-                        {item.conclusion}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
-          <div className="rui-sub">扫描根目录：{report.root}</div>
-        </>
-      )}
-    </div>
     </ReUI>
   )
 }
@@ -185,9 +257,9 @@ export function apply(ctx: { pageEditor: { registerBlock: (spec: Record<string, 
     label: '插件体检',
     blockType: 'test',
     blockTypeLabel: '测试',
-    hint: '扫一遍已安装插件，给出合规结论',
+    hint: '扫描已安装插件：环摘要 + 按问题分组，点开看详情',
     aliases: ['doctor', '体检', '插件体检', 'scan'],
-    defaults: () => ({ report: null }),
+    defaults: () => ({ report: null, filter: 'all', focus: '' }),
     View: DoctorBlock,
   })
 }
