@@ -64,6 +64,46 @@ async function askAi(prompt: string) {
   return json.text || ''
 }
 
+function parseAiJson(raw: string): Record<string, unknown> | null {
+  const trimmed = raw.trim().replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/```$/, '').trim()
+  const start = trimmed.indexOf('{')
+  const end = trimmed.lastIndexOf('}')
+  if (start < 0 || end <= start) return null
+  try {
+    return JSON.parse(trimmed.slice(start, end + 1)) as Record<string, unknown>
+  } catch {
+    return null
+  }
+}
+
+type ScoreCard = { task: number; coherence: number; lexis: number; grammar: number; notes?: Record<string, string> }
+type FixItem = { from: string; to: string; type?: string; why?: string }
+
+function markClass(type: string) {
+  if (type === 'spelling') return 'en-mark-s'
+  if (type === 'lexis' || type === 'vocabulary') return 'en-mark-l'
+  if (type === 'style') return 'en-mark-y'
+  return 'en-mark-g'
+}
+
+function MarkedEssay({ essay, items, open, onOpen }: { essay: string; items: FixItem[]; open: number; onOpen: (i: number) => void }) {
+  const parts: unknown[] = []
+  let rest = essay
+  items.forEach((item, i) => {
+    const at = rest.indexOf(item.from)
+    if (at < 0) return
+    if (at > 0) parts.push(rest.slice(0, at))
+    parts.push(
+      <span key={i} className={markClass(item.type || 'grammar')} data-on={open === i} onClick={() => onOpen(i)}>
+        {item.from}
+      </span>,
+    )
+    rest = rest.slice(at + item.from.length)
+  })
+  parts.push(rest)
+  return <div className="en-passage">{parts}</div>
+}
+
 function tokenize(s: string) {
   return s.trim().split(/\s+/).filter(Boolean)
 }
@@ -412,20 +452,44 @@ function WriteBlock({ data, update, writable }: BlockProps) {
   const outlineFirst = data.outlineFirst === true
   const showSample = data.showSample === true
   const compare = data.compare === true
-  const aiText = asText(data.aiText)
+  const tab = asText(data.aiTab, 'score') === 'fix' ? 'fix' : 'score'
+  const scoreRaw = asText(data.aiScore)
+  const fixRaw = asText(data.aiFix)
+  const score = parseAiJson(scoreRaw) as ScoreCard | null
+  const fix = parseAiJson(fixRaw)
+  const items = Array.isArray(fix?.sentences) ? (fix?.sentences as FixItem[]) : []
+  const rewrite = typeof fix?.rewrite === 'string' ? fix.rewrite : ''
   const count = words(essay)
   const over = count > 0 && count < limit
-  const [busy, setBusy] = useState(false)
+  const [busy, setBusy] = useState('')
+  const [open, setOpen] = useState(-1)
+  const openItem = items[open]
 
-  const runAi = async (task: string) => {
-    setBusy(true)
+  const runScore = async () => {
+    setBusy('score')
     try {
-      const text = await askAi(task)
-      update({ aiText: text })
+      const text = await askAi(
+        `Return ONLY JSON: {"task":n,"coherence":n,"lexis":n,"grammar":n,"notes":{"task":"...","coherence":"...","lexis":"...","grammar":"..."}} with IELTS 0-9 scores for this ${kind}. Prompt:\n${prompt}\nText:\n${essay}`,
+      )
+      update({ aiScore: text, aiTab: 'score' })
     } catch (e) {
-      update({ aiText: String(e) })
+      update({ aiScore: JSON.stringify({ error: String(e) }), aiTab: 'score' })
     } finally {
-      setBusy(false)
+      setBusy('')
+    }
+  }
+
+  const runFix = async () => {
+    setBusy('fix')
+    try {
+      const text = await askAi(
+        `Return ONLY JSON: {"sentences":[{"from":"exact substring from the essay","to":"correction","type":"grammar|spelling|lexis|style","why":"one line"}],"rewrite":"full model answer"} for this ${kind}:\n${essay}`,
+      )
+      update({ aiFix: text, aiTab: 'fix' })
+    } catch (e) {
+      update({ aiFix: JSON.stringify({ error: String(e) }), aiTab: 'fix' })
+    } finally {
+      setBusy('')
     }
   }
 
@@ -435,7 +499,7 @@ function WriteBlock({ data, update, writable }: BlockProps) {
         <div className="en-head">
           <div>
             <h2>Writing</h2>
-            <p>Cambridge Write & Improve · {kind}</p>
+            <p>Cambridge Write & Improve · Grammarly underlines · {kind}</p>
           </div>
           <div className="rui-row">
             {['essay', 'chart', 'email'].map((k) => (
@@ -454,39 +518,102 @@ function WriteBlock({ data, update, writable }: BlockProps) {
           {outlineFirst ? (
             <Textarea value={outline} disabled={!writable} placeholder="Outline first…" style={{ minHeight: 80, marginBottom: 8 }} onChange={(e: { target: { value: string } }) => update({ outline: e.target.value })} />
           ) : null}
-          <Textarea value={essay} disabled={!writable} placeholder="Write here…" style={{ minHeight: 160 }} onChange={(e: { target: { value: string } }) => update({ essay: e.target.value })} />
+          <Textarea value={essay} disabled={!writable} placeholder="Write here…" style={{ minHeight: 140 }} onChange={(e: { target: { value: string } }) => update({ essay: e.target.value })} />
           <div className={over ? 'en-warn' : 'en-count'}>
             {count} / {limit} words{over ? ' — 未达最低字数' : ''}
           </div>
           <div className="rui-row" style={{ marginTop: 8 }}>
-            <Button
-              disabled={busy || !essay}
-              onClick={() =>
-                runAi(
-                  `Score this ${kind} with IELTS-like rubrics Task, Coherence, Lexis, Grammar as JSON scores 0-9 and one sentence each. Text:\n${essay}\nPrompt:\n${prompt}`,
-                )
-              }
-            >
-              AI 评分
+            <Button disabled={!!busy || !essay} onClick={() => void runScore()}>
+              {busy === 'score' ? '评分中…' : 'AI 评分'}
             </Button>
-            <Button
-              variant="outline"
-              disabled={busy || !essay}
-              onClick={() => runAi(`Correct sentence by sentence, then give a rewritten model answer.\n${essay}`)}
-            >
-              逐句批改
+            <Button variant="outline" disabled={!!busy || !essay} onClick={() => void runFix()}>
+              {busy === 'fix' ? '批改中…' : '逐句批改'}
             </Button>
             <Button variant="ghost" onClick={() => update({ showSample: !showSample })}>
               {showSample ? '藏范文' : '看范文'}
             </Button>
-            <Button
-              variant="ghost"
-              onClick={() => update({ compare: !compare, prevEssay: prev || essay })}
-            >
+            <Button variant="ghost" onClick={() => update({ compare: !compare, prevEssay: prev || essay })}>
               版本对比
             </Button>
           </div>
-          {aiText ? <div className="en-passage" style={{ marginTop: 10, whiteSpace: 'pre-wrap' }}>{aiText}</div> : null}
+          <div className="rui-tabs" style={{ marginTop: 12 }}>
+            <Button size="sm" variant={tab === 'score' ? 'secondary' : 'ghost'} onClick={() => update({ aiTab: 'score' })}>
+              评分
+            </Button>
+            <Button size="sm" variant={tab === 'fix' ? 'secondary' : 'ghost'} onClick={() => update({ aiTab: 'fix' })}>
+              批改
+            </Button>
+          </div>
+          {tab === 'score' ? (
+            score && typeof score.task === 'number' ? (
+              <div className="en-rubric">
+                {(
+                  [
+                    ['Task', score.task, score.notes?.task],
+                    ['Coherence', score.coherence, score.notes?.coherence],
+                    ['Lexis', score.lexis, score.notes?.lexis],
+                    ['Grammar', score.grammar, score.notes?.grammar],
+                  ] as Array<[string, number, string | undefined]>
+                ).map(([label, n, note]) => (
+                  <div key={label}>
+                    <span className="rui-kicker">{label}</span>
+                    <b>{n}</b>
+                    {note ? <small>{note}</small> : null}
+                  </div>
+                ))}
+              </div>
+            ) : scoreRaw ? (
+              <div className="en-passage" style={{ marginTop: 10, whiteSpace: 'pre-wrap' }}>{scoreRaw}</div>
+            ) : (
+              <div className="rui-muted" style={{ marginTop: 10 }}>Write & Improve：先写再点评分，四项分会排成卡片</div>
+            )
+          ) : (
+            <div style={{ marginTop: 10 }}>
+              {items.length ? (
+                <>
+                  <div className="rui-muted" style={{ marginBottom: 6 }}>Grammarly：点下划线看说明 · 红语法 蓝用词 金风格</div>
+                  <MarkedEssay essay={essay} items={items} open={open} onOpen={setOpen} />
+                  {openItem ? (
+                    <div className="en-pop">
+                      <div className="rui-kicker">{openItem.type || 'grammar'}</div>
+                      <div>
+                        <s>{openItem.from}</s> → <span className="en-to">{openItem.to}</span>
+                      </div>
+                      {openItem.why ? <div className="rui-muted">{openItem.why}</div> : null}
+                    </div>
+                  ) : null}
+                  <div className="en-fix">
+                    <div className="en-col">
+                      <h4>Your sentence</h4>
+                      {items.map((it, i) => (
+                        <div key={i} className="en-q" onClick={() => setOpen(i)}>
+                          <span className={markClass(it.type || 'grammar')}>{it.from}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="en-col">
+                      <h4>Correction</h4>
+                      {items.map((it, i) => (
+                        <div key={i} className="en-q">
+                          <span className="en-to">{it.to}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  {rewrite ? (
+                    <div className="en-passage" style={{ marginTop: 10 }}>
+                      <h4 className="rui-kicker">Model rewrite</h4>
+                      {rewrite}
+                    </div>
+                  ) : null}
+                </>
+              ) : fixRaw ? (
+                <div className="en-passage" style={{ whiteSpace: 'pre-wrap' }}>{fixRaw}</div>
+              ) : (
+                <div className="rui-muted">点逐句批改后，原文会出现下划线</div>
+              )}
+            </div>
+          )}
           {showSample ? <div className="en-passage" style={{ marginTop: 10, color: '#6d6d72' }}>{sample}</div> : null}
           {compare && prev ? (
             <div className="en-passage" style={{ marginTop: 10 }}>
@@ -916,7 +1043,7 @@ const WRITE = {
   kind: 'essay',
   prompt: 'Some people think students should learn practical skills at school, while others believe academic subjects are more important. Discuss both views and give your own opinion. Write at least 250 words.',
   chart: 'Year | Practical % | Academic %\n2010 | 40 | 60\n2020 | 55 | 45',
-  essay: '',
+  essay: 'Practical skills help graduates find work quickly, but academic subjects train reasoning. A core of academic study should come first.',
   outline: '',
   outlineFirst: false,
   sample: 'Schools have always balanced the useful and the theoretical.',
@@ -924,7 +1051,9 @@ const WRITE = {
   prevEssay: '',
   compare: false,
   showSample: false,
-  aiText: '',
+  aiTab: 'score',
+  aiScore: '{"task":7,"coherence":7,"lexis":6,"grammar":6,"notes":{"task":"Addresses both views with a clear opinion.","coherence":"Paragraphs follow a simple but clear order.","lexis":"Some repetition; try more precise verbs.","grammar":"A few article and agreement slips."}}',
+  aiFix: '{"sentences":[{"from":"Practical skills help graduates find work quickly","to":"Practical skills help graduates find work more quickly","type":"grammar","why":"Adverb placement."},{"from":"academic subjects train reasoning","to":"academic subjects train habits of reasoning","type":"lexis","why":"More precise collocation."}],"rewrite":"Schools should keep a core of academic study and add workshops as a complement, not a replacement."}',
 }
 
 const TRANSLATE = {

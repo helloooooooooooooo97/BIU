@@ -281,8 +281,18 @@ const CSS = `
 .en-mark{display:inline-flex;gap:6px;flex-wrap:wrap}
 .en-mark button[data-on=true]{background:#111;color:#fff;border-color:#111}
 .en-rubric{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:10px 0}
-.en-rubric b{display:block;font-size:18px}
-@media (max-width:820px){.en-split,.en-row3,.en-rubric{grid-template-columns:1fr}}
+.en-rubric b{display:block;font-size:22px;letter-spacing:-.04em;font-variant-numeric:tabular-nums}
+.en-rubric>div{border:1px solid var(--rui-border);border-radius:10px;padding:10px 12px;background:#fafafa}
+.en-rubric small{display:block;margin-top:6px;color:#6d6d72;font-size:12px;line-height:1.4}
+.en-mark-g{border-bottom:2px solid #e32219;cursor:pointer;background:rgba(227,34,25,.08)}
+.en-mark-s{border-bottom:2px dashed #e32219;cursor:pointer;background:rgba(227,34,25,.06)}
+.en-mark-l{border-bottom:2px solid #1cb0f6;cursor:pointer;background:rgba(28,176,246,.1)}
+.en-mark-y{border-bottom:2px solid #c9a227;cursor:pointer;background:rgba(201,162,39,.12)}
+.en-pop{margin:8px 0 12px;padding:10px 12px;border:1px solid var(--rui-border);border-radius:10px;background:#fff;box-shadow:0 8px 24px rgba(0,0,0,.06)}
+.en-pop .en-to{color:#0f7a4a;font-weight:650}
+.en-fix{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--rui-border);border-radius:10px;overflow:hidden;margin-top:10px}
+.en-fix .en-col{min-height:80px}
+@media (max-width:820px){.en-split,.en-row3,.en-rubric,.en-fix{grid-template-columns:1fr}}
 `
 
 function cx(...parts: Array<string | false | null | undefined>) {
