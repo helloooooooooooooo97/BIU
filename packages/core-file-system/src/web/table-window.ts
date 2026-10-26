@@ -60,6 +60,16 @@ export function medianPaintedRowPx(heights: number[], fallback = TABLE_ROW_PX) {
   return xs[Math.floor(xs.length / 2)]!
 }
 
+/** 可见行中位高会随窗口跳变；小于此阈值不写回，避免 layout 里 setState 打到 React #185。 */
+export const TABLE_ROW_PX_SETTLE = 2
+
+export function settlePaintedRowPx(measured: number, current: number, minDelta = TABLE_ROW_PX_SETTLE) {
+  const next = Math.max(1, Math.round(measured))
+  const prev = Math.max(1, Math.round(current))
+  if (Math.abs(next - prev) < minDelta) return prev
+  return next
+}
+
 export function tableWindowSlice(
   count: number,
   scrollTop: number,

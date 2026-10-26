@@ -133,7 +133,7 @@ import { ViewPaneMenu } from './pane-more-menu.tsx'
 import { HttpError, invalidateListReads, listCollection, readJson } from './db-client.ts'
 import { savedViewRecordPath } from '../paths.ts'
 import { findViewNeighbor, indexOnPage } from './view-adjacent.ts'
-import { TABLE_WINDOW_OVERSCAN, medianPaintedRowPx, rememberedTableWrap, tableColumnSlice, tableColumnUnchanged, tableColumnWidth, tableRowFallbackPx, tableWindowSlice, tableWindowUnchanged, tableWrapScroll, type TableColumnSlice } from './table-window.ts'
+import { TABLE_WINDOW_OVERSCAN, medianPaintedRowPx, rememberedTableWrap, settlePaintedRowPx, tableColumnSlice, tableColumnUnchanged, tableColumnWidth, tableRowFallbackPx, tableWindowSlice, tableWindowUnchanged, tableWrapScroll, type TableColumnSlice } from './table-window.ts'
 import { forgetPreviewTotalsForPath, markPaintedListReady, rememberPreviewTotalForView, resetPaintedListReady } from './sidebar-preview.ts'
 import { DataSidebarShell } from './data-sidebar-shell.tsx'
 import { builtinAllViewId, catalogLockFilters, isReadOnlyViewId, mergeTableViews, parseBuiltinScopeViewId, stubBuiltinBlockKindView, viewsForScope, type DataScope } from '../catalog-views.ts'
@@ -525,10 +525,7 @@ function TableCheckRail({
     }
     let raf = 0
     const measure = () => {
-      if (!table.offsetHeight) {
-        raf = requestAnimationFrame(measure)
-        return
-      }
+      if (!table.offsetHeight) return
       const next: CheckSlot[] = []
       const head = table.tHead?.rows[0]
       if (head) next.push({ kind: 'head', top: head.offsetTop, h: head.offsetHeight })
@@ -554,10 +551,16 @@ function TableCheckRail({
         return next
       })
     }
+    const schedule = () => {
+      if (raf) return
+      raf = requestAnimationFrame(() => {
+        raf = 0
+        measure()
+      })
+    }
     measure()
-    const ro = new ResizeObserver(measure)
+    const ro = new ResizeObserver(schedule)
     ro.observe(table)
-    for (const img of Array.from(table.querySelectorAll('img'))) ro.observe(img)
     return () => {
       cancelAnimationFrame(raf)
       ro.disconnect()
@@ -1277,6 +1280,7 @@ const WindowedTable = memo(function WindowedTable({
 
   useLayoutEffect(() => {
     const next = tableRowFallbackPx(wrapCells)
+    if (next === rowPxRef.current) return
     rowPxRef.current = next
     setRowPx(next)
   }, [wrapCells])
@@ -1291,11 +1295,12 @@ const WindowedTable = memo(function WindowedTable({
       const h = tr.offsetHeight
       if (h > 0) heights.push(h)
     }
-    const next = medianPaintedRowPx(heights, rowPxRef.current)
-    if (Math.abs(next - rowPxRef.current) < 1) return
+    // 不能依赖 tableWindow.start/end：setRowPx 会改窗口，窗口再测高再 setState，滚动时会打穿 React #185。
+    const next = settlePaintedRowPx(medianPaintedRowPx(heights, rowPxRef.current), rowPxRef.current)
+    if (next === rowPxRef.current) return
     rowPxRef.current = next
     setRowPx(next)
-  }, [nodes.length, tableRef, tableWindow.end, tableWindow.start, wrapCells])
+  }, [nodes.length, tableRef, tableScroll.height, tableScroll.top, wrapCells])
 
   useEffect(() => {
     onVisibleRange?.(tableWindow.start, tableWindow.end)
