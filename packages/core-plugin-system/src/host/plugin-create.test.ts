@@ -111,6 +111,14 @@ test('sandbox then pack compiles host source into .plugin/<id>/', async () => {
     assert.equal(await readFile(join(dir, '.plugin-dev', 'store-echo', 'README.md'), 'utf8'), '# Echo\n\n自定义介绍\n')
     await store.initSandbox({ id: 'store-empty', name: 'Empty' })
     await assert.rejects(() => store.pack('store-empty'), /host\/index\.ts/)
+    await store.initSandbox({ id: 'store-bench', name: 'Bench' })
+    store.writeWorkbench('store-bench', { who: '我', job: '记事' })
+    await assert.rejects(() => store.pack('store-bench'), /工作台/)
+    store.writeWorkbench('store-bench', { stage: 'plugin' })
+    await mkdir(join(dir, '.plugin-dev', 'store-bench', 'host'), { recursive: true })
+    await writeFile(join(dir, '.plugin-dev', 'store-bench', 'host/index.ts'), `export const name = 'store-bench'\nexport function apply() {}\n`)
+    await store.pack('store-bench')
+    assert.equal(store.readWorkbench('store-bench')?.stage, 'plugin')
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
@@ -327,12 +335,12 @@ test('sandbox/pack live on the plugins collection, not as tools', () => {
     initSandbox: async () => ({ id: 'x', sandboxPath: '/tmp/x' }),
   } as Store)
   const ids = spec.actions?.map((item) => item.id) ?? []
-  assert.deepEqual(ids, ['sandbox', 'start', 'stop', 'pack', 'uninstall'])
+  assert.deepEqual(ids, ['sandbox', 'advance', 'start', 'stop', 'pack', 'uninstall'])
   const sandbox = spec.actions?.find((item) => item.id === 'sandbox')
   const pack = spec.actions?.find((item) => item.id === 'pack')
   assert.equal(spec.actions?.find((item) => item.id === 'create'), undefined)
   assert.equal(sandbox?.allowMissing, true)
-  assert.match(JSON.stringify(sandbox?.parameters), /listing\.shell/)
+  assert.match(JSON.stringify(sandbox?.parameters), /manifest\.shell/)
   assert.match(String(pack?.parameters?.description ?? ''), /host\/index\.ts/)
   assert.match(String(pack?.parameters?.description ?? ''), /每个沙箱都有 package.json/)
 })

@@ -7,6 +7,7 @@ import {
   PLUGIN_SANDBOX_PROPERTIES,
 } from './plugin-create.ts'
 import type { PluginStoreService, StoreListing } from './store.ts'
+import { WORKBENCH_STAGES, advanceWorkbench, workbenchFields } from '../workbench.ts'
 
 type SandboxListing = Awaited<ReturnType<PluginStoreService['listSandboxes']>>[number]
 
@@ -24,6 +25,12 @@ function withOfficial<T extends { builtin?: boolean; author: string; authorUrl: 
     createdBy: BIU_OFFICIAL,
     updatedBy: [BIU_OFFICIAL],
   }
+}
+
+function withWorkbench(row: DbRecord, store: PluginStoreService): DbRecord {
+  const wb = store.readWorkbench(row.id)
+  if (!wb) return row
+  return { ...row, ...workbenchFields(wb) }
 }
 
 function omitEmpty(row: DbRecord): DbRecord {
@@ -119,7 +126,7 @@ export function pluginsCollection(store: PluginStoreService): CollectionSpec {
     const bySandbox = new Map(sandboxes.map((row) => [row.id, row]))
     return [...ids]
       .sort()
-      .map((id) => mergeLifecycle(byInstalled.get(id), bySandbox.get(id), store))
+      .map((id) => withWorkbench(mergeLifecycle(byInstalled.get(id), bySandbox.get(id), store), store))
   }
   const find = async (id: string) => {
     const row = (await list()).find((item) => item.id === id) ?? null
@@ -135,11 +142,11 @@ export function pluginsCollection(store: PluginStoreService): CollectionSpec {
       route: '/plugins',
       title: '插件',
       inspector: true,
-      blurb: '这是插件（可安装的小程序），不是代理。用户说「再开一个 agent」请去 /sessions db_create，不要在这张表 create。已安装（.plugin）和沙箱（.plugin-dev）同一张表。列表 db_list /plugins；sandboxPath 是源码绝对路径，pluginPath 是安装产物绝对路径，Session 绑定其他项目时也按这两个字段找代码。README 用 db_content /plugins/<id>。页面块插件先读介绍里的「示例写法」再写 :::pageBlock。name 等只读（标签仍可写）。不能 db_create。窗口尺寸看 shellWidth/shellHeight。codeVersion 是已安装 host.js+web.js 的内容短哈希，和加载 URL 的 v 参数相同。安装只能 sandbox 再 pack：先 db_action path=/plugins/<插件id> action=sandbox 建 .plugin-dev/<id>/（记录可以还不存在），写完代码再 action=pack 打进 .plugin。不要直写 .plugin。start=打开已安装插件窗口（when：installed 且未 running）；stop=关掉运行中的插件（when：installed 且 running）；uninstall=停止运行并删除已安装的 .plugin/<id>/（when：installed，和安装互斥）。沙箱还在则这行还在并改显示安装。',
+      blurb: '这是插件，不是代理。新插件先 sandbox（只要 name，不要 hostJs/webJs），再 db_update 本行工作台字段：who/job/not、tree、bg/ink/muted/accent。阶段 brief→wireframe→palette→demo→plugin，用 action=advance。到 plugin 再写代码并 pack。改已有插件可直接 sandbox+pack。用户说「再开一个 agent」去 /sessions。不能 db_create。列表 db_list /plugins。README 用 db_content。页面块先读介绍「示例写法」再写 :::pageBlock。name 只读。不要直写 .plugin。',
       order: 30,
       icon: 'puzzle-piece',
     },
-    records: { update: false, create: false, delete: true },
+    records: { update: true, create: false, delete: true },
     schema: {
       labelField: 'title',
       contentField: 'readme',
@@ -162,6 +169,8 @@ export function pluginsCollection(store: PluginStoreService): CollectionSpec {
         'hasWeb',
         'codeVersion',
         'headless',
+        'stage',
+        'kind',
       ],
       fields: {
         ...REQUIRED_RECORD_FIELDS,
@@ -187,14 +196,51 @@ export function pluginsCollection(store: PluginStoreService): CollectionSpec {
         shellMinHeight: { type: 'number', label: '最小高' },
         shellResizable: { type: 'boolean', label: '可缩放' },
         readme: { type: 'file', label: '介绍', writable: true },
+        stage: {
+          type: 'select',
+          label: '工作台',
+          enum: [...WORKBENCH_STAGES],
+          enumLabels: { brief: '需求', wireframe: '线框', palette: '色彩', demo: '演示', plugin: '生成' },
+        },
+        kind: { type: 'select', label: '形态', writable: true, enum: ['page', 'window'], enumLabels: { page: '页面块', window: '窗口' } },
+        who: { type: 'string', label: '给谁', writable: true, description: '≤80 字' },
+        job: { type: 'string', label: '干什么', writable: true, description: '≤80 字' },
+        not: { type: 'string', label: '不做', writable: true, description: '≤80 字' },
+        tree: { type: 'string', label: '线框', writable: true, description: '{t,id?,label?,kids?} t=card|stack|row|btn|field|list|tabs|text|stat' },
+        clicks: { type: 'string', label: '点击', writable: true, description: '[{on,set?}]' },
+        bg: { type: 'string', label: '底色', writable: true },
+        ink: { type: 'string', label: '字色', writable: true },
+        muted: { type: 'string', label: '弱色', writable: true },
+        accent: { type: 'string', label: '强调', writable: true },
       },
     },
     list,
     get: find,
     update: async (id, patch) => {
-      const extra = Object.keys(patch).filter((key) => key !== 'readme')
+      const bench: Record<string, unknown> = {}
+      const extra: string[] = []
+      for (const [key, value] of Object.entries(patch)) {
+        if (key === 'readme') continue
+        if (
+          key === 'kind' ||
+          key === 'who' ||
+          key === 'job' ||
+          key === 'not' ||
+          key === 'tree' ||
+          key === 'clicks' ||
+          key === 'bg' ||
+          key === 'ink' ||
+          key === 'muted' ||
+          key === 'accent'
+        ) {
+          bench[key] = value
+          continue
+        }
+        extra.push(key)
+      }
       if (extra.length) throw new Error(`plugin fields not writable: ${extra.join(', ')}`)
       if ('readme' in patch) await store.writeReadme(id, String(patch.readme ?? ''))
+      if (Object.keys(bench).length) store.writeWorkbench(id, bench)
       return (await find(id)) ?? (() => {
         throw new Error(`unknown plugin: ${id}`)
       })()
@@ -220,6 +266,17 @@ export function pluginsCollection(store: PluginStoreService): CollectionSpec {
           required: ['name'],
         },
         run: async (id, _record, args = {}) => store.initSandbox(createArgs({ ...args, id })),
+      },
+      {
+        id: 'advance',
+        label: '下一段',
+        description: '校验当前阶段短字段，推进 brief→wireframe→palette→demo→plugin。不要在聊天里复述字段。',
+        requiredAction: 'resource:update',
+        run: async (id) => {
+          const wb = store.readWorkbench(id)
+          if (!wb) throw new Error('先 db_update 写 who/job')
+          store.writeWorkbench(id, advanceWorkbench(wb))
+        },
       },
       {
         id: 'start',

@@ -11,6 +11,7 @@ export {
   defaultStatePath,
 } from './store.ts'
 export { pluginsCollection } from './collection.ts'
+export { WORKBENCH_STAGES, parseWorkbench } from '../workbench.ts'
 
 export async function apply(ctx: Context) {
   const store = await openStore(ctx)

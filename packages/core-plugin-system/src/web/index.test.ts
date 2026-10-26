@@ -81,12 +81,22 @@ test('plugin system web passes name/tags/action chrome into databaseUi', async (
   assert.equal(ui.last?.chrome.cells?.tags, undefined)
   assert.equal(ui.last?.chrome.Actions, undefined)
   assert.equal(ui.last?.chrome.Action, undefined)
+  assert.equal(typeof ui.last?.chrome.Board, 'function')
+})
+
+test('plugin workbench is a view on /plugins, not a new collection', async () => {
+  const { readFileSync } = await import('node:fs')
+  const { resolve } = await import('node:path')
+  const src = readFileSync(resolve(import.meta.dirname, './index.tsx'), 'utf8')
+  assert.match(src, /registerView\('\/plugins'/)
+  assert.match(src, /id: 'workbench'/)
+  assert.doesNotMatch(src, /\/plugin-studio/)
 })
 
 test('plugin actions use the shared file-system capsules', async () => {
   const { readFileSync } = await import('node:fs')
   const { resolve } = await import('node:path')
-  const chrome = readFileSync(resolve(import.meta.dirname, './chrome.tsx'), 'utf8')
+  const chrome = readFileSync(resolve(import.meta.dirname, './workbench-ui.tsx'), 'utf8')
   assert.doesNotMatch(chrome, /function PluginActions/)
   assert.doesNotMatch(chrome, /Actions:/)
   assert.doesNotMatch(chrome, /tasks-icon-btn/)
@@ -95,7 +105,7 @@ test('plugin actions use the shared file-system capsules', async () => {
 test('plugin title is the name only; tags are not a custom cell', async () => {
   const { readFileSync } = await import('node:fs')
   const { resolve } = await import('node:path')
-  const chrome = readFileSync(resolve(import.meta.dirname, './chrome.tsx'), 'utf8')
+  const chrome = readFileSync(resolve(import.meta.dirname, './workbench-ui.tsx'), 'utf8')
   assert.doesNotMatch(chrome, /PluginTagsCell/)
   assert.doesNotMatch(chrome, /已装/)
   assert.match(chrome, /data-testid="plugin-enabled-dot"/)
