@@ -2683,6 +2683,10 @@ select.settings-account-input {
   background: color-mix(in srgb, var(--dsw-label-3) 55%, transparent);
 }
 
+.inspector-tab[data-dock-tip]::after {
+  content: none;
+}
+
 .inspector-tab {
   position: relative;
   display: inline-flex;
