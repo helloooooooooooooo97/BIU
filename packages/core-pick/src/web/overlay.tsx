@@ -123,7 +123,7 @@ export function PickOverlay(_props: SlotProps) {
       if (event.repeat) return
       if (!pick) return
       const key = event.key.toLowerCase()
-      const pickChord = (event.metaKey || event.ctrlKey) && key === '1'
+      const pickChord = (event.metaKey || event.ctrlKey) && key === '2'
       const legacy = event.altKey && key === 'c'
       if (!pickChord && !legacy) return
       event.preventDefault()

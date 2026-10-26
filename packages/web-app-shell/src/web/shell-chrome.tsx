@@ -1649,7 +1649,7 @@ export function ShellSettingsShortcuts() {
         </li>
         <li>
           <span>快速选取</span>
-          <span className="settings-kbd"><kbd>⌘</kbd><kbd>1</kbd></span>
+          <span className="settings-kbd"><kbd>⌘</kbd><kbd>2</kbd></span>
         </li>
         <li>
           <span>选区送到对话</span>

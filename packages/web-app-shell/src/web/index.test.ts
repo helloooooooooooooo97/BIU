@@ -250,7 +250,7 @@ test('settings lists search and pick shortcuts', () => {
   assert.match(shell, /ShellSettingsShortcuts/)
   assert.match(chrome, /data-testid="settings-shortcuts"/)
   assert.match(chrome, /<kbd>⌘<\/kbd><kbd>F<\/kbd>/)
-  assert.match(chrome, /<kbd>⌘<\/kbd><kbd>1<\/kbd>/)
+  assert.match(chrome, /<kbd>⌘<\/kbd><kbd>2<\/kbd>/)
   assert.match(chrome, /正文查找/)
   assert.match(chrome, /⌘⇧F 仍打开全局搜索/)
   assert.doesNotMatch(chrome, /⌘K/)

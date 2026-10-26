@@ -66,10 +66,11 @@ test('pointerup does not attach picks after pick mode has exited', () => {
   assert.match(overlay, /if \(!pick.picking\) return/)
 })
 
-test('Command/Ctrl+1 toggles pick mode', () => {
+test('Command/Ctrl+2 toggles pick mode', () => {
   assert.match(overlay, /event.metaKey \|\| event.ctrlKey/)
-  assert.match(overlay, /key === '1'/)
+  assert.match(overlay, /key === '2'/)
   assert.doesNotMatch(overlay, /key === 'q'/)
+  assert.doesNotMatch(overlay, /key === '1'/)
 })
 
 test('marquee inside inspector uses the inspector as the query root', () => {
