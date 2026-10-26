@@ -1295,6 +1295,12 @@ test('database inspector tab expands crumbs when selected, without a toggle', ()
   assert.match(tab, /isInspectorPaneAbandoned\(paneId\)/)
 })
 
+test('inspector crumb view menus use ranked collection views', () => {
+  const tab = readFileSync(resolve(import.meta.dirname, './inspector-database.tsx'), 'utf8')
+  assert.match(tab, /paintCollectionViews\(collection, tables, stored\)/)
+  assert.doesNotMatch(tab, /viewsForRegisteredCollection\(collection, tables, stored\)/)
+})
+
 test('inspector crumbs lock the first level to an icon', () => {
   const tab = readFileSync(resolve(import.meta.dirname, './inspector-database.tsx'), 'utf8')
   const trail = readFileSync(resolve(import.meta.dirname, './crumb-trail.tsx'), 'utf8')

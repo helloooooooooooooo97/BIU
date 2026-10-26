@@ -309,6 +309,55 @@ test('local view delete is not restored by a stale /views pull', async () => {
   }
 })
 
+test('pullSavedViews keeps previous rank when the list comes back shuffled', async () => {
+  const path = '/pages-view-rank-stable'
+  const mem: Record<string, string> = {}
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => mem[key] ?? null,
+      setItem: (key: string, value: string) => {
+        mem[key] = value
+      },
+      removeItem: (key: string) => {
+        delete mem[key]
+      },
+    },
+  })
+  rememberViews(path, [
+    { id: 'mine', name: '我的', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: [], rank: 0 },
+    { id: 'board', name: '看板', mode: 'board', sortField: 'title', sortDir: 'asc', filters: {}, columns: [], rank: 1 },
+  ])
+  persistViewDisplay(path, 'mine', { rank: 0 })
+  persistViewDisplay(path, 'board', { rank: 1 })
+  const prev = globalThis.fetch
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = String(input)
+    if (url.includes('/api/db/list')) {
+      return new Response(
+        JSON.stringify({
+          items: [
+            { viewId: 'board', title: '看板', tablePath: path, mode: 'board' },
+            { viewId: 'mine', title: '我的', tablePath: path },
+          ],
+          total: 2,
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )
+    }
+    return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } })
+  }) as typeof fetch
+  try {
+    await pullSavedViews([path])
+    assert.deepEqual(
+      loadViews(path).map((view) => view.id),
+      ['mine', 'board'],
+    )
+  } finally {
+    globalThis.fetch = prev
+  }
+})
+
 test('route saved views need a fetch until they are remembered', () => {
   const path = '/pages-route-view-need'
   rememberViews(path, [])
