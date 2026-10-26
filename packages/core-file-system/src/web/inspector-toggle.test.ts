@@ -294,6 +294,21 @@ test('table title opens record from the title-side button', () => {
   assert.match(detail, /propPick\(key, field/)
 })
 
+test('leaving a plugin record does not keep a permission error on the plugin list', () => {
+  assert.match(
+    browser,
+    /if \(!routeRecordId\) \{\s*setDetailRow\(null\)\s*setError\(''\)\s*\}/,
+  )
+  const patchFn = browser.slice(browser.indexOf('async function writePatch'), browser.indexOf('async function createRecord'))
+  assert.match(patchFn, /err\.status === 403/)
+  assert.match(patchFn, /permission denied/)
+  assert.match(patchFn, /if \(denied && contentOnly\) return/)
+  assert.match(
+    browser,
+    /collectionPath === '\/plugins' && selected\.builtin === true/,
+  )
+})
+
 test('title cell row tools skip the overflow action menu', () => {
   assert.match(browser, /paintSchema === schema \? chrome\?\.Actions/)
   assert.match(browser, /placedActions\(paintSchema, 'row'\)/)

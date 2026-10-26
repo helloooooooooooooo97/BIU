@@ -2490,7 +2490,10 @@ export function CollectionBrowser({
 
   useLayoutEffect(() => {
     setOpenDetailId(routeRecordId)
-    if (!routeRecordId) setDetailRow(null)
+    if (!routeRecordId) {
+      setDetailRow(null)
+      setError('')
+    }
   }, [routeRecordId])
 
   useEffect(() => {
@@ -3604,8 +3607,8 @@ export function CollectionBrowser({
   }
 
   async function writePatch(row: DbRecord, content: Record<string, unknown>) {
+    const keys = Object.keys(content)
     try {
-      const keys = Object.keys(content)
       quietUntil.current = Date.now() + 800
       if (bodyKey && keys.length === 1 && keys[0] === bodyKey && schema?.fields[bodyKey]?.type === 'file') {
         const path = `${dataPath}/${row.id}`
@@ -3677,6 +3680,11 @@ export function CollectionBrowser({
       await reload({ force: true })
     } catch (err) {
       quietUntil.current = 0
+      const denied =
+        (err instanceof HttpError && err.status === 403) ||
+        /\bpermission denied\b/i.test(String(err instanceof Error ? err.message : err))
+      const contentOnly = Boolean(bodyKey && keys.length === 1 && keys[0] === bodyKey)
+      if (denied && contentOnly) return
       setError(String(err))
     }
   }
@@ -5575,7 +5583,10 @@ export function CollectionBrowser({
           writeOne={writeOne}
           writePatch={writePatch}
           tableIcon={currentTable?.view?.icon}
-          readOnly={selected.shareRole === '阅读' && (!localData || selected.builtin === true)}
+          readOnly={
+            (collectionPath === '/plugins' && selected.builtin === true) ||
+            (selected.shareRole === '阅读' && (!localData || selected.builtin === true))
+          }
           actionProperty={rowActionColumn ? <RecordActions row={selected} /> : null}
           share={
             nested && detailId ? (

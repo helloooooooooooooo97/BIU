@@ -324,6 +324,8 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
   const editorRef = useRef<Editor | null>(null)
   const pathRef = useRef(path)
   pathRef.current = path
+  const writableRef = useRef(writable)
+  writableRef.current = writable
   const titleRef = useRef(recordTitle(record))
   titleRef.current = recordTitle(record)
   const [findOpen, setFindOpen] = useState(false)
@@ -378,11 +380,12 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
       },
       onUpdate: ({ editor: current }) => {
         if (hydratedId.current !== record.id) return
+        if (writableRef.current === false) return
         typedAt.current = Date.now()
         if (timer.current) clearTimeout(timer.current)
         timer.current = setTimeout(() => {
           queueMicrotask(() => {
-            if (current.isDestroyed) return
+            if (current.isDestroyed || writableRef.current === false) return
             const next = current.getMarkdown()
             if (next === saved.current) return
             saved.current = next
@@ -392,9 +395,10 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
       },
       onBlur: ({ editor: current }) => {
         if (hydratedId.current !== record.id) return
+        if (writableRef.current === false) return
         if (timer.current) clearTimeout(timer.current)
         queueMicrotask(() => {
-          if (current.isDestroyed) return
+          if (current.isDestroyed || writableRef.current === false) return
           const next = current.getMarkdown()
           if (next === saved.current) return
           saved.current = next
