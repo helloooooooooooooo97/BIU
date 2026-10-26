@@ -2688,7 +2688,7 @@ select.settings-account-input {
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 6px;
+  gap: 2px;
   height: 26px;
   border: 0;
   border-radius: 6px;
@@ -2802,15 +2802,10 @@ select.settings-account-input {
 }
 
 .inspector-crumb-actions {
-  display: none;
+  display: inline-flex;
   align-items: center;
   flex: none;
-  margin-left: 2px;
-}
-
-.inspector-tab:hover .inspector-crumb-actions,
-.inspector-tab:focus-within .inspector-crumb-actions {
-  display: inline-flex;
+  margin-left: 0;
 }
 
 .inspector-crumb-close {
