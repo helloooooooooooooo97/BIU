@@ -24,7 +24,6 @@ test('development page blocks register under the 测试 slash group', () => {
 test('page block playground UIs use ReUI tokens instead of hardcoded light-theme colors', () => {
   const files = [
     'page-toc/web/index.tsx',
-    'page-deck/web/index.tsx',
     'api-playground/web/index.tsx',
     'option-matrix/web/index.tsx',
     'page-regression/web/index.tsx',
@@ -52,7 +51,6 @@ test('page plugin READMEs use live :::pageBlock fences, not wrapped in markdown 
     'page-regression',
     'page-terminal',
     'page-toc',
-    'page-deck',
     'page-video',
     'plugin-doctor',
   ]
@@ -76,7 +74,6 @@ test('page plugin READMEs use live :::pageBlock fences, not wrapped in markdown 
 test('reui page blocks import @biu/reui rather than injecting STYLE_CSS or using BiuUi', () => {
   const files = [
     'page-toc/web/index.tsx',
-    'page-deck/web/index.tsx',
     'api-playground/web/index.tsx',
     'option-matrix/web/index.tsx',
     'page-regression/web/index.tsx',
