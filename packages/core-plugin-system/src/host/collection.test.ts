@@ -20,6 +20,8 @@ function stubStore(partial: Partial<PluginStoreService>): PluginStoreService {
     sandboxPath: (id: string) => `/workspace/.plugin-dev/${id}`,
     readWorkbench: () => null,
     writeWorkbench: () => ({}) as never,
+    writePluginTitle: async () => ({}),
+    initSandbox: async ({ id }) => ({ id, sandboxPath: `/workspace/.plugin-dev/${id}` }),
     ...partial,
   } as PluginStoreService
 }
@@ -115,7 +117,7 @@ test('pluginsCollection lists installed plugins and sandboxes in one table', asy
   assert.ok(spec.schema.fields.title)
   assert.equal(spec.schema.fields.name, undefined)
   assert.equal(spec.schema.columns?.[0], 'title')
-  assert.deepEqual(spec.records, { update: true, create: false, delete: true })
+  assert.deepEqual(spec.records, { update: true, create: true, delete: true })
   assert.equal(typeof spec.remove, 'function')
   assert.ok(spec.schema.columns?.includes('sandbox'))
   assert.ok(spec.schema.columns?.includes('sandboxPath'))
@@ -258,6 +260,43 @@ test('plugin intro is README.md via contentField readme', async () => {
   assert.equal(written.readme, '# Demo\n\n介绍\n')
   assert.equal(files.get('demo'), '# Demo\n\n介绍\n')
   await assert.rejects(() => spec.update!('demo', { name: '改名' }), /not writable/)
+})
+
+test('creating a plugin opens a workbench draft on that row', async () => {
+  const sandboxes: Array<{ id: string; name: string }> = []
+  let wb: ReturnType<PluginStoreService['readWorkbench']> = null
+  const spec = pluginsCollection(
+    stubStore({
+      listSandboxes: async () =>
+        sandboxes.map((row) => ({
+          id: row.id,
+          name: row.name,
+          blurb: row.name,
+          tags: [],
+          author: '',
+          authorUrl: '',
+          hasHost: false,
+          hasWeb: false,
+          createdAt: 1,
+          updatedAt: 2,
+        })),
+      initSandbox: async ({ id, name }) => {
+        sandboxes.push({ id, name })
+        return { id, sandboxPath: `/tmp/${id}` }
+      },
+      readWorkbench: () => wb,
+      writeWorkbench: (_id, patch) => {
+        wb = applyWorkbenchPatch(wb ?? emptyWorkbench(), patch as Record<string, unknown>)
+        return wb
+      },
+    }),
+  )
+  const [row] = await spec.create!([{ title: '待办' }])
+  assert.equal(row?.id, 'plugin')
+  assert.equal(row?.title, '待办')
+  assert.equal(row?.stage, 'brief')
+  assert.equal(row?.sandbox, true)
+  assert.match(String(spec.view?.blurb ?? ''), /新建/)
 })
 
 test('plugin workbench fields live on the plugin row', async () => {

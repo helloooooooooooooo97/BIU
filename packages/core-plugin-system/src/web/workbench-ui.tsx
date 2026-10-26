@@ -131,7 +131,9 @@ export function PluginWorkbenchBoard({ record }: { record: DbRecord }) {
           {record.who && record.job ? ' · ' : ''}
           {String(record.job || '')}
         </p>
-      ) : null}
+      ) : (
+        <p className="plugin-wb-brief">先在属性里写「给谁」「干什么」，再点「下一段」。</p>
+      )}
       <PluginWorkbenchDemo record={record} />
     </div>
   )

@@ -219,3 +219,25 @@ export function advanceWorkbench(wb: Workbench): Workbench {
 export function workbenchBlocksCode(wb: Workbench | null | undefined) {
   return Boolean(wb && wb.stage !== 'plugin')
 }
+
+export function slugPluginId(raw: string) {
+  const slug = String(raw ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .replace(/^[^a-z]+/, '')
+    .slice(0, 41)
+  return /^[a-z][a-z0-9-]{1,40}$/.test(slug) ? slug : ''
+}
+
+export function allocatePluginId(wanted: string, taken: Iterable<string>) {
+  const used = new Set(taken)
+  const base = slugPluginId(wanted) || 'plugin'
+  if (!used.has(base)) return base
+  for (let i = 2; i < 1000; i++) {
+    const id = `${base}-${i}`.slice(0, 41)
+    if (!used.has(id)) return id
+  }
+  throw new Error('plugin id exhausted')
+}
