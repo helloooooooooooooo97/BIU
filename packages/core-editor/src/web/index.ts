@@ -14,6 +14,7 @@ export { PageEditorService, BASIC_BLOCK_TYPE, getPageEditor, usePageEditorVersio
 export type { HeadingReplacement, PageBlockSpec, PageBlockViewProps, SlashCommandSpec, SlashInsert } from './service.ts'
 export { pageEditorExtensions } from './kit.ts'
 export { deckExtensions } from './deck.ts'
+export { LayoutPicker, LayoutGlyph, type LayoutPreset } from './layout-picker.tsx'
 export { markdownLocusFromRange, markdownLocusFromSelection, markdownLocusFromElement } from './markdown-locus.ts'
 export { PageBlocksView, PageBlockContent, PageBlockStage, pageBlocksCollectionView, PAGE_BLOCKS_VIEW_ID } from './page-blocks-view.tsx'
 

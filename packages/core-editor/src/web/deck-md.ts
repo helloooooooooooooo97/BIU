@@ -1,13 +1,15 @@
 export const DECK_LAYOUTS = ['title', 'split', 'hero', 'trio', 'stack'] as const
 export type DeckLayout = (typeof DECK_LAYOUTS)[number]
 
-export const DECK_LAYOUT_META: Record<DeckLayout, { label: string; slots: number }> = {
-  title: { label: '标题', slots: 2 },
-  split: { label: '对开', slots: 2 },
-  hero: { label: '主从', slots: 2 },
-  trio: { label: '三列', slots: 3 },
-  stack: { label: '纵叠', slots: 3 },
+export const DECK_LAYOUT_META: Record<DeckLayout, { label: string; slots: number; columns: number[]; rows?: number[] }> = {
+  title: { label: '标题', slots: 2, columns: [1], rows: [1, 2] },
+  split: { label: '对开', slots: 2, columns: [1, 1] },
+  hero: { label: '主从', slots: 2, columns: [1.4, 1] },
+  trio: { label: '三列', slots: 3, columns: [1, 1, 1] },
+  stack: { label: '纵叠', slots: 3, columns: [1], rows: [1, 1, 1] },
 }
+
+export const DECK_LAYOUT_PRESETS = DECK_LAYOUTS.map((id) => ({ id, ...DECK_LAYOUT_META[id] }))
 
 export function isDeckLayout(value: unknown): value is DeckLayout {
   return (DECK_LAYOUTS as readonly string[]).includes(String(value))
