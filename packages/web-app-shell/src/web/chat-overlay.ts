@@ -88,6 +88,21 @@ export function shellLayoutFromElement(el: Element | null): { left: number; insp
   return { left, inspector }
 }
 
+/** 拖宽起点用格子 CSS 变量，不用 aside 的 getBoundingClientRect（亚像素/边框会让松手回弹、越拖越窄）。 */
+export function shellColumnStartWidth(
+  handle: Element | null,
+  column: 'left' | 'inspector',
+  fallback: number,
+): number {
+  const shell = handle instanceof Element
+    ? handle.closest('[data-testid="app-shell"]') ?? handle.closest('.app-shell')
+    : null
+  const layout = shellLayoutFromElement(shell)
+  const n = column === 'left' ? layout?.left : layout?.inspector
+  if (typeof n === 'number' && Number.isFinite(n) && n > 0) return n
+  return fallback
+}
+
 export function chatColumnWidth(opts: {
   viewportWidth: number
   inspectorOpen: boolean
