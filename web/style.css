@@ -2716,7 +2716,8 @@ select.settings-account-input {
   color: var(--dsw-sidebar-fg);
 }
 
-.inspector-tab.is-active {
+.inspector-tab.is-active,
+.inspector-tab.is-active:hover {
   background: var(--dsw-hover);
   color: var(--dsw-sidebar-fg-active);
 }
@@ -2776,6 +2777,12 @@ select.settings-account-input {
 .inspector-crumb-tab .fsdb-crumb:last-child .fsdb-crumb-btn.is-open {
   color: inherit;
   font-weight: inherit;
+}
+
+.inspector-crumb-tab.is-active .fsdb-crumb-btn:hover,
+.inspector-crumb-tab.is-active .fsdb-crumb-btn.is-open {
+  background: transparent;
+  color: inherit;
 }
 
 .inspector-crumb-tab .inspector-crumb-full .fsdb-crumb:not(:last-child):not(:first-child) {
@@ -8606,7 +8613,9 @@ html:not(.dark) .fsdb-crumb-btn:hover,
 html:not(.dark) .fsdb-crumb-btn.is-open,
 html:not(.dark) .fsdb-crumb .fsdb-crumb-btn,
 html:not(.dark) .inspector-tab.is-active,
-html:not(.dark) .inspector-tab.is-active .fsdb-crumb-btn {
+html:not(.dark) .inspector-tab.is-active:hover,
+html:not(.dark) .inspector-tab.is-active .fsdb-crumb-btn,
+html:not(.dark) .inspector-tab.is-active .fsdb-crumb-btn:hover {
   color: #2c2c2b;
 }
 
