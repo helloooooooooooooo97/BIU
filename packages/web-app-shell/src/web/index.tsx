@@ -8,6 +8,7 @@ import {
   requestInspectorClose,
   allocateShellColumns,
   applyShellColumnCssVars,
+  commitShellLayoutSnap,
   publishShellLayout,
   clampSidebarWidth,
   isChatPagePath,
@@ -431,6 +432,13 @@ function Shell(props: SlotProps) {
     }
     return 320
   })
+  const layoutSnap = useRef({
+    leftPane: true,
+    inspectorVisible: inspectorOpen,
+    inspectorWidth,
+    sidebarWidth,
+    sidebarCollapsed,
+  })
   const [columnResizing, setColumnResizing] = useState(false)
   const [windowResizing, setWindowResizing] = useState(false)
   const shellRef = useRef<HTMLDivElement>(null)
@@ -456,6 +464,7 @@ function Shell(props: SlotProps) {
   }, [applyInspector])
   const persistInspectorWidth = useCallback((width: number) => {
     const next = Math.min(1000, Math.max(240, Math.round(width)))
+    layoutSnap.current = commitShellLayoutSnap(layoutSnap.current, { inspectorWidth: next })
     setInspectorWidth(next)
     try {
       localStorage.setItem('cordis.inspector.width', String(next))
@@ -545,14 +554,7 @@ function Shell(props: SlotProps) {
     inspectorOpen: inspectorVisible,
     inspectorWidth,
   })
-  const layoutSnap = useRef({
-    leftPane: true,
-    inspectorVisible: false,
-    inspectorWidth: 320,
-    sidebarWidth: SIDEBAR_DEFAULT,
-    sidebarCollapsed: false,
-  })
-  layoutSnap.current = { leftPane, inspectorVisible, inspectorWidth, sidebarWidth, sidebarCollapsed }
+  layoutSnap.current.leftPane = leftPane
   const paintedCols = useRef({ left: shellColumns.left, inspector: shellColumns.inspector })
   if (!columnResizing) paintedCols.current = { left: shellColumns.left, inspector: shellColumns.inspector }
   const dragPaintRaf = useRef(0)
@@ -597,15 +599,13 @@ function Shell(props: SlotProps) {
   }, [flushColumnDrag, persistInspectorWidth, persistSidebar])
   endColumnResizeRef.current = endColumnResize
   const paintLiveLayout = useCallback((patch: { inspectorOpen?: boolean; sidebarCollapsed?: boolean; sidebarWidth?: number }) => {
-    const snap = layoutSnap.current
-    const inspectorOpen = patch.inspectorOpen ?? snap.inspectorVisible
-    const sidebarCollapsed = patch.sidebarCollapsed ?? snap.sidebarCollapsed
-    const width = patch.sidebarWidth ?? snap.sidebarWidth
+    const snap = commitShellLayoutSnap(layoutSnap.current, patch)
+    layoutSnap.current = snap
     const cols = allocateShellColumns({
       viewportWidth: window.innerWidth,
       leftPane: snap.leftPane,
-      leftWidth: snap.leftPane ? (sidebarCollapsed ? 0 : width) : undefined,
-      inspectorOpen,
+      leftWidth: snap.leftPane ? (snap.sidebarCollapsed ? 0 : snap.sidebarWidth) : undefined,
+      inspectorOpen: snap.inspectorVisible,
       inspectorWidth: snap.inspectorWidth,
     })
     paintedCols.current = { left: cols.left, inspector: cols.inspector }

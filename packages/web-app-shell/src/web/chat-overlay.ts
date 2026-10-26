@@ -65,6 +65,34 @@ export function applyShellColumnCssVars(el: HTMLElement | null, cols: { left: nu
   el.style.setProperty('--inspector-width', `${cols.inspector}px`)
 }
 
+export type ShellLayoutSnap = {
+  leftPane: boolean
+  inspectorVisible: boolean
+  inspectorWidth: number
+  sidebarWidth: number
+  sidebarCollapsed: boolean
+}
+
+/** 收起/改宽立刻写 snap，等渲染再覆盖会让下一次拖拽按旧侧栏状态算，弹开一次。 */
+export function commitShellLayoutSnap(
+  snap: ShellLayoutSnap,
+  patch: {
+    leftPane?: boolean
+    inspectorOpen?: boolean
+    inspectorWidth?: number
+    sidebarWidth?: number
+    sidebarCollapsed?: boolean
+  },
+): ShellLayoutSnap {
+  return {
+    leftPane: patch.leftPane ?? snap.leftPane,
+    inspectorVisible: patch.inspectorOpen ?? snap.inspectorVisible,
+    inspectorWidth: patch.inspectorWidth ?? snap.inspectorWidth,
+    sidebarWidth: patch.sidebarWidth ?? snap.sidebarWidth,
+    sidebarCollapsed: patch.sidebarCollapsed ?? snap.sidebarCollapsed,
+  }
+}
+
 export function publishShellLayout(cols: { left: number; inspector: number }) {
   if (typeof window === 'undefined') return
   window.dispatchEvent(new CustomEvent('biu:shell-layout', { detail: { left: cols.left, inspector: cols.inspector } }))

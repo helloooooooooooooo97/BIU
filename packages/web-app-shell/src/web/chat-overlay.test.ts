@@ -5,6 +5,7 @@ import {
   inspectorWidthForExpandedChat,
   allocateShellColumns,
   applyShellColumnCssVars,
+  commitShellLayoutSnap,
   publishShellLayout,
   shellLayoutFromEvent,
   shellLayoutFromElement,
@@ -86,6 +87,23 @@ test('sidebar stays a normal pane at min width, never an icon rail', () => {
     inspectorWidth: 320,
   })
   assert.equal(atMin.left, SIDEBAR_MIN)
+})
+
+test('commitShellLayoutSnap writes collapse before the next render', () => {
+  const snap = {
+    leftPane: true,
+    inspectorVisible: true,
+    inspectorWidth: 320,
+    sidebarWidth: 240,
+    sidebarCollapsed: false,
+  }
+  const afterCollapse = commitShellLayoutSnap(snap, { sidebarCollapsed: true })
+  assert.equal(afterCollapse.sidebarCollapsed, true)
+  assert.equal(afterCollapse.sidebarWidth, 240)
+  assert.equal(snap.sidebarCollapsed, false)
+  const afterWidth = commitShellLayoutSnap(afterCollapse, { inspectorWidth: 400 })
+  assert.equal(afterWidth.inspectorWidth, 400)
+  assert.equal(afterWidth.sidebarCollapsed, true)
 })
 
 test('applyShellColumnCssVars writes grid tracks without React state', () => {
