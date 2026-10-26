@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { NodeViewProps } from '@tiptap/react'
 import { NodeViewContent, NodeViewWrapper } from '@tiptap/react'
 import { DECK_LAYOUTS, DECK_LAYOUT_META, type DeckLayout } from './deck-md.ts'
 
 export function DeckView({ node, editor, getPos }: NodeViewProps) {
+  const rootRef = useRef<HTMLDivElement>(null)
   const index = Math.min(Math.max(0, Number(node.attrs.index) || 0), Math.max(0, node.childCount - 1))
   const [focus, setFocus] = useState(false)
   const slide = node.childCount ? node.child(index) : null
@@ -34,8 +35,18 @@ export function DeckView({ node, editor, getPos }: NodeViewProps) {
     return () => window.removeEventListener('keydown', onKey)
   }, [focus, editor])
 
+  useEffect(() => {
+    const root = rootRef.current
+    if (!root) return
+    root.querySelectorAll<HTMLElement>('[data-deck-slide]').forEach((el, i) => {
+      if (i === index) el.setAttribute('data-on', '')
+      else el.removeAttribute('data-on')
+    })
+  }, [index, node])
+
   return (
     <NodeViewWrapper
+      ref={rootRef}
       className={`page-deck${focus ? ' is-focus' : ''}`}
       data-testid="page-deck"
       data-deck=""

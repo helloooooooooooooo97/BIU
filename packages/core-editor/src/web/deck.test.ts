@@ -4,6 +4,7 @@ import { Editor } from '@tiptap/core'
 import { pageEditorExtensions } from './kit.ts'
 import { filterSlashItems } from './slash.ts'
 import { takeDeckFence } from './deck-md.ts'
+import { PAGE_EDITOR_STYLE } from './style.ts'
 
 function editorOf(markdown: string) {
   return new Editor({
@@ -12,6 +13,12 @@ function editorOf(markdown: string) {
     contentType: 'markdown',
   })
 }
+
+test('deck css grids the slide, not TipTap contentDOM wrapper', () => {
+  assert.match(PAGE_EDITOR_STYLE, /\[data-deck-slide\]\[data-layout=split\]/)
+  assert.match(PAGE_EDITOR_STYLE, /data-node-view-content-react/)
+  assert.match(PAGE_EDITOR_STYLE, /react-renderer\.node-deck\{display:block;width:100%/)
+})
 
 test('slash lists Deck as a core container, not a page plugin', () => {
   const item = filterSlashItems('gamma').find((entry) => entry.id === 'deck')
