@@ -1641,7 +1641,7 @@ export function ShellSettingsShortcuts() {
   return (
     <section data-testid="settings-shortcuts">
       <h3 className="settings-pane-title">快捷键</h3>
-      <p className="settings-muted settings-pane-lead">Windows 与 Linux 上 ⌘ 用 Ctrl。选取也可用 ⌘Q。编辑器内 ⌘F 为正文查找，⌘⇧F 仍打开全局搜索。</p>
+      <p className="settings-muted settings-pane-lead">Windows 与 Linux 上 ⌘ 用 Ctrl。编辑器内 ⌘F 为正文查找，⌘⇧F 仍打开全局搜索。</p>
       <ul className="settings-shortcut-list">
         <li>
           <span>搜索</span>
@@ -1649,7 +1649,7 @@ export function ShellSettingsShortcuts() {
         </li>
         <li>
           <span>快速选取</span>
-          <span className="settings-kbd"><kbd>Ctrl</kbd><kbd>Q</kbd></span>
+          <span className="settings-kbd"><kbd>⌘</kbd><kbd>1</kbd></span>
         </li>
         <li>
           <span>选区送到对话</span>
