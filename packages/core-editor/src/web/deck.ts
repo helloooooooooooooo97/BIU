@@ -241,7 +241,7 @@ export const deck = Node.create({
     }
   },
   addNodeView() {
-    return ReactNodeViewRenderer(DeckView, { className: 'page-deck' })
+    return ReactNodeViewRenderer(DeckView)
   },
 })
 

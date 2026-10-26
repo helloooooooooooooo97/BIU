@@ -17,7 +17,8 @@ function editorOf(markdown: string) {
 test('deck css grids the slide, not TipTap contentDOM wrapper', () => {
   assert.match(PAGE_EDITOR_STYLE, /\[data-deck-slide\]\[data-layout=split\]/)
   assert.match(PAGE_EDITOR_STYLE, /data-node-view-content-react/)
-  assert.match(PAGE_EDITOR_STYLE, /react-renderer\.node-deck\{display:block;width:100%/)
+  assert.match(PAGE_EDITOR_STYLE, /react-renderer\.node-deck\{display:block;width:100%;min-width:0;border:0/)
+  assert.match(PAGE_EDITOR_STYLE, /\[data-deck\]\{display:flex/)
 })
 
 test('slash lists Deck as a core container, not a page plugin', () => {

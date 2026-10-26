@@ -34,8 +34,9 @@ export const PAGE_EDITOR_STYLE = `
 .page-editor .tiptap h3{font-size:1.25em;font-weight:650;line-height:1.3;margin-top:.6em}
 .page-editor .tiptap [data-heading-plugin]{border-radius:8px}
 .page-editor .react-renderer.node-pageBlock{overflow:hidden;min-width:0}
-.page-editor .react-renderer.node-deck{display:block;width:100%;min-width:0}
-.page-editor .page-deck{display:flex;flex-direction:column;width:100%;min-width:0;margin:12px 0;border:1px solid var(--dsw-border);border-radius:12px;background:var(--dsw-bg);overflow:hidden}
+.page-editor .react-renderer.node-deck{display:block;width:100%;min-width:0;border:0;outline:none;box-shadow:none}
+.page-editor .react-renderer.node-deck.ProseMirror-selectednode{outline:none;box-shadow:none}
+.page-editor [data-deck]{display:flex;flex-direction:column;width:100%;min-width:0;margin:12px 0;border:1px solid var(--dsw-border);border-radius:12px;background:var(--dsw-bg);overflow:hidden}
 .page-editor .page-deck.is-focus{position:fixed;inset:12px;z-index:80;margin:0;background:var(--dsw-bg)}
 .page-editor .page-deck-bar,.page-editor .page-deck-nav{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 10px;color:var(--dsw-label-3);font-size:12px}
 .page-editor .page-deck-bar{border-bottom:1px solid var(--dsw-border)}
@@ -51,7 +52,7 @@ export const PAGE_EDITOR_STYLE = `
 .page-editor [data-deck-slide][data-layout=hero]{grid-template-columns:1.4fr 1fr}
 .page-editor [data-deck-slide][data-layout=trio]{grid-template-columns:1fr 1fr 1fr}
 .page-editor [data-deck-slide][data-layout=stack],.page-editor [data-deck-slide][data-layout=title]{grid-template-columns:1fr;grid-template-rows:auto 1fr}
-.page-editor [data-deck-cell]{min-width:0;min-height:0;height:100%;overflow:auto;padding:14px 16px;border-radius:10px;background:var(--dsw-bg);border:1px solid var(--dsw-border)}
+.page-editor [data-deck-cell]{min-width:0;min-height:0;height:100%;overflow:auto;padding:14px 16px;border-radius:10px;background:var(--dsw-bg)}
 .page-editor .page-deck .is-empty::before{content:none}
 .page-editor .page-deck-dots{display:flex;gap:6px}
 .page-editor .page-deck-dots button{width:7px;height:7px;padding:0;border-radius:99px;background:var(--dsw-border)}
