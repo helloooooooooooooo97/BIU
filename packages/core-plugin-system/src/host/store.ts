@@ -815,19 +815,6 @@ export class PluginStoreService extends Service {
     }
   }
 
-  async writePluginTitle(id: string, name: string) {
-    if (isOnlineRuntime()) this.requireWorkspaceMember()
-    const dir = this.readmeDir(id)
-    if (!dir) throw new Error('先新建插件')
-    const title = String(name ?? '').trim()
-    if (!title) throw new Error('plugin name required')
-    const existing = await readManifest(dir)
-    const manifest = buildStoreManifest({ ...existing, name: title }, existing)
-    writeFileSync(join(dir, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
-    this.invalidateList()
-    return manifest
-  }
-
   writeWorkbench(id: string, patch: Record<string, unknown> | Workbench) {
     if (isOnlineRuntime()) this.requireWorkspaceMember()
     const dir = this.readmeDir(id)

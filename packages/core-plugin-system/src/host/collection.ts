@@ -7,7 +7,7 @@ import {
   PLUGIN_SANDBOX_PROPERTIES,
 } from './plugin-create.ts'
 import type { PluginStoreService, StoreListing } from './store.ts'
-import { WORKBENCH_STAGES, advanceWorkbench, allocatePluginId, emptyWorkbench, workbenchFields } from '../workbench.ts'
+import { WORKBENCH_STAGES, advanceWorkbench, workbenchFields } from '../workbench.ts'
 
 type SandboxListing = Awaited<ReturnType<PluginStoreService['listSandboxes']>>[number]
 
@@ -142,11 +142,11 @@ export function pluginsCollection(store: PluginStoreService): CollectionSpec {
       route: '/plugins',
       title: '插件',
       inspector: true,
-      blurb: '这是插件，不是代理。人点右上角「新建」或 db_create /plugins（title 即可）会开一条工作台草稿。再 db_update 本行 who/job/not、tree、bg/ink/muted/accent，action=advance：brief→wireframe→palette→demo→plugin。到 plugin 再写代码并 pack。改已有插件可直接 sandbox+pack。用户说「再开一个 agent」去 /sessions。列表 db_list /plugins。README 用 db_content。页面块先读介绍「示例写法」再写 :::pageBlock。不要直写 .plugin。',
+      blurb: '这是插件，不是代理。新插件先 sandbox（只要 name，不要 hostJs/webJs），再 db_update 本行工作台字段：who/job/not、tree、bg/ink/muted/accent。阶段 brief→wireframe→palette→demo→plugin，用 action=advance。到 plugin 再写代码并 pack。改已有插件可直接 sandbox+pack。用户说「再开一个 agent」去 /sessions。不能 db_create。列表 db_list /plugins。README 用 db_content。页面块先读介绍「示例写法」再写 :::pageBlock。name 只读。不要直写 .plugin。',
       order: 30,
       icon: 'puzzle-piece',
     },
-    records: { update: true, create: true, delete: true },
+    records: { update: true, create: false, delete: true },
     schema: {
       labelField: 'title',
       contentField: 'readme',
@@ -174,7 +174,7 @@ export function pluginsCollection(store: PluginStoreService): CollectionSpec {
       ],
       fields: {
         ...REQUIRED_RECORD_FIELDS,
-        title: { type: 'string', label: '标题', writable: true },
+        title: { type: 'string', label: '标题' },
         blurb: { type: 'string', label: '简介' },
         installed: { type: 'boolean', label: '已安装' },
         sandbox: { type: 'boolean', label: '沙箱' },
@@ -216,31 +216,11 @@ export function pluginsCollection(store: PluginStoreService): CollectionSpec {
     },
     list,
     get: find,
-    create: async (rows) => {
-      const taken = new Set((await list()).map((row) => row.id))
-      const out: DbRecord[] = []
-      for (const fields of rows) {
-        const name = String(fields.title ?? fields.name ?? '').trim() || '未命名插件'
-        const id = allocatePluginId(String(fields.id ?? name), taken)
-        taken.add(id)
-        await store.initSandbox({
-          id,
-          name,
-          blurb: fields.blurb != null ? String(fields.blurb) : name,
-          headless: fields.kind !== 'window',
-        })
-        store.writeWorkbench(id, emptyWorkbench({ kind: fields.kind === 'window' ? 'window' : 'page' }))
-        const row = await find(id)
-        if (!row) throw new Error(`failed to create plugin: ${id}`)
-        out.push(row)
-      }
-      return out
-    },
     update: async (id, patch) => {
       const bench: Record<string, unknown> = {}
       const extra: string[] = []
       for (const [key, value] of Object.entries(patch)) {
-        if (key === 'readme' || key === 'title') continue
+        if (key === 'readme') continue
         if (
           key === 'kind' ||
           key === 'who' ||
@@ -260,7 +240,6 @@ export function pluginsCollection(store: PluginStoreService): CollectionSpec {
       }
       if (extra.length) throw new Error(`plugin fields not writable: ${extra.join(', ')}`)
       if ('readme' in patch) await store.writeReadme(id, String(patch.readme ?? ''))
-      if ('title' in patch) await store.writePluginTitle(id, String(patch.title ?? ''))
       if (Object.keys(bench).length) store.writeWorkbench(id, bench)
       return (await find(id)) ?? (() => {
         throw new Error(`unknown plugin: ${id}`)

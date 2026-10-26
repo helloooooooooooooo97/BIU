@@ -2,7 +2,6 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import {
   advanceWorkbench,
-  allocatePluginId,
   applyWorkbenchPatch,
   emptyWorkbench,
   parseTree,
@@ -30,9 +29,4 @@ test('advance requires the current stage payload', () => {
   assert.equal(advanceWorkbench(demo).stage, 'plugin')
   assert.equal(workbenchBlocksCode(demo), true)
   assert.equal(workbenchBlocksCode(advanceWorkbench(demo)), false)
-})
-
-test('allocatePluginId slugs a title and avoids collisions', () => {
-  assert.equal(allocatePluginId('待办', []), 'plugin')
-  assert.equal(allocatePluginId('Hello Box', ['hello-box']), 'hello-box-2')
 })
