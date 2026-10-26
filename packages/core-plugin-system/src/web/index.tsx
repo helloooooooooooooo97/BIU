@@ -5,7 +5,7 @@ import type { SlotProps } from '@biu/type-slots'
 
 import { XMarkIcon, MinusIcon, ArrowsPointingOutIcon, ArrowsPointingInIcon, Bars2Icon } from '@heroicons/react/16/solid'
 import type { DatabaseUi } from '@biu/type-file-system/ui'
-import { pluginsChrome, PluginWorkbenchView } from './chrome.tsx'
+import { pluginsChrome } from './chrome.tsx'
 import { listenEnablePageBlockPlugin, watchInstalledPageBlocks, watchRunningWindowPlugins } from './page-block-plugin.ts'
 import { PluginTrayPortal, type PluginTrayItem } from './plugin-tray.tsx'
 import {
@@ -439,16 +439,6 @@ export function apply(ctx: Context) {
   if (!slots) throw new Error('slots service required')
   const ui = ctx.get('databaseUi') as DatabaseUi
   ctx.effect(() => ui.decorate('/plugins', pluginsChrome).dispose)
-  ctx.effect(() =>
-    ui
-      .registerView('/plugins', {
-        id: 'workbench',
-        label: '工作台',
-        plugin: name,
-        View: PluginWorkbenchView,
-      })
-      .dispose,
-  )
   ctx.effect(() => listenEnablePageBlockPlugin())
   ctx.effect(() => watchInstalledPageBlocks())
   ctx.effect(() => watchRunningWindowPlugins())
@@ -468,25 +458,6 @@ if (typeof document !== 'undefined') {
   style.id = id
   style.textContent = `
 .plugin-store-window-body > * { box-sizing:border-box; width:100%; height:100%; min-width:0; min-height:0; }
-.plugin-wb-board{display:flex;flex-direction:column;gap:10px;margin:8px 0 14px}
-.plugin-wb-steps{display:flex;flex-wrap:wrap;gap:6px;margin:0;padding:0;list-style:none}
-.plugin-wb-steps li{font-size:12px;color:var(--dsw-label-3);padding:2px 8px;border-radius:999px;background:color-mix(in srgb,var(--dsw-border) 55%,transparent)}
-.plugin-wb-steps li[data-on]{color:var(--dsw-label);background:color-mix(in srgb,var(--dsw-business) 16%,transparent)}
-.plugin-wb-brief{margin:0;font-size:13px;color:var(--dsw-label-2)}
-.plugin-wb-pill{flex:none;font-size:11px;font-weight:600;color:var(--dsw-label-3);padding:1px 6px;border-radius:999px;background:color-mix(in srgb,var(--dsw-border) 55%,transparent)}
-.plugin-wb-demo{--wb-bg:#fff;--wb-ink:#171717;--wb-muted:#737373;--wb-accent:#171717;background:var(--wb-bg);color:var(--wb-ink);border:1px solid color-mix(in srgb,var(--wb-ink) 12%,transparent);border-radius:10px;padding:12px;font-size:13px}
-.plugin-wb-card,.plugin-wb-stack{display:flex;flex-direction:column;gap:8px}
-.plugin-wb-row,.plugin-wb-tabs{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-.plugin-wb-list{display:flex;flex-direction:column;border:1px solid color-mix(in srgb,var(--wb-ink) 10%,transparent);border-radius:8px;overflow:hidden}
-.plugin-wb-list > *{padding:8px 10px;border-bottom:1px solid color-mix(in srgb,var(--wb-ink) 8%,transparent)}
-.plugin-wb-list > *:last-child{border-bottom:0}
-.plugin-wb-btn{height:28px;padding:0 10px;border:0;border-radius:6px;background:var(--wb-accent);color:var(--wb-bg);font:inherit;cursor:pointer}
-.plugin-wb-btn[data-on]{outline:2px solid var(--wb-ink)}
-.plugin-wb-field{border:1px dashed color-mix(in srgb,var(--wb-muted) 70%,transparent);border-radius:6px;padding:6px 8px;color:var(--wb-muted)}
-.plugin-wb-text{color:var(--wb-ink)}
-.plugin-wb-stat{font-weight:600;font-variant-numeric:tabular-nums}
-.plugin-wb-view{display:flex;flex-direction:column;gap:8px;padding:12px}
-.plugin-wb-card-btn{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;text-align:left;padding:10px 12px;border:1px solid var(--dsw-border);border-radius:10px;background:var(--dsw-bg);color:inherit;font:inherit;cursor:pointer}
 `
   document.documentElement.appendChild(style)
 }

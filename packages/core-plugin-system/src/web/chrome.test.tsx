@@ -17,10 +17,3 @@ test('plugin title puts a green dot left of the name when enabled', () => {
   assert.ok(dot)
   assert.ok(dot?.nextElementSibling?.textContent?.includes('画板'))
 })
-
-test('plugin title shows workbench stage when the plugin has one', () => {
-  const Title = pluginsChrome.Title
-  assert.ok(Title)
-  const view = render(<Title record={{ id: 'draft', stage: 'brief' }} label="草稿" />)
-  assert.equal(view.container.querySelector('[data-testid="plugin-workbench-stage"]')?.textContent, '需求')
-})

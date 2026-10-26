@@ -19,14 +19,6 @@ import {
   type StoreManifestFields,
 } from './plugin-create.ts'
 import { parseStoreShell, requireDeclaredShell, type StoreShell } from '../shell.ts'
-import {
-  WORKBENCH_FILE,
-  applyWorkbenchPatch,
-  emptyWorkbench,
-  parseWorkbench,
-  workbenchBlocksCode,
-  type Workbench,
-} from '../workbench.ts'
 import { registerBuiltinPluginLookup } from '@biu/host-account/store'
 import {
   assetsRootPath,
@@ -404,9 +396,6 @@ export class PluginStoreService extends Service {
     mkdirSync(dest, { recursive: true })
     const hostJs = String(input.hostJs ?? '').trim()
     const webSrc = input.webJs != null ? String(input.webJs).trim() : ''
-    if ((hostJs || webSrc) && workbenchBlocksCode(this.readWorkbench(id))) {
-      throw new Error('工作台还没到生成阶段，不要写 host/web')
-    }
     const hasWeb = Boolean(webSrc) || Boolean(findEntry(dest, WEB_ENTRIES))
     const existing = existsSync(join(dest, 'manifest.json')) ? await readManifest(dest).catch(() => undefined) : undefined
     requireDeclaredShell(input.shell, hasWeb, 'sandbox', Boolean(input.headless) || Boolean(existing?.headless))
@@ -439,7 +428,6 @@ export class PluginStoreService extends Service {
     if (!isSafeId(id)) throw new Error(`invalid plugin id: ${id}`)
     const sandbox = this.sandboxPath(id)
     if (!existsSync(join(sandbox, 'manifest.json'))) throw new Error(`sandbox not found: ${sandbox}`)
-    if (workbenchBlocksCode(this.readWorkbench(id))) throw new Error('工作台还没到生成阶段，不能 pack')
     const manifest = await persistStoreManifestCreatedAt(sandbox)
     const raw = JSON.parse(await readFile(join(sandbox, 'manifest.json'), 'utf8')) as unknown
     const hostEntry = findEntry(sandbox, HOST_ENTRIES)
@@ -470,8 +458,6 @@ export class PluginStoreService extends Service {
       })
       await writeFile(join(staging, README_FILE), packed)
       await copyPackedMedia(sandbox, staging)
-      const bench = join(sandbox, WORKBENCH_FILE)
-      if (existsSync(bench)) await writeFile(join(staging, WORKBENCH_FILE), await readFile(bench, 'utf8'))
       await rm(dest, { recursive: true, force: true })
       renameSync(staging, dest)
     } catch (error) {
@@ -795,38 +781,6 @@ export class PluginStoreService extends Service {
       }
     }
     this.invalidateList()
-  }
-
-  workbenchPath(id: string) {
-    const sandbox = this.sandboxPath(id)
-    if (existsSync(join(sandbox, 'manifest.json'))) return join(sandbox, WORKBENCH_FILE)
-    const installed = this.pluginPath(id)
-    if (existsSync(join(installed, 'manifest.json'))) return join(installed, WORKBENCH_FILE)
-    return null
-  }
-
-  readWorkbench(id: string): Workbench | null {
-    const path = this.workbenchPath(id)
-    if (!path || !existsSync(path)) return null
-    try {
-      return parseWorkbench(JSON.parse(readFileSync(path, 'utf8') as string) as unknown)
-    } catch {
-      return null
-    }
-  }
-
-  writeWorkbench(id: string, patch: Record<string, unknown> | Workbench) {
-    if (isOnlineRuntime()) this.requireWorkspaceMember()
-    const dir = this.readmeDir(id)
-    if (!dir) throw new Error('先 sandbox 再建工作台')
-    const path = join(dir, WORKBENCH_FILE)
-    const current = existsSync(path)
-      ? parseWorkbench(JSON.parse(readFileSync(path, 'utf8') as string) as unknown)
-      : emptyWorkbench()
-    const next = applyWorkbenchPatch(current, patch as Record<string, unknown>)
-    writeFileSync(path, `${JSON.stringify(next)}\n`)
-    this.invalidateList()
-    return next
   }
 
   async restore() {

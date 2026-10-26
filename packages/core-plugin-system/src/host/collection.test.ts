@@ -4,7 +4,6 @@ import type { DbRecord } from '@biu/type-file-system'
 import { BIU_GITHUB, BIU_OFFICIAL_NAME, pluginsCollection } from './collection.ts'
 import type { PluginStoreService } from './store.ts'
 import { defaultStoreShell } from '../shell.ts'
-import { applyWorkbenchPatch, emptyWorkbench } from '../workbench.ts'
 
 function stubStore(partial: Partial<PluginStoreService>): PluginStoreService {
   return {
@@ -18,8 +17,6 @@ function stubStore(partial: Partial<PluginStoreService>): PluginStoreService {
     uninstall: async () => {},
     pluginPath: (id: string) => `/workspace/.plugin/${id}`,
     sandboxPath: (id: string) => `/workspace/.plugin-dev/${id}`,
-    readWorkbench: () => null,
-    writeWorkbench: () => ({}) as never,
     ...partial,
   } as PluginStoreService
 }
@@ -102,7 +99,7 @@ test('pluginsCollection lists installed plugins and sandboxes in one table', asy
   assert.equal(draft?.shellWidth, undefined)
   assert.deepEqual(
     spec.actions?.map((item) => item.id),
-    ['sandbox', 'advance', 'start', 'stop', 'pack', 'uninstall'],
+    ['sandbox', 'start', 'stop', 'pack', 'uninstall'],
   )
   await spec.actions!.find((item) => item.id === 'start')!.run('demo', demo!)
   await spec.actions!.find((item) => item.id === 'pack')!.run('draft-hello', draft!)
@@ -115,7 +112,7 @@ test('pluginsCollection lists installed plugins and sandboxes in one table', asy
   assert.ok(spec.schema.fields.title)
   assert.equal(spec.schema.fields.name, undefined)
   assert.equal(spec.schema.columns?.[0], 'title')
-  assert.deepEqual(spec.records, { update: true, create: false, delete: true })
+  assert.deepEqual(spec.records, { update: false, create: false, delete: true })
   assert.equal(typeof spec.remove, 'function')
   assert.ok(spec.schema.columns?.includes('sandbox'))
   assert.ok(spec.schema.columns?.includes('sandboxPath'))
@@ -258,47 +255,6 @@ test('plugin intro is README.md via contentField readme', async () => {
   assert.equal(written.readme, '# Demo\n\n介绍\n')
   assert.equal(files.get('demo'), '# Demo\n\n介绍\n')
   await assert.rejects(() => spec.update!('demo', { name: '改名' }), /not writable/)
-})
-
-test('plugin workbench fields live on the plugin row', async () => {
-  let wb: ReturnType<PluginStoreService['readWorkbench']> = null
-  const spec = pluginsCollection(
-    stubStore({
-      list: () =>
-        Promise.resolve([
-          {
-            id: 'demo',
-            name: 'Demo',
-            blurb: 'hi',
-            tags: [],
-            author: '',
-            authorUrl: '',
-            enabled: false,
-            running: false,
-            bytes: 1,
-            createdAt: 1,
-            updatedAt: 2,
-            lastRunAt: null,
-            hasHost: false,
-            hasWeb: false,
-          },
-        ]),
-      readWorkbench: () => wb,
-      writeWorkbench: (_id, patch) => {
-        wb = applyWorkbenchPatch(wb ?? emptyWorkbench(), patch as Record<string, unknown>)
-        return wb
-      },
-    }),
-  )
-  assert.match(String(spec.view?.blurb ?? ''), /who\/job\/not/)
-  assert.equal(spec.schema.fields.who?.writable, true)
-  await spec.update!('demo', { who: '我', job: '记待办' })
-  const row = await spec.get!('demo')
-  assert.equal(row?.who, '我')
-  assert.equal(row?.job, '记待办')
-  assert.equal(row?.stage, 'brief')
-  await spec.actions!.find((item) => item.id === 'advance')!.run('demo', row!)
-  assert.equal((await spec.get!('demo'))?.stage, 'wireframe')
 })
 
 test('builtin plugins list BIU官方 and the GitHub link', async () => {
