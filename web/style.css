@@ -2778,7 +2778,7 @@ select.settings-account-input {
   font-weight: inherit;
 }
 
-.inspector-crumb-tab .inspector-crumb-full .fsdb-crumb:not(:last-child) {
+.inspector-crumb-tab .inspector-crumb-full .fsdb-crumb:not(:last-child):not(:first-child) {
   display: none;
 }
 
@@ -2843,6 +2843,7 @@ select.settings-account-input {
 .inspector-crumb-full .fsdb-crumb-btn.is-static {
   cursor: default;
   pointer-events: none;
+  padding: 0;
 }
 
 .inspector-crumb-full .fsdb-crumb-btn.is-static:hover {

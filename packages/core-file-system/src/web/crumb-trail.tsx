@@ -274,7 +274,7 @@ export function CrumbTrail({
         const current = crumb.choices.find((item) => item.id === crumb.id)
         const glyph = (
           <>
-            {!allowMenu && crumb.kind === 'view' ? <TableGlyph icon={tableIcon} /> : null}
+            {!allowMenu && !lockRootCrumb && crumb.kind === 'view' ? <TableGlyph icon={tableIcon} /> : null}
             <CrumbItemGlyph
               kind={crumb.kind}
               icon={crumb.icon ?? current?.icon}
