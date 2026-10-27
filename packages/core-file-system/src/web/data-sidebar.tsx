@@ -795,7 +795,7 @@ export const DataSidebar = memo(function DataSidebar({
               </button>
               <button
                 type="button"
-                className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit outline-none hover:text-(--dsw-sidebar-fg-active) focus-visible:ring-1 focus-visible:ring-(--dsw-border)"
+                className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit outline-none hover:text-(--biu-color-text) focus-visible:ring-1 focus-visible:ring-(--biu-color-border)"
                 onClick={() => onOpenTable?.(
                   table.path,
                   builtinAllViewId(table.path),
@@ -1172,7 +1172,7 @@ export const DataSidebar = memo(function DataSidebar({
             <SidebarFold open={userOpen}>
               <div className="flex min-w-0 flex-col gap-px" data-testid="sidebar-user-collections">
                 {userTables.length ? renderTableRows(userTables, 'user') : (
-                  <div className="px-1 py-1 text-[12px] text-(--dsw-label-3)">还没有用户数据表</div>
+                  <div className="px-1 py-1 text-[12px] text-(--biu-color-text-subtle)">还没有用户数据表</div>
                 )}
               </div>
             </SidebarFold>
@@ -1197,7 +1197,7 @@ export const DataSidebar = memo(function DataSidebar({
             <SidebarFold open={indexOpen}>
               <div className="flex min-w-0 flex-col gap-px" data-testid="sidebar-index-collections">
                 {indexTables.length ? renderTableRows(indexTables, 'index') : (
-                  <div className="px-1 py-1 text-[12px] text-(--dsw-label-3)">还没有索引数据</div>
+                  <div className="px-1 py-1 text-[12px] text-(--biu-color-text-subtle)">还没有索引数据</div>
                 )}
               </div>
             </SidebarFold>
@@ -1239,7 +1239,7 @@ export const DataSidebar = memo(function DataSidebar({
 
   return (
     <aside
-      className="app-side-bar fsdb-views flex min-h-0 flex-col overflow-hidden border-r border-(--dsw-border) bg-(--dsw-sidebar)"
+      className="app-side-bar fsdb-views flex min-h-0 flex-col overflow-hidden border-r border-(--biu-color-border) bg-(--biu-color-bg-subtle)"
       aria-label="数据"
     >
       <div className="app-side-bar-head app-side-bar-head-brand" data-biu-ignore>

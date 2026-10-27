@@ -31,8 +31,8 @@ test('page block playground UIs use design tokens instead of hardcoded light-the
   ]
   for (const file of files) {
     const src = readFileSync(join(sandbox, file), 'utf8')
-    assert.match(src, /var\(--dsw-border\)/, `${file} should use --dsw-border`)
-    assert.match(src, /var\(--dsw-label\)/, `${file} should use --dsw-label`)
+    assert.match(src, /var\(--biu-color-border\)/, `${file} should use --biu-color-border`)
+    assert.match(src, /var\(--biu-color-text\)/, `${file} should use --biu-color-text`)
     assert.doesNotMatch(src, /background:\s*'?#fff/, `${file} should not hardcode white`)
     assert.doesNotMatch(src, /#9ec1ff/, `${file} should not hardcode send-button blue`)
   }

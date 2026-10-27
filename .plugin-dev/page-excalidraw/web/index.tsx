@@ -237,7 +237,7 @@ function placeHost(host: Host, slot: HTMLElement | null) {
   if (host.expanded) {
     if (el.parentElement !== document.body) document.body.appendChild(el)
     el.style.cssText =
-      'position:fixed;top:36px;left:0;right:0;bottom:0;width:auto;height:auto;z-index:9992;pointer-events:auto;visibility:visible;overflow:hidden;isolation:isolate;background:var(--dsw-bg,#191919)'
+      'position:fixed;top:36px;left:0;right:0;bottom:0;width:auto;height:auto;z-index:9992;pointer-events:auto;visibility:visible;overflow:hidden;isolation:isolate;background:var(--biu-color-bg,#191919)'
     return
   }
   if (!slot?.isConnected) {
@@ -246,7 +246,7 @@ function placeHost(host: Host, slot: HTMLElement | null) {
   }
   if (el.parentElement !== slot) slot.appendChild(el)
   el.style.cssText =
-    'position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none;visibility:visible;overflow:hidden;isolation:isolate;background:var(--dsw-bg)'
+    'position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none;visibility:visible;overflow:hidden;isolation:isolate;background:var(--biu-color-bg)'
   requestAnimationFrame(() => fitView(host.api))
 }
 
@@ -409,9 +409,9 @@ const BAR: CSSProperties = {
   gap: 8,
   height: 36,
   padding: '0 8px',
-  background: 'var(--dsw-sidebar)',
-  borderBottom: '1px solid var(--dsw-border)',
-  color: 'var(--dsw-label-2)',
+  background: 'var(--biu-color-bg-subtle)',
+  borderBottom: '1px solid var(--biu-color-border)',
+  color: 'var(--biu-color-text-muted)',
   fontSize: 12,
 }
 
@@ -427,7 +427,7 @@ const ICON_BTN: CSSProperties = {
   border: 0,
   borderRadius: 8,
   background: 'transparent',
-  color: 'var(--dsw-label-2)',
+  color: 'var(--biu-color-text-muted)',
   cursor: 'pointer',
 }
 
@@ -460,7 +460,7 @@ function BoardBar(props: {
 
   return (
     <div style={BAR}>
-      <span style={{ display: 'inline-flex', color: 'var(--dsw-label)' }} title="画板">
+      <span style={{ display: 'inline-flex', color: 'var(--biu-color-text)' }} title="画板">
         <Glyph
           evenodd
           d="M2 12V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2Zm1.5-5.5V12a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5V6.5A.5.5 0 0 0 12 6H4a.5.5 0 0 0-.5.5Zm.75-1.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5ZM7 4a.75.75 0 1 1-1.5 0A.75.75 0 0 1 7 4Zm1.25.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z"
@@ -477,7 +477,7 @@ function BoardBar(props: {
           borderRadius: 8,
           padding: '0 8px',
           background: 'transparent',
-          color: 'var(--dsw-label)',
+          color: 'var(--biu-color-text)',
           font: 'inherit',
           textAlign: 'center',
           outline: 'none',
@@ -574,7 +574,7 @@ function Board(props: { data: Record<string, unknown>; update: (p: Record<string
   if (!file) return <div className="text-sm text-[var(--muted-foreground)]">正在创建画板文件…</div>
 
   return (
-    <div style={{ overflow: 'hidden', background: 'var(--dsw-bg)', borderRadius: 8 }}>
+    <div style={{ overflow: 'hidden', background: 'var(--biu-color-bg)', borderRadius: 8 }}>
       <BoardBar
         file={file}
         expanded={expanded}

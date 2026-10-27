@@ -28,9 +28,9 @@ test('inspector header keeps opened tabs on top and a plus menu on the right', (
   assert.match(inspector, /persistOpened\(opened.includes\(next\) \? opened : \[\.\.\.opened, next\]\)/)
   assert.match(inspector, /setTab\(next\)/)
   assert.match(css, /\.inspector-empty-item\s*\{[^}]*border:\s*0/s)
-  assert.match(css, /\.inspector-empty-item\s*\{[^}]*background:\s*var\(--dsw-sidebar\)/s)
-  assert.match(css, /\.inspector-empty-item\s*\{[^}]*color:\s*var\(--dsw-icon\)/s)
-  assert.match(css, /\.inspector-empty-item:hover\s*\{[^}]*color:\s*var\(--dsw-icon-active\)/s)
+  assert.match(css, /\.inspector-empty-item\s*\{[^}]*background:\s*var\(--biu-color-bg-subtle\)/s)
+  assert.match(css, /\.inspector-empty-item\s*\{[^}]*color:\s*var\(--biu-color-icon\)/s)
+  assert.match(css, /\.inspector-empty-item:hover\s*\{[^}]*color:\s*var\(--biu-color-icon-active\)/s)
   assert.match(inspector, /item.Tab/)
   assert.match(inspector, /pruneOpenedForCollections/)
   assert.match(inspector, /biu:inspector-opened/)
@@ -58,7 +58,7 @@ test('plus menu can add another database tab', () => {
   assert.match(inspector, /PaneLeafIcon/)
   assert.match(inspector, /createPortal/)
   assert.match(inspector, /inspector-add-menu is-fixed/)
-  assert.match(css, /\.inspector-add-owner\.has-open\s*\{[^}]*border-bottom:\s*1px solid var\(--dsw-border\)/s)
+  assert.match(css, /\.inspector-add-owner\.has-open\s*\{[^}]*border-bottom:\s*1px solid var\(--biu-color-border\)/s)
   assert.match(inspector, /inspector-add-owner\$\{headerTabs\.length \? ' has-open' : ''\}/)
   assert.doesNotMatch(inspector, /添加\$\{item\.label\}/)
   assert.match(css, /\.inspector-crumb-close/)
@@ -68,7 +68,7 @@ test('plus menu can add another database tab', () => {
   assert.match(inspector, /inspector-tab-main/)
   assert.match(css, /\.inspector-crumb-tab\.is-active \.inspector-crumb-full \.fsdb-crumb:not\(:last-child\)/)
   assert.match(css, /\.inspector-crumb-tab\.is-active \.fsdb-crumb svg/)
-  assert.match(css, /\.inspector-crumb-tab\.is-active \.fsdb-crumb svg[\s\S]*?color:\s*var\(--dsw-icon-active\)/)
+  assert.match(css, /\.inspector-crumb-tab\.is-active \.fsdb-crumb svg[\s\S]*?color:\s*var\(--biu-color-icon-active\)/)
   assert.doesNotMatch(css, /is-crumb-open/)
   assert.doesNotMatch(css, /inspector-crumb-toggle/)
   assert.match(css, /\.inspector-add-close/)
@@ -76,17 +76,17 @@ test('plus menu can add another database tab', () => {
   // 已打开项目行的图标改成和下方选项一样的 #bab9b5（日夜一致），不再吃 #91918e
   assert.match(css, /html:not\(\.dark\) \.inspector-add-row-main svg[\s\S]*color:\s*#bab9b5/)
   assert.doesNotMatch(inspector, /inspector-add-check/)
-  assert.match(css, /\.inspector-add-row\.is-active::before\s*\{[^}]*background:\s*var\(--dsw-hover\)/s)
-  assert.match(css, /\.session-inspector \.inspector-tab svg[\s\S]*color:\s*var\(--dsw-icon\)/)
-  assert.match(css, /html\.dark \{[^}]*--dsw-icon: #bab9b5/)
+  assert.match(css, /\.inspector-add-row\.is-active::before\s*\{[^}]*background:\s*var\(--biu-color-bg-hover\)/s)
+  assert.match(css, /\.session-inspector \.inspector-tab svg[\s\S]*color:\s*var\(--biu-color-icon\)/)
+  assert.match(css, /html\.dark \{[^}]*--biu-color-icon: #bab9b5/)
 })
 
 test('inspector header tabs sit on the same vertical center as the main header', () => {
   assert.match(css, /\.app-side-bar-head\s*\{[^}]*align-items:\s*center/s)
   assert.match(css, /\.inspector-tabs\s*\{[^}]*align-items:\s*center/s)
   // 检查器与它的头栏必须和主画布共用同一个底色 token，才不会露出接缝。
-  assert.match(css, /\.session-inspector\s*\{[^}]*background:\s*var\(--dsw-bg\)/s)
-  assert.match(css, /\.session-inspector \.app-side-bar-head\s*\{[^}]*background:\s*var\(--dsw-bg\)/s)
+  assert.match(css, /\.session-inspector\s*\{[^}]*background:\s*var\(--biu-color-bg\)/s)
+  assert.match(css, /\.session-inspector \.app-side-bar-head\s*\{[^}]*background:\s*var\(--biu-color-bg\)/s)
   assert.match(css, /\.inspector-tabs\s*\{[^}]*padding:\s*0/s)
   assert.doesNotMatch(css, /\.inspector-tabs\s*\{[^}]*padding-bottom:\s*8px/s)
   assert.match(css, /\.inspector-tab\s*\{[^}]*padding:\s*0 8px/s)
@@ -113,7 +113,7 @@ test('opened rows in the inspector add menu use the icon gray for every glyph', 
     assert.equal(rule.includes(selector), true, selector)
   }
   // 行本身仍然可以继承文本色（那是给文字的），但图标有独立规则覆盖
-  assert.match(css, /^\.inspector-add-row \{[^}]*color: var\(--dsw-label\)/m)
+  assert.match(css, /^\.inspector-add-row \{[^}]*color: var\(--biu-color-text\)/m)
   // 亮色主题同样钉成图标灰
   assert.match(css, /html:not\(\.dark\) \.inspector-add-close svg,[\s\S]*?color:\s*#bab9b5/)
 })

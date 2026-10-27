@@ -24,32 +24,32 @@ type LogData = { day?: string; focus?: string; exercises?: ExRow[] }
 
 const STYLE_ID = 'fitness-tracker-style-v1'
 const CSS = `
-.ft-root{border:1px solid var(--dsw-border);border-radius:8px;padding:10px 12px;background:var(--dsw-bg);color:var(--dsw-label);font-family:var(--font-sans);font-size:14px;line-height:1.5}
+.ft-root{border:1px solid var(--biu-color-border);border-radius:8px;padding:10px 12px;background:var(--biu-color-bg);color:var(--biu-color-text);font-family:var(--font-sans);font-size:14px;line-height:1.5}
 .ft-head{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
 .ft-title{font-weight:650;font-size:14px}
-.ft-meta{color:var(--dsw-label-3);font-size:12px;font-weight:500}
+.ft-meta{color:var(--biu-color-text-subtle);font-size:12px;font-weight:500}
 .ft-grow{flex:1}
-.ft-btn{height:26px;font:inherit;font-size:13px;font-weight:650;padding:0 8px;border-radius:6px;border:1px solid var(--dsw-border);background:transparent;color:var(--dsw-label);cursor:pointer}
-.ft-btn:hover{background:var(--dsw-hover)}
-.ft-btn.on{background:color-mix(in srgb,var(--dsw-ok,#3fb950) 18%,transparent);border-color:var(--dsw-ok,#3fb950)}
-.ft-field{height:26px;font:inherit;font-size:13px;padding:0 6px;border:1px solid var(--dsw-border);border-radius:6px;background:var(--dsw-input);color:var(--dsw-label)}
+.ft-btn{height:26px;font:inherit;font-size:13px;font-weight:650;padding:0 8px;border-radius:6px;border:1px solid var(--biu-color-border);background:transparent;color:var(--biu-color-text);cursor:pointer}
+.ft-btn:hover{background:var(--biu-color-bg-hover)}
+.ft-btn.on{background:color-mix(in srgb,var(--biu-color-ok,#3fb950) 18%,transparent);border-color:var(--biu-color-ok,#3fb950)}
+.ft-field{height:26px;font:inherit;font-size:13px;padding:0 6px;border:1px solid var(--biu-color-border);border-radius:6px;background:var(--biu-color-bg-input);color:var(--biu-color-text)}
 .ft-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:8px;margin:8px 0}
-.ft-card{border:1px solid var(--dsw-border);border-radius:8px;padding:8px}
-.ft-k{color:var(--dsw-label-3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.03em}
+.ft-card{border:1px solid var(--biu-color-border);border-radius:8px;padding:8px}
+.ft-k{color:var(--biu-color-text-subtle);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.03em}
 .ft-v{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
-.ft-sub{color:var(--dsw-label-3);font-size:11px;margin-top:2px;font-weight:500}
-.ft-bar{height:8px;border-radius:99px;background:var(--dsw-hover);overflow:hidden;margin-top:6px}
-.ft-bar>i{display:block;height:100%;background:var(--dsw-accent,var(--dsw-pick));transition:width .25s}
+.ft-sub{color:var(--biu-color-text-subtle);font-size:11px;margin-top:2px;font-weight:500}
+.ft-bar{height:8px;border-radius:99px;background:var(--biu-color-bg-hover);overflow:hidden;margin-top:6px}
+.ft-bar>i{display:block;height:100%;background:var(--biu-accent,var(--biu-color-emphasis));transition:width .25s}
 .ft-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:6px 0}
-.ft-chip{height:26px;font:inherit;font-size:12px;font-weight:600;padding:0 8px;border-radius:99px;border:1px solid var(--dsw-border);background:transparent;color:var(--dsw-label);cursor:pointer}
-.ft-chip:hover{background:var(--dsw-hover)}
+.ft-chip{height:26px;font:inherit;font-size:12px;font-weight:600;padding:0 8px;border-radius:99px;border:1px solid var(--biu-color-border);background:transparent;color:var(--biu-color-text);cursor:pointer}
+.ft-chip:hover{background:var(--biu-color-bg-hover)}
 .ft-table{border-collapse:collapse;width:100%;font-size:13px}
-.ft-cell{border:1px solid var(--dsw-border);padding:5px 7px;vertical-align:middle}
-.ft-num{width:58px;height:24px;text-align:center;font:inherit;font-variant-numeric:tabular-nums;border:1px solid var(--dsw-border);border-radius:6px;background:var(--dsw-input);color:var(--dsw-label)}
-.ft-exname{width:100%;height:24px;font:inherit;font-size:13px;border:1px solid transparent;background:transparent;color:var(--dsw-label)}
+.ft-cell{border:1px solid var(--biu-color-border);padding:5px 7px;vertical-align:middle}
+.ft-num{width:58px;height:24px;text-align:center;font:inherit;font-variant-numeric:tabular-nums;border:1px solid var(--biu-color-border);border-radius:6px;background:var(--biu-color-bg-input);color:var(--biu-color-text)}
+.ft-exname{width:100%;height:24px;font:inherit;font-size:13px;border:1px solid transparent;background:transparent;color:var(--biu-color-text)}
 .ft-done{text-decoration:line-through;opacity:.55}
-.ft-md{width:100%;box-sizing:border-box;min-height:120px;margin-top:6px;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;border:1px solid var(--dsw-border);border-radius:6px;background:var(--dsw-input);color:var(--dsw-label);padding:6px}
-.ft-alt{color:var(--dsw-label-3);font-size:12px;margin-top:6px}
+.ft-md{width:100%;box-sizing:border-box;min-height:120px;margin-top:6px;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;border:1px solid var(--biu-color-border);border-radius:6px;background:var(--biu-color-bg-input);color:var(--biu-color-text);padding:6px}
+.ft-alt{color:var(--biu-color-text-subtle);font-size:12px;margin-top:6px}
 `
 
 function useStyle() {
@@ -144,7 +144,7 @@ function DayBlock({ data, update, writable }: { data: DayData; update: (p: Parti
     h('div', { className: 'ft-card', key: 'f' },
       h('div', { className: 'ft-k' }, '进食窗口'),
       h('div', { className: 'ft-v' }, `${fastEnd}–${fastStart}`),
-      h('div', { className: 'ft-alt', style: { color: inWindow ? 'var(--dsw-ok,#3fb950)' : undefined } },
+      h('div', { className: 'ft-alt', style: { color: inWindow ? 'var(--biu-color-ok,#3fb950)' : undefined } },
         inWindow ? '窗口内，可以吃' : `空腹中，还剩 ${Math.floor(fastingLeft / 60)}h ${pad(fastingLeft % 60)}m`),
     ),
     h('div', { className: 'ft-card', key: 'm' },
@@ -155,7 +155,7 @@ function DayBlock({ data, update, writable }: { data: DayData; update: (p: Parti
     h('div', { className: 'ft-card', key: 'c' },
       h('div', { className: 'ft-k' }, '咖啡因'),
       h('div', { className: 'ft-v' }, now),
-      h('div', { className: 'ft-alt', style: { color: lastCoffee ? 'var(--dsw-warn,#d29922)' : undefined } },
+      h('div', { className: 'ft-alt', style: { color: lastCoffee ? 'var(--biu-warn,#d29922)' : undefined } },
         lastCoffee ? '已过 15:00，别再喝' : '最后一杯不晚于 15:00'),
     ),
   ]
