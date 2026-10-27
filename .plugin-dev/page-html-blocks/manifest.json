@@ -1,7 +1,7 @@
 {
   "id": "page-html-blocks",
-  "name": "HTML",
-  "blurb": "斜杠插入静态HTML或动态沙箱HTML（React/全局样式，源码走附件）。",
+  "name": "Sandbox",
+  "blurb": "斜杠插入 Sandbox：文档内沙箱跑 React 组件，继承 --biu-*。",
   "tags": [
     "page",
     "editor",

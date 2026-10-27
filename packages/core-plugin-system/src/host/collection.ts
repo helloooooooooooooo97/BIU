@@ -100,6 +100,9 @@ function mergeLifecycle(
   if (installed && sandbox) {
     return omitEmpty({
       ...asInstalledRecord(installed, store),
+      name: sandbox.name,
+      title: sandbox.name,
+      blurb: sandbox.blurb,
       sandbox: true,
       sandboxPath: store.sandboxPath(sandbox.id),
       updatedAt: Math.max(installed.updatedAt, sandbox.updatedAt),
