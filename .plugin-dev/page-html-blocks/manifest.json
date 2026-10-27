@@ -1,0 +1,17 @@
+{
+  "id": "page-html-blocks",
+  "name": "HTML",
+  "blurb": "斜杠插入静态HTML或动态沙箱HTML（React/全局样式，源码走附件）。",
+  "tags": [
+    "page",
+    "editor",
+    "html",
+    "sandbox",
+    "slide"
+  ],
+  "author": "BIU官方",
+  "authorUrl": "https://github.com/helloooooooooooooo97/biu",
+  "createdAt": 1788577761418,
+  "headless": true,
+  "builtin": true
+}
