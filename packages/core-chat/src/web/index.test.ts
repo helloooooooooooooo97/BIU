@@ -72,7 +72,7 @@ test('composer banner and approvals share GET /api/chat/config', () => {
   assert.match(css, /\.chat-config-banner-action\s*\{[^}]*color:\s*var\(--biu-sidebar-fg-active\)/s)
   assert.match(css, /html\.dark \.chat-config-banner\s*\{[^}]*background:\s*#202020/s)
   assert.match(css, /html\.dark \.chat-config-banner\s*\{[^}]*color:\s*#bcbab7/s)
-  assert.match(css, /html\.dark \.chat-config-banner-action\s*\{[^}]*color:\s*#f0efed/s)
+  assert.match(css, /html\.dark \.chat-config-banner-action\s*\{[^}]*color:\s*#d4d4d4/s)
   assert.match(css, /\.composer-model-panel,\s*\n\.composer-model-flyout\s*\{[^}]*background:\s*var\(--biu-sidebar\)/s)
   assert.match(approvals, /getChatConfig/)
   assert.match(config, /seedChatConfig/)
