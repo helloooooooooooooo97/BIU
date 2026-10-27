@@ -214,14 +214,15 @@ export default function App() { return <div>旧</div> }
   })
   assert.equal(clobbered.title, '刊头')
   const payload = JSON.parse(String(updated.data)) as { source?: string; deck?: boolean }
-  assert.equal(payload.deck, false)
+  assert.equal(payload.deck, undefined)
   assert.match(String(payload.source), /<div>新<\/div>/)
   const after = new DatabaseSync(join(root, PAGE_DB))
   const slim = after.prepare('SELECT data_json FROM page_block_index WHERE block_id = ?').get('ab12cd34') as { data_json: string }
   assert.equal(slim.data_json.includes('<div>新</div>'), false)
   after.close()
   const row = await pages.get!(pageId)
-  assert.match(String(row?.notes), /id=ab12cd34 title="刊头" deck=false/)
+  assert.match(String(row?.notes), /id=ab12cd34 title="刊头"/)
+  assert.doesNotMatch(String(row?.notes), /\bdeck=/)
   assert.match(String(row?.notes), /<div>新<\/div>/)
   assert.match(String(row?.notes), /刊头/)
   assert.equal(blocks.create, undefined)

@@ -22,3 +22,11 @@ test('jsx default export compiles after stripping react import', () => {
 test('empty source fails', () => {
   assert.deepEqual(compileSandboxSource('  '), { ok: false, error: 'empty source' })
 })
+
+test('sandbox mount flushes react before pick stamp', async () => {
+  const { readFile } = await import('node:fs/promises')
+  const { resolve } = await import('node:path')
+  const src = await readFile(resolve(import.meta.dirname, '../web/sandbox.ts'), 'utf8')
+  assert.match(src, /flushSync/)
+  assert.match(src, /data-sandbox-root/)
+})

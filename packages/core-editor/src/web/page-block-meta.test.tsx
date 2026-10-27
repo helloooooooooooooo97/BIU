@@ -46,7 +46,8 @@ test('sandbox pageBlock fence stores React source, not an HTML file', () => {
     source: 'export default function App() { return <div>爱乐之城</div> }',
     deck: true,
   })
-  assert.match(src, /:::pageBlock \{kind=sandbox plugin=page-sandbox deck=true\}/)
+  assert.match(src, /:::pageBlock \{kind=sandbox plugin=page-sandbox\}/)
+  assert.doesNotMatch(src, /\bdeck=/)
   assert.match(src, /export default function App/)
   assert.match(src, /爱乐之城/)
   assert.doesNotMatch(src, /"file":/)
@@ -103,7 +104,7 @@ test('page block fence format then parse roundtrips kind plugin id and data', ()
   assert.equal(box.id, 'sandbx01')
   assert.equal(box.data.source, 'export default function App(){return <div/>}')
   assert.equal(box.data.file, undefined)
-  assert.equal(box.data.deck, true)
+  assert.equal(box.data.deck, undefined)
   assert.equal(box.data.title, '海报')
   const video = readPageBlockFence(formatPageBlockFence('video', 'page-video', { script: '<timeline></timeline>' }, 'viddemo1'))
   assert.equal(video.kind, 'video')

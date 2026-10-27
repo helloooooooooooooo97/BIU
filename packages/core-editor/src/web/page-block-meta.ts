@@ -170,6 +170,7 @@ export function formatPageBlockFence(kind: string, plugin: string, data: Record<
   const body = { ...data }
   delete body.cloneFrom
   if (kind === SANDBOX_KIND) {
+    delete body.deck
     const extras = fenceAttrExtras(body)
     const source = typeof body.source === 'string' ? body.source : typeof body.html === 'string' ? body.html : ''
     return `:::pageBlock ${formatMeta(kind, plugin, extras, id)}\n${source}\n:::`

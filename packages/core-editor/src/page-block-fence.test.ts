@@ -36,7 +36,8 @@ test('listPageBlockFences reads id kind plugin and body', () => {
 
 test('patchPageBlockMarkdown merges attrs of one id and leaves the rest', () => {
   const next = patchPageBlockMarkdown(doc, 'ab12cd34', { data: { source: '<div>新</div>', deck: false } })
-  assert.match(next, /id=ab12cd34 deck=false/)
+  assert.match(next, /id=ab12cd34/)
+  assert.doesNotMatch(next, /\bdeck=/)
   assert.match(next, /<div>新<\/div>/)
   assert.match(next, /id=ef90ab12/)
   assert.match(next, /assets\/board.json/)

@@ -6,16 +6,12 @@ import { EditorState } from '@codemirror/state'
 import { EditorView, drawSelection, keymap, lineNumbers } from '@codemirror/view'
 import {
   ArrowPathIcon,
-  ArrowsPointingInIcon,
-  ArrowsPointingOutIcon,
   CodeBracketIcon,
   CubeTransparentIcon,
   EyeIcon,
 } from '@heroicons/react/16/solid'
 import { tags } from '@lezer/highlight'
-import { createPortal } from 'react-dom'
 import { compileSandboxSource } from '../shared/compile.ts'
-import { bindSandboxSlide, collectSandboxSlides, cssBoxSize, sandboxDeckEnabled, sandboxDeckIndex, sandboxDeckKeyAction, sandboxLooksFillLayout, stepSandboxDeck } from './sandbox-deck.ts'
 import { mountSandbox, unmountSandbox } from './sandbox.ts'
 import { sandboxBlockKey, stampSandboxPickSurfaces } from './stamp-picks.ts'
 
@@ -275,223 +271,19 @@ function sandboxTitle(raw: unknown) {
   return text || 'Sandbox'
 }
 
-const barBtn: Record<string, unknown> = {
-  cursor: 'pointer',
-  border: 'none',
-  borderRadius: 6,
-  padding: '4px 8px',
-  background: 'transparent',
-  color: '#c9cdd6',
-  fontWeight: 700,
-  fontSize: 11,
-  lineHeight: '16px',
-  display: 'inline-flex',
-  alignItems: 'center',
+function cssBoxSize(value: unknown): string | undefined {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) return `${Math.round(value)}px`
+  if (typeof value !== 'string') return undefined
+  const text = value.trim()
+  return text || undefined
 }
 
-function SandboxDeckOverlay({
-  slides,
-  index,
-  onIndex,
-  onClose,
-}: {
-  slides: ReturnType<typeof collectSandboxSlides>
-  index: number
-  onIndex: (next: number) => void
-  onClose: () => void
-}) {
-  const closeRef = useRef(onClose)
-  closeRef.current = onClose
-  const boxRef = useRef<HTMLDivElement | null>(null)
-  const [navHot, setNavHot] = useState(false)
-  const slide = slides[index]
-  const total = slides.length
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      const action = sandboxDeckKeyAction(event.key)
-      if (action == null) return
-      if (action === 'close') {
-        closeRef.current()
-        return
-      }
-      event.preventDefault()
-      event.stopPropagation()
-      if (action === 'first') onIndex(0)
-      else if (action === 'last') onIndex(Math.max(0, total - 1))
-      else onIndex(stepSandboxDeck(index, action, total))
-    }
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
-  }, [index, onIndex, total])
-
-  useEffect(() => {
-    const root = document.documentElement
-    let gone = false
-    void Promise.resolve(root.requestFullscreen?.({ navigationUI: 'hide' })).catch(() => {})
-    const onFs = () => {
-      if (gone) return
-      if (document.fullscreenElement) return
-      closeRef.current()
-    }
-    document.addEventListener('fullscreenchange', onFs)
-    return () => {
-      gone = true
-      document.removeEventListener('fullscreenchange', onFs)
-      if (document.fullscreenElement) void document.exitFullscreen?.()
-    }
-  }, [])
-
-  if (!slide) return null
-  const fill = {
-    position: 'absolute' as const,
-    inset: 0,
-    width: '100%',
-    height: '100%',
-    maxWidth: 'none',
-    maxHeight: 'none',
-    minWidth: 0,
-    minHeight: 0,
-    border: 'none',
-    boxSizing: 'border-box' as const,
-  }
-  return createPortal(
-    <div
-      ref={boxRef}
-      data-testid="sandbox-deck"
-      data-biu-ignore
-      tabIndex={0}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        width: '100%',
-        height: '100%',
-        maxWidth: 'none',
-        zIndex: 2147483646,
-        display: 'flex',
-        flexDirection: 'column',
-        background: '#0b0b12',
-        color: '#e6edf3',
-        font: '13px/1.4 ui-sans-serif, system-ui, sans-serif',
-      }}
-    >
-      <style>{`[data-testid="sandbox-deck"]:fullscreen,[data-testid="sandbox-deck"]:-webkit-full-screen{inset:0!important;width:100%!important;height:100%!important;max-width:none!important;max-height:none!important}[data-testid="sandbox-deck-slide"]>*{width:100%!important;height:100%!important;max-width:none!important;box-sizing:border-box}`}</style>
-      <div
-        data-testid="sandbox-deck-stage"
-        style={{
-          position: 'relative',
-          flex: 1,
-          minHeight: 0,
-          width: '100%',
-          height: '100%',
-          overflow: 'hidden',
-          boxSizing: 'border-box',
-        }}
-      >
-        <div data-testid="sandbox-deck-slide" style={{ ...fill, background: 'var(--biu-color-bg)' }}>
-          <SandboxPreview source={slide.source} />
-        </div>
-      </div>
-      <div
-        data-testid="sandbox-deck-nav"
-        onMouseEnter={() => setNavHot(true)}
-        onMouseLeave={() => setNavHot(false)}
-        style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          bottom: 0,
-          zIndex: 2,
-          display: 'flex',
-          alignItems: 'flex-end',
-          justifyContent: 'center',
-          height: 96,
-          padding: '0 16px 18px',
-          background: navHot ? 'linear-gradient(transparent, rgba(0,0,0,.55))' : 'transparent',
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 10,
-            opacity: navHot ? 1 : 0,
-            transition: 'opacity 160ms ease',
-            pointerEvents: navHot ? 'auto' : 'none',
-          }}
-        >
-          <button type="button" style={{ ...barBtn, ...(index <= 0 ? { opacity: 0.35, cursor: 'default' } : {}) }} disabled={index <= 0} onClick={() => onIndex(stepSandboxDeck(index, -1, total))} aria-label="上一张">
-            上一张
-          </button>
-          <span data-testid="sandbox-deck-index" style={{ color: '#8b93a7', minWidth: 64, textAlign: 'center' }}>
-            {index + 1} / {total}
-          </span>
-          <button
-            type="button"
-            style={{ ...barBtn, ...(index >= total - 1 ? { opacity: 0.35, cursor: 'default' } : {}) }}
-            disabled={index >= total - 1}
-            onClick={() => onIndex(stepSandboxDeck(index, 1, total))}
-            aria-label="下一张"
-          >
-            下一张
-          </button>
-          <button type="button" data-page-block-expand="" style={{ ...barBtn, marginLeft: 12 }} onClick={onClose} title="退出放映" aria-label="退出放映">
-            <ArrowsPointingInIcon style={chromeIcon} />
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body,
-  )
-}
-
-function useSandboxDeck(
-  hostRef: { current: HTMLElement | null },
-  source: string,
-  opts?: { width?: unknown; height?: unknown; deck?: boolean },
-) {
-  const [open, setOpen] = useState(false)
-  const [index, setIndex] = useState(0)
-  const [slides, setSlides] = useState<ReturnType<typeof collectSandboxSlides>>([])
-  const width = opts?.width
-  const height = opts?.height
-  const deck = sandboxDeckEnabled(opts?.deck)
-
-  useLayoutEffect(() => {
-    const host = hostRef.current?.closest('[data-page-block]') ?? null
-    bindSandboxSlide(host, {
-      kind: 'sandbox',
-      source,
-      deck,
-      ...(width != null && width !== '' ? { width: width as number | string } : {}),
-      ...(height != null && height !== '' ? { height: height as number | string } : {}),
-    })
-    return () => bindSandboxSlide(host, null)
-  }, [hostRef, source, width, height, deck])
-
-  const start = () => {
-    const host = hostRef.current?.closest('[data-page-block]') ?? null
-    const list = collectSandboxSlides(host)
-    if (!list.length) return
-    setSlides(list)
-    setIndex(sandboxDeckIndex(list, host))
-    setOpen(true)
-  }
-
-  const overlay = open ? (
-    <SandboxDeckOverlay
-      slides={slides.length ? slides : collectSandboxSlides(hostRef.current?.closest('[data-page-block]') ?? null)}
-      index={index}
-      onIndex={(next) => {
-        const host = hostRef.current?.closest('[data-page-block]') ?? null
-        setSlides(collectSandboxSlides(host))
-        setIndex(next)
-      }}
-      onClose={() => setOpen(false)}
-    />
-  ) : null
-
-  return { start, overlay }
+function sandboxLooksFillLayout(source: string) {
+  const head = source.trim().slice(0, 1600)
+  const pct = /\bheight\s*:\s*100%\b/i.test(head) || /\bheight\s*:\s*100vh\b/i.test(head)
+  const clipped = /\boverflow\s*:\s*hidden\b/i.test(head)
+  const abs = (source.match(/\bposition\s*:\s*absolute\b/gi) ?? []).length >= 3
+  return (pct && clipped) || (pct && abs) || (clipped && abs)
 }
 
 const SANDBOX_DEFAULT_HEIGHT = 280
@@ -578,7 +370,6 @@ function SandboxBar({
   onTab,
   ro,
   onRefresh,
-  onExpand,
 }: {
   title: string
   onTitle: (next: string) => void
@@ -586,7 +377,6 @@ function SandboxBar({
   onTab: (next: 'preview' | 'code') => void
   ro: boolean
   onRefresh: () => void
-  onExpand: () => void
 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(title)
@@ -715,23 +505,6 @@ function SandboxBar({
         >
           <ArrowPathIcon style={chromeIcon} />
         </button>
-        <button
-          type="button"
-          tabIndex={-1}
-          data-page-block-expand=""
-          data-testid="sandbox-deck-expand"
-          title="放大"
-          aria-label="放大"
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={onExpand}
-          style={{
-            ...chromeIconBtn,
-            width: 'var(--biu-size-control-md)',
-            height: 'var(--biu-size-control-md)',
-          }}
-        >
-          <ArrowsPointingOutIcon style={chromeIcon} />
-        </button>
       </div>
     </div>
   )
@@ -786,11 +559,9 @@ function SandboxCard({ data, update, writable }: BlockProps) {
   const width = data.width
   const height = data.height == null || data.height === '' ? SANDBOX_DEFAULT_HEIGHT : data.height
   const fill = sandboxLooksFillLayout(source)
-  const deckOn = sandboxDeckEnabled(data.deck)
   const [tab, setTab] = useState<'preview' | 'code'>('preview')
   const [frame, setFrame] = useState(0)
   const hostRef = useRef<HTMLDivElement | null>(null)
-  const deck = useSandboxDeck(hostRef, source, { width, height, deck: deckOn })
   const compiled = useMemo(() => compileSandboxSource(source), [source])
   const editing = tab === 'code'
 
@@ -824,7 +595,6 @@ function SandboxCard({ data, update, writable }: BlockProps) {
           live.reload()
           setFrame((n) => n + 1)
         }}
-        onExpand={deck.start}
       />
       <div style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'auto' }}>
         {editing ? (
@@ -843,7 +613,6 @@ function SandboxCard({ data, update, writable }: BlockProps) {
         )}
         {ro ? null : <HeightGrip boxRef={hostRef} onHeight={(next) => update({ height: next })} />}
       </div>
-      {deck.overlay}
     </div>
     </ReUI>
   )
@@ -872,7 +641,7 @@ export function apply(ctx: {
     blockTypeLabel: 'Sandbox',
     hint: '沙箱里跑 React 组件，继承 --biu-*',
     aliases: ['sandbox', '沙箱'],
-    defaults: () => ({ source: SANDBOX_SAMPLE, deck: true, title: 'Sandbox', height: SANDBOX_DEFAULT_HEIGHT }),
+    defaults: () => ({ source: SANDBOX_SAMPLE, title: 'Sandbox', height: SANDBOX_DEFAULT_HEIGHT }),
     View: SandboxCard,
   })
 }
