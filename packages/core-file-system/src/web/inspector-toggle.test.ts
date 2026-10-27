@@ -807,7 +807,7 @@ test('create record sits at the right of the toolbar with a blue label', () => {
   assert.match(readFileSync(resolve(import.meta.dirname, './cell-pop-draft.tsx'), 'utf8'), /autoOpen/)
   assert.match(browser, /schemaTagTone\(flat\.packId\)/)
   assert.match(browser, /className=\{\[col\.key === schema\?\.labelField \? 'is-pin-col' : '', tone \? 'is-facet-col' : ''\]\.filter\(Boolean\)\.join\(' '\) \|\| undefined\}/)
-  assert.match(css, /\.tasks-table th\.is-facet-col\{[^}]*color:var\(--biu-color-text,var\(--biu-color-text\)\)/)
+  assert.match(css, /\.tasks-table th\.is-facet-col\{[^}]*color:var\(--biu-color-text\)/)
   assert.match(css, /\.tasks-table th\.is-facet-col\{[^}]*background:color-mix\(in srgb,var\(--biu-tag\) 38%,var\(--biu-color-surface\)\)/)
   assert.match(css, /\.tasks-table\.is-wrap\{[^}]*white-space:normal/)
   assert.match(css, /\.tasks-table th,\.fsdb-page \.tasks-table\.is-wrap th\{[^}]*white-space:nowrap/)

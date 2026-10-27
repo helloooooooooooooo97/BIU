@@ -153,7 +153,7 @@ test('list permission column uses the same capsule and loads the chain on click'
   assert.match(labelSrc, /className=\{`fsdb-scope-tag is-\$\{accessTone\(label\)\}`\}/)
   assert.match(css, /\.fsdb-scope-tag\.is-manage[^{]*\{[^}]*background:var\(--biu-color-bg-hover\)/)
   assert.match(css, /\.fsdb-scope-tag\.is-manage[^{]*\{[^}]*color:var\(--biu-color-text-muted\)/)
-  assert.doesNotMatch(css, /\.fsdb-scope-tag\.is-manage[^{]*\{[^}]*--biu-color-text/)
+  assert.doesNotMatch(css, /\.fsdb-scope-tag\.is-manage[^{]*\{[^}]*--biu-color-text:/)
   assert.doesNotMatch(css, /\.fsdb-scope-tag\.is-manage[^{]*\{[^}]*#2c2c2b/)
   assert.match(
     css,

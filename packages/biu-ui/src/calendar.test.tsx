@@ -12,8 +12,8 @@ test('Calendar uses Tailwind token classes and no injected CSS', () => {
   assert.match(src, /function Calendar/)
   assert.match(src, /from 'class-variance-authority'/)
   assert.match(src, /border-biu-border/)
-  assert.match(src, /rounded-\[6px\]/)
-  assert.match(src, /h-\[26px\]/)
+  assert.match(src, /rounded-\[var\(--biu-radius-md\)\]/)
+  assert.match(src, /h-\[var\(--biu-size-control-md\)\]/)
   assert.doesNotMatch(src, /createElement\('style'\)/)
 })
 

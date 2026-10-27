@@ -50,7 +50,7 @@ test('message outline is a left rail of ticks with a hover menu', () => {
   assert.match(css, /\.chat-outline-panel\s*\{[^}]*border-radius:\s*8px/s)
   assert.match(css, /\.chat-outline-panel\s*\{[^}]*backdrop-filter:\s*blur\(24px\)\s*saturate\(1\.3\)/s)
   assert.match(css, /\.chat-outline-panel\s*\{[^}]*background:\s*rgba\(32,\s*32,\s*32,\s*0\.92\)/s)
-  assert.match(css, /\.chat-outline-panel\s*\{[^}]*border:\s*var(--biu-stroke-width) solid var\(--biu-color-border-strong\)/s)
+  assert.match(css, /\.chat-outline-panel\s*\{[^}]*border:\s*var\(--biu-stroke-width\) solid var\(--biu-color-border-strong\)/s)
   assert.match(css, /html:not\(\.dark\) \.chat-outline-panel\s*\{[^}]*background:\s*rgba\(249,\s*248,\s*247,\s*0\.94\)/s)
   assert.match(css, /\.chat-outline-tick::after\s*\{[^}]*width:\s*10px/s)
   assert.match(css, /\.chat-outline-tick::after\s*\{[^}]*height:\s*2px/s)

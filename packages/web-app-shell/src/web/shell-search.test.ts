@@ -128,7 +128,7 @@ test('session task page plugin hits render tags left of actions', () => {
   assert.match(css, /\.shell-search-hit-action:hover\s*\{[^}]*color:\s*var\(--biu-color-icon-active\)/s)
   assert.match(css, /\.shell-search-hit-action\s*\{[^}]*padding:\s*3px/s)
   assert.match(css, /\.shell-search-hit-action:hover\s*\{[^}]*background:\s*var\(--biu-color-bg-hover\)/s)
-  assert.match(css, /\.shell-search-hit-action\[data-dock-tip\]::after\s*\{[^}]*z-index:\s*80/s)
+  assert.match(css, /\.shell-search-hit-action\[data-dock-tip\]::after\s*\{[^}]*z-index:\s*var\(--biu-z-float\)/s)
   assert.doesNotMatch(css, /\.shell-search-hit-action\[data-dock-tip\]::after\s*\{[^}]*top:\s*calc/s)
 })
 

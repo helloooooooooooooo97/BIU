@@ -13,7 +13,7 @@ test('Input uses Tailwind token classes', () => {
   assert.match(src, /bg-biu-input/)
   assert.match(src, /border-biu-border/)
   assert.match(src, /focus:border-biu-emphasis/)
-  assert.match(src, /h-\[26px\]/)
+  assert.match(src, /h-\[var\(--biu-size-control-md\)\]/)
   assert.doesNotMatch(src, /createElement\('style'\)/)
 })
 

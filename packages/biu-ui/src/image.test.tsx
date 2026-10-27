@@ -12,7 +12,7 @@ test('Image uses Tailwind token classes and no injected CSS', () => {
   assert.match(src, /function ImageRoot/)
   assert.match(src, /biu-image-skeleton/)
   assert.match(src, /border-biu-border/)
-  assert.match(src, /rounded-\[6px\]/)
+  assert.match(src, /rounded-\[var\(--biu-radius-md\)\]/)
   assert.doesNotMatch(src, /createElement\('style'\)/)
 })
 

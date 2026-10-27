@@ -12,8 +12,8 @@ test('Button uses Tailwind token classes', () => {
   assert.match(src, /function Button/)
   assert.match(src, /from 'class-variance-authority'/)
   assert.match(src, /bg-biu-hover/)
-  assert.match(src, /h-\[26px\]/)
-  assert.match(src, /rounded-\[6px\]/)
+  assert.match(src, /h-\[var\(--biu-size-control-md\)\]/)
+  assert.match(src, /rounded-\[var\(--biu-radius-md\)\]/)
   assert.doesNotMatch(src, /createElement\('style'\)/)
 })
 

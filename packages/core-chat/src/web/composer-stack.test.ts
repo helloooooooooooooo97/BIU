@@ -44,7 +44,7 @@ describe('composer dock stacking above sticky user', () => {
     expect(shell).not.toMatch(/bottom-0 z-\[2\]/)
     expect(css).toMatch(/html:not\(\.dark\) \.composer-send,\s*\nhtml:not\(\.dark\) \.composer-send:disabled\s*\{[^}]*color:\s*var\(--biu-color-text-muted\)/s)
     expect(css).toMatch(/html\.dark \.composer-send,\s*\nhtml\.dark \.composer-send:disabled\s*\{[^}]*background:\s*var\(--biu-color-text\)/s)
-    expect(css).toMatch(/html\.dark \.composer-send,\s*\nhtml\.dark \.composer-send:disabled\s*\{[^}]*border:\s*var(--biu-stroke-width) solid var\(--biu-color-text\)/s)
+    expect(css).toMatch(/html\.dark \.composer-send,\s*\nhtml\.dark \.composer-send:disabled\s*\{[^}]*border:\s*var\(--biu-stroke-width\) solid var\(--biu-color-text\)/s)
   })
 
   it('compose-only overlay hides the reply thread until the expand control', () => {
@@ -100,7 +100,7 @@ describe('composer dock stacking above sticky user', () => {
     expect(composer).toMatch(/controlGoal\('resume'\)[\s\S]*onMouseDown=\{\(event\) => event\.preventDefault\(\)\}/)
     expect(composer).not.toMatch(/composer-goal-btn[^>]*>\s*暂停/)
     expect(css).toMatch(/\.composer-goal-btn\s*\{[^}]*width:\s*28px/s)
-    expect(css).toMatch(/\.composer-goal\s*\{[^}]*border:\s*var(--biu-stroke-width) solid var\(--biu-color-border\)/s)
+    expect(css).toMatch(/\.composer-goal\s*\{[^}]*border:\s*var\(--biu-stroke-width\) solid var\(--biu-color-border\)/s)
     expect(css).not.toMatch(/\.composer-goal\.is-pursuing/)
   })
 
@@ -168,7 +168,7 @@ describe('composer dock stacking above sticky user', () => {
     expect(css).toMatch(/\.chat-overlay-panel\s*\{[^}]*overflow:\s*hidden/s)
     expect(css).toMatch(/\.chat-overlay-panel\s*\{[^}]*background:\s*transparent/s)
     expect(css).toMatch(/\.chat-overlay-panel \.chat-pane\s*\{[^}]*background:\s*var\(--biu-color-bg-subtle\)/s)
-    expect(css).toMatch(/\.chat-overlay-panel \.chat-pane\s*\{[^}]*border:\s*var(--biu-stroke-width) solid var\(--biu-color-border\)/s)
+    expect(css).toMatch(/\.chat-overlay-panel \.chat-pane\s*\{[^}]*border:\s*var\(--biu-stroke-width\) solid var\(--biu-color-border\)/s)
     expect(css).toMatch(/\.chat-overlay-panel \.chat-pane\s*\{[^}]*border-radius:\s*8px/s)
     expect(css).toMatch(/\.chat-overlay-panel \.chat-pane\s*\{[^}]*padding-inline:\s*10px/s)
     expect(css).not.toMatch(/\.chat-overlay-panel \.chat-pane\s*\{[^}]*backdrop-filter:\s*blur/s)
@@ -195,9 +195,9 @@ describe('composer dock stacking above sticky user', () => {
     expect(css).toMatch(/\.chat-overlay-panel \.composer-editor\s*\{[^}]*max-height:\s*min\(calc\(8 \* 28px\), 35dvh\)/s)
     expect(css).toMatch(/\.chat-overlay-panel \.chat-composer-dock\s*\{[^}]*padding:\s*0/s)
     expect(css).toMatch(/\.chat-overlay-panel \.chat-composer-dock\s*\{[^}]*background:\s*transparent/s)
-    expect(css).toMatch(/\.composer-pill\s*\{[^}]*border:\s*var(--biu-stroke-width) solid var\(--biu-color-border\)/s)
+    expect(css).toMatch(/\.composer-pill\s*\{[^}]*border:\s*var\(--biu-stroke-width\) solid var\(--biu-color-border\)/s)
     expect(css).toMatch(/\.composer-pill\s*\{[^}]*box-shadow:\s*none/s)
-    expect(css).toMatch(/\.chat-overlay-panel \.composer-pill\s*\{[^}]*border:\s*var(--biu-stroke-width) solid var\(--biu-color-border\)/s)
+    expect(css).toMatch(/\.chat-overlay-panel \.composer-pill\s*\{[^}]*border:\s*var\(--biu-stroke-width\) solid var\(--biu-color-border\)/s)
     expect(css).toMatch(/\.chat-overlay-panel\.is-compose-only \.chat-pane \.chat-composer-dock\s*\{[^}]*background:\s*transparent/s)
     expect(css).toMatch(/\.chat-pane \.chat-composer-dock\s*\{[^}]*z-index:\s*10/s)
     expect(css).toMatch(/\.chat-pane-embed\s*\{[^}]*background:\s*var\(--biu-color-bg\)/s)
@@ -235,10 +235,10 @@ describe('composer dock stacking above sticky user', () => {
     expect(approvals).not.toMatch(/project-chip-clear-ctx/)
     expect(approvals).not.toMatch(/Command\+E/)
     expect(approvals).not.toMatch(/project-chip-hist-bar/)
-    expect(css).toMatch(/\.project-chip\s*\{[^}]*border:\s*var(--biu-stroke-width) solid var\(--biu-color-border\)/s)
-    expect(css).not.toMatch(/\.project-chip\.project-chip-clear-ctx\s*\{[^}]*border:\s*var(--biu-stroke-width) solid #d9730d/s)
+    expect(css).toMatch(/\.project-chip\s*\{[^}]*border:\s*var\(--biu-stroke-width\) solid var\(--biu-color-border\)/s)
+    expect(css).not.toMatch(/\.project-chip\.project-chip-clear-ctx\s*\{[^}]*border:\s*var\(--biu-stroke-width\) solid #d9730d/s)
     // 选取开关只靠文字色表达状态，不要额外描一圈强调色的边。
-    expect(css).not.toMatch(/\.project-chip\.project-chip-pick-toggle\s*\{[^}]*border:\s*var(--biu-stroke-width) solid var\(--biu-color-emphasis\)/s)
+    expect(css).not.toMatch(/\.project-chip\.project-chip-pick-toggle\s*\{[^}]*border:\s*var\(--biu-stroke-width\) solid var\(--biu-color-emphasis\)/s)
     expect(css).toMatch(
       /\.project-chip\.project-chip-follow-toggle\.is-active:hover:not\(:disabled\)\s*\{[^}]*border-color:\s*var\(--biu-color-border\)/s,
     )
