@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, test } from 'vitest'
 import { openAndMigrateBiu, runWithAccount, runWithRequestWorkspace } from '@biu/host-plugin-loader/data-dir'
-import { CollabError, CollabStore } from './store.ts'
+import { CollabError, CollabStore, registerBuiltinPluginLookup } from './store.ts'
 
 const dirs: string[] = []
 
@@ -53,6 +53,24 @@ test('a record cannot be claimed by two workspaces', () => {
   collab.claim(ada.id, adaWorkspace.id, '/pages', 'shared-id')
   assert.throws(() => collab.claim(bob.id, bobWorkspace.id, '/pages', 'shared-id'), /另一个空间/)
   assert.throws(() => collab.attach(bobWorkspace.id, '/pages', 'shared-id'), /另一个空间/)
+})
+
+test('builtin plugin records are not claimed by a workspace', () => {
+  const stop = registerBuiltinPluginLookup((id) => id === 'page-html-blocks')
+  try {
+    const collab = store()
+    const ada = collab.register('Ada')
+    const home = collab.createWorkspace(ada.id, 'A')
+    const local = collab.createWorkspace(ada.id, 'B')
+    runWithAccount(ada.id, () => {
+      collab.attach(home.id, '/plugins', 'page-html-blocks')
+      collab.attach(local.id, '/plugins', 'page-html-blocks')
+    })
+    assert.equal(collab.recordIds(home.id, '/plugins').has('page-html-blocks'), false)
+    assert.equal(collab.recordIds(local.id, '/plugins').has('page-html-blocks'), false)
+  } finally {
+    stop()
+  }
 })
 
 test('online mode denies record reads without an account context', () => {

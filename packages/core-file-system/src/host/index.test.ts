@@ -2511,6 +2511,60 @@ test('builtin plugins stay visible in the workspace plugin list', async () => {
   }
 })
 
+test('reinstalling a builtin plugin does not claim another workspace record', async () => {
+  const previous = process.env.BIU_ONLINE
+  process.env.BIU_ONLINE = '1'
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  const packed: string[] = []
+  db.register({
+    id: 'plugins',
+    path: '/plugins',
+    schema: {
+      labelField: 'title',
+      fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string' }, builtin: { type: 'boolean' } },
+    },
+    list: () => [{ id: 'page-html-blocks', title: 'HTML', builtin: true }],
+    get: (id) => (id === 'page-html-blocks' ? { id, title: 'HTML', builtin: true } : null),
+    actions: [
+      {
+        id: 'pack',
+        label: '安装',
+        requiredAction: 'resource:read',
+        run: async (id) => {
+          packed.push(id)
+        },
+      },
+    ],
+  })
+  const dir = mkdtempSync(join(tmpdir(), 'biu-db-repack-builtin-'))
+  const collab = new CollabStore(openAndMigrateBiu(join(dir, 'biu.sqlite')))
+  class AccountBridge extends Service {
+    store = collab
+    authorization = collab.authorization
+    workspaceLocation = () => 'device' as const
+    constructor(inner: Context) {
+      super(inner, 'account')
+    }
+  }
+  try {
+    await ctx.plugin(AccountBridge)
+    const ada = collab.register('', Date.now(), 'secret1', 'repack-ada@example.com')
+    const home = collab.createWorkspace(ada.id, '先建的空间')
+    const local = collab.createWorkspace(ada.id, '本机空间')
+    collab.setActive(ada.id, home.id)
+    runWithAccount(ada.id, () => collab.attach(home.id, '/plugins', 'page-html-blocks'))
+    collab.setActive(ada.id, local.id)
+    await runWithAccount(ada.id, () => db.action('/plugins/page-html-blocks', 'pack'))
+    assert.deepEqual(packed, ['page-html-blocks'])
+    assert.equal(collab.recordIds(local.id, '/plugins').has('page-html-blocks'), false)
+    assert.equal(collab.recordIds(home.id, '/plugins').has('page-html-blocks'), true)
+  } finally {
+    if (previous === undefined) delete process.env.BIU_ONLINE
+    else process.env.BIU_ONLINE = previous
+  }
+})
+
 test('a member sandbox is private until the owner shares it', async () => {
   const previous = process.env.BIU_ONLINE
   process.env.BIU_ONLINE = '1'

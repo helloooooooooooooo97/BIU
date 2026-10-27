@@ -1923,6 +1923,7 @@ export class CollabStore {
       | { owner_id: string }
       | undefined
     if (!owner) throw new CollabError('工作区不存在', 404)
+    if (collection === '/plugins' && isRegisteredBuiltinPlugin(recordId)) return
     const caller = currentAccountId()
     const recordOwner = caller || owner.owner_id
     const elsewhere = this.db
