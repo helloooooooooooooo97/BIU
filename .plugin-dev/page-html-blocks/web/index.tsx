@@ -1,4 +1,12 @@
-import { ReUI, Textarea } from '@biu/reui'
+import { Input, ReUI, Textarea } from '@biu/reui'
+import {
+  ArrowPathIcon,
+  ArrowsPointingInIcon,
+  ArrowsPointingOutIcon,
+  CodeBracketIcon,
+  CubeTransparentIcon,
+  EyeIcon,
+} from '@heroicons/react/16/solid'
 import { createPortal } from 'react-dom'
 import { compileHtmlSource } from '../shared/compile.ts'
 import { bindHtmlSlide, collectHtmlSlides, cssBoxSize, htmlDeckEnabled, htmlDeckIndex, htmlDeckKeyAction, htmlLooksFillLayout, HTML_FILL_HOST_PX, stepHtmlDeck } from './html-deck.ts'
@@ -200,7 +208,7 @@ function SourceEditor({
         event.stopPropagation()
       }}
       onChange={(e) => setDraft(e.target.value)}
-      placeholder={'<div style="...">…</div>'}
+      placeholder={'export default function App() {\n  return <div />\n}'}
       style={{
         ...field,
         width: '100%',
@@ -229,29 +237,11 @@ function SourceEditor({
   )
 }
 
-function Glyph({ d }: { d: string }) {
-  return (
-    <svg width={14} height={14} viewBox="0 0 16 16" fill="currentColor" aria-hidden>
-      <path fillRule="evenodd" d={d} />
-    </svg>
-  )
-}
+const chromeIcon = { width: 14, height: 14, flexShrink: 0 } as const
 
-const ICON_SANDBOX =
-  'M3.5 2.75A.75.75 0 0 1 4.25 2h7.5a.75.75 0 0 1 .75.75V6h-1.5V3.5h-6V6h-1.5V2.75ZM2 7.25A.75.75 0 0 1 2.75 6.5h10.5a.75.75 0 0 1 .75.75v5.5a.75.75 0 0 1-.75.75H2.75a.75.75 0 0 1-.75-.75v-5.5ZM4 9h8v3H4V9Z'
-const ICON_PREVIEW =
-  'M8 3.5c-2.49 0-4.64 1.47-6.05 3.67a1.84 1.84 0 0 0 0 1.66C3.36 11.03 5.51 12.5 8 12.5s4.64-1.47 6.05-3.67a1.84 1.84 0 0 0 0-1.66C12.64 4.97 10.49 3.5 8 3.5ZM8 10a2 2 0 1 1 0-4 2 2 0 0 1 0 4Z'
-const ICON_CODE =
-  'M4.72 4.22a.75.75 0 0 1 0 1.06L2.5 7.5l2.22 2.22a.75.75 0 1 1-1.06 1.06L.72 7.84a.75.75 0 0 1 0-1.06l2.94-2.94a.75.75 0 0 1 1.06 0Zm6.56 0a.75.75 0 0 1 1.06 0l2.94 2.94a.75.75 0 0 1 0 1.06l-2.94 2.94a.75.75 0 1 1-1.06-1.06L13.5 7.5l-2.22-2.22a.75.75 0 0 1 0-1.06ZM8.22 2.47a.75.75 0 0 1 .47.95l-2.5 8.5a.75.75 0 1 1-1.42-.48l2.5-8.5a.75.75 0 0 1 .95-.47Z'
-const ICON_REFRESH =
-  'M8 1.5a.75.75 0 0 1 .75.75v1.63A5.75 5.75 0 1 1 2.25 8a.75.75 0 0 1 1.5 0 4.25 4.25 0 1 0 4.25-4.25H6.06l.72.72a.75.75 0 1 1-1.06 1.06L3.47 3.97a.75.75 0 0 1 0-1.06l2.25-2.25a.75.75 0 0 1 1.06 1.06L6.06 2.44h1.19A.75.75 0 0 1 8 1.5Z'
-const ICON_EXPAND =
-  'M2.75 9a.75.75 0 0 1 .75.75v1.69l2.22-2.22a.75.75 0 0 1 1.06 1.06L4.56 12.5h1.69a.75.75 0 0 1 0 1.5h-3.5a.75.75 0 0 1-.75-.75v-3.5A.75.75 0 0 1 2.75 9ZM2.75 7a.75.75 0 0 0 .75-.75V4.56l2.22 2.22a.75.75 0 0 0 1.06-1.06L4.56 3.5h1.69a.75.75 0 0 0 0-1.5h-3.5a.75.75 0 0 0-.75.75v3.5c0 .414.336.75.75.75ZM13.25 9a.75.75 0 0 0-.75.75v1.69l-2.22-2.22a.75.75 0 1 0-1.06 1.06l2.22 2.22H9.75a.75.75 0 0 0 0 1.5h3.5a.75.75 0 0 0 .75-.75v-3.5a.75.75 0 0 0-.75-.75ZM13.25 7a.75.75 0 0 1-.75-.75V4.56l-2.22 2.22a.75.75 0 1 1-1.06-1.06l2.22-2.22H9.75a.75.75 0 0 1 0-1.5h3.5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-.75.75Z'
-const ICON_SHRINK =
-  'M2.22 2.22a.75.75 0 0 1 1.06 0L5.5 4.44V2.75a.75.75 0 0 1 1.5 0v3.5a.75.75 0 0 1-.75.75h-3.5a.75.75 0 0 1 0-1.5h1.69L2.22 3.28a.75.75 0 0 1 0-1.06Zm10.5 0a.75.75 0 1 1 1.06 1.06L11.56 5.5h1.69a.75.75 0 0 1 0 1.5h-3.5A.75.75 0 0 1 9 6.25v-3.5a.75.75 0 0 1 1.5 0v1.69l2.22-2.22ZM2.75 9h3.5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-1.69l-2.22 2.22a.75.75 0 0 1-1.06-1.06l2.22-2.22H2.75a.75.75 0 0 1 0-1.5ZM9 9.75A.75.75 0 0 1 9.75 9h3.5a.75.75 0 0 1 0 1.5h-1.69l2.22 2.22a.75.75 0 1 1-1.06 1.06l-2.22-2.22v1.69a.75.75 0 0 1-1.5 0v-3.5Z'
-
-function ExpandGlyph({ shrink }: { shrink?: boolean }) {
-  return <Glyph d={shrink ? ICON_SHRINK : ICON_EXPAND} />
+function sandboxTitle(raw: unknown) {
+  const text = typeof raw === 'string' ? raw.trim() : ''
+  return text || 'Sandbox'
 }
 
 const barBtn: Record<string, unknown> = {
@@ -415,7 +405,7 @@ function HtmlDeckOverlay({
             下一张
           </button>
           <button type="button" data-page-block-expand="" style={{ ...barBtn, marginLeft: 12 }} onClick={onClose} title="退出放映" aria-label="退出放映">
-            <ExpandGlyph shrink />
+            <ArrowsPointingInIcon style={chromeIcon} />
           </button>
         </div>
       </div>
@@ -560,19 +550,34 @@ const chromeIconBtn: Record<string, unknown> = {
 }
 
 function SandboxBar({
+  title,
+  onTitle,
   tab,
   onTab,
   ro,
   onRefresh,
   onExpand,
 }: {
+  title: string
+  onTitle: (next: string) => void
   tab: 'preview' | 'code'
   onTab: (next: 'preview' | 'code') => void
   ro: boolean
   onRefresh: () => void
   onExpand: () => void
 }) {
-  const tabBtn = (id: 'preview' | 'code', label: string, icon: string) => (
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(title)
+  useEffect(() => {
+    if (!editing) setDraft(title)
+  }, [title, editing])
+  const commit = () => {
+    const next = sandboxTitle(draft)
+    setDraft(next)
+    setEditing(false)
+    if (next !== title) onTitle(next)
+  }
+  const tabBtn = (id: 'preview' | 'code', label: string, Icon: typeof EyeIcon) => (
     <button
       type="button"
       tabIndex={-1}
@@ -588,7 +593,7 @@ function SandboxBar({
         fontWeight: 'var(--biu-font-weight-medium)',
       }}
     >
-      <Glyph d={icon} />
+      <Icon style={chromeIcon} />
       {label}
     </button>
   )
@@ -607,23 +612,69 @@ function SandboxBar({
         color: 'var(--biu-color-text)',
       }}
     >
-      <span
-        data-testid="sandbox-title"
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 6,
-          fontSize: 'var(--biu-font-size-3)',
-          fontWeight: 'var(--biu-font-weight-medium)',
-          color: 'var(--biu-color-text-subtle)',
-        }}
-      >
-        <Glyph d={ICON_SANDBOX} />
-        Sandbox
-      </span>
+      {editing && !ro ? (
+        <Input
+          data-testid="sandbox-title-input"
+          data-page-block-capture=""
+          aria-label="Sandbox 名称"
+          value={draft}
+          autoFocus
+          onChange={(event) => setDraft((event.target as HTMLInputElement).value)}
+          onBlur={commit}
+          onKeyDown={(event) => {
+            event.stopPropagation()
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              ;(event.target as HTMLInputElement).blur()
+            }
+            if (event.key === 'Escape') {
+              event.preventDefault()
+              setDraft(title)
+              setEditing(false)
+            }
+          }}
+          style={{
+            minWidth: 0,
+            height: 'var(--biu-size-control-md)',
+            margin: 0,
+            border: 0,
+            background: 'transparent',
+            color: 'var(--biu-color-text)',
+            fontSize: 'var(--biu-font-size-3)',
+            fontWeight: 'var(--biu-font-weight-medium)',
+            outline: 'none',
+          }}
+        />
+      ) : (
+        <button
+          type="button"
+          data-testid="sandbox-title"
+          title={ro ? title : '改名称'}
+          aria-label={ro ? title : '改名称'}
+          disabled={ro}
+          onClick={() => {
+            if (ro) return
+            setDraft(title)
+            setEditing(true)
+          }}
+          style={{
+            ...chromeIconBtn,
+            justifyContent: 'flex-start',
+            minWidth: 0,
+            padding: 0,
+            color: 'var(--biu-color-text-subtle)',
+            fontSize: 'var(--biu-font-size-3)',
+            fontWeight: 'var(--biu-font-weight-medium)',
+            cursor: ro ? 'default' : 'text',
+          }}
+        >
+          <CubeTransparentIcon style={chromeIcon} />
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span>
+        </button>
+      )}
       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }} role="tablist" aria-label="Sandbox 视图">
-        {tabBtn('preview', '预览', ICON_PREVIEW)}
-        {ro ? null : tabBtn('code', '代码', ICON_CODE)}
+        {tabBtn('preview', '预览', EyeIcon)}
+        {ro ? null : tabBtn('code', '代码', CodeBracketIcon)}
       </div>
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
         <button
@@ -640,7 +691,7 @@ function SandboxBar({
             height: 'var(--biu-size-control-md)',
           }}
         >
-          <Glyph d={ICON_REFRESH} />
+          <ArrowPathIcon style={chromeIcon} />
         </button>
         <button
           type="button"
@@ -657,71 +708,57 @@ function SandboxBar({
             height: 'var(--biu-size-control-md)',
           }}
         >
-          <ExpandGlyph />
+          <ArrowsPointingOutIcon style={chromeIcon} />
         </button>
       </div>
     </div>
   )
 }
 
-const HTML_SAMPLE = `<style>
-@keyframes mag-pulse{50%{opacity:.35}}
-@keyframes mag-rail{from{transform:translateX(0)}to{transform:translateX(-50%)}}
-.mag{min-height:100%;height:100%;box-sizing:border-box;display:flex;flex-direction:column;margin:0;background:var(--biu-color-bg);color:var(--biu-color-text);border:var(--biu-stroke-width) solid var(--biu-color-border)}
-.mag-head{display:flex;justify-content:space-between;align-items:center;border-bottom:var(--biu-stroke-width) solid var(--biu-color-border);padding:8px 12px;font-size:var(--biu-font-size-2);letter-spacing:.15em}
-.mag-hero{background:var(--biu-color-emphasis);color:var(--biu-color-on-emphasis);font-size:34px;font-weight:var(--biu-font-weight-medium);line-height:1.05;padding:16px;letter-spacing:-.02em}
-.mag-body{display:flex;gap:0;flex:1}
-.mag-copy{flex:1.4;padding:12px;font-size:var(--biu-font-size-4);line-height:1.7}
-.mag-side{flex:1;border-left:var(--biu-stroke-width) solid var(--biu-color-border);display:flex;flex-direction:column;gap:6px;padding:12px;font-size:var(--biu-font-size-2);font-weight:var(--biu-font-weight-medium)}
-.mag-live{display:inline-flex;align-items:center;gap:6px}
-.mag-dot{width:7px;height:7px;border-radius:50%;background:var(--biu-color-emphasis);animation:mag-pulse 1.1s ease-in-out infinite}
-.mag-rail-wrap{overflow:hidden;border-top:var(--biu-stroke-width) solid var(--biu-color-border)}
-.mag-rail{display:flex;width:max-content;animation:mag-rail 12s linear infinite;font-size:var(--biu-font-size-2);letter-spacing:.18em;padding:6px 0}
-.mag-rail span{padding:0 18px;white-space:nowrap}
-.mag-hit{cursor:pointer;background:var(--biu-color-emphasis);color:var(--biu-color-on-emphasis);padding:2px 6px;border:0;font:inherit;font-weight:var(--biu-font-weight-medium)}
-</style>
-<div class="mag">
-  <div class="mag-head"><span>现代 ・ 美式</span><span class="mag-live"><span class="mag-dot"></span><span id="mag-clock">创立 2024</span></span></div>
-  <div class="mag-hero">丰富<br>排版，<br><span id="mag-line">会跑脚本。</span></div>
-  <div class="mag-body">
-    <div class="mag-copy">沙箱已注入 --biu-*、宿主样式表和 document。这里只写片段，不生成完整 HTML 文件。</div>
-    <div class="mag-side">
-      <button type="button" class="mag-hit" id="mag-hit">点我 <span id="mag-n">0</span></button>
-      <span style="border:var(--biu-stroke-width) solid var(--biu-color-border);padding:2px 6px">沙箱</span>
+const HTML_SAMPLE = `export default function App() {
+  const [n, setN] = React.useState(0)
+  return (
+    <div style={{
+      minHeight: '100%',
+      height: '100%',
+      boxSizing: 'border-box',
+      padding: 16,
+      background: 'var(--biu-color-bg)',
+      color: 'var(--biu-color-text)',
+      border: 'var(--biu-stroke-width) solid var(--biu-color-border)',
+      font: 'inherit',
+    }}>
+      <div style={{ fontSize: 'var(--biu-font-size-2)', color: 'var(--biu-color-text-muted)' }}>Sandbox</div>
+      <div style={{ margin: '8px 0', fontSize: 'var(--biu-font-size-5)', fontWeight: 'var(--biu-font-weight-medium)' }}>
+        用组件写这块
+      </div>
+      <p style={{ margin: 0, fontSize: 'var(--biu-font-size-4)', lineHeight: 1.6 }}>
+        沙箱跑 React。不要 import react，用宿主注入的 React。颜色和间距走 --biu-*。
+      </p>
+      <button
+        type="button"
+        onClick={() => setN((v) => v + 1)}
+        style={{
+          marginTop: 12,
+          padding: '4px 10px',
+          border: 'var(--biu-stroke-width) solid var(--biu-color-border)',
+          background: 'var(--biu-color-bg)',
+          color: 'var(--biu-color-text)',
+          font: 'inherit',
+          fontWeight: 'var(--biu-font-weight-medium)',
+          cursor: 'pointer',
+        }}
+      >
+        点过 {n} 次
+      </button>
     </div>
-  </div>
-  <div class="mag-rail-wrap"><div class="mag-rail" id="mag-rail"><span>NIGHT ISSUE</span><span>LIVE TYPE</span><span>NEW YORK GRID</span><span>NIGHT ISSUE</span><span>LIVE TYPE</span><span>NEW YORK GRID</span></div></div>
-</div>
-<script>
-(function(){
-  var lines=['会跑脚本。','会动。','夜间刊。'];
-  var i=0,n=0;
-  var clock=document.getElementById('mag-clock');
-  var line=document.getElementById('mag-line');
-  var hit=document.getElementById('mag-hit');
-  var count=document.getElementById('mag-n');
-  function tick(){
-    var d=new Date();
-    var hh=String(d.getHours()).padStart(2,'0');
-    var mm=String(d.getMinutes()).padStart(2,'0');
-    var ss=String(d.getSeconds()).padStart(2,'0');
-    if(clock) clock.textContent=hh+':'+mm+':'+ss;
-  }
-  tick();
-  setInterval(tick,1000);
-  setInterval(function(){
-    i=(i+1)%lines.length;
-    if(line) line.textContent=lines[i];
-  },1800);
-  if(hit) hit.addEventListener('click',function(){
-    n+=1;
-    if(count) count.textContent=String(n);
-  });
-})();
-</script>`
+  )
+}
+`
 
 function HtmlCard({ data, update, writable }: BlockProps) {
   const ro = !writable
+  const title = sandboxTitle(data.title)
   const source = useHtmlSource(data, update, HTML_SAMPLE)
   const html = source.html
   const width = data.width
@@ -760,7 +797,15 @@ function HtmlCard({ data, update, writable }: BlockProps) {
       onPointerEnter={() => setHover(true)}
       onPointerLeave={() => setHover(false)}
     >
-      <SandboxBar tab={tab} onTab={setTab} ro={ro} onRefresh={() => setFrame((n) => n + 1)} onExpand={deck.start} />
+      <SandboxBar
+        title={title}
+        onTitle={(next) => update({ title: next })}
+        tab={tab}
+        onTab={setTab}
+        ro={ro}
+        onRefresh={() => setFrame((n) => n + 1)}
+        onExpand={deck.start}
+      />
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
         {editing ? (
           <SourceEditor html={html} onChange={source.save} compile={compiled} />
@@ -818,10 +863,10 @@ export function apply(ctx: {
     label: 'Sandbox',
     blockType: 'html',
     blockTypeLabel: 'Sandbox',
-    hint: '沙箱里跑 HTML / CSS / 脚本，继承全局 --biu-*',
+    hint: '沙箱里跑 React 组件，继承 --biu-*',
     aliases: ['sandbox', 'html', 'html直', '静态html', '动态html', '排版', '沙箱', 'iframe', 'htmlf', 'frame', '小网页'],
     assets: htmlBlockAssets,
-    defaults: () => ({ html: HTML_SAMPLE, deck: true }),
+    defaults: () => ({ html: HTML_SAMPLE, deck: true, title: 'Sandbox' }),
     View: HtmlCard,
   })
   ctx.pageEditor.registerBlock({
@@ -830,11 +875,11 @@ export function apply(ctx: {
     label: 'Sandbox',
     blockType: 'html',
     blockTypeLabel: 'Sandbox',
-    hint: '沙箱里跑 HTML / CSS / 脚本',
+    hint: '沙箱里跑 React 组件',
     aliases: [],
     slash: false,
     assets: htmlBlockAssets,
-    defaults: () => ({ html: HTML_SAMPLE, deck: true }),
+    defaults: () => ({ html: HTML_SAMPLE, deck: true, title: 'Sandbox' }),
     View: HtmlCard,
   })
 }

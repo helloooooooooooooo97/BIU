@@ -1,27 +1,33 @@
 # Sandbox（page-html-blocks）
 
-在页面里用 `/` 插入 **Sandbox**，把卡片、刊头、小应用直接放进文档内沙箱。改页面或代写块之前，先照下面「示例写法」写 `:::pageBlock` 围栏。
+斜杠插入 **Sandbox**。块里写 React 组件（或 HTML 片段），在文档内沙箱预览。改页面或代写块之前，先照「示例写法」写 `:::pageBlock`。
 
-## 设计要点
+## 约定
 
-- 顶栏一直在：左边 Sandbox，中间「预览 / 代码」，右边刷新和放大。
-- 预览在 Shadow 沙箱里跑脚本，继承全局 `--biu-*` 与宿主样式表。
-- 新块把源码写在块 data 里（HTML 片段 + 可选 script），不要生成完整 HTML 文件。
-- **演示开关**：`deck` 写在围栏头上。默认 true。
-- **放大**：浏览器真实全屏。← → / 空格翻页，Esc 退出。
+- 优先 `export default function App()`。不要 `import react` / `import` / `require`，用宿主注入的 `React`。
+- 颜色、字号、描边走 `--biu-*`，不要写死色值。
+- 源码写在块 `html` 里，不要另存完整 HTML 文件。
+- 顶栏：左边点名称可改；中间预览 / 代码；右边刷新、放大。
+- 围栏 `deck` 默认 true。放大后 ← → / 空格翻页，Esc 退出。
 
 ## 示例写法
 
-围栏头写 `kind` / `plugin` / 可选 `deck`、`width`、`height`。
+围栏头写 `kind` / `plugin` / 可选 `deck`、`width`、`height`。块数据用 `title` 和 `html`。
 
 :::pageBlock {kind=html plugin=page-html-blocks deck=true}
-{"html":"<div>刊头</div>"}
+{
+  "title": "Sandbox",
+  "html": "export default function App() {\n  return (\n    <div style={{ padding: 16, color: 'var(--biu-color-text)', background: 'var(--biu-color-bg)' }}>\n      Sandbox\n    </div>\n  )\n}\n"
+}
 :::
 
 旧的 `kind=htmlframe` 仍能打开，不再单独进斜杠。
 
 :::pageBlock {kind=htmlframe plugin=page-html-blocks deck=true height=300}
-{"html":"<div>刊头</div>"}
+{
+  "title": "Sandbox",
+  "html": "export default function App() {\n  return <div>Sandbox</div>\n}\n"
+}
 :::
 
 写入页面用 `db_content` 对应 page 的 markdown，按上面围栏粘贴。
@@ -30,7 +36,7 @@
 
 ```
 POST /api/page-html-blocks/compile
-{ "source": "<div>…</div><script>…</script>" }
+{ "source": "export default function App() { return <div /> }" }
 ```
 
 或工具 `html_block_compile`。通过返回 `{ ok:true, mode:"markup"|"script"|"jsx" }`；语法错误、外链 script、`import`/`require` 会失败。
@@ -38,5 +44,5 @@ POST /api/page-html-blocks/compile
 ## 怎么用
 
 1. 编辑某个页面，输入 `/`，选「Sandbox」。
-2. 顶栏切「代码」改源码，切「预览」看沙箱渲染。
+2. 左边点名称改标题，中间切「代码」改源码，切「预览」看沙箱。
 3. 右边刷新会重挂预览；放大进入放映。

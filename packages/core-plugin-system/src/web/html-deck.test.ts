@@ -88,6 +88,10 @@ test('html block compile accepts markup and rejects bad scripts', async () => {
   const { compileHtmlSource } = await import('../../../../.plugin-dev/page-html-blocks/shared/compile.ts')
   assert.deepEqual(compileHtmlSource('<div class="x">ok</div>'), { ok: true, mode: 'markup' })
   assert.equal(compileHtmlSource('<script>require("fs")</script>').ok, false)
+  assert.equal(
+    compileHtmlSource('export default function App() { return <div style={{ color: "var(--biu-color-text)" }}>ok</div> }').ok,
+    true,
+  )
 })
 
 test('arrow keys drive the deck', () => {
