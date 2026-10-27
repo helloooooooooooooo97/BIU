@@ -10,6 +10,8 @@ test('active view tab opens the view menu; the more button is gone', () => {
   assert.doesNotMatch(src, /data-testid="fsdb-view-more"/)
   assert.doesNotMatch(src, /tasks-viewdd-more/)
   const orderMenu = readFileSync(resolve(import.meta.dirname, './view-order-menu.tsx'), 'utf8')
+  assert.match(orderMenu, /<SearchableFlyout/)
+  assert.doesNotMatch(orderMenu, />视图</)
   assert.match(orderMenu, /title="拷贝视图"/)
   assert.match(orderMenu, /onCopy\(view\)/)
   assert.match(orderMenu, /DndGrip/)

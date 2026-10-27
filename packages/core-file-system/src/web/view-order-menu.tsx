@@ -17,6 +17,7 @@ import { overlayZ } from '@biu/biu-ui/overlay-portal'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { moveList } from '../query-logic.ts'
 import { DndGrip } from './dnd-grip.tsx'
+import { FlyoutEmpty, SearchableFlyout, flyoutQueryMatch } from './flyout-search.tsx'
 import type { SavedView } from './saved-view.ts'
 
 function ViewRowShell({
@@ -134,68 +135,110 @@ export function ViewOrderMenu({
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
   const ids = views.map((view) => view.id)
   const active = views.find((view) => view.id === activeId)
+  const foot = (
+    <div className="tasks-viewdd-foot">
+      <button type="button" className="tasks-viewdd-saveas fsdb-tool-row" onClick={onAdd}>
+        <PlusIcon aria-hidden className="size-[14px]" />
+        添加视图
+      </button>
+    </div>
+  )
 
   return (
-    <div className="fsdb-tool-flyout tasks-viewdd-menu" role="menu">
-      <div className="tasks-viewdd-head fsdb-tool-head">视图</div>
-      {views.length === 0 ? <div className="tasks-viewdd-empty">还没有已保存的视图</div> : null}
-      {views.length ? (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          modifiers={[restrictToVerticalAxis]}
-          onDragStart={(event: DragStartEvent) => setActiveId(String(event.active.id))}
-          onDragCancel={() => setActiveId(null)}
-          onDragEnd={(event: DragEndEvent) => {
-            const overId = event.over?.id
-            setActiveId(null)
-            if (overId == null || event.active.id === overId) return
-            const from = ids.indexOf(String(event.active.id))
-            const to = ids.indexOf(String(overId))
-            if (from < 0 || to < 0) return
-            onReorder(moveList(ids, from, to))
-          }}
-        >
-          <SortableContext items={ids} strategy={verticalListSortingStrategy}>
-            {views.map((view) => (
-              <SortableViewRow
-                key={view.id}
-                view={view}
-                active={view.id === activeViewId}
-                onSelect={onSelect}
-                onCopy={onCopy}
-                onRename={onRename}
-                onDelete={onDelete}
-              />
-            ))}
-          </SortableContext>
-          <DragOverlay zIndex={overlayZ(280)}>
-            {active ? (
-              <div className="fsdb-query-drag-overlay" data-fsdb-sort-overlay>
-                <ViewRowShell
-                  view={active}
-                  active={active.id === activeViewId}
-                  onSelect={() => undefined}
-                  onCopy={() => undefined}
-                  onRename={() => undefined}
-                  onDelete={() => undefined}
-                  grip={
-                    <button type="button" className="fsdb-query-grip" tabIndex={-1}>
-                      <DndGrip />
-                    </button>
-                  }
-                />
-              </div>
-            ) : null}
-          </DragOverlay>
-        </DndContext>
-      ) : null}
-      <div className="tasks-viewdd-foot">
-        <button type="button" className="tasks-viewdd-saveas fsdb-tool-row" onClick={onAdd}>
-          <PlusIcon aria-hidden className="size-[14px]" />
-          添加视图
-        </button>
-      </div>
-    </div>
+    <SearchableFlyout className="tasks-viewdd-menu">
+      {(q) => {
+        const hits = views.filter((view) => flyoutQueryMatch(view.name, q))
+        const searching = Boolean(q.trim())
+        if (!views.length) {
+          return (
+            <>
+              <div className="tasks-viewdd-empty">还没有已保存的视图</div>
+              {foot}
+            </>
+          )
+        }
+        if (searching) {
+          return (
+            <>
+              {hits.length ? (
+                hits.map((view) => (
+                  <ViewRowShell
+                    key={view.id}
+                    view={view}
+                    active={view.id === activeViewId}
+                    onSelect={onSelect}
+                    onCopy={onCopy}
+                    onRename={onRename}
+                    onDelete={onDelete}
+                    grip={
+                      <span className="fsdb-query-grip is-locked" aria-hidden>
+                        <DndGrip />
+                      </span>
+                    }
+                  />
+                ))
+              ) : (
+                <FlyoutEmpty />
+              )}
+              {foot}
+            </>
+          )
+        }
+        return (
+          <>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              modifiers={[restrictToVerticalAxis]}
+              onDragStart={(event: DragStartEvent) => setActiveId(String(event.active.id))}
+              onDragCancel={() => setActiveId(null)}
+              onDragEnd={(event: DragEndEvent) => {
+                const overId = event.over?.id
+                setActiveId(null)
+                if (overId == null || event.active.id === overId) return
+                const from = ids.indexOf(String(event.active.id))
+                const to = ids.indexOf(String(overId))
+                if (from < 0 || to < 0) return
+                onReorder(moveList(ids, from, to))
+              }}
+            >
+              <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+                {views.map((view) => (
+                  <SortableViewRow
+                    key={view.id}
+                    view={view}
+                    active={view.id === activeViewId}
+                    onSelect={onSelect}
+                    onCopy={onCopy}
+                    onRename={onRename}
+                    onDelete={onDelete}
+                  />
+                ))}
+              </SortableContext>
+              <DragOverlay zIndex={overlayZ(280)}>
+                {active ? (
+                  <div className="fsdb-query-drag-overlay" data-fsdb-sort-overlay>
+                    <ViewRowShell
+                      view={active}
+                      active={active.id === activeViewId}
+                      onSelect={() => undefined}
+                      onCopy={() => undefined}
+                      onRename={() => undefined}
+                      onDelete={() => undefined}
+                      grip={
+                        <button type="button" className="fsdb-query-grip" tabIndex={-1}>
+                          <DndGrip />
+                        </button>
+                      }
+                    />
+                  </div>
+                ) : null}
+              </DragOverlay>
+            </DndContext>
+            {foot}
+          </>
+        )
+      }}
+    </SearchableFlyout>
   )
 }
