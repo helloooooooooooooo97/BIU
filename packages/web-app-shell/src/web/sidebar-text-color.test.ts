@@ -7,13 +7,13 @@ const css = readFileSync(resolve(import.meta.dirname, '../../../../web/style.css
 describe('sidebar text colors', () => {
   it('keeps a separate active token for the sidebar foreground', () => {
     // 断言 token 存在并被正确引用，不锁死具体色值，否则换主题就会整片变红。
-    expect(css).toMatch(/--dsw-sidebar-fg:\s*[^;]+;/)
-    expect(css).toMatch(/--dsw-sidebar-fg-active:\s*[^;]+;/)
-    expect(css).toMatch(/--dsw-icon:\s*[^;]+;/)
-    expect(css).toMatch(/--dsw-sidebar-icon:\s*[^;]+;/)
-    expect(css).toMatch(/\.app-side-actions-icon\s*\{[^}]*color:\s*var\(--dsw-sidebar-icon\)/s)
-    expect(css).toMatch(/\.app-side-bar\s*\{[^}]*color:\s*var\(--dsw-sidebar-fg\)/s)
-    expect(css).toMatch(/\.chat-session-row\.is-active\s*\{[^}]*color:\s*var\(--dsw-sidebar-fg-active\)/s)
+    expect(css).toMatch(/--biu-color-text-muted:\s*[^;]+;/)
+    expect(css).toMatch(/--biu-color-text:\s*[^;]+;/)
+    expect(css).toMatch(/--biu-color-icon:\s*[^;]+;/)
+    expect(css).toMatch(/--biu-color-icon:\s*[^;]+;/)
+    expect(css).toMatch(/\.app-side-actions-icon\s*\{[^}]*color:\s*var\(--biu-color-icon\)/s)
+    expect(css).toMatch(/\.app-side-bar\s*\{[^}]*color:\s*var\(--biu-color-text-muted\)/s)
+    expect(css).toMatch(/\.chat-session-row\.is-active\s*\{[^}]*color:\s*var\(--biu-color-text\)/s)
     expect(css).toMatch(/\.chat-session-row\s*\{[^}]*-webkit-user-drag:\s*none/s)
   })
 
@@ -35,7 +35,7 @@ describe('sidebar text colors', () => {
     expect(css).toMatch(/\.sidebar-tag\s*\{[^}]*line-height:\s*16px/s)
     expect(css).toMatch(/\.sidebar-chat-count-num\s*\{[^}]*font-size:\s*12px/s)
     expect(css).toMatch(/\.sidebar-section-head\s*\{[^}]*font-size:\s*12px/s)
-    expect(css).toMatch(/\.sidebar-view-switch-btn\s*\{[^}]*color:\s*var\(--dsw-icon\)/s)
+    expect(css).toMatch(/\.sidebar-view-switch-btn\s*\{[^}]*color:\s*var\(--biu-color-icon\)/s)
     expect(css).toMatch(/\.app-side-bar:not\(\.is-wide\) \.sidebar-tag/)
     const sidebar = readFileSync(resolve(import.meta.dirname, './chat-sidebar.tsx'), 'utf8')
     expect(sidebar).toMatch(/text-\[12px\] font-bold tracking-wider/)
@@ -57,7 +57,7 @@ describe('sidebar text colors', () => {
     expect(overlay).toMatch(/SIDEBAR_LABEL_AT = SIDEBAR_MIN/)
     expect(overlay).toMatch(/SIDEBAR_TAG_AT = SIDEBAR_MAX/)
     expect(overlay).toMatch(/SIDEBAR_MIN = 160/)
-    expect(css).toMatch(/--dsw-sidebar-min:\s*160px/)
+    expect(css).toMatch(/--biu-sidebar-min:\s*160px/)
     expect(css).toMatch(/\.app-side-bar\s*\{[^}]*min-width:\s*0/s)
   })
 })

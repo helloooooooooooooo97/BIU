@@ -122,27 +122,27 @@ function toMarkdown(data: Data): string {
 
 const STYLE_ID = 'option-matrix-style-v2'
 const STYLE_CSS = `
-.om-root{border:1px solid var(--dsw-border);border-radius:8px;padding:10px 12px;margin:0;background:var(--dsw-bg);color:var(--dsw-label);font-family:var(--font-sans);font-size:14px;line-height:1.5}
+.om-root{border:1px solid var(--biu-color-border);border-radius:8px;padding:10px 12px;margin:0;background:var(--biu-color-bg);color:var(--biu-color-text);font-family:var(--font-sans);font-size:14px;line-height:1.5}
 .om-head{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
 .om-title{font-weight:650;font-size:14px}
-.om-meta{color:var(--dsw-label-3);font-size:12px;font-weight:500}
+.om-meta{color:var(--biu-color-text-subtle);font-size:12px;font-weight:500}
 .om-grow{flex:1}
-.om-btn{height:26px;font:inherit;font-size:13px;font-weight:650;padding:0 8px;border-radius:6px;border:1px solid var(--dsw-border);background:transparent;color:var(--dsw-label);cursor:pointer}
-.om-btn:hover{background:var(--dsw-hover)}
-.om-field{height:26px;font:inherit;font-size:13px;padding:0 6px;border:1px solid var(--dsw-border);border-radius:6px;background:var(--dsw-input);color:var(--dsw-label)}
+.om-btn{height:26px;font:inherit;font-size:13px;font-weight:650;padding:0 8px;border-radius:6px;border:1px solid var(--biu-color-border);background:transparent;color:var(--biu-color-text);cursor:pointer}
+.om-btn:hover{background:var(--biu-color-bg-hover)}
+.om-field{height:26px;font:inherit;font-size:13px;padding:0 6px;border:1px solid var(--biu-color-border);border-radius:6px;background:var(--biu-color-bg-input);color:var(--biu-color-text)}
 .om-table-wrap{overflow-x:auto}
 .om-table{border-collapse:collapse;width:100%;font-size:13px}
-.om-cell{border:1px solid var(--dsw-border);padding:6px 8px;text-align:center;white-space:nowrap;vertical-align:middle}
-.om-score{width:46px;height:26px;padding:0 4px;text-align:center;font:inherit;font-variant-numeric:tabular-nums;border:1px solid var(--dsw-border);border-radius:6px;background:var(--dsw-input);color:var(--dsw-label)}
-.om-winner{background:color-mix(in srgb,var(--dsw-ok,#3fb950) 12%,transparent)}
-.om-best{background:color-mix(in srgb,var(--dsw-pick) 14%,transparent);font-weight:650}
-.om-muted{background:var(--dsw-hover)}
+.om-cell{border:1px solid var(--biu-color-border);padding:6px 8px;text-align:center;white-space:nowrap;vertical-align:middle}
+.om-score{width:46px;height:26px;padding:0 4px;text-align:center;font:inherit;font-variant-numeric:tabular-nums;border:1px solid var(--biu-color-border);border-radius:6px;background:var(--biu-color-bg-input);color:var(--biu-color-text)}
+.om-winner{background:color-mix(in srgb,var(--biu-color-ok,#3fb950) 12%,transparent)}
+.om-best{background:color-mix(in srgb,var(--biu-color-emphasis) 14%,transparent);font-weight:650}
+.om-muted{background:var(--biu-color-bg-hover)}
 .om-tools{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
-.om-rationale{margin-top:8px;padding:8px 10px;border-radius:6px;background:var(--dsw-hover);font-size:13px;line-height:1.55;color:var(--dsw-label-2)}
+.om-rationale{margin-top:8px;padding:8px 10px;border-radius:6px;background:var(--biu-color-bg-hover);font-size:13px;line-height:1.55;color:var(--biu-color-text-muted)}
 .om-md{margin-top:8px}
-.om-md textarea{width:100%;min-height:130px;font-family:var(--font-mono);font-size:12px;padding:8px;border-radius:6px;border:1px solid var(--dsw-border);background:var(--dsw-input);color:var(--dsw-label)}
-.om-ghost{border:0;background:transparent;color:var(--dsw-label-3);cursor:pointer;font:inherit}
-.om-ghost:hover{color:var(--dsw-label)}
+.om-md textarea{width:100%;min-height:130px;font-family:var(--font-mono);font-size:12px;padding:8px;border-radius:6px;border:1px solid var(--biu-color-border);background:var(--biu-color-bg-input);color:var(--biu-color-text)}
+.om-ghost{border:0;background:transparent;color:var(--biu-color-text-subtle);cursor:pointer;font:inherit}
+.om-ghost:hover{color:var(--biu-color-text)}
 `
 
 function useOmStyle() {
@@ -220,7 +220,7 @@ function OptionMatrix({ data, update, writable }: { data: Data; update: (patch: 
   const h = React.createElement
 
   const headCells = [
-    h('th', { key: 'corner', className: 'om-cell', style: { textAlign: 'left', color: 'var(--dsw-label-3)' } }, '方案 \\ 维度'),
+    h('th', { key: 'corner', className: 'om-cell', style: { textAlign: 'left', color: 'var(--biu-color-text-subtle)' } }, '方案 \\ 维度'),
     ...criteria.map((c, ci) =>
       h(
         'th',

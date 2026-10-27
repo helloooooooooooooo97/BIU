@@ -26,7 +26,7 @@ test('toolbar flyouts share one fsdb-tool-flyout shell', () => {
   assert.doesNotMatch(rule, /border-radius:(6|7|8)px/)
   assert.match(rule, /padding:8px/)
   assert.doesNotMatch(rule, /padding:(6|12)px/)
-  assert.match(rule, /box-shadow:var\(--dsw-shadow\)/)
+  assert.match(rule, /box-shadow:var\(--biu-shadow-md\)/)
   assert.match(rule, /max-height:min\(70vh,520px\)/)
   assert.match(block, /prefers-reduced-motion/)
   assert.match(block, /\.fsdb-tool-flyout \.db-search-menu/)

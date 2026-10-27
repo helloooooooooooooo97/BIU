@@ -32,7 +32,7 @@ test('session table uses mascot as the standalone icon property, title is just t
   assert.match(src, /TRAJECTORY_TAIL_TURNS/)
   assert.match(src, /seeded\?\.length/)
   assert.doesNotMatch(src, /SESSION_LOAD_TURNS/)
-  assert.match(src, /background:var\(--dsw-bg\)/)
+  assert.match(src, /background:var\(--biu-color-bg\)/)
   assert.doesNotMatch(src, /background:#191919/)
   assert.match(src, /\.fsdb-detail-main:has\(\.chat-pane-embed\) \.chat-stage\{[^}]*overflow:visible/)
   assert.match(src, /\.fsdb-detail-main:has\(\.chat-pane-embed\) \.chat-stage\{[^}]*overscroll-behavior:auto/)

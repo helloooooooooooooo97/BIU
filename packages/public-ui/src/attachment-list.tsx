@@ -3,12 +3,12 @@ import type { ReactNode } from 'react'
 const STYLE_ID = 'biu-public-ui-attachment-list'
 const CSS = `
 .biu-attachments{display:inline-flex;flex-direction:column;gap:4px;align-items:flex-start;min-width:0;max-width:100%}
-.biu-attachment{display:inline-flex;align-items:center;gap:6px;height:22px;max-width:100%;padding:0 6px;border-radius:5px;font-size:13px;line-height:22px;background:color-mix(in srgb,var(--biu-attachment,#787774) 12%,transparent);color:var(--dsw-tag-ink,#2c2c2b)}
+.biu-attachment{display:inline-flex;align-items:center;gap:6px;height:22px;max-width:100%;padding:0 6px;border-radius:5px;font-size:13px;line-height:22px;background:color-mix(in srgb,var(--biu-attachment,#787774) 12%,transparent);color:var(--biu-color-text,#2c2c2b)}
 .biu-attachment-icon{display:inline-flex;width:14px;height:14px;flex:none;opacity:.8}
 .biu-attachment-icon svg{width:14px;height:14px;display:block}
 .biu-attachment-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-decoration:none;color:inherit}
 .biu-attachment-name:hover{text-decoration:underline}
-.biu-attachment-path{color:var(--dsw-label-3,#8a8a86);font-size:12px}
+.biu-attachment-path{color:var(--biu-color-text-subtle,#8a8a86);font-size:12px}
 .biu-attachment-tools{display:inline-flex;align-items:center;gap:2px;flex:none;margin-left:auto}
 .biu-attachment-btn{border:0;background:transparent;padding:0;margin:0;color:inherit;opacity:.6;cursor:pointer;display:inline-flex;align-items:center;line-height:0}
 .biu-attachment-btn:hover{opacity:1}

@@ -7,7 +7,7 @@ function PluginTitle({ record, label }: { record: DbRecord; label: string }) {
     <span className="inline-flex min-w-0 items-center gap-1.5">
       {enabled ? (
         <span
-          className="size-1.5 shrink-0 rounded-full bg-(--dsw-ok,#22c55e)"
+          className="size-1.5 shrink-0 rounded-full bg-(--biu-color-ok,#22c55e)"
           data-testid="plugin-enabled-dot"
           aria-hidden
         />

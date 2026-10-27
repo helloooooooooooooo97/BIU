@@ -9,10 +9,10 @@ export const inject = ['pageEditor']
 const STYLE_ID = 'page-toc-style-v2'
 const STYLE_CSS = `
 .page-toc{
-  border:1px solid var(--dsw-border);
+  border:1px solid var(--biu-color-border);
   border-radius:8px;
-  background:var(--dsw-bg);
-  color:var(--dsw-label);
+  background:var(--biu-color-bg);
+  color:var(--biu-color-text);
   font-family:var(--font-sans);
   font-size:14px;
   line-height:1.5;
@@ -23,10 +23,10 @@ const STYLE_CSS = `
   padding:2px 8px;
   font-size:12px;
   font-weight:650;
-  color:var(--dsw-label-3);
+  color:var(--biu-color-text-subtle);
 }
 .page-toc-list{margin:0;padding:0;list-style:none}
-.page-toc-empty{margin:0;padding:4px 8px;color:var(--dsw-label-3);font-size:13px}
+.page-toc-empty{margin:0;padding:4px 8px;color:var(--biu-color-text-subtle);font-size:13px}
 .page-toc-item{margin:0}
 .page-toc-link{
   display:block;
@@ -36,14 +36,14 @@ const STYLE_CSS = `
   border-radius:6px;
   padding:4px 8px;
   background:transparent;
-  color:var(--dsw-label);
+  color:var(--biu-color-text);
   font:inherit;
   font-size:14px;
   font-weight:500;
   text-align:left;
   cursor:pointer;
 }
-.page-toc-link:hover{background:var(--dsw-hover);color:var(--dsw-sidebar-fg-active)}
+.page-toc-link:hover{background:var(--biu-color-bg-hover);color:var(--biu-color-text)}
 .page-toc-l2{padding-left:22px}
 .page-toc-l3{padding-left:36px}
 `

@@ -181,7 +181,7 @@ function renderReplyPartList({
       elements.push(
         <div
           key={part.id}
-          className="chat-think-body text-[13px] leading-5 text-(--dsw-label-3)"
+          className="chat-think-body text-[13px] leading-5 text-(--biu-color-text-subtle)"
           data-testid="chat-think"
           {...pickDomAttrs('message', part.id, pickPreview(part.text) || 'think')}
         >
@@ -210,7 +210,7 @@ function renderReplyPartList({
             '…'
           ) : null}
           {partStreaming ? (
-            <span className="ml-1 inline-block animate-pulse text-(--dsw-label-3)">▍</span>
+            <span className="ml-1 inline-block animate-pulse text-(--biu-color-text-subtle)">▍</span>
           ) : null}
         </div>,
       )
@@ -378,7 +378,7 @@ function UserTurnBar({
 
   return (
     <div
-      className="user-turn-bar box-border flex min-h-[30px] w-full items-center justify-between gap-3 overflow-hidden border-0 border-t border-(--dsw-bubble) bg-(--dsw-sidebar) px-(--dsw-chat-pad-x) text-(length:--dsw-chat-ui-font-size) leading-none text-(--dsw-sidebar-fg)"
+      className="user-turn-bar box-border flex min-h-[30px] w-full items-center justify-between gap-3 overflow-hidden border-0 border-t border-(--biu-color-bg-muted) bg-(--biu-color-bg-subtle) px-(--biu-chat-pad-x) text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-muted)"
       aria-label="回合摘要"
       data-testid="user-turn-bar"
     >
@@ -386,7 +386,7 @@ function UserTurnBar({
         {hasDetails && reply ? (
           <button
             type="button"
-            className={`inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border border-transparent bg-transparent py-0.5 pr-2 pl-1 text-(length:--dsw-chat-ui-font-size) leading-none text-(--dsw-sidebar-fg) hover:bg-(--dsw-hover) hover:text-(--dsw-sidebar-fg)${detailsOpen ? ' bg-(--dsw-hover) text-(--dsw-sidebar-fg)' : ''}`}
+            className={`inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md border border-transparent bg-transparent py-0.5 pr-2 pl-1 text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text-muted)${detailsOpen ? ' bg-(--biu-color-bg-hover) text-(--biu-color-text-muted)' : ''}`}
             aria-expanded={detailsOpen}
             aria-controls={`reply-details-${reply.id}`}
             data-testid="details-toggle"
@@ -402,7 +402,7 @@ function UserTurnBar({
         {canExpand && onToggleExpand ? (
           <button
             type="button"
-            className="inline-grid size-[22px] cursor-pointer place-items-center rounded-md border-0 bg-transparent p-0 text-(--dsw-sidebar-fg) hover:bg-(--dsw-hover) hover:text-(--dsw-sidebar-fg-active)"
+            className="inline-grid size-[22px] cursor-pointer place-items-center rounded-md border-0 bg-transparent p-0 text-(--biu-color-text-muted) hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text)"
             aria-expanded={Boolean(expanded)}
             aria-label={expanded ? '收起请求全文' : '展开请求全文'}
             data-testid="user-expand-toggle"
@@ -414,7 +414,7 @@ function UserTurnBar({
         <UserSenderAvatar sender={user.sender} sessions={sessions} />
         {sentLabel ? (
           <span
-            className="inline-flex shrink-0 items-center gap-1 text-(length:--dsw-chat-ui-font-size) leading-none text-(--dsw-sidebar-fg) tabular-nums"
+            className="inline-flex shrink-0 items-center gap-1 text-(length:--biu-chat-ui-font-size) leading-none text-(--biu-color-text-muted) tabular-nums"
             title="发送时间"
             data-testid="user-sent-at"
           >
@@ -460,7 +460,7 @@ function UserSenderAvatar({
     const identity = resolveSessionMascot(sender.sessionId, hit?.mascot)
     return (
       <span
-        className="grid size-[18px] shrink-0 place-items-center text-(--dsw-label-3)"
+        className="grid size-[18px] shrink-0 place-items-center text-(--biu-color-text-subtle)"
         title={hit?.title || '会话'}
         data-testid="user-sender-mascot"
       >
@@ -470,7 +470,7 @@ function UserSenderAvatar({
   }
   return (
     <span
-      className="grid size-[18px] shrink-0 place-items-center rounded-[5px] bg-(color-mix(in_srgb,var(--dsw-label-3)_14%,transparent)) text-(--dsw-label-3)"
+      className="grid size-[18px] shrink-0 place-items-center rounded-[5px] bg-(color-mix(in_srgb,var(--biu-color-text-subtle)_14%,transparent)) text-(--biu-color-text-subtle)"
       title="你"
       data-testid="user-sender-human"
       aria-hidden
@@ -528,14 +528,14 @@ function NodeView({
         className="chat-user-card"
         {...pickDomAttrs('message', node.id, pickPreview(picked.rest || node.text) || 'user')}
       >
-        <div className="chat-user-card-body text-(--dsw-label)">
+        <div className="chat-user-card-body text-(--biu-color-text)">
           <div
-            className={`w-full max-w-full border-0 bg-transparent p-0 text-(--dsw-label) outline-none${canExpand && !expanded ? ' max-h-[80px] overflow-hidden' : ''}${expanded ? ' max-h-none overflow-visible' : ''}`}
+            className={`w-full max-w-full border-0 bg-transparent p-0 text-(--biu-color-text) outline-none${canExpand && !expanded ? ' max-h-[80px] overflow-hidden' : ''}${expanded ? ' max-h-none overflow-visible' : ''}`}
             data-testid="user-bubble"
             {...pickDomAttrs('message', node.id, pickPreview(picked.rest || node.text) || 'user')}
           >
             {node.kindTag === 'inject' ? (
-              <div className="mb-1 text-(length:--dsw-chat-ui-font-size) text-(--dsw-label-3)">inject</div>
+              <div className="mb-1 text-(length:--biu-chat-ui-font-size) text-(--biu-color-text-subtle)">inject</div>
             ) : null}
             <UserBubbleEditor text={node.text} />
           </div>
@@ -582,7 +582,7 @@ function NodeView({
     )
   }
 
-  return <div className="self-center text-xs text-(--dsw-label-3)">{node.text}</div>
+  return <div className="self-center text-xs text-(--biu-color-text-subtle)">{node.text}</div>
 }
 
 const NodeViewMemo = memo(NodeView)
@@ -1000,7 +1000,7 @@ export const ChatThread = memo(function ChatThread(props: SlotProps) {
       style={switchingSession ? { opacity: 0.72, transition: 'opacity 120ms ease' } : undefined}
     >
       {loadingOlder ? (
-        <div className="mb-3 text-center text-(length:--dsw-chat-ui-font-size) text-(--dsw-label-3)">加载更早消息…</div>
+        <div className="mb-3 text-center text-(length:--biu-chat-ui-font-size) text-(--biu-color-text-subtle)">加载更早消息…</div>
       ) : null}
       <ChatNodeList
         nodes={mountedNodes}
@@ -1011,7 +1011,7 @@ export const ChatThread = memo(function ChatThread(props: SlotProps) {
         sessionId={sessionId}
       />
       {error ? (
-        <div className="mt-4 rounded-xl bg-(--dsw-danger-soft) px-3 py-2 text-sm text-(--dsw-danger)">{error}</div>
+        <div className="mt-4 rounded-xl bg-(--biu-color-danger-muted) px-3 py-2 text-sm text-(--biu-color-danger)">{error}</div>
       ) : null}
     </div>
   )

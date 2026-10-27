@@ -261,7 +261,7 @@ type CodeViewHandle = {
 const editorTheme = EditorView.theme({
   '&': {
     background: 'transparent',
-    color: 'var(--dsw-label)',
+    color: 'var(--biu-color-text)',
     fontSize: '13px',
     height: '100%',
   },
@@ -272,18 +272,18 @@ const editorTheme = EditorView.theme({
     overflowX: 'auto',
   },
   '.cm-content': {
-    caretColor: 'var(--dsw-label)',
+    caretColor: 'var(--biu-color-text)',
     padding: '10px 12px',
     minHeight: '100%',
     fontFamily: 'inherit',
   },
-  '.cm-cursor': { borderLeftColor: 'var(--dsw-label)' },
+  '.cm-cursor': { borderLeftColor: 'var(--biu-color-text)' },
   '.cm-content ::selection': {
-    background: 'color-mix(in srgb, var(--dsw-pick) 40%, transparent)',
+    background: 'color-mix(in srgb, var(--biu-color-emphasis) 40%, transparent)',
     color: 'inherit',
   },
   '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionLayer .cm-selectionBackground': {
-    background: 'color-mix(in srgb, var(--dsw-pick) 40%, transparent)',
+    background: 'color-mix(in srgb, var(--biu-color-emphasis) 40%, transparent)',
   },
 })
 
@@ -621,15 +621,15 @@ function CodeRunnerBlock({ data, update, writable }: BlockProps) {
         background: 'transparent',
       }}
     >
-      <span style={{ width: 28, height: 3, borderRadius: 99, background: 'var(--dsw-label-3)', opacity: 0.35 }} />
+      <span style={{ width: 28, height: 3, borderRadius: 99, background: 'var(--biu-color-text-subtle)', opacity: 0.35 }} />
     </div>
   )
 
   const colorMap: Record<string, string> = {
-    stdout: 'var(--dsw-label)',
-    stderr: 'var(--dsw-label-3)',
+    stdout: 'var(--biu-color-text)',
+    stderr: 'var(--biu-color-text-subtle)',
     error: '#f38ba8',
-    success: 'var(--dsw-label-2)',
+    success: 'var(--biu-color-text-muted)',
   }
 
   const preview = (localCode.split('\n').find((l) => l.trim()) ?? '').trim().slice(0, 60)
@@ -646,9 +646,9 @@ function CodeRunnerBlock({ data, update, writable }: BlockProps) {
       }}
       style={{
         margin: '8px 0',
-        border: '1px solid var(--dsw-border)',
+        border: '1px solid var(--biu-color-border)',
         borderRadius: 12,
-        background: 'var(--dsw-chat-code-bg, var(--dsw-sidebar))',
+        background: 'var(--biu-color-bg-code, var(--biu-color-bg-subtle))',
         overflow: 'hidden',
         fontFamily: 'var(--font-mono)',
         fontSize: '13px',
@@ -663,9 +663,9 @@ function CodeRunnerBlock({ data, update, writable }: BlockProps) {
           justifyContent: 'space-between',
           gap: 8,
           padding: '7px 10px',
-          borderBottom: collapsed ? 'none' : '1px solid var(--dsw-border)',
+          borderBottom: collapsed ? 'none' : '1px solid var(--biu-color-border)',
           alignItems: 'center',
-          background: 'color-mix(in srgb, var(--dsw-hover) 55%, transparent)',
+          background: 'color-mix(in srgb, var(--biu-color-bg-hover) 55%, transparent)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
@@ -687,7 +687,7 @@ function CodeRunnerBlock({ data, update, writable }: BlockProps) {
                 borderRadius: 6,
                 border: 0,
                 background: 'transparent',
-                color: 'var(--dsw-icon)',
+                color: 'var(--biu-color-icon)',
                 fontSize: 11,
                 cursor: 'pointer',
                 flexShrink: 0,
@@ -697,7 +697,7 @@ function CodeRunnerBlock({ data, update, writable }: BlockProps) {
             </button>
           )}
           {ro ? (
-            <span style={{ fontSize: 12, fontWeight: 650, color: 'var(--dsw-label)' }}>
+            <span style={{ fontSize: 12, fontWeight: 650, color: 'var(--biu-color-text)' }}>
               {langInfo.label}
             </span>
           ) : (
@@ -710,7 +710,7 @@ function CodeRunnerBlock({ data, update, writable }: BlockProps) {
                 borderRadius: 6,
                 border: 0,
                 background: 'transparent',
-                color: 'var(--dsw-label)',
+                color: 'var(--biu-color-text)',
                 fontSize: 12,
                 fontWeight: 650,
                 cursor: 'pointer',
@@ -722,7 +722,7 @@ function CodeRunnerBlock({ data, update, writable }: BlockProps) {
             </select>
           )}
           {collapsed && (
-            <span style={{ color: 'var(--dsw-label-3)', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <span style={{ color: 'var(--biu-color-text-subtle)', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {`${lineCount} \u884c · ${preview}`}
             </span>
           )}
@@ -745,7 +745,7 @@ function CodeRunnerBlock({ data, update, writable }: BlockProps) {
                 borderRadius: 5,
                 border: 0,
                 background: 'transparent',
-                color: 'var(--dsw-icon)',
+                color: 'var(--biu-color-icon)',
                 cursor: running ? 'not-allowed' : 'pointer',
                 opacity: running ? 0.5 : 1,
                 display: 'inline-flex',
@@ -773,7 +773,7 @@ function CodeRunnerBlock({ data, update, writable }: BlockProps) {
                 borderRadius: 5,
                 border: 0,
                 background: 'transparent',
-                color: 'var(--dsw-icon)',
+                color: 'var(--biu-color-icon)',
                 cursor: output.length === 0 ? 'default' : 'pointer',
                 opacity: output.length === 0 ? 0.35 : 1,
                 display: 'inline-flex',
@@ -818,9 +818,9 @@ function CodeRunnerBlock({ data, update, writable }: BlockProps) {
               <div
                 ref={outRef}
                 style={{
-                  borderTop: '1px solid var(--dsw-border)',
+                  borderTop: '1px solid var(--biu-color-border)',
                   padding: '10px 14px',
-                  background: 'color-mix(in srgb, var(--dsw-hover) 35%, transparent)',
+                  background: 'color-mix(in srgb, var(--biu-color-bg-hover) 35%, transparent)',
                   height: outH,
                   maxHeight: MAX_DRAG_OUT_H,
                   boxSizing: 'border-box',
@@ -833,7 +833,7 @@ function CodeRunnerBlock({ data, update, writable }: BlockProps) {
                   <div
                     key={i}
                     style={{
-                      color: colorMap[line.type] || 'var(--dsw-label)',
+                      color: colorMap[line.type] || 'var(--biu-color-text)',
                       whiteSpace: 'pre-wrap',
                       lineHeight: 1.6,
                       wordBreak: 'break-word',
