@@ -66,6 +66,7 @@ export function compileJsxSource(source: string): SandboxCompileResult {
 export function compileSandboxSource(source: string): SandboxCompileResult {
   const text = String(source ?? '')
   if (!text.trim()) return { ok: false, error: 'empty source' }
+  if (!looksLikeJsx(text)) return { ok: false, error: 'sandbox source must be a React component', mode: 'jsx' }
   return compileJsxSource(text)
 }
 

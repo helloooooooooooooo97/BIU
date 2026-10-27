@@ -70,7 +70,7 @@ test('pageBlock markdown roundtrips kind, plugin, id and data', () => {
   editor.destroy()
 })
 
-test('html pageBlock markdown keeps raw html and deck on the fence', () => {
+test('sandbox pageBlock markdown keeps raw source and deck on the fence', () => {
   const src = `:::pageBlock {kind=sandbox plugin=page-sandbox deck=true}
 <div style="color:#fff">爱乐之城</div>
 :::
@@ -82,7 +82,7 @@ test('html pageBlock markdown keeps raw html and deck on the fence', () => {
   })
   const block = editor.getJSON().content?.find((node) => node.type === 'pageBlock')
   assert.equal(block?.attrs?.kind, 'sandbox')
-  assert.equal((block?.attrs?.data as { html?: string; deck?: boolean })?.html, '<div style="color:#fff">爱乐之城</div>')
+  assert.equal((block?.attrs?.data as { source?: string; deck?: boolean })?.source, '<div style="color:#fff">爱乐之城</div>')
   assert.equal((block?.attrs?.data as { deck?: boolean })?.deck, true)
   const out = editor.getMarkdown()
   assert.match(out, /:::pageBlock \{kind=sandbox plugin=page-sandbox id=[a-z0-9]+ deck=true\}/)
@@ -130,7 +130,7 @@ test('video pageBlock still reads the old JSON body', () => {
   editor.destroy()
 })
 
-test('html pageBlock still reads the old JSON body', () => {
+test('sandbox pageBlock still reads the old JSON body as source', () => {
   const src = `:::pageBlock {kind=sandbox plugin=page-sandbox}
 {"html":"<div>旧写法</div>","deck":true}
 :::
@@ -141,10 +141,10 @@ test('html pageBlock still reads the old JSON body', () => {
     contentType: 'markdown',
   })
   const data = editor.getJSON().content?.find((node) => node.type === 'pageBlock')?.attrs?.data as {
-    html?: string
+    source?: string
     deck?: boolean
   }
-  assert.equal(data?.html, '<div>旧写法</div>')
+  assert.equal(data?.source, '<div>旧写法</div>')
   assert.equal(data?.deck, true)
   const out = editor.getMarkdown()
   assert.match(out, /deck=true/)
