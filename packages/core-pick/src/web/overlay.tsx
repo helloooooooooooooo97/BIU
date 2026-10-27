@@ -31,8 +31,8 @@ export function PickOverlay(_props: SlotProps) {
     document.documentElement.classList.add('pick-mode')
     const route = () => window.location.pathname
     const EDITOR_SEL = '.page-editor, .tiptap, [data-testid="page-editor"], .cm-editor'
-    const inEditor = (target: EventTarget | null) =>
-      target instanceof Element && Boolean(target.closest(EDITOR_SEL))
+    const pathHasEditor = (event: Event) =>
+      event.composedPath().some((node) => node instanceof Element && (node.matches(EDITOR_SEL) || Boolean(node.closest(EDITOR_SEL))))
 
     let drag: { x: number; y: number; boxed: boolean; editor: boolean } | null = null
 
@@ -62,11 +62,9 @@ export function PickOverlay(_props: SlotProps) {
     const onDown = (event: PointerEvent) => {
       if (event.button !== 0) return
       if (ignorePickCapture(event.target, event)) return
-      const inReadable =
-        event.target instanceof Element &&
-        Boolean(event.target.closest('.chat-stage, .page-editor, .tiptap, [data-testid="page-editor"], .cm-editor'))
+      const inReadable = pathHasEditor(event) || event.composedPath().some((node) => node instanceof Element && Boolean(node.closest('.chat-stage')))
       if (!inReadable) event.preventDefault()
-      drag = { x: event.clientX, y: event.clientY, boxed: false, editor: inEditor(event.target) }
+      drag = { x: event.clientX, y: event.clientY, boxed: false, editor: pathHasEditor(event) }
     }
 
     const onUp = (event: PointerEvent) => {

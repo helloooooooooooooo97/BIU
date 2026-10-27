@@ -183,6 +183,28 @@ function htmlBlockFrom(node: Element | null) {
   return composedClosest(node, HTML_BLOCK_SEL)
 }
 
+function refineSandboxPick(
+  hit: { el: HTMLElement; ref: PickRef } | null,
+  stacked: Element[],
+  route: string,
+  surface: Element | null,
+) {
+  if (!hit) return null
+  const block = htmlBlockFrom(hit.el)
+  if (!block) return hit
+  if (hit.ref.kind === 'html' && (hit.el.hasAttribute('data-html-pick') || hit.el.getAttribute('data-biu-kind') === 'html')) {
+    return hit
+  }
+  for (const el of stacked) {
+    if (!(el instanceof HTMLElement) || el === block) continue
+    if (!composedContains(block, el)) continue
+    if (el.getAttribute('data-biu-kind') !== 'html' && !el.hasAttribute('data-html-pick')) continue
+    const inner = resolvePickFromNode(el, route, surface)
+    if (inner?.ref.kind === 'html') return inner
+  }
+  return hit
+}
+
 function innermostHtmlTarget(start: Element, highlight: HTMLElement) {
   const block = htmlBlockFrom(start) || htmlBlockFrom(highlight)
   let stamped: HTMLElement | null = null
@@ -371,7 +393,7 @@ export function resolvePickAtPoint(x: number, y: number, route: string) {
     if (inHiddenPane(el)) continue
     const start = unignoredAncestor(el, surface)
     if (!start) continue
-    const hit = resolvePickFromNode(start, route, surface)
+    const hit = refineSandboxPick(resolvePickFromNode(start, route, surface), pool, route, surface)
     if (!hit) continue
     const vis = visiblePickBox(hit.el)
     if (!vis || !pointInBox(vis, x, y)) continue

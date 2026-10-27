@@ -90,6 +90,8 @@ test('jsx sandbox mounts a react root and flushes before pick stamping', async (
   const src = await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/page-sandbox/web/sandbox.ts'), 'utf8')
   assert.match(src, /flushSync/)
   assert.match(src, /data-html-react-root/)
+  assert.match(src, /host-context\(html\.pick-mode\)/)
+  assert.match(src, /cursor:crosshair/)
 })
 
 test('html block compile accepts markup and rejects bad scripts', async () => {

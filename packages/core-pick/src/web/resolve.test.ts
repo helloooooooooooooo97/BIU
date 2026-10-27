@@ -759,3 +759,14 @@ test('html block pick names the inner node even when the host is the plugin shel
   assert.doesNotMatch(hit.ref.element ?? '', /data-biu-kind="plugin"/)
   root.remove()
 })
+
+test('sandbox pick walks composed path and prefers inner html stamps', async () => {
+  const { readFile } = await import('node:fs/promises')
+  const { resolve } = await import('node:path')
+  const resolveSrc = await readFile(resolve(import.meta.dirname, './resolve.ts'), 'utf8')
+  const overlaySrc = await readFile(resolve(import.meta.dirname, './overlay.tsx'), 'utf8')
+  assert.match(resolveSrc, /function refineSandboxPick/)
+  assert.match(resolveSrc, /refineSandboxPick\(resolvePickFromNode/)
+  assert.match(overlaySrc, /pathHasEditor/)
+  assert.match(overlaySrc, /composedPath\(\)/)
+})
