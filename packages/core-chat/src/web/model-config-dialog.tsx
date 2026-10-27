@@ -9,7 +9,7 @@ export function ModelConfigDialog(props: { open: boolean; onClose: () => void })
   if (!props.open) return null
   return createPortal(
     <div
-      className="fixed inset-0 z-[240] flex items-center justify-center bg-(--biu-overlay) p-4"
+      className="fixed inset-0 z-[240] flex items-center justify-center bg-(--biu-color-overlay) p-4"
       data-testid="model-config-dialog"
       onClick={props.onClose}
     >

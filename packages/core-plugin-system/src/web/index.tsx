@@ -207,7 +207,7 @@ function PluginAppWindow({
   return (
     <section
       ref={boxRef}
-      className="group/win pointer-events-auto fixed flex min-h-0 min-w-0 flex-col overflow-visible bg-transparent text-(--biu-label)"
+      className="group/win pointer-events-auto fixed flex min-h-0 min-w-0 flex-col overflow-visible bg-transparent text-(--biu-color-text)"
       style={style}
       data-testid={`plugin-app-window-${extraId}`}
       data-plugin-id={pluginId}

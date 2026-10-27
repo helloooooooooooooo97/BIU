@@ -212,7 +212,7 @@ test('page-excalidraw sandbox stores scenes as page assets', async () => {
   assert.match(src, /requestAnimationFrame\(\(\) => fitView\(host\.api\)\)/)
   assert.doesNotMatch(src, /requestAnimationFrame\(\(\) => fitView\(api\)\)/)
   assert.match(src, /z-index:9992/)
-  assert.doesNotMatch(src, /inset-0 flex flex-col bg-\[var\(--biu-bg/)
+  assert.doesNotMatch(src, /inset-0 flex flex-col bg-\[var\(--biu-color-bg/)
   assert.match(src, /scrollToContent/)
   assert.match(src, /aria-label="画板名称"/)
   assert.match(src, /assetStem/)

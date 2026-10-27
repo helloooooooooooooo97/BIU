@@ -3,8 +3,8 @@ import {
   formatTrajectoryUsage,
   type TrajectoryUsage,
 } from '@biu/web-session-view'
-const CACHE_TRACK = 'var(--biu-usage-track-cache)'
-const HIST_TRACK = 'var(--biu-usage-track-hist)'
+const CACHE_TRACK = 'var(--biu-color-usage-cache)'
+const HIST_TRACK = 'var(--biu-color-usage-hist)'
 const RING_R = 4.5
 const RING_C = 2 * Math.PI * RING_R
 

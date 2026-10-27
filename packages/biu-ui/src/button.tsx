@@ -3,14 +3,14 @@ import type { ButtonHTMLAttributes, ReactNode, Ref } from 'react'
 import { cn } from './cn.ts'
 
 const buttonVariants = cva(
-  'biu-btn inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-[6px] border border-transparent h-[26px] px-2.5 text-[13px] font-semibold leading-[24px] transition-colors focus-visible:outline-none focus-visible:border-biu-pick disabled:pointer-events-none disabled:opacity-50 disabled:cursor-default',
+  'biu-btn inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-[6px] border border-transparent h-[26px] px-2.5 text-[13px] font-semibold leading-[24px] transition-colors focus-visible:outline-none focus-visible:border-biu-emphasis disabled:pointer-events-none disabled:opacity-50 disabled:cursor-default',
   {
     variants: {
       variant: {
-        default: 'bg-biu-hover text-biu-label border-biu-border hover:bg-biu-input',
-        secondary: 'bg-transparent text-biu-label border-biu-border hover:bg-biu-hover',
-        outline: 'bg-transparent text-biu-label border-biu-border hover:bg-biu-hover',
-        ghost: 'bg-transparent text-biu-label-3 hover:bg-biu-hover hover:text-biu-label',
+        default: 'bg-biu-hover text-biu-text border-biu-border hover:bg-biu-input',
+        secondary: 'bg-transparent text-biu-text border-biu-border hover:bg-biu-hover',
+        outline: 'bg-transparent text-biu-text border-biu-border hover:bg-biu-hover',
+        ghost: 'bg-transparent text-biu-text-subtle hover:bg-biu-hover hover:text-biu-text',
         destructive:
           'is-danger bg-biu-danger-soft text-biu-danger border-biu-border hover:bg-biu-danger-soft',
       },

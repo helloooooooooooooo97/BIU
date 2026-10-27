@@ -29,14 +29,14 @@ import {
 function DiffBlock({ lines, path }: { lines: DiffLine[]; path?: string }) {
   const stats = diffStats(lines)
   return (
-    <div className="overflow-hidden rounded-[10px] bg-(--biu-sidebar)">
+    <div className="overflow-hidden rounded-[10px] bg-(--biu-color-bg-subtle)">
       {path ? (
         <div className="flex items-center justify-between gap-2 px-3 py-1.5">
-          <span className="min-w-0 truncate font-mono text-(length:--biu-chat-ui-font-size) text-(--biu-icon)">{path}</span>
-          <span className="shrink-0 font-mono text-(length:--biu-chat-ui-font-size) tabular-nums text-(--biu-label-3)">
-            {stats.removed ? <span className="text-(--biu-danger)">−{stats.removed}</span> : null}
+          <span className="min-w-0 truncate font-mono text-(length:--biu-chat-ui-font-size) text-(--biu-color-icon)">{path}</span>
+          <span className="shrink-0 font-mono text-(length:--biu-chat-ui-font-size) tabular-nums text-(--biu-color-text-subtle)">
+            {stats.removed ? <span className="text-(--biu-color-danger)">−{stats.removed}</span> : null}
             {stats.removed && stats.added ? ' ' : null}
-            {stats.added ? <span className="text-(--biu-ok)">+{stats.added}</span> : null}
+            {stats.added ? <span className="text-(--biu-color-ok)">+{stats.added}</span> : null}
           </span>
         </div>
       ) : null}
@@ -45,10 +45,10 @@ function DiffBlock({ lines, path }: { lines: DiffLine[]; path?: string }) {
           const prefix = line.type === 'add' ? '+' : line.type === 'remove' ? '−' : ' '
           const rowClass =
             line.type === 'add'
-              ? 'bg-[color-mix(in_srgb,var(--biu-tag-green)_22%,transparent)] text-[var(--biu-tag-green)]'
+              ? 'bg-[color-mix(in_srgb,var(--biu-color-ink-green)_22%,transparent)] text-[var(--biu-color-ink-green)]'
               : line.type === 'remove'
-                ? 'bg-[color-mix(in_srgb,var(--biu-tag-red)_22%,transparent)] text-[var(--biu-tag-red)]'
-                : 'text-(--biu-label-2)'
+                ? 'bg-[color-mix(in_srgb,var(--biu-color-ink-red)_22%,transparent)] text-[var(--biu-color-ink-red)]'
+                : 'text-(--biu-color-text-muted)'
           return (
             <div key={`${index}-${line.type}`} className={`flex whitespace-pre-wrap break-all px-2 ${rowClass}`}>
               <span className="w-4 shrink-0 select-none opacity-70">{prefix}</span>
@@ -228,22 +228,22 @@ function DetailView({ detail, tall = false }: { detail: FormattedDetail; tall?: 
     const artifacts = detail.artifacts ?? []
     return (
       <div className="space-y-2">
-        <div className="overflow-hidden rounded-[10px] bg-(--biu-sidebar)">
+        <div className="overflow-hidden rounded-[10px] bg-(--biu-color-bg-subtle)">
           <div className="flex items-center justify-between gap-2 px-3 py-1.5">
-            <span className="font-mono text-(length:--biu-chat-ui-font-size) tracking-wide text-(--biu-label-3) uppercase">output</span>
+            <span className="font-mono text-(length:--biu-chat-ui-font-size) tracking-wide text-(--biu-color-text-subtle) uppercase">output</span>
             <span
               className={`font-mono text-(length:--biu-chat-ui-font-size) tabular-nums ${
-                detail.code === 0 || detail.code == null ? 'text-(--biu-ok)' : 'text-(--biu-danger)'
+                detail.code === 0 || detail.code == null ? 'text-(--biu-color-ok)' : 'text-(--biu-color-danger)'
               }`}
             >
               exit {detail.code ?? '—'}
             </span>
           </div>
-          <pre className="max-h-72 overflow-auto px-3 py-2 font-mono text-(length:--biu-chat-ui-font-size) leading-5 text-(--biu-label-2)">
+          <pre className="max-h-72 overflow-auto px-3 py-2 font-mono text-(length:--biu-chat-ui-font-size) leading-5 text-(--biu-color-text-muted)">
             {hasOut ? <span className="whitespace-pre-wrap">{detail.stdout.replace(/\n$/, '')}</span> : null}
             {hasOut && hasErr ? '\n\n' : null}
-            {hasErr ? <span className="whitespace-pre-wrap text-(--biu-danger)">{detail.stderr.replace(/\n$/, '')}</span> : null}
-            {!hasOut && !hasErr ? <span className="text-(--biu-label-3)">(empty)</span> : null}
+            {hasErr ? <span className="whitespace-pre-wrap text-(--biu-color-danger)">{detail.stderr.replace(/\n$/, '')}</span> : null}
+            {!hasOut && !hasErr ? <span className="text-(--biu-color-text-subtle)">(empty)</span> : null}
           </pre>
         </div>
         <ArtifactGallery artifacts={artifacts} />
@@ -253,14 +253,14 @@ function DetailView({ detail, tall = false }: { detail: FormattedDetail; tall?: 
 
   if (detail.kind === 'json') {
     return (
-      <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-[10px] bg-(--biu-sidebar) px-3 py-2 font-mono text-(length:--biu-chat-ui-font-size) leading-5 text-(--biu-label-2)">
+      <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-[10px] bg-(--biu-color-bg-subtle) px-3 py-2 font-mono text-(length:--biu-chat-ui-font-size) leading-5 text-(--biu-color-text-muted)">
         {detail.text}
       </pre>
     )
   }
 
   return (
-    <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-[10px] bg-(--biu-sidebar) px-3 py-2 font-mono text-(length:--biu-chat-ui-font-size) leading-5 text-(--biu-label)">
+    <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-[10px] bg-(--biu-color-bg-subtle) px-3 py-2 font-mono text-(length:--biu-chat-ui-font-size) leading-5 text-(--biu-color-text)">
       {detail.text}
     </pre>
   )
@@ -318,8 +318,8 @@ function ToolBody({
   if (parsed.kind === 'bash') {
     return (
       <div className="space-y-2">
-        <pre className="overflow-x-auto rounded-[10px] bg-(--biu-sidebar) px-3 py-2 font-mono text-(length:--biu-chat-ui-font-size) leading-5 text-(--biu-label-2)">
-          <span className="text-(--biu-label-3)">$ </span>
+        <pre className="overflow-x-auto rounded-[10px] bg-(--biu-color-bg-subtle) px-3 py-2 font-mono text-(length:--biu-chat-ui-font-size) leading-5 text-(--biu-color-text-muted)">
+          <span className="text-(--biu-color-text-subtle)">$ </span>
           {parsed.command}
         </pre>
         {formatted ? <DetailView detail={formatted} tall={tall} /> : null}
@@ -330,7 +330,7 @@ function ToolBody({
   if (parsed.kind === 'view') {
     return (
       <div className="space-y-2">
-        <div className="font-mono text-(length:--biu-chat-ui-font-size) text-(--biu-label-3)">
+        <div className="font-mono text-(length:--biu-chat-ui-font-size) text-(--biu-color-text-subtle)">
           {parsed.path}
           {parsed.viewRange ? `:${parsed.viewRange[0]}-${parsed.viewRange[1]}` : ''}
         </div>
@@ -342,7 +342,7 @@ function ToolBody({
   return (
     <div className="space-y-2">
       {rawArguments ? (
-        <pre className="max-h-56 overflow-auto whitespace-pre-wrap rounded-[10px] bg-(--biu-sidebar) px-3 py-2 font-mono text-(length:--biu-chat-ui-font-size) leading-5 text-(--biu-label-2)">
+        <pre className="max-h-56 overflow-auto whitespace-pre-wrap rounded-[10px] bg-(--biu-color-bg-subtle) px-3 py-2 font-mono text-(length:--biu-chat-ui-font-size) leading-5 text-(--biu-color-text-muted)">
           {prettyJsonString(rawArguments)}
         </pre>
       ) : null}

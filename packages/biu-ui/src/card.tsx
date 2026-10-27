@@ -5,7 +5,7 @@ export function Card({ className, ...rest }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       className={cn(
-        'biu-card rounded-[6px] border border-biu-border bg-biu-bg p-2.5 text-[13px] text-biu-label',
+        'biu-card rounded-[6px] border border-biu-border bg-biu-bg p-2.5 text-[13px] text-biu-text',
         className,
       )}
       {...rest}

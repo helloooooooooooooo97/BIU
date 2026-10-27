@@ -10,7 +10,7 @@ export const inject = ['databaseUi']
 export function SkillsContent({ record }: FsContentProps) {
   return (
     <div style={{ paddingTop: 12 }}>
-      <p style={{ margin: 0, color: 'var(--biu-label-2)', lineHeight: 1.6 }}>
+      <p style={{ margin: 0, color: 'var(--biu-color-text-muted)', lineHeight: 1.6 }}>
         {String(record.description ?? '')}
       </p>
     </div>
@@ -93,7 +93,7 @@ function SkillLibraryView({ rows, onOpen }: FsViewProps) {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '12px 16px 0' }}>
-        <span style={{ color: 'var(--biu-label-2)', fontSize: 13 }}>
+        <span style={{ color: 'var(--biu-color-text-muted)', fontSize: 13 }}>
           从包含 SKILL.md 的标准目录导入。
         </span>
         <button type="button" disabled={busy} onClick={chooseDirectory}>
@@ -101,9 +101,9 @@ function SkillLibraryView({ rows, onOpen }: FsViewProps) {
         </button>
         <input ref={inputRef} type="file" multiple hidden onChange={importDirectory} />
       </div>
-      {message ? <div style={{ padding: '8px 16px 0', color: 'var(--biu-label-2)', fontSize: 13 }}>{message}</div> : null}
+      {message ? <div style={{ padding: '8px 16px 0', color: 'var(--biu-color-text-muted)', fontSize: 13 }}>{message}</div> : null}
       {!rows.length ? (
-        <div style={{ padding: 40, textAlign: 'center', color: 'var(--biu-label-3)' }}>
+        <div style={{ padding: 40, textAlign: 'center', color: 'var(--biu-color-text-subtle)' }}>
           还没有 Skill，可以导入目录或点击右上角“新建”。
         </div>
       ) : (
@@ -127,10 +127,10 @@ function SkillLibraryView({ rows, onOpen }: FsViewProps) {
                 style={{
                   minHeight: 144,
                   padding: 16,
-                  border: '1px solid var(--biu-border)',
+                  border: '1px solid var(--biu-color-border)',
                   borderRadius: 12,
-                  background: 'var(--biu-bg)',
-                  color: 'var(--biu-label)',
+                  background: 'var(--biu-color-bg)',
+                  color: 'var(--biu-color-text)',
                   textAlign: 'left',
                   cursor: 'pointer',
                 }}
@@ -140,7 +140,7 @@ function SkillLibraryView({ rows, onOpen }: FsViewProps) {
                     {String(row.emoji ?? '') ? `${String(row.emoji)} ` : ''}
                     {String(row.title ?? row.id)}
                   </strong>
-                  <span style={{ color: row.enabled ? 'var(--biu-ok)' : 'var(--biu-label-3)', fontSize: 12 }}>
+                  <span style={{ color: row.enabled ? 'var(--biu-color-ok)' : 'var(--biu-color-text-subtle)', fontSize: 12 }}>
                     {row.enabled ? '已启用' : '已停用'}
                   </span>
                 </span>
@@ -150,7 +150,7 @@ function SkillLibraryView({ rows, onOpen }: FsViewProps) {
                     minHeight: 40,
                     marginTop: 10,
                     overflow: 'hidden',
-                    color: 'var(--biu-label-2)',
+                    color: 'var(--biu-color-text-muted)',
                     fontSize: 13,
                     lineHeight: 1.55,
                     WebkitBoxOrient: 'vertical',
@@ -159,10 +159,10 @@ function SkillLibraryView({ rows, onOpen }: FsViewProps) {
                 >
                   {String(row.description ?? '') || '尚未填写使用说明'}
                 </span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 12, color: 'var(--biu-label-3)', fontSize: 12 }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 12, color: 'var(--biu-color-text-subtle)', fontSize: 12 }}>
                   <span>{files ? `${files} 个附加文件` : '仅 SKILL.md'}</span>
                   {tags.slice(0, 2).map((tag) => (
-                    <span key={tag} style={{ padding: '2px 6px', borderRadius: 999, background: 'var(--biu-hover)' }}>
+                    <span key={tag} style={{ padding: '2px 6px', borderRadius: 999, background: 'var(--biu-color-bg-hover)' }}>
                       {tag}
                     </span>
                   ))}

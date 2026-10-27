@@ -140,7 +140,7 @@ function HtmlSandbox({
         style={{ display: 'block', width: '100%', height: '100%', minHeight: live ? 80 : undefined }}
       />
       {error ? (
-        <div data-testid="html-sandbox-error" style={{ color: 'var(--biu-danger, #c00)', fontSize: 12, padding: 8 }}>
+        <div data-testid="html-sandbox-error" style={{ color: 'var(--biu-color-danger, #c00)', fontSize: 12, padding: 8 }}>
           {error}
         </div>
       ) : null}
@@ -228,7 +228,7 @@ function SourceEditor({
         fontSize: 12,
         lineHeight: 1.55,
         color: 'var(--rui-fg)',
-        background: 'var(--biu-bg)',
+        background: 'var(--biu-color-bg)',
         border: '1px solid var(--rui-border)',
         borderRadius: 10,
         resize: 'vertical',
@@ -238,7 +238,7 @@ function SourceEditor({
       <div
         data-testid="html-compile"
         data-ok={compile.ok ? '1' : '0'}
-        style={{ marginTop: 6, fontSize: 11, color: compile.ok ? 'var(--biu-ok, #17803d)' : 'var(--biu-danger, #c00)' }}
+        style={{ marginTop: 6, fontSize: 11, color: compile.ok ? 'var(--biu-color-ok, #17803d)' : 'var(--biu-color-danger, #c00)' }}
       >
         {compile.ok ? `编译通过 · ${compile.mode}` : `编译失败 · ${compile.error}`}
       </div>
@@ -290,7 +290,7 @@ const pressBtn: Record<string, unknown> = {
   borderLeft: '2px solid #111',
   borderRadius: 0,
   padding: '8px 10px',
-  background: 'var(--biu-bg)',
+  background: 'var(--biu-color-bg)',
   color: '#111',
   fontFamily: inkFace,
   fontWeight: 800,
@@ -635,7 +635,7 @@ function FloatBar({
         alignItems: 'stretch',
         padding: 0,
         borderRadius: 0,
-        background: 'var(--biu-bg)',
+        background: 'var(--biu-color-bg)',
         border: 'none',
         borderBottom: '2px solid #111',
         boxShadow: 'none',
@@ -880,7 +880,7 @@ function HtmlFrameCard({ data, update, writable }: BlockProps) {
                 min={80}
                 value={height}
                 onChange={(e) => update({ height: Number(e.target.value) || 300 })}
-                style={{ width: 52, border: '2px solid #111', borderRadius: 0, background: 'var(--biu-bg)', color: '#111', padding: '1px 4px', fontSize: 12, fontFamily: inkFace }}
+                style={{ width: 52, border: '2px solid #111', borderRadius: 0, background: 'var(--biu-color-bg)', color: '#111', padding: '1px 4px', fontSize: 12, fontFamily: inkFace }}
               />
             </label>
           )}

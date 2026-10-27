@@ -34,7 +34,7 @@ function PluginTree(props: SlotProps) {
                   <span className="flex shrink-0 items-center gap-2">
                     {plugin.state === 'active' ? (
                       <span
-                        className="size-1.5 shrink-0 rounded-full bg-(--biu-ok,var(--biu-ok))"
+                        className="size-1.5 shrink-0 rounded-full bg-(--biu-color-ok,var(--biu-color-ok))"
                         data-testid="plugin-enabled-dot"
                         title="Active"
                         aria-label="已启用"

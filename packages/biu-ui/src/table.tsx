@@ -10,7 +10,7 @@ export function Table({ className, ...rest }: HTMLAttributes<HTMLTableElement>) 
 }
 
 export function TableHeader({ className, ...rest }: HTMLAttributes<HTMLTableSectionElement>) {
-  return <thead className={cn('text-biu-label-3', className)} {...rest} />
+  return <thead className={cn('text-biu-text-subtle', className)} {...rest} />
 }
 
 export function TableBody({ className, ...rest }: HTMLAttributes<HTMLTableSectionElement>) {

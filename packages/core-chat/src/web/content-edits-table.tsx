@@ -186,20 +186,20 @@ function FileDiffView({ sessionId, turn, path }: { sessionId: string; turn: numb
   }, [sessionId, turn, path])
 
   if (state === 'load') {
-    return <div className="px-3 py-2 text-[12px] text-(--biu-label-3)">载入 diff…</div>
+    return <div className="px-3 py-2 text-[12px] text-(--biu-color-text-subtle)">载入 diff…</div>
   }
   if (state === 'gone') {
-    return <div className="px-3 py-2 text-[12px] text-(--biu-label-3)">这份正文已过期，点标题仍可跳到当前文件。</div>
+    return <div className="px-3 py-2 text-[12px] text-(--biu-color-text-subtle)">这份正文已过期，点标题仍可跳到当前文件。</div>
   }
   return (
     <pre
-      className="max-h-80 overflow-auto border-t border-(--biu-border) py-1 font-mono text-[12px] leading-5"
+      className="max-h-80 overflow-auto border-t border-(--biu-color-border) py-1 font-mono text-[12px] leading-5"
       data-testid="content-edit-diff"
     >
       {rows.map((line, index) => {
         if (line.type === 'skip') {
           return (
-            <div key={`skip-${index}`} className="flex px-3 py-0.5 text-(--biu-sidebar-fg)">
+            <div key={`skip-${index}`} className="flex px-3 py-0.5 text-(--biu-color-text-muted)">
               <span className="w-7 shrink-0" />
               <span className="min-w-0 flex-1 px-2 text-center">··· 未改 {line.count} 行</span>
             </div>
@@ -209,10 +209,10 @@ function FileDiffView({ sessionId, turn, path }: { sessionId: string; turn: numb
         const prefix = line.type === 'add' ? '+' : line.type === 'remove' ? '−' : ' '
         const rowClass =
           line.type === 'add'
-            ? 'bg-[color-mix(in_srgb,var(--biu-tag-green)_22%,transparent)] text-[var(--biu-tag-green)]'
+            ? 'bg-[color-mix(in_srgb,var(--biu-color-ink-green)_22%,transparent)] text-[var(--biu-color-ink-green)]'
             : line.type === 'remove'
-              ? 'bg-[color-mix(in_srgb,var(--biu-tag-red)_22%,transparent)] text-[var(--biu-tag-red)]'
-              : 'text-(--biu-label)'
+              ? 'bg-[color-mix(in_srgb,var(--biu-color-ink-red)_22%,transparent)] text-[var(--biu-color-ink-red)]'
+              : 'text-(--biu-color-text)'
         return (
           <div
             key={`${index}-${line.type}`}
@@ -220,7 +220,7 @@ function FileDiffView({ sessionId, turn, path }: { sessionId: string; turn: numb
             data-old-line={line.oldLine ?? ''}
             data-new-line={line.newLine ?? ''}
           >
-            <span className="w-7 shrink-0 select-none text-right tabular-nums text-(--biu-sidebar-fg)">{lineNo ?? ''}</span>
+            <span className="w-7 shrink-0 select-none text-right tabular-nums text-(--biu-color-text-muted)">{lineNo ?? ''}</span>
             <span className="w-4 shrink-0 select-none px-1 opacity-70">{prefix}</span>
             <span className="min-w-0 flex-1">{line.text || ' '}</span>
           </div>
@@ -247,24 +247,24 @@ export const ContentEditsTable = memo(function ContentEditsTable({
 
   return (
     <div
-      className="overflow-hidden rounded-[10px] border border-(--biu-border) bg-(color-mix(in_srgb,var(--biu-sidebar)_65%,transparent))"
+      className="overflow-hidden rounded-[10px] border border-(--biu-color-border) bg-(color-mix(in_srgb,var(--biu-color-bg-subtle)_65%,transparent))"
       data-testid="content-edits-table"
     >
-      <div className="flex items-center justify-between gap-2 border-b border-(--biu-border) px-3 py-2">
+      <div className="flex items-center justify-between gap-2 border-b border-(--biu-color-border) px-3 py-2">
         <div className="content-edits-ink flex min-w-0 items-center gap-1.5 text-[12px] font-semibold">
           <CircleStackIcon className="content-edits-icon size-3.5 shrink-0" aria-hidden />
           数据改动
         </div>
         <div className="flex items-center gap-2 text-[12px] font-semibold tabular-nums">
-          <span className="text-[var(--biu-tag-green)]">+{added}</span>
-          <span className="text-[var(--biu-tag-red)]">−{removed}</span>
+          <span className="text-[var(--biu-color-ink-green)]">+{added}</span>
+          <span className="text-[var(--biu-color-ink-red)]">−{removed}</span>
         </div>
       </div>
       <ul className="m-0 list-none p-0">
         {visible.map((file) => {
           const shown = diffPath === file.path
           return (
-            <li key={file.path} className="border-t border-(--biu-border) first:border-t-0">
+            <li key={file.path} className="border-t border-(--biu-color-border) first:border-t-0">
               <div className="flex items-center gap-2 px-3 py-1.5">
                 <button
                   type="button"
@@ -285,14 +285,14 @@ export const ContentEditsTable = memo(function ContentEditsTable({
                 </button>
                 <button
                   type="button"
-                  className="text-[12px] font-semibold tabular-nums text-[var(--biu-tag-green)] hover:underline"
+                  className="text-[12px] font-semibold tabular-nums text-[var(--biu-color-ink-green)] hover:underline"
                   onClick={() => revealContentEdit(file.path, file.jump_line, { sessionId, turn })}
                 >
                   +{file.added}
                 </button>
                 <button
                   type="button"
-                  className="text-[12px] font-semibold tabular-nums text-[var(--biu-tag-red)] hover:underline"
+                  className="text-[12px] font-semibold tabular-nums text-[var(--biu-color-ink-red)] hover:underline"
                   onClick={() => revealContentEdit(file.path, file.jump_line, { sessionId, turn })}
                 >
                   −{file.removed}

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { compileHtmlSource, looksLikeJsx } from './compile.ts'
 
 test('markup without scripts compiles', () => {
-  const result = compileHtmlSource('<div style="color:var(--biu-label)">刊</div>')
+  const result = compileHtmlSource('<div style="color:var(--biu-color-text)">刊</div>')
   assert.deepEqual(result, { ok: true, mode: 'markup' })
 })
 

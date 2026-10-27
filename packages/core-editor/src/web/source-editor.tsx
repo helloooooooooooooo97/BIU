@@ -72,19 +72,19 @@ export type SourceEditorHandle = {
 }
 
 const mdHighlight = HighlightStyle.define([
-  { tag: tags.heading, color: 'var(--biu-label)', fontWeight: '700' },
+  { tag: tags.heading, color: 'var(--biu-color-text)', fontWeight: '700' },
   { tag: tags.strong, fontWeight: '700' },
   { tag: tags.emphasis, fontStyle: 'italic' },
   { tag: tags.strikethrough, textDecoration: 'line-through' },
-  { tag: tags.link, color: 'var(--biu-business)' },
-  { tag: tags.url, color: 'var(--biu-business)' },
-  { tag: tags.monospace, color: 'var(--biu-label)' },
-  { tag: tags.meta, color: 'var(--biu-sidebar-fg)' },
-  { tag: tags.processingInstruction, color: 'var(--biu-sidebar-fg)' },
-  { tag: tags.comment, color: 'var(--biu-sidebar-fg)' },
-  { tag: tags.keyword, color: 'var(--biu-pick)' },
-  { tag: tags.string, color: 'var(--biu-ok)' },
-  { tag: tags.number, color: 'var(--biu-warning)' },
+  { tag: tags.link, color: 'var(--biu-color-text)' },
+  { tag: tags.url, color: 'var(--biu-color-text)' },
+  { tag: tags.monospace, color: 'var(--biu-color-text)' },
+  { tag: tags.meta, color: 'var(--biu-color-text-muted)' },
+  { tag: tags.processingInstruction, color: 'var(--biu-color-text-muted)' },
+  { tag: tags.comment, color: 'var(--biu-color-text-muted)' },
+  { tag: tags.keyword, color: 'var(--biu-color-emphasis)' },
+  { tag: tags.string, color: 'var(--biu-color-ok)' },
+  { tag: tags.number, color: 'var(--biu-color-warning)' },
 ])
 
 const compactTheme = EditorView.theme({
@@ -95,24 +95,24 @@ const compactTheme = EditorView.theme({
 const theme = EditorView.theme({
   '&': {
     background: 'transparent',
-    color: 'var(--biu-label)',
+    color: 'var(--biu-color-text)',
     fontSize: '14px',
   },
   '.cm-scroller': { fontFamily: 'var(--font-mono)', lineHeight: '1.65', overflow: 'visible' },
-  '.cm-content': { caretColor: 'var(--biu-label)', padding: '0', minHeight: '240px' },
+  '.cm-content': { caretColor: 'var(--biu-color-text)', padding: '0', minHeight: '240px' },
   '.cm-gutters': {
     background: 'transparent',
     border: 'none',
-    color: 'var(--biu-sidebar-fg)',
+    color: 'var(--biu-color-text-muted)',
     minWidth: '2.4em',
   },
-  '.cm-activeLine': { background: 'color-mix(in srgb, var(--biu-hover) 70%, transparent)' },
-  '.cm-activeLineGutter': { background: 'transparent', color: 'var(--biu-label)' },
-  '.cm-cursor': { borderLeftColor: 'var(--biu-label)' },
-  /* 与正文 TipTap / --biu-pick 同一蓝。系统 Highlight 在深色页会发白。 */
-  '.cm-content ::selection': { background: 'color-mix(in srgb, var(--biu-pick) 40%, transparent)', color: 'inherit' },
+  '.cm-activeLine': { background: 'color-mix(in srgb, var(--biu-color-bg-hover) 70%, transparent)' },
+  '.cm-activeLineGutter': { background: 'transparent', color: 'var(--biu-color-text)' },
+  '.cm-cursor': { borderLeftColor: 'var(--biu-color-text)' },
+  /* 与正文 TipTap / --biu-color-emphasis 同一蓝。系统 Highlight 在深色页会发白。 */
+  '.cm-content ::selection': { background: 'color-mix(in srgb, var(--biu-color-emphasis) 40%, transparent)', color: 'inherit' },
   '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionLayer .cm-selectionBackground': {
-    background: 'color-mix(in srgb, var(--biu-pick) 40%, transparent)',
+    background: 'color-mix(in srgb, var(--biu-color-emphasis) 40%, transparent)',
   },
 })
 

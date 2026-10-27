@@ -7,8 +7,8 @@ const badgeVariants = cva(
   {
     variants: {
       variant: {
-        default: 'bg-biu-hover text-biu-label-3',
-        on: 'bg-biu-input text-biu-label',
+        default: 'bg-biu-hover text-biu-text-subtle',
+        on: 'bg-biu-input text-biu-text',
         destructive: 'bg-biu-danger-soft text-biu-danger',
       },
     },

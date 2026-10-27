@@ -249,7 +249,7 @@ function ColorMenus({
           >
             <span
               className="page-bubble-mark"
-              style={{ background: highlight || 'color-mix(in srgb, var(--biu-label) 18%, transparent)' }}
+              style={{ background: highlight || 'color-mix(in srgb, var(--biu-color-text) 18%, transparent)' }}
             />
           </button>
         }

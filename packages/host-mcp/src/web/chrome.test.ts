@@ -42,7 +42,7 @@ test('mcp tool cards put status in the top-right and filters in the bottom-right
   assert.match(css, /\.mcp-tool-dot\{[^}]*position:absolute/)
   assert.match(css, /\.mcp-tool-dot\{[^}]*top:10px/)
   assert.match(css, /\.mcp-tool-dot\{[^}]*right:10px/)
-  assert.match(css, /\.mcp-tool-dot\{[^}]*background:var\(--biu-ok/)
+  assert.match(css, /\.mcp-tool-dot\{[^}]*background:var\(--biu-color-ok/)
   assert.match(css, /\.mcp-tool-actions\{[^}]*right:8px/)
   assert.match(css, /\.mcp-tool-actions\{[^}]*bottom:8px/)
 })

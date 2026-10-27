@@ -151,14 +151,14 @@ const lcHighlight = HighlightStyle.define([
 ])
 
 const lcTheme = EditorView.theme({
-  '&': { background: 'transparent', color: 'var(--biu-code-ink)', fontSize: '13px', height: '100%' },
+  '&': { background: 'transparent', color: 'var(--biu-color-text-code)', fontSize: '13px', height: '100%' },
   '&.cm-editor': { outline: 'none', height: '100%' },
   '.cm-scroller': { fontFamily: 'ui-monospace,SFMono-Regular,Menlo,Consolas,monospace', lineHeight: '1.6', overflow: 'auto' },
-  '.cm-content': { caretColor: 'var(--biu-code-ink)', padding: '10px 8px 16px', minHeight: '100%' },
-  '.cm-gutters': { background: 'var(--biu-code-surface)', border: 'none', color: 'var(--biu-icon-muted)' },
+  '.cm-content': { caretColor: 'var(--biu-color-text-code)', padding: '10px 8px 16px', minHeight: '100%' },
+  '.cm-gutters': { background: 'var(--biu-color-bg-code)', border: 'none', color: 'var(--biu-color-icon-muted)' },
   '.cm-lineNumbers .cm-gutterElement': { minWidth: '2.4em', padding: '0 10px 0 8px' },
   '.cm-activeLine': { background: 'transparent' },
-  '.cm-cursor': { borderLeftColor: 'var(--biu-code-ink)' },
+  '.cm-cursor': { borderLeftColor: 'var(--biu-color-text-code)' },
 })
 
 function langExtension(lang: string) {

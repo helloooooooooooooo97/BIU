@@ -38,8 +38,8 @@ test('share panel uses a compact settings section and custom toggles', () => {
   assert.match(src, /公开链接设置/)
   assert.match(src, /fsdb-share-toggle/)
   assert.match(css, /\.fsdb-share-panel\{[^}]*width:min\(380px/)
-  assert.match(css, /\.fsdb-share-panel\{[^}]*background:var\(--biu-sidebar\)/)
-  assert.doesNotMatch(css, /\.fsdb-share-panel\{[^}]*background:var\(--biu-surface/)
+  assert.match(css, /\.fsdb-share-panel\{[^}]*background:var\(--biu-color-bg-subtle\)/)
+  assert.doesNotMatch(css, /\.fsdb-share-panel\{[^}]*background:var\(--biu-color-surface/)
   assert.match(css, /\.fsdb-share-panel\.is-embedded\{position:static\}/)
   assert.match(css, /\.fsdb-share-toggle\.is-on/)
   assert.match(css, /\.fsdb-share-link-row/)
@@ -151,13 +151,13 @@ test('list permission column uses the same capsule and loads the chain on click'
   const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
   assert.match(src, /data-testid="fsdb-role-tag"/)
   assert.match(labelSrc, /className=\{`fsdb-scope-tag is-\$\{accessTone\(label\)\}`\}/)
-  assert.match(css, /\.fsdb-scope-tag\.is-manage[^{]*\{[^}]*background:var\(--biu-hover\)/)
-  assert.match(css, /\.fsdb-scope-tag\.is-manage[^{]*\{[^}]*color:var\(--biu-label-2\)/)
-  assert.doesNotMatch(css, /\.fsdb-scope-tag\.is-manage[^{]*\{[^}]*--biu-business/)
+  assert.match(css, /\.fsdb-scope-tag\.is-manage[^{]*\{[^}]*background:var\(--biu-color-bg-hover\)/)
+  assert.match(css, /\.fsdb-scope-tag\.is-manage[^{]*\{[^}]*color:var\(--biu-color-text-muted\)/)
+  assert.doesNotMatch(css, /\.fsdb-scope-tag\.is-manage[^{]*\{[^}]*--biu-color-text/)
   assert.doesNotMatch(css, /\.fsdb-scope-tag\.is-manage[^{]*\{[^}]*#2c2c2b/)
   assert.match(
     css,
-    /\.fsdb-scope-tag\.is-shared,\.fsdb-scope-pill\.is-shared,\.fsdb-scope-tag\.is-edit,\.fsdb-scope-pill\.is-edit,[\s\S]*?background:var\(--biu-pick-fill\);color:var\(--biu-pick\)/,
+    /\.fsdb-scope-tag\.is-shared,\.fsdb-scope-pill\.is-shared,\.fsdb-scope-tag\.is-edit,\.fsdb-scope-pill\.is-edit,[\s\S]*?background:var\(--biu-color-emphasis-muted\);color:var\(--biu-color-emphasis\)/,
   )
   assert.doesNotMatch(css, /\.fsdb-scope-tag\.is-edit[^{]*\{[^}]*#2383e2/)
   assert.match(browser, /fallback=\{<ShareRoleLabel label=\{props\.label\} \/>\}/)
@@ -196,9 +196,9 @@ test('list share column uses the same capsule and loads the chain on click', () 
   assert.match(css, /\.fsdb-scope-tag\{[^}]*height:22px/)
   assert.match(
     css,
-    /\.fsdb-scope-tag\.is-workspace,\.fsdb-scope-pill\.is-workspace,\.fsdb-scope-tag\.is-personal,\.fsdb-scope-pill\.is-personal\{background:var\(--biu-hover\);color:var\(--biu-label-2\)\}/,
+    /\.fsdb-scope-tag\.is-workspace,\.fsdb-scope-pill\.is-workspace,\.fsdb-scope-tag\.is-personal,\.fsdb-scope-pill\.is-personal\{background:var\(--biu-color-bg-hover\);color:var\(--biu-color-text-muted\)\}/,
   )
-  assert.doesNotMatch(css, /\.fsdb-scope-tag\.is-workspace\{[^}]*--biu-business/)
+  assert.doesNotMatch(css, /\.fsdb-scope-tag\.is-workspace\{[^}]*--biu-color-text/)
   assert.match(browser, /fallback=\{<ShareScopeLabel label=\{props\.label\} \/>\}/)
   assert.match(browser, /if \(key === 'shareScope' \|\| key === 'shareRole'\) \{\s*return renderCell\(row, key, field, 'table'\)/)
 })

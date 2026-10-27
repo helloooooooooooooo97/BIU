@@ -223,15 +223,15 @@ export function ApprovalsRail(props: SlotProps) {
               <div className="dock-approval-card-actions">
                 <button
                   type="button"
-                  className="rounded-full px-3 py-1 text-(length:--biu-chat-ui-font-size) text-(--biu-bg)"
-                  style={{ background: 'var(--biu-business)' }}
+                  className="rounded-full px-3 py-1 text-(length:--biu-chat-ui-font-size) text-(--biu-color-bg)"
+                  style={{ background: 'var(--biu-color-text)' }}
                   onClick={() => void sessionView.decideApproval(item.id, true)}
                 >
                   Allow
                 </button>
                 <button
                   type="button"
-                  className="rounded-full border border-(--biu-border) px-3 py-1 text-(length:--biu-chat-ui-font-size)"
+                  className="rounded-full border border-(--biu-color-border) px-3 py-1 text-(length:--biu-chat-ui-font-size)"
                   onClick={() => void sessionView.decideApproval(item.id, false)}
                 >
                   Deny

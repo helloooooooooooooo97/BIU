@@ -12,10 +12,10 @@ export interface UsagePanelProps {
   sessionView?: SessionViewService
 }
 
-const IN = 'var(--biu-tag-blue)'
-const OUT = 'var(--biu-icon-muted)'
-const CACHE = 'var(--biu-tag-green)'
-const COMPACT = 'var(--biu-tag-gold)'
+const IN = 'var(--biu-color-ink-blue)'
+const OUT = 'var(--biu-color-icon-muted)'
+const CACHE = 'var(--biu-color-ink-green)'
+const COMPACT = 'var(--biu-color-ink-gold)'
 
 async function loadUsageTrend(sessionId: string): Promise<UsageTrend> {
   const res = await fetch(`/api/sessions/${sessionId}/usage-trend`)

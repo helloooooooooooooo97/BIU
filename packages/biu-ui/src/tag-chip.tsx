@@ -4,9 +4,9 @@ const STYLE_ID = 'biu-public-ui-tag-chip'
 const CSS = `
 .biu-tag-wrap{border:0;background:transparent;padding:0;cursor:pointer;font:inherit}
 .biu-tags{display:inline-flex;flex-wrap:wrap;gap:var(--biu-space-1);align-items:center;min-width:0;max-width:100%}
-.biu-tag{display:inline-flex;align-items:center;gap:var(--biu-space-1);height:var(--biu-space-5);padding:0 6px;border-radius:var(--biu-radius-sm);font-size:var(--biu-font-3);font-weight:var(--biu-weight-regular);line-height:var(--biu-space-5);background:color-mix(in srgb,var(--biu-tag,#5b9fd6) 38%,transparent);color:var(--biu-tag-ink,var(--biu-label));max-width:160px}
+.biu-tag{display:inline-flex;align-items:center;gap:var(--biu-space-1);height:var(--biu-space-5);padding:0 var(--biu-space-1);border-radius:var(--biu-radius-sm);font-size:var(--biu-font-size-3);font-weight:var(--biu-font-weight-regular);line-height:var(--biu-space-5);background:color-mix(in srgb,var(--biu-tag,var(--biu-color-emphasis)) 38%,transparent);color:var(--biu-color-text);max-width:160px}
 .biu-tag.is-btn{cursor:pointer}
-.biu-tag.is-on{background:color-mix(in srgb,var(--biu-tag,#5b9fd6) 34%,transparent)}
+.biu-tag.is-on{background:color-mix(in srgb,var(--biu-tag,var(--biu-color-emphasis)) 34%,transparent)}
 .biu-tag-icon{display:inline-flex;width:12px;height:12px;flex:none;align-items:center;justify-content:center}
 .biu-tag-icon svg{width:12px;height:12px;display:block}
 .biu-tag-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -14,9 +14,18 @@ const CSS = `
 .biu-tag-x:hover{opacity:1}
 `
 
-export const TAG_TONES = ['#5b9fd6', '#9a6dd7', '#d9730d', '#448361', '#c4554d', '#e255a1', '#c2920a', '#787774'] as const
+export const TAG_TONES = [
+  'var(--biu-color-ink-blue)',
+  'var(--biu-color-ink-purple)',
+  'var(--biu-color-ink-orange)',
+  'var(--biu-color-ink-green)',
+  'var(--biu-color-ink-red)',
+  'var(--biu-color-ink-pink)',
+  'var(--biu-color-ink-gold)',
+  'var(--biu-color-ink-gray)',
+] as const
 /** 日间叠在近黑墨上，夜间叠在纯白上；少掺色相。 */
-export const TAG_INK_BASE = 'var(--biu-tag-ink, var(--biu-label))'
+export const TAG_INK_BASE = 'var(--biu-color-text)'
 
 export function tagTextColor(tone: string, strength = 8) {
   return `color-mix(in srgb, ${tone} ${strength}%, ${TAG_INK_BASE})`
@@ -28,11 +37,11 @@ export function tagWashColor(tone: string, strength = 22) {
 }
 
 /** 分面色板里的玫红。 */
-export const TAG_TONE_ROSE = '#e255a1' as const
-export const TAG_TONE_BLUE = '#5b9fd6' as const
-export const TAG_TONE_ORANGE = '#d9730d' as const
-export const TAG_TONE_GREEN = 'var(--biu-tag-green)' as const
-export const TAG_TONE_RED = 'var(--biu-tag-red)' as const
+export const TAG_TONE_ROSE = 'var(--biu-color-ink-pink)' as const
+export const TAG_TONE_BLUE = 'var(--biu-color-ink-blue)' as const
+export const TAG_TONE_ORANGE = 'var(--biu-color-ink-orange)' as const
+export const TAG_TONE_GREEN = 'var(--biu-color-ink-green)' as const
+export const TAG_TONE_RED = 'var(--biu-color-ink-red)' as const
 
 export function tagTone(id: string) {
   let hash = 0

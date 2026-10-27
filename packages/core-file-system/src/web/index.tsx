@@ -514,9 +514,9 @@ if (typeof document !== 'undefined') {
   const style = document.getElementById(id) ?? document.createElement('style')
   style.id = id
   style.textContent = `
-.fsdb-nav-errors{position:fixed;right:16px;bottom:16px;z-index:var(--biu-z-float);max-width:360px;border:1px solid var(--biu-danger);border-radius:12px;padding:12px 14px;background:var(--biu-surface);color:var(--biu-label);box-shadow:var(--biu-shadow)}
-.fsdb-nav-errors strong{display:block;margin-bottom:6px;color:var(--biu-danger);font-size:var(--biu-font-2)}
-.fsdb-nav-errors ul{margin:0;padding-left:18px;font-size:var(--biu-font-2);line-height:1.5}
+.fsdb-nav-errors{position:fixed;right:16px;bottom:16px;z-index:var(--biu-z-float);max-width:360px;border:1px solid var(--biu-color-danger);border-radius:12px;padding:12px 14px;background:var(--biu-color-surface);color:var(--biu-color-text);box-shadow:var(--biu-shadow-md)}
+.fsdb-nav-errors strong{display:block;margin-bottom:6px;color:var(--biu-color-danger);font-size:var(--biu-font-size-2)}
+.fsdb-nav-errors ul{margin:0;padding-left:18px;font-size:var(--biu-font-size-2);line-height:1.5}
 `
   if (!document.getElementById(id)) document.head.appendChild(style)
 }

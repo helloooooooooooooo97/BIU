@@ -65,7 +65,7 @@ export function DataSidebarShell({
   }
   return (
     <aside
-      className="app-side-bar fsdb-views flex min-h-0 flex-col overflow-hidden border-r border-(--biu-border) bg-(--biu-sidebar)"
+      className="app-side-bar fsdb-views flex min-h-0 flex-col overflow-hidden border-r border-(--biu-color-border) bg-(--biu-color-bg-subtle)"
       aria-label="数据"
     >
       {body}

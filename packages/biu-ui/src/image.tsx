@@ -183,7 +183,7 @@ function ImageRoot({
         <span className="biu-image-skeleton absolute inset-0 animate-pulse bg-biu-hover" aria-hidden />
       ) : null}
       {status === 'error' ? (
-        <span className="biu-image-fallback flex h-full w-full items-center justify-center text-[11px] text-biu-label-3">
+        <span className="biu-image-fallback flex h-full w-full items-center justify-center text-[11px] text-biu-text-subtle">
           {fallback ?? '无法加载'}
         </span>
       ) : null}

@@ -232,8 +232,8 @@ function BrowserPanel({ pick }: { pick?: PickApi }) {
 
   if (!api) {
     return (
-      <div style={{ padding: 16, fontFamily: UI, fontSize: 13, color: 'var(--biu-label-2)', lineHeight: 1.6 }}>
-        <div style={{ fontWeight: 700, color: 'var(--biu-label)', marginBottom: 6 }}>侧栏浏览器需要 Electron 外壳</div>
+      <div style={{ padding: 16, fontFamily: UI, fontSize: 13, color: 'var(--biu-color-text-muted)', lineHeight: 1.6 }}>
+        <div style={{ fontWeight: 700, color: 'var(--biu-color-text)', marginBottom: 6 }}>侧栏浏览器需要 Electron 外壳</div>
         <div>这个面板靠 Electron 的原生 BrowserView 渲染，网页版里没有这个能力。</div>
         <div style={{ marginTop: 8 }}>
           用 <code style={{ fontFamily: 'var(--font-mono)' }}>npm run electron:dev</code> 启动就能用。
@@ -246,7 +246,7 @@ function BrowserPanel({ pick }: { pick?: PickApi }) {
     cursor: 'pointer',
     border: 'none',
     background: 'transparent',
-    color: 'var(--biu-label-2)',
+    color: 'var(--biu-color-text-muted)',
     padding: '4px 5px',
     borderRadius: 999,
     display: 'inline-flex',

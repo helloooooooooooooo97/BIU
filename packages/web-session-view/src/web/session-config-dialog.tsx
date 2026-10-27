@@ -53,7 +53,7 @@ interface InspectorPayload {
 }
 
 const fieldClass =
-  'rounded-lg border border-(--biu-border) bg-(--biu-surface) px-2 py-1.5 text-[12px] text-(--biu-label) outline-none'
+  'rounded-lg border border-(--biu-color-border) bg-(--biu-color-surface) px-2 py-1.5 text-[12px] text-(--biu-color-text) outline-none'
 
 function slugFacetId(label: string, used: Set<string>) {
   const base =
@@ -284,16 +284,16 @@ export const SessionConfigDialog = memo(function SessionConfigDialog({
             </div>
           ) : null}
           {!sessionId ? (
-            <div className="text-[11px] leading-[1.45] text-(--biu-label-3)">打开会话后可编辑配置。</div>
+            <div className="text-[11px] leading-[1.45] text-(--biu-color-text-subtle)">打开会话后可编辑配置。</div>
           ) : (
             <div className="flex flex-col gap-2.5">
-              <p className="m-0 text-[11px] leading-[1.45] text-(--biu-label-3)">
+              <p className="m-0 text-[11px] leading-[1.45] text-(--biu-color-text-subtle)">
                 名称、提示词和工具只作用于当前 session；未改的字段沿用全局默认。
               </p>
 
               <ChatOutlineFilterFields />
 
-              <label className="flex flex-col gap-1 text-[11px] text-(--biu-label-3)">
+              <label className="flex flex-col gap-1 text-[11px] text-(--biu-color-text-subtle)">
                 <span>名称</span>
                 <input
                   className={fieldClass}
@@ -320,7 +320,7 @@ export const SessionConfigDialog = memo(function SessionConfigDialog({
                 />
               </label>
 
-              <label className="flex flex-col gap-1 text-[11px] text-(--biu-label-3)">
+              <label className="flex flex-col gap-1 text-[11px] text-(--biu-color-text-subtle)">
                 <span>标签 · 侧栏可按标签分组</span>
                 <SessionFacetPicker
                   value={data?.config?.facet}
@@ -329,7 +329,7 @@ export const SessionConfigDialog = memo(function SessionConfigDialog({
                 />
               </label>
 
-              <label className="flex flex-col gap-1 text-[11px] text-(--biu-label-3)">
+              <label className="flex flex-col gap-1 text-[11px] text-(--biu-color-text-subtle)">
                 <span>系统提示词</span>
                 <textarea
                   className={`${fieldClass} min-h-[88px] resize-y font-mono text-[11px] leading-[1.45]`}
@@ -352,7 +352,7 @@ export const SessionConfigDialog = memo(function SessionConfigDialog({
                 />
               </label>
 
-              <label className="flex flex-col gap-1 text-[11px] text-(--biu-label-3)">
+              <label className="flex flex-col gap-1 text-[11px] text-(--biu-color-text-subtle)">
                 <span>自动压缩上限（输入 token）</span>
                 <input
                   className={fieldClass}
@@ -382,9 +382,9 @@ export const SessionConfigDialog = memo(function SessionConfigDialog({
 
               <div className="flex flex-col gap-px">
                 {sources.map((source) => (
-                  <div key={source.id} className="rounded-lg px-2 py-1.5 hover:bg-(--biu-hover)">
-                    <div className="text-[11px] font-semibold text-(--biu-label-2)">{source.label}</div>
-                    <div className="mt-0.5 text-[11px] leading-[1.4] text-(--biu-label-3)">
+                  <div key={source.id} className="rounded-lg px-2 py-1.5 hover:bg-(--biu-color-bg-hover)">
+                    <div className="text-[11px] font-semibold text-(--biu-color-text-muted)">{source.label}</div>
+                    <div className="mt-0.5 text-[11px] leading-[1.4] text-(--biu-color-text-subtle)">
                       {source.description}
                     </div>
                   </div>
@@ -395,8 +395,8 @@ export const SessionConfigDialog = memo(function SessionConfigDialog({
                 {tools.map((tool) => (
                   <li
                     key={tool.name}
-                    className={`relative box-border flex h-[30px] min-h-[30px] w-full items-center gap-2 rounded-lg border-0 px-2 py-[5px] text-[12px] font-medium leading-[1.2] transition-none hover:bg-(--biu-hover) hover:text-(--biu-label) ${
-                      tool.active ? 'text-(--biu-label)' : 'text-(--biu-label-2)'
+                    className={`relative box-border flex h-[30px] min-h-[30px] w-full items-center gap-2 rounded-lg border-0 px-2 py-[5px] text-[12px] font-medium leading-[1.2] transition-none hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text) ${
+                      tool.active ? 'text-(--biu-color-text)' : 'text-(--biu-color-text-muted)'
                     }`}
                     data-tool={tool.name}
                     title={tool.description || tool.name}
@@ -404,7 +404,7 @@ export const SessionConfigDialog = memo(function SessionConfigDialog({
                     {tool.configurable ? (
                       <input
                         type="checkbox"
-                        className="m-0 size-3.5 shrink-0 accent-(--biu-business)"
+                        className="m-0 size-3.5 shrink-0 accent-(--biu-color-text)"
                         checked={(effective?.extraTools ?? data?.extraTools ?? []).includes(tool.name)}
                         disabled={busy}
                         aria-label={`启用 ${tool.name}`}
@@ -413,7 +413,7 @@ export const SessionConfigDialog = memo(function SessionConfigDialog({
                     ) : (
                       <span
                         className={`grid size-4 shrink-0 place-items-center ${
-                          tool.active ? 'text-(--biu-label)' : 'text-(--biu-label-3)'
+                          tool.active ? 'text-(--biu-color-text)' : 'text-(--biu-color-text-subtle)'
                         }`}
                         aria-hidden
                       >
@@ -421,12 +421,12 @@ export const SessionConfigDialog = memo(function SessionConfigDialog({
                       </span>
                     )}
                     <span className="min-w-0 flex-1 truncate font-mono text-[11px] font-medium">{tool.name}</span>
-                    <span className="shrink-0 text-[10px] font-medium text-(--biu-label-3)">
+                    <span className="shrink-0 text-[10px] font-medium text-(--biu-color-text-subtle)">
                       {sources.find((item) => item.id === tool.source)?.label ?? tool.source}
                     </span>
                     <span
                       className={`ml-auto shrink-0 text-[10px] font-semibold ${
-                        tool.active ? 'text-(--biu-ok,#448361)' : 'text-(--biu-label-3)'
+                        tool.active ? 'text-(--biu-color-ok,#448361)' : 'text-(--biu-color-text-subtle)'
                       }`}
                     >
                       {tool.active ? '可用' : '未开'}

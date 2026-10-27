@@ -52,16 +52,16 @@ export class RenderBoundary extends Component<RenderBoundaryProps, RenderBoundar
           boxSizing: 'border-box',
           width: '100%',
           padding: '10px 12px',
-          border: '1px solid var(--biu-border)',
+          border: '1px solid var(--biu-color-border)',
           borderRadius: 8,
-          background: 'var(--biu-danger-soft)',
-          color: 'var(--biu-label)',
+          background: 'var(--biu-color-danger-muted)',
+          color: 'var(--biu-color-text)',
           font: 'inherit',
           fontSize: 13,
         }}
       >
         <span style={{ fontWeight: 650 }}>{this.props.label || '这块内容'}</span>
-        <span style={{ color: 'var(--biu-label-2)', minWidth: 0, overflowWrap: 'anywhere' }}>
+        <span style={{ color: 'var(--biu-color-text-muted)', minWidth: 0, overflowWrap: 'anywhere' }}>
           渲染失败：{error.message || String(error)}
         </span>
         <button
@@ -70,11 +70,11 @@ export class RenderBoundary extends Component<RenderBoundaryProps, RenderBoundar
           style={{
             marginLeft: 'auto',
             flex: 'none',
-            border: '1px solid var(--biu-border)',
+            border: '1px solid var(--biu-color-border)',
             borderRadius: 6,
             padding: '2px 8px',
             background: 'transparent',
-            color: 'var(--biu-label)',
+            color: 'var(--biu-color-text)',
             font: 'inherit',
             fontSize: 12,
             fontWeight: 600,

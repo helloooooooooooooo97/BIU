@@ -7,7 +7,7 @@ export function Label({
   ...rest
 }: LabelHTMLAttributes<HTMLLabelElement> & { children?: ReactNode }) {
   return (
-    <label className={cn('biu-label text-xs font-semibold text-biu-label-3', className)} {...rest}>
+    <label className={cn('biu-label text-xs font-semibold text-biu-text-subtle', className)} {...rest}>
       {children}
     </label>
   )

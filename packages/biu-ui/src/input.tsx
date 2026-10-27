@@ -8,7 +8,7 @@ export function Input({ className, type = 'text', ...rest }: InputHTMLAttributes
     <input
       type={type}
       className={cn(
-        'biu-input h-[26px] w-full min-w-0 rounded-[6px] border border-biu-border bg-biu-input px-2 text-[13px] text-biu-label outline-none placeholder:text-biu-placeholder focus:border-biu-pick disabled:cursor-default disabled:opacity-50',
+        'biu-input h-[26px] w-full min-w-0 rounded-[6px] border border-biu-border bg-biu-input px-2 text-[13px] text-biu-text outline-none placeholder:text-biu-placeholder focus:border-biu-emphasis disabled:cursor-default disabled:opacity-50',
         className,
       )}
       {...rest}
