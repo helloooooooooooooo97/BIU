@@ -16,19 +16,24 @@ function newHtmlFile() {
   return `assets/html-${crypto.randomUUID().slice(0, 8)}.html`
 }
 
-async function loadHtmlAsset(file: string, fallback: string) {
+function assetEtag(raw: string) {
+  return raw.replace(/^W\//, '').replaceAll('"', '')
+}
+
+async function loadHtmlAsset(file: string, fallback: string, bust = false) {
   const name = assetName(file)
-  const res = await fetch(`/api/page/file/${encodeURIComponent(name)}`)
+  const res = await fetch(`/api/page/file/${encodeURIComponent(name)}${bust ? `?t=${Date.now()}` : ''}`)
   if (res.status === 404) {
+    if (bust) return { html: fallback, etag: '' }
     const created = await fetch(`/api/page/file/${encodeURIComponent(name)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
       body: fallback,
     })
-    return { html: fallback, etag: String(created.headers.get('etag') ?? '') }
+    return { html: fallback, etag: assetEtag(String(created.headers.get('etag') ?? '')) }
   }
   if (!res.ok) return { html: fallback, etag: '' }
-  return { html: await res.text(), etag: String(res.headers.get('etag') ?? '') }
+  return { html: await res.text(), etag: assetEtag(String(res.headers.get('etag') ?? '')) }
 }
 
 async function saveHtmlAsset(file: string, html: string, etag: string) {
@@ -36,7 +41,7 @@ async function saveHtmlAsset(file: string, html: string, etag: string) {
   const headers: Record<string, string> = { 'Content-Type': 'text/html; charset=utf-8' }
   if (etag) headers['If-Match'] = etag
   const res = await fetch(`/api/page/file/${encodeURIComponent(name)}`, { method: 'PUT', headers, body: html })
-  return String(res.headers.get('etag') ?? etag)
+  return assetEtag(String(res.headers.get('etag') ?? etag))
 }
 
 function useHtmlSource(
@@ -47,7 +52,13 @@ function useHtmlSource(
   const file = typeof data.file === 'string' ? data.file.trim() : ''
   const inline = typeof data.html === 'string' ? data.html : ''
   const [html, setHtml] = useState(inline || sample)
+  const [rev, setRev] = useState(0)
   const etagRef = useRef('')
+  const htmlRef = useRef(html)
+  const fileRef = useRef(file)
+  const quietUntil = useRef(0)
+  htmlRef.current = html
+  fileRef.current = file
   useEffect(() => {
     if (file) return
     update({ file: newHtmlFile(), html: undefined })
@@ -55,7 +66,7 @@ function useHtmlSource(
   useEffect(() => {
     if (!file) return
     let gone = false
-    void loadHtmlAsset(file, inline || sample).then((loaded) => {
+    void loadHtmlAsset(file, htmlRef.current || inline || sample, rev > 0).then((loaded) => {
       if (gone) return
       etagRef.current = loaded.etag
       setHtml(loaded.html)
@@ -64,13 +75,30 @@ function useHtmlSource(
     return () => {
       gone = true
     }
-  }, [file])
+  }, [file, rev])
+  useEffect(() => {
+    const onAsset = (event: Event) => {
+      const detail = (event as CustomEvent<{ name?: string; etag?: string }>).detail
+      const name = String(detail?.name ?? '')
+      const current = fileRef.current
+      if (!name || !current) return
+      if (assetName(current) !== name && current !== name) return
+      if (Date.now() < quietUntil.current) return
+      const nextEtag = assetEtag(String(detail?.etag ?? ''))
+      if (nextEtag && nextEtag === etagRef.current) return
+      setRev((n) => n + 1)
+    }
+    window.addEventListener('biu:asset-changed', onAsset)
+    return () => window.removeEventListener('biu:asset-changed', onAsset)
+  }, [])
   const save = (next: string) => {
     setHtml(next)
+    htmlRef.current = next
     if (!file) {
       update({ html: next })
       return
     }
+    quietUntil.current = Date.now() + 1200
     void saveHtmlAsset(file, next, etagRef.current).then((etag) => {
       etagRef.current = etag
     })

@@ -241,6 +241,8 @@ test('html page blocks register plugin id for slash', async () => {
   assert.match(html, /data-html-sandbox/)
   assert.match(html, /html_block_compile|compileHtmlSource/)
   assert.match(html, /newHtmlFile/)
+  assert.match(html, /biu:asset-changed/)
+  assert.match(html, /setRev/)
   assert.match(html, /stampHtmlSource/)
   assert.match(html, /data-biu-ignore/)
   assert.match(html, /data-page-block-expand/)
