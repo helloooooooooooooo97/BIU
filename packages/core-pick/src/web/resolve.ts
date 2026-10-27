@@ -189,19 +189,24 @@ function isSandboxInnerEl(el: Element) {
   return kind === 'sandbox' || kind === 'html' || el.hasAttribute('data-html-pick')
 }
 
+function rawBox(el: Element): ClientBox {
+  const r = el.getBoundingClientRect()
+  return { left: r.left, top: r.top, width: r.width, height: r.height }
+}
+
 function sandboxInnerAtPoint(x: number, y: number): HTMLElement | null {
   let best: HTMLElement | null = null
   let bestArea = Infinity
-  for (const host of queryAllDeep(document, '[data-html-sandbox], [data-page-block="sandbox"]')) {
-    const hostBox = visiblePickBox(host)
-    if (!hostBox || !pointInBox(hostBox, x, y)) continue
-    const root: ParentNode = host.shadowRoot ?? host
-    for (const el of root.querySelectorAll('[data-html-pick], [data-biu-kind="sandbox"], [data-biu-kind="html"]')) {
+  for (const host of document.querySelectorAll('[data-html-sandbox]')) {
+    if (!(host instanceof HTMLElement) || !host.shadowRoot) continue
+    const hostBox = rawBox(host)
+    if (hostBox.width <= 0 || hostBox.height <= 0 || !pointInBox(hostBox, x, y)) continue
+    for (const el of host.shadowRoot.querySelectorAll('[data-html-pick], [data-biu-kind="sandbox"], [data-biu-kind="html"]')) {
       if (!(el instanceof HTMLElement) || !isSandboxInnerEl(el)) continue
-      const box = visiblePickBox(el)
-      if (!box || !pointInBox(box, x, y)) continue
-      const area = Math.max(1, box.width * box.height)
-      if (area <= bestArea) {
+      const box = rawBox(el)
+      if (box.width <= 0 || box.height <= 0 || !pointInBox(box, x, y)) continue
+      const area = box.width * box.height
+      if (area < bestArea) {
         best = el
         bestArea = area
       }
@@ -366,7 +371,16 @@ function elementsFromPointDeep(x: number, y: number): Element[] {
     }
     for (const el of list) {
       if (!(el instanceof Element) || seen.has(el)) continue
-      if (el.shadowRoot) dive(el.shadowRoot)
+      if (el.shadowRoot) {
+        dive(el.shadowRoot)
+        for (const inner of el.shadowRoot.querySelectorAll('[data-html-pick], [data-biu-kind="sandbox"], [data-biu-kind="html"]')) {
+          if (!(inner instanceof HTMLElement) || seen.has(inner)) continue
+          const box = rawBox(inner)
+          if (box.width <= 0 || box.height <= 0 || !pointInBox(box, x, y)) continue
+          seen.add(inner)
+          out.push(inner)
+        }
+      }
       if (seen.has(el)) continue
       seen.add(el)
       out.push(el)

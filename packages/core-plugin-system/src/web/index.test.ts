@@ -322,7 +322,7 @@ test('html page blocks register plugin id for slash', async () => {
   assert.match(html, /var\(--biu-color-emphasis\)/)
   assert.match(html, /var\(--biu-color-icon\)/)
   assert.match(html, /chromeIcon[\s\S]*--biu-color-icon/)
-  assert.doesNotMatch(html, /chromeIcon[\s\S]*--biu-color-ink-purple/)
+  assert.match(html, /CubeTransparentIcon style=\{\{ \.\.\.chromeIcon, color: 'var\(--biu-color-ink-purple\)' \}\}/)
   assert.match(html, /source\.reload\(\)/)
   assert.match(html, /applyInline\(inline \|\| sample\)/)
   assert.doesNotMatch(html, /value=\{html\}/)
