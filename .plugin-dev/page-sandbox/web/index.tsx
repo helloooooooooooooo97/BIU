@@ -1,4 +1,9 @@
-import { Input, ReUI, Textarea } from '@biu/reui'
+import { Input, ReUI } from '@biu/reui'
+import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
+import { javascript } from '@codemirror/lang-javascript'
+import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
+import { EditorState } from '@codemirror/state'
+import { EditorView, drawSelection, keymap, lineNumbers } from '@codemirror/view'
 import {
   ArrowPathIcon,
   ArrowsPointingInIcon,
@@ -7,6 +12,7 @@ import {
   CubeTransparentIcon,
   EyeIcon,
 } from '@heroicons/react/16/solid'
+import { tags } from '@lezer/highlight'
 import { createPortal } from 'react-dom'
 import { compileHtmlSource } from '../shared/compile.ts'
 import { bindHtmlSlide, collectHtmlSlides, cssBoxSize, htmlDeckEnabled, htmlDeckIndex, htmlDeckKeyAction, htmlLooksFillLayout, HTML_FILL_HOST_PX, stepHtmlDeck } from './html-deck.ts'
@@ -54,12 +60,22 @@ function useHtmlSource(
   const quietUntil = useRef(0)
   htmlRef.current = html
   fileRef.current = file
+  const applyInline = (next: string) => {
+    if (next === htmlRef.current) return
+    htmlRef.current = next
+    setHtml(next)
+  }
+  useEffect(() => {
+    if (file) return
+    applyInline(inline || sample)
+  }, [file, inline, sample])
   useEffect(() => {
     if (!file) return
     let gone = false
     void loadHtmlAsset(file, htmlRef.current || inline || sample, rev > 0).then((loaded) => {
       if (gone) return
       etagRef.current = loaded.etag
+      htmlRef.current = loaded.html
       setHtml(loaded.html)
     })
     return () => {
@@ -93,7 +109,14 @@ function useHtmlSource(
       etagRef.current = etag
     })
   }
-  return { file, html, save }
+  const reload = () => {
+    if (file) {
+      setRev((n) => n + 1)
+      return
+    }
+    applyInline(inline || sample)
+  }
+  return { file, html, save, reload }
 }
 
 function HtmlSandbox({
@@ -168,6 +191,44 @@ const field = {
   font: 'inherit',
 }
 
+const cmHighlight = HighlightStyle.define([
+  { tag: tags.heading, color: 'var(--biu-color-text)', fontWeight: '700' },
+  { tag: tags.strong, fontWeight: '700' },
+  { tag: tags.emphasis, fontStyle: 'italic' },
+  { tag: tags.comment, color: 'var(--biu-color-text-muted)' },
+  { tag: tags.keyword, color: 'var(--biu-color-emphasis)' },
+  { tag: tags.string, color: 'var(--biu-color-ok)' },
+  { tag: tags.number, color: 'var(--biu-color-warning)' },
+  { tag: tags.bool, color: 'var(--biu-color-emphasis)' },
+  { tag: tags.null, color: 'var(--biu-color-emphasis)' },
+  { tag: tags.meta, color: 'var(--biu-color-text-muted)' },
+  { tag: tags.className, color: 'var(--biu-color-ink-purple)' },
+  { tag: tags.function(tags.variableName), color: 'var(--biu-color-ink-purple)' },
+])
+
+const cmTheme = EditorView.theme({
+  '&': {
+    background: 'transparent',
+    color: 'var(--biu-color-text)',
+    fontSize: '12px',
+    height: '100%',
+  },
+  '&.cm-editor': { outline: 'none', height: '100%' },
+  '.cm-scroller': { fontFamily: 'var(--font-mono)', lineHeight: '1.55', overflow: 'auto' },
+  '.cm-content': { caretColor: 'var(--biu-color-text)', padding: '10px 8px 16px', minHeight: '160px' },
+  '.cm-gutters': {
+    background: 'transparent',
+    border: 'none',
+    color: 'var(--biu-color-text-muted)',
+  },
+  '.cm-activeLine': { background: 'color-mix(in srgb, var(--biu-color-bg-hover) 70%, transparent)' },
+  '.cm-cursor': { borderLeftColor: 'var(--biu-color-text)' },
+  '.cm-content ::selection': {
+    background: 'color-mix(in srgb, var(--biu-color-emphasis) 40%, transparent)',
+    color: 'inherit',
+  },
+})
+
 /** 源码编辑区。草稿在本地，避免每次回车写回 pageBlock 把光标甩到最后。 */
 function SourceEditor({
   html,
@@ -178,34 +239,65 @@ function SourceEditor({
   onChange: (v: string) => void
   compile?: ReturnType<typeof compileHtmlSource>
 }) {
-  const [draft, setDraft] = useState(html)
+  const host = useRef<HTMLDivElement | null>(null)
+  const viewRef = useRef<EditorView | null>(null)
   const focused = useRef(false)
-  const draftRef = useRef(draft)
+  const draftRef = useRef(html)
   const htmlRef = useRef(html)
   const onChangeRef = useRef(onChange)
-  draftRef.current = draft
   htmlRef.current = html
   onChangeRef.current = onChange
   useEffect(() => {
-    if (!focused.current) setDraft(html)
-  }, [html])
-  useEffect(
-    () => () => {
+    const el = host.current
+    if (!el) return
+    const view = new EditorView({
+      parent: el,
+      state: EditorState.create({
+        doc: html,
+        extensions: [
+          history(),
+          drawSelection(),
+          lineNumbers(),
+          EditorView.lineWrapping,
+          cmTheme,
+          syntaxHighlighting(cmHighlight),
+          javascript({ jsx: true, typescript: true }),
+          keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
+          EditorView.updateListener.of((update) => {
+            if (!update.docChanged) return
+            draftRef.current = update.state.doc.toString()
+          }),
+        ],
+      }),
+    })
+    viewRef.current = view
+    draftRef.current = view.state.doc.toString()
+    return () => {
       if (draftRef.current !== htmlRef.current) onChangeRef.current(draftRef.current)
-    },
-    [],
-  )
+      view.destroy()
+      viewRef.current = null
+    }
+  }, [])
+  useEffect(() => {
+    const view = viewRef.current
+    if (!view || focused.current) return
+    if (html === view.state.doc.toString()) return
+    draftRef.current = html
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: html },
+    })
+  }, [html])
   const flush = () => {
     if (draftRef.current !== htmlRef.current) onChangeRef.current(draftRef.current)
   }
   return (
     <>
-    <Textarea
+    <div
+      ref={host}
       data-testid="html-source"
       data-page-block-capture=""
       data-biu-ignore
-      spellCheck={false}
-      value={draft}
+      className="cm-editor"
       onFocus={() => {
         focused.current = true
       }}
@@ -216,21 +308,13 @@ function SourceEditor({
       onKeyDown={(event) => {
         event.stopPropagation()
       }}
-      onChange={(e) => setDraft(e.target.value)}
-      placeholder={'export default function App() {\n  return <div />\n}'}
       style={{
         ...field,
-        width: '100%',
         minHeight: 160,
-        padding: 10,
-        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-        fontSize: 12,
-        lineHeight: 1.55,
-        color: 'var(--biu-color-text)',
-        background: 'var(--biu-color-bg)',
+        height: '100%',
         border: 'var(--biu-stroke-width) solid var(--biu-color-border)',
         borderRadius: 10,
-        resize: 'vertical',
+        overflow: 'hidden',
       }}
     />
     {compile ? (
@@ -246,7 +330,12 @@ function SourceEditor({
   )
 }
 
-const chromeIcon = { width: 14, height: 14, flexShrink: 0 } as const
+const chromeIcon = {
+  width: 14,
+  height: 14,
+  flexShrink: 0,
+  color: 'var(--biu-color-ink-purple)',
+} as const
 
 function sandboxTitle(raw: unknown) {
   const text = typeof raw === 'string' ? raw.trim() : ''
@@ -812,7 +901,10 @@ function HtmlCard({ data, update, writable }: BlockProps) {
         tab={tab}
         onTab={setTab}
         ro={ro}
-        onRefresh={() => setFrame((n) => n + 1)}
+        onRefresh={() => {
+          source.reload()
+          setFrame((n) => n + 1)
+        }}
         onExpand={deck.start}
       />
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>

@@ -310,8 +310,16 @@ test('html page blocks register plugin id for slash', async () => {
   assert.doesNotMatch(html, /boxShadow: '4px 4px 0 #111'/)
   assert.match(html, /data-testid="html-source"/)
   assert.match(html, /event\.stopPropagation\(\)/)
-  assert.match(html, /setDraft\(e\.target\.value\)/)
+  assert.match(html, /from '@codemirror\/view'/)
+  assert.match(html, /@codemirror\/lang-javascript/)
+  assert.match(html, /javascript\(\{ jsx: true, typescript: true \}\)/)
+  assert.match(html, /syntaxHighlighting\(cmHighlight\)/)
+  assert.match(html, /var\(--biu-color-emphasis\)/)
+  assert.match(html, /var\(--biu-color-ink-purple\)/)
+  assert.match(html, /source\.reload\(\)/)
+  assert.match(html, /applyInline\(inline \|\| sample\)/)
   assert.doesNotMatch(html, /value=\{html\}/)
+  assert.doesNotMatch(html, /setDraft\(e\.target\.value\)/)
 })
 
 test('algorithm card drafts locally and saves on blur like html source', async () => {
