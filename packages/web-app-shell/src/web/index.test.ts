@@ -243,6 +243,8 @@ test('settings appearance toggles day and night themes', () => {
   assert.match(css, /:root \{[^}]*--biu-cell-ink: #2c2c2b/)
   assert.match(css, /html\.dark \{[^}]*--biu-cell-ink: #d4d4d4/)
   assert.match(css, /html\.dark \{[^}]*--biu-label: #d4d4d4/)
+  assert.match(css, /html\.dark \{[^}]*--biu-tag-ink: var\(--biu-label\)/)
+  assert.match(css, /html\.dark \{[^}]*--biu-on-accent: var\(--biu-label\)/)
   assert.match(css, /html\.dark \{[^}]*--biu-bg: #191919/)
   assert.match(css, /html:not\(\.dark\) \.hljs/)
   assert.match(html, /color-scheme/)

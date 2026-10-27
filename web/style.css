@@ -245,7 +245,7 @@ html.dark {
   --biu-placeholder: #5F5F5A;
   --biu-sidebar-fg: #bcbab6;
   --biu-sidebar-fg-active: #d4d4d4;
-  --biu-tag-ink: #ffffff;
+  --biu-tag-ink: var(--biu-label);
   --biu-cell-ink: #d4d4d4;
   --biu-icon: #bab9b5;
   --biu-icon-active: #bab9b5;
@@ -267,7 +267,7 @@ html.dark {
   --biu-warning-on-surface: #e8b84a;
   --biu-code-surface: #1e1e1e;
   --biu-code-ink: #d4d4d4;
-  --biu-on-accent: #ffffff;
+  --biu-on-accent: var(--biu-label);
   --biu-ink: #aaaaaa;
   --biu-ink-gray: #696969;
   --biu-ink-brown: #83733c;
@@ -644,7 +644,7 @@ body {
   padding: 0 5px;
   border-radius: var(--biu-radius-full);
   background: var(--biu-danger);
-  color: #fff;
+  color: var(--biu-on-accent);
   font-size: 10px;
   font-weight: 700;
   line-height: 16px;
@@ -775,7 +775,7 @@ body {
 
 .biu-confirm-submit {
   background: var(--biu-pick);
-  color: #fff;
+  color: var(--biu-on-accent);
 }
 
 .biu-confirm-submit.is-danger {
@@ -2283,6 +2283,7 @@ html:not(.dark) .shell-workspace-menu-item.is-active .shell-workspace-menu-icon 
 }
 
 .auth-gate {
+  --biu-on-accent: #ffffff;
   min-height: 100vh;
   display: grid;
   place-items: center;
@@ -8972,6 +8973,7 @@ html:not(.dark) .inspector-add-row .fsdb-record-emoji,
 }
 
 .site {
+  --biu-on-accent: #ffffff;
   /* 官网自身的滚动容器。
      用视口高度而不是 height:100%：拆成多页后 .site 的父级可能是
      没有任何高度的裸 div，百分比高度会塌成内容高度，overflow 永不触发，
