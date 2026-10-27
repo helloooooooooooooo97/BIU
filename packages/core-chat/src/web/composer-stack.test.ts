@@ -243,7 +243,7 @@ describe('composer dock stacking above sticky user', () => {
     expect(css).toMatch(/\.project-chip\.project-chip-pick-toggle:hover:not\(:disabled\)/)
     expect(css).toMatch(/\.project-chip\.project-chip-pick-toggle\.is-active[\s\S]*?color:\s*var\(--biu-tag-blue\)/)
     expect(css).toMatch(/\.project-chip\.project-chip-follow-toggle:hover:not\(:disabled\)/)
-    expect(css).toMatch(/\.project-chip\.project-chip-follow-toggle\.is-active[\s\S]*?color:\s*#5b9fd6/)
+    expect(css).toMatch(/\.project-chip\.project-chip-follow-toggle\.is-active[\s\S]*?color:\s*var\(--biu-tag-blue\)/)
     expect(css).toMatch(/\[data-dock-tip-at='ne'\]::after/)
     expect(approvals).toMatch(/data-dock-tip-at="ne"/)
     expect(approvals).not.toContain('待确认工具 · 先处理后再发')
