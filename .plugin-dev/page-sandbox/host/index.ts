@@ -1,14 +1,14 @@
 import type { Context } from 'cordis'
-import { compileHtmlSource, formatCompileReport } from '../shared/compile.ts'
+import { compileSandboxSource, formatCompileReport } from '../shared/compile.ts'
 
 export const name = 'page-sandbox'
 export const inject = ['http', 'tools']
 
 export function apply(ctx: Context) {
   ctx.http.route('POST', '/api/page-sandbox/compile', async (route) => {
-    const body = await route.json<{ source?: string; html?: string }>()
-    const source = typeof body.source === 'string' ? body.source : typeof body.html === 'string' ? body.html : ''
-    const result = compileHtmlSource(source)
+    const body = await route.json<{ source?: string }>()
+    const source = typeof body.source === 'string' ? body.source : ''
+    const result = compileSandboxSource(source)
     if (!result.ok) {
       route.send(400, { ok: false, error: result.error, mode: result.mode, report: formatCompileReport(result) })
       return
@@ -19,17 +19,16 @@ export function apply(ctx: Context) {
   ctx.tools.register({
     name: 'sandbox_compile',
     description:
-      'Compile/verify page-sandbox source (static HTML/CSS or dynamic HTML/JS/JSX). Call after writing the attachment. External script src and import/require are rejected. Returns ok + mode, or error.',
+      'Compile/verify page-sandbox React/JSX source. Do not import or require modules. Returns ok + mode, or error.',
     parameters: {
       type: 'object',
       properties: {
-        source: { type: 'string', description: 'Full HTML document, fragment, or React function/JSX source.' },
-        html: { type: 'string', description: 'Alias of source.' },
+        source: { type: 'string', description: 'React function / JSX source for the sandbox block.' },
       },
     },
     execute: (args) => {
-      const source = String(args.source ?? args.html ?? '')
-      const result = compileHtmlSource(source)
+      const source = String(args.source ?? '')
+      const result = compileSandboxSource(source)
       if (!result.ok) return { ok: false, error: result.error, mode: result.mode, report: formatCompileReport(result) }
       return { ok: true, mode: result.mode, report: formatCompileReport(result) }
     },

@@ -27,8 +27,8 @@ test('page-block host does not stamp plugin onto the sandbox shadow host', () =>
   host.className = 'page-block'
   const box = document.createElement('div')
   const sand = document.createElement('div')
-  sand.setAttribute('data-html-sandbox', '')
-  sand.setAttribute('data-testid', 'page-html-sandbox')
+  sand.setAttribute('data-sandbox', '')
+  sand.setAttribute('data-testid', 'page-sandbox-preview')
   box.append(sand)
   host.append(box)
   document.body.append(host)

@@ -14,118 +14,52 @@ import {
 } from '@heroicons/react/16/solid'
 import { tags } from '@lezer/highlight'
 import { createPortal } from 'react-dom'
-import { compileHtmlSource } from '../shared/compile.ts'
-import { bindHtmlSlide, collectHtmlSlides, cssBoxSize, htmlDeckEnabled, htmlDeckIndex, htmlDeckKeyAction, htmlLooksFillLayout, stepHtmlDeck } from './html-deck.ts'
-import { mountHtmlSandbox, unmountHtmlSandbox } from './sandbox.ts'
-import { htmlBlockKey, stampHtmlPickSurfaces } from './stamp-picks.ts'
+import { compileSandboxSource } from '../shared/compile.ts'
+import { mountSandbox, unmountSandbox } from './sandbox.ts'
+import { sandboxBlockKey, stampSandboxPickSurfaces } from './stamp-picks.ts'
 
 const React = globalThis.React
 const { useEffect, useLayoutEffect, useMemo, useRef, useState } = React
 
-function assetName(file: string) {
-  return file.replace(/^assets\//, '')
+function sandboxSourceOf(data: Record<string, unknown>, sample: string) {
+  if (typeof data.source === 'string' && data.source) return data.source
+  if (typeof data.html === 'string' && data.html) return data.html
+  return sample
 }
 
-function assetEtag(raw: string) {
-  return raw.replace(/^W\//, '').replaceAll('"', '')
-}
-
-async function loadHtmlAsset(file: string, fallback: string, bust = false) {
-  const name = assetName(file)
-  const res = await fetch(`/api/page/file/${encodeURIComponent(name)}${bust ? `?t=${Date.now()}` : ''}`)
-  if (!res.ok) return { html: fallback, etag: '' }
-  return { html: await res.text(), etag: assetEtag(String(res.headers.get('etag') ?? '')) }
-}
-
-async function saveHtmlAsset(file: string, html: string, etag: string) {
-  const name = assetName(file)
-  const headers: Record<string, string> = { 'Content-Type': 'text/html; charset=utf-8' }
-  if (etag) headers['If-Match'] = etag
-  const res = await fetch(`/api/page/file/${encodeURIComponent(name)}`, { method: 'PUT', headers, body: html })
-  return assetEtag(String(res.headers.get('etag') ?? etag))
-}
-
-function useHtmlSource(
+function useSandboxSource(
   data: Record<string, unknown>,
   update: (patch: Record<string, unknown>) => void,
   sample: string,
 ) {
-  const file = typeof data.file === 'string' ? data.file.trim() : ''
-  const inline = typeof data.html === 'string' ? data.html : ''
-  const [html, setHtml] = useState(inline || sample)
-  const [rev, setRev] = useState(0)
-  const etagRef = useRef('')
-  const htmlRef = useRef(html)
-  const fileRef = useRef(file)
-  const quietUntil = useRef(0)
-  htmlRef.current = html
-  fileRef.current = file
+  const inline = sandboxSourceOf(data, sample)
+  const [source, setSource] = useState(inline)
+  const sourceRef = useRef(source)
+  sourceRef.current = source
   const applyInline = (next: string) => {
-    if (next === htmlRef.current) return
-    htmlRef.current = next
-    setHtml(next)
+    if (next === sourceRef.current) return
+    sourceRef.current = next
+    setSource(next)
   }
   useEffect(() => {
-    if (file) return
     applyInline(inline || sample)
-  }, [file, inline, sample])
-  useEffect(() => {
-    if (!file) return
-    let gone = false
-    void loadHtmlAsset(file, htmlRef.current || inline || sample, rev > 0).then((loaded) => {
-      if (gone) return
-      etagRef.current = loaded.etag
-      htmlRef.current = loaded.html
-      setHtml(loaded.html)
-    })
-    return () => {
-      gone = true
-    }
-  }, [file, rev])
-  useEffect(() => {
-    const onAsset = (event: Event) => {
-      const detail = (event as CustomEvent<{ name?: string; etag?: string }>).detail
-      const name = String(detail?.name ?? '')
-      const current = fileRef.current
-      if (!name || !current) return
-      if (assetName(current) !== name && current !== name) return
-      if (Date.now() < quietUntil.current) return
-      const nextEtag = assetEtag(String(detail?.etag ?? ''))
-      if (nextEtag && nextEtag === etagRef.current) return
-      setRev((n) => n + 1)
-    }
-    window.addEventListener('biu:asset-changed', onAsset)
-    return () => window.removeEventListener('biu:asset-changed', onAsset)
-  }, [])
+  }, [inline, sample])
   const save = (next: string) => {
-    setHtml(next)
-    htmlRef.current = next
-    if (!file) {
-      update({ html: next })
-      return
-    }
-    quietUntil.current = Date.now() + 1200
-    void saveHtmlAsset(file, next, etagRef.current).then((etag) => {
-      etagRef.current = etag
-    })
+    setSource(next)
+    sourceRef.current = next
+    update({ source: next })
   }
   const reload = () => {
-    if (file) {
-      setRev((n) => n + 1)
-      return
-    }
     applyInline(inline || sample)
   }
-  return { file, html, save, reload }
+  return { source, save, reload }
 }
 
-function HtmlSandbox({
-  html,
-  live,
+function SandboxPreview({
+  source,
   onStamp,
 }: {
-  html: string
-  live: boolean
+  source: string
   onStamp?: (root: ShadowRoot) => void
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null)
@@ -136,10 +70,10 @@ function HtmlSandbox({
     const root = host.shadowRoot ?? host.attachShadow({ mode: 'open' })
     let mo: MutationObserver | undefined
     try {
-      mountHtmlSandbox(root, html, { live })
+      mountSandbox(root, source)
       setError('')
       onStamp?.(root)
-      const target = root.querySelector('[data-html-sandbox-body], [data-html-react-root]')
+      const target = root.querySelector('[data-sandbox-root]')
       if (target && onStamp) {
         mo = new MutationObserver(() => onStamp(root))
         mo.observe(target, { childList: true, subtree: true })
@@ -149,20 +83,20 @@ function HtmlSandbox({
     }
     return () => {
       mo?.disconnect()
-      unmountHtmlSandbox(root)
+      unmountSandbox(root)
     }
-  }, [html, live])
+  }, [source])
   return (
     <>
       <div
         ref={hostRef}
-        data-testid="page-html-sandbox"
-        data-html-sandbox=""
+        data-testid="page-sandbox-preview"
+        data-sandbox=""
         data-page-block-capture=""
-        style={{ display: 'block', width: '100%', height: '100%', minHeight: live ? 80 : undefined, overflow: 'auto' }}
+        style={{ display: 'block', width: '100%', height: '100%', minHeight: 80, overflow: 'auto' }}
       />
       {error ? (
-        <div data-testid="html-sandbox-error" style={{ color: 'var(--biu-color-danger)', fontSize: 12, padding: 8 }}>
+        <div data-testid="sandbox-error" style={{ color: 'var(--biu-color-danger)', fontSize: 12, padding: 8 }}>
           {error}
         </div>
       ) : null}
@@ -178,8 +112,6 @@ type BlockProps = {
   update: (patch: Record<string, unknown>) => void
   writable: boolean
 }
-
-/* ---------------- shared bits ---------------- */
 
 const field = {
   width: '100%',
@@ -231,21 +163,21 @@ const cmTheme = EditorView.theme({
 
 /** 源码编辑区。草稿在本地，避免每次回车写回 pageBlock 把光标甩到最后。 */
 function SourceEditor({
-  html,
+  source,
   onChange,
   compile,
 }: {
-  html: string
+  source: string
   onChange: (v: string) => void
-  compile?: ReturnType<typeof compileHtmlSource>
+  compile?: ReturnType<typeof compileSandboxSource>
 }) {
   const host = useRef<HTMLDivElement | null>(null)
   const viewRef = useRef<EditorView | null>(null)
   const focused = useRef(false)
-  const draftRef = useRef(html)
-  const htmlRef = useRef(html)
+  const draftRef = useRef(source)
+  const sourceRef = useRef(source)
   const onChangeRef = useRef(onChange)
-  htmlRef.current = html
+  sourceRef.current = source
   onChangeRef.current = onChange
   useEffect(() => {
     const el = host.current
@@ -253,7 +185,7 @@ function SourceEditor({
     const view = new EditorView({
       parent: el,
       state: EditorState.create({
-        doc: html,
+        doc: source,
         extensions: [
           history(),
           drawSelection(),
@@ -273,7 +205,7 @@ function SourceEditor({
     viewRef.current = view
     draftRef.current = view.state.doc.toString()
     return () => {
-      if (draftRef.current !== htmlRef.current) onChangeRef.current(draftRef.current)
+      if (draftRef.current !== sourceRef.current) onChangeRef.current(draftRef.current)
       view.destroy()
       viewRef.current = null
     }
@@ -281,20 +213,20 @@ function SourceEditor({
   useEffect(() => {
     const view = viewRef.current
     if (!view || focused.current) return
-    if (html === view.state.doc.toString()) return
-    draftRef.current = html
+    if (source === view.state.doc.toString()) return
+    draftRef.current = source
     view.dispatch({
-      changes: { from: 0, to: view.state.doc.length, insert: html },
+      changes: { from: 0, to: view.state.doc.length, insert: source },
     })
-  }, [html])
+  }, [source])
   const flush = () => {
-    if (draftRef.current !== htmlRef.current) onChangeRef.current(draftRef.current)
+    if (draftRef.current !== sourceRef.current) onChangeRef.current(draftRef.current)
   }
   return (
     <>
     <div
       ref={host}
-      data-testid="html-source"
+      data-testid="sandbox-source"
       data-page-block-capture=""
       data-biu-ignore
       className="cm-editor"
@@ -319,7 +251,7 @@ function SourceEditor({
     />
     {compile ? (
       <div
-        data-testid="html-compile"
+        data-testid="sandbox-compile"
         data-ok={compile.ok ? '1' : '0'}
         style={{ marginTop: 6, fontSize: 11, color: compile.ok ? 'var(--biu-color-ok)' : 'var(--biu-color-danger)' }}
       >
@@ -342,224 +274,19 @@ function sandboxTitle(raw: unknown) {
   return text || 'Sandbox'
 }
 
-const barBtn: Record<string, unknown> = {
-  cursor: 'pointer',
-  border: 'none',
-  borderRadius: 6,
-  padding: '4px 8px',
-  background: 'transparent',
-  color: '#c9cdd6',
-  fontWeight: 700,
-  fontSize: 11,
-  lineHeight: '16px',
-  display: 'inline-flex',
-  alignItems: 'center',
+function cssBoxSize(value: unknown): string | undefined {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) return `${Math.round(value)}px`
+  if (typeof value !== 'string') return undefined
+  const text = value.trim()
+  return text || undefined
 }
 
-function HtmlDeckOverlay({
-  slides,
-  index,
-  onIndex,
-  onClose,
-}: {
-  slides: ReturnType<typeof collectHtmlSlides>
-  index: number
-  onIndex: (next: number) => void
-  onClose: () => void
-}) {
-  const closeRef = useRef(onClose)
-  closeRef.current = onClose
-  const boxRef = useRef<HTMLDivElement | null>(null)
-  const [navHot, setNavHot] = useState(false)
-  const slide = slides[index]
-  const total = slides.length
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      const action = htmlDeckKeyAction(event.key)
-      if (action == null) return
-      if (action === 'close') {
-        closeRef.current()
-        return
-      }
-      event.preventDefault()
-      event.stopPropagation()
-      if (action === 'first') onIndex(0)
-      else if (action === 'last') onIndex(Math.max(0, total - 1))
-      else onIndex(stepHtmlDeck(index, action, total))
-    }
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
-  }, [index, onIndex, total])
-
-  useEffect(() => {
-    const root = document.documentElement
-    let gone = false
-    void Promise.resolve(root.requestFullscreen?.({ navigationUI: 'hide' })).catch(() => {})
-    const onFs = () => {
-      if (gone) return
-      if (document.fullscreenElement) return
-      closeRef.current()
-    }
-    document.addEventListener('fullscreenchange', onFs)
-    return () => {
-      gone = true
-      document.removeEventListener('fullscreenchange', onFs)
-      if (document.fullscreenElement) void document.exitFullscreen?.()
-    }
-  }, [])
-
-  if (!slide) return null
-  const fill = {
-    position: 'absolute' as const,
-    inset: 0,
-    width: '100%',
-    height: '100%',
-    maxWidth: 'none',
-    maxHeight: 'none',
-    minWidth: 0,
-    minHeight: 0,
-    border: 'none',
-    boxSizing: 'border-box' as const,
-  }
-  return createPortal(
-    <div
-      ref={boxRef}
-      data-testid="html-deck"
-      data-biu-ignore
-      tabIndex={0}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        width: '100%',
-        height: '100%',
-        maxWidth: 'none',
-        zIndex: 2147483646,
-        display: 'flex',
-        flexDirection: 'column',
-        background: '#0b0b12',
-        color: '#e6edf3',
-        font: '13px/1.4 ui-sans-serif, system-ui, sans-serif',
-      }}
-    >
-      <style>{`[data-testid="html-deck"]:fullscreen,[data-testid="html-deck"]:-webkit-full-screen{inset:0!important;width:100%!important;height:100%!important;max-width:none!important;max-height:none!important}[data-testid="html-deck-slide"]>*{width:100%!important;height:100%!important;max-width:none!important;box-sizing:border-box}`}</style>
-      <div
-        data-testid="html-deck-stage"
-        style={{
-          position: 'relative',
-          flex: 1,
-          minHeight: 0,
-          width: '100%',
-          height: '100%',
-          overflow: 'hidden',
-          boxSizing: 'border-box',
-        }}
-      >
-        <div data-testid="html-deck-slide" style={{ ...fill, background: 'var(--biu-color-bg)' }}>
-          <HtmlSandbox html={slide.html} live />
-        </div>
-      </div>
-      <div
-        data-testid="html-deck-nav"
-        onMouseEnter={() => setNavHot(true)}
-        onMouseLeave={() => setNavHot(false)}
-        style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          bottom: 0,
-          zIndex: 2,
-          display: 'flex',
-          alignItems: 'flex-end',
-          justifyContent: 'center',
-          height: 96,
-          padding: '0 16px 18px',
-          background: navHot ? 'linear-gradient(transparent, rgba(0,0,0,.55))' : 'transparent',
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 10,
-            opacity: navHot ? 1 : 0,
-            transition: 'opacity 160ms ease',
-            pointerEvents: navHot ? 'auto' : 'none',
-          }}
-        >
-          <button type="button" style={{ ...barBtn, ...(index <= 0 ? { opacity: 0.35, cursor: 'default' } : {}) }} disabled={index <= 0} onClick={() => onIndex(stepHtmlDeck(index, -1, total))} aria-label="上一张">
-            上一张
-          </button>
-          <span data-testid="html-deck-index" style={{ color: '#8b93a7', minWidth: 64, textAlign: 'center' }}>
-            {index + 1} / {total}
-          </span>
-          <button
-            type="button"
-            style={{ ...barBtn, ...(index >= total - 1 ? { opacity: 0.35, cursor: 'default' } : {}) }}
-            disabled={index >= total - 1}
-            onClick={() => onIndex(stepHtmlDeck(index, 1, total))}
-            aria-label="下一张"
-          >
-            下一张
-          </button>
-          <button type="button" data-page-block-expand="" style={{ ...barBtn, marginLeft: 12 }} onClick={onClose} title="退出放映" aria-label="退出放映">
-            <ArrowsPointingInIcon style={chromeIcon} />
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body,
-  )
-}
-
-function useHtmlDeck(
-  hostRef: { current: HTMLElement | null },
-  kind: 'sandbox',
-  html: string,
-  opts?: { width?: unknown; height?: unknown; deck?: boolean },
-) {
-  const [open, setOpen] = useState(false)
-  const [index, setIndex] = useState(0)
-  const [slides, setSlides] = useState<ReturnType<typeof collectHtmlSlides>>([])
-  const width = opts?.width
-  const height = opts?.height
-  const deck = htmlDeckEnabled(opts?.deck)
-
-  useLayoutEffect(() => {
-    const host = hostRef.current?.closest('[data-page-block]') ?? null
-    bindHtmlSlide(host, {
-      kind,
-      html,
-      deck,
-      ...(width != null && width !== '' ? { width: width as number | string } : {}),
-      ...(height != null && height !== '' ? { height: height as number | string } : {}),
-    })
-    return () => bindHtmlSlide(host, null)
-  }, [hostRef, html, kind, width, height, deck])
-
-  const start = () => {
-    const host = hostRef.current?.closest('[data-page-block]') ?? null
-    const list = collectHtmlSlides(host)
-    if (!list.length) return
-    setSlides(list)
-    setIndex(htmlDeckIndex(list, host))
-    setOpen(true)
-  }
-
-  const overlay = open ? (
-    <HtmlDeckOverlay
-      slides={slides.length ? slides : collectHtmlSlides(hostRef.current?.closest('[data-page-block]') ?? null)}
-      index={index}
-      onIndex={(next) => {
-        const host = hostRef.current?.closest('[data-page-block]') ?? null
-        setSlides(collectHtmlSlides(host))
-        setIndex(next)
-      }}
-      onClose={() => setOpen(false)}
-    />
-  ) : null
-
-  return { start, overlay }
+function sandboxLooksFillLayout(source: string) {
+  const head = source.trim().slice(0, 1600)
+  const pct = /\bheight\s*:\s*100%\b/i.test(head) || /\bheight\s*:\s*100vh\b/i.test(head)
+  const clipped = /\boverflow\s*:\s*hidden\b/i.test(head)
+  const abs = (source.match(/\bposition\s*:\s*absolute\b/gi) ?? []).length >= 3
+  return (pct && clipped) || (pct && abs) || (clipped && abs)
 }
 
 const SANDBOX_DEFAULT_HEIGHT = 280
@@ -594,7 +321,7 @@ function HeightGrip({
   return (
     <button
       type="button"
-      data-testid="html-size-grip"
+      data-testid="sandbox-size-grip"
       data-biu-ignore
       tabIndex={-1}
       title="拖动调整高度"
@@ -645,6 +372,7 @@ function SandboxBar({
   tab,
   onTab,
   ro,
+  expanded,
   onRefresh,
   onExpand,
 }: {
@@ -653,6 +381,7 @@ function SandboxBar({
   tab: 'preview' | 'code'
   onTab: (next: 'preview' | 'code') => void
   ro: boolean
+  expanded: boolean
   onRefresh: () => void
   onExpand: () => void
 }) {
@@ -787,9 +516,9 @@ function SandboxBar({
           type="button"
           tabIndex={-1}
           data-page-block-expand=""
-          data-testid="html-deck-expand"
-          title="放大"
-          aria-label="放大"
+          data-testid="sandbox-expand"
+          title={expanded ? '缩小' : '放大'}
+          aria-label={expanded ? '缩小' : '放大'}
           onMouseDown={(event) => event.preventDefault()}
           onClick={onExpand}
           style={{
@@ -798,14 +527,14 @@ function SandboxBar({
             height: 'var(--biu-size-control-md)',
           }}
         >
-          <ArrowsPointingOutIcon style={chromeIcon} />
+          {expanded ? <ArrowsPointingInIcon style={chromeIcon} /> : <ArrowsPointingOutIcon style={chromeIcon} />}
         </button>
       </div>
     </div>
   )
 }
 
-const HTML_SAMPLE = `export default function App() {
+const SANDBOX_SAMPLE = `export default function App() {
   const [n, setN] = React.useState(0)
   return (
     <div style={{
@@ -846,89 +575,103 @@ const HTML_SAMPLE = `export default function App() {
 }
 `
 
-function HtmlCard({ data, update, writable }: BlockProps) {
+function SandboxCard({ data, update, writable }: BlockProps) {
   const ro = !writable
   const title = sandboxTitle(data.title)
-  const source = useHtmlSource(data, update, HTML_SAMPLE)
-  const html = source.html
+  const live = useSandboxSource(data, update, SANDBOX_SAMPLE)
+  const source = live.source
   const width = data.width
   const height = data.height == null || data.height === '' ? SANDBOX_DEFAULT_HEIGHT : data.height
-  const fill = htmlLooksFillLayout(html)
-  const deckOn = htmlDeckEnabled(data.deck)
+  const fill = sandboxLooksFillLayout(source)
   const [tab, setTab] = useState<'preview' | 'code'>('preview')
   const [frame, setFrame] = useState(0)
+  const [expanded, setExpanded] = useState(false)
   const hostRef = useRef<HTMLDivElement | null>(null)
-  const deck = useHtmlDeck(hostRef, 'sandbox', html, { width, height, deck: deckOn })
-  const compiled = useMemo(() => compileHtmlSource(html), [html])
+  const compiled = useMemo(() => compileSandboxSource(source), [source])
   const editing = tab === 'code'
 
-  return (
-    <ReUI>
+  useEffect(() => {
+    if (!expanded) return
+    const root = hostRef.current
+    void Promise.resolve(root?.requestFullscreen?.({ navigationUI: 'hide' })).catch(() => {})
+    const onFs = () => {
+      if (!document.fullscreenElement) setExpanded(false)
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      event.stopPropagation()
+      setExpanded(false)
+    }
+    document.addEventListener('fullscreenchange', onFs)
+    window.addEventListener('keydown', onKey, true)
+    return () => {
+      document.removeEventListener('fullscreenchange', onFs)
+      window.removeEventListener('keydown', onKey, true)
+      if (document.fullscreenElement) void document.exitFullscreen?.()
+    }
+  }, [expanded])
+
+  const card = (
     <div
       ref={hostRef}
-      data-testid="page-html-block"
-      className={fill ? 'html-direct-fill' : undefined}
+      data-testid="page-sandbox-block"
+      data-sandbox-expanded={expanded ? '1' : undefined}
+      className={fill ? 'sandbox-fill' : undefined}
       style={{
-        position: 'relative',
+        position: expanded ? 'fixed' : 'relative',
+        inset: expanded ? 0 : undefined,
+        zIndex: expanded ? 2147483646 : undefined,
         display: 'flex',
         flexDirection: 'column',
-        width: cssBoxSize(width) ?? '100%',
-        height: cssBoxSize(height) ?? SANDBOX_DEFAULT_HEIGHT,
+        width: expanded ? '100%' : cssBoxSize(width) ?? '100%',
+        height: expanded ? '100%' : cssBoxSize(height) ?? SANDBOX_DEFAULT_HEIGHT,
         maxWidth: '100%',
         overflow: 'hidden',
         boxSizing: 'border-box',
-        border: 'var(--biu-stroke-width) solid var(--biu-color-border)',
-        borderRadius: 10,
+        border: expanded ? 'none' : 'var(--biu-stroke-width) solid var(--biu-color-border)',
+        borderRadius: expanded ? 0 : 10,
         background: 'var(--biu-color-bg)',
       }}
     >
+      {expanded ? (
+        <style>{`[data-testid="page-sandbox-block"]:fullscreen,[data-testid="page-sandbox-block"]:-webkit-full-screen{inset:0!important;width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;display:flex!important;flex-direction:column!important}`}</style>
+      ) : null}
       <SandboxBar
         title={title}
         onTitle={(next) => update({ title: next })}
         tab={tab}
         onTab={setTab}
         ro={ro}
+        expanded={expanded}
         onRefresh={() => {
-          source.reload()
+          live.reload()
           setFrame((n) => n + 1)
         }}
-        onExpand={deck.start}
+        onExpand={() => setExpanded((open) => !open)}
       />
       <div style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'auto' }}>
         {editing ? (
-          <SourceEditor html={html} onChange={source.save} compile={compiled} />
+          <SourceEditor source={source} onChange={live.save} compile={compiled} />
         ) : (
-          <HtmlSandbox
+          <SandboxPreview
             key={frame}
-            html={html}
-            live
+            source={source}
             onStamp={(root) => {
               const host = hostRef.current?.closest('[data-page-block]') ?? null
-              const key = htmlBlockKey(host, html)
-              const body = root.querySelector('[data-html-sandbox-body], [data-html-react-root]')
-              if (body instanceof HTMLElement) stampHtmlPickSurfaces(body, `${key}-doc`, { plugin: name, includeRoot: false })
+              const key = sandboxBlockKey(host, source)
+              const body = root.querySelector('[data-sandbox-root]')
+              if (body instanceof HTMLElement) stampSandboxPickSurfaces(body, `${key}-doc`, { plugin: name, includeRoot: false })
             }}
           />
         )}
-        {ro ? null : <HeightGrip boxRef={hostRef} onHeight={(next) => update({ height: next })} />}
+        {ro || expanded ? null : <HeightGrip boxRef={hostRef} onHeight={(next) => update({ height: next })} />}
       </div>
-      {deck.overlay}
     </div>
-    </ReUI>
   )
-}
 
-function htmlBlockAssets(data: Record<string, unknown>) {
-  const out: string[] = []
-  if (typeof data.file === 'string') out.push(data.file)
-  const html = String(data.html ?? '')
-  for (const match of html.matchAll(/<(?:img|a|source|video|audio)\b[^>]*?\b(?:src|href)\s*=\s*["']([^"']+)["']/gi)) {
-    out.push(match[1] ?? '')
-  }
-  return out
+  return <ReUI>{expanded ? createPortal(card, document.body) : card}</ReUI>
 }
-
-/* ---------------- apply ---------------- */
 
 export function apply(ctx: {
   pageEditor: {
@@ -953,8 +696,7 @@ export function apply(ctx: {
     blockTypeLabel: 'Sandbox',
     hint: '沙箱里跑 React 组件，继承 --biu-*',
     aliases: ['sandbox', '沙箱'],
-    assets: htmlBlockAssets,
-    defaults: () => ({ html: HTML_SAMPLE, deck: true, title: 'Sandbox', height: SANDBOX_DEFAULT_HEIGHT }),
-    View: HtmlCard,
+    defaults: () => ({ source: SANDBOX_SAMPLE, title: 'Sandbox', height: SANDBOX_DEFAULT_HEIGHT }),
+    View: SandboxCard,
   })
 }

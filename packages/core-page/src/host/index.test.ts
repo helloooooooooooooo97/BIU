@@ -168,7 +168,7 @@ test('page-blocks collection updates one fence by page::block id', async () => {
   const created = await pages.create!([{
     title: '海报',
     notes: `:::pageBlock {kind=sandbox plugin=page-sandbox id=ab12cd34 deck=true}
-<div>旧</div><img src="/api/db/file/hero.png">
+export default function App() { return <div>旧</div> }
 :::
 :::pageBlock {kind=excalidraw plugin=page-excalidraw id=edd9aaaa}
 {"file":"assets/画板-edd9.json","title":"草图"}
@@ -183,7 +183,7 @@ test('page-blocks collection updates one fence by page::block id', async () => {
   assert.equal(html.blockKind, 'sandbox')
   assert.equal(html.pageTitle, '海报')
   assert.equal(html.title, '海报 sandbox')
-  assert.match(String(html.data), /<div>旧<\/div>/)
+  assert.match(String(html.data), /return <div>旧<\/div>/)
   const draw = listed.find((item) => item.id === `/pages::${pageId}::edd9aaaa`)
   assert.ok(draw)
   assert.match(String(draw.data), /画板-edd9\.json/)
@@ -195,10 +195,10 @@ test('page-blocks collection updates one fence by page::block id', async () => {
   }
   assert.equal(bref.name, '画板-edd9.json')
   assert.equal(bref.source, 'block:edd9aaaa:core')
-  const htmlRef = sqlite
+  const sandboxRef = sqlite
     .prepare('SELECT name FROM block_refs WHERE record_id = ? AND block_id = ?')
-    .get(pageId, 'ab12cd34') as { name: string }
-  assert.equal(htmlRef.name, 'hero.png')
+    .get(pageId, 'ab12cd34') as { name: string } | undefined
+  assert.equal(sandboxRef, undefined)
   const stored = sqlite.prepare('SELECT data_json FROM page_block_index WHERE block_id = ?').get('ab12cd34') as { data_json: string }
   assert.equal(stored.data_json.includes('<div>旧</div>'), false)
   assert.ok(Array.isArray(JSON.parse(stored.data_json).assets))
@@ -206,22 +206,23 @@ test('page-blocks collection updates one fence by page::block id', async () => {
   const renamed = await blocks.update!(`/pages::${pageId}::ab12cd34`, { title: '刊头' })
   assert.equal(renamed.title, '刊头')
   const updated = await blocks.update!(`/pages::${pageId}::ab12cd34`, {
-    data: { html: '<div>新</div>', deck: false },
+    data: { source: 'export default function App() { return <div>新</div> }', deck: false },
   })
   assert.equal(updated.title, '刊头')
   const clobbered = await blocks.update!(`/pages::${pageId}::ab12cd34`, {
-    data: { html: '<div>新</div>', title: '旧名', deck: false },
+    data: { source: 'export default function App() { return <div>新</div> }', title: '旧名', deck: false },
   })
   assert.equal(clobbered.title, '刊头')
-  const payload = JSON.parse(String(updated.data)) as { html?: string; deck?: boolean }
-  assert.equal(payload.deck, false)
-  assert.match(String(payload.html), /<div>新<\/div>/)
+  const payload = JSON.parse(String(updated.data)) as { source?: string; deck?: boolean }
+  assert.equal(payload.deck, undefined)
+  assert.match(String(payload.source), /<div>新<\/div>/)
   const after = new DatabaseSync(join(root, PAGE_DB))
   const slim = after.prepare('SELECT data_json FROM page_block_index WHERE block_id = ?').get('ab12cd34') as { data_json: string }
   assert.equal(slim.data_json.includes('<div>新</div>'), false)
   after.close()
   const row = await pages.get!(pageId)
-  assert.match(String(row?.notes), /id=ab12cd34 title="刊头" deck=false/)
+  assert.match(String(row?.notes), /id=ab12cd34 title="刊头"/)
+  assert.doesNotMatch(String(row?.notes), /\bdeck=/)
   assert.match(String(row?.notes), /<div>新<\/div>/)
   assert.match(String(row?.notes), /刊头/)
   assert.equal(blocks.create, undefined)
