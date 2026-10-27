@@ -194,11 +194,29 @@ function rawBox(el: Element): ClientBox {
   return { left: r.left, top: r.top, width: r.width, height: r.height }
 }
 
+/** 事件路径上最里层的 sandbox 戳。指针在哪个节点上，就选哪个。 */
+export function sandboxInnerFromEvent(event?: Event | null): HTMLElement | null {
+  if (!event || typeof event.composedPath !== 'function') return null
+  for (const node of event.composedPath()) {
+    if (!(node instanceof HTMLElement)) continue
+    if (isSandboxInnerEl(node)) return node
+    if (node.hasAttribute('data-sandbox')) break
+  }
+  return null
+}
+
 function sandboxInnerAtPoint(x: number, y: number): HTMLElement | null {
   let best: HTMLElement | null = null
   let bestArea = Infinity
   for (const host of document.querySelectorAll('[data-sandbox]')) {
     if (!(host instanceof HTMLElement) || !host.shadowRoot) continue
+    try {
+      for (const el of host.shadowRoot.elementsFromPoint(x, y)) {
+        if (isSandboxInnerEl(el)) return el
+      }
+    } catch {
+      /* jsdom */
+    }
     for (const el of host.shadowRoot.querySelectorAll('[data-sandbox-pick], [data-biu-kind="sandbox"]')) {
       if (!(el instanceof HTMLElement) || !isSandboxInnerEl(el)) continue
       const box = rawBox(el)
@@ -417,6 +435,18 @@ export function pickSurfaceAtPoint(x: number, y: number): HTMLElement | null {
     if (pointInBox(boxOf(el), x, y)) return el
   }
   return null
+}
+
+/** 选取：事件路径上的内部节点优先，没有再退回坐标命中。 */
+export function resolvePickFromEvent(event: Event, route: string) {
+  const inner = sandboxInnerFromEvent(event)
+  if (inner && !isPickIgnored(inner) && !inHiddenPane(inner)) {
+    const hit = resolvePickFromNode(inner, route, null)
+    if (hit) return hit
+  }
+  const x = 'clientX' in event ? Number((event as PointerEvent).clientX) : 0
+  const y = 'clientY' in event ? Number((event as PointerEvent).clientY) : 0
+  return resolvePickAtPoint(x, y, route)
 }
 
 export function resolvePickAtPoint(x: number, y: number, route: string) {

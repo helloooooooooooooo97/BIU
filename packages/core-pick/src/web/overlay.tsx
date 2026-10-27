@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import type { SlotProps } from '@biu/type-slots'
 import { getPick, usePickState } from './service.ts'
-import { boxFromPoints, pickSurfaceAtPoint, resolvePickAtPoint, resolvePicksInRect, visiblePickBox } from './resolve.ts'
+import { boxFromPoints, pickSurfaceAtPoint, resolvePickFromEvent, resolvePicksInRect, visiblePickBox } from './resolve.ts'
 
 const DRAG_PX = 6
 
@@ -60,7 +60,7 @@ export function PickOverlay(_props: SlotProps) {
         )
         return
       }
-      const hit = resolvePickAtPoint(event.clientX, event.clientY, route())
+      const hit = resolvePickFromEvent(event, route())
       if (!hit) {
         pick.setHover(null)
         return
@@ -91,7 +91,7 @@ export function PickOverlay(_props: SlotProps) {
         )
         return
       }
-      const hit = resolvePickAtPoint(event.clientX, event.clientY, route())
+      const hit = resolvePickFromEvent(event, route())
       if (hit) pick.add(hit.ref)
     }
 
