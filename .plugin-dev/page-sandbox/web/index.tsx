@@ -873,7 +873,7 @@ export function apply(ctx: {
     blockType: 'sandbox',
     blockTypeLabel: 'Sandbox',
     hint: '沙箱里跑 React 组件，继承 --biu-*',
-    aliases: ['sandbox', 'html', 'html直', '静态html', '动态html', '排版', '沙箱', 'iframe', 'htmlf', 'frame', '小网页'],
+    aliases: ['sandbox', '沙箱'],
     assets: htmlBlockAssets,
     defaults: () => ({ html: HTML_SAMPLE, deck: true, title: 'Sandbox' }),
     View: HtmlCard,

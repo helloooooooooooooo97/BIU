@@ -45,6 +45,8 @@ test('undeclared block kinds yield no assets', () => {
   assert.equal(assetNamesFromBlock('mystery', 'nope', { file: 'assets/x.png' }).size, 0)
   assert.equal(assetNamesFromBlock('sandbox', 'page-sandbox', { html: '<img src="/api/db/file/x.png">' }).size, 0)
   assert.deepEqual([...assetNamesFromBlock('sandbox', 'page-sandbox', { file: 'assets/html-a.html' })], ['html-a.html'])
+  assert.deepEqual([...assetNamesFromBlock('html', 'page-html-blocks', { file: 'assets/html-a.html' })], ['html-a.html'])
+  assert.deepEqual([...assetNamesFromBlock('htmlframe', 'page-html-blocks', { file: 'assets/html-b.html' })], ['html-b.html'])
 })
 
 test('collectAssetNames walks exact urls without prose hits', () => {

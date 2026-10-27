@@ -223,6 +223,22 @@ test('page-excalidraw sandbox stores scenes as page assets', async () => {
   assert.match(src, /refresh/)
 })
 
+test('restored html plugin keeps static and live kinds', async () => {
+  const { readFile } = await import('node:fs/promises')
+  const { resolve } = await import('node:path')
+  const html = await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/page-html-blocks/web/index.tsx'), 'utf8')
+  const manifest = await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/page-html-blocks/manifest.json'), 'utf8')
+  assert.match(manifest, /"id": "page-html-blocks"/)
+  assert.match(manifest, /"name": "HTML"/)
+  assert.match(html, /export const name = 'page-html-blocks'/)
+  assert.match(html, /kind: 'html'/)
+  assert.match(html, /kind: 'htmlframe'/)
+  assert.match(html, /label: '静态HTML'/)
+  assert.match(html, /label: '动态HTML'/)
+  assert.match(html, /plugin: name/)
+  assert.match(html, /newHtmlFile/)
+})
+
 test('html page blocks register plugin id for slash', async () => {
   const { readFile } = await import('node:fs/promises')
   const { resolve } = await import('node:path')
