@@ -35,5 +35,6 @@ test('page-block host does not stamp plugin onto the sandbox shadow host', () =>
   injectPageBlockPlugin(host, 'page-sandbox')
   assert.equal(sand.hasAttribute('data-biu-kind'), false)
   assert.equal(sand.getAttribute('data-biu-plugin'), null)
+  assert.equal(box.getAttribute('data-biu-kind'), null)
   host.remove()
 })

@@ -11,6 +11,15 @@ export const PICK_NAV_GUARD =
 export function ignorePickCapture(target: EventTarget | null, event?: Event) {
   const path = event && 'composedPath' in event ? event.composedPath() : []
   const nodes = path.length ? path : target instanceof Element ? [target] : []
+  if (
+    nodes.some(
+      (node) =>
+        node instanceof Element &&
+        (node.hasAttribute('data-sandbox-pick') || node.getAttribute('data-biu-kind') === 'sandbox'),
+    )
+  ) {
+    return false
+  }
   return nodes.some((node) => node instanceof Element && node.closest(PICK_NAV_GUARD))
 }
 

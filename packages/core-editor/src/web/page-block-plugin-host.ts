@@ -54,7 +54,8 @@ export function injectPageBlockPlugin(host: HTMLElement, plugin: string) {
     ) return
     if (el !== host) {
       el.setAttribute(PLUGIN_ATTR, id)
-      if (!el.getAttribute(KIND_ATTR) && SURFACE.has(el.tagName)) {
+      const wrapsSandbox = Boolean(el.querySelector('[data-sandbox], [data-html-sandbox]'))
+      if (!el.getAttribute(KIND_ATTR) && SURFACE.has(el.tagName) && !wrapsSandbox) {
         el.setAttribute(KIND_ATTR, 'plugin')
         el.setAttribute(ID_ATTR, `${id}:${path}`)
         if (!el.getAttribute(LABEL_ATTR)) el.setAttribute(LABEL_ATTR, surfaceLabel(el))
