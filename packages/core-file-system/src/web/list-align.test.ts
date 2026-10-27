@@ -213,7 +213,7 @@ test('list properties stay on the weakest label tier; detail aside lifts keys on
 test('detail share role and facet chips use table cell ink; leftover 13px/400 is biu-ui .biu-tag', () => {
   const tag = readFileSync(resolve(import.meta.dirname, '../../../biu-ui/src/tag-chip.tsx'), 'utf8')
   assert.match(tag, /\.biu-tag\{[^}]*font-size:var\(--biu-font-size-3\)/)
-  assert.match(tag, /\.biu-tag\{[^}]*font-weight:var\(--biu-font-weight-regular\)/)
+  assert.match(tag, /\.biu-tag\{[^}]*font-weight:var\(--biu-font-weight-medium\)/)
   assert.match(css, /\.fsdb-page \.fsdb-proprow-v,[\s\S]*?color:var\(--biu-color-text\)/)
   assert.doesNotMatch(css, /\.fsdb-page \.fsdb-proprow-v[\s\S]{0,180}--biu-color-text:var\(--biu-color-text\)/)
   assert.match(css, /\.fsdb-page \.fsdb-proprow-v \.fsdb-scope-tag,[\s\S]*?\.fsdb-page \.fsdb-proprow-v \.fsdb-scope-tag\.is-read,[\s\S]*?color:var\(--biu-color-text/)
@@ -286,7 +286,9 @@ test('selected table cells use Super Tag blue when writable and gray when locked
   assert.match(css, /\.fsdb-files\{[^}]*flex-direction:column/)
   assert.match(css, /\.fsdb-cell-pop\{[^}]*background:var\(--biu-color-bg-subtle\)/)
   assert.match(css, /\.fsdb-cell-pop\{[^}]*border:0/)
+  assert.match(css, /\.fsdb-cell-pop\{[^}]*font-weight:var\(--biu-font-weight-medium\)/)
   assert.match(css, /\.fsdb-cell-pop-text\{[^}]*background:transparent/)
+  assert.match(css, /\.fsdb-cell-pop-text\{[^}]*font-weight:var\(--biu-font-weight-medium\)/)
   assert.match(css, /\.fsdb-dlg-input\{[^}]*background:transparent/)
   assert.match(css, /\.fsdb-dlg-input\{[^}]*border:0/)
   assert.match(css, /\.fsdb-cell-pop\.is-select,\.fsdb-cell-pop\.is-multi-select,\.fsdb-cell-pop\.is-facet,\.fsdb-cell-pop\.is-attachment,\.fsdb-cell-pop\.is-image,\.fsdb-cell-pop\.is-person,\.fsdb-cell-pop\.is-record-link,\.fsdb-cell-pop\.is-ref,\.fsdb-cell-pop\.is-multi-ref\{[^}]*min-width:280px/)
