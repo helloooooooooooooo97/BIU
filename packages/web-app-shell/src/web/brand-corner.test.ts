@@ -87,7 +87,7 @@ test('brand mascot lives at the corner; sidebar head is title plus collapse', ()
   assert.match(css, /\.brand-corner-cluster\s*\{[^}]*right:\s*16px/s)
   assert.match(css, /\.brand-corner-cluster\s*\{[^}]*bottom:\s*16px/s)
   assert.match(css, /\.chat-dock-toolbar \.brand-corner-cluster\s*\{[^}]*position:\s*relative/s)
-  assert.match(css, /\.brand-corner-cluster\s*\{[^}]*z-index:\s*200/s)
+  assert.match(css, /\.brand-corner-cluster\s*\{[^}]*z-index:\s*var\(--biu-z-modal\)/s)
   assert.doesNotMatch(css, /\.os-dock \.brand-corner-cluster/)
   // 头部这几处文字必须同属前景色 token，断言引用关系而不是当前主题的色值。
   assert.match(css, /\.chat-view-header-expand\s*\{[^}]*color:\s*var\(--biu-color-icon-active\)/s)
