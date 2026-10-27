@@ -758,7 +758,7 @@ function SandboxBar({
             cursor: ro ? 'default' : 'text',
           }}
         >
-          <CubeTransparentIcon style={chromeIcon} />
+          <CubeTransparentIcon style={{ ...chromeIcon, color: 'var(--biu-color-ink-purple)' }} />
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span>
         </button>
       )}
@@ -906,7 +906,7 @@ function HtmlCard({ data, update, writable }: BlockProps) {
               const host = hostRef.current?.closest('[data-page-block]') ?? null
               const key = htmlBlockKey(host, html)
               const body = root.querySelector('[data-html-sandbox-body], [data-html-react-root]')
-              if (body instanceof HTMLElement) stampHtmlPickSurfaces(body, `${key}-doc`, { plugin: name })
+              if (body instanceof HTMLElement) stampHtmlPickSurfaces(body, `${key}-doc`, { plugin: name, includeRoot: false })
             }}
           />
         )}
