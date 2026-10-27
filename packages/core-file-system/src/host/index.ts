@@ -2450,9 +2450,10 @@ export class DatabaseService extends Service implements Database {
     if (!record) throw new Error(`unknown record: ${spec.path}/${parts[1]}`)
     const personalLoad = spec.path === '/plugins' && (actionId === 'start' || actionId === 'stop')
     const pluginAuthor = spec.path === '/plugins' && (actionId === 'sandbox' || actionId === 'pack')
+    const builtinPlugin = this.builtinPlugin(spec, parts[1]!, record)
     if (pluginAuthor) {
       await this.requirePath(spec.path, 'resource:read')
-      if (loaded) {
+      if (loaded && !builtinPlugin) {
         const owner = this.recordOwner(spec.path, record.id)
         if (!owner) this.attachWorkspaceRecord(spec.path, record.id, { ownership: 'personal', accessMode: 'private' })
         else this.assertLiveRecord(spec, record.id, 'resource:read', record)
@@ -2464,10 +2465,10 @@ export class DatabaseService extends Service implements Database {
     }
     if (!matchActionWhen(record, action.when)) throw new Error(`action not available: ${actionId}`)
     const result = await action.run(parts[1]!, record, args)
-    if (spec.path === '/plugins' && actionId === 'sandbox' && !this.recordOwner(spec.path, parts[1]!)) {
+    if (spec.path === '/plugins' && actionId === 'sandbox' && !builtinPlugin && !this.recordOwner(spec.path, parts[1]!)) {
       this.attachWorkspaceRecord(spec.path, parts[1]!, { ownership: 'personal', accessMode: 'private' })
     }
-    if (spec.path === '/plugins' && (actionId === 'sandbox' || actionId === 'pack')) {
+    if (spec.path === '/plugins' && !builtinPlugin && (actionId === 'sandbox' || actionId === 'pack')) {
       await this.stampActor(spec.path, parts[1]!)
     }
     const next = (await spec.get(parts[1]!)) ?? record
