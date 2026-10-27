@@ -1,6 +1,6 @@
 import { flushSync } from 'react-dom'
 import { createRoot, type Root } from 'react-dom/client'
-import { compileHtmlSource, compileJsxSource, looksLikeJsx, transpileJsx } from '../shared/compile.ts'
+import { compileJsxSource, compileSandboxSource, looksLikeJsx, transpileJsx } from '../shared/compile.ts'
 
 const React = globalThis.React
 const roots = new WeakMap<ShadowRoot, Root>()
@@ -30,25 +30,6 @@ export function adoptDocumentStyles(shadow: ShadowRoot) {
   shadow.adoptedStyleSheets = sheets
 }
 
-function shadowDocument(root: ShadowRoot) {
-  return {
-    documentElement: root,
-    body: root,
-    head: root,
-    getElementById: (id: string) => root.getElementById(id),
-    querySelector: (sel: string) => root.querySelector(sel),
-    querySelectorAll: (sel: string) => root.querySelectorAll(sel),
-    createElement: (tag: string) => document.createElement(tag),
-    createTextNode: (text: string) => document.createTextNode(text),
-    createDocumentFragment: () => document.createDocumentFragment(),
-  }
-}
-
-function runScript(body: string, root: ShadowRoot) {
-  const factory = new Function('React', 'root', 'document', 'css', `"use strict";\n${body}`)
-  factory(React, root, shadowDocument(root), hostThemeCss())
-}
-
 function prepareJsx(source: string) {
   return source
     .replace(/^\s*import\s+[\s\S]*?from\s+['"]react['"]\s*;?\s*$/gim, '')
@@ -69,7 +50,7 @@ function mountJsx(source: string, root: ShadowRoot) {
   )
   const Component = factory(React, hostThemeCss())
   const mount = document.createElement('div')
-  mount.setAttribute('data-html-react-root', '')
+  mount.setAttribute('data-sandbox-root', '')
   root.append(mount)
   if (typeof Component !== 'function' || !React) return
   const prev = roots.get(root)
@@ -81,15 +62,15 @@ function mountJsx(source: string, root: ShadowRoot) {
   })
 }
 
-export function unmountHtmlSandbox(root: ShadowRoot | null) {
+export function unmountSandbox(root: ShadowRoot | null) {
   if (!root) return
   roots.get(root)?.unmount()
   roots.delete(root)
   root.innerHTML = ''
 }
 
-export function mountHtmlSandbox(root: ShadowRoot, source: string, opts: { live: boolean }) {
-  const html = String(source ?? '')
+export function mountSandbox(root: ShadowRoot, source: string) {
+  const text = String(source ?? '')
   roots.get(root)?.unmount()
   roots.delete(root)
   root.innerHTML = ''
@@ -97,30 +78,13 @@ export function mountHtmlSandbox(root: ShadowRoot, source: string, opts: { live:
   const theme = document.createElement('style')
   theme.textContent = hostThemeCss()
   root.append(theme)
-  if (opts.live && looksLikeJsx(html)) {
-    mountJsx(html, root)
-    return compileHtmlSource(html)
+  if (!looksLikeJsx(text)) {
+    const compiled = compileSandboxSource(text)
+    if (!compiled.ok) throw new Error(compiled.error)
+    throw new Error('sandbox source must be a React component')
   }
-  const box = document.createElement('div')
-  box.setAttribute('data-html-sandbox-body', '')
-  box.style.height = '100%'
-  box.innerHTML = html
-  if (!opts.live) {
-    for (const node of [...box.querySelectorAll('script')]) node.remove()
-    root.append(box)
-    return compileHtmlSource(html)
-  }
-  const scripts = [...box.querySelectorAll('script')]
-  for (const node of scripts) node.remove()
-  root.append(box)
-  for (const node of scripts) {
-    if (node.getAttribute('src')) continue
-    const type = node.getAttribute('type') ?? ''
-    const body = node.textContent ?? ''
-    if (type && /jsx|tsx|react/i.test(type)) mountJsx(body, root)
-    else runScript(body, root)
-  }
-  return compileHtmlSource(html)
+  mountJsx(text, root)
+  return compileSandboxSource(text)
 }
 
-export { compileHtmlSource }
+export { compileSandboxSource }

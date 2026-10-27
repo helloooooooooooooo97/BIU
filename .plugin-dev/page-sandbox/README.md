@@ -7,7 +7,7 @@
 - 围栏：`kind=sandbox`，`plugin=page-sandbox`。
 - 优先 `export default function App()`。不要 `import react` / `import` / `require`，用宿主注入的 `React`。
 - 颜色、字号、描边走 `--biu-*`，不要写死色值。
-- 源码写在围栏体里，不要另存完整 HTML 文件。
+- 源码写在围栏体里，字段是 `source`，不要当 HTML 附件。
 - 顶栏：左边点名称可改；中间预览 / 代码；右边刷新、放大。
 - `deck` 默认 true。放大后 ← → / 空格翻页，Esc 退出。
 
@@ -32,7 +32,7 @@ POST /api/page-sandbox/compile
 { "source": "export default function App() { return <div /> }" }
 ```
 
-或工具 `sandbox_compile`。通过返回 `{ ok:true, mode:"markup"|"script"|"jsx" }`；语法错误、外链 script、`import`/`require` 会失败。
+或工具 `sandbox_compile`。通过返回 `{ ok:true, mode:"jsx" }`；语法错误、`import`/`require` 会失败。
 
 ## 怎么用
 

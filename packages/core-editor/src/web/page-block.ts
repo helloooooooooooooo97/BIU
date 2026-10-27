@@ -183,7 +183,7 @@ export const pageBlock = Node.create({
         const target = event.target as HTMLElement | null
         if (target?.closest('.page-block-handle, .page-block-handle-grip, [data-drag-handle]')) return false
         if (event.type === 'dragstart' || event.type === 'drag' || event.type === 'dragend') return true
-        return Boolean(target?.closest('.page-block, [data-page-block-capture], [data-html-sandbox], textarea, input, select, button, canvas, .excalidraw, .cm-editor'))
+        return Boolean(target?.closest('.page-block, [data-page-block-capture], [data-sandbox], [data-html-sandbox], textarea, input, select, button, canvas, .excalidraw, .cm-editor'))
       },
     })
   },

@@ -21,8 +21,8 @@ const HIT = new Set([
   'SECTION',
 ])
 
-export const HTML_PICK_KIND = 'sandbox'
-export const HTML_PICK_MARK = 'data-html-pick'
+export const SANDBOX_PICK_KIND = 'sandbox'
+export const SANDBOX_PICK_MARK = 'data-sandbox-pick'
 
 function hashText(value: string) {
   let hash = 2166136261
@@ -45,25 +45,24 @@ function surfaceLabel(el: HTMLElement) {
   return (named || short || el.textContent || el.tagName.toLowerCase()).replace(/\s+/g, ' ').trim().slice(0, 80)
 }
 
-/** 所有 div/span 都打；标题、按钮、链接、图也打。 */
-export function isHtmlPickSurface(el: Element, _root?: Element) {
+export function isSandboxPickSurface(el: Element, _root?: Element) {
   if (!(el instanceof HTMLElement)) return false
   if (SKIP.has(el.tagName)) return false
   return HIT.has(el.tagName) || el.childElementCount === 0 || Boolean(el.textContent?.trim())
 }
 
-export function htmlBlockKey(host: Element | null, html: string) {
+export function sandboxBlockKey(host: Element | null, source: string) {
   const scope = host?.closest('.tiptap, [data-testid="page-editor"]') ?? host?.parentElement
   const blocks = scope?.querySelectorAll('[data-page-block="sandbox"]')
   const index = host && blocks ? [...blocks].indexOf(host as Element) : 0
-  return `${Math.max(0, index)}-${hashText(html)}`
+  return `${Math.max(0, index)}-${hashText(source)}`
 }
 
-export function clearHtmlPickSurfaces(root: ParentNode) {
-  const nodes = 'querySelectorAll' in root ? [...root.querySelectorAll(`[${HTML_PICK_MARK}]`)] : []
-  if (root instanceof Element && root.hasAttribute(HTML_PICK_MARK)) nodes.push(root)
+export function clearSandboxPickSurfaces(root: ParentNode) {
+  const nodes = 'querySelectorAll' in root ? [...root.querySelectorAll(`[${SANDBOX_PICK_MARK}]`)] : []
+  if (root instanceof Element && root.hasAttribute(SANDBOX_PICK_MARK)) nodes.push(root)
   for (const el of nodes) {
-    el.removeAttribute(HTML_PICK_MARK)
+    el.removeAttribute(SANDBOX_PICK_MARK)
     el.removeAttribute('data-biu-kind')
     el.removeAttribute('data-biu-id')
     el.removeAttribute('data-biu-label')
@@ -71,9 +70,9 @@ export function clearHtmlPickSurfaces(root: ParentNode) {
   }
 }
 
-export function stampHtmlPickSurfaces(root: HTMLElement, blockKey: string, opts?: { includeRoot?: boolean; plugin?: string }) {
-  clearHtmlPickSurfaces(root)
-  const prefix = `${HTML_PICK_KIND}:${blockKey}`
+export function stampSandboxPickSurfaces(root: HTMLElement, blockKey: string, opts?: { includeRoot?: boolean; plugin?: string }) {
+  clearSandboxPickSurfaces(root)
+  const prefix = `${SANDBOX_PICK_KIND}:${blockKey}`
   const plugin =
     opts?.plugin?.trim() ||
     root.closest('[data-biu-plugin], [data-page-block-plugin], [data-plugin-id]')?.getAttribute('data-biu-plugin') ||
@@ -82,29 +81,21 @@ export function stampHtmlPickSurfaces(root: HTMLElement, blockKey: string, opts?
     ''
   const stamp = (el: HTMLElement, path: string) => {
     const label = surfaceLabel(el)
-    el.setAttribute(HTML_PICK_MARK, '')
-    el.setAttribute('data-biu-kind', HTML_PICK_KIND)
+    el.setAttribute(SANDBOX_PICK_MARK, '')
+    el.setAttribute('data-biu-kind', SANDBOX_PICK_KIND)
     el.setAttribute('data-biu-id', `${prefix}:${path}`)
     if (label) el.setAttribute('data-biu-label', label)
     if (plugin) el.setAttribute('data-biu-plugin', plugin)
   }
-  if (opts?.includeRoot !== false && isHtmlPickSurface(root)) stamp(root, 'root')
+  if (opts?.includeRoot !== false && isSandboxPickSurface(root)) stamp(root, 'root')
   const walk = (el: Element, path: string) => {
     let i = 0
     for (const child of el.children) {
       const next = `${path}/${i}`
-      if (child instanceof HTMLElement && isHtmlPickSurface(child, root)) stamp(child, next)
+      if (child instanceof HTMLElement && isSandboxPickSurface(child, root)) stamp(child, next)
       walk(child, next)
       i += 1
     }
   }
   walk(root, '0')
-}
-
-/** 把 pick 写进 HTML 字符串，避免 React 重绘 innerHTML 时冲掉内部属性。 */
-export function stampHtmlSource(html: string, blockKey: string, plugin?: string) {
-  const wrap = document.createElement('div')
-  wrap.innerHTML = html
-  stampHtmlPickSurfaces(wrap, blockKey, { includeRoot: false, plugin })
-  return wrap.innerHTML
 }

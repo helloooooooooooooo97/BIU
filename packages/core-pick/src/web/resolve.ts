@@ -150,13 +150,14 @@ export function resolvePickFromNode(
   }
 }
 
-const HTML_BLOCK_SEL = '[data-page-block="sandbox"]'
+const SANDBOX_BLOCK_SEL = '[data-page-block="sandbox"]'
 const ELEMENT_HTML_CAP = 2000
 
 function stripPickMarks(root: HTMLElement) {
-  const nodes = [root, ...root.querySelectorAll('[data-html-pick], [data-biu-kind], [data-biu-id]')]
+  const nodes = [root, ...root.querySelectorAll('[data-sandbox-pick], [data-html-pick], [data-biu-kind], [data-biu-id]')]
   for (const node of nodes) {
     if (!(node instanceof HTMLElement)) continue
+    node.removeAttribute('data-sandbox-pick')
     node.removeAttribute('data-html-pick')
     node.removeAttribute('data-biu-kind')
     node.removeAttribute('data-biu-id')
@@ -179,14 +180,13 @@ export function serializeHtmlPickElement(el: HTMLElement) {
   return html.length > ELEMENT_HTML_CAP ? `${html.slice(0, ELEMENT_HTML_CAP)}…` : html
 }
 
-function htmlBlockFrom(node: Element | null) {
-  return composedClosest(node, HTML_BLOCK_SEL)
+function sandboxBlockFrom(node: Element | null) {
+  return composedClosest(node, SANDBOX_BLOCK_SEL)
 }
 
 function isSandboxInnerEl(el: Element) {
   if (!(el instanceof HTMLElement)) return false
-  const kind = el.getAttribute('data-biu-kind')
-  return kind === 'sandbox' || kind === 'html' || el.hasAttribute('data-html-pick')
+  return el.getAttribute('data-biu-kind') === 'sandbox' || el.hasAttribute('data-sandbox-pick')
 }
 
 function rawBox(el: Element): ClientBox {
@@ -197,11 +197,11 @@ function rawBox(el: Element): ClientBox {
 function sandboxInnerAtPoint(x: number, y: number): HTMLElement | null {
   let best: HTMLElement | null = null
   let bestArea = Infinity
-  for (const host of document.querySelectorAll('[data-html-sandbox]')) {
+  for (const host of document.querySelectorAll('[data-sandbox]')) {
     if (!(host instanceof HTMLElement) || !host.shadowRoot) continue
     const hostBox = rawBox(host)
     if (hostBox.width <= 0 || hostBox.height <= 0 || !pointInBox(hostBox, x, y)) continue
-    for (const el of host.shadowRoot.querySelectorAll('[data-html-pick], [data-biu-kind="sandbox"], [data-biu-kind="html"]')) {
+    for (const el of host.shadowRoot.querySelectorAll('[data-sandbox-pick], [data-biu-kind="sandbox"]')) {
       if (!(el instanceof HTMLElement) || !isSandboxInnerEl(el)) continue
       const box = rawBox(el)
       if (box.width <= 0 || box.height <= 0 || !pointInBox(box, x, y)) continue
@@ -222,21 +222,21 @@ function refineSandboxPick(
   surface: Element | null,
 ) {
   if (!hit) return null
-  const block = htmlBlockFrom(hit.el)
+  const block = sandboxBlockFrom(hit.el)
   if (!block) return hit
-  if (isSandboxInnerEl(hit.el) && (hit.ref.kind === 'sandbox' || hit.ref.kind === 'html')) return hit
+  if (isSandboxInnerEl(hit.el) && hit.ref.kind === 'sandbox') return hit
   for (const el of stacked) {
     if (!(el instanceof HTMLElement) || el === block) continue
     if (!composedContains(block, el)) continue
     if (!isSandboxInnerEl(el)) continue
     const inner = resolvePickFromNode(el, route, surface)
-    if (inner && (inner.ref.kind === 'sandbox' || inner.ref.kind === 'html')) return inner
+    if (inner && inner.ref.kind === 'sandbox') return inner
   }
   return hit
 }
 
 function innermostHtmlTarget(start: Element, highlight: HTMLElement) {
-  const block = htmlBlockFrom(start) || htmlBlockFrom(highlight)
+  const block = sandboxBlockFrom(start) || sandboxBlockFrom(highlight)
   let stamped: HTMLElement | null = null
   let node: Element | null = start
   const stop = block ?? highlight
@@ -373,7 +373,7 @@ function elementsFromPointDeep(x: number, y: number): Element[] {
       if (!(el instanceof Element) || seen.has(el)) continue
       if (el.shadowRoot) {
         dive(el.shadowRoot)
-        for (const inner of el.shadowRoot.querySelectorAll('[data-html-pick], [data-biu-kind="sandbox"], [data-biu-kind="html"]')) {
+        for (const inner of el.shadowRoot.querySelectorAll('[data-sandbox-pick], [data-biu-kind="sandbox"]')) {
           if (!(inner instanceof HTMLElement) || seen.has(inner)) continue
           const box = rawBox(inner)
           if (box.width <= 0 || box.height <= 0 || !pointInBox(box, x, y)) continue
