@@ -123,7 +123,7 @@ function videoScriptFromJson(json: Record<string, unknown>, fallback: string) {
   return typeof json.script === 'string' ? json.script : fallback
 }
 
-/** HTML / iframe 块：围栏里直接写 HTML；deck / height 写在 :::pageBlock {…} 上。旧 JSON 体仍能读。 */
+/** HTML 块：新写只用附件 file；旧围栏体 HTML / JSON 仍能读。deck / height 写在头上。 */
 export function parsePageBlockData(kind: string, raw: string, extras: Record<string, unknown> = {}) {
   const json = parseJsonObject(raw)
   if (VIDEO_KINDS.has(kind)) {
@@ -159,8 +159,12 @@ export function formatPageBlockFence(kind: string, plugin: string, data: Record<
   const body = { ...data }
   delete body.cloneFrom
   if (HTML_KINDS.has(kind)) {
-    const html = typeof body.html === 'string' ? body.html : ''
     const extras = htmlFenceExtras(body)
+    const file = typeof body.file === 'string' ? body.file.trim() : ''
+    if (file) {
+      return `:::pageBlock ${formatMeta(kind, plugin, extras, id)}\n${JSON.stringify({ file }, null, 2)}\n:::`
+    }
+    const html = typeof body.html === 'string' ? body.html : ''
     return `:::pageBlock ${formatMeta(kind, plugin, extras, id)}\n${html}\n:::`
   }
   if (VIDEO_KINDS.has(kind)) {

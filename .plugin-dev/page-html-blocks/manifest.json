@@ -1,12 +1,12 @@
 {
   "id": "page-html-blocks",
   "name": "HTML",
-  "blurb": "斜杠插入静态HTML（不跑脚本）或动态HTML（能跑脚本）。",
+  "blurb": "斜杠插入静态HTML或动态沙箱HTML（React/全局样式，源码走附件）。",
   "tags": [
     "page",
     "editor",
     "html",
-    "iframe",
+    "sandbox",
     "slide"
   ],
   "author": "BIU官方",

@@ -1,5 +1,7 @@
 {
   "name": "page-html-blocks",
   "private": true,
-  "dependencies": {}
+  "dependencies": {
+    "sucrase": "^3.35.1"
+  }
 }
