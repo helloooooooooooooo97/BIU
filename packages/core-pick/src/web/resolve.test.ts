@@ -614,9 +614,9 @@ test('editor paragraphs headings lists and plugin shells are pickable', () => {
   table.append(row)
   const block = document.createElement('div')
   block.className = 'page-block'
-  block.setAttribute('data-page-block', 'html')
+  block.setAttribute('data-page-block', 'sandbox')
   block.setAttribute('data-biu-kind', 'plugin')
-  block.setAttribute('data-biu-id', 'page-html-blocks:html')
+  block.setAttribute('data-biu-id', 'page-sandbox:html')
   block.setAttribute('data-biu-label', 'HTML')
   root.append(p, h2, ul, img, table, block)
   document.body.append(root)
@@ -641,7 +641,7 @@ test('editor paragraphs headings lists and plugin shells are pickable', () => {
   assert.equal(fromLi?.ref.label, '列表项')
   const fromPlugin = resolvePickFromNode(block, '/pages/p1')
   assert.equal(fromPlugin?.ref.kind, 'plugin')
-  assert.equal(fromPlugin?.ref.id, 'page-html-blocks:html')
+  assert.equal(fromPlugin?.ref.id, 'page-sandbox:html')
   const hits = resolvePicksInRect({ left: 0, top: 0, width: 120, height: 180 }, '/pages/p1', root)
   const kinds = hits.map((item) => item.ref.kind).sort()
   assert.ok(kinds.includes('block'))
@@ -654,9 +654,9 @@ test('html surface pick carries page path and markdown lines like a block', () =
   root.className = 'tiptap'
   const block = document.createElement('div')
   block.className = 'page-block'
-  block.setAttribute('data-page-block', 'html')
-  block.setAttribute('data-page-block-plugin', 'page-html-blocks')
-  block.setAttribute('data-biu-plugin', 'page-html-blocks')
+  block.setAttribute('data-page-block', 'sandbox')
+  block.setAttribute('data-page-block-plugin', 'page-sandbox')
+  block.setAttribute('data-biu-plugin', 'page-sandbox')
   const card = document.createElement('div')
   card.setAttribute('data-biu-kind', 'html')
   card.setAttribute('data-biu-id', 'html:0-abcd:0/1')
@@ -682,14 +682,59 @@ test('html surface pick carries page path and markdown lines like a block', () =
   assert.equal(hit.ref.end_line, 22)
   assert.equal(hit.ref.text, ':::html\n<div>静态富排版</div>\n:::')
   assert.equal(hit.ref.selection, '静态富排版，不跑脚本')
-  assert.equal(hit.ref.plugin, 'page-html-blocks')
+  assert.equal(hit.ref.plugin, 'page-sandbox')
   assert.match(hit.ref.element ?? '', /静态富排版，不跑脚本/)
   assert.doesNotMatch(hit.ref.element ?? '', /data-biu-kind/)
   const packed = formatPicks([hit.ref])
-  assert.match(packed, /"plugin":"page-html-blocks"/)
+  assert.match(packed, /"plugin":"page-sandbox"/)
   assert.match(packed, /"path":"\/pages\/p002"/)
   assert.match(packed, /"start_line":14/)
   assert.match(packed, /"element":/)
+  bindEditorTextHost(root, null)
+  root.remove()
+})
+
+test('pick reaches stamped nodes inside an open sandbox shadow', () => {
+  const root = document.createElement('div')
+  root.className = 'tiptap'
+  const block = document.createElement('div')
+  block.className = 'page-block'
+  block.setAttribute('data-page-block', 'sandbox')
+  block.setAttribute('data-page-block-plugin', 'page-sandbox')
+  block.setAttribute('data-biu-plugin', 'page-sandbox')
+  const host = document.createElement('div')
+  host.setAttribute('data-html-sandbox', '')
+  block.append(host)
+  root.append(block)
+  document.body.append(root)
+  const shadow = host.attachShadow({ mode: 'open' })
+  const inner = document.createElement('button')
+  inner.textContent = '点过 0 次'
+  inner.setAttribute('data-biu-kind', 'html')
+  inner.setAttribute('data-biu-id', 'html:0-x:0/1')
+  inner.setAttribute('data-biu-label', '点过 0 次')
+  inner.setAttribute('data-biu-plugin', 'page-sandbox')
+  shadow.append(inner)
+  stubBox(inner, 10, 10, 80, 20)
+  stubBox(host, 0, 0, 100, 80)
+  stubBox(block, 0, 0, 100, 80)
+  bindEditorTextHost(root, {
+    path: '/pages/p002',
+    locusFromSelection: () => null,
+    locusFromElement: (el) =>
+      el === block || block.contains(el) || host.contains(el) || inner === el
+        ? { start_line: 3, end_line: 8, text: ':::pageBlock\nexport default function App() {}\n:::' }
+        : null,
+  })
+  const hit = resolvePickFromNode(inner, '/s/abc')
+  assert.ok(hit)
+  assert.equal(hit.ref.kind, 'html')
+  assert.equal(hit.ref.id, 'html:0-x:0/1')
+  assert.equal(hit.ref.plugin, 'page-sandbox')
+  assert.equal(hit.ref.path, '/pages/p002')
+  assert.equal(hit.ref.start_line, 3)
+  const boxed = resolvePicksInRect({ left: 8, top: 8, width: 40, height: 20 }, '/s/abc', root)
+  assert.equal(boxed.some((item) => item.ref.id === 'html:0-x:0/1'), true)
   bindEditorTextHost(root, null)
   root.remove()
 })
@@ -699,9 +744,9 @@ test('html block pick names the inner node even when the host is the plugin shel
   root.className = 'tiptap'
   const block = document.createElement('div')
   block.className = 'page-block'
-  block.setAttribute('data-page-block', 'html')
+  block.setAttribute('data-page-block', 'sandbox')
   block.setAttribute('data-biu-kind', 'plugin')
-  block.setAttribute('data-biu-id', 'page-html-blocks:html')
+  block.setAttribute('data-biu-id', 'page-sandbox:html')
   block.setAttribute('data-biu-label', 'HTML')
   const title = document.createElement('div')
   title.textContent = '达米恩·查泽雷'

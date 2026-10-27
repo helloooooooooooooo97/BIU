@@ -2524,8 +2524,8 @@ test('reinstalling a builtin plugin does not claim another workspace record', as
       labelField: 'title',
       fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string' }, builtin: { type: 'boolean' } },
     },
-    list: () => [{ id: 'page-html-blocks', title: 'HTML', builtin: true }],
-    get: (id) => (id === 'page-html-blocks' ? { id, title: 'HTML', builtin: true } : null),
+    list: () => [{ id: 'page-sandbox', title: 'HTML', builtin: true }],
+    get: (id) => (id === 'page-sandbox' ? { id, title: 'HTML', builtin: true } : null),
     actions: [
       {
         id: 'pack',
@@ -2553,12 +2553,12 @@ test('reinstalling a builtin plugin does not claim another workspace record', as
     const home = collab.createWorkspace(ada.id, '先建的空间')
     const local = collab.createWorkspace(ada.id, '本机空间')
     collab.setActive(ada.id, home.id)
-    runWithAccount(ada.id, () => collab.attach(home.id, '/plugins', 'page-html-blocks'))
+    runWithAccount(ada.id, () => collab.attach(home.id, '/plugins', 'page-sandbox'))
     collab.setActive(ada.id, local.id)
-    await runWithAccount(ada.id, () => db.action('/plugins/page-html-blocks', 'pack'))
-    assert.deepEqual(packed, ['page-html-blocks'])
-    assert.equal(collab.recordIds(local.id, '/plugins').has('page-html-blocks'), false)
-    assert.equal(collab.recordIds(home.id, '/plugins').has('page-html-blocks'), true)
+    await runWithAccount(ada.id, () => db.action('/plugins/page-sandbox', 'pack'))
+    assert.deepEqual(packed, ['page-sandbox'])
+    assert.equal(collab.recordIds(local.id, '/plugins').has('page-sandbox'), false)
+    assert.equal(collab.recordIds(home.id, '/plugins').has('page-sandbox'), true)
   } finally {
     if (previous === undefined) delete process.env.BIU_ONLINE
     else process.env.BIU_ONLINE = previous

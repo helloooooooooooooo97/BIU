@@ -32,7 +32,7 @@ function blockTitle(pageName: string, kindName: string, data: Record<string, unk
 
 function assetNamesFromFence(kind: string, plugin: string, data: Record<string, unknown>, body: string) {
   const names = new Set(assetNamesFromBlock(kind, plugin, data))
-  if (kind === 'html' || kind === 'htmlframe') {
+  if (kind === 'sandbox' || kind === 'html' || kind === 'htmlframe') {
     for (const name of assetNamesFromHtml(body)) names.add(name)
   }
   return names

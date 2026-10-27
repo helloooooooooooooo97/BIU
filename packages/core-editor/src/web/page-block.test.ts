@@ -71,7 +71,7 @@ test('pageBlock markdown roundtrips kind, plugin, id and data', () => {
 })
 
 test('html pageBlock markdown keeps raw html and deck on the fence', () => {
-  const src = `:::pageBlock {kind=html plugin=page-html-blocks deck=true}
+  const src = `:::pageBlock {kind=sandbox plugin=page-sandbox deck=true}
 <div style="color:#fff">爱乐之城</div>
 :::
 `
@@ -81,11 +81,11 @@ test('html pageBlock markdown keeps raw html and deck on the fence', () => {
     contentType: 'markdown',
   })
   const block = editor.getJSON().content?.find((node) => node.type === 'pageBlock')
-  assert.equal(block?.attrs?.kind, 'html')
+  assert.equal(block?.attrs?.kind, 'sandbox')
   assert.equal((block?.attrs?.data as { html?: string; deck?: boolean })?.html, '<div style="color:#fff">爱乐之城</div>')
   assert.equal((block?.attrs?.data as { deck?: boolean })?.deck, true)
   const out = editor.getMarkdown()
-  assert.match(out, /:::pageBlock \{kind=html plugin=page-html-blocks id=[a-z0-9]+ deck=true\}/)
+  assert.match(out, /:::pageBlock \{kind=sandbox plugin=page-sandbox id=[a-z0-9]+ deck=true\}/)
   assert.match(out, /<div style="color:#fff">爱乐之城<\/div>/)
   assert.doesNotMatch(out, /"html":/)
   editor.destroy()
@@ -131,7 +131,7 @@ test('video pageBlock still reads the old JSON body', () => {
 })
 
 test('html pageBlock still reads the old JSON body', () => {
-  const src = `:::pageBlock {kind=html plugin=page-html-blocks}
+  const src = `:::pageBlock {kind=sandbox plugin=page-sandbox}
 {"html":"<div>旧写法</div>","deck":true}
 :::
 `
@@ -237,13 +237,13 @@ test('duplicate pageBlock file pointers get a cloneFrom copy', () => {
 test('editor assigns a stable id when inserting or loading a pageBlock without one', async () => {
   const editor = new Editor({
     extensions: pageEditorExtensions(),
-    content: `:::pageBlock {kind=html plugin=page-html-blocks}\n<div>x</div>\n:::\n`,
+    content: `:::pageBlock {kind=sandbox plugin=page-sandbox}\n<div>x</div>\n:::\n`,
     contentType: 'markdown',
   })
   await Promise.resolve()
   const block = editor.getJSON().content?.find((node) => node.type === 'pageBlock')
   assert.match(String(block?.attrs?.id ?? ''), /^[a-z0-9]{8}$/i)
-  assert.match(editor.getMarkdown(), /:::pageBlock \{kind=html plugin=page-html-blocks id=[a-z0-9]+\}/)
+  assert.match(editor.getMarkdown(), /:::pageBlock \{kind=sandbox plugin=page-sandbox id=[a-z0-9]+\}/)
   editor.destroy()
 })
 
@@ -254,7 +254,7 @@ test('setContent from agent without id or with a bad id gets a valid id', () => 
     contentType: 'markdown',
   })
   editor.commands.setContent(
-    `:::pageBlock {kind=html plugin=page-html-blocks}\n<div>a</div>\n:::\n\n:::pageBlock {kind=html plugin=page-html-blocks id=no}\n<div>b</div>\n:::\n`,
+    `:::pageBlock {kind=sandbox plugin=page-sandbox}\n<div>a</div>\n:::\n\n:::pageBlock {kind=sandbox plugin=page-sandbox id=no}\n<div>b</div>\n:::\n`,
     { contentType: 'markdown', emitUpdate: false },
   )
   const ids = (editor.getJSON().content ?? [])
@@ -275,8 +275,8 @@ test('copied pageBlocks do not share an id', () => {
   editor.commands.setContent({
     type: 'doc',
     content: [
-      { type: 'pageBlock', attrs: { kind: 'html', id: 'ab12cd34', data: { html: '<div>a</div>' } } },
-      { type: 'pageBlock', attrs: { kind: 'html', id: 'ab12cd34', data: { html: '<div>b</div>' } } },
+      { type: 'pageBlock', attrs: { kind: 'sandbox', id: 'ab12cd34', data: { html: '<div>a</div>' } } },
+      { type: 'pageBlock', attrs: { kind: 'sandbox', id: 'ab12cd34', data: { html: '<div>b</div>' } } },
     ],
   })
   const ids = (editor.getJSON().content ?? [])
@@ -294,12 +294,12 @@ test('pasted pageBlocks with the same id are rewritten immediately', () => {
     extensions: pageEditorExtensions(),
     content: {
       type: 'doc',
-      content: [{ type: 'pageBlock', attrs: { kind: 'html', id: 'ab12cd34', data: { html: '<div>a</div>' } } }],
+      content: [{ type: 'pageBlock', attrs: { kind: 'sandbox', id: 'ab12cd34', data: { html: '<div>a</div>' } } }],
     },
   })
   editor.commands.insertContentAt(editor.state.doc.content.size, {
     type: 'pageBlock',
-    attrs: { kind: 'html', id: 'ab12cd34', data: { html: '<div>b</div>' } },
+    attrs: { kind: 'sandbox', id: 'ab12cd34', data: { html: '<div>b</div>' } },
   })
   const live = (editor.getJSON().content ?? [])
     .filter((node) => node.type === 'pageBlock')

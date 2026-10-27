@@ -72,7 +72,7 @@ test('insert before / after / duplicate / delete a paragraph', () => {
 })
 
 test('resolveHandleBlock picks pageBlock atom at the gap beside it', () => {
-  const editor = editorOf(`:::pageBlock {kind=html plugin=page-html-blocks}
+  const editor = editorOf(`:::pageBlock {kind=sandbox plugin=page-sandbox}
 {"html":"<p>hi</p>"}
 :::
 `)
@@ -100,7 +100,7 @@ test('handleBlockFromDom maps a nested iframe back to the pageBlock atom', () =>
   const editor = new Editor({
     element: host,
     extensions: pageEditorExtensions(),
-    content: `:::pageBlock {kind=html plugin=page-html-blocks}
+    content: `:::pageBlock {kind=sandbox plugin=page-sandbox}
 {"html":"<p>hi</p>"}
 :::
 `,
@@ -114,7 +114,7 @@ test('handleBlockFromDom maps a nested iframe back to the pageBlock atom', () =>
   })
   assert.ok(hole instanceof HTMLElement)
   hole.classList.add('page-block')
-  hole.setAttribute('data-page-block', 'html')
+  hole.setAttribute('data-page-block', 'sandbox')
   const iframe = document.createElement('iframe')
   hole.append(iframe)
   const found = handleBlockFromDom(editor, iframe)
@@ -155,7 +155,7 @@ test('visibleHandleEl prefers the inner page-block, not the renderer shell', () 
   outer.className = 'page-block react-renderer'
   const inner = document.createElement('div')
   inner.className = 'page-block'
-  inner.setAttribute('data-page-block', 'html')
+  inner.setAttribute('data-page-block', 'sandbox')
   outer.append(inner)
   assert.equal(visibleHandleEl(outer), inner)
   const para = document.createElement('p')

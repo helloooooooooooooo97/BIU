@@ -111,14 +111,23 @@ function HtmlSandbox({
     const host = hostRef.current
     if (!host) return
     const root = host.shadowRoot ?? host.attachShadow({ mode: 'open' })
+    let mo: MutationObserver | undefined
     try {
       mountHtmlSandbox(root, html, { live })
       setError('')
       onStamp?.(root)
+      const target = root.querySelector('[data-html-sandbox-body], [data-html-react-root]')
+      if (target && onStamp) {
+        mo = new MutationObserver(() => onStamp(root))
+        mo.observe(target, { childList: true, subtree: true })
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     }
-    return () => unmountHtmlSandbox(root)
+    return () => {
+      mo?.disconnect()
+      unmountHtmlSandbox(root)
+    }
   }, [html, live])
   return (
     <>
@@ -138,7 +147,7 @@ function HtmlSandbox({
   )
 }
 
-export const name = 'page-html-blocks'
+export const name = 'page-sandbox'
 export const inject = ['pageEditor']
 
 type BlockProps = {
@@ -416,7 +425,7 @@ function HtmlDeckOverlay({
 
 function useHtmlDeck(
   hostRef: { current: HTMLElement | null },
-  kind: 'html' | 'htmlframe',
+  kind: 'sandbox',
   html: string,
   opts?: { width?: unknown; height?: unknown; deck?: boolean },
 ) {
@@ -771,7 +780,7 @@ function HtmlCard({ data, update, writable }: BlockProps) {
   const [frame, setFrame] = useState(0)
   const [hover, setHover] = useState(false)
   const hostRef = useRef<HTMLDivElement | null>(null)
-  const deck = useHtmlDeck(hostRef, 'html', html, { width, height, deck: deckOn })
+  const deck = useHtmlDeck(hostRef, 'sandbox', html, { width, height, deck: deckOn })
   const compiled = useMemo(() => compileHtmlSource(html), [html])
   const editing = tab === 'code'
 
@@ -817,7 +826,7 @@ function HtmlCard({ data, update, writable }: BlockProps) {
             onStamp={(root) => {
               const host = hostRef.current?.closest('[data-page-block]') ?? null
               const key = htmlBlockKey(host, html)
-              const body = root.querySelector('[data-html-sandbox-body]')
+              const body = root.querySelector('[data-html-sandbox-body], [data-html-react-root]')
               if (body instanceof HTMLElement) stampHtmlPickSurfaces(body, `${key}-doc`, { plugin: name })
             }}
           />
@@ -858,26 +867,13 @@ export function apply(ctx: {
   }
 }) {
   ctx.pageEditor.registerBlock({
-    kind: 'html',
+    kind: 'sandbox',
     plugin: name,
     label: 'Sandbox',
-    blockType: 'html',
+    blockType: 'sandbox',
     blockTypeLabel: 'Sandbox',
     hint: '沙箱里跑 React 组件，继承 --biu-*',
     aliases: ['sandbox', 'html', 'html直', '静态html', '动态html', '排版', '沙箱', 'iframe', 'htmlf', 'frame', '小网页'],
-    assets: htmlBlockAssets,
-    defaults: () => ({ html: HTML_SAMPLE, deck: true, title: 'Sandbox' }),
-    View: HtmlCard,
-  })
-  ctx.pageEditor.registerBlock({
-    kind: 'htmlframe',
-    plugin: name,
-    label: 'Sandbox',
-    blockType: 'html',
-    blockTypeLabel: 'Sandbox',
-    hint: '沙箱里跑 React 组件',
-    aliases: [],
-    slash: false,
     assets: htmlBlockAssets,
     defaults: () => ({ html: HTML_SAMPLE, deck: true, title: 'Sandbox' }),
     View: HtmlCard,

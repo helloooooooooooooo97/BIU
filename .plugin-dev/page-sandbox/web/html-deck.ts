@@ -1,7 +1,7 @@
-export const HTML_DECK_SEL = '[data-page-block="html"], [data-page-block="htmlframe"]'
+export const HTML_DECK_SEL = '[data-page-block="sandbox"]'
 
 export type HtmlSlide = {
-  kind: 'html' | 'htmlframe'
+  kind: 'sandbox'
   html: string
   width?: number | string
   height?: number | string

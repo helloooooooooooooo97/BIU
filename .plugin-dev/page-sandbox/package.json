@@ -1,5 +1,5 @@
 {
-  "name": "page-html-blocks",
+  "name": "page-sandbox",
   "private": true,
   "dependencies": {
     "@heroicons/react": "^2.2.0",

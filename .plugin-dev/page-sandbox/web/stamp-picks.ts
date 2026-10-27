@@ -54,7 +54,7 @@ export function isHtmlPickSurface(el: Element, _root?: Element) {
 
 export function htmlBlockKey(host: Element | null, html: string) {
   const scope = host?.closest('.tiptap, [data-testid="page-editor"]') ?? host?.parentElement
-  const blocks = scope?.querySelectorAll('[data-page-block="html"], [data-page-block="htmlframe"]')
+  const blocks = scope?.querySelectorAll('[data-page-block="sandbox"]')
   const index = host && blocks ? [...blocks].indexOf(host as Element) : 0
   return `${Math.max(0, index)}-${hashText(html)}`
 }

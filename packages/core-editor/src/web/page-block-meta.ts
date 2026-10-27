@@ -68,7 +68,7 @@ if (typeof window !== 'undefined') {
   })
 }
 
-const HTML_KINDS = new Set(['html', 'htmlframe'])
+const HTML_KINDS = new Set(['sandbox', 'html', 'htmlframe'])
 const VIDEO_KINDS = new Set(['video'])
 
 export function parsePageBlockMeta(raw: string) {

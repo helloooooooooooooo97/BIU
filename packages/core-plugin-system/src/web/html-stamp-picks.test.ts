@@ -5,7 +5,7 @@ import {
   stampHtmlPickSurfaces,
   stampHtmlSource,
   htmlBlockKey,
-} from '../../../../.plugin-dev/page-html-blocks/web/stamp-picks.ts'
+} from '../../../../.plugin-dev/page-sandbox/web/stamp-picks.ts'
 
 test('stamps every div and span plus semantic nodes', () => {
   const root = document.createElement('div')
@@ -21,7 +21,7 @@ test('stamps every div and span plus semantic nodes', () => {
     </div>
   `
   document.body.append(root)
-  stampHtmlPickSurfaces(root, '0-abcd', { plugin: 'page-html-blocks' })
+  stampHtmlPickSurfaces(root, '0-abcd', { plugin: 'page-sandbox' })
   const stamped = [...root.querySelectorAll('[data-html-pick]')]
   if (root.hasAttribute('data-html-pick') && !stamped.includes(root)) stamped.unshift(root)
   const tags = stamped.map((el) => el.tagName)
@@ -31,7 +31,7 @@ test('stamps every div and span plus semantic nodes', () => {
   assert.ok(tags.includes('SPAN'))
   assert.ok(tags.includes('BUTTON'))
   const chip = root.querySelector('.chip')
-  assert.equal(chip?.getAttribute('data-biu-plugin'), 'page-html-blocks')
+  assert.equal(chip?.getAttribute('data-biu-plugin'), 'page-sandbox')
   assert.equal(isHtmlPickSurface(chip!), true)
   const divs = [...root.querySelectorAll('div')]
   const spans = [...root.querySelectorAll('span')]
@@ -44,9 +44,9 @@ test('htmlBlockKey is stable for the same host and source', () => {
   const editor = document.createElement('div')
   editor.className = 'tiptap'
   const a = document.createElement('div')
-  a.setAttribute('data-page-block', 'html')
+  a.setAttribute('data-page-block', 'sandbox')
   const b = document.createElement('div')
-  b.setAttribute('data-page-block', 'htmlframe')
+  b.setAttribute('data-page-block', 'sandbox')
   editor.append(a, b)
   assert.equal(htmlBlockKey(a, '<p>x</p>'), htmlBlockKey(a, '<p>x</p>'))
   assert.notEqual(htmlBlockKey(a, '<p>x</p>'), htmlBlockKey(b, '<p>x</p>'))
@@ -62,7 +62,7 @@ test('stampHtmlSource hits every poster div and span', () => {
       <span>🏆 奥斯卡最佳导演</span>
     </div>
   </div>`
-  const stamped = stampHtmlSource(html, '0-poster', 'page-html-blocks')
+  const stamped = stampHtmlSource(html, '0-poster', 'page-sandbox')
   const wrap = document.createElement('div')
   wrap.innerHTML = stamped
   const divs = [...wrap.querySelectorAll('div')]

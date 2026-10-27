@@ -1,3 +1,4 @@
+import { flushSync } from 'react-dom'
 import { createRoot, type Root } from 'react-dom/client'
 import { compileHtmlSource, compileJsxSource, looksLikeJsx, transpileJsx } from '../shared/compile.ts'
 
@@ -75,7 +76,9 @@ function mountJsx(source: string, root: ShadowRoot) {
   prev?.unmount()
   const reactRoot = createRoot(mount)
   roots.set(root, reactRoot)
-  reactRoot.render(React.createElement(Component, { css: hostThemeCss() }))
+  flushSync(() => {
+    reactRoot.render(React.createElement(Component, { css: hostThemeCss() }))
+  })
 }
 
 export function unmountHtmlSandbox(root: ShadowRoot | null) {
