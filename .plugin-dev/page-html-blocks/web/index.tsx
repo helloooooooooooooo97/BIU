@@ -229,25 +229,30 @@ function SourceEditor({
   )
 }
 
-function ExpandGlyph({ shrink }: { shrink?: boolean }) {
+function Glyph({ d }: { d: string }) {
   return (
     <svg width={14} height={14} viewBox="0 0 16 16" fill="currentColor" aria-hidden>
-      {shrink ? (
-        <path
-          fillRule="evenodd"
-          d="M2.22 2.22a.75.75 0 0 1 1.06 0L5.5 4.44V2.75a.75.75 0 0 1 1.5 0v3.5a.75.75 0 0 1-.75.75h-3.5a.75.75 0 0 1 0-1.5h1.69L2.22 3.28a.75.75 0 0 1 0-1.06Zm10.5 0a.75.75 0 1 1 1.06 1.06L11.56 5.5h1.69a.75.75 0 0 1 0 1.5h-3.5A.75.75 0 0 1 9 6.25v-3.5a.75.75 0 0 1 1.5 0v1.69l2.22-2.22ZM2.75 9h3.5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-1.69l-2.22 2.22a.75.75 0 0 1-1.06-1.06l2.22-2.22H2.75a.75.75 0 0 1 0-1.5ZM9 9.75A.75.75 0 0 1 9.75 9h3.5a.75.75 0 0 1 0 1.5h-1.69l2.22 2.22a.75.75 0 1 1-1.06 1.06l-2.22-2.22v1.69a.75.75 0 0 1-1.5 0v-3.5Z"
-        />
-      ) : (
-        <path
-          fillRule="evenodd"
-          d="M2.75 9a.75.75 0 0 1 .75.75v1.69l2.22-2.22a.75.75 0 0 1 1.06 1.06L4.56 12.5h1.69a.75.75 0 0 1 0 1.5h-3.5a.75.75 0 0 1-.75-.75v-3.5A.75.75 0 0 1 2.75 9ZM2.75 7a.75.75 0 0 0 .75-.75V4.56l2.22 2.22a.75.75 0 0 0 1.06-1.06L4.56 3.5h1.69a.75.75 0 0 0 0-1.5h-3.5a.75.75 0 0 0-.75.75v3.5c0 .414.336.75.75.75ZM13.25 9a.75.75 0 0 0-.75.75v1.69l-2.22-2.22a.75.75 0 1 0-1.06 1.06l2.22 2.22H9.75a.75.75 0 0 0 0 1.5h3.5a.75.75 0 0 0 .75-.75v-3.5a.75.75 0 0 0-.75-.75ZM13.25 7a.75.75 0 0 1-.75-.75V4.56l-2.22 2.22a.75.75 0 1 1-1.06-1.06l2.22-2.22H9.75a.75.75 0 0 1 0-1.5h3.5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-.75.75Z"
-        />
-      )}
+      <path fillRule="evenodd" d={d} />
     </svg>
   )
 }
 
-const inkFace = "'Helvetica Neue', Arial, sans-serif"
+const ICON_SANDBOX =
+  'M3.5 2.75A.75.75 0 0 1 4.25 2h7.5a.75.75 0 0 1 .75.75V6h-1.5V3.5h-6V6h-1.5V2.75ZM2 7.25A.75.75 0 0 1 2.75 6.5h10.5a.75.75 0 0 1 .75.75v5.5a.75.75 0 0 1-.75.75H2.75a.75.75 0 0 1-.75-.75v-5.5ZM4 9h8v3H4V9Z'
+const ICON_PREVIEW =
+  'M8 3.5c-2.49 0-4.64 1.47-6.05 3.67a1.84 1.84 0 0 0 0 1.66C3.36 11.03 5.51 12.5 8 12.5s4.64-1.47 6.05-3.67a1.84 1.84 0 0 0 0-1.66C12.64 4.97 10.49 3.5 8 3.5ZM8 10a2 2 0 1 1 0-4 2 2 0 0 1 0 4Z'
+const ICON_CODE =
+  'M4.72 4.22a.75.75 0 0 1 0 1.06L2.5 7.5l2.22 2.22a.75.75 0 1 1-1.06 1.06L.72 7.84a.75.75 0 0 1 0-1.06l2.94-2.94a.75.75 0 0 1 1.06 0Zm6.56 0a.75.75 0 0 1 1.06 0l2.94 2.94a.75.75 0 0 1 0 1.06l-2.94 2.94a.75.75 0 1 1-1.06-1.06L13.5 7.5l-2.22-2.22a.75.75 0 0 1 0-1.06ZM8.22 2.47a.75.75 0 0 1 .47.95l-2.5 8.5a.75.75 0 1 1-1.42-.48l2.5-8.5a.75.75 0 0 1 .95-.47Z'
+const ICON_REFRESH =
+  'M8 1.5a.75.75 0 0 1 .75.75v1.63A5.75 5.75 0 1 1 2.25 8a.75.75 0 0 1 1.5 0 4.25 4.25 0 1 0 4.25-4.25H6.06l.72.72a.75.75 0 1 1-1.06 1.06L3.47 3.97a.75.75 0 0 1 0-1.06l2.25-2.25a.75.75 0 0 1 1.06 1.06L6.06 2.44h1.19A.75.75 0 0 1 8 1.5Z'
+const ICON_EXPAND =
+  'M2.75 9a.75.75 0 0 1 .75.75v1.69l2.22-2.22a.75.75 0 0 1 1.06 1.06L4.56 12.5h1.69a.75.75 0 0 1 0 1.5h-3.5a.75.75 0 0 1-.75-.75v-3.5A.75.75 0 0 1 2.75 9ZM2.75 7a.75.75 0 0 0 .75-.75V4.56l2.22 2.22a.75.75 0 0 0 1.06-1.06L4.56 3.5h1.69a.75.75 0 0 0 0-1.5h-3.5a.75.75 0 0 0-.75.75v3.5c0 .414.336.75.75.75ZM13.25 9a.75.75 0 0 0-.75.75v1.69l-2.22-2.22a.75.75 0 1 0-1.06 1.06l2.22 2.22H9.75a.75.75 0 0 0 0 1.5h3.5a.75.75 0 0 0 .75-.75v-3.5a.75.75 0 0 0-.75-.75ZM13.25 7a.75.75 0 0 1-.75-.75V4.56l-2.22 2.22a.75.75 0 1 1-1.06-1.06l2.22-2.22H9.75a.75.75 0 0 1 0-1.5h3.5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-.75.75Z'
+const ICON_SHRINK =
+  'M2.22 2.22a.75.75 0 0 1 1.06 0L5.5 4.44V2.75a.75.75 0 0 1 1.5 0v3.5a.75.75 0 0 1-.75.75h-3.5a.75.75 0 0 1 0-1.5h1.69L2.22 3.28a.75.75 0 0 1 0-1.06Zm10.5 0a.75.75 0 1 1 1.06 1.06L11.56 5.5h1.69a.75.75 0 0 1 0 1.5h-3.5A.75.75 0 0 1 9 6.25v-3.5a.75.75 0 0 1 1.5 0v1.69l2.22-2.22ZM2.75 9h3.5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-1.69l-2.22 2.22a.75.75 0 0 1-1.06-1.06l2.22-2.22H2.75a.75.75 0 0 1 0-1.5ZM9 9.75A.75.75 0 0 1 9.75 9h3.5a.75.75 0 0 1 0 1.5h-1.69l2.22 2.22a.75.75 0 1 1-1.06 1.06l-2.22-2.22v1.69a.75.75 0 0 1-1.5 0v-3.5Z'
+
+function ExpandGlyph({ shrink }: { shrink?: boolean }) {
+  return <Glyph d={shrink ? ICON_SHRINK : ICON_EXPAND} />
+}
 
 const barBtn: Record<string, unknown> = {
   cursor: 'pointer',
@@ -258,23 +263,6 @@ const barBtn: Record<string, unknown> = {
   color: '#c9cdd6',
   fontWeight: 700,
   fontSize: 11,
-  lineHeight: '16px',
-  display: 'inline-flex',
-  alignItems: 'center',
-}
-
-const pressBtn: Record<string, unknown> = {
-  cursor: 'pointer',
-  border: 'none',
-  borderLeft: '2px solid #111',
-  borderRadius: 0,
-  padding: '8px 10px',
-  background: 'var(--biu-color-bg)',
-  color: '#111',
-  fontFamily: inkFace,
-  fontWeight: 800,
-  fontSize: 10,
-  letterSpacing: '.15em',
   lineHeight: '16px',
   display: 'inline-flex',
   alignItems: 'center',
@@ -556,113 +544,122 @@ function SizeGrip({
     />
   )
 }
-function FloatBar({
-  editing,
-  setEditing,
+const chromeIconBtn: Record<string, unknown> = {
+  cursor: 'pointer',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 6,
+  margin: 0,
+  border: 0,
+  borderRadius: 6,
+  padding: 0,
+  background: 'transparent',
+  color: 'var(--biu-color-text-subtle)',
+  font: 'inherit',
+}
+
+function SandboxBar({
+  tab,
+  onTab,
   ro,
+  onRefresh,
   onExpand,
-  deck,
-  onDeck,
-  sized,
-  onResetSize,
-  children,
 }: {
-  editing: boolean
-  setEditing: (v: boolean) => void
+  tab: 'preview' | 'code'
+  onTab: (next: 'preview' | 'code') => void
   ro: boolean
+  onRefresh: () => void
   onExpand: () => void
-  deck: boolean
-  onDeck?: (next: boolean) => void
-  sized?: boolean
-  onResetSize?: () => void
-  children?: unknown
 }) {
-  const seg = (active: boolean, onClick: () => void, label: string, on: string, onInk: string) => (
+  const tabBtn = (id: 'preview' | 'code', label: string, icon: string) => (
     <button
       type="button"
       tabIndex={-1}
-      onClick={onClick}
+      data-testid={id === 'preview' ? 'sandbox-tab-preview' : 'sandbox-tab-code'}
+      aria-pressed={tab === id}
+      onClick={() => onTab(id)}
       style={{
-        ...pressBtn,
-        background: active ? on : '#fff',
-        color: active ? onInk : '#111',
+        ...chromeIconBtn,
+        padding: '4px 10px',
+        background: tab === id ? 'var(--biu-color-bg-hover)' : 'transparent',
+        color: tab === id ? 'var(--biu-color-text)' : 'var(--biu-color-text-muted)',
+        fontSize: 'var(--biu-font-size-3)',
+        fontWeight: 'var(--biu-font-weight-medium)',
       }}
     >
+      <Glyph d={icon} />
       {label}
     </button>
   )
   return (
     <div
-      data-testid="html-floatbar"
+      data-testid="sandbox-bar"
       data-biu-ignore
       style={{
-        position: 'absolute',
-        top: 2,
-        right: 2,
-        zIndex: 20,
-        display: 'flex',
-        gap: 0,
-        alignItems: 'stretch',
-        padding: 0,
-        borderRadius: 0,
+        display: 'grid',
+        gridTemplateColumns: '1fr auto 1fr',
+        alignItems: 'center',
+        gap: 8,
+        padding: '4px 8px',
+        borderBottom: 'var(--biu-stroke-width) solid var(--biu-color-border)',
         background: 'var(--biu-color-bg)',
-        border: 'none',
-        borderBottom: '2px solid #111',
-        boxShadow: 'none',
-        fontFamily: inkFace,
-        fontSize: 10,
-        lineHeight: 1.2,
+        color: 'var(--biu-color-text)',
       }}
     >
-      {children}
-      {ro ? null : (
-        <>
-          {seg(!editing, () => setEditing(false), '预览', '#1c7cff', '#fff')}
-          {seg(editing, () => setEditing(true), '编辑', '#ffd400', '#111')}
-          {sized ? (
-            <button
-              type="button"
-              tabIndex={-1}
-              data-testid="html-size-auto"
-              title="恢复自适应宽高"
-              aria-label="恢复自适应宽高"
-              onClick={() => onResetSize?.()}
-              style={{ ...pressBtn, background: '#ffd400' }}
-            >
-              自适应
-            </button>
-          ) : null}
-          <button
-            type="button"
-            tabIndex={-1}
-            data-testid="html-deck-toggle"
-            title={deck ? '已加入演示，点击移出' : '未加入演示，点击加入'}
-            aria-label={deck ? '移出演示' : '加入演示'}
-            aria-pressed={deck}
-            onClick={() => onDeck?.(!deck)}
-            style={{
-              ...pressBtn,
-              background: deck ? '#ff2a6d' : '#fff',
-              color: deck ? '#fff' : '#111',
-            }}
-          >
-            演示
-          </button>
-        </>
-      )}
-      <button
-        type="button"
-        tabIndex={-1}
-        data-page-block-expand=""
-        data-testid="html-deck-expand"
-        title="放大放映"
-        aria-label="放大放映"
-        onMouseDown={(event) => event.preventDefault()}
-        onClick={onExpand}
-        style={{ ...pressBtn }}
+      <span
+        data-testid="sandbox-title"
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          fontSize: 'var(--biu-font-size-3)',
+          fontWeight: 'var(--biu-font-weight-medium)',
+          color: 'var(--biu-color-text-subtle)',
+        }}
       >
-        <ExpandGlyph />
-      </button>
+        <Glyph d={ICON_SANDBOX} />
+        Sandbox
+      </span>
+      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }} role="tablist" aria-label="Sandbox 视图">
+        {tabBtn('preview', '预览', ICON_PREVIEW)}
+        {ro ? null : tabBtn('code', '代码', ICON_CODE)}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
+        <button
+          type="button"
+          tabIndex={-1}
+          data-testid="sandbox-refresh"
+          title="刷新"
+          aria-label="刷新"
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={onRefresh}
+          style={{
+            ...chromeIconBtn,
+            width: 'var(--biu-size-control-md)',
+            height: 'var(--biu-size-control-md)',
+          }}
+        >
+          <Glyph d={ICON_REFRESH} />
+        </button>
+        <button
+          type="button"
+          tabIndex={-1}
+          data-page-block-expand=""
+          data-testid="html-deck-expand"
+          title="放大"
+          aria-label="放大"
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={onExpand}
+          style={{
+            ...chromeIconBtn,
+            width: 'var(--biu-size-control-md)',
+            height: 'var(--biu-size-control-md)',
+          }}
+        >
+          <ExpandGlyph />
+        </button>
+      </div>
     </div>
   )
 }
@@ -733,11 +730,13 @@ function HtmlCard({ data, update, writable }: BlockProps) {
   const fillHost = fill && (height == null || height === '')
   const sized = (width != null && width !== '') || (height != null && height !== '') || fillHost
   const deckOn = htmlDeckEnabled(data.deck)
-  const [editing, setEditing] = useState(false)
+  const [tab, setTab] = useState<'preview' | 'code'>('preview')
+  const [frame, setFrame] = useState(0)
   const [hover, setHover] = useState(false)
   const hostRef = useRef<HTMLDivElement | null>(null)
   const deck = useHtmlDeck(hostRef, 'html', html, { width, height, deck: deckOn })
   const compiled = useMemo(() => compileHtmlSource(html), [html])
+  const editing = tab === 'code'
 
   return (
     <ReUI>
@@ -747,42 +746,39 @@ function HtmlCard({ data, update, writable }: BlockProps) {
       className={fill ? 'html-direct-fill' : undefined}
       style={{
         position: 'relative',
+        display: 'flex',
+        flexDirection: 'column',
         width: cssBoxSize(width) ?? '100%',
         height: cssBoxSize(height) ?? (fillHost ? HTML_FILL_HOST_PX : undefined),
         maxWidth: '100%',
         overflow: sized ? 'auto' : undefined,
         boxSizing: 'border-box',
+        border: 'var(--biu-stroke-width) solid var(--biu-color-border)',
+        borderRadius: 10,
+        background: 'var(--biu-color-bg)',
       }}
       onPointerEnter={() => setHover(true)}
       onPointerLeave={() => setHover(false)}
     >
-      {(hover || editing) && (
-        <FloatBar
-          editing={editing}
-          setEditing={setEditing}
-          ro={ro}
-          onExpand={deck.start}
-          deck={deckOn}
-          onDeck={(next) => update({ deck: next })}
-          sized={sized}
-          onResetSize={() => update({ width: undefined, height: undefined })}
-        />
-      )}
-      {editing ? (
-        <SourceEditor html={html} onChange={source.save} compile={compiled} />
-      ) : (
-        <HtmlSandbox
-          html={html}
-          live
-          onStamp={(root) => {
-            const host = hostRef.current?.closest('[data-page-block]') ?? null
-            const key = htmlBlockKey(host, html)
-            const body = root.querySelector('[data-html-sandbox-body]')
-            if (body instanceof HTMLElement) stampHtmlPickSurfaces(body, `${key}-doc`, { plugin: name })
-          }}
-        />
-      )}
-      {ro || editing ? null : <SizeGrip reveal={hover} boxRef={hostRef} onSize={(next) => update(next)} />}
+      <SandboxBar tab={tab} onTab={setTab} ro={ro} onRefresh={() => setFrame((n) => n + 1)} onExpand={deck.start} />
+      <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+        {editing ? (
+          <SourceEditor html={html} onChange={source.save} compile={compiled} />
+        ) : (
+          <HtmlSandbox
+            key={frame}
+            html={html}
+            live
+            onStamp={(root) => {
+              const host = hostRef.current?.closest('[data-page-block]') ?? null
+              const key = htmlBlockKey(host, html)
+              const body = root.querySelector('[data-html-sandbox-body]')
+              if (body instanceof HTMLElement) stampHtmlPickSurfaces(body, `${key}-doc`, { plugin: name })
+            }}
+          />
+        )}
+        {ro || editing ? null : <SizeGrip reveal={hover} boxRef={hostRef} onSize={(next) => update(next)} />}
+      </div>
       {deck.overlay}
     </div>
     </ReUI>
@@ -819,11 +815,11 @@ export function apply(ctx: {
   ctx.pageEditor.registerBlock({
     kind: 'html',
     plugin: name,
-    label: 'HTML',
+    label: 'Sandbox',
     blockType: 'html',
-    blockTypeLabel: 'HTML',
+    blockTypeLabel: 'Sandbox',
     hint: '沙箱里跑 HTML / CSS / 脚本，继承全局 --biu-*',
-    aliases: ['html', 'html直', '静态html', '动态html', '排版', '沙箱', 'iframe', 'htmlf', 'frame', '小网页'],
+    aliases: ['sandbox', 'html', 'html直', '静态html', '动态html', '排版', '沙箱', 'iframe', 'htmlf', 'frame', '小网页'],
     assets: htmlBlockAssets,
     defaults: () => ({ html: HTML_SAMPLE, deck: true }),
     View: HtmlCard,
@@ -831,9 +827,9 @@ export function apply(ctx: {
   ctx.pageEditor.registerBlock({
     kind: 'htmlframe',
     plugin: name,
-    label: 'HTML',
+    label: 'Sandbox',
     blockType: 'html',
-    blockTypeLabel: 'HTML',
+    blockTypeLabel: 'Sandbox',
     hint: '沙箱里跑 HTML / CSS / 脚本',
     aliases: [],
     slash: false,
