@@ -54,7 +54,7 @@ test('htmlVisibleText keeps inner copy', () => {
 test('findInPmDoc highlights an html pageBlock once, not each inner match', () => {
   const editor = new Editor({
     extensions: pageEditorExtensions(),
-    content: `正文\n\n:::pageBlock {kind=html plugin=page-html-blocks}\n{"html":"<div>爱乐之城海报 爱乐之城</div>"}\n:::\n`,
+    content: `正文\n\n:::pageBlock {kind=sandbox plugin=page-sandbox}\n{"html":"<div>爱乐之城海报 爱乐之城</div>"}\n:::\n`,
     contentType: 'markdown',
   })
   const hits = findInPmDoc(editor.state.doc, '爱乐之城')

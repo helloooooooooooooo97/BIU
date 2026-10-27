@@ -10,7 +10,7 @@ import {
   htmlLooksFillLayout,
   HTML_FILL_HOST_PX,
   stepHtmlDeck,
-} from '../../../../.plugin-dev/page-html-blocks/web/html-deck.ts'
+} from '../../../../.plugin-dev/page-sandbox/web/html-deck.ts'
 
 test('cssBoxSize turns numbers into px and keeps css units', () => {
   assert.equal(cssBoxSize(320), '320px')
@@ -19,29 +19,29 @@ test('cssBoxSize turns numbers into px and keeps css units', () => {
   assert.equal(cssBoxSize(undefined), undefined)
 })
 
-test('collects html and htmlframe slides in document order', () => {
+test('collects sandbox slides in document order', () => {
   const editor = document.createElement('div')
   editor.className = 'tiptap'
   const a = document.createElement('div')
-  a.setAttribute('data-page-block', 'html')
+  a.setAttribute('data-page-block', 'sandbox')
   const skip = document.createElement('div')
   skip.setAttribute('data-page-block', 'excalidraw')
   const b = document.createElement('div')
-  b.setAttribute('data-page-block', 'htmlframe')
+  b.setAttribute('data-page-block', 'sandbox')
   const c = document.createElement('div')
-  c.setAttribute('data-page-block', 'html')
+  c.setAttribute('data-page-block', 'sandbox')
   editor.append(a, skip, b, c)
   document.body.append(editor)
-  bindHtmlSlide(a, { kind: 'html', html: '<div>一</div>' })
-  bindHtmlSlide(b, { kind: 'htmlframe', html: '<div>二</div>', height: 300 })
-  bindHtmlSlide(c, { kind: 'html', html: '<div>三</div>' })
+  bindHtmlSlide(a, { kind: 'sandbox', html: '<div>一</div>' })
+  bindHtmlSlide(b, { kind: 'sandbox', html: '<div>二</div>', height: 300 })
+  bindHtmlSlide(c, { kind: 'sandbox', html: '<div>三</div>' })
   const slides = collectHtmlSlides(a)
   assert.equal(slides.length, 3)
   assert.equal(slides[0]?.html.includes('一'), true)
-  assert.equal(slides[1]?.kind, 'htmlframe')
+  assert.equal(slides[1]?.kind, 'sandbox')
   assert.equal(slides[2]?.html.includes('三'), true)
   assert.equal(htmlDeckIndex(slides, b), 1)
-  bindHtmlSlide(c, { kind: 'html', html: '<div>三</div>', deck: false })
+  bindHtmlSlide(c, { kind: 'sandbox', html: '<div>三</div>', deck: false })
   assert.equal(collectHtmlSlides(a).length, 2)
   assert.equal(htmlDeckEnabled(undefined), true)
   assert.equal(htmlDeckEnabled(false), false)
@@ -61,7 +61,7 @@ test('stepHtmlDeck stays on the last slide', () => {
 test('fullscreen deck fills the viewport', async () => {
   const { readFile } = await import('node:fs/promises')
   const { resolve } = await import('node:path')
-  const src = await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/page-html-blocks/web/index.tsx'), 'utf8')
+  const src = await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/page-sandbox/web/index.tsx'), 'utf8')
   assert.match(src, /data-testid="html-deck-stage"/)
   assert.match(src, /data-testid="html-deck-slide"/)
   assert.match(src, /index >= total - 1 \? \{ opacity: 0\.35/)
@@ -87,13 +87,13 @@ test('poster html with height 100% and absolute children fills a host', () => {
 test('jsx sandbox mounts a react root and flushes before pick stamping', async () => {
   const { readFile } = await import('node:fs/promises')
   const { resolve } = await import('node:path')
-  const src = await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/page-html-blocks/web/sandbox.ts'), 'utf8')
+  const src = await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/page-sandbox/web/sandbox.ts'), 'utf8')
   assert.match(src, /flushSync/)
   assert.match(src, /data-html-react-root/)
 })
 
 test('html block compile accepts markup and rejects bad scripts', async () => {
-  const { compileHtmlSource } = await import('../../../../.plugin-dev/page-html-blocks/shared/compile.ts')
+  const { compileHtmlSource } = await import('../../../../.plugin-dev/page-sandbox/shared/compile.ts')
   assert.deepEqual(compileHtmlSource('<div class="x">ok</div>'), { ok: true, mode: 'markup' })
   assert.equal(compileHtmlSource('<script>require("fs")</script>').ok, false)
   assert.equal(

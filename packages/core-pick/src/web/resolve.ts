@@ -150,7 +150,7 @@ export function resolvePickFromNode(
   }
 }
 
-const HTML_BLOCK_SEL = '[data-page-block="html"], [data-page-block="htmlframe"]'
+const HTML_BLOCK_SEL = '[data-page-block="sandbox"]'
 const ELEMENT_HTML_CAP = 2000
 
 function stripPickMarks(root: HTMLElement) {

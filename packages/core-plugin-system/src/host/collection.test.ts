@@ -261,7 +261,7 @@ test('builtin listing prefers live sandbox name over a stale packed HTML title',
   const spec = pluginsCollection(stubStore({
     list: () => Promise.resolve([
       {
-        id: 'page-html-blocks',
+        id: 'page-sandbox',
         name: 'HTML',
         blurb: 'old',
         tags: ['html'],
@@ -280,7 +280,7 @@ test('builtin listing prefers live sandbox name over a stale packed HTML title',
     ]),
     listSandboxes: () => Promise.resolve([
       {
-        id: 'page-html-blocks',
+        id: 'page-sandbox',
         name: 'Sandbox',
         blurb: '斜杠插入 Sandbox',
         tags: ['sandbox'],
@@ -294,7 +294,7 @@ test('builtin listing prefers live sandbox name over a stale packed HTML title',
       },
     ]),
   }))
-  const row = (await spec.list()).find((item) => item.id === 'page-html-blocks')
+  const row = (await spec.list()).find((item) => item.id === 'page-sandbox')
   assert.equal(row?.title, 'Sandbox')
   assert.equal(row?.name, 'Sandbox')
   assert.equal(row?.blurb, '斜杠插入 Sandbox')

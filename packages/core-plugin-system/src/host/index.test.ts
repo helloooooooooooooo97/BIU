@@ -283,26 +283,26 @@ test('close of a builtin plugin clears enabled so restore does not remount', asy
     const { dropped } = stubHub(ctx)
     const store = new PluginStoreService(ctx, pluginDir, join(dir, 'store.json'), join(dir, '.plugin-dev')).open()
     await store.initSandbox({
-      id: 'page-html-blocks',
+      id: 'page-sandbox',
       name: 'Sandbox',
       builtin: true,
-      hostJs: `export const name = 'page-html-blocks'\nexport function apply() {}\n`,
+      hostJs: `export const name = 'page-sandbox'\nexport function apply() {}\n`,
     })
-    await store.pack('page-html-blocks')
-    await store.openPlugin('page-html-blocks')
-    assert.equal((await store.list()).find((item) => item.id === 'page-html-blocks')?.enabled, true)
-    await store.close('page-html-blocks')
-    assert.ok(dropped.includes('page-html-blocks'))
-    assert.equal((await store.list()).find((item) => item.id === 'page-html-blocks')?.enabled, false)
-    await assert.rejects(() => store.destroy('page-html-blocks'), /cannot delete built-in plugin/)
+    await store.pack('page-sandbox')
+    await store.openPlugin('page-sandbox')
+    assert.equal((await store.list()).find((item) => item.id === 'page-sandbox')?.enabled, true)
+    await store.close('page-sandbox')
+    assert.ok(dropped.includes('page-sandbox'))
+    assert.equal((await store.list()).find((item) => item.id === 'page-sandbox')?.enabled, false)
+    await assert.rejects(() => store.destroy('page-sandbox'), /cannot delete built-in plugin/)
     const saved = JSON.parse(await readFile(join(dir, 'store.json'), 'utf8')) as { enabled: string[] }
     assert.deepEqual(saved.enabled, [])
     const ctx2 = new Context()
     const { adopted } = stubHub(ctx2)
     const store2 = new PluginStoreService(ctx2, pluginDir, join(dir, 'store.json'), join(dir, '.plugin-dev')).open()
     await store2.restore()
-    assert.equal(adopted.includes('page-html-blocks'), false)
-    assert.equal((await store2.list()).find((item) => item.id === 'page-html-blocks')?.name, 'Sandbox')
+    assert.equal(adopted.includes('page-sandbox'), false)
+    assert.equal((await store2.list()).find((item) => item.id === 'page-sandbox')?.name, 'Sandbox')
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
@@ -312,7 +312,7 @@ test('member stop drops the hub when the last viewer stops a builtin plugin', as
   const dir = await mkdtemp(join(tmpdir(), 'plugin-member-stop-'))
   const pluginDir = join(dir, '.plugin')
   const previous = process.env.BIU_ONLINE
-  const loads = new Set<string>(['page-html-blocks'])
+  const loads = new Set<string>(['page-sandbox'])
   try {
     const ctx = new Context()
     const { dropped } = stubHub(ctx)
@@ -331,16 +331,16 @@ test('member stop drops the hub when the last viewer stops a builtin plugin', as
         : undefined
     const store = new PluginStoreService(ctx, pluginDir, join(dir, 'store.json'), join(dir, '.plugin-dev')).open()
     await store.initSandbox({
-      id: 'page-html-blocks',
+      id: 'page-sandbox',
       name: 'Sandbox',
       builtin: true,
-      hostJs: `export const name = 'page-html-blocks'\nexport function apply() {}\n`,
+      hostJs: `export const name = 'page-sandbox'\nexport function apply() {}\n`,
     })
-    await store.pack('page-html-blocks')
-    await store.openPlugin('page-html-blocks')
+    await store.pack('page-sandbox')
+    await store.openPlugin('page-sandbox')
     process.env.BIU_ONLINE = '1'
-    await runWithAccount('ada', () => runWithRequestWorkspace('ws', () => store.close('page-html-blocks')))
-    assert.ok(dropped.includes('page-html-blocks'))
+    await runWithAccount('ada', () => runWithRequestWorkspace('ws', () => store.close('page-sandbox')))
+    assert.ok(dropped.includes('page-sandbox'))
     const saved = JSON.parse(await readFile(join(dir, 'store.json'), 'utf8')) as { enabled: string[] }
     assert.deepEqual(saved.enabled, [])
   } finally {
@@ -529,24 +529,24 @@ test('local host serves web.js when this account loaded the plugin', async () =>
             store: {
               loadedPluginIds: () => [],
               canAccessPlugin: (accountId: string, workspaceId: string, pluginId: string) =>
-                accountId === 'ada' && workspaceId === 'ws_local' && pluginId === 'page-html-blocks',
+                accountId === 'ada' && workspaceId === 'ws_local' && pluginId === 'page-sandbox',
             },
           }
         : undefined
     const store = new PluginStoreService(ctx, join(dir, '.plugin'), join(dir, 'store.json'), join(dir, '.plugin-dev')).open()
     await store.initSandbox({
-      id: 'page-html-blocks',
+      id: 'page-sandbox',
       name: 'HTML 块',
       headless: true,
-      webJs: `export const name = 'page-html-blocks'\nexport function apply() {}\n`,
+      webJs: `export const name = 'page-sandbox'\nexport function apply() {}\n`,
     })
-    await store.pack('page-html-blocks')
+    await store.pack('page-sandbox')
     const body = await runWithAccount('ada', () =>
-      runWithRequestWorkspace('ws_local', () => store.readInstalledFile('page-html-blocks', 'web.js')),
+      runWithRequestWorkspace('ws_local', () => store.readInstalledFile('page-sandbox', 'web.js')),
     )
-    assert.match(body, /page-html-blocks/)
+    assert.match(body, /page-sandbox/)
     await assert.rejects(
-      () => runWithAccount('bob', () => runWithRequestWorkspace('ws_local', () => store.readInstalledFile('page-html-blocks', 'web.js'))),
+      () => runWithAccount('bob', () => runWithRequestWorkspace('ws_local', () => store.readInstalledFile('page-sandbox', 'web.js'))),
       /not found/,
     )
   } finally {

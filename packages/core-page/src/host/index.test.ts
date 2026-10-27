@@ -167,7 +167,7 @@ test('page-blocks collection updates one fence by page::block id', async () => {
   const blocks = registered.find((item) => item.path === '/page-blocks')!
   const created = await pages.create!([{
     title: '海报',
-    notes: `:::pageBlock {kind=html plugin=page-html-blocks id=ab12cd34 deck=true}
+    notes: `:::pageBlock {kind=sandbox plugin=page-sandbox id=ab12cd34 deck=true}
 <div>旧</div><img src="/api/db/file/hero.png">
 :::
 :::pageBlock {kind=excalidraw plugin=page-excalidraw id=edd9aaaa}
@@ -180,9 +180,9 @@ test('page-blocks collection updates one fence by page::block id', async () => {
   assert.equal(listed.length, 2)
   const html = listed.find((item) => item.id === `/pages::${pageId}::ab12cd34`)
   assert.ok(html)
-  assert.equal(html.blockKind, 'html')
+  assert.equal(html.blockKind, 'sandbox')
   assert.equal(html.pageTitle, '海报')
-  assert.equal(html.title, '海报 html')
+  assert.equal(html.title, '海报 sandbox')
   assert.match(String(html.data), /<div>旧<\/div>/)
   const draw = listed.find((item) => item.id === `/pages::${pageId}::edd9aaaa`)
   assert.ok(draw)
@@ -236,7 +236,7 @@ test('clearing the last pageBlock fence drops the index row immediately', async 
   const store = new PagesStore(ctx.fs.workspace as never, join(root, '.biu/assets/page'))
   const index = new PageBlocksIndex(store, { hotWindowMs: 60_000, hotLimit: 0, warmLimit: 0 })
   const pages = page.pagesCollection(store, index)
-  const fence = (id: string) => `:::pageBlock {kind=html plugin=page-html-blocks id=${id}}\n<div>${id}</div>\n:::\n`
+  const fence = (id: string) => `:::pageBlock {kind=sandbox plugin=page-sandbox id=${id}}\n<div>${id}</div>\n:::\n`
   const created = await pages.create!([{ title: '一页', notes: fence('aaaaaa11') + fence('bbbbbb22') }])
   const id = created[0]!.id
   assert.equal((await index.list()).length, 2)
@@ -256,7 +256,7 @@ test('reindex rewrites duplicate pageBlock ids instead of crashing', async () =>
   await ctx.plugin(fsPlugin, { root })
   const store = new PagesStore(ctx.fs.workspace as never, join(root, '.biu/assets/page'))
   const index = new PageBlocksIndex(store, { hotWindowMs: 60_000, hotLimit: 8, warmLimit: 8 })
-  const fence = (id: string, body: string) => `:::pageBlock {kind=html plugin=page-html-blocks id=${id}}\n<div>${body}</div>\n:::\n`
+  const fence = (id: string, body: string) => `:::pageBlock {kind=sandbox plugin=page-sandbox id=${id}}\n<div>${body}</div>\n:::\n`
   const created = await store.create({ title: '粘贴崩了', notes: fence('ab12cd34', 'a') + fence('ab12cd34', 'b') })
   await index.reindexPage(created)
   const listed = await index.list()
@@ -277,7 +277,7 @@ test('page-block index scans a hot batch instead of every page', async () => {
   await ctx.plugin(fsPlugin, { root })
   const store = new PagesStore(ctx.fs.workspace as never, join(root, '.biu/assets/page'))
   const index = new PageBlocksIndex(store, { hotWindowMs: 60_000, hotLimit: 1, warmLimit: 0 })
-  const fence = (id: string) => `:::pageBlock {kind=html plugin=page-html-blocks id=${id}}\n<div>${id}</div>\n:::\n`
+  const fence = (id: string) => `:::pageBlock {kind=sandbox plugin=page-sandbox id=${id}}\n<div>${id}</div>\n:::\n`
   await store.create({ title: 'a', notes: fence('aaaaaa11') })
   await store.create({ title: 'b', notes: fence('bbbbbb22') })
   await store.create({ title: 'c', notes: fence('cccccc33') })
@@ -308,7 +308,7 @@ test('page-block index keeps non-page editor bodies', async () => {
     db,
     '/tasks',
     't1',
-    ':::pageBlock {kind=html plugin=page-html-blocks id=taskblk1}\n<div>task</div>\n:::\n',
+    ':::pageBlock {kind=sandbox plugin=page-sandbox id=taskblk1}\n<div>task</div>\n:::\n',
   )
   await index.sync()
   const listed = await index.list()

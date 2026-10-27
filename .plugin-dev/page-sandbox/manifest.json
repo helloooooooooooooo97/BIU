@@ -1,5 +1,5 @@
 {
-  "id": "page-html-blocks",
+  "id": "page-sandbox",
   "name": "Sandbox",
   "blurb": "斜杠插入 Sandbox：文档内沙箱跑 React 组件，继承 --biu-*。",
   "tags": [

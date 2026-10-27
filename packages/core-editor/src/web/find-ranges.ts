@@ -43,7 +43,7 @@ function pageBlockHtmlText(node: {
 }) {
   if (node.type?.name !== 'pageBlock') return ''
   const kind = String(node.attrs?.kind ?? '')
-  if (kind !== 'html' && kind !== 'htmlframe') return ''
+  if (kind !== 'sandbox' && kind !== 'html' && kind !== 'htmlframe') return ''
   const data = node.attrs?.data
   if (!data || typeof data !== 'object' || Array.isArray(data)) return ''
   const html = (data as { html?: unknown }).html

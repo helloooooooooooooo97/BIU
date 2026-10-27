@@ -6,12 +6,12 @@ import { join, resolve } from 'node:path'
 const root = resolve(import.meta.dirname, '../../../../')
 const sandbox = join(root, '.plugin-dev')
 
-test('page-html-blocks store listing is Sandbox, not HTML', () => {
-  const manifest = JSON.parse(readFileSync(join(sandbox, 'page-html-blocks', 'manifest.json'), 'utf8')) as {
+test('page-sandbox store listing is Sandbox, not HTML', () => {
+  const manifest = JSON.parse(readFileSync(join(sandbox, 'page-sandbox', 'manifest.json'), 'utf8')) as {
     id: string
     name: string
   }
-  assert.equal(manifest.id, 'page-html-blocks')
+  assert.equal(manifest.id, 'page-sandbox')
   assert.equal(manifest.name, 'Sandbox')
 })
 
@@ -56,7 +56,7 @@ test('page plugin READMEs use live :::pageBlock fences, not wrapped in markdown 
     'page-browser',
     'page-code-runner',
     'page-excalidraw',
-    'page-html-blocks',
+    'page-sandbox',
     'page-regression',
     'page-terminal',
     'page-toc',

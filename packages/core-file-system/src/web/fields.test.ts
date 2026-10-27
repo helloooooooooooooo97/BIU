@@ -237,7 +237,7 @@ test('list projection keeps action when keys so plugin actions do not flash', ()
 test('sparse plugin rows without when flags flash 安装; projected flags keep 运行/停止 and 卸载', () => {
   const sparse = { id: 'page-toc', title: '目录' }
   assert.deepEqual(visibleActions(pluginActions, sparse, 'row').map((item) => item.id), [])
-  const missingFlags = { id: 'page-html-blocks', title: 'HTML', sandbox: true }
+  const missingFlags = { id: 'page-sandbox', title: 'HTML', sandbox: true }
   assert.deepEqual(visibleActions(pluginActions, missingFlags, 'row').map((item) => item.id), ['pack'])
   assert.deepEqual(
     visibleActions(pluginActions, { id: 'page-toc', title: '目录', installed: true, running: true, sandbox: true }, 'row').map(
@@ -246,7 +246,7 @@ test('sparse plugin rows without when flags flash 安装; projected flags keep �
     ['stop', 'uninstall'],
   )
   assert.deepEqual(
-    visibleActions(pluginActions, { id: 'page-html-blocks', title: 'HTML', installed: true, sandbox: true }, 'row').map(
+    visibleActions(pluginActions, { id: 'page-sandbox', title: 'HTML', installed: true, sandbox: true }, 'row').map(
       (item) => item.id,
     ),
     ['start', 'uninstall'],

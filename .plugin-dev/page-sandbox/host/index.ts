@@ -1,11 +1,11 @@
 import type { Context } from 'cordis'
 import { compileHtmlSource, formatCompileReport } from '../shared/compile.ts'
 
-export const name = 'page-html-blocks'
+export const name = 'page-sandbox'
 export const inject = ['http', 'tools']
 
 export function apply(ctx: Context) {
-  ctx.http.route('POST', '/api/page-html-blocks/compile', async (route) => {
+  ctx.http.route('POST', '/api/page-sandbox/compile', async (route) => {
     const body = await route.json<{ source?: string; html?: string }>()
     const source = typeof body.source === 'string' ? body.source : typeof body.html === 'string' ? body.html : ''
     const result = compileHtmlSource(source)
@@ -17,9 +17,9 @@ export function apply(ctx: Context) {
   })
 
   ctx.tools.register({
-    name: 'html_block_compile',
+    name: 'sandbox_compile',
     description:
-      'Compile/verify page-html-blocks source (static HTML/CSS or dynamic HTML/JS/JSX). Call after writing the attachment. External script src and import/require are rejected. Returns ok + mode, or error.',
+      'Compile/verify page-sandbox source (static HTML/CSS or dynamic HTML/JS/JSX). Call after writing the attachment. External script src and import/require are rejected. Returns ok + mode, or error.',
     parameters: {
       type: 'object',
       properties: {
