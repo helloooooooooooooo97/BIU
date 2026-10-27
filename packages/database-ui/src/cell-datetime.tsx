@@ -76,7 +76,7 @@ export function CellDateTime({
           </button>
         }
       >
-        <div className="flex flex-col gap-2 rounded-[6px] border border-dsw-border bg-dsw-bg p-2 shadow-none">
+        <div className="flex flex-col gap-2 rounded-[6px] border border-biu-border bg-biu-bg p-2 shadow-none">
           <Calendar
             value={selected}
             defaultMonth={selected ?? undefined}

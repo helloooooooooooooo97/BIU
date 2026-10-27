@@ -11,7 +11,7 @@ test('Calendar uses Tailwind token classes and no injected CSS', () => {
   const src = readFileSync(resolve(import.meta.dirname, './calendar.tsx'), 'utf8')
   assert.match(src, /function Calendar/)
   assert.match(src, /from 'class-variance-authority'/)
-  assert.match(src, /border-dsw-border/)
+  assert.match(src, /border-biu-border/)
   assert.match(src, /rounded-\[6px\]/)
   assert.match(src, /h-\[26px\]/)
   assert.doesNotMatch(src, /createElement\('style'\)/)

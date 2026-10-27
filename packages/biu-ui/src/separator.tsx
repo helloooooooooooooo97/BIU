@@ -5,7 +5,7 @@ export function Separator({ className, orientation = 'horizontal' }: { className
     <div
       role="separator"
       className={cn(
-        'biu-separator bg-dsw-border',
+        'biu-separator bg-biu-border',
         orientation === 'vertical' ? 'mx-1 h-auto w-px self-stretch' : 'my-2 h-px w-full',
         className,
       )}

@@ -141,7 +141,7 @@ export const ShellSidebarFrame = memo(function ShellSidebarFrame({
     >
       {visible ? null : <div className="sidebar-edge-hot" data-testid="sidebar-edge-hot" aria-hidden />}
     <aside
-      className={`app-side-bar min-h-0 flex-col overflow-hidden border-r border-(--dsw-border) bg-(--dsw-sidebar)${narrow ? ' is-narrow' : ''}${showTags ? ' is-wide' : ''}${visible ? ' flex' : ' is-closed flex'}`}
+      className={`app-side-bar min-h-0 flex-col overflow-hidden border-r border-(--biu-border) bg-(--biu-sidebar)${narrow ? ' is-narrow' : ''}${showTags ? ' is-wide' : ''}${visible ? ' flex' : ' is-closed flex'}`}
       aria-hidden={!visible}
       data-testid={testId}
     >

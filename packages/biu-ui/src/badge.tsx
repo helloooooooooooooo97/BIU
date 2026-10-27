@@ -3,13 +3,13 @@ import type { HTMLAttributes, ReactNode } from 'react'
 import { cn } from './cn.ts'
 
 const badgeVariants = cva(
-  'biu-badge inline-flex items-center rounded-[6px] border border-dsw-border px-1.5 py-px text-[11px] font-semibold leading-4 whitespace-nowrap',
+  'biu-badge inline-flex items-center rounded-[6px] border border-biu-border px-1.5 py-px text-[11px] font-semibold leading-4 whitespace-nowrap',
   {
     variants: {
       variant: {
-        default: 'bg-dsw-hover text-dsw-label-3',
-        on: 'bg-dsw-input text-dsw-label',
-        destructive: 'bg-dsw-danger-soft text-dsw-danger',
+        default: 'bg-biu-hover text-biu-label-3',
+        on: 'bg-biu-input text-biu-label',
+        destructive: 'bg-biu-danger-soft text-biu-danger',
       },
     },
     defaultVariants: { variant: 'default' },

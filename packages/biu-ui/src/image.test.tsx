@@ -11,7 +11,7 @@ test('Image uses Tailwind token classes and no injected CSS', () => {
   const src = readFileSync(resolve(import.meta.dirname, './image.tsx'), 'utf8')
   assert.match(src, /function ImageRoot/)
   assert.match(src, /biu-image-skeleton/)
-  assert.match(src, /border-dsw-border/)
+  assert.match(src, /border-biu-border/)
   assert.match(src, /rounded-\[6px\]/)
   assert.doesNotMatch(src, /createElement\('style'\)/)
 })

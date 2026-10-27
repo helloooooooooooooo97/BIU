@@ -93,7 +93,7 @@ function ImageLightbox({
   if (typeof document === 'undefined') return null
   return createPortal(
     <div
-      className="biu-image-preview fixed inset-0 flex items-center justify-center bg-dsw-overlay"
+      className="biu-image-preview fixed inset-0 flex items-center justify-center bg-biu-overlay"
       style={{ zIndex: overlayZ(280) }}
       role="dialog"
       aria-modal="true"
@@ -116,7 +116,7 @@ function ImageLightbox({
         src={src}
         alt=""
         className={cn(
-          'biu-image-preview-shot max-h-[86vh] max-w-[86vw] rounded-[6px] border border-dsw-border object-contain transition-transform',
+          'biu-image-preview-shot max-h-[86vh] max-w-[86vw] rounded-[6px] border border-biu-border object-contain transition-transform',
           zoomed ? 'scale-150 cursor-zoom-out' : 'cursor-zoom-in',
         )}
         onClick={onZoom}
@@ -176,14 +176,14 @@ function ImageRoot({
 
   return (
     <span
-      className={cn('biu-image relative inline-flex overflow-hidden rounded-[6px] border border-dsw-border bg-dsw-muted-fill', className)}
+      className={cn('biu-image relative inline-flex overflow-hidden rounded-[6px] border border-biu-border bg-biu-muted-fill', className)}
       style={{ width, height }}
     >
       {status === 'loading' ? (
-        <span className="biu-image-skeleton absolute inset-0 animate-pulse bg-dsw-hover" aria-hidden />
+        <span className="biu-image-skeleton absolute inset-0 animate-pulse bg-biu-hover" aria-hidden />
       ) : null}
       {status === 'error' ? (
-        <span className="biu-image-fallback flex h-full w-full items-center justify-center text-[11px] text-dsw-label-3">
+        <span className="biu-image-fallback flex h-full w-full items-center justify-center text-[11px] text-biu-label-3">
           {fallback ?? '无法加载'}
         </span>
       ) : null}

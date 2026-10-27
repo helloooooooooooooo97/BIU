@@ -164,9 +164,9 @@ const SKIP_METRIC_KEYS = new Set([
 ])
 const RECORD_LIST_KEYS = ['records', 'rows', 'results', 'metrics', 'points', 'items', 'list', 'data']
 const CHART_COLORS = [
-  'var(--dsw-pick)',
-  'var(--dsw-ok)',
-  'var(--dsw-danger)',
+  'var(--biu-pick)',
+  'var(--biu-ok)',
+  'var(--biu-danger)',
   '#c9a227',
   '#7c5cbf',
   '#3aa6a0',

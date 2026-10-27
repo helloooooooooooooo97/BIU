@@ -11,7 +11,7 @@ test('Button uses Tailwind token classes', () => {
   const src = readFileSync(resolve(import.meta.dirname, './button.tsx'), 'utf8')
   assert.match(src, /function Button/)
   assert.match(src, /from 'class-variance-authority'/)
-  assert.match(src, /bg-dsw-hover/)
+  assert.match(src, /bg-biu-hover/)
   assert.match(src, /h-\[26px\]/)
   assert.match(src, /rounded-\[6px\]/)
   assert.doesNotMatch(src, /createElement\('style'\)/)

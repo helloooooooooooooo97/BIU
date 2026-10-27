@@ -75,9 +75,9 @@ const TRAY_CSS = `
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  color: var(--dsw-label, var(--text));
-  background: color-mix(in srgb, var(--dsw-sidebar, var(--surface, #1c1c1c)) 88%, transparent);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--dsw-bubble, var(--line, #333)) 55%, transparent);
+  color: var(--biu-label, var(--text));
+  background: color-mix(in srgb, var(--biu-sidebar, var(--surface, #1c1c1c)) 88%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--biu-bubble, var(--line, #333)) 55%, transparent);
   transition: transform 0.15s ease, background 0.15s ease, opacity 0.15s ease;
 }
 .plugin-tray-btn:hover {

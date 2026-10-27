@@ -163,7 +163,7 @@ test('workspace and member settings are separate and workspace switching stays o
   localStorage.setItem('biu.account.token', 'tok')
   const css = readFileSync(resolve(import.meta.dirname, '../../../../web/style.css'), 'utf8')
   assert.match(css, /\.settings-account-action\s*\{[^}]*font:\s*inherit/)
-  assert.match(css, /\.settings-account-action\s*\{[^}]*border:\s*1px solid var\(--dsw-border\)/)
+  assert.match(css, /\.settings-account-action\s*\{[^}]*border:\s*1px solid var\(--biu-border\)/)
   assert.match(css, /\.settings-account-action\s*\{[^}]*height:\s*32px/)
   assert.match(css, /\.settings-members-section\s*\{[^}]*flex-direction:\s*column/s)
   assert.match(css, /\.settings-member-row\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto/s)

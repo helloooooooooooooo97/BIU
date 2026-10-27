@@ -44,11 +44,11 @@ const calendarDayVariants = cva(
   {
     variants: {
       tone: {
-        idle: 'border-transparent text-dsw-label hover:bg-dsw-hover',
-        outside: 'border-transparent text-dsw-label-3 hover:bg-dsw-hover hover:text-dsw-label',
-        today: 'border-dsw-border bg-dsw-hover text-dsw-label',
-        selected: 'border-dsw-label bg-dsw-label text-dsw-bg hover:bg-dsw-label',
-        disabled: 'cursor-default border-transparent text-dsw-label-3 opacity-40',
+        idle: 'border-transparent text-biu-label hover:bg-biu-hover',
+        outside: 'border-transparent text-biu-label-3 hover:bg-biu-hover hover:text-biu-label',
+        today: 'border-biu-border bg-biu-hover text-biu-label',
+        selected: 'border-biu-label bg-biu-label text-biu-bg hover:bg-biu-label',
+        disabled: 'cursor-default border-transparent text-biu-label-3 opacity-40',
       },
     },
     defaultVariants: { tone: 'idle' },
@@ -109,7 +109,7 @@ export function Calendar({
   return (
     <div
       className={cn(
-        'biu-calendar w-[252px] rounded-[6px] border border-dsw-border bg-dsw-bg p-2.5 text-[13px] text-dsw-label',
+        'biu-calendar w-[252px] rounded-[6px] border border-biu-border bg-biu-bg p-2.5 text-[13px] text-biu-label',
         className,
       )}
       {...rest}
@@ -133,7 +133,7 @@ export function Calendar({
           <NavMark dir="next" />
         </Button>
       </div>
-      <div className="mb-1 grid grid-cols-7 text-center text-[11px] font-medium text-dsw-label-3">
+      <div className="mb-1 grid grid-cols-7 text-center text-[11px] font-medium text-biu-label-3">
         {WEEKDAYS.map((label) => (
           <span key={label} className="h-[22px] leading-[22px]">
             {label}
