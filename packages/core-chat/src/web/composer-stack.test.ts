@@ -18,6 +18,8 @@ describe('composer dock stacking above sticky user', () => {
     expect(css).toMatch(/--biu-chat-font-size:\s*var\(--biu-font-4\)/)
     expect(css).toMatch(/--biu-chat-composer-font-size:\s*var\(--biu-font-4\)/)
     expect(css).toMatch(/--font-sans:\s*ui-sans-serif/)
+    expect(css).toMatch(/@theme inline \{/)
+    expect(css).not.toMatch(/@theme \{/)
     expect(css).toMatch(/\.chat-stage\s*\{[^}]*font-family:\s*var\(--font-sans\)/s)
     expect(css).toMatch(/\.composer-tiptap\.is-readonly\s*\{[^}]*font-size:\s*var\(--biu-chat-font-size\)/s)
     expect(css).toMatch(/\.chat-stage\s*\{[^}]*isolation:\s*isolate/s)

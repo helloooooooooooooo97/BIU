@@ -258,7 +258,8 @@ html.dark {
   --biu-accent-soft: var(--biu-pick-fill);
 }
 
-@theme {
+/* inline: do not re-emit --font-* (that overwrote :root with var(--font-sans)). */
+@theme inline {
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
   --color-biu-bg: var(--biu-bg);
