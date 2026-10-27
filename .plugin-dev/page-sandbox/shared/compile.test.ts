@@ -29,4 +29,5 @@ test('sandbox mount flushes react before pick stamp', async () => {
   const src = await readFile(resolve(import.meta.dirname, '../web/sandbox.ts'), 'utf8')
   assert.match(src, /flushSync/)
   assert.match(src, /data-sandbox-root/)
+  assert.match(src, /:host-context\(html\.pick-mode\)/)
 })
