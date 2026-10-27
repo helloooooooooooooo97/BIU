@@ -1,63 +1,63 @@
 import { mergeAttributes, Node } from '@tiptap/core'
 import type { EditorState } from '@tiptap/pm/state'
 import { ReactNodeViewRenderer } from '@tiptap/react'
-import { DeckView } from './deck-view.tsx'
+import { SlideView } from './slide-view.tsx'
 import {
-  DECK_LAYOUT_META,
-  emptyDeckJSON,
-  isDeckLayout,
-  takeDeckFence,
-  type DeckLayout,
-} from './deck-md.ts'
+  SLIDE_LAYOUT_META,
+  emptySlideJSON,
+  isSlideLayout,
+  takeSlideFence,
+  type SlideLayout,
+} from './slide-md.ts'
 
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
-    deck: {
-      insertDeck: (layout?: DeckLayout) => ReturnType
-      setDeckLayout: (layout: DeckLayout) => ReturnType
+    slide: {
+      insertSlide: (layout?: SlideLayout) => ReturnType
+      setSlideLayout: (layout: SlideLayout) => ReturnType
     }
   }
 }
 
 function emptyCell() {
-  return { type: 'deckCell', content: [{ type: 'paragraph' }] }
+  return { type: 'slideCell', content: [{ type: 'paragraph' }] }
 }
 
-function fitDeckCells(layout: DeckLayout, cells: unknown[]) {
-  const n = DECK_LAYOUT_META[layout].slots
+function fitSlideCells(layout: SlideLayout, cells: unknown[]) {
+  const n = SLIDE_LAYOUT_META[layout].slots
   const next = cells.slice(0, n)
   while (next.length < n) next.push(emptyCell())
   return next
 }
 
-function nearestDeckPos(state: EditorState) {
+function nearestSlidePos(state: EditorState) {
   const { $from } = state.selection
   for (let d = $from.depth; d > 0; d--) {
-    if ($from.node(d).type.name === 'deck') return $from.before(d)
+    if ($from.node(d).type.name === 'slide') return $from.before(d)
   }
   const around = $from.nodeAfter ?? $from.nodeBefore
-  if (around?.type.name === 'deck') {
-    return $from.nodeAfter?.type.name === 'deck' ? $from.pos : $from.pos - around.nodeSize
+  if (around?.type.name === 'slide') {
+    return $from.nodeAfter?.type.name === 'slide' ? $from.pos : $from.pos - around.nodeSize
   }
   let found = -1
   state.doc.descendants((node, pos) => {
     if (found >= 0) return false
-    if (node.type.name === 'deck') found = pos
+    if (node.type.name === 'slide') found = pos
     return found < 0
   })
   return found
 }
 
-export const deckCell = Node.create({
-  name: 'deckCell',
+export const slideCell = Node.create({
+  name: 'slideCell',
   content: 'block+',
   isolating: true,
   defining: true,
   parseHTML() {
-    return [{ tag: 'section[data-deck-cell]' }]
+    return [{ tag: 'section[data-slide-cell]' }]
   },
   renderHTML({ HTMLAttributes }) {
-    return ['section', mergeAttributes(HTMLAttributes, { 'data-deck-cell': '' }), 0]
+    return ['section', mergeAttributes(HTMLAttributes, { 'data-slide-cell': '' }), 0]
   },
   renderMarkdown: (node, h) => {
     const body = h.renderChildren(Array.isArray(node.content) ? node.content : [])
@@ -65,10 +65,10 @@ export const deckCell = Node.create({
   },
 })
 
-export const deck = Node.create({
-  name: 'deck',
+export const slide = Node.create({
+  name: 'slide',
   group: 'block',
-  content: 'deckCell+',
+  content: 'slideCell+',
   isolating: true,
   defining: true,
   selectable: true,
@@ -80,11 +80,11 @@ export const deck = Node.create({
   parseHTML() {
     return [
       {
-        tag: 'div[data-deck]',
+        tag: 'div[data-slide]',
         getAttrs: (el) => {
           if (!(el instanceof HTMLElement)) return false
           const layout = el.getAttribute('data-layout')
-          return { layout: isDeckLayout(layout) ? layout : 'split' }
+          return { layout: isSlideLayout(layout) ? layout : 'split' }
         },
       },
     ]
@@ -93,37 +93,37 @@ export const deck = Node.create({
     return [
       'div',
       mergeAttributes(HTMLAttributes, {
-        'data-deck': '',
+        'data-slide': '',
         'data-layout': String(node.attrs.layout ?? 'split'),
       }),
       0,
     ]
   },
   parseMarkdown: (token, helpers) => {
-    const layout = isDeckLayout((token as { layout?: unknown }).layout) ? (token as { layout: DeckLayout }).layout : 'split'
+    const layout = isSlideLayout((token as { layout?: unknown }).layout) ? (token as { layout: SlideLayout }).layout : 'split'
     const cells = Array.isArray((token as { cells?: unknown }).cells) ? (token as { cells: unknown[] }).cells : []
     const content = (cells.length ? cells : [[]]).map((tokens) =>
-      helpers.createNode('deckCell', {}, helpers.parseChildren(Array.isArray(tokens) ? tokens : [])),
+      helpers.createNode('slideCell', {}, helpers.parseChildren(Array.isArray(tokens) ? tokens : [])),
     )
-    return helpers.createNode('deck', { layout }, content.length ? content : emptyDeckJSON(layout).content)
+    return helpers.createNode('slide', { layout }, content.length ? content : emptySlideJSON(layout).content)
   },
   renderMarkdown: (node, h) => {
-    const layout = isDeckLayout(node.attrs?.layout) ? node.attrs.layout : 'split'
+    const layout = isSlideLayout(node.attrs?.layout) ? node.attrs.layout : 'split'
     const body = h.renderChildren(Array.isArray(node.content) ? node.content : [])
-    return `:::deck {layout=${layout}}\n${String(body ?? '').trim()}\n:::`
+    return `:::slide {layout=${layout}}\n${String(body ?? '').trim()}\n:::`
   },
   markdownTokenizer: {
-    name: 'deck',
+    name: 'slide',
     level: 'block',
     start(src) {
-      return src.match(/^:::deck/m)?.index ?? -1
+      return src.match(/^:::slide/m)?.index ?? -1
     },
     tokenize(src, _tokens, helpers) {
-      const taken = takeDeckFence(src)
+      const taken = takeSlideFence(src)
       if (!taken) return undefined
       const blockTokens = helpers && typeof helpers.blockTokens === 'function' ? helpers.blockTokens.bind(helpers) : null
       return {
-        type: 'deck',
+        type: 'slide',
         raw: taken.raw,
         layout: taken.layout,
         cells: taken.cells.map((md) => (blockTokens ? blockTokens(md || '') : [])),
@@ -132,23 +132,23 @@ export const deck = Node.create({
   },
   addCommands() {
     return {
-      insertDeck:
+      insertSlide:
         (layout = 'split') =>
         ({ commands }) =>
-          commands.insertContent(emptyDeckJSON(layout)),
-      setDeckLayout:
+          commands.insertContent(emptySlideJSON(layout)),
+      setSlideLayout:
         (layout) =>
         ({ state, tr, dispatch }) => {
-          const deckPos = nearestDeckPos(state)
-          if (deckPos < 0) return false
-          const node = state.doc.nodeAt(deckPos)
+          const slidePos = nearestSlidePos(state)
+          if (slidePos < 0) return false
+          const node = state.doc.nodeAt(slidePos)
           if (!node) return false
           const cells: unknown[] = []
           node.content.forEach((child) => cells.push(child.toJSON()))
           if (dispatch) {
-            tr.setNodeMarkup(deckPos, undefined, { ...node.attrs, layout })
-            const fitted = fitDeckCells(layout, cells)
-            tr.replaceWith(deckPos + 1, deckPos + node.nodeSize - 1, fitted.map((item) => state.schema.nodeFromJSON(item)))
+            tr.setNodeMarkup(slidePos, undefined, { ...node.attrs, layout })
+            const fitted = fitSlideCells(layout, cells)
+            tr.replaceWith(slidePos + 1, slidePos + node.nodeSize - 1, fitted.map((item) => state.schema.nodeFromJSON(item)))
             dispatch(tr)
           }
           return true
@@ -156,8 +156,8 @@ export const deck = Node.create({
     }
   },
   addNodeView() {
-    return ReactNodeViewRenderer(DeckView)
+    return ReactNodeViewRenderer(SlideView)
   },
 })
 
-export const deckExtensions = [deck, deckCell]
+export const slideExtensions = [slide, slideCell]

@@ -12,7 +12,7 @@ import { pageLowlight } from './page-lowlight.ts'
 import { pageTextStyle, pageHighlight, Color } from './color-marks.ts'
 import { headingSkin } from './heading-skin.ts'
 import { pageBlock } from './page-block.ts'
-import { deckExtensions } from './deck.ts'
+import { slideExtensions } from './slide.ts'
 import { pageFind } from './find-plugin.ts'
 import { pageAgentEdit } from './agent-edit-plugin.ts'
 import { slashCommand } from './slash.ts'
@@ -223,7 +223,7 @@ export function pageEditorExtensions() {
       includeChildren: false,
     }),
     headingSkin,
-    ...deckExtensions,
+    ...slideExtensions,
     pageBlock,
     pageFind,
     pageAgentEdit,

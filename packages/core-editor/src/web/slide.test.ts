@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { Editor } from '@tiptap/core'
 import { pageEditorExtensions } from './kit.ts'
 import { filterSlashItems } from './slash.ts'
-import { takeDeckFence } from './deck-md.ts'
+import { takeSlideFence } from './slide-md.ts'
 import { PAGE_EDITOR_STYLE } from './style.ts'
 
 function editorOf(markdown: string) {
@@ -14,18 +14,18 @@ function editorOf(markdown: string) {
   })
 }
 
-test('deck css grids cells on the deck body', () => {
-  assert.match(PAGE_EDITOR_STYLE, /\[data-deck\]\[data-layout=split\] \.page-deck-body/)
-  assert.match(PAGE_EDITOR_STYLE, /\.page-deck-body\{display:grid/)
-  assert.match(PAGE_EDITOR_STYLE, /react-renderer\.node-deck\{display:block;width:100%;min-width:0;border:0/)
-  assert.match(PAGE_EDITOR_STYLE, /\[data-deck\]\{display:flex/)
-  assert.match(PAGE_EDITOR_STYLE, /\[data-deck\]\{[^}]*background:transparent/)
-  assert.doesNotMatch(PAGE_EDITOR_STYLE, /data-deck-slide|page-deck-slides/)
+test('slide css grids cells on the slide body', () => {
+  assert.match(PAGE_EDITOR_STYLE, /\[data-slide\]\[data-layout=split\] \.page-slide-body/)
+  assert.match(PAGE_EDITOR_STYLE, /\.page-slide-body\{display:grid/)
+  assert.match(PAGE_EDITOR_STYLE, /react-renderer\.node-slide\{display:block;width:100%;min-width:0;border:0/)
+  assert.match(PAGE_EDITOR_STYLE, /\[data-slide\]\{display:flex/)
+  assert.match(PAGE_EDITOR_STYLE, /\[data-slide\]\{[^}]*background:transparent/)
+  assert.doesNotMatch(PAGE_EDITOR_STYLE, /data-deck|page-deck|:::deck/)
 })
 
-test('slash lists Deck as a core container, not a page plugin', () => {
-  const item = filterSlashItems('gamma').find((entry) => entry.id === 'deck')
-  assert.equal(item?.label, 'Deck')
+test('slash lists Slide as a core container, not a page plugin', () => {
+  const item = filterSlashItems('gamma').find((entry) => entry.id === 'slide')
+  assert.equal(item?.label, 'Slide')
   assert.equal(item?.pluginId, undefined)
   const editor = new Editor({
     extensions: pageEditorExtensions(),
@@ -34,14 +34,14 @@ test('slash lists Deck as a core container, not a page plugin', () => {
   })
   const from = editor.state.selection.from - 1
   item!.command({ editor, range: { from: Math.max(1, from), to: editor.state.selection.from } })
-  const deck = editor.getJSON().content?.find((node) => node.type === 'deck')
-  assert.ok(deck)
-  assert.equal(deck?.content?.[0]?.type, 'deckCell')
+  const node = editor.getJSON().content?.find((entry) => entry.type === 'slide')
+  assert.ok(node)
+  assert.equal(node?.content?.[0]?.type, 'slideCell')
   editor.destroy()
 })
 
-test('deck markdown keeps nested pageBlock fences', () => {
-  const src = `:::deck {layout=split}
+test('slide markdown keeps nested pageBlock fences', () => {
+  const src = `:::slide {layout=split}
 
 :::cell
 :::pageBlock {kind=excalidraw plugin=page-excalidraw id=ab12cd34}
@@ -55,7 +55,7 @@ test('deck markdown keeps nested pageBlock fences', () => {
 
 :::
 `
-  const fence = takeDeckFence(src)
+  const fence = takeSlideFence(src)
   assert.ok(fence)
   assert.equal(fence?.layout, 'split')
   assert.match(fence?.cells[0] ?? '', /:::pageBlock \{kind=excalidraw/)
@@ -65,37 +65,37 @@ test('deck markdown keeps nested pageBlock fences', () => {
   editor.state.doc.descendants((node) => {
     types.push(node.type.name)
   })
-  assert.equal(types.includes('deck'), true)
-  assert.equal(types.includes('deckSlide'), false)
-  assert.equal(types.includes('deckCell'), true)
+  assert.equal(types.includes('slide'), true)
+  assert.equal(types.includes('slideCell'), true)
+  assert.equal(types.includes('deck'), false)
   assert.equal(types.includes('pageBlock'), true)
   const out = editor.getMarkdown()
-  assert.match(out, /:::deck \{layout=split\}/)
-  assert.doesNotMatch(out, /:::slide/)
+  assert.match(out, /:::slide \{layout=split\}/)
+  assert.doesNotMatch(out, /:::deck/)
   assert.match(out, /:::pageBlock \{kind=excalidraw plugin=page-excalidraw id=ab12cd34\}/)
   editor.destroy()
 })
 
-test('setDeckLayout pads cells so more blocks can sit together', () => {
+test('setSlideLayout pads cells so more blocks can sit together', () => {
   const editor = editorOf('')
-  editor.commands.insertDeck('split')
-  editor.commands.setDeckLayout('trio')
+  editor.commands.insertSlide('split')
+  editor.commands.setSlideLayout('trio')
   let cells = 0
   editor.state.doc.descendants((node) => {
-    if (node.type.name === 'deckCell') cells += 1
+    if (node.type.name === 'slideCell') cells += 1
   })
   assert.equal(cells, 3)
   editor.destroy()
 })
 
-test('deckCell accepts real block children: table and pageBlock', () => {
+test('slideCell accepts real block children: table and pageBlock', () => {
   const editor = editorOf('')
   editor.commands.insertContent({
-    type: 'deck',
+    type: 'slide',
     attrs: { layout: 'split' },
     content: [
       {
-        type: 'deckCell',
+        type: 'slideCell',
         content: [
           {
             type: 'table',
@@ -112,7 +112,7 @@ test('deckCell accepts real block children: table and pageBlock', () => {
         ],
       },
       {
-        type: 'deckCell',
+        type: 'slideCell',
         content: [
           {
             type: 'pageBlock',
@@ -126,8 +126,8 @@ test('deckCell accepts real block children: table and pageBlock', () => {
   editor.state.doc.descendants((node) => {
     names.add(node.type.name)
   })
-  assert.equal(names.has('deck'), true)
-  assert.equal(names.has('deckSlide'), false)
+  assert.equal(names.has('slide'), true)
+  assert.equal(names.has('slideCell'), true)
   assert.equal(names.has('table'), true)
   assert.equal(names.has('pageBlock'), true)
   editor.destroy()
