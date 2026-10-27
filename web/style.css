@@ -3,8 +3,8 @@
 
 /*
  * BIU design tokens — Notion-shaped semantic layers on a 4px grid.
- * Use --biu-* in product CSS. Primitive aliases (--biu-text, --biu-accent)
- * map onto the same values so new UI can speak industry names.
+ * Use --biu-* in product CSS. --biu-text is the default ink (#2c2c2b / #d4d4d4).
+ * --biu-label aliases it so chrome that already says "label" keeps working.
  */
 :root {
   color-scheme: light;
@@ -27,15 +27,16 @@
   --biu-overlay: rgba(255, 255, 255, 0.72);
   --biu-chat-code-bg: var(--biu-sidebar);
 
-  /* Text */
-  --biu-label: #2c2c2b;
+  /* Text — --biu-text is the global default ink */
+  --biu-text: #2c2c2b;
+  --biu-label: var(--biu-text);
   --biu-label-2: rgba(44, 44, 43, 0.72);
   --biu-label-3: #8d8b87;
   --biu-placeholder: #8d8b87;
   --biu-sidebar-fg: #5f5e5a;
-  --biu-sidebar-fg-active: #2c2c2b;
-  --biu-tag-ink: #2c2c2b;
-  --biu-cell-ink: #2c2c2b;
+  --biu-sidebar-fg-active: var(--biu-text);
+  --biu-tag-ink: var(--biu-text);
+  --biu-cell-ink: var(--biu-text);
   --biu-cell-weight: 500;
 
   /* Icon */
@@ -195,8 +196,7 @@
   --biu-duration: var(--biu-duration-normal);
   --biu-focus-ring: 0 0 0 2px color-mix(in srgb, var(--biu-pick) 45%, transparent);
 
-  /* Industry aliases (Notion: text / bg-secondary / accent) */
-  --biu-text: var(--biu-label);
+  /* Industry aliases */
   --biu-text-secondary: var(--biu-label-2);
   --biu-text-tertiary: var(--biu-label-3);
   --biu-bg-secondary: var(--biu-sidebar);
@@ -239,14 +239,15 @@ html.dark {
   --biu-muted-fill: rgba(242, 241, 237, 0.04);
   --biu-overlay: rgba(25, 25, 25, 0.72);
   --biu-chat-code-bg: var(--biu-sidebar);
-  --biu-label: #d4d4d4;
+  --biu-text: #d4d4d4;
+  --biu-label: var(--biu-text);
   --biu-label-2: rgba(242, 241, 237, 0.72);
   --biu-label-3: rgba(242, 241, 237, 0.45);
   --biu-placeholder: #5F5F5A;
   --biu-sidebar-fg: #bcbab6;
-  --biu-sidebar-fg-active: #d4d4d4;
-  --biu-tag-ink: var(--biu-label);
-  --biu-cell-ink: #d4d4d4;
+  --biu-sidebar-fg-active: var(--biu-text);
+  --biu-tag-ink: var(--biu-text);
+  --biu-cell-ink: var(--biu-text);
   --biu-icon: #bab9b5;
   --biu-icon-active: #bab9b5;
   --biu-icon-muted: #a6a6a3;
@@ -266,8 +267,8 @@ html.dark {
   --biu-warning-soft: rgba(255, 128, 0, 0.16);
   --biu-warning-on-surface: #e8b84a;
   --biu-code-surface: #1e1e1e;
-  --biu-code-ink: #d4d4d4;
-  --biu-on-accent: var(--biu-label);
+  --biu-code-ink: var(--biu-text);
+  --biu-on-accent: var(--biu-text);
   --biu-ink: #aaaaaa;
   --biu-ink-gray: #696969;
   --biu-ink-brown: #83733c;
@@ -321,7 +322,6 @@ html.dark {
   --biu-shadow: var(--biu-shadow-2);
   --biu-shadow-lv2: 0 0 0 1px rgba(242, 241, 237, 0.06), var(--biu-shadow-2);
   --biu-shadow-lg: var(--biu-shadow-3);
-  --biu-text: var(--biu-label);
   --biu-text-secondary: var(--biu-label-2);
   --biu-text-tertiary: var(--biu-label-3);
   --biu-bg-secondary: var(--biu-sidebar);
@@ -336,6 +336,7 @@ html.dark {
   --font-mono: var(--font-mono);
   --color-biu-bg: var(--biu-bg);
   --color-biu-input: var(--biu-input);
+  --color-biu-text: var(--biu-text);
   --color-biu-label: var(--biu-label);
   --color-biu-label-2: var(--biu-label-2);
   --color-biu-label-3: var(--biu-label-3);

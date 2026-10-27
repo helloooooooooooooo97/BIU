@@ -77,7 +77,7 @@ html.dark .rui-root{--rui-primary-fg:var(--biu-bg);color-scheme:dark}
 .rui-cell:last-child{border-bottom:0}
 .rui-cell-main{flex:1 1 auto;min-width:0}
 .rui-cell-meta{color:#8e8e93;font-size:15px;font-variant-numeric:tabular-nums;flex:0 0 auto}
-.rui-activity{margin:0 16px 18px;background:#000;color:var(--biu-label);border-radius:18px;padding:22px 20px;display:flex;align-items:center;gap:22px}
+.rui-activity{margin:0 16px 18px;background:#000;color:var(--biu-text);border-radius:18px;padding:22px 20px;display:flex;align-items:center;gap:22px}
 .rui-legend{display:flex;flex-direction:column;gap:12px;min-width:0}
 .rui-legend i{display:inline-block;width:8px;height:8px;border-radius:99px;margin-right:6px}
 .rui-legend b{display:block;font-size:22px;font-weight:600;letter-spacing:-.03em;font-variant-numeric:tabular-nums;line-height:1.15}
