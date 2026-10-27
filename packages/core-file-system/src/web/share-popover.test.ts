@@ -49,7 +49,7 @@ test('share panel uses a compact settings section and custom toggles', () => {
 test('open share panel sits above the table toolbar', () => {
   const css = readFileSync(resolve(import.meta.dirname, './fsdb-style.ts'), 'utf8')
   assert.match(css, /\.fsdb-page \.tasks-toolbar\{[^}]*z-index:50/)
-  assert.match(css, /\.fsdb-right \.chat-view-header:has\(\.fsdb-share-panel\)\{[^}]*z-index:90/)
+  assert.match(css, /\.fsdb-right \.chat-view-header:has\(\.fsdb-share-panel\)\{[^}]*z-index:var\(--biu-z-dropdown\)/)
 })
 
 test('permission column opens the same kind of chain as data scope', () => {

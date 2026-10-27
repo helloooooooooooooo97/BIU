@@ -3,19 +3,19 @@ import { AnchorMenu } from '@biu/biu-ui'
 
 const STYLE_ID = 'biu-database-ui-search'
 const CSS = `
-.db-search-menu{box-sizing:border-box;padding:6px;background:var(--biu-sidebar);border:0;border-radius:10px;box-shadow:var(--biu-shadow);display:flex;flex-direction:column;gap:4px;font-size:14px}
-.db-search-field{display:flex;align-items:center;gap:6px;border:0;border-radius:8px;padding:4px 8px;color:var(--biu-label-3);background:transparent;font-size:14px}
-.db-search-field input{flex:1;min-width:0;border:0;background:transparent;color:var(--biu-label);font-family:inherit;font-size:14px;font-weight:400;line-height:1.4;outline:none}
-.db-search-field input::placeholder{font-size:14px;color:var(--biu-label-3)}
+.db-search-menu{box-sizing:border-box;padding:6px;background:var(--biu-sidebar);border:0;border-radius:10px;box-shadow:var(--biu-shadow);display:flex;flex-direction:column;gap:4px;font-size:var(--biu-font-4)}
+.db-search-field{display:flex;align-items:center;gap:6px;border:0;border-radius:8px;padding:4px 8px;color:var(--biu-label-3);background:transparent;font-size:var(--biu-font-4)}
+.db-search-field input{flex:1;min-width:0;border:0;background:transparent;color:var(--biu-label);font-family:inherit;font-size:var(--biu-font-4);font-weight:400;line-height:1.4;outline:none}
+.db-search-field input::placeholder{font-size:var(--biu-font-4);color:var(--biu-label-3)}
 .db-search-list{display:flex;flex-direction:column;gap:1px;max-height:220px;overflow:auto}
-.db-search-option{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;border:0;border-radius:6px;padding:5px 6px;background:transparent;color:var(--biu-label);font-family:inherit;font-size:14px;cursor:pointer;text-align:left}
+.db-search-option{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;border:0;border-radius:6px;padding:5px 6px;background:transparent;color:var(--biu-label);font-family:inherit;font-size:var(--biu-font-4);cursor:pointer;text-align:left}
 .db-search-option:hover,.db-search-option.is-selected,.db-search-option.is-active{background:color-mix(in srgb,var(--biu-business) 12%,transparent)}
 .db-search-option-main{display:inline-flex;align-items:center;gap:6px;min-width:0}
 .db-search-option .fsdb-field-glyph,.db-cell-select-trigger .fsdb-field-glyph{color:var(--biu-icon);flex:none}
-.db-search-empty{padding:8px;color:var(--biu-label-3);font-size:14px}
+.db-search-empty{padding:8px;color:var(--biu-label-3);font-size:var(--biu-font-4)}
 .db-search-foot{border-top:1px solid var(--biu-border);margin-top:4px;padding-top:4px}
 .db-cell-select{display:inline-flex;position:relative;min-width:0;max-width:100%;box-sizing:border-box;vertical-align:middle}
-.db-cell-select-trigger{display:inline-flex;align-items:center;gap:5px;max-width:none;height:22px;border:0;border-radius:4px;padding:0 6px;background:transparent;color:var(--biu-label);font:inherit;font-size:14px;font-weight:500;line-height:22px;cursor:pointer;text-align:left}
+.db-cell-select-trigger{display:inline-flex;align-items:center;gap:5px;max-width:none;height:var(--biu-control-h-sm);border:0;border-radius:4px;padding:0 6px;background:transparent;color:var(--biu-label);font:inherit;font-size:var(--biu-font-4);font-weight:500;line-height:var(--biu-control-h-sm);cursor:pointer;text-align:left}
 .db-cell-select-trigger:hover,.db-cell-select-trigger[data-open]{background:transparent}
 .db-cell-select-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .db-cell-select-caret{flex:none;opacity:.55;color:var(--biu-label-2)}
@@ -29,12 +29,12 @@ const CSS = `
 .db-cell-multi{position:relative;display:flex;min-width:0;width:100%;max-width:100%;vertical-align:middle}
 .db-cell-multi.is-empty{display:flex;width:100%;min-width:0;align-self:stretch}
 .db-cell-multi-box{display:flex;flex-wrap:wrap;align-items:center;gap:4px;width:100%;max-width:none;min-height:20px;border:0;border-radius:6px;padding:0;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
-.db-cell-multi-box.is-empty{display:flex;width:100%;min-height:22px;min-width:0;align-self:stretch}
+.db-cell-multi-box.is-empty{display:flex;width:100%;min-height:var(--biu-control-h-sm);min-width:0;align-self:stretch}
 .db-cell-multi-box:hover,.db-cell-multi-box[aria-expanded="true"]{background:transparent}
 .db-datetime{display:inline-flex;align-items:center;gap:4px;position:relative;min-width:0;width:100%;max-width:100%;vertical-align:middle;color:inherit}
-.db-datetime-trigger,.db-datetime-label{display:inline-flex;min-width:0;max-width:100%;border:0;padding:0;background:transparent;font-size:14px;font-weight:500;color:var(--biu-label);outline:none;text-align:left}
+.db-datetime-trigger,.db-datetime-label{display:inline-flex;min-width:0;max-width:100%;border:0;padding:0;background:transparent;font-size:var(--biu-font-4);font-weight:500;color:var(--biu-label);outline:none;text-align:left}
 .db-datetime-trigger:focus-visible{outline:none}
-.db-datetime-trigger:not(:empty)::placeholder,.db-datetime .db-datetime-trigger:empty{font-size:14px;font-weight:500;color:var(--biu-label-3)}
+.db-datetime-trigger:not(:empty)::placeholder,.db-datetime .db-datetime-trigger:empty{font-size:var(--biu-font-4);font-weight:500;color:var(--biu-label-3)}
 .db-datetime.is-overdue .db-datetime-trigger,.db-datetime.is-overdue .db-datetime-label,.db-datetime.is-overdue{color:var(--biu-danger)}
 `
 

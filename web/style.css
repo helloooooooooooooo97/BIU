@@ -139,6 +139,7 @@
   --biu-opacity-90: 0.9;
 
   /* Z-index */
+  --biu-z-float: 80;
   --biu-z-dropdown: 90;
   --biu-z-modal: 200;
   --biu-z-toast: 300;
@@ -424,7 +425,7 @@ body {
   position: relative;
   top: auto;
   left: auto;
-  z-index: 80;
+  z-index: var(--biu-z-float);
   width: 320px;
   max-height: min(70vh, 420px);
   overflow: auto;
@@ -441,7 +442,7 @@ body {
 }
 
 .shell-notify-head-title {
-  font-size: 12px;
+  font-size: var(--biu-font-2);
   font-weight: 600;
   color: var(--biu-label-2);
 }
@@ -514,7 +515,7 @@ body {
 }
 
 .shell-notify-title {
-  font-size: 13px;
+  font-size: var(--biu-font-3);
   font-weight: 650;
   line-height: 1.3;
 }
@@ -525,7 +526,7 @@ body {
   gap: 6px;
   align-items: center;
   color: var(--biu-label-3);
-  font-size: 12px;
+  font-size: var(--biu-font-2);
   line-height: 1.35;
 }
 
@@ -661,7 +662,7 @@ body {
 .biu-confirm-copy > div {
   overflow-wrap: anywhere;
   color: var(--biu-label-3);
-  font-size: 13px;
+  font-size: var(--biu-font-3);
   line-height: 1.55;
 }
 
@@ -679,7 +680,7 @@ body {
   border-radius: 7px;
   padding: 0 13px;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--biu-font-3);
   font-weight: 650;
   cursor: pointer;
 }
@@ -742,7 +743,7 @@ body {
 .biu-float-title {
   margin: 0;
   color: var(--biu-label);
-  font-size: 13px;
+  font-size: var(--biu-font-3);
   font-weight: 600;
   line-height: 1.2;
 }
@@ -774,7 +775,7 @@ body {
   flex-direction: row;
   border-radius: 12px;
   color: var(--biu-label);
-  font-size: 14px;
+  font-size: var(--biu-font-4);
   font-weight: 400;
   line-height: 1.5;
 }
@@ -809,7 +810,7 @@ body {
 
 .settings-muted {
   color: var(--biu-label-3);
-  font-size: 12px;
+  font-size: var(--biu-font-2);
   font-weight: 450;
   line-height: 1.45;
 }
@@ -825,7 +826,7 @@ body {
   background: transparent;
   padding: 6px 8px;
   color: var(--biu-label-2);
-  font-size: 13px;
+  font-size: var(--biu-font-3);
   font-weight: 500;
   text-align: left;
   cursor: pointer;
@@ -895,7 +896,7 @@ body {
 .settings-pane-subtitle {
   margin: 28px 0 6px;
   color: var(--biu-label);
-  font-size: 14px;
+  font-size: var(--biu-font-4);
   font-weight: 650;
 }
 
@@ -916,7 +917,7 @@ body {
   flex-direction: column;
   gap: 6px;
   color: var(--biu-label);
-  font-size: 13px;
+  font-size: var(--biu-font-3);
   font-weight: 600;
 }
 
@@ -936,7 +937,7 @@ body {
   padding: 0 10px;
   color: var(--biu-label);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--biu-font-3);
   font-weight: 500;
   outline: none;
 }
@@ -951,7 +952,7 @@ body {
   background: var(--biu-bg);
   color: var(--biu-label-2);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--biu-font-2);
   font-weight: 600;
   cursor: pointer;
 }
@@ -1026,7 +1027,7 @@ body {
   border-radius: 8px;
   background: var(--biu-hover);
   color: var(--biu-label);
-  font-size: 13px;
+  font-size: var(--biu-font-3);
   font-weight: 700;
 }
 
@@ -1038,14 +1039,14 @@ body {
 .settings-mcp-card-copy strong {
   display: block;
   color: var(--biu-label);
-  font-size: 13px;
+  font-size: var(--biu-font-3);
   font-weight: 650;
 }
 
 .settings-mcp-card-copy p {
   margin: 2px 0 0;
   color: var(--biu-label-3);
-  font-size: 12px;
+  font-size: var(--biu-font-2);
   font-weight: 450;
   line-height: 1.4;
 }
@@ -1092,7 +1093,7 @@ body {
   background: transparent;
   color: var(--biu-label);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--biu-font-3);
   font-weight: 600;
   cursor: pointer;
   text-align: left;
@@ -1112,7 +1113,7 @@ body {
 
 .settings-page-prefs .fsdb-layout-scale > span {
   color: var(--biu-label-2);
-  font-size: 12px;
+  font-size: var(--biu-font-2);
   font-weight: 650;
 }
 
@@ -1132,7 +1133,7 @@ body {
   background: transparent;
   color: var(--biu-label-2);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--biu-font-2);
   font-weight: 650;
   cursor: pointer;
 }
@@ -1175,7 +1176,7 @@ body {
   border-radius: 10px;
   padding: 8px;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--biu-font-3);
   font-weight: 550;
   text-align: left;
   cursor: pointer;
@@ -1257,7 +1258,7 @@ body {
   gap: 16px;
   padding: 12px 0;
   border-bottom: 1px solid var(--biu-float-border);
-  font-size: 14px;
+  font-size: var(--biu-font-4);
 }
 
 .settings-shortcut-list li:last-child {
@@ -1378,7 +1379,7 @@ body {
   background: transparent;
   padding: 8px;
   color: var(--biu-label);
-  font-size: 14px;
+  font-size: var(--biu-font-4);
   font-weight: 500;
   text-align: left;
   cursor: pointer;
@@ -1468,7 +1469,7 @@ body {
   color: var(--biu-icon);
   cursor: pointer;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--biu-font-2);
 }
 
 .shell-search-hit-action:hover {
@@ -1498,7 +1499,7 @@ body {
 }
 
 .shell-search-hit-action[data-dock-tip]::after {
-  z-index: 80;
+  z-index: var(--biu-z-float);
 }
 
 .shell-search-hit-icon .fsdb-record-emoji {
@@ -1513,7 +1514,7 @@ body {
 .shell-search-hint {
   margin: 8px;
   color: var(--biu-label-3);
-  font-size: 13px;
+  font-size: var(--biu-font-3);
   font-weight: 600;
   line-height: 1.45;
 }
@@ -1537,7 +1538,7 @@ body {
   background: var(--biu-hover);
   padding: 0 10px;
   color: var(--biu-label);
-  font-size: 13px;
+  font-size: var(--biu-font-3);
   font-weight: 500;
   outline: none;
 }
@@ -1545,14 +1546,14 @@ body {
 .shell-chrome-pop-empty {
   margin: 8px 2px 2px;
   color: var(--biu-label-3);
-  font-size: 12px;
+  font-size: var(--biu-font-2);
 }
 
 .shell-settings-update-lead,
 .shell-settings-update-hint {
   margin: 0 0 12px;
   color: var(--biu-label-2);
-  font-size: 13px;
+  font-size: var(--biu-font-3);
 }
 
 .shell-settings-update-btn {
@@ -1565,7 +1566,7 @@ body {
   background: var(--biu-label);
   padding: 0 12px;
   color: var(--biu-bg);
-  font-size: 13px;
+  font-size: var(--biu-font-3);
   font-weight: 550;
   cursor: pointer;
 }
@@ -1635,7 +1636,7 @@ body {
   padding: 6px 8px;
   color: var(--biu-label);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--biu-font-3);
   outline: none;
 }
 
@@ -1649,7 +1650,7 @@ body {
   padding: 4px 10px;
   color: var(--biu-sidebar-fg-active);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--biu-font-3);
   font-weight: 500;
   line-height: 1.2;
   text-align: center;
@@ -1728,7 +1729,7 @@ body {
   background: transparent;
   color: var(--biu-label);
   font: inherit;
-  font-size: 14px;
+  font-size: var(--biu-font-4);
   font-weight: 500;
   outline: none;
 }
@@ -1810,7 +1811,7 @@ body {
   background: transparent;
   color: var(--biu-label);
   font: inherit;
-  font-size: 14px;
+  font-size: var(--biu-font-4);
   font-weight: 500;
   line-height: 1.2;
   text-align: left;
@@ -1852,7 +1853,7 @@ html:not(.dark) .shell-workspace-menu-item.is-active .shell-workspace-menu-icon 
 .shell-workspace-menu-role {
   flex: none;
   color: var(--biu-label-3);
-  font-size: 13px;
+  font-size: var(--biu-font-3);
   font-weight: 500;
   line-height: 1;
 }
@@ -1880,7 +1881,7 @@ html:not(.dark) .shell-workspace-menu-item.is-active .shell-workspace-menu-icon 
   background: transparent;
   color: var(--biu-sidebar-fg);
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: var(--biu-font-4);
   font-weight: 500;
   line-height: 1.2;
   text-align: left;
@@ -1927,7 +1928,7 @@ html:not(.dark) .shell-workspace-menu-item.is-active .shell-workspace-menu-icon 
   border-radius: 8px;
   padding: 0 8px;
   color: var(--biu-label);
-  font-size: 14px;
+  font-size: var(--biu-font-4);
   font-weight: 500;
   line-height: 1.2;
 }
@@ -1985,7 +1986,7 @@ html:not(.dark) .shell-workspace-menu-item.is-active .shell-workspace-menu-icon 
   margin: 0;
   padding: 8px;
   color: var(--biu-label-3);
-  font-size: 13px;
+  font-size: var(--biu-font-3);
   font-weight: 500;
 }
 
@@ -2037,7 +2038,7 @@ html:not(.dark) .shell-workspace-menu-item.is-active .shell-workspace-menu-icon 
 .shell-workspace-create-dialog header p {
   margin-top: 5px;
   color: var(--biu-label-3);
-  font-size: 12px;
+  font-size: var(--biu-font-2);
 }
 
 .shell-workspace-create-dialog header > button {
@@ -2122,7 +2123,7 @@ html:not(.dark) .shell-workspace-menu-item.is-active .shell-workspace-menu-icon 
 .shell-workspace-create-card small {
   margin-top: 7px;
   color: var(--biu-label-3);
-  font-size: 12px;
+  font-size: var(--biu-font-2);
   line-height: 1.55;
 }
 
@@ -2130,7 +2131,7 @@ html:not(.dark) .shell-workspace-menu-item.is-active .shell-workspace-menu-icon 
   margin-top: auto;
   padding-top: 22px;
   color: var(--biu-label-2);
-  font-size: 12px;
+  font-size: var(--biu-font-2);
   font-style: normal;
   font-weight: 600;
 }
@@ -2138,7 +2139,7 @@ html:not(.dark) .shell-workspace-menu-item.is-active .shell-workspace-menu-icon 
 .shell-workspace-create-error {
   margin-top: 12px !important;
   color: var(--biu-danger);
-  font-size: 12px;
+  font-size: var(--biu-font-2);
 }
 
 @media (max-width: 620px) {
@@ -2184,7 +2185,7 @@ html:not(.dark) .shell-workspace-menu-item.is-active .shell-workspace-menu-icon 
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--biu-sidebar-fg-active);
-  font-size: 14px;
+  font-size: var(--biu-font-4);
   font-weight: 600;
 }
 
@@ -2229,7 +2230,7 @@ html:not(.dark) .shell-workspace-menu-item.is-active .shell-workspace-menu-icon 
 .auth-status {
   margin: 0;
   color: #b5b5b5;
-  font-size: 14px;
+  font-size: var(--biu-font-4);
   line-height: 1.5;
 }
 .auth-status {
@@ -2240,7 +2241,7 @@ html:not(.dark) .shell-workspace-menu-item.is-active .shell-workspace-menu-icon 
   flex-direction: column;
   gap: 6px;
   color: #fff;
-  font-size: 13px;
+  font-size: var(--biu-font-3);
   font-weight: 500;
 }
 .auth-field {
@@ -2252,7 +2253,7 @@ html:not(.dark) .shell-workspace-menu-item.is-active .shell-workspace-menu-icon 
   color: #0d0d0d;
   padding: 10px 12px;
   font: inherit;
-  font-size: 14px;
+  font-size: var(--biu-font-4);
   outline: none;
 }
 .auth-field:focus { border-color: #0d0d0d; }
@@ -2265,7 +2266,7 @@ html:not(.dark) .shell-workspace-menu-item.is-active .shell-workspace-menu-icon 
   background: #fff;
   color: #000;
   font: inherit;
-  font-size: 14px;
+  font-size: var(--biu-font-4);
   font-weight: 500;
   cursor: pointer;
 }
@@ -2278,7 +2279,7 @@ html:not(.dark) .shell-workspace-menu-item.is-active .shell-workspace-menu-icon 
   color: #b5b5b5;
   padding: 0;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--biu-font-3);
   cursor: pointer;
 }
 .auth-switch:hover,
@@ -2286,7 +2287,7 @@ html:not(.dark) .shell-workspace-menu-item.is-active .shell-workspace-menu-icon 
 .auth-error {
   margin: 0;
   color: #b42318;
-  font-size: 13px;
+  font-size: var(--biu-font-3);
 }
 
 .settings-account-title {
@@ -2324,7 +2325,7 @@ html:not(.dark) .shell-workspace-menu-item.is-active .shell-workspace-menu-icon 
 .settings-account-label {
   margin: 0;
   color: var(--biu-label);
-  font-size: 13px;
+  font-size: var(--biu-font-3);
   font-weight: 600;
 }
 
@@ -2394,7 +2395,7 @@ html:not(.dark) .shell-workspace-menu-item.is-active .shell-workspace-menu-icon 
   padding: 0 10px;
   color: var(--biu-label);
   font: inherit;
-  font-size: 14px;
+  font-size: var(--biu-font-4);
   font-weight: 500;
   outline: none;
 }
@@ -2412,7 +2413,7 @@ html:not(.dark) .shell-workspace-menu-item.is-active .shell-workspace-menu-icon 
   padding: 2px 4px;
   color: var(--biu-label-3);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--biu-font-2);
   font-weight: 600;
   cursor: pointer;
 }
@@ -2520,7 +2521,7 @@ html:not(.dark) .shell-workspace-menu-item.is-active .shell-workspace-menu-icon 
   padding: 0 12px;
   color: var(--biu-label);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--biu-font-3);
   font-weight: 600;
   cursor: pointer;
 }
@@ -2558,7 +2559,7 @@ html:not(.dark) .shell-workspace-menu-item.is-active .shell-workspace-menu-icon 
   padding: 6px 8px;
   color: var(--biu-label-2);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--biu-font-2);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2568,7 +2569,7 @@ html:not(.dark) .shell-workspace-menu-item.is-active .shell-workspace-menu-icon 
   padding: 0;
   list-style: none;
   color: var(--biu-label-2);
-  font-size: 13px;
+  font-size: var(--biu-font-3);
   font-weight: 500;
   line-height: 1.6;
 }
@@ -2610,13 +2611,13 @@ html:not(.dark) .shell-workspace-menu-item.is-active .shell-workspace-menu-icon 
 
 .settings-member-identity strong {
   color: var(--biu-label);
-  font-size: 13px;
+  font-size: var(--biu-font-3);
   font-weight: 600;
 }
 
 .settings-member-identity small {
   color: var(--biu-label-3);
-  font-size: 12px;
+  font-size: var(--biu-font-2);
   font-weight: 500;
 }
 
@@ -2636,7 +2637,7 @@ select.settings-member-role {
 .settings-member-role-label {
   min-width: 52px;
   color: var(--biu-label-3);
-  font-size: 12px;
+  font-size: var(--biu-font-2);
   text-align: right;
   white-space: nowrap;
 }
@@ -2679,7 +2680,7 @@ select.settings-member-role {
 .settings-account-error {
   margin: 12px 0 0;
   color: var(--biu-danger);
-  font-size: 12px;
+  font-size: var(--biu-font-2);
   font-weight: 600;
 }
 
@@ -2700,7 +2701,7 @@ select.settings-account-input {
   position: fixed;
   right: 16px;
   bottom: 16px;
-  z-index: 200;
+  z-index: var(--biu-z-modal);
   display: flex;
   overflow: visible;
   align-items: center;
@@ -2846,7 +2847,7 @@ select.settings-account-input {
   background: transparent;
   padding: 0 8px;
   color: var(--biu-sidebar-fg);
-  font-size: 14px;
+  font-size: var(--biu-font-4);
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
@@ -3016,7 +3017,7 @@ select.settings-account-input {
 }
 
 .inspector-crumb-full .fsdb-crumb-menu {
-  z-index: 90;
+  z-index: var(--biu-z-dropdown);
 }
 
 .inspector-database-rail.fsdb-views {
@@ -3044,7 +3045,7 @@ select.settings-account-input {
 .inspector-catalog-lead {
   margin: 0 0 4px;
   color: var(--biu-label-3);
-  font-size: 12px;
+  font-size: var(--biu-font-2);
   font-weight: 700;
   letter-spacing: 0.04em;
 }
@@ -3064,7 +3065,7 @@ select.settings-account-input {
   padding: 0 8px;
   color: var(--biu-sidebar-fg);
   font: inherit;
-  font-size: 14px;
+  font-size: var(--biu-font-4);
   font-weight: 600;
   text-align: left;
   cursor: pointer;
@@ -3097,7 +3098,7 @@ select.settings-account-input {
   margin: 8px 0 0;
   padding: 12px;
   color: var(--biu-label-3);
-  font-size: 13px;
+  font-size: var(--biu-font-3);
   line-height: 1.45;
 }
 
@@ -3191,7 +3192,7 @@ select.settings-account-input {
   padding: 8px 12px;
   color: var(--biu-icon);
   font: inherit;
-  font-size: 14px;
+  font-size: var(--biu-font-4);
   font-weight: 600;
   text-align: left;
   cursor: pointer;
@@ -3271,7 +3272,7 @@ select.settings-account-input {
   gap: 8px;
   padding: 2px 8px 6px;
   color: var(--biu-sidebar-fg-active);
-  font-size: 14px;
+  font-size: var(--biu-font-4);
   font-weight: 600;
   line-height: 1.3;
 }
@@ -3287,7 +3288,7 @@ select.settings-account-input {
 }
 
 .inspector-add-head {
-  font-size: 14px;
+  font-size: var(--biu-font-4);
   font-weight: 600;
   color: var(--biu-label-3);
 }
@@ -3295,7 +3296,7 @@ select.settings-account-input {
 .inspector-add-empty {
   padding: 6px 8px;
   color: var(--biu-label-3);
-  font-size: 13px;
+  font-size: var(--biu-font-3);
 }
 
 .inspector-add-row {
@@ -3339,7 +3340,7 @@ select.settings-account-input {
   background: transparent;
   color: inherit;
   font: inherit;
-  font-size: 14px;
+  font-size: var(--biu-font-4);
   cursor: pointer;
   text-align: left;
 }
@@ -3430,7 +3431,7 @@ select.settings-account-input {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 14px;
+  font-size: var(--biu-font-4);
   line-height: 1.2;
 }
 
@@ -3476,7 +3477,7 @@ select.settings-account-input {
   min-width: 0;
   max-width: 0;
   overflow: visible;
-  z-index: 80;
+  z-index: var(--biu-z-float);
   pointer-events: none;
 }
 
@@ -3488,7 +3489,7 @@ select.settings-account-input {
   bottom: auto;
   height: 20vh;
   width: 20px;
-  z-index: 80;
+  z-index: var(--biu-z-float);
 }
 
 .sidebar-flyout-host.is-collapsed .app-side-bar.is-closed {
@@ -3586,7 +3587,7 @@ select.settings-account-input {
   position: fixed;
   top: auto;
   bottom: 12px;
-  z-index: 80;
+  z-index: var(--biu-z-float);
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
@@ -3747,7 +3748,7 @@ html.dark .tool-call-status.is-fail {
   border-radius: 8px;
   background: transparent;
   color: var(--biu-sidebar-fg);
-  font-size: 12px;
+  font-size: var(--biu-font-2);
   text-align: left;
   cursor: pointer;
 }
@@ -3877,7 +3878,7 @@ html.dark .tool-call-status.is-fail {
   border-radius: var(--biu-radius-bubble);
   background: var(--biu-sidebar);
   color: var(--biu-sidebar-fg);
-  font-size: 12px;
+  font-size: var(--biu-font-2);
   line-height: 1.5;
 }
 
@@ -4033,7 +4034,7 @@ html.dark .composer-model-flyout {
   border-radius: var(--biu-radius-full);
   padding: 3px 8px;
   background: var(--biu-muted-fill);
-  font-size: 12px;
+  font-size: var(--biu-font-2);
   font-weight: 650;
   font-variant-numeric: tabular-nums;
 }
@@ -4172,7 +4173,7 @@ html.dark .composer-model-flyout {
 
 .sidebar-label,
 .app-side-actions-label {
-  font-size: 14px;
+  font-size: var(--biu-font-4);
 }
 
 .sidebar-tag {
@@ -4262,7 +4263,7 @@ html.dark .composer-model-flyout {
   border-radius: 8px;
   padding: 8px;
   color: var(--biu-sidebar-fg);
-  font-size: 14px;
+  font-size: var(--biu-font-4);
   font-weight: 500;
   line-height: 1.2;
   text-align: left;
@@ -4625,7 +4626,7 @@ html.dark .app-side-bar .chat-session-row-star:not(.is-on) svg {
   border: 0;
   background: transparent;
   color: var(--biu-label-3);
-  font-size: 14px;
+  font-size: var(--biu-font-4);
   line-height: 1.25rem;
   text-align: left;
 }
@@ -4783,17 +4784,17 @@ html.dark .app-side-bar .chat-session-row-star:not(.is-on) svg {
   padding: 0 8px;
   border-radius: 6px;
   color: var(--biu-sidebar-fg);
-  font-size: 12px;
+  font-size: var(--biu-font-2);
   font-weight: 700;
 }
 
 .sidebar-section-head button {
-  font-size: 12px;
+  font-size: var(--biu-font-2);
   font-weight: 700;
 }
 
 .sidebar-section-head .sidebar-label {
-  font-size: 12px;
+  font-size: var(--biu-font-2);
   font-weight: 700;
   letter-spacing: normal;
 }
@@ -4814,7 +4815,7 @@ html.dark .app-side-bar .chat-session-row-star:not(.is-on) svg {
   padding: 0;
   border-radius: 6px;
   color: var(--biu-icon);
-  font-size: 12px;
+  font-size: var(--biu-font-2);
   font-weight: 500;
   line-height: 0;
   opacity: 0;
@@ -4833,7 +4834,7 @@ html.dark .app-side-bar .chat-session-row-star:not(.is-on) svg {
 
 .sidebar-chat-count-num {
   display: block;
-  font-size: 12px;
+  font-size: var(--biu-font-2);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   line-height: 1;
@@ -4843,7 +4844,7 @@ html.dark .app-side-bar .chat-session-row-star:not(.is-on) svg {
 .sidebar-section-head .sidebar-chat-count,
 .sidebar-group-head .sidebar-chat-count,
 .chat-session-row .sidebar-chat-count {
-  font-size: 12px;
+  font-size: var(--biu-font-2);
   font-weight: 500;
   color: var(--biu-icon);
 }
@@ -5109,7 +5110,7 @@ html.dark .app-side-bar .chat-session-row-star:not(.is-on) svg {
 
 .project-chip-error {
   color: var(--biu-danger);
-  font-size: 12px;
+  font-size: var(--biu-font-2);
   font-weight: 700;
 }
 
@@ -5245,7 +5246,7 @@ html.dark .app-side-bar .chat-session-row-star:not(.is-on) svg {
   background: transparent;
   color: var(--biu-label-2);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--biu-font-2);
   font-weight: 550;
   text-align: left;
   cursor: pointer;
@@ -5399,7 +5400,7 @@ html.dark .app-side-bar .chat-session-row-star:not(.is-on) svg {
   padding: 4px 10px 4px 8px;
   color: var(--biu-label-2);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--biu-font-2);
   text-align: left;
 }
 
@@ -5443,7 +5444,7 @@ html.dark .app-side-bar .chat-session-row-star:not(.is-on) svg {
   padding: 10px 12px;
   color: var(--biu-label);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--biu-font-2);
   line-height: 1.5;
   outline: none;
 }
@@ -5857,7 +5858,7 @@ html.dark .app-side-bar .chat-session-row-star:not(.is-on) svg {
   align-items: center;
   gap: 6px;
   color: var(--biu-label-1);
-  font-size: 12px;
+  font-size: var(--biu-font-2);
   font-weight: 600;
   letter-spacing: 0.02em;
 }
@@ -5924,7 +5925,7 @@ html.dark .app-side-bar .chat-session-row-star:not(.is-on) svg {
 .usage-panel-meta-value {
   color: var(--biu-label-1);
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: var(--biu-font-3);
   font-variant-numeric: tabular-nums;
 }
 
@@ -6061,7 +6062,7 @@ html.dark .app-side-bar .chat-session-row-star:not(.is-on) svg {
   padding: 12px 14px;
   border-bottom: 1px solid var(--biu-border);
   color: var(--biu-label-1);
-  font-size: 12px;
+  font-size: var(--biu-font-2);
   font-weight: 600;
 }
 
@@ -6394,7 +6395,7 @@ html.dark .app-side-bar .chat-session-row-star:not(.is-on) svg {
 
 .traj-empty-title {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--biu-font-3);
   font-weight: 600;
   color: var(--biu-label);
 }
@@ -6402,7 +6403,7 @@ html.dark .app-side-bar .chat-session-row-star:not(.is-on) svg {
 .traj-empty-body {
   margin: 0;
   max-width: 320px;
-  font-size: 12px;
+  font-size: var(--biu-font-2);
   line-height: 1.45;
   color: var(--biu-label-3);
 }
@@ -6429,7 +6430,7 @@ html.dark .app-side-bar .chat-session-row-star:not(.is-on) svg {
 }
 
 .traj-detail-title {
-  font-size: 13px;
+  font-size: var(--biu-font-3);
   font-weight: 600;
   color: var(--biu-label);
 }
@@ -6449,7 +6450,7 @@ html.dark .app-side-bar .chat-session-row-star:not(.is-on) svg {
   color: var(--biu-label-3);
   cursor: pointer;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--biu-font-2);
 }
 
 .traj-detail-close:hover {
@@ -6477,7 +6478,7 @@ html.dark .app-side-bar .chat-session-row-star:not(.is-on) svg {
   padding: 7px 10px;
   cursor: pointer;
   color: var(--biu-label-1);
-  font-size: 12px;
+  font-size: var(--biu-font-2);
   font-weight: 600;
   list-style: none;
 }
@@ -6586,7 +6587,7 @@ html.dark .app-side-bar .chat-session-row-star:not(.is-on) svg {
 .traj-detail-meta dd {
   margin: 0;
   color: var(--biu-label);
-  font-size: 12px;
+  font-size: var(--biu-font-2);
   word-break: break-word;
 }
 
@@ -6630,7 +6631,7 @@ html.dark .app-side-bar .chat-session-row-star:not(.is-on) svg {
 /* 对话主列：预留 gutter，避免细滚动条出现时挤布局（样式走全局 * 规则） */
 .chat-select-bubble {
   position: fixed;
-  z-index: 80;
+  z-index: var(--biu-z-float);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -6643,7 +6644,7 @@ html.dark .app-side-bar .chat-session-row-star:not(.is-on) svg {
   background: var(--biu-sidebar);
   color: var(--biu-sidebar-fg);
   box-shadow: var(--biu-shadow);
-  font-size: 13px;
+  font-size: var(--biu-font-3);
   font-weight: 700;
   line-height: 1;
   transform: translateX(-50%);
@@ -6825,7 +6826,7 @@ html:not(.dark) .chat-outline-panel {
   background: transparent;
   padding: 6px 8px;
   color: var(--biu-sidebar-fg);
-  font-size: 13px;
+  font-size: var(--biu-font-3);
   font-weight: 500;
   line-height: 1.35;
   text-align: left;
@@ -6847,7 +6848,7 @@ html:not(.dark) .chat-outline-item.is-active {
 
 .chat-outline-item.is-h2 {
   padding-left: 22px;
-  font-size: 12px;
+  font-size: var(--biu-font-2);
   font-weight: 450;
   opacity: 0.88;
 }
@@ -7828,7 +7829,7 @@ html:not(.dark) .composer-plus {
   background: transparent;
   padding: 8px 10px;
   color: var(--biu-sidebar-fg);
-  font-size: 13px;
+  font-size: var(--biu-font-3);
   text-align: left;
   cursor: pointer;
 }
@@ -7910,7 +7911,7 @@ html:not(.dark) .composer-plus {
   border: 0;
   background: transparent;
   color: var(--biu-sidebar-fg-active);
-  font-size: 13px;
+  font-size: var(--biu-font-3);
   outline: none;
 }
 
@@ -7942,7 +7943,7 @@ html:not(.dark) .composer-plus {
   background: transparent;
   padding: 8px 12px;
   color: var(--biu-sidebar-fg);
-  font-size: 13px;
+  font-size: var(--biu-font-3);
   text-align: left;
   cursor: pointer;
 }
@@ -7970,7 +7971,7 @@ html:not(.dark) .composer-plus {
 .composer-model-item-tag {
   flex-shrink: 0;
   color: var(--biu-label-3);
-  font-size: 12px;
+  font-size: var(--biu-font-2);
 }
 
 .composer-model-check {
@@ -7981,7 +7982,7 @@ html:not(.dark) .composer-plus {
 .composer-model-empty {
   padding: 12px;
   color: var(--biu-label-3);
-  font-size: 13px;
+  font-size: var(--biu-font-3);
   line-height: 1.5;
 }
 
@@ -7992,7 +7993,7 @@ html:not(.dark) .composer-plus {
   background: var(--biu-hover);
   padding: 8px 10px;
   color: var(--biu-sidebar-fg-active);
-  font-size: 13px;
+  font-size: var(--biu-font-3);
   cursor: pointer;
 }
 
@@ -8370,7 +8371,7 @@ html.dark .composer-send:disabled {
   padding: 0 6px;
   color: var(--biu-tag, var(--biu-tag-blue));
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: var(--biu-font-3);
   font-weight: 500;
   letter-spacing: 0;
   line-height: 20px;
@@ -8613,7 +8614,7 @@ html.dark .composer-send:disabled {
 .mascot-dance-stage {
   position: fixed;
   inset: 0;
-  z-index: 200;
+  z-index: var(--biu-z-modal);
   pointer-events: none;
   overflow: hidden;
   isolation: isolate;

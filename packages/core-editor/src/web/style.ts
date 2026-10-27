@@ -37,7 +37,7 @@ export const PAGE_EDITOR_STYLE = `
 .page-editor .react-renderer.node-deck{display:block;width:100%;min-width:0;border:0;outline:none;box-shadow:none}
 .page-editor .react-renderer.node-deck.ProseMirror-selectednode{outline:none;box-shadow:none}
 .page-editor [data-deck]{display:flex;flex-direction:column;width:100%;min-width:0;margin:12px 0;border:var(--biu-border-1) solid var(--biu-border);border-radius:12px;background:transparent;overflow:hidden}
-.page-editor .page-deck.is-focus{position:fixed;inset:12px;z-index:80;margin:0;background:transparent}
+.page-editor .page-deck.is-focus{position:fixed;inset:12px;z-index:var(--biu-z-float);margin:0;background:transparent}
 .page-editor .page-deck-bar{display:flex;align-items:center;justify-content:flex-end;gap:2px;padding:6px 8px}
 .page-editor .page-deck-icon,.page-editor .layout-picker-btn{display:inline-flex;align-items:center;justify-content:center;width:var(--biu-control-h-md);height:var(--biu-control-h-md);margin:0;border:0;border-radius:6px;padding:0;background:transparent;color:var(--biu-label-3);cursor:pointer}
 .page-editor .page-deck-icon:hover,.page-editor .layout-picker-btn:hover,.page-editor .layout-picker-btn.is-on,.page-editor .page-deck-icon:hover svg{background:var(--biu-hover);color:var(--biu-label)}
@@ -114,7 +114,7 @@ export const PAGE_EDITOR_STYLE = `
 .page-editor .tiptap .is-empty::before{content:attr(data-placeholder);float:left;height:0;pointer-events:none;color:var(--biu-placeholder)}
 html:not(.dark) .page-editor .tiptap p.is-editor-empty:first-child::before,
 html:not(.dark) .page-editor .tiptap .is-empty::before{color:var(--biu-sidebar-fg)}
-.page-bubble{z-index:80;background:var(--biu-sidebar);border:var(--biu-border-1) solid var(--biu-border);box-shadow:var(--biu-shadow-2);border-radius:10px;overflow:hidden}
+.page-bubble{z-index:var(--biu-z-float);background:var(--biu-sidebar);border:var(--biu-border-1) solid var(--biu-border);box-shadow:var(--biu-shadow-2);border-radius:10px;overflow:hidden}
 html:not(.dark) .page-bubble{box-shadow:none}
 .page-slash{position:fixed;z-index:10000;width:240px;max-height:min(52vh,280px);padding:4px;display:flex;flex-direction:column;gap:0;overflow:hidden;background:var(--biu-sidebar);border:var(--biu-border-1) solid var(--biu-border);box-shadow:var(--biu-shadow-2);border-radius:8px}
 .page-slash-head,.page-slash-empty{padding:6px 8px 4px;color:var(--biu-label-3);font-size:var(--biu-font-1);font-weight:600}
