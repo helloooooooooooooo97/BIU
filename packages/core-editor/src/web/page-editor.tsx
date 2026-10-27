@@ -18,7 +18,15 @@ import { bindEditorTextHost, getPick } from '@biu/core-pick/web'
 import { markdownLocusFromElement, markdownLocusFromSelection } from './markdown-locus.ts'
 import { FindBar, isFindHotkey } from './find-bar.tsx'
 import { applyEditorFind } from './find-plugin.ts'
-import { EDITOR_TONES, editorHighlightColor, editorTextColor } from './color-swatches.ts'
+import {
+  INK_TONES,
+  WASH_TONES,
+  isLastColorHotkey,
+  lastColorSwatch,
+  readLastEditorColor,
+  writeLastEditorColor,
+  type LastEditorColor,
+} from './color-swatches.ts'
 import { isSendChatHotkey, pickFromEditor, pickFromLocus } from './editor-ask.ts'
 
 const LOCAL_EDIT_MS = 600
@@ -93,62 +101,111 @@ function ColorMenus({
   const color = String(editor.getAttributes('textStyle').color ?? '')
   const highlight = String(editor.getAttributes('highlight').color ?? '')
 
-  const flyout = (kind: 'text' | 'mark') => {
-    const current = kind === 'text' ? color : highlight
-    return (
-      <div
-        className="page-color-menu"
-        role="menu"
-        aria-label={kind === 'text' ? '文字颜色' : '背景色'}
-        onMouseDown={holdSelection}
-      >
-        <div className="page-color-menu-h">{kind === 'text' ? '文字颜色' : '背景色'}</div>
+  const applyColor = (next: LastEditorColor | null) => {
+    if (!next) {
+      editor.chain().focus().unsetColor().unsetHighlight().run()
+      onOpen(null)
+      return
+    }
+    writeLastEditorColor(next)
+    if (next.kind === 'text') editor.chain().focus().setColor(next.value).run()
+    else editor.chain().focus().setHighlight({ color: next.value }).run()
+    onOpen(null)
+  }
+
+  const last = readLastEditorColor()
+  const lastSwatch = lastColorSwatch(last)
+
+  const flyout = () => (
+      <div className="page-color-menu" role="menu" aria-label="颜色" onMouseDown={holdSelection}>
+        <div className="page-color-recent-h">
+          <span>上次使用颜色</span>
+          <span className="page-color-kbd">⌘+Shift+H</span>
+        </div>
+        <div className="page-color-recent">
+          {last ? (
+            <button
+              type="button"
+              role="menuitem"
+              aria-label="上次使用颜色"
+              data-testid="page-color-last"
+              className={last.kind === 'mark' ? 'page-color-wash' : undefined}
+              style={{ background: lastSwatch }}
+              onMouseDown={holdSelection}
+              onClick={() => applyColor(last)}
+            />
+          ) : null}
+        </div>
+        <div className="page-color-menu-h">Text Colorful</div>
         <div className="page-color-grid">
-          {EDITOR_TONES.map((tone) => {
-            const value = kind === 'text' ? editorTextColor(tone) : editorHighlightColor(tone)
-            const on = current.toLowerCase() === value.toLowerCase()
+          <button
+            type="button"
+            role="menuitemradio"
+            className={!color ? 'page-color-none is-on' : 'page-color-none'}
+            aria-checked={!color}
+            aria-label="默认文字色"
+            data-testid="page-color-none"
+            onMouseDown={holdSelection}
+            onClick={() => {
+              editor.chain().focus().unsetColor().run()
+              onOpen(null)
+            }}
+          />
+          {INK_TONES.map((tone) => {
+            const on = color === tone.value
             return (
               <button
-                key={tone}
+                key={tone.id}
                 type="button"
                 role="menuitemradio"
                 className={on ? 'is-on' : undefined}
                 aria-checked={on}
-                aria-label={tone}
-                data-testid={kind === 'text' ? `page-color-${tone}` : `page-highlight-${tone}`}
-                style={
-                  kind === 'text'
-                    ? { color: editorTextColor(tone), background: 'transparent' }
-                    : { background: editorHighlightColor(tone), color: 'var(--biu-on-accent)' }
-                }
+                aria-label={tone.label}
+                data-testid={`page-color-${tone.id}`}
+                style={{ color: tone.value }}
                 onMouseDown={holdSelection}
-                onClick={() => {
-                  if (kind === 'text') editor.chain().focus().setColor(value).run()
-                  else editor.chain().focus().toggleHighlight({ color: value }).run()
-                  onOpen(null)
-                }}
+                onClick={() => applyColor({ kind: 'text', value: tone.value })}
               >
-                {kind === 'text' ? 'A' : ''}
+                A
               </button>
             )
           })}
         </div>
-        <button
-          type="button"
-          className="page-color-clear"
-          data-testid={kind === 'text' ? 'page-color-none' : 'page-highlight-none'}
-          onMouseDown={holdSelection}
-          onClick={() => {
-            if (kind === 'text') editor.chain().focus().unsetColor().run()
-            else editor.chain().focus().unsetHighlight().run()
-            onOpen(null)
-          }}
-        >
-          清除
-        </button>
+        <div className="page-color-menu-h">Background Colorful</div>
+        <div className="page-color-grid">
+          <button
+            type="button"
+            role="menuitemradio"
+            className={!highlight ? 'page-color-none is-on' : 'page-color-none'}
+            aria-checked={!highlight}
+            aria-label="无背景色"
+            data-testid="page-highlight-none"
+            onMouseDown={holdSelection}
+            onClick={() => {
+              editor.chain().focus().unsetHighlight().run()
+              onOpen(null)
+            }}
+          />
+          {WASH_TONES.map((tone) => {
+            const on = highlight === tone.value
+            return (
+              <button
+                key={tone.id}
+                type="button"
+                role="menuitemradio"
+                className={on ? 'page-color-wash is-on' : 'page-color-wash'}
+                aria-checked={on}
+                aria-label={tone.label}
+                data-testid={`page-highlight-${tone.id}`}
+                style={{ background: tone.swatch ?? tone.value }}
+                onMouseDown={holdSelection}
+                onClick={() => applyColor({ kind: 'mark', value: tone.value })}
+              />
+            )
+          })}
+        </div>
       </div>
     )
-  }
 
   return (
     <>
@@ -173,7 +230,7 @@ function ColorMenus({
           </button>
         }
       >
-        {flyout('text')}
+        {flyout()}
       </HeadlessPopover>
       <HeadlessPopover
         open={open === 'mark'}
@@ -197,7 +254,7 @@ function ColorMenus({
           </button>
         }
       >
-        {flyout('mark')}
+        {flyout()}
       </HeadlessPopover>
     </>
   )
@@ -589,6 +646,16 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
       event.preventDefault()
       event.stopPropagation()
       sendToChat()
+      return
+    }
+    if (isLastColorHotkey(event) && !source && editor && !editor.isDestroyed) {
+      const last = readLastEditorColor()
+      if (last) {
+        event.preventDefault()
+        event.stopPropagation()
+        if (last.kind === 'text') editor.chain().focus().setColor(last.value).run()
+        else editor.chain().focus().setHighlight({ color: last.value }).run()
+      }
       return
     }
     const atDocStart = source

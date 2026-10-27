@@ -97,12 +97,12 @@ const CSS = `
 .fsdb-layout-opt:hover{background:var(--biu-hover);color:var(--biu-label)}
 .fsdb-layout-opt.is-active{color:var(--biu-business);background:color-mix(in srgb,var(--biu-business) 10%,var(--biu-input))}
 .fsdb-create-group{position:relative;display:inline-flex;align-items:center;margin-left:8px}
-.fsdb-create-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:var(--biu-control-h-md);margin-left:0;padding:0 10px;border:0;border-radius:4px 0 0 4px;background:var(--biu-pick,var(--biu-pick));color:#fff;cursor:pointer;font:inherit;font-size:var(--biu-font-4);font-weight:600;white-space:nowrap}
+.fsdb-create-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:var(--biu-control-h-md);margin-left:0;padding:0 10px;border:0;border-radius:4px 0 0 4px;background:var(--biu-pick,var(--biu-pick));color:var(--biu-on-accent);cursor:pointer;font:inherit;font-size:var(--biu-font-4);font-weight:600;white-space:nowrap}
 .fsdb-create-btn:hover{background:var(--biu-pick,var(--biu-pick));filter:brightness(.92)}
 .fsdb-create-scope-wrap{display:inline-flex;align-items:stretch}
-.fsdb-create-scope{display:inline-flex;align-items:center;justify-content:center;gap:2px;height:var(--biu-control-h-md);padding:0 6px;border:0;border-left:1px solid color-mix(in srgb,#fff 35%,transparent);border-radius:0 4px 4px 0;background:var(--biu-pick,var(--biu-pick));color:#fff;cursor:pointer}
+.fsdb-create-scope{display:inline-flex;align-items:center;justify-content:center;gap:2px;height:var(--biu-control-h-md);padding:0 6px;border:0;border-left:1px solid color-mix(in srgb,#fff 35%,transparent);border-radius:0 4px 4px 0;background:var(--biu-pick,var(--biu-pick));color:var(--biu-on-accent);cursor:pointer}
 .fsdb-create-scope:hover{filter:brightness(.92)}
-.fsdb-page .fsdb-create-btn,.fsdb-page .fsdb-create-scope,.fsdb-page .fsdb-create-scope .fsdb-ui-glyph{color:#fff;-webkit-text-fill-color:#fff}
+.fsdb-page .fsdb-create-btn,.fsdb-page .fsdb-create-scope,.fsdb-page .fsdb-create-scope .fsdb-ui-glyph{color:var(--biu-on-accent);-webkit-text-fill-color:var(--biu-on-accent)}
 .fsdb-page .fsdb-create-scope .fsdb-ui-glyph{background:#fff}
 .fsdb-create-scope-menu{position:absolute;top:calc(100% + 4px);right:0;z-index:40;display:flex;flex-direction:column;gap:2px;min-width:120px;padding:6px;background:var(--biu-sidebar);border:1px solid var(--biu-border);border-radius:10px;box-shadow:var(--biu-shadow)}
 .fsdb-create-scope-menu button{display:inline-flex;align-items:center;gap:6px;width:100%;border:0;border-radius:7px;padding:6px 8px;background:transparent;color:var(--biu-sidebar-fg);font:inherit;font-size:var(--biu-font-4);font-weight:500;cursor:pointer;text-align:left}
