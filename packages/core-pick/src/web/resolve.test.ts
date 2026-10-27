@@ -694,6 +694,51 @@ test('html surface pick carries page path and markdown lines like a block', () =
   root.remove()
 })
 
+test('pick reaches stamped nodes inside an open sandbox shadow', () => {
+  const root = document.createElement('div')
+  root.className = 'tiptap'
+  const block = document.createElement('div')
+  block.className = 'page-block'
+  block.setAttribute('data-page-block', 'html')
+  block.setAttribute('data-page-block-plugin', 'page-html-blocks')
+  block.setAttribute('data-biu-plugin', 'page-html-blocks')
+  const host = document.createElement('div')
+  host.setAttribute('data-html-sandbox', '')
+  block.append(host)
+  root.append(block)
+  document.body.append(root)
+  const shadow = host.attachShadow({ mode: 'open' })
+  const inner = document.createElement('button')
+  inner.textContent = '点过 0 次'
+  inner.setAttribute('data-biu-kind', 'html')
+  inner.setAttribute('data-biu-id', 'html:0-x:0/1')
+  inner.setAttribute('data-biu-label', '点过 0 次')
+  inner.setAttribute('data-biu-plugin', 'page-html-blocks')
+  shadow.append(inner)
+  stubBox(inner, 10, 10, 80, 20)
+  stubBox(host, 0, 0, 100, 80)
+  stubBox(block, 0, 0, 100, 80)
+  bindEditorTextHost(root, {
+    path: '/pages/p002',
+    locusFromSelection: () => null,
+    locusFromElement: (el) =>
+      el === block || block.contains(el) || host.contains(el) || inner === el
+        ? { start_line: 3, end_line: 8, text: ':::pageBlock\nexport default function App() {}\n:::' }
+        : null,
+  })
+  const hit = resolvePickFromNode(inner, '/s/abc')
+  assert.ok(hit)
+  assert.equal(hit.ref.kind, 'html')
+  assert.equal(hit.ref.id, 'html:0-x:0/1')
+  assert.equal(hit.ref.plugin, 'page-html-blocks')
+  assert.equal(hit.ref.path, '/pages/p002')
+  assert.equal(hit.ref.start_line, 3)
+  const boxed = resolvePicksInRect({ left: 8, top: 8, width: 40, height: 20 }, '/s/abc', root)
+  assert.equal(boxed.some((item) => item.ref.id === 'html:0-x:0/1'), true)
+  bindEditorTextHost(root, null)
+  root.remove()
+})
+
 test('html block pick names the inner node even when the host is the plugin shell', () => {
   const root = document.createElement('div')
   root.className = 'tiptap'

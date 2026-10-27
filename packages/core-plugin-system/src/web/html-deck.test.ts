@@ -84,6 +84,14 @@ test('poster html with height 100% and absolute children fills a host', () => {
   assert.equal(HTML_FILL_HOST_PX, 280)
 })
 
+test('jsx sandbox mounts a react root and flushes before pick stamping', async () => {
+  const { readFile } = await import('node:fs/promises')
+  const { resolve } = await import('node:path')
+  const src = await readFile(resolve(import.meta.dirname, '../../../../.plugin-dev/page-html-blocks/web/sandbox.ts'), 'utf8')
+  assert.match(src, /flushSync/)
+  assert.match(src, /data-html-react-root/)
+})
+
 test('html block compile accepts markup and rejects bad scripts', async () => {
   const { compileHtmlSource } = await import('../../../../.plugin-dev/page-html-blocks/shared/compile.ts')
   assert.deepEqual(compileHtmlSource('<div class="x">ok</div>'), { ok: true, mode: 'markup' })

@@ -111,14 +111,23 @@ function HtmlSandbox({
     const host = hostRef.current
     if (!host) return
     const root = host.shadowRoot ?? host.attachShadow({ mode: 'open' })
+    let mo: MutationObserver | undefined
     try {
       mountHtmlSandbox(root, html, { live })
       setError('')
       onStamp?.(root)
+      const target = root.querySelector('[data-html-sandbox-body], [data-html-react-root]')
+      if (target && onStamp) {
+        mo = new MutationObserver(() => onStamp(root))
+        mo.observe(target, { childList: true, subtree: true })
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     }
-    return () => unmountHtmlSandbox(root)
+    return () => {
+      mo?.disconnect()
+      unmountHtmlSandbox(root)
+    }
   }, [html, live])
   return (
     <>
@@ -817,7 +826,7 @@ function HtmlCard({ data, update, writable }: BlockProps) {
             onStamp={(root) => {
               const host = hostRef.current?.closest('[data-page-block]') ?? null
               const key = htmlBlockKey(host, html)
-              const body = root.querySelector('[data-html-sandbox-body]')
+              const body = root.querySelector('[data-html-sandbox-body], [data-html-react-root]')
               if (body instanceof HTMLElement) stampHtmlPickSurfaces(body, `${key}-doc`, { plugin: name })
             }}
           />

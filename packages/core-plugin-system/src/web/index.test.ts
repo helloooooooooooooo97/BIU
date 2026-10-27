@@ -264,6 +264,8 @@ test('html page blocks register plugin id for slash', async () => {
   assert.match(html, /biu:asset-changed/)
   assert.match(html, /setRev/)
   assert.match(html, /stampHtmlPickSurfaces/)
+  assert.match(html, /data-html-react-root/)
+  assert.match(html, /MutationObserver/)
   assert.match(html, /data-biu-ignore/)
   assert.match(html, /data-page-block-expand/)
   assert.match(html, /html-deck/)
