@@ -3,17 +3,13 @@ import { createPortal } from 'react-dom'
 import { compileHtmlSource } from '../shared/compile.ts'
 import { bindHtmlSlide, collectHtmlSlides, cssBoxSize, htmlDeckEnabled, htmlDeckIndex, htmlDeckKeyAction, htmlLooksFillLayout, HTML_FILL_HOST_PX, stepHtmlDeck } from './html-deck.ts'
 import { mountHtmlSandbox, unmountHtmlSandbox } from './sandbox.ts'
-import { htmlBlockKey, stampHtmlPickSurfaces, stampHtmlSource } from './stamp-picks.ts'
+import { htmlBlockKey, stampHtmlPickSurfaces } from './stamp-picks.ts'
 
 const React = globalThis.React
 const { useEffect, useLayoutEffect, useMemo, useRef, useState } = React
 
 function assetName(file: string) {
   return file.replace(/^assets\//, '')
-}
-
-function newHtmlFile() {
-  return `assets/html-${crypto.randomUUID().slice(0, 8)}.html`
 }
 
 function assetEtag(raw: string) {
@@ -23,15 +19,6 @@ function assetEtag(raw: string) {
 async function loadHtmlAsset(file: string, fallback: string, bust = false) {
   const name = assetName(file)
   const res = await fetch(`/api/page/file/${encodeURIComponent(name)}${bust ? `?t=${Date.now()}` : ''}`)
-  if (res.status === 404) {
-    if (bust) return { html: fallback, etag: '' }
-    const created = await fetch(`/api/page/file/${encodeURIComponent(name)}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
-      body: fallback,
-    })
-    return { html: fallback, etag: assetEtag(String(created.headers.get('etag') ?? '')) }
-  }
   if (!res.ok) return { html: fallback, etag: '' }
   return { html: await res.text(), etag: assetEtag(String(res.headers.get('etag') ?? '')) }
 }
@@ -60,17 +47,12 @@ function useHtmlSource(
   htmlRef.current = html
   fileRef.current = file
   useEffect(() => {
-    if (file) return
-    update({ file: newHtmlFile(), html: undefined })
-  }, [file, update])
-  useEffect(() => {
     if (!file) return
     let gone = false
     void loadHtmlAsset(file, htmlRef.current || inline || sample, rev > 0).then((loaded) => {
       if (gone) return
       etagRef.current = loaded.etag
       setHtml(loaded.html)
-      if (inline) update({ html: undefined })
     })
     return () => {
       gone = true
@@ -134,7 +116,7 @@ function HtmlSandbox({
     <>
       <div
         ref={hostRef}
-        data-testid={live ? 'page-html-sandbox' : 'page-html-static-host'}
+        data-testid="page-html-sandbox"
         data-html-sandbox=""
         data-page-block-capture=""
         style={{ display: 'block', width: '100%', height: '100%', minHeight: live ? 80 : undefined }}
@@ -266,9 +248,6 @@ function ExpandGlyph({ shrink }: { shrink?: boolean }) {
 }
 
 const inkFace = "'Helvetica Neue', Arial, sans-serif"
-const MAG_INK = '#0a0a0a'
-const MAG_PAPER = '#ece7dc'
-const MAG_BLUE = '#1c7cff'
 
 const barBtn: Record<string, unknown> = {
   cursor: 'pointer',
@@ -354,7 +333,6 @@ function HtmlDeckOverlay({
   }, [])
 
   if (!slide) return null
-  const stamped = slide.kind === 'html' ? stampHtmlSource(slide.html, `deck-${index}`, name) : ''
   const fill = {
     position: 'absolute' as const,
     inset: 0,
@@ -400,17 +378,9 @@ function HtmlDeckOverlay({
           boxSizing: 'border-box',
         }}
       >
-        {slide.kind === 'htmlframe' ? (
-          <div data-testid="html-deck-slide" style={{ ...fill, background: MAG_INK }}>
-            <HtmlSandbox html={slide.html} live />
-          </div>
-        ) : (
-          <div
-            data-testid="html-deck-slide"
-            style={{ ...fill, overflow: 'auto', background: 'transparent' }}
-            dangerouslySetInnerHTML={{ __html: stamped }}
-          />
-        )}
+        <div data-testid="html-deck-slide" style={{ ...fill, background: 'var(--biu-color-bg)' }}>
+          <HtmlSandbox html={slide.html} live />
+        </div>
       </div>
       <div
         data-testid="html-deck-nav"
@@ -697,125 +667,30 @@ function FloatBar({
   )
 }
 
-/* ============================================================
-   1) kind=html：直接渲染（无 iframe，无脚本）——内容裸渲染，无外框
-   ============================================================ */
-
-const HTML_EDITORIAL_SAMPLE = `<div style="box-sizing:border-box;min-height:100%;height:100%;width:100%;font-family:'Helvetica Neue','Arial',sans-serif;background:${MAG_INK};border:2px solid ${MAG_PAPER};color:${MAG_PAPER};margin:0;display:flex;flex-direction:column">
-  <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid ${MAG_PAPER};padding:8px 12px;padding-right:220px;font-size:11px;letter-spacing:.15em">
-    <span style="font-weight:700">现代 ・ 美式</span><span style="font-weight:800">创立 2024</span>
-  </div>
-  <div style="background:${MAG_BLUE};color:#fff;font-size:34px;font-weight:900;line-height:1.05;padding:16px;letter-spacing:-.02em">丰富<br>排版，<br>不跑脚本。</div>
-  <div style="display:flex;gap:0;flex:1">
-    <div style="flex:1.4;padding:12px;font-size:13px;line-height:1.7;font-weight:500">夜间美式杂志网格。静态富排版，不执行脚本。纯 HTML / CSS，用来做卡片、表格、配色和干净的刊头。</div>
-    <div style="flex:1;border-left:2px solid ${MAG_PAPER};display:flex;flex-direction:column;gap:6px;padding:12px;font-size:10px;font-weight:800">
-      <span style="background:#ffd400;color:#0a0a0a;padding:2px 6px">静态</span>
-      <span style="background:#ff2a6d;color:#fff;padding:2px 6px">无脚本</span>
-      <span style="border:1.5px solid ${MAG_PAPER};padding:2px 6px">直出</span>
-    </div>
-  </div>
-</div>`
-
-const HTML_DIRECT_SAMPLE = HTML_EDITORIAL_SAMPLE
-
-const HTML_FILL_CSS = `.html-direct-fill-inner{height:100%;min-height:100%}.html-direct-fill-inner>:first-child{height:100%!important;min-height:100%;box-sizing:border-box}`
-
-function HtmlDirectCard({ data, update, writable }: BlockProps) {
-  const ro = !writable
-  const source = useHtmlSource(data, update, HTML_DIRECT_SAMPLE)
-  const html = source.html
-  const width = data.width
-  const height = data.height
-  const fill = htmlLooksFillLayout(html)
-  const fillHost = fill && (height == null || height === '')
-  const sized = (width != null && width !== '') || (height != null && height !== '') || fillHost
-  const deckOn = htmlDeckEnabled(data.deck)
-  const [editing, setEditing] = useState(false)
-  const [hover, setHover] = useState(false)
-  const hostRef = useRef<HTMLDivElement | null>(null)
-  const deck = useHtmlDeck(hostRef, 'html', html, { width, height, deck: deckOn })
-  const stamped = useMemo(
-    () => stampHtmlSource(html, htmlBlockKey(hostRef.current?.closest('[data-page-block]') ?? null, html), name),
-    [html],
-  )
-  const compiled = useMemo(() => compileHtmlSource(html), [html])
-
-  return (
-    <ReUI>
-    <div
-      ref={hostRef}
-      data-testid="page-html-direct"
-      className={fill ? 'html-direct-fill' : undefined}
-      style={{
-        position: 'relative',
-        width: cssBoxSize(width) ?? '100%',
-        height: cssBoxSize(height) ?? (fillHost ? HTML_FILL_HOST_PX : undefined),
-        maxWidth: '100%',
-        overflow: sized ? 'auto' : undefined,
-        boxSizing: 'border-box',
-      }}
-      onPointerEnter={() => setHover(true)}
-      onPointerLeave={() => setHover(false)}
-    >
-      {fill ? <style>{HTML_FILL_CSS}</style> : null}
-      {(hover || editing) && (
-        <FloatBar
-          editing={editing}
-          setEditing={setEditing}
-          ro={ro}
-          onExpand={deck.start}
-          deck={deckOn}
-          onDeck={(next) => update({ deck: next })}
-          sized={sized}
-          onResetSize={() => update({ width: undefined, height: undefined })}
-        />
-      )}
-      {editing ? (
-        <SourceEditor html={html} onChange={source.save} compile={compiled} />
-      ) : (
-        <div
-          className={fill ? 'html-direct-fill-inner' : undefined}
-          style={{ overflowX: sized ? undefined : 'auto', height: fill ? '100%' : undefined }}
-          dangerouslySetInnerHTML={{ __html: stamped }}
-        />
-      )}
-      {ro || editing ? null : <SizeGrip reveal={hover} boxRef={hostRef} onSize={(next) => update(next)} />}
-      {deck.overlay}
-    </div>
-    </ReUI>
-  )
-}
-
-/* ============================================================
-   2) kind=htmlframe：文档内 Shadow 沙箱（可跑脚本 / React），继承全局 --biu-* 与样式表
-   ============================================================ */
-
-const HTML_FRAME_SAMPLE = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-html,body{margin:0;height:100%;background:${MAG_INK};color:${MAG_PAPER}}
+const HTML_SAMPLE = `<style>
 @keyframes mag-pulse{50%{opacity:.35}}
 @keyframes mag-rail{from{transform:translateX(0)}to{transform:translateX(-50%)}}
-.mag{font-family:'Helvetica Neue',Arial,sans-serif;background:${MAG_INK};border:2px solid ${MAG_PAPER};color:${MAG_PAPER};margin:0;min-height:100%;box-sizing:border-box;display:flex;flex-direction:column}
-.mag-head{display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid ${MAG_PAPER};padding:8px 12px;padding-right:220px;font-size:11px;letter-spacing:.15em}
-.mag-hero{background:${MAG_BLUE};color:#fff;font-size:34px;font-weight:900;line-height:1.05;padding:16px;letter-spacing:-.02em}
+.mag{min-height:100%;height:100%;box-sizing:border-box;display:flex;flex-direction:column;margin:0;background:var(--biu-color-bg);color:var(--biu-color-text);border:var(--biu-stroke-width) solid var(--biu-color-border)}
+.mag-head{display:flex;justify-content:space-between;align-items:center;border-bottom:var(--biu-stroke-width) solid var(--biu-color-border);padding:8px 12px;font-size:var(--biu-font-size-2);letter-spacing:.15em}
+.mag-hero{background:var(--biu-color-emphasis);color:var(--biu-color-on-emphasis);font-size:34px;font-weight:var(--biu-font-weight-medium);line-height:1.05;padding:16px;letter-spacing:-.02em}
 .mag-body{display:flex;gap:0;flex:1}
-.mag-copy{flex:1.4;padding:12px;font-size:13px;line-height:1.7;font-weight:500}
-.mag-side{flex:1;border-left:2px solid ${MAG_PAPER};display:flex;flex-direction:column;gap:6px;padding:12px;font-size:10px;font-weight:800}
+.mag-copy{flex:1.4;padding:12px;font-size:var(--biu-font-size-4);line-height:1.7}
+.mag-side{flex:1;border-left:var(--biu-stroke-width) solid var(--biu-color-border);display:flex;flex-direction:column;gap:6px;padding:12px;font-size:var(--biu-font-size-2);font-weight:var(--biu-font-weight-medium)}
 .mag-live{display:inline-flex;align-items:center;gap:6px}
-.mag-dot{width:7px;height:7px;border-radius:50%;background:#ff2a6d;animation:mag-pulse 1.1s ease-in-out infinite}
-.mag-rail-wrap{overflow:hidden;border-top:2px solid ${MAG_PAPER}}
-.mag-rail{display:flex;width:max-content;animation:mag-rail 12s linear infinite;font-size:10px;font-weight:800;letter-spacing:.18em;padding:6px 0}
+.mag-dot{width:7px;height:7px;border-radius:50%;background:var(--biu-color-emphasis);animation:mag-pulse 1.1s ease-in-out infinite}
+.mag-rail-wrap{overflow:hidden;border-top:var(--biu-stroke-width) solid var(--biu-color-border)}
+.mag-rail{display:flex;width:max-content;animation:mag-rail 12s linear infinite;font-size:var(--biu-font-size-2);letter-spacing:.18em;padding:6px 0}
 .mag-rail span{padding:0 18px;white-space:nowrap}
-.mag-hit{cursor:pointer;background:#ffd400;color:#0a0a0a;padding:2px 6px;border:0;font:inherit;font-weight:800}
-</style></head><body>
+.mag-hit{cursor:pointer;background:var(--biu-color-emphasis);color:var(--biu-color-on-emphasis);padding:2px 6px;border:0;font:inherit;font-weight:var(--biu-font-weight-medium)}
+</style>
 <div class="mag">
-  <div class="mag-head"><span style="font-weight:700">现代 ・ 美式</span><span class="mag-live"><span class="mag-dot"></span><span id="mag-clock" style="font-weight:800">创立 2024</span></span></div>
+  <div class="mag-head"><span>现代 ・ 美式</span><span class="mag-live"><span class="mag-dot"></span><span id="mag-clock">创立 2024</span></span></div>
   <div class="mag-hero">丰富<br>排版，<br><span id="mag-line">会跑脚本。</span></div>
   <div class="mag-body">
-    <div class="mag-copy">同一夜间刊头，沙箱里跑脚本：时钟、词条轮播、点击计数。版式与静态块一致，只是内容会动。</div>
+    <div class="mag-copy">沙箱已注入 --biu-*、宿主样式表和 document。这里只写片段，不生成完整 HTML 文件。</div>
     <div class="mag-side">
-      <button type="button" class="mag-hit" id="mag-hit">动态 · 点我 <span id="mag-n">0</span></button>
-      <span style="background:#ff2a6d;color:#fff;padding:2px 6px">有脚本</span>
-      <span style="border:1.5px solid ${MAG_PAPER};padding:2px 6px">沙箱</span>
+      <button type="button" class="mag-hit" id="mag-hit">点我 <span id="mag-n">0</span></button>
+      <span style="border:var(--biu-stroke-width) solid var(--biu-color-border);padding:2px 6px">沙箱</span>
     </div>
   </div>
   <div class="mag-rail-wrap"><div class="mag-rail" id="mag-rail"><span>NIGHT ISSUE</span><span>LIVE TYPE</span><span>NEW YORK GRID</span><span>NIGHT ISSUE</span><span>LIVE TYPE</span><span>NEW YORK GRID</span></div></div>
@@ -846,45 +721,52 @@ html,body{margin:0;height:100%;background:${MAG_INK};color:${MAG_PAPER}}
     if(count) count.textContent=String(n);
   });
 })();
-</script>
-</body></html>`
+</script>`
 
-function HtmlFrameCard({ data, update, writable }: BlockProps) {
+function HtmlCard({ data, update, writable }: BlockProps) {
   const ro = !writable
-  const source = useHtmlSource(data, update, HTML_FRAME_SAMPLE)
+  const source = useHtmlSource(data, update, HTML_SAMPLE)
   const html = source.html
-  const height = Number(data.height) || 300
+  const width = data.width
+  const height = data.height
+  const fill = htmlLooksFillLayout(html)
+  const fillHost = fill && (height == null || height === '')
+  const sized = (width != null && width !== '') || (height != null && height !== '') || fillHost
   const deckOn = htmlDeckEnabled(data.deck)
   const [editing, setEditing] = useState(false)
   const [hover, setHover] = useState(false)
   const hostRef = useRef<HTMLDivElement | null>(null)
-  const deck = useHtmlDeck(hostRef, 'htmlframe', html, { height, deck: deckOn })
+  const deck = useHtmlDeck(hostRef, 'html', html, { width, height, deck: deckOn })
   const compiled = useMemo(() => compileHtmlSource(html), [html])
 
   return (
     <ReUI>
     <div
       ref={hostRef}
-      data-testid="page-html-frame"
-      style={{ position: 'relative', width: '100%', height }}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
+      data-testid="page-html-block"
+      className={fill ? 'html-direct-fill' : undefined}
+      style={{
+        position: 'relative',
+        width: cssBoxSize(width) ?? '100%',
+        height: cssBoxSize(height) ?? (fillHost ? HTML_FILL_HOST_PX : undefined),
+        maxWidth: '100%',
+        overflow: sized ? 'auto' : undefined,
+        boxSizing: 'border-box',
+      }}
+      onPointerEnter={() => setHover(true)}
+      onPointerLeave={() => setHover(false)}
     >
       {(hover || editing) && (
-        <FloatBar editing={editing} setEditing={setEditing} ro={ro} onExpand={deck.start} deck={deckOn} onDeck={(next) => update({ deck: next })}>
-          {ro ? null : (
-            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '0 8px', color: '#111', fontSize: 10, fontWeight: 800, letterSpacing: '.15em', borderLeft: '2px solid #111' }}>
-              H
-              <input
-                type="number"
-                min={80}
-                value={height}
-                onChange={(e) => update({ height: Number(e.target.value) || 300 })}
-                style={{ width: 52, border: '2px solid #111', borderRadius: 0, background: 'var(--biu-color-bg)', color: '#111', padding: '1px 4px', fontSize: 12, fontFamily: inkFace }}
-              />
-            </label>
-          )}
-        </FloatBar>
+        <FloatBar
+          editing={editing}
+          setEditing={setEditing}
+          ro={ro}
+          onExpand={deck.start}
+          deck={deckOn}
+          onDeck={(next) => update({ deck: next })}
+          sized={sized}
+          onResetSize={() => update({ width: undefined, height: undefined })}
+        />
       )}
       {editing ? (
         <SourceEditor html={html} onChange={source.save} compile={compiled} />
@@ -900,6 +782,7 @@ function HtmlFrameCard({ data, update, writable }: BlockProps) {
           }}
         />
       )}
+      {ro || editing ? null : <SizeGrip reveal={hover} boxRef={hostRef} onSize={(next) => update(next)} />}
       {deck.overlay}
     </div>
     </ReUI>
@@ -936,25 +819,26 @@ export function apply(ctx: {
   ctx.pageEditor.registerBlock({
     kind: 'html',
     plugin: name,
-    label: '静态HTML',
+    label: 'HTML',
     blockType: 'html',
     blockTypeLabel: 'HTML',
-    hint: 'HTML/CSS 卡片和刊头，不跑脚本；源码存附件',
-    aliases: ['html', 'html直', '静态html', '排版', '直接渲染', '静态渲染', '静态演示'],
+    hint: '沙箱里跑 HTML / CSS / 脚本，继承全局 --biu-*',
+    aliases: ['html', 'html直', '静态html', '动态html', '排版', '沙箱', 'iframe', 'htmlf', 'frame', '小网页'],
     assets: htmlBlockAssets,
-    defaults: () => ({ file: newHtmlFile(), deck: true }),
-    View: HtmlDirectCard,
+    defaults: () => ({ html: HTML_SAMPLE, deck: true }),
+    View: HtmlCard,
   })
   ctx.pageEditor.registerBlock({
     kind: 'htmlframe',
     plugin: name,
-    label: '动态HTML',
+    label: 'HTML',
     blockType: 'html',
     blockTypeLabel: 'HTML',
-    hint: '文档内沙箱跑脚本/React，继承全局样式；源码存附件',
-    aliases: ['iframe', 'htmlf', 'frame', '幻灯片', 'slide', '沙箱', '小网页', '动态演示'],
+    hint: '沙箱里跑 HTML / CSS / 脚本',
+    aliases: [],
+    slash: false,
     assets: htmlBlockAssets,
-    defaults: () => ({ file: newHtmlFile(), height: 300, deck: true }),
-    View: HtmlFrameCard,
+    defaults: () => ({ html: HTML_SAMPLE, deck: true }),
+    View: HtmlCard,
   })
 }

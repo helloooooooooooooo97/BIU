@@ -348,6 +348,7 @@ export function slashCatalog(): SlashItem[] {
   for (const block of blocks) {
     const blockType = block.blockType ?? block.kind
     covered.add(block.plugin)
+    if (block.slash === false) continue
     map.set(block.kind, {
       id: block.kind,
       label: block.label,
