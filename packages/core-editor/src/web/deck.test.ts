@@ -14,12 +14,13 @@ function editorOf(markdown: string) {
   })
 }
 
-test('deck css grids the slide, not TipTap contentDOM wrapper', () => {
-  assert.match(PAGE_EDITOR_STYLE, /\[data-deck-slide\]\[data-layout=split\]/)
-  assert.match(PAGE_EDITOR_STYLE, /data-node-view-content-react/)
+test('deck css grids cells on the deck body', () => {
+  assert.match(PAGE_EDITOR_STYLE, /\[data-deck\]\[data-layout=split\] \.page-deck-body/)
+  assert.match(PAGE_EDITOR_STYLE, /\.page-deck-body\{display:grid/)
   assert.match(PAGE_EDITOR_STYLE, /react-renderer\.node-deck\{display:block;width:100%;min-width:0;border:0/)
   assert.match(PAGE_EDITOR_STYLE, /\[data-deck\]\{display:flex/)
   assert.match(PAGE_EDITOR_STYLE, /\[data-deck\]\{[^}]*background:transparent/)
+  assert.doesNotMatch(PAGE_EDITOR_STYLE, /data-deck-slide|page-deck-slides/)
 })
 
 test('slash lists Deck as a core container, not a page plugin', () => {
@@ -35,15 +36,12 @@ test('slash lists Deck as a core container, not a page plugin', () => {
   item!.command({ editor, range: { from: Math.max(1, from), to: editor.state.selection.from } })
   const deck = editor.getJSON().content?.find((node) => node.type === 'deck')
   assert.ok(deck)
-  assert.equal(deck?.content?.[0]?.type, 'deckSlide')
-  assert.equal(deck?.content?.[0]?.content?.[0]?.type, 'deckCell')
+  assert.equal(deck?.content?.[0]?.type, 'deckCell')
   editor.destroy()
 })
 
 test('deck markdown keeps nested pageBlock fences', () => {
-  const src = `:::deck {index=0}
-
-:::slide {layout=split}
+  const src = `:::deck {layout=split}
 
 :::cell
 :::pageBlock {kind=excalidraw plugin=page-excalidraw id=ab12cd34}
@@ -56,25 +54,24 @@ test('deck markdown keeps nested pageBlock fences', () => {
 :::
 
 :::
-
-:::
 `
   const fence = takeDeckFence(src)
   assert.ok(fence)
-  assert.equal(fence?.slides[0]?.layout, 'split')
-  assert.match(fence?.slides[0]?.cells[0] ?? '', /:::pageBlock \{kind=excalidraw/)
-  assert.match(fence?.slides[0]?.cells[0] ?? '', /assets\/board\.json/)
+  assert.equal(fence?.layout, 'split')
+  assert.match(fence?.cells[0] ?? '', /:::pageBlock \{kind=excalidraw/)
+  assert.match(fence?.cells[0] ?? '', /assets\/board\.json/)
   const editor = editorOf(src)
   const types: string[] = []
   editor.state.doc.descendants((node) => {
     types.push(node.type.name)
   })
   assert.equal(types.includes('deck'), true)
+  assert.equal(types.includes('deckSlide'), false)
   assert.equal(types.includes('deckCell'), true)
   assert.equal(types.includes('pageBlock'), true)
   const out = editor.getMarkdown()
-  assert.match(out, /:::deck/)
-  assert.match(out, /:::slide \{layout=split\}/)
+  assert.match(out, /:::deck \{layout=split\}/)
+  assert.doesNotMatch(out, /:::slide/)
   assert.match(out, /:::pageBlock \{kind=excalidraw plugin=page-excalidraw id=ab12cd34\}/)
   editor.destroy()
 })
@@ -95,37 +92,31 @@ test('deckCell accepts real block children: table and pageBlock', () => {
   const editor = editorOf('')
   editor.commands.insertContent({
     type: 'deck',
-    attrs: { index: 0 },
+    attrs: { layout: 'split' },
     content: [
       {
-        type: 'deckSlide',
-        attrs: { layout: 'split' },
+        type: 'deckCell',
         content: [
           {
-            type: 'deckCell',
+            type: 'table',
             content: [
               {
-                type: 'table',
+                type: 'tableRow',
                 content: [
-                  {
-                    type: 'tableRow',
-                    content: [
-                      { type: 'tableHeader', content: [{ type: 'paragraph', content: [{ type: 'text', text: '需求' }] }] },
-                      { type: 'tableHeader', content: [{ type: 'paragraph', content: [{ type: 'text', text: '方案' }] }] },
-                    ],
-                  },
+                  { type: 'tableHeader', content: [{ type: 'paragraph', content: [{ type: 'text', text: '需求' }] }] },
+                  { type: 'tableHeader', content: [{ type: 'paragraph', content: [{ type: 'text', text: '方案' }] }] },
                 ],
               },
             ],
           },
+        ],
+      },
+      {
+        type: 'deckCell',
+        content: [
           {
-            type: 'deckCell',
-            content: [
-              {
-                type: 'pageBlock',
-                attrs: { kind: 'excalidraw', plugin: 'page-excalidraw', id: 'ab12cd34', data: { file: 'assets/board.json' } },
-              },
-            ],
+            type: 'pageBlock',
+            attrs: { kind: 'excalidraw', plugin: 'page-excalidraw', id: 'ab12cd34', data: { file: 'assets/board.json' } },
           },
         ],
       },
@@ -136,6 +127,7 @@ test('deckCell accepts real block children: table and pageBlock', () => {
     names.add(node.type.name)
   })
   assert.equal(names.has('deck'), true)
+  assert.equal(names.has('deckSlide'), false)
   assert.equal(names.has('table'), true)
   assert.equal(names.has('pageBlock'), true)
   editor.destroy()

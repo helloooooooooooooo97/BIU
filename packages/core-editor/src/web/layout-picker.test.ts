@@ -16,7 +16,7 @@ test('layout picker is a reusable popover, not deck-only chrome', () => {
 
 test('deck chrome has no filled card background and no pager copy', () => {
   assert.match(PAGE_EDITOR_STYLE, /\[data-deck\]\{[^}]*background:transparent/)
-  assert.match(PAGE_EDITOR_STYLE, /\[data-deck-slide\]\{[^}]*background:transparent/)
+  assert.match(PAGE_EDITOR_STYLE, /\.page-deck-body\{[^}]*background:transparent/)
   assert.match(PAGE_EDITOR_STYLE, /\[data-deck-cell\]\{[^}]*background:transparent/)
   assert.doesNotMatch(PAGE_EDITOR_STYLE, /page-deck-nav/)
   const view = readFileSync(resolve(import.meta.dirname, './deck-view.tsx'), 'utf8')
