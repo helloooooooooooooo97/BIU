@@ -12,7 +12,7 @@ export function hostThemeCss() {
   for (const name of style) {
     if (name.startsWith('--')) vars.push(`${name}:${style.getPropertyValue(name).trim()}`)
   }
-  return `:host,:root,html,body{${vars.join(';')};color:inherit;font:inherit;box-sizing:border-box}*,*::before,*::after{box-sizing:inherit}`
+  return `:host,:root,html,body{${vars.join(';')};color:inherit;font:inherit;box-sizing:border-box}*,*::before,*::after{box-sizing:inherit}:host-context(html.pick-mode),:host-context(html.pick-mode) *{cursor:crosshair!important;user-select:none!important}`
 }
 
 export function adoptDocumentStyles(shadow: ShadowRoot) {

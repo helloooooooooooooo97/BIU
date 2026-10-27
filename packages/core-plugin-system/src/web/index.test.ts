@@ -290,8 +290,12 @@ test('html page blocks register plugin id for slash', async () => {
   assert.match(html, /requestFullscreen/)
   assert.match(html, /html-deck-expand/)
   assert.match(html, /html-size-grip/)
-  assert.match(html, /reveal=\{hover\}/)
-  assert.match(html, /if \(!show\) return null/)
+  assert.match(html, /拖动调整高度/)
+  assert.match(html, /cursor: 'ns-resize'/)
+  assert.match(html, /SANDBOX_DEFAULT_HEIGHT/)
+  assert.match(html, /height: SANDBOX_DEFAULT_HEIGHT/)
+  assert.doesNotMatch(html, /reveal=\{hover\}/)
+  assert.doesNotMatch(html, /if \(!show\) return null/)
   assert.doesNotMatch(html, /html-floatbar/)
   assert.doesNotMatch(html, /opacity: show \? 1 : 0/)
   assert.match(html, /deck: true/)
@@ -320,6 +324,7 @@ test('html page blocks register plugin id for slash', async () => {
   assert.match(html, /applyInline\(inline \|\| sample\)/)
   assert.doesNotMatch(html, /value=\{html\}/)
   assert.doesNotMatch(html, /setDraft\(e\.target\.value\)/)
+  assert.match(html, /data-testid="html-source"[\s\S]*border: 'none'/)
 })
 
 test('algorithm card drafts locally and saves on blur like html source', async () => {

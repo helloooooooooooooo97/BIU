@@ -49,7 +49,7 @@ function surfaceLabel(el: HTMLElement) {
 export function isHtmlPickSurface(el: Element, _root?: Element) {
   if (!(el instanceof HTMLElement)) return false
   if (SKIP.has(el.tagName)) return false
-  return HIT.has(el.tagName)
+  return HIT.has(el.tagName) || el.childElementCount === 0 || Boolean(el.textContent?.trim())
 }
 
 export function htmlBlockKey(host: Element | null, html: string) {
