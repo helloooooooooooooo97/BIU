@@ -559,7 +559,7 @@ body {
   height: 16px;
   padding: 0 5px;
   border-radius: var(--biu-radius-full);
-  background: #e24b4a;
+  background: var(--biu-danger);
   color: #fff;
   font-size: 10px;
   font-weight: 700;
@@ -2536,12 +2536,12 @@ html:not(.dark) .shell-workspace-menu-item.is-active .shell-workspace-menu-icon 
 
 .settings-account-action.is-danger {
   border-color: transparent;
-  background: #c2410c;
-  color: #fff;
+  background: var(--biu-warning);
+  color: var(--biu-on-accent);
 }
 
 .settings-account-action.is-danger:hover:not(:disabled) {
-  background: #9a3412;
+  background: var(--biu-warning);
 }
 
 .settings-account-action.is-danger:disabled {
@@ -2886,7 +2886,7 @@ select.settings-account-input {
 }
 
 .inspector-tab.is-agent-working {
-  background: color-mix(in srgb, #5b9fd6 22%, transparent);
+  background: color-mix(in srgb, var(--biu-tag-blue) 22%, transparent);
 }
 
 .inspector-tab-main {
@@ -3547,9 +3547,9 @@ select.settings-account-input {
   box-sizing: border-box;
   padding-bottom: var(--brand-corner-clearance);
   background: var(--biu-bg);
-  --biu-ok: #448361;
-  --biu-danger: #c4554d;
-  --biu-danger-soft: color-mix(in srgb, #c4554d 14%, transparent);
+  --biu-ok: var(--biu-tag-green);
+  --biu-danger: var(--biu-tag-red);
+  --biu-danger-soft: color-mix(in srgb, var(--biu-tag-red) 14%, transparent);
 }
 
 .session-inspector .app-side-bar-head {
@@ -3666,9 +3666,9 @@ select.settings-account-input {
   min-width: 0;
   min-height: 0;
   flex: 1;
-  --biu-ok: #448361;
-  --biu-danger: #c4554d;
-  --biu-danger-soft: color-mix(in srgb, #c4554d 14%, transparent);
+  --biu-ok: var(--biu-tag-green);
+  --biu-danger: var(--biu-tag-red);
+  --biu-danger-soft: color-mix(in srgb, var(--biu-tag-red) 14%, transparent);
 }
 
 html.dark .chat-pane,
@@ -3688,16 +3688,16 @@ html.dark .session-inspector {
 html.dark .traj-usage-ring.is-cache,
 html.dark .tool-call-chevron.is-ok,
 html.dark .tool-call-status.is-ok {
-  color: #1fac60;
+  color: var(--biu-ok);
 }
 
 html.dark .traj-usage-ring.is-hist {
-  color: #ff8000;
+  color: var(--biu-warning);
 }
 
 html.dark .tool-call-chevron.is-fail,
 html.dark .tool-call-status.is-fail {
-  color: #ff5949;
+  color: var(--biu-danger);
 }
 
 .chat-pane-embed {
@@ -5087,7 +5087,7 @@ html.dark .app-side-bar .chat-session-row-star:not(.is-on) svg {
 .project-chip.project-chip-follow-toggle:hover:not(:disabled),
 .project-chip.project-chip-follow-toggle.is-active,
 .project-chip.project-chip-follow-toggle.is-active:hover:not(:disabled) {
-  color: #5b9fd6;
+  color: var(--biu-tag-blue);
 }
 
 .project-chip:disabled,
@@ -5125,7 +5125,7 @@ html.dark .app-side-bar .chat-session-row-star:not(.is-on) svg {
 .project-chip.project-chip-follow-toggle.is-active:hover:not(:disabled) {
   border-color: var(--biu-border);
   background: var(--biu-bubble);
-  color: #5b9fd6;
+  color: var(--biu-tag-blue);
 }
 
 .dock-icon-wrap {
@@ -5790,11 +5790,11 @@ html.dark .app-side-bar .chat-session-row-star:not(.is-on) svg {
 }
 
 .traj-usage-ring.is-cache {
-  color: #448361;
+  color: var(--biu-tag-green);
 }
 
 .traj-usage-ring.is-hist {
-  color: #d9730d;
+  color: var(--biu-warning);
 }
 
 .traj-usage-card {
@@ -5912,7 +5912,7 @@ html.dark .app-side-bar .chat-session-row-star:not(.is-on) svg {
 }
 
 .usage-panel-meta-compact {
-  border: 1px solid color-mix(in srgb, #e2a938 40%, transparent);
+  border: 1px solid color-mix(in srgb, var(--biu-warning-on-surface) 40%, transparent);
 }
 
 .usage-panel-meta-label {
@@ -5929,14 +5929,14 @@ html.dark .app-side-bar .chat-session-row-star:not(.is-on) svg {
 }
 
 .usage-panel-meta-compact .usage-panel-meta-value {
-  color: #e2a938;
+  color: var(--biu-warning-on-surface);
 }
 
 .usage-panel-note {
   border-radius: 8px;
   padding: 7px 9px;
-  background: color-mix(in srgb, #e2a938 10%, transparent);
-  color: color-mix(in srgb, #e2a938 78%, #fff);
+  background: color-mix(in srgb, var(--biu-warning-on-surface) 10%, transparent);
+  color: color-mix(in srgb, var(--biu-warning-on-surface) 78%, #fff);
   font-size: 10px;
   line-height: 1.5;
 }
@@ -6088,9 +6088,9 @@ html.dark .app-side-bar .chat-session-row-star:not(.is-on) svg {
 .usage-panel-warn {
   border-radius: 8px;
   padding: 7px 9px;
-  background: color-mix(in srgb, #e2a938 11%, transparent);
-  border-left: 2px solid #e2a938;
-  color: color-mix(in srgb, #e2a938 80%, #fff);
+  background: color-mix(in srgb, var(--biu-warning-on-surface) 11%, transparent);
+  border-left: 2px solid var(--biu-warning-on-surface);
+  color: color-mix(in srgb, var(--biu-warning-on-surface) 80%, #fff);
   font-size: 10px;
   line-height: 1.55;
 }
@@ -6134,8 +6134,8 @@ html.dark .app-side-bar .chat-session-row-star:not(.is-on) svg {
 }
 
 .usage-panel-turn-steps.is-bad {
-  background: color-mix(in srgb, #e2a938 16%, transparent);
-  color: #e2a938;
+  background: color-mix(in srgb, var(--biu-warning-on-surface) 16%, transparent);
+  color: var(--biu-warning-on-surface);
 }
 
 .usage-panel-turn-rhs {
@@ -6258,8 +6258,8 @@ html.dark .app-side-bar .chat-session-row-star:not(.is-on) svg {
 }
 
 .traj-io-role-user {
-  color: #448361;
-  background: color-mix(in srgb, #448361 22%, transparent);
+  color: var(--biu-tag-green);
+  background: color-mix(in srgb, var(--biu-tag-green) 22%, transparent);
 }
 
 .traj-io-role-assistant {
@@ -6350,8 +6350,8 @@ html.dark .app-side-bar .chat-session-row-star:not(.is-on) svg {
 }
 
 .traj-tag-user {
-  color: #448361;
-  background: color-mix(in srgb, #448361 22%, transparent);
+  color: var(--biu-tag-green);
+  background: color-mix(in srgb, var(--biu-tag-green) 22%, transparent);
 }
 
 .traj-tag-assistant {
@@ -6360,8 +6360,8 @@ html.dark .app-side-bar .chat-session-row-star:not(.is-on) svg {
 }
 
 .traj-tag-tool {
-  color: #d9730d;
-  background: color-mix(in srgb, #d9730d 22%, transparent);
+  color: var(--biu-warning);
+  background: color-mix(in srgb, var(--biu-warning) 22%, transparent);
 }
 
 .traj-tag-system {
@@ -7129,11 +7129,11 @@ html:not(.dark) .chat-outline-item.is-active {
 }
 
 .tool-call-chevron.is-ok {
-  color: #448361;
+  color: var(--biu-tag-green);
 }
 
 .tool-call-chevron.is-fail {
-  color: #c4554d;
+  color: var(--biu-tag-red);
 }
 
 .tool-call-title {
@@ -7203,11 +7203,11 @@ html:not(.dark) .chat-outline-item.is-active {
 }
 
 .tool-call-status.is-ok {
-  color: #448361;
+  color: var(--biu-tag-green);
 }
 
 .tool-call-status.is-fail {
-  color: #c4554d;
+  color: var(--biu-tag-red);
 }
 
 .tool-call-status.is-running {
@@ -8366,9 +8366,9 @@ html.dark .composer-send:disabled {
   height: 20px;
   border: 0;
   border-radius: 4px;
-  background: color-mix(in srgb, var(--biu-tag, #5b9fd6) 22%, transparent);
+  background: color-mix(in srgb, var(--biu-tag, var(--biu-tag-blue)) 22%, transparent);
   padding: 0 6px;
-  color: var(--biu-tag, #5b9fd6);
+  color: var(--biu-tag, var(--biu-tag-blue));
   font-family: var(--font-sans);
   font-size: 13px;
   font-weight: 500;
@@ -8418,7 +8418,7 @@ html.dark .composer-send:disabled {
 }
 
 .composer-tool-chip.is-pick:hover {
-  background: color-mix(in srgb, var(--biu-tag, #5b9fd6) 34%, transparent);
+  background: color-mix(in srgb, var(--biu-tag, var(--biu-tag-blue)) 34%, transparent);
 }
 
 .pick-kind-icon-wrap {
@@ -9099,7 +9099,7 @@ html:not(.dark) .inspector-add-row .fsdb-record-emoji,
   gap: 6px;
   height: 36px;
   padding: 0 14px;
-  border-radius: var(--biu-radius-full);
+  border-radius: 999px;
   background: #fff;
   color: #000;
   text-decoration: none;
@@ -9107,7 +9107,7 @@ html:not(.dark) .inspector-add-row .fsdb-record-emoji,
 .site-login {
   height: 36px;
   padding: 0 12px;
-  border-radius: var(--biu-radius-full);
+  border-radius: 999px;
 }
 .site-login:hover { background: rgba(255, 255, 255, 0.12); }
 .site-hero {
@@ -9237,7 +9237,7 @@ html:not(.dark) .inspector-add-row .fsdb-record-emoji,
   gap: 6px;
   box-sizing: border-box;
   height: 36px;
-  border-radius: var(--biu-radius-full);
+  border-radius: 999px;
   padding: 0 14px;
   font-size: 14px;
   font-weight: 500;
@@ -9356,7 +9356,7 @@ html:not(.dark) .inspector-add-row .fsdb-record-emoji,
 }
 .site-demo-tabs button {
   border: 0;
-  border-radius: var(--biu-radius-full);
+  border-radius: 999px;
   padding: 8px 13px;
   background: rgba(255, 255, 255, .08);
   color: rgba(255, 255, 255, .88);
@@ -9963,7 +9963,7 @@ html:not(.has-js) .site [data-reveal] {
   text-align: center;
   text-decoration: none;
   border: 1px solid rgba(255, 255, 255, .28);
-  border-radius: var(--biu-radius-full);
+  border-radius: 999px;
   background: transparent;
   color: #fff;
   font: inherit;
@@ -10022,7 +10022,7 @@ html:not(.has-js) .site [data-reveal] {
   display: inline-block;
   padding: 12px 18px;
   border: 1px solid rgba(255, 255, 255, .28);
-  border-radius: var(--biu-radius-full);
+  border-radius: 999px;
   background: transparent;
   color: #fff;
   font-size: 14px;
@@ -10394,7 +10394,7 @@ html:not(.has-js) .site [data-reveal] {
 .auth-strength-bar {
   width: 40px;
   height: 4px;
-  border-radius: var(--biu-radius-full);
+  border-radius: 999px;
   background: rgba(255, 255, 255, .2);
 }
 .auth-strength[data-level="1"] .auth-strength-bar { background: #e05a5a; }
@@ -10428,7 +10428,7 @@ html:not(.has-js) .site [data-reveal] {
   margin-top: 6px;
   padding: 0 18px;
   border: 0;
-  border-radius: var(--biu-radius-full);
+  border-radius: 999px;
   background: #fff;
   color: #000;
   font-size: 16px;
@@ -10544,7 +10544,7 @@ html:not(.has-js) .site [data-reveal] {
     height: 44px;
     min-height: 44px;
     margin-top: 8px;
-    border-radius: var(--biu-radius-full);
+    border-radius: 999px;
   }
 }
 
@@ -10622,7 +10622,7 @@ html:not(.has-js) .site [data-reveal] {
 .site-usecase-more-links a {
   padding: 9px 16px;
   border: 1px solid rgba(255, 255, 255, .1);
-  border-radius: var(--biu-radius-full);
+  border-radius: 999px;
   font-size: 14px;
   text-decoration: none;
   color: rgba(255, 255, 255, .88);
@@ -10737,7 +10737,7 @@ html:not(.has-js) .site [data-reveal] {
   gap: 8px;
   padding: 8px 14px;
   border: 1px solid rgba(255, 255, 255, .14);
-  border-radius: var(--biu-radius-full);
+  border-radius: 999px;
   background: transparent;
   color: #fff;
   font: inherit;
@@ -11108,7 +11108,7 @@ html:not(.has-js) .site [data-reveal] {
   flex: none;
   padding: 4px 12px;
   border: 0;
-  border-radius: var(--biu-radius-full);
+  border-radius: 999px;
   background: rgba(255, 255, 255, .1);
   color: #fff;
   font: inherit;
@@ -11129,7 +11129,7 @@ html:not(.has-js) .site [data-reveal] {
 .site-block-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 0; padding: 0; list-style: none; }
 .site-block-chips li {
   padding: 3px 10px;
-  border-radius: var(--biu-radius-full);
+  border-radius: 999px;
   background: rgba(255, 255, 255, .06);
   font-size: 12px;
   line-height: 1.6;
