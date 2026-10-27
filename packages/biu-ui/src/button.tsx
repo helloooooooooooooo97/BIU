@@ -3,7 +3,7 @@ import type { ButtonHTMLAttributes, ReactNode, Ref } from 'react'
 import { cn } from './cn.ts'
 
 const buttonVariants = cva(
-  'biu-btn inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-[6px] border border-transparent h-[26px] px-2.5 text-[13px] font-semibold leading-[24px] transition-colors focus-visible:outline-none focus-visible:border-biu-emphasis disabled:pointer-events-none disabled:opacity-50 disabled:cursor-default',
+  'biu-btn inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-[var(--biu-radius-md)] border border-transparent h-[var(--biu-size-control-md)] px-2.5 text-[length:var(--biu-font-size-3)] font-semibold leading-[calc(var(--biu-size-control-md)-2px)] transition-colors focus-visible:outline-none focus-visible:border-biu-emphasis disabled:pointer-events-none disabled:opacity-50 disabled:cursor-default',
   {
     variants: {
       variant: {

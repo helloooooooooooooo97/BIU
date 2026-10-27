@@ -4,7 +4,7 @@ import { cn } from './cn.ts'
 export function Table({ className, ...rest }: HTMLAttributes<HTMLTableElement>) {
   return (
     <div className="w-full overflow-x-auto">
-      <table className={cn('biu-table w-full border-collapse text-[13px]', className)} {...rest} />
+      <table className={cn('biu-table w-full border-collapse text-[length:var(--biu-font-size-3)]', className)} {...rest} />
     </div>
   )
 }

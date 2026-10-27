@@ -5,7 +5,7 @@ export function Card({ className, ...rest }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       className={cn(
-        'biu-card rounded-[6px] border border-biu-border bg-biu-bg p-2.5 text-[13px] text-biu-text',
+        'biu-card rounded-[var(--biu-radius-md)] border border-biu-border bg-biu-bg p-2.5 text-[length:var(--biu-font-size-3)] text-biu-text',
         className,
       )}
       {...rest}
@@ -18,7 +18,7 @@ export function CardHeader({ className, ...rest }: HTMLAttributes<HTMLDivElement
 }
 
 export function CardTitle({ className, ...rest }: HTMLAttributes<HTMLHeadingElement>) {
-  return <h3 className={cn('m-0 text-[13px] font-semibold', className)} {...rest} />
+  return <h3 className={cn('m-0 text-[length:var(--biu-font-size-3)] font-semibold', className)} {...rest} />
 }
 
 export function CardContent({ className, ...rest }: HTMLAttributes<HTMLDivElement>) {

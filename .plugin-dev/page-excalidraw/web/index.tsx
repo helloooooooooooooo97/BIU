@@ -238,7 +238,7 @@ function placeHost(host: Host, slot: HTMLElement | null) {
   if (host.expanded) {
     if (el.parentElement !== document.body) document.body.appendChild(el)
     el.style.cssText =
-      'position:fixed;top:36px;left:0;right:0;bottom:0;width:auto;height:auto;z-index:9992;pointer-events:auto;visibility:visible;overflow:hidden;isolation:isolate;background:var(--biu-color-bg,#191919)'
+      'position:fixed;top:36px;left:0;right:0;bottom:0;width:auto;height:auto;z-index:9992;pointer-events:auto;visibility:visible;overflow:hidden;isolation:isolate;background:var(--biu-color-bg)'
     return
   }
   if (!slot?.isConnected) {
@@ -410,9 +410,9 @@ const BAR: CSSProperties = {
   gap: 8,
   height: 36,
   padding: '0 8px',
-  background: 'var(--rui-accent)',
-  borderBottom: '1px solid var(--rui-border)',
-  color: 'var(--rui-muted)',
+  background: 'var(--biu-color-bg-muted)',
+  borderBottom: 'var(--biu-stroke-width) solid var(--biu-color-border)',
+  color: 'var(--biu-color-text-subtle)',
   fontSize: 12,
 }
 
@@ -461,7 +461,7 @@ function BoardBar(props: {
 
   return (
     <ReUI>
-    <div className="rui-card-head" style={{ ...BAR, background: 'var(--rui-accent)', borderBottom: '1px solid var(--rui-border)' }}>
+    <div className="rui-card-head" style={{ ...BAR, background: 'var(--biu-color-bg-muted)', borderBottom: 'var(--biu-stroke-width) solid var(--biu-color-border)' }}>
       <span style={{ display: 'inline-flex', color: 'var(--biu-color-text)' }} title="画板">
         <Glyph
           evenodd

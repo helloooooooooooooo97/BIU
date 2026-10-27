@@ -52,7 +52,7 @@ export class RenderBoundary extends Component<RenderBoundaryProps, RenderBoundar
           boxSizing: 'border-box',
           width: '100%',
           padding: '10px 12px',
-          border: '1px solid var(--biu-color-border)',
+          border: 'var(--biu-stroke-width) solid var(--biu-color-border)',
           borderRadius: 8,
           background: 'var(--biu-color-danger-muted)',
           color: 'var(--biu-color-text)',
@@ -70,7 +70,7 @@ export class RenderBoundary extends Component<RenderBoundaryProps, RenderBoundar
           style={{
             marginLeft: 'auto',
             flex: 'none',
-            border: '1px solid var(--biu-color-border)',
+            border: 'var(--biu-stroke-width) solid var(--biu-color-border)',
             borderRadius: 6,
             padding: '2px 8px',
             background: 'transparent',

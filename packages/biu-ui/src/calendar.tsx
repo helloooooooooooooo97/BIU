@@ -40,7 +40,7 @@ function dayKey(day: Date) {
 }
 
 const calendarDayVariants = cva(
-  'biu-calendar-day inline-flex h-[26px] w-[26px] items-center justify-center rounded-[6px] border text-[13px] font-medium leading-none',
+  'biu-calendar-day inline-flex h-[var(--biu-size-control-md)] w-[var(--biu-size-control-md)] items-center justify-center rounded-[var(--biu-radius-md)] border text-[length:var(--biu-font-size-3)] font-medium leading-none',
   {
     variants: {
       tone: {
@@ -109,7 +109,7 @@ export function Calendar({
   return (
     <div
       className={cn(
-        'biu-calendar w-[252px] rounded-[6px] border border-biu-border bg-biu-bg p-2.5 text-[13px] text-biu-text',
+        'biu-calendar w-[252px] rounded-[var(--biu-radius-md)] border border-biu-border bg-biu-bg p-2.5 text-[length:var(--biu-font-size-3)] text-biu-text',
         className,
       )}
       {...rest}
@@ -117,23 +117,23 @@ export function Calendar({
       <div className="mb-2 flex items-center justify-between gap-1">
         <Button
           variant="ghost"
-          className="h-[26px] w-[26px] px-0"
+          className="h-[var(--biu-size-control-md)] w-[var(--biu-size-control-md)] px-0"
           aria-label="上个月"
           onClick={() => showMonth(new Date(view.getFullYear(), view.getMonth() - 1, 1))}
         >
           <NavMark dir="prev" />
         </Button>
-        <div className="min-w-0 flex-1 text-center text-[13px] font-semibold tracking-tight">{monthTitle(view)}</div>
+        <div className="min-w-0 flex-1 text-center text-[length:var(--biu-font-size-3)] font-semibold tracking-tight">{monthTitle(view)}</div>
         <Button
           variant="ghost"
-          className="h-[26px] w-[26px] px-0"
+          className="h-[var(--biu-size-control-md)] w-[var(--biu-size-control-md)] px-0"
           aria-label="下个月"
           onClick={() => showMonth(new Date(view.getFullYear(), view.getMonth() + 1, 1))}
         >
           <NavMark dir="next" />
         </Button>
       </div>
-      <div className="mb-1 grid grid-cols-7 text-center text-[11px] font-medium text-biu-text-subtle">
+      <div className="mb-1 grid grid-cols-7 text-center text-[length:var(--biu-font-size-1)] font-medium text-biu-text-subtle">
         {WEEKDAYS.map((label) => (
           <span key={label} className="h-[22px] leading-[22px]">
             {label}

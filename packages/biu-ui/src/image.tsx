@@ -116,7 +116,7 @@ function ImageLightbox({
         src={src}
         alt=""
         className={cn(
-          'biu-image-preview-shot max-h-[86vh] max-w-[86vw] rounded-[6px] border border-biu-border object-contain transition-transform',
+          'biu-image-preview-shot max-h-[86vh] max-w-[86vw] rounded-[var(--biu-radius-md)] border border-biu-border object-contain transition-transform',
           zoomed ? 'scale-150 cursor-zoom-out' : 'cursor-zoom-in',
         )}
         onClick={onZoom}
@@ -176,14 +176,14 @@ function ImageRoot({
 
   return (
     <span
-      className={cn('biu-image relative inline-flex overflow-hidden rounded-[6px] border border-biu-border bg-biu-muted-fill', className)}
+      className={cn('biu-image relative inline-flex overflow-hidden rounded-[var(--biu-radius-md)] border border-biu-border bg-biu-muted-fill', className)}
       style={{ width, height }}
     >
       {status === 'loading' ? (
         <span className="biu-image-skeleton absolute inset-0 animate-pulse bg-biu-hover" aria-hidden />
       ) : null}
       {status === 'error' ? (
-        <span className="biu-image-fallback flex h-full w-full items-center justify-center text-[11px] text-biu-text-subtle">
+        <span className="biu-image-fallback flex h-full w-full items-center justify-center text-[length:var(--biu-font-size-1)] text-biu-text-subtle">
           {fallback ?? '无法加载'}
         </span>
       ) : null}

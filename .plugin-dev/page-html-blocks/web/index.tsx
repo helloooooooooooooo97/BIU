@@ -140,7 +140,7 @@ function HtmlSandbox({
         style={{ display: 'block', width: '100%', height: '100%', minHeight: live ? 80 : undefined }}
       />
       {error ? (
-        <div data-testid="html-sandbox-error" style={{ color: 'var(--biu-color-danger, #c00)', fontSize: 12, padding: 8 }}>
+        <div data-testid="html-sandbox-error" style={{ color: 'var(--biu-color-danger)', fontSize: 12, padding: 8 }}>
           {error}
         </div>
       ) : null}
@@ -227,9 +227,9 @@ function SourceEditor({
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: 12,
         lineHeight: 1.55,
-        color: 'var(--rui-fg)',
+        color: 'var(--biu-color-text)',
         background: 'var(--biu-color-bg)',
-        border: '1px solid var(--rui-border)',
+        border: 'var(--biu-stroke-width) solid var(--biu-color-border)',
         borderRadius: 10,
         resize: 'vertical',
       }}
@@ -238,7 +238,7 @@ function SourceEditor({
       <div
         data-testid="html-compile"
         data-ok={compile.ok ? '1' : '0'}
-        style={{ marginTop: 6, fontSize: 11, color: compile.ok ? 'var(--biu-color-ok, #17803d)' : 'var(--biu-color-danger, #c00)' }}
+        style={{ marginTop: 6, fontSize: 11, color: compile.ok ? 'var(--biu-color-ok)' : 'var(--biu-color-danger)' }}
       >
         {compile.ok ? `编译通过 · ${compile.mode}` : `编译失败 · ${compile.error}`}
       </div>

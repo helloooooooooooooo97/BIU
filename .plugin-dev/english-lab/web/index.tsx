@@ -228,7 +228,7 @@ function ListenBlock({ data, update, writable }: BlockProps) {
           <audio ref={audioRef} src={audioUrl || undefined} preload="none" hidden />
         </div>
         {mode === 'questions' && q ? (
-          <div className="en-pane" style={{ borderTop: '1px solid var(--rui-border)' }}>
+          <div className="en-pane" style={{ borderTop: 'var(--biu-stroke-width) solid var(--biu-color-border)' }}>
             <div className="rui-muted" style={{ marginBottom: 8 }}>
               {qIndex + 1}/{questions.length}
             </div>
@@ -273,7 +273,7 @@ function ListenBlock({ data, update, writable }: BlockProps) {
           </div>
         ) : null}
         {mode === 'intensive' ? (
-          <div className="en-pane" style={{ borderTop: '1px solid var(--rui-border)' }}>
+          <div className="en-pane" style={{ borderTop: 'var(--biu-stroke-width) solid var(--biu-color-border)' }}>
             <div className="rui-muted">点出没听清的词，再循环</div>
             <div className="en-mark" style={{ marginTop: 8 }}>
               {tokenize(transcript).map((w, i) => (
@@ -292,7 +292,7 @@ function ListenBlock({ data, update, writable }: BlockProps) {
             </div>
           </div>
         ) : null}
-        {checked ? <div className="en-passage" style={{ padding: 16, borderTop: '1px solid var(--rui-border)' }}>{transcript}</div> : null}
+        {checked ? <div className="en-passage" style={{ padding: 16, borderTop: 'var(--biu-stroke-width) solid var(--biu-color-border)' }}>{transcript}</div> : null}
       </div>
     </ReUI>
   )

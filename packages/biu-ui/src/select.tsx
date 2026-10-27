@@ -5,7 +5,7 @@ export function Select({ className, ...rest }: SelectHTMLAttributes<HTMLSelectEl
   return (
     <select
       className={cn(
-        'biu-select h-[26px] min-w-0 rounded-[6px] border border-biu-border bg-biu-input px-2 text-[13px] text-biu-text outline-none focus:border-biu-emphasis disabled:cursor-default disabled:opacity-50',
+        'biu-select h-[var(--biu-size-control-md)] min-w-0 rounded-[var(--biu-radius-md)] border border-biu-border bg-biu-input px-2 text-[length:var(--biu-font-size-3)] text-biu-text outline-none focus:border-biu-emphasis disabled:cursor-default disabled:opacity-50',
         className,
       )}
       {...rest}

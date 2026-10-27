@@ -186,14 +186,14 @@ function FileDiffView({ sessionId, turn, path }: { sessionId: string; turn: numb
   }, [sessionId, turn, path])
 
   if (state === 'load') {
-    return <div className="px-3 py-2 text-[12px] text-(--biu-color-text-subtle)">载入 diff…</div>
+    return <div className="px-3 py-2 text-[length:var(--biu-font-size-2)] text-(--biu-color-text-subtle)">载入 diff…</div>
   }
   if (state === 'gone') {
-    return <div className="px-3 py-2 text-[12px] text-(--biu-color-text-subtle)">这份正文已过期，点标题仍可跳到当前文件。</div>
+    return <div className="px-3 py-2 text-[length:var(--biu-font-size-2)] text-(--biu-color-text-subtle)">这份正文已过期，点标题仍可跳到当前文件。</div>
   }
   return (
     <pre
-      className="max-h-80 overflow-auto border-t border-(--biu-color-border) py-1 font-mono text-[12px] leading-5"
+      className="max-h-80 overflow-auto border-t border-(--biu-color-border) py-1 font-mono text-[length:var(--biu-font-size-2)] leading-5"
       data-testid="content-edit-diff"
     >
       {rows.map((line, index) => {
@@ -251,11 +251,11 @@ export const ContentEditsTable = memo(function ContentEditsTable({
       data-testid="content-edits-table"
     >
       <div className="flex items-center justify-between gap-2 border-b border-(--biu-color-border) px-3 py-2">
-        <div className="content-edits-ink flex min-w-0 items-center gap-1.5 text-[12px] font-semibold">
+        <div className="content-edits-ink flex min-w-0 items-center gap-1.5 text-[length:var(--biu-font-size-2)] font-semibold">
           <CircleStackIcon className="content-edits-icon size-3.5 shrink-0" aria-hidden />
           数据改动
         </div>
-        <div className="flex items-center gap-2 text-[12px] font-semibold tabular-nums">
+        <div className="flex items-center gap-2 text-[length:var(--biu-font-size-2)] font-semibold tabular-nums">
           <span className="text-[var(--biu-color-ink-green)]">+{added}</span>
           <span className="text-[var(--biu-color-ink-red)]">−{removed}</span>
         </div>
@@ -277,7 +277,7 @@ export const ContentEditsTable = memo(function ContentEditsTable({
                 </button>
                 <button
                   type="button"
-                  className="content-edits-ink min-w-0 flex-1 truncate text-left text-[12px] font-semibold hover:underline"
+                  className="content-edits-ink min-w-0 flex-1 truncate text-left text-[length:var(--biu-font-size-2)] font-semibold hover:underline"
                   title={file.path}
                   onClick={() => revealContentEdit(file.path, file.jump_line, { sessionId, turn })}
                 >
@@ -285,14 +285,14 @@ export const ContentEditsTable = memo(function ContentEditsTable({
                 </button>
                 <button
                   type="button"
-                  className="text-[12px] font-semibold tabular-nums text-[var(--biu-color-ink-green)] hover:underline"
+                  className="text-[length:var(--biu-font-size-2)] font-semibold tabular-nums text-[var(--biu-color-ink-green)] hover:underline"
                   onClick={() => revealContentEdit(file.path, file.jump_line, { sessionId, turn })}
                 >
                   +{file.added}
                 </button>
                 <button
                   type="button"
-                  className="text-[12px] font-semibold tabular-nums text-[var(--biu-color-ink-red)] hover:underline"
+                  className="text-[length:var(--biu-font-size-2)] font-semibold tabular-nums text-[var(--biu-color-ink-red)] hover:underline"
                   onClick={() => revealContentEdit(file.path, file.jump_line, { sessionId, turn })}
                 >
                   −{file.removed}

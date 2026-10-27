@@ -262,7 +262,7 @@ type CodeViewHandle = {
 const editorTheme = EditorView.theme({
   '&': {
     background: 'transparent',
-    color: 'var(--rui-fg)',
+    color: 'var(--biu-color-text)',
     fontSize: '13px',
     height: '100%',
   },
@@ -273,20 +273,20 @@ const editorTheme = EditorView.theme({
     overflowX: 'auto',
   },
   '.cm-content': {
-    caretColor: 'var(--rui-fg)',
+    caretColor: 'var(--biu-color-text)',
     padding: '10px 12px',
     minHeight: '100%',
     fontFamily: 'inherit',
   },
   '.cm-gutters': { background: 'transparent', border: 'none', color: '#c4c4c4' },
   '.cm-lineNumbers .cm-gutterElement': { minWidth: '2.2em', padding: '0 8px 0 6px' },
-  '.cm-cursor': { borderLeftColor: 'var(--rui-fg)' },
+  '.cm-cursor': { borderLeftColor: 'var(--biu-color-text)' },
   '.cm-content ::selection': {
-    background: 'color-mix(in srgb, var(--rui-primary) 40%, transparent)',
+    background: 'color-mix(in srgb, var(--biu-color-text) 40%, transparent)',
     color: 'inherit',
   },
   '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionLayer .cm-selectionBackground': {
-    background: 'color-mix(in srgb, var(--rui-primary) 40%, transparent)',
+    background: 'color-mix(in srgb, var(--biu-color-text) 40%, transparent)',
   },
 })
 
@@ -625,15 +625,15 @@ function CodeRunnerBlock({ data, update, writable }: BlockProps) {
         background: 'transparent',
       }}
     >
-      <span style={{ width: 28, height: 3, borderRadius: 99, background: 'var(--rui-muted)', opacity: 0.35 }} />
+      <span style={{ width: 28, height: 3, borderRadius: 99, background: 'var(--biu-color-text-subtle)', opacity: 0.35 }} />
     </div>
   )
 
   const colorMap: Record<string, string> = {
-    stdout: 'var(--rui-fg)',
-    stderr: 'var(--rui-muted)',
-    error: 'var(--rui-danger)',
-    success: 'var(--rui-ok)',
+    stdout: 'var(--biu-color-text)',
+    stderr: 'var(--biu-color-text-subtle)',
+    error: 'var(--biu-color-danger)',
+    success: 'var(--biu-color-ok)',
   }
 
   const preview = (localCode.split('\n').find((l) => l.trim()) ?? '').trim().slice(0, 60)
@@ -754,7 +754,7 @@ function CodeRunnerBlock({ data, update, writable }: BlockProps) {
             >
               {output.length ? (
                 output.map((line, i) => (
-                  <div key={i} style={{ color: colorMap[line.type] || 'var(--rui-fg)', wordBreak: 'break-word' }}>
+                  <div key={i} style={{ color: colorMap[line.type] || 'var(--biu-color-text)', wordBreak: 'break-word' }}>
                     {line.text}
                   </div>
                 ))

@@ -164,7 +164,7 @@ test('list and detail share the chat column max width with side padding', () => 
   assert.match(css, /\.inspector-database-page \.fsdb-workspace > \.fsdb-pager\{[^}]*var\(--fsdb-pager-lift\)/)
   assert.doesNotMatch(css, /\.inspector-database-page \.fsdb-pager\{/)
   assert.match(css, /\.fsdb-page \.tasks-table\{[^}]*border-left:0|border:0/)
-  assert.match(css, /\.fsdb-page \.tasks-table th,\.fsdb-page \.tasks-table td\{[^}]*border-right:1px solid color-mix\(in srgb,var\(--biu-color-border\) 80%,transparent\)/)
+  assert.match(css, /\.fsdb-page \.tasks-table th,\.fsdb-page \.tasks-table td\{[^}]*border-right:var(--biu-stroke-width) solid color-mix\(in srgb,var\(--biu-color-border\) 80%,transparent\)/)
   assert.match(css, /\.fsdb-page \.tasks-table th:last-child,\.fsdb-page \.tasks-table td:last-child\{[^}]*border-right:0/)
 })
 

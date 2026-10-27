@@ -3,7 +3,7 @@ import type { HTMLAttributes, ReactNode } from 'react'
 import { cn } from './cn.ts'
 
 const badgeVariants = cva(
-  'biu-badge inline-flex items-center rounded-[6px] border border-biu-border px-1.5 py-px text-[11px] font-semibold leading-4 whitespace-nowrap',
+  'biu-badge inline-flex items-center rounded-[var(--biu-radius-md)] border border-biu-border px-1.5 py-px text-[length:var(--biu-font-size-1)] font-semibold leading-4 whitespace-nowrap',
   {
     variants: {
       variant: {

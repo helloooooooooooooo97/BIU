@@ -299,18 +299,18 @@ const STYLE_ID = 'pt-xterm-style-v5'
 const STYLE_CSS = `
 .pt-card{
   display:flex;flex-direction:column;overflow:hidden;
-  border:1px solid color-mix(in srgb, var(--biu-color-border, rgba(242,241,237,0.12)) 80%, #000);
+  border:var(--biu-stroke-width) solid color-mix(in srgb, var(--biu-color-border) 80%, #000);
   border-radius:12px;background:#191919;
   box-shadow:0 1px 2px rgba(15,15,15,.08), 0 8px 24px rgba(0,0,0,.12);
 }
 .pt-head{
   display:flex;align-items:center;gap:8px;flex:none;height:34px;padding:0 10px 0 12px;
-  border-bottom:1px solid rgba(255,255,255,.06);
+  border-bottom:var(--biu-stroke-width) solid rgba(255,255,255,.06);
   background:#141414;color:rgba(242,241,237,.5);
   font:12px/1 ui-sans-serif,system-ui,sans-serif;user-select:none;
 }
 .pt-title{color:rgba(242,241,237,.78);font-weight:600;letter-spacing:-.01em}
-.pt-history{border-bottom:1px solid rgba(255,255,255,.06);background:#161616}
+.pt-history{border-bottom:var(--biu-stroke-width) solid rgba(255,255,255,.06);background:#161616}
 .pt-mount{position:absolute;inset:0;overflow:hidden;box-sizing:border-box;overscroll-behavior:contain}
 .pt-mount .xterm{
   width:100%;height:100%;
@@ -447,8 +447,8 @@ function useTerminalStyle() {
 
 const THEME = {
   background: 'rgba(0,0,0,0)',
-  foreground: '#f0efed',
-  cursor: '#f0efed',
+  foreground: 'var(--biu-color-on-emphasis)',
+  cursor: 'var(--biu-color-on-emphasis)',
   cursorAccent: '#191919',
   selectionBackground: 'rgba(242,241,237,0.22)',
   black: '#191919',
@@ -466,7 +466,7 @@ const THEME = {
   brightBlue: '#78b4e4',
   brightMagenta: '#c496e4',
   brightCyan: '#3ddbd9',
-  brightWhite: '#f0efed',
+  brightWhite: 'var(--biu-color-on-emphasis)',
 }
 
 /** 单个终端面：一个块 = 一个 PTY。
@@ -1122,10 +1122,10 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
           gridTemplateColumns: '1fr auto',
           gap: '2px 10px',
           padding: '8px 0',
-          borderTop: '1px solid var(--biu-color-border, rgba(242,241,237,0.1))',
+          borderTop: 'var(--biu-stroke-width) solid var(--biu-color-border)',
         }}
       >
-        <span style={{ color: 'var(--biu-color-text, #f0efed)', fontWeight: 600 }}>{label}</span>
+        <span style={{ color: 'var(--biu-color-text)', fontWeight: 600 }}>{label}</span>
         <input
           type="number"
           value={value ?? ''}
@@ -1139,14 +1139,14 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
             border: 0,
             borderRadius: 7,
             padding: '0 8px',
-            background: 'var(--biu-color-bg-hover, rgba(242,241,237,0.08))',
-            color: 'var(--biu-color-text, #f0efed)',
+            background: 'var(--biu-color-bg-hover)',
+            color: 'var(--biu-color-text)',
             font: 'inherit',
             textAlign: 'right',
             outline: 'none',
           }}
         />
-        <span style={{ gridColumn: '1 / -1', color: 'var(--biu-color-text-subtle, rgba(242,241,237,0.45))', fontSize: 11, lineHeight: 1.4 }}>
+        <span style={{ gridColumn: '1 / -1', color: 'var(--biu-color-text-subtle)', fontSize: 11, lineHeight: 1.4 }}>
           {hint}
           {limit ? ` · ${limit.min}–${limit.max}` : ''}
         </span>
@@ -1166,18 +1166,18 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
         zIndex: 40,
         width: 268,
         padding: '10px 12px 8px',
-        border: '1px solid var(--biu-color-border, rgba(242,241,237,0.12))',
+        border: 'var(--biu-stroke-width) solid var(--biu-color-border)',
         borderRadius: 10,
-        background: 'color-mix(in srgb, var(--biu-color-bg-subtle, #222220) 92%, #111)',
+        background: 'color-mix(in srgb, var(--biu-color-bg-subtle) 92%, #111)',
         boxShadow: '0 12px 32px rgba(0,0,0,0.42)',
-        color: 'var(--biu-color-text-muted, rgba(242,241,237,0.72))',
+        color: 'var(--biu-color-text-muted)',
         font: '12px ui-sans-serif, system-ui, sans-serif',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '2px 0 8px' }}>
-        <span style={{ color: 'var(--biu-color-text, #f0efed)', fontWeight: 600, fontSize: 13 }}>设置</span>
+        <span style={{ color: 'var(--biu-color-text)', fontWeight: 600, fontSize: 13 }}>设置</span>
         {typeof state.sessions === 'number' ? (
-          <span style={{ color: 'var(--biu-color-text-subtle, rgba(242,241,237,0.45))' }}>{state.sessions} 个后台会话</span>
+          <span style={{ color: 'var(--biu-color-text-subtle)' }}>{state.sessions} 个后台会话</span>
         ) : null}
       </div>
       {state.error ? (

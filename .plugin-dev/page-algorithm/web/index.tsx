@@ -487,7 +487,7 @@ function AlgorithmCard({
                 )
               ) : output.length ? (
                 output.map((line, i) => (
-                  <div key={i} style={{ color: line.type === 'error' ? 'var(--rui-danger)' : line.type === 'success' ? 'var(--rui-ok)' : undefined }}>
+                  <div key={i} style={{ color: line.type === 'error' ? 'var(--biu-color-danger)' : line.type === 'success' ? 'var(--biu-color-ok)' : undefined }}>
                     {line.text}
                   </div>
                 ))

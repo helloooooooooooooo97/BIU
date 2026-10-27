@@ -277,7 +277,7 @@ function BrowserSurface({
                     fontSize: 12,
                     color: INK,
                     background: 'var(--biu-color-bg)',
-                    border: `1px solid ${BORDER}`,
+                    border: `var(--biu-stroke-width) solid ${BORDER}`,
                     borderRadius: 999,
                     padding: '5px 12px',
                   }}

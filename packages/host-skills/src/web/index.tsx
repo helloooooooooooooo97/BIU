@@ -127,7 +127,7 @@ function SkillLibraryView({ rows, onOpen }: FsViewProps) {
                 style={{
                   minHeight: 144,
                   padding: 16,
-                  border: '1px solid var(--biu-color-border)',
+                  border: 'var(--biu-stroke-width) solid var(--biu-color-border)',
                   borderRadius: 12,
                   background: 'var(--biu-color-bg)',
                   color: 'var(--biu-color-text)',

@@ -13,7 +13,7 @@ const CSS = `
 .db-search-option-main{display:inline-flex;align-items:center;gap:6px;min-width:0}
 .db-search-option .fsdb-field-glyph,.db-cell-select-trigger .fsdb-field-glyph{color:var(--biu-color-icon);flex:none}
 .db-search-empty{padding:8px;color:var(--biu-color-text-subtle);font-size:var(--biu-font-size-4)}
-.db-search-foot{border-top:1px solid var(--biu-color-border);margin-top:4px;padding-top:4px}
+.db-search-foot{border-top:var(--biu-stroke-width) solid var(--biu-color-border);margin-top:4px;padding-top:4px}
 .db-cell-select{display:inline-flex;position:relative;min-width:0;max-width:100%;box-sizing:border-box;vertical-align:middle}
 .db-cell-select-trigger{display:inline-flex;align-items:center;gap:5px;max-width:none;height:var(--biu-size-control-sm);border:0;border-radius:4px;padding:0 6px;background:transparent;color:var(--biu-color-text);font:inherit;font-size:var(--biu-font-size-4);font-weight:500;line-height:var(--biu-size-control-sm);cursor:pointer;text-align:left}
 .db-cell-select-trigger:hover,.db-cell-select-trigger[data-open]{background:transparent}
@@ -23,7 +23,7 @@ const CSS = `
 .db-cell-select-trigger.is-chip:hover,.db-cell-select-trigger.is-chip[data-open]{background:transparent}
 .db-cell-select-trigger.is-empty{max-width:none;color:var(--biu-color-text-subtle);background:transparent;font-weight:500}
 .db-cell-select.is-field{display:block;width:100%}
-.db-cell-select.is-field .db-cell-select-trigger{display:flex;justify-content:space-between;gap:6px;width:100%;max-width:none;min-height:28px;border:1px solid var(--biu-color-border);border-radius:7px;padding:5px 8px;background:var(--biu-color-bg-input);color:var(--biu-color-text)}
+.db-cell-select.is-field .db-cell-select-trigger{display:flex;justify-content:space-between;gap:6px;width:100%;max-width:none;min-height:28px;border:var(--biu-stroke-width) solid var(--biu-color-border);border-radius:7px;padding:5px 8px;background:var(--biu-color-bg-input);color:var(--biu-color-text)}
 .db-cell-select.is-field .db-cell-select-trigger:hover,.db-cell-select.is-field .db-cell-select-trigger[data-open]{background:var(--biu-color-bg-hover);filter:none}
 .db-cell-select.is-field .db-cell-select-trigger.is-empty{color:var(--biu-color-text-subtle)}
 .db-cell-multi{position:relative;display:flex;min-width:0;width:100%;max-width:100%;vertical-align:middle}

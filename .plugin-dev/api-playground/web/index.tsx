@@ -510,7 +510,7 @@ function ApiPlaygroundBlock({ data, update, writable }: BlockProps) {
               {!active ? (
                 <div className="ins-empty">还没发过请求。</div>
               ) : active.error ? (
-                <div data-testid="api-playground-error" style={{ color: 'var(--rui-danger)' }}>{active.error}</div>
+                <div data-testid="api-playground-error" style={{ color: 'var(--biu-color-danger)' }}>{active.error}</div>
               ) : resTab === 'headers' ? (
                 <div data-testid="api-playground-res-headers-wrap">
                   <div data-testid="api-playground-res-headers">
