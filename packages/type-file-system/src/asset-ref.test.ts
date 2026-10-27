@@ -44,6 +44,7 @@ test('excalidraw block uses declared file field', () => {
 test('undeclared block kinds yield no assets', () => {
   assert.equal(assetNamesFromBlock('mystery', 'nope', { file: 'assets/x.png' }).size, 0)
   assert.equal(assetNamesFromBlock('html', 'page-html-blocks', { html: '<img src="/api/db/file/x.png">' }).size, 0)
+  assert.deepEqual([...assetNamesFromBlock('html', 'page-html-blocks', { file: 'assets/html-a.html' })], ['html-a.html'])
 })
 
 test('collectAssetNames walks exact urls without prose hits', () => {

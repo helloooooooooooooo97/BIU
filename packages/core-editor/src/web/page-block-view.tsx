@@ -14,18 +14,28 @@ async function copyPageAsset(from: string, to: string) {
   const src = assetName(from)
   const dest = assetName(to)
   const res = await fetch(`/api/page/file/${encodeURIComponent(src)}`)
-  let payload: unknown = { elements: [], appState: { theme: 'dark' }, files: {} }
-  if (res.ok) {
-    try {
-      payload = JSON.parse(await res.text())
-    } catch {
-      /* keep empty */
+  const text = res.ok ? await res.text() : ''
+  const jsonName = /\.json$/i.test(dest)
+  let body = text
+  let type = 'text/plain; charset=utf-8'
+  if (jsonName) {
+    type = 'application/json'
+    if (!text) body = JSON.stringify({ elements: [], appState: { theme: 'dark' }, files: {} })
+    else {
+      try {
+        JSON.parse(text)
+        body = text
+      } catch {
+        body = JSON.stringify({ elements: [], appState: { theme: 'dark' }, files: {} })
+      }
     }
+  } else if (/\.html?$/i.test(dest)) {
+    type = 'text/html; charset=utf-8'
   }
   await fetch(`/api/page/file/${encodeURIComponent(dest)}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+    headers: { 'Content-Type': type },
+    body,
   })
 }
 
