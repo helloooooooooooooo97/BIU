@@ -6,6 +6,15 @@ import { join, resolve } from 'node:path'
 const root = resolve(import.meta.dirname, '../../../../')
 const sandbox = join(root, '.plugin-dev')
 
+test('page-html-blocks store listing is Sandbox, not HTML', () => {
+  const manifest = JSON.parse(readFileSync(join(sandbox, 'page-html-blocks', 'manifest.json'), 'utf8')) as {
+    id: string
+    name: string
+  }
+  assert.equal(manifest.id, 'page-html-blocks')
+  assert.equal(manifest.name, 'Sandbox')
+})
+
 test('development page blocks register under the 测试 slash group', () => {
   const files = [
     'api-playground/web/index.tsx',

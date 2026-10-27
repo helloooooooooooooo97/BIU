@@ -275,6 +275,82 @@ test('missing .plugin lists no plugins', async () => {
   }
 })
 
+test('close of a builtin plugin clears enabled so restore does not remount', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'plugin-builtin-stop-'))
+  const pluginDir = join(dir, '.plugin')
+  try {
+    const ctx = new Context()
+    const { dropped } = stubHub(ctx)
+    const store = new PluginStoreService(ctx, pluginDir, join(dir, 'store.json'), join(dir, '.plugin-dev')).open()
+    await store.initSandbox({
+      id: 'page-html-blocks',
+      name: 'Sandbox',
+      builtin: true,
+      hostJs: `export const name = 'page-html-blocks'\nexport function apply() {}\n`,
+    })
+    await store.pack('page-html-blocks')
+    await store.openPlugin('page-html-blocks')
+    assert.equal((await store.list()).find((item) => item.id === 'page-html-blocks')?.enabled, true)
+    await store.close('page-html-blocks')
+    assert.ok(dropped.includes('page-html-blocks'))
+    assert.equal((await store.list()).find((item) => item.id === 'page-html-blocks')?.enabled, false)
+    await assert.rejects(() => store.destroy('page-html-blocks'), /cannot delete built-in plugin/)
+    const saved = JSON.parse(await readFile(join(dir, 'store.json'), 'utf8')) as { enabled: string[] }
+    assert.deepEqual(saved.enabled, [])
+    const ctx2 = new Context()
+    const { adopted } = stubHub(ctx2)
+    const store2 = new PluginStoreService(ctx2, pluginDir, join(dir, 'store.json'), join(dir, '.plugin-dev')).open()
+    await store2.restore()
+    assert.equal(adopted.includes('page-html-blocks'), false)
+    assert.equal((await store2.list()).find((item) => item.id === 'page-html-blocks')?.name, 'Sandbox')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('member stop drops the hub when the last viewer stops a builtin plugin', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'plugin-member-stop-'))
+  const pluginDir = join(dir, '.plugin')
+  const previous = process.env.BIU_ONLINE
+  const loads = new Set<string>(['page-html-blocks'])
+  try {
+    const ctx = new Context()
+    const { dropped } = stubHub(ctx)
+    ;(ctx as unknown as { get(name: string): unknown }).get = (name: string) =>
+      name === 'account'
+        ? {
+            store: {
+              isMember: () => true,
+              setPluginLoad: (_accountId: string, _workspaceId: string, id: string, on: boolean) => {
+                if (on) loads.add(id)
+                else loads.delete(id)
+              },
+              loadedPluginIds: () => [...loads],
+            },
+          }
+        : undefined
+    const store = new PluginStoreService(ctx, pluginDir, join(dir, 'store.json'), join(dir, '.plugin-dev')).open()
+    await store.initSandbox({
+      id: 'page-html-blocks',
+      name: 'Sandbox',
+      builtin: true,
+      hostJs: `export const name = 'page-html-blocks'\nexport function apply() {}\n`,
+    })
+    await store.pack('page-html-blocks')
+    process.env.BIU_ONLINE = '1'
+    await writeFile(join(dir, 'store.json'), `${JSON.stringify({ enabled: ['page-html-blocks'], lastRunAt: {} })}\n`)
+    const store2 = new PluginStoreService(ctx, pluginDir, join(dir, 'store.json'), join(dir, '.plugin-dev')).open()
+    await runWithAccount('ada', () => runWithRequestWorkspace('ws', () => store2.close('page-html-blocks')))
+    assert.ok(dropped.includes('page-html-blocks'))
+    const saved = JSON.parse(await readFile(join(dir, 'store.json'), 'utf8')) as { enabled: string[] }
+    assert.deepEqual(saved.enabled, [])
+  } finally {
+    if (previous === undefined) delete process.env.BIU_ONLINE
+    else process.env.BIU_ONLINE = previous
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('sandbox then pack writes .plugin/<id>/; close keeps code; uninstall deletes .plugin/<id>/', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'plugin-root-'))
   const pluginDir = join(dir, '.plugin')

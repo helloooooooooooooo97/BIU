@@ -668,7 +668,10 @@ export class PluginStoreService extends Service {
     if (accountId && workspaceId && account?.isMember?.(accountId, workspaceId)) {
       account.setPluginLoad?.(accountId, workspaceId, id, false)
       const still = account.loadedPluginIds?.().includes(id)
-      if (!still) await this.hub().drop(id)
+      if (!still) {
+        await this.hub().drop(id)
+        this.setEnabled(id, false)
+      }
       this.invalidateList()
       return
     }
