@@ -203,14 +203,14 @@ html.dark {
   --biu-muted-fill: rgba(242, 241, 237, 0.04);
   --biu-overlay: rgba(25, 25, 25, 0.72);
   --biu-chat-code-bg: var(--biu-sidebar);
-  --biu-label: #f0efed;
+  --biu-label: #d4d4d4;
   --biu-label-2: rgba(242, 241, 237, 0.72);
   --biu-label-3: rgba(242, 241, 237, 0.45);
   --biu-placeholder: #5F5F5A;
   --biu-sidebar-fg: #bcbab6;
-  --biu-sidebar-fg-active: #f0efed;
+  --biu-sidebar-fg-active: #d4d4d4;
   --biu-tag-ink: #ffffff;
-  --biu-cell-ink: #f0efed;
+  --biu-cell-ink: #d4d4d4;
   --biu-icon: #bab9b5;
   --biu-icon-active: #bab9b5;
   --biu-icon-muted: #a6a6a3;
@@ -230,7 +230,7 @@ html.dark {
   --biu-warning-soft: rgba(255, 128, 0, 0.16);
   --biu-warning-on-surface: #e8b84a;
   --biu-code-surface: #1e1e1e;
-  --biu-code-ink: #f0efed;
+  --biu-code-ink: #d4d4d4;
   --biu-on-accent: #ffffff;
   --biu-tag-blue: #5b9fd6;
   --biu-tag-purple: #9a6dd7;
@@ -1209,7 +1209,7 @@ body {
 }
 
 .settings-theme-card[data-theme-card="dark"].is-on {
-  color: #f0efed;
+  color: #d4d4d4;
 }
 
 .settings-theme-preview {
@@ -3905,7 +3905,7 @@ html.dark .chat-config-banner {
 }
 
 html.dark .chat-config-banner-action {
-  color: #f0efed;
+  color: #d4d4d4;
 }
 
 html.dark .composer-model-panel,
