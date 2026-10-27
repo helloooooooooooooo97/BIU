@@ -6,11 +6,14 @@ import { EditorState } from '@codemirror/state'
 import { EditorView, drawSelection, keymap, lineNumbers } from '@codemirror/view'
 import {
   ArrowPathIcon,
+  ArrowsPointingInIcon,
+  ArrowsPointingOutIcon,
   CodeBracketIcon,
   CubeTransparentIcon,
   EyeIcon,
 } from '@heroicons/react/16/solid'
 import { tags } from '@lezer/highlight'
+import { createPortal } from 'react-dom'
 import { compileSandboxSource } from '../shared/compile.ts'
 import { mountSandbox, unmountSandbox } from './sandbox.ts'
 import { sandboxBlockKey, stampSandboxPickSurfaces } from './stamp-picks.ts'
@@ -369,14 +372,18 @@ function SandboxBar({
   tab,
   onTab,
   ro,
+  expanded,
   onRefresh,
+  onExpand,
 }: {
   title: string
   onTitle: (next: string) => void
   tab: 'preview' | 'code'
   onTab: (next: 'preview' | 'code') => void
   ro: boolean
+  expanded: boolean
   onRefresh: () => void
+  onExpand: () => void
 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(title)
@@ -505,6 +512,23 @@ function SandboxBar({
         >
           <ArrowPathIcon style={chromeIcon} />
         </button>
+        <button
+          type="button"
+          tabIndex={-1}
+          data-page-block-expand=""
+          data-testid="sandbox-expand"
+          title={expanded ? '缩小' : '放大'}
+          aria-label={expanded ? '缩小' : '放大'}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={onExpand}
+          style={{
+            ...chromeIconBtn,
+            width: 'var(--biu-size-control-md)',
+            height: 'var(--biu-size-control-md)',
+          }}
+        >
+          {expanded ? <ArrowsPointingInIcon style={chromeIcon} /> : <ArrowsPointingOutIcon style={chromeIcon} />}
+        </button>
       </div>
     </div>
   )
@@ -561,40 +585,70 @@ function SandboxCard({ data, update, writable }: BlockProps) {
   const fill = sandboxLooksFillLayout(source)
   const [tab, setTab] = useState<'preview' | 'code'>('preview')
   const [frame, setFrame] = useState(0)
+  const [expanded, setExpanded] = useState(false)
   const hostRef = useRef<HTMLDivElement | null>(null)
   const compiled = useMemo(() => compileSandboxSource(source), [source])
   const editing = tab === 'code'
 
-  return (
-    <ReUI>
+  useEffect(() => {
+    if (!expanded) return
+    const root = hostRef.current
+    void Promise.resolve(root?.requestFullscreen?.({ navigationUI: 'hide' })).catch(() => {})
+    const onFs = () => {
+      if (!document.fullscreenElement) setExpanded(false)
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      event.stopPropagation()
+      setExpanded(false)
+    }
+    document.addEventListener('fullscreenchange', onFs)
+    window.addEventListener('keydown', onKey, true)
+    return () => {
+      document.removeEventListener('fullscreenchange', onFs)
+      window.removeEventListener('keydown', onKey, true)
+      if (document.fullscreenElement) void document.exitFullscreen?.()
+    }
+  }, [expanded])
+
+  const card = (
     <div
       ref={hostRef}
       data-testid="page-sandbox-block"
+      data-sandbox-expanded={expanded ? '1' : undefined}
       className={fill ? 'sandbox-fill' : undefined}
       style={{
-        position: 'relative',
+        position: expanded ? 'fixed' : 'relative',
+        inset: expanded ? 0 : undefined,
+        zIndex: expanded ? 2147483646 : undefined,
         display: 'flex',
         flexDirection: 'column',
-        width: cssBoxSize(width) ?? '100%',
-        height: cssBoxSize(height) ?? SANDBOX_DEFAULT_HEIGHT,
+        width: expanded ? '100%' : cssBoxSize(width) ?? '100%',
+        height: expanded ? '100%' : cssBoxSize(height) ?? SANDBOX_DEFAULT_HEIGHT,
         maxWidth: '100%',
         overflow: 'hidden',
         boxSizing: 'border-box',
-        border: 'var(--biu-stroke-width) solid var(--biu-color-border)',
-        borderRadius: 10,
+        border: expanded ? 'none' : 'var(--biu-stroke-width) solid var(--biu-color-border)',
+        borderRadius: expanded ? 0 : 10,
         background: 'var(--biu-color-bg)',
       }}
     >
+      {expanded ? (
+        <style>{`[data-testid="page-sandbox-block"]:fullscreen,[data-testid="page-sandbox-block"]:-webkit-full-screen{inset:0!important;width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;display:flex!important;flex-direction:column!important}`}</style>
+      ) : null}
       <SandboxBar
         title={title}
         onTitle={(next) => update({ title: next })}
         tab={tab}
         onTab={setTab}
         ro={ro}
+        expanded={expanded}
         onRefresh={() => {
           live.reload()
           setFrame((n) => n + 1)
         }}
+        onExpand={() => setExpanded((open) => !open)}
       />
       <div style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'auto' }}>
         {editing ? (
@@ -611,11 +665,12 @@ function SandboxCard({ data, update, writable }: BlockProps) {
             }}
           />
         )}
-        {ro ? null : <HeightGrip boxRef={hostRef} onHeight={(next) => update({ height: next })} />}
+        {ro || expanded ? null : <HeightGrip boxRef={hostRef} onHeight={(next) => update({ height: next })} />}
       </div>
     </div>
-    </ReUI>
   )
+
+  return <ReUI>{expanded ? createPortal(card, document.body) : card}</ReUI>
 }
 
 export function apply(ctx: {
