@@ -46,6 +46,7 @@ export function injectPageBlockPlugin(host: HTMLElement, plugin: string) {
   host.setAttribute('data-page-block-plugin', id)
   const walk = (el: Element, path: string) => {
     if (!(el instanceof HTMLElement) || SKIP.has(el.tagName)) return
+    if (el.hasAttribute('data-html-sandbox') || el.hasAttribute('data-html-pick')) return
     if (el !== host) {
       el.setAttribute(PLUGIN_ATTR, id)
       if (!el.getAttribute(KIND_ATTR) && SURFACE.has(el.tagName)) {

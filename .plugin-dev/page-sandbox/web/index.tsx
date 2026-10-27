@@ -159,7 +159,7 @@ function HtmlSandbox({
         data-testid="page-html-sandbox"
         data-html-sandbox=""
         data-page-block-capture=""
-        style={{ display: 'block', width: '100%', height: '100%', minHeight: live ? 80 : undefined }}
+        style={{ display: 'block', width: '100%', height: '100%', minHeight: live ? 80 : undefined, overflow: 'auto' }}
       />
       {error ? (
         <div data-testid="html-sandbox-error" style={{ color: 'var(--biu-color-danger)', fontSize: 12, padding: 8 }}>
@@ -334,7 +334,7 @@ const chromeIcon = {
   width: 14,
   height: 14,
   flexShrink: 0,
-  color: 'var(--biu-color-ink-purple)',
+  color: 'var(--biu-color-icon)',
 } as const
 
 function sandboxTitle(raw: unknown) {
@@ -894,7 +894,7 @@ function HtmlCard({ data, update, writable }: BlockProps) {
         }}
         onExpand={deck.start}
       />
-      <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+      <div style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'auto' }}>
         {editing ? (
           <SourceEditor html={html} onChange={source.save} compile={compiled} />
         ) : (

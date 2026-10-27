@@ -25,7 +25,7 @@ test('stamps every div and span plus semantic nodes', () => {
   const stamped = [...root.querySelectorAll('[data-html-pick]')]
   if (root.hasAttribute('data-html-pick') && !stamped.includes(root)) stamped.unshift(root)
   const tags = stamped.map((el) => el.tagName)
-  assert.equal(root.getAttribute('data-biu-kind'), 'html')
+  assert.equal(root.getAttribute('data-biu-kind'), 'sandbox')
   assert.ok(tags.includes('DIV'))
   assert.ok(tags.includes('H2'))
   assert.ok(tags.includes('SPAN'))

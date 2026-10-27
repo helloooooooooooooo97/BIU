@@ -21,7 +21,7 @@ const HIT = new Set([
   'SECTION',
 ])
 
-export const HTML_PICK_KIND = 'html'
+export const HTML_PICK_KIND = 'sandbox'
 export const HTML_PICK_MARK = 'data-html-pick'
 
 function hashText(value: string) {
