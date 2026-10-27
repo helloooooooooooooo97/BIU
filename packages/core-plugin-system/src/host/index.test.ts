@@ -337,10 +337,9 @@ test('member stop drops the hub when the last viewer stops a builtin plugin', as
       hostJs: `export const name = 'page-html-blocks'\nexport function apply() {}\n`,
     })
     await store.pack('page-html-blocks')
+    await store.openPlugin('page-html-blocks')
     process.env.BIU_ONLINE = '1'
-    await writeFile(join(dir, 'store.json'), `${JSON.stringify({ enabled: ['page-html-blocks'], lastRunAt: {} })}\n`)
-    const store2 = new PluginStoreService(ctx, pluginDir, join(dir, 'store.json'), join(dir, '.plugin-dev')).open()
-    await runWithAccount('ada', () => runWithRequestWorkspace('ws', () => store2.close('page-html-blocks')))
+    await runWithAccount('ada', () => runWithRequestWorkspace('ws', () => store.close('page-html-blocks')))
     assert.ok(dropped.includes('page-html-blocks'))
     const saved = JSON.parse(await readFile(join(dir, 'store.json'), 'utf8')) as { enabled: string[] }
     assert.deepEqual(saved.enabled, [])
