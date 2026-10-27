@@ -199,8 +199,6 @@ function sandboxInnerAtPoint(x: number, y: number): HTMLElement | null {
   let bestArea = Infinity
   for (const host of document.querySelectorAll('[data-sandbox]')) {
     if (!(host instanceof HTMLElement) || !host.shadowRoot) continue
-    const hostBox = rawBox(host)
-    if (hostBox.width <= 0 || hostBox.height <= 0 || !pointInBox(hostBox, x, y)) continue
     for (const el of host.shadowRoot.querySelectorAll('[data-sandbox-pick], [data-biu-kind="sandbox"]')) {
       if (!(el instanceof HTMLElement) || !isSandboxInnerEl(el)) continue
       const box = rawBox(el)
@@ -426,8 +424,11 @@ export function resolvePickAtPoint(x: number, y: number, route: string) {
   if (stacked.some((el) => el instanceof Element && composedClosest(el, '[data-testid="chat-overlay-panel"]'))) return null
   const inner = sandboxInnerAtPoint(x, y)
   if (inner && !isPickIgnored(inner) && !inHiddenPane(inner)) {
-    const hit = resolvePickFromNode(inner, route, pickSurfaceAtPoint(x, y))
+    const surface = pickSurfaceAtPoint(x, y)
+    const hit = resolvePickFromNode(inner, route, surface)
     if (hit) return hit
+    const raw = resolvePickFromNode(inner, route, null)
+    if (raw?.ref.kind === 'sandbox') return raw
   }
   const surface = pickSurfaceAtPoint(x, y)
   const pool = surface

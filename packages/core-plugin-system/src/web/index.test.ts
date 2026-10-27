@@ -278,6 +278,8 @@ test('html page blocks register plugin id for slash', async () => {
   assert.doesNotMatch(html, /newHtmlFile/)
   assert.match(html, /page-sandbox-preview/)
   assert.match(html, /data-sandbox=""/)
+  assert.match(html, /inset: 0/)
+  assert.match(html, /position: 'absolute'/)
   assert.match(html, /sandbox_compile|compileSandboxSource/)
   assert.doesNotMatch(html, /biu:asset-changed/)
   assert.doesNotMatch(html, /compileHtmlSource/)

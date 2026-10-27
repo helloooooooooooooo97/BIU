@@ -93,7 +93,15 @@ function SandboxPreview({
         data-testid="page-sandbox-preview"
         data-sandbox=""
         data-page-block-capture=""
-        style={{ display: 'block', width: '100%', height: '100%', minHeight: 80, overflow: 'auto' }}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          display: 'block',
+          width: 'auto',
+          height: 'auto',
+          minHeight: 0,
+          overflow: 'auto',
+        }}
       />
       {error ? (
         <div data-testid="sandbox-error" style={{ color: 'var(--biu-color-danger)', fontSize: 12, padding: 8 }}>

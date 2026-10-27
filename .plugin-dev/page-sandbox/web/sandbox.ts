@@ -80,8 +80,13 @@ export function mountSandbox(root: ShadowRoot, source: string) {
   root.innerHTML = ''
   adoptDocumentStyles(root)
   const theme = document.createElement('style')
+  theme.setAttribute('data-sandbox-theme', '')
   theme.textContent = hostThemeCss()
   root.append(theme)
+  const pickMode = document.createElement('style')
+  pickMode.setAttribute('data-sandbox-pick-mode', '')
+  pickMode.textContent = SANDBOX_PICK_MODE_CSS
+  root.append(pickMode)
   if (!looksLikeJsx(text)) {
     const compiled = compileSandboxSource(text)
     if (!compiled.ok) throw new Error(compiled.error)
