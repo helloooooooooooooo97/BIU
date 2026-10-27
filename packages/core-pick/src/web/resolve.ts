@@ -183,6 +183,33 @@ function htmlBlockFrom(node: Element | null) {
   return composedClosest(node, HTML_BLOCK_SEL)
 }
 
+function isSandboxInnerEl(el: Element) {
+  if (!(el instanceof HTMLElement)) return false
+  const kind = el.getAttribute('data-biu-kind')
+  return kind === 'sandbox' || kind === 'html' || el.hasAttribute('data-html-pick')
+}
+
+function sandboxInnerAtPoint(x: number, y: number): HTMLElement | null {
+  let best: HTMLElement | null = null
+  let bestArea = Infinity
+  for (const host of queryAllDeep(document, '[data-html-sandbox], [data-page-block="sandbox"]')) {
+    const hostBox = visiblePickBox(host)
+    if (!hostBox || !pointInBox(hostBox, x, y)) continue
+    const root: ParentNode = host.shadowRoot ?? host
+    for (const el of root.querySelectorAll('[data-html-pick], [data-biu-kind="sandbox"], [data-biu-kind="html"]')) {
+      if (!(el instanceof HTMLElement) || !isSandboxInnerEl(el)) continue
+      const box = visiblePickBox(el)
+      if (!box || !pointInBox(box, x, y)) continue
+      const area = Math.max(1, box.width * box.height)
+      if (area <= bestArea) {
+        best = el
+        bestArea = area
+      }
+    }
+  }
+  return best
+}
+
 function refineSandboxPick(
   hit: { el: HTMLElement; ref: PickRef } | null,
   stacked: Element[],
@@ -192,15 +219,13 @@ function refineSandboxPick(
   if (!hit) return null
   const block = htmlBlockFrom(hit.el)
   if (!block) return hit
-  if (hit.ref.kind === 'html' && (hit.el.hasAttribute('data-html-pick') || hit.el.getAttribute('data-biu-kind') === 'html')) {
-    return hit
-  }
+  if (isSandboxInnerEl(hit.el) && (hit.ref.kind === 'sandbox' || hit.ref.kind === 'html')) return hit
   for (const el of stacked) {
     if (!(el instanceof HTMLElement) || el === block) continue
     if (!composedContains(block, el)) continue
-    if (el.getAttribute('data-biu-kind') !== 'html' && !el.hasAttribute('data-html-pick')) continue
+    if (!isSandboxInnerEl(el)) continue
     const inner = resolvePickFromNode(el, route, surface)
-    if (inner?.ref.kind === 'html') return inner
+    if (inner && (inner.ref.kind === 'sandbox' || inner.ref.kind === 'html')) return inner
   }
   return hit
 }
@@ -211,14 +236,14 @@ function innermostHtmlTarget(start: Element, highlight: HTMLElement) {
   let node: Element | null = start
   const stop = block ?? highlight
   while (node && node !== stop && composedContains(stop, node)) {
-    if (node instanceof HTMLElement && (node.getAttribute('data-biu-kind') === 'html' || node.hasAttribute('data-html-pick'))) {
+    if (isSandboxInnerEl(node)) {
       stamped = node
       break
     }
     node = composedParent(node)
   }
   if (stamped) return stamped
-  if (highlight.getAttribute('data-biu-kind') === 'html' || highlight.hasAttribute('data-html-pick')) return highlight
+  if (isSandboxInnerEl(highlight)) return highlight
   if (block && start instanceof HTMLElement && block.contains(start) && start !== block) return start
   return null
 }
@@ -235,7 +260,7 @@ function withEditorPickContext(ref: PickRef, el: HTMLElement, start: Element = e
   const sourced = withHtmlElement(withHostSource(ref, el), start, el)
   const locus = editorLocusFromNode(el)
   const next = locus ? { ...withPickLocus(sourced, locus), id: ref.id, ...(sourced.element ? { element: sourced.element } : {}) } : sourced
-  if (ref.kind !== 'html' || next.selection) return next
+  if ((ref.kind !== 'html' && ref.kind !== 'sandbox') || next.selection) return next
   const snippet = pickPreview(el.textContent ?? '', 120)
   return snippet ? { ...next, selection: snippet } : next
 }
@@ -385,6 +410,11 @@ export function pickSurfaceAtPoint(x: number, y: number): HTMLElement | null {
 export function resolvePickAtPoint(x: number, y: number, route: string) {
   const stacked = elementsFromPointDeep(x, y)
   if (stacked.some((el) => el instanceof Element && composedClosest(el, '[data-testid="chat-overlay-panel"]'))) return null
+  const inner = sandboxInnerAtPoint(x, y)
+  if (inner && !isPickIgnored(inner) && !inHiddenPane(inner)) {
+    const hit = resolvePickFromNode(inner, route, pickSurfaceAtPoint(x, y))
+    if (hit) return hit
+  }
   const surface = pickSurfaceAtPoint(x, y)
   const pool = surface
     ? stacked.filter((el): el is Element => el instanceof Element && composedContains(surface, el))

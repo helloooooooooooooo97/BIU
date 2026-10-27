@@ -233,7 +233,7 @@ export function pathLeaf(path: string) {
 }
 
 function pickChipName(ref: PickRef) {
-  if (ref.kind === 'html' && ref.label?.trim()) return ref.label.trim()
+  if ((ref.kind === 'html' || ref.kind === 'sandbox') && ref.label?.trim()) return ref.label.trim()
   if (ref.kind === 'file') return pathLeaf(ref.path || '') || ref.label || '文件'
   if (ref.title?.trim()) return ref.title.trim()
   const file = pathLeaf(ref.path || '')

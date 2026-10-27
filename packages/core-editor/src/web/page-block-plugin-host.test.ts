@@ -21,3 +21,19 @@ test('page-block host stamps plugin on inner surfaces that plugins did not tag',
   assert.equal(html.getAttribute('data-biu-id'), 'html:0/1')
   host.remove()
 })
+
+test('page-block host does not stamp plugin onto the sandbox shadow host', () => {
+  const host = document.createElement('div')
+  host.className = 'page-block'
+  const box = document.createElement('div')
+  const sand = document.createElement('div')
+  sand.setAttribute('data-html-sandbox', '')
+  sand.setAttribute('data-testid', 'page-html-sandbox')
+  box.append(sand)
+  host.append(box)
+  document.body.append(host)
+  injectPageBlockPlugin(host, 'page-sandbox')
+  assert.equal(sand.hasAttribute('data-biu-kind'), false)
+  assert.equal(sand.getAttribute('data-biu-plugin'), null)
+  host.remove()
+})
