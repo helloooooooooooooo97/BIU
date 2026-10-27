@@ -80,7 +80,7 @@ const CSS = `
 .fsdb-page .tasks-table-wrap:has(.fsdb-bulk) .fsdb-check-rail{z-index:4}
 .fsdb-page .tasks-table-wrap:has(.fsdb-bulk) .fsdb-check-slot.is-head{z-index:5}
 .fsdb-page .tasks-table-wrap:has(.fsdb-bulk) .tasks-table th.is-pin-col,.fsdb-page .tasks-table-wrap:has(.fsdb-bulk) .tasks-table td.is-pin-col{z-index:2}
-.fsdb-bulk-count{min-width:1.25em;padding:0 6px 0 0;color:var(--biu-pick,#2383e2);font-size:13px;font-weight:650;white-space:nowrap;cursor:pointer}
+.fsdb-bulk-count{min-width:1.25em;padding:0 6px 0 0;color:var(--biu-pick,var(--biu-pick));font-size:13px;font-weight:650;white-space:nowrap;cursor:pointer}
 .fsdb-bulk .tasks-icon-btn{color:var(--biu-icon)}
 .fsdb-bulk-more{position:relative;display:inline-flex}
 .fsdb-bulk-menu{position:absolute;top:calc(100% + 6px);left:0;z-index:40;min-width:180px;padding:8px;background:var(--biu-sidebar);border:1px solid var(--biu-border);border-radius:10px;box-shadow:var(--biu-shadow);display:flex;flex-direction:column;gap:4px;font-weight:600}
@@ -97,10 +97,10 @@ const CSS = `
 .fsdb-layout-opt:hover{background:var(--biu-hover);color:var(--biu-label)}
 .fsdb-layout-opt.is-active{color:var(--biu-business);background:color-mix(in srgb,var(--biu-business) 10%,var(--biu-input))}
 .fsdb-create-group{position:relative;display:inline-flex;align-items:center;margin-left:8px}
-.fsdb-create-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:26px;margin-left:0;padding:0 10px;border:0;border-radius:4px 0 0 4px;background:var(--biu-pick,#2383e2);color:#fff;cursor:pointer;font:inherit;font-size:14px;font-weight:600;white-space:nowrap}
-.fsdb-create-btn:hover{background:var(--biu-pick,#2383e2);filter:brightness(.92)}
+.fsdb-create-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:26px;margin-left:0;padding:0 10px;border:0;border-radius:4px 0 0 4px;background:var(--biu-pick,var(--biu-pick));color:var(--biu-on-accent);cursor:pointer;font:inherit;font-size:14px;font-weight:600;white-space:nowrap}
+.fsdb-create-btn:hover{background:var(--biu-pick,var(--biu-pick));filter:brightness(.92)}
 .fsdb-create-scope-wrap{display:inline-flex;align-items:stretch}
-.fsdb-create-scope{display:inline-flex;align-items:center;justify-content:center;gap:2px;height:26px;padding:0 6px;border:0;border-left:1px solid color-mix(in srgb,#fff 35%,transparent);border-radius:0 4px 4px 0;background:var(--biu-pick,#2383e2);color:#fff;cursor:pointer}
+.fsdb-create-scope{display:inline-flex;align-items:center;justify-content:center;gap:2px;height:26px;padding:0 6px;border:0;border-left:1px solid color-mix(in srgb,var(--biu-on-accent) 35%,transparent);border-radius:0 4px 4px 0;background:var(--biu-pick,var(--biu-pick));color:var(--biu-on-accent);cursor:pointer}
 .fsdb-create-scope:hover{filter:brightness(.92)}
 .fsdb-create-scope-menu{position:absolute;top:calc(100% + 4px);right:0;z-index:40;display:flex;flex-direction:column;gap:2px;min-width:120px;padding:6px;background:var(--biu-sidebar);border:1px solid var(--biu-border);border-radius:10px;box-shadow:var(--biu-shadow)}
 .fsdb-create-scope-menu button{display:inline-flex;align-items:center;gap:6px;width:100%;border:0;border-radius:7px;padding:6px 8px;background:transparent;color:var(--biu-sidebar-fg);font:inherit;font-size:14px;font-weight:500;cursor:pointer;text-align:left}
@@ -116,7 +116,7 @@ const CSS = `
 .fsdb-spin{animation:fsdb-spin .7s linear infinite}
 @keyframes fsdb-spin{to{transform:rotate(360deg)}}
 .fsdb-refresh-toast{position:absolute;top:calc(100% + 8px);right:0;z-index:50;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;border-radius:8px;padding:7px 10px;background:var(--biu-sidebar);border:1px solid var(--biu-border);box-shadow:var(--biu-shadow);color:var(--biu-label);font-size:14px;font-weight:600}
-.fsdb-refresh-toast svg{color:var(--biu-ok,#2f7d4c)}
+.fsdb-refresh-toast svg{color:var(--biu-ok,var(--biu-ok))}
 .fsdb-page .tasks-sort-btn.is-active,.fsdb-page .tasks-refresh.is-active{color:var(--biu-icon-active)}
 .fsdb-page .tasks-sort-btn.is-custom{color:var(--biu-icon-active)}
 .fsdb-page .tasks-sort-dot{position:absolute;top:4px;right:4px;width:5px;height:5px;border-radius:50%;background:var(--biu-business)}
@@ -337,7 +337,7 @@ const CSS = `
 .fsdb-page .tasks-table tbody tr:hover{position:relative;z-index:6}
 .fsdb-page .tasks-table [data-dock-tip]::after{z-index:80}
 .fsdb-page .tasks-table th{padding:6px 6px;color:var(--biu-label-2);font-size:14px;font-weight:500;position:sticky;top:0;background:var(--biu-surface);z-index:5;white-space:nowrap}
-.fsdb-page .tasks-table th.is-facet-col{color:var(--biu-tag-ink,#2c2c2b);background:color-mix(in srgb,var(--biu-tag) 38%,var(--biu-surface))}
+.fsdb-page .tasks-table th.is-facet-col{color:var(--biu-tag-ink,var(--biu-label));background:color-mix(in srgb,var(--biu-tag) 38%,var(--biu-surface))}
 .fsdb-page .tasks-table.is-cols-fixed{table-layout:fixed;width:max-content;min-width:0;max-width:none}
 .fsdb-page .tasks-table.is-cols-fixed.is-wrap{width:max-content;max-width:none;min-width:0}
 .fsdb-page .tasks-table.is-cols-fixed col,.fsdb-page .tasks-table.is-cols-fixed th,.fsdb-page .tasks-table.is-cols-fixed td{box-sizing:border-box}
@@ -459,9 +459,9 @@ const CSS = `
 .fsdb-boolbox{width:16px;height:16px;border-radius:4px;border:1.5px solid var(--biu-border);display:inline-flex;align-items:center;justify-content:center;background:transparent;color:var(--biu-bg);box-sizing:border-box}
 .fsdb-field-bool-glyph{display:inline-flex;flex:none;align-items:center;line-height:0}
 .fsdb-field-bool-glyph .fsdb-boolbox{width:14px;height:14px}
-.fsdb-boolbox.is-on{background:var(--biu-pick,#2383e2);border-color:transparent;color:var(--biu-bg)}
+.fsdb-boolbox.is-on{background:var(--biu-pick,var(--biu-pick));border-color:transparent;color:var(--biu-bg)}
 .fsdb-boolbox.is-locked{cursor:default;opacity:.9}
-.fsdb-boolbox.is-locked.is-on{background:var(--biu-pick,#2383e2);border-color:transparent;color:var(--biu-bg)}
+.fsdb-boolbox.is-locked.is-on{background:var(--biu-pick,var(--biu-pick));border-color:transparent;color:var(--biu-bg)}
 .fsdb-boolbtn:hover .fsdb-boolbox:not(.is-on){border-color:var(--biu-label-2)}
 .fsdb-detail-stage{position:relative;display:flex;min-width:0;width:100%;min-height:min-content;flex:1 0 auto;flex-direction:row;overflow:visible;background:var(--biu-bg)}
 .heading-outline-host{position:absolute;inset:0 auto 0 0;width:12px;z-index:20;pointer-events:none;overflow:visible}
@@ -829,7 +829,7 @@ a.fsdb-person.is-link:hover .fsdb-person-name{text-decoration:underline}
 .fsdb-share-tabs{display:flex;gap:18px;height:38px;margin:8px 16px 0;border-bottom:1px solid var(--biu-border)}
 .fsdb-share-tabs button{position:relative;border:0;background:transparent;padding:0 1px;color:var(--biu-label-2);font:inherit;font-size:13px;font-weight:600;cursor:pointer}
 .fsdb-share-tabs button.is-on{color:var(--biu-label);font-weight:700}
-.fsdb-share-tabs button.is-on::after{position:absolute;right:0;bottom:-1px;left:0;height:2px;border-radius:2px;background:var(--biu-pick,#2383e2);content:""}
+.fsdb-share-tabs button.is-on::after{position:absolute;right:0;bottom:-1px;left:0;height:2px;border-radius:2px;background:var(--biu-pick,var(--biu-pick));content:""}
 .fsdb-share-collab-summary{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;color:var(--biu-label-2);font-size:12px}
 .fsdb-share-scope{display:inline-flex;align-items:center;gap:4px;flex:none;border-radius:999px;background:var(--biu-hover);padding:4px 8px;color:var(--biu-label-2);font-size:12px;font-weight:700}
 .fsdb-share-scope.is-shared{background:var(--biu-pick-fill);color:var(--biu-pick)}
@@ -884,7 +884,7 @@ a.fsdb-person.is-link:hover .fsdb-person-name{text-decoration:underline}
 .fsdb-share-empty>span{min-width:0}
 .fsdb-share-empty-title{margin:0;color:var(--biu-label);font-size:13px;font-weight:650}
 .fsdb-share-empty-copy{margin:2px 0 0;color:var(--biu-label-3);font-size:12px;line-height:1.4;font-weight:500}
-.fsdb-share-publish,.fsdb-share-panel .fsdb-share-copy{display:inline-flex;align-items:center;justify-content:center;gap:4px;height:34px;border:0;border-radius:7px;background:var(--biu-pick,#2383e2);padding:0 12px;color:#fff;font:inherit;font-size:13px;font-weight:650;cursor:pointer}
+.fsdb-share-publish,.fsdb-share-panel .fsdb-share-copy{display:inline-flex;align-items:center;justify-content:center;gap:4px;height:34px;border:0;border-radius:7px;background:var(--biu-pick,var(--biu-pick));padding:0 12px;color:var(--biu-on-accent);font:inherit;font-size:13px;font-weight:650;cursor:pointer}
 .fsdb-share-empty .fsdb-share-publish{width:auto;flex:none}
 .fsdb-share-invite-row{display:grid;grid-template-columns:minmax(0,1fr) 78px 52px;gap:6px}
 .fsdb-share-invite-row .fsdb-share-publish{width:52px;padding:0}
@@ -919,9 +919,9 @@ a.fsdb-person.is-link:hover .fsdb-person-name{text-decoration:underline}
 .fsdb-share-setting-copy em{color:var(--biu-label-2);font-size:12px;font-style:normal;font-weight:500;line-height:1.35}
 .fsdb-share-toggle{position:relative;width:32px;height:18px;flex:none;border:0;border-radius:9px;background:var(--biu-border);padding:0;cursor:pointer}
 .fsdb-share-toggle span{position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:transform 120ms ease}
-.fsdb-share-toggle.is-on{background:var(--biu-pick,#2383e2)}
+.fsdb-share-toggle.is-on{background:var(--biu-pick,var(--biu-pick))}
 .fsdb-share-toggle.is-on span{transform:translateX(14px)}
-.fsdb-share-toggle:focus-visible{outline:2px solid var(--biu-pick,#2383e2);outline-offset:2px}
+.fsdb-share-toggle:focus-visible{outline:2px solid var(--biu-pick,var(--biu-pick));outline-offset:2px}
 .fsdb-share-pin{display:flex;height:34px;align-items:center;justify-content:space-between;margin:0 0 8px;border-radius:7px;background:var(--biu-input);padding:0 8px 0 10px;color:var(--biu-label-2);font-size:12px}
 .fsdb-share-pin.is-collapsed{display:none}
 .fsdb-share-pin strong{margin-left:5px;color:var(--biu-label);font-size:13px;font-weight:700;letter-spacing:.12em}
@@ -1041,7 +1041,7 @@ html:not(.dark) .fsdb-checkrow.is-on,
 html:not(.dark) .fsdb-filter-row,
 html:not(.dark) .tasks-filter-menu-label,
 html:not(.dark) .fsdb-cellselect-menu,
-html:not(.dark) .fsdb-share-dl-item{color:var(--biu-cell-ink,#2c2c2b)}
+html:not(.dark) .fsdb-share-dl-item{color:var(--biu-cell-ink,var(--biu-label))}
 html:not(.dark) .tasks-viewdd-act,
 html:not(.dark) .tasks-viewdd-act svg,
 html:not(.dark) .tasks-viewdd-act:hover,
@@ -1061,7 +1061,7 @@ html:not(.dark) .fsdb-checkrow:hover .fsdb-checkrow-icon svg,
 html:not(.dark) .fsdb-checkrow>svg,
 html:not(.dark) .fsdb-checkrow.is-on>svg,
 html:not(.dark) .fsdb-checkrow:hover>svg,
-html:not(.dark) .fsdb-cellselect-menu svg{color:#91918e}
+html:not(.dark) .fsdb-cellselect-menu svg{color:var(--biu-icon)}
 `
 
 export function ensureFsdbStyle() {

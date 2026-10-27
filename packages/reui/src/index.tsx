@@ -5,8 +5,8 @@
 import * as React from 'react'
 
 const CSS = `
-.rui-root{--rui-bg:#fff;--rui-fg:#171717;--rui-muted:#737373;--rui-border:#ececec;--rui-primary:#171717;--rui-primary-hover:#0a0a0a;--rui-primary-fg:#fff;--rui-accent:#f7f7f7;--rui-soft:#fafafa;--rui-hover:#f5f5f5;--rui-line:#f0f0f0;--rui-danger:#b42318;--rui-ok:#0f7a4a;--rui-radius:10px;color:var(--rui-fg);color-scheme:light;font:12.5px/1.45 ui-sans-serif,system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
-html.dark .rui-root{--rui-bg:#191919;--rui-fg:#f0efed;--rui-muted:rgba(242,241,237,.72);--rui-border:rgba(242,241,237,.12);--rui-primary:#f0efed;--rui-primary-hover:#e4e3df;--rui-primary-fg:#191919;--rui-accent:#262626;--rui-soft:#202020;--rui-hover:#2c2c2c;--rui-line:rgba(242,241,237,.08);--rui-danger:#ff5949;--rui-ok:#1fac60;color-scheme:dark}
+.rui-root{--rui-bg:var(--biu-bg);--rui-fg:var(--biu-label);--rui-muted:var(--biu-label-3);--rui-border:var(--biu-border);--rui-primary:var(--biu-business);--rui-primary-hover:var(--biu-hover-strong);--rui-primary-fg:var(--biu-on-accent);--rui-accent:var(--biu-bubble);--rui-soft:var(--biu-sidebar);--rui-hover:var(--biu-hover);--rui-line:var(--biu-border);--rui-danger:var(--biu-danger);--rui-ok:var(--biu-ok);--rui-radius:var(--biu-radius-xl);color:var(--rui-fg);color-scheme:light;font:12.5px/1.45 var(--font-sans),ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+html.dark .rui-root{--rui-primary-fg:var(--biu-bg);color-scheme:dark}
 .rui-card{background:var(--rui-bg);border:1px solid var(--rui-border);border-radius:var(--rui-radius);padding:18px 20px}
 .rui-card-head{display:flex;align-items:flex-start;gap:12px;margin:0 0 16px}
 .rui-card-title{margin:0;font-size:13px;font-weight:600;letter-spacing:-.01em;line-height:1.3}
@@ -41,7 +41,7 @@ html.dark .rui-root{--rui-bg:#191919;--rui-fg:#f0efed;--rui-muted:rgba(242,241,2
 .rui-badge-destructive{background:color-mix(in srgb,var(--rui-danger) 14%,transparent);color:var(--rui-danger)}
 .rui-table-wrap{width:100%;overflow:auto}
 .rui-table{width:100%;border-collapse:collapse;font-size:12.5px}
-.rui-table th{text-align:left;font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#a3a3a3;padding:0 10px 8px;border-bottom:1px solid var(--rui-border);white-space:nowrap}
+.rui-table th{text-align:left;font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--rui-muted);padding:0 10px 8px;border-bottom:1px solid var(--rui-border);white-space:nowrap}
 .rui-table td{padding:10px;border-bottom:1px solid var(--rui-line);vertical-align:middle}
 .rui-table tr:last-child td{border-bottom:0}
 .rui-tabs{display:inline-flex;align-items:center;gap:0;padding:3px;background:var(--rui-accent);border-radius:8px;width:fit-content}
@@ -64,9 +64,9 @@ html.dark .rui-root{--rui-bg:#191919;--rui-fg:#f0efed;--rui-muted:rgba(242,241,2
 .rui-tree-label{display:flex;align-items:center;gap:6px;min-height:28px;padding:3px 8px;border-radius:6px;font-size:12.5px;line-height:1.35;color:var(--rui-fg)}
 .rui-tree-item:hover .rui-tree-label,.rui-tree-item[data-selected=true] .rui-tree-label{background:var(--rui-hover)}
 .rui-tree-item:focus-visible .rui-tree-label{box-shadow:inset 0 0 0 1px var(--rui-fg)}
-.rui-tree-chevron{width:14px;height:14px;flex:0 0 auto;color:#a3a3a3;transition:transform .15s ease}
+.rui-tree-chevron{width:14px;height:14px;flex:0 0 auto;color:var(--rui-muted);transition:transform .15s ease}
 .rui-tree-item[aria-expanded=false] .rui-tree-chevron{transform:rotate(-90deg)}
-.rui-tree-dot{width:5px;height:5px;border-radius:99px;background:#d4d4d4;flex:0 0 auto;margin-left:4.5px;margin-right:4.5px}
+.rui-tree-dot{width:5px;height:5px;border-radius:99px;background:var(--rui-border);flex:0 0 auto;margin-left:4.5px;margin-right:4.5px}
 @media (max-width:720px){.rui-stats{grid-template-columns:1fr 1fr}.rui-stat:nth-child(2){border-right:0}.rui-stat:nth-child(n+3){border-top:1px solid var(--rui-border)}}
 .rui-ios{background:#f2f2f7;border-radius:16px;padding:8px 0 16px}
 .rui-large{margin:8px 20px 12px;font-size:28px;font-weight:700;letter-spacing:-.04em;line-height:1.1}

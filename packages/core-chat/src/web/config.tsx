@@ -553,7 +553,7 @@ export function ChatConfig(props?: { onClose?: () => void }) {
         {removable ? (
           <button
             type="button"
-            className={`grid size-7 shrink-0 place-items-center rounded-md text-(--biu-label-3) transition-opacity hover:bg-(--biu-hover) hover:text-(--biu-danger,#b42318) ${
+            className={`grid size-7 shrink-0 place-items-center rounded-md text-(--biu-label-3) transition-opacity hover:bg-(--biu-hover) hover:text-(--biu-danger,var(--biu-danger)) ${
               activeRow ? 'opacity-100' : 'opacity-50 group-hover:opacity-100 focus:opacity-100'
             }`}
             title="删除连接"
@@ -907,7 +907,7 @@ export function ChatConfig(props?: { onClose?: () => void }) {
               </div>
               <div className="flex items-center justify-end gap-2 border-t border-(--biu-border) px-4 py-2.5">
                 {error ? (
-                  <span className="mr-auto text-[11px] text-(--biu-danger,#b42318)">{error}</span>
+                  <span className="mr-auto text-[11px] text-(--biu-danger,var(--biu-danger))">{error}</span>
                 ) : null}
                 <button
                   type="button"
@@ -1057,7 +1057,7 @@ export function ChatConfig(props?: { onClose?: () => void }) {
                                 <span
                                   role="button"
                                   tabIndex={0}
-                                  className="grid size-6 shrink-0 place-items-center rounded-md text-(--biu-label-3) hover:bg-(--biu-hover) hover:text-(--biu-danger,#b42318)"
+                                  className="grid size-6 shrink-0 place-items-center rounded-md text-(--biu-label-3) hover:bg-(--biu-hover) hover:text-(--biu-danger,var(--biu-danger))"
                                   title="删除模型"
                                   aria-label={`删除 ${m.label}`}
                                   onClick={(e) => {
@@ -1113,7 +1113,7 @@ export function ChatConfig(props?: { onClose?: () => void }) {
                 {canRemoveConnection(active) ? (
                   <button
                     type="button"
-                    className="inline-flex self-start items-center gap-1 text-[11px] text-(--biu-danger,#b42318) hover:underline"
+                    className="inline-flex self-start items-center gap-1 text-[11px] text-(--biu-danger,var(--biu-danger)) hover:underline"
                     onClick={() => void onRemoveConnection(active.id)}
                   >
                     <TrashGlyph className="size-3" />
@@ -1125,7 +1125,7 @@ export function ChatConfig(props?: { onClose?: () => void }) {
               <div className="flex items-center justify-end gap-2 border-t border-(--biu-border) px-4 py-2.5">
                 {status ? <span className="mr-auto text-[11px] text-(--biu-ok)">{status}</span> : null}
                 {error ? (
-                  <span className="mr-auto text-[11px] text-(--biu-danger,#b42318)">{error}</span>
+                  <span className="mr-auto text-[11px] text-(--biu-danger,var(--biu-danger))">{error}</span>
                 ) : null}
                 {!isDefaultProvider ? (
                   <button

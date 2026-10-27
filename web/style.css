@@ -41,6 +41,8 @@
   /* Icon */
   --biu-icon: #91918e;
   --biu-icon-active: #5f5e5a;
+  --biu-icon-muted: #a6a6a3;
+  --biu-icon-fixed: #bab9b5;
   --biu-sidebar-icon: var(--biu-icon);
 
   /* Border */
@@ -58,14 +60,29 @@
   --biu-ok: #1f8a65;
   --biu-warning: #d9730d;
   --biu-warning-soft: rgba(217, 115, 13, 0.12);
+  --biu-warning-on-surface: #e8b84a;
+  --biu-code-surface: #f7f7f5;
+  --biu-code-ink: #1e1e1e;
+  --biu-on-accent: #ffffff;
+  --biu-tag-blue: #5b9fd6;
+  --biu-tag-purple: #9a6dd7;
+  --biu-tag-orange: #d9730d;
+  --biu-tag-green: #448361;
+  --biu-tag-red: #c4554d;
+  --biu-tag-rose: #e255a1;
+  --biu-tag-gold: #c2920a;
+  --biu-tag-gray: #787774;
   --biu-usage-track-cache: color-mix(in srgb, #448361 22%, #ffffff);
   --biu-usage-track-hist: color-mix(in srgb, #d9730d 22%, #ffffff);
 
-  /* Elevation — hairline first, soft shadow for floats */
-  --biu-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --biu-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
-  --biu-shadow-lv2: 0 8px 24px rgba(0, 0, 0, 0.06);
-  --biu-shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.10);
+  /* Elevation — 1 hairline, 2 float, 3 modal */
+  --biu-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --biu-shadow-2: 0 8px 24px rgba(0, 0, 0, 0.06);
+  --biu-shadow-3: 0 16px 40px rgba(0, 0, 0, 0.10);
+  --biu-shadow-sm: var(--biu-shadow-1);
+  --biu-shadow: var(--biu-shadow-2);
+  --biu-shadow-lv2: var(--biu-shadow-2);
+  --biu-shadow-lg: var(--biu-shadow-3);
 
   /* Radius — Notion 3/6/8, cards 8 */
   --biu-radius-xs: 3px;
@@ -78,19 +95,27 @@
   --biu-radius-card: 8px;
 
   /* Space — 4px grid */
+  --biu-space-0: 0px;
   --biu-space-1: 4px;
   --biu-space-2: 8px;
   --biu-space-3: 12px;
   --biu-space-4: 16px;
   --biu-space-5: 20px;
   --biu-space-6: 24px;
+  --biu-space-7: 28px;
   --biu-space-8: 32px;
 
-  /* Type */
-  --biu-text-xs: 12px;
-  --biu-text-sm: 13px;
-  --biu-text-md: 14px;
-  --biu-text-lg: 16px;
+  /* Type — font-1..6 + named aliases */
+  --biu-font-1: 11px;
+  --biu-font-2: 12px;
+  --biu-font-3: 13px;
+  --biu-font-4: 14px;
+  --biu-font-5: 16px;
+  --biu-font-6: 20px;
+  --biu-text-xs: var(--biu-font-2);
+  --biu-text-sm: var(--biu-font-3);
+  --biu-text-md: var(--biu-font-4);
+  --biu-text-lg: var(--biu-font-5);
   --biu-leading-tight: 1.3;
   --biu-leading-normal: 1.5;
   --biu-leading-relaxed: 1.6;
@@ -98,10 +123,39 @@
   --biu-weight-medium: 500;
   --biu-weight-semibold: 600;
 
+  /* Border width — --biu-border stays the color */
+  --biu-border-1: 1px;
+  --biu-border-2: 2px;
+
+  /* Opacity */
+  --biu-opacity-10: 0.1;
+  --biu-opacity-20: 0.2;
+  --biu-opacity-30: 0.3;
+  --biu-opacity-40: 0.4;
+  --biu-opacity-50: 0.5;
+  --biu-opacity-60: 0.6;
+  --biu-opacity-70: 0.7;
+  --biu-opacity-80: 0.8;
+  --biu-opacity-90: 0.9;
+
+  /* Z-index */
+  --biu-z-dropdown: 90;
+  --biu-z-modal: 200;
+  --biu-z-toast: 300;
+
+  /* Control height — 26px product density */
+  --biu-control-h-sm: 22px;
+  --biu-control-h-md: 26px;
+  --biu-control-h-lg: 32px;
+
   /* Motion / focus */
-  --biu-ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --biu-ease-standard: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --biu-ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --biu-ease: var(--biu-ease-standard);
   --biu-duration-fast: 80ms;
-  --biu-duration: 160ms;
+  --biu-duration-normal: 160ms;
+  --biu-duration-slow: 240ms;
+  --biu-duration: var(--biu-duration-normal);
   --biu-focus-ring: 0 0 0 2px color-mix(in srgb, var(--biu-pick) 45%, transparent);
 
   /* Industry aliases (Notion: text / bg-secondary / accent) */
@@ -115,17 +169,17 @@
 
   /* Layout */
   --biu-chat-width: 748px;
-  --biu-chat-font-size: 14px;
-  --biu-chat-line-height: 1.6;
-  --biu-chat-composer-font-size: 14px;
-  --biu-chat-ui-font-size: 12px;
-  --biu-chat-chip-font-size: 12px;
-  --biu-chat-gap: 12px;
+  --biu-chat-font-size: var(--biu-font-4);
+  --biu-chat-line-height: var(--biu-leading-relaxed);
+  --biu-chat-composer-font-size: var(--biu-font-4);
+  --biu-chat-ui-font-size: var(--biu-font-2);
+  --biu-chat-chip-font-size: var(--biu-font-2);
+  --biu-chat-gap: var(--biu-space-3);
   --brand-corner-clearance: 1.25rem;
-  --biu-chat-gap-turn: 24px;
-  --biu-chat-pad-x: 12px;
+  --biu-chat-gap-turn: var(--biu-space-6);
+  --biu-chat-pad-x: var(--biu-space-3);
   --biu-chat-pad-y: 10px;
-  --biu-chat-reply-pad-x: 12px;
+  --biu-chat-reply-pad-x: var(--biu-space-3);
   --biu-chat-max-width: 768px;
   --biu-center-min: 512px;
   --biu-sidebar-min: 160px;
@@ -158,6 +212,8 @@ html.dark {
   --biu-cell-ink: #f0efed;
   --biu-icon: #bab9b5;
   --biu-icon-active: #bab9b5;
+  --biu-icon-muted: #a6a6a3;
+  --biu-icon-fixed: #bab9b5;
   --biu-sidebar-icon: var(--biu-icon);
   --biu-border: rgba(242, 241, 237, 0.1);
   --biu-float-border: #383836;
@@ -171,12 +227,27 @@ html.dark {
   --biu-ok: #1fac60;
   --biu-warning: #ff8000;
   --biu-warning-soft: rgba(255, 128, 0, 0.16);
+  --biu-warning-on-surface: #e8b84a;
+  --biu-code-surface: #1e1e1e;
+  --biu-code-ink: #f0efed;
+  --biu-on-accent: #ffffff;
+  --biu-tag-blue: #5b9fd6;
+  --biu-tag-purple: #9a6dd7;
+  --biu-tag-orange: #d9730d;
+  --biu-tag-green: #448361;
+  --biu-tag-red: #c4554d;
+  --biu-tag-rose: #e255a1;
+  --biu-tag-gold: #c2920a;
+  --biu-tag-gray: #787774;
   --biu-usage-track-cache: color-mix(in srgb, #1fac60 28%, #191919);
   --biu-usage-track-hist: color-mix(in srgb, #ff8000 28%, #191919);
-  --biu-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.24);
-  --biu-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-  --biu-shadow-lv2: 0 0 0 1px rgba(242, 241, 237, 0.06), 0 8px 24px rgba(0, 0, 0, 0.35);
-  --biu-shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.45);
+  --biu-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.24);
+  --biu-shadow-2: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --biu-shadow-3: 0 16px 40px rgba(0, 0, 0, 0.45);
+  --biu-shadow-sm: var(--biu-shadow-1);
+  --biu-shadow: var(--biu-shadow-2);
+  --biu-shadow-lv2: 0 0 0 1px rgba(242, 241, 237, 0.06), var(--biu-shadow-2);
+  --biu-shadow-lg: var(--biu-shadow-3);
   --biu-text: var(--biu-label);
   --biu-text-secondary: var(--biu-label-2);
   --biu-text-tertiary: var(--biu-label-3);
@@ -238,12 +309,12 @@ body {
 
 *::-webkit-scrollbar-track {
   background: transparent;
-  border-radius: 999px;
+  border-radius: var(--biu-radius-full);
 }
 
 *::-webkit-scrollbar-thumb {
   background: color-mix(in srgb, var(--biu-label-3) 55%, transparent);
-  border-radius: 999px;
+  border-radius: var(--biu-radius-full);
   border: 2px solid transparent;
   background-clip: padding-box;
   min-height: 32px;
@@ -261,7 +332,7 @@ body {
   height: 16px;
   margin-top: 2px;
   border: 1px solid var(--biu-border);
-  border-radius: 999px;
+  border-radius: var(--biu-radius-full);
   background: transparent;
   cursor: pointer;
 }
@@ -273,7 +344,7 @@ body {
   left: 2px;
   width: 10px;
   height: 10px;
-  border-radius: 999px;
+  border-radius: var(--biu-radius-full);
   background: var(--biu-label-3);
   transition: transform 0.16s ease;
 }
@@ -487,7 +558,7 @@ body {
   min-width: 16px;
   height: 16px;
   padding: 0 5px;
-  border-radius: 999px;
+  border-radius: var(--biu-radius-full);
   background: #e24b4a;
   color: #fff;
   font-size: 10px;
@@ -1090,7 +1161,7 @@ body {
 }
 
 .settings-page-prefs .fsdb-boolbox.is-on {
-  background: var(--biu-pick, #2383e2);
+  background: var(--biu-pick, var(--biu-pick));
   border-color: transparent;
   color: var(--biu-bg);
 }
@@ -1114,7 +1185,7 @@ body {
 .settings-theme-card[data-theme-card="light"] {
   color-scheme: light;
   background: #ffffff;
-  color: #5f5e5a;
+  color: var(--biu-sidebar-fg);
 }
 
 .settings-theme-card[data-theme-card="light"]:hover {
@@ -1122,13 +1193,13 @@ body {
 }
 
 .settings-theme-card[data-theme-card="light"].is-on {
-  color: #2c2c2b;
+  color: var(--biu-label);
 }
 
 .settings-theme-card[data-theme-card="dark"] {
   color-scheme: dark;
   background: #191919;
-  color: #bcbab6;
+  color: var(--biu-sidebar-fg);
 }
 
 .settings-theme-card[data-theme-card="dark"]:hover {
@@ -1346,7 +1417,7 @@ body {
   height: 6px;
   flex: none;
   border-radius: 50%;
-  background: var(--biu-ok, #22c55e);
+  background: var(--biu-ok, var(--biu-ok));
 }
 
 .shell-search-hit-title-text {
@@ -1527,8 +1598,8 @@ body {
 }
 
 .chat-view-session-title-wrap .brand-corner-mascot-btn {
-  width: 26px;
-  height: 26px;
+  width: var(--biu-control-h-md);
+  height: var(--biu-control-h-md);
   border-radius: 6px;
 }
 
@@ -1756,7 +1827,7 @@ html:not(.dark) .shell-workspace-menu-action svg,
 html:not(.dark) .shell-workspace-menu-account > svg,
 html:not(.dark) .shell-workspace-menu-account button,
 html:not(.dark) .shell-workspace-menu-account-actions button {
-  color: #91918e;
+  color: var(--biu-icon);
 }
 
 html:not(.dark) .shell-workspace-menu-item.is-active .shell-workspace-menu-icon {
@@ -1879,8 +1950,8 @@ html:not(.dark) .shell-workspace-menu-item.is-active .shell-workspace-menu-icon 
 .shell-workspace-menu-account-actions button {
   display: grid;
   flex: none;
-  width: 26px;
-  height: 26px;
+  width: var(--biu-control-h-md);
+  height: var(--biu-control-h-md);
   margin: 0;
   place-items: center;
   border: 0;
@@ -2692,7 +2763,7 @@ select.settings-account-input {
   width: 32px;
   height: 32px;
   border: 1px solid var(--biu-border);
-  border-radius: 999px;
+  border-radius: var(--biu-radius-full);
   background: var(--biu-bubble);
   color: var(--biu-sidebar-fg);
 }
@@ -2755,7 +2826,7 @@ select.settings-account-input {
 }
 
 .inspector-tabs::-webkit-scrollbar-thumb {
-  border-radius: 999px;
+  border-radius: var(--biu-radius-full);
   background: color-mix(in srgb, var(--biu-label-3) 55%, transparent);
 }
 
@@ -2769,7 +2840,7 @@ select.settings-account-input {
   flex: none;
   align-items: center;
   gap: 2px;
-  height: 26px;
+  height: var(--biu-control-h-md);
   border: 0;
   border-radius: 6px;
   background: transparent;
@@ -3324,8 +3395,8 @@ select.settings-account-input {
 .chat-view-header-expand {
   display: grid;
   place-items: center;
-  width: 26px;
-  height: 26px;
+  width: var(--biu-control-h-md);
+  height: var(--biu-control-h-md);
   border: 0;
   border-radius: 6px;
   background: transparent;
@@ -3602,7 +3673,7 @@ select.settings-account-input {
 
 html.dark .chat-pane,
 html.dark .chat-overlay-panel {
-  --biu-icon: #91918e;
+  --biu-icon: var(--biu-icon);
   --biu-ok: #1fac60;
   --biu-danger: #ff5949;
   --biu-danger-soft: color-mix(in srgb, #ff5949 18%, transparent);
@@ -3959,7 +4030,7 @@ html.dark .composer-model-flyout {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  border-radius: 999px;
+  border-radius: var(--biu-radius-full);
   padding: 3px 8px;
   background: var(--biu-muted-fill);
   font-size: 12px;
@@ -4282,7 +4353,7 @@ html.dark .composer-model-flyout {
 .chat-session-row > .chat-session-row-delete,
 .chat-session-row > .chat-session-row-star,
 .chat-session-row > .sidebar-add {
-  color: #a6a6a3;
+  color: var(--biu-icon-muted);
 }
 
 .chat-session-row::before {
@@ -4329,7 +4400,7 @@ html.dark .composer-model-flyout {
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: #a6a6a3;
+  color: var(--biu-icon-muted);
   opacity: 0;
   cursor: pointer;
   line-height: 0;
@@ -4341,7 +4412,7 @@ html.dark .composer-model-flyout {
   display: block;
   width: 16px;
   height: 16px;
-  color: #a6a6a3;
+  color: var(--biu-icon-muted);
 }
 
 .chat-session-row:hover .chat-session-row-delete,
@@ -4354,7 +4425,7 @@ html.dark .composer-model-flyout {
 
 .chat-session-row-star:hover {
   background: var(--biu-hover);
-  color: #a6a6a3;
+  color: var(--biu-icon-muted);
 }
 
 .chat-session-row-delete:hover {
@@ -4376,7 +4447,7 @@ html.dark .composer-model-flyout {
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: #a6a6a3;
+  color: var(--biu-icon-muted);
   opacity: 0;
   cursor: pointer;
   line-height: 0;
@@ -4399,7 +4470,7 @@ html.dark .composer-model-flyout {
 
 .sidebar-add:hover {
   background: var(--biu-hover);
-  color: #a6a6a3;
+  color: var(--biu-icon-muted);
 }
 
 .sidebar-trail-icon {
@@ -4410,7 +4481,7 @@ html.dark .composer-model-flyout {
   min-width: 0;
   height: 24px;
   overflow: hidden;
-  color: #a6a6a3;
+  color: var(--biu-icon-muted);
   opacity: 0;
   line-height: 0;
   transition: width 150ms ease, opacity 150ms ease;
@@ -4448,14 +4519,14 @@ html.dark .composer-model-flyout {
 
 .app-side-bar .chat-session-row-delete svg,
 .app-side-bar .chat-session-row-star svg {
-  color: #a6a6a3;
+  color: var(--biu-icon-muted);
 }
 
 .chat-session-row-star.is-on,
 .chat-session-row-star.is-on:hover,
 .app-side-bar .chat-session-row-star.is-on svg,
 .app-side-bar .chat-session-row-star.is-on:hover svg {
-  color: #e8b84a;
+  color: var(--biu-warning-on-surface);
 }
 
 html.dark .chat-session-row > .chat-session-row-delete,
@@ -4845,9 +4916,9 @@ html.dark .app-side-bar .chat-session-row-star:not(.is-on) svg {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--biu-ok, #22c55e);
+  background: var(--biu-ok, var(--biu-ok));
   border: 1.5px solid var(--biu-sidebar, #fff);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--biu-ok, #22c55e) 35%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--biu-ok, var(--biu-ok)) 35%, transparent);
   pointer-events: none;
 }
 
@@ -4945,7 +5016,7 @@ html.dark .app-side-bar .chat-session-row-star:not(.is-on) svg {
   align-items: center;
   justify-content: center;
   border: 1px solid var(--biu-border);
-  border-radius: 999px;
+  border-radius: var(--biu-radius-full);
   background: var(--biu-bubble);
   padding: 0;
   color: var(--biu-icon-active);
@@ -4993,7 +5064,7 @@ html.dark .app-side-bar .chat-session-row-star:not(.is-on) svg {
   height: 32px;
   padding: 0 6px;
   border: 1px solid var(--biu-border);
-  border-radius: 999px;
+  border-radius: var(--biu-radius-full);
   background: var(--biu-hover);
   color: var(--biu-label-2);
   font-size: 11px;
@@ -5113,7 +5184,7 @@ html.dark .app-side-bar .chat-session-row-star:not(.is-on) svg {
   height: 32px;
   padding: 0;
   border: 1px solid var(--biu-border);
-  border-radius: 999px;
+  border-radius: var(--biu-radius-full);
   background: var(--biu-bubble);
   color: var(--biu-icon-active);
   cursor: pointer;
@@ -6372,7 +6443,7 @@ html.dark .app-side-bar .chat-session-row-star:not(.is-on) svg {
 
 .traj-detail-close {
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--biu-radius-full);
   padding: 4px 10px;
   background: transparent;
   color: var(--biu-label-3);
@@ -6800,7 +6871,7 @@ html:not(.dark) .chat-outline-item.is-active {
 }
 
 /* 折叠靠 hidden，不卸载，展开不再重建 Markdown/工具 DOM。
-   日间展开态用 #5f5e5a，不要落到正文 --biu-label（#2c2c2b）。 */
+   日间展开态用 var(--biu-sidebar-fg)，不要落到正文 --biu-label（var(--biu-label)）。 */
 .chat-reply-details {
   display: flex;
   flex-direction: column;
@@ -7188,7 +7259,7 @@ html:not(.dark) .chat-outline-item.is-active {
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: #9C9B98;
+  color: var(--biu-icon-muted);
   cursor: pointer;
 }
 
@@ -7199,7 +7270,7 @@ html:not(.dark) .chat-outline-item.is-active {
 .tool-call-inspect,
 .tool-call-inspect:hover,
 .tool-call-inspect svg {
-  color: #9C9B98;
+  color: var(--biu-icon-muted);
 }
 
 .tool-call-copy,
@@ -7222,7 +7293,7 @@ html:not(.dark) .chat-outline-item.is-active {
 .tool-call-copy:hover,
 .tool-call-copy.is-done,
 .tool-call-copy svg {
-  color: #9C9B98;
+  color: var(--biu-icon-muted);
 }
 
 .chat-code-copy {
@@ -7270,8 +7341,8 @@ html:not(.dark) .chat-outline-item.is-active {
 }
 
 .chat-reply-actions .chat-assistant-action {
-  width: 26px;
-  height: 26px;
+  width: var(--biu-control-h-md);
+  height: var(--biu-control-h-md);
 }
 
 .chat-assistant-action {
@@ -7536,7 +7607,7 @@ html:not(.dark) .hljs-meta .hljs-string {
   width: 100%;
   min-width: 420px;
   border: 1px solid var(--biu-border);
-  border-radius: 999px;
+  border-radius: var(--biu-radius-full);
   background: var(--biu-sidebar);
   box-shadow: none;
   transition: border-radius 0.12s ease;
@@ -7584,7 +7655,7 @@ html:not(.dark) .composer-plus {
   height: 28px;
   margin: 0;
   border: 1px solid var(--biu-border);
-  border-radius: 999px;
+  border-radius: var(--biu-radius-full);
   background: var(--biu-bubble);
   color: var(--biu-icon-active);
   cursor: pointer;
@@ -7785,7 +7856,7 @@ html:not(.dark) .composer-plus {
   width: 32px;
   height: 18px;
   flex-shrink: 0;
-  border-radius: 999px;
+  border-radius: var(--biu-radius-full);
   background: #cccccc;
 }
 
@@ -7795,7 +7866,7 @@ html:not(.dark) .composer-plus {
   left: 2px;
   width: 14px;
   height: 14px;
-  border-radius: 999px;
+  border-radius: var(--biu-radius-full);
   background: var(--biu-label);
   content: '';
   transition: transform 0.12s ease;
@@ -7937,7 +8008,7 @@ html:not(.dark) .composer-plus {
   width: 28px;
   height: 28px;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--biu-radius-full);
   cursor: pointer;
 }
 
@@ -7948,7 +8019,7 @@ html:not(.dark) .composer-plus {
 
 html:not(.dark) .composer-send,
 html:not(.dark) .composer-send:disabled {
-  color: #5f5e5a;
+  color: var(--biu-sidebar-fg);
 }
 
 html.dark .chat-outline-tick::after {
@@ -8049,7 +8120,7 @@ html.dark .composer-send:disabled {
   height: 28px;
   margin: 0;
   border: 1px solid var(--biu-border);
-  border-radius: 999px;
+  border-radius: var(--biu-radius-full);
   padding: 0;
   background: var(--biu-bubble);
   color: var(--biu-icon-active);
@@ -8255,7 +8326,7 @@ html.dark .composer-send:disabled {
   width: 16px;
   height: 16px;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--biu-radius-full);
   background: #cccccc;
   color: var(--biu-label);
   font-size: 11px;
@@ -8275,7 +8346,7 @@ html.dark .composer-send:disabled {
   align-items: center;
   gap: 6px;
   border: 1px solid var(--biu-border);
-  border-radius: 999px;
+  border-radius: var(--biu-radius-full);
   background: var(--biu-business-soft);
   padding: 3px 8px;
   color: var(--biu-label-2);
@@ -8669,7 +8740,7 @@ html.pick-mode .chat-overlay-panel * {
   height: 1.25rem !important;
 }
 
-/* 日间：工具图标固定 #91918e；数据改动/文件名/工具名用 #5f5e5a */
+/* 日间：工具图标固定 var(--biu-icon)；数据改动/文件名/工具名用 var(--biu-sidebar-fg) */
 html:not(.dark) .tool-call-chevron:not(.is-ok):not(.is-fail),
 html:not(.dark) .tool-call-chevron:not(.is-ok):not(.is-fail) svg,
 html:not(.dark) .chat-code-copy,
@@ -8678,7 +8749,7 @@ html:not(.dark) .chat-code-copy svg,
 html:not(.dark) .tool-call-status.is-running,
 html:not(.dark) [data-testid="content-edits-table"] .content-edits-icon,
 html:not(.dark) [data-testid="content-edits-table"] .content-edits-icon svg {
-  color: #91918e;
+  color: var(--biu-icon);
 }
 
 html:not(.dark) [data-testid="content-edits-table"] .content-edits-ink,
@@ -8686,7 +8757,7 @@ html:not(.dark) .tool-call-toggle,
 html:not(.dark) .tool-call-title,
 html:not(.dark) .tool-call-head:hover .tool-call-title,
 html:not(.dark) .tool-call-toggle:hover .tool-call-title {
-  color: #5f5e5a;
+  color: var(--biu-sidebar-fg);
 }
 
 
@@ -8700,7 +8771,7 @@ html:not(.dark) .inspector-tab.is-active:hover,
 html:not(.dark) .inspector-tab:hover .fsdb-crumb-btn,
 html:not(.dark) .inspector-tab.is-active .fsdb-crumb-btn,
 html:not(.dark) .inspector-tab.is-active .fsdb-crumb-btn:hover {
-  color: #2c2c2b;
+  color: var(--biu-label);
 }
 
 html:not(.dark) .chat-reply-details,
@@ -8716,10 +8787,10 @@ html:not(.dark) .chat-reply-details .chat-md code,
 html:not(.dark) .chat-reply-details .chat-md pre,
 html:not(.dark) .chat-reply-details .chat-md pre code,
 html:not(.dark) .chat-reply-details .chat-md a {
-  color: #5f5e5a;
+  color: var(--biu-sidebar-fg);
 }
 
-/* 日间浮窗：icon #91918e，文字 #5f5e5a（block 菜单 / slash / 右上角+ / 表格工具栏） */
+/* 日间浮窗：icon var(--biu-icon)，文字 var(--biu-sidebar-fg)（block 菜单 / slash / 右上角+ / 表格工具栏） */
 html:not(.dark) .page-block-handle-menu button,
 html:not(.dark) .page-block-handle-menu button:hover,
 html:not(.dark) .page-slash-item,
@@ -8759,7 +8830,7 @@ html:not(.dark) .fsdb-checkrow:hover,
 html:not(.dark) .fsdb-checkrow.is-on,
 html:not(.dark) .fsdb-filter-row,
 html:not(.dark) .tasks-filter-menu-label {
-  color: #5f5e5a;
+  color: var(--biu-sidebar-fg);
 }
 
 html:not(.dark) .page-block-handle-menu button svg,
@@ -8790,11 +8861,11 @@ html:not(.dark) .fsdb-checkrow:hover .fsdb-checkrow-icon svg,
 html:not(.dark) .fsdb-checkrow > svg,
 html:not(.dark) .fsdb-checkrow.is-on > svg,
 html:not(.dark) .fsdb-checkrow:hover > svg {
-  color: #91918e;
+  color: var(--biu-icon);
 }
 
 /* 右上角加号面板：上方已打开的项目行（左侧图标 + 右侧关闭叉号）跟下方选项一样用图标灰，
-   日夜两套主题都钉成 #bab9b5。行的文字仍用 --biu-label。 */
+   日夜两套主题都钉成 var(--biu-icon-fixed)。行的文字仍用 --biu-label。 */
 html:not(.dark) .inspector-add-row-main svg,
 html:not(.dark) .inspector-add-row > svg,
 html:not(.dark) .inspector-add-row .size-4,
@@ -8808,12 +8879,12 @@ html:not(.dark) .inspector-add-row .fsdb-record-emoji,
 .inspector-add-close,
 .inspector-add-close svg,
 .inspector-add-row .fsdb-record-emoji {
-  color: #bab9b5;
+  color: var(--biu-icon-fixed);
 }
 
 .inspector-add-row-main:hover > svg,
 .inspector-add-close:hover svg {
-  color: #bab9b5;
+  color: var(--biu-icon-fixed);
 }
 
 .site {
@@ -9028,7 +9099,7 @@ html:not(.dark) .inspector-add-row .fsdb-record-emoji,
   gap: 6px;
   height: 36px;
   padding: 0 14px;
-  border-radius: 999px;
+  border-radius: var(--biu-radius-full);
   background: #fff;
   color: #000;
   text-decoration: none;
@@ -9036,7 +9107,7 @@ html:not(.dark) .inspector-add-row .fsdb-record-emoji,
 .site-login {
   height: 36px;
   padding: 0 12px;
-  border-radius: 999px;
+  border-radius: var(--biu-radius-full);
 }
 .site-login:hover { background: rgba(255, 255, 255, 0.12); }
 .site-hero {
@@ -9166,7 +9237,7 @@ html:not(.dark) .inspector-add-row .fsdb-record-emoji,
   gap: 6px;
   box-sizing: border-box;
   height: 36px;
-  border-radius: 999px;
+  border-radius: var(--biu-radius-full);
   padding: 0 14px;
   font-size: 14px;
   font-weight: 500;
@@ -9285,7 +9356,7 @@ html:not(.dark) .inspector-add-row .fsdb-record-emoji,
 }
 .site-demo-tabs button {
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--biu-radius-full);
   padding: 8px 13px;
   background: rgba(255, 255, 255, .08);
   color: rgba(255, 255, 255, .88);
@@ -9892,7 +9963,7 @@ html:not(.has-js) .site [data-reveal] {
   text-align: center;
   text-decoration: none;
   border: 1px solid rgba(255, 255, 255, .28);
-  border-radius: 999px;
+  border-radius: var(--biu-radius-full);
   background: transparent;
   color: #fff;
   font: inherit;
@@ -9951,7 +10022,7 @@ html:not(.has-js) .site [data-reveal] {
   display: inline-block;
   padding: 12px 18px;
   border: 1px solid rgba(255, 255, 255, .28);
-  border-radius: 999px;
+  border-radius: var(--biu-radius-full);
   background: transparent;
   color: #fff;
   font-size: 14px;
@@ -10323,7 +10394,7 @@ html:not(.has-js) .site [data-reveal] {
 .auth-strength-bar {
   width: 40px;
   height: 4px;
-  border-radius: 999px;
+  border-radius: var(--biu-radius-full);
   background: rgba(255, 255, 255, .2);
 }
 .auth-strength[data-level="1"] .auth-strength-bar { background: #e05a5a; }
@@ -10357,7 +10428,7 @@ html:not(.has-js) .site [data-reveal] {
   margin-top: 6px;
   padding: 0 18px;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--biu-radius-full);
   background: #fff;
   color: #000;
   font-size: 16px;
@@ -10473,7 +10544,7 @@ html:not(.has-js) .site [data-reveal] {
     height: 44px;
     min-height: 44px;
     margin-top: 8px;
-    border-radius: 999px;
+    border-radius: var(--biu-radius-full);
   }
 }
 
@@ -10551,7 +10622,7 @@ html:not(.has-js) .site [data-reveal] {
 .site-usecase-more-links a {
   padding: 9px 16px;
   border: 1px solid rgba(255, 255, 255, .1);
-  border-radius: 999px;
+  border-radius: var(--biu-radius-full);
   font-size: 14px;
   text-decoration: none;
   color: rgba(255, 255, 255, .88);
@@ -10666,7 +10737,7 @@ html:not(.has-js) .site [data-reveal] {
   gap: 8px;
   padding: 8px 14px;
   border: 1px solid rgba(255, 255, 255, .14);
-  border-radius: 999px;
+  border-radius: var(--biu-radius-full);
   background: transparent;
   color: #fff;
   font: inherit;
@@ -11037,7 +11108,7 @@ html:not(.has-js) .site [data-reveal] {
   flex: none;
   padding: 4px 12px;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--biu-radius-full);
   background: rgba(255, 255, 255, .1);
   color: #fff;
   font: inherit;
@@ -11058,7 +11129,7 @@ html:not(.has-js) .site [data-reveal] {
 .site-block-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 0; padding: 0; list-style: none; }
 .site-block-chips li {
   padding: 3px 10px;
-  border-radius: 999px;
+  border-radius: var(--biu-radius-full);
   background: rgba(255, 255, 255, .06);
   font-size: 12px;
   line-height: 1.6;

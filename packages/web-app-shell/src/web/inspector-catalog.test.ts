@@ -78,9 +78,9 @@ test('plus menu can add another database tab', () => {
   assert.doesNotMatch(css, /is-crumb-open/)
   assert.doesNotMatch(css, /inspector-crumb-toggle/)
   assert.match(css, /\.inspector-add-close/)
-  assert.match(css, /html:not\(\.dark\) \.inspector-add-menu[\s\S]*color:\s*#5f5e5a/)
+  assert.match(css, /html:not\(\.dark\) \.inspector-add-menu[\s\S]*color:\s*var\(--biu-sidebar-fg\)/)
   // 已打开项目行的图标改成和下方选项一样的 #bab9b5（日夜一致），不再吃 #91918e
-  assert.match(css, /html:not\(\.dark\) \.inspector-add-row-main svg[\s\S]*color:\s*#bab9b5/)
+  assert.match(css, /html:not\(\.dark\) \.inspector-add-row-main svg[\s\S]*color:\s*var\(--biu-icon-fixed\)/)
   assert.doesNotMatch(inspector, /inspector-add-check/)
   assert.match(css, /\.inspector-add-row\.is-active::before\s*\{[^}]*background:\s*var\(--biu-hover\)/s)
   assert.match(css, /\.session-inspector \.inspector-tab svg[\s\S]*color:\s*var\(--biu-icon\)/)
@@ -112,7 +112,7 @@ test('inspector header tabs sit on the same vertical center as the main header',
 
 test('opened rows in the inspector add menu use the icon gray for every glyph', () => {
   // 上方已打开的项目行：左侧图标 + 右侧关闭叉号，两种主题都要是 #bab9b5
-  assert.match(css, /^\.inspector-add-row > svg,\s*\n\.inspector-add-row \.size-4,[\s\S]*?color:\s*#bab9b5/m, )
+  assert.match(css, /^\.inspector-add-row > svg,\s*\n\.inspector-add-row \.size-4,[\s\S]*?color:\s*var\(--biu-icon-fixed\)/m, )
   const block = css.slice(css.indexOf('.inspector-add-row > svg,'))
   const rule = block.slice(0, block.indexOf('}'))
   for (const selector of ['.inspector-add-close', '.inspector-add-close svg', '.inspector-add-row-main > svg']) {
@@ -121,5 +121,5 @@ test('opened rows in the inspector add menu use the icon gray for every glyph', 
   // 行本身仍然可以继承文本色（那是给文字的），但图标有独立规则覆盖
   assert.match(css, /^\.inspector-add-row \{[^}]*color: var\(--biu-label\)/m)
   // 亮色主题同样钉成图标灰
-  assert.match(css, /html:not\(\.dark\) \.inspector-add-close svg,[\s\S]*?color:\s*#bab9b5/)
+  assert.match(css, /html:not\(\.dark\) \.inspector-add-close svg,[\s\S]*?color:\s*var\(--biu-icon-fixed\)/)
 })

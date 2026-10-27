@@ -84,7 +84,7 @@ const mdHighlight = HighlightStyle.define([
   { tag: tags.comment, color: 'var(--biu-sidebar-fg)' },
   { tag: tags.keyword, color: 'var(--biu-pick)' },
   { tag: tags.string, color: 'var(--biu-ok)' },
-  { tag: tags.number, color: '#c2410c' },
+  { tag: tags.number, color: 'var(--biu-warning)' },
 ])
 
 const compactTheme = EditorView.theme({

@@ -997,7 +997,7 @@ export const ChatThread = memo(function ChatThread(props: SlotProps) {
       data-chat-virtual="0"
       data-chat-reveal-start={revealStart}
       data-switching={switchingSession ? '1' : undefined}
-      style={switchingSession ? { opacity: 0.72, transition: 'opacity 120ms ease' } : undefined}
+      style={switchingSession ? { opacity: 'var(--biu-opacity-70)', transition: 'opacity var(--biu-duration-normal) var(--biu-ease-standard)' } : undefined}
     >
       {loadingOlder ? (
         <div className="mb-3 text-center text-(length:--biu-chat-ui-font-size) text-(--biu-label-3)">加载更早消息…</div>

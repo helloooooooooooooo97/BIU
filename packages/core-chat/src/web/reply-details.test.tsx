@@ -95,7 +95,7 @@ describe('Details collapse UI', () => {
     expect(thread).toMatch(/detailsOpen \? ' bg-\(--biu-hover\) text-\(--biu-sidebar-fg\)'/)
     expect(thread).not.toMatch(/detailsOpen \? ' bg-\(--biu-hover\) text-\(--biu-sidebar-fg-active\)'/)
     expect(css).toMatch(/\.chat-reply-details\s*\{[^}]*color:\s*var\(--biu-sidebar-fg\)/s)
-    expect(css).toMatch(/html:not\(\.dark\) \.chat-reply-details[\s\S]*color:\s*#5f5e5a/)
+    expect(css).toMatch(/html:not\(\.dark\) \.chat-reply-details[\s\S]*color:\s*var\(--biu-sidebar-fg\)/)
   })
 
   it('inspect button uses the trajectory map icon', () => {

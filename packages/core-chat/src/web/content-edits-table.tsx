@@ -209,9 +209,9 @@ function FileDiffView({ sessionId, turn, path }: { sessionId: string; turn: numb
         const prefix = line.type === 'add' ? '+' : line.type === 'remove' ? '−' : ' '
         const rowClass =
           line.type === 'add'
-            ? 'bg-[color-mix(in_srgb,#448361_22%,transparent)] text-[#448361]'
+            ? 'bg-[color-mix(in_srgb,var(--biu-tag-green)_22%,transparent)] text-[var(--biu-tag-green)]'
             : line.type === 'remove'
-              ? 'bg-[color-mix(in_srgb,#c4554d_22%,transparent)] text-[#c4554d]'
+              ? 'bg-[color-mix(in_srgb,var(--biu-tag-red)_22%,transparent)] text-[var(--biu-tag-red)]'
               : 'text-(--biu-label)'
         return (
           <div
@@ -256,8 +256,8 @@ export const ContentEditsTable = memo(function ContentEditsTable({
           数据改动
         </div>
         <div className="flex items-center gap-2 text-[12px] font-semibold tabular-nums">
-          <span className="text-[#448361]">+{added}</span>
-          <span className="text-[#c4554d]">−{removed}</span>
+          <span className="text-[var(--biu-tag-green)]">+{added}</span>
+          <span className="text-[var(--biu-tag-red)]">−{removed}</span>
         </div>
       </div>
       <ul className="m-0 list-none p-0">
@@ -285,14 +285,14 @@ export const ContentEditsTable = memo(function ContentEditsTable({
                 </button>
                 <button
                   type="button"
-                  className="text-[12px] font-semibold tabular-nums text-[#448361] hover:underline"
+                  className="text-[12px] font-semibold tabular-nums text-[var(--biu-tag-green)] hover:underline"
                   onClick={() => revealContentEdit(file.path, file.jump_line, { sessionId, turn })}
                 >
                   +{file.added}
                 </button>
                 <button
                   type="button"
-                  className="text-[12px] font-semibold tabular-nums text-[#c4554d] hover:underline"
+                  className="text-[12px] font-semibold tabular-nums text-[var(--biu-tag-red)] hover:underline"
                   onClick={() => revealContentEdit(file.path, file.jump_line, { sessionId, turn })}
                 >
                   −{file.removed}

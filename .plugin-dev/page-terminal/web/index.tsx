@@ -458,7 +458,7 @@ const THEME = {
   blue: '#5b9fd6',
   magenta: '#b07cd6',
   cyan: '#12a594',
-  white: '#bcbab6',
+  white: 'var(--biu-sidebar-fg)',
   brightBlack: '#5f5f5a',
   brightRed: '#ff6369',
   brightGreen: '#4cc38a',

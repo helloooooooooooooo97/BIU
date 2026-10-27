@@ -12,9 +12,9 @@ export const name = 'page-browser'
 export const inject = ['pageEditor', 'slots', 'pick']
 
 const UI = 'ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif'
-const BAR = '#f2f3f5'
+const BAR = 'var(--biu-sidebar)'
 const BORDER = 'rgba(15,23,42,.14)'
-const INK = '#1f2430'
+const INK = 'var(--biu-label)'
 
 function blockHeight(data: Record<string, unknown>) {
   const n = Number(data.height)
@@ -110,7 +110,7 @@ function BrowserSurface({
     cursor: 'pointer',
     border: 'none',
     background: 'transparent',
-    color: '#4b5563',
+    color: 'var(--biu-sidebar-fg)',
     padding: '4px 5px',
     borderRadius: 999,
     display: 'inline-flex',
@@ -235,7 +235,7 @@ function BrowserSurface({
         )}
       </div>
 
-      <div style={{ position: 'relative', flex: 1, minHeight: 0, background: '#fff' }}>
+      <div style={{ position: 'relative', flex: 1, minHeight: 0, background: 'var(--biu-bg)' }}>
         {src ? (
           <iframe
             key={`${src}-${nonce}`}
@@ -247,7 +247,7 @@ function BrowserSurface({
             referrerPolicy="no-referrer"
             allow="fullscreen; clipboard-read; clipboard-write"
             sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
-            style={{ display: 'block', width: '100%', height: '100%', border: 'none', background: '#fff' }}
+            style={{ display: 'block', width: '100%', height: '100%', border: 'none', background: 'var(--biu-bg)' }}
           />
         ) : (
           <div
@@ -276,7 +276,7 @@ function BrowserSurface({
                     fontFamily: UI,
                     fontSize: 12,
                     color: INK,
-                    background: '#fff',
+                    background: 'var(--biu-bg)',
                     border: `1px solid ${BORDER}`,
                     borderRadius: 999,
                     padding: '5px 12px',

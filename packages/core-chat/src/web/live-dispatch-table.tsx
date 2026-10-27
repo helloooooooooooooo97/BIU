@@ -13,7 +13,7 @@ function statusMeta(status: LiveDispatchTaskRow['status'], reason?: string) {
   if (status === 'complete') {
     return {
       label: '已完成',
-      className: 'text-(--biu-ok,#448361)',
+      className: 'text-(--biu-ok,var(--biu-tag-green))',
       icon: <CheckCircleIcon className="size-3.5" aria-hidden />,
     }
   }
@@ -33,7 +33,7 @@ function statusMeta(status: LiveDispatchTaskRow['status'], reason?: string) {
   }
   return {
     label: reason ? `结束(${reason})` : '已结束',
-    className: 'text-(--biu-danger,#c4554d)',
+    className: 'text-(--biu-danger,var(--biu-tag-red))',
     icon: <XCircleIcon className="size-3.5" aria-hidden />,
   }
 }

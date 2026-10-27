@@ -119,7 +119,7 @@ function ColorMenus({
                 style={
                   kind === 'text'
                     ? { color: editorTextColor(tone), background: 'transparent' }
-                    : { background: editorHighlightColor(tone), color: '#fff' }
+                    : { background: editorHighlightColor(tone), color: 'var(--biu-on-accent)' }
                 }
                 onMouseDown={holdSelection}
                 onClick={() => {

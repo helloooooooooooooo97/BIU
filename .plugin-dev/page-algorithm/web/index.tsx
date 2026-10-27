@@ -151,14 +151,14 @@ const lcHighlight = HighlightStyle.define([
 ])
 
 const lcTheme = EditorView.theme({
-  '&': { background: 'transparent', color: '#1e1e1e', fontSize: '13px', height: '100%' },
+  '&': { background: 'transparent', color: 'var(--biu-code-ink)', fontSize: '13px', height: '100%' },
   '&.cm-editor': { outline: 'none', height: '100%' },
   '.cm-scroller': { fontFamily: 'ui-monospace,SFMono-Regular,Menlo,Consolas,monospace', lineHeight: '1.6', overflow: 'auto' },
-  '.cm-content': { caretColor: '#1e1e1e', padding: '10px 8px 16px', minHeight: '100%' },
-  '.cm-gutters': { background: '#fff', border: 'none', color: '#c4c4c4' },
+  '.cm-content': { caretColor: 'var(--biu-code-ink)', padding: '10px 8px 16px', minHeight: '100%' },
+  '.cm-gutters': { background: 'var(--biu-code-surface)', border: 'none', color: 'var(--biu-icon-muted)' },
   '.cm-lineNumbers .cm-gutterElement': { minWidth: '2.4em', padding: '0 10px 0 8px' },
   '.cm-activeLine': { background: 'transparent' },
-  '.cm-cursor': { borderLeftColor: '#1e1e1e' },
+  '.cm-cursor': { borderLeftColor: 'var(--biu-code-ink)' },
 })
 
 function langExtension(lang: string) {

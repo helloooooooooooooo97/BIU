@@ -86,16 +86,16 @@ export const inject = ['pageEditor']
 const STYLE_ID = 'pv-style-v21'
 const STYLE_CSS = `
 .pv{
-  --pv-ink:var(--rui-fg,#171717);
-  --pv-mute:var(--rui-muted,#737373);
-  --pv-line:var(--rui-border,#ececec);
-  --pv-hover:#f5f5f5;
-  --pv-bg:var(--rui-bg,#fff);
-  --pv-panel:#f2f2f7;
-  --pv-surface:#fff;
-  --pv-blue:#007aff;
-  --pv-ok:var(--rui-ok,#0f7a4a);
-  --pv-danger:var(--rui-danger,#b42318);
+  --pv-ink:var(--biu-label);
+  --pv-mute:var(--biu-label-3);
+  --pv-line:var(--biu-border);
+  --pv-hover:var(--biu-hover);
+  --pv-bg:var(--biu-bg);
+  --pv-panel:var(--biu-sidebar);
+  --pv-surface:var(--biu-surface);
+  --pv-blue:var(--biu-pick);
+  --pv-ok:var(--biu-ok);
+  --pv-danger:var(--biu-danger);
   --pv-danger-soft:rgba(255,59,48,.1);
   position:relative;
   color:var(--pv-ink);

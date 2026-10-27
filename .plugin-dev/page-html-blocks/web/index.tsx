@@ -77,7 +77,7 @@ function SourceEditor({ html, onChange }: { html: string; onChange: (v: string) 
         fontSize: 12,
         lineHeight: 1.55,
         color: 'var(--rui-fg)',
-        background: '#fff',
+        background: 'var(--biu-bg)',
         border: '1px solid var(--rui-border)',
         borderRadius: 10,
         resize: 'vertical',
@@ -129,7 +129,7 @@ const pressBtn: Record<string, unknown> = {
   borderLeft: '2px solid #111',
   borderRadius: 0,
   padding: '8px 10px',
-  background: '#fff',
+  background: 'var(--biu-bg)',
   color: '#111',
   fontFamily: inkFace,
   fontWeight: 800,
@@ -477,7 +477,7 @@ function FloatBar({
         alignItems: 'stretch',
         padding: 0,
         borderRadius: 0,
-        background: '#fff',
+        background: 'var(--biu-bg)',
         border: 'none',
         borderBottom: '2px solid #111',
         boxShadow: 'none',
@@ -739,7 +739,7 @@ function HtmlFrameCard({ data, update, writable }: BlockProps) {
                 min={80}
                 value={height}
                 onChange={(e) => update({ height: Number(e.target.value) || 300 })}
-                style={{ width: 52, border: '2px solid #111', borderRadius: 0, background: '#fff', color: '#111', padding: '1px 4px', fontSize: 12, fontFamily: inkFace }}
+                style={{ width: 52, border: '2px solid #111', borderRadius: 0, background: 'var(--biu-bg)', color: '#111', padding: '1px 4px', fontSize: 12, fontFamily: inkFace }}
               />
             </label>
           )}
