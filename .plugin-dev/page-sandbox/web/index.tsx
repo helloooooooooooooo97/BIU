@@ -758,7 +758,7 @@ function SandboxBar({
             cursor: ro ? 'default' : 'text',
           }}
         >
-          <CubeTransparentIcon style={chromeIcon} />
+          <CubeTransparentIcon style={{ ...chromeIcon, color: 'var(--biu-color-ink-purple)' }} />
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span>
         </button>
       )}
