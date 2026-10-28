@@ -258,7 +258,7 @@ export const SessionConfigDialog = memo(function SessionConfigDialog({
       onClick={onClose}
       role="dialog"
       aria-modal="true"
-      aria-label="会话配置"
+      aria-label="代理配置"
       data-testid="session-config-dialog"
     >
       <div
@@ -284,7 +284,7 @@ export const SessionConfigDialog = memo(function SessionConfigDialog({
             </div>
           ) : null}
           {!sessionId ? (
-            <div className="text-[11px] leading-[1.45] text-(--biu-color-text-subtle)">打开会话后可编辑配置。</div>
+            <div className="text-[11px] leading-[1.45] text-(--biu-color-text-subtle)">打开代理后可编辑配置。</div>
           ) : (
             <div className="flex flex-col gap-2.5">
               <p className="m-0 text-[11px] leading-[1.45] text-(--biu-color-text-subtle)">

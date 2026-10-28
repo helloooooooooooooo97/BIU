@@ -414,7 +414,7 @@ export const SessionInspector = memo(function SessionInspector({
     <aside
       className={`session-inspector relative flex min-h-0 min-w-0 flex-col bg-(--biu-color-bg) text-(--biu-color-text)${open ? '' : ' is-closed'}`}
       data-testid="session-inspector"
-      aria-label="会话检查器"
+      aria-label="代理检查器"
       aria-hidden={!open}
       inert={!open || undefined}
     >

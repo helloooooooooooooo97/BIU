@@ -46,7 +46,7 @@ test('fetchMentionItems lists pages tasks facets and sessions', async () => {
     seen.push(url)
     const path = new URL(url, 'http://local.test').searchParams.get('path')
     const id = path === '/pages' ? 'p1' : path === '/tasks' ? 't1' : path === '/facets' ? 'f1' : 's1'
-    const title = path === '/pages' ? '首页' : path === '/tasks' ? '任务甲' : path === '/facets' ? '标签' : '会话'
+    const title = path === '/pages' ? '首页' : path === '/tasks' ? '任务甲' : path === '/facets' ? '标签' : '代理'
     return {
       ok: true,
       json: async () => ({ items: [{ id, title }] }),

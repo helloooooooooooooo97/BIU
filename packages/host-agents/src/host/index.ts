@@ -430,7 +430,7 @@ function registerGoalTools(ctx: Context) {
     parameters: {
       type: 'object',
       properties: {
-        goal_id: { type: 'string', description: '当前会话正在推进的 goal_id' },
+        goal_id: { type: 'string', description: '当前代理正在推进的 goal_id' },
         summary: { type: 'string', description: '完成证据：跑过的测试、改动的文件、验收结果' },
       },
       required: ['goal_id', 'summary'],

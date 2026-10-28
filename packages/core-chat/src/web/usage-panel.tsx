@@ -473,7 +473,7 @@ export function UsagePanel({ useSessionView, sessionView }: UsagePanelProps) {
           ) : null}
         </>
       ) : (
-        <div className="usage-panel-empty">本会话暂无 usage 数据</div>
+        <div className="usage-panel-empty">本代理暂无 usage 数据</div>
       )}
       {last ? (
         <div className="usage-panel-tail">

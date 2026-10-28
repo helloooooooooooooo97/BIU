@@ -1378,7 +1378,7 @@ test('delete parks records in trash and restore puts them back', async () => {
 test('sessions delete parks in trash until purge', async () => {
   const ctx = new Context()
   const db = new DatabaseService(ctx)
-  const rows = new Map<string, { id: string; title: string }>([['s1', { id: 's1', title: '会话' }]])
+  const rows = new Map<string, { id: string; title: string }>([['s1', { id: 's1', title: '代理' }]])
   db.register({
     id: 'sessions',
     path: '/sessions',

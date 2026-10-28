@@ -195,7 +195,7 @@ export const TrajectoryView = memo(function TrajectoryView(props: SlotProps) {
     return (
       <div className="traj-empty">
         <p className="traj-empty-title">No session</p>
-        <p className="traj-empty-body">打开或新建会话后，可在此查看调试日志。</p>
+        <p className="traj-empty-body">打开或新建代理后，可在此查看调试日志。</p>
       </div>
     )
   }
@@ -229,7 +229,7 @@ export const TrajectoryView = memo(function TrajectoryView(props: SlotProps) {
             <span className="traj-meta-sep">·</span>
             {groups.length} turns
           </span>
-          <span className="traj-meta-usage" title="本会话 + 派工到其它会话的用量">
+          <span className="traj-meta-usage" title="本代理 + 派工到其它代理的用量">
             <span className="traj-meta-usage-label">usage</span>
             <UsageInline usage={cumulative} />
           </span>

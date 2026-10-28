@@ -509,7 +509,7 @@ export class ChatService extends Service {
         `goal_id=${goal.id}`,
         '完成后必须调用 goal_complete({ goal_id, summary })，summary 写具体证据（测试、文件、验收）。',
         '只有真正卡住才调用 goal_blocked({ goal_id, reason, evidence })。',
-        '这与极简 / 标准 / 数据工具模式无关：Goal 是会话上的目标合同，工具集仍由当前 Agent 模式决定。',
+        '这与极简 / 标准 / 数据工具模式无关：Goal 是代理上的目标合同，工具集仍由当前 Agent 模式决定。',
       ].join('\n')
     })
     this.syncLlm()
@@ -1214,7 +1214,7 @@ export function apply(ctx: Context) {
       body: JSON.stringify({ executorId: `desktop:${localAccountId}` }),
     })
     const payload = (await response.json().catch(() => ({}))) as { leaseId?: string; error?: string }
-    if (!response.ok || !payload.leaseId) throw new Error(payload.error || '无法取得云端会话执行权')
+    if (!response.ok || !payload.leaseId) throw new Error(payload.error || '无法取得云端代理执行权')
     const heartbeat = setInterval(() => {
       void fetch(`${connection.origin}/api/sessions/${encodeURIComponent(sessionId)}/execution-lease`, {
         method: 'PATCH',
@@ -1404,7 +1404,7 @@ export function apply(ctx: Context) {
         }
         const remoteBody = (await remote.json().catch(() => ({}))) as { id?: string; error?: string }
         if (!remote.ok || !remoteBody.id) {
-          return route.send(remote.status, { error: remoteBody.error || '创建云端会话失败' })
+          return route.send(remote.status, { error: remoteBody.error || '创建云端代理失败' })
         }
         sessionId = remoteBody.id
       }
@@ -1555,7 +1555,7 @@ export function apply(ctx: Context) {
       const body = (await route.json().catch(() => ({}))) as { leaseId?: string; record?: SessionRecord }
       store.requireExecutionLease(accountId, route.params.id, String(body.leaseId ?? ''))
       if (!body.record || body.record.id !== route.params.id || !Array.isArray(body.record.events)) {
-        return route.send(400, { error: '无效的会话记录' })
+        return route.send(400, { error: '无效的代理记录' })
       }
       const record = { ...body.record }
       delete record.project
@@ -1785,7 +1785,7 @@ export function apply(ctx: Context) {
     }
     if (!(await visibleSession(route.params.id))) return route.send(404, { error: 'unknown session' })
     if (isOnlineRuntime() && accountRuntime(ctx)?.store?.hasExecutionLease(route.params.id)) {
-      return route.send(409, { error: '这个会话正在桌面设备上运行' })
+      return route.send(409, { error: '这个代理正在桌面设备上运行' })
     }
     const shouldExecute = payload.kind !== 'inject' || ctx.agents.isBusy(route.params.id)
     if (shouldExecute) {

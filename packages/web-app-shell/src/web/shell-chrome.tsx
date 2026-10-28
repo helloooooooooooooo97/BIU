@@ -1370,7 +1370,7 @@ export function ShellSettingsCollab({ panel = 'members' }: { panel?: 'workspace'
         <div className="settings-account-copy">
           <label className="settings-account-label" htmlFor="settings-workspace-delete-name">删除空间</label>
           <p className="settings-muted settings-account-hint">
-            删除后无法恢复。请重新输入空间名称「{savedWorkspaceName}」确认。该空间下的页面、任务、会话和其他数据会永久删除。
+            删除后无法恢复。请重新输入空间名称「{savedWorkspaceName}」确认。该空间下的页面、任务、代理和其他数据会永久删除。
           </p>
         </div>
         <div className="settings-account-actions">
@@ -2132,7 +2132,7 @@ function NoticeBody({ body }: { body: string }) {
 function noticeKindLabel(kind?: string) {
   if (kind === 'approval') return '审批'
   if (kind === 'task') return '任务'
-  if (kind === 'session') return '会话'
+  if (kind === 'session') return '代理'
   return ''
 }
 

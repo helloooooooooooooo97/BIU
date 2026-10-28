@@ -322,8 +322,8 @@ function ReplyActions({
             <button
               type="button"
               className="chat-assistant-action"
-              title="Fork 会话"
-              aria-label="Fork 会话"
+              title="Fork 代理"
+              aria-label="Fork 代理"
               disabled={forkBusy}
               onClick={() => void fork()}
             >
@@ -461,7 +461,7 @@ function UserSenderAvatar({
     return (
       <span
         className="grid size-[18px] shrink-0 place-items-center text-(--biu-color-text-subtle)"
-        title={hit?.title || '会话'}
+        title={hit?.title || '代理'}
         data-testid="user-sender-mascot"
       >
         <StaticMascotMark identity={identity} size={16} title={hit?.title || identity.shape} />
