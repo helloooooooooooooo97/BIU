@@ -1,7 +1,7 @@
 import * as Popover from '@radix-ui/react-popover'
 import type { ReactElement } from 'react'
 import { HEADLESS_DISMISS_IGNORE } from './headless-dismiss.tsx'
-import { overlayPortalRoot } from './overlay-portal.ts'
+import { overlayPortalRoot, overlayZ } from './overlay-portal.ts'
 
 function shouldIgnoreOutside(event: { target: EventTarget | null; detail?: { originalEvent?: Event } }, ignoreSelector: string) {
   if (!ignoreSelector) return false
@@ -25,6 +25,7 @@ export function HeadlessPopover({
   autoFocus = false,
   ignoreSelector = HEADLESS_DISMISS_IGNORE,
   container,
+  zIndex = 300,
 }: {
   open?: boolean
   defaultOpen?: boolean
@@ -39,18 +40,20 @@ export function HeadlessPopover({
   autoFocus?: boolean
   ignoreSelector?: string
   container?: HTMLElement | null
+  zIndex?: number
 }) {
   return (
     <Popover.Root open={open} defaultOpen={defaultOpen} onOpenChange={onOpenChange} modal={modal}>
       <Popover.Trigger asChild>{trigger}</Popover.Trigger>
       <Popover.Portal container={container ?? overlayPortalRoot() ?? undefined}>
         <Popover.Content
-          asChild
+          className="biu-headless-pop"
           side={side}
           align={align}
           sideOffset={sideOffset}
           avoidCollisions={avoidCollisions}
           collisionPadding={8}
+          style={{ zIndex: overlayZ(zIndex) }}
           onOpenAutoFocus={(event) => {
             if (!autoFocus) event.preventDefault()
           }}

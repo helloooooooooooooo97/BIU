@@ -4133,6 +4133,12 @@ html.dark .composer-model-flyout {
   overflow: visible;
 }
 
+/* Radix 定位层默认 z-index:auto，会被侧栏 contain/transform 合成层盖住 */
+[data-radix-popper-content-wrapper]:has(.biu-headless-pop),
+[data-radix-popper-content-wrapper]:has(.pick-chip-data) {
+  z-index: var(--biu-z-toast) !important;
+}
+
 /* 侧栏独立合成层：右侧 Markdown 重绘时少拖累左侧 :hover */
 .app-side-bar {
   contain: layout paint style;
