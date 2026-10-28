@@ -62,10 +62,13 @@ function isOpenPickSurface(node: HTMLElement | null): node is HTMLElement {
   return Boolean(node && !node.classList.contains('is-closed'))
 }
 
-/** 点落在哪一栏：检查器 / 侧栏 / 中间台。框选和点选都不跨栏。 */
+const PICK_SURFACE_SEL =
+  '[data-testid="session-inspector"], .session-inspector, .app-side-bar, [data-testid="chat-overlay-panel"]'
+
+/** 点落在哪一栏：检查器 / 侧栏 / 悬浮窗 / 中间台。框选和点选都不跨栏。 */
 export function pickSurfaceFromNode(node: Element | null): HTMLElement | null {
   if (!node) return null
-  const hit = composedClosest(node, '[data-testid="session-inspector"], .session-inspector, .app-side-bar')
+  const hit = composedClosest(node, PICK_SURFACE_SEL)
   return hit instanceof HTMLElement ? hit : null
 }
 
@@ -449,7 +452,7 @@ export function pickSurfaceAtPoint(x: number, y: number): HTMLElement | null {
     const surface = pickSurfaceFromNode(el)
     if (isOpenPickSurface(surface)) return surface
   }
-  for (const el of document.querySelectorAll('[data-testid="session-inspector"], .session-inspector, .app-side-bar')) {
+  for (const el of document.querySelectorAll(PICK_SURFACE_SEL)) {
     if (!(el instanceof HTMLElement) || !isOpenPickSurface(el)) continue
     if (pointInBox(boxOf(el), x, y)) return el
   }
@@ -470,7 +473,6 @@ export function resolvePickFromEvent(event: Event, route: string) {
 
 export function resolvePickAtPoint(x: number, y: number, route: string) {
   const stacked = elementsFromPointDeep(x, y)
-  if (stacked.some((el) => el instanceof Element && composedClosest(el, '[data-testid="chat-overlay-panel"]'))) return null
   const inner = sandboxInnerAtPoint(x, y)
   if (inner && !isPickIgnored(inner) && !inHiddenPane(inner)) {
     const surface = pickSurfaceAtPoint(x, y)
