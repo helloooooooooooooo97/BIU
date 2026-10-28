@@ -117,13 +117,22 @@ test('path jump opens the record in the inspector', () => {
   assert.equal(inspectPathTarget('/pages'), null)
   assert.equal(inspectPathTarget(''), null)
   const seen: unknown[] = []
+  const opened: string[] = []
   const onReveal = (event: Event) => seen.push((event as CustomEvent).detail)
+  const onOpen = () => opened.push('open')
   window.addEventListener('biu:inspector-reveal', onReveal)
+  window.addEventListener('biu:inspector-open', onOpen)
   assert.deepEqual(revealInspectPath('/pages/p147'), {
     collection: '/pages',
     recordId: 'p147',
     unique: true,
   })
   window.removeEventListener('biu:inspector-reveal', onReveal)
+  window.removeEventListener('biu:inspector-open', onOpen)
+  assert.deepEqual(opened, ['open'])
   assert.deepEqual(seen, [{ collection: '/pages', recordId: 'p147', unique: true }])
+  const src = readFileSync(resolve(import.meta.dirname, './chip.tsx'), 'utf8')
+  assert.match(src, /data-testid="pick-chip-path-jump"/)
+  assert.match(src, /revealInspectPath\(item\.value\)/)
+  assert.match(src, /在检查器打开/)
 })
