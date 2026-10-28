@@ -31,4 +31,7 @@ test('sandbox mount flushes react before pick stamp', async () => {
   assert.match(src, /data-sandbox-root/)
   assert.match(src, /:host-context\(html\.pick-mode\)/)
   assert.match(src, /data-sandbox-pick-mode/)
+  assert.match(src, /sandboxGlobals/)
+  assert.match(src, /'window'/)
+  assert.match(src, /'document'/)
 })
