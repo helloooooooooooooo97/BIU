@@ -62,11 +62,11 @@ test('pick chips can show the facet close mark', () => {
   assert.match(src, /HeadlessPopover/)
   assert.match(src, /pick-chip-data/)
   assert.match(src, /pick-chip-data-quote/)
-  assert.match(src, /pick-chip-data-code/)
-  assert.match(src, /pick-chip-data-pill/)
+  assert.match(src, /pick-chip-data-fields/)
+  assert.match(src, /pick-chip-data-v is-code/)
 })
 
-test('inspect card leads with the quote, not raw field keys', () => {
+test('inspect card keeps the quote and lists every stored field', () => {
   const card = pickInspectCard({
     kind: 'sandbox',
     id: 'sandbox:0-x:0/0',
@@ -81,9 +81,10 @@ test('inspect card leads with the quote, not raw field keys', () => {
   assert.equal(card.kind, 'sandbox')
   assert.equal(card.title, '能做什么')
   assert.equal(card.quote, '能做什么，不能做什么')
-  assert.match(card.snippet, /<h1>能做什么<\/h1>/)
   assert.deepEqual(
-    card.meta.map((item) => item.label),
-    ['页面', '路径', '插件'],
+    card.fields.map((item) => item.key),
+    ['kind', 'id', 'label', 'title', 'path', 'plugin', 'route', 'selection', 'element'],
   )
+  assert.equal(card.fields.find((item) => item.key === 'path')?.value, '/pages/p002')
+  assert.equal(card.fields.find((item) => item.key === 'element')?.value, '<h1>能做什么</h1>')
 })
