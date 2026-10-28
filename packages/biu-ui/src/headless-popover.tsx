@@ -19,6 +19,7 @@ export function HeadlessPopover({
   side = 'bottom',
   align = 'start',
   sideOffset = 4,
+  avoidCollisions = true,
   modal = false,
   autoFocus = false,
   ignoreSelector = HEADLESS_DISMISS_IGNORE,
@@ -32,6 +33,7 @@ export function HeadlessPopover({
   side?: 'top' | 'right' | 'bottom' | 'left'
   align?: 'start' | 'center' | 'end'
   sideOffset?: number
+  avoidCollisions?: boolean
   modal?: boolean
   autoFocus?: boolean
   ignoreSelector?: string
@@ -46,6 +48,7 @@ export function HeadlessPopover({
           side={side}
           align={align}
           sideOffset={sideOffset}
+          avoidCollisions={avoidCollisions}
           collisionPadding={8}
           onOpenAutoFocus={(event) => {
             if (!autoFocus) event.preventDefault()

@@ -112,6 +112,24 @@ test('chip caption keeps line span off the truncated preview', () => {
   assert.match(chipLabel(ref), /\(1-12\)$/)
 })
 
+test('sandbox inner chip does not show the fence line span', () => {
+  assert.deepEqual(
+    chipCaption({
+      kind: 'sandbox',
+      id: 'sandbox:0-x:0/0',
+      label: '能做什么',
+      route: '/p/p002',
+      title: '能力边界',
+      path: '/pages/p002',
+      start_line: 14,
+      end_line: 80,
+      selection: '能做什么，不能做什么',
+      element: '<h1>能做什么，不能做什么</h1>',
+    }),
+    { name: '能做什么', span: '' },
+  )
+})
+
 test('html pick chip uses the inner node label, not the page title', () => {
   assert.equal(
     chipLabel({
@@ -678,18 +696,21 @@ test('html surface pick carries page path and markdown lines like a block', () =
   assert.equal(hit.ref.kind, 'html')
   assert.equal(hit.ref.id, 'html:0-abcd:0/1')
   assert.equal(hit.ref.path, '/pages/p002')
-  assert.equal(hit.ref.start_line, 14)
-  assert.equal(hit.ref.end_line, 22)
-  assert.equal(hit.ref.text, ':::html\n<div>静态富排版</div>\n:::')
+  assert.equal(hit.ref.start_line, undefined)
+  assert.equal(hit.ref.end_line, undefined)
+  assert.equal(hit.ref.text, undefined)
   assert.equal(hit.ref.selection, '静态富排版，不跑脚本')
   assert.equal(hit.ref.plugin, 'page-sandbox')
   assert.match(hit.ref.element ?? '', /静态富排版，不跑脚本/)
   assert.doesNotMatch(hit.ref.element ?? '', /data-biu-kind/)
+  assert.equal(chipCaption(hit.ref).span, '')
   const packed = formatPicks([hit.ref])
   assert.match(packed, /"plugin":"page-sandbox"/)
   assert.match(packed, /"path":"\/pages\/p002"/)
-  assert.match(packed, /"start_line":14/)
   assert.match(packed, /"element":/)
+  assert.doesNotMatch(packed, /start_line/)
+  assert.doesNotMatch(packed, /:::html/)
+  assert.doesNotMatch(packed, /"text":/)
   bindEditorTextHost(root, null)
   root.remove()
 })
@@ -703,15 +724,16 @@ test('pick reaches stamped nodes inside an open sandbox shadow', () => {
   block.setAttribute('data-page-block-plugin', 'page-sandbox')
   block.setAttribute('data-biu-plugin', 'page-sandbox')
   const host = document.createElement('div')
-  host.setAttribute('data-html-sandbox', '')
+  host.setAttribute('data-sandbox', '')
   block.append(host)
   root.append(block)
   document.body.append(root)
   const shadow = host.attachShadow({ mode: 'open' })
   const inner = document.createElement('button')
   inner.textContent = '点过 0 次'
-  inner.setAttribute('data-biu-kind', 'html')
-  inner.setAttribute('data-biu-id', 'html:0-x:0/1')
+  inner.setAttribute('data-sandbox-pick', '')
+  inner.setAttribute('data-biu-kind', 'sandbox')
+  inner.setAttribute('data-biu-id', 'sandbox:0-x:0/1')
   inner.setAttribute('data-biu-label', '点过 0 次')
   inner.setAttribute('data-biu-plugin', 'page-sandbox')
   shadow.append(inner)
@@ -728,13 +750,17 @@ test('pick reaches stamped nodes inside an open sandbox shadow', () => {
   })
   const hit = resolvePickFromNode(inner, '/s/abc')
   assert.ok(hit)
-  assert.equal(hit.ref.kind, 'html')
-  assert.equal(hit.ref.id, 'html:0-x:0/1')
+  assert.equal(hit.ref.kind, 'sandbox')
+  assert.equal(hit.ref.id, 'sandbox:0-x:0/1')
   assert.equal(hit.ref.plugin, 'page-sandbox')
   assert.equal(hit.ref.path, '/pages/p002')
-  assert.equal(hit.ref.start_line, 3)
+  assert.equal(hit.ref.start_line, undefined)
+  assert.equal(hit.ref.selection, '点过 0 次')
+  assert.equal(hit.ref.text, undefined)
+  assert.equal(chipCaption(hit.ref).span, '')
+  assert.doesNotMatch(formatPicks([hit.ref]), /:::pageBlock|start_line/)
   const boxed = resolvePicksInRect({ left: 8, top: 8, width: 40, height: 20 }, '/s/abc', root)
-  assert.equal(boxed.some((item) => item.ref.id === 'html:0-x:0/1'), true)
+  assert.equal(boxed.some((item) => item.ref.id === 'sandbox:0-x:0/1'), true)
   host.setAttribute('data-biu-kind', 'plugin')
   host.setAttribute('data-biu-id', 'page-sandbox:0/0')
   Object.defineProperty(document, 'elementsFromPoint', {
@@ -743,8 +769,55 @@ test('pick reaches stamped nodes inside an open sandbox shadow', () => {
   })
   const at = resolvePickAtPoint(20, 15, '/s/abc')
   assert.ok(at)
-  assert.equal(at.ref.kind, 'html')
-  assert.equal(at.ref.id, 'html:0-x:0/1')
+  assert.equal(at.ref.kind, 'sandbox')
+  assert.equal(at.ref.id, 'sandbox:0-x:0/1')
+  bindEditorTextHost(root, null)
+  root.remove()
+})
+
+test('sandbox inner pick does not send the whole fence as text', () => {
+  const root = document.createElement('div')
+  root.className = 'tiptap'
+  const block = document.createElement('div')
+  block.className = 'page-block'
+  block.setAttribute('data-page-block', 'sandbox')
+  const host = document.createElement('div')
+  host.setAttribute('data-sandbox', '')
+  block.append(host)
+  root.append(block)
+  document.body.append(root)
+  const shadow = host.attachShadow({ mode: 'open' })
+  const inner = document.createElement('h1')
+  inner.textContent = '能做什么，不能做什么'
+  inner.setAttribute('data-sandbox-pick', '')
+  inner.setAttribute('data-biu-kind', 'sandbox')
+  inner.setAttribute('data-biu-id', 'sandbox:0-x:0/0')
+  inner.setAttribute('data-biu-label', '能做什么')
+  shadow.append(inner)
+  const fence = ':::pageBlock {kind=sandbox}\nexport default function App(){return <h1>能做什么，不能做什么</h1>}\n:::'
+  bindEditorTextHost(root, {
+    path: '/pages/p002',
+    locusFromSelection: () => null,
+    locusFromElement: (el) =>
+      el === block || block.contains(el)
+        ? { start_line: 1, end_line: 4, text: fence, selection: fence }
+        : null,
+  })
+  const hit = resolvePickFromNode(inner, '/s/abc')
+  assert.ok(hit)
+  assert.equal(hit.ref.kind, 'sandbox')
+  assert.equal(hit.ref.id, 'sandbox:0-x:0/0')
+  assert.equal(hit.ref.text, undefined)
+  assert.equal(hit.ref.start_line, undefined)
+  assert.equal(hit.ref.selection, '能做什么，不能做什么')
+  assert.notEqual(hit.ref.selection, fence)
+  assert.equal(chipCaption(hit.ref).name, '能做什么')
+  assert.equal(chipCaption(hit.ref).span, '')
+  const packed = formatPicks([hit.ref])
+  assert.match(packed, /"selection":"能做什么，不能做什么"/)
+  assert.doesNotMatch(packed, /:::pageBlock/)
+  assert.doesNotMatch(packed, /"text":/)
+  assert.doesNotMatch(packed, /start_line/)
   bindEditorTextHost(root, null)
   root.remove()
 })
@@ -770,14 +843,19 @@ test('html block pick names the inner node even when the host is the plugin shel
   root.remove()
 })
 
-test('sandbox pick walks composed path and prefers inner html stamps', async () => {
+test('sandbox pick walks composed path and prefers inner sandbox stamps', async () => {
   const { readFile } = await import('node:fs/promises')
   const { resolve } = await import('node:path')
   const resolveSrc = await readFile(resolve(import.meta.dirname, './resolve.ts'), 'utf8')
   const overlaySrc = await readFile(resolve(import.meta.dirname, './overlay.tsx'), 'utf8')
   assert.match(resolveSrc, /function refineSandboxPick/)
   assert.match(resolveSrc, /function sandboxInnerAtPoint/)
+  assert.match(resolveSrc, /function sandboxInnerFromEvent/)
+  assert.match(resolveSrc, /function resolvePickFromEvent/)
+  assert.match(resolveSrc, /document\.querySelectorAll\('\[data-sandbox\]'\)/)
+  assert.match(resolveSrc, /host\.shadowRoot\.querySelectorAll/)
   assert.match(resolveSrc, /refineSandboxPick\(resolvePickFromNode/)
   assert.match(overlaySrc, /pathHasEditor/)
   assert.match(overlaySrc, /composedPath\(\)/)
+  assert.match(overlaySrc, /resolvePickFromEvent/)
 })

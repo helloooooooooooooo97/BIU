@@ -138,17 +138,17 @@ function sessionProgress(record: SessionRecordLike, opts: { afterSeq?: number; t
 export function sessionsCollection(sessions: SessionsLike): CollectionSpec {
   const list = async () => (await sessions.listSummaries()).map(asRecord)
   return {
-    id: 'sessions',
-    path: '/sessions',
-    label: '会话',
+    id: 'agents',
+    path: '/agents',
+    label: '代理',
     view: {
       moduleId: 'sessions-db',
-      route: '/db-sessions',
-      title: '会话',
+      route: '/db-agents',
+      title: '代理',
       inspector: true,
-      blurb: '这张表的每一行是一个会话，也就是一个代理（agent）。一个代理 = 一个 session，id 就是会话 id。用户说「再开一个 agent / 叫另一个代理去做」= 在本表 db_create 新建一行（caps.create 为真时），不要去建插件、不要去建任务。你自己也是其中一个会话。列表 db_list /sessions。改标题/置顶/emoji/标签/模型/服务商/系统提示/模式/额外工具/自动压缩输入 token/项目路径：db_update /sessions/<id>。聊天记录不在这张表，不能用 db_update 写对话。删除 db_delete 进回收站（记录还在）；彻底删除用 purge=true 或 db_action /trash/sessions::<id> action=delete。本表动作（db_action path=/sessions/<会话id> action=…）：inspect=看这个代理的配置和最近几句对话（可选 args.limit）；query=在这一行会话的时间线里查事件（args.query 匹配类型或摘要，可再传 args.type；不传 query 返回最近若干条）；progress=看它当前回合忙不忙、在用什么工具、刚说了什么（轮询时把上次返回的 newestSeq 当作 afterSeq）；status=看它上下文 token 用了多少；compact=压缩它的旧上下文（第一次不传 text 会返回该怎么写摘要，第二次把摘要放进 args.text）；clear=丢掉摘要、硬切压缩点；retrieve=按关键词找回被压缩的旧内容（必填 args.query）。',
+      blurb: '这张表的每一行是一个代理（agent）。一个代理 = 一个 session，id 就是代理 id。用户说「再开一个 agent / 叫另一个代理去做」= 在本表 db_create 新建一行（caps.create 为真时），不要去建插件、不要去建任务。你自己也是其中一个代理。列表 db_list /agents。改标题/置顶/emoji/标签/模型/服务商/系统提示/模式/额外工具/自动压缩输入 token/项目路径：db_update /agents/<id>。聊天记录不在这张表，不能用 db_update 写对话。删除 db_delete 进回收站（记录还在）；彻底删除用 purge=true 或 db_action /trash/agents::<id> action=delete。本表动作（db_action path=/agents/<代理id> action=…）：inspect=看这个代理的配置和最近几句对话（可选 args.limit）；query=在这一行代理的时间线里查事件（args.query 匹配类型或摘要，可再传 args.type；不传 query 返回最近若干条）；progress=看它当前回合忙不忙、在用什么工具、刚说了什么（轮询时把上次返回的 newestSeq 当作 afterSeq）；status=看它上下文 token 用了多少；compact=压缩它的旧上下文（第一次不传 text 会返回该怎么写摘要，第二次把摘要放进 args.text）；clear=丢掉摘要、硬切压缩点；retrieve=按关键词找回被压缩的旧内容（必填 args.query）。',
       order: 18,
-      icon: 'chat-bubble',
+      icon: 'cursor',
     },
     records: { update: true, create: Boolean(sessions.create), delete: true },
     schema: {
@@ -284,7 +284,7 @@ export function sessionsCollection(sessions: SessionsLike): CollectionSpec {
         for: 'agent',
         placement: [],
         description:
-          '在这一个会话的时间线里查事件。args.query 匹配类型或摘要；args.type 可限定事件类型。不传 query 时返回最近若干条。只查这一行 session。',
+          '在这一个代理的时间线里查事件。args.query 匹配类型或摘要；args.type 可限定事件类型。不传 query 时返回最近若干条。只查这一行 session。',
         parameters: {
           type: 'object',
           properties: {
@@ -455,7 +455,7 @@ export function sessionsCollection(sessions: SessionsLike): CollectionSpec {
             overBudget: tokens > budget,
             compactedAlready: compacted,
             note: !usage.found
-              ? '当前会话暂无 LLM 调用 usage 数据。'
+              ? '当前代理暂无 LLM 调用 usage 数据。'
               : tokens > budget
                 ? `最近一次输入上下文 ${tokens} token > 预算 ${budget}，已超界，建议按需压缩。`
                 : `最近一次输入上下文 ${tokens} / ${budget} token，${budget - tokens} 余量，${tokens / budget > 0.8 ? '接近上限，可考虑尽早压缩' : '暂不紧迫'}`,

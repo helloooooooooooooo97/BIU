@@ -43,11 +43,15 @@ function pageBlockHtmlText(node: {
 }) {
   if (node.type?.name !== 'pageBlock') return ''
   const kind = String(node.attrs?.kind ?? '')
-  if (kind !== 'sandbox' && kind !== 'html' && kind !== 'htmlframe') return ''
   const data = node.attrs?.data
   if (!data || typeof data !== 'object' || Array.isArray(data)) return ''
-  const html = (data as { html?: unknown }).html
-  return typeof html === 'string' ? htmlVisibleText(html) : ''
+  const rec = data as { html?: unknown; source?: unknown }
+  if (kind === 'sandbox') {
+    const source = typeof rec.source === 'string' ? rec.source : typeof rec.html === 'string' ? rec.html : ''
+    return source ? htmlVisibleText(source) : ''
+  }
+  if (kind !== 'html' && kind !== 'htmlframe') return ''
+  return typeof rec.html === 'string' ? htmlVisibleText(rec.html) : ''
 }
 
 function posFromFlat(pieces: TextPiece[], offset: number) {

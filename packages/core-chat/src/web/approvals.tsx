@@ -369,7 +369,7 @@ export function ApprovalsRail(props: SlotProps) {
                 id: 'auto',
                 label: 'Auto',
                 icon: <BoltIcon className="size-4" aria-hidden />,
-                hint: '工具直接执行，不弹出确认。适合你信任当前会话、想少打断的时候。',
+                hint: '工具直接执行，不弹出确认。适合你信任当前代理、想少打断的时候。',
               },
               {
                 id: 'hold',

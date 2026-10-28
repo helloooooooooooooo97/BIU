@@ -350,12 +350,16 @@ export function focusInspectorIfOpen(collection: string, href: string) {
 }
 
 /** 右侧检查器打开这条路径，中间主界面不动。同一数据页只聚焦；unique 时不同页才新开。 */
-export function showInInspector(collection: string, href: string, opts?: { unique?: boolean }) {
+export function showInInspector(collection: string, href: string, opts?: { unique?: boolean; newTab?: boolean }) {
   const tabId = inspectorCollectionTabId(collection)
   const unique = opts?.unique === true
   const same = paneWithHref(tabId, href) ?? paneWithPageKey(href)
   if (same) {
     revealInspectorPane(same, href)
+    return
+  }
+  if (opts?.newTab) {
+    revealInspectorPane(nextInspectorPaneId(tabId), href)
     return
   }
   const paneIds = paneIdsForTab(tabId)
@@ -391,11 +395,19 @@ export function moveInspectorRecordsToTrash(collection: string, recordIds: strin
   }
 }
 
-/** 右侧检查器打开这条记录。同一页已在检查器里则只聚焦。 */
-export function showRecordInInspector(collection: string, recordId: string, viewId?: string | null) {
+/** 右侧检查器打开这条记录。同一页已在检查器里则只聚焦。newTab 时不占用当前列表栏。 */
+export function showRecordInInspector(
+  collection: string,
+  recordId: string,
+  viewId?: string | null,
+  opts?: { newTab?: boolean },
+) {
   const view = String(viewId ?? '').trim() || openListView(collection) || inspectorWorkingView(collection)
   if (view) rememberInspectorWorkingView(collection, view)
-  showInInspector(collection, databaseRecordPath(collection, recordId, view || undefined), { unique: true })
+  showInInspector(collection, databaseRecordPath(collection, recordId, view || undefined), {
+    unique: true,
+    newTab: opts?.newTab === true,
+  })
 }
 
 /** 工具查/改/删某张表后：打开右侧检查器并切到该表（中间主界面不动）。 */

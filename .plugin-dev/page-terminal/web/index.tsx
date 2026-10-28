@@ -644,7 +644,8 @@ function TerminalSurface({
         const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
         socket = new WebSocket(
           `${protocol}//${location.host}/ws/page-terminal` +
-            `?cols=${term.cols}&rows=${term.rows}&session=${encodeURIComponent(sessionKey)}` +
+            `?cols=${term.cols}&rows=${term.rows}&agent=${encodeURIComponent(sessionKey)}` +
+            `&session=${encodeURIComponent(sessionKey)}` +
             `&workspaceId=${encodeURIComponent(sessionStorage.getItem('biu.workspaceId') ?? '')}`,
         )
         socket.binaryType = 'arraybuffer'
@@ -1177,15 +1178,15 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '2px 0 8px' }}>
         <span style={{ color: 'var(--biu-color-text)', fontWeight: 600, fontSize: 13 }}>设置</span>
         {typeof state.sessions === 'number' ? (
-          <span style={{ color: 'var(--biu-color-text-subtle)' }}>{state.sessions} 个后台会话</span>
+          <span style={{ color: 'var(--biu-color-text-subtle)' }}>{state.sessions} 个后台代理</span>
         ) : null}
       </div>
       {state.error ? (
         <div style={{ padding: '6px 0', color: '#ff6369' }}>读取失败：{state.error}</div>
       ) : (
         <>
-          {row('maxSessions', '后台保留', '关掉页面后仍留着的会话，超出按最久未用淘汰')}
-          {row('bufferKB', '回放缓冲 KB', '每个会话缓存的输出，重连时回放')}
+          {row('maxSessions', '后台保留', '关掉页面后仍留着的代理，超出按最久未用淘汰')}
+          {row('bufferKB', '回放缓冲 KB', '每个代理缓存的输出，重连时回放')}
           {row('replayLines', '回放行数', '重连时最多回放多少行')}
         </>
       )}

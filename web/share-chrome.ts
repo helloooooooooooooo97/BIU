@@ -22,7 +22,7 @@ export function installShareCollectionChrome(ctx: Context) {
     ...pageBlocksChrome(() => getPageEditor()?.blocks() ?? []),
     Content: PageBlockContent,
   })
-  ui.decorate('/sessions', sessionsChrome())
+  ui.decorate('/agents', sessionsChrome())
   ui.decorate('/skills', { Content: SkillsContent })
   ui.decorate('/plugins', pluginsChrome)
   ui.decorate('/tasks', tasksChrome)

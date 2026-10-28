@@ -150,13 +150,14 @@ export function resolvePickFromNode(
   }
 }
 
-const HTML_BLOCK_SEL = '[data-page-block="sandbox"]'
+const SANDBOX_BLOCK_SEL = '[data-page-block="sandbox"]'
 const ELEMENT_HTML_CAP = 2000
 
 function stripPickMarks(root: HTMLElement) {
-  const nodes = [root, ...root.querySelectorAll('[data-html-pick], [data-biu-kind], [data-biu-id]')]
+  const nodes = [root, ...root.querySelectorAll('[data-sandbox-pick], [data-html-pick], [data-biu-kind], [data-biu-id]')]
   for (const node of nodes) {
     if (!(node instanceof HTMLElement)) continue
+    node.removeAttribute('data-sandbox-pick')
     node.removeAttribute('data-html-pick')
     node.removeAttribute('data-biu-kind')
     node.removeAttribute('data-biu-id')
@@ -179,29 +180,49 @@ export function serializeHtmlPickElement(el: HTMLElement) {
   return html.length > ELEMENT_HTML_CAP ? `${html.slice(0, ELEMENT_HTML_CAP)}…` : html
 }
 
-function htmlBlockFrom(node: Element | null) {
-  return composedClosest(node, HTML_BLOCK_SEL)
+function sandboxBlockFrom(node: Element | null) {
+  return composedClosest(node, SANDBOX_BLOCK_SEL)
 }
 
 function isSandboxInnerEl(el: Element) {
   if (!(el instanceof HTMLElement)) return false
-  const kind = el.getAttribute('data-biu-kind')
-  return kind === 'sandbox' || kind === 'html' || el.hasAttribute('data-html-pick')
+  return el.getAttribute('data-biu-kind') === 'sandbox' || el.hasAttribute('data-sandbox-pick')
+}
+
+function rawBox(el: Element): ClientBox {
+  const r = el.getBoundingClientRect()
+  return { left: r.left, top: r.top, width: r.width, height: r.height }
+}
+
+/** 事件路径上最里层的 sandbox 戳。指针在哪个节点上，就选哪个。 */
+export function sandboxInnerFromEvent(event?: Event | null): HTMLElement | null {
+  if (!event || typeof event.composedPath !== 'function') return null
+  for (const node of event.composedPath()) {
+    if (!(node instanceof HTMLElement)) continue
+    if (isSandboxInnerEl(node)) return node
+    if (node.hasAttribute('data-sandbox')) break
+  }
+  return null
 }
 
 function sandboxInnerAtPoint(x: number, y: number): HTMLElement | null {
   let best: HTMLElement | null = null
   let bestArea = Infinity
-  for (const host of queryAllDeep(document, '[data-html-sandbox], [data-page-block="sandbox"]')) {
-    const hostBox = visiblePickBox(host)
-    if (!hostBox || !pointInBox(hostBox, x, y)) continue
-    const root: ParentNode = host.shadowRoot ?? host
-    for (const el of root.querySelectorAll('[data-html-pick], [data-biu-kind="sandbox"], [data-biu-kind="html"]')) {
+  for (const host of document.querySelectorAll('[data-sandbox]')) {
+    if (!(host instanceof HTMLElement) || !host.shadowRoot) continue
+    try {
+      for (const el of host.shadowRoot.elementsFromPoint(x, y)) {
+        if (isSandboxInnerEl(el)) return el
+      }
+    } catch {
+      /* jsdom */
+    }
+    for (const el of host.shadowRoot.querySelectorAll('[data-sandbox-pick], [data-biu-kind="sandbox"]')) {
       if (!(el instanceof HTMLElement) || !isSandboxInnerEl(el)) continue
-      const box = visiblePickBox(el)
-      if (!box || !pointInBox(box, x, y)) continue
-      const area = Math.max(1, box.width * box.height)
-      if (area <= bestArea) {
+      const box = rawBox(el)
+      if (box.width <= 0 || box.height <= 0 || !pointInBox(box, x, y)) continue
+      const area = box.width * box.height
+      if (area < bestArea) {
         best = el
         bestArea = area
       }
@@ -217,21 +238,21 @@ function refineSandboxPick(
   surface: Element | null,
 ) {
   if (!hit) return null
-  const block = htmlBlockFrom(hit.el)
+  const block = sandboxBlockFrom(hit.el)
   if (!block) return hit
-  if (isSandboxInnerEl(hit.el) && (hit.ref.kind === 'sandbox' || hit.ref.kind === 'html')) return hit
+  if (isSandboxInnerEl(hit.el) && hit.ref.kind === 'sandbox') return hit
   for (const el of stacked) {
     if (!(el instanceof HTMLElement) || el === block) continue
     if (!composedContains(block, el)) continue
     if (!isSandboxInnerEl(el)) continue
     const inner = resolvePickFromNode(el, route, surface)
-    if (inner && (inner.ref.kind === 'sandbox' || inner.ref.kind === 'html')) return inner
+    if (inner && inner.ref.kind === 'sandbox') return inner
   }
   return hit
 }
 
 function innermostHtmlTarget(start: Element, highlight: HTMLElement) {
-  const block = htmlBlockFrom(start) || htmlBlockFrom(highlight)
+  const block = sandboxBlockFrom(start) || sandboxBlockFrom(highlight)
   let stamped: HTMLElement | null = null
   let node: Element | null = start
   const stop = block ?? highlight
@@ -255,14 +276,33 @@ function withHtmlElement(ref: PickRef, start: Element, highlight: HTMLElement): 
   return element ? { ...ref, element } : ref
 }
 
-/** 带 data-biu 的命中也挂上页面 path / markdown 行，和点选 block 一样；id 仍用节点自己的。 */
+function liveHighlightIn(el: HTMLElement): string {
+  const sel = typeof window === 'undefined' ? null : window.getSelection()
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return ''
+  const raw = pickPreview(sel.toString(), 120)
+  if (!raw) return ''
+  const anchor = sel.anchorNode
+  if (!composedContains(el, anchor) && !(el.shadowRoot && anchor && el.shadowRoot.contains(anchor))) return ''
+  return raw
+}
+
+function withoutFenceLocus(ref: PickRef): PickRef {
+  if (ref.kind !== 'html' && ref.kind !== 'sandbox') return ref
+  if (!ref.element && !ref.selection) return ref
+  const { text: _t, start_line: _s, end_line: _e, insert: _i, ...rest } = ref
+  return rest
+}
+
+/** 内部节点只挂页面 path，不把整块围栏行号/正文当成选区。 */
 function withEditorPickContext(ref: PickRef, el: HTMLElement, start: Element = el): PickRef {
   const sourced = withHtmlElement(withHostSource(ref, el), start, el)
+  if (ref.kind === 'html' || ref.kind === 'sandbox') {
+    const inner = liveHighlightIn(el) || pickPreview(el.textContent ?? '', 120)
+    const next = inner && !sourced.selection ? { ...sourced, selection: inner } : sourced
+    return withoutFenceLocus(next)
+  }
   const locus = editorLocusFromNode(el)
-  const next = locus ? { ...withPickLocus(sourced, locus), id: ref.id, ...(sourced.element ? { element: sourced.element } : {}) } : sourced
-  if ((ref.kind !== 'html' && ref.kind !== 'sandbox') || next.selection) return next
-  const snippet = pickPreview(el.textContent ?? '', 120)
-  return snippet ? { ...next, selection: snippet } : next
+  return locus ? { ...withPickLocus(sourced, locus), id: ref.id, ...(sourced.element ? { element: sourced.element } : {}) } : sourced
 }
 
 function editorLocusFromNode(el: HTMLElement) {
@@ -366,7 +406,16 @@ function elementsFromPointDeep(x: number, y: number): Element[] {
     }
     for (const el of list) {
       if (!(el instanceof Element) || seen.has(el)) continue
-      if (el.shadowRoot) dive(el.shadowRoot)
+      if (el.shadowRoot) {
+        dive(el.shadowRoot)
+        for (const inner of el.shadowRoot.querySelectorAll('[data-sandbox-pick], [data-biu-kind="sandbox"]')) {
+          if (!(inner instanceof HTMLElement) || seen.has(inner)) continue
+          const box = rawBox(inner)
+          if (box.width <= 0 || box.height <= 0 || !pointInBox(box, x, y)) continue
+          seen.add(inner)
+          out.push(inner)
+        }
+      }
       if (seen.has(el)) continue
       seen.add(el)
       out.push(el)
@@ -407,13 +456,28 @@ export function pickSurfaceAtPoint(x: number, y: number): HTMLElement | null {
   return null
 }
 
+/** 选取：事件路径上的内部节点优先，没有再退回坐标命中。 */
+export function resolvePickFromEvent(event: Event, route: string) {
+  const inner = sandboxInnerFromEvent(event)
+  if (inner && !isPickIgnored(inner) && !inHiddenPane(inner)) {
+    const hit = resolvePickFromNode(inner, route, null)
+    if (hit) return hit
+  }
+  const x = 'clientX' in event ? Number((event as PointerEvent).clientX) : 0
+  const y = 'clientY' in event ? Number((event as PointerEvent).clientY) : 0
+  return resolvePickAtPoint(x, y, route)
+}
+
 export function resolvePickAtPoint(x: number, y: number, route: string) {
   const stacked = elementsFromPointDeep(x, y)
   if (stacked.some((el) => el instanceof Element && composedClosest(el, '[data-testid="chat-overlay-panel"]'))) return null
   const inner = sandboxInnerAtPoint(x, y)
   if (inner && !isPickIgnored(inner) && !inHiddenPane(inner)) {
-    const hit = resolvePickFromNode(inner, route, pickSurfaceAtPoint(x, y))
+    const surface = pickSurfaceAtPoint(x, y)
+    const hit = resolvePickFromNode(inner, route, surface)
     if (hit) return hit
+    const raw = resolvePickFromNode(inner, route, null)
+    if (raw?.ref.kind === 'sandbox') return raw
   }
   const surface = pickSurfaceAtPoint(x, y)
   const pool = surface

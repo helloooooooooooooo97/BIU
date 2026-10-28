@@ -258,7 +258,8 @@ test('starred pages and tasks also list in the sidebar favorites section', () =>
 test('table title opens record from the title-side button', () => {
   assert.match(browser, /data-testid="record-title-open"/)
   assert.match(browser, /data-testid="record-title-split"/)
-  assert.match(browser, /showRecordInInspector\(collectionPath, row.id, activeViewId\)/)
+  assert.doesNotMatch(browser, /toolsLive && !nested/)
+  assert.match(browser, /showRecordInInspector\(collectionPath, row.id, activeViewId, nested \? \{ newTab: true \} : undefined\)/)
   assert.match(browser, /className="tasks-icon-btn tasks-title-open"/)
   assert.match(browser, /tasks-title-aside/)
   assert.match(browser, /tasks-tree-count/)
@@ -412,13 +413,12 @@ test('deletable tables can pick rows and bulk-act over the table header', () => 
   assert.doesNotMatch(cells, /<RecordPickPanel/)
   const people = readFileSync(resolve(import.meta.dirname, './person-cell.tsx'), 'utf8')
   assert.match(people, /asPersonList/)
-  assert.match(people, /kind: 'user', name: '用户'/)
-  assert.match(people, /kind: 'system', name: '系统'/)
+  assert.match(people, /path: '\/workspace-members'/)
   assert.match(people, /listCollection/)
-  assert.match(people, /path: '\/sessions'/)
+  assert.match(people, /path: '\/agents'/)
   const personFace = people.slice(people.indexOf('export function PersonFace'), people.indexOf('export function PersonPickPanel'))
   assert.doesNotMatch(personFace, /loadAgents|listCollection/)
-  assert.doesNotMatch(people, /\/api\/sessions/)
+  assert.doesNotMatch(people, /\/api\/agents/)
   assert.match(editor, /<MediaField/)
   assert.doesNotMatch(cells, /placeholder=\{kind === 'image'/)
   const media = readFileSync(resolve(import.meta.dirname, './cell-media.tsx'), 'utf8')
@@ -1197,6 +1197,15 @@ test('missing sort field falls back to updatedAt, then title', () => {
   assert.match(editor, /emptyFilterGroup\(\)/)
   assert.doesNotMatch(menus, /<FlyoutSearch/)
   assert.doesNotMatch(menus, /tasks-sort-head/)
+})
+
+test('session collection uses the cursor glyph labeled 代理', () => {
+  const glyphs = readFileSync(resolve(import.meta.dirname, './table-glyph.tsx'), 'utf8')
+  const spec = readFileSync(resolve(import.meta.dirname, '../../../host-sessions/src/host/sessions-collection.ts'), 'utf8')
+  assert.match(spec, /label: '代理'/)
+  assert.match(spec, /icon: 'cursor'/)
+  assert.match(glyphs, /name === 'cursor'/)
+  assert.match(glyphs, /<CursorArrowRaysIcon/)
 })
 
 test('widget collection uses the grouped-rectangles glyph, not the plugin puzzle', () => {

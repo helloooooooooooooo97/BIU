@@ -4,6 +4,7 @@ import {
   getChatOverlay,
   subscribeChatOverlay,
   closeChatOverlay,
+  setOverlayThread,
   requestOverlayFocus,
   requestInspectorClose,
   allocateShellColumns,
@@ -59,6 +60,8 @@ const ShellSearchPanel = lazy(() => import('./shell-search.tsx').then((m) => ({ 
 import {
   ChevronDoubleLeftIcon,
   ChevronDoubleRightIcon,
+  ArrowsPointingInIcon,
+  ArrowsPointingOutIcon,
   AdjustmentsHorizontalIcon,
   ArrowDownTrayIcon,
   CommandLineIcon,
@@ -806,6 +809,35 @@ function Shell(props: SlotProps) {
       </div>
       <ChatSessionTitle useSessionView={useSessionView} sessionView={sessionView} />
       <div className="chat-view-header-right">
+        <button
+          type="button"
+          className="chat-view-header-expand"
+          title="收起对话"
+          aria-label="收起对话"
+          data-testid="chat-overlay-shrink"
+          onPointerDown={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            setOverlayThread(false)
+          }}
+        >
+          <ArrowsPointingInIcon {...chromeIcon} />
+        </button>
+        <button
+          type="button"
+          className="chat-view-header-expand"
+          title="在主栏打开"
+          aria-label="在主栏打开"
+          data-testid="chat-overlay-expand"
+          onPointerDown={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            closeChatOverlay()
+            navigate(agentHref)
+          }}
+        >
+          <ArrowsPointingOutIcon {...chromeIcon} />
+        </button>
         <button
           type="button"
           className="chat-view-header-expand"

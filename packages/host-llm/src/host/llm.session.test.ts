@@ -84,7 +84,7 @@ test('flattenToolImagesForChatCompletions does not insert user between sibling t
 test('isVisionImageUrl rejects svg and accepts raster data URLs', () => {
   assert.equal(isVisionImageUrl('data:image/png;base64,xx'), true)
   assert.equal(isVisionImageUrl('data:image/svg+xml;base64,PHN2Zz4='), false)
-  assert.equal(isVisionImageUrl('/api/sessions/s/artifacts/favicon.svg'), false)
+  assert.equal(isVisionImageUrl('/api/agents/s/artifacts/favicon.svg'), false)
 })
 
 test('flattenToolImagesForChatCompletions drops svg image_url blocks', () => {

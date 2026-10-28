@@ -68,7 +68,8 @@ if (typeof window !== 'undefined') {
   })
 }
 
-const HTML_KINDS = new Set(['sandbox', 'html', 'htmlframe'])
+const HTML_KINDS = new Set(['html', 'htmlframe'])
+const SANDBOX_KIND = 'sandbox'
 const VIDEO_KINDS = new Set(['video'])
 
 export function parsePageBlockMeta(raw: string) {
@@ -130,6 +131,16 @@ export function parsePageBlockData(kind: string, raw: string, extras: Record<str
     const script = json ? videoScriptFromJson(json, raw.trim()) : raw.trim()
     return { ...extras, script }
   }
+  if (kind === SANDBOX_KIND) {
+    if (json) {
+      const source = typeof json.source === 'string' ? json.source : typeof json.html === 'string' ? json.html : ''
+      const rest = { ...json }
+      delete rest.html
+      delete rest.file
+      return { ...rest, ...extras, source }
+    }
+    return { ...extras, source: raw.trim() }
+  }
   if (json) return { ...json, ...extras }
   if (HTML_KINDS.has(kind)) return { ...extras, html: raw.trim() }
   return { ...extras }
@@ -143,7 +154,7 @@ function formatMeta(kind: string, plugin: string, extras: string[], id = '') {
   return `{${parts.join(' ')}}`
 }
 
-function htmlFenceExtras(data: Record<string, unknown>) {
+function fenceAttrExtras(data: Record<string, unknown>) {
   const extras: string[] = []
   const title = typeof data.title === 'string' ? data.title.trim() : ''
   if (title) extras.push(`title=${JSON.stringify(title)}`)
@@ -158,8 +169,14 @@ function htmlFenceExtras(data: Record<string, unknown>) {
 export function formatPageBlockFence(kind: string, plugin: string, data: Record<string, unknown>, id = '') {
   const body = { ...data }
   delete body.cloneFrom
+  if (kind === SANDBOX_KIND) {
+    delete body.deck
+    const extras = fenceAttrExtras(body)
+    const source = typeof body.source === 'string' ? body.source : typeof body.html === 'string' ? body.html : ''
+    return `:::pageBlock ${formatMeta(kind, plugin, extras, id)}\n${source}\n:::`
+  }
   if (HTML_KINDS.has(kind)) {
-    const extras = htmlFenceExtras(body)
+    const extras = fenceAttrExtras(body)
     const file = typeof body.file === 'string' ? body.file.trim() : ''
     if (file) {
       return `:::pageBlock ${formatMeta(kind, plugin, extras, id)}\n${JSON.stringify({ file }, null, 2)}\n:::`

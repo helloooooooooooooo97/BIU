@@ -654,16 +654,17 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
     }
   })
 
-  ctx.http.route('GET', '/api/account/sessions', async (route) => {
+  ctx.http.route('GET', '/api/account/agents', async (route) => {
     try {
       const me = actor(route)
-      route.send(200, { sessions: account.store.listSessions(me.id) })
+      const agents = account.store.listSessions(me.id)
+      route.send(200, { agents, sessions: agents })
     } catch (error) {
       fail(route, error)
     }
   })
 
-  ctx.http.route('DELETE', '/api/account/sessions/:id', async (route) => {
+  ctx.http.route('DELETE', '/api/account/agents/:id', async (route) => {
     try {
       const me = actor(route)
       const revoked = account.store.revokeSessionById(me.id, String(route.params.id ?? ''))
@@ -729,7 +730,7 @@ export function apply(ctx: Context, config: AccountConfig = {}) {
   ctx.http.route('GET', '/api/account/me', async (route) => {
     try {
       const me = actor(route)
-      route.send(200, { ...me, online: isOnlineRuntime() })
+      route.send(200, { ...me, online: isOnlineRuntime(), isSuperAdmin: account.store.isSuperAdmin(me.id) })
     } catch (error) {
       fail(route, error)
     }

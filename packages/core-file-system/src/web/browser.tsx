@@ -272,7 +272,6 @@ function RecordOpenControls({
   row,
   kidCount = 0,
   toolsLive = true,
-  nested,
   pick,
   onOpenSplit,
   onOpenRow,
@@ -280,14 +279,13 @@ function RecordOpenControls({
   row: DbRecord
   kidCount?: number
   toolsLive?: boolean
-  nested: boolean
   pick: object
   onOpenSplit: () => void
   onOpenRow: () => void
 }) {
   return (
     <span className="tasks-title-aside">
-      {toolsLive && !nested ? (
+      {toolsLive ? (
         <button
           type="button"
           className="tasks-icon-btn tasks-title-open"
@@ -339,7 +337,6 @@ function RecordTitle({
   onToggleCollapsed,
   tableIcon,
   Icon,
-  nested,
   pick,
   onOpenSplit,
   onOpenRow,
@@ -358,7 +355,6 @@ function RecordTitle({
   onToggleCollapsed: () => void
   tableIcon?: string
   Icon?: CollectionChrome['Icon']
-  nested: boolean
   pick: object
   onOpenSplit: () => void
   onOpenRow: () => void
@@ -420,7 +416,6 @@ function RecordTitle({
             row={row}
             kidCount={tree ? kidCount : 0}
             toolsLive={toolsLive}
-            nested={nested}
             pick={pick}
             onOpenSplit={onOpenSplit}
             onOpenRow={onOpenRow}
@@ -4407,9 +4402,8 @@ export function CollectionBrowser({
             onToggleCollapsed={() => setCollapsed((prev) => ({ ...prev, [row.id]: !prev[row.id] }))}
             tableIcon={currentTable?.view?.icon}
             Icon={chrome?.Icon}
-            nested={nested}
             pick={recordPick(row)}
-            onOpenSplit={() => showRecordInInspector(collectionPath, row.id, activeViewId)}
+            onOpenSplit={() => showRecordInInspector(collectionPath, row.id, activeViewId, nested ? { newTab: true } : undefined)}
             onOpenRow={() => openRow(row)}
             onWriteEmoji={(next) => void writePatch(row, { emoji: next })}
             toolsArmed={toolsArmed}
@@ -5589,8 +5583,8 @@ export function CollectionBrowser({
           writePatch={writePatch}
           tableIcon={currentTable?.view?.icon}
           readOnly={
-            (collectionPath === '/plugins' && selected.builtin === true) ||
-            (selected.shareRole === '阅读' && (!localData || selected.builtin === true))
+            (collectionPath === '/plugins' && selected.builtin === true && selected.canManagePackage !== true) ||
+            (selected.shareRole === '阅读' && !localData && selected.canManagePackage !== true)
           }
           actionProperty={rowActionColumn ? <RecordActions row={selected} /> : null}
           share={

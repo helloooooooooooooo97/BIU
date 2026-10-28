@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Core-Chat：会话表 /sessions、对话与轨迹",
+  "description": "Core-Chat：代理表 /agents、对话与轨迹",
   "exports": {
     "./host": "./src/host/index.ts",
     "./web": "./src/web/index.ts"

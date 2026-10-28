@@ -1,6 +1,6 @@
 import { buildAppPath, type AppRoute } from '@biu/web-session-view'
 import { builtinAllViewId } from '../catalog-views.ts'
-import { normalizeCollectionPath } from '../paths.ts'
+import { AGENTS_COLLECTION_PATH, normalizeCollectionPath } from '../paths.ts'
 
 export const DATA_MODULE_ID = 'database'
 export const DATA_MODULE_PATH = '/database'
@@ -55,7 +55,7 @@ const SYSTEM_COLLECTION_ORDER = [
 ] as const
 
 /** 用户表侧栏顺序。组件和标签是反查索引，不排在这里。 */
-const USER_COLLECTION_ORDER = ['/sessions', '/tasks', '/pages', '/plugins'] as const
+const USER_COLLECTION_ORDER = [AGENTS_COLLECTION_PATH, '/tasks', '/pages', '/plugins'] as const
 
 /** 从当前用户能看到的用户数据反查出来，每人一份，没有分享。 */
 const INDEX_COLLECTION_ORDER = [PAGE_BLOCKS_COLLECTION_PATH, FACETS_COLLECTION_PATH] as const

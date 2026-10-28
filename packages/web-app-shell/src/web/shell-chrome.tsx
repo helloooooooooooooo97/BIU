@@ -5,7 +5,7 @@ import {
   ArrowDownTrayIcon,
   ArrowRightStartOnRectangleIcon,
   BellIcon,
-  ChatBubbleLeftRightIcon,
+  CursorArrowRaysIcon,
   CheckIcon,
   ChevronRightIcon,
   CircleStackIcon,
@@ -190,8 +190,8 @@ export function ShellSettingsAccount() {
   const [message, setMessage] = useState('')
   const token = readAccountToken()
   const loadSessions = () =>
-    accountFetch(token, '/api/account/sessions')
-      .then((body) => setSessions((body.sessions as Array<Record<string, unknown>>) ?? []))
+    accountFetch(token, '/api/account/agents')
+      .then((body) => setSessions(((body.agents ?? body.sessions) as Array<Record<string, unknown>>) ?? []))
       .catch(() => setSessions([]))
   const loadCloud = () =>
     accountFetch(token, '/api/account/cloud')
@@ -417,7 +417,7 @@ export function ShellSettingsAccount() {
                     type="button"
                     className="settings-account-action"
                     onClick={() => {
-                      void accountFetch(token, `/api/account/sessions/${encodeURIComponent(String(session.id))}`, { method: 'DELETE' })
+                      void accountFetch(token, `/api/account/agents/${encodeURIComponent(String(session.id))}`, { method: 'DELETE' })
                         .then(loadSessions)
                     }}
                   >
@@ -914,7 +914,7 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
       method: 'POST',
       body: JSON.stringify({ workspaceId }),
     })
-      .then(() => accountFetch(token, '/api/sessions'))
+      .then(() => accountFetch(token, '/api/agents'))
       .then((body) => {
         const sessions = (body as { sessions?: Array<{ id?: string; updatedAt?: number }> }).sessions ?? []
         window.location.assign(defaultSessionPath(sessions))
@@ -938,7 +938,7 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
           method: 'POST',
           body: JSON.stringify({ workspaceId: created.id }),
         })
-        const listed = await accountFetch(token, '/api/sessions') as { sessions?: Array<{ id?: string; updatedAt?: number }> }
+        const listed = await accountFetch(token, '/api/agents') as { sessions?: Array<{ id?: string; updatedAt?: number }> }
         window.location.assign(defaultSessionPath(listed.sessions ?? []))
       })
       .catch((error) => {
@@ -1370,7 +1370,7 @@ export function ShellSettingsCollab({ panel = 'members' }: { panel?: 'workspace'
         <div className="settings-account-copy">
           <label className="settings-account-label" htmlFor="settings-workspace-delete-name">删除空间</label>
           <p className="settings-muted settings-account-hint">
-            删除后无法恢复。请重新输入空间名称「{savedWorkspaceName}」确认。该空间下的页面、任务、会话和其他数据会永久删除。
+            删除后无法恢复。请重新输入空间名称「{savedWorkspaceName}」确认。该空间下的页面、任务、代理和其他数据会永久删除。
           </p>
         </div>
         <div className="settings-account-actions">
@@ -2132,7 +2132,7 @@ function NoticeBody({ body }: { body: string }) {
 function noticeKindLabel(kind?: string) {
   if (kind === 'approval') return '审批'
   if (kind === 'task') return '任务'
-  if (kind === 'session') return '会话'
+  if (kind === 'session') return '代理'
   return ''
 }
 
@@ -2333,10 +2333,10 @@ export function ShellSidePlaces({
         onClick={onSettings}
       />
       <SideAction
-        title="会话"
+        title="代理"
         active={activeId === 'agent'}
         testId="chrome-chat-panel"
-        icon={<ChatBubbleLeftRightIcon {...chromeIcon} />}
+        icon={<CursorArrowRaysIcon {...chromeIcon} />}
         onClick={() => {
           navigate(agentHref)
         }}

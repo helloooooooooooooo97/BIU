@@ -85,29 +85,30 @@ test('online mode denies record reads without an account context', () => {
   }
 })
 
-test('an online instance seeds root as super admin with the default password', () => {
+test('an online instance seeds the env super admin with the default password', () => {
   const previous = process.env.BIU_ONLINE
   process.env.BIU_ONLINE = '1'
   try {
     const collab = store()
-    const root = collab.login('root', '123456')
-    assert.equal(root.name, 'root')
-    assert.equal(root.mustChangePassword, false)
-    assert.equal(collab.requiresPasswordChange(root.id), false)
-    collab.changePassword(root.id, '123456', 'new-secret', root.token)
-    assert.equal(collab.requiresPasswordChange(root.id), false)
-    assert.throws(() => collab.login('root', '123456'), /密码不正确/)
+    const admin = collab.login('97@biu.com', '123456')
+    assert.equal(admin.email, '97@biu.com')
+    assert.equal(admin.mustChangePassword, false)
+    assert.equal(collab.isSuperAdmin(admin.id), true)
+    assert.equal(collab.requiresPasswordChange(admin.id), false)
+    collab.changePassword(admin.id, '123456', 'new-secret', admin.token)
+    assert.equal(collab.requiresPasswordChange(admin.id), false)
+    assert.throws(() => collab.login('97@biu.com', '123456'), /密码不正确/)
     const db = (collab as unknown as { db: import('node:sqlite').DatabaseSync }).db
     const restarted = new CollabStore(db)
-    assert.throws(() => restarted.login('root', '123456'), /密码不正确/)
-    assert.equal(restarted.login('root', 'new-secret').id, root.id)
+    assert.throws(() => restarted.login('97@biu.com', '123456'), /密码不正确/)
+    assert.equal(restarted.login('97@biu.com', 'new-secret').id, admin.id)
   } finally {
     if (previous === undefined) delete process.env.BIU_ONLINE
     else process.env.BIU_ONLINE = previous
   }
 })
 
-test('online startup adds root to a database that already has accounts', () => {
+test('online startup adds the env super admin to a database that already has accounts', () => {
   const previous = process.env.BIU_ONLINE
   delete process.env.BIU_ONLINE
   try {
@@ -116,8 +117,10 @@ test('online startup adds root to a database that already has accounts', () => {
     const db = (collab as unknown as { db: import('node:sqlite').DatabaseSync }).db
     process.env.BIU_ONLINE = '1'
     const online = new CollabStore(db)
-    const root = online.login('root', '123456')
-    assert.notEqual(root.id, ada.id)
+    const admin = online.login('97@biu.com', '123456')
+    assert.notEqual(admin.id, ada.id)
+    assert.equal(online.isSuperAdmin(admin.id), true)
+    assert.equal(online.isSuperAdmin(ada.id), false)
   } finally {
     if (previous === undefined) delete process.env.BIU_ONLINE
     else process.env.BIU_ONLINE = previous
@@ -292,7 +295,7 @@ test('bootstrap claims live records once and skips trash', () => {
   const db = (collab as unknown as { db: import('node:sqlite').DatabaseSync }).db
   db.prepare(`INSERT INTO pages (id, title, created_at, updated_at) VALUES ('p1', 'Home', 1, 1)`).run()
   db.prepare(`INSERT INTO tasks (id, title, created_at, updated_at) VALUES ('t1', 'Do', 1, 1), ('t2', 'Gone', 1, 1)`).run()
-  db.prepare(`INSERT INTO sessions (id, version, title, updated_at) VALUES ('s1', 1, 'Chat', 1)`).run()
+  db.prepare(`INSERT INTO agents (id, version, title, updated_at) VALUES ('s1', 1, 'Chat', 1)`).run()
   db.prepare(
     `INSERT INTO editor_content (collection, record_id, body, updated_at, version) VALUES ('/skills', 'sk1', '#', 1, 1)`,
   ).run()
@@ -314,8 +317,8 @@ test('bootstrap claims live records once and skips trash', () => {
     }>
   ).map((row) => ({ collection: row.collection, record_id: row.record_id, version: row.version }))
   assert.deepEqual(heads, [
+    { collection: '/agents', record_id: 's1', version: 0 },
     { collection: '/pages', record_id: 'p1', version: 0 },
-    { collection: '/sessions', record_id: 's1', version: 0 },
     { collection: '/skills', record_id: 'sk1', version: 0 },
     { collection: '/tasks', record_id: 't1', version: 0 },
   ])
@@ -414,13 +417,13 @@ test('logged-in accounts only see records in their own workspace', () => {
   const bobWs = collab.enter(bob.id)
   assert.notEqual(adaWs, bobWs)
   collab.attach(adaWs, '/pages', 'p-ada')
-  collab.attach(bobWs, '/sessions', 's-bob')
+  collab.attach(bobWs, '/agents', 's-bob')
   const adaView = runWithAccount(ada.id, () => collab.membership())
   const bobView = runWithAccount(bob.id, () => collab.membership())
   assert.equal(adaView.strict, true)
   assert.equal(adaView.mine.has('/pages\tp-ada'), true)
-  assert.equal(adaView.mine.has('/sessions\ts-bob'), false)
-  assert.equal(bobView.mine.has('/sessions\ts-bob'), true)
+  assert.equal(adaView.mine.has('/agents\ts-bob'), false)
+  assert.equal(bobView.mine.has('/agents\ts-bob'), true)
   assert.equal(bobView.mine.has('/pages\tp-ada'), false)
   assert.equal(runWithAccount(ada.id, () => collab.activeWorkspaceId()), adaWs)
   assert.equal(runWithAccount(bob.id, () => collab.activeWorkspaceId()), bobWs)
@@ -663,10 +666,10 @@ test('cross-workspace matrix denies strangers, viewers who write, and revoked se
     runWithAccount(ada.id, () =>
       runWithRequestWorkspace(spaceA.id, () => {
         collab.attach(spaceA.id, '/pages', 'shared-page', now, { ownership: 'workspace', accessMode: 'members' })
-        collab.attach(spaceA.id, '/sessions', 'session-a', now)
+        collab.attach(spaceA.id, '/agents', 'session-a', now)
       }),
     )
-    assert.deepEqual(collab.tenantForRecord('/sessions', 'session-a'), { workspaceId: spaceA.id, accountId: ada.id })
+    assert.deepEqual(collab.tenantForRecord('/agents', 'session-a'), { workspaceId: spaceA.id, accountId: ada.id })
     const read = (accountId: string, workspaceId: string) =>
       runWithAccount(accountId, () => runWithRequestWorkspace(workspaceId, () => collab.canReadRecord('/pages', 'shared-page')))
     const update = (accountId: string, workspaceId: string) =>

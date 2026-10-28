@@ -32,7 +32,7 @@ test('post-step does not insert a compact note into the assistant text', () => {
   assert.equal(autoCompactPostStep(noted), noted)
   assert.equal(shouldAutoCompact(step()), true)
   assert.equal(shouldAutoCompact(step({ inputTokens: 1000 })), false)
-  assert.equal(shouldAutoCompact(step({ toolCalls: [{ id: 'c', name: 'db_action', arguments: JSON.stringify({ path: '/sessions/s1', action: 'compact', args: { text: '摘要' } }) }] })), false)
+  assert.equal(shouldAutoCompact(step({ toolCalls: [{ id: 'c', name: 'db_action', arguments: JSON.stringify({ path: '/agents/s1', action: 'compact', args: { text: '摘要' } }) }] })), false)
   assert.match(mechanicalCompactText([
     { type: 'user/message', text: '旧问题' },
     { type: 'assistant/message', text: '[自动压缩] 不要留下' },

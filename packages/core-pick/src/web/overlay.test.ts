@@ -15,6 +15,23 @@ test('pick capture does not eat inspector chrome, chat overlay, or ignored nodes
   assert.doesNotMatch(overlay, /\.session-inspector/)
 })
 
+test('sandbox inner stamps are pickable even if a page-bubble ancestor is on the path', async () => {
+  const { ignorePickCapture } = await import('./overlay.tsx')
+  const bubble = document.createElement('div')
+  bubble.className = 'page-bubble'
+  const cell = document.createElement('div')
+  cell.setAttribute('data-sandbox-pick', '')
+  cell.setAttribute('data-biu-kind', 'sandbox')
+  document.body.append(bubble, cell)
+  const event = {
+    target: cell,
+    composedPath: () => [cell, bubble, document.body],
+  } as unknown as Event
+  assert.equal(ignorePickCapture(cell, event), false)
+  bubble.remove()
+  cell.remove()
+})
+
 test('sidebar list content can start a pick drag; chrome stays ignored', async () => {
   const { ignorePickCapture } = await import('./overlay.tsx')
   const bar = document.createElement('aside')
@@ -53,7 +70,8 @@ test('Escape blurs the focused control so the UA focus ring does not linger', ()
 })
 
 test('click and hover use the same point resolver', () => {
-  assert.match(overlay, /resolvePickAtPoint/)
+  assert.match(overlay, /resolvePickFromEvent/)
+  assert.doesNotMatch(overlay, /resolvePickAtPoint/)
   assert.doesNotMatch(overlay, /textPickFromSelection/)
   assert.doesNotMatch(overlay, /picksOnPointerUp/)
   assert.doesNotMatch(overlay, /kind === 'html'/)

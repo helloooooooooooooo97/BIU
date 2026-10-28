@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import type { SlotProps } from '@biu/type-slots'
 import { getPick, usePickState } from './service.ts'
-import { boxFromPoints, pickSurfaceAtPoint, resolvePickAtPoint, resolvePicksInRect, visiblePickBox } from './resolve.ts'
+import { boxFromPoints, pickSurfaceAtPoint, resolvePickFromEvent, resolvePicksInRect, visiblePickBox } from './resolve.ts'
 
 const DRAG_PX = 6
 
@@ -11,6 +11,15 @@ export const PICK_NAV_GUARD =
 export function ignorePickCapture(target: EventTarget | null, event?: Event) {
   const path = event && 'composedPath' in event ? event.composedPath() : []
   const nodes = path.length ? path : target instanceof Element ? [target] : []
+  if (
+    nodes.some(
+      (node) =>
+        node instanceof Element &&
+        (node.hasAttribute('data-sandbox-pick') || node.getAttribute('data-biu-kind') === 'sandbox'),
+    )
+  ) {
+    return false
+  }
   return nodes.some((node) => node instanceof Element && node.closest(PICK_NAV_GUARD))
 }
 
@@ -51,7 +60,7 @@ export function PickOverlay(_props: SlotProps) {
         )
         return
       }
-      const hit = resolvePickAtPoint(event.clientX, event.clientY, route())
+      const hit = resolvePickFromEvent(event, route())
       if (!hit) {
         pick.setHover(null)
         return
@@ -82,7 +91,7 @@ export function PickOverlay(_props: SlotProps) {
         )
         return
       }
-      const hit = resolvePickAtPoint(event.clientX, event.clientY, route())
+      const hit = resolvePickFromEvent(event, route())
       if (hit) pick.add(hit.ref)
     }
 
