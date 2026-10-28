@@ -190,7 +190,7 @@ const CSS = `
 .fsdb-page .tasks-sort-item-label svg,.fsdb-page .tasks-mode-item-ico,.fsdb-page .fsdb-checkrow-icon svg{flex:none;display:block;color:var(--biu-color-icon)}
 .fsdb-page .tasks-sort-item.is-active .tasks-sort-item-label svg,.fsdb-page .tasks-sort-item:hover .tasks-sort-item-label svg,.fsdb-page .fsdb-checkrow.is-on .fsdb-checkrow-icon svg,.fsdb-page .fsdb-checkrow:hover .fsdb-checkrow-icon svg{color:var(--biu-color-icon-active)}
 .fsdb-page .tasks-viewdd-item-main{width:auto;flex:1;min-width:0;justify-content:flex-start;padding:4px 6px}
-.fsdb-page .tasks-viewdd-item-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:var(--biu-font-weight-medium)}
+.fsdb-page .tasks-viewdd-item-name,.fsdb-tool-flyout .tasks-viewdd-item-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:var(--biu-font-weight-medium,500)}
 .fsdb-page .tasks-sort-item.is-active,.fsdb-page .tasks-viewdd-item.is-active .tasks-viewdd-item-main{color:var(--biu-color-text);font-weight:var(--biu-font-weight-medium)}
 .fsdb-page .tasks-viewdd-item-actions{display:inline-flex;align-items:center;gap:0;flex:none;margin-left:auto}
 .fsdb-page .tasks-viewdd-act{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;flex:none;padding:0;border:0;border-radius:6px;background:transparent;color:var(--biu-color-icon);cursor:pointer}
@@ -224,8 +224,11 @@ const CSS = `
   max-width:min(92vw,560px);
   max-height:min(70vh,520px);
   overflow:hidden;
-  font-weight:var(--biu-font-weight-medium);
+  font-weight:var(--biu-font-weight-medium,500);
   animation:fsdb-tool-flyout-in 120ms ease;
+}
+.fsdb-tool-flyout button,.fsdb-tool-flyout input,.fsdb-tool-flyout .tasks-viewdd-item-name,.fsdb-tool-flyout .tasks-viewdd-empty,.fsdb-tool-flyout .tasks-viewdd-saveas,.fsdb-tool-flyout .fsdb-checkrow-label,.fsdb-tool-flyout .fsdb-layout-row,.fsdb-tool-flyout .fsdb-mode-plus{
+  font-weight:var(--biu-font-weight-medium,500);
 }
 .fsdb-page .tasks-viewdd-menu{left:0;right:auto;min-width:320px;overflow:auto}
 .fsdb-page .fsdb-col-menu,.fsdb-tool-flyout.fsdb-col-menu{min-width:260px;max-height:min(70vh,520px);overflow:hidden}

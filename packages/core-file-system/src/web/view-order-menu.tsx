@@ -55,7 +55,7 @@ function ViewRowShell({
         className="tasks-viewdd-item-main fsdb-tool-row"
         onClick={() => onSelect(view)}
       >
-        <span className="tasks-viewdd-item-name">{view.name}</span>
+        <span className="tasks-viewdd-item-name font-medium">{view.name}</span>
       </button>
       <span className="tasks-viewdd-item-actions">
         <button type="button" className="tasks-viewdd-act" title="拷贝视图" onClick={() => onCopy(view)}>
@@ -137,7 +137,7 @@ export function ViewOrderMenu({
   const active = views.find((view) => view.id === activeId)
   const foot = (
     <div className="tasks-viewdd-foot">
-      <button type="button" className="tasks-viewdd-saveas fsdb-tool-row" onClick={onAdd}>
+      <button type="button" className="tasks-viewdd-saveas fsdb-tool-row font-medium" onClick={onAdd}>
         <PlusIcon aria-hidden className="size-[14px]" />
         添加视图
       </button>
