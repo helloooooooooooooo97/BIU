@@ -53,7 +53,6 @@ import { isGlobalSearchHotkey } from './search-hotkey.ts'
 import { useSlotEntries } from '@biu/web-slots'
 import type { SlotsService } from '@biu/web-slots'
 import { chromeIcon } from './chrome-icon.ts'
-import { readMainDataRoute } from '@biu/core-file-system/main-data-route'
 import { ChatDockStack, ChatStage } from '@biu/biu-ui/chat-pane'
 
 const OverlayChatWindow = lazy(() => import('./overlay-window.tsx').then((m) => ({ default: m.OverlayChatWindow })))
@@ -86,7 +85,6 @@ function DockSessionMascot({
   useSessionView: ReturnType<typeof bindSessionView>
 }) {
   const location = useLocation()
-  const navigate = useNavigate()
   const agents = useSessionView((state) => state.sessions)
   const activeId = useSessionView((state) => state.sessionId)
   const overlayOpen = useSyncExternalStore(subscribeChatOverlay, getChatOverlay, () => false)
@@ -102,18 +100,13 @@ function DockSessionMascot({
       activeId={activeId}
       busy={busy}
       open={onChatPage ? false : overlayOpen}
-      tapToDance={false}
-      label={onChatPage ? '数据' : undefined}
-      face={onChatPage ? <CircleStackIcon className="brand-corner-data-icon" aria-hidden /> : undefined}
+      tapToDance={onChatPage}
       onToggle={() => {
-        if (onChatPage) {
-          navigate(readMainDataRoute() || '/database')
-          return
-        }
         if (getChatOverlay()) {
           closeChatOverlay()
           return
         }
+        if (isChatPagePath(location.pathname)) return
         openOverlayComposer()
         requestOverlayFocus()
       }}
