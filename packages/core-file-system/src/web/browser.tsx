@@ -5583,8 +5583,8 @@ export function CollectionBrowser({
           writePatch={writePatch}
           tableIcon={currentTable?.view?.icon}
           readOnly={
-            (collectionPath === '/plugins' && selected.builtin === true) ||
-            (selected.shareRole === '阅读' && (!localData || selected.builtin === true))
+            (collectionPath === '/plugins' && selected.builtin === true && selected.canManagePackage !== true) ||
+            (selected.shareRole === '阅读' && !localData && selected.canManagePackage !== true)
           }
           actionProperty={rowActionColumn ? <RecordActions row={selected} /> : null}
           share={

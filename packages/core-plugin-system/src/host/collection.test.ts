@@ -124,12 +124,16 @@ test('pluginsCollection lists installed plugins and sandboxes in one table', asy
   assert.equal(spec.schema.fields.tags, undefined)
   assert.equal(spec.schema.fields.emoji?.writable, true)
   assert.deepEqual(spec.actions?.find((item) => item.id === 'start')?.when, { installed: true, running: false })
-  assert.deepEqual(spec.actions?.find((item) => item.id === 'pack')?.when, { sandbox: true, installed: false })
+  assert.deepEqual(spec.actions?.find((item) => item.id === 'pack')?.when, {
+    sandbox: true,
+    installed: false,
+    canManagePackage: true,
+  })
   assert.equal(spec.actions?.find((item) => item.id === 'start')?.requiredAction, 'resource:read')
   assert.equal(spec.actions?.find((item) => item.id === 'stop')?.requiredAction, 'resource:read')
   assert.equal(spec.actions?.find((item) => item.id === 'pack')?.requiredAction, 'resource:read')
   assert.equal(spec.actions?.find((item) => item.id === 'sandbox')?.requiredAction, 'resource:read')
-  assert.deepEqual(spec.actions?.find((item) => item.id === 'uninstall')?.when, { installed: true })
+  assert.deepEqual(spec.actions?.find((item) => item.id === 'uninstall')?.when, { installed: true, canManagePackage: true })
   assert.equal(spec.actions?.find((item) => item.id === 'uninstall')?.requiredAction, 'resource:read')
   assert.equal(spec.actions?.find((item) => item.id === 'sandbox')?.for, 'agent')
   assert.equal(spec.actions?.find((item) => item.id === 'start')?.for, undefined)

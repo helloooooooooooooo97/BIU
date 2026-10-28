@@ -225,6 +225,32 @@ const pluginActions: CollectionSchema = {
   ],
 }
 
+test('builtin plugins hide install and uninstall unless canManagePackage', () => {
+  const schema: CollectionSchema = {
+    fields: { ...REQUIRED_RECORD_FIELDS },
+    actions: [
+      { id: 'start', label: '运行', when: { installed: true, running: false } },
+      { id: 'stop', label: '停止', when: { installed: true, running: true } },
+      { id: 'pack', label: '安装', when: { sandbox: true, installed: false, canManagePackage: true } },
+      { id: 'uninstall', label: '卸载', when: { installed: true, canManagePackage: true } },
+    ],
+  }
+  const builtin = { id: 'page-toc', installed: true, running: true, sandbox: true, builtin: true }
+  assert.deepEqual(visibleActions(schema, builtin, 'row').map((item) => item.id), ['stop'])
+  assert.deepEqual(
+    visibleActions(schema, { ...builtin, canManagePackage: true }, 'row').map((item) => item.id),
+    ['stop', 'uninstall'],
+  )
+  assert.deepEqual(
+    visibleActions(schema, { id: 'page-toc', sandbox: true, builtin: true }, 'row').map((item) => item.id),
+    [],
+  )
+  assert.deepEqual(
+    visibleActions(schema, { id: 'page-toc', sandbox: true, builtin: true, canManagePackage: true }, 'row').map((item) => item.id),
+    ['pack'],
+  )
+})
+
 test('list projection keeps action when keys so plugin actions do not flash', () => {
   assert.deepEqual(actionWhenKeys(pluginActions), ['installed', 'running', 'sandbox'])
   const keys = listProjectionKeys({ schema: pluginActions, columns: ['title', 'tags'] })

@@ -806,6 +806,8 @@ type WorkspaceFiles = {
     granted_by?: string
   }>
   collectionRecordOwners?(workspaceId: string, collection: string): Map<string, string>
+  isMember?(accountId: string, workspaceId: string): boolean
+  isSuperAdmin?(accountId?: string | null): boolean
 }
 
 export function clampPage(limit?: number, offset?: number) {
@@ -1275,6 +1277,7 @@ export class DatabaseService extends Service implements Database {
   ) {
     if (this.builtinPlugin(spec, id, record)) {
       if (action === 'resource:read' || action === 'resource:list') return
+      if (this.collabStore()?.isSuperAdmin?.(currentAccountId())) return
       throw new Error('permission denied: INSUFFICIENT_PERMISSION')
     }
     if (this.facets.isDeleted(spec.path, id)) throw new Error(`unknown record: ${spec.path}/${id}`)

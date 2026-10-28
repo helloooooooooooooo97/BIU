@@ -108,6 +108,54 @@ test('online members can open a sandbox without instance draft permission', asyn
   }
 })
 
+test('online members cannot pack or uninstall a builtin plugin', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'plugin-builtin-acl-'))
+  const previous = process.env.BIU_ONLINE
+  try {
+    const ctx = new Context()
+    stubHub(ctx)
+    ;(ctx as unknown as { get(name: string): unknown }).get = (name: string) =>
+      name === 'account'
+        ? {
+            store: {
+              isMember: () => true,
+              isSuperAdmin: (accountId?: string | null) => accountId === 'admin',
+              forgetPluginLoads: () => {},
+              removePluginPackage: () => {},
+              loadedPluginIds: () => ['page-sandbox'],
+            },
+          }
+        : undefined
+    const store = new PluginStoreService(ctx, join(dir, '.plugin'), join(dir, 'store.json'), join(dir, '.plugin-dev')).open()
+    process.env.BIU_ONLINE = '0'
+    await store.initSandbox({
+      id: 'page-sandbox',
+      name: 'Sandbox',
+      blurb: '内置',
+      builtin: true,
+      hostJs: 'export default function apply() {}\n',
+    })
+    process.env.BIU_ONLINE = '1'
+    await assert.rejects(
+      () => runWithAccount('ada', () => runWithRequestWorkspace('ws', () => store.pack('page-sandbox'))),
+      /超级管理员/,
+    )
+    await runWithAccount('admin', () => runWithRequestWorkspace('ws', () => store.pack('page-sandbox')))
+    await access(join(dir, '.plugin', 'page-sandbox', 'host.js'))
+    await assert.rejects(
+      () => runWithAccount('ada', () => runWithRequestWorkspace('ws', () => store.uninstall('page-sandbox'))),
+      /超级管理员/,
+    )
+    await runWithAccount('admin', () => runWithRequestWorkspace('ws', () => store.uninstall('page-sandbox')))
+    await assert.rejects(() => access(join(dir, '.plugin', 'page-sandbox', 'host.js')))
+    await access(join(dir, '.plugin-dev', 'page-sandbox', 'manifest.json'))
+  } finally {
+    if (previous === undefined) delete process.env.BIU_ONLINE
+    else process.env.BIU_ONLINE = previous
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
 test('online members can pack without instance install permission', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'plugin-pack-member-'))
   const previous = process.env.BIU_ONLINE
