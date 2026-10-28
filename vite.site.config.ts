@@ -21,7 +21,7 @@ function siteHtmlAsIndex(): Plugin {
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), siteHtmlAsIndex()],
-  // GitHub Pages 的项目站点挂在 /biu/ 下，构建时用 SITE_BASE=/biu/ 指定；绑定自定义域名后改回根路径。
+  // GitHub Pages 项目站点挂在 /<仓库名>/ 下（区分大小写）。CI 用 configure-pages 的 base_path 作为 SITE_BASE；绑定自定义域名后不设 SITE_BASE，走根路径。
   base: process.env.SITE_BASE || '/',
   appType: 'spa',
   build: {

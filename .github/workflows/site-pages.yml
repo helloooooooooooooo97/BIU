@@ -35,15 +35,17 @@ jobs:
           node-version: '22'
           cache: npm
       - uses: actions/configure-pages@v5
+        id: pages
         with:
           enablement: true
       - run: npm ci
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
-      # 项目站点挂在 https://<owner>.github.io/biu/ 下。
+      # 项目站点挂在 https://<owner>.github.io/<仓库名>/ 下。仓库名区分大小写，
+      # 前缀必须用 configure-pages 的 base_path，不能写死成小写 /biu/。
       - run: npm run build:site
         env:
-          SITE_BASE: /biu/
+          SITE_BASE: ${{ steps.pages.outputs.base_path }}/
       # GitHub Pages 没有 SPA 回退：未知路径会返回 404.html，复制一份首页让前端路由接手。
       - run: cp dist-site/index.html dist-site/404.html && touch dist-site/.nojekyll
       - uses: actions/upload-pages-artifact@v4
