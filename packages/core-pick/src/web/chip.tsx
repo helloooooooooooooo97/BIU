@@ -20,7 +20,7 @@ import {
   RectangleGroupIcon,
 } from '@heroicons/react/16/solid'
 import type { ComponentType } from 'react'
-import { ensureTagChipStyle, HeadlessPopover, TagChipCloseMark, tagTone } from '@biu/biu-ui'
+import { ensureTagChipStyle, HeadlessPopover, TagChipCloseMark, overlayZ, tagTone } from '@biu/biu-ui'
 import type { PickRef } from './types.ts'
 import { chipCaption, chipLabel } from './types.ts'
 
@@ -169,7 +169,7 @@ const INSPECT_FIELDS = [
 
 const INSPECT_STYLE_ID = 'biu-pick-chip-data'
 const INSPECT_CSS = `
-.pick-chip-data{z-index:var(--biu-z-modal,200);box-sizing:border-box;width:min(380px,calc(100vw - 24px));max-height:min(72vh,560px);overflow:auto;padding:14px 14px 10px;background:var(--biu-color-bg-elevated,var(--biu-color-bg-subtle));border:0;border-radius:16px;box-shadow:var(--biu-shadow-md);color:var(--biu-color-text);font-family:inherit;font-size:var(--biu-font-size-4);font-weight:500;line-height:20px}
+.pick-chip-data{z-index:240;box-sizing:border-box;width:min(380px,calc(100vw - 24px));max-height:min(72vh,560px);overflow:auto;padding:14px 14px 10px;background:var(--biu-color-bg-elevated,var(--biu-color-bg-subtle));border:0;border-radius:16px;box-shadow:var(--biu-shadow-md);color:var(--biu-color-text);font-family:inherit;font-size:var(--biu-font-size-4);font-weight:500;line-height:20px}
 .pick-chip-data-head{display:flex;align-items:center;gap:10px;min-width:0;min-height:32px;margin:0 0 8px}
 .pick-chip-data-mark{flex:none;display:grid;place-items:center;width:28px;height:28px;border-radius:8px;background:color-mix(in srgb,var(--biu-tag,var(--biu-color-emphasis)) 22%,transparent);color:var(--biu-tag,var(--biu-color-emphasis))}
 .pick-chip-data-mark .pick-kind-icon{width:14px;height:14px}
@@ -184,9 +184,9 @@ const INSPECT_CSS = `
 .pick-chip-data-k{display:inline-flex;align-items:center;gap:6px;min-width:0;min-height:32px;color:var(--biu-color-text-muted)}
 .pick-chip-data-k svg{flex:none;width:14px;height:14px;color:var(--biu-color-icon)}
 .pick-chip-data-k span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pick-chip-data-v{display:flex;align-items:center;box-sizing:border-box;min-width:0;min-height:32px;padding:0;background:transparent;color:var(--biu-color-text);white-space:pre-wrap;word-break:break-word;user-select:text}
-.pick-chip-data-v.is-stack{align-items:flex-start;padding:6px 0;max-height:160px;overflow:auto}
-.pick-chip-data-v.is-jump{gap:4px}
+.pick-chip-data-v{display:flex;align-items:center;box-sizing:border-box;min-width:0;min-height:32px;padding:0 10px;border:var(--biu-stroke-width) solid var(--biu-color-border);border-radius:8px;background:transparent;color:var(--biu-color-text);overflow:auto;white-space:pre-wrap;word-break:break-word;user-select:text}
+.pick-chip-data-v.is-stack{align-items:flex-start;padding:6px 10px;max-height:160px}
+.pick-chip-data-v.is-jump{gap:4px;padding-right:4px}
 .pick-chip-data-v-text{min-width:0;flex:1}
 .pick-chip-data-jump{flex:none;display:grid;place-items:center;width:24px;height:24px;margin:0;border:0;padding:0;border-radius:6px;background:transparent;color:var(--biu-color-icon);cursor:pointer}
 .pick-chip-data-jump:hover{background:var(--biu-color-bg-hover);color:var(--biu-color-text)}
@@ -269,7 +269,9 @@ function PickChipData({ pick }: { pick: PickRef }) {
       data-testid="pick-chip-data"
       role="dialog"
       aria-label={card.title}
-      style={{ ['--biu-tag' as string]: pickKindTone(pick.kind) }}
+      style={{ ['--biu-tag' as string]: pickKindTone(pick.kind), zIndex: overlayZ(240) }}
+      onPointerDown={(event) => event.stopPropagation()}
+      onMouseDown={(event) => event.stopPropagation()}
     >
       <div className="pick-chip-data-head">
         <div className="pick-chip-data-mark">
