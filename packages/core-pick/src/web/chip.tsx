@@ -178,14 +178,14 @@ const INSPECT_CSS = `
 .pick-chip-data-kind{color:var(--biu-color-text-subtle);letter-spacing:.04em;text-transform:uppercase}
 .pick-chip-data-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--biu-color-text)}
 .pick-chip-data-fields{margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
-.pick-chip-data-row{display:grid;grid-template-columns:108px minmax(0,1fr);align-items:center;gap:8px;min-height:32px;margin:0;font:inherit;font-size:var(--biu-font-size-4);font-weight:500;line-height:20px}
+.pick-chip-data-row{display:grid;grid-template-columns:108px minmax(0,1fr);align-items:flex-start;gap:8px;min-height:32px;margin:0;font:inherit;font-size:var(--biu-font-size-4);font-weight:500;line-height:20px}
 .pick-chip-data-row.is-stack{align-items:flex-start}
 .pick-chip-data-row.is-stack .pick-chip-data-k{min-height:32px}
 .pick-chip-data-k{display:inline-flex;align-items:center;gap:6px;min-width:0;min-height:32px;color:var(--biu-color-text-muted)}
 .pick-chip-data-k svg{flex:none;width:14px;height:14px;color:var(--biu-color-icon)}
 .pick-chip-data-k span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pick-chip-data-v{display:flex;align-items:center;box-sizing:border-box;min-width:0;min-height:32px;padding:0;border:0;border-radius:0;background:transparent;color:var(--biu-color-text);overflow:auto;white-space:pre-wrap;word-break:break-word;user-select:text}
-.pick-chip-data-v.is-stack{align-items:flex-start;padding:0;max-height:160px}
+.pick-chip-data-v{display:flex;align-items:flex-start;box-sizing:border-box;min-width:0;min-height:32px;padding:6px 0 0;border:0;border-radius:0;background:transparent;color:var(--biu-color-text);overflow:auto;white-space:pre-wrap;word-break:break-word;user-select:text}
+.pick-chip-data-v.is-stack{align-items:flex-start;padding:6px 0 0;max-height:160px}
 .pick-chip-data-v.is-jump{gap:4px;padding-right:0}
 .pick-chip-data-v-text{min-width:0;flex:1}
 .pick-chip-data-jump{flex:none;display:grid;place-items:center;width:24px;height:24px;margin:0;border:0;padding:0;border-radius:6px;background:transparent;color:var(--biu-color-icon);cursor:pointer}
