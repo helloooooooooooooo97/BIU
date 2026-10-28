@@ -406,7 +406,7 @@ test('sqlite split sessions and events stay consistent across files', async () =
   await ctx.sessions.append('split1', { type: 'user/message', text: 'hi', kind: 'wake' })
   const sessionsDb = new DatabaseSync(path)
   const eventsDb = new DatabaseSync(eventsPath)
-  const sessionRow = sessionsDb.prepare('SELECT event_count FROM sessions WHERE id = ?').get('split1') as
+  const sessionRow = sessionsDb.prepare('SELECT event_count FROM agents WHERE id = ?').get('split1') as
     | { event_count: number }
     | undefined
   const eventRows = eventsDb.prepare('SELECT COUNT(*) AS n FROM events WHERE session_id = ?').get('split1') as
@@ -453,7 +453,7 @@ test('sqlite drops leftover sessions.type column', async () => {
   await ctx.plugin(sessionStore, { driver: 'sqlite', path })
   await ctx.plugin(sessions)
   const opened = new DatabaseSync(path)
-  const cols = (opened.prepare('PRAGMA table_info(sessions)').all() as Array<{ name: string }>).map((row) => row.name)
+  const cols = (opened.prepare('PRAGMA table_info(agents)').all() as Array<{ name: string }>).map((row) => row.name)
   opened.close()
   assert.equal(cols.includes('type'), false)
   assert.equal('type' in ((await ctx.sessions.get('legacy')) ?? {}), false)

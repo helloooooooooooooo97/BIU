@@ -214,11 +214,11 @@ test('share routes stay on the workstation port', async () => {
   }
 })
 
-test('legacy /api/sessions rewrites to /api/agents, not account sessions', () => {
+test('legacy /api/sessions and /api/account/sessions rewrite to /agents', () => {
   assert.equal(rewriteLegacyAgentApi('/api/sessions'), '/api/agents')
   assert.equal(rewriteLegacyAgentApi('/api/sessions/s1/messages'), '/api/agents/s1/messages')
-  assert.equal(rewriteLegacyAgentApi('/api/account/sessions'), '/api/account/sessions')
-  assert.equal(rewriteLegacyAgentApi('/api/account/sessions/abc'), '/api/account/sessions/abc')
+  assert.equal(rewriteLegacyAgentApi('/api/account/sessions'), '/api/account/agents')
+  assert.equal(rewriteLegacyAgentApi('/api/account/sessions/abc'), '/api/account/agents/abc')
 })
 
 test('workspace sockets only receive their own tenant events', () => {

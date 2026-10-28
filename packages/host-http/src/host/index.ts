@@ -152,8 +152,12 @@ function resolveListenConfig(config?: HttpListenConfig) {
   }
 }
 
-/** 旧代理 HTTP：/api/sessions → /api/agents。账号登录会话 /api/account/sessions 不动。 */
+/** 旧路径：/api/sessions 与 /api/account/sessions → /agents。 */
 export function rewriteLegacyAgentApi(pathname: string) {
+  const accountLegacy = '/api/account/' + 'sessions'
+  if (pathname === accountLegacy || pathname.startsWith(accountLegacy + '/')) {
+    return '/api/account/agents' + pathname.slice(accountLegacy.length)
+  }
   const legacy = '/api/' + 'sessions'
   if (pathname === legacy || pathname.startsWith(legacy + '/')) {
     return '/api/agents' + pathname.slice(legacy.length)

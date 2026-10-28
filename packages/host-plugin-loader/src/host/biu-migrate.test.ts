@@ -44,7 +44,7 @@ test('empty database fast path matches upgraded v1 fixture', () => {
 test('BIU_MIGRATIONS versions are unique and increasing', () => {
   assertBiuMigrationLog()
   assert.equal(BIU_MIGRATIONS.at(-1)?.version, LATEST_BIU_SCHEMA)
-  assert.equal(BIU_MIGRATIONS.at(-1)?.name, 'collection.sessions-to-agents')
+  assert.equal(BIU_MIGRATIONS.at(-1)?.name, 'table.sessions-to-agents')
   assert.throws(() => assertBiuMigrationLog([{ version: 2 }, { version: 2 }]), /重复/)
   assert.throws(() => assertBiuMigrationLog([{ version: 3 }, { version: 1 }]), /单调递增/)
 })
@@ -159,6 +159,21 @@ test('v41 remaps stored /sessions collection paths to /agents', () => {
   assert.equal(view.collection, '/agents')
   assert.equal(view.view_id, 'builtin-all:/agents')
   assert.match(view.payload_json, /"tablePath":"\/agents"/)
+  db.close()
+})
+
+test('v42 renames the sessions table to agents', () => {
+  const db = openSqlite(':memory:')
+  migrateBiu(db, {}, 41)
+  if (tableNames(db).includes('agents') && !tableNames(db).includes('sessions')) {
+    db.exec('ALTER TABLE agents RENAME TO sessions')
+  }
+  db.exec(`INSERT INTO sessions (id, version, title, updated_at) VALUES ('s1', 1, 'Chat', 1)`)
+  migrateBiu(db)
+  assert.equal(tableNames(db).includes('agents'), true)
+  assert.equal(tableNames(db).includes('sessions'), false)
+  const row = db.prepare('SELECT title FROM agents WHERE id = ?').get('s1') as { title: string }
+  assert.equal(row.title, 'Chat')
   db.close()
 })
 

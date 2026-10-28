@@ -190,8 +190,8 @@ export function ShellSettingsAccount() {
   const [message, setMessage] = useState('')
   const token = readAccountToken()
   const loadSessions = () =>
-    accountFetch(token, '/api/account/sessions')
-      .then((body) => setSessions((body.sessions as Array<Record<string, unknown>>) ?? []))
+    accountFetch(token, '/api/account/agents')
+      .then((body) => setSessions(((body.agents ?? body.sessions) as Array<Record<string, unknown>>) ?? []))
       .catch(() => setSessions([]))
   const loadCloud = () =>
     accountFetch(token, '/api/account/cloud')
@@ -417,7 +417,7 @@ export function ShellSettingsAccount() {
                     type="button"
                     className="settings-account-action"
                     onClick={() => {
-                      void accountFetch(token, `/api/account/sessions/${encodeURIComponent(String(session.id))}`, { method: 'DELETE' })
+                      void accountFetch(token, `/api/account/agents/${encodeURIComponent(String(session.id))}`, { method: 'DELETE' })
                         .then(loadSessions)
                     }}
                   >

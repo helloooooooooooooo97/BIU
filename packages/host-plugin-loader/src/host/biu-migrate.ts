@@ -26,6 +26,12 @@ export type MigrateCtx = {
   workspace?: string
 }
 
+export function renameSessionsTableToAgents(db: DatabaseSync) {
+  if (hasTable(db, 'agents')) return
+  if (!hasTable(db, 'sessions')) return
+  db.exec('ALTER TABLE sessions RENAME TO agents')
+}
+
 function remapSessionsCollectionToAgents(db: DatabaseSync) {
   const from = '/' + 'sessions'
   const to = '/agents'
@@ -125,6 +131,11 @@ function baseline(db: DatabaseSync) {
   addColumn(db, 'sessions', 'config_json', 'config_json TEXT')
   if (hasTable(db, 'sessions') && tableColumnNames(db, 'sessions').includes('type')) {
     dropColumn(db, 'sessions', 'type')
+  }
+  addColumn(db, 'agents', 'mascot_json', 'mascot_json TEXT')
+  addColumn(db, 'agents', 'config_json', 'config_json TEXT')
+  if (hasTable(db, 'agents') && tableColumnNames(db, 'agents').includes('type')) {
+    dropColumn(db, 'agents', 'type')
   }
   if (hasTable(db, 'attachments')) {
     db.exec(`UPDATE attachments SET storage = 'hash' WHERE storage IN ('cas', '')`)
@@ -619,6 +630,9 @@ export const BIU_MIGRATIONS: Migration[] = [
   } },
   { version: 41, module: 'host-sessions', name: 'collection.sessions-to-agents', up: (db) => {
     remapSessionsCollectionToAgents(db)
+  } },
+  { version: 42, module: 'host-sessions', name: 'table.sessions-to-agents', up: (db) => {
+    renameSessionsTableToAgents(db)
   } },
 ]
 

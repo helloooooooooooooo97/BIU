@@ -295,7 +295,7 @@ test('bootstrap claims live records once and skips trash', () => {
   const db = (collab as unknown as { db: import('node:sqlite').DatabaseSync }).db
   db.prepare(`INSERT INTO pages (id, title, created_at, updated_at) VALUES ('p1', 'Home', 1, 1)`).run()
   db.prepare(`INSERT INTO tasks (id, title, created_at, updated_at) VALUES ('t1', 'Do', 1, 1), ('t2', 'Gone', 1, 1)`).run()
-  db.prepare(`INSERT INTO sessions (id, version, title, updated_at) VALUES ('s1', 1, 'Chat', 1)`).run()
+  db.prepare(`INSERT INTO agents (id, version, title, updated_at) VALUES ('s1', 1, 'Chat', 1)`).run()
   db.prepare(
     `INSERT INTO editor_content (collection, record_id, body, updated_at, version) VALUES ('/skills', 'sk1', '#', 1, 1)`,
   ).run()

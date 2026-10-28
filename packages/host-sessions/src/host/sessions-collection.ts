@@ -138,7 +138,7 @@ function sessionProgress(record: SessionRecordLike, opts: { afterSeq?: number; t
 export function sessionsCollection(sessions: SessionsLike): CollectionSpec {
   const list = async () => (await sessions.listSummaries()).map(asRecord)
   return {
-    id: 'sessions',
+    id: 'agents',
     path: '/agents',
     label: '代理',
     view: {
