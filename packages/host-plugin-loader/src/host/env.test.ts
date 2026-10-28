@@ -31,7 +31,7 @@ test('super admin defaults match the documented account', () => {
   delete process.env.BIU_SUPER_ADMIN_EMAIL
   delete process.env.BIU_SUPER_ADMIN_PASSWORD
   try {
-    assert.equal(superAdminEmail(), 'biu@biu.com')
+    assert.equal(superAdminEmail(), '97@biu.com')
     assert.equal(superAdminPassword(), '123456')
   } finally {
     if (prevEmail === undefined) delete process.env.BIU_SUPER_ADMIN_EMAIL

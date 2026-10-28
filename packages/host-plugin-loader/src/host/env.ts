@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
-export const DEFAULT_SUPER_ADMIN_EMAIL = 'biu@biu.com'
+export const DEFAULT_SUPER_ADMIN_EMAIL = '97@biu.com'
 export const DEFAULT_SUPER_ADMIN_PASSWORD = '123456'
 
 function stripQuotes(value: string) {

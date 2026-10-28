@@ -90,18 +90,18 @@ test('an online instance seeds the env super admin with the default password', (
   process.env.BIU_ONLINE = '1'
   try {
     const collab = store()
-    const admin = collab.login('biu@biu.com', '123456')
-    assert.equal(admin.email, 'biu@biu.com')
+    const admin = collab.login('97@biu.com', '123456')
+    assert.equal(admin.email, '97@biu.com')
     assert.equal(admin.mustChangePassword, false)
     assert.equal(collab.isSuperAdmin(admin.id), true)
     assert.equal(collab.requiresPasswordChange(admin.id), false)
     collab.changePassword(admin.id, '123456', 'new-secret', admin.token)
     assert.equal(collab.requiresPasswordChange(admin.id), false)
-    assert.throws(() => collab.login('biu@biu.com', '123456'), /密码不正确/)
+    assert.throws(() => collab.login('97@biu.com', '123456'), /密码不正确/)
     const db = (collab as unknown as { db: import('node:sqlite').DatabaseSync }).db
     const restarted = new CollabStore(db)
-    assert.throws(() => restarted.login('biu@biu.com', '123456'), /密码不正确/)
-    assert.equal(restarted.login('biu@biu.com', 'new-secret').id, admin.id)
+    assert.throws(() => restarted.login('97@biu.com', '123456'), /密码不正确/)
+    assert.equal(restarted.login('97@biu.com', 'new-secret').id, admin.id)
   } finally {
     if (previous === undefined) delete process.env.BIU_ONLINE
     else process.env.BIU_ONLINE = previous
@@ -117,7 +117,7 @@ test('online startup adds the env super admin to a database that already has acc
     const db = (collab as unknown as { db: import('node:sqlite').DatabaseSync }).db
     process.env.BIU_ONLINE = '1'
     const online = new CollabStore(db)
-    const admin = online.login('biu@biu.com', '123456')
+    const admin = online.login('97@biu.com', '123456')
     assert.notEqual(admin.id, ada.id)
     assert.equal(online.isSuperAdmin(admin.id), true)
     assert.equal(online.isSuperAdmin(ada.id), false)
