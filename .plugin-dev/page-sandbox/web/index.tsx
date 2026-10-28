@@ -686,9 +686,11 @@ function SandboxCard({ data, update, writable }: BlockProps) {
         boxSizing: 'border-box',
         border: expanded
           ? 'none'
-          : selected
-            ? 'var(--biu-stroke-width-thick) solid var(--biu-color-emphasis)'
-            : 'var(--biu-stroke-width) solid var(--biu-color-border)',
+          : `var(--biu-stroke-width) solid ${selected ? 'var(--biu-color-emphasis)' : 'var(--biu-color-border)'}`,
+        boxShadow:
+          expanded || !selected
+            ? undefined
+            : 'inset 0 0 0 var(--biu-stroke-width-thick) var(--biu-color-emphasis)',
         borderRadius: expanded ? 0 : 10,
         background: 'var(--biu-color-bg)',
       }}

@@ -139,6 +139,8 @@ test('slash suggestion uses a fixed high stacking context', async () => {
   assert.match(css, /\.page-editor\{[^}]*font-size:var\(--fsdb-body-size,15px\)/)
   assert.match(css, /\.page-editor \.react-renderer\.node-pageBlock\{[^}]*overflow:hidden/)
   assert.match(css, /\.page-editor \.page-block\[data-page-block\]\{[^}]*isolation:isolate/)
+  assert.match(css, /\.page-editor \.page-block\[data-page-block=sandbox\]\{margin:0\}/)
+  assert.match(css, /\[data-slide-cell\]:has\(\[data-testid="page-sandbox-block"\]\)\{padding:0/)
   assert.match(css, /\.page-editor \.page-block-idle\{[^}]*min-height:200px/)
   assert.match(css, /\.page-editor \.page-block\[data-page-block=excalidraw\] img\{[^}]*margin:0/)
   assert.match(css, /\.page-editor \.page-block\[data-page-block=excalidraw\] \.welcome-screen-center\{display:none\}/)

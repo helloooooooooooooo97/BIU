@@ -53,8 +53,11 @@ export const PAGE_EDITOR_STYLE = `
 .page-editor [data-slide][data-layout=trio] .page-slide-body{grid-template-columns:1fr 1fr 1fr}
 .page-editor [data-slide][data-layout=stack] .page-slide-body,.page-editor [data-slide][data-layout=title] .page-slide-body{grid-template-columns:1fr;grid-template-rows:auto 1fr}
 .page-editor [data-slide-cell]{min-width:0;min-height:0;height:100%;overflow:auto;padding:14px 16px;border-radius:10px;border:1px dashed var(--biu-color-border);background:transparent}
+.page-editor [data-slide-cell]:has([data-testid="page-sandbox-block"]){padding:0;border:0}
+.page-editor [data-slide]:has([data-testid="page-sandbox-block"].sandbox-fill) .page-slide-body{padding:0;gap:0}
 .page-editor .page-slide .is-empty::before{content:none}
 .page-editor .page-block[data-page-block]{margin:12px 0;position:relative;z-index:0;isolation:isolate;overflow:hidden}
+.page-editor .page-block[data-page-block=sandbox]{margin:0}
 .page-editor .page-block-idle{min-height:200px}
 .page-editor .page-block iframe{pointer-events:none}
 .page-editor .page-block.ProseMirror-selectednode iframe,.page-editor .ProseMirror[contenteditable=false] .page-block iframe{pointer-events:auto}
