@@ -4100,6 +4100,17 @@ html.dark .composer-model-flyout {
   grid-column: 1;
 }
 
+/* 检查器打开后中栏变窄，64px 左右垫会在审批图标和分栏之间留空位 */
+.app-shell-agent.is-inspector-open [data-testid="agent-center"] .chat-stage,
+.app-shell-agent.is-inspector-open [data-testid="agent-center"] .chat-composer-dock {
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+.app-shell-agent.is-inspector-open [data-testid="agent-center"] .composer-pill {
+  min-width: 0;
+}
+
 .app-shell-agent > main {
   grid-column: 2;
   min-width: 0;
