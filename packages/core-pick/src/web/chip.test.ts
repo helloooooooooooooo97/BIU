@@ -21,6 +21,11 @@ test('kind maps to distinct heroicons', () => {
     'TagIcon',
     'WrenchScrewdriverIcon',
     'DocumentIcon',
+    'AcademicCapIcon',
+    'LinkIcon',
+    'BellIcon',
+    'UserGroupIcon',
+    'RectangleGroupIcon',
     'ArrowTopRightOnSquareIcon',
   ] as const
   for (const name of needed) {
@@ -42,6 +47,12 @@ test('kind maps to distinct heroicons', () => {
   assert.equal(pickKindIcon('facet'), lu.TagIcon)
   assert.equal(pickKindIcon('facets'), lu.TagIcon)
   assert.equal(pickKindIcon('collection'), lu.TagIcon)
+  assert.equal(pickKindIcon('collection', '/agents'), lu.CursorArrowRaysIcon)
+  assert.equal(pickKindIcon('collection', '/tasks'), lu.CheckCircleIcon)
+  assert.equal(pickKindIcon('collection', '/plugins'), lu.PuzzlePieceIcon)
+  assert.equal(pickKindIcon('collection', '/pages'), lu.DocumentIcon)
+  assert.equal(pickKindIcon('collection', '/skills'), lu.AcademicCapIcon)
+  assert.equal(pickKindIcon('view', '/plugins::builtin-all:/plugins'), lu.PuzzlePieceIcon)
   assert.equal(pickKindIcon('unknown'), lu.TagIcon)
 })
 

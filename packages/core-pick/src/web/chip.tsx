@@ -13,6 +13,11 @@ import {
   TagIcon,
   WrenchScrewdriverIcon,
   ArrowTopRightOnSquareIcon,
+  AcademicCapIcon,
+  LinkIcon,
+  BellIcon,
+  UserGroupIcon,
+  RectangleGroupIcon,
 } from '@heroicons/react/16/solid'
 import type { ComponentType } from 'react'
 import { ensureTagChipStyle, HeadlessPopover, TagChipCloseMark, tagTone } from '@biu/biu-ui'
@@ -25,6 +30,7 @@ const PICK_KIND_ALIAS: Record<string, string> = {
   pages: 'page',
   plugins: 'plugin',
   sessions: 'session',
+  agents: 'session',
   'sessions-db': 'session',
   events: 'event',
   'events-db': 'event',
@@ -69,14 +75,54 @@ const KIND_ICONS: Record<string, Glyph> = {
   sandbox: DocumentTextIcon,
   block: DocumentTextIcon,
   file: DocumentIcon,
+  skill: AcademicCapIcon,
+  mcp: LinkIcon,
+  member: UserGroupIcon,
+  notice: BellIcon,
+  widgets: RectangleGroupIcon,
 }
 
-export function pickKindIcon(kind: string): Glyph {
-  return KIND_ICONS[canonicalPickKind(kind)] ?? TagIcon
+const COLLECTION_KIND: Record<string, string> = {
+  agents: 'session',
+  sessions: 'session',
+  tasks: 'task',
+  pages: 'page',
+  plugins: 'plugin',
+  skills: 'skill',
+  mcp: 'mcp',
+  events: 'event',
+  views: 'view',
+  facets: 'facet',
+  tags: 'facet',
+  members: 'member',
+  'workspace-members': 'member',
+  notices: 'notice',
+  notifications: 'notice',
+  'page-blocks': 'widgets',
+  usage: 'usage',
 }
 
-export function PickKindGlyph({ kind }: { kind: string }) {
-  const Icon = pickKindIcon(kind)
+/** 侧栏表 / 视图芯片用路径选图标，不要一律标签。 */
+export function collectionPickKind(hint?: string) {
+  const raw = String(hint ?? '').trim()
+  if (!raw) return ''
+  const path = raw.includes('::') ? raw.slice(0, raw.indexOf('::')) : raw
+  const key = path.replace(/^\//, '').split('/')[0]?.trim().toLowerCase() ?? ''
+  if (!key) return ''
+  return COLLECTION_KIND[key] ?? canonicalPickKind(key)
+}
+
+export function pickKindIcon(kind: string, hint?: string): Glyph {
+  const canon = canonicalPickKind(kind)
+  if (canon === 'collection' || canon === 'view') {
+    const mapped = collectionPickKind(hint)
+    if (mapped && KIND_ICONS[mapped]) return KIND_ICONS[mapped]
+  }
+  return KIND_ICONS[canon] ?? TagIcon
+}
+
+export function PickKindGlyph({ kind, hint }: { kind: string; hint?: string }) {
+  const Icon = pickKindIcon(kind, hint)
   return <Icon className="pick-kind-icon" aria-hidden data-testid="pick-kind-icon" data-pick-kind={kind} />
 }
 
@@ -87,7 +133,7 @@ export function PickChipLabel({ pick }: { pick: PickRef }) {
   const split = Boolean(field && host && host !== field)
   return (
     <>
-      <PickKindGlyph kind={pick.kind} />
+      <PickKindGlyph kind={pick.kind} hint={pick.path || pick.id} />
       <span className="pick-chip-name">
         {split ? (
           <>
@@ -227,7 +273,7 @@ function PickChipData({ pick }: { pick: PickRef }) {
     >
       <div className="pick-chip-data-head">
         <div className="pick-chip-data-mark">
-          <PickKindGlyph kind={pick.kind} />
+          <PickKindGlyph kind={pick.kind} hint={pick.path || pick.id} />
         </div>
         <div className="pick-chip-data-copy">
           <p className="pick-chip-data-kind">{card.kind}</p>

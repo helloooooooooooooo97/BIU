@@ -774,7 +774,7 @@ export const DataSidebar = memo(function DataSidebar({
               className="flex min-h-8 min-w-0 flex-1 items-center gap-1.5 rounded-md text-left text-[14px] font-medium tracking-normal text-inherit"
               title={name}
               aria-expanded={open}
-              {...pickDomAttrs('collection', table.path, name)}
+              {...pickDomAttrs('collection', table.path, name, { path: table.path })}
             >
               <button
                 type="button"
@@ -833,7 +833,7 @@ export const DataSidebar = memo(function DataSidebar({
                 <div key={view.id} className="min-w-0">
                   <div
                     className={`chat-session-row group${active ? ' is-active' : ''}${starred ? ' is-pinned' : ''}`}
-                    {...pickDomAttrs('view', viewPickId(table.path, view.id), view.name)}
+                    {...pickDomAttrs('view', viewPickId(table.path, view.id), view.name, { path: table.path })}
                   >
                     <div className="chat-session-row-main flex min-w-0 flex-1 items-center gap-1.5 py-1 text-left text-[14px] leading-5">
                       <button
@@ -1088,7 +1088,7 @@ export const DataSidebar = memo(function DataSidebar({
                       <div key={previewKey} className="min-w-0">
                         <div
                           className={`chat-session-row group${active ? ' is-active' : ''} is-pinned`}
-                          {...pickDomAttrs('view', viewPickId(table.path, view.id), view.name)}
+                          {...pickDomAttrs('view', viewPickId(table.path, view.id), view.name, { path: table.path })}
                         >
                           <div className="chat-session-row-main flex min-w-0 flex-1 items-center gap-1.5 py-1 text-left text-[14px] leading-5">
                             <button

@@ -61,6 +61,23 @@ test('close button inside the chat overlay is not captured while picking', async
   panel.remove()
 })
 
+test('replies inside the chat overlay stay pickable', async () => {
+  const { ignorePickCapture } = await import('./overlay.tsx')
+  const panel = document.createElement('div')
+  panel.setAttribute('data-testid', 'chat-overlay-panel')
+  const reply = document.createElement('div')
+  reply.setAttribute('data-biu-kind', 'reply')
+  reply.setAttribute('data-biu-id', 'r1')
+  panel.append(reply)
+  document.body.append(panel)
+  const event = {
+    target: reply,
+    composedPath: () => [reply, panel, document.body],
+  } as unknown as Event
+  assert.equal(ignorePickCapture(reply, event), false)
+  panel.remove()
+})
+
 test('Escape exits pick mode', () => {
   assert.match(overlay, /pick.exit\(\)/)
 })

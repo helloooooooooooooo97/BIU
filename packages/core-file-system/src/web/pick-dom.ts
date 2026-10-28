@@ -60,6 +60,8 @@ const RECORD_PICK_KIND: Record<string, string> = {
   plugin: 'plugin',
   sessions: 'session',
   session: 'session',
+  agents: 'session',
+  agent: 'session',
   'sessions-db': 'session',
   events: 'event',
   event: 'event',
