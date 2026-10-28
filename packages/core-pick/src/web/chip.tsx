@@ -122,7 +122,7 @@ const INSPECT_FIELDS = [
 
 const INSPECT_STYLE_ID = 'biu-pick-chip-data'
 const INSPECT_CSS = `
-.pick-chip-data{z-index:var(--biu-z-dropdown,80);box-sizing:border-box;width:min(380px,calc(100vw - 24px));max-height:min(72vh,560px);overflow:auto;padding:14px 14px 10px;background:var(--biu-color-bg-elevated,var(--biu-color-bg-subtle));border:0;border-radius:16px;box-shadow:var(--biu-shadow-md);color:var(--biu-color-text);font-family:inherit;font-size:var(--biu-font-size-4);font-weight:500;line-height:20px}
+.pick-chip-data{z-index:var(--biu-z-modal,200);box-sizing:border-box;width:min(380px,calc(100vw - 24px));max-height:min(72vh,560px);overflow:auto;padding:14px 14px 10px;background:var(--biu-color-bg-elevated,var(--biu-color-bg-subtle));border:0;border-radius:16px;box-shadow:var(--biu-shadow-md);color:var(--biu-color-text);font-family:inherit;font-size:var(--biu-font-size-4);font-weight:500;line-height:20px}
 .pick-chip-data-head{display:flex;align-items:center;gap:10px;min-width:0;min-height:32px;margin:0 0 8px}
 .pick-chip-data-mark{flex:none;display:grid;place-items:center;width:28px;height:28px;border-radius:8px;background:color-mix(in srgb,var(--biu-tag,var(--biu-color-emphasis)) 22%,transparent);color:var(--biu-tag,var(--biu-color-emphasis))}
 .pick-chip-data-mark .pick-kind-icon{width:14px;height:14px}
@@ -308,7 +308,7 @@ export function PickChip({
   )
   if (!inspect) return chip
   return (
-    <HeadlessPopover trigger={chip} side="top" align="start" sideOffset={6}>
+    <HeadlessPopover trigger={chip} side="top" align="start" sideOffset={10} avoidCollisions={false}>
       <PickChipData pick={pick} />
     </HeadlessPopover>
   )
