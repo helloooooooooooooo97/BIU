@@ -625,6 +625,16 @@ test('flattenTree keeps sibling order, indents children, and hides collapsed sub
   )
 })
 
+test('flattenTree does not blow the stack on a parent cycle', () => {
+  const rows = [
+    { id: 'a', title: 'A', parentId: 'b' },
+    { id: 'b', title: 'B', parentId: 'a' },
+  ]
+  const flat = flattenTree(rows, 'parentId')
+  assert.deepEqual(flat.map((item) => item.row.id).sort(), ['a', 'b'])
+  assert.ok(flat.every((item) => item.kidCount >= 0))
+})
+
 test('defaultColumnKeys omits parentId', () => {
   const treeSchema: CollectionSchema = {
     labelField: 'title',

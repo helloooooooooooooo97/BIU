@@ -42,6 +42,10 @@ const MIME: Record<string, string> = {
   '.map': 'application/json',
 }
 
+function isHashedAssetPath(pathname: string) {
+  return /^\/assets\/[^/]+$/.test(pathname) && Boolean(MIME[extname(pathname)])
+}
+
 const TENANT_EVENTS = new Set(['database', 'session', 'agent', 'inbox', 'approval', 'event', 'snapshot'])
 
 /** 已绑定空间的连接只接收同一空间的租户事件。会话类事件还要落到同一账号。数据变更要给同空间的其他成员，否则详情里的正文无法互相刷新。未绑定的本机连接仍接收全部。 */
@@ -583,6 +587,7 @@ export class HttpService extends Service {
     try {
       const upstream = await fetch(`${base}${pathname}`)
       const type = upstream.headers.get('content-type') ?? MIME[extname(pathname)] ?? 'application/octet-stream'
+      if (isHashedAssetPath(pathname) && (upstream.status === 404 || type.includes('text/html'))) return false
       let buf = Buffer.from(await upstream.arrayBuffer())
       if (type.includes('text/html')) {
         const html = buf
@@ -616,6 +621,11 @@ export class HttpService extends Service {
       if (pathname.startsWith('/api/')) {
         res.writeHead(404, { 'content-type': 'application/json; charset=utf-8' })
         res.end(JSON.stringify({ error: 'not found — 对应插件可能已卸载' }))
+        return
+      }
+      if (isHashedAssetPath(pathname)) {
+        res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' })
+        res.end('not found')
         return
       }
       if (shareOnly && !pathname.startsWith('/share')) {
