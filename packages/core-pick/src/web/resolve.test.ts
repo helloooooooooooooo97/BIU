@@ -734,6 +734,8 @@ test('pick reaches stamped nodes inside an open sandbox shadow', () => {
   assert.equal(hit.ref.plugin, 'page-sandbox')
   assert.equal(hit.ref.path, '/pages/p002')
   assert.equal(hit.ref.start_line, 3)
+  assert.equal(hit.ref.selection, '点过 0 次')
+  assert.equal(hit.ref.text, ':::pageBlock\nexport default function App() {}\n:::')
   const boxed = resolvePicksInRect({ left: 8, top: 8, width: 40, height: 20 }, '/s/abc', root)
   assert.equal(boxed.some((item) => item.ref.id === 'sandbox:0-x:0/1'), true)
   host.setAttribute('data-biu-kind', 'plugin')
@@ -746,6 +748,45 @@ test('pick reaches stamped nodes inside an open sandbox shadow', () => {
   assert.ok(at)
   assert.equal(at.ref.kind, 'sandbox')
   assert.equal(at.ref.id, 'sandbox:0-x:0/1')
+  bindEditorTextHost(root, null)
+  root.remove()
+})
+
+test('sandbox inner pick keeps fence in text and does not treat the whole fence as selection', () => {
+  const root = document.createElement('div')
+  root.className = 'tiptap'
+  const block = document.createElement('div')
+  block.className = 'page-block'
+  block.setAttribute('data-page-block', 'sandbox')
+  const host = document.createElement('div')
+  host.setAttribute('data-sandbox', '')
+  block.append(host)
+  root.append(block)
+  document.body.append(root)
+  const shadow = host.attachShadow({ mode: 'open' })
+  const inner = document.createElement('h1')
+  inner.textContent = '能做什么，不能做什么'
+  inner.setAttribute('data-sandbox-pick', '')
+  inner.setAttribute('data-biu-kind', 'sandbox')
+  inner.setAttribute('data-biu-id', 'sandbox:0-x:0/0')
+  inner.setAttribute('data-biu-label', '能做什么')
+  shadow.append(inner)
+  const fence = ':::pageBlock {kind=sandbox}\nexport default function App(){return <h1>能做什么，不能做什么</h1>}\n:::'
+  bindEditorTextHost(root, {
+    path: '/pages/p002',
+    locusFromSelection: () => null,
+    locusFromElement: (el) =>
+      el === block || block.contains(el)
+        ? { start_line: 1, end_line: 4, text: fence, selection: fence }
+        : null,
+  })
+  const hit = resolvePickFromNode(inner, '/s/abc')
+  assert.ok(hit)
+  assert.equal(hit.ref.kind, 'sandbox')
+  assert.equal(hit.ref.id, 'sandbox:0-x:0/0')
+  assert.equal(hit.ref.text, fence)
+  assert.equal(hit.ref.selection, '能做什么，不能做什么')
+  assert.notEqual(hit.ref.selection, fence)
   bindEditorTextHost(root, null)
   root.remove()
 })
