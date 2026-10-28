@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ArrowPathIcon, CpuChipIcon, UserIcon } from '@heroicons/react/16/solid'
 import { resolveSessionMascot, SidebarMascot } from '@biu/public-mascot'
 import { asPerson, asPersonList, personKey, type PersonValue } from '@biu/type-file-system'
+import { ensureDbSearchStyle } from '@biu/database-ui/search'
 import { listCollection } from './db-client.ts'
 import { showRecordInInspector } from './inspector-db-route.ts'
 import { useWorkspaceProfile } from '@biu/biu-ui/use-workspace-profile'
@@ -13,13 +14,21 @@ type ChatPerson = {
   mascot?: { shape: string; color: string; eye?: number }
 }
 
-const USER: PersonValue = { kind: 'user', name: '用户' }
-const SYSTEM: PersonValue = { kind: 'system', name: '系统' }
+type MemberPerson = {
+  id: string
+  name: string
+  email: string
+}
 
 let agentsInflight: Promise<ChatPerson[]> | null = null
 let agentsListed: ChatPerson[] | null = null
 let agentsListedAt = 0
 const AGENTS_TTL_MS = 8000
+
+let membersInflight: Promise<MemberPerson[]> | null = null
+let membersListed: MemberPerson[] | null = null
+let membersListedAt = 0
+const MEMBERS_TTL_MS = 8000
 
 export function personInspectTarget(person: PersonValue): { collection: string; recordId: string } | null {
   if (person.kind === 'agent') {
@@ -72,6 +81,41 @@ export async function loadAgents(): Promise<ChatPerson[]> {
       agentsInflight = null
     })
   agentsInflight = request
+  return request
+}
+
+export async function loadMembers(): Promise<MemberPerson[]> {
+  if (membersListed && Date.now() - membersListedAt < MEMBERS_TTL_MS) return membersListed
+  if (membersInflight) return membersInflight
+  const request = listCollection({
+    path: '/workspace-members',
+    limit: 500,
+    sortField: 'title',
+    sortDir: 'asc',
+    columns: ['title', 'name', 'email'],
+  })
+    .then((page) => {
+      const rows = page.items
+        .filter((item) => typeof item?.id === 'string' && item.id)
+        .map((item) => {
+          const id = String(item.id)
+          const email = String(item.email ?? '').trim()
+          const name = String(item.name ?? item.title ?? '').trim() || email || id.slice(0, 8)
+          return { id, name, email }
+        })
+      membersListed = rows
+      membersListedAt = Date.now()
+      return rows
+    })
+    .catch(() => {
+      membersListed = []
+      membersListedAt = Date.now()
+      return []
+    })
+    .finally(() => {
+      membersInflight = null
+    })
+  membersInflight = request
   return request
 }
 
@@ -166,20 +210,27 @@ export function PersonPickPanel({
   onChange: (next: PersonValue) => void
   onPicked?: () => void
 }) {
+  ensureDbSearchStyle()
   const current = asPerson(value)
   const selected = personKey(current)
+  const [members, setMembers] = useState<MemberPerson[]>([])
   const [people, setPeople] = useState<ChatPerson[]>([])
+  const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    void loadAgents()
-      .then((rows) => {
-        if (!cancelled) setPeople(rows)
+    void Promise.all([loadMembers(), loadAgents()])
+      .then(([nextMembers, nextAgents]) => {
+        if (cancelled) return
+        setMembers(nextMembers)
+        setPeople(nextAgents)
       })
       .catch(() => {
-        if (!cancelled) setPeople([])
+        if (cancelled) return
+        setMembers([])
+        setPeople([])
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -189,64 +240,113 @@ export function PersonPickPanel({
     }
   }, [])
 
+  const q = query.trim().toLowerCase()
+  const visibleMembers = useMemo(
+    () =>
+      members.filter(
+        (item) =>
+          !q ||
+          item.name.toLowerCase().includes(q) ||
+          item.email.toLowerCase().includes(q) ||
+          item.id.toLowerCase().includes(q),
+      ),
+    [members, q],
+  )
+  const visibleAgents = useMemo(
+    () =>
+      people.filter(
+        (item) => !q || item.name.toLowerCase().includes(q) || item.id.toLowerCase().includes(q),
+      ),
+    [people, q],
+  )
+
   function pick(next: PersonValue) {
     onChange(next)
     onPicked?.()
   }
 
+  function pickFirst() {
+    const member = visibleMembers[0]
+    if (member) {
+      pick({ kind: 'user', name: member.name, accountId: member.id })
+      return
+    }
+    const agent = visibleAgents[0]
+    if (agent) {
+      pick({
+        kind: 'agent',
+        name: agent.name,
+        sessionId: agent.id,
+        ...(agent.mascot ? { mascot: agent.mascot } : {}),
+      })
+    }
+  }
+
   return (
     <div className="fsdb-person-pick">
-      <button
-        type="button"
-        className={`fsdb-person-option${selected === 'user' ? ' is-selected' : ''}`}
-        onClick={() => pick(USER)}
-      >
-        <span className="fsdb-person-avatar" aria-hidden>
-          <UserIcon className="size-[14px]" />
-        </span>
-        <span className="fsdb-person-name">{profileDisplayName()}</span>
-      </button>
-      <button
-        type="button"
-        className={`fsdb-person-option${selected === 'system' ? ' is-selected' : ''}`}
-        onClick={() => pick(SYSTEM)}
-      >
-        <span className="fsdb-person-avatar" aria-hidden>
-          <CpuChipIcon className="size-[14px]" />
-        </span>
-        <span className="fsdb-person-name">系统</span>
-      </button>
-      {people.map((person) => (
-        <button
-          type="button"
-          key={person.id}
-          className={`fsdb-person-option${selected === person.id ? ' is-selected' : ''}`}
-          onClick={() =>
-            pick({
-              kind: 'agent',
-              name: person.name,
-              sessionId: person.id,
-              ...(person.mascot ? { mascot: person.mascot } : {}),
-            })
-          }
-        >
-          <span className="fsdb-person-face" aria-hidden>
-            <SidebarMascot
-              size={18}
-              sessionId={person.id}
-              identity={resolveSessionMascot(person.id, person.mascot)}
-              title={person.name}
-            />
-          </span>
-          <span className="fsdb-person-name">{person.name}</span>
-        </button>
-      ))}
-      {loading ? (
-        <div className="fsdb-person-loading">
-          <ArrowPathIcon className="size-[14px] fsdb-spin" aria-hidden />
-          加载会话…
-        </div>
-      ) : null}
+      <label className="db-search-field">
+        <input
+          value={query}
+          autoFocus
+          placeholder="搜索成员或会话"
+          onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              pickFirst()
+            }
+          }}
+        />
+      </label>
+      <div className="fsdb-person-options">
+        {visibleMembers.map((member) => (
+          <button
+            type="button"
+            key={`user:${member.id}`}
+            className={`fsdb-person-option${selected === `user:${member.id}` ? ' is-selected' : ''}`}
+            onClick={() => pick({ kind: 'user', name: member.name, accountId: member.id })}
+          >
+            <span className="fsdb-person-avatar" aria-hidden>
+              <UserIcon className="size-[14px]" />
+            </span>
+            <span className="fsdb-person-name">{member.name}</span>
+          </button>
+        ))}
+        {visibleAgents.map((person) => (
+          <button
+            type="button"
+            key={person.id}
+            className={`fsdb-person-option${selected === person.id ? ' is-selected' : ''}`}
+            onClick={() =>
+              pick({
+                kind: 'agent',
+                name: person.name,
+                sessionId: person.id,
+                ...(person.mascot ? { mascot: person.mascot } : {}),
+              })
+            }
+          >
+            <span className="fsdb-person-face" aria-hidden>
+              <SidebarMascot
+                size={18}
+                sessionId={person.id}
+                identity={resolveSessionMascot(person.id, person.mascot)}
+                title={person.name}
+              />
+            </span>
+            <span className="fsdb-person-name">{person.name}</span>
+          </button>
+        ))}
+        {loading ? (
+          <div className="fsdb-person-loading">
+            <ArrowPathIcon className="size-[14px] fsdb-spin" aria-hidden />
+            加载成员和会话…
+          </div>
+        ) : null}
+        {!loading && !visibleMembers.length && !visibleAgents.length ? (
+          <div className="fsdb-person-loading">没有匹配的成员或会话</div>
+        ) : null}
+      </div>
     </div>
   )
 }
