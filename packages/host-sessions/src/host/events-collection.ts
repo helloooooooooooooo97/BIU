@@ -78,7 +78,7 @@ export function eventsCollection(sessions: SessionsLike): CollectionSpec {
       fields: {
         ...REQUIRED_RECORD_FIELDS,
         title: { type: 'string', label: '摘要' },
-        sessionId: { type: 'string', label: '会话' },
+        sessionId: { type: 'string', label: '代理' },
         type: { type: 'string', label: '类型' },
         seq: { type: 'number', label: '序号', sortable: true },
         turn: { type: 'number', label: '回合' },

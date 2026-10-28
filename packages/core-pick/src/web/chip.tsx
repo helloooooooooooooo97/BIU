@@ -8,6 +8,7 @@ import {
   ClipboardDocumentCheckIcon,
   CheckCircleIcon,
   ChatBubbleLeftIcon,
+  CursorArrowRaysIcon,
   PuzzlePieceIcon,
   TagIcon,
   WrenchScrewdriverIcon,
@@ -47,7 +48,7 @@ export function pickKindTone(kind: string) {
 type Glyph = ComponentType<{ className?: string }>
 
 const KIND_ICONS: Record<string, Glyph> = {
-  session: ChatBubbleLeftIcon,
+  session: CursorArrowRaysIcon,
   text: DocumentTextIcon,
   task: CheckCircleIcon,
   page: DocumentIcon,

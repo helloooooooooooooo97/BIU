@@ -9,7 +9,7 @@ import {
   XMarkIcon,
   TableCellsIcon,
   ViewColumnsIcon,
-  ChatBubbleLeftRightIcon,
+  CursorArrowRaysIcon,
   DocumentIcon,
   PuzzlePieceIcon,
   RectangleGroupIcon,
@@ -51,7 +51,7 @@ function captionTableIcon(icon?: string) {
   if (name === 'tag' || name === 'rectangle-stack' || name === 'collection') return TagIcon
   if (name === 'rectangle-group' || name === 'squares-2x2' || name === 'widgets') return RectangleGroupIcon
   if (name === 'check-circle' || name === 'check' || name === 'clipboard-document-list' || name === 'clipboard') return CheckCircleIcon
-  if (name === 'chat-bubble' || name === 'chat-bubble-left-right') return ChatBubbleLeftRightIcon
+  if (name === 'cursor' || name === 'cursor-arrow-rays' || name === 'chat-bubble' || name === 'chat-bubble-left-right') return CursorArrowRaysIcon
   if (name === 'document' || name === 'document-text' || name === 'page') return DocumentIcon
   if (name === 'bolt') return BoltIcon
   if (name === 'eye') return EyeIcon

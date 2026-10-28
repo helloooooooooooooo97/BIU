@@ -74,12 +74,12 @@ test('viewsCollection creates and deletes user views on a registered table', asy
 test('every registered table gets a builtin all-view even before the client syncs', async () => {
   const store = new SavedViewsStore()
   const spec = viewsCollection(store, () => [
-    { path: '/sessions', id: 'sessions', kind: 'collection', label: '会话', view: { title: '会话' } },
+    { path: '/sessions', id: 'sessions', kind: 'collection', label: '代理', view: { title: '代理' } },
     { path: '/events', id: 'events', kind: 'collection', label: '事件', view: { title: '事件' } },
   ])
   const rows = await spec.list()
   assert.equal(rows.length, 2)
-  assert.equal(rows.find((row) => row.tablePath === '/sessions')?.title, '全部会话')
+  assert.equal(rows.find((row) => row.tablePath === '/sessions')?.title, '全部代理')
   assert.equal(rows.find((row) => row.tablePath === '/events')?.title, '全部事件')
 })
 

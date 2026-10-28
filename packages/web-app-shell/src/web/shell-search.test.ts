@@ -25,7 +25,7 @@ test('search opens inspector collections, not chat or database routes', () => {
   assert.equal(searchCollection('facet'), '/facets')
   assert.deepEqual(
     SEARCH_SCOPES.map((item) => item.label),
-    ['视图', '会话', '任务', '页面', '插件', '标签'],
+    ['视图', '代理', '任务', '页面', '插件', '标签'],
   )
 })
 
@@ -88,7 +88,7 @@ test('empty search lists every kind by updatedAt instead of skipping remotes', (
   assert.doesNotMatch(src, /if \(!needle && scope === 'all'\) \{\s*setHits\(\[\]\)/)
   assert.match(src, /sort: 'updatedAt'/)
   assert.match(src, /item.id === 'session' \? '\/sessions'/)
-  assert.match(src, /空着时视图、会话、任务、页面、插件、标签各按更新时间列最近/)
+  assert.match(src, /空着时视图、代理、任务、页面、插件、标签各按更新时间列最近/)
   assert.doesNotMatch(src, /window\.confirm/)
   assert.match(src, /<ConfirmDialog/)
 })

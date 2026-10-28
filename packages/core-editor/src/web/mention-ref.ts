@@ -4,7 +4,7 @@ export const MENTION_SCOPES: Array<{ kind: MentionKind; label: string; path: str
   { kind: 'page', label: '页面', path: '/pages' },
   { kind: 'task', label: '任务', path: '/tasks' },
   { kind: 'facet', label: '标签', path: '/facets' },
-  { kind: 'session', label: '会话', path: '/sessions' },
+  { kind: 'session', label: '代理', path: '/sessions' },
 ]
 
 const KIND_SET = new Set<string>(MENTION_SCOPES.map((item) => item.kind))

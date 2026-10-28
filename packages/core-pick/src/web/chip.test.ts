@@ -16,6 +16,7 @@ test('kind maps to distinct heroicons', () => {
     'CheckCircleIcon',
     'DocumentTextIcon',
     'ChatBubbleLeftIcon',
+    'CursorArrowRaysIcon',
     'PuzzlePieceIcon',
     'TagIcon',
     'WrenchScrewdriverIcon',
@@ -25,7 +26,7 @@ test('kind maps to distinct heroicons', () => {
   for (const name of needed) {
     assert.ok(name in lu, `${name} missing`)
   }
-  assert.equal(pickKindIcon('session'), lu.ChatBubbleLeftIcon)
+  assert.equal(pickKindIcon('session'), lu.CursorArrowRaysIcon)
   assert.equal(pickKindIcon('message'), lu.ChatBubbleLeftIcon)
   assert.equal(pickKindIcon('text'), lu.DocumentTextIcon)
   assert.equal(pickKindIcon('block'), lu.DocumentTextIcon)

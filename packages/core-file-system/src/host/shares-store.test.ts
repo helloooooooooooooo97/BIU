@@ -190,7 +190,7 @@ test('session snapshot uses db_content events, not page markdown', async () => {
   const spec: CollectionSpec = {
     id: 'sessions',
     path: '/sessions',
-    label: '会话',
+    label: '代理',
     schema: {
       labelField: 'title',
       contentField: 'events',

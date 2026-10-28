@@ -1199,6 +1199,15 @@ test('missing sort field falls back to updatedAt, then title', () => {
   assert.doesNotMatch(menus, /tasks-sort-head/)
 })
 
+test('session collection uses the cursor glyph labeled 代理', () => {
+  const glyphs = readFileSync(resolve(import.meta.dirname, './table-glyph.tsx'), 'utf8')
+  const spec = readFileSync(resolve(import.meta.dirname, '../../../host-sessions/src/host/sessions-collection.ts'), 'utf8')
+  assert.match(spec, /label: '代理'/)
+  assert.match(spec, /icon: 'cursor'/)
+  assert.match(glyphs, /name === 'cursor'/)
+  assert.match(glyphs, /<CursorArrowRaysIcon/)
+})
+
 test('widget collection uses the grouped-rectangles glyph, not the plugin puzzle', () => {
   const glyphs = readFileSync(resolve(import.meta.dirname, './table-glyph.tsx'), 'utf8')
   assert.match(glyphs, /name === 'rectangle-group'/)

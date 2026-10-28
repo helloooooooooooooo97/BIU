@@ -1,7 +1,7 @@
 import {
   AcademicCapIcon,
   CheckCircleIcon,
-  ChatBubbleLeftRightIcon,
+  CursorArrowRaysIcon,
   BellIcon,
   BoltIcon,
   DocumentIcon,
@@ -17,7 +17,7 @@ import {
 export function idleTableIconKind(icon?: string) {
   const name = (icon ?? '').trim().toLowerCase()
   if (name === 'check-circle' || name === 'check' || name === 'clipboard-document-list' || name === 'clipboard') return 'check'
-  if (name === 'chat-bubble' || name === 'chat-bubble-left-right') return 'chat'
+  if (name === 'cursor' || name === 'cursor-arrow-rays' || name === 'chat-bubble' || name === 'chat-bubble-left-right') return 'cursor'
   if (name === 'academic-cap' || name === 'skill' || name === 'skills') return 'skill'
   if (name === 'document' || name === 'document-text' || name === 'page') return 'page'
   return 'table'
@@ -29,7 +29,9 @@ export function TableGlyph({ icon, className = 'size-4' }: { icon?: string; clas
   if (name === 'check-circle' || name === 'check' || name === 'clipboard-document-list' || name === 'clipboard') {
     return <CheckCircleIcon aria-hidden className={className} />
   }
-  if (name === 'chat-bubble' || name === 'chat-bubble-left-right') return <ChatBubbleLeftRightIcon aria-hidden className={className} />
+  if (name === 'cursor' || name === 'cursor-arrow-rays' || name === 'chat-bubble' || name === 'chat-bubble-left-right') {
+    return <CursorArrowRaysIcon aria-hidden className={className} />
+  }
   if (name === 'academic-cap' || name === 'skill' || name === 'skills') return <AcademicCapIcon aria-hidden className={className} />
   if (name === 'document' || name === 'document-text' || name === 'page') return <DocumentIcon aria-hidden className={className} />
   if (name === 'bolt') return <BoltIcon aria-hidden className={className} />
