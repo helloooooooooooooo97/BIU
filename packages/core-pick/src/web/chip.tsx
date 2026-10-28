@@ -127,11 +127,10 @@ const INSPECT_CSS = `
 .pick-chip-data-mark{flex:none;display:grid;place-items:center;width:28px;height:28px;border-radius:8px;background:color-mix(in srgb,var(--biu-tag,var(--biu-color-emphasis)) 22%,transparent);color:var(--biu-tag,var(--biu-color-emphasis))}
 .pick-chip-data-mark .pick-kind-icon{width:14px;height:14px}
 .pick-chip-data-copy{min-width:0;flex:1;display:flex;flex-direction:column;justify-content:center;gap:0}
-.pick-chip-data-kind,.pick-chip-data-title,.pick-chip-data-quote,.pick-chip-data-k,.pick-chip-data-v{margin:0;font:inherit;font-size:var(--biu-font-size-4);font-weight:500;line-height:20px}
+.pick-chip-data-kind,.pick-chip-data-title,.pick-chip-data-k,.pick-chip-data-v{margin:0;font:inherit;font-size:var(--biu-font-size-4);font-weight:500;line-height:20px}
 .pick-chip-data-kind{color:var(--biu-color-text-subtle);letter-spacing:.04em;text-transform:uppercase}
 .pick-chip-data-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--biu-color-text)}
-.pick-chip-data-quote{display:flex;align-items:center;box-sizing:border-box;min-height:32px;margin:0 0 10px;padding:6px 10px;border-radius:8px;background:color-mix(in srgb,var(--biu-color-text) 6%,transparent);color:var(--biu-color-text);white-space:pre-wrap;word-break:break-word;user-select:text}
-.pick-chip-data-fields{margin:0;padding:4px 0 0;border-top:var(--biu-stroke-width) solid color-mix(in srgb,var(--biu-color-text) 8%,transparent);display:flex;flex-direction:column;gap:2px}
+.pick-chip-data-fields{margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
 .pick-chip-data-row{display:grid;grid-template-columns:108px minmax(0,1fr);align-items:center;gap:8px;min-height:32px;margin:0;font:inherit;font-size:var(--biu-font-size-4);font-weight:500;line-height:20px}
 .pick-chip-data-row.is-stack{align-items:flex-start}
 .pick-chip-data-row.is-stack .pick-chip-data-k{min-height:32px}
@@ -177,7 +176,6 @@ export function revealInspectPath(path: string) {
 
 export function pickInspectCard(ref: PickRef) {
   const title = chipCaption(ref).name || ref.label || ref.kind
-  const quote = (ref.selection || '').trim()
   const fields: {
     key: string
     label: string
@@ -202,7 +200,6 @@ export function pickInspectCard(ref: PickRef) {
   return {
     kind: canonicalPickKind(ref.kind) || ref.kind,
     title,
-    quote: quote && quote !== title ? quote : '',
     fields,
   }
 }
@@ -236,7 +233,6 @@ function PickChipData({ pick }: { pick: PickRef }) {
           <p className="pick-chip-data-title">{card.title}</p>
         </div>
       </div>
-      {card.quote ? <p className="pick-chip-data-quote">{card.quote}</p> : null}
       <div className="pick-chip-data-fields">
         {card.fields.map((item) => (
           <div key={item.key} className={item.stack ? 'pick-chip-data-row is-stack' : 'pick-chip-data-row'}>

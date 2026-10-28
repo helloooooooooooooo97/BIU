@@ -62,7 +62,7 @@ test('pick chips can show the facet close mark', () => {
   assert.match(src, /pick-chip-lines/)
   assert.match(src, /HeadlessPopover/)
   assert.match(src, /pick-chip-data/)
-  assert.match(src, /pick-chip-data-quote/)
+  assert.doesNotMatch(src, /pick-chip-data-quote/)
   assert.match(src, /pick-chip-data-fields/)
   assert.match(src, /108px minmax\(0,1fr\)/)
   assert.match(src, /pick-chip-data-v\{display:flex;align-items:center/)
@@ -72,7 +72,7 @@ test('pick chips can show the facet close mark', () => {
   assert.match(src, /ArrowTopRightOnSquareIcon/)
 })
 
-test('inspect card keeps the quote and lists every stored field', () => {
+test('inspect card lists every stored field without a quote preview', () => {
   const card = pickInspectCard({
     kind: 'sandbox',
     id: 'sandbox:0-x:0/0',
@@ -86,7 +86,8 @@ test('inspect card keeps the quote and lists every stored field', () => {
   })
   assert.equal(card.kind, 'sandbox')
   assert.equal(card.title, '能做什么')
-  assert.equal(card.quote, '能做什么，不能做什么')
+  assert.equal('quote' in card, false)
+  assert.equal(card.fields.find((item) => item.key === 'selection')?.value, '能做什么，不能做什么')
   assert.deepEqual(
     card.fields.map((item) => item.key),
     ['kind', 'id', 'label', 'title', 'path', 'plugin', 'route', 'selection', 'element'],
