@@ -2,7 +2,8 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { injectPageBlockPlugin } from '../../../core-editor/src/web/page-block-plugin-host.ts'
 import { ignorePickCapture } from './overlay.tsx'
-import { resolvePickAtPoint } from './resolve.ts'
+import { resolvePickAtPoint, resolvePickFromEvent } from './resolve.ts'
+import { formatPicks } from './types.ts'
 
 function stubBox(el: Element, left: number, top: number, width: number, height: number) {
   Object.defineProperty(el, 'getBoundingClientRect', {
@@ -121,5 +122,33 @@ test('live dump: plugin pane covers the preview, host is only minHeight, cell be
   } as unknown as Event
   assert.equal(ignorePickCapture(live.cell, composed), false)
 
+  live.editor.remove()
+})
+
+test('pick event on an inner cell yields that cell as the ref, not the plugin card', () => {
+  const live = mountLiveDump()
+  stubBox(live.cell, 0, 0, 0, 0)
+  stubBox(live.host, 0, 0, 0, 0)
+  const event = {
+    clientX: 64,
+    clientY: 240,
+    target: live.host,
+    composedPath: () => [live.cell, live.host, live.pane, live.card, live.block, live.editor, document.body],
+  } as unknown as PointerEvent
+  const hit = resolvePickFromEvent(event, '/pages/p1')
+  const report = hit
+    ? { kind: hit.ref.kind, id: hit.ref.id, label: hit.ref.label, plugin: hit.ref.plugin }
+    : null
+  assert.ok(hit, `no pick from composed path ${JSON.stringify(report)}`)
+  assert.equal(hit?.ref.kind, 'sandbox', JSON.stringify(report))
+  assert.notEqual(hit?.ref.kind, 'plugin', JSON.stringify(report))
+  assert.equal(hit?.ref.id, 'sandbox:1-af3c568d-doc:0/0/1/0/11', JSON.stringify(report))
+  assert.doesNotMatch(hit?.ref.id ?? '', /^page-sandbox:/)
+  assert.equal(hit?.el, live.cell)
+  assert.match(hit?.ref.element ?? '', />2</)
+  const packed = formatPicks([hit!.ref])
+  assert.match(packed, /"kind":"sandbox"/)
+  assert.doesNotMatch(packed, /"kind":"plugin"/)
+  assert.doesNotMatch(packed, /page-sandbox-block/)
   live.editor.remove()
 })

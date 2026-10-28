@@ -70,7 +70,8 @@ test('Escape blurs the focused control so the UA focus ring does not linger', ()
 })
 
 test('click and hover use the same point resolver', () => {
-  assert.match(overlay, /resolvePickAtPoint/)
+  assert.match(overlay, /resolvePickFromEvent/)
+  assert.doesNotMatch(overlay, /resolvePickAtPoint/)
   assert.doesNotMatch(overlay, /textPickFromSelection/)
   assert.doesNotMatch(overlay, /picksOnPointerUp/)
   assert.doesNotMatch(overlay, /kind === 'html'/)
