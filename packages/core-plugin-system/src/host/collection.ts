@@ -97,7 +97,7 @@ function mergeLifecycle(
   const official = builtin
     ? { builtin: true, author: BIU_OFFICIAL_NAME, authorUrl: BIU_GITHUB, createdBy: BIU_OFFICIAL, updatedBy: [BIU_OFFICIAL] }
     : {}
-  const canManagePackage = !builtin || store.viewerIsSuperAdmin?.() !== false
+  const canManagePackage = !builtin || Boolean(store.viewerIsSuperAdmin?.())
   if (installed && sandbox) {
     return omitEmpty({
       ...asInstalledRecord(installed, store),

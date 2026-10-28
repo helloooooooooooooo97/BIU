@@ -127,6 +127,21 @@ test('online startup adds the env super admin to a database that already has acc
   }
 })
 
+test('desktop also seeds the env super admin', () => {
+  const previous = process.env.BIU_ONLINE
+  process.env.BIU_ONLINE = '0'
+  try {
+    const collab = store()
+    const admin = collab.login('97@biu.com', '123456')
+    const ada = collab.register('Ada')
+    assert.equal(collab.isSuperAdmin(admin.id), true)
+    assert.equal(collab.isSuperAdmin(ada.id), false)
+  } finally {
+    if (previous === undefined) delete process.env.BIU_ONLINE
+    else process.env.BIU_ONLINE = previous
+  }
+})
+
 test('owners and managers can rename a workspace but regular members cannot', () => {
   const collab = store()
   const ada = collab.register('Ada')

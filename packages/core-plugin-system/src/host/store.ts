@@ -387,30 +387,27 @@ export class PluginStoreService extends Service {
   }
 
   viewerIsSuperAdmin() {
-    if (!isOnlineRuntime()) return true
     const accountId = currentAccountId()
-    return Boolean(accountId && this.accountStore()?.isSuperAdmin?.(accountId))
+    if (accountId) return Boolean(this.accountStore()?.isSuperAdmin?.(accountId))
+    return !isOnlineRuntime()
   }
 
-  /** 内置插件的安装、卸载、源码与介绍只有超级管理员能改。 */
+  /** 内置插件的安装、卸载、源码与介绍只有超级管理员能改。本机、线上同一套。 */
   private requireBuiltinManager(id: string) {
-    if (!isOnlineRuntime()) return
-    if (!this.isBuiltin(id)) {
-      this.requireWorkspaceMember()
+    if (this.isBuiltin(id)) {
+      if (!this.viewerIsSuperAdmin()) throw new Error('只有超级管理员可以更改内置插件')
       return
     }
-    if (!this.viewerIsSuperAdmin()) throw new Error('只有超级管理员可以更改内置插件')
+    if (isOnlineRuntime()) this.requireWorkspaceMember()
   }
 
   /** 在 .plugin-dev/<id>/ 开沙箱，不写入已安装目录。线上任何空间成员都能开。 */
   async initSandbox(input: PluginCreateInput) {
     const id = String(input.id ?? '').trim()
-    if (isOnlineRuntime()) {
-      if (input.builtin === true || this.isBuiltin(id)) {
-        if (!this.viewerIsSuperAdmin()) throw new Error('只有超级管理员可以更改内置插件')
-      } else {
-        this.requireWorkspaceMember()
-      }
+    if (input.builtin === true || this.isBuiltin(id)) {
+      if (!this.viewerIsSuperAdmin()) throw new Error('只有超级管理员可以更改内置插件')
+    } else if (isOnlineRuntime()) {
+      this.requireWorkspaceMember()
     }
     const name = String(input.name ?? '').trim()
     if (!isSafeId(id)) throw new Error(`invalid plugin id: ${id}`)
@@ -447,7 +444,7 @@ export class PluginStoreService extends Service {
 
   /** 把沙箱 bundle 进 .plugin/<id>/。 */
   async pack(id: string) {
-    if (isOnlineRuntime()) this.requireBuiltinManager(id)
+    this.requireBuiltinManager(id)
     if (!isSafeId(id)) throw new Error(`invalid plugin id: ${id}`)
     const sandbox = this.sandboxPath(id)
     if (!existsSync(join(sandbox, 'manifest.json'))) throw new Error(`sandbox not found: ${sandbox}`)
@@ -633,7 +630,7 @@ export class PluginStoreService extends Service {
     const sandbox = this.sandboxPath(id)
     const canPack = existsSync(join(sandbox, 'manifest.json')) && (findEntry(sandbox, HOST_ENTRIES) || findEntry(sandbox, WEB_ENTRIES))
     if (!canPack) return hit
-    if (isOnlineRuntime() && this.isBuiltin(id) && !this.viewerIsSuperAdmin()) return hit
+    if (this.isBuiltin(id) && !this.viewerIsSuperAdmin()) return hit
     await this.pack(id)
     return this.findPluginDir(id)
   }
@@ -706,7 +703,7 @@ export class PluginStoreService extends Service {
 
   /** 卸载：停运行，只删 .plugin/<id>/，不动 .plugin-dev。有人在用也可以卸。 */
   async uninstall(id: string) {
-    if (isOnlineRuntime()) this.requireBuiltinManager(id)
+    this.requireBuiltinManager(id)
     if (!isSafeId(id)) throw new Error(`invalid plugin id: ${id}`)
     await this.hub().drop(id)
     this.setEnabled(id, false)
@@ -789,7 +786,7 @@ export class PluginStoreService extends Service {
   }
 
   async writeReadme(id: string, markdown: string) {
-    if (isOnlineRuntime()) this.requireBuiltinManager(id)
+    this.requireBuiltinManager(id)
     const text = String(markdown ?? '')
     const sqlitePath = this.contentSqlitePath()
     mkdirSync(dirname(sqlitePath), { recursive: true })

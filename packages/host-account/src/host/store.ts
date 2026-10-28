@@ -2722,7 +2722,6 @@ export class CollabStore {
   }
 
   private ensureBuiltInRoot(now = Date.now()) {
-    if (!isOnlineRuntime()) return false
     const email = superAdminEmail()
     const existing = this.db
       .prepare(`SELECT id FROM accounts WHERE lower(email) = ? LIMIT 1`)

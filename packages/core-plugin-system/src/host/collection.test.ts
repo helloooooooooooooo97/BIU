@@ -327,6 +327,7 @@ test('builtin plugins list BIU官方 and the GitHub link', async () => {
     ]),
   }))
   const row = (await spec.list()).find((item) => item.id === 'api-playground')
+  assert.equal(row?.canManagePackage, undefined)
   assert.equal(row?.author, BIU_OFFICIAL_NAME)
   assert.equal(row?.authorUrl, BIU_GITHUB)
   assert.deepEqual(row?.createdBy, { kind: 'user', name: BIU_OFFICIAL_NAME, url: BIU_GITHUB })

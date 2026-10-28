@@ -149,6 +149,16 @@ test('online members cannot pack or uninstall a builtin plugin', async () => {
     await runWithAccount('admin', () => runWithRequestWorkspace('ws', () => store.uninstall('page-sandbox')))
     await assert.rejects(() => access(join(dir, '.plugin', 'page-sandbox', 'host.js')))
     await access(join(dir, '.plugin-dev', 'page-sandbox', 'manifest.json'))
+    process.env.BIU_ONLINE = '0'
+    await assert.rejects(
+      () => runWithAccount('ada', () => runWithRequestWorkspace('ws', () => store.pack('page-sandbox'))),
+      /超级管理员/,
+    )
+    await runWithAccount('admin', () => runWithRequestWorkspace('ws', () => store.pack('page-sandbox')))
+    await assert.rejects(
+      () => runWithAccount('ada', () => runWithRequestWorkspace('ws', () => store.uninstall('page-sandbox'))),
+      /超级管理员/,
+    )
   } finally {
     if (previous === undefined) delete process.env.BIU_ONLINE
     else process.env.BIU_ONLINE = previous
