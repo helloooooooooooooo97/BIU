@@ -15,7 +15,9 @@ export function ignorePickCapture(target: EventTarget | null, event?: Event) {
     nodes.some(
       (node) =>
         node instanceof Element &&
-        (node.hasAttribute('data-sandbox-pick') || node.getAttribute('data-biu-kind') === 'sandbox'),
+        (node.hasAttribute('data-sandbox-pick') ||
+          node.hasAttribute('data-html-pick') ||
+          node.hasAttribute('data-biu-kind')),
     )
   ) {
     return false
