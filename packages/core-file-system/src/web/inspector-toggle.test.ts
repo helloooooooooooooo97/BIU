@@ -259,7 +259,7 @@ test('table title opens record from the title-side button', () => {
   assert.match(browser, /data-testid="record-title-open"/)
   assert.match(browser, /data-testid="record-title-split"/)
   assert.doesNotMatch(browser, /toolsLive && !nested/)
-  assert.match(browser, /showRecordInInspector\(collectionPath, row.id, activeViewId\)/)
+  assert.match(browser, /showRecordInInspector\(collectionPath, row.id, activeViewId, nested \? \{ newTab: true \} : undefined\)/)
   assert.match(browser, /className="tasks-icon-btn tasks-title-open"/)
   assert.match(browser, /tasks-title-aside/)
   assert.match(browser, /tasks-tree-count/)
