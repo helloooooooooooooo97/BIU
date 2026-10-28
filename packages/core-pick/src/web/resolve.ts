@@ -286,18 +286,23 @@ function liveHighlightIn(el: HTMLElement): string {
   return raw
 }
 
-/** 带 data-biu 的命中也挂上页面 path / markdown 行，和点选 block 一样；id 仍用节点自己的。 */
+function withoutFenceLocus(ref: PickRef): PickRef {
+  if (ref.kind !== 'html' && ref.kind !== 'sandbox') return ref
+  if (!ref.element && !ref.selection) return ref
+  const { text: _t, start_line: _s, end_line: _e, insert: _i, ...rest } = ref
+  return rest
+}
+
+/** 内部节点只挂页面 path，不把整块围栏行号/正文当成选区。 */
 function withEditorPickContext(ref: PickRef, el: HTMLElement, start: Element = el): PickRef {
   const sourced = withHtmlElement(withHostSource(ref, el), start, el)
+  if (ref.kind === 'html' || ref.kind === 'sandbox') {
+    const inner = liveHighlightIn(el) || pickPreview(el.textContent ?? '', 120)
+    const next = inner && !sourced.selection ? { ...sourced, selection: inner } : sourced
+    return withoutFenceLocus(next)
+  }
   const locus = editorLocusFromNode(el)
-  const next = locus ? { ...withPickLocus(sourced, locus), id: ref.id, ...(sourced.element ? { element: sourced.element } : {}) } : sourced
-  if (ref.kind !== 'html' && ref.kind !== 'sandbox') return next
-  const fence = (next.text ?? '').trim()
-  const claimed = (next.selection ?? '').trim()
-  const inner = liveHighlightIn(el) || pickPreview(el.textContent ?? '', 120)
-  if (!inner) return next
-  if (!claimed || claimed === fence) return { ...next, selection: inner }
-  return next
+  return locus ? { ...withPickLocus(sourced, locus), id: ref.id, ...(sourced.element ? { element: sourced.element } : {}) } : sourced
 }
 
 function editorLocusFromNode(el: HTMLElement) {
