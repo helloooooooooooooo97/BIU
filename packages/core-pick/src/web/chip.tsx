@@ -140,10 +140,11 @@ const INSPECT_CSS = `
 .pick-chip-data-k span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pick-chip-data-v{display:flex;align-items:center;box-sizing:border-box;min-width:0;min-height:32px;padding:0 10px;border-radius:8px;background:color-mix(in srgb,var(--biu-color-text) 6%,transparent);color:var(--biu-color-text);white-space:pre-wrap;word-break:break-word;user-select:text}
 .pick-chip-data-v.is-stack{align-items:flex-start;padding:6px 10px;max-height:160px;overflow:auto}
-.pick-chip-data-v.is-jump{gap:6px;padding-right:6px;width:100%;border:0;font:inherit;text-align:left;cursor:pointer}
-.pick-chip-data-v.is-jump:hover{background:color-mix(in srgb,var(--biu-color-text) 10%,transparent)}
+.pick-chip-data-v.is-jump{gap:4px;padding-right:4px}
 .pick-chip-data-v-text{min-width:0;flex:1}
-.pick-chip-data-jump{flex:none;display:grid;place-items:center;width:14px;height:14px;color:var(--biu-color-icon)}
+.pick-chip-data-jump{flex:none;display:grid;place-items:center;width:24px;height:24px;margin:0;border:0;padding:0;border-radius:6px;background:transparent;color:var(--biu-color-icon);cursor:pointer}
+.pick-chip-data-jump:hover{background:var(--biu-color-bg-hover);color:var(--biu-color-text)}
+.pick-chip-data-jump svg{width:14px;height:14px}
 `
 
 function inspectFieldIcon(kind: (typeof INSPECT_FIELDS)[number][2]) {
@@ -243,31 +244,27 @@ function PickChipData({ pick }: { pick: PickRef }) {
               {inspectFieldIcon(item.glyph)}
               <span>{item.label}</span>
             </span>
-            {item.jump ? (
-              <button
-                type="button"
-                className={`pick-chip-data-v is-jump${item.stack ? ' is-stack' : ''}`}
-                data-testid="pick-chip-path-jump"
-                title={item.value}
-                aria-label={`在检查器打开 ${item.value}`}
-                onPointerDown={(event) => {
-                  event.preventDefault()
-                  event.stopPropagation()
-                }}
-                onClick={(event) => {
-                  event.preventDefault()
-                  event.stopPropagation()
-                  revealInspectPath(item.value)
-                }}
-              >
-                <span className="pick-chip-data-v-text">{item.value}</span>
-                <ArrowTopRightOnSquareIcon className="pick-chip-data-jump" aria-hidden />
-              </button>
-            ) : (
-              <span className={`pick-chip-data-v${item.stack ? ' is-stack' : ''}`} title={item.value}>
-                <span className="pick-chip-data-v-text">{item.value}</span>
-              </span>
-            )}
+            <span
+              className={`pick-chip-data-v${item.stack ? ' is-stack' : ''}${item.jump ? ' is-jump' : ''}`}
+              title={item.value}
+            >
+              <span className="pick-chip-data-v-text">{item.value}</span>
+              {item.jump ? (
+                <button
+                  type="button"
+                  className="pick-chip-data-jump"
+                  data-testid="pick-chip-path-jump"
+                  aria-label={`在检查器打开 ${item.value}`}
+                  onPointerDown={(event) => {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    revealInspectPath(item.value)
+                  }}
+                >
+                  <ArrowTopRightOnSquareIcon aria-hidden />
+                </button>
+              ) : null}
+            </span>
           </div>
         ))}
       </div>

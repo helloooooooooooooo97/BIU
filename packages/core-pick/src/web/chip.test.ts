@@ -133,6 +133,7 @@ test('path jump opens the record in the inspector', () => {
   assert.deepEqual(seen, [{ collection: '/pages', recordId: 'p147', unique: true }])
   const src = readFileSync(resolve(import.meta.dirname, './chip.tsx'), 'utf8')
   assert.match(src, /data-testid="pick-chip-path-jump"/)
+  assert.match(src, /onPointerDown/)
   assert.match(src, /revealInspectPath\(item\.value\)/)
   assert.match(src, /在检查器打开/)
 })
