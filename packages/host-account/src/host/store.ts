@@ -384,7 +384,7 @@ export class CollabStore {
 
   revokeSessionById(actorId: string, sessionId: string, now = Date.now()) {
     const row = this.db.prepare('SELECT account_id FROM auth_sessions WHERE id = ?').get(sessionId) as { account_id: string } | undefined
-    if (!row || row.account_id !== actorId) throw new CollabError('会话不存在', 404)
+    if (!row || row.account_id !== actorId) throw new CollabError('代理不存在', 404)
     this.db.prepare('UPDATE auth_sessions SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL').run(now, sessionId)
     return { id: sessionId }
   }
@@ -401,7 +401,7 @@ export class CollabStore {
       .prepare('SELECT account_id, executor_id, expires_at FROM session_execution_leases WHERE session_id = ?')
       .get(sessionId) as { account_id: string; executor_id: string; expires_at: number } | undefined
     if (existing) {
-      throw new CollabError(`这个会话正在由 ${existing.executor_id || '另一台设备'} 运行`, 409)
+      throw new CollabError(`这个代理正在由 ${existing.executor_id || '另一台设备'} 运行`, 409)
     }
     const leaseId = id('lease')
     const expiresAt = now + Math.max(30_000, Math.min(5 * 60_000, ttlMs))
@@ -674,7 +674,7 @@ export class CollabStore {
       .all() as Array<{ name: string }>
     const columnsOf = (table: string) =>
       (this.db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map((column) => column.name)
-    const sessionIds = records.filter((record) => record.collection === '/sessions').map((record) => record.record_id)
+    const sessionIds = records.filter((record) => record.collection === '/agents').map((record) => record.record_id)
     this.db.exec('BEGIN IMMEDIATE')
     try {
       for (const table of tables) {
@@ -690,7 +690,7 @@ export class CollabStore {
       const direct: Record<string, string> = {
         '/pages': 'pages',
         '/tasks': 'tasks',
-        '/sessions': 'sessions',
+        '/agents': 'agents',
         '/facets': 'facets',
       }
       for (const [collection, table] of Object.entries(direct)) {
@@ -2701,13 +2701,13 @@ export class CollabStore {
            UNION
            SELECT '/tasks', id FROM tasks
            UNION
-           SELECT '/sessions', id FROM sessions
+           SELECT '/agents', id FROM agents
            UNION
            SELECT collection, record_id FROM editor_content
            WHERE collection IN ('/skills', '/plugins')
            UNION
            SELECT collection, record_id FROM record_meta
-           WHERE collection IN ('/pages', '/tasks', '/sessions', '/skills', '/plugins')
+           WHERE collection IN ('/pages', '/tasks', '/agents', '/skills', '/plugins')
          ) AS live
          WHERE NOT EXISTS (
            SELECT 1 FROM record_meta AS meta

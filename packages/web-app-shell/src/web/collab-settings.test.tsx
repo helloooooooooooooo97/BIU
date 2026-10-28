@@ -232,7 +232,7 @@ test('account settings are global and workspace switcher lives in the sidebar he
   globalThis.fetch = (async (path: string) => {
     const url = String(path)
     if (url.endsWith('/me')) return json({ id: 'acc_1', name: 'ada@example.com', email: 'ada@example.com' })
-    if (url.endsWith('/sessions')) {
+    if (url.endsWith('/agents')) {
       return json({
         sessions: [
           {
@@ -325,7 +325,7 @@ test('account settings can create and link a cloud account from the local identi
   globalThis.fetch = (async (path: string, init?: RequestInit) => {
     const url = String(path)
     if (url.endsWith('/me')) return json({ id: 'acc_1', name: 'Ada', email: 'ada@example.com' })
-    if (url.endsWith('/sessions')) return json({ sessions: [] })
+    if (url.endsWith('/agents')) return json({ sessions: [] })
     if (url.endsWith('/cloud/sync-create') && init?.method === 'POST') {
       syncBody = JSON.parse(String(init.body)) as Record<string, unknown>
       return json({ created: true }, 201)

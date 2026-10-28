@@ -222,7 +222,7 @@ export function tasksCollection(tasks: TasksLike, recordActions?: TaskRecordActi
       route: '/tasks',
       title: '任务',
       inspector: true,
-      blurb: '可读写的任务行。列表 db_list /tasks，读一行 db_read /tasks/<id>。改标题/状态/优先级/难度/项目/标签/截止：db_update。执行人 assignee：写成另一个代理的会话 id（一个代理=一个 session，见 /sessions）。创建人 createdBy 由系统自记，不可写，不要另开一列。用户说「让某某 agent 去做」= 先 db_update 把 assignee 写成那个会话 id，再 deliver。新建 db_create，删除 db_delete。长描述用 db_content（字段名 description），不要写进 notes。本表动作（db_action path=/tasks/<任务id> action=…）：deliver=把这条任务发给执行人那个代理（必须先有 assignee.sessionId；可选 args.text 当派工词；wait 默认 true，等到它这一回合结束）；report=正在执行的那个代理汇报进度（必填 args.status=doing 做到一半 或 done 做完，可选 note；会记进 reports 并改任务 status）。你自己若是执行人，做完用 report，不要只改 status。',
+      blurb: '可读写的任务行。列表 db_list /tasks，读一行 db_read /tasks/<id>。改标题/状态/优先级/难度/项目/标签/截止：db_update。执行人 assignee：写成另一个代理的 id（一个代理=一个 session，见 /agents）。创建人 createdBy 由系统自记，不可写，不要另开一列。用户说「让某某 agent 去做」= 先 db_update 把 assignee 写成那个代理 id，再 deliver。新建 db_create，删除 db_delete。长描述用 db_content（字段名 description），不要写进 notes。本表动作（db_action path=/tasks/<任务id> action=…）：deliver=把这条任务发给执行人那个代理（必须先有 assignee.sessionId；可选 args.text 当派工词；wait 默认 true，等到它这一回合结束）；report=正在执行的那个代理汇报进度（必填 args.status=doing 做到一半 或 done 做完，可选 note；会记进 reports 并改任务 status）。你自己若是执行人，做完用 report，不要只改 status。',
       order: 21,
       icon: 'check-circle',
     },
@@ -308,7 +308,7 @@ export function tasksCollection(tasks: TasksLike, recordActions?: TaskRecordActi
             for: 'agent',
             placement: [],
             description:
-              '当前这个代理（就是你所在的会话）向任务汇报。args.status 必须是 doing（做到一半）或 done（做完）；可选 note。会追加 reports，并改任务 status。做任务请用这个，不要只 db_update status。',
+              '当前这个代理（就是你所在的代理）向任务汇报。args.status 必须是 doing（做到一半）或 done（做完）；可选 note。会追加 reports，并改任务 status。做任务请用这个，不要只 db_update status。',
             parameters: {
               type: 'object',
               description: 'status=doing|done；note 为给人/创建者看的一句进度。',
@@ -326,12 +326,12 @@ export function tasksCollection(tasks: TasksLike, recordActions?: TaskRecordActi
             for: 'both',
             placement: ['row', 'detail'],
             description:
-              '把任务发给执行人那个代理。一个代理=一个 /sessions 行。先 db_update assignee 为它的会话 id，没有 sessionId 会失败。args.text 可覆盖派工词；wait 默认 true 等它这一回合，false 只入队。用户说「让另一个 agent 做」就是：找到或 db_create 那个会话 → 写入 assignee → deliver。',
+              '把任务发给执行人那个代理。一个代理=一个 /agents 行。先 db_update assignee 为它的代理 id，没有 sessionId 会失败。args.text 可覆盖派工词；wait 默认 true 等它这一回合，false 只入队。用户说「让另一个 agent 做」就是：找到或 db_create 那个代理 → 写入 assignee → deliver。',
             parameters: {
               type: 'object',
               description: '可选 text 覆盖派工说明；wait=false 时立即返回 queued。',
               properties: {
-                text: { type: 'string', description: '派给执行会话的文本；不传则用任务标题+描述拼默认稿' },
+                text: { type: 'string', description: '派给执行代理的文本；不传则用任务标题+描述拼默认稿' },
                 wait: { type: 'boolean', description: '默认 true。false=只入队不等回复' },
               },
             },

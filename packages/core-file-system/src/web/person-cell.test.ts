@@ -6,7 +6,7 @@ import { personInspectTarget } from './person-cell.tsx'
 
 test('person inspect target opens agents on sessions and users on members', () => {
   assert.deepEqual(personInspectTarget({ kind: 'agent', name: '甲', sessionId: 'sess-a' }), {
-    collection: '/sessions',
+    collection: '/agents',
     recordId: 'sess-a',
   })
   assert.deepEqual(personInspectTarget({ kind: 'user', name: 'Ada', accountId: 'acc-1' }), {
@@ -34,7 +34,7 @@ test('person pick panel searches members and sessions', () => {
   assert.match(src, /if \(agentsListed && Date\.now\(\) - agentsListedAt < AGENTS_TTL_MS\) return agentsListed/)
   assert.match(pick, /loadMembers\(\)/)
   assert.match(pick, /loadAgents\(\)/)
-  assert.match(pick, /搜索成员或会话/)
+  assert.match(pick, /搜索成员或代理/)
   assert.doesNotMatch(pick, /name: '系统'/)
   assert.doesNotMatch(pick, /name: '用户'/)
 })

@@ -415,10 +415,10 @@ test('deletable tables can pick rows and bulk-act over the table header', () => 
   assert.match(people, /asPersonList/)
   assert.match(people, /path: '\/workspace-members'/)
   assert.match(people, /listCollection/)
-  assert.match(people, /path: '\/sessions'/)
+  assert.match(people, /path: '\/agents'/)
   const personFace = people.slice(people.indexOf('export function PersonFace'), people.indexOf('export function PersonPickPanel'))
   assert.doesNotMatch(personFace, /loadAgents|listCollection/)
-  assert.doesNotMatch(people, /\/api\/sessions/)
+  assert.doesNotMatch(people, /\/api\/agents/)
   assert.match(editor, /<MediaField/)
   assert.doesNotMatch(cells, /placeholder=\{kind === 'image'/)
   const media = readFileSync(resolve(import.meta.dirname, './cell-media.tsx'), 'utf8')
@@ -1197,6 +1197,15 @@ test('missing sort field falls back to updatedAt, then title', () => {
   assert.match(editor, /emptyFilterGroup\(\)/)
   assert.doesNotMatch(menus, /<FlyoutSearch/)
   assert.doesNotMatch(menus, /tasks-sort-head/)
+})
+
+test('session collection uses the cursor glyph labeled 代理', () => {
+  const glyphs = readFileSync(resolve(import.meta.dirname, './table-glyph.tsx'), 'utf8')
+  const spec = readFileSync(resolve(import.meta.dirname, '../../../host-sessions/src/host/sessions-collection.ts'), 'utf8')
+  assert.match(spec, /label: '代理'/)
+  assert.match(spec, /icon: 'cursor'/)
+  assert.match(glyphs, /name === 'cursor'/)
+  assert.match(glyphs, /<CursorArrowRaysIcon/)
 })
 
 test('widget collection uses the grouped-rectangles glyph, not the plugin puzzle', () => {

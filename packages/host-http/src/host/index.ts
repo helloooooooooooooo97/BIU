@@ -152,6 +152,19 @@ function resolveListenConfig(config?: HttpListenConfig) {
   }
 }
 
+/** 旧路径：/api/sessions 与 /api/account/sessions → /agents。 */
+export function rewriteLegacyAgentApi(pathname: string) {
+  const accountLegacy = '/api/account/' + 'sessions'
+  if (pathname === accountLegacy || pathname.startsWith(accountLegacy + '/')) {
+    return '/api/account/agents' + pathname.slice(accountLegacy.length)
+  }
+  const legacy = '/api/' + 'sessions'
+  if (pathname === legacy || pathname.startsWith(legacy + '/')) {
+    return '/api/agents' + pathname.slice(legacy.length)
+  }
+  return pathname
+}
+
 function upgradePath(req: IncomingMessage) {
   try {
     return new URL(req.url ?? '/', 'http://localhost').pathname
@@ -307,7 +320,7 @@ export class HttpService extends Service {
               } | null
             }
           } | undefined
-        )?.store?.tenantForRecord?.('/sessions', scoped.sessionId)
+        )?.store?.tenantForRecord?.('/agents', scoped.sessionId)
         workspaceId ||= tenant?.workspaceId ?? ''
         accountId ||= tenant?.accountId ?? ''
       }
@@ -417,6 +430,7 @@ export class HttpService extends Service {
 
   private async dispatch(req: IncomingMessage, res: ServerResponse, shareOnly: boolean) {
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
+    url.pathname = rewriteLegacyAgentApi(url.pathname)
     const method = (req.method ?? 'GET').toUpperCase() as Method
     const corsHeaders = {
       'Access-Control-Allow-Origin': '*',

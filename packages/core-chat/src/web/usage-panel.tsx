@@ -18,7 +18,7 @@ const CACHE = 'var(--biu-color-ink-green)'
 const COMPACT = 'var(--biu-color-ink-gold)'
 
 async function loadUsageTrend(sessionId: string): Promise<UsageTrend> {
-  const res = await fetch(`/api/sessions/${sessionId}/usage-trend`)
+  const res = await fetch(`/api/agents/${sessionId}/usage-trend`)
   if (!res.ok) throw new Error(`加载 usage 趋势失败：${res.status}`)
   const body = (await res.json()) as { points?: UsageTrendPoint[]; compactions?: number[] }
   return {
@@ -28,14 +28,14 @@ async function loadUsageTrend(sessionId: string): Promise<UsageTrend> {
 }
 
 async function loadEventDetail(sessionId: string, seq: number): Promise<SessionEvent | null> {
-  const res = await fetch(`/api/sessions/${sessionId}/events/${seq}`)
+  const res = await fetch(`/api/agents/${sessionId}/events/${seq}`)
   if (!res.ok) throw new Error(`加载事件失败：${res.status}`)
   const body = (await res.json()) as { event?: SessionEvent }
   return body.event ?? null
 }
 
 async function loadEventRequest(sessionId: string, seq: number): Promise<{ messages: DerivedMessage[]; toolsTokens: number }> {
-  const res = await fetch(`/api/sessions/${sessionId}/events/${seq}/request`)
+  const res = await fetch(`/api/agents/${sessionId}/events/${seq}/request`)
   if (!res.ok) throw new Error(`加载 request 失败：${res.status}`)
   const body = (await res.json()) as { messages?: DerivedMessage[]; toolsTokens?: number }
   return {
@@ -473,7 +473,7 @@ export function UsagePanel({ useSessionView, sessionView }: UsagePanelProps) {
           ) : null}
         </>
       ) : (
-        <div className="usage-panel-empty">本会话暂无 usage 数据</div>
+        <div className="usage-panel-empty">本代理暂无 usage 数据</div>
       )}
       {last ? (
         <div className="usage-panel-tail">

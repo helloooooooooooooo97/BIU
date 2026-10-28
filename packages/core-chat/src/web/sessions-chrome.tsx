@@ -83,7 +83,7 @@ function SessionRecordChat({ record, value }: FsContentProps) {
       return
     }
     const ac = new AbortController()
-    void fetch(`/api/sessions/${sessionId}?turns=${TRAJECTORY_TAIL_TURNS}`, { signal: ac.signal })
+    void fetch(`/api/agents/${sessionId}?turns=${TRAJECTORY_TAIL_TURNS}`, { signal: ac.signal })
       .then((res) => (res.ok ? res.json() : null))
       .then((body) => {
         if (!body || !Array.isArray(body.events)) return

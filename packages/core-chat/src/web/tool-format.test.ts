@@ -121,14 +121,14 @@ test('formatToolDetail keeps bash artifacts for chat rendering', () => {
       code: 0,
       stdout: 'shot.png\n',
       stderr: '',
-      artifacts: [{ name: 'shot.png', url: '/api/sessions/s1/artifacts/shot.png', mime: 'image/png' }],
+      artifacts: [{ name: 'shot.png', url: '/api/agents/s1/artifacts/shot.png', mime: 'image/png' }],
     }),
     'bash',
   )
   assert.equal(formatted?.kind, 'bash')
   if (formatted?.kind !== 'bash') return
   assert.equal(formatted.artifacts?.length, 1)
-  assert.equal(formatted.artifacts?.[0]?.url, '/api/sessions/s1/artifacts/shot.png')
+  assert.equal(formatted.artifacts?.[0]?.url, '/api/agents/s1/artifacts/shot.png')
 })
 
 test('formatToolDetail pretty-prints generic json objects', () => {

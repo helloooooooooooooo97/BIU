@@ -331,7 +331,7 @@ test('stamps agent createdBy with the session title from /sessions', async () =>
   ])
   db.register({
     id: 'sessions',
-    path: '/sessions',
+    path: '/agents',
     schema: {
       labelField: 'title',
       fields: {
@@ -376,7 +376,7 @@ test('later editors append to updatedBy and leave createdBy alone', async () => 
   db.register(notesCollection())
   db.register({
     id: 'sessions',
-    path: '/sessions',
+    path: '/agents',
     schema: {
       labelField: 'title',
       fields: {
@@ -1378,10 +1378,10 @@ test('delete parks records in trash and restore puts them back', async () => {
 test('sessions delete parks in trash until purge', async () => {
   const ctx = new Context()
   const db = new DatabaseService(ctx)
-  const rows = new Map<string, { id: string; title: string }>([['s1', { id: 's1', title: '会话' }]])
+  const rows = new Map<string, { id: string; title: string }>([['s1', { id: 's1', title: '代理' }]])
   db.register({
     id: 'sessions',
-    path: '/sessions',
+    path: '/agents',
     schema: { fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string', writable: true } } },
     records: { create: true, delete: true },
     list: () => [...rows.values()],
@@ -1393,17 +1393,17 @@ test('sessions delete parks in trash until purge', async () => {
       return ids
     },
   })
-  const gone = await db.remove('/sessions', { ids: ['s1'] })
+  const gone = await db.remove('/agents', { ids: ['s1'] })
   assert.equal((gone as { trash?: boolean }).trash, true)
   assert.equal(rows.has('s1'), true)
-  const listed = await db.list('/sessions')
+  const listed = await db.list('/agents')
   if (listed.kind !== 'collection') return
   assert.equal(listed.items.length, 0)
-  await db.restore('/sessions', { ids: ['s1'] })
-  const back = await db.list('/sessions')
+  await db.restore('/agents', { ids: ['s1'] })
+  const back = await db.list('/agents')
   if (back.kind !== 'collection') return
   assert.equal(back.items.length, 1)
-  await db.remove('/sessions', { ids: ['s1'], purge: true })
+  await db.remove('/agents', { ids: ['s1'], purge: true })
   assert.equal(rows.has('s1'), false)
 })
 

@@ -12,7 +12,7 @@ export function resetSessionsListGet() {
   sessionTurnsInflight.clear()
 }
 
-/** One in-flight GET /api/sessions for boot seed, constructor, applyRoute, and fsdb:change. */
+/** One in-flight GET /api/agents for boot seed, constructor, applyRoute, and fsdb:change. */
 export async function getSessionsList<T = Record<string, unknown>>(opts?: {
   refresh?: boolean
 }): Promise<T[] | null> {
@@ -20,7 +20,7 @@ export async function getSessionsList<T = Record<string, unknown>>(opts?: {
   if (sessionsListInflight) return sessionsListInflight as Promise<T[] | null>
   let request: Promise<unknown[] | null>
   request = (async () => {
-    const res = await fetch('/api/sessions')
+    const res = await fetch('/api/agents')
     if (!res.ok) return null
     const body = (await res.json()) as { sessions?: unknown[] }
     return Array.isArray(body.sessions) ? body.sessions : []
@@ -54,7 +54,7 @@ export async function getSessionTurns<T = Record<string, unknown>>(
   if (pending) return pending as Promise<{ status: number; body: T } | null>
   let request: Promise<{ status: number; body: unknown } | null>
   request = (async () => {
-    const res = await fetch(`/api/sessions/${sessionId}?turns=${SESSION_LOAD_TURNS}`)
+    const res = await fetch(`/api/agents/${sessionId}?turns=${SESSION_LOAD_TURNS}`)
     const body = (await res.json().catch(() => ({}))) as unknown
     return { status: res.status, body }
   })().then(

@@ -50,13 +50,13 @@ export const ChatSessionTitle = memo(function ChatSessionTitle({
       <button
         type="button"
         className="chat-view-session-title"
-        aria-label="会话名称"
+        aria-label="代理名称"
         aria-expanded={open}
         data-testid="chat-session-title"
-        title={title || '会话名称'}
+        title={title || '代理名称'}
         onClick={() => setOpen((prev) => !prev)}
       >
-        {title || '未命名会话'}
+        {title || '未命名代理'}
       </button>
       {open ? (
         <HeadlessDismiss onDismiss={() => setOpen(false)} insideRef={wrapRef}>
@@ -65,8 +65,8 @@ export const ChatSessionTitle = memo(function ChatSessionTitle({
               ref={inputRef}
               className="chat-view-session-title-input"
               value={draft}
-              placeholder="未命名会话"
-              aria-label="编辑会话名称"
+              placeholder="未命名代理"
+              aria-label="编辑代理名称"
               onChange={(event) => setDraft(event.target.value)}
               onBlur={commit}
               onKeyDown={(event) => {

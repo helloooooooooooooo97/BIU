@@ -184,7 +184,7 @@ export const SessionConfigDialog = memo(function SessionConfigDialog({
   const refresh = useCallback(async () => {
     if (!sessionId || !open) return
     try {
-      const res = await fetch(`/api/sessions/${sessionId}/inspector`)
+      const res = await fetch(`/api/agents/${sessionId}/inspector`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const body = (await res.json()) as InspectorPayload
       setData(body)
@@ -222,7 +222,7 @@ export const SessionConfigDialog = memo(function SessionConfigDialog({
     setBusy(true)
     setError('')
     try {
-      const res = await fetch(`/api/sessions/${sessionId}/config`, {
+      const res = await fetch(`/api/agents/${sessionId}/config`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(patch),
@@ -258,7 +258,7 @@ export const SessionConfigDialog = memo(function SessionConfigDialog({
       onClick={onClose}
       role="dialog"
       aria-modal="true"
-      aria-label="会话配置"
+      aria-label="代理配置"
       data-testid="session-config-dialog"
     >
       <div
@@ -284,7 +284,7 @@ export const SessionConfigDialog = memo(function SessionConfigDialog({
             </div>
           ) : null}
           {!sessionId ? (
-            <div className="text-[11px] leading-[1.45] text-(--biu-color-text-subtle)">打开会话后可编辑配置。</div>
+            <div className="text-[11px] leading-[1.45] text-(--biu-color-text-subtle)">打开代理后可编辑配置。</div>
           ) : (
             <div className="flex flex-col gap-2.5">
               <p className="m-0 text-[11px] leading-[1.45] text-(--biu-color-text-subtle)">

@@ -67,11 +67,11 @@ test('pickViewForRoute keeps builtin-block from the URL when the list is still o
 })
 
 test('tables default to the builtin 全部xx view', () => {
-  assert.equal(defaultViewId('/sessions'), builtinAllViewId('/sessions'))
+  assert.equal(defaultViewId('/agents'), builtinAllViewId('/agents'))
   assert.equal(defaultViewId(VIEWS_COLLECTION_PATH), builtinAllViewId(VIEWS_COLLECTION_PATH))
-  assert.equal(viewForPath('/sessions')?.builtin, true)
-  assert.deepEqual(viewForPath('/sessions')?.filters, {})
-  assert.equal(viewForPath('/pages', builtinAllViewId('/sessions'))?.id, builtinAllViewId('/pages'))
+  assert.equal(viewForPath('/agents')?.builtin, true)
+  assert.deepEqual(viewForPath('/agents')?.filters, {})
+  assert.equal(viewForPath('/pages', builtinAllViewId('/agents'))?.id, builtinAllViewId('/pages'))
 })
 
 test('builtin view wrap is stored as display prefs and restored', () => {
@@ -86,15 +86,15 @@ test('builtin view wrap is stored as display prefs and restored', () => {
     },
   }
   Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: storage })
-  const path = '/sessions'
+  const path = '/agents'
   const id = builtinAllViewId(path)
   persistViewDisplay(path, id, { wrap: true, truncate: false })
   assert.equal(mem[viewDisplayKey(path, id)]?.includes('"wrap":true'), true)
-  const painted = withViewDisplay(path, builtinAllView({ path, label: '会话', view: { title: '会话' } }))
+  const painted = withViewDisplay(path, builtinAllView({ path, label: '代理', view: { title: '代理' } }))
   assert.equal(painted.wrap, true)
   assert.equal(painted.truncate, false)
   assert.equal(painted.builtin, true)
-  assert.equal(painted.name, '全部会话')
+  assert.equal(painted.name, '全部代理')
   assert.equal(viewForPath(path)?.wrap, true)
 })
 
@@ -112,7 +112,7 @@ test('withViewDisplay keeps overlay rank over a stale record rank', () => {
       },
     },
   })
-  const path = '/sessions'
+  const path = '/agents'
   persistViewDisplay(path, 'mine', { rank: 0, wrap: true })
   const painted = withViewDisplay(path, {
     id: 'mine',
@@ -142,10 +142,10 @@ test('builtin view columns overlay survives withViewDisplay', () => {
       },
     },
   })
-  const path = '/sessions'
+  const path = '/agents'
   const id = builtinAllViewId(path)
   persistViewDisplay(path, id, { columns: ['title', 'project'] })
-  assert.deepEqual(withViewDisplay(path, builtinAllView({ path, label: '会话', view: { title: '会话' } })).columns, [
+  assert.deepEqual(withViewDisplay(path, builtinAllView({ path, label: '代理', view: { title: '代理' } })).columns, [
     'title',
     'project',
   ])

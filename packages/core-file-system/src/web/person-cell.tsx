@@ -33,7 +33,7 @@ const MEMBERS_TTL_MS = 8000
 export function personInspectTarget(person: PersonValue): { collection: string; recordId: string } | null {
   if (person.kind === 'agent') {
     const recordId = String(person.sessionId ?? '').trim()
-    return recordId ? { collection: '/sessions', recordId } : null
+    return recordId ? { collection: '/agents', recordId } : null
   }
   if (person.kind === 'user') {
     const recordId = String(person.accountId ?? '').trim()
@@ -52,7 +52,7 @@ export async function loadAgents(): Promise<ChatPerson[]> {
   if (agentsListed && Date.now() - agentsListedAt < AGENTS_TTL_MS) return agentsListed
   if (agentsInflight) return agentsInflight
   const request = listCollection({
-    path: '/sessions',
+    path: '/agents',
     limit: 500,
     sortField: 'updatedAt',
     sortDir: 'desc',
@@ -288,7 +288,7 @@ export function PersonPickPanel({
         <input
           value={query}
           autoFocus
-          placeholder="搜索成员或会话"
+          placeholder="搜索成员或代理"
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === 'Enter') {
@@ -340,11 +340,11 @@ export function PersonPickPanel({
         {loading ? (
           <div className="fsdb-person-loading">
             <ArrowPathIcon className="size-[14px] fsdb-spin" aria-hidden />
-            加载成员和会话…
+            加载成员和代理…
           </div>
         ) : null}
         {!loading && !visibleMembers.length && !visibleAgents.length ? (
-          <div className="fsdb-person-loading">没有匹配的成员或会话</div>
+          <div className="fsdb-person-loading">没有匹配的成员或代理</div>
         ) : null}
       </div>
     </div>
