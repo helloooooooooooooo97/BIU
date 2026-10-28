@@ -7,7 +7,7 @@ import { PickOverlay } from './overlay.tsx'
 export { PickService, getPick, usePickState } from './service.ts'
 export { formatPicks, formatPick, parsePicks, splitPickStream, dedupePicks, chipLabel, chipCaption, pickKey, pickPreview, pickIdFromText, textPickFromSelection, textPickFromPlain, filePickFromPath, pathLeaf, pickDomAttrs, pickChipAttrs, pickRefFromAttrs, withPickLocus, withHostSource, lineSpanLabel, chipSpanLabel, type PickRef } from './types.ts'
 export { bindEditorTextHost, editorHostFromNode } from './editor-host.ts'
-export { PickChip, PickChipLabel, PickKindGlyph, pickKindIcon, pickKindTone, canonicalPickKind } from './chip.tsx'
+export { PickChip, PickChipLabel, PickKindGlyph, pickKindIcon, pickKindTone, canonicalPickKind, pickInspectRows } from './chip.tsx'
 export { resolvePickFromNode, resolvePickFromEvent, resolvePickAtPoint, resolvePicksInRect, visiblePickBox, pickSurfaceFromNode, pickSurfaceAtPoint, serializeHtmlPickElement, sandboxInnerFromEvent } from './resolve.ts'
 
 export const name = 'pick-ui'

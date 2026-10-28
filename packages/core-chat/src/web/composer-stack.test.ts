@@ -385,5 +385,6 @@ describe('composer dock stacking above sticky user', () => {
     expect(node).toMatch(/title: \{ default: null \}/)
     expect(node).toMatch(/field: \{ default: null \}/)
     expect(node).toMatch(/plugin: \{ default: null \}/)
+    expect(node).toMatch(/element: \{ default: null \}/)
   })
 })
