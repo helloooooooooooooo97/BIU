@@ -170,6 +170,7 @@ export function inspectPathTarget(path: string) {
 export function revealInspectPath(path: string) {
   const detail = inspectPathTarget(path)
   if (!detail || typeof window === 'undefined') return detail
+  window.dispatchEvent(new Event('biu:inspector-open'))
   window.dispatchEvent(new CustomEvent(INSPECTOR_REVEAL, { detail }))
   return detail
 }
@@ -254,8 +255,7 @@ function PickChipData({ pick }: { pick: PickRef }) {
                   className="pick-chip-data-jump"
                   data-testid="pick-chip-path-jump"
                   aria-label={`在检查器打开 ${item.value}`}
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={(event) => {
+                  onPointerDown={(event) => {
                     event.preventDefault()
                     event.stopPropagation()
                     revealInspectPath(item.value)
