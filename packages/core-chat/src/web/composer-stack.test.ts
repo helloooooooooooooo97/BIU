@@ -333,6 +333,12 @@ describe('composer dock stacking above sticky user', () => {
     expect(css).toMatch(/@container chat-dock \(max-width: 560px\)/)
     expect(css).toMatch(/\[data-stat\]:not\(\[data-stat='usage'\]\)/)
     expect(css).not.toMatch(/@media \(max-width: 720px\) \{\s*\n\s*\.chat-dock-toolbar-mid \[data-stat='step'\]/)
+    expect(css).toMatch(
+      /\.app-shell-agent\.is-inspector-open \[data-testid="agent-center"\] \.chat-composer-dock\s*\{[^}]*padding-right:\s*16px/s,
+    )
+    expect(css).toMatch(
+      /\.app-shell-agent\.is-inspector-open \[data-testid="agent-center"\] \.composer-pill\s*\{[^}]*min-width:\s*0/s,
+    )
     expect(css).toMatch(/\.composer-pill\s*\{[^}]*min-width:\s*420px/s)
     expect(css).toMatch(/\.chat-overlay-panel \.composer-pill\s*\{[^}]*min-width:\s*420px/s)
     expect(css).toMatch(/\.chat-overlay-panel\s*\{[^}]*min-width:\s*420px/s)
