@@ -103,6 +103,16 @@ test('showRecordInInspector focuses an already-open pane for the same page', () 
   assert.equal(getInspectorDbPath('database:/pages'), '')
 })
 
+test('showRecordInInspector newTab keeps the list pane and opens another tab', () => {
+  const list = databaseAllViewPath('/pages')
+  setInspectorDbPath('database:/pages', list)
+  showRecordInInspector('/pages', 'p-new', null, { newTab: true })
+  assert.equal(getInspectorDbPath('database:/pages'), list)
+  const extra = Object.keys(snapshotInspectorDbPaths()).filter((id) => id.startsWith('database:/pages::'))
+  assert.equal(extra.length, 1)
+  assert.equal(getInspectorDbPath(extra[0]!), databaseRecordPath('/pages', 'p-new', builtinAllViewId('/pages')))
+})
+
 test('showRecordInInspector reuses the collection pane instead of opening a second copy of the page', () => {
   setInspectorDbPath('database:/pages', databaseAllViewPath('/pages'))
   showRecordInInspector('/pages', 'p-new')

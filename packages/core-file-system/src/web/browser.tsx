@@ -4403,7 +4403,7 @@ export function CollectionBrowser({
             tableIcon={currentTable?.view?.icon}
             Icon={chrome?.Icon}
             pick={recordPick(row)}
-            onOpenSplit={() => showRecordInInspector(collectionPath, row.id, activeViewId)}
+            onOpenSplit={() => showRecordInInspector(collectionPath, row.id, activeViewId, nested ? { newTab: true } : undefined)}
             onOpenRow={() => openRow(row)}
             onWriteEmoji={(next) => void writePatch(row, { emoji: next })}
             toolsArmed={toolsArmed}
