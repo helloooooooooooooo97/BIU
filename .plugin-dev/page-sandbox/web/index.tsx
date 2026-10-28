@@ -388,7 +388,6 @@ function SandboxBar({
   onTab,
   ro,
   expanded,
-  selected,
   onRefresh,
   onExpand,
 }: {
@@ -398,7 +397,6 @@ function SandboxBar({
   onTab: (next: 'preview' | 'code') => void
   ro: boolean
   expanded: boolean
-  selected: boolean
   onRefresh: () => void
   onExpand: () => void
 }) {
@@ -437,19 +435,15 @@ function SandboxBar({
     <div
       data-testid="sandbox-bar"
       data-biu-ignore
-      data-sandbox-selected={selected ? '1' : undefined}
       style={{
         display: 'grid',
         gridTemplateColumns: '1fr auto 1fr',
         alignItems: 'center',
         gap: 8,
         padding: '4px 8px',
-        borderBottom: selected
-          ? 'var(--biu-stroke-width) solid var(--biu-color-emphasis-border)'
-          : 'var(--biu-stroke-width) solid var(--biu-color-border)',
-        background: selected ? 'var(--biu-color-bg-hover)' : 'var(--biu-color-bg)',
+        borderBottom: 'var(--biu-stroke-width) solid var(--biu-color-border)',
+        background: 'var(--biu-color-bg)',
         color: 'var(--biu-color-text)',
-        boxShadow: selected ? 'inset 3px 0 0 var(--biu-color-emphasis)' : undefined,
       }}
     >
       {editing && !ro ? (
@@ -693,7 +687,7 @@ function SandboxCard({ data, update, writable }: BlockProps) {
         border: expanded
           ? 'none'
           : selected
-            ? 'var(--biu-stroke-width) solid var(--biu-color-emphasis-border)'
+            ? 'var(--biu-stroke-width-thick) solid var(--biu-color-emphasis)'
             : 'var(--biu-stroke-width) solid var(--biu-color-border)',
         borderRadius: expanded ? 0 : 10,
         background: 'var(--biu-color-bg)',
@@ -709,7 +703,6 @@ function SandboxCard({ data, update, writable }: BlockProps) {
         onTab={setTab}
         ro={ro}
         expanded={expanded}
-        selected={selected}
         onRefresh={() => {
           live.reload()
           setFrame((n) => n + 1)
