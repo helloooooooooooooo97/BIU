@@ -8,7 +8,7 @@ import assert from 'node:assert/strict'
 import { Context, Service } from 'cordis'
 import { WebSocket } from 'ws'
 import * as http from './index.ts'
-import { deliverTenantEvent } from './index.ts'
+import { deliverTenantEvent, rewriteLegacyAgentApi } from './index.ts'
 import { currentAccountId, currentRequestWorkspaceId } from '@biu/host-plugin-loader/data-dir'
 
 async function freePort() {
@@ -212,6 +212,13 @@ test('share routes stay on the workstation port', async () => {
   } finally {
     await fiber.dispose()
   }
+})
+
+test('legacy /api/sessions rewrites to /api/agents, not account sessions', () => {
+  assert.equal(rewriteLegacyAgentApi('/api/sessions'), '/api/agents')
+  assert.equal(rewriteLegacyAgentApi('/api/sessions/s1/messages'), '/api/agents/s1/messages')
+  assert.equal(rewriteLegacyAgentApi('/api/account/sessions'), '/api/account/sessions')
+  assert.equal(rewriteLegacyAgentApi('/api/account/sessions/abc'), '/api/account/sessions/abc')
 })
 
 test('workspace sockets only receive their own tenant events', () => {

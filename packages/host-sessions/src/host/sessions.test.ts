@@ -29,7 +29,7 @@ test('creating a session stamps createdBy through the database service', async (
   await ctx.plugin(DatabaseTouch)
   await ctx.plugin(sessions)
   const record = await ctx.sessions.create()
-  assert.deepEqual(stamped, [`/sessions/${record.id}`])
+  assert.deepEqual(stamped, [`/agents/${record.id}`])
 })
 
 test('append-only log projects model history; version is 1', async () => {
@@ -308,8 +308,8 @@ test('listSummaries only returns sessions of the active workspace', async () => 
   await ctx.plugin(sessions)
   const kept = await ctx.sessions.create('kept')
   const other = await ctx.sessions.create('other')
-  const mine = new Set([`/sessions\t${kept.id}`])
-  const any = new Set([`/sessions\t${kept.id}`, `/sessions\t${other.id}`])
+  const mine = new Set([`/agents\t${kept.id}`])
+  const any = new Set([`/agents\t${kept.id}`, `/agents\t${other.id}`])
   let active = 'ws-a'
   const home = 'ws-home'
   class FakeAccount extends Service {
@@ -343,8 +343,8 @@ test('listSummaries only returns sessions of the active workspace', async () => 
   active = home
   mine.clear()
   const legacy = await ctx.sessions.create('legacy')
-  any.delete(`/sessions\t${legacy.id}`)
-  mine.delete(`/sessions\t${legacy.id}`)
+  any.delete(`/agents\t${legacy.id}`)
+  mine.delete(`/agents\t${legacy.id}`)
   assert.equal(ctx.sessions.inWorkspace(legacy.id), true)
   assert.equal(ctx.sessions.inWorkspace(other.id), false)
 })
@@ -626,7 +626,7 @@ test('deriveMessages honors db_action compact as new prefix', () => {
       id: 't1',
       name: 'db_action',
       arguments: JSON.stringify({
-        path: '/sessions/s1',
+        path: '/agents/s1',
         action: 'compact',
         args: { text: '摘要：聊了早期内容' },
       }),

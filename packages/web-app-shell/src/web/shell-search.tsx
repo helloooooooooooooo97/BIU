@@ -205,7 +205,7 @@ export function placedRowActions(actions: SearchAction[] | undefined) {
 }
 
 export function searchCollection(kind: SearchKind) {
-  if (kind === 'session') return '/sessions'
+  if (kind === 'session') return '/agents'
   return SEARCH_SCOPES.find((item) => item.id === kind)?.path ?? `/${kind}`
 }
 
@@ -490,7 +490,7 @@ export function ShellSearchPanel({
     const keyOf = (kind: SearchKind) => `${kind}\0${needle}`
     const listed = SEARCH_SCOPES.map((item) => ({
       id: item.id,
-      path: item.id === 'session' ? '/sessions' : item.path,
+      path: item.id === 'session' ? '/agents' : item.path,
     })).filter((item): item is { id: SearchKind; path: string } => Boolean(item.path))
     const remote = listed.filter((item) => scope === 'all' || item.id === scope)
     const allRemote = listed

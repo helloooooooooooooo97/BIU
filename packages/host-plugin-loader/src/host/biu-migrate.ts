@@ -26,6 +26,47 @@ export type MigrateCtx = {
   workspace?: string
 }
 
+function remapSessionsCollectionToAgents(db: DatabaseSync) {
+  const from = '/' + 'sessions'
+  const to = '/agents'
+  for (const table of tableNames(db)) {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(table)) continue
+    const cols = tableColumnNames(db, table)
+    for (const col of ['collection', 'parent_collection']) {
+      if (!cols.includes(col)) continue
+      db.exec(
+        `UPDATE ${table} SET ${col} = '${to}' || substr(${col}, ${from.length + 1})
+         WHERE ${col} = '${from}' OR ${col} LIKE '${from}/%'`,
+      )
+    }
+  }
+  if (!hasTable(db, 'saved_views') || !tableColumnNames(db, 'saved_views').includes('payload_json')) return
+  const rows = db.prepare('SELECT collection, view_id, payload_json FROM saved_views').all() as Array<{
+    collection: string
+    view_id: string
+    payload_json: string
+  }>
+  const update = db.prepare('UPDATE saved_views SET view_id = ?, payload_json = ? WHERE collection = ? AND view_id = ?')
+  const legacyAll = `builtin-all:${from}`
+  const nextAll = `builtin-all:${to}`
+  for (const row of rows) {
+    let payload = row.payload_json
+    try {
+      const parsed = JSON.parse(row.payload_json) as { tablePath?: unknown; id?: unknown }
+      if (typeof parsed.tablePath === 'string' && (parsed.tablePath === from || parsed.tablePath.startsWith(`${from}/`))) {
+        parsed.tablePath = `${to}${parsed.tablePath.slice(from.length)}`
+      }
+      if (typeof parsed.id === 'string') parsed.id = parsed.id.replace(legacyAll, nextAll)
+      payload = JSON.stringify(parsed)
+    } catch {
+      /* keep raw */
+    }
+    const nextViewId = row.view_id.replace(legacyAll, nextAll)
+    if (payload === row.payload_json && nextViewId === row.view_id) continue
+    update.run(nextViewId, payload, row.collection, row.view_id)
+  }
+}
+
 function hasTable(db: DatabaseSync, name: string) {
   return tableNames(db).includes(name)
 }
@@ -575,6 +616,9 @@ export const BIU_MIGRATIONS: Migration[] = [
       ALTER TABLE cloud_connections_v40 RENAME TO cloud_connections;
       CREATE INDEX IF NOT EXISTS cloud_connections_active ON cloud_connections(local_account_id, active);
     `)
+  } },
+  { version: 41, module: 'host-sessions', name: 'collection.sessions-to-agents', up: (db) => {
+    remapSessionsCollectionToAgents(db)
   } },
 ]
 

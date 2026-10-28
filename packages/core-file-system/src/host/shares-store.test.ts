@@ -189,7 +189,7 @@ test('session snapshot uses db_content events, not page markdown', async () => {
   ]
   const spec: CollectionSpec = {
     id: 'sessions',
-    path: '/sessions',
+    path: '/agents',
     label: '代理',
     schema: {
       labelField: 'title',
@@ -209,7 +209,7 @@ test('session snapshot uses db_content events, not page markdown', async () => {
   db.register(spec)
   const views = new SavedViewsStore().open(':memory:')
   const shares = new SharesStore().open(':memory:')
-  const share = shares.upsert({ kind: 'record', collection: '/sessions', recordId: 's1' })
+  const share = shares.upsert({ kind: 'record', collection: '/agents', recordId: 's1' })
   const snap = await buildShareSnapshot(db, views, share)
   assert.equal(snap.contents.s1, events)
   assert.equal(snap.schema.contentField, 'events')

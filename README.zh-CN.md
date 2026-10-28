@@ -215,7 +215,7 @@ $ db_list /
 /tasks       可读写的任务行。执行人 assignee 写成另一个代理的 id …
 /skills      Skill 是独立的一张表。从 GitHub 安装：db_create /skills，带 files[] …
 /plugins     这是插件（可安装的小程序），不是代理。用户说「再开一个 agent」
-             请去 /sessions db_create，不要在这张表 create。
+             请去 /agents db_create，不要在这张表 create。
 ```
 
 注意最后一条——它**主动纠正误解**。这是 `blurb` 的真正作用：不是文档，是**给 Agent 的操作说明**。
@@ -237,7 +237,7 @@ flowchart TB
   Shape --- API
   Verb --- API
   Say --- API
-  API --> A["Agent<br/>/sessions"]
+  API --> A["Agent<br/>/agents"]
   API --> T["Task<br/>/tasks"]
   API --> L["Plugin<br/>/plugins"]
   API --> P["Page<br/>/pages"]
@@ -249,17 +249,17 @@ flowchart TB
 
 ### Agent：人和 Agent 是同一个操作者模型
 
-`/sessions` 的每一行就是一个 Agent——一个独立 session，有自己的工作区、模型、工具集。
+`/agents` 的每一行就是一个 Agent——一个独立 session，有自己的工作区、模型、工具集。
 
 > **Agent 不是文件系统的使用者，它本身就是文件系统里的一个实例。**
 > 它用同一套 `db_*` 操作读取其他对象，其他对象也通过同一接口读取它。
 
-这一条决定了整个产品的形态：**你可以像操作数据一样操作 Agent。** 建一个 Agent = `db_create /sessions`；给任务派工 = 把 `assignee` 写成另一个代理 id。
+这一条决定了整个产品的形态：**你可以像操作数据一样操作 Agent。** 建一个 Agent = `db_create /agents`；给任务派工 = 把 `assignee` 写成另一个代理 id。
 
 ```
-$ db_list /sessions                       # 工作区里所有 Agent
-$ db_action /sessions/<id> action=inspect # 看它的配置和最近几句对话
-$ db_action /sessions/<id> action=status  # 它的上下文用了多少
+$ db_list /agents                       # 工作区里所有 Agent
+$ db_action /agents/<id> action=inspect # 看它的配置和最近几句对话
+$ db_action /agents/<id> action=status  # 它的上下文用了多少
 ```
 ### 任务：Agent 之间的总线
 
@@ -461,7 +461,7 @@ db_update /tasks/build {tags:["获奖"], values:{name:"季度最佳",year:2022}}
 这是最直接的一条推论。因为所有东西都是表里的行，而 Agent 能写任何一张表：
 
 ```
-db_create /sessions   ← 造一个 Agent
+db_create /agents   ← 造一个 Agent
 db_create /tasks      ← 造一个任务
 db_create /pages      ← 造一页内容
 db_create /skills     ← 造一个技能
@@ -494,7 +494,7 @@ Agent 不是被「通知」人的操作，而是**能读到操作留下的结果
 | 我在做什么 | 块数据、记录字段、任务状态 |
 | 我为什么在这 | `assignee` / `dependsOn` / `reports` |
 | 之前发生了什么 | `/events` |
-| 还有谁在场 | `/sessions`、`/tasks` 的协作图 |
+| 还有谁在场 | `/agents`、`/tasks` 的协作图 |
 
 **成本只与实际需要读取的数据量相关，而不是与全部数据量相关。** 不需要定制的数据摄取管道，也不需要为了让 Agent 理解而维护第二份数据。
 

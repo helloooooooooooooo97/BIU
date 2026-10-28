@@ -18,7 +18,7 @@ import {
 
 test('search opens inspector collections, not chat or database routes', () => {
   assert.equal(searchCollection('view'), '/views')
-  assert.equal(searchCollection('session'), '/sessions')
+  assert.equal(searchCollection('session'), '/agents')
   assert.equal(searchCollection('task'), '/tasks')
   assert.equal(searchCollection('page'), '/pages')
   assert.equal(searchCollection('plugin'), '/plugins')
@@ -42,7 +42,7 @@ test('openSearchHit reveals the record in the inspector', () => {
   window.removeEventListener('biu:inspector-reveal', onReveal)
   assert.deepEqual(seen, [
     { collection: '/pages', recordId: 'p1', unique: true },
-    { collection: '/sessions', recordId: 'abc', unique: true },
+    { collection: '/agents', recordId: 'abc', unique: true },
     { collection: '/pages', viewId: 'mine', unique: true },
   ])
 })
@@ -87,7 +87,7 @@ test('empty search lists every kind by updatedAt instead of skipping remotes', (
   const src = readFileSync(resolve(import.meta.dirname, './shell-search.tsx'), 'utf8')
   assert.doesNotMatch(src, /if \(!needle && scope === 'all'\) \{\s*setHits\(\[\]\)/)
   assert.match(src, /sort: 'updatedAt'/)
-  assert.match(src, /item.id === 'session' \? '\/sessions'/)
+  assert.match(src, /item.id === 'session' \? '\/agents'/)
   assert.match(src, /空着时视图、代理、任务、页面、插件、标签各按更新时间列最近/)
   assert.doesNotMatch(src, /window\.confirm/)
   assert.match(src, /<ConfirmDialog/)

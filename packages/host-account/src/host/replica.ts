@@ -201,7 +201,7 @@ export class RecordReplica {
     return this.enqueue({
       accountId: input.accountId,
       workspaceId: input.workspaceId,
-      collection: '/sessions',
+      collection: '/agents',
       recordId: input.sessionId,
       field: 'transcript',
       value: input.text,

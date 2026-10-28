@@ -33,7 +33,7 @@ const MEMBERS_TTL_MS = 8000
 export function personInspectTarget(person: PersonValue): { collection: string; recordId: string } | null {
   if (person.kind === 'agent') {
     const recordId = String(person.sessionId ?? '').trim()
-    return recordId ? { collection: '/sessions', recordId } : null
+    return recordId ? { collection: '/agents', recordId } : null
   }
   if (person.kind === 'user') {
     const recordId = String(person.accountId ?? '').trim()
@@ -52,7 +52,7 @@ export async function loadAgents(): Promise<ChatPerson[]> {
   if (agentsListed && Date.now() - agentsListedAt < AGENTS_TTL_MS) return agentsListed
   if (agentsInflight) return agentsInflight
   const request = listCollection({
-    path: '/sessions',
+    path: '/agents',
     limit: 500,
     sortField: 'updatedAt',
     sortDir: 'desc',

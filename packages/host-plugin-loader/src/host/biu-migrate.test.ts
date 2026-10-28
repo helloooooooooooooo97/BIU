@@ -44,7 +44,7 @@ test('empty database fast path matches upgraded v1 fixture', () => {
 test('BIU_MIGRATIONS versions are unique and increasing', () => {
   assertBiuMigrationLog()
   assert.equal(BIU_MIGRATIONS.at(-1)?.version, LATEST_BIU_SCHEMA)
-  assert.equal(BIU_MIGRATIONS.at(-1)?.name, 'cloud.many-accounts')
+  assert.equal(BIU_MIGRATIONS.at(-1)?.name, 'collection.sessions-to-agents')
   assert.throws(() => assertBiuMigrationLog([{ version: 2 }, { version: 2 }]), /重复/)
   assert.throws(() => assertBiuMigrationLog([{ version: 3 }, { version: 1 }]), /单调递增/)
 })
@@ -137,6 +137,28 @@ test('skill markdown bodies are copied into editor_content', () => {
   migrateBiu(db, { dataDir, workspace: root, sqlitePath: join(dataDir, 'biu.sqlite') })
   assert.match(readEditorContent(db, '/skills', 'demo'), /skill\.png/)
   assert.equal(liveAssetNames(db, { dataDir, workspace: root }).has('skill.png'), true)
+  db.close()
+})
+
+test('v41 remaps stored /sessions collection paths to /agents', () => {
+  const db = openSqlite(':memory:')
+  migrateBiu(db, {}, 40)
+  db.exec(`
+    INSERT INTO record_meta (collection, record_id, emoji, tags_json) VALUES ('/sessions', 's1', '', '[]');
+    INSERT INTO saved_views (collection, view_id, payload_json, updated_at)
+    VALUES ('/sessions', 'builtin-all:/sessions', '{"id":"builtin-all:/sessions","tablePath":"/sessions","name":"全部"}', 1);
+  `)
+  migrateBiu(db)
+  const meta = db.prepare('SELECT collection FROM record_meta WHERE record_id = ?').get('s1') as { collection: string }
+  assert.equal(meta.collection, '/agents')
+  const view = db.prepare('SELECT collection, view_id, payload_json FROM saved_views').get() as {
+    collection: string
+    view_id: string
+    payload_json: string
+  }
+  assert.equal(view.collection, '/agents')
+  assert.equal(view.view_id, 'builtin-all:/agents')
+  assert.match(view.payload_json, /"tablePath":"\/agents"/)
   db.close()
 })
 

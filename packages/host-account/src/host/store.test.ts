@@ -317,8 +317,8 @@ test('bootstrap claims live records once and skips trash', () => {
     }>
   ).map((row) => ({ collection: row.collection, record_id: row.record_id, version: row.version }))
   assert.deepEqual(heads, [
+    { collection: '/agents', record_id: 's1', version: 0 },
     { collection: '/pages', record_id: 'p1', version: 0 },
-    { collection: '/sessions', record_id: 's1', version: 0 },
     { collection: '/skills', record_id: 'sk1', version: 0 },
     { collection: '/tasks', record_id: 't1', version: 0 },
   ])
@@ -417,13 +417,13 @@ test('logged-in accounts only see records in their own workspace', () => {
   const bobWs = collab.enter(bob.id)
   assert.notEqual(adaWs, bobWs)
   collab.attach(adaWs, '/pages', 'p-ada')
-  collab.attach(bobWs, '/sessions', 's-bob')
+  collab.attach(bobWs, '/agents', 's-bob')
   const adaView = runWithAccount(ada.id, () => collab.membership())
   const bobView = runWithAccount(bob.id, () => collab.membership())
   assert.equal(adaView.strict, true)
   assert.equal(adaView.mine.has('/pages\tp-ada'), true)
-  assert.equal(adaView.mine.has('/sessions\ts-bob'), false)
-  assert.equal(bobView.mine.has('/sessions\ts-bob'), true)
+  assert.equal(adaView.mine.has('/agents\ts-bob'), false)
+  assert.equal(bobView.mine.has('/agents\ts-bob'), true)
   assert.equal(bobView.mine.has('/pages\tp-ada'), false)
   assert.equal(runWithAccount(ada.id, () => collab.activeWorkspaceId()), adaWs)
   assert.equal(runWithAccount(bob.id, () => collab.activeWorkspaceId()), bobWs)
@@ -666,10 +666,10 @@ test('cross-workspace matrix denies strangers, viewers who write, and revoked se
     runWithAccount(ada.id, () =>
       runWithRequestWorkspace(spaceA.id, () => {
         collab.attach(spaceA.id, '/pages', 'shared-page', now, { ownership: 'workspace', accessMode: 'members' })
-        collab.attach(spaceA.id, '/sessions', 'session-a', now)
+        collab.attach(spaceA.id, '/agents', 'session-a', now)
       }),
     )
-    assert.deepEqual(collab.tenantForRecord('/sessions', 'session-a'), { workspaceId: spaceA.id, accountId: ada.id })
+    assert.deepEqual(collab.tenantForRecord('/agents', 'session-a'), { workspaceId: spaceA.id, accountId: ada.id })
     const read = (accountId: string, workspaceId: string) =>
       runWithAccount(accountId, () => runWithRequestWorkspace(workspaceId, () => collab.canReadRecord('/pages', 'shared-page')))
     const update = (accountId: string, workspaceId: string) =>

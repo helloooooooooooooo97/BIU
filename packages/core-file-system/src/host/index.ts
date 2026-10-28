@@ -1039,7 +1039,7 @@ export class DatabaseService extends Service implements Database {
     }
     if (collection === '/events') {
       const sessionId = String(row?.sessionId ?? (id.lastIndexOf(':') > 0 ? id.slice(0, id.lastIndexOf(':')) : ''))
-      if (sessionId) return { collection: '/sessions', id: sessionId }
+      if (sessionId) return { collection: '/agents', id: sessionId }
     }
     if (collection === '/facets') {
       const tablePath = String(row?.tablePath ?? '')
@@ -2015,7 +2015,7 @@ export class DatabaseService extends Service implements Database {
    * 再 require() 把整条 events 读出来，表格每渲染一格就被卡一次。
    */
   private peekSessionRow(sessionId: string): unknown {
-    const sessions = this.collection('/sessions') as
+    const sessions = this.collection('/agents') as
       | { peek?: (id: string) => unknown; get?: (id: string) => unknown }
       | undefined
     const peeked = sessions?.peek?.(sessionId)
@@ -2040,7 +2040,7 @@ export class DatabaseService extends Service implements Database {
     if (peeked.name || peeked.mascot) return peeked
     // 只有 peek 完全落空才回落到真正的读取；正常热路径不会走到这里，
     // 也就不会为了写一个 createdBy 把整条会话的 events 拉进内存。
-    const sessions = this.collection('/sessions')
+    const sessions = this.collection('/agents')
     if (sessions?.get) {
       const fromCollection = sessionPersonFromRow(await sessions.get(sessionId))
       if (fromCollection.name || fromCollection.mascot) return fromCollection
@@ -2334,7 +2334,7 @@ export class DatabaseService extends Service implements Database {
     const ids = [...new Set(matched.map((row) => row.id))]
     if (!ids.length) return { kind: 'deleted' as const, path: spec.path, ids }
     const hard = Boolean(query.purge) || HARD_DELETE_PATHS.has(spec.path)
-    if (spec.path === '/sessions') this.disposeSessionAgents(ids)
+    if (spec.path === '/agents') this.disposeSessionAgents(ids)
     for (const row of matched) {
       const rec = withoutContent(spec, this.withBanner(spec, this.decorateRecord(spec, row)))
       const title = String(rec.title ?? rec.name ?? row.id).trim() || row.id
@@ -3034,7 +3034,7 @@ export function apply(ctx: Context) {
   }
   db.viewCatalog = savedViews
   ctx.inject(['sessions'], (inner) => {
-    inner.sessions.viewAccess = (id, record) => db.allowsViaView('/sessions', { ...record, id })
+    inner.sessions.viewAccess = (id, record) => db.allowsViaView('/agents', { ...record, id })
   })
   account?.authorization?.setMemberViewMatcher((workspaceId, viewId, accountId) => {
     const view = savedViews.viewsFor('/workspace-members').find((item) => item.id === viewId)

@@ -53,10 +53,10 @@ test('decorate keeps Icon as the record mark, later layer wins', () => {
   const ui = new DatabaseUiService(ctx)
   const IconA = () => null
   const IconB = () => null
-  ui.decorate('/sessions', { Icon: IconA })
-  assert.equal(ui.chrome('/sessions').Icon, IconA)
-  ui.decorate('/sessions', { Icon: IconB })
-  assert.equal(ui.chrome('/sessions').Icon, IconB)
+  ui.decorate('/agents', { Icon: IconA })
+  assert.equal(ui.chrome('/agents').Icon, IconA)
+  ui.decorate('/agents', { Icon: IconB })
+  assert.equal(ui.chrome('/agents').Icon, IconB)
 })
 
 test('decorate notifies subscribers', () => {

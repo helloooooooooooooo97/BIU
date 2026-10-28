@@ -7,11 +7,11 @@ const plugins = [DATA_MODULE]
 
 test('view and record helpers match the database URL scheme', () => {
   assert.equal(databaseViewPath('/pages', 'default'), '/database/pages/view/default')
-  assert.equal(databaseViewPath('/sessions'), '/database/sessions')
+  assert.equal(databaseViewPath('/agents'), '/database/agents')
   assert.equal(databaseRecordPath('/pages', 'rec-1'), '/database/pages/record/rec-1')
   assert.equal(databaseRecordPath('/pages', 'rec-1', 'board'), '/database/pages/view/board/record/rec-1')
   assert.equal(parseAppPath(databaseViewPath('/pages', 'default'), plugins).kind, 'collection-view')
-  assert.equal(parseAppPath(databaseViewPath('/sessions'), plugins).kind, 'collection-view')
+  assert.equal(parseAppPath(databaseViewPath('/agents'), plugins).kind, 'collection-view')
   assert.equal(parseAppPath(databaseRecordPath('/pages', 'rec-1'), plugins).kind, 'record')
   const nested = parseAppPath(databaseRecordPath('/pages', 'rec-1', 'board'), plugins)
   assert.equal(nested.kind, 'record')
@@ -20,8 +20,8 @@ test('view and record helpers match the database URL scheme', () => {
 
 test('builtin all-view helpers keep the database URL scheme', () => {
   assert.equal(
-    databaseAllViewPath('/sessions'),
-    `/database/sessions/view/${encodeURIComponent('builtin-all:/sessions')}`,
+    databaseAllViewPath('/agents'),
+    `/database/agents/view/${encodeURIComponent('builtin-all:/agents')}`,
   )
   assert.equal(
     databaseAllViewPath('/tasks'),
@@ -35,11 +35,11 @@ test('builtin all-view helpers keep the database URL scheme', () => {
     databaseAllViewPath('/plugins'),
     `/database/plugins/view/${encodeURIComponent('builtin-all:/plugins')}`,
   )
-  const parsed = parseAppPath(databaseAllViewPath('/sessions'), plugins)
+  const parsed = parseAppPath(databaseAllViewPath('/agents'), plugins)
   assert.equal(parsed.kind, 'collection-view')
   if (parsed.kind === 'collection-view') {
-    assert.equal(parsed.collection, '/sessions')
-    assert.equal(parsed.viewId, 'builtin-all:/sessions')
+    assert.equal(parsed.collection, '/agents')
+    assert.equal(parsed.viewId, 'builtin-all:/agents')
   }
 })
 
@@ -56,7 +56,7 @@ test('only pages and tasks nest records in the data sidebar', () => {
   assert.equal(isRecordTreeCollection('/pages'), true)
   assert.equal(isRecordTreeCollection('/pages/'), true)
   assert.equal(isRecordTreeCollection('/tasks'), true)
-  assert.equal(isRecordTreeCollection('/sessions'), false)
+  assert.equal(isRecordTreeCollection('/agents'), false)
   assert.equal(isRecordTreeCollection('/page-blocks'), false)
   assert.equal(isRecordTreeCollection('/plugins'), false)
 })
@@ -76,7 +76,7 @@ test('members and views are system collections; blocks and facets are index data
   assert.equal(isSystemCollection('/events'), false)
   assert.equal(isSystemCollection('/notices'), true)
   assert.equal(isSystemCollection('/trash'), true)
-  assert.equal(isSystemCollection('/sessions'), false)
+  assert.equal(isSystemCollection('/agents'), false)
   const { user, index, system } = sortDataCollections([
     { path: '/workspace-members' },
     { path: '/plugins' },
@@ -84,14 +84,14 @@ test('members and views are system collections; blocks and facets are index data
     { path: '/notices' },
     { path: '/trash' },
     { path: '/facets' },
-    { path: '/sessions' },
+    { path: '/agents' },
     { path: '/pages' },
     { path: '/page-blocks' },
     { path: '/tasks' },
   ])
   assert.deepEqual(
     user.map((item) => item.path),
-    ['/sessions', '/tasks', '/pages', '/plugins'],
+    ['/agents', '/tasks', '/pages', '/plugins'],
   )
   assert.deepEqual(
     index.map((item) => item.path),

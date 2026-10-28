@@ -184,7 +184,7 @@ export const SessionConfigDialog = memo(function SessionConfigDialog({
   const refresh = useCallback(async () => {
     if (!sessionId || !open) return
     try {
-      const res = await fetch(`/api/sessions/${sessionId}/inspector`)
+      const res = await fetch(`/api/agents/${sessionId}/inspector`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const body = (await res.json()) as InspectorPayload
       setData(body)
@@ -222,7 +222,7 @@ export const SessionConfigDialog = memo(function SessionConfigDialog({
     setBusy(true)
     setError('')
     try {
-      const res = await fetch(`/api/sessions/${sessionId}/config`, {
+      const res = await fetch(`/api/agents/${sessionId}/config`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(patch),

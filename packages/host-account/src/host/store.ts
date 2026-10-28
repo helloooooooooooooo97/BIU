@@ -674,7 +674,7 @@ export class CollabStore {
       .all() as Array<{ name: string }>
     const columnsOf = (table: string) =>
       (this.db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map((column) => column.name)
-    const sessionIds = records.filter((record) => record.collection === '/sessions').map((record) => record.record_id)
+    const sessionIds = records.filter((record) => record.collection === '/agents').map((record) => record.record_id)
     this.db.exec('BEGIN IMMEDIATE')
     try {
       for (const table of tables) {
@@ -690,7 +690,7 @@ export class CollabStore {
       const direct: Record<string, string> = {
         '/pages': 'pages',
         '/tasks': 'tasks',
-        '/sessions': 'sessions',
+        '/agents': 'sessions',
         '/facets': 'facets',
       }
       for (const [collection, table] of Object.entries(direct)) {
@@ -2701,13 +2701,13 @@ export class CollabStore {
            UNION
            SELECT '/tasks', id FROM tasks
            UNION
-           SELECT '/sessions', id FROM sessions
+           SELECT '/agents', id FROM sessions
            UNION
            SELECT collection, record_id FROM editor_content
            WHERE collection IN ('/skills', '/plugins')
            UNION
            SELECT collection, record_id FROM record_meta
-           WHERE collection IN ('/pages', '/tasks', '/sessions', '/skills', '/plugins')
+           WHERE collection IN ('/pages', '/tasks', '/agents', '/skills', '/plugins')
          ) AS live
          WHERE NOT EXISTS (
            SELECT 1 FROM record_meta AS meta

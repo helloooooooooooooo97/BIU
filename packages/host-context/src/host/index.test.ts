@@ -33,7 +33,7 @@ describe('compact 辅助函数', () => {
         id: 't1',
         name: 'db_action',
         arguments: JSON.stringify({
-          path: '/sessions/s1',
+          path: '/agents/s1',
           action: 'compact',
           args: { text: '[摘要]' },
         }),

@@ -94,7 +94,7 @@ export function buildInspectorTools(
 }
 
 export function registerChatInspectorRoutes(ctx: Context) {
-  ctx.http.route('GET', '/api/sessions/:id/inspector', async (route) => {
+  ctx.http.route('GET', '/api/agents/:id/inspector', async (route) => {
     const id = route.params.id
     const record = await ctx.sessions.get(id)
     if (!record) return route.send(404, { error: 'unknown session' })
@@ -134,7 +134,7 @@ export function registerChatInspectorRoutes(ctx: Context) {
     route.send(200, body)
   })
 
-  ctx.http.route('GET', '/api/sessions/:id/dispatched-usage', async (route) => {
+  ctx.http.route('GET', '/api/agents/:id/dispatched-usage', async (route) => {
     const id = route.params.id
     const record = await ctx.sessions.get(id)
     if (!record) return route.send(404, { error: 'unknown session' })

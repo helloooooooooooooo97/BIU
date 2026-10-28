@@ -6,7 +6,7 @@ import { personInspectTarget } from './person-cell.tsx'
 
 test('person inspect target opens agents on sessions and users on members', () => {
   assert.deepEqual(personInspectTarget({ kind: 'agent', name: '甲', sessionId: 'sess-a' }), {
-    collection: '/sessions',
+    collection: '/agents',
     recordId: 'sess-a',
   })
   assert.deepEqual(personInspectTarget({ kind: 'user', name: 'Ada', accountId: 'acc-1' }), {

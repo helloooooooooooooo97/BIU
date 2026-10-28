@@ -628,7 +628,7 @@ const CONTRACT = [
 ].join(' ')
 
 export const PLUGIN_SANDBOX_DESCRIPTION = [
-  '这是安装插件的第一步，不是新建代理。用户说「再开一个 agent」请 db_create /sessions。',
+  '这是安装插件的第一步，不是新建代理。用户说「再开一个 agent」请 db_create /agents。',
   '开沙箱：只建/更新 .plugin-dev/<id>/（manifest.json、package.json，可选起点 host/index.ts / web/index.tsx），不进已安装目录。',
   '然后用 bash / 文件工具在沙箱里写代码、相对 import。调完必须 db_action action=pack 才会打进 .plugin/<id>/。',
   '卸载删 .plugin/<id>/，沙箱还在。',

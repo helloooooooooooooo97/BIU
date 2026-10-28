@@ -6,6 +6,9 @@ test('normalizeCollectionPath strips trailing slash and adds a leading one', () 
   assert.equal(normalizeCollectionPath('/plugins/'), '/plugins')
   assert.equal(normalizeCollectionPath('plugins'), '/plugins')
   assert.equal(normalizeCollectionPath('/'), '/')
+  assert.equal(normalizeCollectionPath('/sessions'), '/agents')
+  assert.equal(normalizeCollectionPath('sessions'), '/agents')
+  assert.equal(normalizeCollectionPath('/sessions/s1'), '/agents/s1')
 })
 
 test('databaseRevealFromPath ignores root and splits table vs record', () => {

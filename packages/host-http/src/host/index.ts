@@ -152,6 +152,15 @@ function resolveListenConfig(config?: HttpListenConfig) {
   }
 }
 
+/** 旧代理 HTTP：/api/sessions → /api/agents。账号登录会话 /api/account/sessions 不动。 */
+export function rewriteLegacyAgentApi(pathname: string) {
+  const legacy = '/api/' + 'sessions'
+  if (pathname === legacy || pathname.startsWith(legacy + '/')) {
+    return '/api/agents' + pathname.slice(legacy.length)
+  }
+  return pathname
+}
+
 function upgradePath(req: IncomingMessage) {
   try {
     return new URL(req.url ?? '/', 'http://localhost').pathname
@@ -307,7 +316,7 @@ export class HttpService extends Service {
               } | null
             }
           } | undefined
-        )?.store?.tenantForRecord?.('/sessions', scoped.sessionId)
+        )?.store?.tenantForRecord?.('/agents', scoped.sessionId)
         workspaceId ||= tenant?.workspaceId ?? ''
         accountId ||= tenant?.accountId ?? ''
       }
@@ -417,6 +426,7 @@ export class HttpService extends Service {
 
   private async dispatch(req: IncomingMessage, res: ServerResponse, shareOnly: boolean) {
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
+    url.pathname = rewriteLegacyAgentApi(url.pathname)
     const method = (req.method ?? 'GET').toUpperCase() as Method
     const corsHeaders = {
       'Access-Control-Allow-Origin': '*',

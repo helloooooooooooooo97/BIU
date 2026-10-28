@@ -914,7 +914,7 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
       method: 'POST',
       body: JSON.stringify({ workspaceId }),
     })
-      .then(() => accountFetch(token, '/api/sessions'))
+      .then(() => accountFetch(token, '/api/agents'))
       .then((body) => {
         const sessions = (body as { sessions?: Array<{ id?: string; updatedAt?: number }> }).sessions ?? []
         window.location.assign(defaultSessionPath(sessions))
@@ -938,7 +938,7 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
           method: 'POST',
           body: JSON.stringify({ workspaceId: created.id }),
         })
-        const listed = await accountFetch(token, '/api/sessions') as { sessions?: Array<{ id?: string; updatedAt?: number }> }
+        const listed = await accountFetch(token, '/api/agents') as { sessions?: Array<{ id?: string; updatedAt?: number }> }
         window.location.assign(defaultSessionPath(listed.sessions ?? []))
       })
       .catch((error) => {
