@@ -61,6 +61,28 @@ test('picking does not look through the chat overlay', () => {
   panel.remove()
 })
 
+test('replies inside the chat overlay are pickable', () => {
+  const behind = document.createElement('div')
+  behind.setAttribute('data-biu-kind', 'page')
+  behind.setAttribute('data-biu-id', 'p1')
+  const panel = document.createElement('div')
+  panel.setAttribute('data-testid', 'chat-overlay-panel')
+  const reply = document.createElement('div')
+  reply.setAttribute('data-biu-kind', 'reply')
+  reply.setAttribute('data-biu-id', 'r1')
+  panel.append(reply)
+  document.body.append(behind, panel)
+  Object.defineProperty(document, 'elementsFromPoint', {
+    configurable: true,
+    value: () => [reply, panel, behind],
+  })
+  const hit = resolvePickAtPoint(0, 0, '/pages')
+  assert.equal(hit?.ref.kind, 'reply')
+  assert.equal(hit?.ref.id, 'r1')
+  behind.remove()
+  panel.remove()
+})
+
 test('formatPicks emits JSON handles only', () => {
   const text = formatPicks([
     { kind: 'session', id: 'abc', label: '聊天', route: '/s/abc' },
