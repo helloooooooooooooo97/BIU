@@ -300,9 +300,12 @@ function ViewRecordPreview({
     })
   }
 
-  function renderRecords(scope: DbRecord[], parentId = '') {
+  function renderRecords(scope: DbRecord[], parentId = '', trail: ReadonlySet<string> = new Set()) {
     const rows = parentKey ? treeChildren(scope, parentKey, parentId) : parentId ? [] : scope
     return rows.map((row) => {
+      if (trail.has(row.id)) return null
+      const nextTrail = new Set(trail)
+      nextTrail.add(row.id)
       const label = recordPreviewLabel(row)
       const kids = parentKey ? treeChildren(scope, parentKey, row.id) : []
       const kidCount = kids.length
@@ -411,7 +414,7 @@ function ViewRecordPreview({
             </button>
           </div>
           <SidebarFold open={expanded}>
-            <div className="fsdb-record-kids">{renderRecords(scope, row.id)}</div>
+            <div className="fsdb-record-kids">{renderRecords(scope, row.id, nextTrail)}</div>
           </SidebarFold>
         </div>
       )

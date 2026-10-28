@@ -117,6 +117,7 @@ export function flattenTree(rows: DbRecord[], parentKey: string, collapsed: Reco
   const kidCountOf = (id: string): number => {
     const hit = memo.get(id)
     if (hit != null) return hit
+    memo.set(id, 0)
     const kids = children.get(id) ?? []
     const total = kids.reduce((sum, child) => sum + 1 + kidCountOf(child.id), 0)
     memo.set(id, total)

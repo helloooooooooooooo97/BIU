@@ -46,6 +46,27 @@ test('port zero reports the actual bound port', async () => {
   }
 })
 
+test('missing hashed assets 404 instead of falling back to index html', async () => {
+  const base = await mkdtemp(join(tmpdir(), 'cordis-http-asset-'))
+  const publicDir = join(base, 'public')
+  await mkdir(publicDir, { recursive: true })
+  await writeFile(join(publicDir, 'index.html'), '<html>app</html>')
+  const ctx = new Context()
+  const ready = new Promise<number>((resolve) => ctx.on('http/ready', ({ port }) => resolve(port)))
+  const fiber = await ctx.plugin(http, { port: 0, host: '127.0.0.1', publicDir, sharePort: 0 })
+  try {
+    const port = await ready
+    const missing = await fetch(`http://127.0.0.1:${port}/assets/data-sidebar-missing.js`)
+    assert.equal(missing.status, 404)
+    assert.doesNotMatch(missing.headers.get('content-type') ?? '', /text\/html/)
+    const page = await fetch(`http://127.0.0.1:${port}/plugins`)
+    assert.equal(page.status, 200)
+    assert.match(await page.text(), /app/)
+  } finally {
+    await fiber.dispose()
+  }
+})
+
 test('sharing can reuse the authenticated workstation listener', async () => {
   const previous = process.env.SHARE_PORT
   const port = await freePort()
