@@ -3,21 +3,14 @@ import type { ReactElement } from 'react'
 import { HEADLESS_DISMISS_IGNORE } from './headless-dismiss.tsx'
 import { overlayPortalRoot } from './overlay-portal.ts'
 
-function eventTargets(event: { target: EventTarget | null; currentTarget?: EventTarget | null; detail?: { originalEvent?: Event } }) {
+function shouldIgnoreOutside(event: { target: EventTarget | null; detail?: { originalEvent?: Event } }, ignoreSelector: string) {
+  if (!ignoreSelector) return false
   const orig = event.detail?.originalEvent
   const path = orig && typeof orig.composedPath === 'function' ? orig.composedPath() : []
-  return [...path, event.target].filter((item): item is EventTarget => item != null)
+  return [...path, event.target].some((target) => target instanceof Element && target.closest(ignoreSelector))
 }
 
-function shouldIgnoreOutside(event: { target: EventTarget | null; currentTarget?: EventTarget | null; detail?: { originalEvent?: Event } }, ignoreSelector: string) {
-  const content = event.currentTarget
-  return eventTargets(event).some((target) => {
-    if (content instanceof Node && target instanceof Node && content.contains(target)) return true
-    return Boolean(ignoreSelector && target instanceof Element && target.closest(ignoreSelector))
-  })
-}
-
-/** 无头 Popover：自带定位、Portal、点外关闭、Esc。不带视觉样式。 */
+/** 无头 Popover：Radix 定位 / Portal / 点外关闭 / Esc。不带视觉样式。 */
 export function HeadlessPopover({
   open,
   defaultOpen,
@@ -66,9 +59,6 @@ export function HeadlessPopover({
             if (shouldIgnoreOutside(event, ignoreSelector)) event.preventDefault()
           }}
           onFocusOutside={(event) => {
-            if (!autoFocus || shouldIgnoreOutside(event, ignoreSelector)) event.preventDefault()
-          }}
-          onInteractOutside={(event) => {
             if (shouldIgnoreOutside(event, ignoreSelector)) event.preventDefault()
           }}
         >
