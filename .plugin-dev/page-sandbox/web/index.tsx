@@ -17,6 +17,13 @@ import { createPortal } from 'react-dom'
 import { compileSandboxSource } from '../shared/compile.ts'
 import { mountSandbox, unmountSandbox } from './sandbox.ts'
 import { sandboxBlockKey, stampSandboxPickSurfaces } from './stamp-picks.ts'
+import {
+  clearSandboxIf,
+  isSelectedSandbox,
+  onSandboxActiveChange,
+  selectSandbox,
+  setLivePreview,
+} from './active.ts'
 
 const React = globalThis.React
 const { useEffect, useLayoutEffect, useMemo, useRef, useState } = React
@@ -381,6 +388,7 @@ function SandboxBar({
   onTab,
   ro,
   expanded,
+  selected,
   onRefresh,
   onExpand,
 }: {
@@ -390,6 +398,7 @@ function SandboxBar({
   onTab: (next: 'preview' | 'code') => void
   ro: boolean
   expanded: boolean
+  selected: boolean
   onRefresh: () => void
   onExpand: () => void
 }) {
@@ -428,15 +437,19 @@ function SandboxBar({
     <div
       data-testid="sandbox-bar"
       data-biu-ignore
+      data-sandbox-selected={selected ? '1' : undefined}
       style={{
         display: 'grid',
         gridTemplateColumns: '1fr auto 1fr',
         alignItems: 'center',
         gap: 8,
         padding: '4px 8px',
-        borderBottom: 'var(--biu-stroke-width) solid var(--biu-color-border)',
-        background: 'var(--biu-color-bg)',
+        borderBottom: selected
+          ? 'var(--biu-stroke-width) solid var(--biu-color-emphasis-border)'
+          : 'var(--biu-stroke-width) solid var(--biu-color-border)',
+        background: selected ? 'var(--biu-color-bg-hover)' : 'var(--biu-color-bg)',
         color: 'var(--biu-color-text)',
+        boxShadow: selected ? 'inset 3px 0 0 var(--biu-color-emphasis)' : undefined,
       }}
     >
       {editing && !ro ? (
@@ -594,9 +607,48 @@ function SandboxCard({ data, update, writable }: BlockProps) {
   const [tab, setTab] = useState<'preview' | 'code'>('preview')
   const [frame, setFrame] = useState(0)
   const [expanded, setExpanded] = useState(false)
+  const [selected, setSelected] = useState(false)
   const hostRef = useRef<HTMLDivElement | null>(null)
   const compiled = useMemo(() => compileSandboxSource(source), [source])
   const editing = tab === 'code'
+
+  useEffect(() => onSandboxActiveChange(() => setSelected(isSelectedSandbox(hostRef.current))), [])
+  useEffect(() => {
+    if (editing) setLivePreview(null)
+  }, [editing])
+  useEffect(() => {
+    const card = hostRef.current
+    if (!card) return
+    return () => clearSandboxIf(card, card.querySelector('[data-sandbox]'))
+  }, [])
+  useEffect(() => {
+    const card = hostRef.current
+    if (!card) return
+    const onCard = (event: PointerEvent) => {
+      selectSandbox(card)
+      const preview = card.querySelector<HTMLElement>('[data-sandbox]')
+      const path = event.composedPath()
+      const inPreview = Boolean(
+        preview &&
+          path.some(
+            (node) =>
+              node === preview || (preview.shadowRoot instanceof ShadowRoot && node instanceof Node && preview.shadowRoot.contains(node)),
+          ),
+      )
+      setLivePreview(inPreview && !editing ? preview : null)
+    }
+    const onDoc = (event: PointerEvent) => {
+      const path = event.composedPath()
+      if (path.some((node) => node instanceof HTMLElement && node.closest('[data-testid="page-sandbox-block"]'))) return
+      if (isSelectedSandbox(card)) selectSandbox(null)
+    }
+    card.addEventListener('pointerdown', onCard)
+    document.addEventListener('pointerdown', onDoc)
+    return () => {
+      card.removeEventListener('pointerdown', onCard)
+      document.removeEventListener('pointerdown', onDoc)
+    }
+  }, [editing])
 
   useEffect(() => {
     if (!expanded) return
@@ -625,6 +677,7 @@ function SandboxCard({ data, update, writable }: BlockProps) {
       ref={hostRef}
       data-testid="page-sandbox-block"
       data-sandbox-expanded={expanded ? '1' : undefined}
+      data-sandbox-selected={selected ? '1' : undefined}
       className={fill ? 'sandbox-fill' : undefined}
       style={{
         position: expanded ? 'fixed' : 'relative',
@@ -637,7 +690,11 @@ function SandboxCard({ data, update, writable }: BlockProps) {
         maxWidth: '100%',
         overflow: 'hidden',
         boxSizing: 'border-box',
-        border: expanded ? 'none' : 'var(--biu-stroke-width) solid var(--biu-color-border)',
+        border: expanded
+          ? 'none'
+          : selected
+            ? 'var(--biu-stroke-width) solid var(--biu-color-emphasis-border)'
+            : 'var(--biu-stroke-width) solid var(--biu-color-border)',
         borderRadius: expanded ? 0 : 10,
         background: 'var(--biu-color-bg)',
       }}
@@ -652,6 +709,7 @@ function SandboxCard({ data, update, writable }: BlockProps) {
         onTab={setTab}
         ro={ro}
         expanded={expanded}
+        selected={selected}
         onRefresh={() => {
           live.reload()
           setFrame((n) => n + 1)

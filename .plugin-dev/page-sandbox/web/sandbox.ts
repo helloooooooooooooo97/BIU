@@ -1,6 +1,7 @@
 import { flushSync } from 'react-dom'
 import { createRoot, type Root } from 'react-dom/client'
 import { compileJsxSource, compileSandboxSource, looksLikeJsx, transpileJsx } from '../shared/compile.ts'
+import { sandboxGlobals } from './gate.ts'
 
 const React = globalThis.React
 const roots = new WeakMap<ShadowRoot, Root>()
@@ -48,11 +49,17 @@ function mountJsx(source: string, root: ShadowRoot) {
   const factory = new Function(
     'React',
     'css',
+    'window',
+    'document',
+    'globalThis',
+    'self',
     `"use strict";
      ${transpileJsx(prepareJsx(source))}
      return (typeof __Component === "function" && __Component) || (typeof App === "function" && App);`,
   )
-  const Component = factory(React, hostThemeCss())
+  const preview = root.host instanceof HTMLElement ? root.host : null
+  const globals = sandboxGlobals(preview)
+  const Component = factory(React, hostThemeCss(), globals.window, globals.document, globals.globalThis, globals.self)
   const mount = document.createElement('div')
   mount.setAttribute('data-sandbox-root', '')
   root.append(mount)
