@@ -34,5 +34,5 @@ test('registers pick instructions on the system prompt', async () => {
   assert.match(text, /db_asset/)
   assert.match(text, /element/)
   assert.match(text, /kind=sandbox/)
-  assert.match(text, /不会带整块围栏正文/)
+  assert.match(text, /不是整块 sandbox/)
 })

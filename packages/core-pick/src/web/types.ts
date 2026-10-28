@@ -76,10 +76,12 @@ function pickPayload(ref: PickRef) {
   if (ref.kind !== 'text' && ref.label) data.label = ref.label
   if (ref.path) data.path = ref.path
   if (ref.plugin) data.plugin = ref.plugin
-  if (ref.start_line != null) data.start_line = ref.start_line
-  if (ref.end_line != null) data.end_line = ref.end_line
   const inner = (ref.kind === 'html' || ref.kind === 'sandbox') && Boolean(ref.element || ref.selection)
-  if (ref.text && !inner) data.text = ref.text
+  if (!inner) {
+    if (ref.start_line != null) data.start_line = ref.start_line
+    if (ref.end_line != null) data.end_line = ref.end_line
+    if (ref.text) data.text = ref.text
+  }
   if (ref.selection) data.selection = ref.selection
   else if (ref.insert != null) data.insert = ref.insert
   if (ref.element) data.element = ref.element
@@ -218,6 +220,7 @@ export function lineSpanLabel(ref: PickRef) {
 
 /** 有源码行号用行号；纯文本选区/长粘贴用字数。 */
 export function chipSpanLabel(ref: PickRef) {
+  if ((ref.kind === 'html' || ref.kind === 'sandbox') && (ref.element || ref.selection)) return ''
   const lines = lineSpanLabel(ref)
   if (lines) return lines
   if (ref.kind !== 'text') return ''
