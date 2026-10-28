@@ -78,7 +78,8 @@ function pickPayload(ref: PickRef) {
   if (ref.plugin) data.plugin = ref.plugin
   if (ref.start_line != null) data.start_line = ref.start_line
   if (ref.end_line != null) data.end_line = ref.end_line
-  if (ref.text) data.text = ref.text
+  const inner = (ref.kind === 'html' || ref.kind === 'sandbox') && Boolean(ref.element || ref.selection)
+  if (ref.text && !inner) data.text = ref.text
   if (ref.selection) data.selection = ref.selection
   else if (ref.insert != null) data.insert = ref.insert
   if (ref.element) data.element = ref.element

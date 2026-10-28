@@ -286,6 +286,13 @@ function liveHighlightIn(el: HTMLElement): string {
   return raw
 }
 
+function withoutFenceText(ref: PickRef): PickRef {
+  if ((ref.kind !== 'html' && ref.kind !== 'sandbox') || !ref.text) return ref
+  if (!ref.element && !ref.selection) return ref
+  const { text: _fence, ...rest } = ref
+  return rest
+}
+
 /** 带 data-biu 的命中也挂上页面 path / markdown 行，和点选 block 一样；id 仍用节点自己的。 */
 function withEditorPickContext(ref: PickRef, el: HTMLElement, start: Element = el): PickRef {
   const sourced = withHtmlElement(withHostSource(ref, el), start, el)
@@ -295,9 +302,9 @@ function withEditorPickContext(ref: PickRef, el: HTMLElement, start: Element = e
   const fence = (next.text ?? '').trim()
   const claimed = (next.selection ?? '').trim()
   const inner = liveHighlightIn(el) || pickPreview(el.textContent ?? '', 120)
-  if (!inner) return next
-  if (!claimed || claimed === fence) return { ...next, selection: inner }
-  return next
+  if (!inner) return withoutFenceText(next)
+  if (!claimed || claimed === fence) return withoutFenceText({ ...next, selection: inner })
+  return withoutFenceText(next)
 }
 
 function editorLocusFromNode(el: HTMLElement) {
