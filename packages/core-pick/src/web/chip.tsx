@@ -15,7 +15,7 @@ import {
 import type { ComponentType } from 'react'
 import { ensureTagChipStyle, HeadlessPopover, TagChipCloseMark, tagTone } from '@biu/biu-ui'
 import type { PickRef } from './types.ts'
-import { chipCaption, chipLabel } from './types.ts'
+import { chipCaption, chipLabel, pathLeaf, pickPreview } from './types.ts'
 
 /** 注入侧可能写 tasks / sessions-db，芯片按规范 kind 取色和图标。 */
 const PICK_KIND_ALIAS: Record<string, string> = {
@@ -64,6 +64,7 @@ const KIND_ICONS: Record<string, Glyph> = {
   facet: TagIcon,
   record: ClipboardDocumentCheckIcon,
   html: DocumentIcon,
+  sandbox: DocumentTextIcon,
   block: DocumentTextIcon,
   file: DocumentIcon,
 }
@@ -100,42 +101,42 @@ export function PickChipLabel({ pick }: { pick: PickRef }) {
   )
 }
 
-const INSPECT_KEYS = [
-  'kind',
-  'id',
-  'label',
-  'title',
-  'path',
-  'plugin',
-  'field',
-  'action',
-  'route',
-  'selection',
-  'element',
-  'text',
-  'start_line',
-  'end_line',
-  'insert',
-] as const
-
 const INSPECT_STYLE_ID = 'biu-pick-chip-data'
 const INSPECT_CSS = `
-.pick-chip-data{z-index:var(--biu-z-dropdown,80);box-sizing:border-box;min-width:240px;max-width:min(420px,calc(100vw - 24px));max-height:min(52vh,360px);overflow:auto;padding:8px 10px;background:var(--biu-color-bg-subtle);border:var(--biu-stroke-width) solid var(--biu-color-border);border-radius:10px;box-shadow:var(--biu-shadow-md);color:var(--biu-color-text);font-size:var(--biu-font-size-3);line-height:1.45}
-.pick-chip-data-h{margin:0 0 8px;color:var(--biu-color-text-subtle);font-size:var(--biu-font-size-1);font-weight:600}
-.pick-chip-data-row{display:grid;grid-template-columns:72px minmax(0,1fr);gap:6px 10px;margin:0 0 6px}
-.pick-chip-data-row:last-child{margin:0}
-.pick-chip-data-k{color:var(--biu-color-text-muted);font-weight:600}
-.pick-chip-data-v{min-width:0;white-space:pre-wrap;word-break:break-word}
+.pick-chip-data{z-index:var(--biu-z-dropdown,80);box-sizing:border-box;width:min(320px,calc(100vw - 24px));max-height:min(56vh,420px);overflow:auto;padding:14px 14px 12px;background:var(--biu-color-bg-elevated,var(--biu-color-bg-subtle));border:0;border-radius:16px;box-shadow:var(--biu-shadow-md);color:var(--biu-color-text)}
+.pick-chip-data-head{display:flex;align-items:center;gap:10px;min-width:0;margin:0 0 12px}
+.pick-chip-data-mark{flex:none;display:grid;place-items:center;width:28px;height:28px;border-radius:8px;background:color-mix(in srgb,var(--biu-tag,var(--biu-color-emphasis)) 22%,transparent);color:var(--biu-tag,var(--biu-color-emphasis))}
+.pick-chip-data-mark .pick-kind-icon{width:14px;height:14px}
+.pick-chip-data-copy{min-width:0;flex:1}
+.pick-chip-data-kind{margin:0 0 2px;color:var(--biu-color-text-subtle);font-size:var(--biu-font-size-1);font-weight:var(--biu-font-weight-medium);letter-spacing:.04em;text-transform:uppercase}
+.pick-chip-data-title{margin:0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--biu-font-size-4);font-weight:var(--biu-font-weight-medium);letter-spacing:-.02em}
+.pick-chip-data-quote{margin:0 0 10px;padding:10px 12px;border-radius:10px;background:color-mix(in srgb,var(--biu-color-text) 5%,transparent);color:var(--biu-color-text);font-size:var(--biu-font-size-4);font-weight:var(--biu-font-weight-regular);line-height:1.5;white-space:pre-wrap;word-break:break-word}
+.pick-chip-data-code{margin:0 0 10px;padding:8px 10px;border-radius:10px;background:var(--biu-color-bg-code,var(--biu-color-bg-hover));color:var(--biu-color-text-muted);font-family:var(--font-mono);font-size:var(--biu-font-size-1);line-height:1.45;white-space:pre-wrap;word-break:break-word;max-height:140px;overflow:auto}
+.pick-chip-data-meta{display:flex;flex-wrap:wrap;gap:6px}
+.pick-chip-data-pill{display:inline-flex;align-items:center;gap:5px;min-width:0;max-width:100%;height:22px;padding:0 8px;border-radius:var(--biu-radius-full);background:var(--biu-color-bg-hover);color:var(--biu-color-text-muted);font-size:var(--biu-font-size-1);font-weight:var(--biu-font-weight-medium)}
+.pick-chip-data-pill b{color:var(--biu-color-text-subtle);font-weight:var(--biu-font-weight-medium)}
+.pick-chip-data-pill span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 `
 
-export function pickInspectRows(ref: PickRef) {
-  const rows: { key: string; value: string }[] = []
-  for (const key of INSPECT_KEYS) {
-    const raw = ref[key]
-    if (raw == null || raw === '') continue
-    rows.push({ key, value: String(raw) })
+export function pickInspectCard(ref: PickRef) {
+  const title = chipCaption(ref).name || ref.label || ref.kind
+  const quote = (ref.selection || '').trim()
+  const snippet = (ref.element || '').trim()
+  const meta: { key: string; label: string; value: string }[] = []
+  const page = ref.title?.trim()
+  if (page && page !== title) meta.push({ key: 'title', label: '页面', value: page })
+  const file = pathLeaf(ref.path || '')
+  if (file) meta.push({ key: 'path', label: '路径', value: file })
+  if (ref.plugin?.trim()) meta.push({ key: 'plugin', label: '插件', value: ref.plugin.trim() })
+  if (ref.field?.trim()) meta.push({ key: 'field', label: '字段', value: ref.field.trim() })
+  if (ref.action?.trim()) meta.push({ key: 'action', label: '动作', value: ref.action.trim() })
+  return {
+    kind: canonicalPickKind(ref.kind) || ref.kind,
+    title,
+    quote: quote && quote !== title ? quote : '',
+    snippet: snippet ? pickPreview(snippet, 280) : '',
+    meta,
   }
-  return rows
 }
 
 function ensurePickInspectStyle() {
@@ -149,16 +150,36 @@ function ensurePickInspectStyle() {
 
 function PickChipData({ pick }: { pick: PickRef }) {
   ensurePickInspectStyle()
-  const rows = pickInspectRows(pick)
+  const card = pickInspectCard(pick)
   return (
-    <div className="pick-chip-data" data-testid="pick-chip-data" role="dialog" aria-label="选取数据">
-      <div className="pick-chip-data-h">选取数据</div>
-      {rows.map((row) => (
-        <div key={row.key} className="pick-chip-data-row">
-          <div className="pick-chip-data-k">{row.key}</div>
-          <div className="pick-chip-data-v">{row.value}</div>
+    <div
+      className="pick-chip-data"
+      data-testid="pick-chip-data"
+      role="dialog"
+      aria-label={card.title}
+      style={{ ['--biu-tag' as string]: pickKindTone(pick.kind) }}
+    >
+      <div className="pick-chip-data-head">
+        <div className="pick-chip-data-mark">
+          <PickKindGlyph kind={pick.kind} />
         </div>
-      ))}
+        <div className="pick-chip-data-copy">
+          <p className="pick-chip-data-kind">{card.kind}</p>
+          <p className="pick-chip-data-title">{card.title}</p>
+        </div>
+      </div>
+      {card.quote ? <p className="pick-chip-data-quote">{card.quote}</p> : null}
+      {card.snippet ? <pre className="pick-chip-data-code">{card.snippet}</pre> : null}
+      {card.meta.length ? (
+        <div className="pick-chip-data-meta">
+          {card.meta.map((item) => (
+            <span key={item.key} className="pick-chip-data-pill">
+              <b>{item.label}</b>
+              <span>{item.value}</span>
+            </span>
+          ))}
+        </div>
+      ) : null}
     </div>
   )
 }
