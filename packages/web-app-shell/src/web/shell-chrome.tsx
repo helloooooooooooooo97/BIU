@@ -5,7 +5,7 @@ import {
   ArrowDownTrayIcon,
   ArrowRightStartOnRectangleIcon,
   BellIcon,
-  ChatBubbleLeftRightIcon,
+  CursorArrowRaysIcon,
   CheckIcon,
   ChevronRightIcon,
   CircleStackIcon,
@@ -2333,10 +2333,10 @@ export function ShellSidePlaces({
         onClick={onSettings}
       />
       <SideAction
-        title="会话"
+        title="代理"
         active={activeId === 'agent'}
         testId="chrome-chat-panel"
-        icon={<ChatBubbleLeftRightIcon {...chromeIcon} />}
+        icon={<CursorArrowRaysIcon {...chromeIcon} />}
         onClick={() => {
           navigate(agentHref)
         }}
