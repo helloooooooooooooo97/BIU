@@ -339,6 +339,11 @@ export function PickChip({
       onMouseDown={(event) => {
         if (!inspect) return
         event.preventDefault()
+        event.stopPropagation()
+      }}
+      onPointerDown={(event) => {
+        if (!inspect) return
+        event.stopPropagation()
       }}
     >
       <PickChipLabel pick={pick} />
@@ -372,6 +377,7 @@ export function PickChip({
       align="start"
       sideOffset={10}
       avoidCollisions={false}
+      container={typeof document === 'undefined' ? null : document.body}
     >
       <PickChipData pick={pick} />
     </HeadlessPopover>
