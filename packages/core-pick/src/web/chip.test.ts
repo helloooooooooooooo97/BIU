@@ -81,6 +81,8 @@ test('pick chips can show the facet close mark', () => {
   assert.match(src, /pick-chip-data-fields/)
   assert.match(src, /108px minmax\(0,1fr\)/)
   assert.match(src, /pick-chip-data-v\{display:flex;align-items:center/)
+  assert.match(src, /pick-chip-data-v\{[^}]*background:transparent/)
+  assert.doesNotMatch(src, /pick-chip-data-v\{[^}]*color-mix/)
   assert.match(src, /min-height:32px/)
   assert.match(src, /font-size:var\(--biu-font-size-4\)/)
   assert.match(src, /pick-chip-data-jump/)
