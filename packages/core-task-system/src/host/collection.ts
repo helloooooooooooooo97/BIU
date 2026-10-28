@@ -1,5 +1,5 @@
 import type { CollectionSpec, DbRecord } from '@biu/type-file-system'
-import { recordBuiltinValues, REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
+import { asPerson, recordBuiltinValues, REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
 
 type Actor = {
   name?: string
@@ -123,7 +123,7 @@ function taskRecord(row: TaskRow, lookup: (id: string) => TaskRow | undefined, u
     creator: row.creator?.name ?? '用户',
     creatorSessionId: row.creator?.sessionId ?? '',
     creatorActor: row.creator ?? { kind: 'user', name: '用户' },
-    assignee: row.assignee?.name ?? '',
+    assignee: asPerson(row.assignee),
     assigneeSessionId: row.assignee?.sessionId ?? '',
     assigneeActor: row.assignee ?? null,
     parentId: row.parentId ?? null,
@@ -152,7 +152,7 @@ function listedTaskRecord(row: TaskRow, lookup: (id: string) => TaskRow | undefi
     dueAt: row.dueAt ?? null,
     creator: row.creator?.name ?? '用户',
     creatorSessionId: row.creator?.sessionId ?? '',
-    assignee: row.assignee?.name ?? '',
+    assignee: asPerson(row.assignee),
     assigneeSessionId: row.assignee?.sessionId ?? '',
     blocked: Boolean(row.blocked),
     parentChain: parentChain(row, lookup),
@@ -243,7 +243,7 @@ export function tasksCollection(tasks: TasksLike, recordActions?: TaskRecordActi
         dueAt: { type: 'datetime', label: '截止', writable: true },
         description: { type: 'file', label: '描述', writable: true },
         notes: { type: 'string', label: '备忘', writable: true },
-        assignee: { type: 'string', label: '执行人', writable: true },
+        assignee: { type: 'person', label: '执行人', writable: true },
         parentId: { type: 'ref', label: '父任务', writable: true },
         dependsOn: { type: 'multi-ref', label: '依赖', writable: true },
       },
