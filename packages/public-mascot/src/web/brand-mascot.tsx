@@ -128,6 +128,8 @@ export function BrandCornerMascot({
   busy = false,
   busyIds,
   tapToDance = false,
+  face,
+  label,
 }: {
   agents?: CornerAgent[]
   activeId?: string | null
@@ -141,6 +143,8 @@ export function BrandCornerMascot({
   busyIds?: Record<string, true>
   /** 聊天页点不开悬浮窗时，点击改播一段 Grok 跳舞。 */
   tapToDance?: boolean
+  face?: ReactNode
+  label?: string
 }) {
   const [agentsOpen, setAgentsOpen] = useState(false)
   const [tapDance, setTapDance] = useState(false)
@@ -179,15 +183,17 @@ export function BrandCornerMascot({
     danceTimer.current = window.setTimeout(() => setTapDance(false), CORNER_TAP_DANCE_MS)
   }
 
-  const tip = tapToDance
-    ? tapDance
-      ? '跳舞中'
-      : '跳舞'
-    : onToggle
-      ? expanded
-        ? '关闭聊天窗'
-        : '打开聊天窗'
-      : name
+  const tip = label
+    ? label
+    : tapToDance
+      ? tapDance
+        ? '跳舞中'
+        : '跳舞'
+      : onToggle
+        ? expanded
+          ? '关闭聊天窗'
+          : '打开聊天窗'
+        : name
 
   return (
     <div className="brand-corner-cluster" data-testid="brand-corner-mascot">
@@ -200,15 +206,19 @@ export function BrandCornerMascot({
           className={`brand-corner-mascot-btn${expanded ? ' is-active' : ''}${tapDance ? ' is-dancing' : ''}`}
           title={tip}
           aria-label={tip}
-          aria-haspopup={tapToDance ? undefined : onToggle ? 'dialog' : menu ? 'dialog' : 'menu'}
-          aria-expanded={tapToDance ? undefined : expanded}
+          aria-haspopup={face || tapToDance ? undefined : onToggle ? 'dialog' : menu ? 'dialog' : 'menu'}
+          aria-expanded={face || tapToDance ? undefined : expanded}
           data-dock-tip={tip}
           data-testid="brand-corner-mascot-toggle"
           onPointerDown={(event) => {
-            if (tapToDance) return
+            if (face || tapToDance) return
             if (onToggle) event.preventDefault()
           }}
           onClick={() => {
+            if (face && onToggle) {
+              onToggle()
+              return
+            }
             if (tapToDance) {
               playTapDance()
               return
@@ -220,7 +230,7 @@ export function BrandCornerMascot({
             setAgentsOpen((prev) => !prev)
           }}
         >
-          {identity && current ? (
+          {face ? face : identity && current ? (
             <SidebarMascot
               size={size}
               sessionId={current.id}
