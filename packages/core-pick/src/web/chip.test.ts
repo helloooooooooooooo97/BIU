@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import * as lu from '@heroicons/react/16/solid'
 import { tagTone } from '@biu/biu-ui'
-import { pickInspectCard, pickKindIcon, pickKindTone } from './chip.tsx'
+import { inspectPathTarget, pickInspectCard, pickKindIcon, pickKindTone, revealInspectPath } from './chip.tsx'
 
 test('kind maps to distinct heroicons', () => {
   const needed = [
@@ -20,6 +20,7 @@ test('kind maps to distinct heroicons', () => {
     'TagIcon',
     'WrenchScrewdriverIcon',
     'DocumentIcon',
+    'ArrowTopRightOnSquareIcon',
   ] as const
   for (const name of needed) {
     assert.ok(name in lu, `${name} missing`)
@@ -64,7 +65,11 @@ test('pick chips can show the facet close mark', () => {
   assert.match(src, /pick-chip-data-quote/)
   assert.match(src, /pick-chip-data-fields/)
   assert.match(src, /108px minmax\(0,1fr\)/)
-  assert.match(src, /fsdb-proprow|pick-chip-data-row is-stack/)
+  assert.match(src, /pick-chip-data-v\{display:flex;align-items:center/)
+  assert.match(src, /min-height:32px/)
+  assert.match(src, /font-size:var\(--biu-font-size-4\)/)
+  assert.match(src, /pick-chip-data-jump/)
+  assert.match(src, /ArrowTopRightOnSquareIcon/)
 })
 
 test('inspect card keeps the quote and lists every stored field', () => {
@@ -87,7 +92,38 @@ test('inspect card keeps the quote and lists every stored field', () => {
     ['kind', 'id', 'label', 'title', 'path', 'plugin', 'route', 'selection', 'element'],
   )
   assert.equal(card.fields.find((item) => item.key === 'path')?.value, '/pages/p002')
+  assert.equal(card.fields.find((item) => item.key === 'path')?.jump, true)
+  assert.equal(card.fields.find((item) => item.key === 'route')?.jump, false)
   assert.equal(card.fields.find((item) => item.key === 'element')?.value, '<h1>能做什么</h1>')
   assert.equal(card.fields.find((item) => item.key === 'id')?.label, 'ID')
-  assert.equal(card.fields.find((item) => item.key === 'element')?.stack, true)
+  assert.equal(card.fields.find((item) => item.key === 'element')?.stack, false)
+  assert.equal(card.fields.find((item) => item.key === 'id')?.stack, false)
+  const wrapped = pickInspectCard({
+    kind: 'sandbox',
+    id: 'x',
+    text: 'line one\nline two',
+    route: '/s/655414355-47600-4f3dd-a9338-512fa6e34c26-this-is-long-but-one-line',
+  })
+  assert.equal(wrapped.fields.find((item) => item.key === 'text')?.stack, true)
+  assert.equal(wrapped.fields.find((item) => item.key === 'route')?.stack, false)
+})
+
+test('path jump opens the record in the inspector', () => {
+  assert.deepEqual(inspectPathTarget('/pages/p147'), {
+    collection: '/pages',
+    recordId: 'p147',
+    unique: true,
+  })
+  assert.equal(inspectPathTarget('/pages'), null)
+  assert.equal(inspectPathTarget(''), null)
+  const seen: unknown[] = []
+  const onReveal = (event: Event) => seen.push((event as CustomEvent).detail)
+  window.addEventListener('biu:inspector-reveal', onReveal)
+  assert.deepEqual(revealInspectPath('/pages/p147'), {
+    collection: '/pages',
+    recordId: 'p147',
+    unique: true,
+  })
+  window.removeEventListener('biu:inspector-reveal', onReveal)
+  assert.deepEqual(seen, [{ collection: '/pages', recordId: 'p147', unique: true }])
 })
