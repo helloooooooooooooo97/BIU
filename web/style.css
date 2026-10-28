@@ -8680,8 +8680,13 @@ html.dark .composer-send:disabled {
 
 html.pick-mode,
 html.pick-mode * {
-  cursor: crosshair !important;
+  cursor: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2228%22%20height%3D%2228%22%20viewBox%3D%220%200%2028%2028%22%3E%3Cpath%20fill%3D%22%23fff%22%20d%3D%22M2.8%201.2%2023%2014.4l-8.8%201.9%203.5%209-3.9%201.5-3.5-9L3.2%2020.6z%22%2F%3E%3Cpath%20fill%3D%22%232b7de6%22%20d%3D%22M4.1%203.6%2019.6%2013.8l-6.9%201.5%202.9%207.3-2.1.8-2.9-7.4-5.4%202.5z%22%2F%3E%3C%2Fsvg%3E") 3 1, pointer !important;
   user-select: none !important;
+}
+
+html.dark.pick-mode,
+html.dark.pick-mode * {
+  cursor: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2228%22%20height%3D%2228%22%20viewBox%3D%220%200%2028%2028%22%3E%3Cpath%20fill%3D%22%23fff%22%20d%3D%22M2.8%201.2%2023%2014.4l-8.8%201.9%203.5%209-3.9%201.5-3.5-9L3.2%2020.6z%22%2F%3E%3Cpath%20fill%3D%22%235b9fd6%22%20d%3D%22M4.1%203.6%2019.6%2013.8l-6.9%201.5%202.9%207.3-2.1.8-2.9-7.4-5.4%202.5z%22%2F%3E%3C%2Fsvg%3E") 3 1, pointer !important;
 }
 
 html.pick-mode .chat-stage,
@@ -8705,11 +8710,50 @@ html.pick-mode .chat-overlay-panel * {
   background: var(--biu-color-emphasis-muted);
 }
 
+.pick-overlay-hit {
+  border-color: var(--biu-color-emphasis);
+  animation: pick-hit-in 0.18s ease-out, pick-hit-pulse 1.2s ease-in-out 0.18s infinite;
+}
+
 .pick-overlay-marquee {
   z-index: 9997;
   border-radius: 2px;
   border-color: var(--biu-color-emphasis);
   background: var(--biu-color-emphasis-muted);
+}
+
+@keyframes pick-hit-in {
+  from {
+    opacity: 0.35;
+    transform: scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes pick-hit-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 0 color-mix(in srgb, var(--biu-color-emphasis) 42%, transparent),
+      0 0 12px color-mix(in srgb, var(--biu-color-emphasis) 28%, transparent);
+  }
+
+  50% {
+    box-shadow:
+      0 0 0 8px color-mix(in srgb, var(--biu-color-emphasis) 0%, transparent),
+      0 0 22px color-mix(in srgb, var(--biu-color-emphasis) 46%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pick-overlay-hit {
+    animation: none;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--biu-color-emphasis) 35%, transparent);
+  }
 }
 
 /* 画板挂在 body 上时，不要被 Tailwind 的 svg/img 默认撑满视口 */

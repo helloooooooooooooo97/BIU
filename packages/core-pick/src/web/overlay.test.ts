@@ -94,3 +94,16 @@ test('Command/Ctrl+2 toggles pick mode', () => {
 test('marquee inside inspector uses the inspector as the query root', () => {
   assert.match(overlay, /pickSurfaceAtPoint/)
 })
+
+test('pick mode uses a blue pointer cursor and pulses the hit box', () => {
+  const css = readFileSync(resolve(import.meta.dirname, '../../../../web/style.css'), 'utf8')
+  const sandbox = readFileSync(resolve(import.meta.dirname, '../../../../.plugin-dev/page-sandbox/web/sandbox.ts'), 'utf8')
+  assert.match(css, /html\.pick-mode[\s\S]*cursor: url\("data:image\/svg\+xml/)
+  assert.match(css, /%232b7de6/)
+  assert.doesNotMatch(css, /html\.pick-mode[\s\S]*cursor: crosshair/)
+  assert.match(css, /pick-hit-pulse/)
+  assert.match(css, /prefers-reduced-motion/)
+  assert.match(overlay, /pick-overlay-hit/)
+  assert.match(sandbox, /%232b7de6/)
+  assert.doesNotMatch(sandbox, /cursor:crosshair/)
+})
