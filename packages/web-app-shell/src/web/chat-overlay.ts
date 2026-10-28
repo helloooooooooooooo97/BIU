@@ -267,7 +267,7 @@ export function toggleOverlayThread() {
 
 /** 收缩态点外面关掉；展开态、选取态或点在窗口/弹出菜单里则留下。 */
 export const OVERLAY_OUTSIDE_KEEP =
-  '[data-testid="chat-overlay-panel"], .composer-model-flyout, [data-testid="page-mention"], [data-testid="chat-session-title-pop"], [role="dialog"]'
+  '[data-testid="chat-overlay-panel"], [data-testid="pick-chip-data"], .pick-chip-data, .composer-model-flyout, [data-testid="page-mention"], [data-testid="chat-session-title-pop"], [role="dialog"]'
 
 let pickLive = false
 

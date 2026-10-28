@@ -3,10 +3,18 @@ import type { ReactElement } from 'react'
 import { HEADLESS_DISMISS_IGNORE } from './headless-dismiss.tsx'
 import { overlayPortalRoot } from './overlay-portal.ts'
 
-function shouldIgnoreOutside(event: { target: EventTarget | null; detail?: { originalEvent?: Event } }, ignoreSelector: string) {
+function eventTargets(event: { target: EventTarget | null; currentTarget?: EventTarget | null; detail?: { originalEvent?: Event } }) {
   const orig = event.detail?.originalEvent
   const path = orig && typeof orig.composedPath === 'function' ? orig.composedPath() : []
-  return [...path, event.target].some((target) => target instanceof Element && target.closest(ignoreSelector))
+  return [...path, event.target].filter((item): item is EventTarget => item != null)
+}
+
+function shouldIgnoreOutside(event: { target: EventTarget | null; currentTarget?: EventTarget | null; detail?: { originalEvent?: Event } }, ignoreSelector: string) {
+  const content = event.currentTarget
+  return eventTargets(event).some((target) => {
+    if (content instanceof Node && target instanceof Node && content.contains(target)) return true
+    return Boolean(ignoreSelector && target instanceof Element && target.closest(ignoreSelector))
+  })
 }
 
 /** 无头 Popover：自带定位、Portal、点外关闭、Esc。不带视觉样式。 */
@@ -55,10 +63,13 @@ export function HeadlessPopover({
           }}
           onCloseAutoFocus={(event) => event.preventDefault()}
           onPointerDownOutside={(event) => {
-            if (ignoreSelector && shouldIgnoreOutside(event, ignoreSelector)) event.preventDefault()
+            if (shouldIgnoreOutside(event, ignoreSelector)) event.preventDefault()
           }}
           onFocusOutside={(event) => {
-            if (ignoreSelector && shouldIgnoreOutside(event, ignoreSelector)) event.preventDefault()
+            if (!autoFocus || shouldIgnoreOutside(event, ignoreSelector)) event.preventDefault()
+          }}
+          onInteractOutside={(event) => {
+            if (shouldIgnoreOutside(event, ignoreSelector)) event.preventDefault()
           }}
         >
           {children}
