@@ -3,6 +3,7 @@ import { ArrowPathIcon, CpuChipIcon, UserIcon } from '@heroicons/react/16/solid'
 import { resolveSessionMascot, SidebarMascot } from '@biu/public-mascot'
 import { asPerson, asPersonList, personKey, type PersonValue } from '@biu/type-file-system'
 import { listCollection } from './db-client.ts'
+import { showRecordInInspector } from './inspector-db-route.ts'
 import { useWorkspaceProfile } from '@biu/biu-ui/use-workspace-profile'
 import { profileDisplayName } from '@biu/biu-ui/workspace-profile'
 
@@ -19,6 +20,24 @@ let agentsInflight: Promise<ChatPerson[]> | null = null
 let agentsListed: ChatPerson[] | null = null
 let agentsListedAt = 0
 const AGENTS_TTL_MS = 8000
+
+export function personInspectTarget(person: PersonValue): { collection: string; recordId: string } | null {
+  if (person.kind === 'agent') {
+    const recordId = String(person.sessionId ?? '').trim()
+    return recordId ? { collection: '/sessions', recordId } : null
+  }
+  if (person.kind === 'user') {
+    const recordId = String(person.accountId ?? '').trim()
+    return recordId ? { collection: '/workspace-members', recordId } : null
+  }
+  return null
+}
+
+function openPersonInInspector(person: PersonValue) {
+  const target = personInspectTarget(person)
+  if (!target) return
+  showRecordInInspector(target.collection, target.recordId)
+}
 
 export async function loadAgents(): Promise<ChatPerson[]> {
   if (agentsListed && Date.now() - agentsListedAt < AGENTS_TTL_MS) return agentsListed
@@ -108,6 +127,24 @@ export function PersonFace({ value, empty = '' }: { value: unknown; empty?: stri
             >
               {body}
             </a>
+          )
+        }
+        const inspect = personInspectTarget(person)
+        if (inspect) {
+          return (
+            <button
+              key={personKey(person) || person.name}
+              type="button"
+              className="fsdb-person is-link"
+              title={label ? `在右侧打开 ${label}` : '在右侧打开'}
+              onClick={(event) => {
+                event.stopPropagation()
+                openPersonInInspector(person)
+              }}
+              onPointerDown={(event) => event.stopPropagation()}
+            >
+              {body}
+            </button>
           )
         }
         return (
