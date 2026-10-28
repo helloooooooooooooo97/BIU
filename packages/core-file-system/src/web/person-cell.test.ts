@@ -18,6 +18,13 @@ test('person inspect target opens agents on sessions and users on members', () =
   assert.equal(personInspectTarget({ kind: 'agent', name: '无名' }), null)
 })
 
+test('person pick list caps at ten visible rows', () => {
+  const css = readFileSync(resolve(import.meta.dirname, './fsdb-style.ts'), 'utf8')
+  assert.match(css, /\.fsdb-person-pick\{[^}]*max-height:calc\(10 \* 28px \+ 9 \* 2px\)/)
+  assert.match(css, /\.fsdb-person-pick\{[^}]*overflow:auto/)
+  assert.match(css, /\.fsdb-person-option\{[^}]*min-height:28px/)
+})
+
 test('person pick panel reuses the sessions list for a short ttl', () => {
   const src = readFileSync(resolve(import.meta.dirname, './person-cell.tsx'), 'utf8')
   const pick = src.slice(src.indexOf('export function PersonPickPanel'))

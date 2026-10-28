@@ -795,8 +795,8 @@ a.fsdb-person.is-link:hover .fsdb-person-name,button.fsdb-person.is-link:hover .
 .fsdb-person-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fsdb-person-face{display:inline-flex;flex:none;line-height:0}
 .fsdb-person-avatar{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;flex:none;border-radius:50%;background:var(--biu-color-bg-hover);color:var(--biu-color-text-muted)}
-.fsdb-person-pick{display:flex;flex-direction:column;gap:2px;min-width:0}
-.fsdb-person-option{display:flex;align-items:center;gap:6px;width:100%;margin:0;border:0;border-radius:5px;padding:5px 6px;background:transparent;color:var(--biu-color-text);font:inherit;cursor:pointer;text-align:left}
+.fsdb-person-pick{display:flex;flex-direction:column;gap:2px;min-width:0;max-height:calc(10 * 28px + 9 * 2px);overflow:auto}
+.fsdb-person-option{display:flex;align-items:center;gap:6px;box-sizing:border-box;width:100%;min-height:28px;margin:0;border:0;border-radius:5px;padding:5px 6px;background:transparent;color:var(--biu-color-text);font:inherit;cursor:pointer;text-align:left}
 .fsdb-person-option:hover{background:var(--biu-color-bg-hover)}
 .fsdb-person-option.is-selected{background:color-mix(in srgb,var(--biu-color-emphasis) 14%,transparent)}
 .fsdb-person-loading{display:flex;align-items:center;gap:6px;padding:6px;color:var(--biu-color-text-subtle);font-size:var(--biu-font-size-2)}
