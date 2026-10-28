@@ -2722,6 +2722,12 @@ select.settings-account-input {
   cursor: pointer;
 }
 
+.brand-corner-data-icon {
+  width: 20px;
+  height: 20px;
+  color: var(--biu-color-icon);
+}
+
 .brand-corner-mascot-btn.is-dancing {
   animation: brand-corner-tap-dance 0.7s ease-in-out 2;
 }
