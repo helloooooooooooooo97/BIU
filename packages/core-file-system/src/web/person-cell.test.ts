@@ -20,17 +20,23 @@ test('person inspect target opens agents on sessions and users on members', () =
 
 test('person pick list caps at ten visible rows', () => {
   const css = readFileSync(resolve(import.meta.dirname, './fsdb-style.ts'), 'utf8')
-  assert.match(css, /\.fsdb-person-pick\{[^}]*max-height:calc\(10 \* 28px \+ 9 \* 2px\)/)
-  assert.match(css, /\.fsdb-person-pick\{[^}]*overflow:auto/)
+  assert.match(css, /\.fsdb-person-options\{[^}]*max-height:calc\(10 \* 28px \+ 9 \* 2px\)/)
+  assert.match(css, /\.fsdb-person-options\{[^}]*overflow:auto/)
   assert.match(css, /\.fsdb-person-option\{[^}]*min-height:28px/)
 })
 
-test('person pick panel reuses the sessions list for a short ttl', () => {
+test('person pick panel searches members and sessions', () => {
   const src = readFileSync(resolve(import.meta.dirname, './person-cell.tsx'), 'utf8')
   const pick = src.slice(src.indexOf('export function PersonPickPanel'))
   assert.match(src, /AGENTS_TTL_MS = 8000/)
+  assert.match(src, /MEMBERS_TTL_MS = 8000/)
+  assert.match(src, /path: '\/workspace-members'/)
   assert.match(src, /if \(agentsListed && Date\.now\(\) - agentsListedAt < AGENTS_TTL_MS\) return agentsListed/)
+  assert.match(pick, /loadMembers\(\)/)
   assert.match(pick, /loadAgents\(\)/)
+  assert.match(pick, /搜索成员或会话/)
+  assert.doesNotMatch(pick, /name: '系统'/)
+  assert.doesNotMatch(pick, /name: '用户'/)
 })
 
 test('table person cells render stamped name and mascot without fetching sessions', () => {
