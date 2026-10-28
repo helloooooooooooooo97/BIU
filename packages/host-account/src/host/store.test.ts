@@ -85,29 +85,30 @@ test('online mode denies record reads without an account context', () => {
   }
 })
 
-test('an online instance seeds root as super admin with the default password', () => {
+test('an online instance seeds the env super admin with the default password', () => {
   const previous = process.env.BIU_ONLINE
   process.env.BIU_ONLINE = '1'
   try {
     const collab = store()
-    const root = collab.login('root', '123456')
-    assert.equal(root.name, 'root')
-    assert.equal(root.mustChangePassword, false)
-    assert.equal(collab.requiresPasswordChange(root.id), false)
-    collab.changePassword(root.id, '123456', 'new-secret', root.token)
-    assert.equal(collab.requiresPasswordChange(root.id), false)
-    assert.throws(() => collab.login('root', '123456'), /密码不正确/)
+    const admin = collab.login('97@biu.com', '123456')
+    assert.equal(admin.email, '97@biu.com')
+    assert.equal(admin.mustChangePassword, false)
+    assert.equal(collab.isSuperAdmin(admin.id), true)
+    assert.equal(collab.requiresPasswordChange(admin.id), false)
+    collab.changePassword(admin.id, '123456', 'new-secret', admin.token)
+    assert.equal(collab.requiresPasswordChange(admin.id), false)
+    assert.throws(() => collab.login('97@biu.com', '123456'), /密码不正确/)
     const db = (collab as unknown as { db: import('node:sqlite').DatabaseSync }).db
     const restarted = new CollabStore(db)
-    assert.throws(() => restarted.login('root', '123456'), /密码不正确/)
-    assert.equal(restarted.login('root', 'new-secret').id, root.id)
+    assert.throws(() => restarted.login('97@biu.com', '123456'), /密码不正确/)
+    assert.equal(restarted.login('97@biu.com', 'new-secret').id, admin.id)
   } finally {
     if (previous === undefined) delete process.env.BIU_ONLINE
     else process.env.BIU_ONLINE = previous
   }
 })
 
-test('online startup adds root to a database that already has accounts', () => {
+test('online startup adds the env super admin to a database that already has accounts', () => {
   const previous = process.env.BIU_ONLINE
   delete process.env.BIU_ONLINE
   try {
@@ -116,8 +117,10 @@ test('online startup adds root to a database that already has accounts', () => {
     const db = (collab as unknown as { db: import('node:sqlite').DatabaseSync }).db
     process.env.BIU_ONLINE = '1'
     const online = new CollabStore(db)
-    const root = online.login('root', '123456')
-    assert.notEqual(root.id, ada.id)
+    const admin = online.login('97@biu.com', '123456')
+    assert.notEqual(admin.id, ada.id)
+    assert.equal(online.isSuperAdmin(admin.id), true)
+    assert.equal(online.isSuperAdmin(ada.id), false)
   } finally {
     if (previous === undefined) delete process.env.BIU_ONLINE
     else process.env.BIU_ONLINE = previous

@@ -1,6 +1,6 @@
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
-import { currentAccountId, currentRequestWorkspaceId, isOnlineRuntime } from '@biu/host-plugin-loader/data-dir'
+import { currentAccountId, currentRequestWorkspaceId, isOnlineRuntime, superAdminEmail, superAdminPassword } from '@biu/host-plugin-loader/data-dir'
 import { AuthorizationService, type ResourcePolicyInput, type ResourceRole, type WorkspaceRole } from './authorization.ts'
 
 export const PRESENCE_STALE_MS = 30_000
@@ -132,6 +132,13 @@ export class CollabStore {
       return this.accountActiveWorkspace(accountId)
     })
     this.ensureBuiltInRoot()
+  }
+
+  isSuperAdmin(accountId?: string | null) {
+    const id = accountId || currentAccountId()
+    if (!id) return false
+    const row = this.db.prepare('SELECT email FROM accounts WHERE id = ?').get(id) as { email?: string } | undefined
+    return String(row?.email ?? '').trim().toLowerCase() === superAdminEmail()
   }
 
   bootstrapLocal(input: { accountName?: string; workspaceName?: string; now?: number } = {}) {
@@ -2716,12 +2723,15 @@ export class CollabStore {
 
   private ensureBuiltInRoot(now = Date.now()) {
     if (!isOnlineRuntime()) return false
+    const email = superAdminEmail()
     const existing = this.db
-      .prepare(`SELECT id FROM accounts WHERE lower(email) = 'root' LIMIT 1`)
-      .get() as { id?: string } | undefined
+      .prepare(`SELECT id FROM accounts WHERE lower(email) = ? LIMIT 1`)
+      .get(email) as { id?: string } | undefined
+    const reserved = 'acc_super'
     const accountId = existing?.id ?? (
-      this.db.prepare(`SELECT 1 AS ok FROM accounts WHERE id = 'acc_root'`).get() ? id('acc') : 'acc_root'
+      this.db.prepare(`SELECT 1 AS ok FROM accounts WHERE id = ?`).get(reserved) ? id('acc') : reserved
     )
+    const name = email.split('@')[0] || 'BIU'
     this.db.exec('BEGIN IMMEDIATE')
     try {
       if (!existing) {
@@ -2729,9 +2739,9 @@ export class CollabStore {
           .prepare(
             `INSERT INTO accounts
               (id, name, token, password_hash, created_at, email, active_workspace_id, must_change_password)
-             VALUES (?, 'root', ?, ?, ?, 'root', '', 0)`,
+             VALUES (?, ?, ?, ?, ?, ?, '', 0)`,
           )
-          .run(accountId, randomBytes(24).toString('hex'), hashPassword('123456'), now)
+          .run(accountId, name, randomBytes(24).toString('hex'), hashPassword(superAdminPassword()), now, email)
       } else {
         this.db.prepare('UPDATE accounts SET must_change_password = 0 WHERE id = ?').run(accountId)
       }

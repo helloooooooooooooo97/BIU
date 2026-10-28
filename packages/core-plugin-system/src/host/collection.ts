@@ -97,6 +97,7 @@ function mergeLifecycle(
   const official = builtin
     ? { builtin: true, author: BIU_OFFICIAL_NAME, authorUrl: BIU_GITHUB, createdBy: BIU_OFFICIAL, updatedBy: [BIU_OFFICIAL] }
     : {}
+  const canManagePackage = !builtin || store.viewerIsSuperAdmin?.() !== false
   if (installed && sandbox) {
     return omitEmpty({
       ...asInstalledRecord(installed, store),
@@ -107,10 +108,11 @@ function mergeLifecycle(
       sandboxPath: store.sandboxPath(sandbox.id),
       updatedAt: Math.max(installed.updatedAt, sandbox.updatedAt),
       ...official,
+      canManagePackage,
     })
   }
-  if (installed) return { ...asInstalledRecord(installed, store), ...official }
-  if (sandbox) return { ...asSandboxRecord(sandbox, store), ...official }
+  if (installed) return { ...asInstalledRecord(installed, store), ...official, ...(canManagePackage ? { canManagePackage } : {}) }
+  if (sandbox) return { ...asSandboxRecord(sandbox, store), ...official, ...(canManagePackage ? { canManagePackage } : {}) }
   throw new Error('empty plugin row')
 }
 
@@ -247,7 +249,7 @@ export function pluginsCollection(store: PluginStoreService): CollectionSpec {
       {
         id: 'pack',
         label: '安装',
-        when: { sandbox: true, installed: false },
+        when: { sandbox: true, installed: false, canManagePackage: true },
         description: PLUGIN_PACK_DESCRIPTION,
         requiredAction: 'resource:read',
         parameters: { type: 'object', description: PLUGIN_PACK_DESCRIPTION, properties: {} },
@@ -258,8 +260,8 @@ export function pluginsCollection(store: PluginStoreService): CollectionSpec {
         label: '卸载',
         tone: 'danger',
         confirm: '确定卸载？会停止运行，并删掉已安装的代码。沙箱源码还在的话可以再安装。',
-        when: { installed: true },
-        description: '停止运行并删除 .plugin/<id>/。已安装才显示，和安装互斥。沙箱 .plugin-dev/<id>/ 还在的话行不会消失，installed 变 false，动作列改显示安装。',
+        when: { installed: true, canManagePackage: true },
+        description: '停止运行并删除 .plugin/<id>/。已安装才显示，和安装互斥。沙箱 .plugin-dev/<id>/ 还在的话行不会消失，installed 变 false，动作列改显示安装。内置插件只有超级管理员能卸，有人在用也可以卸。',
         requiredAction: 'resource:read',
         run: async (id) => {
           await store.uninstall(id)
