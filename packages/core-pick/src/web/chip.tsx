@@ -19,7 +19,7 @@ import {
   UserGroupIcon,
   RectangleGroupIcon,
 } from '@heroicons/react/16/solid'
-import type { ComponentType } from 'react'
+import { useState, type ComponentType } from 'react'
 import { ensureTagChipStyle, HeadlessPopover, TagChipCloseMark, overlayZ, tagTone } from '@biu/biu-ui'
 import type { PickRef } from './types.ts'
 import { chipCaption, chipLabel } from './types.ts'
@@ -270,8 +270,6 @@ function PickChipData({ pick }: { pick: PickRef }) {
       role="dialog"
       aria-label={card.title}
       style={{ ['--biu-tag' as string]: pickKindTone(pick.kind), zIndex: overlayZ(240) }}
-      onPointerDown={(event) => event.stopPropagation()}
-      onMouseDown={(event) => event.stopPropagation()}
     >
       <div className="pick-chip-data-head">
         <div className="pick-chip-data-mark">
@@ -327,19 +325,27 @@ export function PickChip({
   inspect?: boolean
 }) {
   ensureTagChipStyle()
+  const [open, setOpen] = useState(false)
   const label = chipLabel(pick)
   const chip = (
-    <span
+    <button
+      type="button"
       className="biu-tag composer-tool-chip is-pick"
       data-testid="user-pick-chip"
       data-pick-kind={pick.kind}
       title={pick.kind === 'file' && pick.path ? pick.path : `${pick.kind} · ${label}`}
       style={{ ['--biu-tag' as string]: pickKindTone(pick.kind), cursor: inspect ? 'pointer' : undefined }}
+      contentEditable={false}
+      onMouseDown={(event) => {
+        if (!inspect) return
+        event.preventDefault()
+      }}
     >
       <PickChipLabel pick={pick} />
       {onRemove ? (
-        <button
-          type="button"
+        <span
+          role="button"
+          tabIndex={-1}
           className="biu-tag-x"
           aria-label={`移除 ${label}`}
           contentEditable={false}
@@ -347,17 +353,26 @@ export function PickChip({
           onClick={(event) => {
             event.preventDefault()
             event.stopPropagation()
+            setOpen(false)
             onRemove()
           }}
         >
           <TagChipCloseMark />
-        </button>
+        </span>
       ) : null}
-    </span>
+    </button>
   )
   if (!inspect) return chip
   return (
-    <HeadlessPopover trigger={chip} side="top" align="start" sideOffset={10} avoidCollisions={false}>
+    <HeadlessPopover
+      open={open}
+      onOpenChange={setOpen}
+      trigger={chip}
+      side="top"
+      align="start"
+      sideOffset={10}
+      avoidCollisions={false}
+    >
       <PickChipData pick={pick} />
     </HeadlessPopover>
   )

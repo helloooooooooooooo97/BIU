@@ -8410,6 +8410,12 @@ html.dark .composer-send:disabled {
   cursor: pointer;
 }
 
+button.composer-tool-chip.is-pick {
+  appearance: none;
+  margin: 0;
+  font: inherit;
+}
+
 .composer-tool-chip.is-pick:hover {
   background: color-mix(in srgb, var(--biu-tag, var(--biu-color-ink-blue)) 34%, transparent);
 }
