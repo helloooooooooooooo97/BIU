@@ -102,50 +102,72 @@ export function PickChipLabel({ pick }: { pick: PickRef }) {
 }
 
 const INSPECT_FIELDS = [
-  ['kind', '类型'],
-  ['id', 'id'],
-  ['label', '名称'],
-  ['title', '页面'],
-  ['path', '路径'],
-  ['plugin', '插件'],
-  ['field', '字段'],
-  ['action', '动作'],
-  ['route', '路由'],
-  ['selection', '选区'],
-  ['element', '节点'],
-  ['text', '源码'],
-  ['start_line', '起行'],
-  ['end_line', '止行'],
-  ['insert', '插入点'],
+  ['kind', '类型', 'tag'],
+  ['id', 'ID', 'id'],
+  ['label', '名称', 'text'],
+  ['title', '页面', 'page'],
+  ['path', '路径', 'file'],
+  ['plugin', '插件', 'plugin'],
+  ['field', '字段', 'tag'],
+  ['action', '动作', 'action'],
+  ['route', '路由', 'file'],
+  ['selection', '选区', 'text'],
+  ['element', '节点', 'text'],
+  ['text', '源码', 'text'],
+  ['start_line', '起行', 'id'],
+  ['end_line', '止行', 'id'],
+  ['insert', '插入点', 'id'],
 ] as const
 
 const INSPECT_STYLE_ID = 'biu-pick-chip-data'
 const INSPECT_CSS = `
-.pick-chip-data{z-index:var(--biu-z-dropdown,80);box-sizing:border-box;width:min(360px,calc(100vw - 24px));max-height:min(72vh,520px);overflow:auto;padding:14px 14px 12px;background:var(--biu-color-bg-elevated,var(--biu-color-bg-subtle));border:0;border-radius:16px;box-shadow:var(--biu-shadow-md);color:var(--biu-color-text)}
+.pick-chip-data{z-index:var(--biu-z-dropdown,80);box-sizing:border-box;width:min(380px,calc(100vw - 24px));max-height:min(72vh,560px);overflow:auto;padding:14px 14px 10px;background:var(--biu-color-bg-elevated,var(--biu-color-bg-subtle));border:0;border-radius:16px;box-shadow:var(--biu-shadow-md);color:var(--biu-color-text)}
 .pick-chip-data-head{display:flex;align-items:center;gap:10px;min-width:0;margin:0 0 12px}
 .pick-chip-data-mark{flex:none;display:grid;place-items:center;width:28px;height:28px;border-radius:8px;background:color-mix(in srgb,var(--biu-tag,var(--biu-color-emphasis)) 22%,transparent);color:var(--biu-tag,var(--biu-color-emphasis))}
 .pick-chip-data-mark .pick-kind-icon{width:14px;height:14px}
 .pick-chip-data-copy{min-width:0;flex:1}
 .pick-chip-data-kind{margin:0 0 2px;color:var(--biu-color-text-subtle);font-size:var(--biu-font-size-1);font-weight:var(--biu-font-weight-medium);letter-spacing:.04em;text-transform:uppercase}
 .pick-chip-data-title{margin:0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--biu-font-size-4);font-weight:var(--biu-font-weight-medium);letter-spacing:-.02em}
-.pick-chip-data-quote{margin:0 0 12px;padding:10px 12px;border-radius:10px;background:color-mix(in srgb,var(--biu-color-text) 5%,transparent);color:var(--biu-color-text);font-size:var(--biu-font-size-4);font-weight:var(--biu-font-weight-regular);line-height:1.5;white-space:pre-wrap;word-break:break-word;user-select:text}
-.pick-chip-data-fields{margin:0;padding:10px 0 0;border-top:var(--biu-stroke-width) solid color-mix(in srgb,var(--biu-color-text) 8%,transparent);display:flex;flex-direction:column;gap:8px}
-.pick-chip-data-row{display:grid;grid-template-columns:52px minmax(0,1fr);gap:6px 10px;margin:0;align-items:start}
-.pick-chip-data-k{padding-top:1px;color:var(--biu-color-text-subtle);font-size:var(--biu-font-size-1);font-weight:var(--biu-font-weight-medium);letter-spacing:.02em}
-.pick-chip-data-v{min-width:0;margin:0;color:var(--biu-color-text);font-size:var(--biu-font-size-2);line-height:1.45;white-space:pre-wrap;word-break:break-word;user-select:text}
-.pick-chip-data-v.is-code{font-family:var(--font-mono);font-size:var(--biu-font-size-1);color:var(--biu-color-text-muted);max-height:160px;overflow:auto;padding:6px 8px;border-radius:8px;background:var(--biu-color-bg-code,var(--biu-color-bg-hover))}
+.pick-chip-data-quote{margin:0 0 10px;padding:10px 12px;border-radius:10px;background:color-mix(in srgb,var(--biu-color-text) 5%,transparent);color:var(--biu-color-text);font-size:var(--biu-font-size-4);font-weight:var(--biu-font-weight-regular);line-height:1.5;white-space:pre-wrap;word-break:break-word;user-select:text}
+.pick-chip-data-fields{margin:0;padding:4px 0 0;border-top:var(--biu-stroke-width) solid color-mix(in srgb,var(--biu-color-text) 8%,transparent);display:flex;flex-direction:column;gap:2px}
+.pick-chip-data-row{display:grid;grid-template-columns:108px minmax(0,1fr);align-items:center;gap:8px;min-height:32px;margin:0;font-size:var(--biu-font-size-4)}
+.pick-chip-data-row.is-stack{align-items:flex-start}
+.pick-chip-data-row.is-stack .pick-chip-data-k{padding-top:6px}
+.pick-chip-data-k{display:inline-flex;align-items:center;gap:6px;min-width:0;color:var(--biu-color-text-muted);font-size:var(--biu-font-size-4);font-weight:500}
+.pick-chip-data-k svg{flex:none;width:14px;height:14px;color:var(--biu-color-icon)}
+.pick-chip-data-k span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pick-chip-data-v{min-width:0;margin:0;color:var(--biu-color-text);font-size:var(--biu-font-size-4);font-weight:500;line-height:1.4;white-space:pre-wrap;word-break:break-word;user-select:text}
+.pick-chip-data-v.is-stack{padding:6px 0;max-height:160px;overflow:auto}
 `
 
-const CODE_FIELDS = new Set(['id', 'path', 'route', 'element', 'text', 'plugin'])
+const STACK_FIELDS = new Set(['element', 'text', 'selection'])
+
+function inspectFieldIcon(kind: (typeof INSPECT_FIELDS)[number][2]) {
+  const cls = 'size-[14px]'
+  if (kind === 'id') return <HashtagIcon aria-hidden className={cls} />
+  if (kind === 'page') return <DocumentIcon aria-hidden className={cls} />
+  if (kind === 'file') return <DocumentIcon aria-hidden className={cls} />
+  if (kind === 'plugin') return <PuzzlePieceIcon aria-hidden className={cls} />
+  if (kind === 'action') return <WrenchScrewdriverIcon aria-hidden className={cls} />
+  if (kind === 'tag') return <TagIcon aria-hidden className={cls} />
+  return <DocumentTextIcon aria-hidden className={cls} />
+}
 
 export function pickInspectCard(ref: PickRef) {
   const title = chipCaption(ref).name || ref.label || ref.kind
   const quote = (ref.selection || '').trim()
-  const fields: { key: string; label: string; value: string; code: boolean }[] = []
-  for (const [key, label] of INSPECT_FIELDS) {
+  const fields: { key: string; label: string; value: string; glyph: (typeof INSPECT_FIELDS)[number][2]; stack: boolean }[] = []
+  for (const [key, label, glyph] of INSPECT_FIELDS) {
     const raw = ref[key]
     if (raw == null || raw === '') continue
-    fields.push({ key, label, value: String(raw), code: CODE_FIELDS.has(key) })
+    const value = String(raw)
+    fields.push({
+      key,
+      label,
+      value,
+      glyph,
+      stack: STACK_FIELDS.has(key) || value.includes('\n') || value.length > 56,
+    })
   }
   return {
     kind: canonicalPickKind(ref.kind) || ref.kind,
@@ -185,14 +207,19 @@ function PickChipData({ pick }: { pick: PickRef }) {
         </div>
       </div>
       {card.quote ? <p className="pick-chip-data-quote">{card.quote}</p> : null}
-      <dl className="pick-chip-data-fields">
+      <div className="pick-chip-data-fields">
         {card.fields.map((item) => (
-          <div key={item.key} className="pick-chip-data-row">
-            <dt className="pick-chip-data-k">{item.label}</dt>
-            <dd className={item.code ? 'pick-chip-data-v is-code' : 'pick-chip-data-v'}>{item.value}</dd>
+          <div key={item.key} className={item.stack ? 'pick-chip-data-row is-stack' : 'pick-chip-data-row'}>
+            <span className="pick-chip-data-k" title={item.label}>
+              {inspectFieldIcon(item.glyph)}
+              <span>{item.label}</span>
+            </span>
+            <span className={item.stack ? 'pick-chip-data-v is-stack' : 'pick-chip-data-v'} title={item.value}>
+              {item.value}
+            </span>
           </div>
         ))}
-      </dl>
+      </div>
     </div>
   )
 }
