@@ -276,14 +276,28 @@ function withHtmlElement(ref: PickRef, start: Element, highlight: HTMLElement): 
   return element ? { ...ref, element } : ref
 }
 
+function liveHighlightIn(el: HTMLElement): string {
+  const sel = typeof window === 'undefined' ? null : window.getSelection()
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return ''
+  const raw = pickPreview(sel.toString(), 120)
+  if (!raw) return ''
+  const anchor = sel.anchorNode
+  if (!composedContains(el, anchor) && !(el.shadowRoot && anchor && el.shadowRoot.contains(anchor))) return ''
+  return raw
+}
+
 /** 带 data-biu 的命中也挂上页面 path / markdown 行，和点选 block 一样；id 仍用节点自己的。 */
 function withEditorPickContext(ref: PickRef, el: HTMLElement, start: Element = el): PickRef {
   const sourced = withHtmlElement(withHostSource(ref, el), start, el)
   const locus = editorLocusFromNode(el)
   const next = locus ? { ...withPickLocus(sourced, locus), id: ref.id, ...(sourced.element ? { element: sourced.element } : {}) } : sourced
-  if ((ref.kind !== 'html' && ref.kind !== 'sandbox') || next.selection) return next
-  const snippet = pickPreview(el.textContent ?? '', 120)
-  return snippet ? { ...next, selection: snippet } : next
+  if (ref.kind !== 'html' && ref.kind !== 'sandbox') return next
+  const fence = (next.text ?? '').trim()
+  const claimed = (next.selection ?? '').trim()
+  const inner = liveHighlightIn(el) || pickPreview(el.textContent ?? '', 120)
+  if (!inner) return next
+  if (!claimed || claimed === fence) return { ...next, selection: inner }
+  return next
 }
 
 function editorLocusFromNode(el: HTMLElement) {
