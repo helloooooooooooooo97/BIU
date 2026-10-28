@@ -62,6 +62,7 @@ test('pick chips can show the facet close mark', () => {
   assert.match(src, /pick-chip-field/)
   assert.match(src, /pick-chip-lines/)
   assert.match(src, /HeadlessPopover/)
+  assert.match(src, /trigger=\{chip\}/)
   assert.match(src, /side="top"/)
   assert.match(src, /avoidCollisions=\{false\}/)
   assert.match(src, /z-index:var\(--biu-z-modal/)
