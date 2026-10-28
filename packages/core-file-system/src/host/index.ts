@@ -644,7 +644,7 @@ function assertViewAvailable(entry: CollectionSpec, others: CollectionSpec[]) {
   if (!view) return
   const route = navPath(view.route || '')
   if (!view.route?.trim()) throw new Error('view.route 必填：导航路由由登记方自己选定')
-  if (route === '/' || route === '/s') throw new Error(`view.route 与内置路由冲突：${view.route}`)
+  if (route === '/' || route === '/s' || route === '/agents') throw new Error(`view.route 与内置路由冲突：${view.route}`)
   const title = navTitle(entry)
   if (!title) throw new Error('view.title / label 不能为空')
   for (const other of others) {

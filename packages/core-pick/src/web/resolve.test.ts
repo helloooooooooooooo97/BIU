@@ -85,9 +85,9 @@ test('replies inside the chat overlay are pickable', () => {
 
 test('formatPicks emits JSON handles only', () => {
   const text = formatPicks([
-    { kind: 'session', id: 'abc', label: '聊天', route: '/s/abc' },
+    { kind: 'session', id: 'abc', label: '聊天', route: '/agents/abc' },
   ])
-  assert.equal(text, '<pick>{"kind":"session","id":"abc","route":"/s/abc","label":"聊天"}</pick>')
+  assert.equal(text, '<pick>{"kind":"session","id":"abc","route":"/agents/abc","label":"聊天"}</pick>')
   assert.doesNotMatch(text, /class=|svg|html/i)
 })
 

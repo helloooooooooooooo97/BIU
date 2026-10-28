@@ -5,6 +5,7 @@ import { ChatCount } from '@biu/biu-ui/chat-count'
 import { SidebarFold } from '@biu/biu-ui/sidebar-fold'
 import {
   bindSessionView,
+  sessionAppPath,
   type SessionListItem,
   type SessionViewService,
 } from '@biu/web-session-view'
@@ -131,7 +132,7 @@ const SessionRow = memo(function SessionRow({
         </button>
       ) : (
         <Link
-          to={`/s/${item.id}`}
+          to={sessionAppPath(item.id)}
           draggable={false}
           onDragStart={(event) => event.preventDefault()}
           className={sessionRowMainClass}
@@ -356,14 +357,14 @@ export const ChatSidebar = memo(function ChatSidebar({
       void sessionView.newSession(opts).then((id) => {
         onActivate?.()
         if (isChatPagePath(window.location.pathname)) {
-          navigate(`/s/${id}`)
+          navigate(sessionAppPath(id))
           return
         }
         if (variant === 'popover') {
           openOverlayComposer()
           return
         }
-        navigate(`/s/${id}`)
+        navigate(sessionAppPath(id))
       })
     },
     [navigate, onActivate, sessionView, variant],
@@ -373,7 +374,7 @@ export const ChatSidebar = memo(function ChatSidebar({
     (item: SessionListItem) => {
       void sessionView.load(item.id, { view: 'chat' })
       if (isChatPagePath(window.location.pathname)) {
-        navigate(`/s/${item.id}`)
+        navigate(sessionAppPath(item.id))
       } else {
         openOverlayComposer()
       }
@@ -388,7 +389,7 @@ export const ChatSidebar = memo(function ChatSidebar({
       if (variant === 'popover') return
       if (!wasActive) return
       const next = sessionView.get().sessionId
-      navigate(next ? `/s/${next}` : '/')
+      navigate(next ? sessionAppPath(next) : '/')
     })
   }, [navigate, sessionId, sessionView, variant])
 

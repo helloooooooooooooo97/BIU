@@ -737,7 +737,7 @@ export const ChatThread = memo(function ChatThread(props: SlotProps) {
 
   const onFork = useCallback(() => {
     return sessionView.forkCurrent().then((id) => {
-      navigate(`/s/${id}`)
+      navigate(`/agents/${id}`)
     })
   }, [sessionView, navigate])
 

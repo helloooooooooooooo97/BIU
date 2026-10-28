@@ -1115,7 +1115,7 @@ test('ensureTrajectory keeps live index on chat route after new session navigate
   assert.equal(view.get().view, 'chat')
   assert.equal(view.get().trajectory.length, 0)
 
-  // 新建会话后 navigate(`/s/${id}`) 会 applyRoute chat，不应关掉轨迹订阅
+  // 新建会话后 navigate(`/agents/${id}`) 会 applyRoute chat，不应关掉轨迹订阅
   await view.applyRoute({ kind: 'session', sessionId: 's-new', view: 'chat' })
   assert.equal(view.get().view, 'chat')
 

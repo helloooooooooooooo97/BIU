@@ -795,7 +795,7 @@ export function defaultSessionPath(sessions: Array<{ id?: string; updatedAt?: nu
       best = { id: item.id, updatedAt }
     }
   }
-  return best ? `/s/${encodeURIComponent(best.id)}` : '/'
+  return best ? `/agents/${encodeURIComponent(best.id)}` : '/'
 }
 
 /** 带 HTTP 状态码的请求错误，用于区分「凭证失效」和「网络/服务故障」。 */
@@ -2092,7 +2092,7 @@ type NoticeRow = {
 }
 
 function sessionIdFromPath(path: string) {
-  const match = path.match(/^\/s\/([^/]+)/)
+  const match = path.match(/^\/agents\/([^/]+)/)
   return match ? decodeURIComponent(match[1]!) : ''
 }
 
@@ -2103,7 +2103,7 @@ function noticeHref(row: NoticeRow) {
 function noticeIsForSession(row: NoticeRow, sessionId: string) {
   if (!sessionId) return false
   const href = noticeHref(row)
-  return href === `/s/${sessionId}` || href === `/s/${encodeURIComponent(sessionId)}`
+  return href === `/agents/${sessionId}` || href === `/agents/${encodeURIComponent(sessionId)}`
 }
 
 function NoticeBody({ body }: { body: string }) {

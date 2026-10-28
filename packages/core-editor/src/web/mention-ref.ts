@@ -34,7 +34,7 @@ export function mentionCollection(kind: MentionKind) {
 export function mentionHref(id: string) {
   const parsed = decodeMentionId(id)
   if (!parsed) return ''
-  if (parsed.kind === 'session') return `/s/${encodeURIComponent(parsed.recordId)}`
+  if (parsed.kind === 'session') return `/agents/${encodeURIComponent(parsed.recordId)}`
   return `/database${mentionCollection(parsed.kind)}/record/${encodeURIComponent(parsed.recordId)}`
 }
 

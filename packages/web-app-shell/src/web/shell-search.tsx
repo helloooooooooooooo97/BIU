@@ -230,7 +230,7 @@ export function openSearchHit(hit: { kind: SearchKind; id: string; record?: Reco
 export function searchHref(hit: { kind: SearchKind; id: string; record?: Record<string, unknown> }) {
   const view = viewOpenTarget(hit)
   if (view) return `/database${view.collection}/view/${encodeURIComponent(view.viewId)}`
-  if (hit.kind === 'session') return `/s/${encodeURIComponent(hit.id)}`
+  if (hit.kind === 'session') return `/agents/${encodeURIComponent(hit.id)}`
   const collection = searchCollection(hit.kind)
   return `/database${collection}/record/${encodeURIComponent(hit.id)}`
 }
