@@ -441,8 +441,8 @@ function SandboxBar({
         alignItems: 'center',
         gap: 8,
         padding: '4px 8px',
-        borderBottom: 'var(--biu-stroke-width) solid var(--biu-color-border)',
-        background: 'var(--biu-color-bg)',
+        borderBottom: 'none',
+        background: '#202020',
         color: 'var(--biu-color-text)',
       }}
     >

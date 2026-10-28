@@ -249,6 +249,8 @@ test('html page blocks register plugin id for slash', async () => {
   assert.doesNotMatch(html, /kind: 'htmlframe'/)
   assert.match(html, /label: 'Sandbox'/)
   assert.match(html, /data-testid="sandbox-bar"/)
+  assert.match(html, /background: '#202020'/)
+  assert.match(html, /borderBottom: 'none'/)
   assert.match(html, /data-sandbox-selected/)
   assert.match(html, /--biu-stroke-width-thick/)
   assert.match(html, /--biu-color-emphasis/)
