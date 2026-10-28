@@ -64,7 +64,9 @@ test('pick chips can show the facet close mark', () => {
   assert.match(src, /pick-chip-data-quote/)
   assert.match(src, /pick-chip-data-fields/)
   assert.match(src, /108px minmax\(0,1fr\)/)
-  assert.match(src, /fsdb-proprow|pick-chip-data-row is-stack/)
+  assert.match(src, /pick-chip-data-v\{display:flex;align-items:center/)
+  assert.match(src, /min-height:32px/)
+  assert.match(src, /font-size:var\(--biu-font-size-4\)/)
 })
 
 test('inspect card keeps the quote and lists every stored field', () => {
@@ -89,5 +91,14 @@ test('inspect card keeps the quote and lists every stored field', () => {
   assert.equal(card.fields.find((item) => item.key === 'path')?.value, '/pages/p002')
   assert.equal(card.fields.find((item) => item.key === 'element')?.value, '<h1>能做什么</h1>')
   assert.equal(card.fields.find((item) => item.key === 'id')?.label, 'ID')
-  assert.equal(card.fields.find((item) => item.key === 'element')?.stack, true)
+  assert.equal(card.fields.find((item) => item.key === 'element')?.stack, false)
+  assert.equal(card.fields.find((item) => item.key === 'id')?.stack, false)
+  const wrapped = pickInspectCard({
+    kind: 'sandbox',
+    id: 'x',
+    text: 'line one\nline two',
+    route: '/s/655414355-47600-4f3dd-a9338-512fa6e34c26-this-is-long-but-one-line',
+  })
+  assert.equal(wrapped.fields.find((item) => item.key === 'text')?.stack, true)
+  assert.equal(wrapped.fields.find((item) => item.key === 'route')?.stack, false)
 })

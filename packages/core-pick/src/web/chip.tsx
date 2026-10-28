@@ -121,26 +121,25 @@ const INSPECT_FIELDS = [
 
 const INSPECT_STYLE_ID = 'biu-pick-chip-data'
 const INSPECT_CSS = `
-.pick-chip-data{z-index:var(--biu-z-dropdown,80);box-sizing:border-box;width:min(380px,calc(100vw - 24px));max-height:min(72vh,560px);overflow:auto;padding:14px 14px 10px;background:var(--biu-color-bg-elevated,var(--biu-color-bg-subtle));border:0;border-radius:16px;box-shadow:var(--biu-shadow-md);color:var(--biu-color-text)}
-.pick-chip-data-head{display:flex;align-items:center;gap:10px;min-width:0;margin:0 0 12px}
+.pick-chip-data{z-index:var(--biu-z-dropdown,80);box-sizing:border-box;width:min(380px,calc(100vw - 24px));max-height:min(72vh,560px);overflow:auto;padding:14px 14px 10px;background:var(--biu-color-bg-elevated,var(--biu-color-bg-subtle));border:0;border-radius:16px;box-shadow:var(--biu-shadow-md);color:var(--biu-color-text);font-family:inherit;font-size:var(--biu-font-size-4);font-weight:500;line-height:20px}
+.pick-chip-data-head{display:flex;align-items:center;gap:10px;min-width:0;min-height:32px;margin:0 0 8px}
 .pick-chip-data-mark{flex:none;display:grid;place-items:center;width:28px;height:28px;border-radius:8px;background:color-mix(in srgb,var(--biu-tag,var(--biu-color-emphasis)) 22%,transparent);color:var(--biu-tag,var(--biu-color-emphasis))}
 .pick-chip-data-mark .pick-kind-icon{width:14px;height:14px}
-.pick-chip-data-copy{min-width:0;flex:1}
-.pick-chip-data-kind{margin:0 0 2px;color:var(--biu-color-text-subtle);font-size:var(--biu-font-size-1);font-weight:var(--biu-font-weight-medium);letter-spacing:.04em;text-transform:uppercase}
-.pick-chip-data-title{margin:0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--biu-font-size-4);font-weight:var(--biu-font-weight-medium);letter-spacing:-.02em}
-.pick-chip-data-quote{margin:0 0 10px;padding:10px 12px;border-radius:10px;background:color-mix(in srgb,var(--biu-color-text) 5%,transparent);color:var(--biu-color-text);font-size:var(--biu-font-size-4);font-weight:var(--biu-font-weight-regular);line-height:1.5;white-space:pre-wrap;word-break:break-word;user-select:text}
+.pick-chip-data-copy{min-width:0;flex:1;display:flex;flex-direction:column;justify-content:center;gap:0}
+.pick-chip-data-kind,.pick-chip-data-title,.pick-chip-data-quote,.pick-chip-data-k,.pick-chip-data-v{margin:0;font:inherit;font-size:var(--biu-font-size-4);font-weight:500;line-height:20px}
+.pick-chip-data-kind{color:var(--biu-color-text-subtle);letter-spacing:.04em;text-transform:uppercase}
+.pick-chip-data-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--biu-color-text)}
+.pick-chip-data-quote{display:flex;align-items:center;box-sizing:border-box;min-height:32px;margin:0 0 10px;padding:6px 10px;border-radius:8px;background:color-mix(in srgb,var(--biu-color-text) 6%,transparent);color:var(--biu-color-text);white-space:pre-wrap;word-break:break-word;user-select:text}
 .pick-chip-data-fields{margin:0;padding:4px 0 0;border-top:var(--biu-stroke-width) solid color-mix(in srgb,var(--biu-color-text) 8%,transparent);display:flex;flex-direction:column;gap:2px}
-.pick-chip-data-row{display:grid;grid-template-columns:108px minmax(0,1fr);align-items:center;gap:8px;min-height:32px;margin:0;font-size:var(--biu-font-size-4)}
+.pick-chip-data-row{display:grid;grid-template-columns:108px minmax(0,1fr);align-items:center;gap:8px;min-height:32px;margin:0;font:inherit;font-size:var(--biu-font-size-4);font-weight:500;line-height:20px}
 .pick-chip-data-row.is-stack{align-items:flex-start}
-.pick-chip-data-row.is-stack .pick-chip-data-k{padding-top:6px}
-.pick-chip-data-k{display:inline-flex;align-items:center;gap:6px;min-width:0;color:var(--biu-color-text-muted);font-size:var(--biu-font-size-4);font-weight:500}
+.pick-chip-data-row.is-stack .pick-chip-data-k{min-height:32px}
+.pick-chip-data-k{display:inline-flex;align-items:center;gap:6px;min-width:0;min-height:32px;color:var(--biu-color-text-muted)}
 .pick-chip-data-k svg{flex:none;width:14px;height:14px;color:var(--biu-color-icon)}
 .pick-chip-data-k span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pick-chip-data-v{min-width:0;margin:0;color:var(--biu-color-text);font-size:var(--biu-font-size-4);font-weight:500;line-height:1.4;white-space:pre-wrap;word-break:break-word;user-select:text}
-.pick-chip-data-v.is-stack{padding:6px 0;max-height:160px;overflow:auto}
+.pick-chip-data-v{display:flex;align-items:center;box-sizing:border-box;min-width:0;min-height:32px;padding:0 10px;border-radius:8px;background:color-mix(in srgb,var(--biu-color-text) 6%,transparent);color:var(--biu-color-text);white-space:pre-wrap;word-break:break-word;user-select:text}
+.pick-chip-data-v.is-stack{align-items:flex-start;padding:6px 10px;max-height:160px;overflow:auto}
 `
-
-const STACK_FIELDS = new Set(['element', 'text', 'selection'])
 
 function inspectFieldIcon(kind: (typeof INSPECT_FIELDS)[number][2]) {
   const cls = 'size-[14px]'
@@ -166,7 +165,7 @@ export function pickInspectCard(ref: PickRef) {
       label,
       value,
       glyph,
-      stack: STACK_FIELDS.has(key) || value.includes('\n') || value.length > 56,
+      stack: value.includes('\n'),
     })
   }
   return {
