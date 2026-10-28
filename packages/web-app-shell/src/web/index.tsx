@@ -26,7 +26,7 @@ import type { SlotProps } from '@biu/web-slots'
 import { bindSnapshot, type SnapshotService } from '@biu/web-snapshot'
 import { bindSessionView, type SessionViewService } from '@biu/web-session-view'
 import { bindProjectView, type ProjectViewService } from '@biu/web-project-view'
-import { parseAppPath } from '@biu/web-session-view'
+import { parseAppPath, sessionAppPath } from '@biu/web-session-view'
 import {
   isMascotDancing,
   mascotDanceShape,
@@ -509,7 +509,7 @@ function Shell(props: SlotProps) {
   const inspectorVisible = inspectorOpen
   // 侧栏高亮跟 URL，不跟 store：点一下立刻亮，不等 load 完成
   const routeSessionId = appRoute.kind === 'session' ? appRoute.sessionId : null
-  const agentHref = sessionId ? `/s/${sessionId}` : '/'
+  const agentHref = sessionId ? sessionAppPath(sessionId) : '/'
   const showChatSidebar = activeModule === 'agent'
   const visitedChatSidebar = useRef(false)
   if (showChatSidebar) visitedChatSidebar.current = true
@@ -687,7 +687,7 @@ function Shell(props: SlotProps) {
   // 单向：URL → sessionView。插件还没挂上时不要把 /database 当成首页。
   useEffect(() => {
     const waitingOnNav =
-      !navReady && location.pathname !== '/' && !location.pathname.startsWith('/s/')
+      !navReady && location.pathname !== '/' && !location.pathname.startsWith('/agents/')
     if (waitingOnNav) return
     const route = parseAppPath(location.pathname, pluginModules)
     if (route.kind === 'auth') return
@@ -708,7 +708,7 @@ function Shell(props: SlotProps) {
     const onMissing = (event: Event) => {
       const id = String((event as CustomEvent<{ sessionId?: string }>).detail?.sessionId ?? '')
       if (!id) return
-      const prefix = `/s/${encodeURIComponent(id)}`
+      const prefix = sessionAppPath(id)
       const path = location.pathname
       if (path === prefix || path.startsWith(`${prefix}/`)) navigate('/', { replace: true })
     }
@@ -720,11 +720,11 @@ function Shell(props: SlotProps) {
     if (activeModule === 'agent' && getChatOverlay()) closeChatOverlay()
   }, [activeModule])
 
-  // /debug 兼容：主区仍聊天，轨迹在右侧；URL 收成 /s/:id
+  // /debug 兼容：主区仍聊天，轨迹在右侧；URL 收成 /agents/:id
   useEffect(() => {
     const route = parseAppPath(location.pathname)
     if (route.kind !== 'session' || route.view !== 'debug') return
-    navigate(`/s/${encodeURIComponent(route.sessionId)}`, { replace: true })
+    navigate(sessionAppPath(route.sessionId), { replace: true })
   }, [location.pathname, navigate])
 
   useEffect(() => {

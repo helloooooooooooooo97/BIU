@@ -20,7 +20,7 @@ test('mention id encodes collection kind for jump targets', () => {
   assert.equal(encodeMentionId('page', 'p1'), 'page/p1')
   assert.deepEqual(decodeMentionId('task/t-2'), { kind: 'task', recordId: 't-2' })
   assert.equal(mentionHref('page/p1'), '/database/pages/record/p1')
-  assert.equal(mentionHref('session/abc'), '/s/abc')
+  assert.equal(mentionHref('session/abc'), '/agents/abc')
   assert.deepEqual(mentionReveal('facet/f1'), { collection: '/facets', recordId: 'f1', unique: true })
   assert.equal(decodeMentionId('nope'), null)
 })

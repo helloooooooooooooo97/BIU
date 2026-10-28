@@ -8,9 +8,9 @@ test('notice click always opens the notice record, plus task or session', () => 
     sessionHref: '',
     record: null,
   })
-  assert.deepEqual(noticeClickPlan({ id: 'n2', href: '/s/abc' }), {
+  assert.deepEqual(noticeClickPlan({ id: 'n2', href: '/agents/abc' }), {
     noticeId: 'n2',
-    sessionHref: '/s/abc',
+    sessionHref: '/agents/abc',
     record: null,
   })
   assert.deepEqual(noticeClickPlan({ id: 'n3', href: '/database/tasks/record/t%201' }), {
@@ -22,7 +22,7 @@ test('notice click always opens the notice record, plus task or session', () => 
 
 test('noticeOpenHref always has a page to open', () => {
   assert.equal(noticeOpenHref({ id: 'n1' }), '/database/notices/record/n1')
-  assert.equal(noticeOpenHref({ id: 'n2', href: '/s/abc' }), '/s/abc')
+  assert.equal(noticeOpenHref({ id: 'n2', href: '/agents/abc' }), '/agents/abc')
   assert.equal(noticeOpenHref({ id: 'n3', href: '/database/tasks/record/t1' }), '/database/tasks/record/t1')
 })
 

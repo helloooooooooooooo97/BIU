@@ -323,7 +323,7 @@ export function focusComposerEditor(editor: ComposerFocusTarget) {
 /** 聊天页中间已有输入框，选取不要再弹悬浮窗。 */
 export function isChatPagePath(pathname: string) {
   const path = (pathname.split('?')[0] || '/').replace(/\/+$/, '') || '/'
-  return path === '/' || path.startsWith('/s/')
+  return path === '/' || path === '/agents' || path.startsWith('/agents/')
 }
 
 /** 选取或点小人弹出输入条。回复区沿用上次展开/收缩，首次默认收缩；revealThread 才强制展开。聊天页本身已有输入框，不要再弹窗。 */

@@ -234,8 +234,9 @@ test('overlay starts closed', () => {
 
 test('chat page paths skip the overlay', () => {
   assert.equal(isChatPagePath('/'), true)
-  assert.equal(isChatPagePath('/s/abc'), true)
-  assert.equal(isChatPagePath('/s/abc/debug'), true)
+  assert.equal(isChatPagePath('/agents/abc'), true)
+  assert.equal(isChatPagePath('/agents/abc/debug'), true)
+  assert.equal(isChatPagePath('/s/abc'), false)
   assert.equal(isChatPagePath('/database'), false)
   assert.equal(isChatPagePath('/tasks'), false)
 })
@@ -251,7 +252,7 @@ test('pick-attached only opens; closing stays closed even if chips remain', () =
 
 test('pick-attached on the chat page focuses composer instead of overlay', async () => {
   setChatOverlay(false)
-  history.replaceState(null, '', '/s/session-1')
+  history.replaceState(null, '', '/agents/session-1')
   let focused = 0
   const onFocus = () => {
     focused += 1
@@ -324,7 +325,7 @@ test('openOverlayComposer on a database page requests composer focus', () => {
 
 test('openOverlayComposer on the chat page does not open a window', () => {
   setChatOverlay(false)
-  history.replaceState(null, '', '/s/session-1')
+  history.replaceState(null, '', '/agents/session-1')
   openOverlayComposer({ revealThread: true })
   assert.equal(getChatOverlay(), false)
 })

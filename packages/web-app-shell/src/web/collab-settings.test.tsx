@@ -145,9 +145,9 @@ test('switching spaces opens that space default session url', () => {
       { id: 'older', updatedAt: 1 },
       { id: 'newer', updatedAt: 5 },
     ]),
-    '/s/newer',
+    '/agents/newer',
   )
-  assert.equal(defaultSessionPath([{ id: 'a b', updatedAt: 1 }]), '/s/a%20b')
+  assert.equal(defaultSessionPath([{ id: 'a b', updatedAt: 1 }]), '/agents/a%20b')
 })
 
 test('primary navigation does not call the removed chat overlay setter', () => {

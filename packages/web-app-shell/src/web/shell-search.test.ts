@@ -49,7 +49,7 @@ test('openSearchHit reveals the record in the inspector', () => {
 
 test('searchHref opens the left main pane by changing the route', () => {
   assert.equal(searchHref({ kind: 'view', id: 'pages::mine', record: { tablePath: '/pages', viewId: 'mine' } }), '/database/pages/view/mine')
-  assert.equal(searchHref({ kind: 'session', id: 'abc' }), '/s/abc')
+  assert.equal(searchHref({ kind: 'session', id: 'abc' }), '/agents/abc')
   assert.equal(searchHref({ kind: 'page', id: 'p1' }), '/database/pages/record/p1')
   assert.equal(searchHref({ kind: 'task', id: 't1' }), '/database/tasks/record/t1')
   assert.equal(searchHref({ kind: 'plugin', id: 'g1' }), '/database/plugins/record/g1')

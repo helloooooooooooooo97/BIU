@@ -876,7 +876,7 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
         clearDraft(id)
         flushDraftTimer()
       }
-      if (id && shouldNavigateToSession(location.pathname, id)) navigate(`/s/${id}`)
+      if (id && shouldNavigateToSession(location.pathname, id)) navigate(`/agents/${id}`)
     } catch {
       /* error 已写入 sessionView；输入与待发图片保留 */
     }

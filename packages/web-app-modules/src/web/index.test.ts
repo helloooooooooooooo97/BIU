@@ -11,8 +11,8 @@ test('builtin list is only agent', () => {
   )
   assert.equal(moduleById('agent').path, '/')
   assert.equal(moduleIdFromPath('/'), 'agent')
-  assert.equal(moduleIdFromPath('/s/abc'), 'agent')
-  assert.equal(isAgentPath('/s/x'), true)
+  assert.equal(moduleIdFromPath('/agents/abc'), 'agent')
+  assert.equal(isAgentPath('/agents/x'), true)
 })
 
 test('plugins register routes; shell does not hardcode them', async () => {

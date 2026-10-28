@@ -21,6 +21,9 @@ export type { AppRoute, RouteView, InspectorCenterKind } from './session-route.t
 export {
   parseAppPath,
   isKnownAppPath,
+  isSessionAppPath,
+  isAgentSurfacePath,
+  sessionAppPath,
   buildAppPath,
   routeFromState,
   centerKindFromRoute,
@@ -458,7 +461,7 @@ export class SessionViewService extends Service {
   }
 
   /** URL → 状态：只由路由层调用，不回写 URL。
-   * 只有 `/s/:id` 才换成主 Session。搜索把页面/其它记录开到左侧、进数据模块，都不改全局会话。
+   * 只有 `/agents/:id` 才换成主 Session。搜索把页面/其它记录开到左侧、进数据模块，都不改全局会话。
    * 聊天首页冷启动拉最近一条；数据页只绑 sessionId，不拉 turns，等悬浮窗打开再补正文。 */
   async applyRoute(route: AppRoute) {
     if (route.kind === 'auth') return
@@ -1246,7 +1249,7 @@ export class SessionViewService extends Service {
     }
   }
 
-  /** 进入 Trajectory：只拉轻量 rows 索引，不拉全文 events。不改 ConversationView，避免 /s/:id 把 debug 打回 chat。 */
+  /** 进入 Trajectory：只拉轻量 rows 索引，不拉全文 events。不改 ConversationView，避免 /agents/:id 把 debug 打回 chat。 */
   async ensureTrajectory() {
     const sessionId = this.value.sessionId
     if (!sessionId) return
