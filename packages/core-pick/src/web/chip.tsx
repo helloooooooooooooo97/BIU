@@ -169,23 +169,17 @@ const INSPECT_FIELDS = [
 
 const INSPECT_STYLE_ID = 'biu-pick-chip-data'
 const INSPECT_CSS = `
-.pick-chip-data{position:relative;z-index:300;box-sizing:border-box;width:min(380px,calc(100vw - 24px));max-height:min(72vh,560px);overflow:auto;padding:14px 14px 10px;background:var(--biu-color-bg-elevated,var(--biu-color-bg-subtle));border:0;border-radius:16px;box-shadow:var(--biu-shadow-md);color:var(--biu-color-text);font-family:inherit;font-size:var(--biu-font-size-4);font-weight:500;line-height:20px}
-.pick-chip-data-head{display:flex;align-items:center;gap:10px;min-width:0;min-height:32px;margin:0 0 8px}
-.pick-chip-data-mark{flex:none;display:grid;place-items:center;width:28px;height:28px;border-radius:8px;background:color-mix(in srgb,var(--biu-tag,var(--biu-color-emphasis)) 22%,transparent);color:var(--biu-tag,var(--biu-color-emphasis))}
-.pick-chip-data-mark .pick-kind-icon{width:14px;height:14px}
-.pick-chip-data-copy{min-width:0;flex:1;display:flex;flex-direction:column;justify-content:center;gap:0}
-.pick-chip-data-kind,.pick-chip-data-title,.pick-chip-data-k,.pick-chip-data-v{margin:0;font:inherit;font-size:var(--biu-font-size-4);font-weight:500;line-height:20px}
-.pick-chip-data-kind{color:var(--biu-color-text-subtle);letter-spacing:.04em;text-transform:uppercase}
-.pick-chip-data-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--biu-color-text)}
-.pick-chip-data-fields{margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
-.pick-chip-data-row{display:grid;grid-template-columns:108px minmax(0,1fr);align-items:flex-start;gap:8px;min-height:32px;margin:0;font:inherit;font-size:var(--biu-font-size-4);font-weight:500;line-height:20px}
+.pick-chip-data{position:relative;z-index:300;box-sizing:border-box;width:min(280px,calc(100vw - 24px));max-height:min(72vh,560px);overflow:auto;padding:8px 10px;background:var(--biu-color-bg);border:var(--biu-stroke-width) solid var(--biu-color-border);border-radius:10px;box-shadow:none;color:var(--biu-color-text);font-family:inherit;font-size:var(--biu-font-size-4);font-weight:500;line-height:20px}
+.pick-chip-data-k,.pick-chip-data-v{margin:0;font:inherit;font-size:var(--biu-font-size-4);font-weight:500;line-height:20px}
+.pick-chip-data-fields{margin:0;padding:0;display:flex;flex-direction:column;gap:0}
+.pick-chip-data-row{display:grid;grid-template-columns:72px minmax(0,1fr);align-items:flex-start;gap:8px;min-height:28px;margin:0;font:inherit;font-size:var(--biu-font-size-4);font-weight:500;line-height:20px}
 .pick-chip-data-row.is-stack{align-items:flex-start}
-.pick-chip-data-row.is-stack .pick-chip-data-k{min-height:32px}
-.pick-chip-data-k{display:inline-flex;align-items:center;gap:6px;min-width:0;min-height:32px;color:var(--biu-color-text-muted)}
+.pick-chip-data-row.is-stack .pick-chip-data-k{min-height:28px}
+.pick-chip-data-k{display:inline-flex;align-items:center;gap:6px;min-width:0;min-height:28px;color:var(--biu-color-text-muted)}
 .pick-chip-data-k svg{flex:none;width:14px;height:14px;color:var(--biu-color-icon)}
 .pick-chip-data-k span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pick-chip-data-v{display:flex;align-items:flex-start;box-sizing:border-box;min-width:0;min-height:32px;padding:6px 0 0;border:0;border-radius:0;background:transparent;color:var(--biu-color-text);overflow:auto;white-space:pre-wrap;word-break:break-word;user-select:text}
-.pick-chip-data-v.is-stack{align-items:flex-start;padding:6px 0 0;max-height:160px}
+.pick-chip-data-v{display:flex;align-items:flex-start;box-sizing:border-box;min-width:0;min-height:28px;padding:4px 0 0;border:0;border-radius:0;background:transparent;color:var(--biu-color-text);overflow:auto;white-space:pre-wrap;word-break:break-word;user-select:text}
+.pick-chip-data-v.is-stack{align-items:flex-start;padding:4px 0 0;max-height:160px}
 .pick-chip-data-v.is-jump{gap:4px;padding-right:0}
 .pick-chip-data-v-text{min-width:0;flex:1}
 .pick-chip-data-jump{flex:none;display:grid;place-items:center;width:24px;height:24px;margin:0;border:0;padding:0;border-radius:6px;background:transparent;color:var(--biu-color-icon);cursor:pointer}
@@ -269,17 +263,8 @@ function PickChipData({ pick }: { pick: PickRef }) {
       data-testid="pick-chip-data"
       role="dialog"
       aria-label={card.title}
-      style={{ ['--biu-tag' as string]: pickKindTone(pick.kind), zIndex: overlayZ(300) }}
+      style={{ zIndex: overlayZ(300) }}
     >
-      <div className="pick-chip-data-head">
-        <div className="pick-chip-data-mark">
-          <PickKindGlyph kind={pick.kind} hint={pick.path || pick.id} />
-        </div>
-        <div className="pick-chip-data-copy">
-          <p className="pick-chip-data-kind">{card.kind}</p>
-          <p className="pick-chip-data-title">{card.title}</p>
-        </div>
-      </div>
       <div className="pick-chip-data-fields">
         {card.fields.map((item) => (
           <div key={item.key} className={item.stack ? 'pick-chip-data-row is-stack' : 'pick-chip-data-row'}>
