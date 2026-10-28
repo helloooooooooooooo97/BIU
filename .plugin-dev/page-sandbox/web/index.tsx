@@ -5,7 +5,6 @@ import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
 import { EditorState } from '@codemirror/state'
 import { EditorView, drawSelection, keymap, lineNumbers } from '@codemirror/view'
 import {
-  ArrowPathIcon,
   ArrowsPointingInIcon,
   ArrowsPointingOutIcon,
   CodeBracketIcon,
@@ -56,10 +55,7 @@ function useSandboxSource(
     sourceRef.current = next
     update({ source: next })
   }
-  const reload = () => {
-    applyInline(inline || sample)
-  }
-  return { source, save, reload }
+  return { source, save }
 }
 
 function SandboxPreview({
@@ -388,7 +384,6 @@ function SandboxBar({
   onTab,
   ro,
   expanded,
-  onRefresh,
   onExpand,
 }: {
   title: string
@@ -397,7 +392,6 @@ function SandboxBar({
   onTab: (next: 'preview' | 'code') => void
   ro: boolean
   expanded: boolean
-  onRefresh: () => void
   onExpand: () => void
 }) {
   const [editing, setEditing] = useState(false)
@@ -446,87 +440,84 @@ function SandboxBar({
         color: 'var(--biu-color-text)',
       }}
     >
-      {editing && !ro ? (
-        <Input
-          data-testid="sandbox-title-input"
-          data-page-block-capture=""
-          aria-label="Sandbox 名称"
-          value={draft}
-          autoFocus
-          onChange={(event) => setDraft((event.target as HTMLInputElement).value)}
-          onBlur={commit}
-          onKeyDown={(event) => {
-            event.stopPropagation()
-            if (event.key === 'Enter') {
-              event.preventDefault()
-              ;(event.target as HTMLInputElement).blur()
-            }
-            if (event.key === 'Escape') {
-              event.preventDefault()
+      <div
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          minWidth: 0,
+          gap: 6,
+          color: 'var(--biu-color-text-subtle)',
+          fontSize: 'var(--biu-font-size-3)',
+          fontWeight: 'var(--biu-font-weight-medium)',
+        }}
+      >
+        <CubeTransparentIcon style={{ ...chromeIcon, color: 'var(--biu-color-ink-purple)' }} />
+        {editing && !ro ? (
+          <Input
+            data-testid="sandbox-title-input"
+            data-page-block-capture=""
+            aria-label="Sandbox 名称"
+            value={draft}
+            autoFocus
+            onChange={(event) => setDraft((event.target as HTMLInputElement).value)}
+            onBlur={commit}
+            onKeyDown={(event) => {
+              event.stopPropagation()
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                ;(event.target as HTMLInputElement).blur()
+              }
+              if (event.key === 'Escape') {
+                event.preventDefault()
+                setDraft(title)
+                setEditing(false)
+              }
+            }}
+            style={{
+              minWidth: 0,
+              flex: 1,
+              height: 'var(--biu-size-control-md)',
+              margin: 0,
+              border: 0,
+              background: 'transparent',
+              color: 'var(--biu-color-text-subtle)',
+              fontSize: 'inherit',
+              fontWeight: 'inherit',
+              outline: 'none',
+            }}
+          />
+        ) : (
+          <button
+            type="button"
+            data-testid="sandbox-title"
+            title={ro ? title : '改名称'}
+            aria-label={ro ? title : '改名称'}
+            disabled={ro}
+            onClick={() => {
+              if (ro) return
               setDraft(title)
-              setEditing(false)
-            }
-          }}
-          style={{
-            minWidth: 0,
-            height: 'var(--biu-size-control-md)',
-            margin: 0,
-            border: 0,
-            background: 'transparent',
-            color: 'var(--biu-color-text)',
-            fontSize: 'var(--biu-font-size-3)',
-            fontWeight: 'var(--biu-font-weight-medium)',
-            outline: 'none',
-          }}
-        />
-      ) : (
-        <button
-          type="button"
-          data-testid="sandbox-title"
-          title={ro ? title : '改名称'}
-          aria-label={ro ? title : '改名称'}
-          disabled={ro}
-          onClick={() => {
-            if (ro) return
-            setDraft(title)
-            setEditing(true)
-          }}
-          style={{
-            ...chromeIconBtn,
-            justifyContent: 'flex-start',
-            minWidth: 0,
-            padding: 0,
-            color: 'var(--biu-color-text-subtle)',
-            fontSize: 'var(--biu-font-size-3)',
-            fontWeight: 'var(--biu-font-weight-medium)',
-            cursor: ro ? 'default' : 'text',
-          }}
-        >
-          <CubeTransparentIcon style={{ ...chromeIcon, color: 'var(--biu-color-ink-purple)' }} />
-          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span>
-        </button>
-      )}
+              setEditing(true)
+            }}
+            style={{
+              ...chromeIconBtn,
+              justifyContent: 'flex-start',
+              minWidth: 0,
+              padding: 0,
+              color: 'inherit',
+              fontSize: 'inherit',
+              fontWeight: 'inherit',
+              cursor: ro ? 'default' : 'text',
+            }}
+          >
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span>
+          </button>
+        )}
+      </div>
       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }} role="tablist" aria-label="Sandbox 视图">
         {tabBtn('preview', '预览', EyeIcon)}
         {ro ? null : tabBtn('code', '代码', CodeBracketIcon)}
       </div>
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
-        <button
-          type="button"
-          tabIndex={-1}
-          data-testid="sandbox-refresh"
-          title="刷新"
-          aria-label="刷新"
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={onRefresh}
-          style={{
-            ...chromeIconBtn,
-            width: 'var(--biu-size-control-md)',
-            height: 'var(--biu-size-control-md)',
-          }}
-        >
-          <ArrowPathIcon style={chromeIcon} />
-        </button>
         <button
           type="button"
           tabIndex={-1}
@@ -599,7 +590,6 @@ function SandboxCard({ data, update, writable }: BlockProps) {
   const height = data.height == null || data.height === '' ? SANDBOX_DEFAULT_HEIGHT : data.height
   const fill = sandboxLooksFillLayout(source)
   const [tab, setTab] = useState<'preview' | 'code'>('preview')
-  const [frame, setFrame] = useState(0)
   const [expanded, setExpanded] = useState(false)
   const [selected, setSelected] = useState(false)
   const hostRef = useRef<HTMLDivElement | null>(null)
@@ -701,10 +691,6 @@ function SandboxCard({ data, update, writable }: BlockProps) {
         onTab={setTab}
         ro={ro}
         expanded={expanded}
-        onRefresh={() => {
-          live.reload()
-          setFrame((n) => n + 1)
-        }}
         onExpand={() => setExpanded((open) => !open)}
       />
       <div style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'auto' }}>
@@ -712,7 +698,6 @@ function SandboxCard({ data, update, writable }: BlockProps) {
           <SourceEditor source={source} onChange={live.save} compile={compiled} />
         ) : (
           <SandboxPreview
-            key={frame}
             source={source}
             onStamp={(root) => {
               const host = hostRef.current?.closest('[data-page-block]') ?? null
