@@ -31,6 +31,8 @@ test('toolbar flyouts share one fsdb-tool-flyout shell', () => {
   assert.match(block, /prefers-reduced-motion/)
   assert.match(block, /\.fsdb-tool-flyout \.db-search-menu/)
   assert.match(block, /box-shadow:none/)
+  assert.match(block, /\.fsdb-tool-flyout \.tasks-sort-search/)
+  assert.match(block, /background:transparent/)
 
   const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
   const views = readFileSync(resolve(import.meta.dirname, './view-order-menu.tsx'), 'utf8')
