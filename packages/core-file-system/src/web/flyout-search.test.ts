@@ -11,7 +11,7 @@ test('toolbar flyouts replace the title row with a search field', () => {
   const columns = readFileSync(resolve(import.meta.dirname, './column-order-menu.tsx'), 'utf8')
   const views = readFileSync(resolve(import.meta.dirname, './view-order-menu.tsx'), 'utf8')
   assert.match(search, /placeholder="搜索…"/)
-  assert.match(search, /className="tasks-sort-search"/)
+  assert.match(search, /className="tasks-sort-search font-medium"/)
   assert.match(search, /requestAnimationFrame\(\(\) => ref\.current\?\.focus\(\)\)/)
   assert.match(search, /没有匹配项/)
   assert.match(search, /text\.toLowerCase\(\)\.includes\(needle\)/)

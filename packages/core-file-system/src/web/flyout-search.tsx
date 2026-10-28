@@ -21,7 +21,7 @@ export function FlyoutSearch({
   return (
     <input
       ref={ref}
-      className="tasks-sort-search"
+      className="tasks-sort-search font-medium"
       data-testid="tasks-sort-search"
       value={value}
       placeholder="搜索…"
