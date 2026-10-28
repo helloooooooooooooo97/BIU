@@ -258,6 +258,7 @@ test('starred pages and tasks also list in the sidebar favorites section', () =>
 test('table title opens record from the title-side button', () => {
   assert.match(browser, /data-testid="record-title-open"/)
   assert.match(browser, /data-testid="record-title-split"/)
+  assert.doesNotMatch(browser, /toolsLive && !nested/)
   assert.match(browser, /showRecordInInspector\(collectionPath, row.id, activeViewId\)/)
   assert.match(browser, /className="tasks-icon-btn tasks-title-open"/)
   assert.match(browser, /tasks-title-aside/)
