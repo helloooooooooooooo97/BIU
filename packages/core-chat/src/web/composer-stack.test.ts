@@ -264,6 +264,8 @@ describe('composer dock stacking above sticky user', () => {
     expect(chip).toMatch(/biu-tag-x/)
     expect(node).toMatch(/<PickChip pick=/)
     expect(node).toMatch(/onRemove=\{remove\}/)
+    expect(node).toMatch(/dom\.contentEditable = 'false'/)
+    expect(node).toMatch(/stopEvent/)
   })
 
   it('defines the chrome palette tokens and derives the pick highlight from them', () => {
