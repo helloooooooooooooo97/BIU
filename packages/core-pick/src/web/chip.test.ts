@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import * as lu from '@heroicons/react/16/solid'
 import { tagTone } from '@biu/biu-ui'
-import { pickInspectRows, pickKindIcon, pickKindTone } from './chip.tsx'
+import { pickInspectCard, pickKindIcon, pickKindTone } from './chip.tsx'
 
 test('kind maps to distinct heroicons', () => {
   const needed = [
@@ -61,22 +61,29 @@ test('pick chips can show the facet close mark', () => {
   assert.match(src, /pick-chip-lines/)
   assert.match(src, /HeadlessPopover/)
   assert.match(src, /pick-chip-data/)
-  assert.match(src, /选取数据/)
+  assert.match(src, /pick-chip-data-quote/)
+  assert.match(src, /pick-chip-data-code/)
+  assert.match(src, /pick-chip-data-pill/)
 })
 
-test('inspect rows list the pick fields that have values', () => {
-  const rows = pickInspectRows({
+test('inspect card leads with the quote, not raw field keys', () => {
+  const card = pickInspectCard({
     kind: 'sandbox',
     id: 'sandbox:0-x:0/0',
     label: '能做什么',
     route: '/p/p002',
+    title: '能力边界',
     path: '/pages/p002',
+    plugin: 'page-sandbox',
     selection: '能做什么，不能做什么',
     element: '<h1>能做什么</h1>',
   })
+  assert.equal(card.kind, 'sandbox')
+  assert.equal(card.title, '能做什么')
+  assert.equal(card.quote, '能做什么，不能做什么')
+  assert.match(card.snippet, /<h1>能做什么<\/h1>/)
   assert.deepEqual(
-    rows.map((row) => row.key),
-    ['kind', 'id', 'label', 'path', 'route', 'selection', 'element'],
+    card.meta.map((item) => item.label),
+    ['页面', '路径', '插件'],
   )
-  assert.equal(rows.find((row) => row.key === 'selection')?.value, '能做什么，不能做什么')
 })
