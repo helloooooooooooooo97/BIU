@@ -265,7 +265,7 @@ export function waitForPageBlock(plugin: string, kind?: string, timeoutMs = 2000
       reject(new Error(`${plugin} 启动超时`))
     }, timeoutMs)
     const check = () => {
-      if (pageBlockPluginPhase(plugin) === 'failed') {
+      if (pageBlockPluginPhase(plugin) === 'failed' || pageBlockPluginPhase(plugin) === 'missing') {
         off()
         reject(new Error(`${plugin} 启动失败`))
         return
@@ -297,7 +297,7 @@ export async function activateSlashBlock(editor: Editor, range: Range, plugin: s
     return
   }
   const phase = pageBlockPluginPhase(id)
-  requestEnablePageBlockPlugin(id, kind || '', { force: phase === 'failed' })
+  requestEnablePageBlockPlugin(id, kind || '', { force: phase === 'failed' || phase === 'missing' })
   try {
     const spec = await waitForPageBlock(id, kind, 20000)
     if (editor.isDestroyed) return
@@ -319,6 +319,9 @@ function decorateSlashStatus(item: SlashItem): SlashItem {
   if (phase === 'loading') return { ...item, status: 'loading', hint: '正在启动' }
   if (phase === 'failed') {
     return { ...item, status: 'failed', hint: '启动失败', pluginHref: pluginRecordPath(plugin) }
+  }
+  if (phase === 'missing') {
+    return { ...item, status: 'failed', hint: '不存在', pluginHref: pluginRecordPath(plugin) }
   }
   return item
 }

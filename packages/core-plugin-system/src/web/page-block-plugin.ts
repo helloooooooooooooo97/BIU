@@ -63,7 +63,12 @@ export function startStorePlugin(id: string) {
 async function enableStorePlugin(id: string) {
   try {
     const row = await readPluginFlags(id)
-    if (!row) throw new Error(`unknown plugin: ${id}`)
+    if (!row) {
+      const error = new Error(`unknown plugin: ${id}`)
+      error.name = 'PageBlockPluginMissing'
+      throw error
+    }
+    window.dispatchEvent(new CustomEvent(PAGE_BLOCK_PLUGIN_PHASE, { detail: { plugin: id, phase: 'loading' } }))
     clientLog('info', 'page-block', `${id} installed=${row.installed} running=${row.running} sandbox=${row.sandbox}`)
     if (row.running) {
       clientLog('info', 'page-block', `${id} 已在运行，跳过 start。页面要等 web.js 登记块之后才离开源码`)
@@ -90,8 +95,12 @@ export function pageBlockPluginFromEvent(event: Event) {
   return plugin
 }
 
-function reportPhase(plugin: string, phase: 'ready' | 'failed') {
+function reportPhase(plugin: string, phase: 'ready' | 'failed' | 'missing' | 'loading') {
   window.dispatchEvent(new CustomEvent(PAGE_BLOCK_PLUGIN_PHASE, { detail: { plugin, phase } }))
+}
+
+function isMissingPlugin(error: unknown) {
+  return error instanceof Error && (error.name === 'PageBlockPluginMissing' || error.message.startsWith('unknown plugin:'))
 }
 
 const PENDING_PAGE_BLOCK_ENABLES = '__biuPendingPageBlockEnables'
@@ -105,7 +114,7 @@ export function listenEnablePageBlockPlugin() {
   const run = (plugin: string) => {
     void startStorePlugin(plugin)
       .then(() => reportPhase(plugin, 'ready'))
-      .catch(() => reportPhase(plugin, 'failed'))
+      .catch((error) => reportPhase(plugin, isMissingPlugin(error) ? 'missing' : 'failed'))
   }
   const onEnable = (event: Event) => {
     const plugin = pageBlockPluginFromEvent(event)

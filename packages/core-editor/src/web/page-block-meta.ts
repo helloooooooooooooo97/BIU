@@ -13,7 +13,7 @@ function pendingPageBlockEnables() {
   return host[PENDING_PAGE_BLOCK_ENABLES]
 }
 
-export type PageBlockPluginPhase = 'idle' | 'loading' | 'failed' | 'ready' | 'deferred'
+export type PageBlockPluginPhase = 'idle' | 'loading' | 'failed' | 'missing' | 'ready' | 'deferred'
 
 const phases = new Map<string, PageBlockPluginPhase>()
 let phaseVersion = 0
@@ -31,7 +31,7 @@ export function pageBlockPluginPhase(plugin: string): PageBlockPluginPhase {
 export function setPageBlockPluginPhase(plugin: string, phase: PageBlockPluginPhase) {
   const id = plugin.trim()
   if (!id) return
-  if (phase === 'ready' || phase === 'failed') pendingPageBlockEnables().delete(id)
+  if (phase === 'ready' || phase === 'failed' || phase === 'missing') pendingPageBlockEnables().delete(id)
   if (phase === 'idle') phases.delete(id)
   else phases.set(id, phase)
   emitPhase()
@@ -61,9 +61,9 @@ if (typeof window !== 'undefined') {
     const phase = detail?.phase
     if (
       !plugin ||
-      (phase !== 'ready' && phase !== 'failed' && phase !== 'loading' && phase !== 'idle' && phase !== 'deferred')
+      (phase !== 'ready' && phase !== 'failed' && phase !== 'missing' && phase !== 'loading' && phase !== 'idle' && phase !== 'deferred')
     ) return
-    if (phase === 'ready' || phase === 'failed') pendingPageBlockEnables().delete(plugin)
+    if (phase === 'ready' || phase === 'failed' || phase === 'missing') pendingPageBlockEnables().delete(plugin)
     setPageBlockPluginPhase(plugin, phase)
   })
 }
@@ -227,6 +227,5 @@ export function requestEnablePageBlockPlugin(plugin: string, kind: string, opts?
   if (!opts?.force && pageBlockPluginPhase(id) === 'deferred') return
   pendingPageBlockEnables().set(id, kind || '')
   clientLog('info', 'page-block', `${kind || 'unknown'}（${id}）还没有视图，请求启用`)
-  setPageBlockPluginPhase(id, 'loading')
   window.dispatchEvent(new CustomEvent(ENABLE_PAGE_BLOCK_PLUGIN, { detail: { plugin: id, kind, force: Boolean(opts?.force) } }))
 }
