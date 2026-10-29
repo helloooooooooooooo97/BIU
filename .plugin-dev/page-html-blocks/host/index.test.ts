@@ -30,8 +30,8 @@ test('page-html-blocks hangs HTML fence hints on db_content and db_doc', async (
   const content = ctx.tools.schemas().find((item) => item.function.name === 'db_content')?.function.description ?? ''
   const doc = ctx.tools.schemas().find((item) => item.function.name === 'db_doc')?.function.description ?? ''
   assert.match(content, /^正文 /)
-  assert.match(content, /围栏体只写 \{"file":"assets\/<名>\.html"\}/)
-  assert.match(content, /写进围栏的 HTML 会丢/)
+  assert.match(content, /db_content \/plugins\/page-html-blocks 读「示例写法」/)
+  assert.equal(content.includes('围栏体只写'), false)
   assert.match(doc, /^文档 /)
-  assert.match(doc, /块本体在这里，不在 db_content 围栏/)
+  assert.match(doc, /源码约定见 \/plugins\/page-html-blocks 介绍/)
 })

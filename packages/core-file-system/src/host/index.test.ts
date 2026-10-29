@@ -2925,6 +2925,12 @@ test('concurrent lists of one collection share a single spec.list scan', async (
   assert.equal(workspace.items.length, 12)
 })
 
+test('db_content points agents at plugin intros for pageBlock fences', () => {
+  const host = readFileSync(resolve(import.meta.dirname, './index.ts'), 'utf8')
+  assert.match(host, /写 :::pageBlock 前先 db_content \/plugins\/<plugin> 读介绍里的「示例写法」/)
+  assert.equal(host.includes('kind=html 或 htmlframe'), false)
+})
+
 test('collection list preloads authorization scans and releases them', () => {
   const host = readFileSync(resolve(import.meta.dirname, './index.ts'), 'utf8')
   assert.match(host, /auth\.preloadCollection\(actor\.workspaceId, spec\.path, actor\.accountId\)/)
