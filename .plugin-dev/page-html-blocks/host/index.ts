@@ -4,7 +4,15 @@ import { compileHtmlSource, formatCompileReport } from '../shared/compile.ts'
 export const name = 'page-html-blocks'
 export const inject = ['http', 'tools']
 
+const HTML_FENCE_HINT =
+  'HTML 块（:::pageBlock kind=html 或 htmlframe）：围栏体只写 {"file":"assets/<名>.html"}，禁止把 HTML/JSX 写进围栏。源码必须 db_doc command=write name=<名>.html（或 /api/page/file/<名>.html）。打开块时附件会覆盖围栏体，写进围栏的 HTML 会丢。'
+
+const HTML_DOC_HINT =
+  'HTML/htmlframe 块本体在这里，不在 db_content 围栏。先 db_doc write name=<名>.html value/from=源码，再在页面围栏只贴 {"file":"assets/<名>.html"}。围栏里的 HTML 会被附件覆盖丢掉。'
+
 export function apply(ctx: Context) {
+  ctx.tools.annotate('db_content', HTML_FENCE_HINT)
+  ctx.tools.annotate('db_doc', HTML_DOC_HINT)
   ctx.http.route('POST', '/api/page-html-blocks/compile', async (route) => {
     const body = await route.json<{ source?: string; html?: string }>()
     const source = typeof body.source === 'string' ? body.source : typeof body.html === 'string' ? body.html : ''

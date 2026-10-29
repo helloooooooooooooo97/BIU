@@ -4,16 +4,17 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { compileHtmlSource, looksLikeJsx } from './compile.ts'
 
-test('agent-facing hints say HTML lives in db_doc attachments', () => {
+test('html plugin annotates db_content and db_doc instead of owning those tools', () => {
   const host = readFileSync(resolve(import.meta.dirname, '../host/index.ts'), 'utf8')
   const web = readFileSync(resolve(import.meta.dirname, '../web/index.tsx'), 'utf8')
   const readme = readFileSync(resolve(import.meta.dirname, '../README.md'), 'utf8')
+  assert.match(host, /tools\.annotate\('db_content'/)
+  assert.match(host, /tools\.annotate\('db_doc'/)
+  assert.match(host, /围栏体只写 \{"file":"assets\/<名>\.html"\}/)
+  assert.match(host, /HTML\/htmlframe 块本体在这里/)
   assert.match(host, /源码必须先 db_doc write 到附件/)
-  assert.match(host, /写进围栏会被附件覆盖/)
   assert.match(web, /源码必须 db_doc 附件/)
-  assert.match(web, /写进围栏会被覆盖/)
   assert.match(readme, /源码用 `db_doc`/)
-  assert.match(readme, /打开预览会被附件覆盖/)
 })
 
 test('markup without scripts compiles', () => {

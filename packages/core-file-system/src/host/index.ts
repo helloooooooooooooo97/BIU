@@ -3285,7 +3285,6 @@ export function apply(ctx: Context) {
       'command=find_replace：批量替换。默认等价 str_replace（old_str 必须唯一）；all=true 替换所有匹配（可用 count 限制次数），regex=true 时 old_str 按正则解释。返回 replaced 为实际替换次数。新文本同样：短用 new_str，长用 from。',
       'command=write：整篇覆盖。短全文用 value 内联，长全文用 from=<本地文件路径>（工作区或 /tmp）。new_str / value 与 from 都保留；同时给时以 from 为准。写成功只返回 {ok, path}，不含全文。str_replace / find_replace / replace_lines / insert 成功额外返回 start_line、end_line（改后正文的 1-based 行）。编辑器会标出该段改动，不抢输入焦点、不自动跳转；跳转只在用户主动点目录或查找时发生。',
       '页面插图：不要把 data URL / base64 写进正文。先把图片文件落到工作区（下载或生成），再用 db_asset command=write name=<逻辑名.ext> from=<本地路径> 入库（内容寻址，返回 name=<哈希.ext>），然后 insert/str_replace 写入一行 Markdown：![说明](/api/db/file/<哈希.ext>)。也可以先写这一行再 write 附件。',
-      'HTML 块（:::pageBlock kind=html 或 htmlframe）：围栏体只写 {"file":"assets/<名>.html"}，禁止把 HTML/JSX 写进围栏。源码必须 db_doc command=write name=<名>.html（或 /api/page/file/<名>.html）。打开块时附件会覆盖围栏体，写进围栏的 HTML 会丢。',
     ].join(' '),
     parameters: {
       type: 'object',
@@ -3377,9 +3376,8 @@ export function apply(ctx: Context) {
   ctx.tools.register({
     name: 'db_doc',
     description: [
-      '读写一条记录的可变文档（画板场景、视频脚本、html/htmlframe 块本体）。图片等不可变资源用 db_asset。HTML 块源码只在这里，不在 db_content 围栏。',
-      'path 为 /<表>/<id>。write 落盘 .biu/assets/name/<逻辑名>，覆盖必须带 etag（上次 view 的内容哈希），对不上返回 etag conflict。引用写成 /api/db/file/<逻辑名>（按名字寻址；哈希名则是不可变文件）。画板/HTML 也可走 /api/page/file/<逻辑名>。',
-      'HTML 块：先 db_doc write name=<名>.html value/from=源码，再在 db_content 围栏只贴 {"file":"assets/<名>.html"}。围栏里的 HTML 会被附件覆盖丢掉。',
+      '读写一条记录的可变文档（画板场景、视频脚本、htmlframe HTML）。图片等不可变资源用 db_asset。',
+      'path 为 /<表>/<id>。write 落盘 .biu/assets/name/<逻辑名>，覆盖必须带 etag（上次 view 的内容哈希），对不上返回 etag conflict。引用写成 /api/db/file/<逻辑名>（按名字寻址；哈希名则是不可变文件）。画板也可走 /api/page/file/<逻辑名>。',
       'command=view：列出引用或读该文档（文本带 text）和 etag。',
       'command=write：稳定名覆盖 + If-Match。可带 block_id / source / kind=core|asset。',
     ].join(' '),

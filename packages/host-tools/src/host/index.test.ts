@@ -207,6 +207,44 @@ test('report is ignored unless invoke is wrapped with progress', async () => {
   assert.deepEqual(seen, ['{"n":1}', '{"n":2}'])
 })
 
+test('annotate appends to catalog and schemas and unregisters', async () => {
+  const ctx = new Context()
+  await ctx.plugin(tools)
+  ctx.tools.register({
+    name: 'db_content',
+    description: '正文',
+    parameters: { type: 'object', properties: {} },
+    execute: () => 'ok',
+  })
+  const fiber = ctx.plugin({
+    inject: ['tools'],
+    apply: (c) => {
+      c.tools.annotate('db_content', '围栏只写附件指针')
+      c.tools.annotate('db_doc', '先挂着')
+    },
+  })
+  await fiber
+  const content = ctx.tools.schemas().find((item) => item.function.name === 'db_content')
+  assert.equal(content?.function.description, '正文 围栏只写附件指针')
+  assert.equal(ctx.tools.catalog().find((item) => item.name === 'db_content')?.description, '正文 围栏只写附件指针')
+  ctx.tools.register({
+    name: 'db_doc',
+    description: '文档',
+    parameters: { type: 'object', properties: {} },
+    execute: () => 'ok',
+  })
+  assert.equal(
+    ctx.tools.schemas().find((item) => item.function.name === 'db_doc')?.function.description,
+    '文档 先挂着',
+  )
+  await fiber.dispose()
+  assert.equal(
+    ctx.tools.schemas().find((item) => item.function.name === 'db_content')?.function.description,
+    '正文',
+  )
+  assert.equal(ctx.tools.schemas().find((item) => item.function.name === 'db_doc')?.function.description, '文档')
+})
+
 test('Chinese tool names are sanitized for OpenAI-style APIs', async () => {
   const ctx = new Context()
   await ctx.plugin(tools)
