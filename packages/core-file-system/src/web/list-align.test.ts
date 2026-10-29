@@ -217,12 +217,12 @@ test('list properties stay on the weakest label tier; detail aside lifts keys on
   assert.match(css, /\.fsdb-proprow-k svg,\.fsdb-prop>span:first-child svg,\.fsdb-schema-prop-k svg\{[^}]*color:var\(--biu-color-icon\)/)
   assert.match(
     css,
-    /\.fsdb-detail-aside \.fsdb-proprow-k,\.fsdb-detail-aside \.fsdb-prop>span:first-child,\.fsdb-detail-aside \.fsdb-proprow-label\{[^}]*color:var\(--biu-color-text-muted\)/,
+    /\.fsdb-detail-aside \.fsdb-proprow-k,\.fsdb-detail-aside \.fsdb-prop>span:first-child,\.fsdb-detail-aside \.fsdb-proprow-label,\.fsdb-detail-aside \.fsdb-schema-prop-k\{[^}]*color:var\(--biu-color-text-muted\)/,
   )
-  assert.match(css, /\.fsdb-detail-aside \.fsdb-proprow-k svg,\.fsdb-detail-aside \.fsdb-prop>span:first-child svg\{[^}]*color:var\(--biu-color-icon\)/)
+  assert.match(css, /\.fsdb-detail-aside \.fsdb-proprow-k svg,\.fsdb-detail-aside \.fsdb-prop>span:first-child svg,\.fsdb-detail-aside \.fsdb-schema-prop-k svg\{[^}]*color:var\(--biu-color-icon\)/)
   assert.match(
     css,
-    /\.fsdb-detail-aside \.fsdb-proprow-v,\.fsdb-detail-aside \.fsdb-prop-val,\.fsdb-detail-aside \.fsdb-detail-id,\.fsdb-detail-aside \.fsdb-plain-input\{[^}]*color:var\(--biu-color-text\)/,
+    /\.fsdb-detail-aside \.fsdb-proprow-v,\.fsdb-detail-aside \.fsdb-prop-val,\.fsdb-detail-aside \.fsdb-detail-id,\.fsdb-detail-aside \.fsdb-plain-input,\.fsdb-detail-aside \.fsdb-schema-prop-v,\.fsdb-detail-aside \.fsdb-schema-prop-v \.fsdb-muted\{[^}]*color:var\(--biu-color-text\)/,
   )
 })
 
