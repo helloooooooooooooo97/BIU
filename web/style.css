@@ -1103,9 +1103,9 @@ body {
 }
 
 .settings-page-prefs .fsdb-layout-scale > span {
-  color: var(--biu-color-text-muted);
-  font-size: var(--biu-font-size-2);
-  font-weight: 650;
+  color: var(--biu-color-text);
+  font-size: var(--biu-font-size-3);
+  font-weight: 600;
 }
 
 .settings-page-prefs .fsdb-layout-pills {
@@ -1122,10 +1122,10 @@ body {
   border: 0;
   border-radius: 7px;
   background: transparent;
-  color: var(--biu-color-text-muted);
+  color: var(--biu-color-text);
   font: inherit;
-  font-size: var(--biu-font-size-2);
-  font-weight: 650;
+  font-size: var(--biu-font-size-3);
+  font-weight: 600;
   cursor: pointer;
 }
 
