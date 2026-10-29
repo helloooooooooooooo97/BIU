@@ -186,8 +186,8 @@ html.dark {
   --biu-color-icon-active: #bab9b5;
   --biu-color-icon-muted: #a6a6a3;
   --biu-color-icon-fixed: #bab9b5;
-  --biu-color-border: color-mix(in srgb, var(--biu-color-text) 10%, transparent);
-  --biu-color-border-strong: #383836;
+  --biu-color-border: #323232;
+  --biu-color-border-strong: #323232;
   --biu-color-emphasis: #5b9fd6;
   --biu-color-emphasis-muted: color-mix(in srgb, var(--biu-color-emphasis) 22%, transparent);
   --biu-color-emphasis-border: color-mix(in srgb, var(--biu-color-emphasis) 40%, transparent);
@@ -1225,7 +1225,7 @@ body {
 
 .settings-theme-preview.is-dark {
   color-scheme: dark;
-  border: 1px solid #383836;
+  border: 1px solid #323232;
   background-color: #191919;
   background-image:
     linear-gradient(#202020, #202020),
