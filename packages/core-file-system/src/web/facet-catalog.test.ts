@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { loadFacets, persistFacets } from './facet-catalog.ts'
+import { facetFieldLabelOk, facetLiveLabels, loadFacets, persistFacets } from './facet-catalog.ts'
 
 test('persistFacets adopts catalog only after POST succeeds', async () => {
   let release!: (value: Response) => void
@@ -29,4 +29,16 @@ test('persistFacets keeps the previous catalog when POST fails', async () => {
   } finally {
     globalThis.fetch = originalFetch
   }
+})
+
+test('live labels ignore soft-deleted fields so a reused name is free', () => {
+  const fields = [
+    { key: '1', label: '你好', deleted: true },
+    { key: '2', label: '你好的' },
+    { key: '3', label: '困', deleted: true },
+  ]
+  assert.deepEqual(facetLiveLabels(fields), ['你好的'])
+  assert.equal(facetFieldLabelOk('你好', facetLiveLabels(fields)), true)
+  assert.equal(facetFieldLabelOk('你好的', facetLiveLabels(fields)), false)
+  assert.equal(facetFieldLabelOk('你好', facetLiveLabels(fields, '2')), true)
 })
