@@ -344,7 +344,7 @@ const CSS = `
 .fsdb-page .tasks-table [data-dock-tip]::after{z-index:var(--biu-z-float)}
 .fsdb-page .tasks-table th{padding:6px 6px;color:var(--biu-color-text-muted);font-size:var(--biu-font-size-4);font-weight:500;position:sticky;top:0;background:var(--biu-color-surface);z-index:5;white-space:nowrap}
 .fsdb-page .tasks-table th.is-facet-col{color:var(--biu-color-text-muted);background:var(--biu-color-surface);box-shadow:inset 0 -2px 0 color-mix(in srgb,var(--biu-tag) 72%,transparent)}
-.fsdb-page .tasks-table th.is-facet-col .tasks-th-ico{display:inline-flex;align-items:center;justify-content:center;border-radius:4px;padding:2px;background:color-mix(in srgb,var(--biu-tag) 32%,transparent)}
+.fsdb-page .tasks-table th.is-facet-col .tasks-th-ico,.fsdb-page .tasks-table th.is-facet-col .tasks-th-ico svg,.fsdb-page .tasks-table th.is-facet-col .tasks-th-ico .fsdb-field-bool-glyph,.fsdb-page .tasks-table thead .is-facet-col .tasks-th svg,.fsdb-page .tasks-table thead .is-facet-col .fsdb-field-bool-glyph{color:var(--biu-tag)!important;fill:currentColor;background:transparent}
 .fsdb-page .tasks-table.is-cols-fixed{table-layout:fixed;width:max-content;min-width:0;max-width:none}
 .fsdb-page .tasks-table.is-cols-fixed.is-wrap{width:max-content;max-width:none;min-width:0}
 .fsdb-page .tasks-table.is-cols-fixed col,.fsdb-page .tasks-table.is-cols-fixed th,.fsdb-page .tasks-table.is-cols-fixed td{box-sizing:border-box}
