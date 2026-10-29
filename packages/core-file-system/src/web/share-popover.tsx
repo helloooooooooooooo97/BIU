@@ -841,7 +841,7 @@ export function ShareScopeDetail({
                     <strong>{step.title}</strong>
                     <em>{step.detail}</em>
                   </div>
-                  <b className={`fsdb-scope-pill is-${step.result === '共享' ? 'shared' : step.result === '空间' ? 'workspace' : 'personal'}`}>{step.result}</b>
+                  <b className={`fsdb-scope-pill is-${step.result === '共享' ? 'shared' : step.result === '空间' ? 'workspace' : 'personal'}`}><ScopeMark scope={step.result} /></b>
                 </li>
               )) : <li className="is-empty">{error ? error : '正在读取'}</li>}
             </ol>
