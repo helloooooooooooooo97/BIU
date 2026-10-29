@@ -23,6 +23,7 @@ test('person pick list caps at ten visible rows', () => {
   assert.match(css, /\.fsdb-person-options\{[^}]*max-height:calc\(10 \* 28px \+ 9 \* 2px\)/)
   assert.match(css, /\.fsdb-person-options\{[^}]*overflow:auto/)
   assert.match(css, /\.fsdb-person-option\{[^}]*min-height:28px/)
+  assert.match(css, /\.fsdb-person-avatar\{[^}]*color:var\(--biu-color-icon-fixed\)/)
 })
 
 test('person pick panel searches members and sessions', () => {
