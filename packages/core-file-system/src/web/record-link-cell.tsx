@@ -58,8 +58,13 @@ function linkCollection(field: FieldSpec | undefined, fallback?: string) {
   return raw || fallback || ''
 }
 
-function jumpRecord(collectionPath: string | undefined, id: string) {
-  if (!collectionPath || !id) return
+function jumpRecord(collectionPath: string | undefined, id: string, onOpen?: (id: string) => void) {
+  if (!id) return
+  if (onOpen) {
+    onOpen(id)
+    return
+  }
+  if (!collectionPath) return
   showRecordInInspector(collectionPath, id)
 }
 
@@ -107,6 +112,7 @@ export function RecordLinkChips({
   collectionPath,
   labelField,
   deferMissing,
+  onOpen,
 }: {
   field?: FieldSpec
   fieldKey: string
@@ -115,6 +121,8 @@ export function RecordLinkChips({
   collectionPath?: string
   labelField?: string
   deferMissing?: boolean
+  /** 分享页里跳到同一条分享链接下的记录，而不是打开本机检查器。 */
+  onOpen?: (id: string) => void
 }) {
   const ids = recordLinkIds(field, value, fieldKey)
   const peerPath = linkCollection(field, collectionPath)
@@ -130,10 +138,10 @@ export function RecordLinkChips({
             key={id}
             type="button"
             className="fsdb-ref-chip"
-            title={label ? `在右侧打开 ${label}` : '在右侧打开'}
+            title={onOpen ? (label || '打开') : label ? `在右侧打开 ${label}` : '在右侧打开'}
             onClick={(event) => {
               event.stopPropagation()
-              jumpRecord(peerPath, id)
+              jumpRecord(peerPath, id, onOpen)
             }}
           >
             <span className="fsdb-ref-chip-title">{label || (deferMissing ? id : '…')}</span>

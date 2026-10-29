@@ -41,6 +41,7 @@ export function ShareCell({
   collection,
   schema,
   chrome,
+  onOpenLink,
 }: {
   row: DbRecord
   fieldKey: string
@@ -49,6 +50,7 @@ export function ShareCell({
   collection: string
   schema: CollectionSchema
   chrome?: CollectionChrome
+  onOpenLink?: (id: string) => void
 }) {
   const kind = resolveFieldType(field)
   const Custom = chrome?.cells?.[fieldKey]
@@ -64,6 +66,7 @@ export function ShareCell({
       collectionPath={collection}
       labelField={schema.labelField}
       value={row[fieldKey]}
+      onOpenLink={onOpenLink}
     />
   )
 }
@@ -79,6 +82,7 @@ export function ShareListTable({
   wrap,
   truncate,
   queryFields,
+  onOpenLink,
 }: {
   schema: CollectionSchema
   view?: Partial<SavedView>
@@ -90,6 +94,7 @@ export function ShareListTable({
   wrap?: boolean
   truncate?: boolean
   queryFields?: Set<string>
+  onOpenLink?: (id: string) => void
 }) {
   ensureTagChipStyle()
   const listed = shareTableColumns(schema, view, columns)
@@ -129,6 +134,7 @@ export function ShareListTable({
                     collection={collection}
                     schema={schema}
                     chrome={chrome}
+                    onOpenLink={onOpenLink}
                   />
                 )
                 return (

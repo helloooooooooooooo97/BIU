@@ -92,6 +92,14 @@ test('share header merges resources into one download picker', () => {
   assert.match(css, /\.fsdb-share-dl-item\{/)
 })
 
+test('share page record links open another shared record', () => {
+  const src = readFileSync(resolve(import.meta.dirname, './share-page.tsx'), 'utf8')
+  const cell = readFileSync(resolve(import.meta.dirname, './record-link-cell.tsx'), 'utf8')
+  assert.match(src, /function openShareRecord\(id: string\)/)
+  assert.match(src, /onOpenLink=\{openShareRecord\}/)
+  assert.match(cell, /if \(onOpen\) \{\s*onOpen\(id\)/)
+})
+
 test('share corner uses the owner photo when set, else the brand icon', () => {
   const src = readFileSync(resolve(import.meta.dirname, './share-owner-corner.tsx'), 'utf8')
   const css = readFileSync(resolve(import.meta.dirname, './fsdb-style.ts'), 'utf8')

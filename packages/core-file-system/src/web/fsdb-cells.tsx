@@ -299,6 +299,7 @@ export function DefaultCell({
   onRun,
   onChange,
   plain,
+  onOpenLink,
 }: {
   field: FieldSpec
   value: unknown
@@ -309,6 +310,7 @@ export function DefaultCell({
   onRun?: () => void
   onChange?: (next: unknown) => void
   plain?: boolean
+  onOpenLink?: (id: string) => void
 }) {
   const kind = resolveFieldType(field)
   if (kind === 'action') {
@@ -324,6 +326,7 @@ export function DefaultCell({
         records={records}
         labelField={labelField}
         deferMissing={plain}
+        onOpen={onOpenLink}
       />
     )
   }

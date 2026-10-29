@@ -401,6 +401,11 @@ function SharePage({
     link.remove()
   }
 
+  function openShareRecord(id: string) {
+    if (!id || id === shown?.id) return
+    navigate(sharePublicPath(token, id))
+  }
+
   function openShareTarget(target: CrumbTarget) {
     if (target.kind === 'record') {
       navigate(sharePublicPath(token, target.recordId))
@@ -597,6 +602,7 @@ function SharePage({
               collection={snapshot.collection}
               schema={schema}
               chrome={detailChrome}
+              onOpenLink={openShareRecord}
             />
           )}
           setDraft={() => undefined}
@@ -663,6 +669,7 @@ function SharePage({
                 truncate={queryState?.truncate}
                 queryFields={queryFields}
                 onOpen={(id) => navigate(sharePublicPath(token, id))}
+                onOpenLink={openShareRecord}
               />
               {paged.length === 0 ? <p className="fsdb-empty">暂无记录</p> : null}
             </div>
