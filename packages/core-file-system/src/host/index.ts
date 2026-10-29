@@ -495,18 +495,33 @@ function packFieldKey(pack: CollectionSchemaPack | null | undefined, name: strin
   return want
 }
 
+function facetBagValueEmpty(value: unknown) {
+  return value == null || (typeof value === 'string' && !value.trim())
+}
+
 function remapFacetBag(pack: CollectionSchemaPack | null | undefined, bag: Record<string, unknown>) {
   const out: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(bag)) {
     const field = packFieldKey(pack, key)
     if (!field) continue
-    if (value == null || value === '') {
-      delete out[field]
-      continue
-    }
+    if (facetBagValueEmpty(value)) continue
     out[field] = value
   }
   return out
+}
+
+function applyFacetBagPatch(
+  pack: CollectionSchemaPack | null | undefined,
+  current: Record<string, unknown>,
+  bag: Record<string, unknown>,
+) {
+  const next = { ...current, ...remapFacetBag(pack, bag) }
+  for (const [key, value] of Object.entries(bag)) {
+    const field = packFieldKey(pack, key)
+    if (!field || !facetBagValueEmpty(value)) continue
+    delete next[field]
+  }
+  return next
 }
 
 /** Agent 常写成扁平 values（中文属性名），权威形状是 values[标签id][字段key]。 */
@@ -540,7 +555,7 @@ function coerceFacetPatch(
   const applyBag = (packId: string, bag: Record<string, unknown>) => {
     const id = resolvePack(packId)?.id ?? packId
     if (!tags.includes(id)) return
-    bags[id] = { ...bags[id], ...remapFacetBag(resolvePack(id), bag) }
+    bags[id] = applyFacetBagPatch(resolvePack(id), bags[id] ?? {}, bag)
   }
   if (isPlainObject(rec.values)) {
     const nested: Array<[string, Record<string, unknown>]> = []
