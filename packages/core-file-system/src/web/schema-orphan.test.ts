@@ -22,6 +22,14 @@ test('orphan pack entries skip live fields, empties, and reserved keys', () => {
   assert.equal(orphans.find((item) => item.key === 'leftover')?.type, 'string')
 })
 
+test('orphan pack entries keep the label of a deleted field', () => {
+  const orphans = orphanPackEntries(
+    [{ key: '4829103', type: 'string', label: '复杂度', deleted: true }],
+    { 4829103: 'O(n)' },
+  )
+  assert.deepEqual(orphans, [{ key: '4829103', value: 'O(n)', type: 'string', label: '复杂度' }])
+})
+
 test('infer pack field type from leftover values', () => {
   assert.equal(inferPackFieldType(true), 'boolean')
   assert.equal(inferPackFieldType(12), 'number')

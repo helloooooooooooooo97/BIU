@@ -35,7 +35,7 @@ function FacetColumnPackRow({
 }) {
   const [open, setOpen] = useState(false)
   const tone = schemaTagTone(pack.id)
-  const anyOn = pack.fields.some((field) => visibleKeys.has(facetFlatColumnKey(pack.id, field.key)))
+  const anyOn = pack.fields.some((field) => !field.deleted && visibleKeys.has(facetFlatColumnKey(pack.id, field.key)))
 
   return (
     <HeadlessPopover
@@ -72,8 +72,8 @@ function FacetColumnPackRow({
         role="menu"
         style={{ zIndex: overlayZ(280) }}
       >
-        {pack.fields.length ? (
-          pack.fields.map((field) => {
+        {pack.fields.some((field) => !field.deleted) ? (
+          pack.fields.filter((field) => !field.deleted).map((field) => {
             const key = facetFlatColumnKey(pack.id, field.key)
             return (
               <CheckRow
@@ -191,7 +191,7 @@ export function ColumnOrderMenu({
   const packs = facetCatalog.filter(
     (pack) =>
       flyoutQueryMatch(pack.label, query) ||
-      pack.fields.some((field) => flyoutQueryMatch(field.label ?? field.key, query)),
+      pack.fields.some((field) => !field.deleted && flyoutQueryMatch(field.label ?? field.key, query)),
   )
   const locked = new Set([labelField, 'actions'].filter(Boolean))
   const sortableIds = menuCols.filter((item) => !locked.has(item.key)).map((item) => item.key)

@@ -381,6 +381,7 @@ function atomicSchemaField(key: string, row: Record<string, unknown>, fieldLabel
     writable: row.writable !== false,
   }
   if (fieldLabel !== key) field.label = fieldLabel
+  if (row.deleted === true) field.deleted = true
   if (Array.isArray(row.enum)) field.enum = row.enum.map((option) => String(option)).filter(Boolean)
   if (row.enumLabels && typeof row.enumLabels === 'object' && !Array.isArray(row.enumLabels)) {
     field.enumLabels = Object.fromEntries(
@@ -432,6 +433,11 @@ export function parseAtomicFields(raw: unknown): SchemaPackField[] {
 export type SchemaPackField = FieldSpec & {
   key: string
   type: AtomicFieldType
+  deleted?: boolean
+}
+
+export function liveSchemaPackFields(fields: SchemaPackField[] | undefined) {
+  return (fields ?? []).filter((field) => field.deleted !== true)
 }
 
 export type CollectionSchemaPack = {

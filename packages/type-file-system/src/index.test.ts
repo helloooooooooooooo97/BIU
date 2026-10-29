@@ -140,6 +140,17 @@ test('schema field keeps a stable key and a separate label', () => {
   )
 })
 
+test('normalizeSchemaPack keeps deleted fields and their labels', () => {
+  const pack = normalizeSchemaPack({
+    id: 'dp',
+    label: '动态规划',
+    fields: [{ key: '4829103', type: 'string', label: '复杂度', deleted: true }],
+  })
+  assert.equal(pack?.fields[0]?.key, '4829103')
+  assert.equal(pack?.fields[0]?.label, '复杂度')
+  assert.equal(pack?.fields[0]?.deleted, true)
+})
+
 test('normalizeSchemaPack drops reserved or duplicate field names', () => {
   const pack = normalizeSchemaPack({
     id: 'dp',

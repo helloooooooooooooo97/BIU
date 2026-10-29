@@ -187,6 +187,7 @@ test('detail facet property sits last, starts collapsed, and the glyph becomes a
   assert.match(css, /\.fsdb-proprow\.is-facet-fold \.fsdb-prop-val\.is-schema\{[^}]*align-items:center/)
   assert.match(css, /\.fsdb-proprow\.is-facet-fold \.fsdb-prop-val\.is-schema>\.fsdb-pop-host\{[^}]*min-height:32px/)
   assert.match(css, /\.fsdb-proprow\.is-facet-fold \.fsdb-prop-val\.is-schema>\.fsdb-pop-host\{[^}]*align-content:center/)
+  assert.match(schemaUi, /deleted: true/)
   assert.match(schemaUi, /orphanPackEntries/)
   assert.match(schemaUi, /is-orphan/)
   assert.match(schemaUi, /ArrowUturnLeftIcon/)

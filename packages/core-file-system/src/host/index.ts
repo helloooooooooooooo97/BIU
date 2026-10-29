@@ -124,7 +124,7 @@ function schemaWithTagPack(schema: CollectionSchema, pack: CollectionSchemaPack 
   const fields = { ...schema.fields }
   const extra: string[] = []
   for (const field of pack.fields) {
-    if (STAMP_FIELD_BLOCKLIST.has(field.key)) continue
+    if (field.deleted || STAMP_FIELD_BLOCKLIST.has(field.key)) continue
     fields[field.key] = {
       type: field.type,
       label: field.label ?? field.key,
@@ -1507,7 +1507,7 @@ export class DatabaseService extends Service implements Database {
 
   private async hydrateFacetStamps(rows: DbRecord[], pack: CollectionSchemaPack | null) {
     if (!pack?.fields.length) return
-    const wanted = pack.fields.filter((field) => !STAMP_FIELD_BLOCKLIST.has(field.key))
+    const wanted = pack.fields.filter((field) => !field.deleted && !STAMP_FIELD_BLOCKLIST.has(field.key))
     if (!wanted.length) return
     for (const row of rows) {
       const collection = String(row.tablePath ?? '')
