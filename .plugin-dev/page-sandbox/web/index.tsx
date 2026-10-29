@@ -285,9 +285,13 @@ const cmTheme = EditorView.theme({
   },
   '.cm-activeLine': { background: 'color-mix(in srgb, var(--biu-color-bg-hover) 70%, transparent)' },
   '.cm-cursor': { borderLeftColor: 'var(--biu-color-text)' },
+  /* 与正文选中同一蓝。drawSelection 画的是 selectionLayer，不是系统 ::selection。 */
   '.cm-content ::selection': {
     background: 'color-mix(in srgb, var(--biu-color-emphasis) 40%, transparent)',
     color: 'inherit',
+  },
+  '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionLayer .cm-selectionBackground': {
+    background: 'color-mix(in srgb, var(--biu-color-emphasis) 40%, transparent)',
   },
 })
 
