@@ -353,6 +353,7 @@ test('pageBlock capture includes every registered block shell', async () => {
   assert.doesNotMatch(view, /PageBlockIdle/)
   assert.doesNotMatch(view, /data-plugin-phase="loading"/)
   assert.doesNotMatch(src, /addKeyboardShortcuts/)
+  assert.match(src, /handlePageBlockArrow/)
   assert.doesNotMatch(src, /deleteSelection/)
   assert.doesNotMatch(view, /onKeyDownCapture/)
 })

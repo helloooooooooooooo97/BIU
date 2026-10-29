@@ -2,6 +2,7 @@ import { mergeAttributes, Node } from '@tiptap/core'
 import { ReactNodeViewRenderer } from '@tiptap/react'
 import { Plugin, PluginKey, type EditorState, type Transaction } from '@tiptap/pm/state'
 import type { Node as PmNode } from '@tiptap/pm/model'
+import { handlePageBlockArrow } from './page-block-arrow.ts'
 import { PageBlockView } from './page-block-view.tsx'
 import { getPageEditor } from './service.ts'
 import { formatPageBlockFence, parsePageBlockData, parsePageBlockMeta } from './page-block-meta.ts'
@@ -12,6 +13,7 @@ export { createPageBlockId, isPageBlockId }
 const metaKey = new PluginKey('page-block-meta')
 const uniqueFilesKey = new PluginKey('page-block-unique-files')
 const assignIdsKey = new PluginKey('page-block-ids')
+const arrowKey = new PluginKey('page-block-arrow')
 
 function parseData(raw: string | null) {
   if (!raw) return {}
@@ -182,6 +184,14 @@ export const pageBlock = Node.create({
 
   addProseMirrorPlugins() {
     return [
+      new Plugin({
+        key: arrowKey,
+        props: {
+          handleKeyDown(view, event) {
+            return handlePageBlockArrow(view, event)
+          },
+        },
+      }),
       new Plugin({
         key: uniqueFilesKey,
         appendTransaction(transactions, _old, state) {
