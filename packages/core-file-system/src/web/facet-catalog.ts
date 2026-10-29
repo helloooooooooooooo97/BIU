@@ -2,6 +2,7 @@ import {
   BUILTIN_FIELDS,
   isReservedSchemaFieldKey,
   isReservedSchemaFieldLabel,
+  isSchemaFieldKey,
   normalizeSchemaPack,
   type CollectionSchemaPack,
 } from '@biu/type-file-system'
@@ -95,20 +96,15 @@ export function slugFacetId(label: string, used: Set<string>) {
 }
 
 export function fieldKeyFromLabel(label: string, used: Set<string>) {
-  const slug = label
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .slice(0, 32)
-  let key = /^[A-Za-z]/.test(slug) ? slug : `f_${slug || 'field'}`
-  if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(key)) key = 'field'
+  const key = label.trim()
   const blocked = new Set([...used, ...Object.keys(BUILTIN_FIELDS)])
+  if (isSchemaFieldKey(key) && !blocked.has(key) && !isReservedSchemaFieldKey(key)) return key
+  const base = isSchemaFieldKey(key) ? key : 'field'
   let n = 2
-  let next = key
-  while (blocked.has(next)) {
-    next = `${key}_${n}`
+  let next = `${base}_${n}`
+  while (blocked.has(next) || !isSchemaFieldKey(next)) {
     n += 1
+    next = `${base}_${n}`
   }
   return next
 }

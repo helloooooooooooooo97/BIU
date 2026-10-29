@@ -216,6 +216,159 @@ function rewritePageBlockMentions(db: DatabaseSync) {
   }
 }
 
+const RESERVED_FACET_FIELD_NAMES = new Set(
+  [
+    'id',
+    'title',
+    'createdAt',
+    'updatedAt',
+    'content',
+    'emoji',
+    'parentId',
+    'dependsOn',
+    'createdBy',
+    'updatedBy',
+    'facet',
+    'tags',
+    '标题',
+    '创建时间',
+    '更新时间',
+    '内容',
+    '图标',
+    '标签',
+    '父级',
+    '依赖',
+    '创建人',
+    '编辑人',
+  ].map((name) => name.toLowerCase()),
+)
+
+function isMigratableFacetFieldName(name: string) {
+  const next = name.trim()
+  if (!next || next.length > 64) return false
+  if (next.includes('::') || /[/\\]/.test(next) || /[\u0000-\u001f]/.test(next)) return false
+  return !RESERVED_FACET_FIELD_NAMES.has(next.toLowerCase())
+}
+
+function migrateFacetFieldIdentity(db: DatabaseSync) {
+  if (!tableNames(db).includes('facets')) return
+  const remaps = new Map<string, Map<string, string>>()
+  const packs = db.prepare('SELECT id, fields_json FROM facets').all() as Array<{ id: string; fields_json: string }>
+  const save = db.prepare('UPDATE facets SET fields_json = ? WHERE id = ?')
+  for (const pack of packs) {
+    let listed: unknown = []
+    try {
+      listed = JSON.parse(pack.fields_json || '[]')
+    } catch {
+      continue
+    }
+    if (!Array.isArray(listed)) continue
+    const fields: unknown[] = []
+    const seen = new Set<string>()
+    const map = new Map<string, string>()
+    for (const item of listed) {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) continue
+      const row = item as Record<string, unknown>
+      const oldKey = String(row.key ?? '').trim()
+      const label = String(row.label ?? '').trim()
+      const want = [label, oldKey].find((name) => isMigratableFacetFieldName(name)) ?? ''
+      if (!want) continue
+      const taken = seen.has(want.toLowerCase())
+      const dest = taken ? [...map.values()].find((name) => name.toLowerCase() === want.toLowerCase()) ?? want : want
+      if (!taken) {
+        seen.add(want.toLowerCase())
+        const next: Record<string, unknown> = { key: dest, type: row.type }
+        if (row.writable === false) next.writable = false
+        if (Array.isArray(row.enum)) next.enum = row.enum
+        if (row.enumLabels && typeof row.enumLabels === 'object') next.enumLabels = row.enumLabels
+        fields.push(next)
+      }
+      if (oldKey && oldKey !== dest) map.set(oldKey, dest)
+    }
+    save.run(JSON.stringify(fields), pack.id)
+    if (map.size) remaps.set(pack.id, map)
+  }
+  if (!remaps.size) return
+  if (tableNames(db).includes('facet_record_values')) {
+    const rows = db.prepare('SELECT collection, record_id, facet_json FROM facet_record_values').all() as Array<{
+      collection: string
+      record_id: string
+      facet_json: string
+    }>
+    const put = db.prepare('UPDATE facet_record_values SET facet_json = ? WHERE collection = ? AND record_id = ?')
+    for (const row of rows) {
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(row.facet_json || '{}')
+      } catch {
+        continue
+      }
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) continue
+      const rec = parsed as { tags?: unknown; values?: unknown }
+      if (!rec.values || typeof rec.values !== 'object' || Array.isArray(rec.values)) continue
+      let changed = false
+      const values: Record<string, Record<string, unknown>> = {}
+      for (const [packId, bag] of Object.entries(rec.values as Record<string, unknown>)) {
+        if (!bag || typeof bag !== 'object' || Array.isArray(bag)) {
+          values[packId] = bag as Record<string, unknown>
+          continue
+        }
+        const map = remaps.get(packId)
+        if (!map) {
+          values[packId] = bag as Record<string, unknown>
+          continue
+        }
+        const next: Record<string, unknown> = {}
+        for (const [key, value] of Object.entries(bag as Record<string, unknown>)) {
+          const dest = map.get(key) ?? key
+          if (dest !== key) changed = true
+          if (dest in next && (next[dest] != null && next[dest] !== '')) continue
+          next[dest] = value
+        }
+        values[packId] = next
+      }
+      if (changed) put.run(JSON.stringify({ ...rec, values }), row.collection, row.record_id)
+    }
+  }
+  if (!tableNames(db).includes('saved_views')) return
+  const views = db.prepare('SELECT collection, view_id, payload_json FROM saved_views').all() as Array<{
+    collection: string
+    view_id: string
+    payload_json: string
+  }>
+  const saveView = db.prepare('UPDATE saved_views SET payload_json = ? WHERE collection = ? AND view_id = ?')
+  const rewrite = (value: unknown): unknown => {
+    if (typeof value === 'string') {
+      if (!value.startsWith('facet::')) return value
+      const rest = value.slice('facet::'.length)
+      const split = rest.indexOf('::')
+      if (split <= 0) return value
+      const packId = rest.slice(0, split)
+      const fieldKey = rest.slice(split + 2)
+      const dest = remaps.get(packId)?.get(fieldKey)
+      return dest ? `facet::${packId}::${dest}` : value
+    }
+    if (Array.isArray(value)) return value.map(rewrite)
+    if (!value || typeof value !== 'object') return value
+    const out: Record<string, unknown> = {}
+    for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+      out[String(rewrite(key))] = rewrite(item)
+    }
+    return out
+  }
+  for (const row of views) {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(row.payload_json || '{}')
+    } catch {
+      continue
+    }
+    const next = rewrite(parsed)
+    const encoded = JSON.stringify(next)
+    if (encoded !== row.payload_json) saveView.run(encoded, row.collection, row.view_id)
+  }
+}
+
 export const BIU_MIGRATIONS: Migration[] = [
   { version: 1, module: 'core', name: 'baseline', up: (db) => baseline(db) },
   { version: 2, module: 'tasks', name: 'drop.task_views', up: (db) => db.exec('DROP TABLE IF EXISTS task_views') },
@@ -633,6 +786,9 @@ export const BIU_MIGRATIONS: Migration[] = [
   } },
   { version: 42, module: 'host-sessions', name: 'table.sessions-to-agents', up: (db) => {
     renameSessionsTableToAgents(db)
+  } },
+  { version: 43, module: 'core-file-system', name: 'facet.field.identity', up: (db) => {
+    migrateFacetFieldIdentity(db)
   } },
 ]
 

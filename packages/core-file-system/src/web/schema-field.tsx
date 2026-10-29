@@ -191,7 +191,7 @@ export function FacetPackEditor({ facetId }: { facetId: string }) {
       labels: pack.fields.map((item) => item.label ?? item.key),
     })
     if (!key) return false
-    const field: SchemaPackField = { key, type, label: name.trim(), writable: true }
+    const field: SchemaPackField = { key, type, writable: true }
     saveCatalog(catalog.map((item) => (item.id === pack.id ? { ...item, fields: [...item.fields, field] } : item)))
     return true
   }
@@ -310,7 +310,7 @@ export function SchemaFieldEditor({
       labels: tag.fields.map((item) => item.label ?? item.key),
     })
     if (!key) return false
-    const field: SchemaPackField = { key, type, label: name.trim(), writable: true }
+    const field: SchemaPackField = { key, type, writable: true }
     saveCatalog(catalog.map((item) => (item.id === tag.id ? { ...item, fields: [...item.fields, field] } : item)))
     return true
   }
@@ -321,7 +321,7 @@ export function SchemaFieldEditor({
 
   function restoreField(tag: CollectionSchemaPack, key: string, value: unknown) {
     const type = inferPackFieldType(value)
-    const field: SchemaPackField = { key, type, label: key, writable: true }
+    const field: SchemaPackField = { key, type, writable: true }
     const hit = catalog.find((item) => item.id === tag.id)
     if (hit?.fields.some((item) => item.key === key)) return
     if (hit) {

@@ -1,5 +1,5 @@
 import type { AtomicFieldType, CollectionSchema, CollectionSchemaPack, DbRecord, FieldSpec, FieldType, SchemaFieldValue } from '@biu/type-file-system'
-import { asAttachment, asAttachmentList, asHttpHref, asImageSrc, asImageSrcList, asPerson, asPersonList, BUILTIN_FIELD_KEYS, isFacetFieldType, isRefFieldType, isReservedSchemaFieldKey, normalizeSchemaValue, personKey } from '@biu/type-file-system'
+import { asAttachment, asAttachmentList, asHttpHref, asImageSrc, asImageSrcList, asPerson, asPersonList, BUILTIN_FIELD_KEYS, isFacetFieldType, isRefFieldType, isReservedSchemaFieldKey, isSchemaFieldKey, normalizeSchemaValue, personKey } from '@biu/type-file-system'
 import { FACET_FLAT_PREFIX, parseFacetFlatColumnKey, readFacetFieldValue } from '../query-logic.ts'
 import {
   cellGroupValue,
@@ -309,7 +309,7 @@ export function orphanPackEntries(fields: Array<{ key: string }>, bag: Record<st
   if (!bag) return out
   for (const [key, value] of Object.entries(bag)) {
     if (known.has(key) || isReservedSchemaFieldKey(key)) continue
-    if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(key)) continue
+    if (!isSchemaFieldKey(key)) continue
     if (value == null || value === '') continue
     if (typeof value === 'string' && !value.trim()) continue
     out.push({ key, value, type: inferPackFieldType(value) })

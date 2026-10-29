@@ -21,7 +21,7 @@ test('FacetStore keeps packs in sqlite including nested facet types', () => {
   const facets = store.list()
   assert.equal(facets.length, 1)
   assert.equal(facets[0]?.id, 'dp')
-  assert.deepEqual(facets[0]?.fields.map((field) => field.key), ['complexity', 'nested'])
+  assert.deepEqual(facets[0]?.fields.map((field) => field.key), ['复杂度', '套一层'])
   assert.equal(store.list('动态').length, 1)
   assert.equal(store.list('nope').length, 0)
 })

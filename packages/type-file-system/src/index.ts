@@ -319,6 +319,15 @@ export const RESERVED_SCHEMA_FIELD_KEYS = Object.keys(BUILTIN_FIELDS)
 /** 已去掉的 tags 记录列，禁止再登记同名列。 */
 const DROPPED_SCHEMA_FIELDS: Record<string, string> = { tags: '标签' }
 
+/** 标签属性 key：可与显示名相同（含中文）。禁止空、控制符、路径分隔和 facet:: 列分隔。 */
+export function isSchemaFieldKey(key: string) {
+  const next = String(key ?? '').trim()
+  if (!next || next.length > 64) return false
+  if (next.includes('::') || /[/\\]/.test(next)) return false
+  if (/[\u0000-\u001f]/.test(next)) return false
+  return true
+}
+
 export function isReservedSchemaFieldKey(key: string) {
   const next = String(key ?? '').trim()
   return Object.prototype.hasOwnProperty.call(BUILTIN_FIELDS, next) || Object.prototype.hasOwnProperty.call(DROPPED_SCHEMA_FIELDS, next)
@@ -365,6 +374,28 @@ export function isAtomicFieldType(type: unknown): type is AtomicFieldType {
   return typeof type === 'string' && (ATOMIC_FIELD_TYPES as readonly string[]).includes(type)
 }
 
+/** 属性只存一份名字：有 label 时以 label 为准，不再另写 label。 */
+function atomicFieldName(row: Record<string, unknown>) {
+  return String(row.label ?? row.key ?? '').trim()
+}
+
+function atomicSchemaField(key: string, row: Record<string, unknown>): SchemaPackField {
+  const field: SchemaPackField = {
+    key,
+    type: row.type as AtomicFieldType,
+    writable: row.writable !== false,
+  }
+  if (Array.isArray(row.enum)) field.enum = row.enum.map((option) => String(option)).filter(Boolean)
+  if (row.enumLabels && typeof row.enumLabels === 'object' && !Array.isArray(row.enumLabels)) {
+    field.enumLabels = Object.fromEntries(
+      Object.entries(row.enumLabels as Record<string, unknown>)
+        .map(([value, text]) => [value, String(text ?? '').trim()])
+        .filter(([value, text]) => Boolean(value && text && field.enum?.includes(value))),
+    )
+  }
+  return field
+}
+
 /** 写入标签属性定义：数组或 JSON 字符串均可；类型不在白名单时直接报错。 */
 export function parseAtomicFields(raw: unknown): SchemaPackField[] {
   if (raw == null || raw === '') return []
@@ -379,39 +410,20 @@ export function parseAtomicFields(raw: unknown): SchemaPackField[] {
   if (!Array.isArray(listed)) throw new Error('fields 应为数组或 JSON 字符串，例如 [{"key":"category","type":"string"}]')
   const fields: SchemaPackField[] = []
   const seen = new Set<string>()
-  const seenLabels = new Set<string>()
   for (const item of listed) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) {
-      throw new Error('fields 每一项应为 {key,type,label?} 对象')
+      throw new Error('fields 每一项应为 {key,type} 对象')
     }
     const row = item as Record<string, unknown>
-    const key = String(row.key ?? '').trim()
-    if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(key)) throw new Error(`invalid field key: ${key || '(empty)'}`)
-    if (seen.has(key)) throw new Error(`duplicate field key: ${key}`)
-    if (isReservedSchemaFieldKey(key)) throw new Error(`reserved field key: ${key}`)
+    const key = atomicFieldName(row)
+    if (!isSchemaFieldKey(key)) throw new Error(`invalid field key: ${key || '(empty)'}`)
+    if (seen.has(key.toLowerCase())) throw new Error(`duplicate field name: ${key}`)
+    if (isReservedSchemaFieldKey(key) || isReservedSchemaFieldLabel(key)) throw new Error(`reserved field name: ${key}`)
     if (!isAtomicFieldType(row.type)) {
       throw new Error(`unknown field type: ${String(row.type ?? '')}. allowed: ${ATOMIC_FIELD_TYPES.join(', ')}`)
     }
-    const fieldLabel = String(row.label ?? key).trim() || key
-    if (isReservedSchemaFieldLabel(fieldLabel)) throw new Error(`reserved field label: ${fieldLabel}`)
-    if (seenLabels.has(fieldLabel.toLowerCase())) throw new Error(`duplicate field label: ${fieldLabel}`)
-    seen.add(key)
-    seenLabels.add(fieldLabel.toLowerCase())
-    const field: SchemaPackField = {
-      key,
-      type: row.type,
-      label: fieldLabel,
-      writable: row.writable !== false,
-    }
-    if (Array.isArray(row.enum)) field.enum = row.enum.map((option) => String(option)).filter(Boolean)
-    if (row.enumLabels && typeof row.enumLabels === 'object' && !Array.isArray(row.enumLabels)) {
-      field.enumLabels = Object.fromEntries(
-        Object.entries(row.enumLabels as Record<string, unknown>)
-          .map(([value, text]) => [value, String(text ?? '').trim()])
-          .filter(([value, text]) => Boolean(value && text && field.enum?.includes(value))),
-      )
-    }
-    fields.push(field)
+    seen.add(key.toLowerCase())
+    fields.push(atomicSchemaField(key, row))
   }
   return fields
 }
@@ -435,33 +447,16 @@ export function normalizeSchemaPack(raw: unknown): CollectionSchemaPack | null {
   const label = String(rec.label ?? id).trim() || id
   const fields: SchemaPackField[] = []
   const seen = new Set<string>()
-  const seenLabels = new Set<string>()
   const listed = Array.isArray(rec.fields) ? rec.fields : []
   for (const item of listed) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) continue
     const row = item as Record<string, unknown>
-    const key = String(row.key ?? '').trim()
-    if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(key) || seen.has(key) || isReservedSchemaFieldKey(key)) continue
+    const key = atomicFieldName(row)
+    if (!isSchemaFieldKey(key) || seen.has(key.toLowerCase())) continue
+    if (isReservedSchemaFieldKey(key) || isReservedSchemaFieldLabel(key)) continue
     if (!isAtomicFieldType(row.type)) continue
-    const fieldLabel = String(row.label ?? key).trim() || key
-    if (isReservedSchemaFieldLabel(fieldLabel) || seenLabels.has(fieldLabel.toLowerCase())) continue
-    seen.add(key)
-    seenLabels.add(fieldLabel.toLowerCase())
-    const field: SchemaPackField = {
-      key,
-      type: row.type,
-      label: fieldLabel,
-      writable: row.writable !== false,
-    }
-    if (Array.isArray(row.enum)) field.enum = row.enum.map((option) => String(option)).filter(Boolean)
-    if (row.enumLabels && typeof row.enumLabels === 'object' && !Array.isArray(row.enumLabels)) {
-      field.enumLabels = Object.fromEntries(
-        Object.entries(row.enumLabels as Record<string, unknown>)
-          .map(([value, text]) => [value, String(text ?? '').trim()])
-          .filter(([value, text]) => Boolean(value && text && field.enum?.includes(value))),
-      )
-    }
-    fields.push(field)
+    seen.add(key.toLowerCase())
+    fields.push(atomicSchemaField(key, row))
   }
   return { id, label, fields }
 }

@@ -3,9 +3,9 @@ import { parseAtomicFields, recordBuiltinValues, REQUIRED_RECORD_FIELDS } from '
 import { FacetStore, slugFacetId } from './facets-store.ts'
 import { normalizeCollectionPath } from '../paths.ts'
 
-const FACET_FIELDS_EXAMPLE = '[{"key":"category","type":"string","label":"类别"}]'
+const FACET_FIELDS_EXAMPLE = '[{"key":"类别","type":"string"}]'
 const FACET_FIELDS_DESCRIPTION =
-  '属性定义。db_update / db_create 可传数组或 JSON 字符串，两种形状等价。例 [{"key":"category","type":"string","label":"类别"}]。type 必须是 string|number|boolean|select|multi-select|datetime|url|image|attachment|file|action|facet|person|ref|multi-ref（没有 text）。其它表读该属性的列 key 为 facet::<本标签id>::<字段key>，例如 facet::facet::category。'
+  '属性定义。db_update / db_create 可传数组或 JSON 字符串，两种形状等价。例 [{"key":"类别","type":"string"}]。同一标签下属性名不能重复。type 必须是 string|number|boolean|select|multi-select|datetime|url|image|attachment|file|action|facet|person|ref|multi-ref（没有 text）。其它表读该属性的列 key 为 facet::<本标签id>::<字段key>，例如 facet::facet::类别。'
 
 export function stampRecordId(collection: string, recordId: string) {
   const table = normalizeCollectionPath(collection).replace(/^\//, '')
@@ -101,7 +101,7 @@ export function facetsCollection(
       route: '/db-facets',
       title: '标签',
       inspector: true,
-      blurb: '工作区全局标签定义，可贴到任意表的记录。列表 db_list /facets；某标签已贴过哪些记录用 filter.facetId。新建 db_create /facets records=[{title}]（id 由标题 slug）。改名或属性 db_update /facets/<id>，fields 传数组或 JSON 字符串均可，例 [{"key":"category","type":"string","label":"类别"}]；type 必须是白名单（string 不是 text）。其它表 db_list 读属性列用 facet::<标签id>::<字段key>，例如 facet::facet::category。正文 notes 用 db_content。把标签贴到记录并填属性：db_update 那条记录的 facet。一个标签 values 可扁平；多个标签 values 必须按标签 id 分子对象。省略 tags 只改属性，不会撕掉其它标签。本表没有 db_action。',
+      blurb: '工作区全局标签定义，可贴到任意表的记录。列表 db_list /facets；某标签已贴过哪些记录用 filter.facetId。新建 db_create /facets records=[{title}]（id 由标题 slug）。改名或属性 db_update /facets/<id>，fields 传数组或 JSON 字符串均可，例 [{"key":"类别","type":"string"}]；同一标签下属性名不能重复；type 必须是白名单（string 不是 text）。其它表 db_list 读属性列用 facet::<标签id>::<字段key>，例如 facet::facet::类别。正文 notes 用 db_content。把标签贴到记录并填属性：db_update 那条记录的 facet。一个标签 values 可扁平；多个标签 values 必须按标签 id 分子对象。省略 tags 只改属性，不会撕掉其它标签。本表没有 db_action。',
       order: 31,
       icon: 'tag',
     },

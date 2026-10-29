@@ -34,9 +34,9 @@ test('facetsCollection lists facets with stamp counts and supports create/update
   assert.equal(Number(updated.createdAt), createdAt)
   assert.ok(Number(updated.updatedAt) >= Number(created[0]?.updatedAt))
   assert.equal(updated.fieldCount, 1)
-  assert.equal(store.get('io')?.fields[0]?.key, 'format')
+  assert.equal(store.get('io')?.fields[0]?.key, '格式')
   assert.equal(spec.schema.fields.fields?.writable, true)
-  assert.match(String(updated.fields), /format/)
+  assert.match(String(updated.fields), /格式/)
 
   const withNotes = await spec.update!(created[0]!.id, { notes: '# 标签说明\n' })
   assert.equal(withNotes.notes, '# 标签说明\n')
