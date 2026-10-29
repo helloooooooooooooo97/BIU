@@ -14,7 +14,6 @@ import {
   TagIcon,
   ArrowDownTrayIcon,
   GlobeAltIcon,
-  ShareIcon,
   UserIcon,
   UsersIcon,
   ViewColumnsIcon,
@@ -4228,8 +4227,11 @@ export function CollectionBrowser({
         >
           <span className="sidebar-rail-icon sidebar-group-fold" aria-hidden>
             <span className="sidebar-group-fold-face">
-              {groupBy === 'shareScope' && label === '共享' ? (
-                <ShareIcon aria-hidden className="size-[14px] tasks-queue-gshare" />
+              {groupBy === 'shareScope' ? (
+                <UiGlyph
+                  icon={label === '共享' ? 'globe' : label === '空间' ? 'users' : 'user'}
+                  className={label === '共享' ? 'tasks-queue-gshare' : undefined}
+                />
               ) : (
                 <UiGlyph icon="stack" />
               )}

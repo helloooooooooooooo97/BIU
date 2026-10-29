@@ -82,7 +82,7 @@ test('list and detail share the chat column max width with side padding', () => 
   assert.match(css, /\.fsdb-page \.tasks-queue-ghead\{[^}]*width:100%/)
   assert.match(css, /\.fsdb-page \.tasks-queue-count\{[^}]*margin-left:6px/)
   assert.match(css, /\.fsdb-page \.tasks-queue-ghead\{[^}]*color:var\(--biu-color-text\)/)
-  assert.match(css, /\.fsdb-page \.tasks-queue-gshare\{[^}]*color:#5289BC/)
+  assert.match(css, /\.fsdb-page \.tasks-queue-gshare\{[^}]*color:var\(--biu-color-icon-fixed\)/)
   assert.match(css, /\.fsdb-page \.tasks-queue-count\{[^}]*color:var\(--biu-color-text\)/)
   assert.match(css, /\.fsdb-page \.tasks-queue-count\{[^}]*border-radius:4px/)
   assert.doesNotMatch(css, /\.fsdb-page \.tasks-queue-count\{[^}]*border-radius:8px/)

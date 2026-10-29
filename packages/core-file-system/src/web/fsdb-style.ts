@@ -404,7 +404,7 @@ const CSS = `
 .fsdb-page .tasks-group-fold{display:grid;width:14px;min-width:14px;height:14px;flex:none;place-items:center;border:0;border-radius:4px;padding:0;background:transparent;color:inherit;cursor:pointer}
 .fsdb-page .tasks-group-fold .sidebar-group-fold{display:grid;width:14px;height:14px;place-items:center}
 .fsdb-page .tasks-queue-glabel{font-weight:650;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.fsdb-page .tasks-queue-gshare{color:#5289BC}
+.fsdb-page .tasks-queue-gshare{color:var(--biu-color-icon-fixed)}
 .fsdb-page .tasks-queue-count{margin-left:6px;color:var(--biu-color-text);font-size:var(--biu-font-size-4);font-weight:600;background:var(--biu-color-bg-faint);border-radius:4px;padding:1px 7px}
 .fsdb-page .tasks-queue-list{display:flex;flex-direction:column;margin:0;padding:0;list-style:none;gap:6px}
 .fsdb-page .tasks-queue-item{display:block;min-width:0;width:100%}

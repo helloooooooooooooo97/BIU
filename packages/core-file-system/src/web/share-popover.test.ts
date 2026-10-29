@@ -99,6 +99,8 @@ test('share panel separates public sharing from internal and external collaborat
   assert.match(src, /继承自/)
   assert.match(src, /export \{ ShareScopeLabel \}/)
   assert.match(readFileSync(resolve(import.meta.dirname, './share-scope-label.tsx'), 'utf8'), /export function ShareScopeLabel/)
+  assert.match(readFileSync(resolve(import.meta.dirname, './share-scope-label.tsx'), 'utf8'), /GlobeAltIcon/)
+  assert.doesNotMatch(readFileSync(resolve(import.meta.dirname, './share-scope-label.tsx'), 'utf8'), /ShareIcon/)
   assert.match(src, /export function ShareScopeDetail/)
   assert.match(src, /数据归属链路/)
   assert.match(src, /fsdb-scope-chain/)
