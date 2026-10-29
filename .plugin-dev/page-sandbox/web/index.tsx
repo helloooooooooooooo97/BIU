@@ -683,7 +683,7 @@ function SandboxCard({ data, update, writable, selected: nodeSelected }: BlockPr
         boxSizing: 'border-box',
         border: expanded
           ? 'none'
-          : `var(--biu-stroke-width-thick) solid ${selected ? 'var(--biu-color-emphasis)' : 'var(--biu-color-bg)'}`,
+          : `var(--biu-stroke-width-thick) solid ${selected ? 'color-mix(in srgb, var(--biu-color-emphasis) 38%, transparent)' : 'var(--biu-color-bg)'}`,
         borderRadius: expanded ? 0 : 10,
         background: 'var(--biu-color-bg)',
       }}
