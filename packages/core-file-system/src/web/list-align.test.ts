@@ -55,7 +55,7 @@ test('list and detail share the chat column max width with side padding', () => 
   assert.match(css, /\.fsdb-page \.tasks-table td \.fsdb-plain-input,[\s\S]*?\.fsdb-page \.tasks-table td \.biu-tag,[\s\S]*?font-weight:var\(--biu-font-weight-medium/)
   assert.match(css, /\.fsdb-page \.tasks-table td \.fsdb-scope-tag,[\s\S]*?\.fsdb-page \.tasks-table td \.fsdb-scope-tag\.is-read,[\s\S]*?color:var\(--biu-color-text/)
   assert.match(css, /\.fsdb-page \.tasks-table td \.fsdb-scope-tag\.is-shared,[\s\S]*?color:var\(--biu-color-emphasis\)/)
-  assert.match(css, /\.fsdb-page \.tasks-table td \.fsdb-scope-tag svg,[\s\S]*?color:inherit/)
+  assert.match(css, /\.fsdb-page \.tasks-table td \.fsdb-scope-tag svg,[\s\S]*?color:var\(--biu-color-icon-fixed\)/)
   assert.match(css, /\.fsdb-page \.tasks-table td \.fsdb-cellselect-trigger\.is-empty,[\s\S]*?color:var\(--biu-color-text-subtle\)/)
   assert.match(css, /\.fsdb-scope-tag\{[^}]*color:var\(--biu-color-text-muted\)/)
   assert.match(css, /\.fsdb-proprow-k,\.fsdb-prop>span:first-child\{[^}]*font-weight:500/)
@@ -220,7 +220,7 @@ test('detail share role and facet chips use table cell ink; leftover 13px/400 is
   assert.doesNotMatch(css, /\.fsdb-page \.fsdb-proprow-v[\s\S]{0,180}--biu-color-text:var\(--biu-color-text\)/)
   assert.match(css, /\.fsdb-page \.fsdb-proprow-v \.fsdb-scope-tag,[\s\S]*?\.fsdb-page \.fsdb-proprow-v \.fsdb-scope-tag\.is-read,[\s\S]*?color:var\(--biu-color-text/)
   assert.match(css, /\.fsdb-page \.fsdb-proprow-v \.fsdb-scope-tag\.is-shared,[\s\S]*?color:var\(--biu-color-emphasis\)/)
-  assert.match(css, /\.fsdb-page \.fsdb-proprow-v \.fsdb-scope-tag svg,[\s\S]*?color:inherit/)
+  assert.match(css, /\.fsdb-page \.fsdb-proprow-v \.fsdb-scope-tag svg,[\s\S]*?color:var\(--biu-color-icon-fixed\)/)
   assert.match(css, /\.fsdb-page \.tasks-table td\{[^}]*color:var\(--biu-color-text\)/)
 })
 
