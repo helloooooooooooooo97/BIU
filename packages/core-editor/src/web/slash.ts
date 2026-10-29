@@ -321,7 +321,7 @@ function decorateSlashStatus(item: SlashItem): SlashItem {
     return { ...item, status: 'failed', hint: '启动失败', pluginHref: pluginRecordPath(plugin) }
   }
   if (phase === 'missing') {
-    return { ...item, status: 'failed', hint: '不存在', pluginHref: pluginRecordPath(plugin) }
+    return { ...item, status: 'failed', hint: '插件不存在', pluginHref: pluginRecordPath(plugin) }
   }
   return item
 }

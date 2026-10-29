@@ -4,7 +4,6 @@ import { RenderBoundary } from '@biu/biu-ui'
 import { getPageEditor, usePageEditorVersion, type PageBlockViewProps } from './service.ts'
 import {
   ENABLE_PAGE_BLOCK_PLUGIN,
-  formatPageBlockFence,
   requestEnablePageBlockPlugin,
   usePageBlockPluginPhase,
   type PageBlockPluginPhase,
@@ -82,7 +81,7 @@ export function PageBlockMissing({
   data: Record<string, unknown>
   phase?: PageBlockPluginPhase
 }) {
-  const source = formatPageBlockFence(kind, plugin, data)
+  const source = JSON.stringify(data, null, 2)
   const loading = phase === 'loading'
   const missing = phase === 'missing'
   return (
@@ -94,7 +93,7 @@ export function PageBlockMissing({
           <span className="page-block-missing-state">没有插件 id</span>
         )}
         {loading ? <span className="page-block-missing-state">正在加载</span> : null}
-        {missing ? <span className="page-block-missing-state">不存在</span> : null}
+        {missing ? <span className="page-block-missing-state">插件不存在</span> : null}
         {plugin && !loading ? (
           <button
             type="button"
@@ -114,7 +113,7 @@ export function PageBlockMissing({
       </div>
       {loading ? null : (
         <div className="page-block-missing-source">
-          <SourceEditor value={source} writable={false} compact />
+          <SourceEditor value={source} language="json" writable={false} compact />
         </div>
       )}
     </div>
