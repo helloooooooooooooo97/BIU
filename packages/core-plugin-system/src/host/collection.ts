@@ -172,6 +172,7 @@ export function pluginsCollection(store: PluginStoreService): CollectionSpec {
         ...REQUIRED_RECORD_FIELDS,
         title: { type: 'string', label: '标题' },
         blurb: { type: 'string', label: '简介' },
+        builtin: { type: 'boolean', label: '内置' },
         installed: { type: 'boolean', label: '已安装' },
         sandbox: { type: 'boolean', label: '沙箱' },
         sandboxPath: { type: 'string', label: '源码路径' },

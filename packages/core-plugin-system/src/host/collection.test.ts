@@ -110,6 +110,7 @@ test('pluginsCollection lists installed plugins and sandboxes in one table', asy
   assert.match(String(spec.view?.blurb ?? ''), /:::pageBlock/)
   assert.equal(spec.schema.labelField, 'title')
   assert.ok(spec.schema.fields.title)
+  assert.equal(spec.schema.fields.builtin?.type, 'boolean')
   assert.equal(spec.schema.fields.name, undefined)
   assert.equal(spec.schema.columns?.[0], 'title')
   assert.deepEqual(spec.records, { update: false, create: false, delete: true })

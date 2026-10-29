@@ -1031,7 +1031,7 @@ test('title-only plugin list still returns action when flags', async () => {
   const ctx = new Context()
   const db = new DatabaseService(ctx)
   const rows = [
-    { id: 'run', title: '运行中', installed: true, running: true, sandbox: true },
+    { id: 'run', title: '运行中', installed: true, running: true, sandbox: true, builtin: true },
     { id: 'idle', title: '已装', installed: true, sandbox: true },
     { id: 'dev', title: '沙箱', sandbox: true },
   ]
@@ -1041,7 +1041,7 @@ test('title-only plugin list still returns action when flags', async () => {
     label: '插件',
     schema: {
       labelField: 'title',
-      fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string' } },
+      fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string' }, builtin: { type: 'boolean' } },
     },
     list: () => rows,
     get: (id) => rows.find((row) => row.id === id) ?? null,
@@ -1062,6 +1062,7 @@ test('title-only plugin list still returns action when flags', async () => {
   assert.equal(run?.installed, true)
   assert.equal(run?.running, true)
   assert.equal(run?.sandbox, true)
+  assert.equal(run?.builtin, true)
   assert.equal(idle?.installed, true)
   assert.equal(idle?.sandbox, true)
   assert.equal(dev?.sandbox, true)
