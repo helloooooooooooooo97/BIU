@@ -60,8 +60,8 @@ const ShellSearchPanel = lazy(() => import('./shell-search.tsx').then((m) => ({ 
 import {
   ChevronDoubleLeftIcon,
   ChevronDoubleRightIcon,
-  ArrowsPointingInIcon,
   ArrowsPointingOutIcon,
+  MinusIcon,
   AdjustmentsHorizontalIcon,
   ArrowDownTrayIcon,
   CommandLineIcon,
@@ -821,7 +821,7 @@ function Shell(props: SlotProps) {
             setOverlayThread(false)
           }}
         >
-          <ArrowsPointingInIcon {...chromeIcon} />
+          <MinusIcon {...chromeIcon} />
         </button>
         <button
           type="button"

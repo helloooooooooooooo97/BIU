@@ -30,6 +30,8 @@ test('overlay chat is a resident floating window off the agent page', () => {
   assert.doesNotMatch(overlayHead.slice(0, 1600), /layoutTools/)
   assert.doesNotMatch(overlayHead.slice(0, 1600), /chat-overlay-layout/)
   assert.match(overlayHead.slice(0, 2200), /chat-overlay-shrink/)
+  assert.match(overlayHead.slice(0, 2200), /<MinusIcon \{\.\.\.chromeIcon\} \/>/)
+  assert.doesNotMatch(overlayHead.slice(0, 2200), /ArrowsPointingInIcon/)
   assert.match(overlayHead.slice(0, 2200), /setOverlayThread\(false\)/)
   assert.match(overlayHead.slice(0, 2200), /chat-overlay-expand/)
   assert.match(overlayHead.slice(0, 2200), /navigate\(agentHref\)/)
