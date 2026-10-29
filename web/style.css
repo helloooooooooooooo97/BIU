@@ -1177,29 +1177,21 @@ body {
 .settings-theme-card[data-theme-card="light"] {
   color-scheme: light;
   background: #ffffff;
-  color: var(--biu-color-text-muted);
+  color: #2c2c2b;
 }
 
 .settings-theme-card[data-theme-card="light"]:hover {
   background: #f9f8f7;
 }
 
-.settings-theme-card[data-theme-card="light"].is-on {
-  color: var(--biu-color-text);
-}
-
 .settings-theme-card[data-theme-card="dark"] {
   color-scheme: dark;
   background: #191919;
-  color: var(--biu-color-text-muted);
+  color: #ffffff;
 }
 
 .settings-theme-card[data-theme-card="dark"]:hover {
   background: #202020;
-}
-
-.settings-theme-card[data-theme-card="dark"].is-on {
-  color: #d4d4d4;
 }
 
 .settings-theme-preview {
