@@ -124,7 +124,7 @@ function schemaWithTagPack(schema: CollectionSchema, pack: CollectionSchemaPack 
   const fields = { ...schema.fields }
   const extra: string[] = []
   for (const field of pack.fields) {
-    if (STAMP_FIELD_BLOCKLIST.has(field.key)) continue
+    if (field.deleted || STAMP_FIELD_BLOCKLIST.has(field.key)) continue
     fields[field.key] = {
       type: field.type,
       label: field.label ?? field.key,
@@ -490,7 +490,7 @@ function packFieldKey(pack: CollectionSchemaPack | null | undefined, name: strin
   const want = String(name ?? '').trim()
   if (!pack || !want) return want
   for (const field of pack.fields) {
-    if (field.key === want) return field.key
+    if (field.key === want || field.label === want) return field.key
   }
   return want
 }
@@ -558,7 +558,7 @@ function coerceFacetPatch(
         for (const [key, value] of Object.entries(flat)) {
           const hit = tags
             .map((id) => resolvePack(id))
-            .find((pack) => pack?.fields.some((field) => field.key === key))
+            .find((pack) => pack?.fields.some((field) => field.key === key || field.label === key))
           if (hit) applyBag(hit.id, { [key]: value })
         }
       }
@@ -568,7 +568,7 @@ function coerceFacetPatch(
     if (key === 'tags' || key === 'values') continue
     if (tags.length === 1) applyBag(tags[0]!, { [key]: value })
     else {
-      const hit = tags.map((id) => resolvePack(id)).find((pack) => pack?.fields.some((field) => field.key === key))
+      const hit = tags.map((id) => resolvePack(id)).find((pack) => pack?.fields.some((field) => field.key === key || field.label === key))
       if (hit) applyBag(hit.id, { [key]: value })
     }
   }
@@ -1507,7 +1507,7 @@ export class DatabaseService extends Service implements Database {
 
   private async hydrateFacetStamps(rows: DbRecord[], pack: CollectionSchemaPack | null) {
     if (!pack?.fields.length) return
-    const wanted = pack.fields.filter((field) => !STAMP_FIELD_BLOCKLIST.has(field.key))
+    const wanted = pack.fields.filter((field) => !field.deleted && !STAMP_FIELD_BLOCKLIST.has(field.key))
     if (!wanted.length) return
     for (const row of rows) {
       const collection = String(row.tablePath ?? '')

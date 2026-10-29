@@ -582,6 +582,9 @@ const CSS = `
 .fsdb-schema-prop{display:grid;grid-template-columns:108px minmax(0,1fr);align-items:center;gap:8px;min-height:32px;border-radius:6px;padding:0 4px}
 .fsdb-schema-prop:hover{background:var(--biu-color-bg-hover)}
 .fsdb-schema-prop-k{display:inline-flex;align-items:center;gap:6px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--biu-font-size-4);font-weight:500;color:var(--biu-color-text-subtle)}
+.fsdb-schema-prop-k.is-rename{margin:0;border:0;padding:0;background:transparent;color:inherit;font:inherit;cursor:text;text-align:left}
+.fsdb-schema-prop-k.is-editing{flex-wrap:wrap;overflow:visible;white-space:normal}
+.fsdb-schema-prop-rename{flex:1;min-width:0;border:0;border-radius:4px;padding:2px 4px;background:var(--biu-color-bg-hover);color:var(--biu-color-text);font:inherit;font-size:inherit;outline:none}
 .fsdb-schema-prop-v{display:flex;align-items:center;gap:4px;min-width:0;color:var(--biu-color-text-subtle)}
 .fsdb-schema-prop-v .fsdb-plain-input,.fsdb-schema-prop-v .fsdb-cellselect{flex:1;min-width:0}
 .fsdb-schema-prop-del{opacity:0;display:grid;place-items:center;width:22px;height:22px;border:0;border-radius:6px;background:transparent;color:var(--biu-color-text-subtle);cursor:pointer}

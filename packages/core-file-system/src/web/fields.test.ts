@@ -184,7 +184,17 @@ test('default columns omit flattened type properties', () => {
   assert.deepEqual(defaultColumnKeys(schema, ['title', 'status', 'facet', nested]), ['title', 'status', 'facet'])
   assert.equal(parseFacetFlatColumnKey(nested)?.packId, 'haohao')
   assert.equal(parseFacetFlatColumnKey(nested)?.fieldKey, 'dede')
-  const cols = flattenFacetColumns([{ id: 'haohao', label: '好好哈', fields: [{ key: 'dede', type: 'string', label: '的的' }] }])
+  const cols = flattenFacetColumns([
+    {
+      id: 'haohao',
+      label: '好好哈',
+      fields: [
+        { key: 'dede', type: 'string', label: '的的' },
+        { key: 'gone', type: 'string', label: '旧的', deleted: true },
+      ],
+    },
+  ])
+  assert.equal(cols.length, 1)
   assert.equal(cols[0]?.key, nested)
   assert.equal(facetColumnTitle(cols[0]!), '好好哈.的的')
   assert.equal(facetColumnTitle({ key: 'title', field: { label: '标题' } }), '标题')

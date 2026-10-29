@@ -16,7 +16,7 @@ import { CellMulti } from '@biu/database-ui'
 import { DefaultCell, FieldGlyph } from './fsdb-cells.tsx'
 import { FieldValuePop } from './field-value-pop.tsx'
 import { inferPackFieldType, orphanPackEntries } from './fields.ts'
-import { loadFacets, persistFacets, registerFacetFieldKey, slugFacetId, subscribeFacets } from './facet-catalog.ts'
+import { facetFieldLabelOk, loadFacets, persistFacets, registerFacetFieldKey, slugFacetId, subscribeFacets } from './facet-catalog.ts'
 
 const TYPE_LABEL: Partial<Record<FieldType, string>> = {
   string: '文本',
@@ -103,6 +103,91 @@ function TypeMenu({ value, onChange }: { value: AtomicFieldType; onChange: (next
   )
 }
 
+function SchemaPropName({
+  name,
+  kind,
+  onRename,
+}: {
+  name: string
+  kind: FieldType
+  onRename?: (next: string) => boolean | void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(name)
+  const [error, setError] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    setDraft(name)
+  }, [name])
+
+  useEffect(() => {
+    if (editing) inputRef.current?.focus()
+  }, [editing])
+
+  function finish(next = name) {
+    setEditing(false)
+    setDraft(next)
+    setError('')
+  }
+
+  function commit() {
+    const next = draft.trim()
+    if (!next || next === name) {
+      finish()
+      return
+    }
+    if (onRename?.(next) === false) {
+      setError('不能与系统字段或已有属性重名')
+      return
+    }
+    finish(next)
+  }
+
+  if (!onRename) {
+    return (
+      <span className="fsdb-schema-prop-k" title={name}>
+        <FieldGlyph kind={kind} />
+        {name}
+      </span>
+    )
+  }
+
+  if (!editing) {
+    return (
+      <button type="button" className="fsdb-schema-prop-k is-rename" title={`重命名 ${name}`} onClick={() => setEditing(true)}>
+        <FieldGlyph kind={kind} />
+        {name}
+      </button>
+    )
+  }
+
+  return (
+    <span className="fsdb-schema-prop-k is-editing">
+      <FieldGlyph kind={kind} />
+      <input
+        ref={inputRef}
+        className="fsdb-schema-prop-rename"
+        value={draft}
+        aria-label={`重命名 ${name}`}
+        onChange={(event) => setDraft(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault()
+            commit()
+          }
+          if (event.key === 'Escape') {
+            event.preventDefault()
+            finish()
+          }
+        }}
+        onBlur={() => commit()}
+      />
+      {error ? <span className="fsdb-schema-addprop-err">{error}</span> : null}
+    </span>
+  )
+}
+
 export function AddProperty({ onAdd }: { onAdd: (label: string, type: AtomicFieldType) => boolean | void }) {
   const [open, setOpen] = useState(false)
   const [label, setLabel] = useState('')
@@ -184,6 +269,8 @@ export function FacetPackEditor({ facetId }: { facetId: string }) {
 
   if (!tag) return <p className="fsdb-muted">这条标签已不在目录里。</p>
   const pack = tag
+  const live = pack.fields.filter((field) => !field.deleted)
+  const retired = pack.fields.filter((field) => field.deleted)
 
   function addField(name: string, type: AtomicFieldType) {
     const key = registerFacetFieldKey(name, {
@@ -191,20 +278,66 @@ export function FacetPackEditor({ facetId }: { facetId: string }) {
       labels: pack.fields.map((item) => item.label ?? item.key),
     })
     if (!key) return false
-    const field: SchemaPackField = { key, type, writable: true }
+    const field: SchemaPackField = { key, type, label: name.trim(), writable: true }
     saveCatalog(catalog.map((item) => (item.id === pack.id ? { ...item, fields: [...item.fields, field] } : item)))
     return true
   }
 
+  function renameField(from: string, name: string) {
+    const others = pack.fields.filter((item) => item.key !== from)
+    if (!facetFieldLabelOk(name, others.map((item) => item.label ?? item.key))) return false
+    const label = name.trim()
+    saveCatalog(
+      catalog.map((item) =>
+        item.id === pack.id
+          ? {
+              ...item,
+              fields: item.fields.map((row) => {
+                if (row.key !== from) return row
+                const next = { ...row, label }
+                if (label === row.key) delete next.label
+                return next
+              }),
+            }
+          : item,
+      ),
+    )
+    return true
+  }
+
   function removeField(key: string) {
-    saveCatalog(catalog.map((item) => (item.id === pack.id ? { ...item, fields: item.fields.filter((row) => row.key !== key) } : item)))
+    saveCatalog(
+      catalog.map((item) =>
+        item.id === pack.id
+          ? { ...item, fields: item.fields.map((row) => (row.key === key ? { ...row, deleted: true } : row)) }
+          : item,
+      ),
+    )
+  }
+
+  function restoreField(key: string) {
+    saveCatalog(
+      catalog.map((item) =>
+        item.id === pack.id
+          ? {
+              ...item,
+              fields: item.fields.map((row) => {
+                if (row.key !== key) return row
+                const next = { ...row }
+                delete next.deleted
+                return next
+              }),
+            }
+          : item,
+      ),
+    )
   }
 
   return (
     <div className="fsdb-schema" data-testid="fsdb-facet-fields">
-      {pack.fields.length ? (
+      {live.length ? (
         <TagChips>
-          {pack.fields.map((field) => (
+          {live.map((field) => (
             <SchemaChip key={field.key} id={field.key} label={field.label ?? field.key} />
           ))}
         </TagChips>
@@ -212,16 +345,33 @@ export function FacetPackEditor({ facetId }: { facetId: string }) {
         <span className="fsdb-muted">添加属性</span>
       )}
       <div className="fsdb-schema-pack">
-      {pack.fields.map((field) => (
+      {live.map((field) => (
         <div key={field.key} className="fsdb-schema-prop">
+          <SchemaPropName name={field.label ?? field.key} kind={field.type} onRename={(next) => renameField(field.key, next)} />
+          <div className="fsdb-schema-prop-v">
+            <span className="fsdb-muted">{TYPE_LABEL[field.type]}</span>
+            <button type="button" className="fsdb-schema-prop-del" aria-label={`删除 ${field.label ?? field.key}`} onClick={() => removeField(field.key)}>
+              <XMarkIcon aria-hidden className="size-3" />
+            </button>
+          </div>
+        </div>
+      ))}
+      {retired.map((field) => (
+        <div key={`retired:${field.key}`} className="fsdb-schema-prop is-orphan">
           <span className="fsdb-schema-prop-k" title={field.label ?? field.key}>
             <FieldGlyph kind={field.type} />
             {field.label ?? field.key}
           </span>
           <div className="fsdb-schema-prop-v">
             <span className="fsdb-muted">{TYPE_LABEL[field.type]}</span>
-            <button type="button" className="fsdb-schema-prop-del" aria-label={`删除 ${field.label ?? field.key}`} onClick={() => removeField(field.key)}>
-              <XMarkIcon aria-hidden className="size-3" />
+            <button
+              type="button"
+              className="fsdb-schema-prop-restore"
+              aria-label={`恢复 ${field.label ?? field.key}`}
+              data-dock-tip="恢复"
+              onClick={() => restoreField(field.key)}
+            >
+              <ArrowUturnLeftIcon aria-hidden className="size-3" />
             </button>
           </div>
         </div>
@@ -310,20 +460,67 @@ export function SchemaFieldEditor({
       labels: tag.fields.map((item) => item.label ?? item.key),
     })
     if (!key) return false
-    const field: SchemaPackField = { key, type, writable: true }
+    const field: SchemaPackField = { key, type, label: name.trim(), writable: true }
     saveCatalog(catalog.map((item) => (item.id === tag.id ? { ...item, fields: [...item.fields, field] } : item)))
     return true
   }
 
+  function renameField(tag: CollectionSchemaPack, from: string, name: string) {
+    const others = tag.fields.filter((item) => item.key !== from)
+    if (!facetFieldLabelOk(name, others.map((item) => item.label ?? item.key))) return false
+    const label = name.trim()
+    saveCatalog(
+      catalog.map((item) =>
+        item.id === tag.id
+          ? {
+              ...item,
+              fields: item.fields.map((row) => {
+                if (row.key !== from) return row
+                const next = { ...row, label }
+                if (label === row.key) delete next.label
+                return next
+              }),
+            }
+          : item,
+      ),
+    )
+    return true
+  }
+
   function removeField(tagId: string, key: string) {
-    saveCatalog(catalog.map((tag) => (tag.id === tagId ? { ...tag, fields: tag.fields.filter((item) => item.key !== key) } : tag)))
+    saveCatalog(
+      catalog.map((tag) =>
+        tag.id === tagId
+          ? { ...tag, fields: tag.fields.map((item) => (item.key === key ? { ...item, deleted: true } : item)) }
+          : tag,
+      ),
+    )
   }
 
   function restoreField(tag: CollectionSchemaPack, key: string, value: unknown) {
+    const hit = catalog.find((item) => item.id === tag.id)
+    const kept = hit?.fields.find((item) => item.key === key)
+    if (kept && !kept.deleted) return
+    if (kept?.deleted) {
+      saveCatalog(
+        catalog.map((item) =>
+          item.id === tag.id
+            ? {
+                ...item,
+                fields: item.fields.map((row) => {
+                  if (row.key !== key) return row
+                  const next = { ...row }
+                  delete next.deleted
+                  return next
+                }),
+              }
+            : item,
+        ),
+      )
+      return
+    }
     const type = inferPackFieldType(value)
     const field: SchemaPackField = { key, type, writable: true }
-    const hit = catalog.find((item) => item.id === tag.id)
-    if (hit?.fields.some((item) => item.key === key)) return
     if (hit) {
       saveCatalog(catalog.map((item) => (item.id === tag.id ? { ...item, fields: [...item.fields, field] } : item)))
       return
@@ -365,12 +562,9 @@ export function SchemaFieldEditor({
             <div className="fsdb-schema-pack-head">
               <SchemaChip id={tag.id} label={tag.label} />
             </div>
-            {tag.fields.map((field) => (
+            {tag.fields.filter((field) => !field.deleted).map((field) => (
               <div key={field.key} className="fsdb-schema-prop">
-                <span className="fsdb-schema-prop-k" title={field.label ?? field.key}>
-                  <FieldGlyph kind={field.type} />
-                  {field.label ?? field.key}
-                </span>
+                <SchemaPropName name={field.label ?? field.key} kind={field.type} onRename={(next) => renameField(tag, field.key, next)} />
                 <div className="fsdb-schema-prop-v">
                   <FieldValuePop
                     record={record}
@@ -397,16 +591,16 @@ export function SchemaFieldEditor({
             ))}
             {orphans.map((orphan) => (
               <div key={`orphan:${orphan.key}`} className="fsdb-schema-prop is-orphan">
-                <span className="fsdb-schema-prop-k" title={orphan.key}>
+                <span className="fsdb-schema-prop-k" title={orphan.label}>
                   <FieldGlyph kind={orphan.type} />
-                  {orphan.key}
+                  {orphan.label}
                 </span>
                 <div className="fsdb-schema-prop-v">
-                  <DefaultCell field={{ type: orphan.type, label: orphan.key, writable: false }} value={orphan.value} />
+                  <DefaultCell field={{ type: orphan.type, label: orphan.label, writable: false }} value={orphan.value} />
                   <button
                     type="button"
                     className="fsdb-schema-prop-restore"
-                    aria-label={`恢复 ${orphan.key}`}
+                    aria-label={`恢复 ${orphan.label}`}
                     data-dock-tip="恢复"
                     onClick={() => restoreField(tag, orphan.key, orphan.value)}
                   >
