@@ -545,6 +545,7 @@ test('editor content exposes a version and rejects stale writes', async () => {
   assert.equal(initial.version, 0)
   const first = await db.writeContent('/pages/p1', 'one', initial.version)
   assert.equal(first.version, 1)
+  assert.ok(Number(first.updatedAt) > 0)
   await assert.rejects(() => db.writeContent('/pages/p1', 'stale', initial.version), /正文版本冲突/)
   const current = await db.content('/pages/p1')
   assert.equal(current.value, 'one')

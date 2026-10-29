@@ -3619,7 +3619,7 @@ export function CollectionBrowser({
         contentWritePending.current.set(path, (contentWritePending.current.get(path) ?? 0) + 1)
         const previous = contentWriteQueues.current.get(path) ?? Promise.resolve()
         const run = previous.catch(() => undefined).then(async () => {
-          const data = await readJson<{ value?: unknown; version?: number }>('/api/db/content', {
+          const data = await readJson<{ value?: unknown; version?: number; updatedAt?: number }>('/api/db/content', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({
@@ -3634,6 +3634,12 @@ export function CollectionBrowser({
             setDetailBodyStatus('ready')
             setDetailBodyError('')
           }
+          const touched = Number(data.updatedAt)
+          const stamp = Number.isFinite(touched) && touched > 0 ? touched : Date.now()
+          const mergeTime = (item: DbRecord) => (item.id === row.id ? { ...item, updatedAt: stamp } : item)
+          mapListedRecords(mergeTime)
+          setDetailRow((prev) => (prev?.id === row.id ? mergeTime(prev) : prev))
+          publishListedMutation({ path: dataPath, op: 'patch', row: { id: row.id, updatedAt: stamp }, groupBy })
           announceListChange()
         }).catch(async (error) => {
           if (!(error instanceof HttpError) || error.status !== 409) throw error
