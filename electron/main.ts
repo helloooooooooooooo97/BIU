@@ -132,7 +132,7 @@ function inspectScript(x: number, y: number) {
     return new Promise((resolve) => {
       const FILL = 'rgba(91,159,214,.22)'
       const STROKE = 'rgba(91,159,214,.4)'
-      const LINE = '#5b9fd6'
+      const LINE = '#308dbf'
       const DRAG = 6
       const skip = new Set(['SCRIPT', 'STYLE', 'LINK', 'META', 'NOSCRIPT', 'HEAD', 'HTML'])
       const root = document.createElement('div')
