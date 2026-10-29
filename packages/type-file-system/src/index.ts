@@ -421,10 +421,13 @@ export function parseAtomicFields(raw: unknown): SchemaPackField[] {
       throw new Error(`unknown field type: ${String(row.type ?? '')}. allowed: ${ATOMIC_FIELD_TYPES.join(', ')}`)
     }
     const fieldLabel = String(row.label ?? key).trim() || key
-    if (isReservedSchemaFieldLabel(fieldLabel)) throw new Error(`reserved field name: ${fieldLabel}`)
-    if (seenLabels.has(fieldLabel.toLowerCase())) throw new Error(`duplicate field name: ${fieldLabel}`)
+    const deleted = row.deleted === true
+    if (!deleted) {
+      if (isReservedSchemaFieldLabel(fieldLabel)) throw new Error(`reserved field name: ${fieldLabel}`)
+      if (seenLabels.has(fieldLabel.toLowerCase())) throw new Error(`duplicate field name: ${fieldLabel}`)
+      seenLabels.add(fieldLabel.toLowerCase())
+    }
     seen.add(key)
-    seenLabels.add(fieldLabel.toLowerCase())
     fields.push(atomicSchemaField(key, row, fieldLabel))
   }
   return fields
@@ -463,9 +466,10 @@ export function normalizeSchemaPack(raw: unknown): CollectionSchemaPack | null {
     if (!isSchemaFieldKey(key) || seen.has(key) || isReservedSchemaFieldKey(key)) continue
     if (!isAtomicFieldType(row.type)) continue
     const fieldLabel = String(row.label ?? key).trim() || key
-    if (isReservedSchemaFieldLabel(fieldLabel) || seenLabels.has(fieldLabel.toLowerCase())) continue
+    const deleted = row.deleted === true
+    if (!deleted && (isReservedSchemaFieldLabel(fieldLabel) || seenLabels.has(fieldLabel.toLowerCase()))) continue
     seen.add(key)
-    seenLabels.add(fieldLabel.toLowerCase())
+    if (!deleted) seenLabels.add(fieldLabel.toLowerCase())
     fields.push(atomicSchemaField(key, row, fieldLabel))
   }
   return { id, label, fields }

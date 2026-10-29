@@ -144,11 +144,22 @@ test('normalizeSchemaPack keeps deleted fields and their labels', () => {
   const pack = normalizeSchemaPack({
     id: 'dp',
     label: '动态规划',
-    fields: [{ key: '4829103', type: 'string', label: '复杂度', deleted: true }],
+    fields: [
+      { key: '4829103', type: 'string', label: '复杂度', deleted: true },
+      { key: '9911', type: 'string', label: '复杂度' },
+    ],
   })
   assert.equal(pack?.fields[0]?.key, '4829103')
   assert.equal(pack?.fields[0]?.label, '复杂度')
   assert.equal(pack?.fields[0]?.deleted, true)
+  assert.equal(pack?.fields[1]?.key, '9911')
+  assert.equal(pack?.fields[1]?.deleted, undefined)
+  const parsed = parseAtomicFields([
+    { key: '1', type: 'string', label: '你好', deleted: true },
+    { key: '2', type: 'string', label: '你好' },
+  ])
+  assert.equal(parsed.length, 2)
+  assert.equal(parsed[1]?.label, '你好')
 })
 
 test('normalizeSchemaPack drops reserved or duplicate field names', () => {

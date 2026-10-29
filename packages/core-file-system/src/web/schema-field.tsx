@@ -16,7 +16,7 @@ import { CellMulti } from '@biu/database-ui'
 import { DefaultCell, FieldGlyph } from './fsdb-cells.tsx'
 import { FieldValuePop } from './field-value-pop.tsx'
 import { inferPackFieldType, orphanPackEntries } from './fields.ts'
-import { facetFieldLabelOk, loadFacets, persistFacets, registerFacetFieldKey, slugFacetId, subscribeFacets } from './facet-catalog.ts'
+import { facetFieldLabelOk, facetLiveLabels, loadFacets, persistFacets, registerFacetFieldKey, slugFacetId, subscribeFacets } from './facet-catalog.ts'
 
 const TYPE_LABEL: Partial<Record<FieldType, string>> = {
   string: '文本',
@@ -275,7 +275,7 @@ export function FacetPackEditor({ facetId }: { facetId: string }) {
   function addField(name: string, type: AtomicFieldType) {
     const key = registerFacetFieldKey(name, {
       keys: pack.fields.map((item) => item.key),
-      labels: pack.fields.map((item) => item.label ?? item.key),
+      labels: facetLiveLabels(pack.fields),
     })
     if (!key) return false
     const field: SchemaPackField = { key, type, label: name.trim(), writable: true }
@@ -284,8 +284,7 @@ export function FacetPackEditor({ facetId }: { facetId: string }) {
   }
 
   function renameField(from: string, name: string) {
-    const others = pack.fields.filter((item) => item.key !== from)
-    if (!facetFieldLabelOk(name, others.map((item) => item.label ?? item.key))) return false
+    if (!facetFieldLabelOk(name, facetLiveLabels(pack.fields, from))) return false
     const label = name.trim()
     saveCatalog(
       catalog.map((item) =>
@@ -316,6 +315,8 @@ export function FacetPackEditor({ facetId }: { facetId: string }) {
   }
 
   function restoreField(key: string) {
+    const kept = pack.fields.find((item) => item.key === key)
+    if (kept && !facetFieldLabelOk(kept.label ?? kept.key, facetLiveLabels(pack.fields, key))) return
     saveCatalog(
       catalog.map((item) =>
         item.id === pack.id
@@ -457,7 +458,7 @@ export function SchemaFieldEditor({
   function addField(tag: CollectionSchemaPack, name: string, type: AtomicFieldType) {
     const key = registerFacetFieldKey(name, {
       keys: tag.fields.map((item) => item.key),
-      labels: tag.fields.map((item) => item.label ?? item.key),
+      labels: facetLiveLabels(tag.fields),
     })
     if (!key) return false
     const field: SchemaPackField = { key, type, label: name.trim(), writable: true }
@@ -466,8 +467,7 @@ export function SchemaFieldEditor({
   }
 
   function renameField(tag: CollectionSchemaPack, from: string, name: string) {
-    const others = tag.fields.filter((item) => item.key !== from)
-    if (!facetFieldLabelOk(name, others.map((item) => item.label ?? item.key))) return false
+    if (!facetFieldLabelOk(name, facetLiveLabels(tag.fields, from))) return false
     const label = name.trim()
     saveCatalog(
       catalog.map((item) =>
@@ -502,6 +502,7 @@ export function SchemaFieldEditor({
     const kept = hit?.fields.find((item) => item.key === key)
     if (kept && !kept.deleted) return
     if (kept?.deleted) {
+      if (!facetFieldLabelOk(kept.label ?? kept.key, facetLiveLabels(hit.fields, key))) return
       saveCatalog(
         catalog.map((item) =>
           item.id === tag.id

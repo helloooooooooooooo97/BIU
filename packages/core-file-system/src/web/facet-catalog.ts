@@ -114,6 +114,15 @@ export function fieldKeyFromLabel(_label: string, used: Set<string>) {
   return randomFacetFieldKey(used)
 }
 
+export function facetLiveLabels(
+  fields: Iterable<{ key: string; label?: string; deleted?: boolean }>,
+  exceptKey?: string,
+) {
+  return [...fields]
+    .filter((item) => item.deleted !== true && item.key !== exceptKey)
+    .map((item) => item.label ?? item.key)
+}
+
 export function facetFieldLabelOk(label: string, usedLabels: Iterable<string> = []) {
   const name = label.trim()
   if (!name) return false
