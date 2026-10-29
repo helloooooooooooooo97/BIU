@@ -402,7 +402,11 @@ const CSS = `
 .fsdb-page .tasks-queue-group{display:flex;flex-direction:column;gap:2px}
 .fsdb-page .tasks-queue-ghead{display:flex;align-items:center;gap:6px;width:100%;box-sizing:border-box;padding:4px 8px;color:var(--biu-color-text);font-size:var(--biu-font-size-4);font-weight:650;letter-spacing:.01em;cursor:default}
 .fsdb-page .tasks-group-fold{display:grid;width:14px;min-width:14px;height:14px;flex:none;place-items:center;border:0;border-radius:4px;padding:0;background:transparent;color:inherit;cursor:pointer}
-.fsdb-page .tasks-group-fold .sidebar-group-fold,.fsdb-page .tasks-group-fold .sidebar-group-fold-face,.fsdb-page .tasks-group-fold .sidebar-group-fold-chevron{display:grid;width:14px;height:14px;place-items:center}
+.fsdb-page .tasks-group-fold .sidebar-group-fold{display:grid;width:14px;height:14px;place-items:center}
+.fsdb-page .tasks-group-fold .sidebar-group-fold-face,.fsdb-page .tasks-group-fold .sidebar-group-fold-chevron{position:absolute;inset:0;width:14px;height:14px}
+.fsdb-page .tasks-group-fold .sidebar-group-fold-chevron{display:none}
+.fsdb-page .tasks-group-fold .sidebar-group-fold:hover .sidebar-group-fold-face,.fsdb-page .tasks-group-fold .sidebar-group-fold:focus-within .sidebar-group-fold-face{display:none}
+.fsdb-page .tasks-group-fold .sidebar-group-fold:hover .sidebar-group-fold-chevron,.fsdb-page .tasks-group-fold .sidebar-group-fold:focus-within .sidebar-group-fold-chevron{display:grid}
 .fsdb-page .tasks-queue-glabel{font-weight:650;line-height:14px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fsdb-page .tasks-queue-gshare{color:var(--biu-color-icon-fixed)}
 .fsdb-page .tasks-queue-count{margin-left:6px;color:var(--biu-color-text);font-size:var(--biu-font-size-4);font-weight:600;background:var(--biu-color-bg-faint);border-radius:4px;padding:1px 7px}
