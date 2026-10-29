@@ -1176,22 +1176,28 @@ body {
 /* 预览卡自己的浅色/深色，不跟当前 html.dark 走 */
 .settings-theme-card[data-theme-card="light"] {
   color-scheme: light;
-  background: #ffffff;
-  color: #2c2c2b;
+  --biu-color-bg: #ffffff;
+  --biu-color-bg-subtle: #f9f8f7;
+  --biu-color-text: #2c2c2b;
+  background: var(--biu-color-bg);
+  color: var(--biu-color-text);
 }
 
 .settings-theme-card[data-theme-card="light"]:hover {
-  background: #f9f8f7;
+  background: var(--biu-color-bg-subtle);
 }
 
 .settings-theme-card[data-theme-card="dark"] {
   color-scheme: dark;
-  background: #191919;
-  color: #ffffff;
+  --biu-color-bg: #191919;
+  --biu-color-bg-subtle: #202020;
+  --biu-color-text: #d4d4d4;
+  background: var(--biu-color-bg);
+  color: var(--biu-color-text);
 }
 
 .settings-theme-card[data-theme-card="dark"]:hover {
-  background: #202020;
+  background: var(--biu-color-bg-subtle);
 }
 
 .settings-theme-preview {
