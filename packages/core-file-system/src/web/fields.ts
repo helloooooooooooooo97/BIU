@@ -316,10 +316,9 @@ export function orphanPackEntries(
   for (const [key, value] of Object.entries(bag)) {
     if (known.has(key) || isReservedSchemaFieldKey(key)) continue
     if (!isSchemaFieldKey(key)) continue
-    if (value == null || value === '') continue
-    if (typeof value === 'string' && !value.trim()) continue
     const kept = retired.get(key)
     const type = kept?.type && kept.deleted ? kept.type : inferPackFieldType(value)
+    if (!fieldHasValue({ type }, value)) continue
     out.push({ key, value, type, label: kept?.label ?? key })
   }
   return out

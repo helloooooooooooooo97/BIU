@@ -22,6 +22,17 @@ test('orphan pack entries skip live fields, empties, and reserved keys', () => {
   assert.equal(orphans.find((item) => item.key === 'leftover')?.type, 'string')
 })
 
+test('orphan pack entries skip empty select and blank leftover on a deleted field', () => {
+  const orphans = orphanPackEntries(
+    [
+      { key: 'priority', type: 'select', label: '优先级', deleted: true },
+      { key: 'note', type: 'string', label: '好好好好', deleted: true },
+    ],
+    { priority: [], note: '' },
+  )
+  assert.deepEqual(orphans, [])
+})
+
 test('orphan pack entries keep the label of a deleted field', () => {
   const orphans = orphanPackEntries(
     [{ key: '4829103', type: 'string', label: '复杂度', deleted: true }],
