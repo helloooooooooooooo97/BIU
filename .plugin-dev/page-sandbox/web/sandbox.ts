@@ -44,9 +44,18 @@ function prepareJsx(source: string) {
     .replace(/export\s+default\s+/g, 'const __Component = ')
 }
 
-function mountJsx(source: string, root: ShadowRoot) {
+export type SandboxIO = {
+  read: () => Promise<unknown>
+  write: (value: unknown) => Promise<void>
+}
+
+function mountJsx(source: string, root: ShadowRoot, io?: SandboxIO) {
   const compiled = compileJsxSource(source)
   if (!compiled.ok) throw new Error(compiled.error)
+  const biu = {
+    read: () => (io ? io.read() : Promise.resolve(null)),
+    write: (value: unknown) => (io ? io.write(value) : Promise.resolve()),
+  }
   const factory = new Function(
     'React',
     'css',
@@ -54,13 +63,14 @@ function mountJsx(source: string, root: ShadowRoot) {
     'document',
     'globalThis',
     'self',
+    'biu',
     `"use strict";
      ${transpileJsx(prepareJsx(source))}
      return (typeof __Component === "function" && __Component) || (typeof App === "function" && App);`,
   )
   const preview = root.host instanceof HTMLElement ? root.host : null
   const globals = sandboxGlobals(preview)
-  const Component = factory(React, hostThemeCss(), globals.window, globals.document, globals.globalThis, globals.self)
+  const Component = factory(React, hostThemeCss(), globals.window, globals.document, globals.globalThis, globals.self, biu)
   const mount = document.createElement('div')
   mount.setAttribute('data-sandbox-root', '')
   root.append(mount)
@@ -81,7 +91,7 @@ export function unmountSandbox(root: ShadowRoot | null) {
   root.innerHTML = ''
 }
 
-export function mountSandbox(root: ShadowRoot, source: string) {
+export function mountSandbox(root: ShadowRoot, source: string, io?: SandboxIO) {
   const text = String(source ?? '')
   roots.get(root)?.unmount()
   roots.delete(root)
@@ -100,7 +110,7 @@ export function mountSandbox(root: ShadowRoot, source: string) {
     if (!compiled.ok) throw new Error(compiled.error)
     throw new Error('sandbox source must be a React component')
   }
-  mountJsx(text, root)
+  mountJsx(text, root, io)
   return compileSandboxSource(text)
 }
 
