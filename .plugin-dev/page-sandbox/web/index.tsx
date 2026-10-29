@@ -122,6 +122,7 @@ type BlockProps = {
   data: Record<string, unknown>
   update: (patch: Record<string, unknown>) => void
   writable: boolean
+  selected?: boolean
 }
 
 const field = {
@@ -581,7 +582,7 @@ const SANDBOX_SAMPLE = `export default function App() {
 }
 `
 
-function SandboxCard({ data, update, writable }: BlockProps) {
+function SandboxCard({ data, update, writable, selected: nodeSelected }: BlockProps) {
   const ro = !writable
   const title = sandboxTitle(data.title)
   const live = useSandboxSource(data, update, SANDBOX_SAMPLE)
@@ -597,6 +598,12 @@ function SandboxCard({ data, update, writable }: BlockProps) {
   const editing = tab === 'code'
 
   useEffect(() => onSandboxActiveChange(() => setSelected(isSelectedSandbox(hostRef.current))), [])
+  useEffect(() => {
+    const card = hostRef.current
+    if (!card) return
+    if (nodeSelected) selectSandbox(card)
+    else if (isSelectedSandbox(card)) selectSandbox(null)
+  }, [nodeSelected])
   useEffect(() => {
     if (editing) setLivePreview(null)
   }, [editing])

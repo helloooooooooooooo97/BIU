@@ -167,15 +167,7 @@ export const pageBlock = Node.create({
   addNodeView() {
     return ReactNodeViewRenderer(PageBlockView, {
       className: 'page-block',
-      update({ oldNode, newNode, updateProps }) {
-        if (
-          oldNode.attrs.kind === newNode.attrs.kind &&
-          oldNode.attrs.plugin === newNode.attrs.plugin &&
-          oldNode.attrs.id === newNode.attrs.id &&
-          JSON.stringify(oldNode.attrs.data) === JSON.stringify(newNode.attrs.data)
-        ) {
-          return true
-        }
+      update({ updateProps }) {
         updateProps()
         return true
       },

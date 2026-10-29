@@ -127,6 +127,7 @@ export function PagePluginSurface({
   data,
   update,
   writable,
+  selected,
   View,
   phase,
   pending,
@@ -136,6 +137,7 @@ export function PagePluginSurface({
   data: Record<string, unknown>
   update: PageBlockViewProps['update']
   writable: boolean
+  selected?: boolean
   View?: ComponentType<PageBlockViewProps>
   phase: PageBlockPluginPhase
   pending?: ReactNode
@@ -144,7 +146,7 @@ export function PagePluginSurface({
   if (View) {
     return (
       <RenderBoundary label={plugin || kind}>
-        <View data={data} update={update} writable={writable} />
+        <View data={data} update={update} writable={writable} selected={selected} />
       </RenderBoundary>
     )
   }
