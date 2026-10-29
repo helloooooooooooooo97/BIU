@@ -2,7 +2,7 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { render, waitFor } from '@testing-library/react'
 import { blockDataUnchanged, ENABLE_PAGE_BLOCK_PLUGIN, formatPageBlockFence, parsePageBlockData, parsePageBlockMeta, readPageBlockFence, requestEnablePageBlockPlugin, setPageBlockPluginPhase } from './page-block-meta.ts'
-import { PageBlockMissing } from './page-plugin-host.tsx'
+import { PageBlockMissing, PagePluginSurface } from './page-plugin-host.tsx'
 
 test('page block fence keeps plugin id in the document', () => {
   assert.deepEqual(parsePageBlockMeta('kind=excalidraw plugin=page-excalidraw'), {
@@ -128,17 +128,19 @@ test('unchanged block data does not count as an edit', () => {
   assert.equal(blockDataUnchanged({ nested: { on: true } }, { nested: { on: true } }), true)
 })
 
-test('missing plugin keeps the fence and says it does not exist', () => {
+test('missing plugin does not render a placeholder', () => {
   const { container } = render(
-    <PageBlockMissing kind="geo" plugin="page-geo" data={{ title: '地球' }} phase="missing" />,
+    <PagePluginSurface
+      kind="geo"
+      plugin="page-geo"
+      data={{ title: '地球' }}
+      update={() => undefined}
+      writable={false}
+      phase="missing"
+    />,
   )
-  assert.equal(container.querySelector('[data-testid="page-block-missing"]')?.getAttribute('data-plugin-phase'), 'missing')
-  assert.match(container.textContent ?? '', /插件不存在/)
-  assert.match(container.textContent ?? '', /"title": "地球"/)
-  assert.doesNotMatch(container.textContent ?? '', /:::pageBlock/)
-  assert.doesNotMatch(container.textContent ?? '', /正在加载/)
-  assert.ok(container.querySelector('[data-testid="page-source-editor"]'))
-  assert.ok(container.querySelector('[data-testid="page-block-enable"]'))
+  assert.equal(container.querySelector('[data-testid="page-block-missing"]'), null)
+  assert.equal(container.textContent, '')
 })
 
 test('loading plugin hides the fence and keeps the block shell', () => {

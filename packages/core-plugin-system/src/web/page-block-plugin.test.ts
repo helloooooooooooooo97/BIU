@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 import { clientLogSnapshot, resetClientLogs } from '@biu/web-event-log/log'
 import { requestEnablePageBlockPlugin, setPageBlockPluginPhase } from '../../../core-editor/src/web/page-block-meta.ts'
 import { filterSlashItems } from '../../../core-editor/src/web/slash.ts'
-import { resetSlashCatalog } from '../../../core-editor/src/web/slash-memory.ts'
+import { resetSlashCatalog, setListedPluginIds } from '../../../core-editor/src/web/slash-memory.ts'
 import {
   ENABLE_PAGE_BLOCK_PLUGIN,
   listenEnablePageBlockPlugin,
@@ -107,6 +107,7 @@ test('sandbox plugin is packed before start', async () => {
 })
 
 test('missing plugin does not post an action', async () => {
+  resetClientLogs()
   const fetchMock = stubFetch(() => ({ status: 404, body: { error: 'not found' } }))
   try {
     await assert.rejects(() => startStorePlugin('page-missing'), /unknown plugin/)
@@ -114,6 +115,22 @@ test('missing plugin does not post an action', async () => {
     fetchMock.restore()
   }
   assert.equal(fetchMock.calls.some((call) => call.method === 'POST'), false)
+  assert.doesNotMatch(clientLogSnapshot().map((item) => item.message).join('\n'), /启用失败/)
+})
+
+test('listed-unknown plugin skips the 404 read', async () => {
+  resetClientLogs()
+  resetSlashCatalog()
+  setListedPluginIds(['page-toc'])
+  const fetchMock = stubFetch(() => ({ status: 200, body: { value: { installed: true } } }))
+  try {
+    await assert.rejects(() => startStorePlugin('page-geo-calc'), /unknown plugin/)
+  } finally {
+    fetchMock.restore()
+    resetSlashCatalog()
+  }
+  assert.equal(fetchMock.calls.length, 0)
+  assert.doesNotMatch(clientLogSnapshot().map((item) => item.message).join('\n'), /启用失败/)
 })
 
 test('unknown plugin reports missing without a loading flash', async () => {
