@@ -17,6 +17,7 @@ export type PageBlockViewProps = {
   data: Record<string, unknown>
   update: (patch: Record<string, unknown>, opts?: { replace?: boolean }) => void
   writable: boolean
+  selected?: boolean
 }
 
 /** 斜杠菜单分类。'basic' 进「基础模块」；其它字符串各自成组。 */

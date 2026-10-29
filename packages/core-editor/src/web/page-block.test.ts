@@ -6,6 +6,7 @@ import { pageEditorExtensions } from './kit.ts'
 import { filterSlashItems, slashGroups } from './slash.ts'
 import { BASIC_BLOCK_TYPE, PageEditorService } from './service.ts'
 import { duplicateAssetPath } from './page-block.ts'
+import { pageTextBubbleOpen } from './page-editor.tsx'
 
 test('registerBlock adds a slash item and inserts pageBlock', async () => {
   const ctx = new Context()
@@ -312,14 +313,15 @@ test('pasted pageBlocks with the same id are rewritten immediately', () => {
   editor.destroy()
 })
 
-test('pageBlock node view skips react update when attrs are unchanged', async () => {
+test('pageBlock node view still updates when only node selection changes', async () => {
   const { readFile } = await import('node:fs/promises')
   const { resolve } = await import('node:path')
   const src = await readFile(resolve(import.meta.dirname, './page-block.ts'), 'utf8')
-  assert.match(src, /oldNode\.attrs\.id === newNode\.attrs\.id/)
-  assert.match(src, /oldNode\.attrs\.kind === newNode\.attrs\.kind/)
-  assert.match(src, /JSON\.stringify\(oldNode\.attrs\.data\) === JSON\.stringify\(newNode\.attrs\.data\)/)
-  assert.match(src, /return true/)
+  const view = await readFile(resolve(import.meta.dirname, './page-block-view.tsx'), 'utf8')
+  assert.match(src, /update\(\{ updateProps \}\)/)
+  assert.match(src, /updateProps\(\)/)
+  assert.match(view, /prev\.selected === next\.selected/)
+  assert.match(view, /selected=\{selected\}/)
 })
 
 test('pageBlock capture includes every registered block shell', async () => {
@@ -372,6 +374,26 @@ test('Enter on a selected pageBlock does not delete it', () => {
   assert.equal(types.includes('pageBlock'), true)
   assert.match(editor.getMarkdown(), /hello/)
   assert.match(editor.getMarkdown(), /pageBlock/)
+  editor.destroy()
+})
+
+test('text style bubble stays closed when the cursor is on a pageBlock', () => {
+  const editor = new Editor({
+    extensions: pageEditorExtensions(),
+    content: `hello\n\n:::pageBlock {kind=sandbox plugin=page-sandbox}\nexport default function App(){return <div/>}\n:::\n`,
+    contentType: 'markdown',
+  })
+  let pos = -1
+  editor.state.doc.descendants((node, p) => {
+    if (node.type.name === 'pageBlock') pos = p
+  })
+  editor.chain().setNodeSelection(pos).run()
+  const { from, to } = editor.state.selection
+  assert.notEqual(from, to)
+  assert.equal(pageTextBubbleOpen(editor, from, to), false)
+  editor.chain().setTextSelection(1).run()
+  editor.commands.setTextSelection({ from: 1, to: 5 })
+  assert.equal(pageTextBubbleOpen(editor, editor.state.selection.from, editor.state.selection.to), true)
   editor.destroy()
 })
 

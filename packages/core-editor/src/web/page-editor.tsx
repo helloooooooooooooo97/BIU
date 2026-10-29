@@ -6,7 +6,7 @@ import { ArrowPathIcon, ChatBubbleLeftRightIcon } from '@heroicons/react/16/soli
 import { EditorContent, useEditor } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
 import type { Editor } from '@tiptap/core'
-import { Selection } from '@tiptap/pm/state'
+import { NodeSelection, Selection } from '@tiptap/pm/state'
 import type { FsContentProps } from '@biu/type-file-system/ui'
 import { pageEditorExtensions } from './kit.ts'
 import { PageBlockHandle } from './page-block-handle.tsx'
@@ -260,6 +260,14 @@ function ColorMenus({
   )
 }
 
+/** 节点选中（sandbox 等 pageBlock）不是文字选区，不要出加粗/斜体条。 */
+export function pageTextBubbleOpen(editor: Editor, from: number, to: number, colorOpen = false) {
+  if (editor.isActive('table') || editor.isActive('pageBlock')) return false
+  if (editor.state.selection instanceof NodeSelection) return false
+  if (colorOpen) return true
+  return from !== to
+}
+
 function Bubble({
   editor,
   onSendChat,
@@ -286,11 +294,7 @@ function Bubble({
       editor={editor}
       className="page-bubble"
       aria-label="文字样式"
-      shouldShow={({ editor: current, from, to }) => {
-        if (current.isActive('table')) return false
-        if (colorOpen) return true
-        return from !== to
-      }}
+      shouldShow={({ editor: current, from, to }) => pageTextBubbleOpen(current, from, to, Boolean(colorOpen))}
     >
       {btn('B', editor.isActive('bold'), () => editor.chain().focus().toggleBold().run())}
       {btn('I', editor.isActive('italic'), () => editor.chain().focus().toggleItalic().run())}
