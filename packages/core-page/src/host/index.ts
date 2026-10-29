@@ -94,10 +94,18 @@ function servePageFile(ctx: Context, store: PagesStore) {
           etag: ifMatch && ifMatch !== '*' ? ifMatch : '',
         })
         inner.http.broadcast?.(DATABASE_CHANNEL, { ts: Date.now(), asset: { name: written.name, etag: written.etag } })
-        route.send(200, { ok: true, ...written })
+        route.res.writeHead(200, {
+          'content-type': 'application/json; charset=utf-8',
+          'cache-control': 'no-store',
+          etag: `"${written.etag}"`,
+        })
+        route.res.end(JSON.stringify({ ok: true, ...written }))
       } catch (error) {
         if (error instanceof PageAssetConflictError) {
-          route.send(409, { error: 'etag conflict', etag: error.etag })
+          const headers: Record<string, string> = { 'content-type': 'application/json; charset=utf-8' }
+          if (error.etag) headers.etag = `"${error.etag}"`
+          route.res.writeHead(409, headers)
+          route.res.end(JSON.stringify({ error: 'etag conflict', etag: error.etag }))
           return
         }
         route.send(400, { error: String(error) })

@@ -61,13 +61,37 @@ async function loadTextAsset(file: string, fallback: string, bust = false) {
   return { text: await res.text(), etag: assetEtag(String(res.headers.get('etag') ?? '')) }
 }
 
-async function saveTextAsset(file: string, text: string, etag: string, json = false) {
-  const headers: Record<string, string> = {
-    'Content-Type': json ? 'application/json; charset=utf-8' : 'text/plain; charset=utf-8',
+async function responseEtag(res: Response) {
+  const header = assetEtag(String(res.headers.get('etag') ?? ''))
+  if (header) return header
+  try {
+    const body = (await res.clone().json()) as { etag?: unknown }
+    return assetEtag(String(body?.etag ?? ''))
+  } catch {
+    return ''
   }
-  if (etag) headers['If-Match'] = etag
-  const res = await fetch(`/api/page/file/${encodeURIComponent(assetName(file))}`, { method: 'PUT', headers, body: text })
-  return assetEtag(String(res.headers.get('etag') ?? etag))
+}
+
+async function saveTextAsset(file: string, text: string, etag: string, json = false) {
+  const url = `/api/page/file/${encodeURIComponent(assetName(file))}`
+  const put = (match: string) => {
+    const headers: Record<string, string> = {
+      'Content-Type': json ? 'application/json; charset=utf-8' : 'text/plain; charset=utf-8',
+    }
+    if (match) headers['If-Match'] = match
+    return fetch(url, { method: 'PUT', headers, body: text })
+  }
+  let res = await put(etag)
+  if (res.status === 409) {
+    let fresh = await responseEtag(res)
+    if (!fresh) {
+      const current = await fetch(url)
+      fresh = assetEtag(String(current.headers.get('etag') ?? ''))
+    }
+    if (fresh) res = await put(fresh)
+  }
+  if (!res.ok) return etag
+  return (await responseEtag(res)) || etag
 }
 
 function useSandboxSource(
@@ -167,7 +191,7 @@ function useSandboxSource(
     const current = dataFileRef.current
     if (!current) return
     const etag = await saveTextAsset(current, JSON.stringify(value ?? null), dataEtagRef.current, true)
-    dataEtagRef.current = etag
+    if (etag) dataEtagRef.current = etag
   }
   return { source, save, readData, writeData }
 }
