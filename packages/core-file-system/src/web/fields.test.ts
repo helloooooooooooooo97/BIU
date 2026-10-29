@@ -219,6 +219,7 @@ test('list projection keeps visible columns plus title, emoji, and parent', () =
   assert.equal(keys.includes('tags'), true)
   assert.equal(keys.includes('parentChain'), true)
   assert.equal(keys.includes('usageParts'), true)
+  assert.equal(keys.includes('builtin'), true)
   assert.equal(keys.includes('dueAt'), false)
   const withFacet = listProjectionKeys({ schema: { ...schema, fields: { ...schema.fields, facet: { type: 'facet' } } }, columns: [nested] })
   assert.equal(withFacet.includes('facet'), true)
@@ -226,7 +227,7 @@ test('list projection keeps visible columns plus title, emoji, and parent', () =
 
 const pluginActions: CollectionSchema = {
   labelField: 'title',
-  fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string' } },
+  fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string' }, builtin: { type: 'boolean' } },
   actions: [
     { id: 'start', label: '运行', when: { installed: true, running: false } },
     { id: 'stop', label: '停止', when: { installed: true, running: true } },
@@ -267,6 +268,7 @@ test('list projection keeps action when keys so plugin actions do not flash', ()
   assert.equal(keys.includes('installed'), true)
   assert.equal(keys.includes('running'), true)
   assert.equal(keys.includes('sandbox'), true)
+  assert.equal(keys.includes('builtin'), true)
   assert.equal(keys.includes('tags'), true)
 })
 

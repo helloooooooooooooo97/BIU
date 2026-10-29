@@ -218,6 +218,7 @@ export function listProjectionKeys(opts: {
   add('parentChain')
   add('blocked')
   add('usageParts')
+  add('builtin')
   let needFacet = false
   for (const key of opts.columns) {
     add(key)

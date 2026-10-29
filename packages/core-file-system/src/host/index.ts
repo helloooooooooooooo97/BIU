@@ -277,6 +277,7 @@ function listedColumnKeys(requested: unknown, labelField: string, schema?: Colle
     for (const extra of LIST_FIELD_COMPANIONS[key] ?? []) add(extra)
   }
   for (const key of actionWhenKeys(schema)) add(key)
+  if (schema?.fields.builtin) add('builtin')
   return keys
 }
 
