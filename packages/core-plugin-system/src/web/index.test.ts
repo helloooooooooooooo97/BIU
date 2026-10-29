@@ -255,7 +255,7 @@ test('html page blocks register plugin id for slash', async () => {
   assert.match(html, /--biu-stroke-width-thick/)
   assert.match(html, /--biu-color-emphasis/)
   assert.match(html, /--biu-color-bg/)
-  assert.match(html, /stroke-width-thick\) solid \$\{selected \? 'var\(--biu-color-emphasis\)' : 'var\(--biu-color-bg\)'\}/)
+  assert.match(html, /stroke-width-thick\) solid \$\{selected \? 'color-mix\(in srgb, var\(--biu-color-emphasis\) 38%, transparent\)' : 'var\(--biu-color-bg\)'\}/)
   assert.doesNotMatch(html, /inset 0 0 0 var\(--biu-stroke-width-thick\)/)
   assert.doesNotMatch(html, /inset 3px 0 0/)
   assert.match(html, /setLivePreview/)
