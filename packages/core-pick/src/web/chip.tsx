@@ -169,7 +169,7 @@ const INSPECT_FIELDS = [
 
 const INSPECT_STYLE_ID = 'biu-pick-chip-data'
 const INSPECT_CSS = `
-.pick-chip-data{position:relative;z-index:300;box-sizing:border-box;width:min(280px,calc(100vw - 24px));max-height:min(72vh,560px);overflow:auto;padding:8px 10px;background:var(--biu-color-bg-elevated,var(--biu-color-bg-subtle));border:0;border-radius:10px;box-shadow:none;color:var(--biu-color-text);font-family:inherit;font-size:var(--biu-font-size-4);font-weight:500;line-height:20px}
+.pick-chip-data{position:relative;z-index:300;box-sizing:border-box;width:min(280px,calc(100vw - 24px));max-height:min(72vh,560px);overflow:auto;padding:8px 10px;background:var(--biu-color-bg-elevated,var(--biu-color-bg-subtle));border:var(--biu-stroke-width) solid var(--biu-color-border);border-radius:10px;box-shadow:none;color:var(--biu-color-text);font-family:inherit;font-size:var(--biu-font-size-4);font-weight:500;line-height:20px}
 html.dark .pick-chip-data{background:#202020}
 .pick-chip-data-k,.pick-chip-data-v{margin:0;font:inherit;font-size:var(--biu-font-size-4);font-weight:500;line-height:20px}
 .pick-chip-data-fields{margin:0;padding:0;display:flex;flex-direction:column;gap:0}
