@@ -343,7 +343,8 @@ const CSS = `
 .fsdb-page .tasks-table tbody tr:hover{position:relative;z-index:6}
 .fsdb-page .tasks-table [data-dock-tip]::after{z-index:var(--biu-z-float)}
 .fsdb-page .tasks-table th{padding:6px 6px;color:var(--biu-color-text-muted);font-size:var(--biu-font-size-4);font-weight:500;position:sticky;top:0;background:var(--biu-color-surface);z-index:5;white-space:nowrap}
-.fsdb-page .tasks-table th.is-facet-col{color:var(--biu-color-text);background:color-mix(in srgb,var(--biu-tag) 38%,var(--biu-color-surface))}
+.fsdb-page .tasks-table th.is-facet-col{color:var(--biu-color-text-muted);background:var(--biu-color-surface);box-shadow:inset 0 -2px 0 color-mix(in srgb,var(--biu-tag) 72%,transparent)}
+.fsdb-page .tasks-table th.is-facet-col .tasks-th-ico{display:inline-flex;align-items:center;justify-content:center;border-radius:4px;padding:2px;background:color-mix(in srgb,var(--biu-tag) 32%,transparent)}
 .fsdb-page .tasks-table.is-cols-fixed{table-layout:fixed;width:max-content;min-width:0;max-width:none}
 .fsdb-page .tasks-table.is-cols-fixed.is-wrap{width:max-content;max-width:none;min-width:0}
 .fsdb-page .tasks-table.is-cols-fixed col,.fsdb-page .tasks-table.is-cols-fixed th,.fsdb-page .tasks-table.is-cols-fixed td{box-sizing:border-box}
@@ -356,6 +357,7 @@ const CSS = `
 .fsdb-row-check{position:relative;top:auto;left:auto;z-index:12;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;margin:0;transform:none;opacity:0;pointer-events:auto;transition:none}
 .fsdb-check-slot.is-hover .fsdb-row-check,.fsdb-check-slot:hover .fsdb-row-check,.fsdb-row-check.is-on,.fsdb-row-check:hover,.fsdb-row-check:focus-visible{opacity:1}
 .fsdb-page .tasks-th{display:inline-flex;align-items:center;gap:5px;font-weight:500;white-space:nowrap;flex-wrap:nowrap}
+.fsdb-page .tasks-th-ico{display:inline-flex;align-items:center;flex:none;line-height:0}
 .fsdb-page .tasks-th svg,.fsdb-page .tasks-th .fsdb-field-glyph{color:var(--biu-color-icon)}
 .fsdb-page .tasks-th.is-on svg{color:var(--biu-color-icon-active)}
 .fsdb-page .tasks-table tr{cursor:default}

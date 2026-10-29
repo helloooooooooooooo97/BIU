@@ -4328,7 +4328,9 @@ export function CollectionBrowser({
         style={tone ? { ['--biu-tag' as string]: tone } : undefined}
       >
         <span className={`tasks-th${queryFields.has(col.key) ? ' is-on' : ''}`}>
-          <FieldGlyph kind={col.kind} />
+          <span className="tasks-th-ico">
+            <FieldGlyph kind={col.kind} />
+          </span>
           {facetColumnTitle(col)}
         </span>
         <span
