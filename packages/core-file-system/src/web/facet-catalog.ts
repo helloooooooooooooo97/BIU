@@ -49,12 +49,16 @@ function adoptFacets(next: CollectionSchemaPack[]) {
   emit()
 }
 
-export async function persistFacets(facets: CollectionSchemaPack[], _collectionPath?: string) {
+export async function persistFacets(
+  facets: CollectionSchemaPack[],
+  _collectionPath?: string,
+  remaps?: Record<string, Record<string, string>>,
+) {
   const next = parseFacets(facets)
   const res = await fetch('/api/db/facets', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ facets: next }),
+    body: JSON.stringify({ facets: next, remaps }),
   })
   if (!res.ok) throw new Error(`facets persist failed: ${res.status}`)
   adoptFacets(next)

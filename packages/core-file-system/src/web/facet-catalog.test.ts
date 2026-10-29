@@ -2,6 +2,23 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { loadFacets, persistFacets } from './facet-catalog.ts'
 
+test('persistFacets posts field remaps with the catalog', async () => {
+  const originalFetch = globalThis.fetch
+  let body = ''
+  globalThis.fetch = (async (_input, init) => {
+    body = String(init?.body ?? '')
+    return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } })
+  }) as typeof fetch
+  try {
+    await persistFacets([{ id: 'dp', label: '动态规划', fields: [{ key: '难度', type: 'string' }] }], undefined, {
+      dp: { 复杂度: '难度' },
+    })
+    assert.match(body, /"remaps":\{"dp":\{"复杂度":"难度"\}\}/)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
 test('persistFacets adopts catalog only after POST succeeds', async () => {
   let release!: (value: Response) => void
   const originalFetch = globalThis.fetch

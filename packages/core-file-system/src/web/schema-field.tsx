@@ -103,6 +103,91 @@ function TypeMenu({ value, onChange }: { value: AtomicFieldType; onChange: (next
   )
 }
 
+function SchemaPropName({
+  name,
+  kind,
+  onRename,
+}: {
+  name: string
+  kind: FieldType
+  onRename?: (next: string) => boolean | void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(name)
+  const [error, setError] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    setDraft(name)
+  }, [name])
+
+  useEffect(() => {
+    if (editing) inputRef.current?.focus()
+  }, [editing])
+
+  function finish(next = name) {
+    setEditing(false)
+    setDraft(next)
+    setError('')
+  }
+
+  function commit() {
+    const next = draft.trim()
+    if (!next || next === name) {
+      finish()
+      return
+    }
+    if (onRename?.(next) === false) {
+      setError('不能与系统字段或已有属性重名')
+      return
+    }
+    finish(next)
+  }
+
+  if (!onRename) {
+    return (
+      <span className="fsdb-schema-prop-k" title={name}>
+        <FieldGlyph kind={kind} />
+        {name}
+      </span>
+    )
+  }
+
+  if (!editing) {
+    return (
+      <button type="button" className="fsdb-schema-prop-k is-rename" title={`重命名 ${name}`} onClick={() => setEditing(true)}>
+        <FieldGlyph kind={kind} />
+        {name}
+      </button>
+    )
+  }
+
+  return (
+    <span className="fsdb-schema-prop-k is-editing">
+      <FieldGlyph kind={kind} />
+      <input
+        ref={inputRef}
+        className="fsdb-schema-prop-rename"
+        value={draft}
+        aria-label={`重命名 ${name}`}
+        onChange={(event) => setDraft(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault()
+            commit()
+          }
+          if (event.key === 'Escape') {
+            event.preventDefault()
+            finish()
+          }
+        }}
+        onBlur={() => commit()}
+      />
+      {error ? <span className="fsdb-schema-addprop-err">{error}</span> : null}
+    </span>
+  )
+}
+
 export function AddProperty({ onAdd }: { onAdd: (label: string, type: AtomicFieldType) => boolean | void }) {
   const [open, setOpen] = useState(false)
   const [label, setLabel] = useState('')
@@ -178,8 +263,8 @@ export function FacetPackEditor({ facetId }: { facetId: string }) {
   useEffect(() => subscribeFacets(undefined, () => setCatalog(loadFacets())), [])
   const tag = catalog.find((item) => item.id === facetId)
 
-  function saveCatalog(next: CollectionSchemaPack[]) {
-    void persistFacets(next)
+  function saveCatalog(next: CollectionSchemaPack[], remaps?: Record<string, Record<string, string>>) {
+    void persistFacets(next, undefined, remaps)
   }
 
   if (!tag) return <p className="fsdb-muted">这条标签已不在目录里。</p>
@@ -193,6 +278,24 @@ export function FacetPackEditor({ facetId }: { facetId: string }) {
     if (!key) return false
     const field: SchemaPackField = { key, type, writable: true }
     saveCatalog(catalog.map((item) => (item.id === pack.id ? { ...item, fields: [...item.fields, field] } : item)))
+    return true
+  }
+
+  function renameField(from: string, name: string) {
+    const others = pack.fields.filter((item) => item.key !== from)
+    const key = registerFacetFieldKey(name, {
+      keys: others.map((item) => item.key),
+      labels: others.map((item) => item.label ?? item.key),
+    })
+    if (!key) return false
+    saveCatalog(
+      catalog.map((item) =>
+        item.id === pack.id
+          ? { ...item, fields: item.fields.map((row) => (row.key === from ? { ...row, key } : row)) }
+          : item,
+      ),
+      { [pack.id]: { [from]: key } },
+    )
     return true
   }
 
@@ -214,10 +317,7 @@ export function FacetPackEditor({ facetId }: { facetId: string }) {
       <div className="fsdb-schema-pack">
       {pack.fields.map((field) => (
         <div key={field.key} className="fsdb-schema-prop">
-          <span className="fsdb-schema-prop-k" title={field.label ?? field.key}>
-            <FieldGlyph kind={field.type} />
-            {field.label ?? field.key}
-          </span>
+          <SchemaPropName name={field.label ?? field.key} kind={field.type} onRename={(next) => renameField(field.key, next)} />
           <div className="fsdb-schema-prop-v">
             <span className="fsdb-muted">{TYPE_LABEL[field.type]}</span>
             <button type="button" className="fsdb-schema-prop-del" aria-label={`删除 ${field.label ?? field.key}`} onClick={() => removeField(field.key)}>
@@ -265,8 +365,8 @@ export function SchemaFieldEditor({
     [catalog, parsed.tags],
   )
 
-  function saveCatalog(next: CollectionSchemaPack[]) {
-    void persistFacets(next)
+  function saveCatalog(next: CollectionSchemaPack[], remaps?: Record<string, Record<string, string>>) {
+    void persistFacets(next, undefined, remaps)
   }
 
   function patchValue(next: SchemaFieldValue) {
@@ -312,6 +412,32 @@ export function SchemaFieldEditor({
     if (!key) return false
     const field: SchemaPackField = { key, type, writable: true }
     saveCatalog(catalog.map((item) => (item.id === tag.id ? { ...item, fields: [...item.fields, field] } : item)))
+    return true
+  }
+
+  function renameField(tag: CollectionSchemaPack, from: string, name: string) {
+    const others = tag.fields.filter((item) => item.key !== from)
+    const key = registerFacetFieldKey(name, {
+      keys: others.map((item) => item.key),
+      labels: others.map((item) => item.label ?? item.key),
+    })
+    if (!key) return false
+    saveCatalog(
+      catalog.map((item) =>
+        item.id === tag.id
+          ? { ...item, fields: item.fields.map((row) => (row.key === from ? { ...row, key } : row)) }
+          : item,
+      ),
+      { [tag.id]: { [from]: key } },
+    )
+    const bag = { ...(liveRef.current.values[tag.id] ?? {}) }
+    if (from in bag) {
+      bag[key] = bag[from]
+      delete bag[from]
+      const next = { tags: liveRef.current.tags, values: { ...liveRef.current.values, [tag.id]: bag } }
+      liveRef.current = next
+      patchValue(next)
+    }
     return true
   }
 
@@ -367,10 +493,7 @@ export function SchemaFieldEditor({
             </div>
             {tag.fields.map((field) => (
               <div key={field.key} className="fsdb-schema-prop">
-                <span className="fsdb-schema-prop-k" title={field.label ?? field.key}>
-                  <FieldGlyph kind={field.type} />
-                  {field.label ?? field.key}
-                </span>
+                <SchemaPropName name={field.label ?? field.key} kind={field.type} onRename={(next) => renameField(tag, field.key, next)} />
                 <div className="fsdb-schema-prop-v">
                   <FieldValuePop
                     record={record}

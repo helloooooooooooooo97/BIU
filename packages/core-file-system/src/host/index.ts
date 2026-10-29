@@ -4070,8 +4070,8 @@ export function apply(ctx: Context) {
   ctx.http.route('POST', '/api/db/facets', async (route) => {
     try {
       await db.requirePath('/facets', 'resource:update')
-      const body = (await route.json()) as { facets?: unknown[] }
-      facets.replace(Array.isArray(body.facets) ? body.facets : [])
+      const body = (await route.json()) as { facets?: unknown[]; remaps?: unknown }
+      facets.replace(Array.isArray(body.facets) ? body.facets : [], body.remaps)
       ctx.emit('database/change')
       route.send(200, { ok: true, facets: facets.list() })
     } catch (error) {

@@ -80,6 +80,16 @@ test('sqlite stores facet overlay for records that cannot update', async () => {
   assert.equal(store.stampedIds('/plugins', 'dp').has('demo'), false)
 })
 
+test('replace remaps record values when a field is renamed', () => {
+  const store = new FacetStore()
+  store.replace([{ id: 'dp', label: '动态规划', fields: [{ key: '复杂度', type: 'string' }] }])
+  store.writeRecordFacet('/notes', 'n1', { tags: ['dp'], values: { dp: { 复杂度: 'O(n)' } } }, '草稿')
+  store.replace([{ id: 'dp', label: '动态规划', fields: [{ key: '难度', type: 'string' }] }], { dp: { 复杂度: '难度' } })
+  assert.equal(store.get('dp')?.fields[0]?.key, '难度')
+  assert.equal(store.recordFacet('/notes', 'n1')?.values.dp?.['难度'], 'O(n)')
+  assert.equal(store.recordFacet('/notes', 'n1')?.values.dp?.['复杂度'], undefined)
+})
+
 test('empty facet overlay is not stored', async () => {
   const store = new FacetStore()
   store.writeRecordFacet('/pages', 'p1', { tags: ['dp'], values: { dp: {} } }, 'P')
