@@ -344,7 +344,6 @@ const CSS = `
 .fsdb-page .tasks-table [data-dock-tip]::after{z-index:var(--biu-z-float)}
 .fsdb-page .tasks-table th{padding:6px 6px;color:var(--biu-color-text-muted);font-size:var(--biu-font-size-4);font-weight:500;position:sticky;top:0;background:var(--biu-color-surface);z-index:5;white-space:nowrap}
 .fsdb-page .tasks-table th.is-facet-col{color:var(--biu-color-text-muted);background:var(--biu-color-surface);box-shadow:inset 0 -2px 0 color-mix(in srgb,var(--biu-tag) 72%,transparent)}
-.fsdb-page .tasks-table th.is-facet-col .tasks-th-ico,.fsdb-page .tasks-table th.is-facet-col .tasks-th-ico svg,.fsdb-page .tasks-table th.is-facet-col .tasks-th-ico .fsdb-field-bool-glyph,.fsdb-page .tasks-table thead .is-facet-col .tasks-th svg,.fsdb-page .tasks-table thead .is-facet-col .fsdb-field-bool-glyph{color:var(--biu-tag)!important;fill:currentColor;background:transparent}
 .fsdb-page .tasks-table.is-cols-fixed{table-layout:fixed;width:max-content;min-width:0;max-width:none}
 .fsdb-page .tasks-table.is-cols-fixed.is-wrap{width:max-content;max-width:none;min-width:0}
 .fsdb-page .tasks-table.is-cols-fixed col,.fsdb-page .tasks-table.is-cols-fixed th,.fsdb-page .tasks-table.is-cols-fixed td{box-sizing:border-box}
@@ -1036,6 +1035,8 @@ html.dark .fsdb-page .tasks-toolbar-right .tasks-refresh.is-active{color:var(--b
 .fsdb-page .tasks-viewtab.is-active svg,.fsdb-page .tasks-viewtab.is-active .fsdb-ui-glyph,.fsdb-page .tasks-viewdd-btn.is-active svg,.fsdb-page .tasks-viewdd-btn.is-active .fsdb-ui-glyph{color:var(--biu-color-icon-active)!important}
 .fsdb-page .tasks-table thead .tasks-th svg,.fsdb-page .tasks-table thead .fsdb-field-bool-glyph{color:var(--biu-color-icon)!important;fill:currentColor;opacity:1}
 .fsdb-page .tasks-table thead .tasks-th.is-on svg,.fsdb-page .tasks-table thead .tasks-th.is-on .fsdb-field-bool-glyph{color:var(--biu-color-icon-active)!important}
+.fsdb-page .tasks-table thead th.is-facet-col .tasks-th .fsdb-field-glyph,.fsdb-page .tasks-table thead th.is-facet-col .tasks-th-ico .fsdb-field-glyph{color:var(--biu-tag)!important;background:currentColor}
+.fsdb-page .tasks-table thead th.is-facet-col .fsdb-field-bool-glyph,.fsdb-page .tasks-table thead th.is-facet-col .fsdb-boolbox{color:var(--biu-tag)!important;border-color:var(--biu-tag);background:transparent}
 html:not(.dark) .tasks-viewdd-menu,
 html:not(.dark) .tasks-viewdd-head,
 html:not(.dark) .tasks-viewdd-item-main,
