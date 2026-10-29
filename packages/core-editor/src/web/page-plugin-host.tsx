@@ -149,6 +149,5 @@ export function PagePluginSurface({
       </RenderBoundary>
     )
   }
-  if (phase === 'missing') return null
   return <PageBlockMissing kind={kind || 'unknown'} plugin={plugin} data={data} phase={phase} />
 }
