@@ -217,6 +217,11 @@ export const pageBlock = Node.create({
             const from = String(data.file)
             data.file = duplicateAssetPath(from)
             data.cloneFrom = from
+            if (typeof data.dataFile === 'string' && data.dataFile.trim()) {
+              const fromData = data.dataFile
+              data.dataFile = duplicateAssetPath(fromData)
+              data.cloneDataFrom = fromData
+            }
             tr = tr.setNodeMarkup(pos, undefined, { ...node.attrs, data })
           }
           return tr

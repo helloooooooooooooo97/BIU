@@ -27,10 +27,47 @@ import {
 const React = globalThis.React
 const { useEffect, useLayoutEffect, useMemo, useRef, useState } = React
 
-function sandboxSourceOf(data: Record<string, unknown>, sample: string) {
-  if (typeof data.source === 'string' && data.source) return data.source
-  if (typeof data.html === 'string' && data.html) return data.html
-  return sample
+function assetName(file: string) {
+  return file.replace(/^assets\//, '')
+}
+
+function assetEtag(raw: string) {
+  return raw.replace(/^W\//, '').replaceAll('"', '')
+}
+
+function newSandboxFiles() {
+  const id = crypto.randomUUID().slice(0, 8)
+  return { file: `assets/sandbox-${id}.jsx`, dataFile: `assets/sandbox-data-${id}.json` }
+}
+
+function legacySource(data: Record<string, unknown>) {
+  if (typeof data.source === 'string' && data.source.trim()) return data.source
+  if (typeof data.html === 'string' && data.html.trim()) return data.html
+  return ''
+}
+
+async function loadTextAsset(file: string, fallback: string, bust = false) {
+  const name = assetName(file)
+  const res = await fetch(`/api/page/file/${encodeURIComponent(name)}${bust ? `?t=${Date.now()}` : ''}`)
+  if (res.status === 404) {
+    const created = await fetch(`/api/page/file/${encodeURIComponent(name)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      body: fallback,
+    })
+    return { text: fallback, etag: assetEtag(String(created.headers.get('etag') ?? '')) }
+  }
+  if (!res.ok) return { text: fallback, etag: '' }
+  return { text: await res.text(), etag: assetEtag(String(res.headers.get('etag') ?? '')) }
+}
+
+async function saveTextAsset(file: string, text: string, etag: string, json = false) {
+  const headers: Record<string, string> = {
+    'Content-Type': json ? 'application/json; charset=utf-8' : 'text/plain; charset=utf-8',
+  }
+  if (etag) headers['If-Match'] = etag
+  const res = await fetch(`/api/page/file/${encodeURIComponent(assetName(file))}`, { method: 'PUT', headers, body: text })
+  return assetEtag(String(res.headers.get('etag') ?? etag))
 }
 
 function useSandboxSource(
@@ -38,32 +75,113 @@ function useSandboxSource(
   update: (patch: Record<string, unknown>) => void,
   sample: string,
 ) {
-  const inline = sandboxSourceOf(data, sample)
-  const [source, setSource] = useState(inline)
+  const file = typeof data.file === 'string' ? data.file.trim() : ''
+  const dataFile = typeof data.dataFile === 'string' ? data.dataFile.trim() : ''
+  const inline = legacySource(data)
+  const [source, setSource] = useState(inline || sample)
+  const [rev, setRev] = useState(0)
+  const etagRef = useRef('')
+  const dataEtagRef = useRef('')
   const sourceRef = useRef(source)
+  const fileRef = useRef(file)
+  const dataFileRef = useRef(dataFile)
+  const quietUntil = useRef(0)
   sourceRef.current = source
-  const applyInline = (next: string) => {
-    if (next === sourceRef.current) return
-    sourceRef.current = next
-    setSource(next)
-  }
+  fileRef.current = file
+  dataFileRef.current = dataFile
   useEffect(() => {
-    applyInline(inline || sample)
-  }, [inline, sample])
+    if (file && dataFile) return
+    const created = newSandboxFiles()
+    update({
+      file: file || created.file,
+      dataFile: dataFile || created.dataFile,
+      ...(inline ? { source: undefined, html: undefined } : {}),
+    })
+  }, [file, dataFile, inline, update])
+  useEffect(() => {
+    const from = typeof data.cloneDataFrom === 'string' ? data.cloneDataFrom.trim() : ''
+    if (!from || !dataFile) return
+    let gone = false
+    void (async () => {
+      const res = await fetch(`/api/page/file/${encodeURIComponent(assetName(from))}`)
+      if (res.ok) {
+        const etag = await saveTextAsset(dataFile, await res.text(), '', true)
+        dataEtagRef.current = etag
+      }
+      if (!gone) update({ cloneDataFrom: undefined })
+    })()
+    return () => {
+      gone = true
+    }
+  }, [data.cloneDataFrom, dataFile, update])
+  useEffect(() => {
+    if (!file) return
+    let gone = false
+    void loadTextAsset(file, sourceRef.current || inline || sample, rev > 0).then((loaded) => {
+      if (gone) return
+      etagRef.current = loaded.etag
+      setSource(loaded.text)
+      if (inline) update({ source: undefined, html: undefined })
+    })
+    return () => {
+      gone = true
+    }
+  }, [file, rev])
+  useEffect(() => {
+    const onAsset = (event: Event) => {
+      const detail = (event as CustomEvent<{ name?: string; etag?: string }>).detail
+      const name = String(detail?.name ?? '')
+      const current = fileRef.current
+      if (!name || !current) return
+      if (assetName(current) !== name && current !== name) return
+      if (Date.now() < quietUntil.current) return
+      const nextEtag = assetEtag(String(detail?.etag ?? ''))
+      if (nextEtag && nextEtag === etagRef.current) return
+      setRev((n) => n + 1)
+    }
+    window.addEventListener('biu:asset-changed', onAsset)
+    return () => window.removeEventListener('biu:asset-changed', onAsset)
+  }, [])
   const save = (next: string) => {
     setSource(next)
     sourceRef.current = next
-    update({ source: next })
+    const current = fileRef.current
+    if (!current) return
+    quietUntil.current = Date.now() + 1200
+    void saveTextAsset(current, next, etagRef.current).then((etag) => {
+      etagRef.current = etag
+    })
   }
-  return { source, save }
+  const readData = async () => {
+    const current = dataFileRef.current
+    if (!current) return null
+    const res = await fetch(`/api/page/file/${encodeURIComponent(assetName(current))}`)
+    if (res.status === 404) return null
+    if (!res.ok) throw new Error('sandbox data read failed')
+    dataEtagRef.current = assetEtag(String(res.headers.get('etag') ?? ''))
+    const text = await res.text()
+    if (!text.trim()) return null
+    return JSON.parse(text) as unknown
+  }
+  const writeData = async (value: unknown) => {
+    const current = dataFileRef.current
+    if (!current) return
+    const etag = await saveTextAsset(current, JSON.stringify(value ?? null), dataEtagRef.current, true)
+    dataEtagRef.current = etag
+  }
+  return { source, save, readData, writeData }
 }
 
 function SandboxPreview({
   source,
   onStamp,
+  readData,
+  writeData,
 }: {
   source: string
   onStamp?: (root: ShadowRoot) => void
+  readData: () => Promise<unknown>
+  writeData: (value: unknown) => Promise<void>
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null)
   const [error, setError] = useState('')
@@ -73,7 +191,7 @@ function SandboxPreview({
     const root = host.shadowRoot ?? host.attachShadow({ mode: 'open' })
     let mo: MutationObserver | undefined
     try {
-      mountSandbox(root, source)
+      mountSandbox(root, source, { read: readData, write: writeData })
       setError('')
       onStamp?.(root)
       const target = root.querySelector('[data-sandbox-root]')
@@ -389,8 +507,8 @@ function SandboxBar({
 }: {
   title: string
   onTitle: (next: string) => void
-  tab: 'preview' | 'code'
-  onTab: (next: 'preview' | 'code') => void
+  tab: 'preview' | 'code' | 'split'
+  onTab: (next: 'preview' | 'code' | 'split') => void
   ro: boolean
   expanded: boolean
   onExpand: () => void
@@ -522,6 +640,27 @@ function SandboxBar({
         <button
           type="button"
           tabIndex={-1}
+          data-testid="sandbox-split"
+          title={tab === 'split' ? '取消分栏' : '分栏：左预览，右代码'}
+          aria-label={tab === 'split' ? '取消分栏' : '分栏'}
+          aria-pressed={tab === 'split'}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => onTab(tab === 'split' ? 'preview' : 'split')}
+          style={{
+            ...chromeIconBtn,
+            width: 'var(--biu-size-control-md)',
+            height: 'var(--biu-size-control-md)',
+            background: tab === 'split' ? 'var(--biu-color-bg-hover)' : 'transparent',
+            color: tab === 'split' ? 'var(--biu-color-text)' : 'var(--biu-color-text-subtle)',
+          }}
+        >
+          <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden style={chromeIcon}>
+            <path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h3A1.5 1.5 0 0 1 8 3.5v9A1.5 1.5 0 0 1 6.5 14h-3A1.5 1.5 0 0 1 2 12.5v-9Zm7.5-1.5A1.5 1.5 0 0 0 8 3.5v9a1.5 1.5 0 0 0 1.5 1.5h3a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 12.5 2h-3Z" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          tabIndex={-1}
           data-page-block-expand=""
           data-testid="sandbox-expand"
           title={expanded ? '缩小' : '放大'}
@@ -543,6 +682,14 @@ function SandboxBar({
 
 const SANDBOX_SAMPLE = `export default function App() {
   const [n, setN] = React.useState(0)
+  React.useEffect(() => {
+    let gone = false
+    biu.read().then((saved) => {
+      if (gone || !saved || typeof saved.n !== 'number') return
+      setN(saved.n)
+    })
+    return () => { gone = true }
+  }, [])
   return (
     <div style={{
       minHeight: '100%',
@@ -559,11 +706,15 @@ const SANDBOX_SAMPLE = `export default function App() {
         用组件写这块
       </div>
       <p style={{ margin: 0, fontSize: 'var(--biu-font-size-4)', lineHeight: 1.6 }}>
-        沙箱跑 React。不要 import react，用宿主注入的 React。颜色和间距走 --biu-*。
+        不要 import react。要记住的数据用 biu.write 写到 dataFile，不要写进源码。
       </p>
       <button
         type="button"
-        onClick={() => setN((v) => v + 1)}
+        onClick={() => {
+          const next = n + 1
+          setN(next)
+          void biu.write({ n: next })
+        }}
         style={{
           marginTop: 12,
           padding: '4px 10px',
@@ -587,15 +738,19 @@ function SandboxCard({ data, update, writable, selected: nodeSelected }: BlockPr
   const title = sandboxTitle(data.title)
   const live = useSandboxSource(data, update, SANDBOX_SAMPLE)
   const source = live.source
+  const ioRef = useRef({ read: live.readData, write: live.writeData })
+  ioRef.current = { read: live.readData, write: live.writeData }
   const width = data.width
   const height = data.height == null || data.height === '' ? SANDBOX_DEFAULT_HEIGHT : data.height
   const fill = sandboxLooksFillLayout(source)
-  const [tab, setTab] = useState<'preview' | 'code'>('preview')
+  const [tab, setTab] = useState<'preview' | 'code' | 'split'>('preview')
   const [expanded, setExpanded] = useState(false)
   const [selected, setSelected] = useState(false)
   const hostRef = useRef<HTMLDivElement | null>(null)
   const compiled = useMemo(() => compileSandboxSource(source), [source])
-  const editing = tab === 'code'
+  const codeOnly = tab === 'code'
+  const showPreview = tab !== 'code'
+  const showCode = tab !== 'preview'
 
   useEffect(() => onSandboxActiveChange(() => setSelected(isSelectedSandbox(hostRef.current))), [])
   useEffect(() => {
@@ -605,8 +760,8 @@ function SandboxCard({ data, update, writable, selected: nodeSelected }: BlockPr
     else if (isSelectedSandbox(card)) selectSandbox(null)
   }, [nodeSelected])
   useEffect(() => {
-    if (editing) setLivePreview(null)
-  }, [editing])
+    if (codeOnly) setLivePreview(null)
+  }, [codeOnly])
   useEffect(() => {
     const card = hostRef.current
     if (!card) return
@@ -626,7 +781,7 @@ function SandboxCard({ data, update, writable, selected: nodeSelected }: BlockPr
               node === preview || (preview.shadowRoot instanceof ShadowRoot && node instanceof Node && preview.shadowRoot.contains(node)),
           ),
       )
-      setLivePreview(inPreview && !editing ? preview : null)
+      setLivePreview(inPreview && !codeOnly ? preview : null)
     }
     const onDoc = (event: PointerEvent) => {
       const path = event.composedPath()
@@ -639,7 +794,7 @@ function SandboxCard({ data, update, writable, selected: nodeSelected }: BlockPr
       card.removeEventListener('pointerdown', onCard)
       document.removeEventListener('pointerdown', onDoc)
     }
-  }, [editing])
+  }, [codeOnly])
 
   useEffect(() => {
     if (!expanded) return
@@ -700,20 +855,35 @@ function SandboxCard({ data, update, writable, selected: nodeSelected }: BlockPr
         expanded={expanded}
         onExpand={() => setExpanded((open) => !open)}
       />
-      <div style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'auto' }}>
-        {editing ? (
-          <SourceEditor source={source} onChange={live.save} compile={compiled} />
-        ) : (
-          <SandboxPreview
-            source={source}
-            onStamp={(root) => {
-              const host = hostRef.current?.closest('[data-page-block]') ?? null
-              const key = sandboxBlockKey(host, source)
-              const body = root.querySelector('[data-sandbox-root]')
-              if (body instanceof HTMLElement) stampSandboxPickSurfaces(body, `${key}-doc`, { plugin: name, includeRoot: false })
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
+        {showPreview ? (
+          <div style={{ position: 'relative', flex: 1, minWidth: 0, overflow: 'auto' }}>
+            <SandboxPreview
+              source={source}
+              readData={() => ioRef.current.read()}
+              writeData={(value) => ioRef.current.write(value)}
+              onStamp={(root) => {
+                const host = hostRef.current?.closest('[data-page-block]') ?? null
+                const key = sandboxBlockKey(host, source)
+                const body = root.querySelector('[data-sandbox-root]')
+                if (body instanceof HTMLElement) stampSandboxPickSurfaces(body, `${key}-doc`, { plugin: name, includeRoot: false })
+              }}
+            />
+          </div>
+        ) : null}
+        {showCode ? (
+          <div
+            style={{
+              position: 'relative',
+              flex: 1,
+              minWidth: 0,
+              overflow: 'hidden',
+              borderLeft: showPreview ? 'var(--biu-stroke-width) solid var(--biu-color-border)' : 'none',
             }}
-          />
-        )}
+          >
+            <SourceEditor source={source} onChange={ro ? () => undefined : live.save} compile={compiled} />
+          </div>
+        ) : null}
         {ro || expanded ? null : <HeightGrip boxRef={hostRef} onHeight={(next) => update({ height: next })} />}
       </div>
     </div>
@@ -743,9 +913,9 @@ export function apply(ctx: {
     label: 'Sandbox',
     blockType: 'sandbox',
     blockTypeLabel: 'Sandbox',
-    hint: '沙箱里跑 React 组件，继承 --biu-*',
+    hint: '沙箱跑 React。围栏只写 {"file":"assets/sandbox-….jsx","dataFile":"assets/sandbox-data-….json"}。源码用 db_doc 写 .jsx；要记住的数据用 biu.write 写到 dataFile 的 .json，不要写进源码或围栏',
     aliases: ['sandbox', '沙箱'],
-    defaults: () => ({ source: SANDBOX_SAMPLE, title: 'Sandbox', height: SANDBOX_DEFAULT_HEIGHT }),
+    defaults: () => ({ ...newSandboxFiles(), title: 'Sandbox', height: SANDBOX_DEFAULT_HEIGHT }),
     View: SandboxCard,
   })
 }

@@ -133,6 +133,13 @@ export function parsePageBlockData(kind: string, raw: string, extras: Record<str
   }
   if (kind === SANDBOX_KIND) {
     if (json) {
+      const file = typeof json.file === 'string' ? json.file.trim() : ''
+      if (file) {
+        const rest = { ...json }
+        delete rest.html
+        delete rest.source
+        return { ...rest, ...extras, file }
+      }
       const source = typeof json.source === 'string' ? json.source : typeof json.html === 'string' ? json.html : ''
       const rest = { ...json }
       delete rest.html
@@ -172,6 +179,13 @@ export function formatPageBlockFence(kind: string, plugin: string, data: Record<
   if (kind === SANDBOX_KIND) {
     delete body.deck
     const extras = fenceAttrExtras(body)
+    const file = typeof body.file === 'string' ? body.file.trim() : ''
+    if (file) {
+      const pointer: Record<string, string> = { file }
+      const dataFile = typeof body.dataFile === 'string' ? body.dataFile.trim() : ''
+      if (dataFile) pointer.dataFile = dataFile
+      return `:::pageBlock ${formatMeta(kind, plugin, extras, id)}\n${JSON.stringify(pointer, null, 2)}\n:::`
+    }
     const source = typeof body.source === 'string' ? body.source : typeof body.html === 'string' ? body.html : ''
     return `:::pageBlock ${formatMeta(kind, plugin, extras, id)}\n${source}\n:::`
   }
