@@ -1688,7 +1688,7 @@ test('db_update page facet stores flat property values on the stamp', async () =
   assert.equal(merged.value.facet.values[id].director, 'Damien Chazelle')
   assert.equal(merged.value.facet.values[id].year, 2016)
   const cleared = await db.update('/pages/p1', { facet: { values: { 导演: '' } } })
-  assert.equal(cleared.value.facet.values[id].director, undefined)
+  assert.equal(cleared.value.facet.values[id].director, '')
   assert.equal(cleared.value.facet.values[id].year, 2016)
 
   const awards = await db.create('/facets', [{ title: '奖项' }])

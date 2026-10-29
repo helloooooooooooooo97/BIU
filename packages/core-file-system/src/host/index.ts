@@ -504,8 +504,7 @@ function remapFacetBag(pack: CollectionSchemaPack | null | undefined, bag: Recor
   for (const [key, value] of Object.entries(bag)) {
     const field = packFieldKey(pack, key)
     if (!field) continue
-    if (facetBagValueEmpty(value)) continue
-    out[field] = value
+    out[field] = facetBagValueEmpty(value) ? '' : value
   }
   return out
 }
@@ -515,13 +514,7 @@ function applyFacetBagPatch(
   current: Record<string, unknown>,
   bag: Record<string, unknown>,
 ) {
-  const next = { ...current, ...remapFacetBag(pack, bag) }
-  for (const [key, value] of Object.entries(bag)) {
-    const field = packFieldKey(pack, key)
-    if (!field || !facetBagValueEmpty(value)) continue
-    delete next[field]
-  }
-  return next
+  return { ...current, ...remapFacetBag(pack, bag) }
 }
 
 /** Agent 常写成扁平 values（中文属性名），权威形状是 values[标签id][字段key]。 */
