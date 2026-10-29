@@ -29,20 +29,31 @@
 ```jsx
 export default function App() {
   const [n, setN] = React.useState(0)
+  const [ready, setReady] = React.useState(false)
+
   React.useEffect(() => {
     let gone = false
     biu.read().then((saved) => {
-      if (gone || !saved || typeof saved.n !== 'number') return
-      setN(saved.n)
-    })
+      if (gone) return
+      const v = saved && typeof saved === 'object' ? saved.n : 0
+      setN(typeof v === 'number' && isFinite(v) ? v : 0)
+      setReady(true)
+    }).catch(() => setReady(true))
     return () => { gone = true }
   }, [])
-  return (
-    <button type="button" onClick={() => {
-      const next = n + 1
-      setN(next)
+
+  const bump = () => {
+    setN((prev) => {
+      const next = prev + 1
       void biu.write({ n: next })
-    }}>点过 {n} 次</button>
+      return next
+    })
+  }
+
+  return (
+    <button type="button" onClick={bump}>
+      {!ready ? '…' : n === 0 ? '试一下 →' : `已点 ${n} 次 →`}
+    </button>
   )
 }
 ```
