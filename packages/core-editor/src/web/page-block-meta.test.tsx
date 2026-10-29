@@ -128,6 +128,17 @@ test('unchanged block data does not count as an edit', () => {
   assert.equal(blockDataUnchanged({ nested: { on: true } }, { nested: { on: true } }), true)
 })
 
+test('missing plugin keeps the fence and says it does not exist', () => {
+  const { container } = render(
+    <PageBlockMissing kind="geo" plugin="page-geo" data={{ title: '地球' }} phase="missing" />,
+  )
+  assert.equal(container.querySelector('[data-testid="page-block-missing"]')?.getAttribute('data-plugin-phase'), 'missing')
+  assert.match(container.textContent ?? '', /不存在/)
+  assert.doesNotMatch(container.textContent ?? '', /正在加载/)
+  assert.ok(container.querySelector('[data-testid="page-source-editor"]'))
+  assert.ok(container.querySelector('[data-testid="page-block-enable"]'))
+})
+
 test('loading plugin hides the fence and keeps the block shell', () => {
   const { container } = render(
     <PageBlockMissing kind="excalidraw" plugin="page-excalidraw" data={{ file: 'assets/a.json' }} phase="loading" />,
