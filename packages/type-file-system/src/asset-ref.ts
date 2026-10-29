@@ -98,6 +98,7 @@ function ensureDefaultBlockAssets() {
   registerBlockAssets('excalidraw', 'page-excalidraw', ['file'])
   registerBlockAssets('html', 'page-html-blocks', ['file'])
   registerBlockAssets('htmlframe', 'page-html-blocks', ['file'])
+  registerBlockAssets('sandbox', 'page-sandbox', ['file', 'dataFile'])
   registerBlockAssets('video', 'page-video', videoFieldAssets)
 }
 
