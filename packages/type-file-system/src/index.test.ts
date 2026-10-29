@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { asImageSrc, asImageSrcList, asAttachment, asAttachmentList, asPerson, asPersonList, appendPerson, personKey, actionVisibleToUser, emptySchemaValue, isEmptySchemaValue, hasCollectionDeleteQuery, isReservedSchemaFieldKey, isReservedSchemaFieldLabel, normalizeSchemaPack, normalizeSchemaValue, recordBuiltinValues, REQUIRED_RECORD_FIELD_KEYS, REQUIRED_RECORD_FIELDS, retagSchemaValue, schemaSearchHaystack, withBuiltinFields } from './index.ts'
+import { asImageSrc, asImageSrcList, asAttachment, asAttachmentList, asPerson, asPersonList, appendPerson, personKey, actionVisibleToUser, emptySchemaValue, isEmptySchemaValue, hasCollectionDeleteQuery, isReservedSchemaFieldKey, isReservedSchemaFieldLabel, isSchemaFieldKey, normalizeSchemaPack, normalizeSchemaValue, parseAtomicFields, recordBuiltinValues, REQUIRED_RECORD_FIELD_KEYS, REQUIRED_RECORD_FIELDS, retagSchemaValue, schemaSearchHaystack, withBuiltinFields } from './index.ts'
 
 test('asImageSrc keeps http, data:image, and same-origin image paths', () => {
   assert.equal(asImageSrc('https://example.com/a.png'), 'https://example.com/a.png')
@@ -104,6 +104,36 @@ test('normalizeSchemaPack keeps nested facet fields and action', () => {
   assert.equal(pack?.id, 'dp')
   assert.deepEqual(pack?.fields.map((field) => field.key), ['complexity', 'nested', 'run'])
   assert.equal(pack?.fields.find((field) => field.key === 'nested')?.type, 'facet')
+  assert.equal(pack?.fields[0]?.label, undefined)
+})
+
+test('schema field omits label when it matches key, including Chinese names', () => {
+  assert.equal(isSchemaFieldKey('导演'), true)
+  const pack = normalizeSchemaPack({
+    id: 'film',
+    label: '影片',
+    fields: [
+      { key: '导演', type: 'string' },
+      { key: 'complexity', type: 'string', label: '复杂度' },
+      { type: 'string', label: '年份' },
+    ],
+  })
+  assert.deepEqual(
+    pack?.fields.map((field) => ({ key: field.key, label: field.label })),
+    [
+      { key: '导演', label: undefined },
+      { key: 'complexity', label: '复杂度' },
+      { key: '年份', label: undefined },
+    ],
+  )
+  const parsed = parseAtomicFields([{ key: '导演', type: 'string' }, { type: 'number', label: '票房' }])
+  assert.deepEqual(
+    parsed.map((field) => ({ key: field.key, label: field.label })),
+    [
+      { key: '导演', label: undefined },
+      { key: '票房', label: undefined },
+    ],
+  )
 })
 
 test('normalizeSchemaPack drops fields that reuse file-system keys or labels', () => {

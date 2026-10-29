@@ -8,6 +8,5 @@ test('type pack fields cannot reuse file-system keys or labels', () => {
   assert.equal(registerFacetFieldKey('标题'), null)
   assert.equal(registerFacetFieldKey('title'), null)
   const ok = registerFacetFieldKey('复杂度')
-  assert.ok(ok)
-  assert.notEqual(ok, 'facet')
+  assert.equal(ok, '复杂度')
 })
