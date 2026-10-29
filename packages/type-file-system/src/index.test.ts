@@ -107,14 +107,14 @@ test('normalizeSchemaPack keeps nested facet fields and action', () => {
   assert.equal(pack?.fields[0]?.label, undefined)
 })
 
-test('schema field uses one name and drops a separate label', () => {
-  assert.equal(isSchemaFieldKey('导演'), true)
+test('schema field keeps a stable key and a separate label', () => {
+  assert.equal(isSchemaFieldKey('4829103'), true)
   const pack = normalizeSchemaPack({
     id: 'film',
     label: '影片',
     fields: [
       { key: '导演', type: 'string' },
-      { key: 'complexity', type: 'string', label: '复杂度' },
+      { key: '4829103', type: 'string', label: '复杂度' },
       { type: 'string', label: '年份' },
     ],
   })
@@ -122,20 +122,20 @@ test('schema field uses one name and drops a separate label', () => {
     pack?.fields.map((field) => ({ key: field.key, label: field.label })),
     [
       { key: '导演', label: undefined },
-      { key: '复杂度', label: undefined },
+      { key: '4829103', label: '复杂度' },
       { key: '年份', label: undefined },
     ],
   )
-  const parsed = parseAtomicFields([{ key: '导演', type: 'string' }, { type: 'number', label: '票房' }])
+  const parsed = parseAtomicFields([{ key: '4829103', type: 'string', label: '导演' }, { type: 'number', label: '票房' }])
   assert.deepEqual(
     parsed.map((field) => ({ key: field.key, label: field.label })),
     [
-      { key: '导演', label: undefined },
+      { key: '4829103', label: '导演' },
       { key: '票房', label: undefined },
     ],
   )
   assert.throws(
-    () => parseAtomicFields([{ key: '导演', type: 'string' }, { key: '导演', type: 'number' }]),
+    () => parseAtomicFields([{ key: '1', type: 'string', label: '导演' }, { key: '2', type: 'number', label: '导演' }]),
     /duplicate field name/,
   )
 })
@@ -152,7 +152,7 @@ test('normalizeSchemaPack drops reserved or duplicate field names', () => {
       { key: 'dup', type: 'string', label: '复杂度' },
     ],
   })
-  assert.deepEqual(pack?.fields.map((field) => field.key), ['别的名字', '题目', '复杂度'])
+  assert.deepEqual(pack?.fields.map((field) => field.key), ['complexity'])
 })
 
 test('withBuiltinFields always includes writable facet and strips tags', () => {

@@ -16,7 +16,7 @@ import { CellMulti } from '@biu/database-ui'
 import { DefaultCell, FieldGlyph } from './fsdb-cells.tsx'
 import { FieldValuePop } from './field-value-pop.tsx'
 import { inferPackFieldType, orphanPackEntries } from './fields.ts'
-import { loadFacets, persistFacets, registerFacetFieldKey, slugFacetId, subscribeFacets } from './facet-catalog.ts'
+import { facetFieldLabelOk, loadFacets, persistFacets, registerFacetFieldKey, slugFacetId, subscribeFacets } from './facet-catalog.ts'
 
 const TYPE_LABEL: Partial<Record<FieldType, string>> = {
   string: '文本',
@@ -263,8 +263,8 @@ export function FacetPackEditor({ facetId }: { facetId: string }) {
   useEffect(() => subscribeFacets(undefined, () => setCatalog(loadFacets())), [])
   const tag = catalog.find((item) => item.id === facetId)
 
-  function saveCatalog(next: CollectionSchemaPack[], remaps?: Record<string, Record<string, string>>) {
-    void persistFacets(next, undefined, remaps)
+  function saveCatalog(next: CollectionSchemaPack[]) {
+    void persistFacets(next)
   }
 
   if (!tag) return <p className="fsdb-muted">这条标签已不在目录里。</p>
@@ -276,25 +276,29 @@ export function FacetPackEditor({ facetId }: { facetId: string }) {
       labels: pack.fields.map((item) => item.label ?? item.key),
     })
     if (!key) return false
-    const field: SchemaPackField = { key, type, writable: true }
+    const field: SchemaPackField = { key, type, label: name.trim(), writable: true }
     saveCatalog(catalog.map((item) => (item.id === pack.id ? { ...item, fields: [...item.fields, field] } : item)))
     return true
   }
 
   function renameField(from: string, name: string) {
     const others = pack.fields.filter((item) => item.key !== from)
-    const key = registerFacetFieldKey(name, {
-      keys: others.map((item) => item.key),
-      labels: others.map((item) => item.label ?? item.key),
-    })
-    if (!key) return false
+    if (!facetFieldLabelOk(name, others.map((item) => item.label ?? item.key))) return false
+    const label = name.trim()
     saveCatalog(
       catalog.map((item) =>
         item.id === pack.id
-          ? { ...item, fields: item.fields.map((row) => (row.key === from ? { ...row, key } : row)) }
+          ? {
+              ...item,
+              fields: item.fields.map((row) => {
+                if (row.key !== from) return row
+                const next = { ...row, label }
+                if (label === row.key) delete next.label
+                return next
+              }),
+            }
           : item,
       ),
-      { [pack.id]: { [from]: key } },
     )
     return true
   }
@@ -365,8 +369,8 @@ export function SchemaFieldEditor({
     [catalog, parsed.tags],
   )
 
-  function saveCatalog(next: CollectionSchemaPack[], remaps?: Record<string, Record<string, string>>) {
-    void persistFacets(next, undefined, remaps)
+  function saveCatalog(next: CollectionSchemaPack[]) {
+    void persistFacets(next)
   }
 
   function patchValue(next: SchemaFieldValue) {
@@ -410,34 +414,30 @@ export function SchemaFieldEditor({
       labels: tag.fields.map((item) => item.label ?? item.key),
     })
     if (!key) return false
-    const field: SchemaPackField = { key, type, writable: true }
+    const field: SchemaPackField = { key, type, label: name.trim(), writable: true }
     saveCatalog(catalog.map((item) => (item.id === tag.id ? { ...item, fields: [...item.fields, field] } : item)))
     return true
   }
 
   function renameField(tag: CollectionSchemaPack, from: string, name: string) {
     const others = tag.fields.filter((item) => item.key !== from)
-    const key = registerFacetFieldKey(name, {
-      keys: others.map((item) => item.key),
-      labels: others.map((item) => item.label ?? item.key),
-    })
-    if (!key) return false
+    if (!facetFieldLabelOk(name, others.map((item) => item.label ?? item.key))) return false
+    const label = name.trim()
     saveCatalog(
       catalog.map((item) =>
         item.id === tag.id
-          ? { ...item, fields: item.fields.map((row) => (row.key === from ? { ...row, key } : row)) }
+          ? {
+              ...item,
+              fields: item.fields.map((row) => {
+                if (row.key !== from) return row
+                const next = { ...row, label }
+                if (label === row.key) delete next.label
+                return next
+              }),
+            }
           : item,
       ),
-      { [tag.id]: { [from]: key } },
     )
-    const bag = { ...(liveRef.current.values[tag.id] ?? {}) }
-    if (from in bag) {
-      bag[key] = bag[from]
-      delete bag[from]
-      const next = { tags: liveRef.current.tags, values: { ...liveRef.current.values, [tag.id]: bag } }
-      liveRef.current = next
-      patchValue(next)
-    }
     return true
   }
 

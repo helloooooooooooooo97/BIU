@@ -49,16 +49,12 @@ function adoptFacets(next: CollectionSchemaPack[]) {
   emit()
 }
 
-export async function persistFacets(
-  facets: CollectionSchemaPack[],
-  _collectionPath?: string,
-  remaps?: Record<string, Record<string, string>>,
-) {
+export async function persistFacets(facets: CollectionSchemaPack[], _collectionPath?: string) {
   const next = parseFacets(facets)
   const res = await fetch('/api/db/facets', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ facets: next, remaps }),
+    body: JSON.stringify({ facets: next }),
   })
   if (!res.ok) throw new Error(`facets persist failed: ${res.status}`)
   adoptFacets(next)
@@ -99,31 +95,40 @@ export function slugFacetId(label: string, used: Set<string>) {
   return id
 }
 
-export function fieldKeyFromLabel(label: string, used: Set<string>) {
-  const key = label.trim()
+export function randomFacetFieldKey(used: Set<string>) {
   const blocked = new Set([...used, ...Object.keys(BUILTIN_FIELDS)])
-  if (isSchemaFieldKey(key) && !blocked.has(key) && !isReservedSchemaFieldKey(key)) return key
-  const base = isSchemaFieldKey(key) ? key : 'field'
-  let n = 2
-  let next = `${base}_${n}`
-  while (blocked.has(next) || !isSchemaFieldKey(next)) {
-    n += 1
-    next = `${base}_${n}`
+  for (let i = 0; i < 64; i++) {
+    const key = String((Math.random() * 0x7fffffff) | 0)
+    if (key !== '0' && isSchemaFieldKey(key) && !blocked.has(key) && !isReservedSchemaFieldKey(key)) return key
   }
-  return next
+  let n = Date.now()
+  let key = String(n)
+  while (blocked.has(key) || !isSchemaFieldKey(key)) {
+    n += 1
+    key = String(n)
+  }
+  return key
+}
+
+export function fieldKeyFromLabel(_label: string, used: Set<string>) {
+  return randomFacetFieldKey(used)
+}
+
+export function facetFieldLabelOk(label: string, usedLabels: Iterable<string> = []) {
+  const name = label.trim()
+  if (!name) return false
+  if (isReservedSchemaFieldKey(name) || isReservedSchemaFieldLabel(name)) return false
+  const taken = new Set([...usedLabels].map((item) => String(item).trim().toLowerCase()).filter(Boolean))
+  return !taken.has(name.toLowerCase())
 }
 
 export function registerFacetFieldKey(
   label: string,
   used: { keys?: Iterable<string>; labels?: Iterable<string> } = {},
 ): string | null {
-  const name = label.trim()
-  if (!name) return null
-  if (isReservedSchemaFieldKey(name) || isReservedSchemaFieldLabel(name)) return null
-  const usedLabels = new Set([...used.labels ?? []].map((item) => String(item).trim().toLowerCase()).filter(Boolean))
-  if (usedLabels.has(name.toLowerCase())) return null
+  if (!facetFieldLabelOk(label, used.labels ?? [])) return null
   const usedKeys = new Set(used.keys ?? [])
-  const key = fieldKeyFromLabel(name, usedKeys)
-  if (isReservedSchemaFieldKey(key) || usedKeys.has(key)) return null
+  const key = randomFacetFieldKey(usedKeys)
+  if (usedKeys.has(key)) return null
   return key
 }

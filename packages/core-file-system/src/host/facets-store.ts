@@ -19,70 +19,8 @@ import {
 } from '@biu/type-file-system'
 import { parsePageBanner, type PageBanner, type PageBannerKind } from '../page-banner.ts'
 import { bannerGalleryId, isBannerPreset } from '../banner-presets.ts'
-import { FACET_FLAT_PREFIX, parseFacetFlatColumnKey } from '../query-logic.ts'
 
 type DatabaseSync = import('node:sqlite').DatabaseSync
-
-export function parseFacetFieldRemaps(raw: unknown) {
-  const out = new Map<string, Map<string, string>>()
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out
-  for (const [packId, bag] of Object.entries(raw as Record<string, unknown>)) {
-    if (!packId || !bag || typeof bag !== 'object' || Array.isArray(bag)) continue
-    const map = new Map<string, string>()
-    for (const [from, to] of Object.entries(bag as Record<string, unknown>)) {
-      const next = String(to ?? '').trim()
-      const prev = String(from ?? '').trim()
-      if (!prev || !next || prev === next) continue
-      map.set(prev, next)
-    }
-    if (map.size) out.set(packId, map)
-  }
-  return out
-}
-
-function remapFacetRecordJson(raw: unknown, remaps: Map<string, Map<string, string>>) {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
-  const rec = raw as { tags?: unknown; values?: unknown }
-  if (!rec.values || typeof rec.values !== 'object' || Array.isArray(rec.values)) return null
-  let changed = false
-  const values: Record<string, Record<string, unknown>> = {}
-  for (const [packId, bag] of Object.entries(rec.values as Record<string, unknown>)) {
-    if (!bag || typeof bag !== 'object' || Array.isArray(bag)) {
-      values[packId] = bag as Record<string, unknown>
-      continue
-    }
-    const map = remaps.get(packId)
-    if (!map) {
-      values[packId] = bag as Record<string, unknown>
-      continue
-    }
-    const next: Record<string, unknown> = {}
-    for (const [key, value] of Object.entries(bag as Record<string, unknown>)) {
-      const dest = map.get(key) ?? key
-      if (dest !== key) changed = true
-      if (dest in next && next[dest] != null && next[dest] !== '') continue
-      next[dest] = value
-    }
-    values[packId] = next
-  }
-  return changed ? { ...rec, values } : null
-}
-
-function rewriteFacetColumnRefs(value: unknown, remaps: Map<string, Map<string, string>>): unknown {
-  if (typeof value === 'string') {
-    const parsed = parseFacetFlatColumnKey(value)
-    if (!parsed) return value
-    const dest = remaps.get(parsed.packId)?.get(parsed.fieldKey)
-    return dest ? `${FACET_FLAT_PREFIX}${parsed.packId}::${dest}` : value
-  }
-  if (Array.isArray(value)) return value.map((item) => rewriteFacetColumnRefs(item, remaps))
-  if (!value || typeof value !== 'object') return value
-  const out: Record<string, unknown> = {}
-  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
-    out[String(rewriteFacetColumnRefs(key, remaps))] = rewriteFacetColumnRefs(item, remaps)
-  }
-  return out
-}
 
 export type FacetStamp = {
   collection: string
@@ -278,7 +216,7 @@ export class FacetStore {
     return row ? entryFromRow(this.ensure(), row) : null
   }
 
-  replace(tags: unknown[], remaps?: unknown): CollectionSchemaPack[] {
+  replace(tags: unknown[]): CollectionSchemaPack[] {
     const db = this.ensure()
     const next = tags.map((item) => normalizeSchemaPack(item)).filter((item): item is CollectionSchemaPack => Boolean(item))
     const keep = new Set(next.map((tag) => tag.id))
@@ -293,56 +231,12 @@ export class FacetStore {
         db.prepare('DELETE FROM facet_stamps WHERE facet_id = ?').run(row.id)
         db.prepare('DELETE FROM facets WHERE id = ?').run(row.id)
       }
-      this.applyFieldRemaps(remaps)
       db.exec('COMMIT')
     } catch (error) {
       db.exec('ROLLBACK')
       throw error
     }
     return this.list()
-  }
-
-  applyFieldRemaps(raw: unknown) {
-    const remaps = parseFacetFieldRemaps(raw)
-    if (!remaps.size) return
-    const db = this.ensure()
-    const rows = db.prepare('SELECT collection, record_id, facet_json FROM facet_record_values').all() as Array<{
-      collection: string
-      record_id: string
-      facet_json: string
-    }>
-    const put = db.prepare('UPDATE facet_record_values SET facet_json = ? WHERE collection = ? AND record_id = ?')
-    for (const row of rows) {
-      let parsed: unknown
-      try {
-        parsed = JSON.parse(row.facet_json || '{}')
-      } catch {
-        continue
-      }
-      const next = remapFacetRecordJson(parsed, remaps)
-      if (next) put.run(JSON.stringify(next), row.collection, row.record_id)
-    }
-    const hasViews = Boolean(
-      db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'saved_views'`).get(),
-    )
-    if (!hasViews) return
-    const views = db.prepare('SELECT collection, view_id, payload_json FROM saved_views').all() as Array<{
-      collection: string
-      view_id: string
-      payload_json: string
-    }>
-    const saveView = db.prepare('UPDATE saved_views SET payload_json = ? WHERE collection = ? AND view_id = ?')
-    for (const row of views) {
-      let parsed: unknown
-      try {
-        parsed = JSON.parse(row.payload_json || '{}')
-      } catch {
-        continue
-      }
-      const next = rewriteFacetColumnRefs(parsed, remaps)
-      const encoded = JSON.stringify(next)
-      if (encoded !== row.payload_json) saveView.run(encoded, row.collection, row.view_id)
-    }
   }
 
   upsert(raw: unknown, notes?: string): CollectionSchemaPack {

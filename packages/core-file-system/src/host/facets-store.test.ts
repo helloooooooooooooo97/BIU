@@ -21,7 +21,7 @@ test('FacetStore keeps packs in sqlite including nested facet types', () => {
   const facets = store.list()
   assert.equal(facets.length, 1)
   assert.equal(facets[0]?.id, 'dp')
-  assert.deepEqual(facets[0]?.fields.map((field) => field.key), ['复杂度', '套一层'])
+  assert.deepEqual(facets[0]?.fields.map((field) => field.key), ['complexity', 'nested'])
   assert.equal(store.list('动态').length, 1)
   assert.equal(store.list('nope').length, 0)
 })
@@ -78,16 +78,6 @@ test('sqlite stores facet overlay for records that cannot update', async () => {
   store.removeRecord('/plugins', 'demo')
   assert.equal(store.recordFacet('/plugins', 'demo'), null)
   assert.equal(store.stampedIds('/plugins', 'dp').has('demo'), false)
-})
-
-test('replace remaps record values when a field is renamed', () => {
-  const store = new FacetStore()
-  store.replace([{ id: 'dp', label: '动态规划', fields: [{ key: '复杂度', type: 'string' }] }])
-  store.writeRecordFacet('/notes', 'n1', { tags: ['dp'], values: { dp: { 复杂度: 'O(n)' } } }, '草稿')
-  store.replace([{ id: 'dp', label: '动态规划', fields: [{ key: '难度', type: 'string' }] }], { dp: { 复杂度: '难度' } })
-  assert.equal(store.get('dp')?.fields[0]?.key, '难度')
-  assert.equal(store.recordFacet('/notes', 'n1')?.values.dp?.['难度'], 'O(n)')
-  assert.equal(store.recordFacet('/notes', 'n1')?.values.dp?.['复杂度'], undefined)
 })
 
 test('empty facet overlay is not stored', async () => {

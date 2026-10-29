@@ -1490,9 +1490,9 @@ test('listing /facets with tag filter returns stamped records as a table', async
   assert.equal(listed.items[0]?.id, 'notes::n1')
   assert.equal(listed.items[0]?.table, '笔记')
   assert.equal(listed.items[0]?.sourceId, 'n1')
-  assert.equal(listed.items[0]?.['复杂度'], 'O(n)')
-  assert.equal(listed.schema.fields['复杂度']?.type, 'string')
-  assert.deepEqual(listed.schema.columns, ['title', 'table', '复杂度'])
+  assert.equal(listed.items[0]?.complexity, 'O(n)')
+  assert.equal(listed.schema.fields.complexity?.label, '复杂度')
+  assert.deepEqual(listed.schema.columns, ['title', 'table', 'complexity'])
 })
 
 test('facet list filter asks the collection only for stamped ids', async () => {
@@ -1554,7 +1554,7 @@ test('facet schema can be written on tables that cannot update other fields', as
   assert.deepEqual((written.value as { facet?: { tags?: string[] } }).facet?.tags, ['dp'])
   const read = await db.read('/plugins/p1')
   if (read.kind !== 'record') return
-  assert.equal((read.value.facet as { values?: { dp?: { 复杂度?: string } } }).values?.dp?.['复杂度'], 'O(n)')
+  assert.equal((read.value.facet as { values?: { dp?: { complexity?: string } } }).values?.dp?.complexity, 'O(n)')
   const listed = await db.list('/plugins')
   if (listed.kind !== 'collection') return
   assert.deepEqual((listed.items[0]?.facet as { tags?: string[] })?.tags, ['dp'])
@@ -1619,19 +1619,19 @@ test('db_update /facets writes facet field packs', async () => {
     fields: [{ key: 'complexity', type: 'string', label: '复杂度' }],
   })
   assert.equal(asArray.value.fieldCount, 1)
-  assert.equal(db.facets.get(id)?.fields[0]?.key, '复杂度')
-  assert.equal(db.facets.get(id)?.fields[0]?.label, undefined)
+  assert.equal(db.facets.get(id)?.fields[0]?.key, 'complexity')
+  assert.equal(db.facets.get(id)?.fields[0]?.label, '复杂度')
   const updated = await db.update(`/facets/${id}`, {
-    fields: JSON.stringify([{ key: '复杂度', type: 'string' }]),
+    fields: JSON.stringify([{ key: 'complexity', type: 'string', label: '复杂度' }]),
   })
   assert.equal(updated.value.fieldCount, 1)
-  assert.equal(db.facets.get(id)?.fields[0]?.key, '复杂度')
+  assert.equal(db.facets.get(id)?.fields[0]?.key, 'complexity')
   await assert.rejects(
     () => db.update(`/facets/${id}`, { fields: [{ key: 'oops', type: 'text' }] }),
     /unknown field type: text\. allowed: /,
   )
   await assert.rejects(
-    () => db.update(`/facets/${id}`, { fields: [{ key: '甲', type: 'string' }, { key: '甲', type: 'number' }] }),
+    () => db.update(`/facets/${id}`, { fields: [{ key: '1', type: 'string', label: '甲' }, { key: '2', type: 'number', label: '甲' }] }),
     /duplicate field name/,
   )
   const stat = await db.stat('/facets')
@@ -1681,12 +1681,12 @@ test('db_update page facet stores flat property values on the stamp', async () =
   })
   assert.deepEqual(tagged.value.facet, {
     tags: [id],
-    values: { [id]: { 导演: '查泽雷', 年份: 2016, 评分: 8.6 } },
+    values: { [id]: { director: '查泽雷', year: 2016, score: 8.6 } },
   })
-  assert.equal(db.facets.recordFacet('/pages', 'p1')?.values[id]?.['导演'], '查泽雷')
+  assert.equal(db.facets.recordFacet('/pages', 'p1')?.values[id]?.director, '查泽雷')
   const merged = await db.update('/pages/p1', { facet: { values: { 导演: 'Damien Chazelle' } } })
-  assert.equal(merged.value.facet.values[id]['导演'], 'Damien Chazelle')
-  assert.equal(merged.value.facet.values[id]['年份'], 2016)
+  assert.equal(merged.value.facet.values[id].director, 'Damien Chazelle')
+  assert.equal(merged.value.facet.values[id].year, 2016)
 
   const awards = await db.create('/facets', [{ title: '奖项' }])
   const awardId = String(awards.items[0]?.value.id)
@@ -1703,13 +1703,13 @@ test('db_update page facet stores flat property values on the stamp', async () =
     },
   })
   assert.deepEqual(both.value.facet.tags, [id, awardId])
-  assert.equal(both.value.facet.values[id]['导演'], '查泽雷')
-  assert.equal(both.value.facet.values[id]['年份'], 2016)
-  assert.equal(both.value.facet.values[awardId]['奥斯卡'], true)
-  const onlyAward = await db.update('/pages/p1', { facet: { values: { [awardId]: { 奥斯卡: false } } } })
-  assert.equal(onlyAward.value.facet.values[awardId]['奥斯卡'], false)
-  assert.equal(onlyAward.value.facet.values[id]['导演'], '查泽雷')
-  const col = `facet::${id}::导演`
+  assert.equal(both.value.facet.values[id].director, '查泽雷')
+  assert.equal(both.value.facet.values[id].year, 2016)
+  assert.equal(both.value.facet.values[awardId].oscar, true)
+  const onlyAward = await db.update('/pages/p1', { facet: { values: { [awardId]: { oscar: false } } } })
+  assert.equal(onlyAward.value.facet.values[awardId].oscar, false)
+  assert.equal(onlyAward.value.facet.values[id].director, '查泽雷')
+  const col = `facet::${id}::director`
   const listed = await db.list('/pages', undefined, { columns: [col] })
   if (listed.kind !== 'collection') return
   assert.equal(listed.items[0]?.[col], '查泽雷')

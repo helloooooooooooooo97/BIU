@@ -490,7 +490,7 @@ function packFieldKey(pack: CollectionSchemaPack | null | undefined, name: strin
   const want = String(name ?? '').trim()
   if (!pack || !want) return want
   for (const field of pack.fields) {
-    if (field.key === want) return field.key
+    if (field.key === want || field.label === want) return field.key
   }
   return want
 }
@@ -558,7 +558,7 @@ function coerceFacetPatch(
         for (const [key, value] of Object.entries(flat)) {
           const hit = tags
             .map((id) => resolvePack(id))
-            .find((pack) => pack?.fields.some((field) => field.key === key))
+            .find((pack) => pack?.fields.some((field) => field.key === key || field.label === key))
           if (hit) applyBag(hit.id, { [key]: value })
         }
       }
@@ -568,7 +568,7 @@ function coerceFacetPatch(
     if (key === 'tags' || key === 'values') continue
     if (tags.length === 1) applyBag(tags[0]!, { [key]: value })
     else {
-      const hit = tags.map((id) => resolvePack(id)).find((pack) => pack?.fields.some((field) => field.key === key))
+      const hit = tags.map((id) => resolvePack(id)).find((pack) => pack?.fields.some((field) => field.key === key || field.label === key))
       if (hit) applyBag(hit.id, { [key]: value })
     }
   }
@@ -4070,8 +4070,8 @@ export function apply(ctx: Context) {
   ctx.http.route('POST', '/api/db/facets', async (route) => {
     try {
       await db.requirePath('/facets', 'resource:update')
-      const body = (await route.json()) as { facets?: unknown[]; remaps?: unknown }
-      facets.replace(Array.isArray(body.facets) ? body.facets : [], body.remaps)
+      const body = (await route.json()) as { facets?: unknown[] }
+      facets.replace(Array.isArray(body.facets) ? body.facets : [])
       ctx.emit('database/change')
       route.send(200, { ok: true, facets: facets.list() })
     } catch (error) {
