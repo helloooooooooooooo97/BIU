@@ -33,6 +33,8 @@ let memoryBlocks: RememberedPageBlock[] = []
 /** null：还没用本次拉取覆盖，确认集合读磁盘（冷启动）。[]：拉取结果就是空。 */
 let confirmedPlugins: string[] | null = null
 let installed: InstalledPageBlockPlugin[] | null = null
+/** 最近一次 /plugins 列表里的全部 id。null 表示还没拉过。 */
+let listedPluginIds: Set<string> | null = null
 
 function bumpSlashCatalog() {
   catalogSeq += 1
@@ -132,6 +134,18 @@ export function rememberSlashBlock(spec: RememberedPageBlock) {
   bumpSlashCatalog()
 }
 
+export function setListedPluginIds(ids: Iterable<string>) {
+  listedPluginIds = new Set([...ids].map((id) => String(id ?? '').trim()).filter(Boolean))
+}
+
+/** true/false：列表已到，这个 id 在不在。null：还没拉过列表。 */
+export function listedPluginKnown(id: string): boolean | null {
+  if (!listedPluginIds) return null
+  const next = String(id ?? '').trim()
+  if (!next) return false
+  return listedPluginIds.has(next)
+}
+
 export function setInstalledPageBlocks(rows: InstalledPageBlockPlugin[]) {
   installed = rows.map((row) => ({
     id: String(row.id ?? '').trim(),
@@ -148,6 +162,7 @@ export function setInstalledPageBlocks(rows: InstalledPageBlockPlugin[]) {
 export function reloadSlashCatalogFromStorage() {
   installed = null
   confirmedPlugins = null
+  listedPluginIds = null
   memoryBlocks = readStorage().blocks
   bumpSlashCatalog()
 }
@@ -156,6 +171,7 @@ export function resetSlashCatalog() {
   memoryBlocks = []
   confirmedPlugins = []
   installed = []
+  listedPluginIds = null
   if (typeof localStorage !== 'undefined') localStorage.removeItem(SLASH_PAGE_BLOCKS_KEY)
   bumpSlashCatalog()
 }

@@ -53,4 +53,5 @@ test('page plugin views mount without an idle or near-viewport gate', () => {
   assert.match(host, /requestEnablePageBlockPlugin\(plugin, kind, \{ force: true \}\)/)
   assert.match(host, /requestEnablePageBlockPlugin\(plugin, kind\)/)
   assert.match(host, /<View data=\{data\} update=\{update\} writable=\{writable\} selected=\{selected\} \/>/)
+  assert.match(host, /if \(phase === 'missing'\) return null/)
 })
