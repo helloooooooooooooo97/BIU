@@ -398,11 +398,11 @@ const CSS = `
 .fsdb-page .tasks-icon-btn.tasks-title-open:hover,.fsdb-page .tasks-icon-btn.tasks-title-open.is-active{color:var(--biu-color-icon-active)}
 .fsdb-page .tasks-queue{display:flex;flex-direction:column;gap:18px;overflow:auto;box-sizing:border-box;width:100%;margin-left:0;padding:2px 0 12px var(--fsdb-check-gutter);flex:1;min-width:0;min-height:0}
 .fsdb-page .tasks-queue-group{display:flex;flex-direction:column;gap:2px}
-.fsdb-page .tasks-queue-ghead{display:flex;align-items:center;gap:6px;width:100%;box-sizing:border-box;padding:4px 8px;color:var(--biu-color-text-muted);font-size:var(--biu-font-size-4);font-weight:650;letter-spacing:.01em;cursor:default}
+.fsdb-page .tasks-queue-ghead{display:flex;align-items:center;gap:6px;width:100%;box-sizing:border-box;padding:4px 8px;color:var(--biu-color-text);font-size:var(--biu-font-size-4);font-weight:650;letter-spacing:.01em;cursor:default}
 .fsdb-page .tasks-group-fold{display:grid;width:14px;min-width:14px;height:14px;flex:none;place-items:center;border:0;border-radius:4px;padding:0;background:transparent;color:inherit;cursor:pointer}
 .fsdb-page .tasks-group-fold .sidebar-group-fold{display:grid;width:14px;height:14px;place-items:center}
 .fsdb-page .tasks-queue-glabel{font-weight:650;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.fsdb-page .tasks-queue-count{margin-left:6px;color:var(--biu-color-text-subtle);font-size:var(--biu-font-size-4);font-weight:600;background:var(--biu-color-bg-faint);border-radius:8px;padding:1px 7px}
+.fsdb-page .tasks-queue-count{margin-left:6px;color:var(--biu-color-text);font-size:var(--biu-font-size-4);font-weight:600;background:var(--biu-color-bg-faint);border-radius:4px;padding:1px 7px}
 .fsdb-page .tasks-queue-list{display:flex;flex-direction:column;margin:0;padding:0;list-style:none;gap:6px}
 .fsdb-page .tasks-queue-item{display:block;min-width:0;width:100%}
 .fsdb-page .tasks-queue-item-body{position:relative;display:flex;flex-wrap:nowrap;align-items:center;gap:6px;min-width:0;width:100%;box-sizing:border-box;border-radius:6px;padding:6px var(--fsdb-row-tools-w) 6px 0}
