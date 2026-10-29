@@ -455,7 +455,7 @@ const THEME = {
   red: '#e5484d',
   green: '#30a46c',
   yellow: '#ffb224',
-  blue: '#5b9fd6',
+  blue: '#308dbf',
   magenta: '#b07cd6',
   cyan: '#12a594',
   white: 'var(--biu-color-text-muted)',

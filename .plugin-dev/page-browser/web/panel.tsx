@@ -323,7 +323,7 @@ function BrowserPanel({ pick }: { pick?: PickApi }) {
         </form>
         <button
           type="button"
-          style={{ ...iconBtn, color: picking ? '#5b9fd6' : undefined }}
+          style={{ ...iconBtn, color: picking ? 'var(--biu-color-ink-blue)' : undefined }}
           title={picking ? '取消选取' : '选取'}
           aria-label={picking ? '取消选取' : '选取'}
           aria-pressed={picking}
