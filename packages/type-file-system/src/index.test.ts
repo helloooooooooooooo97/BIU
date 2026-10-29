@@ -107,7 +107,7 @@ test('normalizeSchemaPack keeps nested facet fields and action', () => {
   assert.equal(pack?.fields[0]?.label, undefined)
 })
 
-test('schema field omits label when it matches key, including Chinese names', () => {
+test('schema field uses one name and drops a separate label', () => {
   assert.equal(isSchemaFieldKey('导演'), true)
   const pack = normalizeSchemaPack({
     id: 'film',
@@ -122,7 +122,7 @@ test('schema field omits label when it matches key, including Chinese names', ()
     pack?.fields.map((field) => ({ key: field.key, label: field.label })),
     [
       { key: '导演', label: undefined },
-      { key: 'complexity', label: '复杂度' },
+      { key: '复杂度', label: undefined },
       { key: '年份', label: undefined },
     ],
   )
@@ -134,9 +134,13 @@ test('schema field omits label when it matches key, including Chinese names', ()
       { key: '票房', label: undefined },
     ],
   )
+  assert.throws(
+    () => parseAtomicFields([{ key: '导演', type: 'string' }, { key: '导演', type: 'number' }]),
+    /duplicate field name/,
+  )
 })
 
-test('normalizeSchemaPack drops fields that reuse file-system keys or labels', () => {
+test('normalizeSchemaPack drops reserved or duplicate field names', () => {
   const pack = normalizeSchemaPack({
     id: 'dp',
     label: '动态规划',
@@ -148,7 +152,7 @@ test('normalizeSchemaPack drops fields that reuse file-system keys or labels', (
       { key: 'dup', type: 'string', label: '复杂度' },
     ],
   })
-  assert.deepEqual(pack?.fields.map((field) => field.key), ['complexity'])
+  assert.deepEqual(pack?.fields.map((field) => field.key), ['别的名字', '题目', '复杂度'])
 })
 
 test('withBuiltinFields always includes writable facet and strips tags', () => {

@@ -490,7 +490,7 @@ function packFieldKey(pack: CollectionSchemaPack | null | undefined, name: strin
   const want = String(name ?? '').trim()
   if (!pack || !want) return want
   for (const field of pack.fields) {
-    if (field.key === want || field.label === want) return field.key
+    if (field.key === want) return field.key
   }
   return want
 }
@@ -558,7 +558,7 @@ function coerceFacetPatch(
         for (const [key, value] of Object.entries(flat)) {
           const hit = tags
             .map((id) => resolvePack(id))
-            .find((pack) => pack?.fields.some((field) => field.key === key || field.label === key))
+            .find((pack) => pack?.fields.some((field) => field.key === key))
           if (hit) applyBag(hit.id, { [key]: value })
         }
       }
@@ -568,7 +568,7 @@ function coerceFacetPatch(
     if (key === 'tags' || key === 'values') continue
     if (tags.length === 1) applyBag(tags[0]!, { [key]: value })
     else {
-      const hit = tags.map((id) => resolvePack(id)).find((pack) => pack?.fields.some((field) => field.key === key || field.label === key))
+      const hit = tags.map((id) => resolvePack(id)).find((pack) => pack?.fields.some((field) => field.key === key))
       if (hit) applyBag(hit.id, { [key]: value })
     }
   }

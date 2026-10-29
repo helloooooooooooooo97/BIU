@@ -374,14 +374,17 @@ export function isAtomicFieldType(type: unknown): type is AtomicFieldType {
   return typeof type === 'string' && (ATOMIC_FIELD_TYPES as readonly string[]).includes(type)
 }
 
-/** 与 key 相同的 label 不另存；展示用 `label ?? key`。 */
-function atomicSchemaField(key: string, row: Record<string, unknown>, fieldLabel: string): SchemaPackField {
+/** 属性只存一份名字：有 label 时以 label 为准，不再另写 label。 */
+function atomicFieldName(row: Record<string, unknown>) {
+  return String(row.label ?? row.key ?? '').trim()
+}
+
+function atomicSchemaField(key: string, row: Record<string, unknown>): SchemaPackField {
   const field: SchemaPackField = {
     key,
     type: row.type as AtomicFieldType,
     writable: row.writable !== false,
   }
-  if (fieldLabel !== key) field.label = fieldLabel
   if (Array.isArray(row.enum)) field.enum = row.enum.map((option) => String(option)).filter(Boolean)
   if (row.enumLabels && typeof row.enumLabels === 'object' && !Array.isArray(row.enumLabels)) {
     field.enumLabels = Object.fromEntries(
@@ -407,25 +410,20 @@ export function parseAtomicFields(raw: unknown): SchemaPackField[] {
   if (!Array.isArray(listed)) throw new Error('fields 应为数组或 JSON 字符串，例如 [{"key":"category","type":"string"}]')
   const fields: SchemaPackField[] = []
   const seen = new Set<string>()
-  const seenLabels = new Set<string>()
   for (const item of listed) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) {
-      throw new Error('fields 每一项应为 {key,type,label?} 对象')
+      throw new Error('fields 每一项应为 {key,type} 对象')
     }
     const row = item as Record<string, unknown>
-    const key = String(row.key ?? row.label ?? '').trim()
+    const key = atomicFieldName(row)
     if (!isSchemaFieldKey(key)) throw new Error(`invalid field key: ${key || '(empty)'}`)
-    if (seen.has(key)) throw new Error(`duplicate field key: ${key}`)
-    if (isReservedSchemaFieldKey(key)) throw new Error(`reserved field key: ${key}`)
+    if (seen.has(key.toLowerCase())) throw new Error(`duplicate field name: ${key}`)
+    if (isReservedSchemaFieldKey(key) || isReservedSchemaFieldLabel(key)) throw new Error(`reserved field name: ${key}`)
     if (!isAtomicFieldType(row.type)) {
       throw new Error(`unknown field type: ${String(row.type ?? '')}. allowed: ${ATOMIC_FIELD_TYPES.join(', ')}`)
     }
-    const fieldLabel = String(row.label ?? key).trim() || key
-    if (isReservedSchemaFieldLabel(fieldLabel)) throw new Error(`reserved field label: ${fieldLabel}`)
-    if (seenLabels.has(fieldLabel.toLowerCase())) throw new Error(`duplicate field label: ${fieldLabel}`)
-    seen.add(key)
-    seenLabels.add(fieldLabel.toLowerCase())
-    fields.push(atomicSchemaField(key, row, fieldLabel))
+    seen.add(key.toLowerCase())
+    fields.push(atomicSchemaField(key, row))
   }
   return fields
 }
@@ -449,19 +447,16 @@ export function normalizeSchemaPack(raw: unknown): CollectionSchemaPack | null {
   const label = String(rec.label ?? id).trim() || id
   const fields: SchemaPackField[] = []
   const seen = new Set<string>()
-  const seenLabels = new Set<string>()
   const listed = Array.isArray(rec.fields) ? rec.fields : []
   for (const item of listed) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) continue
     const row = item as Record<string, unknown>
-    const key = String(row.key ?? row.label ?? '').trim()
-    if (!isSchemaFieldKey(key) || seen.has(key) || isReservedSchemaFieldKey(key)) continue
+    const key = atomicFieldName(row)
+    if (!isSchemaFieldKey(key) || seen.has(key.toLowerCase())) continue
+    if (isReservedSchemaFieldKey(key) || isReservedSchemaFieldLabel(key)) continue
     if (!isAtomicFieldType(row.type)) continue
-    const fieldLabel = String(row.label ?? key).trim() || key
-    if (isReservedSchemaFieldLabel(fieldLabel) || seenLabels.has(fieldLabel.toLowerCase())) continue
-    seen.add(key)
-    seenLabels.add(fieldLabel.toLowerCase())
-    fields.push(atomicSchemaField(key, row, fieldLabel))
+    seen.add(key.toLowerCase())
+    fields.push(atomicSchemaField(key, row))
   }
   return { id, label, fields }
 }

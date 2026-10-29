@@ -298,7 +298,7 @@ export const BIU_TABLES: Record<string, TableSpec> = {
   },
 }
 
-export const LATEST_BIU_SCHEMA = 42
+export const LATEST_BIU_SCHEMA = 43
 
 export const CREATE_CORE_SQL = `
 CREATE TABLE IF NOT EXISTS pages (
