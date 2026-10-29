@@ -403,7 +403,11 @@ const CSS = `
 .fsdb-page .tasks-queue-ghead{display:flex;align-items:center;gap:6px;width:100%;box-sizing:border-box;padding:4px 8px;color:var(--biu-color-text);font-size:var(--biu-font-size-4);font-weight:650;letter-spacing:.01em;cursor:default}
 .fsdb-page .tasks-group-fold{display:grid;width:14px;min-width:14px;height:14px;flex:none;place-items:center;border:0;border-radius:4px;padding:0;background:transparent;color:inherit;cursor:pointer}
 .fsdb-page .tasks-group-fold .sidebar-group-fold{display:grid;width:14px;height:14px;place-items:center}
-.fsdb-page .tasks-queue-glabel{font-weight:650;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fsdb-page .tasks-group-fold .sidebar-group-fold-face,.fsdb-page .tasks-group-fold .sidebar-group-fold-chevron{position:absolute;inset:0;width:14px;height:14px}
+.fsdb-page .tasks-group-fold .sidebar-group-fold-chevron{display:none}
+.fsdb-page .tasks-group-fold .sidebar-group-fold:hover .sidebar-group-fold-face,.fsdb-page .tasks-group-fold .sidebar-group-fold:focus-within .sidebar-group-fold-face{display:none}
+.fsdb-page .tasks-group-fold .sidebar-group-fold:hover .sidebar-group-fold-chevron,.fsdb-page .tasks-group-fold .sidebar-group-fold:focus-within .sidebar-group-fold-chevron{display:grid}
+.fsdb-page .tasks-queue-glabel{font-weight:650;line-height:14px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fsdb-page .tasks-queue-gshare{color:var(--biu-color-icon-fixed)}
 .fsdb-page .tasks-queue-count{margin-left:6px;color:var(--biu-color-text);font-size:var(--biu-font-size-4);font-weight:600;background:var(--biu-color-bg-faint);border-radius:4px;padding:1px 7px}
 .fsdb-page .tasks-queue-list{display:flex;flex-direction:column;margin:0;padding:0;list-style:none;gap:6px}
@@ -1036,8 +1040,8 @@ html.dark .fsdb-page .tasks-toolbar-right .tasks-sort-btn.is-active,
 html.dark .fsdb-page .tasks-toolbar-right .tasks-sort-btn.is-custom,
 html.dark .fsdb-page .tasks-toolbar-right .tasks-refresh.is-active{color:var(--biu-color-icon-fixed)}
 .fsdb-page .tasks-toolbar-right .tasks-sort-btn svg,
+.fsdb-page .tasks-toolbar-right .tasks-refresh svg{color:inherit;fill:currentColor;background:transparent;opacity:1}
 .fsdb-page .tasks-toolbar-right .tasks-sort-btn .fsdb-ui-glyph,
-.fsdb-page .tasks-toolbar-right .tasks-refresh svg,
 .fsdb-page .tasks-toolbar-right .tasks-refresh .fsdb-ui-glyph{color:inherit;fill:currentColor;background:currentColor;opacity:1}
 .fsdb-page .tasks-viewdd-btn svg,.fsdb-page .tasks-viewdd-btn .fsdb-ui-glyph,.fsdb-page .tasks-viewtab svg,.fsdb-page .tasks-viewtab .fsdb-ui-glyph{color:var(--biu-color-icon)!important;fill:currentColor;opacity:1}
 .fsdb-page .tasks-viewtab.is-active svg,.fsdb-page .tasks-viewtab.is-active .fsdb-ui-glyph,.fsdb-page .tasks-viewdd-btn.is-active svg,.fsdb-page .tasks-viewdd-btn.is-active .fsdb-ui-glyph{color:var(--biu-color-icon-active)!important}

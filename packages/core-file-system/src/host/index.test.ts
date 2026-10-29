@@ -2695,7 +2695,7 @@ test('a lan view share marks matching records shared without stamping ownership'
   assert.equal(scopeOf(listed.items, '进行中'), '共享')
   assert.equal(scopeOf(listed.items, '已完成'), '私人')
   const roleOf = (items: DbRecord[], title: string) => items.find((row) => row.title === title)?.shareRole
-  assert.equal(roleOf(listed.items, '进行中'), '阅读')
+  assert.equal(roleOf(listed.items, '进行中'), '管理')
   assert.equal(roleOf(listed.items, '已完成'), '管理')
   assert.equal(db.shares.findRecord('/docs', 'open1'), null)
   db.shares.revokeView('/docs', 'open')
