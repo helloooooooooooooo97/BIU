@@ -133,7 +133,9 @@ test('missing plugin keeps the fence and says it does not exist', () => {
     <PageBlockMissing kind="geo" plugin="page-geo" data={{ title: '地球' }} phase="missing" />,
   )
   assert.equal(container.querySelector('[data-testid="page-block-missing"]')?.getAttribute('data-plugin-phase'), 'missing')
-  assert.match(container.textContent ?? '', /不存在/)
+  assert.match(container.textContent ?? '', /插件不存在/)
+  assert.match(container.textContent ?? '', /"title": "地球"/)
+  assert.doesNotMatch(container.textContent ?? '', /:::pageBlock/)
   assert.doesNotMatch(container.textContent ?? '', /正在加载/)
   assert.ok(container.querySelector('[data-testid="page-source-editor"]'))
   assert.ok(container.querySelector('[data-testid="page-block-enable"]'))

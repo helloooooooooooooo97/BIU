@@ -1,5 +1,6 @@
 import { useEffect, useImperativeHandle, useRef, forwardRef } from 'react'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
+import { json } from '@codemirror/lang-json'
 import { markdown } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
@@ -121,7 +122,8 @@ export const SourceEditor = forwardRef<SourceEditorHandle, {
   writable: boolean
   onChange?: (next: string) => void
   compact?: boolean
-}>(function SourceEditor({ value, writable, onChange, compact }, ref) {
+  language?: 'markdown' | 'json'
+}>(function SourceEditor({ value, writable, onChange, compact, language = 'markdown' }, ref) {
   const host = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
   const onChangeRef = useRef(onChange)
@@ -144,7 +146,7 @@ export const SourceEditor = forwardRef<SourceEditorHandle, {
           highlightActiveLine(),
           highlightActiveLineGutter(),
           keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
-          markdown({ codeLanguages: languages }),
+          language === 'json' ? json() : markdown({ codeLanguages: languages }),
           syntaxHighlighting(mdHighlight),
           EditorView.lineWrapping,
           theme,
@@ -167,7 +169,7 @@ export const SourceEditor = forwardRef<SourceEditorHandle, {
       view.destroy()
       viewRef.current = null
     }
-  }, [writable, compact])
+  }, [writable, compact, language])
 
   useImperativeHandle(ref, () => ({
     applyFind(query, index) {
