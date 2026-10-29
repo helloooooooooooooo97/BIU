@@ -2552,6 +2552,7 @@ export class DatabaseService extends Service implements Database {
       path: `${spec.path}/${record.id}`,
       field,
       value: editorContent ? editorContent.body : (record[field] ?? null),
+      updatedAt: Math.max(Number(record.updatedAt) || 0, Date.now()),
       ...(editorContent ? { version: editorContent.version } : {}),
     }
   }
