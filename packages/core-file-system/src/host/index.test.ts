@@ -2925,6 +2925,16 @@ test('concurrent lists of one collection share a single spec.list scan', async (
   assert.equal(workspace.items.length, 12)
 })
 
+test('db_content and db_doc tell agents HTML blocks live in attachments', () => {
+  const host = readFileSync(resolve(import.meta.dirname, './index.ts'), 'utf8')
+  assert.match(host, /HTML 块（:::pageBlock kind=html 或 htmlframe）/)
+  assert.match(host, /围栏体只写 \{"file":"assets\/<名>\.html"\}/)
+  assert.match(host, /源码必须 db_doc command=write/)
+  assert.match(host, /写进围栏的 HTML 会丢/)
+  assert.match(host, /HTML 块源码只在这里，不在 db_content 围栏/)
+  assert.match(host, /围栏里的 HTML 会被附件覆盖丢掉/)
+})
+
 test('collection list preloads authorization scans and releases them', () => {
   const host = readFileSync(resolve(import.meta.dirname, './index.ts'), 'utf8')
   assert.match(host, /auth\.preloadCollection\(actor\.workspaceId, spec\.path, actor\.accountId\)/)

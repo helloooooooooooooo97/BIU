@@ -19,7 +19,7 @@ export function apply(ctx: Context) {
   ctx.tools.register({
     name: 'html_block_compile',
     description:
-      'Compile/verify page-html-blocks source (static HTML/CSS or dynamic HTML/JS/JSX). Call after writing the attachment. External script src and import/require are rejected. Returns ok + mode, or error.',
+      '校验 HTML 块源码（静态 HTML/CSS 或动态 HTML/JS/JSX）。源码必须先 db_doc write 到附件（name=<名>.html），页面围栏只写 {"file":"assets/<名>.html"}；写进围栏会被附件覆盖。本工具只编译、不落盘。外链 script、import/require 会失败。返回 ok + mode，或 error。',
     parameters: {
       type: 'object',
       properties: {
