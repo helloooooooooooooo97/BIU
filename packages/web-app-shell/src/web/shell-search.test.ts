@@ -93,15 +93,16 @@ test('empty search lists every kind by updatedAt instead of skipping remotes', (
   assert.match(src, /<ConfirmDialog/)
 })
 
-test('plugin search hits show an enabled dot next to the title', () => {
+test('plugin search hits turn the icon green when enabled', () => {
   assert.equal(pluginRecordEnabled({ enabled: true }), true)
   assert.equal(pluginRecordEnabled({ enabled: 'true' }), true)
   assert.equal(pluginRecordEnabled({}), false)
   const src = readFileSync(resolve(import.meta.dirname, './shell-search.tsx'), 'utf8')
   assert.match(src, /pluginRecordEnabled\(item\.record\)/)
-  assert.match(src, /shell-search-hit-enabled/)
+  assert.match(src, /shell-search-hit-icon\$\{[^}]*is-enabled/)
+  assert.doesNotMatch(src, /plugin-enabled-dot/)
   const css = readFileSync(resolve(import.meta.dirname, '../../../../web/style.css'), 'utf8')
-  assert.match(css, /\.shell-search-hit-enabled\s*\{[^}]*background:\s*var\(--biu-color-ok/)
+  assert.match(css, /\.shell-search-hit-icon\.is-enabled[^}]*color:\s*var\(--biu-color-ink-green\)/)
 })
 
 test('session task page plugin hits render tags left of actions', () => {
@@ -109,7 +110,7 @@ test('session task page plugin hits render tags left of actions', () => {
   assert.doesNotMatch(src, /HitKindTag/)
   assert.match(src, /HitRecordTags/)
   assert.match(src, /HitActions/)
-  assert.match(src, /data-dock-tip=\{action\.label\}/)
+  assert.match(src, /<span>\{action\.label\}<\/span>/)
   assert.match(src, /shell-search-hit-aside/)
   assert.match(src, /shell-search-hit-tags/)
   assert.match(src, /shell-search-hit-actions/)
@@ -124,12 +125,11 @@ test('session task page plugin hits render tags left of actions', () => {
   assert.match(css, /\.shell-search-go\s*\{[^}]*color:\s*var\(--biu-color-icon\)/s)
   assert.match(css, /\.shell-search-hit-icon\s*\{[^}]*color:\s*var\(--biu-color-icon\)/s)
   assert.match(css, /\.shell-search-hit\.is-active \.shell-search-hit-icon[\s\S]*?color:\s*var\(--biu-color-icon-active\)/s)
-  assert.match(css, /\.shell-search-hit-action\s*\{[^}]*color:\s*var\(--biu-color-icon\)/s)
-  assert.match(css, /\.shell-search-hit-action:hover\s*\{[^}]*color:\s*var\(--biu-color-icon-active\)/s)
-  assert.match(css, /\.shell-search-hit-action\s*\{[^}]*padding:\s*3px/s)
-  assert.match(css, /\.shell-search-hit-action:hover\s*\{[^}]*background:\s*var\(--biu-color-bg-hover\)/s)
-  assert.match(css, /\.shell-search-hit-action\[data-dock-tip\]::after\s*\{[^}]*z-index:\s*var\(--biu-z-float\)/s)
-  assert.doesNotMatch(css, /\.shell-search-hit-action\[data-dock-tip\]::after\s*\{[^}]*top:\s*calc/s)
+  assert.match(css, /\.shell-search-hit-action\s*\{[^}]*--biu-tag:\s*var\(--biu-color-ink-gray\)/s)
+  assert.match(css, /\.shell-search-hit-action\.is-danger\s*\{[^}]*--biu-tag:\s*var\(--biu-color-danger\)/s)
+  assert.match(css, /\.shell-search-hit-action\s*\{[^}]*border-radius:\s*var\(--biu-radius-xl\)/s)
+  assert.match(css, /\.shell-search-hit-action\s*\{[^}]*height:\s*22px/s)
+  assert.match(css, /\.shell-search-hit-action\s*\{[^}]*padding:\s*0 8px/s)
 })
 
 test('search hit icons follow record mark: emoji, else session mascot', () => {

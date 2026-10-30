@@ -98,7 +98,8 @@ test('plugin title is the name only; tags are not a custom cell', async () => {
   const chrome = readFileSync(resolve(import.meta.dirname, './chrome.tsx'), 'utf8')
   assert.doesNotMatch(chrome, /PluginTagsCell/)
   assert.doesNotMatch(chrome, /已装/)
-  assert.match(chrome, /data-testid="plugin-enabled-dot"/)
+  assert.match(chrome, /data-plugin-enabled/)
+  assert.doesNotMatch(chrome, /plugin-enabled-dot/)
 })
 
 test('plugin window sizes from manifest.shell instead of measuring DOM', async () => {

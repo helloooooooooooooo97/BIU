@@ -188,7 +188,7 @@ export const BANNER_PRESETS: BannerPreset[] = [
     '波普',
     '重复使神性脱落。同一张脸印四次，消费成为圣像。',
     'background:#7be7ff;display:grid;grid-template-columns:1fr 1fr 1fr 1fr',
-    `<div style="background:#fff000"></div><div style="background:#ff5ebc"></div><div style="background:#54e88b"></div><div style="background:#7f4dff;color:#fff;padding:18px 16px;display:flex;flex-direction:column;justify-content:flex-end"><div style="font-size:10px;letter-spacing:.3em;font-weight:700">WARHOL</div><div style="margin-top:6px;font-size:22px;font-weight:800">波普</div><div style="margin-top:8px;font-size:12px;line-height:1.45">重复使神性脱落。同一张脸印四次。</div></div>`,
+    `<div style="background:#fff000"></div><div style="background:#ff5ebc"></div><div style="background:#54e88b"></div><div style="background:#7f4dff;color:#fff;padding:18px 16px;display:flex;flex-direction:column;justify-content:flex-end"><div style="font-size:10px;letter-spacing:.3em;font-weight:var(--biu-font-weight-bold)">WARHOL</div><div style="margin-top:6px;font-size:22px;font-weight:var(--biu-font-weight-bold)">波普</div><div style="margin-top:8px;font-size:12px;line-height:1.45">重复使神性脱落。同一张脸印四次。</div></div>`,
   ),
   html(
     'us-greiman',
@@ -229,7 +229,7 @@ export const BANNER_PRESETS: BannerPreset[] = [
     '包豪斯',
     '形式追随功能，课堂追随车间。红黄蓝与圆方三角，是工业时代的字母。',
     'background:#f7f4e8;display:grid;grid-template-columns:1.5fr .9fr .7fr',
-    `<div style="background:#f7f4e8;color:#151515;padding:20px 22px;display:flex;flex-direction:column;justify-content:flex-end"><div style="font-size:10px;letter-spacing:.3em">BAUHAUS</div><div style="margin-top:6px;font-size:24px;font-weight:800">包豪斯</div><div style="margin-top:8px;font-size:12px;line-height:1.5">形式追随功能。红黄蓝与圆方三角，是工业时代的字母。</div></div><div style="background:#e13227"></div><div style="background:#1454a3;border-top:70px solid #f1c40f"></div>`,
+    `<div style="background:#f7f4e8;color:#151515;padding:20px 22px;display:flex;flex-direction:column;justify-content:flex-end"><div style="font-size:10px;letter-spacing:.3em">BAUHAUS</div><div style="margin-top:6px;font-size:24px;font-weight:var(--biu-font-weight-bold)">包豪斯</div><div style="margin-top:8px;font-size:12px;line-height:1.5">形式追随功能。红黄蓝与圆方三角，是工业时代的字母。</div></div><div style="background:#e13227"></div><div style="background:#1454a3;border-top:70px solid #f1c40f"></div>`,
   ),
   html(
     'eu-tschichold',
@@ -253,7 +253,7 @@ export const BANNER_PRESETS: BannerPreset[] = [
     '风格派',
     'Mondrian / van Doesburg：世界可被正交。原色与非色，是宇宙的家具。',
     'background:#f4f1ea;display:grid;grid-template-columns:2fr 18px 1fr 18px .8fr;grid-template-rows:1fr 18px .7fr',
-    `<div style="background:#111"></div><div style="background:#111"></div><div style="background:#c4122e"></div><div style="background:#111"></div><div style="background:#1c4a9e"></div><div style="grid-column:1/-1;background:#111"></div><div style="background:#e8c84a;color:#111;padding:12px 16px;display:flex;flex-direction:column;justify-content:flex-end"><div style="font-size:10px;letter-spacing:.28em;font-weight:700">DE STIJL</div><div style="font-size:20px;font-weight:800">风格派</div></div><div style="background:#111"></div><div style="background:#f4f1ea"></div><div style="background:#111"></div><div style="background:#111"></div>`,
+    `<div style="background:#111"></div><div style="background:#111"></div><div style="background:#c4122e"></div><div style="background:#111"></div><div style="background:#1c4a9e"></div><div style="grid-column:1/-1;background:#111"></div><div style="background:#e8c84a;color:#111;padding:12px 16px;display:flex;flex-direction:column;justify-content:flex-end"><div style="font-size:10px;letter-spacing:.28em;font-weight:var(--biu-font-weight-bold)">DE STIJL</div><div style="font-size:20px;font-weight:var(--biu-font-weight-bold)">风格派</div></div><div style="background:#111"></div><div style="background:#f4f1ea"></div><div style="background:#111"></div><div style="background:#111"></div>`,
   ),
   html(
     'eu-lissitzky',

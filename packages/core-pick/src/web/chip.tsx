@@ -5,6 +5,7 @@ import {
   Square3Stack3DIcon,
   DocumentIcon,
   DocumentTextIcon,
+  Bars3BottomLeftIcon,
   ClipboardDocumentCheckIcon,
   CheckCircleIcon,
   ChatBubbleLeftIcon,
@@ -55,7 +56,7 @@ type Glyph = ComponentType<{ className?: string }>
 
 const KIND_ICONS: Record<string, Glyph> = {
   session: CursorArrowRaysIcon,
-  text: DocumentTextIcon,
+  text: Bars3BottomLeftIcon,
   task: CheckCircleIcon,
   page: DocumentIcon,
   collection: TagIcon,
@@ -169,20 +170,22 @@ const INSPECT_FIELDS = [
 
 const INSPECT_STYLE_ID = 'biu-pick-chip-data'
 const INSPECT_CSS = `
-.pick-chip-data{position:relative;z-index:300;box-sizing:border-box;width:min(280px,calc(100vw - 24px));max-height:min(72vh,560px);overflow:auto;padding:8px 10px;background:var(--biu-color-bg-elevated,var(--biu-color-bg-subtle));border:var(--biu-stroke-width) solid var(--biu-color-border);border-radius:10px;box-shadow:none;color:var(--biu-color-text);font-family:inherit;font-size:var(--biu-font-size-4);font-weight:500;line-height:20px}
-html.dark .pick-chip-data{background:#202020}
-.pick-chip-data-k,.pick-chip-data-v{margin:0;font:inherit;font-size:var(--biu-font-size-4);font-weight:500;line-height:20px}
-.pick-chip-data-fields{margin:0;padding:0;display:flex;flex-direction:column;gap:0}
-.pick-chip-data-row{display:grid;grid-template-columns:72px minmax(0,1fr);align-items:flex-start;gap:8px;min-height:28px;margin:0;font:inherit;font-size:var(--biu-font-size-4);font-weight:500;line-height:20px}
+.pick-chip-data{position:relative;z-index:300;box-sizing:border-box;width:min(360px,calc(100vw - 24px));max-height:min(72vh,560px);overflow:auto;padding:0;background:var(--biu-color-bg-subtle);border:0;border-radius:10px;box-shadow:none;color:var(--biu-color-text);font-family:inherit;font-size:var(--biu-font-size-4);font-weight:var(--biu-font-weight-medium);line-height:20px}
+.pick-chip-data-head{display:flex;align-items:center;gap:8px;margin:0;padding:10px 12px;border-bottom:var(--biu-stroke-width) solid var(--biu-color-border);border-radius:10px 10px 0 0;background:color-mix(in srgb,var(--biu-tag,var(--biu-color-emphasis)) 22%,transparent);color:var(--biu-tag,var(--biu-color-emphasis));font-size:var(--biu-font-size-4);font-weight:var(--biu-font-weight-medium);line-height:20px}
+.pick-chip-data-head .pick-kind-icon{width:14px;height:14px;color:var(--biu-tag,var(--biu-color-emphasis))}
+.pick-chip-data-head span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pick-chip-data-k,.pick-chip-data-v{margin:0;font:inherit;font-size:var(--biu-font-size-4);font-weight:var(--biu-font-weight-medium);line-height:20px}
+.pick-chip-data-fields{margin:0;padding:8px 12px;display:flex;flex-direction:column;gap:0}
+.pick-chip-data-row{display:grid;grid-template-columns:72px minmax(0,1fr);align-items:flex-start;gap:8px;min-height:28px;margin:0;font:inherit;font-size:var(--biu-font-size-4);font-weight:var(--biu-font-weight-medium);line-height:20px}
 .pick-chip-data-row.is-stack{align-items:flex-start}
 .pick-chip-data-row.is-stack .pick-chip-data-k{min-height:28px}
 .pick-chip-data-k{display:inline-flex;align-items:center;gap:6px;min-width:0;min-height:28px;color:var(--biu-color-text-muted)}
 .pick-chip-data-k svg{flex:none;width:14px;height:14px;color:var(--biu-color-icon)}
 .pick-chip-data-k span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pick-chip-data-v{display:flex;align-items:flex-start;box-sizing:border-box;min-width:0;min-height:28px;padding:4px 0 0;border:0;border-radius:0;background:transparent;color:var(--biu-color-text);overflow:auto;white-space:pre-wrap;word-break:break-word;user-select:text}
-.pick-chip-data-v.is-stack{align-items:flex-start;padding:4px 0 0;max-height:160px}
+.pick-chip-data-v{display:flex;align-items:flex-start;box-sizing:border-box;min-width:0;min-height:28px;padding:4px 0 0;border:0;border-radius:0;background:transparent;color:var(--biu-color-text);overflow:hidden;user-select:text}
+.pick-chip-data-v.is-stack{align-items:flex-start;padding:4px 0 0}
 .pick-chip-data-v.is-jump{gap:4px;padding-right:0}
-.pick-chip-data-v-text{min-width:0;flex:1}
+.pick-chip-data-v-text{min-width:0;flex:1;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;white-space:pre-wrap;word-break:break-word}
 .pick-chip-data-jump{flex:none;display:grid;place-items:center;width:24px;height:24px;margin:0;border:0;padding:0;border-radius:6px;background:transparent;color:var(--biu-color-icon);cursor:pointer}
 .pick-chip-data-jump:hover{background:var(--biu-color-bg-hover);color:var(--biu-color-text)}
 .pick-chip-data-jump svg{width:14px;height:14px}
@@ -248,7 +251,11 @@ export function pickInspectCard(ref: PickRef) {
 
 function ensurePickInspectStyle() {
   if (typeof document === 'undefined') return
-  if (document.getElementById(INSPECT_STYLE_ID)) return
+  const existing = document.getElementById(INSPECT_STYLE_ID)
+  if (existing) {
+    if (existing.textContent !== INSPECT_CSS) existing.textContent = INSPECT_CSS
+    return
+  }
   const style = document.createElement('style')
   style.id = INSPECT_STYLE_ID
   style.textContent = INSPECT_CSS
@@ -266,8 +273,12 @@ function PickChipData({ pick }: { pick: PickRef }) {
       aria-label={card.title}
       style={{ zIndex: overlayZ(300) }}
     >
+      <p className="pick-chip-data-head" style={{ ['--biu-tag' as string]: pickKindTone(pick.kind) }}>
+        <PickKindGlyph kind={pick.kind} hint={pick.path || pick.id} />
+        <span>{card.kind}</span>
+      </p>
       <div className="pick-chip-data-fields">
-        {card.fields.map((item) => (
+        {card.fields.filter((item) => item.key !== 'kind').map((item) => (
           <div key={item.key} className={item.stack ? 'pick-chip-data-row is-stack' : 'pick-chip-data-row'}>
             <span className="pick-chip-data-k" title={item.label}>
               {inspectFieldIcon(item.glyph)}

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Bars3BottomLeftIcon, CheckIcon } from '@heroicons/react/16/solid'
+import { Bars3BottomLeftIcon } from '@heroicons/react/16/solid'
 import { HeadlessPopover } from '@biu/biu-ui/headless-popover'
 import { normalizePageSize, PAGE_SIZES } from './saved-view.ts'
 
@@ -48,7 +48,6 @@ export function PagerSizeControl({
               }}
             >
               {size}
-              {size === pageSize ? <CheckIcon aria-hidden className="size-[14px]" /> : null}
             </button>
           ))}
         </div>

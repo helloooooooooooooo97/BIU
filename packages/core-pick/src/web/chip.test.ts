@@ -15,6 +15,7 @@ test('kind maps to distinct heroicons', () => {
     'ClipboardDocumentCheckIcon',
     'CheckCircleIcon',
     'DocumentTextIcon',
+    'Bars3BottomLeftIcon',
     'ChatBubbleLeftIcon',
     'CursorArrowRaysIcon',
     'PuzzlePieceIcon',
@@ -33,7 +34,7 @@ test('kind maps to distinct heroicons', () => {
   }
   assert.equal(pickKindIcon('session'), lu.CursorArrowRaysIcon)
   assert.equal(pickKindIcon('message'), lu.ChatBubbleLeftIcon)
-  assert.equal(pickKindIcon('text'), lu.DocumentTextIcon)
+  assert.equal(pickKindIcon('text'), lu.Bars3BottomLeftIcon)
   assert.equal(pickKindIcon('block'), lu.DocumentTextIcon)
   assert.equal(pickKindIcon('html'), lu.DocumentIcon)
   assert.equal(pickKindIcon('file'), lu.DocumentIcon)
@@ -84,22 +85,25 @@ test('pick chips can show the facet close mark', () => {
   assert.match(src, /pick-chip-data/)
   assert.doesNotMatch(src, /pick-chip-data-quote/)
   assert.match(src, /pick-chip-data-fields/)
-  assert.doesNotMatch(src, /pick-chip-data-head/)
+  assert.match(src, /pick-chip-data-head/)
+  assert.match(src, /pick-chip-data-head\{[^}]*color-mix\(in srgb,var\(--biu-tag,var\(--biu-color-emphasis\)\) 22%,transparent\)/)
+  assert.match(src, /pickKindTone\(pick\.kind\)/)
   assert.doesNotMatch(src, /pick-chip-data-mark/)
   assert.doesNotMatch(src, /box-shadow:var\(--biu-shadow-md\)/)
   assert.match(src, /box-shadow:none/)
-  assert.match(src, /width:min\(280px/)
-  assert.match(src, /pick-chip-data\{[^}]*background:var\(--biu-color-bg-elevated/)
-  assert.match(src, /html\.dark \.pick-chip-data\{background:#202020\}/)
-  assert.match(src, /pick-chip-data\{[^}]*border:var\(--biu-stroke-width\) solid var\(--biu-color-border\)/)
-  assert.doesNotMatch(src, /pick-chip-data\{[^}]*border:0/)
+  assert.match(src, /width:min\(360px/)
+  assert.match(src, /pick-chip-data\{[^}]*background:var\(--biu-color-bg-subtle/)
+  assert.doesNotMatch(src, /html\.dark \.pick-chip-data\{background:#202020\}/)
+  assert.match(src, /pick-chip-data\{[^}]*border:0/)
   assert.match(src, /72px minmax\(0,1fr\)/)
   assert.match(src, /pick-chip-data-row\{[^}]*align-items:flex-start/)
   assert.match(src, /pick-chip-data-v\{display:flex;align-items:flex-start/)
   assert.match(src, /pick-chip-data-v\{[^}]*background:transparent/)
   assert.match(src, /pick-chip-data-v\{[^}]*border:0/)
   assert.doesNotMatch(src, /pick-chip-data-v\{[^}]*border:var\(--biu-stroke-width\)/)
-  assert.match(src, /pick-chip-data-v\{[^}]*overflow:auto/)
+  assert.match(src, /pick-chip-data-v-text\{[^}]*-webkit-line-clamp:2/)
+  assert.doesNotMatch(src, /pick-chip-data-v\{[^}]*overflow:auto/)
+  assert.match(src, /title=\{item\.value\}/)
   assert.doesNotMatch(src, /pick-chip-data-v\{[^}]*color-mix/)
   assert.match(src, /min-height:28px/)
   assert.match(src, /font-size:var\(--biu-font-size-4\)/)

@@ -389,7 +389,7 @@ test('workspace creation uses centered local and online cards with default names
   assert.match(css, /\.shell-workspace-switcher\s*\{[^}]*font-size:\s*var\(--biu-font-size-4\);[^}]*font-weight:\s*500;/s)
   assert.match(css, /\.shell-workspace-create-overlay\s*\{[^}]*position:\s*fixed;[^}]*place-items:\s*center;/s)
   assert.match(css, /\.shell-workspace-switch-icon,\s*\n\.shell-workspace-menu-icon\s*\{[^}]*color:\s*var\(--biu-color-icon-fixed\)/s)
-  assert.match(css, /\.shell-workspace-menu-action svg\s*\{[^}]*color:\s*var\(--biu-color-icon-fixed\)/s)
+  assert.match(css, /\.shell-workspace-menu-action svg\s*\{[^}]*color:\s*var\(--biu-color-icon\)/s)
   assert.match(css, /\.shell-workspace-menu-account > svg\s*\{[^}]*color:\s*var\(--biu-color-icon-fixed\)/s)
   assert.match(css, /\.shell-workspace-menu-account button svg,\s*\n\.shell-workspace-menu-account-actions button svg\s*\{[^}]*color:\s*var\(--biu-color-icon-fixed\)/s)
   assert.match(css, /\.shell-workspace-create-card-icon svg\s*\{[^}]*color:\s*var\(--biu-color-icon-fixed\)/s)

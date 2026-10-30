@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from 'react'
 import {
   BoltIcon,
-  CheckCircleIcon,
   CommandLineIcon,
   ExclamationCircleIcon,
   CircleStackIcon,
@@ -90,7 +89,6 @@ function DockIconMenu<T extends string>({
                 {opt.label}
               </span>
               <span className="dock-icon-item-end">
-                {opt.id === value ? <CheckCircleIcon aria-hidden className="size-3.25 dock-icon-check" /> : null}
                 {opt.hint ? (
                   <span
                     className="dock-icon-hint"

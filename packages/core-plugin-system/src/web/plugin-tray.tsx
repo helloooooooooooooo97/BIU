@@ -88,7 +88,7 @@ const TRAY_CSS = `
 }
 .plugin-tray-letter {
   font-size: 12px;
-  font-weight: 700;
+  font-weight:var(--biu-font-weight-bold);
   line-height: 1;
 }
 `

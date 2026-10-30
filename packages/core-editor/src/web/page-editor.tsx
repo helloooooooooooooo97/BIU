@@ -232,30 +232,6 @@ function ColorMenus({
       >
         {flyout()}
       </HeadlessPopover>
-      <HeadlessPopover
-        open={open === 'mark'}
-        onOpenChange={(next) => onOpen(next ? 'mark' : null)}
-        side="bottom"
-        align="start"
-        trigger={
-          <button
-            type="button"
-            className={highlight || open === 'mark' ? 'is-on' : undefined}
-            title="背景色"
-            aria-label="背景色"
-            aria-haspopup="menu"
-            aria-expanded={open === 'mark'}
-            onMouseDown={holdSelection}
-          >
-            <span
-              className="page-bubble-mark"
-              style={{ background: highlight || 'color-mix(in srgb, var(--biu-color-text) 18%, transparent)' }}
-            />
-          </button>
-        }
-      >
-        {flyout()}
-      </HeadlessPopover>
     </>
   )
 }

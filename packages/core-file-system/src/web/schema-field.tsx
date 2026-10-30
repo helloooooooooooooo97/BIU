@@ -10,13 +10,14 @@ import {
   type SchemaFieldValue,
   type SchemaPackField,
 } from '@biu/type-file-system'
-import { ArrowUturnLeftIcon, ChevronDownIcon, PlusIcon, XMarkIcon } from '@heroicons/react/16/solid'
+import { ArrowUturnLeftIcon, ChevronDownIcon, PlusIcon, TagIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import { TagChip, TagChips, tagTone, HeadlessPopover } from '@biu/biu-ui'
 import { CellMulti } from '@biu/database-ui'
 import { DefaultCell, FieldGlyph } from './fsdb-cells.tsx'
 import { FieldValuePop } from './field-value-pop.tsx'
 import { inferPackFieldType, orphanPackEntries } from './fields.ts'
 import { facetFieldLabelOk, loadFacets, persistFacets, registerFacetFieldKey, slugFacetId, subscribeFacets } from './facet-catalog.ts'
+import { peekRecord, subscribeCrumbs } from './view-storage.ts'
 
 const TYPE_LABEL: Partial<Record<FieldType, string>> = {
   string: '文本',
@@ -38,6 +39,12 @@ const TYPE_LABEL: Partial<Record<FieldType, string>> = {
 
 export const schemaTagTone = tagTone
 
+export function facetChipIcon(id: string) {
+  const emoji = peekRecord('/facets', id)?.emoji?.trim()
+  if (emoji) return <span className="fsdb-record-emoji">{emoji}</span>
+  return <TagIcon aria-hidden className="size-3.5" />
+}
+
 export function SchemaChip({
   id,
   label,
@@ -51,7 +58,7 @@ export function SchemaChip({
   onClick?: () => void
   active?: boolean
 }) {
-  return <TagChip id={id} label={label} onRemove={onRemove} onClick={onClick} active={active} />
+  return <TagChip id={id} label={label} icon={facetChipIcon(id)} onRemove={onRemove} onClick={onClick} active={active} />
 }
 
 export function SchemaChips({ value, tags }: { value: unknown; tags: CollectionSchemaPack[] }) {
@@ -406,8 +413,10 @@ export function SchemaFieldEditor({
     liveRef.current = normalizeSchemaValue(value)
   }, [record.id])
   const [catalog, setCatalog] = useState(() => loadFacets())
+  const [, setFacetMarks] = useState(0)
 
   useEffect(() => subscribeFacets(undefined, () => setCatalog(loadFacets())), [])
+  useEffect(() => subscribeCrumbs(() => setFacetMarks((n) => n + 1)), [])
 
   const selected = useMemo(
     () =>
@@ -546,10 +555,11 @@ export function SchemaFieldEditor({
     <div className="fsdb-schema" data-testid="fsdb-schema">
       <CellMulti
         values={parsed.tags}
-        options={catalog.map((tag) => ({ value: tag.id, label: tag.label }))}
+        options={catalog.map((tag) => ({ value: tag.id, label: tag.label, icon: facetChipIcon(tag.id) }))}
         onChange={applyTags}
         multiple
         autoOpen={autoOpen}
+        removable={compact === true}
         placeholder="添加标签"
       />
       {compact
@@ -560,7 +570,11 @@ export function SchemaFieldEditor({
         return (
           <div key={tag.id} className="fsdb-schema-pack">
             <div className="fsdb-schema-pack-head">
-              <SchemaChip id={tag.id} label={tag.label} />
+              <SchemaChip
+                id={tag.id}
+                label={tag.label}
+                onRemove={() => applyTags(parsed.tags.filter((id) => id !== tag.id))}
+              />
             </div>
             {tag.fields.filter((field) => !field.deleted).map((field) => (
               <div key={field.key} className="fsdb-schema-prop">

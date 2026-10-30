@@ -21,6 +21,7 @@ import {
   XMarkIcon,
 } from '@heroicons/react/16/solid'
 import { AnchorMenu } from '@biu/biu-ui/anchor-menu'
+import { TagChip } from '@biu/biu-ui/tag-chip'
 import { ConfirmDialog } from '@biu/biu-ui/confirm-dialog'
 import { chromeIcon } from './chrome-icon.ts'
 import { applyNoticeClick, noticeIdOf } from './notice-open.ts'
@@ -999,7 +1000,9 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
                   <span className="shell-workspace-menu-copy">
                     <strong>{workspace.name}</strong>
                   </span>
-                  <small className="shell-workspace-menu-role">{workspaceRoleLabel(workspace.role)}</small>
+                  <small className="shell-workspace-menu-role">
+                    <TagChip id={workspace.role} label={workspaceRoleLabel(workspace.role)} />
+                  </small>
                 </button>
               )
             })}
@@ -1628,7 +1631,7 @@ export function ShellSettingsAbout() {
   return (
     <section data-testid="settings-about">
       <h3 className="settings-pane-title">关于</h3>
-      <p className="settings-pane-title" style={{ fontSize: 14, fontWeight: 600, margin: '18px 0 8px' }}>BIU</p>
+      <p className="settings-pane-title" style={{ fontSize: 14, fontWeight: 'var(--biu-font-weight-semibold)', margin: '18px 0 8px' }}>BIU</p>
       <p className="settings-muted m-0">Apache License 2.0。</p>
       <p className="settings-muted m-0" style={{ marginTop: 12 }}>
         public/grok-bot/ 角色素材归 xAI，不随 Apache-2.0 授权。详见 NOTICE.md。

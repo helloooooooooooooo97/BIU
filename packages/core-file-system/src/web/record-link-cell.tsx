@@ -1,30 +1,32 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowPathIcon, ArrowTopRightOnSquareIcon, CheckIcon } from '@heroicons/react/16/solid'
-import { ensureDbSearchStyle } from '@biu/database-ui/search'
+import { ArrowPathIcon } from '@heroicons/react/16/solid'
+import { PickOption, PickPanel } from '@biu/database-ui/search'
 import type { DbRecord, FieldSpec } from '@biu/type-file-system'
 import { listCollection, readJson } from './db-client.ts'
+import { getDatabaseUi } from './database-ui.ts'
 import { showRecordInInspector } from './inspector-db-route.ts'
-import { crumbRecordLabel } from './sidebar-preview.ts'
+import { RecordMark, recordMarkStub } from './record-mark.tsx'
+import { crumbRecordLabel, normalizeRecordEmoji } from './sidebar-preview.ts'
 import { isSingleRefField, recordLinkIds } from './fields.ts'
 
-export type RecordLinkPeer = { id: string; label: string }
+export type RecordLinkPeer = { id: string; label: string; emoji: string }
 
 function labelOf(row: DbRecord, labelField?: string) {
   return crumbRecordLabel(row, labelField)
 }
 
 function asPeers(rows: DbRecord[], labelField?: string): RecordLinkPeer[] {
-  return rows.map((row) => ({ id: row.id, label: labelOf(row, labelField) }))
+  return rows.map((row) => ({ id: row.id, label: labelOf(row, labelField), emoji: normalizeRecordEmoji(row.emoji) }))
 }
 
 const TABLE_PAGE = 200
 const TABLE_CAP = 500
 
 async function loadTablePeers(path: string, labelField?: string): Promise<RecordLinkPeer[]> {
-  const first = await listCollection({ path, limit: TABLE_PAGE, offset: 0, sortField: 'id', columns: ['label'] })
+  const first = await listCollection({ path, limit: TABLE_PAGE, offset: 0, sortField: 'id', columns: ['label', 'emoji'] })
   const rows = [...first.items]
   while (rows.length < first.total && rows.length < TABLE_CAP) {
-    const more = await listCollection({ path, limit: TABLE_PAGE, offset: rows.length, sortField: 'id', columns: ['label'] })
+    const more = await listCollection({ path, limit: TABLE_PAGE, offset: rows.length, sortField: 'id', columns: ['label', 'emoji'] })
     if (!more.items.length) break
     rows.push(...more.items)
   }
@@ -44,7 +46,7 @@ async function readPeer(collectionPath: string, id: string, labelField?: string)
       )
       const row = body.value
       if (!row?.id) return null
-      return { id: row.id, label: labelOf(row, labelField) }
+      return { id: row.id, label: labelOf(row, labelField), emoji: normalizeRecordEmoji(row.emoji) }
     } catch {
       return null
     }
@@ -56,6 +58,25 @@ async function readPeer(collectionPath: string, id: string, labelField?: string)
 function linkCollection(field: FieldSpec | undefined, fallback?: string) {
   const raw = typeof field?.collection === 'string' ? field.collection.trim() : ''
   return raw || fallback || ''
+}
+
+function collectionMarkIcon(path: string) {
+  return path.replace(/\/+$/, '') === '/pages' ? 'document' : undefined
+}
+
+function PeerMark({ id, emoji, collectionPath }: { id: string; emoji?: string; collectionPath: string }) {
+  const Icon = getDatabaseUi()?.chrome(collectionPath).Icon
+  return (
+    <span className="fsdb-ref-mark">
+      <RecordMark
+        emoji={emoji}
+        record={recordMarkStub({ id, emoji })}
+        Icon={Icon}
+        tableIcon={collectionMarkIcon(collectionPath)}
+        className="size-4"
+      />
+    </span>
+  )
 }
 
 function jumpRecord(collectionPath: string | undefined, id: string, onOpen?: (id: string) => void) {
@@ -75,9 +96,9 @@ function useResolvedPeerLabels(
   labelField?: string,
   deferMissing?: boolean,
 ) {
-  const seedMap = useMemo(() => new Map((seed ?? []).map((item) => [item.id, item.label])), [seed])
+  const seedMap = useMemo(() => new Map((seed ?? []).map((item) => [item.id, item])), [seed])
   const idKey = ids.join('\0')
-  const [extra, setExtra] = useState<Record<string, string>>({})
+  const [extra, setExtra] = useState<Record<string, RecordLinkPeer>>({})
   useEffect(() => {
     const missing = ids.filter((id) => !seedMap.has(id))
     if (deferMissing || !collectionPath || !missing.length) {
@@ -87,10 +108,10 @@ function useResolvedPeerLabels(
     let cancelled = false
     void Promise.all(missing.map((id) => readPeer(collectionPath, id, labelField))).then((rows) => {
       if (cancelled) return
-      const next: Record<string, string> = {}
+      const next: Record<string, RecordLinkPeer> = {}
       missing.forEach((id, index) => {
         const peer = rows[index]
-        next[id] = peer?.label || ''
+        if (peer) next[id] = peer
       })
       setExtra(next)
     })
@@ -98,10 +119,7 @@ function useResolvedPeerLabels(
       cancelled = true
     }
   }, [collectionPath, deferMissing, idKey, labelField, seedMap])
-  return (id: string) => {
-    const labeled = seedMap.get(id) || extra[id]
-    return labeled && labeled.trim() ? labeled : ''
-  }
+  return (id: string) => seedMap.get(id) ?? extra[id]
 }
 
 export function RecordLinkChips({
@@ -132,7 +150,8 @@ export function RecordLinkChips({
   return (
     <span className="fsdb-ref-chips">
       {ids.map((id) => {
-        const label = labelOfId(id).replace(/\s+/g, ' ').trim()
+        const peer = labelOfId(id)
+        const label = (peer?.label ?? '').replace(/\s+/g, ' ').trim()
         return (
           <button
             key={id}
@@ -144,8 +163,8 @@ export function RecordLinkChips({
               jumpRecord(peerPath, id, onOpen)
             }}
           >
+            <PeerMark id={id} emoji={peer?.emoji} collectionPath={peerPath} />
             <span className="fsdb-ref-chip-title">{label || (deferMissing ? id : '…')}</span>
-            <ArrowTopRightOnSquareIcon className="size-3 shrink-0 opacity-70" aria-hidden />
           </button>
         )
       })}
@@ -176,7 +195,6 @@ export function RecordPickPanel({
   onPicked?: () => void
   onJump?: () => void
 }) {
-  ensureDbSearchStyle()
   const multiple = !isSingleRefField(field, fieldKey)
   const peerPath = linkCollection(field, collectionPath)
   const selected = recordLinkIds(field, value, fieldKey)
@@ -202,9 +220,9 @@ export function RecordPickPanel({
     }
   }, [peerPath, labelField])
 
-  const byId = useMemo(() => new Map(peers.map((item) => [item.id, item.label])), [peers])
+  const byId = useMemo(() => new Map(peers.map((item) => [item.id, item])), [peers])
   const selectedKey = selected.join('\0')
-  const [extra, setExtra] = useState<Record<string, string>>({})
+  const [extra, setExtra] = useState<Record<string, RecordLinkPeer>>({})
   useEffect(() => {
     const missing = selected.filter((id) => !byId.has(id))
     if (!missing.length) {
@@ -214,10 +232,10 @@ export function RecordPickPanel({
     let cancelled = false
     void Promise.all(missing.map((id) => readPeer(peerPath, id, labelField))).then((rows) => {
       if (cancelled) return
-      const next: Record<string, string> = {}
+      const next: Record<string, RecordLinkPeer> = {}
       missing.forEach((id, index) => {
         const peer = rows[index]
-        next[id] = peer?.label || ''
+        if (peer) next[id] = peer
       })
       setExtra(next)
     })
@@ -225,15 +243,15 @@ export function RecordPickPanel({
       cancelled = true
     }
   }, [byId, peerPath, labelField, selectedKey])
+  const peerOf = (id: string) => byId.get(id) ?? extra[id]
   const titleOf = (id: string) => {
-    const labeled = byId.get(id) || extra[id]
+    const labeled = peerOf(id)?.label
     return labeled && labeled.trim() ? labeled : ''
   }
   const q = query.trim().toLowerCase()
   const available = peers.filter(
     (item) =>
       item.id !== excludeId &&
-      (multiple ? !selected.includes(item.id) : true) &&
       (!q || item.label.toLowerCase().includes(q) || item.id.toLowerCase().includes(q)),
   )
 
@@ -245,7 +263,7 @@ export function RecordPickPanel({
   function pick(id: string) {
     if (!id || id === excludeId) return
     if (multiple) {
-      if (!selected.includes(id)) commit([...selected, id])
+      commit(selected.includes(id) ? selected.filter((item) => item !== id) : [...selected, id])
     } else {
       commit(id === selected[0] ? [] : [id])
       onPicked?.()
@@ -259,70 +277,57 @@ export function RecordPickPanel({
   }
 
   return (
-    <div className="fsdb-ref-pick">
-      {selected.length ? (
-        <div className="fsdb-ref-picked">
-          {selected.map((id) => (
-            <div key={id} className="fsdb-ref-picked-row">
-              <button type="button" className="fsdb-ref-jump" onClick={() => jump(id)} title={titleOf(id) || '在右侧打开'}>
-                <span className="fsdb-ref-title">{titleOf(id) || '…'}</span>
-                <ArrowTopRightOnSquareIcon className="size-3 shrink-0 opacity-70" aria-hidden />
-              </button>
-              <button
-                type="button"
-                className="fsdb-ref-x"
-                aria-label={`取消引用 ${titleOf(id) || '记录'}`}
-                onClick={() => commit(selected.filter((item) => item !== id))}
-              >
-                ×
-              </button>
-            </div>
-          ))}
-        </div>
-      ) : null}
-      <label className="db-search-field">
-        <input
-          value={query}
-          autoFocus
-          placeholder="搜索本表记录"
-          onChange={(event) => setQuery(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.preventDefault()
-              if (available[0]) pick(available[0].id)
-            }
-          }}
-        />
-      </label>
-      <div className="fsdb-ref-list">
-        {available.map((item) => {
-          const on = !multiple && selected[0] === item.id
-          return (
-            <div key={item.id} className={`fsdb-ref-row${on ? ' is-on' : ''}`}>
-              <button
-                type="button"
-                className={`fsdb-ref-check${on ? ' is-on' : ''}`}
-                aria-pressed={on}
-                aria-label={on ? `取消引用 ${item.label}` : `引用 ${item.label}`}
-                onClick={() => pick(item.id)}
-              >
-                {on ? <CheckIcon className="size-3" aria-hidden /> : null}
-              </button>
-              <button type="button" className="fsdb-ref-jump" onClick={() => jump(item.id)} title={item.label}>
-                <span className="fsdb-ref-title">{item.label}</span>
-                <ArrowTopRightOnSquareIcon className="size-3 shrink-0 opacity-70" aria-hidden />
-              </button>
-            </div>
-          )
-        })}
-        {loading ? (
+    <PickPanel
+      className="fsdb-ref-pick"
+      query={query}
+      onQuery={setQuery}
+      placeholder="搜索本表记录"
+      onEnter={() => {
+        if (available[0]) pick(available[0].id)
+      }}
+      picked={
+        selected.length
+          ? selected.map((id) => (
+              <div key={id} className="fsdb-ref-picked-row">
+                <button type="button" className="fsdb-ref-jump" onClick={() => jump(id)} title={titleOf(id) || '在右侧打开'}>
+                  <PeerMark id={id} emoji={peerOf(id)?.emoji} collectionPath={peerPath} />
+                  <span className="fsdb-ref-title">{titleOf(id) || '…'}</span>
+                </button>
+                <button
+                  type="button"
+                  className="fsdb-ref-x"
+                  aria-label={`取消引用 ${titleOf(id) || '记录'}`}
+                  onClick={() => commit(selected.filter((item) => item !== id))}
+                >
+                  ×
+                </button>
+              </div>
+            ))
+          : null
+      }
+      empty={
+        loading ? (
           <div className="fsdb-person-loading">
             <ArrowPathIcon className="size-[14px] fsdb-spin" aria-hidden />
             加载本表…
           </div>
-        ) : null}
-        {!loading && !available.length ? <div className="fsdb-person-loading">本表没有可选项</div> : null}
-      </div>
-    </div>
+        ) : !available.length ? (
+          <div className="fsdb-person-loading">本表没有可选项</div>
+        ) : null
+      }
+    >
+      {available.map((item) => (
+        <PickOption
+          key={item.id}
+          className="fsdb-ref-row"
+          selected={selected.includes(item.id)}
+          title={item.label}
+          onClick={() => pick(item.id)}
+        >
+          <PeerMark id={item.id} emoji={item.emoji} collectionPath={peerPath} />
+          <span className="fsdb-ref-title">{item.label}</span>
+        </PickOption>
+      ))}
+    </PickPanel>
   )
 }

@@ -6,14 +6,39 @@ import {
   normalizeSchemaPack,
   type CollectionSchemaPack,
 } from '@biu/type-file-system'
+import { peekRecord, subscribeCrumbs } from './view-storage.ts'
 
 export const FACETS_KEY = 'fsdb.facets'
 
 let memory: CollectionSchemaPack[] | null = null
+let revision = 0
 const listeners = new Set<() => void>()
 
 function emit() {
+  revision += 1
   for (const fn of listeners) fn()
+}
+
+export function facetCatalogRevision() {
+  return revision
+}
+
+export function facetLabel(id: string) {
+  const key = id.trim()
+  return loadFacets().find((tag) => tag.id === key)?.label?.trim() || key
+}
+
+export function facetEmoji(id: string) {
+  return peekRecord('/facets', id)?.emoji?.trim() ?? ''
+}
+
+export function subscribeFacetChrome(fn: () => void) {
+  const stopFacets = subscribeFacets(undefined, fn)
+  const stopCrumbs = subscribeCrumbs(fn)
+  return () => {
+    stopFacets()
+    stopCrumbs()
+  }
 }
 
 function parseFacets(raw: unknown): CollectionSchemaPack[] {

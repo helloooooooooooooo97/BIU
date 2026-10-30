@@ -57,7 +57,7 @@ test('datetime cell uses biu-ui Calendar, not datetime-local or antd', () => {
   assert.match(index, /CellDateTime/)
   assert.match(menu, /\.db-datetime\{[^}]*color:inherit/)
   assert.match(menu, /\.db-datetime-trigger,.db-datetime-label\{[^}]*color:var\(--biu-color-text\)/)
-  assert.match(menu, /\.db-datetime-trigger:not\(:empty\)::placeholder,.db-datetime \.db-datetime-trigger:empty\{[^}]*font-weight:500/)
+  assert.match(menu, /\.db-datetime-trigger:not\(:empty\)::placeholder,.db-datetime \.db-datetime-trigger:empty\{[^}]*font-weight:var(--biu-font-weight-medium)/)
   assert.match(menu, /\.db-datetime-trigger:focus-visible\{[^}]*outline:none/)
   assert.match(picker, /type="time"/)
   assert.doesNotMatch(picker, /CalendarDaysIcon/)

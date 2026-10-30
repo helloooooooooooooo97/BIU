@@ -603,6 +603,7 @@ function SharePage({
               schema={schema}
               chrome={detailChrome}
               onOpenLink={openShareRecord}
+              facets={snapshot.facets}
             />
           )}
           setDraft={() => undefined}
@@ -670,6 +671,7 @@ function SharePage({
                 queryFields={queryFields}
                 onOpen={(id) => navigate(sharePublicPath(token, id))}
                 onOpenLink={openShareRecord}
+                facets={snapshot.facets}
               />
               {paged.length === 0 ? <p className="fsdb-empty">暂无记录</p> : null}
             </div>

@@ -1,5 +1,5 @@
 import { useState, useSyncExternalStore, type ReactNode } from 'react'
-import { AdjustmentsHorizontalIcon, CheckIcon, ChevronLeftIcon, ShareIcon, StarIcon } from '@heroicons/react/16/solid'
+import { AdjustmentsHorizontalIcon, ChevronLeftIcon, ShareIcon, StarIcon } from '@heroicons/react/16/solid'
 import { AnchorMenu } from '@biu/biu-ui/anchor-menu'
 import { dismissInspectorPaneMenu } from './inspector-pane-menu.tsx'
 import { getPagePrefs, getPageWidthVersion, persistPagePrefs, subscribePageWidth } from './page-width.ts'
@@ -47,7 +47,6 @@ export function PaneConfigMenuItem() {
             onClick={() => persistPagePrefs({ wide: true })}
           >
             宽屏
-            {wide ? <CheckIcon aria-hidden className="fsdb-detail-more-caret" /> : null}
           </button>
           <button
             type="button"
@@ -58,7 +57,6 @@ export function PaneConfigMenuItem() {
             onClick={() => persistPagePrefs({ wide: false })}
           >
             窄屏
-            {wide ? null : <CheckIcon aria-hidden className="fsdb-detail-more-caret" />}
           </button>
         </AnchorMenu>
       ) : null}

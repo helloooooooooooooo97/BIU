@@ -18,6 +18,7 @@ import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { moveList } from '../query-logic.ts'
 import { DndGrip } from './dnd-grip.tsx'
 import { FlyoutEmpty, SearchableFlyout, flyoutQueryMatch } from './flyout-search.tsx'
+import { ViewModeGlyph } from './nav-glyphs.tsx'
 import type { SavedView } from './saved-view.ts'
 
 function ViewRowShell({
@@ -55,6 +56,7 @@ function ViewRowShell({
         className="tasks-viewdd-item-main fsdb-tool-row"
         onClick={() => onSelect(view)}
       >
+        <ViewModeGlyph mode={view.mode} className="tasks-viewdd-item-ico" />
         <span className="tasks-viewdd-item-name font-medium">{view.name}</span>
       </button>
       <span className="tasks-viewdd-item-actions">

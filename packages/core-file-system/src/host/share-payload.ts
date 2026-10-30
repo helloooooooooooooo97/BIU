@@ -1,4 +1,5 @@
-import type { CollectionSchema, Database, DbRecord } from '@biu/type-file-system'
+import type { CollectionSchema, CollectionSchemaPack, Database, DbRecord } from '@biu/type-file-system'
+import { normalizeSchemaValue } from '@biu/type-file-system'
 import { collectAssetNames } from './assets-store.ts'
 import type { SavedViewsStore } from './saved-views.ts'
 import { freezeSchema, type ShareSnapshot } from '../share-snapshot.ts'
@@ -91,6 +92,20 @@ async function loadContents(
   return contents
 }
 
+function shareFacetCatalog(
+  db: { facets?: { list: () => CollectionSchemaPack[] } },
+  records: DbRecord[],
+): CollectionSchemaPack[] {
+  const catalog = db.facets?.list() ?? []
+  if (!catalog.length) return []
+  const used = new Set<string>()
+  for (const row of records) {
+    for (const id of normalizeSchemaValue(row.facet).tags) used.add(id)
+  }
+  if (!used.size) return []
+  return catalog.filter((tag) => used.has(tag.id))
+}
+
 function contentIdsFor(share: ShareRecord, records: DbRecord[], opts?: ShareSnapshotOpts) {
   if (share.kind === 'record' || opts?.contentIds === 'all') return records.map((row) => String(row.id))
   const allow = new Set(records.map((row) => String(row.id)))
@@ -98,7 +113,7 @@ function contentIdsFor(share: ShareRecord, records: DbRecord[], opts?: ShareSnap
 }
 
 export async function buildShareSnapshot(
-  db: Pick<Database, 'stat' | 'list' | 'read' | 'content'>,
+  db: Pick<Database, 'stat' | 'list' | 'read' | 'content'> & { facets?: { list: () => CollectionSchemaPack[] } },
   savedViews: SavedViewsStore,
   share: ShareRecord,
   opts?: ShareSnapshotOpts,
@@ -131,6 +146,7 @@ export async function buildShareSnapshot(
       contents,
       assets: [...collectAssetNames(record, content, record.banner)],
       banner: record.banner ?? null,
+      facets: shareFacetCatalog(db, [record]),
     }, share)
   }
   const stored = savedViews.viewsFor(share.collection).find((item) => item.id === share.viewId)
@@ -172,6 +188,7 @@ export async function buildShareSnapshot(
     contents,
     assets: [...collectAssetNames(...records, ...Object.values(contents), banner)],
     banner,
+    facets: shareFacetCatalog(db, records),
   }, share)
 }
 

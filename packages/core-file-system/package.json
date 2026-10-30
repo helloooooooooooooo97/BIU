@@ -9,6 +9,7 @@
     "./host": "./src/host/index.ts",
     "./web": "./src/web/index.tsx",
     "./database-ui": "./src/web/database-ui.ts",
+    "./facet-catalog": "./src/web/facet-catalog.ts",
     "./main-data-route": "./src/web/main-data-route.ts",
     "./inspector-db-route": "./src/web/inspector-db-route.ts",
     "./inspector-pane-menu": "./src/web/inspector-pane-menu.tsx",

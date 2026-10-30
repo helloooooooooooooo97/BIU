@@ -56,6 +56,8 @@ export interface TrajectoryUsage {
   cacheReadTokens?: number
   /** 该次 LLM 输入中「历史 turn」占比（0~1）；后端 agent-loop 在 derive 时挂载。curPct=1-histPct。 */
   histPct?: number
+  /** 回合汇总时：最后一个有输入的 step 的 input，用来判断上下文是否溢出。 */
+  contextInputTokens?: number
 }
 
 /** 精简 ConversationNode：事件 → 可渲染行。 */
@@ -307,6 +309,14 @@ export function projectNodes(events: SessionEvent[]): ChatNode[] {
       .filter(Boolean)
       .join('\n\n')
     const histPct = reply.histWeight > 0 ? reply.histSum / reply.histWeight : undefined
+    const steps = [...reply.steps.values()].sort((a, b) => a.step - b.step)
+    let contextInputTokens: number | undefined
+    for (let i = steps.length - 1; i >= 0; i -= 1) {
+      if (steps[i]!.inputTokens > 0) {
+        contextInputTokens = steps[i]!.inputTokens
+        break
+      }
+    }
     const usage: TrajectoryUsage | undefined = reply.usage.hit
       ? {
           inputTokens: reply.usage.input,
@@ -314,11 +324,11 @@ export function projectNodes(events: SessionEvent[]): ChatNode[] {
           totalTokens: reply.usage.total,
           ...(reply.usage.cache ? { cacheReadTokens: reply.usage.cache } : {}),
           ...(histPct !== undefined ? { histPct } : {}),
+          ...(contextInputTokens != null ? { contextInputTokens } : {}),
         }
       : undefined
     const durationMs =
       finished && turnStartTs != null && endTs != null ? Math.max(0, endTs - turnStartTs) : undefined
-    const steps = [...reply.steps.values()].sort((a, b) => a.step - b.step)
     // 每个 step 单独写回其按 token 加权的历史占比，供 step 横条的 histPct 胶囊展示
     for (const stat of steps) {
       const acc = reply.stepHist.get(stat.step)

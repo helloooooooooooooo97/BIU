@@ -777,9 +777,6 @@ export function ChatConfig(props?: { onClose?: () => void }) {
                                         {ep.note || ep.defaultBaseUrl || ep.baseUrl}
                                       </span>
                                     </span>
-                                    {active ? (
-                                      <CheckIcon className="size-3.5 shrink-0 text-(--biu-color-text)" />
-                                    ) : null}
                                   </button>
                                 )
                               })}
@@ -1074,8 +1071,6 @@ export function ChatConfig(props?: { onClose?: () => void }) {
                                 >
                                   <TrashGlyph className="size-3" />
                                 </span>
-                              ) : selected ? (
-                                <CheckIcon className="size-3.5 shrink-0" />
                               ) : null}
                             </button>
                           </li>

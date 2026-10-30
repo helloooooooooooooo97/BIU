@@ -1,6 +1,4 @@
 import { useSyncExternalStore } from 'react'
-import { CheckIcon } from '@heroicons/react/16/solid'
-import { BoolBox } from '@biu/biu-ui/bool-box'
 import { getPagePrefs, getPageWidthVersion, persistPagePrefs, subscribePageWidth, type BodyScale, type PagePrefs } from './page-width.ts'
 
 const BOOLS: { key: keyof Pick<PagePrefs, 'wide' | 'outlineExpand' | 'outlinePin' | 'navPin'>; label: string; testId: string }[] = [
@@ -39,13 +37,12 @@ export function LayoutPrefsMenu({
             key={item.key}
             type="button"
             role="menuitemcheckbox"
-            className="fsdb-layout-row fsdb-tool-row"
+            className={`fsdb-layout-row fsdb-tool-row${on ? ' is-on' : ''}`}
             aria-checked={on}
             data-testid={item.testId}
             onClick={() => apply({ [item.key]: !on })}
           >
             <span>{item.label}</span>
-            <BoolBox on={on}>{on ? <CheckIcon aria-hidden className="size-3" /> : null}</BoolBox>
           </button>
         )
       })}

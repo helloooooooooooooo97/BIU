@@ -510,7 +510,6 @@ export const DataSidebar = memo(function DataSidebar({
   onDeleteView,
   onAddView,
   onOpenRecord,
-  onOpenScopeHome,
   expandedViewKey: expandedViewKeyProp,
   onExpandedViewKeyChange,
   onCollapse,
@@ -526,7 +525,6 @@ export const DataSidebar = memo(function DataSidebar({
   onDeleteView: (view: SavedView) => void
   onAddView: (path?: string, scope?: DataScope) => void
   onOpenRecord?: (path: string, view: SavedView, recordId: string, row?: DbRecord) => void
-  onOpenScopeHome?: () => void
   expandedViewKey?: string | null
   onExpandedViewKeyChange?: (key: string | null) => void
   onCollapse?: () => void
@@ -1160,12 +1158,9 @@ export const DataSidebar = memo(function DataSidebar({
                   type="button"
                   className="flex h-full min-w-0 flex-1 items-center gap-2 text-left text-[12px] font-bold tracking-wider"
                   aria-expanded={userOpen}
-                  title="打开用户数据概览"
+                  title="展开或收起用户数据"
                   data-testid="sidebar-user-home"
-                  onClick={() => {
-                    setUserOpen((prev) => !prev)
-                    onOpenScopeHome?.()
-                  }}
+                  onClick={() => setUserOpen((prev) => !prev)}
                 >
                   <span className="min-w-0 flex-1 truncate tracking-normal">用户数据</span>
                 </button>

@@ -154,13 +154,13 @@ test('list permission column uses the same capsule and loads the chain on click'
   const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
   assert.match(src, /data-testid="fsdb-role-tag"/)
   assert.match(labelSrc, /className=\{`fsdb-scope-tag is-\$\{accessTone\(label\)\}`\}/)
-  assert.match(css, /\.fsdb-scope-tag\.is-manage[^{]*\{[^}]*background:var\(--biu-color-bg-hover\)/)
-  assert.match(css, /\.fsdb-scope-tag\.is-manage[^{]*\{[^}]*color:var\(--biu-color-text-muted\)/)
+  assert.match(css, /\.fsdb-scope-tag\.is-manage[^{]*\{[^}]*--biu-tag:var\(--biu-color-ink-gray\)/)
+  assert.match(css, /\.fsdb-scope-tag\{[^}]*color:var\(--biu-tag\)/)
   assert.doesNotMatch(css, /\.fsdb-scope-tag\.is-manage[^{]*\{[^}]*--biu-color-text:/)
   assert.doesNotMatch(css, /\.fsdb-scope-tag\.is-manage[^{]*\{[^}]*#2c2c2b/)
   assert.match(
     css,
-    /\.fsdb-scope-tag\.is-shared,\.fsdb-scope-pill\.is-shared,\.fsdb-scope-tag\.is-edit,\.fsdb-scope-pill\.is-edit,[\s\S]*?background:var\(--biu-color-emphasis-muted\);color:var\(--biu-color-emphasis\)/,
+    /\.fsdb-scope-tag\.is-shared,[\s\S]*?--biu-tag:var\(--biu-color-ink-blue\)/,
   )
   assert.doesNotMatch(css, /\.fsdb-scope-tag\.is-edit[^{]*\{[^}]*#2383e2/)
   assert.match(browser, /fallback=\{<ShareRoleLabel label=\{props\.label\} \/>\}/)

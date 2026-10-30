@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { ArrowPathIcon, CpuChipIcon, UserIcon } from '@heroicons/react/16/solid'
 import { resolveSessionMascot, SidebarMascot } from '@biu/public-mascot'
 import { asPerson, asPersonList, personKey, type PersonValue } from '@biu/type-file-system'
-import { ensureDbSearchStyle } from '@biu/database-ui/search'
+import { PickOption, PickPanel } from '@biu/database-ui/search'
 import { listCollection } from './db-client.ts'
 import { showRecordInInspector } from './inspector-db-route.ts'
 import { useWorkspaceProfile } from '@biu/biu-ui/use-workspace-profile'
@@ -210,7 +210,6 @@ export function PersonPickPanel({
   onChange: (next: PersonValue) => void
   onPicked?: () => void
 }) {
-  ensureDbSearchStyle()
   const current = asPerson(value)
   const selected = personKey(current)
   const [members, setMembers] = useState<MemberPerson[]>([])
@@ -283,70 +282,61 @@ export function PersonPickPanel({
   }
 
   return (
-    <div className="fsdb-person-pick">
-      <label className="db-search-field">
-        <input
-          value={query}
-          autoFocus
-          placeholder="搜索成员或代理"
-          onChange={(event) => setQuery(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.preventDefault()
-              pickFirst()
-            }
-          }}
-        />
-      </label>
-      <div className="fsdb-person-options">
-        {visibleMembers.map((member) => (
-          <button
-            type="button"
-            key={`user:${member.id}`}
-            className={`fsdb-person-option${selected === `user:${member.id}` ? ' is-selected' : ''}`}
-            onClick={() => pick({ kind: 'user', name: member.name, accountId: member.id })}
-          >
-            <span className="fsdb-person-avatar" aria-hidden>
-              <UserIcon className="size-[14px]" />
-            </span>
-            <span className="fsdb-person-name">{member.name}</span>
-          </button>
-        ))}
-        {visibleAgents.map((person) => (
-          <button
-            type="button"
-            key={person.id}
-            className={`fsdb-person-option${selected === person.id ? ' is-selected' : ''}`}
-            onClick={() =>
-              pick({
-                kind: 'agent',
-                name: person.name,
-                sessionId: person.id,
-                ...(person.mascot ? { mascot: person.mascot } : {}),
-              })
-            }
-          >
-            <span className="fsdb-person-face" aria-hidden>
-              <SidebarMascot
-                size={18}
-                sessionId={person.id}
-                identity={resolveSessionMascot(person.id, person.mascot)}
-                title={person.name}
-              />
-            </span>
-            <span className="fsdb-person-name">{person.name}</span>
-          </button>
-        ))}
-        {loading ? (
+    <PickPanel
+      className="fsdb-person-pick"
+      query={query}
+      onQuery={setQuery}
+      placeholder="搜索成员或代理"
+      onEnter={pickFirst}
+      empty={
+        loading ? (
           <div className="fsdb-person-loading">
             <ArrowPathIcon className="size-[14px] fsdb-spin" aria-hidden />
             加载成员和代理…
           </div>
-        ) : null}
-        {!loading && !visibleMembers.length && !visibleAgents.length ? (
+        ) : !visibleMembers.length && !visibleAgents.length ? (
           <div className="fsdb-person-loading">没有匹配的成员或代理</div>
-        ) : null}
-      </div>
-    </div>
+        ) : null
+      }
+    >
+      {visibleMembers.map((member) => (
+        <PickOption
+          key={`user:${member.id}`}
+          className="fsdb-person-option"
+          selected={selected === `user:${member.id}`}
+          onClick={() => pick({ kind: 'user', name: member.name, accountId: member.id })}
+        >
+          <span className="fsdb-person-avatar" aria-hidden>
+            <UserIcon className="size-[14px]" />
+          </span>
+          <span className="fsdb-person-name">{member.name}</span>
+        </PickOption>
+      ))}
+      {visibleAgents.map((person) => (
+        <PickOption
+          key={person.id}
+          className="fsdb-person-option"
+          selected={selected === person.id}
+          onClick={() =>
+            pick({
+              kind: 'agent',
+              name: person.name,
+              sessionId: person.id,
+              ...(person.mascot ? { mascot: person.mascot } : {}),
+            })
+          }
+        >
+          <span className="fsdb-person-face" aria-hidden>
+            <SidebarMascot
+              size={18}
+              sessionId={person.id}
+              identity={resolveSessionMascot(person.id, person.mascot)}
+              title={person.name}
+            />
+          </span>
+          <span className="fsdb-person-name">{person.name}</span>
+        </PickOption>
+      ))}
+    </PickPanel>
   )
 }

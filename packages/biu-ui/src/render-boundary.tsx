@@ -60,7 +60,7 @@ export class RenderBoundary extends Component<RenderBoundaryProps, RenderBoundar
           fontSize: 13,
         }}
       >
-        <span style={{ fontWeight: 650 }}>{this.props.label || '这块内容'}</span>
+        <span style={{ fontWeight: 'var(--biu-font-weight-semibold)' }}>{this.props.label || '这块内容'}</span>
         <span style={{ color: 'var(--biu-color-text-muted)', minWidth: 0, overflowWrap: 'anywhere' }}>
           渲染失败：{error.message || String(error)}
         </span>
@@ -77,7 +77,7 @@ export class RenderBoundary extends Component<RenderBoundaryProps, RenderBoundar
             color: 'var(--biu-color-text)',
             font: 'inherit',
             fontSize: 12,
-            fontWeight: 600,
+            fontWeight: 'var(--biu-font-weight-semibold)',
             cursor: 'pointer',
           }}
         >

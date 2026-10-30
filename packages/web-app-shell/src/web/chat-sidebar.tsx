@@ -22,6 +22,8 @@ import { SidebarMascot } from '@biu/public-mascot'
 import { resolveSessionMascot } from '@biu/public-mascot'
 import { FolderGlyph } from '@biu/web-session-view/folder-glyph'
 import { chromeIcon, chromeIconClass } from './chrome-icon.ts'
+import { TagChip } from '@biu/biu-ui/tag-chip'
+import { facetCatalogRevision, facetEmoji, facetLabel, pullFacets, subscribeFacetChrome } from '@biu/core-file-system/facet-catalog'
 import { isChatPagePath, openOverlayComposer } from './chat-overlay.ts'
 import { ShellSidebarFrame } from './shell-sidebar-frame.tsx'
 import {
@@ -57,14 +59,17 @@ function SessionTagBadges({ tags }: { tags?: string[] }) {
   const extra = list.length - shown.length
   return (
     <span className="flex min-w-0 shrink-0 items-center gap-0.5 pl-0.5">
-      {shown.map((tag) => (
-        <span
-          key={tag}
-          className="sidebar-tag max-w-18 truncate rounded-sm bg-(--biu-color-bg-hover-weak,var(--biu-color-bg-hover)) px-1"
-        >
-          {tag}
-        </span>
-      ))}
+      {shown.map((tag) => {
+        const emoji = facetEmoji(tag)
+        return (
+          <TagChip
+            key={tag}
+            id={tag}
+            label={facetLabel(tag)}
+            icon={emoji ? <span className="fsdb-record-emoji">{emoji}</span> : <TagIcon aria-hidden />}
+          />
+        )
+      })}
       {extra > 0 ? (
         <span className="sidebar-tag shrink-0 rounded-sm px-0.5 opacity-80">
           +{extra}
@@ -500,7 +505,7 @@ export const ChatSidebar = memo(function ChatSidebar({
                                       ) : group.kind === 'facet' ? (
                                         <TagIcon className={chromeIconClass('opacity-80')} />
                                       ) : (
-                                        <FolderGlyph className="opacity-80" />
+                                        <FolderGlyph />
                                       )}
                                     </span>
                                     <span className="sidebar-group-fold-chevron">

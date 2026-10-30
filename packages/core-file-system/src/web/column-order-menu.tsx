@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useState, type CSSProperties, type ReactNode } from 'react'
 import {
   DndContext,
   DragOverlay,
@@ -16,13 +16,14 @@ import type { CollectionSchemaPack, FieldSpec, FieldType } from '@biu/type-file-
 import { HEADLESS_DISMISS_IGNORE } from '@biu/biu-ui/headless-dismiss'
 import { HeadlessPopover } from '@biu/biu-ui/headless-popover'
 import { overlayZ } from '@biu/biu-ui/overlay-portal'
-import { tagTextColor, tagTone as schemaTagTone } from '@biu/biu-ui/tag-chip'
+import { tagTone as schemaTagTone } from '@biu/biu-ui/tag-chip'
 import { moveList } from '../query-logic.ts'
 import { CheckRow } from './controls.tsx'
 import { DndGrip } from './dnd-grip.tsx'
 import { FlyoutEmpty, flyoutQueryMatch } from './flyout-search.tsx'
 import { facetFlatColumnKey, parseFacetFlatColumnKey, resolveFieldType } from './fields.ts'
 import { FieldGlyph } from './fsdb-cells.tsx'
+import { facetChipIcon } from './schema-field.tsx'
 
 function FacetColumnPackRow({
   pack,
@@ -35,7 +36,8 @@ function FacetColumnPackRow({
 }) {
   const [open, setOpen] = useState(false)
   const tone = schemaTagTone(pack.id)
-  const anyOn = pack.fields.some((field) => !field.deleted && visibleKeys.has(facetFlatColumnKey(pack.id, field.key)))
+  const fields = pack.fields.filter((field) => !field.deleted)
+  const anyOn = fields.some((field) => visibleKeys.has(facetFlatColumnKey(pack.id, field.key)))
 
   return (
     <HeadlessPopover
@@ -49,20 +51,21 @@ function FacetColumnPackRow({
         <button
           type="button"
           className={`fsdb-checkrow fsdb-tool-row${anyOn || open ? ' is-on' : ''}`}
+          style={{ ['--biu-tag' as string]: tone }}
           data-fsdb-col-facet-trigger
           aria-haspopup="menu"
           aria-expanded={open}
           aria-label={`${pack.label}属性`}
         >
           <span className="fsdb-checkrow-label">
-            <span className="fsdb-checkrow-icon">
-              <FieldGlyph kind="facet" />
+            <span className="fsdb-checkrow-icon fsdb-col-facet-ico" style={{ color: tone }}>
+              {facetChipIcon(pack.id)}
             </span>
-            <span className="fsdb-col-facet-name" style={tone ? { color: tagTextColor(tone) } : undefined}>
+            <span className="fsdb-col-facet-name" style={{ color: tone }}>
               {pack.label}
             </span>
           </span>
-          <span className={`fsdb-col-facet-dot${anyOn ? ' is-on' : ''}`} aria-hidden />
+          <span className="fsdb-col-facet-count">{fields.length}</span>
         </button>
       }
     >
@@ -126,7 +129,7 @@ function ColumnRowShell({
   children: ReactNode
   className?: string
   rowRef?: (node: HTMLElement | null) => void
-  style?: { transform?: string; transition?: string }
+  style?: CSSProperties
 }) {
   return (
     <div ref={rowRef} className={`fsdb-col-drag-row${className ? ` ${className}` : ''}`} style={style}>
@@ -183,16 +186,27 @@ export function ColumnOrderMenu({
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
   const visibleKeys = new Set(columns.map((item) => item.key))
   const hidden = allColumns.filter((item) => !parseFacetFlatColumnKey(item.key) && !visibleKeys.has(item.key))
+  const queryText = query ?? ''
   const menuCols = [
     ...columns.filter((item) => item.key === labelField),
     ...columns.filter((item) => item.key !== labelField),
     ...hidden,
-  ].filter((item) => flyoutQueryMatch(item.field.label ?? item.key, query))
-  const packs = facetCatalog.filter(
-    (pack) =>
-      flyoutQueryMatch(pack.label, query) ||
-      pack.fields.some((field) => !field.deleted && flyoutQueryMatch(field.label ?? field.key, query)),
-  )
+  ].filter((item) => {
+    if (!flyoutQueryMatch(item.field.label ?? item.key, queryText)) return false
+    const flat = parseFacetFlatColumnKey(item.key)
+    if (!flat || !queryText.trim()) return true
+    const pack = facetCatalog.find((entry) => entry.id === flat.packId)
+    const field = pack?.fields.find((entry) => entry.key === flat.fieldKey)
+    return Boolean(field && !field.deleted)
+  })
+  const packs = facetCatalog.filter((pack) => {
+    const liveFields = pack.fields.filter((field) => !field.deleted)
+    if (queryText.trim() && pack.fields.length > 0 && !liveFields.length) return false
+    return (
+      flyoutQueryMatch(pack.label, queryText) ||
+      liveFields.some((field) => flyoutQueryMatch(field.label ?? field.key, queryText))
+    )
+  })
   const locked = new Set([labelField, 'actions'].filter(Boolean))
   const sortableIds = menuCols.filter((item) => !locked.has(item.key)).map((item) => item.key)
   const active = menuCols.find((item) => item.key === activeId)
@@ -281,6 +295,8 @@ export function ColumnOrderMenu({
       {packs.map((pack) => (
         <ColumnRowShell
           key={pack.id}
+          className="is-facet"
+          style={{ ['--biu-tag' as string]: schemaTagTone(pack.id) }}
           grip={
             <span className="fsdb-query-grip is-locked" aria-hidden>
               <DndGrip />

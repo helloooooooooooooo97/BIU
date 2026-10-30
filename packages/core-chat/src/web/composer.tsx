@@ -1090,7 +1090,7 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
                   ? ` · ${modelModeSuffix({ thinking, speed, effort: reasoningEffort, context: contextWindow }, modelCaps)}`
                   : ''}
               </span>
-              <ChevronDownIcon className="size-3.5 opacity-70" />
+              <ChevronDownIcon className="size-3.5" />
             </button>
             {modelOpen ? (
               <HeadlessDismiss onDismiss={() => setModelOpen(false)} inside={(node) => Boolean((node instanceof Element ? node.closest('.composer-model, .composer-model-flyout') : null))}>

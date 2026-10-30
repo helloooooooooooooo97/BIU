@@ -7,7 +7,10 @@ import {
   ArrowUpTrayIcon,
   BoltIcon,
   ChatBubbleLeftRightIcon,
+  CheckCircleIcon,
   CheckIcon,
+  Bars3BottomLeftIcon,
+  LinkIcon,
   PaperAirplaneIcon,
   PencilSquareIcon,
   PlayIcon,
@@ -119,7 +122,9 @@ export function fieldGlyphKind(kind: FieldType) {
 }
 
 export function FieldGlyph({ kind }: { kind: FieldType }) {
-  if (kind === 'boolean') return <span aria-hidden className="fsdb-field-bool-glyph"><BoolBox on={false} /></span>
+  if (kind === 'boolean') return <CheckCircleIcon aria-hidden className="fsdb-field-hero" />
+  if (kind === 'url') return <LinkIcon aria-hidden className="fsdb-field-hero" />
+  if (fieldGlyphKind(kind) === 'text') return <Bars3BottomLeftIcon aria-hidden className="fsdb-field-hero" />
   return <span aria-hidden className="fsdb-field-glyph" data-kind={fieldGlyphKind(kind)} />
 }
 

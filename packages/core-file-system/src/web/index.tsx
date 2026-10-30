@@ -91,10 +91,6 @@ function CollectionPage(props: SlotProps) {
   const [expandedViewKey, setExpandedViewKey] = useState<string | null>(null)
   const parsed = useMemo(() => parseAppPath(location.pathname, [DATA_MODULE]), [location.pathname])
   const dataHome = parsed.kind === 'module' && parsed.moduleId === DATA_MODULE_ID
-  const scopeHome = useMemo(() => {
-    if (!dataHome) return false
-    return new URLSearchParams(location.search).get('home') === 'user'
-  }, [dataHome, location.search])
   const storedHome = useMemo(
     () => (dataHome ? pickMainDataRoute(readMainDataRoute(), orderedTables) : ''),
     [dataHome, orderedTables],
@@ -161,7 +157,6 @@ function CollectionPage(props: SlotProps) {
   useLayoutEffect(() => {
     if (!orderedTables.length) return
     if (!dataHome) return
-    if (scopeHome) return
     const stored = pickMainDataRoute(readMainDataRoute(), orderedTables)
     if (stored) {
       navigate(stored, { replace: true })
@@ -169,7 +164,7 @@ function CollectionPage(props: SlotProps) {
     }
     const first = orderedTables[0]!
     go({ collection: first.path, viewId: builtinAllViewId(first.path) }, { replace: true })
-  }, [dataHome, orderedTables, scopeHome])
+  }, [dataHome, orderedTables])
 
   useEffect(() => {
     if (parsed.kind !== 'collection-view' || parsed.viewId || recordFromRoute) return
@@ -201,8 +196,6 @@ function CollectionPage(props: SlotProps) {
       routeViewId={viewFromRoute}
       expandedViewKey={expandedViewKey}
       onExpandedViewKeyChange={setExpandedViewKey}
-      scopeHome={scopeHome}
-      onOpenScopeHome={() => navigate(`${DATA_MODULE_PATH}?home=user`)}
       onOpenTable={(path, viewId) =>
           go({
             collection: path,

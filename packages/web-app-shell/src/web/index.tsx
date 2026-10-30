@@ -45,7 +45,7 @@ import { BrandCornerMascot, DanceStage } from '@biu/public-mascot'
 import { SessionInspector } from './session-inspector.tsx'
 import { SessionConfigDialog } from '@biu/web-session-view/dialog'
 import { FolderGlyph } from '@biu/web-session-view/folder-glyph'
-import { AuthGate, ShellSettingsAbout, ShellSettingsAccount, ShellSettingsAppearance, ShellSettingsMembers, ShellSettingsMcp, ShellSettingsShortcuts, ShellSettingsUpdate, ShellSettingsWorkspace } from './shell-chrome.tsx'
+import { AuthGate, ShellSettingsAccount, ShellSettingsAppearance, ShellSettingsMembers, ShellSettingsMcp, ShellSettingsShortcuts, ShellSettingsWorkspace } from './shell-chrome.tsx'
 import { hydrateWorkspaceProfile } from '@biu/biu-ui/workspace-profile'
 import { hydrateTheme } from './theme.ts'
 import { hydratePagePrefs } from '@biu/core-file-system/page-width'
@@ -63,13 +63,9 @@ import {
   ArrowsPointingOutIcon,
   MinusIcon,
   AdjustmentsHorizontalIcon,
-  ArrowDownTrayIcon,
   CommandLineIcon,
   CircleStackIcon,
-  InformationCircleIcon,
   LinkIcon,
-  MapIcon,
-  QueueListIcon,
   SwatchIcon,
   UserCircleIcon,
   UserGroupIcon,
@@ -197,7 +193,7 @@ const AgentMainPanels = memo(function AgentMainPanels({
         <div className="absolute inset-0 z-1 flex min-h-0 overflow-hidden">
           <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             {centerStage}
-            <div className="chat-composer-dock pointer-events-none absolute inset-x-0 bottom-0 bg-transparent px-[64px] pb-[calc(1rem+5px)]">
+            <div className="chat-composer-dock pointer-events-none absolute inset-x-0 bottom-0 bg-transparent px-[var(--biu-pad-page)] pb-[calc(1rem+5px)]">
               {centerDock}
             </div>
             {renderSlot('stage-aside')}
@@ -978,7 +974,6 @@ function Shell(props: SlotProps) {
               onClick={(event) => event.stopPropagation()}
             >
               <nav className="settings-rail" aria-label="设置分类">
-                <p className="settings-rail-title">设置</p>
                 <ul className="settings-rail-list">
                   {[
                     { key: 'account', label: '账户', Icon: UserCircleIcon },
@@ -987,10 +982,6 @@ function Shell(props: SlotProps) {
                     { key: 'appearance', label: '外观', Icon: SwatchIcon },
                     { key: 'mcp', label: 'MCP', Icon: LinkIcon },
                     { key: 'shortcuts', label: '快捷键', Icon: CommandLineIcon },
-                    { key: 'routes', label: '路由', Icon: MapIcon },
-                    { key: 'events', label: '事件', Icon: QueueListIcon },
-                    { key: 'update', label: '更新', Icon: ArrowDownTrayIcon },
-                    { key: 'about', label: '关于', Icon: InformationCircleIcon },
                   ].filter((item) => item.key !== 'members' || workspaceLocation === 'cloud').map((item) => (
                     <li key={item.key}>
                       <button
@@ -1022,22 +1013,6 @@ function Shell(props: SlotProps) {
                   {settingsTab === 'appearance' ? <ShellSettingsAppearance /> : null}
                   {settingsTab === 'mcp' ? <ShellSettingsMcp onLeave={() => setSettingsOpen(false)} /> : null}
                   {settingsTab === 'shortcuts' ? <ShellSettingsShortcuts /> : null}
-                  {settingsTab === 'routes' ? (
-                    <section>
-                      <h3 className="settings-pane-title">路由</h3>
-                      <p className="settings-muted settings-pane-lead">应用模块入口与跳转。</p>
-                      {props.renderSlot('routes')}
-                    </section>
-                  ) : null}
-                  {settingsTab === 'events' ? (
-                    <section>
-                      <h3 className="settings-pane-title">事件</h3>
-                      <p className="settings-muted settings-pane-lead">运行日志与调试输出。</p>
-                      {props.renderSlot('log')}
-                    </section>
-                  ) : null}
-                  {settingsTab === 'update' ? <ShellSettingsUpdate /> : null}
-                  {settingsTab === 'about' ? <ShellSettingsAbout /> : null}
                 </div>
               </div>
             </div>

@@ -1,4 +1,4 @@
-import type { CollectionSchema, DbRecord, FieldSpec } from '@biu/type-file-system'
+import type { CollectionSchema, CollectionSchemaPack, DbRecord, FieldSpec } from '@biu/type-file-system'
 import type { CollectionChrome } from '@biu/type-file-system/ui'
 import { ensureTagChipStyle } from '@biu/biu-ui/tag-chip'
 import { formatField, pinLabelColumn, contentFieldKey, resolveFieldType, defaultColumnKeys } from './fields.ts'
@@ -42,6 +42,7 @@ export function ShareCell({
   schema,
   chrome,
   onOpenLink,
+  facets = [],
 }: {
   row: DbRecord
   fieldKey: string
@@ -51,13 +52,14 @@ export function ShareCell({
   schema: CollectionSchema
   chrome?: CollectionChrome
   onOpenLink?: (id: string) => void
+  facets?: CollectionSchemaPack[]
 }) {
   const kind = resolveFieldType(field)
   const Custom = chrome?.cells?.[fieldKey]
   if (Custom) {
     return <Custom field={fieldKey} spec={field} value={row[fieldKey]} record={row} fallback={formatField(field, row[fieldKey])} />
   }
-  if (kind === 'facet') return <SchemaChips value={row[fieldKey]} tags={loadFacets()} />
+  if (kind === 'facet') return <SchemaChips value={row[fieldKey]} tags={facets.length ? facets : loadFacets()} />
   return (
     <DefaultCell
       field={field}
@@ -83,6 +85,7 @@ export function ShareListTable({
   truncate,
   queryFields,
   onOpenLink,
+  facets = [],
 }: {
   schema: CollectionSchema
   view?: Partial<SavedView>
@@ -95,6 +98,7 @@ export function ShareListTable({
   truncate?: boolean
   queryFields?: Set<string>
   onOpenLink?: (id: string) => void
+  facets?: CollectionSchemaPack[]
 }) {
   ensureTagChipStyle()
   const listed = shareTableColumns(schema, view, columns)
@@ -135,6 +139,7 @@ export function ShareListTable({
                     schema={schema}
                     chrome={chrome}
                     onOpenLink={onOpenLink}
+                    facets={facets}
                   />
                 )
                 return (

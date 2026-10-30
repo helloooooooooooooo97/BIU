@@ -1,6 +1,6 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { TagChip, TagChips } from '@biu/biu-ui'
-import { DbSearchMenu, DbSearchOption, ensureDbSearchStyle } from './search-menu.tsx'
+import { DbMenu, PickOption, PickPanel, ensureDbSearchStyle } from './search-menu.tsx'
 
 export function CellMulti({
   values,
@@ -10,14 +10,16 @@ export function CellMulti({
   placeholder,
   multiple = true,
   autoOpen = false,
+  removable = true,
 }: {
   values: string[]
-  options: Array<{ value: string; label: string }>
+  options: Array<{ value: string; label: string; icon?: ReactNode }>
   onChange: (next: string[]) => void
   allowCreate?: boolean
   placeholder?: string
   multiple?: boolean
   autoOpen?: boolean
+  removable?: boolean
 }) {
   ensureDbSearchStyle()
   const [open, setOpen] = useState(autoOpen)
@@ -26,7 +28,7 @@ export function CellMulti({
   const q = query.trim().toLowerCase()
   const byValue = new Map(options.map((item) => [item.value, item]))
   const available = options.filter(
-    (item) => !values.includes(item.value) && (!q || item.label.toLowerCase().includes(q) || item.value.toLowerCase().includes(q)),
+    (item) => Boolean(item.value) && (!q || item.label.toLowerCase().includes(q) || item.value.toLowerCase().includes(q)),
   )
   const canCreate =
     allowCreate && Boolean(query.trim()) && !values.includes(query.trim()) && !options.some((item) => item.value === query.trim() || item.label === query.trim())
@@ -35,9 +37,13 @@ export function CellMulti({
     setQuery('')
   }
   const add = (value: string) => {
-    if (multiple) {
-      if (!values.includes(value)) onChange([...values, value])
-    } else {
+    if (values.includes(value)) {
+      onChange(values.filter((item) => item !== value))
+      setQuery('')
+      return
+    }
+    if (multiple) onChange([...values, value])
+    else {
       onChange([value])
       close()
     }
@@ -72,38 +78,51 @@ export function CellMulti({
               key={value}
               id={value}
               label={byValue.get(value)?.label ?? value}
-              onRemove={() => onChange(values.filter((item) => item !== value))}
+              icon={byValue.get(value)?.icon}
+              onRemove={removable ? () => onChange(values.filter((item) => item !== value)) : undefined}
             />
           ))}
         </TagChips>
       </div>
       {open ? (
-        <DbSearchMenu
-          anchor={boxRef.current}
-          onClose={close}
-          query={query}
-          placeholder={placeholder ?? '添加标签'}
-          onQuery={(next) => {
-            setQuery(next)
-            setOpen(true)
-          }}
-          onEnter={() => {
-            if (available[0]) add(available[0].value)
-            else if (canCreate) add(query.trim())
-          }}
-          empty={!available.length && !canCreate ? <div className="db-search-empty">没有匹配项</div> : null}
-        >
-          {available.map((item) => (
-            <DbSearchOption key={item.value} onClick={() => add(item.value)}>
-              <TagChip id={item.value} label={item.label} />
-            </DbSearchOption>
-          ))}
-          {canCreate ? (
-            <DbSearchOption onClick={() => add(query.trim())}>
-              添加 <TagChip id={query.trim()} label={query.trim()} />
-            </DbSearchOption>
-          ) : null}
-        </DbSearchMenu>
+        <DbMenu anchor={boxRef.current} onClose={close}>
+          <PickPanel
+            query={query}
+            placeholder={placeholder ?? '添加标签'}
+            onQuery={setQuery}
+            onEnter={() => {
+              if (available[0]) add(available[0].value)
+              else if (canCreate) add(query.trim())
+            }}
+            picked={
+              values.length ? (
+                <TagChips>
+                  {values.map((value) => (
+                    <TagChip
+                      key={value}
+                      id={value}
+                      label={byValue.get(value)?.label ?? value}
+                      icon={byValue.get(value)?.icon}
+                      onRemove={() => onChange(values.filter((item) => item !== value))}
+                    />
+                  ))}
+                </TagChips>
+              ) : null
+            }
+            empty={!available.length && !canCreate ? <div className="db-search-empty">没有匹配项</div> : null}
+          >
+            {available.map((item) => (
+              <PickOption key={item.value} selected={values.includes(item.value)} onClick={() => add(item.value)}>
+                <TagChip id={item.value} label={item.label} icon={item.icon} />
+              </PickOption>
+            ))}
+            {canCreate ? (
+              <PickOption onClick={() => add(query.trim())}>
+                添加 <TagChip id={query.trim()} label={query.trim()} />
+              </PickOption>
+            ) : null}
+          </PickPanel>
+        </DbMenu>
       ) : null}
     </div>
   )

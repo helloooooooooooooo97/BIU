@@ -27,6 +27,7 @@ import { BoolBox } from '@biu/biu-ui/bool-box'
 import { ChatCount } from '@biu/biu-ui/chat-count'
 import { HeadlessDismiss, HEADLESS_DISMISS_IGNORE } from '@biu/biu-ui/headless-dismiss'
 import { TagChip, TagChips, tagTextColor, tagTone as schemaTagTone } from '@biu/biu-ui/tag-chip'
+import { facetChipIcon } from './schema-field.tsx'
 import {
   contentFieldKey,
   defaultColumnKeys,
@@ -170,7 +171,6 @@ const LazyShareButton = lazy(() => import('./share-popover.tsx').then((m) => ({ 
 const LazySharePanel = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.SharePanel })))
 const LazyShareRoleDetail = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.ShareRoleDetail })))
 const LazyShareScopeDetail = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.ShareScopeDetail })))
-const ScopeOverview = lazy(() => import('./scope-overview.tsx').then((m) => ({ default: m.ScopeOverview })))
 const DataSidebar = lazy(() => import('./data-sidebar.tsx').then((m) => ({ default: m.DataSidebar })))
 const LayoutPrefsMenu = lazy(() => import('./layout-prefs-menu.tsx').then((m) => ({ default: m.LayoutPrefsMenu })))
 const CollectionRowsShell = lazy(() => import('./rows-view.tsx').then((m) => ({ default: m.CollectionRowsShell })))
@@ -1429,8 +1429,6 @@ export function CollectionBrowser({
   onOpenRecord,
   onCloseRecord,
   onCrumbTarget,
-  scopeHome,
-  onOpenScopeHome,
   embed = false,
   inspectorPaneId,
   sheet = false,
@@ -1453,8 +1451,6 @@ export function CollectionBrowser({
   onOpenRecord?: (recordId: string, viewId?: string | null, collection?: string) => void
   onCloseRecord?: () => void
   onCrumbTarget?: (target: CrumbTarget) => void
-  scopeHome?: boolean
-  onOpenScopeHome?: () => void
   /** 检查器内页：只有中间舞台，不写侧栏开关/视图存储。 */
   embed?: boolean
   inspectorPaneId?: string
@@ -3992,7 +3988,7 @@ export function CollectionBrowser({
         return (
           <TagChips>
             {parsed.tags.map((id) => (
-              <TagChip key={id} id={id} label={tags.find((tag) => tag.id === id)?.label ?? id} />
+              <TagChip key={id} id={id} label={tags.find((tag) => tag.id === id)?.label ?? id} icon={facetChipIcon(id)} />
             ))}
           </TagChips>
         )
@@ -5374,7 +5370,6 @@ export function CollectionBrowser({
           onRenameView={renameView}
           onDeleteView={deleteView}
           onAddView={addEmptyView}
-          onOpenScopeHome={onOpenScopeHome}
           onOpenRecord={(path, view, recordId, row) => {
             if (path === collectionPath) {
               applyView(view)
@@ -5389,15 +5384,6 @@ export function CollectionBrowser({
         />
         </Suspense>
       ) : null}
-      {scopeHome && !nested ? (
-        <Suspense fallback={null}>
-          <ScopeOverview
-            tables={tables}
-            onOpenTable={(path, viewId) => onOpenTable?.(path, viewId)}
-            onOpenRecord={(path, viewId, recordId) => onOpenRecord?.(recordId, viewId, path)}
-          />
-        </Suspense>
-      ) : (
       <div className="fsdb-right">
         {listHeader}
         <div className="fsdb-right-body">
@@ -5632,7 +5618,6 @@ export function CollectionBrowser({
         </div>
         </div>
       </div>
-      )}
       {dlg?.kind === 'rename' ? (
         <AppDialog
           key={dlg.view.id}

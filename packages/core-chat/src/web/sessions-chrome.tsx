@@ -134,7 +134,7 @@ if (typeof document !== 'undefined') {
   const style = document.getElementById(id) ?? document.createElement('style')
   style.id = id
   style.textContent = `
-.sessions-title-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.sessions-title-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:var(--biu-font-weight-medium)}
 .fsdb-fileview:has(.chat-pane-embed){display:flex;flex-direction:column;flex:none;min-width:0;min-height:0;height:auto;width:100%;max-width:100%;background:var(--biu-color-bg)}
 .inspector-database-page .fsdb-fileview:has(.chat-pane-embed){min-height:0;flex:1}
 .fsdb-detail-main:has(.chat-pane-embed),.fsdb-detail-screen:has(.chat-pane-embed){background:var(--biu-color-bg)}
