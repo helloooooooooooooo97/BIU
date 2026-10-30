@@ -106,7 +106,7 @@ export const BIU_TABLES: Record<string, TableSpec> = {
     columns: ['collection', 'view_id', 'deleted_at'],
     indexes: [],
   },
-  sessions: {
+  agents: {
     columns: ['id', 'version', 'project_json', 'event_count', 'title', 'updated_at', 'mascot_json', 'config_json'],
     indexes: [],
   },
@@ -298,7 +298,7 @@ export const BIU_TABLES: Record<string, TableSpec> = {
   },
 }
 
-export const LATEST_BIU_SCHEMA = 40
+export const LATEST_BIU_SCHEMA = 43
 
 export const CREATE_CORE_SQL = `
 CREATE TABLE IF NOT EXISTS pages (
@@ -447,7 +447,7 @@ CREATE TABLE IF NOT EXISTS saved_view_tombstones (
   deleted_at INTEGER NOT NULL,
   PRIMARY KEY (collection, view_id)
 );
-CREATE TABLE IF NOT EXISTS sessions (
+CREATE TABLE IF NOT EXISTS agents (
   id TEXT PRIMARY KEY,
   version INTEGER NOT NULL,
   project_json TEXT,

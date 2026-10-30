@@ -15,7 +15,7 @@ test('cache keeps local sessions and replaces cloud sessions', async () => {
     ['cloud', { id: 'cloud', updatedAt: 10, title: 'old-cloud' }],
     ['gone', { id: 'gone', updatedAt: 10, title: 'deleted-on-cloud' }],
   ])
-  const remote = new Set(['/sessions\tcloud', '/sessions\tgone'])
+  const remote = new Set(['/agents\tcloud', '/agents\tgone'])
   class Places extends Service {
     constructor(ctx: Context) {
       super(ctx, 'account')

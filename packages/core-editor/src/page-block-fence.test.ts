@@ -12,7 +12,7 @@ import {
 
 const doc = `前言
 
-:::pageBlock {kind=html plugin=page-html-blocks id=ab12cd34 deck=true}
+:::pageBlock {kind=sandbox plugin=page-sandbox id=ab12cd34 deck=true}
 <div>旧</div>
 :::
 
@@ -27,16 +27,17 @@ test('listPageBlockFences reads id kind plugin and body', () => {
   const fences = listPageBlockFences(doc)
   assert.equal(fences.length, 2)
   assert.equal(fences[0]?.id, 'ab12cd34')
-  assert.equal(fences[0]?.kind, 'html')
-  assert.equal(pageBlockData(fences[0]!).html, '<div>旧</div>')
+  assert.equal(fences[0]?.kind, 'sandbox')
+  assert.equal(pageBlockData(fences[0]!).source, '<div>旧</div>')
   assert.equal(pageBlockData(fences[0]!).deck, true)
   assert.equal(fences[1]?.id, 'ef90ab12')
   assert.equal(pageBlockData(fences[1]!).file, 'assets/board.json')
 })
 
 test('patchPageBlockMarkdown merges attrs of one id and leaves the rest', () => {
-  const next = patchPageBlockMarkdown(doc, 'ab12cd34', { data: { html: '<div>新</div>', deck: false } })
-  assert.match(next, /id=ab12cd34 deck=false/)
+  const next = patchPageBlockMarkdown(doc, 'ab12cd34', { data: { source: '<div>新</div>', deck: false } })
+  assert.match(next, /id=ab12cd34/)
+  assert.doesNotMatch(next, /\bdeck=/)
   assert.match(next, /<div>新<\/div>/)
   assert.match(next, /id=ef90ab12/)
   assert.match(next, /assets\/board.json/)
@@ -61,7 +62,7 @@ test('patchPageBlockMarkdown rejects missing or duplicate ids', () => {
 })
 
 test('html fence with inline styles still yields the poster html', () => {
-  const md = `:::pageBlock {kind=html plugin=page-html-blocks id=d6ac31a5}
+  const md = `:::pageBlock {kind=sandbox plugin=page-sandbox id=d6ac31a5}
 <div style="box-sizing:border-box;height:100%;width:100%;overflow:hidden;position:relative;background:linear-gradient(170deg,#f3ecd8 0%,#eadfc2 100%)">
 <div style="position:absolute;left:26px;top:22px">番附</div>
 </div>
@@ -69,17 +70,17 @@ test('html fence with inline styles still yields the poster html', () => {
 `
   const fences = listPageBlockFences(md)
   assert.equal(fences.length, 1)
-  assert.equal(fences[0]?.kind, 'html')
-  assert.match(String(pageBlockData(fences[0]!).html), /番附/)
-  assert.match(String(pageBlockData(fences[0]!).html), /height:100%/)
+  assert.equal(fences[0]?.kind, 'sandbox')
+  assert.match(String(pageBlockData(fences[0]!).source), /番附/)
+  assert.match(String(pageBlockData(fences[0]!).source), /height:100%/)
 })
 
 test('uniquifyPageBlockMarkdown keeps the first id and rewrites duplicates', () => {
-  const dup = `:::pageBlock {kind=html plugin=page-html-blocks id=ab12cd34}
+  const dup = `:::pageBlock {kind=sandbox plugin=page-sandbox id=ab12cd34}
 <div>a</div>
 :::
 
-:::pageBlock {kind=html plugin=page-html-blocks id=ab12cd34}
+:::pageBlock {kind=sandbox plugin=page-sandbox id=ab12cd34}
 <div>b</div>
 :::
 `

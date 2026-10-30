@@ -83,6 +83,7 @@ export default defineConfig({
       ['packages/core-*/src/host/**', 'node'],
       ['packages/type-*/**', 'node'],
       ['packages/public-*/**/*.test.ts', 'node'],
+      ['packages/biu-ui/**/*.test.ts', 'node'],
       ['scripts/**', 'node'],
     ],
   },

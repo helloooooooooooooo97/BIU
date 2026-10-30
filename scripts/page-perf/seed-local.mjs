@@ -214,7 +214,7 @@ if (!blockPage) {
 if (blockPage?.id) {
   const fences = Array.from({ length: 12 }, (_, index) => {
     const id = `stress${String(index + 1).padStart(2, '0')}`
-    return `:::pageBlock {kind=html plugin=page-html-blocks id=${id}}\n<p>压测块 ${index + 1}</p>\n:::`
+    return `:::pageBlock {kind=html plugin=page-sandbox id=${id}}\n<p>压测块 ${index + 1}</p>\n:::`
   })
   await apiJson('/api/db/content', {
     method: 'POST',

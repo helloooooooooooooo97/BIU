@@ -157,7 +157,7 @@ test('record snapshot only includes the shared row', async () => {
 })
 
 test('snapshot lists page plugins even when source zip is off', async () => {
-  const fence = ':::pageBlock {kind=html plugin=page-html-blocks id=ab12}\n<div>x</div>\n:::\n'
+  const fence = ':::pageBlock {kind=sandbox plugin=page-sandbox id=ab12}\n<div>x</div>\n:::\n'
   const spec: CollectionSpec = {
     id: 'notes',
     path: '/notes',
@@ -179,7 +179,7 @@ test('snapshot lists page plugins even when source zip is off', async () => {
   const share = shares.upsert({ kind: 'record', collection: '/notes', recordId: 'open' })
   const snap = await buildShareSnapshot(db, views, share)
   assert.equal(snap.sharePlugins, false)
-  assert.deepEqual(snap.pluginIds, ['page-html-blocks'])
+  assert.deepEqual(snap.pluginIds, ['page-sandbox'])
 })
 
 test('session snapshot uses db_content events, not page markdown', async () => {
@@ -189,8 +189,8 @@ test('session snapshot uses db_content events, not page markdown', async () => {
   ]
   const spec: CollectionSpec = {
     id: 'sessions',
-    path: '/sessions',
-    label: '会话',
+    path: '/agents',
+    label: '代理',
     schema: {
       labelField: 'title',
       contentField: 'events',
@@ -209,7 +209,7 @@ test('session snapshot uses db_content events, not page markdown', async () => {
   db.register(spec)
   const views = new SavedViewsStore().open(':memory:')
   const shares = new SharesStore().open(':memory:')
-  const share = shares.upsert({ kind: 'record', collection: '/sessions', recordId: 's1' })
+  const share = shares.upsert({ kind: 'record', collection: '/agents', recordId: 's1' })
   const snap = await buildShareSnapshot(db, views, share)
   assert.equal(snap.contents.s1, events)
   assert.equal(snap.schema.contentField, 'events')

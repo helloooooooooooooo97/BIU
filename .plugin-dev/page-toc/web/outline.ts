@@ -4,6 +4,23 @@ export type TocHeading = {
   level: 1 | 2 | 3
 }
 
+export type TocNode = TocHeading & { children: TocNode[]; depth: number }
+
+/** 按标题级别嵌成 ReUI Tree 用的树。 */
+export function nestHeadings(items: TocHeading[]): TocNode[] {
+  const root: TocNode[] = []
+  const stack: TocNode[] = []
+  for (const item of items) {
+    const node: TocNode = { ...item, children: [], depth: 0 }
+    while (stack.length && stack[stack.length - 1].level >= item.level) stack.pop()
+    node.depth = stack.length
+    if (!stack.length) root.push(node)
+    else stack[stack.length - 1].children.push(node)
+    stack.push(node)
+  }
+  return root
+}
+
 const SKIP = ['.fsdb-detail-title', '.fsdb-detail-extra-title']
 
 function asLevel(n: number): 1 | 2 | 3 {

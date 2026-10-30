@@ -27,6 +27,6 @@ test('assemble appends live ui context', async () => {
     focusPath: '/pages/p002',
   })
   assert.match(text, /当前界面/)
-  assert.match(text, /主会话：配图 id=s1/)
+  assert.match(text, /主代理：配图 id=s1/)
   assert.match(text, /爱乐之城 \/pages\/p002/)
 })

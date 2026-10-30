@@ -331,7 +331,7 @@ test('stamps agent createdBy with the session title from /sessions', async () =>
   ])
   db.register({
     id: 'sessions',
-    path: '/sessions',
+    path: '/agents',
     schema: {
       labelField: 'title',
       fields: {
@@ -376,7 +376,7 @@ test('later editors append to updatedBy and leave createdBy alone', async () => 
   db.register(notesCollection())
   db.register({
     id: 'sessions',
-    path: '/sessions',
+    path: '/agents',
     schema: {
       labelField: 'title',
       fields: {
@@ -545,6 +545,7 @@ test('editor content exposes a version and rejects stale writes', async () => {
   assert.equal(initial.version, 0)
   const first = await db.writeContent('/pages/p1', 'one', initial.version)
   assert.equal(first.version, 1)
+  assert.ok(Number(first.updatedAt) > 0)
   await assert.rejects(() => db.writeContent('/pages/p1', 'stale', initial.version), /正文版本冲突/)
   const current = await db.content('/pages/p1')
   assert.equal(current.value, 'one')
@@ -1031,7 +1032,7 @@ test('title-only plugin list still returns action when flags', async () => {
   const ctx = new Context()
   const db = new DatabaseService(ctx)
   const rows = [
-    { id: 'run', title: '运行中', installed: true, running: true, sandbox: true },
+    { id: 'run', title: '运行中', installed: true, running: true, sandbox: true, builtin: true },
     { id: 'idle', title: '已装', installed: true, sandbox: true },
     { id: 'dev', title: '沙箱', sandbox: true },
   ]
@@ -1041,7 +1042,7 @@ test('title-only plugin list still returns action when flags', async () => {
     label: '插件',
     schema: {
       labelField: 'title',
-      fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string' } },
+      fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string' }, builtin: { type: 'boolean' } },
     },
     list: () => rows,
     get: (id) => rows.find((row) => row.id === id) ?? null,
@@ -1062,6 +1063,7 @@ test('title-only plugin list still returns action when flags', async () => {
   assert.equal(run?.installed, true)
   assert.equal(run?.running, true)
   assert.equal(run?.sandbox, true)
+  assert.equal(run?.builtin, true)
   assert.equal(idle?.installed, true)
   assert.equal(idle?.sandbox, true)
   assert.equal(dev?.sandbox, true)
@@ -1378,10 +1380,10 @@ test('delete parks records in trash and restore puts them back', async () => {
 test('sessions delete parks in trash until purge', async () => {
   const ctx = new Context()
   const db = new DatabaseService(ctx)
-  const rows = new Map<string, { id: string; title: string }>([['s1', { id: 's1', title: '会话' }]])
+  const rows = new Map<string, { id: string; title: string }>([['s1', { id: 's1', title: '代理' }]])
   db.register({
     id: 'sessions',
-    path: '/sessions',
+    path: '/agents',
     schema: { fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string', writable: true } } },
     records: { create: true, delete: true },
     list: () => [...rows.values()],
@@ -1393,17 +1395,17 @@ test('sessions delete parks in trash until purge', async () => {
       return ids
     },
   })
-  const gone = await db.remove('/sessions', { ids: ['s1'] })
+  const gone = await db.remove('/agents', { ids: ['s1'] })
   assert.equal((gone as { trash?: boolean }).trash, true)
   assert.equal(rows.has('s1'), true)
-  const listed = await db.list('/sessions')
+  const listed = await db.list('/agents')
   if (listed.kind !== 'collection') return
   assert.equal(listed.items.length, 0)
-  await db.restore('/sessions', { ids: ['s1'] })
-  const back = await db.list('/sessions')
+  await db.restore('/agents', { ids: ['s1'] })
+  const back = await db.list('/agents')
   if (back.kind !== 'collection') return
   assert.equal(back.items.length, 1)
-  await db.remove('/sessions', { ids: ['s1'], purge: true })
+  await db.remove('/agents', { ids: ['s1'], purge: true })
   assert.equal(rows.has('s1'), false)
 })
 
@@ -1483,7 +1485,7 @@ test('listing /facets with tag filter returns stamped records as a table', async
   db.register(notesCollection())
   db.register(facetsCollection(db.facets, () => [{ id: 'notes', path: '/notes', label: '笔记' }]))
   db.facets.replace([{ id: 'dp', label: '动态规划', fields: [{ key: 'complexity', type: 'string', label: '复杂度' }] }])
-  await db.update('/notes/n1', { facet: { tags: ['dp'], values: { dp: { complexity: 'O(n)' } } } })
+  await db.update('/notes/n1', { facet: { tags: ['dp'], values: { dp: { 复杂度: 'O(n)' } } } })
   const listed = await db.list('/facets', { facetId: 'dp' })
   if (listed.kind !== 'collection') return
   assert.equal(listed.items.length, 1)
@@ -1550,7 +1552,7 @@ test('facet schema can be written on tables that cannot update other fields', as
   })
   db.facets.replace([{ id: 'dp', label: '动态规划', fields: [{ key: 'complexity', type: 'string', label: '复杂度' }] }])
   await assert.rejects(() => db.update('/plugins/p1', { title: '改名' }), /cannot update/)
-  const written = await db.update('/plugins/p1', { facet: { tags: ['dp'], values: { dp: { complexity: 'O(n)' } } } })
+  const written = await db.update('/plugins/p1', { facet: { tags: ['dp'], values: { dp: { 复杂度: 'O(n)' } } } })
   assert.deepEqual((written.value as { facet?: { tags?: string[] } }).facet?.tags, ['dp'])
   const read = await db.read('/plugins/p1')
   if (read.kind !== 'record') return
@@ -1620,6 +1622,7 @@ test('db_update /facets writes facet field packs', async () => {
   })
   assert.equal(asArray.value.fieldCount, 1)
   assert.equal(db.facets.get(id)?.fields[0]?.key, 'complexity')
+  assert.equal(db.facets.get(id)?.fields[0]?.label, '复杂度')
   const updated = await db.update(`/facets/${id}`, {
     fields: JSON.stringify([{ key: 'complexity', type: 'string', label: '复杂度' }]),
   })
@@ -1629,9 +1632,13 @@ test('db_update /facets writes facet field packs', async () => {
     () => db.update(`/facets/${id}`, { fields: [{ key: 'oops', type: 'text' }] }),
     /unknown field type: text\. allowed: /,
   )
+  await assert.rejects(
+    () => db.update(`/facets/${id}`, { fields: [{ key: '1', type: 'string', label: '甲' }, { key: '2', type: 'number', label: '甲' }] }),
+    /duplicate field name/,
+  )
   const stat = await db.stat('/facets')
   if (stat.kind === 'collection') {
-    assert.equal(stat.schema.fields.fields?.example, '[{"key":"category","type":"string","label":"类别"}]')
+    assert.equal(stat.schema.fields.fields?.example, '[{"key":"类别","type":"string"}]')
     assert.match(String(stat.schema.fields.fields?.description), /facet::<本标签id>::<字段key>/)
   }
   const body = await db.writeContent(`/facets/${id}`, '# 标签说明')
@@ -1682,6 +1689,9 @@ test('db_update page facet stores flat property values on the stamp', async () =
   const merged = await db.update('/pages/p1', { facet: { values: { 导演: 'Damien Chazelle' } } })
   assert.equal(merged.value.facet.values[id].director, 'Damien Chazelle')
   assert.equal(merged.value.facet.values[id].year, 2016)
+  const cleared = await db.update('/pages/p1', { facet: { values: { 导演: '' } } })
+  assert.equal(cleared.value.facet.values[id].director, '')
+  assert.equal(cleared.value.facet.values[id].year, 2016)
 
   const awards = await db.create('/facets', [{ title: '奖项' }])
   const awardId = String(awards.items[0]?.value.id)
@@ -2511,6 +2521,60 @@ test('builtin plugins stay visible in the workspace plugin list', async () => {
   }
 })
 
+test('reinstalling a builtin plugin does not claim another workspace record', async () => {
+  const previous = process.env.BIU_ONLINE
+  process.env.BIU_ONLINE = '1'
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  const packed: string[] = []
+  db.register({
+    id: 'plugins',
+    path: '/plugins',
+    schema: {
+      labelField: 'title',
+      fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string' }, builtin: { type: 'boolean' } },
+    },
+    list: () => [{ id: 'page-sandbox', title: 'HTML', builtin: true }],
+    get: (id) => (id === 'page-sandbox' ? { id, title: 'HTML', builtin: true } : null),
+    actions: [
+      {
+        id: 'pack',
+        label: '安装',
+        requiredAction: 'resource:read',
+        run: async (id) => {
+          packed.push(id)
+        },
+      },
+    ],
+  })
+  const dir = mkdtempSync(join(tmpdir(), 'biu-db-repack-builtin-'))
+  const collab = new CollabStore(openAndMigrateBiu(join(dir, 'biu.sqlite')))
+  class AccountBridge extends Service {
+    store = collab
+    authorization = collab.authorization
+    workspaceLocation = () => 'device' as const
+    constructor(inner: Context) {
+      super(inner, 'account')
+    }
+  }
+  try {
+    await ctx.plugin(AccountBridge)
+    const ada = collab.register('', Date.now(), 'secret1', 'repack-ada@example.com')
+    const home = collab.createWorkspace(ada.id, '先建的空间')
+    const local = collab.createWorkspace(ada.id, '本机空间')
+    collab.setActive(ada.id, home.id)
+    runWithAccount(ada.id, () => collab.attach(home.id, '/plugins', 'page-sandbox'))
+    collab.setActive(ada.id, local.id)
+    await runWithAccount(ada.id, () => db.action('/plugins/page-sandbox', 'pack'))
+    assert.deepEqual(packed, ['page-sandbox'])
+    assert.equal(collab.recordIds(local.id, '/plugins').has('page-sandbox'), false)
+    assert.equal(collab.recordIds(home.id, '/plugins').has('page-sandbox'), true)
+  } finally {
+    if (previous === undefined) delete process.env.BIU_ONLINE
+    else process.env.BIU_ONLINE = previous
+  }
+})
+
 test('a member sandbox is private until the owner shares it', async () => {
   const previous = process.env.BIU_ONLINE
   process.env.BIU_ONLINE = '1'
@@ -2631,7 +2695,7 @@ test('a lan view share marks matching records shared without stamping ownership'
   assert.equal(scopeOf(listed.items, '进行中'), '共享')
   assert.equal(scopeOf(listed.items, '已完成'), '私人')
   const roleOf = (items: DbRecord[], title: string) => items.find((row) => row.title === title)?.shareRole
-  assert.equal(roleOf(listed.items, '进行中'), '阅读')
+  assert.equal(roleOf(listed.items, '进行中'), '管理')
   assert.equal(roleOf(listed.items, '已完成'), '管理')
   assert.equal(db.shares.findRecord('/docs', 'open1'), null)
   db.shares.revokeView('/docs', 'open')
@@ -2869,6 +2933,12 @@ test('concurrent lists of one collection share a single spec.list scan', async (
   assert.equal(again.total, 6)
   assert.equal(personal.items.length, 12)
   assert.equal(workspace.items.length, 12)
+})
+
+test('db_content points agents at plugin intros for pageBlock fences', () => {
+  const host = readFileSync(resolve(import.meta.dirname, './index.ts'), 'utf8')
+  assert.match(host, /写 :::pageBlock 前先 db_content \/plugins\/<plugin> 读介绍里的「示例写法」/)
+  assert.equal(host.includes('kind=html 或 htmlframe'), false)
 })
 
 test('collection list preloads authorization scans and releases them', () => {

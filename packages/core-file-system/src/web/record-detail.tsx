@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type Disp
 import type { CollectionChrome, FsDetailPane } from '@biu/type-file-system/ui'
 import type { CollectionSchema, DbRecord, FieldSpec } from '@biu/type-file-system'
 import { ChevronDownIcon, ChevronLeftIcon, ChevronUpIcon, HashtagIcon, ShareIcon } from '@heroicons/react/16/solid'
-import { AnchorMenu, RecordEmojiBoard } from '@biu/public-ui'
+import { AnchorMenu, RecordEmojiBoard } from '@biu/biu-ui'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { contentFieldKey, fieldHasValue, formatField, resolveFieldType } from './fields.ts'
 import { LocalText } from './controls.tsx'

@@ -1,5 +1,5 @@
-import { BoolBox } from '@biu/public-ui/bool-box'
-import { TagChip, TagChips } from '@biu/public-ui/tag-chip'
+import { BoolBox } from '@biu/biu-ui/bool-box'
+import { TagChip, TagChips } from '@biu/biu-ui/tag-chip'
 import {
   ArchiveBoxArrowDownIcon,
   ArrowDownTrayIcon,
@@ -7,7 +7,10 @@ import {
   ArrowUpTrayIcon,
   BoltIcon,
   ChatBubbleLeftRightIcon,
+  CheckCircleIcon,
   CheckIcon,
+  Bars3BottomLeftIcon,
+  LinkIcon,
   PaperAirplaneIcon,
   PencilSquareIcon,
   PlayIcon,
@@ -119,7 +122,9 @@ export function fieldGlyphKind(kind: FieldType) {
 }
 
 export function FieldGlyph({ kind }: { kind: FieldType }) {
-  if (kind === 'boolean') return <span aria-hidden className="fsdb-field-bool-glyph"><BoolBox on={false} /></span>
+  if (kind === 'boolean') return <CheckCircleIcon aria-hidden className="fsdb-field-hero" />
+  if (kind === 'url') return <LinkIcon aria-hidden className="fsdb-field-hero" />
+  if (fieldGlyphKind(kind) === 'text') return <Bars3BottomLeftIcon aria-hidden className="fsdb-field-hero" />
   return <span aria-hidden className="fsdb-field-glyph" data-kind={fieldGlyphKind(kind)} />
 }
 
@@ -299,6 +304,7 @@ export function DefaultCell({
   onRun,
   onChange,
   plain,
+  onOpenLink,
 }: {
   field: FieldSpec
   value: unknown
@@ -309,6 +315,7 @@ export function DefaultCell({
   onRun?: () => void
   onChange?: (next: unknown) => void
   plain?: boolean
+  onOpenLink?: (id: string) => void
 }) {
   const kind = resolveFieldType(field)
   if (kind === 'action') {
@@ -324,6 +331,7 @@ export function DefaultCell({
         records={records}
         labelField={labelField}
         deferMissing={plain}
+        onOpen={onOpenLink}
       />
     )
   }

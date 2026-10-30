@@ -43,7 +43,7 @@ test('formatLiveUiContext is a short labeled block', () => {
     caretInsert: 0,
   })
   assert.match(text, /当前界面/)
-  assert.match(text, /主会话：配图 id=s1/)
+  assert.match(text, /主代理：配图 id=s1/)
   assert.match(text, /路由：\/database\/pages\/record\/p002/)
   assert.match(text, /右侧栏：页面 \(database:\/pages\)/)
   assert.match(text, /焦点记录：爱乐之城 \/pages\/p002/)

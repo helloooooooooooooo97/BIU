@@ -67,7 +67,7 @@ export function eventsCollection(sessions: SessionsLike): CollectionSpec {
       route: '/db-events',
       title: '事件',
       inspector: false,
-      blurb: '会话时间线日志。每一行是某会话里的一条 seq。列表 db_list /events（可用 filter.sessionId 只看一个会话，q 搜 type/摘要）。只读，没有 db_action。',
+      blurb: '代理时间线日志。每一行是某代理里的一条 seq。列表 db_list /events（可用 filter.sessionId 只看一个代理，q 搜 type/摘要）。只读，没有 db_action。',
       order: 19,
       icon: 'bolt',
     },
@@ -78,7 +78,7 @@ export function eventsCollection(sessions: SessionsLike): CollectionSpec {
       fields: {
         ...REQUIRED_RECORD_FIELDS,
         title: { type: 'string', label: '摘要' },
-        sessionId: { type: 'string', label: '会话' },
+        sessionId: { type: 'string', label: '代理' },
         type: { type: 'string', label: '类型' },
         seq: { type: 'number', label: '序号', sortable: true },
         turn: { type: 'number', label: '回合' },

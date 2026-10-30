@@ -215,7 +215,7 @@ $ db_list /
 /tasks       Read-write task rows. Assignee is the session id of another agent …
 /skills      Skills are their own table. Install from GitHub: db_create /skills with files[] …
 /plugins     These are plugins (installable mini-programs), not agents. If the user says
-             "spin up another agent", go to /sessions db_create — do not create here.
+             "spin up another agent", go to /agents db_create — do not create here.
 ```
 
 Note that last one — it **proactively corrects a misunderstanding**. That is the real job of `blurb`: not documentation, but **operating instructions for an agent**.
@@ -237,7 +237,7 @@ flowchart TB
   Shape --- API
   Verb --- API
   Say --- API
-  API --> A["Agent<br/>/sessions"]
+  API --> A["Agent<br/>/agents"]
   API --> T["Task<br/>/tasks"]
   API --> L["Plugin<br/>/plugins"]
   API --> P["Page<br/>/pages"]
@@ -249,17 +249,17 @@ Each one answers the same three questions: **what is it, how does a human use it
 
 ### Agents: one operator model for humans and agents
 
-Every row in `/sessions` is an agent — an independent session with its own workspace, model, and tool set.
+Every row in `/agents` is an agent — an independent session with its own workspace, model, and tool set.
 
 > **An agent is not a consumer of the file system; it is an instance inside it.**
 > It reads other objects through the same `db_*` interface, and other objects use that interface to read it.
 
-That single fact determines the shape of the product: **you can operate on agents the way you operate on data.** Spinning up an agent = `db_create /sessions`. Dispatching a task = writing another session's id into `assignee`.
+That single fact determines the shape of the product: **you can operate on agents the way you operate on data.** Spinning up an agent = `db_create /agents`. Dispatching a task = writing another session's id into `assignee`.
 
 ```
-$ db_list /sessions                       # every agent in the workspace
-$ db_action /sessions/<id> action=inspect # its config and last few messages
-$ db_action /sessions/<id> action=status  # how much context it has used
+$ db_list /agents                       # every agent in the workspace
+$ db_action /agents/<id> action=inspect # its config and last few messages
+$ db_action /agents/<id> action=status  # how much context it has used
 ```
 ### Tasks: the bus between agents
 
@@ -463,7 +463,7 @@ The previous sections traced one chain: a single interface, and everything as an
 This is the most direct consequence. Because everything is a row in a table, and an agent can write to any table:
 
 ```
-db_create /sessions   ← make an agent
+db_create /agents   ← make an agent
 db_create /tasks      ← make a task
 db_create /pages      ← make a page of content
 db_create /skills     ← make a skill
@@ -496,7 +496,7 @@ That makes context injection stop being a guessing game about what to stuff in:
 | What am I doing | block data, record fields, task status |
 | Why am I here | `assignee` / `dependsOn` / `reports` |
 | What happened before | `/events` |
-| Who else is around | `/sessions`, the collaboration graph in `/tasks` |
+| Who else is around | `/agents`, the collaboration graph in `/tasks` |
 
 **The cost scales with the data that actually needs to be read, not with all available data.** There is no bespoke ingestion pipeline and no second copy maintained solely for agents to understand.
 
@@ -775,7 +775,7 @@ biu
     ├── web-routes-panel/      # Settings → Routes
     ├── web-ui-hub/
     ├── public-mascot/         # shared mascot UI, not in json
-    ├── public-ui/             # shared parts (fold/count/menu/attachments), not in json
+    ├── biu-ui/                # Biu UI shared parts (fold/count/menu/attachments), not in json
     │
     ├── core-file-system/      # File System: tables + db_* tools + UI
     ├── core-editor/           # record body editor; blocks, refs, slash menu

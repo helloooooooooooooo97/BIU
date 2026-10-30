@@ -65,6 +65,34 @@ export function applyShellColumnCssVars(el: HTMLElement | null, cols: { left: nu
   el.style.setProperty('--inspector-width', `${cols.inspector}px`)
 }
 
+export type ShellLayoutSnap = {
+  leftPane: boolean
+  inspectorVisible: boolean
+  inspectorWidth: number
+  sidebarWidth: number
+  sidebarCollapsed: boolean
+}
+
+/** 收起/改宽立刻写 snap，等渲染再覆盖会让下一次拖拽按旧侧栏状态算，弹开一次。 */
+export function commitShellLayoutSnap(
+  snap: ShellLayoutSnap,
+  patch: {
+    leftPane?: boolean
+    inspectorOpen?: boolean
+    inspectorWidth?: number
+    sidebarWidth?: number
+    sidebarCollapsed?: boolean
+  },
+): ShellLayoutSnap {
+  return {
+    leftPane: patch.leftPane ?? snap.leftPane,
+    inspectorVisible: patch.inspectorOpen ?? snap.inspectorVisible,
+    inspectorWidth: patch.inspectorWidth ?? snap.inspectorWidth,
+    sidebarWidth: patch.sidebarWidth ?? snap.sidebarWidth,
+    sidebarCollapsed: patch.sidebarCollapsed ?? snap.sidebarCollapsed,
+  }
+}
+
 export function publishShellLayout(cols: { left: number; inspector: number }) {
   if (typeof window === 'undefined') return
   window.dispatchEvent(new CustomEvent('biu:shell-layout', { detail: { left: cols.left, inspector: cols.inspector } }))
@@ -86,6 +114,21 @@ export function shellLayoutFromElement(el: Element | null): { left: number; insp
   const inspector = Number.parseFloat(styles.getPropertyValue('--inspector-width'))
   if (!Number.isFinite(left) || !Number.isFinite(inspector)) return null
   return { left, inspector }
+}
+
+/** 拖宽起点用格子 CSS 变量，不用 aside 的 getBoundingClientRect（亚像素/边框会让松手回弹、越拖越窄）。 */
+export function shellColumnStartWidth(
+  handle: Element | null,
+  column: 'left' | 'inspector',
+  fallback: number,
+): number {
+  const shell = handle instanceof Element
+    ? handle.closest('[data-testid="app-shell"]') ?? handle.closest('.app-shell')
+    : null
+  const layout = shellLayoutFromElement(shell)
+  const n = column === 'left' ? layout?.left : layout?.inspector
+  if (typeof n === 'number' && Number.isFinite(n) && n > 0) return n
+  return fallback
 }
 
 export function chatColumnWidth(opts: {
@@ -224,7 +267,7 @@ export function toggleOverlayThread() {
 
 /** 收缩态点外面关掉；展开态、选取态或点在窗口/弹出菜单里则留下。 */
 export const OVERLAY_OUTSIDE_KEEP =
-  '[data-testid="chat-overlay-panel"], .composer-model-flyout, [data-testid="page-mention"], [data-testid="chat-session-title-pop"], [role="dialog"]'
+  '[data-testid="chat-overlay-panel"], [data-testid="pick-chip-data"], .pick-chip-data, .composer-model-flyout, [data-testid="page-mention"], [data-testid="chat-session-title-pop"], [role="dialog"]'
 
 let pickLive = false
 
@@ -280,7 +323,7 @@ export function focusComposerEditor(editor: ComposerFocusTarget) {
 /** 聊天页中间已有输入框，选取不要再弹悬浮窗。 */
 export function isChatPagePath(pathname: string) {
   const path = (pathname.split('?')[0] || '/').replace(/\/+$/, '') || '/'
-  return path === '/' || path.startsWith('/s/')
+  return path === '/' || path === '/agents' || path.startsWith('/agents/')
 }
 
 /** 选取或点小人弹出输入条。回复区沿用上次展开/收缩，首次默认收缩；revealThread 才强制展开。聊天页本身已有输入框，不要再弹窗。 */

@@ -16,7 +16,7 @@ test('eventsCollection is a read-only table over session logs', async () => {
   assert.equal(spec.path, '/events')
   assert.equal(spec.view?.moduleId, 'events-db')
   assert.deepEqual(spec.records, { update: false, create: false, delete: false })
-  assert.match(String(spec.view?.blurb), /会话时间线/)
+  assert.match(String(spec.view?.blurb), /代理时间线/)
   assert.doesNotMatch(String(spec.view?.blurb), /dispatch/)
   const rows = await spec.list()
   assert.equal(rows.some((row) => row.id === eventRecordId('s1', 1)), true)

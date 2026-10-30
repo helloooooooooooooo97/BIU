@@ -1,7 +1,7 @@
 {
   "id": "page-algorithm",
   "name": "算法题卡片",
-  "blurb": "在页面里用 / 插入 LeetCode 风算法块：左边题目描述，右边代码。",
+  "blurb": "在页面里用 / 插入 LeetCode 风算法块：左边题目，右边代码并可运行。",
   "tags": [
     "page",
     "editor",

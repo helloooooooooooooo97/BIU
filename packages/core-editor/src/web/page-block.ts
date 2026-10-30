@@ -2,6 +2,7 @@ import { mergeAttributes, Node } from '@tiptap/core'
 import { ReactNodeViewRenderer } from '@tiptap/react'
 import { Plugin, PluginKey, type EditorState, type Transaction } from '@tiptap/pm/state'
 import type { Node as PmNode } from '@tiptap/pm/model'
+import { handlePageBlockArrow } from './page-block-arrow.ts'
 import { PageBlockView } from './page-block-view.tsx'
 import { getPageEditor } from './service.ts'
 import { formatPageBlockFence, parsePageBlockData, parsePageBlockMeta } from './page-block-meta.ts'
@@ -12,6 +13,7 @@ export { createPageBlockId, isPageBlockId }
 const metaKey = new PluginKey('page-block-meta')
 const uniqueFilesKey = new PluginKey('page-block-unique-files')
 const assignIdsKey = new PluginKey('page-block-ids')
+const arrowKey = new PluginKey('page-block-arrow')
 
 function parseData(raw: string | null) {
   if (!raw) return {}
@@ -167,15 +169,7 @@ export const pageBlock = Node.create({
   addNodeView() {
     return ReactNodeViewRenderer(PageBlockView, {
       className: 'page-block',
-      update({ oldNode, newNode, updateProps }) {
-        if (
-          oldNode.attrs.kind === newNode.attrs.kind &&
-          oldNode.attrs.plugin === newNode.attrs.plugin &&
-          oldNode.attrs.id === newNode.attrs.id &&
-          JSON.stringify(oldNode.attrs.data) === JSON.stringify(newNode.attrs.data)
-        ) {
-          return true
-        }
+      update({ updateProps }) {
         updateProps()
         return true
       },
@@ -183,13 +177,21 @@ export const pageBlock = Node.create({
         const target = event.target as HTMLElement | null
         if (target?.closest('.page-block-handle, .page-block-handle-grip, [data-drag-handle]')) return false
         if (event.type === 'dragstart' || event.type === 'drag' || event.type === 'dragend') return true
-        return Boolean(target?.closest('.page-block, [data-page-block-capture], textarea, input, select, button, canvas, .excalidraw, .cm-editor'))
+        return Boolean(target?.closest('.page-block, [data-page-block-capture], [data-sandbox], [data-html-sandbox], textarea, input, select, button, canvas, .excalidraw, .cm-editor'))
       },
     })
   },
 
   addProseMirrorPlugins() {
     return [
+      new Plugin({
+        key: arrowKey,
+        props: {
+          handleKeyDown(view, event) {
+            return handlePageBlockArrow(view, event)
+          },
+        },
+      }),
       new Plugin({
         key: uniqueFilesKey,
         appendTransaction(transactions, _old, state) {
@@ -215,6 +217,11 @@ export const pageBlock = Node.create({
             const from = String(data.file)
             data.file = duplicateAssetPath(from)
             data.cloneFrom = from
+            if (typeof data.dataFile === 'string' && data.dataFile.trim()) {
+              const fromData = data.dataFile
+              data.dataFile = duplicateAssetPath(fromData)
+              data.cloneDataFrom = fromData
+            }
             tr = tr.setNodeMarkup(pos, undefined, { ...node.attrs, data })
           }
           return tr

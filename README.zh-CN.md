@@ -33,9 +33,9 @@
 ## 产品演示
 
 <p align="center">
-  <img src="docs/demo/file-system.png" alt="File System：会话表与页面表并排打开" width="880" />
+  <img src="docs/demo/file-system.png" alt="File System：代理表与页面表并排打开" width="880" />
 </p>
-<p align="center"><sub><code>file-system.png</code> — 会话和页面都是同一工作区里的普通表，共用同一套操作方式与地址空间；分栏视图让不同集合可以并排查看</sub></p>
+<p align="center"><sub><code>file-system.png</code> — 代理和页面都是同一工作区里的普通表，共用同一套操作方式与地址空间；分栏视图让不同集合可以并排查看</sub></p>
 
 <p align="center">
   <img src="docs/demo/component.png" alt="Component：嵌入页面的视频块与其专用实时编辑器" width="880" />
@@ -45,7 +45,7 @@
 <p align="center">
   <img src="docs/demo/context.png" alt="上下文：将工作区项目显式附加到 Agent 对话" width="880" />
 </p>
-<p align="center"><sub><code>context.png</code> — 页面、会话、插件等工作区项目以可移除的上下文标签加入输入框，让 Agent 准确获取本次对话所选的资料</sub></p>
+<p align="center"><sub><code>context.png</code> — 页面、代理、插件等工作区项目以可移除的上下文标签加入输入框，让 Agent 准确获取本次对话所选的资料</sub></p>
 
 ---
 
@@ -122,7 +122,7 @@ Biu 的原子集很小：
 路径 · 表 · 记录 · schema · 操作 · blurb
 ```
 
-其他对象都由这六种原子组合而成：任务、页面、技能、插件、标签、组件、会话、事件……
+其他对象都由这六种原子组合而成：任务、页面、技能、插件、标签、组件、代理、事件……
 
 于是**加一个领域 ≠ 加一套概念，而是用同一套原子再组合一次**。
 
@@ -211,11 +211,11 @@ db_stat /skills
 
 ```
 $ db_list /
-/events      会话时间线日志。每一行是某会话里的一条 seq。只读。
-/tasks       可读写的任务行。执行人 assignee 写成另一个代理的会话 id …
+/events      代理时间线日志。每一行是某代理里的一条 seq。只读。
+/tasks       可读写的任务行。执行人 assignee 写成另一个代理的 id …
 /skills      Skill 是独立的一张表。从 GitHub 安装：db_create /skills，带 files[] …
 /plugins     这是插件（可安装的小程序），不是代理。用户说「再开一个 agent」
-             请去 /sessions db_create，不要在这张表 create。
+             请去 /agents db_create，不要在这张表 create。
 ```
 
 注意最后一条——它**主动纠正误解**。这是 `blurb` 的真正作用：不是文档，是**给 Agent 的操作说明**。
@@ -237,7 +237,7 @@ flowchart TB
   Shape --- API
   Verb --- API
   Say --- API
-  API --> A["Agent<br/>/sessions"]
+  API --> A["Agent<br/>/agents"]
   API --> T["Task<br/>/tasks"]
   API --> L["Plugin<br/>/plugins"]
   API --> P["Page<br/>/pages"]
@@ -249,17 +249,17 @@ flowchart TB
 
 ### Agent：人和 Agent 是同一个操作者模型
 
-`/sessions` 的每一行就是一个 Agent——一个独立 session，有自己的工作区、模型、工具集。
+`/agents` 的每一行就是一个 Agent——一个独立 session，有自己的工作区、模型、工具集。
 
 > **Agent 不是文件系统的使用者，它本身就是文件系统里的一个实例。**
 > 它用同一套 `db_*` 操作读取其他对象，其他对象也通过同一接口读取它。
 
-这一条决定了整个产品的形态：**你可以像操作数据一样操作 Agent。** 建一个 Agent = `db_create /sessions`；给任务派工 = 把 `assignee` 写成另一个会话 id。
+这一条决定了整个产品的形态：**你可以像操作数据一样操作 Agent。** 建一个 Agent = `db_create /agents`；给任务派工 = 把 `assignee` 写成另一个代理 id。
 
 ```
-$ db_list /sessions                       # 工作区里所有 Agent
-$ db_action /sessions/<id> action=inspect # 看它的配置和最近几句对话
-$ db_action /sessions/<id> action=status  # 它的上下文用了多少
+$ db_list /agents                       # 工作区里所有 Agent
+$ db_action /agents/<id> action=inspect # 看它的配置和最近几句对话
+$ db_action /agents/<id> action=status  # 它的上下文用了多少
 ```
 ### 任务：Agent 之间的总线
 
@@ -340,8 +340,8 @@ Page       声明「什么环境」  它自己的属性
 页面正文在 SQLite 里；业务数据进 `biu.sqlite`，事件日志单独进 `events.sqlite`：
 
 ```
-.biu/biu.sqlite       ← 页面、任务、会话、标签、视图
-.biu/events.sqlite    ← 会话事件流
+.biu/biu.sqlite       ← 页面、任务、代理、标签、视图
+.biu/events.sqlite    ← 代理事件流
 .biu/assets/          ← 附件
 ```
 
@@ -424,7 +424,7 @@ db_update /tasks/build {tags:["获奖"], values:{name:"季度最佳",year:2022}}
 | `/skills` | 技能包。一条记录（元数据 + 正文）+ 一个目录（技能自带的文件）。`SKILL.md` 被提取为正文，其余文件存入 `.biu/skill/<id>/`，磁盘状态以只读字段 `fileList` 暴露出来——**三种存储，一套接口** |
 | `/mcp` | 外部工具来源。一行 = 一台 MCP 服务器，工具统一用 `mcp_list` / `mcp_call` 访问，不各自变成独立工具 |
 | `/views` | 已保存的查询。筛选、排序、复杂条件（`filterTree`）都存成一行 |
-| `/events` | 会话时间线。append-only，只读 |
+| `/events` | 代理时间线。append-only，只读 |
 | `/notices` | 给人看的收件箱 |
 
 注意 `/skills` 和 `/mcp` 放在这里，不是因为它们不重要，而是因为它们**不引入新机制**——它们是「登记一张表」这条规则的应用，不是规则本身。
@@ -446,7 +446,7 @@ db_update /tasks/build {tags:["获奖"], values:{name:"季度最佳",year:2022}}
 
 这也明确了「一切皆文件」的含义：它不是对底层存储的字面描述，因为底层仍然是异构的；它表达的是一项**特性**——数据既可通过统一接口访问，也可直接在磁盘上查看。
 
-页面正文在 `.biu/biu.sqlite` 的 `pages.notes`；会话事件在 `.biu/events.sqlite`。附件在 `.biu/assets`。表记录也在同一个业务库里。每项能力可以选择适合自己的底层存储，但都按照同一份接口契约暴露在同一棵树上。
+页面正文在 `.biu/biu.sqlite` 的 `pages.notes`；代理事件在 `.biu/events.sqlite`。附件在 `.biu/assets`。表记录也在同一个业务库里。每项能力可以选择适合自己的底层存储，但都按照同一份接口契约暴露在同一棵树上。
 
 **透明还带来一件事：可溯源。** 一条 append-only 的事件流记录所有动作，所有界面都是它的投影。事件流是权威日志——投影可以替换，日志不能丢。因为你能同时看到「状态」和「状态如何形成」，出现问题时便可以沿着日志追溯。
 
@@ -461,7 +461,7 @@ db_update /tasks/build {tags:["获奖"], values:{name:"季度最佳",year:2022}}
 这是最直接的一条推论。因为所有东西都是表里的行，而 Agent 能写任何一张表：
 
 ```
-db_create /sessions   ← 造一个 Agent
+db_create /agents   ← 造一个 Agent
 db_create /tasks      ← 造一个任务
 db_create /pages      ← 造一页内容
 db_create /skills     ← 造一个技能
@@ -494,7 +494,7 @@ Agent 不是被「通知」人的操作，而是**能读到操作留下的结果
 | 我在做什么 | 块数据、记录字段、任务状态 |
 | 我为什么在这 | `assignee` / `dependsOn` / `reports` |
 | 之前发生了什么 | `/events` |
-| 还有谁在场 | `/sessions`、`/tasks` 的协作图 |
+| 还有谁在场 | `/agents`、`/tasks` 的协作图 |
 
 **成本只与实际需要读取的数据量相关，而不是与全部数据量相关。** 不需要定制的数据摄取管道，也不需要为了让 Agent 理解而维护第二份数据。
 
@@ -634,9 +634,9 @@ export CHAT_MODEL=deepseek-chat # 可选
 
 首次使用时：
 
-1. 打开一个 **Live** 会话作为调度席，再打开一个或多个 **chat** 会话作为执行席。
-2. 从侧栏进入 **Tasks**，新建任务并将负责人指派给某个执行会话。
-3. 由人或调度会话派发任务以唤醒执行会话；执行会话在每轮结束时汇报进展。
+1. 打开一个 **Live** 代理作为调度席，再打开一个或多个 **chat** 代理作为执行席。
+2. 从侧栏进入 **Tasks**，新建任务并将负责人指派给某个执行代理。
+3. 由人或调度代理派发任务以唤醒执行代理；执行代理在每轮结束时汇报进展。
 4. 在右侧检查器中查看执行**轨迹**及其对应的**任务**。
 
 <details>
@@ -674,7 +674,7 @@ flowchart TB
   JSON --> WebLoad["web/main.tsx<br/>加载 web 表"]
   JSON --> Caps["plugins 表"]
 
-  HostLoad --> Kernel["@biu/host-*<br/>会话 · 工具 · loop · HTTP/WS"]
+  HostLoad --> Kernel["@biu/host-*<br/>代理 · 工具 · loop · HTTP/WS"]
   WebLoad --> Shell["@biu/web-*<br/>插槽 · 投影 · 检查器框"]
   Caps --> Cap["@biu/core-* / @biu/cap-*<br/>./host 与 ./web 分入口"]
   Kernel --- Cap
@@ -773,13 +773,13 @@ biu
     ├── web-routes-panel/      # Settings → Routes
     ├── web-ui-hub/
     ├── public-mascot/         # 共享吉祥物 UI，不进 json
-    ├── public-ui/             # 共享零件（折叠/计数/菜单/附件），不进 json
+    ├── biu-ui/                # Biu UI 共享零件（折叠/计数/菜单/附件），不进 json
     │
     ├── core-file-system/      # File System：登记表 + db_* 工具 + UI
     ├── core-editor/           # 记录正文编辑器；块、引用、斜杠菜单
     ├── core-plugin-system/    # 已安装插件、安装卸载、沙箱 + pack
     ├── core-task-system/      # 任务数据、心跳、派工 / 汇报 + 任务表
-    ├── core-chat/             # 会话表 + 轨迹 / 用量
+    ├── core-chat/             # 代理表 + 轨迹 / 用量
     ├── core-page/             # 页面表 + 页面块反向索引
     ├── core-pick/             # 点选数据句柄
     │

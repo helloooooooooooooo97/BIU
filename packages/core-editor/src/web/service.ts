@@ -17,6 +17,7 @@ export type PageBlockViewProps = {
   data: Record<string, unknown>
   update: (patch: Record<string, unknown>, opts?: { replace?: boolean }) => void
   writable: boolean
+  selected?: boolean
 }
 
 /** 斜杠菜单分类。'basic' 进「基础模块」；其它字符串各自成组。 */
@@ -36,6 +37,8 @@ export type PageBlockSpec = {
   blockTypeLabel?: string
   hint?: string
   aliases?: string[]
+  /** false：仍能渲染已有块，但不进斜杠菜单。 */
+  slash?: boolean
   /** 插入时的块 data。每块都有 title；不写则用「当前页面名 + 组件类型名」。 */
   defaults?: Record<string, unknown> | (() => Record<string, unknown>)
   /**
@@ -140,15 +143,17 @@ export class PageEditorService extends Service {
     clientLog('info', 'page-block', `登记块 ${spec.kind}（${plugin}）`)
     return this.ctx.effect(() => {
       this.customBlocks.set(spec.kind, next)
-      rememberSlashBlock({
-        kind: spec.kind,
-        plugin,
-        label: spec.label,
-        hint: spec.hint ?? '自定义块',
-        aliases: spec.aliases ?? [],
-        blockType,
-        blockTypeLabel,
-      })
+      if (spec.slash !== false) {
+        rememberSlashBlock({
+          kind: spec.kind,
+          plugin,
+          label: spec.label,
+          hint: spec.hint ?? '自定义块',
+          aliases: spec.aliases ?? [],
+          blockType,
+          blockTypeLabel,
+        })
+      }
       setPageBlockPluginPhase(plugin, 'ready')
       this.bump()
       return () => {

@@ -3,7 +3,7 @@ import type { Editor } from '@tiptap/core'
 import type { Node } from '@tiptap/pm/model'
 import { Plugin, PluginKey, NodeSelection, TextSelection } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
-import { scrollOutlineTarget } from '@biu/public-ui'
+import { scrollOutlineTarget } from '@biu/biu-ui'
 import { findInPmDoc, wrapFindIndex } from './find-ranges.ts'
 
 export const FIND_PLUGIN = new PluginKey('page-find')

@@ -1,5 +1,6 @@
 import { useEffect, useImperativeHandle, useRef, forwardRef } from 'react'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
+import { json } from '@codemirror/lang-json'
 import { markdown } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
@@ -72,19 +73,19 @@ export type SourceEditorHandle = {
 }
 
 const mdHighlight = HighlightStyle.define([
-  { tag: tags.heading, color: 'var(--dsw-label)', fontWeight: '700' },
+  { tag: tags.heading, color: 'var(--biu-color-text)', fontWeight: '700' },
   { tag: tags.strong, fontWeight: '700' },
   { tag: tags.emphasis, fontStyle: 'italic' },
   { tag: tags.strikethrough, textDecoration: 'line-through' },
-  { tag: tags.link, color: 'var(--dsw-business)' },
-  { tag: tags.url, color: 'var(--dsw-business)' },
-  { tag: tags.monospace, color: 'var(--dsw-label)' },
-  { tag: tags.meta, color: 'var(--dsw-sidebar-fg)' },
-  { tag: tags.processingInstruction, color: 'var(--dsw-sidebar-fg)' },
-  { tag: tags.comment, color: 'var(--dsw-sidebar-fg)' },
-  { tag: tags.keyword, color: 'var(--dsw-pick)' },
-  { tag: tags.string, color: 'var(--dsw-ok)' },
-  { tag: tags.number, color: '#c2410c' },
+  { tag: tags.link, color: 'var(--biu-color-text)' },
+  { tag: tags.url, color: 'var(--biu-color-text)' },
+  { tag: tags.monospace, color: 'var(--biu-color-text)' },
+  { tag: tags.meta, color: 'var(--biu-color-text-muted)' },
+  { tag: tags.processingInstruction, color: 'var(--biu-color-text-muted)' },
+  { tag: tags.comment, color: 'var(--biu-color-text-muted)' },
+  { tag: tags.keyword, color: 'var(--biu-color-emphasis)' },
+  { tag: tags.string, color: 'var(--biu-color-ok)' },
+  { tag: tags.number, color: 'var(--biu-color-warning)' },
 ])
 
 const compactTheme = EditorView.theme({
@@ -95,24 +96,24 @@ const compactTheme = EditorView.theme({
 const theme = EditorView.theme({
   '&': {
     background: 'transparent',
-    color: 'var(--dsw-label)',
+    color: 'var(--biu-color-text)',
     fontSize: '14px',
   },
   '.cm-scroller': { fontFamily: 'var(--font-mono)', lineHeight: '1.65', overflow: 'visible' },
-  '.cm-content': { caretColor: 'var(--dsw-label)', padding: '0', minHeight: '240px' },
+  '.cm-content': { caretColor: 'var(--biu-color-text)', padding: '0', minHeight: '240px' },
   '.cm-gutters': {
     background: 'transparent',
     border: 'none',
-    color: 'var(--dsw-sidebar-fg)',
+    color: 'var(--biu-color-text-muted)',
     minWidth: '2.4em',
   },
-  '.cm-activeLine': { background: 'color-mix(in srgb, var(--dsw-hover) 70%, transparent)' },
-  '.cm-activeLineGutter': { background: 'transparent', color: 'var(--dsw-label)' },
-  '.cm-cursor': { borderLeftColor: 'var(--dsw-label)' },
-  /* 与正文 TipTap / --dsw-pick 同一蓝。系统 Highlight 在深色页会发白。 */
-  '.cm-content ::selection': { background: 'color-mix(in srgb, var(--dsw-pick) 40%, transparent)', color: 'inherit' },
+  '.cm-activeLine': { background: 'color-mix(in srgb, var(--biu-color-bg-hover) 70%, transparent)' },
+  '.cm-activeLineGutter': { background: 'transparent', color: 'var(--biu-color-text)' },
+  '.cm-cursor': { borderLeftColor: 'var(--biu-color-text)' },
+  /* 与正文 TipTap / --biu-color-emphasis 同一蓝。系统 Highlight 在深色页会发白。 */
+  '.cm-content ::selection': { background: 'color-mix(in srgb, var(--biu-color-emphasis) 40%, transparent)', color: 'inherit' },
   '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionLayer .cm-selectionBackground': {
-    background: 'color-mix(in srgb, var(--dsw-pick) 40%, transparent)',
+    background: 'color-mix(in srgb, var(--biu-color-emphasis) 40%, transparent)',
   },
 })
 
@@ -121,7 +122,8 @@ export const SourceEditor = forwardRef<SourceEditorHandle, {
   writable: boolean
   onChange?: (next: string) => void
   compact?: boolean
-}>(function SourceEditor({ value, writable, onChange, compact }, ref) {
+  language?: 'markdown' | 'json'
+}>(function SourceEditor({ value, writable, onChange, compact, language = 'markdown' }, ref) {
   const host = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
   const onChangeRef = useRef(onChange)
@@ -144,7 +146,7 @@ export const SourceEditor = forwardRef<SourceEditorHandle, {
           highlightActiveLine(),
           highlightActiveLineGutter(),
           keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
-          markdown({ codeLanguages: languages }),
+          language === 'json' ? json() : markdown({ codeLanguages: languages }),
           syntaxHighlighting(mdHighlight),
           EditorView.lineWrapping,
           theme,
@@ -167,7 +169,7 @@ export const SourceEditor = forwardRef<SourceEditorHandle, {
       view.destroy()
       viewRef.current = null
     }
-  }, [writable, compact])
+  }, [writable, compact, language])
 
   useImperativeHandle(ref, () => ({
     applyFind(query, index) {

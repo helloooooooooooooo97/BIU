@@ -14,23 +14,34 @@ async function copyPageAsset(from: string, to: string) {
   const src = assetName(from)
   const dest = assetName(to)
   const res = await fetch(`/api/page/file/${encodeURIComponent(src)}`)
-  let payload: unknown = { elements: [], appState: { theme: 'dark' }, files: {} }
-  if (res.ok) {
-    try {
-      payload = JSON.parse(await res.text())
-    } catch {
-      /* keep empty */
+  const text = res.ok ? await res.text() : ''
+  const jsonName = /\.json$/i.test(dest)
+  let body = text
+  let type = 'text/plain; charset=utf-8'
+  if (jsonName) {
+    type = 'application/json'
+    if (!text) body = JSON.stringify({ elements: [], appState: { theme: 'dark' }, files: {} })
+    else {
+      try {
+        JSON.parse(text)
+        body = text
+      } catch {
+        body = JSON.stringify({ elements: [], appState: { theme: 'dark' }, files: {} })
+      }
     }
+  } else if (/\.html?$/i.test(dest)) {
+    type = 'text/html; charset=utf-8'
   }
   await fetch(`/api/page/file/${encodeURIComponent(dest)}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+    headers: { 'Content-Type': type },
+    body,
   })
 }
 
 function samePageBlockProps(prev: NodeViewProps, next: NodeViewProps) {
   return (
+    prev.selected === next.selected &&
     prev.node.attrs.kind === next.node.attrs.kind &&
     prev.node.attrs.plugin === next.node.attrs.plugin &&
     prev.node.attrs.id === next.node.attrs.id &&
@@ -39,7 +50,7 @@ function samePageBlockProps(prev: NodeViewProps, next: NodeViewProps) {
   )
 }
 
-export const PageBlockView = memo(function PageBlockView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
+export const PageBlockView = memo(function PageBlockView({ node, updateAttributes, editor, getPos, selected }: NodeViewProps) {
   const kind = String(node.attrs.kind ?? 'card')
   const plugin = String(node.attrs.plugin ?? '').trim()
   const data = (node.attrs.data && typeof node.attrs.data === 'object' ? node.attrs.data : {}) as Record<string, unknown>
@@ -78,8 +89,8 @@ export const PageBlockView = memo(function PageBlockView({ node, updateAttribute
     if (!editor.isEditable || editor.isDestroyed) return
     if (event.target instanceof Element && event.target.closest('textarea, input, select, button, a')) return
     if (event.currentTarget instanceof Element && event.target !== event.currentTarget) return
-    // Pick overlay resolves the inner html node. A node selection here becomes
-    // a markdown fence pick on pointerup and hides that node.
+    // Pick overlay owns the click. Node selection here becomes a fence pick
+    // and hides the block. Shadow internals are resolved by pick, not TipTap.
     if (document.documentElement.classList.contains('pick-mode')) return
     const pos = getPos()
     if (typeof pos !== 'number') return
@@ -105,6 +116,7 @@ export const PageBlockView = memo(function PageBlockView({ node, updateAttribute
         data={data}
         update={update}
         writable
+        selected={selected}
         View={View}
         phase={phase}
         pending={cloneFrom ? <div className="page-block-missing">正在复制附件…</div> : null}

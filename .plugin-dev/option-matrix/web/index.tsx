@@ -1,3 +1,5 @@
+import { Button, Input, ReUI, Textarea } from '@biu/reui'
+
 const React = globalThis.React
 const { useState, useMemo, useEffect, useRef } = React
 
@@ -12,6 +14,8 @@ type Data = {
   options?: string[]
   criteria?: Criterion[]
   scores?: Scores
+  highlight?: string
+  editing?: boolean
 }
 
 type Cell = { name: string; raw: number; norm: number; weighted: number }
@@ -120,59 +124,31 @@ function toMarkdown(data: Data): string {
   return lines.join('\n')
 }
 
-const STYLE_ID = 'option-matrix-style-v2'
-const STYLE_CSS = `
-.om-root{border:1px solid var(--dsw-border);border-radius:8px;padding:10px 12px;margin:0;background:var(--dsw-bg);color:var(--dsw-label);font-family:var(--font-sans);font-size:14px;line-height:1.5}
-.om-head{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
-.om-title{font-weight:650;font-size:14px}
-.om-meta{color:var(--dsw-label-3);font-size:12px;font-weight:500}
-.om-grow{flex:1}
-.om-btn{height:26px;font:inherit;font-size:13px;font-weight:650;padding:0 8px;border-radius:6px;border:1px solid var(--dsw-border);background:transparent;color:var(--dsw-label);cursor:pointer}
-.om-btn:hover{background:var(--dsw-hover)}
-.om-field{height:26px;font:inherit;font-size:13px;padding:0 6px;border:1px solid var(--dsw-border);border-radius:6px;background:var(--dsw-input);color:var(--dsw-label)}
-.om-table-wrap{overflow-x:auto}
-.om-table{border-collapse:collapse;width:100%;font-size:13px}
-.om-cell{border:1px solid var(--dsw-border);padding:6px 8px;text-align:center;white-space:nowrap;vertical-align:middle}
-.om-score{width:46px;height:26px;padding:0 4px;text-align:center;font:inherit;font-variant-numeric:tabular-nums;border:1px solid var(--dsw-border);border-radius:6px;background:var(--dsw-input);color:var(--dsw-label)}
-.om-winner{background:color-mix(in srgb,var(--dsw-ok,#3fb950) 12%,transparent)}
-.om-best{background:color-mix(in srgb,var(--dsw-pick) 14%,transparent);font-weight:650}
-.om-muted{background:var(--dsw-hover)}
-.om-tools{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
-.om-rationale{margin-top:8px;padding:8px 10px;border-radius:6px;background:var(--dsw-hover);font-size:13px;line-height:1.55;color:var(--dsw-label-2)}
-.om-md{margin-top:8px}
-.om-md textarea{width:100%;min-height:130px;font-family:var(--font-mono);font-size:12px;padding:8px;border-radius:6px;border:1px solid var(--dsw-border);background:var(--dsw-input);color:var(--dsw-label)}
-.om-ghost{border:0;background:transparent;color:var(--dsw-label-3);cursor:pointer;font:inherit}
-.om-ghost:hover{color:var(--dsw-label)}
-`
 
-function useOmStyle() {
-  useEffect(() => {
-    const existing = document.getElementById(STYLE_ID)
-    const el = existing instanceof HTMLStyleElement ? existing : document.createElement('style')
-    el.id = STYLE_ID
-    el.textContent = STYLE_CSS
-    if (el.parentNode !== document.head) document.head.appendChild(el)
-  }, [])
+function ScoreDots({ value, max }: { value: number; max: number }) {
+  const n = Math.max(0, Math.min(max, Math.round(value)))
+  return (
+    <span className="cmp-bar" aria-hidden>
+      {Array.from({ length: max }, (_, i) => (
+        <i key={i} data-on={i < n} />
+      ))}
+    </span>
+  )
 }
 
-function ScoreInput({ value, max, onChange, readOnly }: { value: number; max: number; onChange: (v: number) => void; readOnly: boolean }) {
-  if (readOnly) return React.createElement('span', { style: { fontVariantNumeric: 'tabular-nums' } }, value)
-  return React.createElement('input', {
-    type: 'number',
-    min: 0,
-    max,
-    value,
-    className: 'om-score',
-    onChange: (e: { target: { value: string } }) => onChange(Math.max(0, Math.min(max, num(e.target.value, 0)))),
-  })
+
+function badgeOf(rank: number) {
+  if (rank === 1) return '首选'
+  if (rank === 2) return '也值得考虑'
+  return '备选'
 }
 
 function OptionMatrix({ data, update, writable }: { data: Data; update: (patch: Record<string, unknown>) => void; writable: boolean }) {
-  useOmStyle()
   const [showMd, setShowMd] = useState(false)
   const [copied, setCopied] = useState(false)
   const [draftTitle, setDraftTitle] = useState(data.title ?? '')
   const titleTouched = useRef(false)
+  const editing = data.editing === true
 
   useEffect(() => {
     if (!titleTouched.current) setDraftTitle(data.title ?? '')
@@ -184,12 +160,10 @@ function OptionMatrix({ data, update, writable }: { data: Data; update: (patch: 
   const options = m.options
   const criteria = m.criteria
   const scores = data.scores ?? {}
-  const readOnly = !writable
-
+  const highlight = typeof data.highlight === 'string' && data.highlight ? data.highlight : m.winner?.option
   const setCriteria = (next: Criterion[]) => update({ criteria: next })
-  const setScores = (next: Scores) => update({ scores: next })
   const setCell = (opt: string, crit: string, v: number) => {
-    setScores({ ...scores, [opt]: { ...(scores[opt] ?? {}), [crit]: v } })
+    update({ scores: { ...scores, [opt]: { ...(scores[opt] ?? {}), [crit]: v } } })
   }
   const renameCriterion = (ci: number, name: string) => {
     const old = criteria[ci]?.name
@@ -217,138 +191,167 @@ function OptionMatrix({ data, update, writable }: { data: Data; update: (patch: 
   }
 
   const md = useMemo(() => toMarkdown(data), [key])
-  const h = React.createElement
+  const byOption = new Map(m.rows.map((row) => [row.option, row]))
+  const picks = m.ranked
 
-  const headCells = [
-    h('th', { key: 'corner', className: 'om-cell', style: { textAlign: 'left', color: 'var(--dsw-label-3)' } }, '方案 \\ 维度'),
-    ...criteria.map((c, ci) =>
-      h(
-        'th',
-        { key: `c${ci}`, className: 'om-cell', style: { verticalAlign: 'top' } },
-        readOnly
-          ? h('div', null, h('div', { style: { fontWeight: 650 } }, c.name), h('div', { className: 'om-meta' }, `权重 ${c.weight} · ${c.higherIsBetter === false ? '越低越好' : '越高越好'}`))
-          : h(
-              'div',
-              { style: { display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' } },
-              h('input', { value: c.name, onChange: (e: { target: { value: string } }) => renameCriterion(ci, e.target.value), className: 'om-field', style: { fontWeight: 650, textAlign: 'center', width: 96 } }),
-              h('div', { style: { display: 'flex', gap: 4, alignItems: 'center' } },
-                h('span', { className: 'om-meta' }, '权重'),
-                h('input', { type: 'number', min: 0, max: 9, value: c.weight, onChange: (e: { target: { value: string } }) => setCriteria(criteria.map((x, i) => (i === ci ? { ...x, weight: num(e.target.value, 0) } : x))), className: 'om-field', style: { width: 44, textAlign: 'center' } }),
-              ),
-              h('button', { type: 'button', className: 'om-btn', title: '点击切换维度方向', onClick: () => setCriteria(criteria.map((x, i) => (i === ci ? { ...x, higherIsBetter: x.higherIsBetter === false } : x))) }, c.higherIsBetter === false ? '越低越好' : '越高越好'),
-              h('button', { type: 'button', className: 'om-ghost', onClick: () => {
+  return (
+    <ReUI>
+      <div className="cmp-shell" data-testid="option-matrix">
+        <div className="cmp-head">
+          <div>
+            <h2>{data.title || '方案对比'}</h2>
+            <p>{options.length} 个方案，按加权总分排序 · 满分 {m.maxTotal.toFixed(1)}</p>
+          </div>
+          <div className="rui-row">
+            {writable ? (
+              <Button type="button" variant={editing ? 'outline' : undefined} onClick={() => update({ editing: !editing })}>
+                {editing ? '完成' : '编辑打分'}
+              </Button>
+            ) : null}
+            <Button type="button" variant="outline" onClick={() => setShowMd((v) => !v)}>
+              {showMd ? '隐藏 Markdown' : '导出 Markdown'}
+            </Button>
+          </div>
+        </div>
+        <div className="cmp-picks">
+          {picks.map((row) => (
+            <div key={row.option} className="cmp-pick" data-rank={row.rank <= 3 ? String(row.rank) : 'n'}>
+              <span className="cmp-badge">{badgeOf(row.rank)}</span>
+              <h3>{row.option}</h3>
+              <div className="cmp-score">{row.total.toFixed(1)}</div>
+              <div className="rui-muted">{(row.percent * 100).toFixed(1)}%</div>
+            </div>
+          ))}
+        </div>
+        <table className="cmp-table" data-testid="option-matrix-table">
+          <thead>
+            <tr>
+              <th>对比项</th>
+              {options.map((option) => (
+                <th key={option} style={highlight === option ? { background: 'rgba(255,196,0,.22)' } : undefined}>
+                  {highlight === option ? `推荐 · ${option}` : option}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {criteria.map((c, ci) => (
+              <tr key={c.name + String(ci)}>
+                <td>
+                  {c.name}
+                  <div className="rui-muted">{c.higherIsBetter === false ? '越低越好' : '越高越好'} · 权重 {c.weight}</div>
+                </td>
+                {options.map((option) => {
+                  const cell = byOption.get(option)?.cells[ci]
+                  return (
+                    <td key={option} style={cell?.best ? { background: 'rgba(255,196,0,.22)', fontWeight: 650 } : undefined}>
+                      <span className="tabular-nums">{cell?.raw ?? 0}</span>
+                      <ScoreDots value={cell?.raw ?? 0} max={scale} />
+                      {c.higherIsBetter === false ? <div className="rui-muted">→{cell?.norm ?? 0}</div> : null}
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+            <tr>
+              <td>加权总分</td>
+              {options.map((option) => {
+                const row = byOption.get(option)
+                return (
+                  <td key={option} style={{ fontWeight: 650 }}>
+                    {row ? row.total.toFixed(1) : '0.0'}
+                    <div className="rui-muted">{row ? `${(row.percent * 100).toFixed(1)}%` : ''}</div>
+                  </td>
+                )
+              })}
+            </tr>
+          </tbody>
+        </table>
+        {m.rationale ? <div data-testid="option-matrix-rationale" className="cmp-why">{m.rationale}</div> : null}
+        {writable && editing ? (
+          <div className="cmp-edit">
+            <Input
+              value={draftTitle}
+              placeholder="对比标题"
+              style={{ fontWeight: 650, width: 260, marginBottom: 10 }}
+              onChange={(e: { target: { value: string } }) => {
+                titleTouched.current = true
+                setDraftTitle(e.target.value)
+              }}
+              onBlur={() => {
+                titleTouched.current = false
+                update({ title: draftTitle })
+              }}
+            />
+            {options.map((option, oi) => (
+              <div key={option} className="rui-row" style={{ marginBottom: 8, flexWrap: 'wrap' }}>
+                <Input value={option} onChange={(e: { target: { value: string } }) => renameOption(oi, e.target.value)} style={{ width: 140 }} />
+                {criteria.map((c) => (
+                  <span key={c.name} className="rui-row">
+                    <span className="rui-muted">{c.name}</span>
+                    <Input type="number" min={0} max={scale} value={byOption.get(option)?.cells.find((x) => x.name === c.name)?.raw ?? 0} style={{ width: 52 }} onChange={(e: { target: { value: string } }) => setCell(option, c.name, Math.max(0, Math.min(scale, num(e.target.value, 0))))} />
+                  </span>
+                ))}
+                <Button type="button" size="sm" variant="ghost" onClick={() => {
+                  const ns: Scores = { ...scores }
+                  delete ns[option]
+                  update({ options: options.filter((_, i) => i !== oi), scores: ns })
+                }}>删除方案</Button>
+              </div>
+            ))}
+            {criteria.map((c, ci) => (
+              <div key={c.name + 'e'} className="rui-row" style={{ marginBottom: 6, flexWrap: 'wrap' }}>
+                <Input value={c.name} onChange={(e: { target: { value: string } }) => renameCriterion(ci, e.target.value)} style={{ width: 120 }} />
+                <span className="rui-muted">权重</span>
+                <Input type="number" min={0} max={9} value={c.weight} style={{ width: 44 }} onChange={(e: { target: { value: string } }) => setCriteria(criteria.map((x, i) => (i === ci ? { ...x, weight: num(e.target.value, 0) } : x)))} />
+                <Button type="button" size="sm" variant="outline" onClick={() => setCriteria(criteria.map((x, i) => (i === ci ? { ...x, higherIsBetter: x.higherIsBetter === false } : x)))}>
+                  {c.higherIsBetter === false ? '越低越好' : '越高越好'}
+                </Button>
+                <Button type="button" size="sm" variant="ghost" onClick={() => {
+                  const ns: Scores = { ...scores }
+                  options.forEach((o) => {
+                    if (ns[o]) {
+                      const row = { ...ns[o] }
+                      delete row[c.name]
+                      ns[o] = row
+                    }
+                  })
+                  update({ criteria: criteria.filter((_, i) => i !== ci), scores: ns })
+                }}>删除维度</Button>
+              </div>
+            ))}
+            <div className="rui-row" style={{ marginTop: 8 }}>
+              <Button type="button" variant="outline" onClick={() => {
+                const nm = `方案 ${String.fromCharCode(65 + options.length)}`
+                const ns: Scores = { ...scores, [nm]: {} }
+                criteria.forEach((c) => { ns[nm][c.name] = 3 })
+                update({ options: [...options, nm], scores: ns })
+              }}>加方案</Button>
+              <Button type="button" variant="outline" onClick={() => {
+                const nm = `维度 ${criteria.length + 1}`
                 const ns: Scores = { ...scores }
-                options.forEach((o) => {
-                  if (ns[o]) {
-                    const row = { ...ns[o] }
-                    delete row[c.name]
-                    ns[o] = row
-                  }
-                })
-                update({ criteria: criteria.filter((_, i) => i !== ci), scores: ns })
-              } }, '删除'),
-            ),
-      ),
-    ),
-    h('th', { key: 'total', className: 'om-cell om-muted' }, '加权总分'),
-  ]
-
-  const bodyRows = m.rows.map((row, ri) => {
-    const isWinner = !!m.winner && m.winner.option === row.option
-    return h(
-      'tr',
-      { key: `r${ri}`, className: isWinner ? 'om-winner' : undefined },
-      h(
-        'th',
-        { className: 'om-cell', style: { textAlign: 'left' } },
-        readOnly
-          ? h('span', { style: { fontWeight: isWinner ? 650 : 500 } }, `${isWinner ? '推荐 · ' : ''}${row.option}`)
-          : h('div', { style: { display: 'flex', gap: 4, alignItems: 'center' } },
-              h('input', { value: row.option, onChange: (e: { target: { value: string } }) => renameOption(ri, e.target.value), className: 'om-field', style: { width: 130 } }),
-              h('button', { type: 'button', className: 'om-ghost', onClick: () => {
-                const ns: Scores = { ...scores }
-                delete ns[row.option]
-                update({ options: options.filter((_, i) => i !== ri), scores: ns })
-              } }, '×'),
-            ),
-      ),
-      ...criteria.map((c, ci) => {
-        const cell = row.cells[ci]
-        return h(
-          'td',
-          { key: `d${ci}`, className: cell && cell.best ? 'om-cell om-best' : 'om-cell' },
-          h(ScoreInput, { value: (cell && cell.raw) || 0, max: scale, readOnly, onChange: (v: number) => setCell(row.option, c.name, v) }),
-          c.higherIsBetter === false ? h('span', { className: 'om-meta' }, ` →${(cell && cell.norm) || 0}`) : null,
-        )
-      }),
-      h('td', { key: 't', className: 'om-cell om-muted', style: { fontWeight: 650, fontVariantNumeric: 'tabular-nums' } },
-        row.total.toFixed(1),
-        h('div', { className: 'om-meta', style: { fontWeight: 500 } }, `${(row.percent * 100).toFixed(1)}%`),
-      ),
-    )
-  })
-
-  const toolbar = !readOnly
-    ? h('div', { className: 'om-tools' },
-        h('button', { type: 'button', className: 'om-btn', onClick: () => {
-          const nm = `方案 ${String.fromCharCode(65 + options.length)}`
-          const ns: Scores = { ...scores, [nm]: {} }
-          criteria.forEach((c) => { ns[nm][c.name] = 3 })
-          update({ options: [...options, nm], scores: ns })
-        } }, '加方案'),
-        h('button', { type: 'button', className: 'om-btn', onClick: () => {
-          const nm = `维度 ${criteria.length + 1}`
-          const ns: Scores = { ...scores }
-          options.forEach((o) => { ns[o] = { ...(ns[o] ?? {}), [nm]: 3 } })
-          update({ criteria: [...criteria, { name: nm, weight: 1, higherIsBetter: true }], scores: ns })
-        } }, '加维度'),
-        h('button', { type: 'button', className: 'om-btn', onClick: () => update({ scale: scale >= 10 ? 5 : scale + 1 }) }, `满分制 ${scale} → ${scale >= 10 ? 5 : scale + 1}`),
-      )
-    : null
-
-  const mdPanel = showMd
-    ? h('div', { className: 'om-md' },
-        h('div', { className: 'om-head' },
-          h('span', { className: 'om-meta' }, 'Markdown（agent 可直接读）'),
-          h('button', { type: 'button', className: 'om-btn', onClick: () => {
-            const nav = globalThis.navigator
-            if (nav && nav.clipboard && nav.clipboard.writeText) void nav.clipboard.writeText(md)
-            setCopied(true)
-          } }, copied ? '已复制' : '复制'),
-        ),
-        h('textarea', { readOnly: true, value: md }),
-      )
-    : null
-
-  return h(
-    'div',
-    { 'data-testid': 'option-matrix', className: 'om-root' },
-    h('div', { className: 'om-head' },
-      readOnly
-        ? h('strong', { className: 'om-title' }, data.title || '方案对比')
-        : h('input', {
-            value: draftTitle,
-            placeholder: '对比标题',
-            className: 'om-field om-title',
-            style: { minWidth: 180 },
-            onChange: (e: { target: { value: string } }) => { titleTouched.current = true; setDraftTitle(e.target.value) },
-            onBlur: () => { titleTouched.current = false; update({ title: draftTitle }) },
-          }),
-      h('span', { className: 'om-meta' }, `${options.length} 方案 × ${criteria.length} 维度 · 满分 ${m.maxTotal.toFixed(1)}`),
-      h('span', { className: 'om-grow' }),
-      h('button', { type: 'button', className: 'om-btn', onClick: () => setShowMd((v) => !v) }, showMd ? '隐藏 Markdown' : '导出 Markdown'),
-    ),
-    h('div', { className: 'om-table-wrap' },
-      h('table', { 'data-testid': 'option-matrix-table', className: 'om-table' },
-        h('thead', null, h('tr', null, ...headCells)),
-        h('tbody', null, ...bodyRows),
-      ),
-    ),
-    toolbar,
-    m.rationale
-      ? h('div', { 'data-testid': 'option-matrix-rationale', className: 'om-rationale' }, m.rationale)
-      : null,
-    mdPanel,
+                options.forEach((o) => { ns[o] = { ...(ns[o] ?? {}), [nm]: 3 } })
+                update({ criteria: [...criteria, { name: nm, weight: 1, higherIsBetter: true }], scores: ns })
+              }}>加维度</Button>
+              <Button type="button" variant="outline" onClick={() => update({ scale: scale >= 10 ? 5 : scale + 1 })}>满分制 {scale} → {scale >= 10 ? 5 : scale + 1}</Button>
+            </div>
+          </div>
+        ) : null}
+        {showMd ? (
+          <div style={{ padding: '0 18px 16px' }}>
+            <div className="rui-row" style={{ marginBottom: 8 }}>
+              <span className="rui-muted">Markdown</span>
+              <Button type="button" onClick={() => {
+                const nav = globalThis.navigator
+                if (nav && nav.clipboard && nav.clipboard.writeText) void nav.clipboard.writeText(md)
+                setCopied(true)
+              }}>{copied ? '已复制' : '复制'}</Button>
+            </div>
+            <Textarea readOnly value={md} className="mt-1 min-h-[130px] font-mono" />
+          </div>
+        ) : null}
+      </div>
+    </ReUI>
   )
 }
 
@@ -361,7 +364,7 @@ export function apply(ctx: {
     label: '方案对比块',
     blockType: 'test',
     blockTypeLabel: '测试',
-    hint: '多方案 × 多维度加权对比矩阵：改权重/打分，总分与推荐实时变；越低越好的维度自动反向计入',
+    hint: 'Wirecutter 首选卡片 + Apple/RTINGS 规格表；编辑打分与对比视图分开',
     aliases: ['matrix', 'option', 'compare', '对比', '矩阵', '选型', '方案对比'],
     assets: [],
     defaults: () => DEFAULTS,

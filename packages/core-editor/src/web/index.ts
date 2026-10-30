@@ -13,6 +13,8 @@ export { SourceToggle } from './source-toggle.tsx'
 export { PageEditorService, BASIC_BLOCK_TYPE, getPageEditor, usePageEditorVersion } from './service.ts'
 export type { HeadingReplacement, PageBlockSpec, PageBlockViewProps, SlashCommandSpec, SlashInsert } from './service.ts'
 export { pageEditorExtensions } from './kit.ts'
+export { slideExtensions } from './slide.ts'
+export { LayoutPicker, LayoutGlyph, type LayoutPreset } from './layout-picker.tsx'
 export { markdownLocusFromRange, markdownLocusFromSelection, markdownLocusFromElement } from './markdown-locus.ts'
 export { PageBlocksView, PageBlockContent, PageBlockStage, pageBlocksCollectionView, PAGE_BLOCKS_VIEW_ID } from './page-blocks-view.tsx'
 

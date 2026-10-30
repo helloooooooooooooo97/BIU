@@ -1,6 +1,6 @@
-import type { CollectionSchema, DbRecord, FieldSpec } from '@biu/type-file-system'
+import type { CollectionSchema, CollectionSchemaPack, DbRecord, FieldSpec } from '@biu/type-file-system'
 import type { CollectionChrome } from '@biu/type-file-system/ui'
-import { ensureTagChipStyle } from '@biu/public-ui/tag-chip'
+import { ensureTagChipStyle } from '@biu/biu-ui/tag-chip'
 import { formatField, pinLabelColumn, contentFieldKey, resolveFieldType, defaultColumnKeys } from './fields.ts'
 import { DefaultCell, FieldGlyph } from './fsdb-cells.tsx'
 import { SchemaChips } from './schema-field.tsx'
@@ -41,6 +41,8 @@ export function ShareCell({
   collection,
   schema,
   chrome,
+  onOpenLink,
+  facets = [],
 }: {
   row: DbRecord
   fieldKey: string
@@ -49,13 +51,15 @@ export function ShareCell({
   collection: string
   schema: CollectionSchema
   chrome?: CollectionChrome
+  onOpenLink?: (id: string) => void
+  facets?: CollectionSchemaPack[]
 }) {
   const kind = resolveFieldType(field)
   const Custom = chrome?.cells?.[fieldKey]
   if (Custom) {
     return <Custom field={fieldKey} spec={field} value={row[fieldKey]} record={row} fallback={formatField(field, row[fieldKey])} />
   }
-  if (kind === 'facet') return <SchemaChips value={row[fieldKey]} tags={loadFacets()} />
+  if (kind === 'facet') return <SchemaChips value={row[fieldKey]} tags={facets.length ? facets : loadFacets()} />
   return (
     <DefaultCell
       field={field}
@@ -64,6 +68,7 @@ export function ShareCell({
       collectionPath={collection}
       labelField={schema.labelField}
       value={row[fieldKey]}
+      onOpenLink={onOpenLink}
     />
   )
 }
@@ -79,6 +84,8 @@ export function ShareListTable({
   wrap,
   truncate,
   queryFields,
+  onOpenLink,
+  facets = [],
 }: {
   schema: CollectionSchema
   view?: Partial<SavedView>
@@ -90,6 +97,8 @@ export function ShareListTable({
   wrap?: boolean
   truncate?: boolean
   queryFields?: Set<string>
+  onOpenLink?: (id: string) => void
+  facets?: CollectionSchemaPack[]
 }) {
   ensureTagChipStyle()
   const listed = shareTableColumns(schema, view, columns)
@@ -129,6 +138,8 @@ export function ShareListTable({
                     collection={collection}
                     schema={schema}
                     chrome={chrome}
+                    onOpenLink={onOpenLink}
+                    facets={facets}
                   />
                 )
                 return (

@@ -1,10 +1,11 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { isMascotDancing, subscribeMascotDance } from '@biu/public-mascot'
-import { ChatCount } from '@biu/public-ui/chat-count'
-import { SidebarFold } from '@biu/public-ui/sidebar-fold'
+import { ChatCount } from '@biu/biu-ui/chat-count'
+import { SidebarFold } from '@biu/biu-ui/sidebar-fold'
 import {
   bindSessionView,
+  sessionAppPath,
   type SessionListItem,
   type SessionViewService,
 } from '@biu/web-session-view'
@@ -21,6 +22,8 @@ import { SidebarMascot } from '@biu/public-mascot'
 import { resolveSessionMascot } from '@biu/public-mascot'
 import { FolderGlyph } from '@biu/web-session-view/folder-glyph'
 import { chromeIcon, chromeIconClass } from './chrome-icon.ts'
+import { TagChip } from '@biu/biu-ui/tag-chip'
+import { facetCatalogRevision, facetEmoji, facetLabel, pullFacets, subscribeFacetChrome } from '@biu/core-file-system/facet-catalog'
 import { isChatPagePath, openOverlayComposer } from './chat-overlay.ts'
 import { ShellSidebarFrame } from './shell-sidebar-frame.tsx'
 import {
@@ -56,14 +59,17 @@ function SessionTagBadges({ tags }: { tags?: string[] }) {
   const extra = list.length - shown.length
   return (
     <span className="flex min-w-0 shrink-0 items-center gap-0.5 pl-0.5">
-      {shown.map((tag) => (
-        <span
-          key={tag}
-          className="sidebar-tag max-w-18 truncate rounded-sm bg-(--dsw-hover-weak,var(--dsw-hover)) px-1"
-        >
-          {tag}
-        </span>
-      ))}
+      {shown.map((tag) => {
+        const emoji = facetEmoji(tag)
+        return (
+          <TagChip
+            key={tag}
+            id={tag}
+            label={facetLabel(tag)}
+            icon={emoji ? <span className="fsdb-record-emoji">{emoji}</span> : <TagIcon aria-hidden />}
+          />
+        )
+      })}
       {extra > 0 ? (
         <span className="sidebar-tag shrink-0 rounded-sm px-0.5 opacity-80">
           +{extra}
@@ -131,7 +137,7 @@ const SessionRow = memo(function SessionRow({
         </button>
       ) : (
         <Link
-          to={`/s/${item.id}`}
+          to={sessionAppPath(item.id)}
           draggable={false}
           onDragStart={(event) => event.preventDefault()}
           className={sessionRowMainClass}
@@ -356,14 +362,14 @@ export const ChatSidebar = memo(function ChatSidebar({
       void sessionView.newSession(opts).then((id) => {
         onActivate?.()
         if (isChatPagePath(window.location.pathname)) {
-          navigate(`/s/${id}`)
+          navigate(sessionAppPath(id))
           return
         }
         if (variant === 'popover') {
           openOverlayComposer()
           return
         }
-        navigate(`/s/${id}`)
+        navigate(sessionAppPath(id))
       })
     },
     [navigate, onActivate, sessionView, variant],
@@ -373,7 +379,7 @@ export const ChatSidebar = memo(function ChatSidebar({
     (item: SessionListItem) => {
       void sessionView.load(item.id, { view: 'chat' })
       if (isChatPagePath(window.location.pathname)) {
-        navigate(`/s/${item.id}`)
+        navigate(sessionAppPath(item.id))
       } else {
         openOverlayComposer()
       }
@@ -388,7 +394,7 @@ export const ChatSidebar = memo(function ChatSidebar({
       if (variant === 'popover') return
       if (!wasActive) return
       const next = sessionView.get().sessionId
-      navigate(next ? `/s/${next}` : '/')
+      navigate(next ? sessionAppPath(next) : '/')
     })
   }, [navigate, sessionId, sessionView, variant])
 
@@ -477,7 +483,7 @@ export const ChatSidebar = memo(function ChatSidebar({
                                 <div
                                   role="button"
                                   tabIndex={0}
-                                  className="flex min-h-8 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md text-left text-[14px] font-medium tracking-normal text-inherit outline-none hover:text-(--dsw-sidebar-fg-active) focus-visible:ring-1 focus-visible:ring-(--dsw-border)"
+                                  className="flex min-h-8 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md text-left text-[14px] font-medium tracking-normal text-inherit outline-none hover:text-(--biu-color-text) focus-visible:ring-1 focus-visible:ring-(--biu-color-border)"
                                   title={group.path ?? group.label}
                                   aria-expanded={!collapsed}
                                   onClick={() => toggleProjectGroup(group.key)}
@@ -499,7 +505,7 @@ export const ChatSidebar = memo(function ChatSidebar({
                                       ) : group.kind === 'facet' ? (
                                         <TagIcon className={chromeIconClass('opacity-80')} />
                                       ) : (
-                                        <FolderGlyph className="opacity-80" />
+                                        <FolderGlyph />
                                       )}
                                     </span>
                                     <span className="sidebar-group-fold-chevron">

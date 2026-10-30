@@ -13,7 +13,7 @@ function pendingPageBlockEnables() {
   return host[PENDING_PAGE_BLOCK_ENABLES]
 }
 
-export type PageBlockPluginPhase = 'idle' | 'loading' | 'failed' | 'ready' | 'deferred'
+export type PageBlockPluginPhase = 'idle' | 'loading' | 'failed' | 'missing' | 'ready' | 'deferred'
 
 const phases = new Map<string, PageBlockPluginPhase>()
 let phaseVersion = 0
@@ -31,7 +31,7 @@ export function pageBlockPluginPhase(plugin: string): PageBlockPluginPhase {
 export function setPageBlockPluginPhase(plugin: string, phase: PageBlockPluginPhase) {
   const id = plugin.trim()
   if (!id) return
-  if (phase === 'ready' || phase === 'failed') pendingPageBlockEnables().delete(id)
+  if (phase === 'ready' || phase === 'failed' || phase === 'missing') pendingPageBlockEnables().delete(id)
   if (phase === 'idle') phases.delete(id)
   else phases.set(id, phase)
   emitPhase()
@@ -61,14 +61,15 @@ if (typeof window !== 'undefined') {
     const phase = detail?.phase
     if (
       !plugin ||
-      (phase !== 'ready' && phase !== 'failed' && phase !== 'loading' && phase !== 'idle' && phase !== 'deferred')
+      (phase !== 'ready' && phase !== 'failed' && phase !== 'missing' && phase !== 'loading' && phase !== 'idle' && phase !== 'deferred')
     ) return
-    if (phase === 'ready' || phase === 'failed') pendingPageBlockEnables().delete(plugin)
+    if (phase === 'ready' || phase === 'failed' || phase === 'missing') pendingPageBlockEnables().delete(plugin)
     setPageBlockPluginPhase(plugin, phase)
   })
 }
 
 const HTML_KINDS = new Set(['html', 'htmlframe'])
+const SANDBOX_KIND = 'sandbox'
 const VIDEO_KINDS = new Set(['video'])
 
 export function parsePageBlockMeta(raw: string) {
@@ -123,12 +124,29 @@ function videoScriptFromJson(json: Record<string, unknown>, fallback: string) {
   return typeof json.script === 'string' ? json.script : fallback
 }
 
-/** HTML / iframe 块：围栏里直接写 HTML；deck / height 写在 :::pageBlock {…} 上。旧 JSON 体仍能读。 */
+/** HTML 块：新写只用附件 file；旧围栏体 HTML / JSON 仍能读。deck / height 写在头上。 */
 export function parsePageBlockData(kind: string, raw: string, extras: Record<string, unknown> = {}) {
   const json = parseJsonObject(raw)
   if (VIDEO_KINDS.has(kind)) {
     const script = json ? videoScriptFromJson(json, raw.trim()) : raw.trim()
     return { ...extras, script }
+  }
+  if (kind === SANDBOX_KIND) {
+    if (json) {
+      const file = typeof json.file === 'string' ? json.file.trim() : ''
+      if (file) {
+        const rest = { ...json }
+        delete rest.html
+        delete rest.source
+        return { ...rest, ...extras, file }
+      }
+      const source = typeof json.source === 'string' ? json.source : typeof json.html === 'string' ? json.html : ''
+      const rest = { ...json }
+      delete rest.html
+      delete rest.file
+      return { ...rest, ...extras, source }
+    }
+    return { ...extras, source: raw.trim() }
   }
   if (json) return { ...json, ...extras }
   if (HTML_KINDS.has(kind)) return { ...extras, html: raw.trim() }
@@ -143,7 +161,7 @@ function formatMeta(kind: string, plugin: string, extras: string[], id = '') {
   return `{${parts.join(' ')}}`
 }
 
-function htmlFenceExtras(data: Record<string, unknown>) {
+function fenceAttrExtras(data: Record<string, unknown>) {
   const extras: string[] = []
   const title = typeof data.title === 'string' ? data.title.trim() : ''
   if (title) extras.push(`title=${JSON.stringify(title)}`)
@@ -158,9 +176,26 @@ function htmlFenceExtras(data: Record<string, unknown>) {
 export function formatPageBlockFence(kind: string, plugin: string, data: Record<string, unknown>, id = '') {
   const body = { ...data }
   delete body.cloneFrom
+  if (kind === SANDBOX_KIND) {
+    delete body.deck
+    const extras = fenceAttrExtras(body)
+    const file = typeof body.file === 'string' ? body.file.trim() : ''
+    if (file) {
+      const pointer: Record<string, string> = { file }
+      const dataFile = typeof body.dataFile === 'string' ? body.dataFile.trim() : ''
+      if (dataFile) pointer.dataFile = dataFile
+      return `:::pageBlock ${formatMeta(kind, plugin, extras, id)}\n${JSON.stringify(pointer, null, 2)}\n:::`
+    }
+    const source = typeof body.source === 'string' ? body.source : typeof body.html === 'string' ? body.html : ''
+    return `:::pageBlock ${formatMeta(kind, plugin, extras, id)}\n${source}\n:::`
+  }
   if (HTML_KINDS.has(kind)) {
+    const extras = fenceAttrExtras(body)
+    const file = typeof body.file === 'string' ? body.file.trim() : ''
+    if (file) {
+      return `:::pageBlock ${formatMeta(kind, plugin, extras, id)}\n${JSON.stringify({ file }, null, 2)}\n:::`
+    }
     const html = typeof body.html === 'string' ? body.html : ''
-    const extras = htmlFenceExtras(body)
     return `:::pageBlock ${formatMeta(kind, plugin, extras, id)}\n${html}\n:::`
   }
   if (VIDEO_KINDS.has(kind)) {
@@ -206,6 +241,5 @@ export function requestEnablePageBlockPlugin(plugin: string, kind: string, opts?
   if (!opts?.force && pageBlockPluginPhase(id) === 'deferred') return
   pendingPageBlockEnables().set(id, kind || '')
   clientLog('info', 'page-block', `${kind || 'unknown'}（${id}）还没有视图，请求启用`)
-  setPageBlockPluginPhase(id, 'loading')
   window.dispatchEvent(new CustomEvent(ENABLE_PAGE_BLOCK_PLUGIN, { detail: { plugin: id, kind, force: Boolean(opts?.force) } }))
 }

@@ -44,7 +44,7 @@ test('empty database fast path matches upgraded v1 fixture', () => {
 test('BIU_MIGRATIONS versions are unique and increasing', () => {
   assertBiuMigrationLog()
   assert.equal(BIU_MIGRATIONS.at(-1)?.version, LATEST_BIU_SCHEMA)
-  assert.equal(BIU_MIGRATIONS.at(-1)?.name, 'cloud.many-accounts')
+  assert.equal(BIU_MIGRATIONS.at(-1)?.name, 'facet.field.identity')
   assert.throws(() => assertBiuMigrationLog([{ version: 2 }, { version: 2 }]), /重复/)
   assert.throws(() => assertBiuMigrationLog([{ version: 3 }, { version: 1 }]), /单调递增/)
 })
@@ -140,6 +140,43 @@ test('skill markdown bodies are copied into editor_content', () => {
   db.close()
 })
 
+test('v41 remaps stored /sessions collection paths to /agents', () => {
+  const db = openSqlite(':memory:')
+  migrateBiu(db, {}, 40)
+  db.exec(`
+    INSERT INTO record_meta (collection, record_id, emoji, tags_json) VALUES ('/sessions', 's1', '', '[]');
+    INSERT INTO saved_views (collection, view_id, payload_json, updated_at)
+    VALUES ('/sessions', 'builtin-all:/sessions', '{"id":"builtin-all:/sessions","tablePath":"/sessions","name":"全部"}', 1);
+  `)
+  migrateBiu(db)
+  const meta = db.prepare('SELECT collection FROM record_meta WHERE record_id = ?').get('s1') as { collection: string }
+  assert.equal(meta.collection, '/agents')
+  const view = db.prepare('SELECT collection, view_id, payload_json FROM saved_views').get() as {
+    collection: string
+    view_id: string
+    payload_json: string
+  }
+  assert.equal(view.collection, '/agents')
+  assert.equal(view.view_id, 'builtin-all:/agents')
+  assert.match(view.payload_json, /"tablePath":"\/agents"/)
+  db.close()
+})
+
+test('v42 renames the sessions table to agents', () => {
+  const db = openSqlite(':memory:')
+  migrateBiu(db, {}, 41)
+  if (tableNames(db).includes('agents') && !tableNames(db).includes('sessions')) {
+    db.exec('ALTER TABLE agents RENAME TO sessions')
+  }
+  db.exec(`INSERT INTO sessions (id, version, title, updated_at) VALUES ('s1', 1, 'Chat', 1)`)
+  migrateBiu(db)
+  assert.equal(tableNames(db).includes('agents'), true)
+  assert.equal(tableNames(db).includes('sessions'), false)
+  const row = db.prepare('SELECT title FROM agents WHERE id = ?').get('s1') as { title: string }
+  assert.equal(row.title, 'Chat')
+  db.close()
+})
+
 test('content_refs keep markdown links and drop prose mentions', () => {
   const dir = mkdtempSync(join(tmpdir(), 'biu-refs-'))
   const db = openAndMigrateBiu(join(dir, 'biu.sqlite'))
@@ -155,5 +192,35 @@ test('content_refs keep markdown links and drop prose mentions', () => {
   assert.deepEqual(names.sort(), ['keep.png'])
   assert.equal(liveAssetNames(db).has('keep.png'), true)
   assert.equal(liveAssetNames(db).has('page'), false)
+  db.close()
+})
+
+test('facet field identity migration folds label into key and remaps values', () => {
+  const db = openSqlite(':memory:')
+  migrateBiu(db, {}, 42)
+  db.exec(`
+    INSERT INTO facets (id, label, fields_json, created_at, updated_at)
+    VALUES (
+      'dp',
+      '动态规划',
+      '[{"key":"complexity","type":"string","label":"复杂度"},{"key":"dup","type":"string","label":"复杂度"}]',
+      1,
+      1
+    );
+    INSERT INTO facet_record_values (collection, record_id, facet_json)
+    VALUES ('/notes', 'n1', '{"tags":["dp"],"values":{"dp":{"complexity":"O(n)"}}}');
+    INSERT INTO saved_views (collection, view_id, payload_json, updated_at)
+    VALUES ('/notes', 'v1', '{"columns":["title","facet::dp::complexity"],"groupBy":"facet::dp::complexity"}', 1);
+  `)
+  migrateBiu(db)
+  const pack = db.prepare('SELECT fields_json FROM facets WHERE id = ?').get('dp') as { fields_json: string }
+  assert.deepEqual(JSON.parse(pack.fields_json), [{ key: '复杂度', type: 'string' }])
+  const row = db.prepare('SELECT facet_json FROM facet_record_values WHERE record_id = ?').get('n1') as { facet_json: string }
+  assert.deepEqual(JSON.parse(row.facet_json), { tags: ['dp'], values: { dp: { 复杂度: 'O(n)' } } })
+  const view = db.prepare('SELECT payload_json FROM saved_views WHERE view_id = ?').get('v1') as { payload_json: string }
+  assert.deepEqual(JSON.parse(view.payload_json), {
+    columns: ['title', 'facet::dp::复杂度'],
+    groupBy: 'facet::dp::复杂度',
+  })
   db.close()
 })

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ArrowPathIcon, CheckIcon, LinkIcon, ShareIcon, XMarkIcon } from '@heroicons/react/16/solid'
-import { HeadlessDismiss } from '@biu/public-ui/headless-dismiss'
+import { HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
 import { listCollection, readJson } from './db-client.ts'
 import { AccessMark, accessText, accessTone, ScopeMark, scopeText, scopeTone } from './share-scope-label.tsx'
 
@@ -613,7 +613,8 @@ export function ShareScopeDetail({
   const panelRef = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState(false)
   const [box, setBox] = useState<{ top: number; left: number } | null>(null)
-  const [scope, setScope] = useState(scopeTone(label))
+  const shown = scopeTone(label)
+  const [scope, setScope] = useState(shown)
   const [direct, setDirect] = useState<Array<{ id: string; name: string; role: string; note: string }>>([])
   const [chain, setChain] = useState<Array<{ id: string; title: string; detail: string; result: string }>>([])
   const [error, setError] = useState('')
@@ -621,7 +622,7 @@ export function ShareScopeDetail({
   useEffect(() => {
     if (localOnly == null) return
     if (!open) {
-      setScope(scopeTone(label))
+      setScope(shown)
       setError('')
       return
     }
@@ -668,7 +669,7 @@ export function ShareScopeDetail({
             title: String(share.title || view.name || share.viewId || '').trim() || view.id,
           }]
         })
-        const shared = recordShare || viewHits.length > 0
+        const shared = recordShare || viewHits.length > 0 || shown === 'shared'
         setScope(shared ? 'shared' : stored)
         setChain([
           {
@@ -693,7 +694,7 @@ export function ShareScopeDetail({
         setError('')
       })().catch((err) => {
         if (cancelled) return
-        const shared = label === '共享'
+        const shared = shown === 'shared'
         setScope(shared ? 'shared' : 'personal')
         setChain([{
           id: 'stored',
@@ -800,15 +801,15 @@ export function ShareScopeDetail({
     return () => {
       cancelled = true
     }
-  }, [open, collection, recordId, tableLabel, localOnly, label, builtin])
+  }, [open, collection, recordId, tableLabel, localOnly, label, builtin, shown])
 
   return (
     <div className="fsdb-scope-detail" ref={wrapRef}>
       <button
         type="button"
-        className={`fsdb-scope-tag is-${scope}`}
+        className={`fsdb-scope-tag is-${shown}`}
         data-testid="fsdb-scope-tag"
-        aria-label={`${label || scopeText(scope)}的权限详情`}
+        aria-label={`${label || scopeText(shown)}的权限详情`}
         aria-expanded={open}
         onPointerDown={(event) => event.stopPropagation()}
         onClick={(event) => {
@@ -818,7 +819,7 @@ export function ShareScopeDetail({
           setOpen((prev) => !prev)
         }}
       >
-        <ScopeMark scope={scope} />
+        <ScopeMark scope={shown} />
       </button>
       {open && box ? createPortal(
         <HeadlessDismiss
@@ -831,7 +832,7 @@ export function ShareScopeDetail({
                 <strong>{localOnly ? '局域网链接' : '数据归属'}</strong>
                 <em>{localOnly ? '这条记录命中的局域网链接' : '直接协作者和匹配到的视图，取最宽的一档'}</em>
               </div>
-              <b className={`fsdb-scope-pill is-${scope}`}><ScopeMark scope={scope} /></b>
+              <b className={`fsdb-scope-pill is-${shown}`}><ScopeMark scope={shown} /></b>
             </header>
             <ol className="fsdb-scope-chain">
               {chain.length ? chain.map((step) => (
@@ -840,7 +841,7 @@ export function ShareScopeDetail({
                     <strong>{step.title}</strong>
                     <em>{step.detail}</em>
                   </div>
-                  <b className={`fsdb-scope-pill is-${step.result === '共享' ? 'shared' : step.result === '空间' ? 'workspace' : 'personal'}`}>{step.result}</b>
+                  <b className={`fsdb-scope-pill is-${step.result === '共享' ? 'shared' : step.result === '空间' ? 'workspace' : 'personal'}`}><ScopeMark scope={step.result} /></b>
                 </li>
               )) : <li className="is-empty">{error ? error : '正在读取'}</li>}
             </ol>

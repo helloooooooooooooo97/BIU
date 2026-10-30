@@ -1,3 +1,5 @@
+import { ActivityRings, Button, Cell, Checkbox, Group, Input, ReUI, Textarea } from '@biu/reui'
+
 const React = globalThis.React
 const { useState, useMemo, useEffect } = React
 
@@ -17,69 +19,55 @@ type DayData = {
   sleep?: number
   workoutDone?: boolean
   note?: string
+  goals?: { steps?: number; sleep?: number }
 }
-type SetRow = { weight?: number; reps?: number; done?: boolean }
+type SetRow = { weight?: number; reps?: number; done?: boolean; rpe?: number }
 type ExRow = { name: string; scheme: string; sets: SetRow[] }
-type LogData = { day?: string; focus?: string; exercises?: ExRow[] }
-
-const STYLE_ID = 'fitness-tracker-style-v1'
-const CSS = `
-.ft-root{border:1px solid var(--dsw-border);border-radius:8px;padding:10px 12px;background:var(--dsw-bg);color:var(--dsw-label);font-family:var(--font-sans);font-size:14px;line-height:1.5}
-.ft-head{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
-.ft-title{font-weight:650;font-size:14px}
-.ft-meta{color:var(--dsw-label-3);font-size:12px;font-weight:500}
-.ft-grow{flex:1}
-.ft-btn{height:26px;font:inherit;font-size:13px;font-weight:650;padding:0 8px;border-radius:6px;border:1px solid var(--dsw-border);background:transparent;color:var(--dsw-label);cursor:pointer}
-.ft-btn:hover{background:var(--dsw-hover)}
-.ft-btn.on{background:color-mix(in srgb,var(--dsw-ok,#3fb950) 18%,transparent);border-color:var(--dsw-ok,#3fb950)}
-.ft-field{height:26px;font:inherit;font-size:13px;padding:0 6px;border:1px solid var(--dsw-border);border-radius:6px;background:var(--dsw-input);color:var(--dsw-label)}
-.ft-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:8px;margin:8px 0}
-.ft-card{border:1px solid var(--dsw-border);border-radius:8px;padding:8px}
-.ft-k{color:var(--dsw-label-3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.03em}
-.ft-v{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
-.ft-sub{color:var(--dsw-label-3);font-size:11px;margin-top:2px;font-weight:500}
-.ft-bar{height:8px;border-radius:99px;background:var(--dsw-hover);overflow:hidden;margin-top:6px}
-.ft-bar>i{display:block;height:100%;background:var(--dsw-accent,var(--dsw-pick));transition:width .25s}
-.ft-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:6px 0}
-.ft-chip{height:26px;font:inherit;font-size:12px;font-weight:600;padding:0 8px;border-radius:99px;border:1px solid var(--dsw-border);background:transparent;color:var(--dsw-label);cursor:pointer}
-.ft-chip:hover{background:var(--dsw-hover)}
-.ft-table{border-collapse:collapse;width:100%;font-size:13px}
-.ft-cell{border:1px solid var(--dsw-border);padding:5px 7px;vertical-align:middle}
-.ft-num{width:58px;height:24px;text-align:center;font:inherit;font-variant-numeric:tabular-nums;border:1px solid var(--dsw-border);border-radius:6px;background:var(--dsw-input);color:var(--dsw-label)}
-.ft-exname{width:100%;height:24px;font:inherit;font-size:13px;border:1px solid transparent;background:transparent;color:var(--dsw-label)}
-.ft-done{text-decoration:line-through;opacity:.55}
-.ft-md{width:100%;box-sizing:border-box;min-height:120px;margin-top:6px;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;border:1px solid var(--dsw-border);border-radius:6px;background:var(--dsw-input);color:var(--dsw-label);padding:6px}
-.ft-alt{color:var(--dsw-label-3);font-size:12px;margin-top:6px}
-`
-
-function useStyle() {
-  useEffect(() => {
-    if (typeof document === 'undefined') return
-    if (document.getElementById(STYLE_ID)) return
-    const s = document.createElement('style')
-    s.id = STYLE_ID
-    s.textContent = CSS
-    document.head.appendChild(s)
-  }, [])
-}
-
-const h = React.createElement
+type LogData = { day?: string; focus?: string; exercises?: ExRow[]; restSec?: number; startedAt?: number }
 
 function num(v: unknown, fallback = 0): number {
   const n = typeof v === 'number' ? v : Number(v)
   return Number.isFinite(n) ? n : fallback
 }
-function pad(n: number) { return String(n).padStart(2, '0') }
-function today() { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` }
-function hhmm(d: Date) { return `${pad(d.getHours())}:${pad(d.getMinutes())}` }
-function mins(t: string) { const [a, b] = t.split(':').map(Number); return (a || 0) * 60 + (b || 0) }
+function pad(n: number) {
+  return String(n).padStart(2, '0')
+}
+function today() {
+  const d = new Date()
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+function hhmm(d: Date) {
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+function mins(t: string) {
+  const [a, b] = t.split(':').map(Number)
+  return (a || 0) * 60 + (b || 0)
+}
 
 const WATER_TARGET = { rest: 2850, train: 3750 }
 const WATER_SLOTS: Array<[string, number]> = [
-  ['07:00', 500], ['09:00', 400], ['11:00', 400], ['12:00', 300], ['14:30', 400],
-  ['16:00', 500], ['17:00', 600], ['18:45', 500], ['20:00', 300], ['睡前', 200],
+  ['07:00', 500],
+  ['09:00', 400],
+  ['11:00', 400],
+  ['12:00', 300],
+  ['14:30', 400],
+  ['16:00', 500],
+  ['17:00', 600],
+  ['18:45', 500],
+  ['20:00', 300],
+  ['睡前', 200],
 ]
-const MEALS = ['12:00 第一餐（开窗）', '15:00 第二餐（练前2h）', '16:00 练前（香蕉+黑咖）', '18:45 第三餐（练后30min）', '20:00 关窗（酸奶/坚果）']
+const MEALS = [
+  '12:00 第一餐（开窗）',
+  '15:00 第二餐（练前2h）',
+  '16:00 练前（香蕉+黑咖）',
+  '18:45 第三餐（练后30min）',
+  '20:00 关窗（酸奶/坚果）',
+]
+
+const MOVE = '#fa114f'
+const EXERCISE = '#92e82a'
+const STAND = '#1ee0d4'
 
 function dayProgress(d: DayData) {
   const train = !!d.workoutDone
@@ -89,9 +77,7 @@ function dayProgress(d: DayData) {
   return { target, water, waterPct: water / target, mealsDone }
 }
 
-// ---------------- 今日打卡 ----------------
 function DayBlock({ data, update, writable }: { data: DayData; update: (p: Partial<DayData>) => void; writable: boolean }) {
-  useStyle()
   const [now, setNow] = useState(() => hhmm(new Date()))
   useEffect(() => {
     const t = setInterval(() => setNow(hhmm(new Date())), 30000)
@@ -106,7 +92,8 @@ function DayBlock({ data, update, writable }: { data: DayData; update: (p: Parti
   const p = dayProgress(d)
   const fastStart = d.fastStart ?? '20:00'
   const fastEnd = d.fastEnd ?? '12:00'
-  const endMin = mins(fastEnd), startMin = mins(fastStart)
+  const endMin = mins(fastEnd)
+  const startMin = mins(fastStart)
   const cur = mins(now)
   let fastingLeft = 0
   if (startMin > endMin) {
@@ -115,10 +102,13 @@ function DayBlock({ data, update, writable }: { data: DayData; update: (p: Parti
     fastingLeft = cur >= startMin ? 0 : Math.max(0, endMin - cur)
   }
   const inWindow = fastingLeft === 0
-  const lastCoffee = cur >= mins('15:00')
 
   const addWater = (ml: number) => update({ water: { ...water, [now]: num(water[now]) + ml } })
-  const setSlot = (slot: string, ml: number) => update({ water: { ...water, [slot]: ml } })
+  const toggleSlot = (slot: string, ml: number) => {
+    if (!writable) return
+    const curMl = num(water[slot])
+    update({ water: { ...water, [slot]: curMl ? 0 : ml } })
+  }
 
   const md = useMemo(() => {
     const lines = [
@@ -134,199 +124,334 @@ function DayBlock({ data, update, writable }: { data: DayData; update: (p: Parti
     return lines.join('\n')
   }, [JSON.stringify(d)])
 
-  const cards = [
-    h('div', { className: 'ft-card', key: 'w' },
-      h('div', { className: 'ft-k' }, '饮水'),
-      h('div', { className: 'ft-v' }, `${p.water}`, h('span', { className: 'ft-sub' }, ` / ${p.target} ml`)),
-      h('div', { className: 'ft-bar' }, h('i', { style: { width: `${Math.min(100, p.waterPct * 100)}%` } })),
-      h('div', { className: 'ft-alt' }, p.waterPct >= 1 ? '达标 ✅' : `还差 ${p.target - p.water} ml`),
-    ),
-    h('div', { className: 'ft-card', key: 'f' },
-      h('div', { className: 'ft-k' }, '进食窗口'),
-      h('div', { className: 'ft-v' }, `${fastEnd}–${fastStart}`),
-      h('div', { className: 'ft-alt', style: { color: inWindow ? 'var(--dsw-ok,#3fb950)' : undefined } },
-        inWindow ? '窗口内，可以吃' : `空腹中，还剩 ${Math.floor(fastingLeft / 60)}h ${pad(fastingLeft % 60)}m`),
-    ),
-    h('div', { className: 'ft-card', key: 'm' },
-      h('div', { className: 'ft-k' }, '餐次'),
-      h('div', { className: 'ft-v' }, `${p.mealsDone} / ${MEALS.length}`),
-      h('div', { className: 'ft-alt' }, '每餐 35–45g 蛋白'),
-    ),
-    h('div', { className: 'ft-card', key: 'c' },
-      h('div', { className: 'ft-k' }, '咖啡因'),
-      h('div', { className: 'ft-v' }, now),
-      h('div', { className: 'ft-alt', style: { color: lastCoffee ? 'var(--dsw-warn,#d29922)' : undefined } },
-        lastCoffee ? '已过 15:00，别再喝' : '最后一杯不晚于 15:00'),
-    ),
-  ]
+  return (
+    <ReUI className="rui-ios">
+      <div data-testid="fitness-day">
+        <div className="rui-large">活动</div>
+        <div className="rui-sub">
+          {d.date ?? today()} · {p.target === WATER_TARGET.train ? '训练日' : '休息日'} · 进食窗口 {fastEnd}–{fastStart}
+        </div>
+        <div className="rui-activity">
+          <ActivityRings
+            rings={[
+              { value: p.waterPct, color: MOVE },
+              { value: p.mealsDone / MEALS.length, color: EXERCISE },
+              { value: d.workoutDone ? 1 : 0, color: STAND },
+            ]}
+          />
+          <div className="rui-legend">
+            <div>
+              <b>
+                <i style={{ background: MOVE }} />
+                {p.water}
+                <span className="rui-muted" style={{ color: 'rgba(255,255,255,.45)', fontSize: 14 }}>
+                  {' '}
+                  / {p.target} ml
+                </span>
+              </b>
+              <em>饮水 · {p.waterPct >= 1 ? '已闭环' : `还差 ${p.target - p.water} ml`}</em>
+            </div>
+            <div>
+              <b>
+                <i style={{ background: EXERCISE }} />
+                {p.mealsDone}/{MEALS.length}
+              </b>
+              <em>餐次</em>
+            </div>
+            <div>
+              <b>
+                <i style={{ background: STAND }} />
+                {d.workoutDone ? '完成' : '未练'}
+              </b>
+              <em>{inWindow ? '进食窗口内' : `空腹还剩 ${Math.floor(fastingLeft / 60)}h ${pad(fastingLeft % 60)}m`}</em>
+            </div>
+          </div>
+        </div>
+        <div className="fit-tiles">
+          <div className="fit-tile">
+            <b>{d.steps ?? '—'}</b>
+            <em>步数 / {d.goals?.steps ?? 8000}</em>
+            <div className="fit-meter">
+              <i style={{ width: `${Math.min(100, (num(d.steps) / (d.goals?.steps ?? 8000)) * 100)}%`, background: MOVE }} />
+            </div>
+          </div>
+          <div className="fit-tile">
+            <b>{d.sleep ?? '—'}</b>
+            <em>睡眠 h / {d.goals?.sleep ?? 7.5}</em>
+            <div className="fit-meter">
+              <i style={{ width: `${Math.min(100, (num(d.sleep) / (d.goals?.sleep ?? 7.5)) * 100)}%`, background: EXERCISE }} />
+            </div>
+          </div>
+          <div className="fit-tile">
+            <b>{d.weight ?? '—'}</b>
+            <em>体重 kg</em>
+          </div>
+        </div>
 
-  return h('div', { 'data-testid': 'fitness-day', className: 'ft-root' },
-    h('div', { className: 'ft-head' },
-      h('strong', { className: 'ft-title' }, '今日打卡'),
-      writable
-        ? h('input', { className: 'ft-field', type: 'date', value: d.date ?? today(), onChange: (e: any) => update({ date: e.target.value }) })
-        : h('span', { className: 'ft-meta' }, d.date ?? today()),
-      h('span', { className: 'ft-meta' }, p.target === WATER_TARGET.train ? '训练日' : '休息日'),
-      h('button', { className: `ft-btn${d.workoutDone ? ' on' : ''}`, type: 'button', onClick: () => writable && update({ workoutDone: !d.workoutDone }) }, d.workoutDone ? '训练已完成' : '标记训练完成'),
-      h('span', { className: 'ft-grow' }),
-      h('button', { className: 'ft-btn', type: 'button', onClick: () => setShowMd((v) => !v) }, showMd ? '隐藏' : '导出 markdown'),
-    ),
-    h('div', { className: 'ft-grid' }, ...cards),
-    h('div', { className: 'ft-row' },
-      h('span', { className: 'ft-meta' }, '快捷加水'),
-      ...[250, 300, 400, 500].map((ml) => h('button', { key: ml, className: 'ft-btn', type: 'button', onClick: () => writable && addWater(ml) }, `+${ml}`)),
-      h('button', { className: 'ft-btn', type: 'button', onClick: () => writable && update({ water: {} }) }, '清零'),
-      h('button', { className: `ft-chip${d.sodium ? ' on' : ''}`, type: 'button', onClick: () => writable && update({ sodium: !d.sodium }) }, '电解质 ✓'),
-    ),
-    h('div', null,
-      h('div', { className: 'ft-meta', style: { marginTop: 4 } }, '按时间表打点（ml）'),
-      h('div', { className: 'ft-row' },
-        ...WATER_SLOTS.map(([slot, ml]) =>
-          h('label', { key: slot, className: 'ft-chip', style: { display: 'inline-flex', alignItems: 'center', gap: 4, cursor: writable ? 'pointer' : 'default' } },
-            h('span', { style: { opacity: water[slot] ? 1 : 0.6 } }, slot),
-            writable
-              ? h('input', { className: 'ft-num', style: { width: 52, height: 20 }, type: 'number', value: water[slot] ?? '', placeholder: String(ml), onChange: (e: any) => setSlot(slot, e.target.value === '' ? 0 : num(e.target.value)) })
-              : h('span', null, `${water[slot] ?? 0}`),
-          ),
-        ),
-      ),
-    ),
-    h('div', null,
-      h('div', { className: 'ft-meta', style: { marginTop: 4 } }, '餐次'),
-      ...MEALS.map((m) =>
-        h('label', { key: m, className: 'ft-row', style: { cursor: writable ? 'pointer' : 'default', margin: '2px 0' } },
-          h('input', { type: 'checkbox', checked: !!meals[m], onChange: () => writable && update({ meals: { ...meals, [m]: !meals[m] } }) }),
-          h('span', { className: meals[m] ? 'ft-done' : undefined }, m),
-        ),
-      ),
-    ),
-    h('div', { className: 'ft-row' },
-      h('label', null, h('span', { className: 'ft-meta' }, '体重 kg '), writable
-        ? h('input', { className: 'ft-num', type: 'number', step: '0.1', value: d.weight ?? '', onChange: (e: any) => update({ weight: e.target.value === '' ? undefined : num(e.target.value) }) })
-        : h('strong', null, d.weight ?? '—')),
-      h('label', null, h('span', { className: 'ft-meta' }, '步数 '), writable
-        ? h('input', { className: 'ft-num', type: 'number', value: d.steps ?? '', onChange: (e: any) => update({ steps: e.target.value === '' ? undefined : num(e.target.value) }) })
-        : h('strong', null, d.steps ?? '—')),
-      h('label', null, h('span', { className: 'ft-meta' }, '睡眠 h '), writable
-        ? h('input', { className: 'ft-num', type: 'number', step: '0.1', value: d.sleep ?? '', onChange: (e: any) => update({ sleep: e.target.value === '' ? undefined : num(e.target.value) }) })
-        : h('strong', null, d.sleep ?? '—')),
-      h('label', null, h('span', { className: 'ft-meta' }, '关窗 '), writable
-        ? h('input', { className: 'ft-field', style: { width: 70 }, value: fastStart, onChange: (e: any) => update({ fastStart: e.target.value }) })
-        : h('span', null, fastStart)),
-      h('label', null, h('span', { className: 'ft-meta' }, '开窗 '), writable
-        ? h('input', { className: 'ft-field', style: { width: 70 }, value: fastEnd, onChange: (e: any) => update({ fastEnd: e.target.value }) })
-        : h('span', null, fastEnd)),
-    ),
-    writable
-      ? h('input', { className: 'ft-field', style: { width: '100%', marginTop: 4 }, placeholder: '备注（饿感 / 状态 / 训练感受）', value: d.note ?? '', onChange: (e: any) => update({ note: e.target.value }) })
-      : (d.note ? h('div', { className: 'ft-alt' }, `备注：${d.note}`) : null),
-    h('div', { className: 'ft-alt' }, '判定：尿色淡黄为准；一次别灌超 500ml；训练日必补钠 1–2g。'),
-    showMd ? h('div', null,
-      h('textarea', { className: 'ft-md', readOnly: true, value: md }),
-      h('button', { className: 'ft-btn', style: { marginTop: 4 }, type: 'button', onClick: () => { const nav = globalThis.navigator; if (nav && nav.clipboard) void nav.clipboard.writeText(md); setCopied(true) } }, copied ? '已复制' : '复制'),
-    ) : null,
+        <div className="rui-section">饮水</div>
+        <Group>
+          <Cell>
+            <span className="rui-cell-main">快捷</span>
+            {[250, 300, 400, 500].map((ml) => (
+              <Button key={ml} size="sm" variant="ghost" type="button" onClick={() => writable && addWater(ml)}>
+                +{ml}
+              </Button>
+            ))}
+          </Cell>
+          {WATER_SLOTS.map(([slot, ml]) => (
+            <Cell
+              key={slot}
+              onClick={() => toggleSlot(slot, ml)}
+              style={{ cursor: writable ? 'pointer' : 'default', opacity: water[slot] ? 1 : 0.55 }}
+            >
+              <span className="rui-cell-main">{slot}</span>
+              <span className="rui-cell-meta">{water[slot] ? `${water[slot]} ml` : `建议 ${ml}`}</span>
+            </Cell>
+          ))}
+          <Cell>
+            <span className="rui-cell-main">电解质</span>
+            <Checkbox checked={!!d.sodium} onChange={() => writable && update({ sodium: !d.sodium })} />
+          </Cell>
+        </Group>
+
+        <div className="rui-section">餐次</div>
+        <Group>
+          {MEALS.map((m) => (
+            <Cell key={m} onClick={() => writable && update({ meals: { ...meals, [m]: !meals[m] } })} style={{ cursor: writable ? 'pointer' : 'default' }}>
+              <Checkbox checked={!!meals[m]} onChange={() => writable && update({ meals: { ...meals, [m]: !meals[m] } })} />
+              <span className="rui-cell-main" style={meals[m] ? { color: '#8e8e93' } : undefined}>
+                {m}
+              </span>
+            </Cell>
+          ))}
+        </Group>
+
+        <div className="rui-section">身体</div>
+        <Group>
+          <Cell>
+            <span className="rui-cell-main">体重</span>
+            {writable ? (
+              <Input style={{ width: 72, textAlign: 'right', border: 0, background: 'transparent' }} type="number" step="0.1" value={d.weight ?? ''} onChange={(e: { target: { value: string } }) => update({ weight: e.target.value === '' ? undefined : num(e.target.value) })} />
+            ) : (
+              <span className="rui-cell-meta">{d.weight ?? '—'} kg</span>
+            )}
+          </Cell>
+          <Cell>
+            <span className="rui-cell-main">步数</span>
+            {writable ? (
+              <Input style={{ width: 88, textAlign: 'right', border: 0, background: 'transparent' }} type="number" value={d.steps ?? ''} onChange={(e: { target: { value: string } }) => update({ steps: e.target.value === '' ? undefined : num(e.target.value) })} />
+            ) : (
+              <span className="rui-cell-meta">{d.steps ?? '—'}</span>
+            )}
+          </Cell>
+          <Cell>
+            <span className="rui-cell-main">睡眠</span>
+            {writable ? (
+              <Input style={{ width: 64, textAlign: 'right', border: 0, background: 'transparent' }} type="number" step="0.1" value={d.sleep ?? ''} onChange={(e: { target: { value: string } }) => update({ sleep: e.target.value === '' ? undefined : num(e.target.value) })} />
+            ) : (
+              <span className="rui-cell-meta">{d.sleep ?? '—'} h</span>
+            )}
+          </Cell>
+          <Cell>
+            <span className="rui-cell-main">训练</span>
+            <Button size="sm" variant={d.workoutDone ? 'secondary' : 'default'} type="button" onClick={() => writable && update({ workoutDone: !d.workoutDone })}>
+              {d.workoutDone ? '已完成' : '标记完成'}
+            </Button>
+          </Cell>
+          <Cell>
+            <span className="rui-cell-main">日期</span>
+            {writable ? <Input type="date" style={{ border: 0, background: 'transparent' }} value={d.date ?? today()} onChange={(e: { target: { value: string } }) => update({ date: e.target.value })} /> : <span className="rui-cell-meta">{d.date ?? today()}</span>}
+          </Cell>
+        </Group>
+
+        {writable ? (
+          <Group>
+            <Cell>
+              <Input className="rui-grow" style={{ border: 0, background: 'transparent', width: '100%' }} placeholder="备注" value={d.note ?? ''} onChange={(e: { target: { value: string } }) => update({ note: e.target.value })} />
+            </Cell>
+          </Group>
+        ) : d.note ? (
+          <div className="rui-sub">{d.note}</div>
+        ) : null}
+
+        <div style={{ margin: '0 16px' }}>
+          <Button variant="ghost" type="button" onClick={() => setShowMd((v) => !v)}>
+            {showMd ? '收起摘要' : '导出 markdown'}
+          </Button>
+        </div>
+        {showMd ? (
+          <Group>
+            <Textarea readOnly value={md} style={{ border: 0, minHeight: 120, fontFamily: 'ui-monospace,monospace' }} />
+            <Cell>
+              <Button type="button" onClick={() => { const nav = globalThis.navigator; if (nav?.clipboard) void nav.clipboard.writeText(md); setCopied(true) }}>
+                {copied ? '已复制' : '复制'}
+              </Button>
+            </Cell>
+          </Group>
+        ) : null}
+      </div>
+    </ReUI>
   )
 }
 
-// ---------------- 训练日志 ----------------
 function LogBlock({ data, update, writable }: { data: LogData; update: (p: Partial<LogData>) => void; writable: boolean }) {
-  useStyle()
   const [showMd, setShowMd] = useState(false)
   const [copied, setCopied] = useState(false)
   const ex = data.exercises ?? []
-
   const volOf = (r: ExRow) => r.sets.reduce((a, s) => a + (s.done ? num(s.weight) * num(s.reps) : 0), 0)
   const doneSets = ex.reduce((a, r) => a + r.sets.filter((s) => s.done).length, 0)
   const totalSets = ex.reduce((a, r) => a + r.sets.length, 0)
   const volume = ex.reduce((a, r) => a + volOf(r), 0)
-
   const setSet = (ei: number, si: number, patch: Partial<SetRow>) => {
-    update({ exercises: ex.map((r, i) => i === ei ? { ...r, sets: r.sets.map((s, j) => j === si ? { ...s, ...patch } : s) } : r) })
+    update({ exercises: ex.map((r, i) => (i === ei ? { ...r, sets: r.sets.map((s, j) => (j === si ? { ...s, ...patch } : s)) } : r)) })
   }
   const addSet = (ei: number) => {
-    update({ exercises: ex.map((r, i) => {
-      if (i !== ei) return r
-      const last = r.sets[r.sets.length - 1] ?? {}
-      return { ...r, sets: [...r.sets, { weight: last.weight, reps: last.reps, done: false }] }
-    }) })
+    update({
+      exercises: ex.map((r, i) => {
+        if (i !== ei) return r
+        const last = r.sets[r.sets.length - 1] ?? {}
+        return { ...r, sets: [...r.sets, { weight: last.weight, reps: last.reps, done: false }] }
+      }),
+    })
   }
-  const delSet = (ei: number) => update({ exercises: ex.map((r, i) => i === ei ? { ...r, sets: r.sets.slice(0, -1) } : r) })
+  const delSet = (ei: number) => update({ exercises: ex.map((r, i) => (i === ei ? { ...r, sets: r.sets.slice(0, -1) } : r)) })
   const addEx = () => update({ exercises: [...ex, { name: '新动作', scheme: '3×10', sets: Array.from({ length: 3 }, () => ({ done: false })) }] })
 
   const md = useMemo(() => {
-    const lines = [`### ${data.day || ''} ${data.focus || ''} 训练日志`, '',
-      '| 动作 | 计划 | 组（重量×次数） | 完成 | 容量 |', '| --- | --- | --- | --- | --- |']
+    const lines = [`### ${data.day || ''} ${data.focus || ''} 训练日志`, '', '| 动作 | 计划 | 组（重量×次数） | 完成 | 容量 |', '| --- | --- | --- | --- | --- |']
     ex.forEach((r) => {
       const sets = r.sets.map((s) => `${s.weight ?? '-'}×${s.reps ?? '-'}${s.done ? '✓' : ''}`).join(' / ')
       lines.push(`| ${r.name} | ${r.scheme} | ${sets} | ${r.sets.filter((s) => s.done).length}/${r.sets.length} | ${volOf(r)} |`)
     })
-    lines.push('', `总容量 ${volume} kg · 完成组数 ${doneSets}/${totalSets}`, '',
-      '> 每个动作留 RIR 2–3；每 2 周同次数 +2.5kg 或同重量 +1 次。')
+    lines.push('', `总容量 ${volume} kg · 完成组数 ${doneSets}/${totalSets}`)
     return lines.join('\n')
   }, [JSON.stringify(data)])
 
-  return h('div', { 'data-testid': 'fitness-log', className: 'ft-root' },
-    h('div', { className: 'ft-head' },
-      h('strong', { className: 'ft-title' }, '训练日志'),
-      writable ? h('input', { className: 'ft-field', placeholder: '周一', value: data.day ?? '', onChange: (e: any) => update({ day: e.target.value }) })
-        : h('span', { className: 'ft-meta' }, data.day ?? ''),
-      writable ? h('input', { className: 'ft-field', placeholder: '上肢A（推为主）', value: data.focus ?? '', onChange: (e: any) => update({ focus: e.target.value }) })
-        : h('span', { className: 'ft-meta' }, data.focus ?? ''),
-      h('span', { className: 'ft-meta' }, `${doneSets}/${totalSets} 组 · 容量 ${volume} kg`),
-      h('span', { className: 'ft-grow' }),
-      writable ? h('button', { className: 'ft-btn', type: 'button', onClick: addEx }, '加动作') : null,
-      h('button', { className: 'ft-btn', type: 'button', onClick: () => setShowMd((v) => !v) }, showMd ? '隐藏' : '导出 markdown'),
-    ),
-    h('table', { className: 'ft-table' },
-      h('thead', null, h('tr', null,
-        h('th', { className: 'ft-cell', style: { textAlign: 'left' } }, '动作'),
-        h('th', { className: 'ft-cell' }, '计划'),
-        h('th', { className: 'ft-cell', style: { textAlign: 'left' } }, '组（重量×次数，勾选=完成）'),
-        h('th', { className: 'ft-cell' }, '容量'),
-        writable ? h('th', { className: 'ft-cell' }, '') : null,
-      )),
-      h('tbody', null, ...ex.map((r, ei) =>
-        h('tr', { key: ei },
-          h('td', { className: 'ft-cell' }, writable
-            ? h('input', { className: 'ft-exname', value: r.name, onChange: (e: any) => update({ exercises: ex.map((x, i) => i === ei ? { ...x, name: e.target.value } : x) }) })
-            : h('span', { style: { fontWeight: 600 } }, r.name)),
-          h('td', { className: 'ft-cell', style: { textAlign: 'center' } }, writable
-            ? h('input', { className: 'ft-num', style: { width: 66 }, value: r.scheme, onChange: (e: any) => update({ exercises: ex.map((x, i) => i === ei ? { ...x, scheme: e.target.value } : x) }) })
-            : r.scheme),
-          h('td', { className: 'ft-cell' },
-            h('div', { className: 'ft-row', style: { margin: 0 } },
-              ...r.sets.map((s, si) =>
-                h('span', { key: si, style: { display: 'inline-flex', alignItems: 'center', gap: 2, opacity: s.done ? 1 : .75 } },
-                  writable
-                    ? h('input', { type: 'checkbox', checked: !!s.done, onChange: () => setSet(ei, si, { done: !s.done }) })
-                    : h('span', null, s.done ? '✓' : '·'),
-                  writable
-                    ? h(React.Fragment, null,
-                        h('input', { className: 'ft-num', style: { width: 46 }, type: 'number', placeholder: 'kg', value: s.weight ?? '', onChange: (e: any) => setSet(ei, si, { weight: e.target.value === '' ? undefined : num(e.target.value) }) }),
-                        h('span', { className: 'ft-meta' }, '×'),
-                        h('input', { className: 'ft-num', style: { width: 40 }, type: 'number', placeholder: '次', value: s.reps ?? '', onChange: (e: any) => setSet(ei, si, { reps: e.target.value === '' ? undefined : num(e.target.value) }) }),
-                      )
-                    : h('span', { className: s.done ? undefined : 'ft-done' }, `${s.weight ?? '-'}×${s.reps ?? '-'}`),
-                ),
-              ),
-              writable ? h('button', { className: 'ft-btn', type: 'button', onClick: () => addSet(ei) }, '+组') : null,
-              writable ? h('button', { className: 'ft-btn', type: 'button', onClick: () => delSet(ei) }, '−组') : null,
-            ),
-          ),
-          h('td', { className: 'ft-cell', style: { textAlign: 'center', fontVariantNumeric: 'tabular-nums' } }, String(volOf(r))),
-          writable ? h('td', { className: 'ft-cell' }, h('button', { className: 'ft-btn', type: 'button', onClick: () => update({ exercises: ex.filter((_, i) => i !== ei) }) }, '×')) : null,
-        ),
-      )),
-    ),
-    h('div', { className: 'ft-alt' }, 'RIR 2–3；每 8 周 deload 一周（组数砍 40%，重量不变）。'),
-    showMd ? h('div', null,
-      h('textarea', { className: 'ft-md', readOnly: true, value: md }),
-      h('button', { className: 'ft-btn', style: { marginTop: 4 }, type: 'button', onClick: () => { const nav = globalThis.navigator; if (nav && nav.clipboard) void nav.clipboard.writeText(md); setCopied(true) } }, copied ? '已复制' : '复制'),
-    ) : null,
+  const prevOf = (r: ExRow, si: number) => {
+    const prev = r.sets[si - 1]
+    if (!prev) return '—'
+    return `${prev.weight ?? '—'}×${prev.reps ?? '—'}`
+  }
+
+  return (
+    <ReUI className="rui-ios">
+      <div data-testid="fitness-log">
+        <div className="rui-large">训练</div>
+        <div className="rui-sub">
+          {data.day || '训练'} · {data.focus || ''} · 完成组数 {doneSets}/{totalSets}
+        </div>
+        <div className="hv-stats">
+          <div>
+            <b>{volume}</b>
+            <em>容量 kg</em>
+          </div>
+          <div>
+            <b>
+              {doneSets}/{totalSets}
+            </b>
+            <em>完成组</em>
+          </div>
+          <div>
+            <b>{ex.length}</b>
+            <em>动作</em>
+          </div>
+        </div>
+        {writable ? (
+          <Group>
+            <Cell>
+              <Input placeholder="周一" style={{ border: 0, width: 88, background: 'transparent' }} value={data.day ?? ''} onChange={(e: { target: { value: string } }) => update({ day: e.target.value })} />
+              <Input className="rui-grow" placeholder="上肢A" style={{ border: 0, background: 'transparent' }} value={data.focus ?? ''} onChange={(e: { target: { value: string } }) => update({ focus: e.target.value })} />
+              <Button size="sm" type="button" onClick={addEx}>
+                加动作
+              </Button>
+            </Cell>
+          </Group>
+        ) : null}
+        {ex.map((r, ei) => (
+          <div className="hv-ex" key={ei}>
+            <h3>
+              {writable ? (
+                <Input style={{ border: 0, background: 'transparent', fontWeight: 650, width: '100%' }} value={r.name} onChange={(e: { target: { value: string } }) => update({ exercises: ex.map((x, i) => (i === ei ? { ...x, name: e.target.value } : x)) })} />
+              ) : (
+                r.name
+              )}
+            </h3>
+            <p>
+              {r.scheme} · 容量 {volOf(r)} kg
+            </p>
+            <table className="hv-table">
+              <thead>
+                <tr>
+                  <th>组</th>
+                  <th>上次</th>
+                  <th>kg</th>
+                  <th>次</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {r.sets.map((s, si) => (
+                  <tr key={si} style={s.done ? { background: '#f3fff4' } : undefined}>
+                    <td>{si + 1}</td>
+                    <td className="rui-muted">{prevOf(r, si)}</td>
+                    <td>
+                      {writable ? (
+                        <input type="number" placeholder="kg" value={s.weight ?? ''} onChange={(e: { target: { value: string } }) => setSet(ei, si, { weight: e.target.value === '' ? undefined : num(e.target.value) })} />
+                      ) : (
+                        s.weight ?? '—'
+                      )}
+                    </td>
+                    <td>
+                      {writable ? (
+                        <input type="number" placeholder="次" value={s.reps ?? ''} onChange={(e: { target: { value: string } }) => setSet(ei, si, { reps: e.target.value === '' ? undefined : num(e.target.value) })} />
+                      ) : (
+                        s.reps ?? '—'
+                      )}
+                    </td>
+                    <td>
+                      <Checkbox checked={!!s.done} onChange={() => writable && setSet(ei, si, { done: !s.done })} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {writable ? (
+              <div className="rui-row" style={{ padding: '8px 10px 10px' }}>
+                <Button size="sm" variant="ghost" type="button" onClick={() => addSet(ei)}>
+                  加一组
+                </Button>
+                <Button size="sm" variant="ghost" type="button" onClick={() => delSet(ei)}>
+                  少一组
+                </Button>
+                <span className="rui-grow" />
+                <Button size="sm" variant="ghost" type="button" onClick={() => update({ exercises: ex.filter((_, i) => i !== ei) })}>
+                  删除动作
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        ))}
+        <div style={{ margin: '0 16px' }}>
+          <Button variant="ghost" type="button" onClick={() => setShowMd((v) => !v)}>
+            {showMd ? '收起' : '导出 markdown'}
+          </Button>
+        </div>
+        {showMd ? (
+          <Group>
+            <Textarea readOnly value={md} style={{ border: 0, minHeight: 120, fontFamily: 'ui-monospace,monospace' }} />
+            <Cell>
+              <Button type="button" onClick={() => { const nav = globalThis.navigator; if (nav?.clipboard) void nav.clipboard.writeText(md); setCopied(true) }}>
+                {copied ? '已复制' : '复制'}
+              </Button>
+            </Cell>
+          </Group>
+        ) : null}
+      </div>
+    </ReUI>
   )
 }
 
-const DAY_DEFAULTS: DayData = { fastStart: '20:00', fastEnd: '12:00', water: {}, meals: {}, sodium: false, note: '' }
+const DAY_DEFAULTS: DayData = { fastStart: '20:00', fastEnd: '12:00', water: {}, meals: {}, sodium: false, note: '', goals: { steps: 8000, sleep: 7.5 } }
 
 const UPPER_A: ExRow[] = [
   { name: '杠铃卧推', scheme: '4×6–8', sets: Array.from({ length: 4 }, () => ({ done: false })) },
@@ -341,17 +466,23 @@ const LOG_DEFAULTS: LogData = { day: '周一', focus: '上肢A（推为主）', 
 
 export function apply(ctx: { pageEditor: { registerBlock: (spec: Record<string, unknown>) => void } }) {
   ctx.pageEditor.registerBlock({
-    kind: 'fitness-day', plugin: name, label: '今日打卡',
-    blockType: 'fitness', blockTypeLabel: '健身',
-    hint: '饮水累加 + 8+16 进食窗口倒计时 + 餐次/训练/体重打卡，可导出 markdown',
+    kind: 'fitness-day',
+    plugin: name,
+    label: '今日打卡',
+    blockType: 'fitness',
+    blockTypeLabel: '健身',
+    hint: 'Apple 健身环：饮水 / 餐次 / 训练 + 步数睡眠体重磁贴，可导出 markdown',
     aliases: ['fitness', 'day', 'water', '打卡', '饮水', '健身打卡', 'fitness-day'],
     defaults: () => DAY_DEFAULTS,
     View: ({ data, update, writable }: any) => React.createElement(DayBlock, { data, update, writable }),
   })
   ctx.pageEditor.registerBlock({
-    kind: 'fitness-log', plugin: name, label: '训练日志',
-    blockType: 'fitness', blockTypeLabel: '健身',
-    hint: '周分化动作表：勾选组、填重量次数，自动算容量，可导出 markdown',
+    kind: 'fitness-log',
+    plugin: name,
+    label: '训练日志',
+    blockType: 'fitness',
+    blockTypeLabel: '健身',
+    hint: 'Hevy / Strong：组表 kg×次数、容量和完成组，可导出 markdown',
     aliases: ['fitness-log', 'workout', 'training', '训练', '训练日志', '举铁'],
     defaults: () => LOG_DEFAULTS,
     View: ({ data, update, writable }: any) => React.createElement(LogBlock, { data, update, writable }),

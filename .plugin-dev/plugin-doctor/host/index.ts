@@ -9,6 +9,7 @@ export const inject = ['http']
 
 /** 体检结论。README 示例写法缺失＝不合规（页面块插件靠它告诉 agent 语法）。 */
 export type Conclusion = '合规' | '缺 README 示例' | '缺引擎' | '空插件'
+export type Level = 'ok' | 'warn' | 'error'
 
 export type PluginReport = {
   id: string
@@ -23,7 +24,23 @@ export type PluginReport = {
   readme: boolean
   readmeExample: boolean
   conclusion: Conclusion
+  level: Level
   problems: string[]
+}
+
+export function levelOf(conclusion: Conclusion): Level {
+  if (conclusion === '合规') return 'ok'
+  if (conclusion === '空插件' || conclusion === '缺引擎') return 'error'
+  return 'warn'
+}
+
+export type Issue = {
+  id: string
+  pluginId: string
+  name: string
+  level: Level
+  title: string
+  detail: string
 }
 
 export type ScanResult = {
@@ -33,6 +50,7 @@ export type ScanResult = {
   total: number
   summary: { ok: number; warn: number; broken: number; bytes: number }
   plugins: PluginReport[]
+  issues: Issue[]
 }
 
 function workspaceCandidates(): string[] {
@@ -162,6 +180,7 @@ export async function scan(root = findRoot()): Promise<ScanResult> {
       /* ignore */
     }
     const { conclusion, problems } = diagnose({ hasHost, hasWeb, files, readme, readmeExample })
+    const level = levelOf(conclusion)
     const runAt = store.lastRunAt?.[id]
     plugins.push({
       id: String(manifest?.id ?? id),
@@ -176,6 +195,7 @@ export async function scan(root = findRoot()): Promise<ScanResult> {
       readme,
       readmeExample,
       conclusion,
+      level,
       problems,
     })
   }
@@ -183,18 +203,32 @@ export async function scan(root = findRoot()): Promise<ScanResult> {
   const rank: Record<Conclusion, number> = { 空插件: 0, 缺引擎: 1, '缺 README 示例': 2, 合规: 3 }
   plugins.sort((a, b) => rank[a.conclusion] - rank[b.conclusion] || a.id.localeCompare(b.id))
 
+  const issues: Issue[] = plugins.flatMap((item) =>
+    item.problems.length
+      ? item.problems.map((detail, index) => ({
+          id: `${item.id}:${index}`,
+          pluginId: item.id,
+          name: item.name,
+          level: item.level,
+          title: item.conclusion,
+          detail,
+        }))
+      : [],
+  )
+
   return {
     scannedAt: Date.now(),
     root,
     pluginsDir,
     total: plugins.length,
     summary: {
-      ok: plugins.filter((item) => item.conclusion === '合规').length,
-      warn: plugins.filter((item) => item.conclusion === '缺 README 示例').length,
-      broken: plugins.filter((item) => item.conclusion === '缺引擎' || item.conclusion === '空插件').length,
+      ok: plugins.filter((item) => item.level === 'ok').length,
+      warn: plugins.filter((item) => item.level === 'warn').length,
+      broken: plugins.filter((item) => item.level === 'error').length,
       bytes: plugins.reduce((sum, item) => sum + item.bytes, 0),
     },
     plugins,
+    issues,
   }
 }
 

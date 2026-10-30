@@ -2,7 +2,7 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { Editor } from '@tiptap/core'
 import { pageEditorExtensions } from './kit.ts'
-import { markdownLocusFromRange, markdownLocusFromSelection } from './markdown-locus.ts'
+import { markdownLocusFromElement, markdownLocusFromRange, markdownLocusFromSelection } from './markdown-locus.ts'
 
 function editorOf(markdown: string) {
   return new Editor({
@@ -109,6 +109,22 @@ test('caret in a heading uses the heading markdown line', () => {
   assert.equal(locus.start_line, 1)
   assert.equal(locus.text, '# Hello title')
   assert.equal(locus.insert, '# Hello'.length)
+  editor.destroy()
+})
+
+test('page-block locus locates the source and does not claim the whole body as a highlight', () => {
+  const md = '能做什么，不能做什么'
+  const editor = editorOf(md)
+  const p = editor.view.dom.querySelector('p')
+  assert.ok(p)
+  p.setAttribute('data-page-block', 'sandbox')
+  p.classList.add('page-block')
+  const whole = markdownLocusFromRange(editor, 0, editor.state.doc.content.size)
+  assert.ok(whole?.selection)
+  const locus = markdownLocusFromElement(editor, p)
+  assert.ok(locus)
+  assert.match(locus.text, /能做什么/)
+  assert.equal(locus.selection, undefined)
   editor.destroy()
 })
 

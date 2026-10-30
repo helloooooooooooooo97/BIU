@@ -8,7 +8,7 @@ import assert from 'node:assert/strict'
 import { Context, Service } from 'cordis'
 import { WebSocket } from 'ws'
 import * as http from './index.ts'
-import { deliverTenantEvent } from './index.ts'
+import { deliverTenantEvent, rewriteLegacyAgentApi } from './index.ts'
 import { currentAccountId, currentRequestWorkspaceId } from '@biu/host-plugin-loader/data-dir'
 
 async function freePort() {
@@ -41,6 +41,27 @@ test('port zero reports the actual bound port', async () => {
     const response = await fetch(`http://127.0.0.1:${port}/`)
     assert.equal(response.status, 200)
     assert.match(await response.text(), /dynamic/)
+  } finally {
+    await fiber.dispose()
+  }
+})
+
+test('missing hashed assets 404 instead of falling back to index html', async () => {
+  const base = await mkdtemp(join(tmpdir(), 'cordis-http-asset-'))
+  const publicDir = join(base, 'public')
+  await mkdir(publicDir, { recursive: true })
+  await writeFile(join(publicDir, 'index.html'), '<html>app</html>')
+  const ctx = new Context()
+  const ready = new Promise<number>((resolve) => ctx.on('http/ready', ({ port }) => resolve(port)))
+  const fiber = await ctx.plugin(http, { port: 0, host: '127.0.0.1', publicDir, sharePort: 0 })
+  try {
+    const port = await ready
+    const missing = await fetch(`http://127.0.0.1:${port}/assets/data-sidebar-missing.js`)
+    assert.equal(missing.status, 404)
+    assert.doesNotMatch(missing.headers.get('content-type') ?? '', /text\/html/)
+    const page = await fetch(`http://127.0.0.1:${port}/plugins`)
+    assert.equal(page.status, 200)
+    assert.match(await page.text(), /app/)
   } finally {
     await fiber.dispose()
   }
@@ -191,6 +212,13 @@ test('share routes stay on the workstation port', async () => {
   } finally {
     await fiber.dispose()
   }
+})
+
+test('legacy /api/sessions and /api/account/sessions rewrite to /agents', () => {
+  assert.equal(rewriteLegacyAgentApi('/api/sessions'), '/api/agents')
+  assert.equal(rewriteLegacyAgentApi('/api/sessions/s1/messages'), '/api/agents/s1/messages')
+  assert.equal(rewriteLegacyAgentApi('/api/account/sessions'), '/api/account/agents')
+  assert.equal(rewriteLegacyAgentApi('/api/account/sessions/abc'), '/api/account/agents/abc')
 })
 
 test('workspace sockets only receive their own tenant events', () => {

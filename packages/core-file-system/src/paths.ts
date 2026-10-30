@@ -1,9 +1,16 @@
-/** 集合路径：补前导斜杠、去掉尾斜杠。host 与 web 共用。 */
+export const AGENTS_COLLECTION_PATH = '/agents'
+export const LEGACY_SESSIONS_COLLECTION_PATH = '/' + 'sessions'
+
+/** 集合路径：补前导斜杠、去掉尾斜杠。host 与 web 共用。旧 /sessions 表迁到 /agents。 */
 export function normalizeCollectionPath(path: string) {
   const raw = String(path || '/').trim() || '/'
   const withSlash = raw.startsWith('/') ? raw : `/${raw}`
-  if (withSlash === '/') return '/'
-  return withSlash.replace(/\/+$/, '') || '/'
+  const normalized = withSlash === '/' ? '/' : withSlash.replace(/\/+$/, '') || '/'
+  if (normalized === LEGACY_SESSIONS_COLLECTION_PATH) return AGENTS_COLLECTION_PATH
+  if (normalized.startsWith(`${LEGACY_SESSIONS_COLLECTION_PATH}/`)) {
+    return `${AGENTS_COLLECTION_PATH}${normalized.slice(LEGACY_SESSIONS_COLLECTION_PATH.length)}`
+  }
+  return normalized
 }
 
 /** 第一段是表，其余原样当记录 id。组件 id 以 `/pages::` 开头，拼路径会出现 `//`，不能 filter 掉空段。 */

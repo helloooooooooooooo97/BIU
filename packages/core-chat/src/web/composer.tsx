@@ -6,7 +6,7 @@ import Placeholder from '@tiptap/extension-placeholder'
 import type { SlotProps } from '@biu/web-slots'
 import { bindSessionView, type SessionViewService } from '@biu/web-session-view'
 import { filePickFromPath, pickKey, textPickFromPlain, usePickState, type PickService } from '@biu/core-pick/web'
-import { HeadlessDismiss } from '@biu/public-ui'
+import { HeadlessDismiss } from '@biu/biu-ui'
 import { composerDocExtensions } from './composer-kit.ts'
 import {
   collectPickKeys,
@@ -876,7 +876,7 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
         clearDraft(id)
         flushDraftTimer()
       }
-      if (id && shouldNavigateToSession(location.pathname, id)) navigate(`/s/${id}`)
+      if (id && shouldNavigateToSession(location.pathname, id)) navigate(`/agents/${id}`)
     } catch {
       /* error 已写入 sessionView；输入与待发图片保留 */
     }
@@ -1090,7 +1090,7 @@ export const ChatComposer = memo(function ChatComposer(props: SlotProps) {
                   ? ` · ${modelModeSuffix({ thinking, speed, effort: reasoningEffort, context: contextWindow }, modelCaps)}`
                   : ''}
               </span>
-              <ChevronDownIcon className="size-3.5 opacity-70" />
+              <ChevronDownIcon className="size-3.5" />
             </button>
             {modelOpen ? (
               <HeadlessDismiss onDismiss={() => setModelOpen(false)} inside={(node) => Boolean((node instanceof Element ? node.closest('.composer-model, .composer-model-flyout') : null))}>

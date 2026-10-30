@@ -23,10 +23,11 @@ import { normalizeSchemaValue } from '@biu/type-file-system'
 import type { CollectionChrome, CollectionRowViewType, CollectionViewType, DatabaseUi } from '@biu/type-file-system/ui'
 import { parseAppPath } from '@biu/web-session-view'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
-import { BoolBox } from '@biu/public-ui/bool-box'
-import { ChatCount } from '@biu/public-ui/chat-count'
-import { HeadlessDismiss, HEADLESS_DISMISS_IGNORE } from '@biu/public-ui/headless-dismiss'
-import { TagChip, TagChips, tagTextColor, tagTone as schemaTagTone } from '@biu/public-ui/tag-chip'
+import { BoolBox } from '@biu/biu-ui/bool-box'
+import { ChatCount } from '@biu/biu-ui/chat-count'
+import { HeadlessDismiss, HEADLESS_DISMISS_IGNORE } from '@biu/biu-ui/headless-dismiss'
+import { TagChip, TagChips, tagTextColor, tagTone as schemaTagTone } from '@biu/biu-ui/tag-chip'
+import { facetChipIcon } from './schema-field.tsx'
 import {
   contentFieldKey,
   defaultColumnKeys,
@@ -133,7 +134,7 @@ import { ViewPaneMenu } from './pane-more-menu.tsx'
 import { HttpError, invalidateListReads, listCollection, readJson } from './db-client.ts'
 import { savedViewRecordPath } from '../paths.ts'
 import { findViewNeighbor, indexOnPage } from './view-adjacent.ts'
-import { TABLE_WINDOW_OVERSCAN, medianPaintedRowPx, rememberedTableWrap, tableColumnSlice, tableColumnUnchanged, tableColumnWidth, tableRowFallbackPx, tableWindowSlice, tableWindowUnchanged, tableWrapScroll, type TableColumnSlice } from './table-window.ts'
+import { TABLE_WINDOW_OVERSCAN, medianPaintedRowPx, rememberedTableWrap, settlePaintedRowPx, tableColumnSlice, tableColumnUnchanged, tableColumnWidth, tableRowFallbackPx, tableWindowSlice, tableWindowUnchanged, tableWrapScroll, type TableColumnSlice } from './table-window.ts'
 import { forgetPreviewTotalsForPath, markPaintedListReady, rememberPreviewTotalForView, resetPaintedListReady } from './sidebar-preview.ts'
 import { DataSidebarShell } from './data-sidebar-shell.tsx'
 import { builtinAllViewId, catalogLockFilters, isReadOnlyViewId, mergeTableViews, parseBuiltinScopeViewId, stubBuiltinBlockKindView, viewsForScope, type DataScope } from '../catalog-views.ts'
@@ -165,12 +166,11 @@ const FieldValuePop = lazy(() => import('./field-value-pop.tsx').then((m) => ({ 
 const CellPopDraft = lazy(() => import('./cell-pop-draft.tsx').then((m) => ({ default: m.CellPopDraft })))
 const RecordDetail = lazy(() => import('./record-detail.tsx').then((m) => ({ default: m.RecordDetail })))
 const ColumnOrderMenu = lazy(() => import('./column-order-menu.tsx').then((m) => ({ default: m.ColumnOrderMenu })))
-const RecordEmojiBoard = lazy(() => import('@biu/public-ui/emoji-board').then((m) => ({ default: m.RecordEmojiBoard })))
+const RecordEmojiBoard = lazy(() => import('@biu/biu-ui/emoji-board').then((m) => ({ default: m.RecordEmojiBoard })))
 const LazyShareButton = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.ShareButton })))
 const LazySharePanel = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.SharePanel })))
 const LazyShareRoleDetail = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.ShareRoleDetail })))
 const LazyShareScopeDetail = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.ShareScopeDetail })))
-const ScopeOverview = lazy(() => import('./scope-overview.tsx').then((m) => ({ default: m.ScopeOverview })))
 const DataSidebar = lazy(() => import('./data-sidebar.tsx').then((m) => ({ default: m.DataSidebar })))
 const LayoutPrefsMenu = lazy(() => import('./layout-prefs-menu.tsx').then((m) => ({ default: m.LayoutPrefsMenu })))
 const CollectionRowsShell = lazy(() => import('./rows-view.tsx').then((m) => ({ default: m.CollectionRowsShell })))
@@ -272,7 +272,6 @@ function RecordOpenControls({
   row,
   kidCount = 0,
   toolsLive = true,
-  nested,
   pick,
   onOpenSplit,
   onOpenRow,
@@ -280,14 +279,13 @@ function RecordOpenControls({
   row: DbRecord
   kidCount?: number
   toolsLive?: boolean
-  nested: boolean
   pick: object
   onOpenSplit: () => void
   onOpenRow: () => void
 }) {
   return (
     <span className="tasks-title-aside">
-      {toolsLive && !nested ? (
+      {toolsLive ? (
         <button
           type="button"
           className="tasks-icon-btn tasks-title-open"
@@ -339,7 +337,6 @@ function RecordTitle({
   onToggleCollapsed,
   tableIcon,
   Icon,
-  nested,
   pick,
   onOpenSplit,
   onOpenRow,
@@ -358,7 +355,6 @@ function RecordTitle({
   onToggleCollapsed: () => void
   tableIcon?: string
   Icon?: CollectionChrome['Icon']
-  nested: boolean
   pick: object
   onOpenSplit: () => void
   onOpenRow: () => void
@@ -420,7 +416,6 @@ function RecordTitle({
             row={row}
             kidCount={tree ? kidCount : 0}
             toolsLive={toolsLive}
-            nested={nested}
             pick={pick}
             onOpenSplit={onOpenSplit}
             onOpenRow={onOpenRow}
@@ -525,10 +520,7 @@ function TableCheckRail({
     }
     let raf = 0
     const measure = () => {
-      if (!table.offsetHeight) {
-        raf = requestAnimationFrame(measure)
-        return
-      }
+      if (!table.offsetHeight) return
       const next: CheckSlot[] = []
       const head = table.tHead?.rows[0]
       if (head) next.push({ kind: 'head', top: head.offsetTop, h: head.offsetHeight })
@@ -554,10 +546,16 @@ function TableCheckRail({
         return next
       })
     }
+    const schedule = () => {
+      if (raf) return
+      raf = requestAnimationFrame(() => {
+        raf = 0
+        measure()
+      })
+    }
     measure()
-    const ro = new ResizeObserver(measure)
+    const ro = new ResizeObserver(schedule)
     ro.observe(table)
-    for (const img of Array.from(table.querySelectorAll('img'))) ro.observe(img)
     return () => {
       cancelAnimationFrame(raf)
       ro.disconnect()
@@ -707,7 +705,7 @@ const EMPTY_FILTERS: Record<string, string> = {}
 /** 与选区拖选同一阈值：位移超过这个距离只当拖，不当点击。 */
 const CELL_POP_DRAG_PX = 6
 const CELL_POP_IGNORE =
-  '.fsdb-row-check, .fsdb-col-resizer, .tasks-row-tools, .tasks-title-open, .fsdb-action-btn, .fsdb-action-tag, .fsdb-boolbtn, .fsdb-thumb-btn, .fsdb-thumb, .ant-image, .fsdb-file-tools, .fsdb-ref-chip, .db-datetime, .ant-picker, .fsdb-scope-detail'
+  '.fsdb-row-check, .fsdb-col-resizer, .tasks-row-tools, .tasks-title-open, .fsdb-action-btn, .fsdb-action-tag, .fsdb-boolbtn, .fsdb-thumb-btn, .fsdb-thumb, .biu-image, .fsdb-file-tools, .fsdb-ref-chip, .db-datetime, .biu-calendar, .fsdb-scope-detail'
 
 type TablePaintNode =
   | { kind: 'empty'; key: string }
@@ -1277,6 +1275,7 @@ const WindowedTable = memo(function WindowedTable({
 
   useLayoutEffect(() => {
     const next = tableRowFallbackPx(wrapCells)
+    if (next === rowPxRef.current) return
     rowPxRef.current = next
     setRowPx(next)
   }, [wrapCells])
@@ -1291,11 +1290,12 @@ const WindowedTable = memo(function WindowedTable({
       const h = tr.offsetHeight
       if (h > 0) heights.push(h)
     }
-    const next = medianPaintedRowPx(heights, rowPxRef.current)
-    if (Math.abs(next - rowPxRef.current) < 1) return
+    // 不能依赖 tableWindow.start/end：setRowPx 会改窗口，窗口再测高再 setState，滚动时会打穿 React #185。
+    const next = settlePaintedRowPx(medianPaintedRowPx(heights, rowPxRef.current), rowPxRef.current)
+    if (next === rowPxRef.current) return
     rowPxRef.current = next
     setRowPx(next)
-  }, [nodes.length, tableRef, tableWindow.end, tableWindow.start, wrapCells])
+  }, [nodes.length, tableRef, tableScroll.height, tableScroll.top, wrapCells])
 
   useEffect(() => {
     onVisibleRange?.(tableWindow.start, tableWindow.end)
@@ -1429,8 +1429,6 @@ export function CollectionBrowser({
   onOpenRecord,
   onCloseRecord,
   onCrumbTarget,
-  scopeHome,
-  onOpenScopeHome,
   embed = false,
   inspectorPaneId,
   sheet = false,
@@ -1453,8 +1451,6 @@ export function CollectionBrowser({
   onOpenRecord?: (recordId: string, viewId?: string | null, collection?: string) => void
   onCloseRecord?: () => void
   onCrumbTarget?: (target: CrumbTarget) => void
-  scopeHome?: boolean
-  onOpenScopeHome?: () => void
   /** 检查器内页：只有中间舞台，不写侧栏开关/视图存储。 */
   embed?: boolean
   inspectorPaneId?: string
@@ -2393,6 +2389,7 @@ export function CollectionBrowser({
         pendingViews = false
         pendingData = false
         if (dataTouched) {
+          void pullFacets()
           // 页面记录打开时不要把整张表（私人/空间/共享三包）再拉一遍。
           // 装全部页面插件会连续 bump /plugins，每个 change 都 force list 会把 Chrome 打到 ERR_INSUFFICIENT_RESOURCES。
           if (detailIdRef.current) {
@@ -2490,7 +2487,10 @@ export function CollectionBrowser({
 
   useLayoutEffect(() => {
     setOpenDetailId(routeRecordId)
-    if (!routeRecordId) setDetailRow(null)
+    if (!routeRecordId) {
+      setDetailRow(null)
+      setError('')
+    }
   }, [routeRecordId])
 
   useEffect(() => {
@@ -3604,8 +3604,8 @@ export function CollectionBrowser({
   }
 
   async function writePatch(row: DbRecord, content: Record<string, unknown>) {
+    const keys = Object.keys(content)
     try {
-      const keys = Object.keys(content)
       quietUntil.current = Date.now() + 800
       if (bodyKey && keys.length === 1 && keys[0] === bodyKey && schema?.fields[bodyKey]?.type === 'file') {
         const path = `${dataPath}/${row.id}`
@@ -3616,7 +3616,7 @@ export function CollectionBrowser({
         contentWritePending.current.set(path, (contentWritePending.current.get(path) ?? 0) + 1)
         const previous = contentWriteQueues.current.get(path) ?? Promise.resolve()
         const run = previous.catch(() => undefined).then(async () => {
-          const data = await readJson<{ value?: unknown; version?: number }>('/api/db/content', {
+          const data = await readJson<{ value?: unknown; version?: number; updatedAt?: number }>('/api/db/content', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({
@@ -3631,6 +3631,12 @@ export function CollectionBrowser({
             setDetailBodyStatus('ready')
             setDetailBodyError('')
           }
+          const touched = Number(data.updatedAt)
+          const stamp = Number.isFinite(touched) && touched > 0 ? touched : Date.now()
+          const mergeTime = (item: DbRecord) => (item.id === row.id ? { ...item, updatedAt: stamp } : item)
+          mapListedRecords(mergeTime)
+          setDetailRow((prev) => (prev?.id === row.id ? mergeTime(prev) : prev))
+          publishListedMutation({ path: dataPath, op: 'patch', row: { id: row.id, updatedAt: stamp }, groupBy })
           announceListChange()
         }).catch(async (error) => {
           if (!(error instanceof HttpError) || error.status !== 409) throw error
@@ -3677,6 +3683,11 @@ export function CollectionBrowser({
       await reload({ force: true })
     } catch (err) {
       quietUntil.current = 0
+      const denied =
+        (err instanceof HttpError && err.status === 403) ||
+        /\bpermission denied\b/i.test(String(err instanceof Error ? err.message : err))
+      const contentOnly = Boolean(bodyKey && keys.length === 1 && keys[0] === bodyKey)
+      if (denied && contentOnly) return
       setError(String(err))
     }
   }
@@ -3978,7 +3989,7 @@ export function CollectionBrowser({
         return (
           <TagChips>
             {parsed.tags.map((id) => (
-              <TagChip key={id} id={id} label={tags.find((tag) => tag.id === id)?.label ?? id} />
+              <TagChip key={id} id={id} label={tags.find((tag) => tag.id === id)?.label ?? id} icon={facetChipIcon(id)} />
             ))}
           </TagChips>
         )
@@ -4213,7 +4224,14 @@ export function CollectionBrowser({
         >
           <span className="sidebar-rail-icon sidebar-group-fold" aria-hidden>
             <span className="sidebar-group-fold-face">
-              <UiGlyph icon="stack" />
+              {groupBy === 'shareScope' ? (
+                <UiGlyph
+                  icon={label === '共享' ? 'globe' : label === '空间' ? 'users' : 'user'}
+                  className={label === '共享' ? 'tasks-queue-gshare' : undefined}
+                />
+              ) : (
+                <UiGlyph icon="stack" />
+              )}
             </span>
             <span className="sidebar-group-fold-chevron">
               <UiGlyph icon={folded ? 'chevron-right' : 'chevron-down'} />
@@ -4320,7 +4338,9 @@ export function CollectionBrowser({
         style={tone ? { ['--biu-tag' as string]: tone } : undefined}
       >
         <span className={`tasks-th${queryFields.has(col.key) ? ' is-on' : ''}`}>
-          <FieldGlyph kind={col.kind} />
+          <span className="tasks-th-ico">
+            <FieldGlyph kind={col.kind} />
+          </span>
           {facetColumnTitle(col)}
         </span>
         <span
@@ -4394,9 +4414,8 @@ export function CollectionBrowser({
             onToggleCollapsed={() => setCollapsed((prev) => ({ ...prev, [row.id]: !prev[row.id] }))}
             tableIcon={currentTable?.view?.icon}
             Icon={chrome?.Icon}
-            nested={nested}
             pick={recordPick(row)}
-            onOpenSplit={() => showRecordInInspector(collectionPath, row.id, activeViewId)}
+            onOpenSplit={() => showRecordInInspector(collectionPath, row.id, activeViewId, nested ? { newTab: true } : undefined)}
             onOpenRow={() => openRow(row)}
             onWriteEmoji={(next) => void writePatch(row, { emoji: next })}
             toolsArmed={toolsArmed}
@@ -5352,7 +5371,6 @@ export function CollectionBrowser({
           onRenameView={renameView}
           onDeleteView={deleteView}
           onAddView={addEmptyView}
-          onOpenScopeHome={onOpenScopeHome}
           onOpenRecord={(path, view, recordId, row) => {
             if (path === collectionPath) {
               applyView(view)
@@ -5367,15 +5385,6 @@ export function CollectionBrowser({
         />
         </Suspense>
       ) : null}
-      {scopeHome && !nested ? (
-        <Suspense fallback={null}>
-          <ScopeOverview
-            tables={tables}
-            onOpenTable={(path, viewId) => onOpenTable?.(path, viewId)}
-            onOpenRecord={(path, viewId, recordId) => onOpenRecord?.(recordId, viewId, path)}
-          />
-        </Suspense>
-      ) : (
       <div className="fsdb-right">
         {listHeader}
         <div className="fsdb-right-body">
@@ -5575,7 +5584,10 @@ export function CollectionBrowser({
           writeOne={writeOne}
           writePatch={writePatch}
           tableIcon={currentTable?.view?.icon}
-          readOnly={selected.shareRole === '阅读' && (!localData || selected.builtin === true)}
+          readOnly={
+            (collectionPath === '/plugins' && selected.builtin === true && selected.canManagePackage !== true) ||
+            (selected.shareRole === '阅读' && !localData && selected.canManagePackage !== true)
+          }
           actionProperty={rowActionColumn ? <RecordActions row={selected} /> : null}
           share={
             nested && detailId ? (
@@ -5607,7 +5619,6 @@ export function CollectionBrowser({
         </div>
         </div>
       </div>
-      )}
       {dlg?.kind === 'rename' ? (
         <AppDialog
           key={dlg.view.id}
