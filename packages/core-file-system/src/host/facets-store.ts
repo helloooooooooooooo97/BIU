@@ -200,7 +200,9 @@ export class FacetStore {
             .all(q, q) as TagRow[])
         : (db.prepare(`SELECT ${FACET_ROW_SQL} FROM facets ORDER BY label`).all() as TagRow[])
     )
-    return rows.map((row) => entryFromRow(db, row)).filter((item): item is FacetEntry => Boolean(item))
+    return rows
+      .map((row) => entryFromRow(db, row))
+      .filter((item): item is FacetEntry => Boolean(item) && !this.isDeleted('/facets', item.pack.id))
   }
 
   get(idOrLabel: string): CollectionSchemaPack | null {

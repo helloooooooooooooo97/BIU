@@ -2389,6 +2389,7 @@ export function CollectionBrowser({
         pendingViews = false
         pendingData = false
         if (dataTouched) {
+          void pullFacets()
           // 页面记录打开时不要把整张表（私人/空间/共享三包）再拉一遍。
           // 装全部页面插件会连续 bump /plugins，每个 change 都 force list 会把 Chrome 打到 ERR_INSUFFICIENT_RESOURCES。
           if (detailIdRef.current) {
