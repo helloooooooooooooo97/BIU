@@ -126,7 +126,7 @@ test('discover-routes covers every local-space URL shape', () => {
     '/page-blocks',
     '/pages',
     '/plugins',
-    '/sessions',
+    '/agents',
     '/skills',
     '/tasks',
     '/trash',

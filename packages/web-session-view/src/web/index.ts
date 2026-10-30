@@ -21,6 +21,9 @@ export type { AppRoute, RouteView, InspectorCenterKind } from './session-route.t
 export {
   parseAppPath,
   isKnownAppPath,
+  isSessionAppPath,
+  isAgentSurfacePath,
+  sessionAppPath,
   buildAppPath,
   routeFromState,
   centerKindFromRoute,
@@ -184,7 +187,7 @@ export interface SessionViewState {
   dispatchedUsage?: TrajectoryUsage
   /** 切会话且无缓存：保留上一段画面直到新数据到齐，避免先闪 EmptyHero */
   switchingSession: boolean
-  /** 当前 session 的检查器绑定，只来自 GET /api/sessions/:id */
+  /** 当前 session 的检查器绑定，只来自 GET /api/agents/:id */
   sessionInspector?: SessionInspectorBind
   inspectorReady: boolean
   error?: string
@@ -395,7 +398,7 @@ export class SessionViewService extends Service {
     const ac = new AbortController()
     this.dispatchedAbort = ac
     try {
-      const res = await fetch(`/api/sessions/${sessionId}/dispatched-usage`, { signal: ac.signal })
+      const res = await fetch(`/api/agents/${sessionId}/dispatched-usage`, { signal: ac.signal })
       if (!res.ok || this.value.sessionId !== sessionId) return
       const body = (await res.json()) as {
         dispatchedUsage?: TrajectoryUsage | null
@@ -458,7 +461,7 @@ export class SessionViewService extends Service {
   }
 
   /** URL → 状态：只由路由层调用，不回写 URL。
-   * 只有 `/s/:id` 才换成主 Session。搜索把页面/其它记录开到左侧、进数据模块，都不改全局会话。
+   * 只有 `/agents/:id` 才换成主 Session。搜索把页面/其它记录开到左侧、进数据模块，都不改全局会话。
    * 聊天首页冷启动拉最近一条；数据页只绑 sessionId，不拉 turns，等悬浮窗打开再补正文。 */
   async applyRoute(route: AppRoute) {
     if (route.kind === 'auth') return
@@ -903,7 +906,7 @@ export class SessionViewService extends Service {
   }
 
   async newSession(opts: { projectPath?: string } = {}) {
-    const res = await fetch('/api/sessions', {
+    const res = await fetch('/api/agents', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({}),
@@ -912,7 +915,7 @@ export class SessionViewService extends Service {
     if (!body.id) throw new Error('无法创建 session')
     const projectPath = opts.projectPath?.trim()
     if (projectPath) {
-      const bind = await fetch(`/api/sessions/${body.id}/project`, {
+      const bind = await fetch(`/api/agents/${body.id}/project`, {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ path: projectPath }),
@@ -1219,7 +1222,7 @@ export class SessionViewService extends Service {
     this.replace({ loadingOlder: true })
     try {
       const res = await fetch(
-        `/api/sessions/${sessionId}/events?beforeSeq=${beforeSeq}&turns=${SESSION_TAIL_TURNS}`,
+        `/api/agents/${sessionId}/events?beforeSeq=${beforeSeq}&turns=${SESSION_TAIL_TURNS}`,
       )
       if (!res.ok) throw new Error(`加载更早事件失败：${res.status}`)
       const body = (await res.json()) as SessionPayload
@@ -1246,7 +1249,7 @@ export class SessionViewService extends Service {
     }
   }
 
-  /** 进入 Trajectory：只拉轻量 rows 索引，不拉全文 events。不改 ConversationView，避免 /s/:id 把 debug 打回 chat。 */
+  /** 进入 Trajectory：只拉轻量 rows 索引，不拉全文 events。不改 ConversationView，避免 /agents/:id 把 debug 打回 chat。 */
   async ensureTrajectory() {
     const sessionId = this.value.sessionId
     if (!sessionId) return
@@ -1257,7 +1260,7 @@ export class SessionViewService extends Service {
     this.replace({ trajectoryLoading: true })
     try {
       const res = await fetch(
-        `/api/sessions/${sessionId}/trajectory?turns=${TRAJECTORY_TAIL_TURNS}`,
+        `/api/agents/${sessionId}/trajectory?turns=${TRAJECTORY_TAIL_TURNS}`,
       )
       if (gen !== this.trajGen || this.value.sessionId !== sessionId) return
       if (!res.ok) throw new Error(`加载 trajectory 失败：${res.status}`)
@@ -1280,7 +1283,7 @@ export class SessionViewService extends Service {
     const gen = this.trajGen
     try {
       const res = await fetch(
-        `/api/sessions/${sessionId}/trajectory?turns=${TRAJECTORY_TAIL_TURNS}`,
+        `/api/agents/${sessionId}/trajectory?turns=${TRAJECTORY_TAIL_TURNS}`,
       )
       if (gen !== this.trajGen || this.value.sessionId !== sessionId) return
       if (!res.ok) return
@@ -1303,7 +1306,7 @@ export class SessionViewService extends Service {
     this.replace({ trajectoryLoading: true })
     try {
       const res = await fetch(
-        `/api/sessions/${sessionId}/trajectory?beforeSeq=${beforeSeq}&turns=${TRAJECTORY_TAIL_TURNS}`,
+        `/api/agents/${sessionId}/trajectory?beforeSeq=${beforeSeq}&turns=${TRAJECTORY_TAIL_TURNS}`,
       )
       if (!res.ok) throw new Error(`加载更早 trajectory 失败：${res.status}`)
       const body = (await res.json()) as TrajectoryPayload
@@ -1333,7 +1336,7 @@ export class SessionViewService extends Service {
   async fetchEventDetail(seq: number): Promise<SessionEvent | null> {
     const sessionId = this.value.sessionId
     if (!sessionId) return null
-    const res = await fetch(`/api/sessions/${sessionId}/events/${seq}`)
+    const res = await fetch(`/api/agents/${sessionId}/events/${seq}`)
     if (!res.ok) throw new Error(`加载事件失败：${res.status}`)
     const body = (await res.json()) as { event?: SessionEvent }
     return body.event ?? null
@@ -1344,7 +1347,7 @@ export class SessionViewService extends Service {
   async fetchUsageTrend(): Promise<UsageTrend> {
     const sessionId = this.value.sessionId
     if (!sessionId) return { points: [], compactions: [] }
-    const res = await fetch(`/api/sessions/${sessionId}/usage-trend`)
+    const res = await fetch(`/api/agents/${sessionId}/usage-trend`)
     if (!res.ok) throw new Error(`加载 usage 趋势失败：${res.status}`)
     const body = (await res.json()) as { points?: UsageTrendPoint[]; compactions?: number[] }
     return {
@@ -1356,7 +1359,7 @@ export class SessionViewService extends Service {
   async fetchEventRequest(seq: number): Promise<{ messages: DerivedMessage[]; toolsTokens: number }> {
     const sessionId = this.value.sessionId
     if (!sessionId) return { messages: [], toolsTokens: 0 }
-    const res = await fetch(`/api/sessions/${sessionId}/events/${seq}/request`)
+    const res = await fetch(`/api/agents/${sessionId}/events/${seq}/request`)
     if (!res.ok) throw new Error(`加载 request 失败：${res.status}`)
     const body = (await res.json()) as { messages?: DerivedMessage[]; toolsTokens?: number }
     return {
@@ -1400,7 +1403,7 @@ export class SessionViewService extends Service {
   async forkCurrent() {
     const sessionId = this.value.sessionId
     if (!sessionId) throw new Error('no session')
-    const res = await fetch(`/api/sessions/${sessionId}/fork`, { method: 'POST' })
+    const res = await fetch(`/api/agents/${sessionId}/fork`, { method: 'POST' })
     const body = (await res.json()) as {
       id?: string
       error?: string
@@ -1435,7 +1438,7 @@ export class SessionViewService extends Service {
       sessions: prev.map((item) => (item.id === id ? { ...item, pinned } : item)),
     })
     try {
-      const res = await fetch(`/api/sessions/${id}/config`, {
+      const res = await fetch(`/api/agents/${id}/config`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ pinned }),
@@ -1457,7 +1460,7 @@ export class SessionViewService extends Service {
       })
     }
     try {
-      const res = await fetch(`/api/sessions/${id}/config`, {
+      const res = await fetch(`/api/agents/${id}/config`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ title: next || null }),
@@ -1478,7 +1481,7 @@ export class SessionViewService extends Service {
       sessions: prev.map((item) => (item.id === id ? { ...item, inspector: nextBind } : item)),
     })
     try {
-      const res = await fetch(`/api/sessions/${id}/config`, {
+      const res = await fetch(`/api/agents/${id}/config`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ inspector: nextBind ?? null }),
@@ -1521,7 +1524,7 @@ export class SessionViewService extends Service {
     })
 
     try {
-      const res = await fetch(`/api/sessions/${id}`, { method: 'DELETE' })
+      const res = await fetch(`/api/agents/${id}`, { method: 'DELETE' })
       const body = (await res.json()) as { ok?: boolean; error?: string }
       if (!res.ok) throw new Error(body.error || `删除失败：${res.status}`)
     } catch (error) {
@@ -1595,7 +1598,7 @@ export class SessionViewService extends Service {
     if (busy) this.enqueueLocalInbox(effectiveKind, content || '（图片）')
 
     if (effectiveKind === 'inject') {
-      const res = await fetch(`/api/sessions/${sessionId}/messages`, {
+      const res = await fetch(`/api/agents/${sessionId}/messages`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body),
@@ -1614,7 +1617,7 @@ export class SessionViewService extends Service {
     this.replace({ error: undefined })
     if (!busy) this.paintOutgoingUser(sessionId, content || '（图片）', pics)
     try {
-      const res = await fetch(`/api/sessions/${sessionId}/messages`, {
+      const res = await fetch(`/api/agents/${sessionId}/messages`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body),
@@ -1698,7 +1701,7 @@ export class SessionViewService extends Service {
     const sessionId = this.value.sessionId
     if (!sessionId || !itemId) return false
     try {
-      const res = await fetch(`/api/sessions/${sessionId}/inbox/drop`, {
+      const res = await fetch(`/api/agents/${sessionId}/inbox/drop`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ id: itemId }),
@@ -1720,7 +1723,7 @@ export class SessionViewService extends Service {
     const sessionId = this.value.sessionId
     if (!sessionId || !itemId) return false
     try {
-      const res = await fetch(`/api/sessions/${sessionId}/inbox/patch`, {
+      const res = await fetch(`/api/agents/${sessionId}/inbox/patch`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ id: itemId, text }),
@@ -1744,7 +1747,7 @@ export class SessionViewService extends Service {
       return
     }
     try {
-      const res = await fetch(`/api/sessions/${sessionId}/inbox`)
+      const res = await fetch(`/api/agents/${sessionId}/inbox`)
       if (!res.ok || this.value.sessionId !== sessionId) return
       const body = (await res.json()) as { inbox?: InboxQueueItem[] }
       this.setInbox(Array.isArray(body.inbox) ? body.inbox : [], sessionId)
@@ -1757,7 +1760,7 @@ export class SessionViewService extends Service {
     const sessionId = this.value.sessionId
     if (!sessionId) return
     const goal = this.value.sessions.find((item) => item.id === sessionId)?.goal
-    const aborting = fetch(`/api/sessions/${sessionId}/cancel`, { method: 'POST' }).catch(() => undefined)
+    const aborting = fetch(`/api/agents/${sessionId}/cancel`, { method: 'POST' }).catch(() => undefined)
     if (goal?.status === 'pursuing') void this.controlGoal('pause')
     await aborting
     this.setAgentStatus('idle', undefined, sessionId)
@@ -1766,7 +1769,7 @@ export class SessionViewService extends Service {
   async controlGoal(action: 'pause' | 'resume' | 'clear') {
     const sessionId = this.value.sessionId
     if (!sessionId) return
-    const res = await fetch(`/api/sessions/${sessionId}/goal`, {
+    const res = await fetch(`/api/agents/${sessionId}/goal`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ action }),
@@ -1806,7 +1809,7 @@ export class SessionViewService extends Service {
     this.markBusyHold()
     this.setAgentStatus('running', undefined, sessionId)
     try {
-      const res = await fetch(`/api/sessions/${sessionId}/inbox/flush`, { method: 'POST' })
+      const res = await fetch(`/api/agents/${sessionId}/inbox/flush`, { method: 'POST' })
       const data = (await res.json()) as {
         error?: string
         flushed?: boolean

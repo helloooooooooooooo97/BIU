@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   ArchiveBoxArrowDownIcon,
   ArrowPathIcon,
-  ChatBubbleLeftRightIcon,
+  CursorArrowRaysIcon,
   CheckCircleIcon,
   DocumentIcon,
   MagnifyingGlassIcon,
@@ -16,12 +16,13 @@ import {
   StopIcon,
   TableCellsIcon,
 } from '@heroicons/react/16/solid'
-import { ConfirmDialog, TagChip, TagChips } from '@biu/public-ui'
+import { ConfirmDialog, TagChip, TagChips } from '@biu/biu-ui'
 import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { actionVisibleToUser } from '@biu/type-file-system'
 import type { CollectionActionInfo, DbRecord } from '@biu/type-file-system'
 import { getDatabaseUi } from '@biu/core-file-system/database-ui'
+import { loadFacets } from '@biu/core-file-system/facet-catalog'
 import { setChatOverlay, requestComposerFocus } from './chat-overlay.ts'
 
 export type SearchKind = 'view' | 'session' | 'task' | 'page' | 'plugin' | 'facet'
@@ -32,7 +33,7 @@ export const SEARCH_SCOPES: Array<{
   path: string | null
 }> = [
   { id: 'view', label: '视图', path: '/views' },
-  { id: 'session', label: '会话', path: null },
+  { id: 'session', label: '代理', path: null },
   { id: 'task', label: '任务', path: '/tasks' },
   { id: 'page', label: '页面', path: '/pages' },
   { id: 'plugin', label: '插件', path: '/plugins' },
@@ -205,7 +206,7 @@ export function placedRowActions(actions: SearchAction[] | undefined) {
 }
 
 export function searchCollection(kind: SearchKind) {
-  if (kind === 'session') return '/sessions'
+  if (kind === 'session') return '/agents'
   return SEARCH_SCOPES.find((item) => item.id === kind)?.path ?? `/${kind}`
 }
 
@@ -230,7 +231,7 @@ export function openSearchHit(hit: { kind: SearchKind; id: string; record?: Reco
 export function searchHref(hit: { kind: SearchKind; id: string; record?: Record<string, unknown> }) {
   const view = viewOpenTarget(hit)
   if (view) return `/database${view.collection}/view/${encodeURIComponent(view.viewId)}`
-  if (hit.kind === 'session') return `/s/${encodeURIComponent(hit.id)}`
+  if (hit.kind === 'session') return `/agents/${encodeURIComponent(hit.id)}`
   const collection = searchCollection(hit.kind)
   return `/database${collection}/record/${encodeURIComponent(hit.id)}`
 }
@@ -297,6 +298,10 @@ function actionGlyph(id: string) {
   return null
 }
 
+function facetTagLabel(id: string) {
+  return loadFacets().find((tag) => tag.id === id)?.label || id
+}
+
 function HitRecordTags({ tags }: { tags?: string[] }) {
   const list = (tags ?? []).map((tag) => tag.trim()).filter(Boolean)
   if (!list.length) return null
@@ -305,7 +310,7 @@ function HitRecordTags({ tags }: { tags?: string[] }) {
   return (
     <TagChips>
       {shown.map((tag) => (
-        <TagChip key={tag} id={tag} label={tag} />
+        <TagChip key={tag} id={tag} label={facetTagLabel(tag)} />
       ))}
       {extra > 0 ? <TagChip id={`+${extra}`} label={`+${extra}`} /> : null}
     </TagChips>
@@ -368,8 +373,6 @@ function HitActions({ hit }: { hit: SearchHit }) {
             key={action.id}
             type="button"
             className={`shell-search-hit-action${action.tone === 'danger' ? ' is-danger' : ''}`}
-            title={action.label}
-            data-dock-tip={action.label}
             aria-label={action.label}
             onClick={(event) => {
               event.preventDefault()
@@ -378,6 +381,7 @@ function HitActions({ hit }: { hit: SearchHit }) {
             }}
           >
             {actionGlyph(action.id)}
+            <span>{action.label}</span>
           </button>
         ))}
       </span>
@@ -409,7 +413,7 @@ function KindGlyph({ kind, compact }: { kind: SearchKind | 'all'; compact?: bool
   const className = compact ? 'size-3 shrink-0' : 'size-4 shrink-0'
   if (kind === 'all') return <Squares2X2Icon className={className} />
   if (kind === 'view') return <TableCellsIcon className={className} />
-  if (kind === 'session') return <ChatBubbleLeftRightIcon className={className} />
+  if (kind === 'session') return <CursorArrowRaysIcon className={className} />
   if (kind === 'task') return <CheckCircleIcon className={className} />
   if (kind === 'page') return <DocumentIcon className={className} />
   if (kind === 'plugin') return <PuzzlePieceIcon className={className} />
@@ -490,7 +494,7 @@ export function ShellSearchPanel({
     const keyOf = (kind: SearchKind) => `${kind}\0${needle}`
     const listed = SEARCH_SCOPES.map((item) => ({
       id: item.id,
-      path: item.id === 'session' ? '/sessions' : item.path,
+      path: item.id === 'session' ? '/agents' : item.path,
     })).filter((item): item is { id: SearchKind; path: string } => Boolean(item.path))
     const remote = listed.filter((item) => scope === 'all' || item.id === scope)
     const allRemote = listed
@@ -606,7 +610,11 @@ export function ShellSearchPanel({
             ref={inputRef}
             className="shell-search-input"
             autoFocus
-            placeholder="搜索视图、会话、任务、页面、插件、标签"
+            placeholder={
+              scope === 'all'
+                ? '搜索视图、代理、任务、页面、插件、标签'
+                : `搜索${SEARCH_SCOPES.find((item) => item.id === scope)?.label ?? ''}`
+            }
             value={query}
             data-testid="shell-search-input"
             onChange={(event) => {
@@ -660,12 +668,12 @@ export function ShellSearchPanel({
         <div ref={bodyRef} className="shell-search-body" aria-busy={busy}>
           {!needle && scope === 'all' && !flat.length && !busy ? (
             <p className="shell-search-hint">
-              空着时视图、会话、任务、页面、插件、标签各按更新时间列最近 {PER_KIND} 条。
+              空着时视图、代理、任务、页面、插件、标签各按更新时间列最近 {PER_KIND} 条。
             </p>
           ) : null}
           {grouped.map((group) => (
             <section key={group.kind} className="shell-search-group">
-              <h3 className="shell-search-group-title">{group.label}</h3>
+              {scope === 'all' ? <h3 className="shell-search-group-title">{group.label}</h3> : null}
               {group.items.map((item) => {
                 cursor += 1
                 const index = cursor
@@ -684,13 +692,13 @@ export function ShellSearchPanel({
                     onMouseEnter={() => setActive(index)}
                     onClick={(event) => openHit(item, event.shiftKey ? 'left' : 'right')}
                   >
-                    <span className="shell-search-hit-icon" aria-hidden>
+                    <span
+                      className={`shell-search-hit-icon${item.kind === 'plugin' && pluginRecordEnabled(item.record) ? ' is-enabled' : ''}`}
+                      aria-hidden
+                    >
                       <HitMark hit={item} />
                     </span>
                     <span className="shell-search-hit-title">
-                      {item.kind === 'plugin' && pluginRecordEnabled(item.record) ? (
-                        <span className="shell-search-hit-enabled" data-testid="plugin-enabled-dot" aria-hidden />
-                      ) : null}
                       <span className="shell-search-hit-title-text">{item.title}</span>
                     </span>
                     {tags?.length || actions.length || hasGlyphActions ? (

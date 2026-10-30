@@ -1,4 +1,4 @@
-import { EyeIcon, PencilSquareIcon, ShareIcon, ShieldCheckIcon, UserIcon, UsersIcon } from '@heroicons/react/16/solid'
+import { EyeIcon, GlobeAltIcon, PencilSquareIcon, ShieldCheckIcon, UserIcon, UsersIcon } from '@heroicons/react/16/solid'
 
 export function scopeText(scope: string) {
   if (scope === 'shared') return '共享'
@@ -18,7 +18,7 @@ export function ScopeMark({ scope }: { scope: string }) {
   const icon = text === '空间'
     ? <UsersIcon aria-hidden className="size-[14px]" />
     : text === '共享'
-      ? <ShareIcon aria-hidden className="size-[14px]" />
+      ? <GlobeAltIcon aria-hidden className="size-[14px]" />
       : <UserIcon aria-hidden className="size-[14px]" />
   return <>{icon}{text}</>
 }

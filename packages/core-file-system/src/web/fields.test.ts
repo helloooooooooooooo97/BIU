@@ -184,7 +184,17 @@ test('default columns omit flattened type properties', () => {
   assert.deepEqual(defaultColumnKeys(schema, ['title', 'status', 'facet', nested]), ['title', 'status', 'facet'])
   assert.equal(parseFacetFlatColumnKey(nested)?.packId, 'haohao')
   assert.equal(parseFacetFlatColumnKey(nested)?.fieldKey, 'dede')
-  const cols = flattenFacetColumns([{ id: 'haohao', label: '好好哈', fields: [{ key: 'dede', type: 'string', label: '的的' }] }])
+  const cols = flattenFacetColumns([
+    {
+      id: 'haohao',
+      label: '好好哈',
+      fields: [
+        { key: 'dede', type: 'string', label: '的的' },
+        { key: 'gone', type: 'string', label: '旧的', deleted: true },
+      ],
+    },
+  ])
+  assert.equal(cols.length, 1)
   assert.equal(cols[0]?.key, nested)
   assert.equal(facetColumnTitle(cols[0]!), '好好哈.的的')
   assert.equal(facetColumnTitle({ key: 'title', field: { label: '标题' } }), '标题')
@@ -209,6 +219,7 @@ test('list projection keeps visible columns plus title, emoji, and parent', () =
   assert.equal(keys.includes('tags'), true)
   assert.equal(keys.includes('parentChain'), true)
   assert.equal(keys.includes('usageParts'), true)
+  assert.equal(keys.includes('builtin'), true)
   assert.equal(keys.includes('dueAt'), false)
   const withFacet = listProjectionKeys({ schema: { ...schema, fields: { ...schema.fields, facet: { type: 'facet' } } }, columns: [nested] })
   assert.equal(withFacet.includes('facet'), true)
@@ -216,7 +227,7 @@ test('list projection keeps visible columns plus title, emoji, and parent', () =
 
 const pluginActions: CollectionSchema = {
   labelField: 'title',
-  fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string' } },
+  fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string' }, builtin: { type: 'boolean' } },
   actions: [
     { id: 'start', label: '运行', when: { installed: true, running: false } },
     { id: 'stop', label: '停止', when: { installed: true, running: true } },
@@ -225,19 +236,46 @@ const pluginActions: CollectionSchema = {
   ],
 }
 
+test('builtin plugins hide install and uninstall unless canManagePackage', () => {
+  const schema: CollectionSchema = {
+    fields: { ...REQUIRED_RECORD_FIELDS },
+    actions: [
+      { id: 'start', label: '运行', when: { installed: true, running: false } },
+      { id: 'stop', label: '停止', when: { installed: true, running: true } },
+      { id: 'pack', label: '安装', when: { sandbox: true, installed: false, canManagePackage: true } },
+      { id: 'uninstall', label: '卸载', when: { installed: true, canManagePackage: true } },
+    ],
+  }
+  const builtin = { id: 'page-toc', installed: true, running: true, sandbox: true, builtin: true }
+  assert.deepEqual(visibleActions(schema, builtin, 'row').map((item) => item.id), ['stop'])
+  assert.deepEqual(
+    visibleActions(schema, { ...builtin, canManagePackage: true }, 'row').map((item) => item.id),
+    ['stop', 'uninstall'],
+  )
+  assert.deepEqual(
+    visibleActions(schema, { id: 'page-toc', sandbox: true, builtin: true }, 'row').map((item) => item.id),
+    [],
+  )
+  assert.deepEqual(
+    visibleActions(schema, { id: 'page-toc', sandbox: true, builtin: true, canManagePackage: true }, 'row').map((item) => item.id),
+    ['pack'],
+  )
+})
+
 test('list projection keeps action when keys so plugin actions do not flash', () => {
   assert.deepEqual(actionWhenKeys(pluginActions), ['installed', 'running', 'sandbox'])
   const keys = listProjectionKeys({ schema: pluginActions, columns: ['title', 'tags'] })
   assert.equal(keys.includes('installed'), true)
   assert.equal(keys.includes('running'), true)
   assert.equal(keys.includes('sandbox'), true)
+  assert.equal(keys.includes('builtin'), true)
   assert.equal(keys.includes('tags'), true)
 })
 
 test('sparse plugin rows without when flags flash 安装; projected flags keep 运行/停止 and 卸载', () => {
   const sparse = { id: 'page-toc', title: '目录' }
   assert.deepEqual(visibleActions(pluginActions, sparse, 'row').map((item) => item.id), [])
-  const missingFlags = { id: 'page-html-blocks', title: 'HTML', sandbox: true }
+  const missingFlags = { id: 'page-sandbox', title: 'HTML', sandbox: true }
   assert.deepEqual(visibleActions(pluginActions, missingFlags, 'row').map((item) => item.id), ['pack'])
   assert.deepEqual(
     visibleActions(pluginActions, { id: 'page-toc', title: '目录', installed: true, running: true, sandbox: true }, 'row').map(
@@ -246,7 +284,7 @@ test('sparse plugin rows without when flags flash 安装; projected flags keep �
     ['stop', 'uninstall'],
   )
   assert.deepEqual(
-    visibleActions(pluginActions, { id: 'page-html-blocks', title: 'HTML', installed: true, sandbox: true }, 'row').map(
+    visibleActions(pluginActions, { id: 'page-sandbox', title: 'HTML', installed: true, sandbox: true }, 'row').map(
       (item) => item.id,
     ),
     ['start', 'uninstall'],
@@ -597,6 +635,16 @@ test('flattenTree keeps sibling order, indents children, and hides collapsed sub
     flattenTree(rows, 'parentId', { p: true }).map((item) => item.row.id),
     ['p'],
   )
+})
+
+test('flattenTree does not blow the stack on a parent cycle', () => {
+  const rows = [
+    { id: 'a', title: 'A', parentId: 'b' },
+    { id: 'b', title: 'B', parentId: 'a' },
+  ]
+  const flat = flattenTree(rows, 'parentId')
+  assert.deepEqual(flat.map((item) => item.row.id).sort(), ['a', 'b'])
+  assert.ok(flat.every((item) => item.kidCount >= 0))
 })
 
 test('defaultColumnKeys omits parentId', () => {

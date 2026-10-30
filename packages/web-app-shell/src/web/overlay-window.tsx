@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
-import { ChatPane } from '@biu/public-ui/chat-pane'
+import { ChatPane } from '@biu/biu-ui/chat-pane'
 import {
   closeChatOverlay,
   getOverlayThread,
@@ -146,7 +146,6 @@ export function OverlayChatWindow({
       className={`chat-overlay-panel${threadOpen ? '' : ' is-compose-only'}`}
       data-testid="chat-overlay-panel"
       data-overlay-layout="right"
-      data-biu-ignore
       style={{
         left: geom.x,
         width: geom.w,
@@ -161,7 +160,7 @@ export function OverlayChatWindow({
           paneRef={cardRef}
           aside={
             <>
-              <div className="chat-overlay-head" data-testid="chat-overlay-head">
+              <div className="chat-overlay-head" data-testid="chat-overlay-head" data-biu-ignore>
                 {header}
               </div>
               {handles.map((item) => (
@@ -169,6 +168,7 @@ export function OverlayChatWindow({
                   key={item.key}
                   className={`${item.className} z-40`}
                   data-testid={`chat-overlay-resize-${item.key}`}
+                  data-biu-ignore
                   onPointerDown={startResize(item.edge)}
                 />
               ))}

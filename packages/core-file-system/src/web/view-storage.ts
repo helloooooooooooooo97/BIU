@@ -3,7 +3,7 @@ import { isIndexCollection } from './database-path.ts'
 import { invalidateListReads, listCollection, readJson } from './db-client.ts'
 import { savedViewRecordPath } from '../paths.ts'
 import { looksLikeFilterTree, normalizeFilterGroup, parseSortsInput } from '../query-logic.ts'
-import { normalizePageSize, normalizeSavedView, parseViewColumns, type SavedView } from './saved-view.ts'
+import { normalizePageSize, normalizeSavedView, parseViewColumns, rankListedViews, type SavedView } from './saved-view.ts'
 
 export function viewsKey(collectionPath: string) {
   return `fsdb.views:${collectionPath}`
@@ -567,12 +567,17 @@ async function pullSavedViewsNow(
     for (const path of paths) {
       if (viewWriteStale(path, started)) continue
       const views = byPath.get(path) ?? []
-      const prev = JSON.stringify(memoryViews.get(path) ?? [])
-      const next = JSON.stringify(views)
+      const previous = memoryViews.get(path) ?? loadViews(path)
+      const ranked = rankListedViews(
+        views.map((view) => withViewDisplay(path, view)),
+        previous,
+      )
+      const prev = JSON.stringify(previous)
+      const next = JSON.stringify(ranked)
       if (prev !== next) changed = true
-      rememberViews(path, views)
+      rememberViews(path, ranked)
       try {
-        if (views.length) localStorage.setItem(viewsKey(path), JSON.stringify(views))
+        if (ranked.length) localStorage.setItem(viewsKey(path), JSON.stringify(ranked))
         else localStorage.removeItem(viewsKey(path))
       } catch {
         /* ignore */

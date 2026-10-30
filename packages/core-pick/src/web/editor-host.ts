@@ -17,12 +17,19 @@ export function bindEditorTextHost(el: Element | null, host: EditorTextHost | nu
   else hosts.delete(el)
 }
 
+function composedParent(node: Node | null): Element | null {
+  if (!node) return null
+  if (node.parentElement) return node.parentElement
+  const root = node.parentNode
+  return root instanceof ShadowRoot ? root.host : null
+}
+
 export function editorHostFromNode(node: Node | null): EditorTextHost | null {
-  let el: Element | null = node instanceof Element ? node : node?.parentElement ?? null
+  let el: Element | null = node instanceof Element ? node : composedParent(node)
   while (el) {
     const host = hosts.get(el)
     if (host) return host
-    el = el.parentElement
+    el = composedParent(el)
   }
   return null
 }

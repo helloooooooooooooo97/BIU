@@ -1,4 +1,4 @@
-import type { CollectionSchema, DbRecord } from '@biu/type-file-system'
+import type { CollectionSchema, CollectionSchemaPack, DbRecord } from '@biu/type-file-system'
 import type { SavedView } from './web/saved-view.ts'
 
 export type ShareKind = 'view' | 'record'
@@ -29,6 +29,7 @@ export type ShareSnapshot = {
   contents: Record<string, unknown>
   assets: string[]
   banner?: unknown
+  facets?: CollectionSchemaPack[]
   resources: {
     pages: number
     plugins: number

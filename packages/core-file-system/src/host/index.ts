@@ -124,7 +124,7 @@ function schemaWithTagPack(schema: CollectionSchema, pack: CollectionSchemaPack 
   const fields = { ...schema.fields }
   const extra: string[] = []
   for (const field of pack.fields) {
-    if (STAMP_FIELD_BLOCKLIST.has(field.key)) continue
+    if (field.deleted || STAMP_FIELD_BLOCKLIST.has(field.key)) continue
     fields[field.key] = {
       type: field.type,
       label: field.label ?? field.key,
@@ -277,6 +277,7 @@ function listedColumnKeys(requested: unknown, labelField: string, schema?: Colle
     for (const extra of LIST_FIELD_COMPANIONS[key] ?? []) add(extra)
   }
   for (const key of actionWhenKeys(schema)) add(key)
+  if (schema?.fields.builtin) add('builtin')
   return keys
 }
 
@@ -495,18 +496,26 @@ function packFieldKey(pack: CollectionSchemaPack | null | undefined, name: strin
   return want
 }
 
+function facetBagValueEmpty(value: unknown) {
+  return value == null || (typeof value === 'string' && !value.trim())
+}
+
 function remapFacetBag(pack: CollectionSchemaPack | null | undefined, bag: Record<string, unknown>) {
   const out: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(bag)) {
     const field = packFieldKey(pack, key)
     if (!field) continue
-    if (value == null || value === '') {
-      delete out[field]
-      continue
-    }
-    out[field] = value
+    out[field] = facetBagValueEmpty(value) ? '' : value
   }
   return out
+}
+
+function applyFacetBagPatch(
+  pack: CollectionSchemaPack | null | undefined,
+  current: Record<string, unknown>,
+  bag: Record<string, unknown>,
+) {
+  return { ...current, ...remapFacetBag(pack, bag) }
 }
 
 /** Agent 常写成扁平 values（中文属性名），权威形状是 values[标签id][字段key]。 */
@@ -540,7 +549,7 @@ function coerceFacetPatch(
   const applyBag = (packId: string, bag: Record<string, unknown>) => {
     const id = resolvePack(packId)?.id ?? packId
     if (!tags.includes(id)) return
-    bags[id] = { ...bags[id], ...remapFacetBag(resolvePack(id), bag) }
+    bags[id] = applyFacetBagPatch(resolvePack(id), bags[id] ?? {}, bag)
   }
   if (isPlainObject(rec.values)) {
     const nested: Array<[string, Record<string, unknown>]> = []
@@ -644,7 +653,7 @@ function assertViewAvailable(entry: CollectionSpec, others: CollectionSpec[]) {
   if (!view) return
   const route = navPath(view.route || '')
   if (!view.route?.trim()) throw new Error('view.route 必填：导航路由由登记方自己选定')
-  if (route === '/' || route === '/s') throw new Error(`view.route 与内置路由冲突：${view.route}`)
+  if (route === '/' || route === '/s' || route === '/agents') throw new Error(`view.route 与内置路由冲突：${view.route}`)
   const title = navTitle(entry)
   if (!title) throw new Error('view.title / label 不能为空')
   for (const other of others) {
@@ -806,6 +815,8 @@ type WorkspaceFiles = {
     granted_by?: string
   }>
   collectionRecordOwners?(workspaceId: string, collection: string): Map<string, string>
+  isMember?(accountId: string, workspaceId: string): boolean
+  isSuperAdmin?(accountId?: string | null): boolean
 }
 
 export function clampPage(limit?: number, offset?: number) {
@@ -1037,7 +1048,7 @@ export class DatabaseService extends Service implements Database {
     }
     if (collection === '/events') {
       const sessionId = String(row?.sessionId ?? (id.lastIndexOf(':') > 0 ? id.slice(0, id.lastIndexOf(':')) : ''))
-      if (sessionId) return { collection: '/sessions', id: sessionId }
+      if (sessionId) return { collection: '/agents', id: sessionId }
     }
     if (collection === '/facets') {
       const tablePath = String(row?.tablePath ?? '')
@@ -1275,6 +1286,7 @@ export class DatabaseService extends Service implements Database {
   ) {
     if (this.builtinPlugin(spec, id, record)) {
       if (action === 'resource:read' || action === 'resource:list') return
+      if (this.collabStore()?.isSuperAdmin?.(currentAccountId())) return
       throw new Error('permission denied: INSUFFICIENT_PERMISSION')
     }
     if (this.facets.isDeleted(spec.path, id)) throw new Error(`unknown record: ${spec.path}/${id}`)
@@ -1504,7 +1516,7 @@ export class DatabaseService extends Service implements Database {
 
   private async hydrateFacetStamps(rows: DbRecord[], pack: CollectionSchemaPack | null) {
     if (!pack?.fields.length) return
-    const wanted = pack.fields.filter((field) => !STAMP_FIELD_BLOCKLIST.has(field.key))
+    const wanted = pack.fields.filter((field) => !field.deleted && !STAMP_FIELD_BLOCKLIST.has(field.key))
     if (!wanted.length) return
     for (const row of rows) {
       const collection = String(row.tablePath ?? '')
@@ -1801,13 +1813,11 @@ export class DatabaseService extends Service implements Database {
     return views
   }
 
-  /** 当前用户对这一条的权限。记录上的角色和视图授权取较高的一级。 */
+  /**
+   * 当前用户对这一条的权限。记录上的角色和视图授权取较高的一级。
+   * 局域网链接只让访客在分享页上是阅读，不改创建者自己在本机列表里的角色。
+   */
   private shareRoleLabel(spec: CollectionSpec, record: DbRecord) {
-    const id = String(record.id ?? '')
-    // 本机局域网链接没有协作者角色。分享出去的人只能看，不要显示成管理。
-    if (this.deviceWorkspace() && this.hasPublicShare(spec.path, id, record, this.ownershipOf(spec.path, id))) {
-      return '阅读'
-    }
     const authorization = this.authorization()
     const actor = authorization?.currentActor()
     if (!authorization || !actor) return '管理'
@@ -2012,7 +2022,7 @@ export class DatabaseService extends Service implements Database {
    * 再 require() 把整条 events 读出来，表格每渲染一格就被卡一次。
    */
   private peekSessionRow(sessionId: string): unknown {
-    const sessions = this.collection('/sessions') as
+    const sessions = this.collection('/agents') as
       | { peek?: (id: string) => unknown; get?: (id: string) => unknown }
       | undefined
     const peeked = sessions?.peek?.(sessionId)
@@ -2037,7 +2047,7 @@ export class DatabaseService extends Service implements Database {
     if (peeked.name || peeked.mascot) return peeked
     // 只有 peek 完全落空才回落到真正的读取；正常热路径不会走到这里，
     // 也就不会为了写一个 createdBy 把整条会话的 events 拉进内存。
-    const sessions = this.collection('/sessions')
+    const sessions = this.collection('/agents')
     if (sessions?.get) {
       const fromCollection = sessionPersonFromRow(await sessions.get(sessionId))
       if (fromCollection.name || fromCollection.mascot) return fromCollection
@@ -2331,7 +2341,7 @@ export class DatabaseService extends Service implements Database {
     const ids = [...new Set(matched.map((row) => row.id))]
     if (!ids.length) return { kind: 'deleted' as const, path: spec.path, ids }
     const hard = Boolean(query.purge) || HARD_DELETE_PATHS.has(spec.path)
-    if (spec.path === '/sessions') this.disposeSessionAgents(ids)
+    if (spec.path === '/agents') this.disposeSessionAgents(ids)
     for (const row of matched) {
       const rec = withoutContent(spec, this.withBanner(spec, this.decorateRecord(spec, row)))
       const title = String(rec.title ?? rec.name ?? row.id).trim() || row.id
@@ -2450,9 +2460,10 @@ export class DatabaseService extends Service implements Database {
     if (!record) throw new Error(`unknown record: ${spec.path}/${parts[1]}`)
     const personalLoad = spec.path === '/plugins' && (actionId === 'start' || actionId === 'stop')
     const pluginAuthor = spec.path === '/plugins' && (actionId === 'sandbox' || actionId === 'pack')
+    const builtinPlugin = this.builtinPlugin(spec, parts[1]!, record)
     if (pluginAuthor) {
       await this.requirePath(spec.path, 'resource:read')
-      if (loaded) {
+      if (loaded && !builtinPlugin) {
         const owner = this.recordOwner(spec.path, record.id)
         if (!owner) this.attachWorkspaceRecord(spec.path, record.id, { ownership: 'personal', accessMode: 'private' })
         else this.assertLiveRecord(spec, record.id, 'resource:read', record)
@@ -2464,10 +2475,10 @@ export class DatabaseService extends Service implements Database {
     }
     if (!matchActionWhen(record, action.when)) throw new Error(`action not available: ${actionId}`)
     const result = await action.run(parts[1]!, record, args)
-    if (spec.path === '/plugins' && actionId === 'sandbox' && !this.recordOwner(spec.path, parts[1]!)) {
+    if (spec.path === '/plugins' && actionId === 'sandbox' && !builtinPlugin && !this.recordOwner(spec.path, parts[1]!)) {
       this.attachWorkspaceRecord(spec.path, parts[1]!, { ownership: 'personal', accessMode: 'private' })
     }
-    if (spec.path === '/plugins' && (actionId === 'sandbox' || actionId === 'pack')) {
+    if (spec.path === '/plugins' && !builtinPlugin && (actionId === 'sandbox' || actionId === 'pack')) {
       await this.stampActor(spec.path, parts[1]!)
     }
     const next = (await spec.get(parts[1]!)) ?? record
@@ -2540,6 +2551,7 @@ export class DatabaseService extends Service implements Database {
       path: `${spec.path}/${record.id}`,
       field,
       value: editorContent ? editorContent.body : (record[field] ?? null),
+      updatedAt: Math.max(Number(record.updatedAt) || 0, Date.now()),
       ...(editorContent ? { version: editorContent.version } : {}),
     }
   }
@@ -3030,7 +3042,7 @@ export function apply(ctx: Context) {
   }
   db.viewCatalog = savedViews
   ctx.inject(['sessions'], (inner) => {
-    inner.sessions.viewAccess = (id, record) => db.allowsViaView('/sessions', { ...record, id })
+    inner.sessions.viewAccess = (id, record) => db.allowsViaView('/agents', { ...record, id })
   })
   account?.authorization?.setMemberViewMatcher((workspaceId, viewId, accountId) => {
     const view = savedViews.viewsFor('/workspace-members').find((item) => item.id === viewId)
@@ -3242,7 +3254,7 @@ export function apply(ctx: Context) {
   ctx.tools.register({
     name: 'db_action',
     description:
-      '对一条记录执行该表登记的动作。路径为 /<表>/<id>，action 为动作 id（见 db_stat 的 schema.actions）。成功返回 {ok, path}，有返回值时带 result，不回整行。需要参数时放在 args。任务派工/汇报、会话压缩/进度、插件创建/打包一律走这里。',
+      '对一条记录执行该表登记的动作。路径为 /<表>/<id>，action 为动作 id（见 db_stat 的 schema.actions）。成功返回 {ok, path}，有返回值时带 result，不回整行。需要参数时放在 args。任务派工/汇报、代理压缩/进度、插件创建/打包一律走这里。',
     parameters: {
       type: 'object',
       properties: {
@@ -3281,6 +3293,7 @@ export function apply(ctx: Context) {
       'command=find_replace：批量替换。默认等价 str_replace（old_str 必须唯一）；all=true 替换所有匹配（可用 count 限制次数），regex=true 时 old_str 按正则解释。返回 replaced 为实际替换次数。新文本同样：短用 new_str，长用 from。',
       'command=write：整篇覆盖。短全文用 value 内联，长全文用 from=<本地文件路径>（工作区或 /tmp）。new_str / value 与 from 都保留；同时给时以 from 为准。写成功只返回 {ok, path}，不含全文。str_replace / find_replace / replace_lines / insert 成功额外返回 start_line、end_line（改后正文的 1-based 行）。编辑器会标出该段改动，不抢输入焦点、不自动跳转；跳转只在用户主动点目录或查找时发生。',
       '页面插图：不要把 data URL / base64 写进正文。先把图片文件落到工作区（下载或生成），再用 db_asset command=write name=<逻辑名.ext> from=<本地路径> 入库（内容寻址，返回 name=<哈希.ext>），然后 insert/str_replace 写入一行 Markdown：![说明](/api/db/file/<哈希.ext>)。也可以先写这一行再 write 附件。',
+      '写 :::pageBlock 前先 db_content /plugins/<plugin> 读介绍里的「示例写法」，不要猜围栏，也不要把块源码写进围栏体。',
     ].join(' '),
     parameters: {
       type: 'object',

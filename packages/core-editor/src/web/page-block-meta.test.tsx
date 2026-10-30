@@ -34,44 +34,51 @@ test('missing block shows stored source and asks to enable the stored plugin', a
   assert.ok(container.querySelector('[data-testid="page-source-editor"]'))
 })
 
-test('html pageBlock fence stores raw html and deck on the header', () => {
-  assert.deepEqual(parsePageBlockMeta('kind=html plugin=page-html-blocks deck=true'), {
-    kind: 'html',
-    plugin: 'page-html-blocks',
+test('sandbox pageBlock fence stores code and data as attachments', () => {
+  assert.deepEqual(parsePageBlockMeta('kind=sandbox plugin=page-sandbox deck=true'), {
+    kind: 'sandbox',
+    plugin: 'page-sandbox',
     id: '',
     extras: { deck: true },
   })
-  const src = formatPageBlockFence('html', 'page-html-blocks', {
-    html: '<div style="color:#fff">爱乐之城</div>',
+  const src = formatPageBlockFence('sandbox', 'page-sandbox', {
+    file: 'assets/sandbox-ab12cd34.jsx',
+    dataFile: 'assets/sandbox-data-ab12cd34.json',
+    source: 'export default function App() { return <div>爱乐之城</div> }',
     deck: true,
   })
-  assert.match(src, /:::pageBlock \{kind=html plugin=page-html-blocks deck=true\}/)
-  assert.match(src, /<div style="color:#fff">爱乐之城<\/div>/)
-  assert.doesNotMatch(src, /\\"/)
+  assert.match(src, /:::pageBlock \{kind=sandbox plugin=page-sandbox\}/)
+  assert.doesNotMatch(src, /\bdeck=/)
+  assert.match(src, /"file": "assets\/sandbox-ab12cd34.jsx"/)
+  assert.match(src, /"dataFile": "assets\/sandbox-data-ab12cd34.json"/)
+  assert.doesNotMatch(src, /export default function App/)
   assert.doesNotMatch(src, /"html":/)
-  assert.deepEqual(parsePageBlockData('html', '<div>裸 HTML</div>', { deck: false }), {
-    deck: false,
-    html: '<div>裸 HTML</div>',
+  const legacy = formatPageBlockFence('sandbox', 'page-sandbox', {
+    source: 'export default function App() { return <div>爱乐之城</div> }',
   })
-  assert.equal(parsePageBlockData('html', '{"html":"<p>旧</p>","deck":true}').html, '<p>旧</p>')
-  const frame = formatPageBlockFence('htmlframe', 'page-html-blocks', {
-    html: '<html></html>',
-    deck: false,
-    height: 300,
+  assert.match(legacy, /export default function App/)
+  assert.match(legacy, /爱乐之城/)
+  const live = formatPageBlockFence('sandbox', 'page-sandbox', {
+    html: 'export default function App() { return <div>Sandbox</div> }',
+    deck: true,
   })
-  assert.match(frame, /kind=htmlframe plugin=page-html-blocks deck=false height=300/)
-  assert.match(frame, /<html><\/html>/)
-  const sized = formatPageBlockFence('html', 'page-html-blocks', {
-    html: '<div>卡</div>',
+  assert.match(live, /export default function App/)
+  assert.deepEqual(parsePageBlockData('sandbox', 'export default function App() { return <div /> }', { deck: false }), {
+    deck: false,
+    source: 'export default function App() { return <div /> }',
+  })
+  assert.equal(parsePageBlockData('sandbox', '{"html":"<p>旧</p>","deck":true}').source, '<p>旧</p>')
+  const sized = formatPageBlockFence('sandbox', 'page-sandbox', {
+    source: 'export default function App() { return <div>卡</div> }',
     deck: true,
     width: '100%',
     height: '100vh',
   })
   assert.match(sized, /width=100%/)
   assert.match(sized, /height=100vh/)
-  assert.deepEqual(parsePageBlockMeta('kind=html plugin=page-html-blocks id=ab12cd34 deck=true'), {
-    kind: 'html',
-    plugin: 'page-html-blocks',
+  assert.deepEqual(parsePageBlockMeta('kind=sandbox plugin=page-sandbox id=ab12cd34 deck=true'), {
+    kind: 'sandbox',
+    plugin: 'page-sandbox',
     id: 'ab12cd34',
     extras: { deck: true },
   })
@@ -97,13 +104,17 @@ test('page block fence format then parse roundtrips kind plugin id and data', ()
   assert.equal(json.plugin, 'page-excalidraw')
   assert.equal(json.id, 'ab12cd34')
   assert.equal(json.data.file, 'assets/a.json')
-  const html = readPageBlockFence(formatPageBlockFence('html', 'page-html-blocks', { html: '<div>卡</div>', deck: true, title: '海报' }, 'htmlid01'))
-  assert.equal(html.kind, 'html')
-  assert.equal(html.plugin, 'page-html-blocks')
-  assert.equal(html.id, 'htmlid01')
-  assert.equal(html.data.html, '<div>卡</div>')
-  assert.equal(html.data.deck, true)
-  assert.equal(html.data.title, '海报')
+  const box = readPageBlockFence(formatPageBlockFence('sandbox', 'page-sandbox', { file: 'assets/sandbox-sandbx01.jsx', dataFile: 'assets/sandbox-data-sandbx01.json', deck: true, title: '海报' }, 'sandbx01'))
+  assert.equal(box.kind, 'sandbox')
+  assert.equal(box.plugin, 'page-sandbox')
+  assert.equal(box.id, 'sandbx01')
+  assert.equal(box.data.file, 'assets/sandbox-sandbx01.jsx')
+  assert.equal(box.data.dataFile, 'assets/sandbox-data-sandbx01.json')
+  assert.equal(box.data.source, undefined)
+  assert.equal(box.data.deck, undefined)
+  assert.equal(box.data.title, '海报')
+  const legacy = readPageBlockFence(formatPageBlockFence('sandbox', 'page-sandbox', { source: 'export default function App(){return <div/>}' }, 'sandbx01'))
+  assert.equal(legacy.data.source, 'export default function App(){return <div/>}')
   const video = readPageBlockFence(formatPageBlockFence('video', 'page-video', { script: '<timeline></timeline>' }, 'viddemo1'))
   assert.equal(video.kind, 'video')
   assert.equal(video.plugin, 'page-video')
@@ -111,19 +122,32 @@ test('page block fence format then parse roundtrips kind plugin id and data', ()
   assert.equal(video.data.script, '<timeline></timeline>')
 })
 
-test('html pageBlock fence keeps title on the header', () => {
-  const src = formatPageBlockFence('html', 'page-html-blocks', {
-    html: '<div>旧</div>',
-    title: '海报 HTML',
+test('sandbox pageBlock fence keeps title on the header', () => {
+  const src = formatPageBlockFence('sandbox', 'page-sandbox', {
+    source: 'export default function App(){return <div/>}',
+    title: '海报',
   }, 'ab12cd34')
-  assert.match(src, /title="海报 HTML"/)
-  assert.equal(parsePageBlockMeta(src.match(/\{([^}]*)\}/)?.[1] ?? '').extras.title, '海报 HTML')
+  assert.match(src, /title="海报"/)
+  assert.equal(parsePageBlockMeta(src.match(/\{([^}]*)\}/)?.[1] ?? '').extras.title, '海报')
 })
 
 test('unchanged block data does not count as an edit', () => {
   assert.equal(blockDataUnchanged({ sid: 'a', n: 1 }, { sid: 'a', n: 1 }), true)
   assert.equal(blockDataUnchanged({ sid: 'a' }, { sid: 'b' }), false)
   assert.equal(blockDataUnchanged({ nested: { on: true } }, { nested: { on: true } }), true)
+})
+
+test('missing plugin keeps the fence and says it does not exist', () => {
+  const { container } = render(
+    <PageBlockMissing kind="geo" plugin="page-geo" data={{ title: '地球' }} phase="missing" />,
+  )
+  assert.equal(container.querySelector('[data-testid="page-block-missing"]')?.getAttribute('data-plugin-phase'), 'missing')
+  assert.match(container.textContent ?? '', /插件不存在/)
+  assert.match(container.textContent ?? '', /"title": "地球"/)
+  assert.doesNotMatch(container.textContent ?? '', /:::pageBlock/)
+  assert.doesNotMatch(container.textContent ?? '', /正在加载/)
+  assert.ok(container.querySelector('[data-testid="page-source-editor"]'))
+  assert.ok(container.querySelector('[data-testid="page-block-enable"]'))
 })
 
 test('loading plugin hides the fence and keeps the block shell', () => {

@@ -20,7 +20,7 @@ export function MentionChipView({ node }: NodeViewProps) {
         openMention(id)
       }}
     >
-      <PickChip pick={pick} />
+      <PickChip pick={pick} inspect={false} />
     </NodeViewWrapper>
   )
 }

@@ -227,7 +227,7 @@ test('页脚：列区在上，底部行（BIU 左 / 法务右）在下', () => {
 test('页脚：底部行两侧字号一致', () => {
   const m = css.match(/\.site-footer-tagline,\s*\.site-footer-legal\s*\{([^}]*)\}/)
   assert.ok(m, 'tagline 与 legal 应共用同一条字号规则')
-  assert.match(m[1], /font-size:\s*13px/, '两侧字号应统一为 13px')
+   assert.match(m[1], /font-size:\s*var\(--biu-font-size-3\)/, '两侧字号应统一为 13px')
 })
 
 test('板块间距：小字→大字、大字→内容 各自统一', () => {
@@ -260,7 +260,7 @@ test('官网字号只走一套刻度，不再出现 11/15/17/19/25px 这种相�
 })
 
 test('键盘焦点可见：官网有统一的 focus-visible 样式', () => {
-  assert.match(siteCss, /\.site :focus-visible\s*\{[^}]*outline:\s*2px solid #fff/)
+  assert.match(siteCss, /\.site :focus-visible\s*\{[^}]*outline:\s*2px solid var\(--biu-color-on-emphasis\)/)
 })
 
 test('卡片圆角统一 20px，hover 不再跳到 #2a2a2a', () => {

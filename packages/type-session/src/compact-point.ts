@@ -23,7 +23,14 @@ export function sessionCompactSummaryText(event: {
 
 function isSessionsDbAction(args: Record<string, unknown>): boolean {
   const path = String(args.path ?? args.collection ?? '')
-  return path === 'sessions' || path === '/sessions' || path.includes('/sessions/')
+  return (
+    path === 'sessions' ||
+    path === 'agents' ||
+    path === '/sessions' ||
+    path === '/agents' ||
+    path.includes('/sessions/') ||
+    path.includes('/agents/')
+  )
 }
 
 export function isSessionCompactPoint(event: {

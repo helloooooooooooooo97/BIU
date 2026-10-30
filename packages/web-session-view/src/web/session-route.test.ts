@@ -18,12 +18,13 @@ const plugins: AppModule[] = [
 
 test('parseAppPath covers home, session, and registered plugin modules', () => {
   assert.deepEqual(parseAppPath('/'), { kind: 'home' })
-  assert.deepEqual(parseAppPath('/s/abc'), { kind: 'session', sessionId: 'abc', view: 'chat' })
-  assert.deepEqual(parseAppPath('/s/abc/debug'), {
+  assert.deepEqual(parseAppPath('/agents/abc'), { kind: 'session', sessionId: 'abc', view: 'chat' })
+  assert.deepEqual(parseAppPath('/agents/abc/debug'), {
     kind: 'session',
     sessionId: 'abc',
     view: 'debug',
   })
+  assert.deepEqual(parseAppPath('/s/abc'), { kind: 'home' })
   assert.deepEqual(parseAppPath('/extra', plugins), {
     kind: 'module',
     moduleId: 'extra',
@@ -41,7 +42,7 @@ test('parseAppPath covers home, session, and registered plugin modules', () => {
   assert.equal(isKnownAppPath('/share/tok'), true)
 })
 
-test('database nested routes identify view vs record without touching /s/:id', () => {
+test('database nested routes identify view vs record without touching /agents/:id', () => {
   assert.deepEqual(parseAppPath('/database/pages', plugins), {
     kind: 'collection-view',
     moduleId: 'database',
@@ -104,7 +105,8 @@ test('database nested routes identify view vs record without touching /s/:id', (
     }),
     '/database/tasks/record/task_mtdbgnqj_5022je',
   )
-  assert.equal(parseAppPath('/s/rec-1', plugins).kind, 'session')
+  assert.equal(parseAppPath('/agents/rec-1', plugins).kind, 'session')
+  assert.equal(parseAppPath('/s/rec-1', plugins).kind, 'home')
 })
 
 test('isKnownAppPath only accepts builtins plus registered plugin paths', () => {
@@ -115,7 +117,8 @@ test('isKnownAppPath only accepts builtins plus registered plugin paths', () => 
   assert.equal(isKnownAppPath('/workspace'), false)
   assert.equal(isKnownAppPath('/login'), true)
   assert.equal(isKnownAppPath('/register'), true)
-  assert.equal(isKnownAppPath('/s/abc'), true)
+  assert.equal(isKnownAppPath('/agents/abc'), true)
+  assert.equal(isKnownAppPath('/s/abc'), false)
   assert.equal(isKnownAppPath('/unknown'), false)
   assert.equal(isKnownAppPath('/database/pages/view/x', plugins), true)
 })

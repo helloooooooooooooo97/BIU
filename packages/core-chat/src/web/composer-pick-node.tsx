@@ -32,6 +32,7 @@ export const PickChipNode = Node.create({
       text: { default: null },
       selection: { default: null },
       insert: { default: null },
+      element: { default: null },
     }
   },
   parseHTML() {
@@ -52,6 +53,7 @@ export const PickChipNode = Node.create({
       const dom = document.createElement('span')
       dom.className = 'composer-inline-chip'
       dom.setAttribute('data-pick-chip', '')
+      dom.contentEditable = 'false'
       let attrs = node.attrs as Record<string, unknown>
       let root: Root | null = createRoot(dom)
       let paintQueued = false
@@ -83,6 +85,10 @@ export const PickChipNode = Node.create({
           const current = root
           root = null
           queueMicrotask(() => current?.unmount())
+        },
+        stopEvent({ event }) {
+          const type = event.type
+          return type === 'mousedown' || type === 'mouseup' || type === 'click' || type === 'pointerdown'
         },
       }
     }

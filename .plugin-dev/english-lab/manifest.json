@@ -1,0 +1,11 @@
+{
+  "id": "english-lab",
+  "name": "英语练习块",
+  "blurb": "页面块：听力、阅读、写作、翻译、选择、填空、口语。数据写在文档里，斜杠菜单「英语」。",
+  "tags": ["page", "editor", "english"],
+  "author": "BIU官方",
+  "authorUrl": "https://github.com/helloooooooooooooo97/biu",
+  "createdAt": 1792920000000,
+  "headless": true,
+  "builtin": true
+}

@@ -1,3 +1,4 @@
+import { Button, ReUI } from '@biu/reui'
 import { FitAddon } from '@xterm/addon-fit'
 import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
@@ -298,18 +299,18 @@ const STYLE_ID = 'pt-xterm-style-v5'
 const STYLE_CSS = `
 .pt-card{
   display:flex;flex-direction:column;overflow:hidden;
-  border:1px solid color-mix(in srgb, var(--dsw-border, rgba(242,241,237,0.12)) 80%, #000);
+  border:var(--biu-stroke-width) solid color-mix(in srgb, var(--biu-color-border) 80%, #000);
   border-radius:12px;background:#191919;
   box-shadow:0 1px 2px rgba(15,15,15,.08), 0 8px 24px rgba(0,0,0,.12);
 }
 .pt-head{
   display:flex;align-items:center;gap:8px;flex:none;height:34px;padding:0 10px 0 12px;
-  border-bottom:1px solid rgba(255,255,255,.06);
+  border-bottom:var(--biu-stroke-width) solid rgba(255,255,255,.06);
   background:#141414;color:rgba(242,241,237,.5);
   font:12px/1 ui-sans-serif,system-ui,sans-serif;user-select:none;
 }
 .pt-title{color:rgba(242,241,237,.78);font-weight:600;letter-spacing:-.01em}
-.pt-history{border-bottom:1px solid rgba(255,255,255,.06);background:#161616}
+.pt-history{border-bottom:var(--biu-stroke-width) solid rgba(255,255,255,.06);background:#161616}
 .pt-mount{position:absolute;inset:0;overflow:hidden;box-sizing:border-box;overscroll-behavior:contain}
 .pt-mount .xterm{
   width:100%;height:100%;
@@ -446,18 +447,18 @@ function useTerminalStyle() {
 
 const THEME = {
   background: 'rgba(0,0,0,0)',
-  foreground: '#f0efed',
-  cursor: '#f0efed',
+  foreground: 'var(--biu-color-on-emphasis)',
+  cursor: 'var(--biu-color-on-emphasis)',
   cursorAccent: '#191919',
   selectionBackground: 'rgba(242,241,237,0.22)',
   black: '#191919',
   red: '#e5484d',
   green: '#30a46c',
   yellow: '#ffb224',
-  blue: '#5b9fd6',
+  blue: '#308dbf',
   magenta: '#b07cd6',
   cyan: '#12a594',
-  white: '#bcbab6',
+  white: 'var(--biu-color-text-muted)',
   brightBlack: '#5f5f5a',
   brightRed: '#ff6369',
   brightGreen: '#4cc38a',
@@ -465,7 +466,7 @@ const THEME = {
   brightBlue: '#78b4e4',
   brightMagenta: '#c496e4',
   brightCyan: '#3ddbd9',
-  brightWhite: '#f0efed',
+  brightWhite: 'var(--biu-color-on-emphasis)',
 }
 
 /** 单个终端面：一个块 = 一个 PTY。
@@ -643,7 +644,8 @@ function TerminalSurface({
         const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
         socket = new WebSocket(
           `${protocol}//${location.host}/ws/page-terminal` +
-            `?cols=${term.cols}&rows=${term.rows}&session=${encodeURIComponent(sessionKey)}` +
+            `?cols=${term.cols}&rows=${term.rows}&agent=${encodeURIComponent(sessionKey)}` +
+            `&session=${encodeURIComponent(sessionKey)}` +
             `&workspaceId=${encodeURIComponent(sessionStorage.getItem('biu.workspaceId') ?? '')}`,
         )
         socket.binaryType = 'arraybuffer'
@@ -929,29 +931,17 @@ function IconButton({
   children: unknown
 }) {
   return (
-    <button
+    <Button
       type="button"
+      variant={active ? 'secondary' : 'ghost'}
       data-zoom-exit={dataZoomExit ? '' : undefined}
       onClick={onClick}
       aria-label={label}
       title={label}
-      style={{
-        flex: '0 0 auto',
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: 22,
-        height: 22,
-        border: 0,
-        padding: 0,
-        borderRadius: 5,
-        background: active ? 'color-mix(in srgb, var(--dsw-label, #f0efed) 12%, transparent)' : 'transparent',
-        color: 'inherit',
-        cursor: 'pointer',
-      }}
+      className="h-[22px] w-[22px] px-0"
     >
       {children as never}
-    </button>
+    </Button>
   )
 }
 
@@ -1133,10 +1123,10 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
           gridTemplateColumns: '1fr auto',
           gap: '2px 10px',
           padding: '8px 0',
-          borderTop: '1px solid var(--dsw-border, rgba(242,241,237,0.1))',
+          borderTop: 'var(--biu-stroke-width) solid var(--biu-color-border)',
         }}
       >
-        <span style={{ color: 'var(--dsw-label, #f0efed)', fontWeight: 600 }}>{label}</span>
+        <span style={{ color: 'var(--biu-color-text)', fontWeight: 600 }}>{label}</span>
         <input
           type="number"
           value={value ?? ''}
@@ -1150,14 +1140,14 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
             border: 0,
             borderRadius: 7,
             padding: '0 8px',
-            background: 'var(--dsw-hover, rgba(242,241,237,0.08))',
-            color: 'var(--dsw-label, #f0efed)',
+            background: 'var(--biu-color-bg-hover)',
+            color: 'var(--biu-color-text)',
             font: 'inherit',
             textAlign: 'right',
             outline: 'none',
           }}
         />
-        <span style={{ gridColumn: '1 / -1', color: 'var(--dsw-label-3, rgba(242,241,237,0.45))', fontSize: 11, lineHeight: 1.4 }}>
+        <span style={{ gridColumn: '1 / -1', color: 'var(--biu-color-text-subtle)', fontSize: 11, lineHeight: 1.4 }}>
           {hint}
           {limit ? ` · ${limit.min}–${limit.max}` : ''}
         </span>
@@ -1177,26 +1167,26 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
         zIndex: 40,
         width: 268,
         padding: '10px 12px 8px',
-        border: '1px solid var(--dsw-border, rgba(242,241,237,0.12))',
+        border: 'var(--biu-stroke-width) solid var(--biu-color-border)',
         borderRadius: 10,
-        background: 'color-mix(in srgb, var(--dsw-sidebar, #222220) 92%, #111)',
+        background: 'color-mix(in srgb, var(--biu-color-bg-subtle) 92%, #111)',
         boxShadow: '0 12px 32px rgba(0,0,0,0.42)',
-        color: 'var(--dsw-label-2, rgba(242,241,237,0.72))',
+        color: 'var(--biu-color-text-muted)',
         font: '12px ui-sans-serif, system-ui, sans-serif',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '2px 0 8px' }}>
-        <span style={{ color: 'var(--dsw-label, #f0efed)', fontWeight: 600, fontSize: 13 }}>设置</span>
+        <span style={{ color: 'var(--biu-color-text)', fontWeight: 600, fontSize: 13 }}>设置</span>
         {typeof state.sessions === 'number' ? (
-          <span style={{ color: 'var(--dsw-label-3, rgba(242,241,237,0.45))' }}>{state.sessions} 个后台会话</span>
+          <span style={{ color: 'var(--biu-color-text-subtle)' }}>{state.sessions} 个后台代理</span>
         ) : null}
       </div>
       {state.error ? (
         <div style={{ padding: '6px 0', color: '#ff6369' }}>读取失败：{state.error}</div>
       ) : (
         <>
-          {row('maxSessions', '后台保留', '关掉页面后仍留着的会话，超出按最久未用淘汰')}
-          {row('bufferKB', '回放缓冲 KB', '每个会话缓存的输出，重连时回放')}
+          {row('maxSessions', '后台保留', '关掉页面后仍留着的代理，超出按最久未用淘汰')}
+          {row('bufferKB', '回放缓冲 KB', '每个代理缓存的输出，重连时回放')}
           {row('replayLines', '回放行数', '重连时最多回放多少行')}
         </>
       )}
@@ -1296,7 +1286,7 @@ function PageTerminal({
     </section>
   )
 
-  return body
+  return <ReUI>{body}</ReUI>
 }
 
 export function apply(ctx: {

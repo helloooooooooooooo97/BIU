@@ -4,7 +4,7 @@ export const MENTION_SCOPES: Array<{ kind: MentionKind; label: string; path: str
   { kind: 'page', label: '页面', path: '/pages' },
   { kind: 'task', label: '任务', path: '/tasks' },
   { kind: 'facet', label: '标签', path: '/facets' },
-  { kind: 'session', label: '会话', path: '/sessions' },
+  { kind: 'session', label: '代理', path: '/agents' },
 ]
 
 const KIND_SET = new Set<string>(MENTION_SCOPES.map((item) => item.kind))
@@ -25,7 +25,7 @@ export function decodeMentionId(id: string) {
 }
 
 export function mentionCollection(kind: MentionKind) {
-  if (kind === 'session') return '/sessions'
+  if (kind === 'session') return '/agents'
   if (kind === 'task') return '/tasks'
   if (kind === 'facet') return '/facets'
   return '/pages'
@@ -34,7 +34,7 @@ export function mentionCollection(kind: MentionKind) {
 export function mentionHref(id: string) {
   const parsed = decodeMentionId(id)
   if (!parsed) return ''
-  if (parsed.kind === 'session') return `/s/${encodeURIComponent(parsed.recordId)}`
+  if (parsed.kind === 'session') return `/agents/${encodeURIComponent(parsed.recordId)}`
   return `/database${mentionCollection(parsed.kind)}/record/${encodeURIComponent(parsed.recordId)}`
 }
 

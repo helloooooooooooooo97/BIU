@@ -1,5 +1,5 @@
 /** URL = 中心舞台。
- * `/` | `/s/:id` | `/s/:id/debug` | 插件 path
+ * `/` | `/agents/:id` | `/agents/:id/debug` | 插件 path
  * 数据模块（默认 `/database`）：
  *   `/database` 入口
  *   `/database/:type` 某张表
@@ -27,6 +27,32 @@ export type AppRoute =
 const DATABASE_FLAT = /^\/(?:c\/)?([^/]+)(?:\/(?:view|v)\/([^/]+)|\/(?:record|r)\/([^/]+))?$/
 const DATABASE_NESTED_RECORD =
   /^\/(?:c\/)?([^/]+)\/(?:view|v)\/([^/]+)\/(?:record|r)\/([^/]+)$/
+const SESSION_APP = /^\/agents\/([^/]+)(?:\/(chat|debug|trajectory))?$/
+
+export function sessionAppPath(sessionId: string, view: RouteView = 'chat') {
+  const base = `/agents/${encodeURIComponent(sessionId)}`
+  return view === 'debug' ? `${base}/debug` : base
+}
+
+export function isSessionAppPath(pathname: string) {
+  return SESSION_APP.test(normalizePath(pathname))
+}
+
+export function isAgentSurfacePath(pathname: string) {
+  const path = normalizePath(pathname)
+  return path === '/' || path === '/agents' || isSessionAppPath(path)
+}
+
+function parseSessionApp(path: string): Extract<AppRoute, { kind: 'session' }> | null {
+  const match = path.match(SESSION_APP)
+  if (!match?.[1]) return null
+  const segment = match[2]
+  return {
+    kind: 'session',
+    sessionId: decodeURIComponent(match[1]),
+    view: segment === 'debug' || segment === 'trajectory' ? 'debug' : 'chat',
+  }
+}
 
 export function encodeCollectionSeg(path: string) {
   return encodeURIComponent(normalizeCollectionKey(path).replace(/^\//, ''))
@@ -85,6 +111,8 @@ export function parseAppPath(pathname: string, plugins: AppModule[] = []): AppRo
   const path = normalizePath(pathname)
   if (path === '/login') return { kind: 'auth', mode: 'login' }
   if (path === '/register' || path === '/signup') return { kind: 'auth', mode: 'register' }
+  const session = parseSessionApp(path)
+  if (session) return session
   const hit = matchRegisteredModule(path, plugins)
   if (hit) {
     const nested = parseDatabaseRest(path, hit)
@@ -100,14 +128,7 @@ export function parseAppPath(pathname: string, plugins: AppModule[] = []): AppRo
       ...(share[2] ? { recordId: decodeURIComponent(share[2]) } : {}),
     }
   }
-  const match = path.match(/^\/s\/([^/]+)(?:\/(chat|debug|trajectory))?$/)
-  if (!match?.[1]) return { kind: 'home' }
-  const segment = match[2]
-  return {
-    kind: 'session',
-    sessionId: decodeURIComponent(match[1]),
-    view: segment === 'debug' || segment === 'trajectory' ? 'debug' : 'chat',
-  }
+  return { kind: 'home' }
 }
 
 export function isKnownAppPath(pathname: string, plugins: AppModule[] = []): boolean {
@@ -115,7 +136,7 @@ export function isKnownAppPath(pathname: string, plugins: AppModule[] = []): boo
   if (path === '/' || path === '/login' || path === '/register' || path === '/signup') return true
   if (/^\/share\/[^/]+(?:\/r\/[^/]+)?$/.test(path)) return true
   if (matchRegisteredModule(path, plugins)) return true
-  return /^\/s\/[^/]+(?:\/(chat|debug|trajectory))?$/.test(path)
+  return isSessionAppPath(path)
 }
 
 export function buildAppPath(route: AppRoute): string {
@@ -137,8 +158,7 @@ export function buildAppPath(route: AppRoute): string {
     if (route.viewId) return `${next}/view/${encodeURIComponent(route.viewId)}`
     return next
   }
-  if (route.view === 'debug') return `/s/${encodeURIComponent(route.sessionId)}/debug`
-  return `/s/${encodeURIComponent(route.sessionId)}`
+  return sessionAppPath(route.sessionId, route.view)
 }
 
 export function routeFromState(sessionId: string | null, view: RouteView): AppRoute {

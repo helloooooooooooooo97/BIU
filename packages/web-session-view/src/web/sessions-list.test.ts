@@ -63,7 +63,7 @@ test('seedHomeSessionFetches pulls the list then the latest turns', async () => 
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     const url = String(input)
     calls.push(url)
-    if (url.endsWith('/api/sessions')) {
+    if (url.endsWith('/api/agents')) {
       return new Response(
         JSON.stringify({
           sessions: [
@@ -82,9 +82,9 @@ test('seedHomeSessionFetches pulls the list then the latest turns', async () => 
   try {
     seedHomeSessionFetches()
     await new Promise((resolve) => setTimeout(resolve, 40))
-    assert.equal(calls.filter((url) => url.endsWith('/api/sessions')).length, 1)
-    assert.equal(calls.some((url) => url.includes('/api/sessions/new?turns=100')), true)
-    assert.equal(calls.some((url) => url.includes('/api/sessions/old?turns=')), false)
+    assert.equal(calls.filter((url) => url.endsWith('/api/agents')).length, 1)
+    assert.equal(calls.some((url) => url.includes('/api/agents/new?turns=100')), true)
+    assert.equal(calls.some((url) => url.includes('/api/agents/old?turns=')), false)
   } finally {
     globalThis.fetch = originalFetch
     resetSessionsListGet()

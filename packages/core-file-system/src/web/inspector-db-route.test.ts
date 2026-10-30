@@ -67,13 +67,13 @@ test('each inspector database pane keeps its own path', () => {
 })
 
 test('inspector pane path stays in memory until restored from session bind', () => {
-  const pane = 'database:/sessions'
-  setInspectorDbPath(pane, '/database/sessions/view/mine')
-  assert.equal(getInspectorDbPath(pane), '/database/sessions/view/mine')
+  const pane = 'database:/agents'
+  setInspectorDbPath(pane, '/database/agents/view/mine')
+  assert.equal(getInspectorDbPath(pane), '/database/agents/view/mine')
   resetInspectorDbPathMemory()
   assert.equal(getInspectorDbPath(pane), '')
-  restoreInspectorDbPaths({ [pane]: '/database/sessions/record/s1?view=mine' })
-  assert.equal(getInspectorDbPath(pane), '/database/sessions/record/s1?view=mine')
+  restoreInspectorDbPaths({ [pane]: '/database/agents/record/s1?view=mine' })
+  assert.equal(getInspectorDbPath(pane), '/database/agents/record/s1?view=mine')
 })
 
 test('window reveal event opens the inspector record path', async () => {
@@ -101,6 +101,16 @@ test('showRecordInInspector focuses an already-open pane for the same page', () 
   showRecordInInspector('/pages', 'p1')
   assert.equal(getInspectorDbPath(pane), '/database/pages/record/p1')
   assert.equal(getInspectorDbPath('database:/pages'), '')
+})
+
+test('showRecordInInspector newTab keeps the list pane and opens another tab', () => {
+  const list = databaseAllViewPath('/pages')
+  setInspectorDbPath('database:/pages', list)
+  showRecordInInspector('/pages', 'p-new', null, { newTab: true })
+  assert.equal(getInspectorDbPath('database:/pages'), list)
+  const extra = Object.keys(snapshotInspectorDbPaths()).filter((id) => id.startsWith('database:/pages::'))
+  assert.equal(extra.length, 1)
+  assert.equal(getInspectorDbPath(extra[0]!), databaseRecordPath('/pages', 'p-new', builtinAllViewId('/pages')))
 })
 
 test('showRecordInInspector reuses the collection pane instead of opening a second copy of the page', () => {
@@ -542,11 +552,11 @@ test('inspector db paths restore replaces the global pane map', () => {
   setInspectorDbPath('database:/pages', '/database/pages')
   setInspectorDbPath('database:/tasks', '/database/tasks')
   assert.equal(snapshotInspectorDbPaths()['database:/pages'], '/database/pages')
-  restoreInspectorDbPaths({ 'database:/sessions': '/database/sessions' })
+  restoreInspectorDbPaths({ 'database:/agents': '/database/agents' })
   assert.equal(getInspectorDbPath('database:/pages'), '')
   assert.equal(getInspectorDbPath('database:/tasks'), '')
-  assert.equal(getInspectorDbPath('database:/sessions'), '/database/sessions')
+  assert.equal(getInspectorDbPath('database:/agents'), '/database/agents')
   restoreInspectorDbPaths({})
-  assert.equal(getInspectorDbPath('database:/sessions'), '')
+  assert.equal(getInspectorDbPath('database:/agents'), '')
   assert.deepEqual(snapshotInspectorDbPaths(), {})
 })

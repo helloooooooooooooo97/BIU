@@ -91,10 +91,6 @@ function CollectionPage(props: SlotProps) {
   const [expandedViewKey, setExpandedViewKey] = useState<string | null>(null)
   const parsed = useMemo(() => parseAppPath(location.pathname, [DATA_MODULE]), [location.pathname])
   const dataHome = parsed.kind === 'module' && parsed.moduleId === DATA_MODULE_ID
-  const scopeHome = useMemo(() => {
-    if (!dataHome) return false
-    return new URLSearchParams(location.search).get('home') === 'user'
-  }, [dataHome, location.search])
   const storedHome = useMemo(
     () => (dataHome ? pickMainDataRoute(readMainDataRoute(), orderedTables) : ''),
     [dataHome, orderedTables],
@@ -161,7 +157,6 @@ function CollectionPage(props: SlotProps) {
   useLayoutEffect(() => {
     if (!orderedTables.length) return
     if (!dataHome) return
-    if (scopeHome) return
     const stored = pickMainDataRoute(readMainDataRoute(), orderedTables)
     if (stored) {
       navigate(stored, { replace: true })
@@ -169,7 +164,7 @@ function CollectionPage(props: SlotProps) {
     }
     const first = orderedTables[0]!
     go({ collection: first.path, viewId: builtinAllViewId(first.path) }, { replace: true })
-  }, [dataHome, orderedTables, scopeHome])
+  }, [dataHome, orderedTables])
 
   useEffect(() => {
     if (parsed.kind !== 'collection-view' || parsed.viewId || recordFromRoute) return
@@ -201,8 +196,6 @@ function CollectionPage(props: SlotProps) {
       routeViewId={viewFromRoute}
       expandedViewKey={expandedViewKey}
       onExpandedViewKeyChange={setExpandedViewKey}
-      scopeHome={scopeHome}
-      onOpenScopeHome={() => navigate(`${DATA_MODULE_PATH}?home=user`)}
       onOpenTable={(path, viewId) =>
           go({
             collection: path,
@@ -514,9 +507,9 @@ if (typeof document !== 'undefined') {
   const style = document.getElementById(id) ?? document.createElement('style')
   style.id = id
   style.textContent = `
-.fsdb-nav-errors{position:fixed;right:16px;bottom:16px;z-index:80;max-width:360px;border:1px solid var(--dsw-danger);border-radius:12px;padding:12px 14px;background:var(--dsw-surface);color:var(--dsw-label);box-shadow:var(--dsw-shadow)}
-.fsdb-nav-errors strong{display:block;margin-bottom:6px;color:var(--dsw-danger);font-size:12px}
-.fsdb-nav-errors ul{margin:0;padding-left:18px;font-size:12px;line-height:1.5}
+.fsdb-nav-errors{position:fixed;right:16px;bottom:16px;z-index:var(--biu-z-float);max-width:360px;border:var(--biu-stroke-width) solid var(--biu-color-danger);border-radius:12px;padding:12px 14px;background:var(--biu-color-surface);color:var(--biu-color-text);box-shadow:var(--biu-shadow-md)}
+.fsdb-nav-errors strong{display:block;margin-bottom:6px;color:var(--biu-color-danger);font-size:var(--biu-font-size-2)}
+.fsdb-nav-errors ul{margin:0;padding-left:18px;font-size:var(--biu-font-size-2);line-height:1.5}
 `
   if (!document.getElementById(id)) document.head.appendChild(style)
 }

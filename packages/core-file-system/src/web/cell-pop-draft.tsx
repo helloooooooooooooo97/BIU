@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   normalizeSchemaValue,
   retagSchemaValue,
@@ -7,16 +7,18 @@ import {
   type FieldSpec,
   type SchemaFieldValue,
 } from '@biu/type-file-system'
-import { TagChip, TagChips } from '@biu/public-ui'
-import { DbSearchOption, ensureDbSearchStyle } from '@biu/database-ui/search'
+import { TagChip, TagChips } from '@biu/biu-ui'
+import { PickOption, PickPanel } from '@biu/database-ui/search'
 import { fieldDraftValue, parseFieldValue } from './fsdb-cells.tsx'
 import { FieldEditor } from './field-editor.tsx'
 import { loadFacets, persistFacets, slugFacetId, subscribeFacets } from './facet-catalog.ts'
+import { facetChipIcon } from './schema-field.tsx'
+import { subscribeCrumbs } from './view-storage.ts'
 import { PersonPickPanel } from './person-cell.tsx'
 import { RecordPickPanel } from './record-link-cell.tsx'
 import { asStringList, enumDisplayLabel, isRecordLinkField, isSingleRefField, parseFacetFlatColumnKey, resolveFieldType } from './fields.ts'
 
-type TagOption = { value: string; label: string }
+type TagOption = { value: string; label: string; icon?: ReactNode }
 
 function TagPickPanel({
   values,
@@ -33,14 +35,12 @@ function TagPickPanel({
   onChange: (next: string[]) => void
   onPicked?: () => void
 }) {
-  ensureDbSearchStyle()
   const [query, setQuery] = useState('')
   const q = query.trim().toLowerCase()
-  const byValue = new Map(options.map((item) => [item.value, item.label]))
+  const byValue = new Map(options.map((item) => [item.value, item]))
   const available = options.filter(
     (item) =>
       Boolean(item.value) &&
-      !values.includes(item.value) &&
       (!q || item.label.toLowerCase().includes(q) || item.value.toLowerCase().includes(q)),
   )
   const draft = query.trim()
@@ -51,58 +51,55 @@ function TagPickPanel({
     !options.some((item) => item.value === draft || item.label === draft)
   function add(value: string) {
     if (!value) return
-    if (multiple) {
-      if (!values.includes(value)) onChange([...values, value])
-    } else {
+    if (values.includes(value)) {
+      onChange(values.filter((item) => item !== value))
+      setQuery('')
+      return
+    }
+    if (multiple) onChange([...values, value])
+    else {
       onChange([value])
       onPicked?.()
     }
     setQuery('')
   }
   return (
-    <div className="fsdb-cell-pop-tags">
-      {values.length ? (
-        <div className="fsdb-cell-pop-picked">
+    <PickPanel
+      className="fsdb-cell-pop-tags"
+      query={query}
+      onQuery={setQuery}
+      onEnter={() => {
+        if (available[0]) add(available[0].value)
+        else if (canCreate) add(draft)
+      }}
+      picked={
+        values.length ? (
           <TagChips>
             {values.map((value) => (
               <TagChip
                 key={value}
                 id={value}
-                label={byValue.get(value) ?? value}
+                label={byValue.get(value)?.label ?? value}
+                icon={byValue.get(value)?.icon}
                 onRemove={() => onChange(values.filter((item) => item !== value))}
               />
             ))}
           </TagChips>
-        </div>
+        ) : null
+      }
+      empty={!available.length && !canCreate ? <div className="db-search-empty">没有匹配项</div> : null}
+    >
+      {available.map((item) => (
+        <PickOption key={item.value} selected={values.includes(item.value)} onClick={() => add(item.value)}>
+          <TagChip id={item.value} label={item.label} icon={item.icon} />
+        </PickOption>
+      ))}
+      {canCreate ? (
+        <PickOption onClick={() => add(draft)}>
+          添加 <TagChip id={draft} label={draft} />
+        </PickOption>
       ) : null}
-      <label className="db-search-field">
-        <input
-          value={query}
-          autoFocus
-          placeholder=""
-          onChange={(event) => setQuery(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.preventDefault()
-              if (available[0]) add(available[0].value)
-              else if (canCreate) add(draft)
-            }
-          }}
-        />
-      </label>
-      <div className="db-search-list">
-        {available.map((item) => (
-          <DbSearchOption key={item.value} onClick={() => add(item.value)}>
-            <TagChip id={item.value} label={item.label} />
-          </DbSearchOption>
-        ))}
-        {canCreate ? (
-          <DbSearchOption onClick={() => add(draft)}>
-            添加 <TagChip id={draft} label={draft} />
-          </DbSearchOption>
-        ) : null}
-      </div>
-    </div>
+    </PickPanel>
   )
 }
 
@@ -133,11 +130,13 @@ function FacetPickPanel({ value, onChange }: { value: unknown; onChange: (next: 
   const parsed = normalizeSchemaValue(value)
   const liveRef = useRef(parsed)
   const [catalog, setCatalog] = useState(() => loadFacets())
+  const [, setFacetMarks] = useState(0)
   useEffect(() => subscribeFacets(undefined, () => setCatalog(loadFacets())), [])
+  useEffect(() => subscribeCrumbs(() => setFacetMarks((n) => n + 1)), [])
   return (
     <TagPickPanel
       values={parsed.tags}
-      options={catalog.map((tag) => ({ value: tag.id, label: tag.label }))}
+      options={catalog.map((tag) => ({ value: tag.id, label: tag.label, icon: facetChipIcon(tag.id) }))}
       multiple
       onChange={(next) => {
         void applyFacetTags(liveRef.current, catalog, next).then((updated) => {

@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { headingElById, headingsFromPage, pageRootFrom } from './web/outline.ts'
+import { headingElById, headingsFromPage, nestHeadings, pageRootFrom } from './web/outline.ts'
 
 test('headingsFromPage extracts h1–h3, skips chrome and the toc host', () => {
   const root = document.createElement('div')
@@ -47,4 +47,18 @@ test('pageRootFrom uses the page shell; inspector without page DOM is empty', ()
   document.body.appendChild(orphan)
   assert.equal(pageRootFrom(orphan), null)
   orphan.remove()
+})
+
+test('nestHeadings nests by heading level for ReUI Tree', () => {
+  const tree = nestHeadings([
+    { id: 'a', text: 'Intro', level: 1 },
+    { id: 'b', text: 'Section', level: 2 },
+    { id: 'c', text: 'Detail', level: 3 },
+    { id: 'd', text: 'Next', level: 1 },
+  ])
+  assert.equal(tree.length, 2)
+  assert.equal(tree[0].children[0].text, 'Section')
+  assert.equal(tree[0].children[0].children[0].text, 'Detail')
+  assert.equal(tree[0].children[0].children[0].depth, 2)
+  assert.equal(tree[1].text, 'Next')
 })

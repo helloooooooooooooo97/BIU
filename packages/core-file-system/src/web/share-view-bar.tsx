@@ -9,7 +9,7 @@ import {
   FunnelIcon,
   MagnifyingGlassIcon,
 } from '@heroicons/react/16/solid'
-import { HeadlessDismiss, HEADLESS_DISMISS_IGNORE } from '@biu/public-ui/headless-dismiss'
+import { HeadlessDismiss, HEADLESS_DISMISS_IGNORE } from '@biu/biu-ui/headless-dismiss'
 import type { CollectionSchema, DbRecord, FieldType } from '@biu/type-file-system'
 import { countFilterRules, isCustomSorts } from '../query-logic.ts'
 import { defaultColumnKeys, resolveFieldType } from './fields.ts'

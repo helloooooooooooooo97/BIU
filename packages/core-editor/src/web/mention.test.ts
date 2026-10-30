@@ -20,7 +20,7 @@ test('mention id encodes collection kind for jump targets', () => {
   assert.equal(encodeMentionId('page', 'p1'), 'page/p1')
   assert.deepEqual(decodeMentionId('task/t-2'), { kind: 'task', recordId: 't-2' })
   assert.equal(mentionHref('page/p1'), '/database/pages/record/p1')
-  assert.equal(mentionHref('session/abc'), '/s/abc')
+  assert.equal(mentionHref('session/abc'), '/agents/abc')
   assert.deepEqual(mentionReveal('facet/f1'), { collection: '/facets', recordId: 'f1', unique: true })
   assert.equal(decodeMentionId('nope'), null)
 })
@@ -46,7 +46,7 @@ test('fetchMentionItems lists pages tasks facets and sessions', async () => {
     seen.push(url)
     const path = new URL(url, 'http://local.test').searchParams.get('path')
     const id = path === '/pages' ? 'p1' : path === '/tasks' ? 't1' : path === '/facets' ? 'f1' : 's1'
-    const title = path === '/pages' ? '首页' : path === '/tasks' ? '任务甲' : path === '/facets' ? '标签' : '会话'
+    const title = path === '/pages' ? '首页' : path === '/tasks' ? '任务甲' : path === '/facets' ? '标签' : '代理'
     return {
       ok: true,
       json: async () => ({ items: [{ id, title }] }),
@@ -116,7 +116,7 @@ test('mention list shows a kind icon on each hit', () => {
         { id: 'page/p1', label: '首页', kind: 'page', kindLabel: '页面' },
         { id: 'task/t1', label: '任务甲', kind: 'task', kindLabel: '任务' },
         { id: 'facet/f1', label: '标签', kind: 'facet', kindLabel: '标签' },
-        { id: 'session/s1', label: '会话', kind: 'session', kindLabel: '会话' },
+        { id: 'session/s1', label: '代理', kind: 'session', kindLabel: '代理' },
       ],
       command: () => undefined,
     }),

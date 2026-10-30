@@ -1472,7 +1472,7 @@ export function apply(ctx: Context) {
     if (!row) throw new Error('unknown task')
     const targetSessionId = row.assignee?.sessionId
     if (!targetSessionId) {
-      throw new Error(`task ${id} 未分配执行会话。请先 db_update /tasks/${id} 写入 assignee（会话 id）`)
+      throw new Error(`task ${id} 未分配执行代理。请先 db_update /tasks/${id} 写入 assignee（代理 id）`)
     }
     if (!host.sessions?.sendMessage) {
       throw new Error('sessions.sendMessage 不可用：sessions 服务未就绪')

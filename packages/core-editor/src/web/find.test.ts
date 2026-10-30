@@ -9,7 +9,7 @@ import { applyEditorFind } from './find-plugin.ts'
 import { pageEditorExtensions } from './kit.ts'
 import { isFindHotkey } from './find-bar.tsx'
 import { PAGE_EDITOR_STYLE } from './style.ts'
-import { TAG_TONE_ROSE } from '@biu/public-ui'
+import { TAG_TONE_ROSE } from '@biu/biu-ui'
 
 test('findRanges is case-insensitive and walks every hit', () => {
   assert.deepEqual(findRanges('Hello hello HELLO', 'hello'), [
@@ -54,7 +54,7 @@ test('htmlVisibleText keeps inner copy', () => {
 test('findInPmDoc highlights an html pageBlock once, not each inner match', () => {
   const editor = new Editor({
     extensions: pageEditorExtensions(),
-    content: `正文\n\n:::pageBlock {kind=html plugin=page-html-blocks}\n{"html":"<div>爱乐之城海报 爱乐之城</div>"}\n:::\n`,
+    content: `正文\n\n:::pageBlock {kind=sandbox plugin=page-sandbox}\n{"html":"<div>爱乐之城海报 爱乐之城</div>"}\n:::\n`,
     contentType: 'markdown',
   })
   const hits = findInPmDoc(editor.state.doc, '爱乐之城')
@@ -118,8 +118,8 @@ test('find bar pins to the inspector chrome, not the scrolling body', () => {
 })
 
 test('find hits use rose tag text and wash; html blocks only get a pink frame', () => {
-  assert.match(PAGE_EDITOR_STYLE, new RegExp(`\\.page-find-hit\\{[^}]*color:${TAG_TONE_ROSE}`))
-  assert.match(PAGE_EDITOR_STYLE, /color-mix\(in srgb,#e255a1 22%,transparent\)/)
+  assert.match(PAGE_EDITOR_STYLE, new RegExp(`\\.page-find-hit\\{[^}]*color:${TAG_TONE_ROSE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`))
+  assert.match(PAGE_EDITOR_STYLE, /color-mix\(in srgb,var\(--biu-color-ink-pink\) 22%,transparent\)/)
   assert.match(PAGE_EDITOR_STYLE, /\.page-find-hit:not\(\.page-block\)/)
   assert.match(PAGE_EDITOR_STYLE, /\.page-block\.page-find-hit\{[^}]*background:transparent/)
   assert.match(PAGE_EDITOR_STYLE, /\.page-block\.page-find-hit/)

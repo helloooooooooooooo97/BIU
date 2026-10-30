@@ -6,6 +6,7 @@ import { pageEditorExtensions } from './kit.ts'
 import { filterSlashItems, slashGroups } from './slash.ts'
 import { BASIC_BLOCK_TYPE, PageEditorService } from './service.ts'
 import { duplicateAssetPath } from './page-block.ts'
+import { pageTextBubbleOpen } from './page-editor.tsx'
 
 test('registerBlock adds a slash item and inserts pageBlock', async () => {
   const ctx = new Context()
@@ -70,8 +71,8 @@ test('pageBlock markdown roundtrips kind, plugin, id and data', () => {
   editor.destroy()
 })
 
-test('html pageBlock markdown keeps raw html and deck on the fence', () => {
-  const src = `:::pageBlock {kind=html plugin=page-html-blocks deck=true}
+test('sandbox pageBlock markdown keeps raw source and deck on the fence', () => {
+  const src = `:::pageBlock {kind=sandbox plugin=page-sandbox deck=true}
 <div style="color:#fff">爱乐之城</div>
 :::
 `
@@ -81,11 +82,12 @@ test('html pageBlock markdown keeps raw html and deck on the fence', () => {
     contentType: 'markdown',
   })
   const block = editor.getJSON().content?.find((node) => node.type === 'pageBlock')
-  assert.equal(block?.attrs?.kind, 'html')
-  assert.equal((block?.attrs?.data as { html?: string; deck?: boolean })?.html, '<div style="color:#fff">爱乐之城</div>')
+  assert.equal(block?.attrs?.kind, 'sandbox')
+  assert.equal((block?.attrs?.data as { source?: string; deck?: boolean })?.source, '<div style="color:#fff">爱乐之城</div>')
   assert.equal((block?.attrs?.data as { deck?: boolean })?.deck, true)
   const out = editor.getMarkdown()
-  assert.match(out, /:::pageBlock \{kind=html plugin=page-html-blocks id=[a-z0-9]+ deck=true\}/)
+  assert.match(out, /:::pageBlock \{kind=sandbox plugin=page-sandbox id=[a-z0-9]+\}/)
+  assert.doesNotMatch(out, /\bdeck=/)
   assert.match(out, /<div style="color:#fff">爱乐之城<\/div>/)
   assert.doesNotMatch(out, /"html":/)
   editor.destroy()
@@ -130,8 +132,8 @@ test('video pageBlock still reads the old JSON body', () => {
   editor.destroy()
 })
 
-test('html pageBlock still reads the old JSON body', () => {
-  const src = `:::pageBlock {kind=html plugin=page-html-blocks}
+test('sandbox pageBlock still reads the old JSON body as source', () => {
+  const src = `:::pageBlock {kind=sandbox plugin=page-sandbox}
 {"html":"<div>旧写法</div>","deck":true}
 :::
 `
@@ -141,13 +143,13 @@ test('html pageBlock still reads the old JSON body', () => {
     contentType: 'markdown',
   })
   const data = editor.getJSON().content?.find((node) => node.type === 'pageBlock')?.attrs?.data as {
-    html?: string
+    source?: string
     deck?: boolean
   }
-  assert.equal(data?.html, '<div>旧写法</div>')
+  assert.equal(data?.source, '<div>旧写法</div>')
   assert.equal(data?.deck, true)
   const out = editor.getMarkdown()
-  assert.match(out, /deck=true/)
+  assert.doesNotMatch(out, /\bdeck=/)
   assert.match(out, /<div>旧写法<\/div>/)
   assert.doesNotMatch(out, /\\"/)
   editor.destroy()
@@ -237,13 +239,13 @@ test('duplicate pageBlock file pointers get a cloneFrom copy', () => {
 test('editor assigns a stable id when inserting or loading a pageBlock without one', async () => {
   const editor = new Editor({
     extensions: pageEditorExtensions(),
-    content: `:::pageBlock {kind=html plugin=page-html-blocks}\n<div>x</div>\n:::\n`,
+    content: `:::pageBlock {kind=sandbox plugin=page-sandbox}\n<div>x</div>\n:::\n`,
     contentType: 'markdown',
   })
   await Promise.resolve()
   const block = editor.getJSON().content?.find((node) => node.type === 'pageBlock')
   assert.match(String(block?.attrs?.id ?? ''), /^[a-z0-9]{8}$/i)
-  assert.match(editor.getMarkdown(), /:::pageBlock \{kind=html plugin=page-html-blocks id=[a-z0-9]+\}/)
+  assert.match(editor.getMarkdown(), /:::pageBlock \{kind=sandbox plugin=page-sandbox id=[a-z0-9]+\}/)
   editor.destroy()
 })
 
@@ -254,7 +256,7 @@ test('setContent from agent without id or with a bad id gets a valid id', () => 
     contentType: 'markdown',
   })
   editor.commands.setContent(
-    `:::pageBlock {kind=html plugin=page-html-blocks}\n<div>a</div>\n:::\n\n:::pageBlock {kind=html plugin=page-html-blocks id=no}\n<div>b</div>\n:::\n`,
+    `:::pageBlock {kind=sandbox plugin=page-sandbox}\n<div>a</div>\n:::\n\n:::pageBlock {kind=sandbox plugin=page-sandbox id=no}\n<div>b</div>\n:::\n`,
     { contentType: 'markdown', emitUpdate: false },
   )
   const ids = (editor.getJSON().content ?? [])
@@ -275,8 +277,8 @@ test('copied pageBlocks do not share an id', () => {
   editor.commands.setContent({
     type: 'doc',
     content: [
-      { type: 'pageBlock', attrs: { kind: 'html', id: 'ab12cd34', data: { html: '<div>a</div>' } } },
-      { type: 'pageBlock', attrs: { kind: 'html', id: 'ab12cd34', data: { html: '<div>b</div>' } } },
+      { type: 'pageBlock', attrs: { kind: 'sandbox', id: 'ab12cd34', data: { html: '<div>a</div>' } } },
+      { type: 'pageBlock', attrs: { kind: 'sandbox', id: 'ab12cd34', data: { html: '<div>b</div>' } } },
     ],
   })
   const ids = (editor.getJSON().content ?? [])
@@ -294,12 +296,12 @@ test('pasted pageBlocks with the same id are rewritten immediately', () => {
     extensions: pageEditorExtensions(),
     content: {
       type: 'doc',
-      content: [{ type: 'pageBlock', attrs: { kind: 'html', id: 'ab12cd34', data: { html: '<div>a</div>' } } }],
+      content: [{ type: 'pageBlock', attrs: { kind: 'sandbox', id: 'ab12cd34', data: { html: '<div>a</div>' } } }],
     },
   })
   editor.commands.insertContentAt(editor.state.doc.content.size, {
     type: 'pageBlock',
-    attrs: { kind: 'html', id: 'ab12cd34', data: { html: '<div>b</div>' } },
+    attrs: { kind: 'sandbox', id: 'ab12cd34', data: { html: '<div>b</div>' } },
   })
   const live = (editor.getJSON().content ?? [])
     .filter((node) => node.type === 'pageBlock')
@@ -311,14 +313,15 @@ test('pasted pageBlocks with the same id are rewritten immediately', () => {
   editor.destroy()
 })
 
-test('pageBlock node view skips react update when attrs are unchanged', async () => {
+test('pageBlock node view still updates when only node selection changes', async () => {
   const { readFile } = await import('node:fs/promises')
   const { resolve } = await import('node:path')
   const src = await readFile(resolve(import.meta.dirname, './page-block.ts'), 'utf8')
-  assert.match(src, /oldNode\.attrs\.id === newNode\.attrs\.id/)
-  assert.match(src, /oldNode\.attrs\.kind === newNode\.attrs\.kind/)
-  assert.match(src, /JSON\.stringify\(oldNode\.attrs\.data\) === JSON\.stringify\(newNode\.attrs\.data\)/)
-  assert.match(src, /return true/)
+  const view = await readFile(resolve(import.meta.dirname, './page-block-view.tsx'), 'utf8')
+  assert.match(src, /update\(\{ updateProps \}\)/)
+  assert.match(src, /updateProps\(\)/)
+  assert.match(view, /prev\.selected === next\.selected/)
+  assert.match(view, /selected=\{selected\}/)
 })
 
 test('pageBlock capture includes every registered block shell', async () => {
@@ -350,6 +353,7 @@ test('pageBlock capture includes every registered block shell', async () => {
   assert.doesNotMatch(view, /PageBlockIdle/)
   assert.doesNotMatch(view, /data-plugin-phase="loading"/)
   assert.doesNotMatch(src, /addKeyboardShortcuts/)
+  assert.match(src, /handlePageBlockArrow/)
   assert.doesNotMatch(src, /deleteSelection/)
   assert.doesNotMatch(view, /onKeyDownCapture/)
 })
@@ -371,6 +375,26 @@ test('Enter on a selected pageBlock does not delete it', () => {
   assert.equal(types.includes('pageBlock'), true)
   assert.match(editor.getMarkdown(), /hello/)
   assert.match(editor.getMarkdown(), /pageBlock/)
+  editor.destroy()
+})
+
+test('text style bubble stays closed when the cursor is on a pageBlock', () => {
+  const editor = new Editor({
+    extensions: pageEditorExtensions(),
+    content: `hello\n\n:::pageBlock {kind=sandbox plugin=page-sandbox}\nexport default function App(){return <div/>}\n:::\n`,
+    contentType: 'markdown',
+  })
+  let pos = -1
+  editor.state.doc.descendants((node, p) => {
+    if (node.type.name === 'pageBlock') pos = p
+  })
+  editor.chain().setNodeSelection(pos).run()
+  const { from, to } = editor.state.selection
+  assert.notEqual(from, to)
+  assert.equal(pageTextBubbleOpen(editor, from, to), false)
+  editor.chain().setTextSelection(1).run()
+  editor.commands.setTextSelection({ from: 1, to: 5 })
+  assert.equal(pageTextBubbleOpen(editor, editor.state.selection.from, editor.state.selection.to), true)
   editor.destroy()
 })
 

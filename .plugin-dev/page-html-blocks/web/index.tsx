@@ -1,9 +1,152 @@
+import { ReUI, Textarea } from '@biu/reui'
 import { createPortal } from 'react-dom'
+import { compileHtmlSource } from '../shared/compile.ts'
 import { bindHtmlSlide, collectHtmlSlides, cssBoxSize, htmlDeckEnabled, htmlDeckIndex, htmlDeckKeyAction, htmlLooksFillLayout, HTML_FILL_HOST_PX, stepHtmlDeck } from './html-deck.ts'
+import { mountHtmlSandbox, unmountHtmlSandbox } from './sandbox.ts'
 import { htmlBlockKey, stampHtmlPickSurfaces, stampHtmlSource } from './stamp-picks.ts'
 
 const React = globalThis.React
 const { useEffect, useLayoutEffect, useMemo, useRef, useState } = React
+
+function assetName(file: string) {
+  return file.replace(/^assets\//, '')
+}
+
+function newHtmlFile() {
+  return `assets/html-${crypto.randomUUID().slice(0, 8)}.html`
+}
+
+function assetEtag(raw: string) {
+  return raw.replace(/^W\//, '').replaceAll('"', '')
+}
+
+async function loadHtmlAsset(file: string, fallback: string, bust = false) {
+  const name = assetName(file)
+  const res = await fetch(`/api/page/file/${encodeURIComponent(name)}${bust ? `?t=${Date.now()}` : ''}`)
+  if (res.status === 404) {
+    if (bust) return { html: fallback, etag: '' }
+    const created = await fetch(`/api/page/file/${encodeURIComponent(name)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      body: fallback,
+    })
+    return { html: fallback, etag: assetEtag(String(created.headers.get('etag') ?? '')) }
+  }
+  if (!res.ok) return { html: fallback, etag: '' }
+  return { html: await res.text(), etag: assetEtag(String(res.headers.get('etag') ?? '')) }
+}
+
+async function saveHtmlAsset(file: string, html: string, etag: string) {
+  const name = assetName(file)
+  const headers: Record<string, string> = { 'Content-Type': 'text/html; charset=utf-8' }
+  if (etag) headers['If-Match'] = etag
+  const res = await fetch(`/api/page/file/${encodeURIComponent(name)}`, { method: 'PUT', headers, body: html })
+  return assetEtag(String(res.headers.get('etag') ?? etag))
+}
+
+function useHtmlSource(
+  data: Record<string, unknown>,
+  update: (patch: Record<string, unknown>) => void,
+  sample: string,
+) {
+  const file = typeof data.file === 'string' ? data.file.trim() : ''
+  const inline = typeof data.html === 'string' ? data.html : ''
+  const [html, setHtml] = useState(inline || sample)
+  const [rev, setRev] = useState(0)
+  const etagRef = useRef('')
+  const htmlRef = useRef(html)
+  const fileRef = useRef(file)
+  const quietUntil = useRef(0)
+  htmlRef.current = html
+  fileRef.current = file
+  useEffect(() => {
+    if (file) return
+    update({ file: newHtmlFile(), html: undefined })
+  }, [file, update])
+  useEffect(() => {
+    if (!file) return
+    let gone = false
+    void loadHtmlAsset(file, htmlRef.current || inline || sample, rev > 0).then((loaded) => {
+      if (gone) return
+      etagRef.current = loaded.etag
+      setHtml(loaded.html)
+      if (inline) update({ html: undefined })
+    })
+    return () => {
+      gone = true
+    }
+  }, [file, rev])
+  useEffect(() => {
+    const onAsset = (event: Event) => {
+      const detail = (event as CustomEvent<{ name?: string; etag?: string }>).detail
+      const name = String(detail?.name ?? '')
+      const current = fileRef.current
+      if (!name || !current) return
+      if (assetName(current) !== name && current !== name) return
+      if (Date.now() < quietUntil.current) return
+      const nextEtag = assetEtag(String(detail?.etag ?? ''))
+      if (nextEtag && nextEtag === etagRef.current) return
+      setRev((n) => n + 1)
+    }
+    window.addEventListener('biu:asset-changed', onAsset)
+    return () => window.removeEventListener('biu:asset-changed', onAsset)
+  }, [])
+  const save = (next: string) => {
+    setHtml(next)
+    htmlRef.current = next
+    if (!file) {
+      update({ html: next })
+      return
+    }
+    quietUntil.current = Date.now() + 1200
+    void saveHtmlAsset(file, next, etagRef.current).then((etag) => {
+      etagRef.current = etag
+    })
+  }
+  return { file, html, save }
+}
+
+function HtmlSandbox({
+  html,
+  live,
+  onStamp,
+}: {
+  html: string
+  live: boolean
+  onStamp?: (root: ShadowRoot) => void
+}) {
+  const hostRef = useRef<HTMLDivElement | null>(null)
+  const [error, setError] = useState('')
+  useLayoutEffect(() => {
+    const host = hostRef.current
+    if (!host) return
+    const root = host.shadowRoot ?? host.attachShadow({ mode: 'open' })
+    try {
+      mountHtmlSandbox(root, html, { live })
+      setError('')
+      onStamp?.(root)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+    return () => unmountHtmlSandbox(root)
+  }, [html, live])
+  return (
+    <>
+      <div
+        ref={hostRef}
+        data-testid={live ? 'page-html-sandbox' : 'page-html-static-host'}
+        data-html-sandbox=""
+        data-page-block-capture=""
+        style={{ display: 'block', width: '100%', height: '100%', minHeight: live ? 80 : undefined }}
+      />
+      {error ? (
+        <div data-testid="html-sandbox-error" style={{ color: 'var(--biu-color-danger)', fontSize: 12, padding: 8 }}>
+          {error}
+        </div>
+      ) : null}
+    </>
+  )
+}
 
 export const name = 'page-html-blocks'
 export const inject = ['pageEditor']
@@ -27,7 +170,15 @@ const field = {
 }
 
 /** 源码编辑区。草稿在本地，避免每次回车写回 pageBlock 把光标甩到最后。 */
-function SourceEditor({ html, onChange }: { html: string; onChange: (v: string) => void }) {
+function SourceEditor({
+  html,
+  onChange,
+  compile,
+}: {
+  html: string
+  onChange: (v: string) => void
+  compile?: ReturnType<typeof compileHtmlSource>
+}) {
   const [draft, setDraft] = useState(html)
   const focused = useRef(false)
   const draftRef = useRef(draft)
@@ -49,7 +200,8 @@ function SourceEditor({ html, onChange }: { html: string; onChange: (v: string) 
     if (draftRef.current !== htmlRef.current) onChangeRef.current(draftRef.current)
   }
   return (
-    <textarea
+    <>
+    <Textarea
       data-testid="html-source"
       data-page-block-capture=""
       data-biu-ignore
@@ -71,17 +223,27 @@ function SourceEditor({ html, onChange }: { html: string; onChange: (v: string) 
         ...field,
         width: '100%',
         minHeight: 160,
-        padding: '26px 10px 10px',
+        padding: 10,
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: 12,
         lineHeight: 1.55,
-        color: '#111',
-        background: '#fff',
-        border: '2px solid #111',
-        borderRadius: 0,
+        color: 'var(--biu-color-text)',
+        background: 'var(--biu-color-bg)',
+        border: 'var(--biu-stroke-width) solid var(--biu-color-border)',
+        borderRadius: 10,
         resize: 'vertical',
       }}
     />
+    {compile ? (
+      <div
+        data-testid="html-compile"
+        data-ok={compile.ok ? '1' : '0'}
+        style={{ marginTop: 6, fontSize: 11, color: compile.ok ? 'var(--biu-color-ok)' : 'var(--biu-color-danger)' }}
+      >
+        {compile.ok ? `编译通过 · ${compile.mode}` : `编译失败 · ${compile.error}`}
+      </div>
+    ) : null}
+    </>
   )
 }
 
@@ -128,7 +290,7 @@ const pressBtn: Record<string, unknown> = {
   borderLeft: '2px solid #111',
   borderRadius: 0,
   padding: '8px 10px',
-  background: '#fff',
+  background: 'var(--biu-color-bg)',
   color: '#111',
   fontFamily: inkFace,
   fontWeight: 800,
@@ -239,12 +401,9 @@ function HtmlDeckOverlay({
         }}
       >
         {slide.kind === 'htmlframe' ? (
-          <iframe
-            title={`html-deck-${index}`}
-            srcDoc={slide.html}
-            sandbox="allow-scripts"
-            style={{ ...fill, background: MAG_INK }}
-          />
+          <div data-testid="html-deck-slide" style={{ ...fill, background: MAG_INK }}>
+            <HtmlSandbox html={slide.html} live />
+          </div>
         ) : (
           <div
             data-testid="html-deck-slide"
@@ -476,7 +635,7 @@ function FloatBar({
         alignItems: 'stretch',
         padding: 0,
         borderRadius: 0,
-        background: '#fff',
+        background: 'var(--biu-color-bg)',
         border: 'none',
         borderBottom: '2px solid #111',
         boxShadow: 'none',
@@ -563,7 +722,8 @@ const HTML_FILL_CSS = `.html-direct-fill-inner{height:100%;min-height:100%}.html
 
 function HtmlDirectCard({ data, update, writable }: BlockProps) {
   const ro = !writable
-  const html = String(data.html ?? '')
+  const source = useHtmlSource(data, update, HTML_DIRECT_SAMPLE)
+  const html = source.html
   const width = data.width
   const height = data.height
   const fill = htmlLooksFillLayout(html)
@@ -578,8 +738,10 @@ function HtmlDirectCard({ data, update, writable }: BlockProps) {
     () => stampHtmlSource(html, htmlBlockKey(hostRef.current?.closest('[data-page-block]') ?? null, html), name),
     [html],
   )
+  const compiled = useMemo(() => compileHtmlSource(html), [html])
 
   return (
+    <ReUI>
     <div
       ref={hostRef}
       data-testid="page-html-direct"
@@ -609,7 +771,7 @@ function HtmlDirectCard({ data, update, writable }: BlockProps) {
         />
       )}
       {editing ? (
-        <SourceEditor html={html} onChange={(v) => update({ html: v })} />
+        <SourceEditor html={html} onChange={source.save} compile={compiled} />
       ) : (
         <div
           className={fill ? 'html-direct-fill-inner' : undefined}
@@ -620,12 +782,12 @@ function HtmlDirectCard({ data, update, writable }: BlockProps) {
       {ro || editing ? null : <SizeGrip reveal={hover} boxRef={hostRef} onSize={(next) => update(next)} />}
       {deck.overlay}
     </div>
+    </ReUI>
   )
 }
 
 /* ============================================================
-   2) kind=htmlframe：iframe 沙箱隔离渲染（可跑脚本）
-   同样无外框，iframe 本身不再描边
+   2) kind=htmlframe：文档内 Shadow 沙箱（可跑脚本 / React），继承全局 --biu-* 与样式表
    ============================================================ */
 
 const HTML_FRAME_SAMPLE = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
@@ -653,7 +815,7 @@ html,body{margin:0;height:100%;background:${MAG_INK};color:${MAG_PAPER}}
     <div class="mag-side">
       <button type="button" class="mag-hit" id="mag-hit">动态 · 点我 <span id="mag-n">0</span></button>
       <span style="background:#ff2a6d;color:#fff;padding:2px 6px">有脚本</span>
-      <span style="border:1.5px solid ${MAG_PAPER};padding:2px 6px">iframe</span>
+      <span style="border:1.5px solid ${MAG_PAPER};padding:2px 6px">沙箱</span>
     </div>
   </div>
   <div class="mag-rail-wrap"><div class="mag-rail" id="mag-rail"><span>NIGHT ISSUE</span><span>LIVE TYPE</span><span>NEW YORK GRID</span><span>NIGHT ISSUE</span><span>LIVE TYPE</span><span>NEW YORK GRID</span></div></div>
@@ -689,39 +851,22 @@ html,body{margin:0;height:100%;background:${MAG_INK};color:${MAG_PAPER}}
 
 function HtmlFrameCard({ data, update, writable }: BlockProps) {
   const ro = !writable
-  const html = String(data.html ?? '')
+  const source = useHtmlSource(data, update, HTML_FRAME_SAMPLE)
+  const html = source.html
   const height = Number(data.height) || 300
   const deckOn = htmlDeckEnabled(data.deck)
   const [editing, setEditing] = useState(false)
   const [hover, setHover] = useState(false)
   const hostRef = useRef<HTMLDivElement | null>(null)
-  const frameRef = useRef<HTMLIFrameElement | null>(null)
   const deck = useHtmlDeck(hostRef, 'htmlframe', html, { height, deck: deckOn })
-
-  const stampFrame = () => {
-    const frame = frameRef.current
-    if (!frame) return
-    const host = hostRef.current?.closest('[data-page-block]') ?? null
-    const key = htmlBlockKey(host, html)
-    stampHtmlPickSurfaces(frame, key, { plugin: name })
-    try {
-      const body = frame.contentDocument?.body
-      if (body) stampHtmlPickSurfaces(body, `${key}-doc`, { plugin: name })
-    } catch {
-      /* srcdoc + sandbox 可能读不到 contentDocument */
-    }
-  }
-
-  useEffect(() => {
-    if (editing) return
-    queueMicrotask(stampFrame)
-  }, [editing, html, height])
+  const compiled = useMemo(() => compileHtmlSource(html), [html])
 
   return (
+    <ReUI>
     <div
       ref={hostRef}
       data-testid="page-html-frame"
-      style={{ position: 'relative', width: '100%' }}
+      style={{ position: 'relative', width: '100%', height }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
@@ -735,28 +880,40 @@ function HtmlFrameCard({ data, update, writable }: BlockProps) {
                 min={80}
                 value={height}
                 onChange={(e) => update({ height: Number(e.target.value) || 300 })}
-                style={{ width: 52, border: '2px solid #111', borderRadius: 0, background: '#fff', color: '#111', padding: '1px 4px', fontSize: 12, fontFamily: inkFace }}
+                style={{ width: 52, border: '2px solid #111', borderRadius: 0, background: 'var(--biu-color-bg)', color: '#111', padding: '1px 4px', fontSize: 12, fontFamily: inkFace }}
               />
             </label>
           )}
         </FloatBar>
       )}
       {editing ? (
-        <SourceEditor html={html} onChange={(v) => update({ html: v })} />
+        <SourceEditor html={html} onChange={source.save} compile={compiled} />
       ) : (
-        <iframe
-          ref={frameRef}
-          data-testid="page-html-frame-preview"
-          title="html-frame"
-          srcDoc={html}
-          sandbox="allow-scripts"
-          onLoad={stampFrame}
-          style={{ display: 'block', width: '100%', height, border: 'none', background: MAG_INK }}
+        <HtmlSandbox
+          html={html}
+          live
+          onStamp={(root) => {
+            const host = hostRef.current?.closest('[data-page-block]') ?? null
+            const key = htmlBlockKey(host, html)
+            const body = root.querySelector('[data-html-sandbox-body]')
+            if (body instanceof HTMLElement) stampHtmlPickSurfaces(body, `${key}-doc`, { plugin: name })
+          }}
         />
       )}
       {deck.overlay}
     </div>
+    </ReUI>
   )
+}
+
+function htmlBlockAssets(data: Record<string, unknown>) {
+  const out: string[] = []
+  if (typeof data.file === 'string') out.push(data.file)
+  const html = String(data.html ?? '')
+  for (const match of html.matchAll(/<(?:img|a|source|video|audio)\b[^>]*?\b(?:src|href)\s*=\s*["']([^"']+)["']/gi)) {
+    out.push(match[1] ?? '')
+  }
+  return out
 }
 
 /* ---------------- apply ---------------- */
@@ -782,17 +939,10 @@ export function apply(ctx: {
     label: '静态HTML',
     blockType: 'html',
     blockTypeLabel: 'HTML',
-    hint: 'HTML/CSS 卡片和刊头，不跑脚本；悬停可编辑',
+    hint: 'HTML/CSS 卡片和刊头，不跑脚本；源码必须 db_doc 附件，围栏只写 {"file":"assets/….html"}，写进围栏会被覆盖',
     aliases: ['html', 'html直', '静态html', '排版', '直接渲染', '静态渲染', '静态演示'],
-    assets: (data: Record<string, unknown>) => {
-      const html = String(data.html ?? '')
-      const out: string[] = []
-      for (const match of html.matchAll(/<(?:img|a|source|video|audio)\b[^>]*?\b(?:src|href)\s*=\s*["']([^"']+)["']/gi)) {
-        out.push(match[1] ?? '')
-      }
-      return out
-    },
-    defaults: { html: HTML_DIRECT_SAMPLE, deck: true },
+    assets: htmlBlockAssets,
+    defaults: () => ({ file: newHtmlFile(), deck: true }),
     View: HtmlDirectCard,
   })
   ctx.pageEditor.registerBlock({
@@ -801,17 +951,10 @@ export function apply(ctx: {
     label: '动态HTML',
     blockType: 'html',
     blockTypeLabel: 'HTML',
-    hint: '能跑脚本的独立页面；放大后可翻页放映',
+    hint: '文档内沙箱跑脚本/React，继承全局样式；源码必须 db_doc 附件，围栏只写 {"file":"assets/….html"}，写进围栏会被覆盖',
     aliases: ['iframe', 'htmlf', 'frame', '幻灯片', 'slide', '沙箱', '小网页', '动态演示'],
-    assets: (data: Record<string, unknown>) => {
-      const html = String(data.html ?? '')
-      const out: string[] = []
-      for (const match of html.matchAll(/<(?:img|a|source|video|audio)\b[^>]*?\b(?:src|href)\s*=\s*["']([^"']+)["']/gi)) {
-        out.push(match[1] ?? '')
-      }
-      return out
-    },
-    defaults: { html: HTML_FRAME_SAMPLE, height: 300, deck: true },
+    assets: htmlBlockAssets,
+    defaults: () => ({ file: newHtmlFile(), height: 300, deck: true }),
     View: HtmlFrameCard,
   })
 }

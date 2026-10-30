@@ -1,8 +1,12 @@
+import { Button, ReUI } from '@biu/reui'
+
 const React = globalThis.React
-const { useState, useEffect } = React
+const { useState } = React
 
 export const name = 'plugin-doctor'
 export const inject = ['pageEditor']
+
+type Level = 'ok' | 'warn' | 'error'
 
 type PluginReport = {
   id: string
@@ -17,7 +21,17 @@ type PluginReport = {
   readme: boolean
   readmeExample: boolean
   conclusion: string
+  level?: Level
   problems: string[]
+}
+
+type Issue = {
+  id: string
+  pluginId: string
+  name: string
+  level: Level
+  title: string
+  detail: string
 }
 
 type ScanResult = {
@@ -26,46 +40,13 @@ type ScanResult = {
   total: number
   summary: { ok: number; warn: number; broken: number; bytes: number }
   plugins: PluginReport[]
+  issues?: Issue[]
 }
 
 type BlockProps = {
   data: Record<string, unknown>
   update: (patch: Record<string, unknown>) => void
   writable: boolean
-}
-
-const STYLE_ID = 'plugin-doctor-style-v2'
-const STYLE_CSS = `
-.pd-root{border:1px solid var(--dsw-border);border-radius:8px;padding:10px 12px;font-family:var(--font-sans);font-size:14px;line-height:1.5;background:var(--dsw-bg);color:var(--dsw-label)}
-.pd-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.pd-title{font-size:13px;font-weight:650}
-.pd-btn{height:26px;padding:0 8px;border-radius:6px;border:1px solid var(--dsw-border);background:transparent;color:var(--dsw-label);font-size:13px;font-weight:650;cursor:pointer}
-.pd-btn:hover{background:var(--dsw-hover)}
-.pd-btn:disabled{opacity:.5;cursor:default}
-.pd-meta{font-size:12px;color:var(--dsw-label-3)}
-.pd-err{margin-top:8px;color:var(--dsw-danger);font-size:13px}
-.pd-empty{margin-top:8px;color:var(--dsw-label-3);font-size:13px}
-.pd-table-wrap{margin-top:8px;overflow-x:auto}
-.pd-table{border-collapse:collapse;width:100%;font-size:13px}
-.pd-table th{padding:4px 10px 4px 0;font-weight:650;color:var(--dsw-label-3);text-align:left}
-.pd-table td{padding:6px 10px 6px 0;vertical-align:top;border-top:1px solid var(--dsw-border)}
-.pd-id{font-family:var(--font-mono);font-size:12px}
-.pd-name{color:var(--dsw-label-3)}
-.pd-chip{display:inline-block;margin-right:4px;padding:1px 6px;border-radius:6px;font-size:11px;line-height:16px;border:1px solid var(--dsw-border);background:var(--dsw-hover);color:var(--dsw-label-3);white-space:nowrap}
-.pd-chip.is-on{color:var(--dsw-label);background:var(--dsw-input)}
-.pd-tone{padding:1px 8px;border-radius:6px;white-space:nowrap;border:1px solid var(--dsw-border);background:var(--dsw-hover);color:var(--dsw-label)}
-.pd-tone.warn{color:var(--dsw-label)}
-.pd-tone.bad{color:var(--dsw-danger)}
-`
-
-function usePdStyle() {
-  useEffect(() => {
-    const existing = document.getElementById(STYLE_ID)
-    const el = existing instanceof HTMLStyleElement ? existing : document.createElement('style')
-    el.id = STYLE_ID
-    el.textContent = STYLE_CSS
-    if (el.parentNode !== document.head) document.head.appendChild(el)
-  }, [])
 }
 
 function kb(bytes: number) {
@@ -88,20 +69,32 @@ function when(ts: number | null) {
 function clock(ts: number) {
   const d = new Date(ts)
   const pad = (n: number) => String(n).padStart(2, '0')
-  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds())
+  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes())
 }
 
-function Chip(props: { label: string; on?: boolean; title?: string }) {
-  return (
-    <span title={props.title} className={props.on ? 'pd-chip is-on' : 'pd-chip'}>
-      {props.label}
-    </span>
-  )
+function levelOf(item: PluginReport): Level {
+  if (item.level === 'ok' || item.level === 'warn' || item.level === 'error') return item.level
+  if (item.conclusion === '合规') return 'ok'
+  if (item.conclusion === '空插件' || item.conclusion === '缺引擎') return 'error'
+  return 'warn'
+}
+
+const LEVEL_COLOR: Record<Level, string> = {
+  ok: '#2ecd72',
+  warn: '#f5b000',
+  error: '#f55459',
+}
+
+const LEVEL_LABEL: Record<Level, string> = {
+  ok: '合规',
+  warn: '待修',
+  error: '问题',
 }
 
 function DoctorBlock(props: BlockProps) {
-  usePdStyle()
   const report = (props.data && props.data.report ? props.data.report : null) as ScanResult | null
+  const filter = (props.data.filter === 'ok' || props.data.filter === 'warn' || props.data.filter === 'error' ? props.data.filter : 'all') as 'all' | Level
+  const focus = typeof props.data.focus === 'string' ? props.data.focus : ''
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -121,96 +114,155 @@ function DoctorBlock(props: BlockProps) {
     }
   }
 
+  const plugins = report?.plugins ?? []
+  const ok = report?.summary.ok ?? 0
+  const warn = report?.summary.warn ?? 0
+  const broken = report?.summary.broken ?? 0
+  const total = Math.max(0, report?.total ?? 0)
+  const issueCount = report?.issues?.length ?? plugins.reduce((n, item) => n + (item.problems?.length || 0), 0)
+  const visible = filter === 'all' ? plugins : plugins.filter((item) => levelOf(item) === filter)
+  const rank: Record<Level, number> = { error: 0, warn: 1, ok: 2 }
+  const rows = [...visible].sort((a, b) => rank[levelOf(a)] - rank[levelOf(b)] || a.id.localeCompare(b.id))
+
+  const setFilter = (next: 'all' | Level) => {
+    if (props.writable) props.update({ filter: next })
+  }
+  const toggle = (id: string) => {
+    if (props.writable) props.update({ focus: focus === id ? '' : id })
+  }
+
+  const barTotal = Math.max(1, ok + warn + broken)
+
   return (
-    <div data-testid="plugin-doctor-block" className="pd-root">
-      <div className="pd-head">
-        <strong className="pd-title">插件体检</strong>
-        {props.writable ? (
-          <button data-testid="plugin-doctor-run" onClick={run} disabled={busy} className="pd-btn">
-            {busy ? '扫描中…' : '体检'}
-          </button>
-        ) : (
-          <span className="pd-meta">只读态 · 展示上次结果</span>
-        )}
-        {report ? (
-          <span className="pd-meta">
-            共 {report.total} 个插件 · 合规 {report.summary.ok} · 待修 {report.summary.warn} · 坏 {report.summary.broken} · 合计 {kb(report.summary.bytes)} · 扫描于 {clock(report.scannedAt)}
-          </span>
+    <ReUI>
+      <div data-testid="plugin-doctor-block" className="doc-shell">
+        <div className="doc-head">
+          <div>
+            <h2>Issues</h2>
+            <p>
+              {report
+                ? `${clock(report.scannedAt)} · ${total} 个插件 · ${kb(report.summary.bytes)} · ${report.root}`
+                : '扫描已安装插件，按 Sentry / Linear 的 issue 流呈现'}
+            </p>
+          </div>
+          {props.writable ? (
+            <Button data-testid="plugin-doctor-run" onClick={run} disabled={busy}>
+              {busy ? '扫描中…' : '重新扫描'}
+            </Button>
+          ) : (
+            <span className="rui-muted">只读</span>
+          )}
+        </div>
+        {error ? (
+          <div className="rui-sub" style={{ color: '#f55459' }}>
+            {error}
+          </div>
         ) : null}
-      </div>
-
-      {error ? <div className="pd-err">{error}</div> : null}
-
-      {!report ? (
-        <div className="pd-empty">
-          还没有体检结果{props.writable ? '，点「体检」扫一遍 .plugin。' : '。'}
-        </div>
-      ) : (
-        <div className="pd-table-wrap">
-          <table data-testid="plugin-doctor-table" className="pd-table">
-            <thead>
-              <tr>
-                <th>插件</th>
-                <th>headless</th>
-                <th>host / web</th>
-                <th>大小</th>
-                <th>最近运行</th>
-                <th>README 示例</th>
-                <th>体检结论</th>
-              </tr>
-            </thead>
-            <tbody>
-              {report.plugins.map((item) => {
-                const tone = item.conclusion === '合规' ? 'pd-tone' : item.conclusion === '缺引擎' || item.conclusion === '空插件' ? 'pd-tone bad' : 'pd-tone warn'
-                return (
-                  <tr key={item.id}>
-                    <td>
-                      <code className="pd-id">{item.id}</code>
-                      <div className="pd-name">{item.name}</div>
-                    </td>
-                    <td>
-                      <Chip label={item.headless ? '是' : '否'} on={item.headless} />
-                    </td>
-                    <td>
-                      <Chip label="host" on={item.hasHost} />
-                      <Chip label="web" on={item.hasWeb} />
-                    </td>
-                    <td>{kb(item.bytes)}</td>
-                    <td title={item.lastRunAt ? clock(item.lastRunAt) : '没有运行记录'}>
-                      {when(item.lastRunAt)}
-                    </td>
-                    <td>
-                      {item.readmeExample ? <Chip label="有" on /> : <Chip label={item.readme ? '缺' : '无 README'} />}
-                    </td>
-                    <td>
-                      <span title={(item.problems || []).join('；')} className={tone}>
-                        {item.conclusion}
-                      </span>
-                    </td>
+        {!report ? (
+          <div className="rui-sub">还没有体检结果{props.writable ? '，点「重新扫描」。' : '。'}</div>
+        ) : (
+          <>
+            <div className="doc-stats">
+              <div className="doc-stat">
+                <b style={{ color: LEVEL_COLOR.error }}>{broken}</b>
+                <em>Unresolved</em>
+              </div>
+              <div className="doc-stat">
+                <b style={{ color: LEVEL_COLOR.warn }}>{warn}</b>
+                <em>Warnings</em>
+              </div>
+              <div className="doc-stat">
+                <b style={{ color: LEVEL_COLOR.ok }}>{ok}</b>
+                <em>Resolved</em>
+              </div>
+            </div>
+            <div className="doc-bar" aria-label={`${issueCount} issues`}>
+              <i style={{ width: `${(broken / barTotal) * 100}%`, background: LEVEL_COLOR.error }} />
+              <i style={{ width: `${(warn / barTotal) * 100}%`, background: LEVEL_COLOR.warn }} />
+              <i style={{ width: `${(ok / barTotal) * 100}%`, background: LEVEL_COLOR.ok }} />
+            </div>
+            <div className="doc-filters">
+              {([
+                ['all', `All ${plugins.length}`],
+                ['error', `Unresolved ${broken}`],
+                ['warn', `Warnings ${warn}`],
+                ['ok', `Resolved ${ok}`],
+              ] as const).map(([id, label]) => (
+                <button key={id} type="button" className="doc-filter" data-on={filter === id} onClick={() => setFilter(id)}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="doc-list" data-testid="plugin-doctor-table">
+              <table className="doc-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: 92 }}>Level</th>
+                    <th>Issue</th>
+                    <th style={{ width: 88 }}>Events</th>
+                    <th style={{ width: 120 }}>Last seen</th>
                   </tr>
-                )
-              })}
-            </tbody>
-          </table>
-          <div className="pd-meta" style={{ marginTop: 6 }}>扫描根目录：{report.root}</div>
-        </div>
-      )}
-    </div>
+                </thead>
+                <tbody>
+                  {rows.map((item) => {
+                    const level = levelOf(item)
+                    const open = focus === item.id
+                    const events = Math.max(item.problems?.length || 0, level === 'ok' ? 0 : 1)
+                    return (
+                      <React.Fragment key={item.id}>
+                        <tr className="doc-row" data-open={open} onClick={() => toggle(item.id)}>
+                          <td>
+                            <span className="doc-lvl" style={{ color: LEVEL_COLOR[level] }}>{LEVEL_LABEL[level]}</span>
+                          </td>
+                          <td>
+                            <div className="doc-title">{item.problems?.[0] || item.conclusion}</div>
+                            <div className="doc-culprit">{item.name} · {item.id}</div>
+                          </td>
+                          <td>{events}</td>
+                          <td>{when(item.lastRunAt)}</td>
+                        </tr>
+                        {open ? (
+                          <tr>
+                            <td colSpan={4}>
+                              <div className="doc-detail">
+                                {item.hasHost ? 'host' : '无 host'} · {item.hasWeb ? 'web' : '无 web'}
+                                {item.headless ? ' · 无头' : ''} · {kb(item.bytes)} · {item.files} 文件
+                                {(item.problems || []).length ? (
+                                  <ul style={{ margin: '8px 0 0', paddingLeft: 18 }}>
+                                    {item.problems.map((p) => (
+                                      <li key={p}>{p}</li>
+                                    ))}
+                                  </ul>
+                                ) : (
+                                  <div style={{ marginTop: 6 }}>没有未解决问题。</div>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ) : null}
+                      </React.Fragment>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </div>
+    </ReUI>
   )
 }
 
-export function apply(ctx: {
-  pageEditor: { registerBlock: (spec: Record<string, unknown>) => void }
-}) {
+export function apply(ctx: { pageEditor: { registerBlock: (spec: Record<string, unknown>) => void } }) {
   ctx.pageEditor.registerBlock({
     kind: 'plugin-doctor',
     plugin: name,
     label: '插件体检',
     blockType: 'test',
     blockTypeLabel: '测试',
-    hint: '扫一遍已安装插件，给出合规结论',
+    hint: '扫描已安装插件：issue 计数、严重度条、按问题分组',
     aliases: ['doctor', '体检', '插件体检', 'scan'],
-    defaults: () => ({ report: null }),
+    defaults: () => ({ report: null, filter: 'all', focus: '' }),
     View: DoctorBlock,
   })
 }

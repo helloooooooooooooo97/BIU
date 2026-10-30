@@ -10,7 +10,7 @@ import {
   MoonIcon,
   SunIcon,
 } from '@heroicons/react/16/solid'
-import { HeadlessDismiss } from '@biu/public-ui'
+import { HeadlessDismiss } from '@biu/biu-ui'
 import { ShareOwnerCorner } from './share-owner-corner.tsx'
 
 export { registerShareOwnerExtra } from './share-owner-corner.tsx'
@@ -401,6 +401,11 @@ function SharePage({
     link.remove()
   }
 
+  function openShareRecord(id: string) {
+    if (!id || id === shown?.id) return
+    navigate(sharePublicPath(token, id))
+  }
+
   function openShareTarget(target: CrumbTarget) {
     if (target.kind === 'record') {
       navigate(sharePublicPath(token, target.recordId))
@@ -597,6 +602,8 @@ function SharePage({
               collection={snapshot.collection}
               schema={schema}
               chrome={detailChrome}
+              onOpenLink={openShareRecord}
+              facets={snapshot.facets}
             />
           )}
           setDraft={() => undefined}
@@ -663,6 +670,8 @@ function SharePage({
                 truncate={queryState?.truncate}
                 queryFields={queryFields}
                 onOpen={(id) => navigate(sharePublicPath(token, id))}
+                onOpenLink={openShareRecord}
+                facets={snapshot.facets}
               />
               {paged.length === 0 ? <p className="fsdb-empty">暂无记录</p> : null}
             </div>

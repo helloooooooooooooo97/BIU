@@ -2,8 +2,10 @@ import { buildAppPath } from '@biu/web-session-view'
 import { clientLog, clientLogErrorText } from '@biu/web-event-log/log'
 import {
   installedPageBlocksFromRows,
+  listedPluginKnown,
   onSlashCatalogOpen,
   setInstalledPageBlocks,
+  setListedPluginIds,
 } from '../../../core-editor/src/web/slash-memory.ts'
 
 export const ENABLE_PAGE_BLOCK_PLUGIN = 'biu:enable-page-block-plugin'
@@ -60,10 +62,22 @@ export function startStorePlugin(id: string) {
   return job
 }
 
+function missingPluginError(id: string) {
+  const error = new Error(`unknown plugin: ${id}`)
+  error.name = 'PageBlockPluginMissing'
+  return error
+}
+
+function isMissingPlugin(error: unknown) {
+  return error instanceof Error && (error.name === 'PageBlockPluginMissing' || error.message.startsWith('unknown plugin:'))
+}
+
 async function enableStorePlugin(id: string) {
   try {
+    if (listedPluginKnown(id) === false) throw missingPluginError(id)
     const row = await readPluginFlags(id)
-    if (!row) throw new Error(`unknown plugin: ${id}`)
+    if (!row) throw missingPluginError(id)
+    window.dispatchEvent(new CustomEvent(PAGE_BLOCK_PLUGIN_PHASE, { detail: { plugin: id, phase: 'loading' } }))
     clientLog('info', 'page-block', `${id} installed=${row.installed} running=${row.running} sandbox=${row.sandbox}`)
     if (row.running) {
       clientLog('info', 'page-block', `${id} 已在运行，跳过 start。页面要等 web.js 登记块之后才离开源码`)
@@ -79,7 +93,9 @@ async function enableStorePlugin(id: string) {
     await postPluginAction(id, 'start')
     clientLog('info', 'page-block', `${id} start 已完成`)
   } catch (error) {
-    clientLog('error', 'page-block', `${id} 启用失败: ${clientLogErrorText(error)}`)
+    if (!isMissingPlugin(error)) {
+      clientLog('error', 'page-block', `${id} 启用失败: ${clientLogErrorText(error)}`)
+    }
     throw error
   }
 }
@@ -90,7 +106,7 @@ export function pageBlockPluginFromEvent(event: Event) {
   return plugin
 }
 
-function reportPhase(plugin: string, phase: 'ready' | 'failed') {
+function reportPhase(plugin: string, phase: 'ready' | 'failed' | 'missing' | 'loading') {
   window.dispatchEvent(new CustomEvent(PAGE_BLOCK_PLUGIN_PHASE, { detail: { plugin, phase } }))
 }
 
@@ -105,7 +121,7 @@ export function listenEnablePageBlockPlugin() {
   const run = (plugin: string) => {
     void startStorePlugin(plugin)
       .then(() => reportPhase(plugin, 'ready'))
-      .catch(() => reportPhase(plugin, 'failed'))
+      .catch((error) => reportPhase(plugin, isMissingPlugin(error) ? 'missing' : 'failed'))
   }
   const onEnable = (event: Event) => {
     const plugin = pageBlockPluginFromEvent(event)
@@ -142,6 +158,7 @@ export async function refreshInstalledPageBlocks() {
       if (!res.ok) throw new Error(body.error || res.statusText)
       const items = Array.isArray(body.items) ? body.items : []
       rows.push(...items)
+      setListedPluginIds(rows.map((row) => String(row.id ?? '')))
       const total = typeof body.total === 'number' ? body.total : rows.length
       offset += items.length
       if (!items.length || offset >= total) break

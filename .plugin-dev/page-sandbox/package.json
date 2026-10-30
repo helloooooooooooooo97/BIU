@@ -1,0 +1,8 @@
+{
+  "name": "page-sandbox",
+  "private": true,
+  "dependencies": {
+    "@heroicons/react": "^2.2.0",
+    "sucrase": "^3.35.1"
+  }
+}

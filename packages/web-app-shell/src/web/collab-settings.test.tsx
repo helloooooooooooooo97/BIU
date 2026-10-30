@@ -145,9 +145,9 @@ test('switching spaces opens that space default session url', () => {
       { id: 'older', updatedAt: 1 },
       { id: 'newer', updatedAt: 5 },
     ]),
-    '/s/newer',
+    '/agents/newer',
   )
-  assert.equal(defaultSessionPath([{ id: 'a b', updatedAt: 1 }]), '/s/a%20b')
+  assert.equal(defaultSessionPath([{ id: 'a b', updatedAt: 1 }]), '/agents/a%20b')
 })
 
 test('primary navigation does not call the removed chat overlay setter', () => {
@@ -163,7 +163,7 @@ test('workspace and member settings are separate and workspace switching stays o
   localStorage.setItem('biu.account.token', 'tok')
   const css = readFileSync(resolve(import.meta.dirname, '../../../../web/style.css'), 'utf8')
   assert.match(css, /\.settings-account-action\s*\{[^}]*font:\s*inherit/)
-  assert.match(css, /\.settings-account-action\s*\{[^}]*border:\s*1px solid var\(--dsw-border\)/)
+  assert.match(css, /\.settings-account-action\s*\{[^}]*border:\s*var\(--biu-stroke-width\) solid var\(--biu-color-border\)/)
   assert.match(css, /\.settings-account-action\s*\{[^}]*height:\s*32px/)
   assert.match(css, /\.settings-members-section\s*\{[^}]*flex-direction:\s*column/s)
   assert.match(css, /\.settings-member-row\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto/s)
@@ -232,7 +232,7 @@ test('account settings are global and workspace switcher lives in the sidebar he
   globalThis.fetch = (async (path: string) => {
     const url = String(path)
     if (url.endsWith('/me')) return json({ id: 'acc_1', name: 'ada@example.com', email: 'ada@example.com' })
-    if (url.endsWith('/sessions')) {
+    if (url.endsWith('/agents')) {
       return json({
         sessions: [
           {
@@ -278,7 +278,7 @@ test('account settings are global and workspace switcher lives in the sidebar he
   assert.equal(screen.getByRole('menuitemradio', { checked: true }).querySelectorAll('svg').length, 1)
   const css = readFileSync(resolve(import.meta.dirname, '../../../../web/style.css'), 'utf8')
   assert.match(css, /\.shell-workspace-menu-item\s*\{[^}]*align-items:\s*center/s)
-  assert.match(css, /\.shell-workspace-menu-role\s*\{[^}]*font-size:\s*13px/s)
+  assert.match(css, /\.shell-workspace-menu-role\s*\{[^}]*font-size:\s*var\(--biu-font-size-3\)/s)
   assert.match(css, /\.shell-workspace-menu\s*\{[^}]*display:\s*flex/s)
   assert.match(css, /\.shell-workspace-menu-list\s*\{[^}]*overflow:\s*auto/s)
   assert.match(css, /\.shell-workspace-menu-action\s*\{[^}]*font-family:\s*var\(--font-sans\)/s)
@@ -325,7 +325,7 @@ test('account settings can create and link a cloud account from the local identi
   globalThis.fetch = (async (path: string, init?: RequestInit) => {
     const url = String(path)
     if (url.endsWith('/me')) return json({ id: 'acc_1', name: 'Ada', email: 'ada@example.com' })
-    if (url.endsWith('/sessions')) return json({ sessions: [] })
+    if (url.endsWith('/agents')) return json({ sessions: [] })
     if (url.endsWith('/cloud/sync-create') && init?.method === 'POST') {
       syncBody = JSON.parse(String(init.body)) as Record<string, unknown>
       return json({ created: true }, 201)
@@ -386,8 +386,13 @@ test('workspace creation uses centered local and online cards with default names
   await waitFor(() => assert.deepEqual(createBodies[1], { name: '云端空间', location: 'cloud' }))
 
   const css = readFileSync(resolve(import.meta.dirname, '../../../../web/style.css'), 'utf8')
-  assert.match(css, /\.shell-workspace-switcher\s*\{[^}]*font-size:\s*14px;[^}]*font-weight:\s*500;/s)
+  assert.match(css, /\.shell-workspace-switcher\s*\{[^}]*font-size:\s*var\(--biu-font-size-4\);[^}]*font-weight:\s*500;/s)
   assert.match(css, /\.shell-workspace-create-overlay\s*\{[^}]*position:\s*fixed;[^}]*place-items:\s*center;/s)
+  assert.match(css, /\.shell-workspace-switch-icon,\s*\n\.shell-workspace-menu-icon\s*\{[^}]*color:\s*var\(--biu-color-icon-fixed\)/s)
+  assert.match(css, /\.shell-workspace-menu-action svg\s*\{[^}]*color:\s*var\(--biu-color-icon\)/s)
+  assert.match(css, /\.shell-workspace-menu-account > svg\s*\{[^}]*color:\s*var\(--biu-color-icon-fixed\)/s)
+  assert.match(css, /\.shell-workspace-menu-account button svg,\s*\n\.shell-workspace-menu-account-actions button svg\s*\{[^}]*color:\s*var\(--biu-color-icon-fixed\)/s)
+  assert.match(css, /\.shell-workspace-create-card-icon svg\s*\{[^}]*color:\s*var\(--biu-color-icon-fixed\)/s)
   cleanup()
 
   const onlineBodies: Array<Record<string, unknown>> = []

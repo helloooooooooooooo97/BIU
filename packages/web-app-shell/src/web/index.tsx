@@ -4,10 +4,12 @@ import {
   getChatOverlay,
   subscribeChatOverlay,
   closeChatOverlay,
+  setOverlayThread,
   requestOverlayFocus,
   requestInspectorClose,
   allocateShellColumns,
   applyShellColumnCssVars,
+  commitShellLayoutSnap,
   publishShellLayout,
   clampSidebarWidth,
   isChatPagePath,
@@ -24,7 +26,7 @@ import type { SlotProps } from '@biu/web-slots'
 import { bindSnapshot, type SnapshotService } from '@biu/web-snapshot'
 import { bindSessionView, type SessionViewService } from '@biu/web-session-view'
 import { bindProjectView, type ProjectViewService } from '@biu/web-project-view'
-import { parseAppPath } from '@biu/web-session-view'
+import { parseAppPath, sessionAppPath } from '@biu/web-session-view'
 import {
   isMascotDancing,
   mascotDanceShape,
@@ -43,29 +45,27 @@ import { BrandCornerMascot, DanceStage } from '@biu/public-mascot'
 import { SessionInspector } from './session-inspector.tsx'
 import { SessionConfigDialog } from '@biu/web-session-view/dialog'
 import { FolderGlyph } from '@biu/web-session-view/folder-glyph'
-import { AuthGate, ShellSettingsAbout, ShellSettingsAccount, ShellSettingsAppearance, ShellSettingsMembers, ShellSettingsMcp, ShellSettingsShortcuts, ShellSettingsUpdate, ShellSettingsWorkspace } from './shell-chrome.tsx'
-import { hydrateWorkspaceProfile } from '@biu/public-ui/workspace-profile'
+import { AuthGate, ShellSettingsAccount, ShellSettingsAppearance, ShellSettingsMembers, ShellSettingsMcp, ShellSettingsShortcuts, ShellSettingsWorkspace } from './shell-chrome.tsx'
+import { hydrateWorkspaceProfile } from '@biu/biu-ui/workspace-profile'
 import { hydrateTheme } from './theme.ts'
 import { hydratePagePrefs } from '@biu/core-file-system/page-width'
 import { isGlobalSearchHotkey } from './search-hotkey.ts'
 import { useSlotEntries } from '@biu/web-slots'
 import type { SlotsService } from '@biu/web-slots'
 import { chromeIcon } from './chrome-icon.ts'
-import { ChatDockStack, ChatStage } from '@biu/public-ui/chat-pane'
+import { ChatDockStack, ChatStage } from '@biu/biu-ui/chat-pane'
 
 const OverlayChatWindow = lazy(() => import('./overlay-window.tsx').then((m) => ({ default: m.OverlayChatWindow })))
 const ShellSearchPanel = lazy(() => import('./shell-search.tsx').then((m) => ({ default: m.ShellSearchPanel })))
 import {
   ChevronDoubleLeftIcon,
   ChevronDoubleRightIcon,
+  ArrowsPointingOutIcon,
+  MinusIcon,
   AdjustmentsHorizontalIcon,
-  ArrowDownTrayIcon,
   CommandLineIcon,
   CircleStackIcon,
-  InformationCircleIcon,
   LinkIcon,
-  MapIcon,
-  QueueListIcon,
   SwatchIcon,
   UserCircleIcon,
   UserGroupIcon,
@@ -193,7 +193,7 @@ const AgentMainPanels = memo(function AgentMainPanels({
         <div className="absolute inset-0 z-1 flex min-h-0 overflow-hidden">
           <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             {centerStage}
-            <div className="chat-composer-dock pointer-events-none absolute inset-x-0 bottom-0 bg-transparent px-[64px] pb-[calc(1rem+5px)]">
+            <div className="chat-composer-dock pointer-events-none absolute inset-x-0 bottom-0 bg-transparent px-[var(--biu-pad-page)] pb-[calc(1rem+5px)]">
               {centerDock}
             </div>
             {renderSlot('stage-aside')}
@@ -370,10 +370,9 @@ function Shell(props: SlotProps) {
   )
   const onSidebarWidthChange = useCallback(
     (width: number) => {
-      const next = clampSidebarWidth(width)
-      persistSidebar(next === 0 ? sidebarWidth : next, next === 0)
+      endColumnResizeRef.current({ sidebar: width })
     },
-    [persistSidebar, sidebarWidth],
+    [],
   )
   const openSettings = useCallback((tab?: string) => {
     if (tab) setSettingsTab(tab)
@@ -432,26 +431,19 @@ function Shell(props: SlotProps) {
     }
     return 320
   })
+  const layoutSnap = useRef({
+    leftPane: true,
+    inspectorVisible: inspectorOpen,
+    inspectorWidth,
+    sidebarWidth,
+    sidebarCollapsed,
+  })
   const [columnResizing, setColumnResizing] = useState(false)
   const [windowResizing, setWindowResizing] = useState(false)
   const shellRef = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const onDown = (event: PointerEvent) => {
-      const target = event.target
-      if (!(target instanceof Element)) return
-      if (!target.closest('.sidebar-resize, .inspector-resize')) return
-      setColumnResizing(true)
-    }
-    const onUp = () => setColumnResizing(false)
-    window.addEventListener('pointerdown', onDown)
-    window.addEventListener('pointerup', onUp)
-    window.addEventListener('pointercancel', onUp)
-    return () => {
-      window.removeEventListener('pointerdown', onDown)
-      window.removeEventListener('pointerup', onUp)
-      window.removeEventListener('pointercancel', onUp)
-    }
-  }, [])
+  const columnResizingRef = useRef(false)
+  const columnDragAxisRef = useRef<'sidebar' | 'inspector' | null>(null)
+  const endColumnResizeRef = useRef<(patch?: { sidebar?: number; inspector?: number }) => void>(() => {})
   const inspectorOpenRef = useRef(inspectorOpen)
   inspectorOpenRef.current = inspectorOpen
   const applyInspector = useCallback((next: boolean) => {
@@ -469,8 +461,9 @@ function Shell(props: SlotProps) {
     applyInspector(next)
     if (!next) requestInspectorClose()
   }, [applyInspector])
-  const onInspectorWidthChange = useCallback((width: number) => {
+  const persistInspectorWidth = useCallback((width: number) => {
     const next = Math.min(1000, Math.max(240, Math.round(width)))
+    layoutSnap.current = commitShellLayoutSnap(layoutSnap.current, { inspectorWidth: next })
     setInspectorWidth(next)
     try {
       localStorage.setItem('cordis.inspector.width', String(next))
@@ -478,15 +471,18 @@ function Shell(props: SlotProps) {
       /* ignore */
     }
   }, [])
+  const onInspectorWidthChange = useCallback((width: number) => {
+    endColumnResizeRef.current({ inspector: width })
+  }, [])
   const activeModule = moduleIdFromPath(location.pathname, pluginModules)
   useEffect(() => {
     const onWidth = (event: Event) => {
       const n = (event as CustomEvent<number>).detail
-      if (typeof n === 'number' && Number.isFinite(n)) onInspectorWidthChange(n)
+      if (typeof n === 'number' && Number.isFinite(n)) persistInspectorWidth(n)
     }
     window.addEventListener('biu:inspector-width', onWidth)
     return () => window.removeEventListener('biu:inspector-width', onWidth)
-  }, [onInspectorWidthChange])
+  }, [persistInspectorWidth])
   useEffect(() => {
     const persist = (next: boolean) => applyInspector(next)
     const onOpen = () => persist(true)
@@ -509,7 +505,7 @@ function Shell(props: SlotProps) {
   const inspectorVisible = inspectorOpen
   // 侧栏高亮跟 URL，不跟 store：点一下立刻亮，不等 load 完成
   const routeSessionId = appRoute.kind === 'session' ? appRoute.sessionId : null
-  const agentHref = sessionId ? `/s/${sessionId}` : '/'
+  const agentHref = sessionId ? sessionAppPath(sessionId) : '/'
   const showChatSidebar = activeModule === 'agent'
   const visitedChatSidebar = useRef(false)
   if (showChatSidebar) visitedChatSidebar.current = true
@@ -557,28 +553,58 @@ function Shell(props: SlotProps) {
     inspectorOpen: inspectorVisible,
     inspectorWidth,
   })
-  const layoutSnap = useRef({
-    leftPane: true,
-    inspectorVisible: false,
-    inspectorWidth: 320,
-    sidebarWidth: SIDEBAR_DEFAULT,
-    sidebarCollapsed: false,
-  })
-  layoutSnap.current = { leftPane, inspectorVisible, inspectorWidth, sidebarWidth, sidebarCollapsed }
+  layoutSnap.current.leftPane = leftPane
   const paintedCols = useRef({ left: shellColumns.left, inspector: shellColumns.inspector })
   if (!columnResizing) paintedCols.current = { left: shellColumns.left, inspector: shellColumns.inspector }
   const dragPaintRaf = useRef(0)
   const dragPaintPending = useRef<{ sidebar?: number; inspector?: number }>({})
-  const paintLiveLayout = useCallback((patch: { inspectorOpen?: boolean; sidebarCollapsed?: boolean; sidebarWidth?: number }) => {
+  const applyPendingColumnDrag = useCallback((patch?: { sidebar?: number; inspector?: number }) => {
+    if (patch) Object.assign(dragPaintPending.current, patch)
+    const pending = dragPaintPending.current
+    const hasPending = pending.sidebar != null || pending.inspector != null
+    dragPaintPending.current = {}
+    if (!hasPending) return paintedCols.current
     const snap = layoutSnap.current
-    const inspectorOpen = patch.inspectorOpen ?? snap.inspectorVisible
-    const sidebarCollapsed = patch.sidebarCollapsed ?? snap.sidebarCollapsed
-    const width = patch.sidebarWidth ?? snap.sidebarWidth
     const cols = allocateShellColumns({
       viewportWidth: window.innerWidth,
       leftPane: snap.leftPane,
-      leftWidth: snap.leftPane ? (sidebarCollapsed ? 0 : width) : undefined,
-      inspectorOpen,
+      leftWidth: snap.leftPane ? (pending.sidebar ?? (snap.sidebarCollapsed ? 0 : snap.sidebarWidth)) : undefined,
+      inspectorOpen: snap.inspectorVisible,
+      inspectorWidth: pending.inspector ?? snap.inspectorWidth,
+    })
+    paintedCols.current = { left: cols.left, inspector: cols.inspector }
+    applyShellColumnCssVars(shellRef.current, cols)
+    return paintedCols.current
+  }, [])
+  const flushColumnDrag = useCallback((patch?: { sidebar?: number; inspector?: number }) => {
+    if (dragPaintRaf.current) {
+      window.cancelAnimationFrame(dragPaintRaf.current)
+      dragPaintRaf.current = 0
+    }
+    return applyPendingColumnDrag(patch)
+  }, [applyPendingColumnDrag])
+  const endColumnResize = useCallback((patch?: { sidebar?: number; inspector?: number }) => {
+    const axis = columnDragAxisRef.current
+    const cols = flushColumnDrag(patch)
+    if (patch?.sidebar != null || axis === 'sidebar') {
+      persistSidebar(cols.left === 0 ? sidebarWidthRef.current : cols.left, cols.left === 0)
+    }
+    if (patch?.inspector != null || axis === 'inspector') {
+      persistInspectorWidth(cols.inspector)
+    }
+    columnDragAxisRef.current = null
+    columnResizingRef.current = false
+    setColumnResizing(false)
+  }, [flushColumnDrag, persistInspectorWidth, persistSidebar])
+  endColumnResizeRef.current = endColumnResize
+  const paintLiveLayout = useCallback((patch: { inspectorOpen?: boolean; sidebarCollapsed?: boolean; sidebarWidth?: number }) => {
+    const snap = commitShellLayoutSnap(layoutSnap.current, patch)
+    layoutSnap.current = snap
+    const cols = allocateShellColumns({
+      viewportWidth: window.innerWidth,
+      leftPane: snap.leftPane,
+      leftWidth: snap.leftPane ? (snap.sidebarCollapsed ? 0 : snap.sidebarWidth) : undefined,
+      inspectorOpen: snap.inspectorVisible,
       inspectorWidth: snap.inspectorWidth,
     })
     paintedCols.current = { left: cols.left, inspector: cols.inspector }
@@ -592,19 +618,37 @@ function Shell(props: SlotProps) {
     if (dragPaintRaf.current) return
     dragPaintRaf.current = window.requestAnimationFrame(() => {
       dragPaintRaf.current = 0
-      const pending = dragPaintPending.current
-      dragPaintPending.current = {}
-      const snap = layoutSnap.current
-      const cols = allocateShellColumns({
-        viewportWidth: window.innerWidth,
-        leftPane: snap.leftPane,
-        leftWidth: snap.leftPane ? (pending.sidebar ?? (snap.sidebarCollapsed ? 0 : snap.sidebarWidth)) : undefined,
-        inspectorOpen: snap.inspectorVisible,
-        inspectorWidth: pending.inspector ?? snap.inspectorWidth,
-      })
-      paintedCols.current = { left: cols.left, inspector: cols.inspector }
-      applyShellColumnCssVars(shellRef.current, cols)
+      applyPendingColumnDrag()
     })
+  }, [applyPendingColumnDrag])
+  useEffect(() => {
+    const onDown = (event: PointerEvent) => {
+      const target = event.target
+      if (!(target instanceof Element)) return
+      if (target.closest('.sidebar-resize')) {
+        columnDragAxisRef.current = 'sidebar'
+        columnResizingRef.current = true
+        setColumnResizing(true)
+        return
+      }
+      if (target.closest('.inspector-resize')) {
+        columnDragAxisRef.current = 'inspector'
+        columnResizingRef.current = true
+        setColumnResizing(true)
+      }
+    }
+    const onUp = () => {
+      if (!columnResizingRef.current && !columnDragAxisRef.current) return
+      endColumnResizeRef.current()
+    }
+    window.addEventListener('pointerdown', onDown)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
+    return () => {
+      window.removeEventListener('pointerdown', onDown)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
+    }
   }, [])
   const onSidebarWidthLive = useCallback((width: number) => paintColumnDrag({ sidebar: width }), [paintColumnDrag])
   const onInspectorWidthLive = useCallback((width: number) => paintColumnDrag({ inspector: width }), [paintColumnDrag])
@@ -639,7 +683,7 @@ function Shell(props: SlotProps) {
   // 单向：URL → sessionView。插件还没挂上时不要把 /database 当成首页。
   useEffect(() => {
     const waitingOnNav =
-      !navReady && location.pathname !== '/' && !location.pathname.startsWith('/s/')
+      !navReady && location.pathname !== '/' && !location.pathname.startsWith('/agents/')
     if (waitingOnNav) return
     const route = parseAppPath(location.pathname, pluginModules)
     if (route.kind === 'auth') return
@@ -660,7 +704,7 @@ function Shell(props: SlotProps) {
     const onMissing = (event: Event) => {
       const id = String((event as CustomEvent<{ sessionId?: string }>).detail?.sessionId ?? '')
       if (!id) return
-      const prefix = `/s/${encodeURIComponent(id)}`
+      const prefix = sessionAppPath(id)
       const path = location.pathname
       if (path === prefix || path.startsWith(`${prefix}/`)) navigate('/', { replace: true })
     }
@@ -672,11 +716,11 @@ function Shell(props: SlotProps) {
     if (activeModule === 'agent' && getChatOverlay()) closeChatOverlay()
   }, [activeModule])
 
-  // /debug 兼容：主区仍聊天，轨迹在右侧；URL 收成 /s/:id
+  // /debug 兼容：主区仍聊天，轨迹在右侧；URL 收成 /agents/:id
   useEffect(() => {
     const route = parseAppPath(location.pathname)
     if (route.kind !== 'session' || route.view !== 'debug') return
-    navigate(`/s/${encodeURIComponent(route.sessionId)}`, { replace: true })
+    navigate(sessionAppPath(route.sessionId), { replace: true })
   }, [location.pathname, navigate])
 
   useEffect(() => {
@@ -761,6 +805,35 @@ function Shell(props: SlotProps) {
       </div>
       <ChatSessionTitle useSessionView={useSessionView} sessionView={sessionView} />
       <div className="chat-view-header-right">
+        <button
+          type="button"
+          className="chat-view-header-expand"
+          title="收起对话"
+          aria-label="收起对话"
+          data-testid="chat-overlay-shrink"
+          onPointerDown={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            setOverlayThread(false)
+          }}
+        >
+          <MinusIcon {...chromeIcon} />
+        </button>
+        <button
+          type="button"
+          className="chat-view-header-expand"
+          title="在主栏打开"
+          aria-label="在主栏打开"
+          data-testid="chat-overlay-expand"
+          onPointerDown={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            closeChatOverlay()
+            navigate(agentHref)
+          }}
+        >
+          <ArrowsPointingOutIcon {...chromeIcon} />
+        </button>
         <button
           type="button"
           className="chat-view-header-expand"
@@ -901,7 +974,6 @@ function Shell(props: SlotProps) {
               onClick={(event) => event.stopPropagation()}
             >
               <nav className="settings-rail" aria-label="设置分类">
-                <p className="settings-rail-title">设置</p>
                 <ul className="settings-rail-list">
                   {[
                     { key: 'account', label: '账户', Icon: UserCircleIcon },
@@ -910,10 +982,6 @@ function Shell(props: SlotProps) {
                     { key: 'appearance', label: '外观', Icon: SwatchIcon },
                     { key: 'mcp', label: 'MCP', Icon: LinkIcon },
                     { key: 'shortcuts', label: '快捷键', Icon: CommandLineIcon },
-                    { key: 'routes', label: '路由', Icon: MapIcon },
-                    { key: 'events', label: '事件', Icon: QueueListIcon },
-                    { key: 'update', label: '更新', Icon: ArrowDownTrayIcon },
-                    { key: 'about', label: '关于', Icon: InformationCircleIcon },
                   ].filter((item) => item.key !== 'members' || workspaceLocation === 'cloud').map((item) => (
                     <li key={item.key}>
                       <button
@@ -945,22 +1013,6 @@ function Shell(props: SlotProps) {
                   {settingsTab === 'appearance' ? <ShellSettingsAppearance /> : null}
                   {settingsTab === 'mcp' ? <ShellSettingsMcp onLeave={() => setSettingsOpen(false)} /> : null}
                   {settingsTab === 'shortcuts' ? <ShellSettingsShortcuts /> : null}
-                  {settingsTab === 'routes' ? (
-                    <section>
-                      <h3 className="settings-pane-title">路由</h3>
-                      <p className="settings-muted settings-pane-lead">应用模块入口与跳转。</p>
-                      {props.renderSlot('routes')}
-                    </section>
-                  ) : null}
-                  {settingsTab === 'events' ? (
-                    <section>
-                      <h3 className="settings-pane-title">事件</h3>
-                      <p className="settings-muted settings-pane-lead">运行日志与调试输出。</p>
-                      {props.renderSlot('log')}
-                    </section>
-                  ) : null}
-                  {settingsTab === 'update' ? <ShellSettingsUpdate /> : null}
-                  {settingsTab === 'about' ? <ShellSettingsAbout /> : null}
                 </div>
               </div>
             </div>

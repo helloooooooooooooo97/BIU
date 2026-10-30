@@ -1,7 +1,7 @@
 import { lazy, memo, Suspense, useEffect, useLayoutEffect, useMemo, useState, useSyncExternalStore, type MouseEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { ChatCount } from '@biu/public-ui/chat-count'
-import { SidebarFold } from '@biu/public-ui/sidebar-fold'
+import { ChatCount } from '@biu/biu-ui/chat-count'
+import { SidebarFold } from '@biu/biu-ui/sidebar-fold'
 import {
   ChevronDoubleLeftIcon,
   ChevronDownIcon,
@@ -69,7 +69,7 @@ import { getDatabaseUi } from './database-ui.ts'
 import { RecordMark, recordMarkStub } from './record-mark.tsx'
 import { SidebarBrandLockup } from '@biu/public-mascot'
 
-const RecordEmojiBoard = lazy(() => import('@biu/public-ui/emoji-board').then((m) => ({ default: m.RecordEmojiBoard })))
+const RecordEmojiBoard = lazy(() => import('@biu/biu-ui/emoji-board').then((m) => ({ default: m.RecordEmojiBoard })))
 
 type PreviewState = {
   items: DbRecord[]
@@ -300,9 +300,12 @@ function ViewRecordPreview({
     })
   }
 
-  function renderRecords(scope: DbRecord[], parentId = '') {
+  function renderRecords(scope: DbRecord[], parentId = '', trail: ReadonlySet<string> = new Set()) {
     const rows = parentKey ? treeChildren(scope, parentKey, parentId) : parentId ? [] : scope
     return rows.map((row) => {
+      if (trail.has(row.id)) return null
+      const nextTrail = new Set(trail)
+      nextTrail.add(row.id)
       const label = recordPreviewLabel(row)
       const kids = parentKey ? treeChildren(scope, parentKey, row.id) : []
       const kidCount = kids.length
@@ -411,7 +414,7 @@ function ViewRecordPreview({
             </button>
           </div>
           <SidebarFold open={expanded}>
-            <div className="fsdb-record-kids">{renderRecords(scope, row.id)}</div>
+            <div className="fsdb-record-kids">{renderRecords(scope, row.id, nextTrail)}</div>
           </SidebarFold>
         </div>
       )
@@ -507,7 +510,6 @@ export const DataSidebar = memo(function DataSidebar({
   onDeleteView,
   onAddView,
   onOpenRecord,
-  onOpenScopeHome,
   expandedViewKey: expandedViewKeyProp,
   onExpandedViewKeyChange,
   onCollapse,
@@ -523,7 +525,6 @@ export const DataSidebar = memo(function DataSidebar({
   onDeleteView: (view: SavedView) => void
   onAddView: (path?: string, scope?: DataScope) => void
   onOpenRecord?: (path: string, view: SavedView, recordId: string, row?: DbRecord) => void
-  onOpenScopeHome?: () => void
   expandedViewKey?: string | null
   onExpandedViewKeyChange?: (key: string | null) => void
   onCollapse?: () => void
@@ -771,7 +772,7 @@ export const DataSidebar = memo(function DataSidebar({
               className="flex min-h-8 min-w-0 flex-1 items-center gap-1.5 rounded-md text-left text-[14px] font-medium tracking-normal text-inherit"
               title={name}
               aria-expanded={open}
-              {...pickDomAttrs('collection', table.path, name)}
+              {...pickDomAttrs('collection', table.path, name, { path: table.path })}
             >
               <button
                 type="button"
@@ -795,7 +796,7 @@ export const DataSidebar = memo(function DataSidebar({
               </button>
               <button
                 type="button"
-                className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit outline-none hover:text-(--dsw-sidebar-fg-active) focus-visible:ring-1 focus-visible:ring-(--dsw-border)"
+                className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-left font-medium text-inherit outline-none hover:text-(--biu-color-text) focus-visible:ring-1 focus-visible:ring-(--biu-color-border)"
                 onClick={() => onOpenTable?.(
                   table.path,
                   builtinAllViewId(table.path),
@@ -830,7 +831,7 @@ export const DataSidebar = memo(function DataSidebar({
                 <div key={view.id} className="min-w-0">
                   <div
                     className={`chat-session-row group${active ? ' is-active' : ''}${starred ? ' is-pinned' : ''}`}
-                    {...pickDomAttrs('view', viewPickId(table.path, view.id), view.name)}
+                    {...pickDomAttrs('view', viewPickId(table.path, view.id), view.name, { path: table.path })}
                   >
                     <div className="chat-session-row-main flex min-w-0 flex-1 items-center gap-1.5 py-1 text-left text-[14px] leading-5">
                       <button
@@ -1085,7 +1086,7 @@ export const DataSidebar = memo(function DataSidebar({
                       <div key={previewKey} className="min-w-0">
                         <div
                           className={`chat-session-row group${active ? ' is-active' : ''} is-pinned`}
-                          {...pickDomAttrs('view', viewPickId(table.path, view.id), view.name)}
+                          {...pickDomAttrs('view', viewPickId(table.path, view.id), view.name, { path: table.path })}
                         >
                           <div className="chat-session-row-main flex min-w-0 flex-1 items-center gap-1.5 py-1 text-left text-[14px] leading-5">
                             <button
@@ -1157,12 +1158,9 @@ export const DataSidebar = memo(function DataSidebar({
                   type="button"
                   className="flex h-full min-w-0 flex-1 items-center gap-2 text-left text-[12px] font-bold tracking-wider"
                   aria-expanded={userOpen}
-                  title="打开用户数据概览"
+                  title="展开或收起用户数据"
                   data-testid="sidebar-user-home"
-                  onClick={() => {
-                    setUserOpen((prev) => !prev)
-                    onOpenScopeHome?.()
-                  }}
+                  onClick={() => setUserOpen((prev) => !prev)}
                 >
                   <span className="min-w-0 flex-1 truncate tracking-normal">用户数据</span>
                 </button>
@@ -1172,7 +1170,7 @@ export const DataSidebar = memo(function DataSidebar({
             <SidebarFold open={userOpen}>
               <div className="flex min-w-0 flex-col gap-px" data-testid="sidebar-user-collections">
                 {userTables.length ? renderTableRows(userTables, 'user') : (
-                  <div className="px-1 py-1 text-[12px] text-(--dsw-label-3)">还没有用户数据表</div>
+                  <div className="px-1 py-1 text-[12px] text-(--biu-color-text-subtle)">还没有用户数据表</div>
                 )}
               </div>
             </SidebarFold>
@@ -1197,7 +1195,7 @@ export const DataSidebar = memo(function DataSidebar({
             <SidebarFold open={indexOpen}>
               <div className="flex min-w-0 flex-col gap-px" data-testid="sidebar-index-collections">
                 {indexTables.length ? renderTableRows(indexTables, 'index') : (
-                  <div className="px-1 py-1 text-[12px] text-(--dsw-label-3)">还没有索引数据</div>
+                  <div className="px-1 py-1 text-[12px] text-(--biu-color-text-subtle)">还没有索引数据</div>
                 )}
               </div>
             </SidebarFold>
@@ -1239,7 +1237,7 @@ export const DataSidebar = memo(function DataSidebar({
 
   return (
     <aside
-      className="app-side-bar fsdb-views flex min-h-0 flex-col overflow-hidden border-r border-(--dsw-border) bg-(--dsw-sidebar)"
+      className="app-side-bar fsdb-views flex min-h-0 flex-col overflow-hidden border-r border-(--biu-color-border) bg-(--biu-color-bg-subtle)"
       aria-label="数据"
     >
       <div className="app-side-bar-head app-side-bar-head-brand" data-biu-ignore>

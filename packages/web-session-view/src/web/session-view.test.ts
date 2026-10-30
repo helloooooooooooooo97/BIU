@@ -30,7 +30,7 @@ function mockFetch(handlers: Record<string, (init?: RequestInit) => unknown>) {
   return calls
 }
 
-test('refreshSessions shares one in-flight GET /api/sessions', async () => {
+test('refreshSessions shares one in-flight GET /api/agents', async () => {
   resetSessionsListGet()
   let listHits = 0
   let release!: () => void
@@ -39,7 +39,7 @@ test('refreshSessions shares one in-flight GET /api/sessions', async () => {
   })
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     const url = String(input)
-    if (/\/api\/sessions\/?$/.test(url) || url === '/api/sessions') {
+    if (/\/api\/agents\/?$/.test(url) || url === '/api/agents') {
       listHits += 1
       await gate
       return {
@@ -48,7 +48,7 @@ test('refreshSessions shares one in-flight GET /api/sessions', async () => {
         json: async () => ({ sessions: [{ id: 's1', title: 'a', eventCount: 1, updatedAt: 1 }] }),
       } as Response
     }
-    if (url.includes('/api/sessions/s1?turns=')) {
+    if (url.includes('/api/agents/s1?turns=')) {
       return {
         ok: true,
         status: 200,
@@ -86,7 +86,7 @@ test('home applyRoute waits on the constructor sessions GET', async () => {
   })
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     const url = String(input)
-    if (/\/api\/sessions\/?$/.test(url) || url === '/api/sessions') {
+    if (/\/api\/agents\/?$/.test(url) || url === '/api/agents') {
       listHits += 1
       await gate
       return {
@@ -95,7 +95,7 @@ test('home applyRoute waits on the constructor sessions GET', async () => {
         json: async () => ({ sessions: [{ id: 's1', title: 'a', eventCount: 1, updatedAt: 1 }] }),
       } as Response
     }
-    if (url.includes('/api/sessions/s1?turns=')) {
+    if (url.includes('/api/agents/s1?turns=')) {
       return {
         ok: true,
         status: 200,
@@ -132,7 +132,7 @@ test('leaveMissingSession does not deadlock on the list GET that discovered the 
   ]
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     const url = String(input)
-    if (/\/api\/sessions\/?$/.test(url) || url === '/api/sessions') {
+    if (/\/api\/agents\/?$/.test(url) || url === '/api/agents') {
       listHits += 1
       return { ok: true, status: 200, json: async () => ({ sessions }) } as Response
     }
@@ -158,7 +158,7 @@ test('leaveMissingSession does not deadlock on the list GET that discovered the 
 
 test('refreshApprovals rehydrates mode and pending', async () => {
   mockFetch({
-    '/api/sessions': () => ({ sessions: [] }),
+    '/api/agents': () => ({ sessions: [] }),
     '/api/approvals': () => ({
       mode: 'hold',
       pending: [{ id: 'a1', name: 'bash', args: { command: 'ls' } }],
@@ -174,7 +174,7 @@ test('refreshApprovals rehydrates mode and pending', async () => {
 
 test('setApprovalMode posts and updates state', async () => {
   const calls = mockFetch({
-    '/api/sessions': () => ({ sessions: [] }),
+    '/api/agents': () => ({ sessions: [] }),
     '/api/approvals/mode': () => ({ mode: 'hold' }),
     '/api/approvals': () => ({ mode: 'auto', pending: [] }),
   })
@@ -192,8 +192,8 @@ test('setApprovalMode posts and updates state', async () => {
 test('setSessionTitle patches config title', async () => {
   let listed = '旧名'
   const calls = mockFetch({
-    '/api/sessions/s1/config': () => ({ id: 's1' }),
-    '/api/sessions': () => ({ sessions: [{ id: 's1', title: listed, eventCount: 1, updatedAt: 1 }] }),
+    '/api/agents/s1/config': () => ({ id: 's1' }),
+    '/api/agents': () => ({ sessions: [{ id: 's1', title: listed, eventCount: 1, updatedAt: 1 }] }),
     '/api/approvals': () => ({ mode: 'auto', pending: [] }),
   })
   const ctx = new Context()
@@ -210,8 +210,8 @@ test('setSessionTitle patches config title', async () => {
 
 test('setSessionTitle empty sends null title', async () => {
   const calls = mockFetch({
-    '/api/sessions/s1/config': () => ({ id: 's1' }),
-    '/api/sessions': () => ({ sessions: [{ id: 's1', title: '旧名', eventCount: 1, updatedAt: 1 }] }),
+    '/api/agents/s1/config': () => ({ id: 's1' }),
+    '/api/agents': () => ({ sessions: [{ id: 's1', title: '旧名', eventCount: 1, updatedAt: 1 }] }),
     '/api/approvals': () => ({ mode: 'auto', pending: [] }),
   })
   const ctx = new Context()
@@ -226,9 +226,9 @@ test('setSessionTitle empty sends null title', async () => {
 
 test('send inject posts kind without clearing running state', async () => {
   const calls = mockFetch({
-    '/api/sessions': () => ({ sessions: [] }),
+    '/api/agents': () => ({ sessions: [] }),
     '/api/approvals': () => ({ mode: 'auto', pending: [] }),
-    '/api/sessions/s1/messages': () => ({ sessionId: 's1', queued: true }),
+    '/api/agents/s1/messages': () => ({ sessionId: 's1', queued: true }),
   })
   const ctx = new Context()
   await ctx.plugin(sessionView)
@@ -245,15 +245,15 @@ test('send inject posts kind without clearing running state', async () => {
 
 test('send wake keeps running after HTTP so WS agent/status owns idle', async () => {
   const calls = mockFetch({
-    '/api/sessions': () => ({ sessions: [{ id: 's1', title: 'a', eventCount: 1, updatedAt: 1 }] }),
-    '/api/sessions/s1?turns=': () => ({
+    '/api/agents': () => ({ sessions: [{ id: 's1', title: 'a', eventCount: 1, updatedAt: 1 }] }),
+    '/api/agents/s1?turns=': () => ({
       id: 's1',
       events: [{ type: 'session/open', version: 1, seq: 0, ts: 1 }],
       hasMore: false,
       totalTurns: 0,
     }),
     '/api/approvals': () => ({ mode: 'auto', pending: [] }),
-    '/api/sessions/s1/messages': () => ({ sessionId: 's1', text: 'ok', queued: true }),
+    '/api/agents/s1/messages': () => ({ sessionId: 's1', text: 'ok', queued: true }),
   })
   const ctx = new Context()
   await ctx.plugin(sessionView)
@@ -276,7 +276,7 @@ test('turn/end clears current busy promptly (no stale breathing state)', async (
   // 列表已不再 busy(false)，但因当前会话 pending 存在，旧 syncBusyFromSessions 的
   // pending 保护会卡死不删 → 侧栏持续呼吸态。turn/end 是回合结束的权威信号，应立即清 busy。
   mockFetch({
-    '/api/sessions': () => ({ sessions: [{ id: 's1', title: 'a', busy: false, eventCount: 2, updatedAt: 1 }] }),
+    '/api/agents': () => ({ sessions: [{ id: 's1', title: 'a', busy: false, eventCount: 2, updatedAt: 1 }] }),
     '/api/approvals': () => ({ mode: 'auto', pending: [] }),
   })
   const ctx = new Context()
@@ -299,7 +299,7 @@ test('turn/end clears current busy promptly (no stale breathing state)', async (
 
 test('stale agent/status running after turn/end does not restart breathing', async () => {
   mockFetch({
-    '/api/sessions': () => ({ sessions: [{ id: 's1', title: 'a', busy: false, eventCount: 2, updatedAt: 1 }] }),
+    '/api/agents': () => ({ sessions: [{ id: 's1', title: 'a', busy: false, eventCount: 2, updatedAt: 1 }] }),
     '/api/approvals': () => ({ mode: 'auto', pending: [] }),
   })
   const ctx = new Context()
@@ -315,7 +315,7 @@ test('stale agent/status running after turn/end does not restart breathing', asy
 
 test('list not-busy clears current breathing after the send hold expires', async () => {
   mockFetch({
-    '/api/sessions': () => ({ sessions: [{ id: 's1', title: 'a', busy: false, eventCount: 1, updatedAt: 1 }] }),
+    '/api/agents': () => ({ sessions: [{ id: 's1', title: 'a', busy: false, eventCount: 1, updatedAt: 1 }] }),
     '/api/approvals': () => ({ mode: 'auto', pending: [] }),
   })
   const ctx = new Context()
@@ -332,7 +332,7 @@ test('list not-busy clears current breathing after the send hold expires', async
 
 test('stale agent/status running after turn/end does not restart breathing', async () => {
   mockFetch({
-    '/api/sessions': () => ({ sessions: [{ id: 's1', title: 'a', busy: false, eventCount: 2, updatedAt: 1 }] }),
+    '/api/agents': () => ({ sessions: [{ id: 's1', title: 'a', busy: false, eventCount: 2, updatedAt: 1 }] }),
     '/api/approvals': () => ({ mode: 'auto', pending: [] }),
   })
   const ctx = new Context()
@@ -348,7 +348,7 @@ test('stale agent/status running after turn/end does not restart breathing', asy
 
 test('list not-busy clears current breathing after the send hold expires', async () => {
   mockFetch({
-    '/api/sessions': () => ({ sessions: [{ id: 's1', title: 'a', busy: false, eventCount: 1, updatedAt: 1 }] }),
+    '/api/agents': () => ({ sessions: [{ id: 's1', title: 'a', busy: false, eventCount: 1, updatedAt: 1 }] }),
     '/api/approvals': () => ({ mode: 'auto', pending: [] }),
   })
   const ctx = new Context()
@@ -365,7 +365,7 @@ test('list not-busy clears current breathing after the send hold expires', async
 
 test('worker session busy cleared once list reports not busy', async () => {
   mockFetch({
-    '/api/sessions': () => ({ sessions: [{ id: 'worker-9', title: 'w', busy: false, eventCount: 1, updatedAt: 1 }] }),
+    '/api/agents': () => ({ sessions: [{ id: 'worker-9', title: 'w', busy: false, eventCount: 1, updatedAt: 1 }] }),
     '/api/approvals': () => ({ mode: 'auto', pending: [] }),
   })
   const ctx = new Context()
@@ -382,7 +382,7 @@ test('worker session busy cleared once list reports not busy', async () => {
 
 test('stale list busy:true after turn/end does not restore breathing', async () => {
   mockFetch({
-    '/api/sessions': () => ({ sessions: [{ id: 's1', title: 'a', busy: true, eventCount: 2, updatedAt: 1 }] }),
+    '/api/agents': () => ({ sessions: [{ id: 's1', title: 'a', busy: true, eventCount: 2, updatedAt: 1 }] }),
     '/api/approvals': () => ({ mode: 'auto', pending: [] }),
   })
   const ctx = new Context()
@@ -405,7 +405,7 @@ test('stale list busy:true after turn/end does not restore breathing', async () 
 
 test('stale list busy:true after worker turn/end does not restore breathing', async () => {
   mockFetch({
-    '/api/sessions': () => ({
+    '/api/agents': () => ({
       sessions: [
         { id: 'live-1', title: 'live', busy: false, eventCount: 1, updatedAt: 1 },
         { id: 'worker-9', title: 'w', busy: true, eventCount: 2, updatedAt: 2 },
@@ -431,9 +431,9 @@ test('stale list busy:true after worker turn/end does not restore breathing', as
 
 test('controlGoal pause clears busy so the session is not left running', async () => {
   mockFetch({
-    '/api/sessions': () => ({ sessions: [{ id: 's1', title: 'a', busy: true, eventCount: 1, updatedAt: 1 }] }),
+    '/api/agents': () => ({ sessions: [{ id: 's1', title: 'a', busy: true, eventCount: 1, updatedAt: 1 }] }),
     '/api/approvals': () => ({ mode: 'auto', pending: [] }),
-    '/api/sessions/s1/goal': () => ({
+    '/api/agents/s1/goal': () => ({
       goal: { id: 'g1', objective: 'ship', status: 'paused', turns: 1 },
     }),
   })
@@ -453,7 +453,7 @@ test('controlGoal pause clears busy so the session is not left running', async (
 
 test('stale agent/status running after worker turn/end does not restore breathing', async () => {
   mockFetch({
-    '/api/sessions': () => ({ sessions: [{ id: 'live-1', title: 'live', busy: false, eventCount: 1, updatedAt: 1 }] }),
+    '/api/agents': () => ({ sessions: [{ id: 'live-1', title: 'live', busy: false, eventCount: 1, updatedAt: 1 }] }),
     '/api/approvals': () => ({ mode: 'auto', pending: [] }),
   })
   const ctx = new Context()
@@ -490,9 +490,9 @@ test('hasActiveDispatchedTasks is true while a worker is still pending or runnin
 
 test('dispatch poll keeps running after live turn/end while a worker is still active', async () => {
   mockFetch({
-    '/api/sessions': () => ({ sessions: [{ id: 's1', title: 'a', busy: false, eventCount: 2, updatedAt: 1 }] }),
+    '/api/agents': () => ({ sessions: [{ id: 's1', title: 'a', busy: false, eventCount: 2, updatedAt: 1 }] }),
     '/api/approvals': () => ({ mode: 'auto', pending: [] }),
-    '/api/sessions/s1/dispatched-usage': () => ({
+    '/api/agents/s1/dispatched-usage': () => ({
       dispatchedTasksByTurn: {
         '1': [{ sessionId: 'w1', tool: 'task_deliver', status: 'running' }],
       },
@@ -520,7 +520,7 @@ test('dispatch poll keeps running after live turn/end while a worker is still ac
 
 test('setAgentStatus with other sessionId only updates busySessions', async () => {
   mockFetch({
-    '/api/sessions': () => ({ sessions: [] }),
+    '/api/agents': () => ({ sessions: [] }),
     '/api/approvals': () => ({ mode: 'auto', pending: [] }),
   })
   const ctx = new Context()
@@ -538,7 +538,7 @@ test('setAgentStatus with other sessionId only updates busySessions', async () =
 
 test('inspectCall switches to trajectory with focus', async () => {
   mockFetch({
-    '/api/sessions': () => ({ sessions: [] }),
+    '/api/agents': () => ({ sessions: [] }),
     '/api/approvals': () => ({ mode: 'auto', pending: [] }),
   })
   const ctx = new Context()
@@ -553,7 +553,7 @@ test('inspectCall switches to trajectory with focus', async () => {
 
 test('ingest coalesces consecutive chunks and skips trajectory on chat view', async () => {
   mockFetch({
-    '/api/sessions': () => ({ sessions: [] }),
+    '/api/agents': () => ({ sessions: [] }),
     '/api/approvals': () => ({ mode: 'auto', pending: [] }),
   })
   const ctx = new Context()
@@ -583,7 +583,7 @@ test('ingest coalesces consecutive chunks and skips trajectory on chat view', as
 
 test('ingest keeps reasoning chunks separate from the answer', async () => {
   mockFetch({
-    '/api/sessions': () => ({ sessions: [] }),
+    '/api/agents': () => ({ sessions: [] }),
     '/api/approvals': () => ({ mode: 'auto', pending: [] }),
   })
   const ctx = new Context()
@@ -601,7 +601,7 @@ test('ingest keeps reasoning chunks separate from the answer', async () => {
 
 test('ingest updates live tool/result without duplicating the card', async () => {
   mockFetch({
-    '/api/sessions': () => ({ sessions: [] }),
+    '/api/agents': () => ({ sessions: [] }),
     '/api/approvals': () => ({ mode: 'auto', pending: [] }),
   })
   const ctx = new Context()
@@ -640,7 +640,7 @@ test('ingest updates live tool/result without duplicating the card', async () =>
 
 test('ingest updates live tool/call arguments without duplicating the card', async () => {
   mockFetch({
-    '/api/sessions': () => ({ sessions: [] }),
+    '/api/agents': () => ({ sessions: [] }),
     '/api/approvals': () => ({ mode: 'auto', pending: [] }),
   })
   const ctx = new Context()
@@ -661,7 +661,7 @@ test('ingest updates live tool/call arguments without duplicating the card', asy
 
 test('ingest merges live content/edits on the same seq so later files are not dropped', async () => {
   mockFetch({
-    '/api/sessions': () => ({ sessions: [] }),
+    '/api/agents': () => ({ sessions: [] }),
     '/api/approvals': () => ({ mode: 'auto', pending: [] }),
   })
   const ctx = new Context()
@@ -707,7 +707,7 @@ test('load fetches full session turns and skips trajectory until ensureTrajector
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     const url = String(input)
     calls.push(url)
-    if (url.includes('/api/sessions/s1/trajectory')) {
+    if (url.includes('/api/agents/s1/trajectory')) {
       return {
         ok: true,
         status: 200,
@@ -719,7 +719,7 @@ test('load fetches full session turns and skips trajectory until ensureTrajector
         }),
       } as Response
     }
-    if (url.includes('/api/sessions/s1?turns=')) {
+    if (url.includes('/api/agents/s1?turns=')) {
       return {
         ok: true,
         status: 200,
@@ -737,7 +737,7 @@ test('load fetches full session turns and skips trajectory until ensureTrajector
         }),
       } as Response
     }
-    if (url.includes('/api/sessions') && !url.includes('/s1')) {
+    if (url.includes('/api/agents') && !url.includes('/s1')) {
       return { ok: true, status: 200, json: async () => ({ sessions: [] }) } as Response
     }
     if (url.includes('/api/approvals')) {
@@ -770,7 +770,7 @@ test('load fetches full session turns and skips trajectory until ensureTrajector
 
 test('load applies inspector bind from GET session, not the list cache', async () => {
   mockFetch({
-    '/api/sessions/s1': () => ({
+    '/api/agents/s1': () => ({
       id: 's1',
       events: [{ type: 'session/open', version: 1, seq: 0, ts: 1 }],
       hasMore: false,
@@ -783,7 +783,7 @@ test('load applies inspector bind from GET session, not the list cache', async (
         },
       },
     }),
-    '/api/sessions': () => ({
+    '/api/agents': () => ({
       sessions: [{ id: 's1', title: 'A', eventCount: 1, updatedAt: 1 }],
     }),
     '/api/approvals': () => ({ mode: 'auto', pending: [] }),
@@ -804,7 +804,7 @@ test('fetchEventDetail and fetchEventRequest hit fine-grained APIs', async () =>
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     const url = String(input)
     calls.push(url)
-    if (url.endsWith('/api/sessions/s1/events/4/request')) {
+    if (url.endsWith('/api/agents/s1/events/4/request')) {
       return {
         ok: true,
         status: 200,
@@ -816,7 +816,7 @@ test('fetchEventDetail and fetchEventRequest hit fine-grained APIs', async () =>
         }),
       } as Response
     }
-    if (url.endsWith('/api/sessions/s1/events/4')) {
+    if (url.endsWith('/api/agents/s1/events/4')) {
       return {
         ok: true,
         status: 200,
@@ -826,7 +826,7 @@ test('fetchEventDetail and fetchEventRequest hit fine-grained APIs', async () =>
         }),
       } as Response
     }
-    if (url.includes('/api/sessions')) {
+    if (url.includes('/api/agents')) {
       return { ok: true, status: 200, json: async () => ({ sessions: [] }) } as Response
     }
     if (url.includes('/api/approvals')) {
@@ -854,7 +854,7 @@ test('load keeps previous chat visible until new session fetch resolves', async 
   let emptyFetchStarted = false
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     const url = String(input)
-    if (url.includes('/api/sessions/empty?turns=')) {
+    if (url.includes('/api/agents/empty?turns=')) {
       emptyFetchStarted = true
       await gate
       return {
@@ -868,7 +868,7 @@ test('load keeps previous chat visible until new session fetch resolves', async 
         }),
       } as Response
     }
-    if (url.includes('/api/sessions/busy?turns=')) {
+    if (url.includes('/api/agents/busy?turns=')) {
       return {
         ok: true,
         status: 200,
@@ -884,7 +884,7 @@ test('load keeps previous chat visible until new session fetch resolves', async 
         }),
       } as Response
     }
-    if (url.includes('/api/sessions')) {
+    if (url.includes('/api/agents')) {
       return { ok: true, status: 200, json: async () => ({ sessions: [] }) } as Response
     }
     if (url.includes('/api/approvals')) {
@@ -917,7 +917,7 @@ test('second load of same session hits memory cache without waiting on fetch', a
   let fetches = 0
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     const url = String(input)
-    if (url.includes('/api/sessions/s1?turns=')) {
+    if (url.includes('/api/agents/s1?turns=')) {
       fetches += 1
       return {
         ok: true,
@@ -933,7 +933,7 @@ test('second load of same session hits memory cache without waiting on fetch', a
         }),
       } as Response
     }
-    if (url.includes('/api/sessions')) {
+    if (url.includes('/api/agents')) {
       return { ok: true, status: 200, json: async () => ({ sessions: [] }) } as Response
     }
     if (url.includes('/api/approvals')) {
@@ -955,7 +955,7 @@ test('second load of same session hits memory cache without waiting on fetch', a
 test('loadOlder prepends earlier turns', async () => {
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     const url = String(input)
-    if (url.includes('/api/sessions/s1/events?beforeSeq=')) {
+    if (url.includes('/api/agents/s1/events?beforeSeq=')) {
       return {
         ok: true,
         status: 200,
@@ -970,7 +970,7 @@ test('loadOlder prepends earlier turns', async () => {
         }),
       } as Response
     }
-    if (url.includes('/api/sessions/s1?turns=')) {
+    if (url.includes('/api/agents/s1?turns=')) {
       return {
         ok: true,
         status: 200,
@@ -985,7 +985,7 @@ test('loadOlder prepends earlier turns', async () => {
         }),
       } as Response
     }
-    if (url.includes('/api/sessions')) {
+    if (url.includes('/api/agents')) {
       return { ok: true, status: 200, json: async () => ({ sessions: [] }) } as Response
     }
     if (url.includes('/api/approvals')) {
@@ -1014,10 +1014,10 @@ test('deleteSession clears active session when list empty', async () => {
     const url = String(input)
     const method = init?.method ?? 'GET'
     calls.push({ url, method })
-    if (url.endsWith('/api/sessions') && method === 'GET') {
+    if (url.endsWith('/api/agents') && method === 'GET') {
       return { ok: true, status: 200, json: async () => ({ sessions }) } as Response
     }
-    if (url.includes('/api/sessions/s1') && method === 'DELETE') {
+    if (url.includes('/api/agents/s1') && method === 'DELETE') {
       sessions = []
       return { ok: true, status: 200, json: async () => ({ ok: true, id: 's1' }) } as Response
     }
@@ -1051,10 +1051,10 @@ test('deleteSession removes from list before DELETE resolves', async () => {
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
     const method = init?.method ?? 'GET'
-    if (url.endsWith('/api/sessions') && method === 'GET') {
+    if (url.endsWith('/api/agents') && method === 'GET') {
       return { ok: true, status: 200, json: async () => ({ sessions }) } as Response
     }
-    if (url.includes('/api/sessions/s1') && method === 'DELETE') {
+    if (url.includes('/api/agents/s1') && method === 'DELETE') {
       return deleteGate
     }
     if (url.includes('/api/approvals')) {
@@ -1086,7 +1086,7 @@ test('ensureTrajectory keeps live index on chat route after new session navigate
         json: async () => ({ id: 's-new', rows: trajRows, hasMore: false, totalTurns: trajRows.length ? 1 : 0 }),
       } as Response
     }
-    if (url.includes('/api/sessions/s-new?turns=')) {
+    if (url.includes('/api/agents/s-new?turns=')) {
       return {
         ok: true,
         status: 200,
@@ -1098,7 +1098,7 @@ test('ensureTrajectory keeps live index on chat route after new session navigate
         }),
       } as Response
     }
-    if (url.includes('/api/sessions')) {
+    if (url.includes('/api/agents')) {
       return { ok: true, status: 200, json: async () => ({ sessions: [] }) } as Response
     }
     if (url.includes('/api/approvals')) {
@@ -1115,7 +1115,7 @@ test('ensureTrajectory keeps live index on chat route after new session navigate
   assert.equal(view.get().view, 'chat')
   assert.equal(view.get().trajectory.length, 0)
 
-  // 新建会话后 navigate(`/s/${id}`) 会 applyRoute chat，不应关掉轨迹订阅
+  // 新建会话后 navigate(`/agents/${id}`) 会 applyRoute chat，不应关掉轨迹订阅
   await view.applyRoute({ kind: 'session', sessionId: 's-new', view: 'chat' })
   assert.equal(view.get().view, 'chat')
 
@@ -1138,10 +1138,10 @@ test('forkCurrent inserts the child into the sidebar list', async () => {
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
     const method = init?.method ?? 'GET'
-    if (url.endsWith('/api/sessions') && method === 'GET') {
+    if (url.endsWith('/api/agents') && method === 'GET') {
       return { ok: true, status: 200, json: async () => ({ sessions }) } as Response
     }
-    if (url.includes('/api/sessions/s1/fork') && method === 'POST') {
+    if (url.includes('/api/agents/s1/fork') && method === 'POST') {
       sessions = [
         { id: 's2', title: 'keep', eventCount: 2, updatedAt: 9, mascot: { shape: 'circle', color: '#111' } },
         { id: 's1', title: 'keep', eventCount: 2, updatedAt: 1 },
@@ -1152,7 +1152,7 @@ test('forkCurrent inserts the child into the sidebar list', async () => {
         json: async () => ({ id: 's2', parentId: 's1', type: 'chat', mascot: { shape: 'circle', color: '#111' } }),
       } as Response
     }
-    if (url.includes('/api/sessions/s2')) {
+    if (url.includes('/api/agents/s2')) {
       return {
         ok: true,
         status: 200,
@@ -1182,19 +1182,19 @@ test('forkCurrent inserts the child into the sidebar list', async () => {
 
 test('home cold-start picks latest chat; opening pages or data does not switch session', async () => {
   mockFetch({
-    '/api/sessions': () => ({
+    '/api/agents': () => ({
       sessions: [
         { id: 'old', title: 'old', eventCount: 1, updatedAt: 1 },
         { id: 'new', title: 'new', eventCount: 1, updatedAt: 9 },
       ],
     }),
-    '/api/sessions/new?turns=': () => ({
+    '/api/agents/new?turns=': () => ({
       id: 'new',
       events: [{ type: 'session/open', version: 1, seq: 0, ts: 1 }],
       hasMore: false,
       totalTurns: 0,
     }),
-    '/api/sessions/old?turns=': () => ({
+    '/api/agents/old?turns=': () => ({
       id: 'old',
       events: [{ type: 'session/open', version: 1, seq: 0, ts: 1 }],
       hasMore: false,
@@ -1232,13 +1232,13 @@ test('home cold-start picks latest chat; opening pages or data does not switch s
 
 test('database cold-start binds latest session without loading turns until overlay', async () => {
   const calls = mockFetch({
-    '/api/sessions': () => ({
+    '/api/agents': () => ({
       sessions: [
         { id: 'old', title: 'old', eventCount: 1, updatedAt: 1 },
         { id: 'new', title: 'new', eventCount: 1, updatedAt: 9 },
       ],
     }),
-    '/api/sessions/new?turns=': () => ({
+    '/api/agents/new?turns=': () => ({
       id: 'new',
       events: [{ type: 'session/open', version: 1, seq: 0, ts: 1 }],
       hasMore: false,
@@ -1254,18 +1254,18 @@ test('database cold-start binds latest session without loading turns until overl
   assert.equal(view.get().sessionId, 'new')
   assert.equal(calls.some((row) => row.url.includes('turns=')), false)
   await view.ensureSessionThread()
-  assert.equal(calls.some((row) => row.url.includes('/api/sessions/new?turns=')), true)
+  assert.equal(calls.some((row) => row.url.includes('/api/agents/new?turns=')), true)
 })
 
 test('returning to chat home loads the bound session thread without a refresh', async () => {
   const calls = mockFetch({
-    '/api/sessions': () => ({
+    '/api/agents': () => ({
       sessions: [
         { id: 'old', title: 'old', eventCount: 1, updatedAt: 1 },
         { id: 'new', title: 'new', eventCount: 1, updatedAt: 9 },
       ],
     }),
-    '/api/sessions/new?turns=': () => ({
+    '/api/agents/new?turns=': () => ({
       id: 'new',
       events: [
         { type: 'session/open', version: 1, seq: 0, ts: 1 },
@@ -1285,17 +1285,17 @@ test('returning to chat home loads the bound session thread without a refresh', 
   assert.equal(view.get().events.length, 0)
   assert.equal(calls.some((row) => row.url.includes('turns=')), false)
   await view.applyRoute({ kind: 'home' })
-  assert.equal(calls.some((row) => row.url.includes('/api/sessions/new?turns=')), true)
+  assert.equal(calls.some((row) => row.url.includes('/api/agents/new?turns=')), true)
   assert.ok(view.get().events.length)
   assert.ok(view.get().nodes.some((node) => node.kind === 'user'))
 })
 
 test('same session route still loads turns after a session/open with no chat nodes', async () => {
   const calls = mockFetch({
-    '/api/sessions': () => ({
+    '/api/agents': () => ({
       sessions: [{ id: 'new', title: 'new', eventCount: 1, updatedAt: 9 }],
     }),
-    '/api/sessions/new?turns=': () => ({
+    '/api/agents/new?turns=': () => ({
       id: 'new',
       events: [
         { type: 'session/open', version: 1, seq: 0, ts: 1 },
@@ -1316,7 +1316,7 @@ test('same session route still loads turns after a session/open with no chat nod
   assert.ok(view.get().events.length)
   assert.equal(view.get().nodes.length, 0)
   await view.applyRoute({ kind: 'session', sessionId: 'new', view: 'chat' })
-  assert.equal(calls.some((row) => row.url.includes('/api/sessions/new?turns=')), true)
+  assert.equal(calls.some((row) => row.url.includes('/api/agents/new?turns=')), true)
   assert.ok(view.get().nodes.some((node) => node.kind === 'user'))
 })
 
@@ -1327,10 +1327,10 @@ test('missing session route does not surface 404 and opens the latest chat', asy
   }
   window.addEventListener('biu:session-missing', onMissing)
   mockFetch({
-    '/api/sessions': () => ({
+    '/api/agents': () => ({
       sessions: [{ id: 'new', title: 'new', eventCount: 1, updatedAt: 9 }],
     }),
-    '/api/sessions/new?turns=': () => ({
+    '/api/agents/new?turns=': () => ({
       id: 'new',
       events: [{ type: 'session/open', version: 1, seq: 0, ts: 1 }],
       hasMore: false,
@@ -1341,7 +1341,7 @@ test('missing session route does not surface 404 and opens the latest chat', asy
   const innerFetch = globalThis.fetch
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
-    if (/\/api\/sessions\/gone(\?|$)/.test(url)) {
+    if (/\/api\/agents\/gone(\?|$)/.test(url)) {
       return { ok: false, status: 404, json: async () => ({}) } as Response
     }
     return innerFetch(input, init)
@@ -1359,13 +1359,13 @@ test('missing session route does not surface 404 and opens the latest chat', asy
 
 test('sessions record routes do not switch the live session', async () => {
   mockFetch({
-    '/api/sessions': () => ({
+    '/api/agents': () => ({
       sessions: [
         { id: 'old', title: 'old', eventCount: 1, updatedAt: 1 },
         { id: 'new', title: 'new', eventCount: 1, updatedAt: 9 },
       ],
     }),
-    '/api/sessions/new?turns=': () => ({
+    '/api/agents/new?turns=': () => ({
       id: 'new',
       events: [{ type: 'session/open', version: 1, seq: 0, ts: 1 }],
       hasMore: false,
@@ -1383,7 +1383,7 @@ test('sessions record routes do not switch the live session', async () => {
     kind: 'record',
     moduleId: 'database',
     path: '/database',
-    collection: '/sessions',
+    collection: '/agents',
     recordId: 'old',
   })
   assert.equal(view.get().sessionId, 'new')
@@ -1391,9 +1391,9 @@ test('sessions record routes do not switch the live session', async () => {
 
 test('send wake paints the user bubble before the host roundtrip', async () => {
   mockFetch({
-    '/api/sessions': () => ({ sessions: [{ id: 's1', title: 'a', eventCount: 1, updatedAt: 1 }] }),
+    '/api/agents': () => ({ sessions: [{ id: 's1', title: 'a', eventCount: 1, updatedAt: 1 }] }),
     '/api/approvals': () => ({ mode: 'auto', pending: [] }),
-    '/api/sessions/s1/messages': () => ({ sessionId: 's1', text: 'ok', queued: true }),
+    '/api/agents/s1/messages': () => ({ sessionId: 's1', text: 'ok', queued: true }),
   })
   const ctx = new Context()
   await ctx.plugin(sessionView)
@@ -1414,7 +1414,7 @@ test('busy send appears in the wake inbox before messages HTTP returns', async (
     if (url.includes('/messages')) {
       await new Promise(() => undefined)
     }
-    if (url.includes('/api/sessions')) {
+    if (url.includes('/api/agents')) {
       return { ok: true, status: 200, json: async () => ({ sessions: [] }) } as Response
     }
     if (url.includes('/api/approvals')) {
@@ -1435,8 +1435,8 @@ test('busy send appears in the wake inbox before messages HTTP returns', async (
 
 test('empty switching session still ingests the outgoing user bubble', async () => {
   mockFetch({
-    '/api/sessions': () => ({ sessions: [] }),
-    '/api/sessions/empty?turns=': () => new Promise(() => undefined),
+    '/api/agents': () => ({ sessions: [] }),
+    '/api/agents/empty?turns=': () => new Promise(() => undefined),
     '/api/approvals': () => ({ mode: 'auto', pending: [] }),
   })
   const ctx = new Context()
@@ -1454,7 +1454,7 @@ test('empty switching session still ingests the outgoing user bubble', async () 
 test('未登录不请求会话和审批，登录后再拉', async () => {
   localStorage.removeItem('biu.account.token')
   const calls = mockFetch({
-    '/api/sessions': () => ({ sessions: [] }),
+    '/api/agents': () => ({ sessions: [] }),
     '/api/approvals': () => ({ mode: 'auto', pending: [] }),
   })
   const ctx = new Context()
@@ -1464,7 +1464,7 @@ test('未登录不请求会话和审批，登录后再拉', async () => {
   localStorage.setItem('biu.account.token', 'tok')
   window.dispatchEvent(new Event('biu:account-token'))
   await new Promise((resolve) => setTimeout(resolve, 30))
-  assert.equal(calls.some((call) => call.url.includes('/api/sessions')), true)
+  assert.equal(calls.some((call) => call.url.includes('/api/agents')), true)
   assert.equal(calls.some((call) => call.url.includes('/api/approvals')), true)
   localStorage.removeItem('biu.account.token')
 })

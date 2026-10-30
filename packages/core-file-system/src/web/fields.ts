@@ -1,5 +1,5 @@
 import type { AtomicFieldType, CollectionSchema, CollectionSchemaPack, DbRecord, FieldSpec, FieldType, SchemaFieldValue } from '@biu/type-file-system'
-import { asAttachment, asAttachmentList, asHttpHref, asImageSrc, asImageSrcList, asPerson, asPersonList, BUILTIN_FIELD_KEYS, isFacetFieldType, isRefFieldType, isReservedSchemaFieldKey, normalizeSchemaValue, personKey } from '@biu/type-file-system'
+import { asAttachment, asAttachmentList, asHttpHref, asImageSrc, asImageSrcList, asPerson, asPersonList, BUILTIN_FIELD_KEYS, isFacetFieldType, isRefFieldType, isReservedSchemaFieldKey, isSchemaFieldKey, normalizeSchemaValue, personKey } from '@biu/type-file-system'
 import { FACET_FLAT_PREFIX, parseFacetFlatColumnKey, readFacetFieldValue } from '../query-logic.ts'
 import {
   cellGroupValue,
@@ -117,6 +117,7 @@ export function flattenTree(rows: DbRecord[], parentKey: string, collapsed: Reco
   const kidCountOf = (id: string): number => {
     const hit = memo.get(id)
     if (hit != null) return hit
+    memo.set(id, 0)
     const kids = children.get(id) ?? []
     const total = kids.reduce((sum, child) => sum + 1 + kidCountOf(child.id), 0)
     memo.set(id, total)
@@ -217,6 +218,7 @@ export function listProjectionKeys(opts: {
   add('parentChain')
   add('blocked')
   add('usageParts')
+  add('builtin')
   let needFacet = false
   for (const key of opts.columns) {
     add(key)
@@ -243,13 +245,15 @@ export function facetSourceKey(schema: CollectionSchema | undefined) {
 
 export function flattenFacetColumns(catalog: CollectionSchemaPack[]) {
   return catalog.flatMap((pack) =>
-    pack.fields.map((field) => ({
-      key: facetFlatColumnKey(pack.id, field.key),
-      field: { ...field, label: field.label ?? field.key },
-      kind: resolveFieldType(field),
-      packId: pack.id,
-      packLabel: pack.label,
-    })),
+    pack.fields
+      .filter((field) => field.deleted !== true)
+      .map((field) => ({
+        key: facetFlatColumnKey(pack.id, field.key),
+        field: { ...field, label: field.label ?? field.key },
+        kind: resolveFieldType(field),
+        packId: pack.id,
+        packLabel: pack.label,
+      })),
   )
 }
 
@@ -302,16 +306,21 @@ export function inferPackFieldType(value: unknown): AtomicFieldType {
   return 'string'
 }
 
-export function orphanPackEntries(fields: Array<{ key: string }>, bag: Record<string, unknown> | undefined) {
-  const known = new Set(fields.map((item) => item.key))
-  const out: Array<{ key: string; value: unknown; type: AtomicFieldType }> = []
+export function orphanPackEntries(
+  fields: Array<{ key: string; deleted?: boolean; type?: AtomicFieldType; label?: string }>,
+  bag: Record<string, unknown> | undefined,
+) {
+  const known = new Set(fields.filter((item) => item.deleted !== true).map((item) => item.key))
+  const retired = new Map(fields.map((item) => [item.key, item]))
+  const out: Array<{ key: string; value: unknown; type: AtomicFieldType; label: string }> = []
   if (!bag) return out
   for (const [key, value] of Object.entries(bag)) {
     if (known.has(key) || isReservedSchemaFieldKey(key)) continue
-    if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(key)) continue
-    if (value == null || value === '') continue
-    if (typeof value === 'string' && !value.trim()) continue
-    out.push({ key, value, type: inferPackFieldType(value) })
+    if (!isSchemaFieldKey(key)) continue
+    const kept = retired.get(key)
+    const type = kept?.type && kept.deleted ? kept.type : inferPackFieldType(value)
+    if (!fieldHasValue({ type }, value)) continue
+    out.push({ key, value, type, label: kept?.label ?? key })
   }
   return out
 }

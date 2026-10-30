@@ -5,7 +5,7 @@ import {
   ArrowDownTrayIcon,
   ArrowRightStartOnRectangleIcon,
   BellIcon,
-  ChatBubbleLeftRightIcon,
+  CursorArrowRaysIcon,
   CheckIcon,
   ChevronRightIcon,
   CircleStackIcon,
@@ -20,14 +20,15 @@ import {
   PlusIcon,
   XMarkIcon,
 } from '@heroicons/react/16/solid'
-import { AnchorMenu } from '@biu/public-ui/anchor-menu'
-import { ConfirmDialog } from '@biu/public-ui/confirm-dialog'
+import { AnchorMenu } from '@biu/biu-ui/anchor-menu'
+import { TagChip } from '@biu/biu-ui/tag-chip'
+import { ConfirmDialog } from '@biu/biu-ui/confirm-dialog'
 import { chromeIcon } from './chrome-icon.ts'
 import { applyNoticeClick, noticeIdOf } from './notice-open.ts'
 import { readMainDataRoute } from '@biu/core-file-system/main-data-route'
 import { persistTheme, readTheme, type ThemeMode } from './theme.ts'
-import { persistWorkspaceProfile } from '@biu/public-ui/workspace-profile'
-import { useWorkspaceProfile } from '@biu/public-ui/use-workspace-profile'
+import { persistWorkspaceProfile } from '@biu/biu-ui/workspace-profile'
+import { useWorkspaceProfile } from '@biu/biu-ui/use-workspace-profile'
 import { LayoutPrefsMenu } from '@biu/core-file-system/layout-prefs-menu'
 import { getPagePrefs, hydratePagePrefs, subscribePageWidth } from '@biu/core-file-system/page-width'
 
@@ -190,8 +191,8 @@ export function ShellSettingsAccount() {
   const [message, setMessage] = useState('')
   const token = readAccountToken()
   const loadSessions = () =>
-    accountFetch(token, '/api/account/sessions')
-      .then((body) => setSessions((body.sessions as Array<Record<string, unknown>>) ?? []))
+    accountFetch(token, '/api/account/agents')
+      .then((body) => setSessions(((body.agents ?? body.sessions) as Array<Record<string, unknown>>) ?? []))
       .catch(() => setSessions([]))
   const loadCloud = () =>
     accountFetch(token, '/api/account/cloud')
@@ -417,7 +418,7 @@ export function ShellSettingsAccount() {
                     type="button"
                     className="settings-account-action"
                     onClick={() => {
-                      void accountFetch(token, `/api/account/sessions/${encodeURIComponent(String(session.id))}`, { method: 'DELETE' })
+                      void accountFetch(token, `/api/account/agents/${encodeURIComponent(String(session.id))}`, { method: 'DELETE' })
                         .then(loadSessions)
                     }}
                   >
@@ -795,7 +796,7 @@ export function defaultSessionPath(sessions: Array<{ id?: string; updatedAt?: nu
       best = { id: item.id, updatedAt }
     }
   }
-  return best ? `/s/${encodeURIComponent(best.id)}` : '/'
+  return best ? `/agents/${encodeURIComponent(best.id)}` : '/'
 }
 
 /** 带 HTTP 状态码的请求错误，用于区分「凭证失效」和「网络/服务故障」。 */
@@ -914,7 +915,7 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
       method: 'POST',
       body: JSON.stringify({ workspaceId }),
     })
-      .then(() => accountFetch(token, '/api/sessions'))
+      .then(() => accountFetch(token, '/api/agents'))
       .then((body) => {
         const sessions = (body as { sessions?: Array<{ id?: string; updatedAt?: number }> }).sessions ?? []
         window.location.assign(defaultSessionPath(sessions))
@@ -938,7 +939,7 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
           method: 'POST',
           body: JSON.stringify({ workspaceId: created.id }),
         })
-        const listed = await accountFetch(token, '/api/sessions') as { sessions?: Array<{ id?: string; updatedAt?: number }> }
+        const listed = await accountFetch(token, '/api/agents') as { sessions?: Array<{ id?: string; updatedAt?: number }> }
         window.location.assign(defaultSessionPath(listed.sessions ?? []))
       })
       .catch((error) => {
@@ -999,7 +1000,9 @@ export function ShellWorkspaceSwitcher({ onWorkspaceSettings }: { onWorkspaceSet
                   <span className="shell-workspace-menu-copy">
                     <strong>{workspace.name}</strong>
                   </span>
-                  <small className="shell-workspace-menu-role">{workspaceRoleLabel(workspace.role)}</small>
+                  <small className="shell-workspace-menu-role">
+                    <TagChip id={workspace.role} label={workspaceRoleLabel(workspace.role)} />
+                  </small>
                 </button>
               )
             })}
@@ -1370,7 +1373,7 @@ export function ShellSettingsCollab({ panel = 'members' }: { panel?: 'workspace'
         <div className="settings-account-copy">
           <label className="settings-account-label" htmlFor="settings-workspace-delete-name">删除空间</label>
           <p className="settings-muted settings-account-hint">
-            删除后无法恢复。请重新输入空间名称「{savedWorkspaceName}」确认。该空间下的页面、任务、会话和其他数据会永久删除。
+            删除后无法恢复。请重新输入空间名称「{savedWorkspaceName}」确认。该空间下的页面、任务、代理和其他数据会永久删除。
           </p>
         </div>
         <div className="settings-account-actions">
@@ -1628,7 +1631,7 @@ export function ShellSettingsAbout() {
   return (
     <section data-testid="settings-about">
       <h3 className="settings-pane-title">关于</h3>
-      <p className="settings-pane-title" style={{ fontSize: 14, fontWeight: 600, margin: '18px 0 8px' }}>BIU</p>
+      <p className="settings-pane-title" style={{ fontSize: 14, fontWeight: 'var(--biu-font-weight-semibold)', margin: '18px 0 8px' }}>BIU</p>
       <p className="settings-muted m-0">Apache License 2.0。</p>
       <p className="settings-muted m-0" style={{ marginTop: 12 }}>
         public/grok-bot/ 角色素材归 xAI，不随 Apache-2.0 授权。详见 NOTICE.md。
@@ -1641,7 +1644,7 @@ export function ShellSettingsShortcuts() {
   return (
     <section data-testid="settings-shortcuts">
       <h3 className="settings-pane-title">快捷键</h3>
-      <p className="settings-muted settings-pane-lead">Windows 与 Linux 上 ⌘ 用 Ctrl。选取也可用 ⌘Q。编辑器内 ⌘F 为正文查找，⌘⇧F 仍打开全局搜索。</p>
+      <p className="settings-muted settings-pane-lead">Windows 与 Linux 上 ⌘ 用 Ctrl。编辑器内 ⌘F 为正文查找，⌘⇧F 仍打开全局搜索。</p>
       <ul className="settings-shortcut-list">
         <li>
           <span>搜索</span>
@@ -1649,7 +1652,7 @@ export function ShellSettingsShortcuts() {
         </li>
         <li>
           <span>快速选取</span>
-          <span className="settings-kbd"><kbd>Ctrl</kbd><kbd>Q</kbd></span>
+          <span className="settings-kbd"><kbd>⌘</kbd><kbd>2</kbd></span>
         </li>
         <li>
           <span>选区送到对话</span>
@@ -2092,7 +2095,7 @@ type NoticeRow = {
 }
 
 function sessionIdFromPath(path: string) {
-  const match = path.match(/^\/s\/([^/]+)/)
+  const match = path.match(/^\/agents\/([^/]+)/)
   return match ? decodeURIComponent(match[1]!) : ''
 }
 
@@ -2103,7 +2106,7 @@ function noticeHref(row: NoticeRow) {
 function noticeIsForSession(row: NoticeRow, sessionId: string) {
   if (!sessionId) return false
   const href = noticeHref(row)
-  return href === `/s/${sessionId}` || href === `/s/${encodeURIComponent(sessionId)}`
+  return href === `/agents/${sessionId}` || href === `/agents/${encodeURIComponent(sessionId)}`
 }
 
 function NoticeBody({ body }: { body: string }) {
@@ -2132,7 +2135,7 @@ function NoticeBody({ body }: { body: string }) {
 function noticeKindLabel(kind?: string) {
   if (kind === 'approval') return '审批'
   if (kind === 'task') return '任务'
-  if (kind === 'session') return '会话'
+  if (kind === 'session') return '代理'
   return ''
 }
 
@@ -2333,10 +2336,10 @@ export function ShellSidePlaces({
         onClick={onSettings}
       />
       <SideAction
-        title="会话"
+        title="代理"
         active={activeId === 'agent'}
         testId="chrome-chat-panel"
-        icon={<ChatBubbleLeftRightIcon {...chromeIcon} />}
+        icon={<CursorArrowRaysIcon {...chromeIcon} />}
         onClick={() => {
           navigate(agentHref)
         }}

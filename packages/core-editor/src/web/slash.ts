@@ -150,6 +150,16 @@ export const SLASH_ITEMS: SlashItem[] = [
     ...BASIC_GROUP,
   },
   {
+    id: 'slide',
+    label: 'Slide',
+    hint: '一页多栏：格子里可再插画板、表格等块',
+    aliases: ['slide', 'deck', 'ppt', 'gamma', '幻灯片', '演示', '卡片'],
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).insertSlide('split').run()
+    },
+    ...BASIC_GROUP,
+  },
+  {
     id: 'table',
     label: '表格',
     hint: '插入表格',
@@ -255,7 +265,7 @@ export function waitForPageBlock(plugin: string, kind?: string, timeoutMs = 2000
       reject(new Error(`${plugin} 启动超时`))
     }, timeoutMs)
     const check = () => {
-      if (pageBlockPluginPhase(plugin) === 'failed') {
+      if (pageBlockPluginPhase(plugin) === 'failed' || pageBlockPluginPhase(plugin) === 'missing') {
         off()
         reject(new Error(`${plugin} 启动失败`))
         return
@@ -287,7 +297,7 @@ export async function activateSlashBlock(editor: Editor, range: Range, plugin: s
     return
   }
   const phase = pageBlockPluginPhase(id)
-  requestEnablePageBlockPlugin(id, kind || '', { force: phase === 'failed' })
+  requestEnablePageBlockPlugin(id, kind || '', { force: phase === 'failed' || phase === 'missing' })
   try {
     const spec = await waitForPageBlock(id, kind, 20000)
     if (editor.isDestroyed) return
@@ -309,6 +319,9 @@ function decorateSlashStatus(item: SlashItem): SlashItem {
   if (phase === 'loading') return { ...item, status: 'loading', hint: '正在启动' }
   if (phase === 'failed') {
     return { ...item, status: 'failed', hint: '启动失败', pluginHref: pluginRecordPath(plugin) }
+  }
+  if (phase === 'missing') {
+    return { ...item, status: 'failed', hint: '插件不存在', pluginHref: pluginRecordPath(plugin) }
   }
   return item
 }
@@ -338,6 +351,7 @@ export function slashCatalog(): SlashItem[] {
   for (const block of blocks) {
     const blockType = block.blockType ?? block.kind
     covered.add(block.plugin)
+    if (block.slash === false) continue
     map.set(block.kind, {
       id: block.kind,
       label: block.label,

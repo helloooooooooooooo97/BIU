@@ -1,5 +1,11 @@
+/**
+ * 回归检查：Playwright HTML report / Vitest UI / Cypress / GitHub Checks
+ * 断言是测试用例，runs 是 CI 记录，filter / selected 写进块数据。
+ */
+import { Button, Input, ReUI, Select } from '@biu/reui'
+
 const React = globalThis.React
-const { useState, useCallback, useEffect } = React
+const { useState, useCallback } = React
 
 export const name = 'page-regression'
 export const inject = ['pageEditor']
@@ -48,39 +54,6 @@ const TYPES = [
 
 const MAX_RUNS = 10
 const MAX_ACTUAL = 72
-const STYLE_ID = 'page-regression-style-v2'
-const STYLE_CSS = `
-.rg-root{border:1px solid var(--dsw-border);border-radius:8px;padding:10px 12px;font-family:var(--font-sans);font-size:14px;color:var(--dsw-label);background:var(--dsw-bg);user-select:text}
-.rg-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.rg-title{font-size:13px;font-weight:650}
-.rg-meta{color:var(--dsw-label-3);font-family:var(--font-mono);font-size:12px}
-.rg-grow{flex:1}
-.rg-btn{flex:none;height:26px;padding:0 8px;border:1px solid var(--dsw-border);border-radius:6px;background:transparent;color:var(--dsw-label);font-size:13px;font-weight:650;cursor:pointer}
-.rg-btn:hover{background:var(--dsw-hover)}
-.rg-btn:disabled{opacity:.5;cursor:default}
-.rg-rows{margin-top:8px;display:flex;flex-direction:column;gap:6px}
-.rg-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.rg-idx{flex:none;width:18px;color:var(--dsw-label-3);font-family:var(--font-mono);font-size:12px}
-.rg-input{min-width:0;flex:1 1 140px;box-sizing:border-box;height:26px;padding:0 8px;border:1px solid var(--dsw-border);border-radius:6px;background:var(--dsw-input);color:var(--dsw-label);font-family:var(--font-mono);font-size:12px}
-.rg-chip{flex:none;min-width:96px;padding:2px 6px;border:1px solid var(--dsw-border);border-radius:6px;font-family:var(--font-mono);font-size:11px;white-space:nowrap;color:var(--dsw-label)}
-.rg-chip.is-pass{color:var(--dsw-label);background:color-mix(in srgb,var(--dsw-ok,#3fb950) 14%,transparent)}
-.rg-chip.is-fail{color:var(--dsw-danger);background:color-mix(in srgb,var(--dsw-danger) 12%,transparent)}
-.rg-actual{flex:1 1 100%;padding-left:24px;color:var(--dsw-label-3);font-family:var(--font-mono);font-size:11px}
-.rg-actual.is-fail{color:var(--dsw-danger)}
-.rg-empty{color:var(--dsw-label-3);font-size:13px}
-.rg-hist{margin-top:8px;border-top:1px solid var(--dsw-border);padding-top:6px}
-.rg-hist-row{display:flex;gap:8px;font-family:var(--font-mono);font-size:12px;color:var(--dsw-label-2)}
-`
-
-function useRgStyle() {
-  useEffect(() => {
-    const existing = document.getElementById(STYLE_ID)
-    const el = existing instanceof HTMLStyleElement ? existing : document.createElement('style')
-    el.id = STYLE_ID
-    el.textContent = STYLE_CSS
-    if (el.parentNode !== document.head) document.head.appendChild(el)
-  }, [])
-}
 
 function newId() {
   return 'a' + Math.random().toString(36).slice(2, 7)
@@ -95,7 +68,6 @@ function nowMs() {
   return typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()
 }
 
-/** 一条断言：真去读 DOM / 真去发请求，返回 通过|失败 + 实际值 + 耗时。 */
 async function runAssert(item: Assert): Promise<{ status: 'pass' | 'fail'; actual: string; ms: number }> {
   const started = nowMs()
   const done = (status: 'pass' | 'fail', actual: string) => ({
@@ -146,7 +118,6 @@ async function runAssert(item: Assert): Promise<{ status: 'pass' | 'fail'; actua
   }
 }
 
-/** 和上一次跑的结果逐条对齐：上次失败这次通过 = fixed，反过来 = broken。 */
 function markDeltas(prev: Run | null, items: ItemResult[]): ItemResult[] {
   if (!prev) return items
   const before = new Map(prev.items.map((item) => [item.id, item.status]))
@@ -164,25 +135,19 @@ function fmtTime(at: number) {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 
-function Chip({ item }: { item?: ItemResult }) {
-  if (!item) return <span className="rg-chip">—</span>
-  const pass = item.status === 'pass'
-  return (
-    <span className={pass ? 'rg-chip is-pass' : 'rg-chip is-fail'}>
-      {pass ? '通过' : '失败'} {item.ms}ms
-      {item.delta ? <b style={{ marginLeft: 6 }}>{item.delta}</b> : null}
-    </span>
-  )
+function specName(item: Assert) {
+  if (item.type === 'http') return `${item.method || 'GET'} ${item.url || ''}`.trim()
+  return [item.selector, item.expect].filter(Boolean).join(' · ') || item.type
 }
 
 export function RegressionBlock({ data, update, writable }: BlockProps) {
-  useRgStyle()
   const asserts = Array.isArray(data.asserts) ? (data.asserts as Assert[]) : []
   const runs = Array.isArray(data.runs) ? (data.runs as Run[]) : []
+  const filter = data.filter === 'failed' || data.filter === 'passed' ? data.filter : 'all'
+  const selected = typeof data.selected === 'string' ? data.selected : ''
   const [busy, setBusy] = useState(false)
-  const [showHistory, setShowHistory] = useState(false)
-
-  const last = runs.length ? runs[runs.length - 1] : null
+  const runAt = typeof data.runAt === 'number' ? data.runAt : (runs.length ? runs[runs.length - 1].at : 0)
+  const last = runs.find((run) => run.at === runAt) ?? (runs.length ? runs[runs.length - 1] : null)
   const prev = runs.length > 1 ? runs[runs.length - 2] : null
   const resultOf = (id: string) => last?.items.find((item) => item.id === id)
 
@@ -208,172 +173,152 @@ export function RegressionBlock({ data, update, writable }: BlockProps) {
         failed: marked.filter((item) => item.status === 'fail').length,
         items: marked,
       }
-      update({ runs: [...runs, run].slice(-MAX_RUNS) })
+      update({ runs: [...runs, run].slice(-MAX_RUNS), runAt: run.at })
     } finally {
       setBusy(false)
     }
   }, [busy, asserts, prev, runs, update])
 
-  const fixed = last ? last.items.filter((item) => item.delta === 'fixed').length : 0
-  const broken = last ? last.items.filter((item) => item.delta === 'broken').length : 0
+  const passed = last?.passed ?? 0
+  const failed = last?.failed ?? 0
+  const total = last?.total ?? asserts.length
+  const visible = asserts.filter((item) => {
+    const result = resultOf(item.id)
+    if (filter === 'failed') return result?.status === 'fail'
+    if (filter === 'passed') return result?.status === 'pass'
+    return true
+  })
 
   return (
-    <div data-testid="regression-block" className="rg-root">
-      <div className="rg-head">
-        <b className="rg-title">页面回归检查</b>
-        <span data-testid="regression-summary" className="rg-meta">
-          {last
-            ? `${last.passed}/${last.total} 通过 · ${last.failed} 失败 · ${last.ms}ms · ${fmtTime(last.at)}${
-                fixed ? ` · fixed ${fixed}` : ''
-              }${broken ? ` · broken ${broken}` : ''}`
-            : `${asserts.length} 条断言 · 还没跑过`}
-        </span>
-        <span className="rg-grow" />
-        {writable ? (
-          <button type="button" data-testid="regression-add" onClick={() => update({ asserts: [...asserts, { id: newId(), type: 'exists', selector: '' }] })} className="rg-btn">
-            加断言
-          </button>
-        ) : null}
-        <button type="button" data-testid="regression-run" disabled={busy} onClick={() => void runAll()} className="rg-btn">
-          {busy ? '跑…' : '跑一遍'}
-        </button>
+    <ReUI>
+      <div className="rg-shell" data-testid="regression-block">
+        <div className="rg-head">
+          <div>
+            <h2>Test report</h2>
+            <p data-testid="regression-summary">
+              {last
+                ? `${last.passed}/${last.total} passed · ${last.failed} failed · ${last.ms}ms · ${fmtTime(last.at)}`
+                : `${asserts.length} tests · 还没跑过`}
+            </p>
+          </div>
+          <div className="rui-row">
+            {writable ? (
+              <Button type="button" variant="outline" data-testid="regression-add" onClick={() => update({ asserts: [...asserts, { id: newId(), type: 'exists', selector: '' }] })}>
+                加用例
+              </Button>
+            ) : null}
+            <Button type="button" data-testid="regression-run" disabled={busy} onClick={() => void runAll()}>
+              {busy ? '跑…' : 'Run'}
+            </Button>
+          </div>
+        </div>
+        <div className="rg-stats">
+          <div>
+            <b style={{ color: '#0f7a4a' }}>{passed}</b>
+            <em>Passed</em>
+          </div>
+          <div>
+            <b style={{ color: '#b42318' }}>{failed}</b>
+            <em>Failed</em>
+          </div>
+          <div>
+            <b>{total}</b>
+            <em>Tests</em>
+          </div>
+          <div>
+            <b>{last?.ms ?? 0}</b>
+            <em>ms</em>
+          </div>
+        </div>
         {runs.length ? (
-          <button type="button" data-testid="regression-history" onClick={() => setShowHistory(!showHistory)} className="rg-btn">
-            历史 {runs.length}
-          </button>
-        ) : null}
-      </div>
-
-      <div className="rg-rows">
-        {asserts.map((item, i) => {
-          const result = resultOf(item.id)
-          return (
-            <div key={item.id} data-testid="regression-row" className="rg-row">
-              <span className="rg-idx">{i + 1}</span>
-              <select
-                value={item.type}
-                disabled={!writable}
-                onChange={(event) => patchAssert(item.id, { type: event.target.value })}
-                className="rg-input"
-                style={{ flex: '0 0 88px' }}
+          <div className="rg-runs" data-testid="regression-history">
+            <div data-testid="regression-history-list" className="rui-row" style={{ flexWrap: 'wrap', gap: 6 }}>
+            {runs.slice().reverse().map((run) => (
+              <button
+                key={run.at}
+                type="button"
+                className="rg-run"
+                data-on={last?.at === run.at}
+                onClick={() => update({ runAt: run.at })}
               >
-                {TYPES.map((type) => (
-                  <option key={type.id} value={type.id}>
-                    {type.label}
-                  </option>
-                ))}
-              </select>
-              {item.type === 'http' ? (
-                <>
-                  <select
-                    value={String(item.method || 'GET')}
-                    disabled={!writable}
-                    onChange={(event) => patchAssert(item.id, { method: event.target.value })}
-                    className="rg-input"
-                    style={{ flex: '0 0 74px' }}
-                  >
-                    {['GET', 'POST', 'PUT', 'DELETE'].map((method) => (
-                      <option key={method} value={method}>
-                        {method}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    value={String(item.url ?? '')}
-                    disabled={!writable}
-                    placeholder="/api/… 或 http://…"
-                    onChange={(event) => patchAssert(item.id, { url: event.target.value })}
-                    className="rg-input"
-                    style={{ flex: '1 1 200px' }}
-                  />
-                  <input
-                    value={String(item.status ?? 200)}
-                    disabled={!writable}
-                    onChange={(event) => patchAssert(item.id, { status: event.target.value })}
-                    className="rg-input"
-                    style={{ flex: '0 0 54px' }}
-                  />
-                </>
-              ) : (
-                <>
-                  <input
-                    value={String(item.selector ?? '')}
-                    disabled={!writable}
-                    placeholder="选择器，如 h1 / [data-testid=xxx]"
-                    onChange={(event) => patchAssert(item.id, { selector: event.target.value })}
-                    className="rg-input"
-                    style={{ flex: '1 1 180px' }}
-                  />
-                  {item.type === 'exists' ? null : (
-                    <input
-                      value={String(item.expect ?? '')}
-                      disabled={!writable}
-                      placeholder={item.type === 'count' ? '期望个数' : '期望文案（子串）'}
-                      onChange={(event) => patchAssert(item.id, { expect: event.target.value })}
-                      className="rg-input"
-                      style={{ flex: '0 0 130px' }}
-                    />
-                  )}
-                </>
-              )}
-              <input
-                value={String(item.note ?? '')}
-                disabled={!writable}
-                placeholder="说明"
-                onChange={(event) => patchAssert(item.id, { note: event.target.value })}
-                className="rg-input"
-                style={{ flex: '0 0 96px', fontFamily: 'inherit' }}
-              />
-              <Chip item={result} />
-              {writable ? (
-                <button type="button" title="删掉这条断言" onClick={() => update({ asserts: asserts.filter((a) => a.id !== item.id) })} className="rg-btn">
-                  删除
-                </button>
+                {fmtTime(run.at)} · {run.passed}/{run.total}
+              </button>
+            ))}
+            </div>
+          </div>
+        ) : null}
+        <div className="rg-filters">
+          {([['all', `All ${asserts.length}`], ['failed', `Failed ${failed}`], ['passed', `Passed ${passed}`]] as const).map(([id, label]) => (
+            <button key={id} type="button" data-on={filter === id} onClick={() => update({ filter: id })}>
+              {label}
+            </button>
+          ))}
+        </div>
+        {visible.map((item) => {
+          const result = resultOf(item.id)
+          const open = selected === item.id
+          const color = !result ? '#c7c7cc' : result.status === 'pass' ? '#0f7a4a' : '#b42318'
+          return (
+            <div key={item.id}>
+              <div
+                className="rg-test"
+                data-testid="regression-row"
+                data-open={open}
+                onClick={() => update({ selected: open ? '' : item.id })}
+              >
+                <i className="rg-dot" style={{ background: color }} />
+                <div className="min-w-0">
+                  <div className="rg-name">{item.note || TYPES.find((type) => type.id === item.type)?.label || item.type}</div>
+                  <div className="rg-file">{specName(item)}</div>
+                </div>
+                <span className="rg-ms">{result ? `${result.ms}ms` : '—'}</span>
+                <span className="rg-ms">{result ? (result.delta || result.status) : 'queued'}</span>
+              </div>
+              {open ? (
+                <div className="rg-out">
+                  {writable ? (
+                    <div className="rui-row" style={{ flexWrap: 'wrap', marginBottom: 8 }} onClick={(event: { stopPropagation: () => void }) => event.stopPropagation()}>
+                      <Select value={item.type} disabled={!writable} onChange={(event: { target: { value: string } }) => patchAssert(item.id, { type: event.target.value })} style={{ width: 108 }}>
+                        {TYPES.map((type) => (
+                          <option key={type.id} value={type.id}>{type.label}</option>
+                        ))}
+                      </Select>
+                      {item.type === 'http' ? (
+                        <>
+                          <Select value={String(item.method || 'GET')} onChange={(event: { target: { value: string } }) => patchAssert(item.id, { method: event.target.value })} style={{ width: 78 }}>
+                            {['GET', 'POST', 'PUT', 'DELETE'].map((method) => (
+                              <option key={method} value={method}>{method}</option>
+                            ))}
+                          </Select>
+                          <Input value={String(item.url ?? '')} placeholder="/api/…" onChange={(event: { target: { value: string } }) => patchAssert(item.id, { url: event.target.value })} className="rui-grow" />
+                          <Input value={String(item.status ?? 200)} onChange={(event: { target: { value: string } }) => patchAssert(item.id, { status: event.target.value })} style={{ width: 56 }} />
+                        </>
+                      ) : (
+                        <>
+                          <Input value={String(item.selector ?? '')} placeholder="选择器" onChange={(event: { target: { value: string } }) => patchAssert(item.id, { selector: event.target.value })} className="rui-grow" />
+                          {item.type === 'exists' ? null : (
+                            <Input value={String(item.expect ?? '')} placeholder={item.type === 'count' ? '期望个数' : '期望文案'} onChange={(event: { target: { value: string } }) => patchAssert(item.id, { expect: event.target.value })} style={{ width: 130 }} />
+                          )}
+                        </>
+                      )}
+                      <Button type="button" size="sm" variant="ghost" onClick={() => update({ asserts: asserts.filter((row) => row.id !== item.id) })}>删除</Button>
+                    </div>
+                  ) : null}
+                  <span className={result?.status === 'fail' ? 'rui-bad' : 'rui-ok'}>{result?.actual || item.note || '还没跑'}</span>
+                </div>
               ) : null}
-              {result ? <span className={result.status === 'pass' ? 'rg-actual' : 'rg-actual is-fail'}>{result.actual}</span> : null}
             </div>
           )
         })}
-        {asserts.length ? null : <span className="rg-empty">还没有断言，点右上「加断言」加一条。</span>}
+        {asserts.length ? null : <div className="rui-muted" style={{ padding: 16 }}>还没有用例，点「加用例」。</div>}
       </div>
-
-      {showHistory && runs.length ? (
-        <div data-testid="regression-history-list" className="rg-hist">
-          {runs
-            .slice()
-            .reverse()
-            .map((run) => (
-              <div key={run.at} className="rg-hist-row">
-                <span>{fmtTime(run.at)}</span>
-                <span>
-                  {run.passed}/{run.total}
-                </span>
-                <span>{run.ms}ms</span>
-                <span>
-                  {run.items.filter((item) => item.delta === 'fixed').length ? 'fixed ' + run.items.filter((item) => item.delta === 'fixed').length : ''}
-                  {run.items.filter((item) => item.delta === 'broken').length ? ' broken ' + run.items.filter((item) => item.delta === 'broken').length : ''}
-                </span>
-              </div>
-            ))}
-        </div>
-      ) : null}
-    </div>
+    </ReUI>
   )
 }
 
 export function apply(ctx: {
   pageEditor: {
-    registerBlock: (spec: {
-      kind: string
-      plugin: string
-      label: string
-      blockType?: string
-      blockTypeLabel?: string
-      hint?: string
-      aliases?: string[]
-      defaults?: Record<string, unknown> | (() => Record<string, unknown>)
-      View: (props: BlockProps) => unknown
-    }) => void
+    registerBlock: (spec: Record<string, unknown>) => void
   }
 }) {
   ctx.pageEditor.registerBlock({
@@ -382,9 +327,12 @@ export function apply(ctx: {
     label: '页面回归检查块',
     blockType: 'test',
     blockTypeLabel: '测试',
-    hint: '写一组断言（元素存在 / 文案匹配 / 数量相等 / 接口状态码），点「跑一遍」逐条出通过失败，结果存进块 data.runs 并能和上一次对比（fixed / broken）',
-    aliases: ['run', 'regression', 'test', 'assert', '回归', '断言', '检查'],
+    hint: 'Playwright 式测试报告：断言是用例，runs 是 CI 记录，可筛选 failed/passed',
+    aliases: ['run', 'regression', 'test', 'assert', '回归', '断言', '检查', 'playwright'],
     defaults: {
+      filter: 'all',
+      selected: '',
+      runAt: 0,
       asserts: [
         { id: 'a1', type: 'exists', selector: 'h1', note: '标题在' },
         { id: 'a2', type: 'text', selector: 'h1', expect: '举例说明', note: '标题文案' },
