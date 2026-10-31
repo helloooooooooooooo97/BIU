@@ -19,6 +19,8 @@ import { fieldPickAttrs, recordSourcePath } from './pick-dom.ts'
 import { dismissInspectorPaneMenu, reportInspectorPaneMenu } from './inspector-pane-menu.tsx'
 import { PaneConfigMenuItem } from './pane-more-menu.tsx'
 import { PageContentFailed, PageContentLoading } from './page-content-status.tsx'
+import { filterPageOutline, parsePageOutline } from './page-outline.ts'
+import { PageContentToolbar, usePageViewState } from './page-toolbar.tsx'
 
 export { PageContentFailed, PageContentLoading } from './page-content-status.tsx'
 
@@ -143,6 +145,7 @@ function RecordPaneMenu({
   deleteLabel,
   share,
   shareLabel,
+  hideConfig,
 }: {
   record: DbRecord
   Tools?: CollectionChrome['DetailTools']
@@ -150,6 +153,7 @@ function RecordPaneMenu({
   deleteLabel: string
   share?: ReactNode
   shareLabel?: string
+  hideConfig?: boolean
 }) {
   const [shareItem, setShareItem] = useState<HTMLElement | null>(null)
   const close = () => {
@@ -192,7 +196,7 @@ function RecordPaneMenu({
         </button>
       ) : null}
       {Tools ? <Tools record={record} onDone={close} /> : null}
-      <PaneConfigMenuItem />
+      {hideConfig ? null : <PaneConfigMenuItem />}
       {share && shareItem ? (
         <AnchorMenu
           anchor={shareItem}
@@ -304,12 +308,28 @@ export function RecordDetail({
         Tools={readOnly ? undefined : chrome?.DetailTools}
         onDelete={!readOnly && deleteRef.current ? () => deleteRef.current?.() : undefined}
         deleteLabel={collectionPath === '/pages' ? '删除页面' : '删除记录'}
-        share={shareRef.current}
+        share={collectionPath === '/pages' ? undefined : shareRef.current}
         shareLabel={collectionPath === '/pages' ? '分享页面' : '分享记录'}
+        hideConfig={collectionPath === '/pages'}
       />,
     )
     return () => reportInspectorPaneMenu(inspectorPaneId, null)
   }, [chrome?.DetailTools, collectionPath, inspectorPaneId, readOnly, selected.id])
+
+  const isPage = collectionPath === '/pages'
+  const pageViews = usePageViewState(recordPath)
+  const pageView = pageViews.views.find((view) => view.id === pageViews.activeId) ?? pageViews.views[0]
+  const pageMarkdown =
+    typeof detailBody === 'string' ? detailBody : detailBody == null ? '' : JSON.stringify(detailBody, null, 2)
+  const pageOutline = isPage
+    ? filterPageOutline(
+        parsePageOutline(pageMarkdown),
+        pageView?.query ?? '',
+        pageView?.filterLevels ?? [1, 2, 3],
+        pageView?.sort === 'title' ? 'title' : 'doc',
+      )
+    : []
+  const outlineMode = isPage && pageView?.mode === 'outline'
 
   const [facetOpen, setFacetOpen] = useState(false)
   useEffect(() => {
@@ -338,6 +358,7 @@ export function RecordDetail({
           <div className="fsdb-detail-screen" role="main" aria-label="记录详情">
             <div className="fsdb-detail-split">
               <div className="fsdb-detail-main" ref={mainRef} data-testid="fsdb-detail-main">
+                {isPage ? <PageContentToolbar path={recordPath} share={share} /> : null}
                 <PageBanner
                   value={selected.banner}
                   writable={!readOnly}
@@ -442,7 +463,20 @@ export function RecordDetail({
                   ) : null}
                 </div>
                 {renderDetailPanes(chrome?.panes?.filter((pane) => pane.place === 'properties'), selected, onOpenRecord, 'fsdb-detail-prop-panes')}
-                {contentFieldKey(schema) && schema.fields[contentFieldKey(schema)!] ? (() => {
+                {outlineMode ? (
+                  <div className="page-outline" data-testid="page-outline">
+                    {pageOutline.length ? (
+                      pageOutline.map((item) => (
+                        <article key={item.id} className="page-outline-item" data-level={item.level}>
+                          <h2 className="page-outline-title">{item.text}</h2>
+                          {item.body ? <p className="page-outline-body">{item.body}</p> : null}
+                        </article>
+                      ))
+                    ) : (
+                      <p className="fsdb-muted">没有匹配的标题</p>
+                    )}
+                  </div>
+                ) : contentFieldKey(schema) && schema.fields[contentFieldKey(schema)!] ? (() => {
                   const key = contentFieldKey(schema)!
                   const spec = schema.fields[key]!
                   const ContentView = chrome?.Content
@@ -521,7 +555,7 @@ export function RecordDetail({
               </div>
             </div>
           </div>
-          <HeadingOutline enabled={headingOutline} />
+          <HeadingOutline enabled={headingOutline && !outlineMode} />
           {onPrev || onNext ? (
             <nav className="fsdb-detail-float-nav" aria-label="按视图顺序切换记录">
               <button

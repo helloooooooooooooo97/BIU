@@ -5253,8 +5253,8 @@ export function CollectionBrowser({
                 <UiGlyph icon="star" className={viewStarred ? 'text-[#f5b700]' : undefined} />
               </button>
             ) : null}
-            {isSystemCollection(collectionPath) || isIndexCollection(collectionPath) || (collectionPath === '/plugins' && detailRow?.builtin === true) ? null : (
-            <ShareButton
+            {isSystemCollection(collectionPath) || isIndexCollection(collectionPath) || (collectionPath === '/plugins' && detailRow?.builtin === true) || (collectionPath === '/pages' && detailId) ? null : (
+            <ShareButton>
               localOnly={localData}
               target={
                 detailId
@@ -5276,6 +5276,7 @@ export function CollectionBrowser({
               }
             />
             )}
+            {collectionPath === '/pages' && detailId ? null : (
             <div className="fsdb-layout-wrap" ref={layoutRef}>
               <button
                 type="button"
@@ -5297,6 +5298,7 @@ export function CollectionBrowser({
                 </HeadlessDismiss>
               ) : null}
             </div>
+            )}
             <button
               type="button"
               className={`chat-view-header-expand${inspectorOpen ? ' is-active' : ''}`}
@@ -5590,7 +5592,19 @@ export function CollectionBrowser({
           }
           actionProperty={rowActionColumn ? <RecordActions row={selected} /> : null}
           share={
-            nested && detailId ? (
+            collectionPath === '/pages' && detailId ? (
+              <ShareButton
+                buttonClassName="tasks-sort-btn"
+                localOnly={localData}
+                target={{
+                  kind: 'record',
+                  collection: collectionPath,
+                  viewId: activeViewId ?? undefined,
+                  recordId: detailId,
+                  title: String(detailRow?.title ?? title),
+                }}
+              />
+            ) : nested && detailId ? (
               <SharePanel
                 embedded
                 localOnly={localData}
