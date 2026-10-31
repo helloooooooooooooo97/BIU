@@ -8,12 +8,13 @@ const detail = readFileSync(resolve(import.meta.dirname, './record-detail.tsx'),
 const style = readFileSync(resolve(import.meta.dirname, './fsdb-style.ts'), 'utf8')
 
 test('embedded record details can share their explicit record target', () => {
-  assert.match(browser, /share=\{\s*nested && detailId \?/)
+  assert.match(browser, /share=\{\s*collectionPath === '\/pages' && detailId \?/)
+  assert.match(browser, /nested && detailId \?/)
   assert.match(browser, /<SharePanel/)
   assert.match(browser, /embedded/)
   assert.match(browser, /recordId: detailId/)
   assert.match(detail, /share\?: ReactNode/)
-  assert.match(detail, /share=\{shareRef\.current\}/)
+  assert.match(detail, /share=\{collectionPath === '\/pages' \? undefined : shareRef\.current\}/)
   assert.match(detail, /shareLabel=\{collectionPath === '\/pages' \? '分享页面' : '分享记录'\}/)
   assert.match(detail, /data-testid="fsdb-detail-share"/)
   assert.match(detail, /placement="left"/)
@@ -32,7 +33,7 @@ test('embedded record details can share their explicit record target', () => {
   assert.match(style, /\.fsdb-detail-more-menu\.has-share/)
   assert.match(style, /\.fsdb-detail-more-caret/)
   assert.doesNotMatch(browser, /\{nested \? null : \(\s*<ShareButton/)
-  assert.match(browser, /isSystemCollection\(collectionPath\) \|\| isIndexCollection\(collectionPath\) \|\| \(collectionPath === '\/plugins' && detailRow\?\.builtin === true\) \? null : \(\s*<ShareButton/)
+  assert.match(browser, /isSystemCollection\(collectionPath\) \|\| isIndexCollection\(collectionPath\) \|\| \(collectionPath === '\/plugins' && detailRow\?\.builtin === true\) \|\| \(collectionPath === '\/pages' && detailId\) \? null : \(\s*<ShareButton/)
   assert.doesNotMatch(browser, /buttonClassName="fsdb-detail-float-btn"/)
 })
 
@@ -898,7 +899,7 @@ test('database extras sit after the record detail, not in the inspector', () => 
   assert.match(detail, /<h1 className="fsdb-detail-title">/)
   assert.match(detail, /data-testid="fsdb-detail-delete"/)
   assert.match(browser, /onDelete=\{canDelete/)
-  assert.match(detail, /<HeadingOutline enabled=\{headingOutline\} \/>/)
+  assert.match(detail, /<HeadingOutline enabled=\{headingOutline && !outlineMode\} \/>/)
   assert.doesNotMatch(browser, /headingOutline=\{collectionPath !== '\/sessions'\}/)
   const outline = readFileSync(resolve(import.meta.dirname, './heading-outline.tsx'), 'utf8')
   assert.match(outline, /closest\('\.fsdb-detail-stage'\)/)
@@ -1363,7 +1364,9 @@ test('inspector view menu offers share, star, and width, and detail keeps width 
   const viewMenu = menu.slice(menu.indexOf('function ViewPaneMenu'), menu.length)
   assert.ok(viewMenu.indexOf('data-testid="fsdb-view-share"') < viewMenu.indexOf('data-testid="fsdb-view-star"'))
   assert.ok(viewMenu.indexOf('data-testid="fsdb-view-star"') < viewMenu.indexOf('<PaneConfigMenuItem'))
-  assert.match(detail, /<PaneConfigMenuItem \/>/)
+  assert.match(detail, /hideConfig \? null : <PaneConfigMenuItem \/>/)
+  assert.match(detail, /<PageContentToolbar path=\{recordPath\} share=\{share\} \/>/)
+  assert.match(detail, /data-testid="page-outline"/)
 })
 
 test('collection header has a layout config control next to the star', () => {
