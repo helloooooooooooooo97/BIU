@@ -31,7 +31,7 @@ test('deriveChatOutline can hide robot-initiated user nodes', () => {
 
 test('message outline is a left rail of ticks with a hover menu', () => {
   const css = readFileSync(resolve(import.meta.dirname, '../../../../web/style.css'), 'utf8')
-  const outline = readFileSync(resolve(import.meta.dirname, '../../../public-ui/src/outline-nav.tsx'), 'utf8')
+  const outline = readFileSync(resolve(import.meta.dirname, '../../../biu-ui/src/outline-nav.tsx'), 'utf8')
   const bound = readFileSync(resolve(import.meta.dirname, '../../../core-chat/src/web/message-outline.tsx'), 'utf8')
   const shell = readFileSync(resolve(import.meta.dirname, '../../../web-app-shell/src/web/index.tsx'), 'utf8')
   assert.match(css, /\.chat-outline\s*\{[^}]*left:\s*8px/s)
@@ -50,7 +50,7 @@ test('message outline is a left rail of ticks with a hover menu', () => {
   assert.match(css, /\.chat-outline-panel\s*\{[^}]*border-radius:\s*8px/s)
   assert.match(css, /\.chat-outline-panel\s*\{[^}]*backdrop-filter:\s*blur\(24px\)\s*saturate\(1\.3\)/s)
   assert.match(css, /\.chat-outline-panel\s*\{[^}]*background:\s*rgba\(32,\s*32,\s*32,\s*0\.92\)/s)
-  assert.match(css, /\.chat-outline-panel\s*\{[^}]*border:\s*1px solid var\(--dsw-float-border\)/s)
+  assert.match(css, /\.chat-outline-panel\s*\{[^}]*border:\s*1px solid var\(--biu-float-border\)/s)
   assert.match(css, /html:not\(\.dark\) \.chat-outline-panel\s*\{[^}]*background:\s*rgba\(249,\s*248,\s*247,\s*0\.94\)/s)
   assert.match(css, /\.chat-outline-tick::after\s*\{[^}]*width:\s*10px/s)
   assert.match(css, /\.chat-outline-tick::after\s*\{[^}]*height:\s*2px/s)
@@ -64,7 +64,7 @@ test('message outline is a left rail of ticks with a hover menu', () => {
   assert.match(css, /\.chat-outline-item\.is-active\s*\{[^}]*background:\s*[^;}]+;/s)
   assert.match(
     css,
-    /\.chat-outline-item\.is-active\s*\{[^}]*color:\s*var\(--dsw-sidebar-fg-active\)/s,
+    /\.chat-outline-item\.is-active\s*\{[^}]*color:\s*var\(--biu-sidebar-fg-active\)/s,
   )
   assert.doesNotMatch(css, /\.chat-outline-item:hover,\s*\.chat-outline-item\.is-active/)
   assert.match(outline, /data-outline-row/)

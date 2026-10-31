@@ -16,7 +16,7 @@ import {
   StopIcon,
   TableCellsIcon,
 } from '@heroicons/react/16/solid'
-import { ConfirmDialog, TagChip, TagChips } from '@biu/public-ui'
+import { ConfirmDialog, TagChip, TagChips } from '@biu/biu-ui'
 import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { actionVisibleToUser } from '@biu/type-file-system'

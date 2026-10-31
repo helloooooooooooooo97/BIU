@@ -10,7 +10,7 @@ import {
   MoonIcon,
   SunIcon,
 } from '@heroicons/react/16/solid'
-import { HeadlessDismiss } from '@biu/public-ui'
+import { HeadlessDismiss } from '@biu/biu-ui'
 import { ShareOwnerCorner } from './share-owner-corner.tsx'
 
 export { registerShareOwnerExtra } from './share-owner-corner.tsx'

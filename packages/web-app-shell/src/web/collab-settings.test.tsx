@@ -163,7 +163,7 @@ test('workspace and member settings are separate and workspace switching stays o
   localStorage.setItem('biu.account.token', 'tok')
   const css = readFileSync(resolve(import.meta.dirname, '../../../../web/style.css'), 'utf8')
   assert.match(css, /\.settings-account-action\s*\{[^}]*font:\s*inherit/)
-  assert.match(css, /\.settings-account-action\s*\{[^}]*border:\s*1px solid var\(--dsw-border\)/)
+  assert.match(css, /\.settings-account-action\s*\{[^}]*border:\s*1px solid var\(--biu-border\)/)
   assert.match(css, /\.settings-account-action\s*\{[^}]*height:\s*32px/)
   assert.match(css, /\.settings-members-section\s*\{[^}]*flex-direction:\s*column/s)
   assert.match(css, /\.settings-member-row\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto/s)
@@ -386,7 +386,7 @@ test('workspace creation uses centered local and online cards with default names
   await waitFor(() => assert.deepEqual(createBodies[1], { name: '云端空间', location: 'cloud' }))
 
   const css = readFileSync(resolve(import.meta.dirname, '../../../../web/style.css'), 'utf8')
-  assert.match(css, /\.shell-workspace-switcher\s*\{[^}]*font-size:\s*14px;[^}]*font-weight:\s*500;/s)
+  assert.match(css, /\.shell-workspace-switcher\s*\{[^}]*font-size:\s*var\(--biu-font-4\);[^}]*font-weight:\s*500;/s)
   assert.match(css, /\.shell-workspace-create-overlay\s*\{[^}]*position:\s*fixed;[^}]*place-items:\s*center;/s)
   cleanup()
 

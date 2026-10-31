@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ArrowPathIcon, CheckIcon, LinkIcon, ShareIcon, XMarkIcon } from '@heroicons/react/16/solid'
-import { HeadlessDismiss } from '@biu/public-ui/headless-dismiss'
+import { HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
 import { listCollection, readJson } from './db-client.ts'
 import { AccessMark, accessText, accessTone, ScopeMark, scopeText, scopeTone } from './share-scope-label.tsx'
 

@@ -1,14 +1,40 @@
+import { Card, Input, ReUI, Select, Textarea } from '@biu/reui'
+import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
+import { cpp } from '@codemirror/lang-cpp'
+import { java } from '@codemirror/lang-java'
+import { javascript } from '@codemirror/lang-javascript'
+import { python } from '@codemirror/lang-python'
+import { HighlightStyle, indentUnit, syntaxHighlighting } from '@codemirror/language'
+import { EditorState, Prec } from '@codemirror/state'
+import { EditorView, drawSelection, keymap, lineNumbers, placeholder as cmPlaceholder } from '@codemirror/view'
+import { tags as t } from '@lezer/highlight'
+
 const React = globalThis.React
 const { useEffect, useRef, useState } = React
 
 export const name = 'page-algorithm'
 export const inject = ['pageEditor']
 
+type Example = { input: string; output: string; explanation?: string }
+
 const DEFAULTS = {
   title: '1. Two Sum',
   difficulty: 'Easy',
+  topics: ['Array', 'Hash Table'],
   prompt:
-    '给定一个整数数组 nums 和一个整数目标值 target，请你在该数组中找出和为目标值的那两个整数，并返回它们的数组下标。\n\n你可以假设每种输入只会对应一个答案。数组中同一个元素在答案里不能重复出现。',
+    '给定一个整数数组 nums 和一个整数目标值 target，请你在该数组中找出和为目标值的那两个整数，并返回它们的数组下标。\n\n你可以假设每种输入只会对应一个答案。数组中同一个元素在答案里不能重复出现。你可以按任意顺序返回答案。',
+  examples: [
+    {
+      input: 'nums = [2,7,11,15], target = 9',
+      output: '[0,1]',
+      explanation: 'Because nums[0] + nums[1] == 9, we return [0, 1].',
+    },
+    {
+      input: 'nums = [3,2,4], target = 6',
+      output: '[1,2]',
+    },
+  ] satisfies Example[],
+  constraints: '2 <= nums.length <= 10^4\n-10^9 <= nums[i] <= 10^9\n-10^9 <= target <= 10^9\n只会存在一个有效答案。',
   lang: 'python',
   code: `class Solution:
     def twoSum(self, nums: list[int], target: int) -> list[int]:
@@ -17,8 +43,14 @@ const DEFAULTS = {
             if target - n in seen:
                 return [seen[target - n], i]
             seen[n] = i
-        return []`,
+        return []
+
+if __name__ == '__main__':
+    print(Solution().twoSum([2, 7, 11, 15], 9))
+    print(Solution().twoSum([3, 2, 4], 6))`,
 }
+
+type OutputLine = { type: 'stdout' | 'stderr' | 'error' | 'success'; text: string }
 
 const DIFF_COLOR: Record<string, string> = {
   Easy: '#00b8a3',
@@ -26,75 +58,15 @@ const DIFF_COLOR: Record<string, string> = {
   Hard: '#ff375f',
 }
 
-/** 草稿在本地；失焦/点到外部才写回，避免每次按键 update 把光标甩到末尾。 */
-const STYLE_ID = 'pa-card-style-v1'
-const STYLE_CSS = `
-.pa-card{
-  display:grid;
-  grid-template-columns:minmax(220px,1fr) minmax(240px,1.12fr);
-  min-height:280px;
-  overflow:hidden;
-  border:1px solid var(--dsw-border);
-  border-radius:12px;
-  background:var(--dsw-bg);
-  color:var(--dsw-label);
-  font:13px/1.55 ui-sans-serif,system-ui,-apple-system,sans-serif;
-  box-shadow:0 1px 2px rgba(15,15,15,.04);
-}
-@media (max-width:640px){
-  .pa-card{grid-template-columns:1fr}
-  .pa-prompt{border-right:0;border-bottom:1px solid var(--dsw-border)}
-}
-.pa-prompt{min-width:0;padding:16px 18px 18px;background:color-mix(in srgb,var(--dsw-hover) 70%,var(--dsw-bg))}
-.pa-prompt-head{display:flex;align-items:center;gap:8px;margin-bottom:12px}
-.pa-kicker{font-size:11px;font-weight:650;letter-spacing:.06em;color:var(--dsw-label-3)}
-.pa-diff{
-  margin-left:auto;border:0;border-radius:999px;padding:2px 9px;
-  background:color-mix(in srgb,var(--pa-diff,#0f7b6c) 14%,transparent);
-  color:var(--pa-diff,#0f7b6c);font:700 11px/1.4 inherit;cursor:pointer;outline:none;
-}
-.pa-diff:disabled{cursor:default;opacity:.85}
-.pa-title,.pa-body,.pa-code{
-  width:100%;box-sizing:border-box;border:0;outline:none;background:transparent;color:inherit;font:inherit;resize:vertical;
-}
-.pa-title{display:block;margin:0 0 10px;padding:0;font-size:20px;font-weight:700;letter-spacing:-.02em;line-height:1.25}
-.pa-body{min-height:160px;color:var(--dsw-label-2)}
-.pa-code-col{min-width:0;display:flex;flex-direction:column;background:var(--dsw-chat-code-bg,var(--dsw-sidebar))}
-.pa-code-head{
-  display:flex;align-items:center;gap:8px;flex:none;padding:8px 12px;
-  border-bottom:1px solid var(--dsw-border);font-size:12px;
-}
-.pa-lang{
-  margin-left:auto;border:1px solid var(--dsw-border);border-radius:6px;padding:2px 8px;
-  background:var(--dsw-input,transparent);color:var(--dsw-label);font:600 12px inherit;cursor:pointer;outline:none;
-}
-.pa-code{
-  flex:1;min-height:200px;padding:12px 14px;resize:none;
-  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.6;
-  color:var(--dsw-label);
-}
-`
-
-function useAlgoStyle() {
-  useEffect(() => {
-    for (const stale of document.querySelectorAll('style[id^="pa-card-style"]')) {
-      if (stale.id !== STYLE_ID) stale.remove()
-    }
-    const existing = document.getElementById(STYLE_ID)
-    const el = existing instanceof HTMLStyleElement ? existing : document.createElement('style')
-    el.id = STYLE_ID
-    el.textContent = STYLE_CSS
-    if (el.parentNode !== document.head) document.head.appendChild(el)
-  }, [])
-}
-
 function DraftField({
-  as: Tag,
+  as: kind,
   value,
   onCommit,
   readOnly,
   testId,
   className,
+  style,
+  onLive,
 }: {
   as: 'input' | 'textarea'
   value: string
@@ -102,7 +74,10 @@ function DraftField({
   readOnly?: boolean
   testId: string
   className: string
+  style?: Record<string, unknown>
+  onLive?: (next: string) => void
 }) {
+  const Tag = kind === 'textarea' ? Textarea : Input
   const [draft, setDraft] = useState(value)
   const focused = useRef(false)
   const draftRef = useRef(draft)
@@ -128,7 +103,7 @@ function DraftField({
       data-testid={testId}
       data-page-block-capture=""
       readOnly={readOnly}
-      spellCheck={Tag === 'textarea' ? false : undefined}
+      spellCheck={kind === 'textarea' ? false : undefined}
       value={draft}
       onFocus={() => {
         focused.current = true
@@ -140,10 +115,179 @@ function DraftField({
       onKeyDown={(event) => {
         event.stopPropagation()
       }}
-      onChange={(event) => setDraft(event.currentTarget.value)}
+      onChange={(event) => {
+        const next = event.currentTarget.value
+        setDraft(next)
+        onLive?.(next)
+      }}
       className={className}
+      style={style}
     />
   )
+}
+
+const lcHighlight = HighlightStyle.define([
+  { tag: t.keyword, color: '#0000ff' },
+  { tag: t.controlKeyword, color: '#af00db' },
+  { tag: t.operatorKeyword, color: '#0000ff' },
+  { tag: t.moduleKeyword, color: '#0000ff' },
+  { tag: t.definitionKeyword, color: '#0000ff' },
+  { tag: t.comment, color: '#008000' },
+  { tag: t.lineComment, color: '#008000' },
+  { tag: t.blockComment, color: '#008000' },
+  { tag: t.string, color: '#a31515' },
+  { tag: t.number, color: '#098658' },
+  { tag: t.bool, color: '#0000ff' },
+  { tag: t.null, color: '#0000ff' },
+  { tag: t.self, color: '#0000ff' },
+  { tag: t.className, color: '#267f99' },
+  { tag: t.typeName, color: '#267f99' },
+  { tag: t.function(t.definition(t.variableName)), color: '#795e26' },
+  { tag: t.function(t.variableName), color: '#795e26' },
+  { tag: t.definition(t.variableName), color: '#001080' },
+  { tag: t.propertyName, color: '#001080' },
+  { tag: t.operator, color: '#000000' },
+  { tag: t.punctuation, color: '#000000' },
+])
+
+const lcTheme = EditorView.theme({
+  '&': { background: 'transparent', color: 'var(--biu-code-ink)', fontSize: '13px', height: '100%' },
+  '&.cm-editor': { outline: 'none', height: '100%' },
+  '.cm-scroller': { fontFamily: 'ui-monospace,SFMono-Regular,Menlo,Consolas,monospace', lineHeight: '1.6', overflow: 'auto' },
+  '.cm-content': { caretColor: 'var(--biu-code-ink)', padding: '10px 8px 16px', minHeight: '100%' },
+  '.cm-gutters': { background: 'var(--biu-code-surface)', border: 'none', color: 'var(--biu-icon-muted)' },
+  '.cm-lineNumbers .cm-gutterElement': { minWidth: '2.4em', padding: '0 10px 0 8px' },
+  '.cm-activeLine': { background: 'transparent' },
+  '.cm-cursor': { borderLeftColor: 'var(--biu-code-ink)' },
+})
+
+function langExtension(lang: string) {
+  if (lang === 'python') return python()
+  if (lang === 'javascript') return javascript()
+  if (lang === 'typescript') return javascript({ typescript: true })
+  if (lang === 'java') return java()
+  if (lang === 'cpp') return cpp()
+  return python()
+}
+
+function CodePane({
+  value,
+  lang,
+  readOnly,
+  onLive,
+  onCommit,
+  onRun,
+}: {
+  value: string
+  lang: string
+  readOnly: boolean
+  onLive: (next: string) => void
+  onCommit: (next: string) => void
+  onRun: () => void
+}) {
+  const host = useRef<HTMLDivElement>(null)
+  const viewRef = useRef<EditorView | null>(null)
+  const liveRef = useRef(onLive)
+  const commitRef = useRef(onCommit)
+  const runRef = useRef(onRun)
+  const valueRef = useRef(value)
+  liveRef.current = onLive
+  commitRef.current = onCommit
+  runRef.current = onRun
+  valueRef.current = value
+
+  useEffect(() => {
+    const el = host.current
+    if (!el) return
+    const indent = lang === 'java' || lang === 'cpp' ? '    ' : '  '
+    const view = new EditorView({
+      parent: el,
+      state: EditorState.create({
+        doc: value,
+        extensions: [
+          history(),
+          drawSelection(),
+          lineNumbers(),
+          EditorView.lineWrapping,
+          lcTheme,
+          syntaxHighlighting(lcHighlight),
+          langExtension(lang),
+          EditorState.tabSize.of(indent.length),
+          indentUnit.of(indent),
+          cmPlaceholder('在此写解法…'),
+          Prec.highest(
+            keymap.of([
+              {
+                key: 'Mod-Enter',
+                run: () => {
+                  runRef.current()
+                  return true
+                },
+              },
+            ]),
+          ),
+          keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
+          EditorState.readOnly.of(readOnly),
+          EditorView.editable.of(!readOnly),
+          EditorView.domEventHandlers({
+            keydown: (event) => {
+              event.stopPropagation()
+              return false
+            },
+          }),
+          EditorView.updateListener.of((update) => {
+            if (!update.docChanged) return
+            liveRef.current(update.state.doc.toString())
+          }),
+        ],
+      }),
+    })
+    viewRef.current = view
+    return () => {
+      const next = view.state.doc.toString()
+      if (next !== valueRef.current) commitRef.current(next)
+      view.destroy()
+      viewRef.current = null
+    }
+  }, [lang, readOnly])
+
+  useEffect(() => {
+    const view = viewRef.current
+    if (!view) return
+    if (view.state.doc.toString() === value) return
+    if (view.hasFocus) return
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: value } })
+  }, [value])
+
+  return (
+    <div
+      ref={host}
+      data-testid="page-algorithm-code"
+      data-page-block-capture=""
+      onMouseDown={(event) => event.stopPropagation()}
+      style={{ flex: 1, minHeight: 280 }}
+    />
+  )
+}
+
+function readExamples(raw: unknown): Example[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .filter((item) => item && typeof item === 'object')
+    .map((item) => {
+      const row = item as Record<string, unknown>
+      return {
+        input: String(row.input ?? ''),
+        output: String(row.output ?? ''),
+        explanation: row.explanation ? String(row.explanation) : undefined,
+      }
+    })
+    .filter((item) => item.input || item.output)
+}
+
+function readTopics(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return []
+  return raw.map((item) => String(item)).filter(Boolean)
 }
 
 function AlgorithmCard({
@@ -160,71 +304,201 @@ function AlgorithmCard({
   const prompt = String(data.prompt ?? '')
   const lang = String(data.lang ?? 'python')
   const code = String(data.code ?? '')
+  const constraints = String(data.constraints ?? '')
+  const topics = readTopics(data.topics)
+  const examples = readExamples(data.examples)
   const accent = DIFF_COLOR[difficulty] ?? '#00b8a3'
   const ro = !writable
-  useAlgoStyle()
+  const codeLive = useRef(code)
+  useEffect(() => {
+    codeLive.current = code
+  }, [code])
+  const [running, setRunning] = useState(false)
+  const [consoleTab, setConsoleTab] = useState<'case' | 'out'>('case')
+  const [output, setOutput] = useState<OutputLine[]>([])
+  const lines = (codeLive.current || code).split('\n').length
+
+  const run = async () => {
+    const source = codeLive.current || code
+    if (!source.trim() || running) return
+    setRunning(true)
+    setConsoleTab('out')
+    setOutput([])
+    try {
+      const res = await fetch('/api/page-algorithm/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: source, lang }),
+      })
+      const result = await res.json()
+      const linesOut: OutputLine[] = []
+      if (!res.ok) {
+        linesOut.push({ type: 'error', text: String(result?.error || `HTTP ${res.status}`) })
+      } else if (result.compileError) {
+        String(result.compileError).split('\n').forEach((l: string) => { if (l.trim()) linesOut.push({ type: 'stderr', text: l }) })
+        linesOut.push({ type: 'error', text: '✗ 编译失败' })
+      } else {
+        if (result.stdout) String(result.stdout).split('\n').forEach((l: string) => { if (l.length) linesOut.push({ type: 'stdout', text: l }) })
+        if (result.stderr) String(result.stderr).split('\n').forEach((l: string) => { if (l.trim()) linesOut.push({ type: 'stderr', text: l }) })
+        if (result.ok) {
+          if (!result.stdout) linesOut.push({ type: 'success', text: '✓ 执行完成（无输出。可在代码里 print，或加 if __name__ == "__main__"）' })
+          else linesOut.push({ type: 'success', text: '✓ 执行完成' })
+        } else {
+          linesOut.push({ type: 'error', text: `✗ 运行出错 (exit ${result.exitCode})` })
+        }
+      }
+      setOutput(linesOut)
+    } catch (e) {
+      setOutput([{ type: 'error', text: '✗ 请求失败: ' + String(e) }])
+    } finally {
+      setRunning(false)
+    }
+  }
 
   return (
-    <div data-testid="page-algorithm-card" className="pa-card" style={{ ['--pa-diff' as string]: accent }}>
-      <section className="pa-prompt">
-        <div className="pa-prompt-head">
-          <span className="pa-kicker">题目</span>
-          <select
-            data-testid="page-algorithm-diff"
-            className="pa-diff"
-            disabled={ro}
-            value={difficulty}
-            onChange={(event) => update({ difficulty: event.target.value })}
-          >
-            <option>Easy</option>
-            <option>Medium</option>
-            <option>Hard</option>
-          </select>
-        </div>
-        <DraftField
-          as="input"
-          testId="page-algorithm-title"
-          readOnly={ro}
-          value={title}
-          onCommit={(next) => update({ title: next })}
-          className="pa-title"
-        />
-        <DraftField
-          as="textarea"
-          testId="page-algorithm-prompt"
-          readOnly={ro}
-          value={prompt}
-          onCommit={(next) => update({ prompt: next })}
-          className="pa-body"
-        />
-      </section>
-      <section className="pa-code-col">
-        <div className="pa-code-head">
-          <span className="pa-kicker">代码</span>
-          <select
-            data-testid="page-algorithm-lang"
-            className="pa-lang"
-            disabled={ro}
-            value={lang}
-            onChange={(event) => update({ lang: event.target.value })}
-          >
-            <option value="python">Python</option>
-            <option value="javascript">JavaScript</option>
-            <option value="typescript">TypeScript</option>
-            <option value="java">Java</option>
-            <option value="cpp">C++</option>
-          </select>
-        </div>
-        <DraftField
-          as="textarea"
-          testId="page-algorithm-code"
-          readOnly={ro}
-          value={code}
-          onCommit={(next) => update({ code: next })}
-          className="pa-code"
-        />
-      </section>
-    </div>
+    <ReUI>
+      <Card data-testid="page-algorithm-card" className="lc-shell" style={{ padding: 0, overflow: 'hidden' }}>
+        <section className="lc-desc">
+          <DraftField
+            as="input"
+            testId="page-algorithm-title"
+            readOnly={ro}
+            value={title}
+            onCommit={(next) => update({ title: next })}
+            className="lc-title"
+            style={{ height: 'auto', border: 0, background: 'transparent', fontSize: 22, fontWeight: 600, padding: 0 }}
+          />
+          <div className="lc-meta">
+            {ro ? (
+              <span className="lc-diff" style={{ color: accent }}>
+                {difficulty}
+              </span>
+            ) : (
+              <Select
+                data-testid="page-algorithm-diff"
+                style={{ width: 108, border: 0, background: 'transparent', color: accent, fontWeight: 600 }}
+                value={difficulty}
+                onChange={(event) => update({ difficulty: event.target.value })}
+              >
+                <option>Easy</option>
+                <option>Medium</option>
+                <option>Hard</option>
+              </Select>
+            )}
+            <div className="lc-topics">
+              {topics.map((topic) => (
+                <span className="lc-topic" key={topic}>
+                  {topic}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="lc-h">Description</div>
+          <DraftField
+            as="textarea"
+            testId="page-algorithm-prompt"
+            readOnly={ro}
+            value={prompt}
+            onCommit={(next) => update({ prompt: next })}
+            className="lc-p"
+            style={{ minHeight: 120, border: 0, background: 'transparent', padding: 0, fontSize: 14, lineHeight: 1.75 }}
+          />
+          {examples.map((ex, i) => (
+            <div className="lc-ex" key={i}>
+              <strong>Example {i + 1}:</strong>
+              <div>
+                <span className="rui-muted">Input: </span>
+                {ex.input}
+              </div>
+              <div>
+                <span className="rui-muted">Output: </span>
+                {ex.output}
+              </div>
+              {ex.explanation ? (
+                <div>
+                  <span className="rui-muted">Explanation: </span>
+                  {ex.explanation}
+                </div>
+              ) : null}
+            </div>
+          ))}
+          {constraints ? (
+            <>
+              <div className="lc-h">Constraints</div>
+              <pre className="lc-p" style={{ margin: 0, fontFamily: 'ui-monospace,monospace', fontSize: 13 }}>
+                {constraints}
+              </pre>
+            </>
+          ) : null}
+        </section>
+        <section className="lc-code">
+          <div className="lc-codebar">
+            <span style={{ fontWeight: 650, fontSize: 13 }}>Code</span>
+            <Select
+              data-testid="page-algorithm-lang"
+              disabled={ro}
+              value={lang}
+              onChange={(event) => update({ lang: event.target.value })}
+            >
+              <option value="python">Python3</option>
+              <option value="javascript">JavaScript</option>
+              <option value="typescript">TypeScript</option>
+              <option value="java">Java</option>
+              <option value="cpp">C++</option>
+            </Select>
+            <span className="rui-muted" style={{ marginLeft: 'auto' }}>
+              {lines} 行
+            </span>
+            <button
+              type="button"
+              className="lc-run"
+              data-testid="page-algorithm-run"
+              disabled={running || !writable}
+              onClick={() => void run()}
+            >
+              {running ? '运行中…' : '运行'}
+            </button>
+          </div>
+          <CodePane
+            value={code}
+            lang={lang}
+            readOnly={ro}
+            onLive={(next) => {
+              codeLive.current = next
+            }}
+            onCommit={(next) => update({ code: next })}
+            onRun={() => void run()}
+          />
+          <div className="lc-console">
+            <div className="lc-console-tabs">
+              <button type="button" data-on={consoleTab === 'case'} onClick={() => setConsoleTab('case')} style={{ border: 0, background: 'transparent', cursor: 'pointer', color: 'inherit', font: 'inherit' }}>
+                Testcase
+              </button>
+              <button type="button" data-on={consoleTab === 'out'} onClick={() => setConsoleTab('out')} style={{ border: 0, background: 'transparent', cursor: 'pointer', color: 'inherit', font: 'inherit' }}>
+                Output
+              </button>
+            </div>
+            <div className="lc-console-body" data-testid="page-algorithm-output">
+              {consoleTab === 'case' ? (
+                examples[0] ? (
+                  `Case 1\n${examples[0].input}`
+                ) : (
+                  <span className="lc-empty">还没有用例</span>
+                )
+              ) : output.length ? (
+                output.map((line, i) => (
+                  <div key={i} style={{ color: line.type === 'error' ? 'var(--rui-danger)' : line.type === 'success' ? 'var(--rui-ok)' : undefined }}>
+                    {line.text}
+                  </div>
+                ))
+              ) : (
+                <span className="lc-empty">You must run your code first.</span>
+              )}
+            </div>
+          </div>
+        </section>
+      </Card>
+    </ReUI>
   )
 }
 
@@ -249,7 +523,7 @@ export function apply(ctx: {
     label: '算法题',
     blockType: 'algorithm',
     blockTypeLabel: '算法题',
-    hint: '左右分栏：题面 + 代码，跟随页面主题',
+    hint: 'LeetCode 结构：题面 / 示例 / 约束 + 代码，点运行在本机执行',
     aliases: ['leetcode', 'algo', '算法', 'lc'],
     assets: [],
     defaults: DEFAULTS,

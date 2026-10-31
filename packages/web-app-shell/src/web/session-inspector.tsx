@@ -24,10 +24,10 @@ import {
 } from '@biu/web-session-view'
 import { useSlotEntries } from '@biu/web-slots'
 import type { SlotsService } from '@biu/web-slots'
-import { inspectorTabFromEvent, requestInspectorAction } from './chat-overlay.ts'
+import { inspectorTabFromEvent, requestInspectorAction, shellColumnStartWidth } from './chat-overlay.ts'
 import { getInspectorCaption, getInspectorCaptionVersion, subscribeInspectorCaptions } from './inspector-captions.ts'
 import { inspectorPanelMatches, inspectorViewProps, nextRepeatableTabId, pruneOpenedForCollections, resolveInspectorTab, slotTabId } from './inspector-panels.ts'
-import { HeadlessDismiss } from '@biu/public-ui/headless-dismiss'
+import { HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
 import { SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
 import {
   getInspectorDbPath,
@@ -359,9 +359,11 @@ export const SessionInspector = memo(function SessionInspector({
     }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
     return () => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
     }
   }, [onWidthChange, onWidthLive])
 
@@ -410,7 +412,7 @@ export const SessionInspector = memo(function SessionInspector({
 
   return (
     <aside
-      className={`session-inspector relative flex min-h-0 min-w-0 flex-col bg-(--dsw-bg) text-(--dsw-label)${open ? '' : ' is-closed'}`}
+      className={`session-inspector relative flex min-h-0 min-w-0 flex-col bg-(--biu-bg) text-(--biu-label)${open ? '' : ' is-closed'}`}
       data-testid="session-inspector"
       aria-label="会话检查器"
       aria-hidden={!open}
@@ -423,7 +425,7 @@ export const SessionInspector = memo(function SessionInspector({
         title="拖动调整宽度"
         onPointerDown={(event) => {
           event.preventDefault()
-          const visual = event.currentTarget.parentElement?.getBoundingClientRect().width ?? width
+          const visual = shellColumnStartWidth(event.currentTarget, 'inspector', width)
           dragRef.current = { startX: event.clientX, startWidth: visual, last: visual }
           document.body.style.cursor = 'col-resize'
           document.body.style.userSelect = 'none'

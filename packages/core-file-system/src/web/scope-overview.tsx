@@ -93,15 +93,15 @@ export function ScopeOverview({
         <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-6">
           <section>
             <h1 className="text-xl font-semibold">用户数据</h1>
-            <p className="mt-1 text-sm text-(--dsw-label-2)">按协作者区分：只有自己是私人数据，空间成员是空间数据，包含外部成员是共享数据。</p>
+            <p className="mt-1 text-sm text-(--biu-label-2)">按协作者区分：只有自己是私人数据，空间成员是空间数据，包含外部成员是共享数据。</p>
           </section>
           <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-label="数据表">
             {userTables.map((table) => {
               const tableCounts = counts[table.path]
               return (
-                <div key={table.path} className="rounded-xl border border-(--dsw-border) bg-(--dsw-surface) p-4">
+                <div key={table.path} className="rounded-xl border border-(--biu-border) bg-(--biu-surface) p-4">
                   <div className="flex items-center gap-3">
-                    <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-(--dsw-hover)">
+                    <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-(--biu-hover)">
                       <TableGlyph icon={table.view?.icon} />
                     </span>
                     <strong className="min-w-0 flex-1 truncate text-sm">{table.view?.title ?? table.label}</strong>
@@ -111,10 +111,10 @@ export function ScopeOverview({
                       <button
                         key={scope}
                         type="button"
-                        className="rounded-lg bg-(--dsw-hover) px-2 py-2 text-left hover:bg-(--dsw-border)"
+                        className="rounded-lg bg-(--biu-hover) px-2 py-2 text-left hover:bg-(--biu-border)"
                         onClick={() => onOpenTable(table.path, builtinAllViewId(table.path))}
                       >
-                        <span className="block text-xs text-(--dsw-label-2)">{scopedCollectionName(table, scope)}</span>
+                        <span className="block text-xs text-(--biu-label-2)">{scopedCollectionName(table, scope)}</span>
                         <strong className="text-sm">{tableCounts?.[scope] ?? 0}</strong>
                       </button>
                     ))}
@@ -128,25 +128,25 @@ export function ScopeOverview({
               <ClockIcon className="size-4" />
               最近使用
             </h2>
-            <div className="overflow-hidden rounded-xl border border-(--dsw-border) bg-(--dsw-surface)">
-              {loading ? <p className="p-4 text-sm text-(--dsw-label-3)">加载中…</p> : null}
-              {!loading && !rows.length ? <p className="p-4 text-sm text-(--dsw-label-3)">还没有数据</p> : null}
+            <div className="overflow-hidden rounded-xl border border-(--biu-border) bg-(--biu-surface)">
+              {loading ? <p className="p-4 text-sm text-(--biu-label-3)">加载中…</p> : null}
+              {!loading && !rows.length ? <p className="p-4 text-sm text-(--biu-label-3)">还没有数据</p> : null}
               {rows.map(({ table, record, scope, timestamp }) => {
                 const viewId = builtinAllViewId(table.path)
                 return (
                   <button
                     key={`${table.path}:${scope}:${record.id}`}
                     type="button"
-                    className="flex w-full items-center gap-3 border-0 border-b border-(--dsw-border) bg-transparent px-4 py-3 text-left last:border-b-0 hover:bg-(--dsw-hover)"
+                    className="flex w-full items-center gap-3 border-0 border-b border-(--biu-border) bg-transparent px-4 py-3 text-left last:border-b-0 hover:bg-(--biu-hover)"
                     onClick={() => onOpenRecord(table.path, viewId, record.id, record)}
                   >
                     <span className="text-lg">{String(record.emoji ?? '') || '•'}</span>
                     <span className="min-w-0 flex-1">
                       <strong className="block truncate text-sm">{recordLabel(record)}</strong>
-                      <span className="text-xs text-(--dsw-label-3)">{scopedCollectionName(table, scope)}</span>
+                      <span className="text-xs text-(--biu-label-3)">{scopedCollectionName(table, scope)}</span>
                     </span>
                     {timestamp ? (
-                      <time className="text-xs text-(--dsw-label-3)">
+                      <time className="text-xs text-(--biu-label-3)">
                         {new Date(timestamp).toLocaleDateString()}
                       </time>
                     ) : null}

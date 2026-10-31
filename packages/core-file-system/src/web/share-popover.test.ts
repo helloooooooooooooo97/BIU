@@ -38,8 +38,8 @@ test('share panel uses a compact settings section and custom toggles', () => {
   assert.match(src, /公开链接设置/)
   assert.match(src, /fsdb-share-toggle/)
   assert.match(css, /\.fsdb-share-panel\{[^}]*width:min\(380px/)
-  assert.match(css, /\.fsdb-share-panel\{[^}]*background:var\(--dsw-sidebar\)/)
-  assert.doesNotMatch(css, /\.fsdb-share-panel\{[^}]*background:var\(--dsw-surface/)
+  assert.match(css, /\.fsdb-share-panel\{[^}]*background:var\(--biu-sidebar\)/)
+  assert.doesNotMatch(css, /\.fsdb-share-panel\{[^}]*background:var\(--biu-surface/)
   assert.match(css, /\.fsdb-share-panel\.is-embedded\{position:static\}/)
   assert.match(css, /\.fsdb-share-toggle\.is-on/)
   assert.match(css, /\.fsdb-share-link-row/)
@@ -49,7 +49,7 @@ test('share panel uses a compact settings section and custom toggles', () => {
 test('open share panel sits above the table toolbar', () => {
   const css = readFileSync(resolve(import.meta.dirname, './fsdb-style.ts'), 'utf8')
   assert.match(css, /\.fsdb-page \.tasks-toolbar\{[^}]*z-index:50/)
-  assert.match(css, /\.fsdb-right \.chat-view-header:has\(\.fsdb-share-panel\)\{[^}]*z-index:90/)
+  assert.match(css, /\.fsdb-right \.chat-view-header:has\(\.fsdb-share-panel\)\{[^}]*z-index:var\(--biu-z-dropdown\)/)
 })
 
 test('permission column opens the same kind of chain as data scope', () => {
@@ -151,13 +151,13 @@ test('list permission column uses the same capsule and loads the chain on click'
   const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
   assert.match(src, /data-testid="fsdb-role-tag"/)
   assert.match(labelSrc, /className=\{`fsdb-scope-tag is-\$\{accessTone\(label\)\}`\}/)
-  assert.match(css, /\.fsdb-scope-tag\.is-manage[^{]*\{[^}]*background:var\(--dsw-hover\)/)
-  assert.match(css, /\.fsdb-scope-tag\.is-manage[^{]*\{[^}]*color:var\(--dsw-label-2\)/)
-  assert.doesNotMatch(css, /\.fsdb-scope-tag\.is-manage[^{]*\{[^}]*--dsw-business/)
+  assert.match(css, /\.fsdb-scope-tag\.is-manage[^{]*\{[^}]*background:var\(--biu-hover\)/)
+  assert.match(css, /\.fsdb-scope-tag\.is-manage[^{]*\{[^}]*color:var\(--biu-label-2\)/)
+  assert.doesNotMatch(css, /\.fsdb-scope-tag\.is-manage[^{]*\{[^}]*--biu-business/)
   assert.doesNotMatch(css, /\.fsdb-scope-tag\.is-manage[^{]*\{[^}]*#2c2c2b/)
   assert.match(
     css,
-    /\.fsdb-scope-tag\.is-shared,\.fsdb-scope-pill\.is-shared,\.fsdb-scope-tag\.is-edit,\.fsdb-scope-pill\.is-edit,[\s\S]*?background:var\(--dsw-pick-fill\);color:var\(--dsw-pick\)/,
+    /\.fsdb-scope-tag\.is-shared,\.fsdb-scope-pill\.is-shared,\.fsdb-scope-tag\.is-edit,\.fsdb-scope-pill\.is-edit,[\s\S]*?background:var\(--biu-pick-fill\);color:var\(--biu-pick\)/,
   )
   assert.doesNotMatch(css, /\.fsdb-scope-tag\.is-edit[^{]*\{[^}]*#2383e2/)
   assert.match(browser, /fallback=\{<ShareRoleLabel label=\{props\.label\} \/>\}/)
@@ -196,9 +196,9 @@ test('list share column uses the same capsule and loads the chain on click', () 
   assert.match(css, /\.fsdb-scope-tag\{[^}]*height:22px/)
   assert.match(
     css,
-    /\.fsdb-scope-tag\.is-workspace,\.fsdb-scope-pill\.is-workspace,\.fsdb-scope-tag\.is-personal,\.fsdb-scope-pill\.is-personal\{background:var\(--dsw-hover\);color:var\(--dsw-label-2\)\}/,
+    /\.fsdb-scope-tag\.is-workspace,\.fsdb-scope-pill\.is-workspace,\.fsdb-scope-tag\.is-personal,\.fsdb-scope-pill\.is-personal\{background:var\(--biu-hover\);color:var\(--biu-label-2\)\}/,
   )
-  assert.doesNotMatch(css, /\.fsdb-scope-tag\.is-workspace\{[^}]*--dsw-business/)
+  assert.doesNotMatch(css, /\.fsdb-scope-tag\.is-workspace\{[^}]*--biu-business/)
   assert.match(browser, /fallback=\{<ShareScopeLabel label=\{props\.label\} \/>\}/)
   assert.match(browser, /if \(key === 'shareScope' \|\| key === 'shareRole'\) \{\s*return renderCell\(row, key, field, 'table'\)/)
 })

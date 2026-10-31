@@ -111,7 +111,7 @@ test('collection browser renders extra views registered for that path', () => {
   assert.match(cells, /fsdb-select-text/)
   assert.doesNotMatch(browser, /SchemaChips/)
   const schemaUi = readFileSync(resolve(import.meta.dirname, './schema-field.tsx'), 'utf8')
-  assert.match(schemaUi, /from '@biu\/public-ui'/)
+  assert.match(schemaUi, /from '@biu\/biu-ui'/)
   assert.match(schemaUi, /<TagChip /)
   assert.match(schemaUi, /placeholder=""/)
   assert.doesNotMatch(schemaUi, /placeholder="属性名"/)

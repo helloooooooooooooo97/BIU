@@ -8,6 +8,7 @@ import {
   SIDEBAR_FLYOUT_HIDE_MS,
   shouldKeepSidebarFlyout,
 } from './sidebar-flyout.ts'
+import { shellColumnStartWidth } from './chat-overlay.ts'
 
 export type ShellSidebarFrameProps = {
   visible: boolean
@@ -67,9 +68,11 @@ export const ShellSidebarFrame = memo(function ShellSidebarFrame({
     }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
     return () => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
     }
   }, [onWidthChange, onWidthLive])
 
@@ -138,7 +141,7 @@ export const ShellSidebarFrame = memo(function ShellSidebarFrame({
     >
       {visible ? null : <div className="sidebar-edge-hot" data-testid="sidebar-edge-hot" aria-hidden />}
     <aside
-      className={`app-side-bar min-h-0 flex-col overflow-hidden border-r border-(--dsw-border) bg-(--dsw-sidebar)${narrow ? ' is-narrow' : ''}${showTags ? ' is-wide' : ''}${visible ? ' flex' : ' is-closed flex'}`}
+      className={`app-side-bar min-h-0 flex-col overflow-hidden border-r border-(--biu-border) bg-(--biu-sidebar)${narrow ? ' is-narrow' : ''}${showTags ? ' is-wide' : ''}${visible ? ' flex' : ' is-closed flex'}`}
       aria-hidden={!visible}
       data-testid={testId}
     >
@@ -150,7 +153,7 @@ export const ShellSidebarFrame = memo(function ShellSidebarFrame({
           title="拖动调整宽度"
           onPointerDown={(event) => {
             event.preventDefault()
-            const visual = event.currentTarget.parentElement?.getBoundingClientRect().width ?? 0
+            const visual = shellColumnStartWidth(event.currentTarget, 'left', 0)
             dragRef.current = { startX: event.clientX, startWidth: visual, last: visual }
             document.body.style.cursor = 'col-resize'
             document.body.style.userSelect = 'none'

@@ -1,3 +1,4 @@
+import { ReUI, Textarea } from '@biu/reui'
 import { createPortal } from 'react-dom'
 import { bindHtmlSlide, collectHtmlSlides, cssBoxSize, htmlDeckEnabled, htmlDeckIndex, htmlDeckKeyAction, htmlLooksFillLayout, HTML_FILL_HOST_PX, stepHtmlDeck } from './html-deck.ts'
 import { htmlBlockKey, stampHtmlPickSurfaces, stampHtmlSource } from './stamp-picks.ts'
@@ -49,7 +50,7 @@ function SourceEditor({ html, onChange }: { html: string; onChange: (v: string) 
     if (draftRef.current !== htmlRef.current) onChangeRef.current(draftRef.current)
   }
   return (
-    <textarea
+    <Textarea
       data-testid="html-source"
       data-page-block-capture=""
       data-biu-ignore
@@ -71,14 +72,14 @@ function SourceEditor({ html, onChange }: { html: string; onChange: (v: string) 
         ...field,
         width: '100%',
         minHeight: 160,
-        padding: '26px 10px 10px',
+        padding: 10,
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
         fontSize: 12,
         lineHeight: 1.55,
-        color: '#111',
-        background: '#fff',
-        border: '2px solid #111',
-        borderRadius: 0,
+        color: 'var(--rui-fg)',
+        background: 'var(--biu-bg)',
+        border: '1px solid var(--rui-border)',
+        borderRadius: 10,
         resize: 'vertical',
       }}
     />
@@ -128,7 +129,7 @@ const pressBtn: Record<string, unknown> = {
   borderLeft: '2px solid #111',
   borderRadius: 0,
   padding: '8px 10px',
-  background: '#fff',
+  background: 'var(--biu-bg)',
   color: '#111',
   fontFamily: inkFace,
   fontWeight: 800,
@@ -476,7 +477,7 @@ function FloatBar({
         alignItems: 'stretch',
         padding: 0,
         borderRadius: 0,
-        background: '#fff',
+        background: 'var(--biu-bg)',
         border: 'none',
         borderBottom: '2px solid #111',
         boxShadow: 'none',
@@ -580,6 +581,7 @@ function HtmlDirectCard({ data, update, writable }: BlockProps) {
   )
 
   return (
+    <ReUI>
     <div
       ref={hostRef}
       data-testid="page-html-direct"
@@ -620,6 +622,7 @@ function HtmlDirectCard({ data, update, writable }: BlockProps) {
       {ro || editing ? null : <SizeGrip reveal={hover} boxRef={hostRef} onSize={(next) => update(next)} />}
       {deck.overlay}
     </div>
+    </ReUI>
   )
 }
 
@@ -718,6 +721,7 @@ function HtmlFrameCard({ data, update, writable }: BlockProps) {
   }, [editing, html, height])
 
   return (
+    <ReUI>
     <div
       ref={hostRef}
       data-testid="page-html-frame"
@@ -735,7 +739,7 @@ function HtmlFrameCard({ data, update, writable }: BlockProps) {
                 min={80}
                 value={height}
                 onChange={(e) => update({ height: Number(e.target.value) || 300 })}
-                style={{ width: 52, border: '2px solid #111', borderRadius: 0, background: '#fff', color: '#111', padding: '1px 4px', fontSize: 12, fontFamily: inkFace }}
+                style={{ width: 52, border: '2px solid #111', borderRadius: 0, background: 'var(--biu-bg)', color: '#111', padding: '1px 4px', fontSize: 12, fontFamily: inkFace }}
               />
             </label>
           )}
@@ -756,6 +760,7 @@ function HtmlFrameCard({ data, update, writable }: BlockProps) {
       )}
       {deck.overlay}
     </div>
+    </ReUI>
   )
 }
 

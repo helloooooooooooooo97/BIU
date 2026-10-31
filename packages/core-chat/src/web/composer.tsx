@@ -6,7 +6,7 @@ import Placeholder from '@tiptap/extension-placeholder'
 import type { SlotProps } from '@biu/web-slots'
 import { bindSessionView, type SessionViewService } from '@biu/web-session-view'
 import { filePickFromPath, pickKey, textPickFromPlain, usePickState, type PickService } from '@biu/core-pick/web'
-import { HeadlessDismiss } from '@biu/public-ui'
+import { HeadlessDismiss } from '@biu/biu-ui'
 import { composerDocExtensions } from './composer-kit.ts'
 import {
   collectPickKeys,

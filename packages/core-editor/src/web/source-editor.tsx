@@ -72,19 +72,19 @@ export type SourceEditorHandle = {
 }
 
 const mdHighlight = HighlightStyle.define([
-  { tag: tags.heading, color: 'var(--dsw-label)', fontWeight: '700' },
+  { tag: tags.heading, color: 'var(--biu-label)', fontWeight: '700' },
   { tag: tags.strong, fontWeight: '700' },
   { tag: tags.emphasis, fontStyle: 'italic' },
   { tag: tags.strikethrough, textDecoration: 'line-through' },
-  { tag: tags.link, color: 'var(--dsw-business)' },
-  { tag: tags.url, color: 'var(--dsw-business)' },
-  { tag: tags.monospace, color: 'var(--dsw-label)' },
-  { tag: tags.meta, color: 'var(--dsw-sidebar-fg)' },
-  { tag: tags.processingInstruction, color: 'var(--dsw-sidebar-fg)' },
-  { tag: tags.comment, color: 'var(--dsw-sidebar-fg)' },
-  { tag: tags.keyword, color: 'var(--dsw-pick)' },
-  { tag: tags.string, color: 'var(--dsw-ok)' },
-  { tag: tags.number, color: '#c2410c' },
+  { tag: tags.link, color: 'var(--biu-business)' },
+  { tag: tags.url, color: 'var(--biu-business)' },
+  { tag: tags.monospace, color: 'var(--biu-label)' },
+  { tag: tags.meta, color: 'var(--biu-sidebar-fg)' },
+  { tag: tags.processingInstruction, color: 'var(--biu-sidebar-fg)' },
+  { tag: tags.comment, color: 'var(--biu-sidebar-fg)' },
+  { tag: tags.keyword, color: 'var(--biu-pick)' },
+  { tag: tags.string, color: 'var(--biu-ok)' },
+  { tag: tags.number, color: 'var(--biu-warning)' },
 ])
 
 const compactTheme = EditorView.theme({
@@ -95,24 +95,24 @@ const compactTheme = EditorView.theme({
 const theme = EditorView.theme({
   '&': {
     background: 'transparent',
-    color: 'var(--dsw-label)',
+    color: 'var(--biu-label)',
     fontSize: '14px',
   },
   '.cm-scroller': { fontFamily: 'var(--font-mono)', lineHeight: '1.65', overflow: 'visible' },
-  '.cm-content': { caretColor: 'var(--dsw-label)', padding: '0', minHeight: '240px' },
+  '.cm-content': { caretColor: 'var(--biu-label)', padding: '0', minHeight: '240px' },
   '.cm-gutters': {
     background: 'transparent',
     border: 'none',
-    color: 'var(--dsw-sidebar-fg)',
+    color: 'var(--biu-sidebar-fg)',
     minWidth: '2.4em',
   },
-  '.cm-activeLine': { background: 'color-mix(in srgb, var(--dsw-hover) 70%, transparent)' },
-  '.cm-activeLineGutter': { background: 'transparent', color: 'var(--dsw-label)' },
-  '.cm-cursor': { borderLeftColor: 'var(--dsw-label)' },
-  /* 与正文 TipTap / --dsw-pick 同一蓝。系统 Highlight 在深色页会发白。 */
-  '.cm-content ::selection': { background: 'color-mix(in srgb, var(--dsw-pick) 40%, transparent)', color: 'inherit' },
+  '.cm-activeLine': { background: 'color-mix(in srgb, var(--biu-hover) 70%, transparent)' },
+  '.cm-activeLineGutter': { background: 'transparent', color: 'var(--biu-label)' },
+  '.cm-cursor': { borderLeftColor: 'var(--biu-label)' },
+  /* 与正文 TipTap / --biu-pick 同一蓝。系统 Highlight 在深色页会发白。 */
+  '.cm-content ::selection': { background: 'color-mix(in srgb, var(--biu-pick) 40%, transparent)', color: 'inherit' },
   '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionLayer .cm-selectionBackground': {
-    background: 'color-mix(in srgb, var(--dsw-pick) 40%, transparent)',
+    background: 'color-mix(in srgb, var(--biu-pick) 40%, transparent)',
   },
 })
 

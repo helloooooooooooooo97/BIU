@@ -23,10 +23,10 @@ import { normalizeSchemaValue } from '@biu/type-file-system'
 import type { CollectionChrome, CollectionRowViewType, CollectionViewType, DatabaseUi } from '@biu/type-file-system/ui'
 import { parseAppPath } from '@biu/web-session-view'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
-import { BoolBox } from '@biu/public-ui/bool-box'
-import { ChatCount } from '@biu/public-ui/chat-count'
-import { HeadlessDismiss, HEADLESS_DISMISS_IGNORE } from '@biu/public-ui/headless-dismiss'
-import { TagChip, TagChips, tagTextColor, tagTone as schemaTagTone } from '@biu/public-ui/tag-chip'
+import { BoolBox } from '@biu/biu-ui/bool-box'
+import { ChatCount } from '@biu/biu-ui/chat-count'
+import { HeadlessDismiss, HEADLESS_DISMISS_IGNORE } from '@biu/biu-ui/headless-dismiss'
+import { TagChip, TagChips, tagTextColor, tagTone as schemaTagTone } from '@biu/biu-ui/tag-chip'
 import {
   contentFieldKey,
   defaultColumnKeys,
@@ -133,7 +133,7 @@ import { ViewPaneMenu } from './pane-more-menu.tsx'
 import { HttpError, invalidateListReads, listCollection, readJson } from './db-client.ts'
 import { savedViewRecordPath } from '../paths.ts'
 import { findViewNeighbor, indexOnPage } from './view-adjacent.ts'
-import { TABLE_WINDOW_OVERSCAN, medianPaintedRowPx, rememberedTableWrap, tableColumnSlice, tableColumnUnchanged, tableColumnWidth, tableRowFallbackPx, tableWindowSlice, tableWindowUnchanged, tableWrapScroll, type TableColumnSlice } from './table-window.ts'
+import { TABLE_WINDOW_OVERSCAN, medianPaintedRowPx, rememberedTableWrap, settlePaintedRowPx, tableColumnSlice, tableColumnUnchanged, tableColumnWidth, tableRowFallbackPx, tableWindowSlice, tableWindowUnchanged, tableWrapScroll, type TableColumnSlice } from './table-window.ts'
 import { forgetPreviewTotalsForPath, markPaintedListReady, rememberPreviewTotalForView, resetPaintedListReady } from './sidebar-preview.ts'
 import { DataSidebarShell } from './data-sidebar-shell.tsx'
 import { builtinAllViewId, catalogLockFilters, isReadOnlyViewId, mergeTableViews, parseBuiltinScopeViewId, stubBuiltinBlockKindView, viewsForScope, type DataScope } from '../catalog-views.ts'
@@ -165,7 +165,7 @@ const FieldValuePop = lazy(() => import('./field-value-pop.tsx').then((m) => ({ 
 const CellPopDraft = lazy(() => import('./cell-pop-draft.tsx').then((m) => ({ default: m.CellPopDraft })))
 const RecordDetail = lazy(() => import('./record-detail.tsx').then((m) => ({ default: m.RecordDetail })))
 const ColumnOrderMenu = lazy(() => import('./column-order-menu.tsx').then((m) => ({ default: m.ColumnOrderMenu })))
-const RecordEmojiBoard = lazy(() => import('@biu/public-ui/emoji-board').then((m) => ({ default: m.RecordEmojiBoard })))
+const RecordEmojiBoard = lazy(() => import('@biu/biu-ui/emoji-board').then((m) => ({ default: m.RecordEmojiBoard })))
 const LazyShareButton = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.ShareButton })))
 const LazySharePanel = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.SharePanel })))
 const LazyShareRoleDetail = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.ShareRoleDetail })))
@@ -525,10 +525,7 @@ function TableCheckRail({
     }
     let raf = 0
     const measure = () => {
-      if (!table.offsetHeight) {
-        raf = requestAnimationFrame(measure)
-        return
-      }
+      if (!table.offsetHeight) return
       const next: CheckSlot[] = []
       const head = table.tHead?.rows[0]
       if (head) next.push({ kind: 'head', top: head.offsetTop, h: head.offsetHeight })
@@ -554,10 +551,16 @@ function TableCheckRail({
         return next
       })
     }
+    const schedule = () => {
+      if (raf) return
+      raf = requestAnimationFrame(() => {
+        raf = 0
+        measure()
+      })
+    }
     measure()
-    const ro = new ResizeObserver(measure)
+    const ro = new ResizeObserver(schedule)
     ro.observe(table)
-    for (const img of Array.from(table.querySelectorAll('img'))) ro.observe(img)
     return () => {
       cancelAnimationFrame(raf)
       ro.disconnect()
@@ -707,7 +710,7 @@ const EMPTY_FILTERS: Record<string, string> = {}
 /** 与选区拖选同一阈值：位移超过这个距离只当拖，不当点击。 */
 const CELL_POP_DRAG_PX = 6
 const CELL_POP_IGNORE =
-  '.fsdb-row-check, .fsdb-col-resizer, .tasks-row-tools, .tasks-title-open, .fsdb-action-btn, .fsdb-action-tag, .fsdb-boolbtn, .fsdb-thumb-btn, .fsdb-thumb, .ant-image, .fsdb-file-tools, .fsdb-ref-chip, .db-datetime, .ant-picker, .fsdb-scope-detail'
+  '.fsdb-row-check, .fsdb-col-resizer, .tasks-row-tools, .tasks-title-open, .fsdb-action-btn, .fsdb-action-tag, .fsdb-boolbtn, .fsdb-thumb-btn, .fsdb-thumb, .biu-image, .fsdb-file-tools, .fsdb-ref-chip, .db-datetime, .biu-calendar, .fsdb-scope-detail'
 
 type TablePaintNode =
   | { kind: 'empty'; key: string }
@@ -1277,6 +1280,7 @@ const WindowedTable = memo(function WindowedTable({
 
   useLayoutEffect(() => {
     const next = tableRowFallbackPx(wrapCells)
+    if (next === rowPxRef.current) return
     rowPxRef.current = next
     setRowPx(next)
   }, [wrapCells])
@@ -1291,11 +1295,12 @@ const WindowedTable = memo(function WindowedTable({
       const h = tr.offsetHeight
       if (h > 0) heights.push(h)
     }
-    const next = medianPaintedRowPx(heights, rowPxRef.current)
-    if (Math.abs(next - rowPxRef.current) < 1) return
+    // 不能依赖 tableWindow.start/end：setRowPx 会改窗口，窗口再测高再 setState，滚动时会打穿 React #185。
+    const next = settlePaintedRowPx(medianPaintedRowPx(heights, rowPxRef.current), rowPxRef.current)
+    if (next === rowPxRef.current) return
     rowPxRef.current = next
     setRowPx(next)
-  }, [nodes.length, tableRef, tableWindow.end, tableWindow.start, wrapCells])
+  }, [nodes.length, tableRef, tableScroll.height, tableScroll.top, wrapCells])
 
   useEffect(() => {
     onVisibleRange?.(tableWindow.start, tableWindow.end)
@@ -2490,7 +2495,10 @@ export function CollectionBrowser({
 
   useLayoutEffect(() => {
     setOpenDetailId(routeRecordId)
-    if (!routeRecordId) setDetailRow(null)
+    if (!routeRecordId) {
+      setDetailRow(null)
+      setError('')
+    }
   }, [routeRecordId])
 
   useEffect(() => {
@@ -3604,8 +3612,8 @@ export function CollectionBrowser({
   }
 
   async function writePatch(row: DbRecord, content: Record<string, unknown>) {
+    const keys = Object.keys(content)
     try {
-      const keys = Object.keys(content)
       quietUntil.current = Date.now() + 800
       if (bodyKey && keys.length === 1 && keys[0] === bodyKey && schema?.fields[bodyKey]?.type === 'file') {
         const path = `${dataPath}/${row.id}`
@@ -3677,6 +3685,11 @@ export function CollectionBrowser({
       await reload({ force: true })
     } catch (err) {
       quietUntil.current = 0
+      const denied =
+        (err instanceof HttpError && err.status === 403) ||
+        /\bpermission denied\b/i.test(String(err instanceof Error ? err.message : err))
+      const contentOnly = Boolean(bodyKey && keys.length === 1 && keys[0] === bodyKey)
+      if (denied && contentOnly) return
       setError(String(err))
     }
   }
@@ -5575,7 +5588,10 @@ export function CollectionBrowser({
           writeOne={writeOne}
           writePatch={writePatch}
           tableIcon={currentTable?.view?.icon}
-          readOnly={selected.shareRole === '阅读' && (!localData || selected.builtin === true)}
+          readOnly={
+            (collectionPath === '/plugins' && selected.builtin === true) ||
+            (selected.shareRole === '阅读' && (!localData || selected.builtin === true))
+          }
           actionProperty={rowActionColumn ? <RecordActions row={selected} /> : null}
           share={
             nested && detailId ? (

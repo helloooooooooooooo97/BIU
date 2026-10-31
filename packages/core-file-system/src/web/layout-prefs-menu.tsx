@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { CheckIcon } from '@heroicons/react/16/solid'
-import { BoolBox } from '@biu/public-ui/bool-box'
+import { BoolBox } from '@biu/biu-ui/bool-box'
 import { getPagePrefs, getPageWidthVersion, persistPagePrefs, subscribePageWidth, type BodyScale, type PagePrefs } from './page-width.ts'
 
 const BOOLS: { key: keyof Pick<PagePrefs, 'wide' | 'outlineExpand' | 'outlinePin' | 'navPin'>; label: string; testId: string }[] = [

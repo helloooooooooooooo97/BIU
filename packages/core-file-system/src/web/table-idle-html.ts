@@ -1,5 +1,5 @@
 import { asPersonList } from '@biu/type-file-system'
-import { ensureTagChipStyle, tagTone } from '@biu/public-ui/tag-chip'
+import { ensureTagChipStyle, tagTone } from '@biu/biu-ui/tag-chip'
 
 /** First-paint cells only need a screen of text; CSS overflow hides the rest. */
 export const IDLE_CELL_TEXT_MAX = 80

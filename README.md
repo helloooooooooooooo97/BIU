@@ -775,7 +775,7 @@ biu
     ├── web-routes-panel/      # Settings → Routes
     ├── web-ui-hub/
     ├── public-mascot/         # shared mascot UI, not in json
-    ├── public-ui/             # shared parts (fold/count/menu/attachments), not in json
+    ├── biu-ui/                # Biu UI shared parts (fold/count/menu/attachments), not in json
     │
     ├── core-file-system/      # File System: tables + db_* tools + UI
     ├── core-editor/           # record body editor; blocks, refs, slash menu

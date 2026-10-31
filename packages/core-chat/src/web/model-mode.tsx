@@ -12,8 +12,8 @@ import type {
 const pillCls = (on: boolean) =>
   `rounded-md border px-2 py-[3px] text-[12px] leading-none transition-colors ${
     on
-      ? 'border-(--dsw-business) bg-(--dsw-business-soft) text-(--dsw-business)'
-      : 'border-(--dsw-border) text-(--dsw-label-3) hover:bg-(--dsw-hover) hover:text-(--dsw-label)'
+      ? 'border-(--biu-business) bg-(--biu-business-soft) text-(--biu-business)'
+      : 'border-(--biu-border) text-(--biu-label-3) hover:bg-(--biu-hover) hover:text-(--biu-label)'
   }`
 
 export type ModelModePatch = Partial<ModelModeValues>
@@ -52,7 +52,7 @@ export function ModelModeControls(props: {
         if (knob.kind === 'toggle') {
           return (
             <div key={knob.id} className="flex items-center gap-2">
-              <span className="w-10 shrink-0 text-[11px] text-(--dsw-label-3)">{knob.label}</span>
+              <span className="w-10 shrink-0 text-[11px] text-(--biu-label-3)">{knob.label}</span>
               <div className="flex gap-1">
                 <button
                   type="button"
@@ -78,7 +78,7 @@ export function ModelModeControls(props: {
         }
         return (
           <div key={knob.id} className="flex items-center gap-2">
-            <span className="w-10 shrink-0 text-[11px] text-(--dsw-label-3)">{knob.label}</span>
+            <span className="w-10 shrink-0 text-[11px] text-(--biu-label-3)">{knob.label}</span>
             <div className="flex gap-1">
               {knob.options.map((item) => (
                 <button

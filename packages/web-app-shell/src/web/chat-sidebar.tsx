@@ -1,8 +1,8 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { isMascotDancing, subscribeMascotDance } from '@biu/public-mascot'
-import { ChatCount } from '@biu/public-ui/chat-count'
-import { SidebarFold } from '@biu/public-ui/sidebar-fold'
+import { ChatCount } from '@biu/biu-ui/chat-count'
+import { SidebarFold } from '@biu/biu-ui/sidebar-fold'
 import {
   bindSessionView,
   type SessionListItem,
@@ -59,7 +59,7 @@ function SessionTagBadges({ tags }: { tags?: string[] }) {
       {shown.map((tag) => (
         <span
           key={tag}
-          className="sidebar-tag max-w-18 truncate rounded-sm bg-(--dsw-hover-weak,var(--dsw-hover)) px-1"
+          className="sidebar-tag max-w-18 truncate rounded-sm bg-(--biu-hover-weak,var(--biu-hover)) px-1"
         >
           {tag}
         </span>
@@ -477,7 +477,7 @@ export const ChatSidebar = memo(function ChatSidebar({
                                 <div
                                   role="button"
                                   tabIndex={0}
-                                  className="flex min-h-8 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md text-left text-[14px] font-medium tracking-normal text-inherit outline-none hover:text-(--dsw-sidebar-fg-active) focus-visible:ring-1 focus-visible:ring-(--dsw-border)"
+                                  className="flex min-h-8 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md text-left text-[14px] font-medium tracking-normal text-inherit outline-none hover:text-(--biu-sidebar-fg-active) focus-visible:ring-1 focus-visible:ring-(--biu-border)"
                                   title={group.path ?? group.label}
                                   aria-expanded={!collapsed}
                                   onClick={() => toggleProjectGroup(group.key)}

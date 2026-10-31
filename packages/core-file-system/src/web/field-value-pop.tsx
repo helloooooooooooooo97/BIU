@@ -6,7 +6,7 @@ import { CellPopDraft } from './cell-pop-draft.tsx'
 import { ActionCell, BoolCell, DefaultCell } from './fsdb-cells.tsx'
 import { fieldHasValue, isRecordLinkField, resolveFieldType } from './fields.ts'
 
-const POP_HOST_IGNORE = '.fsdb-ref-chip, .fsdb-boolbtn, .fsdb-thumb-btn, .fsdb-thumb, .ant-image, .fsdb-file-tools, .fsdb-action-btn, .db-datetime, .ant-picker'
+const POP_HOST_IGNORE = '.fsdb-ref-chip, .fsdb-boolbtn, .fsdb-thumb-btn, .fsdb-thumb, .biu-image, .fsdb-file-tools, .fsdb-action-btn, .db-datetime, .biu-calendar'
 
 export function FieldValuePop({
   record,

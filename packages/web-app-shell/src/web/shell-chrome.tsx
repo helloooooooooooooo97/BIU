@@ -20,14 +20,14 @@ import {
   PlusIcon,
   XMarkIcon,
 } from '@heroicons/react/16/solid'
-import { AnchorMenu } from '@biu/public-ui/anchor-menu'
-import { ConfirmDialog } from '@biu/public-ui/confirm-dialog'
+import { AnchorMenu } from '@biu/biu-ui/anchor-menu'
+import { ConfirmDialog } from '@biu/biu-ui/confirm-dialog'
 import { chromeIcon } from './chrome-icon.ts'
 import { applyNoticeClick, noticeIdOf } from './notice-open.ts'
 import { readMainDataRoute } from '@biu/core-file-system/main-data-route'
 import { persistTheme, readTheme, type ThemeMode } from './theme.ts'
-import { persistWorkspaceProfile } from '@biu/public-ui/workspace-profile'
-import { useWorkspaceProfile } from '@biu/public-ui/use-workspace-profile'
+import { persistWorkspaceProfile } from '@biu/biu-ui/workspace-profile'
+import { useWorkspaceProfile } from '@biu/biu-ui/use-workspace-profile'
 import { LayoutPrefsMenu } from '@biu/core-file-system/layout-prefs-menu'
 import { getPagePrefs, hydratePagePrefs, subscribePageWidth } from '@biu/core-file-system/page-width'
 
@@ -1641,7 +1641,7 @@ export function ShellSettingsShortcuts() {
   return (
     <section data-testid="settings-shortcuts">
       <h3 className="settings-pane-title">快捷键</h3>
-      <p className="settings-muted settings-pane-lead">Windows 与 Linux 上 ⌘ 用 Ctrl。选取也可用 ⌘Q。编辑器内 ⌘F 为正文查找，⌘⇧F 仍打开全局搜索。</p>
+      <p className="settings-muted settings-pane-lead">Windows 与 Linux 上 ⌘ 用 Ctrl。编辑器内 ⌘F 为正文查找，⌘⇧F 仍打开全局搜索。</p>
       <ul className="settings-shortcut-list">
         <li>
           <span>搜索</span>
@@ -1649,7 +1649,7 @@ export function ShellSettingsShortcuts() {
         </li>
         <li>
           <span>快速选取</span>
-          <span className="settings-kbd"><kbd>Ctrl</kbd><kbd>Q</kbd></span>
+          <span className="settings-kbd"><kbd>⌘</kbd><kbd>2</kbd></span>
         </li>
         <li>
           <span>选区送到对话</span>

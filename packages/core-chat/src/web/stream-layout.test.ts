@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest'
 
 const root = resolve(import.meta.dirname, '../../../..')
 const styleCss = () => readFileSync(resolve(root, 'web/style.css'), 'utf8')
-const chatPane = () => readFileSync(resolve(root, 'packages/public-ui/src/chat-pane.tsx'), 'utf8')
+const chatPane = () => readFileSync(resolve(root, 'packages/biu-ui/src/chat-pane.tsx'), 'utf8')
 
 describe('chat stream layout width stability', () => {
   it('chat stage stretches children with min-width 0 instead of centering by content width', () => {

@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, type ComponentType, type ReactNode } from 'react'
 import { PlayIcon } from '@heroicons/react/16/solid'
-import { RenderBoundary } from '@biu/public-ui'
+import { RenderBoundary } from '@biu/biu-ui'
 import { getPageEditor, usePageEditorVersion, type PageBlockViewProps } from './service.ts'
 import {
   ENABLE_PAGE_BLOCK_PLUGIN,

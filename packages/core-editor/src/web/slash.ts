@@ -150,6 +150,16 @@ export const SLASH_ITEMS: SlashItem[] = [
     ...BASIC_GROUP,
   },
   {
+    id: 'deck',
+    label: 'Deck',
+    hint: '幻灯片容器：格子里可再插画板、表格等块',
+    aliases: ['deck', 'ppt', 'gamma', '幻灯片', '演示', '卡片'],
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).insertDeck('split').run()
+    },
+    ...BASIC_GROUP,
+  },
+  {
     id: 'table',
     label: '表格',
     hint: '插入表格',

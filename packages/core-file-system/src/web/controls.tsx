@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { CheckCircleIcon } from '@heroicons/react/16/solid'
-import { overlayPortalRoot } from '@biu/public-ui/overlay-portal'
+import { overlayPortalRoot } from '@biu/biu-ui/overlay-portal'
 
 export function CheckRow({
   label,

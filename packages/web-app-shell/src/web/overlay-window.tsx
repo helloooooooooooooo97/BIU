@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
-import { ChatPane } from '@biu/public-ui/chat-pane'
+import { ChatPane } from '@biu/biu-ui/chat-pane'
 import {
   closeChatOverlay,
   getOverlayThread,

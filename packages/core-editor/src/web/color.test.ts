@@ -1,7 +1,7 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { Editor } from '@tiptap/core'
-import { TAG_TONES } from '@biu/public-ui'
+import { TAG_TONES } from '@biu/biu-ui'
 import { pageEditorExtensions } from './kit.ts'
 import { EDITOR_TONES, HIGHLIGHT_COLORS, TEXT_COLORS, editorHighlightColor, editorTextColor } from './color-swatches.ts'
 

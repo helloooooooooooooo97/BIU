@@ -3,7 +3,7 @@ import type { Editor } from '@tiptap/core'
 import { CONTENT_JUMP_EVENT, parseContentJump, type ContentJump } from '@biu/type-file-system'
 import { applyAgentEditMark } from './agent-edit-plugin.ts'
 import { editorHostIsLive } from './editor-live.ts'
-import { scrollOutlineTarget } from '@biu/public-ui'
+import { scrollOutlineTarget } from '@biu/biu-ui'
 
 let pending: ContentJump | null = null
 let consumeTimer = 0

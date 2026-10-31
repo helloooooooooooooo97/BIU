@@ -11,7 +11,7 @@ import {
   type SchemaPackField,
 } from '@biu/type-file-system'
 import { ArrowUturnLeftIcon, ChevronDownIcon, PlusIcon, XMarkIcon } from '@heroicons/react/16/solid'
-import { TagChip, TagChips, tagTone, HeadlessPopover } from '@biu/public-ui'
+import { TagChip, TagChips, tagTone, HeadlessPopover } from '@biu/biu-ui'
 import { CellMulti } from '@biu/database-ui'
 import { DefaultCell, FieldGlyph } from './fsdb-cells.tsx'
 import { FieldValuePop } from './field-value-pop.tsx'

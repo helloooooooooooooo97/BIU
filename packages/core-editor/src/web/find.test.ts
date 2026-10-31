@@ -9,7 +9,7 @@ import { applyEditorFind } from './find-plugin.ts'
 import { pageEditorExtensions } from './kit.ts'
 import { isFindHotkey } from './find-bar.tsx'
 import { PAGE_EDITOR_STYLE } from './style.ts'
-import { TAG_TONE_ROSE } from '@biu/public-ui'
+import { TAG_TONE_ROSE } from '@biu/biu-ui'
 
 test('findRanges is case-insensitive and walks every hit', () => {
   assert.deepEqual(findRanges('Hello hello HELLO', 'hello'), [

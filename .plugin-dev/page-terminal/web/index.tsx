@@ -1,3 +1,4 @@
+import { Button, ReUI } from '@biu/reui'
 import { FitAddon } from '@xterm/addon-fit'
 import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
@@ -298,7 +299,7 @@ const STYLE_ID = 'pt-xterm-style-v5'
 const STYLE_CSS = `
 .pt-card{
   display:flex;flex-direction:column;overflow:hidden;
-  border:1px solid color-mix(in srgb, var(--dsw-border, rgba(242,241,237,0.12)) 80%, #000);
+  border:1px solid color-mix(in srgb, var(--biu-border, rgba(242,241,237,0.12)) 80%, #000);
   border-radius:12px;background:#191919;
   box-shadow:0 1px 2px rgba(15,15,15,.08), 0 8px 24px rgba(0,0,0,.12);
 }
@@ -457,7 +458,7 @@ const THEME = {
   blue: '#5b9fd6',
   magenta: '#b07cd6',
   cyan: '#12a594',
-  white: '#bcbab6',
+  white: 'var(--biu-sidebar-fg)',
   brightBlack: '#5f5f5a',
   brightRed: '#ff6369',
   brightGreen: '#4cc38a',
@@ -929,29 +930,17 @@ function IconButton({
   children: unknown
 }) {
   return (
-    <button
+    <Button
       type="button"
+      variant={active ? 'secondary' : 'ghost'}
       data-zoom-exit={dataZoomExit ? '' : undefined}
       onClick={onClick}
       aria-label={label}
       title={label}
-      style={{
-        flex: '0 0 auto',
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: 22,
-        height: 22,
-        border: 0,
-        padding: 0,
-        borderRadius: 5,
-        background: active ? 'color-mix(in srgb, var(--dsw-label, #f0efed) 12%, transparent)' : 'transparent',
-        color: 'inherit',
-        cursor: 'pointer',
-      }}
+      className="h-[22px] w-[22px] px-0"
     >
       {children as never}
-    </button>
+    </Button>
   )
 }
 
@@ -1133,10 +1122,10 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
           gridTemplateColumns: '1fr auto',
           gap: '2px 10px',
           padding: '8px 0',
-          borderTop: '1px solid var(--dsw-border, rgba(242,241,237,0.1))',
+          borderTop: '1px solid var(--biu-border, rgba(242,241,237,0.1))',
         }}
       >
-        <span style={{ color: 'var(--dsw-label, #f0efed)', fontWeight: 600 }}>{label}</span>
+        <span style={{ color: 'var(--biu-label, #f0efed)', fontWeight: 600 }}>{label}</span>
         <input
           type="number"
           value={value ?? ''}
@@ -1150,14 +1139,14 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
             border: 0,
             borderRadius: 7,
             padding: '0 8px',
-            background: 'var(--dsw-hover, rgba(242,241,237,0.08))',
-            color: 'var(--dsw-label, #f0efed)',
+            background: 'var(--biu-hover, rgba(242,241,237,0.08))',
+            color: 'var(--biu-label, #f0efed)',
             font: 'inherit',
             textAlign: 'right',
             outline: 'none',
           }}
         />
-        <span style={{ gridColumn: '1 / -1', color: 'var(--dsw-label-3, rgba(242,241,237,0.45))', fontSize: 11, lineHeight: 1.4 }}>
+        <span style={{ gridColumn: '1 / -1', color: 'var(--biu-label-3, rgba(242,241,237,0.45))', fontSize: 11, lineHeight: 1.4 }}>
           {hint}
           {limit ? ` · ${limit.min}–${limit.max}` : ''}
         </span>
@@ -1177,18 +1166,18 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
         zIndex: 40,
         width: 268,
         padding: '10px 12px 8px',
-        border: '1px solid var(--dsw-border, rgba(242,241,237,0.12))',
+        border: '1px solid var(--biu-border, rgba(242,241,237,0.12))',
         borderRadius: 10,
-        background: 'color-mix(in srgb, var(--dsw-sidebar, #222220) 92%, #111)',
+        background: 'color-mix(in srgb, var(--biu-sidebar, #222220) 92%, #111)',
         boxShadow: '0 12px 32px rgba(0,0,0,0.42)',
-        color: 'var(--dsw-label-2, rgba(242,241,237,0.72))',
+        color: 'var(--biu-label-2, rgba(242,241,237,0.72))',
         font: '12px ui-sans-serif, system-ui, sans-serif',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '2px 0 8px' }}>
-        <span style={{ color: 'var(--dsw-label, #f0efed)', fontWeight: 600, fontSize: 13 }}>设置</span>
+        <span style={{ color: 'var(--biu-label, #f0efed)', fontWeight: 600, fontSize: 13 }}>设置</span>
         {typeof state.sessions === 'number' ? (
-          <span style={{ color: 'var(--dsw-label-3, rgba(242,241,237,0.45))' }}>{state.sessions} 个后台会话</span>
+          <span style={{ color: 'var(--biu-label-3, rgba(242,241,237,0.45))' }}>{state.sessions} 个后台会话</span>
         ) : null}
       </div>
       {state.error ? (
@@ -1296,7 +1285,7 @@ function PageTerminal({
     </section>
   )
 
-  return body
+  return <ReUI>{body}</ReUI>
 }
 
 export function apply(ctx: {

@@ -8,6 +8,7 @@ import {
   requestInspectorClose,
   allocateShellColumns,
   applyShellColumnCssVars,
+  commitShellLayoutSnap,
   publishShellLayout,
   clampSidebarWidth,
   isChatPagePath,
@@ -44,14 +45,14 @@ import { SessionInspector } from './session-inspector.tsx'
 import { SessionConfigDialog } from '@biu/web-session-view/dialog'
 import { FolderGlyph } from '@biu/web-session-view/folder-glyph'
 import { AuthGate, ShellSettingsAbout, ShellSettingsAccount, ShellSettingsAppearance, ShellSettingsMembers, ShellSettingsMcp, ShellSettingsShortcuts, ShellSettingsUpdate, ShellSettingsWorkspace } from './shell-chrome.tsx'
-import { hydrateWorkspaceProfile } from '@biu/public-ui/workspace-profile'
+import { hydrateWorkspaceProfile } from '@biu/biu-ui/workspace-profile'
 import { hydrateTheme } from './theme.ts'
 import { hydratePagePrefs } from '@biu/core-file-system/page-width'
 import { isGlobalSearchHotkey } from './search-hotkey.ts'
 import { useSlotEntries } from '@biu/web-slots'
 import type { SlotsService } from '@biu/web-slots'
 import { chromeIcon } from './chrome-icon.ts'
-import { ChatDockStack, ChatStage } from '@biu/public-ui/chat-pane'
+import { ChatDockStack, ChatStage } from '@biu/biu-ui/chat-pane'
 
 const OverlayChatWindow = lazy(() => import('./overlay-window.tsx').then((m) => ({ default: m.OverlayChatWindow })))
 const ShellSearchPanel = lazy(() => import('./shell-search.tsx').then((m) => ({ default: m.ShellSearchPanel })))
@@ -370,10 +371,9 @@ function Shell(props: SlotProps) {
   )
   const onSidebarWidthChange = useCallback(
     (width: number) => {
-      const next = clampSidebarWidth(width)
-      persistSidebar(next === 0 ? sidebarWidth : next, next === 0)
+      endColumnResizeRef.current({ sidebar: width })
     },
-    [persistSidebar, sidebarWidth],
+    [],
   )
   const openSettings = useCallback((tab?: string) => {
     if (tab) setSettingsTab(tab)
@@ -432,26 +432,19 @@ function Shell(props: SlotProps) {
     }
     return 320
   })
+  const layoutSnap = useRef({
+    leftPane: true,
+    inspectorVisible: inspectorOpen,
+    inspectorWidth,
+    sidebarWidth,
+    sidebarCollapsed,
+  })
   const [columnResizing, setColumnResizing] = useState(false)
   const [windowResizing, setWindowResizing] = useState(false)
   const shellRef = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const onDown = (event: PointerEvent) => {
-      const target = event.target
-      if (!(target instanceof Element)) return
-      if (!target.closest('.sidebar-resize, .inspector-resize')) return
-      setColumnResizing(true)
-    }
-    const onUp = () => setColumnResizing(false)
-    window.addEventListener('pointerdown', onDown)
-    window.addEventListener('pointerup', onUp)
-    window.addEventListener('pointercancel', onUp)
-    return () => {
-      window.removeEventListener('pointerdown', onDown)
-      window.removeEventListener('pointerup', onUp)
-      window.removeEventListener('pointercancel', onUp)
-    }
-  }, [])
+  const columnResizingRef = useRef(false)
+  const columnDragAxisRef = useRef<'sidebar' | 'inspector' | null>(null)
+  const endColumnResizeRef = useRef<(patch?: { sidebar?: number; inspector?: number }) => void>(() => {})
   const inspectorOpenRef = useRef(inspectorOpen)
   inspectorOpenRef.current = inspectorOpen
   const applyInspector = useCallback((next: boolean) => {
@@ -469,8 +462,9 @@ function Shell(props: SlotProps) {
     applyInspector(next)
     if (!next) requestInspectorClose()
   }, [applyInspector])
-  const onInspectorWidthChange = useCallback((width: number) => {
+  const persistInspectorWidth = useCallback((width: number) => {
     const next = Math.min(1000, Math.max(240, Math.round(width)))
+    layoutSnap.current = commitShellLayoutSnap(layoutSnap.current, { inspectorWidth: next })
     setInspectorWidth(next)
     try {
       localStorage.setItem('cordis.inspector.width', String(next))
@@ -478,15 +472,18 @@ function Shell(props: SlotProps) {
       /* ignore */
     }
   }, [])
+  const onInspectorWidthChange = useCallback((width: number) => {
+    endColumnResizeRef.current({ inspector: width })
+  }, [])
   const activeModule = moduleIdFromPath(location.pathname, pluginModules)
   useEffect(() => {
     const onWidth = (event: Event) => {
       const n = (event as CustomEvent<number>).detail
-      if (typeof n === 'number' && Number.isFinite(n)) onInspectorWidthChange(n)
+      if (typeof n === 'number' && Number.isFinite(n)) persistInspectorWidth(n)
     }
     window.addEventListener('biu:inspector-width', onWidth)
     return () => window.removeEventListener('biu:inspector-width', onWidth)
-  }, [onInspectorWidthChange])
+  }, [persistInspectorWidth])
   useEffect(() => {
     const persist = (next: boolean) => applyInspector(next)
     const onOpen = () => persist(true)
@@ -557,28 +554,58 @@ function Shell(props: SlotProps) {
     inspectorOpen: inspectorVisible,
     inspectorWidth,
   })
-  const layoutSnap = useRef({
-    leftPane: true,
-    inspectorVisible: false,
-    inspectorWidth: 320,
-    sidebarWidth: SIDEBAR_DEFAULT,
-    sidebarCollapsed: false,
-  })
-  layoutSnap.current = { leftPane, inspectorVisible, inspectorWidth, sidebarWidth, sidebarCollapsed }
+  layoutSnap.current.leftPane = leftPane
   const paintedCols = useRef({ left: shellColumns.left, inspector: shellColumns.inspector })
   if (!columnResizing) paintedCols.current = { left: shellColumns.left, inspector: shellColumns.inspector }
   const dragPaintRaf = useRef(0)
   const dragPaintPending = useRef<{ sidebar?: number; inspector?: number }>({})
-  const paintLiveLayout = useCallback((patch: { inspectorOpen?: boolean; sidebarCollapsed?: boolean; sidebarWidth?: number }) => {
+  const applyPendingColumnDrag = useCallback((patch?: { sidebar?: number; inspector?: number }) => {
+    if (patch) Object.assign(dragPaintPending.current, patch)
+    const pending = dragPaintPending.current
+    const hasPending = pending.sidebar != null || pending.inspector != null
+    dragPaintPending.current = {}
+    if (!hasPending) return paintedCols.current
     const snap = layoutSnap.current
-    const inspectorOpen = patch.inspectorOpen ?? snap.inspectorVisible
-    const sidebarCollapsed = patch.sidebarCollapsed ?? snap.sidebarCollapsed
-    const width = patch.sidebarWidth ?? snap.sidebarWidth
     const cols = allocateShellColumns({
       viewportWidth: window.innerWidth,
       leftPane: snap.leftPane,
-      leftWidth: snap.leftPane ? (sidebarCollapsed ? 0 : width) : undefined,
-      inspectorOpen,
+      leftWidth: snap.leftPane ? (pending.sidebar ?? (snap.sidebarCollapsed ? 0 : snap.sidebarWidth)) : undefined,
+      inspectorOpen: snap.inspectorVisible,
+      inspectorWidth: pending.inspector ?? snap.inspectorWidth,
+    })
+    paintedCols.current = { left: cols.left, inspector: cols.inspector }
+    applyShellColumnCssVars(shellRef.current, cols)
+    return paintedCols.current
+  }, [])
+  const flushColumnDrag = useCallback((patch?: { sidebar?: number; inspector?: number }) => {
+    if (dragPaintRaf.current) {
+      window.cancelAnimationFrame(dragPaintRaf.current)
+      dragPaintRaf.current = 0
+    }
+    return applyPendingColumnDrag(patch)
+  }, [applyPendingColumnDrag])
+  const endColumnResize = useCallback((patch?: { sidebar?: number; inspector?: number }) => {
+    const axis = columnDragAxisRef.current
+    const cols = flushColumnDrag(patch)
+    if (patch?.sidebar != null || axis === 'sidebar') {
+      persistSidebar(cols.left === 0 ? sidebarWidthRef.current : cols.left, cols.left === 0)
+    }
+    if (patch?.inspector != null || axis === 'inspector') {
+      persistInspectorWidth(cols.inspector)
+    }
+    columnDragAxisRef.current = null
+    columnResizingRef.current = false
+    setColumnResizing(false)
+  }, [flushColumnDrag, persistInspectorWidth, persistSidebar])
+  endColumnResizeRef.current = endColumnResize
+  const paintLiveLayout = useCallback((patch: { inspectorOpen?: boolean; sidebarCollapsed?: boolean; sidebarWidth?: number }) => {
+    const snap = commitShellLayoutSnap(layoutSnap.current, patch)
+    layoutSnap.current = snap
+    const cols = allocateShellColumns({
+      viewportWidth: window.innerWidth,
+      leftPane: snap.leftPane,
+      leftWidth: snap.leftPane ? (snap.sidebarCollapsed ? 0 : snap.sidebarWidth) : undefined,
+      inspectorOpen: snap.inspectorVisible,
       inspectorWidth: snap.inspectorWidth,
     })
     paintedCols.current = { left: cols.left, inspector: cols.inspector }
@@ -592,19 +619,37 @@ function Shell(props: SlotProps) {
     if (dragPaintRaf.current) return
     dragPaintRaf.current = window.requestAnimationFrame(() => {
       dragPaintRaf.current = 0
-      const pending = dragPaintPending.current
-      dragPaintPending.current = {}
-      const snap = layoutSnap.current
-      const cols = allocateShellColumns({
-        viewportWidth: window.innerWidth,
-        leftPane: snap.leftPane,
-        leftWidth: snap.leftPane ? (pending.sidebar ?? (snap.sidebarCollapsed ? 0 : snap.sidebarWidth)) : undefined,
-        inspectorOpen: snap.inspectorVisible,
-        inspectorWidth: pending.inspector ?? snap.inspectorWidth,
-      })
-      paintedCols.current = { left: cols.left, inspector: cols.inspector }
-      applyShellColumnCssVars(shellRef.current, cols)
+      applyPendingColumnDrag()
     })
+  }, [applyPendingColumnDrag])
+  useEffect(() => {
+    const onDown = (event: PointerEvent) => {
+      const target = event.target
+      if (!(target instanceof Element)) return
+      if (target.closest('.sidebar-resize')) {
+        columnDragAxisRef.current = 'sidebar'
+        columnResizingRef.current = true
+        setColumnResizing(true)
+        return
+      }
+      if (target.closest('.inspector-resize')) {
+        columnDragAxisRef.current = 'inspector'
+        columnResizingRef.current = true
+        setColumnResizing(true)
+      }
+    }
+    const onUp = () => {
+      if (!columnResizingRef.current && !columnDragAxisRef.current) return
+      endColumnResizeRef.current()
+    }
+    window.addEventListener('pointerdown', onDown)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
+    return () => {
+      window.removeEventListener('pointerdown', onDown)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
+    }
   }, [])
   const onSidebarWidthLive = useCallback((width: number) => paintColumnDrag({ sidebar: width }), [paintColumnDrag])
   const onInspectorWidthLive = useCallback((width: number) => paintColumnDrag({ inspector: width }), [paintColumnDrag])

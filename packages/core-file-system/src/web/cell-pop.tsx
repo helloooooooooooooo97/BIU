@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { HeadlessDismiss, HEADLESS_DISMISS_IGNORE } from '@biu/public-ui/headless-dismiss'
-import { overlayPortalRoot, overlayZ } from '@biu/public-ui/overlay-portal'
+import { HeadlessDismiss, HEADLESS_DISMISS_IGNORE } from '@biu/biu-ui/headless-dismiss'
+import { overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
 import type { FieldType } from '@biu/type-file-system'
 
 export function cellUsesPop(kind: FieldType, writable?: boolean) {
