@@ -157,6 +157,7 @@
   --brand-corner-clearance: var(--biu-space-5);
   --biu-chat-gap-turn: var(--biu-space-6);
   --biu-pad-page: 80px;
+  --biu-pad-chip-x: var(--biu-space-2);
   --biu-chat-pad-x: var(--biu-space-3);
   --biu-chat-pad-y: var(--biu-space-2);
   --biu-chat-reply-pad-x: var(--biu-space-3);
@@ -1436,7 +1437,7 @@ body {
   border: 0;
   height: 22px;
   border-radius: var(--biu-radius-xl);
-  padding: 0 8px;
+  padding: 0 var(--biu-pad-chip-x);
   background: color-mix(in srgb, var(--biu-tag) 22%, transparent);
   color: var(--biu-tag);
   cursor: pointer;

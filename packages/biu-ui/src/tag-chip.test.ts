@@ -14,6 +14,7 @@ test('TagChip ships the tinted chip markup', () => {
   const src = readFileSync(resolve(import.meta.dirname, './tag-chip.tsx'), 'utf8')
   assert.match(src, /function TagChip/)
   assert.match(src, /className=\{\`biu-tag/)
+  assert.match(src, /padding:0 var\(--biu-pad-chip-x\)/)
   assert.match(src, /color-mix\(in srgb,var\(--biu-tag/)
   assert.match(src, /color:var\(--biu-color-text/)
   assert.match(src, /38%,transparent/)

@@ -288,6 +288,11 @@ test('settings lists search and pick shortcuts', () => {
   assert.match(chrome, /选区送到对话/)
 })
 
+test('chip horizontal padding is a global token shared with tags', () => {
+  const css = readFileSync(resolve(import.meta.dirname, '../../../../web/style.css'), 'utf8')
+  assert.match(css, /--biu-pad-chip-x: var\(--biu-space-2\)/)
+})
+
 test('settings nav omits routes, events, and about', () => {
   const shell = readFileSync(resolve(import.meta.dirname, './index.tsx'), 'utf8')
   assert.doesNotMatch(shell, /key: 'about'/)
