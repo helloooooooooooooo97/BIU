@@ -26,6 +26,17 @@ test('decorate merges cells; later layer wins; dispose restores', () => {
   assert.equal(ui.chrome('/plugins').cells?.name, undefined)
 })
 
+test('decorate merges DetailBar; later layer wins', () => {
+  const ctx = new Context()
+  const ui = new DatabaseUiService(ctx)
+  const First = () => null
+  const Second = () => null
+  ui.decorate('/pages', { DetailBar: First })
+  assert.equal(ui.chrome('/pages').DetailBar, First)
+  ui.decorate('/pages', { DetailBar: Second })
+  assert.equal(ui.chrome('/pages').DetailBar, Second)
+})
+
 test('decorate merges DetailTools; later layer wins', () => {
   const ctx = new Context()
   const ui = new DatabaseUiService(ctx)

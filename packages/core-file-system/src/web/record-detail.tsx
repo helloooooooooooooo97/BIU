@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type Dispatch, type SetStateAction } from 'react'
+import { useEffect, useRef, useState, type ReactNode, type Dispatch, type SetStateAction } from 'react'
 import type { CollectionChrome, FsDetailPane } from '@biu/type-file-system/ui'
 import type { CollectionSchema, DbRecord, FieldSpec } from '@biu/type-file-system'
 import { ChevronDownIcon, ChevronLeftIcon, ChevronUpIcon, HashtagIcon, ShareIcon } from '@heroicons/react/16/solid'
@@ -6,17 +6,17 @@ import { AnchorMenu, RecordEmojiBoard } from '@biu/biu-ui'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { contentFieldKey, fieldHasValue, formatField, resolveFieldType } from './fields.ts'
 import { LocalText } from './controls.tsx'
-import { FilePreview } from './fsdb-cells.tsx'
+import { FieldGlyph, FilePreview } from './fsdb-cells.tsx'
 import { PropertyRow } from './property-row.tsx'
 import { FacetPackEditor } from './schema-field.tsx'
-import { TableGlyph } from './nav-glyphs.tsx'
+import { idleTableIconKind } from './nav-glyphs.tsx'
 import { FACETS_COLLECTION_PATH } from './database-path.ts'
 import { normalizeRecordEmoji, recordPreviewEmoji } from './sidebar-preview.ts'
 import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, shouldLeaveContentForTitle, shouldLeaveTitleForContent, focusRecordTitleNear } from './title-content-nav.ts'
 import { HeadingOutline } from './heading-outline.tsx'
 import { PageBanner } from './page-banner.tsx'
 import { fieldPickAttrs, recordSourcePath } from './pick-dom.ts'
-import { dismissInspectorPaneMenu, reportInspectorPaneMenu } from './inspector-pane-menu.tsx'
+import { dismissInspectorPaneMenu } from './inspector-pane-menu.tsx'
 import { PaneConfigMenuItem } from './pane-more-menu.tsx'
 import { PageContentFailed, PageContentLoading } from './page-content-status.tsx'
 
@@ -75,10 +75,10 @@ function DetailTitleIcon({
             <span className="fsdb-record-emoji">{emoji}</span>
           ) : Icon ? (
             <span className="fsdb-record-mark is-lg">
-              <Icon record={record} size={64} />
+              <Icon record={record} size={78} />
             </span>
           ) : (
-            <TableGlyph icon={tableIcon} className="size-16" />
+            <span className="fsdb-record-mark is-lg" data-icon={idleTableIconKind(tableIcon)} />
           )}
         </span>
       </span>
@@ -107,10 +107,10 @@ function DetailTitleIcon({
           <span className="fsdb-record-emoji">{emoji}</span>
         ) : Icon ? (
           <span className="fsdb-record-mark is-lg">
-            <Icon record={record} size={64} />
+            <Icon record={record} size={78} />
           </span>
         ) : (
-          <TableGlyph icon={tableIcon} className="size-16" />
+          <span className="fsdb-record-mark is-lg" data-icon={idleTableIconKind(tableIcon)} />
         )}
       </button>
       {open && anchor ? (
@@ -239,6 +239,7 @@ export function RecordDetail({
   onDelete,
   readOnly = false,
   inspectorPaneId,
+  visibleColumns,
 }: {
   selected: DbRecord
   schema: CollectionSchema
@@ -267,6 +268,7 @@ export function RecordDetail({
   onDelete?: () => void
   readOnly?: boolean
   inspectorPaneId?: string
+  visibleColumns?: string[]
 }) {
   const title = labelOf(selected)
   const recordPath = recordSourcePath(collectionPath, selected.id)
@@ -288,33 +290,31 @@ export function RecordDetail({
     return () => window.removeEventListener(FOCUS_RECORD_TITLE, onTitle)
   }, [])
 
-  const deleteRef = useRef(onDelete)
-  deleteRef.current = onDelete
-  const selectedRef = useRef(selected)
-  selectedRef.current = selected
-  const shareRef = useRef(share)
-  shareRef.current = share
-  useLayoutEffect(() => {
-    if (!inspectorPaneId) return
-    const row = selectedRef.current
-    reportInspectorPaneMenu(
-      inspectorPaneId,
-      <RecordPaneMenu
-        record={row}
-        Tools={readOnly ? undefined : chrome?.DetailTools}
-        onDelete={!readOnly && deleteRef.current ? () => deleteRef.current?.() : undefined}
-        deleteLabel={collectionPath === '/pages' ? '删除页面' : '删除记录'}
-        share={shareRef.current}
-        shareLabel={collectionPath === '/pages' ? '分享页面' : '分享记录'}
-      />,
-    )
-    return () => reportInspectorPaneMenu(inspectorPaneId, null)
-  }, [chrome?.DetailTools, collectionPath, inspectorPaneId, readOnly, selected.id])
+  const paneMenu = (
+    <RecordPaneMenu
+      record={selected}
+      Tools={readOnly ? undefined : chrome?.DetailTools}
+      onDelete={!readOnly && onDelete ? onDelete : undefined}
+      deleteLabel={collectionPath === '/pages' ? '删除页面' : '删除记录'}
+      share={share}
+      shareLabel={collectionPath === '/pages' ? '分享页面' : '分享记录'}
+    />
+  )
 
   const [facetOpen, setFacetOpen] = useState(false)
+  const [visiblePropertyKeys, setVisiblePropertyKeys] = useState<string[] | null>(null)
+  const [outlineOn, setOutlineOn] = useState(headingOutline)
+  const visibleColumnsKey = visibleColumns?.join('\0') ?? ''
   useEffect(() => {
     setFacetOpen(false)
-  }, [selected.id])
+    setVisiblePropertyKeys(visibleColumnsKey ? visibleColumnsKey.split('\0') : null)
+    setOutlineOn(headingOutline)
+  }, [selected.id, headingOutline, visibleColumnsKey])
+  useEffect(() => {
+    const onOutline = () => setOutlineOn((prev) => !prev)
+    window.addEventListener('biu:page-outline', onOutline)
+    return () => window.removeEventListener('biu:page-outline', onOutline)
+  }, [])
 
   const propertyEntries = Object.entries(schema.fields)
     .filter(([key, field]) => {
@@ -325,6 +325,7 @@ export function RecordDetail({
       const kind = resolveFieldType(field)
       if (kind === 'facet' && !field.writable) return false
       if (field.computed && !fieldHasValue(field, selected[key])) return false
+      if (visiblePropertyKeys && !visiblePropertyKeys.includes(key)) return false
       return true
     })
     .sort(([keyA, a], [keyB, b]) => {
@@ -400,16 +401,55 @@ export function RecordDetail({
                 )}
                 </div>
                 </div>
+                {chrome?.DetailBar ? (
+                  <chrome.DetailBar
+                    record={selected}
+                    schema={schema}
+                    collectionPath={collectionPath}
+                    visiblePropertyKeys={visiblePropertyKeys ?? undefined}
+                    onVisiblePropertyKeys={setVisiblePropertyKeys}
+                    onRetry={onRetryBody}
+                    configMenu={paneMenu}
+                  />
+                ) : null}
                 <div className="fsdb-detail-aside">
-                  <div className="fsdb-prop" {...propPick('id', { type: 'string', label: 'ID' }, selected.id)}>
-                    <span>
+                  <table className="tasks-table is-wrap">
+                    <thead>
+                      <tr>
+                        <th>
+                          <span className="tasks-th">
+                            <span className="tasks-th-ico">
+                              <FieldGlyph kind="string" />
+                            </span>
+                            属性名
+                          </span>
+                        </th>
+                        <th>
+                          <span className="tasks-th">
+                            <span className="tasks-th-ico">
+                              <FieldGlyph kind="string" />
+                            </span>
+                            属性值
+                          </span>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                  {!visiblePropertyKeys || visiblePropertyKeys.includes('id') ? (
+                  <tr className="fsdb-prop" {...propPick('id', { type: 'string', label: 'ID' }, selected.id)}>
+                    <td>
+                    <span className="fsdb-proprow-k">
                       <HashtagIcon aria-hidden className="size-[14px]" />
                       ID
                     </span>
+                    </td>
+                    <td>
                     <span className="fsdb-detail-id" title={selected.id}>
                       {selected.id}
                     </span>
-                  </div>
+                    </td>
+                  </tr>
+                  ) : null}
                   {propertyEntries.map(([key, field]) => {
                     const kind = resolveFieldType(field)
                     const facet = kind === 'facet'
@@ -418,6 +458,7 @@ export function RecordDetail({
                     return (
                       <PropertyRow
                         key={key}
+                        table
                         field={field}
                         fieldKey={key}
                         collapsible={fold}
@@ -436,10 +477,12 @@ export function RecordDetail({
                     )
                   })}
                   {actionProperty ? (
-                    <PropertyRow field={{ type: 'action', label: '动作' }} fieldKey="actions">
+                    <PropertyRow table field={{ type: 'action', label: '动作' }} fieldKey="actions">
                       <div className="fsdb-prop-val is-actions">{actionProperty}</div>
                     </PropertyRow>
                   ) : null}
+                    </tbody>
+                  </table>
                 </div>
                 {renderDetailPanes(chrome?.panes?.filter((pane) => pane.place === 'properties'), selected, onOpenRecord, 'fsdb-detail-prop-panes')}
                 {contentFieldKey(schema) && schema.fields[contentFieldKey(schema)!] ? (() => {
@@ -521,7 +564,7 @@ export function RecordDetail({
               </div>
             </div>
           </div>
-          <HeadingOutline enabled={headingOutline} />
+          <HeadingOutline enabled={outlineOn} />
           {onPrev || onNext ? (
             <nav className="fsdb-detail-float-nav" aria-label="按视图顺序切换记录">
               <button

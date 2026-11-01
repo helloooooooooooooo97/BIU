@@ -20,6 +20,7 @@ class FakeDatabaseUi extends Service implements DatabaseUi {
     }
     assert.equal(chrome.Content, PageEditor)
     assert.ok(chrome.DetailTools)
+    assert.ok(chrome.DetailBar)
     return { dispose() {} }
   }
   registerView(path: string, view: CollectionViewType) {

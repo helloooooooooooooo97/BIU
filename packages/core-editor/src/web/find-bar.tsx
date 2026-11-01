@@ -51,7 +51,7 @@ export function FindBar({
 
   useEffect(() => {
     if (host === undefined) return
-    input.current?.focus()
+    input.current?.focus({ preventScroll: true })
     input.current?.select()
   }, [host])
 

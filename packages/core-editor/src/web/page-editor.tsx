@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { HeadlessPopover } from '@biu/biu-ui'
 import { SourceEditor, type SourceEditorHandle } from './source-editor.tsx'
-import { usePageSourceMode } from './source-mode.ts'
+import { usePagePresentMode } from './source-mode.ts'
 import { ArrowPathIcon, ChatBubbleLeftRightIcon } from '@heroicons/react/16/solid'
 import { EditorContent, useEditor } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
@@ -18,6 +18,10 @@ import { bindEditorTextHost, getPick } from '@biu/core-pick/web'
 import { markdownLocusFromElement, markdownLocusFromSelection } from './markdown-locus.ts'
 import { FindBar, isFindHotkey } from './find-bar.tsx'
 import { applyEditorFind } from './find-plugin.ts'
+import { applyStoredBlockIds, markdownWithBlockIds, stripBlockIdStamps } from './block-id.ts'
+import { getLivePageEditor, setLivePageEditor } from './page-live-editor.ts'
+import { PAGE_FIND_OPEN_EVENT, PAGE_INSERT_EVENT } from './page-view-state.ts'
+import { PageBlocksTable } from './page-blocks-table.tsx'
 import {
   INK_TONES,
   WASH_TONES,
@@ -54,6 +58,16 @@ function jumpToPending(editor: Editor, markdown: string, recordId: string, force
   }
   run()
   requestAnimationFrame(run)
+}
+
+function persistEditorMarkdown(editor: Editor) {
+  return markdownWithBlockIds(editor)
+}
+
+function hydrateEditorMarkdown(editor: Editor, raw: string) {
+  const { text, ids } = stripBlockIdStamps(raw)
+  editor.commands.setContent(text, { contentType: 'markdown', emitUpdate: false })
+  applyStoredBlockIds(editor, ids)
 }
 
 function asMarkdown(value: unknown) {
@@ -348,7 +362,8 @@ function PageEditorFailed({ onRetry }: { onRetry?: () => void }) {
 }
 
 export function PageEditor({ record, value, writable, onChange, path, status = 'ready', onRetry }: FsContentProps) {
-  const source = usePageSourceMode(record.id)
+  const present = usePagePresentMode(record.id)
+  const source = present === 'source'
   const saved = useRef(asMarkdown(value))
   const sourceMode = useRef(source)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -423,7 +438,7 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
         timer.current = setTimeout(() => {
           queueMicrotask(() => {
             if (current.isDestroyed || writableRef.current === false) return
-            const next = current.getMarkdown()
+            const next = persistEditorMarkdown(current)
             if (next === saved.current) return
             saved.current = next
             onChange?.(next)
@@ -436,7 +451,7 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
         if (timer.current) clearTimeout(timer.current)
         queueMicrotask(() => {
           if (current.isDestroyed || writableRef.current === false) return
-          const next = current.getMarkdown()
+          const next = persistEditorMarkdown(current)
           if (next === saved.current) return
           saved.current = next
           onChange?.(next)
@@ -448,6 +463,32 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
   editorRef.current = editor ?? null
 
   useEffect(() => {
+    if (!editor || editor.isDestroyed) return
+    setLivePageEditor(editor)
+    return () => {
+      if (getLivePageEditor() === editor) setLivePageEditor(null)
+    }
+  }, [editor])
+
+  useEffect(() => {
+    const onFind = (event: Event) => {
+      const id = (event as CustomEvent<{ recordId?: string }>).detail?.recordId
+      if (id && id !== record.id) return
+      setFindOpen(true)
+    }
+    const onInsert = () => {
+      if (!editor || editor.isDestroyed || writableRef.current === false) return
+      editor.chain().focus('end').insertContent('/').run()
+    }
+    window.addEventListener(PAGE_FIND_OPEN_EVENT, onFind)
+    window.addEventListener(PAGE_INSERT_EVENT, onInsert)
+    return () => {
+      window.removeEventListener(PAGE_FIND_OPEN_EVENT, onFind)
+      window.removeEventListener(PAGE_INSERT_EVENT, onInsert)
+    }
+  }, [editor, record.id])
+
+  useEffect(() => {
     hydratedId.current = null
   }, [record.id])
 
@@ -456,20 +497,22 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
     const md = asMarkdown(value)
     if (hydratedId.current !== record.id) {
       if (status === 'loading' || status === 'failed') return
-      saved.current = md
       hydratedId.current = record.id
-      editor.commands.setContent(md, { contentType: 'markdown', emitUpdate: false })
-      jumpToPending(editor, md, record.id, true)
+      hydrateEditorMarkdown(editor, md)
+      const stamped = persistEditorMarkdown(editor)
+      saved.current = stamped
+      if (stamped !== md) onChange?.(stamped)
+      jumpToPending(editor, stripBlockIdStamps(stamped).text, record.id, true)
       return
     }
     if (md === saved.current) {
-      jumpToPending(editor, md, record.id)
+      jumpToPending(editor, stripBlockIdStamps(md).text, record.id)
       return
     }
     const paint = (next: string) => {
-      saved.current = next
-      editor.commands.setContent(next, { contentType: 'markdown', emitUpdate: false })
-      jumpToPending(editor, next, record.id, true)
+      hydrateEditorMarkdown(editor, next)
+      saved.current = persistEditorMarkdown(editor)
+      jumpToPending(editor, stripBlockIdStamps(saved.current).text, record.id, true)
     }
     const canPaint = () =>
       shouldApplyRemoteMarkdown({
@@ -517,7 +560,7 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
     if (!timer.current) return
     clearTimeout(timer.current)
     timer.current = null
-    const next = editor.getMarkdown()
+    const next = persistEditorMarkdown(editor)
     if (next === saved.current) return
     saved.current = next
     onChange?.(next)
@@ -529,9 +572,8 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
     sourceMode.current = source
     if (source || !leavingSource) return
     const md = asMarkdown(value)
-    saved.current = md
-    if (md === editor.getMarkdown()) return
-    editor.commands.setContent(md, { contentType: 'markdown', emitUpdate: false })
+    hydrateEditorMarkdown(editor, md)
+    saved.current = persistEditorMarkdown(editor)
   }, [source, editor, value])
 
   useEffect(() => {
@@ -693,7 +735,7 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
 
   if (source) {
     return (
-      <div className="page-editor is-source" tabIndex={-1} onMouseDown={onEditorBlankMouseDown} onKeyDownCapture={onEditorHotkey}>
+      <div className="page-editor is-source" data-page-record={record.id} tabIndex={-1} onMouseDown={onEditorBlankMouseDown} onKeyDownCapture={onEditorHotkey}>
         {findBar}
         <SourceEditor
           ref={sourceFind}
@@ -710,12 +752,13 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
   }
 
   return (
-    <div className="page-editor" tabIndex={-1} onMouseDown={onEditorBlankMouseDown} onKeyDownCapture={onEditorHotkey}>
+    <div className={`page-editor${present === 'outline' ? ' is-outline' : ''}${present === 'table' ? ' is-table' : ''}`} data-page-record={record.id} tabIndex={-1} onMouseDown={onEditorBlankMouseDown} onKeyDownCapture={onEditorHotkey}>
       {findBar}
+      {present === 'table' ? <PageBlocksTable editor={editor} recordId={record.id} /> : null}
       <EditorContent editor={editor} />
-      {writable !== false ? <PageBlockHandle editor={editor} /> : null}
-      {writable !== false ? <Bubble editor={editor} onSendChat={sendToChat} /> : null}
-      {writable !== false ? <TableBar editor={editor} /> : null}
+      {present !== 'table' && writable !== false ? <PageBlockHandle editor={editor} /> : null}
+      {present !== 'table' && writable !== false ? <Bubble editor={editor} onSendChat={sendToChat} /> : null}
+      {present !== 'table' && writable !== false ? <TableBar editor={editor} /> : null}
     </div>
   )
 }

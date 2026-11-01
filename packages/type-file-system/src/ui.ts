@@ -1,4 +1,4 @@
-import type { ComponentType } from 'react'
+import type { ComponentType, ReactNode } from 'react'
 import type { CollectionActionInfo, CollectionInfo, CollectionSchema, DbRecord, FieldSpec } from './index.ts'
 
 /** 单元格：不传则 File System 按 FieldSpec.type 默认画。 */
@@ -48,6 +48,8 @@ export type CollectionChrome = {
   Actions?: ComponentType<FsActionsProps>
   /** 详情侧栏「⋯」菜单里的操作（例如源码模式）。 */
   DetailTools?: ComponentType<{ record: DbRecord; onDone?: () => void }>
+  /** 标题/属性下方、正文上方的页面操作栏。 */
+  DetailBar?: ComponentType<FsDetailBarProps>
   /** 记录独立图标属性。有 emoji 用 emoji；不传则详情/侧栏/面包屑用集合 glyph。 */
   Icon?: ComponentType<{ record: DbRecord; size?: number }>
   Title?: ComponentType<{ record: DbRecord; label: string }>
@@ -68,6 +70,18 @@ export type CollectionChrome = {
 export type FsOpenRow =
   | { kind: 'table'; path: string; viewId?: string }
   | { kind: 'record'; recordId: string; collection?: string }
+
+export type FsDetailBarProps = {
+  record: DbRecord
+  schema?: CollectionSchema
+  collectionPath?: string
+  hiddenPropertyKeys?: string[]
+  onHiddenPropertyKeys?: (keys: string[]) => void
+  visiblePropertyKeys?: string[]
+  onVisiblePropertyKeys?: (keys: string[]) => void
+  onRetry?: () => void
+  configMenu?: ReactNode
+}
 
 export type FsContentStatus = 'loading' | 'ready' | 'failed'
 

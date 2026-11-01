@@ -14,6 +14,9 @@ import { headingSkin } from './heading-skin.ts'
 import { pageBlock } from './page-block.ts'
 import { slideExtensions } from './slide.ts'
 import { pageFind } from './find-plugin.ts'
+import { pageBlockIds } from './block-id.ts'
+import { pageFilter } from './page-filter-plugin.ts'
+import { pageOutline } from './page-outline-plugin.ts'
 import { pageAgentEdit } from './agent-edit-plugin.ts'
 import { slashCommand } from './slash.ts'
 import { pageMention } from './mention.ts'
@@ -225,6 +228,9 @@ export function pageEditorExtensions() {
     headingSkin,
     ...slideExtensions,
     pageBlock,
+    pageBlockIds,
+    pageFilter,
+    pageOutline,
     pageFind,
     pageAgentEdit,
     slashCommand,

@@ -5613,6 +5613,7 @@ export function CollectionBrowser({
           collectionPath={collectionPath}
           recordKind={recordKind}
           inspectorPaneId={inspectorPaneId}
+          visibleColumns={columnKeys.length ? columnKeys : undefined}
         />
         </Suspense>
       ) : null}
