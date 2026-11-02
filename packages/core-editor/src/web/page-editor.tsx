@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { HeadlessPopover } from '@biu/biu-ui'
 import { SourceEditor, type SourceEditorHandle } from './source-editor.tsx'
+import { restorePageScroll } from './page-scroll-pin.ts'
 import { usePagePresentMode } from './source-mode.ts'
 import { ArrowPathIcon, ChatBubbleLeftRightIcon } from '@heroicons/react/16/solid'
 import { EditorContent, useEditor } from '@tiptap/react'
@@ -11,7 +12,7 @@ import type { FsContentProps } from '@biu/type-file-system/ui'
 import { pageEditorExtensions } from './kit.ts'
 import { PageBlockHandle } from './page-block-handle.tsx'
 import { editorHostIsLive } from './editor-live.ts'
-import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, handleContentTitleNav, shouldLeaveContentForTitle, focusRecordTitleNear, isDocStartSelection } from './title-content-nav.ts'
+import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, handleContentTitleNav, shouldLeaveContentForTitle, focusRecordTitleNear, isDocStartSelection, atFirstVisibleLine } from './title-content-nav.ts'
 import { tryContentJump, contentJumpForRecord } from './content-jump.ts'
 import { CONTENT_JUMP_EVENT } from '@biu/type-file-system'
 import { bindEditorTextHost, getPick } from '@biu/core-pick/web'
@@ -373,6 +374,7 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
   valueRef.current = value
   const hydratedId = useRef<string | null>(null)
   const sourceFind = useRef<SourceEditorHandle>(null)
+  const hostRef = useRef<HTMLDivElement>(null)
   const editorRef = useRef<Editor | null>(null)
   const pathRef = useRef(path)
   pathRef.current = path
@@ -576,6 +578,15 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
     saved.current = persistEditorMarkdown(editor)
   }, [source, editor, value])
 
+  useLayoutEffect(() => {
+    restorePageScroll()
+    const id = requestAnimationFrame(() => {
+      restorePageScroll()
+      requestAnimationFrame(restorePageScroll)
+    })
+    return () => cancelAnimationFrame(id)
+  }, [source, present])
+
   useEffect(() => {
     if (!editor || editor.isDestroyed) return
     editor.setEditable(writable !== false && status !== 'loading' && status !== 'failed')
@@ -680,16 +691,21 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
       }
       return
     }
+    if (!source && editor && !editor.isDestroyed && handleContentTitleNav(editor.view, event.nativeEvent)) {
+      event.stopPropagation()
+      return
+    }
     const atDocStart = source
       ? Boolean(sourceFind.current?.isAtStart())
       : Boolean(
           editor &&
             !editor.isDestroyed &&
-            isDocStartSelection(
+            (isDocStartSelection(
               editor.state.selection.from,
               editor.state.selection.empty,
               Selection.atStart(editor.state.doc).from,
-            ),
+            ) ||
+              (event.key === 'ArrowUp' && atFirstVisibleLine(editor.view))),
         )
     const nested = Boolean(
       !source && editor && !editor.isDestroyed && editor.state.selection.$from.depth > 1,
@@ -707,6 +723,7 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
     if (event.target !== event.currentTarget) return
     event.preventDefault()
     if (status === 'loading' || status === 'failed') return
+    if (present === 'table') return
     if (!source && writable !== false && editor && !editor.isDestroyed) {
       editor.commands.focus('end')
       return
@@ -733,32 +750,39 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
   if (status === 'failed') return <PageEditorFailed onRetry={onRetry} />
   if (!editor) return <div className="page-editor" data-testid="page-editor-pending" />
 
-  if (source) {
-    return (
-      <div className="page-editor is-source" data-page-record={record.id} tabIndex={-1} onMouseDown={onEditorBlankMouseDown} onKeyDownCapture={onEditorHotkey}>
-        {findBar}
-        <SourceEditor
-          ref={sourceFind}
-          value={asMarkdown(value)}
-          writable={writable !== false && status === 'ready'}
-          onChange={(next) => {
-            if (next === saved.current) return
-            saved.current = next
-            onChange?.(next)
-          }}
-        />
-      </div>
-    )
-  }
-
   return (
-    <div className={`page-editor${present === 'outline' ? ' is-outline' : ''}${present === 'table' ? ' is-table' : ''}`} data-page-record={record.id} tabIndex={-1} onMouseDown={onEditorBlankMouseDown} onKeyDownCapture={onEditorHotkey}>
+    <div
+      ref={hostRef}
+      className={`page-editor${source ? ' is-source' : ''}${present === 'outline' ? ' is-outline' : ''}${present === 'table' ? ' is-table' : ''}`}
+      data-page-record={record.id}
+      tabIndex={-1}
+      onMouseDown={onEditorBlankMouseDown}
+      onKeyDownCapture={onEditorHotkey}
+    >
       {findBar}
-      {present === 'table' ? <PageBlocksTable editor={editor} recordId={record.id} /> : null}
-      <EditorContent editor={editor} />
-      {present !== 'table' && writable !== false ? <PageBlockHandle editor={editor} /> : null}
-      {present !== 'table' && writable !== false ? <Bubble editor={editor} onSendChat={sendToChat} /> : null}
-      {present !== 'table' && writable !== false ? <TableBar editor={editor} /> : null}
+      <div hidden={!source}>
+        {source ? (
+          <SourceEditor
+            ref={sourceFind}
+            value={asMarkdown(value)}
+            writable={writable !== false && status === 'ready'}
+            onChange={(next) => {
+              if (next === saved.current) return
+              saved.current = next
+              onChange?.(next)
+            }}
+          />
+        ) : null}
+      </div>
+      <div hidden={source}>
+        {present === 'table' ? <PageBlocksTable editor={editor} recordId={record.id} /> : null}
+        <div className="page-editor-doc" hidden={present === 'table'}>
+          <EditorContent editor={editor} />
+        </div>
+        {present !== 'table' && writable !== false ? <PageBlockHandle editor={editor} /> : null}
+        {present !== 'table' && writable !== false ? <Bubble editor={editor} onSendChat={sendToChat} /> : null}
+        {present !== 'table' && writable !== false ? <TableBar editor={editor} /> : null}
+      </div>
     </div>
   )
 }

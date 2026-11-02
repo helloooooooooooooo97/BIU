@@ -18,6 +18,6 @@
 :::pageBlock {kind=browser plugin=page-browser}
 {
   "url": "https://example.com",
-  "height": 420
+  "height": 640
 }
 :::

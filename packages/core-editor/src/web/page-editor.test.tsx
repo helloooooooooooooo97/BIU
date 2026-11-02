@@ -149,6 +149,8 @@ test('page editor applies later value when it is not focused', async () => {
   assert.match(src, /md === saved\.current/)
   assert.match(src, /leavingSource/)
   assert.match(src, /sourceMode\.current/)
+  assert.match(src, /restorePageScroll/)
+  assert.match(src, /hidden=\{!source\}/)
 })
 
 test('page editor shows a spinner and is not editable while content loads', async () => {

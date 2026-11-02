@@ -1,4 +1,4 @@
-import { useState, type MouseEvent } from 'react'
+import { useState, type MouseEvent, type ReactNode } from 'react'
 import { HeadlessPopover } from '@biu/biu-ui'
 
 export type LayoutPreset<Id extends string = string> = {
@@ -19,34 +19,39 @@ export function LayoutGlyph({
   rows?: number[]
   className?: string
 }) {
-  const gap = 1.6
-  if (rows && rows.length > 1) {
-    const total = rows.reduce((sum, item) => sum + item, 0)
-    let y = 1
-    const inner = 18 - gap * (rows.length - 1)
-    return (
-      <svg viewBox="0 0 28 20" width="28" height="20" className={className} aria-hidden>
-        {rows.map((weight, i) => {
-          const h = (inner * weight) / total
-          const el = <rect key={i} x="1" y={y} width="26" height={h} rx="1.6" fill="none" stroke="currentColor" strokeWidth="1.4" />
-          y += h + gap
-          return el
-        })}
-      </svg>
-    )
-  }
-  const cols = columns.length ? columns : [1]
-  const total = cols.reduce((sum, item) => sum + item, 0)
-  let x = 1
-  const inner = 26 - gap * (cols.length - 1)
+  const pad = 2
+  const gap = 2
+  const x0 = pad
+  const y0 = pad
+  const innerW = 24 - pad * 2
+  const innerH = 16 - pad * 2
+  const cells =
+    rows && rows.length > 1
+      ? (() => {
+          const total = rows.reduce((sum, item) => sum + item, 0)
+          let y = y0
+          return rows.map((weight, i) => {
+            const h = (innerH - gap * (rows.length - 1)) * (weight / total)
+            const el = <rect key={i} x={x0} y={y} width={innerW} height={h} rx="1.5" />
+            y += h + gap
+            return el
+          })
+        })()
+      : (() => {
+          const cols = columns.length ? columns : [1]
+          const total = cols.reduce((sum, item) => sum + item, 0)
+          let x = x0
+          return cols.map((weight, i) => {
+            const w = (innerW - gap * (cols.length - 1)) * (weight / total)
+            const el = <rect key={i} x={x} y={y0} width={w} height={innerH} rx="1.5" />
+            x += w + gap
+            return el
+          })
+        })()
   return (
-    <svg viewBox="0 0 28 20" width="28" height="20" className={className} aria-hidden>
-      {cols.map((weight, i) => {
-        const w = (inner * weight) / total
-        const el = <rect key={i} x={x} y="1" width={w} height="18" rx="1.6" fill="none" stroke="currentColor" strokeWidth="1.4" />
-        x += w + gap
-        return el
-      })}
+    <svg viewBox="0 0 24 16" width="24" height="16" className={className} aria-hidden fill="currentColor">
+      <rect x="0.75" y="0.75" width="22.5" height="14.5" rx="3" fill="none" stroke="currentColor" strokeWidth="1.25" opacity="0.4" />
+      <g opacity="0.78">{cells}</g>
     </svg>
   )
 }
@@ -62,12 +67,22 @@ export function LayoutPicker<Id extends string>({
   onChange,
   disabled,
   label = '调整布局',
+  side = 'bottom',
+  sideOffset = 8,
+  alignOffset = 0,
+  avoidCollisions = true,
+  icon,
 }: {
   value: Id
   items: readonly LayoutPreset<Id>[]
   onChange: (id: Id) => void
   disabled?: boolean
   label?: string
+  side?: 'top' | 'bottom' | 'left' | 'right'
+  sideOffset?: number
+  alignOffset?: number
+  avoidCollisions?: boolean
+  icon?: ReactNode
 }) {
   const [open, setOpen] = useState(false)
   const current = items.find((item) => item.id === value) ?? items[0]
@@ -77,8 +92,11 @@ export function LayoutPicker<Id extends string>({
     <HeadlessPopover
       open={open}
       onOpenChange={setOpen}
-      side="bottom"
+      side={side}
       align="start"
+      sideOffset={sideOffset}
+      alignOffset={alignOffset}
+      avoidCollisions={avoidCollisions}
       trigger={
         <button
           type="button"
@@ -91,7 +109,7 @@ export function LayoutPicker<Id extends string>({
           data-testid="layout-picker"
           onMouseDown={hold}
         >
-          <LayoutGlyph columns={current.columns} rows={current.rows} className="layout-picker-glyph" />
+          {icon ?? <LayoutGlyph columns={current.columns} rows={current.rows} className="layout-picker-glyph" />}
         </button>
       }
     >

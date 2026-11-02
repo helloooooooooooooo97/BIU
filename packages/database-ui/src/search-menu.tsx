@@ -3,7 +3,7 @@ import { AnchorMenu } from '@biu/biu-ui'
 
 const STYLE_ID = 'biu-database-ui-search'
 const CSS = `
-.db-search-menu{box-sizing:border-box;padding:6px;background:var(--biu-color-bg-subtle);border:0;border-radius:10px;box-shadow:var(--biu-shadow-md);display:flex;flex-direction:column;gap:4px;font-size:var(--biu-font-size-4)}
+.db-search-menu{box-sizing:border-box;padding:6px;background:var(--biu-color-bg-popover);border:var(--biu-stroke-width) solid var(--biu-color-border-popover);border-radius:var(--biu-radius-popover);box-shadow:var(--biu-shadow-popover);display:flex;flex-direction:column;gap:4px;font-size:var(--biu-font-size-4)}
 .db-search-field{display:flex;align-items:center;gap:6px;border:0;border-radius:8px;padding:4px 8px;color:var(--biu-color-text-subtle);background:transparent;font-size:var(--biu-font-size-4)}
 .db-search-field input{flex:1;min-width:0;border:0;background:transparent;color:var(--biu-color-text);font-family:inherit;font-size:var(--biu-font-size-4);font-weight:var(--biu-font-weight-regular);line-height:1.4;outline:none}
 .db-search-field input::placeholder{font-size:var(--biu-font-size-4);color:var(--biu-color-text-subtle)}

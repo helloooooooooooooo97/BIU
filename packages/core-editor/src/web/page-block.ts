@@ -5,7 +5,7 @@ import type { Node as PmNode } from '@tiptap/pm/model'
 import { handlePageBlockArrow } from './page-block-arrow.ts'
 import { PageBlockView } from './page-block-view.tsx'
 import { getPageEditor } from './service.ts'
-import { formatPageBlockFence, parsePageBlockData, parsePageBlockMeta } from './page-block-meta.ts'
+import { formatPageBlockFence, parsePageBlockData, parsePageBlockMeta, takePageBlockFence } from './page-block-meta.ts'
 import { createPageBlockId, isPageBlockId } from '../page-block-fence.ts'
 
 export { createPageBlockId, isPageBlockId }
@@ -150,14 +150,14 @@ export const pageBlock = Node.create({
       return src.match(/^:::pageBlock/m)?.index ?? -1
     },
     tokenize(src) {
-      const match = src.match(/^:::pageBlock(?:\s+\{([^}]*)\})?\s*\n([\s\S]*?)\n:::/)
-      if (!match) return undefined
-      const { kind, plugin, extras, id } = parsePageBlockMeta(match[1] ?? '')
+      const taken = takePageBlockFence(src)
+      if (!taken) return undefined
+      const { kind, plugin, extras, id } = parsePageBlockMeta(taken.header)
       return {
         type: 'pageBlock',
-        raw: match[0],
+        raw: taken.raw,
         attributes: { kind, plugin, id, ...extras },
-        content: match[2] ?? '',
+        content: taken.body,
       }
     },
   },

@@ -4,6 +4,7 @@ import { Editor } from '@tiptap/core'
 import { pageEditorExtensions } from './kit.ts'
 import { filterSlashItems } from './slash.ts'
 import { takeSlideFence } from './slide-md.ts'
+import { WASH_TONES } from './color-swatches.ts'
 import { PAGE_EDITOR_STYLE } from './style.ts'
 
 function editorOf(markdown: string) {
@@ -15,9 +16,18 @@ function editorOf(markdown: string) {
 }
 
 test('slide css grids cells on the slide body', () => {
+  assert.match(PAGE_EDITOR_STYLE, /\[data-slide-cell\]>:first-child/)
   assert.match(PAGE_EDITOR_STYLE, /\[data-slide\]\[data-layout=split\] \.page-slide-body/)
   assert.match(PAGE_EDITOR_STYLE, /\.page-slide-body\{display:grid/)
-  assert.match(PAGE_EDITOR_STYLE, /react-renderer\.node-slide\{display:block;width:100%;min-width:0;border:0/)
+  assert.match(PAGE_EDITOR_STYLE, /page-slide-body>\[data-node-view-content-react\].*display:contents/)
+  assert.match(PAGE_EDITOR_STYLE, /\.page-slide-bar\{[^}]*top:0/)
+  assert.match(PAGE_EDITOR_STYLE, /\.page-slide-bar\{[^}]*left:calc\(100% \+ 8px\)/)
+  assert.match(PAGE_EDITOR_STYLE, /\.page-slide-bar\{[^}]*border-radius:8px/)
+  assert.match(PAGE_EDITOR_STYLE, /\.page-slide-bar\{[^}]*opacity:0/)
+  assert.match(PAGE_EDITOR_STYLE, /\.page-slide-bar>\*\{[^}]*place-items:center/)
+  assert.match(PAGE_EDITOR_STYLE, /\.page-slide-body\{[^}]*height:auto/)
+  assert.doesNotMatch(PAGE_EDITOR_STYLE, /page-slide-body\{[^}]*aspect-ratio:16\/9/)
+  assert.match(PAGE_EDITOR_STYLE, /react-renderer\.node-slide\{display:block;position:relative;width:100%;min-width:0;border:0/)
   assert.match(PAGE_EDITOR_STYLE, /\[data-slide\]\{display:flex/)
   assert.match(PAGE_EDITOR_STYLE, /\[data-slide\]\{[^}]*background:transparent/)
   assert.doesNotMatch(PAGE_EDITOR_STYLE, /data-deck|page-deck|:::deck/)
@@ -38,6 +48,34 @@ test('slash lists Slide as a core container, not a page plugin', () => {
   assert.ok(node)
   assert.equal(node?.content?.[0]?.type, 'slideCell')
   editor.destroy()
+})
+
+test('slide markdown does not glue cell fences into ::::::cell', () => {
+  const editor = editorOf('')
+  editor.commands.insertSlide('split')
+  const once = editor.getMarkdown()
+  assert.match(once, /:::slide \{layout=split\}/)
+  assert.match(once, /:::cell/)
+  assert.doesNotMatch(once, /:{4,}cell/)
+  editor.commands.setContent(once, { contentType: 'markdown' })
+  const again = editor.getMarkdown()
+  assert.doesNotMatch(again, /:{4,}cell/)
+  assert.equal(again.match(/:::cell/g)?.length, 2)
+  editor.destroy()
+})
+
+test('takeSlideFence accepts a stamped opener and glued cell close', () => {
+  const fence = takeSlideFence(`:::slide {layout=split bg=teal} <!-- biu:34623e55 -->
+:::cell
+
+::::::cell
+
+:::
+:::`)
+  assert.ok(fence)
+  assert.equal(fence?.layout, 'split')
+  assert.equal(fence?.bg.includes('teal') || fence?.bg.includes('wash-teal'), true)
+  assert.equal(fence?.cells.length, 2)
 })
 
 test('slide markdown keeps nested pageBlock fences', () => {
@@ -76,6 +114,52 @@ test('slide markdown keeps nested pageBlock fences', () => {
   editor.destroy()
 })
 
+test('slide cell keeps a code fence and a registered pageBlock apart', () => {
+  const editor = editorOf('')
+  editor.commands.insertContent({
+    type: 'slide',
+    attrs: { layout: 'split' },
+    content: [
+      {
+        type: 'slideCell',
+        content: [
+          { type: 'codeBlock', content: [{ type: 'text', text: 'const a = 1' }] },
+          {
+            type: 'pageBlock',
+            attrs: { kind: 'sandbox', plugin: 'page-sandbox', id: 'ab12cd34', data: { file: 'assets/a.isx' } },
+          },
+        ],
+      },
+      {
+        type: 'slideCell',
+        content: [
+          {
+            type: 'pageBlock',
+            attrs: {
+              kind: 'video',
+              plugin: 'page-video',
+              id: 'viddemo1',
+              data: { script: '<timeline>\n:::\n<track />\n</timeline>' },
+            },
+          },
+        ],
+      },
+    ],
+  })
+  const once = editor.getMarkdown()
+  assert.match(once, /```[\s\S]*const a = 1[\s\S]*```\n\n:::pageBlock/)
+  assert.match(once, /:::pageBlock \{kind=video[\s\S]*:::\n<track \/>/)
+  editor.commands.setContent(once, { contentType: 'markdown' })
+  const names: string[] = []
+  editor.state.doc.descendants((node) => {
+    names.push(node.type.name)
+  })
+  assert.equal(names.includes('codeBlock'), true)
+  assert.equal(names.filter((name) => name === 'pageBlock').length, 2)
+  assert.doesNotMatch(editor.getMarkdown(), /:{4,}cell/)
+  editor.destroy()
+})
+
 test('setSlideLayout pads cells so more blocks can sit together', () => {
   const editor = editorOf('')
   editor.commands.insertSlide('split')
@@ -85,6 +169,23 @@ test('setSlideLayout pads cells so more blocks can sit together', () => {
     if (node.type.name === 'slideCell') cells += 1
   })
   assert.equal(cells, 3)
+  editor.destroy()
+})
+
+test('slide background color persists on the fence', () => {
+  const wash = WASH_TONES.find((tone) => tone.id === 'sky')
+  assert.ok(wash)
+  const editor = editorOf('')
+  editor.commands.insertSlide('split')
+  editor.commands.setSlideBg(wash!.value)
+  const out = editor.getMarkdown()
+  assert.match(out, /:::slide \{layout=split bg=sky\}/)
+  editor.commands.setContent(out, { contentType: 'markdown' })
+  let bg = ''
+  editor.state.doc.descendants((node) => {
+    if (node.type.name === 'slide') bg = String(node.attrs.bg ?? '')
+  })
+  assert.equal(bg, wash!.value)
   editor.destroy()
 })
 

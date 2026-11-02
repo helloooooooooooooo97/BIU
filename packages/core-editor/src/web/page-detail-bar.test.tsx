@@ -26,12 +26,12 @@ test('detail bar switches document and source modes', () => {
 })
 
 test('detail bar config uses the table sliders icon and hosts extra menu', () => {
-  const { getByLabelText, getByText } = render(
+  const { getByLabelText, getByText, queryByText } = render(
     <PageDetailBar record={{ id: 'p0133' }} configMenu={<button type="button">删除页面</button>} />,
   )
   fireEvent.click(getByLabelText('表格配置'))
   assert.ok(getByText('删除页面'))
-  assert.ok(getByText('切换标题大纲'))
+  assert.equal(queryByText('切换标题大纲'), null)
 })
 
 test('detail bar sort and filter write page view state', () => {

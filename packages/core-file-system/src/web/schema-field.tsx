@@ -45,6 +45,16 @@ export function facetChipIcon(id: string) {
   return <TagIcon aria-hidden className="size-3.5" />
 }
 
+export function facetPropertyCount(tag: { fields?: Array<{ deleted?: boolean }> } | undefined) {
+  return (tag?.fields ?? []).filter((field) => !field.deleted).length
+}
+
+export function facetTagLabel(tag: { id?: string; label?: string; fields?: Array<{ deleted?: boolean }> } | undefined, fallback = '') {
+  const name = String(tag?.label || fallback || tag?.id || '').trim()
+  if (!name) return fallback
+  return `${name} ${facetPropertyCount(tag)}`
+}
+
 export function SchemaChip({
   id,
   label,
@@ -68,7 +78,7 @@ export function SchemaChips({ value, tags }: { value: unknown; tags: CollectionS
   return (
     <TagChips>
       {parsed.tags.map((id) => (
-        <SchemaChip key={id} id={id} label={byId.get(id)?.label ?? id} />
+        <SchemaChip key={id} id={id} label={facetTagLabel(byId.get(id), id)} />
       ))}
     </TagChips>
   )
@@ -555,7 +565,7 @@ export function SchemaFieldEditor({
     <div className="fsdb-schema" data-testid="fsdb-schema">
       <CellMulti
         values={parsed.tags}
-        options={catalog.map((tag) => ({ value: tag.id, label: tag.label, icon: facetChipIcon(tag.id) }))}
+        options={catalog.map((tag) => ({ value: tag.id, label: facetTagLabel(tag), icon: facetChipIcon(tag.id) }))}
         onChange={applyTags}
         multiple
         autoOpen={autoOpen}
@@ -572,7 +582,7 @@ export function SchemaFieldEditor({
             <div className="fsdb-schema-pack-head">
               <SchemaChip
                 id={tag.id}
-                label={tag.label}
+                label={facetTagLabel(tag)}
                 onRemove={() => applyTags(parsed.tags.filter((id) => id !== tag.id))}
               />
             </div>

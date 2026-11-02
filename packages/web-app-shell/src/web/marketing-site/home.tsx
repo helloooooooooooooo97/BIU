@@ -70,13 +70,10 @@ const PLUGIN_WALL = [
   { glyph: '✎', name: 'Excalidraw Whiteboard', body: 'A hand-drawn whiteboard. Zoom in and start drawing; the source file stays with the page.' },
   { glyph: '{}', name: 'Coding Challenge', body: 'The prompt on the left, code on the right—a LeetCode-style practice block.' },
   { glyph: '▶', name: 'Code Runner', body: 'Run Python, Go, Java, and more than a dozen other languages right on the page.' },
-  { glyph: '⚖', name: 'Option Comparison', body: 'Score multiple options across weighted criteria and get an automatic recommendation.' },
   { glyph: '◧', name: 'Video Editor', body: 'Edit with timeline scripts and preview the composition in real time.' },
   { glyph: '</>', name: 'HTML', body: 'Build a static card or a scriptable mini app, then present it full-screen in one click.' },
   { glyph: '$_', name: 'Page Terminal', body: 'A real interactive terminal, with an independent session for every block.' },
-  { glyph: '⇄', name: 'API Client', body: 'Configure a request and send it; responses and history stay on the page.' },
   { glyph: '◎', name: 'Browser', body: 'A web card that opens into a real browser in the sidebar.' },
-  { glyph: '✓', name: 'Page Regression Tests', body: 'Write assertions, run them one by one, and compare results with the previous run.' },
   { glyph: '≡', name: 'Table of Contents', body: 'List every heading on the page and jump to any section.' },
   { glyph: '✦', name: 'Gunfire', body: 'A 2D mini game—because even a game can be a plugin.' },
 ] as const

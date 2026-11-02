@@ -1,4 +1,12 @@
 import { ReUI, Textarea } from '@biu/reui'
+import {
+  ArrowsPointingInIcon,
+  ArrowsPointingOutIcon,
+  CodeBracketIcon,
+  EyeIcon,
+  PlayCircleIcon,
+  ViewfinderCircleIcon,
+} from '@heroicons/react/16/solid'
 import { createPortal } from 'react-dom'
 import { compileHtmlSource } from '../shared/compile.ts'
 import { bindHtmlSlide, collectHtmlSlides, cssBoxSize, htmlDeckEnabled, htmlDeckIndex, htmlDeckKeyAction, htmlLooksFillLayout, HTML_FILL_HOST_PX, stepHtmlDeck } from './html-deck.ts'
@@ -155,7 +163,10 @@ type BlockProps = {
   data: Record<string, unknown>
   update: (patch: Record<string, unknown>) => void
   writable: boolean
+  selected?: boolean
 }
+
+const SELECTED_RING = '0 0 0 2px color-mix(in srgb, var(--biu-color-emphasis) 55%, transparent)'
 
 /* ---------------- shared bits ---------------- */
 
@@ -247,25 +258,6 @@ function SourceEditor({
   )
 }
 
-function ExpandGlyph({ shrink }: { shrink?: boolean }) {
-  return (
-    <svg width={14} height={14} viewBox="0 0 16 16" fill="currentColor" aria-hidden>
-      {shrink ? (
-        <path
-          fillRule="evenodd"
-          d="M2.22 2.22a.75.75 0 0 1 1.06 0L5.5 4.44V2.75a.75.75 0 0 1 1.5 0v3.5a.75.75 0 0 1-.75.75h-3.5a.75.75 0 0 1 0-1.5h1.69L2.22 3.28a.75.75 0 0 1 0-1.06Zm10.5 0a.75.75 0 1 1 1.06 1.06L11.56 5.5h1.69a.75.75 0 0 1 0 1.5h-3.5A.75.75 0 0 1 9 6.25v-3.5a.75.75 0 0 1 1.5 0v1.69l2.22-2.22ZM2.75 9h3.5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-1.69l-2.22 2.22a.75.75 0 0 1-1.06-1.06l2.22-2.22H2.75a.75.75 0 0 1 0-1.5ZM9 9.75A.75.75 0 0 1 9.75 9h3.5a.75.75 0 0 1 0 1.5h-1.69l2.22 2.22a.75.75 0 1 1-1.06 1.06l-2.22-2.22v1.69a.75.75 0 0 1-1.5 0v-3.5Z"
-        />
-      ) : (
-        <path
-          fillRule="evenodd"
-          d="M2.75 9a.75.75 0 0 1 .75.75v1.69l2.22-2.22a.75.75 0 0 1 1.06 1.06L4.56 12.5h1.69a.75.75 0 0 1 0 1.5h-3.5a.75.75 0 0 1-.75-.75v-3.5A.75.75 0 0 1 2.75 9ZM2.75 7a.75.75 0 0 0 .75-.75V4.56l2.22 2.22a.75.75 0 0 0 1.06-1.06L4.56 3.5h1.69a.75.75 0 0 0 0-1.5h-3.5a.75.75 0 0 0-.75.75v3.5c0 .414.336.75.75.75ZM13.25 9a.75.75 0 0 0-.75.75v1.69l-2.22-2.22a.75.75 0 1 0-1.06 1.06l2.22 2.22H9.75a.75.75 0 0 0 0 1.5h3.5a.75.75 0 0 0 .75-.75v-3.5a.75.75 0 0 0-.75-.75ZM13.25 7a.75.75 0 0 1-.75-.75V4.56l-2.22 2.22a.75.75 0 1 1-1.06-1.06l2.22-2.22H9.75a.75.75 0 0 1 0-1.5h3.5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-.75.75Z"
-        />
-      )}
-    </svg>
-  )
-}
-
-const inkFace = "'Helvetica Neue', Arial, sans-serif"
 const MAG_INK = '#0a0a0a'
 const MAG_PAPER = '#ece7dc'
 const MAG_BLUE = '#1c7cff'
@@ -284,21 +276,8 @@ const barBtn: Record<string, unknown> = {
   alignItems: 'center',
 }
 
-const pressBtn: Record<string, unknown> = {
-  cursor: 'pointer',
-  border: 'none',
-  borderLeft: '2px solid #111',
-  borderRadius: 0,
-  padding: '8px 10px',
-  background: 'var(--biu-color-bg)',
-  color: '#111',
-  fontFamily: inkFace,
-  fontWeight: 800,
-  fontSize: 10,
-  letterSpacing: '.15em',
-  lineHeight: '16px',
-  display: 'inline-flex',
-  alignItems: 'center',
+function hold(event: { preventDefault: () => void }) {
+  event.preventDefault()
 }
 
 function HtmlDeckOverlay({
@@ -457,7 +436,7 @@ function HtmlDeckOverlay({
             下一张
           </button>
           <button type="button" data-page-block-expand="" style={{ ...barBtn, marginLeft: 12 }} onClick={onClose} title="退出放映" aria-label="退出放映">
-            <ExpandGlyph shrink />
+            <ArrowsPointingInIcon aria-hidden className="page-slide-ico" />
           </button>
         </div>
       </div>
@@ -586,7 +565,7 @@ function SizeGrip({
     />
   )
 }
-function FloatBar({
+function HtmlSideBar({
   editing,
   setEditing,
   ro,
@@ -595,7 +574,6 @@ function FloatBar({
   onDeck,
   sized,
   onResetSize,
-  children,
 }: {
   editing: boolean
   setEditing: (v: boolean) => void
@@ -605,93 +583,65 @@ function FloatBar({
   onDeck?: (next: boolean) => void
   sized?: boolean
   onResetSize?: () => void
-  children?: unknown
 }) {
-  const seg = (active: boolean, onClick: () => void, label: string, on: string, onInk: string) => (
-    <button
-      type="button"
-      tabIndex={-1}
-      onClick={onClick}
-      style={{
-        ...pressBtn,
-        background: active ? on : '#fff',
-        color: active ? onInk : '#111',
-      }}
-    >
-      {label}
-    </button>
-  )
   return (
-    <div
-      data-testid="html-floatbar"
-      data-biu-ignore
-      style={{
-        position: 'absolute',
-        top: 2,
-        right: 2,
-        zIndex: 20,
-        display: 'flex',
-        gap: 0,
-        alignItems: 'stretch',
-        padding: 0,
-        borderRadius: 0,
-        background: 'var(--biu-color-bg)',
-        border: 'none',
-        borderBottom: '2px solid #111',
-        boxShadow: 'none',
-        fontFamily: inkFace,
-        fontSize: 10,
-        lineHeight: 1.2,
-      }}
-    >
-      {children}
+    <div className="page-slide-bar" data-testid="html-side-bar" data-biu-ignore>
       {ro ? null : (
         <>
-          {seg(!editing, () => setEditing(false), '预览', '#1c7cff', '#fff')}
-          {seg(editing, () => setEditing(true), '编辑', '#ffd400', '#111')}
+          <button
+            type="button"
+            className={`page-slide-icon${editing ? ' is-on' : ''}`}
+            title={editing ? '预览' : '编辑'}
+            aria-label={editing ? '预览' : '编辑'}
+            aria-pressed={editing}
+            data-testid="html-edit"
+            onMouseDown={hold}
+            onClick={() => setEditing(!editing)}
+          >
+            {editing ? (
+              <EyeIcon aria-hidden className="page-slide-ico" />
+            ) : (
+              <CodeBracketIcon aria-hidden className="page-slide-ico" />
+            )}
+          </button>
           {sized ? (
             <button
               type="button"
-              tabIndex={-1}
+              className="page-slide-icon"
               data-testid="html-size-auto"
               title="恢复自适应宽高"
               aria-label="恢复自适应宽高"
+              onMouseDown={hold}
               onClick={() => onResetSize?.()}
-              style={{ ...pressBtn, background: '#ffd400' }}
             >
-              自适应
+              <ViewfinderCircleIcon aria-hidden className="page-slide-ico" />
             </button>
           ) : null}
           <button
             type="button"
-            tabIndex={-1}
+            className={`page-slide-icon${deck ? ' is-deck' : ''}`}
             data-testid="html-deck-toggle"
             title={deck ? '已加入演示，点击移出' : '未加入演示，点击加入'}
             aria-label={deck ? '移出演示' : '加入演示'}
             aria-pressed={deck}
+            onMouseDown={hold}
             onClick={() => onDeck?.(!deck)}
-            style={{
-              ...pressBtn,
-              background: deck ? '#ff2a6d' : '#fff',
-              color: deck ? '#fff' : '#111',
-            }}
           >
-            演示
+            <PlayCircleIcon aria-hidden className="page-slide-ico" />
           </button>
         </>
       )}
       <button
         type="button"
-        tabIndex={-1}
+        className="page-slide-icon"
         data-page-block-expand=""
         data-testid="html-deck-expand"
         title="放大放映"
         aria-label="放大放映"
-        onMouseDown={(event) => event.preventDefault()}
+        onMouseDown={hold}
         onClick={onExpand}
-        style={{ ...pressBtn }}
       >
-        <ExpandGlyph />
+        <ArrowsPointingOutIcon aria-hidden className="page-slide-ico" />
       </button>
     </div>
   )
@@ -720,7 +670,7 @@ const HTML_DIRECT_SAMPLE = HTML_EDITORIAL_SAMPLE
 
 const HTML_FILL_CSS = `.html-direct-fill-inner{height:100%;min-height:100%}.html-direct-fill-inner>:first-child{height:100%!important;min-height:100%;box-sizing:border-box}`
 
-function HtmlDirectCard({ data, update, writable }: BlockProps) {
+function HtmlDirectCard({ data, update, writable, selected }: BlockProps) {
   const ro = !writable
   const source = useHtmlSource(data, update, HTML_DIRECT_SAMPLE)
   const html = source.html
@@ -745,37 +695,38 @@ function HtmlDirectCard({ data, update, writable }: BlockProps) {
     <div
       ref={hostRef}
       data-testid="page-html-direct"
+      data-html-selected={selected ? '1' : undefined}
       className={fill ? 'html-direct-fill' : undefined}
       style={{
         position: 'relative',
         width: cssBoxSize(width) ?? '100%',
         height: cssBoxSize(height) ?? (fillHost ? HTML_FILL_HOST_PX : undefined),
         maxWidth: '100%',
-        overflow: sized ? 'auto' : undefined,
+        overflow: 'visible',
         boxSizing: 'border-box',
+        boxShadow: selected ? SELECTED_RING : undefined,
+        borderRadius: selected ? 4 : undefined,
       }}
       onPointerEnter={() => setHover(true)}
       onPointerLeave={() => setHover(false)}
     >
       {fill ? <style>{HTML_FILL_CSS}</style> : null}
-      {(hover || editing) && (
-        <FloatBar
-          editing={editing}
-          setEditing={setEditing}
-          ro={ro}
-          onExpand={deck.start}
-          deck={deckOn}
-          onDeck={(next) => update({ deck: next })}
-          sized={sized}
-          onResetSize={() => update({ width: undefined, height: undefined })}
-        />
-      )}
+      <HtmlSideBar
+        editing={editing}
+        setEditing={setEditing}
+        ro={ro}
+        onExpand={deck.start}
+        deck={deckOn}
+        onDeck={(next) => update({ deck: next })}
+        sized={sized}
+        onResetSize={() => update({ width: undefined, height: undefined })}
+      />
       {editing ? (
         <SourceEditor html={html} onChange={source.save} compile={compiled} />
       ) : (
         <div
           className={fill ? 'html-direct-fill-inner' : undefined}
-          style={{ overflowX: sized ? undefined : 'auto', height: fill ? '100%' : undefined }}
+          style={{ overflow: sized ? 'auto' : undefined, overflowX: sized ? undefined : 'auto', height: fill || sized ? '100%' : undefined }}
           dangerouslySetInnerHTML={{ __html: stamped }}
         />
       )}
@@ -849,7 +800,7 @@ html,body{margin:0;height:100%;background:${MAG_INK};color:${MAG_PAPER}}
 </script>
 </body></html>`
 
-function HtmlFrameCard({ data, update, writable }: BlockProps) {
+function HtmlFrameCard({ data, update, writable, selected }: BlockProps) {
   const ro = !writable
   const source = useHtmlSource(data, update, HTML_FRAME_SAMPLE)
   const html = source.html
@@ -866,26 +817,19 @@ function HtmlFrameCard({ data, update, writable }: BlockProps) {
     <div
       ref={hostRef}
       data-testid="page-html-frame"
-      style={{ position: 'relative', width: '100%', height }}
+      data-html-selected={selected ? '1' : undefined}
+      style={{
+        position: 'relative',
+        width: '100%',
+        height,
+        overflow: 'visible',
+        boxShadow: selected ? SELECTED_RING : undefined,
+        borderRadius: selected ? 4 : undefined,
+      }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
-      {(hover || editing) && (
-        <FloatBar editing={editing} setEditing={setEditing} ro={ro} onExpand={deck.start} deck={deckOn} onDeck={(next) => update({ deck: next })}>
-          {ro ? null : (
-            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '0 8px', color: '#111', fontSize: 10, fontWeight: 800, letterSpacing: '.15em', borderLeft: '2px solid #111' }}>
-              H
-              <input
-                type="number"
-                min={80}
-                value={height}
-                onChange={(e) => update({ height: Number(e.target.value) || 300 })}
-                style={{ width: 52, border: '2px solid #111', borderRadius: 0, background: 'var(--biu-color-bg)', color: '#111', padding: '1px 4px', fontSize: 12, fontFamily: inkFace }}
-              />
-            </label>
-          )}
-        </FloatBar>
-      )}
+      <HtmlSideBar editing={editing} setEditing={setEditing} ro={ro} onExpand={deck.start} deck={deckOn} onDeck={(next) => update({ deck: next })} />
       {editing ? (
         <SourceEditor html={html} onChange={source.save} compile={compiled} />
       ) : (
@@ -900,6 +844,7 @@ function HtmlFrameCard({ data, update, writable }: BlockProps) {
           }}
         />
       )}
+      {ro || editing ? null : <SizeGrip reveal={hover} boxRef={hostRef} onSize={(next) => update({ height: next.height })} />}
       {deck.overlay}
     </div>
     </ReUI>

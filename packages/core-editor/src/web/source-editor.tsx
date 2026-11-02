@@ -9,6 +9,7 @@ import { Decoration, EditorView, drawSelection, highlightActiveLine, highlightAc
 import { tags } from '@lezer/highlight'
 import { CONTENT_JUMP_EVENT, parseContentJump } from '@biu/type-file-system'
 import { peekContentJump } from './content-jump.ts'
+import { restorePageScroll } from './page-scroll-pin.ts'
 import { findRanges, wrapFindIndex } from './find-ranges.ts'
 
 const findEffect = StateEffect.define<{ query: string; index: number }>()
@@ -164,6 +165,11 @@ export const SourceEditor = forwardRef<SourceEditorHandle, {
       }),
     })
     viewRef.current = view
+    restorePageScroll()
+    requestAnimationFrame(() => {
+      restorePageScroll()
+      requestAnimationFrame(restorePageScroll)
+    })
     return () => {
       if (timer.current) clearTimeout(timer.current)
       view.destroy()

@@ -45,12 +45,21 @@ test('list and detail share the chat column max width with side padding', () => 
   assert.match(css, /\.fsdb-detail-aside \.fsdb-prop,\.fsdb-detail-aside \.fsdb-prop-tr\{[^}]*display:table-row/)
   assert.doesNotMatch(css, /\.fsdb-detail-main > \.tasks-toolbar\{[^}]*padding-bottom:8px/)
   assert.doesNotMatch(css, /\.fsdb-detail-main > \.tasks-toolbar\{[^}]*background-image/)
+  assert.match(css, /\.fsdb-detail-main > \.tasks-toolbar\{[^}]*position:sticky/)
+  assert.match(css, /\.fsdb-detail-main > \.tasks-toolbar\{[^}]*top:0/)
+  assert.doesNotMatch(css, /animation-timeline:scroll\(nearest\)/)
+  assert.match(css, /\.fsdb-page:not\(\.is-sheet\) \.fsdb-main > \.tasks-toolbar\.is-stuck,\.fsdb-page \.fsdb-detail-main > \.tasks-toolbar\.is-stuck\{[^}]*padding-left:12px;padding-right:12px/)
+  assert.match(css, /\.fsdb-detail-main > \.tasks-toolbar::after\{[^}]*left:var\(--biu-pad-page\)/)
+  assert.match(css, /\.fsdb-detail-main > \.tasks-toolbar::after\{[^}]*right:var\(--biu-pad-page\)/)
+  assert.match(css, /\.fsdb-detail-main > \.tasks-toolbar::after\{[^}]*top:calc\(100% \+ 10px\)/)
+  assert.match(css, /\.fsdb-main > \.tasks-toolbar\.is-stuck::after,\.fsdb-detail-main > \.tasks-toolbar\.is-stuck::after\{left:12px;right:12px\}/)
   assert.doesNotMatch(css, /\.fsdb-detail-main > \.fsdb-fileview[^{]*\{[^}]*border-top/)
   assert.match(css, /\.fsdb-page-banner\{[^}]*width:100%/)
   assert.match(css, /\.fsdb-page\.is-full-width \.fsdb-main > :not\(\.fsdb-page-banner\),\.fsdb-page\.is-full-width \.fsdb-detail-main > :not\(\.fsdb-page-banner\)\{[^}]*max-width:none/)
   assert.doesNotMatch(css, /\.fsdb-page\.is-full-width[^{]*\{[^}]*padding:[^}]*24px/)
   assert.doesNotMatch(css, /flex:0 0 36%/)
   assert.match(css, /\.fsdb-page\{[^}]*--fsdb-check-gutter:26px/)
+  assert.match(css, /\.fsdb-page \.tasks-table tbody tr:last-child:not\(\.fsdb-table-pad\) td/)
   assert.match(css, /\.fsdb-page \.tasks-table th\.is-pin-col,\.fsdb-page \.tasks-table td\.is-pin-col\{[^}]*position:sticky/)
   assert.doesNotMatch(css, /\.fsdb-page \.tasks-table td:has\(\.fsdb-title-host\)\{[^}]*padding-right:var\(--fsdb-row-tools-w\)/)
   assert.match(css, /\.fsdb-page \.tasks-title-aside\{[^}]*display:inline-flex/)
@@ -186,11 +195,11 @@ test('list and detail share the chat column max width with side padding', () => 
   assert.match(css, /\.fsdb-page \.fsdb-query-join\.is-btn\{/)
   assert.match(css, /\.fsdb-right-body:has\(\.fsdb-detail-stage\) \.app-pane-in\{[^}]*overflow:visible/)
   assert.match(css, /\.fsdb-right-body:has\(\.fsdb-detail-stage\) \.app-pane-in\{[^}]*width:100%/)
-  assert.match(css, /\.fsdb-right-body:has\(> \* > \.fsdb-workspace > \.fsdb-pager\)\{[^}]*overflow:hidden/)
+  assert.match(css, /\.fsdb-right-body:has\(> \* > \.fsdb-workspace > \.fsdb-pager\)\{[^}]*overflow:auto/)
   assert.match(css, /\.fsdb-right-body:has\(\.fsdb-detail-stage\)\{[^}]*overflow:auto/)
   assert.doesNotMatch(css, /\.fsdb-right-body:has\(\.fsdb-pager\)\{/)
-  assert.match(css, /\.inspector-database-page \.fsdb-right-body\{[^}]*overflow:hidden/)
-  assert.match(css, /\.inspector-database-page \.fsdb-right-body>\*,\.inspector-database-page \.fsdb-main\{[^}]*overflow:hidden/)
+  assert.match(css, /\.inspector-database-page \.fsdb-right-body\{[^}]*overflow:auto/)
+  assert.match(css, /\.inspector-database-page \.fsdb-right-body>\*,\.inspector-database-page \.fsdb-main\{[^}]*overflow:visible/)
   assert.match(css, /\.fsdb-page:has\(\.fsdb-query-menu\)/)
   assert.match(css, /\.fsdb-page:has\(\.fsdb-query-menu\) \.fsdb-right/)
   assert.doesNotMatch(css, /\.inspector-database-page \.tasks-filter-btn-wrap,\.inspector-database-page \.tasks-sort-wrap\{[^}]*position:static/)
@@ -230,19 +239,19 @@ test('title cell hover icons take the primary label color', () => {
 })
 
 test('list properties stay on the weakest label tier; detail aside lifts keys one tier and values to primary', () => {
-  assert.match(css, /\.fsdb-proprow-k,\.fsdb-prop>span:first-child\{[^}]*color:var\(--biu-color-text-subtle\)/)
+  assert.match(css, /\.fsdb-proprow-k,\.fsdb-prop>span:first-child\{[^}]*color:var\(--biu-color-text\)/)
   assert.match(css, /\.fsdb-proprow-v,\.fsdb-prop-val,\.fsdb-detail-id\{[^}]*color:var\(--biu-color-text\)/)
-  assert.match(css, /\.fsdb-schema-prop-k\{[^}]*color:var\(--biu-color-text-subtle\)/)
+  assert.match(css, /\.fsdb-schema-prop-k\{[^}]*color:var\(--biu-color-text\)/)
   assert.match(css, /\.fsdb-proprow-k svg,\.fsdb-prop>span:first-child svg,\.fsdb-schema-prop-k svg\{[^}]*color:var\(--biu-color-icon\)/)
   assert.match(
     css,
-    /\.fsdb-detail-aside \.fsdb-proprow-k,\.fsdb-detail-aside \.fsdb-prop>span:first-child,\.fsdb-detail-aside \.fsdb-proprow-label,\.fsdb-detail-aside \.fsdb-schema-prop-k,\.fsdb-detail-aside \.fsdb-schema-prop-k\.is-rename\{[^}]*color:var\(--biu-color-text-muted\)/,
+    /\.fsdb-detail-aside \.fsdb-proprow-k,\.fsdb-detail-aside \.fsdb-prop>span:first-child,\.fsdb-detail-aside \.fsdb-proprow-label,\.fsdb-detail-aside \.fsdb-schema-prop-k,\.fsdb-detail-aside \.fsdb-schema-prop-k\.is-rename\{[^}]*color:var\(--biu-color-text\)/,
   )
   assert.match(
     css,
     /\.fsdb-detail-aside \.fsdb-proprow-k svg,\.fsdb-detail-aside \.fsdb-prop>span:first-child svg,\.fsdb-detail-aside \.fsdb-schema-prop-k svg,\.fsdb-detail-aside \.fsdb-schema-prop-k \.fsdb-field-glyph\{[^}]*color:var\(--biu-color-icon\)/,
   )
-  assert.match(css, /\.fsdb-schema-prop-k\.is-rename\{[^}]*color:var\(--biu-color-text-subtle\)/)
+  assert.match(css, /\.fsdb-schema-prop-k\.is-rename\{[^}]*color:var\(--biu-color-text\)/)
   assert.match(css, /\.fsdb-schema-prop-k \.fsdb-field-glyph\{[^}]*color:var\(--biu-color-icon\)/)
   assert.match(
     css,
@@ -381,6 +390,6 @@ test('share page portals sit above the share overlay', () => {
   assert.match(css, /html\[data-nav-pin="1"\] \.fsdb-detail-float-nav\{[^}]*opacity:1/)
   assert.match(css, /@media \(max-width:720px\)\{[\s\S]*\.fsdb-share-page \.fsdb-main > :not\(\.fsdb-page-banner\)/)
   assert.doesNotMatch(css, /\.fsdb-share-page \.tasks-table-wrap/)
-  assert.match(css, /\.fsdb-share-page \.fsdb-right-body:has\(\.tasks-main \.fsdb-workspace\)\{overflow:hidden\}/)
+  assert.match(css, /\.fsdb-share-page \.fsdb-right-body:has\(\.tasks-main \.fsdb-workspace\)\{overflow:auto\}/)
   assert.doesNotMatch(css, /\.fsdb-share-page \.tasks-table\{width/)
 })

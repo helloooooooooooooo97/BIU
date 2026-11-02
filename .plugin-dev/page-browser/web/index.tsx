@@ -18,7 +18,7 @@ const INK = 'var(--biu-color-text)'
 
 function blockHeight(data: Record<string, unknown>) {
   const n = Number(data.height)
-  return Number.isFinite(n) && n >= 160 ? Math.round(n) : 420
+  return Number.isFinite(n) && n >= 160 ? Math.round(n) : 640
 }
 
 /* ---------------- 图标 ---------------- */
@@ -62,12 +62,14 @@ function BrowserSurface({
   data,
   update,
   zoomed,
+  frameHeight,
   onZoom,
   onClose,
 }: {
   data: Record<string, unknown>
   update: (patch: Record<string, unknown>) => void
   zoomed: boolean
+  frameHeight: number
   onZoom: () => void
   onClose?: () => void
 }) {
@@ -119,14 +121,16 @@ function BrowserSurface({
   }
 
   return (
-    <ReUI>
+    <ReUI className="page-browser-ui">
     <div
       data-testid="page-browser-surface"
       className="rui-card"
       style={{
         flex: 1,
-        minHeight: 0,
+        minHeight: zoomed ? 0 : frameHeight,
+        height: zoomed ? '100%' : frameHeight,
         width: '100%',
+        maxWidth: 'none',
         display: 'flex',
         flexDirection: 'column',
         padding: 0,
@@ -137,7 +141,6 @@ function BrowserSurface({
       }}
     >
       <div data-biu-ignore className="rui-chrome">
-        <span className="rui-traffic" aria-hidden><i className="r" /><i className="y" /><i className="g" /></span>
         {zoomed ? null : (
           <button
             type="button"
@@ -181,20 +184,10 @@ function BrowserSurface({
             aria-label="地址"
             onKeyDown={(event) => event.stopPropagation()}
             onChange={(event) => setAddr(event.currentTarget.value)}
-            className="rui-addr"
+            className="rui-addr rui-grow"
+            style={{ width: '100%' }}
           />
         </form>
-        <button
-          type="button"
-          tabIndex={-1}
-          data-testid="page-browser-go"
-          title="访问"
-          aria-label="访问"
-          style={iconBtn}
-          onClick={() => go(addr)}
-        >
-          前往
-        </button>
         {src ? (
           <button
             type="button"
@@ -370,14 +363,30 @@ function BrowserCard({
   }, [zoom])
 
   const surface = (zoomed: boolean) => (
-    <BrowserSurface data={data} update={update} zoomed={zoomed} onZoom={() => setZoom(true)} onClose={() => setZoom(false)} />
+    <BrowserSurface
+      data={data}
+      update={update}
+      zoomed={zoomed}
+      frameHeight={height}
+      onZoom={() => setZoom(true)}
+      onClose={() => setZoom(false)}
+    />
   )
 
   return (
     <div
       ref={hostRef}
       data-testid="page-browser"
-      style={{ position: 'relative', width: '100%', height, display: 'flex' }}
+      style={{
+        position: 'relative',
+        width: '100%',
+        maxWidth: 'none',
+        height,
+        minHeight: height,
+        display: 'flex',
+        flexDirection: 'column',
+        boxSizing: 'border-box',
+      }}
     >
       {surface(false)}
       {overlayEl ? createPortal(surface(true), overlayEl) : null}
@@ -422,7 +431,7 @@ export function apply(ctx: {
     hint: '输入链接就能访问的网页卡片；禁嵌站点点跳转会进右侧栏真浏览器',
     aliases: ['browser', 'web', '浏览器', '网页', '网址', 'url', '链接'],
     assets: [],
-    defaults: () => ({ url: 'https://example.com', height: 420 }),
+    defaults: () => ({ url: 'https://example.com', height: 640 }),
     View: BrowserCard,
   })
 }

@@ -43,11 +43,10 @@ test('composer model menu renders knobs from catalog, not hardcoded vendor rows'
   assert.match(css, /\.composer-model-flyout\s*\{[^}]*z-index:\s*240/)
   assert.match(css, /\.composer-model-flyout\s*\{[^}]*width:\s*200px/)
   assert.match(css, /\.composer-model-panel,\s*\n\.composer-model-flyout\s*\{[^}]*border:\s*var\(--biu-stroke-width\) solid/)
-  assert.match(css, /\.composer-model-panel,\s*\n\.composer-model-flyout\s*\{[^}]*background:\s*var\(--biu-color-bg-subtle\)/)
-  assert.match(css, /html\.dark \.composer-model-panel,\s*\nhtml\.dark \.composer-model-flyout\s*\{[^}]*background:\s*#202020/)
+  assert.match(css, /\.composer-model-panel,\s*\n\.composer-model-flyout\s*\{[^}]*background:\s*var\(--biu-color-bg-popover\)/)
   assert.match(
     css,
-    /\.composer-model-panel,\s*\n\.composer-model-flyout\s*\{[^}]*box-shadow:\s*var\(--biu-shadow-md\)/,
+    /\.composer-model-panel,\s*\n\.composer-model-flyout\s*\{[^}]*box-shadow:\s*var\(--biu-shadow-popover\)/,
   )
   assert.match(css, /\.composer-model-switch\.is-on/)
   assert.match(css, /\.composer-model-add-models/)

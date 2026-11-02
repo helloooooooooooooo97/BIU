@@ -429,7 +429,7 @@ const chromeIcon = {
 
 function sandboxTitle(raw: unknown) {
   const text = typeof raw === 'string' ? raw.trim() : ''
-  return text || 'Sandbox'
+  return text || '沙箱'
 }
 
 function cssBoxSize(value: unknown): string | undefined {
@@ -603,7 +603,7 @@ function SandboxBar({
           <Input
             data-testid="sandbox-title-input"
             data-page-block-capture=""
-            aria-label="Sandbox 名称"
+            aria-label="沙箱名称"
             value={draft}
             autoFocus
             onChange={(event) => setDraft((event.target as HTMLInputElement).value)}
@@ -660,7 +660,7 @@ function SandboxBar({
           </button>
         )}
       </div>
-      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }} role="tablist" aria-label="Sandbox 视图">
+      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }} role="tablist" aria-label="沙箱视图">
         {tabBtn('preview', '预览', EyeIcon)}
         {ro ? null : tabBtn('code', '代码', CodeBracketIcon)}
       </div>
@@ -748,7 +748,7 @@ const SANDBOX_SAMPLE = `export default function App() {
           color: 'var(--biu-color-text-muted)', opacity: 0.7,
           marginBottom: 'var(--biu-space-5)', fontWeight: 500,
         }}>
-          Sandbox
+          沙箱
         </div>
 
         <h1 style={{
@@ -999,12 +999,12 @@ export function apply(ctx: {
   ctx.pageEditor.registerBlock({
     kind: 'sandbox',
     plugin: name,
-    label: 'Sandbox',
+    label: '沙箱',
     blockType: 'sandbox',
-    blockTypeLabel: 'Sandbox',
+    blockTypeLabel: '沙箱',
     hint: '沙箱跑 React。围栏只写 {"file":"assets/sandbox-….jsx","dataFile":"assets/sandbox-data-….json"}。源码用 db_doc 写 .jsx；要记住的数据用 biu.write 写到 dataFile 的 .json，不要写进源码或围栏',
-    aliases: ['sandbox', '沙箱'],
-    defaults: () => ({ ...newSandboxFiles(), title: 'Sandbox', height: SANDBOX_DEFAULT_HEIGHT }),
+    aliases: ['sandbox', '沙箱', 'Sandbox'],
+    defaults: () => ({ ...newSandboxFiles(), title: '沙箱', height: SANDBOX_DEFAULT_HEIGHT }),
     View: SandboxCard,
   })
 }

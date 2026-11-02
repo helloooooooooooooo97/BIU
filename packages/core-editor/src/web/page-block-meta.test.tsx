@@ -1,7 +1,7 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { render, waitFor } from '@testing-library/react'
-import { blockDataUnchanged, ENABLE_PAGE_BLOCK_PLUGIN, formatPageBlockFence, parsePageBlockData, parsePageBlockMeta, readPageBlockFence, requestEnablePageBlockPlugin, setPageBlockPluginPhase } from './page-block-meta.ts'
+import { blockDataUnchanged, ENABLE_PAGE_BLOCK_PLUGIN, formatPageBlockFence, parsePageBlockData, parsePageBlockMeta, readPageBlockFence, requestEnablePageBlockPlugin, setPageBlockPluginPhase, takePageBlockFence } from './page-block-meta.ts'
 import { PageBlockMissing } from './page-plugin-host.tsx'
 
 test('page block fence keeps plugin id in the document', () => {
@@ -96,6 +96,22 @@ test('video pageBlock fence stores the tag script, not JSON', () => {
     script: '<timeline fps=24>\n  <track><scene dur=1s>A</scene></track>\n</timeline>',
   })
   assert.match(String(parsePageBlockData('video', '{"script":"<timeline></timeline>"}').script), /<timeline><\/timeline>/)
+})
+
+test('takePageBlockFence does not close on ::: inside the registered body', () => {
+  const src = `:::pageBlock {kind=video plugin=page-video id=viddemo1}
+<timeline>
+:::
+<track />
+</timeline>
+:::
+
+:::cell
+`
+  const taken = takePageBlockFence(src)
+  assert.ok(taken)
+  assert.match(taken!.body, /<timeline>\n:::\n<track \/>/)
+  assert.match(taken!.raw, /<\/timeline>\n:::$/)
 })
 
 test('page block fence format then parse roundtrips kind plugin id and data', () => {

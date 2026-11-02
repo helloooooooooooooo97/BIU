@@ -87,8 +87,7 @@ export const PageBlockView = memo(function PageBlockView({ node, updateAttribute
 
   const onMouseDown = (event: MouseEvent) => {
     if (!editor.isEditable || editor.isDestroyed) return
-    if (event.target instanceof Element && event.target.closest('textarea, input, select, button, a')) return
-    if (event.currentTarget instanceof Element && event.target !== event.currentTarget) return
+    if (event.target instanceof Element && event.target.closest('textarea, input, select, button, a, .page-slide-bar, .page-block-handle')) return
     // Pick overlay owns the click. Node selection here becomes a fence pick
     // and hides the block. Shadow internals are resolved by pick, not TipTap.
     if (document.documentElement.classList.contains('pick-mode')) return

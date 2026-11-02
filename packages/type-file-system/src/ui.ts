@@ -46,7 +46,7 @@ export type CollectionChrome = {
   Action?: ComponentType<FsActionProps>
   /** 整组动作。有则宿主不再按条 map，前端完全由登记方 decorate。 */
   Actions?: ComponentType<FsActionsProps>
-  /** 详情侧栏「⋯」菜单里的操作（例如源码模式）。 */
+  /** 详情侧栏「⋯」菜单里的额外操作。 */
   DetailTools?: ComponentType<{ record: DbRecord; onDone?: () => void }>
   /** 标题/属性下方、正文上方的页面操作栏。 */
   DetailBar?: ComponentType<FsDetailBarProps>

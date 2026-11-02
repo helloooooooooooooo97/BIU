@@ -27,7 +27,7 @@ import { BoolBox } from '@biu/biu-ui/bool-box'
 import { ChatCount } from '@biu/biu-ui/chat-count'
 import { HeadlessDismiss, HEADLESS_DISMISS_IGNORE } from '@biu/biu-ui/headless-dismiss'
 import { TagChip, TagChips, tagTextColor, tagTone as schemaTagTone } from '@biu/biu-ui/tag-chip'
-import { facetChipIcon } from './schema-field.tsx'
+import { facetChipIcon, facetTagLabel } from './schema-field.tsx'
 import {
   contentFieldKey,
   defaultColumnKeys,
@@ -68,6 +68,7 @@ import { fieldPickAttrs, pickDomAttrs, recordPickKind, recordSourcePath } from '
 import { normalizeRecordEmoji, recordPreviewEmoji, crumbRecordLabel } from './sidebar-preview.ts'
 import { recordPreviewMascot, RecordMark } from './record-mark.tsx'
 import { COL_WIDTH_MAX, COL_WIDTH_MIN, colWidthStyle, normalizeColumnWidths, normalizeSavedView, normalizePageSize, rankListedViews, viewIsFresher, viewStateKey, type SavedView } from './saved-view.ts'
+import { useStickyToolbar } from './sticky-toolbar.ts'
 import { PagerSizeControl } from './pager-size.tsx'
 import {
   actionIcon,
@@ -1881,6 +1882,7 @@ export function CollectionBrowser({
   const searchRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const searchExpanded = searchOpen || query.length > 0
+  useStickyToolbar(toolbarRef)
 
   function toggleViewsOpen() {
     if (typeof document !== 'undefined' && document.getElementById('shell-module-sidebar')) {
@@ -3989,7 +3991,7 @@ export function CollectionBrowser({
         return (
           <TagChips>
             {parsed.tags.map((id) => (
-              <TagChip key={id} id={id} label={tags.find((tag) => tag.id === id)?.label ?? id} icon={facetChipIcon(id)} />
+              <TagChip key={id} id={id} label={facetTagLabel(tags.find((tag) => tag.id === id), id)} icon={facetChipIcon(id)} />
             ))}
           </TagChips>
         )
@@ -5129,7 +5131,6 @@ export function CollectionBrowser({
                     onClick={() => setCreateScopeOpen((open) => !open)}
                   >
                     <UiGlyph icon={createScope === 'workspace' ? 'users' : createScope === 'shared' ? 'globe' : 'user'} />
-                    <UiGlyph icon="chevron-down" />
                   </button>
                   {createScopeOpen ? (
                     <div className="fsdb-create-scope-menu" role="menu">
@@ -5734,7 +5735,7 @@ export function CollectionBrowser({
                   return (
                     <CheckRow
                       key={pack.id}
-                      label={pack.label || pack.id}
+                      label={facetTagLabel(pack)}
                       icon={<TagIcon aria-hidden className="size-[14px]" />}
                       on={on}
                       onToggle={() =>

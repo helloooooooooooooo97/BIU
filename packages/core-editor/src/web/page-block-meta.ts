@@ -206,11 +206,39 @@ export function formatPageBlockFence(kind: string, plugin: string, data: Record<
   return `:::pageBlock ${meta}\n${JSON.stringify(body, null, 2)}\n:::`
 }
 
+const PAGE_BLOCK_OPEN = /^:::pageBlock(?:\s+\{([^}]*)\})?\s*(?:<!--.*?-->\s*)?$/
+const FENCE_CLOSE = /^:::\s*(?:<!--.*?-->\s*)?$/
+
+function pageBlockCloseLooksOuter(lines: string[], closeAt: number) {
+  let i = closeAt + 1
+  while (i < lines.length && !String(lines[i] ?? '').trim()) i += 1
+  if (i >= lines.length) return true
+  return /^(:::((pageBlock|cell|slide|table|row|th|td)\b|$)|`{3,}|#{1,6}\s)/.test(String(lines[i] ?? ''))
+}
+
+/** 内置块正文是不透明的：正文里的 ::: 不算结束，只认后面接着外层围栏 / 代码围栏 / 文末的 :::。 */
+export function takePageBlockFence(src: string) {
+  const lines = src.split('\n')
+  const head = PAGE_BLOCK_OPEN.exec(lines[0] ?? '')
+  if (!head) return null
+  const closes: number[] = []
+  for (let i = 1; i < lines.length; i += 1) {
+    if (FENCE_CLOSE.test(lines[i] ?? '')) closes.push(i)
+  }
+  if (!closes.length) return null
+  const end = closes.find((index) => pageBlockCloseLooksOuter(lines, index)) ?? closes[closes.length - 1]
+  return {
+    raw: lines.slice(0, end + 1).join('\n'),
+    header: head[1] ?? '',
+    body: lines.slice(1, end).join('\n'),
+  }
+}
+
 /** 块 ↔ 源码的唯一读出口。id 在围栏头上，体再走 parsePageBlockData。 */
 export function readPageBlockFence(raw: string) {
-  const match = raw.trim().match(/^:::pageBlock(?:\s+\{([^}]*)\})?\s*\n([\s\S]*?)\n:::\s*$/)
-  const header = match?.[1] ?? ''
-  const body = match?.[2] ?? raw
+  const taken = takePageBlockFence(raw.trim())
+  const header = taken?.header ?? ''
+  const body = taken?.body ?? raw
   const meta = parsePageBlockMeta(header || raw)
   return {
     kind: meta.kind,

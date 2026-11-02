@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { capturePageScroll } from './page-scroll-pin.ts'
 import { PAGE_VIEW_EVENT } from './page-view-state.ts'
 
 export type PagePresentMode = 'doc' | 'outline' | 'table' | 'source'
@@ -22,6 +23,7 @@ export function setPagePresentMode(recordId: string, mode: PagePresentMode) {
   const id = String(recordId ?? '').trim()
   if (!id) return
   if (getPagePresentMode(id) === mode) return
+  capturePageScroll()
   modes.set(id, mode)
   bump()
 }

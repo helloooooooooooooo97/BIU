@@ -11,6 +11,8 @@ test('layout picker is a reusable popover, not slide-only chrome', () => {
   assert.match(src, /export function LayoutGlyph/)
   assert.match(src, /HeadlessPopover/)
   assert.match(src, /data-testid="layout-picker"/)
+  assert.match(src, /sideOffset/)
+  assert.match(src, /alignOffset/)
   assert.equal(SLIDE_LAYOUT_PRESETS.some((item) => item.id === 'split' && item.columns.length === 2), true)
 })
 
@@ -22,4 +24,7 @@ test('slide chrome has no filled card background and no pager copy', () => {
   const view = readFileSync(resolve(import.meta.dirname, './slide-view.tsx'), 'utf8')
   assert.doesNotMatch(view, /上一页|下一页|加一页/)
   assert.match(view, /LayoutPicker/)
+  assert.match(view, /slide-bg-picker/)
+  assert.match(view, /ViewColumnsIcon/)
+  assert.match(view, /SwatchIcon/)
 })

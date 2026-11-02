@@ -188,11 +188,9 @@ html.dark .rui-root{--biu-color-on-emphasis:var(--biu-color-bg);color-scheme:dar
 .m-HEAD,.m-OPTIONS{color:#6b7280;font-weight:var(--biu-font-weight-bold);font-size:11px}
 .ins-status{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:var(--biu-stroke-width) solid var(--biu-color-border);font-size:12.5px}
 @media (max-width:860px){.ins-shell{grid-template-columns:1fr}}
-.toc-shell{background:#fff;border:var(--biu-stroke-width) solid var(--biu-color-border);border-radius:12px;padding:14px 8px 12px 14px;max-width:320px}
-.toc-kicker{font-size:11px;font-weight:var(--biu-font-weight-semibold);letter-spacing:.08em;text-transform:uppercase;color:#8e8e93;margin:0 8px 6px}
-.toc-shell h2{margin:0 8px 10px;font-size:15px;font-weight:var(--biu-font-weight-semibold)}
-.toc-shell .rui-tree{margin-top:0}
-.toc-shell .rui-tree-item[data-selected=true] .rui-tree-label{background:#f0f0f0;font-weight:var(--biu-font-weight-semibold)}
+.toc-shell{box-sizing:border-box;width:100%;max-width:none;margin:0;padding:0;background:transparent;border:0;border-radius:0}
+.toc-shell .rui-tree{margin:0;width:100%}
+.toc-shell .rui-tree-item[data-selected=true] .rui-tree-label{background:transparent;font-weight:inherit}
 .rg-shell{background:#fff;border:var(--biu-stroke-width) solid var(--biu-color-border);border-radius:12px;overflow:hidden}
 .rg-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:14px 16px 8px}
 .rg-head h2{margin:0;font-size:16px;font-weight:var(--biu-font-weight-semibold)}

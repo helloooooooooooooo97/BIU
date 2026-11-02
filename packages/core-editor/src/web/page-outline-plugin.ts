@@ -43,24 +43,33 @@ export function collapsedOutlineIndices(
   return hide
 }
 
-function foldButton(recordId: string, blockId: string, folded: boolean) {
-  return () => {
-    const btn = document.createElement('button')
-    btn.type = 'button'
-    btn.className = `page-outline-fold${folded ? ' is-folded' : ''}`
-    btn.setAttribute('aria-label', folded ? '展开' : '收起')
-    btn.setAttribute('aria-expanded', folded ? 'false' : 'true')
-    btn.addEventListener('mousedown', (event) => {
-      event.preventDefault()
-      event.stopPropagation()
-    })
-    btn.addEventListener('click', (event) => {
-      event.preventDefault()
-      event.stopPropagation()
-      togglePageOutlineFold(recordId, blockId)
-    })
-    return btn
+/** 点在标题左侧图标槽才折叠，不往正文里插 widget，避免挡住方向键。 */
+export function outlineFoldGutterHit(heading: HTMLElement, event: { clientX: number; clientY: number }) {
+  const rect = heading.getBoundingClientRect()
+  const css = getComputedStyle(heading)
+  const icon = Number.parseFloat(css.getPropertyValue('--page-outline-icon')) || 14
+  const gap = Number.parseFloat(css.getPropertyValue('--page-outline-gap')) || 8
+  const pad = 6
+  return (
+    event.clientX >= rect.left - icon - gap - pad &&
+    event.clientX < rect.left &&
+    event.clientY >= rect.top &&
+    event.clientY <= rect.top + Math.max(icon + 12, 28)
+  )
+}
+
+function headingHasChildren(
+  blocks: { heading: boolean; level: number }[],
+  index: number,
+) {
+  const item = blocks[index]
+  if (!item?.heading) return false
+  for (let j = index + 1; j < blocks.length; j += 1) {
+    const next = blocks[j]
+    if (next.heading && next.level <= item.level) break
+    return true
   }
+  return false
 }
 
 function decorations(doc: Node, recordId: string) {
@@ -73,29 +82,15 @@ function decorations(doc: Node, recordId: string) {
     const cls = ['page-outline-block']
     if (item.heading) cls.push('page-outline-heading')
     if (hidden.has(index)) cls.push('page-block-is-hidden')
-    let child = false
-    if (item.heading && item.id) {
-      for (let j = index + 1; j < blocks.length; j += 1) {
-        const next = blocks[j]
-        if (next.heading && next.level <= item.level) break
-        child = true
-        break
-      }
-    }
+    const child = Boolean(item.id && headingHasChildren(blocks, index))
     if (child) cls.push('has-fold')
-    decos.push(
-      Decoration.node(item.pos, item.pos + item.size, {
-        class: cls.join(' '),
-        style: `--page-outline-depth:${item.depth}`,
-      }),
-    )
-    if (!child || !item.id) return
-    decos.push(
-      Decoration.widget(item.pos + 1, foldButton(recordId, item.id, folded.has(item.id)), {
-        side: -1,
-        ignoreSelection: true,
-      }),
-    )
+    const attrs: Record<string, string> = {
+      class: cls.join(' '),
+      style: `--page-outline-depth:${item.depth}`,
+    }
+    if (item.id) attrs['data-outline-id'] = item.id
+    if (child) attrs['data-outline-folded'] = folded.has(item.id) ? 'true' : 'false'
+    decos.push(Decoration.node(item.pos, item.pos + item.size, attrs))
   })
   return DecorationSet.create(doc, decos)
 }
@@ -133,6 +128,21 @@ export const pageOutline = Extension.create({
         props: {
           decorations(state) {
             return key.getState(state)
+          },
+          handleDOMEvents: {
+            mousedown(view, event) {
+              const recordId = recordIdFromDom(view)
+              if (!recordId || getPagePresentMode(recordId) !== 'outline') return false
+              const target = event.target
+              if (!(target instanceof Element)) return false
+              const heading = target.closest<HTMLElement>('.page-outline-heading.has-fold')
+              const id = heading?.dataset.outlineId
+              if (!heading || !id || !outlineFoldGutterHit(heading, event)) return false
+              event.preventDefault()
+              event.stopPropagation()
+              togglePageOutlineFold(recordId, id)
+              return true
+            },
           },
         },
       }),

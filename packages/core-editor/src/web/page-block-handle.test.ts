@@ -7,7 +7,9 @@ import {
   deleteHandleBlock,
   duplicateHandleBlock,
   handleBlockFromDom,
+  handleLeftForBlock,
   handleRailLeft,
+  isSlideInnerBlock,
   visibleHandleEl,
   insertParagraphAfter,
   insertParagraphBefore,
@@ -150,6 +152,28 @@ test('handleRailLeft is the same for indented list boxes and top-level paragraph
   assert.notEqual(handleRailLeft(hostLeft, contentLeft), listItemBoxLeft - hostLeft - HANDLE_RAIL)
 })
 
+test('resolveHandleBlock picks the inner slide block, not only the card', () => {
+  const editor = editorOf(`:::slide {layout=stack}
+
+:::cell
+里面
+:::
+
+:::
+`)
+  let inside = -1
+  editor.state.doc.descendants((node, pos) => {
+    if (inside < 0 && node.isText && node.text === '里面') inside = pos
+  })
+  assert.ok(inside >= 0)
+  const found = resolveHandleBlock(editor.state.doc.resolve(inside))
+  assert.equal(found?.node.type.name, 'paragraph')
+  assert.equal(found?.node.textContent, '里面')
+  assert.equal(isSlideInnerBlock(editor.state.doc, found!.pos, found!.node.type.name), true)
+  assert.equal(handleLeftForBlock({ hostLeft: 0, contentLeft: 40, boxLeft: 120, nested: true }), 120 - HANDLE_RAIL)
+  editor.destroy()
+})
+
 test('visibleHandleEl prefers the inner page-block, not the renderer shell', () => {
   const outer = document.createElement('div')
   outer.className = 'page-block react-renderer'
@@ -160,14 +184,21 @@ test('visibleHandleEl prefers the inner page-block, not the renderer shell', () 
   assert.equal(visibleHandleEl(outer), inner)
   const para = document.createElement('p')
   assert.equal(visibleHandleEl(para), para)
+  const shell = document.createElement('div')
+  shell.className = 'react-renderer node-slide'
+  const card = document.createElement('div')
+  card.setAttribute('data-slide', '')
+  shell.append(card)
+  assert.equal(visibleHandleEl(shell), card)
 })
 
 test('page block handle x uses the editor rail, not the node box', async () => {
   const { readFile } = await import('node:fs/promises')
   const { resolve } = await import('node:path')
   const src = await readFile(resolve(import.meta.dirname, './page-block-handle.tsx'), 'utf8')
-  assert.match(src, /handleRailLeft\(hostBox\.left, contentBox\.left\)/)
-  assert.doesNotMatch(src, /left: box\.left - hostBox\.left - HANDLE_RAIL/)
+  assert.match(src, /handleLeftForBlock/)
+  assert.match(src, /isSlideInnerBlock/)
+  assert.doesNotMatch(src, /coordsAtPos|lineCoords|gripTop/)
 })
 
 test('block handle menu puts an icon before each action', async () => {

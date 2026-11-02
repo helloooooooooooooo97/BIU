@@ -12,7 +12,7 @@ import { PickOption, PickPanel } from '@biu/database-ui/search'
 import { fieldDraftValue, parseFieldValue } from './fsdb-cells.tsx'
 import { FieldEditor } from './field-editor.tsx'
 import { loadFacets, persistFacets, slugFacetId, subscribeFacets } from './facet-catalog.ts'
-import { facetChipIcon } from './schema-field.tsx'
+import { facetChipIcon, facetTagLabel } from './schema-field.tsx'
 import { subscribeCrumbs } from './view-storage.ts'
 import { PersonPickPanel } from './person-cell.tsx'
 import { RecordPickPanel } from './record-link-cell.tsx'
@@ -136,7 +136,7 @@ function FacetPickPanel({ value, onChange }: { value: unknown; onChange: (next: 
   return (
     <TagPickPanel
       values={parsed.tags}
-      options={catalog.map((tag) => ({ value: tag.id, label: tag.label, icon: facetChipIcon(tag.id) }))}
+      options={catalog.map((tag) => ({ value: tag.id, label: facetTagLabel(tag), icon: facetChipIcon(tag.id) }))}
       multiple
       onChange={(next) => {
         void applyFacetTags(liveRef.current, catalog, next).then((updated) => {

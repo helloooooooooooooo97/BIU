@@ -4,6 +4,7 @@
 /*
  * BIU design tokens. Groups: color / space / font / radius / shadow / stroke.
  * --biu-color-* are colors. --biu-stroke-width is a length. No aliases.
+ * Popovers use --biu-color-bg-popover / --biu-color-bg-popover-hover / --biu-color-border-popover / --biu-radius-popover / --biu-shadow-popover.
  * --biu-color-emphasis is view/highlight only, never body ink.
  */
 :root {
@@ -39,6 +40,9 @@
 
   --biu-color-border: #f0efed;
   --biu-color-border-strong: #f0efed;
+  --biu-color-bg-popover: #f0efed;
+  --biu-color-bg-popover-hover: #e4e3e0;
+  --biu-color-border-popover: color-mix(in srgb, #f0efed 70%, transparent);
   --biu-stroke-width: 1px;
   --biu-stroke-width-thick: 2px;
 
@@ -96,6 +100,8 @@
   --biu-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
   --biu-shadow-md: 0 8px 24px rgba(0, 0, 0, 0.06);
   --biu-shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.10);
+  --biu-shadow-popover: 0 8px 24px rgba(0, 0, 0, 0.06);
+  --biu-radius-popover: 12px;
 
   --biu-radius-xs: 3px;
   --biu-radius-sm: 4px;
@@ -182,6 +188,9 @@ html.dark {
   --biu-color-icon: #bab9b5;
   --biu-color-border: #323232;
   --biu-color-border-strong: #323232;
+  --biu-color-bg-popover: #262626;
+  --biu-color-bg-popover-hover: #333332;
+  --biu-color-border-popover: color-mix(in srgb, #323232 70%, transparent);
   --biu-color-danger: #ff5949;
   --biu-color-ok: #1fac60;
   --biu-color-warning: #ff8000;
@@ -221,6 +230,7 @@ html.dark {
   --biu-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.24);
   --biu-shadow-md: 0 8px 24px rgba(0, 0, 0, 0.35);
   --biu-shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.45);
+  --biu-shadow-popover: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
 /* inline: do not re-emit --font-* (that overwrote :root with var(--font-sans)). */
@@ -396,9 +406,10 @@ body {
   z-index: 40;
   width: 240px;
   padding: 10px;
-  border-radius: 12px;
-  background: var(--biu-color-surface);
-  box-shadow: var(--biu-shadow-md);
+  border: var(--biu-stroke-width) solid var(--biu-color-border-popover);
+  border-radius: var(--biu-radius-popover);
+  background: var(--biu-color-bg-popover);
+  box-shadow: var(--biu-shadow-popover);
 }
 
 .shell-notify-pop {
@@ -1053,24 +1064,40 @@ body {
 .settings-page-prefs .fsdb-layout-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  justify-content: flex-start;
+  gap: 8px;
   width: 100%;
   margin: 0;
   border: 0;
   border-radius: 7px;
   padding: 6px 8px;
   background: transparent;
-  color: var(--biu-color-text);
+  color: var(--biu-color-text-muted);
   font: inherit;
   font-size: var(--biu-font-size-3);
-  font-weight:var(--biu-font-weight-semibold);
+  font-weight:var(--biu-font-weight-medium);
   cursor: pointer;
   text-align: left;
 }
 
-.settings-page-prefs .fsdb-layout-row:hover {
+.settings-page-prefs .fsdb-layout-row:hover,
+.settings-page-prefs .fsdb-layout-row.is-on {
   background: var(--biu-color-bg-hover);
+  color: var(--biu-color-text);
+}
+
+.settings-page-prefs .fsdb-layout-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-page-prefs .fsdb-layout-row svg,
+.settings-page-prefs .fsdb-layout-scale svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--biu-color-icon);
 }
 
 .settings-page-prefs .fsdb-layout-scale {
@@ -1079,12 +1106,13 @@ body {
   justify-content: space-between;
   gap: 8px;
   padding: 6px 8px;
+  color: var(--biu-color-text-muted);
+  font-size: var(--biu-font-size-3);
+  font-weight:var(--biu-font-weight-medium);
 }
 
-.settings-page-prefs .fsdb-layout-scale>span {
-  color: var(--biu-color-text);
-  font-size: var(--biu-font-size-3);
-  font-weight:var(--biu-font-weight-semibold);
+.settings-page-prefs .fsdb-layout-scale .fsdb-layout-label {
+  color: inherit;
 }
 
 .settings-page-prefs .fsdb-layout-pills {
@@ -1599,10 +1627,10 @@ body {
   min-width: 180px;
   transform: translateX(-50%);
   padding: 6px;
-  border: 0;
-  border-radius: 10px;
-  background: var(--biu-color-bg-subtle);
-  box-shadow: var(--biu-shadow-md);
+  border: var(--biu-stroke-width) solid var(--biu-color-border-popover);
+  border-radius: var(--biu-radius-popover);
+  background: var(--biu-color-bg-popover);
+  box-shadow: var(--biu-shadow-popover);
   pointer-events: auto;
 }
 
@@ -1759,10 +1787,10 @@ body {
   flex-direction: column;
   overflow: hidden;
   padding: 6px;
-  border: var(--biu-stroke-width) solid var(--biu-color-border);
-  border-radius: 10px;
-  background: var(--biu-color-surface);
-  box-shadow: var(--biu-shadow-md);
+  border: var(--biu-stroke-width) solid var(--biu-color-border-popover);
+  border-radius: var(--biu-radius-popover);
+  background: var(--biu-color-bg-popover);
+  box-shadow: var(--biu-shadow-popover);
 }
 
 html.dark .shell-workspace-menu {
@@ -2798,11 +2826,11 @@ select.settings-account-input {
   max-width: 320px;
   max-height: 400px;
   overflow: auto;
-  border: 0;
-  border-radius: 8px;
-  background: var(--biu-color-bg-subtle);
+  border: var(--biu-stroke-width) solid var(--biu-color-border-popover);
+  border-radius: var(--biu-radius-popover);
+  background: var(--biu-color-bg-popover);
   padding: 4px;
-  box-shadow: var(--biu-shadow-md);
+  box-shadow: var(--biu-shadow-popover);
 }
 
 .chat-sidebar-popover {
@@ -3254,11 +3282,11 @@ select.settings-account-input {
   width: max-content;
   max-height: min(70vh, 480px);
   overflow: auto;
-  border: var(--biu-stroke-width) solid var(--biu-color-border);
-  border-radius: 10px;
-  background: var(--biu-color-bg-subtle);
+  border: var(--biu-stroke-width) solid var(--biu-color-border-popover);
+  border-radius: var(--biu-radius-popover);
+  background: var(--biu-color-bg-popover);
   padding: 4px;
-  box-shadow: var(--biu-shadow-md);
+  box-shadow: var(--biu-shadow-popover);
   display: flex;
   flex-direction: column;
   gap: 1px;
@@ -3282,11 +3310,11 @@ select.settings-account-input {
   min-width: 220px;
   max-height: 320px;
   overflow: auto;
-  border: var(--biu-stroke-width) solid var(--biu-color-border);
-  border-radius: 10px;
-  background: var(--biu-color-bg-subtle);
+  border: var(--biu-stroke-width) solid var(--biu-color-border-popover);
+  border-radius: var(--biu-radius-popover);
+  background: var(--biu-color-bg-popover);
   padding: 8px;
-  box-shadow: var(--biu-shadow-md);
+  box-shadow: var(--biu-shadow-popover);
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -3936,7 +3964,6 @@ html.dark .chat-config-banner-action {
 
 html.dark .composer-model-panel,
 html.dark .composer-model-flyout {
-  background: #202020;
   color: #bcbab7;
 }
 
@@ -4694,6 +4721,58 @@ html.dark .composer-model-flyout {
   line-height: 1;
 }
 
+.biu-popover {
+  --biu-color-bg-hover: var(--biu-color-bg-popover-hover);
+  background: var(--biu-color-bg-popover);
+  border: var(--biu-stroke-width) solid var(--biu-color-border-popover);
+  border-radius: var(--biu-radius-popover);
+  box-shadow: var(--biu-shadow-popover);
+}
+
+.fsdb-emoji-picker,
+.fsdb-tool-flyout,
+.fsdb-create-scope-menu,
+.fsdb-crumb-menu,
+.fsdb-bulk-menu,
+.fsdb-layout-menu,
+.fsdb-col-facet-flyout,
+.fsdb-pager-size-menu,
+.fsdb-detail-more-menu,
+.fsdb-banner-pop,
+.fsdb-schema-type-menu,
+.fsdb-cellselect-menu,
+.fsdb-cell-pop,
+.fsdb-share-panel,
+.fsdb-scope-panel,
+.fsdb-share-member-options,
+.fsdb-share-res-pop,
+.fsdb-share-owner-card,
+.fsdb-query-drag-overlay,
+.page-block-handle-menu,
+.layout-picker-menu,
+.page-bubble,
+.page-slash,
+.page-color-menu,
+.page-find-box,
+.page-math-pop,
+.db-search-menu,
+.shell-side-pop,
+.shell-workspace-menu,
+.brand-agent-menu,
+.inspector-more-menu,
+.inspector-add-menu,
+.dock-icon-menu,
+.composer-model-panel,
+.composer-model-flyout,
+.chat-view-session-title-pop,
+.fsdb-page .tasks-viewdd-menu,
+.fsdb-page .tasks-sort-menu,
+.fsdb-page .tasks-filter-menu,
+.fsdb-page .fsdb-query-menu,
+.fsdb-page .fsdb-col-menu {
+  --biu-color-bg-hover: var(--biu-color-bg-popover-hover);
+}
+
 .fsdb-emoji-picker {
   position: absolute;
   top: calc(100% + 6px);
@@ -4701,10 +4780,10 @@ html.dark .composer-model-flyout {
   z-index: 30;
   width: 272px;
   padding: 10px 10px 8px;
-  border: var(--biu-stroke-width) solid color-mix(in srgb, var(--biu-color-border) 70%, transparent);
-  border-radius: 12px;
-  background: var(--biu-color-bg-muted);
-  box-shadow: var(--biu-shadow-md);
+  border: var(--biu-stroke-width) solid var(--biu-color-border-popover);
+  border-radius: var(--biu-radius-popover);
+  background: var(--biu-color-bg-popover);
+  box-shadow: var(--biu-shadow-popover);
 }
 
 .fsdb-emoji-picker.is-fixed {
@@ -5257,10 +5336,10 @@ html.dark .composer-model-flyout {
   flex-direction: column;
   gap: 4px;
   padding: 8px;
-  border: var(--biu-stroke-width) solid var(--biu-color-border);
-  border-radius: 10px;
-  background: var(--biu-color-bg-subtle);
-  box-shadow: var(--biu-shadow-md);
+  border: var(--biu-stroke-width) solid var(--biu-color-border-popover);
+  border-radius: var(--biu-radius-popover);
+  background: var(--biu-color-bg-popover);
+  box-shadow: var(--biu-shadow-popover);
 }
 
 .dock-icon-wrap.is-end .dock-icon-menu {
@@ -7869,11 +7948,11 @@ html:not(.dark) .composer-plus {
 
 .composer-model-panel,
 .composer-model-flyout {
-  border: var(--biu-stroke-width) solid var(--biu-color-border-strong);
-  border-radius: 12px;
-  background: var(--biu-color-bg-subtle);
+  border: var(--biu-stroke-width) solid var(--biu-color-border-popover);
+  border-radius: var(--biu-radius-popover);
+  background: var(--biu-color-bg-popover);
   color: var(--biu-color-text-muted);
-  box-shadow: var(--biu-shadow-md);
+  box-shadow: var(--biu-shadow-popover);
 }
 
 .composer-model-panel {

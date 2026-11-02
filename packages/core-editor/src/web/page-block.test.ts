@@ -480,6 +480,7 @@ test('page blocks are not HTML-draggable; only the handle moves the atom', async
   const view = await readFile(resolve(import.meta.dirname, './page-block-view.tsx'), 'utf8')
   assert.match(spec, /draggable: false/)
   assert.match(spec, /event\.type === 'dragstart'/)
-  assert.match(view, /event\.target !== event\.currentTarget/)
+  assert.doesNotMatch(view, /event\.target !== event\.currentTarget/)
+  assert.match(view, /page-slide-bar/)
 })
 

@@ -3,7 +3,6 @@ import { HeadlessDismiss } from '@biu/biu-ui'
 import type { FsDetailBarProps } from '@biu/type-file-system/ui'
 import {
   ArrowPathIcon,
-  ChevronDownIcon,
   CodeBracketIcon,
   DocumentTextIcon,
   EyeIcon,
@@ -21,12 +20,12 @@ import { kindLabel } from './block-id.ts'
 import {
   PAGE_FIND_OPEN_EVENT,
   PAGE_INSERT_EVENT,
-  PAGE_OUTLINE_EVENT,
   pageFilterActive,
   patchPageViewState,
   usePageViewState,
   type PageSort,
 } from './page-view-state.ts'
+import { useStickyToolbar } from './sticky-toolbar.ts'
 
 const MODES = [
   { id: 'doc' as const, label: '文档', Icon: DocumentTextIcon },
@@ -83,6 +82,8 @@ export function PageDetailBar({
   const filterRef = useRef<HTMLDivElement>(null)
   const columnRef = useRef<HTMLDivElement>(null)
   const configRef = useRef<HTMLDivElement>(null)
+  const toolbarRef = useRef<HTMLDivElement>(null)
+  useStickyToolbar(toolbarRef)
   const current = MODES.find((item) => item.id === present) ?? MODES[0]
   const CurrentIcon = current.Icon
   const filterOn = pageFilterActive(view)
@@ -119,6 +120,7 @@ export function PageDetailBar({
   return (
     <div
       className="tasks-toolbar"
+      ref={toolbarRef}
       data-testid="fsdb-page-detail-bar"
       data-biu-ignore
       onMouseDown={(event) => {
@@ -321,16 +323,6 @@ export function PageDetailBar({
             >
               <div className="tasks-filter-menu fsdb-tool-flyout" role="menu">
                 {configMenu}
-                <button
-                  type="button"
-                  className="fsdb-detail-more-item"
-                  onClick={() => {
-                    window.dispatchEvent(new Event(PAGE_OUTLINE_EVENT))
-                    setOpen(null)
-                  }}
-                >
-                  切换标题大纲
-                </button>
               </div>
             </HeadlessDismiss>
           ) : null}
@@ -359,7 +351,6 @@ export function PageDetailBar({
                 onClick={() => setScopeOpen((prev) => !prev)}
               >
                 {scope === 'workspace' ? <UsersIcon aria-hidden className="size-[14px]" /> : scope === 'shared' ? <GlobeAltIcon aria-hidden className="size-[14px]" /> : <UserIcon aria-hidden className="size-[14px]" />}
-                <ChevronDownIcon aria-hidden className="size-[14px]" />
               </button>
               {scopeOpen ? (
                 <div className="fsdb-create-scope-menu" role="menu">

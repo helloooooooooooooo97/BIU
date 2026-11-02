@@ -6,6 +6,7 @@ import { pageImage } from './page-image.ts'
 import { BlockMath, InlineMath, Mathematics } from '@tiptap/extension-mathematics'
 import Placeholder from '@tiptap/extension-placeholder'
 import { TableKit } from '@tiptap/extension-table'
+import { pageTable } from './page-table.ts'
 import StarterKit from '@tiptap/starter-kit'
 import { Paragraph } from '@tiptap/extension-paragraph'
 import { pageLowlight } from './page-lowlight.ts'
@@ -145,6 +146,7 @@ const pageCodeBlock = CodeBlockLowlight.extend({
         'code',
         {
           class: language ? `${this.options.languageClassPrefix}${language} hljs` : 'hljs',
+          ...(language ? { 'data-language': language } : {}),
         },
         0,
       ],
@@ -204,6 +206,7 @@ export function pageEditorExtensions() {
       heading: { levels: [1, 2, 3] },
       codeBlock: false,
       paragraph: false,
+      gapcursor: false,
     }),
     pageParagraph,
     pageCodeBlock,
@@ -213,8 +216,12 @@ export function pageEditorExtensions() {
     pageHighlight,
     pageImage,
     TableKit.configure({
-      table: { resizable: true, allowTableNodeSelection: true },
+      table: false,
+      tableCell: {},
+      tableHeader: {},
+      tableRow: {},
     }),
+    pageTable.configure({ resizable: true, allowTableNodeSelection: true }),
     pageMathematics,
     Placeholder.configure({
       placeholder: ({ node }) => {
@@ -236,4 +243,10 @@ export function pageEditorExtensions() {
     slashCommand,
     pageMention,
   ]
+}
+
+const EMBED_SKIP = new Set(['pageBlockIds', 'pageFilter', 'pageOutline', 'pageFind', 'pageAgentEdit', 'slash-command'])
+
+export function pageEmbedExtensions() {
+  return pageEditorExtensions().filter((ext) => !EMBED_SKIP.has(ext.name))
 }
