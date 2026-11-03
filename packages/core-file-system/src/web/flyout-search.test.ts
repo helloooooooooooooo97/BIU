@@ -12,7 +12,7 @@ test('toolbar flyouts replace the title row with a search field', () => {
   const views = readFileSync(resolve(import.meta.dirname, './view-order-menu.tsx'), 'utf8')
   assert.match(search, /placeholder="搜索…"/)
   assert.match(search, /className="tasks-sort-search font-medium"/)
-  assert.match(search, /requestAnimationFrame\(\(\) => ref\.current\?\.focus\(\)\)/)
+  assert.match(search, /requestAnimationFrame\(\(\) => ref\.current\?\.focus\(\{ preventScroll: true \}\)\)/)
   assert.match(search, /没有匹配项/)
   assert.match(search, /text\.toLowerCase\(\)\.includes\(needle\)/)
   assert.doesNotMatch(menus, /<FlyoutSearch/)

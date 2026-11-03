@@ -17,8 +17,12 @@ import {
   PhotoIcon,
   RectangleStackIcon,
   TableCellsIcon,
+  TagIcon,
   VariableIcon,
 } from '@heroicons/react/16/solid'
+import { HeadlessPopover, TagChip, TagChips } from '@biu/biu-ui'
+import { normalizeSchemaValue, retagSchemaValue, type SchemaFieldValue } from '@biu/type-file-system'
+import { pageBlockRecordId } from '../page-block-fence.ts'
 import { kindLabel, nodeBlockId } from './block-id.ts'
 import { comparePageBlocks } from './page-filter-plugin.ts'
 import { usePageViewState } from './page-view-state.ts'
@@ -66,7 +70,8 @@ export function listPageTableBlocks(doc: Node) {
     const type = node.type.name
     const heading = type === 'heading' ? Math.min(3, Math.max(1, Number(node.attrs.level) || 1)) : 0
     const kind = heading ? `标题 ${heading}` : type === 'pageBlock' ? pageBlockKindLabel(node) : kindLabel(type)
-    const label = node.textContent.replace(/\s+/g, ' ').trim() || blockTitle(node) || kind
+    const imageName = type === 'image' ? String(node.attrs.alt ?? '').trim() : ''
+    const label = node.textContent.replace(/\s+/g, ' ').trim() || imageName || blockTitle(node) || kind
     out.push({ id: nodeBlockId(node), kind, type, label, pos })
   })
   return out
@@ -99,37 +104,40 @@ export function replaceBlockPlainText(editor: Editor, pos: number, text: string)
   return true
 }
 
-export function writeBackTableBlock(editor: Editor, pos: number, nextJson: Record<string, unknown>) {
+export function writeBackTableBlock(editor: Editor, pos: number, nextJson: Record<string, unknown> | Record<string, unknown>[]) {
   const current = editor.state.doc.nodeAt(pos)
   if (!current) return false
-  let next: Node
+  const items = Array.isArray(nextJson) ? nextJson : [nextJson]
+  let nodes: Node[]
   try {
-    next = editor.schema.nodeFromJSON(nextJson)
+    nodes = items.map((json) => editor.schema.nodeFromJSON(json))
   } catch {
     return false
   }
-  if (next.type !== current.type) return false
-  const attrs = { ...next.attrs }
-  if (current.attrs.blockId && !attrs.blockId) attrs.blockId = current.attrs.blockId
-  if (current.attrs.id && !attrs.id) attrs.id = current.attrs.id
-  next = next.type.create(attrs, next.content, next.marks)
-  if (current.eq(next)) return false
-  const tr = editor.state.tr.replaceWith(pos, pos + current.nodeSize, next)
-  editor.view.dispatch(tr)
+  if (!nodes.length) return false
+  const first = nodes[0]
+  if (first.type === current.type) {
+    const attrs = { ...first.attrs }
+    if (current.attrs.blockId && !attrs.blockId) attrs.blockId = current.attrs.blockId
+    if (current.attrs.id && !attrs.id) attrs.id = current.attrs.id
+    nodes[0] = first.type.create(attrs, first.content, first.marks)
+  }
+  if (nodes.length === 1 && current.eq(nodes[0])) return false
+  editor.view.dispatch(editor.state.tr.replaceWith(pos, pos + current.nodeSize, nodes))
   return true
 }
 
 function flushEmbed(editor: Editor, pos: number, child: Editor | null) {
-  const next = child?.state.doc.firstChild
-  if (!next) return
-  writeBackTableBlock(editor, pos, next.toJSON() as Record<string, unknown>)
+  const doc = child?.state.doc
+  if (!doc?.childCount) return
+  const next: Record<string, unknown>[] = []
+  doc.forEach((node) => next.push(node.toJSON() as Record<string, unknown>))
+  writeBackTableBlock(editor, pos, next)
 }
 
 function BlockEmbed({ editor, pos }: { editor: Editor; pos: number }) {
   const posRef = useRef(pos)
   posRef.current = pos
-  const live = useRef(false)
-  const timer = useRef<number>(0)
   const childRef = useRef<Editor | null>(null)
   const json = editor.state.doc.nodeAt(pos)?.toJSON()
   const embed = useEditor({
@@ -141,15 +149,14 @@ function BlockEmbed({ editor, pos }: { editor: Editor; pos: number }) {
     editorProps: { attributes: { class: 'tiptap' } },
     onCreate: ({ editor: child }) => {
       childRef.current = child
-      requestAnimationFrame(() => {
-        live.current = true
-      })
     },
-    onUpdate: ({ editor: child, transaction }) => {
+    onUpdate: ({ editor: child }) => {
       childRef.current = child
-      if (!live.current || !transaction.docChanged) return
-      window.clearTimeout(timer.current)
-      timer.current = window.setTimeout(() => flushEmbed(editor, posRef.current, child), 240)
+    },
+    onBlur: ({ editor: child, event }) => {
+      const next = event?.relatedTarget
+      if (next instanceof Element && next.closest('.page-slash,.page-bubble,.page-math-pop,.page-block-handle-menu,.layout-picker-menu')) return
+      flushEmbed(editor, posRef.current, child)
     },
   })
 
@@ -159,7 +166,6 @@ function BlockEmbed({ editor, pos }: { editor: Editor; pos: number }) {
 
   useEffect(
     () => () => {
-      window.clearTimeout(timer.current)
       flushEmbed(editor, posRef.current, childRef.current)
     },
     [editor],
@@ -172,6 +178,131 @@ function BlockEmbed({ editor, pos }: { editor: Editor; pos: number }) {
       onKeyDown={(event) => event.stopPropagation()}
     >
       <EditorContent editor={embed} />
+    </div>
+  )
+}
+
+type FacetOption = { id: string; label: string }
+
+function collectionFromPath(path?: string) {
+  const raw = String(path ?? '').trim()
+  if (!raw.startsWith('/')) return '/pages'
+  const name = raw.split('/').filter(Boolean)[0]
+  return name ? `/${name}` : '/pages'
+}
+
+function useFacetCatalog() {
+  const [tags, setTags] = useState<FacetOption[]>([])
+  useEffect(() => {
+    let gone = false
+    void fetch('/api/db/list?path=/facets&limit=200')
+      .then((res) => res.json())
+      .then((body) => {
+        if (gone) return
+        const items = Array.isArray(body?.items) ? body.items : []
+        setTags(
+          items.map((item: { id?: unknown; label?: unknown; title?: unknown }) => {
+            const id = String(item.id ?? '').trim()
+            return { id, label: String(item.label || item.title || id).trim() || id }
+          }).filter((item: FacetOption) => item.id),
+        )
+      })
+      .catch(() => {})
+    return () => {
+      gone = true
+    }
+  }, [])
+  return tags
+}
+
+function BlockFacetCell({
+  collection,
+  pageId,
+  blockId,
+  writable,
+  catalog,
+}: {
+  collection: string
+  pageId: string
+  blockId: string
+  writable: boolean
+  catalog: FacetOption[]
+}) {
+  const recordPath = `/page-blocks/${pageBlockRecordId(collection, pageId, blockId)}`
+  const [value, setValue] = useState<SchemaFieldValue>({ tags: [], values: {} })
+  const [open, setOpen] = useState(false)
+  useEffect(() => {
+    let gone = false
+    void fetch(`/api/db/read?path=${encodeURIComponent(recordPath)}`)
+      .then((res) => res.json())
+      .then((body) => {
+        if (!gone) setValue(normalizeSchemaValue(body?.value?.facet))
+      })
+      .catch(() => {})
+    return () => {
+      gone = true
+    }
+  }, [recordPath])
+
+  const save = (nextIds: string[]) => {
+    const next = retagSchemaValue(value, nextIds)
+    setValue(next)
+    void fetch('/api/db/update', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ path: recordPath, content: { facet: next } }),
+    }).catch(() => {})
+  }
+
+  const toggle = (id: string) => {
+    save(value.tags.includes(id) ? value.tags.filter((item) => item !== id) : [...value.tags, id])
+  }
+
+  if (!blockId) return <div className="fsdb-cell">—</div>
+  const byId = new Map(catalog.map((item) => [item.id, item.label]))
+  return (
+    <div className="page-blocks-table-facet" onMouseDown={(event) => event.stopPropagation()}>
+      {value.tags.length ? (
+        <TagChips>
+          {value.tags.map((id) => (
+            <TagChip
+              key={id}
+              id={id}
+              label={byId.get(id) || id}
+              icon={<TagIcon aria-hidden className="size-3.5" />}
+              onRemove={writable ? () => toggle(id) : undefined}
+            />
+          ))}
+        </TagChips>
+      ) : null}
+      {writable ? (
+        <HeadlessPopover
+          open={open}
+          onOpenChange={setOpen}
+          trigger={
+            <button type="button" className="page-blocks-table-facet-add" aria-label="添加标签">
+              添加标签
+            </button>
+          }
+        >
+          <div className="page-blocks-table-facet-menu" role="listbox">
+            {catalog.length ? (
+              catalog.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`page-blocks-table-facet-option${value.tags.includes(item.id) ? ' is-on' : ''}`}
+                  onClick={() => toggle(item.id)}
+                >
+                  {item.label}
+                </button>
+              ))
+            ) : (
+              <div className="page-blocks-table-facet-empty">没有标签</div>
+            )}
+          </div>
+        </HeadlessPopover>
+      ) : null}
     </div>
   )
 }
@@ -220,10 +351,22 @@ function KindCell({
   )
 }
 
-export function PageBlocksTable({ editor, recordId }: { editor: Editor; recordId: string }) {
+export function PageBlocksTable({
+  editor,
+  recordId,
+  path,
+  writable = true,
+}: {
+  editor: Editor
+  recordId: string
+  path?: string
+  writable?: boolean
+}) {
   usePageEditorVersion()
   useSlashCatalogVersion()
   const view = usePageViewState(recordId)
+  const collection = collectionFromPath(path)
+  const catalog = useFacetCatalog()
   const [openIds, setOpenIds] = useState<string[]>([])
   const openRef = useRef(openIds)
   openRef.current = openIds
@@ -266,6 +409,9 @@ export function PageBlocksTable({ editor, recordId }: { editor: Editor; recordId
             <th>
               <Th Icon={DocumentTextIcon}>内容</Th>
             </th>
+            <th>
+              <Th Icon={TagIcon}>标签</Th>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -273,11 +419,23 @@ export function PageBlocksTable({ editor, recordId }: { editor: Editor; recordId
             rows.map((row, index) => {
               const key = row.id || `i-${index}`
               const open = openIds.includes(key)
-              return <FragmentRow key={key} row={row} open={open} editor={editor} onToggle={() => toggle(key)} />
+              return (
+                <FragmentRow
+                  key={key}
+                  row={row}
+                  open={open}
+                  editor={editor}
+                  collection={collection}
+                  pageId={recordId}
+                  writable={writable}
+                  catalog={catalog}
+                  onToggle={() => toggle(key)}
+                />
+              )
             })
           ) : (
             <tr>
-              <td colSpan={3}>
+              <td colSpan={4}>
                 <div className="fsdb-cell">没有块</div>
               </td>
             </tr>
@@ -292,11 +450,19 @@ function FragmentRow({
   row,
   open,
   editor,
+  collection,
+  pageId,
+  writable,
+  catalog,
   onToggle,
 }: {
   row: { id: string; kind: string; type: string; label: string; pos: number }
   open: boolean
   editor: Editor
+  collection: string
+  pageId: string
+  writable: boolean
+  catalog: FacetOption[]
   onToggle: () => void
 }) {
   return (
@@ -311,10 +477,13 @@ function FragmentRow({
         <td>
           <div className="page-blocks-table-content">{row.label}</div>
         </td>
+        <td>
+          <BlockFacetCell collection={collection} pageId={pageId} blockId={row.id} writable={writable} catalog={catalog} />
+        </td>
       </tr>
       {open ? (
         <tr className="page-blocks-table-expand">
-          <td colSpan={3}>
+          <td colSpan={4}>
             <div className="page-blocks-table-preview" data-testid="page-blocks-table-editor">
               <BlockEmbed editor={editor} pos={row.pos} />
             </div>

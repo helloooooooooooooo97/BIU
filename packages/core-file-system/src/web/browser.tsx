@@ -1955,7 +1955,7 @@ export function CollectionBrowser({
   }, [collectionPath, nested, moduleId])
 
   useEffect(() => {
-    if (searchOpen) searchInputRef.current?.focus()
+    if (searchOpen) searchInputRef.current?.focus({ preventScroll: true })
   }, [searchOpen])
 
   useEffect(() => {
@@ -2482,7 +2482,7 @@ export function CollectionBrowser({
       skipColumnReload.current = false
       if (!needsLoad) return
     }
-    if (routeRecordId) return
+    if (routeRecordId && loadedIdentityRef.current === listIdentityKey) return
     if (!routeViewReadyRef.current) return
     void reloadRef.current({ force: needsLoad })
   }, [listIdentityKey, reloadKey, routeRecordId, routeViewReady])
@@ -4689,7 +4689,18 @@ export function CollectionBrowser({
         </>
         )}
 
-        <div className="tasks-toolbar" ref={toolbarRef} data-biu-ignore>
+        <div
+          className="tasks-toolbar"
+          ref={toolbarRef}
+          data-biu-ignore
+          onMouseDown={(event) => {
+            const target = event.target as HTMLElement
+            if (target.closest('input,textarea,select,[contenteditable="true"]')) return
+            if (target.closest('button,[role="menuitem"],[role="menuitemcheckbox"],[role="menuitemradio"]')) {
+              event.preventDefault()
+            }
+          }}
+        >
           <div className="tasks-toolbar-left">
             {sheet ? null : (
             <div className="tasks-viewdd-wrap" ref={viewRef}>
@@ -4766,7 +4777,7 @@ export function CollectionBrowser({
                 title="搜索"
                 onClick={() => {
                   if (query) {
-                    searchInputRef.current?.focus()
+                    searchInputRef.current?.focus({ preventScroll: true })
                     return
                   }
                   setSearchOpen((open) => !open)
@@ -5607,8 +5618,8 @@ export function CollectionBrowser({
           }
           onDelete={canDelete && !(collectionPath === '/plugins' && selected.builtin === true) ? () => setDlg({ kind: 'delete-record', row: selected }) : undefined}
           onOpenRecord={(recordId, collection) => onOpenRecord?.(recordId, activeViewId, collection)}
-          onPrev={total > 1 ? () => void stepViewRecord(-1) : undefined}
-          onNext={total > 1 ? () => void stepViewRecord(1) : undefined}
+          onPrev={() => void stepViewRecord(-1)}
+          onNext={() => void stepViewRecord(1)}
           canPrev={viewIndex == null ? total > 1 : viewIndex > 0}
           canNext={viewIndex == null ? total > 1 : viewIndex < total - 1}
           collectionPath={collectionPath}

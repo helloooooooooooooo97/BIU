@@ -194,7 +194,7 @@ html.dark {
   --biu-color-danger: #ff5949;
   --biu-color-ok: #1fac60;
   --biu-color-warning: #ff8000;
-  --biu-color-ink-gray: #696969;
+  --biu-color-ink-gray: #b4b4b4;
   --biu-color-ink-brown: #83733c;
   --biu-color-ink-orange: #e36921;
   --biu-color-ink-pink: #aa2b78;
@@ -6922,19 +6922,12 @@ html[data-outline-pin="1"] .chat-outline-rail {
   max-height: min(40vh, 360px);
   overflow: auto;
   transform: translateY(-50%);
-  border: var(--biu-stroke-width) solid var(--biu-color-border-strong);
-  border-radius: 8px;
-  background: rgba(32, 32, 32, 0.92);
+  border: var(--biu-stroke-width) solid var(--biu-color-border-popover);
+  border-radius: var(--biu-radius-popover);
+  background: var(--biu-color-bg-popover);
   padding: 6px;
-  box-shadow: 0 1px 2px rgba(15, 15, 15, 0.04), 0 10px 32px rgba(0, 0, 0, 0.28);
-  backdrop-filter: blur(24px) saturate(1.3);
-  -webkit-backdrop-filter: blur(24px) saturate(1.3);
+  box-shadow: var(--biu-shadow-popover);
   color: var(--biu-color-text-muted);
-}
-
-html:not(.dark) .chat-outline-panel {
-  background: rgba(249, 248, 247, 0.94);
-  box-shadow: 0 1px 2px rgba(15, 15, 15, 0.04), 0 10px 28px rgba(0, 0, 0, 0.08);
 }
 
 .chat-outline-panel::before {
@@ -6965,12 +6958,8 @@ html:not(.dark) .chat-outline-panel {
 }
 
 .chat-outline-item.is-active {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--biu-color-bg-hover);
   color: var(--biu-color-text);
-}
-
-html:not(.dark) .chat-outline-item.is-active {
-  background: rgba(0, 0, 0, 0.05);
 }
 
 .chat-outline-item.is-h1 {

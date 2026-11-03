@@ -3,7 +3,6 @@ import { useSyncExternalStore } from 'react'
 import {
   ArrowsPointingOutIcon,
   ArrowsUpDownIcon,
-  Bars3BottomLeftIcon,
   BookmarkIcon,
   ChevronUpDownIcon,
   LanguageIcon,
@@ -12,10 +11,9 @@ import { getPagePrefs, getPageWidthVersion, persistPagePrefs, subscribePageWidth
 
 type Icon = ComponentType<SVGProps<SVGSVGElement>>
 
-const BOOLS: { key: keyof Pick<PagePrefs, 'wide' | 'outlineExpand' | 'outlinePin' | 'navPin'>; label: string; testId: string; icon: Icon }[] = [
+const BOOLS: { key: keyof Pick<PagePrefs, 'wide' | 'outlinePin' | 'navPin'>; label: string; testId: string; icon: Icon }[] = [
   { key: 'wide', label: '宽屏', testId: 'fsdb-layout-wide', icon: ArrowsPointingOutIcon },
-  { key: 'outlineExpand', label: '展开悬浮', testId: 'fsdb-layout-outline-expand', icon: Bars3BottomLeftIcon },
-  { key: 'outlinePin', label: '悬浮目录常驻', testId: 'fsdb-layout-outline-pin', icon: BookmarkIcon },
+  { key: 'outlinePin', label: '目录常驻', testId: 'fsdb-layout-outline-pin', icon: BookmarkIcon },
   { key: 'navPin', label: '翻页常驻', testId: 'fsdb-layout-nav-pin', icon: ChevronUpDownIcon },
 ]
 

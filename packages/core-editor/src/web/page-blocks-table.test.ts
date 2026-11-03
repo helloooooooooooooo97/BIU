@@ -1,5 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { Editor } from '@tiptap/core'
 import { pageEditorExtensions } from './kit.ts'
 import { listPageTableBlocks, replaceBlockPlainText, writeBackTableBlock } from './page-blocks-table.tsx'
@@ -44,19 +45,51 @@ test('table mode hides the document and keeps the content peek', () => {
   assert.match(PAGE_EDITOR_STYLE, /tr:hover \.page-blocks-table-kind-expand/)
 })
 
-test('writeBackTableBlock keeps the row when the embed is still empty', () => {
+test('table view has a facet column for block ids', () => {
+  const src = readFileSync(new URL('./page-blocks-table.tsx', import.meta.url), 'utf8')
+  assert.match(src, /标签/)
+  assert.match(src, /pageBlockRecordId/)
+  assert.match(src, /BlockFacetCell/)
+  assert.match(src, /row\.id/)
+})
+
+test('writeBackTableBlock replaces the row with a different block', () => {
   const editor = new Editor({
     extensions: pageEditorExtensions(),
-    content: `:::pageBlock {kind=algorithm plugin=page-algorithm id=ab12cd34}
-{"title":"Two Sum"}
-:::
-`,
+    content: '乙',
     contentType: 'markdown',
   })
-  const row = listPageTableBlocks(editor.state.doc).find((item) => item.type === 'pageBlock')
+  const row = listPageTableBlocks(editor.state.doc)[0]
   assert.ok(row)
-  assert.equal(writeBackTableBlock(editor, row.pos, { type: 'paragraph' }), false)
-  assert.equal(listPageTableBlocks(editor.state.doc).filter((item) => item.type === 'pageBlock').length, 1)
+  assert.equal(writeBackTableBlock(editor, row.pos, { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: '标题' }] }), true)
+  const after = listPageTableBlocks(editor.state.doc)
+  assert.equal(after[0]?.type, 'heading')
+  assert.equal(after[0]?.label, '标题')
+  editor.destroy()
+})
+
+test('writeBackTableBlock replaces one row with several blocks', () => {
+  const editor = new Editor({
+    extensions: pageEditorExtensions(),
+    content: '乙',
+    contentType: 'markdown',
+  })
+  const row = listPageTableBlocks(editor.state.doc)[0]
+  assert.ok(row)
+  assert.equal(
+    writeBackTableBlock(editor, row.pos, [
+      { type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: '甲' }] },
+      { type: 'paragraph', content: [{ type: 'text', text: '乙' }] },
+    ]),
+    true,
+  )
+  assert.deepEqual(
+    listPageTableBlocks(editor.state.doc).map((item) => [item.type, item.label]),
+    [
+      ['heading', '甲'],
+      ['paragraph', '乙'],
+    ],
+  )
   editor.destroy()
 })
 

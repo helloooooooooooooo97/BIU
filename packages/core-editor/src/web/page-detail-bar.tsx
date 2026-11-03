@@ -3,6 +3,8 @@ import { HeadlessDismiss } from '@biu/biu-ui'
 import type { FsDetailBarProps } from '@biu/type-file-system/ui'
 import {
   ArrowPathIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
   CodeBracketIcon,
   DocumentTextIcon,
   EyeIcon,
@@ -18,10 +20,11 @@ import {
 import { setPagePresentMode, usePagePresentMode } from './source-mode.ts'
 import { kindLabel } from './block-id.ts'
 import {
-  PAGE_FIND_OPEN_EVENT,
   PAGE_INSERT_EVENT,
   pageFilterActive,
+  patchPageFind,
   patchPageViewState,
+  usePageFind,
   usePageViewState,
   type PageSort,
 } from './page-view-state.ts'
@@ -72,10 +75,14 @@ export function PageDetailBar({
 }: FsDetailBarProps) {
   const present = usePagePresentMode(record.id)
   const view = usePageViewState(record.id)
+  const find = usePageFind(record.id)
+  const searchRef = useRef<HTMLDivElement>(null)
+  const searchInput = useRef<HTMLInputElement>(null)
   const [open, setOpen] = useState<string | null>(null)
   const [scopeOpen, setScopeOpen] = useState(false)
   const [scope, setScope] = useState<'personal' | 'workspace' | 'shared'>('personal')
   const [creating, setCreating] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
   const viewRef = useRef<HTMLDivElement>(null)
   const modeRef = useRef<HTMLDivElement>(null)
   const sortRef = useRef<HTMLDivElement>(null)
@@ -97,7 +104,26 @@ export function PageDetailBar({
     setOpen(null)
   }, [record.id])
 
+  useEffect(() => {
+    if (!find.open) return
+    searchInput.current?.focus({ preventScroll: true })
+    searchInput.current?.select()
+  }, [find.open])
+
   const toggle = (next: string) => setOpen((prev) => (prev === next ? null : next))
+
+  const refreshNow = async () => {
+    if (refreshing) return
+    setRefreshing(true)
+    const started = Date.now()
+    try {
+      await Promise.resolve(onRetry?.())
+    } finally {
+      const wait = Math.max(0, 480 - (Date.now() - started))
+      if (wait) await new Promise((resolve) => window.setTimeout(resolve, wait))
+      setRefreshing(false)
+    }
+  }
 
   const createPage = async () => {
     if (creating) return
@@ -124,7 +150,9 @@ export function PageDetailBar({
       data-testid="fsdb-page-detail-bar"
       data-biu-ignore
       onMouseDown={(event) => {
-        if ((event.target as HTMLElement).closest('button,input,textarea,[role="menuitem"],[role="menuitemcheckbox"],[role="menuitemradio"]')) {
+        const target = event.target as HTMLElement
+        if (target.closest('input,textarea,select,[contenteditable="true"]')) return
+        if (target.closest('button,[role="menuitem"],[role="menuitemcheckbox"],[role="menuitemradio"]')) {
           event.preventDefault()
         }
       }}
@@ -168,15 +196,57 @@ export function PageDetailBar({
         </div>
       </div>
       <div className="tasks-toolbar-right">
-        <button
-          type="button"
-          className="tasks-sort-btn"
-          aria-label="搜索"
-          title="搜索"
-          onClick={() => window.dispatchEvent(new CustomEvent(PAGE_FIND_OPEN_EVENT, { detail: { recordId: record.id } }))}
+        <HeadlessDismiss
+          enabled={find.open}
+          onDismiss={() => {
+            if (!find.query) patchPageFind(record.id, { open: false, index: 0, total: 0 })
+          }}
         >
-          <MagnifyingGlassIcon aria-hidden className="size-[14px]" />
-        </button>
+          <div className={`tasks-search-wrap${find.open ? ' is-open is-find' : ''}`} ref={searchRef}>
+            <button
+              type="button"
+              className={`tasks-sort-btn${find.open ? ' is-active' : ''}`}
+              aria-label="搜索"
+              aria-expanded={find.open}
+              title="搜索"
+              onClick={() => patchPageFind(record.id, find.open ? { open: false, query: '', index: 0, total: 0 } : { open: true })}
+            >
+              <MagnifyingGlassIcon aria-hidden className="size-[14px]" />
+            </button>
+            {find.open ? (
+              <>
+                <input
+                  ref={searchInput}
+                  className="tasks-search"
+                  value={find.query}
+                  placeholder="搜索"
+                  aria-label="正文搜索"
+                  data-testid="page-find"
+                  onChange={(event) => patchPageFind(record.id, { query: event.target.value, index: 0 })}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Escape') {
+                      event.preventDefault()
+                      patchPageFind(record.id, { open: false, query: '', index: 0, total: 0 })
+                    }
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      patchPageFind(record.id, { index: find.index + (event.shiftKey ? -1 : 1) })
+                    }
+                  }}
+                />
+                <span className="page-find-count" data-testid="page-find-count">
+                  {find.query.trim() ? `${find.total ? find.index + 1 : 0}/${find.total}` : ''}
+                </span>
+                <button type="button" className="page-find-btn" title="上一个" aria-label="上一个" onClick={() => patchPageFind(record.id, { index: find.index - 1 })}>
+                  <ChevronUpIcon aria-hidden className="size-3.5" />
+                </button>
+                <button type="button" className="page-find-btn" title="下一个" aria-label="下一个" onClick={() => patchPageFind(record.id, { index: find.index + 1 })}>
+                  <ChevronDownIcon aria-hidden className="size-3.5" />
+                </button>
+              </>
+            ) : null}
+          </div>
+        </HeadlessDismiss>
         <div className="tasks-sort-wrap" ref={modeRef}>
           <button
             type="button"
@@ -327,8 +397,15 @@ export function PageDetailBar({
             </HeadlessDismiss>
           ) : null}
         </div>
-        <button type="button" className="tasks-refresh" aria-label="刷新" title="刷新" onClick={() => onRetry?.()}>
-          <ArrowPathIcon aria-hidden className="size-[14px]" />
+        <button
+          type="button"
+          className={`tasks-refresh${refreshing ? ' is-spinning' : ''}`}
+          aria-label="刷新"
+          title="刷新"
+          disabled={refreshing}
+          onClick={() => void refreshNow()}
+        >
+          <ArrowPathIcon aria-hidden className={`size-[14px]${refreshing ? ' fsdb-spin' : ''}`} />
         </button>
         <div className="fsdb-create-group">
           <button

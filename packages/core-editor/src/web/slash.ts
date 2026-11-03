@@ -8,7 +8,7 @@ import { slashMayOpen } from './editor-live.ts'
 import { createPageBlockId } from './page-block.ts'
 import { defaultPageBlockTitle } from '../page-block-fence.ts'
 import { BASIC_BLOCK_TYPE, getPageEditor, type PageBlockSpec, type SlashInsert } from './service.ts'
-import { uploadPageImage } from './page-image.ts'
+import { pageResourcePath, uploadPageImage } from './page-image.ts'
 import { clientLog, clientLogErrorText } from '@biu/web-event-log/log'
 import {
   pageBlockPluginPhase,
@@ -142,9 +142,9 @@ export const SLASH_ITEMS: SlashItem[] = [
     aliases: ['image', 'img', 'pic', '图片', 'photo'],
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).run()
-      pickLocalImageSrc().then((src) => {
-        if (!src || editor.isDestroyed) return
-        editor.chain().focus().setImage({ src, alt: '' }).run()
+      pickLocalImageSrc(editor).then((picked) => {
+        if (!picked.src || editor.isDestroyed) return
+        editor.chain().focus().setImage({ src: picked.src, alt: picked.alt }).run()
       })
     },
     ...BASIC_GROUP,
@@ -191,22 +191,24 @@ export const SLASH_ITEMS: SlashItem[] = [
   },
 ]
 
-function pickLocalImageSrc() {
-  return new Promise<string>((resolve) => {
+function pickLocalImageSrc(editor: Editor) {
+  return new Promise<{ src: string; alt: string }>((resolve) => {
+    const empty = { src: '', alt: '' }
     const input = document.createElement('input')
     input.type = 'file'
     input.accept = 'image/*'
     input.addEventListener('change', () => {
       const file = input.files?.[0]
       if (!file) {
-        resolve('')
+        resolve(empty)
         return
       }
-      void uploadPageImage(file)
-        .then(resolve)
-        .catch(() => resolve(''))
+      const alt = file.name.replace(/^.*[/\\]/, '')
+      void uploadPageImage(file, pageResourcePath(editor))
+        .then((src) => resolve({ src, alt }))
+        .catch(() => resolve(empty))
     })
-    input.addEventListener('cancel', () => resolve(''))
+    input.addEventListener('cancel', () => resolve(empty))
     input.click()
   })
 }

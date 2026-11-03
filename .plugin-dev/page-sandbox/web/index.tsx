@@ -1,4 +1,4 @@
-import { Input, ReUI } from '@biu/reui'
+import { ReUI } from '@biu/reui'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { javascript } from '@codemirror/lang-javascript'
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
@@ -8,8 +8,8 @@ import {
   ArrowsPointingInIcon,
   ArrowsPointingOutIcon,
   CodeBracketIcon,
-  CubeTransparentIcon,
   EyeIcon,
+  ViewColumnsIcon,
 } from '@heroicons/react/16/solid'
 import { tags } from '@lezer/highlight'
 import { createPortal } from 'react-dom'
@@ -420,16 +420,8 @@ function SourceEditor({
   )
 }
 
-const chromeIcon = {
-  width: 14,
-  height: 14,
-  flexShrink: 0,
-  color: 'var(--biu-color-icon)',
-} as const
-
-function sandboxTitle(raw: unknown) {
-  const text = typeof raw === 'string' ? raw.trim() : ''
-  return text || '沙箱'
+function hold(event: { preventDefault: () => void }) {
+  event.preventDefault()
 }
 
 function cssBoxSize(value: unknown): string | undefined {
@@ -509,201 +501,62 @@ function HeightGrip({
     />
   )
 }
-const chromeIconBtn: Record<string, unknown> = {
-  cursor: 'pointer',
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: 6,
-  margin: 0,
-  border: 0,
-  borderRadius: 6,
-  padding: 0,
-  background: 'transparent',
-  color: 'var(--biu-color-text-subtle)',
-  font: 'inherit',
-}
-
 function SandboxBar({
-  title,
-  onTitle,
   tab,
   onTab,
   ro,
   expanded,
   onExpand,
 }: {
-  title: string
-  onTitle: (next: string) => void
   tab: 'preview' | 'code' | 'split'
   onTab: (next: 'preview' | 'code' | 'split') => void
   ro: boolean
   expanded: boolean
   onExpand: () => void
 }) {
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState(title)
-  useEffect(() => {
-    if (!editing) setDraft(title)
-  }, [title, editing])
-  const commit = () => {
-    const next = sandboxTitle(draft)
-    setDraft(next)
-    setEditing(false)
-    if (next !== title) onTitle(next)
-  }
-  const tabBtn = (id: 'preview' | 'code', label: string, Icon: typeof EyeIcon) => (
-    <button
-      type="button"
-      tabIndex={-1}
-      data-testid={id === 'preview' ? 'sandbox-tab-preview' : 'sandbox-tab-code'}
-      aria-pressed={tab === id}
-      onClick={() => onTab(id)}
-      style={{
-        ...chromeIconBtn,
-        padding: '4px 10px',
-        background: tab === id ? 'var(--biu-color-bg-hover)' : 'transparent',
-        color: tab === id ? 'var(--biu-color-text)' : 'var(--biu-color-text-muted)',
-        fontSize: 'var(--biu-font-size-3)',
-        fontWeight: 'var(--biu-font-weight-medium)',
-      }}
-    >
-      <Icon style={chromeIcon} />
-      {label}
-    </button>
-  )
+  const coding = tab === 'code'
   return (
-    <div
-      data-testid="sandbox-bar"
-      data-biu-ignore
-      style={{
-        display: 'grid',
-        gridTemplateColumns: '1fr auto 1fr',
-        alignItems: 'center',
-        gap: 8,
-        padding: '4px 8px',
-        borderBottom: 'none',
-        background: '#202020',
-        color: 'var(--biu-color-text)',
-      }}
-    >
-      <div
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          minWidth: 0,
-          gap: 6,
-          color: 'var(--biu-color-text-subtle)',
-          fontSize: 'var(--biu-font-size-3)',
-          fontWeight: 'var(--biu-font-weight-medium)',
-        }}
-      >
-        <CubeTransparentIcon style={{ ...chromeIcon, color: 'var(--biu-color-ink-purple)' }} />
-        {editing && !ro ? (
-          <Input
-            data-testid="sandbox-title-input"
-            data-page-block-capture=""
-            aria-label="沙箱名称"
-            value={draft}
-            autoFocus
-            onChange={(event) => setDraft((event.target as HTMLInputElement).value)}
-            onBlur={commit}
-            onKeyDown={(event) => {
-              event.stopPropagation()
-              if (event.key === 'Enter') {
-                event.preventDefault()
-                ;(event.target as HTMLInputElement).blur()
-              }
-              if (event.key === 'Escape') {
-                event.preventDefault()
-                setDraft(title)
-                setEditing(false)
-              }
-            }}
-            style={{
-              minWidth: 0,
-              flex: 1,
-              height: 'var(--biu-size-control-md)',
-              margin: 0,
-              border: 0,
-              background: 'transparent',
-              color: 'var(--biu-color-text-subtle)',
-              fontSize: 'inherit',
-              fontWeight: 'inherit',
-              outline: 'none',
-            }}
-          />
-        ) : (
+    <div className="page-slide-bar" data-testid="sandbox-bar" data-biu-ignore>
+      {ro ? null : (
+        <>
           <button
             type="button"
-            data-testid="sandbox-title"
-            title={ro ? title : '改名称'}
-            aria-label={ro ? title : '改名称'}
-            disabled={ro}
-            onClick={() => {
-              if (ro) return
-              setDraft(title)
-              setEditing(true)
-            }}
-            style={{
-              ...chromeIconBtn,
-              justifyContent: 'flex-start',
-              minWidth: 0,
-              padding: 0,
-              color: 'inherit',
-              fontSize: 'inherit',
-              fontWeight: 'inherit',
-              cursor: ro ? 'default' : 'text',
-            }}
+            className={`page-slide-icon${coding ? ' is-on' : ''}`}
+            title={coding ? '预览' : '编辑'}
+            aria-label={coding ? '预览' : '编辑'}
+            aria-pressed={coding}
+            data-testid="sandbox-edit"
+            onMouseDown={hold}
+            onClick={() => onTab(coding ? 'preview' : 'code')}
           >
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span>
+            {coding ? <EyeIcon aria-hidden className="page-slide-ico" /> : <CodeBracketIcon aria-hidden className="page-slide-ico" />}
           </button>
-        )}
-      </div>
-      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }} role="tablist" aria-label="沙箱视图">
-        {tabBtn('preview', '预览', EyeIcon)}
-        {ro ? null : tabBtn('code', '代码', CodeBracketIcon)}
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
-        <button
-          type="button"
-          tabIndex={-1}
-          data-testid="sandbox-split"
-          title={tab === 'split' ? '取消分栏' : '分栏：左预览，右代码'}
-          aria-label={tab === 'split' ? '取消分栏' : '分栏'}
-          aria-pressed={tab === 'split'}
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => onTab(tab === 'split' ? 'preview' : 'split')}
-          style={{
-            ...chromeIconBtn,
-            width: 'var(--biu-size-control-md)',
-            height: 'var(--biu-size-control-md)',
-            background: tab === 'split' ? 'var(--biu-color-bg-hover)' : 'transparent',
-            color: tab === 'split' ? 'var(--biu-color-text)' : 'var(--biu-color-text-subtle)',
-          }}
-        >
-          <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden style={chromeIcon}>
-            <path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h3A1.5 1.5 0 0 1 8 3.5v9A1.5 1.5 0 0 1 6.5 14h-3A1.5 1.5 0 0 1 2 12.5v-9Zm7.5-1.5A1.5 1.5 0 0 0 8 3.5v9a1.5 1.5 0 0 0 1.5 1.5h3a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 12.5 2h-3Z" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          tabIndex={-1}
-          data-page-block-expand=""
-          data-testid="sandbox-expand"
-          title={expanded ? '缩小' : '放大'}
-          aria-label={expanded ? '缩小' : '放大'}
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={onExpand}
-          style={{
-            ...chromeIconBtn,
-            width: 'var(--biu-size-control-md)',
-            height: 'var(--biu-size-control-md)',
-          }}
-        >
-          {expanded ? <ArrowsPointingInIcon style={chromeIcon} /> : <ArrowsPointingOutIcon style={chromeIcon} />}
-        </button>
-      </div>
+          <button
+            type="button"
+            className={`page-slide-icon${tab === 'split' ? ' is-on' : ''}`}
+            data-testid="sandbox-split"
+            title={tab === 'split' ? '取消分栏' : '分栏：左预览，右代码'}
+            aria-label={tab === 'split' ? '取消分栏' : '分栏'}
+            aria-pressed={tab === 'split'}
+            onMouseDown={hold}
+            onClick={() => onTab(tab === 'split' ? 'preview' : 'split')}
+          >
+            <ViewColumnsIcon aria-hidden className="page-slide-ico" />
+          </button>
+        </>
+      )}
+      <button
+        type="button"
+        className="page-slide-icon"
+        data-page-block-expand=""
+        data-testid="sandbox-expand"
+        title={expanded ? '缩小' : '放大'}
+        aria-label={expanded ? '缩小' : '放大'}
+        onMouseDown={hold}
+        onClick={onExpand}
+      >
+        {expanded ? <ArrowsPointingInIcon aria-hidden className="page-slide-ico" /> : <ArrowsPointingOutIcon aria-hidden className="page-slide-ico" />}
+      </button>
     </div>
   )
 }
@@ -824,7 +677,6 @@ const SANDBOX_SAMPLE = `export default function App() {
 
 function SandboxCard({ data, update, writable, selected: nodeSelected }: BlockProps) {
   const ro = !writable
-  const title = sandboxTitle(data.title)
   const live = useSandboxSource(data, update, SANDBOX_SAMPLE)
   const source = live.source
   const ioRef = useRef({ read: live.readData, write: live.writeData })
@@ -923,7 +775,7 @@ function SandboxCard({ data, update, writable, selected: nodeSelected }: BlockPr
         width: expanded ? '100%' : cssBoxSize(width) ?? '100%',
         height: expanded ? '100%' : cssBoxSize(height) ?? SANDBOX_DEFAULT_HEIGHT,
         maxWidth: '100%',
-        overflow: 'hidden',
+        overflow: expanded ? 'hidden' : 'visible',
         boxSizing: 'border-box',
         border: expanded
           ? 'none'
@@ -936,8 +788,6 @@ function SandboxCard({ data, update, writable, selected: nodeSelected }: BlockPr
         <style>{`[data-testid="page-sandbox-block"]:fullscreen,[data-testid="page-sandbox-block"]:-webkit-full-screen{inset:0!important;width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;display:flex!important;flex-direction:column!important}`}</style>
       ) : null}
       <SandboxBar
-        title={title}
-        onTitle={(next) => update({ title: next })}
         tab={tab}
         onTab={setTab}
         ro={ro}

@@ -50,7 +50,7 @@ export function OutlineNav({
   }
 
   function outlineExpandOn() {
-    return typeof document === 'undefined' || document.documentElement.getAttribute('data-outline-expand') !== '0'
+    return true
   }
 
   useEffect(() => {

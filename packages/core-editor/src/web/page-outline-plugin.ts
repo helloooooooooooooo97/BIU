@@ -1,5 +1,5 @@
 import { Extension } from '@tiptap/core'
-import { Plugin, PluginKey } from '@tiptap/pm/state'
+import { Plugin, PluginKey, type Transaction } from '@tiptap/pm/state'
 import type { Node } from '@tiptap/pm/model'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { nodeBlockId } from './block-id.ts'
@@ -22,6 +22,19 @@ export function listOutlineBlocks(doc: Node) {
     const depth = heading ? level - 1 : nest
     out.push({ pos, size: node.nodeSize, id: nodeBlockId(node), heading, level, depth })
     if (heading) nest = level
+  })
+  return out
+}
+
+export function listFoldableItems(doc: Node) {
+  const out: { pos: number; size: number }[] = []
+  doc.descendants((node, pos) => {
+    if (node.type.name !== 'listItem') return
+    let nested = false
+    node.forEach((child) => {
+      if (child.type.name === 'bulletList' || child.type.name === 'orderedList') nested = true
+    })
+    if (nested) out.push({ pos, size: node.nodeSize })
   })
   return out
 }
@@ -58,10 +71,7 @@ export function outlineFoldGutterHit(heading: HTMLElement, event: { clientX: num
   )
 }
 
-function headingHasChildren(
-  blocks: { heading: boolean; level: number }[],
-  index: number,
-) {
+function headingHasChildren(blocks: { heading: boolean; level: number }[], index: number) {
   const item = blocks[index]
   if (!item?.heading) return false
   for (let j = index + 1; j < blocks.length; j += 1) {
@@ -72,27 +82,53 @@ function headingHasChildren(
   return false
 }
 
-function decorations(doc: Node, recordId: string) {
-  if (getPagePresentMode(recordId) !== 'outline') return DecorationSet.empty
-  const folded = pageOutlineFolded(recordId)
-  const blocks = listOutlineBlocks(doc)
-  const hidden = collapsedOutlineIndices(blocks, folded)
+function mapFolded(folded: Set<number>, tr: Transaction, doc: Node) {
+  const next = new Set<number>()
+  for (const pos of folded) {
+    const mapped = tr.mapping.mapResult(pos)
+    if (mapped.deleted) continue
+    if (doc.nodeAt(mapped.pos)?.type.name === 'listItem') next.add(mapped.pos)
+  }
+  return next
+}
+
+type PluginState = { decos: DecorationSet; folded: Set<number> }
+
+function decorations(doc: Node, recordId: string, folded: Set<number>): PluginState {
+  const mode = recordId ? getPagePresentMode(recordId) : 'doc'
   const decos: Decoration[] = []
-  blocks.forEach((item, index) => {
-    const cls = ['page-outline-block']
-    if (item.heading) cls.push('page-outline-heading')
-    if (hidden.has(index)) cls.push('page-block-is-hidden')
-    const child = Boolean(item.id && headingHasChildren(blocks, index))
-    if (child) cls.push('has-fold')
-    const attrs: Record<string, string> = {
-      class: cls.join(' '),
-      style: `--page-outline-depth:${item.depth}`,
+  if (mode === 'outline') {
+    const shut = pageOutlineFolded(recordId)
+    const blocks = listOutlineBlocks(doc)
+    const hidden = collapsedOutlineIndices(blocks, shut)
+    blocks.forEach((item, index) => {
+      const cls = ['page-outline-block']
+      if (item.heading) cls.push('page-outline-heading')
+      if (hidden.has(index)) cls.push('page-block-is-hidden')
+      const child = Boolean(item.id && headingHasChildren(blocks, index))
+      if (child) cls.push('has-fold')
+      const attrs: Record<string, string> = {
+        class: cls.join(' '),
+        style: `--page-outline-depth:${item.depth}`,
+      }
+      if (item.id) attrs['data-outline-id'] = item.id
+      if (child) attrs['data-outline-folded'] = shut.has(item.id) ? 'true' : 'false'
+      decos.push(Decoration.node(item.pos, item.pos + item.size, attrs))
+    })
+  }
+  if (mode === 'doc' || mode === 'outline' || mode === 'table') {
+    for (const item of listFoldableItems(doc)) {
+      const shut = folded.has(item.pos)
+      decos.push(
+        Decoration.node(item.pos, item.pos + item.size, {
+          class: `has-fold${shut ? ' is-folded' : ''}`,
+          'data-list-pos': String(item.pos),
+          'data-list-folded': shut ? 'true' : 'false',
+        }),
+      )
     }
-    if (item.id) attrs['data-outline-id'] = item.id
-    if (child) attrs['data-outline-folded'] = folded.has(item.id) ? 'true' : 'false'
-    decos.push(Decoration.node(item.pos, item.pos + item.size, attrs))
-  })
-  return DecorationSet.create(doc, decos)
+  }
+  return { decos: DecorationSet.create(doc, decos), folded }
 }
 
 export const pageOutline = Extension.create({
@@ -118,23 +154,38 @@ export const pageOutline = Extension.create({
       new Plugin({
         key,
         state: {
-          init: () => DecorationSet.empty,
+          init: (_: unknown, state): PluginState => decorations(state.doc, '', new Set()),
           apply(tr, old, _oldState, state) {
             const id = recordIdFromDom(editor.view)
-            if (tr.docChanged || tr.getMeta(key) || !id) return decorations(state.doc, id)
-            return old.map(tr.mapping, tr.doc)
+            const meta = tr.getMeta(key)
+            let folded = old.folded
+            if (tr.docChanged) folded = mapFolded(folded, tr, state.doc)
+            if (meta && typeof meta === 'object' && typeof meta.listFold === 'number') {
+              folded = new Set(folded)
+              if (folded.has(meta.listFold)) folded.delete(meta.listFold)
+              else folded.add(meta.listFold)
+            }
+            return decorations(state.doc, id, folded)
           },
         },
         props: {
           decorations(state) {
-            return key.getState(state)
+            return key.getState(state)?.decos
           },
           handleDOMEvents: {
             mousedown(view, event) {
               const recordId = recordIdFromDom(view)
-              if (!recordId || getPagePresentMode(recordId) !== 'outline') return false
               const target = event.target
               if (!(target instanceof Element)) return false
+              const li = target.closest<HTMLElement>('li.has-fold')
+              const listPos = Number(li?.dataset.listPos)
+              if (li && Number.isFinite(listPos) && outlineFoldGutterHit(li, event)) {
+                event.preventDefault()
+                event.stopPropagation()
+                view.dispatch(view.state.tr.setMeta(key, { listFold: listPos }))
+                return true
+              }
+              if (!recordId || getPagePresentMode(recordId) !== 'outline') return false
               const heading = target.closest<HTMLElement>('.page-outline-heading.has-fold')
               const id = heading?.dataset.outlineId
               if (!heading || !id || !outlineFoldGutterHit(heading, event)) return false

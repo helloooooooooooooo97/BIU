@@ -17,11 +17,11 @@ import { tryContentJump, contentJumpForRecord } from './content-jump.ts'
 import { CONTENT_JUMP_EVENT } from '@biu/type-file-system'
 import { bindEditorTextHost, getPick } from '@biu/core-pick/web'
 import { markdownLocusFromElement, markdownLocusFromSelection } from './markdown-locus.ts'
-import { FindBar, isFindHotkey } from './find-bar.tsx'
+import { isFindHotkey } from './find-bar.tsx'
 import { applyEditorFind } from './find-plugin.ts'
 import { applyStoredBlockIds, markdownWithBlockIds, stripBlockIdStamps } from './block-id.ts'
 import { getLivePageEditor, setLivePageEditor } from './page-live-editor.ts'
-import { PAGE_FIND_OPEN_EVENT, PAGE_INSERT_EVENT } from './page-view-state.ts'
+import { PAGE_FIND_OPEN_EVENT, PAGE_INSERT_EVENT, getPageFind, patchPageFind, usePageFind } from './page-view-state.ts'
 import { PageBlocksTable } from './page-blocks-table.tsx'
 import {
   INK_TONES,
@@ -382,10 +382,7 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
   writableRef.current = writable
   const titleRef = useRef(recordTitle(record))
   titleRef.current = recordTitle(record)
-  const [findOpen, setFindOpen] = useState(false)
-  const [findQuery, setFindQuery] = useState('')
-  const [findIndex, setFindIndex] = useState(0)
-  const [findTotal, setFindTotal] = useState(0)
+  const find = usePageFind(record.id)
 
   const editor = useEditor(
     {
@@ -405,9 +402,11 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
         handleKeyDown: (view, event) => {
           if (isFindHotkey(event)) {
             event.preventDefault()
-            setFindOpen(true)
             const { from, to } = view.state.selection
-            if (from !== to) setFindQuery(view.state.doc.textBetween(from, to))
+            patchPageFind(record.id, {
+              open: true,
+              query: from !== to ? view.state.doc.textBetween(from, to) : getPageFind(record.id).query,
+            })
             return true
           }
           return handleContentTitleNav(view, event)
@@ -476,7 +475,7 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
     const onFind = (event: Event) => {
       const id = (event as CustomEvent<{ recordId?: string }>).detail?.recordId
       if (id && id !== record.id) return
-      setFindOpen(true)
+      patchPageFind(record.id, { open: true })
     }
     const onInsert = () => {
       if (!editor || editor.isDestroyed || writableRef.current === false) return
@@ -621,32 +620,29 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
   }, [editor, record.id, value])
 
   const runFind = (query: string, index: number) => {
-    if (source) {
-      const next = sourceFind.current?.applyFind(query, index) ?? { total: 0, index: 0 }
-      setFindIndex(next.index)
-      setFindTotal(next.total)
-      return
-    }
-    if (!editor || editor.isDestroyed) return
-    const next = applyEditorFind(editor, query, index)
-    setFindIndex(next.index)
-    setFindTotal(next.total)
+    const next = source
+      ? sourceFind.current?.applyFind(query, index) ?? { total: 0, index: 0 }
+      : !editor || editor.isDestroyed
+        ? { total: 0, index: 0 }
+        : applyEditorFind(editor, query, index)
+    const cur = getPageFind(record.id)
+    if (cur.index !== next.index || cur.total !== next.total) patchPageFind(record.id, next)
   }
 
   useEffect(() => {
-    if (!findOpen) {
+    if (!find.open) {
       if (source) sourceFind.current?.applyFind('', 0)
       else if (editor && !editor.isDestroyed) applyEditorFind(editor, '', 0)
-      setFindTotal(0)
+      if (find.total) patchPageFind(record.id, { total: 0, index: 0 })
       return
     }
     if (!source) {
-      runFind(findQuery, 0)
+      runFind(find.query, find.index)
       return
     }
-    const id = requestAnimationFrame(() => runFind(findQuery, 0))
+    const id = requestAnimationFrame(() => runFind(find.query, find.index))
     return () => cancelAnimationFrame(id)
-  }, [findOpen, findQuery, source, editor])
+  }, [find.open, find.query, find.index, source, editor, record.id])
 
   const currentPick = () => {
     if (source) return pickFromLocus(path, sourceFind.current?.getLocus() ?? null, undefined, recordTitle(record))
@@ -668,11 +664,11 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
     if (isFindHotkey(event)) {
       event.preventDefault()
       event.stopPropagation()
-      setFindOpen(true)
-      if (!source && editor && !editor.isDestroyed) {
-        const { from, to } = editor.state.selection
-        if (from !== to) setFindQuery(editor.state.doc.textBetween(from, to))
-      }
+      const { from, to } = !source && editor && !editor.isDestroyed ? editor.state.selection : { from: 0, to: 0 }
+      patchPageFind(record.id, {
+        open: true,
+        query: from !== to ? editor!.state.doc.textBetween(from, to) : getPageFind(record.id).query,
+      })
       return
     }
     if (isSendChatHotkey(event)) {
@@ -731,21 +727,6 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
     event.currentTarget.focus({ preventScroll: true })
   }
 
-  const findBar = findOpen ? (
-    <FindBar
-      query={findQuery}
-      index={findIndex}
-      total={findTotal}
-      onQuery={setFindQuery}
-      onNext={() => runFind(findQuery, findIndex + 1)}
-      onPrev={() => runFind(findQuery, findIndex - 1)}
-      onClose={() => {
-        setFindOpen(false)
-        if (!source && editor && !editor.isDestroyed) editor.commands.focus()
-      }}
-    />
-  ) : null
-
   if (status === 'loading') return <PageEditorLoading />
   if (status === 'failed') return <PageEditorFailed onRetry={onRetry} />
   if (!editor) return <div className="page-editor" data-testid="page-editor-pending" />
@@ -755,11 +736,11 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
       ref={hostRef}
       className={`page-editor${source ? ' is-source' : ''}${present === 'outline' ? ' is-outline' : ''}${present === 'table' ? ' is-table' : ''}`}
       data-page-record={record.id}
+      data-page-path={path || `/pages/${record.id}`}
       tabIndex={-1}
       onMouseDown={onEditorBlankMouseDown}
       onKeyDownCapture={onEditorHotkey}
     >
-      {findBar}
       <div hidden={!source}>
         {source ? (
           <SourceEditor
@@ -775,7 +756,9 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
         ) : null}
       </div>
       <div hidden={source}>
-        {present === 'table' ? <PageBlocksTable editor={editor} recordId={record.id} /> : null}
+        {present === 'table' ? (
+          <PageBlocksTable editor={editor} recordId={record.id} path={path} writable={writable !== false && status === 'ready'} />
+        ) : null}
         <div className="page-editor-doc" hidden={present === 'table'}>
           <EditorContent editor={editor} />
         </div>

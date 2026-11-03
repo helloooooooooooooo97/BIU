@@ -30,6 +30,8 @@ test('toolbar shows only the current view, not a switcher strip', () => {
   assert.doesNotMatch(src, /tasks-viewtabs-measure/)
   assert.match(src, /activeView\?\.name \?\? '未保存'/)
   assert.match(src, /data-testid="fsdb-view-tab"/)
+  assert.match(src, /className="tasks-toolbar"[\s\S]*?event\.preventDefault\(\)/)
+  assert.match(src, /searchInputRef\.current\?\.focus\(\{ preventScroll: true \}\)/)
   assert.match(css, /\.tasks-viewtabs\{[^}]*overflow:visible/)
   assert.doesNotMatch(css, /tasks-viewtabs-measure/)
   assert.doesNotMatch(css, /\.tasks-viewtabs\.is-collapsed/)

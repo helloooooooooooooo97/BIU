@@ -511,6 +511,14 @@ export class FacetStore {
     upsertAttachmentRow(this.ensure(), row)
   }
 
+  linkContentRef(collection: string, recordId: string, name: string, source = 'content') {
+    const file = String(name ?? '').trim()
+    if (!file || !collection || !recordId) return
+    this.ensure()
+      .prepare('INSERT OR IGNORE INTO content_refs (collection, record_id, name, source) VALUES (?, ?, ?, ?)')
+      .run(collection, recordId, file, source)
+  }
+
   replaceContentRefs(collection: string, recordId: string, content: Iterable<string>, banner: Iterable<string> = []) {
     const db = this.ensure()
     db.exec('BEGIN IMMEDIATE')

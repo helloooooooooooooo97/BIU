@@ -1,5 +1,5 @@
 import type { CollectionSpec, DbRecord } from '@biu/type-file-system'
-import { REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
+import { REQUIRED_RECORD_FIELDS, recordBuiltinValues } from '@biu/type-file-system'
 import { parsePageBlockRecordId, patchPageBlockMarkdown } from '@biu/core-editor/host'
 import { readEditorContent, writeEditorContent } from '@biu/host-plugin-loader/data-dir'
 import type { PagesStore } from './store.ts'
@@ -16,13 +16,28 @@ function asDataObject(raw: unknown): Record<string, unknown> | undefined {
   throw new Error('data must be a JSON object')
 }
 
+function syntheticBlockRecord(id: string, parsed: NonNullable<ReturnType<typeof parsePageBlockRecordId>>): DbRecord {
+  return {
+    id,
+    title: parsed.blockId,
+    collection: parsed.collection,
+    pageId: parsed.pageId,
+    blockId: parsed.blockId,
+    ...recordBuiltinValues({}),
+  }
+}
+
+function touchesBlockBody(patch: Record<string, unknown>) {
+  return ['data', 'plugin', 'title', 'deck', 'width', 'height', 'replace'].some((key) => key in patch)
+}
+
 async function recordOf(_store: PagesStore, index: PageBlocksIndex, id: string) {
   const hit = await index.get(id)
   if (hit) return hit
   const parsed = parsePageBlockRecordId(id)
   if (!parsed) return null
   await index.reindexRecord(parsed.collection, parsed.pageId)
-  return index.get(id)
+  return (await index.get(id)) ?? syntheticBlockRecord(id, parsed)
 }
 
 async function hydratedRecord(index: PageBlocksIndex, row: DbRecord | null) {
@@ -86,6 +101,12 @@ export function pageBlocksCollection(store: PagesStore, index: PageBlocksIndex):
     update: async (id, patch) => {
       const parsed = parsePageBlockRecordId(id)
       if (!parsed) throw new Error(`unknown pageBlock: ${id}`)
+      if (!touchesBlockBody(patch)) {
+        const row = await recordOf(store, index, id)
+        const hydrated = await hydratedRecord(index, row)
+        if (!hydrated) throw new Error(`unknown pageBlock: ${id}`)
+        return hydrated
+      }
       const db = await store.sqlite()
       const current = parsed.collection === '/pages'
         ? (await store.get(parsed.pageId))?.notes ?? ''

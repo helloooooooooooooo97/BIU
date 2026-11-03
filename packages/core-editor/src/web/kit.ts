@@ -245,7 +245,7 @@ export function pageEditorExtensions() {
   ]
 }
 
-const EMBED_SKIP = new Set(['pageBlockIds', 'pageFilter', 'pageOutline', 'pageFind', 'pageAgentEdit', 'slash-command'])
+const EMBED_SKIP = new Set(['pageBlockIds', 'pageFilter', 'pageOutline', 'pageFind', 'pageAgentEdit'])
 
 export function pageEmbedExtensions() {
   return pageEditorExtensions().filter((ext) => !EMBED_SKIP.has(ext.name))

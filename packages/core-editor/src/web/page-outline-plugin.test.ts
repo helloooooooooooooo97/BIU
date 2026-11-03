@@ -4,7 +4,7 @@ import { Editor } from '@tiptap/core'
 import { pageEditorExtensions } from './kit.ts'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { collapsedOutlineIndices, listOutlineBlocks, outlineFoldGutterHit } from './page-outline-plugin.ts'
+import { collapsedOutlineIndices, listFoldableItems, listOutlineBlocks, outlineFoldGutterHit } from './page-outline-plugin.ts'
 
 test('outline indents h2/h3 and body under the last heading', () => {
   const editor = new Editor({
@@ -75,6 +75,17 @@ test('folding a heading hides until the next same-or-higher heading', () => {
   ]
   const hide = collapsedOutlineIndices(blocks, new Set(['a']))
   assert.deepEqual([...hide], [1, 2, 3])
+})
+
+test('nested list items can fold', () => {
+  const editor = new Editor({
+    extensions: pageEditorExtensions(),
+    content: '- a\n  - b\n- c\n\n1. d\n   1. e',
+    contentType: 'markdown',
+  })
+  const items = listFoldableItems(editor.state.doc)
+  assert.equal(items.length, 2)
+  editor.destroy()
 })
 
 test('outline fold lives on the heading node, not an inline widget', () => {

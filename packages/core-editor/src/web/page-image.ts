@@ -1,6 +1,17 @@
 import type { Editor } from '@tiptap/core'
 import Image from '@tiptap/extension-image'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
+import { ReactNodeViewRenderer } from '@tiptap/react'
+import { imageCaptionFromFile, pageImageAlign, pageImageMarkdown } from './page-image-attrs.ts'
+import { PageImageView } from './page-image-view.tsx'
+
+export {
+  clampImageWidth,
+  imageCaptionFromFile,
+  pageImageAlign,
+  pageImageMarkdown,
+  type PageImageAlign,
+} from './page-image-attrs.ts'
 
 const IMAGE_MIMES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp'])
 
@@ -33,11 +44,26 @@ function safeAssetFileName(name: string) {
   return base || `image-${Date.now()}.png`
 }
 
-export async function uploadPageImage(file: File) {
+export function pageResourcePath(editor?: Editor | null) {
+  const host = editor?.view.dom.closest('.page-editor')
+  if (host instanceof HTMLElement) {
+    const stamped = String(host.dataset.livePath || host.dataset.pagePath || '').trim()
+    if (stamped) return stamped
+    const rec = String(host.dataset.pageRecord || '').trim()
+    if (rec) return `/pages/${rec}`
+  }
+  return '/pages'
+}
+
+export async function uploadPageImage(file: File, path = '/pages') {
   const hint = `${Date.now()}-${safeAssetFileName(file.name)}`
-  const res = await fetch(`/api/db/file/hash/${encodeURIComponent(hint)}`, {
+  const resource = path.trim() || '/pages'
+  const res = await fetch(`/api/db/file/hash/${encodeURIComponent(hint)}?path=${encodeURIComponent(resource)}`, {
     method: 'PUT',
-    headers: { 'content-type': file.type || 'application/octet-stream' },
+    headers: {
+      'content-type': file.type || 'application/octet-stream',
+      'x-biu-resource-path': resource,
+    },
     body: file,
   })
   const body = (await res.json().catch(() => ({}))) as { error?: string; href?: string; name?: string }
@@ -46,19 +72,18 @@ export async function uploadPageImage(file: File) {
   return body.href || `/api/db/file/${encodeURIComponent(name)}`
 }
 
-function insertSrc(editor: Editor, src: string, pos: number) {
+function insertSrc(editor: Editor, src: string, alt = '') {
   if (editor.isDestroyed || !src) return
-  editor.chain().focus().insertContentAt(pos, { type: 'image', attrs: { src, alt: '' } }).run()
+  if (editor.chain().focus().setImage({ src, alt }).run()) return
+  editor.chain().focus().insertContent({ type: 'image', attrs: { src, alt } }).run()
 }
 
-export async function insertClipboardImages(editor: Editor, files: File[], pos: number) {
-  let at = pos
+export async function insertClipboardImages(editor: Editor, files: File[], _pos?: number) {
   for (const file of files) {
     try {
-      const src = await uploadPageImage(file)
+      const src = await uploadPageImage(file, pageResourcePath(editor))
       if (editor.isDestroyed) return
-      insertSrc(editor, src, at)
-      at += 1
+      insertSrc(editor, src, imageCaptionFromFile(file.name))
     } catch {
       /* skip failed upload */
     }
@@ -72,6 +97,32 @@ export function stripPastedDataImages(html: string) {
 const pageImagePasteKey = new PluginKey('page-image-paste')
 
 export const pageImage = Image.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      align: {
+        default: 'left',
+        parseHTML: (el) => pageImageAlign(el.getAttribute('data-align')),
+        renderHTML: (attrs) => {
+          const align = pageImageAlign(attrs.align)
+          return align === 'left' ? {} : { 'data-align': align }
+        },
+      },
+    }
+  },
+
+  renderMarkdown: (node) => pageImageMarkdown((node.attrs ?? {}) as Record<string, unknown>),
+
+  addNodeView() {
+    return ReactNodeViewRenderer(PageImageView, {
+      className: 'page-image-node',
+      stopEvent: ({ event }) => {
+        const target = event.target as HTMLElement | null
+        return Boolean(target?.closest('input, button, .page-slide-bar, .page-image-resize, .page-image-lightbox'))
+      },
+    })
+  },
+
   addProseMirrorPlugins() {
     const editor = this.editor
     return [

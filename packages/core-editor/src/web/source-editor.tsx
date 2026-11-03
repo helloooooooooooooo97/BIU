@@ -101,7 +101,7 @@ const theme = EditorView.theme({
     fontSize: '14px',
   },
   '.cm-scroller': { fontFamily: 'var(--font-mono)', lineHeight: '1.65', overflow: 'visible' },
-  '.cm-content': { caretColor: 'var(--biu-color-text)', padding: '0', minHeight: '240px' },
+  '.cm-content': { caretColor: 'var(--biu-color-text)', padding: '0', minHeight: '0' },
   '.cm-gutters': {
     background: 'transparent',
     border: 'none',

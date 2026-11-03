@@ -105,16 +105,14 @@ test('isFindHotkey is command/ctrl f without shift', () => {
   assert.equal(isFindHotkey({ key: 'f', metaKey: true, ctrlKey: false, altKey: false, shiftKey: true }), false)
 })
 
-test('find bar pins to the inspector chrome, not the scrolling body', () => {
-  const src = readFileSync(resolve(import.meta.dirname, './find-bar.tsx'), 'utf8')
-  assert.match(src, /createPortal/)
-  assert.match(src, /fsdb-right/)
-  assert.match(src, /page-find-slot/)
-  assert.match(src, /appendChild/)
-  assert.match(PAGE_EDITOR_STYLE, /\.page-find-slot\{[^}]*position:absolute/)
-  assert.match(PAGE_EDITOR_STYLE, /\.fsdb-right:has\(\.page-find-slot\)\{[^}]*position:relative/)
-  assert.doesNotMatch(PAGE_EDITOR_STYLE, /\.page-find-slot\{[^}]*height:0/)
-  assert.doesNotMatch(PAGE_EDITOR_STYLE, /\.page-find\{[^}]*position:sticky/)
+test('page find lives in the toolbar, not a floating slot', () => {
+  const src = readFileSync(resolve(import.meta.dirname, './page-detail-bar.tsx'), 'utf8')
+  assert.match(src, /tasks-search-wrap/)
+  assert.match(src, /aria-label="上一个"/)
+  assert.match(src, /aria-label="下一个"/)
+  assert.doesNotMatch(src, /createPortal/)
+  assert.doesNotMatch(PAGE_EDITOR_STYLE, /\.page-find-slot\{/)
+  assert.doesNotMatch(PAGE_EDITOR_STYLE, /\.page-find-box\{/)
 })
 
 test('find hits use rose tag text and wash; html blocks only get a pink frame', () => {

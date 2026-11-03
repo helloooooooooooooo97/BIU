@@ -229,6 +229,35 @@ export default function App() { return <div>旧</div> }
   assert.equal(blocks.remove, undefined)
 })
 
+test('page-blocks get synthesizes a row for any block id so facets can attach', async () => {
+  const ctx = new Context()
+  const registered: CollectionSpec[] = []
+  class FakeDb extends Service {
+    constructor(c: Context) {
+      super(c, 'database')
+    }
+    register(spec: CollectionSpec) {
+      registered.push(spec)
+    }
+  }
+  new FakeDb(ctx)
+  await ctx.plugin(tools)
+  const root = await mkdtemp(join(tmpdir(), 'page-block-facet-'))
+  await ctx.plugin(fsPlugin, { root })
+  await ctx.plugin(page)
+  const pages = registered.find((item) => item.path === '/pages')!
+  const blocks = registered.find((item) => item.path === '/page-blocks')!
+  const created = await pages.create!([{ title: '一段', notes: '段落 <!-- biu:aabbcc11 -->' }])
+  const pageId = created[0]!.id
+  const id = `/pages::${pageId}::aabbcc11`
+  const row = await blocks.get!(id)
+  assert.equal(row?.blockId, 'aabbcc11')
+  assert.equal(row?.pageId, pageId)
+  const next = await blocks.update!(id, { facet: { tags: ['需求'], values: {} } })
+  assert.equal(next.blockId, 'aabbcc11')
+  assert.match(String((await pages.get!(pageId))?.notes ?? ''), /段落/)
+})
+
 test('clearing the last pageBlock fence drops the index row immediately', async () => {
   const ctx = new Context()
   await ctx.plugin(tools)

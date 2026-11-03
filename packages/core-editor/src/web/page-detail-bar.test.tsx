@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { PageDetailBar } from './page-detail-bar.tsx'
 import { getPagePresentMode, isPageSourceMode, setPageSourceMode } from './source-mode.ts'
-import { getPageViewState, patchPageViewState } from './page-view-state.ts'
+import { getPageFind, getPageViewState, patchPageFind, patchPageViewState } from './page-view-state.ts'
 
 afterEach(() => cleanup())
 
@@ -32,6 +32,28 @@ test('detail bar config uses the table sliders icon and hosts extra menu', () =>
   fireEvent.click(getByLabelText('表格配置'))
   assert.ok(getByText('删除页面'))
   assert.equal(queryByText('切换标题大纲'), null)
+})
+
+test('detail bar search expands in the toolbar with prev and next', () => {
+  patchPageFind('p0133', { open: false, query: '', index: 0, total: 0 })
+  const { getByLabelText, getByTestId, queryByTestId } = render(<PageDetailBar record={{ id: 'p0133' }} />)
+  assert.equal(queryByTestId('page-find'), null)
+  fireEvent.click(getByLabelText('搜索'))
+  assert.equal(getPageFind('p0133').open, true)
+  assert.ok(getByTestId('page-find'))
+  assert.ok(getByLabelText('上一个'))
+  assert.ok(getByLabelText('下一个'))
+  fireEvent.change(getByTestId('page-find'), { target: { value: 'hello' } })
+  assert.equal(getPageFind('p0133').query, 'hello')
+  fireEvent.click(getByLabelText('下一个'))
+  assert.equal(getPageFind('p0133').index, 1)
+})
+
+test('detail bar refresh spins the icon', () => {
+  const { getByLabelText } = render(<PageDetailBar record={{ id: 'p0133' }} onRetry={() => {}} />)
+  fireEvent.click(getByLabelText('刷新'))
+  assert.ok(getByLabelText('刷新').classList.contains('is-spinning'))
+  assert.ok(getByLabelText('刷新').querySelector('.fsdb-spin'))
 })
 
 test('detail bar sort and filter write page view state', () => {

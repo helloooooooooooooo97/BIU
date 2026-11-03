@@ -125,6 +125,11 @@ test('sqlite stores html banner in its own table without wrapping json', () => {
 test('attachments and refs live next to record_meta', () => {
   const store = new FacetStore()
   store.putAttachment({ name: 'ab'.repeat(32) + '.png', etag: 'ab'.repeat(32) + '.png', mime: 'image/png', bytes: 4, kind: 'asset' })
+  store.linkContentRef('/pages', 'p1', 'fresh.png')
+  const linked = store.recordsReferencingAsset('fresh.png')
+  assert.equal(linked.length, 1)
+  assert.equal(linked[0]?.collection, '/pages')
+  assert.equal(linked[0]?.record_id, 'p1')
   store.replaceContentRefs('/pages', 'p1', ['hero.png'], ['cover.png'])
   store.replaceBlockRefs('/pages', 'p1', 'e4945888', [{ name: 'ab'.repeat(32) + '.html', source: 'block:e4945888:core' }])
   assert.deepEqual(store.listedAttachmentNames('/pages', 'p1'), ['ab'.repeat(32) + '.html', 'cover.png', 'hero.png'].sort())

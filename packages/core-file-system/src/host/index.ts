@@ -345,6 +345,12 @@ function splitPath(path: string): string[] {
   return hit.recordId ? [name, hit.recordId] : [name]
 }
 
+function linkUploadedAsset(db: { facets: { linkContentRef: (collection: string, recordId: string, name: string) => void } }, path: string, name: string) {
+  const parts = splitPath(path)
+  if (parts.length < 2 || !name) return
+  db.facets.linkContentRef(`/${parts[0]}`, parts.slice(1).join('/'), name)
+}
+
 function coerceList(value: unknown) {
   if (Array.isArray(value)) return value.map(String)
   if (typeof value === 'string') {
@@ -4122,6 +4128,7 @@ export function apply(ctx: Context) {
         kind: 'asset',
         storage: written.storage,
       })
+      linkUploadedAsset(db, path, written.name)
       ctx.http.broadcast?.(DATABASE_CHANNEL, { ts: Date.now(), asset: { name: written.name, etag: written.etag } })
       route.send(200, { ok: true, ...written })
     } catch (error) {
@@ -4151,6 +4158,7 @@ export function apply(ctx: Context) {
         kind: 'asset',
         storage: written.storage,
       })
+      linkUploadedAsset(db, path, written.name)
       ctx.http.broadcast?.(DATABASE_CHANNEL, { ts: Date.now(), asset: { name: written.name, etag: written.etag } })
       route.send(200, { ok: true, ...written })
     } catch (error) {
