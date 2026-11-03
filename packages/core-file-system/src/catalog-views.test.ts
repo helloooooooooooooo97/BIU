@@ -160,6 +160,10 @@ test('stamp rows open the source record, not a tag view', () => {
     recordId: 'home',
   })
   assert.equal(stampRowOpenTarget({ tablePath: '', sourceId: 'home' }), null)
+  assert.deepEqual(stampRowOpenTarget({ id: 'pages::p180' }), {
+    collection: '/pages',
+    recordId: 'p180',
+  })
 })
 
 test('builtin all views are read-only', () => {

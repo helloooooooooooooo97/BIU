@@ -11,6 +11,7 @@ export function CellMulti({
   multiple = true,
   autoOpen = false,
   removable = true,
+  onChipClick,
 }: {
   values: string[]
   options: Array<{ value: string; label: string; icon?: ReactNode }>
@@ -20,6 +21,7 @@ export function CellMulti({
   multiple?: boolean
   autoOpen?: boolean
   removable?: boolean
+  onChipClick?: (value: string) => void
 }) {
   ensureDbSearchStyle()
   const [open, setOpen] = useState(autoOpen)
@@ -79,6 +81,7 @@ export function CellMulti({
               id={value}
               label={byValue.get(value)?.label ?? value}
               icon={byValue.get(value)?.icon}
+              onClick={onChipClick ? () => onChipClick(value) : undefined}
               onRemove={removable ? () => onChange(values.filter((item) => item !== value)) : undefined}
             />
           ))}

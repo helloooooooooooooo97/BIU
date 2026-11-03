@@ -16,7 +16,7 @@ import { CellMulti } from '@biu/database-ui'
 import { DefaultCell, FieldGlyph } from './fsdb-cells.tsx'
 import { FieldValuePop } from './field-value-pop.tsx'
 import { inferPackFieldType, orphanPackEntries } from './fields.ts'
-import { facetFieldLabelOk, loadFacets, persistFacets, registerFacetFieldKey, slugFacetId, subscribeFacets } from './facet-catalog.ts'
+import { createFacet, facetFieldLabelOk, facetLabel, jumpFacet, loadFacets, persistFacets, registerFacetFieldKey, subscribeFacets } from './facet-catalog.ts'
 import { peekRecord, subscribeCrumbs } from './view-storage.ts'
 
 const TYPE_LABEL: Partial<Record<FieldType, string>> = {
@@ -50,7 +50,7 @@ export function facetPropertyCount(tag: { fields?: Array<{ deleted?: boolean }> 
 }
 
 export function facetTagLabel(tag: { id?: string; label?: string; fields?: Array<{ deleted?: boolean }> } | undefined, fallback = '') {
-  const name = String(tag?.label || fallback || tag?.id || '').trim()
+  const name = String(tag?.label || facetLabel(fallback || tag?.id || '') || fallback || tag?.id || '').trim()
   if (!name) return fallback
   return `${name} ${facetPropertyCount(tag)}`
 }
@@ -71,14 +71,22 @@ export function SchemaChip({
   return <TagChip id={id} label={label} icon={facetChipIcon(id)} onRemove={onRemove} onClick={onClick} active={active} />
 }
 
-export function SchemaChips({ value, tags }: { value: unknown; tags: CollectionSchemaPack[] }) {
+export function SchemaChips({
+  value,
+  tags,
+  onOpen,
+}: {
+  value: unknown
+  tags: CollectionSchemaPack[]
+  onOpen?: (id: string) => void
+}) {
   const parsed = normalizeSchemaValue(value)
   if (!parsed.tags.length) return null
   const byId = new Map(tags.map((tag) => [tag.id, tag]))
   return (
     <TagChips>
       {parsed.tags.map((id) => (
-        <SchemaChip key={id} id={id} label={facetTagLabel(byId.get(id), id)} />
+        <SchemaChip key={id} id={id} label={facetTagLabel(byId.get(id), id)} onClick={() => jumpFacet(id, onOpen)} />
       ))}
     </TagChips>
   )
@@ -430,7 +438,7 @@ export function SchemaFieldEditor({
 
   const selected = useMemo(
     () =>
-      parsed.tags.map((id) => catalog.find((tag) => tag.id === id) ?? { id, label: id, fields: [] }),
+      parsed.tags.map((id) => catalog.find((tag) => tag.id === id) ?? { id, label: facetLabel(id), fields: [] }),
     [catalog, parsed.tags],
   )
 
@@ -442,10 +450,17 @@ export function SchemaFieldEditor({
     onChange(next)
   }
 
+  function finishTags(resolved: string[]) {
+    const next = retagSchemaValue(liveRef.current, resolved)
+    liveRef.current = next
+    patchValue(next)
+  }
+
   function applyTags(nextIds: string[]) {
     let packs = catalog
     const used = new Set(packs.map((tag) => tag.id))
     const resolved: string[] = []
+    const pending: string[] = []
     for (const item of nextIds) {
       if (used.has(item)) {
         resolved.push(item)
@@ -456,21 +471,21 @@ export function SchemaFieldEditor({
         resolved.push(hit.id)
         continue
       }
-      const id = slugFacetId(item, used)
-      packs = [...packs, { id, label: item, fields: [] }]
-      used.add(id)
-      resolved.push(id)
+      pending.push(item)
     }
-    const finish = () => {
-      const next = retagSchemaValue(liveRef.current, resolved)
-      liveRef.current = next
-      patchValue(next)
-    }
-    if (packs !== catalog) {
-      void persistFacets(packs).then(finish)
+    if (!pending.length) {
+      finishTags(resolved)
       return
     }
-    finish()
+    void (async () => {
+      for (const item of pending) {
+        const created = await createFacet(item)
+        packs = [...packs, created]
+        used.add(created.id)
+        resolved.push(created.id)
+      }
+      finishTags(resolved)
+    })()
   }
 
   function addField(tag: CollectionSchemaPack, name: string, type: AtomicFieldType) {
@@ -567,6 +582,7 @@ export function SchemaFieldEditor({
         values={parsed.tags}
         options={catalog.map((tag) => ({ value: tag.id, label: facetTagLabel(tag), icon: facetChipIcon(tag.id) }))}
         onChange={applyTags}
+        onChipClick={(id) => jumpFacet(id)}
         multiple
         autoOpen={autoOpen}
         removable={compact === true}
@@ -583,6 +599,7 @@ export function SchemaFieldEditor({
               <SchemaChip
                 id={tag.id}
                 label={facetTagLabel(tag)}
+                onClick={() => jumpFacet(tag.id)}
                 onRemove={() => applyTags(parsed.tags.filter((id) => id !== tag.id))}
               />
             </div>

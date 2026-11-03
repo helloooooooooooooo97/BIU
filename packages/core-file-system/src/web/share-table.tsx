@@ -59,7 +59,9 @@ export function ShareCell({
   if (Custom) {
     return <Custom field={fieldKey} spec={field} value={row[fieldKey]} record={row} fallback={formatField(field, row[fieldKey])} />
   }
-  if (kind === 'facet') return <SchemaChips value={row[fieldKey]} tags={facets.length ? facets : loadFacets()} />
+  if (kind === 'facet') {
+    return <SchemaChips value={row[fieldKey]} tags={facets.length ? facets : loadFacets()} onOpen={onOpenLink} />
+  }
   return (
     <DefaultCell
       field={field}

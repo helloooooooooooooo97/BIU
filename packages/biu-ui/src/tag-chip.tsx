@@ -87,6 +87,7 @@ export function TagChip({
   const chip = (
     <span
       className={`biu-tag${active ? ' is-on' : ''}${onClick ? ' is-btn' : ''}`}
+      data-tag-id={id}
       style={{ ['--biu-tag' as string]: tagTone(id) }}
       title={label}
     >
@@ -109,7 +110,15 @@ export function TagChip({
   )
   if (!onClick) return chip
   return (
-    <button type="button" className="biu-tag-wrap" onClick={onClick}>
+    <button
+      type="button"
+      className="biu-tag-wrap"
+      data-tag-id={id}
+      onClick={(event) => {
+        event.stopPropagation()
+        onClick()
+      }}
+    >
       {chip}
     </button>
   )

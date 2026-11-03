@@ -1140,7 +1140,9 @@ export class DatabaseService extends Service implements Database {
       if (item.collection === '/facets') continue
       if (this.visibleRecords(item.collection, [{ id: item.id }]).length > 0) return true
     }
-    return this.facets.recordMeta('/facets', id)?.createdBy?.accountId === accountId
+    const createdBy = this.facets.recordMeta('/facets', id)?.createdBy?.accountId
+    if (createdBy) return createdBy === accountId
+    return Boolean(this.facets.get(id))
   }
 
   private recordsInScope<T extends { id?: unknown; pageId?: unknown; collection?: unknown; sessionId?: unknown; sourceId?: unknown; tablePath?: unknown }>(
@@ -1307,6 +1309,13 @@ export class DatabaseService extends Service implements Database {
         recordId: target.id,
       })
       if (!decision.allowed) {
+        if (
+          spec.path === '/facets' &&
+          (action === 'resource:read' || action === 'resource:list') &&
+          this.indexFacetVisible(id, actor.accountId)
+        ) {
+          return
+        }
         const viaView = record
           ? this.viewGrantRole(actor.workspaceId, spec.path, record, actor.accountId)
           : null

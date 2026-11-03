@@ -18,7 +18,7 @@ import {
 } from '@heroicons/react/16/solid'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import type { CollectionSchema, DbRecord, FieldSpec, FieldType } from '@biu/type-file-system'
-import { actionVisibleToUser, asAttachmentList, asHttpHref, asImageSrc, asImageSrcList, asPerson, asPersonList, commitAttachments } from '@biu/type-file-system'
+import { actionVisibleToUser, asAttachmentList, asHttpHref, asImageSrc, asImageSrcList, asPerson, asPersonList, commitAttachments, normalizeSchemaValue } from '@biu/type-file-system'
 import type { CollectionRowViewType, CollectionViewType } from '@biu/type-file-system/ui'
 import {
   asStringList,
@@ -32,6 +32,7 @@ import {
 import { AttachmentFile, UrlHref } from './cell-media.tsx'
 import { PersonFace } from './person-cell.tsx'
 import { RecordLinkChips } from './record-link-cell.tsx'
+import { facetLabel, jumpFacet } from './facet-catalog.ts'
 
 export function actionIcon(id: string, opts?: { fallback?: boolean; className?: string }) {
   const cls = opts?.className ?? 'size-[14px]'
@@ -333,6 +334,17 @@ export function DefaultCell({
         deferMissing={plain}
         onOpen={onOpenLink}
       />
+    )
+  }
+  if (kind === 'facet') {
+    const parsed = normalizeSchemaValue(value)
+    if (!parsed.tags.length) return null
+    return (
+      <TagChips>
+        {parsed.tags.map((id) => (
+          <TagChip key={id} id={id} label={facetLabel(id)} onClick={() => jumpFacet(id, onOpenLink)} />
+        ))}
+      </TagChips>
     )
   }
   if (kind === 'select' || kind === 'multi-select') {

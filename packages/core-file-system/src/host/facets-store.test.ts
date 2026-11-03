@@ -80,6 +80,17 @@ test('sqlite stores facet overlay for records that cannot update', async () => {
   assert.equal(store.stampedIds('/plugins', 'dp').has('demo'), false)
 })
 
+test('upserting a soft-deleted facet id brings it back', () => {
+  const store = new FacetStore()
+  store.upsert({ id: 'facet-6', label: '未命名标签', fields: [] })
+  store.markDeleted('/facets', 'facet-6')
+  assert.equal(store.isDeleted('/facets', 'facet-6'), true)
+  assert.equal(store.entries().some((item) => item.pack.id === 'facet-6'), false)
+  store.upsert({ id: 'facet-6', label: '新标签', fields: [] })
+  assert.equal(store.isDeleted('/facets', 'facet-6'), false)
+  assert.equal(store.get('facet-6')?.label, '新标签')
+})
+
 test('empty facet overlay is not stored', async () => {
   const store = new FacetStore()
   store.writeRecordFacet('/pages', 'p1', { tags: ['dp'], values: { dp: {} } }, 'P')

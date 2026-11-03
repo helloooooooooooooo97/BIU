@@ -41,6 +41,7 @@ test('idle chips, person, and actions paint without waiting for hover', () => {
   const chips = idleTagChipsInnerHtml([{ id: 'open', label: '进行中' }, { id: 'done', label: '完成' }])
   assert.match(chips, /class="biu-tags"/)
   assert.match(chips, /class="biu-tag"/)
+  assert.match(chips, /data-tag-id="open"/)
   assert.match(chips, /进行中/)
   const person = idlePersonInnerHtml({ kind: 'user', name: 'Ada' })
   assert.match(person, /fsdb-person-list/)

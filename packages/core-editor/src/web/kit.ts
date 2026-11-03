@@ -96,12 +96,12 @@ const pageInlineMath = InlineMath.extend({
       ...parent,
       insertInlineMath:
         (options) =>
-        ({ commands }) => {
-          const latex = options.latex
-          if (!latex) return false
-          const content = { type: this.name, attrs: { latex } }
-          return options.pos != null ? commands.insertContentAt(options.pos, content) : commands.insertContent(content)
-        },
+          ({ commands }) => {
+            const latex = options.latex
+            if (!latex) return false
+            const content = { type: this.name, attrs: { latex } }
+            return options.pos != null ? commands.insertContentAt(options.pos, content) : commands.insertContent(content)
+          },
     }
   },
   addInputRules() {

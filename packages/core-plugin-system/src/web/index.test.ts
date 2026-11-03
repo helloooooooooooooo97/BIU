@@ -370,6 +370,8 @@ test('algorithm card drafts locally and saves on blur like html source', async (
   assert.match(src, /syntaxHighlighting\(lcHighlight\)/)
   assert.match(src, /@codemirror\/lang-python/)
   assert.match(src, /className="lc-shell"/)
+  assert.doesNotMatch(src, />Code</)
+  assert.doesNotMatch(src, /\d+ 行|lines\} 行/)
   assert.match(src, /Example \{i \+ 1\}/)
   assert.match(src, /Constraints/)
   assert.doesNotMatch(src, /onChange=\{\(event\) => update\(\{ title:/)

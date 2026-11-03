@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useState, useSyncExternalStore, type ComponentType } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState, useSyncExternalStore, type ComponentType } from 'react'
 import type { Context } from 'cordis'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { CircleStackIcon } from '@heroicons/react/16/solid'
@@ -18,7 +18,7 @@ import {
 } from './nav-boot.ts'
 import { defaultViewId } from './view-storage.ts'
 import { DATA_MODULE, DATA_MODULE_ID, DATA_MODULE_PATH, FACETS_COLLECTION_PATH, PAGE_BLOCKS_COLLECTION_PATH, VIEWS_COLLECTION_PATH, sortDataCollections } from './database-path.ts'
-import { pickMainDataRoute, readMainDataRoute, writeMainDataRoute } from './main-data-route.ts'
+import { writeMainDataRoute } from './main-data-route.ts'
 import { facetsChrome } from './facet-chrome.tsx'
 import { viewsChrome } from './views-chrome.ts'
 import { pageBlocksChrome } from './page-blocks-chrome.ts'
@@ -28,6 +28,7 @@ import { normalizeCollectionPath } from '../paths.ts'
 
 const ShareRoot = lazy(() => import('./share-page.tsx').then((m) => ({ default: m.ShareRoot })))
 const CollectionBrowser = lazy(() => import('./browser.tsx').then((m) => ({ default: m.CollectionBrowser })))
+const DataOverview = lazy(() => import('./data-overview.tsx').then((m) => ({ default: m.DataOverview })))
 
 if (typeof window !== 'undefined' && /(?:^|\/)database(?:\/|$)/.test(window.location.pathname)) {
   void import('./browser.tsx')
@@ -91,31 +92,13 @@ function CollectionPage(props: SlotProps) {
   const [expandedViewKey, setExpandedViewKey] = useState<string | null>(null)
   const parsed = useMemo(() => parseAppPath(location.pathname, [DATA_MODULE]), [location.pathname])
   const dataHome = parsed.kind === 'module' && parsed.moduleId === DATA_MODULE_ID
-  const storedHome = useMemo(
-    () => (dataHome ? pickMainDataRoute(readMainDataRoute(), orderedTables) : ''),
-    [dataHome, orderedTables],
-  )
-  const storedParsed = useMemo(
-    () => (storedHome ? parseAppPath(storedHome, [DATA_MODULE]) : null),
-    [storedHome],
-  )
-  const routeCollection =
-    parsed.kind === 'collection-view' || parsed.kind === 'record'
-      ? parsed
-      : storedParsed && (storedParsed.kind === 'collection-view' || storedParsed.kind === 'record')
-        ? storedParsed
-        : null
+  const routeCollection = parsed.kind === 'collection-view' || parsed.kind === 'record' ? parsed : null
   const collectionFromRoute = routeCollection?.collection ?? ''
   const viewFromRoute = routeCollection
     ? routeCollection.viewId || builtinAllViewId(routeCollection.collection)
     : undefined
-  const recordFromRoute =
-    parsed.kind === 'record'
-      ? parsed.recordId
-      : dataHome && storedParsed?.kind === 'record'
-        ? storedParsed.recordId
-        : null
-  const currentPath = collectionFromRoute || orderedTables[0]?.path || ''
+  const recordFromRoute = parsed.kind === 'record' ? parsed.recordId : null
+  const currentPath = collectionFromRoute
   const row = orderedTables.find((item) => item.path === currentPath)
   const chrome = useSyncExternalStore(
     (fn) => (ui ? ui.subscribe(fn) : () => undefined),
@@ -154,18 +137,6 @@ function CollectionPage(props: SlotProps) {
     if (parsed.kind === 'collection-view' || parsed.kind === 'record') writeMainDataRoute(location.pathname)
   }, [location.pathname, parsed])
 
-  useLayoutEffect(() => {
-    if (!orderedTables.length) return
-    if (!dataHome) return
-    const stored = pickMainDataRoute(readMainDataRoute(), orderedTables)
-    if (stored) {
-      navigate(stored, { replace: true })
-      return
-    }
-    const first = orderedTables[0]!
-    go({ collection: first.path, viewId: builtinAllViewId(first.path) }, { replace: true })
-  }, [dataHome, orderedTables])
-
   useEffect(() => {
     if (parsed.kind !== 'collection-view' || parsed.viewId || recordFromRoute) return
     if (!parsed.collection) return
@@ -180,6 +151,16 @@ function CollectionPage(props: SlotProps) {
   }, [collectionFromRoute, orderedTables])
 
   const lockedFilters = chrome.lockedFiltersFromSearch?.(location.search) ?? EMPTY_FILTERS
+  if (dataHome) {
+    return (
+      <Suspense fallback={null}>
+        <DataOverview
+          tables={orderedTables}
+          onOpenTable={(path) => go({ collection: path, viewId: builtinAllViewId(path) })}
+        />
+      </Suspense>
+    )
+  }
   if (!currentPath) return null
   const title = row?.view?.title ?? row?.label ?? currentPath.replace(/^\//, '')
   return (

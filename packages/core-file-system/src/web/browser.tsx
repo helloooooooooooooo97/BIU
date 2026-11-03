@@ -141,7 +141,7 @@ import { DataSidebarShell } from './data-sidebar-shell.tsx'
 import { builtinAllViewId, catalogLockFilters, isReadOnlyViewId, mergeTableViews, parseBuiltinScopeViewId, stubBuiltinBlockKindView, viewsForScope, type DataScope } from '../catalog-views.ts'
 import { SAVED_VIEW_EVENT, moveInspectorRecordsToTrash, rememberInspectorWorkingView, showRecordInInspector } from './inspector-db-route.ts'
 import { CellPop, cellUsesPop } from './cell-pop.tsx'
-import { loadFacets, pullFacets, subscribeFacets } from './facet-catalog.ts'
+import { jumpFacet, loadFacets, pullFacets, subscribeFacets } from './facet-catalog.ts'
 import {
   collectQueryFields,
   isCustomSorts,
@@ -594,6 +594,9 @@ type StatResult = { schema?: CollectionSchema }
 
 let cachedLocalData: boolean | null = null
 
+const COLLECT_SHEET_COLUMNS = ['title', 'table'] as const
+const COLLECT_SHEET_FETCH_COLUMNS = ['title', 'table', 'tablePath', 'sourceId'] as const
+
 const LIST_SEED_COLUMNS = [
   'title',
   'status',
@@ -706,7 +709,7 @@ const EMPTY_FILTERS: Record<string, string> = {}
 /** 与选区拖选同一阈值：位移超过这个距离只当拖，不当点击。 */
 const CELL_POP_DRAG_PX = 6
 const CELL_POP_IGNORE =
-  '.fsdb-row-check, .fsdb-col-resizer, .tasks-row-tools, .tasks-title-open, .fsdb-action-btn, .fsdb-action-tag, .fsdb-boolbtn, .fsdb-thumb-btn, .fsdb-thumb, .biu-image, .fsdb-file-tools, .fsdb-ref-chip, .db-datetime, .biu-calendar, .fsdb-scope-detail'
+  '.fsdb-row-check, .fsdb-col-resizer, .tasks-row-tools, .tasks-title-open, .fsdb-action-btn, .fsdb-action-tag, .fsdb-boolbtn, .fsdb-thumb-btn, .fsdb-thumb, .biu-image, .fsdb-file-tools, .fsdb-ref-chip, .biu-tag-wrap, .db-datetime, .biu-calendar, .fsdb-scope-detail'
 
 type TablePaintNode =
   | { kind: 'empty'; key: string }
@@ -1557,7 +1560,7 @@ export function CollectionBrowser({
   )
   const [filters, setFilters] = useState<Record<string, string>>(initialView?.filters ?? {})
   const [filterTree, setFilterTree] = useState<FilterGroup>(() => resolveViewFilterTree(initialView ?? { filters: {} }))
-  const [columnKeys, setColumnKeys] = useState<string[]>(initialView?.columns ?? [])
+  const [columnKeys, setColumnKeys] = useState<string[]>(sheet ? ['title', 'table'] : initialView?.columns ?? [])
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => normalizeColumnWidths(initialView?.columnWidths))
   const [resizingCol, setResizingCol] = useState<string | null>(null)
   const [cellPop, setCellPop] = useState<{ id: string; key: string } | null>(null)
@@ -1801,6 +1804,13 @@ export function CollectionBrowser({
   const loadedIdentityRef = useRef('')
   const loadedPagesRef = useRef<Record<string, number>>({})
   const listColumns = useMemo(() => {
+    if (sheet) {
+      return listProjectionKeys({
+        schema: stat?.schema,
+        columns: [...COLLECT_SHEET_FETCH_COLUMNS],
+        groupBy,
+      })
+    }
     if (customView) return undefined
     const currentSchema = stat?.schema
     const cellKeys = chrome?.cells ? Object.keys(chrome.cells) : []
@@ -1829,7 +1839,7 @@ export function CollectionBrowser({
     if (!columns.length) return undefined
     const queryKeys = [...collectQueryFields(sorts, filterTree, currentSchema?.labelField ?? 'title')]
     return listProjectionKeys({ schema: currentSchema, columns: [...columns, ...queryKeys], groupBy })
-  }, [chrome, columnKeys, customView, facetCatalog, filterTree, groupBy, sorts, stat])
+  }, [chrome, columnKeys, customView, facetCatalog, filterTree, groupBy, sheet, sorts, stat])
   const listColumnsKey = listColumns?.join('\0') ?? ''
   const [refreshing, setRefreshing] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
@@ -2509,6 +2519,7 @@ export function CollectionBrowser({
       })
       .catch((error) => {
         if (cancelled || !(error instanceof HttpError) || error.status !== 404) return
+        if (itemsRef.current.some((item) => item.id === detailId)) return
         setOpenDetailId(null)
         setDetailRow(null)
         queueMicrotask(() => onCloseRecord?.())
@@ -2560,6 +2571,13 @@ export function CollectionBrowser({
   )
   const schemaDefaultSig = schemaDefaultKeys.join('\0')
   const columns = useMemo(() => {
+    if (sheet) {
+      return COLLECT_SHEET_COLUMNS.map((key) => ({
+        key,
+        kind: 'string' as const,
+        field: { type: 'string' as const, label: key === 'title' ? '记录' : '来源表' },
+      }))
+    }
     const requested = columnKeys.length ? columnKeys : schemaDefaultKeys
     const order = pinActionColumn(
       schema,
@@ -2579,7 +2597,7 @@ export function CollectionBrowser({
         return null
       })
       .filter(Boolean) as typeof allColumns
-  }, [allColumnKeys, allColumns, columnKeys, rowActionColumn, schema, schemaDefaultKeys])
+  }, [allColumnKeys, allColumns, columnKeys, rowActionColumn, schema, schemaDefaultKeys, sheet])
 
   const colWindowRef = useRef<TableColumnSlice>(EMPTY_COL_WINDOW)
   const tableChromeRef = useRef<TableChromeBag>({
@@ -2654,6 +2672,7 @@ export function CollectionBrowser({
   )
 
   useEffect(() => {
+    if (sheet) return
     if (!schemaDefaultKeys.length) return
     const prevDefaults = prevSchemaDefaultSig.current ? prevSchemaDefaultSig.current.split('\0').filter(Boolean) : []
     prevSchemaDefaultSig.current = schemaDefaultSig
@@ -2677,7 +2696,7 @@ export function CollectionBrowser({
       skipPersistGen.current += 1
       return schemaDefaultKeys
     })
-  }, [allColumnKeys, rowActionColumn, schema, schemaDefaultKeys, schemaDefaultSig])
+  }, [allColumnKeys, rowActionColumn, schema, schemaDefaultKeys, schemaDefaultSig, sheet])
 
   useEffect(() => {
     if (!schema || sortFields.some((item) => item.key === sortField)) return
@@ -3991,7 +4010,13 @@ export function CollectionBrowser({
         return (
           <TagChips>
             {parsed.tags.map((id) => (
-              <TagChip key={id} id={id} label={facetTagLabel(tags.find((tag) => tag.id === id), id)} icon={facetChipIcon(id)} />
+              <TagChip
+                key={id}
+                id={id}
+                label={facetTagLabel(tags.find((tag) => tag.id === id), id)}
+                icon={facetChipIcon(id)}
+                onClick={() => jumpFacet(id)}
+              />
             ))}
           </TagChips>
         )
@@ -4322,6 +4347,13 @@ export function CollectionBrowser({
     const col = columns.find((item) => item.key === cell.key)
     if (!col) return
     const kind = resolveFieldType(col.field)
+    if (kind === 'facet') {
+      const tagId = (event.target as HTMLElement | null)?.closest('[data-tag-id]')?.getAttribute('data-tag-id')?.trim()
+      if (tagId) {
+        jumpFacet(tagId)
+        return
+      }
+    }
     setCellPop(cellUsesPop(kind, col.field.writable) ? { id: cell.id, key: cell.key } : null)
   }
 
@@ -4417,7 +4449,18 @@ export function CollectionBrowser({
             tableIcon={currentTable?.view?.icon}
             Icon={chrome?.Icon}
             pick={recordPick(row)}
-            onOpenSplit={() => showRecordInInspector(collectionPath, row.id, activeViewId, nested ? { newTab: true } : undefined)}
+            onOpenSplit={() => {
+              const jump = chrome?.openRow?.(row)
+              if (jump && jump.kind === 'record') {
+                showRecordInInspector(jump.collection ?? collectionPath, jump.recordId, activeViewId, nested ? { newTab: true } : undefined)
+                return
+              }
+              if (jump && jump.kind === 'table') {
+                onOpenTable?.(jump.path, jump.viewId)
+                return
+              }
+              showRecordInInspector(collectionPath, row.id, activeViewId, nested ? { newTab: true } : undefined)
+            }}
             onOpenRow={() => openRow(row)}
             onWriteEmoji={(next) => void writePatch(row, { emoji: next })}
             toolsArmed={toolsArmed}
@@ -4995,6 +5038,7 @@ export function CollectionBrowser({
                 </HeadlessDismiss>
               ) : null}
             </div>
+            {sheet ? null : (
             <div className="tasks-sort-wrap" ref={columnRef}>
               <button
                 type="button"
@@ -5039,6 +5083,7 @@ export function CollectionBrowser({
                 </HeadlessDismiss>
               ) : null}
             </div>
+            )}
             {mode === 'table' ? (
             <div className="tasks-filter-btn-wrap" ref={configRef}>
               <button
@@ -5110,7 +5155,7 @@ export function CollectionBrowser({
                 </span>
               ) : null}
             </div>
-            {canCreate ? (
+            {canCreate && !sheet ? (
               <div className="fsdb-create-group">
                 <button
                   type="button"

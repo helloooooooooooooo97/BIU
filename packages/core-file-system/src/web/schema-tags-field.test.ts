@@ -1,5 +1,7 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { registerFacetFieldKey } from './facet-catalog.ts'
 import { facetPropertyCount, facetTagLabel } from './schema-field.tsx'
 
@@ -11,6 +13,18 @@ test('type pack fields cannot reuse file-system keys or labels', () => {
   const ok = registerFacetFieldKey('复杂度')
   assert.match(String(ok), /^\d+$/)
   assert.equal(registerFacetFieldKey('复杂度', { keys: [ok!], labels: ['复杂度'] }), null)
+})
+
+test('facet chips jump to the tag record like parent and depend chips', () => {
+  const catalog = readFileSync(resolve(import.meta.dirname, './facet-catalog.ts'), 'utf8')
+  const schemaUi = readFileSync(resolve(import.meta.dirname, './schema-field.tsx'), 'utf8')
+  const cells = readFileSync(resolve(import.meta.dirname, './fsdb-cells.tsx'), 'utf8')
+  const pop = readFileSync(resolve(import.meta.dirname, './field-value-pop.tsx'), 'utf8')
+  assert.match(catalog, /showRecordInInspector\('\/facets', resolved\)/)
+  assert.match(schemaUi, /jumpFacet\(id, onOpen\)/)
+  assert.match(schemaUi, /onChipClick=\{\(id\) => jumpFacet\(id\)\}/)
+  assert.match(cells, /jumpFacet\(id, onOpenLink\)/)
+  assert.match(pop, /\.biu-tag-wrap/)
 })
 
 test('facet tag label appends the live property count', () => {

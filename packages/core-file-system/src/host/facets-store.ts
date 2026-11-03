@@ -245,6 +245,7 @@ export class FacetStore {
     const pack = normalizeSchemaPack(raw)
     if (!pack) throw new Error('invalid 标签')
     const nextNotes = notes !== undefined ? String(notes) : this.notes(pack.id)
+    if (this.isDeleted('/facets', pack.id)) this.restoreDeleted('/facets', pack.id)
     this.savePack(pack, nextNotes)
     return pack
   }

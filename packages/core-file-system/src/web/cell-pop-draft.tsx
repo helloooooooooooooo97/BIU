@@ -11,7 +11,7 @@ import { TagChip, TagChips } from '@biu/biu-ui'
 import { PickOption, PickPanel } from '@biu/database-ui/search'
 import { fieldDraftValue, parseFieldValue } from './fsdb-cells.tsx'
 import { FieldEditor } from './field-editor.tsx'
-import { loadFacets, persistFacets, slugFacetId, subscribeFacets } from './facet-catalog.ts'
+import { createFacet, jumpFacet, loadFacets, subscribeFacets } from './facet-catalog.ts'
 import { facetChipIcon, facetTagLabel } from './schema-field.tsx'
 import { subscribeCrumbs } from './view-storage.ts'
 import { PersonPickPanel } from './person-cell.tsx'
@@ -27,6 +27,8 @@ function TagPickPanel({
   allowCreate = true,
   onChange,
   onPicked,
+  onChipClick,
+  onJump,
 }: {
   values: string[]
   options: TagOption[]
@@ -34,6 +36,8 @@ function TagPickPanel({
   allowCreate?: boolean
   onChange: (next: string[]) => void
   onPicked?: () => void
+  onChipClick?: (value: string) => void
+  onJump?: () => void
 }) {
   const [query, setQuery] = useState('')
   const q = query.trim().toLowerCase()
@@ -81,6 +85,14 @@ function TagPickPanel({
                 id={value}
                 label={byValue.get(value)?.label ?? value}
                 icon={byValue.get(value)?.icon}
+                onClick={
+                  onChipClick
+                    ? () => {
+                        onChipClick(value)
+                        onJump?.()
+                      }
+                    : undefined
+                }
                 onRemove={() => onChange(values.filter((item) => item !== value))}
               />
             ))}
@@ -117,16 +129,23 @@ async function applyFacetTags(parsed: SchemaFieldValue, catalog: CollectionSchem
       resolved.push(hit.id)
       continue
     }
-    const id = slugFacetId(item, used)
-    packs = [...packs, { id, label: item, fields: [] }]
-    used.add(id)
-    resolved.push(id)
+    const created = await createFacet(item)
+    packs = [...packs, created]
+    used.add(created.id)
+    resolved.push(created.id)
   }
-  if (packs !== catalog) await persistFacets(packs)
   return retagSchemaValue(parsed, resolved)
 }
 
-function FacetPickPanel({ value, onChange }: { value: unknown; onChange: (next: SchemaFieldValue) => void }) {
+function FacetPickPanel({
+  value,
+  onChange,
+  onJump,
+}: {
+  value: unknown
+  onChange: (next: SchemaFieldValue) => void
+  onJump?: () => void
+}) {
   const parsed = normalizeSchemaValue(value)
   const liveRef = useRef(parsed)
   const [catalog, setCatalog] = useState(() => loadFacets())
@@ -138,6 +157,8 @@ function FacetPickPanel({ value, onChange }: { value: unknown; onChange: (next: 
       values={parsed.tags}
       options={catalog.map((tag) => ({ value: tag.id, label: facetTagLabel(tag), icon: facetChipIcon(tag.id) }))}
       multiple
+      onChipClick={(id) => jumpFacet(id)}
+      onJump={onJump}
       onChange={(next) => {
         void applyFacetTags(liveRef.current, catalog, next).then((updated) => {
           liveRef.current = updated
@@ -250,7 +271,7 @@ export function CellPopDraft({
   }
 
   if (kind === 'facet') {
-    return <FacetPickPanel value={raw} onChange={(next) => put(next)} />
+    return <FacetPickPanel value={raw} onChange={(next) => put(next)} onJump={onClose} />
   }
 
   if (kind === 'person') {

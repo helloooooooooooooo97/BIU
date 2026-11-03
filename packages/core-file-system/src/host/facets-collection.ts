@@ -152,12 +152,15 @@ export function facetsCollection(
         }
         return null
       }
-      return facetRows().find((row) => row.id === id) ?? null
+      const pack = store.get(id)
+      if (!pack || store.isDeleted('/facets', pack.id)) return null
+      return fromEntry(pack.id, store.stampCounts()[pack.id] ?? 0)
     },
     create: (rows) =>
       rows.map((fields = {}) => {
         const title = String(fields.title ?? '').trim() || '未命名标签'
-        const id = slugFacetId(title, new Set(store.list().map((facet) => facet.id)))
+        const used = new Set([...store.list().map((facet) => facet.id), ...store.deletedIds('/facets')])
+        const id = slugFacetId(title, used)
         const pack = store.upsert({ id, label: title, fields: parseAtomicFields(fields.fields) }, fields.notes != null ? String(fields.notes) : '')
         return fromEntry(pack.id, 0)
       }),

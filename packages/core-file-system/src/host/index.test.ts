@@ -1611,6 +1611,19 @@ test('writeContent can persist intro on tables that cannot update other fields',
   assert.equal(body.value, '# Demo\n')
 })
 
+test('facet records can be read by title after catalog replace', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  db.register(facetsCollection(db.facets))
+  db.facets.replace([{ id: 'facet-3', label: '测试', fields: [] }])
+  const byId = await db.read('/facets/facet-3')
+  const byTitle = await db.read('/facets/测试')
+  assert.equal(byId.kind, 'record')
+  assert.equal(byTitle.kind, 'record')
+  if (byId.kind === 'record') assert.equal(byId.value.title, '测试')
+  if (byTitle.kind === 'record') assert.equal(byTitle.value.id, 'facet-3')
+})
+
 test('db_update /facets writes facet field packs', async () => {
   const ctx = new Context()
   const db = new DatabaseService(ctx)

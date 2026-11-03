@@ -7,6 +7,7 @@ import {
   type CollectionSchemaPack,
 } from '@biu/type-file-system'
 import { peekRecord, subscribeCrumbs } from './view-storage.ts'
+import { showRecordInInspector } from './inspector-db-route.ts'
 
 export const FACETS_KEY = 'fsdb.facets'
 
@@ -23,9 +24,27 @@ export function facetCatalogRevision() {
   return revision
 }
 
+export function jumpFacet(id: string, onOpen?: (id: string) => void) {
+  const key = String(id ?? '').trim()
+  if (!key) return
+  const resolved =
+    loadFacets().find((tag) => tag.id === key || tag.label === key)?.id ||
+    String(peekRecord('/facets', key)?.id ?? '').trim() ||
+    key
+  if (onOpen) {
+    onOpen(resolved)
+    return
+  }
+  showRecordInInspector('/facets', resolved)
+}
+
 export function facetLabel(id: string) {
   const key = id.trim()
-  return loadFacets().find((tag) => tag.id === key)?.label?.trim() || key
+  return (
+    loadFacets().find((tag) => tag.id === key)?.label?.trim() ||
+    String(peekRecord('/facets', key)?.title ?? '').trim() ||
+    key
+  )
 }
 
 export function facetEmoji(id: string) {
@@ -74,8 +93,27 @@ function adoptFacets(next: CollectionSchemaPack[]) {
   emit()
 }
 
+async function serverFacets(): Promise<CollectionSchemaPack[] | null> {
+  try {
+    const res = await fetch('/api/db/facets')
+    const body = (await res.json()) as { facets?: unknown[] }
+    if (!res.ok || !Array.isArray(body.facets)) return null
+    return parseFacets(body.facets)
+  } catch {
+    return null
+  }
+}
+
+function mergeFacetCatalog(base: CollectionSchemaPack[], incoming: CollectionSchemaPack[]) {
+  const byId = new Map(base.map((tag) => [tag.id, tag]))
+  for (const tag of incoming) byId.set(tag.id, tag)
+  return [...byId.values()]
+}
+
 export async function persistFacets(facets: CollectionSchemaPack[], _collectionPath?: string) {
-  const next = parseFacets(facets)
+  const incoming = parseFacets(facets)
+  const remote = await serverFacets()
+  const next = parseFacets(remote ? mergeFacetCatalog(remote, incoming) : incoming)
   const res = await fetch('/api/db/facets', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -83,6 +121,31 @@ export async function persistFacets(facets: CollectionSchemaPack[], _collectionP
   })
   if (!res.ok) throw new Error(`facets persist failed: ${res.status}`)
   adoptFacets(next)
+}
+
+export async function createFacet(title: string): Promise<CollectionSchemaPack> {
+  const name = title.trim() || '未命名标签'
+  const res = await fetch('/api/db/create', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ path: '/facets', records: [{ title: name }] }),
+  })
+  const body = (await res.json().catch(() => ({}))) as {
+    items?: Array<{ value?: { id?: string; title?: string; fields?: unknown } }>
+    error?: string
+  }
+  if (!res.ok) throw new Error(body.error || `facet create failed: ${res.status}`)
+  const value = body.items?.[0]?.value
+  const id = String(value?.id ?? '').trim()
+  if (!id) throw new Error('facet create failed: missing id')
+  const pack = normalizeSchemaPack({
+    id,
+    label: String(value?.title ?? name).trim() || name,
+    fields: value?.fields ?? [],
+  })
+  if (!pack) throw new Error('facet create failed: invalid pack')
+  adoptFacets([...loadFacets().filter((tag) => tag.id !== pack.id), pack])
+  return pack
 }
 
 export async function pullFacets(_collectionPath?: string) {
