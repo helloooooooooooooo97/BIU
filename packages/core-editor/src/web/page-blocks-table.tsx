@@ -195,7 +195,7 @@ function useFacetCatalog() {
   const [tags, setTags] = useState<FacetOption[]>([])
   useEffect(() => {
     let gone = false
-    void fetch('/api/db/list?path=/facets&limit=200')
+    void fetch('/api/db/list?path=/tags&limit=200')
       .then((res) => res.json())
       .then((body) => {
         if (gone) return
@@ -236,7 +236,7 @@ function BlockFacetCell({
     void fetch(`/api/db/read?path=${encodeURIComponent(recordPath)}`)
       .then((res) => res.json())
       .then((body) => {
-        if (!gone) setValue(normalizeSchemaValue(body?.value?.facet))
+        if (!gone) setValue(normalizeSchemaValue(body?.value?.tag))
       })
       .catch(() => {})
     return () => {
@@ -250,7 +250,7 @@ function BlockFacetCell({
     void fetch('/api/db/update', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ path: recordPath, content: { facet: next } }),
+      body: JSON.stringify({ path: recordPath, content: { tag: next } }),
     }).catch(() => {})
   }
 
@@ -261,7 +261,7 @@ function BlockFacetCell({
   if (!blockId) return <div className="fsdb-cell">—</div>
   const byId = new Map(catalog.map((item) => [item.id, item.label]))
   return (
-    <div className="page-blocks-table-facet" onMouseDown={(event) => event.stopPropagation()}>
+    <div className="page-blocks-table-tag" onMouseDown={(event) => event.stopPropagation()}>
       {value.tags.length ? (
         <TagChips>
           {value.tags.map((id) => (
@@ -280,25 +280,25 @@ function BlockFacetCell({
           open={open}
           onOpenChange={setOpen}
           trigger={
-            <button type="button" className="page-blocks-table-facet-add" aria-label="添加标签">
+            <button type="button" className="page-blocks-table-tag-add" aria-label="添加标签">
               添加标签
             </button>
           }
         >
-          <div className="page-blocks-table-facet-menu" role="listbox">
+          <div className="page-blocks-table-tag-menu" role="listbox">
             {catalog.length ? (
               catalog.map((item) => (
                 <button
                   key={item.id}
                   type="button"
-                  className={`page-blocks-table-facet-option${value.tags.includes(item.id) ? ' is-on' : ''}`}
+                  className={`page-blocks-table-tag-option${value.tags.includes(item.id) ? ' is-on' : ''}`}
                   onClick={() => toggle(item.id)}
                 >
                   {item.label}
                 </button>
               ))
             ) : (
-              <div className="page-blocks-table-facet-empty">没有标签</div>
+              <div className="page-blocks-table-tag-empty">没有标签</div>
             )}
           </div>
         </HeadlessPopover>

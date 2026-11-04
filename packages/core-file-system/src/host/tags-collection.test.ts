@@ -1,14 +1,14 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { FacetStore } from './facets-store.ts'
-import { facetsCollection } from './facets-collection.ts'
+import { TagStore } from './tags-store.ts'
+import { tagsCollection } from './tags-collection.ts'
 
-test('facetsCollection lists facets with stamp counts and supports create/update/delete', async () => {
-  const store = new FacetStore()
+test('tagsCollection lists facets with stamp counts and supports create/update/delete', async () => {
+  const store = new TagStore()
   store.replace([{ id: 'dp', label: '动态规划', fields: [{ key: 'complexity', type: 'string' }] }])
   store.indexRecord('/pages', 'home', '首页', ['dp'])
-  const spec = facetsCollection(store)
-  assert.equal(spec.path, '/facets')
+  const spec = tagsCollection(store)
+  assert.equal(spec.path, '/tags')
   assert.equal(spec.label, '标签')
   assert.equal(spec.view?.title, '标签')
   assert.equal(spec.view?.icon, 'tag')
@@ -49,12 +49,12 @@ test('facetsCollection lists facets with stamp counts and supports create/update
   assert.equal(store.get('io'), null)
   assert.equal((await spec.list()).length, 1)
 
-  const specWithTables = facetsCollection(store, () => [{ id: 'pages', path: '/pages', label: '页面' }])
-  const collected = await specWithTables.list({ filter: { facetId: 'dp' } })
+  const specWithTables = tagsCollection(store, () => [{ id: 'pages', path: '/pages', label: '页面' }])
+  const collected = await specWithTables.list({ filter: { tagId: 'dp' } })
   assert.equal(collected.length, 1)
   assert.equal(collected[0]?.id, 'pages::home')
   assert.equal(collected[0]?.table, '页面')
   assert.equal(collected[0]?.tablePath, '/pages')
   assert.equal(collected[0]?.sourceId, 'home')
-  assert.equal(collected[0]?.facetId, 'dp')
+  assert.equal(collected[0]?.tagId, 'dp')
 })

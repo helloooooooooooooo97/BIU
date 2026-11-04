@@ -3,11 +3,11 @@ import { resolve } from 'node:path'
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import { REQUIRED_RECORD_FIELDS, type CollectionSchema } from '@biu/type-file-system'
-import { facetFlatColumnKey, GROUP_STRATEGIES, groupField, groupableFields, groupListKeys, groupRecords, isGroupableKind } from './fields'
+import { tagFlatColumnKey, GROUP_STRATEGIES, groupField, groupableFields, groupListKeys, groupRecords, isGroupableKind } from './fields'
 
 const schema: CollectionSchema = {
   labelField: 'title',
-  fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string' }, facet: { type: 'facet' } },
+  fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string' }, tag: { type: 'tag' } },
 }
 
 const packs = [
@@ -24,7 +24,7 @@ const packs = [
 ]
 
 test('groupListKeys uses facet packs without waiting for collection schema', () => {
-  const key = facetFlatColumnKey('haohao', 'mood')
+  const key = tagFlatColumnKey('haohao', 'mood')
   const listed = groupListKeys(undefined, key, [], packs)
   assert.ok(listed.some((item) => item.key === 'ok'))
   assert.ok(listed.some((item) => item.key === 'meh'))
@@ -32,22 +32,22 @@ test('groupListKeys uses facet packs without waiting for collection schema', () 
 
 test('facet pack menus only list groupable kinds, including number intervals', () => {
   const keys = groupableFields(schema, packs).map((item) => item.key)
-  assert.equal(keys.includes('facet'), true)
-  assert.equal(keys.includes(facetFlatColumnKey('haohao', 'mood')), true)
-  assert.equal(keys.includes(facetFlatColumnKey('haohao', 'count')), true)
-  assert.equal(keys.includes(facetFlatColumnKey('haohao', 'when')), true)
-  assert.equal(keys.includes(facetFlatColumnKey('haohao', 'note')), false)
+  assert.equal(keys.includes('tag'), true)
+  assert.equal(keys.includes(tagFlatColumnKey('haohao', 'mood')), true)
+  assert.equal(keys.includes(tagFlatColumnKey('haohao', 'count')), true)
+  assert.equal(keys.includes(tagFlatColumnKey('haohao', 'when')), true)
+  assert.equal(keys.includes(tagFlatColumnKey('haohao', 'note')), false)
   assert.equal(isGroupableKind('number'), true)
   assert.equal('number' in GROUP_STRATEGIES, true)
 })
 
 test('number facet fields group by interval, not distinct values', () => {
-  const key = facetFlatColumnKey('haohao', 'count')
+  const key = tagFlatColumnKey('haohao', 'count')
   assert.equal(groupField(schema, key, packs)?.key, key)
   const rows = [
-    { id: '1', title: 'a', facet: { tags: ['haohao'], values: { haohao: { count: 3 } } } },
-    { id: '2', title: 'b', facet: { tags: ['haohao'], values: { haohao: { count: 4 } } } },
-    { id: '3', title: 'c', facet: { tags: ['haohao'], values: { haohao: { count: 40 } } } },
+    { id: '1', title: 'a', tag: { tags: ['haohao'], values: { haohao: { count: 3 } } } },
+    { id: '2', title: 'b', tag: { tags: ['haohao'], values: { haohao: { count: 4 } } } },
+    { id: '3', title: 'c', tag: { tags: ['haohao'], values: { haohao: { count: 40 } } } },
   ]
   const grouped = groupRecords(rows, schema, key, packs)
   assert.deepEqual(

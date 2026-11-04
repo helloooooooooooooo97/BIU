@@ -22,10 +22,10 @@ import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { actionVisibleToUser } from '@biu/type-file-system'
 import type { CollectionActionInfo, DbRecord } from '@biu/type-file-system'
 import { getDatabaseUi } from '@biu/core-file-system/database-ui'
-import { loadFacets } from '@biu/core-file-system/facet-catalog'
+import { loadTags } from '@biu/core-file-system/tag-catalog'
 import { setChatOverlay, requestComposerFocus } from './chat-overlay.ts'
 
-export type SearchKind = 'view' | 'session' | 'task' | 'page' | 'plugin' | 'facet'
+export type SearchKind = 'view' | 'session' | 'task' | 'page' | 'plugin' | 'tag'
 
 export const SEARCH_SCOPES: Array<{
   id: SearchKind
@@ -37,7 +37,7 @@ export const SEARCH_SCOPES: Array<{
   { id: 'task', label: '任务', path: '/tasks' },
   { id: 'page', label: '页面', path: '/pages' },
   { id: 'plugin', label: '插件', path: '/plugins' },
-  { id: 'facet', label: '标签', path: '/facets' },
+  { id: 'tag', label: '标签', path: '/tags' },
 ]
 
 const PER_KIND = 8
@@ -104,16 +104,16 @@ function pushTags(into: string[], value: unknown) {
   }
 }
 
-/** 列表行上的标签：facet.tags、config.facet.tags；旧 tags 只当遗留标签名。 */
+/** 列表行上的标签：facet.tags、config.tag.tags；旧 tags 只当遗留标签名。 */
 export function tagsFromRecord(row: Record<string, unknown>) {
   const tags: string[] = []
-  const facet = row.facet
+  const facet = row.tag
   if (facet && typeof facet === 'object' && !Array.isArray(facet)) {
     pushTags(tags, (facet as { tags?: unknown }).tags)
   }
   const config = row.config
   if (config && typeof config === 'object' && !Array.isArray(config)) {
-    const nested = (config as { facet?: unknown }).facet
+    const nested = (config as { tag?: unknown; facet?: unknown }).tag ?? (config as { facet?: unknown }).facet
     if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
       pushTags(tags, (nested as { tags?: unknown }).tags)
     }
@@ -298,8 +298,8 @@ function actionGlyph(id: string) {
   return null
 }
 
-function facetTagLabel(id: string) {
-  return loadFacets().find((tag) => tag.id === id)?.label || id
+function tagChipLabel(id: string) {
+  return loadTags().find((tag) => tag.id === id)?.label || id
 }
 
 function HitRecordTags({ tags }: { tags?: string[] }) {
@@ -310,7 +310,7 @@ function HitRecordTags({ tags }: { tags?: string[] }) {
   return (
     <TagChips>
       {shown.map((tag) => (
-        <TagChip key={tag} id={tag} label={facetTagLabel(tag)} />
+        <TagChip key={tag} id={tag} label={tagChipLabel(tag)} />
       ))}
       {extra > 0 ? <TagChip id={`+${extra}`} label={`+${extra}`} /> : null}
     </TagChips>
@@ -542,7 +542,7 @@ export function ShellSearchPanel({
 
   const grouped = useMemo(() => {
     const remote = hits.filter((item) => scope === 'all' || item.kind === scope)
-    const order: SearchKind[] = ['view', 'session', 'task', 'page', 'plugin', 'facet']
+    const order: SearchKind[] = ['view', 'session', 'task', 'page', 'plugin', 'tag']
     return order
       .map((kind) => {
         const fromRemote = remote.filter((item) => item.kind === kind)

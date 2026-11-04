@@ -22,7 +22,7 @@ import { bannerGalleryId, isBannerPreset } from '../banner-presets.ts'
 
 type DatabaseSync = import('node:sqlite').DatabaseSync
 
-export type FacetStamp = {
+export type TagStamp = {
   collection: string
   id: string
   path: string
@@ -38,22 +38,22 @@ type TagRow = {
   updated_at?: number
 }
 
-export type FacetEntry = {
+export type TagEntry = {
   pack: CollectionSchemaPack
   notes: string
   createdAt: number
   updatedAt: number
 }
-type StampRow = { facet_id: string; collection: string; record_id: string; title: string }
+type StampRow = { tag_id: string; collection: string; record_id: string; title: string }
 
-export function slugFacetId(label: string, used: Set<string>) {
+export function slugTagId(label: string, used: Set<string>) {
   const base =
     label
       .trim()
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '')
-      .slice(0, 24) || 'facet'
+      .slice(0, 24) || 'tag'
   let id = /^[a-z]/.test(base) ? base : `t-${base}`
   let n = 2
   while (used.has(id) || !/^[a-z][a-z0-9-]{0,31}$/.test(id)) {
@@ -74,7 +74,7 @@ function packFromRow(row: TagRow): CollectionSchemaPack | null {
   return normalizeSchemaPack({ id: row.id, label: row.label, fields })
 }
 
-function entryFromRow(db: DatabaseSync, row: TagRow): FacetEntry | null {
+function entryFromRow(db: DatabaseSync, row: TagRow): TagEntry | null {
   const pack = packFromRow(row)
   if (!pack) return null
   const updated = Number(row.updated_at) || 0
@@ -83,7 +83,7 @@ function entryFromRow(db: DatabaseSync, row: TagRow): FacetEntry | null {
   const updatedAt = updated > 0 ? updated : createdAt
   return {
     pack,
-    notes: readEditorContent(db, '/facets', row.id),
+    notes: readEditorContent(db, '/tags', row.id),
     createdAt,
     updatedAt,
   }
@@ -92,7 +92,7 @@ function entryFromRow(db: DatabaseSync, row: TagRow): FacetEntry | null {
 const FACET_ROW_SQL = 'id, label, fields_json, created_at, updated_at'
 
 /** 分面目录由 File System 用 SQLite 管：目录 + 跨表倒排，查询不扫全表。 */
-export class FacetStore {
+export class TagStore {
   private db: DatabaseSync | null = null
 
   open(path = ':memory:') {
@@ -107,11 +107,11 @@ export class FacetStore {
 
   private ensureCreatedAtColumn() {
     const db = this.db!
-    const cols = db.prepare('PRAGMA table_info(facets)').all() as Array<{ name: string }>
+    const cols = db.prepare('PRAGMA table_info(tags)').all() as Array<{ name: string }>
     if (!cols.some((col) => col.name === 'created_at')) {
-      db.exec(`ALTER TABLE facets ADD COLUMN created_at INTEGER NOT NULL DEFAULT 0`)
+      db.exec(`ALTER TABLE tags ADD COLUMN created_at INTEGER NOT NULL DEFAULT 0`)
     }
-    db.exec(`UPDATE facets SET created_at = updated_at WHERE created_at = 0 AND updated_at > 0`)
+    db.exec(`UPDATE tags SET created_at = updated_at WHERE created_at = 0 AND updated_at > 0`)
   }
 
   private ensurePersonMetaColumns() {
@@ -159,14 +159,14 @@ export class FacetStore {
   notes(id: string) {
     const want = String(id ?? '').trim()
     if (!want) return ''
-    return readEditorContent(this.ensure(), '/facets', want)
+    return readEditorContent(this.ensure(), '/tags', want)
   }
 
   private savePack(pack: CollectionSchemaPack, notes: string) {
     const now = Date.now()
     const db = this.ensure()
     db.prepare(
-        `INSERT INTO facets (id, label, fields_json, created_at, updated_at)
+        `INSERT INTO tags (id, label, fields_json, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            label = excluded.label,
@@ -174,7 +174,7 @@ export class FacetStore {
            updated_at = excluded.updated_at`,
       )
       .run(pack.id, pack.label, JSON.stringify(pack.fields), now, now)
-    writeEditorContent(db, '/facets', pack.id, notes, { transaction: false })
+    writeEditorContent(db, '/tags', pack.id, notes, { transaction: false })
   }
 
   ensure() {
@@ -186,34 +186,34 @@ export class FacetStore {
     return this.entries(query).map((item) => item.pack)
   }
 
-  entries(query = ''): FacetEntry[] {
+  entries(query = ''): TagEntry[] {
     const db = this.ensure()
     const q = query.trim().toLowerCase()
     const rows = (
       q
         ? (db
             .prepare(
-              `SELECT ${FACET_ROW_SQL} FROM facets
+              `SELECT ${FACET_ROW_SQL} FROM tags
                WHERE instr(lower(id), ?) > 0 OR instr(lower(label), ?) > 0
                ORDER BY label`,
             )
             .all(q, q) as TagRow[])
-        : (db.prepare(`SELECT ${FACET_ROW_SQL} FROM facets ORDER BY label`).all() as TagRow[])
+        : (db.prepare(`SELECT ${FACET_ROW_SQL} FROM tags ORDER BY label`).all() as TagRow[])
     )
     return rows
       .map((row) => entryFromRow(db, row))
-      .filter((item): item is FacetEntry => Boolean(item) && !this.isDeleted('/facets', item.pack.id))
+      .filter((item): item is TagEntry => Boolean(item) && !this.isDeleted('/tags', item.pack.id))
   }
 
   get(idOrLabel: string): CollectionSchemaPack | null {
     return this.entry(idOrLabel)?.pack ?? null
   }
 
-  entry(idOrLabel: string): FacetEntry | null {
+  entry(idOrLabel: string): TagEntry | null {
     const want = String(idOrLabel ?? '').trim()
     if (!want) return null
     const row = this.ensure()
-      .prepare(`SELECT ${FACET_ROW_SQL} FROM facets WHERE id = ? OR label = ? LIMIT 1`)
+      .prepare(`SELECT ${FACET_ROW_SQL} FROM tags WHERE id = ? OR label = ? LIMIT 1`)
       .get(want, want) as TagRow | undefined
     return row ? entryFromRow(this.ensure(), row) : null
   }
@@ -227,11 +227,11 @@ export class FacetStore {
       for (const tag of next) {
         this.savePack(tag, this.notes(tag.id))
       }
-      const existing = db.prepare('SELECT id FROM facets').all() as Array<{ id: string }>
+      const existing = db.prepare('SELECT id FROM tags').all() as Array<{ id: string }>
       for (const row of existing) {
         if (keep.has(row.id)) continue
-        db.prepare('DELETE FROM facet_stamps WHERE facet_id = ?').run(row.id)
-        db.prepare('DELETE FROM facets WHERE id = ?').run(row.id)
+        db.prepare('DELETE FROM tag_stamps WHERE tag_id = ?').run(row.id)
+        db.prepare('DELETE FROM tags WHERE id = ?').run(row.id)
       }
       db.exec('COMMIT')
     } catch (error) {
@@ -245,7 +245,7 @@ export class FacetStore {
     const pack = normalizeSchemaPack(raw)
     if (!pack) throw new Error('invalid 标签')
     const nextNotes = notes !== undefined ? String(notes) : this.notes(pack.id)
-    if (this.isDeleted('/facets', pack.id)) this.restoreDeleted('/facets', pack.id)
+    if (this.isDeleted('/tags', pack.id)) this.restoreDeleted('/tags', pack.id)
     this.savePack(pack, nextNotes)
     return pack
   }
@@ -256,8 +256,8 @@ export class FacetStore {
     if (!want) return false
     db.exec('BEGIN IMMEDIATE')
     try {
-      db.prepare('DELETE FROM facet_stamps WHERE facet_id = ?').run(want)
-      const result = db.prepare('DELETE FROM facets WHERE id = ?').run(want)
+      db.prepare('DELETE FROM tag_stamps WHERE tag_id = ?').run(want)
+      const result = db.prepare('DELETE FROM tags WHERE id = ?').run(want)
       db.exec('COMMIT')
       return Number(result.changes) > 0
     } catch (error) {
@@ -268,10 +268,10 @@ export class FacetStore {
 
   stampCounts(): Record<string, number> {
     const rows = this.ensure()
-      .prepare('SELECT facet_id, COUNT(*) AS n FROM facet_stamps GROUP BY facet_id')
-      .all() as Array<{ facet_id: string; n: number | bigint }>
+      .prepare('SELECT tag_id, COUNT(*) AS n FROM tag_stamps GROUP BY tag_id')
+      .all() as Array<{ tag_id: string; n: number | bigint }>
     const out: Record<string, number> = {}
-    for (const row of rows) out[row.facet_id] = Number(row.n)
+    for (const row of rows) out[row.tag_id] = Number(row.n)
     return out
   }
 
@@ -280,9 +280,9 @@ export class FacetStore {
     const ids = [...new Set(tagIds.map((id) => String(id).trim()).filter(Boolean))]
     db.exec('BEGIN IMMEDIATE')
     try {
-      db.prepare('DELETE FROM facet_stamps WHERE collection = ? AND record_id = ?').run(collection, recordId)
+      db.prepare('DELETE FROM tag_stamps WHERE collection = ? AND record_id = ?').run(collection, recordId)
       const insert = db.prepare(
-        'INSERT INTO facet_stamps (facet_id, collection, record_id, title) VALUES (?, ?, ?, ?)',
+        'INSERT INTO tag_stamps (tag_id, collection, record_id, title) VALUES (?, ?, ?, ?)',
       )
       for (const tagId of ids) insert.run(tagId, collection, recordId, title)
       db.exec('COMMIT')
@@ -292,26 +292,26 @@ export class FacetStore {
     }
   }
 
-  recordFacet(collection: string, recordId: string): SchemaFieldValue | null {
+  recordTag(collection: string, recordId: string): SchemaFieldValue | null {
     const row = this.ensure()
-      .prepare('SELECT facet_json FROM facet_record_values WHERE collection = ? AND record_id = ?')
-      .get(collection, recordId) as { facet_json: string } | undefined
+      .prepare('SELECT tag_json FROM tag_record_values WHERE collection = ? AND record_id = ?')
+      .get(collection, recordId) as { tag_json: string } | undefined
     if (!row) return null
-    return normalizeSchemaValue(row.facet_json)
+    return normalizeSchemaValue(row.tag_json)
   }
 
-  writeRecordFacet(collection: string, recordId: string, facet: unknown, title: string) {
-    const value = normalizeSchemaValue(facet)
+  writeRecordTag(collection: string, recordId: string, tag: unknown, title: string) {
+    const value = normalizeSchemaValue(tag)
     const db = this.ensure()
     if (isEmptySchemaValue(value)) {
-      db.prepare('DELETE FROM facet_record_values WHERE collection = ? AND record_id = ?').run(collection, recordId)
+      db.prepare('DELETE FROM tag_record_values WHERE collection = ? AND record_id = ?').run(collection, recordId)
       this.indexRecord(collection, recordId, title, [])
       return value
     }
     db.prepare(
-      `INSERT INTO facet_record_values (collection, record_id, facet_json)
+      `INSERT INTO tag_record_values (collection, record_id, tag_json)
        VALUES (?, ?, ?)
-       ON CONFLICT(collection, record_id) DO UPDATE SET facet_json = excluded.facet_json`,
+       ON CONFLICT(collection, record_id) DO UPDATE SET tag_json = excluded.tag_json`,
     ).run(collection, recordId, JSON.stringify(value))
     this.indexRecord(collection, recordId, title, value.tags)
     return value
@@ -500,8 +500,8 @@ export class FacetStore {
 
   removeRecord(collection: string, recordId: string) {
     const db = this.ensure()
-    db.prepare('DELETE FROM facet_stamps WHERE collection = ? AND record_id = ?').run(collection, recordId)
-    db.prepare('DELETE FROM facet_record_values WHERE collection = ? AND record_id = ?').run(collection, recordId)
+    db.prepare('DELETE FROM tag_stamps WHERE collection = ? AND record_id = ?').run(collection, recordId)
+    db.prepare('DELETE FROM tag_record_values WHERE collection = ? AND record_id = ?').run(collection, recordId)
     db.prepare('DELETE FROM record_meta WHERE collection = ? AND record_id = ?').run(collection, recordId)
     db.prepare('DELETE FROM record_banners WHERE collection = ? AND record_id = ?').run(collection, recordId)
     db.prepare('DELETE FROM content_refs WHERE collection = ? AND record_id = ?').run(collection, recordId)
@@ -607,22 +607,22 @@ export class FacetStore {
     const tag = this.get(tagIdOrLabel)
     const tagId = tag?.id ?? tagIdOrLabel
     const rows = this.ensure()
-      .prepare('SELECT record_id FROM facet_stamps WHERE collection = ? AND facet_id = ?')
+      .prepare('SELECT record_id FROM tag_stamps WHERE collection = ? AND tag_id = ?')
       .all(collection, tagId) as Array<{ record_id: string }>
     return new Set(rows.map((row) => row.record_id))
   }
 
-  collect(idOrLabel: string): { facet: CollectionSchemaPack | null; items: FacetStamp[] } {
+  collect(idOrLabel: string): { tag: CollectionSchemaPack | null; items: TagStamp[] } {
     const tag = this.get(idOrLabel)
     const tagId = tag?.id ?? String(idOrLabel ?? '').trim()
-    if (!tagId) return { facet: null, items: [] }
+    if (!tagId) return { tag: null, items: [] }
     const rows = this.ensure()
       .prepare(
-        'SELECT facet_id, collection, record_id, title FROM facet_stamps WHERE facet_id = ? ORDER BY collection, record_id',
+        'SELECT tag_id, collection, record_id, title FROM tag_stamps WHERE tag_id = ? ORDER BY collection, record_id',
       )
       .all(tagId) as StampRow[]
     return {
-      facet: tag,
+      tag,
       items: rows.map((row) => ({
         collection: row.collection,
         id: row.record_id,

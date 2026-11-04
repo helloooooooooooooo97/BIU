@@ -134,8 +134,8 @@ export interface SessionConfig {
   pinned?: boolean
   /** 记录图标 */
   emoji?: string
-  /** 分面 */
-  facet?: { tags: string[]; values: Record<string, Record<string, unknown>> }
+  /** 标签 */
+  tag?: { tags: string[]; values: Record<string, Record<string, unknown>> }
   createdAt?: number
   /** 右侧检查器页签与各栏库路径，跟这条 session 走。 */
   inspector?: SessionInspectorBind
@@ -189,7 +189,7 @@ export function normalizeInspectorBind(value: unknown): SessionInspectorBind | u
   return Object.keys(next).length ? next : undefined
 }
 
-function asSessionFacet(raw: unknown): SessionConfig['facet'] | undefined {
+function asSessionTag(raw: unknown): SessionConfig['tag'] | undefined {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
   const rec = raw as Record<string, unknown>
   const tags = Array.isArray(rec.tags)
@@ -207,15 +207,15 @@ function asSessionFacet(raw: unknown): SessionConfig['facet'] | undefined {
 
 /** 旧会话 tags 并进标签：每个标签名就是贴上的标签 id/显示名。 */
 function absorbLegacySessionTags(
-  facet: SessionConfig['facet'] | undefined,
+  current: SessionConfig['tag'] | undefined,
   tags: unknown,
-): SessionConfig['facet'] | undefined {
+): SessionConfig['tag'] | undefined {
   const extra = Array.isArray(tags)
     ? [...new Set(tags.map((item) => String(item).trim()).filter(Boolean))].slice(0, 24)
     : []
-  if (!extra.length) return facet
-  const tagsNext = [...(facet?.tags ?? [])]
-  const values = { ...(facet?.values ?? {}) }
+  if (!extra.length) return current
+  const tagsNext = [...(current?.tags ?? [])]
+  const values = { ...(current?.values ?? {}) }
   for (const tag of extra) {
     if (!tagsNext.includes(tag)) tagsNext.push(tag)
   }
@@ -263,8 +263,8 @@ export function normalizeSessionConfig(value: unknown): SessionConfig | undefine
   if (Array.isArray(raw.extraTools)) {
     next.extraTools = [...new Set(raw.extraTools.map((name) => String(name).trim()).filter(Boolean))]
   }
-  const facet = absorbLegacySessionTags(asSessionFacet(raw.facet), raw.tags)
-  if (facet) next.facet = facet
+  const tag = absorbLegacySessionTags(asSessionTag(raw.tag ?? raw.facet), raw.tags)
+  if (tag) next.tag = tag
   if (typeof raw.pinned === 'boolean') next.pinned = raw.pinned
   if (typeof raw.emoji === 'string') next.emoji = raw.emoji
   if (typeof raw.createdAt === 'number' && Number.isFinite(raw.createdAt) && raw.createdAt > 0) next.createdAt = raw.createdAt
@@ -318,10 +318,10 @@ export function mergeSessionConfig(
   if (Array.isArray(patch.extraTools)) {
     next.extraTools = [...new Set(patch.extraTools.map((name) => String(name).trim()).filter(Boolean))]
   }
-  if (Array.isArray((patch as { tags?: unknown }).tags) && !('facet' in patch)) {
-    const facet = absorbLegacySessionTags(next.facet, (patch as { tags?: unknown }).tags)
-    if (facet) next.facet = facet
-    else delete next.facet
+  if (Array.isArray((patch as { tags?: unknown }).tags) && !('tag' in patch)) {
+    const tag = absorbLegacySessionTags(next.tag, (patch as { tags?: unknown }).tags)
+    if (tag) next.tag = tag
+    else delete next.tag
   }
   if (typeof patch.pinned === 'boolean') {
     if (patch.pinned) next.pinned = true
@@ -331,9 +331,9 @@ export function mergeSessionConfig(
     if (patch.emoji == null || !String(patch.emoji)) delete next.emoji
     else next.emoji = String(patch.emoji)
   }
-  if ('facet' in patch) {
-    if (patch.facet == null) delete next.facet
-    else next.facet = patch.facet
+  if ('tag' in patch) {
+    if (patch.tag == null) delete next.tag
+    else next.tag = patch.tag
   }
   if (typeof patch.createdAt === 'number' && Number.isFinite(patch.createdAt) && patch.createdAt > 0) {
     next.createdAt = patch.createdAt

@@ -2,7 +2,7 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import type { CollectionSchema } from '@biu/type-file-system'
 import { REQUIRED_RECORD_FIELDS, normalizeSchemaValue } from '@biu/type-file-system'
-import { actionWhenKeys, defaultColumnKeys, facetFlatColumnKey, flattenFacetColumns, facetColumnTitle, inferPackFieldType, listProjectionKeys, parseFacetFlatColumnKey, patchFacetFlatValue, pinActionColumn, pinLabelColumn, contentFieldKey, flattenTree, formatField, fieldHasValue, fieldValueOptions, GROUP_STRATEGIES, groupField, groupListFilter, groupListKeys, groupRecords, groupableFields, hasTreeLinks, treeChildren, isGroupableKind, isViewModeId, matchActionWhen, mergeListFilters, overlayListed, previewActionRecord, parentFieldKey, readFacetFlatValue, recordLinkIds, resolveFieldType, uniqueValues } from './fields'
+import { actionWhenKeys, defaultColumnKeys, tagFlatColumnKey, flattenTagColumns, tagColumnTitle, inferPackFieldType, listProjectionKeys, parseTagFlatColumnKey, patchTagFlatValue, pinActionColumn, pinLabelColumn, contentFieldKey, flattenTree, formatField, fieldHasValue, fieldValueOptions, GROUP_STRATEGIES, groupField, groupListFilter, groupListKeys, groupRecords, groupableFields, hasTreeLinks, treeChildren, isGroupableKind, isViewModeId, matchActionWhen, mergeListFilters, overlayListed, previewActionRecord, parentFieldKey, readTagFlatValue, recordLinkIds, resolveFieldType, uniqueValues } from './fields'
 import { placedActions, visibleActions } from './fsdb-cells.tsx'
 
 test('isViewModeId accepts builtin and custom slugs', () => {
@@ -33,7 +33,7 @@ test('resolveFieldType maps legacy aliases', () => {
   assert.equal(resolveFieldType({ type: 'string', format: 'url' }), 'url')
   assert.equal(resolveFieldType({ type: 'image' }), 'image')
   assert.equal(resolveFieldType({ type: 'attachment' }), 'attachment')
-  assert.equal(resolveFieldType({ type: 'facet' }), 'facet')
+  assert.equal(resolveFieldType({ type: 'tag' }), 'tag')
   assert.equal(resolveFieldType({ type: 'action' }), 'action')
   assert.equal(resolveFieldType({ type: 'ref' }), 'ref')
   assert.equal(resolveFieldType({ type: 'multi-ref' }), 'multi-ref')
@@ -69,8 +69,8 @@ test('fieldHasValue hides missing list/card/board chips', () => {
   assert.equal(fieldHasValue({ type: 'url' }, 'javascript:alert(1)'), false)
   assert.equal(fieldHasValue({ type: 'url' }, 'https://example.com'), true)
   assert.equal(fieldHasValue({ type: 'action', label: '开始' }, null), true)
-  assert.equal(fieldHasValue({ type: 'facet' }, { tags: [], values: {} }), false)
-  assert.equal(fieldHasValue({ type: 'facet' }, { tags: ['dp'], values: {} }), true)
+  assert.equal(fieldHasValue({ type: 'tag' }, { tags: [], values: {} }), false)
+  assert.equal(fieldHasValue({ type: 'tag' }, { tags: ['dp'], values: {} }), true)
 })
 
 test('formatField renders datetime tags and media', () => {
@@ -180,11 +180,11 @@ test('default columns skip id and timestamps unless schema.columns lists them; t
 })
 
 test('default columns omit flattened type properties', () => {
-  const nested = facetFlatColumnKey('haohao', 'dede')
-  assert.deepEqual(defaultColumnKeys(schema, ['title', 'status', 'facet', nested]), ['title', 'status', 'facet'])
-  assert.equal(parseFacetFlatColumnKey(nested)?.packId, 'haohao')
-  assert.equal(parseFacetFlatColumnKey(nested)?.fieldKey, 'dede')
-  const cols = flattenFacetColumns([
+  const nested = tagFlatColumnKey('haohao', 'dede')
+  assert.deepEqual(defaultColumnKeys(schema, ['title', 'status', 'tag', nested]), ['title', 'status', 'tag'])
+  assert.equal(parseTagFlatColumnKey(nested)?.packId, 'haohao')
+  assert.equal(parseTagFlatColumnKey(nested)?.fieldKey, 'dede')
+  const cols = flattenTagColumns([
     {
       id: 'haohao',
       label: '好好哈',
@@ -196,21 +196,21 @@ test('default columns omit flattened type properties', () => {
   ])
   assert.equal(cols.length, 1)
   assert.equal(cols[0]?.key, nested)
-  assert.equal(facetColumnTitle(cols[0]!), '好好哈.的的')
-  assert.equal(facetColumnTitle({ key: 'title', field: { label: '标题' } }), '标题')
-  const row = { id: '1', facet: { tags: ['haohao'], values: { haohao: { dede: 'v' } } } }
-  assert.equal(readFacetFlatValue(row, nested), 'v')
+  assert.equal(tagColumnTitle(cols[0]!), '好好哈.的的')
+  assert.equal(tagColumnTitle({ key: 'title', field: { label: '标题' } }), '标题')
+  const row = { id: '1', tag: { tags: ['haohao'], values: { haohao: { dede: 'v' } } } }
+  assert.equal(readTagFlatValue(row, nested), 'v')
   assert.deepEqual(uniqueValues([row], nested, { type: 'string', label: '的的' }), ['v'])
-  assert.deepEqual(patchFacetFlatValue(row, nested, 'next').values.haohao?.dede, 'next')
-  const untagged = { id: '2', facet: { tags: [], values: {} } }
-  const stamped = patchFacetFlatValue(untagged, nested, 'next')
+  assert.deepEqual(patchTagFlatValue(row, nested, 'next').values.haohao?.dede, 'next')
+  const untagged = { id: '2', tag: { tags: [], values: {} } }
+  const stamped = patchTagFlatValue(untagged, nested, 'next')
   assert.deepEqual(stamped.tags, ['haohao'])
   assert.equal(stamped.values.haohao?.dede, 'next')
   assert.equal(normalizeSchemaValue(stamped).values.haohao?.dede, 'next')
 })
 
 test('list projection keeps visible columns plus title, emoji, and parent', () => {
-  const nested = facetFlatColumnKey('haohao', 'dede')
+  const nested = tagFlatColumnKey('haohao', 'dede')
   const keys = listProjectionKeys({ schema, columns: ['status'], groupBy: 'tags' })
   assert.equal(keys.includes('id'), true)
   assert.equal(keys.includes('title'), true)
@@ -221,8 +221,8 @@ test('list projection keeps visible columns plus title, emoji, and parent', () =
   assert.equal(keys.includes('usageParts'), true)
   assert.equal(keys.includes('builtin'), true)
   assert.equal(keys.includes('dueAt'), false)
-  const withFacet = listProjectionKeys({ schema: { ...schema, fields: { ...schema.fields, facet: { type: 'facet' } } }, columns: [nested] })
-  assert.equal(withFacet.includes('facet'), true)
+  const withTag = listProjectionKeys({ schema: { ...schema, fields: { ...schema.fields, tag: { type: 'tag' } } }, columns: [nested] })
+  assert.equal(withTag.includes('tag'), true)
 })
 
 const pluginActions: CollectionSchema = {
@@ -322,7 +322,7 @@ test('groupField follows the strategy registry and skips free text', () => {
   assert.equal(isGroupableKind('url'), false)
   assert.deepEqual(
     Object.keys(GROUP_STRATEGIES).sort(),
-    ['boolean', 'datetime', 'facet', 'multi-ref', 'multi-select', 'number', 'person', 'ref', 'select'].sort(),
+    ['boolean', 'datetime', 'tag', 'multi-ref', 'multi-select', 'number', 'person', 'ref', 'select'].sort(),
   )
 })
 

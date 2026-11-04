@@ -32,7 +32,7 @@ import {
 import { AttachmentFile, UrlHref } from './cell-media.tsx'
 import { PersonFace } from './person-cell.tsx'
 import { RecordLinkChips } from './record-link-cell.tsx'
-import { facetLabel, jumpFacet } from './facet-catalog.ts'
+import { tagLabel, jumpTag } from './tag-catalog.ts'
 
 export function actionIcon(id: string, opts?: { fallback?: boolean; className?: string }) {
   const cls = opts?.className ?? 'size-[14px]'
@@ -115,7 +115,7 @@ export function fieldGlyphKind(kind: FieldType) {
   if (kind === 'number') return 'num'
   if (kind === 'action') return 'play'
   if (kind === 'select' || kind === 'multi-select') return 'stack'
-  if (kind === 'facet') return 'tag'
+  if (kind === 'tag') return 'tag'
   if (kind === 'url') return 'link'
   if (kind === 'ref' || kind === 'multi-ref') return 'ref'
   if (kind === 'image' || kind === 'attachment' || kind === 'file') return 'file'
@@ -202,7 +202,7 @@ export function parseFieldValue(field: FieldSpec, raw: string): unknown {
   if (kind === 'boolean') return raw === 'true'
   if (kind === 'number' || kind === 'datetime') return raw === '' ? null : Number(raw)
   if (kind === 'multi-select') return asStringList(raw)
-  if (kind === 'facet') {
+  if (kind === 'tag') {
     const trimmed = raw.trim()
     if (!trimmed) return { tags: [], values: {} }
     try {
@@ -336,13 +336,13 @@ export function DefaultCell({
       />
     )
   }
-  if (kind === 'facet') {
+  if (kind === 'tag') {
     const parsed = normalizeSchemaValue(value)
     if (!parsed.tags.length) return null
     return (
       <TagChips>
         {parsed.tags.map((id) => (
-          <TagChip key={id} id={id} label={facetLabel(id)} onClick={() => jumpFacet(id, onOpenLink)} />
+          <TagChip key={id} id={id} label={tagLabel(id)} onClick={() => jumpTag(id, onOpenLink)} />
         ))}
       </TagChips>
     )

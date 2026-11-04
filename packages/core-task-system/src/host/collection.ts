@@ -231,7 +231,7 @@ export function tasksCollection(tasks: TasksLike, recordActions?: TaskRecordActi
       contentField: 'description',
       contentBackend: 'editorContent',
       parentField: 'parentId',
-      columns: ['title', 'status', 'priority', 'difficulty', 'usage', 'createdBy', 'assignee', 'project', 'facet', 'dueAt'],
+      columns: ['title', 'status', 'priority', 'difficulty', 'usage', 'createdBy', 'assignee', 'project', 'tag', 'dueAt'],
       fields: {
         ...REQUIRED_RECORD_FIELDS,
         title: { type: 'string', label: '标题', writable: true },

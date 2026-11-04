@@ -8,7 +8,7 @@ test('orphan pack entries skip live fields, empties, and reserved keys', () => {
     {
       complexity: 'O(n)',
       related: { tags: ['graph'], values: {} },
-      facet: 'nope',
+      tag: 'nope',
       '': 'x',
       leftover: '还在',
       blank: '  ',
@@ -18,7 +18,7 @@ test('orphan pack entries skip live fields, empties, and reserved keys', () => {
     orphans.map((item) => item.key),
     ['related', 'leftover'],
   )
-  assert.equal(orphans.find((item) => item.key === 'related')?.type, 'facet')
+  assert.equal(orphans.find((item) => item.key === 'related')?.type, 'tag')
   assert.equal(orphans.find((item) => item.key === 'leftover')?.type, 'string')
 })
 
@@ -46,6 +46,6 @@ test('infer pack field type from leftover values', () => {
   assert.equal(inferPackFieldType(12), 'number')
   assert.equal(inferPackFieldType(['a', 'b']), 'multi-select')
   assert.equal(inferPackFieldType('https://example.com/a'), 'url')
-  assert.equal(inferPackFieldType({ tags: ['dp'], values: {} }), 'facet')
+  assert.equal(inferPackFieldType({ tags: ['dp'], values: {} }), 'tag')
   assert.equal(inferPackFieldType('O(n)'), 'string')
 })

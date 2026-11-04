@@ -11,12 +11,12 @@ import { TagChip, TagChips } from '@biu/biu-ui'
 import { PickOption, PickPanel } from '@biu/database-ui/search'
 import { fieldDraftValue, parseFieldValue } from './fsdb-cells.tsx'
 import { FieldEditor } from './field-editor.tsx'
-import { createFacet, jumpFacet, loadFacets, subscribeFacets } from './facet-catalog.ts'
-import { facetChipIcon, facetTagLabel } from './schema-field.tsx'
+import { createTag, jumpTag, loadTags, subscribeTags } from './tag-catalog.ts'
+import { tagChipIcon, tagChipLabel } from './schema-field.tsx'
 import { subscribeCrumbs } from './view-storage.ts'
 import { PersonPickPanel } from './person-cell.tsx'
 import { RecordPickPanel } from './record-link-cell.tsx'
-import { asStringList, enumDisplayLabel, isRecordLinkField, isSingleRefField, parseFacetFlatColumnKey, resolveFieldType } from './fields.ts'
+import { asStringList, enumDisplayLabel, isRecordLinkField, isSingleRefField, parseTagFlatColumnKey, resolveFieldType } from './fields.ts'
 
 type TagOption = { value: string; label: string; icon?: ReactNode }
 
@@ -129,7 +129,7 @@ async function applyFacetTags(parsed: SchemaFieldValue, catalog: CollectionSchem
       resolved.push(hit.id)
       continue
     }
-    const created = await createFacet(item)
+    const created = await createTag(item)
     packs = [...packs, created]
     used.add(created.id)
     resolved.push(created.id)
@@ -148,16 +148,16 @@ function FacetPickPanel({
 }) {
   const parsed = normalizeSchemaValue(value)
   const liveRef = useRef(parsed)
-  const [catalog, setCatalog] = useState(() => loadFacets())
+  const [catalog, setCatalog] = useState(() => loadTags())
   const [, setFacetMarks] = useState(0)
-  useEffect(() => subscribeFacets(undefined, () => setCatalog(loadFacets())), [])
+  useEffect(() => subscribeTags(undefined, () => setCatalog(loadTags())), [])
   useEffect(() => subscribeCrumbs(() => setFacetMarks((n) => n + 1)), [])
   return (
     <TagPickPanel
       values={parsed.tags}
-      options={catalog.map((tag) => ({ value: tag.id, label: facetTagLabel(tag), icon: facetChipIcon(tag.id) }))}
+      options={catalog.map((tag) => ({ value: tag.id, label: tagChipLabel(tag), icon: tagChipIcon(tag.id) }))}
       multiple
-      onChipClick={(id) => jumpFacet(id)}
+      onChipClick={(id) => jumpTag(id)}
       onJump={onJump}
       onChange={(next) => {
         void applyFacetTags(liveRef.current, catalog, next).then((updated) => {
@@ -202,7 +202,7 @@ export function CellPopDraft({
   onSubmit: (raw: unknown) => void
 }) {
   const kind = resolveFieldType(field)
-  const flat = parseFacetFlatColumnKey(fieldKey)
+  const flat = parseTagFlatColumnKey(fieldKey)
   const [text, setText] = useState(() => fieldDraftValue(field, initial))
   const [raw, setRaw] = useState<unknown>(initial)
   const rawRef = useRef(initial)
@@ -214,7 +214,7 @@ export function CellPopDraft({
     kind === 'datetime' ||
     kind === 'image' ||
     kind === 'attachment' ||
-    kind === 'facet' ||
+    kind === 'tag' ||
     kind === 'person' ||
     isRecordLinkField(field, fieldKey)
 
@@ -270,7 +270,7 @@ export function CellPopDraft({
     )
   }
 
-  if (kind === 'facet') {
+  if (kind === 'tag') {
     return <FacetPickPanel value={raw} onChange={(next) => put(next)} onJump={onClose} />
   }
 

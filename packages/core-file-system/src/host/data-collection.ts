@@ -1,6 +1,6 @@
 import type { CollectionSpec, CollectionInfo, DbRecord } from '@biu/type-file-system'
 import { actionVisibleToUser, REQUIRED_RECORD_FIELDS, recordBuiltinValues } from '@biu/type-file-system'
-import { parseStampRecordId, stampRecordId } from './facets-collection.ts'
+import { parseStampRecordId, stampRecordId } from './tags-collection.ts'
 import { DATA_COLLECTION_PATH, isIndexCollection, isSystemCollection } from '../web/database-path.ts'
 import { matchActionWhen } from '../web/fields.ts'
 
@@ -41,7 +41,7 @@ export function overviewRecord(
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
       emoji: row.emoji,
-      facet: row.facet,
+      tag: row.tag,
       createdBy: row.createdBy,
       updatedBy: row.updatedBy,
     }),

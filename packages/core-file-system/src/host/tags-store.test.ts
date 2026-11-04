@@ -3,17 +3,17 @@ import assert from 'node:assert/strict'
 import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { FacetStore } from './facets-store.ts'
+import { TagStore } from './tags-store.ts'
 
-test('FacetStore keeps packs in sqlite including nested facet types', () => {
-  const store = new FacetStore()
+test('TagStore keeps packs in sqlite including nested facet types', () => {
+  const store = new TagStore()
   store.replace([
     {
       id: 'dp',
       label: '动态规划',
       fields: [
         { key: 'complexity', type: 'string', label: '复杂度' },
-        { key: 'nested', type: 'facet', label: '套一层' },
+        { key: 'nested', type: 'tag', label: '套一层' },
       ],
     },
     { id: '??', label: '坏的', fields: [] },
@@ -26,8 +26,8 @@ test('FacetStore keeps packs in sqlite including nested facet types', () => {
   assert.equal(store.list('nope').length, 0)
 })
 
-test('FacetStore writes createdAt on insert and keeps it across updates', () => {
-  const store = new FacetStore()
+test('TagStore writes createdAt on insert and keeps it across updates', () => {
+  const store = new TagStore()
   const before = Date.now()
   store.upsert({ id: 'dp', label: '动态规划', fields: [] })
   const first = store.entry('dp')
@@ -44,19 +44,19 @@ test('FacetStore writes createdAt on insert and keeps it across updates', () => 
 test('sqlite file round-trips facet catalog and stamp index', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'fs-facet-'))
   const path = join(dir, 'file-system.sqlite')
-  const store = new FacetStore()
+  const store = new TagStore()
   store.open(path)
   store.replace([{ id: 'dp', label: '动态规划', fields: [{ key: 'complexity', type: 'string' }] }])
   store.indexRecord('/pages', 'home', '首页', ['dp'])
   store.indexRecord('/notes', 'n1', '草稿', ['dp'])
   store.writeRecordBanner('/pages', 'home', { kind: 'html', html: '<section>cover</section>' })
 
-  const again = new FacetStore()
+  const again = new TagStore()
   again.open(path)
   assert.deepEqual(again.recordBanner('/pages', 'home'), { kind: 'html', html: '<section>cover</section>' })
   assert.equal(again.list()[0]?.label, '动态规划')
   const collected = again.collect('动态规划')
-  assert.equal(collected.facet?.id, 'dp')
+  assert.equal(collected.tag?.id, 'dp')
   assert.deepEqual(collected.items.map((item) => item.path).sort(), ['/notes/n1', '/pages/home'])
   assert.equal(again.stampedIds('/pages', 'dp').has('home'), true)
   assert.equal(again.stampCounts().dp, 2)
@@ -71,36 +71,36 @@ test('sqlite file round-trips facet catalog and stamp index', async () => {
 })
 
 test('sqlite stores facet overlay for records that cannot update', async () => {
-  const store = new FacetStore()
-  store.writeRecordFacet('/plugins', 'demo', { tags: ['dp'], values: { dp: { complexity: 'O(n)' } } }, 'Demo')
-  assert.deepEqual(store.recordFacet('/plugins', 'demo')?.tags, ['dp'])
+  const store = new TagStore()
+  store.writeRecordTag('/plugins', 'demo', { tags: ['dp'], values: { dp: { complexity: 'O(n)' } } }, 'Demo')
+  assert.deepEqual(store.recordTag('/plugins', 'demo')?.tags, ['dp'])
   assert.equal(store.stampedIds('/plugins', 'dp').has('demo'), true)
   store.removeRecord('/plugins', 'demo')
-  assert.equal(store.recordFacet('/plugins', 'demo'), null)
+  assert.equal(store.recordTag('/plugins', 'demo'), null)
   assert.equal(store.stampedIds('/plugins', 'dp').has('demo'), false)
 })
 
 test('upserting a soft-deleted facet id brings it back', () => {
-  const store = new FacetStore()
+  const store = new TagStore()
   store.upsert({ id: 'facet-6', label: '未命名标签', fields: [] })
-  store.markDeleted('/facets', 'facet-6')
-  assert.equal(store.isDeleted('/facets', 'facet-6'), true)
+  store.markDeleted('/tags', 'facet-6')
+  assert.equal(store.isDeleted('/tags', 'facet-6'), true)
   assert.equal(store.entries().some((item) => item.pack.id === 'facet-6'), false)
   store.upsert({ id: 'facet-6', label: '新标签', fields: [] })
-  assert.equal(store.isDeleted('/facets', 'facet-6'), false)
+  assert.equal(store.isDeleted('/tags', 'facet-6'), false)
   assert.equal(store.get('facet-6')?.label, '新标签')
 })
 
 test('empty facet overlay is not stored', async () => {
-  const store = new FacetStore()
-  store.writeRecordFacet('/pages', 'p1', { tags: ['dp'], values: { dp: {} } }, 'P')
-  assert.equal(store.recordFacet('/pages', 'p1')?.tags[0], 'dp')
-  store.writeRecordFacet('/pages', 'p1', { tags: [], values: {} }, 'P')
-  assert.equal(store.recordFacet('/pages', 'p1'), null)
+  const store = new TagStore()
+  store.writeRecordTag('/pages', 'p1', { tags: ['dp'], values: { dp: {} } }, 'P')
+  assert.equal(store.recordTag('/pages', 'p1')?.tags[0], 'dp')
+  store.writeRecordTag('/pages', 'p1', { tags: [], values: {} }, 'P')
+  assert.equal(store.recordTag('/pages', 'p1'), null)
 })
 
 test('sqlite stores emoji and tags overlay without wiping the other', () => {
-  const store = new FacetStore()
+  const store = new TagStore()
   store.writeRecordMeta('/plugins', 'demo', { emoji: '🔌' })
   assert.equal(store.recordMeta('/plugins', 'demo')?.emoji, '🔌')
   assert.equal(store.recordMeta('/plugins', 'demo')?.tags, null)
@@ -116,7 +116,7 @@ test('sqlite stores emoji and tags overlay without wiping the other', () => {
 })
 
 test('sqlite stores html banner in its own table without wrapping json', () => {
-  const store = new FacetStore()
+  const store = new TagStore()
   store.writeRecordMeta('/pages', 'home', { emoji: '🏠' })
   store.writeRecordBanner('/pages', 'home', { kind: 'htmlframe', html: '<div>live</div>' })
   assert.equal(store.recordMeta('/pages', 'home')?.emoji, '🏠')
@@ -134,7 +134,7 @@ test('sqlite stores html banner in its own table without wrapping json', () => {
 })
 
 test('attachments and refs live next to record_meta', () => {
-  const store = new FacetStore()
+  const store = new TagStore()
   store.putAttachment({ name: 'ab'.repeat(32) + '.png', etag: 'ab'.repeat(32) + '.png', mime: 'image/png', bytes: 4, kind: 'asset' })
   store.linkContentRef('/pages', 'p1', 'fresh.png')
   const linked = store.recordsReferencingAsset('fresh.png')
@@ -150,7 +150,7 @@ test('attachments and refs live next to record_meta', () => {
 
 test('preset banners are not copied into the custom gallery', async () => {
   const { BANNER_PRESETS } = await import('../banner-presets.ts')
-  const store = new FacetStore()
+  const store = new TagStore()
   const sample = BANNER_PRESETS[0]!
   store.writeRecordBanner('/pages', 'home', { kind: sample.kind, html: sample.html })
   assert.equal(store.listBannerGallery().length, 0)

@@ -119,7 +119,7 @@ test('block/tag stub views only fetch a total when they are the open view', () =
   assert.equal(shouldFetchViewTotal({ path: '/page-blocks', view: all, collectionPath: '/page-blocks', activeViewId: all.id }), false)
   assert.equal(shouldFetchViewTotal({ path: '/page-blocks', view: user, collectionPath: '/page-blocks', activeViewId: all.id }), true)
   assert.equal(shouldFetchViewTotal({ path: '/page-blocks', view: all, collectionPath: '/tasks', activeViewId: all.id }), true)
-  assert.equal(shouldFetchViewTotal({ path: '/facets', view: tag, collectionPath: '/tasks', activeViewId: tag.id }), false)
+  assert.equal(shouldFetchViewTotal({ path: '/tags', view: tag, collectionPath: '/tasks', activeViewId: tag.id }), false)
 })
 
 test('view totals wait past first paint so ready is not blocked', () => {

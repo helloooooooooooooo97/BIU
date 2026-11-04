@@ -146,7 +146,7 @@ test('catalog view rows open the source table view instead of a record pane', ()
 test('tags collection uses the same view list as other tables', () => {
   assert.equal(isBuiltinTagViewId(builtinTagViewId('dp')), true)
   assert.equal(isBuiltinCatalogViewId(builtinTagViewId('dp')), false)
-  const table = { path: '/facets', label: '标签', view: { title: '标签' } }
+  const table = { path: '/tags', label: '标签', view: { title: '标签' } }
   const merged = mergeTableViews(table, [{ id: 'mine', name: '置顶', mode: 'table', sortField: 'id', sortDir: 'asc', filters: {}, columns: [] }])
   assert.equal(merged[0]?.name, '全部标签')
   assert.equal(merged.some((view) => view.name === '私人标签'), false)

@@ -13,7 +13,7 @@ test('sessionsCollection maps summaries and writes title/pinned/facet', async ()
         title: 'hello',
         updatedAt: 100,
         mascot: { shape: 'pebble', color: 'orange', eye: 1 },
-        config: { pinned: false, facet: { tags: ['a'], values: {} } },
+        config: { pinned: false, tag: { tags: ['a'], values: {} } },
       },
     ],
     rename: async (id, title) => {
@@ -49,7 +49,7 @@ test('sessionsCollection maps summaries and writes title/pinned/facet', async ()
   assert.equal(rows[0]?.mascotColor, 'orange')
   assert.equal(rows[0]?.mascotEye, 1)
   assert.equal(rows[0]?.mascotName, '橙石美')
-  assert.deepEqual((rows[0]?.facet as { tags?: string[] })?.tags, ['a'])
+  assert.deepEqual((rows[0]?.tag as { tags?: string[] })?.tags, ['a'])
   assert.equal(rows[0]?.createdAt, 100)
   assert.equal(rows[0]?.events, undefined)
   const got = await spec.get?.('s1')
@@ -57,14 +57,14 @@ test('sessionsCollection maps summaries and writes title/pinned/facet', async ()
   await spec.update?.('s1', {
     title: 'renamed',
     pinned: true,
-    facet: { tags: ['b', 'c'], values: {} },
+    tag: { tags: ['b', 'c'], values: {} },
     model: 'deepseek-reasoner',
     projectPath: '/tmp/app',
   })
   await spec.remove?.({ ids: ['s1'] })
   assert.deepEqual(calls, [
     ['rename', 's1', 'renamed'],
-    ['patch', 's1', { pinned: true, facet: { tags: ['b', 'c'], values: {} }, model: 'deepseek-reasoner' }],
+    ['patch', 's1', { pinned: true, tag: { tags: ['b', 'c'], values: {} }, model: 'deepseek-reasoner' }],
     ['project', 's1', { path: '/tmp/app' }],
     ['delete', 's1'],
   ])

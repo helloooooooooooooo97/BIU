@@ -29,13 +29,13 @@ import { BoolBox } from '@biu/biu-ui/bool-box'
 import { ChatCount } from '@biu/biu-ui/chat-count'
 import { HeadlessDismiss, HEADLESS_DISMISS_IGNORE } from '@biu/biu-ui/headless-dismiss'
 import { TagChip, TagChips, tagTextColor, tagTone as schemaTagTone } from '@biu/biu-ui/tag-chip'
-import { facetChipIcon, facetTagLabel } from './schema-field.tsx'
+import { tagChipIcon, tagChipLabel } from './schema-field.tsx'
 import {
   contentFieldKey,
   defaultColumnKeys,
-  facetSourceKey,
-  flattenFacetColumns,
-  facetColumnTitle,
+  tagSourceKey,
+  flattenTagColumns,
+  tagColumnTitle,
   fieldEntries,
   flattenTree,
   enumDisplayLabel,
@@ -51,11 +51,11 @@ import {
   listProjectionKeys,
   overlayListed,
   parentFieldKey,
-  parseFacetFlatColumnKey,
-  isFacetFlatColumnKey,
-  patchFacetFlatValue,
+  parseTagFlatColumnKey,
+  isTagFlatColumnKey,
+  patchTagFlatValue,
   pinActionColumn,
-  readFacetFlatValue,
+  readTagFlatValue,
   resolveFieldType,
   uniqueValues,
   type GroupBucket,
@@ -143,7 +143,7 @@ import { DataSidebarShell } from './data-sidebar-shell.tsx'
 import { builtinAllViewId, catalogLockFilters, collectionNoun, isReadOnlyViewId, mergeTableViews, parseBuiltinScopeViewId, stubBuiltinBlockKindView, viewsForScope, type DataScope } from '../catalog-views.ts'
 import { SAVED_VIEW_EVENT, moveInspectorRecordsToTrash, rememberInspectorWorkingView, showRecordInInspector } from './inspector-db-route.ts'
 import { CellPop, cellUsesPop } from './cell-pop.tsx'
-import { jumpFacet, loadFacets, pullFacets, subscribeFacets } from './facet-catalog.ts'
+import { jumpTag, loadTags, pullTags, subscribeTags } from './tag-catalog.ts'
 import {
   collectQueryFields,
   isCustomSorts,
@@ -611,7 +611,7 @@ const LIST_SEED_COLUMNS = [
   'createdBy',
   'assignee',
   'project',
-  'facet',
+  'tag',
   'dueAt',
   'shareScope',
   'shareRole',
@@ -631,7 +631,7 @@ function isListColumn(key: string) {
 function retainSavedColumn(key: string, schema: CollectionSchema | undefined, allColumnKeys: string[]) {
   if (key === 'actions' || key === 'shareScope' || key === 'shareRole') return true
   if (key === 'createdBy' || key === 'updatedBy' || key === 'createdAt' || key === 'updatedAt') return true
-  if (parseFacetFlatColumnKey(key) || isFacetFlatColumnKey(key)) return true
+  if (parseTagFlatColumnKey(key) || isTagFlatColumnKey(key)) return true
   if (!schema) return true
   if (allColumnKeys.includes(key)) return true
   const field = schema.fields[key]
@@ -1574,7 +1574,7 @@ export function CollectionBrowser({
   const cellPickRef = useRef<{ id: string; key: string } | null>(null)
   const cellAnchorRef = useRef<HTMLElement | null>(null)
   const cellPopPtrRef = useRef<{ x: number; y: number; dragged: boolean } | null>(null)
-  const [facetCatalog, setFacetCatalog] = useState(() => loadFacets())
+  const [tagCatalog, setFacetCatalog] = useState(() => loadTags())
   const tablePathsKey = tables
     .map((table) => table.path)
     .slice()
@@ -1842,8 +1842,8 @@ export function CollectionBrowser({
           (key) => isListColumn(key) && resolveFieldType(currentSchema.fields[key]!) !== 'file',
         )
       : []
-    const facetKeys = flattenFacetColumns(facetCatalog).map((item) => item.key)
-    const allowed = new Set([...fieldKeys, ...facetKeys, ...cellKeys])
+    const tagKeys = flattenTagColumns(tagCatalog).map((item) => item.key)
+    const allowed = new Set([...fieldKeys, ...tagKeys, ...cellKeys])
     const seedColumns = LIST_SEED_COLUMNS
     const requested = [
       ...(columnKeys.length ? columnKeys : currentSchema ? defaultColumnKeys(currentSchema, [...allowed]) : seedColumns),
@@ -1853,7 +1853,7 @@ export function CollectionBrowser({
       (key) =>
         !currentSchema ||
         allowed.has(key) ||
-        Boolean(parseFacetFlatColumnKey(key)) ||
+        Boolean(parseTagFlatColumnKey(key)) ||
         key === 'shareScope' ||
         key === 'shareRole' ||
         cellKeys.includes(key),
@@ -1862,7 +1862,7 @@ export function CollectionBrowser({
     if (!columns.length) return undefined
     const queryKeys = [...collectQueryFields(sorts, filterTree, currentSchema?.labelField ?? 'title')]
     return listProjectionKeys({ schema: currentSchema, columns: [...columns, ...queryKeys], groupBy })
-  }, [chrome, columnKeys, customView, facetCatalog, filterTree, groupBy, sheet, sorts, stat])
+  }, [chrome, columnKeys, customView, tagCatalog, filterTree, groupBy, sheet, sorts, stat])
   const listColumnsKey = listColumns?.join('\0') ?? ''
   const [refreshing, setRefreshing] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
@@ -1893,7 +1893,7 @@ export function CollectionBrowser({
     | { kind: 'delete-record'; row: DbRecord }
     | { kind: 'delete-records'; ids: string[] }
     | { kind: 'bulk-edit'; ids: string[] }
-    | { kind: 'bulk-facet'; ids: string[] }
+    | { kind: 'bulk-tag'; ids: string[] }
     | null
   >(null)
   const [bulkEditKey, setBulkEditKey] = useState('')
@@ -2024,10 +2024,10 @@ export function CollectionBrowser({
         { value: 'false', label: '否' },
       ]
     }
-    if (item.kind === 'facet') {
+    if (item.kind === 'tag') {
       return uniqueValues(rows, item.key, item.field).map((option) => ({
         value: option,
-        label: loadFacets().find((tag) => tag.id === option)?.label ?? option,
+        label: loadTags().find((tag) => tag.id === option)?.label ?? option,
       }))
     }
     return fieldValueOptions(rows, item.key, item.field)
@@ -2077,7 +2077,7 @@ export function CollectionBrowser({
         : readJson<StatResult>(`/api/db/stat?path=${encodeURIComponent(dataPath)}`, undefined, { fresh: Boolean(opts?.force) })
       const extraGroupValues = (schema?: CollectionSchema) => {
         if (switching) return []
-        const group = groupField(schema, reqGroupBy, facetCatalog)
+        const group = groupField(schema, reqGroupBy, tagCatalog)
         if (!group || group.field.enum?.length) return []
         const kind = resolveFieldType(group.field)
         if (kind === 'datetime' || kind === 'number' || kind === 'boolean') return []
@@ -2088,7 +2088,7 @@ export function CollectionBrowser({
           ...listOpts,
           groupBy: reqGroupBy,
           schema,
-          packs: facetCatalog,
+          packs: tagCatalog,
           extraValues: extraGroupValues(schema),
           pageSize: reqPageSize,
           groupPages: switching || opts?.force ? {} : groupPagesRef.current,
@@ -2107,7 +2107,7 @@ export function CollectionBrowser({
       const loadUngrouped = () => listCollection({ ...listOpts, limit: reqPageSize, offset: switching ? 0 : page * reqPageSize })
       if (reqGroupBy) {
         const cachedSchema = switching ? undefined : schemaRef.current
-        const cachedKeys = groupListKeys(cachedSchema, reqGroupBy, extraGroupValues(cachedSchema), facetCatalog)
+        const cachedKeys = groupListKeys(cachedSchema, reqGroupBy, extraGroupValues(cachedSchema), tagCatalog)
         if (cachedKeys.length) {
           const [statResult, grouped] = await Promise.all([nextStatPromise, loadGroups(cachedSchema)])
           nextStat = statResult
@@ -2223,7 +2223,7 @@ export function CollectionBrowser({
     } finally {
       if (reloadInflightRef.current?.promise === promise) reloadInflightRef.current = null
     }
-  }, [activeViewId, collectionPath, customView, dataPath, facetCatalog, fetchQuery, groupBy, groupFillKeys, listColumns, listIdentityKey, queryFilters, page, pageSize, reloadKey, sortDir, sortField, sorts, wrapCells])
+  }, [activeViewId, collectionPath, customView, dataPath, tagCatalog, fetchQuery, groupBy, groupFillKeys, listColumns, listIdentityKey, queryFilters, page, pageSize, reloadKey, sortDir, sortField, sorts, wrapCells])
   const reloadRef = useRef(reload)
   reloadRef.current = reload
   const detailIdRef = useRef<string | null>(null)
@@ -2415,9 +2415,9 @@ export function CollectionBrowser({
     let pendingViews = false
     let pendingData = false
     const onChange = (event: Event) => {
-      const detail = (event as CustomEvent<{ views?: boolean; facets?: boolean }>).detail
+      const detail = (event as CustomEvent<{ views?: boolean; tags?: boolean }>).detail
       if (detail?.views) pendingViews = true
-      else if (detail?.facets) return
+      else if (detail?.tags) return
       else pendingData = true
       window.clearTimeout(debounce)
       debounce = window.setTimeout(() => {
@@ -2426,7 +2426,7 @@ export function CollectionBrowser({
         pendingViews = false
         pendingData = false
         if (dataTouched) {
-          void pullFacets()
+          void pullTags()
           // 页面记录打开时不要把整张表（私人/空间/共享三包）再拉一遍。
           // 装全部页面插件会连续 bump /plugins，每个 change 都 force list 会把 Chrome 打到 ERR_INSUFFICIENT_RESOURCES。
           if (detailIdRef.current) {
@@ -2457,7 +2457,7 @@ export function CollectionBrowser({
 
   useEffect(() => {
     if (routeRecordId) return
-    void pullFacets()
+    void pullTags()
   }, [collectionPath, routeRecordId])
 
   useEffect(() => {
@@ -2481,7 +2481,7 @@ export function CollectionBrowser({
     }
   }, [nested])
 
-  useEffect(() => subscribeFacets(undefined, () => setFacetCatalog(loadFacets())), [])
+  useEffect(() => subscribeTags(undefined, () => setFacetCatalog(loadTags())), [])
 
   useEffect(() => {
     const onMode = (event: Event) => {
@@ -2578,14 +2578,14 @@ export function CollectionBrowser({
   const canDelete = Boolean(schema?.records?.delete) && !subsetLocked
   const inTrash = collectionPath === '/trash'
   const canBulkDelete = (canDelete || inTrash) && !subsetLocked
-  const canFacet = Boolean(schema?.fields.facet?.writable) && !subsetLocked
+  const canTag = Boolean(schema?.fields.tag?.writable) && !subsetLocked
   const bulkFields = useMemo(
     () =>
       fieldEntries(schema).filter(({ key, field }) => {
         if (!field.writable || field.computed) return false
         if (key === 'id' || key === 'createdAt' || key === 'updatedAt' || key === 'createdBy' || key === 'updatedBy') return false
         const kind = resolveFieldType(field)
-        return kind !== 'file' && kind !== 'action' && kind !== 'image' && kind !== 'attachment' && kind !== 'facet'
+        return kind !== 'file' && kind !== 'action' && kind !== 'image' && kind !== 'attachment' && kind !== 'tag'
       }),
     [schema],
   )
@@ -2601,9 +2601,9 @@ export function CollectionBrowser({
       ...(rowActionColumn
         ? [{ key: 'actions', kind: 'action' as const, field: { type: 'action' as const, label: '动作' } }]
         : []),
-      ...flattenFacetColumns(facetCatalog),
+      ...flattenTagColumns(tagCatalog),
     ], localData),
-    [bodyKey, entries, facetCatalog, localData, rowActionColumn],
+    [bodyKey, entries, tagCatalog, localData, rowActionColumn],
   )
   const allColumnKeys = useMemo(() => allColumns.map((item) => item.key), [allColumns])
   const schemaDefaultKeys = useMemo(
@@ -2631,7 +2631,7 @@ export function CollectionBrowser({
         if (hit) return hit
         if (key === 'shareScope') return { key, kind: 'select' as const, field: { type: 'select' as const, label: '分享' } }
         if (key === 'shareRole') return { key, kind: 'select' as const, field: { type: 'select' as const, label: '权限' } }
-        const facet = parseFacetFlatColumnKey(key)
+        const facet = parseTagFlatColumnKey(key)
         if (facet) {
           return { key, kind: 'select' as const, field: { type: 'select' as const, label: facet.fieldKey }, packId: facet.packId }
         }
@@ -2686,17 +2686,17 @@ export function CollectionBrowser({
     handle.addEventListener('pointerup', onUp)
     handle.addEventListener('pointercancel', onUp)
   }
-  const groupFields = useMemo(() => groupableFields(schema, facetCatalog), [facetCatalog, schema])
-  const activeGroup = groupField(schema, groupBy, facetCatalog)
+  const groupFields = useMemo(() => groupableFields(schema, tagCatalog), [tagCatalog, schema])
+  const activeGroup = groupField(schema, groupBy, tagCatalog)
   const grouping = Boolean(activeGroup)
   const filterFields = useMemo(
     () =>
       [
         ...entries,
-        ...flattenFacetColumns(facetCatalog).map((item) => ({
+        ...flattenTagColumns(tagCatalog).map((item) => ({
           key: item.key,
           kind: item.kind,
-          field: { ...item.field, label: facetColumnTitle(item) },
+          field: { ...item.field, label: tagColumnTitle(item) },
         })),
       ].filter(
         (item) =>
@@ -2705,7 +2705,7 @@ export function CollectionBrowser({
           item.key !== 'shareScope' &&
           !lockedFilterKeys.includes(item.key),
       ),
-    [bodyKey, entries, facetCatalog, lockedFilterKeys],
+    [bodyKey, entries, tagCatalog, lockedFilterKeys],
   )
   const sortFields = useMemo(
     () => filterFields.filter((item) => item.field.sortable !== false),
@@ -2754,12 +2754,12 @@ export function CollectionBrowser({
   const visible = items
 
   const grouped = useMemo(() => {
-    if (!grouping) return groupRecords(visible, schema, groupBy, facetCatalog)
+    if (!grouping) return groupRecords(visible, schema, groupBy, tagCatalog)
     if (groupBuckets.length) return groupBuckets.filter((item) => (item.total ?? item.rows.length) > 0)
     // 分享列是计算属性。用行上的 shareScope 再分组，会把「分享出去的私人记录」先画进共享，等 $scope 组桶到了再跳。
     if (groupBy === 'shareScope') return []
-    return groupRecords(visible, schema, groupBy, facetCatalog).filter((item) => item.rows.length)
-  }, [facetCatalog, groupBuckets, groupBy, grouping, schema, visible])
+    return groupRecords(visible, schema, groupBy, tagCatalog).filter((item) => item.rows.length)
+  }, [tagCatalog, groupBuckets, groupBy, grouping, schema, visible])
   const parentKey = useMemo(() => parentFieldKey(schema, items), [items, schema])
   const treeable = useMemo(() => hasTreeLinks(items, parentKey), [items, parentKey])
   const treeOn = treeable && showTree
@@ -3576,7 +3576,7 @@ export function CollectionBrowser({
       return same ? prev : next
     })
     setGroupBuckets((prev) => {
-      const next = remapGroupedRecords(prev, map, groupByRef.current, schemaRef.current, facetCatalog)
+      const next = remapGroupedRecords(prev, map, groupByRef.current, schemaRef.current, tagCatalog)
       groupBucketsRef.current = next
       return next
     })
@@ -3940,10 +3940,10 @@ export function CollectionBrowser({
     const rows = items.filter((row) => ids.includes(row.id))
     try {
       for (const row of rows) {
-        const current = normalizeSchemaValue(row.facet)
+        const current = normalizeSchemaValue(row.tag)
         const tags = [...current.tags]
         for (const id of addTags) if (!tags.includes(id)) tags.push(id)
-        await writePatch(row, { facet: { tags, values: current.values } })
+        await writePatch(row, { tag: { tags, values: current.values } })
       }
       setPickedIds([])
     } catch (err) {
@@ -3971,10 +3971,10 @@ export function CollectionBrowser({
   }
 
   function writeCellValue(row: DbRecord, key: string, field: FieldSpec, next: unknown) {
-    const flat = parseFacetFlatColumnKey(key)
+    const flat = parseTagFlatColumnKey(key)
     if (flat && schema) {
-      const source = facetSourceKey(schema)
-      void writePatch(row, { [source]: patchFacetFlatValue(row, key, next, source) })
+      const source = tagSourceKey(schema)
+      void writePatch(row, { [source]: patchTagFlatValue(row, key, next, source) })
       return
     }
     void writePatch(row, { [key]: next })
@@ -4015,7 +4015,7 @@ export function CollectionBrowser({
       ? pickDomAttrs(recordKind, row.id, labelOf(row), { path: recordPathOf(row), title: labelOf(row) })
       : EMPTY_PICK
   const cellValueText = (row: DbRecord, key: string, field: FieldSpec) => {
-    const raw = parseFacetFlatColumnKey(key) ? readFacetFlatValue(row, key, facetSourceKey(schema)) : row[key]
+    const raw = parseTagFlatColumnKey(key) ? readTagFlatValue(row, key, tagSourceKey(schema)) : row[key]
     return formatField(field, raw)
   }
   const cellPickOf = (row: DbRecord, key: string, field: FieldSpec) =>
@@ -4056,10 +4056,10 @@ export function CollectionBrowser({
       )
     }
     const kind = resolveFieldType(field)
-    const flat = parseFacetFlatColumnKey(key)
+    const flat = parseTagFlatColumnKey(key)
     if (surface === 'table') {
       if (kind === 'boolean') {
-        const raw = flat ? readFacetFlatValue(row, key, facetSourceKey(schema)) : row[key]
+        const raw = flat ? readTagFlatValue(row, key, tagSourceKey(schema)) : row[key]
         const on = raw === true || raw === 'true'
         if (field.writable) {
           return <BoolCell on={on} writable onToggle={() => writeCellValue(row, key, field, !on)} />
@@ -4071,8 +4071,8 @@ export function CollectionBrowser({
         const action = (schema?.actions ?? []).find((item) => item.id === actionId)
         return <ActionCell field={field} fieldKey={key} onRun={action ? () => void runAction(row, action) : undefined} />
       }
-      if (kind === 'facet') {
-        const tags = loadFacets()
+      if (kind === 'tag') {
+        const tags = loadTags()
         const parsed = normalizeSchemaValue(row[key])
         if (!parsed.tags.length) return null
         return (
@@ -4081,9 +4081,9 @@ export function CollectionBrowser({
               <TagChip
                 key={id}
                 id={id}
-                label={facetTagLabel(tags.find((tag) => tag.id === id), id)}
-                icon={facetChipIcon(id)}
-                onClick={() => jumpFacet(id)}
+                label={tagChipLabel(tags.find((tag) => tag.id === id), id)}
+                icon={tagChipIcon(id)}
+                onClick={() => jumpTag(id)}
               />
             ))}
           </TagChips>
@@ -4097,7 +4097,7 @@ export function CollectionBrowser({
             records={isRecordLinkField(field, key) ? items : undefined}
             collectionPath={collectionPath}
             labelField={schema?.labelField}
-            value={readFacetFlatValue(row, key, facetSourceKey(schema))}
+            value={readTagFlatValue(row, key, tagSourceKey(schema))}
             onChange={
               field.writable && (kind === 'attachment' || kind === 'datetime')
                 ? (next) => writeCellValue(row, key, field, next)
@@ -4125,8 +4125,8 @@ export function CollectionBrowser({
       )
     }
     if (flat) {
-      const source = facetSourceKey(schema)
-      const value = readFacetFlatValue(row, key, source)
+      const source = tagSourceKey(schema)
+      const value = readTagFlatValue(row, key, source)
       if (field.writable && kind !== 'file') {
         return (
           <Suspense fallback={<DefaultCell field={field} fieldKey={key} records={items} collectionPath={collectionPath} labelField={schema?.labelField} value={value} />}>
@@ -4138,7 +4138,7 @@ export function CollectionBrowser({
             collectionPath={collectionPath}
             getOptions={() =>
               uniqueValues(
-                items.map((item) => ({ ...item, [key]: readFacetFlatValue(item, key, source) })),
+                items.map((item) => ({ ...item, [key]: readTagFlatValue(item, key, source) })),
                 key,
                 field,
               )
@@ -4152,7 +4152,7 @@ export function CollectionBrowser({
       }
       return <DefaultCell field={field} fieldKey={key} records={items} collectionPath={collectionPath} labelField={schema?.labelField} value={value} />
     }
-    if (kind === 'facet') {
+    if (kind === 'tag') {
       if (field.writable) {
         return (
           <Suspense fallback={<DefaultCell field={field} fieldKey={key} records={items} collectionPath={collectionPath} labelField={schema?.labelField} value={row[key]} />}>
@@ -4220,11 +4220,11 @@ export function CollectionBrowser({
     if (!row || !col) return null
     const key = col.key
     const field = col.field
-    const flat = parseFacetFlatColumnKey(key)
-    const initial = flat ? readFacetFlatValue(row, key, facetSourceKey(schema)) : row[key]
+    const flat = parseTagFlatColumnKey(key)
+    const initial = flat ? readTagFlatValue(row, key, tagSourceKey(schema)) : row[key]
     const options = flat
       ? uniqueValues(
-          items.map((item) => ({ ...item, [key]: readFacetFlatValue(item, key, facetSourceKey(schema)) })),
+          items.map((item) => ({ ...item, [key]: readTagFlatValue(item, key, tagSourceKey(schema)) })),
           key,
           field,
         )
@@ -4415,10 +4415,10 @@ export function CollectionBrowser({
     const col = columns.find((item) => item.key === cell.key)
     if (!col) return
     const kind = resolveFieldType(col.field)
-    if (kind === 'facet') {
+    if (kind === 'tag') {
       const tagId = (event.target as HTMLElement | null)?.closest('[data-tag-id]')?.getAttribute('data-tag-id')?.trim()
       if (tagId) {
-        jumpFacet(tagId)
+        jumpTag(tagId)
         return
       }
     }
@@ -4431,19 +4431,19 @@ export function CollectionBrowser({
   }
 
   function paintHeadTh(col: (typeof columns)[number]) {
-    const flat = parseFacetFlatColumnKey(col.key)
+    const flat = parseTagFlatColumnKey(col.key)
     const tone = flat ? schemaTagTone(flat.packId) : undefined
     return (
       <th
         key={col.key}
-        className={[col.key === schema?.labelField ? 'is-pin-col' : '', tone ? 'is-facet-col' : ''].filter(Boolean).join(' ') || undefined}
+        className={[col.key === schema?.labelField ? 'is-pin-col' : '', tone ? 'is-tag-col' : ''].filter(Boolean).join(' ') || undefined}
         style={tone ? { ['--biu-tag' as string]: tone } : undefined}
       >
         <span className={`tasks-th${queryFields.has(col.key) ? ' is-on' : ''}`}>
           <span className="tasks-th-ico">
             <FieldGlyph kind={col.kind} />
           </span>
-          {facetColumnTitle(col)}
+          {tagColumnTitle(col)}
         </span>
         <span
           className={`fsdb-col-resizer${resizingCol === col.key ? ' is-active' : ''}`}
@@ -4462,7 +4462,7 @@ export function CollectionBrowser({
     if (
       kind === 'boolean' ||
       kind === 'action' ||
-      kind === 'facet' ||
+      kind === 'tag' ||
       kind === 'select' ||
       kind === 'multi-select' ||
       kind === 'person' ||
@@ -4473,7 +4473,7 @@ export function CollectionBrowser({
     ) {
       return renderCell(row, key, field, 'table')
     }
-    if (parseFacetFlatColumnKey(key) || isRecordLinkField(field, key) || chrome?.cells?.[key]) {
+    if (parseTagFlatColumnKey(key) || isRecordLinkField(field, key) || chrome?.cells?.[key]) {
       if (key === 'usage' && !(Number(row[key]) > 0)) return <span className="traj-usage-empty">—</span>
       return renderCell(row, key, field, 'table')
     }
@@ -4760,7 +4760,7 @@ export function CollectionBrowser({
     columns.map((col) => col.key).join(','),
     allColumnKeys.join(','),
     schemaFingerprint(schema),
-    facetCatalog.map((pack) => pack.id).join(','),
+    tagCatalog.map((pack) => pack.id).join(','),
     viewBanner == null ? '' : JSON.stringify(viewBanner),
     activeView?.name ?? title,
     idleTableIconKind(currentTable?.view?.icon),
@@ -5125,12 +5125,12 @@ export function CollectionBrowser({
                 <HeadlessDismiss
                   onDismiss={() => setColumnMenuOpen(false)}
                   insideRef={columnRef}
-                  ignoreSelector={`${HEADLESS_DISMISS_IGNORE}, [data-fsdb-col-flyout], [data-fsdb-col-facet-trigger], .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]`}
+                  ignoreSelector={`${HEADLESS_DISMISS_IGNORE}, [data-fsdb-col-flyout], [data-fsdb-col-tag-trigger], .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]`}
                   inside={(node) =>
                     node instanceof Element &&
                     Boolean(
                       node.closest(
-                        '[data-fsdb-col-flyout], [data-fsdb-col-facet-trigger], .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]',
+                        '[data-fsdb-col-flyout], [data-fsdb-col-tag-trigger], .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]',
                       ),
                     )
                   }
@@ -5143,7 +5143,7 @@ export function CollectionBrowser({
                       columns={columns}
                       allColumns={allColumns}
                       labelField={schema?.labelField}
-                      facetCatalog={facetCatalog}
+                      tagCatalog={tagCatalog}
                       query={q}
                       onToggle={toggleColumn}
                       onReorder={setVisibleColumns}
@@ -5650,14 +5650,14 @@ export function CollectionBrowser({
                             role="menu"
                             style={{ top: bulkMenuBox.top, left: bulkMenuBox.left, zIndex: overlayZ(200) }}
                           >
-                            {canFacet ? (
+                            {canTag ? (
                               <button
                                 type="button"
                                 className="tasks-sort-item fsdb-tool-row"
-                                data-testid="fsdb-bulk-facet"
+                                data-testid="fsdb-bulk-tag"
                                 onClick={() => {
                                   setBulkFacetIds([])
-                                  setDlg({ kind: 'bulk-facet', ids: pickedIds })
+                                  setDlg({ kind: 'bulk-tag', ids: pickedIds })
                                   setBulkMenuOpen(false)
                                 }}
                               >
@@ -5899,7 +5899,7 @@ export function CollectionBrowser({
           }
         />
       ) : null}
-      {dlg?.kind === 'bulk-facet' ? (
+      {dlg?.kind === 'bulk-tag' ? (
         <AppDialog
           title={`标签 · ${dlg.ids.length} 条`}
           confirm="贴上"
@@ -5912,14 +5912,14 @@ export function CollectionBrowser({
             void executeBulkFacet(ids, tags)
           }}
           body={
-            loadFacets().length ? (
+            loadTags().length ? (
               <div className="fsdb-bulk-form">
-                {loadFacets().map((pack) => {
+                {loadTags().map((pack) => {
                   const on = bulkFacetIds.includes(pack.id)
                   return (
                     <CheckRow
                       key={pack.id}
-                      label={facetTagLabel(pack)}
+                      label={tagChipLabel(pack)}
                       icon={<TagIcon aria-hidden className="size-[14px]" />}
                       on={on}
                       onToggle={() =>

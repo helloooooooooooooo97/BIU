@@ -67,7 +67,7 @@ test('page plugin stores pages in SQLite under .biu', async () => {
   assert.equal(fields.tags, undefined)
   assert.equal(fields.score, undefined)
   assert.equal(fields.notes?.type, 'file')
-  assert.deepEqual(registered[0]?.schema.columns, ['title', 'facet', 'createdBy', 'updatedBy'])
+  assert.deepEqual(registered[0]?.schema.columns, ['title', 'tag', 'createdBy', 'updatedBy'])
   assert.deepEqual(registered[0]?.records, { update: true, create: true, delete: true })
   assert.equal(registered[1]?.path, '/page-blocks')
   assert.equal(registered[1]?.label, '组件')
@@ -112,10 +112,10 @@ test('page plugin stores pages in SQLite under .biu', async () => {
   assert.match(String(againBody?.notes), /# 标题\n内容/)
 
   await spec.update!(created[0]!.id, {
-    facet: { tags: ['dp'], values: { dp: { complexity: 'O(n)' } } },
+    tag: { tags: ['dp'], values: { dp: { complexity: 'O(n)' } } },
   })
   const again = await spec.get!(created[0]!.id)
-  assert.deepEqual(again?.facet, { tags: [], values: {} })
+  assert.deepEqual(again?.tag, { tags: [], values: {} })
 
   await spec.remove!({ ids: [created[0]!.id] })
   assert.equal((await spec.list()).length, 0)
@@ -253,7 +253,7 @@ test('page-blocks get synthesizes a row for any block id so facets can attach', 
   const row = await blocks.get!(id)
   assert.equal(row?.blockId, 'aabbcc11')
   assert.equal(row?.pageId, pageId)
-  const next = await blocks.update!(id, { facet: { tags: ['需求'], values: {} } })
+  const next = await blocks.update!(id, { tag: { tags: ['需求'], values: {} } })
   assert.equal(next.blockId, 'aabbcc11')
   assert.match(String((await pages.get!(pageId))?.notes ?? ''), /段落/)
 })
@@ -387,7 +387,7 @@ test('pages sqlite keeps notes as the body, not markdown files', async () => {
   const cols = (sqlite.prepare('PRAGMA table_info(pages)').all() as Array<{ name: string }>).map((col) => col.name)
   assert.equal(cols.includes('notes'), false)
   assert.equal(cols.includes('tags_json'), false)
-  assert.equal(cols.includes('facet_json'), false)
+  assert.equal(cols.includes('tag_json'), false)
   assert.equal(existsSync(join(root, PAGE_ROOT, 'legacy.md')), false)
 })
 

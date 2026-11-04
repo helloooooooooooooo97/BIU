@@ -17,7 +17,7 @@ test('toolbar flyouts share one fsdb-tool-flyout shell', () => {
     'tasks-filter-menu',
     'fsdb-col-menu',
     'fsdb-bulk-menu',
-    'fsdb-col-facet-flyout',
+    'fsdb-col-tag-flyout',
     'fsdb-layout-menu',
   ]) {
     assert.match(rule, new RegExp(name))
@@ -52,7 +52,7 @@ test('toolbar flyouts share one fsdb-tool-flyout shell', () => {
   assert.match(views, /tasks-viewdd-saveas fsdb-tool-row font-medium/)
   assert.match(search, /tasks-sort-search font-medium/)
   assert.match(menus, /fsdb-tool-flyout fsdb-query-menu/)
-  assert.match(columns, /fsdb-col-facet-flyout fsdb-tool-flyout/)
+  assert.match(columns, /fsdb-col-tag-flyout fsdb-tool-flyout/)
   assert.match(layout, /fsdb-tool-flyout fsdb-layout-menu/)
   assert.match(css, /\.fsdb-layout-menu\{[^}]*min-width:280px/)
   assert.match(css, /\.fsdb-layout-scale\{[^}]*font-size:var\(--biu-font-size-4\)/)
