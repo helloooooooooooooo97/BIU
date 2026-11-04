@@ -195,6 +195,8 @@ test('detail facet property sits last, starts collapsed, and the glyph becomes a
   assert.match(css, /\.fsdb-right-body:has\(\.fsdb-detail-stage\)\{[^}]*overflow:auto/)
   assert.doesNotMatch(detail, /stacked=\{facet && tagOpen\}/)
   assert.doesNotMatch(detail, /\bsetTagOpen\b/)
+  assert.doesNotMatch(detail, /\btagOpen\b/)
+  assert.match(detail, /const nextVisible = visibleColumnsKey \? visibleColumnsKey.split/)
   assert.match(detail, /setOpenFolds\(\{\}\)/)
   assert.match(detail, /setOpenFolds\(\(prev\) => \(\{ \.\.\.prev, \[key\]: !prev\[key\] \}\)\)/)
   assert.match(css, /\.fsdb-proprow\.is-tag-fold\{align-items:start\}/)
