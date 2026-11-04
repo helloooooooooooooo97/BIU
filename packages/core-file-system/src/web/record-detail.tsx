@@ -305,13 +305,13 @@ export function RecordDetail({
     />
   )
 
-  const [tagOpen, setTagOpen] = useState(false)
+  const [openFolds, setOpenFolds] = useState<Record<string, boolean>>({})
   const [openPanes, setOpenPanes] = useState<Record<string, boolean>>({})
   const [visiblePropertyKeys, setVisiblePropertyKeys] = useState<string[] | null>(null)
   const [outlineOn, setOutlineOn] = useState(headingOutline)
   const visibleColumnsKey = visibleColumns?.join('\0') ?? ''
   useEffect(() => {
-    setTagOpen(false)
+    setOpenFolds({})
     setOpenPanes({})
     setVisiblePropertyKeys(visibleColumnsKey ? visibleColumnsKey.split('\0') : null)
     setOutlineOn(headingOutline)
@@ -472,8 +472,8 @@ export function RecordDetail({
                         field={field}
                         fieldKey={key}
                         collapsible={fold}
-                        expanded={fold ? tagOpen : undefined}
-                        onToggle={fold ? () => setTagOpen((open) => !open) : undefined}
+                        expanded={fold ? Boolean(openFolds[key]) : undefined}
+                        onToggle={fold ? () => setOpenFolds((prev) => ({ ...prev, [key]: !prev[key] })) : undefined}
                         pick={propPick(key, field, packFields ? undefined : formatField(field, selected[key]))}
                       >
                         <div className={fold ? 'fsdb-prop-val is-schema' : 'fsdb-prop-val'} title={packFields ? undefined : formatField(field, selected[key])}>
