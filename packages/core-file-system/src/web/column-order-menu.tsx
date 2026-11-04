@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type ReactNode } from 'react'
+import { useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
 import {
   DndContext,
   DragOverlay,
@@ -24,6 +24,7 @@ import { FlyoutEmpty, flyoutQueryMatch } from './flyout-search.tsx'
 import { tagFlatColumnKey, parseTagFlatColumnKey, resolveFieldType } from './fields.ts'
 import { FieldGlyph } from './fsdb-cells.tsx'
 import { tagChipIcon } from './schema-field.tsx'
+import { pullTags, subscribeTagChrome, tagCatalogRevision, tagFieldFilled } from './tag-catalog.ts'
 
 function TagColumnPackRow({
   pack,
@@ -35,6 +36,7 @@ function TagColumnPackRow({
   onToggle: (key: string) => void
 }) {
   const [open, setOpen] = useState(false)
+  useSyncExternalStore(subscribeTagChrome, tagCatalogRevision)
   const tone = schemaTagTone(pack.id)
   const fields = pack.fields.filter((field) => !field.deleted)
   const anyOn = fields.some((field) => visibleKeys.has(tagFlatColumnKey(pack.id, field.key)))
@@ -42,7 +44,10 @@ function TagColumnPackRow({
   return (
     <HeadlessPopover
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={(next) => {
+        setOpen(next)
+        if (next) void pullTags()
+      }}
       side="left"
       align="start"
       sideOffset={6}
@@ -84,6 +89,7 @@ function TagColumnPackRow({
                 icon={<FieldGlyph kind={resolveFieldType(field)} />}
                 label={field.label ?? field.key}
                 on={visibleKeys.has(key)}
+                count={tagFieldFilled(pack.id, field.key)}
                 onToggle={() => onToggle(key)}
               />
             )

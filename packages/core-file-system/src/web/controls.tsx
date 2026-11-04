@@ -8,12 +8,14 @@ export function CheckRow({
   on,
   onToggle,
   locked,
+  count,
 }: {
   label: ReactNode
   icon?: ReactNode
   on: boolean
   onToggle: () => void
   locked?: boolean
+  count?: number
 }) {
   return (
     <button
@@ -29,6 +31,7 @@ export function CheckRow({
         {icon ? <span className="fsdb-checkrow-icon">{icon}</span> : null}
         {label}
       </span>
+      {count != null ? <span className="fsdb-col-tag-count">{count}</span> : null}
     </button>
   )
 }

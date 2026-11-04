@@ -148,6 +148,35 @@ test('attachments and refs live next to record_meta', () => {
   assert.deepEqual(store.listedAttachmentNames('/pages', 'p1'), [])
 })
 
+test('removing a pack field clears that value on stamped records and keeps the pages', () => {
+  const store = new TagStore()
+  store.upsert({
+    id: 'dp',
+    label: '动态规划',
+    fields: [
+      { key: 'complexity', type: 'string', label: '复杂度' },
+      { key: 'year', type: 'number', label: '年份' },
+    ],
+  })
+  store.writeRecordTag('/pages', 'p1', { tags: ['dp'], values: { dp: { complexity: 'O(n)', year: 2016 } } }, '页一')
+  store.writeRecordTag('/pages', 'p2', { tags: ['dp'], values: { dp: { complexity: 'O(1)' } } }, '页二')
+  store.writeRecordTag('/notes', 'n1', { tags: ['dp'], values: { dp: { year: 2020 } } }, '笔记')
+  assert.deepEqual(store.filledFieldCounts(), { dp: { complexity: 2, year: 2 } })
+  store.upsert({
+    id: 'dp',
+    label: '动态规划',
+    fields: [{ key: 'year', type: 'number', label: '年份' }],
+  })
+  assert.equal(store.get('dp')?.fields.map((field) => field.key).join(), 'year')
+  assert.equal(store.recordTag('/pages', 'p1')?.values.dp.complexity, undefined)
+  assert.equal(store.recordTag('/pages', 'p1')?.values.dp.year, 2016)
+  assert.deepEqual(store.recordTag('/pages', 'p1')?.tags, ['dp'])
+  assert.equal(store.recordTag('/pages', 'p2')?.values.dp.complexity, undefined)
+  assert.equal(store.stampedIds('/pages', 'dp').has('p1'), true)
+  assert.equal(store.stampedIds('/pages', 'dp').has('p2'), true)
+  assert.deepEqual(store.filledFieldCounts(), { dp: { year: 2 } })
+})
+
 test('preset banners are not copied into the custom gallery', async () => {
   const { BANNER_PRESETS } = await import('../banner-presets.ts')
   const store = new TagStore()

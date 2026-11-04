@@ -165,6 +165,7 @@ export class TagStore {
   private savePack(pack: CollectionSchemaPack, notes: string) {
     const now = Date.now()
     const db = this.ensure()
+    const prev = this.get(pack.id)
     db.prepare(
         `INSERT INTO tags (id, label, fields_json, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?)
@@ -175,6 +176,67 @@ export class TagStore {
       )
       .run(pack.id, pack.label, JSON.stringify(pack.fields), now, now)
     writeEditorContent(db, '/tags', pack.id, notes, { transaction: false })
+    if (!prev) return
+    const keep = new Set(pack.fields.filter((field) => !field.deleted).map((field) => field.key))
+    for (const field of prev.fields) {
+      if (field.deleted || keep.has(field.key)) continue
+      this.purgePackField(pack.id, field.key)
+    }
+  }
+
+  private bagValueFilled(value: unknown) {
+    if (value == null) return false
+    if (typeof value === 'string' && !value.trim()) return false
+    if (Array.isArray(value) && value.length === 0) return false
+    return true
+  }
+
+  purgePackField(tagId: string, fieldKey: string) {
+    const want = String(tagId ?? '').trim()
+    const key = String(fieldKey ?? '').trim()
+    if (!want || !key) return
+    const db = this.ensure()
+    const rows = db.prepare('SELECT collection, record_id, tag_json FROM tag_record_values').all() as Array<{
+      collection: string
+      record_id: string
+      tag_json: string
+    }>
+    for (const row of rows) {
+      let parsed: ReturnType<typeof normalizeSchemaValue>
+      try {
+        parsed = normalizeSchemaValue(JSON.parse(row.tag_json || '{}'))
+      } catch {
+        continue
+      }
+      const bag = parsed.values[want]
+      if (!bag || !Object.prototype.hasOwnProperty.call(bag, key)) continue
+      const nextBag = { ...bag }
+      delete nextBag[key]
+      const values = { ...parsed.values, [want]: nextBag }
+      this.writeRecordTag(row.collection, row.record_id, { tags: parsed.tags, values }, row.record_id)
+    }
+  }
+
+  filledFieldCounts(): Record<string, Record<string, number>> {
+    const rows = this.ensure().prepare('SELECT tag_json FROM tag_record_values').all() as Array<{ tag_json: string }>
+    const out: Record<string, Record<string, number>> = {}
+    for (const row of rows) {
+      let parsed: ReturnType<typeof normalizeSchemaValue>
+      try {
+        parsed = normalizeSchemaValue(JSON.parse(row.tag_json || '{}'))
+      } catch {
+        continue
+      }
+      for (const [tagId, bag] of Object.entries(parsed.values)) {
+        if (!bag || typeof bag !== 'object' || Array.isArray(bag)) continue
+        const counts = (out[tagId] ??= {})
+        for (const [key, value] of Object.entries(bag)) {
+          if (!this.bagValueFilled(value)) continue
+          counts[key] = (counts[key] ?? 0) + 1
+        }
+      }
+    }
+    return out
   }
 
   ensure() {

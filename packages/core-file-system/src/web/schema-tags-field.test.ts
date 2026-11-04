@@ -39,6 +39,13 @@ test('detail facet cell opens FieldValuePop unless the click is on a tag', () =>
   assert.match(css, /\.fsdb-page \.fsdb-detail-aside \.tasks-table\.is-wrap \.fsdb-pop-host:has\(\.biu-tags\)[\s\S]*?width:100%/)
 })
 
+test('tag pack editor hard-deletes a property without a restore row', () => {
+  const schemaUi = readFileSync(resolve(import.meta.dirname, './schema-field.tsx'), 'utf8')
+  assert.match(schemaUi, /fields: item\.fields\.filter\(\(row\) => row\.key !== key\)/)
+  assert.match(schemaUi, /fields: tag\.fields\.filter\(\(item\) => item\.key !== key\)/)
+  assert.doesNotMatch(schemaUi, /retired\.map/)
+})
+
 test('facet pack property chips use the field glyph instead of the tag icon', () => {
   const schemaUi = readFileSync(resolve(import.meta.dirname, './schema-field.tsx'), 'utf8')
   assert.match(schemaUi, /icon=\{icon \?\? tagChipIcon\(id\)\}/)

@@ -13,6 +13,7 @@ export const TAGS_KEY = 'fsdb.tags'
 const LEGACY_TAGS_KEY = 'fsdb.facets'
 
 let memory: CollectionSchemaPack[] | null = null
+let filledMemory: Record<string, Record<string, number>> = {}
 let revision = 0
 const listeners = new Set<() => void>()
 
@@ -23,6 +24,10 @@ function emit() {
 
 export function tagCatalogRevision() {
   return revision
+}
+
+export function tagFieldFilled(tagId: string, fieldKey: string) {
+  return filledMemory[tagId]?.[fieldKey] ?? 0
 }
 
 export function jumpTag(id: string, onOpen?: (id: string) => void) {
@@ -84,6 +89,21 @@ export function loadTags(_collectionPath?: string): CollectionSchemaPack[] {
   }
 }
 
+function adoptFilled(raw: unknown) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return
+  const next: Record<string, Record<string, number>> = {}
+  for (const [tagId, bag] of Object.entries(raw as Record<string, unknown>)) {
+    if (!bag || typeof bag !== 'object' || Array.isArray(bag)) continue
+    const counts: Record<string, number> = {}
+    for (const [key, value] of Object.entries(bag as Record<string, unknown>)) {
+      const n = Number(value)
+      if (Number.isFinite(n) && n > 0) counts[key] = Math.floor(n)
+    }
+    if (Object.keys(counts).length) next[tagId] = counts
+  }
+  filledMemory = next
+}
+
 function adoptTags(next: CollectionSchemaPack[]) {
   memory = next
   try {
@@ -99,35 +119,17 @@ function adoptTags(next: CollectionSchemaPack[]) {
   emit()
 }
 
-async function serverFacets(): Promise<CollectionSchemaPack[] | null> {
-  try {
-    const res = await fetch('/api/db/tags')
-    const body = (await res.json()) as { tags?: unknown[]; facets?: unknown[] }
-    const listed = body.tags ?? body.facets
-    if (!res.ok || !Array.isArray(listed)) return null
-    return parseTags(listed)
-  } catch {
-    return null
-  }
-}
-
-function mergeFacetCatalog(base: CollectionSchemaPack[], incoming: CollectionSchemaPack[]) {
-  const byId = new Map(base.map((tag) => [tag.id, tag]))
-  for (const tag of incoming) byId.set(tag.id, tag)
-  return [...byId.values()]
-}
-
 export async function persistTags(facets: CollectionSchemaPack[], _collectionPath?: string) {
   const incoming = parseTags(facets)
-  const remote = await serverFacets()
-  const next = parseTags(remote ? mergeFacetCatalog(remote, incoming) : incoming)
   const res = await fetch('/api/db/tags', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ tags: next }),
+    body: JSON.stringify({ tags: incoming }),
   })
+  const body = (await res.json().catch(() => ({}))) as { tags?: unknown[]; filled?: unknown }
   if (!res.ok) throw new Error(`tags persist failed: ${res.status}`)
-  adoptTags(next)
+  adoptFilled(body.filled)
+  adoptTags(Array.isArray(body.tags) ? parseTags(body.tags) : incoming)
 }
 
 export async function createTag(title: string): Promise<CollectionSchemaPack> {
@@ -158,10 +160,11 @@ export async function createTag(title: string): Promise<CollectionSchemaPack> {
 export async function pullTags(_collectionPath?: string) {
   try {
     const res = await fetch('/api/db/tags')
-    const body = (await res.json()) as { tags?: unknown[]; facets?: unknown[] }
+    const body = (await res.json()) as { tags?: unknown[]; facets?: unknown[]; filled?: unknown }
     const listed = body.tags ?? body.facets
     if (!res.ok || !Array.isArray(listed)) return loadTags()
     const facets = parseTags(listed)
+    adoptFilled(body.filled)
     const prev = JSON.stringify(memory ?? [])
     const next = JSON.stringify(facets)
     if (prev !== next) adoptTags(facets)

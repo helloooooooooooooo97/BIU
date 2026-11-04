@@ -42,7 +42,7 @@ test('persistTags keeps the previous catalog when POST fails', async () => {
   }
 })
 
-test('persistTags merges the incoming pack into the server catalog', async () => {
+test('persistTags upserts the incoming pack and adopts the server catalog', async () => {
   const originalFetch = globalThis.fetch
   let posted: unknown
   globalThis.fetch = (async (_url, init) => {
@@ -53,14 +53,23 @@ test('persistTags merges the incoming pack into the server catalog', async () =>
       )
     }
     posted = JSON.parse(String(init?.body ?? '{}'))
-    return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } })
+    return new Response(
+      JSON.stringify({
+        tags: [
+          { id: 'keep', label: '保留', fields: [] },
+          { id: 'risk', label: '风险', fields: [] },
+        ],
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    )
   }) as typeof fetch
   try {
     await persistTags([{ id: 'risk', label: '风险', fields: [] }])
     const facets = (posted as { tags: Array<{ id: string; label: string }> }).tags
-    assert.equal(facets.some((item) => item.id === 'keep' && item.label === '保留'), true)
+    assert.equal(facets.some((item) => item.id === 'keep'), false)
     assert.equal(facets.some((item) => item.id === 'risk' && item.label === '风险'), true)
     assert.equal(loadTags().some((item) => item.id === 'keep' && item.label === '保留'), true)
+    assert.equal(loadTags().some((item) => item.id === 'risk' && item.label === '风险'), true)
   } finally {
     globalThis.fetch = originalFetch
   }
