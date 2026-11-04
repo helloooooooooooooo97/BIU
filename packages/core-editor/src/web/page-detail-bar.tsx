@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { HeadlessDismiss } from '@biu/biu-ui'
+import { HEADLESS_DISMISS_IGNORE } from '@biu/biu-ui/headless-dismiss'
 import type { FsDetailBarProps } from '@biu/type-file-system/ui'
 import {
   ArrowPathIcon,
@@ -70,6 +71,7 @@ export function PageDetailBar({
   onHiddenPropertyKeys,
   visiblePropertyKeys,
   onVisiblePropertyKeys,
+  columnMenu,
   onRetry,
   configMenu,
 }: FsDetailBarProps) {
@@ -346,32 +348,46 @@ export function PageDetailBar({
             type="button"
             className={`tasks-sort-btn${open === 'columns' ? ' is-active' : ''}`}
             aria-label="可见列"
-            title="可见属性"
+            title="可见列"
             onClick={() => toggle('columns')}
           >
             <EyeIcon aria-hidden className="size-[14px]" />
           </button>
           {open === 'columns' ? (
-            <HeadlessDismiss onDismiss={() => setOpen(null)} insideRef={columnRef}>
-              <div className="tasks-sort-menu fsdb-tool-flyout" role="menu">
-                {props.length ? (
-                  props.map((item) => (
-                    <Row
-                      key={item.key}
-                      label={item.label}
-                      on={visibleKeys.includes(item.key)}
-                      onToggle={() => {
-                        const has = visibleKeys.includes(item.key)
-                        const next = has ? visibleKeys.filter((key) => key !== item.key) : [...visibleKeys, item.key]
-                        onVisiblePropertyKeys?.(next)
-                        onHiddenPropertyKeys?.(props.map((prop) => prop.key).filter((key) => !next.includes(key)))
-                      }}
-                    />
-                  ))
-                ) : (
-                  <div className="tasks-viewdd-empty">没有可隐藏的属性</div>
-                )}
-              </div>
+            <HeadlessDismiss
+              onDismiss={() => setOpen(null)}
+              insideRef={columnRef}
+              ignoreSelector={`${HEADLESS_DISMISS_IGNORE}, [data-fsdb-col-flyout], [data-fsdb-col-tag-trigger], .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]`}
+              inside={(node) =>
+                node instanceof Element &&
+                Boolean(
+                  node.closest(
+                    '[data-fsdb-col-flyout], [data-fsdb-col-tag-trigger], .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]',
+                  ),
+                )
+              }
+            >
+              {columnMenu ?? (
+                <div className="tasks-sort-menu fsdb-tool-flyout" role="menu">
+                  {props.length ? (
+                    props.map((item) => (
+                      <Row
+                        key={item.key}
+                        label={item.label}
+                        on={visibleKeys.includes(item.key)}
+                        onToggle={() => {
+                          const has = visibleKeys.includes(item.key)
+                          const next = has ? visibleKeys.filter((key) => key !== item.key) : [...visibleKeys, item.key]
+                          onVisiblePropertyKeys?.(next)
+                          onHiddenPropertyKeys?.(props.map((prop) => prop.key).filter((key) => !next.includes(key)))
+                        }}
+                      />
+                    ))
+                  ) : (
+                    <div className="tasks-viewdd-empty">没有可隐藏的属性</div>
+                  )}
+                </div>
+              )}
             </HeadlessDismiss>
           ) : null}
         </div>

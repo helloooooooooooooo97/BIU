@@ -240,6 +240,8 @@ export function RecordDetail({
   readOnly = false,
   inspectorPaneId,
   visibleColumns,
+  onVisibleColumns,
+  columnMenu,
 }: {
   selected: DbRecord
   schema: CollectionSchema
@@ -269,6 +271,8 @@ export function RecordDetail({
   readOnly?: boolean
   inspectorPaneId?: string
   visibleColumns?: string[]
+  onVisibleColumns?: (keys: string[]) => void
+  columnMenu?: ReactNode
 }) {
   const title = labelOf(selected)
   const recordPath = recordSourcePath(collectionPath, selected.id)
@@ -407,7 +411,11 @@ export function RecordDetail({
                     schema={schema}
                     collectionPath={collectionPath}
                     visiblePropertyKeys={visiblePropertyKeys ?? undefined}
-                    onVisiblePropertyKeys={setVisiblePropertyKeys}
+                    onVisiblePropertyKeys={(next) => {
+                      setVisiblePropertyKeys(next)
+                      onVisibleColumns?.(next)
+                    }}
+                    columnMenu={columnMenu}
                     onRetry={onRetryBody}
                     configMenu={paneMenu}
                   />

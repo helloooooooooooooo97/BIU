@@ -56,6 +56,19 @@ test('detail bar refresh spins the icon', () => {
   assert.ok(getByLabelText('刷新').querySelector('.fsdb-spin'))
 })
 
+test('detail bar visible columns host the same flyout as the table view', () => {
+  const { getByLabelText, getByText } = render(
+    <PageDetailBar
+      record={{ id: 'p0133' }}
+      columnMenu={<div data-testid="view-column-menu">视图列</div>}
+    />,
+  )
+  const btn = getByLabelText('可见列')
+  assert.equal(btn.getAttribute('title'), '可见列')
+  fireEvent.click(btn)
+  assert.ok(getByText('视图列'))
+})
+
 test('detail bar sort and filter write page view state', () => {
   patchPageViewState('p0133', { filterKinds: [], sort: 'doc' })
   const { getByLabelText, getByText, queryByText } = render(<PageDetailBar record={{ id: 'p0133' }} />)

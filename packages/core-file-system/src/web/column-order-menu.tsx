@@ -20,7 +20,7 @@ import { tagTone as schemaTagTone } from '@biu/biu-ui/tag-chip'
 import { moveList } from '../query-logic.ts'
 import { CheckRow } from './controls.tsx'
 import { DndGrip } from './dnd-grip.tsx'
-import { FlyoutEmpty, flyoutQueryMatch } from './flyout-search.tsx'
+import { FlyoutEmpty, SearchableFlyout, flyoutQueryMatch } from './flyout-search.tsx'
 import { tagFlatColumnKey, parseTagFlatColumnKey, resolveFieldType } from './fields.ts'
 import { FieldGlyph } from './fsdb-cells.tsx'
 import { tagChipIcon } from './schema-field.tsx'
@@ -313,5 +313,32 @@ export function ColumnOrderMenu({
         </ColumnRowShell>
       ))}
     </>
+  )
+}
+
+export function VisibleColumnsFlyout({
+  columns,
+  allColumns,
+  labelField,
+  tagCatalog,
+  onToggle,
+  onReorder,
+}: Omit<Parameters<typeof ColumnOrderMenu>[0], 'query'>) {
+  return (
+    <SearchableFlyout className="tasks-sort-menu fsdb-col-menu">
+      {(q) => (
+        <div className="fsdb-col-menu-list">
+          <ColumnOrderMenu
+            columns={columns}
+            allColumns={allColumns}
+            labelField={labelField}
+            tagCatalog={tagCatalog}
+            query={q}
+            onToggle={onToggle}
+            onReorder={onReorder}
+          />
+        </div>
+      )}
+    </SearchableFlyout>
   )
 }
