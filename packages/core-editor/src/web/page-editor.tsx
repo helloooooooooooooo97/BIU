@@ -2,7 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type 
 import { HeadlessPopover } from '@biu/biu-ui'
 import { SourceEditor, type SourceEditorHandle } from './source-editor.tsx'
 import { restorePageScroll } from './page-scroll-pin.ts'
-import { usePagePresentMode } from './source-mode.ts'
+import { isPageCustomView, usePagePresentMode } from './source-mode.ts'
+import { PageHostView } from './page-host-view.tsx'
 import { ArrowPathIcon, ChatBubbleLeftRightIcon } from '@heroicons/react/16/solid'
 import { EditorContent, useEditor } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
@@ -719,7 +720,7 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
     if (event.target !== event.currentTarget) return
     event.preventDefault()
     if (status === 'loading' || status === 'failed') return
-    if (present === 'table') return
+    if (present === 'table' || isPageCustomView(present)) return
     if (!source && writable !== false && editor && !editor.isDestroyed) {
       editor.commands.focus('end')
       return
@@ -734,7 +735,7 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
   return (
     <div
       ref={hostRef}
-      className={`page-editor${source ? ' is-source' : ''}${present === 'outline' ? ' is-outline' : ''}${present === 'table' ? ' is-table' : ''}`}
+      className={`page-editor${source ? ' is-source' : ''}${present === 'outline' ? ' is-outline' : ''}${present === 'table' ? ' is-table' : ''}${isPageCustomView(present) ? ' is-host' : ''}`}
       data-page-record={record.id}
       data-page-path={path || `/pages/${record.id}`}
       tabIndex={-1}
@@ -759,12 +760,15 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
         {present === 'table' ? (
           <PageBlocksTable editor={editor} recordId={record.id} path={path} writable={writable !== false && status === 'ready'} />
         ) : null}
-        <div className="page-editor-doc" hidden={present === 'table'}>
+        {isPageCustomView(present) ? (
+          <PageHostView record={record} viewId={present} writable={writable !== false && status === 'ready'} />
+        ) : null}
+        <div className="page-editor-doc" hidden={present === 'table' || isPageCustomView(present)}>
           <EditorContent editor={editor} />
         </div>
-        {present !== 'table' && writable !== false ? <PageBlockHandle editor={editor} /> : null}
-        {present !== 'table' && writable !== false ? <Bubble editor={editor} onSendChat={sendToChat} /> : null}
-        {present !== 'table' && writable !== false ? <TableBar editor={editor} /> : null}
+        {present !== 'table' && !isPageCustomView(present) && writable !== false ? <PageBlockHandle editor={editor} /> : null}
+        {present !== 'table' && !isPageCustomView(present) && writable !== false ? <Bubble editor={editor} onSendChat={sendToChat} /> : null}
+        {present !== 'table' && !isPageCustomView(present) && writable !== false ? <TableBar editor={editor} /> : null}
       </div>
     </div>
   )

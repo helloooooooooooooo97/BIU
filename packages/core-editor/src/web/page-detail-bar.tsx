@@ -12,6 +12,8 @@ import {
   FunnelIcon,
   ListBulletIcon,
   MagnifyingGlassIcon,
+  PlusIcon,
+  Squares2X2Icon,
   TableCellsIcon,
   AdjustmentsHorizontalIcon,
   UserIcon,
@@ -19,6 +21,7 @@ import {
   GlobeAltIcon,
 } from '@heroicons/react/16/solid'
 import { setPagePresentMode, usePagePresentMode } from './source-mode.ts'
+import { createPageSandboxView, loadPageViews, usePageViews } from './page-views.ts'
 import { kindLabel } from './block-id.ts'
 import {
   PAGE_INSERT_EVENT,
@@ -76,6 +79,7 @@ export function PageDetailBar({
   configMenu,
 }: FsDetailBarProps) {
   const present = usePagePresentMode(record.id)
+  const pageViews = usePageViews(record.id)
   const view = usePageViewState(record.id)
   const find = usePageFind(record.id)
   const searchRef = useRef<HTMLDivElement>(null)
@@ -93,8 +97,12 @@ export function PageDetailBar({
   const configRef = useRef<HTMLDivElement>(null)
   const toolbarRef = useRef<HTMLDivElement>(null)
   useStickyToolbar(toolbarRef)
-  const current = MODES.find((item) => item.id === present) ?? MODES[0]
+  const custom = pageViews.find((item) => item.id === present)
+  const current = custom
+    ? { id: custom.id, label: custom.name, Icon: Squares2X2Icon }
+    : (MODES.find((item) => item.id === present) ?? MODES[0])
   const CurrentIcon = current.Icon
+  const [creatingView, setCreatingView] = useState(false)
   const filterOn = pageFilterActive(view)
   const sortOn = view.sort !== 'doc'
   const props = Object.entries(schema?.fields ?? {})
@@ -104,7 +112,8 @@ export function PageDetailBar({
 
   useEffect(() => {
     setOpen(null)
-  }, [record.id])
+    void loadPageViews(record.id, record.views)
+  }, [record.id, record.views])
 
   useEffect(() => {
     if (!find.open) return
@@ -192,6 +201,43 @@ export function PageDetailBar({
                     <span className="tasks-viewdd-item-name">{item.label}</span>
                   </button>
                 ))}
+                {pageViews.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={item.id === present}
+                    className={`tasks-viewdd-item-main${item.id === present ? ' is-active' : ''}`}
+                    data-testid={`page-view-${item.id}`}
+                    onClick={() => {
+                      setPagePresentMode(record.id, item.id)
+                      setOpen(null)
+                    }}
+                  >
+                    <Squares2X2Icon aria-hidden className="tasks-viewdd-item-ico" />
+                    <span className="tasks-viewdd-item-name">{item.name}</span>
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="tasks-viewdd-item-main"
+                  data-testid="page-view-create"
+                  disabled={creatingView}
+                  onClick={() => {
+                    if (creatingView) return
+                    setCreatingView(true)
+                    void createPageSandboxView(record.id, String(record.title ?? ''), `沙盒 ${pageViews.length + 1}`)
+                      .catch(() => undefined)
+                      .finally(() => {
+                        setCreatingView(false)
+                        setOpen(null)
+                      })
+                  }}
+                >
+                  <PlusIcon aria-hidden className="tasks-viewdd-item-ico" />
+                  <span className="tasks-viewdd-item-name">{creatingView ? '正在创建…' : '新建沙盒视图'}</span>
+                </button>
               </div>
             </HeadlessDismiss>
           ) : null}

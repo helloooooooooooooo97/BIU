@@ -2,10 +2,24 @@ import { afterEach, test } from 'vitest'
 import assert from 'node:assert/strict'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { PageDetailBar } from './page-detail-bar.tsx'
-import { getPagePresentMode, isPageSourceMode, setPageSourceMode } from './source-mode.ts'
+import { getPagePresentMode, isPageSourceMode, setPagePresentMode, setPageSourceMode } from './source-mode.ts'
+import { setPageViews } from './page-views.ts'
 import { getPageFind, getPageViewState, patchPageFind, patchPageViewState } from './page-view-state.ts'
 
 afterEach(() => cleanup())
+
+test('detail bar lists page-bound sandbox views', () => {
+  setPagePresentMode('p0133', 'doc')
+  setPageViews('p0133', [
+    { id: 'site1', name: '官网', kind: 'sandbox', file: 'view-p0133-site1.jsx', dataFile: 'view-data-p0133-site1.json' },
+  ])
+  const { getByText, getByTestId } = render(<PageDetailBar record={{ id: 'p0133', title: '演示' }} />)
+  fireEvent.click(getByText('文档'))
+  assert.ok(getByText('新建沙盒视图'))
+  fireEvent.click(getByTestId('page-view-site1'))
+  assert.equal(getPagePresentMode('p0133'), 'site1')
+  assert.ok(getByText('官网'))
+})
 
 test('detail bar switches document and source modes', () => {
   setPageSourceMode('p0133', false)

@@ -17,6 +17,8 @@ export { slideExtensions } from './slide.ts'
 export { LayoutPicker, LayoutGlyph, type LayoutPreset } from './layout-picker.tsx'
 export { markdownLocusFromRange, markdownLocusFromSelection, markdownLocusFromElement } from './markdown-locus.ts'
 export { PageBlocksView, PageBlockContent, PageBlockStage, pageBlocksCollectionView, PAGE_BLOCKS_VIEW_ID } from './page-blocks-view.tsx'
+export { PageHostView } from './page-host-view.tsx'
+export { parsePageViews, viewsAssetName, createPageSandboxView, loadPageViews } from './page-views.ts'
 
 export const name = 'core-editor-ui'
 export const inject = ['databaseUi']

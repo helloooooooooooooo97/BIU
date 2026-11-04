@@ -2,7 +2,17 @@ import { useSyncExternalStore } from 'react'
 import { capturePageScroll } from './page-scroll-pin.ts'
 import { PAGE_VIEW_EVENT } from './page-view-state.ts'
 
-export type PagePresentMode = 'doc' | 'outline' | 'table' | 'source'
+export const PAGE_BUILTIN_MODES = ['doc', 'outline', 'table', 'source'] as const
+export type PageBuiltinMode = (typeof PAGE_BUILTIN_MODES)[number]
+export type PagePresentMode = PageBuiltinMode | string
+
+export function isPageBuiltinMode(mode: string): mode is PageBuiltinMode {
+  return (PAGE_BUILTIN_MODES as readonly string[]).includes(mode)
+}
+
+export function isPageCustomView(mode: string) {
+  return Boolean(mode) && !isPageBuiltinMode(mode)
+}
 
 const modes = new Map<string, PagePresentMode>()
 const folded = new Map<string, Set<string>>()

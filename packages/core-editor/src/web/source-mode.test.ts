@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { getPagePresentMode, isPageSourceMode, setPagePresentMode, setPageSourceMode, togglePageSourceMode } from './source-mode.ts'
+import { getPagePresentMode, isPageBuiltinMode, isPageCustomView, isPageSourceMode, setPagePresentMode, setPageSourceMode, togglePageSourceMode } from './source-mode.ts'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
@@ -25,6 +25,12 @@ test('present mode keeps outline separate from source', () => {
   assert.equal(isPageSourceMode('page-a'), false)
   setPagePresentMode('page-a', 'source')
   assert.equal(isPageSourceMode('page-a'), true)
+})
+
+test('custom sandbox view id is not a builtin present mode', () => {
+  assert.equal(isPageBuiltinMode('doc'), true)
+  assert.equal(isPageCustomView('site1'), true)
+  assert.equal(isPageCustomView('table'), false)
 })
 
 test('switching present mode captures page scroll before paint', () => {

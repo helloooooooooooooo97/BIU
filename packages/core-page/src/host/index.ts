@@ -3,12 +3,40 @@ import type { Context } from 'cordis'
 import type { CollectionSpec } from '@biu/type-file-system'
 import { DATABASE_CHANNEL, REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
 import { PagesStore, PageAssetConflictError, type WorkspaceFs } from './store.ts'
+import { parsePageViews, viewsAssetName } from '@biu/core-editor/host'
 import { pageBlocksCollection } from './page-blocks-collection.ts'
 import { PAGE_BLOCK_TICK_MS, PageBlocksIndex } from './page-blocks-index.ts'
 
 export { PAGE_ROOT, PAGE_ASSETS, ASSET_GC_GRACE_MS, PagesStore } from './store.ts'
 export { pageBlocksCollection } from './page-blocks-collection.ts'
 export { PageBlocksIndex, PAGE_BLOCK_TICK_MS } from './page-blocks-index.ts'
+
+async function readPageViews(store: PagesStore, pageId: string) {
+  try {
+    const { bytes } = await store.readAsset(viewsAssetName(pageId))
+    return parsePageViews(bytes.toString('utf8'))
+  } catch {
+    return []
+  }
+}
+
+async function writePageViews(store: PagesStore, pageId: string, raw: unknown) {
+  const views = parsePageViews(raw)
+  const name = viewsAssetName(pageId)
+  let etag = ''
+  try {
+    etag = (await store.readAsset(name)).etag
+  } catch {
+    etag = ''
+  }
+  await store.writeAsset(name, `${JSON.stringify(views, null, 2)}\n`, etag ? { etag } : undefined)
+  return views
+}
+
+async function withPageViews(store: PagesStore, row: Awaited<ReturnType<PagesStore['get']>>) {
+  if (!row) return row
+  return { ...row, views: await readPageViews(store, row.id) }
+}
 
 export function pagesCollection(store: PagesStore, index: PageBlocksIndex): CollectionSpec {
   return {
@@ -36,15 +64,22 @@ export function pagesCollection(store: PagesStore, index: PageBlocksIndex): Coll
         notes: { type: 'file', label: '正文', writable: true },
         parentId: { type: 'ref', label: '父级', writable: true },
         dependsOn: { type: 'multi-ref', label: '依赖', writable: true },
+        views: {
+          type: 'string',
+          label: '视图',
+          writable: true,
+          description: '本页特制沙盒视图。JSON 数组：id、name、kind=sandbox、file、dataFile。文档/大纲/表格/源码是内置视图，不写在这里。',
+        },
       },
     },
     records: { update: true, create: true, delete: true },
     list: (query) => store.list(query?.ids),
-    get: (id) => store.get(id),
+    get: async (id) => withPageViews(store, await store.get(id)),
     update: async (id, patch) => {
+      if ('views' in patch) await writePageViews(store, id, patch.views)
       const row = await store.update(id, patch)
       if ('notes' in patch) await index.reindexPage(row)
-      return row
+      return withPageViews(store, row)
     },
     create: async (rows) => {
       const out = []
