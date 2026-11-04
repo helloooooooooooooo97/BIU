@@ -610,9 +610,9 @@ const CSS = `
 .fsdb-page .fsdb-detail-aside .tasks-table.is-wrap th,.fsdb-page .fsdb-detail-aside .tasks-table.is-wrap td{vertical-align:middle;max-width:none}
 .fsdb-detail-aside .tasks-table th:first-child,.fsdb-detail-aside .tasks-table td:first-child{width:12rem;min-width:12rem;white-space:nowrap}
 .fsdb-page .fsdb-detail-aside .tasks-table.is-wrap .fsdb-prop-tr.is-tag-fold td{vertical-align:top}
-.fsdb-detail-aside .fsdb-prop-tr.is-tag-fold .fsdb-proprow-k{display:inline-flex;align-items:center;min-height:22px;padding-top:0}
-.fsdb-detail-aside .fsdb-prop-tr.is-tag-fold .fsdb-proprow-v,.fsdb-detail-aside .fsdb-prop-tr.is-tag-fold .fsdb-prop-val.is-schema{display:flex;flex-direction:column;align-items:stretch;min-height:22px;padding-top:0}
-.fsdb-detail-aside .fsdb-prop-tr.is-tag-fold .fsdb-schema>:first-child,.fsdb-detail-aside .fsdb-prop-tr.is-tag-fold .fsdb-prop-val.is-schema>.fsdb-pop-host{flex:none;display:flex;align-items:center;min-height:22px;margin:0;padding-top:0}
+.fsdb-detail-aside .fsdb-prop-tr.is-tag-fold .fsdb-proprow-k{display:inline-flex;align-items:center;min-height:32px;padding-top:5px}
+.fsdb-detail-aside .fsdb-prop-tr.is-tag-fold .fsdb-proprow-v,.fsdb-detail-aside .fsdb-prop-tr.is-tag-fold .fsdb-prop-val.is-schema{display:flex;flex-direction:column;align-items:stretch;min-height:32px;padding-top:5px}
+.fsdb-detail-aside .fsdb-prop-tr.is-tag-fold .fsdb-schema>:first-child,.fsdb-detail-aside .fsdb-prop-tr.is-tag-fold .fsdb-prop-val.is-schema>.fsdb-pop-host{flex:none;display:flex;align-items:center;min-height:32px;margin:0;padding-top:0}
 .fsdb-detail-aside .fsdb-prop-tr.is-tag-fold .fsdb-schema{gap:0}
 .fsdb-detail-aside .fsdb-prop-tr.is-tag-fold.is-open .fsdb-schema-pack{padding-top:4px}
 .fsdb-detail-aside .fsdb-prop,.fsdb-detail-aside .fsdb-prop-tr{display:table-row;grid-template-columns:none;min-height:0;gap:0}
@@ -635,7 +635,7 @@ const CSS = `
 .fsdb-proprow.is-tag-fold:hover .fsdb-proprow-chevron,.fsdb-prop-tr.is-tag-fold:hover .fsdb-proprow-chevron,.fsdb-proprow.is-tag-fold:focus-within .fsdb-proprow-chevron,.fsdb-prop-tr.is-tag-fold:focus-within .fsdb-proprow-chevron{opacity:1}
 .fsdb-proprow.is-tag-fold{align-items:start}
 .fsdb-proprow.is-tag-fold:not(:has(.fsdb-schema)){align-items:center}
-.fsdb-proprow.is-tag-fold .fsdb-proprow-k,.fsdb-prop-tr.is-tag-fold .fsdb-proprow-k{min-height:32px;padding-top:0}
+.fsdb-proprow.is-tag-fold .fsdb-proprow-k,.fsdb-prop-tr.is-tag-fold .fsdb-proprow-k{min-height:32px;padding-top:5px}
 .fsdb-proprow.is-tag-fold .fsdb-proprow-v,.fsdb-prop-tr.is-tag-fold .fsdb-proprow-v,.fsdb-proprow.is-tag-fold .fsdb-prop-val.is-schema,.fsdb-prop-tr.is-tag-fold .fsdb-prop-val.is-schema{min-height:32px;display:flex;align-items:center}
 .fsdb-proprow.is-tag-fold.is-open .fsdb-proprow-v,.fsdb-prop-tr.is-tag-fold.is-open .fsdb-proprow-v,.fsdb-proprow.is-tag-fold.is-open .fsdb-prop-val.is-schema,.fsdb-prop-tr.is-tag-fold.is-open .fsdb-prop-val.is-schema{align-items:stretch}
 .fsdb-proprow.is-tag-fold .fsdb-prop-val.is-schema>.fsdb-pop-host,.fsdb-prop-tr.is-tag-fold .fsdb-prop-val.is-schema>.fsdb-pop-host{min-height:32px;align-items:center;align-content:center}
