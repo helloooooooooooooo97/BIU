@@ -311,10 +311,11 @@ export function RecordDetail({
   const [outlineOn, setOutlineOn] = useState(headingOutline)
   const visibleColumnsKey = visibleColumns?.join('\0') ?? ''
   useEffect(() => {
-    setOpenFolds({})
-    setOpenPanes({})
-    setVisiblePropertyKeys(visibleColumnsKey ? visibleColumnsKey.split('\0') : null)
+    const nextVisible = visibleColumnsKey ? visibleColumnsKey.split('\0') : null
+    setVisiblePropertyKeys(nextVisible)
     setOutlineOn(headingOutline)
+    setOpenPanes({})
+    setOpenFolds({})
   }, [selected.id, headingOutline, visibleColumnsKey])
   useEffect(() => {
     const onOutline = () => setOutlineOn((prev) => !prev)
