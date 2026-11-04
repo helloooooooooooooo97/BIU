@@ -296,7 +296,6 @@ export function TagPackEditor({ tagId }: { tagId: string }) {
   if (!tag) return <p className="fsdb-muted">这条标签已不在目录里。</p>
   const pack = tag
   const live = pack.fields.filter((field) => !field.deleted)
-  const retired = pack.fields.filter((field) => field.deleted)
 
   function addField(name: string, type: AtomicFieldType) {
     const key = registerTagFieldKey(name, {
@@ -334,27 +333,7 @@ export function TagPackEditor({ tagId }: { tagId: string }) {
   function removeField(key: string) {
     saveCatalog(
       catalog.map((item) =>
-        item.id === pack.id
-          ? { ...item, fields: item.fields.map((row) => (row.key === key ? { ...row, deleted: true } : row)) }
-          : item,
-      ),
-    )
-  }
-
-  function restoreField(key: string) {
-    saveCatalog(
-      catalog.map((item) =>
-        item.id === pack.id
-          ? {
-              ...item,
-              fields: item.fields.map((row) => {
-                if (row.key !== key) return row
-                const next = { ...row }
-                delete next.deleted
-                return next
-              }),
-            }
-          : item,
+        item.id === pack.id ? { ...item, fields: item.fields.filter((row) => row.key !== key) } : item,
       ),
     )
   }
@@ -383,26 +362,6 @@ export function TagPackEditor({ tagId }: { tagId: string }) {
             <span className="fsdb-muted">{TYPE_LABEL[field.type]}</span>
             <button type="button" className="fsdb-schema-prop-del" aria-label={`删除 ${field.label ?? field.key}`} onClick={() => removeField(field.key)}>
               <XMarkIcon aria-hidden className="size-3" />
-            </button>
-          </div>
-        </div>
-      ))}
-      {retired.map((field) => (
-        <div key={`retired:${field.key}`} className="fsdb-schema-prop is-orphan">
-          <span className="fsdb-schema-prop-k" title={field.label ?? field.key}>
-            <FieldGlyph kind={field.type} />
-            {field.label ?? field.key}
-          </span>
-          <div className="fsdb-schema-prop-v">
-            <span className="fsdb-muted">{TYPE_LABEL[field.type]}</span>
-            <button
-              type="button"
-              className="fsdb-schema-prop-restore"
-              aria-label={`恢复 ${field.label ?? field.key}`}
-              data-dock-tip="恢复"
-              onClick={() => restoreField(field.key)}
-            >
-              <ArrowUturnLeftIcon aria-hidden className="size-3" />
             </button>
           </div>
         </div>
@@ -528,9 +487,7 @@ export function SchemaFieldEditor({
   function removeField(tagId: string, key: string) {
     saveCatalog(
       catalog.map((tag) =>
-        tag.id === tagId
-          ? { ...tag, fields: tag.fields.map((item) => (item.key === key ? { ...item, deleted: true } : item)) }
-          : tag,
+        tag.id === tagId ? { ...tag, fields: tag.fields.filter((item) => item.key !== key) } : tag,
       ),
     )
   }

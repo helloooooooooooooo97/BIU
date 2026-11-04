@@ -33,6 +33,7 @@ import {
   bindSchemaValue,
   emptySchemaValue,
   isEmptySchemaValue,
+  normalizeSchemaPack,
   normalizeSchemaValue,
   schemaSearchHaystack,
   withBuiltinFields,
@@ -4174,7 +4175,7 @@ export function apply(ctx: Context) {
         return
       }
       const q = route.query.get('q') || ''
-      route.send(200, { tags: facets.list(q) })
+      route.send(200, { tags: facets.list(q), filled: facets.filledFieldCounts() })
     } catch (error) {
       route.send(400, { error: String(error) })
     }
@@ -4182,10 +4183,14 @@ export function apply(ctx: Context) {
   ctx.http.route('POST', '/api/db/tags', async (route) => {
     try {
       await db.requirePath('/tags', 'resource:update')
-      const body = (await route.json()) as { tags?: unknown[]; tags?: unknown[] }
-      facets.replace(Array.isArray(body.tags) ? body.tags : Array.isArray(body.facets) ? body.tags : [])
+      const body = (await route.json()) as { tags?: unknown[]; facets?: unknown[] }
+      const listed = Array.isArray(body.tags) ? body.tags : Array.isArray(body.facets) ? body.facets : []
+      for (const item of listed) {
+        const pack = normalizeSchemaPack(item)
+        if (pack) facets.upsert(pack)
+      }
       ctx.emit('database/change')
-      route.send(200, { ok: true, tags: facets.list() })
+      route.send(200, { ok: true, tags: facets.list(), filled: facets.filledFieldCounts() })
     } catch (error) {
       route.send(400, { error: String(error) })
     }
