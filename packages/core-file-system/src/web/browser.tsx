@@ -2265,7 +2265,7 @@ export function CollectionBrowser({
     const id = detailIdRef.current
     if (!id) return
     const gen = ++recordGen.current
-    void readJson<{ value?: DbRecord }>(`/api/db/read?path=${encodeURIComponent(`${dataPath}/${id}`)}`)
+    void readJson<{ value?: DbRecord }>(`/api/db/read?path=${encodeURIComponent(`${dataPath}/${id}`)}`, undefined, { fresh: true })
       .then((data) => {
         const row = data.value
         if (gen !== recordGen.current || !row?.id) return
@@ -2273,9 +2273,17 @@ export function CollectionBrowser({
           if (prev?.id && prev.id !== row.id) return prev
           return { ...prev, ...row, banner: row.banner ?? null }
         })
+        mapListedRecords((item) => (item.id === row.id ? overlayListedRow(item, row) : item))
+        patchListCacheRecords(dataPath, (item) => (item.id === row.id ? overlayListedRow(item, row) : item))
       })
       .catch(() => undefined)
   }, [dataPath])
+  const refreshOpenDetail = useCallback(() => {
+    invalidateListReads()
+    void pullTags()
+    pullDetailBody()
+    pullDetailRecord()
+  }, [dataPath, pullDetailBody, pullDetailRecord])
   const steppingView = useRef(false)
 
   useEffect(() => {
@@ -2431,8 +2439,7 @@ export function CollectionBrowser({
           // 页面记录打开时不要把整张表（私人/空间/共享三包）再拉一遍。
           // 装全部页面插件会连续 bump /plugins，每个 change 都 force list 会把 Chrome 打到 ERR_INSUFFICIENT_RESOURCES。
           if (detailIdRef.current) {
-            pullDetailBody()
-            pullDetailRecord()
+            refreshOpenDetail()
           } else {
             void reloadRef.current({ force: true })
           }
@@ -2454,7 +2461,7 @@ export function CollectionBrowser({
       window.removeEventListener('fsdb:change', onChange)
       window.removeEventListener('fsdb:shares-change', onChange)
     }
-  }, [collectionPath, dataPath, nested, pullDetailBody, pullDetailRecord])
+  }, [collectionPath, dataPath, nested, pullDetailBody, pullDetailRecord, refreshOpenDetail])
 
   useEffect(() => {
     if (routeRecordId) return
@@ -5762,7 +5769,7 @@ export function CollectionBrowser({
           detailBody={detailBody}
           detailBodyStatus={detailBodyStatus}
           detailBodyError={detailBodyError}
-          onRetryBody={pullDetailBody}
+          onRetryBody={refreshOpenDetail}
           labelOf={labelOf}
           renderCell={renderCell}
           setDraft={setDraft}

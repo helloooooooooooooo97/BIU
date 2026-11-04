@@ -1062,7 +1062,7 @@ test('detail body uses an explicit loading phase instead of a blank editor', () 
   assert.match(browser, /setDetailBodyStatus\('failed'\)/)
   assert.match(browser, /setDetailBodyStatus\('ready'\)/)
   assert.match(browser, /detailBodyStatus=\{detailBodyStatus\}/)
-  assert.match(browser, /onRetryBody=\{pullDetailBody\}/)
+  assert.match(browser, /onRetryBody=\{refreshOpenDetail\}/)
   assert.match(detail, /status=\{detailBodyStatus\}/)
   assert.match(detail, /PageContentLoading/)
   assert.match(detail, /PageContentFailed/)
@@ -1091,14 +1091,16 @@ test('opening a record fetches content without waiting for detailRow', () => {
 
 test('open detail still reloads body when the collection changes', () => {
   const onChange = browser.slice(browser.indexOf('const onChange = (event: Event)'), browser.indexOf("window.addEventListener('fsdb:change', onChange)"))
-  assert.match(onChange, /detail\?\.facets/)
   assert.match(onChange, /if \(detailIdRef\.current\) \{/)
-  assert.match(onChange, /pullDetailBody\(\)/)
-  assert.match(onChange, /pullDetailRecord\(\)/)
+  assert.match(onChange, /refreshOpenDetail\(\)/)
   assert.match(onChange, /else \{\s*void reloadRef\.current\(\{ force: true \}\)/)
   assert.doesNotMatch(onChange, /void reloadRef\.current\(\{ force: true \}\)\s*\n\s*if \(detailIdRef\.current\)/)
   assert.match(browser, /banner: row\.banner \?\? null/)
   assert.match(browser, /window.dispatchEvent\(new Event\('fsdb:change'\)\)/)
+  assert.match(browser, /onRetryBody=\{refreshOpenDetail\}/)
+  assert.match(browser, /invalidateListReads\(\)/)
+  assert.match(browser, /readJson<\{ value\?: DbRecord \}>\(`\/api\/db\/read\?path=\$\{encodeURIComponent\(`\$\{dataPath\}\/\$\{id\}`\)\}`, undefined, \{ fresh: true \}\)/)
+  assert.match(browser, /mapListedRecords\(\(item\) => \(item.id === row.id \? overlayListedRow\(item, row\) : item\)\)/)
 })
 
 test('agent view writes reload saved views without a full page refresh', () => {
