@@ -88,7 +88,7 @@ export function tagsCollection(
       tablePath: item.collection,
       sourceId: item.id,
       tagId: id,
-      ...recordBuiltinValues(),
+      ...recordBuiltinValues({ tag: store.recordTag(item.collection, item.id) }),
     }))
   }
 

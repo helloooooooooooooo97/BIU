@@ -52,6 +52,7 @@ import {
   overlayListed,
   parentFieldKey,
   parseTagFlatColumnKey,
+  tagFlatColumnKey,
   isTagFlatColumnKey,
   patchTagFlatValue,
   pinActionColumn,
@@ -601,7 +602,14 @@ type StatResult = { schema?: CollectionSchema }
 let cachedLocalData: boolean | null = null
 
 const COLLECT_SHEET_COLUMNS = ['title', 'table'] as const
-const COLLECT_SHEET_FETCH_COLUMNS = ['title', 'table', 'tablePath', 'sourceId'] as const
+const COLLECT_SHEET_FETCH_COLUMNS = ['title', 'table', 'tablePath', 'sourceId', 'tag'] as const
+
+function collectSheetColumns(pack?: CollectionSchemaPack | null) {
+  const flats = (pack?.fields ?? [])
+    .filter((field) => field.deleted !== true)
+    .map((field) => tagFlatColumnKey(pack!.id, field.key))
+  return [...COLLECT_SHEET_COLUMNS, ...flats]
+}
 
 const LIST_SEED_COLUMNS = [
   'title',
@@ -1568,7 +1576,11 @@ export function CollectionBrowser({
   )
   const [filters, setFilters] = useState<Record<string, string>>(initialView?.filters ?? {})
   const [filterTree, setFilterTree] = useState<FilterGroup>(() => resolveViewFilterTree(initialView ?? { filters: {} }))
-  const [columnKeys, setColumnKeys] = useState<string[]>(sheet ? ['title', 'table'] : initialView?.columns ?? [])
+  const [columnKeys, setColumnKeys] = useState<string[]>(
+    sheet
+      ? collectSheetColumns(loadTags().find((pack) => pack.id === String(lockedFilters.tagId ?? '').trim()))
+      : initialView?.columns ?? [],
+  )
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => normalizeColumnWidths(initialView?.columnWidths))
   const [resizingCol, setResizingCol] = useState<string | null>(null)
   const [cellPop, setCellPop] = useState<{ id: string; key: string } | null>(null)
@@ -1827,11 +1839,16 @@ export function CollectionBrowser({
   groupByRef.current = groupBy
   const loadedIdentityRef = useRef('')
   const loadedPagesRef = useRef<Record<string, number>>({})
+  const sheetPackId = String(catalogLocks.tagId ?? '').trim()
+  const sheetPack = useMemo(
+    () => (sheet && sheetPackId ? tagCatalog.find((pack) => pack.id === sheetPackId) : undefined),
+    [sheet, sheetPackId, tagCatalog],
+  )
   const listColumns = useMemo(() => {
     if (sheet) {
       return listProjectionKeys({
         schema: stat?.schema,
-        columns: [...COLLECT_SHEET_FETCH_COLUMNS],
+        columns: [...COLLECT_SHEET_FETCH_COLUMNS, ...collectSheetColumns(sheetPack).filter((key) => key !== 'title' && key !== 'table')],
         groupBy,
       })
     }
@@ -1863,7 +1880,7 @@ export function CollectionBrowser({
     if (!columns.length) return undefined
     const queryKeys = [...collectQueryFields(sorts, filterTree, currentSchema?.labelField ?? 'title')]
     return listProjectionKeys({ schema: currentSchema, columns: [...columns, ...queryKeys], groupBy })
-  }, [chrome, columnKeys, customView, tagCatalog, filterTree, groupBy, sheet, sorts, stat])
+  }, [chrome, columnKeys, customView, tagCatalog, filterTree, groupBy, sheet, sheetPack, sorts, stat])
   const listColumnsKey = listColumns?.join('\0') ?? ''
   const [refreshing, setRefreshing] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
@@ -2621,11 +2638,17 @@ export function CollectionBrowser({
   const schemaDefaultSig = schemaDefaultKeys.join('\0')
   const columns = useMemo(() => {
     if (sheet) {
-      return COLLECT_SHEET_COLUMNS.map((key) => ({
-        key,
-        kind: 'string' as const,
-        field: { type: 'string' as const, label: key === 'title' ? '记录' : '来源表' },
-      }))
+      const requested = columnKeys.length ? columnKeys : collectSheetColumns(sheetPack)
+      const packCols = flattenTagColumns(sheetPack ? [sheetPack] : [])
+      return requested
+        .map((key) => {
+          if (key === 'title') return { key, kind: 'string' as const, field: { type: 'string' as const, label: '记录' } }
+          if (key === 'table') return { key, kind: 'string' as const, field: { type: 'string' as const, label: '来源表' } }
+          const hit = packCols.find((item) => item.key === key)
+          if (hit) return { key: hit.key, kind: hit.kind, field: { ...hit.field, label: hit.field.label ?? hit.key }, packId: hit.packId }
+          return null
+        })
+        .filter(Boolean) as typeof allColumns
     }
     const requested = columnKeys.length ? columnKeys : schemaDefaultKeys
     const order = pinActionColumn(
@@ -2646,7 +2669,7 @@ export function CollectionBrowser({
         return null
       })
       .filter(Boolean) as typeof allColumns
-  }, [allColumnKeys, allColumns, columnKeys, rowActionColumn, schema, schemaDefaultKeys, sheet])
+  }, [allColumnKeys, allColumns, columnKeys, rowActionColumn, schema, schemaDefaultKeys, sheet, sheetPack])
 
   const colWindowRef = useRef<TableColumnSlice>(EMPTY_COL_WINDOW)
   const tableChromeRef = useRef<TableChromeBag>({
@@ -2720,6 +2743,18 @@ export function CollectionBrowser({
     [filterFields],
   )
 
+  useEffect(() => {
+    if (!sheet) return
+    const defaults = collectSheetColumns(sheetPack)
+    setColumnKeys((prev) => {
+      const packKeys = defaults.filter((key) => key !== 'title' && key !== 'table')
+      const kept = prev.filter((key) => key === 'title' || key === 'table' || packKeys.includes(key))
+      const added = packKeys.filter((key) => !kept.includes(key))
+      const next = kept.length ? [...kept, ...added] : defaults
+      if (next.length === prev.length && next.every((key, index) => key === prev[index])) return prev
+      return next
+    })
+  }, [sheet, sheetPack])
   useEffect(() => {
     if (sheet) return
     if (!schemaDefaultKeys.length) return
@@ -3504,7 +3539,7 @@ export function CollectionBrowser({
           columns={columns}
           allColumns={allColumns}
           labelField={schema?.labelField}
-          tagCatalog={tagCatalog}
+                    tagCatalog={sheetPack ? [sheetPack] : tagCatalog}
           onToggle={toggleColumn}
           onReorder={setVisibleColumns}
         />
@@ -3516,7 +3551,7 @@ export function CollectionBrowser({
     const pinned = pinActionColumn(schema, next, rowActionColumn)
     if (!pinned.length) return
     setColumnKeys(pinned)
-    if (!activeViewId) return
+    if (sheet || !activeViewId) return
     const current = views.find((view) => view.id === activeViewId)
     if (!current) return
     if (current.builtin) {
@@ -5133,7 +5168,6 @@ export function CollectionBrowser({
                 </HeadlessDismiss>
               ) : null}
             </div>
-            {sheet ? null : (
             <div className="tasks-sort-wrap" ref={columnRef}>
               <button
                 type="button"
@@ -5162,7 +5196,6 @@ export function CollectionBrowser({
                 </HeadlessDismiss>
               ) : null}
             </div>
-            )}
             {mode === 'table' ? (
             <div className="tasks-filter-btn-wrap" ref={configRef}>
               <button

@@ -7,6 +7,7 @@ test('tagsCollection lists facets with stamp counts and supports create/update/d
   const store = new TagStore()
   store.replace([{ id: 'dp', label: '动态规划', fields: [{ key: 'complexity', type: 'string' }] }])
   store.indexRecord('/pages', 'home', '首页', ['dp'])
+  store.writeRecordTag('/pages', 'home', { tags: ['dp'], values: { dp: { complexity: 'O(n)' } } }, '首页')
   const spec = tagsCollection(store)
   assert.equal(spec.path, '/tags')
   assert.equal(spec.label, '标签')
@@ -57,4 +58,5 @@ test('tagsCollection lists facets with stamp counts and supports create/update/d
   assert.equal(collected[0]?.tablePath, '/pages')
   assert.equal(collected[0]?.sourceId, 'home')
   assert.equal(collected[0]?.tagId, 'dp')
+  assert.deepEqual((collected[0]?.tag as { values?: { dp?: { complexity?: string } } })?.values?.dp, { complexity: 'O(n)' })
 })
