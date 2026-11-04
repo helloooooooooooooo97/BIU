@@ -39,6 +39,13 @@ test('detail facet cell opens FieldValuePop unless the click is on a tag', () =>
   assert.match(css, /\.fsdb-page \.fsdb-detail-aside \.tasks-table\.is-wrap \.fsdb-pop-host:has\(\.biu-tags\)[\s\S]*?width:100%/)
 })
 
+test('facet pack property chips use the field glyph instead of the tag icon', () => {
+  const schemaUi = readFileSync(resolve(import.meta.dirname, './schema-field.tsx'), 'utf8')
+  assert.match(schemaUi, /icon=\{icon \?\? facetChipIcon\(id\)\}/)
+  assert.match(schemaUi, /icon=\{<FieldGlyph kind=\{field\.type\} \/>\}/)
+  assert.match(schemaUi, /data-testid="fsdb-facet-fields"/)
+})
+
 test('facet tag label appends the live property count', () => {
   assert.equal(facetPropertyCount({ fields: [{}, { deleted: true }, {}] }), 2)
   assert.equal(facetTagLabel({ id: 'need', label: '需求', fields: [{}, {}, {}] }), '需求 3')

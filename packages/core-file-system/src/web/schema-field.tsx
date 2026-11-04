@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   ATOMIC_FIELD_TYPES,
   normalizeSchemaValue,
@@ -60,14 +60,16 @@ export function SchemaChip({
   onRemove,
   onClick,
   active,
+  icon,
 }: {
   id: string
   label: string
   onRemove?: () => void
   onClick?: () => void
   active?: boolean
+  icon?: ReactNode
 }) {
-  return <TagChip id={id} label={label} icon={facetChipIcon(id)} onRemove={onRemove} onClick={onClick} active={active} />
+  return <TagChip id={id} label={label} icon={icon ?? facetChipIcon(id)} onRemove={onRemove} onClick={onClick} active={active} />
 }
 
 export function SchemaChips({
@@ -362,7 +364,12 @@ export function FacetPackEditor({ facetId }: { facetId: string }) {
       {live.length ? (
         <TagChips>
           {live.map((field) => (
-            <SchemaChip key={field.key} id={field.key} label={field.label ?? field.key} />
+            <SchemaChip
+              key={field.key}
+              id={field.key}
+              label={field.label ?? field.key}
+              icon={<FieldGlyph kind={field.type} />}
+            />
           ))}
         </TagChips>
       ) : (
