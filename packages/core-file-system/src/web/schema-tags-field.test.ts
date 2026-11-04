@@ -22,9 +22,21 @@ test('facet chips jump to the tag record like parent and depend chips', () => {
   const pop = readFileSync(resolve(import.meta.dirname, './field-value-pop.tsx'), 'utf8')
   assert.match(catalog, /showRecordInInspector\('\/facets', resolved\)/)
   assert.match(schemaUi, /jumpFacet\(id, onOpen\)/)
-  assert.match(schemaUi, /onChipClick=\{\(id\) => jumpFacet\(id\)\}/)
+  assert.match(schemaUi, /<FieldValuePop/)
+  assert.doesNotMatch(schemaUi, /<CellMulti/)
+  assert.doesNotMatch(schemaUi, /onChipClick=\{\(id\) => jumpFacet\(id\)\}/)
   assert.match(cells, /jumpFacet\(id, onOpenLink\)/)
   assert.match(pop, /\.biu-tag-wrap/)
+})
+
+test('detail facet cell opens FieldValuePop unless the click is on a tag', () => {
+  const schemaUi = readFileSync(resolve(import.meta.dirname, './schema-field.tsx'), 'utf8')
+  const pop = readFileSync(resolve(import.meta.dirname, './field-value-pop.tsx'), 'utf8')
+  const css = readFileSync(resolve(import.meta.dirname, './fsdb-style.ts'), 'utf8')
+  assert.match(schemaUi, /const facetPop =/)
+  assert.match(schemaUi, /\{facetPop\}/)
+  assert.match(pop, /if \(\(event\.target as HTMLElement\)\.closest\(POP_HOST_IGNORE\)\) return/)
+  assert.match(css, /\.fsdb-page \.fsdb-detail-aside \.tasks-table\.is-wrap \.fsdb-pop-host:has\(\.biu-tags\)[\s\S]*?width:100%/)
 })
 
 test('facet tag label appends the live property count', () => {

@@ -12,7 +12,6 @@ import {
 } from '@biu/type-file-system'
 import { ArrowUturnLeftIcon, ChevronDownIcon, PlusIcon, TagIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import { TagChip, TagChips, tagTone, HeadlessPopover } from '@biu/biu-ui'
-import { CellMulti } from '@biu/database-ui'
 import { DefaultCell, FieldGlyph } from './fsdb-cells.tsx'
 import { FieldValuePop } from './field-value-pop.tsx'
 import { inferPackFieldType, orphanPackEntries } from './fields.ts'
@@ -414,7 +413,6 @@ export function SchemaFieldEditor({
   writable,
   onChange,
   compact,
-  autoOpen = false,
 }: {
   collectionPath: string
   record: DbRecord
@@ -423,7 +421,6 @@ export function SchemaFieldEditor({
   onChange: (next: SchemaFieldValue) => void
   /** Table cells: chips only — pack fields flatten as their own columns. */
   compact?: boolean
-  autoOpen?: boolean
 }) {
   const parsed = normalizeSchemaValue(value)
   const liveRef = useRef(parsed)
@@ -562,32 +559,22 @@ export function SchemaFieldEditor({
     saveCatalog([...catalog, { id: tag.id, label: tag.label, fields: [field] }])
   }
 
+  const facetPop = (
+    <FieldValuePop
+      record={record}
+      fieldKey="facet"
+      field={{ type: 'facet', writable: true }}
+      value={value}
+      collectionPath={_collectionPath}
+      onSubmit={(next) => onChange(normalizeSchemaValue(next))}
+    />
+  )
   if (!writable) return <SchemaChips value={value} tags={catalog} />
-  if (!parsed.tags.length) {
-    return (
-      <FieldValuePop
-        record={record}
-        fieldKey="facet"
-        field={{ type: 'facet', writable: true }}
-        value={value}
-        collectionPath={_collectionPath}
-        onSubmit={(next) => onChange(normalizeSchemaValue(next))}
-      />
-    )
-  }
+  if (!parsed.tags.length) return facetPop
 
   return (
     <div className="fsdb-schema" data-testid="fsdb-schema">
-      <CellMulti
-        values={parsed.tags}
-        options={catalog.map((tag) => ({ value: tag.id, label: facetTagLabel(tag), icon: facetChipIcon(tag.id) }))}
-        onChange={applyTags}
-        onChipClick={(id) => jumpFacet(id)}
-        multiple
-        autoOpen={autoOpen}
-        removable={compact === true}
-        placeholder="添加标签"
-      />
+      {facetPop}
       {compact
         ? null
         : selected.map((tag) => {

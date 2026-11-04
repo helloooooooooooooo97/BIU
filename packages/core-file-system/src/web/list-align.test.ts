@@ -298,6 +298,11 @@ test('empty select cells fill the table cell so a click opens the tag menu', () 
   assert.match(css, /td:has\(\.db-cell-multi\.is-empty\) \.db-cell-multi\.is-empty[\s\S]*?inset:0/)
 })
 
+test('detail facet value host fills the cell so a click beside the tag opens the pop', () => {
+  assert.match(css, /\.fsdb-page \.fsdb-detail-aside \.tasks-table\.is-wrap \.fsdb-pop-host[\s\S]*?width:100%/)
+  assert.match(css, /\.fsdb-page \.fsdb-detail-aside \.tasks-table\.is-wrap \.fsdb-schema>\.fsdb-pop-host[\s\S]*?width:100%/)
+})
+
 test('table columns resize with a Super Tag blue highlight on the divider', () => {
   const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
   assert.match(browser, /data-testid="fsdb-col-resizer"/)
