@@ -3,6 +3,9 @@ const STYLE_ID = 'biu-core-file-system-ui-style'
 
 const CSS = `
 
+.fsdb-data-overview{display:flex;min-width:0;min-height:0;flex:1;flex-direction:column;overflow:hidden}
+.fsdb-source-table{display:inline-flex;align-items:center;gap:6px;min-width:0;max-width:100%;margin:0;padding:0;border:0;background:transparent;color:inherit;cursor:pointer;font:inherit;text-align:left}
+.fsdb-source-table .fsdb-title-text{color:var(--biu-color-text);font-weight:var(--biu-font-weight-medium)}
 .fsdb-page{display:flex;min-width:0;min-height:0;flex:1;flex-direction:row;overflow:hidden;background:var(--biu-color-bg);color:var(--biu-color-text);font-family:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,sans-serif,"Apple Color Emoji","Segoe UI Emoji";font-size:var(--biu-font-size-4);letter-spacing:-.011em}
 .fsdb-right{display:flex;min-width:0;min-height:0;flex:1;flex-direction:column;overflow:hidden}
 .fsdb-right .chat-view-header{flex:none}
@@ -79,15 +82,20 @@ const CSS = `
 .fsdb-views-error button{flex:none;border:0;background:transparent;color:inherit;font:inherit;cursor:pointer;text-decoration:underline}
 .fsdb-page .tasks-toolbar-right:has(.fsdb-query-menu),.fsdb-page .tasks-toolbar-right:has(.tasks-sort-menu),.fsdb-page .tasks-toolbar-right:has(.tasks-filter-menu){z-index:var(--biu-z-float)}
 .fsdb-page .tasks-sort-wrap:has(.fsdb-query-menu),.fsdb-page .tasks-sort-wrap:has(.tasks-sort-menu),.fsdb-page .tasks-filter-btn-wrap:has(.fsdb-query-menu),.fsdb-page .tasks-filter-btn-wrap:has(.tasks-filter-menu){z-index:var(--biu-z-float)}
-.fsdb-bulk-slot{position:sticky;top:0;left:0;z-index:40;height:0;width:0;overflow:visible;pointer-events:none}
-.fsdb-bulk{position:relative;top:4px;left:var(--fsdb-check-gutter);z-index:40;isolation:isolate;display:inline-flex;align-items:center;gap:2px;height:var(--biu-size-control-md);margin:0;padding:0 4px 0 8px;border-radius:8px;background:var(--biu-color-bg-subtle);box-shadow:var(--biu-shadow-md);color:var(--biu-color-text);pointer-events:auto}
+.fsdb-bulk-slot{position:relative;left:0;z-index:40;height:0;width:0;overflow:visible;pointer-events:none}
+.fsdb-bulk-slot.is-pinned{z-index:41}
+.fsdb-bulk{position:relative;top:calc((var(--fsdb-head-h, 32px) - var(--biu-size-control-md)) / 2);left:calc(var(--fsdb-check-gutter) + var(--fsdb-bulk-shift, 80px));z-index:40;isolation:isolate;display:inline-flex;align-items:center;gap:2px;height:var(--biu-size-control-md);margin:0;padding:0 4px 0 8px;border-radius:var(--biu-radius-sm);background:#262626;box-shadow:none;color:var(--biu-color-text);pointer-events:auto}
 .fsdb-page .tasks-table-wrap:has(.fsdb-bulk) .fsdb-check-rail{z-index:4}
 .fsdb-page .tasks-table-wrap:has(.fsdb-bulk) .fsdb-check-slot.is-head{z-index:5}
 .fsdb-page .tasks-table-wrap:has(.fsdb-bulk) .tasks-table th.is-pin-col,.fsdb-page .tasks-table-wrap:has(.fsdb-bulk) .tasks-table td.is-pin-col{z-index:2}
 .fsdb-bulk-count{min-width:1.25em;padding:0 6px 0 0;color:var(--biu-color-emphasis);font-size:var(--biu-font-size-3);font-weight:var(--biu-font-weight-semibold);white-space:nowrap;cursor:pointer}
 .fsdb-bulk .tasks-icon-btn{color:var(--biu-color-icon)}
 .fsdb-bulk-more{position:relative;display:inline-flex}
-.fsdb-bulk-menu{position:absolute;top:calc(100% + 6px);left:0;z-index:40;min-width:180px;padding:8px;background:var(--biu-color-bg-popover);border:var(--biu-stroke-width) solid var(--biu-color-border-popover);border-radius:var(--biu-radius-popover);box-shadow:var(--biu-shadow-popover);display:flex;flex-direction:column;gap:4px;font-weight:var(--biu-font-weight-medium)}
+.fsdb-bulk-menu{position:absolute;top:calc(100% + 6px);left:0;z-index:40;min-width:160px;width:max-content;padding:8px;background:var(--biu-color-bg-popover);border:var(--biu-stroke-width) solid var(--biu-color-border-popover);border-radius:var(--biu-radius-popover);box-shadow:var(--biu-shadow-popover);display:flex;flex-direction:column;gap:4px;font-weight:var(--biu-font-weight-medium)}
+.fsdb-bulk-menu.is-fixed{position:fixed;right:auto;margin:0;min-width:160px;width:max-content}
+.fsdb-tool-flyout .tasks-sort-item,.fsdb-bulk-menu .tasks-sort-item{display:flex;align-items:center;justify-content:flex-start;width:100%;border:0;background:transparent;color:var(--biu-color-text-muted);cursor:pointer;text-align:left}
+.fsdb-tool-flyout .tasks-sort-item-label,.fsdb-bulk-menu .tasks-sort-item-label{display:inline-flex;align-items:center;gap:6px;min-width:0}
+.fsdb-tool-flyout .tasks-sort-item-label svg,.fsdb-bulk-menu .tasks-sort-item-label svg{flex:none;display:block;color:var(--biu-color-icon)}
 .fsdb-bulk-form{display:flex;flex-direction:column;gap:8px}
 .fsdb-bulk-label{display:flex;flex-direction:column;gap:4px;font-size:var(--biu-font-size-3);font-weight:var(--biu-font-weight-medium);color:var(--biu-color-text-muted)}
 .fsdb-layout-wrap{position:relative;display:inline-flex}

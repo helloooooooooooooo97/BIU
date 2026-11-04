@@ -62,7 +62,8 @@ import { isSharePluginId } from '../share-resources.ts'
 import { FacetStore } from './facets-store.ts'
 import { SharesStore, dropSharesForRemovedViews } from './shares-store.ts'
 import { builtinAllView, builtinAllViewId, builtinMemberViews, displayNameForView, isReadOnlyViewId, stubBuiltinAllView, stubBuiltinMemberView } from '../catalog-views.ts'
-import { isIndexCollection, isSystemCollection } from '../web/database-path.ts'
+import { DATA_COLLECTION_PATH, isIndexCollection, isSystemCollection } from '../web/database-path.ts'
+import { dataCollection, isDataOverviewSource, overviewRecord } from './data-collection.ts'
 import { effectiveDataScope, highestViewRole, recordMatchesGrantedView, type DataScopeName, type ViewGrantRole } from '../view-access.ts'
 import { recordMatchesSharedView, resolveSharedView, type SharedViewDef } from '../share-view-match.ts'
 import { buildShareSnapshot } from './share-payload.ts'
@@ -254,7 +255,8 @@ function withoutContent(spec: CollectionSpec, row: DbRecord): DbRecord {
 
 const LIST_FIELD_COMPANIONS: Record<string, string[]> = {
   usage: ['usageParts'],
-  title: ['parentChain', 'blocked'],
+  title: ['parentChain', 'blocked', 'emoji', 'actionIds'],
+  table: ['tablePath', 'tableIcon', 'sourceId'],
 }
 
 function listedColumnKeys(requested: unknown, labelField: string, schema?: CollectionSchema): string[] | null {
@@ -1014,7 +1016,24 @@ export class DatabaseService extends Service implements Database {
     }
   }
 
+  private overviewRowActions(): CollectionActionInfo[] {
+    const seen = new Set<string>()
+    const out: CollectionActionInfo[] = []
+    for (const source of this.collectionsList()) {
+      if (!isDataOverviewSource(source.path)) continue
+      for (const action of schemaFor(source).actions ?? []) {
+        const places = action.placement ?? ['row', 'detail']
+        if (!places.includes('row') || !actionVisibleToUser(action)) continue
+        if (seen.has(action.id)) continue
+        seen.add(action.id)
+        out.push(action)
+      }
+    }
+    return out
+  }
+
   private schemaForCurrent(spec: CollectionSpec, schema = schemaFor(spec)) {
+    if (spec.path === DATA_COLLECTION_PATH) schema = { ...schema, actions: this.overviewRowActions() }
     schema = this.withLocationShareScope(schema)
     const authorization = this.authorization()
     const actor = authorization?.currentActor()
@@ -1654,6 +1673,64 @@ export class DatabaseService extends Service implements Database {
     }
   }
 
+  private async listDataOverview(spec: CollectionSpec, filter?: Record<string, unknown>, page?: ListPage) {
+    const schema = { ...schemaFor(spec), actions: this.overviewRowActions() }
+    const { limit, offset } = clampPage(page?.limit, page?.offset)
+    const q = page?.q ?? ''
+    const sortField = page?.sortField?.trim() || 'title'
+    const sortDir = page?.sortDir === 'desc' ? 'desc' : 'asc'
+    const scopeFilter = filter?.$scope === 'workspace' || filter?.$scope === 'personal' || filter?.$scope === 'shared' ? filter.$scope : ''
+    const columnKeys = listedColumnKeys(page?.columns, schema.labelField ?? 'title', schema)
+    const liveFilter = filter ? { ...filter } : undefined
+    if (liveFilter) {
+      delete liveFilter.deleted
+      delete liveFilter.trash
+      delete liveFilter.$scope
+    }
+    const tableFilter = normalizeCollectionPath(String(liveFilter?.tablePath ?? ''))
+    if (liveFilter) delete liveFilter.tablePath
+    const overlay = listNeedsMatchOverlay(liveFilter, q, sortField, page?.sorts)
+    const query: CollectionListQuery = { q: '', trash: false }
+    const gathered: DbRecord[] = []
+    for (const source of this.collectionsList()) {
+      if (!isDataOverviewSource(source.path)) continue
+      if (tableFilter && tableFilter !== '/' && source.path !== tableFilter) continue
+      const pack = await this.visibleSortedCollectionRows(source, query, sortField, sortDir, page?.sorts, overlay)
+      const visible = scopeFilter ? pack[scopeFilter] : pack.rows
+      const decorated = this.decorateSlice(source, visible, null)
+      for (const row of decorated) gathered.push(overviewRecord(source, row))
+    }
+    const packs = this.facets.list()
+    const sorted = sortRecords(
+      gathered.filter((row) => matchListFilter(row, liveFilter, schema, packs) && matchQuery(row, q, packs)),
+      sortField,
+      sortDir,
+      page?.sorts,
+    )
+    const total = sorted.length
+    const slice = sorted.slice(offset, offset + limit)
+    return {
+      kind: 'collection' as const,
+      path: spec.path,
+      id: spec.id,
+      label: spec.label ?? spec.id,
+      view: spec.view ?? null,
+      schema: this.schemaForCurrent(spec, schema),
+      total,
+      offset,
+      limit,
+      items: slice.map((row): DbRecord & { path: string; kind: 'record' } => {
+        const value = withoutContent(spec, row)
+        const picked = columnKeys ? pickListedFields(value, columnKeys) : value
+        return {
+          ...picked,
+          path: `${spec.path}/${row.id}`,
+          kind: 'record',
+        }
+      }),
+    }
+  }
+
   async list(path: string, filter?: Record<string, unknown>, page?: ListPage) {
     const parts = splitPath(path)
     if (parts.length === 0) {
@@ -1666,6 +1743,7 @@ export class DatabaseService extends Service implements Database {
     if (parts.length !== 1) throw new Error(`cannot list: ${normalizeCollectionPath(path)}`)
     const spec = this.collection(`/${parts[0]}`)
     if (!spec) throw new Error(`unknown collection: /${parts[0]}`)
+    if (spec.path === DATA_COLLECTION_PATH) return this.listDataOverview(spec, filter, page)
     let schema = schemaFor(spec)
     const { limit, offset } = clampPage(page?.limit, page?.offset)
     const q = page?.q ?? ''
@@ -3085,6 +3163,7 @@ export function apply(ctx: Context) {
   const shares = db.shares
   shares.open(process.env.VITEST ? ':memory:' : biuSqlitePath())
   const facets = db.facets
+  db.register(dataCollection(() => db.collectionsList()))
   db.register(viewsCollection(savedViews, () => db.collectionsList().map((item) => db.publishCollection(item)), () => currentAccountId()))
   db.register(facetsCollection(facets, () => db.collectionsList().map((item) => ({
     id: item.id,

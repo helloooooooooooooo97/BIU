@@ -1734,7 +1734,7 @@ body {
   border: 0;
   border-radius: 7px;
   background: transparent;
-  color: var(--biu-color-text-muted);
+  color: var(--biu-color-text);
   font: inherit;
   font-size: var(--biu-font-size-4);
   font-weight:var(--biu-font-weight-medium);

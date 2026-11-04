@@ -701,6 +701,21 @@ function Shell(props: SlotProps) {
   }, [activeModule, sessionView])
 
   useEffect(() => {
+    const onOpen = (event: Event) => {
+      const sessionId = String((event as CustomEvent<{ sessionId?: string }>).detail?.sessionId ?? '').trim()
+      if (!sessionId) return
+      void sessionView.load(sessionId, { view: 'chat' })
+      if (isChatPagePath(window.location.pathname)) {
+        navigate(sessionAppPath(sessionId))
+      } else {
+        openOverlayComposer()
+      }
+    }
+    window.addEventListener('biu:open-session', onOpen)
+    return () => window.removeEventListener('biu:open-session', onOpen)
+  }, [navigate, sessionView])
+
+  useEffect(() => {
     const onMissing = (event: Event) => {
       const id = String((event as CustomEvent<{ sessionId?: string }>).detail?.sessionId ?? '')
       if (!id) return

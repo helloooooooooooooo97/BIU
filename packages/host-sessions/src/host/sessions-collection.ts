@@ -249,6 +249,14 @@ export function sessionsCollection(sessions: SessionsLike): CollectionSpec {
     },
     actions: [
       {
+        id: 'chat',
+        label: '对话',
+        for: 'user',
+        placement: ['row', 'detail'],
+        description: '把当前代理换成这一行，打开对话。',
+        run: async (id) => ({ ok: true, sessionId: id }),
+      },
+      {
         id: 'inspect',
         requiredAction: 'resource:read',
         label: '检查',

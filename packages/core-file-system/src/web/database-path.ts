@@ -32,6 +32,7 @@ export function databaseRecordPath(collection: string, recordId: string, viewId?
   } satisfies AppRoute)
 }
 
+export const DATA_COLLECTION_PATH = '/data'
 export const VIEWS_COLLECTION_PATH = '/views'
 export const FACETS_COLLECTION_PATH = '/facets'
 export const NOTICES_COLLECTION_PATH = '/notices'
@@ -76,6 +77,7 @@ export function sortDataCollections<T extends { path: string }>(tables: T[]): { 
   const index: T[] = []
   const system: T[] = []
   for (const table of tables) {
+    if (normalizeCollectionPath(table.path) === DATA_COLLECTION_PATH) continue
     if (isSystemCollection(table.path)) system.push(table)
     else if (isIndexCollection(table.path)) index.push(table)
     else user.push(table)

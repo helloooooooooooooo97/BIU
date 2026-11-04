@@ -35,6 +35,10 @@ test('builtin all-view helpers keep the database URL scheme', () => {
     databaseAllViewPath('/plugins'),
     `/database/plugins/view/${encodeURIComponent('builtin-all:/plugins')}`,
   )
+  assert.equal(
+    databaseAllViewPath('/data'),
+    `/database/data/view/${encodeURIComponent('builtin-all:/data')}`,
+  )
   const parsed = parseAppPath(databaseAllViewPath('/agents'), plugins)
   assert.equal(parsed.kind, 'collection-view')
   if (parsed.kind === 'collection-view') {
@@ -88,6 +92,7 @@ test('members and views are system collections; blocks and facets are index data
     { path: '/pages' },
     { path: '/page-blocks' },
     { path: '/tasks' },
+    { path: '/data' },
   ])
   assert.deepEqual(
     user.map((item) => item.path),

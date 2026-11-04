@@ -10,6 +10,7 @@ import { DatabaseService, apply as applyFileSystem, databaseHttpFailure, listNee
 import { FileSystemAssets } from './assets-store.ts'
 import type { CollectionSpec, DbRecord } from '@biu/type-file-system'
 import { REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
+import { dataCollection } from './data-collection.ts'
 import { facetsCollection } from './facets-collection.ts'
 import { SavedViewsStore, viewsCollection } from './saved-views.ts'
 import { trashCollection } from './trash-collection.ts'
@@ -77,6 +78,29 @@ test('database HTTP failures distinguish missing resources from bad requests', (
     status: 400,
     body: { error: 'Error: cannot read: /pages/p008/child', code: 'BAD_REQUEST' },
   })
+})
+
+test('data overview lists each source record and skips index/system tables', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  const notes = notesCollection()
+  db.register({ ...notes, view: { ...notes.view!, icon: 'document' } })
+  db.register(dataCollection(() => db.collectionsList()))
+  db.register(facetsCollection(db.facets, () => [{ id: 'notes', path: '/notes', label: '笔记' }]))
+  const listed = await db.list('/data')
+  assert.equal(listed.kind, 'collection')
+  if (listed.kind !== 'collection') return
+  assert.deepEqual(
+    listed.items.map((item) => item.id).sort(),
+    ['notes::n1', 'notes::n2'],
+  )
+  assert.equal(listed.items.find((item) => item.id === 'notes::n1')?.table, '笔记2号')
+  assert.equal(listed.items.find((item) => item.id === 'notes::n1')?.tableIcon, 'document')
+  assert.equal(listed.items.find((item) => item.id === 'notes::n1')?.sourceId, 'n1')
+  assert.ok((listed.schema?.actions ?? []).some((action) => action.id === 'pin'))
+  assert.ok(!(listed.schema?.actions ?? []).some((action) => action.id === 'open'))
+  assert.deepEqual(listed.items.find((item) => item.id === 'notes::n1')?.actionIds, ['pin'])
+  assert.ok(!listed.items.some((item) => String(item.tablePath) === '/facets'))
 })
 
 test('root lists registered collections; record read/update follows schema', async () => {

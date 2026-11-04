@@ -1,116 +1,140 @@
-import { useSyncExternalStore } from 'react'
-import type { CollectionInfo, FieldType } from '@biu/type-file-system'
-import { DataSidebarShell } from './data-sidebar-shell.tsx'
-import { isIndexCollection, isSystemCollection, sortDataCollections } from './database-path.ts'
-import { FieldGlyph } from './fsdb-cells.tsx'
-import { ensureFsdbStyle } from './fsdb-style.ts'
-import { getPagePrefs, subscribePageWidth } from './page-width.ts'
-import { idleTableIconKind } from './table-glyph.tsx'
+import type { CollectionActionInfo, CollectionInfo, DbRecord } from '@biu/type-file-system'
+import { builtinAllView, builtinAllViewId, collectionNoun, stampRowOpenTarget } from '../catalog-views.ts'
+import { normalizeCollectionPath } from '../paths.ts'
+import { CollectionBrowser } from './browser.tsx'
+import type { CrumbTarget } from './sidebar-nav.ts'
+import { viewsForRegisteredCollection } from './collection-nav.ts'
+import { dataChrome } from './data-chrome.ts'
+import { actionIcon } from './fsdb-cells.tsx'
+import { DATA_COLLECTION_PATH, DATA_MODULE_ID } from './database-path.ts'
+import { idleTableIconKind } from './nav-glyphs.tsx'
+import type { SavedView } from './saved-view.ts'
 
-function groupLabel(path: string) {
-  if (isSystemCollection(path)) return '系统数据'
-  if (isIndexCollection(path)) return '索引数据'
-  return '用户数据'
+function SourceActions({
+  actions,
+  record,
+  busy,
+  run,
+}: {
+  actions: CollectionActionInfo[]
+  record: DbRecord
+  busy: boolean
+  run: (action: CollectionActionInfo) => void
+}) {
+  const allowed = new Set((Array.isArray(record.actionIds) ? record.actionIds : []).map(String))
+  const shown = actions.filter((action) => allowed.has(action.id))
+  if (!shown.length) return null
+  return (
+    <>
+      {shown.map((action) => (
+        <button
+          key={action.id}
+          type="button"
+          className={`fsdb-action-tag${action.tone === 'danger' ? ' is-danger' : ''}`}
+          aria-label={action.label}
+          disabled={busy}
+          onClick={() => run(action)}
+        >
+          {actionIcon(action.id)}
+          <span>{action.label}</span>
+        </button>
+      ))}
+    </>
+  )
 }
 
-const COLUMNS: Array<{ key: string; label: string; kind: FieldType; pin?: boolean }> = [
-  { key: 'title', label: '表', kind: 'string', pin: true },
-  { key: 'group', label: '分组', kind: 'select' },
-  { key: 'path', label: '路径', kind: 'string' },
-  { key: 'blurb', label: '说明', kind: 'string' },
-]
-
-export function DataOverview({
+function SourceTableCell({
+  record,
   tables,
   onOpenTable,
 }: {
+  record: DbRecord
   tables: CollectionInfo[]
-  onOpenTable: (path: string) => void
+  onOpenTable: (path: string, viewId?: string) => void
 }) {
-  ensureFsdbStyle()
-  const wide = useSyncExternalStore(subscribePageWidth, () => getPagePrefs().wide, () => false)
-  const { user, index, system } = sortDataCollections(tables)
-  const rows = [...user, ...index, ...system]
+  const path = normalizeCollectionPath(String(record.tablePath ?? ''))
+  if (!path || path === '/') return null
+  const table = tables.find((item) => item.path === path)
+  const viewId = builtinAllViewId(path)
+  const name = collectionNoun({ path, label: table?.label, view: table?.view })
+  const jump = builtinAllView({ path, label: table?.label, view: table?.view }).name
   return (
-    <div className={`fsdb-page tasks-root${wide ? ' is-full-width' : ''}`} data-testid="fsdb-data-overview">
-      <DataSidebarShell tables={tables} collectionPath="" title="数据" />
-      <div className="fsdb-right">
-        <div className="fsdb-right-body">
-          <div className="app-pane-in">
-            <div className="tasks-main fsdb-main">
-              <div className="fsdb-detail-icon-slot">
-                <span className="fsdb-detail-title-icon" aria-hidden>
-                  <span className="fsdb-record-mark is-lg" data-icon="table" />
-                </span>
-              </div>
-              <div className="fsdb-detail-title-row">
-                <div className="fsdb-detail-title-block">
-                  <h1 className="fsdb-detail-title">数据</h1>
-                </div>
-              </div>
-              <div className="tasks-toolbar">
-                <div className="tasks-toolbar-left" />
-                <div className="tasks-toolbar-right" />
-              </div>
-              <div className="fsdb-workspace">
-                <div className="fsdb-stage">
-                  <div className="tasks-table-wrap">
-                    <table className="tasks-table is-cols-fixed is-truncate">
-                      <thead>
-                        <tr>
-                          {COLUMNS.map((col) => (
-                            <th key={col.key} className={col.pin ? 'is-pin-col' : undefined}>
-                              <span className="tasks-th">
-                                <span className="tasks-th-ico">
-                                  <FieldGlyph kind={col.kind} />
-                                </span>
-                                {col.label}
-                              </span>
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {rows.length ? (
-                          rows.map((table) => (
-                            <tr key={table.path} onClick={() => onOpenTable(table.path)}>
-                              <td className="is-pin-col">
-                                <span className="fsdb-title-host">
-                                  <span
-                                    className="fsdb-record-mark is-sm"
-                                    data-icon={idleTableIconKind(table.view?.icon)}
-                                    aria-hidden
-                                  />
-                                  <span className="fsdb-title-text">{table.view?.title ?? table.label ?? table.path}</span>
-                                </span>
-                              </td>
-                              <td>
-                                <span className="fsdb-cell">{groupLabel(table.path)}</span>
-                              </td>
-                              <td>
-                                <span className="fsdb-cell">{table.path}</span>
-                              </td>
-                              <td>
-                                <span className="fsdb-cell">{table.view?.blurb ?? ''}</span>
-                              </td>
-                            </tr>
-                          ))
-                        ) : (
-                          <tr>
-                            <td colSpan={COLUMNS.length}>
-                              <span className="fsdb-cell">还没有登记的数据表</span>
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+    <button
+      type="button"
+      className="fsdb-source-table"
+      data-biu-ignore
+      title={jump}
+      aria-label={jump}
+      onClick={(event) => {
+        event.stopPropagation()
+        onOpenTable(path, viewId)
+      }}
+      onPointerDown={(event) => event.stopPropagation()}
+    >
+      <span className="fsdb-record-mark is-sm" data-icon={idleTableIconKind(table?.view?.icon)} aria-hidden />
+      <span className="fsdb-title-text">{name}</span>
+    </button>
+  )
+}
+
+export function DataOverview({
+  tables,
+  routeViewId,
+  onOpenTable,
+  onOpenView,
+  onOpenRecord,
+  onCrumbTarget,
+  expandedViewKey,
+  onExpandedViewKeyChange,
+}: {
+  tables: CollectionInfo[]
+  routeViewId?: string
+  onOpenTable: (path: string, viewId?: string) => void
+  onOpenView?: (viewId: string) => void
+  onOpenRecord?: (path: string, view: SavedView, recordId: string) => void
+  onCrumbTarget?: (target: CrumbTarget) => void
+  expandedViewKey?: string | null
+  onExpandedViewKeyChange?: (key: string | null) => void
+}) {
+  return (
+    <div className="fsdb-data-overview" data-testid="fsdb-data-overview">
+      <CollectionBrowser
+        moduleId={DATA_MODULE_ID}
+        collectionPath={DATA_COLLECTION_PATH}
+        title="数据"
+        blurb=""
+        chrome={{
+          ...dataChrome,
+          cells: {
+            table: ({ record }) => (
+              <SourceTableCell record={record} tables={tables} onOpenTable={onOpenTable} />
+            ),
+          },
+          Actions: ({ actions, record, busy, run }) => (
+            <SourceActions actions={actions} record={record} busy={busy} run={run} />
+          ),
+        }}
+        tables={tables}
+        routeViewId={routeViewId}
+        onOpenTable={onOpenTable}
+        onOpenView={onOpenView}
+        onCrumbTarget={onCrumbTarget}
+        onOpenRecord={(recordId, viewId, collection) => {
+          const stamp =
+            collection && collection !== DATA_COLLECTION_PATH
+              ? { collection, recordId }
+              : stampRowOpenTarget({ id: recordId })
+          if (!stamp) return
+          onOpenRecord?.(
+            stamp.collection,
+            { id: viewId || builtinAllViewId(stamp.collection) } as SavedView,
+            stamp.recordId,
+          )
+        }}
+        resolveViews={(path, user) => viewsForRegisteredCollection(path, tables, user)}
+        expandedViewKey={expandedViewKey}
+        onExpandedViewKeyChange={onExpandedViewKeyChange}
+      />
     </div>
   )
 }

@@ -7,7 +7,7 @@ import { builtinAllView, isReadOnlyViewId } from '../catalog-views.ts'
 import { normalizeColumnWidths, normalizePageSize, parseViewColumns, type SavedView } from '../web/saved-view.ts'
 import { isViewModeId } from '../web/fields.ts'
 import { normalizeCollectionPath } from '../paths.ts'
-import { isIndexCollection } from '../web/database-path.ts'
+import { DATA_COLLECTION_PATH, isIndexCollection } from '../web/database-path.ts'
 import {
   countFilterRules,
   flatFiltersToTree,
@@ -265,7 +265,10 @@ export class SavedViewsStore {
   create(fields: Record<string, unknown>, tables: CollectionInfo[], accountId = ''): DbRecord {
     const tablePath = tablePathOf(fields)
     if (!tablePath || tablePath === '/' || tablePath === '/views') throw new Error('tablePath required')
-    if (!tables.some((item) => normalizeCollectionPath(item.path) === tablePath)) {
+    if (
+      tablePath !== DATA_COLLECTION_PATH &&
+      !tables.some((item) => normalizeCollectionPath(item.path) === tablePath)
+    ) {
       throw new Error(`unknown collection: ${tablePath}`)
     }
     const table = tables.find((item) => normalizeCollectionPath(item.path) === tablePath)

@@ -45,7 +45,7 @@ export function actionIcon(id: string, opts?: { fallback?: boolean; className?: 
   if (id === 'sync-from-directory') return <ArrowDownTrayIcon aria-hidden className={cls} />
   if (id === 'sync-to-directory') return <ArrowUpTrayIcon aria-hidden className={cls} />
   if (id === 'deliver') return <PaperAirplaneIcon aria-hidden className={cls} />
-  if (id === 'report' || id === 'progress') return <ChatBubbleLeftRightIcon aria-hidden className={cls} />
+  if (id === 'chat' || id === 'report' || id === 'progress') return <ChatBubbleLeftRightIcon aria-hidden className={cls} />
   if (opts?.fallback === false) return null
   return <BoltIcon aria-hidden className={cls} />
 }

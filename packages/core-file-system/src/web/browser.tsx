@@ -1,4 +1,6 @@
 import { createContext, lazy, memo, Suspense, type ComponentProps, type PointerEvent as ReactPointerEvent, type RefObject, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
+import { overlayPortalRoot, overlayZ } from '@biu/biu-ui/overlay-portal'
 import {
   ArrowsPointingOutIcon,
   Bars3BottomLeftIcon,
@@ -89,8 +91,8 @@ import { ShareRoleLabel, ShareScopeLabel } from './share-scope-label.tsx'
 import { ensureFsdbStyle } from './fsdb-style.ts'
 import { workspaceColumnsForLocation } from './workspace-columns.ts'
 import { PageBanner } from './page-banner.tsx'
-import { UiGlyph, ViewModeGlyph, idleTableIconKind } from './nav-glyphs.tsx'
-import { DATA_MODULE, isIndexCollection, isSystemCollection } from './database-path.ts'
+import { TableGlyph, UiGlyph, ViewModeGlyph, idleTableIconKind } from './nav-glyphs.tsx'
+import { DATA_COLLECTION_PATH, DATA_MODULE, PAGES_COLLECTION_PATH, isIndexCollection, isSystemCollection } from './database-path.ts'
 import { ViewOrderMenu } from './view-order-menu.tsx'
 import { getDatabaseUi } from './database-ui.ts'
 import {
@@ -138,7 +140,7 @@ import { findViewNeighbor, indexOnPage } from './view-adjacent.ts'
 import { TABLE_WINDOW_OVERSCAN, medianPaintedRowPx, rememberedTableWrap, settlePaintedRowPx, tableColumnSlice, tableColumnUnchanged, tableColumnWidth, tableRowFallbackPx, tableWindowSlice, tableWindowUnchanged, tableWrapScroll, type TableColumnSlice } from './table-window.ts'
 import { forgetPreviewTotalsForPath, markPaintedListReady, rememberPreviewTotalForView, resetPaintedListReady } from './sidebar-preview.ts'
 import { DataSidebarShell } from './data-sidebar-shell.tsx'
-import { builtinAllViewId, catalogLockFilters, isReadOnlyViewId, mergeTableViews, parseBuiltinScopeViewId, stubBuiltinBlockKindView, viewsForScope, type DataScope } from '../catalog-views.ts'
+import { builtinAllViewId, catalogLockFilters, collectionNoun, isReadOnlyViewId, mergeTableViews, parseBuiltinScopeViewId, stubBuiltinBlockKindView, viewsForScope, type DataScope } from '../catalog-views.ts'
 import { SAVED_VIEW_EVENT, moveInspectorRecordsToTrash, rememberInspectorWorkingView, showRecordInInspector } from './inspector-db-route.ts'
 import { CellPop, cellUsesPop } from './cell-pop.tsx'
 import { jumpFacet, loadFacets, pullFacets, subscribeFacets } from './facet-catalog.ts'
@@ -367,12 +369,15 @@ function RecordTitle({
     if (!toolsLive) setToolsLive(true)
   }
   const tree = openDetail && treeOn
+  const typeIcon = typeof row.tableIcon === 'string' && row.tableIcon.trim() ? row.tableIcon : tableIcon
   if (!toolsLive && !tree) {
     const emoji = recordPreviewEmoji(row)
     return (
       <span className="fsdb-title-host" onMouseEnter={armTools}>
         {emoji ? (
           <span className="fsdb-record-emoji">{emoji}</span>
+        ) : typeIcon && typeIcon !== tableIcon ? (
+          <RecordMark record={row} tableIcon={typeIcon} />
         ) : (
           <span className="fsdb-record-mark is-sm" data-icon={idleTableIconKind(tableIcon)} aria-hidden />
         )}
@@ -405,9 +410,9 @@ function RecordTitle({
           )
         ) : null}
         {openDetail && toolsLive ? (
-          <TableRecordIcon row={row} label={label} tableIcon={tableIcon} Icon={Icon} onWriteEmoji={onWriteEmoji} />
+          <TableRecordIcon row={row} label={label} tableIcon={typeIcon} Icon={Icon} onWriteEmoji={onWriteEmoji} />
         ) : (
-          <RecordMark record={row} tableIcon={tableIcon} />
+          <RecordMark record={row} tableIcon={typeIcon} />
         )}
         <span className="fsdb-title-text">{toolsLive && Title ? <Title record={row} label={label} /> : label}</span>
       </span>
@@ -709,7 +714,7 @@ const EMPTY_FILTERS: Record<string, string> = {}
 /** 与选区拖选同一阈值：位移超过这个距离只当拖，不当点击。 */
 const CELL_POP_DRAG_PX = 6
 const CELL_POP_IGNORE =
-  '.fsdb-row-check, .fsdb-col-resizer, .tasks-row-tools, .tasks-title-open, .fsdb-action-btn, .fsdb-action-tag, .fsdb-boolbtn, .fsdb-thumb-btn, .fsdb-thumb, .biu-image, .fsdb-file-tools, .fsdb-ref-chip, .biu-tag-wrap, .db-datetime, .biu-calendar, .fsdb-scope-detail'
+  '.fsdb-row-check, .fsdb-col-resizer, .tasks-row-tools, .tasks-title-open, .fsdb-action-btn, .fsdb-action-tag, .fsdb-boolbtn, .fsdb-thumb-btn, .fsdb-thumb, .biu-image, .fsdb-file-tools, .fsdb-ref-chip, .biu-tag-wrap, .db-datetime, .biu-calendar, .fsdb-scope-detail, .fsdb-source-table'
 
 type TablePaintNode =
   | { kind: 'empty'; key: string }
@@ -1528,6 +1533,8 @@ export function CollectionBrowser({
     routeScope === 'workspace' ? 'workspace' : routeScope === 'shared' ? 'shared' : 'personal',
   )
   const [createScopeOpen, setCreateScopeOpen] = useState(false)
+  const [createTypePath, setCreateTypePath] = useState(PAGES_COLLECTION_PATH)
+  const [createTypeOpen, setCreateTypeOpen] = useState(false)
   useEffect(() => {
     let live = true
     void getWorkspaceProfile()
@@ -1646,6 +1653,22 @@ export function CollectionBrowser({
   const [groupOpen, setGroupOpen] = useState(false)
   const [layoutOpen, setLayoutOpen] = useState(false)
   const [bulkMenuOpen, setBulkMenuOpen] = useState(false)
+  useLayoutEffect(() => {
+    if (!bulkMenuOpen) return
+    const place = () => {
+      const el = bulkRef.current
+      if (!el) return
+      const rect = el.getBoundingClientRect()
+      setBulkMenuBox({ top: rect.bottom + 6, left: rect.left })
+    }
+    place()
+    window.addEventListener('resize', place)
+    window.addEventListener('scroll', place, true)
+    return () => {
+      window.removeEventListener('resize', place)
+      window.removeEventListener('scroll', place, true)
+    }
+  }, [bulkMenuOpen])
   const [wrapCells, setWrapCells] = useState(!!initialView?.wrap)
   const [truncateCells, setTruncateCells] = useState(initialView?.truncate !== false)
   const [groupBy, setGroupBy] = useState(initialView?.groupBy ?? '')
@@ -1886,6 +1909,8 @@ export function CollectionBrowser({
   const columnRef = useRef<HTMLDivElement>(null)
   const filterRef = useRef<HTMLDivElement>(null)
   const bulkRef = useRef<HTMLDivElement>(null)
+  const bulkMenuRef = useRef<HTMLDivElement>(null)
+  const [bulkMenuBox, setBulkMenuBox] = useState({ top: 0, left: 0 })
   const configRef = useRef<HTMLDivElement>(null)
   const groupRef = useRef<HTMLDivElement>(null)
   const layoutRef = useRef<HTMLDivElement>(null)
@@ -2533,7 +2558,23 @@ export function CollectionBrowser({
 
   const schema = stat?.schema
   const subsetLocked = lockedFilterKeys.length > 0
-  const canCreate = Boolean(schema?.records?.create) && !subsetLocked
+  const isDataOverview = dataPath === DATA_COLLECTION_PATH
+  const overviewCreateTables = useMemo(
+    () =>
+      tables.filter(
+        (table) =>
+          table.path !== DATA_COLLECTION_PATH &&
+          !isIndexCollection(table.path) &&
+          !isSystemCollection(table.path),
+      ),
+    [tables],
+  )
+  const canCreate =
+    (isDataOverview ? overviewCreateTables.length > 0 : Boolean(schema?.records?.create)) && !subsetLocked
+  const createTypeTable =
+    overviewCreateTables.find((table) => table.path === createTypePath) ??
+    overviewCreateTables.find((table) => table.path === PAGES_COLLECTION_PATH) ??
+    overviewCreateTables[0]
   const canDelete = Boolean(schema?.records?.delete) && !subsetLocked
   const inTrash = collectionPath === '/trash'
   const canBulkDelete = (canDelete || inTrash) && !subsetLocked
@@ -3501,6 +3542,13 @@ export function CollectionBrowser({
   }
 
   async function runAction(row: DbRecord, action: CollectionActionInfo) {
+    if (action.id === 'chat') {
+      const sessionId = String(row.sourceId ?? row.id ?? '').trim()
+      if (sessionId) {
+        window.dispatchEvent(new CustomEvent('biu:open-session', { detail: { sessionId } }))
+      }
+      return
+    }
     if (action.id === 'pack' && (row.installed === true || row.installed === 'true')) {
       setDlg({
         kind: 'action',
@@ -3602,14 +3650,18 @@ export function CollectionBrowser({
     if (actingRef.current) return
     actingRef.current = true
     setActing(true)
+    const sourcePath = String(row.tablePath ?? '').trim()
+    const sourceId = String(row.sourceId ?? '').trim()
+    const actionPath =
+      dataPath === DATA_COLLECTION_PATH && sourcePath && sourceId ? `${sourcePath}/${sourceId}` : `${dataPath}/${row.id}`
     try {
       await readJson('/api/db/action', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ path: `${dataPath}/${row.id}`, action: action.id }),
+        body: JSON.stringify({ path: actionPath, action: action.id }),
       })
       if (action.id === 'start') {
-        window.dispatchEvent(new CustomEvent('biu:enable-page-block-plugin', { detail: { plugin: String(row.id) } }))
+        window.dispatchEvent(new CustomEvent('biu:enable-page-block-plugin', { detail: { plugin: sourceId || String(row.id) } }))
       }
       announceListChange()
       quietUntil.current = 0
@@ -3715,22 +3767,38 @@ export function CollectionBrowser({
 
   async function createRecord() {
     if (!canCreate) return
+    const targetPath = isDataOverview ? createTypeTable?.path || PAGES_COLLECTION_PATH : dataPath
+    const targetTable = isDataOverview
+      ? createTypeTable ?? { path: targetPath, label: targetPath.replace(/^\//, '') }
+      : undefined
     try {
       const data = await readJson<{ items?: Array<{ value?: DbRecord }> }>('/api/db/create', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          path: dataPath,
+          path: targetPath,
           records: [seedRecordFromViewFilters(catalogLocks, filterTree, schema)],
           scope: createScope,
         }),
       })
-      const value = data.items?.[0]?.value
-      const id = value?.id
-      if (!id) {
+      const created = data.items?.[0]?.value
+      const sourceId = created?.id
+      if (!created || !sourceId) {
         setError('没有写入')
         return
       }
+      const value = targetTable
+        ? {
+            ...created,
+            id: `${String(targetTable.path).replace(/^\//, '')}::${sourceId}`,
+            title: String(created.title ?? sourceId),
+            table: targetTable.view?.title ?? targetTable.label ?? targetTable.path.replace(/^\//, ''),
+            tablePath: targetTable.path,
+            tableIcon: targetTable.view?.icon,
+            sourceId,
+          }
+        : created
+      const id = value.id
       confirmedCreates.current.add(id)
       setItems((prev) => {
         const next = [value, ...prev.filter((item) => item.id !== id)]
@@ -3750,8 +3818,8 @@ export function CollectionBrowser({
       })
       announceListChange()
       quietUntil.current = 0
-      if (activeViewId) rememberInspectorWorkingView(collectionPath, activeViewId)
-      window.setTimeout(() => showRecordInInspector(collectionPath, id, activeViewId), 0)
+      if (activeViewId) rememberInspectorWorkingView(targetPath, activeViewId)
+      window.setTimeout(() => showRecordInInspector(targetPath, sourceId, activeViewId), 0)
     } catch (err) {
       setError(String(err))
     }
@@ -4662,6 +4730,10 @@ export function CollectionBrowser({
     Number(configOpen),
     Number(createScopeOpen),
     createScope,
+    Number(createTypeOpen),
+    createTypePath,
+    Number(isDataOverview),
+    overviewCreateTables.map((table) => table.path).join(','),
     Number(localData),
     Number(canCreate),
     Number(refreshing),
@@ -5166,6 +5238,45 @@ export function CollectionBrowser({
                 >
                   新建
                 </button>
+                {isDataOverview ? (
+                <HeadlessDismiss enabled={createTypeOpen} onDismiss={() => setCreateTypeOpen(false)}>
+                  <div className="fsdb-create-scope-wrap">
+                  <button
+                    type="button"
+                    className="fsdb-create-scope"
+                    aria-label="新建类型"
+                    aria-expanded={createTypeOpen}
+                    title={`新建${collectionNoun({
+                      path: createTypeTable?.path ?? PAGES_COLLECTION_PATH,
+                      label: createTypeTable?.label,
+                      view: createTypeTable?.view,
+                    })}`}
+                    onClick={() => setCreateTypeOpen((open) => !open)}
+                  >
+                    <TableGlyph icon={createTypeTable?.view?.icon} />
+                  </button>
+                  {createTypeOpen ? (
+                    <div className="fsdb-create-scope-menu" role="menu">
+                      {overviewCreateTables.map((table) => (
+                        <button
+                          key={table.path}
+                          type="button"
+                          role="menuitem"
+                          className={table.path === (createTypeTable?.path ?? createTypePath) ? 'is-on' : ''}
+                          onClick={() => {
+                            setCreateTypePath(table.path)
+                            setCreateTypeOpen(false)
+                          }}
+                        >
+                          <TableGlyph icon={table.view?.icon} />
+                          {collectionNoun(table)}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                  </div>
+                </HeadlessDismiss>
+                ) : (
                 <HeadlessDismiss enabled={createScopeOpen} onDismiss={() => setCreateScopeOpen(false)}>
                   <div className="fsdb-create-scope-wrap">
                   <button
@@ -5232,6 +5343,7 @@ export function CollectionBrowser({
                   ) : null}
                   </div>
                 </HeadlessDismiss>
+                )}
               </div>
             ) : null}
           </div>
@@ -5521,9 +5633,23 @@ export function CollectionBrowser({
                       >
                         <EllipsisHorizontalIcon aria-hidden className="size-[14px]" />
                       </button>
-                      {bulkMenuOpen ? (
-                        <HeadlessDismiss onDismiss={() => setBulkMenuOpen(false)} insideRef={bulkRef}>
-                          <div className="fsdb-tool-flyout fsdb-bulk-menu" role="menu">
+                      {bulkMenuOpen
+                        ? createPortal(
+                        <HeadlessDismiss
+                          onDismiss={() => setBulkMenuOpen(false)}
+                          inside={(node) =>
+                            Boolean(
+                              node instanceof Node &&
+                                (bulkRef.current?.contains(node) || bulkMenuRef.current?.contains(node)),
+                            )
+                          }
+                        >
+                          <div
+                            ref={bulkMenuRef}
+                            className="fsdb-tool-flyout fsdb-bulk-menu is-fixed"
+                            role="menu"
+                            style={{ top: bulkMenuBox.top, left: bulkMenuBox.left, zIndex: overlayZ(200) }}
+                          >
                             {canFacet ? (
                               <button
                                 type="button"
@@ -5556,8 +5682,10 @@ export function CollectionBrowser({
                               </span>
                             </button>
                           </div>
-                        </HeadlessDismiss>
-                      ) : null}
+                        </HeadlessDismiss>,
+                        overlayPortalRoot() ?? document.body,
+                      )
+                        : null}
                     </div>
                   </div>
                   </div>

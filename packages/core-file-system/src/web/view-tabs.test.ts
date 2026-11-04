@@ -48,7 +48,7 @@ test('toolbar shows only the current view, not a switcher strip', () => {
   assert.match(css, /\.fsdb-page \.tasks-filter-btn-wrap:has\(\.fsdb-query-menu\)/)
   assert.match(css, /\.fsdb-page \.tasks-table-wrap\{[^}]*z-index:0/)
   assert.match(src, /className="fsdb-bulk-slot"/)
-  assert.match(css, /\.fsdb-bulk-slot\{[^}]*position:sticky/)
+  assert.match(css, /\.fsdb-bulk-slot\{[^}]*position:relative/)
   assert.match(css, /\.fsdb-bulk-slot\{[^}]*left:0/)
   assert.match(css, /\.fsdb-bulk-slot\{[^}]*width:0/)
 })

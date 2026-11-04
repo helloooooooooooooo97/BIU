@@ -17,7 +17,8 @@ import {
   collectionNavKey,
 } from './nav-boot.ts'
 import { defaultViewId } from './view-storage.ts'
-import { DATA_MODULE, DATA_MODULE_ID, DATA_MODULE_PATH, FACETS_COLLECTION_PATH, PAGE_BLOCKS_COLLECTION_PATH, VIEWS_COLLECTION_PATH, sortDataCollections } from './database-path.ts'
+import { DATA_COLLECTION_PATH, DATA_MODULE, DATA_MODULE_ID, DATA_MODULE_PATH, FACETS_COLLECTION_PATH, PAGE_BLOCKS_COLLECTION_PATH, VIEWS_COLLECTION_PATH, sortDataCollections } from './database-path.ts'
+import { dataChrome } from './data-chrome.ts'
 import { writeMainDataRoute } from './main-data-route.ts'
 import { facetsChrome } from './facet-chrome.tsx'
 import { viewsChrome } from './views-chrome.ts'
@@ -138,25 +139,37 @@ function CollectionPage(props: SlotProps) {
   }, [location.pathname, parsed])
 
   useEffect(() => {
+    if (dataHome) {
+      go({ collection: DATA_COLLECTION_PATH, viewId: builtinAllViewId(DATA_COLLECTION_PATH) }, { replace: true })
+      return
+    }
     if (parsed.kind !== 'collection-view' || parsed.viewId || recordFromRoute) return
     if (!parsed.collection) return
     go({ collection: parsed.collection, viewId: builtinAllViewId(parsed.collection) }, { replace: true })
-  }, [parsed, recordFromRoute])
+  }, [dataHome, parsed, recordFromRoute])
 
   useEffect(() => {
     if (!orderedTables.length || !collectionFromRoute) return
+    if (collectionFromRoute === DATA_COLLECTION_PATH) return
     if (orderedTables.some((item) => item.path === collectionFromRoute)) return
     const first = orderedTables[0]!
     go({ collection: first.path, viewId: defaultViewId(first.path) }, { replace: true })
   }, [collectionFromRoute, orderedTables])
 
   const lockedFilters = chrome.lockedFiltersFromSearch?.(location.search) ?? EMPTY_FILTERS
-  if (dataHome) {
+  const dataOverview = dataHome || collectionFromRoute === DATA_COLLECTION_PATH
+  if (dataOverview) {
     return (
       <Suspense fallback={null}>
         <DataOverview
           tables={orderedTables}
-          onOpenTable={(path) => go({ collection: path, viewId: builtinAllViewId(path) })}
+          routeViewId={dataHome ? builtinAllViewId(DATA_COLLECTION_PATH) : viewFromRoute}
+          onOpenTable={(path, viewId) => go({ collection: path, viewId: viewId ?? builtinAllViewId(path) })}
+          onOpenView={(viewId) => go({ collection: DATA_COLLECTION_PATH, viewId })}
+          onOpenRecord={(path, view, recordId) => go({ collection: path, viewId: view.id, recordId })}
+          onCrumbTarget={(target) => navigate(pathForCrumbTarget(target))}
+          expandedViewKey={expandedViewKey}
+          onExpandedViewKeyChange={setExpandedViewKey}
         />
       </Suspense>
     )
@@ -252,6 +265,7 @@ export function apply(ctx: Context) {
   ctx.effect(() => {
     const ui = getDatabaseUi()
     if (!ui) return () => undefined
+    const dataUi = ui.decorate(DATA_COLLECTION_PATH, dataChrome)
     const views = ui.decorate(VIEWS_COLLECTION_PATH, viewsChrome)
     const facetsUi = ui.decorate(FACETS_COLLECTION_PATH, facetsChrome)
     const blocksUi = ui.decorate(
@@ -262,6 +276,7 @@ export function apply(ctx: Context) {
       }),
     )
     return () => {
+      dataUi.dispose()
       views.dispose()
       facetsUi.dispose()
       blocksUi.dispose()

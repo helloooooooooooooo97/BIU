@@ -226,7 +226,7 @@ export function stubBuiltinAllView(id: string): SavedView | null {
 
 export function builtinCatalogViews(tables: CollectionInfo[]): SavedView[] {
   return tables
-    .filter((table) => table.path && table.path !== '/')
+    .filter((table) => table.path && table.path !== '/' && table.path !== '/data')
     .map((table) => {
       const path = normalizeCollectionPath(table.path)
       return normalizeSavedView({
