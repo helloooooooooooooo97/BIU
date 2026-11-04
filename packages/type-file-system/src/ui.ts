@@ -79,6 +79,7 @@ export type FsDetailBarProps = {
   onHiddenPropertyKeys?: (keys: string[]) => void
   visiblePropertyKeys?: string[]
   onVisiblePropertyKeys?: (keys: string[]) => void
+  columnMenu?: ReactNode
   onRetry?: () => void
   configMenu?: ReactNode
 }

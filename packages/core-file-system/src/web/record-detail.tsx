@@ -241,6 +241,7 @@ export function RecordDetail({
   inspectorPaneId,
   visibleColumns,
   onVisibleColumns,
+  columnMenu,
 }: {
   selected: DbRecord
   schema: CollectionSchema
@@ -271,6 +272,7 @@ export function RecordDetail({
   inspectorPaneId?: string
   visibleColumns?: string[]
   onVisibleColumns?: (keys: string[]) => void
+  columnMenu?: ReactNode
 }) {
   const title = labelOf(selected)
   const recordPath = recordSourcePath(collectionPath, selected.id)
@@ -413,6 +415,7 @@ export function RecordDetail({
                       setVisiblePropertyKeys(next)
                       onVisibleColumns?.(next)
                     }}
+                    columnMenu={columnMenu}
                     onRetry={onRetryBody}
                     configMenu={paneMenu}
                   />

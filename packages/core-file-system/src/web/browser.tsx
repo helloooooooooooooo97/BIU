@@ -168,7 +168,7 @@ const QueryFlyout = lazy(() => import('./query-menus.tsx').then((m) => ({ defaul
 const FieldValuePop = lazy(() => import('./field-value-pop.tsx').then((m) => ({ default: m.FieldValuePop })))
 const CellPopDraft = lazy(() => import('./cell-pop-draft.tsx').then((m) => ({ default: m.CellPopDraft })))
 const RecordDetail = lazy(() => import('./record-detail.tsx').then((m) => ({ default: m.RecordDetail })))
-const ColumnOrderMenu = lazy(() => import('./column-order-menu.tsx').then((m) => ({ default: m.ColumnOrderMenu })))
+const VisibleColumnsFlyout = lazy(() => import('./column-order-menu.tsx').then((m) => ({ default: m.VisibleColumnsFlyout })))
 const RecordEmojiBoard = lazy(() => import('@biu/biu-ui/emoji-board').then((m) => ({ default: m.RecordEmojiBoard })))
 const LazyShareButton = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.ShareButton })))
 const LazySharePanel = lazy(() => import('./share-popover.tsx').then((m) => ({ default: m.SharePanel })))
@@ -3489,6 +3489,21 @@ export function CollectionBrowser({
     })
   }
 
+  function renderVisibleColumnsFlyout() {
+    return (
+      <Suspense fallback={null}>
+        <VisibleColumnsFlyout
+          columns={columns}
+          allColumns={allColumns}
+          labelField={schema?.labelField}
+          tagCatalog={tagCatalog}
+          onToggle={toggleColumn}
+          onReorder={setVisibleColumns}
+        />
+      </Suspense>
+    )
+  }
+
   function setVisibleColumns(next: string[]) {
     const pinned = pinActionColumn(schema, next, rowActionColumn)
     if (!pinned.length) return
@@ -5135,23 +5150,7 @@ export function CollectionBrowser({
                     )
                   }
                 >
-                <SearchableFlyout className="tasks-sort-menu fsdb-col-menu">
-                  {(q) => (
-                  <div className="fsdb-col-menu-list">
-                  <Suspense fallback={null}>
-                    <ColumnOrderMenu
-                      columns={columns}
-                      allColumns={allColumns}
-                      labelField={schema?.labelField}
-                      tagCatalog={tagCatalog}
-                      query={q}
-                      onToggle={toggleColumn}
-                      onReorder={setVisibleColumns}
-                    />
-                  </Suspense>
-                  </div>
-                  )}
-                </SearchableFlyout>
+                {renderVisibleColumnsFlyout()}
                 </HeadlessDismiss>
               ) : null}
             </div>
@@ -5800,6 +5799,7 @@ export function CollectionBrowser({
           inspectorPaneId={inspectorPaneId}
           visibleColumns={columnKeys.length ? columnKeys : schemaDefaultKeys}
           onVisibleColumns={setVisibleColumns}
+          columnMenu={renderVisibleColumnsFlyout()}
         />
         </Suspense>
       ) : null}
