@@ -5798,7 +5798,8 @@ export function CollectionBrowser({
           collectionPath={collectionPath}
           recordKind={recordKind}
           inspectorPaneId={inspectorPaneId}
-          visibleColumns={columnKeys.length ? columnKeys : undefined}
+          visibleColumns={columnKeys.length ? columnKeys : schemaDefaultKeys}
+          onVisibleColumns={setVisibleColumns}
         />
         </Suspense>
       ) : null}
