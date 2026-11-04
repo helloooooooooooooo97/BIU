@@ -285,10 +285,10 @@ test('showInInspector opens a collection href in the inspector', async () => {
   const opened = new Promise<void>((resolve) => {
     window.addEventListener('biu:inspector-open', () => resolve(), { once: true })
   })
-  showInInspector('/facets', '/database/facets/view/builtin-all:/facets?facetId=dp')
+  showInInspector('/tags', '/database/tags/view/builtin-all:/tags?tagId=dp')
   await opened
-  assert.equal(getInspectorDbPath('database:/facets'), '/database/facets/view/builtin-all:/facets?facetId=dp')
-  assert.deepEqual(tabs, ['database:/facets'])
+  assert.equal(getInspectorDbPath('database:/tags'), '/database/tags/view/builtin-all:/tags?tagId=dp')
+  assert.deepEqual(tabs, ['database:/tags'])
   window.removeEventListener('biu:inspector-tab', onTab)
 })
 

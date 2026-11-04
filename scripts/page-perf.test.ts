@@ -120,7 +120,7 @@ test('discover-routes covers every local-space URL shape', () => {
     '/database/pages/view/1792/record/p000',
   )
   const collections = [
-    '/facets',
+    '/tags',
     '/mcp',
     '/notices',
     '/page-blocks',

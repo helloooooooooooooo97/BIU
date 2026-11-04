@@ -33,7 +33,7 @@ interface SessionConfigFields {
   systemPrompt?: string
   agentMode?: AgentMode
   extraTools?: string[]
-  facet?: SchemaFieldValue
+  tag?: SchemaFieldValue
   pinned?: boolean
   autoCompactInputTokens?: number
 }
@@ -55,14 +55,14 @@ interface InspectorPayload {
 const fieldClass =
   'rounded-lg border border-(--biu-color-border) bg-(--biu-color-surface) px-2 py-1.5 text-[12px] text-(--biu-color-text) outline-none'
 
-function slugFacetId(label: string, used: Set<string>) {
+function slugTagId(label: string, used: Set<string>) {
   const base =
     label
       .trim()
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '')
-      .slice(0, 24) || 'facet'
+      .slice(0, 24) || 'tag'
   let id = /^[a-z]/.test(base) ? base : `f-${base}`
   let n = 2
   while (used.has(id) || !/^[a-z][a-z0-9-]{0,31}$/.test(id)) {
@@ -87,11 +87,11 @@ function SessionFacetPicker({
 
   useEffect(() => {
     let cancelled = false
-    void fetch('/api/db/facets')
+    void fetch('/api/db/tags')
       .then((res) => res.json())
-      .then((body: { facets?: CollectionSchemaPack[] }) => {
-        if (cancelled || !Array.isArray(body.facets)) return
-        setCatalog(body.facets)
+      .then((body: { tags?: CollectionSchemaPack[] }) => {
+        if (cancelled || !Array.isArray(body.tags)) return
+        setCatalog(body.tags)
       })
       .catch(() => undefined)
     return () => {
@@ -113,7 +113,7 @@ function SessionFacetPicker({
         resolved.push(hit.id)
         continue
       }
-      const id = slugFacetId(item, used)
+      const id = slugTagId(item, used)
       packs = [...packs, { id, label: item, fields: [] }]
       used.add(id)
       resolved.push(id)
@@ -128,10 +128,10 @@ function SessionFacetPicker({
       onChange({ tags: resolved, values })
     }
     if (packs !== catalog) {
-      void fetch('/api/db/facets', {
+      void fetch('/api/db/tags', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ facets: packs }),
+        body: JSON.stringify({ tags: packs }),
       })
         .then((res) => {
           if (!res.ok) return
@@ -323,9 +323,9 @@ export const SessionConfigDialog = memo(function SessionConfigDialog({
               <label className="flex flex-col gap-1 text-[11px] text-(--biu-color-text-subtle)">
                 <span>标签 · 侧栏可按标签分组</span>
                 <SessionFacetPicker
-                  value={data?.config?.facet}
+                  value={data?.config?.tag}
                   disabled={busy}
-                  onChange={(facet) => void patchSessionConfig({ facet })}
+                  onChange={(tag) => void patchSessionConfig({ tag })}
                 />
               </label>
 

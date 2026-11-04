@@ -8,9 +8,9 @@ import { contentFieldKey, fieldHasValue, formatField, resolveFieldType } from '.
 import { LocalText } from './controls.tsx'
 import { FieldGlyph, FilePreview } from './fsdb-cells.tsx'
 import { PropertyRow } from './property-row.tsx'
-import { FacetPackEditor } from './schema-field.tsx'
+import { TagPackEditor } from './schema-field.tsx'
 import { idleTableIconKind } from './nav-glyphs.tsx'
-import { FACETS_COLLECTION_PATH } from './database-path.ts'
+import { TAGS_COLLECTION_PATH } from './database-path.ts'
 import { normalizeRecordEmoji, recordPreviewEmoji } from './sidebar-preview.ts'
 import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, shouldLeaveContentForTitle, shouldLeaveTitleForContent, focusRecordTitleNear } from './title-content-nav.ts'
 import { HeadingOutline } from './heading-outline.tsx'
@@ -301,12 +301,12 @@ export function RecordDetail({
     />
   )
 
-  const [facetOpen, setFacetOpen] = useState(false)
+  const [tagOpen, setTagOpen] = useState(false)
   const [visiblePropertyKeys, setVisiblePropertyKeys] = useState<string[] | null>(null)
   const [outlineOn, setOutlineOn] = useState(headingOutline)
   const visibleColumnsKey = visibleColumns?.join('\0') ?? ''
   useEffect(() => {
-    setFacetOpen(false)
+    setTagOpen(false)
     setVisiblePropertyKeys(visibleColumnsKey ? visibleColumnsKey.split('\0') : null)
     setOutlineOn(headingOutline)
   }, [selected.id, headingOutline, visibleColumnsKey])
@@ -321,16 +321,16 @@ export function RecordDetail({
       if (key === 'id' || key === 'emoji' || key === schema.labelField) return false
       if (key === contentFieldKey(schema) && resolveFieldType(field) === 'file') return false
       if (chrome?.panes?.some((pane) => pane.id === key)) return false
-      if (key === 'fields' && collectionPath === FACETS_COLLECTION_PATH && String(selected.id).includes('::')) return false
+      if (key === 'fields' && collectionPath === TAGS_COLLECTION_PATH && String(selected.id).includes('::')) return false
       const kind = resolveFieldType(field)
-      if (kind === 'facet' && !field.writable) return false
+      if (kind === 'tag' && !field.writable) return false
       if (field.computed && !fieldHasValue(field, selected[key])) return false
       if (visiblePropertyKeys && !visiblePropertyKeys.includes(key)) return false
       return true
     })
     .sort(([keyA, a], [keyB, b]) => {
       const fold = (key: string, field: FieldSpec) =>
-        resolveFieldType(field) === 'facet' || (key === 'fields' && collectionPath === FACETS_COLLECTION_PATH)
+        resolveFieldType(field) === 'tag' || (key === 'fields' && collectionPath === TAGS_COLLECTION_PATH)
       return Number(fold(keyA, a)) - Number(fold(keyB, b))
     })
 
@@ -452,8 +452,8 @@ export function RecordDetail({
                   ) : null}
                   {propertyEntries.map(([key, field]) => {
                     const kind = resolveFieldType(field)
-                    const facet = kind === 'facet'
-                    const packFields = key === 'fields' && collectionPath === FACETS_COLLECTION_PATH
+                    const facet = kind === 'tag'
+                    const packFields = key === 'fields' && collectionPath === TAGS_COLLECTION_PATH
                     const fold = facet || packFields
                     return (
                       <PropertyRow
@@ -462,13 +462,13 @@ export function RecordDetail({
                         field={field}
                         fieldKey={key}
                         collapsible={fold}
-                        expanded={fold ? facetOpen : undefined}
-                        onToggle={fold ? () => setFacetOpen((open) => !open) : undefined}
+                        expanded={fold ? tagOpen : undefined}
+                        onToggle={fold ? () => setTagOpen((open) => !open) : undefined}
                         pick={propPick(key, field, packFields ? undefined : formatField(field, selected[key]))}
                       >
                         <div className={fold ? 'fsdb-prop-val is-schema' : 'fsdb-prop-val'} title={packFields ? undefined : formatField(field, selected[key])}>
                           {packFields ? (
-                            <FacetPackEditor facetId={selected.id} />
+                            <TagPackEditor tagId={selected.id} />
                           ) : (
                             renderCell(selected, key, field)
                           )}

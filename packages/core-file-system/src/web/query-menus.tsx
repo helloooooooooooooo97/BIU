@@ -434,7 +434,7 @@ function FilterRuleRow({
             variant="field"
             allowCreate={!field?.field.enum?.length}
             placeholder="值"
-            chips={kind === 'select' || kind === 'multi-select' || kind === 'facet'}
+            chips={kind === 'select' || kind === 'multi-select' || kind === 'tag'}
             onSelect={(next) => onChange({ ...rule, value: next })}
           />
         ) : (

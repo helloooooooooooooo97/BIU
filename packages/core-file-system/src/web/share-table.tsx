@@ -4,7 +4,7 @@ import { ensureTagChipStyle } from '@biu/biu-ui/tag-chip'
 import { formatField, pinLabelColumn, contentFieldKey, resolveFieldType, defaultColumnKeys } from './fields.ts'
 import { DefaultCell, FieldGlyph } from './fsdb-cells.tsx'
 import { SchemaChips } from './schema-field.tsx'
-import { loadFacets } from './facet-catalog.ts'
+import { loadTags } from './tag-catalog.ts'
 import { RecordMark } from './record-mark.tsx'
 import { crumbRecordLabel } from './sidebar-preview.ts'
 import type { SavedView } from './saved-view.ts'
@@ -42,7 +42,7 @@ export function ShareCell({
   schema,
   chrome,
   onOpenLink,
-  facets = [],
+  tags = [],
 }: {
   row: DbRecord
   fieldKey: string
@@ -52,15 +52,15 @@ export function ShareCell({
   schema: CollectionSchema
   chrome?: CollectionChrome
   onOpenLink?: (id: string) => void
-  facets?: CollectionSchemaPack[]
+  tags?: CollectionSchemaPack[]
 }) {
   const kind = resolveFieldType(field)
   const Custom = chrome?.cells?.[fieldKey]
   if (Custom) {
     return <Custom field={fieldKey} spec={field} value={row[fieldKey]} record={row} fallback={formatField(field, row[fieldKey])} />
   }
-  if (kind === 'facet') {
-    return <SchemaChips value={row[fieldKey]} tags={facets.length ? facets : loadFacets()} onOpen={onOpenLink} />
+  if (kind === 'tag') {
+    return <SchemaChips value={row[fieldKey]} tags={tags.length ? tags : loadTags()} onOpen={onOpenLink} />
   }
   return (
     <DefaultCell
@@ -87,7 +87,7 @@ export function ShareListTable({
   truncate,
   queryFields,
   onOpenLink,
-  facets = [],
+  tags = [],
 }: {
   schema: CollectionSchema
   view?: Partial<SavedView>
@@ -100,7 +100,7 @@ export function ShareListTable({
   truncate?: boolean
   queryFields?: Set<string>
   onOpenLink?: (id: string) => void
-  facets?: CollectionSchemaPack[]
+  tags?: CollectionSchemaPack[]
 }) {
   ensureTagChipStyle()
   const listed = shareTableColumns(schema, view, columns)
@@ -141,7 +141,7 @@ export function ShareListTable({
                     schema={schema}
                     chrome={chrome}
                     onOpenLink={onOpenLink}
-                    facets={facets}
+                    tags={tags}
                   />
                 )
                 return (

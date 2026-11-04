@@ -92,15 +92,15 @@ async function loadContents(
   return contents
 }
 
-function shareFacetCatalog(
-  db: { facets?: { list: () => CollectionSchemaPack[] } },
+function shareTagCatalog(
+  db: { tags?: { list: () => CollectionSchemaPack[] } },
   records: DbRecord[],
 ): CollectionSchemaPack[] {
-  const catalog = db.facets?.list() ?? []
+  const catalog = db.tags?.list() ?? []
   if (!catalog.length) return []
   const used = new Set<string>()
   for (const row of records) {
-    for (const id of normalizeSchemaValue(row.facet).tags) used.add(id)
+    for (const id of normalizeSchemaValue(row.tag).tags) used.add(id)
   }
   if (!used.size) return []
   return catalog.filter((tag) => used.has(tag.id))
@@ -113,7 +113,7 @@ function contentIdsFor(share: ShareRecord, records: DbRecord[], opts?: ShareSnap
 }
 
 export async function buildShareSnapshot(
-  db: Pick<Database, 'stat' | 'list' | 'read' | 'content'> & { facets?: { list: () => CollectionSchemaPack[] } },
+  db: Pick<Database, 'stat' | 'list' | 'read' | 'content'> & { tags?: { list: () => CollectionSchemaPack[] } },
   savedViews: SavedViewsStore,
   share: ShareRecord,
   opts?: ShareSnapshotOpts,
@@ -146,7 +146,7 @@ export async function buildShareSnapshot(
       contents,
       assets: [...collectAssetNames(record, content, record.banner)],
       banner: record.banner ?? null,
-      facets: shareFacetCatalog(db, [record]),
+      tags: shareTagCatalog(db, [record]),
     }, share)
   }
   const stored = savedViews.viewsFor(share.collection).find((item) => item.id === share.viewId)
@@ -188,7 +188,7 @@ export async function buildShareSnapshot(
     contents,
     assets: [...collectAssetNames(...records, ...Object.values(contents), banner)],
     banner,
-    facets: shareFacetCatalog(db, records),
+    tags: shareTagCatalog(db, records),
   }, share)
 }
 

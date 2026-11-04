@@ -1,11 +1,11 @@
 import type { CollectionInfo, CollectionListQuery, CollectionSpec, DbRecord } from '@biu/type-file-system'
 import { parseAtomicFields, recordBuiltinValues, REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
-import { FacetStore, slugFacetId } from './facets-store.ts'
+import { TagStore, slugTagId } from './tags-store.ts'
 import { normalizeCollectionPath } from '../paths.ts'
 
-const FACET_FIELDS_EXAMPLE = '[{"key":"类别","type":"string"}]'
-const FACET_FIELDS_DESCRIPTION =
-  '属性定义。db_update / db_create 可传数组或 JSON 字符串，两种形状等价。例 [{"key":"类别","type":"string"}]。同一标签下属性名不能重复。type 必须是 string|number|boolean|select|multi-select|datetime|url|image|attachment|file|action|facet|person|ref|multi-ref（没有 text）。其它表读该属性的列 key 为 facet::<本标签id>::<字段key>，例如 facet::facet::类别。'
+const TAG_FIELDS_EXAMPLE = '[{"key":"类别","type":"string"}]'
+const TAG_FIELDS_DESCRIPTION =
+  '属性定义。db_update / db_create 可传数组或 JSON 字符串，两种形状等价。例 [{"key":"类别","type":"string"}]。同一标签下属性名不能重复。type 必须是 string|number|boolean|select|multi-select|datetime|url|image|attachment|file|action|facet|person|ref|multi-ref（没有 text）。其它表读该属性的列 key 为 tag::<本标签id>::<字段key>，例如 tag::tag::类别。'
 
 export function stampRecordId(collection: string, recordId: string) {
   const table = normalizeCollectionPath(collection).replace(/^\//, '')
@@ -22,11 +22,11 @@ export function parseStampRecordId(id: string) {
   return { collection: `/${table}`, recordId }
 }
 
-export function facetsCollection(
-  store: FacetStore,
+export function tagsCollection(
+  store: TagStore,
   tables: () => Array<Pick<CollectionInfo, 'path' | 'label' | 'id'>> = () => [],
 ): CollectionSpec {
-  const asFacet = (
+  const asTag = (
     id: string,
     label: string,
     fields: unknown[],
@@ -51,8 +51,8 @@ export function facetsCollection(
 
   const fromEntry = (id: string, stampCount: number) => {
     const item = store.entry(id)
-    if (!item) return asFacet(id, id, [], stampCount)
-    return asFacet(
+    if (!item) return asTag(id, id, [], stampCount)
+    return asTag(
       item.pack.id,
       item.pack.label,
       item.pack.fields,
@@ -63,10 +63,10 @@ export function facetsCollection(
     )
   }
 
-  const facetRows = () => {
+  const tagRows = () => {
     const counts = store.stampCounts()
     return store.entries().map((item) =>
-      asFacet(
+      asTag(
         item.pack.id,
         item.pack.label,
         item.pack.fields,
@@ -78,30 +78,30 @@ export function facetsCollection(
     )
   }
 
-  const stampRows = (facetId: string) => {
-    const found = store.collect(facetId)
-    const id = found.facet?.id ?? facetId
+  const stampRows = (tagId: string) => {
+    const found = store.collect(tagId)
+    const id = found.tag?.id ?? tagId
     return found.items.map((item) => ({
       id: stampRecordId(item.collection, item.id),
       title: item.title || item.id,
       table: tableLabel(item.collection),
       tablePath: item.collection,
       sourceId: item.id,
-      facetId: id,
+      tagId: id,
       ...recordBuiltinValues(),
     }))
   }
 
   return {
     id: 'facets',
-    path: '/facets',
+    path: '/tags',
     label: '标签',
     view: {
-      moduleId: 'facets-db',
+      moduleId: 'tags-db',
       route: '/db-facets',
       title: '标签',
       inspector: true,
-      blurb: '工作区全局标签定义，可贴到任意表的记录。列表 db_list /facets；某标签已贴过哪些记录用 filter.facetId。新建 db_create /facets records=[{title}]（id 由标题 slug）。改名或属性 db_update /facets/<id>，fields 传数组或 JSON 字符串均可，例 [{"key":"类别","type":"string"}]；同一标签下属性名不能重复；type 必须是白名单（string 不是 text）。其它表 db_list 读属性列用 facet::<标签id>::<字段key>，例如 facet::facet::类别。正文 notes 用 db_content。把标签贴到记录并填属性：db_update 那条记录的 facet。一个标签 values 可扁平；多个标签 values 必须按标签 id 分子对象。省略 tags 只改属性，不会撕掉其它标签。本表没有 db_action。',
+      blurb: '工作区全局标签定义，可贴到任意表的记录。列表 db_list /tags；某标签已贴过哪些记录用 filter.tagId。新建 db_create /tags records=[{title}]（id 由标题 slug）。改名或属性 db_update /tags/<id>，fields 传数组或 JSON 字符串均可，例 [{"key":"类别","type":"string"}]；同一标签下属性名不能重复；type 必须是白名单（string 不是 text）。其它表 db_list 读属性列用 tag::<标签id>::<字段key>，例如 tag::need::类别。正文 notes 用 db_content。把标签贴到记录并填属性：db_update 那条记录的 tag。一个标签 values 可扁平；多个标签 values 必须按标签 id 分子对象。省略 tags 只改属性，不会撕掉其它标签。本表没有 db_action。',
       order: 31,
       icon: 'tag',
     },
@@ -120,19 +120,19 @@ export function facetsCollection(
           type: 'string',
           label: '属性',
           writable: true,
-          description: FACET_FIELDS_DESCRIPTION,
-          example: FACET_FIELDS_EXAMPLE,
+          description: TAG_FIELDS_DESCRIPTION,
+          example: TAG_FIELDS_EXAMPLE,
         },
         notes: { type: 'file', label: '正文', writable: true },
         table: { type: 'string', label: '来源表', computed: true },
         tablePath: { type: 'string', label: '表路径', computed: true },
         sourceId: { type: 'string', label: '记录', computed: true },
-        facetId: { type: 'string', label: '标签', computed: true },
+        tagId: { type: 'string', label: '标签', computed: true },
       },
     },
     list: (query?: CollectionListQuery) => {
-      const facetFilter = String(query?.filter?.facetId ?? '').trim()
-      let listed = facetFilter ? stampRows(facetFilter) : facetRows()
+      const tagFilter = String(query?.filter?.tagId ?? '').trim()
+      let listed = tagFilter ? stampRows(tagFilter) : tagRows()
       if (query?.ids?.length) {
         const want = new Set(query.ids)
         listed = listed.filter((row) => want.has(row.id))
@@ -153,14 +153,14 @@ export function facetsCollection(
         return null
       }
       const pack = store.get(id)
-      if (!pack || store.isDeleted('/facets', pack.id)) return null
+      if (!pack || store.isDeleted('/tags', pack.id)) return null
       return fromEntry(pack.id, store.stampCounts()[pack.id] ?? 0)
     },
     create: (rows) =>
       rows.map((fields = {}) => {
         const title = String(fields.title ?? '').trim() || '未命名标签'
-        const used = new Set([...store.list().map((facet) => facet.id), ...store.deletedIds('/facets')])
-        const id = slugFacetId(title, used)
+        const used = new Set([...store.list().map((facet) => facet.id), ...store.deletedIds('/tags')])
+        const id = slugTagId(title, used)
         const pack = store.upsert({ id, label: title, fields: parseAtomicFields(fields.fields) }, fields.notes != null ? String(fields.notes) : '')
         return fromEntry(pack.id, 0)
       }),

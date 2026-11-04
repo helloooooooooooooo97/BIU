@@ -6,10 +6,10 @@ test('normalizeSessionConfig folds legacy tags into facet and drops tags', () =>
   const next = normalizeSessionConfig({
     title: 'A',
     tags: ['host-ui', 'bug', 'host-ui'],
-    facet: { tags: ['host-ui'], values: { 'host-ui': { n: 1 } } },
+    tag: { tags: ['host-ui'], values: { 'host-ui': { n: 1 } } },
   })
   assert.equal(next && 'tags' in next, false)
-  assert.deepEqual(next?.facet, { tags: ['host-ui', 'bug'], values: { 'host-ui': { n: 1 } } })
+  assert.deepEqual(next?.tag, { tags: ['host-ui', 'bug'], values: { 'host-ui': { n: 1 } } })
 })
 
 test('normalizeSessionConfig keeps skipLlmImages', () => {
@@ -32,5 +32,5 @@ test('normalizeSessionConfig keeps omitImageSeqs and empty patch clears them', (
 test('mergeSessionConfig still accepts tags patches as 标签 ids', () => {
   const next = mergeSessionConfig({ pinned: true }, { tags: ['lab'] } as never)
   assert.equal(next && 'tags' in next, false)
-  assert.deepEqual(next?.facet, { tags: ['lab'], values: {} })
+  assert.deepEqual(next?.tag, { tags: ['lab'], values: {} })
 })

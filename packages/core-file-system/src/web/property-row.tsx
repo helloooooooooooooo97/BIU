@@ -51,7 +51,7 @@ export function PropertyRow({
     </span>
   )
   const value = <span className="fsdb-proprow-v">{children}</span>
-  const cls = `${table ? 'fsdb-prop-tr' : 'fsdb-proprow'}${stacked ? ' is-stack' : ''}${collapsible ? ' is-facet-fold' : ''}${expanded ? ' is-open' : ''}`
+  const cls = `${table ? 'fsdb-prop-tr' : 'fsdb-proprow'}${stacked ? ' is-stack' : ''}${collapsible ? ' is-tag-fold' : ''}${expanded ? ' is-open' : ''}`
   if (table) {
     return (
       <tr className={cls} {...pick}>

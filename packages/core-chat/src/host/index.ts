@@ -1091,14 +1091,14 @@ export const inject = ['http', 'hub', 'agents', 'sessions', 'systemPrompt', 'too
 function databaseOf(ctx: Context) {
   return ctx.get('database') as
     | {
-        facets: { isDeleted: (collection: string, id: string) => boolean; deletedIds: (collection: string) => Set<string> }
+        tags: { isDeleted: (collection: string, id: string) => boolean; deletedIds: (collection: string) => Set<string> }
         remove: (path: string, query: { ids: string[] }) => Promise<unknown>
       }
     | undefined
 }
 
 function liveSessionItems<T extends { id: string }>(ctx: Context, items: T[]) {
-  const hidden = databaseOf(ctx)?.facets.deletedIds('/agents')
+  const hidden = databaseOf(ctx)?.tags.deletedIds('/agents')
   if (!hidden?.size) return items
   return items.filter((item) => !hidden.has(item.id))
 }
@@ -1112,7 +1112,7 @@ declare module 'cordis' {
 export async function openSessionHttpPayload(ctx: Context, id: string, limitTurns: number) {
   const record = await ctx.sessions.get(id)
   if (!record || !ctx.sessions.inWorkspace(id)) return { status: 404 as const, body: { error: 'unknown session' } }
-  if (databaseOf(ctx)?.facets.isDeleted('/agents', record.id)) {
+  if (databaseOf(ctx)?.tags.isDeleted('/agents', record.id)) {
     return { status: 404 as const, body: { error: 'unknown session' } }
   }
   const window = sliceTailTurns(record.events, limitTurns)
@@ -1437,7 +1437,8 @@ export function apply(ctx: Context) {
         systemPrompt?: string | null
         agentMode?: AgentToolMode
         extraTools?: string[]
-        facet?: SessionConfig['facet']
+        tag?: SessionConfig['tag']
+        facet?: SessionConfig['tag']
         tags?: string[]
         pinned?: boolean
         autoCompactInputTokens?: number | null
@@ -1453,8 +1454,10 @@ export function apply(ctx: Context) {
       }
       if (isAgentToolMode(payload.agentMode)) patch.agentMode = payload.agentMode
       if (Array.isArray(payload.extraTools)) patch.extraTools = payload.extraTools.map((name) => String(name))
-      if (payload.facet && typeof payload.facet === 'object' && !Array.isArray(payload.facet)) {
-        patch.facet = payload.facet as SessionConfig['facet']
+      if (payload.tag && typeof payload.tag === 'object' && !Array.isArray(payload.tag)) {
+        patch.tag = payload.tag as SessionConfig['tag']
+      } else if (payload.facet && typeof payload.facet === 'object' && !Array.isArray(payload.facet)) {
+        patch.tag = payload.facet as SessionConfig['tag']
       }
       if (Array.isArray(payload.tags)) patch.tags = payload.tags.map((name) => String(name))
       if (typeof payload.pinned === 'boolean') patch.pinned = payload.pinned
@@ -1499,7 +1502,7 @@ export function apply(ctx: Context) {
         busy: ctx.agents.isBusy(item.id),
         ...(item.project ? { project: item.project } : {}),
         ...(item.mascot ? { mascot: item.mascot } : {}),
-        ...(item.config?.facet ? { facet: item.config.facet } : {}),
+        ...(item.config?.tag ? { tag: item.config.tag } : {}),
         pinned: Boolean(item.config?.pinned),
         ...(item.config?.inspector ? { inspector: item.config.inspector } : {}),
         ...(item.config?.goal ? { goal: item.config.goal } : {}),
@@ -1762,7 +1765,7 @@ export function apply(ctx: Context) {
     const record = await visibleSession(id)
     if (!record) return route.send(404, { error: 'unknown session' })
     const db = databaseOf(ctx)
-    if (db?.facets.isDeleted('/agents', id)) return route.send(404, { error: 'unknown session' })
+    if (db?.tags.isDeleted('/agents', id)) return route.send(404, { error: 'unknown session' })
     ctx.agents.get(id)?.dispose()
     if (db?.remove) {
       await db.remove('/agents', { ids: [id] })

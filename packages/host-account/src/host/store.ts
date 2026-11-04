@@ -691,7 +691,7 @@ export class CollabStore {
         '/pages': 'pages',
         '/tasks': 'tasks',
         '/agents': 'agents',
-        '/facets': 'facets',
+        '/tags': 'tags',
       }
       for (const [collection, table] of Object.entries(direct)) {
         if (!tables.some((item) => item.name === table)) continue
@@ -727,10 +727,10 @@ export class CollabStore {
           if (record.collection === '/pages') stmt.run(record.record_id)
         }
       }
-      if (tables.some((item) => item.name === 'facet_stamps')) {
-        const stmt = this.db.prepare('DELETE FROM facet_stamps WHERE facet_id = ?')
+      if (tables.some((item) => item.name === 'tag_stamps')) {
+        const stmt = this.db.prepare('DELETE FROM tag_stamps WHERE tag_id = ?')
         for (const record of records) {
-          if (record.collection === '/facets') stmt.run(record.record_id)
+          if (record.collection === '/tags') stmt.run(record.record_id)
         }
       }
       if (tables.some((item) => item.name === 'shares')) {

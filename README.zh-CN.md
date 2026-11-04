@@ -387,11 +387,11 @@ $ db_list /page-blocks filter.plugin=page-algorithm
 
 上面每一节，schema 都由插件代码定义。但有些维度是**运行时长出来的**——一部电影该不该有「导演」，一个任务该不该有「季度评级」，取决于你此刻在做什么，不该要求先写一个插件。
 
-`/facets` 把这件事翻过来：**维度自己也是表里的行。**
+`/tags` 把这件事翻过来：**维度自己也是表里的行。**
 
 ```bash
 db_create /facets records=[{title:"获奖"}]                     # 新维度，零代码
-db_update /facets/获奖 {fields:[{key:"name",type:"string"},    # 维度自带 schema
+db_update /tags/获奖 {fields:[{key:"name",type:"string"},    # 维度自带 schema
                                 {key:"year",type:"number"}]}
 
 db_update /movies/dune {tags:["获奖"], values:{name:"奥斯卡",year:2022}}
@@ -413,7 +413,7 @@ db_update /tasks/build {tags:["获奖"], values:{name:"季度最佳",year:2022}}
 
 > **「无限延展」的确切含义不是 File System 预先知道所有维度，而是它允许维度在运行时作为数据出现。**
 
-标签索引（`facet_stamps`）让「查询所有标记过 X 的记录」无需扫描各业务表：给定一个标签，就能直接返回工作区内所有关联记录。它是派生索引，随时可以重建。
+标签索引（`tag_stamps`）让「查询所有标记过 X 的记录」无需扫描各业务表：给定一个标签，就能直接返回工作区内所有关联记录。它是派生索引，随时可以重建。
 
 ### 二级对象：同样的接口，更小的能力范围
 

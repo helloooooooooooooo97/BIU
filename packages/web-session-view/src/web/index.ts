@@ -102,7 +102,7 @@ export interface SessionListItem {
   busy?: boolean
   project?: { name: string; path?: string; boundAt: number }
   mascot?: { shape: string; color: string; eye?: number }
-  facet?: { tags: string[]; values?: Record<string, Record<string, unknown>> }
+  tag?: { tags: string[]; values?: Record<string, Record<string, unknown>> }
   pinned?: boolean
   /** 云端记录。本机只留缓存，改动走云端接口。 */
   remote?: boolean
@@ -270,7 +270,7 @@ function sessionsEqual(a: SessionListItem[], b: SessionListItem[]): boolean {
       left.mascot?.eye !== right.mascot?.eye ||
       Boolean(left.busy) !== Boolean(right.busy) ||
       Boolean(left.pinned) !== Boolean(right.pinned) ||
-      (left.facet?.tags ?? []).join('\0') !== (right.facet?.tags ?? []).join('\0') ||
+      (left.tag?.tags ?? []).join('\0') !== (right.tag?.tags ?? []).join('\0') ||
       JSON.stringify(left.inspector ?? null) !== JSON.stringify(right.inspector ?? null) ||
       JSON.stringify(left.goal ?? null) !== JSON.stringify(right.goal ?? null)
     ) {
@@ -1419,7 +1419,7 @@ export class SessionViewService extends Service {
             ...parent,
             id: body.id,
             pinned: false,
-            facet: { tags: [], values: {} },
+            tag: { tags: [], values: {} },
             ...(body.mascot ? { mascot: body.mascot } : {}),
             updatedAt: Date.now(),
           },

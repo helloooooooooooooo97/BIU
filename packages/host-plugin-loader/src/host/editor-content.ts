@@ -6,7 +6,7 @@ import { tableColumnNames, tableNames } from './biu-schema.ts'
 const LEGACY_BODY: Record<string, { table: string; id: string; column: string }> = {
   '/pages': { table: 'pages', id: 'id', column: 'notes' },
   '/tasks': { table: 'tasks', id: 'id', column: 'description' },
-  '/facets': { table: 'facets', id: 'id', column: 'notes' },
+  '/tags': { table: 'tags', id: 'id', column: 'notes' },
 }
 
 export function hasEditorContent(db: DatabaseSync) {

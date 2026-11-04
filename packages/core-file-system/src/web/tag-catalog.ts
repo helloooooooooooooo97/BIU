@@ -9,7 +9,8 @@ import {
 import { peekRecord, subscribeCrumbs } from './view-storage.ts'
 import { showRecordInInspector } from './inspector-db-route.ts'
 
-export const FACETS_KEY = 'fsdb.facets'
+export const TAGS_KEY = 'fsdb.tags'
+const LEGACY_TAGS_KEY = 'fsdb.facets'
 
 let memory: CollectionSchemaPack[] | null = null
 let revision = 0
@@ -20,62 +21,62 @@ function emit() {
   for (const fn of listeners) fn()
 }
 
-export function facetCatalogRevision() {
+export function tagCatalogRevision() {
   return revision
 }
 
-export function jumpFacet(id: string, onOpen?: (id: string) => void) {
+export function jumpTag(id: string, onOpen?: (id: string) => void) {
   const key = String(id ?? '').trim()
   if (!key) return
   const resolved =
-    loadFacets().find((tag) => tag.id === key || tag.label === key)?.id ||
-    String(peekRecord('/facets', key)?.id ?? '').trim() ||
+    loadTags().find((tag) => tag.id === key || tag.label === key)?.id ||
+    String(peekRecord('/tags', key)?.id ?? '').trim() ||
     key
   if (onOpen) {
     onOpen(resolved)
     return
   }
-  showRecordInInspector('/facets', resolved)
+  showRecordInInspector('/tags', resolved)
 }
 
-export function facetLabel(id: string) {
+export function tagLabel(id: string) {
   const key = id.trim()
   return (
-    loadFacets().find((tag) => tag.id === key)?.label?.trim() ||
-    String(peekRecord('/facets', key)?.title ?? '').trim() ||
+    loadTags().find((tag) => tag.id === key)?.label?.trim() ||
+    String(peekRecord('/tags', key)?.title ?? '').trim() ||
     key
   )
 }
 
-export function facetEmoji(id: string) {
-  return peekRecord('/facets', id)?.emoji?.trim() ?? ''
+export function tagEmoji(id: string) {
+  return peekRecord('/tags', id)?.emoji?.trim() ?? ''
 }
 
-export function subscribeFacetChrome(fn: () => void) {
-  const stopFacets = subscribeFacets(undefined, fn)
+export function subscribeTagChrome(fn: () => void) {
+  const stopTags = subscribeTags(undefined, fn)
   const stopCrumbs = subscribeCrumbs(fn)
   return () => {
-    stopFacets()
+    stopTags()
     stopCrumbs()
   }
 }
 
-function parseFacets(raw: unknown): CollectionSchemaPack[] {
+function parseTags(raw: unknown): CollectionSchemaPack[] {
   if (!Array.isArray(raw)) return []
   return raw.map((item) => normalizeSchemaPack(item)).filter((item): item is CollectionSchemaPack => Boolean(item))
 }
 
-export function subscribeFacets(_collectionPath: string | undefined, fn: () => void) {
+export function subscribeTags(_collectionPath: string | undefined, fn: () => void) {
   listeners.add(fn)
   return () => {
     listeners.delete(fn)
   }
 }
 
-export function loadFacets(_collectionPath?: string): CollectionSchemaPack[] {
+export function loadTags(_collectionPath?: string): CollectionSchemaPack[] {
   if (memory) return memory
   try {
-    memory = parseFacets(JSON.parse(localStorage.getItem(FACETS_KEY) ?? '[]'))
+    memory = parseTags(JSON.parse(localStorage.getItem(TAGS_KEY) ?? localStorage.getItem(LEGACY_TAGS_KEY) ?? '[]'))
     return memory
   } catch {
     memory = []
@@ -83,10 +84,15 @@ export function loadFacets(_collectionPath?: string): CollectionSchemaPack[] {
   }
 }
 
-function adoptFacets(next: CollectionSchemaPack[]) {
+function adoptTags(next: CollectionSchemaPack[]) {
   memory = next
   try {
-    localStorage.setItem(FACETS_KEY, JSON.stringify(next))
+    localStorage.setItem(TAGS_KEY, JSON.stringify(next))
+    try {
+      localStorage.removeItem(LEGACY_TAGS_KEY)
+    } catch {
+      /* ignore */
+    }
   } catch {
     /* ignore */
   }
@@ -95,10 +101,11 @@ function adoptFacets(next: CollectionSchemaPack[]) {
 
 async function serverFacets(): Promise<CollectionSchemaPack[] | null> {
   try {
-    const res = await fetch('/api/db/facets')
-    const body = (await res.json()) as { facets?: unknown[] }
-    if (!res.ok || !Array.isArray(body.facets)) return null
-    return parseFacets(body.facets)
+    const res = await fetch('/api/db/tags')
+    const body = (await res.json()) as { tags?: unknown[]; facets?: unknown[] }
+    const listed = body.tags ?? body.facets
+    if (!res.ok || !Array.isArray(listed)) return null
+    return parseTags(listed)
   } catch {
     return null
   }
@@ -110,69 +117,70 @@ function mergeFacetCatalog(base: CollectionSchemaPack[], incoming: CollectionSch
   return [...byId.values()]
 }
 
-export async function persistFacets(facets: CollectionSchemaPack[], _collectionPath?: string) {
-  const incoming = parseFacets(facets)
+export async function persistTags(facets: CollectionSchemaPack[], _collectionPath?: string) {
+  const incoming = parseTags(facets)
   const remote = await serverFacets()
-  const next = parseFacets(remote ? mergeFacetCatalog(remote, incoming) : incoming)
-  const res = await fetch('/api/db/facets', {
+  const next = parseTags(remote ? mergeFacetCatalog(remote, incoming) : incoming)
+  const res = await fetch('/api/db/tags', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ facets: next }),
+    body: JSON.stringify({ tags: next }),
   })
-  if (!res.ok) throw new Error(`facets persist failed: ${res.status}`)
-  adoptFacets(next)
+  if (!res.ok) throw new Error(`tags persist failed: ${res.status}`)
+  adoptTags(next)
 }
 
-export async function createFacet(title: string): Promise<CollectionSchemaPack> {
+export async function createTag(title: string): Promise<CollectionSchemaPack> {
   const name = title.trim() || '未命名标签'
   const res = await fetch('/api/db/create', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ path: '/facets', records: [{ title: name }] }),
+    body: JSON.stringify({ path: '/tags', records: [{ title: name }] }),
   })
   const body = (await res.json().catch(() => ({}))) as {
     items?: Array<{ value?: { id?: string; title?: string; fields?: unknown } }>
     error?: string
   }
-  if (!res.ok) throw new Error(body.error || `facet create failed: ${res.status}`)
+  if (!res.ok) throw new Error(body.error || `tag create failed: ${res.status}`)
   const value = body.items?.[0]?.value
   const id = String(value?.id ?? '').trim()
-  if (!id) throw new Error('facet create failed: missing id')
+  if (!id) throw new Error('tag create failed: missing id')
   const pack = normalizeSchemaPack({
     id,
     label: String(value?.title ?? name).trim() || name,
     fields: value?.fields ?? [],
   })
-  if (!pack) throw new Error('facet create failed: invalid pack')
-  adoptFacets([...loadFacets().filter((tag) => tag.id !== pack.id), pack])
+  if (!pack) throw new Error('tag create failed: invalid pack')
+  adoptTags([...loadTags().filter((tag) => tag.id !== pack.id), pack])
   return pack
 }
 
-export async function pullFacets(_collectionPath?: string) {
+export async function pullTags(_collectionPath?: string) {
   try {
-    const res = await fetch('/api/db/facets')
-    const body = (await res.json()) as { facets?: unknown[] }
-    if (!res.ok || !Array.isArray(body.facets)) return loadFacets()
-    const facets = parseFacets(body.facets)
+    const res = await fetch('/api/db/tags')
+    const body = (await res.json()) as { tags?: unknown[]; facets?: unknown[] }
+    const listed = body.tags ?? body.facets
+    if (!res.ok || !Array.isArray(listed)) return loadTags()
+    const facets = parseTags(listed)
     const prev = JSON.stringify(memory ?? [])
     const next = JSON.stringify(facets)
-    if (prev !== next) adoptFacets(facets)
+    if (prev !== next) adoptTags(facets)
     else memory = facets
     return facets
   } catch {
     /* ignore */
   }
-  return loadFacets()
+  return loadTags()
 }
 
-export function slugFacetId(label: string, used: Set<string>) {
+export function slugTagId(label: string, used: Set<string>) {
   const base =
     label
       .trim()
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '')
-      .slice(0, 24) || 'facet'
+      .slice(0, 24) || 'tag'
   let id = /^[a-z]/.test(base) ? base : `f-${base}`
   let n = 2
   while (used.has(id) || !/^[a-z][a-z0-9-]{0,31}$/.test(id)) {
@@ -202,7 +210,7 @@ export function fieldKeyFromLabel(_label: string, used: Set<string>) {
   return randomFacetFieldKey(used)
 }
 
-export function facetFieldLabelOk(label: string, usedLabels: Iterable<string> = []) {
+export function tagFieldLabelOk(label: string, usedLabels: Iterable<string> = []) {
   const name = label.trim()
   if (!name) return false
   if (isReservedSchemaFieldKey(name) || isReservedSchemaFieldLabel(name)) return false
@@ -210,11 +218,11 @@ export function facetFieldLabelOk(label: string, usedLabels: Iterable<string> = 
   return !taken.has(name.toLowerCase())
 }
 
-export function registerFacetFieldKey(
+export function registerTagFieldKey(
   label: string,
   used: { keys?: Iterable<string>; labels?: Iterable<string> } = {},
 ): string | null {
-  if (!facetFieldLabelOk(label, used.labels ?? [])) return null
+  if (!tagFieldLabelOk(label, used.labels ?? [])) return null
   const usedKeys = new Set(used.keys ?? [])
   const key = randomFacetFieldKey(usedKeys)
   if (usedKeys.has(key)) return null

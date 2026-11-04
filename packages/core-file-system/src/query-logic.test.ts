@@ -150,7 +150,7 @@ const pagesSchema = {
     title: { type: 'string' as const, writable: true },
     status: { type: 'select' as const, writable: true },
     tags: { type: 'multi-select' as const, writable: true },
-    facet: { type: 'facet' as const, writable: true },
+    tag: { type: 'tag' as const, writable: true },
     createdBy: { type: 'person' as const, writable: false },
   },
 }
@@ -176,7 +176,7 @@ test('seedRecordFromViewFilters skips scope / neq and unknown tag locks', () => 
   ]
   const seed = seedRecordFromViewFilters({ $scope: 'workspace', tag: 'bug' }, tree, pagesSchema)
   assert.equal('$scope' in seed, false)
-  assert.equal('tag' in seed, false)
+  assert.deepEqual(seed.tag, { tags: ['bug'] })
   assert.equal('status' in seed, false)
   assert.deepEqual(seed.tags, ['bug'])
 })
@@ -185,20 +185,20 @@ test('seedRecordFromViewFilters takes the first OR branch and writes facet tags'
   const tree = emptyFilterGroup()
   tree.combinator = 'or'
   tree.children = [
-    { kind: 'rule', id: 'a', field: 'facet', op: 'eq', value: 'dp' },
+    { kind: 'rule', id: 'a', field: 'tag', op: 'eq', value: 'dp' },
     { kind: 'rule', id: 'b', field: 'status', op: 'eq', value: 'open' },
   ]
   const seed = seedRecordFromViewFilters({}, tree, pagesSchema)
-  assert.deepEqual(seed.facet, { tags: ['dp'] })
+  assert.deepEqual(seed.tag, { tags: ['dp'] })
   assert.equal('status' in seed, false)
 })
 
 test('filter and sort read flattened 标签 pack properties', () => {
-  const field = 'facet::movie::导演'
+  const field = 'tag::movie::导演'
   const rows = [
-    { id: '2', facet: { tags: ['movie'], values: { movie: { 导演: '乙' } } } },
-    { id: '1', facet: { tags: ['movie'], values: { movie: { 导演: '甲' } } } },
-    { id: '3', facet: { tags: ['movie'], values: { movie: { 导演: '甲' } } } },
+    { id: '2', tag: { tags: ['movie'], values: { movie: { 导演: '乙' } } } },
+    { id: '1', tag: { tags: ['movie'], values: { movie: { 导演: '甲' } } } },
+    { id: '3', tag: { tags: ['movie'], values: { movie: { 导演: '甲' } } } },
   ]
   const packs = [{ id: 'movie', label: '电影', fields: [{ key: '导演', type: 'string' as const, label: '导演' }] }]
   const tree = emptyFilterGroup()

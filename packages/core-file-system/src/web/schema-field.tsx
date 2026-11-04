@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   ATOMIC_FIELD_TYPES,
   normalizeSchemaValue,
@@ -12,11 +12,10 @@ import {
 } from '@biu/type-file-system'
 import { ArrowUturnLeftIcon, ChevronDownIcon, PlusIcon, TagIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import { TagChip, TagChips, tagTone, HeadlessPopover } from '@biu/biu-ui'
-import { CellMulti } from '@biu/database-ui'
 import { DefaultCell, FieldGlyph } from './fsdb-cells.tsx'
 import { FieldValuePop } from './field-value-pop.tsx'
 import { inferPackFieldType, orphanPackEntries } from './fields.ts'
-import { createFacet, facetFieldLabelOk, facetLabel, jumpFacet, loadFacets, persistFacets, registerFacetFieldKey, subscribeFacets } from './facet-catalog.ts'
+import { createTag, tagFieldLabelOk, tagLabel, jumpTag, loadTags, persistTags, registerTagFieldKey, subscribeTags } from './tag-catalog.ts'
 import { peekRecord, subscribeCrumbs } from './view-storage.ts'
 
 const TYPE_LABEL: Partial<Record<FieldType, string>> = {
@@ -31,7 +30,7 @@ const TYPE_LABEL: Partial<Record<FieldType, string>> = {
   attachment: '附件',
   file: '正文',
   action: '动作',
-  facet: '标签',
+  tag: '标签',
   person: '人物',
   ref: '引用',
   'multi-ref': '多引用',
@@ -39,20 +38,20 @@ const TYPE_LABEL: Partial<Record<FieldType, string>> = {
 
 export const schemaTagTone = tagTone
 
-export function facetChipIcon(id: string) {
-  const emoji = peekRecord('/facets', id)?.emoji?.trim()
+export function tagChipIcon(id: string) {
+  const emoji = peekRecord('/tags', id)?.emoji?.trim()
   if (emoji) return <span className="fsdb-record-emoji">{emoji}</span>
   return <TagIcon aria-hidden className="size-3.5" />
 }
 
-export function facetPropertyCount(tag: { fields?: Array<{ deleted?: boolean }> } | undefined) {
+export function tagPropertyCount(tag: { fields?: Array<{ deleted?: boolean }> } | undefined) {
   return (tag?.fields ?? []).filter((field) => !field.deleted).length
 }
 
-export function facetTagLabel(tag: { id?: string; label?: string; fields?: Array<{ deleted?: boolean }> } | undefined, fallback = '') {
-  const name = String(tag?.label || facetLabel(fallback || tag?.id || '') || fallback || tag?.id || '').trim()
+export function tagChipLabel(tag: { id?: string; label?: string; fields?: Array<{ deleted?: boolean }> } | undefined, fallback = '') {
+  const name = String(tag?.label || tagLabel(fallback || tag?.id || '') || fallback || tag?.id || '').trim()
   if (!name) return fallback
-  return `${name} ${facetPropertyCount(tag)}`
+  return `${name} ${tagPropertyCount(tag)}`
 }
 
 export function SchemaChip({
@@ -61,14 +60,16 @@ export function SchemaChip({
   onRemove,
   onClick,
   active,
+  icon,
 }: {
   id: string
   label: string
   onRemove?: () => void
   onClick?: () => void
   active?: boolean
+  icon?: ReactNode
 }) {
-  return <TagChip id={id} label={label} icon={facetChipIcon(id)} onRemove={onRemove} onClick={onClick} active={active} />
+  return <TagChip id={id} label={label} icon={icon ?? tagChipIcon(id)} onRemove={onRemove} onClick={onClick} active={active} />
 }
 
 export function SchemaChips({
@@ -86,7 +87,7 @@ export function SchemaChips({
   return (
     <TagChips>
       {parsed.tags.map((id) => (
-        <SchemaChip key={id} id={id} label={facetTagLabel(byId.get(id), id)} onClick={() => jumpFacet(id, onOpen)} />
+        <SchemaChip key={id} id={id} label={tagChipLabel(byId.get(id), id)} onClick={() => jumpTag(id, onOpen)} />
       ))}
     </TagChips>
   )
@@ -283,13 +284,13 @@ export function AddProperty({ onAdd }: { onAdd: (label: string, type: AtomicFiel
   )
 }
 
-export function FacetPackEditor({ facetId }: { facetId: string }) {
-  const [catalog, setCatalog] = useState(() => loadFacets())
-  useEffect(() => subscribeFacets(undefined, () => setCatalog(loadFacets())), [])
-  const tag = catalog.find((item) => item.id === facetId)
+export function TagPackEditor({ tagId }: { tagId: string }) {
+  const [catalog, setCatalog] = useState(() => loadTags())
+  useEffect(() => subscribeTags(undefined, () => setCatalog(loadTags())), [])
+  const tag = catalog.find((item) => item.id === tagId)
 
   function saveCatalog(next: CollectionSchemaPack[]) {
-    void persistFacets(next)
+    void persistTags(next)
   }
 
   if (!tag) return <p className="fsdb-muted">这条标签已不在目录里。</p>
@@ -298,7 +299,7 @@ export function FacetPackEditor({ facetId }: { facetId: string }) {
   const retired = pack.fields.filter((field) => field.deleted)
 
   function addField(name: string, type: AtomicFieldType) {
-    const key = registerFacetFieldKey(name, {
+    const key = registerTagFieldKey(name, {
       keys: pack.fields.map((item) => item.key),
       labels: pack.fields.map((item) => item.label ?? item.key),
     })
@@ -310,7 +311,7 @@ export function FacetPackEditor({ facetId }: { facetId: string }) {
 
   function renameField(from: string, name: string) {
     const others = pack.fields.filter((item) => item.key !== from)
-    if (!facetFieldLabelOk(name, others.map((item) => item.label ?? item.key))) return false
+    if (!tagFieldLabelOk(name, others.map((item) => item.label ?? item.key))) return false
     const label = name.trim()
     saveCatalog(
       catalog.map((item) =>
@@ -359,11 +360,16 @@ export function FacetPackEditor({ facetId }: { facetId: string }) {
   }
 
   return (
-    <div className="fsdb-schema" data-testid="fsdb-facet-fields">
+    <div className="fsdb-schema" data-testid="fsdb-tag-fields">
       {live.length ? (
         <TagChips>
           {live.map((field) => (
-            <SchemaChip key={field.key} id={field.key} label={field.label ?? field.key} />
+            <SchemaChip
+              key={field.key}
+              id={field.key}
+              label={field.label ?? field.key}
+              icon={<FieldGlyph kind={field.type} />}
+            />
           ))}
         </TagChips>
       ) : (
@@ -414,7 +420,6 @@ export function SchemaFieldEditor({
   writable,
   onChange,
   compact,
-  autoOpen = false,
 }: {
   collectionPath: string
   record: DbRecord
@@ -423,27 +428,26 @@ export function SchemaFieldEditor({
   onChange: (next: SchemaFieldValue) => void
   /** Table cells: chips only — pack fields flatten as their own columns. */
   compact?: boolean
-  autoOpen?: boolean
 }) {
   const parsed = normalizeSchemaValue(value)
   const liveRef = useRef(parsed)
   useEffect(() => {
     liveRef.current = normalizeSchemaValue(value)
   }, [record.id])
-  const [catalog, setCatalog] = useState(() => loadFacets())
+  const [catalog, setCatalog] = useState(() => loadTags())
   const [, setFacetMarks] = useState(0)
 
-  useEffect(() => subscribeFacets(undefined, () => setCatalog(loadFacets())), [])
+  useEffect(() => subscribeTags(undefined, () => setCatalog(loadTags())), [])
   useEffect(() => subscribeCrumbs(() => setFacetMarks((n) => n + 1)), [])
 
   const selected = useMemo(
     () =>
-      parsed.tags.map((id) => catalog.find((tag) => tag.id === id) ?? { id, label: facetLabel(id), fields: [] }),
+      parsed.tags.map((id) => catalog.find((tag) => tag.id === id) ?? { id, label: tagLabel(id), fields: [] }),
     [catalog, parsed.tags],
   )
 
   function saveCatalog(next: CollectionSchemaPack[]) {
-    void persistFacets(next)
+    void persistTags(next)
   }
 
   function patchValue(next: SchemaFieldValue) {
@@ -479,7 +483,7 @@ export function SchemaFieldEditor({
     }
     void (async () => {
       for (const item of pending) {
-        const created = await createFacet(item)
+        const created = await createTag(item)
         packs = [...packs, created]
         used.add(created.id)
         resolved.push(created.id)
@@ -489,7 +493,7 @@ export function SchemaFieldEditor({
   }
 
   function addField(tag: CollectionSchemaPack, name: string, type: AtomicFieldType) {
-    const key = registerFacetFieldKey(name, {
+    const key = registerTagFieldKey(name, {
       keys: tag.fields.map((item) => item.key),
       labels: tag.fields.map((item) => item.label ?? item.key),
     })
@@ -501,7 +505,7 @@ export function SchemaFieldEditor({
 
   function renameField(tag: CollectionSchemaPack, from: string, name: string) {
     const others = tag.fields.filter((item) => item.key !== from)
-    if (!facetFieldLabelOk(name, others.map((item) => item.label ?? item.key))) return false
+    if (!tagFieldLabelOk(name, others.map((item) => item.label ?? item.key))) return false
     const label = name.trim()
     saveCatalog(
       catalog.map((item) =>
@@ -562,32 +566,22 @@ export function SchemaFieldEditor({
     saveCatalog([...catalog, { id: tag.id, label: tag.label, fields: [field] }])
   }
 
+  const tagPop = (
+    <FieldValuePop
+      record={record}
+      fieldKey="tag"
+      field={{ type: 'tag', writable: true }}
+      value={value}
+      collectionPath={_collectionPath}
+      onSubmit={(next) => onChange(normalizeSchemaValue(next))}
+    />
+  )
   if (!writable) return <SchemaChips value={value} tags={catalog} />
-  if (!parsed.tags.length) {
-    return (
-      <FieldValuePop
-        record={record}
-        fieldKey="facet"
-        field={{ type: 'facet', writable: true }}
-        value={value}
-        collectionPath={_collectionPath}
-        onSubmit={(next) => onChange(normalizeSchemaValue(next))}
-      />
-    )
-  }
+  if (!parsed.tags.length) return tagPop
 
   return (
     <div className="fsdb-schema" data-testid="fsdb-schema">
-      <CellMulti
-        values={parsed.tags}
-        options={catalog.map((tag) => ({ value: tag.id, label: facetTagLabel(tag), icon: facetChipIcon(tag.id) }))}
-        onChange={applyTags}
-        onChipClick={(id) => jumpFacet(id)}
-        multiple
-        autoOpen={autoOpen}
-        removable={compact === true}
-        placeholder="添加标签"
-      />
+      {tagPop}
       {compact
         ? null
         : selected.map((tag) => {
@@ -598,8 +592,8 @@ export function SchemaFieldEditor({
             <div className="fsdb-schema-pack-head">
               <SchemaChip
                 id={tag.id}
-                label={facetTagLabel(tag)}
-                onClick={() => jumpFacet(tag.id)}
+                label={tagChipLabel(tag)}
+                onClick={() => jumpTag(tag.id)}
                 onRemove={() => applyTags(parsed.tags.filter((id) => id !== tag.id))}
               />
             </div>
