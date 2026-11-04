@@ -651,6 +651,8 @@ export type CollectionActionInfo = {
   allowMissing?: boolean
   /** 此动作要求的统一授权能力。缺省按修改记录处理。 */
   requiredAction?: CollectionPermissionAction
+  /** 全部数据把各表动作摊平后，用来认这颗按钮属于哪张表。同一 id 在不同表含义不同。 */
+  collection?: string
 }
 
 export function actionVisibleToUser(action: { for?: CollectionActionAudience }) {

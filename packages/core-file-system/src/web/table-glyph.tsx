@@ -20,6 +20,7 @@ export function idleTableIconKind(icon?: string) {
   if (name === 'cursor' || name === 'cursor-arrow-rays' || name === 'chat-bubble' || name === 'chat-bubble-left-right') return 'cursor'
   if (name === 'academic-cap' || name === 'skill' || name === 'skills') return 'skill'
   if (name === 'document' || name === 'document-text' || name === 'page') return 'page'
+  if (name === 'tag' || name === 'rectangle-stack' || name === 'collection') return 'tag'
   return 'table'
 }
 

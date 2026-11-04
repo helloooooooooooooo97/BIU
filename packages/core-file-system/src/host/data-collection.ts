@@ -1,7 +1,8 @@
 import type { CollectionSpec, CollectionInfo, DbRecord } from '@biu/type-file-system'
 import { actionVisibleToUser, REQUIRED_RECORD_FIELDS, recordBuiltinValues } from '@biu/type-file-system'
 import { parseStampRecordId, stampRecordId } from './tags-collection.ts'
-import { DATA_COLLECTION_PATH, isIndexCollection, isSystemCollection } from '../web/database-path.ts'
+import { normalizeCollectionPath } from '../paths.ts'
+import { DATA_COLLECTION_PATH, TAGS_COLLECTION_PATH, isIndexCollection, isSystemCollection } from '../web/database-path.ts'
 import { matchActionWhen } from '../web/fields.ts'
 
 export function overviewActionIds(spec: Pick<CollectionSpec, 'actions'>, row: DbRecord): string[] {
@@ -16,7 +17,8 @@ export function overviewActionIds(spec: Pick<CollectionSpec, 'actions'>, row: Db
 
 export function isDataOverviewSource(path: string) {
   if (path === DATA_COLLECTION_PATH) return false
-  if (isIndexCollection(path) || isSystemCollection(path)) return false
+  if (isSystemCollection(path)) return false
+  if (isIndexCollection(path) && normalizeCollectionPath(path) !== TAGS_COLLECTION_PATH) return false
   return true
 }
 

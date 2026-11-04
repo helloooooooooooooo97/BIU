@@ -22,7 +22,11 @@ function SourceActions({
   run: (action: CollectionActionInfo) => void
 }) {
   const allowed = new Set((Array.isArray(record.actionIds) ? record.actionIds : []).map(String))
-  const shown = actions.filter((action) => allowed.has(action.id))
+  const source = String(record.tablePath ?? '')
+  const shown = actions.filter((action) => {
+    if (!allowed.has(action.id)) return false
+    return !action.collection || !source || action.collection === source
+  })
   if (!shown.length) return null
   return (
     <>

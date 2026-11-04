@@ -1018,16 +1018,16 @@ export class DatabaseService extends Service implements Database {
   }
 
   private overviewRowActions(): CollectionActionInfo[] {
-    const seen = new Set<string>()
     const out: CollectionActionInfo[] = []
     for (const source of this.collectionsList()) {
       if (!isDataOverviewSource(source.path)) continue
+      const seen = new Set<string>()
       for (const action of schemaFor(source).actions ?? []) {
         const places = action.placement ?? ['row', 'detail']
         if (!places.includes('row') || !actionVisibleToUser(action)) continue
         if (seen.has(action.id)) continue
         seen.add(action.id)
-        out.push(action)
+        out.push({ ...action, collection: source.path })
       }
     }
     return out

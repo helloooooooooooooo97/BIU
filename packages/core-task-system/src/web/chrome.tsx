@@ -90,6 +90,7 @@ export const tasksChrome: CollectionChrome = {
     {
       id: 'script',
       label: '脚本',
+      place: 'properties',
       badge: (record) => {
         const trigger = record.trigger as { cron?: string; at?: number; on?: string[]; enabled?: boolean } | undefined
         if (!trigger) return undefined
@@ -101,6 +102,7 @@ export const tasksChrome: CollectionChrome = {
     {
       id: 'reports',
       label: '进度汇报',
+      place: 'properties',
       badge: (record) => (Array.isArray(record.reports) && record.reports.length ? record.reports.length : undefined),
       Pane: ReportsPane,
     },

@@ -372,11 +372,12 @@ function RecordTitle({
   const typeIcon = typeof row.tableIcon === 'string' && row.tableIcon.trim() ? row.tableIcon : tableIcon
   if (!toolsLive && !tree) {
     const emoji = recordPreviewEmoji(row)
+    const mascotRow = Boolean(recordPreviewMascot(row)) || row.tablePath === '/agents'
     return (
       <span className="fsdb-title-host" onMouseEnter={armTools}>
-        {emoji ? (
+        {!mascotRow && emoji ? (
           <span className="fsdb-record-emoji">{emoji}</span>
-        ) : typeIcon && typeIcon !== tableIcon ? (
+        ) : (typeIcon && typeIcon !== tableIcon) || mascotRow ? (
           <RecordMark record={row} tableIcon={typeIcon} />
         ) : (
           <span className="fsdb-record-mark is-sm" data-icon={idleTableIconKind(tableIcon)} aria-hidden />

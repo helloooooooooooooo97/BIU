@@ -359,7 +359,10 @@ export function TagPackEditor({ tagId }: { tagId: string }) {
         <div key={field.key} className="fsdb-schema-prop">
           <SchemaPropName name={field.label ?? field.key} kind={field.type} onRename={(next) => renameField(field.key, next)} />
           <div className="fsdb-schema-prop-v">
-            <span className="fsdb-muted">{TYPE_LABEL[field.type]}</span>
+            <span className="fsdb-schema-prop-type">
+              <FieldGlyph kind={field.type} />
+              <span className="fsdb-muted">{TYPE_LABEL[field.type]}</span>
+            </span>
             <button type="button" className="fsdb-schema-prop-del" aria-label={`删除 ${field.label ?? field.key}`} onClick={() => removeField(field.key)}>
               <XMarkIcon aria-hidden className="size-3" />
             </button>

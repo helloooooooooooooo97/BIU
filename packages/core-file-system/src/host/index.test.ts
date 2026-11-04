@@ -10,7 +10,7 @@ import { DatabaseService, apply as applyFileSystem, databaseHttpFailure, listNee
 import { FileSystemAssets } from './assets-store.ts'
 import type { CollectionSpec, DbRecord } from '@biu/type-file-system'
 import { REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
-import { dataCollection } from './data-collection.ts'
+import { dataCollection, isDataOverviewSource } from './data-collection.ts'
 import { tagsCollection } from './tags-collection.ts'
 import { SavedViewsStore, viewsCollection } from './saved-views.ts'
 import { trashCollection } from './trash-collection.ts'
@@ -80,7 +80,7 @@ test('database HTTP failures distinguish missing resources from bad requests', (
   })
 })
 
-test('data overview lists each source record and skips index/system tables', async () => {
+test('data overview lists each source record, includes tags, and skips other index/system tables', async () => {
   const ctx = new Context()
   const db = new DatabaseService(ctx)
   const notes = notesCollection()
@@ -100,7 +100,9 @@ test('data overview lists each source record and skips index/system tables', asy
   assert.ok((listed.schema?.actions ?? []).some((action) => action.id === 'pin'))
   assert.ok(!(listed.schema?.actions ?? []).some((action) => action.id === 'open'))
   assert.deepEqual(listed.items.find((item) => item.id === 'notes::n1')?.actionIds, ['pin'])
-  assert.ok(!listed.items.some((item) => String(item.tablePath) === '/tags'))
+  assert.equal(isDataOverviewSource('/tags'), true)
+  assert.equal(isDataOverviewSource('/page-blocks'), false)
+  assert.equal(isDataOverviewSource('/trash'), false)
 })
 
 test('root lists registered collections; record read/update follows schema', async () => {

@@ -306,11 +306,13 @@ export function RecordDetail({
   )
 
   const [tagOpen, setTagOpen] = useState(false)
+  const [openPanes, setOpenPanes] = useState<Record<string, boolean>>({})
   const [visiblePropertyKeys, setVisiblePropertyKeys] = useState<string[] | null>(null)
   const [outlineOn, setOutlineOn] = useState(headingOutline)
   const visibleColumnsKey = visibleColumns?.join('\0') ?? ''
   useEffect(() => {
     setTagOpen(false)
+    setOpenPanes({})
     setVisiblePropertyKeys(visibleColumnsKey ? visibleColumnsKey.split('\0') : null)
     setOutlineOn(headingOutline)
   }, [selected.id, headingOutline, visibleColumnsKey])
@@ -489,10 +491,28 @@ export function RecordDetail({
                       <div className="fsdb-prop-val is-actions">{actionProperty}</div>
                     </PropertyRow>
                   ) : null}
+                  {chrome?.panes?.filter((pane) => pane.place === 'properties').map((pane) => {
+                    const Pane = pane.Pane
+                    const paneOpen = Boolean(openPanes[pane.id])
+                    return (
+                      <PropertyRow
+                        key={pane.id}
+                        table
+                        collapsible
+                        expanded={paneOpen}
+                        onToggle={() => setOpenPanes((prev) => ({ ...prev, [pane.id]: !prev[pane.id] }))}
+                        field={{ type: 'string', label: pane.label }}
+                        fieldKey={pane.id}
+                      >
+                        <div className="fsdb-prop-val is-pane">
+                          <Pane record={selected} openRecord={onOpenRecord} />
+                        </div>
+                      </PropertyRow>
+                    )
+                  })}
                     </tbody>
                   </table>
                 </div>
-                {renderDetailPanes(chrome?.panes?.filter((pane) => pane.place === 'properties'), selected, onOpenRecord, 'fsdb-detail-prop-panes')}
                 {contentFieldKey(schema) && schema.fields[contentFieldKey(schema)!] ? (() => {
                   const key = contentFieldKey(schema)!
                   const spec = schema.fields[key]!
