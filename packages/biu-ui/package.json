@@ -1,0 +1,45 @@
+{
+  "name": "@biu/biu-ui",
+  "license": "Apache-2.0",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "跨插件共享 UI 零件（Biu UI：不是 Cordis 插件）",
+  "exports": {
+    ".": "./src/index.ts",
+    "./bool-box": "./src/bool-box.tsx",
+    "./button": "./src/button.tsx",
+    "./input": "./src/input.tsx",
+    "./textarea": "./src/textarea.tsx",
+    "./select": "./src/select.tsx",
+    "./label": "./src/label.tsx",
+    "./badge": "./src/badge.tsx",
+    "./calendar": "./src/calendar.tsx",
+    "./image": "./src/image.tsx",
+    "./cn": "./src/cn.ts",
+    "./chat-count": "./src/chat-count.tsx",
+    "./chat-pane": "./src/chat-pane.tsx",
+    "./emoji-board": "./src/emoji-board.tsx",
+    "./headless-dismiss": "./src/headless-dismiss.tsx",
+    "./headless-popover": "./src/headless-popover.tsx",
+    "./overlay-portal": "./src/overlay-portal.ts",
+    "./sidebar-fold": "./src/sidebar-fold.tsx",
+    "./tag-chip": "./src/tag-chip.tsx",
+    "./use-workspace-profile": "./src/use-workspace-profile.ts",
+    "./workspace-profile": "./src/workspace-profile.ts",
+    "./anchor-menu": "./src/anchor-menu.tsx",
+    "./confirm-dialog": "./src/confirm-dialog.tsx",
+    "./outline-nav": "./src/outline-nav.tsx",
+    "./render-boundary": "./src/render-boundary.tsx"
+  },
+  "peerDependencies": {
+    "react": "^19.1.1"
+  },
+  "dependencies": {
+    "@radix-ui/react-dismissable-layer": "^1.1.19",
+    "@radix-ui/react-popover": "^1.1.6",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.3.1"
+  }
+}

@@ -52,7 +52,7 @@ export function formatLiveUiContext(ctx: LiveUiContext | undefined): string {
   if (live.sessionId || live.sessionTitle) {
     const name = live.sessionTitle || '（未命名）'
     const id = live.sessionId ? ` id=${live.sessionId}` : ''
-    lines.push(`- 主会话：${name}${id}`)
+    lines.push(`- 主代理：${name}${id}`)
   }
   if (live.route) lines.push(`- 路由：${live.route}`)
   if (live.inspectorTabLabel || live.inspectorTab) {

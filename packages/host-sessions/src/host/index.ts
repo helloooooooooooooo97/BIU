@@ -399,7 +399,7 @@ export class SessionsService extends Service {
     await this.persist(record)
     this.attachSession(record.id)
     const database = this.ctx.get('database') as { touchActor?: (collection: string, recordId: string) => Promise<void> } | undefined
-    await database?.touchActor?.('/sessions', record.id)
+    await database?.touchActor?.('/agents', record.id)
     return record
   }
 
@@ -717,7 +717,7 @@ export class SessionsService extends Service {
       const allowed = authorization.authorize(actor, 'resource:read', {
         type: 'record',
         workspaceId: actor.workspaceId,
-        collection: '/sessions',
+        collection: '/agents',
         recordId: id,
       }).allowed
       if (allowed) return true
@@ -727,7 +727,7 @@ export class SessionsService extends Service {
     if (!store?.activeWorkspaceId()) return true
     if (this.viewAccess(id, record)) return true
     const membership = store.membership()
-    const key = `/sessions\t${id}`
+    const key = `/agents\t${id}`
     if (membership.mine.has(key)) return this.recordReadable(id)
     if (membership.any.has(key)) return false
     if (membership.strict) return false
@@ -738,7 +738,7 @@ export class SessionsService extends Service {
   private recordReadable(id: string) {
     const store = this.collabStore()
     if (!store || typeof store.canReadRecord !== 'function') return true
-    return store.canReadRecord('/sessions', id)
+    return store.canReadRecord('/agents', id)
   }
 
   /**
@@ -845,7 +845,7 @@ export class SessionsService extends Service {
     const store = this.collabStore()
     const workspaceId = store?.activeWorkspaceId()
     if (!store || !workspaceId) return
-    store.attach(workspaceId, '/sessions', id)
+    store.attach(workspaceId, '/agents', id)
   }
 
   private persistTimers = new Map<string, ReturnType<typeof setTimeout>>()

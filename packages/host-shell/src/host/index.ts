@@ -47,8 +47,8 @@ export function apply(ctx: Context) {
     name: 'bash',
     description:
       hostShellKind() === 'cmd'
-        ? '在沙箱工作区执行命令（当前为 Windows cmd.exe /c）。用 dir/type/del，不要用 ls/cat。图片路径会尽量收录到会话 artifacts。'
-        : '在沙箱工作区执行命令（当前为 POSIX shell）。截图/图片文件会尽量收录到会话 artifacts，并在对话里展示（命令或输出中带图片路径，或工作区内新写入的图片）。',
+        ? '在沙箱工作区执行命令（当前为 Windows cmd.exe /c）。用 dir/type/del，不要用 ls/cat。图片路径会尽量收录到代理 artifacts。'
+        : '在沙箱工作区执行命令（当前为 POSIX shell）。截图/图片文件会尽量收录到代理 artifacts，并在对话里展示（命令或输出中带图片路径，或工作区内新写入的图片）。',
     parameters: {
       type: 'object',
       properties: { command: { type: 'string' } },

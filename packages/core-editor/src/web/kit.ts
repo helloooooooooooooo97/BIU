@@ -6,13 +6,18 @@ import { pageImage } from './page-image.ts'
 import { BlockMath, InlineMath, Mathematics } from '@tiptap/extension-mathematics'
 import Placeholder from '@tiptap/extension-placeholder'
 import { TableKit } from '@tiptap/extension-table'
+import { pageTable } from './page-table.ts'
 import StarterKit from '@tiptap/starter-kit'
 import { Paragraph } from '@tiptap/extension-paragraph'
 import { pageLowlight } from './page-lowlight.ts'
 import { pageTextStyle, pageHighlight, Color } from './color-marks.ts'
 import { headingSkin } from './heading-skin.ts'
 import { pageBlock } from './page-block.ts'
+import { slideExtensions } from './slide.ts'
 import { pageFind } from './find-plugin.ts'
+import { pageBlockIds } from './block-id.ts'
+import { pageFilter } from './page-filter-plugin.ts'
+import { pageOutline } from './page-outline-plugin.ts'
 import { pageAgentEdit } from './agent-edit-plugin.ts'
 import { slashCommand } from './slash.ts'
 import { pageMention } from './mention.ts'
@@ -91,12 +96,12 @@ const pageInlineMath = InlineMath.extend({
       ...parent,
       insertInlineMath:
         (options) =>
-        ({ commands }) => {
-          const latex = options.latex
-          if (!latex) return false
-          const content = { type: this.name, attrs: { latex } }
-          return options.pos != null ? commands.insertContentAt(options.pos, content) : commands.insertContent(content)
-        },
+          ({ commands }) => {
+            const latex = options.latex
+            if (!latex) return false
+            const content = { type: this.name, attrs: { latex } }
+            return options.pos != null ? commands.insertContentAt(options.pos, content) : commands.insertContent(content)
+          },
     }
   },
   addInputRules() {
@@ -141,6 +146,7 @@ const pageCodeBlock = CodeBlockLowlight.extend({
         'code',
         {
           class: language ? `${this.options.languageClassPrefix}${language} hljs` : 'hljs',
+          ...(language ? { 'data-language': language } : {}),
         },
         0,
       ],
@@ -200,6 +206,7 @@ export function pageEditorExtensions() {
       heading: { levels: [1, 2, 3] },
       codeBlock: false,
       paragraph: false,
+      gapcursor: false,
     }),
     pageParagraph,
     pageCodeBlock,
@@ -209,8 +216,12 @@ export function pageEditorExtensions() {
     pageHighlight,
     pageImage,
     TableKit.configure({
-      table: { resizable: true, allowTableNodeSelection: true },
+      table: false,
+      tableCell: {},
+      tableHeader: {},
+      tableRow: {},
     }),
+    pageTable.configure({ resizable: true, allowTableNodeSelection: true }),
     pageMathematics,
     Placeholder.configure({
       placeholder: ({ node }) => {
@@ -222,10 +233,20 @@ export function pageEditorExtensions() {
       includeChildren: false,
     }),
     headingSkin,
+    ...slideExtensions,
     pageBlock,
+    pageBlockIds,
+    pageFilter,
+    pageOutline,
     pageFind,
     pageAgentEdit,
     slashCommand,
     pageMention,
   ]
+}
+
+const EMBED_SKIP = new Set(['pageBlockIds', 'pageFilter', 'pageOutline', 'pageFind', 'pageAgentEdit'])
+
+export function pageEmbedExtensions() {
+  return pageEditorExtensions().filter((ext) => !EMBED_SKIP.has(ext.name))
 }

@@ -1,11 +1,12 @@
 import type { CollectionSchema, CollectionSchemaPack, DbRecord, FieldSpec, FieldType } from '@biu/type-file-system'
-import { asPersonList, isFacetFieldType, normalizeSchemaValue, personKey } from '@biu/type-file-system'
+import { asPersonList, isTagFieldType, normalizeSchemaValue, personKey } from '@biu/type-file-system'
 
-export const FACET_FLAT_PREFIX = 'facet::'
+export const TAG_FLAT_PREFIX = 'tag::'
 
-export function parseFacetFlatColumnKey(key: string): { packId: string; fieldKey: string } | null {
-  if (!key.startsWith(FACET_FLAT_PREFIX)) return null
-  const rest = key.slice(FACET_FLAT_PREFIX.length)
+export function parseTagFlatColumnKey(key: string): { packId: string; fieldKey: string } | null {
+  if (key.startsWith('facet::')) key = `tag::${key.slice('facet::'.length)}`
+  if (!key.startsWith(TAG_FLAT_PREFIX)) return null
+  const rest = key.slice(TAG_FLAT_PREFIX.length)
   const split = rest.indexOf('::')
   if (split <= 0) return null
   const packId = rest.slice(0, split)
@@ -14,8 +15,8 @@ export function parseFacetFlatColumnKey(key: string): { packId: string; fieldKey
   return { packId, fieldKey }
 }
 
-export function readFacetFieldValue(record: DbRecord, field: string, sourceKey = 'facet') {
-  const parsed = parseFacetFlatColumnKey(field)
+export function readTagFieldValue(record: DbRecord, field: string, sourceKey = 'tag') {
+  const parsed = parseTagFlatColumnKey(field)
   if (!parsed) return record[field]
   return normalizeSchemaValue(record[sourceKey]).values[parsed.packId]?.[parsed.fieldKey]
 }
@@ -25,7 +26,7 @@ function specForFilterField(
   schema?: CollectionSchema,
   packs: CollectionSchemaPack[] = [],
 ): FieldSpec | undefined {
-  const parsed = parseFacetFlatColumnKey(fieldKey)
+  const parsed = parseTagFlatColumnKey(fieldKey)
   if (parsed) {
     return packs.find((pack) => pack.id === parsed.packId)?.fields.find((item) => item.key === parsed.fieldKey)
   }
@@ -242,7 +243,7 @@ export function opsForKind(kind: FieldType | string): Array<{ value: FilterOp; l
       { value: 'not_empty', label: '不为空' },
     ]
   }
-  if (kind === 'select' || kind === 'multi-select' || kind === 'facet') {
+  if (kind === 'select' || kind === 'multi-select' || kind === 'tag') {
     return [
       { value: 'eq', label: '是' },
       { value: 'neq', label: '不是' },
@@ -298,7 +299,7 @@ export function matchFilterRule(
   schema?: CollectionSchema,
   packs: CollectionSchemaPack[] = [],
 ) {
-  const actual = readFacetFieldValue(record, rule.field)
+  const actual = readTagFieldValue(record, rule.field)
   const field = specForFilterField(rule.field, schema, packs)
   const want = rule.value
   if (rule.op === 'is_empty') return isEmptyValue(actual)
@@ -313,7 +314,7 @@ export function matchFilterRule(
     if (!span) return false
     return Date.now() - n <= span
   }
-  if (isFacetFieldType(field?.type)) {
+  if (isTagFieldType(field?.type)) {
     const parsed = normalizeSchemaValue(actual)
     const hit = parsed.tags.some((id) => id === want || packs.find((item) => item.id === id)?.label === want)
     if (rule.op === 'eq') return hit
@@ -394,8 +395,8 @@ export function matchListFilterRecord(
 }
 
 export function compareRecords(a: DbRecord, b: DbRecord, field: string, dir: 'asc' | 'desc') {
-  const av = readFacetFieldValue(a, field)
-  const bv = readFacetFieldValue(b, field)
+  const av = readTagFieldValue(a, field)
+  const bv = readTagFieldValue(b, field)
   const an = Number(av)
   const bn = Number(bv)
   const numeric = Number.isFinite(an) && Number.isFinite(bn) && String(av).trim() !== '' && String(bv).trim() !== ''
@@ -423,16 +424,16 @@ export function looksLikeFilterTree(raw: unknown): boolean {
 }
 
 export const VIEW_FILTERS_DESCRIPTION =
-  '扁平 JSON 字符串，各 key 等于该列。例 {"project":"biu","status":"open"}。多选是「包含该值」。AND 多个 key；OR 或 contains/neq 用 filterTree。标签用 facet 字段。'
+  '扁平 JSON 字符串，各 key 等于该列。例 {"project":"biu","status":"open"}。多选是「包含该值」。AND 多个 key；OR 或 contains/neq 用 filterTree。标签用 tag 字段。'
 
 export const VIEW_FILTER_TREE_DESCRIPTION =
-  '筛选树 JSON。group: {kind:"group",combinator:"and"|"or",children}；rule: {kind:"rule",field,op,value}，value 为字符串，id 可省。op: eq|neq|contains|not_contains|is_empty|not_empty|gt|lt|within。标签含 dp：{"kind":"group","combinator":"and","children":[{"kind":"rule","field":"facet","op":"eq","value":"dp"}]}。两个标签任一：combinator or，两条 eq。'
+  '筛选树 JSON。group: {kind:"group",combinator:"and"|"or",children}；rule: {kind:"rule",field,op,value}，value 为字符串，id 可省。op: eq|neq|contains|not_contains|is_empty|not_empty|gt|lt|within。标签含 dp：{"kind":"group","combinator":"and","children":[{"kind":"rule","field":"tag","op":"eq","value":"dp"}]}。两个标签任一：combinator or，两条 eq。'
 
 export const VIEW_SORTS_DESCRIPTION =
   'JSON 数组，按顺序多 key 排序。例 [{"field":"project","dir":"asc"},{"field":"title","dir":"desc"}]。dir 仅 asc|desc。'
 
 export const VIEW_COLUMNS_DESCRIPTION =
-  '列 key 数组，或 JSON 数组字符串。例 ["title","facet","facet::facet::category"]。标签属性列必须写成 facet::<标签id>::<字段key>。半截 JSON 会报错，不会按逗号拆开写坏。'
+  '列 key 数组，或 JSON 数组字符串。例 ["title","tag","tag::tag::category"]。标签属性列必须写成 tag::<标签id>::<字段key>。半截 JSON 会报错，不会按逗号拆开写坏。'
 
 /** 有规则的 filterTree 优先；空树则回退扁平 filters（agent db_update 仍写 {project:"biu"}）。 */
 export function resolveViewFilterTree(view: {
@@ -530,12 +531,12 @@ export function seedRecordFromViewFilters(
   for (const [field, values] of collected) {
     if (!values.length) continue
     const spec = schema?.fields[field]
-    const kind = spec ? (isFacetFieldType(spec.type) ? 'facet' : spec.type) : undefined
+    const kind = spec ? (isTagFieldType(spec.type) ? 'tag' : spec.type) : undefined
     if (kind === 'boolean') {
       out[field] = values[0] === 'true' || values[0] === '1'
       continue
     }
-    if (kind === 'facet') {
+    if (kind === 'tag') {
       out[field] = { tags: values }
       continue
     }

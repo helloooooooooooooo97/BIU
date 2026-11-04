@@ -1,6 +1,6 @@
 import type { AtomicFieldType, CollectionSchema, CollectionSchemaPack, DbRecord, FieldSpec, FieldType, SchemaFieldValue } from '@biu/type-file-system'
-import { asAttachment, asAttachmentList, asHttpHref, asImageSrc, asImageSrcList, asPerson, asPersonList, BUILTIN_FIELD_KEYS, isFacetFieldType, isRefFieldType, isReservedSchemaFieldKey, normalizeSchemaValue, personKey } from '@biu/type-file-system'
-import { FACET_FLAT_PREFIX, parseFacetFlatColumnKey, readFacetFieldValue } from '../query-logic.ts'
+import { asAttachment, asAttachmentList, asHttpHref, asImageSrc, asImageSrcList, asPerson, asPersonList, BUILTIN_FIELD_KEYS, isTagFieldType, isRefFieldType, isReservedSchemaFieldKey, isSchemaFieldKey, normalizeSchemaValue, personKey } from '@biu/type-file-system'
+import { TAG_FLAT_PREFIX, parseTagFlatColumnKey, readTagFieldValue } from '../query-logic.ts'
 import {
   cellGroupValue,
   GROUP_STRATEGIES,
@@ -13,7 +13,7 @@ import {
 
 export { GROUP_STRATEGIES, isGroupableKind, parseGroupByKey }
 
-export { FACET_FLAT_PREFIX, parseFacetFlatColumnKey }
+export { TAG_FLAT_PREFIX, parseTagFlatColumnKey }
 
 export const BUILTIN_VIEW_MODES = ['table'] as const
 export type BuiltinViewMode = (typeof BUILTIN_VIEW_MODES)[number]
@@ -29,7 +29,7 @@ export function isViewModeId(mode: unknown): mode is ViewMode {
 }
 
 export function resolveFieldType(field: FieldSpec): FieldType {
-  if (isFacetFieldType(field.type)) return 'facet'
+  if (isTagFieldType(field.type)) return 'tag'
   if (field.type === 'string[]') return 'multi-select'
   if (field.type === 'string' && field.enum?.length) return 'select'
   if (field.type === 'number' && field.format === 'datetime') return 'datetime'
@@ -117,6 +117,7 @@ export function flattenTree(rows: DbRecord[], parentKey: string, collapsed: Reco
   const kidCountOf = (id: string): number => {
     const hit = memo.get(id)
     if (hit != null) return hit
+    memo.set(id, 0)
     const kids = children.get(id) ?? []
     const total = kids.reduce((sum, child) => sum + 1 + kidCountOf(child.id), 0)
     memo.set(id, total)
@@ -173,7 +174,7 @@ export function defaultColumnKeys(schema: CollectionSchema | undefined, allKeys:
   const raw = listed.length
     ? listed
     : allKeys.filter((key) => !(BUILTIN_FIELD_KEYS as readonly string[]).includes(key) && key !== parent)
-  const keys = (raw.length ? raw : allKeys).filter((key) => !isFacetFlatColumnKey(key))
+  const keys = (raw.length ? raw : allKeys).filter((key) => !isTagFlatColumnKey(key))
   return pinLabelColumn(schema, keys)
 }
 
@@ -217,43 +218,46 @@ export function listProjectionKeys(opts: {
   add('parentChain')
   add('blocked')
   add('usageParts')
-  let needFacet = false
+  add('builtin')
+  let needTag = false
   for (const key of opts.columns) {
     add(key)
-    if (parseFacetFlatColumnKey(key)) needFacet = true
+    if (parseTagFlatColumnKey(key)) needTag = true
   }
-  if (needFacet) add(facetSourceKey(opts.schema))
+  if (needTag) add(tagSourceKey(opts.schema))
   for (const key of actionWhenKeys(opts.schema)) add(key)
   return keys
 }
 
-export function facetFlatColumnKey(packId: string, fieldKey: string) {
-  return `${FACET_FLAT_PREFIX}${packId}::${fieldKey}`
+export function tagFlatColumnKey(packId: string, fieldKey: string) {
+  return `${TAG_FLAT_PREFIX}${packId}::${fieldKey}`
 }
 
-export function isFacetFlatColumnKey(key: string) {
-  return key.startsWith(FACET_FLAT_PREFIX)
+export function isTagFlatColumnKey(key: string) {
+  return key.startsWith(TAG_FLAT_PREFIX)
 }
 
-export function facetSourceKey(schema: CollectionSchema | undefined) {
-  if (!schema) return 'facet'
-  const hit = Object.entries(schema.fields).find(([, field]) => resolveFieldType(field) === 'facet')
-  return hit?.[0] ?? 'facet'
+export function tagSourceKey(schema: CollectionSchema | undefined) {
+  if (!schema) return 'tag'
+  const hit = Object.entries(schema.fields).find(([, field]) => resolveFieldType(field) === 'tag')
+  return hit?.[0] ?? 'tag'
 }
 
-export function flattenFacetColumns(catalog: CollectionSchemaPack[]) {
+export function flattenTagColumns(catalog: CollectionSchemaPack[]) {
   return catalog.flatMap((pack) =>
-    pack.fields.map((field) => ({
-      key: facetFlatColumnKey(pack.id, field.key),
-      field: { ...field, label: field.label ?? field.key },
-      kind: resolveFieldType(field),
-      packId: pack.id,
-      packLabel: pack.label,
-    })),
+    pack.fields
+      .filter((field) => field.deleted !== true)
+      .map((field) => ({
+        key: tagFlatColumnKey(pack.id, field.key),
+        field: { ...field, label: field.label ?? field.key },
+        kind: resolveFieldType(field),
+        packId: pack.id,
+        packLabel: pack.label,
+      })),
   )
 }
 
-export function facetColumnTitle(col: {
+export function tagColumnTitle(col: {
   key: string
   packLabel?: string
   field?: { label?: string }
@@ -263,13 +267,13 @@ export function facetColumnTitle(col: {
   return pack ? `${pack}.${fieldLabel}` : fieldLabel
 }
 
-export function readFacetFlatValue(row: DbRecord, columnKey: string, sourceKey = 'facet') {
-  if (!parseFacetFlatColumnKey(columnKey)) return undefined
-  return readFacetFieldValue(row, columnKey, sourceKey)
+export function readTagFlatValue(row: DbRecord, columnKey: string, sourceKey = 'tag') {
+  if (!parseTagFlatColumnKey(columnKey)) return undefined
+  return readTagFieldValue(row, columnKey, sourceKey)
 }
 
-export function patchFacetFlatValue(row: DbRecord, columnKey: string, next: unknown, sourceKey = 'facet'): SchemaFieldValue {
-  const parsed = parseFacetFlatColumnKey(columnKey)
+export function patchTagFlatValue(row: DbRecord, columnKey: string, next: unknown, sourceKey = 'tag'): SchemaFieldValue {
+  const parsed = parseTagFlatColumnKey(columnKey)
   const current = normalizeSchemaValue(row[sourceKey])
   if (!parsed) return current
   const tags = current.tags.includes(parsed.packId) ? current.tags : [...current.tags, parsed.packId]
@@ -293,7 +297,7 @@ export function inferPackFieldType(value: unknown): AtomicFieldType {
   }
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     const rec = value as Record<string, unknown>
-    if (Array.isArray(rec.tags)) return 'facet'
+    if (Array.isArray(rec.tags)) return 'tag'
     if (asPerson(value)) return 'person'
     if (asAttachment(value)) return 'attachment'
     if (asImageSrcList(value).length) return 'image'
@@ -302,16 +306,21 @@ export function inferPackFieldType(value: unknown): AtomicFieldType {
   return 'string'
 }
 
-export function orphanPackEntries(fields: Array<{ key: string }>, bag: Record<string, unknown> | undefined) {
-  const known = new Set(fields.map((item) => item.key))
-  const out: Array<{ key: string; value: unknown; type: AtomicFieldType }> = []
+export function orphanPackEntries(
+  fields: Array<{ key: string; deleted?: boolean; type?: AtomicFieldType; label?: string }>,
+  bag: Record<string, unknown> | undefined,
+) {
+  const known = new Set(fields.filter((item) => item.deleted !== true).map((item) => item.key))
+  const retired = new Map(fields.map((item) => [item.key, item]))
+  const out: Array<{ key: string; value: unknown; type: AtomicFieldType; label: string }> = []
   if (!bag) return out
   for (const [key, value] of Object.entries(bag)) {
     if (known.has(key) || isReservedSchemaFieldKey(key)) continue
-    if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(key)) continue
-    if (value == null || value === '') continue
-    if (typeof value === 'string' && !value.trim()) continue
-    out.push({ key, value, type: inferPackFieldType(value) })
+    if (!isSchemaFieldKey(key)) continue
+    const kept = retired.get(key)
+    const type = kept?.type && kept.deleted ? kept.type : inferPackFieldType(value)
+    if (!fieldHasValue({ type }, value)) continue
+    out.push({ key, value, type, label: kept?.label ?? key })
   }
   return out
 }
@@ -377,7 +386,7 @@ export function formatField(field: FieldSpec | undefined, value: unknown): strin
   }
   if (kind === 'select') return enumDisplayLabel(field, value)
   if (kind === 'action') return field.label || '动作'
-  if (kind === 'facet') {
+  if (kind === 'tag') {
     const parsed = normalizeSchemaValue(value)
     return parsed.tags.length ? parsed.tags.join(', ') : ''
   }
@@ -408,7 +417,7 @@ export function fieldHasValue(field: FieldSpec | undefined, value: unknown): boo
   if (!field) return true
   const kind = resolveFieldType(field)
   if (kind === 'boolean') return value === true || value === 'true'
-  if (kind === 'facet') return normalizeSchemaValue(value).tags.length > 0
+  if (kind === 'tag') return normalizeSchemaValue(value).tags.length > 0
   return Boolean(formatField(field, value))
 }
 
@@ -459,12 +468,12 @@ export function recordLinkIds(field: FieldSpec | string | undefined, value: unkn
 export function uniqueValues(rows: DbRecord[], key: string, field: FieldSpec): string[] {
   const set = new Set<string>()
   const kind = resolveFieldType(field)
-  const cell = (row: DbRecord) => (parseFacetFlatColumnKey(key) ? readFacetFieldValue(row, key) : row[key])
+  const cell = (row: DbRecord) => (parseTagFlatColumnKey(key) ? readTagFieldValue(row, key) : row[key])
   for (const row of rows) {
     const raw = cell(row)
     if (kind === 'multi-select' || kind === 'multi-ref') {
       for (const item of asStringList(raw)) set.add(item)
-    } else if (kind === 'facet') {
+    } else if (kind === 'tag') {
       for (const item of normalizeSchemaValue(raw).tags) set.add(item)
     } else if (kind === 'person') {
       for (const item of asPersonList(raw)) {
@@ -480,7 +489,7 @@ export function uniqueValues(rows: DbRecord[], key: string, field: FieldSpec): s
 
 export function groupableFields(schema: CollectionSchema | undefined, packs: CollectionSchemaPack[] = []) {
   const fromSchema = fieldEntries(schema).filter((item) => isGroupableKind(item.kind) && item.key !== schema?.labelField)
-  const fromPacks = flattenFacetColumns(packs)
+  const fromPacks = flattenTagColumns(packs)
     .filter((item) => isGroupableKind(item.kind))
     .map((item) => ({ key: item.key, field: item.field, kind: item.kind }))
   return [...fromSchema, ...fromPacks]

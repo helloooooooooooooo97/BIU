@@ -33,7 +33,7 @@ interface SessionConfigFields {
   systemPrompt?: string
   agentMode?: AgentMode
   extraTools?: string[]
-  facet?: SchemaFieldValue
+  tag?: SchemaFieldValue
   pinned?: boolean
   autoCompactInputTokens?: number
 }
@@ -53,16 +53,16 @@ interface InspectorPayload {
 }
 
 const fieldClass =
-  'rounded-lg border border-(--dsw-border) bg-(--dsw-surface) px-2 py-1.5 text-[12px] text-(--dsw-label) outline-none'
+  'rounded-lg border border-(--biu-color-border) bg-(--biu-color-surface) px-2 py-1.5 text-[12px] text-(--biu-color-text) outline-none'
 
-function slugFacetId(label: string, used: Set<string>) {
+function slugTagId(label: string, used: Set<string>) {
   const base =
     label
       .trim()
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '')
-      .slice(0, 24) || 'facet'
+      .slice(0, 24) || 'tag'
   let id = /^[a-z]/.test(base) ? base : `f-${base}`
   let n = 2
   while (used.has(id) || !/^[a-z][a-z0-9-]{0,31}$/.test(id)) {
@@ -87,11 +87,11 @@ function SessionFacetPicker({
 
   useEffect(() => {
     let cancelled = false
-    void fetch('/api/db/facets')
+    void fetch('/api/db/tags')
       .then((res) => res.json())
-      .then((body: { facets?: CollectionSchemaPack[] }) => {
-        if (cancelled || !Array.isArray(body.facets)) return
-        setCatalog(body.facets)
+      .then((body: { tags?: CollectionSchemaPack[] }) => {
+        if (cancelled || !Array.isArray(body.tags)) return
+        setCatalog(body.tags)
       })
       .catch(() => undefined)
     return () => {
@@ -113,7 +113,7 @@ function SessionFacetPicker({
         resolved.push(hit.id)
         continue
       }
-      const id = slugFacetId(item, used)
+      const id = slugTagId(item, used)
       packs = [...packs, { id, label: item, fields: [] }]
       used.add(id)
       resolved.push(id)
@@ -128,10 +128,10 @@ function SessionFacetPicker({
       onChange({ tags: resolved, values })
     }
     if (packs !== catalog) {
-      void fetch('/api/db/facets', {
+      void fetch('/api/db/tags', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ facets: packs }),
+        body: JSON.stringify({ tags: packs }),
       })
         .then((res) => {
           if (!res.ok) return
@@ -184,7 +184,7 @@ export const SessionConfigDialog = memo(function SessionConfigDialog({
   const refresh = useCallback(async () => {
     if (!sessionId || !open) return
     try {
-      const res = await fetch(`/api/sessions/${sessionId}/inspector`)
+      const res = await fetch(`/api/agents/${sessionId}/inspector`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const body = (await res.json()) as InspectorPayload
       setData(body)
@@ -222,7 +222,7 @@ export const SessionConfigDialog = memo(function SessionConfigDialog({
     setBusy(true)
     setError('')
     try {
-      const res = await fetch(`/api/sessions/${sessionId}/config`, {
+      const res = await fetch(`/api/agents/${sessionId}/config`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(patch),
@@ -258,7 +258,7 @@ export const SessionConfigDialog = memo(function SessionConfigDialog({
       onClick={onClose}
       role="dialog"
       aria-modal="true"
-      aria-label="会话配置"
+      aria-label="代理配置"
       data-testid="session-config-dialog"
     >
       <div
@@ -284,16 +284,16 @@ export const SessionConfigDialog = memo(function SessionConfigDialog({
             </div>
           ) : null}
           {!sessionId ? (
-            <div className="text-[11px] leading-[1.45] text-(--dsw-label-3)">打开会话后可编辑配置。</div>
+            <div className="text-[11px] leading-[1.45] text-(--biu-color-text-subtle)">打开代理后可编辑配置。</div>
           ) : (
             <div className="flex flex-col gap-2.5">
-              <p className="m-0 text-[11px] leading-[1.45] text-(--dsw-label-3)">
+              <p className="m-0 text-[11px] leading-[1.45] text-(--biu-color-text-subtle)">
                 名称、提示词和工具只作用于当前 session；未改的字段沿用全局默认。
               </p>
 
               <ChatOutlineFilterFields />
 
-              <label className="flex flex-col gap-1 text-[11px] text-(--dsw-label-3)">
+              <label className="flex flex-col gap-1 text-[11px] text-(--biu-color-text-subtle)">
                 <span>名称</span>
                 <input
                   className={fieldClass}
@@ -320,16 +320,16 @@ export const SessionConfigDialog = memo(function SessionConfigDialog({
                 />
               </label>
 
-              <label className="flex flex-col gap-1 text-[11px] text-(--dsw-label-3)">
+              <label className="flex flex-col gap-1 text-[11px] text-(--biu-color-text-subtle)">
                 <span>标签 · 侧栏可按标签分组</span>
                 <SessionFacetPicker
-                  value={data?.config?.facet}
+                  value={data?.config?.tag}
                   disabled={busy}
-                  onChange={(facet) => void patchSessionConfig({ facet })}
+                  onChange={(tag) => void patchSessionConfig({ tag })}
                 />
               </label>
 
-              <label className="flex flex-col gap-1 text-[11px] text-(--dsw-label-3)">
+              <label className="flex flex-col gap-1 text-[11px] text-(--biu-color-text-subtle)">
                 <span>系统提示词</span>
                 <textarea
                   className={`${fieldClass} min-h-[88px] resize-y font-mono text-[11px] leading-[1.45]`}
@@ -352,7 +352,7 @@ export const SessionConfigDialog = memo(function SessionConfigDialog({
                 />
               </label>
 
-              <label className="flex flex-col gap-1 text-[11px] text-(--dsw-label-3)">
+              <label className="flex flex-col gap-1 text-[11px] text-(--biu-color-text-subtle)">
                 <span>自动压缩上限（输入 token）</span>
                 <input
                   className={fieldClass}
@@ -382,9 +382,9 @@ export const SessionConfigDialog = memo(function SessionConfigDialog({
 
               <div className="flex flex-col gap-px">
                 {sources.map((source) => (
-                  <div key={source.id} className="rounded-lg px-2 py-1.5 hover:bg-(--dsw-hover)">
-                    <div className="text-[11px] font-semibold text-(--dsw-label-2)">{source.label}</div>
-                    <div className="mt-0.5 text-[11px] leading-[1.4] text-(--dsw-label-3)">
+                  <div key={source.id} className="rounded-lg px-2 py-1.5 hover:bg-(--biu-color-bg-hover)">
+                    <div className="text-[11px] font-semibold text-(--biu-color-text-muted)">{source.label}</div>
+                    <div className="mt-0.5 text-[11px] leading-[1.4] text-(--biu-color-text-subtle)">
                       {source.description}
                     </div>
                   </div>
@@ -395,8 +395,8 @@ export const SessionConfigDialog = memo(function SessionConfigDialog({
                 {tools.map((tool) => (
                   <li
                     key={tool.name}
-                    className={`relative box-border flex h-[30px] min-h-[30px] w-full items-center gap-2 rounded-lg border-0 px-2 py-[5px] text-[12px] font-medium leading-[1.2] transition-none hover:bg-(--dsw-hover) hover:text-(--dsw-label) ${
-                      tool.active ? 'text-(--dsw-label)' : 'text-(--dsw-label-2)'
+                    className={`relative box-border flex h-[30px] min-h-[30px] w-full items-center gap-2 rounded-lg border-0 px-2 py-[5px] text-[12px] font-medium leading-[1.2] transition-none hover:bg-(--biu-color-bg-hover) hover:text-(--biu-color-text) ${
+                      tool.active ? 'text-(--biu-color-text)' : 'text-(--biu-color-text-muted)'
                     }`}
                     data-tool={tool.name}
                     title={tool.description || tool.name}
@@ -404,7 +404,7 @@ export const SessionConfigDialog = memo(function SessionConfigDialog({
                     {tool.configurable ? (
                       <input
                         type="checkbox"
-                        className="m-0 size-3.5 shrink-0 accent-(--dsw-business)"
+                        className="m-0 size-3.5 shrink-0 accent-(--biu-color-text)"
                         checked={(effective?.extraTools ?? data?.extraTools ?? []).includes(tool.name)}
                         disabled={busy}
                         aria-label={`启用 ${tool.name}`}
@@ -413,7 +413,7 @@ export const SessionConfigDialog = memo(function SessionConfigDialog({
                     ) : (
                       <span
                         className={`grid size-4 shrink-0 place-items-center ${
-                          tool.active ? 'text-(--dsw-label)' : 'text-(--dsw-label-3)'
+                          tool.active ? 'text-(--biu-color-text)' : 'text-(--biu-color-text-subtle)'
                         }`}
                         aria-hidden
                       >
@@ -421,12 +421,12 @@ export const SessionConfigDialog = memo(function SessionConfigDialog({
                       </span>
                     )}
                     <span className="min-w-0 flex-1 truncate font-mono text-[11px] font-medium">{tool.name}</span>
-                    <span className="shrink-0 text-[10px] font-medium text-(--dsw-label-3)">
+                    <span className="shrink-0 text-[10px] font-medium text-(--biu-color-text-subtle)">
                       {sources.find((item) => item.id === tool.source)?.label ?? tool.source}
                     </span>
                     <span
                       className={`ml-auto shrink-0 text-[10px] font-semibold ${
-                        tool.active ? 'text-(--dsw-ok,#448361)' : 'text-(--dsw-label-3)'
+                        tool.active ? 'text-(--biu-color-ok,#448361)' : 'text-(--biu-color-text-subtle)'
                       }`}
                     >
                       {tool.active ? '可用' : '未开'}

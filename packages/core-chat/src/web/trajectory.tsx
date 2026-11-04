@@ -17,14 +17,14 @@ import { pickDomAttrs, pickPreview } from '@biu/core-pick/web'
 type TagTone = 'user' | 'assistant' | 'tool' | 'system' | 'turn' | 'step'
 
 async function loadEventDetail(sessionId: string, seq: number): Promise<SessionEvent | null> {
-  const res = await fetch(`/api/sessions/${sessionId}/events/${seq}`)
+  const res = await fetch(`/api/agents/${sessionId}/events/${seq}`)
   if (!res.ok) throw new Error(`加载事件失败：${res.status}`)
   const body = (await res.json()) as { event?: SessionEvent }
   return body.event ?? null
 }
 
 async function loadEventRequest(sessionId: string, seq: number): Promise<{ messages: DerivedMessage[]; toolsTokens: number }> {
-  const res = await fetch(`/api/sessions/${sessionId}/events/${seq}/request`)
+  const res = await fetch(`/api/agents/${sessionId}/events/${seq}/request`)
   if (!res.ok) throw new Error(`加载 request 失败：${res.status}`)
   const body = (await res.json()) as { messages?: DerivedMessage[]; toolsTokens?: number }
   return {
@@ -195,7 +195,7 @@ export const TrajectoryView = memo(function TrajectoryView(props: SlotProps) {
     return (
       <div className="traj-empty">
         <p className="traj-empty-title">No session</p>
-        <p className="traj-empty-body">打开或新建会话后，可在此查看调试日志。</p>
+        <p className="traj-empty-body">打开或新建代理后，可在此查看调试日志。</p>
       </div>
     )
   }
@@ -229,7 +229,7 @@ export const TrajectoryView = memo(function TrajectoryView(props: SlotProps) {
             <span className="traj-meta-sep">·</span>
             {groups.length} turns
           </span>
-          <span className="traj-meta-usage" title="本会话 + 派工到其它会话的用量">
+          <span className="traj-meta-usage" title="本代理 + 派工到其它代理的用量">
             <span className="traj-meta-usage-label">usage</span>
             <UsageInline usage={cumulative} />
           </span>

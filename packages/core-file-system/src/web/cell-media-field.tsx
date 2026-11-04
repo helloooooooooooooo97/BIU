@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Image } from 'antd'
+import { Image } from '@biu/biu-ui'
 import { ArrowUpTrayIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import { asAttachmentList, asHttpHref, asImageSrcList, commitAttachments } from '@biu/type-file-system'
 import { LocalText } from './controls.tsx'

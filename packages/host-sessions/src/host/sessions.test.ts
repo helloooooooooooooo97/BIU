@@ -29,7 +29,7 @@ test('creating a session stamps createdBy through the database service', async (
   await ctx.plugin(DatabaseTouch)
   await ctx.plugin(sessions)
   const record = await ctx.sessions.create()
-  assert.deepEqual(stamped, [`/sessions/${record.id}`])
+  assert.deepEqual(stamped, [`/agents/${record.id}`])
 })
 
 test('append-only log projects model history; version is 1', async () => {
@@ -308,8 +308,8 @@ test('listSummaries only returns sessions of the active workspace', async () => 
   await ctx.plugin(sessions)
   const kept = await ctx.sessions.create('kept')
   const other = await ctx.sessions.create('other')
-  const mine = new Set([`/sessions\t${kept.id}`])
-  const any = new Set([`/sessions\t${kept.id}`, `/sessions\t${other.id}`])
+  const mine = new Set([`/agents\t${kept.id}`])
+  const any = new Set([`/agents\t${kept.id}`, `/agents\t${other.id}`])
   let active = 'ws-a'
   const home = 'ws-home'
   class FakeAccount extends Service {
@@ -343,8 +343,8 @@ test('listSummaries only returns sessions of the active workspace', async () => 
   active = home
   mine.clear()
   const legacy = await ctx.sessions.create('legacy')
-  any.delete(`/sessions\t${legacy.id}`)
-  mine.delete(`/sessions\t${legacy.id}`)
+  any.delete(`/agents\t${legacy.id}`)
+  mine.delete(`/agents\t${legacy.id}`)
   assert.equal(ctx.sessions.inWorkspace(legacy.id), true)
   assert.equal(ctx.sessions.inWorkspace(other.id), false)
 })
@@ -406,7 +406,7 @@ test('sqlite split sessions and events stay consistent across files', async () =
   await ctx.sessions.append('split1', { type: 'user/message', text: 'hi', kind: 'wake' })
   const sessionsDb = new DatabaseSync(path)
   const eventsDb = new DatabaseSync(eventsPath)
-  const sessionRow = sessionsDb.prepare('SELECT event_count FROM sessions WHERE id = ?').get('split1') as
+  const sessionRow = sessionsDb.prepare('SELECT event_count FROM agents WHERE id = ?').get('split1') as
     | { event_count: number }
     | undefined
   const eventRows = eventsDb.prepare('SELECT COUNT(*) AS n FROM events WHERE session_id = ?').get('split1') as
@@ -453,7 +453,7 @@ test('sqlite drops leftover sessions.type column', async () => {
   await ctx.plugin(sessionStore, { driver: 'sqlite', path })
   await ctx.plugin(sessions)
   const opened = new DatabaseSync(path)
-  const cols = (opened.prepare('PRAGMA table_info(sessions)').all() as Array<{ name: string }>).map((row) => row.name)
+  const cols = (opened.prepare('PRAGMA table_info(agents)').all() as Array<{ name: string }>).map((row) => row.name)
   opened.close()
   assert.equal(cols.includes('type'), false)
   assert.equal('type' in ((await ctx.sessions.get('legacy')) ?? {}), false)
@@ -626,7 +626,7 @@ test('deriveMessages honors db_action compact as new prefix', () => {
       id: 't1',
       name: 'db_action',
       arguments: JSON.stringify({
-        path: '/sessions/s1',
+        path: '/agents/s1',
         action: 'compact',
         args: { text: '摘要：聊了早期内容' },
       }),

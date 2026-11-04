@@ -10,7 +10,8 @@ import { DatabaseService, apply as applyFileSystem, databaseHttpFailure, listNee
 import { FileSystemAssets } from './assets-store.ts'
 import type { CollectionSpec, DbRecord } from '@biu/type-file-system'
 import { REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
-import { facetsCollection } from './facets-collection.ts'
+import { dataCollection, isDataOverviewSource } from './data-collection.ts'
+import { tagsCollection } from './tags-collection.ts'
 import { SavedViewsStore, viewsCollection } from './saved-views.ts'
 import { trashCollection } from './trash-collection.ts'
 import { runWithSession } from '@biu/host-sessions/scope'
@@ -77,6 +78,31 @@ test('database HTTP failures distinguish missing resources from bad requests', (
     status: 400,
     body: { error: 'Error: cannot read: /pages/p008/child', code: 'BAD_REQUEST' },
   })
+})
+
+test('data overview lists each source record, includes tags, and skips other index/system tables', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  const notes = notesCollection()
+  db.register({ ...notes, view: { ...notes.view!, icon: 'document' } })
+  db.register(dataCollection(() => db.collectionsList()))
+  db.register(tagsCollection(db.tags, () => [{ id: 'notes', path: '/notes', label: '笔记' }]))
+  const listed = await db.list('/data')
+  assert.equal(listed.kind, 'collection')
+  if (listed.kind !== 'collection') return
+  assert.deepEqual(
+    listed.items.map((item) => item.id).sort(),
+    ['notes::n1', 'notes::n2'],
+  )
+  assert.equal(listed.items.find((item) => item.id === 'notes::n1')?.table, '笔记2号')
+  assert.equal(listed.items.find((item) => item.id === 'notes::n1')?.tableIcon, 'document')
+  assert.equal(listed.items.find((item) => item.id === 'notes::n1')?.sourceId, 'n1')
+  assert.ok((listed.schema?.actions ?? []).some((action) => action.id === 'pin'))
+  assert.ok(!(listed.schema?.actions ?? []).some((action) => action.id === 'open'))
+  assert.deepEqual(listed.items.find((item) => item.id === 'notes::n1')?.actionIds, ['pin'])
+  assert.equal(isDataOverviewSource('/tags'), true)
+  assert.equal(isDataOverviewSource('/page-blocks'), false)
+  assert.equal(isDataOverviewSource('/trash'), false)
 })
 
 test('root lists registered collections; record read/update follows schema', async () => {
@@ -244,9 +270,9 @@ test('every collection schema includes id, title, createdAt and updatedAt', asyn
   assert.equal(stat.schema.fields.content?.type, 'file')
   assert.equal(stat.schema.fields.emoji?.writable, true)
   assert.equal(stat.schema.fields.tags, undefined)
-  assert.equal(stat.schema.fields.facet?.type, 'facet')
-  assert.equal(stat.schema.fields.facet?.label, '标签')
-  assert.equal(stat.schema.fields.facet?.writable, true)
+  assert.equal(stat.schema.fields.tag?.type, 'tag')
+  assert.equal(stat.schema.fields.tag?.label, '标签')
+  assert.equal(stat.schema.fields.tag?.writable, true)
   assert.equal(stat.schema.fields.parentId?.type, 'ref')
   assert.equal(stat.schema.fields.parentId?.writable, true)
   assert.equal(stat.schema.fields.parentId?.label, '父级')
@@ -261,12 +287,12 @@ test('every collection schema includes id, title, createdAt and updatedAt', asyn
   assert.equal(stat.schema.fields.updatedBy?.multiple, true)
   assert.equal(stat.schema.fields.updatedBy?.label, '编辑人')
   assert.equal(stat.schema.contentField, 'content')
-  const tagged = await db.update('/notes/n1', { facet: { tags: ['dp'], values: { dp: { complexity: 'O(n)' } } } })
-  assert.deepEqual(tagged.value.facet, { tags: ['dp'], values: { dp: { complexity: 'O(n)' } } })
-  db.facets.replace([{ id: 'dp', label: '动态规划', fields: [] }])
+  const tagged = await db.update('/notes/n1', { tag: { tags: ['dp'], values: { dp: { complexity: 'O(n)' } } } })
+  assert.deepEqual(tagged.value.tag, { tags: ['dp'], values: { dp: { complexity: 'O(n)' } } })
+  db.tags.replace([{ id: 'dp', label: '动态规划', fields: [] }])
   const byLabel = await db.list('/notes', undefined, { q: '动态规划' })
   assert.equal(byLabel.items.length, 1)
-  const byFilter = await db.list('/notes', { facet: 'dp' })
+  const byFilter = await db.list('/notes', { tag: 'dp' })
   assert.equal(byFilter.items.length, 1)
   await assert.rejects(() => db.update('/notes/n1', { createdAt: Date.now() }), /not writable/)
   await assert.rejects(() => db.update('/notes/n1', { createdBy: { kind: 'system', name: '系统' } }), /not writable/)
@@ -331,7 +357,7 @@ test('stamps agent createdBy with the session title from /sessions', async () =>
   ])
   db.register({
     id: 'sessions',
-    path: '/sessions',
+    path: '/agents',
     schema: {
       labelField: 'title',
       fields: {
@@ -376,7 +402,7 @@ test('later editors append to updatedBy and leave createdBy alone', async () => 
   db.register(notesCollection())
   db.register({
     id: 'sessions',
-    path: '/sessions',
+    path: '/agents',
     schema: {
       labelField: 'title',
       fields: {
@@ -545,6 +571,7 @@ test('editor content exposes a version and rejects stale writes', async () => {
   assert.equal(initial.version, 0)
   const first = await db.writeContent('/pages/p1', 'one', initial.version)
   assert.equal(first.version, 1)
+  assert.ok(Number(first.updatedAt) > 0)
   await assert.rejects(() => db.writeContent('/pages/p1', 'stale', initial.version), /正文版本冲突/)
   const current = await db.content('/pages/p1')
   assert.equal(current.value, 'one')
@@ -972,7 +999,7 @@ test('apply registers db_* tools', async () => {
   const items = ((listed as { items: Array<{ path: string; view?: { blurb?: string } }> }).items ?? [])
   const paths = items.map((item) => item.path)
   assert.equal(paths.includes('/views'), true)
-  assert.equal(paths.includes('/facets'), true)
+  assert.equal(paths.includes('/tags'), true)
   assert.equal(paths.includes('/notices'), false)
   assert.equal(paths.includes('/asset-gc'), false)
   assert.equal(paths.includes('/trash'), true)
@@ -980,8 +1007,8 @@ test('apply registers db_* tools', async () => {
   assert.match(String(views?.view?.blurb ?? ''), /db_list \/views/)
   assert.match(String(views?.view?.blurb ?? ''), /filterTree/)
   assert.match(String(views?.view?.blurb ?? ''), /kind":"rule"/)
-  const facets = items.find((item) => item.path === '/facets')
-  assert.match(String(facets?.view?.blurb ?? ''), /db_list \/facets/)
+  const facets = items.find((item) => item.path === '/tags')
+  assert.match(String(facets?.view?.blurb ?? ''), /db_list \/tags/)
 })
 
 test('db_create tool ignores empty companion records instead of creating blank rows', async () => {
@@ -1031,7 +1058,7 @@ test('title-only plugin list still returns action when flags', async () => {
   const ctx = new Context()
   const db = new DatabaseService(ctx)
   const rows = [
-    { id: 'run', title: '运行中', installed: true, running: true, sandbox: true },
+    { id: 'run', title: '运行中', installed: true, running: true, sandbox: true, builtin: true },
     { id: 'idle', title: '已装', installed: true, sandbox: true },
     { id: 'dev', title: '沙箱', sandbox: true },
   ]
@@ -1041,7 +1068,7 @@ test('title-only plugin list still returns action when flags', async () => {
     label: '插件',
     schema: {
       labelField: 'title',
-      fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string' } },
+      fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string' }, builtin: { type: 'boolean' } },
     },
     list: () => rows,
     get: (id) => rows.find((row) => row.id === id) ?? null,
@@ -1062,6 +1089,7 @@ test('title-only plugin list still returns action when flags', async () => {
   assert.equal(run?.installed, true)
   assert.equal(run?.running, true)
   assert.equal(run?.sandbox, true)
+  assert.equal(run?.builtin, true)
   assert.equal(idle?.installed, true)
   assert.equal(idle?.sandbox, true)
   assert.equal(dev?.sandbox, true)
@@ -1105,7 +1133,7 @@ test('agent db_stat omits builtin fields; service stat and list still include th
   const serviceStat = await db.stat('/notes')
   if (serviceStat.kind !== 'collection') return
   assert.equal(serviceStat.schema.fields.id?.type, 'string')
-  assert.equal(serviceStat.schema.fields.facet?.type, 'facet')
+  assert.equal(serviceStat.schema.fields.tag?.type, 'tag')
   const listed = await db.list('/notes')
   assert.ok(listed.schema.fields.status)
   const agentStat = (await ctx.tools.invoke('db_stat', { path: '/notes' })) as {
@@ -1113,7 +1141,7 @@ test('agent db_stat omits builtin fields; service stat and list still include th
     caps?: string[]
   }
   assert.equal(agentStat.schema?.fields && 'id' in agentStat.schema.fields, false)
-  assert.equal((agentStat.schema?.fields as { facet?: { type?: string } } | undefined)?.facet?.type, 'facet')
+  assert.equal((agentStat.schema?.fields as { tag?: { type?: string } } | undefined)?.tag?.type, 'tag')
   assert.ok(agentStat.schema?.fields && 'status' in agentStat.schema.fields)
   assert.equal(agentStat.schema?.records, undefined)
   assert.ok(agentStat.caps?.includes('list'))
@@ -1378,10 +1406,10 @@ test('delete parks records in trash and restore puts them back', async () => {
 test('sessions delete parks in trash until purge', async () => {
   const ctx = new Context()
   const db = new DatabaseService(ctx)
-  const rows = new Map<string, { id: string; title: string }>([['s1', { id: 's1', title: '会话' }]])
+  const rows = new Map<string, { id: string; title: string }>([['s1', { id: 's1', title: '代理' }]])
   db.register({
     id: 'sessions',
-    path: '/sessions',
+    path: '/agents',
     schema: { fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string', writable: true } } },
     records: { create: true, delete: true },
     list: () => [...rows.values()],
@@ -1393,17 +1421,17 @@ test('sessions delete parks in trash until purge', async () => {
       return ids
     },
   })
-  const gone = await db.remove('/sessions', { ids: ['s1'] })
+  const gone = await db.remove('/agents', { ids: ['s1'] })
   assert.equal((gone as { trash?: boolean }).trash, true)
   assert.equal(rows.has('s1'), true)
-  const listed = await db.list('/sessions')
+  const listed = await db.list('/agents')
   if (listed.kind !== 'collection') return
   assert.equal(listed.items.length, 0)
-  await db.restore('/sessions', { ids: ['s1'] })
-  const back = await db.list('/sessions')
+  await db.restore('/agents', { ids: ['s1'] })
+  const back = await db.list('/agents')
   if (back.kind !== 'collection') return
   assert.equal(back.items.length, 1)
-  await db.remove('/sessions', { ids: ['s1'], purge: true })
+  await db.remove('/agents', { ids: ['s1'], purge: true })
   assert.equal(rows.has('s1'), false)
 })
 
@@ -1468,11 +1496,11 @@ test('facet catalog is workspace-wide and collect uses sqlite stamps', async () 
       return next as { id: string }
     },
   })
-  db.facets.replace([{ id: 'dp', label: '动态规划', fields: [] }])
-  await db.update('/notes/n1', { facet: { tags: ['dp'], values: {} } })
-  await db.update('/pages/p1', { facet: { tags: ['dp'], values: {} } })
-  const collected = await db.collectFacet('动态规划')
-  assert.equal(collected.facet?.id, 'dp')
+  db.tags.replace([{ id: 'dp', label: '动态规划', fields: [] }])
+  await db.update('/notes/n1', { tag: { tags: ['dp'], values: {} } })
+  await db.update('/pages/p1', { tag: { tags: ['dp'], values: {} } })
+  const collected = await db.collectTag('动态规划')
+  assert.equal(collected.tag?.id, 'dp')
   assert.equal(collected.items.length, 2)
   assert.deepEqual(collected.items.map((item) => item.path).sort(), ['/notes/n1', '/pages/p1'])
 })
@@ -1481,10 +1509,10 @@ test('listing /facets with tag filter returns stamped records as a table', async
   const ctx = new Context()
   const db = new DatabaseService(ctx)
   db.register(notesCollection())
-  db.register(facetsCollection(db.facets, () => [{ id: 'notes', path: '/notes', label: '笔记' }]))
-  db.facets.replace([{ id: 'dp', label: '动态规划', fields: [{ key: 'complexity', type: 'string', label: '复杂度' }] }])
-  await db.update('/notes/n1', { facet: { tags: ['dp'], values: { dp: { complexity: 'O(n)' } } } })
-  const listed = await db.list('/facets', { facetId: 'dp' })
+  db.register(tagsCollection(db.tags, () => [{ id: 'notes', path: '/notes', label: '笔记' }]))
+  db.tags.replace([{ id: 'dp', label: '动态规划', fields: [{ key: 'complexity', type: 'string', label: '复杂度' }] }])
+  await db.update('/notes/n1', { tag: { tags: ['dp'], values: { dp: { 复杂度: 'O(n)' } } } })
+  const listed = await db.list('/tags', { tagId: 'dp' })
   if (listed.kind !== 'collection') return
   assert.equal(listed.items.length, 1)
   assert.equal(listed.items[0]?.id, 'notes::n1')
@@ -1520,14 +1548,14 @@ test('facet list filter asks the collection only for stamped ids', async () => {
       return next as { id: string }
     },
   })
-  const empty = await db.list('/notes', { facet: 'dp' })
+  const empty = await db.list('/notes', { tag: 'dp' })
   if (empty.kind !== 'collection') return
   assert.equal(empty.items.length, 0)
   assert.equal(listed, undefined)
-  db.facets.replace([{ id: 'dp', label: '动态规划', fields: [] }])
-  await db.update('/notes/a', { facet: { tags: ['dp'], values: {} } })
+  db.tags.replace([{ id: 'dp', label: '动态规划', fields: [] }])
+  await db.update('/notes/a', { tag: { tags: ['dp'], values: {} } })
   listed = undefined
-  const filtered = await db.list('/notes', { facet: 'dp' })
+  const filtered = await db.list('/notes', { tag: 'dp' })
   if (filtered.kind !== 'collection') return
   assert.deepEqual(listed, ['a'])
   assert.equal(filtered.items.length, 1)
@@ -1548,24 +1576,24 @@ test('facet schema can be written on tables that cannot update other fields', as
     get: (id) => (rows.get(id) as { id: string } | undefined) ?? null,
     remove: (query) => query.ids ?? [],
   })
-  db.facets.replace([{ id: 'dp', label: '动态规划', fields: [{ key: 'complexity', type: 'string', label: '复杂度' }] }])
+  db.tags.replace([{ id: 'dp', label: '动态规划', fields: [{ key: 'complexity', type: 'string', label: '复杂度' }] }])
   await assert.rejects(() => db.update('/plugins/p1', { title: '改名' }), /cannot update/)
-  const written = await db.update('/plugins/p1', { facet: { tags: ['dp'], values: { dp: { complexity: 'O(n)' } } } })
-  assert.deepEqual((written.value as { facet?: { tags?: string[] } }).facet?.tags, ['dp'])
+  const written = await db.update('/plugins/p1', { tag: { tags: ['dp'], values: { dp: { 复杂度: 'O(n)' } } } })
+  assert.deepEqual((written.value as { tag?: { tags?: string[] } }).tag?.tags, ['dp'])
   const read = await db.read('/plugins/p1')
   if (read.kind !== 'record') return
-  assert.equal((read.value.facet as { values?: { dp?: { complexity?: string } } }).values?.dp?.complexity, 'O(n)')
+  assert.equal((read.value.tag as { values?: { dp?: { complexity?: string } } }).values?.dp?.complexity, 'O(n)')
   const listed = await db.list('/plugins')
   if (listed.kind !== 'collection') return
-  assert.deepEqual((listed.items[0]?.facet as { tags?: string[] })?.tags, ['dp'])
-  const collected = await db.collectFacet('dp')
+  assert.deepEqual((listed.items[0]?.tag as { tags?: string[] })?.tags, ['dp'])
+  const collected = await db.collectTag('dp')
   assert.equal(collected.items.length, 1)
   assert.equal(collected.items[0]?.path, '/plugins/p1')
   await db.update('/plugins/p1', { emoji: '🔌' })
   const withEmoji = await db.read('/plugins/p1')
   if (withEmoji.kind !== 'record') return
   assert.equal(withEmoji.value.emoji, '🔌')
-  assert.deepEqual((withEmoji.value.facet as { tags?: string[] })?.tags, ['dp'])
+  assert.deepEqual((withEmoji.value.tag as { tags?: string[] })?.tags, ['dp'])
   await db.update('/plugins/p1', { banner: { kind: 'htmlframe', html: '<script></script>' } })
   const withBanner = await db.read('/plugins/p1')
   if (withBanner.kind !== 'record') return
@@ -1609,38 +1637,56 @@ test('writeContent can persist intro on tables that cannot update other fields',
   assert.equal(body.value, '# Demo\n')
 })
 
-test('db_update /facets writes facet field packs', async () => {
+test('facet records can be read by title after catalog replace', async () => {
   const ctx = new Context()
   const db = new DatabaseService(ctx)
-  db.register(facetsCollection(db.facets))
-  const created = await db.create('/facets', [{ title: '动态规划' }])
+  db.register(tagsCollection(db.tags))
+  db.tags.replace([{ id: 'facet-3', label: '测试', fields: [] }])
+  const byId = await db.read('/tags/facet-3')
+  const byTitle = await db.read('/tags/测试')
+  assert.equal(byId.kind, 'record')
+  assert.equal(byTitle.kind, 'record')
+  if (byId.kind === 'record') assert.equal(byId.value.title, '测试')
+  if (byTitle.kind === 'record') assert.equal(byTitle.value.id, 'facet-3')
+})
+
+test('db_update /tags writes facet field packs', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  db.register(tagsCollection(db.tags))
+  const created = await db.create('/tags', [{ title: '动态规划' }])
   const id = String(created.items[0]?.value.id)
-  const asArray = await db.update(`/facets/${id}`, {
+  const asArray = await db.update(`/tags/${id}`, {
     fields: [{ key: 'complexity', type: 'string', label: '复杂度' }],
   })
   assert.equal(asArray.value.fieldCount, 1)
-  assert.equal(db.facets.get(id)?.fields[0]?.key, 'complexity')
-  const updated = await db.update(`/facets/${id}`, {
+  assert.equal(db.tags.get(id)?.fields[0]?.key, 'complexity')
+  assert.equal(db.tags.get(id)?.fields[0]?.label, '复杂度')
+  const updated = await db.update(`/tags/${id}`, {
     fields: JSON.stringify([{ key: 'complexity', type: 'string', label: '复杂度' }]),
   })
   assert.equal(updated.value.fieldCount, 1)
-  assert.equal(db.facets.get(id)?.fields[0]?.key, 'complexity')
+  assert.equal(db.tags.get(id)?.fields[0]?.key, 'complexity')
   await assert.rejects(
-    () => db.update(`/facets/${id}`, { fields: [{ key: 'oops', type: 'text' }] }),
+    () => db.update(`/tags/${id}`, { fields: [{ key: 'oops', type: 'text' }] }),
     /unknown field type: text\. allowed: /,
   )
-  const stat = await db.stat('/facets')
+  await assert.rejects(
+    () => db.update(`/tags/${id}`, { fields: [{ key: '1', type: 'string', label: '甲' }, { key: '2', type: 'number', label: '甲' }] }),
+    /duplicate field name/,
+  )
+  const stat = await db.stat('/tags')
   if (stat.kind === 'collection') {
-    assert.equal(stat.schema.fields.fields?.example, '[{"key":"category","type":"string","label":"类别"}]')
-    assert.match(String(stat.schema.fields.fields?.description), /facet::<本标签id>::<字段key>/)
+    assert.equal(stat.schema.fields.fields?.example, '[{"key":"类别","type":"string"}]')
+    assert.match(String(stat.schema.fields.fields?.description), /tag::<本标签id>::<字段key>/)
   }
-  const body = await db.writeContent(`/facets/${id}`, '# 标签说明')
+  const body = await db.writeContent(`/tags/${id}`, '# 标签说明')
   assert.equal(body.field, 'notes')
   assert.equal(body.value, '# 标签说明')
-  const listed = await db.list('/facets')
+  const listed = await db.list('/tags')
   if (listed.kind !== 'collection') return
   assert.equal('notes' in listed.items[0]!, false)
-  const read = await db.content(`/facets/${id}`)
+  const read = await db.content(`/tags/${id}`)
   assert.equal(read.value, '# 标签说明')
 })
 
@@ -1661,10 +1707,10 @@ test('db_update page facet stores flat property values on the stamp', async () =
       return next as { id: string }
     },
   })
-  db.register(facetsCollection(db.facets))
-  const created = await db.create('/facets', [{ title: '电影' }])
+  db.register(tagsCollection(db.tags))
+  const created = await db.create('/tags', [{ title: '电影' }])
   const id = String(created.items[0]?.value.id)
-  await db.update(`/facets/${id}`, {
+  await db.update(`/tags/${id}`, {
     fields: JSON.stringify([
       { key: 'director', type: 'string', label: '导演' },
       { key: 'year', type: 'number', label: '年份' },
@@ -1672,24 +1718,27 @@ test('db_update page facet stores flat property values on the stamp', async () =
     ]),
   })
   const tagged = await db.update('/pages/p1', {
-    facet: { tags: [id], values: { 导演: '查泽雷', 年份: 2016, 评分: 8.6 } },
+    tag: { tags: [id], values: { 导演: '查泽雷', 年份: 2016, 评分: 8.6 } },
   })
-  assert.deepEqual(tagged.value.facet, {
+  assert.deepEqual(tagged.value.tag, {
     tags: [id],
     values: { [id]: { director: '查泽雷', year: 2016, score: 8.6 } },
   })
-  assert.equal(db.facets.recordFacet('/pages', 'p1')?.values[id]?.director, '查泽雷')
-  const merged = await db.update('/pages/p1', { facet: { values: { 导演: 'Damien Chazelle' } } })
-  assert.equal(merged.value.facet.values[id].director, 'Damien Chazelle')
-  assert.equal(merged.value.facet.values[id].year, 2016)
+  assert.equal(db.tags.recordTag('/pages', 'p1')?.values[id]?.director, '查泽雷')
+  const merged = await db.update('/pages/p1', { tag: { values: { 导演: 'Damien Chazelle' } } })
+  assert.equal(merged.value.tag.values[id].director, 'Damien Chazelle')
+  assert.equal(merged.value.tag.values[id].year, 2016)
+  const cleared = await db.update('/pages/p1', { tag: { values: { 导演: '' } } })
+  assert.equal(cleared.value.tag.values[id].director, '')
+  assert.equal(cleared.value.tag.values[id].year, 2016)
 
-  const awards = await db.create('/facets', [{ title: '奖项' }])
+  const awards = await db.create('/tags', [{ title: '奖项' }])
   const awardId = String(awards.items[0]?.value.id)
-  await db.update(`/facets/${awardId}`, {
+  await db.update(`/tags/${awardId}`, {
     fields: JSON.stringify([{ key: 'oscar', type: 'boolean', label: '奥斯卡' }]),
   })
   const both = await db.update('/pages/p1', {
-    facet: {
+    tag: {
       tags: [id, awardId],
       values: {
         [id]: { 导演: '查泽雷' },
@@ -1697,14 +1746,14 @@ test('db_update page facet stores flat property values on the stamp', async () =
       },
     },
   })
-  assert.deepEqual(both.value.facet.tags, [id, awardId])
-  assert.equal(both.value.facet.values[id].director, '查泽雷')
-  assert.equal(both.value.facet.values[id].year, 2016)
-  assert.equal(both.value.facet.values[awardId].oscar, true)
-  const onlyAward = await db.update('/pages/p1', { facet: { values: { [awardId]: { oscar: false } } } })
-  assert.equal(onlyAward.value.facet.values[awardId].oscar, false)
-  assert.equal(onlyAward.value.facet.values[id].director, '查泽雷')
-  const col = `facet::${id}::director`
+  assert.deepEqual(both.value.tag.tags, [id, awardId])
+  assert.equal(both.value.tag.values[id].director, '查泽雷')
+  assert.equal(both.value.tag.values[id].year, 2016)
+  assert.equal(both.value.tag.values[awardId].oscar, true)
+  const onlyAward = await db.update('/pages/p1', { tag: { values: { [awardId]: { oscar: false } } } })
+  assert.equal(onlyAward.value.tag.values[awardId].oscar, false)
+  assert.equal(onlyAward.value.tag.values[id].director, '查泽雷')
+  const col = `tag::${id}::director`
   const listed = await db.list('/pages', undefined, { columns: [col] })
   if (listed.kind !== 'collection') return
   assert.equal(listed.items[0]?.[col], '查泽雷')
@@ -1728,20 +1777,20 @@ test('db_update /views columns accepts array or JSON array and rejects fragments
   )
   const created = await db.create('/views', [{ title: '需求', tablePath: '/pages', columns: ['title'] }])
   const id = String(created.items[0]?.value.id)
-  const asArray = await db.update(`/views/${id}`, { columns: ['title', 'facet'] })
-  assert.deepEqual(asArray.value.columns, ['title', 'facet'])
-  const asJson = await db.update(`/views/${id}`, { columns: '["title","facet","facet::facet::category"]' })
-  assert.deepEqual(asJson.value.columns, ['title', 'facet', 'facet::facet::category'])
+  const asArray = await db.update(`/views/${id}`, { columns: ['title', 'tag'] })
+  assert.deepEqual(asArray.value.columns, ['title', 'tag'])
+  const asJson = await db.update(`/views/${id}`, { columns: '["title","tag","tag::tag::category"]' })
+  assert.deepEqual(asJson.value.columns, ['title', 'tag', 'tag::tag::category'])
   await assert.rejects(
-    () => db.update(`/views/${id}`, { columns: '["title","facet"' }),
+    () => db.update(`/views/${id}`, { columns: '["title","tag"' }),
     /expected string list as JSON array/,
   )
   const read = await db.read(`/views/${id}`)
   if (read.kind !== 'record') return
-  assert.deepEqual(read.value.columns, ['title', 'facet', 'facet::facet::category'])
+  assert.deepEqual(read.value.columns, ['title', 'tag', 'tag::tag::category'])
   const stat = await db.stat('/views')
   if (stat.kind !== 'collection') return
-  assert.deepEqual(stat.schema.fields.columns?.example, ['title', 'facet', 'facet::facet::category'])
+  assert.deepEqual(stat.schema.fields.columns?.example, ['title', 'tag', 'tag::tag::category'])
 })
 
 test('tables without records.create/delete reject create and delete', async () => {
@@ -1808,7 +1857,7 @@ test('db tools follow the same workspace boundary as the file-system UI', async 
   const own = await db.read('/notes/n1')
   assert.equal(own.kind, 'record')
   mine.delete('/notes\tn1')
-  db.facets.markDeleted('/notes', 'n1')
+  db.tags.markDeleted('/notes', 'n1')
   const restored = await db.restore('/notes', { ids: ['n1'] })
   assert.equal(restored.kind, 'restored')
   if (restored.kind === 'restored') assert.deepEqual(restored.ids, [])
@@ -1856,7 +1905,7 @@ test('file-system CRUD uses the unified account authorization decision', async (
     () => runWithAccount(bob.id, () => db.update('/notes/n1', { title: '偷改' })),
     /unknown record/,
   )
-  db.facets.replaceContentRefs('/notes', 'n1', ['private.png'])
+  db.tags.replaceContentRefs('/notes', 'n1', ['private.png'])
   assert.doesNotThrow(() => runWithAccount(ada.id, () => db.requireAsset('private.png', 'resource:read')))
   assert.throws(
     () => runWithAccount(bob.id, () => db.requireAsset('private.png', 'resource:read')),
@@ -2233,7 +2282,7 @@ test('granting the all-members view lets the other member read the owner private
   const ownChain = runWithAccount(ada.id, () => collab.recordAccess(ada.id, '/tasks', privateId)).roleChain
   assert.equal(ownChain[0]?.detail, '你是创建者')
   assert.equal(ownChain[0]?.role, 'owner')
-  db.facets.replaceContentRefs('/tasks', privateId, ['via-view.png'])
+  db.tags.replaceContentRefs('/tasks', privateId, ['via-view.png'])
   assert.doesNotThrow(() => runWithAccount(bob.id, () => db.requireAsset('via-view.png', 'resource:read')))
 })
 
@@ -2388,7 +2437,7 @@ test('index rows follow the user records each person can read and omit share', a
     list: () => blocks,
     get: (id) => blocks.find((row) => row.id === id) ?? null,
   })
-  db.register(facetsCollection(db.facets, () => [{ id: 'pages', path: '/pages', label: '页面' }]))
+  db.register(tagsCollection(db.tags, () => [{ id: 'pages', path: '/pages', label: '页面' }]))
   const dir = mkdtempSync(join(tmpdir(), 'biu-db-index-'))
   const collab = new CollabStore(openAndMigrateBiu(join(dir, 'biu.sqlite')))
   class AccountBridge extends Service {
@@ -2416,12 +2465,12 @@ test('index rows follow the user records each person can read and omit share', a
   const shared = await runWithAccount(ada.id, () => db.create('/pages', [{ title: '空间' }], { scope: 'workspace' }))
   const personalId = personal.items[0]!.value.id
   const sharedId = shared.items[0]!.value.id
-  const hidden = await runWithAccount(ada.id, () => db.create('/facets', [{ title: '只贴私人' }]))
-  const shown = await runWithAccount(ada.id, () => db.create('/facets', [{ title: '贴在空间' }]))
+  const hidden = await runWithAccount(ada.id, () => db.create('/tags', [{ title: '只贴私人' }]))
+  const shown = await runWithAccount(ada.id, () => db.create('/tags', [{ title: '贴在空间' }]))
   const hiddenId = String(hidden.items[0]!.value.id)
   const shownId = String(shown.items[0]!.value.id)
-  await runWithAccount(ada.id, () => db.update(`/pages/${personalId}`, { facet: { tags: [hiddenId], values: {} } }))
-  await runWithAccount(ada.id, () => db.update(`/pages/${sharedId}`, { facet: { tags: [shownId], values: {} } }))
+  await runWithAccount(ada.id, () => db.update(`/pages/${personalId}`, { tag: { tags: [hiddenId], values: {} } }))
+  await runWithAccount(ada.id, () => db.update(`/pages/${sharedId}`, { tag: { tags: [shownId], values: {} } }))
 
   const adaBlocks = await runWithAccount(ada.id, () => db.list('/page-blocks'))
   const bobBlocks = await runWithAccount(bob.id, () => db.list('/page-blocks'))
@@ -2431,13 +2480,13 @@ test('index rows follow the user records each person can read and omit share', a
   const blockStat = await runWithAccount(ada.id, () => db.stat('/page-blocks'))
   if (blockStat.kind === 'collection') assert.equal(blockStat.schema.fields.shareScope, undefined)
 
-  const adaFacets = await runWithAccount(ada.id, () => db.list('/facets'))
-  const bobFacets = await runWithAccount(bob.id, () => db.list('/facets'))
+  const adaFacets = await runWithAccount(ada.id, () => db.list('/tags'))
+  const bobFacets = await runWithAccount(bob.id, () => db.list('/tags'))
   assert.deepEqual(adaFacets.items.map((row) => row.id).sort(), [hiddenId, shownId].sort())
   assert.deepEqual(bobFacets.items.map((row) => row.id), [shownId])
-  const bobStamps = await runWithAccount(bob.id, () => db.list('/facets', { facetId: hiddenId }))
+  const bobStamps = await runWithAccount(bob.id, () => db.list('/tags', { tagId: hiddenId }))
   assert.equal(bobStamps.items.length, 0)
-  const adaStamps = await runWithAccount(ada.id, () => db.list('/facets', { facetId: hiddenId }))
+  const adaStamps = await runWithAccount(ada.id, () => db.list('/tags', { tagId: hiddenId }))
   assert.equal(adaStamps.items.length, 1)
 })
 
@@ -2498,13 +2547,67 @@ test('builtin plugins stay visible in the workspace plugin list', async () => {
       () => runWithAccount(bob.id, () => db.update('/plugins/api-playground', { title: '改掉' })),
       /INSUFFICIENT_PERMISSION/,
     )
-    db.facets.markDeleted('/plugins', 'api-playground')
+    db.tags.markDeleted('/plugins', 'api-playground')
     const stillListed = await runWithAccount(bob.id, () => db.list('/plugins'))
     assert.deepEqual(stillListed.items.map((item) => item.id), ['api-playground'])
     const stillRead = await runWithAccount(bob.id, () => db.read('/plugins/api-playground'))
     assert.equal(stillRead.kind === 'record' && stillRead.value.id, 'api-playground')
     const bin = await runWithAccount(bob.id, () => db.listTrash())
     assert.deepEqual(bin.items.map((item) => item.id), [])
+  } finally {
+    if (previous === undefined) delete process.env.BIU_ONLINE
+    else process.env.BIU_ONLINE = previous
+  }
+})
+
+test('reinstalling a builtin plugin does not claim another workspace record', async () => {
+  const previous = process.env.BIU_ONLINE
+  process.env.BIU_ONLINE = '1'
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  const packed: string[] = []
+  db.register({
+    id: 'plugins',
+    path: '/plugins',
+    schema: {
+      labelField: 'title',
+      fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string' }, builtin: { type: 'boolean' } },
+    },
+    list: () => [{ id: 'page-sandbox', title: 'HTML', builtin: true }],
+    get: (id) => (id === 'page-sandbox' ? { id, title: 'HTML', builtin: true } : null),
+    actions: [
+      {
+        id: 'pack',
+        label: '安装',
+        requiredAction: 'resource:read',
+        run: async (id) => {
+          packed.push(id)
+        },
+      },
+    ],
+  })
+  const dir = mkdtempSync(join(tmpdir(), 'biu-db-repack-builtin-'))
+  const collab = new CollabStore(openAndMigrateBiu(join(dir, 'biu.sqlite')))
+  class AccountBridge extends Service {
+    store = collab
+    authorization = collab.authorization
+    workspaceLocation = () => 'device' as const
+    constructor(inner: Context) {
+      super(inner, 'account')
+    }
+  }
+  try {
+    await ctx.plugin(AccountBridge)
+    const ada = collab.register('', Date.now(), 'secret1', 'repack-ada@example.com')
+    const home = collab.createWorkspace(ada.id, '先建的空间')
+    const local = collab.createWorkspace(ada.id, '本机空间')
+    collab.setActive(ada.id, home.id)
+    runWithAccount(ada.id, () => collab.attach(home.id, '/plugins', 'page-sandbox'))
+    collab.setActive(ada.id, local.id)
+    await runWithAccount(ada.id, () => db.action('/plugins/page-sandbox', 'pack'))
+    assert.deepEqual(packed, ['page-sandbox'])
+    assert.equal(collab.recordIds(local.id, '/plugins').has('page-sandbox'), false)
+    assert.equal(collab.recordIds(home.id, '/plugins').has('page-sandbox'), true)
   } finally {
     if (previous === undefined) delete process.env.BIU_ONLINE
     else process.env.BIU_ONLINE = previous
@@ -2631,7 +2734,7 @@ test('a lan view share marks matching records shared without stamping ownership'
   assert.equal(scopeOf(listed.items, '进行中'), '共享')
   assert.equal(scopeOf(listed.items, '已完成'), '私人')
   const roleOf = (items: DbRecord[], title: string) => items.find((row) => row.title === title)?.shareRole
-  assert.equal(roleOf(listed.items, '进行中'), '阅读')
+  assert.equal(roleOf(listed.items, '进行中'), '管理')
   assert.equal(roleOf(listed.items, '已完成'), '管理')
   assert.equal(db.shares.findRecord('/docs', 'open1'), null)
   db.shares.revokeView('/docs', 'open')
@@ -2733,7 +2836,7 @@ test('list match overlay is only loaded for overlay fields or tree filters', () 
   assert.equal(listNeedsMatchOverlay(undefined, '', 'emoji'), true)
   assert.equal(listNeedsMatchOverlay(undefined, '', 'title', [{ field: 'createdBy', dir: 'asc' }]), true)
   assert.equal(listNeedsMatchOverlay({ $tree: { root: 'n1' } }, '', 'title'), true)
-  assert.equal(listNeedsMatchOverlay(undefined, '', 'title', [{ field: 'facet::movie::导演', dir: 'asc' }]), true)
+  assert.equal(listNeedsMatchOverlay(undefined, '', 'title', [{ field: 'tag::movie::导演', dir: 'asc' }]), true)
 })
 
 test('list with columns skips shareRole decorate', async () => {
@@ -2771,7 +2874,7 @@ test('spec.list query keeps facet and session filters and drops group filters', 
     trash: true,
     ids: ['a'],
   })
-  assert.deepEqual(specListQuery({ filter: { facetId: 'work', status: 'open' } }), { filter: { facetId: 'work' } })
+  assert.deepEqual(specListQuery({ filter: { tagId: 'work', status: 'open' } }), { filter: { tagId: 'work' } })
   assert.deepEqual(specListQuery({ filter: { sessionId: 's1' } }), { filter: { sessionId: 's1' } })
 })
 
@@ -2869,6 +2972,12 @@ test('concurrent lists of one collection share a single spec.list scan', async (
   assert.equal(again.total, 6)
   assert.equal(personal.items.length, 12)
   assert.equal(workspace.items.length, 12)
+})
+
+test('db_content points agents at plugin intros for pageBlock fences', () => {
+  const host = readFileSync(resolve(import.meta.dirname, './index.ts'), 'utf8')
+  assert.match(host, /写 :::pageBlock 前先 db_content \/plugins\/<plugin> 读介绍里的「示例写法」/)
+  assert.equal(host.includes('kind=html 或 htmlframe'), false)
 })
 
 test('collection list preloads authorization scans and releases them', () => {

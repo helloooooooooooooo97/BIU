@@ -1124,8 +1124,8 @@ test('博客：不提供 RSS，文章有作者署名', async () => {
 
 test('更新日志：Release 正文去掉 Markdown 记号', async () => {
   const { releaseLines } = await import('./marketing-site/resources.tsx')
-  const body = "## macOS\n```bash\nxattr -dr x\n```\n## What's Changed\n* feat: 会话列表 by @someone in https://github.com/a/b/pull/3\n用 `make` 启动"
-  assert.deepEqual(releaseLines(body), ['macOS', 'xattr -dr x', 'feat: 会话列表（#3）', '用 make 启动'])
+  const body = "## macOS\n```bash\nxattr -dr x\n```\n## What's Changed\n* feat: 代理列表 by @someone in https://github.com/a/b/pull/3\n用 `make` 启动"
+  assert.deepEqual(releaseLines(body), ['macOS', 'xattr -dr x', 'feat: 代理列表（#3）', '用 make 启动'])
 })
 
 test('常见问题：首页、产品、场景子页、对比、安全、定价、下载各有一组，博客与品牌不放', () => {

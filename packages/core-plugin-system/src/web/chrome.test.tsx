@@ -7,13 +7,14 @@ test('plugin actions come from the collection action schema', () => {
   assert.equal(pluginsChrome.Actions, undefined)
 })
 
-test('plugin title puts a green dot left of the name when enabled', () => {
+test('plugin title marks enabled rows so the row icon can turn green', () => {
   const Title = pluginsChrome.Title
   assert.ok(Title)
   const off = render(<Title record={{ id: 'draft' }} label="草稿" />)
-  assert.equal(off.container.querySelector('[data-testid="plugin-enabled-dot"]'), null)
+  assert.equal(off.container.querySelector('[data-plugin-enabled]'), null)
   const on = render(<Title record={{ id: 'demo', enabled: true }} label="画板" />)
-  const dot = on.container.querySelector('[data-testid="plugin-enabled-dot"]')
-  assert.ok(dot)
-  assert.ok(dot?.nextElementSibling?.textContent?.includes('画板'))
+  const mark = on.container.querySelector('[data-plugin-enabled]')
+  assert.ok(mark)
+  assert.match(mark?.textContent ?? '', /画板/)
+  assert.equal(on.container.querySelector('[data-testid="plugin-enabled-dot"]'), null)
 })

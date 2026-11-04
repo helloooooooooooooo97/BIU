@@ -1,6 +1,6 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { asImageSrc, asImageSrcList, asAttachment, asAttachmentList, asPerson, asPersonList, appendPerson, personKey, actionVisibleToUser, emptySchemaValue, isEmptySchemaValue, hasCollectionDeleteQuery, isReservedSchemaFieldKey, isReservedSchemaFieldLabel, normalizeSchemaPack, normalizeSchemaValue, recordBuiltinValues, REQUIRED_RECORD_FIELD_KEYS, REQUIRED_RECORD_FIELDS, retagSchemaValue, schemaSearchHaystack, withBuiltinFields } from './index.ts'
+import { asImageSrc, asImageSrcList, asAttachment, asAttachmentList, asPerson, asPersonList, appendPerson, personKey, actionVisibleToUser, emptySchemaValue, isEmptySchemaValue, hasCollectionDeleteQuery, isReservedSchemaFieldKey, isReservedSchemaFieldLabel, isSchemaFieldKey, normalizeSchemaPack, normalizeSchemaValue, parseAtomicFields, recordBuiltinValues, REQUIRED_RECORD_FIELD_KEYS, REQUIRED_RECORD_FIELDS, retagSchemaValue, schemaSearchHaystack, withBuiltinFields } from './index.ts'
 
 test('asImageSrc keeps http, data:image, and same-origin image paths', () => {
   assert.equal(asImageSrc('https://example.com/a.png'), 'https://example.com/a.png')
@@ -73,14 +73,15 @@ test('empty schema values are tags=[] and values={}', () => {
   assert.equal(isEmptySchemaValue({ tags: [], values: { dp: { complexity: 'O(n)' } } }), false)
 })
 
-test('reserved schema fields include 标签 / facet by key or label', () => {
-  assert.equal(isReservedSchemaFieldKey('facet'), true)
+test('reserved schema fields include 标签 / tag by key or label', () => {
+  assert.equal(isReservedSchemaFieldKey('tag'), true)
+  assert.equal(isReservedSchemaFieldKey('tag'), true)
   assert.equal(isReservedSchemaFieldKey('title'), true)
   assert.equal(isReservedSchemaFieldKey('tags'), true)
   assert.equal(isReservedSchemaFieldLabel('标签'), true)
   assert.equal(isReservedSchemaFieldLabel('类型'), false)
   assert.equal(isReservedSchemaFieldLabel('标题'), true)
-  assert.equal(isReservedSchemaFieldLabel('facet'), true)
+  assert.equal(isReservedSchemaFieldLabel('tag'), true)
   assert.equal(isReservedSchemaFieldKey('parentId'), true)
   assert.equal(isReservedSchemaFieldKey('dependsOn'), true)
   assert.equal(isReservedSchemaFieldLabel('父级'), true)
@@ -97,21 +98,66 @@ test('normalizeSchemaPack keeps nested facet fields and action', () => {
     label: '动态规划',
     fields: [
       { key: 'complexity', type: 'string' },
-      { key: 'nested', type: 'facet' },
+      { key: 'nested', type: 'tag' },
       { key: 'run', type: 'action' },
     ],
   })
   assert.equal(pack?.id, 'dp')
   assert.deepEqual(pack?.fields.map((field) => field.key), ['complexity', 'nested', 'run'])
-  assert.equal(pack?.fields.find((field) => field.key === 'nested')?.type, 'facet')
+  assert.equal(pack?.fields.find((field) => field.key === 'nested')?.type, 'tag')
+  assert.equal(pack?.fields[0]?.label, undefined)
 })
 
-test('normalizeSchemaPack drops fields that reuse file-system keys or labels', () => {
+test('schema field keeps a stable key and a separate label', () => {
+  assert.equal(isSchemaFieldKey('4829103'), true)
+  const pack = normalizeSchemaPack({
+    id: 'film',
+    label: '影片',
+    fields: [
+      { key: '导演', type: 'string' },
+      { key: '4829103', type: 'string', label: '复杂度' },
+      { type: 'string', label: '年份' },
+    ],
+  })
+  assert.deepEqual(
+    pack?.fields.map((field) => ({ key: field.key, label: field.label })),
+    [
+      { key: '导演', label: undefined },
+      { key: '4829103', label: '复杂度' },
+      { key: '年份', label: undefined },
+    ],
+  )
+  const parsed = parseAtomicFields([{ key: '4829103', type: 'string', label: '导演' }, { type: 'number', label: '票房' }])
+  assert.deepEqual(
+    parsed.map((field) => ({ key: field.key, label: field.label })),
+    [
+      { key: '4829103', label: '导演' },
+      { key: '票房', label: undefined },
+    ],
+  )
+  assert.throws(
+    () => parseAtomicFields([{ key: '1', type: 'string', label: '导演' }, { key: '2', type: 'number', label: '导演' }]),
+    /duplicate field name/,
+  )
+})
+
+test('normalizeSchemaPack keeps deleted fields and their labels', () => {
+  const pack = normalizeSchemaPack({
+    id: 'dp',
+    label: '动态规划',
+    fields: [{ key: '4829103', type: 'string', label: '复杂度', deleted: true }],
+  })
+  assert.equal(pack?.fields[0]?.key, '4829103')
+  assert.equal(pack?.fields[0]?.label, '复杂度')
+  assert.equal(pack?.fields[0]?.deleted, true)
+})
+
+test('normalizeSchemaPack drops reserved or duplicate field names', () => {
   const pack = normalizeSchemaPack({
     id: 'dp',
     label: '动态规划',
     fields: [
-      { key: 'facet', type: 'string', label: '别的名字' },
+      { key: 'tag', type: 'string', label: '别的名字' },
       { key: 'extra', type: 'string', label: '标签' },
       { key: 'title', type: 'string', label: '题目' },
       { key: 'complexity', type: 'string', label: '复杂度' },
@@ -121,15 +167,16 @@ test('normalizeSchemaPack drops fields that reuse file-system keys or labels', (
   assert.deepEqual(pack?.fields.map((field) => field.key), ['complexity'])
 })
 
-test('withBuiltinFields always includes writable facet and strips tags', () => {
+test('withBuiltinFields always includes writable tag and strips tags', () => {
   const fields = withBuiltinFields({
     title: { type: 'string', writable: true },
     parentId: { type: 'string', label: '父级', writable: true },
     tags: { type: 'multi-select', label: '标签', writable: true },
   })
-  assert.equal(fields.facet?.type, 'facet')
-  assert.equal(fields.facet?.writable, true)
-  assert.equal(fields.facet?.label, '标签')
+  assert.equal(fields.tag?.type, 'tag')
+  assert.equal(fields.tag?.writable, true)
+  assert.equal(fields.tag?.label, '标签')
+  assert.equal(fields.facet, undefined)
   assert.equal(fields.tags, undefined)
   assert.equal(fields.emoji?.writable, true)
   assert.equal(fields.parentId?.writable, true)
@@ -150,7 +197,7 @@ test('recordBuiltinValues fills required record columns', () => {
     createdAt: 0,
     updatedAt: 0,
     emoji: '',
-    facet: { tags: [], values: {} },
+    tag: { tags: [], values: {} },
     parentId: '',
     dependsOn: [],
     createdBy: null,
@@ -162,14 +209,14 @@ test('recordBuiltinValues fills required record columns', () => {
   assert.deepEqual(recordBuiltinValues({ dependsOn: ['a', 'a', ''] }).dependsOn, ['a'])
 })
 
-test('required record fields are icon, timestamps, facet, parent, and dependency', () => {
+test('required record fields are icon, timestamps, tag, parent, and dependency', () => {
   assert.deepEqual([...REQUIRED_RECORD_FIELD_KEYS].sort(), [
     'createdAt',
     'createdBy',
     'dependsOn',
     'emoji',
-    'facet',
     'parentId',
+    'tag',
     'updatedAt',
     'updatedBy',
   ])
@@ -177,7 +224,7 @@ test('required record fields are icon, timestamps, facet, parent, and dependency
   assert.equal(REQUIRED_RECORD_FIELDS.updatedBy.type, 'person')
   assert.equal(REQUIRED_RECORD_FIELDS.updatedBy.multiple, true)
   assert.equal(REQUIRED_RECORD_FIELDS.emoji.type, 'string')
-  assert.equal(REQUIRED_RECORD_FIELDS.facet.type, 'facet')
+  assert.equal(REQUIRED_RECORD_FIELDS.tag.type, 'tag')
   assert.equal(REQUIRED_RECORD_FIELDS.createdAt.type, 'datetime')
   assert.equal(REQUIRED_RECORD_FIELDS.updatedAt.type, 'datetime')
   assert.equal(REQUIRED_RECORD_FIELDS.parentId.type, 'ref')

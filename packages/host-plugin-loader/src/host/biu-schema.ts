@@ -3,7 +3,7 @@ type DatabaseSync = import('node:sqlite').DatabaseSync
 export type TableSpec = { columns: string[]; indexes: string[] }
 
 /** Current biu.sqlite shape including editor_content. Stores must not CREATE TABLE themselves.
- *  tasks / facets / facet_stamps / facet_record_values / shares / banner_gallery stay in schema
+ *  tasks / tags / tag_stamps / tag_record_values / shares / banner_gallery stay in schema
  *  even when a workspace has 0 rows — they are product tables, not leftovers. */
 export const BIU_TABLES: Record<string, TableSpec> = {
   pages: {
@@ -37,21 +37,21 @@ export const BIU_TABLES: Record<string, TableSpec> = {
       'report_interval_sec',
       'last_report_prompt_at',
       'report_prompt_count',
-      'facet_json',
+      'tag_json',
       'emoji',
     ],
     indexes: ['tasks_status_sort'],
   },
-  facets: {
+  tags: {
     columns: ['id', 'label', 'fields_json', 'created_at', 'updated_at'],
-    indexes: ['facets_label'],
+    indexes: ['tags_label'],
   },
-  facet_stamps: {
-    columns: ['facet_id', 'collection', 'record_id', 'title'],
-    indexes: ['facet_stamps_facet', 'facet_stamps_record'],
+  tag_stamps: {
+    columns: ['tag_id', 'collection', 'record_id', 'title'],
+    indexes: ['tag_stamps_tag', 'tag_stamps_record'],
   },
-  facet_record_values: {
-    columns: ['collection', 'record_id', 'facet_json'],
+  tag_record_values: {
+    columns: ['collection', 'record_id', 'tag_json'],
     indexes: [],
   },
   record_meta: {
@@ -106,7 +106,7 @@ export const BIU_TABLES: Record<string, TableSpec> = {
     columns: ['collection', 'view_id', 'deleted_at'],
     indexes: [],
   },
-  sessions: {
+  agents: {
     columns: ['id', 'version', 'project_json', 'event_count', 'title', 'updated_at', 'mascot_json', 'config_json'],
     indexes: [],
   },
@@ -298,7 +298,7 @@ export const BIU_TABLES: Record<string, TableSpec> = {
   },
 }
 
-export const LATEST_BIU_SCHEMA = 40
+export const LATEST_BIU_SCHEMA = 44
 
 export const CREATE_CORE_SQL = `
 CREATE TABLE IF NOT EXISTS pages (
@@ -338,11 +338,11 @@ CREATE TABLE IF NOT EXISTS tasks (
   report_interval_sec INTEGER NOT NULL DEFAULT 60,
   last_report_prompt_at INTEGER,
   report_prompt_count INTEGER NOT NULL DEFAULT 0,
-  facet_json TEXT NOT NULL DEFAULT '{}',
+  tag_json TEXT NOT NULL DEFAULT '{}',
   emoji TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS tasks_status_sort ON tasks(status, sort, updated_at DESC);
-CREATE TABLE IF NOT EXISTS facets (
+CREATE TABLE IF NOT EXISTS tags (
   id TEXT PRIMARY KEY,
   label TEXT NOT NULL,
   fields_json TEXT NOT NULL DEFAULT '[]',
@@ -350,20 +350,20 @@ CREATE TABLE IF NOT EXISTS facets (
   created_at INTEGER NOT NULL DEFAULT 0,
   updated_at INTEGER NOT NULL
 );
-CREATE INDEX IF NOT EXISTS facets_label ON facets(label);
-CREATE TABLE IF NOT EXISTS facet_stamps (
-  facet_id TEXT NOT NULL,
+CREATE INDEX IF NOT EXISTS tags_label ON tags(label);
+CREATE TABLE IF NOT EXISTS tag_stamps (
+  tag_id TEXT NOT NULL,
   collection TEXT NOT NULL,
   record_id TEXT NOT NULL,
   title TEXT NOT NULL DEFAULT '',
-  PRIMARY KEY (facet_id, collection, record_id)
+  PRIMARY KEY (tag_id, collection, record_id)
 );
-CREATE INDEX IF NOT EXISTS facet_stamps_facet ON facet_stamps(facet_id);
-CREATE INDEX IF NOT EXISTS facet_stamps_record ON facet_stamps(collection, record_id);
-CREATE TABLE IF NOT EXISTS facet_record_values (
+CREATE INDEX IF NOT EXISTS tag_stamps_tag ON tag_stamps(tag_id);
+CREATE INDEX IF NOT EXISTS tag_stamps_record ON tag_stamps(collection, record_id);
+CREATE TABLE IF NOT EXISTS tag_record_values (
   collection TEXT NOT NULL,
   record_id TEXT NOT NULL,
-  facet_json TEXT NOT NULL,
+  tag_json TEXT NOT NULL,
   PRIMARY KEY (collection, record_id)
 );
 CREATE TABLE IF NOT EXISTS record_meta (
@@ -447,7 +447,7 @@ CREATE TABLE IF NOT EXISTS saved_view_tombstones (
   deleted_at INTEGER NOT NULL,
   PRIMARY KEY (collection, view_id)
 );
-CREATE TABLE IF NOT EXISTS sessions (
+CREATE TABLE IF NOT EXISTS agents (
   id TEXT PRIMARY KEY,
   version INTEGER NOT NULL,
   project_json TEXT,
@@ -869,7 +869,7 @@ export function rebuildPageBlockCollectionKeys(db: DatabaseSync) {
 export function dropLegacyEditorColumns(db: DatabaseSync) {
   dropSqliteColumn(db, 'pages', 'notes')
   dropSqliteColumn(db, 'tasks', 'description')
-  dropSqliteColumn(db, 'facets', 'notes')
+  dropSqliteColumn(db, 'tags', 'notes')
 }
 
 export function applyLatestSchemaPatches(db: DatabaseSync) {

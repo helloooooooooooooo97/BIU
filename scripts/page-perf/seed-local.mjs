@@ -201,7 +201,7 @@ const skills = await ensurePrefixed('/skills', skillPrefix, skillTarget, (index)
   description: '本机空间压测技能，给技能表和记录页用。',
   enabled: true,
 }))
-const facets = await ensurePrefixed('/facets', facetPrefix, facetTarget, (index) => ({
+const facets = await ensurePrefixed('/tags', facetPrefix, facetTarget, (index) => ({
   title: `${facetPrefix}${index}`,
 }))
 let blockPage = (await listPage('/pages', { q: blockPageTitle, limit: 5, columns: 'id,title' })).items.find(
@@ -214,7 +214,7 @@ if (!blockPage) {
 if (blockPage?.id) {
   const fences = Array.from({ length: 12 }, (_, index) => {
     const id = `stress${String(index + 1).padStart(2, '0')}`
-    return `:::pageBlock {kind=html plugin=page-html-blocks id=${id}}\n<p>压测块 ${index + 1}</p>\n:::`
+    return `:::pageBlock {kind=html plugin=page-sandbox id=${id}}\n<p>压测块 ${index + 1}</p>\n:::`
   })
   await apiJson('/api/db/content', {
     method: 'POST',
@@ -225,7 +225,7 @@ const pageCount = await listPage('/pages', { limit: 1 })
 const taskCount = await listPage('/tasks', { limit: 1 })
 const sessionCount = await listPage('/sessions', { limit: 1 })
 const skillCount = await listPage('/skills', { limit: 1 })
-const facetCount = await listPage('/facets', { limit: 1 })
+const facetCount = await listPage('/tags', { limit: 1 })
 const blockCount = await listPage('/page-blocks', { limit: 1 })
 const stat = await apiJson('/api/db/stat?path=/')
 

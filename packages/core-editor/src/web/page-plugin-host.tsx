@@ -1,12 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, type ComponentType, type ReactNode } from 'react'
 import { PlayIcon } from '@heroicons/react/16/solid'
-import { RenderBoundary } from '@biu/public-ui'
+import { RenderBoundary } from '@biu/biu-ui'
 import { getPageEditor, usePageEditorVersion, type PageBlockViewProps } from './service.ts'
 import {
   ENABLE_PAGE_BLOCK_PLUGIN,
-  formatPageBlockFence,
   requestEnablePageBlockPlugin,
-  setPageBlockPluginPhase,
   usePageBlockPluginPhase,
   type PageBlockPluginPhase,
 } from './page-block-meta.ts'
@@ -54,7 +52,7 @@ export function usePagePluginResolve(kind: string, plugin: string) {
       retriedReady.current = false
       return
     }
-    if (!plugin || phase === 'loading' || phase === 'failed') return
+    if (!plugin || phase === 'loading' || phase === 'failed' || phase === 'missing') return
     if (phase === 'ready') {
       if (retriedReady.current) return
       retriedReady.current = true
@@ -83,8 +81,9 @@ export function PageBlockMissing({
   data: Record<string, unknown>
   phase?: PageBlockPluginPhase
 }) {
-  const source = formatPageBlockFence(kind, plugin, data)
+  const source = JSON.stringify(data, null, 2)
   const loading = phase === 'loading'
+  const missing = phase === 'missing'
   return (
     <div className="page-block-missing" data-testid="page-block-missing" data-plugin-phase={phase}>
       <div className="page-block-missing-head">
@@ -94,6 +93,7 @@ export function PageBlockMissing({
           <span className="page-block-missing-state">没有插件 id</span>
         )}
         {loading ? <span className="page-block-missing-state">正在加载</span> : null}
+        {missing ? <span className="page-block-missing-state">插件不存在</span> : null}
         {plugin && !loading ? (
           <button
             type="button"
@@ -104,7 +104,6 @@ export function PageBlockMissing({
             onClick={(event) => {
               event.preventDefault()
               event.stopPropagation()
-              setPageBlockPluginPhase(plugin, 'idle')
               requestEnablePageBlockPlugin(plugin, kind, { force: true })
             }}
           >
@@ -114,7 +113,7 @@ export function PageBlockMissing({
       </div>
       {loading ? null : (
         <div className="page-block-missing-source">
-          <SourceEditor value={source} writable={false} compact />
+          <SourceEditor value={source} language="json" writable={false} compact />
         </div>
       )}
     </div>
@@ -127,6 +126,7 @@ export function PagePluginSurface({
   data,
   update,
   writable,
+  selected,
   View,
   phase,
   pending,
@@ -136,6 +136,7 @@ export function PagePluginSurface({
   data: Record<string, unknown>
   update: PageBlockViewProps['update']
   writable: boolean
+  selected?: boolean
   View?: ComponentType<PageBlockViewProps>
   phase: PageBlockPluginPhase
   pending?: ReactNode
@@ -144,7 +145,7 @@ export function PagePluginSurface({
   if (View) {
     return (
       <RenderBoundary label={plugin || kind}>
-        <View data={data} update={update} writable={writable} />
+        <View data={data} update={update} writable={writable} selected={selected} />
       </RenderBoundary>
     )
   }

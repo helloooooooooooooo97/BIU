@@ -1,7 +1,7 @@
 import { isSessionCompactPoint, type SessionEvent } from '@biu/type-session'
 
 export const COMPACT_GUIDE = [
-  '【压缩目标】把会话中此前的必要上下文浓缩为一段结构化摘要，作为新前缀，之后不再重复发送旧历史。',
+  '【压缩目标】把代理中此前的必要上下文浓缩为一段结构化摘要，作为新前缀，之后不再重复发送旧历史。',
   '【摘要 Prompt】请逐项覆盖：',
   '  1. 当前位置/进度：你正在做什么任务、进行到哪一阶段、最近几轮聚焦的话题。',
   '  2. 关键决策：已作出的决定与理由。',

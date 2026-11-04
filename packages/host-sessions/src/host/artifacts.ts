@@ -175,7 +175,7 @@ export async function ingestSessionImages(options: {
     out.push({
       name,
       mime: artifactMime(name),
-      url: `/api/sessions/${encodeURIComponent(sessionId)}/artifacts/${encodeURIComponent(name)}`,
+      url: `/api/agents/${encodeURIComponent(sessionId)}/artifacts/${encodeURIComponent(name)}`,
       source: insideWorkspace ? rel || basename(full) : full,
     })
   }

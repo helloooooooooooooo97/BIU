@@ -100,7 +100,7 @@ export function apply(ctx: Context) {
     const ui = inner.get('databaseUi') as DatabaseUi
     let sessions: { dispose: () => void } | undefined
     void import('./sessions-chrome.tsx').then((mod) => {
-      sessions = ui.decorate('/sessions', mod.sessionsChrome())
+      sessions = ui.decorate('/agents', mod.sessionsChrome())
     })
     return () => {
       sessions?.dispose()

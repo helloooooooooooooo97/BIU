@@ -1,5 +1,8 @@
 {
   "name": "page-html-blocks",
   "private": true,
-  "dependencies": {}
+  "dependencies": {
+    "@heroicons/react": "^2.2.0",
+    "sucrase": "^3.35.1"
+  }
 }

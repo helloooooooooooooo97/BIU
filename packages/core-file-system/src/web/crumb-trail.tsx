@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { MagnifyingGlassIcon, PlusIcon } from '@heroicons/react/16/solid'
-import { HeadlessDismiss } from '@biu/public-ui/headless-dismiss'
-import { overlayPortalRoot } from '@biu/public-ui/overlay-portal'
+import { HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
+import { overlayPortalRoot } from '@biu/biu-ui/overlay-portal'
 import { delayCrumbQuery, pullCrumbRecords, recordChoicesFromRows } from './crumb-records.ts'
 import { CrumbItemGlyph, TableGlyph } from './nav-glyphs.tsx'
 import { crumbButtonAction, type Crumb, type CrumbChoice, type CrumbTarget } from './sidebar-nav.ts'
@@ -274,7 +274,7 @@ export function CrumbTrail({
         const current = crumb.choices.find((item) => item.id === crumb.id)
         const glyph = (
           <>
-            {!allowMenu && crumb.kind === 'view' ? <TableGlyph icon={tableIcon} /> : null}
+            {!allowMenu && !lockRootCrumb && crumb.kind === 'view' ? <TableGlyph icon={tableIcon} /> : null}
             <CrumbItemGlyph
               kind={crumb.kind}
               icon={crumb.icon ?? current?.icon}

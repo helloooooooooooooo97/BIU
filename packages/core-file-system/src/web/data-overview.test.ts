@@ -1,0 +1,52 @@
+import { test } from 'vitest'
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
+test('data overview reuses CollectionBrowser and opens source records', () => {
+  const overview = readFileSync(resolve(import.meta.dirname, './data-overview.tsx'), 'utf8')
+  const page = readFileSync(resolve(import.meta.dirname, './index.tsx'), 'utf8')
+  assert.match(overview, /data-testid="fsdb-data-overview"/)
+  assert.match(overview, /className="fsdb-data-overview"/)
+  const css = readFileSync(resolve(import.meta.dirname, './fsdb-style.ts'), 'utf8')
+  assert.match(css, /\.fsdb-data-overview\{display:flex;min-width:0;min-height:0;flex:1/)
+  assert.match(overview, /<CollectionBrowser/)
+  assert.match(overview, /DATA_COLLECTION_PATH/)
+  assert.match(overview, /dataChrome/)
+  assert.match(overview, /SourceActions/)
+  assert.match(overview, /record\.actionIds/)
+  assert.doesNotMatch(overview, /action.id === 'open'/)
+  const chrome = readFileSync(resolve(import.meta.dirname, './data-chrome.ts'), 'utf8')
+  assert.match(chrome, /columns: \['title', 'actions', 'table'\]/)
+  assert.match(overview, /SourceTableCell/)
+  assert.match(overview, /cells: \{/)
+  assert.match(overview, /className="fsdb-record-mark is-sm"/)
+  assert.match(overview, /idleTableIconKind\(table\?\.view\?\.icon\)/)
+  assert.match(overview, /className="fsdb-title-text"/)
+  assert.match(overview, /collectionNoun/)
+  assert.match(overview, /onOpenTable\(path, viewId\)/)
+  assert.match(overview, /builtinAllViewId\(path\)/)
+  const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
+  assert.match(browser, /activeView\?\.builtin \? null/)
+  assert.match(browser, /row\.tableIcon/)
+  assert.match(overview, /onOpenView/)
+  assert.match(page, /collectionFromRoute === DATA_COLLECTION_PATH/)
+  assert.match(page, /onOpenView=\{\(viewId\) => go\(\{ collection: DATA_COLLECTION_PATH, viewId \}\)\}/)
+  assert.match(page, /dataHome \? builtinAllViewId\(DATA_COLLECTION_PATH\) : viewFromRoute/)
+  assert.match(
+    page,
+    /go\(\{ collection: DATA_COLLECTION_PATH, viewId: builtinAllViewId\(DATA_COLLECTION_PATH\) \}/,
+  )
+  assert.match(overview, /stampRowOpenTarget/)
+  assert.doesNotMatch(overview, /DataSidebarShell/)
+  assert.doesNotMatch(overview, /tasks-table is-cols-fixed/)
+  assert.match(page, /<DataOverview/)
+  assert.match(page, /decorate\(DATA_COLLECTION_PATH, dataChrome\)/)
+  assert.match(browser, /isDataOverview \? overviewCreateTables.length > 0/)
+  assert.match(browser, /aria-label="新建类型"/)
+  assert.match(browser, /useState\(PAGES_COLLECTION_PATH\)/)
+  assert.match(browser, /path: targetPath/)
+  assert.match(browser, /tablePath: targetTable.path/)
+  assert.doesNotMatch(browser, /from '\.\.\/host\/data-collection/)
+  assert.match(browser, /showRecordInInspector\(targetPath, sourceId/)
+})

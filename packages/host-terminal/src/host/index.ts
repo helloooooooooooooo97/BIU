@@ -4,7 +4,7 @@ import { posixShellBin } from '@biu/host-subprocess'
 
 interface Term {
   id: string
-  /** 可选命名会话：同名复用同一个 shell（页面终端和 agent 共用一条会话就靠它） */
+  /** 可选命名代理：同名复用同一个 shell（页面终端和 agent 共用一条就靠它） */
   name: string
   child: ChildProcessWithoutNullStreams
   buffer: string
@@ -61,7 +61,7 @@ export class TerminalService extends Service {
     super(ctx, 'terminals')
   }
 
-  /** name 传了就复用同名会话；没传就是一条匿名会话。 */
+  /** name 传了就复用同名代理；没传就是一条匿名代理。 */
   open(name = '') {
     const wanted = name.trim()
     if (wanted) {
@@ -141,7 +141,7 @@ export class TerminalService extends Service {
     return { terms: [...this.terms.values()].map(info) }
   }
 
-  /** 查一条会话：页面按块 id 命名，agent 用同一个名字就能接上。 */
+  /** 查一条代理：页面按块 id 命名，agent 用同一个名字就能接上。 */
   get(idOrName: string) {
     const direct = this.terms.get(idOrName)
     if (direct) return info(direct)
@@ -168,7 +168,7 @@ export function apply(ctx: Context) {
   ctx.tools.register({
     name: 'terminal_open',
     description:
-      '打开持久 shell。可选 name：同名会话直接复用（页面终端就是按块 id 命名的），不传则新开一条匿名会话。',
+      '打开持久 shell。可选 name：同名代理直接复用（页面终端就是按块 id 命名的），不传则新开一条匿名代理。',
     parameters: { type: 'object', properties: { name: { type: 'string' } } },
     execute: (args) => terminals.open(args.name == null ? '' : String(args.name)),
   })
@@ -195,7 +195,7 @@ export function apply(ctx: Context) {
   })
   ctx.tools.register({
     name: 'terminal_list',
-    description: '列出当前活着的 shell 会话（id / 名字 / cwd / pid）',
+    description: '列出当前活着的 shell 代理（id / 名字 / cwd / pid）',
     parameters: { type: 'object', properties: {} },
     execute: () => terminals.list(),
   })

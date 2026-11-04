@@ -26,6 +26,150 @@ export type MigrateCtx = {
   workspace?: string
 }
 
+export function renameSessionsTableToAgents(db: DatabaseSync) {
+  if (hasTable(db, 'agents')) return
+  if (!hasTable(db, 'sessions')) return
+  db.exec('ALTER TABLE sessions RENAME TO agents')
+}
+
+function renameTable(db: DatabaseSync, from: string, to: string) {
+  if (!hasTable(db, from) || hasTable(db, to)) return
+  db.exec(`ALTER TABLE ${from} RENAME TO ${to}`)
+}
+
+function renameColumn(db: DatabaseSync, table: string, from: string, to: string) {
+  if (!hasTable(db, table)) return
+  const cols = tableColumnNames(db, table)
+  if (!cols.includes(from) || cols.includes(to)) return
+  db.exec(`ALTER TABLE ${table} RENAME COLUMN ${from} TO ${to}`)
+}
+
+function rewriteFacetToken(value: string) {
+  if (value === 'facet') return 'tag'
+  if (value === 'facetId') return 'tagId'
+  if (value.startsWith('facet::')) return `tag::${value.slice('facet::'.length)}`
+  if (value === '/facets' || value.startsWith('/facets/')) return `/tags${value.slice('/facets'.length)}`
+  return value
+}
+
+function rewriteFacetJson(value: unknown): unknown {
+  if (typeof value === 'string') return rewriteFacetToken(value)
+  if (Array.isArray(value)) return value.map(rewriteFacetJson)
+  if (!value || typeof value !== 'object') return value
+  const out: Record<string, unknown> = {}
+  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+    const nextKey = rewriteFacetToken(key)
+    let next = rewriteFacetJson(item)
+    if (nextKey === 'type' && (item === 'facet' || item === 'tag')) next = 'tag'
+    out[nextKey] = next
+  }
+  return out
+}
+
+function migrateFacetNameToTag(db: DatabaseSync) {
+  renameTable(db, 'facets', 'tags')
+  renameTable(db, 'facet_stamps', 'tag_stamps')
+  renameTable(db, 'facet_record_values', 'tag_record_values')
+  renameColumn(db, 'tag_stamps', 'facet_id', 'tag_id')
+  renameColumn(db, 'tag_record_values', 'facet_json', 'tag_json')
+  renameColumn(db, 'tasks', 'facet_json', 'tag_json')
+  db.exec('DROP INDEX IF EXISTS facets_label')
+  db.exec('DROP INDEX IF EXISTS facet_stamps_facet')
+  db.exec('DROP INDEX IF EXISTS facet_stamps_record')
+  if (hasTable(db, 'tags')) db.exec('CREATE INDEX IF NOT EXISTS tags_label ON tags(label)')
+  if (hasTable(db, 'tag_stamps')) {
+    db.exec('CREATE INDEX IF NOT EXISTS tag_stamps_tag ON tag_stamps(tag_id)')
+    db.exec('CREATE INDEX IF NOT EXISTS tag_stamps_record ON tag_stamps(collection, record_id)')
+  }
+  remapCollectionPath(db, '/facets', '/tags')
+  if (hasTable(db, 'tags')) {
+    const packs = db.prepare('SELECT id, fields_json FROM tags').all() as Array<{ id: string; fields_json: string }>
+    const save = db.prepare('UPDATE tags SET fields_json = ? WHERE id = ?')
+    for (const pack of packs) {
+      try {
+        const next = rewriteFacetJson(JSON.parse(pack.fields_json || '[]'))
+        save.run(JSON.stringify(next), pack.id)
+      } catch {
+        /* keep */
+      }
+    }
+  }
+  if (hasTable(db, 'saved_views')) {
+    const rows = db.prepare('SELECT collection, view_id, payload_json FROM saved_views').all() as Array<{
+      collection: string
+      view_id: string
+      payload_json: string
+    }>
+    const save = db.prepare('UPDATE saved_views SET payload_json = ? WHERE collection = ? AND view_id = ?')
+    for (const row of rows) {
+      try {
+        const next = JSON.stringify(rewriteFacetJson(JSON.parse(row.payload_json || '{}')))
+        if (next !== row.payload_json) save.run(next, row.collection, row.view_id)
+      } catch {
+        /* keep */
+      }
+    }
+  }
+  if (hasTable(db, 'agents') && tableColumnNames(db, 'agents').includes('config_json')) {
+    const rows = db.prepare('SELECT id, config_json FROM agents').all() as Array<{ id: string; config_json: string | null }>
+    const save = db.prepare('UPDATE agents SET config_json = ? WHERE id = ?')
+    for (const row of rows) {
+      if (!row.config_json) continue
+      try {
+        const parsed = JSON.parse(row.config_json) as Record<string, unknown>
+        if (!('facet' in parsed) && !JSON.stringify(parsed).includes('facet')) continue
+        const next = rewriteFacetJson(parsed)
+        save.run(JSON.stringify(next), row.id)
+      } catch {
+        /* keep */
+      }
+    }
+  }
+}
+
+function remapSessionsCollectionToAgents(db: DatabaseSync) {
+  remapCollectionPath(db, '/' + 'sessions', '/agents')
+}
+
+function remapCollectionPath(db: DatabaseSync, from: string, to: string) {
+  for (const table of tableNames(db)) {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(table)) continue
+    const cols = tableColumnNames(db, table)
+    for (const col of ['collection', 'parent_collection']) {
+      if (!cols.includes(col)) continue
+      db.exec(
+        `UPDATE ${table} SET ${col} = '${to}' || substr(${col}, ${from.length + 1})
+         WHERE ${col} = '${from}' OR ${col} LIKE '${from}/%'`,
+      )
+    }
+  }
+  if (!hasTable(db, 'saved_views') || !tableColumnNames(db, 'saved_views').includes('payload_json')) return
+  const rows = db.prepare('SELECT collection, view_id, payload_json FROM saved_views').all() as Array<{
+    collection: string
+    view_id: string
+    payload_json: string
+  }>
+  const update = db.prepare('UPDATE saved_views SET view_id = ?, payload_json = ? WHERE collection = ? AND view_id = ?')
+  const legacyAll = `builtin-all:${from}`
+  const nextAll = `builtin-all:${to}`
+  for (const row of rows) {
+    let payload = row.payload_json
+    try {
+      const parsed = JSON.parse(row.payload_json) as { tablePath?: unknown; id?: unknown }
+      if (typeof parsed.tablePath === 'string' && (parsed.tablePath === from || parsed.tablePath.startsWith(`${from}/`))) {
+        parsed.tablePath = `${to}${parsed.tablePath.slice(from.length)}`
+      }
+      if (typeof parsed.id === 'string') parsed.id = parsed.id.replace(legacyAll, nextAll)
+      payload = JSON.stringify(parsed)
+    } catch {
+      /* keep raw */
+    }
+    const nextViewId = row.view_id.replace(legacyAll, nextAll)
+    if (payload === row.payload_json && nextViewId === row.view_id) continue
+    update.run(nextViewId, payload, row.collection, row.view_id)
+  }
+}
+
 function hasTable(db: DatabaseSync, name: string) {
   return tableNames(db).includes(name)
 }
@@ -84,6 +228,11 @@ function baseline(db: DatabaseSync) {
   addColumn(db, 'sessions', 'config_json', 'config_json TEXT')
   if (hasTable(db, 'sessions') && tableColumnNames(db, 'sessions').includes('type')) {
     dropColumn(db, 'sessions', 'type')
+  }
+  addColumn(db, 'agents', 'mascot_json', 'mascot_json TEXT')
+  addColumn(db, 'agents', 'config_json', 'config_json TEXT')
+  if (hasTable(db, 'agents') && tableColumnNames(db, 'agents').includes('type')) {
+    dropColumn(db, 'agents', 'type')
   }
   if (hasTable(db, 'attachments')) {
     db.exec(`UPDATE attachments SET storage = 'hash' WHERE storage IN ('cas', '')`)
@@ -161,6 +310,164 @@ function rewritePageBlockMentions(db: DatabaseSync) {
       if (from !== to) next = next.split(from).join(to)
     }
     if (next !== (row.body ?? '')) update.run(next, row.collection, row.record_id)
+  }
+}
+
+const RESERVED_FACET_FIELD_NAMES = new Set(
+  [
+    'id',
+    'title',
+    'createdAt',
+    'updatedAt',
+    'content',
+    'emoji',
+    'parentId',
+    'dependsOn',
+    'createdBy',
+    'updatedBy',
+    'facet',
+    'tags',
+    '标题',
+    '创建时间',
+    '更新时间',
+    '内容',
+    '图标',
+    '标签',
+    '父级',
+    '依赖',
+    '创建人',
+    '编辑人',
+  ].map((name) => name.toLowerCase()),
+)
+
+function isMigratableFacetFieldName(name: string) {
+  const next = name.trim()
+  if (!next || next.length > 64) return false
+  if (next.includes('::') || /[/\\]/.test(next) || /[\u0000-\u001f]/.test(next)) return false
+  return !RESERVED_FACET_FIELD_NAMES.has(next.toLowerCase())
+}
+
+function migrateFacetFieldIdentity(db: DatabaseSync) {
+  const names = tableNames(db)
+  const packTable = names.includes('facets') ? 'facets' : names.includes('tags') ? 'tags' : ''
+  if (!packTable) return
+  const remaps = new Map<string, Map<string, string>>()
+  const packs = db.prepare(`SELECT id, fields_json FROM ${packTable}`).all() as Array<{ id: string; fields_json: string }>
+  const save = db.prepare(`UPDATE ${packTable} SET fields_json = ? WHERE id = ?`)
+  for (const pack of packs) {
+    let listed: unknown = []
+    try {
+      listed = JSON.parse(pack.fields_json || '[]')
+    } catch {
+      continue
+    }
+    if (!Array.isArray(listed)) continue
+    const fields: unknown[] = []
+    const seen = new Set<string>()
+    const map = new Map<string, string>()
+    for (const item of listed) {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) continue
+      const row = item as Record<string, unknown>
+      const oldKey = String(row.key ?? '').trim()
+      const label = String(row.label ?? '').trim()
+      const want = [label, oldKey].find((name) => isMigratableFacetFieldName(name)) ?? ''
+      if (!want) continue
+      const taken = seen.has(want.toLowerCase())
+      const dest = taken ? [...map.values()].find((name) => name.toLowerCase() === want.toLowerCase()) ?? want : want
+      if (!taken) {
+        seen.add(want.toLowerCase())
+        const next: Record<string, unknown> = { key: dest, type: row.type }
+        if (row.writable === false) next.writable = false
+        if (Array.isArray(row.enum)) next.enum = row.enum
+        if (row.enumLabels && typeof row.enumLabels === 'object') next.enumLabels = row.enumLabels
+        fields.push(next)
+      }
+      if (oldKey && oldKey !== dest) map.set(oldKey, dest)
+    }
+    save.run(JSON.stringify(fields), pack.id)
+    if (map.size) remaps.set(pack.id, map)
+  }
+  if (!remaps.size) return
+  const valueTable = names.includes('facet_record_values') ? 'facet_record_values' : names.includes('tag_record_values') ? 'tag_record_values' : ''
+  const valueCol = valueTable === 'tag_record_values' ? 'tag_json' : 'facet_json'
+  if (valueTable) {
+    const rows = db.prepare(`SELECT collection, record_id, ${valueCol} AS facet_json FROM ${valueTable}`).all() as Array<{
+      collection: string
+      record_id: string
+      facet_json: string
+    }>
+    const put = db.prepare(`UPDATE ${valueTable} SET ${valueCol} = ? WHERE collection = ? AND record_id = ?`)
+    for (const row of rows) {
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(row.facet_json || '{}')
+      } catch {
+        continue
+      }
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) continue
+      const rec = parsed as { tags?: unknown; values?: unknown }
+      if (!rec.values || typeof rec.values !== 'object' || Array.isArray(rec.values)) continue
+      let changed = false
+      const values: Record<string, Record<string, unknown>> = {}
+      for (const [packId, bag] of Object.entries(rec.values as Record<string, unknown>)) {
+        if (!bag || typeof bag !== 'object' || Array.isArray(bag)) {
+          values[packId] = bag as Record<string, unknown>
+          continue
+        }
+        const map = remaps.get(packId)
+        if (!map) {
+          values[packId] = bag as Record<string, unknown>
+          continue
+        }
+        const next: Record<string, unknown> = {}
+        for (const [key, value] of Object.entries(bag as Record<string, unknown>)) {
+          const dest = map.get(key) ?? key
+          if (dest !== key) changed = true
+          if (dest in next && (next[dest] != null && next[dest] !== '')) continue
+          next[dest] = value
+        }
+        values[packId] = next
+      }
+      if (changed) put.run(JSON.stringify({ ...rec, values }), row.collection, row.record_id)
+    }
+  }
+  if (!tableNames(db).includes('saved_views')) return
+  const views = db.prepare('SELECT collection, view_id, payload_json FROM saved_views').all() as Array<{
+    collection: string
+    view_id: string
+    payload_json: string
+  }>
+  const saveView = db.prepare('UPDATE saved_views SET payload_json = ? WHERE collection = ? AND view_id = ?')
+  const rewrite = (value: unknown): unknown => {
+    if (typeof value === 'string') {
+      const prefix = value.startsWith('tag::') ? 'tag::' : value.startsWith('facet::') ? 'facet::' : ''
+      if (!prefix) return value
+      const rest = value.slice(prefix.length)
+      const split = rest.indexOf('::')
+      if (split <= 0) return value
+      const packId = rest.slice(0, split)
+      const fieldKey = rest.slice(split + 2)
+      const dest = remaps.get(packId)?.get(fieldKey)
+      return dest ? `${prefix}${packId}::${dest}` : value
+    }
+    if (Array.isArray(value)) return value.map(rewrite)
+    if (!value || typeof value !== 'object') return value
+    const out: Record<string, unknown> = {}
+    for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+      out[String(rewrite(key))] = rewrite(item)
+    }
+    return out
+  }
+  for (const row of views) {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(row.payload_json || '{}')
+    } catch {
+      continue
+    }
+    const next = rewrite(parsed)
+    const encoded = JSON.stringify(next)
+    if (encoded !== row.payload_json) saveView.run(encoded, row.collection, row.view_id)
   }
 }
 
@@ -575,6 +882,18 @@ export const BIU_MIGRATIONS: Migration[] = [
       ALTER TABLE cloud_connections_v40 RENAME TO cloud_connections;
       CREATE INDEX IF NOT EXISTS cloud_connections_active ON cloud_connections(local_account_id, active);
     `)
+  } },
+  { version: 41, module: 'host-sessions', name: 'collection.sessions-to-agents', up: (db) => {
+    remapSessionsCollectionToAgents(db)
+  } },
+  { version: 42, module: 'host-sessions', name: 'table.sessions-to-agents', up: (db) => {
+    renameSessionsTableToAgents(db)
+  } },
+  { version: 43, module: 'core-file-system', name: 'facet.field.identity', up: (db) => {
+    migrateFacetFieldIdentity(db)
+  } },
+  { version: 44, module: 'core-file-system', name: 'facet-to-tag', up: (db) => {
+    migrateFacetNameToTag(db)
   } },
 ]
 

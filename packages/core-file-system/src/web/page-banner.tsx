@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { PhotoIcon, Square2StackIcon, XMarkIcon } from '@heroicons/react/16/solid'
-import { HeadlessPopover } from '@biu/public-ui/headless-popover'
+import { HeadlessPopover } from '@biu/biu-ui/headless-popover'
 import {
   BANNER_STYLE_IDS,
   BANNER_STYLE_LABEL,

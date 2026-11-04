@@ -24,7 +24,6 @@
 
 ## 示例
 
-```md
 :::pageBlock {kind=video plugin=page-video}
 <timeline fps=30 size=1920x1080 background=#191919 description="BIU 动态广告片">
   <track name=scenes layer=3>
@@ -39,7 +38,6 @@
   </track>
 </timeline>
 :::
-```
 
 `builtin:ad-scene` 只渲染一幕逐帧 React 文字场景。版式 `variant` 可选 `hero`、`split`、`marquee`、`stagger`、`focus`、`code`、`stack`、`finale`；文字 `motion` 可选 `fade`、`fade-up`、`slide`、`type`、`reveal`、`scale`、`tracking`、`blur`。`builtin:ad-transition` 的 `variant` 可选 `wipe`、`iris`、`split`、`bars`、`flash`、`slide`、`shutter`。默认配乐跟 pack 产物一样写 `src=assets/bgm.mp3`。播放器认出插件包里的 `bgm.mp3` 就会去 `.plugin/page-video/assets/` 取。其它文件名仍走页面附件。`at`/`dur`/`volume`/`sourceIn`/`speed` 均可动画。
 

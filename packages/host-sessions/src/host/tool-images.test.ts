@@ -59,7 +59,7 @@ test('liftToolImages turns bash artifacts into image_url blocks', async () => {
       tool_call_id: '1',
       content: JSON.stringify({
         stdout: 'wrote shot.png',
-        artifacts: [{ name: 'shot.png', mime: 'image/png', url: '/api/sessions/sess-1/artifacts/shot.png' }],
+        artifacts: [{ name: 'shot.png', mime: 'image/png', url: '/api/agents/sess-1/artifacts/shot.png' }],
       }),
     },
   ]
@@ -106,7 +106,7 @@ test('liftToolImages does not lift SVG bytes even if named like a png', async ()
       role: 'tool',
       tool_call_id: 'svg',
       content: JSON.stringify({
-        artifacts: [{ name: 'shot.png', mime: 'image/png', url: '/api/sessions/sess-svg/artifacts/shot.png' }],
+        artifacts: [{ name: 'shot.png', mime: 'image/png', url: '/api/agents/sess-svg/artifacts/shot.png' }],
       }),
     },
   ]
@@ -133,9 +133,9 @@ test('liftToolImages skips svg refs and still lifts a later png', async () => {
           ...['a.svg', 'b.svg', 'c.svg', 'd.svg', 'e.svg', 'f.svg'].map((name) => ({
             name,
             mime: 'image/svg+xml',
-            url: `/api/sessions/sess-mix/artifacts/${name}`,
+            url: `/api/agents/sess-mix/artifacts/${name}`,
           })),
-          { name: 'shot.png', mime: 'image/png', url: '/api/sessions/sess-mix/artifacts/shot.png' },
+          { name: 'shot.png', mime: 'image/png', url: '/api/agents/sess-mix/artifacts/shot.png' },
         ],
       }),
     },

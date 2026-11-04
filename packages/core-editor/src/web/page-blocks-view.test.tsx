@@ -21,8 +21,8 @@ test('parsePageBlockRowData unpacks slim index envelopes', () => {
   assert.deepEqual(
     parsePageBlockRowData({
       blockId: 'a1',
-      kind: 'html',
-      plugin: 'page-html-blocks',
+      kind: 'sandbox',
+      plugin: 'page-sandbox',
       attrs: { deck: true },
       assets: ['hero.png'],
     }),
@@ -52,8 +52,8 @@ test('page-blocks view paints the registered block View', async () => {
   const ctx = new Context()
   new PageEditorService(ctx)
   ctx.pageEditor.registerBlock({
-    kind: 'html',
-    plugin: 'page-html-blocks',
+    kind: 'sandbox',
+    plugin: 'page-sandbox',
     label: '静态HTML',
     View: ({ data }) => <div data-testid="html-ui">{String(data.html ?? '')}</div>,
   })
@@ -70,14 +70,14 @@ test('page-blocks view paints the registered block View', async () => {
     <PageBlocksView
       path="/page-blocks"
       rows={[
-        { id: 'p1::a1', title: '刊头', pageId: 'p1', blockKind: 'html', plugin: 'page-html-blocks', data: '{"html":"<b>hi</b>"}' },
+        { id: 'p1::a1', title: '刊头', pageId: 'p1', blockKind: 'sandbox', plugin: 'page-sandbox', data: '{"html":"<b>hi</b>"}' },
         { id: 'p1::a2', title: '缺插件', blockKind: 'gone', plugin: 'missing-plugin', data: '{}' },
       ]}
       onOpen={(row) => opened.push(String(row.id))}
     />,
   )
   assert.equal(container.querySelector('[data-testid="html-ui"]')?.textContent, '<b>hi</b>')
-  assert.equal(container.querySelector('[data-testid="html-ui"]')?.getAttribute('data-biu-plugin'), 'page-html-blocks')
+  assert.equal(container.querySelector('[data-testid="html-ui"]')?.getAttribute('data-biu-plugin'), 'page-sandbox')
   assert.ok(container.querySelector('[data-testid="page-block-missing"]'))
   await waitFor(() => assert.equal(container.querySelector('[data-testid="page-blocks-view-page"]')?.textContent, '首页'))
   fireEvent.click(container.querySelector('[data-testid="page-blocks-view-zoom"]')!)
@@ -144,14 +144,14 @@ test('page-block detail content paints the registered View', () => {
   const ctx = new Context()
   new PageEditorService(ctx)
   ctx.pageEditor.registerBlock({
-    kind: 'html',
-    plugin: 'page-html-blocks',
+    kind: 'sandbox',
+    plugin: 'page-sandbox',
     label: '静态HTML',
     View: ({ data }) => <div data-testid="html-detail">{String(data.html ?? '')}</div>,
   })
   const { container } = render(
     <PageBlockContent
-      record={{ id: 'p1::a1', title: '刊头', blockKind: 'html', plugin: 'page-html-blocks' }}
+      record={{ id: 'p1::a1', title: '刊头', blockKind: 'sandbox', plugin: 'page-sandbox' }}
       field="data"
       spec={{ type: 'string', writable: true }}
       value={{ html: '<i>detail</i>' }}

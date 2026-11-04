@@ -362,7 +362,7 @@ export function apply(ctx: Ctx) {
     const cols = dim(q.get('cols'), 80, 20, 500)
     const rows = dim(q.get('rows'), 20, 5, 400)
     // 块的 id 作为会话键：同一块刷新/切页/重开都能连回同一个 shell。
-    const key = String(q.get('session') ?? '').trim() || `anon-${++seq}`
+    const key = String(q.get('agent') ?? q.get('session') ?? '').trim() || `anon-${++seq}`
 
     let session = pool.get(key)
     // 已有会话：尺寸可能因重新布局而不同，按新尺寸对齐(并触发 shell 重绘)。

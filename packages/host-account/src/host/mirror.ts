@@ -120,21 +120,21 @@ export async function applySnapshot(ctx: Context, snapshot: MirrorSnapshot, mode
     for (const record of snapshot.sessions ?? []) {
       if (!record?.id) continue
       incoming.add(record.id)
-      const localHome = current.has(record.id) && !account?.isRemote?.('/sessions', record.id)
+      const localHome = current.has(record.id) && !account?.isRemote?.('/agents', record.id)
       if (mode === 'cache' && localHome) continue
       try {
         await store.save(record)
-        claim(ctx, '/sessions', record.id)
-        if (mode === 'cache') rememberCloud(ctx, '/sessions', record.id)
+        claim(ctx, '/agents', record.id)
+        if (mode === 'cache') rememberCloud(ctx, '/agents', record.id)
       } catch (error) {
         console.warn('[replica] skip session', record.id, error)
       }
     }
     if (mode === 'cache') {
-      for (const id of account?.remoteIds?.('/sessions') ?? []) {
+      for (const id of account?.remoteIds?.('/agents') ?? []) {
         if (incoming.has(id)) continue
         await store.delete?.(id)
-        account?.clearPlace?.('/sessions', id)
+        account?.clearPlace?.('/agents', id)
       }
     }
   }

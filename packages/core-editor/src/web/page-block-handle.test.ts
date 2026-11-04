@@ -7,7 +7,9 @@ import {
   deleteHandleBlock,
   duplicateHandleBlock,
   handleBlockFromDom,
+  handleLeftForBlock,
   handleRailLeft,
+  isSlideInnerBlock,
   visibleHandleEl,
   insertParagraphAfter,
   insertParagraphBefore,
@@ -72,7 +74,7 @@ test('insert before / after / duplicate / delete a paragraph', () => {
 })
 
 test('resolveHandleBlock picks pageBlock atom at the gap beside it', () => {
-  const editor = editorOf(`:::pageBlock {kind=html plugin=page-html-blocks}
+  const editor = editorOf(`:::pageBlock {kind=sandbox plugin=page-sandbox}
 {"html":"<p>hi</p>"}
 :::
 `)
@@ -100,7 +102,7 @@ test('handleBlockFromDom maps a nested iframe back to the pageBlock atom', () =>
   const editor = new Editor({
     element: host,
     extensions: pageEditorExtensions(),
-    content: `:::pageBlock {kind=html plugin=page-html-blocks}
+    content: `:::pageBlock {kind=sandbox plugin=page-sandbox}
 {"html":"<p>hi</p>"}
 :::
 `,
@@ -114,7 +116,7 @@ test('handleBlockFromDom maps a nested iframe back to the pageBlock atom', () =>
   })
   assert.ok(hole instanceof HTMLElement)
   hole.classList.add('page-block')
-  hole.setAttribute('data-page-block', 'html')
+  hole.setAttribute('data-page-block', 'sandbox')
   const iframe = document.createElement('iframe')
   hole.append(iframe)
   const found = handleBlockFromDom(editor, iframe)
@@ -150,24 +152,53 @@ test('handleRailLeft is the same for indented list boxes and top-level paragraph
   assert.notEqual(handleRailLeft(hostLeft, contentLeft), listItemBoxLeft - hostLeft - HANDLE_RAIL)
 })
 
+test('resolveHandleBlock picks the inner slide block, not only the card', () => {
+  const editor = editorOf(`:::slide {layout=stack}
+
+:::cell
+里面
+:::
+
+:::
+`)
+  let inside = -1
+  editor.state.doc.descendants((node, pos) => {
+    if (inside < 0 && node.isText && node.text === '里面') inside = pos
+  })
+  assert.ok(inside >= 0)
+  const found = resolveHandleBlock(editor.state.doc.resolve(inside))
+  assert.equal(found?.node.type.name, 'paragraph')
+  assert.equal(found?.node.textContent, '里面')
+  assert.equal(isSlideInnerBlock(editor.state.doc, found!.pos, found!.node.type.name), true)
+  assert.equal(handleLeftForBlock({ hostLeft: 0, contentLeft: 40, boxLeft: 120, nested: true }), 120 - HANDLE_RAIL)
+  editor.destroy()
+})
+
 test('visibleHandleEl prefers the inner page-block, not the renderer shell', () => {
   const outer = document.createElement('div')
   outer.className = 'page-block react-renderer'
   const inner = document.createElement('div')
   inner.className = 'page-block'
-  inner.setAttribute('data-page-block', 'html')
+  inner.setAttribute('data-page-block', 'sandbox')
   outer.append(inner)
   assert.equal(visibleHandleEl(outer), inner)
   const para = document.createElement('p')
   assert.equal(visibleHandleEl(para), para)
+  const shell = document.createElement('div')
+  shell.className = 'react-renderer node-slide'
+  const card = document.createElement('div')
+  card.setAttribute('data-slide', '')
+  shell.append(card)
+  assert.equal(visibleHandleEl(shell), card)
 })
 
 test('page block handle x uses the editor rail, not the node box', async () => {
   const { readFile } = await import('node:fs/promises')
   const { resolve } = await import('node:path')
   const src = await readFile(resolve(import.meta.dirname, './page-block-handle.tsx'), 'utf8')
-  assert.match(src, /handleRailLeft\(hostBox\.left, contentBox\.left\)/)
-  assert.doesNotMatch(src, /left: box\.left - hostBox\.left - HANDLE_RAIL/)
+  assert.match(src, /handleLeftForBlock/)
+  assert.match(src, /isSlideInnerBlock/)
+  assert.doesNotMatch(src, /coordsAtPos|lineCoords|gripTop/)
 })
 
 test('block handle menu puts an icon before each action', async () => {
@@ -181,8 +212,8 @@ test('block handle menu puts an icon before each action', async () => {
   assert.match(src, /<TrashIcon[\s\S]*删除/)
   assert.match(css, /\.page-block-handle-menu button\{[^}]*display:\s*flex/)
   assert.match(css, /\.page-block-handle-menu button\{[^}]*gap:\s*8px/)
-  assert.match(css, /\.page-block-handle-menu button\{[^}]*color:var\(--dsw-sidebar-fg\)/)
-  assert.match(css, /\.page-block-handle-menu button svg\{[^}]*color:var\(--dsw-icon\)/)
-  assert.match(css, /html:not\(\.dark\) \.page-block-handle-menu button[\s\S]*color:#5f5e5a/)
-  assert.match(css, /html:not\(\.dark\) \.page-block-handle-menu button svg[\s\S]*color:#91918e/)
+  assert.match(css, /\.page-block-handle-menu button\{[^}]*color:var\(--biu-color-text-muted\)/)
+  assert.match(css, /\.page-block-handle-menu button svg\{[^}]*color:var\(--biu-color-icon\)/)
+  assert.match(css, /html:not\(\.dark\) \.page-block-handle-menu button[\s\S]*color:var\(--biu-color-text-muted\)/)
+  assert.match(css, /html:not\(\.dark\) \.page-block-handle-menu button svg[\s\S]*color:var\(--biu-color-icon\)/)
 })

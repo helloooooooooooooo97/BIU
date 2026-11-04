@@ -128,6 +128,15 @@ test('page editor hydrates markdown after content fetch', async () => {
   assert.match(container.textContent ?? '', /一段正文/)
 })
 
+test('page editor does not persist markdown when the field is not writable', async () => {
+  const { readFile } = await import('node:fs/promises')
+  const { resolve } = await import('node:path')
+  const src = await readFile(resolve(import.meta.dirname, './page-editor.tsx'), 'utf8')
+  assert.match(src, /writableRef\.current = writable/)
+  assert.match(src, /if \(writableRef\.current === false\) return/)
+  assert.match(src, /current\.isDestroyed \|\| writableRef\.current === false/)
+})
+
 test('page editor applies later value when it is not focused', async () => {
   const { readFile } = await import('node:fs/promises')
   const { resolve } = await import('node:path')
@@ -140,6 +149,8 @@ test('page editor applies later value when it is not focused', async () => {
   assert.match(src, /md === saved\.current/)
   assert.match(src, /leavingSource/)
   assert.match(src, /sourceMode\.current/)
+  assert.match(src, /restorePageScroll/)
+  assert.match(src, /hidden=\{!source\}/)
 })
 
 test('page editor shows a spinner and is not editable while content loads', async () => {

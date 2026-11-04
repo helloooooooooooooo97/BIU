@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   ATOMIC_FIELD_TYPES,
   normalizeSchemaValue,
@@ -10,13 +10,13 @@ import {
   type SchemaFieldValue,
   type SchemaPackField,
 } from '@biu/type-file-system'
-import { ArrowUturnLeftIcon, ChevronDownIcon, PlusIcon, XMarkIcon } from '@heroicons/react/16/solid'
-import { TagChip, TagChips, tagTone, HeadlessPopover } from '@biu/public-ui'
-import { CellMulti } from '@biu/database-ui'
+import { ArrowUturnLeftIcon, ChevronDownIcon, PlusIcon, TagIcon, XMarkIcon } from '@heroicons/react/16/solid'
+import { TagChip, TagChips, tagTone, HeadlessPopover } from '@biu/biu-ui'
 import { DefaultCell, FieldGlyph } from './fsdb-cells.tsx'
 import { FieldValuePop } from './field-value-pop.tsx'
 import { inferPackFieldType, orphanPackEntries } from './fields.ts'
-import { loadFacets, persistFacets, registerFacetFieldKey, slugFacetId, subscribeFacets } from './facet-catalog.ts'
+import { createTag, tagFieldLabelOk, tagLabel, jumpTag, loadTags, persistTags, registerTagFieldKey, subscribeTags } from './tag-catalog.ts'
+import { peekRecord, subscribeCrumbs } from './view-storage.ts'
 
 const TYPE_LABEL: Partial<Record<FieldType, string>> = {
   string: '文本',
@@ -30,7 +30,7 @@ const TYPE_LABEL: Partial<Record<FieldType, string>> = {
   attachment: '附件',
   file: '正文',
   action: '动作',
-  facet: '标签',
+  tag: '标签',
   person: '人物',
   ref: '引用',
   'multi-ref': '多引用',
@@ -38,30 +38,56 @@ const TYPE_LABEL: Partial<Record<FieldType, string>> = {
 
 export const schemaTagTone = tagTone
 
+export function tagChipIcon(id: string) {
+  const emoji = peekRecord('/tags', id)?.emoji?.trim()
+  if (emoji) return <span className="fsdb-record-emoji">{emoji}</span>
+  return <TagIcon aria-hidden className="size-3.5" />
+}
+
+export function tagPropertyCount(tag: { fields?: Array<{ deleted?: boolean }> } | undefined) {
+  return (tag?.fields ?? []).filter((field) => !field.deleted).length
+}
+
+export function tagChipLabel(tag: { id?: string; label?: string; fields?: Array<{ deleted?: boolean }> } | undefined, fallback = '') {
+  const name = String(tag?.label || tagLabel(fallback || tag?.id || '') || fallback || tag?.id || '').trim()
+  if (!name) return fallback
+  return `${name} ${tagPropertyCount(tag)}`
+}
+
 export function SchemaChip({
   id,
   label,
   onRemove,
   onClick,
   active,
+  icon,
 }: {
   id: string
   label: string
   onRemove?: () => void
   onClick?: () => void
   active?: boolean
+  icon?: ReactNode
 }) {
-  return <TagChip id={id} label={label} onRemove={onRemove} onClick={onClick} active={active} />
+  return <TagChip id={id} label={label} icon={icon ?? tagChipIcon(id)} onRemove={onRemove} onClick={onClick} active={active} />
 }
 
-export function SchemaChips({ value, tags }: { value: unknown; tags: CollectionSchemaPack[] }) {
+export function SchemaChips({
+  value,
+  tags,
+  onOpen,
+}: {
+  value: unknown
+  tags: CollectionSchemaPack[]
+  onOpen?: (id: string) => void
+}) {
   const parsed = normalizeSchemaValue(value)
   if (!parsed.tags.length) return null
   const byId = new Map(tags.map((tag) => [tag.id, tag]))
   return (
     <TagChips>
       {parsed.tags.map((id) => (
-        <SchemaChip key={id} id={id} label={byId.get(id)?.label ?? id} />
+        <SchemaChip key={id} id={id} label={tagChipLabel(byId.get(id), id)} onClick={() => jumpTag(id, onOpen)} />
       ))}
     </TagChips>
   )
@@ -100,6 +126,91 @@ function TypeMenu({ value, onChange }: { value: AtomicFieldType; onChange: (next
         </div>
       </HeadlessPopover>
     </div>
+  )
+}
+
+function SchemaPropName({
+  name,
+  kind,
+  onRename,
+}: {
+  name: string
+  kind: FieldType
+  onRename?: (next: string) => boolean | void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(name)
+  const [error, setError] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    setDraft(name)
+  }, [name])
+
+  useEffect(() => {
+    if (editing) inputRef.current?.focus()
+  }, [editing])
+
+  function finish(next = name) {
+    setEditing(false)
+    setDraft(next)
+    setError('')
+  }
+
+  function commit() {
+    const next = draft.trim()
+    if (!next || next === name) {
+      finish()
+      return
+    }
+    if (onRename?.(next) === false) {
+      setError('不能与系统字段或已有属性重名')
+      return
+    }
+    finish(next)
+  }
+
+  if (!onRename) {
+    return (
+      <span className="fsdb-schema-prop-k" title={name}>
+        <FieldGlyph kind={kind} />
+        {name}
+      </span>
+    )
+  }
+
+  if (!editing) {
+    return (
+      <button type="button" className="fsdb-schema-prop-k is-rename" title={`重命名 ${name}`} onClick={() => setEditing(true)}>
+        <FieldGlyph kind={kind} />
+        {name}
+      </button>
+    )
+  }
+
+  return (
+    <span className="fsdb-schema-prop-k is-editing">
+      <FieldGlyph kind={kind} />
+      <input
+        ref={inputRef}
+        className="fsdb-schema-prop-rename"
+        value={draft}
+        aria-label={`重命名 ${name}`}
+        onChange={(event) => setDraft(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault()
+            commit()
+          }
+          if (event.key === 'Escape') {
+            event.preventDefault()
+            finish()
+          }
+        }}
+        onBlur={() => commit()}
+      />
+      {error ? <span className="fsdb-schema-addprop-err">{error}</span> : null}
+    </span>
   )
 }
 
@@ -173,20 +284,21 @@ export function AddProperty({ onAdd }: { onAdd: (label: string, type: AtomicFiel
   )
 }
 
-export function FacetPackEditor({ facetId }: { facetId: string }) {
-  const [catalog, setCatalog] = useState(() => loadFacets())
-  useEffect(() => subscribeFacets(undefined, () => setCatalog(loadFacets())), [])
-  const tag = catalog.find((item) => item.id === facetId)
+export function TagPackEditor({ tagId }: { tagId: string }) {
+  const [catalog, setCatalog] = useState(() => loadTags())
+  useEffect(() => subscribeTags(undefined, () => setCatalog(loadTags())), [])
+  const tag = catalog.find((item) => item.id === tagId)
 
   function saveCatalog(next: CollectionSchemaPack[]) {
-    void persistFacets(next)
+    void persistTags(next)
   }
 
   if (!tag) return <p className="fsdb-muted">这条标签已不在目录里。</p>
   const pack = tag
+  const live = pack.fields.filter((field) => !field.deleted)
 
   function addField(name: string, type: AtomicFieldType) {
-    const key = registerFacetFieldKey(name, {
+    const key = registerTagFieldKey(name, {
       keys: pack.fields.map((item) => item.key),
       labels: pack.fields.map((item) => item.label ?? item.key),
     })
@@ -196,30 +308,61 @@ export function FacetPackEditor({ facetId }: { facetId: string }) {
     return true
   }
 
+  function renameField(from: string, name: string) {
+    const others = pack.fields.filter((item) => item.key !== from)
+    if (!tagFieldLabelOk(name, others.map((item) => item.label ?? item.key))) return false
+    const label = name.trim()
+    saveCatalog(
+      catalog.map((item) =>
+        item.id === pack.id
+          ? {
+              ...item,
+              fields: item.fields.map((row) => {
+                if (row.key !== from) return row
+                const next = { ...row, label }
+                if (label === row.key) delete next.label
+                return next
+              }),
+            }
+          : item,
+      ),
+    )
+    return true
+  }
+
   function removeField(key: string) {
-    saveCatalog(catalog.map((item) => (item.id === pack.id ? { ...item, fields: item.fields.filter((row) => row.key !== key) } : item)))
+    saveCatalog(
+      catalog.map((item) =>
+        item.id === pack.id ? { ...item, fields: item.fields.filter((row) => row.key !== key) } : item,
+      ),
+    )
   }
 
   return (
-    <div className="fsdb-schema" data-testid="fsdb-facet-fields">
-      {pack.fields.length ? (
+    <div className="fsdb-schema" data-testid="fsdb-tag-fields">
+      {live.length ? (
         <TagChips>
-          {pack.fields.map((field) => (
-            <SchemaChip key={field.key} id={field.key} label={field.label ?? field.key} />
+          {live.map((field) => (
+            <SchemaChip
+              key={field.key}
+              id={field.key}
+              label={field.label ?? field.key}
+              icon={<FieldGlyph kind={field.type} />}
+            />
           ))}
         </TagChips>
       ) : (
         <span className="fsdb-muted">添加属性</span>
       )}
       <div className="fsdb-schema-pack">
-      {pack.fields.map((field) => (
+      {live.map((field) => (
         <div key={field.key} className="fsdb-schema-prop">
-          <span className="fsdb-schema-prop-k" title={field.label ?? field.key}>
-            <FieldGlyph kind={field.type} />
-            {field.label ?? field.key}
-          </span>
+          <SchemaPropName name={field.label ?? field.key} kind={field.type} onRename={(next) => renameField(field.key, next)} />
           <div className="fsdb-schema-prop-v">
-            <span className="fsdb-muted">{TYPE_LABEL[field.type]}</span>
+            <span className="fsdb-schema-prop-type">
+              <FieldGlyph kind={field.type} />
+              <span className="fsdb-muted">{TYPE_LABEL[field.type]}</span>
+            </span>
             <button type="button" className="fsdb-schema-prop-del" aria-label={`删除 ${field.label ?? field.key}`} onClick={() => removeField(field.key)}>
               <XMarkIcon aria-hidden className="size-3" />
             </button>
@@ -239,7 +382,6 @@ export function SchemaFieldEditor({
   writable,
   onChange,
   compact,
-  autoOpen = false,
 }: {
   collectionPath: string
   record: DbRecord
@@ -248,35 +390,43 @@ export function SchemaFieldEditor({
   onChange: (next: SchemaFieldValue) => void
   /** Table cells: chips only — pack fields flatten as their own columns. */
   compact?: boolean
-  autoOpen?: boolean
 }) {
   const parsed = normalizeSchemaValue(value)
   const liveRef = useRef(parsed)
   useEffect(() => {
     liveRef.current = normalizeSchemaValue(value)
   }, [record.id])
-  const [catalog, setCatalog] = useState(() => loadFacets())
+  const [catalog, setCatalog] = useState(() => loadTags())
+  const [, setFacetMarks] = useState(0)
 
-  useEffect(() => subscribeFacets(undefined, () => setCatalog(loadFacets())), [])
+  useEffect(() => subscribeTags(undefined, () => setCatalog(loadTags())), [])
+  useEffect(() => subscribeCrumbs(() => setFacetMarks((n) => n + 1)), [])
 
   const selected = useMemo(
     () =>
-      parsed.tags.map((id) => catalog.find((tag) => tag.id === id) ?? { id, label: id, fields: [] }),
+      parsed.tags.map((id) => catalog.find((tag) => tag.id === id) ?? { id, label: tagLabel(id), fields: [] }),
     [catalog, parsed.tags],
   )
 
   function saveCatalog(next: CollectionSchemaPack[]) {
-    void persistFacets(next)
+    void persistTags(next)
   }
 
   function patchValue(next: SchemaFieldValue) {
     onChange(next)
   }
 
+  function finishTags(resolved: string[]) {
+    const next = retagSchemaValue(liveRef.current, resolved)
+    liveRef.current = next
+    patchValue(next)
+  }
+
   function applyTags(nextIds: string[]) {
     let packs = catalog
     const used = new Set(packs.map((tag) => tag.id))
     const resolved: string[] = []
+    const pending: string[] = []
     for (const item of nextIds) {
       if (used.has(item)) {
         resolved.push(item)
@@ -287,25 +437,25 @@ export function SchemaFieldEditor({
         resolved.push(hit.id)
         continue
       }
-      const id = slugFacetId(item, used)
-      packs = [...packs, { id, label: item, fields: [] }]
-      used.add(id)
-      resolved.push(id)
+      pending.push(item)
     }
-    const finish = () => {
-      const next = retagSchemaValue(liveRef.current, resolved)
-      liveRef.current = next
-      patchValue(next)
-    }
-    if (packs !== catalog) {
-      void persistFacets(packs).then(finish)
+    if (!pending.length) {
+      finishTags(resolved)
       return
     }
-    finish()
+    void (async () => {
+      for (const item of pending) {
+        const created = await createTag(item)
+        packs = [...packs, created]
+        used.add(created.id)
+        resolved.push(created.id)
+      }
+      finishTags(resolved)
+    })()
   }
 
   function addField(tag: CollectionSchemaPack, name: string, type: AtomicFieldType) {
-    const key = registerFacetFieldKey(name, {
+    const key = registerTagFieldKey(name, {
       keys: tag.fields.map((item) => item.key),
       labels: tag.fields.map((item) => item.label ?? item.key),
     })
@@ -315,15 +465,60 @@ export function SchemaFieldEditor({
     return true
   }
 
+  function renameField(tag: CollectionSchemaPack, from: string, name: string) {
+    const others = tag.fields.filter((item) => item.key !== from)
+    if (!tagFieldLabelOk(name, others.map((item) => item.label ?? item.key))) return false
+    const label = name.trim()
+    saveCatalog(
+      catalog.map((item) =>
+        item.id === tag.id
+          ? {
+              ...item,
+              fields: item.fields.map((row) => {
+                if (row.key !== from) return row
+                const next = { ...row, label }
+                if (label === row.key) delete next.label
+                return next
+              }),
+            }
+          : item,
+      ),
+    )
+    return true
+  }
+
   function removeField(tagId: string, key: string) {
-    saveCatalog(catalog.map((tag) => (tag.id === tagId ? { ...tag, fields: tag.fields.filter((item) => item.key !== key) } : tag)))
+    saveCatalog(
+      catalog.map((tag) =>
+        tag.id === tagId ? { ...tag, fields: tag.fields.filter((item) => item.key !== key) } : tag,
+      ),
+    )
   }
 
   function restoreField(tag: CollectionSchemaPack, key: string, value: unknown) {
-    const type = inferPackFieldType(value)
-    const field: SchemaPackField = { key, type, label: key, writable: true }
     const hit = catalog.find((item) => item.id === tag.id)
-    if (hit?.fields.some((item) => item.key === key)) return
+    const kept = hit?.fields.find((item) => item.key === key)
+    if (kept && !kept.deleted) return
+    if (kept?.deleted) {
+      saveCatalog(
+        catalog.map((item) =>
+          item.id === tag.id
+            ? {
+                ...item,
+                fields: item.fields.map((row) => {
+                  if (row.key !== key) return row
+                  const next = { ...row }
+                  delete next.deleted
+                  return next
+                }),
+              }
+            : item,
+        ),
+      )
+      return
+    }
+    const type = inferPackFieldType(value)
+    const field: SchemaPackField = { key, type, writable: true }
     if (hit) {
       saveCatalog(catalog.map((item) => (item.id === tag.id ? { ...item, fields: [...item.fields, field] } : item)))
       return
@@ -331,30 +526,22 @@ export function SchemaFieldEditor({
     saveCatalog([...catalog, { id: tag.id, label: tag.label, fields: [field] }])
   }
 
+  const tagPop = (
+    <FieldValuePop
+      record={record}
+      fieldKey="tag"
+      field={{ type: 'tag', writable: true }}
+      value={value}
+      collectionPath={_collectionPath}
+      onSubmit={(next) => onChange(normalizeSchemaValue(next))}
+    />
+  )
   if (!writable) return <SchemaChips value={value} tags={catalog} />
-  if (!parsed.tags.length) {
-    return (
-      <FieldValuePop
-        record={record}
-        fieldKey="facet"
-        field={{ type: 'facet', writable: true }}
-        value={value}
-        collectionPath={_collectionPath}
-        onSubmit={(next) => onChange(normalizeSchemaValue(next))}
-      />
-    )
-  }
+  if (!parsed.tags.length) return tagPop
 
   return (
     <div className="fsdb-schema" data-testid="fsdb-schema">
-      <CellMulti
-        values={parsed.tags}
-        options={catalog.map((tag) => ({ value: tag.id, label: tag.label }))}
-        onChange={applyTags}
-        multiple
-        autoOpen={autoOpen}
-        placeholder="添加标签"
-      />
+      {tagPop}
       {compact
         ? null
         : selected.map((tag) => {
@@ -363,14 +550,16 @@ export function SchemaFieldEditor({
         return (
           <div key={tag.id} className="fsdb-schema-pack">
             <div className="fsdb-schema-pack-head">
-              <SchemaChip id={tag.id} label={tag.label} />
+              <SchemaChip
+                id={tag.id}
+                label={tagChipLabel(tag)}
+                onClick={() => jumpTag(tag.id)}
+                onRemove={() => applyTags(parsed.tags.filter((id) => id !== tag.id))}
+              />
             </div>
-            {tag.fields.map((field) => (
+            {tag.fields.filter((field) => !field.deleted).map((field) => (
               <div key={field.key} className="fsdb-schema-prop">
-                <span className="fsdb-schema-prop-k" title={field.label ?? field.key}>
-                  <FieldGlyph kind={field.type} />
-                  {field.label ?? field.key}
-                </span>
+                <SchemaPropName name={field.label ?? field.key} kind={field.type} onRename={(next) => renameField(tag, field.key, next)} />
                 <div className="fsdb-schema-prop-v">
                   <FieldValuePop
                     record={record}
@@ -397,16 +586,16 @@ export function SchemaFieldEditor({
             ))}
             {orphans.map((orphan) => (
               <div key={`orphan:${orphan.key}`} className="fsdb-schema-prop is-orphan">
-                <span className="fsdb-schema-prop-k" title={orphan.key}>
+                <span className="fsdb-schema-prop-k" title={orphan.label}>
                   <FieldGlyph kind={orphan.type} />
-                  {orphan.key}
+                  {orphan.label}
                 </span>
                 <div className="fsdb-schema-prop-v">
-                  <DefaultCell field={{ type: orphan.type, label: orphan.key, writable: false }} value={orphan.value} />
+                  <DefaultCell field={{ type: orphan.type, label: orphan.label, writable: false }} value={orphan.value} />
                   <button
                     type="button"
                     className="fsdb-schema-prop-restore"
-                    aria-label={`恢复 ${orphan.key}`}
+                    aria-label={`恢复 ${orphan.label}`}
                     data-dock-tip="恢复"
                     onClick={() => restoreField(tag, orphan.key, orphan.value)}
                   >

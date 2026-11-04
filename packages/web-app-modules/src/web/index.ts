@@ -75,7 +75,7 @@ export class AppModulesService extends Service {
   register(mod: AppModule) {
     if (!mod.id || !mod.path || !mod.label) throw new Error('appModules.register requires id, path, label')
     const path = normalizePath(mod.path)
-    if (path === '/' || path === '/s') throw new Error(`reserved module path: ${mod.path}`)
+    if (path === '/' || path === '/s' || path === '/agents') throw new Error(`reserved module path: ${mod.path}`)
     return this.ctx.effect(() => {
       this.extras.set(mod.id, { ...mod, path })
       this.bump()

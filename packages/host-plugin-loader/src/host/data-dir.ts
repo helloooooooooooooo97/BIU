@@ -17,7 +17,7 @@ export {
 export { adoptCasAssets, listCasAssetFiles, listDocAssetFiles, rewriteAssetText, upsertAttachmentRow, replacePageBlockRefs, ensureRefTables } from './adopt-cas-assets.ts'
 export { openSqlite, configureSqlite, quoteSqlitePath, SQLITE_BUSY_TIMEOUT_MS, SQLITE_WAL_AUTOCHECKPOINT, getSchemaVersion, setSchemaVersion } from './sqlite-open.ts'
 export { ensureBiuAssetSchema, LATEST_BIU_SCHEMA, createLatestSchema } from './biu-schema.ts'
-export { migrateBiu, openAndMigrateBiu } from './biu-migrate.ts'
+export { migrateBiu, openAndMigrateBiu, renameSessionsTableToAgents } from './biu-migrate.ts'
 export { migrateEvents, openAndMigrateEvents, LATEST_EVENTS_SCHEMA } from './events-migrate.ts'
 export {
   EditorContentConflictError,
@@ -51,6 +51,14 @@ export const PAGE_DB = `${DATA_DIR_NAME}/biu.sqlite`
 /** Runtime mode is read lazily so tests and embedded hosts can set it before boot. */
 export const isOnlineRuntime = () => process.env.BIU_ONLINE === '1'
 export const isDesktopRuntime = () => !isOnlineRuntime()
+export {
+  DEFAULT_SUPER_ADMIN_EMAIL,
+  DEFAULT_SUPER_ADMIN_PASSWORD,
+  isSuperAdminEmail,
+  loadBiuEnv,
+  superAdminEmail,
+  superAdminPassword,
+} from './env.ts'
 
 /** Leftover page-only folder; new files go under `.biu/assets`. */
 export const PAGE_ASSETS = `${DATA_DIR_NAME}/page/assets`

@@ -88,7 +88,12 @@ export function markdownLocusFromElement(editor: Editor, el: Element): MarkdownL
   try {
     const from = view.posAtDOM(el, 0)
     const to = view.posAtDOM(el, el.childNodes.length)
-    return markdownLocusFromRange(editor, from, to)
+    const locus = markdownLocusFromRange(editor, from, to)
+    if (!locus) return null
+    if (el instanceof HTMLElement && (el.hasAttribute('data-page-block') || el.classList.contains('page-block'))) {
+      return { start_line: locus.start_line, end_line: locus.end_line, text: locus.text }
+    }
+    return locus
   } catch {
     return null
   }

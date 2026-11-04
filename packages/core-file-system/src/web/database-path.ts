@@ -1,6 +1,6 @@
 import { buildAppPath, type AppRoute } from '@biu/web-session-view'
 import { builtinAllViewId } from '../catalog-views.ts'
-import { normalizeCollectionPath } from '../paths.ts'
+import { AGENTS_COLLECTION_PATH, normalizeCollectionPath } from '../paths.ts'
 
 export const DATA_MODULE_ID = 'database'
 export const DATA_MODULE_PATH = '/database'
@@ -32,8 +32,9 @@ export function databaseRecordPath(collection: string, recordId: string, viewId?
   } satisfies AppRoute)
 }
 
+export const DATA_COLLECTION_PATH = '/data'
 export const VIEWS_COLLECTION_PATH = '/views'
-export const FACETS_COLLECTION_PATH = '/facets'
+export const TAGS_COLLECTION_PATH = '/tags'
 export const NOTICES_COLLECTION_PATH = '/notices'
 export const PAGE_BLOCKS_COLLECTION_PATH = '/page-blocks'
 export const PAGES_COLLECTION_PATH = '/pages'
@@ -55,10 +56,10 @@ const SYSTEM_COLLECTION_ORDER = [
 ] as const
 
 /** 用户表侧栏顺序。组件和标签是反查索引，不排在这里。 */
-const USER_COLLECTION_ORDER = ['/sessions', '/tasks', '/pages', '/plugins'] as const
+const USER_COLLECTION_ORDER = [AGENTS_COLLECTION_PATH, '/tasks', '/pages', '/plugins'] as const
 
 /** 从当前用户能看到的用户数据反查出来，每人一份，没有分享。 */
-const INDEX_COLLECTION_ORDER = [PAGE_BLOCKS_COLLECTION_PATH, FACETS_COLLECTION_PATH] as const
+const INDEX_COLLECTION_ORDER = [PAGE_BLOCKS_COLLECTION_PATH, TAGS_COLLECTION_PATH] as const
 
 /** 成员、视图、通知、回收站由系统维护，侧栏归在系统数据。会话事件不进文件系统。 */
 export function isSystemCollection(path: string) {
@@ -76,6 +77,7 @@ export function sortDataCollections<T extends { path: string }>(tables: T[]): { 
   const index: T[] = []
   const system: T[] = []
   for (const table of tables) {
+    if (normalizeCollectionPath(table.path) === DATA_COLLECTION_PATH) continue
     if (isSystemCollection(table.path)) system.push(table)
     else if (isIndexCollection(table.path)) index.push(table)
     else user.push(table)

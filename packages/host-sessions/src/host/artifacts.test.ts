@@ -39,7 +39,7 @@ test('ingestSessionImages copies workspace images into .biu/artifacts', async ()
   assert.equal(artifacts.length, 1)
   assert.equal(artifacts[0]?.name, 'demo.png')
   assert.equal(artifacts[0]?.mime, 'image/png')
-  assert.equal(artifacts[0]?.url, '/api/sessions/sess-1/artifacts/demo.png')
+  assert.equal(artifacts[0]?.url, '/api/agents/sess-1/artifacts/demo.png')
 
   const file = await readArtifactFile('sess-1', 'demo.png', baseDir)
   assert.ok(file)

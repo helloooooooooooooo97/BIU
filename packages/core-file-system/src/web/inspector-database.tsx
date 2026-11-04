@@ -19,7 +19,7 @@ import {
 } from './inspector-db-route.ts'
 import { getDatabaseUi } from './database-ui.ts'
 import { TableGlyph } from './nav-glyphs.tsx'
-import { viewsForRegisteredCollection } from './collection-nav.ts'
+import { paintCollectionViews, viewsForRegisteredCollection } from './collection-nav.ts'
 import { PageContentLoading } from './page-content-status.tsx'
 
 const CollectionBrowser = lazy(() => import('./browser.tsx').then((m) => ({ default: m.CollectionBrowser })))
@@ -151,7 +151,7 @@ function crumbsForRoute(
   const collection = parsed.kind === 'collection-view' || parsed.kind === 'record' ? parsed.collection : ''
   const table = tables.find((item) => item.path === collection)
   const stored = collection ? loadViews(collection) : []
-  const views = viewsForRegisteredCollection(collection, tables, stored)
+  const views = collection ? paintCollectionViews(collection, tables, stored) : []
   const urlViewId =
     parsed.kind === 'collection-view' || parsed.kind === 'record' ? parsed.viewId : undefined
   const recordId = parsed.kind === 'record' ? parsed.recordId : undefined
@@ -232,7 +232,6 @@ export function DatabaseInspectorTab({
       data-testid="inspector-tab-database"
       data-pane={id}
       onClick={() => onActivate?.()}
-      data-dock-tip={crumbs.map((item) => item.label).join(' / ') || '数据'}
     >
       {crumbs.length ? (
         <CrumbTrail

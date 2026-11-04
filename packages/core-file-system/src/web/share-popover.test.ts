@@ -38,8 +38,8 @@ test('share panel uses a compact settings section and custom toggles', () => {
   assert.match(src, /公开链接设置/)
   assert.match(src, /fsdb-share-toggle/)
   assert.match(css, /\.fsdb-share-panel\{[^}]*width:min\(380px/)
-  assert.match(css, /\.fsdb-share-panel\{[^}]*background:var\(--dsw-sidebar\)/)
-  assert.doesNotMatch(css, /\.fsdb-share-panel\{[^}]*background:var\(--dsw-surface/)
+  assert.match(css, /\.fsdb-share-panel\{[^}]*background:var\(--biu-color-bg-subtle\)/)
+  assert.doesNotMatch(css, /\.fsdb-share-panel\{[^}]*background:var\(--biu-color-surface/)
   assert.match(css, /\.fsdb-share-panel\.is-embedded\{position:static\}/)
   assert.match(css, /\.fsdb-share-toggle\.is-on/)
   assert.match(css, /\.fsdb-share-link-row/)
@@ -49,7 +49,7 @@ test('share panel uses a compact settings section and custom toggles', () => {
 test('open share panel sits above the table toolbar', () => {
   const css = readFileSync(resolve(import.meta.dirname, './fsdb-style.ts'), 'utf8')
   assert.match(css, /\.fsdb-page \.tasks-toolbar\{[^}]*z-index:50/)
-  assert.match(css, /\.fsdb-right \.chat-view-header:has\(\.fsdb-share-panel\)\{[^}]*z-index:90/)
+  assert.match(css, /\.fsdb-right \.chat-view-header:has\(\.fsdb-share-panel\)\{[^}]*z-index:var\(--biu-z-dropdown\)/)
 })
 
 test('permission column opens the same kind of chain as data scope', () => {
@@ -99,11 +99,14 @@ test('share panel separates public sharing from internal and external collaborat
   assert.match(src, /继承自/)
   assert.match(src, /export \{ ShareScopeLabel \}/)
   assert.match(readFileSync(resolve(import.meta.dirname, './share-scope-label.tsx'), 'utf8'), /export function ShareScopeLabel/)
+  assert.match(readFileSync(resolve(import.meta.dirname, './share-scope-label.tsx'), 'utf8'), /GlobeAltIcon/)
+  assert.doesNotMatch(readFileSync(resolve(import.meta.dirname, './share-scope-label.tsx'), 'utf8'), /ShareIcon/)
   assert.match(src, /export function ShareScopeDetail/)
   assert.match(src, /数据归属链路/)
   assert.match(src, /fsdb-scope-chain/)
   assert.match(src, /effectiveDataScope/)
-  assert.match(src, /<ScopeMark scope=\{scope\} \/>/)
+  assert.match(src, /<ScopeMark scope=\{shown\} \/>/)
+  assert.match(src, /<ScopeMark scope=\{step.result\} \/>/)
   assert.doesNotMatch(src, /ScopeMark scope=\{label \|\| scope\}/)
   assert.match(src, /内部协作者/)
   assert.match(src, /外部协作者/)
@@ -151,13 +154,13 @@ test('list permission column uses the same capsule and loads the chain on click'
   const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
   assert.match(src, /data-testid="fsdb-role-tag"/)
   assert.match(labelSrc, /className=\{`fsdb-scope-tag is-\$\{accessTone\(label\)\}`\}/)
-  assert.match(css, /\.fsdb-scope-tag\.is-manage[^{]*\{[^}]*background:var\(--dsw-hover\)/)
-  assert.match(css, /\.fsdb-scope-tag\.is-manage[^{]*\{[^}]*color:var\(--dsw-label-2\)/)
-  assert.doesNotMatch(css, /\.fsdb-scope-tag\.is-manage[^{]*\{[^}]*--dsw-business/)
+  assert.match(css, /\.fsdb-scope-tag\.is-manage[^{]*\{[^}]*--biu-tag:var\(--biu-color-ink-gray\)/)
+  assert.match(css, /\.fsdb-scope-tag\{[^}]*color:var\(--biu-tag\)/)
+  assert.doesNotMatch(css, /\.fsdb-scope-tag\.is-manage[^{]*\{[^}]*--biu-color-text:/)
   assert.doesNotMatch(css, /\.fsdb-scope-tag\.is-manage[^{]*\{[^}]*#2c2c2b/)
   assert.match(
     css,
-    /\.fsdb-scope-tag\.is-shared,\.fsdb-scope-pill\.is-shared,\.fsdb-scope-tag\.is-edit,\.fsdb-scope-pill\.is-edit,[\s\S]*?background:var\(--dsw-pick-fill\);color:var\(--dsw-pick\)/,
+    /\.fsdb-scope-tag\.is-shared,[\s\S]*?--biu-tag:var\(--biu-color-ink-blue\)/,
   )
   assert.doesNotMatch(css, /\.fsdb-scope-tag\.is-edit[^{]*\{[^}]*#2383e2/)
   assert.match(browser, /fallback=\{<ShareRoleLabel label=\{props\.label\} \/>\}/)
@@ -170,8 +173,11 @@ test('builtin plugins keep shared ownership in the scope chain', () => {
   const browser = readFileSync(resolve(import.meta.dirname, './browser.tsx'), 'utf8')
   const detail = src.slice(src.indexOf('export function ShareScopeDetail'), src.indexOf('export function ShareRoleDetail'))
   assert.match(detail, /builtin = false/)
+  assert.match(detail, /const shown = scopeTone\(label\)/)
+  assert.match(detail, /className=\{`fsdb-scope-tag is-\$\{shown\}`\}/)
   assert.match(detail, /if \(builtin\) \{/)
   assert.match(detail, /setScope\('shared'\)/)
+  assert.match(detail, /shared = recordShare \|\| viewHits.length > 0 \|\| shown === 'shared'/)
   assert.match(detail, /title: '内置插件'/)
   assert.match(detail, /result: '共享'/)
   assert.match(browser, /builtin=\{collectionPath === '\/plugins' && row\.builtin === true\}/)
@@ -196,9 +202,9 @@ test('list share column uses the same capsule and loads the chain on click', () 
   assert.match(css, /\.fsdb-scope-tag\{[^}]*height:22px/)
   assert.match(
     css,
-    /\.fsdb-scope-tag\.is-workspace,\.fsdb-scope-pill\.is-workspace,\.fsdb-scope-tag\.is-personal,\.fsdb-scope-pill\.is-personal\{background:var\(--dsw-hover\);color:var\(--dsw-label-2\)\}/,
+    /\.fsdb-scope-tag\.is-workspace,\.fsdb-scope-pill\.is-workspace,\.fsdb-scope-tag\.is-personal,\.fsdb-scope-pill\.is-personal\{background:var\(--biu-color-bg-hover\);color:var\(--biu-color-text-muted\)\}/,
   )
-  assert.doesNotMatch(css, /\.fsdb-scope-tag\.is-workspace\{[^}]*--dsw-business/)
+  assert.doesNotMatch(css, /\.fsdb-scope-tag\.is-workspace\{[^}]*--biu-color-text/)
   assert.match(browser, /fallback=\{<ShareScopeLabel label=\{props\.label\} \/>\}/)
   assert.match(browser, /if \(key === 'shareScope' \|\| key === 'shareRole'\) \{\s*return renderCell\(row, key, field, 'table'\)/)
 })

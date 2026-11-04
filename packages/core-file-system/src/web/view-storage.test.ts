@@ -67,11 +67,11 @@ test('pickViewForRoute keeps builtin-block from the URL when the list is still o
 })
 
 test('tables default to the builtin 全部xx view', () => {
-  assert.equal(defaultViewId('/sessions'), builtinAllViewId('/sessions'))
+  assert.equal(defaultViewId('/agents'), builtinAllViewId('/agents'))
   assert.equal(defaultViewId(VIEWS_COLLECTION_PATH), builtinAllViewId(VIEWS_COLLECTION_PATH))
-  assert.equal(viewForPath('/sessions')?.builtin, true)
-  assert.deepEqual(viewForPath('/sessions')?.filters, {})
-  assert.equal(viewForPath('/pages', builtinAllViewId('/sessions'))?.id, builtinAllViewId('/pages'))
+  assert.equal(viewForPath('/agents')?.builtin, true)
+  assert.deepEqual(viewForPath('/agents')?.filters, {})
+  assert.equal(viewForPath('/pages', builtinAllViewId('/agents'))?.id, builtinAllViewId('/pages'))
 })
 
 test('builtin view wrap is stored as display prefs and restored', () => {
@@ -86,15 +86,15 @@ test('builtin view wrap is stored as display prefs and restored', () => {
     },
   }
   Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: storage })
-  const path = '/sessions'
+  const path = '/agents'
   const id = builtinAllViewId(path)
   persistViewDisplay(path, id, { wrap: true, truncate: false })
   assert.equal(mem[viewDisplayKey(path, id)]?.includes('"wrap":true'), true)
-  const painted = withViewDisplay(path, builtinAllView({ path, label: '会话', view: { title: '会话' } }))
+  const painted = withViewDisplay(path, builtinAllView({ path, label: '代理', view: { title: '代理' } }))
   assert.equal(painted.wrap, true)
   assert.equal(painted.truncate, false)
   assert.equal(painted.builtin, true)
-  assert.equal(painted.name, '全部会话')
+  assert.equal(painted.name, '全部代理')
   assert.equal(viewForPath(path)?.wrap, true)
 })
 
@@ -112,7 +112,7 @@ test('withViewDisplay keeps overlay rank over a stale record rank', () => {
       },
     },
   })
-  const path = '/sessions'
+  const path = '/agents'
   persistViewDisplay(path, 'mine', { rank: 0, wrap: true })
   const painted = withViewDisplay(path, {
     id: 'mine',
@@ -142,10 +142,10 @@ test('builtin view columns overlay survives withViewDisplay', () => {
       },
     },
   })
-  const path = '/sessions'
+  const path = '/agents'
   const id = builtinAllViewId(path)
   persistViewDisplay(path, id, { columns: ['title', 'project'] })
-  assert.deepEqual(withViewDisplay(path, builtinAllView({ path, label: '会话', view: { title: '会话' } })).columns, [
+  assert.deepEqual(withViewDisplay(path, builtinAllView({ path, label: '代理', view: { title: '代理' } })).columns, [
     'title',
     'project',
   ])
@@ -303,6 +303,55 @@ test('local view delete is not restored by a stale /views pull', async () => {
     assert.deepEqual(
       loadViews(path).map((view) => view.id),
       ['keep'],
+    )
+  } finally {
+    globalThis.fetch = prev
+  }
+})
+
+test('pullSavedViews keeps previous rank when the list comes back shuffled', async () => {
+  const path = '/pages-view-rank-stable'
+  const mem: Record<string, string> = {}
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => mem[key] ?? null,
+      setItem: (key: string, value: string) => {
+        mem[key] = value
+      },
+      removeItem: (key: string) => {
+        delete mem[key]
+      },
+    },
+  })
+  rememberViews(path, [
+    { id: 'mine', name: '我的', mode: 'table', sortField: 'title', sortDir: 'asc', filters: {}, columns: [], rank: 0 },
+    { id: 'board', name: '看板', mode: 'board', sortField: 'title', sortDir: 'asc', filters: {}, columns: [], rank: 1 },
+  ])
+  persistViewDisplay(path, 'mine', { rank: 0 })
+  persistViewDisplay(path, 'board', { rank: 1 })
+  const prev = globalThis.fetch
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = String(input)
+    if (url.includes('/api/db/list')) {
+      return new Response(
+        JSON.stringify({
+          items: [
+            { viewId: 'board', title: '看板', tablePath: path, mode: 'board' },
+            { viewId: 'mine', title: '我的', tablePath: path },
+          ],
+          total: 2,
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )
+    }
+    return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } })
+  }) as typeof fetch
+  try {
+    await pullSavedViews([path])
+    assert.deepEqual(
+      loadViews(path).map((view) => view.id),
+      ['mine', 'board'],
     )
   } finally {
     globalThis.fetch = prev

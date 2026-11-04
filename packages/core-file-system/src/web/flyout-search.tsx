@@ -15,13 +15,13 @@ export function FlyoutSearch({
 }) {
   const ref = useRef<HTMLInputElement>(null)
   useEffect(() => {
-    const id = window.requestAnimationFrame(() => ref.current?.focus())
+    const id = window.requestAnimationFrame(() => ref.current?.focus({ preventScroll: true }))
     return () => window.cancelAnimationFrame(id)
   }, [])
   return (
     <input
       ref={ref}
-      className="tasks-sort-search"
+      className="tasks-sort-search font-medium"
       data-testid="tasks-sort-search"
       value={value}
       placeholder="搜索…"

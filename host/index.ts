@@ -1,10 +1,11 @@
 import { Context } from 'cordis'
 import { join } from 'node:path'
 import { importConfiguredPackage, readCordisConfig, findRepoRoot } from '@biu/host-plugin-loader'
-import { adoptPackedUserData } from '@biu/host-plugin-loader/data-dir'
+import { adoptPackedUserData, loadBiuEnv } from '@biu/host-plugin-loader/data-dir'
 import { lanIPv4, printReadyBanner } from './banner.ts'
 import './types.ts'
 
+loadBiuEnv()
 process.env.BIU_ONLINE = process.env.BIU_ONLINE || '1'
 
 // tsx 发现这里监听了信号就不会再代为退出。直接退出，端口和 sqlite 马上让出来。

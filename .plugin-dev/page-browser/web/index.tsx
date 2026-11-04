@@ -1,3 +1,4 @@
+import { Button, Input, ReUI } from '@biu/reui'
 import { createPortal } from 'react-dom'
 import { BLOCKED_HINT, BOOKMARKS, normalizeUrl } from './url.ts'
 import { openSidebarBrowser } from './open.ts'
@@ -11,13 +12,13 @@ export const name = 'page-browser'
 export const inject = ['pageEditor', 'slots', 'pick']
 
 const UI = 'ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif'
-const BAR = '#f2f3f5'
+const BAR = 'var(--biu-color-bg-subtle)'
 const BORDER = 'rgba(15,23,42,.14)'
-const INK = '#1f2430'
+const INK = 'var(--biu-color-text)'
 
 function blockHeight(data: Record<string, unknown>) {
   const n = Number(data.height)
-  return Number.isFinite(n) && n >= 160 ? Math.round(n) : 420
+  return Number.isFinite(n) && n >= 160 ? Math.round(n) : 640
 }
 
 /* ---------------- 图标 ---------------- */
@@ -61,12 +62,14 @@ function BrowserSurface({
   data,
   update,
   zoomed,
+  frameHeight,
   onZoom,
   onClose,
 }: {
   data: Record<string, unknown>
   update: (patch: Record<string, unknown>) => void
   zoomed: boolean
+  frameHeight: number
   onZoom: () => void
   onClose?: () => void
 }) {
@@ -109,7 +112,7 @@ function BrowserSurface({
     cursor: 'pointer',
     border: 'none',
     background: 'transparent',
-    color: '#4b5563',
+    color: 'var(--biu-color-text-muted)',
     padding: '4px 5px',
     borderRadius: 999,
     display: 'inline-flex',
@@ -118,33 +121,26 @@ function BrowserSurface({
   }
 
   return (
+    <ReUI className="page-browser-ui">
     <div
       data-testid="page-browser-surface"
+      className="rui-card"
       style={{
         flex: 1,
-        minHeight: 0,
+        minHeight: zoomed ? 0 : frameHeight,
+        height: zoomed ? '100%' : frameHeight,
         width: '100%',
+        maxWidth: 'none',
         display: 'flex',
         flexDirection: 'column',
-        background: '#fff',
-        border: zoomed ? 'none' : `1px solid ${BORDER}`,
-        borderRadius: zoomed ? 0 : 10,
+        padding: 0,
         overflow: 'hidden',
         boxSizing: 'border-box',
+        borderRadius: zoomed ? 0 : undefined,
+        border: zoomed ? 'none' : undefined,
       }}
     >
-      <div
-        data-biu-ignore
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          padding: '6px 8px',
-          background: BAR,
-          borderBottom: `1px solid ${BORDER}`,
-          fontFamily: UI,
-        }}
-      >
+      <div data-biu-ignore className="rui-chrome">
         {zoomed ? null : (
           <button
             type="button"
@@ -179,7 +175,7 @@ function BrowserSurface({
           }}
           style={{ flex: 1, minWidth: 0, display: 'flex' }}
         >
-          <input
+          <Input
             data-testid="page-browser-addr"
             data-page-block-capture=""
             spellCheck={false}
@@ -188,31 +184,10 @@ function BrowserSurface({
             aria-label="地址"
             onKeyDown={(event) => event.stopPropagation()}
             onChange={(event) => setAddr(event.currentTarget.value)}
-            style={{
-              flex: 1,
-              minWidth: 0,
-              fontFamily: UI,
-              fontSize: 12.5,
-              color: INK,
-              background: '#fff',
-              border: `1px solid ${BORDER}`,
-              borderRadius: 999,
-              padding: '5px 12px',
-              outline: 'none',
-            }}
+            className="rui-addr rui-grow"
+            style={{ width: '100%' }}
           />
         </form>
-        <button
-          type="button"
-          tabIndex={-1}
-          data-testid="page-browser-go"
-          title="访问"
-          aria-label="访问"
-          style={{ ...iconBtn, color: '#1d4ed8' }}
-          onClick={() => go(addr)}
-        >
-          前往
-        </button>
         {src ? (
           <button
             type="button"
@@ -253,7 +228,7 @@ function BrowserSurface({
         )}
       </div>
 
-      <div style={{ position: 'relative', flex: 1, minHeight: 0, background: '#fff' }}>
+      <div style={{ position: 'relative', flex: 1, minHeight: 0, background: 'var(--biu-color-bg)' }}>
         {src ? (
           <iframe
             key={`${src}-${nonce}`}
@@ -265,7 +240,7 @@ function BrowserSurface({
             referrerPolicy="no-referrer"
             allow="fullscreen; clipboard-read; clipboard-write"
             sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
-            style={{ display: 'block', width: '100%', height: '100%', border: 'none', background: '#fff' }}
+            style={{ display: 'block', width: '100%', height: '100%', border: 'none', background: 'var(--biu-color-bg)' }}
           />
         ) : (
           <div
@@ -294,8 +269,8 @@ function BrowserSurface({
                     fontFamily: UI,
                     fontSize: 12,
                     color: INK,
-                    background: '#fff',
-                    border: `1px solid ${BORDER}`,
+                    background: 'var(--biu-color-bg)',
+                    border: `var(--biu-stroke-width) solid ${BORDER}`,
                     borderRadius: 999,
                     padding: '5px 12px',
                   }}
@@ -350,6 +325,7 @@ function BrowserSurface({
         ) : null}
       </div>
     </div>
+    </ReUI>
   )
 }
 
@@ -387,14 +363,30 @@ function BrowserCard({
   }, [zoom])
 
   const surface = (zoomed: boolean) => (
-    <BrowserSurface data={data} update={update} zoomed={zoomed} onZoom={() => setZoom(true)} onClose={() => setZoom(false)} />
+    <BrowserSurface
+      data={data}
+      update={update}
+      zoomed={zoomed}
+      frameHeight={height}
+      onZoom={() => setZoom(true)}
+      onClose={() => setZoom(false)}
+    />
   )
 
   return (
     <div
       ref={hostRef}
       data-testid="page-browser"
-      style={{ position: 'relative', width: '100%', height, display: 'flex' }}
+      style={{
+        position: 'relative',
+        width: '100%',
+        maxWidth: 'none',
+        height,
+        minHeight: height,
+        display: 'flex',
+        flexDirection: 'column',
+        boxSizing: 'border-box',
+      }}
     >
       {surface(false)}
       {overlayEl ? createPortal(surface(true), overlayEl) : null}
@@ -439,7 +431,7 @@ export function apply(ctx: {
     hint: '输入链接就能访问的网页卡片；禁嵌站点点跳转会进右侧栏真浏览器',
     aliases: ['browser', 'web', '浏览器', '网页', '网址', 'url', '链接'],
     assets: [],
-    defaults: () => ({ url: 'https://example.com', height: 420 }),
+    defaults: () => ({ url: 'https://example.com', height: 640 }),
     View: BrowserCard,
   })
 }

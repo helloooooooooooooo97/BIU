@@ -17,7 +17,7 @@ test('collectShareResources splits page files, plugins and facets', () => {
     [{ id: 'p000', title: '讲义' }],
     {
       p000: [
-        ':::pageBlock {kind=html plugin=page-html-blocks id=ab12}',
+        ':::pageBlock {kind=sandbox plugin=page-sandbox id=ab12}',
         '<img src="/api/page/file/cover.png">',
         '见 @page/p001 和 facet/music-era',
         ':::',
@@ -26,7 +26,7 @@ test('collectShareResources splits page files, plugins and facets', () => {
     ['p000'],
   )
   assert.equal(stats.pages >= 2, true)
-  assert.equal(stats.pluginIds.includes('page-html-blocks'), true)
+  assert.equal(stats.pluginIds.includes('page-sandbox'), true)
   assert.equal(stats.collections >= 1, true)
   assert.equal(shareResourceTypeCount(stats), 3)
 })

@@ -121,7 +121,7 @@ export type TaskRow = {
   doneCount?: number
   sort: number
   emoji: string
-  facet: SchemaFieldValue
+  tag: SchemaFieldValue
   createdAt: number
   updatedAt: number
   creator: TaskActor
@@ -168,7 +168,7 @@ export type TaskCreateInput = {
   /** 进度汇报提醒间隔（秒），默认 60。 */
   reportIntervalSec?: number
   emoji?: string
-  facet?: SchemaFieldValue
+  tag?: SchemaFieldValue
 }
 
 export type TaskUpdateInput = Partial<{
@@ -197,7 +197,7 @@ export type TaskUpdateInput = Partial<{
   /** 自上次汇报以来已追问次数。 */
   reportPromptCount: number
   emoji: string
-  facet: SchemaFieldValue
+  tag: SchemaFieldValue
 }>
 
 export type TaskListFilter = {
@@ -828,12 +828,12 @@ function mapRow(row: Record<string, unknown>, listed = false): TaskRow {
     }
   }
 
-  let facet = emptySchemaValue()
-  if (!listed && !isBlankJson(row.facet_json) && typeof row.facet_json === 'string') {
+  let tag = emptySchemaValue()
+  if (!listed && !isBlankJson(row.tag_json) && typeof row.tag_json === 'string') {
     try {
-      facet = normalizeSchemaValue(JSON.parse(row.facet_json))
+      tag = normalizeSchemaValue(JSON.parse(row.tag_json))
     } catch {
-      facet = emptySchemaValue()
+      tag = emptySchemaValue()
     }
   }
 
@@ -853,7 +853,7 @@ function mapRow(row: Record<string, unknown>, listed = false): TaskRow {
     depth: typeof row.depth === 'number' ? Number(row.depth) : 0,
     sort: Number(row.sort ?? 0),
     emoji: String(row.emoji ?? ''),
-    facet,
+    tag,
     createdAt: Number(row.created_at ?? 0),
     updatedAt: Number(row.updated_at ?? 0),
     creator,
@@ -1177,7 +1177,7 @@ export class TasksService extends Service {
           id, title, status, priority, difficulty, assignee, due_at, notes, sort,
           created_at, updated_at, creator_json, assignee_json, assigned_at,
           project, tags_json, parent_id, depends_on, depth, trigger_json,
-          report_interval_sec, facet_json, emoji
+          report_interval_sec, tag_json, emoji
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
@@ -1202,7 +1202,7 @@ export class TasksService extends Service {
         depth,
         JSON.stringify(trigger),
         reportIntervalSec,
-        JSON.stringify(normalizeSchemaValue(input.facet)),
+        JSON.stringify(normalizeSchemaValue(input.tag)),
         typeof input.emoji === 'string' ? input.emoji : '',
       )
     writeEditorContent(this.db, '/tasks', id, description)
@@ -1303,7 +1303,7 @@ export class TasksService extends Service {
         ? current.reportPromptCount
         : Math.max(0, Math.round(Number(patch.reportPromptCount) || 0))
     const emoji = patch.emoji !== undefined ? String(patch.emoji ?? '') : current.emoji
-    const facet = patch.facet !== undefined ? normalizeSchemaValue(patch.facet) : current.facet
+    const tag = patch.tag !== undefined ? normalizeSchemaValue(patch.tag) : current.tag
 
     const ts = typeof patch.updatedAt === 'number' && patch.updatedAt > 0 ? patch.updatedAt : now()
     this.db
@@ -1312,7 +1312,7 @@ export class TasksService extends Service {
           title = ?, status = ?, priority = ?, difficulty = ?, assignee = ?, due_at = ?, notes = ?, sort = ?,
           updated_at = ?, creator_json = ?, assignee_json = ?, assigned_at = ?, project = ?, tags_json = ?,
           parent_id = ?, depends_on = ?, depth = ?, trigger_json = ?,
-          report_interval_sec = ?, last_report_prompt_at = ?, report_prompt_count = ?, facet_json = ?, emoji = ?
+          report_interval_sec = ?, last_report_prompt_at = ?, report_prompt_count = ?, tag_json = ?, emoji = ?
          WHERE id = ?`,
       )
       .run(
@@ -1337,7 +1337,7 @@ export class TasksService extends Service {
         reportIntervalSec,
         lastReportPromptAt,
         reportPromptCount,
-        JSON.stringify(facet),
+        JSON.stringify(tag),
         emoji,
         id,
       )
@@ -1472,7 +1472,7 @@ export function apply(ctx: Context) {
     if (!row) throw new Error('unknown task')
     const targetSessionId = row.assignee?.sessionId
     if (!targetSessionId) {
-      throw new Error(`task ${id} 未分配执行会话。请先 db_update /tasks/${id} 写入 assignee（会话 id）`)
+      throw new Error(`task ${id} 未分配执行代理。请先 db_update /tasks/${id} 写入 assignee（代理 id）`)
     }
     if (!host.sessions?.sendMessage) {
       throw new Error('sessions.sendMessage 不可用：sessions 服务未就绪')

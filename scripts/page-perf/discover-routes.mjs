@@ -78,14 +78,14 @@ export async function discoverLocalSpaceRoutes(apiJson) {
       id: `session:${chatSession.id}`,
       kind: 'session',
       label: `会话 ${chatSession.title || chatSession.id}`,
-      path: `/s/${encodeURIComponent(chatSession.id)}`,
+      path: `/agents/${encodeURIComponent(chatSession.id)}`,
       interact: 'chat',
     })
     push(routes, seen, {
       id: `session-debug:${chatSession.id}`,
       kind: 'session-debug',
       label: `会话调试 ${chatSession.title || chatSession.id}`,
-      path: `/s/${encodeURIComponent(chatSession.id)}/debug`,
+      path: `/agents/${encodeURIComponent(chatSession.id)}/debug`,
       interact: 'chat',
     })
   }
@@ -94,7 +94,7 @@ export async function discoverLocalSpaceRoutes(apiJson) {
       id: `session:${otherSession.id}`,
       kind: 'session',
       label: `会话 ${otherSession.title || otherSession.id}`,
-      path: `/s/${encodeURIComponent(otherSession.id)}`,
+      path: `/agents/${encodeURIComponent(otherSession.id)}`,
       interact: 'chat',
     })
   }

@@ -26,6 +26,17 @@ test('decorate merges cells; later layer wins; dispose restores', () => {
   assert.equal(ui.chrome('/plugins').cells?.name, undefined)
 })
 
+test('decorate merges DetailBar; later layer wins', () => {
+  const ctx = new Context()
+  const ui = new DatabaseUiService(ctx)
+  const First = () => null
+  const Second = () => null
+  ui.decorate('/pages', { DetailBar: First })
+  assert.equal(ui.chrome('/pages').DetailBar, First)
+  ui.decorate('/pages', { DetailBar: Second })
+  assert.equal(ui.chrome('/pages').DetailBar, Second)
+})
+
 test('decorate merges DetailTools; later layer wins', () => {
   const ctx = new Context()
   const ui = new DatabaseUiService(ctx)
@@ -53,10 +64,10 @@ test('decorate keeps Icon as the record mark, later layer wins', () => {
   const ui = new DatabaseUiService(ctx)
   const IconA = () => null
   const IconB = () => null
-  ui.decorate('/sessions', { Icon: IconA })
-  assert.equal(ui.chrome('/sessions').Icon, IconA)
-  ui.decorate('/sessions', { Icon: IconB })
-  assert.equal(ui.chrome('/sessions').Icon, IconB)
+  ui.decorate('/agents', { Icon: IconA })
+  assert.equal(ui.chrome('/agents').Icon, IconA)
+  ui.decorate('/agents', { Icon: IconB })
+  assert.equal(ui.chrome('/agents').Icon, IconB)
 })
 
 test('decorate notifies subscribers', () => {

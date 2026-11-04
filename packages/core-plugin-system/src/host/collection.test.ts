@@ -110,6 +110,7 @@ test('pluginsCollection lists installed plugins and sandboxes in one table', asy
   assert.match(String(spec.view?.blurb ?? ''), /:::pageBlock/)
   assert.equal(spec.schema.labelField, 'title')
   assert.ok(spec.schema.fields.title)
+  assert.equal(spec.schema.fields.builtin?.type, 'boolean')
   assert.equal(spec.schema.fields.name, undefined)
   assert.equal(spec.schema.columns?.[0], 'title')
   assert.deepEqual(spec.records, { update: false, create: false, delete: true })
@@ -124,12 +125,16 @@ test('pluginsCollection lists installed plugins and sandboxes in one table', asy
   assert.equal(spec.schema.fields.tags, undefined)
   assert.equal(spec.schema.fields.emoji?.writable, true)
   assert.deepEqual(spec.actions?.find((item) => item.id === 'start')?.when, { installed: true, running: false })
-  assert.deepEqual(spec.actions?.find((item) => item.id === 'pack')?.when, { sandbox: true, installed: false })
+  assert.deepEqual(spec.actions?.find((item) => item.id === 'pack')?.when, {
+    sandbox: true,
+    installed: false,
+    canManagePackage: true,
+  })
   assert.equal(spec.actions?.find((item) => item.id === 'start')?.requiredAction, 'resource:read')
   assert.equal(spec.actions?.find((item) => item.id === 'stop')?.requiredAction, 'resource:read')
   assert.equal(spec.actions?.find((item) => item.id === 'pack')?.requiredAction, 'resource:read')
   assert.equal(spec.actions?.find((item) => item.id === 'sandbox')?.requiredAction, 'resource:read')
-  assert.deepEqual(spec.actions?.find((item) => item.id === 'uninstall')?.when, { installed: true })
+  assert.deepEqual(spec.actions?.find((item) => item.id === 'uninstall')?.when, { installed: true, canManagePackage: true })
   assert.equal(spec.actions?.find((item) => item.id === 'uninstall')?.requiredAction, 'resource:read')
   assert.equal(spec.actions?.find((item) => item.id === 'sandbox')?.for, 'agent')
   assert.equal(spec.actions?.find((item) => item.id === 'start')?.for, undefined)
@@ -255,6 +260,52 @@ test('plugin intro is README.md via contentField readme', async () => {
   assert.equal(written.readme, '# Demo\n\n介绍\n')
   assert.equal(files.get('demo'), '# Demo\n\n介绍\n')
   await assert.rejects(() => spec.update!('demo', { name: '改名' }), /not writable/)
+})
+
+test('builtin listing prefers live sandbox name over a stale packed HTML title', async () => {
+  const spec = pluginsCollection(stubStore({
+    list: () => Promise.resolve([
+      {
+        id: 'page-sandbox',
+        name: 'HTML',
+        blurb: 'old',
+        tags: ['html'],
+        author: 'Biu',
+        authorUrl: '',
+        enabled: true,
+        running: true,
+        bytes: 12,
+        createdAt: 1,
+        updatedAt: 2,
+        lastRunAt: null,
+        hasHost: true,
+        hasWeb: true,
+        builtin: true,
+      },
+    ]),
+    listSandboxes: () => Promise.resolve([
+      {
+        id: 'page-sandbox',
+        name: 'Sandbox',
+        blurb: '斜杠插入 Sandbox',
+        tags: ['sandbox'],
+        author: 'Biu',
+        authorUrl: '',
+        builtin: true,
+        hasHost: true,
+        hasWeb: true,
+        createdAt: 1,
+        updatedAt: 3,
+      },
+    ]),
+  }))
+  const row = (await spec.list()).find((item) => item.id === 'page-sandbox')
+  assert.equal(row?.title, 'Sandbox')
+  assert.equal(row?.name, 'Sandbox')
+  assert.equal(row?.blurb, '斜杠插入 Sandbox')
+  assert.equal(row?.builtin, true)
+  assert.equal(row?.installed, true)
+  assert.equal(row?.running, true)
 })
 
 test('builtin plugins list BIU官方 and the GitHub link', async () => {

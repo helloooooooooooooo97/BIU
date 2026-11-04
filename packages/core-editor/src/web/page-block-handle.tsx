@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState, type DragEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import type { Editor } from '@tiptap/core'
 import { ArrowDownIcon, ArrowUpIcon, Square2StackIcon, TrashIcon } from '@heroicons/react/16/solid'
-import { HeadlessDismiss } from '@biu/public-ui'
+import { HeadlessDismiss } from '@biu/biu-ui'
 import {
   beginHandleDrag,
   deleteHandleBlock,
   duplicateHandleBlock,
   handleBlockAtPointer,
-  handleRailLeft,
+  handleLeftForBlock,
+  isSlideInnerBlock,
   visibleHandleEl,
   insertParagraphAfter,
   insertParagraphBefore,
@@ -17,16 +18,7 @@ import {
 const GRIP_H = 26
 const HIDE_DELAY_MS = 200
 
-type HandleTarget = HandleBlock & { top: number; left: number; height: number; gripTop: number }
-
-function lineCoords(editor: Editor, found: HandleBlock) {
-  const inside = found.node.isAtom || found.node.isLeaf || found.node.nodeSize < 2 ? found.pos : found.pos + 1
-  try {
-    return editor.view.coordsAtPos(inside)
-  } catch {
-    return null
-  }
-}
+type HandleTarget = HandleBlock & { top: number; left: number; height: number }
 
 function readTarget(editor: Editor, host: HTMLElement, clientX: number, clientY: number): HandleTarget | null {
   const found = handleBlockAtPointer(editor, clientX, clientY)
@@ -37,17 +29,16 @@ function readTarget(editor: Editor, host: HTMLElement, clientX: number, clientY:
   const hostBox = host.getBoundingClientRect()
   const box = el.getBoundingClientRect()
   const contentBox = editor.view.dom.getBoundingClientRect()
-  const line =
-    found.node.isAtom || found.node.isLeaf || found.node.type.name === 'pageBlock'
-      ? { top: box.top, bottom: box.top + GRIP_H }
-      : (lineCoords(editor, found) ?? { top: box.top, bottom: box.top + GRIP_H })
-  const gripTop = (line.top + line.bottom) / 2 - box.top - GRIP_H / 2
   return {
     ...found,
     top: box.top - hostBox.top,
-    left: handleRailLeft(hostBox.left, contentBox.left),
+    left: handleLeftForBlock({
+      hostLeft: hostBox.left,
+      contentLeft: contentBox.left,
+      boxLeft: box.left,
+      nested: isSlideInnerBlock(editor.state.doc, found.pos, found.node.type.name),
+    }),
     height: Math.max(box.height, GRIP_H),
-    gripTop: Math.max(0, gripTop),
   }
 }
 
@@ -153,7 +144,6 @@ export function PageBlockHandle({ editor }: { editor: Editor }) {
       <button
         type="button"
         className="page-block-handle-grip"
-        style={{ marginTop: target.gripTop }}
         draggable
         aria-label="拖拽或打开块菜单"
         data-testid="page-block-handle-grip"
@@ -168,7 +158,6 @@ export function PageBlockHandle({ editor }: { editor: Editor }) {
           <div
             ref={menuRef}
             className="page-block-handle-menu"
-            style={{ top: target.gripTop }}
             role="menu"
             data-testid="page-block-handle-menu"
           >

@@ -1,13 +1,13 @@
 import { useState, useSyncExternalStore, type ReactNode } from 'react'
-import { AdjustmentsHorizontalIcon, CheckIcon, ChevronLeftIcon, ShareIcon, StarIcon } from '@heroicons/react/16/solid'
-import { AnchorMenu } from '@biu/public-ui/anchor-menu'
+import { AdjustmentsHorizontalIcon, ChevronLeftIcon, ShareIcon, StarIcon } from '@heroicons/react/16/solid'
+import { AnchorMenu } from '@biu/biu-ui/anchor-menu'
 import { dismissInspectorPaneMenu } from './inspector-pane-menu.tsx'
-import { getPagePrefs, getPageWidthVersion, persistPagePrefs, subscribePageWidth } from './page-width.ts'
+import { LayoutPrefsMenu } from './layout-prefs-menu.tsx'
+import { getPagePrefs, getPageWidthVersion, subscribePageWidth } from './page-width.ts'
 import { getStarredViews, getStarredViewsVersion, isViewStarred, persistStarredViews, subscribeStarredViews, toggleStarredView } from './view-storage.ts'
 
 export function PaneConfigMenuItem() {
   useSyncExternalStore(subscribePageWidth, getPageWidthVersion, () => 0)
-  const wide = getPagePrefs().wide
   const [anchor, setAnchor] = useState<HTMLElement | null>(null)
   return (
     <>
@@ -24,7 +24,7 @@ export function PaneConfigMenuItem() {
         }}
       >
         <AdjustmentsHorizontalIcon aria-hidden />
-        配置
+        布局配置
         <ChevronLeftIcon aria-hidden className="fsdb-detail-more-caret" />
       </button>
       {anchor ? (
@@ -33,33 +33,12 @@ export function PaneConfigMenuItem() {
           onClose={() => setAnchor(null)}
           className="fsdb-detail-more-menu"
           role="menu"
-          minWidth={168}
+          minWidth={220}
           placement="left"
           zIndex={210}
           inside={(node) => anchor.contains(node)}
         >
-          <button
-            type="button"
-            role="menuitemradio"
-            className="fsdb-detail-more-item"
-            aria-checked={wide}
-            data-testid="fsdb-pane-width-wide"
-            onClick={() => persistPagePrefs({ wide: true })}
-          >
-            宽屏
-            {wide ? <CheckIcon aria-hidden className="fsdb-detail-more-caret" /> : null}
-          </button>
-          <button
-            type="button"
-            role="menuitemradio"
-            className="fsdb-detail-more-item"
-            aria-checked={!wide}
-            data-testid="fsdb-pane-width-narrow"
-            onClick={() => persistPagePrefs({ wide: false })}
-          >
-            窄屏
-            {wide ? null : <CheckIcon aria-hidden className="fsdb-detail-more-caret" />}
-          </button>
+          <LayoutPrefsMenu prefs={getPagePrefs()} className="is-anchored" />
         </AnchorMenu>
       ) : null}
     </>

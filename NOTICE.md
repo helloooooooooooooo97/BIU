@@ -471,7 +471,6 @@ on npm.
 - `@xyflow/system`
 - `ansi-regex`
 - `ansi-styles`
-- `antd`
 - `aria-hidden`
 - `assertion-error`
 - `bidi-js`

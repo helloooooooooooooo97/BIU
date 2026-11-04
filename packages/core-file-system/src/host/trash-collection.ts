@@ -2,7 +2,7 @@ import type { CollectionAction, CollectionListQuery, CollectionSpec, DbRecord } 
 import { REQUIRED_RECORD_FIELDS, recordBuiltinValues } from '@biu/type-file-system'
 import type { AssetGcHooks } from './asset-gc-run.ts'
 import { listWorkspaceGcCandidates, previewWorkspaceAssetGc, runWorkspaceAssetGc } from './asset-gc-run.ts'
-import { parseStampRecordId, stampRecordId } from './facets-collection.ts'
+import { parseStampRecordId, stampRecordId } from './tags-collection.ts'
 
 export type TrashItem = {
   id: string

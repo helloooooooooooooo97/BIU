@@ -1,5 +1,5 @@
 import { asPersonList } from '@biu/type-file-system'
-import { ensureTagChipStyle, tagTone } from '@biu/public-ui/tag-chip'
+import { ensureTagChipStyle, tagTone } from '@biu/biu-ui/tag-chip'
 
 /** First-paint cells only need a screen of text; CSS overflow hides the rest. */
 export const IDLE_CELL_TEXT_MAX = 80
@@ -61,7 +61,7 @@ export function idleTagChipsInnerHtml(tags: { id: string; label: string }[]) {
     .map((tag) => {
       const label = escapeTableHtml(idleClipText(tag.label, 24))
       const tone = escapeTableHtml(tagTone(tag.id))
-      return `<span class="biu-tag" style="--biu-tag:${tone}" title="${label}"><span class="biu-tag-label">${label}</span></span>`
+      return `<span class="biu-tag" data-tag-id="${escapeTableHtml(tag.id)}" style="--biu-tag:${tone}" title="${label}"><span class="biu-tag-label">${label}</span></span>`
     })
     .join('')}</span>`
 }

@@ -34,7 +34,7 @@ function asIso(value: unknown): string | undefined {
   return Number.isNaN(date.getTime()) ? undefined : date.toISOString()
 }
 
-function facetMatter(raw: unknown) {
+function tagMatter(raw: unknown) {
   const facet = normalizeSchemaValue(raw)
   if (!facet.tags.length) return undefined
   const values: Record<string, Record<string, unknown>> = {}
@@ -71,10 +71,10 @@ export function recordMatter(row: Record<string, unknown>, bodyKey?: string | nu
   if (parentId) matter.parentId = parentId
   const dependsOn = asTagList(row.dependsOn)
   if (dependsOn.length) matter.dependsOn = dependsOn
-  const facet = facetMatter(row.facet)
-  if (facet) matter.facet = facet
+  const facet = tagMatter(row.tag)
+  if (facet) matter.tag = facet
   for (const [key, value] of Object.entries(row)) {
-    if (skip.has(key) || key in matter || key === 'tags' || key === 'facet' || key === 'emoji' || key === 'parentId' || key === 'dependsOn') continue
+    if (skip.has(key) || key in matter || key === 'tags' || key === 'tag' || key === 'emoji' || key === 'parentId' || key === 'dependsOn') continue
     if (key === 'createdAt' || key === 'updatedAt' || key === 'createdBy' || key === 'updatedBy' || key === 'id' || key === 'title') continue
     if (!hasValue(value)) continue
     matter[key] = value

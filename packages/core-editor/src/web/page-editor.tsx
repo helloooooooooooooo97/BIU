@@ -1,24 +1,37 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
-import { HeadlessPopover } from '@biu/public-ui'
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
+import { HeadlessPopover } from '@biu/biu-ui'
 import { SourceEditor, type SourceEditorHandle } from './source-editor.tsx'
-import { usePageSourceMode } from './source-mode.ts'
+import { restorePageScroll } from './page-scroll-pin.ts'
+import { usePagePresentMode } from './source-mode.ts'
 import { ArrowPathIcon, ChatBubbleLeftRightIcon } from '@heroicons/react/16/solid'
 import { EditorContent, useEditor } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
 import type { Editor } from '@tiptap/core'
-import { Selection } from '@tiptap/pm/state'
+import { NodeSelection, Selection } from '@tiptap/pm/state'
 import type { FsContentProps } from '@biu/type-file-system/ui'
 import { pageEditorExtensions } from './kit.ts'
 import { PageBlockHandle } from './page-block-handle.tsx'
 import { editorHostIsLive } from './editor-live.ts'
-import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, handleContentTitleNav, shouldLeaveContentForTitle, focusRecordTitleNear, isDocStartSelection } from './title-content-nav.ts'
+import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, handleContentTitleNav, shouldLeaveContentForTitle, focusRecordTitleNear, isDocStartSelection, atFirstVisibleLine } from './title-content-nav.ts'
 import { tryContentJump, contentJumpForRecord } from './content-jump.ts'
 import { CONTENT_JUMP_EVENT } from '@biu/type-file-system'
 import { bindEditorTextHost, getPick } from '@biu/core-pick/web'
 import { markdownLocusFromElement, markdownLocusFromSelection } from './markdown-locus.ts'
-import { FindBar, isFindHotkey } from './find-bar.tsx'
+import { isFindHotkey } from './find-bar.tsx'
 import { applyEditorFind } from './find-plugin.ts'
-import { EDITOR_TONES, editorHighlightColor, editorTextColor } from './color-swatches.ts'
+import { applyStoredBlockIds, markdownWithBlockIds, stripBlockIdStamps } from './block-id.ts'
+import { getLivePageEditor, setLivePageEditor } from './page-live-editor.ts'
+import { PAGE_FIND_OPEN_EVENT, PAGE_INSERT_EVENT, getPageFind, patchPageFind, usePageFind } from './page-view-state.ts'
+import { PageBlocksTable } from './page-blocks-table.tsx'
+import {
+  INK_TONES,
+  WASH_TONES,
+  isLastColorHotkey,
+  lastColorSwatch,
+  readLastEditorColor,
+  writeLastEditorColor,
+  type LastEditorColor,
+} from './color-swatches.ts'
 import { isSendChatHotkey, pickFromEditor, pickFromLocus } from './editor-ask.ts'
 
 const LOCAL_EDIT_MS = 600
@@ -46,6 +59,16 @@ function jumpToPending(editor: Editor, markdown: string, recordId: string, force
   }
   run()
   requestAnimationFrame(run)
+}
+
+function persistEditorMarkdown(editor: Editor) {
+  return markdownWithBlockIds(editor)
+}
+
+function hydrateEditorMarkdown(editor: Editor, raw: string) {
+  const { text, ids } = stripBlockIdStamps(raw)
+  editor.commands.setContent(text, { contentType: 'markdown', emitUpdate: false })
+  applyStoredBlockIds(editor, ids)
 }
 
 function asMarkdown(value: unknown) {
@@ -93,62 +116,111 @@ function ColorMenus({
   const color = String(editor.getAttributes('textStyle').color ?? '')
   const highlight = String(editor.getAttributes('highlight').color ?? '')
 
-  const flyout = (kind: 'text' | 'mark') => {
-    const current = kind === 'text' ? color : highlight
-    return (
-      <div
-        className="page-color-menu"
-        role="menu"
-        aria-label={kind === 'text' ? '文字颜色' : '背景色'}
-        onMouseDown={holdSelection}
-      >
-        <div className="page-color-menu-h">{kind === 'text' ? '文字颜色' : '背景色'}</div>
+  const applyColor = (next: LastEditorColor | null) => {
+    if (!next) {
+      editor.chain().focus().unsetColor().unsetHighlight().run()
+      onOpen(null)
+      return
+    }
+    writeLastEditorColor(next)
+    if (next.kind === 'text') editor.chain().focus().setColor(next.value).run()
+    else editor.chain().focus().setHighlight({ color: next.value }).run()
+    onOpen(null)
+  }
+
+  const last = readLastEditorColor()
+  const lastSwatch = lastColorSwatch(last)
+
+  const flyout = () => (
+      <div className="page-color-menu" role="menu" aria-label="颜色" onMouseDown={holdSelection}>
+        <div className="page-color-recent-h">
+          <span>上次使用颜色</span>
+          <span className="page-color-kbd">⌘+Shift+H</span>
+        </div>
+        <div className="page-color-recent">
+          {last ? (
+            <button
+              type="button"
+              role="menuitem"
+              aria-label="上次使用颜色"
+              data-testid="page-color-last"
+              className={last.kind === 'mark' ? 'page-color-wash' : undefined}
+              style={{ background: lastSwatch }}
+              onMouseDown={holdSelection}
+              onClick={() => applyColor(last)}
+            />
+          ) : null}
+        </div>
+        <div className="page-color-menu-h">Text Colorful</div>
         <div className="page-color-grid">
-          {EDITOR_TONES.map((tone) => {
-            const value = kind === 'text' ? editorTextColor(tone) : editorHighlightColor(tone)
-            const on = current.toLowerCase() === value.toLowerCase()
+          <button
+            type="button"
+            role="menuitemradio"
+            className={!color ? 'page-color-none is-on' : 'page-color-none'}
+            aria-checked={!color}
+            aria-label="默认文字色"
+            data-testid="page-color-none"
+            onMouseDown={holdSelection}
+            onClick={() => {
+              editor.chain().focus().unsetColor().run()
+              onOpen(null)
+            }}
+          />
+          {INK_TONES.map((tone) => {
+            const on = color === tone.value
             return (
               <button
-                key={tone}
+                key={tone.id}
                 type="button"
                 role="menuitemradio"
                 className={on ? 'is-on' : undefined}
                 aria-checked={on}
-                aria-label={tone}
-                data-testid={kind === 'text' ? `page-color-${tone}` : `page-highlight-${tone}`}
-                style={
-                  kind === 'text'
-                    ? { color: editorTextColor(tone), background: 'transparent' }
-                    : { background: editorHighlightColor(tone), color: '#fff' }
-                }
+                aria-label={tone.label}
+                data-testid={`page-color-${tone.id}`}
+                style={{ color: tone.value }}
                 onMouseDown={holdSelection}
-                onClick={() => {
-                  if (kind === 'text') editor.chain().focus().setColor(value).run()
-                  else editor.chain().focus().toggleHighlight({ color: value }).run()
-                  onOpen(null)
-                }}
+                onClick={() => applyColor({ kind: 'text', value: tone.value })}
               >
-                {kind === 'text' ? 'A' : ''}
+                A
               </button>
             )
           })}
         </div>
-        <button
-          type="button"
-          className="page-color-clear"
-          data-testid={kind === 'text' ? 'page-color-none' : 'page-highlight-none'}
-          onMouseDown={holdSelection}
-          onClick={() => {
-            if (kind === 'text') editor.chain().focus().unsetColor().run()
-            else editor.chain().focus().unsetHighlight().run()
-            onOpen(null)
-          }}
-        >
-          清除
-        </button>
+        <div className="page-color-menu-h">Background Colorful</div>
+        <div className="page-color-grid">
+          <button
+            type="button"
+            role="menuitemradio"
+            className={!highlight ? 'page-color-none is-on' : 'page-color-none'}
+            aria-checked={!highlight}
+            aria-label="无背景色"
+            data-testid="page-highlight-none"
+            onMouseDown={holdSelection}
+            onClick={() => {
+              editor.chain().focus().unsetHighlight().run()
+              onOpen(null)
+            }}
+          />
+          {WASH_TONES.map((tone) => {
+            const on = highlight === tone.value
+            return (
+              <button
+                key={tone.id}
+                type="button"
+                role="menuitemradio"
+                className={on ? 'page-color-wash is-on' : 'page-color-wash'}
+                aria-checked={on}
+                aria-label={tone.label}
+                data-testid={`page-highlight-${tone.id}`}
+                style={{ background: tone.swatch ?? tone.value }}
+                onMouseDown={holdSelection}
+                onClick={() => applyColor({ kind: 'mark', value: tone.value })}
+              />
+            )
+          })}
+        </div>
       </div>
     )
-  }
 
   return (
     <>
@@ -173,34 +245,18 @@ function ColorMenus({
           </button>
         }
       >
-        {flyout('text')}
-      </HeadlessPopover>
-      <HeadlessPopover
-        open={open === 'mark'}
-        onOpenChange={(next) => onOpen(next ? 'mark' : null)}
-        side="bottom"
-        align="start"
-        trigger={
-          <button
-            type="button"
-            className={highlight || open === 'mark' ? 'is-on' : undefined}
-            title="背景色"
-            aria-label="背景色"
-            aria-haspopup="menu"
-            aria-expanded={open === 'mark'}
-            onMouseDown={holdSelection}
-          >
-            <span
-              className="page-bubble-mark"
-              style={{ background: highlight || 'color-mix(in srgb, var(--dsw-label) 18%, transparent)' }}
-            />
-          </button>
-        }
-      >
-        {flyout('mark')}
+        {flyout()}
       </HeadlessPopover>
     </>
   )
+}
+
+/** 节点选中（sandbox 等 pageBlock）不是文字选区，不要出加粗/斜体条。 */
+export function pageTextBubbleOpen(editor: Editor, from: number, to: number, colorOpen = false) {
+  if (editor.isActive('table') || editor.isActive('pageBlock')) return false
+  if (editor.state.selection instanceof NodeSelection) return false
+  if (colorOpen) return true
+  return from !== to
 }
 
 function Bubble({
@@ -229,11 +285,7 @@ function Bubble({
       editor={editor}
       className="page-bubble"
       aria-label="文字样式"
-      shouldShow={({ editor: current, from, to }) => {
-        if (current.isActive('table')) return false
-        if (colorOpen) return true
-        return from !== to
-      }}
+      shouldShow={({ editor: current, from, to }) => pageTextBubbleOpen(current, from, to, Boolean(colorOpen))}
     >
       {btn('B', editor.isActive('bold'), () => editor.chain().focus().toggleBold().run())}
       {btn('I', editor.isActive('italic'), () => editor.chain().focus().toggleItalic().run())}
@@ -311,7 +363,8 @@ function PageEditorFailed({ onRetry }: { onRetry?: () => void }) {
 }
 
 export function PageEditor({ record, value, writable, onChange, path, status = 'ready', onRetry }: FsContentProps) {
-  const source = usePageSourceMode(record.id)
+  const present = usePagePresentMode(record.id)
+  const source = present === 'source'
   const saved = useRef(asMarkdown(value))
   const sourceMode = useRef(source)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -321,15 +374,15 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
   valueRef.current = value
   const hydratedId = useRef<string | null>(null)
   const sourceFind = useRef<SourceEditorHandle>(null)
+  const hostRef = useRef<HTMLDivElement>(null)
   const editorRef = useRef<Editor | null>(null)
   const pathRef = useRef(path)
   pathRef.current = path
+  const writableRef = useRef(writable)
+  writableRef.current = writable
   const titleRef = useRef(recordTitle(record))
   titleRef.current = recordTitle(record)
-  const [findOpen, setFindOpen] = useState(false)
-  const [findQuery, setFindQuery] = useState('')
-  const [findIndex, setFindIndex] = useState(0)
-  const [findTotal, setFindTotal] = useState(0)
+  const find = usePageFind(record.id)
 
   const editor = useEditor(
     {
@@ -349,9 +402,11 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
         handleKeyDown: (view, event) => {
           if (isFindHotkey(event)) {
             event.preventDefault()
-            setFindOpen(true)
             const { from, to } = view.state.selection
-            if (from !== to) setFindQuery(view.state.doc.textBetween(from, to))
+            patchPageFind(record.id, {
+              open: true,
+              query: from !== to ? view.state.doc.textBetween(from, to) : getPageFind(record.id).query,
+            })
             return true
           }
           return handleContentTitleNav(view, event)
@@ -378,12 +433,13 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
       },
       onUpdate: ({ editor: current }) => {
         if (hydratedId.current !== record.id) return
+        if (writableRef.current === false) return
         typedAt.current = Date.now()
         if (timer.current) clearTimeout(timer.current)
         timer.current = setTimeout(() => {
           queueMicrotask(() => {
-            if (current.isDestroyed) return
-            const next = current.getMarkdown()
+            if (current.isDestroyed || writableRef.current === false) return
+            const next = persistEditorMarkdown(current)
             if (next === saved.current) return
             saved.current = next
             onChange?.(next)
@@ -392,10 +448,11 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
       },
       onBlur: ({ editor: current }) => {
         if (hydratedId.current !== record.id) return
+        if (writableRef.current === false) return
         if (timer.current) clearTimeout(timer.current)
         queueMicrotask(() => {
-          if (current.isDestroyed) return
-          const next = current.getMarkdown()
+          if (current.isDestroyed || writableRef.current === false) return
+          const next = persistEditorMarkdown(current)
           if (next === saved.current) return
           saved.current = next
           onChange?.(next)
@@ -407,6 +464,32 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
   editorRef.current = editor ?? null
 
   useEffect(() => {
+    if (!editor || editor.isDestroyed) return
+    setLivePageEditor(editor)
+    return () => {
+      if (getLivePageEditor() === editor) setLivePageEditor(null)
+    }
+  }, [editor])
+
+  useEffect(() => {
+    const onFind = (event: Event) => {
+      const id = (event as CustomEvent<{ recordId?: string }>).detail?.recordId
+      if (id && id !== record.id) return
+      patchPageFind(record.id, { open: true })
+    }
+    const onInsert = () => {
+      if (!editor || editor.isDestroyed || writableRef.current === false) return
+      editor.chain().focus('end').insertContent('/').run()
+    }
+    window.addEventListener(PAGE_FIND_OPEN_EVENT, onFind)
+    window.addEventListener(PAGE_INSERT_EVENT, onInsert)
+    return () => {
+      window.removeEventListener(PAGE_FIND_OPEN_EVENT, onFind)
+      window.removeEventListener(PAGE_INSERT_EVENT, onInsert)
+    }
+  }, [editor, record.id])
+
+  useEffect(() => {
     hydratedId.current = null
   }, [record.id])
 
@@ -415,20 +498,22 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
     const md = asMarkdown(value)
     if (hydratedId.current !== record.id) {
       if (status === 'loading' || status === 'failed') return
-      saved.current = md
       hydratedId.current = record.id
-      editor.commands.setContent(md, { contentType: 'markdown', emitUpdate: false })
-      jumpToPending(editor, md, record.id, true)
+      hydrateEditorMarkdown(editor, md)
+      const stamped = persistEditorMarkdown(editor)
+      saved.current = stamped
+      if (stamped !== md) onChange?.(stamped)
+      jumpToPending(editor, stripBlockIdStamps(stamped).text, record.id, true)
       return
     }
     if (md === saved.current) {
-      jumpToPending(editor, md, record.id)
+      jumpToPending(editor, stripBlockIdStamps(md).text, record.id)
       return
     }
     const paint = (next: string) => {
-      saved.current = next
-      editor.commands.setContent(next, { contentType: 'markdown', emitUpdate: false })
-      jumpToPending(editor, next, record.id, true)
+      hydrateEditorMarkdown(editor, next)
+      saved.current = persistEditorMarkdown(editor)
+      jumpToPending(editor, stripBlockIdStamps(saved.current).text, record.id, true)
     }
     const canPaint = () =>
       shouldApplyRemoteMarkdown({
@@ -476,7 +561,7 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
     if (!timer.current) return
     clearTimeout(timer.current)
     timer.current = null
-    const next = editor.getMarkdown()
+    const next = persistEditorMarkdown(editor)
     if (next === saved.current) return
     saved.current = next
     onChange?.(next)
@@ -488,10 +573,18 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
     sourceMode.current = source
     if (source || !leavingSource) return
     const md = asMarkdown(value)
-    saved.current = md
-    if (md === editor.getMarkdown()) return
-    editor.commands.setContent(md, { contentType: 'markdown', emitUpdate: false })
+    hydrateEditorMarkdown(editor, md)
+    saved.current = persistEditorMarkdown(editor)
   }, [source, editor, value])
+
+  useLayoutEffect(() => {
+    restorePageScroll()
+    const id = requestAnimationFrame(() => {
+      restorePageScroll()
+      requestAnimationFrame(restorePageScroll)
+    })
+    return () => cancelAnimationFrame(id)
+  }, [source, present])
 
   useEffect(() => {
     if (!editor || editor.isDestroyed) return
@@ -527,32 +620,29 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
   }, [editor, record.id, value])
 
   const runFind = (query: string, index: number) => {
-    if (source) {
-      const next = sourceFind.current?.applyFind(query, index) ?? { total: 0, index: 0 }
-      setFindIndex(next.index)
-      setFindTotal(next.total)
-      return
-    }
-    if (!editor || editor.isDestroyed) return
-    const next = applyEditorFind(editor, query, index)
-    setFindIndex(next.index)
-    setFindTotal(next.total)
+    const next = source
+      ? sourceFind.current?.applyFind(query, index) ?? { total: 0, index: 0 }
+      : !editor || editor.isDestroyed
+        ? { total: 0, index: 0 }
+        : applyEditorFind(editor, query, index)
+    const cur = getPageFind(record.id)
+    if (cur.index !== next.index || cur.total !== next.total) patchPageFind(record.id, next)
   }
 
   useEffect(() => {
-    if (!findOpen) {
+    if (!find.open) {
       if (source) sourceFind.current?.applyFind('', 0)
       else if (editor && !editor.isDestroyed) applyEditorFind(editor, '', 0)
-      setFindTotal(0)
+      if (find.total) patchPageFind(record.id, { total: 0, index: 0 })
       return
     }
     if (!source) {
-      runFind(findQuery, 0)
+      runFind(find.query, find.index)
       return
     }
-    const id = requestAnimationFrame(() => runFind(findQuery, 0))
+    const id = requestAnimationFrame(() => runFind(find.query, find.index))
     return () => cancelAnimationFrame(id)
-  }, [findOpen, findQuery, source, editor])
+  }, [find.open, find.query, find.index, source, editor, record.id])
 
   const currentPick = () => {
     if (source) return pickFromLocus(path, sourceFind.current?.getLocus() ?? null, undefined, recordTitle(record))
@@ -574,11 +664,11 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
     if (isFindHotkey(event)) {
       event.preventDefault()
       event.stopPropagation()
-      setFindOpen(true)
-      if (!source && editor && !editor.isDestroyed) {
-        const { from, to } = editor.state.selection
-        if (from !== to) setFindQuery(editor.state.doc.textBetween(from, to))
-      }
+      const { from, to } = !source && editor && !editor.isDestroyed ? editor.state.selection : { from: 0, to: 0 }
+      patchPageFind(record.id, {
+        open: true,
+        query: from !== to ? editor!.state.doc.textBetween(from, to) : getPageFind(record.id).query,
+      })
       return
     }
     if (isSendChatHotkey(event)) {
@@ -587,16 +677,31 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
       sendToChat()
       return
     }
+    if (isLastColorHotkey(event) && !source && editor && !editor.isDestroyed) {
+      const last = readLastEditorColor()
+      if (last) {
+        event.preventDefault()
+        event.stopPropagation()
+        if (last.kind === 'text') editor.chain().focus().setColor(last.value).run()
+        else editor.chain().focus().setHighlight({ color: last.value }).run()
+      }
+      return
+    }
+    if (!source && editor && !editor.isDestroyed && handleContentTitleNav(editor.view, event.nativeEvent)) {
+      event.stopPropagation()
+      return
+    }
     const atDocStart = source
       ? Boolean(sourceFind.current?.isAtStart())
       : Boolean(
           editor &&
             !editor.isDestroyed &&
-            isDocStartSelection(
+            (isDocStartSelection(
               editor.state.selection.from,
               editor.state.selection.empty,
               Selection.atStart(editor.state.doc).from,
-            ),
+            ) ||
+              (event.key === 'ArrowUp' && atFirstVisibleLine(editor.view))),
         )
     const nested = Boolean(
       !source && editor && !editor.isDestroyed && editor.state.selection.$from.depth > 1,
@@ -614,6 +719,7 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
     if (event.target !== event.currentTarget) return
     event.preventDefault()
     if (status === 'loading' || status === 'failed') return
+    if (present === 'table') return
     if (!source && writable !== false && editor && !editor.isDestroyed) {
       editor.commands.focus('end')
       return
@@ -621,50 +727,45 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
     event.currentTarget.focus({ preventScroll: true })
   }
 
-  const findBar = findOpen ? (
-    <FindBar
-      query={findQuery}
-      index={findIndex}
-      total={findTotal}
-      onQuery={setFindQuery}
-      onNext={() => runFind(findQuery, findIndex + 1)}
-      onPrev={() => runFind(findQuery, findIndex - 1)}
-      onClose={() => {
-        setFindOpen(false)
-        if (!source && editor && !editor.isDestroyed) editor.commands.focus()
-      }}
-    />
-  ) : null
-
   if (status === 'loading') return <PageEditorLoading />
   if (status === 'failed') return <PageEditorFailed onRetry={onRetry} />
   if (!editor) return <div className="page-editor" data-testid="page-editor-pending" />
 
-  if (source) {
-    return (
-      <div className="page-editor is-source" tabIndex={-1} onMouseDown={onEditorBlankMouseDown} onKeyDownCapture={onEditorHotkey}>
-        {findBar}
-        <SourceEditor
-          ref={sourceFind}
-          value={asMarkdown(value)}
-          writable={writable !== false && status === 'ready'}
-          onChange={(next) => {
-            if (next === saved.current) return
-            saved.current = next
-            onChange?.(next)
-          }}
-        />
-      </div>
-    )
-  }
-
   return (
-    <div className="page-editor" tabIndex={-1} onMouseDown={onEditorBlankMouseDown} onKeyDownCapture={onEditorHotkey}>
-      {findBar}
-      <EditorContent editor={editor} />
-      {writable !== false ? <PageBlockHandle editor={editor} /> : null}
-      {writable !== false ? <Bubble editor={editor} onSendChat={sendToChat} /> : null}
-      {writable !== false ? <TableBar editor={editor} /> : null}
+    <div
+      ref={hostRef}
+      className={`page-editor${source ? ' is-source' : ''}${present === 'outline' ? ' is-outline' : ''}${present === 'table' ? ' is-table' : ''}`}
+      data-page-record={record.id}
+      data-page-path={path || `/pages/${record.id}`}
+      tabIndex={-1}
+      onMouseDown={onEditorBlankMouseDown}
+      onKeyDownCapture={onEditorHotkey}
+    >
+      <div hidden={!source}>
+        {source ? (
+          <SourceEditor
+            ref={sourceFind}
+            value={asMarkdown(value)}
+            writable={writable !== false && status === 'ready'}
+            onChange={(next) => {
+              if (next === saved.current) return
+              saved.current = next
+              onChange?.(next)
+            }}
+          />
+        ) : null}
+      </div>
+      <div hidden={source}>
+        {present === 'table' ? (
+          <PageBlocksTable editor={editor} recordId={record.id} path={path} writable={writable !== false && status === 'ready'} />
+        ) : null}
+        <div className="page-editor-doc" hidden={present === 'table'}>
+          <EditorContent editor={editor} />
+        </div>
+        {present !== 'table' && writable !== false ? <PageBlockHandle editor={editor} /> : null}
+        {present !== 'table' && writable !== false ? <Bubble editor={editor} onSendChat={sendToChat} /> : null}
+        {present !== 'table' && writable !== false ? <TableBar editor={editor} /> : null}
+      </div>
     </div>
   )
 }

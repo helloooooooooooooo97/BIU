@@ -8,7 +8,7 @@ import { slashMayOpen } from './editor-live.ts'
 import { createPageBlockId } from './page-block.ts'
 import { defaultPageBlockTitle } from '../page-block-fence.ts'
 import { BASIC_BLOCK_TYPE, getPageEditor, type PageBlockSpec, type SlashInsert } from './service.ts'
-import { uploadPageImage } from './page-image.ts'
+import { pageResourcePath, uploadPageImage } from './page-image.ts'
 import { clientLog, clientLogErrorText } from '@biu/web-event-log/log'
 import {
   pageBlockPluginPhase,
@@ -142,10 +142,20 @@ export const SLASH_ITEMS: SlashItem[] = [
     aliases: ['image', 'img', 'pic', '图片', 'photo'],
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).run()
-      pickLocalImageSrc().then((src) => {
-        if (!src || editor.isDestroyed) return
-        editor.chain().focus().setImage({ src, alt: '' }).run()
+      pickLocalImageSrc(editor).then((picked) => {
+        if (!picked.src || editor.isDestroyed) return
+        editor.chain().focus().setImage({ src: picked.src, alt: picked.alt }).run()
       })
+    },
+    ...BASIC_GROUP,
+  },
+  {
+    id: 'slide',
+    label: 'Slide',
+    hint: '一页多栏：格子里可再插画板、表格等块',
+    aliases: ['slide', 'deck', 'ppt', 'gamma', '幻灯片', '演示', '卡片'],
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).insertSlide('split').run()
     },
     ...BASIC_GROUP,
   },
@@ -181,22 +191,24 @@ export const SLASH_ITEMS: SlashItem[] = [
   },
 ]
 
-function pickLocalImageSrc() {
-  return new Promise<string>((resolve) => {
+function pickLocalImageSrc(editor: Editor) {
+  return new Promise<{ src: string; alt: string }>((resolve) => {
+    const empty = { src: '', alt: '' }
     const input = document.createElement('input')
     input.type = 'file'
     input.accept = 'image/*'
     input.addEventListener('change', () => {
       const file = input.files?.[0]
       if (!file) {
-        resolve('')
+        resolve(empty)
         return
       }
-      void uploadPageImage(file)
-        .then(resolve)
-        .catch(() => resolve(''))
+      const alt = file.name.replace(/^.*[/\\]/, '')
+      void uploadPageImage(file, pageResourcePath(editor))
+        .then((src) => resolve({ src, alt }))
+        .catch(() => resolve(empty))
     })
-    input.addEventListener('cancel', () => resolve(''))
+    input.addEventListener('cancel', () => resolve(empty))
     input.click()
   })
 }
@@ -255,7 +267,7 @@ export function waitForPageBlock(plugin: string, kind?: string, timeoutMs = 2000
       reject(new Error(`${plugin} 启动超时`))
     }, timeoutMs)
     const check = () => {
-      if (pageBlockPluginPhase(plugin) === 'failed') {
+      if (pageBlockPluginPhase(plugin) === 'failed' || pageBlockPluginPhase(plugin) === 'missing') {
         off()
         reject(new Error(`${plugin} 启动失败`))
         return
@@ -287,7 +299,7 @@ export async function activateSlashBlock(editor: Editor, range: Range, plugin: s
     return
   }
   const phase = pageBlockPluginPhase(id)
-  requestEnablePageBlockPlugin(id, kind || '', { force: phase === 'failed' })
+  requestEnablePageBlockPlugin(id, kind || '', { force: phase === 'failed' || phase === 'missing' })
   try {
     const spec = await waitForPageBlock(id, kind, 20000)
     if (editor.isDestroyed) return
@@ -309,6 +321,9 @@ function decorateSlashStatus(item: SlashItem): SlashItem {
   if (phase === 'loading') return { ...item, status: 'loading', hint: '正在启动' }
   if (phase === 'failed') {
     return { ...item, status: 'failed', hint: '启动失败', pluginHref: pluginRecordPath(plugin) }
+  }
+  if (phase === 'missing') {
+    return { ...item, status: 'failed', hint: '插件不存在', pluginHref: pluginRecordPath(plugin) }
   }
   return item
 }
@@ -338,6 +353,7 @@ export function slashCatalog(): SlashItem[] {
   for (const block of blocks) {
     const blockType = block.blockType ?? block.kind
     covered.add(block.plugin)
+    if (block.slash === false) continue
     map.set(block.kind, {
       id: block.kind,
       label: block.label,

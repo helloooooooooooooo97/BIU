@@ -1,7 +1,7 @@
 /** 侧栏展开/收起与数据路由切换的纯逻辑，UI 和压测共用。 */
 import { parseAppPath } from '@biu/web-session-view'
 import { builtinAllViewId } from '../catalog-views.ts'
-import { DATA_MODULE, databaseRecordPath, databaseViewPath } from './database-path.ts'
+import { DATA_COLLECTION_PATH, DATA_MODULE, databaseAllViewPath, databaseRecordPath, databaseViewPath } from './database-path.ts'
 import type { ViewMode } from './fields.ts'
 
 const DATABASE = [DATA_MODULE]
@@ -43,7 +43,7 @@ export function toggleExpandedViewKey(current: string | null, key: string) {
   return current === key ? null : key
 }
 
-export const DATABASE_ROOT_PATH = '/database'
+export const DATABASE_ROOT_PATH = databaseAllViewPath(DATA_COLLECTION_PATH)
 
 export type CrumbKind = 'root' | 'collection' | 'view' | 'record'
 

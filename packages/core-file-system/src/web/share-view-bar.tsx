@@ -9,7 +9,7 @@ import {
   FunnelIcon,
   MagnifyingGlassIcon,
 } from '@heroicons/react/16/solid'
-import { HeadlessDismiss, HEADLESS_DISMISS_IGNORE } from '@biu/public-ui/headless-dismiss'
+import { HeadlessDismiss, HEADLESS_DISMISS_IGNORE } from '@biu/biu-ui/headless-dismiss'
 import type { CollectionSchema, DbRecord, FieldType } from '@biu/type-file-system'
 import { countFilterRules, isCustomSorts } from '../query-logic.ts'
 import { defaultColumnKeys, resolveFieldType } from './fields.ts'
@@ -94,7 +94,17 @@ export function ShareViewQueryBar({
   }
 
   return (
-    <div className="tasks-toolbar" data-testid="fsdb-share-query">
+    <div
+      className="tasks-toolbar"
+      data-testid="fsdb-share-query"
+      onMouseDown={(event) => {
+        const target = event.target as HTMLElement
+        if (target.closest('input,textarea,select,[contenteditable="true"]')) return
+        if (target.closest('button,[role="menuitem"],[role="menuitemcheckbox"],[role="menuitemradio"]')) {
+          event.preventDefault()
+        }
+      }}
+    >
       <div className="tasks-toolbar-left" />
       <div className="tasks-toolbar-right">
         <HeadlessDismiss

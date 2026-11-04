@@ -5,8 +5,11 @@ import {
   inspectorWidthForExpandedChat,
   allocateShellColumns,
   applyShellColumnCssVars,
+  commitShellLayoutSnap,
   publishShellLayout,
   shellLayoutFromEvent,
+  shellLayoutFromElement,
+  shellColumnStartWidth,
   CHAT_OVERLAY_ENTER,
   CENTER_MIN,
   INSPECTOR_MIN,
@@ -86,11 +89,55 @@ test('sidebar stays a normal pane at min width, never an icon rail', () => {
   assert.equal(atMin.left, SIDEBAR_MIN)
 })
 
+test('commitShellLayoutSnap writes collapse before the next render', () => {
+  const snap = {
+    leftPane: true,
+    inspectorVisible: true,
+    inspectorWidth: 320,
+    sidebarWidth: 240,
+    sidebarCollapsed: false,
+  }
+  const afterCollapse = commitShellLayoutSnap(snap, { sidebarCollapsed: true })
+  assert.equal(afterCollapse.sidebarCollapsed, true)
+  assert.equal(afterCollapse.sidebarWidth, 240)
+  assert.equal(snap.sidebarCollapsed, false)
+  const afterWidth = commitShellLayoutSnap(afterCollapse, { inspectorWidth: 400 })
+  assert.equal(afterWidth.inspectorWidth, 400)
+  assert.equal(afterWidth.sidebarCollapsed, true)
+})
+
 test('applyShellColumnCssVars writes grid tracks without React state', () => {
   const el = document.createElement('div')
   applyShellColumnCssVars(el, { left: 240, inspector: 320 })
   assert.equal(el.style.getPropertyValue('--sidebar-col'), '240px')
   assert.equal(el.style.getPropertyValue('--inspector-width'), '320px')
+})
+
+test('shell column drag starts from CSS tracks, not a fractional bounding box', () => {
+  const shell = document.createElement('div')
+  shell.setAttribute('data-testid', 'app-shell')
+  applyShellColumnCssVars(shell, { left: 240, inspector: 320 })
+  const handle = document.createElement('div')
+  handle.className = 'sidebar-resize'
+  shell.appendChild(handle)
+  document.body.appendChild(shell)
+  handle.getBoundingClientRect = () => ({
+    x: 0,
+    y: 0,
+    top: 0,
+    left: 0,
+    right: 239.4,
+    bottom: 800,
+    width: 239.4,
+    height: 800,
+    toJSON() {
+      return {}
+    },
+  })
+  assert.equal(shellColumnStartWidth(handle, 'left', 160), 240)
+  assert.equal(shellColumnStartWidth(handle, 'inspector', 240), 320)
+  assert.deepEqual(shellLayoutFromElement(shell), { left: 240, inspector: 320 })
+  shell.remove()
 })
 
 test('publishShellLayout reports painted column widths', () => {
@@ -187,8 +234,9 @@ test('overlay starts closed', () => {
 
 test('chat page paths skip the overlay', () => {
   assert.equal(isChatPagePath('/'), true)
-  assert.equal(isChatPagePath('/s/abc'), true)
-  assert.equal(isChatPagePath('/s/abc/debug'), true)
+  assert.equal(isChatPagePath('/agents/abc'), true)
+  assert.equal(isChatPagePath('/agents/abc/debug'), true)
+  assert.equal(isChatPagePath('/s/abc'), false)
   assert.equal(isChatPagePath('/database'), false)
   assert.equal(isChatPagePath('/tasks'), false)
 })
@@ -204,7 +252,7 @@ test('pick-attached only opens; closing stays closed even if chips remain', () =
 
 test('pick-attached on the chat page focuses composer instead of overlay', async () => {
   setChatOverlay(false)
-  history.replaceState(null, '', '/s/session-1')
+  history.replaceState(null, '', '/agents/session-1')
   let focused = 0
   const onFocus = () => {
     focused += 1
@@ -277,7 +325,7 @@ test('openOverlayComposer on a database page requests composer focus', () => {
 
 test('openOverlayComposer on the chat page does not open a window', () => {
   setChatOverlay(false)
-  history.replaceState(null, '', '/s/session-1')
+  history.replaceState(null, '', '/agents/session-1')
   openOverlayComposer({ revealThread: true })
   assert.equal(getChatOverlay(), false)
 })
@@ -329,14 +377,18 @@ test('collapsed overlay closes on outside click; expanded overlay stays', () => 
   panel.setAttribute('data-testid', 'chat-overlay-panel')
   const flyout = document.createElement('div')
   flyout.className = 'composer-model-flyout'
-  document.body.append(panel, flyout)
+  const chip = document.createElement('div')
+  chip.setAttribute('data-testid', 'pick-chip-data')
+  document.body.append(panel, flyout, chip)
   assert.equal(shouldCloseOverlayOnOutside(panel), false)
   assert.equal(shouldCloseOverlayOnOutside(flyout), false)
+  assert.equal(shouldCloseOverlayOnOutside(chip), false)
   assert.equal(shouldCloseOverlayOnOutside(document.body), true)
   setOverlayThread(true)
   assert.equal(shouldCloseOverlayOnOutside(document.body), false)
   panel.remove()
   flyout.remove()
+  chip.remove()
   setChatOverlay(false)
 })
 

@@ -1,6 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { CheckIcon, ChevronRightIcon, MagnifyingGlassIcon } from '@heroicons/react/16/solid'
+import { ChevronRightIcon, MagnifyingGlassIcon } from '@heroicons/react/16/solid'
 import {
   inferModelCapabilities,
   type ModelCapabilities,
@@ -160,7 +160,6 @@ export function ComposerModelMenu(props: {
                         <span className="composer-model-item-label">{option.label}</span>
                         {tag ? <span className="composer-model-item-tag">{tag}</span> : null}
                       </span>
-                      {active ? <CheckIcon className="composer-model-check size-3.5" aria-hidden /> : null}
                     </button>
                   )
                 })}
@@ -193,7 +192,6 @@ export function ComposerModelMenu(props: {
               onClick={() => onMode(patchKnob(openChoice, item.value))}
             >
               <span className="composer-model-item-label">{item.label}</span>
-              {active ? <CheckIcon className="composer-model-check size-3.5" aria-hidden /> : null}
             </button>
           )
         })}

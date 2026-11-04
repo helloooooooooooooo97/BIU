@@ -71,7 +71,7 @@ test('bash copies printed image paths into session artifacts', async () => {
     assert.equal(bash.code, 0)
     assert.equal(bash.artifacts?.length, 1)
     assert.equal(bash.artifacts?.[0]?.name, 'shot.png')
-    assert.equal(bash.artifacts?.[0]?.url, '/api/sessions/sess-shot/artifacts/shot.png')
+    assert.equal(bash.artifacts?.[0]?.url, '/api/agents/sess-shot/artifacts/shot.png')
     const file = await readArtifactFile('sess-shot', 'shot.png', base)
     assert.ok(file)
     assert.deepEqual(file.data, png)

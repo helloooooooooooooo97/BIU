@@ -89,7 +89,7 @@ function SceneLayout({variant, k, color, counter, progress, children}) {
   );
   if (variant==="code") return (
     <div style={{position:"absolute", left:120*k, right:120*k, top:205*k, bottom:120*k, display:"grid", gridTemplateColumns:"44% 56%", alignItems:"center", gap:90*k}}>
-      <div style={{padding:42*k, border:"1px solid rgba(255,255,255,.16)", borderRadius:18*k, background:"rgba(0,0,0,.28)", fontFamily:"ui-monospace, monospace", fontSize:22*k, lineHeight:1.9, color:"rgba(255,255,255,.6)"}}>
+      <div style={{padding:42*k, border:"var(--biu-stroke-width) solid rgba(255,255,255,.16)", borderRadius:18*k, background:"rgba(0,0,0,.28)", fontFamily:"ui-monospace, monospace", fontSize:22*k, lineHeight:1.9, color:"rgba(255,255,255,.6)"}}>
         <div style={{color:color}}>function Frame()</div><div>const p = spring(frame)</div><div>return &lt;AbsoluteFill /&gt;</div>
       </div>
       <div>{children}</div>

@@ -81,7 +81,7 @@ test('page prefs store reading chrome and body scale', async () => {
   }
 })
 
-test('persistPagePrefs does not apply until the profile POST succeeds', async () => {
+test('persistPagePrefs applies locally before the profile POST succeeds', async () => {
   const restoreOk = okFetch()
   try {
     await persistPagePrefs({
@@ -103,11 +103,13 @@ test('persistPagePrefs does not apply until the profile POST succeeds', async ()
       }),
   )
   try {
-    const pending = persistPagePrefs({ outlinePin: true })
-    assert.equal(getPagePrefs().outlinePin, false)
+    const pending = persistPagePrefs({ outlinePin: true, navPin: true })
+    assert.equal(getPagePrefs().outlinePin, true)
+    assert.equal(getPagePrefs().navPin, true)
+    assert.equal(document.documentElement.dataset.navPin, '1')
     release(new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } }))
     await pending
-    assert.equal(getPagePrefs().outlinePin, true)
+    assert.equal(getPagePrefs().navPin, true)
   } finally {
     restore()
     const restoreReset = okFetch()
@@ -268,6 +270,50 @@ test('hydratePagePrefs does not overwrite a newer local write', async () => {
     assert.equal(getPagePrefs().outlinePin, true)
     assert.equal(getPagePrefs().navPin, true)
     assert.equal(document.documentElement.dataset.outlinePin, '1')
+    assert.equal(document.documentElement.dataset.navPin, '1')
+  } finally {
+    globalThis.fetch = originalFetch
+    resetWorkspaceProfileGet()
+    const restore = okFetch()
+    try {
+      await persistPagePrefs({
+        wide: false,
+        outlineExpand: true,
+        outlinePin: false,
+        navPin: false,
+        bodySize: 'md',
+        bodyGap: 'md',
+      })
+    } finally {
+      restore()
+    }
+  }
+})
+
+test('hydratePagePrefs keeps local navPin when the profile omits it', async () => {
+  const restoreOk = okFetch()
+  try {
+    await persistPagePrefs({
+      wide: false,
+      outlineExpand: true,
+      outlinePin: false,
+      navPin: true,
+      bodySize: 'md',
+      bodyGap: 'md',
+    })
+  } finally {
+    restoreOk()
+  }
+  resetWorkspaceProfileGet()
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = (async () =>
+    new Response(JSON.stringify({ pagePrefs: { wide: false, bodySize: 'md' } }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })) as typeof fetch
+  try {
+    await hydratePagePrefs()
+    assert.equal(getPagePrefs().navPin, true)
     assert.equal(document.documentElement.dataset.navPin, '1')
   } finally {
     globalThis.fetch = originalFetch

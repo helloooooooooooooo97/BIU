@@ -12,6 +12,7 @@ test('pickDomAttrs writes the same handles core-pick reads', () => {
   assert.equal(recordPickKind('tasks'), 'task')
   assert.equal(recordPickKind('plugins'), 'plugin')
   assert.equal(recordPickKind('sessions-db'), 'session')
+  assert.equal(recordPickKind('agents'), 'session')
   assert.equal(recordPickKind(''), 'record')
   assert.equal(viewPickId('/pages', 'v1'), '/pages::v1')
 })

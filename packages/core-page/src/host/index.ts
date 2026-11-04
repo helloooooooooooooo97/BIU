@@ -20,7 +20,7 @@ export function pagesCollection(store: PagesStore, index: PageBlocksIndex): Coll
       route: '/pages',
       title: '页面',
       inspector: true,
-      blurb: '每页正文在 .biu/biu.sqlite 的 editor_content。正文用 db_content；改标题等用 db_update。标签用 db_update 写 facet：{tags:["facet-2"],values:{导演:"查泽雷"}}。图片不要写 data URL：先 db_asset write name=xxx.png from=本地文件，再 db_content 插入 ![说明](/api/db/file/xxx.png)。附件在 .biu/assets。树用 parentId。新建 db_create，删除 db_delete。本表没有 db_action。',
+      blurb: '每页正文在 .biu/biu.sqlite 的 editor_content。正文用 db_content；改标题等用 db_update。标签用 db_update 写 tag：{tags:["tag-2"],values:{导演:"查泽雷"}}。图片不要写 data URL：先 db_asset write name=xxx.png from=本地文件，再 db_content 插入 ![说明](/api/db/file/xxx.png)。附件在 .biu/assets。树用 parentId。新建 db_create，删除 db_delete。本表没有 db_action。',
       order: 25,
       icon: 'document',
     },
@@ -29,7 +29,7 @@ export function pagesCollection(store: PagesStore, index: PageBlocksIndex): Coll
       contentField: 'notes',
       contentBackend: 'editorContent',
       parentField: 'parentId',
-        columns: ['title', 'facet', 'createdBy', 'updatedBy'],
+        columns: ['title', 'tag', 'createdBy', 'updatedBy'],
       fields: {
         ...REQUIRED_RECORD_FIELDS,
         title: { type: 'string', label: '标题', writable: true },
@@ -94,10 +94,18 @@ function servePageFile(ctx: Context, store: PagesStore) {
           etag: ifMatch && ifMatch !== '*' ? ifMatch : '',
         })
         inner.http.broadcast?.(DATABASE_CHANNEL, { ts: Date.now(), asset: { name: written.name, etag: written.etag } })
-        route.send(200, { ok: true, ...written })
+        route.res.writeHead(200, {
+          'content-type': 'application/json; charset=utf-8',
+          'cache-control': 'no-store',
+          etag: `"${written.etag}"`,
+        })
+        route.res.end(JSON.stringify({ ok: true, ...written }))
       } catch (error) {
         if (error instanceof PageAssetConflictError) {
-          route.send(409, { error: 'etag conflict', etag: error.etag })
+          const headers: Record<string, string> = { 'content-type': 'application/json; charset=utf-8' }
+          if (error.etag) headers.etag = `"${error.etag}"`
+          route.res.writeHead(409, headers)
+          route.res.end(JSON.stringify({ error: 'etag conflict', etag: error.etag }))
           return
         }
         route.send(400, { error: String(error) })

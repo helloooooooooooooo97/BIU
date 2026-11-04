@@ -42,8 +42,8 @@ test('parseViewColumns keeps list projection JSON strings', () => {
   assert.deepEqual(parseViewColumns('["title","dueAt"]'), ['title', 'dueAt'])
   assert.deepEqual(parseViewColumns('title,status'), ['title', 'status'])
   assert.deepEqual(
-    normalizeSavedView({ ...base, columns: '["title","facet"]' as unknown as string[] }).columns,
-    ['title', 'facet'],
+    normalizeSavedView({ ...base, columns: '["title","tag"]' as unknown as string[] }).columns,
+    ['title', 'tag'],
   )
   assert.throws(() => parseViewColumns('["title"'), /columns 应为字符串数组/)
   assert.throws(() => parseViewColumns('"[\\"title\\""'), /不能按逗号拆/)

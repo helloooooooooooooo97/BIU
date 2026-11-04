@@ -20,8 +20,9 @@ test('mention id encodes collection kind for jump targets', () => {
   assert.equal(encodeMentionId('page', 'p1'), 'page/p1')
   assert.deepEqual(decodeMentionId('task/t-2'), { kind: 'task', recordId: 't-2' })
   assert.equal(mentionHref('page/p1'), '/database/pages/record/p1')
-  assert.equal(mentionHref('session/abc'), '/s/abc')
-  assert.deepEqual(mentionReveal('facet/f1'), { collection: '/facets', recordId: 'f1', unique: true })
+  assert.equal(mentionHref('session/abc'), '/agents/abc')
+  assert.deepEqual(mentionReveal('tag/f1'), { collection: '/tags', recordId: 'f1', unique: true })
+  assert.deepEqual(mentionReveal('facet/f1'), { collection: '/tags', recordId: 'f1', unique: true })
   assert.equal(decodeMentionId('nope'), null)
 })
 
@@ -45,8 +46,8 @@ test('fetchMentionItems lists pages tasks facets and sessions', async () => {
     const url = String(input)
     seen.push(url)
     const path = new URL(url, 'http://local.test').searchParams.get('path')
-    const id = path === '/pages' ? 'p1' : path === '/tasks' ? 't1' : path === '/facets' ? 'f1' : 's1'
-    const title = path === '/pages' ? '首页' : path === '/tasks' ? '任务甲' : path === '/facets' ? '标签' : '会话'
+    const id = path === '/pages' ? 'p1' : path === '/tasks' ? 't1' : path === '/tags' ? 'f1' : 's1'
+    const title = path === '/pages' ? '首页' : path === '/tasks' ? '任务甲' : path === '/tags' ? '标签' : '代理'
     return {
       ok: true,
       json: async () => ({ items: [{ id, title }] }),
@@ -57,7 +58,7 @@ test('fetchMentionItems lists pages tasks facets and sessions', async () => {
     assert.equal(seen.length, 4)
     assert.ok(items.some((item) => item.id === 'page/p1' && item.label === '首页'))
     assert.ok(items.some((item) => item.id === 'task/t1'))
-    assert.ok(items.some((item) => item.id === 'facet/f1'))
+    assert.ok(items.some((item) => item.id === 'tag/f1'))
     assert.ok(items.some((item) => item.id === 'session/s1'))
   } finally {
     globalThis.fetch = orig
@@ -115,14 +116,14 @@ test('mention list shows a kind icon on each hit', () => {
       items: [
         { id: 'page/p1', label: '首页', kind: 'page', kindLabel: '页面' },
         { id: 'task/t1', label: '任务甲', kind: 'task', kindLabel: '任务' },
-        { id: 'facet/f1', label: '标签', kind: 'facet', kindLabel: '标签' },
-        { id: 'session/s1', label: '会话', kind: 'session', kindLabel: '会话' },
+        { id: 'tag/f1', label: '标签', kind: 'tag', kindLabel: '标签' },
+        { id: 'session/s1', label: '代理', kind: 'session', kindLabel: '代理' },
       ],
       command: () => undefined,
     }),
   )
   assert.equal(container.querySelectorAll('[data-pick-kind=page]').length, 1)
   assert.equal(container.querySelectorAll('[data-pick-kind=task]').length, 1)
-  assert.equal(container.querySelectorAll('[data-pick-kind=facet]').length, 1)
+  assert.equal(container.querySelectorAll('[data-pick-kind=tag]').length, 1)
   assert.equal(container.querySelectorAll('[data-pick-kind=session]').length, 1)
 })

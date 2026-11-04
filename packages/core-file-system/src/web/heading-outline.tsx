@@ -1,7 +1,7 @@
 import { useCallback, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { Bars3BottomLeftIcon } from '@heroicons/react/16/solid'
-import { HeadlessDismiss, OutlineNav, scrollOutlineTarget } from '@biu/public-ui'
+import { HeadlessDismiss, OutlineNav, scrollOutlineTarget } from '@biu/biu-ui'
 import { headingElById, headingsFromRoot, sameOutlineItems } from './heading-outline.ts'
 
 function detailMain(from: HTMLElement | null) {

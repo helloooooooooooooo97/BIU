@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from 'react'
 import {
   BoltIcon,
-  CheckCircleIcon,
   CommandLineIcon,
   ExclamationCircleIcon,
   CircleStackIcon,
@@ -12,7 +11,7 @@ import {
 import type { SlotProps } from '@biu/web-slots'
 import { bindSessionView, type DispatchedTaskRow, type SessionViewService } from '@biu/web-session-view'
 import { BrandCornerMascot, SidebarMascot, resolveSessionMascot } from '@biu/public-mascot'
-import { HeadlessDismiss } from '@biu/public-ui'
+import { HeadlessDismiss } from '@biu/biu-ui'
 import { ChatSidebar } from '@biu/web-app-shell/chat-sidebar'
 import {
   getChatOverlay,
@@ -90,7 +89,6 @@ function DockIconMenu<T extends string>({
                 {opt.label}
               </span>
               <span className="dock-icon-item-end">
-                {opt.id === value ? <CheckCircleIcon aria-hidden className="size-3.25 dock-icon-check" /> : null}
                 {opt.hint ? (
                   <span
                     className="dock-icon-hint"
@@ -223,15 +221,15 @@ export function ApprovalsRail(props: SlotProps) {
               <div className="dock-approval-card-actions">
                 <button
                   type="button"
-                  className="rounded-full px-3 py-1 text-(length:--dsw-chat-ui-font-size) text-(--dsw-bg)"
-                  style={{ background: 'var(--dsw-business)' }}
+                  className="rounded-full px-3 py-1 text-(length:--biu-chat-ui-font-size) text-(--biu-color-bg)"
+                  style={{ background: 'var(--biu-color-text)' }}
                   onClick={() => void sessionView.decideApproval(item.id, true)}
                 >
                   Allow
                 </button>
                 <button
                   type="button"
-                  className="rounded-full border border-(--dsw-border) px-3 py-1 text-(length:--dsw-chat-ui-font-size)"
+                  className="rounded-full border border-(--biu-color-border) px-3 py-1 text-(length:--biu-chat-ui-font-size)"
                   onClick={() => void sessionView.decideApproval(item.id, false)}
                 >
                   Deny
@@ -243,7 +241,7 @@ export function ApprovalsRail(props: SlotProps) {
       ) : null}
 
       <div
-        className="chat-dock-toolbar bg-transparent px-1 text-(length:--dsw-chat-ui-font-size)"
+        className="chat-dock-toolbar bg-transparent px-1 text-(length:--biu-chat-ui-font-size)"
         role="toolbar"
         aria-label="Session controls"
       >
@@ -369,7 +367,7 @@ export function ApprovalsRail(props: SlotProps) {
                 id: 'auto',
                 label: 'Auto',
                 icon: <BoltIcon className="size-4" aria-hidden />,
-                hint: '工具直接执行，不弹出确认。适合你信任当前会话、想少打断的时候。',
+                hint: '工具直接执行，不弹出确认。适合你信任当前代理、想少打断的时候。',
               },
               {
                 id: 'hold',

@@ -14,7 +14,7 @@ export type FieldType =
   | 'attachment'
   | 'file'
   | 'string[]'
-  | 'facet'
+  | 'tag'
   | 'action'
   | 'person'
   | 'ref'
@@ -269,12 +269,12 @@ export const BUILTIN_FIELDS = {
   updatedAt: { type: 'datetime', label: '更新时间' },
   content: { type: 'file', label: '内容' },
   emoji: { type: 'string', label: '图标', writable: true },
-  facet: {
-    type: 'facet',
+  tag: {
+    type: 'tag',
     label: '标签',
     writable: true,
     description:
-      '贴标签并填属性。一个标签：{tags:["facet-2"],values:{导演:"查泽雷"}}。多个标签 values 必须按 id 分组：{tags:["facet-2","awards"],values:{"facet-2":{导演:"查泽雷"},awards:{oscar:true}}}。省略 tags 只合并属性，不撕掉其它标签。读属性列：db_list columns=["facet::<标签id>::<字段key>"]，例如 facet::facet::category。',
+      '贴标签并填属性。一个标签：{tags:["need"],values:{导演:"查泽雷"}}。多个标签 values 必须按 id 分组：{tags:["need","awards"],values:{"need":{导演:"查泽雷"},awards:{oscar:true}}}。省略 tags 只合并属性，不撕掉其它标签。读属性列：db_list columns=["tag::<标签id>::<字段key>"]，例如 tag::need::category。',
   },
   parentId: { type: 'ref', label: '父级', writable: true },
   dependsOn: { type: 'multi-ref', label: '依赖', writable: true },
@@ -287,7 +287,7 @@ export const REQUIRED_RECORD_FIELD_KEYS = [
   'createdAt',
   'updatedAt',
   'emoji',
-  'facet',
+  'tag',
   'parentId',
   'dependsOn',
   'createdBy',
@@ -304,7 +304,7 @@ export const REQUIRED_RECORD_FIELDS: RequiredRecordFields = {
   createdAt: BUILTIN_FIELDS.createdAt,
   updatedAt: BUILTIN_FIELDS.updatedAt,
   emoji: BUILTIN_FIELDS.emoji,
-  facet: BUILTIN_FIELDS.facet,
+  tag: BUILTIN_FIELDS.tag,
   parentId: BUILTIN_FIELDS.parentId,
   dependsOn: BUILTIN_FIELDS.dependsOn,
   createdBy: BUILTIN_FIELDS.createdBy,
@@ -316,8 +316,17 @@ export const BUILTIN_FIELD_KEYS = ['id', 'createdAt', 'updatedAt', 'content', 'e
 
 export const RESERVED_SCHEMA_FIELD_KEYS = Object.keys(BUILTIN_FIELDS)
 
-/** 已去掉的 tags 记录列，禁止再登记同名列。 */
-const DROPPED_SCHEMA_FIELDS: Record<string, string> = { tags: '标签' }
+/** 已去掉的 tags 记录列，禁止再登记同名列。旧字段名 facet 一并封掉。 */
+const DROPPED_SCHEMA_FIELDS: Record<string, string> = { tags: '标签', facet: '标签' }
+
+/** 标签属性 key：可与显示名相同（含中文）。禁止空、控制符、路径分隔和 tag:: 列分隔。 */
+export function isSchemaFieldKey(key: string) {
+  const next = String(key ?? '').trim()
+  if (!next || next.length > 64) return false
+  if (next.includes('::') || /[/\\]/.test(next)) return false
+  if (/[\u0000-\u001f]/.test(next)) return false
+  return true
+}
 
 export function isReservedSchemaFieldKey(key: string) {
   const next = String(key ?? '').trim()
@@ -332,7 +341,7 @@ export function isReservedSchemaFieldLabel(label: string) {
   return Object.values(BUILTIN_FIELDS).some((field) => String(field.label ?? '').trim().toLowerCase() === want)
 }
 
-/** 分面包内允许的字段类型，含标签（可再贴标签）。 */
+/** 标签包内允许的字段类型，含标签（可再贴标签）。 */
 export const ATOMIC_FIELD_TYPES = [
   'string',
   'number',
@@ -345,14 +354,14 @@ export const ATOMIC_FIELD_TYPES = [
   'attachment',
   'file',
   'action',
-  'facet',
+  'tag',
   'person',
   'ref',
   'multi-ref',
 ] as const satisfies readonly FieldType[]
 
-export function isFacetFieldType(type: unknown): boolean {
-  return type === 'facet'
+export function isTagFieldType(type: unknown): boolean {
+  return type === 'tag' || type === 'facet'
 }
 
 export function isRefFieldType(type: unknown): type is 'ref' | 'multi-ref' {
@@ -362,7 +371,26 @@ export function isRefFieldType(type: unknown): type is 'ref' | 'multi-ref' {
 export type AtomicFieldType = (typeof ATOMIC_FIELD_TYPES)[number]
 
 export function isAtomicFieldType(type: unknown): type is AtomicFieldType {
-  return typeof type === 'string' && (ATOMIC_FIELD_TYPES as readonly string[]).includes(type)
+  return typeof type === 'string' && ((ATOMIC_FIELD_TYPES as readonly string[]).includes(type) || type === 'tag')
+}
+
+function atomicSchemaField(key: string, row: Record<string, unknown>, fieldLabel: string): SchemaPackField {
+  const field: SchemaPackField = {
+    key,
+    type: isTagFieldType(row.type) ? 'tag' : (row.type as AtomicFieldType),
+    writable: row.writable !== false,
+  }
+  if (fieldLabel !== key) field.label = fieldLabel
+  if (row.deleted === true) field.deleted = true
+  if (Array.isArray(row.enum)) field.enum = row.enum.map((option) => String(option)).filter(Boolean)
+  if (row.enumLabels && typeof row.enumLabels === 'object' && !Array.isArray(row.enumLabels)) {
+    field.enumLabels = Object.fromEntries(
+      Object.entries(row.enumLabels as Record<string, unknown>)
+        .map(([value, text]) => [value, String(text ?? '').trim()])
+        .filter(([value, text]) => Boolean(value && text && field.enum?.includes(value))),
+    )
+  }
+  return field
 }
 
 /** 写入标签属性定义：数组或 JSON 字符串均可；类型不在白名单时直接报错。 */
@@ -385,33 +413,19 @@ export function parseAtomicFields(raw: unknown): SchemaPackField[] {
       throw new Error('fields 每一项应为 {key,type,label?} 对象')
     }
     const row = item as Record<string, unknown>
-    const key = String(row.key ?? '').trim()
-    if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(key)) throw new Error(`invalid field key: ${key || '(empty)'}`)
+    const key = String(row.key ?? row.label ?? '').trim()
+    if (!isSchemaFieldKey(key)) throw new Error(`invalid field key: ${key || '(empty)'}`)
     if (seen.has(key)) throw new Error(`duplicate field key: ${key}`)
     if (isReservedSchemaFieldKey(key)) throw new Error(`reserved field key: ${key}`)
     if (!isAtomicFieldType(row.type)) {
       throw new Error(`unknown field type: ${String(row.type ?? '')}. allowed: ${ATOMIC_FIELD_TYPES.join(', ')}`)
     }
     const fieldLabel = String(row.label ?? key).trim() || key
-    if (isReservedSchemaFieldLabel(fieldLabel)) throw new Error(`reserved field label: ${fieldLabel}`)
-    if (seenLabels.has(fieldLabel.toLowerCase())) throw new Error(`duplicate field label: ${fieldLabel}`)
+    if (isReservedSchemaFieldLabel(fieldLabel)) throw new Error(`reserved field name: ${fieldLabel}`)
+    if (seenLabels.has(fieldLabel.toLowerCase())) throw new Error(`duplicate field name: ${fieldLabel}`)
     seen.add(key)
     seenLabels.add(fieldLabel.toLowerCase())
-    const field: SchemaPackField = {
-      key,
-      type: row.type,
-      label: fieldLabel,
-      writable: row.writable !== false,
-    }
-    if (Array.isArray(row.enum)) field.enum = row.enum.map((option) => String(option)).filter(Boolean)
-    if (row.enumLabels && typeof row.enumLabels === 'object' && !Array.isArray(row.enumLabels)) {
-      field.enumLabels = Object.fromEntries(
-        Object.entries(row.enumLabels as Record<string, unknown>)
-          .map(([value, text]) => [value, String(text ?? '').trim()])
-          .filter(([value, text]) => Boolean(value && text && field.enum?.includes(value))),
-      )
-    }
-    fields.push(field)
+    fields.push(atomicSchemaField(key, row, fieldLabel))
   }
   return fields
 }
@@ -419,6 +433,11 @@ export function parseAtomicFields(raw: unknown): SchemaPackField[] {
 export type SchemaPackField = FieldSpec & {
   key: string
   type: AtomicFieldType
+  deleted?: boolean
+}
+
+export function liveSchemaPackFields(fields: SchemaPackField[] | undefined) {
+  return (fields ?? []).filter((field) => field.deleted !== true)
 }
 
 export type CollectionSchemaPack = {
@@ -440,28 +459,14 @@ export function normalizeSchemaPack(raw: unknown): CollectionSchemaPack | null {
   for (const item of listed) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) continue
     const row = item as Record<string, unknown>
-    const key = String(row.key ?? '').trim()
-    if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(key) || seen.has(key) || isReservedSchemaFieldKey(key)) continue
+    const key = String(row.key ?? row.label ?? '').trim()
+    if (!isSchemaFieldKey(key) || seen.has(key) || isReservedSchemaFieldKey(key)) continue
     if (!isAtomicFieldType(row.type)) continue
     const fieldLabel = String(row.label ?? key).trim() || key
     if (isReservedSchemaFieldLabel(fieldLabel) || seenLabels.has(fieldLabel.toLowerCase())) continue
     seen.add(key)
     seenLabels.add(fieldLabel.toLowerCase())
-    const field: SchemaPackField = {
-      key,
-      type: row.type,
-      label: fieldLabel,
-      writable: row.writable !== false,
-    }
-    if (Array.isArray(row.enum)) field.enum = row.enum.map((option) => String(option)).filter(Boolean)
-    if (row.enumLabels && typeof row.enumLabels === 'object' && !Array.isArray(row.enumLabels)) {
-      field.enumLabels = Object.fromEntries(
-        Object.entries(row.enumLabels as Record<string, unknown>)
-          .map(([value, text]) => [value, String(text ?? '').trim()])
-          .filter(([value, text]) => Boolean(value && text && field.enum?.includes(value))),
-      )
-    }
-    fields.push(field)
+    fields.push(atomicSchemaField(key, row, fieldLabel))
   }
   return { id, label, fields }
 }
@@ -552,7 +557,7 @@ export function recordBuiltinValues(row: Record<string, unknown> = {}) {
     createdAt: created,
     updatedAt: updated,
     emoji: String(row.emoji ?? ''),
-    facet: normalizeSchemaValue(row.facet),
+    tag: normalizeSchemaValue(row.tag ?? row.facet),
     parentId,
     dependsOn,
     createdBy: asPerson(row.createdBy),
@@ -594,7 +599,10 @@ export function withBuiltinFields(
   if (!next.emoji) next.emoji = BUILTIN_FIELDS.emoji
   else if (!next.emoji.computed) next.emoji = { ...BUILTIN_FIELDS.emoji, ...next.emoji, writable: true }
   delete next.tags
-  if (!next.facet) next.facet = BUILTIN_FIELDS.facet
+  if (next.facet && !next.tag) next.tag = { ...next.facet, type: 'tag' }
+  delete next.facet
+  if (!next.tag) next.tag = BUILTIN_FIELDS.tag
+  else next.tag = { ...BUILTIN_FIELDS.tag, ...next.tag, type: 'tag' }
   if (!next.parentId) next.parentId = BUILTIN_FIELDS.parentId
   else if (!next.parentId.computed) next.parentId = { ...BUILTIN_FIELDS.parentId, ...next.parentId, type: 'ref', writable: true }
   if (!next.dependsOn) next.dependsOn = BUILTIN_FIELDS.dependsOn
@@ -643,6 +651,8 @@ export type CollectionActionInfo = {
   allowMissing?: boolean
   /** 此动作要求的统一授权能力。缺省按修改记录处理。 */
   requiredAction?: CollectionPermissionAction
+  /** 全部数据把各表动作摊平后，用来认这颗按钮属于哪张表。同一 id 在不同表含义不同。 */
+  collection?: string
 }
 
 export function actionVisibleToUser(action: { for?: CollectionActionAudience }) {

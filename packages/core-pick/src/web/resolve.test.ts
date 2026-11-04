@@ -61,11 +61,33 @@ test('picking does not look through the chat overlay', () => {
   panel.remove()
 })
 
+test('replies inside the chat overlay are pickable', () => {
+  const behind = document.createElement('div')
+  behind.setAttribute('data-biu-kind', 'page')
+  behind.setAttribute('data-biu-id', 'p1')
+  const panel = document.createElement('div')
+  panel.setAttribute('data-testid', 'chat-overlay-panel')
+  const reply = document.createElement('div')
+  reply.setAttribute('data-biu-kind', 'reply')
+  reply.setAttribute('data-biu-id', 'r1')
+  panel.append(reply)
+  document.body.append(behind, panel)
+  Object.defineProperty(document, 'elementsFromPoint', {
+    configurable: true,
+    value: () => [reply, panel, behind],
+  })
+  const hit = resolvePickAtPoint(0, 0, '/pages')
+  assert.equal(hit?.ref.kind, 'reply')
+  assert.equal(hit?.ref.id, 'r1')
+  behind.remove()
+  panel.remove()
+})
+
 test('formatPicks emits JSON handles only', () => {
   const text = formatPicks([
-    { kind: 'session', id: 'abc', label: '聊天', route: '/s/abc' },
+    { kind: 'session', id: 'abc', label: '聊天', route: '/agents/abc' },
   ])
-  assert.equal(text, '<pick>{"kind":"session","id":"abc","route":"/s/abc","label":"聊天"}</pick>')
+  assert.equal(text, '<pick>{"kind":"session","id":"abc","route":"/agents/abc","label":"聊天"}</pick>')
   assert.doesNotMatch(text, /class=|svg|html/i)
 })
 
@@ -110,6 +132,24 @@ test('chip caption keeps line span off the truncated preview', () => {
   assert.equal(span, '1-12')
   assert.ok(name.length <= 25)
   assert.match(chipLabel(ref), /\(1-12\)$/)
+})
+
+test('sandbox inner chip does not show the fence line span', () => {
+  assert.deepEqual(
+    chipCaption({
+      kind: 'sandbox',
+      id: 'sandbox:0-x:0/0',
+      label: '能做什么',
+      route: '/p/p002',
+      title: '能力边界',
+      path: '/pages/p002',
+      start_line: 14,
+      end_line: 80,
+      selection: '能做什么，不能做什么',
+      element: '<h1>能做什么，不能做什么</h1>',
+    }),
+    { name: '能做什么', span: '' },
+  )
 })
 
 test('html pick chip uses the inner node label, not the page title', () => {
@@ -614,9 +654,9 @@ test('editor paragraphs headings lists and plugin shells are pickable', () => {
   table.append(row)
   const block = document.createElement('div')
   block.className = 'page-block'
-  block.setAttribute('data-page-block', 'html')
+  block.setAttribute('data-page-block', 'sandbox')
   block.setAttribute('data-biu-kind', 'plugin')
-  block.setAttribute('data-biu-id', 'page-html-blocks:html')
+  block.setAttribute('data-biu-id', 'page-sandbox:html')
   block.setAttribute('data-biu-label', 'HTML')
   root.append(p, h2, ul, img, table, block)
   document.body.append(root)
@@ -641,7 +681,7 @@ test('editor paragraphs headings lists and plugin shells are pickable', () => {
   assert.equal(fromLi?.ref.label, '列表项')
   const fromPlugin = resolvePickFromNode(block, '/pages/p1')
   assert.equal(fromPlugin?.ref.kind, 'plugin')
-  assert.equal(fromPlugin?.ref.id, 'page-html-blocks:html')
+  assert.equal(fromPlugin?.ref.id, 'page-sandbox:html')
   const hits = resolvePicksInRect({ left: 0, top: 0, width: 120, height: 180 }, '/pages/p1', root)
   const kinds = hits.map((item) => item.ref.kind).sort()
   assert.ok(kinds.includes('block'))
@@ -654,9 +694,9 @@ test('html surface pick carries page path and markdown lines like a block', () =
   root.className = 'tiptap'
   const block = document.createElement('div')
   block.className = 'page-block'
-  block.setAttribute('data-page-block', 'html')
-  block.setAttribute('data-page-block-plugin', 'page-html-blocks')
-  block.setAttribute('data-biu-plugin', 'page-html-blocks')
+  block.setAttribute('data-page-block', 'sandbox')
+  block.setAttribute('data-page-block-plugin', 'page-sandbox')
+  block.setAttribute('data-biu-plugin', 'page-sandbox')
   const card = document.createElement('div')
   card.setAttribute('data-biu-kind', 'html')
   card.setAttribute('data-biu-id', 'html:0-abcd:0/1')
@@ -678,18 +718,128 @@ test('html surface pick carries page path and markdown lines like a block', () =
   assert.equal(hit.ref.kind, 'html')
   assert.equal(hit.ref.id, 'html:0-abcd:0/1')
   assert.equal(hit.ref.path, '/pages/p002')
-  assert.equal(hit.ref.start_line, 14)
-  assert.equal(hit.ref.end_line, 22)
-  assert.equal(hit.ref.text, ':::html\n<div>静态富排版</div>\n:::')
+  assert.equal(hit.ref.start_line, undefined)
+  assert.equal(hit.ref.end_line, undefined)
+  assert.equal(hit.ref.text, undefined)
   assert.equal(hit.ref.selection, '静态富排版，不跑脚本')
-  assert.equal(hit.ref.plugin, 'page-html-blocks')
+  assert.equal(hit.ref.plugin, 'page-sandbox')
   assert.match(hit.ref.element ?? '', /静态富排版，不跑脚本/)
   assert.doesNotMatch(hit.ref.element ?? '', /data-biu-kind/)
+  assert.equal(chipCaption(hit.ref).span, '')
   const packed = formatPicks([hit.ref])
-  assert.match(packed, /"plugin":"page-html-blocks"/)
+  assert.match(packed, /"plugin":"page-sandbox"/)
   assert.match(packed, /"path":"\/pages\/p002"/)
-  assert.match(packed, /"start_line":14/)
   assert.match(packed, /"element":/)
+  assert.doesNotMatch(packed, /start_line/)
+  assert.doesNotMatch(packed, /:::html/)
+  assert.doesNotMatch(packed, /"text":/)
+  bindEditorTextHost(root, null)
+  root.remove()
+})
+
+test('pick reaches stamped nodes inside an open sandbox shadow', () => {
+  const root = document.createElement('div')
+  root.className = 'tiptap'
+  const block = document.createElement('div')
+  block.className = 'page-block'
+  block.setAttribute('data-page-block', 'sandbox')
+  block.setAttribute('data-page-block-plugin', 'page-sandbox')
+  block.setAttribute('data-biu-plugin', 'page-sandbox')
+  const host = document.createElement('div')
+  host.setAttribute('data-sandbox', '')
+  block.append(host)
+  root.append(block)
+  document.body.append(root)
+  const shadow = host.attachShadow({ mode: 'open' })
+  const inner = document.createElement('button')
+  inner.textContent = '点过 0 次'
+  inner.setAttribute('data-sandbox-pick', '')
+  inner.setAttribute('data-biu-kind', 'sandbox')
+  inner.setAttribute('data-biu-id', 'sandbox:0-x:0/1')
+  inner.setAttribute('data-biu-label', '点过 0 次')
+  inner.setAttribute('data-biu-plugin', 'page-sandbox')
+  shadow.append(inner)
+  stubBox(inner, 10, 10, 80, 20)
+  stubBox(host, 0, 0, 100, 80)
+  stubBox(block, 0, 0, 100, 80)
+  bindEditorTextHost(root, {
+    path: '/pages/p002',
+    locusFromSelection: () => null,
+    locusFromElement: (el) =>
+      el === block || block.contains(el) || host.contains(el) || inner === el
+        ? { start_line: 3, end_line: 8, text: ':::pageBlock\nexport default function App() {}\n:::' }
+        : null,
+  })
+  const hit = resolvePickFromNode(inner, '/s/abc')
+  assert.ok(hit)
+  assert.equal(hit.ref.kind, 'sandbox')
+  assert.equal(hit.ref.id, 'sandbox:0-x:0/1')
+  assert.equal(hit.ref.plugin, 'page-sandbox')
+  assert.equal(hit.ref.path, '/pages/p002')
+  assert.equal(hit.ref.start_line, undefined)
+  assert.equal(hit.ref.selection, '点过 0 次')
+  assert.equal(hit.ref.text, undefined)
+  assert.equal(chipCaption(hit.ref).span, '')
+  assert.doesNotMatch(formatPicks([hit.ref]), /:::pageBlock|start_line/)
+  const boxed = resolvePicksInRect({ left: 8, top: 8, width: 40, height: 20 }, '/s/abc', root)
+  assert.equal(boxed.some((item) => item.ref.id === 'sandbox:0-x:0/1'), true)
+  host.setAttribute('data-biu-kind', 'plugin')
+  host.setAttribute('data-biu-id', 'page-sandbox:0/0')
+  Object.defineProperty(document, 'elementsFromPoint', {
+    configurable: true,
+    value: () => [host, block, root],
+  })
+  const at = resolvePickAtPoint(20, 15, '/s/abc')
+  assert.ok(at)
+  assert.equal(at.ref.kind, 'sandbox')
+  assert.equal(at.ref.id, 'sandbox:0-x:0/1')
+  bindEditorTextHost(root, null)
+  root.remove()
+})
+
+test('sandbox inner pick does not send the whole fence as text', () => {
+  const root = document.createElement('div')
+  root.className = 'tiptap'
+  const block = document.createElement('div')
+  block.className = 'page-block'
+  block.setAttribute('data-page-block', 'sandbox')
+  const host = document.createElement('div')
+  host.setAttribute('data-sandbox', '')
+  block.append(host)
+  root.append(block)
+  document.body.append(root)
+  const shadow = host.attachShadow({ mode: 'open' })
+  const inner = document.createElement('h1')
+  inner.textContent = '能做什么，不能做什么'
+  inner.setAttribute('data-sandbox-pick', '')
+  inner.setAttribute('data-biu-kind', 'sandbox')
+  inner.setAttribute('data-biu-id', 'sandbox:0-x:0/0')
+  inner.setAttribute('data-biu-label', '能做什么')
+  shadow.append(inner)
+  const fence = ':::pageBlock {kind=sandbox}\nexport default function App(){return <h1>能做什么，不能做什么</h1>}\n:::'
+  bindEditorTextHost(root, {
+    path: '/pages/p002',
+    locusFromSelection: () => null,
+    locusFromElement: (el) =>
+      el === block || block.contains(el)
+        ? { start_line: 1, end_line: 4, text: fence, selection: fence }
+        : null,
+  })
+  const hit = resolvePickFromNode(inner, '/s/abc')
+  assert.ok(hit)
+  assert.equal(hit.ref.kind, 'sandbox')
+  assert.equal(hit.ref.id, 'sandbox:0-x:0/0')
+  assert.equal(hit.ref.text, undefined)
+  assert.equal(hit.ref.start_line, undefined)
+  assert.equal(hit.ref.selection, '能做什么，不能做什么')
+  assert.notEqual(hit.ref.selection, fence)
+  assert.equal(chipCaption(hit.ref).name, '能做什么')
+  assert.equal(chipCaption(hit.ref).span, '')
+  const packed = formatPicks([hit.ref])
+  assert.match(packed, /"selection":"能做什么，不能做什么"/)
+  assert.doesNotMatch(packed, /:::pageBlock/)
+  assert.doesNotMatch(packed, /"text":/)
+  assert.doesNotMatch(packed, /start_line/)
   bindEditorTextHost(root, null)
   root.remove()
 })
@@ -699,9 +849,9 @@ test('html block pick names the inner node even when the host is the plugin shel
   root.className = 'tiptap'
   const block = document.createElement('div')
   block.className = 'page-block'
-  block.setAttribute('data-page-block', 'html')
+  block.setAttribute('data-page-block', 'sandbox')
   block.setAttribute('data-biu-kind', 'plugin')
-  block.setAttribute('data-biu-id', 'page-html-blocks:html')
+  block.setAttribute('data-biu-id', 'page-sandbox:html')
   block.setAttribute('data-biu-label', 'HTML')
   const title = document.createElement('div')
   title.textContent = '达米恩·查泽雷'
@@ -713,4 +863,21 @@ test('html block pick names the inner node even when the host is the plugin shel
   assert.match(hit.ref.element ?? '', /达米恩·查泽雷/)
   assert.doesNotMatch(hit.ref.element ?? '', /data-biu-kind="plugin"/)
   root.remove()
+})
+
+test('sandbox pick walks composed path and prefers inner sandbox stamps', async () => {
+  const { readFile } = await import('node:fs/promises')
+  const { resolve } = await import('node:path')
+  const resolveSrc = await readFile(resolve(import.meta.dirname, './resolve.ts'), 'utf8')
+  const overlaySrc = await readFile(resolve(import.meta.dirname, './overlay.tsx'), 'utf8')
+  assert.match(resolveSrc, /function refineSandboxPick/)
+  assert.match(resolveSrc, /function sandboxInnerAtPoint/)
+  assert.match(resolveSrc, /function sandboxInnerFromEvent/)
+  assert.match(resolveSrc, /function resolvePickFromEvent/)
+  assert.match(resolveSrc, /document\.querySelectorAll\('\[data-sandbox\]'\)/)
+  assert.match(resolveSrc, /host\.shadowRoot\.querySelectorAll/)
+  assert.match(resolveSrc, /refineSandboxPick\(resolvePickFromNode/)
+  assert.match(overlaySrc, /pathHasEditor/)
+  assert.match(overlaySrc, /composedPath\(\)/)
+  assert.match(overlaySrc, /resolvePickFromEvent/)
 })

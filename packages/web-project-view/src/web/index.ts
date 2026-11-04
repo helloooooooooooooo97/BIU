@@ -71,7 +71,7 @@ export class ProjectViewService extends Service {
   async openFolderForSession(sessionId: string) {
     this.replace({ busy: true, error: undefined })
     try {
-      const res = await fetch(`/api/sessions/${sessionId}/project/pick`, { method: 'POST' })
+      const res = await fetch(`/api/agents/${sessionId}/project/pick`, { method: 'POST' })
       const body = (await res.json()) as {
         ok?: boolean
         cancelled?: boolean
@@ -101,7 +101,7 @@ export class ProjectViewService extends Service {
     if (!sessionId) return
     this.replace({ busy: true, error: undefined })
     try {
-      await fetch(`/api/sessions/${sessionId}/project`, {
+      await fetch(`/api/agents/${sessionId}/project`, {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ path: null }),

@@ -108,6 +108,7 @@ export class ToolsService extends Service {
   private origins = new Map<string, ToolOrigin>()
   private pluginIds = new Map<string, string>()
   private aliases = new Map<string, string>()
+  private notes = new Map<string, string[]>()
   private guards: ToolGuard[] = []
   private mode: AgentToolMode = 'standard'
   /** 极简模式下常驻额外工具（配置面板勾选，跨回合生效）。 */
@@ -187,6 +188,31 @@ export class ToolsService extends Service {
     return raw
   }
 
+  /** 插件给已有工具追加说明（卸载时摘掉）。工具尚未注册也可以先挂。 */
+  annotate(name: string, text: string) {
+    const key = String(name ?? '').trim()
+    const note = String(text ?? '').trim()
+    if (!key || !note) throw new Error('tools.annotate needs name and text')
+    return this.ctx.effect(() => {
+      const list = this.notes.get(key) ?? []
+      list.push(note)
+      this.notes.set(key, list)
+      this.ctx.emit('hub/change')
+      return () => {
+        const next = (this.notes.get(key) ?? []).filter((item) => item !== note)
+        if (next.length) this.notes.set(key, next)
+        else this.notes.delete(key)
+        this.ctx.emit('hub/change')
+      }
+    }, `tools.annotate ${key}`)
+  }
+
+  private describe(tool: ToolSpec) {
+    const extra = this.notes.get(tool.name) ?? []
+    if (!extra.length) return tool.description
+    return [tool.description, ...extra].join(' ')
+  }
+
   register(spec: ToolSpec) {
     const original = String(spec.name ?? '').trim()
     const name = toolNameForApi(original, new Set(this.tools.keys()))
@@ -225,7 +251,7 @@ export class ToolsService extends Service {
     return [...this.tools.values()]
       .map((tool) => ({
         name: tool.name,
-        description: tool.description,
+        description: this.describe(tool),
         origin: this.originOf(tool.name),
       }))
       .sort((a, b) => a.name.localeCompare(b.name))
@@ -238,7 +264,7 @@ export class ToolsService extends Service {
         type: 'function' as const,
         function: {
           name: tool.name,
-          description: tool.description,
+          description: this.describe(tool),
           parameters: tool.parameters,
         },
       }))

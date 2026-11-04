@@ -31,7 +31,7 @@ export const COMPARE_PAGES: ComparePage[] = [
     category: '基础设施',
     opening: 'Linux 用「一切皆文件」抹平了异构硬件，用一组系统调用统一了所有设备的读写。BIU 做的是同一件事，只是把坐标换成了数据：一切皆路径，一切皆 /<table>/<id>。',
     useWhen: '需要通用操作系统、进程隔离、网络栈、跑原生程序',
-    biuWhen: '需要把工作区里的页面、数据、会话、智能体当成同一种可寻址对象来读写和扩展',
+    biuWhen: '需要把工作区里的页面、数据、代理当成同一种可寻址对象来读写和扩展',
     columns: ['Linux', 'BIU'],
     rows: [
       { dimension: '核心主张', them: '一切皆文件', biu: '一切皆 /<table>/<id>' },

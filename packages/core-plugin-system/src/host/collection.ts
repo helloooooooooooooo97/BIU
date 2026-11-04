@@ -97,17 +97,22 @@ function mergeLifecycle(
   const official = builtin
     ? { builtin: true, author: BIU_OFFICIAL_NAME, authorUrl: BIU_GITHUB, createdBy: BIU_OFFICIAL, updatedBy: [BIU_OFFICIAL] }
     : {}
+  const canManagePackage = !builtin || store.viewerIsSuperAdmin?.() !== false
   if (installed && sandbox) {
     return omitEmpty({
       ...asInstalledRecord(installed, store),
+      name: sandbox.name,
+      title: sandbox.name,
+      blurb: sandbox.blurb,
       sandbox: true,
       sandboxPath: store.sandboxPath(sandbox.id),
       updatedAt: Math.max(installed.updatedAt, sandbox.updatedAt),
       ...official,
+      canManagePackage,
     })
   }
-  if (installed) return { ...asInstalledRecord(installed, store), ...official }
-  if (sandbox) return { ...asSandboxRecord(sandbox, store), ...official }
+  if (installed) return { ...asInstalledRecord(installed, store), ...official, ...(canManagePackage ? { canManagePackage } : {}) }
+  if (sandbox) return { ...asSandboxRecord(sandbox, store), ...official, ...(canManagePackage ? { canManagePackage } : {}) }
   throw new Error('empty plugin row')
 }
 
@@ -135,7 +140,7 @@ export function pluginsCollection(store: PluginStoreService): CollectionSpec {
       route: '/plugins',
       title: '插件',
       inspector: true,
-      blurb: '这是插件（可安装的小程序），不是代理。用户说「再开一个 agent」请去 /sessions db_create，不要在这张表 create。已安装（.plugin）和沙箱（.plugin-dev）同一张表。列表 db_list /plugins；sandboxPath 是源码绝对路径，pluginPath 是安装产物绝对路径，Session 绑定其他项目时也按这两个字段找代码。README 用 db_content /plugins/<id>。页面块插件先读介绍里的「示例写法」再写 :::pageBlock。name 等只读（标签仍可写）。不能 db_create。窗口尺寸看 shellWidth/shellHeight。codeVersion 是已安装 host.js+web.js 的内容短哈希，和加载 URL 的 v 参数相同。安装只能 sandbox 再 pack：先 db_action path=/plugins/<插件id> action=sandbox 建 .plugin-dev/<id>/（记录可以还不存在），写完代码再 action=pack 打进 .plugin。不要直写 .plugin。start=打开已安装插件窗口（when：installed 且未 running）；stop=关掉运行中的插件（when：installed 且 running）；uninstall=停止运行并删除已安装的 .plugin/<id>/（when：installed，和安装互斥）。沙箱还在则这行还在并改显示安装。',
+      blurb: '这是插件（可安装的小程序），不是代理。用户说「再开一个 agent」请去 /agents db_create，不要在这张表 create。已安装（.plugin）和沙箱（.plugin-dev）同一张表。列表 db_list /plugins；sandboxPath 是源码绝对路径，pluginPath 是安装产物绝对路径，Session 绑定其他项目时也按这两个字段找代码。README 用 db_content /plugins/<id>。页面块插件先读介绍里的「示例写法」再写 :::pageBlock。name 等只读（标签仍可写）。不能 db_create。窗口尺寸看 shellWidth/shellHeight。codeVersion 是已安装 host.js+web.js 的内容短哈希，和加载 URL 的 v 参数相同。安装只能 sandbox 再 pack：先 db_action path=/plugins/<插件id> action=sandbox 建 .plugin-dev/<id>/（记录可以还不存在），写完代码再 action=pack 打进 .plugin。不要直写 .plugin。start=打开已安装插件窗口（when：installed 且未 running）；stop=关掉运行中的插件（when：installed 且 running）；uninstall=停止运行并删除已安装的 .plugin/<id>/（when：installed，和安装互斥）。沙箱还在则这行还在并改显示安装。',
       order: 30,
       icon: 'puzzle-piece',
     },
@@ -167,6 +172,7 @@ export function pluginsCollection(store: PluginStoreService): CollectionSpec {
         ...REQUIRED_RECORD_FIELDS,
         title: { type: 'string', label: '标题' },
         blurb: { type: 'string', label: '简介' },
+        builtin: { type: 'boolean', label: '内置' },
         installed: { type: 'boolean', label: '已安装' },
         sandbox: { type: 'boolean', label: '沙箱' },
         sandboxPath: { type: 'string', label: '源码路径' },
@@ -244,7 +250,7 @@ export function pluginsCollection(store: PluginStoreService): CollectionSpec {
       {
         id: 'pack',
         label: '安装',
-        when: { sandbox: true, installed: false },
+        when: { sandbox: true, installed: false, canManagePackage: true },
         description: PLUGIN_PACK_DESCRIPTION,
         requiredAction: 'resource:read',
         parameters: { type: 'object', description: PLUGIN_PACK_DESCRIPTION, properties: {} },
@@ -255,8 +261,8 @@ export function pluginsCollection(store: PluginStoreService): CollectionSpec {
         label: '卸载',
         tone: 'danger',
         confirm: '确定卸载？会停止运行，并删掉已安装的代码。沙箱源码还在的话可以再安装。',
-        when: { installed: true },
-        description: '停止运行并删除 .plugin/<id>/。已安装才显示，和安装互斥。沙箱 .plugin-dev/<id>/ 还在的话行不会消失，installed 变 false，动作列改显示安装。',
+        when: { installed: true, canManagePackage: true },
+        description: '停止运行并删除 .plugin/<id>/。已安装才显示，和安装互斥。沙箱 .plugin-dev/<id>/ 还在的话行不会消失，installed 变 false，动作列改显示安装。内置插件只有超级管理员能卸，有人在用也可以卸。',
         requiredAction: 'resource:read',
         run: async (id) => {
           await store.uninstall(id)

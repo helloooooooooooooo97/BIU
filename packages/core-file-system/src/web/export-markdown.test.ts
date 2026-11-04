@@ -10,7 +10,7 @@ test('yaml carries tags, times, and filled facet values', () => {
       tags: ['meta'],
       createdAt: Date.parse('2026-01-02T03:04:05.000Z'),
       updatedAt: Date.parse('2026-01-03T03:04:05.000Z'),
-      facet: { tags: ['films'], values: { films: { 导演: '查泽雷', empty: '' } } },
+      tag: { tags: ['films'], values: { films: { 导演: '查泽雷', empty: '' } } },
       notes: 'SECRET',
     },
     '# hello\n',
@@ -30,7 +30,7 @@ test('yaml carries tags, times, and filled facet values', () => {
 test('empty metadata is omitted', () => {
   const matter = recordMatter({ id: 'x', title: '空', tags: [], parentId: '', emoji: '' })
   assert.equal(matter.tags, undefined)
-  assert.equal(matter.facet, undefined)
+  assert.equal(matter.tag, undefined)
   assert.equal(matter.id, 'x')
 })
 

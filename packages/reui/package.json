@@ -1,0 +1,14 @@
+{
+  "name": "@biu/reui",
+  "license": "Apache-2.0",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "商店页面块共享 ReUI 控件；宿主挂 globalThis.ReUI",
+  "exports": {
+    ".": "./src/index.tsx"
+  },
+  "peerDependencies": {
+    "react": "^19.1.1"
+  }
+}

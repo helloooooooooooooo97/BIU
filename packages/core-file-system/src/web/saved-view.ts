@@ -38,11 +38,11 @@ export function parseViewColumns(value: unknown): string[] {
       try {
         return parseViewColumns(JSON.parse(text) as unknown)
       } catch {
-        throw new Error('columns 应为字符串数组，例如 ["title","facet"]')
+        throw new Error('columns 应为字符串数组，例如 ["title","tag"]')
       }
     }
     if (text.includes('"') || text.includes(']')) {
-      throw new Error('columns 应为字符串数组，例如 ["title","facet"]，不能按逗号拆 JSON 碎片')
+      throw new Error('columns 应为字符串数组，例如 ["title","tag"]，不能按逗号拆 JSON 碎片')
     }
     try {
       return parseViewColumns(JSON.parse(text) as unknown)

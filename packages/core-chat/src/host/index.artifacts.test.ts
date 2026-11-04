@@ -28,7 +28,7 @@ async function freePort() {
   })
 }
 
-test('GET /api/sessions/:id/artifacts/:name returns image bytes', async () => {
+test('GET /api/agents/:id/artifacts/:name returns image bytes', async () => {
   const base = await mkdtemp(join(tmpdir(), 'cordis-art-http-'))
   const prev = process.cwd()
   process.chdir(base)
@@ -47,7 +47,7 @@ test('GET /api/sessions/:id/artifacts/:name returns image bytes', async () => {
   await ready
 
   // 与 chat.ts 同源处理：二进制直出，不走 route.send JSON
-  ctx.http.route('GET', '/api/sessions/:id/artifacts/:name', async (route) => {
+  ctx.http.route('GET', '/api/agents/:id/artifacts/:name', async (route) => {
     const record = await ctx.sessions.get(route.params.id)
     if (!record) return route.send(404, { error: 'unknown session' })
     const file = await readArtifactFile(route.params.id, route.params.name)
@@ -71,16 +71,16 @@ test('GET /api/sessions/:id/artifacts/:name returns image bytes', async () => {
     await mkdir(dir, { recursive: true })
     await writeFile(join(dir, 'smoke.png'), png)
 
-    const res = await fetch(`http://127.0.0.1:${port}/api/sessions/${record.id}/artifacts/smoke.png`)
+    const res = await fetch(`http://127.0.0.1:${port}/api/agents/${record.id}/artifacts/smoke.png`)
     const body = Buffer.from(await res.arrayBuffer())
     assert.equal(res.status, 200)
     assert.equal(res.headers.get('content-type'), 'image/png')
     assert.deepEqual(body, png)
 
-    const missing = await fetch(`http://127.0.0.1:${port}/api/sessions/${record.id}/artifacts/nope.png`)
+    const missing = await fetch(`http://127.0.0.1:${port}/api/agents/${record.id}/artifacts/nope.png`)
     assert.equal(missing.status, 404)
 
-    const unknownSession = await fetch(`http://127.0.0.1:${port}/api/sessions/no-such/artifacts/smoke.png`)
+    const unknownSession = await fetch(`http://127.0.0.1:${port}/api/agents/no-such/artifacts/smoke.png`)
     assert.equal(unknownSession.status, 404)
   } finally {
     await httpFiber.dispose()
@@ -89,7 +89,7 @@ test('GET /api/sessions/:id/artifacts/:name returns image bytes', async () => {
   }
 })
 
-test('POST /api/sessions/:id/messages persists pasted images before enqueue', () => {
+test('POST /api/agents/:id/messages persists pasted images before enqueue', () => {
   const src = readFileSync(resolve(import.meta.dirname, './index.ts'), 'utf8')
   assert.match(src, /persistPastedImages/)
   assert.match(src, /withPastedImagePicks/)

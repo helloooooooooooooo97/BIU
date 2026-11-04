@@ -14,6 +14,14 @@ test('Skill sync actions use distinct directional icons', () => {
   assert.notEqual(push.container.innerHTML, fallback.container.innerHTML)
 })
 
+test('chat action uses the chat bubble icon', () => {
+  const chat = render(actionIcon('chat'))
+  const report = render(actionIcon('report'))
+  const bolt = render(actionIcon('unknown-action'))
+  assert.equal(chat.container.innerHTML, report.container.innerHTML)
+  assert.notEqual(chat.container.innerHTML, bolt.container.innerHTML)
+})
+
 test('enable and disable actions use play and stop glyphs', () => {
   const on = render(actionIcon('enable'))
   const off = render(actionIcon('disable'))
@@ -132,7 +140,8 @@ test('table image cells skip antd; editors still use Image preview', () => {
   assert.doesNotMatch(cells, /Image\.PreviewGroup/)
   assert.doesNotMatch(cells, /fsdb-lightbox/)
   assert.doesNotMatch(media, /from 'antd'/)
-  assert.match(mediaField, /from 'antd'/)
+  assert.doesNotMatch(mediaField, /from 'antd'/)
+  assert.match(mediaField, /from '@biu\/biu-ui'/)
   assert.match(mediaField, /Image\.PreviewGroup/)
   assert.doesNotMatch(thumbs, /from 'antd'/)
   assert.doesNotMatch(thumbs, /Image\.PreviewGroup/)

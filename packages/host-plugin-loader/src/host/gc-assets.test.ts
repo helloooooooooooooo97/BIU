@@ -37,7 +37,7 @@ test('html fence images stay live from editor body without htmlFieldAssets', () 
     db,
     '/pages',
     'p1',
-    `:::pageBlock {kind=html plugin=page-html-blocks id=ab12cd34}
+    `:::pageBlock {kind=sandbox plugin=page-sandbox id=ab12cd34}
 <img src="/api/db/file/hero.png">
 :::
 `,

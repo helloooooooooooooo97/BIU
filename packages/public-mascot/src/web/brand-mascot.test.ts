@@ -16,6 +16,8 @@ test('brand mascot is the grok blob on a white rounded square', () => {
   assert.doesNotMatch(mascot, /Biu Agent OS/)
   assert.doesNotMatch(mascot, /#0066B0/)
   assert.match(mascot, /tapToDance/)
+  assert.match(mascot, /face\?: ReactNode/)
+  assert.match(mascot, /label\?: string/)
   assert.match(mascot, /dancing=\{tapDance\}/)
   assert.match(mascot, /playNonce/)
   assert.match(mascot, /onPointerDown/)

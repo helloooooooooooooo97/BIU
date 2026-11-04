@@ -9,6 +9,7 @@ test('stays on module routes after a chat turn', () => {
   assert.equal(shouldNavigateToSession('/database/pages/view/x', 'abc'), false)
   assert.equal(shouldNavigateToSession('/database/pages/record/rec-1', 'abc'), false)
   assert.equal(shouldNavigateToSession('/', 'abc'), true)
-  assert.equal(shouldNavigateToSession('/s/other', 'abc'), true)
+  assert.equal(shouldNavigateToSession('/agents/other', 'abc'), true)
+  assert.equal(shouldNavigateToSession('/agents/abc', 'abc'), false)
   assert.equal(shouldNavigateToSession('/s/abc', 'abc'), false)
 })

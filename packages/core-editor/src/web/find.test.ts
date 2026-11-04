@@ -9,7 +9,7 @@ import { applyEditorFind } from './find-plugin.ts'
 import { pageEditorExtensions } from './kit.ts'
 import { isFindHotkey } from './find-bar.tsx'
 import { PAGE_EDITOR_STYLE } from './style.ts'
-import { TAG_TONE_ROSE } from '@biu/public-ui'
+import { TAG_TONE_ROSE } from '@biu/biu-ui'
 
 test('findRanges is case-insensitive and walks every hit', () => {
   assert.deepEqual(findRanges('Hello hello HELLO', 'hello'), [
@@ -54,7 +54,7 @@ test('htmlVisibleText keeps inner copy', () => {
 test('findInPmDoc highlights an html pageBlock once, not each inner match', () => {
   const editor = new Editor({
     extensions: pageEditorExtensions(),
-    content: `正文\n\n:::pageBlock {kind=html plugin=page-html-blocks}\n{"html":"<div>爱乐之城海报 爱乐之城</div>"}\n:::\n`,
+    content: `正文\n\n:::pageBlock {kind=sandbox plugin=page-sandbox}\n{"html":"<div>爱乐之城海报 爱乐之城</div>"}\n:::\n`,
     contentType: 'markdown',
   })
   const hits = findInPmDoc(editor.state.doc, '爱乐之城')
@@ -105,21 +105,19 @@ test('isFindHotkey is command/ctrl f without shift', () => {
   assert.equal(isFindHotkey({ key: 'f', metaKey: true, ctrlKey: false, altKey: false, shiftKey: true }), false)
 })
 
-test('find bar pins to the inspector chrome, not the scrolling body', () => {
-  const src = readFileSync(resolve(import.meta.dirname, './find-bar.tsx'), 'utf8')
-  assert.match(src, /createPortal/)
-  assert.match(src, /fsdb-right/)
-  assert.match(src, /page-find-slot/)
-  assert.match(src, /appendChild/)
-  assert.match(PAGE_EDITOR_STYLE, /\.page-find-slot\{[^}]*position:absolute/)
-  assert.match(PAGE_EDITOR_STYLE, /\.fsdb-right:has\(\.page-find-slot\)\{[^}]*position:relative/)
-  assert.doesNotMatch(PAGE_EDITOR_STYLE, /\.page-find-slot\{[^}]*height:0/)
-  assert.doesNotMatch(PAGE_EDITOR_STYLE, /\.page-find\{[^}]*position:sticky/)
+test('page find lives in the toolbar, not a floating slot', () => {
+  const src = readFileSync(resolve(import.meta.dirname, './page-detail-bar.tsx'), 'utf8')
+  assert.match(src, /tasks-search-wrap/)
+  assert.match(src, /aria-label="上一个"/)
+  assert.match(src, /aria-label="下一个"/)
+  assert.doesNotMatch(src, /createPortal/)
+  assert.doesNotMatch(PAGE_EDITOR_STYLE, /\.page-find-slot\{/)
+  assert.doesNotMatch(PAGE_EDITOR_STYLE, /\.page-find-box\{/)
 })
 
 test('find hits use rose tag text and wash; html blocks only get a pink frame', () => {
-  assert.match(PAGE_EDITOR_STYLE, new RegExp(`\\.page-find-hit\\{[^}]*color:${TAG_TONE_ROSE}`))
-  assert.match(PAGE_EDITOR_STYLE, /color-mix\(in srgb,#e255a1 22%,transparent\)/)
+  assert.match(PAGE_EDITOR_STYLE, new RegExp(`\\.page-find-hit\\{[^}]*color:${TAG_TONE_ROSE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`))
+  assert.match(PAGE_EDITOR_STYLE, /color-mix\(in srgb,var\(--biu-color-ink-pink\) 22%,transparent\)/)
   assert.match(PAGE_EDITOR_STYLE, /\.page-find-hit:not\(\.page-block\)/)
   assert.match(PAGE_EDITOR_STYLE, /\.page-block\.page-find-hit\{[^}]*background:transparent/)
   assert.match(PAGE_EDITOR_STYLE, /\.page-block\.page-find-hit/)

@@ -64,6 +64,9 @@ test('viewsCollection creates and deletes user views on a registered table', asy
   assert.deepEqual(row?.columnWidths, { title: 240 })
   assert.equal(typeof row?.viewId, 'string')
   assert.throws(() => spec.create!([{ tablePath: '/nope', title: 'x' }]), /unknown collection/)
+  const [overview] = await spec.create!([{ tablePath: '/data', title: '总览筛选' }])
+  assert.equal(overview?.tablePath, '/data')
+  assert.equal(overview?.title, '总览筛选')
   assert.throws(() => spec.create!([{ title: '无表' }]), /tablePath required/)
   const ids = await spec.remove!({ ids: [String(row?.id)] })
   assert.deepEqual(ids, [String(row?.id)])
@@ -74,12 +77,12 @@ test('viewsCollection creates and deletes user views on a registered table', asy
 test('every registered table gets a builtin all-view even before the client syncs', async () => {
   const store = new SavedViewsStore()
   const spec = viewsCollection(store, () => [
-    { path: '/sessions', id: 'sessions', kind: 'collection', label: '会话', view: { title: '会话' } },
+    { path: '/agents', id: 'sessions', kind: 'collection', label: '代理', view: { title: '代理' } },
     { path: '/events', id: 'events', kind: 'collection', label: '事件', view: { title: '事件' } },
   ])
   const rows = await spec.list()
   assert.equal(rows.length, 2)
-  assert.equal(rows.find((row) => row.tablePath === '/sessions')?.title, '全部会话')
+  assert.equal(rows.find((row) => row.tablePath === '/agents')?.title, '全部代理')
   assert.equal(rows.find((row) => row.tablePath === '/events')?.title, '全部事件')
 })
 
@@ -139,21 +142,21 @@ test('clientViewFromDbRow keeps flat filters and sorts for the live table', () =
 test('index collection views stay with the account that saved them', async () => {
   const store = new SavedViewsStore()
   store.open(':memory:')
-  store.replaceOwned('/facets', [{ id: 'ada-view', name: 'Ada 的标签' }], 'ada')
-  store.replaceOwned('/facets', [{ id: 'bob-view', name: 'Bob 的标签' }], 'bob')
-  store.replaceOwned('/facets', [{ id: 'ada-view', name: 'Ada 改过' }], 'ada')
+  store.replaceOwned('/tags', [{ id: 'ada-view', name: 'Ada 的标签' }], 'ada')
+  store.replaceOwned('/tags', [{ id: 'bob-view', name: 'Bob 的标签' }], 'bob')
+  store.replaceOwned('/tags', [{ id: 'ada-view', name: 'Ada 改过' }], 'ada')
   let who = 'ada'
   const spec = viewsCollection(
     store,
-    () => [{ path: '/facets', id: 'facets', kind: 'collection', label: '标签', view: { moduleId: 'facets', route: '/facets', title: '标签' } }],
+    () => [{ path: '/tags', id: 'facets', kind: 'collection', label: '标签', view: { moduleId: 'facets', route: '/tags', title: '标签' } }],
     () => who,
   )
   const adaRows = await spec.list()
-  assert.deepEqual(adaRows.map((row) => row.viewId).filter((id) => id !== builtinAllViewId('/facets')), ['ada-view'])
+  assert.deepEqual(adaRows.map((row) => row.viewId).filter((id) => id !== builtinAllViewId('/tags')), ['ada-view'])
   assert.equal(adaRows.find((row) => row.viewId === 'ada-view')?.title, 'Ada 改过')
   who = 'bob'
   const bobRows = await spec.list()
-  assert.deepEqual(bobRows.map((row) => row.viewId).filter((id) => id !== builtinAllViewId('/facets')), ['bob-view'])
+  assert.deepEqual(bobRows.map((row) => row.viewId).filter((id) => id !== builtinAllViewId('/tags')), ['bob-view'])
   await assert.rejects(() => spec.remove!({ ids: ['facets::ada-view'] }), /unknown view/)
 })
 
@@ -179,16 +182,16 @@ test('update of another account view on an index collection stays unknown', asyn
   const spec = (account: string) =>
     viewsCollection(
       store,
-      () => [{ path: '/facets', id: 'facets', kind: 'collection', label: '标签', view: { moduleId: 'facets', route: '/facets', title: '标签' } }],
+      () => [{ path: '/tags', id: 'facets', kind: 'collection', label: '标签', view: { moduleId: 'facets', route: '/tags', title: '标签' } }],
       () => account,
     )
-  spec('ada').create!([{ tablePath: '/facets', viewId: 'ada-view', title: 'Ada 的标签' }])
-  assert.equal(store.viewsFor('/facets', 'bob').length, 0)
+  spec('ada').create!([{ tablePath: '/tags', viewId: 'ada-view', title: 'Ada 的标签' }])
+  assert.equal(store.viewsFor('/tags', 'bob').length, 0)
   assert.throws(() => store.write('facets::ada-view', { title: '抢改' }, 'bob'), /unknown view/)
   assert.throws(() => spec('bob').update!('facets::ada-view', { title: '抢改' }), /unknown view/)
   await assert.rejects(() => spec('bob').remove!({ ids: ['facets::ada-view'] }), /unknown view/)
   assert.equal(spec('ada').update!('facets::ada-view', { title: 'Ada 改' }).title, 'Ada 改')
-  assert.equal(store.viewsFor('/facets', 'ada')[0]?.name, 'Ada 改')
+  assert.equal(store.viewsFor('/tags', 'ada')[0]?.name, 'Ada 改')
 })
 
 test('deleting a /views row also removes the stored view so it cannot come back', async () => {

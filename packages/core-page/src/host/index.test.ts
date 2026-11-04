@@ -67,7 +67,7 @@ test('page plugin stores pages in SQLite under .biu', async () => {
   assert.equal(fields.tags, undefined)
   assert.equal(fields.score, undefined)
   assert.equal(fields.notes?.type, 'file')
-  assert.deepEqual(registered[0]?.schema.columns, ['title', 'facet', 'createdBy', 'updatedBy'])
+  assert.deepEqual(registered[0]?.schema.columns, ['title', 'tag', 'createdBy', 'updatedBy'])
   assert.deepEqual(registered[0]?.records, { update: true, create: true, delete: true })
   assert.equal(registered[1]?.path, '/page-blocks')
   assert.equal(registered[1]?.label, '组件')
@@ -112,10 +112,10 @@ test('page plugin stores pages in SQLite under .biu', async () => {
   assert.match(String(againBody?.notes), /# 标题\n内容/)
 
   await spec.update!(created[0]!.id, {
-    facet: { tags: ['dp'], values: { dp: { complexity: 'O(n)' } } },
+    tag: { tags: ['dp'], values: { dp: { complexity: 'O(n)' } } },
   })
   const again = await spec.get!(created[0]!.id)
-  assert.deepEqual(again?.facet, { tags: [], values: {} })
+  assert.deepEqual(again?.tag, { tags: [], values: {} })
 
   await spec.remove!({ ids: [created[0]!.id] })
   assert.equal((await spec.list()).length, 0)
@@ -167,8 +167,8 @@ test('page-blocks collection updates one fence by page::block id', async () => {
   const blocks = registered.find((item) => item.path === '/page-blocks')!
   const created = await pages.create!([{
     title: '海报',
-    notes: `:::pageBlock {kind=html plugin=page-html-blocks id=ab12cd34 deck=true}
-<div>旧</div><img src="/api/db/file/hero.png">
+    notes: `:::pageBlock {kind=sandbox plugin=page-sandbox id=ab12cd34 deck=true}
+export default function App() { return <div>旧</div> }
 :::
 :::pageBlock {kind=excalidraw plugin=page-excalidraw id=edd9aaaa}
 {"file":"assets/画板-edd9.json","title":"草图"}
@@ -180,10 +180,10 @@ test('page-blocks collection updates one fence by page::block id', async () => {
   assert.equal(listed.length, 2)
   const html = listed.find((item) => item.id === `/pages::${pageId}::ab12cd34`)
   assert.ok(html)
-  assert.equal(html.blockKind, 'html')
+  assert.equal(html.blockKind, 'sandbox')
   assert.equal(html.pageTitle, '海报')
-  assert.equal(html.title, '海报 html')
-  assert.match(String(html.data), /<div>旧<\/div>/)
+  assert.equal(html.title, '海报 sandbox')
+  assert.match(String(html.data), /return <div>旧<\/div>/)
   const draw = listed.find((item) => item.id === `/pages::${pageId}::edd9aaaa`)
   assert.ok(draw)
   assert.match(String(draw.data), /画板-edd9\.json/)
@@ -195,10 +195,10 @@ test('page-blocks collection updates one fence by page::block id', async () => {
   }
   assert.equal(bref.name, '画板-edd9.json')
   assert.equal(bref.source, 'block:edd9aaaa:core')
-  const htmlRef = sqlite
+  const sandboxRef = sqlite
     .prepare('SELECT name FROM block_refs WHERE record_id = ? AND block_id = ?')
-    .get(pageId, 'ab12cd34') as { name: string }
-  assert.equal(htmlRef.name, 'hero.png')
+    .get(pageId, 'ab12cd34') as { name: string } | undefined
+  assert.equal(sandboxRef, undefined)
   const stored = sqlite.prepare('SELECT data_json FROM page_block_index WHERE block_id = ?').get('ab12cd34') as { data_json: string }
   assert.equal(stored.data_json.includes('<div>旧</div>'), false)
   assert.ok(Array.isArray(JSON.parse(stored.data_json).assets))
@@ -206,26 +206,56 @@ test('page-blocks collection updates one fence by page::block id', async () => {
   const renamed = await blocks.update!(`/pages::${pageId}::ab12cd34`, { title: '刊头' })
   assert.equal(renamed.title, '刊头')
   const updated = await blocks.update!(`/pages::${pageId}::ab12cd34`, {
-    data: { html: '<div>新</div>', deck: false },
+    data: { source: 'export default function App() { return <div>新</div> }', deck: false },
   })
   assert.equal(updated.title, '刊头')
   const clobbered = await blocks.update!(`/pages::${pageId}::ab12cd34`, {
-    data: { html: '<div>新</div>', title: '旧名', deck: false },
+    data: { source: 'export default function App() { return <div>新</div> }', title: '旧名', deck: false },
   })
   assert.equal(clobbered.title, '刊头')
-  const payload = JSON.parse(String(updated.data)) as { html?: string; deck?: boolean }
-  assert.equal(payload.deck, false)
-  assert.match(String(payload.html), /<div>新<\/div>/)
+  const payload = JSON.parse(String(updated.data)) as { source?: string; deck?: boolean }
+  assert.equal(payload.deck, undefined)
+  assert.match(String(payload.source), /<div>新<\/div>/)
   const after = new DatabaseSync(join(root, PAGE_DB))
   const slim = after.prepare('SELECT data_json FROM page_block_index WHERE block_id = ?').get('ab12cd34') as { data_json: string }
   assert.equal(slim.data_json.includes('<div>新</div>'), false)
   after.close()
   const row = await pages.get!(pageId)
-  assert.match(String(row?.notes), /id=ab12cd34 title="刊头" deck=false/)
+  assert.match(String(row?.notes), /id=ab12cd34 title="刊头"/)
+  assert.doesNotMatch(String(row?.notes), /\bdeck=/)
   assert.match(String(row?.notes), /<div>新<\/div>/)
   assert.match(String(row?.notes), /刊头/)
   assert.equal(blocks.create, undefined)
   assert.equal(blocks.remove, undefined)
+})
+
+test('page-blocks get synthesizes a row for any block id so facets can attach', async () => {
+  const ctx = new Context()
+  const registered: CollectionSpec[] = []
+  class FakeDb extends Service {
+    constructor(c: Context) {
+      super(c, 'database')
+    }
+    register(spec: CollectionSpec) {
+      registered.push(spec)
+    }
+  }
+  new FakeDb(ctx)
+  await ctx.plugin(tools)
+  const root = await mkdtemp(join(tmpdir(), 'page-block-facet-'))
+  await ctx.plugin(fsPlugin, { root })
+  await ctx.plugin(page)
+  const pages = registered.find((item) => item.path === '/pages')!
+  const blocks = registered.find((item) => item.path === '/page-blocks')!
+  const created = await pages.create!([{ title: '一段', notes: '段落 <!-- biu:aabbcc11 -->' }])
+  const pageId = created[0]!.id
+  const id = `/pages::${pageId}::aabbcc11`
+  const row = await blocks.get!(id)
+  assert.equal(row?.blockId, 'aabbcc11')
+  assert.equal(row?.pageId, pageId)
+  const next = await blocks.update!(id, { tag: { tags: ['需求'], values: {} } })
+  assert.equal(next.blockId, 'aabbcc11')
+  assert.match(String((await pages.get!(pageId))?.notes ?? ''), /段落/)
 })
 
 test('clearing the last pageBlock fence drops the index row immediately', async () => {
@@ -236,7 +266,7 @@ test('clearing the last pageBlock fence drops the index row immediately', async 
   const store = new PagesStore(ctx.fs.workspace as never, join(root, '.biu/assets/page'))
   const index = new PageBlocksIndex(store, { hotWindowMs: 60_000, hotLimit: 0, warmLimit: 0 })
   const pages = page.pagesCollection(store, index)
-  const fence = (id: string) => `:::pageBlock {kind=html plugin=page-html-blocks id=${id}}\n<div>${id}</div>\n:::\n`
+  const fence = (id: string) => `:::pageBlock {kind=sandbox plugin=page-sandbox id=${id}}\n<div>${id}</div>\n:::\n`
   const created = await pages.create!([{ title: '一页', notes: fence('aaaaaa11') + fence('bbbbbb22') }])
   const id = created[0]!.id
   assert.equal((await index.list()).length, 2)
@@ -256,7 +286,7 @@ test('reindex rewrites duplicate pageBlock ids instead of crashing', async () =>
   await ctx.plugin(fsPlugin, { root })
   const store = new PagesStore(ctx.fs.workspace as never, join(root, '.biu/assets/page'))
   const index = new PageBlocksIndex(store, { hotWindowMs: 60_000, hotLimit: 8, warmLimit: 8 })
-  const fence = (id: string, body: string) => `:::pageBlock {kind=html plugin=page-html-blocks id=${id}}\n<div>${body}</div>\n:::\n`
+  const fence = (id: string, body: string) => `:::pageBlock {kind=sandbox plugin=page-sandbox id=${id}}\n<div>${body}</div>\n:::\n`
   const created = await store.create({ title: '粘贴崩了', notes: fence('ab12cd34', 'a') + fence('ab12cd34', 'b') })
   await index.reindexPage(created)
   const listed = await index.list()
@@ -277,7 +307,7 @@ test('page-block index scans a hot batch instead of every page', async () => {
   await ctx.plugin(fsPlugin, { root })
   const store = new PagesStore(ctx.fs.workspace as never, join(root, '.biu/assets/page'))
   const index = new PageBlocksIndex(store, { hotWindowMs: 60_000, hotLimit: 1, warmLimit: 0 })
-  const fence = (id: string) => `:::pageBlock {kind=html plugin=page-html-blocks id=${id}}\n<div>${id}</div>\n:::\n`
+  const fence = (id: string) => `:::pageBlock {kind=sandbox plugin=page-sandbox id=${id}}\n<div>${id}</div>\n:::\n`
   await store.create({ title: 'a', notes: fence('aaaaaa11') })
   await store.create({ title: 'b', notes: fence('bbbbbb22') })
   await store.create({ title: 'c', notes: fence('cccccc33') })
@@ -308,7 +338,7 @@ test('page-block index keeps non-page editor bodies', async () => {
     db,
     '/tasks',
     't1',
-    ':::pageBlock {kind=html plugin=page-html-blocks id=taskblk1}\n<div>task</div>\n:::\n',
+    ':::pageBlock {kind=sandbox plugin=page-sandbox id=taskblk1}\n<div>task</div>\n:::\n',
   )
   await index.sync()
   const listed = await index.list()
@@ -357,7 +387,7 @@ test('pages sqlite keeps notes as the body, not markdown files', async () => {
   const cols = (sqlite.prepare('PRAGMA table_info(pages)').all() as Array<{ name: string }>).map((col) => col.name)
   assert.equal(cols.includes('notes'), false)
   assert.equal(cols.includes('tags_json'), false)
-  assert.equal(cols.includes('facet_json'), false)
+  assert.equal(cols.includes('tag_json'), false)
   assert.equal(existsSync(join(root, PAGE_ROOT, 'legacy.md')), false)
 })
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { TagChip } from '@biu/public-ui'
+import { TagChip } from '@biu/biu-ui'
 import { DbSearchMenu, DbSearchOption, ensureDbSearchStyle } from './search-menu.tsx'
 
 function CheckMark() {

@@ -16,7 +16,7 @@ test('chat selection bubble attaches a text pick', () => {
   assert.match(css, /\.chat-select-bubble\s*\{[^}]*height:\s*28px/s)
   assert.match(css, /\.chat-select-bubble\s*\{[^}]*gap:\s*4px/s)
   assert.match(css, /\.chat-select-bubble\s*\{[^}]*padding:\s*0 8px/s)
-  assert.match(css, /\.chat-select-bubble\s*\{[^}]*font-size:\s*13px/s)
+  assert.match(css, /\.chat-select-bubble\s*\{[^}]*font-size:\s*var\(--biu-font-size-3\)/s)
   assert.match(css, /\.chat-select-bubble-icon\s*\{[^}]*width:\s*14px/s)
   assert.match(css, /\.chat-select-bubble-icon\s*\{[^}]*height:\s*14px/s)
   assert.match(src, /closest\('\.chat-stage'\)/)

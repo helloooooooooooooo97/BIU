@@ -232,8 +232,8 @@ function BrowserPanel({ pick }: { pick?: PickApi }) {
 
   if (!api) {
     return (
-      <div style={{ padding: 16, fontFamily: UI, fontSize: 13, color: 'var(--dsw-label-2)', lineHeight: 1.6 }}>
-        <div style={{ fontWeight: 700, color: 'var(--dsw-label)', marginBottom: 6 }}>侧栏浏览器需要 Electron 外壳</div>
+      <div style={{ padding: 16, fontFamily: UI, fontSize: 13, color: 'var(--biu-color-text-muted)', lineHeight: 1.6 }}>
+        <div style={{ fontWeight: 700, color: 'var(--biu-color-text)', marginBottom: 6 }}>侧栏浏览器需要 Electron 外壳</div>
         <div>这个面板靠 Electron 的原生 BrowserView 渲染，网页版里没有这个能力。</div>
         <div style={{ marginTop: 8 }}>
           用 <code style={{ fontFamily: 'var(--font-mono)' }}>npm run electron:dev</code> 启动就能用。
@@ -246,7 +246,7 @@ function BrowserPanel({ pick }: { pick?: PickApi }) {
     cursor: 'pointer',
     border: 'none',
     background: 'transparent',
-    color: 'var(--dsw-label-2)',
+    color: 'var(--biu-color-text-muted)',
     padding: '4px 5px',
     borderRadius: 999,
     display: 'inline-flex',
@@ -275,7 +275,7 @@ function BrowserPanel({ pick }: { pick?: PickApi }) {
           alignItems: 'center',
           gap: 4,
           padding: '5px 6px',
-          borderBottom: `1px solid ${BORDER}`,
+          borderBottom: `var(--biu-stroke-width) solid ${BORDER}`,
           background: PAPER,
           color: INK,
           fontFamily: UI,
@@ -314,7 +314,7 @@ function BrowserPanel({ pick }: { pick?: PickApi }) {
               fontSize: 12.5,
               color: INK,
               background: FIELD,
-              border: `1px solid ${BORDER}`,
+              border: `var(--biu-stroke-width) solid ${BORDER}`,
               borderRadius: 999,
               padding: '5px 12px',
               outline: 'none',
@@ -323,7 +323,7 @@ function BrowserPanel({ pick }: { pick?: PickApi }) {
         </form>
         <button
           type="button"
-          style={{ ...iconBtn, color: picking ? '#5b9fd6' : undefined }}
+          style={{ ...iconBtn, color: picking ? 'var(--biu-color-ink-blue)' : undefined }}
           title={picking ? '取消选取' : '选取'}
           aria-label={picking ? '取消选取' : '选取'}
           aria-pressed={picking}
@@ -395,7 +395,7 @@ function BrowserPanel({ pick }: { pick?: PickApi }) {
                     fontSize: 12,
                     color: INK,
                     background: FIELD,
-                    border: `1px solid ${BORDER}`,
+                    border: `var(--biu-stroke-width) solid ${BORDER}`,
                     borderRadius: 999,
                     padding: '5px 12px',
                   }}

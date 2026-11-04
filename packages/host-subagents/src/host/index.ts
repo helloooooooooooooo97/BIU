@@ -30,7 +30,7 @@ export function apply(ctx: Context) {
   const subagents = new SubagentsService(ctx)
   ctx.tools.register({
     name: 'subagent_spawn',
-    description: '在独立 session 中跑一个子 agent；inherit=true 时 fork 父会话上下文',
+    description: '在独立 session 中跑一个子 agent；inherit=true 时 fork 父代理上下文',
     parameters: {
       type: 'object',
       properties: {
