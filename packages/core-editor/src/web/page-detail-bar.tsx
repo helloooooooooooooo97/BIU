@@ -184,60 +184,66 @@ export function PageDetailBar({
           </div>
           {open === 'view' ? (
             <HeadlessDismiss onDismiss={() => setOpen(null)} insideRef={viewRef}>
-              <div className="tasks-viewdd" role="menu">
-                {MODES.map((item) => (
+              <div className="fsdb-tool-flyout tasks-viewdd-menu" role="menu">
+                <div className="tasks-sort-list">
+                  {MODES.map((item) => (
+                    <div key={item.id} className={`tasks-viewdd-item${item.id === current.id ? ' is-active' : ''}`}>
+                      <button
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={item.id === current.id}
+                        className="tasks-viewdd-item-main fsdb-tool-row"
+                        onClick={() => {
+                          setPagePresentMode(record.id, item.id)
+                          setOpen(null)
+                        }}
+                      >
+                        <item.Icon aria-hidden className="tasks-viewdd-item-ico" />
+                        <span className="tasks-viewdd-item-name">{item.label}</span>
+                      </button>
+                    </div>
+                  ))}
+                  {pageViews.map((item) => (
+                    <div key={item.id} className={`tasks-viewdd-item${item.id === present ? ' is-active' : ''}`}>
+                      <button
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={item.id === present}
+                        className="tasks-viewdd-item-main fsdb-tool-row"
+                        data-testid={`page-view-${item.id}`}
+                        onClick={() => {
+                          setPagePresentMode(record.id, item.id)
+                          setOpen(null)
+                        }}
+                      >
+                        <Squares2X2Icon aria-hidden className="tasks-viewdd-item-ico" />
+                        <span className="tasks-viewdd-item-name">{item.name}</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="tasks-viewdd-foot">
                   <button
-                    key={item.id}
                     type="button"
-                    role="menuitemradio"
-                    aria-checked={item.id === current.id}
-                    className={`tasks-viewdd-item-main${item.id === current.id ? ' is-active' : ''}`}
+                    role="menuitem"
+                    className="tasks-viewdd-saveas fsdb-tool-row font-medium"
+                    data-testid="page-view-create"
+                    disabled={creatingView}
                     onClick={() => {
-                      setPagePresentMode(record.id, item.id)
-                      setOpen(null)
+                      if (creatingView) return
+                      setCreatingView(true)
+                      void createPageSandboxView(record.id, String(record.title ?? ''), `沙盒 ${pageViews.length + 1}`)
+                        .catch(() => undefined)
+                        .finally(() => {
+                          setCreatingView(false)
+                          setOpen(null)
+                        })
                     }}
                   >
-                    <item.Icon aria-hidden className="tasks-viewdd-item-ico" />
-                    <span className="tasks-viewdd-item-name">{item.label}</span>
+                    <PlusIcon aria-hidden className="size-[14px]" />
+                    {creatingView ? '正在创建…' : '新建沙盒视图'}
                   </button>
-                ))}
-                {pageViews.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    role="menuitemradio"
-                    aria-checked={item.id === present}
-                    className={`tasks-viewdd-item-main${item.id === present ? ' is-active' : ''}`}
-                    data-testid={`page-view-${item.id}`}
-                    onClick={() => {
-                      setPagePresentMode(record.id, item.id)
-                      setOpen(null)
-                    }}
-                  >
-                    <Squares2X2Icon aria-hidden className="tasks-viewdd-item-ico" />
-                    <span className="tasks-viewdd-item-name">{item.name}</span>
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="tasks-viewdd-item-main"
-                  data-testid="page-view-create"
-                  disabled={creatingView}
-                  onClick={() => {
-                    if (creatingView) return
-                    setCreatingView(true)
-                    void createPageSandboxView(record.id, String(record.title ?? ''), `沙盒 ${pageViews.length + 1}`)
-                      .catch(() => undefined)
-                      .finally(() => {
-                        setCreatingView(false)
-                        setOpen(null)
-                      })
-                  }}
-                >
-                  <PlusIcon aria-hidden className="tasks-viewdd-item-ico" />
-                  <span className="tasks-viewdd-item-name">{creatingView ? '正在创建…' : '新建沙盒视图'}</span>
-                </button>
+                </div>
               </div>
             </HeadlessDismiss>
           ) : null}

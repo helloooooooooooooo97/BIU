@@ -4896,38 +4896,6 @@ export function CollectionBrowser({
                   insideRef={viewRef}
                   ignoreSelector={`${HEADLESS_DISMISS_IGNORE}, .fsdb-query-drag-overlay, [data-fsdb-sort-overlay]`}
                 >
-                {embed ? (
-                  <div className="tasks-viewdd" role="menu">
-                    {views.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        role="menuitemradio"
-                        aria-checked={item.id === activeViewId}
-                        className={`tasks-viewdd-item-main${item.id === activeViewId ? ' is-active' : ''}`}
-                        onClick={() => {
-                          selectView(item)
-                          setViewMenuOpen(false)
-                        }}
-                      >
-                        <ViewModeGlyph mode={item.mode} className="tasks-viewdd-item-ico" />
-                        <span className="tasks-viewdd-item-name">{item.name}</span>
-                      </button>
-                    ))}
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="tasks-viewdd-item-main"
-                      onClick={() => {
-                        addEmptyView()
-                        setViewMenuOpen(false)
-                      }}
-                    >
-                      <PlusIcon aria-hidden className="tasks-viewdd-item-ico" />
-                      <span className="tasks-viewdd-item-name">添加视图</span>
-                    </button>
-                  </div>
-                ) : (
                 <ViewOrderMenu
                   views={views}
                   activeViewId={activeViewId}
@@ -4938,7 +4906,6 @@ export function CollectionBrowser({
                   onReorder={persistViewOrder}
                   onAdd={() => addEmptyView()}
                 />
-                )}
                 </HeadlessDismiss>
               ) : null}
             </div>
