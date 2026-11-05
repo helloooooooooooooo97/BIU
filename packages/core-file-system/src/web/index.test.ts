@@ -190,7 +190,7 @@ test('detail facet property sits last, starts collapsed, and the glyph becomes a
   assert.match(row, /展开\$\{label/)
   assert.match(row, /ChevronRightIcon/)
   assert.match(css, /\.fsdb-proprow\.is-tag-fold:hover \.fsdb-proprow-chevron/)
-  assert.match(css, /\.fsdb-proprow\.is-tag-fold:not\(\.is-open\) \.fsdb-schema-pack\{display:none\}/)
+  assert.match(css, /\.fsdb-proprow\.is-tag-fold:not\(\.is-open\) \.fsdb-schema-pack,\.fsdb-prop-tr\.is-tag-fold:not\(\.is-open\) \.fsdb-schema-pack\{display:none\}/)
   const schemaUi = readFileSync(resolve(import.meta.dirname, './schema-field.tsx'), 'utf8')
   assert.match(schemaUi, /function SchemaPropName/)
   assert.match(schemaUi, /onRename/)
