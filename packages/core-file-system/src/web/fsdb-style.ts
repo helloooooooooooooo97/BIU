@@ -143,7 +143,7 @@ const CSS = `
 .fsdb-page .tasks-viewdd-wrap,.fsdb-page .tasks-sort-wrap,.fsdb-page .tasks-filter-btn-wrap{position:relative;display:inline-flex}
 .fsdb-page .tasks-viewdd-wrap{flex:none;min-width:min-content;align-items:center;gap:2px}
 .fsdb-page .tasks-viewdd-wrap:has(.tasks-viewdd-menu){z-index:var(--biu-z-float)}
-.fsdb-page .tasks-viewtabs{display:flex;align-items:center;gap:2px;overflow:visible;flex:none;min-width:min-content}
+.fsdb-page .tasks-viewtabs,.fsdb-page .tasks-viewdd{display:flex;align-items:center;gap:2px;overflow:visible;flex:none;min-width:min-content}
 .fsdb-page .tasks-viewdd-btn{display:inline-flex;box-sizing:border-box;align-items:center;gap:6px;height:var(--biu-size-control-md);border:0;border-radius:6px;padding:0 8px;background:transparent;color:var(--biu-color-text);font:inherit;font-size:var(--biu-font-size-4);font-weight:var(--biu-font-weight-medium);cursor:pointer;flex:none}
 .fsdb-page .tasks-viewdd-btn svg,.fsdb-page .tasks-viewdd-btn .fsdb-ui-glyph{color:var(--biu-color-icon)}
 .fsdb-page .tasks-viewtab.is-active svg,.fsdb-page .tasks-viewdd-btn.is-active svg{color:var(--biu-color-icon-active)}
