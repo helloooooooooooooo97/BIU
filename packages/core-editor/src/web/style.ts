@@ -131,7 +131,10 @@ export const PAGE_EDITOR_STYLE = `
 .page-editor .page-block.ProseMirror-selectednode iframe,.page-editor .ProseMirror[contenteditable=false] .page-block iframe{pointer-events:auto}
 .page-editor .page-block.ProseMirror-selectednode{outline:none;box-shadow:none}
 .page-editor .ProseMirror[contenteditable=false] .ProseMirror-selectednode{outline:none;box-shadow:none;background:transparent}
+.page-editor .page-block[data-page-block=excalidraw],.page-editor .react-renderer.node-pageBlock:has([data-page-block=excalidraw]){overflow:visible}
 .page-editor .page-block[data-page-block=excalidraw]{outline:none;box-shadow:none;border:0;border-radius:8px}
+.page-editor .page-block[data-page-block=excalidraw]:hover .page-slide-bar,.page-editor .page-block[data-page-block=excalidraw].ProseMirror-selectednode .page-slide-bar,.page-editor [data-testid=page-excalidraw]:hover>.page-slide-bar,.page-editor [data-testid=page-excalidraw]:focus-within>.page-slide-bar,.page-editor [data-testid=page-excalidraw]>.page-slide-bar:hover{opacity:1}
+.page-editor .page-block[data-page-block=excalidraw].ProseMirror-selectednode .page-slide-bar{border-color:color-mix(in srgb,var(--biu-color-emphasis) 45%,var(--biu-color-border-popover))}
 .page-editor .page-block-missing{display:flex;flex-direction:column;gap:0;padding:12px 14px;border:1px dashed var(--biu-color-border);border-radius:8px;color:var(--biu-color-text-subtle);font-size:var(--biu-font-size-3)}
 .page-editor .page-block-missing-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 0 10px;margin:0 0 10px;border-bottom:var(--biu-stroke-width) solid var(--biu-color-border)}
 .page-editor .page-block-missing-id{font-family:var(--font-mono);font-weight:var(--biu-font-weight-semibold);color:var(--biu-color-text)}
