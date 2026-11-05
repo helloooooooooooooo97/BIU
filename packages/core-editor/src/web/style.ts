@@ -17,11 +17,8 @@ export const PAGE_EDITOR_STYLE = `
 .page-source .cm-editor.cm-focused>.cm-scroller>.cm-selectionLayer .cm-selectionBackground,.page-source .cm-selectionLayer .cm-selectionBackground{background:color-mix(in srgb,var(--biu-color-emphasis) 40%,transparent)}
 .page-editor .tiptap{outline:none;min-height:0}
 .page-editor.is-table .page-editor-doc,.page-editor.is-host .page-editor-doc{display:none}
-.page-host-view{min-width:0;width:100%}
-.page-host-view-bar{display:flex;align-items:center;gap:8px;margin:0 0 16px;color:var(--biu-color-text-muted);font-size:var(--biu-font-size-3)}
-.page-host-view-name{margin-right:auto;color:var(--biu-color-text);font-weight:var(--biu-font-weight-semibold)}
-.page-host-view-bar button{display:inline-flex;align-items:center;gap:4px;margin:0;border:0;border-radius:7px;padding:4px 8px;background:transparent;color:var(--biu-color-text-muted);font:inherit;cursor:pointer}
-.page-host-view-bar button.is-on,.page-host-view-bar button:hover{background:var(--biu-color-bg-hover);color:var(--biu-color-text)}
+.page-host-view{position:relative;min-width:0;width:100%;overflow:visible}
+.page-editor .page-host-view:hover .page-slide-bar,.page-editor .page-host-view:focus-within .page-slide-bar,.page-editor .page-host-view>.page-slide-bar:hover{opacity:1}
 .page-host-error,.page-host-missing{padding:12px 0;color:var(--biu-color-danger);font-size:var(--biu-font-size-3)}
 .page-editor.is-table .page-blocks-table-preview .tiptap{display:block;min-height:4em}
 .page-editor .page-blocks-table-wrap{width:100%;min-width:0;overflow:visible}

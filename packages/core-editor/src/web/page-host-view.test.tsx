@@ -12,7 +12,9 @@ test('host view paints the default sandbox when the view file is missing', async
   await waitFor(() => {
     assert.ok(getByTestId('page-host-view-root'))
   })
-  assert.match(getByTestId('page-host-view').textContent ?? '', /官网/)
+  assert.ok(getByTestId('page-host-side-bar'))
+  assert.ok(getByTestId('page-host-preview'))
+  assert.ok(getByTestId('page-host-code'))
   assert.match(getByTestId('page-host-view-root').textContent ?? '', /本页沙盒/)
   assert.match(getByTestId('page-host-view-root').textContent ?? '', /演示页/)
 })

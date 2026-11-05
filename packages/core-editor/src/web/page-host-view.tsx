@@ -159,28 +159,33 @@ export function PageHostView({
 
   return (
     <div className="page-host-view" data-testid="page-host-view">
-      <div className="page-host-view-bar" data-biu-ignore>
-        <span className="page-host-view-name">{view?.name || '沙盒'}</span>
+      <div className="page-slide-bar" data-testid="page-host-side-bar" data-biu-ignore>
         <button
           type="button"
-          className={mode === 'preview' ? 'is-on' : ''}
+          className={`page-slide-icon${mode === 'preview' ? ' is-on' : ''}`}
+          title="预览"
+          aria-label="预览"
+          aria-pressed={mode === 'preview'}
           data-testid="page-host-preview"
+          onMouseDown={(event) => event.preventDefault()}
           onClick={() => {
             setMode('preview')
             setTick((n) => n + 1)
           }}
         >
-          <EyeIcon aria-hidden className="size-[14px]" />
-          预览
+          <EyeIcon aria-hidden className="page-slide-ico" />
         </button>
         <button
           type="button"
-          className={mode === 'code' ? 'is-on' : ''}
+          className={`page-slide-icon${mode === 'code' ? ' is-on' : ''}`}
+          title="代码"
+          aria-label="代码"
+          aria-pressed={mode === 'code'}
           data-testid="page-host-code"
+          onMouseDown={(event) => event.preventDefault()}
           onClick={() => setMode('code')}
         >
-          <CodeBracketIcon aria-hidden className="size-[14px]" />
-          代码
+          <CodeBracketIcon aria-hidden className="page-slide-ico" />
         </button>
       </div>
       {mode === 'code' ? (
