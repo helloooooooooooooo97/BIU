@@ -2,7 +2,7 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import * as React from 'react'
 
-;(globalThis as unknown as { React: typeof React }).React = React
+  ; (globalThis as unknown as { React: typeof React }).React = React
 
 const SOURCE = `export default function App() {
   React.useEffect(() => {

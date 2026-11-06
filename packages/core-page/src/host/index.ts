@@ -85,7 +85,7 @@ export function pagesCollection(store: PagesStore, index: PageBlocksIndex): Coll
       contentField: 'notes',
       contentBackend: 'editorContent',
       parentField: 'parentId',
-        columns: ['title', 'tag', 'createdBy', 'updatedBy'],
+      columns: ['title', 'tag', 'createdBy', 'updatedBy'],
       fields: {
         ...REQUIRED_RECORD_FIELDS,
         title: { type: 'string', label: '标题', writable: true },
