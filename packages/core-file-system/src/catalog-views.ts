@@ -177,7 +177,9 @@ export function stubBuiltinScopeView(id: string, listed: SavedView[] = []): Save
 
 export function collectionNoun(table: TableRef) {
   const path = normalizeCollectionPath(table.path)
-  return (table.view?.title ?? table.label ?? path.replace(/^\//, '')) || '记录'
+  const named = String(table.view?.title ?? table.label ?? '').trim()
+  if (path === '/data') return named && named !== 'data' ? named : '数据'
+  return named || path.replace(/^\//, '') || '记录'
 }
 
 /** 分享/面包屑用：内置视图不在 saved-views 里，不能把路径 id 当名称。 */
@@ -367,6 +369,13 @@ export function stubBuiltinTagView(id: string): SavedView | null {
   const tagId = tagIdFromViewId(id)
   if (!tagId) return null
   return builtinTagView({ id: tagId, label: tagId })
+}
+
+export function stampRecordId(collection: string, recordId: string) {
+  const table = normalizeCollectionPath(collection).replace(/^\//, '')
+  const id = String(recordId ?? '').trim()
+  if (!table || !id) return ''
+  return `${table}::${id}`
 }
 
 /** 收集表里的一行：打开原始表里的那条记录。 */

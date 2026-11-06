@@ -488,6 +488,20 @@ test('hasActiveDispatchedTasks is true while a worker is still pending or runnin
   )
 })
 
+test('dispatch poll does not start on a live turn without workers', async () => {
+  mockFetch({
+    '/api/agents': () => ({ sessions: [{ id: 's1', title: 'a', busy: false, eventCount: 2, updatedAt: 1 }] }),
+    '/api/approvals': () => ({ mode: 'auto', pending: [] }),
+  })
+  const ctx = new Context()
+  await ctx.plugin(sessionView)
+  const view = ctx.sessionView as SessionViewService
+  view.ingest('s1', { type: 'session/open', version: 1, seq: 0, ts: 1 })
+  view.ingest('s1', { type: 'turn/start', turn: 1, seq: 1, ts: 2 })
+  const poll = (view as unknown as { dispatchedPoll: ReturnType<typeof setInterval> | null }).dispatchedPoll
+  assert.equal(poll, null)
+})
+
 test('dispatch poll keeps running after live turn/end while a worker is still active', async () => {
   mockFetch({
     '/api/agents': () => ({ sessions: [{ id: 's1', title: 'a', busy: false, eventCount: 2, updatedAt: 1 }] }),

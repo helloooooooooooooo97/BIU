@@ -36,6 +36,7 @@ test('page plugin READMEs use live :::pageBlock fences, not wrapped in markdown 
     'page-html-blocks',
     'page-sandbox',
     'page-terminal',
+    'page-tag',
     'page-toc',
     'page-video',
   ]

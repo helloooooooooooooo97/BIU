@@ -6,6 +6,10 @@ export type SandboxCompileResult =
 
 const FORBIDDEN = /\bimport\s*\(|\brequire\s*\(/
 
+export function sandboxModuleFile(file: string) {
+  return /\.(jsx|tsx)$/i.test(String(file ?? '').trim())
+}
+
 export function looksLikeJsx(source: string) {
   const text = String(source ?? '').trim()
   if (!text) return false

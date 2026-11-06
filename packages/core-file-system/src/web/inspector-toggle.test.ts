@@ -266,7 +266,7 @@ test('table title opens record from the title-side button', () => {
   assert.match(browser, /data-testid="record-title-open"/)
   assert.match(browser, /data-testid="record-title-split"/)
   assert.doesNotMatch(browser, /toolsLive && !nested/)
-  assert.match(browser, /showRecordInInspector\(collectionPath, row.id, activeViewId, nested \? \{ newTab: true \} : undefined\)/)
+  assert.match(browser, /showRecordInInspector\(collectionPath, row.id, fromData \? undefined : activeViewId, nested \? \{ newTab: true \} : undefined\)/)
   assert.match(browser, /className="tasks-icon-btn tasks-title-open"/)
   assert.match(browser, /tasks-title-aside/)
   assert.match(browser, /tasks-tree-count/)
@@ -282,7 +282,7 @@ test('table title opens record from the title-side button', () => {
   assert.match(browser, /chrome\?\.openRow/)
   assert.doesNotMatch(browser, /catalogRowOpenTarget/)
   assert.doesNotMatch(browser, /tagRowOpenTarget/)
-  assert.doesNotMatch(browser, /stampRowOpenTarget/)
+  assert.match(browser, /stampRowOpenTarget/)
   const page = readFileSync(resolve(import.meta.dirname, './index.tsx'), 'utf8')
   assert.match(page, /viewsChrome/)
   assert.match(page, /pageBlocksChrome/)
@@ -556,7 +556,7 @@ test('deletable tables can pick rows and bulk-act over the table header', () => 
 
 test('creating a record opens a new inspector pane instead of covering the view', () => {
   const createFn = browser.slice(browser.indexOf('async function createRecord'), browser.indexOf('async function executeDeleteRecord'))
-  assert.match(createFn, /showRecordInInspector\(targetPath, sourceId, activeViewId\)/)
+  assert.match(createFn, /showRecordInInspector\(targetPath, sourceId, isDataOverview \? undefined : activeViewId\)/)
   assert.match(createFn, /rememberInspectorWorkingView\(targetPath, activeViewId\)/)
   assert.match(createFn, /seedRecordFromViewFilters\(catalogLocks, filterTree, schema\)/)
   assert.doesNotMatch(createFn, /records: \[\{\}\]/)
@@ -1083,6 +1083,8 @@ test('opening a record fetches content without waiting for detailRow', () => {
   assert.match(effect, /pullDetailBody\(\)/)
   assert.doesNotMatch(effect, /detailRow/)
   assert.match(browser, /\[collectionPath, dataPath, detailId, pullDetailBody\]/)
+  assert.match(browser, /sourceRecordPath\(detailRowRef\.current, id\)/)
+  assert.match(browser, /\}, \[dataPath\]\)/)
   assert.match(browser, /<Suspense fallback=\{<PageContentLoading \/>\}>/)
   assert.doesNotMatch(browser, /warmSiblingListCaches/)
   assert.doesNotMatch(browser, /WARM_LIST_CONCURRENCY/)
@@ -1193,7 +1195,9 @@ test('pager keeps the current page when filter objects are only recreated', () =
   assert.doesNotMatch(inspector, /lockedFiltersFromSearch\?\.\(search\) \?\? \{\}/)
   assert.match(inspector, /key=\{id\}/)
   assert.doesNotMatch(inspector, /key=\{inspectorPath\}/)
-  assert.match(inspector, /<Suspense fallback=\{<PageContentLoading \/>\}>/)
+  assert.match(inspector, /<Suspense fallback=\{null\}>/)
+  assert.match(inspector, /ensureFsdbStyle\(\)/)
+  assert.doesNotMatch(inspector, /<Suspense fallback=\{<PageContentLoading \/>\}>/)
 })
 
 test('missing sort field falls back to updatedAt, then title', () => {
@@ -1348,6 +1352,10 @@ test('inspector crumb view menus use ranked collection views', () => {
   const tab = readFileSync(resolve(import.meta.dirname, './inspector-database.tsx'), 'utf8')
   assert.match(tab, /paintCollectionViews\(collection, tables, stored\)/)
   assert.doesNotMatch(tab, /viewsForRegisteredCollection\(collection, tables, stored\)/)
+  assert.match(tab, /crumbFromData=\{viaData && currentPath !== DATA_COLLECTION_PATH\}/)
+  assert.match(tab, /viaDataCrumbsOn/)
+  assert.match(tab, /<DataOverview/)
+  assert.match(tab, /currentPath === DATA_COLLECTION_PATH && !recordId/)
 })
 
 test('inspector crumbs lock the first level to an icon', () => {

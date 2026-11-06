@@ -3,6 +3,17 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
+test('data overview title is writable and writes through the source record', () => {
+  const data = readFileSync(resolve(import.meta.dirname, '../host/data-collection.ts'), 'utf8')
+  assert.match(data, /title: \{ type: 'string', label: '标题', writable: true \}/)
+  assert.match(data, /records: \{ update: true \}/)
+  assert.match(data, /spec\.update\(stamp\.recordId, patch\)/)
+  const host = readFileSync(resolve(import.meta.dirname, '../host/index.ts'), 'utf8')
+  assert.match(host, /collection === '\/trash' \|\| collection === DATA_COLLECTION_PATH/)
+  assert.match(host, /parts\[0\] === 'data'/)
+  assert.match(host, /overviewRecord\(source, written\.value/)
+})
+
 test('data overview reuses CollectionBrowser and opens source records', () => {
   const overview = readFileSync(resolve(import.meta.dirname, './data-overview.tsx'), 'utf8')
   const page = readFileSync(resolve(import.meta.dirname, './index.tsx'), 'utf8')
@@ -32,18 +43,29 @@ test('data overview reuses CollectionBrowser and opens source records', () => {
   assert.match(overview, /onOpenView/)
   assert.match(page, /collectionFromRoute === DATA_COLLECTION_PATH/)
   assert.match(page, /onOpenView=\{\(viewId\) => go\(\{ collection: DATA_COLLECTION_PATH, viewId \}\)\}/)
+  assert.match(page, /stampRowOpenTarget/)
+  assert.match(page, /setViaDataCrumbs/)
+  assert.match(page, /crumbFromData=\{viaDataCrumbs\}/)
+  assert.match(overview, /stampRowOpenTarget/)
+  assert.match(overview, /stamp\?\.recordId \?\? recordId/)
   assert.match(page, /dataHome \? builtinAllViewId\(DATA_COLLECTION_PATH\) : viewFromRoute/)
   assert.match(
     page,
     /go\(\{ collection: DATA_COLLECTION_PATH, viewId: builtinAllViewId\(DATA_COLLECTION_PATH\) \}/,
   )
-  assert.match(overview, /stampRowOpenTarget/)
+  assert.match(chrome, /stampRowOpenTarget/)
+  assert.match(browser, /crumbFromData/)
+  assert.match(browser, /viaDataViewId/)
+  assert.match(browser, /originNav/)
+  assert.match(browser, /canStepPrev/)
+  assert.match(browser, /canStepNext/)
   assert.doesNotMatch(overview, /DataSidebarShell/)
   assert.doesNotMatch(overview, /tasks-table is-cols-fixed/)
   assert.match(page, /<DataOverview/)
   assert.match(page, /decorate\(DATA_COLLECTION_PATH, dataChrome\)/)
   assert.match(browser, /isDataOverview \? overviewCreateTables.length > 0/)
   assert.match(browser, /aria-label="新建类型"/)
+  assert.match(overview, /embed=\{embed\}/)
   assert.match(browser, /useState\(PAGES_COLLECTION_PATH\)/)
   assert.match(browser, /path: targetPath/)
   assert.match(browser, /tablePath: targetTable.path/)

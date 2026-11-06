@@ -30,6 +30,18 @@ export function tagFieldFilled(tagId: string, fieldKey: string) {
   return filledMemory[tagId]?.[fieldKey] ?? 0
 }
 
+export const OPEN_TAG_EVENT = 'biu:open-tag'
+
+export function listenOpenTag() {
+  if (typeof window === 'undefined') return () => undefined
+  const onOpen = (event: Event) => {
+    const id = String((event as CustomEvent<{ id?: unknown }>).detail?.id ?? '').trim()
+    if (id) jumpTag(id)
+  }
+  window.addEventListener(OPEN_TAG_EVENT, onOpen)
+  return () => window.removeEventListener(OPEN_TAG_EVENT, onOpen)
+}
+
 export function jumpTag(id: string, onOpen?: (id: string) => void) {
   const key = String(id ?? '').trim()
   if (!key) return

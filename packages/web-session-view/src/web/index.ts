@@ -379,11 +379,7 @@ export class SessionViewService extends Service {
     this.stopDispatchedPoll()
     const id = this.value.sessionId
     if (!id) return
-    if (
-      !this.wantsTrajectory() &&
-      !turnInProgress(this.value.events) &&
-      !hasActiveDispatchedTasks(this.value.dispatchedTasksByTurn)
-    ) {
+    if (!this.wantsTrajectory() && !hasActiveDispatchedTasks(this.value.dispatchedTasksByTurn)) {
       return
     }
     this.dispatchedPoll = setInterval(() => {
@@ -606,6 +602,13 @@ export class SessionViewService extends Service {
       nodes: this.buildNodes(events),
       error: undefined,
     })
+    if (
+      (event.type === 'tool/call' || event.type === 'tool/result') &&
+      (event.name === 'task_deliver' || event.name === 'task_report')
+    ) {
+      this.syncDispatchedPoll()
+      void this.refreshDispatchedUsage()
+    }
     this.stashCurrent()
     if (event.type === 'turn/end' || event.type === 'turn/start') this.syncDispatchedPoll()
     if (event.type === 'turn/end') void this.refreshDispatchedUsage()

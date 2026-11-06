@@ -202,8 +202,9 @@ export const pageBlock = Node.create({
             if (node.type.name !== 'pageBlock') return
             const file = blockFile(node)
             if (!file) return
-            if (!seen.has(file)) {
-              seen.add(file)
+            const owner = `${String(node.attrs.kind ?? '')}:${file}`
+            if (!seen.has(owner)) {
+              seen.add(owner)
               return
             }
             dupes.push({ pos, node })

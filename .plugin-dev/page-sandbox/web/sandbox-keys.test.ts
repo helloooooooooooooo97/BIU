@@ -2,7 +2,7 @@ import { test } from 'vitest'
 import assert from 'node:assert/strict'
 import * as React from 'react'
 
-;(globalThis as unknown as { React: typeof React }).React = React
+  ; (globalThis as unknown as { React: typeof React }).React = React
 
 const SOURCE = `export default function App() {
   React.useEffect(() => {
@@ -20,6 +20,17 @@ const SOURCE = `export default function App() {
 async function flush() {
   await new Promise((resolve) => setTimeout(resolve, 0))
 }
+
+test('markup source paints inside the sandbox instead of throwing', async () => {
+  const { mountSandbox, unmountSandbox } = await import('./sandbox.ts')
+  const host = document.createElement('div')
+  document.body.append(host)
+  const root = host.attachShadow({ mode: 'open' })
+  mountSandbox(root, '<div data-testid="sandbox-markup">刊</div>')
+  assert.equal(root.querySelector('[data-testid="sandbox-markup"]')?.textContent, '刊')
+  unmountSandbox(root)
+  host.remove()
+})
 
 test('sandbox window shortcuts do not fire until the preview is live', async () => {
   const { mountSandbox, unmountSandbox } = await import('./sandbox.ts')

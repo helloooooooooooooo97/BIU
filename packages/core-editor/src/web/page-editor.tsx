@@ -2,7 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type 
 import { HeadlessPopover } from '@biu/biu-ui'
 import { SourceEditor, type SourceEditorHandle } from './source-editor.tsx'
 import { restorePageScroll } from './page-scroll-pin.ts'
-import { usePagePresentMode } from './source-mode.ts'
+import { isPageCustomView, usePagePresentMode } from './source-mode.ts'
+import { PageHostView } from './page-host-view.tsx'
 import { ArrowPathIcon, ChatBubbleLeftRightIcon } from '@heroicons/react/16/solid'
 import { EditorContent, useEditor } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
@@ -20,8 +21,8 @@ import { markdownLocusFromElement, markdownLocusFromSelection } from './markdown
 import { isFindHotkey } from './find-bar.tsx'
 import { applyEditorFind } from './find-plugin.ts'
 import { applyStoredBlockIds, markdownWithBlockIds, stripBlockIdStamps } from './block-id.ts'
-import { getLivePageEditor, setLivePageEditor } from './page-live-editor.ts'
-import { PAGE_FIND_OPEN_EVENT, PAGE_INSERT_EVENT, getPageFind, patchPageFind, usePageFind } from './page-view-state.ts'
+import { getLivePageEditor, setLivePageEditor, setLivePagePersist } from './page-live-editor.ts'
+import { PAGE_FIND_OPEN_EVENT, getPageFind, patchPageFind, usePageFind } from './page-view-state.ts'
 import { PageBlocksTable } from './page-blocks-table.tsx'
 import {
   INK_TONES,
@@ -362,7 +363,40 @@ function PageEditorFailed({ onRetry }: { onRetry?: () => void }) {
   )
 }
 
-export function PageEditor({ record, value, writable, onChange, path, status = 'ready', onRetry }: FsContentProps) {
+function PageHostShell({
+  record,
+  value,
+  writable,
+  path,
+  viewId,
+}: FsContentProps & { viewId: string }) {
+  return (
+    <div
+      className="page-editor is-host"
+      data-testid="page-editor-host"
+      data-page-record={record.id}
+      data-page-path={path || `/pages/${record.id}`}
+      tabIndex={-1}
+    >
+      <PageHostView
+        record={record}
+        viewId={viewId}
+        markdown={asMarkdown(value)}
+        writable={writable !== false}
+      />
+    </div>
+  )
+}
+
+export function PageEditor(props: FsContentProps) {
+  const present = usePagePresentMode(props.record.id)
+  if (props.status === 'loading') return <PageEditorLoading />
+  if (props.status === 'failed') return <PageEditorFailed onRetry={props.onRetry} />
+  if (isPageCustomView(present)) return <PageHostShell {...props} viewId={present} />
+  return <PageDocEditor {...props} />
+}
+
+function PageDocEditor({ record, value, writable, onChange, path, status = 'ready', onRetry }: FsContentProps) {
   const present = usePagePresentMode(record.id)
   const source = present === 'source'
   const saved = useRef(asMarkdown(value))
@@ -466,10 +500,18 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
   useEffect(() => {
     if (!editor || editor.isDestroyed) return
     setLivePageEditor(editor)
+    setLivePagePersist((current) => {
+      if (current.isDestroyed || writableRef.current === false) return
+      const next = persistEditorMarkdown(current)
+      if (next === saved.current) return
+      saved.current = next
+      onChange?.(next)
+    })
     return () => {
       if (getLivePageEditor() === editor) setLivePageEditor(null)
+      setLivePagePersist(null)
     }
-  }, [editor])
+  }, [editor, onChange])
 
   useEffect(() => {
     const onFind = (event: Event) => {
@@ -477,15 +519,9 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
       if (id && id !== record.id) return
       patchPageFind(record.id, { open: true })
     }
-    const onInsert = () => {
-      if (!editor || editor.isDestroyed || writableRef.current === false) return
-      editor.chain().focus('end').insertContent('/').run()
-    }
     window.addEventListener(PAGE_FIND_OPEN_EVENT, onFind)
-    window.addEventListener(PAGE_INSERT_EVENT, onInsert)
     return () => {
       window.removeEventListener(PAGE_FIND_OPEN_EVENT, onFind)
-      window.removeEventListener(PAGE_INSERT_EVENT, onInsert)
     }
   }, [editor, record.id])
 

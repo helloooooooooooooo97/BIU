@@ -5,6 +5,8 @@ import type { FsDetailBarProps } from '@biu/type-file-system/ui'
 import {
   ArrowPathIcon,
   ChevronDownIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
   ChevronUpIcon,
   CodeBracketIcon,
   DocumentTextIcon,
@@ -12,16 +14,18 @@ import {
   FunnelIcon,
   ListBulletIcon,
   MagnifyingGlassIcon,
+  PencilSquareIcon,
+  PlusIcon,
+  Square2StackIcon,
+  Squares2X2Icon,
   TableCellsIcon,
   AdjustmentsHorizontalIcon,
-  UserIcon,
-  UsersIcon,
-  GlobeAltIcon,
 } from '@heroicons/react/16/solid'
 import { setPagePresentMode, usePagePresentMode } from './source-mode.ts'
+import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
+import { copyPageSandboxView, createPageSandboxView, deletePageSandboxView, loadPageViews, renamePageSandboxView, usePageViews } from './page-views.ts'
 import { kindLabel } from './block-id.ts'
 import {
-  PAGE_INSERT_EVENT,
   pageFilterActive,
   patchPageFind,
   patchPageViewState,
@@ -66,7 +70,6 @@ function Row({
 export function PageDetailBar({
   record,
   schema,
-  collectionPath,
   hiddenPropertyKeys = [],
   onHiddenPropertyKeys,
   visiblePropertyKeys,
@@ -74,16 +77,18 @@ export function PageDetailBar({
   columnMenu,
   onRetry,
   configMenu,
+  onPrev,
+  onNext,
+  canPrev,
+  canNext,
 }: FsDetailBarProps) {
   const present = usePagePresentMode(record.id)
+  const pageViews = usePageViews(record.id)
   const view = usePageViewState(record.id)
   const find = usePageFind(record.id)
   const searchRef = useRef<HTMLDivElement>(null)
   const searchInput = useRef<HTMLInputElement>(null)
   const [open, setOpen] = useState<string | null>(null)
-  const [scopeOpen, setScopeOpen] = useState(false)
-  const [scope, setScope] = useState<'personal' | 'workspace' | 'shared'>('personal')
-  const [creating, setCreating] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const viewRef = useRef<HTMLDivElement>(null)
   const modeRef = useRef<HTMLDivElement>(null)
@@ -93,8 +98,14 @@ export function PageDetailBar({
   const configRef = useRef<HTMLDivElement>(null)
   const toolbarRef = useRef<HTMLDivElement>(null)
   useStickyToolbar(toolbarRef)
-  const current = MODES.find((item) => item.id === present) ?? MODES[0]
+  const custom = pageViews.find((item) => item.id === present)
+  const current = custom
+    ? { id: custom.id, label: custom.name, Icon: Squares2X2Icon }
+    : (MODES.find((item) => item.id === present) ?? MODES[0])
   const CurrentIcon = current.Icon
+  const [creatingView, setCreatingView] = useState(false)
+  const [renamingView, setRenamingView] = useState('')
+  const [renameDraft, setRenameDraft] = useState('')
   const filterOn = pageFilterActive(view)
   const sortOn = view.sort !== 'doc'
   const props = Object.entries(schema?.fields ?? {})
@@ -104,7 +115,8 @@ export function PageDetailBar({
 
   useEffect(() => {
     setOpen(null)
-  }, [record.id])
+    void loadPageViews(record.id, record.views)
+  }, [record.id, record.views])
 
   useEffect(() => {
     if (!find.open) return
@@ -124,24 +136,6 @@ export function PageDetailBar({
       const wait = Math.max(0, 480 - (Date.now() - started))
       if (wait) await new Promise((resolve) => window.setTimeout(resolve, wait))
       setRefreshing(false)
-    }
-  }
-
-  const createPage = async () => {
-    if (creating) return
-    setCreating(true)
-    try {
-      const res = await fetch('/api/db/create', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ path: collectionPath || '/pages', records: [{}], scope }),
-      })
-      const data = (await res.json()) as { items?: Array<{ value?: { id?: string } }> }
-      const id = data.items?.[0]?.value?.id
-      if (id) window.dispatchEvent(new CustomEvent('fsdb:change'))
-    } finally {
-      setCreating(false)
-      setScopeOpen(false)
     }
   }
 
@@ -175,23 +169,137 @@ export function PageDetailBar({
           </div>
           {open === 'view' ? (
             <HeadlessDismiss onDismiss={() => setOpen(null)} insideRef={viewRef}>
-              <div className="tasks-viewdd" role="menu">
-                {MODES.map((item) => (
+              <div className="fsdb-tool-flyout tasks-viewdd-menu" role="menu">
+                <div className="tasks-sort-list">
+                  {MODES.map((item) => (
+                    <div key={item.id} className={`tasks-viewdd-item${item.id === current.id ? ' is-active' : ''}`}>
+                      <button
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={item.id === current.id}
+                        className="tasks-viewdd-item-main fsdb-tool-row"
+                        onClick={() => {
+                          setPagePresentMode(record.id, item.id)
+                          setOpen(null)
+                        }}
+                      >
+                        <item.Icon aria-hidden className="tasks-viewdd-item-ico" />
+                        <span className="tasks-viewdd-item-name">{item.label}</span>
+                      </button>
+                    </div>
+                  ))}
+                  {pageViews.map((item) => (
+                    <div key={item.id} className={`tasks-viewdd-item${item.id === present ? ' is-active' : ''}`}>
+                      {renamingView === item.id ? (
+                        <div className="tasks-viewdd-item-main fsdb-tool-row">
+                          <Squares2X2Icon aria-hidden className="tasks-viewdd-item-ico" />
+                          <input
+                            className="tasks-viewdd-item-name"
+                            aria-label={`沙盒视图名称 ${item.name}`}
+                            value={renameDraft}
+                            autoFocus
+                            onChange={(event) => setRenameDraft(event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') {
+                                event.preventDefault()
+                                void renamePageSandboxView(record.id, item.id, renameDraft).catch(() => undefined)
+                                setRenamingView('')
+                              }
+                              if (event.key === 'Escape') setRenamingView('')
+                            }}
+                            onBlur={() => {
+                              void renamePageSandboxView(record.id, item.id, renameDraft).catch(() => undefined)
+                              setRenamingView('')
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          role="menuitemradio"
+                          aria-checked={item.id === present}
+                          className="tasks-viewdd-item-main fsdb-tool-row"
+                          data-testid={`page-view-${item.id}`}
+                          onClick={() => {
+                            setPagePresentMode(record.id, item.id)
+                            setOpen(null)
+                          }}
+                        >
+                          <Squares2X2Icon aria-hidden className="tasks-viewdd-item-ico" />
+                          <span className="tasks-viewdd-item-name">{item.name}</span>
+                        </button>
+                      )}
+                      <span className="tasks-viewdd-item-actions">
+                        <button
+                          type="button"
+                          className="tasks-viewdd-act"
+                          title="拷贝视图"
+                          aria-label={`拷贝沙盒视图 ${item.name}`}
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={(event) => {
+                            event.preventDefault()
+                            event.stopPropagation()
+                            void copyPageSandboxView(record.id, item.id, String(record.title ?? '')).catch(() => undefined)
+                          }}
+                        >
+                          <Square2StackIcon aria-hidden className="size-[14px]" />
+                        </button>
+                        <button
+                          type="button"
+                          className="tasks-viewdd-act"
+                          title="重命名"
+                          aria-label={`重命名沙盒视图 ${item.name}`}
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={(event) => {
+                            event.preventDefault()
+                            event.stopPropagation()
+                            setRenamingView(item.id)
+                            setRenameDraft(item.name)
+                          }}
+                        >
+                          <PencilSquareIcon aria-hidden className="size-[14px]" />
+                        </button>
+                        <button
+                          type="button"
+                          className="tasks-viewdd-act is-danger"
+                          title="删除"
+                          aria-label={`删除沙盒视图 ${item.name}`}
+                          data-testid={`page-view-delete-${item.id}`}
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={(event) => {
+                            event.preventDefault()
+                            event.stopPropagation()
+                            void deletePageSandboxView(record.id, item.id).catch(() => undefined)
+                          }}
+                        >
+                          <TrashGlyph aria-hidden className="size-[14px]" />
+                        </button>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <div className="tasks-viewdd-foot">
                   <button
-                    key={item.id}
                     type="button"
-                    role="menuitemradio"
-                    aria-checked={item.id === current.id}
-                    className={`tasks-viewdd-item-main${item.id === current.id ? ' is-active' : ''}`}
+                    role="menuitem"
+                    className="tasks-viewdd-saveas fsdb-tool-row font-medium"
+                    data-testid="page-view-create"
+                    disabled={creatingView}
                     onClick={() => {
-                      setPagePresentMode(record.id, item.id)
-                      setOpen(null)
+                      if (creatingView) return
+                      setCreatingView(true)
+                      void createPageSandboxView(record.id, String(record.title ?? ''), `沙盒 ${pageViews.length + 1}`)
+                        .catch(() => undefined)
+                        .finally(() => {
+                          setCreatingView(false)
+                          setOpen(null)
+                        })
                     }}
                   >
-                    <item.Icon aria-hidden className="tasks-viewdd-item-ico" />
-                    <span className="tasks-viewdd-item-name">{item.label}</span>
+                    <PlusIcon aria-hidden className="size-[14px]" />
+                    {creatingView ? '正在创建…' : '新建沙盒视图'}
                   </button>
-                ))}
+                </div>
               </div>
             </HeadlessDismiss>
           ) : null}
@@ -423,47 +531,28 @@ export function PageDetailBar({
         >
           <ArrowPathIcon aria-hidden className={`size-[14px]${refreshing ? ' fsdb-spin' : ''}`} />
         </button>
-        <div className="fsdb-create-group">
+        {canPrev ? (
           <button
             type="button"
-            className="fsdb-create-btn"
-            aria-label="插入"
-            title="插入"
-            onClick={() => window.dispatchEvent(new Event(PAGE_INSERT_EVENT))}
+            className="tasks-refresh"
+            title="上一条"
+            aria-label="上一条"
+            onClick={onPrev}
           >
-            插入
+            <ChevronLeftIcon aria-hidden className="size-[14px]" />
           </button>
-          <HeadlessDismiss enabled={scopeOpen} onDismiss={() => setScopeOpen(false)}>
-            <div className="fsdb-create-scope-wrap">
-              <button
-                type="button"
-                className="fsdb-create-scope"
-                aria-label="新建归属"
-                aria-expanded={scopeOpen}
-                title="新建子页面"
-                onClick={() => setScopeOpen((prev) => !prev)}
-              >
-                {scope === 'workspace' ? <UsersIcon aria-hidden className="size-[14px]" /> : scope === 'shared' ? <GlobeAltIcon aria-hidden className="size-[14px]" /> : <UserIcon aria-hidden className="size-[14px]" />}
-              </button>
-              {scopeOpen ? (
-                <div className="fsdb-create-scope-menu" role="menu">
-                  <button type="button" role="menuitem" className={scope === 'personal' ? 'is-on' : ''} onClick={() => { setScope('personal'); setScopeOpen(false) }}>
-                    私人
-                  </button>
-                  <button type="button" role="menuitem" className={scope === 'workspace' ? 'is-on' : ''} onClick={() => { setScope('workspace'); setScopeOpen(false) }}>
-                    空间
-                  </button>
-                  <button type="button" role="menuitem" className={scope === 'shared' ? 'is-on' : ''} onClick={() => { setScope('shared'); setScopeOpen(false) }}>
-                    共享
-                  </button>
-                  <button type="button" role="menuitem" disabled={creating} onClick={() => void createPage()}>
-                    新建子页面
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          </HeadlessDismiss>
-        </div>
+        ) : null}
+        {canNext ? (
+          <button
+            type="button"
+            className="tasks-refresh"
+            title="下一条"
+            aria-label="下一条"
+            onClick={onNext}
+          >
+            <ChevronRightIcon aria-hidden className="size-[14px]" />
+          </button>
+        ) : null}
       </div>
     </div>
   )

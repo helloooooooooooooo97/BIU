@@ -45,7 +45,8 @@ export async function findViewNeighbor(opts: {
     query?: string
     sortField?: string
     sortDir?: string
-    filters?: Record<string, string>
+    sorts?: Array<{ field: string; dir: 'asc' | 'desc' }>
+    filters?: Record<string, unknown>
     columns?: string[]
   }) => Promise<{ items: Array<{ id: string }>; total: number }>
 }): Promise<ViewNeighborHit | null> {
@@ -78,6 +79,16 @@ export async function findViewNeighbor(opts: {
   })
   const row = listed.items[next - nextPage * pageSize]
   return row ? { id: row.id, page: nextPage, row } : null
+}
+
+export async function locateViewRecord(
+  id: string,
+  pageSize: number,
+  knownTotal: number,
+  query: ViewNeighborQuery,
+  list: Parameters<typeof findViewNeighbor>[0]['list'],
+) {
+  return locateInView(id, pageSize, knownTotal, query, list)
 }
 
 async function locateInView(

@@ -100,9 +100,23 @@ test('data overview lists each source record, includes tags, and skips other ind
   assert.ok((listed.schema?.actions ?? []).some((action) => action.id === 'pin'))
   assert.ok(!(listed.schema?.actions ?? []).some((action) => action.id === 'open'))
   assert.deepEqual(listed.items.find((item) => item.id === 'notes::n1')?.actionIds, ['pin'])
+  const published = db.collectionsList().map((item) => db.publishCollection(item)).find((item) => item.path === '/data')
+  assert.equal(published?.view?.inspector, true)
+  assert.equal(published?.view?.title, '数据')
   assert.equal(isDataOverviewSource('/tags'), true)
   assert.equal(isDataOverviewSource('/page-blocks'), false)
   assert.equal(isDataOverviewSource('/trash'), false)
+  assert.equal(listed.schema?.fields.title?.writable, true)
+  const written = await db.update('/data/notes::n1', { title: '改了' })
+  assert.equal(written.kind, 'record')
+  assert.equal(written.path, '/data/notes::n1')
+  assert.equal(written.value.id, 'notes::n1')
+  assert.equal(written.value.title, '改了')
+  assert.equal(written.value.tablePath, '/notes')
+  assert.equal(written.value.sourceId, 'n1')
+  const source = await db.read('/notes/n1')
+  assert.equal(source.kind, 'record')
+  if (source.kind === 'record') assert.equal(source.value.title, '改了')
 })
 
 test('root lists registered collections; record read/update follows schema', async () => {
@@ -983,7 +997,7 @@ test('apply registers db_* tools', async () => {
   new HttpStub(ctx)
   await ctx.plugin({ inject: ['tools', 'http'], apply: applyFileSystem })
   const names = ctx.tools.names()
-  for (const name of ['db_list', 'db_read', 'db_update', 'db_create', 'db_delete', 'db_restore', 'db_stat', 'db_action', 'db_content', 'db_asset', 'db_doc']) {
+  for (const name of ['db_list', 'db_read', 'db_update', 'db_create', 'db_delete', 'db_restore', 'db_stat', 'db_action', 'db_content', 'db_file', 'db_media']) {
     assert.equal(names.includes(name), true, name)
   }
   for (const name of ['db_list', 'db_read', 'db_stat']) {
@@ -992,8 +1006,9 @@ test('apply registers db_* tools', async () => {
   assert.equal(ctx.tools.executionMode('db_update'), 'exclusive')
   assert.equal(ctx.tools.executionMode('db_content', { path: '/pages/p1', command: 'view' }), 'parallel')
   assert.equal(ctx.tools.executionMode('db_content', { path: '/pages/p1', command: 'write', value: 'x' }), 'exclusive')
-  assert.equal(ctx.tools.executionMode('db_asset', { path: '/pages/p1', command: 'view' }), 'parallel')
-  assert.equal(ctx.tools.executionMode('db_asset', { path: '/pages/p1', command: 'write', value: 'x' }), 'exclusive')
+  assert.equal(ctx.tools.executionMode('db_file', { path: '/pages/p1', command: 'view' }), 'parallel')
+  assert.equal(ctx.tools.executionMode('db_media', { path: '/pages/p1', command: 'view' }), 'parallel')
+  assert.equal(ctx.tools.executionMode('db_media', { path: '/pages/p1', command: 'write', value: 'x' }), 'exclusive')
   const listed = await ctx.tools.invoke('db_list', { path: '/' })
   assert.equal((listed as { kind: string }).kind, 'root')
   const items = ((listed as { items: Array<{ path: string; view?: { blurb?: string } }> }).items ?? [])
@@ -3087,4 +3102,79 @@ test('deleting a /views row is a hard delete and drops the stored view', async (
     db.viewCatalog!.viewsFor('/notes').map((view) => view.id).filter((id) => id === viewId),
     [],
   )
+})
+
+test('db_doc view/write uses collection namedDocs for page sandbox files', async () => {
+  const files = new Map<string, { text: string; etag: string }>([
+    ['view-p194-8fdbc4f8.jsx', { text: 'export default function App(){return <p>你好</p>}\n', etag: 'e1' }],
+  ])
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  db.register({
+    id: 'pages',
+    path: '/pages',
+    schema: { labelField: 'title', fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string', writable: true } } },
+    namedDocs: {
+      names: (record) => [`view-${record.id}-8fdbc4f8.jsx`, `page-views-${record.id}.json`],
+      read: (name) => {
+        const hit = files.get(name)
+        if (!hit) throw new Error('not found')
+        return { bytes: Buffer.from(hit.text), type: 'text/javascript; charset=utf-8', etag: hit.etag }
+      },
+      write: (name, content, opts) => {
+        const hit = files.get(name)
+        if (hit && opts?.etag && opts.etag !== hit.etag) throw new Error('etag conflict')
+        const text = typeof content === 'string' ? content : Buffer.from(content).toString('utf8')
+        const next = { text, etag: `e${files.size + 1}` }
+        files.set(name, next)
+        return { name, etag: next.etag, bytes: Buffer.byteLength(text) }
+      },
+    },
+    list: () => [{ id: 'p194', title: '沙盒页' }],
+    get: (id) => (id === 'p194' ? { id: 'p194', title: '沙盒页', views: [{ id: '8fdbc4f8', file: 'view-p194-8fdbc4f8.jsx' }] } : null),
+  })
+  const listed = await db.editDoc('/pages/p194')
+  assert.equal(listed.kind, 'doc')
+  if (listed.kind === 'doc' && 'assets' in listed) {
+    assert.ok((listed.assets as Array<{ name: string }>).some((item) => item.name === 'view-p194-8fdbc4f8.jsx'))
+  }
+  const viewed = await db.editDoc('/pages/p194', { name: 'view-p194-8fdbc4f8.jsx' })
+  assert.equal(viewed.kind, 'doc')
+  if (viewed.kind === 'doc' && 'text' in viewed) {
+    assert.match(String(viewed.text), /你好/)
+    const written = await db.editDoc('/pages/p194', {
+      command: 'write',
+      name: 'view-p194-8fdbc4f8.jsx',
+      value: String(viewed.text).replace('你好', 'hello'),
+      etag: viewed.etag,
+    })
+    assert.equal(written.ok, true)
+  }
+  const again = await db.editDoc('/pages/p194', { name: 'view-p194-8fdbc4f8.jsx' })
+  if (again.kind === 'doc' && 'text' in again) assert.match(String(again.text), /hello/)
+  const patched = await db.editDoc('/pages/p194', {
+    command: 'str_replace',
+    name: 'view-p194-8fdbc4f8.jsx',
+    old_str: 'hello',
+    new_str: 'hi',
+  })
+  assert.equal(patched.ok, true)
+  assert.equal(patched.command, 'str_replace')
+  const afterPatch = await db.editDoc('/pages/p194', { name: 'view-p194-8fdbc4f8.jsx' })
+  if (afterPatch.kind === 'doc' && 'text' in afterPatch) assert.match(String(afterPatch.text), /hi/)
+  const lined = await db.editDoc('/pages/p194', {
+    command: 'replace_lines',
+    name: 'view-p194-8fdbc4f8.jsx',
+    start_line: 1,
+    end_line: 1,
+    new_str: 'export default function App(){return <p>ok</p>}',
+  })
+  assert.equal(lined.ok, true)
+  const inserted = await db.editDoc('/pages/p194', {
+    command: 'insert',
+    name: 'view-p194-8fdbc4f8.jsx',
+    insert_line: 1,
+    new_str: '// note',
+  })
+  assert.equal(inserted.ok, true)
 })

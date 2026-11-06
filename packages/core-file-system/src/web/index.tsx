@@ -18,14 +18,17 @@ import {
 } from './nav-boot.ts'
 import { defaultViewId } from './view-storage.ts'
 import { DATA_COLLECTION_PATH, DATA_MODULE, DATA_MODULE_ID, DATA_MODULE_PATH, TAGS_COLLECTION_PATH, PAGE_BLOCKS_COLLECTION_PATH, VIEWS_COLLECTION_PATH, sortDataCollections } from './database-path.ts'
-import { dataChrome } from './data-chrome.ts'
+import { dataChrome, setViaDataCrumbs, subscribeViaDataCrumbs, viaDataCrumbsOn, viaDataViewId } from './data-chrome.ts'
 import { writeMainDataRoute } from './main-data-route.ts'
 import { tagsChrome } from './tag-chrome.tsx'
 import { viewsChrome } from './views-chrome.ts'
 import { pageBlocksChrome } from './page-blocks-chrome.ts'
 import { viewsForRegisteredCollection } from './collection-nav.ts'
-import { builtinAllViewId } from '../catalog-views.ts'
+import { builtinAllViewId, stampRowOpenTarget } from '../catalog-views.ts'
 import { normalizeCollectionPath } from '../paths.ts'
+import { ensureFsdbStyle } from './fsdb-style.ts'
+import { TagBlockView } from './tag-block.tsx'
+import { listenOpenTag } from './tag-catalog.ts'
 
 const ShareRoot = lazy(() => import('./share-page.tsx').then((m) => ({ default: m.ShareRoot })))
 const CollectionBrowser = lazy(() => import('./browser.tsx').then((m) => ({ default: m.CollectionBrowser })))
@@ -91,6 +94,7 @@ function CollectionPage(props: SlotProps) {
   const location = useLocation()
   const navigate = useNavigate()
   const [expandedViewKey, setExpandedViewKey] = useState<string | null>(null)
+  const viaDataCrumbs = useSyncExternalStore(subscribeViaDataCrumbs, viaDataCrumbsOn, () => false)
   const parsed = useMemo(() => parseAppPath(location.pathname, [DATA_MODULE]), [location.pathname])
   const dataHome = parsed.kind === 'module' && parsed.moduleId === DATA_MODULE_ID
   const routeCollection = parsed.kind === 'collection-view' || parsed.kind === 'record' ? parsed : null
@@ -158,15 +162,44 @@ function CollectionPage(props: SlotProps) {
 
   const lockedFilters = chrome.lockedFiltersFromSearch?.(location.search) ?? EMPTY_FILTERS
   const dataOverview = dataHome || collectionFromRoute === DATA_COLLECTION_PATH
+  useEffect(() => {
+    if (!dataOverview || !recordFromRoute) {
+      if (dataOverview) setViaDataCrumbs(false)
+      return
+    }
+    const stamp = stampRowOpenTarget({ id: recordFromRoute })
+    if (!stamp) return
+    setViaDataCrumbs(true, viewFromRoute || builtinAllViewId(DATA_COLLECTION_PATH))
+    go(
+      {
+        collection: stamp.collection,
+        viewId: builtinAllViewId(stamp.collection),
+        recordId: stamp.recordId,
+      },
+      { replace: true },
+    )
+  }, [dataOverview, recordFromRoute])
   if (dataOverview) {
     return (
       <Suspense fallback={null}>
         <DataOverview
           tables={orderedTables}
           routeViewId={dataHome ? builtinAllViewId(DATA_COLLECTION_PATH) : viewFromRoute}
-          onOpenTable={(path, viewId) => go({ collection: path, viewId: viewId ?? builtinAllViewId(path) })}
+          routeRecordId={recordFromRoute}
+          onOpenTable={(path, viewId) => {
+            setViaDataCrumbs(false)
+            go({ collection: path, viewId: viewId ?? builtinAllViewId(path) })
+          }}
           onOpenView={(viewId) => go({ collection: DATA_COLLECTION_PATH, viewId })}
-          onOpenRecord={(path, view, recordId) => go({ collection: path, viewId: view.id, recordId })}
+          onOpenRecord={(path, view, recordId) => {
+            const stamp = stampRowOpenTarget({ id: recordId, tablePath: path })
+            const collection = stamp?.collection ?? path
+            go({
+              collection,
+              viewId: view.id || builtinAllViewId(collection),
+              recordId: stamp?.recordId ?? recordId,
+            })
+          }}
           onCrumbTarget={(target) => navigate(pathForCrumbTarget(target))}
           expandedViewKey={expandedViewKey}
           onExpandedViewKeyChange={setExpandedViewKey}
@@ -190,20 +223,28 @@ function CollectionPage(props: SlotProps) {
       routeViewId={viewFromRoute}
       expandedViewKey={expandedViewKey}
       onExpandedViewKeyChange={setExpandedViewKey}
-      onOpenTable={(path, viewId) =>
+      crumbFromData={viaDataCrumbs}
+      onOpenTable={(path, viewId) => {
+          setViaDataCrumbs(false)
           go({
             collection: path,
             viewId: viewId ?? builtinAllViewId(path),
           })
-        }
+        }}
       onOpenView={(viewId) => go({ collection: currentPath, viewId })}
       onOpenRecord={(recordId, viewId, collection) =>
         go({ collection: collection ?? currentPath, viewId: viewId ?? viewFromRoute, recordId })
       }
       resolveViews={(path, user) => viewsForRegisteredCollection(path, orderedTables, user)}
-      onCloseRecord={() =>
+      onCloseRecord={() => {
+        if (viaDataCrumbs) {
+          const dataViewId = viaDataViewId()
+          setViaDataCrumbs(false)
+          go({ collection: DATA_COLLECTION_PATH, viewId: dataViewId }, { replace: true })
+          return
+        }
         go({ collection: currentPath, viewId: viewFromRoute ?? defaultViewId(currentPath) }, { replace: true })
-      }
+      }}
       onCrumbTarget={(target: CrumbTarget) => navigate(pathForCrumbTarget(target))}
     />
     </Suspense>
@@ -261,6 +302,7 @@ export const name = 'core-file-system-ui'
 export const inject = ['slots', 'appModules']
 
 export function apply(ctx: Context) {
+  ensureFsdbStyle()
   new DatabaseUiService(ctx)
   ctx.effect(() => {
     const ui = getDatabaseUi()
@@ -286,7 +328,30 @@ export function apply(ctx: Context) {
     const editor = inner.get('pageEditor') as {
       subscribe: (fn: () => void) => () => void
       blocks: () => Array<{ kind: string }>
+      registerBlock: (spec: {
+        kind: string
+        plugin: string
+        label: string
+        blockType: string
+        hint: string
+        aliases: string[]
+        assets: unknown[]
+        defaults: Record<string, unknown>
+        View: typeof TagBlockView
+      }) => () => void
     }
+    const stopBlock = editor.registerBlock({
+      kind: 'tag',
+      plugin: 'page-tag',
+      label: '标签块',
+      blockType: 'basic',
+      hint: '选一个标签，在块里填写它的字段',
+      aliases: ['标签块', '标签', 'tag', 'tags'],
+      assets: [],
+      defaults: { tagId: '', values: {} },
+      View: TagBlockView,
+    })
+    const stopOpen = listenOpenTag()
     let sig = ''
     const stop = editor.subscribe(() => {
       const next = editor
@@ -298,7 +363,11 @@ export function apply(ctx: Context) {
       sig = next
       getDatabaseUi()?.refresh()
     })
-    return () => stop()
+    return () => {
+      stop()
+      stopOpen()
+      stopBlock()
+    }
   })
   const slots = ctx.get('slots') as SlotsService
   const appModules = ctx.get('appModules') as AppModulesService

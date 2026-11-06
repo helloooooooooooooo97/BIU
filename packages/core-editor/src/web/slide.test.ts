@@ -6,6 +6,8 @@ import { filterSlashItems } from './slash.ts'
 import { takeSlideFence } from './slide-md.ts'
 import { WASH_TONES } from './color-swatches.ts'
 import { PAGE_EDITOR_STYLE } from './style.ts'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 
 function editorOf(markdown: string) {
   return new Editor({
@@ -20,17 +22,35 @@ test('slide css grids cells on the slide body', () => {
   assert.match(PAGE_EDITOR_STYLE, /\[data-slide\]\[data-layout=split\] \.page-slide-body/)
   assert.match(PAGE_EDITOR_STYLE, /\.page-slide-body\{display:grid/)
   assert.match(PAGE_EDITOR_STYLE, /page-slide-body>\[data-node-view-content-react\].*display:contents/)
-  assert.match(PAGE_EDITOR_STYLE, /\.page-slide-bar\{[^}]*top:0/)
-  assert.match(PAGE_EDITOR_STYLE, /\.page-slide-bar\{[^}]*left:calc\(100% \+ 8px\)/)
-  assert.match(PAGE_EDITOR_STYLE, /\.page-slide-bar\{[^}]*border-radius:8px/)
-  assert.match(PAGE_EDITOR_STYLE, /\.page-slide-bar\{[^}]*opacity:0/)
+  assert.match(PAGE_EDITOR_STYLE, /\.page-slide-bar[^{]*\{[^}]*top:8px/)
+  assert.match(PAGE_EDITOR_STYLE, /\.page-slide-bar[^{]*\{[^}]*right:8px/)
+  assert.match(PAGE_EDITOR_STYLE, /\.page-slide-bar[^{]*\{[^}]*flex-direction:row/)
+  assert.doesNotMatch(PAGE_EDITOR_STYLE, /\.page-slide-bar[^{]*\{[^}]*left:calc\(100% \+ 8px\)/)
+  assert.match(PAGE_EDITOR_STYLE, /\.page-slide-bar[^{]*\{[^}]*border-radius:8px/)
+  assert.match(PAGE_EDITOR_STYLE, /\.page-slide-bar[^{]*\{[^}]*opacity:0/)
   assert.match(PAGE_EDITOR_STYLE, /\.page-slide-bar>\*\{[^}]*place-items:center/)
   assert.match(PAGE_EDITOR_STYLE, /\.page-slide-body\{[^}]*height:auto/)
   assert.doesNotMatch(PAGE_EDITOR_STYLE, /page-slide-body\{[^}]*aspect-ratio:16\/9/)
   assert.match(PAGE_EDITOR_STYLE, /react-renderer\.node-slide\{display:block;position:relative;width:100%;min-width:0;border:0/)
   assert.match(PAGE_EDITOR_STYLE, /\[data-slide\]\{display:flex/)
   assert.match(PAGE_EDITOR_STYLE, /\[data-slide\]\{[^}]*background:transparent/)
+  assert.match(PAGE_EDITOR_STYLE, /\[data-slide\]\{[^}]*border:0/)
+  assert.doesNotMatch(PAGE_EDITOR_STYLE, /\[data-slide\]\{[^}]*border:var\(--biu-stroke-width-thick\)/)
+  assert.match(PAGE_EDITOR_STYLE, /\[data-slide\]\.is-selected/)
+  assert.match(PAGE_EDITOR_STYLE, /\[data-slide\]:focus-within\{outline:none\}/)
+  assert.match(PAGE_EDITOR_STYLE, /node-slide\.ProseMirror-selectednode \[data-slide\]/)
+  assert.match(PAGE_EDITOR_STYLE, /\[data-slide\]\.is-selected,.page-editor \.react-renderer\.node-slide\.ProseMirror-selectednode \[data-slide\],.page-editor \[data-slide-selected\]\{[^}]*box-shadow:0 0 0 var\(--biu-stroke-width-thick\) var\(--biu-color-emphasis-border\)/)
+  assert.match(PAGE_EDITOR_STYLE, /\.page-image-frame\{[^}]*border:var\(--biu-stroke-width-thick\)/)
+  assert.match(PAGE_EDITOR_STYLE, /\.page-image\.is-selected \.page-image-frame\{[^}]*38%/)
+  assert.doesNotMatch(PAGE_EDITOR_STYLE, /page-image\.is-selected \.page-image-frame\{box-shadow:0 0 0 1\.5px/)
   assert.doesNotMatch(PAGE_EDITOR_STYLE, /data-deck|page-deck|:::deck/)
+  const view = readFileSync(resolve(import.meta.dirname, './slide-view.tsx'), 'utf8')
+  assert.match(view, /data-slide-selected/)
+  assert.match(view, /is-selected/)
+  assert.match(view, /selectionUpdate/)
+  assert.match(view, /page-block-expand-nav/)
+  assert.match(view, /slide-title/)
+  assert.doesNotMatch(view, /className="page-slide-bar"/)
 })
 
 test('slash lists Slide as a core container, not a page plugin', () => {
@@ -61,6 +81,29 @@ test('slide markdown does not glue cell fences into ::::::cell', () => {
   const again = editor.getMarkdown()
   assert.doesNotMatch(again, /:{4,}cell/)
   assert.equal(again.match(/:::cell/g)?.length, 2)
+  editor.destroy()
+})
+
+test('slide fence keeps an editable title on the header', () => {
+  const fence = takeSlideFence(`:::slide {layout=split title="封面"}
+:::cell
+hi
+:::
+:::
+`)
+  assert.equal(fence?.title, '封面')
+  const editor = editorOf(`:::slide {layout=split title="封面"}
+
+:::cell
+hi
+:::
+
+:::
+`)
+  const slide = editor.state.doc.firstChild
+  assert.equal(slide?.attrs.title, '封面')
+  editor.commands.setSlideTitle('新封面')
+  assert.match(editor.getMarkdown(), /title="新封面"/)
   editor.destroy()
 })
 

@@ -15,6 +15,27 @@ test('pick capture does not eat inspector chrome, chat overlay, or ignored nodes
   assert.doesNotMatch(overlay, /\.session-inspector/)
 })
 
+test('page-host preview stamps are pickable even if a page-editor host is on the path', async () => {
+  const { ignorePickCapture } = await import('./overlay.tsx')
+  const shell = document.createElement('div')
+  shell.className = 'page-editor is-host'
+  const pane = document.createElement('div')
+  pane.setAttribute('data-sandbox', '')
+  pane.setAttribute('data-biu-kind', 'sandbox')
+  const chip = document.createElement('button')
+  chip.setAttribute('data-sandbox-pick', '')
+  chip.setAttribute('data-biu-kind', 'sandbox')
+  pane.append(chip)
+  shell.append(pane)
+  document.body.append(shell)
+  const event = {
+    target: chip,
+    composedPath: () => [chip, pane, shell, document.body],
+  } as unknown as Event
+  assert.equal(ignorePickCapture(chip, event), false)
+  shell.remove()
+})
+
 test('sandbox inner stamps are pickable even if a page-bubble ancestor is on the path', async () => {
   const { ignorePickCapture } = await import('./overlay.tsx')
   const bubble = document.createElement('div')
@@ -95,6 +116,7 @@ test('click and hover use the same point resolver', () => {
   assert.match(overlay, /inReadable/)
   assert.match(overlay, /\.chat-stage/)
   assert.match(overlay, /\.page-bubble/)
+  assert.match(overlay, /\.page-editor:not\(\.is-host\)/)
 })
 
 test('pointerup does not attach picks after pick mode has exited', () => {
