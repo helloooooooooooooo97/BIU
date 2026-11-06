@@ -1,5 +1,5 @@
 import type { CollectionSchema, CollectionSchemaPack, DbRecord, FieldSpec, FieldType } from '@biu/type-file-system'
-import { asPersonList, isFacetFieldType, normalizeSchemaValue, personKey } from '@biu/type-file-system'
+import { asPersonList, isTagFieldType, normalizeSchemaValue, personKey } from '@biu/type-file-system'
 
 function asStringList(value: unknown): string[] {
   if (Array.isArray(value)) return value.map(String).filter(Boolean)
@@ -8,10 +8,10 @@ function asStringList(value: unknown): string[] {
   }
   return []
 }
-import { parseFacetFlatColumnKey, readFacetFieldValue } from '../query-logic.ts'
+import { parseTagFlatColumnKey, readTagFieldValue } from '../query-logic.ts'
 
 function fieldKind(field: FieldSpec): FieldType {
-  if (isFacetFieldType(field.type)) return 'facet'
+  if (isTagFieldType(field.type)) return 'tag'
   if (field.type === 'string[]') return 'multi-select'
   if (field.type === 'string' && field.enum?.length) return 'select'
   if (field.type === 'number' && field.format === 'datetime') return 'datetime'
@@ -66,7 +66,7 @@ export function isGroupableKind(kind: FieldType) {
 }
 
 export function cellGroupValue(row: DbRecord, fieldKey: string) {
-  return parseFacetFlatColumnKey(fieldKey) ? readFacetFieldValue(row, fieldKey) : row[fieldKey]
+  return parseTagFlatColumnKey(fieldKey) ? readTagFieldValue(row, fieldKey) : row[fieldKey]
 }
 
 function emptyFilter(fieldKey: string): Record<string, unknown> {
@@ -481,7 +481,7 @@ const refStrategy: GroupStrategy = {
 export const GROUP_STRATEGIES: Record<string, GroupStrategy> = {
   select: singleValueStrategy('select', (key, field) => enumLabel(field, key)),
   'multi-select': multiValueStrategy('multi-select', asStringList, (key, field) => enumLabel(field, key)),
-  facet: multiValueStrategy('facet', (raw) => normalizeSchemaValue(raw).tags, (key) => key),
+  tag: multiValueStrategy('tag', (raw) => normalizeSchemaValue(raw).tags, (key) => key),
   boolean: booleanStrategy,
   datetime: datetimeStrategy,
   person: multiValueStrategy(
@@ -502,7 +502,7 @@ export function resolveGroupField(
 ): { key: string; field: FieldSpec; grain?: GroupGrain } | null {
   const parsed = parseGroupByKey(preferred)
   if (!parsed.fieldKey) return null
-  const facet = parseFacetFlatColumnKey(parsed.fieldKey)
+  const facet = parseTagFlatColumnKey(parsed.fieldKey)
   const field = facet
     ? packs.find((pack) => pack.id === facet.packId)?.fields.find((item) => item.key === facet.fieldKey)
     : schema?.fields[parsed.fieldKey]

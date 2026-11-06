@@ -27,5 +27,8 @@ test('workspace profile stores preferred name and rejects oversized avatars', as
   assert.equal(writeWorkspaceProfile({ pagePrefs: { wide: true, bodySize: 'lg' } }).pagePrefs.wide, true)
   assert.equal(readWorkspaceProfile().pagePrefs.bodySize, 'lg')
   assert.equal(writeWorkspaceProfile({ theme: 'light' }).pagePrefs.wide, true)
+  assert.equal(writeWorkspaceProfile({ pagePrefs: { navPin: true } }).pagePrefs.navPin, true)
+  assert.equal(writeWorkspaceProfile({ pagePrefs: { wide: false } }).pagePrefs.navPin, true)
+  assert.equal((asPublicProfile().pagePrefs as { navPin?: boolean }).navPin, true)
   assert.throws(() => writeWorkspaceProfile({ avatar: `data:image/jpeg;base64,${'a'.repeat(240_001)}` }))
 })

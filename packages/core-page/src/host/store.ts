@@ -39,7 +39,7 @@ export type PageRow = DbRecord & {
   notes: string
   parentId: string | null
   dependsOn: string[]
-  facet: SchemaFieldValue
+  tag: SchemaFieldValue
   emoji: string
   createdAt: number
   updatedAt: number
@@ -101,7 +101,7 @@ function rowFromFile(id: string, raw: string): PageRow {
     notes: body,
     parentId: matter.parentId == null || matter.parentId === '' ? null : String(matter.parentId),
     dependsOn: asStringList(matter.dependsOn),
-    facet: normalizeSchemaValue(matter.facet),
+    tag: normalizeSchemaValue(matter.tag ?? matter.facet),
     emoji: String(matter.emoji ?? ''),
     createdAt,
     updatedAt,
@@ -116,7 +116,7 @@ function emptyRow(id: string, ts: number): PageRow {
     notes: '',
     parentId: null,
     dependsOn: [],
-    facet: emptySchemaValue(),
+    tag: emptySchemaValue(),
     emoji: '',
     createdAt: ts,
     updatedAt: ts,
@@ -138,7 +138,7 @@ function applyPatch(current: PageRow, patch: Record<string, unknown>): PageRow {
       ? patch.parentId == null || patch.parentId === '' ? null : String(patch.parentId)
       : current.parentId,
     dependsOn: 'dependsOn' in patch ? asStringList(patch.dependsOn) : current.dependsOn,
-    facet: current.facet,
+    tag: current.tag,
     emoji: 'emoji' in patch ? String(patch.emoji ?? '') : current.emoji,
     createdAt: current.createdAt,
     updatedAt: typeof patch.updatedAt === 'number' && patch.updatedAt > 0 ? patch.updatedAt : Date.now(),
@@ -364,7 +364,7 @@ function rowFromSql(row: SqlPage): PageRow {
     notes: '',
     parentId: row.parent_id == null || row.parent_id === '' ? null : String(row.parent_id),
     dependsOn: asStringList(parseJson(row.depends_on_json ?? '[]', [])),
-    facet: emptySchemaValue(),
+    tag: emptySchemaValue(),
     emoji: row.emoji ?? '',
     createdAt: Number(row.created_at) || 0,
     updatedAt: Number(row.updated_at) || 0,
@@ -381,6 +381,7 @@ function mimeOf(name: string) {
   if (ext === '.avif') return 'image/avif'
   if (ext === '.bmp') return 'image/bmp'
   if (ext === '.json' || ext === '.excalidraw') return 'application/json; charset=utf-8'
+  if (ext === '.js' || ext === '.jsx' || ext === '.ts' || ext === '.tsx') return 'text/javascript; charset=utf-8'
   if (ext === '.zip') return 'application/zip'
   if (ext === '.pdf') return 'application/pdf'
   return 'application/octet-stream'

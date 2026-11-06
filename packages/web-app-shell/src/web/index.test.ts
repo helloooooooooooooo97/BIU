@@ -45,6 +45,13 @@ test('update button does not download when already current', () => {
   assert.match(shell, /activeModule === 'agent' && getChatOverlay\(\)/)
 })
 
+test('agent chat action replaces the current session', () => {
+  const shell = readFileSync(resolve(import.meta.dirname, './index.tsx'), 'utf8')
+  assert.match(shell, /biu:open-session/)
+  assert.match(shell, /sessionView\.load\(sessionId, \{ view: 'chat' \}\)/)
+  assert.match(shell, /openOverlayComposer\(\)/)
+})
+
 test('refresh does not send unfinished plugin routes home', () => {
   const shell = readFileSync(resolve(import.meta.dirname, './index.tsx'), 'utf8')
   assert.match(shell, /waitingOnNav/)
@@ -286,6 +293,11 @@ test('settings lists search and pick shortcuts', () => {
   assert.doesNotMatch(chrome, /就地编辑选区/)
   assert.match(chrome, /<kbd>⌘<\/kbd><kbd>L<\/kbd>/)
   assert.match(chrome, /选区送到对话/)
+})
+
+test('chip horizontal padding is a global token shared with tags', () => {
+  const css = readFileSync(resolve(import.meta.dirname, '../../../../web/style.css'), 'utf8')
+  assert.match(css, /--biu-pad-chip-x: var\(--biu-space-2\)/)
 })
 
 test('settings nav omits routes, events, and about', () => {

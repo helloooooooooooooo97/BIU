@@ -5,8 +5,10 @@ import { Selection } from '@tiptap/pm/state'
 import { pageEditorExtensions } from './kit.ts'
 import {
   FOCUS_RECORD_TITLE,
+  atFirstVisibleLine,
   focusRecordTitleNear,
   handleContentTitleNav,
+  hasVisibleBlockBefore,
   shouldLeaveContentForTitle,
 } from './title-content-nav.ts'
 
@@ -215,6 +217,54 @@ test('Backspace in an empty list at doc start lifts the list instead of jumping 
   press(editor, 'Backspace')
   title.stop()
   assert.equal(title.hits(), 0)
+  editor.destroy()
+  host.remove()
+})
+
+test('ArrowUp with caret before the first heading (pos 0) focuses the title', () => {
+  const { editor, host } = makeEditor('# 构建')
+  editor.view.dispatch(editor.state.tr.setSelection(Selection.near(editor.state.doc.resolve(0), -1)))
+  const title = listenTitle()
+  const event = press(editor, 'ArrowUp')
+  title.stop()
+  assert.equal(event.defaultPrevented, true)
+  assert.equal(title.hits(), 1)
+  editor.destroy()
+  host.remove()
+})
+
+test('ArrowUp from a heading at doc start focuses the title', () => {
+  const { editor, host } = makeEditor('# 构建\n\n正文')
+  editor.chain().focus().setTextSelection(Selection.atStart(editor.state.doc)).run()
+  const title = listenTitle()
+  const event = press(editor, 'ArrowUp')
+  title.stop()
+  assert.equal(event.defaultPrevented, true)
+  assert.equal(title.hits(), 1)
+  editor.destroy()
+  host.remove()
+})
+
+test('ArrowUp from the first visible outline heading skips a hidden block above', () => {
+  const { editor, host } = makeEditor('藏起来\n\n# 构建')
+  let heading = -1
+  editor.state.doc.descendants((node, pos) => {
+    if (heading < 0 && node.type.name === 'heading') heading = pos
+  })
+  assert.ok(heading > 0, `heading pos ${heading}`)
+  editor.commands.setTextSelection(heading + 1)
+  const raw = editor.view.nodeDOM(0)
+  const first = raw instanceof HTMLElement ? raw : raw instanceof Node ? raw.parentElement : null
+  if (first instanceof HTMLElement) first.setAttribute('class', `${first.getAttribute('class') ?? ''} page-block-is-hidden`.trim())
+  assert.equal(editor.state.selection.$from.parent.type.name, 'heading')
+  assert.equal(hasVisibleBlockBefore(editor.view, editor.state.selection.$from), false)
+  assert.equal(atFirstVisibleLine(editor.view), true)
+  const title = listenTitle()
+  const event = new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true })
+  assert.equal(handleContentTitleNav(editor.view, event), true)
+  title.stop()
+  assert.equal(event.defaultPrevented, true)
+  assert.equal(title.hits(), 1)
   editor.destroy()
   host.remove()
 })

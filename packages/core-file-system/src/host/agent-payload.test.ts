@@ -31,11 +31,11 @@ test('compact schema drops identical builtins and user-only actions', () => {
   const compact = pack.schema(notesSchema())
   assert.equal('id' in ((compact.fields as object) ?? {}), false)
   assert.equal('createdAt' in ((compact.fields as object) ?? {}), false)
-  assert.deepEqual((compact.fields as Record<string, unknown>).facet, {
-    type: 'facet',
+  assert.deepEqual((compact.fields as Record<string, unknown>).tag, {
+    type: 'tag',
     label: '标签',
     description:
-      '贴标签并填属性。一个标签：{tags:["facet-2"],values:{导演:"查泽雷"}}。多个标签 values 必须按 id 分组：{tags:["facet-2","awards"],values:{"facet-2":{导演:"查泽雷"},awards:{oscar:true}}}。省略 tags 只合并属性，不撕掉其它标签。读属性列：db_list columns=["facet::<标签id>::<字段key>"]，例如 facet::facet::category。',
+      '贴标签并填属性。一个标签：{tags:["need"],values:{导演:"查泽雷"}}。多个标签 values 必须按 id 分组：{tags:["need","awards"],values:{"need":{导演:"查泽雷"},awards:{oscar:true}}}。省略 tags 只合并属性，不撕掉其它标签。读属性列：db_list columns=["tag::<标签id>::<字段key>"]，例如 tag::need::category。',
   })
   assert.equal('title' in ((compact.fields as object) ?? {}), false)
   assert.deepEqual((compact.fields as Record<string, unknown>).status, {
@@ -116,9 +116,9 @@ test('compact list keeps empty facet columns', () => {
   const listed = pack.query({
     kind: 'collection',
     path: '/pages',
-    items: [{ id: 'p1', title: '页', 'facet::facet::category': null, path: '/pages/p1', kind: 'record' }],
+    items: [{ id: 'p1', title: '页', 'tag::tag::category': null, path: '/pages/p1', kind: 'record' }],
   }) as Record<string, unknown>
-  assert.deepEqual(listed.columns, ['id', 'title', 'facet::facet::category'])
+  assert.deepEqual(listed.columns, ['id', 'title', 'tag::tag::category'])
   assert.deepEqual(listed.rows, [['p1', '页', null]])
 })
 
@@ -128,7 +128,7 @@ test('compact list uses columns once; drops empty and path/kind', () => {
     path: '/notes',
     total: 2,
     items: [
-      { id: 'n1', title: '草稿', tags: [], facet: {}, path: '/notes/n1', kind: 'record' },
+      { id: 'n1', title: '草稿', tags: [], tag: {}, path: '/notes/n1', kind: 'record' },
       { id: 'n2', title: '另一篇', tags: [], path: '/notes/n2', kind: 'record' },
     ],
   }) as Record<string, unknown>

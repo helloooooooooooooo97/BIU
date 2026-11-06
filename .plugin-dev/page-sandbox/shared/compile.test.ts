@@ -1,6 +1,11 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
-import { compileSandboxSource, looksLikeJsx } from './compile.ts'
+import { compileSandboxSource, looksLikeJsx, sandboxModuleFile } from './compile.ts'
+
+test('board json is not a sandbox module file', () => {
+  assert.equal(sandboxModuleFile('assets/画板-e7c178eb.json'), false)
+  assert.equal(sandboxModuleFile('assets/sandbox-ab12cd34.jsx'), true)
+})
 
 test('static markup is not sandbox source', () => {
   const result = compileSandboxSource('<div style="color:var(--biu-color-text)">刊</div>')
@@ -27,6 +32,13 @@ test('sandbox mount flushes react before pick stamp', async () => {
   const { readFile } = await import('node:fs/promises')
   const { resolve } = await import('node:path')
   const src = await readFile(resolve(import.meta.dirname, '../web/sandbox.ts'), 'utf8')
+  const files = await readFile(resolve(import.meta.dirname, '../web/page-file.ts'), 'utf8')
+  const card = await readFile(resolve(import.meta.dirname, '../web/index.tsx'), 'utf8')
+  assert.match(card, /markFreshSandboxAssets/)
+  assert.match(card, /createOnMiss: false/)
+  assert.match(files, /fresh.has\(name\) && createOnMiss/)
+  assert.match(files, /opts\?\.bust \|\| !createOnMiss/)
+  assert.match(files, /x-biu-resource-path/)
   assert.match(src, /flushSync/)
   assert.match(src, /data-sandbox-root/)
   assert.match(src, /:host-context\(html\.pick-mode\)/)

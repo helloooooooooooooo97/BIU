@@ -6,37 +6,18 @@ import { join, resolve } from 'node:path'
 const root = resolve(import.meta.dirname, '../../../../')
 const sandbox = join(root, '.plugin-dev')
 
-test('page-sandbox store listing is Sandbox, not HTML', () => {
+test('page-sandbox store listing is 沙箱, not HTML', () => {
   const manifest = JSON.parse(readFileSync(join(sandbox, 'page-sandbox', 'manifest.json'), 'utf8')) as {
     id: string
     name: string
   }
   assert.equal(manifest.id, 'page-sandbox')
-  assert.equal(manifest.name, 'Sandbox')
-})
-
-test('development page blocks register under the 测试 slash group', () => {
-  const files = [
-    'api-playground/web/index.tsx',
-    'option-matrix/web/index.tsx',
-    'page-regression/web/index.tsx',
-    'plugin-doctor/web/index.tsx',
-  ]
-  for (const file of files) {
-    const src = readFileSync(join(sandbox, file), 'utf8')
-    assert.match(src, /blockType:\s*'test'/, `${file} should use blockType test`)
-    assert.match(src, /blockTypeLabel:\s*'测试'/, `${file} should use blockTypeLabel 测试`)
-    assert.doesNotMatch(src, /blockType:\s*'(basic|api|dev)'/, `${file} should not use a separate slash group`)
-  }
+  assert.equal(manifest.name, '沙箱')
 })
 
 test('page block playground UIs use ReUI tokens instead of hardcoded light-theme colors', () => {
   const files = [
     'page-toc/web/index.tsx',
-    'api-playground/web/index.tsx',
-    'option-matrix/web/index.tsx',
-    'page-regression/web/index.tsx',
-    'plugin-doctor/web/index.tsx',
   ]
   for (const file of files) {
     const src = readFileSync(join(sandbox, file), 'utf8')
@@ -48,21 +29,16 @@ test('page block playground UIs use ReUI tokens instead of hardcoded light-theme
 
 test('page plugin READMEs use live :::pageBlock fences, not wrapped in markdown code fences', () => {
   const ids = [
-    'api-playground',
-    'english-lab',
-    'fitness-tracker',
-    'option-matrix',
     'page-algorithm',
     'page-browser',
     'page-code-runner',
     'page-excalidraw',
     'page-html-blocks',
     'page-sandbox',
-    'page-regression',
     'page-terminal',
+    'page-tag',
     'page-toc',
     'page-video',
-    'plugin-doctor',
   ]
   for (const id of ids) {
     const src = readFileSync(join(sandbox, id, 'README.md'), 'utf8')
@@ -84,13 +60,7 @@ test('page plugin READMEs use live :::pageBlock fences, not wrapped in markdown 
 test('reui page blocks import @biu/reui rather than injecting STYLE_CSS or using BiuUi', () => {
   const files = [
     'page-toc/web/index.tsx',
-    'api-playground/web/index.tsx',
-    'option-matrix/web/index.tsx',
-    'page-regression/web/index.tsx',
-    'plugin-doctor/web/index.tsx',
-    'fitness-tracker/web/index.tsx',
     'page-algorithm/web/index.tsx',
-    'english-lab/web/index.tsx',
   ]
   for (const file of files) {
     const src = readFileSync(join(sandbox, file), 'utf8')

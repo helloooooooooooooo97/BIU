@@ -38,8 +38,7 @@ const PICK_KIND_ALIAS: Record<string, string> = {
   views: 'view',
   'views-db': 'view',
   tags: 'tag',
-  facets: 'facet',
-  'facets-db': 'facet',
+  'tags-db': 'tag',
 }
 
 export function canonicalPickKind(kind: string) {
@@ -70,7 +69,6 @@ const KIND_ICONS: Record<string, Glyph> = {
   turn: HashtagIcon,
   usage: CircleStackIcon,
   tag: TagIcon,
-  facet: TagIcon,
   record: ClipboardDocumentCheckIcon,
   html: DocumentIcon,
   sandbox: DocumentTextIcon,
@@ -93,8 +91,7 @@ const COLLECTION_KIND: Record<string, string> = {
   mcp: 'mcp',
   events: 'event',
   views: 'view',
-  facets: 'facet',
-  tags: 'facet',
+  tags: 'tag',
   members: 'member',
   'workspace-members': 'member',
   notices: 'notice',

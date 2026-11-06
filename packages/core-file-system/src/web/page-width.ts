@@ -37,14 +37,18 @@ function asScale(value: unknown, fallback: BodyScale): BodyScale {
   return typeof value === 'string' && SCALES.has(value as BodyScale) ? (value as BodyScale) : fallback
 }
 
+function asBool(value: unknown, fallback: boolean): boolean {
+  return typeof value === 'boolean' ? value : fallback
+}
+
 export function parsePagePrefs(value: unknown, fallback: PagePrefs = DEFAULT_PREFS): PagePrefs {
   if (!value || typeof value !== 'object') return { ...fallback }
   const rec = value as Partial<PagePrefs>
   return {
-    wide: rec.wide === true,
-    outlineExpand: rec.outlineExpand !== false,
-    outlinePin: rec.outlinePin === true,
-    navPin: rec.navPin === true,
+    wide: asBool(rec.wide, fallback.wide),
+    outlineExpand: asBool(rec.outlineExpand, fallback.outlineExpand),
+    outlinePin: asBool(rec.outlinePin, fallback.outlinePin),
+    navPin: asBool(rec.navPin, fallback.navPin),
     bodySize: asScale(rec.bodySize, fallback.bodySize),
     bodyGap: asScale(rec.bodyGap, fallback.bodyGap),
   }
@@ -154,7 +158,7 @@ export function applyPagePrefs(next = prefs) {
   if (typeof document === 'undefined') return
   const root = document.documentElement
   root.dataset.widePage = next.wide ? '1' : '0'
-  root.dataset.outlineExpand = next.outlineExpand ? '1' : '0'
+  root.dataset.outlineExpand = '1'
   root.dataset.outlinePin = next.outlinePin ? '1' : '0'
   root.dataset.navPin = next.navPin ? '1' : '0'
   root.dataset.bodySize = next.bodySize
@@ -164,11 +168,17 @@ export function applyPagePrefs(next = prefs) {
 export async function persistPagePrefs(patch: Partial<PagePrefs>) {
   const next = parsePagePrefs({ ...prefs, ...patch }, prefs)
   if (JSON.stringify(next) === JSON.stringify(prefs)) return prefs
+  const previous = prefs
   prefsWriteGen += 1
   const gen = prefsWriteGen
-  await postPagePrefs(next)
-  if (gen !== prefsWriteGen) return getPagePrefs()
   commit(next)
+  try {
+    await postPagePrefs(next)
+  } catch (error) {
+    if (gen === prefsWriteGen) commit(previous)
+    throw error
+  }
+  if (gen !== prefsWriteGen) return getPagePrefs()
   return prefs
 }
 

@@ -316,7 +316,6 @@ function AlgorithmCard({
   const [running, setRunning] = useState(false)
   const [consoleTab, setConsoleTab] = useState<'case' | 'out'>('case')
   const [output, setOutput] = useState<OutputLine[]>([])
-  const lines = (codeLive.current || code).split('\n').length
 
   const run = async () => {
     const source = codeLive.current || code
@@ -433,7 +432,6 @@ function AlgorithmCard({
         </section>
         <section className="lc-code">
           <div className="lc-codebar">
-            <span style={{ fontWeight: 650, fontSize: 13 }}>Code</span>
             <Select
               data-testid="page-algorithm-lang"
               disabled={ro}
@@ -446,9 +444,6 @@ function AlgorithmCard({
               <option value="java">Java</option>
               <option value="cpp">C++</option>
             </Select>
-            <span className="rui-muted" style={{ marginLeft: 'auto' }}>
-              {lines} 行
-            </span>
             <button
               type="button"
               className="lc-run"

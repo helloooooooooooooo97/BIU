@@ -22,7 +22,7 @@ test('search opens inspector collections, not chat or database routes', () => {
   assert.equal(searchCollection('task'), '/tasks')
   assert.equal(searchCollection('page'), '/pages')
   assert.equal(searchCollection('plugin'), '/plugins')
-  assert.equal(searchCollection('facet'), '/facets')
+  assert.equal(searchCollection('tag'), '/tags')
   assert.deepEqual(
     SEARCH_SCOPES.map((item) => item.label),
     ['视图', '代理', '任务', '页面', '插件', '标签'],
@@ -53,14 +53,14 @@ test('searchHref opens the left main pane by changing the route', () => {
   assert.equal(searchHref({ kind: 'page', id: 'p1' }), '/database/pages/record/p1')
   assert.equal(searchHref({ kind: 'task', id: 't1' }), '/database/tasks/record/t1')
   assert.equal(searchHref({ kind: 'plugin', id: 'g1' }), '/database/plugins/record/g1')
-  assert.equal(searchHref({ kind: 'facet', id: 'f1' }), '/database/facets/record/f1')
+  assert.equal(searchHref({ kind: 'tag', id: 'f1' }), '/database/tags/record/f1')
 })
 
-test('search hits collect 标签 from facet.tags and config.facet.tags', () => {
+test('search hits collect 标签 from facet.tags and config.tag.tags', () => {
   assert.deepEqual(tagsFromRecord({ tags: ['a', 'b'] }), [])
-  assert.deepEqual(tagsFromRecord({ facet: { tags: ['dp'] } }), ['dp'])
-  assert.deepEqual(tagsFromRecord({ config: { facet: { tags: ['host-ui'] } } }), ['host-ui'])
-  assert.deepEqual(tagsFromRecord({ tags: ['a'], facet: { tags: ['a', 'b'] } }), ['a', 'b'])
+  assert.deepEqual(tagsFromRecord({ tag: { tags: ['dp'] } }), ['dp'])
+  assert.deepEqual(tagsFromRecord({ config: { tag: { tags: ['host-ui'] } } }), ['host-ui'])
+  assert.deepEqual(tagsFromRecord({ tags: ['a'], tag: { tags: ['a', 'b'] } }), ['a', 'b'])
 })
 
 test('recordUpdatedAt prefers updatedAt then createdAt', () => {

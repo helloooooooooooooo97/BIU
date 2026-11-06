@@ -345,7 +345,7 @@ Page bodies live in SQLite; attachments share one tree with two layers:
 .biu/assets/          ← attachments
 ```
 
-Back up those sqlite files with `VACUUM INTO '/path/to/backup.sqlite'` (a single file, no WAL). Do not `cp` a live `.sqlite` while WAL exists. Facet stamp tables (`facet_stamps`, `facet_record_values`) are reserved for the 标签 overlay and may be empty until that overlay is used.
+Back up those sqlite files with `VACUUM INTO '/path/to/backup.sqlite'` (a single file, no WAL). Do not `cp` a live `.sqlite` while WAL exists. Facet stamp tables (`tag_stamps`, `tag_record_values`) are reserved for the 标签 overlay and may be empty until that overlay is used.
 
 Markdown can carry **blocks** — a fenced section that renders as a live component:
 
@@ -389,11 +389,11 @@ That is what it means for components to be first-class objects: **they do not on
 
 In every section above, the schema was defined by plugin code. But some dimensions emerge **while the system is running**. Whether a movie needs a "director" or a task needs a "quarterly rating" depends on the current use case; adding either dimension should not require a new plugin.
 
-`/facets` flips this around: **a dimension is itself a row in a table.**
+`/tags` flips this around: **a dimension is itself a row in a table.**
 
 ```bash
 db_create /facets records=[{title:"Awards"}]                   # a new dimension, zero code
-db_update /facets/Awards {fields:[{key:"name",type:"string"},  # the dimension carries its own schema
+db_update /tags/Awards {fields:[{key:"name",type:"string"},  # the dimension carries its own schema
                                   {key:"year",type:"number"}]}
 
 db_update /movies/dune {tags:["Awards"], values:{name:"Oscar",year:2022}}
@@ -415,7 +415,7 @@ This makes the division of labour between the two kinds of schema explicit:
 
 > **"Unlimited extension" does not mean the File System knows every dimension in advance. It means it lets dimensions appear at runtime, as data.**
 
-The facet index (`facet_stamps`) makes "give me everything tagged X" cheap instead of a table scan: given one facet, it returns every record in the workspace carrying it. It is a derived index, rebuildable at any time.
+The facet index (`tag_stamps`) makes "give me everything tagged X" cheap instead of a table scan: given one facet, it returns every record in the workspace carrying it. It is a derived index, rebuildable at any time.
 
 ### Second-class objects: the same interface, a smaller surface
 

@@ -1,5 +1,8 @@
+import { TagIcon } from '@heroicons/react/16/solid'
+import { tagTone } from '@biu/biu-ui'
 import type { DbRecord } from '@biu/type-file-system'
 import type { CollectionChrome } from '@biu/type-file-system/ui'
+import { resolveSessionMascot, SidebarMascot } from '@biu/public-mascot'
 import { TableGlyph } from './table-glyph.tsx'
 import { recordPreviewEmoji } from './sidebar-preview.ts'
 
@@ -40,8 +43,33 @@ export function RecordMark({
   className?: string
   size?: 'sm' | 'lg'
 }) {
+  const mascot = record ? recordPreviewMascot(record) : undefined
+  const sessionId = String(record?.sourceId || record?.id || '')
+  const agent = record?.tablePath === '/agents' || Boolean(mascot)
+  if (record && sessionId && agent) {
+    return (
+      <span className={`fsdb-record-mark is-${size}`}>
+        <SidebarMascot
+          size={size === 'lg' ? 32 : 16}
+          sessionId={sessionId}
+          identity={resolveSessionMascot(sessionId, mascot)}
+          animate={false}
+          title=""
+        />
+      </span>
+    )
+  }
   const mark = (emoji ?? (record ? recordPreviewEmoji(record) : '')).trim()
   if (mark) return <span className="fsdb-record-emoji">{mark}</span>
+  const tagId = String(record?.sourceId || record?.id || '')
+  if (record?.tablePath === '/tags' && tagId) {
+    const px = size === 'lg' ? 32 : 16
+    return (
+      <span className={`fsdb-record-mark is-${size}`}>
+        <TagIcon aria-hidden style={{ width: px, height: px, color: tagTone(tagId) }} />
+      </span>
+    )
+  }
   if (Icon && record) {
     return (
       <span className={`fsdb-record-mark is-${size}`}>

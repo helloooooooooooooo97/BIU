@@ -33,14 +33,14 @@ test('session config stores facet and pin; legacy tags become facet', async () =
   await ctx.sessions.patchConfig(record.id, { tags: ['host-ui', 'bug'], pinned: true } as never)
   const again = await ctx.sessions.require(record.id)
   assert.equal(again.config && 'tags' in again.config, false)
-  assert.deepEqual(again.config?.facet, { tags: ['host-ui', 'bug'], values: {} })
+  assert.deepEqual(again.config?.tag, { tags: ['host-ui', 'bug'], values: {} })
   assert.equal(again.config?.pinned, true)
   const listed = await ctx.sessions.listSummaries()
-  assert.deepEqual(listed.find((item) => item.id === record.id)?.config?.facet, { tags: ['host-ui', 'bug'], values: {} })
-  await ctx.sessions.patchConfig(record.id, { pinned: false, facet: { tags: [], values: {} } })
+  assert.deepEqual(listed.find((item) => item.id === record.id)?.config?.tag, { tags: ['host-ui', 'bug'], values: {} })
+  await ctx.sessions.patchConfig(record.id, { pinned: false, tag: { tags: [], values: {} } })
   const cleared = await ctx.sessions.require(record.id)
   assert.equal(cleared.config?.pinned, undefined)
-  assert.deepEqual(cleared.config?.facet, { tags: [], values: {} })
+  assert.deepEqual(cleared.config?.tag, { tags: [], values: {} })
 })
 
 test('session config stores inspector bind', async () => {

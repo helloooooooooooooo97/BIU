@@ -32,9 +32,106 @@ export function renameSessionsTableToAgents(db: DatabaseSync) {
   db.exec('ALTER TABLE sessions RENAME TO agents')
 }
 
+function renameTable(db: DatabaseSync, from: string, to: string) {
+  if (!hasTable(db, from) || hasTable(db, to)) return
+  db.exec(`ALTER TABLE ${from} RENAME TO ${to}`)
+}
+
+function renameColumn(db: DatabaseSync, table: string, from: string, to: string) {
+  if (!hasTable(db, table)) return
+  const cols = tableColumnNames(db, table)
+  if (!cols.includes(from) || cols.includes(to)) return
+  db.exec(`ALTER TABLE ${table} RENAME COLUMN ${from} TO ${to}`)
+}
+
+function rewriteFacetToken(value: string) {
+  if (value === 'facet') return 'tag'
+  if (value === 'facetId') return 'tagId'
+  if (value.startsWith('facet::')) return `tag::${value.slice('facet::'.length)}`
+  if (value === '/facets' || value.startsWith('/facets/')) return `/tags${value.slice('/facets'.length)}`
+  return value
+}
+
+function rewriteFacetJson(value: unknown): unknown {
+  if (typeof value === 'string') return rewriteFacetToken(value)
+  if (Array.isArray(value)) return value.map(rewriteFacetJson)
+  if (!value || typeof value !== 'object') return value
+  const out: Record<string, unknown> = {}
+  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+    const nextKey = rewriteFacetToken(key)
+    let next = rewriteFacetJson(item)
+    if (nextKey === 'type' && (item === 'facet' || item === 'tag')) next = 'tag'
+    out[nextKey] = next
+  }
+  return out
+}
+
+function migrateFacetNameToTag(db: DatabaseSync) {
+  renameTable(db, 'facets', 'tags')
+  renameTable(db, 'facet_stamps', 'tag_stamps')
+  renameTable(db, 'facet_record_values', 'tag_record_values')
+  renameColumn(db, 'tag_stamps', 'facet_id', 'tag_id')
+  renameColumn(db, 'tag_record_values', 'facet_json', 'tag_json')
+  renameColumn(db, 'tasks', 'facet_json', 'tag_json')
+  db.exec('DROP INDEX IF EXISTS facets_label')
+  db.exec('DROP INDEX IF EXISTS facet_stamps_facet')
+  db.exec('DROP INDEX IF EXISTS facet_stamps_record')
+  if (hasTable(db, 'tags')) db.exec('CREATE INDEX IF NOT EXISTS tags_label ON tags(label)')
+  if (hasTable(db, 'tag_stamps')) {
+    db.exec('CREATE INDEX IF NOT EXISTS tag_stamps_tag ON tag_stamps(tag_id)')
+    db.exec('CREATE INDEX IF NOT EXISTS tag_stamps_record ON tag_stamps(collection, record_id)')
+  }
+  remapCollectionPath(db, '/facets', '/tags')
+  if (hasTable(db, 'tags')) {
+    const packs = db.prepare('SELECT id, fields_json FROM tags').all() as Array<{ id: string; fields_json: string }>
+    const save = db.prepare('UPDATE tags SET fields_json = ? WHERE id = ?')
+    for (const pack of packs) {
+      try {
+        const next = rewriteFacetJson(JSON.parse(pack.fields_json || '[]'))
+        save.run(JSON.stringify(next), pack.id)
+      } catch {
+        /* keep */
+      }
+    }
+  }
+  if (hasTable(db, 'saved_views')) {
+    const rows = db.prepare('SELECT collection, view_id, payload_json FROM saved_views').all() as Array<{
+      collection: string
+      view_id: string
+      payload_json: string
+    }>
+    const save = db.prepare('UPDATE saved_views SET payload_json = ? WHERE collection = ? AND view_id = ?')
+    for (const row of rows) {
+      try {
+        const next = JSON.stringify(rewriteFacetJson(JSON.parse(row.payload_json || '{}')))
+        if (next !== row.payload_json) save.run(next, row.collection, row.view_id)
+      } catch {
+        /* keep */
+      }
+    }
+  }
+  if (hasTable(db, 'agents') && tableColumnNames(db, 'agents').includes('config_json')) {
+    const rows = db.prepare('SELECT id, config_json FROM agents').all() as Array<{ id: string; config_json: string | null }>
+    const save = db.prepare('UPDATE agents SET config_json = ? WHERE id = ?')
+    for (const row of rows) {
+      if (!row.config_json) continue
+      try {
+        const parsed = JSON.parse(row.config_json) as Record<string, unknown>
+        if (!('facet' in parsed) && !JSON.stringify(parsed).includes('facet')) continue
+        const next = rewriteFacetJson(parsed)
+        save.run(JSON.stringify(next), row.id)
+      } catch {
+        /* keep */
+      }
+    }
+  }
+}
+
 function remapSessionsCollectionToAgents(db: DatabaseSync) {
-  const from = '/' + 'sessions'
-  const to = '/agents'
+  remapCollectionPath(db, '/' + 'sessions', '/agents')
+}
+
+function remapCollectionPath(db: DatabaseSync, from: string, to: string) {
   for (const table of tableNames(db)) {
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(table)) continue
     const cols = tableColumnNames(db, table)
@@ -251,10 +348,12 @@ function isMigratableFacetFieldName(name: string) {
 }
 
 function migrateFacetFieldIdentity(db: DatabaseSync) {
-  if (!tableNames(db).includes('facets')) return
+  const names = tableNames(db)
+  const packTable = names.includes('facets') ? 'facets' : names.includes('tags') ? 'tags' : ''
+  if (!packTable) return
   const remaps = new Map<string, Map<string, string>>()
-  const packs = db.prepare('SELECT id, fields_json FROM facets').all() as Array<{ id: string; fields_json: string }>
-  const save = db.prepare('UPDATE facets SET fields_json = ? WHERE id = ?')
+  const packs = db.prepare(`SELECT id, fields_json FROM ${packTable}`).all() as Array<{ id: string; fields_json: string }>
+  const save = db.prepare(`UPDATE ${packTable} SET fields_json = ? WHERE id = ?`)
   for (const pack of packs) {
     let listed: unknown = []
     try {
@@ -289,13 +388,15 @@ function migrateFacetFieldIdentity(db: DatabaseSync) {
     if (map.size) remaps.set(pack.id, map)
   }
   if (!remaps.size) return
-  if (tableNames(db).includes('facet_record_values')) {
-    const rows = db.prepare('SELECT collection, record_id, facet_json FROM facet_record_values').all() as Array<{
+  const valueTable = names.includes('facet_record_values') ? 'facet_record_values' : names.includes('tag_record_values') ? 'tag_record_values' : ''
+  const valueCol = valueTable === 'tag_record_values' ? 'tag_json' : 'facet_json'
+  if (valueTable) {
+    const rows = db.prepare(`SELECT collection, record_id, ${valueCol} AS facet_json FROM ${valueTable}`).all() as Array<{
       collection: string
       record_id: string
       facet_json: string
     }>
-    const put = db.prepare('UPDATE facet_record_values SET facet_json = ? WHERE collection = ? AND record_id = ?')
+    const put = db.prepare(`UPDATE ${valueTable} SET ${valueCol} = ? WHERE collection = ? AND record_id = ?`)
     for (const row of rows) {
       let parsed: unknown
       try {
@@ -339,14 +440,15 @@ function migrateFacetFieldIdentity(db: DatabaseSync) {
   const saveView = db.prepare('UPDATE saved_views SET payload_json = ? WHERE collection = ? AND view_id = ?')
   const rewrite = (value: unknown): unknown => {
     if (typeof value === 'string') {
-      if (!value.startsWith('facet::')) return value
-      const rest = value.slice('facet::'.length)
+      const prefix = value.startsWith('tag::') ? 'tag::' : value.startsWith('facet::') ? 'facet::' : ''
+      if (!prefix) return value
+      const rest = value.slice(prefix.length)
       const split = rest.indexOf('::')
       if (split <= 0) return value
       const packId = rest.slice(0, split)
       const fieldKey = rest.slice(split + 2)
       const dest = remaps.get(packId)?.get(fieldKey)
-      return dest ? `facet::${packId}::${dest}` : value
+      return dest ? `${prefix}${packId}::${dest}` : value
     }
     if (Array.isArray(value)) return value.map(rewrite)
     if (!value || typeof value !== 'object') return value
@@ -789,6 +891,9 @@ export const BIU_MIGRATIONS: Migration[] = [
   } },
   { version: 43, module: 'core-file-system', name: 'facet.field.identity', up: (db) => {
     migrateFacetFieldIdentity(db)
+  } },
+  { version: 44, module: 'core-file-system', name: 'facet-to-tag', up: (db) => {
+    migrateFacetNameToTag(db)
   } },
 ]
 

@@ -41,14 +41,18 @@ function asScale(value: unknown, fallback: BodyScale): BodyScale {
   return typeof value === 'string' && SCALES.has(value as BodyScale) ? (value as BodyScale) : fallback
 }
 
+function asBool(value: unknown, fallback: boolean): boolean {
+  return typeof value === 'boolean' ? value : fallback
+}
+
 export function parsePagePrefs(value: unknown, fallback: PagePrefs = DEFAULT_PAGE_PREFS): PagePrefs {
   if (!value || typeof value !== 'object') return { ...fallback }
   const rec = value as Partial<PagePrefs>
   return {
-    wide: rec.wide === true,
-    outlineExpand: rec.outlineExpand !== false,
-    outlinePin: rec.outlinePin === true,
-    navPin: rec.navPin === true,
+    wide: asBool(rec.wide, fallback.wide),
+    outlineExpand: asBool(rec.outlineExpand, fallback.outlineExpand),
+    outlinePin: asBool(rec.outlinePin, fallback.outlinePin),
+    navPin: asBool(rec.navPin, fallback.navPin),
     bodySize: asScale(rec.bodySize, fallback.bodySize),
     bodyGap: asScale(rec.bodyGap, fallback.bodyGap),
   }
@@ -92,12 +96,22 @@ export function profileExists() {
   return existsSync(workspaceProfilePath())
 }
 
-export function asPublicProfile(profile = readWorkspaceProfile()) {
+export function asPublicProfile(profile?: WorkspaceProfile) {
+  const current = profile ?? readWorkspaceProfile()
+  let pagePrefs: unknown = current.pagePrefs
+  if (!profile) {
+    try {
+      const raw = JSON.parse(readFileSync(workspaceProfilePath(), 'utf8')) as { pagePrefs?: unknown }
+      if (raw.pagePrefs && typeof raw.pagePrefs === 'object' && !Array.isArray(raw.pagePrefs)) pagePrefs = raw.pagePrefs
+    } catch {
+      /* 没有落盘记录时用解析后的默认值 */
+    }
+  }
   return {
-    name: profile.name,
-    avatar: profile.avatar,
-    theme: profile.theme,
-    pagePrefs: profile.pagePrefs,
-    displayName: profile.name || '用户',
+    name: current.name,
+    avatar: current.avatar,
+    theme: current.theme,
+    pagePrefs,
+    displayName: current.name || '用户',
   }
 }

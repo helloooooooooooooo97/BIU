@@ -69,9 +69,9 @@ const RECORD_PICK_KIND: Record<string, string> = {
   views: 'view',
   view: 'view',
   'views-db': 'view',
-  facets: 'facet',
-  facet: 'facet',
-  'facets-db': 'facet',
+  tags: 'tag',
+  tag: 'tag',
+  'tags-db': 'tag',
 }
 
 export function recordPickKind(moduleId?: string | null) {

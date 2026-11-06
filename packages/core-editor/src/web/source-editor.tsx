@@ -1,5 +1,6 @@
 import { useEffect, useImperativeHandle, useRef, forwardRef } from 'react'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
+import { javascript } from '@codemirror/lang-javascript'
 import { json } from '@codemirror/lang-json'
 import { markdown } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
@@ -8,7 +9,9 @@ import { EditorSelection, EditorState, StateEffect, StateField } from '@codemirr
 import { Decoration, EditorView, drawSelection, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers } from '@codemirror/view'
 import { tags } from '@lezer/highlight'
 import { CONTENT_JUMP_EVENT, parseContentJump } from '@biu/type-file-system'
+import { bindEditorTextHost } from '@biu/core-pick/web'
 import { peekContentJump } from './content-jump.ts'
+import { restorePageScroll } from './page-scroll-pin.ts'
 import { findRanges, wrapFindIndex } from './find-ranges.ts'
 
 const findEffect = StateEffect.define<{ query: string; index: number }>()
@@ -66,10 +69,52 @@ const agentEditField = StateField.define({
   provide: (field) => EditorView.decorations.from(field),
 })
 
+export type SourceLocus = { start_line: number; end_line: number; text: string; selection?: string; insert?: number }
+
 export type SourceEditorHandle = {
   applyFind: (query: string, index: number) => { total: number; index: number }
-  getLocus: () => { start_line: number; end_line: number; text: string; selection?: string; insert?: number } | null
+  getLocus: () => SourceLocus | null
+  locusFromElement: (node: Element) => SourceLocus | null
   isAtStart: () => boolean
+}
+
+function locusFromView(view: EditorView | null): SourceLocus | null {
+  if (!view) return null
+  const sel = view.state.selection.main
+  const from = Math.min(sel.from, sel.to)
+  const to = Math.max(sel.from, sel.to)
+  if (sel.empty || from === to) {
+    const line = view.state.doc.lineAt(from)
+    return { start_line: line.number, end_line: line.number, text: line.text, insert: from - line.from }
+  }
+  const selection = view.state.doc.sliceString(from, to).trim()
+  if (!selection) return null
+  const start_line = view.state.doc.lineAt(from).number
+  const end_line = view.state.doc.lineAt(Math.max(from, to - 1)).number
+  const start = view.state.doc.line(start_line)
+  const end = view.state.doc.line(end_line)
+  return { start_line, end_line, text: view.state.doc.sliceString(start.from, end.to), selection }
+}
+
+export function locusFromViewElement(view: EditorView | null, node: Element): SourceLocus | null {
+  if (!view) return null
+  const lineEl = node.closest('.cm-line')
+  if (lineEl) {
+    try {
+      const pos = view.posAtDOM(lineEl, 0)
+      const line = view.state.doc.lineAt(pos)
+      const sel = view.state.selection.main
+      if (!sel.empty) {
+        const from = Math.min(sel.from, sel.to)
+        const to = Math.max(sel.from, sel.to)
+        if (from < line.to && to > line.from) return locusFromView(view)
+      }
+      return { start_line: line.number, end_line: line.number, text: line.text }
+    } catch {
+      /* jsdom / detached */
+    }
+  }
+  return locusFromView(view)
 }
 
 const mdHighlight = HighlightStyle.define([
@@ -86,7 +131,20 @@ const mdHighlight = HighlightStyle.define([
   { tag: tags.keyword, color: 'var(--biu-color-emphasis)' },
   { tag: tags.string, color: 'var(--biu-color-ok)' },
   { tag: tags.number, color: 'var(--biu-color-warning)' },
+  { tag: tags.bool, color: 'var(--biu-color-emphasis)' },
+  { tag: tags.null, color: 'var(--biu-color-emphasis)' },
+  { tag: tags.tagName, color: 'var(--biu-color-emphasis)', fontWeight: '600' },
+  { tag: tags.className, color: 'var(--biu-color-ink-purple)' },
+  { tag: tags.function(tags.variableName), color: 'var(--biu-color-ink-purple)' },
 ])
+
+export type SourceLanguage = 'markdown' | 'json' | 'javascript'
+
+function languageSupport(language: SourceLanguage) {
+  if (language === 'json') return json()
+  if (language === 'javascript') return javascript({ jsx: true, typescript: true })
+  return markdown({ codeLanguages: languages })
+}
 
 const compactTheme = EditorView.theme({
   '.cm-content': { minHeight: '0' },
@@ -100,7 +158,7 @@ const theme = EditorView.theme({
     fontSize: '14px',
   },
   '.cm-scroller': { fontFamily: 'var(--font-mono)', lineHeight: '1.65', overflow: 'visible' },
-  '.cm-content': { caretColor: 'var(--biu-color-text)', padding: '0', minHeight: '240px' },
+  '.cm-content': { caretColor: 'var(--biu-color-text)', padding: '0', minHeight: '0' },
   '.cm-gutters': {
     background: 'transparent',
     border: 'none',
@@ -122,8 +180,9 @@ export const SourceEditor = forwardRef<SourceEditorHandle, {
   writable: boolean
   onChange?: (next: string) => void
   compact?: boolean
-  language?: 'markdown' | 'json'
-}>(function SourceEditor({ value, writable, onChange, compact, language = 'markdown' }, ref) {
+  language?: SourceLanguage
+  pickHost?: { path?: string; name?: string; title?: string } | null
+}>(function SourceEditor({ value, writable, onChange, compact, language = 'markdown', pickHost }, ref) {
   const host = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
   const onChangeRef = useRef(onChange)
@@ -146,7 +205,7 @@ export const SourceEditor = forwardRef<SourceEditorHandle, {
           highlightActiveLine(),
           highlightActiveLineGutter(),
           keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
-          language === 'json' ? json() : markdown({ codeLanguages: languages }),
+          languageSupport(language),
           syntaxHighlighting(mdHighlight),
           EditorView.lineWrapping,
           theme,
@@ -164,6 +223,11 @@ export const SourceEditor = forwardRef<SourceEditorHandle, {
       }),
     })
     viewRef.current = view
+    restorePageScroll()
+    requestAnimationFrame(() => {
+      restorePageScroll()
+      requestAnimationFrame(restorePageScroll)
+    })
     return () => {
       if (timer.current) clearTimeout(timer.current)
       view.destroy()
@@ -191,22 +255,10 @@ export const SourceEditor = forwardRef<SourceEditorHandle, {
       return { total, index: i }
     },
     getLocus() {
-      const view = viewRef.current
-      if (!view) return null
-      const sel = view.state.selection.main
-      const from = Math.min(sel.from, sel.to)
-      const to = Math.max(sel.from, sel.to)
-      if (sel.empty || from === to) {
-        const line = view.state.doc.lineAt(from)
-        return { start_line: line.number, end_line: line.number, text: line.text, insert: from - line.from }
-      }
-      const selection = view.state.doc.sliceString(from, to).trim()
-      if (!selection) return null
-      const start_line = view.state.doc.lineAt(from).number
-      const end_line = view.state.doc.lineAt(Math.max(from, to - 1)).number
-      const start = view.state.doc.line(start_line)
-      const end = view.state.doc.line(end_line)
-      return { start_line, end_line, text: view.state.doc.sliceString(start.from, end.to), selection }
+      return locusFromView(viewRef.current)
+    },
+    locusFromElement(node) {
+      return locusFromViewElement(viewRef.current, node)
     },
     isAtStart() {
       const view = viewRef.current
@@ -237,6 +289,19 @@ export const SourceEditor = forwardRef<SourceEditorHandle, {
     window.addEventListener(CONTENT_JUMP_EVENT, onJump)
     return () => window.removeEventListener(CONTENT_JUMP_EVENT, onJump)
   }, [])
+
+  useEffect(() => {
+    const el = host.current
+    if (!el || !pickHost) return
+    bindEditorTextHost(el, {
+      path: pickHost.path,
+      name: pickHost.name,
+      title: pickHost.title,
+      locusFromSelection: () => locusFromView(viewRef.current),
+      locusFromElement: (node) => locusFromViewElement(viewRef.current, node),
+    })
+    return () => bindEditorTextHost(el, null)
+  }, [pickHost?.path, pickHost?.name, pickHost?.title, Boolean(pickHost)])
 
   useEffect(
     () => () => {

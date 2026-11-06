@@ -25,7 +25,6 @@ import { TagChip } from '@biu/biu-ui/tag-chip'
 import { ConfirmDialog } from '@biu/biu-ui/confirm-dialog'
 import { chromeIcon } from './chrome-icon.ts'
 import { applyNoticeClick, noticeIdOf } from './notice-open.ts'
-import { readMainDataRoute } from '@biu/core-file-system/main-data-route'
 import { persistTheme, readTheme, type ThemeMode } from './theme.ts'
 import { persistWorkspaceProfile } from '@biu/biu-ui/workspace-profile'
 import { useWorkspaceProfile } from '@biu/biu-ui/use-workspace-profile'
@@ -2350,7 +2349,7 @@ export function ShellSidePlaces({
         testId="chrome-data-panel"
         icon={<CircleStackIcon {...chromeIcon} />}
         onClick={() => {
-          navigate(readMainDataRoute() || '/database')
+          navigate('/database')
         }}
       />
     </div>

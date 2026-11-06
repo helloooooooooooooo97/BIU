@@ -29,10 +29,11 @@ import {
   asHttpHref,
   asImageSrc,
   asImageSrcList,
-  isFacetFieldType,
+  isTagFieldType,
   bindSchemaValue,
   emptySchemaValue,
   isEmptySchemaValue,
+  normalizeSchemaPack,
   normalizeSchemaValue,
   schemaSearchHaystack,
   withBuiltinFields,
@@ -59,15 +60,16 @@ import { SavedViewsStore, clientViewFromDbRow, viewsCollection, type StoredView 
 import { publicShareUrl } from './share-origin.ts'
 import { readSharePluginWebJs, zipSharePluginSource } from './share-plugin-pack.ts'
 import { isSharePluginId } from '../share-resources.ts'
-import { FacetStore } from './facets-store.ts'
+import { TagStore } from './tags-store.ts'
 import { SharesStore, dropSharesForRemovedViews } from './shares-store.ts'
 import { builtinAllView, builtinAllViewId, builtinMemberViews, displayNameForView, isReadOnlyViewId, stubBuiltinAllView, stubBuiltinMemberView } from '../catalog-views.ts'
-import { isIndexCollection, isSystemCollection } from '../web/database-path.ts'
+import { DATA_COLLECTION_PATH, isIndexCollection, isSystemCollection } from '../web/database-path.ts'
+import { dataCollection, isDataOverviewSource, overviewRecord } from './data-collection.ts'
 import { effectiveDataScope, highestViewRole, recordMatchesGrantedView, type DataScopeName, type ViewGrantRole } from '../view-access.ts'
 import { recordMatchesSharedView, resolveSharedView, type SharedViewDef } from '../share-view-match.ts'
 import { buildShareSnapshot } from './share-payload.ts'
 import { FileSystemAssets, collectAssetNames, assetNamesFromMarkdown, assetNamesFromHtml, isAssetFileName, isHashedAssetName, mimeOfAsset, AssetConflictError, parseIfMatch } from './assets-store.ts'
-import { facetsCollection, parseStampRecordId } from './facets-collection.ts'
+import { tagsCollection, parseStampRecordId } from './tags-collection.ts'
 import { trashCollection } from './trash-collection.ts'
 import { runWorkspaceAssetGc } from './asset-gc-run.ts'
 import { ContentTurnService } from './content-turn-service.ts'
@@ -85,7 +87,7 @@ import {
 } from './content-edit.ts'
 import { currentSessionId } from '@biu/host-sessions/scope'
 import { databaseRevealForTool, normalizeCollectionPath, splitResourcePath } from '../paths.ts'
-import { matchListFilterRecord, normalizeSorts, parseFacetFlatColumnKey, readFacetFieldValue, sortRecordsBy } from '../query-logic.ts'
+import { matchListFilterRecord, normalizeSorts, parseTagFlatColumnKey, readTagFieldValue, sortRecordsBy } from '../query-logic.ts'
 import { actionWhenKeys } from '../web/fields.ts'
 import { AgentDbCompact } from './agent-payload.ts'
 
@@ -103,11 +105,11 @@ const STAMP_FIELD_BLOCKLIST = new Set([
   'table',
   'tablePath',
   'sourceId',
-  'facetId',
+  'tagId',
   'tag',
   'fieldCount',
   'stampCount',
-  'facetId',
+  'tagId',
   'content',
   'emoji',
   'createdAt',
@@ -177,7 +179,7 @@ function schemaFor(spec: CollectionSpec): CollectionSchema {
   for (const [key, field] of Object.entries(raw)) {
     fields[key] = field.computed ? { ...field, writable: false } : field
   }
-  let columns = ensureColumn(spec.schema.columns, 'facet')
+  let columns = ensureColumn(spec.schema.columns, 'tag')
   if (!isSystemCollection(spec.path) && !isIndexCollection(spec.path)) {
     fields.shareScope = {
       type: 'select',
@@ -254,7 +256,8 @@ function withoutContent(spec: CollectionSpec, row: DbRecord): DbRecord {
 
 const LIST_FIELD_COMPANIONS: Record<string, string[]> = {
   usage: ['usageParts'],
-  title: ['parentChain', 'blocked'],
+  title: ['parentChain', 'blocked', 'emoji', 'actionIds'],
+  table: ['tablePath', 'tableIcon', 'sourceId'],
 }
 
 function listedColumnKeys(requested: unknown, labelField: string, schema?: CollectionSchema): string[] | null {
@@ -282,7 +285,7 @@ function listedColumnKeys(requested: unknown, labelField: string, schema?: Colle
 }
 
 type ListDecorateNeed = {
-  facet: boolean
+  tag: boolean
   people: boolean
   meta: boolean
   shareScope: boolean
@@ -293,7 +296,7 @@ function listDecorateNeed(wanted: string[] | null | undefined): ListDecorateNeed
   if (!wanted?.length) return null
   const set = new Set(wanted)
   return {
-    facet: set.has('facet') || wanted.some((key) => key.startsWith('facet::')),
+    tag: set.has('tag') || wanted.some((key) => key.startsWith('tag::')),
     people: set.has('createdBy') || set.has('updatedBy'),
     meta: set.has('emoji'),
     shareScope: set.has('shareScope'),
@@ -305,8 +308,8 @@ function pickListedFields(row: DbRecord, keys: string[]): DbRecord {
   const next: DbRecord = { id: row.id }
   for (const key of keys) {
     if (key === 'path' || key === 'kind') continue
-    if (parseFacetFlatColumnKey(key)) {
-      next[key] = readFacetFieldValue(row, key)
+    if (parseTagFlatColumnKey(key)) {
+      next[key] = readTagFieldValue(row, key)
       continue
     }
     if (Object.prototype.hasOwnProperty.call(row, key)) next[key] = row[key]
@@ -345,6 +348,12 @@ function splitPath(path: string): string[] {
   return hit.recordId ? [name, hit.recordId] : [name]
 }
 
+function linkUploadedAsset(db: { tags: { linkContentRef: (collection: string, recordId: string, name: string) => void } }, path: string, name: string) {
+  const parts = splitPath(path)
+  if (parts.length < 2 || !name) return
+  db.tags.linkContentRef(`/${parts[0]}`, parts.slice(1).join('/'), name)
+}
+
 function coerceList(value: unknown) {
   if (Array.isArray(value)) return value.map(String)
   if (typeof value === 'string') {
@@ -355,9 +364,9 @@ function coerceList(value: unknown) {
       try {
         parsed = JSON.parse(text)
       } catch {
-        throw new Error('expected string list as JSON array, e.g. ["title","facet"]')
+        throw new Error('expected string list as JSON array, e.g. ["title","tag"]')
       }
-      if (!Array.isArray(parsed)) throw new Error('expected string list as JSON array, e.g. ["title","facet"]')
+      if (!Array.isArray(parsed)) throw new Error('expected string list as JSON array, e.g. ["title","tag"]')
       return parsed.map(String)
     }
     if (text.includes('"') || text.includes('[') || text.includes(']')) {
@@ -473,7 +482,7 @@ function coerce(field: FieldSpec, value: unknown) {
     throw new Error('expected file')
   }
   if (kind === 'action') return value == null ? '' : value
-  if (isFacetFieldType(kind)) return normalizeSchemaValue(value)
+  if (isTagFieldType(kind)) return normalizeSchemaValue(value)
   if (Array.isArray(value)) return JSON.stringify(value)
   if (value && typeof value === 'object') {
     const rec = value as Record<string, unknown>
@@ -496,30 +505,30 @@ function packFieldKey(pack: CollectionSchemaPack | null | undefined, name: strin
   return want
 }
 
-function facetBagValueEmpty(value: unknown) {
+function tagBagValueEmpty(value: unknown) {
   return value == null || (typeof value === 'string' && !value.trim())
 }
 
-function remapFacetBag(pack: CollectionSchemaPack | null | undefined, bag: Record<string, unknown>) {
+function remapTagBag(pack: CollectionSchemaPack | null | undefined, bag: Record<string, unknown>) {
   const out: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(bag)) {
     const field = packFieldKey(pack, key)
     if (!field) continue
-    out[field] = facetBagValueEmpty(value) ? '' : value
+    out[field] = tagBagValueEmpty(value) ? '' : value
   }
   return out
 }
 
-function applyFacetBagPatch(
+function applyTagBagPatch(
   pack: CollectionSchemaPack | null | undefined,
   current: Record<string, unknown>,
   bag: Record<string, unknown>,
 ) {
-  return { ...current, ...remapFacetBag(pack, bag) }
+  return { ...current, ...remapTagBag(pack, bag) }
 }
 
 /** Agent 常写成扁平 values（中文属性名），权威形状是 values[标签id][字段key]。 */
-function coerceFacetPatch(
+function coerceTagPatch(
   raw: unknown,
   current: SchemaFieldValue,
   resolvePack: (idOrLabel: string) => CollectionSchemaPack | null,
@@ -549,7 +558,7 @@ function coerceFacetPatch(
   const applyBag = (packId: string, bag: Record<string, unknown>) => {
     const id = resolvePack(packId)?.id ?? packId
     if (!tags.includes(id)) return
-    bags[id] = applyFacetBagPatch(resolvePack(id), bags[id] ?? {}, bag)
+    bags[id] = applyTagBagPatch(resolvePack(id), bags[id] ?? {}, bag)
   }
   if (isPlainObject(rec.values)) {
     const nested: Array<[string, Record<string, unknown>]> = []
@@ -678,7 +687,7 @@ function matchQuery(record: DbRecord, q: string, packs: CollectionSchemaPack[] =
   if (String(record.id).toLowerCase().includes(needle)) return true
   for (const [key, value] of Object.entries(record)) {
     if (value == null || value === '') continue
-    if (key === 'facet' || (value && typeof value === 'object' && !Array.isArray(value) && 'tags' in (value as object))) {
+    if (key === 'tag' || (value && typeof value === 'object' && !Array.isArray(value) && 'tags' in (value as object))) {
       if (schemaSearchHaystack(value, packs).toLowerCase().includes(needle)) return true
       continue
     }
@@ -692,10 +701,10 @@ function matchListFilter(record: DbRecord, filter: Record<string, unknown> | und
   return matchListFilterRecord(record, filter, schema, packs)
 }
 
-const OVERLAY_LIST_FIELDS = new Set(['emoji', 'facet', 'createdBy', 'updatedBy', 'shareScope', 'shareRole'])
+const OVERLAY_LIST_FIELDS = new Set(['emoji', 'tag', 'createdBy', 'updatedBy', 'shareScope', 'shareRole'])
 
 function overlayListField(field: string) {
-  return OVERLAY_LIST_FIELDS.has(String(field ?? '')) || String(field ?? '').startsWith('facet::')
+  return OVERLAY_LIST_FIELDS.has(String(field ?? '')) || String(field ?? '').startsWith('tag::')
 }
 
 export function listNeedsMatchOverlay(
@@ -719,10 +728,10 @@ export function listNeedsMatchOverlay(
 
 /** spec.list 真正用到的查询。分组筛选在内存里做，好让并发的组页共用一次整表扫描。 */
 export function specListQuery(query: CollectionListQuery): CollectionListQuery {
-  const facetId = String(query.filter?.facetId ?? '').trim()
+  const tagId = String(query.filter?.tagId ?? '').trim()
   const sessionId = String(query.filter?.sessionId ?? '').trim()
   const filter = {
-    ...(facetId ? { facetId } : {}),
+    ...(tagId ? { tagId } : {}),
     ...(sessionId ? { sessionId } : {}),
   }
   return {
@@ -845,7 +854,7 @@ function viewRowKeys(rows: DbRecord[]) {
 export class DatabaseService extends Service implements Database {
   private collections = new Map<string, CollectionSpec>()
   private contentWrites = new Map<string, Promise<void>>()
-  facets = new FacetStore()
+  tags = new TagStore()
   shares = new SharesStore()
   assets = new FileSystemAssets()
   viewCatalog?: { viewsFor(collectionPath: string): SharedViewDef[] }
@@ -946,7 +955,7 @@ export class DatabaseService extends Service implements Database {
   private async loadCollectionRows(spec: CollectionSpec, query: CollectionListQuery) {
     const rows = await spec.list(query)
     const listed = !query.ids?.length ? rows : rows.filter((row) => query.ids!.includes(row.id))
-    const hidden = this.facets.deletedIds(spec.path)
+    const hidden = this.tags.deletedIds(spec.path)
     const builtinPlugin = (row: { builtin?: unknown }) => spec.path === '/plugins' && row.builtin === true
     return query.trash
       ? listed.filter((row) => hidden.has(row.id) && !builtinPlugin(row))
@@ -1008,7 +1017,24 @@ export class DatabaseService extends Service implements Database {
     }
   }
 
+  private overviewRowActions(): CollectionActionInfo[] {
+    const out: CollectionActionInfo[] = []
+    for (const source of this.collectionsList()) {
+      if (!isDataOverviewSource(source.path)) continue
+      const seen = new Set<string>()
+      for (const action of schemaFor(source).actions ?? []) {
+        const places = action.placement ?? ['row', 'detail']
+        if (!places.includes('row') || !actionVisibleToUser(action)) continue
+        if (seen.has(action.id)) continue
+        seen.add(action.id)
+        out.push({ ...action, collection: source.path })
+      }
+    }
+    return out
+  }
+
   private schemaForCurrent(spec: CollectionSpec, schema = schemaFor(spec)) {
+    if (spec.path === DATA_COLLECTION_PATH) schema = { ...schema, actions: this.overviewRowActions() }
     schema = this.withLocationShareScope(schema)
     const authorization = this.authorization()
     const actor = authorization?.currentActor()
@@ -1039,7 +1065,7 @@ export class DatabaseService extends Service implements Database {
   }
 
   private scopeTarget(collection: string, id: string, row?: { pageId?: unknown; collection?: unknown; sessionId?: unknown; sourceId?: unknown; tablePath?: unknown }) {
-    if (collection === '/trash') {
+    if (collection === '/trash' || collection === DATA_COLLECTION_PATH) {
       const tablePath = String(row?.tablePath ?? '')
       const sourceId = String(row?.sourceId ?? '')
       if (tablePath && sourceId) return { collection: tablePath, id: sourceId }
@@ -1050,7 +1076,7 @@ export class DatabaseService extends Service implements Database {
       const sessionId = String(row?.sessionId ?? (id.lastIndexOf(':') > 0 ? id.slice(0, id.lastIndexOf(':')) : ''))
       if (sessionId) return { collection: '/agents', id: sessionId }
     }
-    if (collection === '/facets') {
+    if (collection === '/tags') {
       const tablePath = String(row?.tablePath ?? '')
       const sourceId = String(row?.sourceId ?? '')
       if (tablePath && sourceId) return { collection: tablePath, id: sourceId }
@@ -1095,7 +1121,7 @@ export class DatabaseService extends Service implements Database {
           collection: target.collection,
           recordId: target.id,
         }
-        if (collection === '/facets' && !String(row.sourceId ?? '') && !String(row.tablePath ?? '')) {
+        if (collection === '/tags' && !String(row.sourceId ?? '') && !String(row.tablePath ?? '')) {
           return this.indexFacetVisible(String(row.id ?? ''), actor.accountId)
         }
         if (authorization.authorize(actor, action, resource).allowed) return true
@@ -1128,13 +1154,15 @@ export class DatabaseService extends Service implements Database {
 
   /** 标签目录只留下当前用户能读到的源记录上贴过的标签；还没贴到公开数据上的，只留给创建人。 */
   private indexFacetVisible(id: string, accountId: string) {
-    const found = this.facets.collect(id)
+    const found = this.tags.collect(id)
     for (const item of found.items) {
-      if (this.facets.isDeleted(item.collection, item.id)) continue
-      if (item.collection === '/facets') continue
+      if (this.tags.isDeleted(item.collection, item.id)) continue
+      if (item.collection === '/tags') continue
       if (this.visibleRecords(item.collection, [{ id: item.id }]).length > 0) return true
     }
-    return this.facets.recordMeta('/facets', id)?.createdBy?.accountId === accountId
+    const createdBy = this.tags.recordMeta('/tags', id)?.createdBy?.accountId
+    if (createdBy) return createdBy === accountId
+    return Boolean(this.tags.get(id))
   }
 
   private recordsInScope<T extends { id?: unknown; pageId?: unknown; collection?: unknown; sessionId?: unknown; sourceId?: unknown; tablePath?: unknown }>(
@@ -1289,7 +1317,7 @@ export class DatabaseService extends Service implements Database {
       if (this.collabStore()?.isSuperAdmin?.(currentAccountId())) return
       throw new Error('permission denied: INSUFFICIENT_PERMISSION')
     }
-    if (this.facets.isDeleted(spec.path, id)) throw new Error(`unknown record: ${spec.path}/${id}`)
+    if (this.tags.isDeleted(spec.path, id)) throw new Error(`unknown record: ${spec.path}/${id}`)
     const authorization = this.authorization()
     const actor = authorization?.currentActor()
     if (authorization && actor) {
@@ -1301,6 +1329,13 @@ export class DatabaseService extends Service implements Database {
         recordId: target.id,
       })
       if (!decision.allowed) {
+        if (
+          spec.path === '/tags' &&
+          (action === 'resource:read' || action === 'resource:list') &&
+          this.indexFacetVisible(id, actor.accountId)
+        ) {
+          return
+        }
         const viaView = record
           ? this.viewGrantRole(actor.workspaceId, spec.path, record, actor.accountId)
           : null
@@ -1348,7 +1383,7 @@ export class DatabaseService extends Service implements Database {
     if (!authorization) return
     const actor = authorization.currentActor()
     if (!actor) throw new Error('permission denied: UNAUTHENTICATED')
-    const refs = this.facets.recordsReferencingAsset(name)
+    const refs = this.tags.recordsReferencingAsset(name)
     const allowed = refs.some((ref) => {
       const resource = {
         type: 'record' as const,
@@ -1389,7 +1424,7 @@ export class DatabaseService extends Service implements Database {
   }
 
   private listRemapsRecords(path: string) {
-    return path === '/trash' || path === '/events' || path === '/facets' || path === '/page-blocks'
+    return path === '/trash' || path === '/events' || path === '/tags' || path === '/page-blocks'
   }
 
   private preloadRelatedCollections(
@@ -1447,9 +1482,9 @@ export class DatabaseService extends Service implements Database {
     sorts: Array<{ field: string; dir: 'asc' | 'desc' }> | undefined,
     overlay: boolean,
   ) {
-    const tagFilter = spec.path === '/facets' ? String(query.filter?.facetId ?? '').trim() : ''
+    const tagFilter = spec.path === '/tags' ? String(query.filter?.tagId ?? '').trim() : ''
     const rows = await this.scanCollectionRows(spec, query, Boolean(tagFilter || overlay))
-    if (tagFilter) await this.hydrateFacetStamps(rows, this.facets.get(tagFilter))
+    if (tagFilter) await this.hydrateTagStamps(rows, this.tags.get(tagFilter))
     const auth = this.authorization()
     const actor = auth?.currentActor()
     const extraScans = auth && actor ? this.preloadRelatedCollections(spec.path, rows, auth, actor) : []
@@ -1492,7 +1527,7 @@ export class DatabaseService extends Service implements Database {
   private async scanCollectionRowsNow(spec: CollectionSpec, query: CollectionListQuery, overlay: boolean) {
     const rows = await this.loadCollectionRows(spec, query)
     if (!overlay) return rows
-    return rows.map((row) => this.applyMetaOverlay(spec, this.applyFacetOverlay(spec, row)))
+    return rows.map((row) => this.applyMetaOverlay(spec, this.applyTagOverlay(spec, row)))
   }
 
   private async matchCollectionRowsNow(
@@ -1503,18 +1538,18 @@ export class DatabaseService extends Service implements Database {
     overlay = true,
   ) {
     let schema = schemaFor(spec)
-    const packs = this.facets.list()
-    const tagFilter = spec.path === '/facets' ? String(filter?.facetId ?? '').trim() : ''
-    const tagPack = tagFilter ? this.facets.get(tagFilter) : null
+    const packs = this.tags.list()
+    const tagFilter = spec.path === '/tags' ? String(filter?.tagId ?? '').trim() : ''
+    const tagPack = tagFilter ? this.tags.get(tagFilter) : null
     const rows = await this.scanCollectionRows(spec, query, Boolean(tagFilter || overlay))
     if (tagFilter) {
       schema = schemaWithTagPack(schema, tagPack)
-      await this.hydrateFacetStamps(rows, tagPack)
+      await this.hydrateTagStamps(rows, tagPack)
     }
     return rows.filter((row) => matchListFilter(row, filter, schema, packs) && matchQuery(row, q, packs))
   }
 
-  private async hydrateFacetStamps(rows: DbRecord[], pack: CollectionSchemaPack | null) {
+  private async hydrateTagStamps(rows: DbRecord[], pack: CollectionSchemaPack | null) {
     if (!pack?.fields.length) return
     const wanted = pack.fields.filter((field) => !field.deleted && !STAMP_FIELD_BLOCKLIST.has(field.key))
     if (!wanted.length) return
@@ -1526,7 +1561,7 @@ export class DatabaseService extends Service implements Database {
       const found = await spec.get(id)
       if (!found) continue
       const record = this.decorateRecord(spec, found)
-      const bag = normalizeSchemaValue(record.facet).values[pack.id] ?? {}
+      const bag = normalizeSchemaValue(record.tag).values[pack.id] ?? {}
       for (const field of wanted) {
         if (bag[field.key] !== undefined) row[field.key] = bag[field.key]
       }
@@ -1639,6 +1674,64 @@ export class DatabaseService extends Service implements Database {
     }
   }
 
+  private async listDataOverview(spec: CollectionSpec, filter?: Record<string, unknown>, page?: ListPage) {
+    const schema = { ...schemaFor(spec), actions: this.overviewRowActions() }
+    const { limit, offset } = clampPage(page?.limit, page?.offset)
+    const q = page?.q ?? ''
+    const sortField = page?.sortField?.trim() || 'title'
+    const sortDir = page?.sortDir === 'desc' ? 'desc' : 'asc'
+    const scopeFilter = filter?.$scope === 'workspace' || filter?.$scope === 'personal' || filter?.$scope === 'shared' ? filter.$scope : ''
+    const columnKeys = listedColumnKeys(page?.columns, schema.labelField ?? 'title', schema)
+    const liveFilter = filter ? { ...filter } : undefined
+    if (liveFilter) {
+      delete liveFilter.deleted
+      delete liveFilter.trash
+      delete liveFilter.$scope
+    }
+    const tableFilter = normalizeCollectionPath(String(liveFilter?.tablePath ?? ''))
+    if (liveFilter) delete liveFilter.tablePath
+    const overlay = listNeedsMatchOverlay(liveFilter, q, sortField, page?.sorts)
+    const query: CollectionListQuery = { q: '', trash: false }
+    const gathered: DbRecord[] = []
+    for (const source of this.collectionsList()) {
+      if (!isDataOverviewSource(source.path)) continue
+      if (tableFilter && tableFilter !== '/' && source.path !== tableFilter) continue
+      const pack = await this.visibleSortedCollectionRows(source, query, sortField, sortDir, page?.sorts, overlay)
+      const visible = scopeFilter ? pack[scopeFilter] : pack.rows
+      const decorated = this.decorateSlice(source, visible, null)
+      for (const row of decorated) gathered.push(overviewRecord(source, row))
+    }
+    const packs = this.tags.list()
+    const sorted = sortRecords(
+      gathered.filter((row) => matchListFilter(row, liveFilter, schema, packs) && matchQuery(row, q, packs)),
+      sortField,
+      sortDir,
+      page?.sorts,
+    )
+    const total = sorted.length
+    const slice = sorted.slice(offset, offset + limit)
+    return {
+      kind: 'collection' as const,
+      path: spec.path,
+      id: spec.id,
+      label: spec.label ?? spec.id,
+      view: spec.view ?? null,
+      schema: this.schemaForCurrent(spec, schema),
+      total,
+      offset,
+      limit,
+      items: slice.map((row): DbRecord & { path: string; kind: 'record' } => {
+        const value = withoutContent(spec, row)
+        const picked = columnKeys ? pickListedFields(value, columnKeys) : value
+        return {
+          ...picked,
+          path: `${spec.path}/${row.id}`,
+          kind: 'record',
+        }
+      }),
+    }
+  }
+
   async list(path: string, filter?: Record<string, unknown>, page?: ListPage) {
     const parts = splitPath(path)
     if (parts.length === 0) {
@@ -1651,12 +1744,17 @@ export class DatabaseService extends Service implements Database {
     if (parts.length !== 1) throw new Error(`cannot list: ${normalizeCollectionPath(path)}`)
     const spec = this.collection(`/${parts[0]}`)
     if (!spec) throw new Error(`unknown collection: /${parts[0]}`)
+    if (spec.path === DATA_COLLECTION_PATH) return this.listDataOverview(spec, filter, page)
     let schema = schemaFor(spec)
     const { limit, offset } = clampPage(page?.limit, page?.offset)
     const q = page?.q ?? ''
     const sortField = page?.sortField?.trim() || 'title'
     const sortDir = page?.sortDir === 'desc' ? 'desc' : 'asc'
-    const schemaFilter = filter?.facet != null && filter.facet !== '' ? String(filter.facet) : ''
+    const schemaFilter = typeof filter?.tag === 'string' && filter.tag !== ''
+      ? filter.tag
+      : typeof filter?.facet === 'string' && filter.facet !== ''
+        ? filter.facet
+        : ''
     const scopeFilter = filter?.$scope === 'workspace' || filter?.$scope === 'personal' || filter?.$scope === 'shared' ? filter.$scope : ''
     const columnKeys = listedColumnKeys(page?.columns, schema.labelField ?? 'title', schema)
     const trash = filter?.deleted === true || filter?.trash === true
@@ -1667,8 +1765,8 @@ export class DatabaseService extends Service implements Database {
       delete liveFilter.$scope
     }
     const query: CollectionListQuery = { q, filter: liveFilter, trash }
-    if (schemaFilter && schema.fields.facet && spec.path !== '/facets') {
-      const stamped = this.facets.stampedIds(spec.path, schemaFilter)
+    if (schemaFilter && schema.fields.tag && spec.path !== '/tags') {
+      const stamped = this.tags.stampedIds(spec.path, schemaFilter)
       if (!stamped.size) {
         return {
           kind: 'collection' as const,
@@ -1692,9 +1790,9 @@ export class DatabaseService extends Service implements Database {
       const overlay = listNeedsMatchOverlay(liveFilter, q, sortField, page?.sorts)
       const pack = await this.visibleSortedCollectionRows(spec, query, sortField, sortDir, page?.sorts, overlay)
       const visible = scopeFilter ? pack[scopeFilter] : pack.rows
-      const tagFilter = spec.path === '/facets' ? String(filter?.facetId ?? '').trim() : ''
-      if (tagFilter) schema = schemaWithTagPack(schema, this.facets.get(tagFilter))
-      const packs = this.facets.list()
+      const tagFilter = spec.path === '/tags' ? String(filter?.tagId ?? '').trim() : ''
+      if (tagFilter) schema = schemaWithTagPack(schema, this.tags.get(tagFilter))
+      const packs = this.tags.list()
       const sorted = visible.filter((row) => matchListFilter(row, liveFilter, schema, packs) && matchQuery(row, q, packs))
       const total = sorted.length
       const slice = this.decorateSlice(spec, sorted.slice(offset, offset + limit), columnKeys)
@@ -1725,13 +1823,13 @@ export class DatabaseService extends Service implements Database {
     }
   }
 
-  async collectFacet(id: string) {
-    const found = this.facets.collect(id)
+  async collectTag(id: string) {
+    const found = this.tags.collect(id)
     const labels = new Map(this.collectionsList().map((spec) => [spec.path, spec.label ?? spec.id]))
     return {
-      facet: found.facet,
+      tag: found.tag,
       items: found.items
-        .filter((item) => !this.facets.isDeleted(item.collection, item.id))
+        .filter((item) => !this.tags.isDeleted(item.collection, item.id))
         .filter((item) => this.visibleRecords(item.collection, [{ id: item.id }]).length > 0)
         .map((item) => ({
         ...item,
@@ -1741,8 +1839,8 @@ export class DatabaseService extends Service implements Database {
   }
 
   private decorateRecord(spec: CollectionSpec, row: DbRecord, need: ListDecorateNeed | null = null): DbRecord {
-    const withFacet = !need || need.facet ? this.applyFacetOverlay(spec, row) : row
-    const withPeople = !need || need.people ? this.applyPersonOverlay(spec, withFacet) : withFacet
+    const withTag = !need || need.tag ? this.applyTagOverlay(spec, row) : row
+    const withPeople = !need || need.people ? this.applyPersonOverlay(spec, withTag) : withTag
     const withMeta = !need || need.meta ? this.applyMetaOverlay(spec, withPeople) : withPeople
     if (isSystemCollection(spec.path) || isIndexCollection(spec.path)) return withMeta
     if (spec.path === '/plugins' && row.builtin === true) {
@@ -1898,7 +1996,7 @@ export class DatabaseService extends Service implements Database {
   }
 
   private withBanner(spec: CollectionSpec, row: DbRecord): DbRecord {
-    const banner = this.facets.recordBanner(spec.path, row.id)
+    const banner = this.tags.recordBanner(spec.path, row.id)
     const next = { ...row }
     delete next.banner
     if (banner) next.banner = banner
@@ -1906,9 +2004,9 @@ export class DatabaseService extends Service implements Database {
   }
 
   private refreshContentRefs(spec: CollectionSpec, record: DbRecord) {
-    const banner = this.facets.recordBanner(spec.path, record.id)
-    const body = readEditorContent(this.facets.ensure(), spec.path, record.id)
-    this.facets.replaceContentRefs(
+    const banner = this.tags.recordBanner(spec.path, record.id)
+    const body = readEditorContent(this.tags.ensure(), spec.path, record.id)
+    this.tags.replaceContentRefs(
       spec.path,
       record.id,
       assetNamesFromMarkdown(body),
@@ -1921,7 +2019,7 @@ export class DatabaseService extends Service implements Database {
       const official = { kind: 'user' as const, name: 'BIU官方', url: 'https://github.com/helloooooooooooooo97/biu' }
       return { ...row, createdBy: official, updatedBy: [official] }
     }
-    const meta = this.facets.recordMeta(spec.path, row.id)
+    const meta = this.tags.recordMeta(spec.path, row.id)
     if (!meta) return row
     const editors = asPersonList(meta.updatedBy).map((item) => this.namedPerson(item))
     return {
@@ -1977,8 +2075,8 @@ export class DatabaseService extends Service implements Database {
 
   private async stampActor(collection: string, recordId: string) {
     const actor = await this.currentPerson()
-    const existing = this.facets.recordMeta(collection, recordId)
-    this.facets.writeRecordMeta(collection, recordId, {
+    const existing = this.tags.recordMeta(collection, recordId)
+    this.tags.writeRecordMeta(collection, recordId, {
       ...(existing?.createdBy ? {} : { createdBy: actor }),
       updatedBy: appendPerson(existing?.updatedBy, actor),
     })
@@ -2055,19 +2153,19 @@ export class DatabaseService extends Service implements Database {
     return sessionPersonFromRow(await this.sessionsService()?.get?.(sessionId))
   }
 
-  private applyFacetOverlay(spec: CollectionSpec, row: DbRecord): DbRecord {
-    if (!schemaFor(spec).fields.facet) return row
-    let overlay = this.facets.recordFacet(spec.path, row.id)
-    if (!overlay && row.facet != null) {
-      const value = normalizeSchemaValue(row.facet)
-      if (!isEmptySchemaValue(value)) overlay = this.persistRecordFacet(spec, row.id, value, row)
+  private applyTagOverlay(spec: CollectionSpec, row: DbRecord): DbRecord {
+    if (!schemaFor(spec).fields.tag) return row
+    let overlay = this.tags.recordTag(spec.path, row.id)
+    if (!overlay && row.tag != null) {
+      const value = normalizeSchemaValue(row.tag)
+      if (!isEmptySchemaValue(value)) overlay = this.persistRecordTag(spec, row.id, value, row)
     }
     if (!overlay) return row
-    return { ...row, facet: overlay }
+    return { ...row, tag: overlay }
   }
 
   private applyMetaOverlay(spec: CollectionSpec, row: DbRecord): DbRecord {
-    let meta = this.facets.recordMeta(spec.path, row.id)
+    let meta = this.tags.recordMeta(spec.path, row.id)
     if (!meta) return row
     return {
       ...row,
@@ -2079,21 +2177,21 @@ export class DatabaseService extends Service implements Database {
     return Boolean(spec.records?.update && spec.update)
   }
 
-  private persistRecordFacet(spec: CollectionSpec, recordId: string, facet: unknown, record: DbRecord) {
-    const next = normalizeSchemaValue(facet)
+  private persistRecordTag(spec: CollectionSpec, recordId: string, tag: unknown, record: DbRecord) {
+    const next = normalizeSchemaValue(tag)
     const labelKey = schemaFor(spec).labelField ?? 'title'
-    this.facets.writeRecordFacet(spec.path, recordId, next, String(record[labelKey] ?? record.id))
+    this.tags.writeRecordTag(spec.path, recordId, next, String(record[labelKey] ?? record.id))
     return next
   }
 
-  private indexFacetRecord(spec: CollectionSpec, record: DbRecord) {
-    if (!schemaFor(spec).fields.facet) return
+  private indexTagRecord(spec: CollectionSpec, record: DbRecord) {
+    if (!schemaFor(spec).fields.tag) return
     const labelKey = schemaFor(spec).labelField ?? 'title'
-    this.facets.indexRecord(
+    this.tags.indexRecord(
       spec.path,
       record.id,
       String(record[labelKey] ?? record.id),
-      normalizeSchemaValue(record.facet).tags,
+      normalizeSchemaValue(record.tag).tags,
     )
   }
 
@@ -2112,6 +2210,21 @@ export class DatabaseService extends Service implements Database {
 
   async update(path: string, content: unknown) {
     const parts = splitPath(path)
+    if (parts.length === 2 && parts[0] === 'data') {
+      const stamp = parseStampRecordId(parts[1]!)
+      if (stamp && stamp.collection !== DATA_COLLECTION_PATH) {
+        const written = await this.update(`${stamp.collection}/${stamp.recordId}`, content)
+        if (written.kind !== 'record') return written
+        const source = this.collection(stamp.collection)
+        return {
+          ...written,
+          path: `${DATA_COLLECTION_PATH}/${parts[1]}`,
+          value: source
+            ? overviewRecord(source, written.value as DbRecord)
+            : { ...(written.value as DbRecord), id: parts[1]! },
+        }
+      }
+    }
     if (parts.length !== 2) throw new Error(`cannot update: ${normalizeCollectionPath(path)}`)
     const spec = this.collection(`/${parts[0]}`)
     if (!spec) throw new Error(`unknown collection: /${parts[0]}`)
@@ -2121,28 +2234,29 @@ export class DatabaseService extends Service implements Database {
     if (!current) throw new Error(`unknown record: ${spec.path}/${parts[1]}`)
     this.assertLiveRecord(spec, current.id, 'resource:update', current)
     const bannerPatch = takeBannerPatch(raw)
-    if ('facet' in raw && schema.fields.facet) {
-      if (!schema.fields.facet.writable || schema.fields.facet.computed) throw new Error(`field not writable: facet`)
-      raw.facet = coerceFacetPatch(raw.facet, normalizeSchemaValue(this.decorateRecord(spec, current).facet), (id) =>
-        this.facets.get(id),
+    if ('facet' in raw && !('tag' in raw)) raw.tag = raw.facet
+    if ('tag' in raw && schema.fields.tag) {
+      if (!schema.fields.tag.writable || schema.fields.tag.computed) throw new Error(`field not writable: tag`)
+      raw.tag = coerceTagPatch(raw.tag, normalizeSchemaValue(this.decorateRecord(spec, current).tag), (id) =>
+        this.tags.get(id),
       )
     }
     if (!this.collectionCanUpdate(spec)) {
       const keys = Object.keys(raw)
-      const overlayKeys = new Set(['facet', 'emoji'])
+      const overlayKeys = new Set(['tag', 'emoji'])
       if ((keys.length && keys.some((key) => !overlayKeys.has(key))) || (!keys.length && !bannerPatch.present)) {
         throw new Error(`collection cannot update: ${spec.path}`)
       }
       let next: DbRecord = { ...this.decorateRecord(spec, current) }
-      if ('facet' in raw) {
-        const nextSchema = coerce(schema.fields.facet, raw.facet)
-        next = { ...next, facet: this.persistRecordFacet(spec, current.id, nextSchema, next) }
+      if ('tag' in raw) {
+        const nextSchema = coerce(schema.fields.tag, raw.tag)
+        next = { ...next, tag: this.persistRecordTag(spec, current.id, nextSchema, next) }
       }
       if ('emoji' in raw) {
         if (!schema.fields.emoji?.writable || schema.fields.emoji.computed) {
           throw new Error(`field not writable: emoji`)
         }
-        const meta = this.facets.writeRecordMeta(spec.path, current.id, {
+        const meta = this.tags.writeRecordMeta(spec.path, current.id, {
           emoji: String(coerce(schema.fields.emoji!, raw.emoji) ?? ''),
         })
         next = {
@@ -2151,7 +2265,7 @@ export class DatabaseService extends Service implements Database {
         }
       }
       if (bannerPatch.present) {
-        this.facets.writeRecordBanner(spec.path, current.id, bannerPatch.value)
+        this.tags.writeRecordBanner(spec.path, current.id, bannerPatch.value)
         next = this.withBanner(spec, next)
       }
       this.refreshContentRefs(spec, next)
@@ -2192,7 +2306,7 @@ export class DatabaseService extends Service implements Database {
     if (moving && resource) authorization!.move(actor!, resource, parent)
     await this.stampActor(spec.path, record.id)
     if ('emoji' in patch) {
-      const meta = this.facets.writeRecordMeta(spec.path, record.id, {
+      const meta = this.tags.writeRecordMeta(spec.path, record.id, {
         emoji: String(patch.emoji ?? ''),
       })
       record = {
@@ -2200,13 +2314,13 @@ export class DatabaseService extends Service implements Database {
         ...(meta.emoji !== null ? { emoji: meta.emoji } : {}),
       }
     }
-    if (schema.fields.facet && 'facet' in patch) {
-      record = { ...record, facet: this.persistRecordFacet(spec, record.id, patch.facet, record) }
+    if (schema.fields.tag && 'tag' in patch) {
+      record = { ...record, tag: this.persistRecordTag(spec, record.id, patch.tag, record) }
     }
     if (bannerPatch.present) {
-      this.facets.writeRecordBanner(spec.path, record.id, bannerPatch.value)
+      this.tags.writeRecordBanner(spec.path, record.id, bannerPatch.value)
     }
-    this.indexFacetRecord(spec, this.decorateRecord(spec, record))
+    this.indexTagRecord(spec, this.decorateRecord(spec, record))
     this.refreshContentRefs(spec, this.withBanner(spec, record))
     this.bump()
     const beforeSnap: Record<string, unknown> = {}
@@ -2244,8 +2358,9 @@ export class DatabaseService extends Service implements Database {
     for (const row of rows) {
       const bannerPatch = takeBannerPatch(row)
       banners.push(bannerPatch.present ? bannerPatch.value : undefined)
-      if ('facet' in row && schema.fields.facet) {
-        row.facet = coerceFacetPatch(row.facet, emptySchemaValue(), (id) => this.facets.get(id))
+      if ('facet' in row && !('tag' in row)) row.tag = row.facet
+      if ('tag' in row && schema.fields.tag) {
+        row.tag = coerceTagPatch(row.tag, emptySchemaValue(), (id) => this.tags.get(id))
       }
       const patch = pickWritablePatch(schema, row)
       await assertSameTableLinks(spec, patch)
@@ -2256,17 +2371,17 @@ export class DatabaseService extends Service implements Database {
     for (const [index, record] of created.entries()) {
       await this.stampActor(spec.path, record.id)
       const banner = banners[index]
-      if (banner !== undefined) this.facets.writeRecordBanner(spec.path, record.id, banner)
+      if (banner !== undefined) this.tags.writeRecordBanner(spec.path, record.id, banner)
       const input = records[index] ?? record
       if ('emoji' in input) {
-        this.facets.writeRecordMeta(spec.path, record.id, {
+        this.tags.writeRecordMeta(spec.path, record.id, {
           emoji: String(input.emoji ?? ''),
         })
       }
-      if (schema.fields.facet) {
-        this.persistRecordFacet(spec, record.id, input.facet ?? record.facet, record)
+      if (schema.fields.tag) {
+        this.persistRecordTag(spec, record.id, input.tag ?? record.tag, record)
       }
-      this.indexFacetRecord(spec, this.decorateRecord(spec, record))
+      this.indexTagRecord(spec, this.decorateRecord(spec, record))
       this.refreshContentRefs(spec, this.withBanner(spec, record))
       const parentField = spec.schema.parentField
       const parentRecordId = parentField ? String(record[parentField] ?? '').trim() : ''
@@ -2325,9 +2440,13 @@ export class DatabaseService extends Service implements Database {
     const q = query.q ?? ''
     const filter = query.filter
     const listQuery: CollectionListQuery = { q, filter, ids: query.ids }
-    const schemaFilter = filter?.facet != null && filter.facet !== '' ? String(filter.facet) : ''
-    if (schemaFilter && schema.fields.facet && spec.path !== '/facets') {
-      const stamped = this.facets.stampedIds(spec.path, schemaFilter)
+    const schemaFilter = typeof filter?.tag === 'string' && filter.tag !== ''
+      ? filter.tag
+      : typeof filter?.facet === 'string' && filter.facet !== ''
+        ? filter.facet
+        : ''
+    if (schemaFilter && schema.fields.tag && spec.path !== '/tags') {
+      const stamped = this.tags.stampedIds(spec.path, schemaFilter)
       if (!stamped.size) return { kind: 'deleted' as const, path: spec.path, ids: [] as string[] }
       listQuery.ids = query.ids?.length ? query.ids.filter((id) => stamped.has(id)) : [...stamped]
     }
@@ -2350,7 +2469,7 @@ export class DatabaseService extends Service implements Database {
     if (!hard) {
       const at = Date.now()
       for (const id of ids) {
-        this.facets.markDeleted(spec.path, id, at)
+        this.tags.markDeleted(spec.path, id, at)
         this.shares.revokeRecord(spec.path, id)
       }
       if (spec.path === '/views') {
@@ -2376,7 +2495,7 @@ export class DatabaseService extends Service implements Database {
       }
     }
     for (const id of ids) {
-      this.facets.removeRecord(spec.path, id)
+      this.tags.removeRecord(spec.path, id)
       this.shares.revokeRecord(spec.path, id)
     }
     if (spec.path === '/views') {
@@ -2406,14 +2525,14 @@ export class DatabaseService extends Service implements Database {
       'resource:restore',
     )
     const ids = [...new Set(matched.map((row) => row.id))]
-    for (const id of ids) this.facets.restoreDeleted(spec.path, id)
+    for (const id of ids) this.tags.restoreDeleted(spec.path, id)
     this.bump()
     return { kind: 'restored' as const, path: spec.path, ids }
   }
 
   async listTrash() {
     const items = []
-    for (const row of this.facets.listDeleted()) {
+    for (const row of this.tags.listDeleted()) {
       const spec = this.collection(row.collection)
       if (!spec) continue
       const record = await spec.get(row.record_id)
@@ -2482,7 +2601,7 @@ export class DatabaseService extends Service implements Database {
       await this.stampActor(spec.path, parts[1]!)
     }
     const next = (await spec.get(parts[1]!)) ?? record
-    this.indexFacetRecord(spec, next)
+    this.indexTagRecord(spec, next)
     this.bump()
     return {
       kind: 'record' as const,
@@ -2504,7 +2623,7 @@ export class DatabaseService extends Service implements Database {
     this.assertLiveRecord(spec, record.id, 'resource:read', record)
     if (!schema.fields[field]) throw new Error(`no content field: ${field}`)
     const editorContent = isEditorContentSpec(spec)
-      ? readEditorContentRecord(this.facets.ensure(), spec.path, record.id)
+      ? readEditorContentRecord(this.tags.ensure(), spec.path, record.id)
       : null
     const value = editorContent ? editorContent.body : (record[field] ?? null)
     return {
@@ -2534,7 +2653,7 @@ export class DatabaseService extends Service implements Database {
     this.assertLiveRecord(spec, existing.id, 'resource:update', existing)
     if (!schema.fields[field]) throw new Error(`no content field: ${field}`)
     if (isEditorContentSpec(spec)) {
-      writeEditorContent(this.facets.ensure(), spec.path, parts[1]!, String(value ?? ''), { expectedVersion })
+      writeEditorContent(this.tags.ensure(), spec.path, parts[1]!, String(value ?? ''), { expectedVersion })
     }
     const patch = this.collectionCanUpdate(spec)
       ? pickWritablePatch(schema, { [field]: value })
@@ -2544,7 +2663,7 @@ export class DatabaseService extends Service implements Database {
     this.refreshContentRefs(spec, this.withBanner(spec, record))
     this.bump()
     const editorContent = isEditorContentSpec(spec)
-      ? readEditorContentRecord(this.facets.ensure(), spec.path, record.id)
+      ? readEditorContentRecord(this.tags.ensure(), spec.path, record.id)
       : null
     return {
       kind: 'content' as const,
@@ -2628,8 +2747,8 @@ export class DatabaseService extends Service implements Database {
     const command = String(args.command ?? (args.value != null || from ? 'write' : 'view'))
     this.assertLiveRecord(spec, record.id, command === 'view' ? 'resource:read' : 'resource:update', record)
     const names = new Set([
-      ...collectAssetNames(record, this.facets.recordBanner(spec.path, record.id)?.html),
-      ...this.facets.listedAttachmentNames(spec.path, record.id),
+      ...collectAssetNames(record, this.tags.recordBanner(spec.path, record.id)?.html),
+      ...this.tags.listedAttachmentNames(spec.path, record.id),
     ])
     const file = String(args.name ?? '')
       .trim()
@@ -2682,7 +2801,7 @@ export class DatabaseService extends Service implements Database {
     const kind = String(args.kind ?? '') === 'core' ? 'core' : 'asset'
     const blockId = String(args.block_id ?? args.blockId ?? '').trim()
     const source = String(args.source ?? (blockId ? `block:${blockId}` : 'asset')).trim() || 'asset'
-    this.facets.putAttachment({
+    this.tags.putAttachment({
       name: written.name,
       etag: written.etag,
       mime: mimeOfAsset(written.name),
@@ -2698,9 +2817,9 @@ export class DatabaseService extends Service implements Database {
         if (!isAssetFileName(name)) return []
         return [{ name, source: String(rec.source ?? source) }]
       })
-      if (blockId) this.facets.replaceBlockRefs(spec.path, record.id, blockId, refs.length ? refs : [{ name: written.name, source }])
+      if (blockId) this.tags.replaceBlockRefs(spec.path, record.id, blockId, refs.length ? refs : [{ name: written.name, source }])
     } else if (blockId) {
-      this.facets.upsertBlockRef(spec.path, record.id, blockId, written.name, source)
+      this.tags.upsertBlockRef(spec.path, record.id, blockId, written.name, source)
     }
     this.broadcastAsset(recPath, written.name, written.etag)
     return { kind: 'asset' as const, ok: true as const, path: recPath, name: written.name, etag: written.etag, storage: 'hash' as const }
@@ -2713,24 +2832,41 @@ export class DatabaseService extends Service implements Database {
     if (!spec) throw new Error(`unknown collection: /${parts[0]}`)
     const record = await spec.get(parts[1]!)
     if (!record) throw new Error(`unknown record: ${spec.path}/${parts[1]}`)
-    const from = String(args.from ?? '').trim()
-    const command = String(args.command ?? (args.value != null || from ? 'write' : 'view'))
+    const command = resolveContentCommand(args)
     this.assertLiveRecord(spec, record.id, command === 'view' ? 'resource:read' : 'resource:update', record)
+    const ownedDocs = new Set(
+      [...(spec.namedDocs?.names(record) ?? [])].map((name) =>
+        String(name)
+          .trim()
+          .replace(/^assets\//, '')
+          .replace(/^.*[/\\]/, ''),
+      ).filter(Boolean),
+    )
     const names = new Set([
-      ...collectAssetNames(record, this.facets.recordBanner(spec.path, record.id)?.html),
-      ...this.facets.listedAttachmentNames(spec.path, record.id),
+      ...collectAssetNames(record, this.tags.recordBanner(spec.path, record.id)?.html),
+      ...this.tags.listedAttachmentNames(spec.path, record.id),
+      ...ownedDocs,
     ])
     const file = String(args.name ?? '')
       .trim()
       .replace(/^assets\//, '')
       .replace(/^.*[/\\]/, '')
     const recPath = `${spec.path}/${record.id}`
+    const readOwnedOrAsset = async (name: string) => {
+      if (ownedDocs.has(name) && spec.namedDocs) return spec.namedDocs.read(name)
+      return this.assets.readAny(name)
+    }
     if (command === 'view' && !file) {
       const assets = []
       for (const name of [...names].sort()) {
         try {
-          const read = await this.assets.readAny(name)
-          assets.push({ name, etag: read.etag, type: read.type, storage: read.storage })
+          const read = await readOwnedOrAsset(name)
+          assets.push({
+            name,
+            etag: read.etag,
+            type: read.type,
+            ...('storage' in read ? { storage: (read as { storage?: string }).storage } : {}),
+          })
         } catch {
           assets.push({ name, missing: true })
         }
@@ -2738,56 +2874,97 @@ export class DatabaseService extends Service implements Database {
       return { kind: 'doc' as const, path: recPath, command: 'view' as const, assets }
     }
     if (!isAssetFileName(file)) throw new Error('invalid asset')
+    if (!names.has(file)) throw new Error(`doc not referenced: ${file}`)
+    const readDoc = async () => {
+      if (ownedDocs.has(file) && spec.namedDocs) return spec.namedDocs.read(file)
+      return this.assets.readDoc(file)
+    }
+    let current: { text: string; etag: string; type: string } | null = null
+    try {
+      const read = await readDoc()
+      const raw = Buffer.from(read.bytes).toString('utf8')
+      current = { text: raw, etag: read.etag, type: read.type }
+    } catch {
+      current = null
+    }
     if (command === 'view') {
-      if (!names.has(file)) throw new Error(`doc not referenced: ${file}`)
-      try {
-        const read = await this.assets.readDoc(file)
-        const text =
-          read.type.startsWith('text/') || read.type.includes('json') ? read.bytes.toString('utf8') : undefined
-        return {
-          kind: 'doc' as const,
-          path: recPath,
-          command: 'view' as const,
-          name: file,
-          etag: read.etag,
-          type: read.type,
-          ...(text != null ? { text } : {}),
-        }
-      } catch {
-        return {
-          kind: 'doc' as const,
-          path: recPath,
-          command: 'view' as const,
-          name: file,
-          missing: true,
-          etag: '',
-        }
+      if (!current) {
+        return { kind: 'doc' as const, path: recPath, command: 'view' as const, name: file, missing: true, etag: '' }
+      }
+      const viewed = viewContent(current.text, args.view_range)
+      return {
+        kind: 'doc' as const,
+        path: recPath,
+        command: 'view' as const,
+        name: file,
+        etag: current.etag,
+        type: current.type,
+        start: viewed.start,
+        end: viewed.end,
+        total: viewed.total,
+        truncated: viewed.truncated,
+        text: viewed.text,
       }
     }
-    if (command !== 'write') throw new Error(`unknown doc command: ${command}`)
-    const body = from ? await readLocalWriteFile(from) : String(args.value ?? '')
-    if (!from && args.value == null) throw new Error('write needs value or from')
-    const written = await this.assets.writeDoc(file, body, { etag: String(args.etag ?? '') })
+    if (command !== 'write' && !current) throw new Error(`doc missing: ${file}`)
+    if (command !== 'write' && current && !isTextDoc(file, current.type)) throw new Error(`doc is not text: ${file}`)
+    let replaced: number | undefined
+    const incoming = await resolveIncomingText(command, args)
+    const base = current?.text ?? ''
+    const patch = { ...args, new_str: incoming, ...(command === 'write' ? { value: incoming } : {}) }
+    const next =
+      command === 'write'
+        ? writeContentText(incoming)
+        : command === 'str_replace'
+          ? strReplaceText(base, args.old_str, incoming)
+          : command === 'find_replace'
+            ? resolveFindReplace(base, { ...args, new_str: incoming })
+            : command === 'insert'
+              ? insertText(base, args.insert_line, incoming)
+              : replaceLinesText(base, args.start_line, args.end_line, incoming)
+    if (typeof next === 'object') replaced = next.replaced
+    const nextText = typeof next === 'object' ? next.text : next
+    const matchEtag = String(args.etag ?? current?.etag ?? '')
+    const written =
+      ownedDocs.has(file) && spec.namedDocs
+        ? await spec.namedDocs.write(file, nextText, { etag: matchEtag })
+        : await this.assets.writeDoc(file, nextText, { etag: matchEtag })
     const kind = String(args.kind ?? '') === 'core' ? 'core' : 'asset'
     const blockId = String(args.block_id ?? args.blockId ?? '').trim()
     const source = String(args.source ?? (blockId ? `block:${blockId}` : 'doc')).trim() || 'doc'
-    this.facets.putAttachment({
+    this.tags.putAttachment({
       name: written.name,
       etag: written.etag,
       mime: mimeOfAsset(written.name),
-      bytes: written.bytes,
+      bytes: written.bytes ?? Buffer.byteLength(nextText),
       kind,
       storage: 'name',
     })
-    if (blockId) this.facets.upsertBlockRef(spec.path, record.id, blockId, written.name, source)
+    if (blockId) this.tags.upsertBlockRef(spec.path, record.id, blockId, written.name, source)
     this.broadcastAsset(recPath, written.name, written.etag)
-    return { kind: 'doc' as const, ok: true as const, path: recPath, name: written.name, etag: written.etag, storage: 'name' as const }
+    const locus = mutationLocus(command === 'find_replace' ? 'str_replace' : command, base, nextText, patch)
+    return {
+      kind: 'doc' as const,
+      ok: true as const,
+      path: recPath,
+      name: written.name,
+      etag: written.etag,
+      storage: 'name' as const,
+      command,
+      ...(replaced != null ? { replaced } : {}),
+      ...(locus ? { start_line: locus.start_line, end_line: locus.end_line, ...(locus.text ? { text: locus.text } : {}) } : {}),
+    }
   }
 
   private broadcastAsset(path: string, name: string, etag: string) {
     const http = this.ctx.get('http') as { broadcast?: (type: string, payload: unknown) => void } | undefined
     http?.broadcast?.(DATABASE_CHANNEL, { ts: Date.now(), asset: { name, etag, path } })
   }
+}
+
+function isTextDoc(name: string, type: string) {
+  if (type.startsWith('text/') || /json|javascript|xml|svg/.test(type)) return true
+  return /\.(?:jsx?|tsx?|html?|md|css|svg|json)$/i.test(name)
 }
 
 async function readLocalWriteFile(raw: string) {
@@ -3003,7 +3180,7 @@ export function databaseHttpFailure(error: unknown) {
 
 export function apply(ctx: Context) {
   const db = new DatabaseService(ctx)
-  db.facets.open(biuSqlitePath())
+  db.tags.open(biuSqlitePath())
   const assets = db.assets
   const savedViews = new SavedViewsStore()
   savedViews.open(process.env.VITEST ? ':memory:' : biuSqlitePath())
@@ -3069,9 +3246,10 @@ export function apply(ctx: Context) {
   })
   const shares = db.shares
   shares.open(process.env.VITEST ? ':memory:' : biuSqlitePath())
-  const facets = db.facets
+  const facets = db.tags
+  db.register(dataCollection(() => db.collectionsList()))
   db.register(viewsCollection(savedViews, () => db.collectionsList().map((item) => db.publishCollection(item)), () => currentAccountId()))
-  db.register(facetsCollection(facets, () => db.collectionsList().map((item) => ({
+  db.register(tagsCollection(facets, () => db.collectionsList().map((item) => ({
     id: item.id,
     path: item.path,
     label: item.label ?? item.id,
@@ -3085,7 +3263,7 @@ export function apply(ctx: Context) {
       notices = undefined
     }
     return {
-      db: db.facets.ensure(),
+      db: db.tags.ensure(),
       assetsDir: db.assets.root(),
       sqlitePath,
       notices,
@@ -3135,7 +3313,7 @@ export function apply(ctx: Context) {
         columns: {
           type: 'array',
           items: { type: 'string' },
-          description: '可选，只返回这些列。始终带 id。label 等于标题列（默认 title）。不传则除 content 外全返回。标签属性列写成 facet::<标签id>::<字段key>，例如 facet::facet::category。',
+          description: '可选，只返回这些列。始终带 id。label 等于标题列（默认 title）。不传则除 content 外全返回。标签属性列写成 tag::<标签id>::<字段key>，例如 tag::tag::category。',
         },
       },
       required: ['path'],
@@ -3167,14 +3345,14 @@ export function apply(ctx: Context) {
   })
   ctx.tools.register({
     name: 'db_update',
-    description: '按表结构 schema 的可写字段更新一条已有记录，路径为 /<表>/<id>。成功只返回 {ok, path}，不回整行。未知字段会列出该表可写字段。标签 facet：可同时贴多个。一个标签用扁平 values，如 {tags:["facet-2"],values:{导演:"查泽雷"}}；多个标签必须按标签分子对象，如 {tags:["facet-2","awards"],values:{"facet-2":{导演:"查泽雷"},awards:{oscar:true}}}。省略 tags 则改当前已贴标签的属性（合并，不撕掉别的标签）。改标签定义用 db_update /facets/<id> fields（数组或 JSON 字符串均可）。新建用 db_create，正文用 db_content。',
+    description: '按表结构 schema 的可写字段更新一条已有记录，路径为 /<表>/<id>。成功只返回 {ok, path}，不回整行。未知字段会列出该表可写字段。标签 tag：可同时贴多个。一个标签用扁平 values，如 {tags:["tag-2"],values:{导演:"查泽雷"}}；多个标签必须按标签分子对象，如 {tags:["tag-2","awards"],values:{"tag-2":{导演:"查泽雷"},awards:{oscar:true}}}。省略 tags 则改当前已贴标签的属性（合并，不撕掉别的标签）。改标签定义用 db_update /tags/<id> fields（数组或 JSON 字符串均可）。新建用 db_create，正文用 db_content。',
     parameters: {
       type: 'object',
       properties: {
         path: { type: 'string' },
         content: {
           description:
-            '要更新的字段（对象或 JSON 字符串）。标签写 facet：一个标签 values 扁平，如 {facet:{tags:["facet-2"],values:{导演:"查泽雷"}}}；多个标签 values 按标签 id 分子对象。省略 tags 只改属性，不撕掉其它标签。',
+            '要更新的字段（对象或 JSON 字符串）。标签写 tag：一个标签 values 扁平，如 {tag:{tags:["tag-2"],values:{导演:"查泽雷"}}}；多个标签 values 按标签 id 分子对象。省略 tags 只改属性，不撕掉其它标签。',
         },
       },
       required: ['path', 'content'],
@@ -3186,7 +3364,7 @@ export function apply(ctx: Context) {
   })
   ctx.tools.register({
     name: 'db_create',
-    description: '在已登记且允许新建的表中批量新增记录。路径为 /<表>，records 为对象数组。成功返回 {ok, path, ids}，不回整行。能否新建看 db_stat 的 caps。新建标签用 db_create path=/facets records=[{title}]。',
+    description: '在已登记且允许新建的表中批量新增记录。路径为 /<表>，records 为对象数组。成功返回 {ok, path, ids}，不回整行。能否新建看 db_stat 的 caps。新建标签用 db_create path=/tags records=[{title}]。',
     parameters: {
       type: 'object',
       properties: {
@@ -3285,14 +3463,14 @@ export function apply(ctx: Context) {
   ctx.tools.register({
     name: 'db_content',
     description: [
-      '读写一条记录的正文。list/read 不含正文。path 为 /<表>/<id>。',
+      '读写一条记录的正文（一篇，只要 path）。list/read 不含正文。path 为 /<表>/<id>。',
       'command=view：带行号读一段正文，默认前 80 行，可用 view_range=[start,end]（1-based，end=-1 到末尾）；truncated 表示还有未读行。',
       'command=str_replace：old_str 必须在正文里唯一，替换为 new_str（短文本）或 from 文件内容（长文本）。',
       'command=replace_lines：按 1-based 闭区间 start_line..end_line 换成 new_str（短）或 from 文件内容（长）。',
       'command=insert：在 insert_line 之后插入。短文本用 new_str；长文本用 from=<本地文件>。',
       'command=find_replace：批量替换。默认等价 str_replace（old_str 必须唯一）；all=true 替换所有匹配（可用 count 限制次数），regex=true 时 old_str 按正则解释。返回 replaced 为实际替换次数。新文本同样：短用 new_str，长用 from。',
       'command=write：整篇覆盖。短全文用 value 内联，长全文用 from=<本地文件路径>（工作区或 /tmp）。new_str / value 与 from 都保留；同时给时以 from 为准。写成功只返回 {ok, path}，不含全文。str_replace / find_replace / replace_lines / insert 成功额外返回 start_line、end_line（改后正文的 1-based 行）。编辑器会标出该段改动，不抢输入焦点、不自动跳转；跳转只在用户主动点目录或查找时发生。',
-      '页面插图：不要把 data URL / base64 写进正文。先把图片文件落到工作区（下载或生成），再用 db_asset command=write name=<逻辑名.ext> from=<本地路径> 入库（内容寻址，返回 name=<哈希.ext>），然后 insert/str_replace 写入一行 Markdown：![说明](/api/db/file/<哈希.ext>)。也可以先写这一行再 write 附件。',
+      '页面插图：不要把 data URL / base64 写进正文。先把图片文件落到工作区（下载或生成），再用 db_media command=write name=<逻辑名.ext> from=<本地路径> 入库（内容寻址，返回 name=<哈希.ext>），然后 insert/str_replace 写入一行 Markdown：![说明](/api/db/file/<哈希.ext>)。也可以先写这一行再 write 附件。',
       '写 :::pageBlock 前先 db_content /plugins/<plugin> 读介绍里的「示例写法」，不要猜围栏，也不要把块源码写进围栏体。',
     ].join(' '),
     parameters: {
@@ -3337,9 +3515,9 @@ export function apply(ctx: Context) {
       ),
   })
   ctx.tools.register({
-    name: 'db_asset',
+    name: 'db_media',
     description: [
-      '读写一条记录的不可变资源（图片、音频、导入文件）。可变文档（画板 json、块本体）用 db_doc。正文仍用 db_content。',
+      '读写一条记录的不可变附件（图片、音频、导入文件）。旧名 db_asset 仍可用。可变文件（画板、沙盒 jsx）用 db_file。正文用 db_content。',
       'path 为 /<表>/<id>。write 落盘 .biu/assets/hash/<2>/<2>/<哈希>.<ext>，返回 name=<哈希.ext>。引用写成 /api/db/file/<哈希.ext>。',
       'command=view：列出已引用附件；带 name 读该文件。missing=true 合法。',
       'command=write：内容寻址，只增不改。可带 block_id / source / kind=core|asset；refs 为该块当前引用完整列表。',
@@ -3361,7 +3539,7 @@ export function apply(ctx: Context) {
           type: 'string',
           description: 'write 时读这个本地文件作为内容，代替 value。相对工作区根，或绝对路径。',
         },
-        etag: { type: 'string', description: '资源路径不用 etag；文档请用 db_doc' },
+        etag: { type: 'string', description: '资源路径不用 etag；可变文件请用 db_file' },
         block_id: { type: 'string', description: '块级归属，写入 block_refs' },
         source: { type: 'string', description: '引用子键，如 block:<id>:bgm' },
         kind: { type: 'string', description: 'core（永不自动回收）或 asset' },
@@ -3383,37 +3561,61 @@ export function apply(ctx: Context) {
       ),
   })
   ctx.tools.register({
-    name: 'db_doc',
+    name: 'db_file',
     description: [
-      '读写一条记录的可变文档（画板场景、视频脚本、htmlframe HTML）。图片等不可变资源用 db_asset。',
-      'path 为 /<表>/<id>。write 落盘 .biu/assets/name/<逻辑名>，覆盖必须带 etag（上次 view 的内容哈希），对不上返回 etag conflict。引用写成 /api/db/file/<逻辑名>（按名字寻址；哈希名则是不可变文件）。画板也可走 /api/page/file/<逻辑名>。',
-      'command=view：列出引用或读该文档（文本带 text）和 etag。',
-      'command=write：稳定名覆盖 + If-Match。可带 block_id / source / kind=core|asset。',
+      '读写一条记录上的可变文件（画板、视频脚本、htmlframe、页面沙盒 jsx）。旧名 db_doc 仍可用。不可变附件用 db_media。正文用 db_content。',
+      'path 为 /<表>/<id>，name 为稳定逻辑名。页面沙盒用 path=/pages/<id> name=view-<id>-<viewId>.jsx。',
+      '命令与 db_content 相同：view / str_replace / find_replace / replace_lines / insert / write。局部改写会先读当前文件再覆盖，不必先 view 再带 etag；并发冲突仍返回 etag conflict。write 整篇覆盖。',
+      'command=view：不带 name 列出引用；带 name 按行号读（可用 view_range）。',
     ].join(' '),
     parameters: {
       type: 'object',
       properties: {
         path: { type: 'string' },
-        name: { type: 'string', description: '稳定逻辑名，如 画板-ab12cd.json' },
+        name: { type: 'string', description: '稳定逻辑名，如 view-p194-8fdbc4f8.jsx' },
         command: {
           type: 'string',
-          enum: ['view', 'write'],
-          description: 'view | write。省略时：有 value 或 from 则 write，否则 view。',
+          enum: ['view', 'str_replace', 'find_replace', 'replace_lines', 'insert', 'write'],
+          description:
+            'view | str_replace | find_replace | replace_lines | insert | write。省略时：有 value 或 from 则 write，否则 view。',
         },
-        value: { type: 'string' },
-        from: { type: 'string' },
-        etag: { type: 'string', description: '覆盖已有文档时必填，等于上次 view 的 etag' },
+        value: { type: 'string', description: 'write 的短全文。长文本用 from。' },
+        from: {
+          type: 'string',
+          description:
+            '长文本：从本地文件读入。write 对应 value；insert / str_replace / find_replace / replace_lines 对应 new_str。',
+        },
+        old_str: { type: 'string', description: 'str_replace / find_replace 要替换的原文' },
+        new_str: {
+          type: 'string',
+          description: 'str_replace / find_replace / insert / replace_lines 的短新文本。长文本用 from。',
+        },
+        regex: { type: 'boolean', description: 'find_replace：old_str 是否按正则解释' },
+        all: { type: 'boolean', description: 'find_replace：是否替换所有匹配' },
+        count: { type: 'integer', description: 'find_replace：最多替换几处' },
+        insert_line: { type: 'integer', description: 'insert：在该行之后插入' },
+        start_line: { type: 'integer', description: 'replace_lines 起始行（含）' },
+        end_line: { type: 'integer', description: 'replace_lines 结束行（含）' },
+        view_range: {
+          type: 'array',
+          items: { type: 'integer' },
+          description: 'view 的行区间，如 [11, 20] 或 [80, -1]',
+        },
+        etag: { type: 'string', description: '可选 If-Match；省略则用刚读到的当前 etag' },
         block_id: { type: 'string' },
         source: { type: 'string' },
         kind: { type: 'string' },
       },
       required: ['path'],
     },
+    execution: (args) => (resolveContentCommand(args) === 'view' ? 'parallel' : 'exclusive'),
     execute: (args) =>
       withInspectorReveal(ctx, String(args.path), () =>
         db.editDoc(String(args.path), args).then((body) => agentDbCompact.query(body)),
       ),
   })
+  ctx.tools.alias('db_file', ['db_doc'])
+  ctx.tools.alias('db_media', ['db_asset'])
 
   const send = async (route: { query: URLSearchParams; send: (status: number, body: unknown) => void }, op: () => unknown) => {
     try {
@@ -3477,7 +3679,7 @@ export function apply(ctx: Context) {
   ctx.http.route('GET', '/api/db/banner-gallery', (route) =>
     send(route, async () => {
       await db.requirePath('/pages', 'resource:read')
-      return { items: db.facets.listBannerGallery() }
+      return { items: db.tags.listBannerGallery() }
     }),
   )
   ctx.http.route('POST', '/api/db/banner-gallery', async (route) => {
@@ -3489,7 +3691,7 @@ export function apply(ctx: Context) {
         route.send(400, { error: 'id required' })
         return
       }
-      route.send(200, { ok: db.facets.forgetBannerGallery(id) })
+      route.send(200, { ok: db.tags.forgetBannerGallery(id) })
     } catch (error) {
       route.send(400, { error: String(error) })
     }
@@ -4061,27 +4263,31 @@ export function apply(ctx: Context) {
       route.send(404, { error: 'not found' })
     }
   })
-  ctx.http.route('GET', '/api/db/facets', async (route) => {
+  ctx.http.route('GET', '/api/db/tags', async (route) => {
     try {
-      await db.requirePath('/facets', 'resource:read')
+      await db.requirePath('/tags', 'resource:read')
       const collect = route.query.get('collect') || ''
       if (collect) {
-        route.send(200, await db.collectFacet(collect))
+        route.send(200, await db.collectTag(collect))
         return
       }
       const q = route.query.get('q') || ''
-      route.send(200, { facets: facets.list(q) })
+      route.send(200, { tags: facets.list(q), filled: facets.filledFieldCounts() })
     } catch (error) {
       route.send(400, { error: String(error) })
     }
   })
-  ctx.http.route('POST', '/api/db/facets', async (route) => {
+  ctx.http.route('POST', '/api/db/tags', async (route) => {
     try {
-      await db.requirePath('/facets', 'resource:update')
-      const body = (await route.json()) as { facets?: unknown[] }
-      facets.replace(Array.isArray(body.facets) ? body.facets : [])
+      await db.requirePath('/tags', 'resource:update')
+      const body = (await route.json()) as { tags?: unknown[]; facets?: unknown[] }
+      const listed = Array.isArray(body.tags) ? body.tags : Array.isArray(body.facets) ? body.facets : []
+      for (const item of listed) {
+        const pack = normalizeSchemaPack(item)
+        if (pack) facets.upsert(pack)
+      }
       ctx.emit('database/change')
-      route.send(200, { ok: true, facets: facets.list() })
+      route.send(200, { ok: true, tags: facets.list(), filled: facets.filledFieldCounts() })
     } catch (error) {
       route.send(400, { error: String(error) })
     }
@@ -4114,7 +4320,7 @@ export function apply(ctx: Context) {
       const written = isHashedAssetName(name)
         ? await assets.write(name, bytes)
         : await assets.writeDoc(name, bytes, { etag: parseIfMatch(route.req.headers['if-match']) })
-      db.facets.putAttachment({
+      db.tags.putAttachment({
         name: written.name,
         etag: written.etag,
         mime: mimeOfAsset(written.name),
@@ -4122,6 +4328,7 @@ export function apply(ctx: Context) {
         kind: 'asset',
         storage: written.storage,
       })
+      linkUploadedAsset(db, path, written.name)
       ctx.http.broadcast?.(DATABASE_CHANNEL, { ts: Date.now(), asset: { name: written.name, etag: written.etag } })
       route.send(200, { ok: true, ...written })
     } catch (error) {
@@ -4143,7 +4350,7 @@ export function apply(ctx: Context) {
       await db.requirePath(path, 'resource:update')
       const bytes = await route.bytes()
       const written = await assets.write(name, bytes)
-      db.facets.putAttachment({
+      db.tags.putAttachment({
         name: written.name,
         etag: written.etag,
         mime: mimeOfAsset(written.name),
@@ -4151,6 +4358,7 @@ export function apply(ctx: Context) {
         kind: 'asset',
         storage: written.storage,
       })
+      linkUploadedAsset(db, path, written.name)
       ctx.http.broadcast?.(DATABASE_CHANNEL, { ts: Date.now(), asset: { name: written.name, etag: written.etag } })
       route.send(200, { ok: true, ...written })
     } catch (error) {

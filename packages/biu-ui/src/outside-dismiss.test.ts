@@ -35,6 +35,20 @@ test('headless dismiss uses radix dismissable layer', () => {
 test('share overlay portal helper lifts z-index', () => {
   const overlay = readFileSync(resolve(import.meta.dirname, './overlay-portal.ts'), 'utf8')
   assert.match(overlay, /SHARE_OVERLAY_Z = 360/)
+  assert.match(overlay, /EXPAND_OVERLAY_Z = 360/)
+  assert.match(overlay, /data-page-host-expanded/)
   assert.match(overlay, /\.fsdb-share-page/)
   assert.match(overlay, /classList\.contains\('share'\)/)
+})
+
+test('expanded page sandbox takes overlay portal root and lifts z-index', async () => {
+  const { overlayPortalRoot, overlayZ, EXPAND_OVERLAY_Z } = await import('./overlay-portal.ts')
+  assert.equal(overlayZ(180), 180)
+  const host = document.createElement('div')
+  host.setAttribute('data-page-host-expanded', '1')
+  document.body.append(host)
+  assert.equal(overlayPortalRoot(), host)
+  assert.equal(overlayZ(180), EXPAND_OVERLAY_Z)
+  host.remove()
+  assert.equal(overlayPortalRoot(), document.body)
 })

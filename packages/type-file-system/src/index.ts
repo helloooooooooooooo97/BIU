@@ -14,7 +14,7 @@ export type FieldType =
   | 'attachment'
   | 'file'
   | 'string[]'
-  | 'facet'
+  | 'tag'
   | 'action'
   | 'person'
   | 'ref'
@@ -269,12 +269,12 @@ export const BUILTIN_FIELDS = {
   updatedAt: { type: 'datetime', label: '更新时间' },
   content: { type: 'file', label: '内容' },
   emoji: { type: 'string', label: '图标', writable: true },
-  facet: {
-    type: 'facet',
+  tag: {
+    type: 'tag',
     label: '标签',
     writable: true,
     description:
-      '贴标签并填属性。一个标签：{tags:["facet-2"],values:{导演:"查泽雷"}}。多个标签 values 必须按 id 分组：{tags:["facet-2","awards"],values:{"facet-2":{导演:"查泽雷"},awards:{oscar:true}}}。省略 tags 只合并属性，不撕掉其它标签。读属性列：db_list columns=["facet::<标签id>::<字段key>"]，例如 facet::facet::category。',
+      '贴标签并填属性。一个标签：{tags:["need"],values:{导演:"查泽雷"}}。多个标签 values 必须按 id 分组：{tags:["need","awards"],values:{"need":{导演:"查泽雷"},awards:{oscar:true}}}。省略 tags 只合并属性，不撕掉其它标签。读属性列：db_list columns=["tag::<标签id>::<字段key>"]，例如 tag::need::category。',
   },
   parentId: { type: 'ref', label: '父级', writable: true },
   dependsOn: { type: 'multi-ref', label: '依赖', writable: true },
@@ -287,7 +287,7 @@ export const REQUIRED_RECORD_FIELD_KEYS = [
   'createdAt',
   'updatedAt',
   'emoji',
-  'facet',
+  'tag',
   'parentId',
   'dependsOn',
   'createdBy',
@@ -304,7 +304,7 @@ export const REQUIRED_RECORD_FIELDS: RequiredRecordFields = {
   createdAt: BUILTIN_FIELDS.createdAt,
   updatedAt: BUILTIN_FIELDS.updatedAt,
   emoji: BUILTIN_FIELDS.emoji,
-  facet: BUILTIN_FIELDS.facet,
+  tag: BUILTIN_FIELDS.tag,
   parentId: BUILTIN_FIELDS.parentId,
   dependsOn: BUILTIN_FIELDS.dependsOn,
   createdBy: BUILTIN_FIELDS.createdBy,
@@ -316,10 +316,10 @@ export const BUILTIN_FIELD_KEYS = ['id', 'createdAt', 'updatedAt', 'content', 'e
 
 export const RESERVED_SCHEMA_FIELD_KEYS = Object.keys(BUILTIN_FIELDS)
 
-/** 已去掉的 tags 记录列，禁止再登记同名列。 */
-const DROPPED_SCHEMA_FIELDS: Record<string, string> = { tags: '标签' }
+/** 已去掉的 tags 记录列，禁止再登记同名列。旧字段名 facet 一并封掉。 */
+const DROPPED_SCHEMA_FIELDS: Record<string, string> = { tags: '标签', facet: '标签' }
 
-/** 标签属性 key：可与显示名相同（含中文）。禁止空、控制符、路径分隔和 facet:: 列分隔。 */
+/** 标签属性 key：可与显示名相同（含中文）。禁止空、控制符、路径分隔和 tag:: 列分隔。 */
 export function isSchemaFieldKey(key: string) {
   const next = String(key ?? '').trim()
   if (!next || next.length > 64) return false
@@ -341,7 +341,7 @@ export function isReservedSchemaFieldLabel(label: string) {
   return Object.values(BUILTIN_FIELDS).some((field) => String(field.label ?? '').trim().toLowerCase() === want)
 }
 
-/** 分面包内允许的字段类型，含标签（可再贴标签）。 */
+/** 标签包内允许的字段类型，含标签（可再贴标签）。 */
 export const ATOMIC_FIELD_TYPES = [
   'string',
   'number',
@@ -354,14 +354,14 @@ export const ATOMIC_FIELD_TYPES = [
   'attachment',
   'file',
   'action',
-  'facet',
+  'tag',
   'person',
   'ref',
   'multi-ref',
 ] as const satisfies readonly FieldType[]
 
-export function isFacetFieldType(type: unknown): boolean {
-  return type === 'facet'
+export function isTagFieldType(type: unknown): boolean {
+  return type === 'tag' || type === 'facet'
 }
 
 export function isRefFieldType(type: unknown): type is 'ref' | 'multi-ref' {
@@ -371,13 +371,13 @@ export function isRefFieldType(type: unknown): type is 'ref' | 'multi-ref' {
 export type AtomicFieldType = (typeof ATOMIC_FIELD_TYPES)[number]
 
 export function isAtomicFieldType(type: unknown): type is AtomicFieldType {
-  return typeof type === 'string' && (ATOMIC_FIELD_TYPES as readonly string[]).includes(type)
+  return typeof type === 'string' && ((ATOMIC_FIELD_TYPES as readonly string[]).includes(type) || type === 'tag')
 }
 
 function atomicSchemaField(key: string, row: Record<string, unknown>, fieldLabel: string): SchemaPackField {
   const field: SchemaPackField = {
     key,
-    type: row.type as AtomicFieldType,
+    type: isTagFieldType(row.type) ? 'tag' : (row.type as AtomicFieldType),
     writable: row.writable !== false,
   }
   if (fieldLabel !== key) field.label = fieldLabel
@@ -557,7 +557,7 @@ export function recordBuiltinValues(row: Record<string, unknown> = {}) {
     createdAt: created,
     updatedAt: updated,
     emoji: String(row.emoji ?? ''),
-    facet: normalizeSchemaValue(row.facet),
+    tag: normalizeSchemaValue(row.tag ?? row.facet),
     parentId,
     dependsOn,
     createdBy: asPerson(row.createdBy),
@@ -599,7 +599,10 @@ export function withBuiltinFields(
   if (!next.emoji) next.emoji = BUILTIN_FIELDS.emoji
   else if (!next.emoji.computed) next.emoji = { ...BUILTIN_FIELDS.emoji, ...next.emoji, writable: true }
   delete next.tags
-  if (!next.facet) next.facet = BUILTIN_FIELDS.facet
+  if (next.facet && !next.tag) next.tag = { ...next.facet, type: 'tag' }
+  delete next.facet
+  if (!next.tag) next.tag = BUILTIN_FIELDS.tag
+  else next.tag = { ...BUILTIN_FIELDS.tag, ...next.tag, type: 'tag' }
   if (!next.parentId) next.parentId = BUILTIN_FIELDS.parentId
   else if (!next.parentId.computed) next.parentId = { ...BUILTIN_FIELDS.parentId, ...next.parentId, type: 'ref', writable: true }
   if (!next.dependsOn) next.dependsOn = BUILTIN_FIELDS.dependsOn
@@ -648,6 +651,8 @@ export type CollectionActionInfo = {
   allowMissing?: boolean
   /** 此动作要求的统一授权能力。缺省按修改记录处理。 */
   requiredAction?: CollectionPermissionAction
+  /** 全部数据把各表动作摊平后，用来认这颗按钮属于哪张表。同一 id 在不同表含义不同。 */
+  collection?: string
 }
 
 export function actionVisibleToUser(action: { for?: CollectionActionAudience }) {
@@ -722,12 +727,24 @@ export function hasCollectionDeleteQuery(query?: CollectionListQuery | null): bo
   return false
 }
 
+/** 表自己保管的可变文档（例如 /pages 的特制沙盒 .jsx），不走通用 assets/name。 */
+export type CollectionNamedDocs = {
+  names: (record: DbRecord) => Iterable<string>
+  read: (name: string) => { bytes: Uint8Array; type: string; etag: string } | Promise<{ bytes: Uint8Array; type: string; etag: string }>
+  write: (
+    name: string,
+    content: string | Buffer | Uint8Array,
+    opts?: { etag?: string },
+  ) => { name: string; etag: string; bytes?: number } | Promise<{ name: string; etag: string; bytes?: number }>
+}
+
 export type CollectionSpec = {
   id: string
   path: string
   label?: string
   schema: CollectionSchema
   view?: CollectionView
+  namedDocs?: CollectionNamedDocs
   /**
    * 记录权限。list / get 始终可用。
    * update / create / delete 为 true 时必须提供对应实现；不写则不能改、不能新建、不能删。

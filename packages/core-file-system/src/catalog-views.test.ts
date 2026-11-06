@@ -21,9 +21,11 @@ import {
   isBuiltinAllViewForCollection,
   stubBuiltinCatalogView,
   catalogRowOpenTarget,
+  collectionNoun,
   displayNameForView,
   builtinTagViewId,
   isBuiltinTagViewId,
+  stampRecordId,
   stampRowOpenTarget,
   stubBuiltinScopeView,
   viewsForScope,
@@ -146,7 +148,7 @@ test('catalog view rows open the source table view instead of a record pane', ()
 test('tags collection uses the same view list as other tables', () => {
   assert.equal(isBuiltinTagViewId(builtinTagViewId('dp')), true)
   assert.equal(isBuiltinCatalogViewId(builtinTagViewId('dp')), false)
-  const table = { path: '/facets', label: '标签', view: { title: '标签' } }
+  const table = { path: '/tags', label: '标签', view: { title: '标签' } }
   const merged = mergeTableViews(table, [{ id: 'mine', name: '置顶', mode: 'table', sortField: 'id', sortDir: 'asc', filters: {}, columns: [] }])
   assert.equal(merged[0]?.name, '全部标签')
   assert.equal(merged.some((view) => view.name === '私人标签'), false)
@@ -160,11 +162,26 @@ test('stamp rows open the source record, not a tag view', () => {
     recordId: 'home',
   })
   assert.equal(stampRowOpenTarget({ tablePath: '', sourceId: 'home' }), null)
+  assert.deepEqual(stampRowOpenTarget({ id: 'pages::p180' }), {
+    collection: '/pages',
+    recordId: 'p180',
+  })
+  assert.equal(stampRecordId('/agents', 's1'), 'agents::s1')
 })
 
 test('builtin all views are read-only', () => {
   assert.equal(isReadOnlyViewId(builtinAllViewId('/agents')), true)
   assert.equal(isReadOnlyViewId('user-traj'), false)
+})
+
+test('data collection noun is 数据, not the path segment', () => {
+  assert.equal(collectionNoun({ path: '/data' }), '数据')
+  assert.equal(collectionNoun({ path: '/data', label: 'data' }), '数据')
+  assert.equal(stubBuiltinAllView(builtinAllViewId('/data'))?.name, '全部数据')
+  assert.equal(
+    displayNameForView(builtinAllViewId('/data'), { path: '/data', label: '数据', view: { title: '数据' } }),
+    '全部数据',
+  )
 })
 
 test('each registered page block kind gets a builtin view', () => {

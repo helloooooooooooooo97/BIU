@@ -18,6 +18,14 @@ function atTextblockEdge($pos: ResolvedPos, dir: 1 | -1) {
   return dir > 0 ? $pos.parentOffset === $pos.parent.content.size : $pos.parentOffset === 0
 }
 
+function endOfTextblockSafe(view: EditorView, dir: 'up' | 'down') {
+  try {
+    return view.endOfTextblock(dir)
+  } catch {
+    return true
+  }
+}
+
 /** 上下键会跳过 atom。贴着 sandbox 时改成 NodeSelection，外框才能变蓝。 */
 export function handlePageBlockArrow(view: EditorView, event: KeyboardEvent): boolean {
   if (event.shiftKey || event.altKey || event.metaKey || event.ctrlKey || event.isComposing) return false
@@ -34,7 +42,7 @@ export function handlePageBlockArrow(view: EditorView, event: KeyboardEvent): bo
   }
   if (!sel.empty) return false
   const $pos = dir > 0 ? sel.$to : sel.$from
-  if (!atTextblockEdge($pos, dir) && !view.endOfTextblock(dir > 0 ? 'down' : 'up')) return false
+  if (!atTextblockEdge($pos, dir) && !endOfTextblockSafe(view, dir > 0 ? 'down' : 'up')) return false
   const pos = adjacentPageBlockPos($pos, dir)
   if (pos == null) return false
   event.preventDefault()

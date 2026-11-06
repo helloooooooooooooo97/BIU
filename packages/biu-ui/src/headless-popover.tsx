@@ -20,6 +20,7 @@ export function HeadlessPopover({
   side = 'bottom',
   align = 'start',
   sideOffset = 4,
+  alignOffset = 0,
   avoidCollisions = true,
   modal = false,
   autoFocus = false,
@@ -35,6 +36,7 @@ export function HeadlessPopover({
   side?: 'top' | 'right' | 'bottom' | 'left'
   align?: 'start' | 'center' | 'end'
   sideOffset?: number
+  alignOffset?: number
   avoidCollisions?: boolean
   modal?: boolean
   autoFocus?: boolean
@@ -51,6 +53,7 @@ export function HeadlessPopover({
           side={side}
           align={align}
           sideOffset={sideOffset}
+          alignOffset={alignOffset}
           avoidCollisions={avoidCollisions}
           collisionPadding={8}
           style={{ zIndex: overlayZ(zIndex) }}

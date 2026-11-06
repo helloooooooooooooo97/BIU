@@ -350,7 +350,7 @@ test('close of a builtin plugin clears enabled so restore does not remount', asy
     const store2 = new PluginStoreService(ctx2, pluginDir, join(dir, 'store.json'), join(dir, '.plugin-dev')).open()
     await store2.restore()
     assert.equal(adopted.includes('page-sandbox'), false)
-    assert.equal((await store2.list()).find((item) => item.id === 'page-sandbox')?.name, 'Sandbox')
+    assert.equal((await store2.list()).find((item) => item.id === 'page-sandbox')?.name, '沙箱')
   } finally {
     await rm(dir, { recursive: true, force: true })
   }

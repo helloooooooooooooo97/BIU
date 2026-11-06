@@ -10,14 +10,14 @@ const LIST_META_KEYS = new Set(['createdAt', 'updatedAt', 'createdBy', 'updatedB
 /** 把 File System 工具回包压成 Agent 用的短 JSON；网页 API 不走这里。 */
 export class AgentDbCompact {
   readonly statBlurb =
-    '查看路径元数据。根目录列出表。表路径返回相对默认的 schema：每张表都有 id、title（标题）、createdAt、updatedAt、emoji、tags、facet、parentId（父级）、dependsOn、createdBy（唯一创建人，系统自记不可写）、updatedBy（编辑人列表，系统自记不可写，多人先后编辑会追加）；正文默认字段 content（file，用 db_content）。fields 只含本表多出来的列，或覆盖了这些默认的列；可写列可能带 example，按 example 的形状写（数组不要先 stringify，除非 example 本身是 JSON 字符串）。标签属性列 key 为 facet::<标签id>::<字段key>。caps 表示能否 list/read/update/create/delete/action/content。'
+    '查看路径元数据。根目录列出表。表路径返回相对默认的 schema：每张表都有 id、title（标题）、createdAt、updatedAt、emoji、tags、tag、parentId（父级）、dependsOn、createdBy（唯一创建人，系统自记不可写）、updatedBy（编辑人列表，系统自记不可写，多人先后编辑会追加）；正文默认字段 content（file，用 db_content）。fields 只含本表多出来的列，或覆盖了这些默认的列；可写列可能带 example，按 example 的形状写（数组不要先 stringify，除非 example 本身是 JSON 字符串）。标签属性列 key 为 tag::<标签id>::<字段key>。caps 表示能否 list/read/update/create/delete/action/content。'
 
   schema(schema: CollectionSchema) {
     const defaults = this.defaultFields(schema)
     const fields: Record<string, unknown> = {}
     for (const [key, field] of Object.entries(schema.fields)) {
       const builtin = defaults[key]
-      if (key !== 'facet' && builtin && this.specsMatch(field, builtin)) continue
+      if (key !== 'tag' && builtin && this.specsMatch(field, builtin)) continue
       fields[key] = this.field(key, field)
     }
     const actions = (schema.actions ?? []).map((item) => this.action(item)).filter(Boolean)
@@ -43,6 +43,7 @@ export class AgentDbCompact {
       return next
     }
     if (kind === 'content') return this.content(rec)
+    if (kind === 'doc') return this.doc(rec)
     if (kind === 'asset') return this.asset(rec)
     return result
   }
@@ -103,6 +104,26 @@ export class AgentDbCompact {
     return next
   }
 
+  private doc(rec: Record<string, unknown>) {
+    if (Array.isArray(rec.assets)) return { path: rec.path, assets: rec.assets }
+    if (rec.ok === true || (typeof rec.command === 'string' && rec.command !== 'view')) {
+      const next: Record<string, unknown> = { ok: true, path: rec.path, name: rec.name, etag: rec.etag }
+      if (typeof rec.command === 'string' && rec.command !== 'write') next.command = rec.command
+      if (typeof rec.start_line === 'number') next.start_line = rec.start_line
+      if (typeof rec.end_line === 'number') next.end_line = rec.end_line
+      if (typeof rec.text === 'string' && rec.text.trim()) next.text = rec.text.trim()
+      if (typeof rec.replaced === 'number') next.replaced = rec.replaced
+      return next
+    }
+    const next: Record<string, unknown> = { path: rec.path, name: rec.name, etag: rec.etag, text: rec.text }
+    if (typeof rec.start === 'number') next.start = rec.start
+    if (typeof rec.end === 'number') next.end = rec.end
+    if (typeof rec.total === 'number') next.total = rec.total
+    if (rec.truncated) next.truncated = true
+    if (typeof rec.type === 'string') next.type = rec.type
+    return next
+  }
+
   private asset(rec: Record<string, unknown>) {
     if (rec.ok === true || rec.command === 'write') {
       return { ok: true, path: rec.path, name: rec.name, etag: rec.etag }
@@ -127,7 +148,7 @@ export class AgentDbCompact {
       }
     }
     const columns = order.filter(
-      (key) => key === 'id' || key.startsWith('facet::') || rowsIn.some((row) => !this.empty(row[key])),
+      (key) => key === 'id' || key.startsWith('tag::') || rowsIn.some((row) => !this.empty(row[key])),
     )
     const rows = rowsIn.map((row) => columns.map((key) => (this.empty(row[key]) ? null : row[key])))
     return { columns, rows }

@@ -177,7 +177,9 @@ export function stubBuiltinScopeView(id: string, listed: SavedView[] = []): Save
 
 export function collectionNoun(table: TableRef) {
   const path = normalizeCollectionPath(table.path)
-  return (table.view?.title ?? table.label ?? path.replace(/^\//, '')) || '记录'
+  const named = String(table.view?.title ?? table.label ?? '').trim()
+  if (path === '/data') return named && named !== 'data' ? named : '数据'
+  return named || path.replace(/^\//, '') || '记录'
 }
 
 /** 分享/面包屑用：内置视图不在 saved-views 里，不能把路径 id 当名称。 */
@@ -210,7 +212,7 @@ export function builtinAllView(table: TableRef): SavedView {
     ...builtinViewLayout(),
     filters: {},
     columns: [],
-    groupBy: path === '/page-blocks' || path === '/facets' ? '' : 'shareScope',
+    groupBy: path === '/page-blocks' || path === '/tags' ? '' : 'shareScope',
     wrap: false,
     truncate: true,
     query: '',
@@ -226,7 +228,7 @@ export function stubBuiltinAllView(id: string): SavedView | null {
 
 export function builtinCatalogViews(tables: CollectionInfo[]): SavedView[] {
   return tables
-    .filter((table) => table.path && table.path !== '/')
+    .filter((table) => table.path && table.path !== '/' && table.path !== '/data')
     .map((table) => {
       const path = normalizeCollectionPath(table.path)
       return normalizeSavedView({
@@ -369,12 +371,26 @@ export function stubBuiltinTagView(id: string): SavedView | null {
   return builtinTagView({ id: tagId, label: tagId })
 }
 
+export function stampRecordId(collection: string, recordId: string) {
+  const table = normalizeCollectionPath(collection).replace(/^\//, '')
+  const id = String(recordId ?? '').trim()
+  if (!table || !id) return ''
+  return `${table}::${id}`
+}
+
 /** 收集表里的一行：打开原始表里的那条记录。 */
-export function stampRowOpenTarget(row: { tablePath?: unknown; sourceId?: unknown }) {
+export function stampRowOpenTarget(row: { id?: unknown; tablePath?: unknown; sourceId?: unknown }) {
   const collection = normalizeCollectionPath(String(row.tablePath ?? ''))
   const recordId = String(row.sourceId ?? '').trim()
-  if (!collection || collection === '/' || !recordId) return null
-  return { collection, recordId }
+  if (collection && collection !== '/' && recordId) return { collection, recordId }
+  const raw = String(row.id ?? '').trim()
+  const at = raw.indexOf('::')
+  if (at > 0) {
+    const table = raw.slice(0, at).trim()
+    const source = raw.slice(at + 2).trim()
+    if (table && source) return { collection: normalizeCollectionPath(`/${table}`), recordId: source }
+  }
+  return null
 }
 
 /** 路由里已经是 builtin: 时，即使本地还没合并登记表，也能先还原筛选。 */

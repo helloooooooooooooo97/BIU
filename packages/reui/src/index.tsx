@@ -129,6 +129,7 @@ html.dark .rui-root{--biu-color-on-emphasis:var(--biu-color-bg);color-scheme:dar
 .lc-ex strong{display:block;font-family:ui-sans-serif,system-ui,sans-serif;font-size:var(--biu-font-size-3);margin:0 0 8px}
 .lc-code{display:flex;flex-direction:column;min-width:0;min-height:0;background:#fff}
 .lc-codebar{display:flex;align-items:center;gap:8px;height:42px;padding:0 12px;border-bottom:var(--biu-stroke-width) solid var(--biu-color-border);background:#fafafa}
+.lc-codebar .lc-run{margin-left:auto}
 .lc-codebar .rui-select{border:0;background:transparent;height:28px;font-weight:var(--biu-font-weight-semibold)}
 .lc-run{height:28px;padding:0 14px;border:0;border-radius:6px;background:#2cbb5d;color:var(--biu-color-on-emphasis);font:600 13px/1 ui-sans-serif,system-ui,sans-serif;cursor:pointer}
 .lc-run:disabled{opacity:.45;cursor:default}
@@ -136,8 +137,8 @@ html.dark .rui-root{--biu-color-on-emphasis:var(--biu-color-bg);color-scheme:dar
 .lc-console{border-top:var(--biu-stroke-width) solid var(--biu-color-border);background:#fff}
 .lc-console-tabs{display:flex;align-items:center;gap:14px;padding:8px 14px;border-bottom:var(--biu-stroke-width) solid var(--biu-color-border);font-size:var(--biu-font-size-3);color:#8c8c8c}
 .lc-console-tabs [data-on=true]{color:#262626;font-weight:var(--biu-font-weight-semibold);border-bottom:2px solid #262626;padding-bottom:6px;margin-bottom:-9px}
-.lc-console-body{padding:12px 14px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;line-height:1.65;min-height:72px;color:#262626;white-space:pre-wrap}
-.lc-empty{color:#8c8c8c}
+.lc-console-body{padding:12px 14px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;line-height:1.65;min-height:72px;color:var(--biu-color-text);white-space:pre-wrap}
+.lc-empty{color:var(--biu-color-text-muted)}
 @media (max-width:820px){.lc-shell{grid-template-columns:1fr}}
 .doc-shell{background:#fafafa;border:var(--biu-stroke-width) solid var(--biu-color-border);border-radius:12px;overflow:hidden}
 .doc-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:16px 18px 8px}
@@ -188,11 +189,9 @@ html.dark .rui-root{--biu-color-on-emphasis:var(--biu-color-bg);color-scheme:dar
 .m-HEAD,.m-OPTIONS{color:#6b7280;font-weight:var(--biu-font-weight-bold);font-size:11px}
 .ins-status{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:var(--biu-stroke-width) solid var(--biu-color-border);font-size:12.5px}
 @media (max-width:860px){.ins-shell{grid-template-columns:1fr}}
-.toc-shell{background:#fff;border:var(--biu-stroke-width) solid var(--biu-color-border);border-radius:12px;padding:14px 8px 12px 14px;max-width:320px}
-.toc-kicker{font-size:11px;font-weight:var(--biu-font-weight-semibold);letter-spacing:.08em;text-transform:uppercase;color:#8e8e93;margin:0 8px 6px}
-.toc-shell h2{margin:0 8px 10px;font-size:15px;font-weight:var(--biu-font-weight-semibold)}
-.toc-shell .rui-tree{margin-top:0}
-.toc-shell .rui-tree-item[data-selected=true] .rui-tree-label{background:#f0f0f0;font-weight:var(--biu-font-weight-semibold)}
+.toc-shell{box-sizing:border-box;width:100%;max-width:none;margin:0;padding:0;background:transparent;border:0;border-radius:0}
+.toc-shell .rui-tree{margin:0;width:100%}
+.toc-shell .rui-tree-item[data-selected=true] .rui-tree-label{background:transparent;font-weight:inherit}
 .rg-shell{background:#fff;border:var(--biu-stroke-width) solid var(--biu-color-border);border-radius:12px;overflow:hidden}
 .rg-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:14px 16px 8px}
 .rg-head h2{margin:0;font-size:16px;font-weight:var(--biu-font-weight-semibold)}
@@ -296,7 +295,8 @@ html.dark .rui-root{--biu-color-on-emphasis:var(--biu-color-bg);color-scheme:dar
 @media (max-width:820px){.en-split,.en-row3,.en-rubric,.en-fix{grid-template-columns:1fr}}
 html.dark .rui-root .rui-group,html.dark .rui-root .rui-cell,html.dark .rui-root .fit-tile,html.dark .rui-root .hv-ex,html.dark .rui-root .lc-shell,html.dark .rui-root .lc-desc,html.dark .rui-root .lc-code,html.dark .rui-root .lc-console,html.dark .rui-root .doc-shell,html.dark .rui-root .doc-stat,html.dark .rui-root .doc-filters,html.dark .rui-root .doc-list,html.dark .rui-root .doc-table th,html.dark .rui-root .ins-shell,html.dark .rui-root .ins-hit[data-on=true],html.dark .rui-root .toc-shell,html.dark .rui-root .rg-shell,html.dark .rui-root .rg-run,html.dark .rui-root .cmp-shell,html.dark .rui-root .cmp-pick,html.dark .rui-root .en-rubric>div{background:var(--biu-color-bg);color:var(--biu-color-text);border-color:var(--biu-color-border)}
 html.dark .rui-root .rui-ios,html.dark .rui-root .ins-side,html.dark .rui-root .lc-codebar,html.dark .rui-root .doc-head p,html.dark .rui-root .rg-filters,html.dark .rui-root .cmp-edit,html.dark .rui-root .cmp-table th,html.dark .rui-root .cmp-table th:first-child,html.dark .rui-root .cmp-table td:first-child{background:var(--biu-color-bg-subtle);color:var(--biu-color-text-subtle)}
-html.dark .rui-root .rui-sub,html.dark .rui-root .rui-section,html.dark .rui-root .rui-cell-meta,html.dark .rui-root .fit-tile em,html.dark .rui-root .hv-stats em,html.dark .rui-root .doc-stat em,html.dark .rui-root .doc-title,html.dark .rui-root .lc-title,html.dark .rui-root .lc-h,html.dark .rui-root .lc-p,html.dark .rui-root .rg-head p,html.dark .rui-root .cmp-head p,html.dark .rui-root .cmp-why{color:var(--biu-color-text)}
+html.dark .rui-root .rui-sub,html.dark .rui-root .rui-section,html.dark .rui-root .rui-cell-meta,html.dark .rui-root .fit-tile em,html.dark .rui-root .hv-stats em,html.dark .rui-root .doc-stat em,html.dark .rui-root .doc-title,html.dark .rui-root .lc-title,html.dark .rui-root .lc-h,html.dark .rui-root .lc-p,html.dark .rui-root .lc-console-body,html.dark .rui-root .rg-head p,html.dark .rui-root .cmp-head p,html.dark .rui-root .cmp-why{color:var(--biu-color-text)}
+html.dark .rui-root .lc-empty,html.dark .rui-root .lc-console-tabs{color:var(--biu-color-text-muted)}
 html.dark .rui-root .lc-topic,html.dark .rui-root .lc-ex,html.dark .rui-root .doc-bar,html.dark .rui-root .rui-chrome,html.dark .rui-root .rui-addr{background:var(--biu-color-bg-muted);color:var(--biu-color-text)}
 html.dark .rui-root .doc-filter[data-on=true],html.dark .rui-root .ins-panes button[data-on=true],html.dark .rui-root .rg-filters button[data-on=true],html.dark .rui-root .lc-console-tabs [data-on=true]{color:var(--biu-color-text);box-shadow:inset 0 -2px 0 var(--biu-color-text)}
 html.dark .rui-root .rg-run[data-on=true],html.dark .rui-root .cmp-pick[data-rank="1"],html.dark .rui-root .cmp-pick[data-rank="1"] .cmp-badge{background:var(--biu-color-text);color:var(--biu-color-bg);border-color:var(--biu-color-text)}

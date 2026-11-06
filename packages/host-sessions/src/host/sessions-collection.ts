@@ -67,7 +67,7 @@ function asRecord(row: SessionSummary): DbRecord {
       createdAt: sessionCreatedAt(row),
       updatedAt: row.updatedAt,
       emoji: row.config?.emoji,
-      facet: row.config?.facet,
+      tag: row.config?.tag,
     }),
   }
 }
@@ -155,7 +155,7 @@ export function sessionsCollection(sessions: SessionsLike): CollectionSpec {
       labelField: 'title',
       contentField: 'events',
       contentBackend: 'computed',
-      columns: ['title', 'pinned', 'facet', 'eventCount', 'project', 'updatedAt'],
+      columns: ['title', 'pinned', 'tag', 'eventCount', 'project', 'updatedAt'],
       fields: {
         ...REQUIRED_RECORD_FIELDS,
         events: { type: 'file', label: '对话', writable: false },
@@ -203,7 +203,7 @@ export function sessionsCollection(sessions: SessionsLike): CollectionSpec {
       const config: SessionConfig = {}
       if (typeof patch.pinned === 'boolean') config.pinned = patch.pinned
       if ('emoji' in patch) config.emoji = String(patch.emoji ?? '')
-      if ('facet' in patch) config.facet = normalizeSchemaValue(patch.facet)
+      if ('tag' in patch) config.tag = normalizeSchemaValue(patch.tag)
       if (typeof patch.createdAt === 'number') config.createdAt = patch.createdAt
       if (typeof patch.model === 'string') config.model = patch.model
       if (patch.provider === 'deepseek' || patch.provider === 'openai' || patch.provider === 'anthropic') {
@@ -249,6 +249,14 @@ export function sessionsCollection(sessions: SessionsLike): CollectionSpec {
     },
     actions: [
       {
+        id: 'chat',
+        label: '对话',
+        for: 'user',
+        placement: ['row', 'detail'],
+        description: '把当前代理换成这一行，打开对话。',
+        run: async (id) => ({ ok: true, sessionId: id }),
+      },
+      {
         id: 'inspect',
         requiredAction: 'resource:read',
         label: '检查',
@@ -270,7 +278,7 @@ export function sessionsCollection(sessions: SessionsLike): CollectionSpec {
             title: record.config?.title,
             config: record.config ?? null,
             project: record.project ?? null,
-            facet: record.config?.facet ?? { tags: [], values: {} },
+            tag: record.config?.tag ?? { tags: [], values: {} },
             pinned: Boolean(record.config?.pinned),
             eventCount: record.events.length,
             recent: recentMessages(record.events, limit),

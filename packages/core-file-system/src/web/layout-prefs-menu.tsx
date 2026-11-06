@@ -1,11 +1,20 @@
+import type { ComponentType, SVGProps } from 'react'
 import { useSyncExternalStore } from 'react'
+import {
+  ArrowsPointingOutIcon,
+  ArrowsUpDownIcon,
+  BookmarkIcon,
+  ChevronUpDownIcon,
+  LanguageIcon,
+} from '@heroicons/react/16/solid'
 import { getPagePrefs, getPageWidthVersion, persistPagePrefs, subscribePageWidth, type BodyScale, type PagePrefs } from './page-width.ts'
 
-const BOOLS: { key: keyof Pick<PagePrefs, 'wide' | 'outlineExpand' | 'outlinePin' | 'navPin'>; label: string; testId: string }[] = [
-  { key: 'wide', label: '宽屏', testId: 'fsdb-layout-wide' },
-  { key: 'outlineExpand', label: '展开悬浮', testId: 'fsdb-layout-outline-expand' },
-  { key: 'outlinePin', label: '悬浮目录常驻', testId: 'fsdb-layout-outline-pin' },
-  { key: 'navPin', label: '翻页常驻', testId: 'fsdb-layout-nav-pin' },
+type Icon = ComponentType<SVGProps<SVGSVGElement>>
+
+const BOOLS: { key: keyof Pick<PagePrefs, 'wide' | 'outlinePin' | 'navPin'>; label: string; testId: string; icon: Icon }[] = [
+  { key: 'wide', label: '宽屏', testId: 'fsdb-layout-wide', icon: ArrowsPointingOutIcon },
+  { key: 'outlinePin', label: '目录常驻', testId: 'fsdb-layout-outline-pin', icon: BookmarkIcon },
+  { key: 'navPin', label: '翻页常驻', testId: 'fsdb-layout-nav-pin', icon: ChevronUpDownIcon },
 ]
 
 const SCALES: { value: BodyScale; label: string }[] = [
@@ -13,6 +22,46 @@ const SCALES: { value: BodyScale; label: string }[] = [
   { value: 'md', label: '中' },
   { value: 'lg', label: '大' },
 ]
+
+function ScaleRow({
+  icon: Icon,
+  label,
+  value,
+  testPrefix,
+  kind,
+  onPick,
+}: {
+  icon: Icon
+  label: string
+  value: BodyScale
+  testPrefix: string
+  kind: 'size' | 'gap'
+  onPick: (value: BodyScale) => void
+}) {
+  return (
+    <div className="fsdb-layout-scale">
+      <span className="fsdb-layout-label">
+        <Icon aria-hidden />
+        {label}
+      </span>
+      <div className="fsdb-layout-pills">
+        {SCALES.map((item) => (
+          <button
+            key={item.value}
+            type="button"
+            role="menuitemradio"
+            className={`fsdb-layout-opt${value === item.value ? ' is-active' : ''}`}
+            aria-checked={value === item.value}
+            data-testid={`${testPrefix}-${kind}-${item.value}`}
+            onClick={() => onPick(item.value)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 export function LayoutPrefsMenu({
   prefs,
@@ -32,6 +81,7 @@ export function LayoutPrefsMenu({
     <div className={className ? `fsdb-tool-flyout fsdb-layout-menu ${className}` : 'fsdb-tool-flyout fsdb-layout-menu'} role="menu" data-testid={`${testPrefix}-menu`}>
       {BOOLS.map((item) => {
         const on = live[item.key]
+        const Icon = item.icon
         return (
           <button
             key={item.key}
@@ -42,46 +92,29 @@ export function LayoutPrefsMenu({
             data-testid={item.testId}
             onClick={() => apply({ [item.key]: !on })}
           >
-            <span>{item.label}</span>
+            <span className="fsdb-layout-label">
+              <Icon aria-hidden />
+              {item.label}
+            </span>
           </button>
         )
       })}
-      <div className="fsdb-layout-scale">
-        <span>文字</span>
-        <div className="fsdb-layout-pills">
-          {SCALES.map((item) => (
-            <button
-              key={item.value}
-              type="button"
-              role="menuitemradio"
-              className={`fsdb-layout-opt${live.bodySize === item.value ? ' is-active' : ''}`}
-              aria-checked={live.bodySize === item.value}
-              data-testid={`${testPrefix}-size-${item.value}`}
-              onClick={() => apply({ bodySize: item.value })}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="fsdb-layout-scale">
-        <span>间距</span>
-        <div className="fsdb-layout-pills">
-          {SCALES.map((item) => (
-            <button
-              key={item.value}
-              type="button"
-              role="menuitemradio"
-              className={`fsdb-layout-opt${live.bodyGap === item.value ? ' is-active' : ''}`}
-              aria-checked={live.bodyGap === item.value}
-              data-testid={`${testPrefix}-gap-${item.value}`}
-              onClick={() => apply({ bodyGap: item.value })}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <ScaleRow
+        icon={LanguageIcon}
+        label="文字"
+        value={live.bodySize}
+        testPrefix={testPrefix}
+        kind="size"
+        onPick={(bodySize) => apply({ bodySize })}
+      />
+      <ScaleRow
+        icon={ArrowsUpDownIcon}
+        label="间距"
+        value={live.bodyGap}
+        testPrefix={testPrefix}
+        kind="gap"
+        onPick={(bodyGap) => apply({ bodyGap })}
+      />
     </div>
   )
 }

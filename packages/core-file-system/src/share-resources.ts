@@ -9,8 +9,8 @@ export type ShareResourceStats = {
 
 const PLUGIN_ID_RE = /(?:^|[^\w-])plugin=([A-Za-z0-9][\w.-]{0,63})/g
 const PAGE_MENTION_RE = /(?:^|[^\w/])page\/([A-Za-z0-9._-]+)/g
-const FACET_MENTION_RE = /(?:^|[^\w/])facet\/([A-Za-z0-9._-]+)/g
-const COLLECTION_PATH_RE = /\/(?:database\/)?(pages|tasks|facets|plugins)\b/g
+const TAG_MENTION_RE = /(?:^|[^\w/])tag\/([A-Za-z0-9._-]+)/g
+const COLLECTION_PATH_RE = /\/(?:database\/)?(pages|tasks|tags|plugins)\b/g
 
 export function isSharePluginId(id: string) {
   return /^[A-Za-z][A-Za-z0-9._-]{0,63}$/.test(id)
@@ -66,7 +66,7 @@ export function collectShareResources(
     const text = typeof blob === 'string' ? blob : JSON.stringify(blob)
     eatMatches(text, PLUGIN_ID_RE, plugins)
     eatMatches(text, PAGE_MENTION_RE, pages)
-    eatMatches(text, FACET_MENTION_RE, collections)
+    eatMatches(text, TAG_MENTION_RE, collections)
     eatMatches(text, COLLECTION_PATH_RE, collections)
   }
   if (!options.includeRecords) {

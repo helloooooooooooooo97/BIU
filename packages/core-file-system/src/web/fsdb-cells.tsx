@@ -18,7 +18,7 @@ import {
 } from '@heroicons/react/16/solid'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import type { CollectionSchema, DbRecord, FieldSpec, FieldType } from '@biu/type-file-system'
-import { actionVisibleToUser, asAttachmentList, asHttpHref, asImageSrc, asImageSrcList, asPerson, asPersonList, commitAttachments } from '@biu/type-file-system'
+import { actionVisibleToUser, asAttachmentList, asHttpHref, asImageSrc, asImageSrcList, asPerson, asPersonList, commitAttachments, normalizeSchemaValue } from '@biu/type-file-system'
 import type { CollectionRowViewType, CollectionViewType } from '@biu/type-file-system/ui'
 import {
   asStringList,
@@ -32,6 +32,8 @@ import {
 import { AttachmentFile, UrlHref } from './cell-media.tsx'
 import { PersonFace } from './person-cell.tsx'
 import { RecordLinkChips } from './record-link-cell.tsx'
+import { tagChipIcon, tagChipLabel } from './schema-field.tsx'
+import { jumpTag, loadTags } from './tag-catalog.ts'
 
 export function actionIcon(id: string, opts?: { fallback?: boolean; className?: string }) {
   const cls = opts?.className ?? 'size-[14px]'
@@ -44,7 +46,7 @@ export function actionIcon(id: string, opts?: { fallback?: boolean; className?: 
   if (id === 'sync-from-directory') return <ArrowDownTrayIcon aria-hidden className={cls} />
   if (id === 'sync-to-directory') return <ArrowUpTrayIcon aria-hidden className={cls} />
   if (id === 'deliver') return <PaperAirplaneIcon aria-hidden className={cls} />
-  if (id === 'report' || id === 'progress') return <ChatBubbleLeftRightIcon aria-hidden className={cls} />
+  if (id === 'chat' || id === 'report' || id === 'progress') return <ChatBubbleLeftRightIcon aria-hidden className={cls} />
   if (opts?.fallback === false) return null
   return <BoltIcon aria-hidden className={cls} />
 }
@@ -114,7 +116,7 @@ export function fieldGlyphKind(kind: FieldType) {
   if (kind === 'number') return 'num'
   if (kind === 'action') return 'play'
   if (kind === 'select' || kind === 'multi-select') return 'stack'
-  if (kind === 'facet') return 'tag'
+  if (kind === 'tag') return 'tag'
   if (kind === 'url') return 'link'
   if (kind === 'ref' || kind === 'multi-ref') return 'ref'
   if (kind === 'image' || kind === 'attachment' || kind === 'file') return 'file'
@@ -201,7 +203,7 @@ export function parseFieldValue(field: FieldSpec, raw: string): unknown {
   if (kind === 'boolean') return raw === 'true'
   if (kind === 'number' || kind === 'datetime') return raw === '' ? null : Number(raw)
   if (kind === 'multi-select') return asStringList(raw)
-  if (kind === 'facet') {
+  if (kind === 'tag') {
     const trimmed = raw.trim()
     if (!trimmed) return { tags: [], values: {} }
     try {
@@ -333,6 +335,24 @@ export function DefaultCell({
         deferMissing={plain}
         onOpen={onOpenLink}
       />
+    )
+  }
+  if (kind === 'tag') {
+    const parsed = normalizeSchemaValue(value)
+    if (!parsed.tags.length) return null
+    const byId = new Map(loadTags().map((tag) => [tag.id, tag]))
+    return (
+      <TagChips>
+        {parsed.tags.map((id) => (
+          <TagChip
+            key={id}
+            id={id}
+            label={tagChipLabel(byId.get(id), id)}
+            icon={tagChipIcon(id)}
+            onClick={() => jumpTag(id, onOpenLink)}
+          />
+        ))}
+      </TagChips>
     )
   }
   if (kind === 'select' || kind === 'multi-select') {

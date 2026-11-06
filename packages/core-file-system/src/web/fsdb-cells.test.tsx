@@ -14,6 +14,14 @@ test('Skill sync actions use distinct directional icons', () => {
   assert.notEqual(push.container.innerHTML, fallback.container.innerHTML)
 })
 
+test('chat action uses the chat bubble icon', () => {
+  const chat = render(actionIcon('chat'))
+  const report = render(actionIcon('report'))
+  const bolt = render(actionIcon('unknown-action'))
+  assert.equal(chat.container.innerHTML, report.container.innerHTML)
+  assert.notEqual(chat.container.innerHTML, bolt.container.innerHTML)
+})
+
 test('enable and disable actions use play and stop glyphs', () => {
   const on = render(actionIcon('enable'))
   const off = render(actionIcon('disable'))

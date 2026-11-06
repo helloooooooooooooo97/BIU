@@ -23,7 +23,7 @@ import { resolveSessionMascot } from '@biu/public-mascot'
 import { FolderGlyph } from '@biu/web-session-view/folder-glyph'
 import { chromeIcon, chromeIconClass } from './chrome-icon.ts'
 import { TagChip } from '@biu/biu-ui/tag-chip'
-import { facetCatalogRevision, facetEmoji, facetLabel, pullFacets, subscribeFacetChrome } from '@biu/core-file-system/facet-catalog'
+import { tagCatalogRevision, tagEmoji, tagLabel, pullTags, subscribeTagChrome } from '@biu/core-file-system/tag-catalog'
 import { isChatPagePath, openOverlayComposer } from './chat-overlay.ts'
 import { ShellSidebarFrame } from './shell-sidebar-frame.tsx'
 import {
@@ -45,7 +45,7 @@ const GROUP_BY_KEY = 'cordis.sidebar.groupBy'
 function readGroupBy(): SidebarGroupBy {
   try {
     const stored = localStorage.getItem(GROUP_BY_KEY)
-    return stored === 'tag' || stored === 'facet' ? 'facet' : 'project'
+    return stored === 'tag' || stored === 'tag' ? 'tag' : 'project'
   } catch {
     return 'project'
   }
@@ -60,12 +60,12 @@ function SessionTagBadges({ tags }: { tags?: string[] }) {
   return (
     <span className="flex min-w-0 shrink-0 items-center gap-0.5 pl-0.5">
       {shown.map((tag) => {
-        const emoji = facetEmoji(tag)
+        const emoji = tagEmoji(tag)
         return (
           <TagChip
             key={tag}
             id={tag}
-            label={facetLabel(tag)}
+            label={tagLabel(tag)}
             icon={emoji ? <span className="fsdb-record-emoji">{emoji}</span> : <TagIcon aria-hidden />}
           />
         )
@@ -115,7 +115,7 @@ const SessionRow = memo(function SessionRow({
       <span className="sidebar-label min-w-0 flex-1 truncate font-medium">
         {item.title}
       </span>
-      <SessionTagBadges tags={item.facet?.tags} />
+      <SessionTagBadges tags={item.tag?.tags} />
     </>
   )
   return (
@@ -448,9 +448,9 @@ export const ChatSidebar = memo(function ChatSidebar({
                           <button
                             type="button"
                             title="按标签分组"
-                            aria-pressed={groupBy === 'facet'}
-                            className={`sidebar-view-switch-btn${groupBy === 'facet' ? ' is-on' : ''}`}
-                            onClick={() => changeGroupBy('facet')}
+                            aria-pressed={groupBy === 'tag'}
+                            className={`sidebar-view-switch-btn${groupBy === 'tag' ? ' is-on' : ''}`}
+                            onClick={() => changeGroupBy('tag')}
                           >
                             <TagIcon {...chromeIcon} />
                           </button>
@@ -502,7 +502,7 @@ export const ChatSidebar = memo(function ChatSidebar({
                                         <FolderMinusIcon className={chromeIconClass('opacity-80')} />
                                       ) : group.key === UNGROUPED_TAG_KEY ? (
                                         <BookmarkSlashIcon className={chromeIconClass('opacity-80')} />
-                                      ) : group.kind === 'facet' ? (
+                                      ) : group.kind === 'tag' ? (
                                         <TagIcon className={chromeIconClass('opacity-80')} />
                                       ) : (
                                         <FolderGlyph />

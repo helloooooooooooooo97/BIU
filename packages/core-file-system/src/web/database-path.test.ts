@@ -35,6 +35,10 @@ test('builtin all-view helpers keep the database URL scheme', () => {
     databaseAllViewPath('/plugins'),
     `/database/plugins/view/${encodeURIComponent('builtin-all:/plugins')}`,
   )
+  assert.equal(
+    databaseAllViewPath('/data'),
+    `/database/data/view/${encodeURIComponent('builtin-all:/data')}`,
+  )
   const parsed = parseAppPath(databaseAllViewPath('/agents'), plugins)
   assert.equal(parsed.kind, 'collection-view')
   if (parsed.kind === 'collection-view') {
@@ -69,8 +73,8 @@ test('views catalog source is a query filter', () => {
 test('members and views are system collections; blocks and facets are index data', () => {
   assert.equal(isSystemCollection('/workspace-members'), true)
   assert.equal(isSystemCollection('/views'), true)
-  assert.equal(isSystemCollection('/facets'), false)
-  assert.equal(isIndexCollection('/facets'), true)
+  assert.equal(isSystemCollection('/tags'), false)
+  assert.equal(isIndexCollection('/tags'), true)
   assert.equal(isIndexCollection('/page-blocks'), true)
   assert.equal(isIndexCollection('/pages'), false)
   assert.equal(isSystemCollection('/events'), false)
@@ -83,11 +87,12 @@ test('members and views are system collections; blocks and facets are index data
     { path: '/views' },
     { path: '/notices' },
     { path: '/trash' },
-    { path: '/facets' },
+    { path: '/tags' },
     { path: '/agents' },
     { path: '/pages' },
     { path: '/page-blocks' },
     { path: '/tasks' },
+    { path: '/data' },
   ])
   assert.deepEqual(
     user.map((item) => item.path),
@@ -95,7 +100,7 @@ test('members and views are system collections; blocks and facets are index data
   )
   assert.deepEqual(
     index.map((item) => item.path),
-    ['/page-blocks', '/facets'],
+    ['/page-blocks', '/tags'],
   )
   assert.deepEqual(
     system.map((item) => item.path),

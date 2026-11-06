@@ -13,6 +13,7 @@ import {
   nameFromSessionMascot,
   normalizeSessionConfig,
   sessionDisplayTitle,
+  lastSpokenAt,
 } from '@biu/type-session'
 import { isSessionMascot, parseSessionMascot } from '@biu/host-sessions/mascot'
 
@@ -27,6 +28,7 @@ type SessionRow = {
   event_count: number
   title: string
   updated_at: number
+  last_message_at?: number
   first_event_at?: number
 }
 
@@ -121,7 +123,20 @@ export class SqliteSessionStore implements SessionStore {
     } catch {
       /* column already exists */
     }
-    if (tableColumns(this.sessions, 'agents').includes('type')) {
+    const agentCols = tableColumns(this.sessions, 'agents')
+    const missingStamps = !agentCols.includes('last_message_at') || !agentCols.includes('first_event_at')
+    try {
+      this.sessions.exec('ALTER TABLE agents ADD COLUMN last_message_at INTEGER NOT NULL DEFAULT 0')
+    } catch {
+      /* column already exists */
+    }
+    try {
+      this.sessions.exec('ALTER TABLE agents ADD COLUMN first_event_at INTEGER NOT NULL DEFAULT 0')
+    } catch {
+      /* column already exists */
+    }
+    if (missingStamps) this.backfillSummaryStamps()
+    if (agentCols.includes('type')) {
       try {
         this.sessions.exec('ALTER TABLE agents DROP COLUMN type')
       } catch {
@@ -129,6 +144,38 @@ export class SqliteSessionStore implements SessionStore {
       }
     }
     return this
+  }
+
+  /** 旧库只扫一次 events，把侧栏时间戳写进 agents。之后 listSummaries 不再碰 events。 */
+  private backfillSummaryStamps() {
+    const spokenBySession = new Map<string, number>()
+    const spoken = this.sessions
+      .prepare(
+        `SELECT session_id, MAX(ts) AS last_message_at FROM ${this.eventsTable()} WHERE type = 'user/message' GROUP BY session_id`,
+      )
+      .all() as Array<{ session_id: string; last_message_at: number }>
+    for (const row of spoken) spokenBySession.set(row.session_id, Number(row.last_message_at) || 0)
+    const firstBySession = new Map<string, number>()
+    const mins = this.sessions
+      .prepare(`SELECT session_id, MIN(ts) AS first_event_at FROM ${this.eventsTable()} GROUP BY session_id`)
+      .all() as Array<{ session_id: string; first_event_at: number }>
+    for (const row of mins) firstBySession.set(row.session_id, Number(row.first_event_at) || 0)
+    const update = this.sessions.prepare('UPDATE agents SET last_message_at = ?, first_event_at = ? WHERE id = ?')
+    const ids = this.sessions.prepare('SELECT id FROM agents').all() as Array<{ id: string }>
+    this.sessions.exec('BEGIN IMMEDIATE')
+    try {
+      for (const row of ids) {
+        update.run(spokenBySession.get(row.id) ?? 0, firstBySession.get(row.id) ?? 0, row.id)
+      }
+      this.sessions.exec('COMMIT')
+    } catch (error) {
+      try {
+        this.sessions.exec('ROLLBACK')
+      } catch {
+        /* ignore */
+      }
+      throw error
+    }
   }
 
   async load(id: string): Promise<SessionRecord | undefined> {
@@ -168,13 +215,15 @@ export class SqliteSessionStore implements SessionStore {
     const configJson = record.config ? JSON.stringify(record.config) : null
     const eventCount = record.events.length
     const eventsTable = this.eventsTable()
+    const lastMessageAt = lastSpokenAt(record.events)
+    const firstEventAt = record.events[0]?.ts ?? 0
 
     const insertEvent = this.sessions.prepare(
       `INSERT INTO ${eventsTable} (session_id, seq, ts, type, event_json) VALUES (?, ?, ?, ?, ?)`,
     )
     const upsertSession = this.sessions.prepare(`
-      INSERT INTO agents (id, version, project_json, mascot_json, config_json, event_count, title, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO agents (id, version, project_json, mascot_json, config_json, event_count, title, updated_at, last_message_at, first_event_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         version = excluded.version,
         project_json = excluded.project_json,
@@ -182,9 +231,10 @@ export class SqliteSessionStore implements SessionStore {
         config_json = excluded.config_json,
         event_count = excluded.event_count,
         title = excluded.title,
-        updated_at = excluded.updated_at
+        updated_at = excluded.updated_at,
+        last_message_at = excluded.last_message_at,
+        first_event_at = excluded.first_event_at
     `)
-
     const existing = this.sessions.prepare('SELECT event_count FROM agents WHERE id = ?').get(record.id) as
       | { event_count: number }
       | undefined
@@ -215,6 +265,8 @@ export class SqliteSessionStore implements SessionStore {
         eventCount,
         title,
         updatedAt,
+        lastMessageAt,
+        firstEventAt,
       )
 
       if (storedCount === 0) {
@@ -257,27 +309,16 @@ export class SqliteSessionStore implements SessionStore {
   async listSummaries(): Promise<SessionSummary[]> {
     const rows = this.sessions
       .prepare(
-        'SELECT id, version, project_json, mascot_json, config_json, event_count, title, updated_at FROM agents ORDER BY updated_at DESC',
+        'SELECT id, version, project_json, mascot_json, config_json, event_count, title, updated_at, last_message_at, first_event_at FROM agents ORDER BY updated_at DESC',
       )
       .all() as SessionRow[]
-    const spokenBySession = new Map<string, number>()
-    const spoken = this.sessions
-      .prepare(
-        `SELECT session_id, MAX(ts) AS last_message_at FROM ${this.eventsTable()} WHERE type = 'user/message' GROUP BY session_id`,
-      )
-      .all() as Array<{ session_id: string; last_message_at: number }>
-    for (const row of spoken) spokenBySession.set(row.session_id, Number(row.last_message_at) || 0)
-    const firstBySession = new Map<string, number>()
-    const mins = this.sessions
-      .prepare(`SELECT session_id, MIN(ts) AS first_event_at FROM ${this.eventsTable()} GROUP BY session_id`)
-      .all() as Array<{ session_id: string; first_event_at: number }>
-    for (const row of mins) firstBySession.set(row.session_id, Number(row.first_event_at) || 0)
     return rows.map((row) => {
       const project = parseProject(row.project_json)
       const mascot = parseMascot(row.mascot_json)
       const config = parseConfig(row.config_json)
       const createdAt = Number(config?.createdAt)
-      const firstEventAt = firstBySession.get(row.id) ?? 0
+      const firstEventAt = Number(row.first_event_at) || 0
+      const lastMessageAt = Number(row.last_message_at) || 0
       const stamp =
         Number.isFinite(createdAt) && createdAt > 0
           ? createdAt
@@ -295,8 +336,7 @@ export class SqliteSessionStore implements SessionStore {
               ? nameFromSessionMascot(mascot)
               : row.title || row.id.slice(0, 8),
         updatedAt: row.updated_at,
-        ...((spokenBySession.get(row.id) ?? 0) > 0 ? { lastMessageAt: spokenBySession.get(row.id) } : {}),
-        ...(project ? { project } : {}),
+        ...(lastMessageAt > 0 ? { lastMessageAt } : {}),
         ...(mascot ? { mascot } : {}),
         ...(config || stamp ? { config: { ...(config ?? {}), createdAt: stamp } } : {}),
       }

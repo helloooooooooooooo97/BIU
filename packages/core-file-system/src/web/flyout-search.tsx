@@ -15,7 +15,7 @@ export function FlyoutSearch({
 }) {
   const ref = useRef<HTMLInputElement>(null)
   useEffect(() => {
-    const id = window.requestAnimationFrame(() => ref.current?.focus())
+    const id = window.requestAnimationFrame(() => ref.current?.focus({ preventScroll: true }))
     return () => window.cancelAnimationFrame(id)
   }, [])
   return (

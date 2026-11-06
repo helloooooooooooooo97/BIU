@@ -4,6 +4,7 @@
 /*
  * BIU design tokens. Groups: color / space / font / radius / shadow / stroke.
  * --biu-color-* are colors. --biu-stroke-width is a length. No aliases.
+ * Popovers use --biu-color-bg-popover / --biu-color-bg-popover-hover / --biu-color-border-popover / --biu-radius-popover / --biu-shadow-popover.
  * --biu-color-emphasis is view/highlight only, never body ink.
  */
 :root {
@@ -39,6 +40,9 @@
 
   --biu-color-border: #f0efed;
   --biu-color-border-strong: #f0efed;
+  --biu-color-bg-popover: #f0efed;
+  --biu-color-bg-popover-hover: #e4e3e0;
+  --biu-color-border-popover: color-mix(in srgb, #f0efed 70%, transparent);
   --biu-stroke-width: 1px;
   --biu-stroke-width-thick: 2px;
 
@@ -96,6 +100,8 @@
   --biu-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
   --biu-shadow-md: 0 8px 24px rgba(0, 0, 0, 0.06);
   --biu-shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.10);
+  --biu-shadow-popover: 0 8px 24px rgba(0, 0, 0, 0.06);
+  --biu-radius-popover: 12px;
 
   --biu-radius-xs: 3px;
   --biu-radius-sm: 4px;
@@ -124,7 +130,7 @@
   --biu-leading-normal: 1.5;
   --biu-leading-relaxed: 1.6;
   --biu-font-weight-regular: 400;
-  --biu-font-weight-medium: 450;
+  --biu-font-weight-medium: 500;
   --biu-font-weight-semibold: 600;
   --biu-font-weight-bold: 700;
 
@@ -157,6 +163,7 @@
   --brand-corner-clearance: var(--biu-space-5);
   --biu-chat-gap-turn: var(--biu-space-6);
   --biu-pad-page: 80px;
+  --biu-pad-chip-x: var(--biu-space-2);
   --biu-chat-pad-x: var(--biu-space-3);
   --biu-chat-pad-y: var(--biu-space-2);
   --biu-chat-reply-pad-x: var(--biu-space-3);
@@ -181,10 +188,13 @@ html.dark {
   --biu-color-icon: #bab9b5;
   --biu-color-border: #323232;
   --biu-color-border-strong: #323232;
+  --biu-color-bg-popover: #262626;
+  --biu-color-bg-popover-hover: #333332;
+  --biu-color-border-popover: color-mix(in srgb, #323232 70%, transparent);
   --biu-color-danger: #ff5949;
   --biu-color-ok: #1fac60;
   --biu-color-warning: #ff8000;
-  --biu-color-ink-gray: #696969;
+  --biu-color-ink-gray: #b4b4b4;
   --biu-color-ink-brown: #83733c;
   --biu-color-ink-orange: #e36921;
   --biu-color-ink-pink: #aa2b78;
@@ -220,6 +230,7 @@ html.dark {
   --biu-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.24);
   --biu-shadow-md: 0 8px 24px rgba(0, 0, 0, 0.35);
   --biu-shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.45);
+  --biu-shadow-popover: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
 /* inline: do not re-emit --font-* (that overwrote :root with var(--font-sans)). */
@@ -395,9 +406,10 @@ body {
   z-index: 40;
   width: 240px;
   padding: 10px;
-  border-radius: 12px;
-  background: var(--biu-color-surface);
-  box-shadow: var(--biu-shadow-md);
+  border: var(--biu-stroke-width) solid var(--biu-color-border-popover);
+  border-radius: var(--biu-radius-popover);
+  background: var(--biu-color-bg-popover);
+  box-shadow: var(--biu-shadow-popover);
 }
 
 .shell-notify-pop {
@@ -1052,24 +1064,40 @@ body {
 .settings-page-prefs .fsdb-layout-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  justify-content: flex-start;
+  gap: 8px;
   width: 100%;
   margin: 0;
   border: 0;
   border-radius: 7px;
   padding: 6px 8px;
   background: transparent;
-  color: var(--biu-color-text);
+  color: var(--biu-color-text-muted);
   font: inherit;
   font-size: var(--biu-font-size-3);
-  font-weight:var(--biu-font-weight-semibold);
+  font-weight:var(--biu-font-weight-medium);
   cursor: pointer;
   text-align: left;
 }
 
-.settings-page-prefs .fsdb-layout-row:hover {
+.settings-page-prefs .fsdb-layout-row:hover,
+.settings-page-prefs .fsdb-layout-row.is-on {
   background: var(--biu-color-bg-hover);
+  color: var(--biu-color-text);
+}
+
+.settings-page-prefs .fsdb-layout-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-page-prefs .fsdb-layout-row svg,
+.settings-page-prefs .fsdb-layout-scale svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--biu-color-icon);
 }
 
 .settings-page-prefs .fsdb-layout-scale {
@@ -1078,12 +1106,13 @@ body {
   justify-content: space-between;
   gap: 8px;
   padding: 6px 8px;
+  color: var(--biu-color-text-muted);
+  font-size: var(--biu-font-size-3);
+  font-weight:var(--biu-font-weight-medium);
 }
 
-.settings-page-prefs .fsdb-layout-scale>span {
-  color: var(--biu-color-text);
-  font-size: var(--biu-font-size-3);
-  font-weight:var(--biu-font-weight-semibold);
+.settings-page-prefs .fsdb-layout-scale .fsdb-layout-label {
+  color: inherit;
 }
 
 .settings-page-prefs .fsdb-layout-pills {
@@ -1436,7 +1465,7 @@ body {
   border: 0;
   height: 22px;
   border-radius: var(--biu-radius-xl);
-  padding: 0 8px;
+  padding: 0 var(--biu-pad-chip-x);
   background: color-mix(in srgb, var(--biu-tag) 22%, transparent);
   color: var(--biu-tag);
   cursor: pointer;
@@ -1598,10 +1627,10 @@ body {
   min-width: 180px;
   transform: translateX(-50%);
   padding: 6px;
-  border: 0;
-  border-radius: 10px;
-  background: var(--biu-color-bg-subtle);
-  box-shadow: var(--biu-shadow-md);
+  border: var(--biu-stroke-width) solid var(--biu-color-border-popover);
+  border-radius: var(--biu-radius-popover);
+  background: var(--biu-color-bg-popover);
+  box-shadow: var(--biu-shadow-popover);
   pointer-events: auto;
 }
 
@@ -1705,7 +1734,7 @@ body {
   border: 0;
   border-radius: 7px;
   background: transparent;
-  color: var(--biu-color-text-muted);
+  color: var(--biu-color-text);
   font: inherit;
   font-size: var(--biu-font-size-4);
   font-weight:var(--biu-font-weight-medium);
@@ -1758,10 +1787,10 @@ body {
   flex-direction: column;
   overflow: hidden;
   padding: 6px;
-  border: var(--biu-stroke-width) solid var(--biu-color-border);
-  border-radius: 10px;
-  background: var(--biu-color-surface);
-  box-shadow: var(--biu-shadow-md);
+  border: var(--biu-stroke-width) solid var(--biu-color-border-popover);
+  border-radius: var(--biu-radius-popover);
+  background: var(--biu-color-bg-popover);
+  box-shadow: var(--biu-shadow-popover);
 }
 
 html.dark .shell-workspace-menu {
@@ -2797,11 +2826,11 @@ select.settings-account-input {
   max-width: 320px;
   max-height: 400px;
   overflow: auto;
-  border: 0;
-  border-radius: 8px;
-  background: var(--biu-color-bg-subtle);
+  border: var(--biu-stroke-width) solid var(--biu-color-border-popover);
+  border-radius: var(--biu-radius-popover);
+  background: var(--biu-color-bg-popover);
   padding: 4px;
-  box-shadow: var(--biu-shadow-md);
+  box-shadow: var(--biu-shadow-popover);
 }
 
 .chat-sidebar-popover {
@@ -2877,6 +2906,9 @@ select.settings-account-input {
 
 .inspector-tab svg,
 .inspector-crumb-close svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
   pointer-events: none;
 }
 
@@ -3016,6 +3048,34 @@ select.settings-account-input {
   align-items: center;
   gap: 2px;
   overflow: visible;
+}
+
+.inspector-crumb-tab .fsdb-crumbs,
+.inspector-crumb-tab .fsdb-crumb,
+.inspector-crumb-tab .fsdb-crumb-btn {
+  display: inline-flex;
+  align-items: center;
+}
+
+.inspector-crumb-tab .fsdb-crumb-btn {
+  box-sizing: border-box;
+  height: var(--biu-size-control-md);
+  min-height: var(--biu-size-control-md);
+  margin: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  padding: 0 4px;
+  gap: 6px;
+}
+
+.inspector-crumb-tab .fsdb-crumb svg,
+.inspector-crumb-tab .fsdb-crumb-btn svg,
+.inspector-crumb-tab .chat-view-project-icon,
+.inspector-crumb-tab .fsdb-record-mark {
+  width: 16px;
+  height: 16px;
+  flex: none;
 }
 
 .inspector-crumb-full .fsdb-crumb-btn.is-static {
@@ -3253,11 +3313,11 @@ select.settings-account-input {
   width: max-content;
   max-height: min(70vh, 480px);
   overflow: auto;
-  border: var(--biu-stroke-width) solid var(--biu-color-border);
-  border-radius: 10px;
-  background: var(--biu-color-bg-subtle);
+  border: var(--biu-stroke-width) solid var(--biu-color-border-popover);
+  border-radius: var(--biu-radius-popover);
+  background: var(--biu-color-bg-popover);
   padding: 4px;
-  box-shadow: var(--biu-shadow-md);
+  box-shadow: var(--biu-shadow-popover);
   display: flex;
   flex-direction: column;
   gap: 1px;
@@ -3281,11 +3341,11 @@ select.settings-account-input {
   min-width: 220px;
   max-height: 320px;
   overflow: auto;
-  border: var(--biu-stroke-width) solid var(--biu-color-border);
-  border-radius: 10px;
-  background: var(--biu-color-bg-subtle);
+  border: var(--biu-stroke-width) solid var(--biu-color-border-popover);
+  border-radius: var(--biu-radius-popover);
+  background: var(--biu-color-bg-popover);
   padding: 8px;
-  box-shadow: var(--biu-shadow-md);
+  box-shadow: var(--biu-shadow-popover);
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -3935,7 +3995,6 @@ html.dark .chat-config-banner-action {
 
 html.dark .composer-model-panel,
 html.dark .composer-model-flyout {
-  background: #202020;
   color: #bcbab7;
 }
 
@@ -4693,6 +4752,58 @@ html.dark .composer-model-flyout {
   line-height: 1;
 }
 
+.biu-popover {
+  --biu-color-bg-hover: var(--biu-color-bg-popover-hover);
+  background: var(--biu-color-bg-popover);
+  border: var(--biu-stroke-width) solid var(--biu-color-border-popover);
+  border-radius: var(--biu-radius-popover);
+  box-shadow: var(--biu-shadow-popover);
+}
+
+.fsdb-emoji-picker,
+.fsdb-tool-flyout,
+.fsdb-create-scope-menu,
+.fsdb-crumb-menu,
+.fsdb-bulk-menu,
+.fsdb-layout-menu,
+.fsdb-col-facet-flyout,
+.fsdb-pager-size-menu,
+.fsdb-detail-more-menu,
+.fsdb-banner-pop,
+.fsdb-schema-type-menu,
+.fsdb-cellselect-menu,
+.fsdb-cell-pop,
+.fsdb-share-panel,
+.fsdb-scope-panel,
+.fsdb-share-member-options,
+.fsdb-share-res-pop,
+.fsdb-share-owner-card,
+.fsdb-query-drag-overlay,
+.page-block-handle-menu,
+.layout-picker-menu,
+.page-bubble,
+.page-slash,
+.page-color-menu,
+.page-find-box,
+.page-math-pop,
+.db-search-menu,
+.shell-side-pop,
+.shell-workspace-menu,
+.brand-agent-menu,
+.inspector-more-menu,
+.inspector-add-menu,
+.dock-icon-menu,
+.composer-model-panel,
+.composer-model-flyout,
+.chat-view-session-title-pop,
+.fsdb-page .tasks-viewdd-menu,
+.fsdb-page .tasks-sort-menu,
+.fsdb-page .tasks-filter-menu,
+.fsdb-page .fsdb-query-menu,
+.fsdb-page .fsdb-col-menu {
+  --biu-color-bg-hover: var(--biu-color-bg-popover-hover);
+}
+
 .fsdb-emoji-picker {
   position: absolute;
   top: calc(100% + 6px);
@@ -4700,10 +4811,10 @@ html.dark .composer-model-flyout {
   z-index: 30;
   width: 272px;
   padding: 10px 10px 8px;
-  border: var(--biu-stroke-width) solid color-mix(in srgb, var(--biu-color-border) 70%, transparent);
-  border-radius: 12px;
-  background: var(--biu-color-bg-muted);
-  box-shadow: var(--biu-shadow-md);
+  border: var(--biu-stroke-width) solid var(--biu-color-border-popover);
+  border-radius: var(--biu-radius-popover);
+  background: var(--biu-color-bg-popover);
+  box-shadow: var(--biu-shadow-popover);
 }
 
 .fsdb-emoji-picker.is-fixed {
@@ -5256,10 +5367,10 @@ html.dark .composer-model-flyout {
   flex-direction: column;
   gap: 4px;
   padding: 8px;
-  border: var(--biu-stroke-width) solid var(--biu-color-border);
-  border-radius: 10px;
-  background: var(--biu-color-bg-subtle);
-  box-shadow: var(--biu-shadow-md);
+  border: var(--biu-stroke-width) solid var(--biu-color-border-popover);
+  border-radius: var(--biu-radius-popover);
+  background: var(--biu-color-bg-popover);
+  box-shadow: var(--biu-shadow-popover);
 }
 
 .dock-icon-wrap.is-end .dock-icon-menu {
@@ -6770,7 +6881,7 @@ html[data-outline-pin="1"] .chat-outline {
   flex: none;
   flex-direction: column;
   align-items: flex-start;
-  gap: 2px;
+  gap: 6px;
   min-width: 22px;
   max-height: min(40vh, 360px);
   overflow-x: hidden;
@@ -6784,7 +6895,7 @@ html[data-outline-pin="1"] .chat-outline {
   flex: none;
   align-items: center;
   width: 22px;
-  height: 16px;
+  height: 2px;
   margin: 0;
   border: 0;
   background: transparent;
@@ -6842,19 +6953,12 @@ html[data-outline-pin="1"] .chat-outline-rail {
   max-height: min(40vh, 360px);
   overflow: auto;
   transform: translateY(-50%);
-  border: var(--biu-stroke-width) solid var(--biu-color-border-strong);
-  border-radius: 8px;
-  background: rgba(32, 32, 32, 0.92);
+  border: var(--biu-stroke-width) solid var(--biu-color-border-popover);
+  border-radius: var(--biu-radius-popover);
+  background: var(--biu-color-bg-popover);
   padding: 6px;
-  box-shadow: 0 1px 2px rgba(15, 15, 15, 0.04), 0 10px 32px rgba(0, 0, 0, 0.28);
-  backdrop-filter: blur(24px) saturate(1.3);
-  -webkit-backdrop-filter: blur(24px) saturate(1.3);
+  box-shadow: var(--biu-shadow-popover);
   color: var(--biu-color-text-muted);
-}
-
-html:not(.dark) .chat-outline-panel {
-  background: rgba(249, 248, 247, 0.94);
-  box-shadow: 0 1px 2px rgba(15, 15, 15, 0.04), 0 10px 28px rgba(0, 0, 0, 0.08);
 }
 
 .chat-outline-panel::before {
@@ -6885,12 +6989,8 @@ html:not(.dark) .chat-outline-panel {
 }
 
 .chat-outline-item.is-active {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--biu-color-bg-hover);
   color: var(--biu-color-text);
-}
-
-html:not(.dark) .chat-outline-item.is-active {
-  background: rgba(0, 0, 0, 0.05);
 }
 
 .chat-outline-item.is-h1 {
@@ -7868,11 +7968,11 @@ html:not(.dark) .composer-plus {
 
 .composer-model-panel,
 .composer-model-flyout {
-  border: var(--biu-stroke-width) solid var(--biu-color-border-strong);
-  border-radius: 12px;
-  background: var(--biu-color-bg-subtle);
+  border: var(--biu-stroke-width) solid var(--biu-color-border-popover);
+  border-radius: var(--biu-radius-popover);
+  background: var(--biu-color-bg-popover);
   color: var(--biu-color-text-muted);
-  box-shadow: var(--biu-shadow-md);
+  box-shadow: var(--biu-shadow-popover);
 }
 
 .composer-model-panel {

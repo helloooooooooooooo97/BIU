@@ -4,6 +4,8 @@ import assert from 'node:assert/strict'
 import { Context } from 'cordis'
 import { PageEditor } from './page-editor.tsx'
 import { PageEditorService } from './service.ts'
+import { resetPageFileState, setPageViews } from './page-views.ts'
+import { setPagePresentMode } from './source-mode.ts'
 
 test('page editor paints markdown headings without a chrome toolbar', async () => {
   const { container, rerender } = render(
@@ -149,6 +151,8 @@ test('page editor applies later value when it is not focused', async () => {
   assert.match(src, /md === saved\.current/)
   assert.match(src, /leavingSource/)
   assert.match(src, /sourceMode\.current/)
+  assert.match(src, /restorePageScroll/)
+  assert.match(src, /hidden=\{!source\}/)
 })
 
 test('page editor shows a spinner and is not editable while content loads', async () => {
@@ -183,6 +187,30 @@ test('page editor shows a spinner and is not editable while content loads', asyn
   })
   assert.equal(container.querySelector('[data-testid="page-editor-loading"]'), null)
   assert.equal(container.querySelector('[contenteditable="true"]')?.getAttribute('contenteditable'), 'true')
+})
+
+test('sandbox view mounts the host sandbox and skips prosemirror', async () => {
+  resetPageFileState()
+  setPageViews('home', [
+    { id: 'site1', name: '官网', kind: 'sandbox', file: 'missing-view.jsx', dataFile: 'missing-data.json' },
+  ])
+  setPagePresentMode('home', 'site1')
+  const { container } = render(
+    <PageEditor
+      record={{ id: 'home', title: '演示页' }}
+      field="notes"
+      spec={{ type: 'file', label: '正文', writable: true }}
+      value={':::pageBlock {kind=sandbox plugin=page-sandbox id=ab12cd34}\n{"title":"沙箱"}\n:::\n'}
+      writable
+    />,
+  )
+  await waitFor(() => {
+    assert.ok(container.querySelector('[data-testid="page-host-view"]'))
+  })
+  assert.ok(container.querySelector('[data-testid="page-editor-host"]'))
+  assert.equal(container.querySelector('[data-testid="page-editor"]'), null)
+  assert.equal(container.querySelector('.tiptap'), null)
+  setPagePresentMode('home', 'doc')
 })
 
 test('page editor shows retry when content failed to load', () => {

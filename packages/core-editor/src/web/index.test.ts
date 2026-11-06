@@ -19,7 +19,8 @@ class FakeDatabaseUi extends Service implements DatabaseUi {
       return { dispose() {} }
     }
     assert.equal(chrome.Content, PageEditor)
-    assert.ok(chrome.DetailTools)
+    assert.equal(chrome.DetailTools, undefined)
+    assert.ok(chrome.DetailBar)
     return { dispose() {} }
   }
   registerView(path: string, view: CollectionViewType) {

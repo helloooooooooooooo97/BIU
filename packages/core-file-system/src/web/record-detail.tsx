@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type Dispatch, type SetStateAction } from 'react'
+import { useEffect, useRef, useState, type ReactNode, type Dispatch, type SetStateAction } from 'react'
 import type { CollectionChrome, FsDetailPane } from '@biu/type-file-system/ui'
 import type { CollectionSchema, DbRecord, FieldSpec } from '@biu/type-file-system'
 import { ChevronDownIcon, ChevronLeftIcon, ChevronUpIcon, HashtagIcon, ShareIcon } from '@heroicons/react/16/solid'
@@ -6,17 +6,17 @@ import { AnchorMenu, RecordEmojiBoard } from '@biu/biu-ui'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { contentFieldKey, fieldHasValue, formatField, resolveFieldType } from './fields.ts'
 import { LocalText } from './controls.tsx'
-import { FilePreview } from './fsdb-cells.tsx'
+import { FieldGlyph, FilePreview } from './fsdb-cells.tsx'
 import { PropertyRow } from './property-row.tsx'
-import { FacetPackEditor } from './schema-field.tsx'
-import { TableGlyph } from './nav-glyphs.tsx'
-import { FACETS_COLLECTION_PATH } from './database-path.ts'
+import { TagPackEditor } from './schema-field.tsx'
+import { idleTableIconKind } from './nav-glyphs.tsx'
+import { TAGS_COLLECTION_PATH } from './database-path.ts'
 import { normalizeRecordEmoji, recordPreviewEmoji } from './sidebar-preview.ts'
 import { FOCUS_RECORD_CONTENT, FOCUS_RECORD_TITLE, shouldLeaveContentForTitle, shouldLeaveTitleForContent, focusRecordTitleNear } from './title-content-nav.ts'
 import { HeadingOutline } from './heading-outline.tsx'
 import { PageBanner } from './page-banner.tsx'
 import { fieldPickAttrs, recordSourcePath } from './pick-dom.ts'
-import { dismissInspectorPaneMenu, reportInspectorPaneMenu } from './inspector-pane-menu.tsx'
+import { dismissInspectorPaneMenu } from './inspector-pane-menu.tsx'
 import { PaneConfigMenuItem } from './pane-more-menu.tsx'
 import { PageContentFailed, PageContentLoading } from './page-content-status.tsx'
 
@@ -75,10 +75,10 @@ function DetailTitleIcon({
             <span className="fsdb-record-emoji">{emoji}</span>
           ) : Icon ? (
             <span className="fsdb-record-mark is-lg">
-              <Icon record={record} size={64} />
+              <Icon record={record} size={78} />
             </span>
           ) : (
-            <TableGlyph icon={tableIcon} className="size-16" />
+            <span className="fsdb-record-mark is-lg" data-icon={idleTableIconKind(tableIcon)} />
           )}
         </span>
       </span>
@@ -107,10 +107,10 @@ function DetailTitleIcon({
           <span className="fsdb-record-emoji">{emoji}</span>
         ) : Icon ? (
           <span className="fsdb-record-mark is-lg">
-            <Icon record={record} size={64} />
+            <Icon record={record} size={78} />
           </span>
         ) : (
-          <TableGlyph icon={tableIcon} className="size-16" />
+          <span className="fsdb-record-mark is-lg" data-icon={idleTableIconKind(tableIcon)} />
         )}
       </button>
       {open && anchor ? (
@@ -239,6 +239,9 @@ export function RecordDetail({
   onDelete,
   readOnly = false,
   inspectorPaneId,
+  visibleColumns,
+  onVisibleColumns,
+  columnMenu,
 }: {
   selected: DbRecord
   schema: CollectionSchema
@@ -267,6 +270,9 @@ export function RecordDetail({
   onDelete?: () => void
   readOnly?: boolean
   inspectorPaneId?: string
+  visibleColumns?: string[]
+  onVisibleColumns?: (keys: string[]) => void
+  columnMenu?: ReactNode
 }) {
   const title = labelOf(selected)
   const recordPath = recordSourcePath(collectionPath, selected.id)
@@ -288,48 +294,50 @@ export function RecordDetail({
     return () => window.removeEventListener(FOCUS_RECORD_TITLE, onTitle)
   }, [])
 
-  const deleteRef = useRef(onDelete)
-  deleteRef.current = onDelete
-  const selectedRef = useRef(selected)
-  selectedRef.current = selected
-  const shareRef = useRef(share)
-  shareRef.current = share
-  useLayoutEffect(() => {
-    if (!inspectorPaneId) return
-    const row = selectedRef.current
-    reportInspectorPaneMenu(
-      inspectorPaneId,
-      <RecordPaneMenu
-        record={row}
-        Tools={readOnly ? undefined : chrome?.DetailTools}
-        onDelete={!readOnly && deleteRef.current ? () => deleteRef.current?.() : undefined}
-        deleteLabel={collectionPath === '/pages' ? '删除页面' : '删除记录'}
-        share={shareRef.current}
-        shareLabel={collectionPath === '/pages' ? '分享页面' : '分享记录'}
-      />,
-    )
-    return () => reportInspectorPaneMenu(inspectorPaneId, null)
-  }, [chrome?.DetailTools, collectionPath, inspectorPaneId, readOnly, selected.id])
+  const paneMenu = (
+    <RecordPaneMenu
+      record={selected}
+      Tools={readOnly ? undefined : chrome?.DetailTools}
+      onDelete={!readOnly && onDelete ? onDelete : undefined}
+      deleteLabel={collectionPath === '/pages' ? '删除页面' : '删除记录'}
+      share={share}
+      shareLabel={collectionPath === '/pages' ? '分享页面' : '分享记录'}
+    />
+  )
 
-  const [facetOpen, setFacetOpen] = useState(false)
+  const [openFolds, setOpenFolds] = useState<Record<string, boolean>>({})
+  const [openPanes, setOpenPanes] = useState<Record<string, boolean>>({})
+  const [visiblePropertyKeys, setVisiblePropertyKeys] = useState<string[] | null>(null)
+  const [outlineOn, setOutlineOn] = useState(headingOutline)
+  const visibleColumnsKey = visibleColumns?.join('\0') ?? ''
   useEffect(() => {
-    setFacetOpen(false)
-  }, [selected.id])
+    const nextVisible = visibleColumnsKey ? visibleColumnsKey.split('\0') : null
+    setVisiblePropertyKeys(nextVisible)
+    setOutlineOn(headingOutline)
+    setOpenPanes({})
+    setOpenFolds({})
+  }, [selected.id, headingOutline, visibleColumnsKey])
+  useEffect(() => {
+    const onOutline = () => setOutlineOn((prev) => !prev)
+    window.addEventListener('biu:page-outline', onOutline)
+    return () => window.removeEventListener('biu:page-outline', onOutline)
+  }, [])
 
   const propertyEntries = Object.entries(schema.fields)
     .filter(([key, field]) => {
       if (key === 'id' || key === 'emoji' || key === schema.labelField) return false
       if (key === contentFieldKey(schema) && resolveFieldType(field) === 'file') return false
       if (chrome?.panes?.some((pane) => pane.id === key)) return false
-      if (key === 'fields' && collectionPath === FACETS_COLLECTION_PATH && String(selected.id).includes('::')) return false
+      if (key === 'fields' && collectionPath === TAGS_COLLECTION_PATH && String(selected.id).includes('::')) return false
       const kind = resolveFieldType(field)
-      if (kind === 'facet' && !field.writable) return false
+      if (kind === 'tag' && !field.writable) return false
       if (field.computed && !fieldHasValue(field, selected[key])) return false
+      if (visiblePropertyKeys && !visiblePropertyKeys.includes(key)) return false
       return true
     })
     .sort(([keyA, a], [keyB, b]) => {
       const fold = (key: string, field: FieldSpec) =>
-        resolveFieldType(field) === 'facet' || (key === 'fields' && collectionPath === FACETS_COLLECTION_PATH)
+        resolveFieldType(field) === 'tag' || (key === 'fields' && collectionPath === TAGS_COLLECTION_PATH)
       return Number(fold(keyA, a)) - Number(fold(keyB, b))
     })
 
@@ -400,34 +408,82 @@ export function RecordDetail({
                 )}
                 </div>
                 </div>
+                {chrome?.DetailBar ? (
+                  <chrome.DetailBar
+                    record={selected}
+                    schema={schema}
+                    collectionPath={collectionPath}
+                    visiblePropertyKeys={visiblePropertyKeys ?? undefined}
+                    onVisiblePropertyKeys={(next) => {
+                      setVisiblePropertyKeys(next)
+                      onVisibleColumns?.(next)
+                    }}
+                    columnMenu={columnMenu}
+                    onRetry={onRetryBody}
+                    configMenu={paneMenu}
+                    onPrev={onPrev}
+                    onNext={onNext}
+                    canPrev={canPrev}
+                    canNext={canNext}
+                  />
+                ) : null}
                 <div className="fsdb-detail-aside">
-                  <div className="fsdb-prop" {...propPick('id', { type: 'string', label: 'ID' }, selected.id)}>
-                    <span>
+                  <table className="tasks-table is-wrap">
+                    <thead>
+                      <tr>
+                        <th>
+                          <span className="tasks-th">
+                            <span className="tasks-th-ico">
+                              <FieldGlyph kind="string" />
+                            </span>
+                            属性名
+                          </span>
+                        </th>
+                        <th>
+                          <span className="tasks-th">
+                            <span className="tasks-th-ico">
+                              <FieldGlyph kind="string" />
+                            </span>
+                            属性值
+                          </span>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                  {!visiblePropertyKeys || visiblePropertyKeys.includes('id') ? (
+                  <tr className="fsdb-prop" {...propPick('id', { type: 'string', label: 'ID' }, selected.id)}>
+                    <td>
+                    <span className="fsdb-proprow-k">
                       <HashtagIcon aria-hidden className="size-[14px]" />
                       ID
                     </span>
+                    </td>
+                    <td>
                     <span className="fsdb-detail-id" title={selected.id}>
                       {selected.id}
                     </span>
-                  </div>
+                    </td>
+                  </tr>
+                  ) : null}
                   {propertyEntries.map(([key, field]) => {
                     const kind = resolveFieldType(field)
-                    const facet = kind === 'facet'
-                    const packFields = key === 'fields' && collectionPath === FACETS_COLLECTION_PATH
+                    const facet = kind === 'tag'
+                    const packFields = key === 'fields' && collectionPath === TAGS_COLLECTION_PATH
                     const fold = facet || packFields
                     return (
                       <PropertyRow
                         key={key}
+                        table
                         field={field}
                         fieldKey={key}
                         collapsible={fold}
-                        expanded={fold ? facetOpen : undefined}
-                        onToggle={fold ? () => setFacetOpen((open) => !open) : undefined}
+                        expanded={fold ? Boolean(openFolds[key]) : undefined}
+                        onToggle={fold ? () => setOpenFolds((prev) => ({ ...prev, [key]: !prev[key] })) : undefined}
                         pick={propPick(key, field, packFields ? undefined : formatField(field, selected[key]))}
                       >
                         <div className={fold ? 'fsdb-prop-val is-schema' : 'fsdb-prop-val'} title={packFields ? undefined : formatField(field, selected[key])}>
                           {packFields ? (
-                            <FacetPackEditor facetId={selected.id} />
+                            <TagPackEditor tagId={selected.id} />
                           ) : (
                             renderCell(selected, key, field)
                           )}
@@ -436,12 +492,32 @@ export function RecordDetail({
                     )
                   })}
                   {actionProperty ? (
-                    <PropertyRow field={{ type: 'action', label: '动作' }} fieldKey="actions">
+                    <PropertyRow table field={{ type: 'action', label: '动作' }} fieldKey="actions">
                       <div className="fsdb-prop-val is-actions">{actionProperty}</div>
                     </PropertyRow>
                   ) : null}
+                  {chrome?.panes?.filter((pane) => pane.place === 'properties').map((pane) => {
+                    const Pane = pane.Pane
+                    const paneOpen = Boolean(openPanes[pane.id])
+                    return (
+                      <PropertyRow
+                        key={pane.id}
+                        table
+                        collapsible
+                        expanded={paneOpen}
+                        onToggle={() => setOpenPanes((prev) => ({ ...prev, [pane.id]: !prev[pane.id] }))}
+                        field={{ type: 'string', label: pane.label }}
+                        fieldKey={pane.id}
+                      >
+                        <div className="fsdb-prop-val is-pane">
+                          <Pane record={selected} openRecord={onOpenRecord} />
+                        </div>
+                      </PropertyRow>
+                    )
+                  })}
+                    </tbody>
+                  </table>
                 </div>
-                {renderDetailPanes(chrome?.panes?.filter((pane) => pane.place === 'properties'), selected, onOpenRecord, 'fsdb-detail-prop-panes')}
                 {contentFieldKey(schema) && schema.fields[contentFieldKey(schema)!] ? (() => {
                   const key = contentFieldKey(schema)!
                   const spec = schema.fields[key]!
@@ -455,7 +531,13 @@ export function RecordDetail({
                           spec={spec}
                           value={detailBody}
                           writable={Boolean(spec.writable) && !readOnly && detailBodyStatus === 'ready'}
-                          path={collectionPath ? `${collectionPath}/${selected.id}` : undefined}
+                          path={
+                            collectionPath === '/data' && selected.tablePath && selected.sourceId
+                              ? `${String(selected.tablePath)}/${String(selected.sourceId)}`
+                              : collectionPath
+                                ? `${collectionPath}/${selected.id}`
+                                : undefined
+                          }
                           status={detailBodyStatus}
                           onRetry={onRetryBody}
                           onChange={(next) => void writePatch(selected, { [key]: next })}
@@ -521,29 +603,31 @@ export function RecordDetail({
               </div>
             </div>
           </div>
-          <HeadingOutline enabled={headingOutline} />
-          {onPrev || onNext ? (
+          <HeadingOutline enabled={outlineOn} />
+          {chrome?.DetailBar ? null : canPrev || canNext ? (
             <nav className="fsdb-detail-float-nav" aria-label="按视图顺序切换记录">
-              <button
-                type="button"
-                className="fsdb-detail-float-btn"
-                title="上一条"
-                aria-label="上一条"
-                disabled={!canPrev}
-                onClick={onPrev}
-              >
-                <ChevronUpIcon aria-hidden />
-              </button>
-              <button
-                type="button"
-                className="fsdb-detail-float-btn"
-                title="下一条"
-                aria-label="下一条"
-                disabled={!canNext}
-                onClick={onNext}
-              >
-                <ChevronDownIcon aria-hidden />
-              </button>
+              {canPrev ? (
+                <button
+                  type="button"
+                  className="fsdb-detail-float-btn"
+                  title="上一条"
+                  aria-label="上一条"
+                  onClick={onPrev}
+                >
+                  <ChevronUpIcon aria-hidden />
+                </button>
+              ) : null}
+              {canNext ? (
+                <button
+                  type="button"
+                  className="fsdb-detail-float-btn"
+                  title="下一条"
+                  aria-label="下一条"
+                  onClick={onNext}
+                >
+                  <ChevronDownIcon aria-hidden />
+                </button>
+              ) : null}
             </nav>
           ) : null}
         </div>

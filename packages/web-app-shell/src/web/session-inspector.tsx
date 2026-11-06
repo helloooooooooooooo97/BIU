@@ -88,15 +88,6 @@ function PaneLeafIcon({
   return <Squares2X2Icon {...chromeIcon} />
 }
 
-function closePaneLabel(paneId: string, kind?: string) {
-  const path = getInspectorDbPath(paneId).split('?')[0]
-  if (kind === 'record' && /\/pages(?:\/|$)/.test(path)) return '关闭页面'
-  if (kind === 'record') return '关闭记录'
-  if (kind === 'view') return '关闭视图'
-  if (kind === 'collection' || path.startsWith('/database/')) return '关闭表格'
-  return '关闭此栏'
-}
-
 export type SessionInspectorProps = {
   open: boolean
   width: number
@@ -488,6 +479,7 @@ export const SessionInspector = memo(function SessionInspector({
           })}
         </div>
         <div className="inspector-head-tools">
+        {tab && getInspectorPaneMenu(tab) ? (
         <div className="inspector-more" ref={moreRef}>
           <button
             type="button"
@@ -521,33 +513,14 @@ export const SessionInspector = memo(function SessionInspector({
                   data-pane-menu-rev={paneMenuRev}
                   style={{ right: morePos.right, top: morePos.top }}
                 >
-                  {tab ? getInspectorPaneMenu(tab) : null}
-                  {(() => {
-                    if (!tab) return null
-                    const kind = getInspectorCaption(tab)?.kind
-                    const label = closePaneLabel(tab, kind)
-                    return (
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="fsdb-detail-more-item"
-                        data-testid="inspector-more-close"
-                        onClick={() => {
-                          setMoreOpen(false)
-                          closeOpenedTab(tab)
-                        }}
-                      >
-                        <XMarkIcon {...chromeIcon} />
-                        {label}
-                      </button>
-                    )
-                  })()}
+                  {getInspectorPaneMenu(tab)}
                 </div>
               </HeadlessDismiss>,
               document.body,
             )
             : null}
         </div>
+        ) : null}
         <div className="inspector-add" ref={plusRef}>
           <button
             type="button"

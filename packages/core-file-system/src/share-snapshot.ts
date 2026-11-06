@@ -29,7 +29,7 @@ export type ShareSnapshot = {
   contents: Record<string, unknown>
   assets: string[]
   banner?: unknown
-  facets?: CollectionSchemaPack[]
+  tags?: CollectionSchemaPack[]
   resources: {
     pages: number
     plugins: number

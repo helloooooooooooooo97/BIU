@@ -67,7 +67,8 @@ test('page plugin stores pages in SQLite under .biu', async () => {
   assert.equal(fields.tags, undefined)
   assert.equal(fields.score, undefined)
   assert.equal(fields.notes?.type, 'file')
-  assert.deepEqual(registered[0]?.schema.columns, ['title', 'facet', 'createdBy', 'updatedBy'])
+  assert.equal(fields.views?.writable, true)
+  assert.deepEqual(registered[0]?.schema.columns, ['title', 'tag', 'createdBy', 'updatedBy'])
   assert.deepEqual(registered[0]?.records, { update: true, create: true, delete: true })
   assert.equal(registered[1]?.path, '/page-blocks')
   assert.equal(registered[1]?.label, '组件')
@@ -112,10 +113,10 @@ test('page plugin stores pages in SQLite under .biu', async () => {
   assert.match(String(againBody?.notes), /# 标题\n内容/)
 
   await spec.update!(created[0]!.id, {
-    facet: { tags: ['dp'], values: { dp: { complexity: 'O(n)' } } },
+    tag: { tags: ['dp'], values: { dp: { complexity: 'O(n)' } } },
   })
   const again = await spec.get!(created[0]!.id)
-  assert.deepEqual(again?.facet, { tags: [], values: {} })
+  assert.deepEqual(again?.tag, { tags: [], values: {} })
 
   await spec.remove!({ ids: [created[0]!.id] })
   assert.equal((await spec.list()).length, 0)
@@ -227,6 +228,35 @@ export default function App() { return <div>旧</div> }
   assert.match(String(row?.notes), /刊头/)
   assert.equal(blocks.create, undefined)
   assert.equal(blocks.remove, undefined)
+})
+
+test('page-blocks get synthesizes a row for any block id so facets can attach', async () => {
+  const ctx = new Context()
+  const registered: CollectionSpec[] = []
+  class FakeDb extends Service {
+    constructor(c: Context) {
+      super(c, 'database')
+    }
+    register(spec: CollectionSpec) {
+      registered.push(spec)
+    }
+  }
+  new FakeDb(ctx)
+  await ctx.plugin(tools)
+  const root = await mkdtemp(join(tmpdir(), 'page-block-facet-'))
+  await ctx.plugin(fsPlugin, { root })
+  await ctx.plugin(page)
+  const pages = registered.find((item) => item.path === '/pages')!
+  const blocks = registered.find((item) => item.path === '/page-blocks')!
+  const created = await pages.create!([{ title: '一段', notes: '段落 <!-- biu:aabbcc11 -->' }])
+  const pageId = created[0]!.id
+  const id = `/pages::${pageId}::aabbcc11`
+  const row = await blocks.get!(id)
+  assert.equal(row?.blockId, 'aabbcc11')
+  assert.equal(row?.pageId, pageId)
+  const next = await blocks.update!(id, { tag: { tags: ['需求'], values: {} } })
+  assert.equal(next.blockId, 'aabbcc11')
+  assert.match(String((await pages.get!(pageId))?.notes ?? ''), /段落/)
 })
 
 test('clearing the last pageBlock fence drops the index row immediately', async () => {
@@ -358,7 +388,7 @@ test('pages sqlite keeps notes as the body, not markdown files', async () => {
   const cols = (sqlite.prepare('PRAGMA table_info(pages)').all() as Array<{ name: string }>).map((col) => col.name)
   assert.equal(cols.includes('notes'), false)
   assert.equal(cols.includes('tags_json'), false)
-  assert.equal(cols.includes('facet_json'), false)
+  assert.equal(cols.includes('tag_json'), false)
   assert.equal(existsSync(join(root, PAGE_ROOT, 'legacy.md')), false)
 })
 
@@ -403,6 +433,14 @@ test('PagesStore reads existing markdown files from .biu/page', async () => {
   const all = await store.list()
   assert.equal(all.map((row) => row.id).sort().join(','), 'home,other')
   assert.equal(existsSync(join(root, PAGE_ROOT, 'home.md')), false)
+})
+
+test('page file GET authorizes through the open page path like PUT', async () => {
+  const src = await readFile(join(import.meta.dirname, 'index.ts'), 'utf8')
+  assert.match(src, /route\('GET', '\/api\/page\/file\/:name'/)
+  assert.match(src, /x-biu-resource-path/)
+  assert.match(src, /requirePath\(path, 'resource:read'\)/)
+  assert.match(src, /requirePath\(path, 'resource:update'\)/)
 })
 
 test('markdown and declared block fields pick asset pointers', () => {
@@ -483,4 +521,41 @@ test('PagesStore migrates leftover .page into .biu', async () => {
   assert.match(asset, /ok/)
   assert.equal(existsSync(join(root, '.page')), false)
   assert.equal(existsSync(join(root, '.biu/assets/page')), false)
+})
+
+test('page namedDocs exposes sandbox view jsx for db_doc', async () => {
+  const ctx = new Context()
+  const registered: CollectionSpec[] = []
+  class FakeDb extends Service {
+    constructor(c: Context) {
+      super(c, 'database')
+    }
+    register(spec: CollectionSpec) {
+      registered.push(spec)
+    }
+  }
+  new FakeDb(ctx)
+  await ctx.plugin(tools)
+  const root = await mkdtemp(join(tmpdir(), 'page-named-docs-'))
+  await ctx.plugin(fsPlugin, { root })
+  await ctx.plugin(page)
+  const spec = registered[0]!
+  assert.ok(spec.namedDocs)
+  const created = await spec.create!([{ title: '沙盒页' }])
+  const id = created[0]!.id
+  const viewId = '8fdbc4f8'
+  const file = `view-${id}-${viewId}.jsx`
+  const dataFile = `view-data-${id}-${viewId}.json`
+  await spec.update!(id, { views: [{ id: viewId, name: '沙盒 1', kind: 'sandbox', file, dataFile }] })
+  const assetsDir = join(root, '.biu/assets')
+  const store = new page.PagesStore(ctx.fs.workspace as never, assetsDir)
+  await store.writeAsset(file, 'export default function App(){return <p>你好</p>}\n')
+  const row = await spec.get!(id)
+  const names = [...spec.namedDocs!.names(row!)]
+  assert.ok(names.includes(file))
+  assert.ok(names.includes(dataFile))
+  assert.ok(names.includes(`page-views-${id}.json`))
+  const read = await spec.namedDocs!.read(file)
+  assert.match(Buffer.from(read.bytes).toString('utf8'), /你好/)
+  assert.match(read.type, /javascript/)
 })

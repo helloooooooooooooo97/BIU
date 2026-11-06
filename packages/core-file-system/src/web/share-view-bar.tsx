@@ -94,7 +94,17 @@ export function ShareViewQueryBar({
   }
 
   return (
-    <div className="tasks-toolbar" data-testid="fsdb-share-query">
+    <div
+      className="tasks-toolbar"
+      data-testid="fsdb-share-query"
+      onMouseDown={(event) => {
+        const target = event.target as HTMLElement
+        if (target.closest('input,textarea,select,[contenteditable="true"]')) return
+        if (target.closest('button,[role="menuitem"],[role="menuitemcheckbox"],[role="menuitemradio"]')) {
+          event.preventDefault()
+        }
+      }}
+    >
       <div className="tasks-toolbar-left" />
       <div className="tasks-toolbar-right">
         <HeadlessDismiss
