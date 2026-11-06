@@ -421,6 +421,10 @@ export function RecordDetail({
                     columnMenu={columnMenu}
                     onRetry={onRetryBody}
                     configMenu={paneMenu}
+                    onPrev={onPrev}
+                    onNext={onNext}
+                    canPrev={canPrev}
+                    canNext={canNext}
                   />
                 ) : null}
                 <div className="fsdb-detail-aside">
@@ -527,7 +531,13 @@ export function RecordDetail({
                           spec={spec}
                           value={detailBody}
                           writable={Boolean(spec.writable) && !readOnly && detailBodyStatus === 'ready'}
-                          path={collectionPath ? `${collectionPath}/${selected.id}` : undefined}
+                          path={
+                            collectionPath === '/data' && selected.tablePath && selected.sourceId
+                              ? `${String(selected.tablePath)}/${String(selected.sourceId)}`
+                              : collectionPath
+                                ? `${collectionPath}/${selected.id}`
+                                : undefined
+                          }
                           status={detailBodyStatus}
                           onRetry={onRetryBody}
                           onChange={(next) => void writePatch(selected, { [key]: next })}
@@ -594,28 +604,30 @@ export function RecordDetail({
             </div>
           </div>
           <HeadingOutline enabled={outlineOn} />
-          {onPrev || onNext ? (
+          {chrome?.DetailBar ? null : canPrev || canNext ? (
             <nav className="fsdb-detail-float-nav" aria-label="按视图顺序切换记录">
-              <button
-                type="button"
-                className="fsdb-detail-float-btn"
-                title="上一条"
-                aria-label="上一条"
-                disabled={!canPrev}
-                onClick={onPrev}
-              >
-                <ChevronUpIcon aria-hidden />
-              </button>
-              <button
-                type="button"
-                className="fsdb-detail-float-btn"
-                title="下一条"
-                aria-label="下一条"
-                disabled={!canNext}
-                onClick={onNext}
-              >
-                <ChevronDownIcon aria-hidden />
-              </button>
+              {canPrev ? (
+                <button
+                  type="button"
+                  className="fsdb-detail-float-btn"
+                  title="上一条"
+                  aria-label="上一条"
+                  onClick={onPrev}
+                >
+                  <ChevronUpIcon aria-hidden />
+                </button>
+              ) : null}
+              {canNext ? (
+                <button
+                  type="button"
+                  className="fsdb-detail-float-btn"
+                  title="下一条"
+                  aria-label="下一条"
+                  onClick={onNext}
+                >
+                  <ChevronDownIcon aria-hidden />
+                </button>
+              ) : null}
             </nav>
           ) : null}
         </div>

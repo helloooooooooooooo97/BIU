@@ -41,7 +41,7 @@ export function PickOverlay(_props: SlotProps) {
     }
     document.documentElement.classList.add('pick-mode')
     const route = () => window.location.pathname
-    const EDITOR_SEL = '.page-editor, .tiptap, [data-testid="page-editor"], .cm-editor'
+    const EDITOR_SEL = '.page-editor:not(.is-host), .tiptap, [data-testid="page-editor"], .cm-editor'
     const pathHasEditor = (event: Event) =>
       event.composedPath().some((node) => node instanceof Element && (node.matches(EDITOR_SEL) || Boolean(node.closest(EDITOR_SEL))))
 

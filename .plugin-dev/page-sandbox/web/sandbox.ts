@@ -52,9 +52,13 @@ export type SandboxIO = {
 function mountJsx(source: string, root: ShadowRoot, io?: SandboxIO) {
   const compiled = compileJsxSource(source)
   if (!compiled.ok) throw new Error(compiled.error)
+  let live = true
   const biu = {
-    read: () => (io ? io.read() : Promise.resolve(null)),
-    write: (value: unknown) => (io ? io.write(value) : Promise.resolve()),
+    read: () => (live && io ? io.read() : Promise.resolve(null)),
+    write: (value: unknown) => (live && io ? io.write(value) : Promise.resolve()),
+  }
+  ;(root as ShadowRoot & { __sandboxIoLive?: () => void }).__sandboxIoLive = () => {
+    live = false
   }
   const factory = new Function(
     'React',
@@ -86,6 +90,7 @@ function mountJsx(source: string, root: ShadowRoot, io?: SandboxIO) {
 
 export function unmountSandbox(root: ShadowRoot | null) {
   if (!root) return
+  ;(root as ShadowRoot & { __sandboxIoLive?: () => void }).__sandboxIoLive?.()
   roots.get(root)?.unmount()
   roots.delete(root)
   root.innerHTML = ''
@@ -106,9 +111,11 @@ export function mountSandbox(root: ShadowRoot, source: string, io?: SandboxIO) {
   pickMode.textContent = SANDBOX_PICK_MODE_CSS
   root.append(pickMode)
   if (!looksLikeJsx(text)) {
-    const compiled = compileSandboxSource(text)
-    if (!compiled.ok) throw new Error(compiled.error)
-    throw new Error('sandbox source must be a React component')
+    const mount = document.createElement('div')
+    mount.setAttribute('data-sandbox-root', '')
+    mount.innerHTML = text
+    root.append(mount)
+    return compileSandboxSource(text)
   }
   mountJsx(text, root, io)
   return compileSandboxSource(text)

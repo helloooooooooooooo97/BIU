@@ -33,6 +33,15 @@ test('custom sandbox view id is not a builtin present mode', () => {
   assert.equal(isPageCustomView('table'), false)
 })
 
+test('present mode survives a fresh read from storage', () => {
+  localStorage.removeItem('biu.page.present')
+  setPagePresentMode('page-keep', 'site1')
+  assert.equal(JSON.parse(localStorage.getItem('biu.page.present') || '{}')['page-keep'], 'site1')
+  assert.equal(getPagePresentMode('page-keep-reopen'), 'doc')
+  localStorage.setItem('biu.page.present', JSON.stringify({ 'page-keep-reopen': 'outline' }))
+  assert.equal(getPagePresentMode('page-keep-reopen'), 'outline')
+})
+
 test('switching present mode captures page scroll before paint', () => {
   const src = readFileSync(resolve(import.meta.dirname, './source-mode.ts'), 'utf8')
   assert.match(src, /capturePageScroll\(\)/)

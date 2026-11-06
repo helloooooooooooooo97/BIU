@@ -381,6 +381,7 @@ function mimeOf(name: string) {
   if (ext === '.avif') return 'image/avif'
   if (ext === '.bmp') return 'image/bmp'
   if (ext === '.json' || ext === '.excalidraw') return 'application/json; charset=utf-8'
+  if (ext === '.js' || ext === '.jsx' || ext === '.ts' || ext === '.tsx') return 'text/javascript; charset=utf-8'
   if (ext === '.zip') return 'application/zip'
   if (ext === '.pdf') return 'application/pdf'
   return 'application/octet-stream'

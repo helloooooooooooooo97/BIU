@@ -37,7 +37,7 @@ export function parsePageBlockRowData(raw: unknown): Record<string, unknown> {
   return parsed
 }
 
-async function writeBlockData(id: string, data: Record<string, unknown>) {
+export async function writeBlockData(id: string, data: Record<string, unknown>) {
   const res = await fetch('/api/db/update', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },

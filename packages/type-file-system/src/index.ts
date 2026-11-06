@@ -727,12 +727,24 @@ export function hasCollectionDeleteQuery(query?: CollectionListQuery | null): bo
   return false
 }
 
+/** 表自己保管的可变文档（例如 /pages 的特制沙盒 .jsx），不走通用 assets/name。 */
+export type CollectionNamedDocs = {
+  names: (record: DbRecord) => Iterable<string>
+  read: (name: string) => { bytes: Uint8Array; type: string; etag: string } | Promise<{ bytes: Uint8Array; type: string; etag: string }>
+  write: (
+    name: string,
+    content: string | Buffer | Uint8Array,
+    opts?: { etag?: string },
+  ) => { name: string; etag: string; bytes?: number } | Promise<{ name: string; etag: string; bytes?: number }>
+}
+
 export type CollectionSpec = {
   id: string
   path: string
   label?: string
   schema: CollectionSchema
   view?: CollectionView
+  namedDocs?: CollectionNamedDocs
   /**
    * 记录权限。list / get 始终可用。
    * update / create / delete 为 true 时必须提供对应实现；不写则不能改、不能新建、不能删。

@@ -43,9 +43,24 @@ function emptyScene(): Scene {
   return { elements: [], appState: { showWelcomeScreen: false }, files: {} }
 }
 
+const VIEWPORT_KEYS = new Set([
+  'scrollX',
+  'scrollY',
+  'zoom',
+  'width',
+  'height',
+  'offsetLeft',
+  'offsetTop',
+  'cursorButton',
+  'scrolledOutside',
+  'isLoading',
+  'showWelcomeScreen',
+])
+
 function withoutCollab(appState: unknown): Record<string, unknown> {
   if (!appState || typeof appState !== 'object' || Array.isArray(appState)) return {}
   const { collaborators: _c, ...rest } = appState as Record<string, unknown>
+  for (const key of VIEWPORT_KEYS) delete rest[key]
   return rest
 }
 
@@ -88,7 +103,12 @@ function etagFromResponse(res: Response) {
   return String(res.headers.get('etag') ?? '').replace(/^W\//, '').replaceAll('"', '')
 }
 
+function isSceneFile(file: string) {
+  return /\.(json|excalidraw)$/i.test(String(file ?? '').trim())
+}
+
 async function saveScene(file: string, scene: Scene, etag: string) {
+  if (!isSceneFile(file)) return { ok: false as const, etag }
   const name = assetName(file)
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (etag) headers['If-Match'] = `"${etag}"`
@@ -227,17 +247,20 @@ function placeHost(host: Host, slot: HTMLElement | null) {
   if (host.expanded) {
     if (el.parentElement !== document.body) document.body.appendChild(el)
     el.style.cssText =
-      'position:fixed;inset:12px;width:auto;height:auto;z-index:9992;pointer-events:auto;visibility:visible;overflow:hidden;isolation:isolate;background:var(--biu-color-bg)'
+      'position:fixed;inset:var(--biu-size-control-lg) 0 0 0;width:auto;height:auto;z-index:9992;pointer-events:auto;visibility:visible;overflow:hidden;isolation:isolate;background:var(--biu-color-bg)'
     return
   }
   if (!slot?.isConnected) {
     parkHost(host)
     return
   }
-  if (el.parentElement !== slot) slot.appendChild(el)
-  el.style.cssText =
-    'position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none;visibility:visible;overflow:hidden;isolation:isolate;background:var(--biu-color-bg)'
-  requestAnimationFrame(() => fitView(host.api))
+  const moved = el.parentElement !== slot
+  if (moved) slot.appendChild(el)
+  const live = Boolean(slot.closest('.page-host-view'))
+  el.style.cssText = live
+    ? 'position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:auto;visibility:visible;overflow:hidden;isolation:isolate;background:var(--biu-color-bg)'
+    : 'position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none;visibility:visible;overflow:hidden;isolation:isolate;background:var(--biu-color-bg)'
+  if (moved) requestAnimationFrame(() => fitView(host.api))
 }
 
 function paintHost(host: Host) {
@@ -393,43 +416,133 @@ function PersistentDraw(props: {
   )
 }
 
-function DrawSideBar(props: { expanded: boolean; onToggle: () => void }) {
+function BoardKindIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" aria-hidden>
+      <rect
+        x="1.75"
+        y="2.2"
+        width="12.5"
+        height="11.6"
+        rx="2.4"
+        stroke="var(--biu-color-ink-purple)"
+        strokeWidth="1.4"
+      />
+      <circle cx="5.2" cy="5.55" r="1.15" stroke="var(--biu-color-ink-purple)" strokeWidth="1.25" />
+      <path
+        d="M4.15 10.15c1.7-2.85 2.55-.75 3.85.4 1.5 1.3 2.15-3 4.75-3.85"
+        stroke="var(--biu-color-ink-purple)"
+        strokeWidth="1.35"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function DrawTools(props: { expanded: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      className="page-slide-icon"
+      tabIndex={-1}
+      data-page-block-expand=""
+      data-testid="excalidraw-expand"
+      title={props.expanded ? '缩小' : '放大'}
+      aria-label={props.expanded ? '缩小' : '放大'}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={props.onToggle}
+    >
+      {props.expanded ? (
+        <ArrowsPointingInIcon aria-hidden className="page-slide-ico" />
+      ) : (
+        <ArrowsPointingOutIcon aria-hidden className="page-slide-ico" />
+      )}
+    </button>
+  )
+}
+
+function NavTitle({
+  value,
+  readOnly,
+  onCommit,
+}: {
+  value: string
+  readOnly?: boolean
+  onCommit: (next: string) => void
+}) {
+  const [draft, setDraft] = useState(value)
+  useEffect(() => {
+    setDraft(value)
+  }, [value])
+  const commit = () => {
+    const next = draft.trim()
+    if (!next || next === value) {
+      setDraft(value)
+      return
+    }
+    onCommit(next)
+  }
+  return (
+    <input
+      className="page-block-expand-nav-title"
+      data-testid="excalidraw-title"
+      data-biu-ignore
+      readOnly={readOnly}
+      value={draft}
+      placeholder="标题"
+      aria-label="标题"
+      onMouseDown={(event) => event.stopPropagation()}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault()
+          event.currentTarget.blur()
+        }
+        if (event.key === 'Escape') {
+          setDraft(value)
+          event.currentTarget.blur()
+        }
+      }}
+    />
+  )
+}
+
+function DrawSideBar(props: {
+  expanded: boolean
+  onToggle: () => void
+  title: string
+  readOnly?: boolean
+  onTitle: (next: string) => void
+}) {
+  const tools = <DrawTools expanded={props.expanded} onToggle={props.onToggle} />
   return (
     <div
-      className="page-slide-bar"
-      data-testid="excalidraw-side-bar"
+      className="page-block-expand-nav"
+      data-testid={props.expanded ? 'excalidraw-expand-nav' : 'excalidraw-side-bar'}
       data-biu-ignore
-      style={props.expanded ? { position: 'fixed', top: 12, right: 4, zIndex: 9993, opacity: 1 } : undefined}
+      style={props.expanded ? { position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9993 } : undefined}
     >
-      <button
-        type="button"
-        className="page-slide-icon"
-        tabIndex={-1}
-        data-page-block-expand=""
-        data-testid="excalidraw-expand"
-        title={props.expanded ? '缩小' : '放大'}
-        aria-label={props.expanded ? '缩小' : '放大'}
-        onMouseDown={(event) => event.preventDefault()}
-        onClick={props.onToggle}
-      >
-        {props.expanded ? (
-          <ArrowsPointingInIcon aria-hidden className="page-slide-ico" />
-        ) : (
-          <ArrowsPointingOutIcon aria-hidden className="page-slide-ico" />
-        )}
-      </button>
+      <div className="page-block-expand-nav-type" data-testid="excalidraw-type-icon" title="画板" aria-label="画板">
+        <BoardKindIcon />
+      </div>
+      <NavTitle value={props.title} readOnly={props.readOnly} onCommit={props.onTitle} />
+      <div className="page-block-expand-nav-tools">{tools}</div>
     </div>
   )
 }
 
-function Board(props: { data: Record<string, unknown>; update: (p: Record<string, unknown>) => void; writable: boolean }) {
+function Board(props: { data: Record<string, unknown>; update: (p: Record<string, unknown>) => void; writable: boolean; selected?: boolean }) {
   const file = String(props.data.file || '')
   const [expanded, setExpanded] = useState(false)
   const slotRef = useRef<HTMLDivElement>(null)
 
+  const updateRef = useRef(props.update)
+  updateRef.current = props.update
   useEffect(() => {
     if (!file) {
-      props.update({ file: `assets/画板-${crypto.randomUUID().slice(0, 8)}.json` })
+      updateRef.current({ file: `assets/excalidraw-${crypto.randomUUID().slice(0, 8)}.json` })
     }
   }, [file])
 
@@ -467,14 +580,31 @@ function Board(props: { data: Record<string, unknown>; update: (p: Record<string
 
   if (!file) return <div className="text-sm text-[var(--muted-foreground)]">正在创建画板文件…</div>
 
+  const title = String(props.data.title ?? '').trim() || '画板'
   const bar = (
-    <DrawSideBar expanded={expanded} onToggle={() => setExpanded((v) => !v)} />
+    <DrawSideBar
+      expanded={expanded}
+      onToggle={() => setExpanded((v) => !v)}
+      title={title}
+      readOnly={!props.writable}
+      onTitle={(next) => props.update({ title: next })}
+    />
   )
 
   return (
     <div
       data-testid="page-excalidraw"
-      style={{ position: 'relative', overflow: 'visible', background: 'var(--biu-color-bg)', borderRadius: 8 }}
+      data-excalidraw-selected={props.selected ? '1' : undefined}
+      style={{
+        position: 'relative',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'visible',
+        background: 'var(--biu-color-bg)',
+        boxSizing: 'border-box',
+        border: 'none',
+        borderRadius: 0,
+      }}
     >
       {expanded ? createPortal(bar, document.body) : bar}
       <div ref={slotRef} style={{ position: 'relative', height: 280, overflow: 'hidden', borderRadius: 8 }} />
@@ -492,7 +622,7 @@ export function apply(ctx: { pageEditor: PageEditor }) {
     hint: '手绘白板，放大后编辑',
     aliases: ['excalidraw', 'draw', '白板', '画板', 'board'],
     assets: ['file'],
-    defaults: () => ({ file: `assets/画板-${crypto.randomUUID().slice(0, 8)}.json` }),
+    defaults: () => ({ file: `assets/excalidraw-${crypto.randomUUID().slice(0, 8)}.json`, title: '画板' }),
     View: Board,
   })
 }

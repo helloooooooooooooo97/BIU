@@ -2906,6 +2906,9 @@ select.settings-account-input {
 
 .inspector-tab svg,
 .inspector-crumb-close svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
   pointer-events: none;
 }
 
@@ -3045,6 +3048,34 @@ select.settings-account-input {
   align-items: center;
   gap: 2px;
   overflow: visible;
+}
+
+.inspector-crumb-tab .fsdb-crumbs,
+.inspector-crumb-tab .fsdb-crumb,
+.inspector-crumb-tab .fsdb-crumb-btn {
+  display: inline-flex;
+  align-items: center;
+}
+
+.inspector-crumb-tab .fsdb-crumb-btn {
+  box-sizing: border-box;
+  height: var(--biu-size-control-md);
+  min-height: var(--biu-size-control-md);
+  margin: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  padding: 0 4px;
+  gap: 6px;
+}
+
+.inspector-crumb-tab .fsdb-crumb svg,
+.inspector-crumb-tab .fsdb-crumb-btn svg,
+.inspector-crumb-tab .chat-view-project-icon,
+.inspector-crumb-tab .fsdb-record-mark {
+  width: 16px;
+  height: 16px;
+  flex: none;
 }
 
 .inspector-crumb-full .fsdb-crumb-btn.is-static {
@@ -6850,7 +6881,7 @@ html[data-outline-pin="1"] .chat-outline {
   flex: none;
   flex-direction: column;
   align-items: flex-start;
-  gap: 2px;
+  gap: 6px;
   min-width: 22px;
   max-height: min(40vh, 360px);
   overflow-x: hidden;
@@ -6864,7 +6895,7 @@ html[data-outline-pin="1"] .chat-outline {
   flex: none;
   align-items: center;
   width: 22px;
-  height: 16px;
+  height: 2px;
   margin: 0;
   border: 0;
   background: transparent;

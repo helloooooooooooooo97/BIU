@@ -21,8 +21,8 @@ import { markdownLocusFromElement, markdownLocusFromSelection } from './markdown
 import { isFindHotkey } from './find-bar.tsx'
 import { applyEditorFind } from './find-plugin.ts'
 import { applyStoredBlockIds, markdownWithBlockIds, stripBlockIdStamps } from './block-id.ts'
-import { getLivePageEditor, setLivePageEditor } from './page-live-editor.ts'
-import { PAGE_FIND_OPEN_EVENT, PAGE_INSERT_EVENT, getPageFind, patchPageFind, usePageFind } from './page-view-state.ts'
+import { getLivePageEditor, setLivePageEditor, setLivePagePersist } from './page-live-editor.ts'
+import { PAGE_FIND_OPEN_EVENT, getPageFind, patchPageFind, usePageFind } from './page-view-state.ts'
 import { PageBlocksTable } from './page-blocks-table.tsx'
 import {
   INK_TONES,
@@ -363,7 +363,40 @@ function PageEditorFailed({ onRetry }: { onRetry?: () => void }) {
   )
 }
 
-export function PageEditor({ record, value, writable, onChange, path, status = 'ready', onRetry }: FsContentProps) {
+function PageHostShell({
+  record,
+  value,
+  writable,
+  path,
+  viewId,
+}: FsContentProps & { viewId: string }) {
+  return (
+    <div
+      className="page-editor is-host"
+      data-testid="page-editor-host"
+      data-page-record={record.id}
+      data-page-path={path || `/pages/${record.id}`}
+      tabIndex={-1}
+    >
+      <PageHostView
+        record={record}
+        viewId={viewId}
+        markdown={asMarkdown(value)}
+        writable={writable !== false}
+      />
+    </div>
+  )
+}
+
+export function PageEditor(props: FsContentProps) {
+  const present = usePagePresentMode(props.record.id)
+  if (props.status === 'loading') return <PageEditorLoading />
+  if (props.status === 'failed') return <PageEditorFailed onRetry={props.onRetry} />
+  if (isPageCustomView(present)) return <PageHostShell {...props} viewId={present} />
+  return <PageDocEditor {...props} />
+}
+
+function PageDocEditor({ record, value, writable, onChange, path, status = 'ready', onRetry }: FsContentProps) {
   const present = usePagePresentMode(record.id)
   const source = present === 'source'
   const saved = useRef(asMarkdown(value))
@@ -467,10 +500,18 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
   useEffect(() => {
     if (!editor || editor.isDestroyed) return
     setLivePageEditor(editor)
+    setLivePagePersist((current) => {
+      if (current.isDestroyed || writableRef.current === false) return
+      const next = persistEditorMarkdown(current)
+      if (next === saved.current) return
+      saved.current = next
+      onChange?.(next)
+    })
     return () => {
       if (getLivePageEditor() === editor) setLivePageEditor(null)
+      setLivePagePersist(null)
     }
-  }, [editor])
+  }, [editor, onChange])
 
   useEffect(() => {
     const onFind = (event: Event) => {
@@ -478,15 +519,9 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
       if (id && id !== record.id) return
       patchPageFind(record.id, { open: true })
     }
-    const onInsert = () => {
-      if (!editor || editor.isDestroyed || writableRef.current === false) return
-      editor.chain().focus('end').insertContent('/').run()
-    }
     window.addEventListener(PAGE_FIND_OPEN_EVENT, onFind)
-    window.addEventListener(PAGE_INSERT_EVENT, onInsert)
     return () => {
       window.removeEventListener(PAGE_FIND_OPEN_EVENT, onFind)
-      window.removeEventListener(PAGE_INSERT_EVENT, onInsert)
     }
   }, [editor, record.id])
 
@@ -720,7 +755,7 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
     if (event.target !== event.currentTarget) return
     event.preventDefault()
     if (status === 'loading' || status === 'failed') return
-    if (present === 'table' || isPageCustomView(present)) return
+    if (present === 'table') return
     if (!source && writable !== false && editor && !editor.isDestroyed) {
       editor.commands.focus('end')
       return
@@ -735,7 +770,7 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
   return (
     <div
       ref={hostRef}
-      className={`page-editor${source ? ' is-source' : ''}${present === 'outline' ? ' is-outline' : ''}${present === 'table' ? ' is-table' : ''}${isPageCustomView(present) ? ' is-host' : ''}`}
+      className={`page-editor${source ? ' is-source' : ''}${present === 'outline' ? ' is-outline' : ''}${present === 'table' ? ' is-table' : ''}`}
       data-page-record={record.id}
       data-page-path={path || `/pages/${record.id}`}
       tabIndex={-1}
@@ -760,15 +795,12 @@ export function PageEditor({ record, value, writable, onChange, path, status = '
         {present === 'table' ? (
           <PageBlocksTable editor={editor} recordId={record.id} path={path} writable={writable !== false && status === 'ready'} />
         ) : null}
-        {isPageCustomView(present) ? (
-          <PageHostView record={record} viewId={present} writable={writable !== false && status === 'ready'} />
-        ) : null}
-        <div className="page-editor-doc" hidden={present === 'table' || isPageCustomView(present)}>
+        <div className="page-editor-doc" hidden={present === 'table'}>
           <EditorContent editor={editor} />
         </div>
-        {present !== 'table' && !isPageCustomView(present) && writable !== false ? <PageBlockHandle editor={editor} /> : null}
-        {present !== 'table' && !isPageCustomView(present) && writable !== false ? <Bubble editor={editor} onSendChat={sendToChat} /> : null}
-        {present !== 'table' && !isPageCustomView(present) && writable !== false ? <TableBar editor={editor} /> : null}
+        {present !== 'table' && writable !== false ? <PageBlockHandle editor={editor} /> : null}
+        {present !== 'table' && writable !== false ? <Bubble editor={editor} onSendChat={sendToChat} /> : null}
+        {present !== 'table' && writable !== false ? <TableBar editor={editor} /> : null}
       </div>
     </div>
   )

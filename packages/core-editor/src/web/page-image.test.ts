@@ -99,13 +99,13 @@ test('image size and align persist through markdown', () => {
   }
 })
 
-test('image chrome uses the same right slide bar as html and slide', () => {
+test('image chrome uses the same top slide bar as html and slide', () => {
   const view = readFileSync(resolve(import.meta.dirname, './page-image-view.tsx'), 'utf8')
   const css = readFileSync(resolve(import.meta.dirname, './style.ts'), 'utf8')
   assert.match(view, /className="page-slide-bar"/)
   assert.match(view, /ArrowsPointingOutIcon/)
   assert.doesNotMatch(view, /page-image-bar/)
-  assert.match(css, /\.page-editor \.tiptap \.page-image \.page-slide-bar\{top:0;left:calc\(100% \+ 8px\)\}/)
+  assert.match(css, /\.page-editor \.tiptap \.page-image \.page-slide-bar\{top:8px;right:8px;left:auto\}/)
 })
 
 test('collectClipboardImages keeps image files and stripPastedDataImages drops inline data URLs', () => {

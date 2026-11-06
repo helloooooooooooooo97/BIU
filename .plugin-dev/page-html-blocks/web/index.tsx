@@ -2,6 +2,8 @@ import { ReUI, Textarea } from '@biu/reui'
 import {
   ArrowsPointingInIcon,
   ArrowsPointingOutIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
   CodeBracketIcon,
   EyeIcon,
   PlayCircleIcon,
@@ -145,7 +147,7 @@ function HtmlSandbox({
         data-testid={live ? 'page-html-sandbox' : 'page-html-static-host'}
         data-html-sandbox=""
         data-page-block-capture=""
-        style={{ display: 'block', width: '100%', height: '100%', minHeight: live ? 80 : undefined }}
+        style={{ display: 'block', flex: 1, minHeight: live ? 80 : 0, width: '100%', height: '100%' }}
       />
       {error ? (
         <div data-testid="html-sandbox-error" style={{ color: 'var(--biu-color-danger)', fontSize: 12, padding: 8 }}>
@@ -166,7 +168,9 @@ type BlockProps = {
   selected?: boolean
 }
 
-const SELECTED_RING = '0 0 0 2px color-mix(in srgb, var(--biu-color-emphasis) 55%, transparent)'
+function selectBorder(_on?: boolean) {
+  return 'none'
+}
 
 /* ---------------- shared bits ---------------- */
 
@@ -262,18 +266,16 @@ const MAG_INK = '#0a0a0a'
 const MAG_PAPER = '#ece7dc'
 const MAG_BLUE = '#1c7cff'
 
-const barBtn: Record<string, unknown> = {
-  cursor: 'pointer',
-  border: 'none',
-  borderRadius: 6,
-  padding: '4px 8px',
-  background: 'transparent',
-  color: '#c9cdd6',
-  fontWeight: 700,
-  fontSize: 11,
-  lineHeight: '16px',
-  display: 'inline-flex',
-  alignItems: 'center',
+function HtmlKindIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="var(--biu-color-ink-purple)" aria-hidden>
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M5.4 3.55 1.85 8l3.55 4.45a.75.75 0 0 1-1.18.9L.32 8.48a.75.75 0 0 1 0-.96L4.22 2.65a.75.75 0 1 1 1.18.9Zm5.2 0 3.55 4.45-3.55 4.45a.75.75 0 0 0 1.18.9l3.9-4.87a.75.75 0 0 0 0-.96L11.78 2.65a.75.75 0 1 0-1.18.9ZM9.7 2.48a.75.75 0 0 1 .32 1.01L7.08 12.7a.75.75 0 1 1-1.34-.7L8.68 2.8a.75.75 0 0 1 1.02-.32Z"
+      />
+    </svg>
+  )
 }
 
 function hold(event: { preventDefault: () => void }) {
@@ -294,7 +296,6 @@ function HtmlDeckOverlay({
   const closeRef = useRef(onClose)
   closeRef.current = onClose
   const boxRef = useRef<HTMLDivElement | null>(null)
-  const [navHot, setNavHot] = useState(false)
   const slide = slides[index]
   const total = slides.length
   useEffect(() => {
@@ -367,6 +368,47 @@ function HtmlDeckOverlay({
       }}
     >
       <style>{`[data-testid="html-deck"]:fullscreen,[data-testid="html-deck"]:-webkit-full-screen{inset:0!important;width:100%!important;height:100%!important;max-width:none!important;max-height:none!important}[data-testid="html-deck-slide"]>*{width:100%!important;height:100%!important;max-width:none!important;box-sizing:border-box}`}</style>
+      <div className="page-block-expand-nav" data-testid="html-deck-expand-nav" data-biu-ignore>
+        <div className="page-block-expand-nav-type" data-testid="html-deck-type-icon" title="HTML" aria-label="HTML">
+          <HtmlKindIcon />
+        </div>
+        <div className="page-block-expand-nav-tools">
+          <button
+            type="button"
+            className="page-slide-icon"
+            disabled={index <= 0}
+            style={index <= 0 ? { opacity: 0.35, cursor: 'default' } : undefined}
+            onClick={() => onIndex(stepHtmlDeck(index, -1, total))}
+            aria-label="上一张"
+          >
+            <ChevronLeftIcon aria-hidden className="page-slide-ico" />
+          </button>
+          <span data-testid="html-deck-index" style={{ minWidth: 48, textAlign: 'center', fontSize: 12, color: 'var(--biu-color-text-muted)' }}>
+            {index + 1} / {total}
+          </span>
+          <button
+            type="button"
+            className="page-slide-icon"
+            disabled={index >= total - 1}
+            style={index >= total - 1 ? { opacity: 0.35, cursor: 'default' } : undefined}
+            onClick={() => onIndex(stepHtmlDeck(index, 1, total))}
+            aria-label="下一张"
+          >
+            <ChevronRightIcon aria-hidden className="page-slide-ico" />
+          </button>
+          <button
+            type="button"
+            className="page-slide-icon"
+            data-page-block-expand=""
+            data-testid="html-deck-exit"
+            title="退出放映"
+            aria-label="退出放映"
+            onClick={onClose}
+          >
+            <ArrowsPointingInIcon aria-hidden className="page-slide-ico" />
+          </button>
+        </div>
+      </div>
       <div
         data-testid="html-deck-stage"
         style={{
@@ -390,55 +432,6 @@ function HtmlDeckOverlay({
             dangerouslySetInnerHTML={{ __html: stamped }}
           />
         )}
-      </div>
-      <div
-        data-testid="html-deck-nav"
-        onMouseEnter={() => setNavHot(true)}
-        onMouseLeave={() => setNavHot(false)}
-        style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          bottom: 0,
-          zIndex: 2,
-          display: 'flex',
-          alignItems: 'flex-end',
-          justifyContent: 'center',
-          height: 96,
-          padding: '0 16px 18px',
-          background: navHot ? 'linear-gradient(transparent, rgba(0,0,0,.55))' : 'transparent',
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 10,
-            opacity: navHot ? 1 : 0,
-            transition: 'opacity 160ms ease',
-            pointerEvents: navHot ? 'auto' : 'none',
-          }}
-        >
-          <button type="button" style={{ ...barBtn, ...(index <= 0 ? { opacity: 0.35, cursor: 'default' } : {}) }} disabled={index <= 0} onClick={() => onIndex(stepHtmlDeck(index, -1, total))} aria-label="上一张">
-            上一张
-          </button>
-          <span data-testid="html-deck-index" style={{ color: '#8b93a7', minWidth: 64, textAlign: 'center' }}>
-            {index + 1} / {total}
-          </span>
-          <button
-            type="button"
-            style={{ ...barBtn, ...(index >= total - 1 ? { opacity: 0.35, cursor: 'default' } : {}) }}
-            disabled={index >= total - 1}
-            onClick={() => onIndex(stepHtmlDeck(index, 1, total))}
-            aria-label="下一张"
-          >
-            下一张
-          </button>
-          <button type="button" data-page-block-expand="" style={{ ...barBtn, marginLeft: 12 }} onClick={onClose} title="退出放映" aria-label="退出放映">
-            <ArrowsPointingInIcon aria-hidden className="page-slide-ico" />
-          </button>
-        </div>
       </div>
     </div>,
     document.body,
@@ -585,7 +578,11 @@ function HtmlSideBar({
   onResetSize?: () => void
 }) {
   return (
-    <div className="page-slide-bar" data-testid="html-side-bar" data-biu-ignore>
+    <div className="page-block-expand-nav" data-testid="html-side-bar" data-biu-ignore>
+      <div className="page-block-expand-nav-type" data-testid="html-type-icon" title="HTML" aria-label="HTML">
+        <HtmlKindIcon />
+      </div>
+      <div className="page-block-expand-nav-tools">
       {ro ? null : (
         <>
           <button
@@ -643,6 +640,7 @@ function HtmlSideBar({
       >
         <ArrowsPointingOutIcon aria-hidden className="page-slide-ico" />
       </button>
+      </div>
     </div>
   )
 }
@@ -699,13 +697,15 @@ function HtmlDirectCard({ data, update, writable, selected }: BlockProps) {
       className={fill ? 'html-direct-fill' : undefined}
       style={{
         position: 'relative',
+        display: 'flex',
+        flexDirection: 'column',
         width: cssBoxSize(width) ?? '100%',
         height: cssBoxSize(height) ?? (fillHost ? HTML_FILL_HOST_PX : undefined),
         maxWidth: '100%',
         overflow: 'visible',
         boxSizing: 'border-box',
-        boxShadow: selected ? SELECTED_RING : undefined,
-        borderRadius: selected ? 4 : undefined,
+        border: selectBorder(selected),
+        borderRadius: 0,
       }}
       onPointerEnter={() => setHover(true)}
       onPointerLeave={() => setHover(false)}
@@ -726,7 +726,7 @@ function HtmlDirectCard({ data, update, writable, selected }: BlockProps) {
       ) : (
         <div
           className={fill ? 'html-direct-fill-inner' : undefined}
-          style={{ overflow: sized ? 'auto' : undefined, overflowX: sized ? undefined : 'auto', height: fill || sized ? '100%' : undefined }}
+          style={{ flex: 1, minHeight: 0, overflow: sized ? 'auto' : undefined, overflowX: sized ? undefined : 'auto', height: fill || sized ? '100%' : undefined }}
           dangerouslySetInnerHTML={{ __html: stamped }}
         />
       )}
@@ -820,11 +820,14 @@ function HtmlFrameCard({ data, update, writable, selected }: BlockProps) {
       data-html-selected={selected ? '1' : undefined}
       style={{
         position: 'relative',
+        display: 'flex',
+        flexDirection: 'column',
         width: '100%',
         height,
         overflow: 'visible',
-        boxShadow: selected ? SELECTED_RING : undefined,
-        borderRadius: selected ? 4 : undefined,
+        boxSizing: 'border-box',
+        border: selectBorder(selected),
+        borderRadius: 0,
       }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}

@@ -9,7 +9,6 @@ export type PageViewState = {
   group: PageGroup
 }
 
-export const PAGE_INSERT_EVENT = 'biu:page-insert'
 export const PAGE_FIND_OPEN_EVENT = 'biu:page-find-open'
 export const PAGE_OUTLINE_EVENT = 'biu:page-outline'
 export const PAGE_VIEW_EVENT = 'biu:page-view'

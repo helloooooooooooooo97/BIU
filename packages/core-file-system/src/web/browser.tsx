@@ -137,11 +137,13 @@ import { PageContentLoading } from './page-content-status.tsx'
 import { ViewPaneMenu } from './pane-more-menu.tsx'
 import { HttpError, invalidateListReads, listCollection, readJson } from './db-client.ts'
 import { savedViewRecordPath } from '../paths.ts'
-import { findViewNeighbor, indexOnPage } from './view-adjacent.ts'
+import { findViewNeighbor, indexOnPage, locateViewRecord, pageOfIndex, type ViewNeighborQuery } from './view-adjacent.ts'
+import { setViaDataCrumbs, viaDataViewId } from './data-chrome.ts'
+import { paintCollectionViews } from './collection-nav.ts'
 import { TABLE_WINDOW_OVERSCAN, medianPaintedRowPx, rememberedTableWrap, settlePaintedRowPx, tableColumnSlice, tableColumnUnchanged, tableColumnWidth, tableRowFallbackPx, tableWindowSlice, tableWindowUnchanged, tableWrapScroll, type TableColumnSlice } from './table-window.ts'
 import { forgetPreviewTotalsForPath, markPaintedListReady, rememberPreviewTotalForView, resetPaintedListReady } from './sidebar-preview.ts'
 import { DataSidebarShell } from './data-sidebar-shell.tsx'
-import { builtinAllViewId, catalogLockFilters, collectionNoun, isReadOnlyViewId, mergeTableViews, parseBuiltinScopeViewId, stubBuiltinBlockKindView, viewsForScope, type DataScope } from '../catalog-views.ts'
+import { builtinAllViewId, catalogLockFilters, collectionNoun, displayNameForView, isBuiltinAllViewId, isReadOnlyViewId, mergeTableViews, parseBuiltinScopeViewId, stampRecordId, stampRowOpenTarget, stubBuiltinBlockKindView, viewsForScope, type DataScope } from '../catalog-views.ts'
 import { SAVED_VIEW_EVENT, moveInspectorRecordsToTrash, rememberInspectorWorkingView, showRecordInInspector } from './inspector-db-route.ts'
 import { CellPop, cellUsesPop } from './cell-pop.tsx'
 import { jumpTag, loadTags, pullTags, subscribeTags } from './tag-catalog.ts'
@@ -1430,6 +1432,21 @@ const WindowedTable = memo(function WindowedTable({
   )
 })
 
+function overviewStampOf(collectionPath: string, row?: DbRecord | null, id?: string | null) {
+  const table = String(row?.tablePath ?? collectionPath).trim()
+  const source = String(row?.sourceId ?? id ?? row?.id ?? '').trim()
+  return stampRecordId(table, source)
+}
+
+type OriginViewNav = {
+  items: Array<DbRecord & { id: string }>
+  total: number
+  page: number
+  pageSize: number
+  viewId: string
+  query: ViewNeighborQuery
+}
+
 export function CollectionBrowser({
   moduleId,
   collectionPath,
@@ -1447,6 +1464,7 @@ export function CollectionBrowser({
   onOpenRecord,
   onCloseRecord,
   onCrumbTarget,
+  crumbFromData = false,
   embed = false,
   inspectorPaneId,
   sheet = false,
@@ -1469,6 +1487,7 @@ export function CollectionBrowser({
   onOpenRecord?: (recordId: string, viewId?: string | null, collection?: string) => void
   onCloseRecord?: () => void
   onCrumbTarget?: (target: CrumbTarget) => void
+  crumbFromData?: boolean
   /** 检查器内页：只有中间舞台，不写侧栏开关/视图存储。 */
   embed?: boolean
   inspectorPaneId?: string
@@ -1512,6 +1531,7 @@ export function CollectionBrowser({
   const [error, setError] = useState('')
   const [openDetailId, setOpenDetailId] = useState<string | null>(routeRecordId)
   const [detailRow, setDetailRow] = useState<DbRecord | null>(null)
+  const [originNav, setOriginNav] = useState<OriginViewNav | null>(null)
   const [detailBody, setDetailBody] = useState<unknown>(null)
   const [detailBodyStatus, setDetailBodyStatus] = useState<'loading' | 'ready' | 'failed'>('loading')
   const [detailBodyError, setDetailBodyError] = useState('')
@@ -1997,6 +2017,11 @@ export function CollectionBrowser({
   }, [nested])
 
   useEffect(() => {
+    if (embed || nested || !inspectorOpen || !detailId || !crumbFromData) return
+    showRecordInInspector(collectionPath, detailId)
+  }, [collectionPath, crumbFromData, detailId, embed, inspectorOpen, nested])
+
+  useEffect(() => {
     if (nested) return
     function onToggle(event: Event) {
       const id = (event as CustomEvent<{ id?: string }>).detail?.id
@@ -2246,12 +2271,21 @@ export function CollectionBrowser({
   reloadRef.current = reload
   const detailIdRef = useRef<string | null>(null)
   detailIdRef.current = detailId
+  const detailRowRef = useRef(detailRow)
+  detailRowRef.current = detailRow
   const contentGen = useRef(0)
   const contentVersions = useRef(new Map<string, number>())
   const contentWriteGens = useRef(new Map<string, number>())
   const contentWriteQueues = useRef(new Map<string, Promise<void>>())
   const contentWritePending = useRef(new Map<string, number>())
   const recordGen = useRef(0)
+  const sourceRecordPath = (row?: DbRecord | null, id = '') => {
+    const table = String(row?.tablePath ?? '').trim()
+    const source = String(row?.sourceId ?? '').trim()
+    if (dataPath === DATA_COLLECTION_PATH && table && source) return `${table}/${source}`
+    return `${dataPath}/${id || row?.id || ''}`
+  }
+
   const pullDetailBody = useCallback(() => {
     const id = detailIdRef.current
     if (!id) {
@@ -2260,7 +2294,7 @@ export function CollectionBrowser({
       setDetailBodyError('')
       return
     }
-    const path = `${dataPath}/${id}`
+    const path = sourceRecordPath(detailRowRef.current, id)
     const gen = ++contentGen.current
     void readJson<{ value?: unknown; version?: number }>(`/api/db/content?path=${encodeURIComponent(path)}`)
       .then((data) => {
@@ -2954,10 +2988,36 @@ export function CollectionBrowser({
     return listedSelected ?? { id: detailId }
   }, [detailId, detailRow, listColumns, listedSelected])
   const viewIndex = selected ? indexOnPage(selected.id, items, page, pageSize) : null
+  const originStamp = crumbFromData ? overviewStampOf(collectionPath, selected, detailId) : ''
+  const originIndex = crumbFromData
+    ? originNav
+      ? indexOnPage(originStamp, originNav.items, originNav.page, originNav.pageSize)
+      : null
+    : viewIndex
+  const originTotal = crumbFromData ? (originNav?.total ?? 0) : total
+  const canStepPrev = originIndex != null && originIndex > 0
+  const canStepNext = originIndex != null && originIndex < originTotal - 1
   const stepViewRecord = async (delta: -1 | 1) => {
     if (!selected || steppingView.current) return
     steppingView.current = true
     try {
+      if (crumbFromData && originNav) {
+        const hit = await findViewNeighbor({
+          currentId: originStamp,
+          delta,
+          items: originNav.items,
+          page: originNav.page,
+          pageSize: originNav.pageSize,
+          total: originNav.total,
+          query: originNav.query,
+          list: listCollection,
+        })
+        if (!hit) return
+        const stamp = stampRowOpenTarget(hit.row ?? { id: hit.id })
+        if (!stamp) return
+        onOpenRecord?.(stamp.recordId, undefined, stamp.collection)
+        return
+      }
       const hit = await findViewNeighbor({
         currentId: selected.id,
         delta,
@@ -2983,6 +3043,63 @@ export function CollectionBrowser({
       steppingView.current = false
     }
   }
+  useEffect(() => {
+    if (!crumbFromData || !detailId) {
+      setOriginNav(null)
+      return
+    }
+    const viewId = viaDataViewId()
+    const view = viewForPath(DATA_COLLECTION_PATH, viewId)
+    const size = normalizePageSize(view?.pageSize)
+    const query: ViewNeighborQuery = {
+      path: DATA_COLLECTION_PATH,
+      query: view?.query || '',
+      sortField: view?.sortField || 'updatedAt',
+      sortDir: view?.sortDir || 'desc',
+      sorts: view?.sorts,
+      filters: encodeListFilter(view?.filters ?? {}, resolveViewFilterTree(view ?? { filters: {} })),
+      columns: ['title', 'table', 'tablePath', 'sourceId', 'emoji', 'mascot'],
+    }
+    const stampId = overviewStampOf(collectionPath, detailRow, detailId)
+    let cancelled = false
+    void (async () => {
+      const located = await locateViewRecord(stampId, size, 0, query, listCollection)
+      if (cancelled) return
+      if (!located) {
+        const first = await listCollection({
+          path: DATA_COLLECTION_PATH,
+          limit: size,
+          offset: 0,
+          query: query.query,
+          sortField: query.sortField,
+          sortDir: query.sortDir,
+          sorts: query.sorts,
+          filters: query.filters,
+          columns: query.columns,
+        })
+        if (cancelled) return
+        setOriginNav({ items: first.items, total: first.total, page: 0, pageSize: size, viewId, query })
+        return
+      }
+      const nextPage = pageOfIndex(located.index, size)
+      const listed = await listCollection({
+        path: DATA_COLLECTION_PATH,
+        limit: size,
+        offset: nextPage * size,
+        query: query.query,
+        sortField: query.sortField,
+        sortDir: query.sortDir,
+        sorts: query.sorts,
+        filters: query.filters,
+        columns: query.columns,
+      })
+      if (cancelled) return
+      setOriginNav({ items: listed.items, total: listed.total, page: nextPage, pageSize: size, viewId, query })
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [collectionPath, crumbFromData, detailId, detailRow])
   useEffect(() => {
     const rows = items.map((row) => ({
       id: row.id,
@@ -3739,7 +3856,7 @@ export function CollectionBrowser({
     try {
       quietUntil.current = Date.now() + 800
       if (bodyKey && keys.length === 1 && keys[0] === bodyKey && schema?.fields[bodyKey]?.type === 'file') {
-        const path = `${dataPath}/${row.id}`
+        const path = sourceRecordPath(row, row.id)
         const value = content[bodyKey]
         const gen = (contentWriteGens.current.get(path) ?? 0) + 1
         contentWriteGens.current.set(path, gen)
@@ -3876,8 +3993,9 @@ export function CollectionBrowser({
       })
       announceListChange()
       quietUntil.current = 0
-      if (activeViewId) rememberInspectorWorkingView(targetPath, activeViewId)
-      window.setTimeout(() => showRecordInInspector(targetPath, sourceId, activeViewId), 0)
+      if (isDataOverview) setViaDataCrumbs(true, activeViewId)
+      if (activeViewId && !isDataOverview) rememberInspectorWorkingView(targetPath, activeViewId)
+      window.setTimeout(() => showRecordInInspector(targetPath, sourceId, isDataOverview ? undefined : activeViewId), 0)
     } catch (err) {
       setError(String(err))
     }
@@ -4039,32 +4157,42 @@ export function CollectionBrowser({
   }
 
   const labelOf = (row: DbRecord) => crumbRecordLabel(row, schema?.labelField)
-  const crumbs = useMemo(
-    () =>
-      buildCrumbs({
-        collection: collectionPath,
-        collectionLabel: title,
-        tables: tables.map((table) => ({
-          path: table.path,
-          label: table.view?.title ?? table.label,
-          icon: table.view?.icon,
-        })),
-        viewId: routeViewId ?? activeViewId ?? undefined,
-        viewName: activeView?.name,
-        views: views.map((view) => ({ id: view.id, name: view.name, mode: view.mode })),
-        recordId: selected?.id,
-        recordLabel: selected ? crumbRecordLabel(selected, schema?.labelField) : undefined,
-        records: selected
-          ? items.map((row) => ({
-              id: row.id,
-              label: crumbRecordLabel(row, schema?.labelField),
-              emoji: recordPreviewEmoji(row),
-              mascot: recordPreviewMascot(row),
-            }))
-          : undefined,
-      }),
-    [activeView?.name, activeViewId, collectionPath, routeViewId, schema?.labelField, selected, selected ? items : null, tables, title, views],
-  )
+  const crumbs = useMemo(() => {
+    const dataViewId = crumbFromData ? viaDataViewId() : ''
+    const dataView = crumbFromData ? viewForPath(DATA_COLLECTION_PATH, dataViewId) : null
+    const dataViews = crumbFromData ? paintCollectionViews(DATA_COLLECTION_PATH, tables) : []
+    const stampId = crumbFromData ? originStamp : ''
+    return buildCrumbs({
+      collection: crumbFromData ? DATA_COLLECTION_PATH : collectionPath,
+      collectionLabel: crumbFromData ? '数据' : title,
+      tables: tables.map((table) => ({
+        path: table.path,
+        label: table.view?.title ?? table.label,
+        icon: table.view?.icon,
+      })),
+      viewId: crumbFromData ? dataViewId : (routeViewId ?? activeViewId ?? undefined),
+      viewName: crumbFromData
+        ? displayNameForView(
+            dataViewId,
+            { path: DATA_COLLECTION_PATH, label: '数据', view: { title: '数据' } },
+            isBuiltinAllViewId(dataViewId) ? undefined : dataView?.name,
+          )
+        : activeView?.name,
+      views: crumbFromData
+        ? dataViews.map((view) => ({ id: view.id, name: view.name, mode: view.mode }))
+        : views.map((view) => ({ id: view.id, name: view.name, mode: view.mode })),
+      recordId: crumbFromData ? stampId : selected?.id,
+      recordLabel: selected ? crumbRecordLabel(selected, schema?.labelField) : undefined,
+      records: selected
+        ? (crumbFromData ? originNav?.items ?? [] : items).map((row) => ({
+            id: row.id,
+            label: crumbRecordLabel(row, schema?.labelField),
+            emoji: recordPreviewEmoji(row),
+            mascot: recordPreviewMascot(row),
+          }))
+        : undefined,
+    })
+  }, [activeView?.name, activeViewId, collectionPath, crumbFromData, originNav, originStamp, routeViewId, schema?.labelField, selected, selected ? items : null, tables, title, views])
   const currentTable = tables.find((item) => item.path === collectionPath)
   const recordKind = recordPickKind(currentTable?.view?.moduleId || currentTable?.id)
   const recordPathOf = (row: DbRecord) => recordSourcePath(collectionPath, row.id)
@@ -4577,15 +4705,17 @@ export function CollectionBrowser({
             pick={recordPick(row)}
             onOpenSplit={() => {
               const jump = chrome?.openRow?.(row)
+              const fromData = isDataOverview || crumbFromData
+              if (fromData) setViaDataCrumbs(true, isDataOverview ? activeViewId : viaDataViewId())
               if (jump && jump.kind === 'record') {
-                showRecordInInspector(jump.collection ?? collectionPath, jump.recordId, activeViewId, nested ? { newTab: true } : undefined)
+                showRecordInInspector(jump.collection ?? collectionPath, jump.recordId, fromData ? undefined : activeViewId, nested ? { newTab: true } : undefined)
                 return
               }
               if (jump && jump.kind === 'table') {
                 onOpenTable?.(jump.path, jump.viewId)
                 return
               }
-              showRecordInInspector(collectionPath, row.id, activeViewId, nested ? { newTab: true } : undefined)
+              showRecordInInspector(collectionPath, row.id, fromData ? undefined : activeViewId, nested ? { newTab: true } : undefined)
             }}
             onOpenRow={() => openRow(row)}
             onWriteEmoji={(next) => void writePatch(row, { emoji: next })}
@@ -5797,7 +5927,18 @@ export function CollectionBrowser({
         <RecordDetail
           selected={selected}
           schema={schema}
-          chrome={chrome}
+          chrome={
+            isDataOverview
+              ? {
+                  ...chrome,
+                  ...getDatabaseUi()?.chrome(String(selected.tablePath ?? '')),
+                  openRow: chrome.openRow,
+                  listViews: chrome.listViews,
+                  cells: chrome.cells,
+                  Actions: chrome.Actions,
+                }
+              : chrome
+          }
           draft={draft}
           detailBody={detailBody}
           detailBodyStatus={detailBodyStatus}
@@ -5833,8 +5974,8 @@ export function CollectionBrowser({
           onOpenRecord={(recordId, collection) => onOpenRecord?.(recordId, activeViewId, collection)}
           onPrev={() => void stepViewRecord(-1)}
           onNext={() => void stepViewRecord(1)}
-          canPrev={viewIndex == null ? total > 1 : viewIndex > 0}
-          canNext={viewIndex == null ? total > 1 : viewIndex < total - 1}
+          canPrev={canStepPrev}
+          canNext={canStepNext}
           collectionPath={collectionPath}
           recordKind={recordKind}
           inspectorPaneId={inspectorPaneId}

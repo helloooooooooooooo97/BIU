@@ -82,6 +82,10 @@ export type FsDetailBarProps = {
   columnMenu?: ReactNode
   onRetry?: () => void
   configMenu?: ReactNode
+  onPrev?: () => void
+  onNext?: () => void
+  canPrev?: boolean
+  canNext?: boolean
 }
 
 export type FsContentStatus = 'loading' | 'ready' | 'failed'

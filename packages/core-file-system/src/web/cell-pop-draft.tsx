@@ -20,7 +20,7 @@ import { asStringList, enumDisplayLabel, isRecordLinkField, isSingleRefField, pa
 
 type TagOption = { value: string; label: string; icon?: ReactNode }
 
-function TagPickPanel({
+export function TagPickPanel({
   values,
   options,
   multiple,

@@ -7,8 +7,9 @@ import { parseAppPath } from '@biu/web-session-view'
 import { buildCrumbs, pathForCrumbTarget, type Crumb, type CrumbTarget } from './sidebar-nav.ts'
 import { CrumbTrail } from './crumb-trail.tsx'
 import { defaultViewId, loadRecords, loadViews, peekRecord, subscribeCrumbs, viewForPath } from './view-storage.ts'
-import { builtinAllViewId } from '../catalog-views.ts'
-import { DATA_MODULE, DATA_MODULE_ID, databaseAllViewPath, databaseRecordPath, databaseViewPath } from './database-path.ts'
+import { builtinAllViewId, displayNameForView, isBuiltinAllViewId, stampRecordId, stampRowOpenTarget } from '../catalog-views.ts'
+import { DATA_COLLECTION_PATH, DATA_MODULE, DATA_MODULE_ID, databaseAllViewPath, databaseRecordPath, databaseViewPath } from './database-path.ts'
+import { subscribeViaDataCrumbs, viaDataCrumbsOn, viaDataViewId } from './data-chrome.ts'
 import {
   getInspectorDbPath,
   isInspectorAgentWorking,
@@ -20,9 +21,12 @@ import {
 import { getDatabaseUi } from './database-ui.ts'
 import { TableGlyph } from './nav-glyphs.tsx'
 import { paintCollectionViews, viewsForRegisteredCollection } from './collection-nav.ts'
-import { PageContentLoading } from './page-content-status.tsx'
+import { ensureFsdbStyle } from './fsdb-style.ts'
 
 const CollectionBrowser = lazy(() => import('./browser.tsx').then((m) => ({ default: m.CollectionBrowser })))
+const DataOverview = lazy(() => import('./data-overview.tsx').then((m) => ({ default: m.DataOverview })))
+
+if (typeof window !== 'undefined') ensureFsdbStyle()
 
 const tabIcons = new Map<string, ComponentType<{ className?: string }>>()
 
@@ -142,9 +146,18 @@ function splitHref(href: string) {
   return { pathname: href.slice(0, cut), search: href.slice(cut) }
 }
 
+function hrefForInspectorCrumb(target: CrumbTarget) {
+  if (target.kind === 'record' && viaDataCrumbsOn()) {
+    const stamp = stampRowOpenTarget({ id: target.recordId, tablePath: target.collection })
+    if (stamp) return databaseRecordPath(stamp.collection, stamp.recordId)
+  }
+  return pathForCrumbTarget(target)
+}
+
 function crumbsForRoute(
   href: string,
   tables: CollectionInfo[],
+  viaData = false,
 ): { crumbs: Crumb[]; collection: string; viewId?: string; recordId?: string } {
   const pathname = href.split('?')[0] || href
   const parsed = parseAppPath(pathname, [DATA_MODULE])
@@ -162,22 +175,42 @@ function crumbsForRoute(
     recordId ? listed.find((row) => row.id === recordId) ?? peekRecord(collection, recordId) : undefined
   const records =
     recordId && recordHit && !listed.some((row) => row.id === recordId) ? [...listed, recordHit] : listed
-  const crumbs = buildCrumbs({
-    collection,
-    collectionLabel: table ? tableLabel(table) : collection,
-    tables: tables.map((item) => ({ path: item.path, label: tableLabel(item), icon: item.view?.icon })),
-    viewId: collection ? activeViewId : undefined,
-    viewName: resolvedView?.name,
-    views: views.map((item) => ({ id: item.id, name: item.name, mode: item.mode })),
-    recordId,
-    recordLabel: recordHit?.label,
-    records,
-  })
+  const crumbs = viaData && collection && collection !== DATA_COLLECTION_PATH && recordId
+    ? buildCrumbs({
+        collection: DATA_COLLECTION_PATH,
+        collectionLabel: '数据',
+        tables: tables.map((item) => ({ path: item.path, label: tableLabel(item), icon: item.view?.icon })),
+        viewId: viaDataViewId(),
+        viewName: displayNameForView(
+          viaDataViewId(),
+          { path: DATA_COLLECTION_PATH, label: '数据', view: { title: '数据' } },
+          isBuiltinAllViewId(viaDataViewId()) ? undefined : viewForPath(DATA_COLLECTION_PATH, viaDataViewId())?.name,
+        ),
+        views: paintCollectionViews(DATA_COLLECTION_PATH, tables, loadViews(DATA_COLLECTION_PATH)).map((item) => ({
+          id: item.id,
+          name: item.name,
+          mode: item.mode,
+        })),
+        recordId: stampRecordId(collection, recordId),
+        recordLabel: recordHit?.label,
+        records: loadRecords(DATA_COLLECTION_PATH, viaDataViewId()),
+      })
+    : buildCrumbs({
+        collection,
+        collectionLabel: table ? tableLabel(table) : collection,
+        tables: tables.map((item) => ({ path: item.path, label: tableLabel(item), icon: item.view?.icon })),
+        viewId: collection ? activeViewId : undefined,
+        viewName: resolvedView?.name,
+        views: views.map((item) => ({ id: item.id, name: item.name, mode: item.mode })),
+        recordId,
+        recordLabel: recordHit?.label,
+        records,
+      })
   return { crumbs, collection, viewId: activeViewId, recordId }
 }
 
 function goInspector(paneId: string, target: CrumbTarget) {
-  setInspectorDbPath(paneId, pathForCrumbTarget(target))
+  setInspectorDbPath(paneId, hrefForInspectorCrumb(target))
 }
 
 export function DatabaseInspectorTab({
@@ -200,12 +233,13 @@ export function DatabaseInspectorTab({
     [collections],
   )
   const inspectorPath = useBindInspectorDbPath(id, tables, seedCollection)
-  const { collection: tabCollection } = crumbsForRoute(inspectorPath, tables)
+  const viaData = useSyncExternalStore(subscribeViaDataCrumbs, viaDataCrumbsOn, () => false)
+  const { collection: tabCollection } = crumbsForRoute(inspectorPath, tables, viaData)
   const agentWorking = useInspectorAgentWorking(tabCollection || seedCollection || '')
   const crumbRef = useRef<HTMLElement>(null)
   const tabRef = useRef<HTMLDivElement>(null)
   useViewTick()
-  const { crumbs } = crumbsForRoute(inspectorPath, tables)
+  const { crumbs } = crumbsForRoute(inspectorPath, tables, viaData)
   const leaf = crumbs.at(-1)
   const leafChoice = leaf?.choices.find((item) => item.id === leaf.id)
   useEffect(() => {
@@ -267,7 +301,7 @@ export function DatabaseInspectorTab({
               onClose()
             }}
           >
-            <XMarkIcon aria-hidden className="size-3" />
+            <XMarkIcon aria-hidden className="size-4" />
           </button>
         ) : null}
       </span>
@@ -288,7 +322,8 @@ export function DatabaseInspectorBrowse(props: SlotProps) {
   const agentWorking = useInspectorAgentWorking(seedOf(extra) || '')
   useViewTick()
   const { pathname, search } = splitHref(inspectorPath)
-  const { collection, viewId, recordId } = crumbsForRoute(pathname, tables)
+  const viaData = useSyncExternalStore(subscribeViaDataCrumbs, viaDataCrumbsOn, () => false)
+  const { collection, viewId, recordId } = crumbsForRoute(pathname, tables, viaData)
   const currentPath = collection
   const chrome = useSyncExternalStore(
     (fn) => (ui ? ui.subscribe(fn) : () => undefined),
@@ -299,6 +334,11 @@ export function DatabaseInspectorBrowse(props: SlotProps) {
   const table = tables.find((item) => item.path === currentPath)
   const title = table ? tableLabel(table) : '数据'
   const liveWorking = useInspectorAgentWorking(currentPath)
+  useEffect(() => {
+    ensureFsdbStyle()
+    void import('./browser.tsx')
+    void import('./data-overview.tsx')
+  }, [])
 
   if (!currentPath) {
     return <p className="fsdb-inspector-empty">没有数据表</p>
@@ -311,7 +351,24 @@ export function DatabaseInspectorBrowse(props: SlotProps) {
       data-testid="fsdb-agent-follow"
       aria-busy={liveWorking || agentWorking}
     >
-    <Suspense fallback={<PageContentLoading />}>
+    <Suspense fallback={null}>
+    {currentPath === DATA_COLLECTION_PATH && !recordId ? (
+    <DataOverview
+      embed
+      inspectorPaneId={id}
+      tables={tables}
+      routeViewId={viewId}
+      routeRecordId={recordId ?? null}
+      onOpenTable={(path, nextViewId) => {
+        setInspectorDbPath(id, databaseViewPath(path, nextViewId ?? builtinAllViewId(path)))
+      }}
+      onOpenView={(nextViewId) => setInspectorDbPath(id, databaseViewPath(DATA_COLLECTION_PATH, nextViewId))}
+      onOpenRecord={(path, view, recordIdNext) => {
+        setInspectorDbPath(id, databaseRecordPath(path, recordIdNext, view.id))
+      }}
+      onCrumbTarget={(target) => goInspector(id, target)}
+    />
+    ) : (
     <CollectionBrowser
       embed
       moduleId={DATA_MODULE_ID}
@@ -323,6 +380,7 @@ export function DatabaseInspectorBrowse(props: SlotProps) {
       lockedFilters={lockedFilters}
       routeRecordId={recordId ?? null}
       routeViewId={viewId}
+      crumbFromData={viaData && currentPath !== DATA_COLLECTION_PATH}
       onOpenTable={(path, nextViewId) => {
         setInspectorDbPath(id, databaseViewPath(path, nextViewId ?? builtinAllViewId(path)))
       }}
@@ -335,6 +393,11 @@ export function DatabaseInspectorBrowse(props: SlotProps) {
       }}
       resolveViews={(path, user) => viewsForRegisteredCollection(path, tables, user)}
       onCloseRecord={() => {
+        if (viaData) {
+          const dataViewId = viaDataViewId()
+          setInspectorDbPath(id, databaseViewPath(DATA_COLLECTION_PATH, dataViewId))
+          return
+        }
         setInspectorDbPath(
           id,
           viewId ? databaseViewPath(currentPath, viewId) : databaseAllViewPath(currentPath),
@@ -343,6 +406,7 @@ export function DatabaseInspectorBrowse(props: SlotProps) {
       onCrumbTarget={(target) => goInspector(id, target)}
       inspectorPaneId={id}
     />
+    )}
     </Suspense>
     </div>
   )

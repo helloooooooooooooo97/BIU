@@ -435,6 +435,14 @@ test('PagesStore reads existing markdown files from .biu/page', async () => {
   assert.equal(existsSync(join(root, PAGE_ROOT, 'home.md')), false)
 })
 
+test('page file GET authorizes through the open page path like PUT', async () => {
+  const src = await readFile(join(import.meta.dirname, 'index.ts'), 'utf8')
+  assert.match(src, /route\('GET', '\/api\/page\/file\/:name'/)
+  assert.match(src, /x-biu-resource-path/)
+  assert.match(src, /requirePath\(path, 'resource:read'\)/)
+  assert.match(src, /requirePath\(path, 'resource:update'\)/)
+})
+
 test('markdown and declared block fields pick asset pointers', () => {
   const names = collectAssetNames(
     '![cover](/api/db/file/hero.png)\n',
@@ -513,4 +521,41 @@ test('PagesStore migrates leftover .page into .biu', async () => {
   assert.match(asset, /ok/)
   assert.equal(existsSync(join(root, '.page')), false)
   assert.equal(existsSync(join(root, '.biu/assets/page')), false)
+})
+
+test('page namedDocs exposes sandbox view jsx for db_doc', async () => {
+  const ctx = new Context()
+  const registered: CollectionSpec[] = []
+  class FakeDb extends Service {
+    constructor(c: Context) {
+      super(c, 'database')
+    }
+    register(spec: CollectionSpec) {
+      registered.push(spec)
+    }
+  }
+  new FakeDb(ctx)
+  await ctx.plugin(tools)
+  const root = await mkdtemp(join(tmpdir(), 'page-named-docs-'))
+  await ctx.plugin(fsPlugin, { root })
+  await ctx.plugin(page)
+  const spec = registered[0]!
+  assert.ok(spec.namedDocs)
+  const created = await spec.create!([{ title: '沙盒页' }])
+  const id = created[0]!.id
+  const viewId = '8fdbc4f8'
+  const file = `view-${id}-${viewId}.jsx`
+  const dataFile = `view-data-${id}-${viewId}.json`
+  await spec.update!(id, { views: [{ id: viewId, name: '沙盒 1', kind: 'sandbox', file, dataFile }] })
+  const assetsDir = join(root, '.biu/assets')
+  const store = new page.PagesStore(ctx.fs.workspace as never, assetsDir)
+  await store.writeAsset(file, 'export default function App(){return <p>你好</p>}\n')
+  const row = await spec.get!(id)
+  const names = [...spec.namedDocs!.names(row!)]
+  assert.ok(names.includes(file))
+  assert.ok(names.includes(dataFile))
+  assert.ok(names.includes(`page-views-${id}.json`))
+  const read = await spec.namedDocs!.read(file)
+  assert.match(Buffer.from(read.bytes).toString('utf8'), /你好/)
+  assert.match(read.type, /javascript/)
 })

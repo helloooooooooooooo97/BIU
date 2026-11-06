@@ -21,9 +21,11 @@ import {
   isBuiltinAllViewForCollection,
   stubBuiltinCatalogView,
   catalogRowOpenTarget,
+  collectionNoun,
   displayNameForView,
   builtinTagViewId,
   isBuiltinTagViewId,
+  stampRecordId,
   stampRowOpenTarget,
   stubBuiltinScopeView,
   viewsForScope,
@@ -164,11 +166,22 @@ test('stamp rows open the source record, not a tag view', () => {
     collection: '/pages',
     recordId: 'p180',
   })
+  assert.equal(stampRecordId('/agents', 's1'), 'agents::s1')
 })
 
 test('builtin all views are read-only', () => {
   assert.equal(isReadOnlyViewId(builtinAllViewId('/agents')), true)
   assert.equal(isReadOnlyViewId('user-traj'), false)
+})
+
+test('data collection noun is 数据, not the path segment', () => {
+  assert.equal(collectionNoun({ path: '/data' }), '数据')
+  assert.equal(collectionNoun({ path: '/data', label: 'data' }), '数据')
+  assert.equal(stubBuiltinAllView(builtinAllViewId('/data'))?.name, '全部数据')
+  assert.equal(
+    displayNameForView(builtinAllViewId('/data'), { path: '/data', label: '数据', view: { title: '数据' } }),
+    '全部数据',
+  )
 })
 
 test('each registered page block kind gets a builtin view', () => {

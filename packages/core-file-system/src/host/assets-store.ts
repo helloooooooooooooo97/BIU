@@ -30,6 +30,7 @@ export function mimeOfAsset(name: string) {
   if (ext === '.json' || ext === '.excalidraw' || ext === '.timeline') return 'application/json; charset=utf-8'
   if (ext === '.html' || ext === '.htm') return 'text/html; charset=utf-8'
   if (ext === '.txt' || ext === '.md') return 'text/plain; charset=utf-8'
+  if (ext === '.js' || ext === '.jsx' || ext === '.ts' || ext === '.tsx') return 'text/javascript; charset=utf-8'
   if (ext === '.mp3') return 'audio/mpeg'
   if (ext === '.mp4') return 'video/mp4'
   return 'application/octet-stream'
