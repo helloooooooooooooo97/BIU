@@ -30,6 +30,7 @@ import {
   type ViewMode,
 } from './fields.ts'
 import { isViewCatalogField, selectedViewCatalogOption } from './view-catalog.ts'
+import { ViewCatalogGlyph } from './view-catalog-glyph.tsx'
 import { AttachmentFile, UrlHref } from './cell-media.tsx'
 import { PersonFace } from './person-cell.tsx'
 import { RecordLinkChips } from './record-link-cell.tsx'
@@ -332,9 +333,10 @@ export function DefaultCell({
     if (!option) return null
     if (plain) return <span className="fsdb-select-text">{option.name}</span>
     return (
-      <TagChips>
-        <TagChip id={option.id} label={option.name} />
-      </TagChips>
+      <span className="fsdb-viewcat">
+        <ViewCatalogGlyph icon={option.icon} />
+        <span className="fsdb-viewcat-name">{option.name}</span>
+      </span>
     )
   }
   if (fieldKey && isRecordLinkField(field, fieldKey)) {
