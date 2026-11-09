@@ -329,6 +329,7 @@ test('title cell row tools skip the overflow action menu', () => {
   assert.doesNotMatch(detail, /role="main" aria-label="记录详情">\s*\{toolbar\}/)
   assert.doesNotMatch(browser, /fsdb-detail-actionbar/)
   assert.match(detail, /chrome\?\.DetailBar/)
+  assert.match(detail, /chrome\?\.Properties/)
   assert.match(detail, /visiblePropertyKeys/)
   assert.match(detail, /visibleColumns/)
   assert.match(detail, /onVisibleColumns/)

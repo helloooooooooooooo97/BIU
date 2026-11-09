@@ -428,6 +428,9 @@ export function RecordDetail({
                     canNext={canNext}
                   />
                 ) : null}
+                {(() => {
+                  const Properties = chrome?.Properties
+                  const table = (
                 <div className="fsdb-detail-aside">
                   <table className="tasks-table is-wrap">
                     <thead>
@@ -519,6 +522,19 @@ export function RecordDetail({
                     </tbody>
                   </table>
                 </div>
+                  )
+                  if (!Properties) return table
+                  return (
+                    <Properties
+                      record={selected}
+                      schema={schema}
+                      collectionPath={collectionPath}
+                      writable={!readOnly}
+                    >
+                      {table}
+                    </Properties>
+                  )
+                })()}
                 {contentFieldKey(schema) && schema.fields[contentFieldKey(schema)!] ? (() => {
                   const key = contentFieldKey(schema)!
                   const spec = schema.fields[key]!

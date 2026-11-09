@@ -6,6 +6,7 @@ import { PageEditor } from './page-editor.tsx'
 import { PageEditorService } from './service.ts'
 import { PAGE_EDITOR_STYLE } from './style.ts'
 import { PageDetailBar } from './page-detail-bar.tsx'
+import { PageProperties } from './page-prop-host.tsx'
 import { pageBlocksCollectionView, PageBlockContent } from './page-blocks-view.tsx'
 
 export { PageEditor, PageEditor as RecordEditor } from './page-editor.tsx'
@@ -19,6 +20,8 @@ export { markdownLocusFromRange, markdownLocusFromSelection, markdownLocusFromEl
 export { PageBlocksView, PageBlockContent, PageBlockStage, pageBlocksCollectionView, PAGE_BLOCKS_VIEW_ID } from './page-blocks-view.tsx'
 export { PageHostView } from './page-host-view.tsx'
 export { parsePageViews, viewsAssetName, createPageSandboxView, loadPageViews } from './page-views.ts'
+export { PageProperties } from './page-prop-host.tsx'
+export { parsePagePropViews, propViewsAssetName, createPagePropSandboxView, loadPagePropViews } from './page-prop-views.ts'
 
 export const name = 'core-editor-ui'
 export const inject = ['databaseUi']
@@ -28,6 +31,7 @@ export function apply(ctx: Context) {
   const ui = ctx.get('databaseUi') as DatabaseUi
   // 凡是有 file 正文的表都走 Markdown；没有 contentField 的表不会用到这份 chrome。
   ctx.effect(() => ui.decorate(DEFAULT_CHROME_PATH, { Content: PageEditor, DetailBar: PageDetailBar }).dispose)
+  ctx.effect(() => ui.decorate('/pages', { Properties: PageProperties }).dispose)
   // page-blocks 用自己的正文组件盖掉上面的通配（精确路径在 mergeChrome 里后写覆盖）。
   ctx.effect(() => ui.decorate('/page-blocks', { Content: PageBlockContent }).dispose)
   ctx.effect(() => ui.registerView('/page-blocks', pageBlocksCollectionView).dispose)
