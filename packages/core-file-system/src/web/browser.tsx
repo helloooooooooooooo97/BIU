@@ -4298,6 +4298,7 @@ export function CollectionBrowser({
         <DefaultCell
           field={field}
           fieldKey={key}
+          record={row}
           records={isRecordLinkField(field, key) ? items : undefined}
           collectionPath={collectionPath}
           labelField={schema?.labelField}

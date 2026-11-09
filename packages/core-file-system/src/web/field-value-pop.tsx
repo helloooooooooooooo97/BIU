@@ -5,6 +5,7 @@ import { CellPop, cellUsesPop } from './cell-pop.tsx'
 import { CellPopDraft } from './cell-pop-draft.tsx'
 import { ActionCell, BoolCell, DefaultCell } from './fsdb-cells.tsx'
 import { fieldHasValue, isRecordLinkField, resolveFieldType } from './fields.ts'
+import { isViewCatalogField } from './view-catalog.ts'
 
 const POP_HOST_IGNORE = '.fsdb-ref-chip, .biu-tag-wrap, .fsdb-boolbtn, .fsdb-thumb-btn, .fsdb-thumb, .biu-image, .fsdb-file-tools, .fsdb-action-btn, .db-datetime, .biu-calendar'
 
@@ -55,10 +56,12 @@ export function FieldValuePop({
       />
     )
   }
-  const display = fieldHasValue(field, value) ? (
+  const display =
+    fieldHasValue(field, value) || isViewCatalogField(fieldKey) ? (
     <DefaultCell
       field={field}
       fieldKey={fieldKey}
+      record={record}
       records={records}
       collectionPath={collectionPath}
       labelField={labelField}
@@ -85,7 +88,7 @@ export function FieldValuePop({
         <CellPop
           open
           anchor={hostRef.current}
-          className={`is-${kind}${isRecordLinkField(field, fieldKey) ? ' is-record-link' : ''}`}
+          className={`is-${kind}${isRecordLinkField(field, fieldKey) ? ' is-record-link' : ''}${isViewCatalogField(fieldKey) ? ' is-select is-view-catalog' : ''}`}
           onClose={() => setOpen(false)}
         >
           <CellPopDraft

@@ -31,6 +31,11 @@ export function setTagViews(tagId: string, views: TagSandboxView[]) {
   bump()
 }
 
+export function subscribeTagViews(fn: () => void) {
+  listeners.add(fn)
+  return () => listeners.delete(fn)
+}
+
 export function useTagViews(tagId: string) {
   useSyncExternalStore(
     (fn) => {

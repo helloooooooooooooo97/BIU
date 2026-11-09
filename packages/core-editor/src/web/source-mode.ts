@@ -94,6 +94,11 @@ export function togglePageOutlineFold(recordId: string, blockId: string) {
   bump()
 }
 
+export function subscribePagePresent(fn: () => void) {
+  listeners.add(fn)
+  return () => listeners.delete(fn)
+}
+
 export function usePagePresentMode(recordId: string) {
   useSyncExternalStore(
     (fn) => {

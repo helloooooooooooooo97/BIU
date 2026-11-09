@@ -44,6 +44,11 @@ export function uniquePageViewName(pageId: string, base: string) {
   return uniqueViewName(base, getPageViews(pageId).map((item) => item.name))
 }
 
+export function subscribePageViews(fn: () => void) {
+  listeners.add(fn)
+  return () => listeners.delete(fn)
+}
+
 export function usePageViews(pageId: string) {
   useSyncExternalStore(
     (fn) => {

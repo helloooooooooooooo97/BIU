@@ -147,6 +147,11 @@ export function selectPageLayout(pageId: string, layout: PageLayoutView) {
   applyPageLayout(pageId, layout)
 }
 
+export function subscribePageLayouts(fn: () => void) {
+  listeners.add(fn)
+  return () => listeners.delete(fn)
+}
+
 export function usePageLayouts(pageId: string) {
   useSyncExternalStore(
     (fn) => {
