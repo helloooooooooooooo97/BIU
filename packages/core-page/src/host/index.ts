@@ -147,7 +147,7 @@ export function pagesCollection(store: PagesStore, index: PageBlocksIndex): Coll
         dependsOn: { type: 'multi-ref', label: '依赖', writable: true },
         views: {
           type: 'string',
-          label: '视图',
+          label: '内容视图',
           writable: true,
           description: '本页正文沙盒视图。JSON 数组：id、name、kind=sandbox、file、dataFile。改视图源码用 db_file path=/pages/<id> name=<file>。文档/大纲/表格/源码是内置正文视图，不写在这里。',
         },

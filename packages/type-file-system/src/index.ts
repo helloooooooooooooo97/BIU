@@ -635,9 +635,9 @@ export function withBuiltinFields(
   else next.createdBy = { ...BUILTIN_FIELDS.createdBy, ...next.createdBy, type: 'person', writable: false }
   if (!next.updatedBy) next.updatedBy = BUILTIN_FIELDS.updatedBy
   else next.updatedBy = { ...BUILTIN_FIELDS.updatedBy, ...next.updatedBy, type: 'person', writable: false, multiple: true }
-  next.views = { ...BUILTIN_FIELDS.views, ...next.views, type: 'string', writable: true }
-  next.propViews = { ...BUILTIN_FIELDS.propViews, ...next.propViews, type: 'string', writable: true }
-  next.layouts = { ...BUILTIN_FIELDS.layouts, ...next.layouts, type: 'string', writable: true }
+  next.views = { ...BUILTIN_FIELDS.views, ...next.views, type: 'string', writable: true, label: BUILTIN_FIELDS.views.label }
+  next.propViews = { ...BUILTIN_FIELDS.propViews, ...next.propViews, type: 'string', writable: true, label: BUILTIN_FIELDS.propViews.label }
+  next.layouts = { ...BUILTIN_FIELDS.layouts, ...next.layouts, type: 'string', writable: true, label: BUILTIN_FIELDS.layouts.label }
   if (contentField === 'content' && !next.content) next.content = BUILTIN_FIELDS.content
   const ordered: Record<string, FieldSpec> = {
     id: next.id,
