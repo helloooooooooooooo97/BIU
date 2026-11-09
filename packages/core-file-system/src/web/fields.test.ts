@@ -52,6 +52,23 @@ test('closed enums keep stable values and expose translated labels', () => {
   ])
 })
 
+test('view catalog columns show names instead of [object Object]', () => {
+  const field = { type: 'string' as const, label: '内容视图' }
+  assert.equal(
+    formatField(field, [{ id: 'site1', name: '官网', kind: 'sandbox', file: 'view-a.jsx' }]),
+    '官网',
+  )
+  assert.equal(
+    formatField(field, [
+      { id: 'a', name: '官网', kind: 'sandbox', file: 'a.jsx' },
+      { id: 'b', name: '海报', kind: 'sandbox', file: 'b.jsx' },
+    ]),
+    '官网、海报',
+  )
+  assert.equal(formatField({ type: 'string', label: '组合视图' }, [{ id: 'need', name: '需求', contentViewId: 'doc' }]), '需求')
+  assert.equal(formatField(field, []), '')
+})
+
 test('fieldHasValue hides missing list/card/board chips', () => {
   assert.equal(fieldHasValue({ type: 'string' }, ''), false)
   assert.equal(fieldHasValue({ type: 'string' }, '   '), false)
