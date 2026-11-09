@@ -59,6 +59,13 @@ test('file-system web registers 标签块 on the page editor', () => {
   assert.doesNotMatch(block, /writeRecordTag/)
   assert.doesNotMatch(block, /retagSchemaValue/)
   assert.doesNotMatch(block, /\/api\/db\/update/)
+  const host = readFileSync(resolve(import.meta.dirname, './tag-host-view.tsx'), 'utf8')
+  assert.match(host, /record:/)
+  assert.match(host, /patch:/)
+  assert.match(host, /patchTagSandbox/)
+  const views = readFileSync(resolve(import.meta.dirname, './tag-views.ts'), 'utf8')
+  assert.match(views, /export async function patchTagSandbox/)
+  assert.match(views, /\/api\/tag\/sandbox\/patch/)
 })
 
 test('file-system web injects page styles when the plugin applies', () => {

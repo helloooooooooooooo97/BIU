@@ -1786,6 +1786,53 @@ test('db_update page facet stores flat property values on the stamp', async () =
   assert.equal(listed.items[0]?.[col], '查泽雷')
 })
 
+test('sandbox patch writes only the current record and this tag', async () => {
+  const ctx = new Context()
+  const db = new DatabaseService(ctx)
+  const pages = new Map<string, Record<string, unknown>>([
+    ['p1', { id: 'p1', title: '爱乐之城' }],
+    ['p2', { id: 'p2', title: '另一页' }],
+  ])
+  db.register({
+    id: 'pages',
+    path: '/pages',
+    schema: { fields: { ...REQUIRED_RECORD_FIELDS, title: { type: 'string', writable: true } } },
+    records: { update: true },
+    list: () => [...pages.values()] as { id: string }[],
+    get: (id) => pages.get(id) as { id: string } | undefined,
+    update: (id, patch) => {
+      const next = { ...pages.get(id), ...patch, id }
+      pages.set(id, next)
+      return next as { id: string }
+    },
+  })
+  db.register(tagsCollection(db.tags))
+  const movie = await db.create('/tags', [{ title: '电影' }])
+  const movieId = String(movie.items[0]?.value.id)
+  await db.update(`/tags/${movieId}`, {
+    fields: JSON.stringify([
+      { key: 'status', type: 'string', label: '状态' },
+      { key: 'director', type: 'string', label: '导演' },
+    ]),
+  })
+  const award = await db.create('/tags', [{ title: '奖项' }])
+  const awardId = String(award.items[0]?.value.id)
+  await db.update(`/tags/${awardId}`, {
+    fields: JSON.stringify([{ key: 'oscar', type: 'boolean', label: '奥斯卡' }]),
+  })
+  await db.update('/pages/p1', {
+    tag: { tags: [movieId, awardId], values: { [movieId]: { director: '查泽雷' }, [awardId]: { oscar: true } } },
+  })
+  const patched = await db.patchTagSandbox('/pages/p1', movieId, { 状态: '进行中' })
+  assert.equal(patched.value.tag.values[movieId].status, '进行中')
+  assert.equal(patched.value.tag.values[movieId].director, '查泽雷')
+  assert.equal(patched.value.tag.values[awardId].oscar, true)
+  assert.equal(db.tags.recordTag('/pages', 'p2')?.values[movieId]?.status, undefined)
+  await assert.rejects(() => db.patchTagSandbox('/pages/p1', movieId, { 奥斯卡: true }), /unknown tag field/)
+  await assert.rejects(() => db.patchTagSandbox('/pages', movieId, { 状态: '进行中' }), /current record/)
+  await assert.rejects(() => db.patchTagSandbox(`/tags/${movieId}`, movieId, { 状态: '进行中' }), /no instance property values/)
+})
+
 test('db_update /views columns accepts array or JSON array and rejects fragments', async () => {
   const ctx = new Context()
   const db = new DatabaseService(ctx)

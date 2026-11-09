@@ -15,4 +15,5 @@ test('parseTagViews keeps sandbox catalog entries', () => {
 test('default tag sandbox source compiles', () => {
   const compiled = compileHostSource(defaultTagSandboxSource('动态规划'))
   assert.equal(compiled.ok, true)
+  if (compiled.ok) assert.match(defaultTagSandboxSource('动态规划'), /biu\.patch/)
 })

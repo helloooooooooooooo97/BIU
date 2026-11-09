@@ -21,6 +21,7 @@ import {
   isFreshSandboxAsset,
   loadTextAsset,
   markFreshSandboxAssets,
+  pageResourcePath,
   saveTextAsset,
 } from './page-file.ts'
 import { mountSandbox, unmountSandbox } from './sandbox.ts'
@@ -153,7 +154,25 @@ function useSandboxSource(
     const etag = await saveTextAsset(current, JSON.stringify(value ?? null), dataEtagRef.current, { json: true })
     if (etag) dataEtagRef.current = etag
   }
-  return { source, save, readData, writeData }
+  const record = () => {
+    const path = pageResourcePath()
+    const parts = path.split('/').filter(Boolean)
+    return { path, collection: parts[0] ? `/${parts[0]}` : '', id: parts[1] ?? '' }
+  }
+  const patchData = async (values: unknown) => {
+    const path = pageResourcePath()
+    if (!path) throw new Error('no current record')
+    const res = await fetch('/api/page/sandbox/patch', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ path, values }),
+    })
+    const data = (await res.json().catch(() => ({}))) as { error?: string }
+    if (!res.ok) throw new Error(data.error || res.statusText)
+    window.dispatchEvent(new Event('fsdb:change'))
+    return data
+  }
+  return { source, save, readData, writeData, record, patchData }
 }
 
 function SandboxPreview({
@@ -161,11 +180,15 @@ function SandboxPreview({
   onStamp,
   readData,
   writeData,
+  record,
+  patchData,
 }: {
   source: string
   onStamp?: (root: ShadowRoot) => void
   readData: () => Promise<unknown>
   writeData: (value: unknown) => Promise<void>
+  record: () => { path: string; collection: string; id: string }
+  patchData: (values: unknown) => Promise<unknown>
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null)
   const [error, setError] = useState('')
@@ -175,7 +198,7 @@ function SandboxPreview({
     const root = host.shadowRoot ?? host.attachShadow({ mode: 'open' })
     let mo: MutationObserver | undefined
     try {
-      mountSandbox(root, source, { read: readData, write: writeData })
+      mountSandbox(root, source, { read: readData, write: writeData, record, patch: patchData })
       setError('')
       onStamp?.(root)
       const target = root.querySelector('[data-sandbox-root]')
@@ -736,8 +759,13 @@ function SandboxCard({ data, update, writable, selected: nodeSelected }: BlockPr
   const title = String(data.title ?? '').trim() || '沙箱'
   const live = useSandboxSource(data, update, SANDBOX_SAMPLE)
   const source = live.source
-  const ioRef = useRef({ read: live.readData, write: live.writeData })
-  ioRef.current = { read: live.readData, write: live.writeData }
+  const ioRef = useRef({
+    read: live.readData,
+    write: live.writeData,
+    record: live.record,
+    patch: live.patchData,
+  })
+  ioRef.current = { read: live.readData, write: live.writeData, record: live.record, patch: live.patchData }
   const width = data.width
   const height = data.height == null || data.height === '' ? SANDBOX_DEFAULT_HEIGHT : data.height
   const fill = sandboxLooksFillLayout(source)
@@ -858,6 +886,8 @@ function SandboxCard({ data, update, writable, selected: nodeSelected }: BlockPr
               source={source}
               readData={() => ioRef.current.read()}
               writeData={(value) => ioRef.current.write(value)}
+              record={() => ioRef.current.record()}
+              patchData={(values) => ioRef.current.patch(values)}
               onStamp={(root) => {
                 const host = hostRef.current?.closest('[data-page-block]') ?? null
                 const key = sandboxBlockKey(host, source)

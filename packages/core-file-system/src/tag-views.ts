@@ -94,7 +94,7 @@ export function defaultTagSandboxSource(title = '') {
       <div style={{ fontSize: 12, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--biu-color-text-muted)' }}>标签沙盒</div>
       <h1 style={{ margin: 0, fontSize: 28, lineHeight: 1.25 }}>{tag.title || ${JSON.stringify(heading)}}</h1>
       <p style={{ margin: 0, color: 'var(--biu-color-text-muted)', lineHeight: 1.6 }}>
-        这是绑定本标签的特制视图。属性定义在标签上，当前块里的值用 biu.get / biu.set。
+        这是绑定本标签的特制视图。属性定义在标签上，当前记录的值用 biu.patch / Field 写回。
       </p>
       <div style={{ display: 'grid', gap: 8 }}>
         {fields.map((field) => (

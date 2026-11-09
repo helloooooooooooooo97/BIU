@@ -7,6 +7,8 @@ import { compileHostSource, loadHostComponent } from './tag-host-compile.ts'
 import {
   defaultTagSandboxSource,
   getTagViews,
+  openHostRecordPath,
+  patchTagSandbox,
   peekTagFile,
   readTagFile,
   renameTagSandboxView,
@@ -129,6 +131,7 @@ export function TagHostView({
   pack,
   values,
   writable = true,
+  recordPath = '',
   onValues,
 }: {
   tagId: string
@@ -136,6 +139,7 @@ export function TagHostView({
   pack?: CollectionSchemaPack
   values: Record<string, unknown>
   writable?: boolean
+  recordPath?: string
   onValues: (next: Record<string, unknown>) => void
 }) {
   const fileTick = useTagFileTick()
@@ -149,6 +153,37 @@ export function TagHostView({
   const showCode = tab !== 'preview'
   const hostRef = useRef<HTMLDivElement | null>(null)
   const fields = (pack?.fields ?? []).filter((field) => !field.deleted)
+  const [patchError, setPatchError] = useState('')
+
+  const liveRecordPath = () => String(recordPath || openHostRecordPath()).trim()
+
+  const writeRecordValues = useCallback(
+    async (next: Record<string, unknown>, changed?: Record<string, unknown>) => {
+      const path = liveRecordPath()
+      const bag = changed ?? next
+      if (path.startsWith('/tags/')) {
+        setPatchError('标签定义上没有实例属性值，请在贴了该标签的记录上写入')
+        onValues(next)
+        throw new Error('tag catalog has no instance property values')
+      }
+      if (!path) {
+        setPatchError('没有当前记录，已只更新本块')
+        onValues(next)
+        return
+      }
+      try {
+        await patchTagSandbox(path, tagId, bag)
+        setPatchError('')
+        onValues(next)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        setPatchError(message)
+        onValues(next)
+        throw error
+      }
+    },
+    [onValues, recordPath, tagId],
+  )
 
   useEffect(() => {
     let gone = false
@@ -177,11 +212,21 @@ export function TagHostView({
       tag: () => ({ id: tagId, title: pack?.label ?? '' }),
       fields: () => fields.map((item) => ({ key: item.key, type: item.type, label: item.label ?? item.key })),
       values: () => ({ ...values }),
+      record: () => {
+        const path = liveRecordPath()
+        const parts = path.split('/').filter(Boolean)
+        return { path, collection: parts[0] ? `/${parts[0]}` : '', id: parts[1] ?? '', tagId }
+      },
       get: (key: string) => values[String(key ?? '').trim()],
       set: (key: string, value: unknown) => {
         const nextKey = String(key ?? '').trim()
         if (!nextKey) return
-        onValues({ ...values, [nextKey]: value })
+        void writeRecordValues({ ...values, [nextKey]: value }, { [nextKey]: value })
+      },
+      patch: async (bag: unknown) => {
+        if (!bag || typeof bag !== 'object' || Array.isArray(bag)) throw new Error('patch values must be an object')
+        const nextBag = bag as Record<string, unknown>
+        await writeRecordValues({ ...values, ...nextBag }, nextBag)
       },
       read: async () => {
         if (!view?.dataFile) return null
@@ -198,14 +243,22 @@ export function TagHostView({
         await writeTagFile(tagId, view.dataFile, JSON.stringify(value ?? null, null, 2), 'application/json')
       },
     }),
-    [fields, onValues, pack?.label, tagId, values, view?.dataFile],
+    [fields, pack?.label, tagId, values, view?.dataFile, writeRecordValues],
   )
 
   const Field = useCallback(
     (props: { name?: string }) => (
-      <HostField name={String(props.name ?? '')} pack={pack} values={values} writable={writable} onSet={(key, value) => onValues({ ...values, [key]: value })} />
+      <HostField
+        name={String(props.name ?? '')}
+        pack={pack}
+        values={values}
+        writable={writable}
+        onSet={(key, value) => {
+          void writeRecordValues({ ...values, [key]: value }, { [key]: value })
+        }}
+      />
     ),
-    [onValues, pack, values, writable],
+    [pack, values, writable, writeRecordValues],
   )
 
   useEffect(() => {
@@ -232,6 +285,8 @@ export function TagHostView({
         values: () => envRef.current.biu.values(),
         get: (key: string) => envRef.current.biu.get(key),
         set: (key: string, value: unknown) => envRef.current.biu.set(key, value),
+        record: () => envRef.current.biu.record(),
+        patch: (bag: unknown) => envRef.current.biu.patch(bag),
         read: () => envRef.current.biu.read(),
         write: (value: unknown) => envRef.current.biu.write(value),
       }
@@ -273,7 +328,14 @@ export function TagHostView({
         {showPreview ? (
           <div className="page-host-preview-pane" data-testid="tag-host-preview">
             {preview.Preview ? (
-              <preview.Preview />
+              <>
+                <preview.Preview />
+                {patchError ? (
+                  <div className="page-host-error" data-testid="tag-host-patch-error">
+                    写入失败 · {patchError}
+                  </div>
+                ) : null}
+              </>
             ) : (
               <div className="page-host-error" data-testid="tag-host-error">
                 {preview.error || '无法渲染'}
@@ -294,8 +356,8 @@ export function TagHostView({
                 if (view?.file && writable) void writeTagFile(tagId, view.file, next)
               }}
             />
-            <div className="page-host-compile" data-testid="tag-host-compile" data-ok={compiled.ok ? '1' : '0'}>
-              {compiled.ok ? '编译通过' : `编译失败 · ${compiled.error}`}
+            <div className="page-host-compile" data-testid="tag-host-compile" data-ok={compiled.ok && !patchError ? '1' : '0'}>
+              {compiled.ok ? (patchError ? `写入失败 · ${patchError}` : '编译通过') : `编译失败 · ${compiled.error}`}
             </div>
           </div>
         ) : null}

@@ -97,6 +97,7 @@ export function TagContent({ record, value, writable, onChange }: FsContentProps
         viewId={sandbox.id}
         pack={pack ?? undefined}
         values={{}}
+        recordPath={`/tags/${tagId}`}
         writable={writable !== false}
         onValues={() => undefined}
       />
