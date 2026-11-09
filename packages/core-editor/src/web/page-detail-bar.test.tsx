@@ -7,26 +7,50 @@ import { getPageViews, setPageViews } from './page-views.ts'
 import { getPagePropPresentMode, PAGE_PROP_TABLE_VIEW_ID, setPagePropPresentMode } from './page-prop-present.ts'
 import { setPagePropViews } from './page-prop-views.ts'
 import { getPageFind, getPageViewState, patchPageFind, patchPageViewState } from './page-view-state.ts'
+import { resetPageLayoutState } from './page-layouts.ts'
 
-afterEach(() => cleanup())
+afterEach(() => {
+  cleanup()
+  resetPageLayoutState('p0133')
+  setPagePresentMode('p0133', 'doc')
+  setPageSourceMode('p0133', false)
+  setPagePropPresentMode('p0133', PAGE_PROP_TABLE_VIEW_ID)
+})
 
-test('detail bar lists page-bound sandbox views', () => {
+test('copying a layout uses unique 副本 names like table views', async () => {
+  const original = globalThis.fetch
+  globalThis.fetch = async () => new Response('{}', { status: 200 })
+  try {
+    const { getByText, getAllByTitle, findByText } = render(<PageDetailBar record={{ id: 'p0133', title: '演示' }} />)
+    fireEvent.click(getByText('默认'))
+    fireEvent.click(getAllByTitle('拷贝视图')[0])
+    assert.ok(await findByText('默认 副本'))
+    fireEvent.click(getAllByTitle('拷贝视图')[0])
+    assert.ok(await findByText('默认 副本 2'))
+  } finally {
+    globalThis.fetch = original
+  }
+})
+
+test('left view menu composes layouts and does not list content modes', () => {
   setPagePresentMode('p0133', 'doc')
   setPageViews('p0133', [
     { id: 'site1', name: '官网', kind: 'sandbox', file: 'view-p0133-site1.jsx', dataFile: 'view-data-p0133-site1.json' },
   ])
   const { getByText, getByTestId, getByLabelText, queryByText } = render(<PageDetailBar record={{ id: 'p0133', title: '演示' }} />)
-  fireEvent.click(getByText('文档'))
+  fireEvent.click(getByText('默认'))
+  assert.ok(getByText('添加视图'))
   assert.equal(queryByText('新建沙盒视图'), null)
   assert.equal(queryByText('新建内容视图'), null)
-  fireEvent.click(getByTestId('page-view-site1'))
-  assert.equal(getPagePresentMode('p0133'), 'site1')
-  assert.ok(getByText('官网'))
+  assert.equal(queryByText('大纲'), null)
+  assert.equal(queryByText('源码'), null)
   fireEvent.click(getByLabelText('查看模式'))
   assert.ok(getByText('新建内容视图'))
+  fireEvent.click(getByTestId('page-view-site1'))
+  assert.equal(getPagePresentMode('p0133'), 'site1')
 })
 
-test('detail bar deletes a sandbox view and leaves the document', async () => {
+test('detail bar deletes a content sandbox from the present-mode menu', async () => {
   setPagePresentMode('p0133', 'site1')
   setPageViews('p0133', [
     { id: 'site1', name: '官网', kind: 'sandbox', file: 'view-p0133-site1.jsx', dataFile: 'view-data-p0133-site1.json' },
@@ -34,10 +58,9 @@ test('detail bar deletes a sandbox view and leaves the document', async () => {
   const original = globalThis.fetch
   globalThis.fetch = async () => new Response('{}', { status: 200 })
   try {
-    const { getByLabelText, getByText, getAllByTitle } = render(<PageDetailBar record={{ id: 'p0133', title: '演示' }} />)
-    fireEvent.click(getByText('官网'))
-    assert.ok(getAllByTitle('拷贝视图').length)
-    assert.ok(getByLabelText('重命名 官网'))
+    const { getByLabelText, getByText } = render(<PageDetailBar record={{ id: 'p0133', title: '演示' }} />)
+    fireEvent.click(getByLabelText('查看模式'))
+    assert.ok(getByText('官网'))
     fireEvent.click(getByLabelText('删除 官网'))
     await waitFor(() => {
       assert.equal(getPageViews('p0133').length, 0)
@@ -48,10 +71,12 @@ test('detail bar deletes a sandbox view and leaves the document', async () => {
   }
 })
 
-test('detail bar switches document and source modes', () => {
+test('detail bar switches document and source modes from the content icon', () => {
   setPageSourceMode('p0133', false)
-  const { getByText, getByLabelText, container } = render(<PageDetailBar record={{ id: 'p0133' }} />)
-  fireEvent.click(getByText('文档'))
+  const { getByText, getByLabelText, container, queryByText } = render(<PageDetailBar record={{ id: 'p0133' }} />)
+  fireEvent.click(getByText('默认'))
+  assert.equal(queryByText('大纲'), null)
+  fireEvent.click(getByLabelText('查看模式'))
   fireEvent.click(getByText('大纲'))
   assert.equal(getPagePresentMode('p0133'), 'outline')
   fireEvent.click(getByLabelText('查看模式'))
@@ -142,7 +167,7 @@ test('detail bar visible columns host the same flyout as the table view', () => 
   assert.ok(getByText('视图列'))
 })
 
-test('detail bar property views stay independent from content present mode', () => {
+test('property and content presentation bind to the active layout independently', () => {
   setPagePresentMode('p0133', 'doc')
   setPagePropPresentMode('p0133', PAGE_PROP_TABLE_VIEW_ID)
   setPagePropViews('p0133', [
@@ -154,7 +179,7 @@ test('detail bar property views stay independent from content present mode', () 
   fireEvent.click(getByTestId('page-prop-view-card1'))
   assert.equal(getPagePropPresentMode('p0133'), 'card1')
   assert.equal(getPagePresentMode('p0133'), 'doc')
-  fireEvent.click(getByText('文档'))
+  fireEvent.click(getByLabelText('查看模式'))
   fireEvent.click(getByText('大纲'))
   assert.equal(getPagePresentMode('p0133'), 'outline')
   assert.equal(getPagePropPresentMode('p0133'), 'card1')

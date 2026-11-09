@@ -22,6 +22,7 @@ export { PageHostView } from './page-host-view.tsx'
 export { parsePageViews, viewsAssetName, createPageSandboxView, loadPageViews } from './page-views.ts'
 export { PageProperties } from './page-prop-host.tsx'
 export { parsePagePropViews, propViewsAssetName, createPagePropSandboxView, loadPagePropViews } from './page-prop-views.ts'
+export { parsePageLayouts, layoutsAssetName, PAGE_DEFAULT_LAYOUT_ID, loadPageLayouts } from './page-layouts.ts'
 
 export const name = 'core-editor-ui'
 export const inject = ['databaseUi']

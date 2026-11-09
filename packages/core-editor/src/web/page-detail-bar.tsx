@@ -22,8 +22,8 @@ import {
   TableCellsIcon,
   AdjustmentsHorizontalIcon,
 } from '@heroicons/react/16/solid'
-import { setPagePresentMode, usePagePresentMode } from './source-mode.ts'
-import { PAGE_PROP_TABLE_VIEW_ID, setPagePropPresentMode, usePagePropPresentMode } from './page-prop-present.ts'
+import { usePagePresentMode } from './source-mode.ts'
+import { PAGE_PROP_TABLE_VIEW_ID, usePagePropPresentMode } from './page-prop-present.ts'
 import {
   copyPagePropSandboxView,
   createPagePropSandboxView,
@@ -33,12 +33,22 @@ import {
   usePagePropViews,
 } from './page-prop-views.ts'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
-import { copyPageSandboxView, createPageSandboxView, deletePageSandboxView, loadPageViews, renamePageSandboxView, usePageViews } from './page-views.ts'
+import { copyPageSandboxView, createPageSandboxView, deletePageSandboxView, loadPageViews, usePageViews } from './page-views.ts'
+import {
+  addPageLayout,
+  copyPageLayout,
+  deletePageLayout,
+  loadPageLayouts,
+  renamePageLayout,
+  selectPageLayout,
+  patchActivePageLayout,
+  useActivePageLayout,
+  usePageLayouts,
+} from './page-layouts.ts'
 import { kindLabel } from './block-id.ts'
 import {
   pageFilterActive,
   patchPageFind,
-  patchPageViewState,
   usePageFind,
   usePageViewState,
   type PageSort,
@@ -95,6 +105,8 @@ export function PageDetailBar({
 }: FsDetailBarProps) {
   const present = usePagePresentMode(record.id)
   const pageViews = usePageViews(record.id)
+  const layouts = usePageLayouts(record.id)
+  const activeLayout = useActivePageLayout(record.id)
   const propPresent = usePagePropPresentMode(record.id)
   const propViews = usePagePropViews(record.id)
   const view = usePageViewState(record.id)
@@ -112,12 +124,12 @@ export function PageDetailBar({
   const configRef = useRef<HTMLDivElement>(null)
   const toolbarRef = useRef<HTMLDivElement>(null)
   useStickyToolbar(toolbarRef)
-  const custom = pageViews.find((item) => item.id === present)
-  const current = custom
-    ? { id: custom.id, label: custom.name, Icon: Squares2X2Icon }
+  const contentMode = pageViews.find((item) => item.id === present)
+    ? { id: present, label: pageViews.find((item) => item.id === present)!.name, Icon: Squares2X2Icon }
     : (MODES.find((item) => item.id === present) ?? MODES[0])
-  const CurrentIcon = current.Icon
+  const CurrentIcon = contentMode.Icon
   const [creatingView, setCreatingView] = useState(false)
+  const [creatingLayout, setCreatingLayout] = useState(false)
   const [renamingView, setRenamingView] = useState('')
   const [renameDraft, setRenameDraft] = useState('')
   const [creatingPropView, setCreatingPropView] = useState(false)
@@ -137,7 +149,8 @@ export function PageDetailBar({
     setOpen(null)
     void loadPageViews(record.id, record.views)
     void loadPagePropViews(record.id, record.propViews)
-  }, [record.id, record.views, record.propViews])
+    void loadPageLayouts(record.id, record.layouts)
+  }, [record.id, record.views, record.propViews, record.layouts])
 
   useEffect(() => {
     if (!find.open) return
@@ -182,69 +195,38 @@ export function PageDetailBar({
               className={`tasks-viewdd-btn tasks-viewtab is-active${open === 'view' ? ' is-menu' : ''}`}
               aria-haspopup="menu"
               aria-expanded={open === 'view'}
+              data-testid="page-layout-tab"
               onClick={() => toggle('view')}
             >
               <CurrentIcon aria-hidden className="size-[14px]" />
-              <span className="tasks-viewdd-name">{current.label}</span>
+              <span className="tasks-viewdd-name">{activeLayout.name}</span>
             </button>
           </div>
           {open === 'view' ? (
             <HeadlessDismiss onDismiss={() => setOpen(null)} insideRef={viewRef}>
               <div className="fsdb-tool-flyout tasks-viewdd-menu" role="menu">
                 <div className="tasks-sort-list">
-                  {MODES.map((item) => (
-                    <div key={item.id} className={`tasks-viewdd-item${item.id === current.id ? ' is-active' : ''}`}>
-                      <button
-                        type="button"
-                        role="menuitemradio"
-                        aria-checked={item.id === current.id}
-                        className="tasks-viewdd-item-main fsdb-tool-row"
-                        onClick={() => {
-                          setPagePresentMode(record.id, item.id)
-                          setOpen(null)
-                        }}
-                      >
-                        <item.Icon aria-hidden className="tasks-viewdd-item-ico" />
-                        <span className="tasks-viewdd-item-name">{item.label}</span>
-                      </button>
-                      <span className="tasks-viewdd-item-actions">
-                        <button
-                          type="button"
-                          className="tasks-viewdd-act"
-                          title="拷贝视图"
-                          onMouseDown={(event) => event.preventDefault()}
-                          onClick={(event) => {
-                            event.preventDefault()
-                            event.stopPropagation()
-                            void copyPageSandboxView(record.id, item.id, String(record.title ?? ''), item.label).catch(() => undefined)
-                          }}
-                        >
-                          <Square2StackIcon aria-hidden className="size-[14px]" />
-                        </button>
-                      </span>
-                    </div>
-                  ))}
-                  {pageViews.map((item) => (
-                    <div key={item.id} className={`tasks-viewdd-item${item.id === present ? ' is-active' : ''}`}>
+                  {layouts.map((item) => (
+                    <div key={item.id} className={`tasks-viewdd-item${item.id === activeLayout.id ? ' is-active' : ''}`}>
                       {renamingView === item.id ? (
                         <div className="tasks-viewdd-item-main fsdb-tool-row">
                           <Squares2X2Icon aria-hidden className="tasks-viewdd-item-ico" />
                           <input
                             className="tasks-viewdd-item-name"
-                            aria-label={`沙盒视图名称 ${item.name}`}
+                            aria-label={`视图名称 ${item.name}`}
                             value={renameDraft}
                             autoFocus
                             onChange={(event) => setRenameDraft(event.target.value)}
                             onKeyDown={(event) => {
                               if (event.key === 'Enter') {
                                 event.preventDefault()
-                                void renamePageSandboxView(record.id, item.id, renameDraft).catch(() => undefined)
+                                void renamePageLayout(record.id, item.id, renameDraft).catch(() => undefined)
                                 setRenamingView('')
                               }
                               if (event.key === 'Escape') setRenamingView('')
                             }}
                             onBlur={() => {
-                              void renamePageSandboxView(record.id, item.id, renameDraft).catch(() => undefined)
+                              void renamePageLayout(record.id, item.id, renameDraft).catch(() => undefined)
                               setRenamingView('')
                             }}
                           />
@@ -253,11 +235,11 @@ export function PageDetailBar({
                         <button
                           type="button"
                           role="menuitemradio"
-                          aria-checked={item.id === present}
+                          aria-checked={item.id === activeLayout.id}
                           className="tasks-viewdd-item-main fsdb-tool-row"
-                          data-testid={`page-view-${item.id}`}
+                          data-testid={`page-layout-${item.id}`}
                           onClick={() => {
-                            setPagePresentMode(record.id, item.id)
+                            selectPageLayout(record.id, item)
                             setOpen(null)
                           }}
                         >
@@ -274,44 +256,70 @@ export function PageDetailBar({
                           onClick={(event) => {
                             event.preventDefault()
                             event.stopPropagation()
-                            void copyPageSandboxView(record.id, item.id, String(record.title ?? '')).catch(() => undefined)
+                            void copyPageLayout(record.id, item).catch(() => undefined)
                           }}
                         >
                           <Square2StackIcon aria-hidden className="size-[14px]" />
                         </button>
-                        <button
-                          type="button"
-                          className="tasks-viewdd-act"
-                          title="重命名"
-                          aria-label={`重命名 ${item.name}`}
-                          onMouseDown={(event) => event.preventDefault()}
-                          onClick={(event) => {
-                            event.preventDefault()
-                            event.stopPropagation()
-                            setRenamingView(item.id)
-                            setRenameDraft(item.name)
-                          }}
-                        >
-                          <PencilSquareIcon aria-hidden className="size-[14px]" />
-                        </button>
-                        <button
-                          type="button"
-                          className="tasks-viewdd-act is-danger"
-                          title="删除"
-                          aria-label={`删除 ${item.name}`}
-                          data-testid={`page-view-delete-${item.id}`}
-                          onMouseDown={(event) => event.preventDefault()}
-                          onClick={(event) => {
-                            event.preventDefault()
-                            event.stopPropagation()
-                            void deletePageSandboxView(record.id, item.id).catch(() => undefined)
-                          }}
-                        >
-                          <TrashGlyph aria-hidden className="size-[14px]" />
-                        </button>
+                        {item.builtin ? null : (
+                          <>
+                            <button
+                              type="button"
+                              className="tasks-viewdd-act"
+                              title="重命名"
+                              aria-label={`重命名 ${item.name}`}
+                              onMouseDown={(event) => event.preventDefault()}
+                              onClick={(event) => {
+                                event.preventDefault()
+                                event.stopPropagation()
+                                setRenamingView(item.id)
+                                setRenameDraft(item.name)
+                              }}
+                            >
+                              <PencilSquareIcon aria-hidden className="size-[14px]" />
+                            </button>
+                            <button
+                              type="button"
+                              className="tasks-viewdd-act is-danger"
+                              title="删除"
+                              aria-label={`删除 ${item.name}`}
+                              data-testid={`page-layout-delete-${item.id}`}
+                              onMouseDown={(event) => event.preventDefault()}
+                              onClick={(event) => {
+                                event.preventDefault()
+                                event.stopPropagation()
+                                void deletePageLayout(record.id, item.id).catch(() => undefined)
+                              }}
+                            >
+                              <TrashGlyph aria-hidden className="size-[14px]" />
+                            </button>
+                          </>
+                        )}
                       </span>
                     </div>
                   ))}
+                </div>
+                <div className="tasks-viewdd-foot">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="tasks-viewdd-saveas fsdb-tool-row font-medium"
+                    data-testid="page-layout-create"
+                    disabled={creatingLayout}
+                    onClick={() => {
+                      if (creatingLayout) return
+                      setCreatingLayout(true)
+                      void addPageLayout(record.id)
+                        .catch(() => undefined)
+                        .finally(() => {
+                          setCreatingLayout(false)
+                          setOpen(null)
+                        })
+                    }}
+                  >
+                    <PlusIcon aria-hidden className="size-[14px]" />
+                    {creatingLayout ? '正在创建…' : '添加视图'}
+                  </button>
                 </div>
               </div>
             </HeadlessDismiss>
@@ -394,7 +402,7 @@ export function PageDetailBar({
                         className="tasks-viewdd-item-main fsdb-tool-row"
                         data-testid="page-prop-view-table"
                         onClick={() => {
-                          setPagePropPresentMode(record.id, PAGE_PROP_TABLE_VIEW_ID)
+                          void patchActivePageLayout(record.id, { propViewId: PAGE_PROP_TABLE_VIEW_ID })
                           setOpen(null)
                         }}
                       >
@@ -410,7 +418,11 @@ export function PageDetailBar({
                           onClick={(event) => {
                             event.preventDefault()
                             event.stopPropagation()
-                            void copyPagePropSandboxView(record.id, PAGE_PROP_TABLE_VIEW_ID, String(record.title ?? ''), '表格').catch(() => undefined)
+                            void copyPagePropSandboxView(record.id, PAGE_PROP_TABLE_VIEW_ID, String(record.title ?? ''), '表格')
+                              .then((view) => {
+                                if (view) return patchActivePageLayout(record.id, { propViewId: view.id })
+                              })
+                              .catch(() => undefined)
                           }}
                         >
                           <Square2StackIcon aria-hidden className="size-[14px]" />
@@ -450,7 +462,7 @@ export function PageDetailBar({
                             className="tasks-viewdd-item-main fsdb-tool-row"
                             data-testid={`page-prop-view-${item.id}`}
                             onClick={() => {
-                              setPagePropPresentMode(record.id, item.id)
+                              void patchActivePageLayout(record.id, { propViewId: item.id })
                               setOpen(null)
                             }}
                           >
@@ -467,7 +479,11 @@ export function PageDetailBar({
                             onClick={(event) => {
                               event.preventDefault()
                               event.stopPropagation()
-                              void copyPagePropSandboxView(record.id, item.id, String(record.title ?? '')).catch(() => undefined)
+                              void copyPagePropSandboxView(record.id, item.id, String(record.title ?? ''))
+                                .then((view) => {
+                                  if (view) return patchActivePageLayout(record.id, { propViewId: view.id })
+                                })
+                                .catch(() => undefined)
                             }}
                           >
                             <Square2StackIcon aria-hidden className="size-[14px]" />
@@ -517,6 +533,9 @@ export function PageDetailBar({
                         if (creatingPropView) return
                         setCreatingPropView(true)
                         void createPagePropSandboxView(record.id, String(record.title ?? ''), '新视图')
+                          .then((view) => {
+                            if (view) return patchActivePageLayout(record.id, { propViewId: view.id })
+                          })
                           .catch(() => undefined)
                           .finally(() => {
                             setCreatingPropView(false)
@@ -551,16 +570,66 @@ export function PageDetailBar({
                     key={item.id}
                     type="button"
                     role="menuitemradio"
-                    aria-checked={item.id === current.id}
-                    className={`tasks-viewdd-item-main fsdb-tool-row${item.id === current.id ? ' is-active' : ''}`}
+                    aria-checked={item.id === present}
+                    className={`tasks-viewdd-item-main fsdb-tool-row${item.id === present ? ' is-active' : ''}`}
                     onClick={() => {
-                      setPagePresentMode(record.id, item.id)
+                      void patchActivePageLayout(record.id, { contentViewId: item.id })
                       setOpen(null)
                     }}
                   >
                     <item.Icon aria-hidden className="tasks-viewdd-item-ico" />
                     <span className="tasks-viewdd-item-name">{item.label}</span>
                   </button>
+                ))}
+                {pageViews.map((item) => (
+                  <div key={item.id} className={`tasks-viewdd-item${item.id === present ? ' is-active' : ''}`}>
+                    <button
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={item.id === present}
+                      className="tasks-viewdd-item-main fsdb-tool-row"
+                      data-testid={`page-view-${item.id}`}
+                      onClick={() => {
+                        void patchActivePageLayout(record.id, { contentViewId: item.id })
+                        setOpen(null)
+                      }}
+                    >
+                      <Squares2X2Icon aria-hidden className="tasks-viewdd-item-ico" />
+                      <span className="tasks-viewdd-item-name">{item.name}</span>
+                    </button>
+                    <span className="tasks-viewdd-item-actions">
+                      <button
+                        type="button"
+                        className="tasks-viewdd-act"
+                        title="拷贝视图"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={(event) => {
+                          event.preventDefault()
+                          event.stopPropagation()
+                          void copyPageSandboxView(record.id, item.id, String(record.title ?? '')).then((view) => {
+                            if (view) return patchActivePageLayout(record.id, { contentViewId: view.id })
+                          }).catch(() => undefined)
+                        }}
+                      >
+                        <Square2StackIcon aria-hidden className="size-[14px]" />
+                      </button>
+                      <button
+                        type="button"
+                        className="tasks-viewdd-act is-danger"
+                        title="删除"
+                        aria-label={`删除 ${item.name}`}
+                        data-testid={`page-view-delete-${item.id}`}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={(event) => {
+                          event.preventDefault()
+                          event.stopPropagation()
+                          void deletePageSandboxView(record.id, item.id).catch(() => undefined)
+                        }}
+                      >
+                        <TrashGlyph aria-hidden className="size-[14px]" />
+                      </button>
+                    </span>
+                  </div>
                 ))}
                 <div className="tasks-viewdd-foot">
                   <button
@@ -573,6 +642,9 @@ export function PageDetailBar({
                       if (creatingView) return
                       setCreatingView(true)
                       void createPageSandboxView(record.id, String(record.title ?? ''), '新视图')
+                        .then((view) => {
+                          if (view) return patchActivePageLayout(record.id, { contentViewId: view.id })
+                        })
                         .catch(() => undefined)
                         .finally(() => {
                           setCreatingView(false)
@@ -607,7 +679,7 @@ export function PageDetailBar({
                     key={item.id}
                     label={item.label}
                     on={view.sort === item.id}
-                    onToggle={() => patchPageViewState(record.id, { sort: item.id })}
+                    onToggle={() => void patchActivePageLayout(record.id, { sort: item.id })}
                   />
                 ))}
               </div>
@@ -631,7 +703,7 @@ export function PageDetailBar({
                 <Row
                   label="全部类型"
                   on={!filterOn}
-                  onToggle={() => patchPageViewState(record.id, { filterKinds: [] })}
+                  onToggle={() => void patchActivePageLayout(record.id, { filterKinds: [] })}
                 />
                 {KINDS.map((kind) => (
                   <Row
@@ -641,7 +713,7 @@ export function PageDetailBar({
                     onToggle={() => {
                       const has = view.filterKinds.includes(kind)
                       const next = has ? view.filterKinds.filter((item) => item !== kind) : [...view.filterKinds, kind]
-                      patchPageViewState(record.id, { filterKinds: next })
+                      void patchActivePageLayout(record.id, { filterKinds: next })
                     }}
                   />
                 ))}
