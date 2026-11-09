@@ -27,6 +27,11 @@ export function setPagePropViews(pageId: string, views: PagePropSandboxView[]) {
   bump()
 }
 
+export function subscribePagePropViews(fn: () => void) {
+  listeners.add(fn)
+  return () => listeners.delete(fn)
+}
+
 export function usePagePropViews(pageId: string) {
   useSyncExternalStore(
     (fn) => {

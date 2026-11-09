@@ -1,5 +1,7 @@
 import { test } from 'vitest'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { Context, Service } from 'cordis'
 import { DEFAULT_CHROME_PATH, type CollectionChrome, type CollectionViewType, type DatabaseUi } from '@biu/type-file-system/ui'
 import * as editorUi from './index.ts'
@@ -55,4 +57,6 @@ test('core-editor paints Content as the default for every file body, and page-bl
   assert.deepEqual(ui.paths, [DEFAULT_CHROME_PATH, '/pages', '/page-blocks'])
   assert.deepEqual(ui.registered, [{ path: '/page-blocks', id: 'blocks', label: '组件' }])
   assert.ok(ctx.pageEditor)
+  const src = readFileSync(resolve(import.meta.dirname, './index.ts'), 'utf8')
+  assert.match(src, /bindPageViewCatalogHost/)
 })

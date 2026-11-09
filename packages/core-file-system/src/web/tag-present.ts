@@ -31,6 +31,11 @@ function bump() {
   for (const fn of listeners) fn()
 }
 
+export function subscribeTagPresent(fn: () => void) {
+  listeners.add(fn)
+  return () => listeners.delete(fn)
+}
+
 export function getTagPresentMode(tagId: string) {
   const id = String(tagId ?? '').trim()
   if (!id) return TAG_TABLE_VIEW_ID

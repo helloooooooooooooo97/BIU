@@ -29,6 +29,7 @@ import {
   resolveFieldType,
   type ViewMode,
 } from './fields.ts'
+import { isViewCatalogField, selectedViewCatalogOption } from './view-catalog.ts'
 import { AttachmentFile, UrlHref } from './cell-media.tsx'
 import { PersonFace } from './person-cell.tsx'
 import { RecordLinkChips } from './record-link-cell.tsx'
@@ -98,7 +99,8 @@ export function fieldDraftValue(field: FieldSpec, value: unknown): string {
     return JSON.stringify(value, null, 2)
   }
   if (value == null) return ''
-  return String(value)
+  const catalog = formatField(field, value)
+  return catalog
 }
 
 export function draftFromRecord(schema: CollectionSchema, row: DbRecord, bodyKey: string | null | undefined, detailBody: unknown) {
@@ -300,6 +302,7 @@ export function DefaultCell({
   field,
   value,
   fieldKey,
+  record,
   records,
   collectionPath,
   labelField,
@@ -311,6 +314,7 @@ export function DefaultCell({
   field: FieldSpec
   value: unknown
   fieldKey?: string
+  record?: DbRecord
   records?: DbRecord[]
   collectionPath?: string
   labelField?: string
@@ -322,6 +326,16 @@ export function DefaultCell({
   const kind = resolveFieldType(field)
   if (kind === 'action') {
     return <ActionCell field={field} fieldKey={fieldKey ?? ''} onRun={onRun} />
+  }
+  if (fieldKey && record && collectionPath && isViewCatalogField(fieldKey)) {
+    const option = selectedViewCatalogOption(collectionPath, record, fieldKey)
+    if (!option) return null
+    if (plain) return <span className="fsdb-select-text">{option.name}</span>
+    return (
+      <TagChips>
+        <TagChip id={option.id} label={option.name} />
+      </TagChips>
+    )
   }
   if (fieldKey && isRecordLinkField(field, fieldKey)) {
     return (

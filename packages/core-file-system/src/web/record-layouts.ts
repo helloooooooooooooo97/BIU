@@ -26,6 +26,11 @@ function bump() {
   for (const fn of listeners) fn()
 }
 
+export function subscribeRecordLayouts(fn: () => void) {
+  listeners.add(fn)
+  return () => listeners.delete(fn)
+}
+
 export function recordViewKey(collectionPath: string, recordId: string) {
   return `${String(collectionPath ?? '').trim() || '/'}::${String(recordId ?? '').trim()}`
 }

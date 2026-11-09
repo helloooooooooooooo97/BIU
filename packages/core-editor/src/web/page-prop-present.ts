@@ -53,6 +53,11 @@ export function setPagePropPresentMode(recordId: string, mode: string) {
   bump()
 }
 
+export function subscribePagePropPresent(fn: () => void) {
+  listeners.add(fn)
+  return () => listeners.delete(fn)
+}
+
 export function usePagePropPresentMode(recordId: string) {
   useSyncExternalStore(
     (fn) => {
