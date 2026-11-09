@@ -776,6 +776,8 @@ test('create record sits at the right of the toolbar with a blue label', () => {
   const glyph = readFileSync(resolve(import.meta.dirname, './table-glyph.tsx'), 'utf8')
   assert.match(glyph, /export function idleTableIconKind/)
   assert.match(glyph, /name === 'check-circle'/)
+  assert.match(glyph, /circle-stack/)
+  assert.match(glyph, /CircleStackIcon/)
   assert.match(titleFn, /toolsLive \|\| \(tree && kidCount > 0\) \? \(/)
   assert.match(titleFn, /toolsLive && Title \? <Title record=\{row\} label=\{label\} \/> : label/)
   assert.match(browser, /key === 'actions'\) return/)

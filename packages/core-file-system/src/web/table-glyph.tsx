@@ -1,6 +1,7 @@
 import {
   AcademicCapIcon,
   CheckCircleIcon,
+  CircleStackIcon,
   CursorArrowRaysIcon,
   BellIcon,
   BoltIcon,
@@ -21,6 +22,7 @@ export function idleTableIconKind(icon?: string) {
   if (name === 'academic-cap' || name === 'skill' || name === 'skills') return 'skill'
   if (name === 'document' || name === 'document-text' || name === 'page') return 'page'
   if (name === 'tag' || name === 'rectangle-stack' || name === 'collection') return 'tag'
+  if (name === 'circle-stack' || name === 'data' || name === 'database') return 'data'
   return 'table'
 }
 
@@ -42,5 +44,6 @@ export function TableGlyph({ icon, className = 'size-4' }: { icon?: string; clas
   if (name === 'eye') return <EyeIcon aria-hidden className={className} />
   if (name === 'tag' || name === 'rectangle-stack' || name === 'collection') return <TagIcon aria-hidden className={className} />
   if (name === 'rectangle-group' || name === 'squares-2x2' || name === 'widgets') return <RectangleGroupIcon aria-hidden className={className} />
+  if (name === 'circle-stack' || name === 'data' || name === 'database') return <CircleStackIcon aria-hidden className={className} />
   return <TableCellsIcon aria-hidden className={className} />
 }

@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { createPortal } from 'react-dom'
 import {
   CheckCircleIcon,
+  CircleStackIcon,
   ListBulletIcon,
   EllipsisHorizontalIcon,
   PlusIcon,
@@ -55,6 +56,7 @@ function captionTableIcon(icon?: string) {
   if (name === 'document' || name === 'document-text' || name === 'page') return DocumentIcon
   if (name === 'bolt') return BoltIcon
   if (name === 'eye') return EyeIcon
+  if (name === 'circle-stack' || name === 'data' || name === 'database') return CircleStackIcon
   return TableCellsIcon
 }
 

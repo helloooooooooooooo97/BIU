@@ -6,6 +6,11 @@ import assert from 'node:assert/strict'
 const inspector = readFileSync(resolve(import.meta.dirname, './session-inspector.tsx'), 'utf8')
 const css = readFileSync(resolve(import.meta.dirname, '../../../../web/style.css'), 'utf8')
 
+test('data collection captions use the stack glyph, not the table glyph', () => {
+  assert.match(inspector, /name === 'circle-stack' \|\| name === 'data' \|\| name === 'database'/)
+  assert.match(inspector, /return CircleStackIcon/)
+})
+
 test('inspector header keeps opened tabs on top and a plus menu on the right', () => {
   assert.match(inspector, /data-testid="inspector-more"/)
   assert.match(inspector, /data-testid="inspector-more"[\s\S]*data-testid="inspector-add"/)
