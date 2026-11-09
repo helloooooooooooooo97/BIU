@@ -6,6 +6,7 @@ import {
   tagViewsAssetName,
   type TagSandboxView,
 } from '../tag-views.ts'
+import { getTagPresentMode, setTagPresentMode, TAG_TABLE_VIEW_ID } from './tag-present.ts'
 
 export type { TagSandboxView } from '../tag-views.ts'
 export { defaultTagSandboxSource, parseTagViews, tagViewsAssetName, createTagViewId } from '../tag-views.ts'
@@ -186,6 +187,7 @@ export async function createTagSandboxView(tagId: string, title = '', name = 'æ²
   await putTagFile(id, view.file, defaultTagSandboxSource(title), 'text/plain; charset=utf-8')
   await putTagFile(id, view.dataFile, 'null', 'application/json')
   await saveTagViews(id, [...getTagViews(id), view])
+  setTagPresentMode(id, viewId)
   return view
 }
 
@@ -216,6 +218,7 @@ export async function copyTagSandboxView(tagId: string, viewId: string, title = 
   await putTagFile(id, view.file, body, 'text/plain; charset=utf-8')
   await putTagFile(id, view.dataFile, data, 'application/json')
   await saveTagViews(id, [...getTagViews(id), view])
+  setTagPresentMode(id, viewIdNext)
   return view
 }
 
@@ -224,6 +227,7 @@ export async function deleteTagSandboxView(tagId: string, viewId: string) {
   const target = String(viewId ?? '').trim()
   if (!id || !target) return
   await saveTagViews(id, getTagViews(id).filter((item) => item.id !== target))
+  if (getTagPresentMode(id) === target) setTagPresentMode(id, TAG_TABLE_VIEW_ID)
 }
 
 export async function readTagFile(tagId: string, name: string, fallback?: string) {
