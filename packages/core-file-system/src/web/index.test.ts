@@ -250,6 +250,7 @@ test('detail facet property sits last, starts collapsed, and the glyph becomes a
   const row = readFileSync(resolve(import.meta.dirname, './property-row.tsx'), 'utf8')
   const css = readFileSync(resolve(import.meta.dirname, './fsdb-style.ts'), 'utf8')
   assert.match(detail, /collectionPath === TAGS_COLLECTION_PATH/)
+  assert.match(detail, /visiblePropertyKeys.includes\(key\)/)
   assert.match(detail, /key === 'views' \|\| key === 'propViews' \|\| key === 'layouts'/)
   assert.match(detail, /useState\(false\)/)
   assert.match(detail, /collapsible=\{fold\}/)

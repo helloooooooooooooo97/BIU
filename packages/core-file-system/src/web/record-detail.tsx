@@ -329,7 +329,12 @@ export function RecordDetail({
       if (key === contentFieldKey(schema) && resolveFieldType(field) === 'file') return false
       if (chrome?.panes?.some((pane) => pane.id === key)) return false
       if (key === 'fields' && collectionPath === TAGS_COLLECTION_PATH && String(selected.id).includes('::')) return false
-      if (key === 'views' || key === 'propViews' || key === 'layouts') return false
+      if (
+        (key === 'views' || key === 'propViews' || key === 'layouts') &&
+        !(visiblePropertyKeys && visiblePropertyKeys.includes(key))
+      ) {
+        return false
+      }
       const kind = resolveFieldType(field)
       if (kind === 'tag' && !field.writable) return false
       if (field.computed && !fieldHasValue(field, selected[key])) return false
