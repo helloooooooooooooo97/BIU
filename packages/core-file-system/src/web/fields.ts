@@ -1,5 +1,6 @@
 import type { AtomicFieldType, CollectionSchema, CollectionSchemaPack, DbRecord, FieldSpec, FieldType, SchemaFieldValue } from '@biu/type-file-system'
 import { asAttachment, asAttachmentList, asHttpHref, asImageSrc, asImageSrcList, asPerson, asPersonList, BUILTIN_FIELD_KEYS, isTagFieldType, isRefFieldType, isReservedSchemaFieldKey, isSchemaFieldKey, normalizeSchemaValue, personKey } from '@biu/type-file-system'
+import { parseRecordLayouts, parseRecordSandboxes } from '@biu/type-file-system/record-views'
 import { TAG_FLAT_PREFIX, parseTagFlatColumnKey, readTagFieldValue } from '../query-logic.ts'
 import {
   cellGroupValue,
@@ -341,10 +342,20 @@ export function asTime(value: unknown): number {
   return Number.isFinite(n) && n > 0 ? n : 0
 }
 
+export function formatViewCatalog(value: unknown): string {
+  const sandboxes = parseRecordSandboxes(value)
+  if (sandboxes.length) return sandboxes.map((item) => item.name).filter(Boolean).join('、')
+  const layouts = parseRecordLayouts(value)
+  if (layouts.length) return layouts.map((item) => item.name).filter(Boolean).join('、')
+  return ''
+}
+
 export function formatField(field: FieldSpec | undefined, value: unknown): string {
-  if (!field) return value == null || value === '' ? '' : String(value)
-  const kind = resolveFieldType(field)
   if (value == null || value === '') return ''
+  const catalog = formatViewCatalog(value)
+  if (catalog && (!field || resolveFieldType(field) === 'string')) return catalog
+  if (!field) return String(value)
+  const kind = resolveFieldType(field)
   if (kind === 'datetime') {
     const n = asTime(value)
     if (!n) return ''
