@@ -895,6 +895,19 @@ export const BIU_MIGRATIONS: Migration[] = [
   { version: 44, module: 'core-file-system', name: 'facet-to-tag', up: (db) => {
     migrateFacetNameToTag(db)
   } },
+  { version: 45, module: 'core-file-system', name: 'tag.views', up: (db) => {
+    addColumn(db, 'tags', 'views_json', `views_json TEXT NOT NULL DEFAULT '[]'`)
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS tag_docs (
+        name TEXT PRIMARY KEY,
+        tag_id TEXT NOT NULL,
+        body TEXT NOT NULL,
+        etag TEXT NOT NULL,
+        mime TEXT NOT NULL DEFAULT 'text/plain; charset=utf-8'
+      );
+      CREATE INDEX IF NOT EXISTS tag_docs_tag ON tag_docs(tag_id);
+    `)
+  } },
 ]
 
 export function assertBiuMigrationLog(rows: Array<{ version: number }> = BIU_MIGRATIONS) {

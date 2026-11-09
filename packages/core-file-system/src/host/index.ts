@@ -4263,6 +4263,45 @@ export function apply(ctx: Context) {
       route.send(404, { error: 'not found' })
     }
   })
+  ctx.http.route('GET', '/api/tag/file/:name', async (route) => {
+    try {
+      const name = route.params.name ?? ''
+      const path = route.query.get('path') || String(route.req.headers['x-biu-resource-path'] ?? '')
+      if (path) await db.requirePath(path, 'resource:read')
+      else db.requireAsset(name, 'resource:read')
+      const { bytes, type, etag } = facets.readNamedDoc(name)
+      route.res.writeHead(200, {
+        'content-type': type,
+        'cache-control': 'no-store',
+        etag: `"${etag}"`,
+      })
+      route.res.end(bytes)
+    } catch {
+      route.send(404, { error: 'not found' })
+    }
+  })
+  ctx.http.route('PUT', '/api/tag/file/:name', async (route) => {
+    try {
+      const name = route.params.name ?? ''
+      const path = route.query.get('path') || String(route.req.headers['x-biu-resource-path'] ?? '')
+      if (path) await db.requirePath(path, 'resource:update')
+      else db.requireAsset(name, 'resource:update')
+      const written = facets.writeNamedDoc(name, await route.bytes(), { etag: parseIfMatch(route.req.headers['if-match']) })
+      ctx.http.broadcast?.(DATABASE_CHANNEL, { ts: Date.now(), asset: { name: written.name, etag: written.etag } })
+      route.res.writeHead(200, {
+        'content-type': 'application/json; charset=utf-8',
+        'cache-control': 'no-store',
+        etag: `"${written.etag}"`,
+      })
+      route.res.end(JSON.stringify({ ok: true, ...written }))
+    } catch (error) {
+      if (error instanceof AssetConflictError) {
+        route.send(409, { error: 'etag conflict', etag: error.etag })
+        return
+      }
+      route.send(400, { error: String(error) })
+    }
+  })
   ctx.http.route('GET', '/api/db/tags', async (route) => {
     try {
       await db.requirePath('/tags', 'resource:read')

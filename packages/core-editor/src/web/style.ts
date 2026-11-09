@@ -163,6 +163,8 @@ export const PAGE_EDITOR_STYLE = `
 .page-tag-block-query{margin:0 0 4px;border:var(--biu-stroke-width) solid var(--biu-color-border);border-radius:6px;padding:6px 8px;background:transparent;color:var(--biu-color-text);font:inherit;font-size:var(--biu-font-size-3)}
 .page-tag-block-option{display:flex;width:100%;margin:0;border:0;border-radius:6px;padding:6px 8px;background:transparent;color:var(--biu-color-text-muted);font:inherit;font-size:var(--biu-font-size-4);text-align:left;cursor:pointer}
 .page-tag-block-option:hover,.page-tag-block-option.is-on{background:var(--biu-color-bg-hover);color:var(--biu-color-text)}
+.page-tag-block .page-host-view{min-height:min(48vh,480px);margin-top:4px}
+.page-tag-host-source{flex:1;min-height:0;width:100%;resize:none;border:0;padding:12px;background:transparent;color:var(--biu-color-text);font-family:var(--font-mono);font-size:var(--biu-font-size-4);line-height:1.5;outline:none}
 .page-editor .page-block-idle{min-height:200px}
 .page-editor .page-block iframe{pointer-events:none;border:0;outline:none}
 .page-editor .page-block.ProseMirror-selectednode iframe,.page-editor .ProseMirror[contenteditable=false] .page-block iframe,.page-host-view .page-block iframe{pointer-events:auto}

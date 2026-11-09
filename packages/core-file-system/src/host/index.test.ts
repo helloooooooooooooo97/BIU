@@ -1695,6 +1695,18 @@ test('db_update /tags writes facet field packs', async () => {
     assert.equal(stat.schema.fields.fields?.example, '[{"key":"类别","type":"string"}]')
     assert.match(String(stat.schema.fields.fields?.description), /tag::<本标签id>::<字段key>/)
   }
+  const views = await db.update(`/tags/${id}`, {
+    views: [{ id: '8fdbc4f8', name: '沙盒 1', kind: 'sandbox', file: `tag-view-${id}-8fdbc4f8.jsx`, dataFile: `tag-view-data-${id}-8fdbc4f8.json` }],
+  })
+  assert.equal((views.value.views as Array<{ id: string }>)[0]?.id, '8fdbc4f8')
+  const written = await db.editDoc(`/tags/${id}`, {
+    command: 'write',
+    name: `tag-view-${id}-8fdbc4f8.jsx`,
+    value: 'export default function App(){return <p>标签沙盒</p>}',
+  })
+  assert.equal(written.ok, true)
+  const viewed = await db.editDoc(`/tags/${id}`, { name: `tag-view-${id}-8fdbc4f8.jsx` })
+  if (viewed.kind === 'doc' && 'text' in viewed) assert.match(String(viewed.text), /标签沙盒/)
   const body = await db.writeContent(`/tags/${id}`, '# 标签说明')
   assert.equal(body.field, 'notes')
   assert.equal(body.value, '# 标签说明')

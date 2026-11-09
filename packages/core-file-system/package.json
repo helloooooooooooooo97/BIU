@@ -32,7 +32,8 @@
     "@dnd-kit/modifiers": "^9.0.0",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
-    "yaml": "^2.9.0"
+    "yaml": "^2.9.0",
+    "sucrase": "^3.35.1"
   },
   "peerDependencies": {
     "cordis": "4.0.0-rc.8",
