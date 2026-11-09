@@ -57,6 +57,7 @@ import {
 } from '@biu/type-file-system'
 import { parsePageBanner, type PageBanner } from '../page-banner.ts'
 import { SavedViewsStore, clientViewFromDbRow, viewsCollection, type StoredView } from './saved-views.ts'
+import { RecordViewsStore, wrapCollectionRecordViews } from './record-views.ts'
 import { publicShareUrl } from './share-origin.ts'
 import { readSharePluginWebJs, zipSharePluginSource } from './share-plugin-pack.ts'
 import { isSharePluginId } from '../share-resources.ts'
@@ -858,6 +859,7 @@ export class DatabaseService extends Service implements Database {
   shares = new SharesStore()
   assets = new FileSystemAssets()
   viewCatalog?: { viewsFor(collectionPath: string): SharedViewDef[] }
+  recordViews = new RecordViewsStore()
   private ownershipCache: { key: string; map: Map<string, 'personal' | 'workspace' | 'shared'> } | null = null
   private ownerCache: { key: string; map: Map<string, string> } | null = null
   private viewAudienceCache: {
@@ -910,6 +912,7 @@ export class DatabaseService extends Service implements Database {
       }
       assertViewAvailable(entry, [...this.collections.values()])
       assertRecordCaps(entry)
+      entry = wrapCollectionRecordViews(entry, this.recordViews)
       const view = entry.view
       if (view) entry = { ...entry, view: { ...view, route: navPath(view.route) } }
       this.collections.set(entry.id, entry)
@@ -3217,6 +3220,7 @@ export function apply(ctx: Context) {
   const assets = db.assets
   const savedViews = new SavedViewsStore()
   savedViews.open(process.env.VITEST ? ':memory:' : biuSqlitePath())
+  db.recordViews.open(process.env.VITEST ? ':memory:' : biuSqlitePath())
   const account = ctx.get('account') as {
     authorization?: AuthorizationService
     workspaceLocation?: (workspaceId: string) => 'device' | 'cloud'

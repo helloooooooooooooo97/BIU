@@ -21,12 +21,14 @@ export function TagViewSwitcher({
   writable,
   onPick,
   testId = 'page-tag-block-view',
+  asIcon = false,
 }: {
   tagId: string
   viewId: string
   writable: boolean
   onPick: (id: string) => void
   testId?: string
+  asIcon?: boolean
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const views = useTagViews(tagId)
@@ -40,15 +42,16 @@ export function TagViewSwitcher({
     <div className="tasks-viewdd-wrap" ref={wrapRef}>
       <button
         type="button"
-        className={`tasks-viewdd-btn tasks-viewtab is-active${open ? ' is-menu' : ''}`}
+        className={asIcon ? `tasks-sort-btn${open ? ' is-active' : ''}` : `tasks-viewdd-btn tasks-viewtab is-active${open ? ' is-menu' : ''}`}
         data-testid={testId}
+        aria-label="查看模式"
         title="呈现方式"
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((next) => !next)}
       >
         {current ? <TagIcon aria-hidden className="size-[14px]" /> : <ViewModeGlyph mode="table" />}
-        <span className="tasks-viewdd-name">{label}</span>
+        {asIcon ? null : <span className="tasks-viewdd-name">{label}</span>}
       </button>
       {open ? (
         <HeadlessDismiss onDismiss={() => setOpen(false)} insideRef={wrapRef}>
@@ -178,7 +181,7 @@ export function TagViewSwitcher({
                 onClick={() => {
                   if (!writable || creating || !tagId) return
                   setCreating(true)
-                  void createTagSandboxView(tagId, tagLabel(tagId), `标签沙盒 ${views.length + 1}`)
+                  void createTagSandboxView(tagId, tagLabel(tagId), '新视图')
                     .then((view) => onPick(view.id))
                     .catch(() => undefined)
                     .finally(() => {
@@ -188,7 +191,7 @@ export function TagViewSwitcher({
                 }}
               >
                 <PlusIcon aria-hidden className="size-[14px]" />
-                {creating ? '正在创建…' : '新建标签视图'}
+                {creating ? '正在创建…' : '新建内容视图'}
               </button>
             </div>
           </div>

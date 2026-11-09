@@ -88,6 +88,9 @@ test('reserved schema fields include 标签 / tag by key or label', () => {
   assert.equal(isReservedSchemaFieldLabel('依赖'), true)
   assert.equal(isReservedSchemaFieldKey('createdBy'), true)
   assert.equal(isReservedSchemaFieldKey('updatedBy'), true)
+  assert.equal(isReservedSchemaFieldKey('views'), true)
+  assert.equal(isReservedSchemaFieldKey('propViews'), true)
+  assert.equal(isReservedSchemaFieldKey('layouts'), true)
   assert.equal(isReservedSchemaFieldLabel('创建人'), true)
   assert.equal(isReservedSchemaFieldLabel('编辑人'), true)
 })
@@ -190,6 +193,10 @@ test('withBuiltinFields always includes writable tag and strips tags', () => {
   assert.equal(fields.updatedBy?.type, 'person')
   assert.equal(fields.updatedBy?.writable, false)
   assert.equal(fields.updatedBy?.multiple, true)
+  assert.equal(fields.views?.writable, true)
+  assert.equal(fields.propViews?.writable, true)
+  assert.equal(fields.layouts?.writable, true)
+  assert.equal(fields.layouts?.label, '组合视图')
 })
 
 test('recordBuiltinValues fills required record columns', () => {
@@ -215,10 +222,13 @@ test('required record fields are icon, timestamps, tag, parent, and dependency',
     'createdBy',
     'dependsOn',
     'emoji',
+    'layouts',
     'parentId',
+    'propViews',
     'tag',
     'updatedAt',
     'updatedBy',
+    'views',
   ])
   assert.equal(REQUIRED_RECORD_FIELDS.createdBy.type, 'person')
   assert.equal(REQUIRED_RECORD_FIELDS.updatedBy.type, 'person')
