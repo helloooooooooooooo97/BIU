@@ -215,6 +215,7 @@ const CSS = `
 .tasks-viewdd-item-ico{flex:none;width:14px;height:14px;color:var(--biu-color-icon)}
 .fsdb-tool-flyout .tasks-viewdd-item-main:hover .tasks-viewdd-item-ico,.fsdb-tool-flyout .tasks-viewdd-item.is-active .tasks-viewdd-item-ico{color:var(--biu-color-icon-active)}
 .fsdb-page .tasks-viewdd-item-name,.fsdb-tool-flyout .tasks-viewdd-item-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:var(--biu-font-weight-medium,500)}
+.fsdb-page input.tasks-viewdd-item-name,.fsdb-tool-flyout input.tasks-viewdd-item-name{flex:1;width:100%;margin:0;padding:0;border:0;outline:none;box-shadow:none;background:transparent;color:inherit;font:inherit;overflow:visible;text-overflow:clip}
 .fsdb-page .tasks-sort-item:hover,.fsdb-page .tasks-sort-item.is-active,.fsdb-page .tasks-viewdd-item.is-active .tasks-viewdd-item-main{background:var(--biu-color-bg-hover);color:var(--biu-color-text);font-weight:var(--biu-font-weight-medium)}
 .fsdb-page .tasks-viewdd-item-actions{display:inline-flex;align-items:center;gap:0;flex:none;margin-left:auto}
 .fsdb-page .tasks-viewdd-act{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;flex:none;padding:0;border:0;border-radius:6px;background:transparent;color:var(--biu-color-icon);cursor:pointer}
