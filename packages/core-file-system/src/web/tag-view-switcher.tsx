@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
-import { PencilSquareIcon, PlusIcon, Square2StackIcon, Squares2X2Icon } from '@heroicons/react/16/solid'
+import { PencilSquareIcon, PlusIcon, Square2StackIcon, TagIcon } from '@heroicons/react/16/solid'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { ViewModeGlyph } from './nav-glyphs.tsx'
 import { tagLabel } from './tag-catalog.ts'
@@ -47,7 +47,7 @@ export function TagViewSwitcher({
         aria-expanded={open}
         onClick={() => setOpen((next) => !next)}
       >
-        {current ? <Squares2X2Icon aria-hidden className="size-[14px]" /> : <ViewModeGlyph mode="table" />}
+        {current ? <TagIcon aria-hidden className="size-[14px]" /> : <ViewModeGlyph mode="table" />}
         <span className="tasks-viewdd-name">{label}</span>
       </button>
       {open ? (
@@ -74,7 +74,7 @@ export function TagViewSwitcher({
                 <div key={item.id} className={`tasks-viewdd-item${item.id === viewId ? ' is-active' : ''}`}>
                   {renaming === item.id ? (
                     <div className="tasks-viewdd-item-main fsdb-tool-row">
-                      <Squares2X2Icon aria-hidden className="tasks-viewdd-item-ico" />
+                      <TagIcon aria-hidden className="tasks-viewdd-item-ico" />
                       <input
                         className="tasks-viewdd-item-name"
                         aria-label={`沙盒视图名称 ${item.name}`}
@@ -107,7 +107,7 @@ export function TagViewSwitcher({
                         setOpen(false)
                       }}
                     >
-                      <Squares2X2Icon aria-hidden className="tasks-viewdd-item-ico" />
+                      <TagIcon aria-hidden className="tasks-viewdd-item-ico" />
                       <span className="tasks-viewdd-item-name">{item.name}</span>
                     </button>
                   )}
@@ -178,7 +178,7 @@ export function TagViewSwitcher({
                 onClick={() => {
                   if (!writable || creating || !tagId) return
                   setCreating(true)
-                  void createTagSandboxView(tagId, tagLabel(tagId), `沙盒 ${views.length + 1}`)
+                  void createTagSandboxView(tagId, tagLabel(tagId), `标签沙盒 ${views.length + 1}`)
                     .then((view) => onPick(view.id))
                     .catch(() => undefined)
                     .finally(() => {
@@ -188,7 +188,7 @@ export function TagViewSwitcher({
                 }}
               >
                 <PlusIcon aria-hidden className="size-[14px]" />
-                {creating ? '正在创建…' : '新建沙盒视图'}
+                {creating ? '正在创建…' : '新建标签视图'}
               </button>
             </div>
           </div>

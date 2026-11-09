@@ -31,7 +31,7 @@ export function parseTagViews(raw: unknown): TagSandboxView[] {
     seen.add(id)
     out.push({
       id,
-      name: String(rec.name ?? '').trim() || '沙盒',
+      name: String(rec.name ?? '').trim() || '标签沙盒',
       kind: 'sandbox',
       file,
       dataFile: String(rec.dataFile ?? '').trim() || `tag-view-data-${id}.json`,

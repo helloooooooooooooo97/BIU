@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowsPointingInIcon, ArrowsPointingOutIcon, CodeBracketIcon, EyeIcon, ViewColumnsIcon } from '@heroicons/react/16/solid'
+import { ArrowsPointingInIcon, ArrowsPointingOutIcon, CodeBracketIcon, EyeIcon, TagIcon, ViewColumnsIcon } from '@heroicons/react/16/solid'
 import type { CollectionSchemaPack, FieldSpec } from '@biu/type-file-system'
 import { FieldValuePop } from './field-value-pop.tsx'
 import { compileHostSource, loadHostComponent } from './tag-host-compile.ts'
@@ -27,15 +27,7 @@ function viewOf(tagId: string, viewId: string): TagSandboxView | undefined {
 }
 
 function SandboxKindIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width="14" height="14" fill="var(--biu-color-ink-purple)" aria-hidden>
-      <path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d="M7.628 1.349a.75.75 0 0 1 .744 0l1.247.712a.75.75 0 1 1-.744 1.303L8 2.864l-.875.5a.75.75 0 0 1-.744-1.303l1.247-.712Z"
-      />
-    </svg>
-  )
+  return <TagIcon aria-hidden className="size-[14px]" />
 }
 
 function HostTools({
@@ -259,14 +251,14 @@ export function TagHostView({
       data-testid="tag-host-view"
     >
       <div className="page-block-expand-nav" data-testid={expanded ? 'tag-host-expand-nav' : 'tag-host-side-bar'} data-biu-ignore>
-        <div className="page-block-expand-nav-type" title="沙箱" aria-label="沙箱">
+        <div className="page-block-expand-nav-type" title="标签沙盒" aria-label="标签沙盒">
           <SandboxKindIcon />
         </div>
         <input
           className="page-block-expand-nav-title"
           data-testid="tag-host-title"
           readOnly={!writable}
-          defaultValue={view?.name?.trim() || '沙盒'}
+          defaultValue={view?.name?.trim() || '标签沙盒'}
           key={view?.id}
           onBlur={(event) => {
             const next = event.currentTarget.value.trim()

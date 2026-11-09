@@ -173,7 +173,7 @@ export async function saveTagViews(tagId: string, views: TagSandboxView[]) {
   window.dispatchEvent(new Event('fsdb:change'))
 }
 
-export async function createTagSandboxView(tagId: string, title = '', name = '沙盒') {
+export async function createTagSandboxView(tagId: string, title = '', name = '标签沙盒') {
   const id = String(tagId ?? '').trim()
   if (!id) throw new Error('missing tag')
   const viewId = createTagViewId()
