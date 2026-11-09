@@ -7,8 +7,8 @@ const CSS = `
 .biu-tag{display:inline-flex;align-items:center;gap:var(--biu-space-1);height:var(--biu-space-5);padding:0 var(--biu-pad-chip-x);border-radius:var(--biu-radius-sm);font-size:var(--biu-chat-chip-font-size,var(--biu-font-size-3));font-weight:var(--biu-font-weight-medium);line-height:var(--biu-space-5);background:color-mix(in srgb,var(--biu-tag,var(--biu-color-emphasis)) 22%,transparent);color:var(--biu-tag,var(--biu-color-emphasis));max-width:160px}
 .biu-tag.is-btn{cursor:pointer}
 .biu-tag.is-on{background:color-mix(in srgb,var(--biu-tag,var(--biu-color-emphasis)) 34%,transparent)}
-.biu-tag-icon{display:inline-flex;width:var(--biu-size-icon,14px);height:var(--biu-size-icon,14px);flex:none;align-items:center;justify-content:center}
-.biu-tag-icon svg{width:var(--biu-size-icon,14px);height:var(--biu-size-icon,14px);display:block}
+.biu-tag-icon{display:inline-flex;width:var(--biu-size-icon,14px);height:var(--biu-size-icon,14px);flex:none;align-items:center;justify-content:center;color:inherit}
+.biu-tag-icon svg,.biu-tag-icon .fsdb-field-glyph,.biu-tag-icon .fsdb-field-hero{width:var(--biu-size-icon,14px);height:var(--biu-size-icon,14px);display:block;color:inherit}
 .biu-tag-icon .fsdb-record-emoji{width:var(--biu-size-icon,14px);height:var(--biu-size-icon,14px);font-size:var(--biu-chat-chip-font-size,var(--biu-font-size-3))}
 .biu-tag-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .biu-tag-x{border:0;background:transparent;padding:0;margin:0;color:inherit;opacity:.55;cursor:pointer;display:inline-flex;line-height:0}

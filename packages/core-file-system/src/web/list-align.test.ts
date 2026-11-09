@@ -272,6 +272,7 @@ test('list properties stay on the weakest label tier; detail aside lifts keys on
   assert.match(css, /\.fsdb-schema-prop-k \.fsdb-field-glyph,\.fsdb-schema-prop-k \.fsdb-field-hero\{[^}]*color:var\(--biu-color-icon\)/)
   assert.match(css, /\.fsdb-page \.tasks-table \.fsdb-schema-prop-k svg[\s\S]*?color:var\(--biu-color-icon\)/)
   assert.match(css, /\.fsdb-schema-prop-type \.fsdb-field-glyph,\.fsdb-schema-prop-type \.fsdb-field-hero\{[^}]*color:var\(--biu-color-icon\)/)
+  assert.match(css, /\.fsdb-page \.biu-tag \.fsdb-field-glyph,\.fsdb-page \.biu-tag \.fsdb-field-hero,\.fsdb-page \.biu-tag-icon svg\{[^}]*color:currentColor/)
   assert.match(
     css,
     /\.fsdb-detail-aside \.fsdb-proprow-v,\.fsdb-detail-aside \.fsdb-prop-val,\.fsdb-detail-aside \.fsdb-detail-id,\.fsdb-detail-aside \.fsdb-plain-input,\.fsdb-detail-aside \.fsdb-schema-prop-v,\.fsdb-detail-aside \.fsdb-schema-prop-v \.fsdb-muted\{[^}]*color:var\(--biu-color-text\)/,
