@@ -161,7 +161,7 @@ export function pagesCollection(store: PagesStore, index: PageBlocksIndex): Coll
           type: 'string',
           label: '组合视图',
           writable: true,
-          description: '本页保存的组合视图，和表视图一样：一条绑内容展示、属性展示、筛选、排序。内置「默认」不写在这里。',
+          description: '本页保存的组合视图，和表视图一样：一条绑内容展示、属性展示、筛选、排序。内置「默认视图」不写在这里。',
         },
       },
     },

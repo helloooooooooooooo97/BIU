@@ -22,11 +22,11 @@ test('copying a layout uses unique 副本 names like table views', async () => {
   globalThis.fetch = async () => new Response('{}', { status: 200 })
   try {
     const { getByText, getAllByTitle, findByText } = render(<PageDetailBar record={{ id: 'p0133', title: '演示' }} />)
-    fireEvent.click(getByText('默认'))
+    fireEvent.click(getByText('默认视图'))
     fireEvent.click(getAllByTitle('拷贝视图')[0])
-    assert.ok(await findByText('默认 副本'))
+    assert.ok(await findByText('默认视图 副本'))
     fireEvent.click(getAllByTitle('拷贝视图')[0])
-    assert.ok(await findByText('默认 副本 2'))
+    assert.ok(await findByText('默认视图 副本 2'))
   } finally {
     globalThis.fetch = original
   }
@@ -38,7 +38,7 @@ test('left view menu composes layouts and does not list content modes', () => {
     { id: 'site1', name: '官网', kind: 'sandbox', file: 'view-p0133-site1.jsx', dataFile: 'view-data-p0133-site1.json' },
   ])
   const { getByText, getByTestId, getByLabelText, queryByText } = render(<PageDetailBar record={{ id: 'p0133', title: '演示' }} />)
-  fireEvent.click(getByText('默认'))
+  fireEvent.click(getByText('默认视图'))
   assert.ok(getByText('添加视图'))
   assert.equal(queryByText('新建沙盒视图'), null)
   assert.equal(queryByText('新建内容视图'), null)
@@ -74,7 +74,7 @@ test('detail bar deletes a content sandbox from the present-mode menu', async ()
 test('detail bar switches document and source modes from the content icon', () => {
   setPageSourceMode('p0133', false)
   const { getByText, getByLabelText, container, queryByText } = render(<PageDetailBar record={{ id: 'p0133' }} />)
-  fireEvent.click(getByText('默认'))
+  fireEvent.click(getByText('默认视图'))
   assert.equal(queryByText('大纲'), null)
   fireEvent.click(getByLabelText('查看模式'))
   fireEvent.click(getByText('大纲'))

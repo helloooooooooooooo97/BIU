@@ -5,6 +5,7 @@ import { defaultPageLayout, layoutsAssetName, listedPageLayouts, parsePageLayout
 test('page layouts keep a builtin default and skip it from stored custom rows', () => {
   assert.equal(layoutsAssetName('p003'), 'page-layouts-p003.json')
   assert.equal(defaultPageLayout().id, PAGE_DEFAULT_LAYOUT_ID)
+  assert.equal(defaultPageLayout().name, '默认视图')
   assert.equal(defaultPageLayout().contentViewId, 'doc')
   assert.equal(defaultPageLayout().propViewId, 'table')
   const parsed = parsePageLayouts([
