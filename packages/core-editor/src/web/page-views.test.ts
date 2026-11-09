@@ -1,6 +1,8 @@
 import { afterEach, test } from 'vitest'
 import assert from 'node:assert/strict'
-import { applyPageAssetChanged, peekPageFile, readPageFile, rememberPageFile, resetPageFileState, writePageFile } from './page-views.ts'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { applyPageAssetChanged, peekPageFile, readPageFile, rememberPageFile, resetPageFileState, uniqueViewName, writePageFile } from './page-views.ts'
 
 afterEach(() => {
   resetPageFileState()
@@ -26,6 +28,21 @@ function mockFetch(handler: (url: string, init?: RequestInit) => { status: numbe
   }) as typeof fetch
   return calls
 }
+
+test('unique view names match table copy numbering', () => {
+  assert.equal(uniqueViewName('官网 副本', []), '官网 副本')
+  assert.equal(uniqueViewName('官网 副本', ['官网 副本']), '官网 副本 2')
+  assert.equal(uniqueViewName('官网 副本', ['官网 副本', '官网 副本 2']), '官网 副本 3')
+  const copy = readFileSync(resolve(import.meta.dirname, './page-views.ts'), 'utf8')
+  const fn = copy.slice(copy.indexOf('export async function copyPageSandboxView'), copy.indexOf('export async function deletePageSandboxView'))
+  assert.match(fn, /uniquePageViewName\(id, `\$\{source\.name\} 副本`\)/)
+  assert.match(fn, /createPageBlockId\(\)/)
+  assert.doesNotMatch(fn, /Date\.now\(\)/)
+  const props = readFileSync(resolve(import.meta.dirname, './page-prop-views.ts'), 'utf8')
+  const propCopy = props.slice(props.indexOf('export async function copyPagePropSandboxView'), props.indexOf('export async function deletePagePropSandboxView'))
+  assert.match(propCopy, /uniquePagePropViewName\(id, `\$\{source\.name\} 副本`\)/)
+  assert.doesNotMatch(propCopy, /Date\.now\(\)/)
+})
 
 test('readPageFile uses memory and does not GET again after a 404', async () => {
   rememberPageFile('view-p1-a.jsx', 'export default function App(){return 1}')

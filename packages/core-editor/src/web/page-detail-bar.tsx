@@ -207,6 +207,21 @@ export function PageDetailBar({
                         <item.Icon aria-hidden className="tasks-viewdd-item-ico" />
                         <span className="tasks-viewdd-item-name">{item.label}</span>
                       </button>
+                      <span className="tasks-viewdd-item-actions">
+                        <button
+                          type="button"
+                          className="tasks-viewdd-act"
+                          title="拷贝视图"
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={(event) => {
+                            event.preventDefault()
+                            event.stopPropagation()
+                            void copyPageSandboxView(record.id, item.id, String(record.title ?? ''), item.label).catch(() => undefined)
+                          }}
+                        >
+                          <Square2StackIcon aria-hidden className="size-[14px]" />
+                        </button>
+                      </span>
                     </div>
                   ))}
                   {pageViews.map((item) => (
@@ -255,7 +270,6 @@ export function PageDetailBar({
                           type="button"
                           className="tasks-viewdd-act"
                           title="拷贝视图"
-                          aria-label={`拷贝沙盒视图 ${item.name}`}
                           onMouseDown={(event) => event.preventDefault()}
                           onClick={(event) => {
                             event.preventDefault()
@@ -269,7 +283,7 @@ export function PageDetailBar({
                           type="button"
                           className="tasks-viewdd-act"
                           title="重命名"
-                          aria-label={`重命名沙盒视图 ${item.name}`}
+                          aria-label={`重命名 ${item.name}`}
                           onMouseDown={(event) => event.preventDefault()}
                           onClick={(event) => {
                             event.preventDefault()
@@ -284,7 +298,7 @@ export function PageDetailBar({
                           type="button"
                           className="tasks-viewdd-act is-danger"
                           title="删除"
-                          aria-label={`删除沙盒视图 ${item.name}`}
+                          aria-label={`删除 ${item.name}`}
                           data-testid={`page-view-delete-${item.id}`}
                           onMouseDown={(event) => event.preventDefault()}
                           onClick={(event) => {
@@ -298,28 +312,6 @@ export function PageDetailBar({
                       </span>
                     </div>
                   ))}
-                </div>
-                <div className="tasks-viewdd-foot">
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="tasks-viewdd-saveas fsdb-tool-row font-medium"
-                    data-testid="page-view-create"
-                    disabled={creatingView}
-                    onClick={() => {
-                      if (creatingView) return
-                      setCreatingView(true)
-                      void createPageSandboxView(record.id, String(record.title ?? ''), `沙盒 ${pageViews.length + 1}`)
-                        .catch(() => undefined)
-                        .finally(() => {
-                          setCreatingView(false)
-                          setOpen(null)
-                        })
-                    }}
-                  >
-                    <PlusIcon aria-hidden className="size-[14px]" />
-                    {creatingView ? '正在创建…' : '新建沙盒视图'}
-                  </button>
                 </div>
               </div>
             </HeadlessDismiss>
@@ -409,6 +401,21 @@ export function PageDetailBar({
                         <TableCellsIcon aria-hidden className="tasks-viewdd-item-ico" />
                         <span className="tasks-viewdd-item-name">表格</span>
                       </button>
+                      <span className="tasks-viewdd-item-actions">
+                        <button
+                          type="button"
+                          className="tasks-viewdd-act"
+                          title="拷贝视图"
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={(event) => {
+                            event.preventDefault()
+                            event.stopPropagation()
+                            void copyPagePropSandboxView(record.id, PAGE_PROP_TABLE_VIEW_ID, String(record.title ?? ''), '表格').catch(() => undefined)
+                          }}
+                        >
+                          <Square2StackIcon aria-hidden className="size-[14px]" />
+                        </button>
+                      </span>
                     </div>
                     {propViews.map((item) => (
                       <div key={item.id} className={`tasks-viewdd-item${item.id === propViewId ? ' is-active' : ''}`}>
@@ -456,7 +463,6 @@ export function PageDetailBar({
                             type="button"
                             className="tasks-viewdd-act"
                             title="拷贝视图"
-                            aria-label={`拷贝属性视图 ${item.name}`}
                             onMouseDown={(event) => event.preventDefault()}
                             onClick={(event) => {
                               event.preventDefault()
@@ -470,7 +476,7 @@ export function PageDetailBar({
                             type="button"
                             className="tasks-viewdd-act"
                             title="重命名"
-                            aria-label={`重命名属性视图 ${item.name}`}
+                            aria-label={`重命名 ${item.name}`}
                             onMouseDown={(event) => event.preventDefault()}
                             onClick={(event) => {
                               event.preventDefault()
@@ -485,7 +491,7 @@ export function PageDetailBar({
                             type="button"
                             className="tasks-viewdd-act is-danger"
                             title="删除"
-                            aria-label={`删除属性视图 ${item.name}`}
+                            aria-label={`删除 ${item.name}`}
                             data-testid={`page-prop-view-delete-${item.id}`}
                             onMouseDown={(event) => event.preventDefault()}
                             onClick={(event) => {
@@ -510,7 +516,7 @@ export function PageDetailBar({
                       onClick={() => {
                         if (creatingPropView) return
                         setCreatingPropView(true)
-                        void createPagePropSandboxView(record.id, String(record.title ?? ''), `属性沙盒 ${propViews.length + 1}`)
+                        void createPagePropSandboxView(record.id, String(record.title ?? ''), '新视图')
                           .catch(() => undefined)
                           .finally(() => {
                             setCreatingPropView(false)
@@ -556,6 +562,28 @@ export function PageDetailBar({
                     <span className="tasks-viewdd-item-name">{item.label}</span>
                   </button>
                 ))}
+                <div className="tasks-viewdd-foot">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="tasks-viewdd-saveas fsdb-tool-row font-medium"
+                    data-testid="page-view-create"
+                    disabled={creatingView}
+                    onClick={() => {
+                      if (creatingView) return
+                      setCreatingView(true)
+                      void createPageSandboxView(record.id, String(record.title ?? ''), '新视图')
+                        .catch(() => undefined)
+                        .finally(() => {
+                          setCreatingView(false)
+                          setOpen(null)
+                        })
+                    }}
+                  >
+                    <PlusIcon aria-hidden className="size-[14px]" />
+                    {creatingView ? '正在创建…' : '新建内容视图'}
+                  </button>
+                </div>
               </div>
             </HeadlessDismiss>
           ) : null}

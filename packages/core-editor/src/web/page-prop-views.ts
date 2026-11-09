@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import { createPageBlockId } from '../page-block-fence.ts'
 import { parsePagePropViews, defaultPropSandboxSource, type PagePropSandboxView } from '../page-prop-views.ts'
-import { peekPageFile, readPageFile, writePageFile } from './page-views.ts'
+import { peekPageFile, readPageFile, uniqueViewName, writePageFile } from './page-views.ts'
 import { getPagePropPresentMode, PAGE_PROP_TABLE_VIEW_ID, setPagePropPresentMode } from './page-prop-present.ts'
 
 export type { PagePropSandboxView }
@@ -69,13 +69,17 @@ export async function savePagePropViews(pageId: string, views: PagePropSandboxVi
   window.dispatchEvent(new Event('fsdb:change'))
 }
 
-export async function createPagePropSandboxView(pageId: string, title = '', name = '属性沙盒') {
+export function uniquePagePropViewName(pageId: string, base: string) {
+  return uniqueViewName(base, getPagePropViews(pageId).map((item) => item.name))
+}
+
+export async function createPagePropSandboxView(pageId: string, title = '', name = '新视图') {
   const id = String(pageId ?? '').trim()
   if (!id) throw new Error('missing page')
   const viewId = createPageBlockId()
   const view: PagePropSandboxView = {
     id: viewId,
-    name: name.trim() || '属性沙盒',
+    name: uniquePagePropViewName(id, name.trim() || '新视图'),
     kind: 'sandbox',
     file: `prop-view-${id}-${viewId}.jsx`,
     dataFile: `prop-view-data-${id}-${viewId}.json`,
@@ -96,17 +100,21 @@ export async function renamePagePropSandboxView(pageId: string, viewId: string, 
   await savePagePropViews(id, next)
 }
 
-export async function copyPagePropSandboxView(pageId: string, viewId: string, title = '') {
+export async function copyPagePropSandboxView(pageId: string, viewId: string, title = '', fallbackName = '') {
   const id = String(pageId ?? '').trim()
   const target = String(viewId ?? '').trim()
+  if (!id || !target) return
   const source = getPagePropViews(id).find((item) => item.id === target)
-  if (!id || !source) return
+  if (!source) {
+    if (target !== PAGE_PROP_TABLE_VIEW_ID && !fallbackName) return
+    return createPagePropSandboxView(id, title, uniquePagePropViewName(id, `${fallbackName || '表格'} 副本`))
+  }
   const body = await readPageFile(source.file, defaultPropSandboxSource(title))
   const data = await readPageFile(source.dataFile, 'null')
   const viewIdNext = createPageBlockId()
   const view: PagePropSandboxView = {
     id: viewIdNext,
-    name: `${source.name} 副本`,
+    name: uniquePagePropViewName(id, `${source.name} 副本`),
     kind: 'sandbox',
     file: `prop-view-${id}-${viewIdNext}.jsx`,
     dataFile: `prop-view-data-${id}-${viewIdNext}.json`,
