@@ -132,7 +132,7 @@ export function tagsCollection(
         },
         views: {
           type: 'string',
-          label: '视图',
+          label: '内容视图',
           writable: true,
           description: TAG_VIEWS_DESCRIPTION,
         },

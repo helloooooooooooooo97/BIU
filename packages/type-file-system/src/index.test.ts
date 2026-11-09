@@ -199,6 +199,14 @@ test('withBuiltinFields always includes writable tag and strips tags', () => {
   assert.equal(fields.layouts?.label, '组合视图')
 })
 
+test('withBuiltinFields keeps 内容视图 even if a collection labels views as 视图', () => {
+  const fields = withBuiltinFields({
+    title: { type: 'string', writable: true },
+    views: { type: 'string', label: '视图', writable: true },
+  })
+  assert.equal(fields.views?.label, '内容视图')
+})
+
 test('recordBuiltinValues fills required record columns', () => {
   assert.deepEqual(recordBuiltinValues({}), {
     createdAt: 0,
