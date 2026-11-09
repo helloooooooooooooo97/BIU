@@ -21,7 +21,7 @@ export function layoutsAssetName(pageId: string) {
 export function defaultPageLayout(): PageLayoutView {
   return {
     id: PAGE_DEFAULT_LAYOUT_ID,
-    name: '默认',
+    name: '默认视图',
     builtin: true,
     contentViewId: 'doc',
     propViewId: 'table',
