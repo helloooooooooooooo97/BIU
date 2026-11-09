@@ -3,7 +3,7 @@ import type { Context } from 'cordis'
 import type { CollectionNamedDocs, CollectionSpec, DbRecord } from '@biu/type-file-system'
 import { DATABASE_CHANNEL, REQUIRED_RECORD_FIELDS } from '@biu/type-file-system'
 import { PagesStore, PageAssetConflictError, type WorkspaceFs } from './store.ts'
-import { parsePageViews, viewsAssetName } from '@biu/core-editor/host'
+import { parsePageViews, parsePagePropViews, propViewsAssetName, viewsAssetName } from '@biu/core-editor/host'
 import { pageBlocksCollection } from './page-blocks-collection.ts'
 import { PAGE_BLOCK_TICK_MS, PageBlocksIndex } from './page-blocks-index.ts'
 
@@ -33,16 +33,45 @@ async function writePageViews(store: PagesStore, pageId: string, raw: unknown) {
   return views
 }
 
-async function withPageViews(store: PagesStore, row: Awaited<ReturnType<PagesStore['get']>>) {
-  if (!row) return row
-  return { ...row, views: await readPageViews(store, row.id) }
+async function readPagePropViews(store: PagesStore, pageId: string) {
+  try {
+    const { bytes } = await store.readAsset(propViewsAssetName(pageId))
+    return parsePagePropViews(bytes.toString('utf8'))
+  } catch {
+    return []
+  }
 }
 
-export function pageViewFileNames(record: { id?: unknown; views?: unknown }): string[] {
+async function writePagePropViews(store: PagesStore, pageId: string, raw: unknown) {
+  const views = parsePagePropViews(raw)
+  const name = propViewsAssetName(pageId)
+  let etag = ''
+  try {
+    etag = (await store.readAsset(name)).etag
+  } catch {
+    etag = ''
+  }
+  await store.writeAsset(name, `${JSON.stringify(views, null, 2)}\n`, etag ? { etag } : undefined)
+  return views
+}
+
+async function withPageViews(store: PagesStore, row: Awaited<ReturnType<PagesStore['get']>>) {
+  if (!row) return row
+  return {
+    ...row,
+    views: await readPageViews(store, row.id),
+    propViews: await readPagePropViews(store, row.id),
+  }
+}
+
+export function pageViewFileNames(record: { id?: unknown; views?: unknown; propViews?: unknown }): string[] {
   const id = String(record.id ?? '').trim()
   const out: string[] = []
-  if (id) out.push(viewsAssetName(id))
-  for (const view of parsePageViews(record.views)) {
+  if (id) {
+    out.push(viewsAssetName(id))
+    out.push(propViewsAssetName(id))
+  }
+  for (const view of [...parsePageViews(record.views), ...parsePagePropViews(record.propViews)]) {
     for (const raw of [view.file, view.dataFile]) {
       const name = String(raw ?? '')
         .trim()
@@ -96,7 +125,13 @@ export function pagesCollection(store: PagesStore, index: PageBlocksIndex): Coll
           type: 'string',
           label: '视图',
           writable: true,
-          description: '本页特制沙盒视图。JSON 数组：id、name、kind=sandbox、file、dataFile。改视图源码用 db_file path=/pages/<id> name=<file>。文档/大纲/表格/源码是内置视图，不写在这里。',
+          description: '本页正文沙盒视图。JSON 数组：id、name、kind=sandbox、file、dataFile。改视图源码用 db_file path=/pages/<id> name=<file>。文档/大纲/表格/源码是内置正文视图，不写在这里。',
+        },
+        propViews: {
+          type: 'string',
+          label: '属性视图',
+          writable: true,
+          description: '本页属性沙盒视图，与正文视图独立。JSON 数组：id、name、kind=sandbox、file、dataFile。内置默认是属性表。',
         },
       },
     },
@@ -105,6 +140,7 @@ export function pagesCollection(store: PagesStore, index: PageBlocksIndex): Coll
     get: async (id) => withPageViews(store, await store.get(id)),
     update: async (id, patch) => {
       if ('views' in patch) await writePageViews(store, id, patch.views)
+      if ('propViews' in patch) await writePagePropViews(store, id, patch.propViews)
       const row = await store.update(id, patch)
       if ('notes' in patch) await index.reindexPage(row)
       return withPageViews(store, row)

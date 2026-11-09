@@ -4,6 +4,8 @@ import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { PageDetailBar } from './page-detail-bar.tsx'
 import { getPagePresentMode, isPageSourceMode, setPagePresentMode, setPageSourceMode } from './source-mode.ts'
 import { getPageViews, setPageViews } from './page-views.ts'
+import { getPagePropPresentMode, PAGE_PROP_TABLE_VIEW_ID, setPagePropPresentMode } from './page-prop-present.ts'
+import { setPagePropViews } from './page-prop-views.ts'
 import { getPageFind, getPageViewState, patchPageFind, patchPageViewState } from './page-view-state.ts'
 
 afterEach(() => cleanup())
@@ -135,6 +137,24 @@ test('detail bar visible columns host the same flyout as the table view', () => 
   assert.equal(btn.getAttribute('title'), '可见列')
   fireEvent.click(btn)
   assert.ok(getByText('视图列'))
+})
+
+test('detail bar property views stay independent from content present mode', () => {
+  setPagePresentMode('p0133', 'doc')
+  setPagePropPresentMode('p0133', PAGE_PROP_TABLE_VIEW_ID)
+  setPagePropViews('p0133', [
+    { id: 'card1', name: '卡片', kind: 'sandbox', file: 'prop-view-p0133-card1.jsx', dataFile: 'prop-view-data-p0133-card1.json' },
+  ])
+  const { getByLabelText, getByTestId, getByText } = render(<PageDetailBar record={{ id: 'p0133', title: '演示' }} collectionPath="/pages" />)
+  fireEvent.click(getByLabelText('属性展示'))
+  assert.ok(getByText('新建属性视图'))
+  fireEvent.click(getByTestId('page-prop-view-card1'))
+  assert.equal(getPagePropPresentMode('p0133'), 'card1')
+  assert.equal(getPagePresentMode('p0133'), 'doc')
+  fireEvent.click(getByText('文档'))
+  fireEvent.click(getByText('大纲'))
+  assert.equal(getPagePresentMode('p0133'), 'outline')
+  assert.equal(getPagePropPresentMode('p0133'), 'card1')
 })
 
 test('detail bar sort and filter write page view state', () => {

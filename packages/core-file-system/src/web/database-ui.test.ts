@@ -37,6 +37,17 @@ test('decorate merges DetailBar; later layer wins', () => {
   assert.equal(ui.chrome('/pages').DetailBar, Second)
 })
 
+test('decorate merges Properties; later layer wins', () => {
+  const ctx = new Context()
+  const ui = new DatabaseUiService(ctx)
+  const First = ({ children }: { children: unknown }) => children
+  const Second = ({ children }: { children: unknown }) => children
+  ui.decorate('/pages', { Properties: First as never })
+  assert.equal(ui.chrome('/pages').Properties, First)
+  ui.decorate('/pages', { Properties: Second as never })
+  assert.equal(ui.chrome('/pages').Properties, Second)
+})
+
 test('decorate merges DetailTools; later layer wins', () => {
   const ctx = new Context()
   const ui = new DatabaseUiService(ctx)

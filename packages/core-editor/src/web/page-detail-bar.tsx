@@ -16,12 +16,22 @@ import {
   MagnifyingGlassIcon,
   PencilSquareIcon,
   PlusIcon,
+  QueueListIcon,
   Square2StackIcon,
   Squares2X2Icon,
   TableCellsIcon,
   AdjustmentsHorizontalIcon,
 } from '@heroicons/react/16/solid'
 import { setPagePresentMode, usePagePresentMode } from './source-mode.ts'
+import { PAGE_PROP_TABLE_VIEW_ID, setPagePropPresentMode, usePagePropPresentMode } from './page-prop-present.ts'
+import {
+  copyPagePropSandboxView,
+  createPagePropSandboxView,
+  deletePagePropSandboxView,
+  loadPagePropViews,
+  renamePagePropSandboxView,
+  usePagePropViews,
+} from './page-prop-views.ts'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { copyPageSandboxView, createPageSandboxView, deletePageSandboxView, loadPageViews, renamePageSandboxView, usePageViews } from './page-views.ts'
 import { kindLabel } from './block-id.ts'
@@ -70,6 +80,7 @@ function Row({
 export function PageDetailBar({
   record,
   schema,
+  collectionPath,
   hiddenPropertyKeys = [],
   onHiddenPropertyKeys,
   visiblePropertyKeys,
@@ -84,6 +95,8 @@ export function PageDetailBar({
 }: FsDetailBarProps) {
   const present = usePagePresentMode(record.id)
   const pageViews = usePageViews(record.id)
+  const propPresent = usePagePropPresentMode(record.id)
+  const propViews = usePagePropViews(record.id)
   const view = usePageViewState(record.id)
   const find = usePageFind(record.id)
   const searchRef = useRef<HTMLDivElement>(null)
@@ -92,6 +105,7 @@ export function PageDetailBar({
   const [refreshing, setRefreshing] = useState(false)
   const viewRef = useRef<HTMLDivElement>(null)
   const modeRef = useRef<HTMLDivElement>(null)
+  const propRef = useRef<HTMLDivElement>(null)
   const sortRef = useRef<HTMLDivElement>(null)
   const filterRef = useRef<HTMLDivElement>(null)
   const columnRef = useRef<HTMLDivElement>(null)
@@ -106,6 +120,12 @@ export function PageDetailBar({
   const [creatingView, setCreatingView] = useState(false)
   const [renamingView, setRenamingView] = useState('')
   const [renameDraft, setRenameDraft] = useState('')
+  const [creatingPropView, setCreatingPropView] = useState(false)
+  const [renamingPropView, setRenamingPropView] = useState('')
+  const [renamePropDraft, setRenamePropDraft] = useState('')
+  const pageRecord = !collectionPath || collectionPath === '/pages'
+  const propSandbox = propViews.find((item) => item.id === propPresent)
+  const propViewId = propSandbox ? propSandbox.id : PAGE_PROP_TABLE_VIEW_ID
   const filterOn = pageFilterActive(view)
   const sortOn = view.sort !== 'doc'
   const props = Object.entries(schema?.fields ?? {})
@@ -116,7 +136,8 @@ export function PageDetailBar({
   useEffect(() => {
     setOpen(null)
     void loadPageViews(record.id, record.views)
-  }, [record.id, record.views])
+    void loadPagePropViews(record.id, record.propViews)
+  }, [record.id, record.views, record.propViews])
 
   useEffect(() => {
     if (!find.open) return
@@ -357,6 +378,155 @@ export function PageDetailBar({
             ) : null}
           </div>
         </HeadlessDismiss>
+        {pageRecord ? (
+          <div className="tasks-sort-wrap" ref={propRef}>
+            <button
+              type="button"
+              className={`tasks-sort-btn${open === 'props' || propViewId !== PAGE_PROP_TABLE_VIEW_ID ? ' is-active' : ''}`}
+              aria-label="属性展示"
+              title="属性展示"
+              data-testid="page-prop-view"
+              onClick={() => toggle('props')}
+            >
+              <QueueListIcon aria-hidden className="size-[14px]" />
+            </button>
+            {open === 'props' ? (
+              <HeadlessDismiss onDismiss={() => setOpen(null)} insideRef={propRef}>
+                <div className="tasks-sort-menu fsdb-tool-flyout" role="menu">
+                  <div className="tasks-sort-list">
+                    <div className={`tasks-viewdd-item${propViewId === PAGE_PROP_TABLE_VIEW_ID ? ' is-active' : ''}`}>
+                      <button
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={propViewId === PAGE_PROP_TABLE_VIEW_ID}
+                        className="tasks-viewdd-item-main fsdb-tool-row"
+                        data-testid="page-prop-view-table"
+                        onClick={() => {
+                          setPagePropPresentMode(record.id, PAGE_PROP_TABLE_VIEW_ID)
+                          setOpen(null)
+                        }}
+                      >
+                        <TableCellsIcon aria-hidden className="tasks-viewdd-item-ico" />
+                        <span className="tasks-viewdd-item-name">表格</span>
+                      </button>
+                    </div>
+                    {propViews.map((item) => (
+                      <div key={item.id} className={`tasks-viewdd-item${item.id === propViewId ? ' is-active' : ''}`}>
+                        {renamingPropView === item.id ? (
+                          <div className="tasks-viewdd-item-main fsdb-tool-row">
+                            <QueueListIcon aria-hidden className="tasks-viewdd-item-ico" />
+                            <input
+                              className="tasks-viewdd-item-name"
+                              aria-label={`属性视图名称 ${item.name}`}
+                              value={renamePropDraft}
+                              autoFocus
+                              onChange={(event) => setRenamePropDraft(event.target.value)}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') {
+                                  event.preventDefault()
+                                  void renamePagePropSandboxView(record.id, item.id, renamePropDraft).catch(() => undefined)
+                                  setRenamingPropView('')
+                                }
+                                if (event.key === 'Escape') setRenamingPropView('')
+                              }}
+                              onBlur={() => {
+                                void renamePagePropSandboxView(record.id, item.id, renamePropDraft).catch(() => undefined)
+                                setRenamingPropView('')
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            role="menuitemradio"
+                            aria-checked={item.id === propViewId}
+                            className="tasks-viewdd-item-main fsdb-tool-row"
+                            data-testid={`page-prop-view-${item.id}`}
+                            onClick={() => {
+                              setPagePropPresentMode(record.id, item.id)
+                              setOpen(null)
+                            }}
+                          >
+                            <QueueListIcon aria-hidden className="tasks-viewdd-item-ico" />
+                            <span className="tasks-viewdd-item-name">{item.name}</span>
+                          </button>
+                        )}
+                        <span className="tasks-viewdd-item-actions">
+                          <button
+                            type="button"
+                            className="tasks-viewdd-act"
+                            title="拷贝视图"
+                            aria-label={`拷贝属性视图 ${item.name}`}
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={(event) => {
+                              event.preventDefault()
+                              event.stopPropagation()
+                              void copyPagePropSandboxView(record.id, item.id, String(record.title ?? '')).catch(() => undefined)
+                            }}
+                          >
+                            <Square2StackIcon aria-hidden className="size-[14px]" />
+                          </button>
+                          <button
+                            type="button"
+                            className="tasks-viewdd-act"
+                            title="重命名"
+                            aria-label={`重命名属性视图 ${item.name}`}
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={(event) => {
+                              event.preventDefault()
+                              event.stopPropagation()
+                              setRenamingPropView(item.id)
+                              setRenamePropDraft(item.name)
+                            }}
+                          >
+                            <PencilSquareIcon aria-hidden className="size-[14px]" />
+                          </button>
+                          <button
+                            type="button"
+                            className="tasks-viewdd-act is-danger"
+                            title="删除"
+                            aria-label={`删除属性视图 ${item.name}`}
+                            data-testid={`page-prop-view-delete-${item.id}`}
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={(event) => {
+                              event.preventDefault()
+                              event.stopPropagation()
+                              void deletePagePropSandboxView(record.id, item.id).catch(() => undefined)
+                            }}
+                          >
+                            <TrashGlyph aria-hidden className="size-[14px]" />
+                          </button>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="tasks-viewdd-foot">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="tasks-viewdd-saveas fsdb-tool-row font-medium"
+                      data-testid="page-prop-view-create"
+                      disabled={creatingPropView}
+                      onClick={() => {
+                        if (creatingPropView) return
+                        setCreatingPropView(true)
+                        void createPagePropSandboxView(record.id, String(record.title ?? ''), `属性沙盒 ${propViews.length + 1}`)
+                          .catch(() => undefined)
+                          .finally(() => {
+                            setCreatingPropView(false)
+                            setOpen(null)
+                          })
+                      }}
+                    >
+                      <PlusIcon aria-hidden className="size-[14px]" />
+                      {creatingPropView ? '正在创建…' : '新建属性视图'}
+                    </button>
+                  </div>
+                </div>
+              </HeadlessDismiss>
+            ) : null}
+          </div>
+        ) : null}
         <div className="tasks-sort-wrap" ref={modeRef}>
           <button
             type="button"

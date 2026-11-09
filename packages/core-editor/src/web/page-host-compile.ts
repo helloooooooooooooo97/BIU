@@ -6,6 +6,8 @@ export type HostCompileResult =
   | { ok: true; code: string }
   | { ok: false; error: string }
 
+export type HostSlot = 'Block' | 'Field'
+
 function stripReactImports(source: string) {
   return source
     .replace(/^\s*import\s+[\s\S]*?from\s+['"]react['"]\s*;?\s*$/gim, '')
@@ -19,7 +21,7 @@ function prepareJsx(source: string) {
     .replace(/export\s+default\s+/g, 'const __Component = ')
 }
 
-export function compileHostSource(source: string): HostCompileResult {
+function compileSlotSource(source: string, slot: HostSlot): HostCompileResult {
   const text = String(source ?? '').trim()
   if (!text) return { ok: false, error: 'empty source' }
   if (FORBIDDEN.test(text)) return { ok: false, error: 'source cannot import or require modules' }
@@ -32,20 +34,24 @@ export function compileHostSource(source: string): HostCompileResult {
       transforms: ['jsx', 'typescript'],
       jsxRuntime: 'classic',
       production: true,
-      filePath: 'page-view.tsx',
+      filePath: slot === 'Field' ? 'page-prop-view.tsx' : 'page-view.tsx',
     }).code
     // eslint-disable-next-line @typescript-eslint/no-implied-eval
-    new Function('React', 'Block', 'biu', code)
+    new Function('React', slot, 'biu', code)
     return { ok: true, code }
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) }
   }
 }
 
-export function loadHostComponent(code: string, React: unknown, Block: unknown, biu: unknown) {
+export function compileHostSource(source: string, slot: HostSlot = 'Block'): HostCompileResult {
+  return compileSlotSource(source, slot)
+}
+
+export function loadHostComponent(code: string, React: unknown, Block: unknown, biu: unknown, slot: HostSlot = 'Block') {
   const factory = new Function(
     'React',
-    'Block',
+    slot,
     'biu',
     `"use strict";
      ${code}
