@@ -15,12 +15,15 @@ test('detail bar lists page-bound sandbox views', () => {
   setPageViews('p0133', [
     { id: 'site1', name: '官网', kind: 'sandbox', file: 'view-p0133-site1.jsx', dataFile: 'view-data-p0133-site1.json' },
   ])
-  const { getByText, getByTestId } = render(<PageDetailBar record={{ id: 'p0133', title: '演示' }} />)
+  const { getByText, getByTestId, getByLabelText, queryByText } = render(<PageDetailBar record={{ id: 'p0133', title: '演示' }} />)
   fireEvent.click(getByText('文档'))
-  assert.ok(getByText('新建沙盒视图'))
+  assert.equal(queryByText('新建沙盒视图'), null)
+  assert.equal(queryByText('新建内容视图'), null)
   fireEvent.click(getByTestId('page-view-site1'))
   assert.equal(getPagePresentMode('p0133'), 'site1')
   assert.ok(getByText('官网'))
+  fireEvent.click(getByLabelText('查看模式'))
+  assert.ok(getByText('新建内容视图'))
 })
 
 test('detail bar deletes a sandbox view and leaves the document', async () => {
@@ -31,11 +34,11 @@ test('detail bar deletes a sandbox view and leaves the document', async () => {
   const original = globalThis.fetch
   globalThis.fetch = async () => new Response('{}', { status: 200 })
   try {
-    const { getByLabelText, getByText } = render(<PageDetailBar record={{ id: 'p0133', title: '演示' }} />)
+    const { getByLabelText, getByText, getAllByTitle } = render(<PageDetailBar record={{ id: 'p0133', title: '演示' }} />)
     fireEvent.click(getByText('官网'))
-    assert.ok(getByLabelText('拷贝沙盒视图 官网'))
-    assert.ok(getByLabelText('重命名沙盒视图 官网'))
-    fireEvent.click(getByLabelText('删除沙盒视图 官网'))
+    assert.ok(getAllByTitle('拷贝视图').length)
+    assert.ok(getByLabelText('重命名 官网'))
+    fireEvent.click(getByLabelText('删除 官网'))
     await waitFor(() => {
       assert.equal(getPageViews('p0133').length, 0)
     })
