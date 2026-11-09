@@ -280,6 +280,24 @@ export const BUILTIN_FIELDS = {
   dependsOn: { type: 'multi-ref', label: '依赖', writable: true },
   createdBy: { type: 'person', label: '创建人', writable: false },
   updatedBy: { type: 'person', label: '编辑人', writable: false, multiple: true },
+  views: {
+    type: 'string',
+    label: '内容视图',
+    writable: true,
+    description: '这条记录的内容沙盒视图。JSON 数组：id、name、kind=sandbox、file、dataFile。所有表的记录都有。内置内容模式不写在这里。',
+  },
+  propViews: {
+    type: 'string',
+    label: '属性视图',
+    writable: true,
+    description: '这条记录的属性沙盒视图，与内容视图独立。JSON 数组：id、name、kind=sandbox、file、dataFile。内置默认是属性表。所有表的记录都有。',
+  },
+  layouts: {
+    type: 'string',
+    label: '组合视图',
+    writable: true,
+    description: '这条记录保存的组合视图，和表视图一样：一条绑内容展示、属性展示、筛选、排序。内置「默认视图」不写在这里。所有表的记录都有。',
+  },
 } as const satisfies Record<string, FieldSpec>
 
 /** 登记 CollectionSpec.schema.fields 必须声明的记录列。由登记方自己存；创建人/编辑人也可由 Core 叠一层。 */
@@ -292,6 +310,9 @@ export const REQUIRED_RECORD_FIELD_KEYS = [
   'dependsOn',
   'createdBy',
   'updatedBy',
+  'views',
+  'propViews',
+  'layouts',
 ] as const
 
 export type RequiredRecordFieldKey = (typeof REQUIRED_RECORD_FIELD_KEYS)[number]
@@ -309,10 +330,13 @@ export const REQUIRED_RECORD_FIELDS: RequiredRecordFields = {
   dependsOn: BUILTIN_FIELDS.dependsOn,
   createdBy: BUILTIN_FIELDS.createdBy,
   updatedBy: BUILTIN_FIELDS.updatedBy,
+  views: BUILTIN_FIELDS.views,
+  propViews: BUILTIN_FIELDS.propViews,
+  layouts: BUILTIN_FIELDS.layouts,
 }
 
 /** 表格默认不展开这些内置列（标题除外）。分面作为默认业务列留下。 */
-export const BUILTIN_FIELD_KEYS = ['id', 'createdAt', 'updatedAt', 'content', 'emoji', 'parentId', 'dependsOn', 'createdBy', 'updatedBy'] as const
+export const BUILTIN_FIELD_KEYS = ['id', 'createdAt', 'updatedAt', 'content', 'emoji', 'parentId', 'dependsOn', 'createdBy', 'updatedBy', 'views', 'propViews', 'layouts'] as const
 
 export const RESERVED_SCHEMA_FIELD_KEYS = Object.keys(BUILTIN_FIELDS)
 
@@ -611,6 +635,9 @@ export function withBuiltinFields(
   else next.createdBy = { ...BUILTIN_FIELDS.createdBy, ...next.createdBy, type: 'person', writable: false }
   if (!next.updatedBy) next.updatedBy = BUILTIN_FIELDS.updatedBy
   else next.updatedBy = { ...BUILTIN_FIELDS.updatedBy, ...next.updatedBy, type: 'person', writable: false, multiple: true }
+  next.views = { ...BUILTIN_FIELDS.views, ...next.views, type: 'string', writable: true }
+  next.propViews = { ...BUILTIN_FIELDS.propViews, ...next.propViews, type: 'string', writable: true }
+  next.layouts = { ...BUILTIN_FIELDS.layouts, ...next.layouts, type: 'string', writable: true }
   if (contentField === 'content' && !next.content) next.content = BUILTIN_FIELDS.content
   const ordered: Record<string, FieldSpec> = {
     id: next.id,
