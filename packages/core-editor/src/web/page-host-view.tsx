@@ -12,7 +12,6 @@ import { capturePageScroll } from './page-scroll-pin.ts'
 import { getPageEditor, usePageEditorVersion } from './service.ts'
 import { SourceEditor } from './source-editor.tsx'
 import { defaultSandboxSource } from '../page-views.ts'
-import { defaultLayoutSandboxSource } from '../page-layouts.ts'
 import { pageHostPickKey, stampPageHostPickSurfaces } from './page-host-pick.ts'
 
 export type HostBlockInfo = {
@@ -339,9 +338,7 @@ export function PageHostView({
   usePageLayouts(pageId)
   const view = viewOf(pageId, viewId)
   const layoutView = layoutSandboxOf(pageId, viewId)
-  const fallback = layoutView
-    ? defaultLayoutSandboxSource(String(record.title ?? ''))
-    : defaultSandboxSource(String(record.title ?? ''))
+  const fallback = defaultSandboxSource(String(record.title ?? ''))
   const [source, setSource] = useState(() => peekPageFile(view?.file ?? '') || fallback)
   const [tab, setTab] = useState<HostTab>('preview')
   const [expanded, setExpanded] = useState(false)
@@ -365,9 +362,7 @@ export function PageHostView({
   useEffect(() => {
     let gone = false
     const file = view?.file
-    const next = layoutView
-      ? defaultLayoutSandboxSource(String(record.title ?? ''))
-      : defaultSandboxSource(String(record.title ?? ''))
+    const next = defaultSandboxSource(String(record.title ?? ''))
     if (!file) {
       setSource(next)
       return

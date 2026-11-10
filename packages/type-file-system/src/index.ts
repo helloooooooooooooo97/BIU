@@ -296,7 +296,7 @@ export const BUILTIN_FIELDS = {
     type: 'string',
     label: '全局视图',
     writable: true,
-    description: '这条记录保存的全局视图：可组合内容展示与属性展示、筛选、排序，也可以像内容/属性视图一样用代码沙盒。内置「默认视图」不写在这里。所有表的记录都有。',
+    description: '这条记录保存的全局视图：组合内容展示、属性展示、筛选、排序。内置「默认视图」不写在这里。同时画属性和正文用内容沙盒。所有表的记录都有。',
   },
 } as const satisfies Record<string, FieldSpec>
 
