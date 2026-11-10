@@ -16,7 +16,7 @@ import {
   type PagePropSandboxView,
 } from './page-prop-views.ts'
 import { usePageFileTick } from './page-views.ts'
-import { PAGE_PROP_TABLE_VIEW_ID, usePagePropPresentMode } from './page-prop-present.ts'
+import { PAGE_PROP_HIDDEN_VIEW_ID, usePagePropPresentMode } from './page-prop-present.ts'
 
 type HostTab = 'preview' | 'code' | 'split'
 
@@ -415,6 +415,7 @@ export function PageProperties({
   const present = usePagePropPresentMode(record.id)
   const views = usePagePropViews(record.id)
   const sandbox = views.find((item) => item.id === present)
+  if (present === PAGE_PROP_HIDDEN_VIEW_ID) return null
   if (!page || !sandbox) return children
   return (
     <PagePropHostView record={record} viewId={sandbox.id} schema={schema} writable={writable !== false} />

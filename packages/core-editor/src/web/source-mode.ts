@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react'
 import { capturePageScroll } from './page-scroll-pin.ts'
 import { PAGE_VIEW_EVENT } from './page-view-state.ts'
 
-export const PAGE_BUILTIN_MODES = ['doc', 'outline', 'table', 'source'] as const
+export const PAGE_BUILTIN_MODES = ['doc', 'outline', 'table', 'source', 'hidden'] as const
 export type PageBuiltinMode = (typeof PAGE_BUILTIN_MODES)[number]
 export type PagePresentMode = PageBuiltinMode | string
 

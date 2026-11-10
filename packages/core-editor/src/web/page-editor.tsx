@@ -398,6 +398,7 @@ export function PageEditor(props: FsContentProps) {
   const layout = useActivePageLayout(props.record.id)
   if (props.status === 'loading') return <PageEditorLoading />
   if (props.status === 'failed') return <PageEditorFailed onRetry={props.onRetry} />
+  if (present === 'hidden') return null
   if (layout.kind === 'sandbox' && layout.file) {
     return <PageHostShell {...props} viewId={layout.id} />
   }

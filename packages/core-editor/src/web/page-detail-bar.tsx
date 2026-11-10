@@ -11,6 +11,7 @@ import {
   CodeBracketIcon,
   DocumentTextIcon,
   EyeIcon,
+  EyeSlashIcon,
   FunnelIcon,
   ListBulletIcon,
   MagnifyingGlassIcon,
@@ -23,7 +24,7 @@ import {
   AdjustmentsHorizontalIcon,
 } from '@heroicons/react/16/solid'
 import { usePagePresentMode } from './source-mode.ts'
-import { PAGE_PROP_TABLE_VIEW_ID, usePagePropPresentMode } from './page-prop-present.ts'
+import { PAGE_PROP_HIDDEN_VIEW_ID, PAGE_PROP_TABLE_VIEW_ID, usePagePropPresentMode } from './page-prop-present.ts'
 import {
   copyPagePropSandboxView,
   createPagePropSandboxView,
@@ -60,6 +61,7 @@ const MODES = [
   { id: 'outline' as const, label: '大纲', Icon: ListBulletIcon },
   { id: 'table' as const, label: '表格', Icon: TableCellsIcon },
   { id: 'source' as const, label: '源码', Icon: CodeBracketIcon },
+  { id: 'hidden' as const, label: '隐藏', Icon: EyeSlashIcon },
 ]
 
 const KINDS = ['paragraph', 'heading', 'bulletList', 'orderedList', 'blockquote', 'codeBlock', 'table', 'pageBlock', 'slide', 'blockMath', 'image']
@@ -141,7 +143,12 @@ export function PageDetailBar({
   const createRef = useRef<HTMLDivElement>(null)
   const pageRecord = !collectionPath || collectionPath === '/pages'
   const propSandbox = propViews.find((item) => item.id === propPresent)
-  const propViewId = propSandbox ? propSandbox.id : PAGE_PROP_TABLE_VIEW_ID
+  const propViewId =
+    propPresent === PAGE_PROP_HIDDEN_VIEW_ID
+      ? PAGE_PROP_HIDDEN_VIEW_ID
+      : propSandbox
+        ? propSandbox.id
+        : PAGE_PROP_TABLE_VIEW_ID
   const filterOn = pageFilterActive(view)
   const sortOn = view.sort !== 'doc'
   const props = Object.entries(schema?.fields ?? {})
@@ -410,7 +417,7 @@ export function PageDetailBar({
           <div className="tasks-sort-wrap" ref={propRef}>
             <button
               type="button"
-              className={`tasks-sort-btn${open === 'props' || propViewId !== PAGE_PROP_TABLE_VIEW_ID ? ' is-active' : ''}`}
+              className={`tasks-sort-btn${open === 'props' || propViewId === PAGE_PROP_HIDDEN_VIEW_ID || propViewId !== PAGE_PROP_TABLE_VIEW_ID ? ' is-active' : ''}`}
               aria-label="属性展示"
               title="属性展示"
               data-testid="page-prop-view"
@@ -436,6 +443,22 @@ export function PageDetailBar({
                       >
                         <TableCellsIcon aria-hidden className="tasks-viewdd-item-ico" />
                         <span className="tasks-viewdd-item-name">表格</span>
+                      </button>
+                    </div>
+                    <div className={`tasks-viewdd-item${propViewId === PAGE_PROP_HIDDEN_VIEW_ID ? ' is-active' : ''}`}>
+                      <button
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={propViewId === PAGE_PROP_HIDDEN_VIEW_ID}
+                        className="tasks-viewdd-item-main fsdb-tool-row"
+                        data-testid="page-prop-view-hidden"
+                        onClick={() => {
+                          void patchActivePageLayout(record.id, { propViewId: PAGE_PROP_HIDDEN_VIEW_ID })
+                          setOpen(null)
+                        }}
+                      >
+                        <EyeSlashIcon aria-hidden className="tasks-viewdd-item-ico" />
+                        <span className="tasks-viewdd-item-name">隐藏</span>
                       </button>
                     </div>
                     {propViews.map((item) => (
@@ -564,7 +587,7 @@ export function PageDetailBar({
         <div className="tasks-sort-wrap" ref={modeRef}>
           <button
             type="button"
-            className={`tasks-sort-btn${open === 'mode' ? ' is-active' : ''}`}
+            className={`tasks-sort-btn${open === 'mode' || present === 'hidden' ? ' is-active' : ''}`}
             aria-label="查看模式"
             title="呈现方式"
             onClick={() => toggle('mode')}
@@ -581,6 +604,7 @@ export function PageDetailBar({
                     role="menuitemradio"
                     aria-checked={item.id === present}
                     className={`tasks-viewdd-item-main fsdb-tool-row${item.id === present ? ' is-active' : ''}`}
+                    data-testid={item.id === 'hidden' ? 'page-view-hidden' : undefined}
                     onClick={() => {
                       void patchActivePageLayout(record.id, { contentViewId: item.id })
                       setOpen(null)

@@ -15,7 +15,7 @@ import { listedPageLayouts as mergeListedLayouts } from '../page-layouts.ts'
 import { copyPageSandboxView, deletePageSandboxView, getPageViews, parsePageViews, subscribePageViews } from './page-views.ts'
 import { copyPagePropSandboxView, deletePagePropSandboxView, getPagePropViews, parsePagePropViews, subscribePagePropViews } from './page-prop-views.ts'
 import { getPagePresentMode, PAGE_BUILTIN_MODES, subscribePagePresent } from './source-mode.ts'
-import { getPagePropPresentMode, PAGE_PROP_TABLE_VIEW_ID, subscribePagePropPresent } from './page-prop-present.ts'
+import { getPagePropPresentMode, PAGE_PROP_HIDDEN_VIEW_ID, PAGE_PROP_TABLE_VIEW_ID, subscribePagePropPresent } from './page-prop-present.ts'
 
 const VIEW_CATALOG_HOSTS_KEY = '__biuViewCatalogHosts'
 
@@ -24,10 +24,11 @@ const CONTENT_BUILTINS = [
   { id: 'outline', name: '大纲', icon: 'outline' as const, builtin: true },
   { id: 'table', name: '表格', icon: 'table' as const, builtin: true },
   { id: 'source', name: '源码', icon: 'source' as const, builtin: true },
+  { id: 'hidden', name: '隐藏', icon: 'hidden' as const, builtin: true },
 ]
 
 type FieldKey = 'views' | 'propViews' | 'layouts'
-type Option = { id: string; name: string; icon: 'doc' | 'outline' | 'table' | 'source' | 'sandbox' | 'layout' | 'props'; builtin?: boolean }
+type Option = { id: string; name: string; icon: 'doc' | 'outline' | 'table' | 'source' | 'hidden' | 'sandbox' | 'layout' | 'props'; builtin?: boolean }
 
 function options(record: DbRecord, fieldKey: FieldKey): Option[] {
   const id = String(record.id ?? '').trim()
@@ -45,6 +46,7 @@ function options(record: DbRecord, fieldKey: FieldKey): Option[] {
     const listed = live.length ? live : parsePagePropViews(record.propViews)
     return [
       { id: PAGE_PROP_TABLE_VIEW_ID, name: '表格', icon: 'table', builtin: true },
+      { id: PAGE_PROP_HIDDEN_VIEW_ID, name: '隐藏', icon: 'hidden', builtin: true },
       ...listed.map((item) => ({ id: item.id, name: item.name, icon: 'props' as const })),
     ]
   }
