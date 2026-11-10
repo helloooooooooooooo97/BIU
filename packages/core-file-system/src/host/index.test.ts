@@ -1829,6 +1829,16 @@ test('sandbox patch writes only the current record and this tag', async () => {
   assert.equal(patched.value.tag.values[awardId].oscar, true)
   assert.equal(db.tags.recordTag('/pages', 'p2')?.values[movieId]?.status, undefined)
   await assert.rejects(() => db.patchTagSandbox('/pages/p1', movieId, { 奥斯卡: true }), /unknown tag field/)
+  await db.update(`/tags/${movieId}`, {
+    fields: JSON.stringify([
+      { key: 'status', type: 'string', label: '状态' },
+      { key: 'director', type: 'string', label: '导演' },
+      { key: 'locked', type: 'string', label: '锁定', writable: false },
+      { key: 'year', type: 'number', label: '年份' },
+    ]),
+  })
+  await assert.rejects(() => db.patchTagSandbox('/pages/p1', movieId, { locked: 'x' }), /not writable/)
+  await assert.rejects(() => db.patchTagSandbox('/pages/p1', movieId, { year: 'nope' }), /expected number/)
   await assert.rejects(() => db.patchTagSandbox('/pages', movieId, { 状态: '进行中' }), /current record/)
   await assert.rejects(() => db.patchTagSandbox(`/tags/${movieId}`, movieId, { 状态: '进行中' }), /no instance property values/)
 })

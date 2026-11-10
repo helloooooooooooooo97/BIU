@@ -85,7 +85,7 @@ export function defaultSandboxSource(title = '') {
         <Api name="biu.kinds()" use={'返回 { kind, plugin, label }[]'} note="编辑器里已注册、可插入的块类型。" />
         <Api name="biu.update(id, patch)" use={"await biu.update(blockId, { title: '新标题' })"} note="把 patch 写进那一块的 data。" />
         <Api name="biu.read() / biu.write(v)" use="本视图自己的 JSON 文件" note="和页面正文分开，适合记这个沙盒的 UI 状态。" />
-        <Api name="biu.record / fields / values" use="整条记录、字段定义、当前值" note={'get(key)、set(key, value)、patch({ key: value }) 写回记录。'} />
+        <Api name="biu.record / fields / values" use="整条记录、字段定义、当前值" note={'get(key)、set(key, value)、patch({ key: value }) 只写可写字段，未知/只读/类型不对会抛错。'} />
       </section>
       <section>
         <h2 style={{ margin: '0 0 8px', fontSize: 16 }}>用法</h2>

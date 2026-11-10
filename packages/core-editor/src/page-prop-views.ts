@@ -55,8 +55,8 @@ export function defaultPropSandboxSource(title = '') {
         <Api name="biu.fields()" use={'返回 { key, type, label, writable }[]'} note="可展示的属性定义。" />
         <Api name="biu.values()" use="当前这些字段的值对象" note="只读快照；改值请用 set / patch。" />
         <Api name="biu.get(key)" use="biu.get('title')" note="读一个字段。" />
-        <Api name="biu.set(key, value)" use="biu.set('title', '新标题')" note="写一个字段并保存记录。" />
-        <Api name="biu.patch(bag)" use={"await biu.patch({ title: '新标题' })"} note="一次写多个字段。bag 必须是对象。" />
+        <Api name="biu.set(key, value)" use="biu.set('title', '新标题')" note="只写 schema 里 writable 且非 computed 的字段；未知/只读会抛错。" />
+        <Api name="biu.patch(bag)" use={"await biu.patch({ title: '新标题' })"} note="一次写多个字段。会按类型校验，bag 必须是对象。" />
         <Api name="biu.read() / biu.write(v)" use="本视图自己的 JSON 文件" note="和记录字段分开，适合记这个沙盒的 UI 状态。" />
       </section>
       <section>
