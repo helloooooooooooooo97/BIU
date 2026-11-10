@@ -129,8 +129,10 @@ test('detail bar hosts previous and next after refresh', () => {
   const refresh = getByLabelText('刷新')
   const prev = getByLabelText('上一条')
   const next = getByLabelText('下一条')
+  const create = getByLabelText('新建')
   assert.ok(refresh.compareDocumentPosition(prev) & Node.DOCUMENT_POSITION_FOLLOWING)
   assert.ok(prev.compareDocumentPosition(next) & Node.DOCUMENT_POSITION_FOLLOWING)
+  assert.ok(next.compareDocumentPosition(create) & Node.DOCUMENT_POSITION_FOLLOWING)
 })
 
 test('detail bar has no page insert or child-page create', () => {
@@ -183,9 +185,12 @@ test('detail bar new menu creates global, property, and content views', () => {
   const { getByLabelText, getByText } = render(<PageDetailBar record={{ id: 'p0133', title: '演示' }} collectionPath="/pages" />)
   assert.ok(getByLabelText('新建'))
   fireEvent.click(getByLabelText('新建类型'))
-  assert.ok(getByText('全局视图'))
-  assert.ok(getByText('属性视图'))
-  assert.ok(getByText('内容视图'))
+  const layout = getByText('全局视图')
+  const prop = getByText('属性视图')
+  const content = getByText('内容视图')
+  assert.ok(layout.querySelector('svg'))
+  assert.ok(prop.querySelector('svg'))
+  assert.ok(content.querySelector('svg'))
 })
 
 test('property and content presentation bind to the active layout independently', () => {

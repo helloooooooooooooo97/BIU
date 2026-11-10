@@ -7,6 +7,7 @@ import {
   ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  DocumentTextIcon,
   EyeIcon,
   FunnelIcon,
   MagnifyingGlassIcon,
@@ -708,6 +709,16 @@ export function TagDetailBar({
         >
           <ArrowPathIcon aria-hidden className={`size-[14px]${refreshing ? ' fsdb-spin' : ''}`} />
         </button>
+        {canPrev ? (
+          <button type="button" className="tasks-refresh" title="上一条" aria-label="上一条" onClick={onPrev}>
+            <ChevronLeftIcon aria-hidden className="size-[14px]" />
+          </button>
+        ) : null}
+        {canNext ? (
+          <button type="button" className="tasks-refresh" title="下一条" aria-label="下一条" onClick={onNext}>
+            <ChevronRightIcon aria-hidden className="size-[14px]" />
+          </button>
+        ) : null}
         <div className="fsdb-create-group" ref={createRef}>
           <button
             type="button"
@@ -734,12 +745,15 @@ export function TagDetailBar({
               {createOpen ? (
                 <div className="fsdb-create-scope-menu" role="menu">
                   <button type="button" role="menuitem" className={createKind === 'layout' ? 'is-on' : ''} onClick={() => void createChosen('layout')}>
+                    <Squares2X2Icon aria-hidden className="size-[14px]" />
                     全局视图
                   </button>
                   <button type="button" role="menuitem" className={createKind === 'prop' ? 'is-on' : ''} onClick={() => void createChosen('prop')}>
+                    <QueueListIcon aria-hidden className="size-[14px]" />
                     属性视图
                   </button>
                   <button type="button" role="menuitem" className={createKind === 'content' ? 'is-on' : ''} onClick={() => void createChosen('content')}>
+                    <DocumentTextIcon aria-hidden className="size-[14px]" />
                     内容视图
                   </button>
                 </div>
@@ -747,16 +761,6 @@ export function TagDetailBar({
             </div>
           </HeadlessDismiss>
         </div>
-        {canPrev ? (
-          <button type="button" className="tasks-refresh" title="上一条" aria-label="上一条" onClick={onPrev}>
-            <ChevronLeftIcon aria-hidden className="size-[14px]" />
-          </button>
-        ) : null}
-        {canNext ? (
-          <button type="button" className="tasks-refresh" title="下一条" aria-label="下一条" onClick={onNext}>
-            <ChevronRightIcon aria-hidden className="size-[14px]" />
-          </button>
-        ) : null}
       </div>
     </div>
   )
