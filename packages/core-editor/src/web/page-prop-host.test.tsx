@@ -113,6 +113,18 @@ test('property sandbox host shares the page-host sandbox pick entry', () => {
 test('property sandbox nav tools use the same muted icon color as page chrome', () => {
   assert.match(
     PAGE_EDITOR_STYLE,
+    /\.page-block-expand-nav \.page-slide-icon,.page-block-expand-nav \.layout-picker-btn\{[^}]*display:grid/,
+  )
+  assert.match(
+    PAGE_EDITOR_STYLE,
+    /\.page-block-expand-nav \.page-slide-icon,.page-block-expand-nav \.layout-picker-btn\{[^}]*place-items:center/,
+  )
+  assert.match(
+    PAGE_EDITOR_STYLE,
+    /\.page-block-expand-nav \.page-slide-icon,.page-block-expand-nav \.layout-picker-btn\{[^}]*line-height:0/,
+  )
+  assert.match(
+    PAGE_EDITOR_STYLE,
     /\.page-block-expand-nav \.page-slide-icon,.page-block-expand-nav \.layout-picker-btn\{[^}]*color:var\(--biu-color-icon\)/,
   )
   assert.match(PAGE_EDITOR_STYLE, /\.page-block-expand-nav \.page-slide-icon:hover/)
