@@ -13,7 +13,12 @@ test('parseTagViews keeps sandbox catalog entries', () => {
 })
 
 test('default tag sandbox source compiles', () => {
-  const compiled = compileHostSource(defaultTagSandboxSource('动态规划'))
+  const src = defaultTagSandboxSource('动态规划')
+  const compiled = compileHostSource(src)
   assert.equal(compiled.ok, true)
-  if (compiled.ok) assert.match(defaultTagSandboxSource('动态规划'), /biu\.patch/)
+  assert.match(src, /组件 API/)
+  assert.match(src, /数据 API/)
+  assert.match(src, /biu\.tag\(\)/)
+  assert.match(src, /biu\.patch/)
+  assert.match(src, /<Field name=\{field\.key\}/)
 })
