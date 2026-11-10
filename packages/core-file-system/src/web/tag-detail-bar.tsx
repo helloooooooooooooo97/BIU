@@ -381,31 +381,6 @@ export function TagDetailBar({
                       <TableCellsIcon aria-hidden className="tasks-viewdd-item-ico" />
                       <span className="tasks-viewdd-item-name">表格</span>
                     </button>
-                    <span className="tasks-viewdd-item-actions">
-                      <button
-                        type="button"
-                        className="tasks-viewdd-act"
-                        title="拷贝视图"
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={(event) => {
-                          event.preventDefault()
-                          event.stopPropagation()
-                          const id = crypto.randomUUID().replace(/-/g, '').slice(0, 8)
-                          const view: RecordSandboxView = {
-                            id,
-                            name: uniqueViewName('表格 副本', propViews.map((item) => item.name)),
-                            kind: 'sandbox',
-                            file: `tag-prop-${tagId}-${id}.jsx`,
-                            dataFile: `tag-prop-data-${tagId}-${id}.json`,
-                          }
-                          void saveTagPropViews(tagId, [...propViews, view]).then((ok) => {
-                            if (ok) void patchActiveRecordLayout(TAGS_PATH, tagId, { propViewId: view.id }, 'table')
-                          })
-                        }}
-                      >
-                        <Square2StackIcon aria-hidden className="size-[14px]" />
-                      </button>
-                    </span>
                   </div>
                   {propViews.map((item) => (
                     <div key={item.id} className={`tasks-viewdd-item${item.id === propViewId ? ' is-active' : ''}`}>

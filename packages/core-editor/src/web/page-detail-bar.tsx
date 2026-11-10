@@ -409,25 +409,6 @@ export function PageDetailBar({
                         <TableCellsIcon aria-hidden className="tasks-viewdd-item-ico" />
                         <span className="tasks-viewdd-item-name">表格</span>
                       </button>
-                      <span className="tasks-viewdd-item-actions">
-                        <button
-                          type="button"
-                          className="tasks-viewdd-act"
-                          title="拷贝视图"
-                          onMouseDown={(event) => event.preventDefault()}
-                          onClick={(event) => {
-                            event.preventDefault()
-                            event.stopPropagation()
-                            void copyPagePropSandboxView(record.id, PAGE_PROP_TABLE_VIEW_ID, String(record.title ?? ''), '表格')
-                              .then((view) => {
-                                if (view) return patchActivePageLayout(record.id, { propViewId: view.id })
-                              })
-                              .catch(() => undefined)
-                          }}
-                        >
-                          <Square2StackIcon aria-hidden className="size-[14px]" />
-                        </button>
-                      </span>
                     </div>
                     {propViews.map((item) => (
                       <div key={item.id} className={`tasks-viewdd-item${item.id === propViewId ? ' is-active' : ''}`}>

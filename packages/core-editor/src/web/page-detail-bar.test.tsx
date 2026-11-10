@@ -167,6 +167,18 @@ test('detail bar visible columns host the same flyout as the table view', () => 
   assert.ok(getByText('视图列'))
 })
 
+test('builtin property table view has no copy action', () => {
+  setPagePropViews('p0133', [
+    { id: 'card1', name: '卡片', kind: 'sandbox', file: 'prop-view-p0133-card1.jsx', dataFile: 'prop-view-data-p0133-card1.json' },
+  ])
+  const { getByLabelText, getByTestId, queryAllByTitle } = render(<PageDetailBar record={{ id: 'p0133', title: '演示' }} />)
+  fireEvent.click(getByLabelText('属性展示'))
+  const table = getByTestId('page-prop-view-table')
+  assert.equal(table.parentElement?.querySelector('[title="拷贝视图"]'), null)
+  assert.ok(getByTestId('page-prop-view-card1').parentElement?.querySelector('[title="拷贝视图"]'))
+  assert.ok(queryAllByTitle('拷贝视图').length >= 1)
+})
+
 test('property and content presentation bind to the active layout independently', () => {
   setPagePresentMode('p0133', 'doc')
   setPagePropPresentMode('p0133', PAGE_PROP_TABLE_VIEW_ID)
