@@ -21,13 +21,19 @@ test('parse page property views keeps sandbox files bound to the page', () => {
   )
 })
 
-test('default property sandbox source uses Field and record APIs', () => {
+test('default property sandbox source uses Field and record APIs', async () => {
+  const { compileHostSource } = await import('./web/page-host-compile.ts')
   const src = defaultPropSandboxSource('演示页')
   assert.match(src, /export default function App/)
+  assert.match(src, /组件 API/)
+  assert.match(src, /数据 API/)
   assert.match(src, /biu\.record\(\)/)
   assert.match(src, /biu\.fields\(\)/)
+  assert.match(src, /biu\.patch\(/)
+  assert.match(src, /biu\.read\(\)/)
   assert.match(src, /<Field name=\{field\.key\}/)
   assert.doesNotMatch(src, /biu\.blocks\(\)/)
   assert.doesNotMatch(src, /<Block /)
   assert.match(src, /演示页/)
+  assert.equal(compileHostSource(src, 'Field').ok, true)
 })

@@ -23,10 +23,17 @@ test('parsePageViews keeps sandbox views bound to files', () => {
   assert.equal(viewsAssetName('p003'), 'page-views-p003.json')
 })
 
-test('default sandbox source is a host component that uses Block', () => {
+test('default sandbox source is a host component that uses Block', async () => {
+  const { compileHostSource } = await import('./web/page-host-compile.ts')
   const src = defaultSandboxSource('演示页')
   assert.match(src, /export default function App/)
+  assert.match(src, /组件 API/)
+  assert.match(src, /数据 API/)
   assert.match(src, /biu\.blocks\(\)/)
+  assert.match(src, /biu\.update\(/)
+  assert.match(src, /biu\.read\(\)/)
   assert.match(src, /<Block id=\{open\}/)
+  assert.match(src, /<Field name/)
   assert.match(src, /演示页/)
+  assert.equal(compileHostSource(src).ok, true)
 })
