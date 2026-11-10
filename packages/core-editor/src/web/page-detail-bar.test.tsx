@@ -193,6 +193,26 @@ test('detail bar new menu creates global, property, and content views', () => {
   assert.ok(content.querySelector('svg'))
 })
 
+test('content and property menus include a builtin hidden view', () => {
+  setPagePresentMode('p0133', 'doc')
+  setPagePropPresentMode('p0133', PAGE_PROP_TABLE_VIEW_ID)
+  const { getByLabelText, getByTestId, getByText } = render(<PageDetailBar record={{ id: 'p0133', title: '演示' }} collectionPath="/pages" />)
+  fireEvent.click(getByLabelText('属性展示'))
+  fireEvent.click(getByTestId('page-prop-view-hidden'))
+  assert.equal(getPagePropPresentMode('p0133'), 'hidden')
+  assert.equal(getPagePresentMode('p0133'), 'doc')
+  fireEvent.click(getByLabelText('查看模式'))
+  fireEvent.click(getByTestId('page-view-hidden'))
+  assert.equal(getPagePresentMode('p0133'), 'hidden')
+  assert.equal(getPagePropPresentMode('p0133'), 'hidden')
+  fireEvent.click(getByLabelText('查看模式'))
+  fireEvent.click(getByText('文档'))
+  assert.equal(getPagePresentMode('p0133'), 'doc')
+  fireEvent.click(getByLabelText('属性展示'))
+  fireEvent.click(getByTestId('page-prop-view-table'))
+  assert.equal(getPagePropPresentMode('p0133'), PAGE_PROP_TABLE_VIEW_ID)
+})
+
 test('property and content presentation bind to the active layout independently', () => {
   setPagePresentMode('p0133', 'doc')
   setPagePropPresentMode('p0133', PAGE_PROP_TABLE_VIEW_ID)

@@ -336,6 +336,7 @@ const CSS = `
 .fsdb-file-tools .tasks-icon-btn.is-danger:hover{background:var(--biu-color-danger-muted);color:var(--biu-color-danger)}
 .fsdb-files{display:flex;flex-direction:column;gap:2px;min-width:0;width:100%;flex:1}
 .fsdb-fileview{min-width:0;flex:none;height:auto;min-height:0;max-height:none;overflow:visible}
+.fsdb-fileview:empty{display:none}
 .fsdb-content-loading{display:flex;align-items:center;justify-content:center;flex:1;min-height:120px;min-width:0;user-select:none;pointer-events:none;color:var(--biu-color-icon)}
 .fsdb-content-loading-icon,.fsdb-content-loading svg{display:block;flex:none;box-sizing:border-box;width:22px;height:22px;max-width:22px;max-height:22px;overflow:hidden;opacity:0;animation:fsdb-spin .7s linear infinite,fsdb-content-load-in 0s 150ms forwards}
 @keyframes fsdb-content-load-in{to{opacity:1}}

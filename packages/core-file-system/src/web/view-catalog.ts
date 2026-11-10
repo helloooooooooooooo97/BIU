@@ -26,7 +26,7 @@ export const VIEW_CATALOG_HOSTS_KEY = '__biuViewCatalogHosts'
 export const VIEW_CATALOG_KEYS = ['views', 'propViews', 'layouts'] as const
 export type ViewCatalogFieldKey = (typeof VIEW_CATALOG_KEYS)[number]
 
-export type ViewCatalogIcon = 'doc' | 'outline' | 'table' | 'source' | 'sandbox' | 'layout' | 'props'
+export type ViewCatalogIcon = 'doc' | 'outline' | 'table' | 'source' | 'hidden' | 'sandbox' | 'layout' | 'props'
 
 export type ViewCatalogOption = { id: string; name: string; icon: ViewCatalogIcon; builtin?: boolean }
 
@@ -44,6 +44,7 @@ const PAGE_CONTENT_BUILTINS: ViewCatalogOption[] = [
   { id: 'outline', name: '大纲', icon: 'outline', builtin: true },
   { id: 'table', name: '表格', icon: 'table', builtin: true },
   { id: 'source', name: '源码', icon: 'source', builtin: true },
+  { id: 'hidden', name: '隐藏', icon: 'hidden', builtin: true },
 ]
 
 const hosts = new Map<string, ViewCatalogHost>()
@@ -105,6 +106,7 @@ function contentIcon(id: string): ViewCatalogIcon {
   if (id === 'outline') return 'outline'
   if (id === 'table') return 'table'
   if (id === 'source') return 'source'
+  if (id === 'hidden') return 'hidden'
   if (id === 'doc') return 'doc'
   return 'sandbox'
 }
@@ -122,10 +124,19 @@ function defaultOptions(collectionPath: string, record: DbRecord, fieldKey: View
     )
   }
   if (fieldKey === 'propViews') {
-    return withBuiltin(
-      { id: DEFAULT_RECORD_PROP_VIEW_ID, name: '表格', icon: 'table', builtin: true },
-      parseRecordSandboxes(record.propViews).map((item) => ({ id: item.id, name: item.name, icon: 'props' as const })),
-    )
+    const listed = parseRecordSandboxes(record.propViews).map((item) => ({
+      id: item.id,
+      name: item.name,
+      icon: 'props' as const,
+    }))
+    if (path === PAGES_COLLECTION_PATH) {
+      return named([
+        { id: DEFAULT_RECORD_PROP_VIEW_ID, name: '表格', icon: 'table', builtin: true },
+        { id: 'hidden', name: '隐藏', icon: 'hidden', builtin: true },
+        ...listed,
+      ])
+    }
+    return withBuiltin({ id: DEFAULT_RECORD_PROP_VIEW_ID, name: '表格', icon: 'table', builtin: true }, listed)
   }
   if (path === TAGS_COLLECTION_PATH) {
     const live = getTagViews(String(record.id ?? ''))
@@ -288,7 +299,7 @@ async function defaultRemove(collectionPath: string, record: DbRecord, fieldKey:
   }
 }
 
-const CONTENT_BUILTIN_IDS = new Set(['doc', 'outline', 'table', 'source'])
+const CONTENT_BUILTIN_IDS = new Set(['doc', 'outline', 'table', 'source', 'hidden'])
 
 export function canCopyViewCatalogItem(fieldKey: string, item: { id?: string; builtin?: boolean }) {
   if (fieldKey !== 'views' && fieldKey !== 'propViews') return false
@@ -296,7 +307,7 @@ export function canCopyViewCatalogItem(fieldKey: string, item: { id?: string; bu
   if (!id) return false
   if (item.builtin) return false
   if (fieldKey === 'views' && (CONTENT_BUILTIN_IDS.has(id) || id === TAG_TABLE_VIEW_ID)) return false
-  if (fieldKey === 'propViews' && (id === DEFAULT_RECORD_PROP_VIEW_ID || id === 'table')) return false
+  if (fieldKey === 'propViews' && (id === DEFAULT_RECORD_PROP_VIEW_ID || id === 'table' || id === 'hidden')) return false
   return true
 }
 

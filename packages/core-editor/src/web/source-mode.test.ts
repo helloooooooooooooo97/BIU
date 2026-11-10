@@ -29,8 +29,17 @@ test('present mode keeps outline separate from source', () => {
 
 test('custom sandbox view id is not a builtin present mode', () => {
   assert.equal(isPageBuiltinMode('doc'), true)
+  assert.equal(isPageBuiltinMode('hidden'), true)
   assert.equal(isPageCustomView('site1'), true)
   assert.equal(isPageCustomView('table'), false)
+  assert.equal(isPageCustomView('hidden'), false)
+})
+
+test('hidden present mode is stored and default remains doc', () => {
+  assert.equal(getPagePresentMode('page-hidden-default'), 'doc')
+  setPagePresentMode('page-hidden', 'hidden')
+  assert.equal(getPagePresentMode('page-hidden'), 'hidden')
+  assert.equal(JSON.parse(localStorage.getItem('biu.page.present') || '{}')['page-hidden'], 'hidden')
 })
 
 test('present mode survives a fresh read from storage', () => {

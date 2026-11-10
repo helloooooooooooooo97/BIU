@@ -248,6 +248,22 @@ test('dropping a sandbox view unmounts the host even if present still names it',
   assert.equal(getPagePresentMode('gone'), 'doc')
 })
 
+test('hidden content view unmounts the editor', async () => {
+  setPagePresentMode('home', 'hidden')
+  const { container } = render(
+    <PageEditor
+      record={{ id: 'home' }}
+      field="notes"
+      spec={{ type: 'file', label: '正文', writable: true }}
+      value={'# 欢迎\n\n正文'}
+      writable
+    />,
+  )
+  assert.equal(container.querySelector('[data-testid="page-editor"]'), null)
+  assert.equal(container.querySelector('[data-testid="page-host-view"]'), null)
+  setPagePresentMode('home', 'doc')
+})
+
 test('page editor shows retry when content failed to load', () => {
   let retries = 0
   const { container } = render(
