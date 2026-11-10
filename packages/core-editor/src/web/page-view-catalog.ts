@@ -1,35 +1,49 @@
 import type { DbRecord } from '@biu/type-file-system'
-import { listedPageLayouts, selectPageLayout, subscribePageLayouts, getActivePageLayout, patchActivePageLayout } from './page-layouts.ts'
-import { getPageViews, subscribePageViews } from './page-views.ts'
-import { getPagePropViews, subscribePagePropViews } from './page-prop-views.ts'
+import {
+  copyPageLayout,
+  deletePageLayout,
+  listedPageLayouts,
+  selectPageLayout,
+  subscribePageLayouts,
+  getActivePageLayout,
+  patchActivePageLayout,
+  PAGE_DEFAULT_LAYOUT_ID,
+} from './page-layouts.ts'
+import { copyPageSandboxView, deletePageSandboxView, getPageViews, subscribePageViews } from './page-views.ts'
+import { copyPagePropSandboxView, deletePagePropSandboxView, getPagePropViews, subscribePagePropViews } from './page-prop-views.ts'
 import { getPagePresentMode, PAGE_BUILTIN_MODES, subscribePagePresent } from './source-mode.ts'
 import { getPagePropPresentMode, PAGE_PROP_TABLE_VIEW_ID, subscribePagePropPresent } from './page-prop-present.ts'
 
 const VIEW_CATALOG_HOSTS_KEY = '__biuViewCatalogHosts'
 
 const CONTENT_BUILTINS = [
-  { id: 'doc', name: '文档' },
-  { id: 'outline', name: '大纲' },
-  { id: 'table', name: '表格' },
-  { id: 'source', name: '源码' },
-] as const
+  { id: 'doc', name: '文档', icon: 'doc' as const, builtin: true },
+  { id: 'outline', name: '大纲', icon: 'outline' as const, builtin: true },
+  { id: 'table', name: '表格', icon: 'table' as const, builtin: true },
+  { id: 'source', name: '源码', icon: 'source' as const, builtin: true },
+]
 
 type FieldKey = 'views' | 'propViews' | 'layouts'
-type Option = { id: string; name: string }
+type Option = { id: string; name: string; icon: 'doc' | 'outline' | 'table' | 'source' | 'sandbox' | 'layout' | 'props'; builtin?: boolean }
 
 function options(record: DbRecord, fieldKey: FieldKey): Option[] {
   const id = String(record.id ?? '').trim()
   if (fieldKey === 'layouts') {
-    return listedPageLayouts(id).map((item) => ({ id: item.id, name: item.name }))
+    return listedPageLayouts(id).map((item) => ({
+      id: item.id,
+      name: item.name,
+      icon: 'layout',
+      builtin: Boolean(item.builtin) || item.id === PAGE_DEFAULT_LAYOUT_ID,
+    }))
   }
   if (fieldKey === 'propViews') {
     return [
-      { id: PAGE_PROP_TABLE_VIEW_ID, name: '表格' },
-      ...getPagePropViews(id).map((item) => ({ id: item.id, name: item.name })),
+      { id: PAGE_PROP_TABLE_VIEW_ID, name: '表格', icon: 'table', builtin: true },
+      ...getPagePropViews(id).map((item) => ({ id: item.id, name: item.name, icon: 'props' as const })),
     ]
   }
   const builtins = CONTENT_BUILTINS.filter((item) => (PAGE_BUILTIN_MODES as readonly string[]).includes(item.id))
-  return [...builtins, ...getPageViews(id).map((item) => ({ id: item.id, name: item.name }))]
+  return [...builtins, ...getPageViews(id).map((item) => ({ id: item.id, name: item.name, icon: 'sandbox' as const }))]
 }
 
 function selectedId(record: DbRecord, fieldKey: FieldKey) {
@@ -55,6 +69,33 @@ function select(record: DbRecord, fieldKey: FieldKey, viewId: string) {
   void patchActivePageLayout(id, { contentViewId: next })
 }
 
+function copy(record: DbRecord, fieldKey: FieldKey, viewId: string) {
+  const id = String(record.id ?? '').trim()
+  const target = String(viewId ?? '').trim()
+  if (!id || !target) return
+  const title = String(record.title ?? '')
+  if (fieldKey === 'layouts') {
+    const source = listedPageLayouts(id).find((item) => item.id === target)
+    return copyPageLayout(id, source)
+  }
+  if (fieldKey === 'propViews') {
+    return copyPagePropSandboxView(id, target, title, target === PAGE_PROP_TABLE_VIEW_ID ? '表格' : '')
+  }
+  const builtin = CONTENT_BUILTINS.find((item) => item.id === target)
+  return copyPageSandboxView(id, target, title, builtin?.name ?? '')
+}
+
+function remove(record: DbRecord, fieldKey: FieldKey, viewId: string) {
+  const id = String(record.id ?? '').trim()
+  const target = String(viewId ?? '').trim()
+  if (!id || !target) return
+  const option = options(record, fieldKey).find((item) => item.id === target)
+  if (option?.builtin) return
+  if (fieldKey === 'layouts') return deletePageLayout(id, target)
+  if (fieldKey === 'propViews') return deletePagePropSandboxView(id, target)
+  return deletePageSandboxView(id, target)
+}
+
 function subscribe(fn: () => void) {
   const offs = [
     subscribePageLayouts(fn),
@@ -71,7 +112,7 @@ function subscribe(fn: () => void) {
 export function bindPageViewCatalogHost() {
   if (typeof window === 'undefined') return () => undefined
   const bag = ((window as unknown as Record<string, unknown>)[VIEW_CATALOG_HOSTS_KEY] as Record<string, unknown>) ?? {}
-  const host = { options, selectedId, select, subscribe }
+  const host = { options, selectedId, select, copy, remove, subscribe }
   bag['/pages'] = host
   ;(window as unknown as Record<string, unknown>)[VIEW_CATALOG_HOSTS_KEY] = bag
   return () => {
