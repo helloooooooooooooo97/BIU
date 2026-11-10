@@ -34,7 +34,7 @@ test('prop view catalog is a single current option plus a switcher list', () => 
   assert.equal(current?.name, '表格')
   assert.equal(current?.icon, 'table')
   assert.equal(current?.builtin, true)
-  assert.equal(options.find((item) => item.id === 'wide')?.icon, 'props')
+  assert.equal(options.find((item) => item.id === 'wide')?.icon, 'sandbox')
   selectViewCatalog('/tasks', record, 'propViews', 'wide')
   assert.equal(selectedViewCatalogId('/tasks', record, 'propViews'), 'wide')
   assert.equal(selectedViewCatalogOption('/tasks', record, 'propViews')?.name, '宽表')

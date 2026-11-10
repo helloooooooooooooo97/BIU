@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowsPointingInIcon, ArrowsPointingOutIcon, CodeBracketIcon, EyeIcon, QueueListIcon, ViewColumnsIcon } from '@heroicons/react/16/solid'
+import { ArrowsPointingInIcon, ArrowsPointingOutIcon, CodeBracketIcon, EyeIcon, ViewColumnsIcon } from '@heroicons/react/16/solid'
 import { fieldIsWritable, sanitizeRecordPatch, type CollectionSchema, type DbRecord, type FieldSpec } from '@biu/type-file-system'
 import { compileHostSource, loadHostComponent } from './page-host-compile.ts'
 import { ExpandNavTitle } from './expand-nav-title.tsx'
@@ -17,6 +17,7 @@ import {
 } from './page-prop-views.ts'
 import { usePageFileTick } from './page-views.ts'
 import { PAGE_PROP_HIDDEN_VIEW_ID, usePagePropPresentMode } from './page-prop-present.ts'
+import { SandboxKindIcon } from './sandbox-kind-icon.tsx'
 
 type HostTab = 'preview' | 'code' | 'split'
 
@@ -342,7 +343,7 @@ export function PagePropHostView({
     >
       <div className="page-block-expand-nav" data-testid={expanded ? 'page-prop-host-expand-nav' : 'page-prop-host-side-bar'} data-biu-ignore>
         <div className="page-block-expand-nav-type" data-testid="page-prop-host-type-icon" title="属性沙盒" aria-label="属性沙盒">
-          <QueueListIcon aria-hidden className="size-[14px]" />
+          <SandboxKindIcon className="size-[14px]" />
         </div>
         <ExpandNavTitle
           value={view?.name?.trim() || '属性沙盒'}
