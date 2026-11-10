@@ -46,7 +46,7 @@ function options(record: DbRecord, fieldKey: FieldKey): Option[] {
     return [
       { id: PAGE_PROP_TABLE_VIEW_ID, name: '表格', icon: 'table', builtin: true },
       { id: PAGE_PROP_HIDDEN_VIEW_ID, name: '隐藏', icon: 'hidden', builtin: true },
-      ...listed.map((item) => ({ id: item.id, name: item.name, icon: 'props' as const })),
+      ...listed.map((item) => ({ id: item.id, name: item.name, icon: 'sandbox' as const })),
     ]
   }
   const builtins = CONTENT_BUILTINS.filter((item) => (PAGE_BUILTIN_MODES as readonly string[]).includes(item.id))

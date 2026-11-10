@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react'
 import { HeadlessDismiss } from '@biu/biu-ui/headless-dismiss'
-import { PencilSquareIcon, PlusIcon, Square2StackIcon, TagIcon } from '@heroicons/react/16/solid'
+import { PencilSquareIcon, PlusIcon, Square2StackIcon } from '@heroicons/react/16/solid'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { ViewModeGlyph } from './nav-glyphs.tsx'
 import { tagLabel } from './tag-catalog.ts'
 import { TAG_TABLE_VIEW_ID } from './tag-present.ts'
+import { SandboxKindIcon } from './sandbox-kind-icon.tsx'
 import {
   copyTagSandboxView,
   createTagSandboxView,
@@ -50,7 +51,7 @@ export function TagViewSwitcher({
         aria-expanded={open}
         onClick={() => setOpen((next) => !next)}
       >
-        {current ? <TagIcon aria-hidden className="size-[14px]" /> : <ViewModeGlyph mode="table" />}
+        {current ? <SandboxKindIcon className="size-[14px]" /> : <ViewModeGlyph mode="table" />}
         {asIcon ? null : <span className="tasks-viewdd-name">{label}</span>}
       </button>
       {open ? (
@@ -77,7 +78,7 @@ export function TagViewSwitcher({
                 <div key={item.id} className={`tasks-viewdd-item${item.id === viewId ? ' is-active' : ''}`}>
                   {renaming === item.id ? (
                     <div className="tasks-viewdd-item-main fsdb-tool-row">
-                      <TagIcon aria-hidden className="tasks-viewdd-item-ico" />
+                      <SandboxKindIcon className="tasks-viewdd-item-ico" />
                       <input
                         className="tasks-viewdd-item-name"
                         aria-label={`沙盒视图名称 ${item.name}`}
@@ -110,7 +111,7 @@ export function TagViewSwitcher({
                         setOpen(false)
                       }}
                     >
-                      <TagIcon aria-hidden className="tasks-viewdd-item-ico" />
+                      <SandboxKindIcon className="tasks-viewdd-item-ico" />
                       <span className="tasks-viewdd-item-name">{item.name}</span>
                     </button>
                   )}

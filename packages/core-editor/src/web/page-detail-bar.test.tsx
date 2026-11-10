@@ -207,11 +207,17 @@ test('detail bar new menu creates property and content views', () => {
   assert.equal(queryByText('全局视图'), null)
   const prop = getByText('属性视图')
   const content = getByText('内容视图')
-  assert.ok(prop.querySelector('svg'))
-  assert.ok(content.querySelector('svg'))
+  assert.equal(prop.querySelector('svg')?.innerHTML, content.querySelector('svg')?.innerHTML)
+  assert.match(prop.querySelector('svg')?.getAttribute('fill') ?? '', /biu-color-ink-purple/)
 })
 
 test('toolbar icons match the selected flyout item', () => {
+  setPagePropViews('p0133', [
+    { id: 'card1', name: '卡片', kind: 'sandbox', file: 'prop-view-p0133-card1.jsx', dataFile: 'prop-view-data-p0133-card1.json' },
+  ])
+  setPageViews('p0133', [
+    { id: 'site1', name: '官网', kind: 'sandbox', file: 'view-p0133-site1.jsx', dataFile: 'view-data-p0133-site1.json' },
+  ])
   const { getByLabelText, getByTestId } = render(<PageDetailBar record={{ id: 'p0133', title: '演示' }} collectionPath="/pages" />)
   fireEvent.click(getByLabelText('属性展示'))
   fireEvent.click(getByTestId('page-prop-view-hidden'))
@@ -220,12 +226,26 @@ test('toolbar icons match the selected flyout item', () => {
     getByTestId('page-prop-view').querySelector('svg')?.innerHTML,
     getByTestId('page-prop-view-hidden').querySelector('svg')?.innerHTML,
   )
+  fireEvent.click(getByTestId('page-prop-view-card1'))
+  fireEvent.click(getByLabelText('属性展示'))
+  assert.equal(
+    getByTestId('page-prop-view').querySelector('svg')?.innerHTML,
+    getByTestId('page-prop-view-card1').querySelector('svg')?.innerHTML,
+  )
+  assert.match(getByTestId('page-prop-view-card1').querySelector('svg')?.getAttribute('fill') ?? '', /biu-color-ink-purple/)
   fireEvent.click(getByLabelText('查看模式'))
   fireEvent.click(getByTestId('page-view-hidden'))
   fireEvent.click(getByTestId('page-layout-tab'))
   assert.equal(
     getByTestId('page-layout-tab').querySelector('svg')?.innerHTML,
     getByTestId(`page-layout-${PAGE_DEFAULT_LAYOUT_ID}`).querySelector('svg')?.innerHTML,
+  )
+  fireEvent.click(getByLabelText('查看模式'))
+  fireEvent.click(getByTestId('page-view-site1'))
+  fireEvent.click(getByLabelText('查看模式'))
+  assert.equal(
+    getByLabelText('查看模式').querySelector('svg')?.innerHTML,
+    getByTestId('page-view-site1').querySelector('svg')?.innerHTML,
   )
 })
 

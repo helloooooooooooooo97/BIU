@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowsPointingInIcon, ArrowsPointingOutIcon, CodeBracketIcon, EyeIcon, TagIcon, ViewColumnsIcon } from '@heroicons/react/16/solid'
+import { ArrowsPointingInIcon, ArrowsPointingOutIcon, CodeBracketIcon, EyeIcon, ViewColumnsIcon } from '@heroicons/react/16/solid'
 import { fieldIsWritable, sanitizeTagValuesPatch, type CollectionSchemaPack, type FieldSpec } from '@biu/type-file-system'
 import { FieldValuePop } from './field-value-pop.tsx'
 import { compileHostSource, loadHostComponent } from './tag-host-compile.ts'
@@ -17,6 +17,7 @@ import {
   writeTagFile,
   type TagSandboxView,
 } from './tag-views.ts'
+import { SandboxKindIcon } from './sandbox-kind-icon.tsx'
 
 type HostTab = 'preview' | 'code' | 'split'
 
@@ -26,10 +27,6 @@ function hold(event: { preventDefault: () => void }) {
 
 function viewOf(tagId: string, viewId: string): TagSandboxView | undefined {
   return getTagViews(tagId).find((item) => item.id === viewId)
-}
-
-function SandboxKindIcon() {
-  return <TagIcon aria-hidden className="size-[14px]" />
 }
 
 function HostTools({

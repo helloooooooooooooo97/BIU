@@ -127,7 +127,7 @@ function defaultOptions(collectionPath: string, record: DbRecord, fieldKey: View
     const listed = parseRecordSandboxes(record.propViews).map((item) => ({
       id: item.id,
       name: item.name,
-      icon: 'props' as const,
+      icon: 'sandbox' as const,
     }))
     if (path === PAGES_COLLECTION_PATH) {
       return named([

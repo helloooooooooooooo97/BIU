@@ -17,7 +17,6 @@ import {
   MagnifyingGlassIcon,
   PencilSquareIcon,
   PlusIcon,
-  QueueListIcon,
   Square2StackIcon,
   Squares2X2Icon,
   TableCellsIcon,
@@ -55,6 +54,7 @@ import {
   type PageSort,
 } from './page-view-state.ts'
 import { useStickyToolbar } from './sticky-toolbar.ts'
+import { SandboxKindIcon } from './sandbox-kind-icon.tsx'
 
 const MODES = [
   { id: 'doc' as const, label: '文档', Icon: DocumentTextIcon },
@@ -71,7 +71,7 @@ function layoutKindIcon(kind?: string) {
 function propPresentIcon(propViewId: string) {
   if (propViewId === PAGE_PROP_HIDDEN_VIEW_ID) return EyeSlashIcon
   if (propViewId === PAGE_PROP_TABLE_VIEW_ID) return TableCellsIcon
-  return QueueListIcon
+  return SandboxKindIcon
 }
 
 const KINDS = ['paragraph', 'heading', 'bulletList', 'orderedList', 'blockquote', 'codeBlock', 'table', 'pageBlock', 'slide', 'blockMath', 'image']
@@ -137,7 +137,7 @@ export function PageDetailBar({
   const toolbarRef = useRef<HTMLDivElement>(null)
   useStickyToolbar(toolbarRef)
   const contentMode = pageViews.find((item) => item.id === present)
-    ? { id: present, label: pageViews.find((item) => item.id === present)!.name, Icon: Squares2X2Icon }
+    ? { id: present, label: pageViews.find((item) => item.id === present)!.name, Icon: SandboxKindIcon }
     : (MODES.find((item) => item.id === present) ?? MODES[0])
   const CurrentIcon = contentMode.Icon
   const [creatingView, setCreatingView] = useState(false)
@@ -474,7 +474,7 @@ export function PageDetailBar({
                       <div key={item.id} className={`tasks-viewdd-item${item.id === propViewId ? ' is-active' : ''}`}>
                         {renamingPropView === item.id ? (
                           <div className="tasks-viewdd-item-main fsdb-tool-row">
-                            <QueueListIcon aria-hidden className="tasks-viewdd-item-ico" />
+                            <SandboxKindIcon className="tasks-viewdd-item-ico" />
                             <input
                               className="tasks-viewdd-item-name"
                               aria-label={`属性视图名称 ${item.name}`}
@@ -507,7 +507,7 @@ export function PageDetailBar({
                               setOpen(null)
                             }}
                           >
-                            <QueueListIcon aria-hidden className="tasks-viewdd-item-ico" />
+                            <SandboxKindIcon className="tasks-viewdd-item-ico" />
                             <span className="tasks-viewdd-item-name">{item.name}</span>
                           </button>
                         )}
@@ -636,7 +636,7 @@ export function PageDetailBar({
                         setOpen(null)
                       }}
                     >
-                      <Squares2X2Icon aria-hidden className="tasks-viewdd-item-ico" />
+                      <SandboxKindIcon className="tasks-viewdd-item-ico" />
                       <span className="tasks-viewdd-item-name">{item.name}</span>
                     </button>
                     <span className="tasks-viewdd-item-actions">
@@ -892,11 +892,11 @@ export function PageDetailBar({
                 {createOpen ? (
                   <div className="fsdb-create-scope-menu" role="menu">
                     <button type="button" role="menuitem" className={createKind === 'prop' ? 'is-on' : ''} onClick={() => void createChosen('prop')}>
-                      <QueueListIcon aria-hidden className="size-[14px]" />
+                      <SandboxKindIcon className="size-[14px]" />
                       属性视图
                     </button>
                     <button type="button" role="menuitem" className={createKind === 'content' ? 'is-on' : ''} onClick={() => void createChosen('content')}>
-                      <DocumentTextIcon aria-hidden className="size-[14px]" />
+                      <SandboxKindIcon className="size-[14px]" />
                       内容视图
                     </button>
                   </div>

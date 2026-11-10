@@ -7,13 +7,11 @@ import {
   ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  DocumentTextIcon,
   EyeIcon,
   FunnelIcon,
   MagnifyingGlassIcon,
   PencilSquareIcon,
   PlusIcon,
-  QueueListIcon,
   Square2StackIcon,
   Squares2X2Icon,
   TableCellsIcon,
@@ -28,6 +26,7 @@ import { TAG_TABLE_VIEW_ID, setTagPresentMode, useTagPresentMode } from './tag-p
 import { TagViewSwitcher } from './tag-view-switcher.tsx'
 import { TrashGlyph } from '@biu/web-session-view/trash-glyph'
 import { useStickyToolbar } from './sticky-toolbar.ts'
+import { SandboxKindIcon } from './sandbox-kind-icon.tsx'
 import {
   DEFAULT_RECORD_PROP_VIEW_ID,
   addRecordLayout,
@@ -390,7 +389,11 @@ export function TagDetailBar({
             data-testid="tag-prop-view"
             onClick={() => toggle('props')}
           >
-            <QueueListIcon aria-hidden className="size-[14px]" />
+            {propViewId === DEFAULT_RECORD_PROP_VIEW_ID ? (
+              <TableCellsIcon aria-hidden className="size-[14px]" />
+            ) : (
+              <SandboxKindIcon className="size-[14px]" />
+            )}
           </button>
           {open === 'props' ? (
             <HeadlessDismiss onDismiss={() => setOpen(null)} insideRef={propRef}>
@@ -416,7 +419,7 @@ export function TagDetailBar({
                     <div key={item.id} className={`tasks-viewdd-item${item.id === propViewId ? ' is-active' : ''}`}>
                       {renamingPropView === item.id ? (
                         <div className="tasks-viewdd-item-main fsdb-tool-row">
-                          <QueueListIcon aria-hidden className="tasks-viewdd-item-ico" />
+                          <SandboxKindIcon className="tasks-viewdd-item-ico" />
                           <input
                             className="tasks-viewdd-item-name"
                             aria-label={`属性视图名称 ${item.name}`}
@@ -461,7 +464,7 @@ export function TagDetailBar({
                             setOpen(null)
                           }}
                         >
-                          <QueueListIcon aria-hidden className="tasks-viewdd-item-ico" />
+                          <SandboxKindIcon className="tasks-viewdd-item-ico" />
                           <span className="tasks-viewdd-item-name">{item.name}</span>
                         </button>
                       )}
@@ -742,11 +745,11 @@ export function TagDetailBar({
               {createOpen ? (
                 <div className="fsdb-create-scope-menu" role="menu">
                   <button type="button" role="menuitem" className={createKind === 'prop' ? 'is-on' : ''} onClick={() => void createChosen('prop')}>
-                    <QueueListIcon aria-hidden className="size-[14px]" />
+                    <SandboxKindIcon className="size-[14px]" />
                     属性视图
                   </button>
                   <button type="button" role="menuitem" className={createKind === 'content' ? 'is-on' : ''} onClick={() => void createChosen('content')}>
-                    <DocumentTextIcon aria-hidden className="size-[14px]" />
+                    <SandboxKindIcon className="size-[14px]" />
                     内容视图
                   </button>
                 </div>
