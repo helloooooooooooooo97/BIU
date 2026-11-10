@@ -333,10 +333,13 @@ export function DefaultCell({
     if (!option) return null
     if (plain) return <span className="fsdb-select-text">{option.name}</span>
     return (
-      <span className="fsdb-viewcat">
-        <ViewCatalogGlyph icon={option.icon} />
-        <span className="fsdb-viewcat-name">{option.name}</span>
-      </span>
+      <TagChips>
+        <TagChip
+          id={option.id}
+          label={option.name}
+          icon={<ViewCatalogGlyph icon={option.icon} className="size-[14px]" />}
+        />
+      </TagChips>
     )
   }
   if (fieldKey && isRecordLinkField(field, fieldKey)) {

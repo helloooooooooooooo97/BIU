@@ -58,6 +58,7 @@ test('property flyout uses the view switcher instead of a string textarea', () =
   const pop = readFileSync(resolve(import.meta.dirname, './field-value-pop.tsx'), 'utf8')
   assert.match(draft, /<ViewCatalogPickPanel/)
   assert.match(cells, /selectedViewCatalogOption/)
+  assert.match(cells, /<TagChip/)
   assert.match(cells, /<ViewCatalogGlyph icon=\{option\.icon\}/)
   assert.match(pop, /isViewCatalogField\(fieldKey\) \? ' is-select is-view-catalog'/)
   const pick = readFileSync(resolve(import.meta.dirname, './view-catalog-pick.tsx'), 'utf8')
