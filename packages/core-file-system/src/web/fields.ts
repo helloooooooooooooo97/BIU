@@ -50,6 +50,42 @@ export function fieldValueOptions(rows: DbRecord[], key: string, field: FieldSpe
   return values.map((value) => ({ value, label: enumDisplayLabel(field, value) }))
 }
 
+export function filterFieldValueOptions(
+  rows: DbRecord[],
+  key: string,
+  field: FieldSpec,
+  tags: Array<{ id: string; label?: string }> = [],
+): Array<{ value: string; label: string }> {
+  const kind = resolveFieldType(field)
+  if (kind === 'boolean') {
+    return [
+      { value: 'true', label: '是' },
+      { value: 'false', label: '否' },
+    ]
+  }
+  if (kind === 'tag') {
+    const seen = new Set<string>()
+    const out: Array<{ value: string; label: string }> = []
+    for (const tag of tags) {
+      const id = String(tag.id ?? '').trim()
+      if (!id || seen.has(id)) continue
+      seen.add(id)
+      out.push({ value: id, label: String(tag.label ?? '').trim() || id })
+    }
+    for (const id of uniqueValues(rows, key, field)) {
+      if (!id || seen.has(id)) continue
+      seen.add(id)
+      const hit = tags.find((tag) => tag.id === id)
+      out.push({ value: id, label: String(hit?.label ?? '').trim() || id })
+    }
+    return out
+  }
+  if ((kind === 'select' || kind === 'multi-select') && field.enum?.length) {
+    return field.enum.map((value) => ({ value, label: enumDisplayLabel(field, value) }))
+  }
+  return fieldValueOptions(rows, key, field)
+}
+
 export function fieldEntries(schema: CollectionSchema | undefined) {
   if (!schema) return []
   return Object.entries(schema.fields).map(([key, field]) => ({ key, field, kind: resolveFieldType(field) }))

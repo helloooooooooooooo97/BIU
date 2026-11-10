@@ -427,14 +427,15 @@ function FilterRuleRow({
       {needsValue ? (
         rule.op === 'within' ? (
           <CellSelect value={rule.value} options={WITHIN} variant="field" placeholder="时间" onSelect={(next) => onChange({ ...rule, value: next })} />
-        ) : options.length ? (
+        ) : kind === 'tag' || Boolean(field?.field.enum?.length) || options.length ? (
           <CellSelect
             value={rule.value}
             options={options}
             variant="field"
-            allowCreate={!field?.field.enum?.length}
-            placeholder="值"
+            allowCreate={(kind === 'select' || kind === 'multi-select') && !field?.field.enum?.length}
+            placeholder={kind === 'tag' && !options.length ? '还没有标签' : '值'}
             chips={kind === 'select' || kind === 'multi-select' || kind === 'tag'}
+            empty={kind === 'tag' && !options.length ? <div className="db-search-empty">还没有标签</div> : undefined}
             onSelect={(next) => onChange({ ...rule, value: next })}
           />
         ) : (
