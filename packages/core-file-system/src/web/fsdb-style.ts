@@ -780,11 +780,13 @@ button.fsdb-detail-title-icon:hover{background:color-mix(in srgb,var(--biu-color
 .fsdb-main > .tasks-toolbar,.fsdb-detail-main > .tasks-toolbar{position:sticky;top:0;z-index:50;margin-top:0;padding-bottom:0;overflow:visible;background:var(--biu-color-bg);max-width:var(--biu-chat-max-width);width:100%;transition:max-width .18s ease,padding .18s ease}
 .fsdb-page:not(.is-sheet) .fsdb-main > .tasks-toolbar.is-stuck,.fsdb-page .fsdb-detail-main > .tasks-toolbar.is-stuck{max-width:100%;margin-inline:0;padding-left:12px;padding-right:12px}
 .fsdb-main > .tasks-toolbar::before,.fsdb-detail-main > .tasks-toolbar::before{content:"";position:absolute;left:0;right:0;top:100%;height:10px;background:var(--biu-color-bg);pointer-events:none}
+.fsdb-detail-main > .tasks-toolbar::before{background:linear-gradient(var(--biu-color-border),var(--biu-color-border)) var(--biu-pad-page) bottom/calc(100% - 2 * var(--biu-pad-page)) 1px no-repeat,var(--biu-color-bg)}
 .fsdb-main > .tasks-toolbar.is-stuck::before,.fsdb-detail-main > .tasks-toolbar.is-stuck::before{background:linear-gradient(var(--biu-color-border),var(--biu-color-border)) 12px bottom/calc(100% - 24px) 1px no-repeat,var(--biu-color-bg)}
 .fsdb-main > .tasks-toolbar::after,.fsdb-detail-main > .tasks-toolbar::after{content:"";position:absolute;left:var(--biu-pad-page);right:var(--biu-pad-page);top:0;height:2px;background:linear-gradient(var(--biu-color-emphasis),var(--biu-color-emphasis)) 0 0/calc(var(--page-read,0)*100%) 2px no-repeat;pointer-events:none;transition:left .18s ease,right .18s ease}
 .fsdb-main > .tasks-toolbar.is-stuck::after,.fsdb-detail-main > .tasks-toolbar.is-stuck::after{left:12px;right:12px}
 @media (prefers-reduced-motion:reduce){.fsdb-main > .tasks-toolbar,.fsdb-detail-main > .tasks-toolbar,.fsdb-main > .tasks-toolbar::after,.fsdb-detail-main > .tasks-toolbar::after{transition:none}}
 .fsdb-detail-main > .fsdb-detail-aside{padding-top:0}
+.fsdb-detail-aside .tasks-table{border-top:0}
 .fsdb-detail-extras{display:flex;flex-direction:column;gap:20px;margin-top:8px;padding-top:16px;border-top:var(--biu-stroke-width) solid var(--biu-color-border)}
 .fsdb-prop-tr:not(.is-open):has(.fsdb-prop-val.is-pane) td{vertical-align:middle;height:32px}
 .fsdb-prop-tr:not(.is-open) .fsdb-prop-val.is-pane{display:flex;align-items:center;min-width:0;height:22px;overflow:hidden;white-space:nowrap}
